@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(git --version)",
+      "Bash(python -c \"import openpyxl,sys; wb=openpyxl.load_workbook\\('nhà Q5.xlsx',read_only=True,data_only=True\\); print\\('SHEETS:',wb.sheetnames\\); ws=wb.active; [print\\([c.value for c in row]\\) for i,row in enumerate\\(ws.iter_rows\\(\\)\\) if i<8]\")",
+      "Bash(pip install *)",
+      "Bash(python -c 'import openpyxl; wb=openpyxl.load_workbook\\('\\\\''nhà Q5.xlsx'\\\\'',read_only=True,data_only=True\\); print\\('\\\\''SHEETS:'\\\\'',wb.sheetnames\\) *)",
+      "Bash(python -c ' *)",
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python -c ' *)",
+      "Bash(npx --yes create-next-app@latest nhadat-cc --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(PYTHONUTF8=1 python -c ' *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\);console.log\\('next',p.dependencies.next,'| react',p.dependencies.react,'| tailwind',\\(p.devDependencies.tailwindcss||p.dependencies.tailwindcss\\)\\)\")",
+      "Bash(mkdir -p nhadat-cc/data)",
+      "Bash(cp masterDB/_listings.json nhadat-cc/data/listings.json)",
+      "Bash(rm -f masterDB/_preview.json masterDB/_listings.json)",
+      "Bash(node -e \"const d=require\\('./nhadat-cc/data/listings.json'\\);console.log\\('seed copied:',d.length,'listings'\\)\")",
+      "Bash(grep -iA3 -B1 \"async\\\\|params\\\\|breaking\\\\|removed\\\\|deprecat\\\\|metadata\\\\|client\\\\|use client\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"=== tsc exit: $? ===\")",
+      "Bash(npm run *)",
+      "Bash(grep -q \"Ready\\\\|started server\\\\|Local:\" \"C:\\\\Users\\\\clnt\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-clnt-OneDrive---Nha-Dat--Cty-TNHH-nhadat-CC\\\\41642050-e337-46a6-b0b1-5d5e70332d11\\\\tasks\\\\bjwa5613z.output\")",
+      "Bash(break)",
+      "Bash(curl -s -o /tmp/home.html -w \"%{http_code}\" http://localhost:3000/)",
+      "Read(//tmp/**)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(ls \"C:\\\\Users\\\\clnt\\\\.claude\\\\projects\\\\C--Users-clnt-OneDrive---Nha-Dat--Cty-TNHH-nhadat-CC\\\\memory\\\\\" 2>&1)",
+      "Bash(file \"1/1.jpg\" \"5/1.jpg\")",
+      "Bash(node -e \"const d=require\\('./data/listings.json'\\); const wp=d.filter\\(l=>l.photos&&l.photos.length\\).length; console.log\\('listings with photos:',wp+'/'+d.length\\); console.log\\('sample id1 photos:',JSON.stringify\\(d.find\\(l=>l.id==='1'\\).photos\\)\\)\")"
+    ]
+  }
+}

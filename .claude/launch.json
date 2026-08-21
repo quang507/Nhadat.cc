@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nhadat-cc",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "nhadat-cc", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

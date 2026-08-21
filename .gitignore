@@ -1,0 +1,19 @@
+# Thư mục app (quá nặng, quản lý riêng)
+nhadat-cc/
+
+# KHÔNG commit — chứa credential
+admin logins/
+
+# KHÔNG commit — dữ liệu cá nhân thật (sổ đỏ, CCCD, địa chỉ)
+sổ đỏ samples/
+
+# KHÔNG commit — dữ liệu nhà + ảnh (179MB)
+masterDB/
+
+# KHÔNG commit — theme thương mại có bản quyền (274MB)
+ThemeForest/
+
+# OneDrive / OS
+desktop.ini
+Thumbs.db
+.DS_Store
