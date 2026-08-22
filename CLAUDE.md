@@ -87,6 +87,13 @@ danh** khi trích vào `docs/` (`0903xxxxxx`, `chị D.`).
 Repo này là **tầng đặc tả**; code chỉ được viết sau khi `07-srs.md` đã chốt phần
 tương ứng.
 
+## 6b. Nguồn thiết kế
+
+`design/` chứa nguồn của bản trình bày thiết kế: `tokens.json` (design token máy
+đọc được), `artboards/*.dc.html` (13 khung thiết kế), `artboards/canvas.json`
+(bố cục), `assets/` (ảnh mẫu đã downsample). Dùng để dựng lại sang Figma hoặc
+làm tham chiếu khi code. Xem `design/README.md`.
+
 ## 7. Cách chạy pipeline BA
 
 Xem `.claude/skills/ba-pipeline/SKILL.md` — quy trình chuẩn để tạo mới hoặc cập

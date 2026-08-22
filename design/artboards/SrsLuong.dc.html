@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; color: #243651; }
+    a { color: #E2571E; } a:hover { color: #F2691F; }
+    .actor { font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 13.5px; color: #fff; border-radius: 10px; padding: 10px 0; text-align: center; }
+    .msg { font-size: 12.5px; line-height: 1.45; }
+    .code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.65; background: #0E1B33; color: #DCE4EF; border-radius: 10px; padding: 14px 16px; white-space: pre; overflow-x: auto; }
+    .jobrow { display: grid; grid-template-columns: 190px 120px 1fr; gap: 14px; padding: 9px 16px; border-top: 1px solid #F1F4F9; font-size: 12.5px; align-items: baseline; }
+  </style>
+</helmet>
+<div style="width: 1360px; min-height: 1330px; box-sizing: border-box; background: #F6F8FB; padding: 48px 56px; display: flex; flex-direction: column; gap: 26px;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #E3E8EF; padding-bottom: 18px;">
+    <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 800; font-size: 30px; color: #0E1B33;">SRS · Luồng lõi &amp; API</div>
+    <div style="font-size: 13px; color: #6B7C93;">docs/07-srs.md §4–5 · UF-05 vòng lặp hỏi-đáp S↔B</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; align-items: start;">
+    <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 0;">
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px;">
+        <div class="actor" style="background: #0068FF;">B (Zalo)</div>
+        <div class="actor" style="background: #E2571E;">B Side</div>
+        <div class="actor" style="background: #E2571E;">S Side</div>
+        <div class="actor" style="background: #12805C;">S (chủ tin)</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 11px;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div style="width: 22%; text-align: right;" class="msg"><strong>"Cho chị xem sổ đỏ cái"</strong></div>
+          <svg width="40" height="14" viewBox="0 0 40 14" fill="none" stroke="#0068FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h32M28 2l6 5-6 5"></path></svg>
+          <div class="msg" style="color: #6B7C93; flex: 1;">phân loại: cần xác minh → <strong style="color: #B42318;">không tự trả lời</strong> (I3)</div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <svg width="40" height="14" viewBox="0 0 40 14" fill="none" stroke="#E2571E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M38 7H6M12 2 6 7l6 5"></path></svg>
+          <div class="msg" style="flex: 1;">"Chị chờ giùm một chút. Trong khi chờ, chị có câu hỏi nào khác không ạ?" <span style="color: #6B7C93;">(FR-45 giữ nhịp)</span></div>
+        </div>
+        <div class="code">POST /api/s-side/info-request        (SRS-4.1)
+{ "request_id": "uuid",              // idempotent
+  "property_code": 35148,
+  "buyer_ref": "b_7f3a",
+  "question_text": "Cho chị xem sổ đỏ cái",
+  "question_category": "so_do" }</div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div class="msg" style="color: #6B7C93; margin-left: auto;">định tuyến: chủ tin → CTV → chuyên viên</div>
+          <svg width="40" height="14" viewBox="0 0 40 14" fill="none" stroke="#12805C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h32M28 2l6 5-6 5"></path></svg>
+          <div class="msg"><strong>"Đây em" + [ảnh sổ]</strong></div>
+        </div>
+        <div class="code">POST /api/b-side/info-response       (SRS-4.2)
+{ "request_id": "uuid",
+  "answer_text": "Sổ cấp 2023, chính chủ đứng tên",
+  "attachments": [{ "type": "image", "public": false }],
+  "listing_updates": { "has_red_book": true } }</div>
+        <div style="background: #FFF3EC; border-radius: 10px; padding: 12px 16px; font-size: 12.5px; line-height: 1.55; color: #243651;">
+          Khi nhận: ① cập nhật info_requests → ② áp listing_updates vào properties (<strong>FR-44 — tin giàu thêm, phục vụ mọi B sau</strong>) + ghi sự kiện INFO_ADDED → ③ đẩy tin tới B qua Zalo OA → ④ B offline thì vào hàng đợi (NFR-04).
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <svg width="40" height="14" viewBox="0 0 40 14" fill="none" stroke="#E2571E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M38 7H6M12 2 6 7l6 5"></path></svg>
+          <div class="msg" style="flex: 1;">"Chào chị Dương. Em có sổ đỏ rồi nè chị. Em gửi chị nhé?" + signed URL ≤15 phút</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div style="background: #0E1B33; border-radius: 14px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 16px; color: #fff;">4 bất biến của chatbot — kiểm thử được (SRS-5.1)</div>
+        <div style="display: flex; flex-direction: column; gap: 9px; font-size: 13px; line-height: 1.5; color: #DCE4EF;">
+          <div style="display: flex; gap: 10px;"><span style="font-family: 'JetBrains Mono', monospace; color: #F2691F; flex-shrink: 0;">I1</span>Không quá 3 listing mỗi tin nhắn (FR-24)</div>
+          <div style="display: flex; gap: 10px;"><span style="font-family: 'JetBrains Mono', monospace; color: #F2691F; flex-shrink: 0;">I2</span>Mọi tin chủ động kết thúc bằng dấu hỏi — mục tiêu là B nhắn lại</div>
+          <div style="display: flex; gap: 10px;"><span style="font-family: 'JetBrains Mono', monospace; color: #F2691F; flex-shrink: 0;">I3</span>Còn bán / sổ đỏ / quy hoạch / hoàn công → luôn tạo info_request, bot không tự khẳng định (RSK-03)</div>
+          <div style="display: flex; gap: 10px;"><span style="font-family: 'JetBrains Mono', monospace; color: #F2691F; flex-shrink: 0;">I4</span>Không hỏi số điện thoại trừ khi đang chốt lịch xem nhà (NFR-07)</div>
+        </div>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 14px; overflow: hidden;">
+        <div style="padding: 14px 16px; font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 15px; color: #0E1B33; background: #F6F8FB; border-bottom: 1px solid #E3E8EF;">Job định kỳ (SRS-5.3)</div>
+        <div class="jobrow"><span style="font-family: 'JetBrains Mono', monospace; color: #0E1B33;">recompute_hot_score</span><span style="color: #6B7C93;">02:00/ngày</span><span>hot = sự kiện 2 tháng (FR-73)</span></div>
+        <div class="jobrow"><span style="font-family: 'JetBrains Mono', monospace; color: #0E1B33;">followup_d3</span><span style="color: #6B7C93;">mỗi giờ</span><span>B im lặng 3 ngày → follow-up (FR-60)</span></div>
+        <div class="jobrow" style="background: rgba(226,87,30,0.06);"><span style="font-family: 'JetBrains Mono', monospace; color: #E2571E; font-weight: 500;">zalo_keepalive</span><span style="color: #6B7C93;">mỗi giờ</span><span><strong>Im lặng 5–6 ngày → tin chống xoá kết nối (RSK-01)</strong></span></div>
+        <div class="jobrow"><span style="font-family: 'JetBrains Mono', monospace; color: #0E1B33;">match_new_listings</span><span style="color: #6B7C93;">15 phút</span><span>tin mới khớp saved_criteria → báo B (FR-64)</span></div>
+        <div class="jobrow"><span style="font-family: 'JetBrains Mono', monospace; color: #0E1B33;">info_request_sla</span><span style="color: #6B7C93;">30 phút</span><span>quá 4h → CTV · quá 24h → chuyên viên (FR-47)</span></div>
+        <div class="jobrow"><span style="font-family: 'JetBrains Mono', monospace; color: #0E1B33;">stale_listing_check</span><span style="color: #6B7C93;">thứ 2/tuần</span><span>&gt;30 ngày chưa xác minh → hỏi "còn bán không" (RSK-06)</span></div>
+        <div class="jobrow"><span style="font-family: 'JetBrains Mono', monospace; color: #0E1B33;">close_conversations</span><span style="color: #6B7C93;">5 phút</span><span>im lặng &gt;30 phút → đóng cuộc trò chuyện (FR-72)</span></div>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 15px; color: #0E1B33;">Xếp hạng gợi ý (SRS-5.2)</div>
+        <div style="display: flex; flex-direction: column; gap: 7px; font-size: 12.5px;">
+          <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 40%; height: 12px; border-radius: 999px; background: #E2571E;"></div><span>0.40 · khớp tiêu chí</span></div>
+          <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 25%; height: 12px; border-radius: 999px; background: #F2691F;"></div><span>0.25 · hot_score</span></div>
+          <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 20%; height: 12px; border-radius: 999px; background: #0E1B33;"></div><span>0.20 · độ đầy đủ thông tin</span></div>
+          <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 15%; height: 12px; border-radius: 999px; background: #6B7C93;"></div><span>0.15 · độ mới xác minh</span></div>
+        </div>
+        <div style="font-size: 12px; color: #6B7C93; line-height: 1.5;">Loại: tin không còn rao · căn B đã từ chối sau khi xem (UF-07).</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 14px; padding: 20px 24px; display: flex; gap: 24px; align-items: center;">
+    <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 15px; color: #0E1B33; flex-shrink: 0;">API khác</div>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+      <div style="padding: 8px 13px; border-radius: 8px; background: #F6F8FB; border: 1px solid #E3E8EF; color: #0E1B33;">POST /api/search <span style="color: #6B7C93; font-family: Inter, sans-serif;">— NLU + nới tiêu chí có giải thích</span></div>
+      <div style="padding: 8px 13px; border-radius: 8px; background: #F6F8FB; border: 1px solid #E3E8EF; color: #0E1B33;">POST /api/listing/parse <span style="color: #6B7C93; font-family: Inter, sans-serif;">— bóc tách + confidence từng trường</span></div>
+      <div style="padding: 8px 13px; border-radius: 8px; background: #F6F8FB; border: 1px solid #E3E8EF; color: #0E1B33;">POST /api/curated-list <span style="color: #6B7C93; font-family: Inter, sans-serif;">— /ds/token noindex</span></div>
+      <div style="padding: 8px 13px; border-radius: 8px; background: #F6F8FB; border: 1px solid #E3E8EF; color: #0E1B33;">POST /api/webhooks/zalo <span style="color: #6B7C93; font-family: Inter, sans-serif;">— 200 dưới 1s, xử lý bất đồng bộ</span></div>
+      <div style="padding: 8px 13px; border-radius: 8px; background: #F6F8FB; border: 1px solid #E3E8EF; color: #0E1B33;">zalo.me/oa?ctx=token <span style="color: #6B7C93; font-family: Inter, sans-serif;">— deep link mang ngữ cảnh, TTL 24h</span></div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
