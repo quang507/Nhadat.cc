@@ -113,3 +113,15 @@ nhật một tầng tài liệu mà không phá vỡ truy vết.
 
 Claude Code và Cline dùng chung nguồn sự thật (`docs/`, `design/`) — harness
 hai bên phải được cập nhật song song khi quy ước đổi.
+
+## 9. Agent vai phụ (.claude/agents/)
+
+Ba vai gọi được từ mọi phiên Claude Code mở repo này:
+
+| Agent | Việc | Khi nào |
+|---|---|---|
+| `soat-truy-vet` | Soát ID gãy, truy vết thiếu, số đếm lệch, PII | Trước mọi commit đụng docs/ |
+| `reviewer` | Review diff/PR theo checklist BA, chỉ báo finding | Khi review PR |
+| `figma-builder` | Dựng Figma theo `design/figma-handoff.md`, chống dựng trùng | Khi Figma MCP khả dụng |
+
+Routine nền: soát docs hằng đêm 22:00 (giờ VN) trên phiên mới, chỉ báo khi có lỗi.
