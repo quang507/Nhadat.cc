@@ -30,6 +30,9 @@ nhiều biến thể; cột "Biến thể trong tài liệu gốc" để tra ng�
 | **Sổ đỏ / sổ hồng** | Giấy chứng nhận quyền sử dụng đất / quyền sở hữu nhà. |
 | **Tỉ** | Tỉ đồng (10⁹ VND). Đơn vị giá mặc định khi mua bán. |
 | **Bớt lộc / TL** | Thương lượng được về giá. |
+| **Dự án** | Khu nhà/chung cư sơ cấp gồm nhiều căn cùng chủ đầu tư (ví dụ: "Ny'ah"). Phạm vi hỗ trợ: xem `OPEN-15`. |
+| **Căn (unit)** | Một đơn vị bán được trong một dự án ("căn 50 của Ny'ah"). Thừa hưởng dữ liệu chung của dự án, có trạng thái bán riêng. |
+| **Giỏ hàng** | Danh sách căn còn bán được của một dự án tại một thời điểm — cách gọi phổ biến của môi giới sơ cấp. |
 
 ## Hệ thống
 

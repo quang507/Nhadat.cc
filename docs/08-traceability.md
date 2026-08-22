@@ -29,6 +29,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | INS-07 | Ngôn ngữ nói ≠ bộ lọc | FR-02, FR-09, FR-22, FR-23, SRS-4.5, AC-12 |
 | INS-08 | Sâu một quận trước | BR-01, SRS-8 (thứ tự P1 trước P2) |
 | INS-09 | "Rao một lần là xong", không spam S | FR-103, §6.9 (06), SRS-5.3 `stale_listing_check` |
+| INS-10 | Hàng dự án: dữ liệu hai tầng, tồn kho theo căn | *chưa có FR — chờ chốt phạm vi ở OPEN-15, CRM ở OPEN-16* |
 
 ## 8.3 FR → UF → WF → SRS → AC
 

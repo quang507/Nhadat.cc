@@ -19,6 +19,8 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-12 | Quy trình chấm điểm & chấm dứt NMG | Trung bình | FR-102 |
 | OPEN-13 | Nguồn dữ liệu tiện ích quanh BĐS | Thấp | FR-28 |
 | OPEN-14 | Chính sách fingerprint & tuân thủ dữ liệu cá nhân | Trung bình | FR-16, NFR-08 |
+| OPEN-15 | Hàng dự án (căn/giỏ hàng) — vào MVP hay giai đoạn 2? | Cao | Data model, INS-10 |
+| OPEN-16 | Có cần CRM riêng không? | Trung bình | OPEN-02, vận hành |
 
 ---
 
@@ -111,3 +113,47 @@ liệu cá nhân có thể coi đây là dữ liệu cá nhân, cần thông bá
 **Khuyến nghị**: tham vấn pháp lý; tối thiểu phải có banner thông báo, trang `/rieng-tu`
 (IA-06) mô tả rõ, và cơ chế từ chối. Trớ trêu: dùng fingerprint quá tay sẽ mâu thuẫn với
 chính lời hứa riêng tư đang là điểm bán hàng (INS-04).
+
+### OPEN-15 · Hàng dự án (căn / giỏ hàng) — vào MVP hay giai đoạn 2?
+**Nguồn**: trao đổi chủ dự án 22/08/2026 — *"bán căn 50 của Ny'ah"*, nhu cầu kiểm soát
+trong một dự án đã bán những căn nào; phân tích ở `INS-10`.
+Toàn bộ tài liệu gốc (kịch bản chat, S's side, biz model) chỉ mô tả **hàng lẻ thứ cấp**;
+hàng dự án chưa từng được đặc tả — đưa vào là mở rộng phạm vi thật sự.
+
+**Mô hình dữ liệu đề xuất** (áp dụng khi chốt, bất kể phương án nào):
+- Bảng `projects`: `id, name, slug, developer, district, ward, lat/lng, legal_status,
+  amenities jsonb, floor_plans jsonb, handover_date, description`.
+- `properties` thêm `project_id uuid null fk` + `unit_code text` ("50", "A-12.07"),
+  `floor int`, `direction`, `unit_status enum(con_ban, giu_cho, da_coc, da_ban)`.
+- **Quy tắc thừa hưởng dữ liệu**: trường nào `properties` để null mà `projects` có →
+  trả lời từ dự án, KHÔNG tạo info_request (INS-06 chỉ áp cho dữ liệu tầng căn);
+  câu hỏi tầng căn ("căn 50 còn không?") → đọc `unit_status`, nếu `last_verified_at`
+  cũ quá X giờ thì mới hỏi S.
+- **Cái dùng chung được**: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mặt bằng,
+  tiến độ, ảnh dự án. **Cái không dùng chung**: giá từng căn, trạng thái bán, hướng,
+  tầng, ảnh thực tế căn, thông tin thương lượng — và **không bao giờ** dùng chung
+  giữa hai dự án khác nhau.
+
+**Phương án**: (a) vào MVP đầy đủ (bảng + luồng rao giỏ hàng + chat mức căn) — chậm
+MVP đáng kể; (b) **MVP chỉ đặt nền data model** (bảng `projects` + 4 cột thêm ở
+`properties`, chưa làm UI giỏ hàng — NMG rao căn dự án như hàng lẻ có gắn `project_id`),
+giai đoạn 2 làm trang dự án + quản lý giỏ hàng; (c) để hẳn giai đoạn 2.
+**Khuyến nghị**: (b) — chi phí gần bằng 0 hôm nay, tránh migration đau về sau, và
+"căn 50 của Ny'ah còn không?" đã trả lời được ngay từ MVP qua `unit_status`.
+
+### OPEN-16 · Có cần CRM riêng không?
+**Nguồn**: trao đổi chủ dự án 22/08/2026.
+**Hiện trạng**: hệ thống đặc tả sẵn đã là một CRM tối giản — `buyers` (hồ sơ + tiêu chí
+học được), `conversations` (toàn bộ lịch sử), `viewings` (lịch xem + kết quả), 5 bảng
+admin + email escalation, tất cả kết nối được Excel (NFR-11). Cái CHƯA có: pipeline
+giao dịch sau buổi xem (đàm phán → cọc → công chứng → thu phí) và sổ hoa hồng CTV/NMG.
+**Phương án**: (a) mua CRM ngoài (HubSpot/Pipedrive…) — thừa tính năng, đội chi phí,
+nhân đôi nơi nhập liệu, lệch lời hứa riêng tư nếu đồng bộ dữ liệu B ra ngoài;
+(b) **thêm 1 bảng `deals`** vào hệ thống hiện tại: `id, property_id, buyer_id, seller_id,
+stage enum(dam_phan, dat_coc, cong_chung, hoan_tat, huy), price_final, fee_rate,
+fee_amount, ctv_id, closed_at` + một trang admin dạng bảng 20 dòng — đủ cho 1 giao
+dịch/2 ngày (OKR 4) và trả lời được "dự án X đã bán căn nào" khi ghép `unit_status`;
+(c) xây CRM riêng đầy đủ — vượt ngân sách 418tr.
+**Khuyến nghị**: (b) cho MVP. Chỉ cân nhắc CRM thật khi có >3 CTV hoặc >5 giao
+dịch/tuần. Định nghĩa các stage của `deals` phụ thuộc `OPEN-02` (thời điểm nào tính
+phí) — nên chốt hai mục này cùng lúc.

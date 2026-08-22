@@ -96,6 +96,27 @@ OKR số 1 là phủ **90% thị trường Quận 5**, rồi mới lan tự nhi�
 các câu hỏi vi mô ("gần hồ bơi Lam Sơn", "hẻm 174 Trần Bình Trọng") — thứ mà các
 site toàn quốc không làm được.
 
+### INS-10 — Hàng dự án là một loại hàng khác hẳn hàng lẻ
+Chủ dự án nêu tình huống *"bán căn 50 của Ny'ah"* — tức nhu cầu kiểm soát trong
+**một dự án** đã bán những căn nào [nguồn: trao đổi chủ dự án, 22/08/2026].
+Hàng dự án (sơ cấp) khác hàng lẻ (thứ cấp) ở ba điểm cấu trúc:
+
+1. **Dữ liệu hai tầng.** Phần lớn thông tin thuộc về *dự án* và dùng chung cho
+   mọi căn (vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mặt bằng tầng, tiến độ);
+   chỉ một phần nhỏ thuộc về *căn* (mã căn, tầng, hướng, DT, giá, trạng thái bán).
+   B hỏi câu thuộc tầng dự án → trả lời ngay từ dữ liệu chung, **không** cần hỏi
+   ngược S từng lần như hàng lẻ (INS-06 chỉ áp cho tầng căn).
+2. **Tồn kho thay đổi liên tục.** "Căn 50 còn không?" phải trả lời được theo
+   trạng thái từng căn (còn / giữ chỗ / đã cọc / đã bán) — sai tồn kho ở hàng dự
+   án gây mất uy tín nhanh hơn hàng lẻ vì người mua so được với bảng hàng của
+   môi giới khác.
+3. **Một tin rao ↔ nhiều căn.** Một listing dự án đại diện cho cả giỏ hàng;
+   gợi ý trong chat phải xuống được tới mức căn ("còn căn 2PN tầng trung, hướng
+   Đông") thay vì lặp lại tin dự án.
+
+Phạm vi đưa hàng dự án vào MVP hay giai đoạn sau: quyết định ở `OPEN-15`.
+Nhu cầu "kiểm soát đã bán những căn nào" cũng mở câu hỏi CRM: `OPEN-16`.
+
 ## 1.2 Người dùng
 
 ### Bên mua (B)
