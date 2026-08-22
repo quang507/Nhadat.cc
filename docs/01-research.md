@@ -49,8 +49,9 @@ chỉ *đọc*.
 > [nguồn: nhadat.cc website.docx §Tụi em không hỏi số ĐT].
 
 Nỗi đau lớn nhất của người tìm nhà ở Việt Nam là bị hàng chục môi giới gọi liên
-tục sau khi để lại số. nhadat.cc chọn **không thu số điện thoại** làm lời hứa
-thương hiệu. Ngoại lệ duy nhất quan sát được là khi đặt lịch xem nhà, chat mẫu
+tục sau khi để lại số — chủ dự án định lượng: *"để lại SĐT trên trang BĐS đồng
+nghĩa với 40 cuộc gọi trong 3 ngày"* [nguồn: trao đổi chủ dự án, 22/08/2026].
+nhadat.cc chọn **không thu số điện thoại** làm lời hứa thương hiệu. Ngoại lệ duy nhất quan sát được là khi đặt lịch xem nhà, chat mẫu
 vẫn hỏi số ĐT [nguồn: chats w B.docx §Hẹn xem nhà] — mâu thuẫn này ghi ở `OPEN-05`.
 
 ### INS-05 — Người bán không muốn điền form
@@ -78,6 +79,16 @@ Người dùng gõ *"Có nhà gần ngã tư Nguyễn Trãi với Trần Bình T
 [nguồn: chats w B.docx §Hỏi nhà quanh 1 vị trí]. Không bộ lọc dropdown nào diễn
 đạt được "gần ngã tư X và Y" hay "giống giống căn này". Ô search trên web vì vậy
 được đặc tả là **ô chat**, không phải form [nguồn: nhadat.cc website.docx §Search].
+
+### INS-09 — Lời hứa phía bán: "rao một lần là xong"
+> *"Bên em sẽ rao bán cho đến khi gặp người mua mà bên em thấy là phù hợp nhất,
+> để anh chỉ cần nhắn cho bọn em là xong, không có spam"*
+> [nguồn: trao đổi chủ dự án, 22/08/2026].
+
+Lời hứa không-spam áp cho **cả hai phía**: S rao đúng một câu, sau đó hệ thống
+tự viết lại tin, tự trả lời B, và chỉ liên hệ lại S khi thật sự cần (câu hỏi
+cần xác minh, chốt lịch xem nhà) — theo đuổi cho tới khi gặp người mua phù hợp
+nhất, không bỏ rơi tin giữa chừng. Đây là mặt đối xứng của INS-04.
 
 ### INS-08 — Mật độ dữ liệu quan trọng hơn độ phủ địa lý
 OKR số 1 là phủ **90% thị trường Quận 5**, rồi mới lan tự nhiên sang quận khác

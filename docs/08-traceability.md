@@ -28,6 +28,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | INS-06 | Thiếu thông tin là tính năng | FR-40…FR-47, UF-05, SRS-3.6, AC-03 |
 | INS-07 | Ngôn ngữ nói ≠ bộ lọc | FR-02, FR-09, FR-22, FR-23, SRS-4.5, AC-12 |
 | INS-08 | Sâu một quận trước | BR-01, SRS-8 (thứ tự P1 trước P2) |
+| INS-09 | "Rao một lần là xong", không spam S | FR-103, §6.9 (06), SRS-5.3 `stale_listing_check` |
 
 ## 8.3 FR → UF → WF → SRS → AC
 
@@ -63,6 +64,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-99 | — | — | — | *chưa đặc tả — `OPEN-10`* |
 | FR-100 | UF-12 | WF-11 | SRS-4.3 | AC-11 |
 | FR-101, FR-102 | UF-09 | WF-09 | SRS-3.4 | — |
+| FR-103 | UF-09 | — | SRS-5.3 | — |
 
 ## 8.4 Rủi ro → biện pháp
 

@@ -200,6 +200,8 @@ Chưng cất từ 24 hội thoại mẫu trong `chats w B.docx`. Đây là đặ
 | 0 kết quả | *"Chưa có căn nào khớp đúng. Em nới giá lên 9.6 tỉ thì có 41 căn:"* |
 | Chờ xác minh | *"Thông tin do người bán cung cấp — hỏi tụi em để xác minh lại."* |
 | CTA người bán | *"Miễn phí đăng tin. Chỉ thu phí khi bán được: chính chủ 1% · môi giới 0.5%"* |
+| Khối riêng tư (phụ đề) | *"Để lại số ĐT trên trang BĐS khác nghĩa là 40 cuộc gọi trong 3 ngày. Ở đây: không một cuộc nào."* |
+| Lời hứa với người bán | *"Bên em rao cho đến khi gặp người mua phù hợp nhất — anh/chị chỉ cần nhắn một lần."* |
 
 ## 6.10 Accessibility
 

@@ -170,6 +170,7 @@ Cổng NMG tự phục vụ đầy đủ (MVP dùng CTV vận hành thủ công)
 | FR-100 | URL "Show a list": tạo danh sách vài chục BĐS riêng cho một B, nhận User ID + danh sách BĐS ID | M | S's side.docx §Show a list |
 | FR-101 | Phân loại S là CCRB hay NMG để áp đúng mức phí | M | biz model.docx |
 | FR-102 | Theo dõi tiêu chuẩn NMG: ≥10 listing, tỉ lệ thành công ≥5% (MA 6 tháng), rating >3/5 | S | biz model.docx §NMG |
+| FR-103 | Lời hứa "rao một lần là xong" với S: hệ thống theo đuổi việc bán tới khi gặp người mua phù hợp; chỉ liên hệ lại S khi cần xác minh thông tin hoặc chốt lịch xem — không spam S; tin không bị bỏ rơi (kết hợp `stale_listing_check`) | M | trao đổi chủ dự án 22/08/2026; INS-09 |
 
 ---
 
