@@ -98,3 +98,18 @@ làm tham chiếu khi code. Xem `design/README.md`.
 
 Xem `.claude/skills/ba-pipeline/SKILL.md` — quy trình chuẩn để tạo mới hoặc cập
 nhật một tầng tài liệu mà không phá vỡ truy vết.
+
+## 8. Dùng với Cline (VS Code, chạy local)
+
+`.clinerules/` chứa bản đồ tương đương cho Cline: luật dự án tự nạp +
+4 workflow gõ bằng lệnh slash trong chat Cline:
+
+| Lệnh | Việc |
+|---|---|
+| `/ba-pipeline.md` | Thêm/sửa yêu cầu giữ truy vết |
+| `/soat-truy-vet.md` | Soát ID gãy trước commit |
+| `/review-docs.md` | Review diff đụng docs/ |
+| `/hoan-tat-figma.md` | Làm nốt Figma (local nói chuyện được với plugin Talk-to-Figma) |
+
+Claude Code và Cline dùng chung nguồn sự thật (`docs/`, `design/`) — harness
+hai bên phải được cập nhật song song khi quy ước đổi.
