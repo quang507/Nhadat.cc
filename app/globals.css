@@ -2,11 +2,11 @@
 
 /* Skin theo theme King (kingthemes.net — nhánh kingtheme):
    Nunito · nền #f6f7f9 · card trắng bo 14px viền #eef0f3 · nút pill ·
-   chữ #13151d / phụ #687686. Primary giữ cam thương hiệu nhadat.cc
-   (design/tokens.json); muốn đúng đỏ King thì đổi --color-brand: #e60023. */
+   chữ #13151d / phụ #687686. Primary = đỏ King #e60023
+   (chốt chủ dự án 24/08/2026 — thay cam #E2571E của tokens.json cũ). */
 @theme {
-  --color-brand: #e2571e;
-  --color-brand-dark: #c44615;
+  --color-brand: #e60023;
+  --color-brand-dark: #c2001e;
   --color-navy: #13151d;
   --color-zalo: #0068ff;
   --color-cream: #f6f7f9;
