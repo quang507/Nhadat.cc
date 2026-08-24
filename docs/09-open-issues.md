@@ -11,7 +11,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-04 | Ai dẫn khách xem nhà khi NMG bận | Trung bình | UF-06 |
 | OPEN-05 | Xin số ĐT có phá vỡ lời hứa riêng tư? | Cao | FR-53, NFR-07 |
 | OPEN-06 | Thiếu file TOP-100 keyword | Cao | FR-12, toàn bộ SEO |
-| OPEN-07 | Dùng theme thương mại hay thiết kế riêng | Trung bình | Toàn bộ `06` |
+| OPEN-07 | Theme — **ĐÃ CHỐT: dùng KingTheme đã mua**, 24/08/2026 (còn chờ xác định loại theme) | Trung bình | Toàn bộ `06` |
 | OPEN-08 | Tên thương hiệu và tên miền | Thấp | Copy toàn hệ thống |
 | OPEN-09 | Zalo OA có cho gửi tin chủ động ở tần suất cần? | Cao | FR-63, FR-64 |
 | OPEN-10 | FR-99 định giá so sánh — chưa có đặc tả | Trung bình | FR-99 |
@@ -65,11 +65,22 @@ trong repo**, và dữ liệu từ **2014**.
 (Google Keyword Planner + Search Console). Toàn bộ chiến lược SEO (BR-08) đứng trên file này.
 
 ### OPEN-07 · Theme thương mại
+> ✅ **ĐÃ CHỐT một nửa**, chủ dự án, 24/08/2026: dùng theme **KingTheme** đã mua
+> (nằm trong `ThemeForest/KingTheme`, ngoài repo). Nửa còn lại chờ xác định **loại
+> theme** — quyết định cách tích hợp:
+> - Theme **HTML/React/Next template** → cắt thẳng vào app Next.js, giữ nguyên
+>   stack Supabase + Vercel. Độ khó thấp.
+> - Theme **WordPress** (có file `.php` + `style.css`) → hoặc (i) chạy WP làm site
+>   listing/SEO (cần hosting PHP, khó free tốt; bot vẫn dùng Supabase) hoặc
+>   (ii) chỉ lấy HTML/CSS của theme cắt sang Next.js. Khuyến nghị (ii).
+> Tông màu/copy vẫn theo design system `docs/06`; token có thể map lại theo theme.
+
 `ThemeForest/` (274MB) bị loại khỏi repo vì bản quyền; `Vedoo pages/` chỉ là ảnh chụp.
-**Phương án**: (a) mua license Veedoo và dùng cho WordPress; (b) tự dựng UI trên
-Next.js + Tailwind theo design system ở `06` (đã viết theo hướng này).
-**Khuyến nghị**: (b) — `.claude/launch.json` cho thấy dự án đã đi theo Next.js, và
-FR-09/FR-14 cần logic tuỳ biến mà theme WordPress không hỗ trợ tự nhiên.
+**Phương án cũ**: (a) mua license Veedoo và dùng cho WordPress; (b) tự dựng UI trên
+Next.js + Tailwind theo design system ở `06`.
+**Khuyến nghị cũ**: (b). Quyết định thực tế của chủ dự án: dùng KingTheme (license
+ThemeForest regular: 1 end product — hợp lệ cho nhadat.cc; asset của theme dùng
+được trong sản phẩm, nhưng **không commit theme vào repo public**).
 
 ### OPEN-08 · Tên thương hiệu
 Tài liệu dùng lẫn `nhadat.cc`, `nhadatCC`, `Nhã Đạt CC`, `nhaadaat.com`.
@@ -186,3 +197,12 @@ NFR-06 ngay; (b) OneDrive — dung lượng rẻ, nhưng tự xây kiểm soát 
 đạt NFR-06.
 **Khuyến nghị**: (a) làm mặc định MVP, giữ interface adapter; OneDrive làm kho
 lạnh (ảnh gốc dung lượng lớn) nếu chi phí Storage thành vấn đề.
+
+> **Cập nhật 24/08/2026** — chủ dự án nghiêng về OneDrive (đã có sẵn theo
+> Microsoft 365 công ty, dung lượng lớn, chi phí 0đ tăng thêm). Đánh giá kỹ thuật:
+> OneDrive làm **kho gốc/kho lạnh** thì dễ (đồng bộ tay hoặc Graph API một chiều);
+> OneDrive làm **origin phục vụ web** thì khó vừa-khó: cần app Azure AD + token
+> refresh, share link không phải CDN (chậm, rate limit), không resize ảnh, không
+> signed URL ngắn hạn cho sổ đỏ (NFR-06). Khuyến nghị giữ nguyên hybrid: ảnh gốc
+> OneDrive, ảnh nén phục vụ web trên Supabase Storage (free 1GB ≈ 8–12k ảnh nén
+> ≈ đủ MVP Quận 5); vượt free thì cân nhắc Cloudflare R2 trước khi trả Supabase Pro.

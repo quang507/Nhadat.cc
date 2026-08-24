@@ -221,7 +221,8 @@ Phạm vi MVP: **đặt nền dữ liệu**, chưa làm UI giỏ hàng riêng.
 | NFR-12 | Khả chuyển | Tầng messaging trừu tượng hoá để thêm Messenger/Telegram mà không sửa lõi | RSK-02 |
 | NFR-13 | Khả kiểm | Mọi sự kiện listing và hội thoại có timestamp, truy vết được | FR-70, FR-71 |
 | NFR-14 | Chi phí | Tổng chi phí build MVP ≤ 418tr VND | §1.4 |
-| NFR-15 | Tuân thủ | Không sao chép asset theme thương mại vào sản phẩm | OPEN-07 |
+| NFR-15 | Tuân thủ | Asset theme thương mại chỉ dùng trong phạm vi license đã mua (KingTheme, regular license = 1 end product); không commit theme vào repo public | OPEN-07 chốt 24/08 |
+| NFR-16 | Chi phí | **Free-tier trước, trả tiền sau**: mọi dịch vụ hạ tầng khởi đầu ở bậc miễn phí (Vercel Hobby, Supabase Free, Zalo OA cơ bản); chỉ nâng cấp khi chạm ngưỡng đo được, ghi lại ngưỡng trong docs | trao đổi chủ dự án 24/08/2026 |
 
 ## 2.6 Giả định
 
