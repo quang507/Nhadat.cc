@@ -83,10 +83,17 @@ danh** khi trích vào `docs/` (`0903xxxxxx`, `chị D.`).
 
 ## 6. Mã nguồn app
 
-`nhadat-cc/` (Next.js + TypeScript + Tailwind, App Router) được quản lý riêng và
-**không nằm trong repo này** — xem `.gitignore` và `.claude/launch.json`.
-Repo này là **tầng đặc tả**; code chỉ được viết sau khi `07-srs.md` đã chốt phần
-tương ứng.
+Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**, hai mảnh:
+
+- **Web** (Next.js 15 + TS + Tailwind 4, App Router) ở **root repo**:
+  `app/`, `components/`, `lib/`, `public/` — Vercel project `nhadat-cc` build
+  từ root, package manager **Bun** (`bun.lock`). Dữ liệu đọc Supabase bằng
+  publishable key qua RLS; mô tả listing luôn qua `sanitizeDescription()`
+  (lọc SĐT — FR-104) trước khi render.
+- **Bot** ở `bot/` — Supabase Edge Functions (xem `bot/README.md`).
+
+Thư mục `nhadat-cc/` cũ (máy local) không dùng nữa. Quy tắc giữ nguyên: tính
+năng mới phải có FR/SRS tương ứng trong `docs/` trước khi code.
 
 ## 6b. Nguồn thiết kế
 

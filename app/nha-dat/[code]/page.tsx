@@ -1,0 +1,174 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import ListingCard from "@/components/ListingCard";
+import { supabase, type Listing } from "@/lib/supabase";
+import {
+  formatArea,
+  formatPrice,
+  placeholderImg,
+  sanitizeDescription,
+  zaloLink,
+} from "@/lib/format";
+
+export const revalidate = 300;
+
+async function getListing(code: string): Promise<Listing | null> {
+  const { data } = await supabase
+    .from("listings")
+    .select("*")
+    .eq("code", code)
+    .maybeSingle();
+  return data as Listing | null;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}): Promise<Metadata> {
+  const { code } = await params;
+  const listing = await getListing(decodeURIComponent(code));
+  if (!listing) return { title: "Không tìm thấy tin" };
+  const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
+  return {
+    title: `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất ${loc} — ${formatPrice(listing.price_vnd, listing.price_raw)} · #${listing.code}`,
+    description: sanitizeDescription(listing.description).slice(0, 155),
+  };
+}
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}) {
+  const { code: rawCode } = await params;
+  const code = decodeURIComponent(rawCode);
+  const listing = await getListing(code);
+  if (!listing) notFound();
+
+  const [factsRes, relatedRes] = await Promise.all([
+    supabase
+      .from("listing_facts")
+      .select("question, answer")
+      .eq("listing_id", listing.id)
+      .limit(20),
+    supabase
+      .from("listings")
+      .select("*")
+      .eq("deal", listing.deal)
+      .neq("id", listing.id)
+      .not("price_raw", "is", null)
+      .neq("price_raw", "")
+      .eq("ward", listing.ward ?? "")
+      .limit(4),
+  ]);
+  const facts = factsRes.data ?? [];
+  const related = (relatedRes.data ?? []) as Listing[];
+
+  const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
+  const desc = sanitizeDescription(listing.description);
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      <nav className="mb-4 text-sm text-navy/50">
+        <Link href="/" className="hover:text-brand">Trang chủ</Link>
+        {" / "}
+        <Link href={listing.deal === "cho_thue" ? "/cho-thue" : "/mua-ban"} className="hover:text-brand">
+          {listing.deal === "cho_thue" ? "Cho thuê" : "Mua bán"}
+        </Link>
+        {" / "}
+        <span className="text-navy">#{listing.code}</span>
+      </nav>
+
+      <div className="grid gap-8 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="overflow-hidden rounded-2xl bg-navy/5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={placeholderImg(code)}
+              alt={loc}
+              className="aspect-[16/10] w-full object-cover"
+            />
+          </div>
+          <p className="mt-2 text-xs text-navy/40">
+            Ảnh thật của căn này gửi qua Zalo — nhắn “cho em xem hình #{listing.code}”.
+          </p>
+
+          <h1 className="mt-5 text-2xl font-extrabold md:text-3xl">
+            {listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất {loc}
+          </h1>
+
+          <div className="mt-4 flex flex-wrap gap-6 rounded-xl border border-navy/10 bg-cream p-4">
+            <div>
+              <p className="text-xs text-navy/50">Giá</p>
+              <p className="text-xl font-bold text-brand">
+                {formatPrice(listing.price_vnd, listing.price_raw)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-navy/50">Diện tích</p>
+              <p className="text-xl font-bold">{formatArea(listing.area_m2)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-navy/50">Khu vực</p>
+              <p className="text-xl font-bold">{loc}</p>
+            </div>
+            <div>
+              <p className="text-xs text-navy/50">Mã tin</p>
+              <p className="text-xl font-bold">#{listing.code}</p>
+            </div>
+          </div>
+
+          {desc && (
+            <div className="mt-6">
+              <h2 className="text-lg font-bold">Mô tả</h2>
+              <p className="mt-2 whitespace-pre-line leading-7 text-navy/80">{desc}</p>
+            </div>
+          )}
+
+          {facts.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-lg font-bold">Đã xác minh với chủ nhà</h2>
+              <ul className="mt-2 divide-y divide-navy/10 rounded-xl border border-navy/10">
+                {facts.map((f, i) => (
+                  <li key={i} className="flex gap-3 p-3 text-sm">
+                    <span className="min-w-32 font-medium text-navy/60">{f.question}</span>
+                    <span>{f.answer}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Khối CTA Zalo mang ngữ cảnh (FR-13/14) */}
+        <aside className="h-fit rounded-2xl border border-navy/10 p-5 shadow-sm lg:sticky lg:top-20">
+          <p className="font-bold">Hỏi về căn #{listing.code}</p>
+          <p className="mt-1 text-sm text-navy/60">
+            Còn không? Hẻm rộng bao nhiêu? Sổ sách sao? — nhắn Zalo, tụi em trả
+            lời ngay, chưa rõ thì đi hỏi chủ nhà giùm anh chị.
+          </p>
+          <a
+            href={zaloLink(`#${listing.code}`)}
+            className="mt-4 block rounded-xl bg-zalo py-3 text-center font-bold text-white hover:opacity-90"
+          >
+            Chat Zalo về căn này
+          </a>
+          <p className="mt-3 text-center text-xs text-navy/40">
+            Miễn phí · không cần để lại số điện thoại
+          </p>
+        </aside>
+      </div>
+
+      {related.length > 0 && (
+        <section className="mt-12">
+          <h2 className="mb-5 text-xl font-extrabold">Cùng khu {listing.ward}</h2>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {related.map((l) => <ListingCard key={l.id} listing={l} />)}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}

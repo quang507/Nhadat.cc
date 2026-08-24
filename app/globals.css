@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #e2571e;
+  --color-brand-dark: #c44615;
+  --color-navy: #0e1b33;
+  --color-zalo: #0068ff;
+  --color-cream: #fdf6f1;
+  --font-sans: var(--font-be-vietnam), system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-white text-navy antialiased;
+}
