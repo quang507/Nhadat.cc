@@ -11,7 +11,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-04 | Ai dẫn khách xem nhà khi NMG bận | Trung bình | UF-06 |
 | OPEN-05 | Xin số ĐT có phá vỡ lời hứa riêng tư? | Cao | FR-53, NFR-07 |
 | OPEN-06 | Thiếu file TOP-100 keyword | Cao | FR-12, toàn bộ SEO |
-| OPEN-07 | Theme — **ĐÃ CHỐT: dùng KingTheme đã mua**, 24/08/2026 (còn chờ xác định loại theme) | Trung bình | Toàn bộ `06` |
+| OPEN-07 | Theme — **ĐÃ CHỐT: KingTheme (HTML template), cắt vào Next.js**, 24/08/2026 | Trung bình | Toàn bộ `06` |
 | OPEN-08 | Tên thương hiệu và tên miền | Thấp | Copy toàn hệ thống |
 | OPEN-09 | Zalo OA có cho gửi tin chủ động ở tần suất cần? | Cao | FR-63, FR-64 |
 | OPEN-10 | FR-99 định giá so sánh — chưa có đặc tả | Trung bình | FR-99 |
@@ -65,9 +65,12 @@ trong repo**, và dữ liệu từ **2014**.
 (Google Keyword Planner + Search Console). Toàn bộ chiến lược SEO (BR-08) đứng trên file này.
 
 ### OPEN-07 · Theme thương mại
-> ✅ **ĐÃ CHỐT một nửa**, chủ dự án, 24/08/2026: dùng theme **KingTheme** đã mua
-> (nằm trong `ThemeForest/KingTheme`, ngoài repo). Nửa còn lại chờ xác định **loại
-> theme** — quyết định cách tích hợp:
+> ✅ **ĐÃ CHỐT HOÀN TOÀN**, chủ dự án, 24/08/2026: dùng theme **KingTheme** đã mua
+> (nằm trong `ThemeForest/KingTheme`, ngoài repo), là **HTML template** → **cắt
+> thẳng vào Next.js**, giữ nguyên stack Supabase + Vercel. Việc còn lại là thi
+> công: đưa HTML/CSS của theme vào tầm với của phiên code (Cline local hoặc repo
+> private riêng), map token màu/chữ của theme về `design/tokens.json`.
+> Phân nhánh cũ dưới đây giữ làm hồ sơ:
 > - Theme **HTML/React/Next template** → cắt thẳng vào app Next.js, giữ nguyên
 >   stack Supabase + Vercel. Độ khó thấp.
 > - Theme **WordPress** (có file `.php` + `style.css`) → hoặc (i) chạy WP làm site
