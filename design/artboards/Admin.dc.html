@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; color: #243651; }
+    a { color: #0068FF; } a:hover { color: #0052CC; }
+    .th { font-size: 12px; font-weight: 600; color: #6B7C93; text-transform: uppercase; letter-spacing: 0.04em; }
+    .td { font-size: 13.5px; color: #0E1B33; }
+  </style>
+</helmet>
+<div style="width: 1440px; min-height: 820px; background: #F6F8FB; box-sizing: border-box; display: flex;">
+
+  <div style="width: 232px; background: #0E1B33; padding: 24px 16px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 9px; padding: 0 10px 20px;">
+      <div style="width: 28px; height: 28px; border-radius: 8px; background: #E2571E; display: flex; align-items: center; justify-content: center;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path></svg>
+      </div>
+      <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 15px; color: #fff;">Admin · B Side</div>
+    </div>
+    <div style="padding: 10px 12px; border-radius: 9px; color: #B8C4D6; font-size: 13.5px; font-weight: 500;">Tìm kiếm B</div>
+    <div style="padding: 10px 12px; border-radius: 9px; background: #E2571E; color: #fff; font-size: 13.5px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">Câu hỏi chờ S <span style="background: rgba(255,255,255,0.25); border-radius: 999px; padding: 1px 8px; font-size: 11.5px;">7</span></div>
+    <div style="padding: 10px 12px; border-radius: 9px; color: #B8C4D6; font-size: 13.5px; font-weight: 500; display: flex; justify-content: space-between; align-items: center;">Hẹn xem nhà <span style="background: #243651; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: #DCE4EF;">3</span></div>
+    <div style="padding: 10px 12px; border-radius: 9px; color: #B8C4D6; font-size: 13.5px; font-weight: 500; display: flex; justify-content: space-between; align-items: center;">Phản ứng tiêu cực <span style="background: #B42318; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; color: #fff;">1</span></div>
+    <div style="padding: 10px 12px; border-radius: 9px; color: #B8C4D6; font-size: 13.5px; font-weight: 500;">Yêu cầu voice</div>
+    <div style="padding: 10px 12px; border-radius: 9px; color: #B8C4D6; font-size: 13.5px; font-weight: 500;">Sự kiện BĐS</div>
+    <div style="margin-top: auto; padding: 10px 12px; font-size: 12px; color: #6B7C93; line-height: 1.5;">Mỗi mục ở đây cũng gửi email tới admin.buyerside@nhadat.cc</div>
+  </div>
+
+  <div style="flex: 1; padding: 32px 40px; display: flex; flex-direction: column; gap: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 24px; color: #0E1B33;">Câu hỏi của B cần S trả lời</div>
+        <div style="font-size: 13px; color: #6B7C93;">FR-76 · 20 mục/trang · click B ID để nhảy sang Zalo</div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <div style="height: 40px; padding: 0 16px; border-radius: 10px; background: #fff; border: 1px solid #E3E8EF; font-size: 13.5px; font-weight: 600; color: #0E1B33; display: flex; align-items: center; gap: 8px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M6 11l6 6 6-6"></path><path d="M4 21h16"></path></svg>
+          Xuất Excel
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 12px; overflow: hidden;">
+      <div style="display: grid; grid-template-columns: 130px 100px 120px 1fr 120px 1fr; gap: 16px; padding: 13px 20px; background: #F6F8FB; border-bottom: 1px solid #E3E8EF;">
+        <div class="th">B ID</div><div class="th">BĐS ID</div><div class="th">Gửi S lúc</div><div class="th">Câu hỏi của B</div><div class="th">S trả lời lúc</div><div class="th">Câu trả lời</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 130px 100px 120px 1fr 120px 1fr; gap: 16px; padding: 14px 20px; border-bottom: 1px solid #E3E8EF; align-items: center;">
+        <div class="td" style="color: #0068FF; font-weight: 500;">z_9d41f2…</div>
+        <div class="td" style="font-family: 'JetBrains Mono', monospace;">#35148</div>
+        <div class="td">21/08 · 14:32</div>
+        <div class="td">"Cho chị xem sổ đỏ cái"</div>
+        <div class="td">21/08 · 15:07</div>
+        <div class="td" style="color: #12805C;">"Đây em, sổ cấp 2023" · kèm 1 ảnh</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 130px 100px 120px 1fr 120px 1fr; gap: 16px; padding: 14px 20px; border-bottom: 1px solid #E3E8EF; align-items: center; background: rgba(180,83,9,0.07);">
+        <div class="td" style="color: #0068FF; font-weight: 500;">z_1a08cc…</div>
+        <div class="td" style="font-family: 'JetBrains Mono', monospace;">#35102</div>
+        <div class="td">21/08 · 09:12</div>
+        <div class="td">"Còn bán không em?"</div>
+        <div class="td" style="color: #B45309; font-weight: 600;">— quá SLA 6h</div>
+        <div class="td" style="color: #B45309;">Đã escalate sang CTV Ngân</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 130px 100px 120px 1fr 120px 1fr; gap: 16px; padding: 14px 20px; border-bottom: 1px solid #E3E8EF; align-items: center;">
+        <div class="td" style="color: #0068FF; font-weight: 500;">z_77b3e0…</div>
+        <div class="td" style="font-family: 'JetBrains Mono', monospace;">#346</div>
+        <div class="td">21/08 · 08:45</div>
+        <div class="td">"Chỗ này mở quán ăn được không?"</div>
+        <div class="td">21/08 · 10:02</div>
+        <div class="td" style="color: #12805C;">"Trung tâm, nhiều quán ăn đồ Hoa"</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 130px 100px 120px 1fr 120px 1fr; gap: 16px; padding: 14px 20px; border-bottom: 1px solid #E3E8EF; align-items: center;">
+        <div class="td" style="color: #0068FF; font-weight: 500;">z_c25d19…</div>
+        <div class="td" style="font-family: 'JetBrains Mono', monospace;">#6442</div>
+        <div class="td">20/08 · 19:21</div>
+        <div class="td">"Em có hình cái hẻm không?"</div>
+        <div class="td">20/08 · 20:40</div>
+        <div class="td" style="color: #12805C;">Kèm 3 ảnh · đã cập nhật listing</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 130px 100px 120px 1fr 120px 1fr; gap: 16px; padding: 14px 20px; align-items: center;">
+        <div class="td" style="color: #0068FF; font-weight: 500;">z_40aa87…</div>
+        <div class="td" style="font-family: 'JetBrains Mono', monospace;">#284</div>
+        <div class="td">20/08 · 16:03</div>
+        <div class="td">"Nhà đã hoàn công chưa?"</div>
+        <div class="td">20/08 · 17:15</div>
+        <div class="td" style="color: #12805C;">"Hoàn công năm 1989"</div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div style="font-size: 13px; color: #6B7C93;">Hiển thị 1–20 trong 87 mục</div>
+      <div style="display: flex; gap: 6px; align-items: center; font-size: 13.5px;">
+        <div style="width: 34px; height: 34px; border-radius: 8px; background: #E2571E; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600;">1</div>
+        <div style="width: 34px; height: 34px; border-radius: 8px; background: #fff; border: 1px solid #E3E8EF; color: #0E1B33; display: flex; align-items: center; justify-content: center;">2</div>
+        <div style="width: 34px; height: 34px; border-radius: 8px; background: #fff; border: 1px solid #E3E8EF; color: #0E1B33; display: flex; align-items: center; justify-content: center;">3</div>
+        <div style="width: 34px; height: 34px; border-radius: 8px; background: #fff; border: 1px solid #E3E8EF; color: #0E1B33; display: flex; align-items: center; justify-content: center;">4</div>
+        <div style="width: 34px; height: 34px; border-radius: 8px; background: #fff; border: 1px solid #E3E8EF; color: #0E1B33; display: flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg></div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 8px;">
+      <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 12.5px; color: #6B7C93; font-weight: 500;">Chat mới hôm nay</div>
+        <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 26px; color: #0E1B33;">11 <span style="font-size: 13px; color: #12805C; font-weight: 600;">· đạt OKR ≥10</span></div>
+      </div>
+      <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 12.5px; color: #6B7C93; font-weight: 500;">Tin/cuộc trò chuyện (TB 7 ngày)</div>
+        <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 26px; color: #0E1B33;">26 <span style="font-size: 13px; color: #B45309; font-weight: 600;">· mục tiêu 30</span></div>
+      </div>
+      <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 12.5px; color: #6B7C93; font-weight: 500;">Kết nối Zalo sắp mất (im lặng ≥5 ngày)</div>
+        <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 26px; color: #B42318;">14 <span style="font-size: 13px; color: #6B7C93; font-weight: 600;">· job chống xoá đang chạy</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,28 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Nền tảng" },
+    { "id": "page-2", "name": "Màn hình" },
+    { "id": "page-3", "name": "SRS" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html",         "x": 0,    "y": 0,    "w": 1200, "h": 760,  "page": "page-1", "title": "Bìa" },
+    { "file": "Foundation.dc.html",   "x": 0,    "y": 920,  "w": 1200, "h": 1560, "page": "page-1", "title": "01 · Nền tảng" },
+    { "file": "Components.dc.html",   "x": 1340, "y": 920,  "w": 1200, "h": 1780, "page": "page-1", "title": "02 · Component" },
+    { "file": "TrangChu.dc.html",     "x": 0,    "y": 0,    "w": 1440, "h": 2400, "page": "page-2", "title": "Trang chủ — desktop" },
+    { "file": "TimKiem.dc.html",      "x": 1580, "y": 0,    "w": 1440, "h": 1120, "page": "page-2", "title": "Kết quả tìm kiếm" },
+    { "file": "ChiTiet.dc.html",      "x": 3160, "y": 0,    "w": 1440, "h": 1980, "page": "page-2", "title": "Chi tiết BĐS" },
+    { "file": "RaoBan.dc.html",       "x": 1580, "y": 1250, "w": 390,  "h": 844,  "page": "page-2", "title": "Mini-site rao bán — mobile" },
+    { "file": "ChatZalo.dc.html",     "x": 2100, "y": 1250, "w": 390,  "h": 844,  "page": "page-2", "title": "Chat Zalo OA — mobile" },
+    { "file": "Admin.dc.html",        "x": 4740, "y": 0,    "w": 1440, "h": 820,  "page": "page-2", "title": "Admin B Side" },
+    { "file": "SrsKienTruc.dc.html",  "x": 0,    "y": 0,    "w": 1360, "h": 1060, "page": "page-3", "title": "SRS · Kiến trúc" },
+    { "file": "SrsDuLieu.dc.html",    "x": 1480, "y": 0,    "w": 1360, "h": 1240, "page": "page-3", "title": "SRS · Dữ liệu" },
+    { "file": "SrsLuong.dc.html",     "x": 0,    "y": 1180, "w": 1360, "h": 1330, "page": "page-3", "title": "SRS · Luồng và API" },
+    { "file": "SrsNghiemThu.dc.html", "x": 1480, "y": 1360, "w": 1360, "h": 1100, "page": "page-3", "title": "SRS · Nghiệm thu" }
+  ],
+  "annotations": [
+    { "id": "note-nguon", "x": 1340, "y": 0, "w": 420, "page": "page-1", "text": "Nguồn sự thật: docs/06-ui-design.md (token, component, tone giọng) và docs/05-wireframes.md (bố cục). Theme kế thừa bố cục Veedoo — cam #E2571E + navy #0E1B33 — không dùng asset của theme (NFR-15).\n\nSố liệu và listing trong mockup là dữ liệu mẫu lấy từ kịch bản chat trong tài liệu gốc." },
+    { "id": "note-manhinh", "x": 4740, "y": 920, "w": 380, "page": "page-2", "text": "6/14 màn hình chủ chốt (WF-01, 02, 03, 05, 08, 12). Các màn còn lại — trang tag, xác nhận bóc tách, danh sách riêng /ds, tìm kiếm B — dựng tiếp khi chốt hướng này." },
+    { "id": "note-srs", "x": 2900, "y": 0, "w": 380, "page": "page-3", "text": "Bản trình bày trực quan của docs/07-srs.md — nguồn sự thật vẫn là file markdown; sửa SRS thì sửa docs trước rồi cập nhật trang này.\n\n4 quyết định đang chặn: OPEN-03, OPEN-05, OPEN-09, OPEN-11 (docs/09)." }
+  ],
+  "launch": { "view": "canvas", "page": "page-3" }
+}

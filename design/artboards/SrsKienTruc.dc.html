@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; color: #243651; }
+    a { color: #E2571E; } a:hover { color: #F2691F; }
+    .lane { border: 1px solid #E3E8EF; border-radius: 14px; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 12px; background: #FFFFFF; }
+    .lanetitle { font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6B7C93; }
+    .node { border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+    .nt { font-family: 'Be Vietnam Pro', sans-serif; font-weight: 600; font-size: 14px; }
+    .ns { font-size: 11.5px; line-height: 1.45; }
+    .arrow { display: flex; align-items: center; justify-content: center; color: #6B7C93; }
+  </style>
+</helmet>
+<div style="width: 1360px; min-height: 1060px; box-sizing: border-box; background: #F6F8FB; padding: 48px 56px; display: flex; flex-direction: column; gap: 28px;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #E3E8EF; padding-bottom: 18px;">
+    <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 800; font-size: 30px; color: #0E1B33;">SRS · Kiến trúc tổng thể</div>
+    <div style="font-size: 13px; color: #6B7C93;">docs/07-srs.md §2 · 4 phân hệ WEB · BOT · SEL · ADM</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 44px 1fr 44px 1fr; gap: 0; align-items: stretch;">
+    <div class="lane">
+      <div class="lanetitle">Client</div>
+      <div class="node" style="background: #0E1B33;">
+        <div class="nt" style="color: #fff;">Web nhadat.cc</div>
+        <div class="ns" style="color: #B8C4D6;">Next.js App Router · TypeScript · Tailwind · SSR/SSG cho 100 trang tag</div>
+      </div>
+      <div class="node" style="background: #0068FF;">
+        <div class="nt" style="color: #fff;">Zalo app — người mua (B)</div>
+        <div class="ns" style="color: #D6E7FF;">Chat với OA · không cần số ĐT</div>
+      </div>
+      <div class="node" style="background: #0068FF;">
+        <div class="nt" style="color: #fff;">Zalo app — người bán (S)</div>
+        <div class="ns" style="color: #D6E7FF;">Bắt lead → đẩy sang mini-site /raoban</div>
+      </div>
+    </div>
+    <div class="arrow">
+      <svg width="28" height="20" viewBox="0 0 28 20" fill="none" stroke="#6B7C93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10h22M18 4l6 6-6 6"></path></svg>
+    </div>
+    <div class="lane">
+      <div class="lanetitle">Edge &amp; Core</div>
+      <div class="node" style="background: #FFF3EC;">
+        <div class="nt" style="color: #0E1B33;">API Edge</div>
+        <div class="ns" style="color: #6B7C93;">Next.js Route Handlers + Supabase Edge Functions · webhook Zalo trả 200 dưới 1s</div>
+      </div>
+      <div class="node" style="background: #E2571E;">
+        <div class="nt" style="color: #fff;">B Side service</div>
+        <div class="ns" style="color: #FFE0CF;">Chatbot · intent · gợi ý ≤3 căn · giữ chân</div>
+      </div>
+      <div class="node" style="background: #E2571E;">
+        <div class="nt" style="color: #fff;">S Side service</div>
+        <div class="ns" style="color: #FFE0CF;">Rao tin · định tuyến câu hỏi · trả lời + ảnh</div>
+      </div>
+      <div class="node" style="background: #fff; border: 1.5px dashed #E2571E;">
+        <div class="nt" style="color: #0E1B33;">AI service</div>
+        <div class="ns" style="color: #6B7C93;">NLU tiếng Việt · bóc tách câu rao · sinh biến thể · entity vị trí (hẻm, ngã tư, mốc)</div>
+      </div>
+      <div class="node" style="background: #fff; border: 1.5px dashed #B45309;">
+        <div class="nt" style="color: #0E1B33;">Message Queue</div>
+        <div class="ns" style="color: #B45309;">NFR-04: không mất tin khi một bên offline · Logstash theo tài liệu gốc → xem OPEN-11</div>
+      </div>
+    </div>
+    <div class="arrow">
+      <svg width="28" height="20" viewBox="0 0 28 20" fill="none" stroke="#6B7C93" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10h22M18 4l6 6-6 6"></path></svg>
+    </div>
+    <div class="lane">
+      <div class="lanetitle">Data &amp; External</div>
+      <div class="node" style="background: #0E1B33;">
+        <div class="nt" style="color: #fff;">Supabase Postgres</div>
+        <div class="ns" style="color: #B8C4D6;">RLS bật mọi bảng · anon chỉ đọc listing đang rao</div>
+      </div>
+      <div class="node" style="background: #0E1B33;">
+        <div class="nt" style="color: #fff;">Supabase Storage</div>
+        <div class="ns" style="color: #B8C4D6;">Ảnh listing · sổ đỏ bucket riêng, signed URL ≤15 phút (NFR-06)</div>
+      </div>
+      <div class="node" style="background: #0E1B33;">
+        <div class="nt" style="color: #fff;">Supabase Realtime + Auth (Zalo SSO)</div>
+        <div class="ns" style="color: #B8C4D6;">Thông báo thời gian thực · đăng nhập S</div>
+      </div>
+      <div class="node" style="background: #fff; border: 1px solid #E3E8EF;">
+        <div class="nt" style="color: #0E1B33;">ElasticSearch + Logstash</div>
+        <div class="ns" style="color: #6B7C93;">Log &amp; phân tích sự kiện (quan sát)</div>
+      </div>
+      <div class="node" style="background: #fff; border: 1px solid #E3E8EF;">
+        <div class="nt" style="color: #0E1B33;">Bên ngoài</div>
+        <div class="ns" style="color: #6B7C93;">Zalo OA API · Slack (kênh vận hành nội bộ) · SMTP → admin.buyerside@nhadat.cc · Google Maps</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div style="background: #FFF3EC; border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 15px; color: #0E1B33;">SRS-2.2 · Hai đường giao tiếp S ↔ B — cần chốt (OPEN-03)</div>
+      <div style="font-size: 13px; line-height: 1.6; color: #243651;"><strong>B — API S Side ↔ B Side</strong> là đường nghiệp vụ chính: có Requested Info ID, truy vết được, cập nhật listing (FR-44), hiện ở admin. <strong>A — relay qua Slack</strong> giữ vai trò kênh quan sát/can thiệp của con người, không phải đường đi bắt buộc của dữ liệu.</div>
+    </div>
+    <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 15px; color: #0E1B33;">Ghi chú kiến trúc (OPEN-11)</div>
+      <div style="font-size: 13px; line-height: 1.6; color: #243651;">Logstash không bảo đảm giao nhận (at-least-once, retry, DLQ) mà NFR-04 đòi hỏi. Khuyến nghị: <strong>Postgres outbox + worker</strong> (hoặc pgmq) cho hàng đợi nghiệp vụ; giữ Logstash + ES cho log. Ảnh hưởng báo giá vendor — chờ chủ dự án chốt.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; color: #243651; }
+    a { color: #E2571E; } a:hover { color: #F2691F; }
+    .tbl { background: #fff; border: 1px solid #E3E8EF; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(14,27,51,0.06); }
+    .tblh { padding: 10px 16px; font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 13.5px; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+    .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 16px; border-top: 1px solid #F1F4F9; font-size: 12px; }
+    .fn { font-family: 'JetBrains Mono', monospace; color: #0E1B33; }
+    .ft { color: #6B7C93; }
+    .rel { font-size: 11px; color: #B45309; background: #FFF3EC; border-radius: 999px; padding: 2px 9px; font-weight: 600; }
+  </style>
+</helmet>
+<div style="width: 1360px; min-height: 1240px; box-sizing: border-box; background: #F6F8FB; padding: 48px 56px; display: flex; flex-direction: column; gap: 24px;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #E3E8EF; padding-bottom: 18px;">
+    <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 800; font-size: 30px; color: #0E1B33;">SRS · Mô hình dữ liệu</div>
+    <div style="font-size: 13px; color: #6B7C93;">docs/07-srs.md §3 · Postgres · snake_case · uuid PK · RLS</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start;">
+
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div class="tbl" style="border: 1.5px solid #E2571E;">
+        <div class="tblh" style="background: #E2571E;">properties <span class="rel" style="background: rgba(255,255,255,0.2); color: #fff;">trung tâm</span></div>
+        <div class="row"><span class="fn">code</span><span class="ft">int unique · mã #35148</span></div>
+        <div class="row"><span class="fn">deal_type</span><span class="ft">sale | rent</span></div>
+        <div class="row"><span class="fn">street · alley · ward · district</span><span class="ft">text</span></div>
+        <div class="row"><span class="fn">landmarks</span><span class="ft">jsonb · "hồ bơi Lam Sơn, 250m"</span></div>
+        <div class="row"><span class="fn">access_type</span><span class="ft">MT | HXH | HXT | hẻm xe máy</span></div>
+        <div class="row"><span class="fn">land_area_m2 ≠ legal_area_m2</span><span class="ft">DT thực ≠ DT công nhận</span></div>
+        <div class="row"><span class="fn">price · negotiable</span><span class="ft">numeric · bool</span></div>
+        <div class="row"><span class="fn">has_red_book · completion_year</span><span class="ft">null = chờ xác minh</span></div>
+        <div class="row"><span class="fn">raw_pitch · variants</span><span class="ft">câu rao gốc · biến thể AI</span></div>
+        <div class="row"><span class="fn">status</span><span class="ft">đang rao | tạm ngưng | đã bán | hết hạn</span></div>
+        <div class="row"><span class="fn">hot_score</span><span class="ft">sự kiện 2 tháng gần nhất (FR-73)</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tblh" style="background: #0E1B33;">property_events <span class="rel">n:1 properties</span></div>
+        <div class="row"><span class="fn">event_type</span><span class="ft">CREATED · UPDATED · INFO_REQUESTED · INFO_ADDED · VIEWING_REQUESTED</span></div>
+        <div class="row"><span class="fn">occurred_at · actor_type</span><span class="ft">timestamptz · buyer/seller/ctv/system</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tblh" style="background: #243651;">photos <span class="rel">n:1 properties</span></div>
+        <div class="row"><span class="fn">kind</span><span class="ft">mặt tiền · trong nhà · hẻm · sổ đỏ · khác</span></div>
+        <div class="row"><span class="fn">is_public</span><span class="ft">sổ đỏ luôn false · signed URL ≤15ph</span></div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div class="tbl">
+        <div class="tblh" style="background: #0068FF;">buyers</div>
+        <div class="row"><span class="fn">zalo_user_id</span><span class="ft">unique</span></div>
+        <div class="row"><span class="fn">phone</span><span class="ft">null · CHỈ khi B tự nguyện (UF-06)</span></div>
+        <div class="row"><span class="fn">fingerprint_ids</span><span class="ft">nối phiên web ↔ Zalo (FR-30)</span></div>
+        <div class="row"><span class="fn">connection_status</span><span class="ft">active | at_risk ≥5 ngày | lost</span></div>
+        <div class="row"><span class="fn">preferences</span><span class="ft">tiêu chí học được sau xem nhà (UF-07)</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tblh" style="background: #0068FF;">conversations · messages <span class="rel">n:1 buyers</span></div>
+        <div class="row"><span class="fn">buyer/system_message_count</span><span class="ft">phục vụ OKR 3 (≥30 tin/cuộc)</span></div>
+        <div class="row"><span class="fn">quy tắc cắt</span><span class="ft">tin cách nhau &gt;30 phút → cuộc mới (FR-72)</span></div>
+        <div class="row"><span class="fn">sentiment</span><span class="ft">negative → escalation UPSET</span></div>
+      </div>
+      <div class="tbl" style="border: 1.5px solid #B45309;">
+        <div class="tblh" style="background: #B45309;">info_requests <span class="rel" style="background: rgba(255,255,255,0.2); color: #fff;">vòng lặp trung tâm</span></div>
+        <div class="row"><span class="fn">id</span><span class="ft">= Requested Info ID (API S↔B)</span></div>
+        <div class="row"><span class="fn">question_text</span><span class="ft">nguyên văn câu hỏi của B</span></div>
+        <div class="row"><span class="fn">question_category</span><span class="ft">còn bán · sổ đỏ · quy hoạch · kinh doanh · hình ảnh · hoàn công</span></div>
+        <div class="row"><span class="fn">routed_to</span><span class="ft">seller → ctv → chuyên viên (SLA 4h/24h)</span></div>
+        <div class="row"><span class="fn">applied_to_listing</span><span class="ft">trả lời đồng thời làm giàu listing (FR-44)</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tblh" style="background: #243651;">viewings <span class="rel">B × BĐS</span></div>
+        <div class="row"><span class="fn">guide_type</span><span class="ft">ctv (hàng CCRB) | nmg (hàng NMG)</span></div>
+        <div class="row"><span class="fn">status</span><span class="ft">requested → confirmed → reminded → completed</span></div>
+        <div class="row"><span class="fn">outcome_feedback · rating</span><span class="ft">tinh chỉnh tiêu chí + chấm NMG</span></div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div class="tbl">
+        <div class="tblh" style="background: #12805C;">sellers</div>
+        <div class="row"><span class="fn">seller_type</span><span class="ft">ccrb (phí 1%) | nmg (phí 0.5%)</span></div>
+        <div class="row"><span class="fn">active_listings_count</span><span class="ft">chuẩn NMG: ≥10 tin mọi lúc</span></div>
+        <div class="row"><span class="fn">success_rate_6m</span><span class="ft">≥5% moving average</span></div>
+        <div class="row"><span class="fn">avg_rating · contract_status</span><span class="ft">≤3/5 → cảnh báo/chấm dứt (OPEN-12)</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tblh" style="background: #243651;">tags · property_tags</div>
+        <div class="row"><span class="fn">slug · keyword</span><span class="ft">TOP-100 keyword Google (OPEN-06)</span></div>
+        <div class="row"><span class="fn">criteria</span><span class="ft">jsonb → lọc listing cho trang tag</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tblh" style="background: #243651;">saved_criteria</div>
+        <div class="row"><span class="fn">criteria · active</span><span class="ft">match listing mới → báo B (FR-64)</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tblh" style="background: #243651;">curated_lists</div>
+        <div class="row"><span class="fn">token</span><span class="ft">≥22 ký tự · URL /ds/… noindex (FR-100)</span></div>
+      </div>
+      <div class="tbl">
+        <div class="tblh" style="background: #B42318;">escalations</div>
+        <div class="row"><span class="fn">type</span><span class="ft">QUESTION · VOICE · VIEWING · UPSET</span></div>
+        <div class="row"><span class="fn">emailed_at</span><span class="ft">email thất bại vẫn giữ bản ghi (FR-81)</span></div>
+      </div>
+      <div style="background: #FFF3EC; border-radius: 12px; padding: 16px 18px; font-size: 12.5px; line-height: 1.6; color: #243651;">
+        <strong style="color: #0E1B33;">Bảo mật (SRS-3.9):</strong> RLS bật mọi bảng · anon chỉ đọc properties đang rao + photos public + tags · buyers.phone mã hoá at-rest, chỉ CTV đọc · ảnh sổ đỏ bucket riêng.
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

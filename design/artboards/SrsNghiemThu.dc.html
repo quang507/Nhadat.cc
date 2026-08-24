@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; color: #243651; }
+    a { color: #E2571E; } a:hover { color: #F2691F; }
+    .ac { background: #fff; border: 1px solid #E3E8EF; border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; line-height: 1.5; }
+    .acid { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 500; color: #E2571E; flex-shrink: 0; padding-top: 1px; }
+    .ph { border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+    .pht { font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 14.5px; }
+    .phs { font-size: 12px; line-height: 1.5; }
+  </style>
+</helmet>
+<div style="width: 1360px; min-height: 1100px; box-sizing: border-box; background: #F6F8FB; padding: 48px 56px; display: flex; flex-direction: column; gap: 26px;">
+
+  <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #E3E8EF; padding-bottom: 18px;">
+    <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 800; font-size: 30px; color: #0E1B33;">SRS · Phát hành &amp; nghiệm thu</div>
+    <div style="font-size: 13px; color: #6B7C93;">docs/07-srs.md §7–8 · ngân sách build 418tr (NFR-14)</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 17px; color: #0E1B33;">Kế hoạch phát hành — nguồn hàng trước, chat sau</div>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; align-items: stretch;">
+      <div class="ph" style="background: #0E1B33; border-radius: 12px 0 0 12px;">
+        <div class="pht" style="color: #fff;">P0 · Nền</div>
+        <div class="phs" style="color: #B8C4D6;">DB schema · Supabase · Zalo SSO · upload ảnh · mini-site rao tin (UF-09)</div>
+      </div>
+      <div class="ph" style="background: #E2571E; border-radius: 0;">
+        <div class="pht" style="color: #fff;">P1 · Nguồn hàng</div>
+        <div class="phs" style="color: #FFE0CF;">Bóc tách AI · biến thể · listing / chi tiết / tag · SEO → phục vụ OKR 1 &amp; 2 trước</div>
+      </div>
+      <div class="ph" style="background: #F2691F;">
+        <div class="pht" style="color: #fff;">P2 · Chat</div>
+        <div class="phs" style="color: #FFE9DC;">Bot B Side · NLU · gợi ý · vòng info_request</div>
+      </div>
+      <div class="ph" style="background: #FFF3EC;">
+        <div class="pht" style="color: #0E1B33;">P3 · Giao dịch</div>
+        <div class="phs" style="color: #6B7C93;">Đặt lịch xem · escalation · email · admin</div>
+      </div>
+      <div class="ph" style="background: #fff; border: 1px solid #E3E8EF; border-radius: 0 12px 12px 0;">
+        <div class="pht" style="color: #0E1B33;">P4 · Giữ chân</div>
+        <div class="phs" style="color: #6B7C93;">Follow-up · chống xoá Zalo · match tin mới · đánh giá — kiểm ASM-01/OPEN-09 trước</div>
+      </div>
+    </div>
+    <div style="font-size: 12.5px; color: #6B7C93; line-height: 1.5;">Thứ tự này quan trọng: xây bot trước khi có hàng sẽ tạo ra chat rỗng — đúng thứ OKR 3 loại trừ ("không có chat vô nghĩa").</div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 17px; color: #0E1B33;">12 kịch bản nghiệm thu MVP — chạy end-to-end mới nhận bàn giao</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+      <div class="ac"><span class="acid">AC-01</span><span>Google → trang tag → chi tiết → click Zalo → bot nhắc <strong>đúng</strong> nhu cầu ở tin đầu tiên</span></div>
+      <div class="ac"><span class="acid">AC-02</span><span>Chat từ đầu: thu đủ khu vực + giá, trả đúng 3 listing, "xem thêm" trả 3 tiếp</span></div>
+      <div class="ac"><span class="acid">AC-03</span><span>"Cho xem sổ đỏ" → info_request → S trả lời kèm ảnh → B nhận <strong>và</strong> listing được cập nhật</span></div>
+      <div class="ac"><span class="acid">AC-04</span><span>Đặt lịch xem: B <strong>từ chối</strong> cho số ĐT vẫn đặt được lịch · nhận link Maps · email [VIEWING]</span></div>
+      <div class="ac"><span class="acid">AC-05</span><span>Sau xem, B nói "chỉ mua MT trên 4m" → gợi ý lần sau đã loại nhà hẻm</span></div>
+      <div class="ac"><span class="acid">AC-06</span><span>B im lặng 5 ngày → nhận tin chống-xoá-Zalo, kết thúc bằng câu hỏi</span></div>
+      <div class="ac"><span class="acid">AC-07</span><span>S gõ <strong>một</strong> câu rao → bóc tách đúng ≥4 trường → sửa → đăng → có mã #ID</span></div>
+      <div class="ac"><span class="acid">AC-08</span><span>Nhắn Zalo "cần bán nhà" → nhận ngay link /raoban</span></div>
+      <div class="ac"><span class="acid">AC-09</span><span>Admin đủ 5 bảng, 20 mục/trang, click B ID nhảy sang Zalo</span></div>
+      <div class="ac"><span class="acid">AC-10</span><span>4 loại email tới admin.buyerside@nhadat.cc đúng subject, đúng body</span></div>
+      <div class="ac"><span class="acid">AC-11</span><span>Danh sách riêng /ds/token: noindex, không lộ danh tính B</span></div>
+      <div class="ac"><span class="acid">AC-12</span><span>Tìm "gần ngã tư Trần Bình Trọng và An Dương Vương" trả kết quả hợp lý</span></div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px;">
+    <div style="background: #fff; border: 1px solid #E3E8EF; border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 15px; color: #0E1B33;">NFR then chốt — cách kiểm chứng</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 20px; font-size: 12.5px; line-height: 1.5; color: #243651;">
+        <div><strong>NFR-01</strong> · bot p95 &lt; 3s — load test 50 tin đồng thời</div>
+        <div><strong>NFR-02</strong> · LCP &lt; 2.5s/4G — Lighthouse mobile ≥ 90</div>
+        <div><strong>NFR-04</strong> · chaos test: tắt worker 10 phút → 0 tin mất</div>
+        <div><strong>NFR-06</strong> · pen-test: URL sổ đỏ hết hạn 15 phút</div>
+        <div><strong>NFR-07</strong> · rà 100 hội thoại: 0 lần hỏi số ĐT sai chỗ</div>
+        <div><strong>NFR-09</strong> · 100 URL tag index, 0 lỗi structured data</div>
+      </div>
+    </div>
+    <div style="background: #FFF3EC; border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-family: 'Be Vietnam Pro', sans-serif; font-weight: 700; font-size: 15px; color: #0E1B33;">Chặn bởi Open Issues</div>
+      <div style="font-size: 12.5px; line-height: 1.65; color: #243651;"><strong>OPEN-03</strong> Slack relay vs API S↔B → chặn P2 · <strong>OPEN-05</strong> xin số ĐT vs lời hứa riêng tư → FR-53 · <strong>OPEN-09</strong> hạn mức tin chủ động Zalo → chặn P4 · <strong>OPEN-11</strong> Logstash làm queue → NFR-04. Toàn bộ 14 mục: docs/09-open-issues.md.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
