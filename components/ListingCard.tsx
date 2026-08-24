@@ -20,7 +20,7 @@ export default function ListingCard({ listing }: { listing: Listing }) {
   return (
     <Link
       href={`/nha-dat/${encodeURIComponent(code)}`}
-      className="group overflow-hidden rounded-xl border border-navy/10 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+      className="group overflow-hidden rounded-king border border-line bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-navy/5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -40,16 +40,16 @@ export default function ListingCard({ listing }: { listing: Listing }) {
       </div>
       <div className="space-y-1.5 p-4">
         <p className="line-clamp-1 font-semibold group-hover:text-brand">{title}</p>
-        <p className="line-clamp-1 text-sm text-navy/60">
+        <p className="line-clamp-1 text-sm text-mute">
           {[listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ")}
         </p>
         <div className="flex items-center justify-between pt-1">
           <span className="text-lg font-bold text-brand">
             {formatPrice(listing.price_vnd, listing.price_raw)}
           </span>
-          <span className="text-sm text-navy/60">{formatArea(listing.area_m2)}</span>
+          <span className="text-sm text-mute">{formatArea(listing.area_m2)}</span>
         </div>
-        <p className="pt-1 text-xs text-navy/40">#{code}</p>
+        <p className="pt-1 text-xs text-mute/70">#{code}</p>
       </div>
     </Link>
   );

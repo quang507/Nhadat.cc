@@ -71,7 +71,7 @@ export default async function Page({
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <nav className="mb-4 text-sm text-navy/50">
+      <nav className="mb-4 text-sm text-mute">
         <Link href="/" className="hover:text-brand">Trang chủ</Link>
         {" / "}
         <Link href={listing.deal === "cho_thue" ? "/cho-thue" : "/mua-ban"} className="hover:text-brand">
@@ -83,7 +83,7 @@ export default async function Page({
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="overflow-hidden rounded-2xl bg-navy/5">
+          <div className="overflow-hidden rounded-king bg-navy/5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={placeholderImg(code)}
@@ -91,7 +91,7 @@ export default async function Page({
               className="aspect-[16/10] w-full object-cover"
             />
           </div>
-          <p className="mt-2 text-xs text-navy/40">
+          <p className="mt-2 text-xs text-mute/70">
             Ảnh thật của căn này gửi qua Zalo — nhắn “cho em xem hình #{listing.code}”.
           </p>
 
@@ -99,23 +99,23 @@ export default async function Page({
             {listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất {loc}
           </h1>
 
-          <div className="mt-4 flex flex-wrap gap-6 rounded-xl border border-navy/10 bg-cream p-4">
+          <div className="mt-4 flex flex-wrap gap-6 rounded-king border border-line bg-white p-4">
             <div>
-              <p className="text-xs text-navy/50">Giá</p>
+              <p className="text-xs text-mute">Giá</p>
               <p className="text-xl font-bold text-brand">
                 {formatPrice(listing.price_vnd, listing.price_raw)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-navy/50">Diện tích</p>
+              <p className="text-xs text-mute">Diện tích</p>
               <p className="text-xl font-bold">{formatArea(listing.area_m2)}</p>
             </div>
             <div>
-              <p className="text-xs text-navy/50">Khu vực</p>
+              <p className="text-xs text-mute">Khu vực</p>
               <p className="text-xl font-bold">{loc}</p>
             </div>
             <div>
-              <p className="text-xs text-navy/50">Mã tin</p>
+              <p className="text-xs text-mute">Mã tin</p>
               <p className="text-xl font-bold">#{listing.code}</p>
             </div>
           </div>
@@ -130,10 +130,10 @@ export default async function Page({
           {facts.length > 0 && (
             <div className="mt-6">
               <h2 className="text-lg font-bold">Đã xác minh với chủ nhà</h2>
-              <ul className="mt-2 divide-y divide-navy/10 rounded-xl border border-navy/10">
+              <ul className="mt-2 divide-y divide-line rounded-king border border-line bg-white">
                 {facts.map((f, i) => (
                   <li key={i} className="flex gap-3 p-3 text-sm">
-                    <span className="min-w-32 font-medium text-navy/60">{f.question}</span>
+                    <span className="min-w-32 font-medium text-mute">{f.question}</span>
                     <span>{f.answer}</span>
                   </li>
                 ))}
@@ -143,19 +143,19 @@ export default async function Page({
         </div>
 
         {/* Khối CTA Zalo mang ngữ cảnh (FR-13/14) */}
-        <aside className="h-fit rounded-2xl border border-navy/10 p-5 shadow-sm lg:sticky lg:top-20">
+        <aside className="h-fit rounded-king border border-line bg-white p-5 shadow-sm lg:sticky lg:top-20">
           <p className="font-bold">Hỏi về căn #{listing.code}</p>
-          <p className="mt-1 text-sm text-navy/60">
+          <p className="mt-1 text-sm text-mute">
             Còn không? Hẻm rộng bao nhiêu? Sổ sách sao? — nhắn Zalo, tụi em trả
             lời ngay, chưa rõ thì đi hỏi chủ nhà giùm anh chị.
           </p>
           <a
             href={zaloLink(`#${listing.code}`)}
-            className="mt-4 block rounded-xl bg-zalo py-3 text-center font-bold text-white hover:opacity-90"
+            className="mt-4 block rounded-full bg-zalo py-3 text-center font-bold text-white hover:opacity-90"
           >
             Chat Zalo về căn này
           </a>
-          <p className="mt-3 text-center text-xs text-navy/40">
+          <p className="mt-3 text-center text-xs text-mute/70">
             Miễn phí · không cần để lại số điện thoại
           </p>
         </aside>

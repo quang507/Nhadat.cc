@@ -1,12 +1,19 @@
 @import "tailwindcss";
 
+/* Skin theo theme King (kingthemes.net — nhánh kingtheme):
+   Nunito · nền #f6f7f9 · card trắng bo 14px viền #eef0f3 · nút pill ·
+   chữ #13151d / phụ #687686. Primary giữ cam thương hiệu nhadat.cc
+   (design/tokens.json); muốn đúng đỏ King thì đổi --color-brand: #e60023. */
 @theme {
   --color-brand: #e2571e;
   --color-brand-dark: #c44615;
-  --color-navy: #0e1b33;
+  --color-navy: #13151d;
   --color-zalo: #0068ff;
-  --color-cream: #fdf6f1;
-  --font-sans: var(--font-be-vietnam), system-ui, sans-serif;
+  --color-cream: #f6f7f9;
+  --color-line: #eef0f3;
+  --color-mute: #687686;
+  --font-sans: var(--font-nunito), system-ui, sans-serif;
+  --radius-king: 14px;
 }
 
 html {
@@ -14,5 +21,5 @@ html {
 }
 
 body {
-  @apply bg-white text-navy antialiased;
+  @apply bg-cream text-navy antialiased;
 }

@@ -26,13 +26,13 @@ export default function Page() {
 
       <div className="mt-8 space-y-4">
         {STEPS.map(([n, title, desc]) => (
-          <div key={n} className="flex gap-4 rounded-xl border border-navy/10 p-5">
+          <div key={n} className="flex gap-4 rounded-king border border-line p-5">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand font-bold text-white">
               {n}
             </span>
             <div>
               <p className="font-bold">{title}</p>
-              <p className="mt-1 text-sm text-navy/60">{desc}</p>
+              <p className="mt-1 text-sm text-mute">{desc}</p>
             </div>
           </div>
         ))}
@@ -40,11 +40,11 @@ export default function Page() {
 
       <a
         href={zaloLink("raoban")}
-        className="mt-8 block rounded-xl bg-zalo py-4 text-center text-lg font-bold text-white hover:opacity-90"
+        className="mt-8 block rounded-full bg-zalo py-4 text-center text-lg font-bold text-white hover:opacity-90"
       >
         Nhắn câu rao qua Zalo ngay
       </a>
-      <p className="mt-3 text-center text-sm text-navy/50">
+      <p className="mt-3 text-center text-sm text-mute">
         Chủ nhà ngại gõ? Gọi tụi em đọc miệng cũng được — CTV ghi giùm.
       </p>
     </div>

@@ -9,7 +9,7 @@ const NAV = [
 
 export default function Header() {
   return (
-    <header className="sticky top-0 z-40 border-b border-navy/10 bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
         <Link href="/" className="flex items-baseline gap-0.5 text-2xl font-extrabold">
           <span className="text-navy">nhadat</span>
@@ -24,7 +24,7 @@ export default function Header() {
         </nav>
         <a
           href={zaloLink("header")}
-          className="rounded-lg bg-zalo px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-90"
+          className="rounded-full bg-zalo px-4 py-2 text-sm font-semibold text-white shadow hover:opacity-90"
         >
           Chat Zalo — miễn phí
         </a>

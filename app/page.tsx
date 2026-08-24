@@ -41,12 +41,12 @@ export default async function Home() {
           </p>
           <a
             href={zaloLink("hero")}
-            className="mt-8 flex max-w-2xl items-center gap-3 rounded-2xl bg-white p-3 pl-5 text-navy shadow-xl transition hover:shadow-2xl"
+            className="mt-8 flex max-w-2xl items-center gap-3 rounded-king bg-white p-3 pl-5 text-navy shadow-xl transition hover:shadow-2xl"
           >
-            <span className="flex-1 text-navy/50">
+            <span className="flex-1 text-mute">
               Ví dụ: “Có nhà gần ngã tư Nguyễn Trãi với Trần Bình Trọng không em?”
             </span>
-            <span className="rounded-xl bg-zalo px-5 py-3 font-semibold text-white">
+            <span className="rounded-full bg-zalo px-5 py-3 font-semibold text-white">
               Hỏi qua Zalo
             </span>
           </a>
@@ -71,10 +71,10 @@ export default async function Home() {
           ["🕐", "Trực 24/7, nhớ nhu cầu của anh chị", "Chat hôm nay, ba tháng sau quay lại vẫn tiếp đúng chỗ cũ."],
           ["📋", "Thiếu thông tin thì đi hỏi giùm", "Chưa rõ pháp lý, hẻm rộng bao nhiêu — tụi em hỏi chủ nhà rồi báo lại."],
         ].map(([icon, title, desc]) => (
-          <div key={title} className="rounded-xl border border-navy/10 bg-cream p-5">
+          <div key={title} className="rounded-king border border-line bg-white p-5">
             <p className="text-2xl">{icon}</p>
             <p className="mt-2 font-bold">{title}</p>
-            <p className="mt-1 text-sm text-navy/60">{desc}</p>
+            <p className="mt-1 text-sm text-mute">{desc}</p>
           </div>
         ))}
       </section>
@@ -115,7 +115,7 @@ export default async function Home() {
             <Link
               key={w}
               href={`/mua-ban?phuong=${encodeURIComponent(w)}`}
-              className="rounded-full border border-navy/15 px-4 py-1.5 text-sm hover:border-brand hover:text-brand"
+              className="rounded-full border border-line px-4 py-1.5 text-sm hover:border-brand hover:text-brand"
             >
               {w}
             </Link>
@@ -125,7 +125,7 @@ export default async function Home() {
 
       {/* CTA rao bán (INS-05) */}
       <section className="mx-auto max-w-6xl px-4 py-10">
-        <div className="rounded-2xl bg-brand px-6 py-10 text-white md:px-12">
+        <div className="rounded-king bg-brand px-6 py-10 text-white md:px-12">
           <h2 className="text-2xl font-extrabold md:text-3xl">
             Rao bán? Một câu là xong.
           </h2>
@@ -136,7 +136,7 @@ export default async function Home() {
           </p>
           <Link
             href="/raoban"
-            className="mt-6 inline-block rounded-xl bg-white px-6 py-3 font-bold text-brand hover:bg-cream"
+            className="mt-6 inline-block rounded-full bg-white px-6 py-3 font-bold text-brand hover:bg-cream"
           >
             Rao bán ngay — miễn phí
           </Link>
