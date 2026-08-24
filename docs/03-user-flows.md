@@ -147,6 +147,12 @@ Câu trả lời mới của S được lọc liên hệ (FR-105) rồi lưu kho
 câu là có liền. Timeout theo FR-110: nhắc S sau 24h, quá 48h đóng yêu cầu và báo
 trung thực cho B.
 
+**Nhánh hàng dự án (INS-10, FR-115/FR-116)**: listing có `project_id` thì phân tầng
+câu hỏi trước khi làm gì khác — câu thuộc **tầng dự án** (vị trí, chủ đầu tư, pháp lý
+dự án, tiện ích, tiến độ) trả lời ngay từ dữ liệu chung, không info_request; câu
+**tầng căn** ("căn 50 còn không?") đọc `unit_status`, chỉ hỏi lại S khi quá TTL
+xác nhận (FR-107). Căn đã bán → báo mọi B đang chờ kèm căn thay thế cùng dự án.
+
 **Quy tắc vàng (RSK-03)**: với câu hỏi pháp lý, quy hoạch, "còn bán không", hệ thống
 **không bao giờ khẳng định**. Mẫu đúng quan sát được:
 > *"Cho tới 15h ngày 17/9 thì còn. Nhưng để em hỏi lại anh nhé."*
@@ -224,7 +230,7 @@ flowchart TD
 ---
 
 ## UF-09 — S rao tin từ website
-**Actor** CCRB / NMG · **FR** FR-90…FR-96, FR-101
+**Actor** CCRB / NMG · **FR** FR-90…FR-96, FR-101, FR-114
 
 ```mermaid
 flowchart TD
@@ -252,6 +258,11 @@ flowchart TD
 
 Từ bản bóc tách này, AI sinh **nhiều biến thể câu rao** theo độ dài và theo khía cạnh
 B quan tâm (gần trường học, gần tiện ích…) — FR-93.
+
+**Nhánh hàng dự án (FR-114)**: ở bước xác nhận bóc tách, thêm trường **tuỳ chọn**
+"Thuộc dự án": chọn dự án có sẵn + nhập mã căn (tầng/hướng nếu biết) — áp cho cả
+luồng Zalo từng bước (UF-10). Bỏ qua thì tin là hàng lẻ như cũ; không thêm ma sát
+cho CCRB (INS-05 giữ nguyên).
 
 ---
 

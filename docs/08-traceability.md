@@ -29,7 +29,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | INS-07 | Ngôn ngữ nói ≠ bộ lọc | FR-02, FR-09, FR-22, FR-23, SRS-4.5, AC-12 |
 | INS-08 | Sâu một quận trước | BR-01, SRS-8 (thứ tự P1 trước P2) |
 | INS-09 | "Rao một lần là xong", không spam S | FR-103, §6.9 (06), SRS-5.3 `stale_listing_check` |
-| INS-10 | Hàng dự án: dữ liệu hai tầng, tồn kho theo căn | *chưa có FR — chờ chốt phạm vi ở OPEN-15* |
+| INS-10 | Hàng dự án: dữ liệu hai tầng, tồn kho theo căn | FR-113…FR-117 (OPEN-15 chốt phương án b, 24/08) |
 | INS-11 | Trung gian toàn phần, ẩn danh hai chiều | FR-104…FR-112, UF-10, UF-13, SRS-3.8 |
 
 ## 8.3 FR → UF → WF → SRS → AC
@@ -71,6 +71,10 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-109, FR-111 | UF-10 | — | SRS-3.8 | — |
 | FR-110 | UF-05 | WF-06 | SRS-5.3 `info_request_sla` | — |
 | FR-112 | UF-07 | — | SRS-3.8 `deals` | — |
+| FR-113 | — | — | SRS-3.10 `projects` | AC-13 |
+| FR-114 | UF-09, UF-10 | WF-09 | SRS-3.10 | AC-13 |
+| FR-115, FR-116 | UF-05 | — | SRS-3.10, SRS-5.1 (nhánh tầng dự án / tồn kho căn) | AC-13 |
+| FR-117 | — | — | *giai đoạn 2 — chưa đặc tả UI* | — |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp

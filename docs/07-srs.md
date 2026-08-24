@@ -295,6 +295,27 @@ escalations         id, type enum(QUESTION, VOICE, VIEWING, UPSET), buyer_id, pr
 - RLS bật trên mọi bảng; `anon` chỉ đọc được `properties` có `status='dang_rao'`,
   `photos` có `is_public=true`, và `tags`.
 
+### SRS-3.10 · `projects` — hàng dự án (FR-113, OPEN-15 phương án b)
+```
+id             uuid pk
+name           text not null        -- "Ny'ah"
+slug           text unique
+developer      text
+street, ward, district, city, lat, lng
+legal_status   text                 -- pháp lý cấp dự án
+amenities      jsonb
+floor_plans    jsonb                -- mặt bằng tầng
+handover_date  date
+description    text
+```
+`properties` bổ sung: `project_id uuid null fk projects`, `unit_code text`,
+`floor int`, `direction text`, `unit_status enum(con_ban, giu_cho, da_coc, da_ban)`.
+
+**Quy tắc thừa hưởng (FR-115/FR-116)**: trường tầng dự án đọc từ `projects`, không
+tạo info_request; `unit_status` là nguồn sự thật cho "căn X còn không" — quá TTL
+`last_confirmed_at` (FR-107) thì xác nhận lại với S trước khi khẳng định. MVP chưa
+có UI giỏ hàng riêng — cập nhật `unit_status` qua luồng rao/sửa tin và bảng `deals`.
+
 ---
 
 ## 4. Đặc tả giao diện lập trình
@@ -381,6 +402,10 @@ B Side nối `fingerprint ↔ zalo_user_id` và mở hội thoại bằng câu x
 nhận tin → chuẩn hoá → phân loại intent → cập nhật hồ sơ nhu cầu
   → chọn hành động:
       TRẢ LỜI ĐƯỢC        → soạn theo tone §6.8, gửi
+      TẦNG DỰ ÁN          → listing có project_id + câu hỏi thuộc dữ liệu chung
+                            → trả từ projects, KHÔNG info_request (FR-115)
+      TỒN KHO CĂN         → "căn X còn không" → đọc unit_status; quá TTL
+                            (FR-107) mới xác nhận lại với S (FR-116)
       CẦN XÁC MINH        → info_request (SRS-4.1) + câu giữ nhịp
       ĐỦ TIÊU CHÍ         → truy vấn, trả tối đa 3 listing
       MUỐN XEM NHÀ        → luồng viewing
@@ -478,6 +503,7 @@ Hệ thống được nghiệm thu khi **toàn bộ** kịch bản sau chạy en
 | AC-10 | 4 loại email tới `admin.buyerside@nhadat.cc` đúng subject, đúng body | FR-81 |
 | AC-11 | Tạo danh sách riêng → URL token → `noindex`, không lộ danh tính B | UF-12, FR-100 |
 | AC-12 | Tìm kiếm "gần ngã tư Trần Bình Trọng và An Dương Vương" trả kết quả hợp lý | FR-22, INS-07 |
+| AC-13 | Rao một căn gắn dự án (mã căn 50) → hỏi bot "căn 50 của dự án đó còn không?" trả đúng theo `unit_status`; hỏi tiện ích dự án được trả lời ngay **không** sinh info_request; đổi `unit_status` sang đã bán → mọi B trong interests được báo kèm căn thay thế cùng dự án | FR-113…FR-116, INS-10 |
 
 ## 8. Kế hoạch phát hành đề xuất
 

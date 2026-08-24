@@ -188,6 +188,19 @@ Nguồn cả nhóm: [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot,
 | FR-111 | Ảnh từ Zalo là URL tạm: tải về ngay, đẩy lên kho file qua adapter, DB chỉ lưu tham chiếu (kho file thay được không đụng logic bot — xem OPEN-18) | M | Cầu Nối §Kiến trúc |
 | FR-112 | Điểm sao từng tương tác ghi vào hồ sơ người dùng; bảng deals ghi giao dịch thành công làm căn cứ tính phí (CCRB 1% — CTV hưởng 0.5%; NMG 0.5%) và tỉ lệ chốt 5% của NMG | M | Cầu Nối §F4; chốt OPEN-16 phương án (b) |
 
+### I. Hàng dự án (PROJECT)
+
+Nguồn cả nhóm: chốt `OPEN-15` phương án (b), chủ dự án 24/08/2026; phân tích `INS-10`.
+Phạm vi MVP: **đặt nền dữ liệu**, chưa làm UI giỏ hàng riêng.
+
+| ID | Yêu cầu | Ưu tiên | Nguồn |
+|---|---|---|---|
+| FR-113 | Data model dự án: bảng `projects` (tên, slug, chủ đầu tư, vị trí, pháp lý dự án, tiện ích, mặt bằng, tiến độ) + liên kết trên listing: `project_id` (null với hàng lẻ), `unit_code` ("50", "A-12.07"), `floor`, `direction`, `unit_status` ∈ {còn bán, giữ chỗ, đã cọc, đã bán} | M | OPEN-15 (b); INS-10 |
+| FR-114 | Trong luồng rao (Zalo từng bước FR-109 hoặc `/raoban`), S/CTV gắn được tin vào dự án: chọn dự án có sẵn + nhập mã căn; không thuộc dự án thì bỏ qua — tin là hàng lẻ | M | OPEN-15 (b) |
+| FR-115 | Bot trả lời câu hỏi **tầng dự án** (vị trí, chủ đầu tư, pháp lý dự án, tiện ích, tiến độ) từ dữ liệu chung của dự án, KHÔNG tạo info_request; vòng hỏi-đáp INS-06 chỉ dành cho dữ liệu tầng căn | M | INS-10 |
+| FR-116 | "Căn X của dự án Y còn không?" → đọc `unit_status`; quá TTL xác nhận (FR-107) thì xác nhận lại với S trước khi khẳng định; căn chuyển đã bán → báo mọi B đang chờ (interests, FR-108) kèm gợi ý căn thay thế **cùng dự án** | M | INS-10; Cầu Nối §F2 |
+| FR-117 | Trang dự án `/du-an/{slug}` + màn quản lý giỏ hàng cho admin/NMG — **giai đoạn 2**, ngoài phạm vi MVP | S | OPEN-15 (b) |
+
 ---
 
 ## 2.5 Yêu cầu phi chức năng

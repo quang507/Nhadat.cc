@@ -106,6 +106,7 @@ erDiagram
     CURATED_LIST }o--o{ PROPERTY : ""
     INFO_REQUEST }o--|| SELLER : "được hỏi tới"
     SELLER ||--o{ AGENT_SCORE : "chỉ NMG"
+    PROJECT ||--o{ PROPERTY : "căn thuộc dự án (null với hàng lẻ)"
 ```
 
 ### Thực thể trung tâm — PROPERTY
@@ -123,6 +124,12 @@ erDiagram
 | Nội dung | `raw_pitch` (câu rao gốc của S), `variants[]` (biến thể AI sinh) | FR-91, FR-93 |
 | Trạng thái | `status` ∈ {đang rao, tạm ngưng, đã bán, hết hạn}, `last_verified_at` | RSK-06 |
 | Xếp hạng | `hot_score` = số sự kiện 2 tháng gần nhất | FR-73 |
+| Dự án | `project_id` (null = hàng lẻ), `unit_code`, `floor`, `direction`, `unit_status` ∈ {còn bán, giữ chỗ, đã cọc, đã bán} | FR-113, INS-10 |
+
+Thực thể **PROJECT** (FR-113): `name`, `slug`, `developer`, vị trí, `legal_status`,
+`amenities`, `floor_plans`, `handover_date` — dữ liệu **dùng chung** cho mọi căn;
+câu hỏi tầng dự án trả lời từ đây, không qua vòng info_request (FR-115). Không bao
+giờ dùng chung dữ liệu giữa hai dự án. Trang `/du-an/{slug}`: giai đoạn 2 (FR-117).
 
 ### PROPERTY_EVENT — 5 loại sự kiện chuẩn
 [nguồn: chats w B.docx §Các sự kiện với 1 BĐS]

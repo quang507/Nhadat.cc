@@ -19,7 +19,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-12 | Quy trình chấm điểm & chấm dứt NMG | Trung bình | FR-102 |
 | OPEN-13 | Nguồn dữ liệu tiện ích quanh BĐS | Thấp | FR-28 |
 | OPEN-14 | Chính sách fingerprint & tuân thủ dữ liệu cá nhân | Trung bình | FR-16, NFR-08 |
-| OPEN-15 | Hàng dự án (căn/giỏ hàng) — vào MVP hay giai đoạn 2? | Cao | Data model, INS-10 |
+| OPEN-15 | Hàng dự án (căn/giỏ hàng) — **ĐÃ CHỐT: phương án (b)**, 24/08/2026 | Cao | → FR-113…FR-117 |
 | OPEN-16 | ~~Có cần CRM riêng không?~~ **Đã chốt (b)** — bảng deals, không CRM ngoài | — | OPEN-02 |
 | OPEN-17 | Định dạng mã công khai listing (#35148 vs BDS-Q5-0012) | Thấp | Copy web + chat |
 | OPEN-18 | Kho file: Supabase Storage vs OneDrive (qua adapter) | Trung bình | FR-111, NFR-06 |
@@ -117,6 +117,10 @@ liệu cá nhân có thể coi đây là dữ liệu cá nhân, cần thông bá
 chính lời hứa riêng tư đang là điểm bán hàng (INS-04).
 
 ### OPEN-15 · Hàng dự án (căn / giỏ hàng) — vào MVP hay giai đoạn 2?
+> ✅ **ĐÃ CHỐT — phương án (b)**, chủ dự án, 24/08/2026. Hiện thực hoá thành
+> `FR-113`…`FR-117` (docs/02 nhóm I), cập nhật UF-05/UF-09, WF-09, SRS-3.1/3.10/5.1,
+> AC-13. Giữ nguyên mục này làm hồ sơ quyết định.
+
 **Nguồn**: trao đổi chủ dự án 22/08/2026 — *"bán căn 50 của Ny'ah"*, nhu cầu kiểm soát
 trong một dự án đã bán những căn nào; phân tích ở `INS-10`.
 Toàn bộ tài liệu gốc (kịch bản chat, S's side, biz model) chỉ mô tả **hàng lẻ thứ cấp**;
