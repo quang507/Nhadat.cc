@@ -132,6 +132,25 @@ Hệ quả cấu trúc:
 3. Trạng thái listing, matching, hàng đợi nằm trong database — LLM chỉ hiểu ý
    định và trích xuất, "không giao cho LLM nhớ".
 
+### INS-12 — Sau sáp nhập 2025, địa giới CŨ vẫn là ngôn ngữ của thị trường
+Từ 1/7/2025 TP.HCM sắp xếp lại đơn vị hành chính (bỏ cấp quận, sáp nhập phường —
+Nghị quyết 202/2025/QH15), nhưng người mua bán nhà vẫn tìm kiếm và định giá theo
+địa giới cũ: đối thủ radanhadat.vn đến giữa 2026 vẫn chạy toàn bộ URL SEO theo
+quận/phường cũ (`/mua-ban-nha-dat-thanh-pho-ho-chi-minh-quan-go-vap`,
+`quan-tan-phu`…) và chỉ xử lý địa giới mới bằng **bài content tra cứu** ánh xạ
+cũ↔mới [nguồn: WebSearch 24/08/2026 — index Google site radanhadat.vn; bài
+"Bản đồ TPHCM sau sáp nhập 2025" trên radanhadat.vn/edutech]. Chủ dự án chốt
+cùng hướng: **nhadat.cc dùng vị trí lúc chưa sáp nhập** (Quận 5, phường cũ) làm
+trục taxonomy chính [nguồn: trao đổi chủ dự án, 24/08/2026].
+
+Hệ quả:
+1. Taxonomy khu vực ở `04` giữ nguyên Quận 5 + phường cũ — không đổi URL.
+2. Cần **bảng ánh xạ địa giới cũ↔mới** (`ward_mapping`) để: (a) hiển thị kèm tên
+   phường mới khi nói chuyện pháp lý/sổ đỏ, (b) làm content SEO "tra cứu sau
+   sáp nhập" — đúng khe traffic radanhadat đang khai thác.
+3. Bot phải hiểu cả hai cách gọi trong chat ("Phường 4 Quận 5" và tên phường mới)
+   và quy về cùng một khu vực.
+
 ## 1.2 Người dùng
 
 ### Bên mua (B)
@@ -211,6 +230,69 @@ Hệ quả cho phạm vi sản phẩm:
 | Portal listing VN | batdongsan.com.vn, chotot Nhà | Traffic, độ phủ toàn quốc | Bán lead → user bị spam gọi điện; tin trùng, tin ảo |
 | Sàn/môi giới truyền thống | Đại lý khu vực | Quan hệ, biết hàng thật | Không trực 24/7, phủ hẹp, không lưu nhu cầu khách |
 | Chat-first quốc tế | (concept trong `demo2Vitalify.docx`) | — | Chưa có bản địa hoá Zalo cho thị trường VN |
+| Portal thế hệ mới | **radanhadat.vn** (MCDX, ra mắt 10/2024) | Đăng tin 0đ, công cụ cho môi giới, SEO facet mạnh | Vẫn là mô hình listing-first bán hiển thị; không có tầng hội thoại giữ khách — chi tiết §1.5b |
+
+### 1.5b Phân tích sâu đối thủ trực tiếp: radanhadat.vn
+
+Chủ dự án chỉ định đây là hình mẫu tham chiếu gần nhất ("tao tính làm cũng tương
+tự web này") [nguồn: trao đổi chủ dự án, 24/08/2026]. Site chặn crawler từ môi
+trường phân tích nên toàn bộ dưới đây tái dựng từ **nguồn thứ cấp** — index
+Google của chính site + loạt bài PR (VnExpress, CafeF, Dân trí, baodautu,
+Vietnamnet, 12/2024–2025) + mô tả app trên App Store/Google Play
+[nguồn: WebSearch 24/08/2026]; cần xác minh lại bằng crawl trực tiếp
+(Firecrawl) trước khi trích số liệu cụ thể.
+
+**Mô hình.** Nền tảng đăng tin thế hệ mới của công ty MCDX (ra mắt 21/10/2024):
+doanh thu từ phía đăng tin (bảng giá tin thường/VIP/premium + combo, trang
+`/bang-gia-dang-tin`), đang chạy chính sách **đăng tin 0 đồng không giới hạn**
+để gom cung — đúng bài toán "nguồn hàng trước" mà nhadat.cc cũng đối mặt (RSK-04).
+Tin VIP mô tả tới 9 BĐS, premium 12 BĐS trong một tin.
+
+**Tính năng phía người mua (B):**
+1. **Tìm theo thời gian di chuyển** — nhập điểm neo (chỗ làm, trường…) và tìm BĐS
+   trong ngưỡng phút di chuyển, thay vì chỉ theo ranh giới hành chính.
+2. **Kiểm tra quy hoạch** — tra quy hoạch thửa đất ngay trong luồng xem tin
+   (trọng tâm cho nhà phố/đất nền).
+3. **Công cụ phân tích tài chính** — dòng tiền, tính khoản vay.
+4. **Tìm theo tiện ích xung quanh** (siêu thị, trường, bệnh viện) cho căn hộ.
+
+**Tính năng phía môi giới (app "Radanhadat.vn - Môi giới BĐS", 2025):**
+1. Quản lý kho hàng với trường thông tin chuẩn hoá (DT, pháp lý, hướng, giá…).
+2. **Matching tự động nhu cầu khách đã lưu ↔ kho hàng** — máy gợi ý căn phù hợp
+   cho từng khách (đúng ý tưởng `interests`/FR-108 của ta, nhưng đặt trong tay
+   môi giới chứ không phải bot).
+3. **Chia sẻ kho hàng giữa các môi giới** trong mạng lưới (đầu chung — ta gọi
+   là chia hàng NMG).
+4. (Lộ trình) quản lý phòng ban cho chủ sàn: giao việc, theo dõi, **đánh giá
+   hiệu suất môi giới** — tương đồng bài toán đánh giá CTV/NMG (FR-102).
+
+**Luồng đăng tin (S):** nút "Đăng tin" → đăng nhập Google/Microsoft → bắt buộc
+liên kết SĐT + OTP → khai CCCD/mã số thuế (tuân thủ pháp lý sàn TMĐT) → tạo tin
+nhập trường + ảnh/video → **duyệt tin trước khi hiển thị**. Đối chiếu: đây chính
+là form nhiều bước mà INS-05 xác định là phản mô hình với CCRB — khe hở của ta
+là "rao bằng một câu, AI bóc tách" (FR-91) và rao ngay trong Zalo (FR-109).
+
+**IA / SEO:** URL facet đúng kiểu `04` đang đặc tả — mẫu quan sát được:
+`/mua-ban-nha-dat-{tinh-thanh}[-{quan}]/gia-tu-{X}-den-{Y}[-dt-tu-{A}-den-{B}]`,
+`/thue-nha-dat-toan-quoc/...`; title gắn "mới nhất T{tháng}/{năm}" tự động.
+Content hub `/edutech/` (bản đồ quy hoạch từng phường, review dự án, hướng dẫn
+tra cứu sau sáp nhập) nuôi SEO informational; trung tâm hỗ trợ tách subdomain
+`hotro.radanhadat.vn`. Địa giới: **toàn bộ URL vẫn theo quận/phường cũ** sau
+sáp nhập 1/7/2025 → củng cố INS-12.
+
+**Kết luận cạnh tranh — học gì, khác gì:**
+
+| | radanhadat.vn | nhadat.cc học / khác |
+|---|---|---|
+| Học | URL facet + title theo tháng; content hub quy hoạch/sáp nhập; địa giới cũ làm trục | Áp vào `04` (đã cùng hướng); thêm content ánh xạ cũ↔mới (INS-12) |
+| Học | Checklist trường chuẩn hoá theo loại BĐS trong app môi giới | Đã hiện thực bằng `required_facts`/`listing_missing_facts` (INS-06) |
+| Khác | Listing-first: giá trị dừng ở tin đăng + công cụ; liên hệ = lộ SĐT trên tin | Chat-first: giá trị nằm ở hội thoại 3–4 năm (INS-01/02), ẩn danh hai chiều (INS-11) |
+| Khác | Phục vụ môi giới là khách trả tiền chính, phủ toàn quốc | Phục vụ giao dịch đầu-cuối, sâu một quận (INS-08), phí theo giao dịch chứ không theo tin |
+| Né | Đăng tin nhiều bước + duyệt tin thủ công | Rao một câu qua Zalo, AI viết lại (INS-05, FR-109) |
+
+Ba công cụ B-side của họ (thời gian di chuyển, quy hoạch, tài chính) là ứng viên
+tính năng giai đoạn sau cho ta ở dạng **trả lời trong chat** thay vì widget —
+chưa đưa vào FR, chờ chủ dự án chọn phạm vi: ghi `OPEN-19`.
 
 Tham chiếu giao diện: theme **Veedoo** (`Vedoo pages/`) — cấu trúc card listing,
 thanh search dính đầu trang, khối thông số nổi trên ảnh hero ở trang chi tiết.

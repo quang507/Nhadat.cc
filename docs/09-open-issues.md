@@ -23,6 +23,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-16 | ~~Có cần CRM riêng không?~~ **Đã chốt (b)** — bảng deals, không CRM ngoài | — | OPEN-02 |
 | OPEN-17 | Định dạng mã công khai listing (#35148 vs BDS-Q5-0012) | Thấp | Copy web + chat |
 | OPEN-18 | Kho file: Supabase Storage vs OneDrive (qua adapter) | Trung bình | FR-111, NFR-06 |
+| OPEN-19 | Có làm 3 công cụ B-side kiểu radanhadat (thời gian di chuyển, quy hoạch, tài chính) dạng trả lời trong chat không, giai đoạn nào | Thấp | docs/01 §1.5b |
 
 ---
 
@@ -209,3 +210,15 @@ lạnh (ảnh gốc dung lượng lớn) nếu chi phí Storage thành vấn đ�
 > signed URL ngắn hạn cho sổ đỏ (NFR-06). Khuyến nghị giữ nguyên hybrid: ảnh gốc
 > OneDrive, ảnh nén phục vụ web trên Supabase Storage (free 1GB ≈ 8–12k ảnh nén
 > ≈ đủ MVP Quận 5); vượt free thì cân nhắc Cloudflare R2 trước khi trả Supabase Pro.
+
+### OPEN-19 · Công cụ B-side kiểu radanhadat: làm không, làm lúc nào
+**Nguồn**: phân tích đối thủ radanhadat.vn (`01 §1.5b`, WebSearch 24/08/2026).
+Ba công cụ phía người mua của radanhadat — (1) tìm theo thời gian di chuyển,
+(2) kiểm tra quy hoạch, (3) phân tích tài chính/khoản vay — đều khả thi ở dạng
+**bot trả lời trong chat** thay vì widget web (đúng IA-P1). Nhưng mỗi cái kéo
+theo nguồn dữ liệu/chi phí riêng: routing API (Goong/Mapbox), dữ liệu quy hoạch
+(chưa có nguồn máy-đọc-được đáng tin — dính RSK-03), công thức khoản vay (dễ).
+**Phương án**: (a) không làm ở MVP, chỉ giữ khe cho giai đoạn 2; (b) làm ngay
+món rẻ nhất (tính khoản vay trong chat); (c) làm cả ba.
+**Khuyến nghị**: (a) cho quy hoạch (rủi ro khẳng định sai — chuyển thành câu hỏi
+cho S theo INS-06), (b) cho khoản vay; thời gian di chuyển để giai đoạn 2.

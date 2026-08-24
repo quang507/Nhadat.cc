@@ -200,6 +200,7 @@ Phạm vi MVP: **đặt nền dữ liệu**, chưa làm UI giỏ hàng riêng.
 | FR-115 | Bot trả lời câu hỏi **tầng dự án** (vị trí, chủ đầu tư, pháp lý dự án, tiện ích, tiến độ) từ dữ liệu chung của dự án, KHÔNG tạo info_request; vòng hỏi-đáp INS-06 chỉ dành cho dữ liệu tầng căn | M | INS-10 |
 | FR-116 | "Căn X của dự án Y còn không?" → đọc `unit_status`; quá TTL xác nhận (FR-107) thì xác nhận lại với S trước khi khẳng định; căn chuyển đã bán → báo mọi B đang chờ (interests, FR-108) kèm gợi ý căn thay thế **cùng dự án** | M | INS-10; Cầu Nối §F2 |
 | FR-117 | Trang dự án `/du-an/{slug}` + màn quản lý giỏ hàng cho admin/NMG — **giai đoạn 2**, ngoài phạm vi MVP | S | OPEN-15 (b) |
+| FR-118 | Địa giới hành chính dùng **bản cũ trước sáp nhập 1/7/2025** làm trục chính (Quận 5, phường cũ) trên toàn hệ thống: URL, taxonomy, chat. Bảng ánh xạ `ward_mapping` (phường cũ ↔ phường mới theo NQ 202/2025/QH15) để: (a) bot hiểu cả hai cách gọi và quy về một khu vực, (b) hiển thị kèm tên mới khi nói chuyện pháp lý/sổ đỏ, (c) nội dung SEO tra cứu cũ↔mới | M | INS-12; quyết định chủ dự án 24/08/2026 |
 
 ---
 
