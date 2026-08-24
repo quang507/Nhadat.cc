@@ -32,9 +32,12 @@ export function zaloLink(context?: string): string {
   return context ? `${ZALO_OA_URL}?ref=${encodeURIComponent(context)}` : ZALO_OA_URL;
 }
 
-// Ảnh placeholder xoay vòng theo mã tin (ảnh thật nằm OneDrive, chờ pipeline OPEN-18)
+// Ảnh placeholder xoay vòng theo mã tin (ảnh thật nằm OneDrive, chờ pipeline OPEN-18).
+// Serve từ GitHub raw (repo public) để deploy tay không phải đóng gói ảnh.
+const IMG_BASE =
+  "https://raw.githubusercontent.com/quang507/Nhadat.cc/main/public/img";
 export function placeholderImg(seed: string): string {
   let h = 0;
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return `/img/house${(h % 5) + 1}.jpg`;
+  return `${IMG_BASE}/house${(h % 5) + 1}.jpg`;
 }
