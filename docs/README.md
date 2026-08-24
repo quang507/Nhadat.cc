@@ -28,13 +28,13 @@ flowchart LR
 | [00-glossary.md](00-glossary.md) | Từ điển thuật ngữ | Tất cả |
 | [01-research.md](01-research.md) | Bối cảnh thị trường, người dùng, đối thủ, ràng buộc | PO, Founder, Marketing |
 | [02-requirements.md](02-requirements.md) | Mục tiêu KD, persona, FR/NFR | PO, Dev Lead, QA |
-| [03-user-flows.md](03-user-flows.md) | 12 luồng end-to-end | UX, Dev, QA |
+| [03-user-flows.md](03-user-flows.md) | 13 luồng end-to-end | UX, Dev, QA |
 | [04-information-architecture.md](04-information-architecture.md) | Sitemap, URL/SEO, content model | UX, SEO, Dev |
 | [05-wireframes.md](05-wireframes.md) | Wireframe low-fi 14 màn hình | UX, UI, Dev |
 | [06-ui-design.md](06-ui-design.md) | Design system + tone giọng chat | UI, Dev, Content |
 | [07-srs.md](07-srs.md) | Đặc tả kỹ thuật: kiến trúc, DB, API, NFR | Dev, QA, Vendor |
 | [08-traceability.md](08-traceability.md) | Ma trận truy vết | PO, QA |
-| [09-open-issues.md](09-open-issues.md) | 16 vấn đề cần chủ dự án chốt | Founder, PO |
+| [09-open-issues.md](09-open-issues.md) | 18 vấn đề cần chủ dự án chốt | Founder, PO |
 
 ## Đọc từ đâu
 

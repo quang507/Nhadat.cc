@@ -11,14 +11,14 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 |---|---|---|
 | 0 | [Glossary](docs/00-glossary.md) | Từ điển thuật ngữ (B, S, CCRB, NMG, HXH…) |
 | 1 | [Research](docs/01-research.md) | Insight, persona, mô hình KD, ngân sách, rủi ro |
-| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 78 FR · 15 NFR · 5 giả định |
-| 3 | [User Flow](docs/03-user-flows.md) | 12 luồng end-to-end |
+| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 87 FR · 15 NFR · 5 giả định |
+| 3 | [User Flow](docs/03-user-flows.md) | 13 luồng end-to-end |
 | 4 | [Information Architecture](docs/04-information-architecture.md) | Sitemap, URL/SEO, content model |
 | 5 | [Wireframe](docs/05-wireframes.md) | 14 màn hình low-fi |
 | 6 | [UI Design](docs/06-ui-design.md) | Design system + tone giọng chat |
 | 7 | [SRS](docs/07-srs.md) | Kiến trúc, data model, API, 12 tiêu chí nghiệm thu |
 | 8 | [Traceability](docs/08-traceability.md) | Ma trận truy vết BR→FR→UF→WF→SRS→AC |
-| 9 | [Open Issues](docs/09-open-issues.md) | 16 vấn đề chờ chủ dự án chốt |
+| 9 | [Open Issues](docs/09-open-issues.md) | 18 vấn đề chờ chủ dự án chốt |
 
 Quy ước làm việc và ranh giới bảo mật: [`CLAUDE.md`](CLAUDE.md).
 Quy trình cập nhật tài liệu: [`.claude/skills/ba-pipeline/SKILL.md`](.claude/skills/ba-pipeline/SKILL.md).

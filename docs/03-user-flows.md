@@ -141,6 +141,12 @@ sequenceDiagram
     BS->>BS: Ghi sự kiện INFO_ADDED
 ```
 
+**Kho tích luỹ trước, hỏi S sau** (FR-44 + Cầu Nối §F3): trước khi tạo info_request,
+bot tìm trong `media` / `listing_facts` — đã có thì **trả ngay, không làm phiền S**.
+Câu trả lời mới của S được lọc liên hệ (FR-105) rồi lưu kho, nên B thứ hai hỏi cùng
+câu là có liền. Timeout theo FR-110: nhắc S sau 24h, quá 48h đóng yêu cầu và báo
+trung thực cho B.
+
 **Quy tắc vàng (RSK-03)**: với câu hỏi pháp lý, quy hoạch, "còn bán không", hệ thống
 **không bao giờ khẳng định**. Mẫu đúng quan sát được:
 > *"Cho tới 15h ngày 17/9 thì còn. Nhưng để em hỏi lại anh nhé."*
@@ -163,6 +169,11 @@ sequenceDiagram
 7. CTV/NMG xác nhận → bot chốt giờ + gửi link Google Maps (FR-54).
 8. Nhắc trước giờ hẹn (FR-55).
 9. Sau buổi xem → UF-07.
+
+**Mở khoá danh tính (FR-104 · Cầu Nối §F4)** — toàn hệ thống chỉ có đúng một khoảnh
+khắc hai bên biết nhau: khi lịch xem **đã chốt**. Lúc đó B nhận địa chỉ chính xác +
+tên, SĐT người dẫn xem (CTV nếu chủ tin là CCRB, chính NMG nếu là NMG); S nhận tên +
+SĐT người mua. Trước thời điểm này: ẩn danh tuyệt đối cả hai chiều.
 
 **Nhánh lỗi**
 - B từ chối cho số ĐT → vẫn nhận lịch, liên hệ hoàn toàn qua Zalo (bắt buộc, theo NFR-07).
@@ -244,16 +255,21 @@ B quan tâm (gần trường học, gần tiện ích…) — FR-93.
 
 ---
 
-## UF-10 — S rao tin từ Zalo
-**Actor** CCRB / NMG · **FR** FR-97
+## UF-10 — S rao tin ngay trong Zalo (F1)
+**Actor** CCRB / NMG · **FR** FR-109, FR-111, FR-106 · *(bản cũ dùng FR-97 đã deprecated;
+quyết định đảo chiều theo [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026])*
 
-1. Ai đó nhắn Zalo OA: *"Cần bán nhà MT Trần Bình Trọng giá 6 tỉ"*.
-2. Bot cảm ơn và **lập tức** gửi link mini-site: `https://www.nhadat.cc/raoban`.
-3. Chuyển sang UF-09 tại bước đăng nhập.
+1. S nhắn Zalo OA: *"Cần bán nhà MT Trần Bình Trọng giá 6 tỉ"*.
+2. Bot hỏi **lần lượt từng bước**: khu vực → loại BĐS → giá → diện tích → pháp lý → mô tả.
+3. Khu vực không khớp danh mục chuẩn → bot đưa lựa chọn quận/phường để S chọn.
+4. Bot yêu cầu gửi ảnh: mặt tiền · nội thất · sổ.
+5. Ảnh Zalo là URL tạm → tải về ngay, upload kho file qua adapter, ghi bảng `media` (FR-111).
+6. Listing vào `pending_review` chờ admin duyệt; thiếu thông tin hoặc **ảnh lộ SĐT** → trả về S bổ sung.
+7. Duyệt đạt → `active`, cấp mã công khai (định dạng: `OPEN-17`), sẵn sàng matching.
 
-> Quyết định thiết kế: **không** nhận rao tin đầy đủ ngay trong Zalo — vì cần upload
-> ảnh, xác nhận trường bóc tách và chọn loại người bán, đều làm tốt hơn trên web.
-> Zalo chỉ đóng vai trò bắt lead bên bán.
+Một S có nhiều BĐS: mỗi lần đăng tạo một listing riêng với mã riêng. Mã công khai
+là danh tính duy nhất B nhìn thấy (FR-104). Mini-site `/raoban` (UF-09) vẫn tồn tại
+như kênh song song trên web — một câu rao + AI bóc tách.
 
 ---
 
@@ -288,3 +304,28 @@ Chat không thể hiển thị quá 3 BĐS mỗi tin nhắn (FR-24), nên khi c�
 
 **Ràng buộc riêng tư**: URL chứa token không đoán được, không index (`noindex`),
 không lộ thông tin cá nhân của B trên trang.
+
+---
+
+## UF-13 — Vòng đời listing & báo sold cho người đang chờ
+**Actor** hệ thống, admin, S, B · **FR** FR-106, FR-107, FR-108 · [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft: S bắt đầu đăng
+    draft --> pending_review: đủ thông tin + ảnh
+    pending_review --> active: admin duyệt, cấp mã
+    pending_review --> draft: thiếu / ảnh lộ SĐT
+    active --> negotiating: chốt lịch xem
+    negotiating --> active: không chốt được
+    active --> sold: S báo đã bán
+    negotiating --> sold: chốt giao dịch
+    active --> expired: quá TTL không xác nhận
+    expired --> active: S xác nhận còn bán
+```
+
+1. Trạng thái gắn vào **từng BĐS**, không gắn vào người bán; S báo "bán rồi" ở bất kỳ đâu trong hội thoại đều được nhận diện.
+2. `last_confirmed_at` điều khiển TTL 7 ngày (FR-107): trong hạn giới thiệu ngay; quá hạn bot hỏi S *"Căn [mã] còn bán không anh/chị?"* trước khi giới thiệu B mới — S không bị hỏi lặp mỗi lần có khách.
+3. Khi listing chuyển `sold`: bot quét bảng `interests`, **chủ động báo mọi B đang chờ** căn đó kèm gợi ý căn thay thế cùng khu vực/tầm giá (FR-108).
+4. `expired` không xoá listing — chỉ ẩn khỏi matching cho tới khi S xác nhận lại.
+5. Ràng buộc Zalo: tin chủ động ngoài khung tương tác cần ZNS trả phí (`OPEN-09`) — thiết kế nhắc/báo nên gom vào các lần hai bên đang tương tác.

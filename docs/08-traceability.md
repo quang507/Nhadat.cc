@@ -29,7 +29,8 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | INS-07 | Ngôn ngữ nói ≠ bộ lọc | FR-02, FR-09, FR-22, FR-23, SRS-4.5, AC-12 |
 | INS-08 | Sâu một quận trước | BR-01, SRS-8 (thứ tự P1 trước P2) |
 | INS-09 | "Rao một lần là xong", không spam S | FR-103, §6.9 (06), SRS-5.3 `stale_listing_check` |
-| INS-10 | Hàng dự án: dữ liệu hai tầng, tồn kho theo căn | *chưa có FR — chờ chốt phạm vi ở OPEN-15, CRM ở OPEN-16* |
+| INS-10 | Hàng dự án: dữ liệu hai tầng, tồn kho theo căn | *chưa có FR — chờ chốt phạm vi ở OPEN-15* |
+| INS-11 | Trung gian toàn phần, ẩn danh hai chiều | FR-104…FR-112, UF-10, UF-13, SRS-3.8 |
 
 ## 8.3 FR → UF → WF → SRS → AC
 
@@ -60,12 +61,17 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-80 | — | WF-12…14 | UI-C10 | AC-09 |
 | FR-81 | UF-11 | — | SRS-5.5 | AC-10 |
 | FR-90…FR-96 | UF-09 | WF-08, WF-09 | SRS-4.6 | AC-07 |
-| FR-97 | UF-10 | WF-05 | SRS-5.1 | AC-08 |
 | FR-98 | UF-05 | WF-10 | SRS-4.2 | AC-03 |
 | FR-99 | — | — | — | *chưa đặc tả — `OPEN-10`* |
 | FR-100 | UF-12 | WF-11 | SRS-4.3 | AC-11 |
 | FR-101, FR-102 | UF-09 | WF-09 | SRS-3.4 | — |
 | FR-103 | UF-09 | — | SRS-5.3 | — |
+| FR-104, FR-105 | UF-06, UF-12 | — | SRS-3.8 (bất biến ẩn danh) | — |
+| FR-106, FR-107, FR-108 | UF-13 | — | SRS-3.8, SRS-5.3 | — |
+| FR-109, FR-111 | UF-10 | — | SRS-3.8 | — |
+| FR-110 | UF-05 | WF-06 | SRS-5.3 `info_request_sla` | — |
+| FR-112 | UF-07 | — | SRS-3.8 `deals` | — |
+| FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp
 

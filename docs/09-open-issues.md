@@ -20,7 +20,9 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-13 | Nguồn dữ liệu tiện ích quanh BĐS | Thấp | FR-28 |
 | OPEN-14 | Chính sách fingerprint & tuân thủ dữ liệu cá nhân | Trung bình | FR-16, NFR-08 |
 | OPEN-15 | Hàng dự án (căn/giỏ hàng) — vào MVP hay giai đoạn 2? | Cao | Data model, INS-10 |
-| OPEN-16 | Có cần CRM riêng không? | Trung bình | OPEN-02, vận hành |
+| OPEN-16 | ~~Có cần CRM riêng không?~~ **Đã chốt (b)** — bảng deals, không CRM ngoài | — | OPEN-02 |
+| OPEN-17 | Định dạng mã công khai listing (#35148 vs BDS-Q5-0012) | Thấp | Copy web + chat |
+| OPEN-18 | Kho file: Supabase Storage vs OneDrive (qua adapter) | Trung bình | FR-111, NFR-06 |
 
 ---
 
@@ -157,3 +159,26 @@ dịch/2 ngày (OKR 4) và trả lời được "dự án X đã bán căn nào"
 **Khuyến nghị**: (b) cho MVP. Chỉ cân nhắc CRM thật khi có >3 CTV hoặc >5 giao
 dịch/tuần. Định nghĩa các stage của `deals` phụ thuộc `OPEN-02` (thời điểm nào tính
 phí) — nên chốt hai mục này cùng lúc.
+
+**Trạng thái: ĐÃ CHỐT phương án (b)** — spec "Cầu Nối BĐS" v2 của chủ dự án đưa
+bảng `deals` vào thiết kế chính thức (FR-112), và schema đã tồn tại trên Supabase
+`nhadat-bot`. Còn treo duy nhất: định nghĩa stage chờ `OPEN-02`.
+
+### OPEN-17 · Định dạng mã công khai listing
+Bộ docs dùng `#35148` (số tự tăng, cue "Khi Zalo nhớ hỏi #35148"); spec Cầu Nối
+dùng `BDS-Q5-0012` (tiền tố + quận + số) [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026].
+**Phương án**: (a) `#35148` — ngắn, dễ đọc trong chat; (b) `BDS-Q5-0012` — tự mô tả
+khu vực, đẹp cho SEO/URL, nhưng dài khi gõ tay.
+**Khuyến nghị**: (b) làm mã chính thức trong DB/URL; chat chấp nhận mọi cách gõ
+("0012", "Q5-0012", "BDS-Q5-0012"). Cần chốt trước khi in mã lên web.
+
+### OPEN-18 · Kho file: Supabase Storage vs OneDrive
+SRS đặc tả Supabase Storage (NFR-06: bucket riêng cho sổ đỏ, signed URL 15 phút);
+spec Cầu Nối dùng OneDrive làm kho file sau adapter, "thay được không đụng logic
+bot" [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]. Hai bên thống nhất một điểm: **kho file nằm sau adapter**
+(FR-111) — bất đồng chỉ còn là backend mặc định.
+**Phương án**: (a) Supabase Storage — cùng hệ DB, signed URL + RLS có sẵn, đạt
+NFR-06 ngay; (b) OneDrive — dung lượng rẻ, nhưng tự xây kiểm soát truy cập, khó
+đạt NFR-06.
+**Khuyến nghị**: (a) làm mặc định MVP, giữ interface adapter; OneDrive làm kho
+lạnh (ảnh gốc dung lượng lớn) nếu chi phí Storage thành vấn đề.

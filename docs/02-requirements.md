@@ -110,7 +110,7 @@ Cổng NMG tự phục vụ đầy đủ (MVP dùng CTV vận hành thủ công)
 | FR-44 | Câu trả lời của S **đồng thời cập nhật listing**, phục vụ mọi B sau đó | M | S's side.docx §Hỏi thêm thông tin từ S |
 | FR-45 | Trong lúc chờ S, bot giữ nhịp hội thoại: "Trong khi chờ, chị có câu hỏi gì khác không ạ?" | M | S's side.docx |
 | FR-46 | Nhóm câu hỏi chuẩn hoá: còn bán không · sổ đỏ · quy hoạch · kinh doanh được không · ảnh hẻm/khu vực · hoàn công | M | chats w B.docx |
-| FR-47 | Có SLA cho yêu cầu thông tin; quá hạn thì escalate sang CTV rồi chuyên viên | S | [giả định BA] |
+| FR-47 | Có SLA cho yêu cầu thông tin; quá hạn thì escalate sang CTV rồi chuyên viên (mốc thời gian cụ thể: FR-110) | S | [giả định BA] |
 
 ### D. Đặt lịch xem nhà (VIEW)
 
@@ -164,13 +164,29 @@ Cổng NMG tự phục vụ đầy đủ (MVP dùng CTV vận hành thủ công)
 | FR-94 | Hiển thị bản đã bóc tách cho S xác nhận/chỉnh sửa trước khi đăng | M | PDF hệ thống §2 |
 | FR-95 | Đăng nhập bằng **Zalo SSO** | M | PDF hệ thống §2 |
 | FR-96 | Upload nhiều ảnh cho listing | M | PDF hệ thống §3 |
-| FR-97 | Khi có người nhắn Zalo OA muốn bán, bot lập tức gửi link mini-site rao tin | M | S's side.docx §List new |
+| FR-97 | `[deprecated — thay bằng FR-109]` Khi có người nhắn Zalo OA muốn bán, bot gửi link mini-site rao tin | — | S's side.docx §List new |
 | FR-98 | S nhận và trả lời câu hỏi bổ sung (kể cả gửi ảnh, PDF sổ đỏ) ngay trong luồng chat | M | S's side.docx §Hỏi thêm thông tin từ S |
 | FR-99 | Hỗ trợ định giá bằng cách so sánh nhanh với BĐS cạnh tranh trên thị trường | S | S's side.docx §Dịch vụ của nhadatCC cho S |
 | FR-100 | URL "Show a list": tạo danh sách vài chục BĐS riêng cho một B, nhận User ID + danh sách BĐS ID | M | S's side.docx §Show a list |
 | FR-101 | Phân loại S là CCRB hay NMG để áp đúng mức phí | M | biz model.docx |
 | FR-102 | Theo dõi tiêu chuẩn NMG: ≥10 listing, tỉ lệ thành công ≥5% (MA 6 tháng), rating >3/5 | S | biz model.docx §NMG |
 | FR-103 | Lời hứa "rao một lần là xong" với S: hệ thống theo đuổi việc bán tới khi gặp người mua phù hợp; chỉ liên hệ lại S khi cần xác minh thông tin hoặc chốt lịch xem — không spam S; tin không bị bỏ rơi (kết hợp `stale_listing_check`) | M | trao đổi chủ dự án 22/08/2026; INS-09 |
+
+### H. Trung gian ẩn danh & vòng đời listing (BROKER)
+
+Nguồn cả nhóm: [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026] — spec này thắng khi mâu thuẫn với các mục cũ.
+
+| ID | Yêu cầu | Ưu tiên | Nguồn |
+|---|---|---|---|
+| FR-104 | Ẩn danh hai chiều: B chỉ thấy mã listing + mô tả khu vực mức phường (không số nhà, không tên chủ); website hiển thị số điện thoại proxy; hai bên không bao giờ nhắn trực tiếp cho nhau | M | INS-11 |
+| FR-105 | Lọc liên hệ: mọi tin nhắn relay qua kiểm tra SĐT / Zalo ID / địa chỉ chính xác trước khi chuyển; ảnh duyệt tay giai đoạn đầu | M | INS-11 |
+| FR-106 | Vòng đời listing: draft → pending_review (admin duyệt) → active → negotiating → sold / expired; sold thì ngừng giới thiệu; expired chỉ ẩn khỏi matching, không xoá | M | Cầu Nối §Vòng đời |
+| FR-107 | TTL xác nhận 7 ngày (`last_confirmed_at`): trong hạn giới thiệu ngay không hỏi S; quá hạn phải xác nhận "còn bán không" với S trước khi giới thiệu cho B mới | M | Cầu Nối §F2 |
+| FR-108 | Bảng interests: ghi B nào đang quan tâm căn nào; khi listing chuyển sold, chủ động báo mọi B đang chờ kèm gợi ý căn thay thế | M | Cầu Nối §F2 |
+| FR-109 | Rao tin từng bước ngay trong Zalo (khu vực → loại → giá → DT → pháp lý → mô tả → ảnh); khu vực không khớp danh mục chuẩn thì đưa lựa chọn quận/phường; mini-site /raoban là kênh song song trên web | M | Cầu Nối §F1; thay FR-97 |
+| FR-110 | Timeout hỏi S: nhắc 1 lần sau 24h; quá 48h đóng yêu cầu (expired) và báo trung thực cho B kèm gợi ý căn khác | M | Cầu Nối §F3 |
+| FR-111 | Ảnh từ Zalo là URL tạm: tải về ngay, đẩy lên kho file qua adapter, DB chỉ lưu tham chiếu (kho file thay được không đụng logic bot — xem OPEN-18) | M | Cầu Nối §Kiến trúc |
+| FR-112 | Điểm sao từng tương tác ghi vào hồ sơ người dùng; bảng deals ghi giao dịch thành công làm căn cứ tính phí (CCRB 1% — CTV hưởng 0.5%; NMG 0.5%) và tỉ lệ chốt 5% của NMG | M | Cầu Nối §F4; chốt OPEN-16 phương án (b) |
 
 ---
 

@@ -256,7 +256,29 @@ status enum(requested, confirmed, reminded, completed, cancelled, no_show),
 outcome_feedback text, rating int
 ```
 
-### SRS-3.8 · Bảng phụ trợ
+### SRS-3.8 · Bảng broker — theo spec Cầu Nối BĐS v2
+Schema đã được hiện thực sẵn trên Supabase project `nhadat-bot` [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]:
+
+```
+listings.status            enum(draft, pending_review, active, negotiating, sold, expired)  -- FR-106
+listings.last_confirmed_at timestamptz   -- TTL 7 ngày (FR-107)
+interests                  id, listing_id, buyer_id, created_at
+                           -- B đang quan tâm căn nào; sold → báo tất cả (FR-108)
+listing_facts              id, listing_id, question_norm, answer, source_info_request_id
+                           -- kho hỏi-đáp tích luỹ: có sẵn thì trả ngay, không hỏi S
+media                      id, listing_id, kind, storage_ref, is_public
+                           -- ảnh Zalo URL tạm → tải về, đẩy kho file qua ADAPTER (FR-111, OPEN-18)
+deals                      id, listing_id, buyer_id, seller_id, stage, price_final,
+                           fee_rate, fee_amount, ctv_id, closed_at
+                           -- căn cứ tính phí + tỉ lệ chốt NMG (FR-112, OPEN-16 đã chốt (b))
+users.rating               -- điểm sao từng tương tác (chấm dứt NMG: OPEN-12)
+```
+
+**Bất biến ẩn danh (FR-104/105)**: view công khai không bao giờ trả về số nhà,
+tên hay liên hệ của S; mọi payload relay đi qua bộ lọc SĐT/Zalo/địa chỉ chính xác
+trước khi gửi; danh tính chỉ xuất hiện trong luồng xác nhận lịch xem (UF-06).
+
+### SRS-3.8b · Bảng phụ trợ
 ```
 tags                id, slug unique, keyword, title, description, criteria jsonb
 property_tags       property_id, tag_id
@@ -392,8 +414,8 @@ Loại khỏi kết quả: `status ≠ 'dang_rao'`, và listing B đã từ ch�
 | `followup_d3` | mỗi giờ | B im lặng đúng 3 ngày → FR-60 |
 | `zalo_keepalive` | mỗi giờ | B im lặng 5–6 ngày → FR-63, đặt `connection_status='at_risk'` |
 | `match_new_listings` | mỗi 15 phút | listing mới khớp `saved_criteria` → FR-64 |
-| `info_request_sla` | mỗi 30 phút | pending > 4h → escalate CTV; > 24h → chuyên viên (FR-47) |
-| `stale_listing_check` | thứ 2 hằng tuần | `last_verified_at` > 30 ngày → INFO_REQUESTED "còn bán không" |
+| `info_request_sla` | mỗi 30 phút | *(mốc theo FR-110)* pending > 24h → nhắc S một lần; > 48h → đóng (expired) + báo trung thực cho B; escalate CTV/chuyên viên chạy song song (FR-47) |
+| `stale_listing_check` | thứ 2 hằng tuần | *(tinh chỉnh theo FR-107)* TTL xác nhận là **7 ngày**, kiểm tra **tại thời điểm matching**: quá hạn thì hỏi S trước khi giới thiệu; job tuần chỉ quét listing không có lượt matching nào |
 | `close_conversations` | mỗi 5 phút | đóng hội thoại im lặng > 30 phút (FR-72) |
 
 ### SRS-5.4 · Phát hiện phản ứng tiêu cực (FR-77)

@@ -117,6 +117,21 @@ Hàng dự án (sơ cấp) khác hàng lẻ (thứ cấp) ở ba điểm cấu t
 Phạm vi đưa hàng dự án vào MVP hay giai đoạn sau: quyết định ở `OPEN-15`.
 Nhu cầu "kiểm soát đã bán những căn nào" cũng mở câu hỏi CRM: `OPEN-16`.
 
+### INS-11 — Bot là trung gian toàn phần: ẩn danh hai chiều tới lúc chốt lịch xem
+Spec "Cầu Nối BĐS" v2 của chủ dự án đẩy INS-04 đi xa hơn hẳn: không chỉ
+không-thu-số-điện-thoại, mà **hai bên không bao giờ nhắn trực tiếp cho nhau** —
+mọi trao đổi qua bot; buyer chỉ thấy mã listing + khu vực mức phường (không số
+nhà); website hiển thị số điện thoại proxy; danh tính hai bên chỉ mở khoá tại
+đúng một khoảnh khắc: **khi lịch xem nhà đã chốt** [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026].
+
+Hệ quả cấu trúc:
+1. Vị thế trung gian là tài sản — hai bên không thể "đi đêm" bỏ qua phí, và
+   nhadat.cc kiểm soát trải nghiệm đầu-cuối.
+2. Cần **lọc liên hệ chủ động**: mọi tin nhắn/ảnh relay phải được kiểm SĐT,
+   Zalo ID, địa chỉ chính xác trước khi chuyển.
+3. Trạng thái listing, matching, hàng đợi nằm trong database — LLM chỉ hiểu ý
+   định và trích xuất, "không giao cho LLM nhớ".
+
 ## 1.2 Người dùng
 
 ### Bên mua (B)
