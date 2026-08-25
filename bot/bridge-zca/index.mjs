@@ -54,12 +54,18 @@ api.listener.on("message", async (message) => {
         channel: "zalo_personal_test",
       }),
     });
-    const { reply, error } = await res.json();
+    const { reply, replies, error } = await res.json();
     if (error) return console.error("chat-reply lỗi:", error);
-    if (!reply) return;
+    const bubbles = Array.isArray(replies) && replies.length ? replies : reply ? [reply] : [];
+    if (!bubbles.length) return;
 
-    await api.sendMessage(reply, message.threadId, ThreadType.User);
-    console.log(`→ ${reply.slice(0, 80)}…`);
+    // FR-130: gửi từng bong bóng, trễ theo độ dài như người đang gõ
+    for (const bubble of bubbles) {
+      const typingMs = Math.min(1000 + bubble.length * 35, 6000);
+      await new Promise((r) => setTimeout(r, typingMs));
+      await api.sendMessage(bubble, message.threadId, ThreadType.User);
+      console.log(`→ ${bubble.slice(0, 80)}…`);
+    }
   } catch (e) {
     console.error("Lỗi xử lý tin:", e?.message ?? e);
   }

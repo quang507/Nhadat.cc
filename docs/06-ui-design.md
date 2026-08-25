@@ -190,6 +190,22 @@ Chưng cất từ 24 hội thoại mẫu trong `chats w B.docx`. Đây là đặ
 - ❌ Lặp lại **cùng một** mẫu follow-up hai lần liên tiếp.
 - ❌ Dùng emoji quá 1 cái mỗi tin nhắn.
 
+### Nhịp nhắn giống người (FR-130)
+
+- Trả lời đúng ý khách **trước**; câu hỏi (duy nhất) nằm cuối tin.
+- Không hỏi lại điều khách đã nói — hồ sơ nhu cầu tích luỹ qua các phiên
+  (`buyers.preferences`); gặp lại thì nhắc đúng nhu cầu cũ (mẫu "Gặp lại").
+- Bot đã hỏi 2 lượt liên tiếp → lượt kế **đưa giá trị trước** (gợi ý căn khớp
+  hồ sơ) rồi mới hỏi nhẹ, tránh cảm giác bị hỏi cung.
+- Viết như người nhắn tay: mỗi bong bóng 1–3 câu, không markdown, không gạch
+  đầu dòng (trừ khi liệt kê 2–3 căn); số viết kiểu nói ("5 tỷ", "60m2").
+- Một lượt trả lời được tách tối đa **2 bong bóng**, bong bóng sau gửi trễ
+  vài giây (kênh bridge/OA mô phỏng thời gian gõ phím).
+- Chưa đủ tiêu chí tối thiểu (khu vực + khoảng giá — UF-04) thì chưa gợi ý
+  căn, tập trung khai thác; trừ khi khách chủ động hỏi một căn cụ thể.
+
+[nguồn: quyết định chủ dự án 25/08/2026; chưng cất `chats w B.docx`]
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |
