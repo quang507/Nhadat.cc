@@ -9,6 +9,7 @@ Dữ liệu cào bằng [Firecrawl CLI](https://docs.firecrawl.dev/sdks/cli) ng�
 | `urls-all.txt` | Toàn bộ 1041 URL tìm được qua `firecrawl map` |
 | `sitemap-grouped.json` | Các URL trên, nhóm theo khu vực của site |
 | `pages/` | 32 trang trọng yếu đã scrape ra markdown |
+| [`mogi-hcm-du-an/`](mogi-hcm-du-an/) | **mogi.vn** — 1.613 dự án BĐS TPHCM (CSV + JSON + 162 trang thô), cào 2026-08-25 |
 
 ## Cấu trúc site (1041 URL)
 

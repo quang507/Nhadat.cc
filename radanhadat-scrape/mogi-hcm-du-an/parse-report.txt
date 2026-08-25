@@ -1,0 +1,8 @@
+pages parsed: 162
+projects: 1613
+  missing developer: 548
+  missing district: 0
+  missing handover: 902
+  missing price_from: 850
+  missing status: 544
+top districts: [('Quận 7', 214), ('Quận 9 (TP. Thủ Đức)', 173), ('Quận 2 (TP. Thủ Đức)', 168), ('Huyện Bình Chánh', 117), ('Quận Thủ Đức (TP. Thủ Đức)', 99), ('Quận Bình Tân', 87), ('Huyện Nhà Bè', 81), ('Quận 8', 77)]
