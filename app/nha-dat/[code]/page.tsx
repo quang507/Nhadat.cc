@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import ListingCard from "@/components/ListingCard";
 import TrackView from "@/components/TrackView";
 import { supabase, type Listing } from "@/lib/supabase";
+import { coverByCode, photosOfCode } from "@/lib/photos";
 import {
   formatArea,
   formatPrice,
@@ -48,7 +49,7 @@ export default async function Page({
   const listing = await getListing(code);
   if (!listing) notFound();
 
-  const [factsRes, relatedRes] = await Promise.all([
+  const [factsRes, relatedRes, photos] = await Promise.all([
     supabase
       .from("listing_facts")
       .select("question, answer")
@@ -64,9 +65,11 @@ export default async function Page({
       .neq("price_raw", "")
       .eq("ward", listing.ward ?? "")
       .limit(4),
+    photosOfCode(code), // FR-148
   ]);
   const facts = factsRes.data ?? [];
   const related = (relatedRes.data ?? []) as Listing[];
+  const relCovers = await coverByCode(related.map((l) => l.code));
 
   const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
   const desc = sanitizeDescription(listing.description);
@@ -86,16 +89,32 @@ export default async function Page({
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-2">
+          {/* FR-148: ảnh thật up theo mã tin (bucket listing-photos/<mã>/…) */}
           <div className="overflow-hidden rounded-king bg-navy/5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={placeholderImg(code)}
+              src={photos[0] ?? placeholderImg(code)}
               alt={loc}
               className="aspect-[16/10] w-full object-cover"
             />
           </div>
+          {photos.length > 1 && (
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              {photos.slice(1, 9).map((url) => (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  key={url}
+                  src={url}
+                  alt={loc}
+                  className="aspect-[4/3] w-full rounded-lg object-cover"
+                />
+              ))}
+            </div>
+          )}
           <p className="mt-2 text-xs text-mute/70">
-            Ảnh thật của căn này gửi qua Zalo — nhắn “cho em xem hình #{listing.code}”.
+            {photos.length
+              ? `${photos.length} ảnh thật của căn này. Cần thêm góc nào, nhắn Zalo tụi em gửi liền.`
+              : `Ảnh thật của căn này gửi qua Zalo — nhắn “cho em xem hình #${listing.code}”.`}
           </p>
 
           <h1 className="mt-5 text-2xl font-extrabold md:text-3xl">
@@ -188,7 +207,9 @@ export default async function Page({
         <section className="mt-12">
           <h2 className="mb-5 text-xl font-extrabold">Cùng khu {listing.ward}</h2>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {related.map((l) => <ListingCard key={l.id} listing={l} />)}
+            {related.map((l) => (
+              <ListingCard key={l.id} listing={l} photo={l.code ? relCovers[l.code] : null} />
+            ))}
           </div>
         </section>
       )}

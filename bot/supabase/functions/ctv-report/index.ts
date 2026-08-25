@@ -151,10 +151,19 @@ Deno.serve(async (req) => {
 
   let sentTo = "none";
   if (!dry_run) {
+    // FR-149 (quyết định 25/08): báo cáo về Zalo CÁ NHÂN admin, không qua OA.
+    // Đẩy vào reminders kind='report' → bridge acc clone kéo qua escalation-feed
+    // và nhắn tới số admin trong bảng `admins`. Còn OA thì gửi thẳng luôn.
     const oaToken = await secret(client, "ZALO_OA_ACCESS_TOKEN");
     const adminId = await secret(client, "ZALO_ADMIN_ZALO_ID");
     if (oaToken && adminId) {
       sentTo = (await sendZalo(oaToken, adminId, reportText)) ? `zalo_oa:${adminId}` : "zalo_error";
+    }
+    if (sentTo !== `zalo_oa:${adminId}`) {
+      await client.from("reminders").insert({
+        kind: "report", due_at: new Date().toISOString(), note: reportText,
+      });
+      sentTo = "queued_bridge";
     }
     for (const s of saved) {
       await client.from("ctv_daily_reports").upsert({

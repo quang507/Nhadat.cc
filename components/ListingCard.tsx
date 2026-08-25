@@ -16,9 +16,12 @@ const TYPE_LABEL: Record<string, string> = {
 export default function ListingCard({
   listing,
   featured,
+  photo,
 }: {
   listing: Listing;
   featured?: boolean;
+  /** FR-148: ảnh bìa thật (bucket listing-photos theo mã); không có thì ảnh minh hoạ */
+  photo?: string | null;
 }) {
   const code = listing.code ?? listing.id.slice(0, 8);
   const title =
@@ -32,7 +35,7 @@ export default function ListingCard({
       <div className={`relative overflow-hidden bg-navy/5 ${featured ? "aspect-[4/3] sm:aspect-auto sm:min-h-64 sm:flex-1" : "aspect-[4/3]"}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={placeholderImg(code)}
+          src={photo ?? placeholderImg(code)}
           alt={title}
           className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
         />

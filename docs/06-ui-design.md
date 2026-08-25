@@ -243,6 +243,13 @@ hiệu AI như cái gạch dài"*:
 - **Cần người thật (FR-135)**: khách đòi gặp người thật, bức xúc, hoặc đàm phán
   hồi kết → bot vẫn trả lời tử tế + "để em nhờ anh/chị phụ trách khu này nhắn
   lại liền", gắn cờ cho CTV tiếp quản; không bật cờ vì câu hỏi khó thường ngày.
+  Báo **CTV đang chăm đơn trước**; quá 30 phút chưa ai gõ tay mới leo lên admin
+  (FR-147) — khách không thấy bước leo thang này, chỉ thấy người thật nhắn vào.
+- **Chạm trần 100 tin/24h (FR-146)**: đúng MỘT tin nhẹ nhàng, không trách móc,
+  không giải thích cơ chế — "Dạ hôm nay mình trao đổi nhiều rồi, để em nhờ
+  anh/chị phụ trách nhắn lại trực tiếp cho mình nha!" — rồi im tới hết ngày.
+- **Báo cáo nội bộ 17h (FR-149)**: gửi vào Zalo cá nhân admin, **nguyên văn**,
+  không bọc lời chào CSKH — đây là tin cho người nhà, không phải cho khách.
 - **Đặt lịch xem nhà (UF-06)**: khách muốn xem → chốt khung giờ cụ thể; **chỉ ở
   bước chốt lịch** mới xin số điện thoại, kèm lý do ("để CTV gọi xác nhận trước
   ~30 phút") và đường từ chối ("không tiện để số thì hẹn qua Zalo cũng được ạ");

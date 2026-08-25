@@ -177,14 +177,21 @@ Deno.serve(async (req) => {
         p_zalo_user_id: externalUserId, p_channel: channel,
       }).single();
       const hConvId = (hbc as { c_id?: string } | null)?.c_id;
+      const hBuyerId = (hbc as { b_id?: string } | null)?.b_id;
       if (hConvId) {
         await client.from("messages").insert({
           conversation_id: hConvId, sender: "human", body: text,
         });
+        // FR-147: người thật đã vào tay → hạ cờ cần-người-thật, khỏi leo lên admin
         await client.from("conversations").update({
           human_touch_at: new Date().toISOString(),
           last_message_at: new Date().toISOString(),
+          needs_human: false,
         }).eq("id", hConvId);
+        if (hBuyerId) {
+          await client.from("reminders").update({ status: "cancelled" })
+            .eq("buyer_id", hBuyerId).eq("kind", "escalation").eq("status", "pending");
+        }
       }
     }
     return new Response(JSON.stringify({ ok: true, human_note: true }), {
@@ -459,6 +466,46 @@ Deno.serve(async (req) => {
     });
   }
 
+  // FR-146: trần 100 tin/24h mỗi khách. Chống người ta lấy anon key gọi thẳng
+  // function đốt tiền model; khách thật nhắn nhiều đến mức này thì cũng nên có
+  // người thật vào. Chạm trần: trả lời MỘT lần + báo CTV/admin, sau đó im.
+  const DAILY_LIMIT = 100;
+  const { count: msg24h } = await client.from("messages")
+    .select("id", { count: "exact", head: true })
+    .eq("conversation_id", convId).eq("sender", "buyer")
+    .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
+  if ((msg24h ?? 0) > DAILY_LIMIT) {
+    const { count: quotaEsc } = await client.from("reminders")
+      .select("id", { count: "exact", head: true })
+      .eq("buyer_id", buyer.id).eq("kind", "escalation")
+      .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
+    if ((quotaEsc ?? 0) > 0) {
+      // đã báo rồi → im tới hết ngày, không tốn thêm lượt model nào
+      return new Response(JSON.stringify({ reply: null, replies: [], rate_limited: true }), {
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      });
+    }
+    const capMsg =
+      "Dạ hôm nay mình trao đổi nhiều rồi, để em nhờ anh/chị phụ trách nhắn lại trực tiếp cho mình nha!";
+    await client.from("messages").insert({
+      conversation_id: convId, sender: "bot", body: capMsg,
+    });
+    await client.from("conversations").update({
+      needs_human: true, needs_human_at: new Date().toISOString(),
+    }).eq("id", convId);
+    await client.from("reminders").insert({
+      kind: "escalation", buyer_id: buyer.id,
+      ctv_id: (await client.from("conversations").select("ctv_id").eq("id", convId).maybeSingle())
+        .data?.ctv_id ?? null,
+      due_at: new Date().toISOString(),
+      note: `khách nhắn hơn ${DAILY_LIMIT} tin trong 24h, bot tạm dừng trả lời. Anh/chị vào xem giúp`,
+    });
+    return new Response(
+      JSON.stringify({ reply: capMsg, replies: [capMsg], rate_limited: true }),
+      { headers: { "Content-Type": "application/json; charset=utf-8" } },
+    );
+  }
+
   // FR-131: KHÔNG delay nhân tạo (quyết định chủ dự án 25/08 — "càng nhanh càng
   // tốt"). Chỉ giữ check nhường-lượt: tin mới hơn của cùng khách đã vào trong
   // lúc xử lý thì lượt này im, lượt của tin cuối trả lời trên ngữ cảnh gộp.
@@ -500,7 +547,7 @@ Deno.serve(async (req) => {
     [...textOrTag.matchAll(CODE_RE)].map((m) => m[1].toUpperCase()),
   )].slice(0, 3);
 
-  const [{ data: history }, { data: listings }, { data: partnerProj }, { data: matchedProj }, { data: askedListings }] = await Promise.all([
+  const [{ data: history }, { data: listings }, { data: partnerProj }, { data: matchedProj }, { data: askedListings }, { data: askedPhotos }] = await Promise.all([
     client.from("messages").select("sender, body")
       .eq("conversation_id", convId).order("created_at", { ascending: false }).limit(12),
     khoQ,
@@ -515,6 +562,10 @@ Deno.serve(async (req) => {
       ? client.from("listings")
         .select("code, status, ward, location_raw, price_raw, area_m2, bedrooms, listing_facts(question, answer)")
         .in("code", mentioned).limit(3)
+      : Promise.resolve({ data: [] as never[] }),
+    // FR-148: kho ảnh thật up theo MÃ tin (bucket listing-photos/<mã>/…)
+    mentioned.length
+      ? client.from("listing_photos_v").select("code, url").in("code", mentioned).limit(24)
       : Promise.resolve({ data: [] as never[] }),
   ]);
   const ordered = (history ?? []).reverse();
@@ -540,12 +591,19 @@ Deno.serve(async (req) => {
     price_raw?: string | null; area_m2?: number | null; bedrooms?: number | null;
     listing_facts?: Array<{ question: string; answer: string }> | null;
   };
-  // FR-143: hình sẵn có của một căn = URL trong facts hinh_anh (chính chủ gửi qua chat)
+  // FR-143/148: hình sẵn có của một căn = ảnh up theo mã (bucket listing-photos)
+  // + URL chính chủ gửi qua chat (facts hinh_anh). Ảnh kho đứng trước.
   const PHOTO_URL_RE = /https?:\/\/\S+/g;
-  const photosOf = (l: Asked): string[] =>
-    (l.listing_facts ?? [])
+  const photoByCode: Record<string, string[]> = {};
+  for (const p of (askedPhotos ?? []) as Array<{ code: string; url: string }>) {
+    (photoByCode[p.code] ??= []).push(p.url);
+  }
+  const photosOf = (l: Asked): string[] => [
+    ...(photoByCode[l.code] ?? []),
+    ...(l.listing_facts ?? [])
       .filter((f) => f.question === "hinh_anh")
-      .flatMap((f) => f.answer.match(PHOTO_URL_RE) ?? []);
+      .flatMap((f) => f.answer.match(PHOTO_URL_RE) ?? []),
+  ];
   const askedBlock = ((askedListings ?? []) as Asked[])
     .map((l) => {
       const facts = (l.listing_facts ?? [])
@@ -702,11 +760,23 @@ Deno.serve(async (req) => {
     await client.from("buyers").update({ name: out.profile.name }).eq("id", buyer.id);
   }
 
-  // Bot bí / khách đòi người thật → gắn cờ cho CTV tiếp quản (FR-135)
+  // Bot bí / khách đòi người thật → gắn cờ (FR-135) + BÁO NGAY cho CTV đang
+  // chăm đơn (FR-147). Quá 30 phút chưa ai đụng tay thì nudge leo tiếp lên
+  // admin. Chống báo lặp: đã có escalation pending cho khách này thì thôi.
   if (out.need_human) {
     await client.from("conversations")
       .update({ needs_human: true, needs_human_at: new Date().toISOString() })
       .eq("id", convId);
+    const { count: hEsc } = await client.from("reminders")
+      .select("id", { count: "exact", head: true })
+      .eq("buyer_id", buyer.id).eq("kind", "escalation").eq("status", "pending");
+    if ((hEsc ?? 0) === 0) {
+      await client.from("reminders").insert({
+        kind: "escalation", buyer_id: buyer.id, ctv_id: convRow?.ctv_id ?? null,
+        due_at: new Date().toISOString(),
+        note: `🙋 khách cần người thật${buyer.name ? ` (${buyer.name})` : ""}. Tin cuối: "${text.slice(0, 120)}"`,
+      });
+    }
   }
 
   // FR-140: bot hứa "để em hỏi lại chủ nhà" → tạo info_request; trigger DB
@@ -863,11 +933,16 @@ Deno.serve(async (req) => {
     const inAsked = ((askedListings ?? []) as Asked[]).find((l) => l.code === pCode);
     if (inAsked) photos = photosOf(inAsked).slice(0, 4);
     else {
-      const { data: pFacts } = await client.from("listing_facts")
-        .select("answer, listings!inner(code)")
-        .eq("question", "hinh_anh").eq("listings.code", pCode).limit(4);
-      photos = (pFacts ?? [])
-        .flatMap((f) => (f.answer as string).match(PHOTO_URL_RE) ?? []).slice(0, 4);
+      const [{ data: pStore }, { data: pFacts }] = await Promise.all([
+        client.from("listing_photos_v").select("url").eq("code", pCode).limit(4),
+        client.from("listing_facts")
+          .select("answer, listings!inner(code)")
+          .eq("question", "hinh_anh").eq("listings.code", pCode).limit(4),
+      ]);
+      photos = [
+        ...(pStore ?? []).map((p) => p.url as string),
+        ...(pFacts ?? []).flatMap((f) => (f.answer as string).match(PHOTO_URL_RE) ?? []),
+      ].slice(0, 4);
     }
   }
   if (repliedCode && !out.viewing) {
