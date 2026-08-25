@@ -4,10 +4,14 @@
 //   → { reply, replies[], conversation_id }
 // Nhánh BUYER theo FR-130: hồ sơ nhu cầu tích luỹ (buyers.preferences), mỗi
 // lượt hỏi đúng MỘT tiêu chí thiếu, trả lời tách tối đa 2 bong bóng.
-import Anthropic from "npm:@anthropic-ai/sdk";
 import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import {
+  anthropicClient,
+  jsonResponse,
+  MODEL,
+  serviceClient,
+} from "../_shared/claude.ts";
 import {
   AGREE_RULES,
   BUYER_FEWSHOT,
@@ -96,27 +100,10 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
 // FR-29: mã căn khách nhắc ("#BDS-Q5-0115", từ web bấm sang) — chào đúng căn đó
 const CODE_RE = /(?:#\s*)?\b([A-Za-z]{2,5}(?:-[A-Za-z0-9]{1,8}){1,3})\b/g;
 
-const MODEL = "claude-opus-5";
-
-function db(): SupabaseClient {
-  return createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
-}
-
-async function secret(client: SupabaseClient, name: string): Promise<string | null> {
-  const fromEnv = Deno.env.get(name);
-  if (fromEnv) return fromEnv;
-  const { data } = await client.rpc("get_secret", { secret_name: name });
-  return (data as string) ?? null;
-}
-
 // Hồ sơ + trả lời trong MỘT lượt gọi model (FR-130)
 const BuyerTurn = z.object({
   profile: z.object({
     name: z.string().nullable().describe("Tên khách nếu khách vừa xưng tên"),
-    honorific: z.enum(["anh", "chị"]).nullable(),
     deal: z.enum(["ban", "thue"]).nullable().describe("ban = khách muốn MUA, thue = muốn THUÊ"),
     area: z.string().nullable().describe("Khu vực khách tìm, nguyên văn kiểu nói"),
     budget: z.string().nullable().describe("Khoảng giá, nguyên văn kiểu nói ('tầm 5 tỷ')"),
@@ -160,11 +147,11 @@ Deno.serve(async (req) => {
   const channel = String(body.channel ?? "zalo_oa");
   const imageUrl = body.image_url ? String(body.image_url) : null;
   if (!externalUserId || (!text && !imageUrl)) {
-    return new Response(JSON.stringify({ error: "external_user_id và text (hoặc image_url) bắt buộc" }), { status: 400 });
+    return jsonResponse({ error: "external_user_id và text (hoặc image_url) bắt buộc" }, 400);
   }
   const textOrTag = text || "[khách gửi ảnh]";
 
-  const client = db();
+  const client = serviceClient();
 
   // FR-141: bridge báo NGƯỜI THẬT (CTV/admin gõ tay từ acc clone) vừa nhắn cho
   // khách này → ghi tin sender='human' + đặt human_touch_at; bot nhường sân
@@ -194,9 +181,7 @@ Deno.serve(async (req) => {
         }
       }
     }
-    return new Response(JSON.stringify({ ok: true, human_note: true }), {
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    });
+    return jsonResponse({ ok: true, human_note: true });
   }
 
   // FR-138: "não" cấu hình được từ dashboard — bảng bot_prompts đè lên mặc định
@@ -220,8 +205,7 @@ Deno.serve(async (req) => {
     .from("sellers").select("id, name")
     .eq("zalo_user_id", externalUserId).maybeSingle();
   if (sellerRow) {
-    const apiKeyS = await secret(client, "ANTHROPIC_API_KEY");
-    const anthropicS = new Anthropic({ apiKey: apiKeyS! });
+    const anthropicS = await anthropicClient(client);
     const { data: pendingReq } = await client
       .from("info_requests")
       .select("id, listing_id, question, listings!inner(seller_id, code)")
@@ -251,10 +235,7 @@ Deno.serve(async (req) => {
       }
       const thanks =
         "Dạ em nhận được ảnh rồi ạ, em bổ sung vào tin ngay. Cảm ơn anh/chị nhiều!";
-      return new Response(
-        JSON.stringify({ reply: thanks, replies: [thanks], role: "seller" }),
-        { headers: { "Content-Type": "application/json; charset=utf-8" } },
-      );
+      return jsonResponse({ reply: thanks, replies: [thanks], role: "seller" });
     }
     if (pendingReq) {
       await client.from("listing_facts").insert({
@@ -319,15 +300,12 @@ Deno.serve(async (req) => {
           listing_id: pendingReq.listing_id, question: next.fact_key, status: "pending",
         });
       }
-      return new Response(
-        JSON.stringify({
-          reply: sellerReply,
-          replies: sellerReply ? [sellerReply] : [],
-          role: "seller",
-          saved_fact: pendingReq.question,
-        }),
-        { headers: { "Content-Type": "application/json; charset=utf-8" } },
-      );
+      return jsonResponse({
+        reply: sellerReply,
+        replies: sellerReply ? [sellerReply] : [],
+        role: "seller",
+        saved_fact: pendingReq.question,
+      });
     }
     // FR-144: chính chủ nhắn CÂU RAO MỚI (bán/cho thuê + loại BĐS, thường kèm
     // giá) → tạo tin nháp cho_thong_tin ngay + mở vòng hỏi nhỏ giọt, hỏi tới
@@ -383,10 +361,7 @@ Deno.serve(async (req) => {
         });
         const raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ??
           `Dạ em nhận tin rao rồi ạ, em tạo tin #${newLst.code} và sẽ hỏi thêm vài thông tin để đăng cho đẹp nha.`;
-        return new Response(
-          JSON.stringify({ reply: raoReply, replies: [raoReply], role: "seller", listing_code: newLst.code }),
-          { headers: { "Content-Type": "application/json; charset=utf-8" } },
-        );
+        return jsonResponse({ reply: raoReply, replies: [raoReply], role: "seller", listing_code: newLst.code });
       }
     }
     // Seller nhắn nhưng KHÔNG có câu chờ → vẫn trả lời ĐÚNG VAI người bán
@@ -416,10 +391,7 @@ Deno.serve(async (req) => {
     });
     const sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ??
       "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha.";
-    return new Response(
-      JSON.stringify({ reply: sReply, replies: [sReply], role: "seller" }),
-      { headers: { "Content-Type": "application/json; charset=utf-8" } },
-    );
+    return jsonResponse({ reply: sReply, replies: [sReply], role: "seller" });
   }
 
   // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130).
@@ -431,7 +403,7 @@ Deno.serve(async (req) => {
       p_channel: channel,
     }).single();
   if (bcErr || !bc) {
-    return new Response(JSON.stringify({ error: bcErr?.message ?? "ensure_buyer_conversation" }), { status: 500 });
+    return jsonResponse({ error: bcErr?.message ?? "ensure_buyer_conversation" }, 500);
   }
   const buyer = { id: bc.b_id as string, name: bc.b_name as string | null };
   const convId = bc.c_id as string;
@@ -445,12 +417,10 @@ Deno.serve(async (req) => {
   }).select("id").single();
   if (msgErr?.code === "23505") {
     // Retry của kênh (cùng msg_id) — đã trả lời rồi, đừng trả lời lần hai
-    return new Response(JSON.stringify({ reply: null, replies: [], deduped: true }), {
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    });
+    return jsonResponse({ reply: null, replies: [], deduped: true });
   }
   if (msgErr) {
-    return new Response(JSON.stringify({ error: msgErr.message }), { status: 500 });
+    return jsonResponse({ error: msgErr.message }, 500);
   }
   await client.from("conversations")
     .update({ last_message_at: new Date().toISOString() }).eq("id", convId);
@@ -461,9 +431,7 @@ Deno.serve(async (req) => {
     .select("ctv_id, human_touch_at").eq("id", convId).maybeSingle();
   if (convRow?.human_touch_at &&
       Date.now() - Date.parse(convRow.human_touch_at as string) < 30 * 60e3) {
-    return new Response(JSON.stringify({ reply: null, replies: [], human_active: true }), {
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    });
+    return jsonResponse({ reply: null, replies: [], human_active: true });
   }
 
   // FR-146: trần 100 tin/24h mỗi khách. Chống người ta lấy anon key gọi thẳng
@@ -481,9 +449,7 @@ Deno.serve(async (req) => {
       .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
     if ((quotaEsc ?? 0) > 0) {
       // đã báo rồi → im tới hết ngày, không tốn thêm lượt model nào
-      return new Response(JSON.stringify({ reply: null, replies: [], rate_limited: true }), {
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-      });
+      return jsonResponse({ reply: null, replies: [], rate_limited: true });
     }
     const capMsg =
       "Dạ hôm nay mình trao đổi nhiều rồi, để em nhờ anh/chị phụ trách nhắn lại trực tiếp cho mình nha!";
@@ -495,15 +461,11 @@ Deno.serve(async (req) => {
     }).eq("id", convId);
     await client.from("reminders").insert({
       kind: "escalation", buyer_id: buyer.id,
-      ctv_id: (await client.from("conversations").select("ctv_id").eq("id", convId).maybeSingle())
-        .data?.ctv_id ?? null,
+      ctv_id: convRow?.ctv_id ?? null,
       due_at: new Date().toISOString(),
       note: `khách nhắn hơn ${DAILY_LIMIT} tin trong 24h, bot tạm dừng trả lời. Anh/chị vào xem giúp`,
     });
-    return new Response(
-      JSON.stringify({ reply: capMsg, replies: [capMsg], rate_limited: true }),
-      { headers: { "Content-Type": "application/json; charset=utf-8" } },
-    );
+    return jsonResponse({ reply: capMsg, replies: [capMsg], rate_limited: true });
   }
 
   // FR-131: KHÔNG delay nhân tạo (quyết định chủ dự án 25/08 — "càng nhanh càng
@@ -514,9 +476,7 @@ Deno.serve(async (req) => {
     .eq("conversation_id", convId).eq("sender", "buyer")
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (newest && insMsg && newest.id !== insMsg.id) {
-    return new Response(JSON.stringify({ reply: null, replies: [], superseded: true }), {
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    });
+    return jsonResponse({ reply: null, replies: [], superseded: true });
   }
 
   // Buyer quay lại nhắn → hủy nhắc-lời-hứa + follow-up đang chờ (FR-133/FR-32)
@@ -652,8 +612,6 @@ Deno.serve(async (req) => {
     .map(([, label]) => `- ${label}`).join("\n");
   const minimumMet = prefs.area != null && prefs.budget != null;
 
-  const apiKey = await secret(client, "ANTHROPIC_API_KEY");
-  const anthropic = new Anthropic({ apiKey: apiKey! });
   let out:
     | {
       profile: Record<string, unknown>; replies: string[];
@@ -666,6 +624,9 @@ Deno.serve(async (req) => {
     }
     | null = null;
   try {
+    // Dựng client TRONG try: thiếu key/hỏng model đều rơi về fallback regex bên
+    // dưới thay vì 500 — không đổ lỗi cho khách (giữ đúng ý đồ fallback cũ).
+    const anthropic = await anthropicClient(client);
     const resp = await anthropic.messages.parse({
       model: MODEL,
       max_tokens: 1024,
@@ -966,8 +927,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(
-    JSON.stringify({ reply: replies.join("\n"), replies, photos, conversation_id: convId }),
-    { headers: { "Content-Type": "application/json; charset=utf-8" } },
-  );
+  return jsonResponse({ reply: replies.join("\n"), replies, photos, conversation_id: convId });
 });

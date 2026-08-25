@@ -260,7 +260,8 @@ outcome_feedback text, rating int
 Schema đã được hiện thực sẵn trên Supabase project `nhadat-bot` [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]:
 
 ```
-listings.status            enum(draft, pending_review, active, negotiating, sold, expired)  -- FR-106
+listings.status            text CHECK (cho_thong_tin|dang_ban|dang_quan_tam|da_chot|an)  -- FR-139
+                           -- (bản cũ enum listing_status tiếng Anh của FR-106 đã DROP 25/08)
 listings.last_confirmed_at timestamptz   -- TTL 7 ngày (FR-107)
 interests                  id, listing_id, buyer_id, created_at
                            -- B đang quan tâm căn nào; sold → báo tất cả (FR-108)
@@ -321,14 +322,14 @@ có UI giỏ hàng riêng — cập nhật `unit_status` qua luồng rao/sửa t
 - `sellers.auth_user_id uuid unique fk auth.users` — nối tài khoản Supabase Auth
   (magic-link email) với hồ sơ NMG. CCRB và buyer **không có** tài khoản.
 - RLS `authenticated`: đọc/ghi `sellers` của chính mình; đọc `listings` của
-  mình mọi status; insert `listings` chỉ với `status='unverified'` và
+  mình mọi status; insert `listings` chỉ với `status='cho_thong_tin'` và
   `seller_id` thuộc về mình (`listings_own_read`, `listings_own_insert`).
 - View `agents_public` (definer): lộ đúng `name, seller_type, rating_sum,
   rating_count, listing_count` của NMG — **không bao giờ** lộ `phone`,
   `zalo_user_id`, `phone_proxy` (bất biến FR-104).
-- Đọc công khai (anon): hiện tạm cho đọc cả `unverified` vì kho khởi tạo 173
-  tin chưa qua duyệt; khi luồng duyệt admin chạy (FR-76) sẽ siết về
-  `status='active'` — ghi nhận ở kế hoạch kiểm thử (TS-SEL/TS-ADM).
+- Đọc công khai (anon): chỉ các trạng thái đang lên kệ
+  `dang_ban` / `dang_quan_tam` / `da_chot` (FR-139); tin `cho_thong_tin` (chưa đủ
+  thông tin) và `an` không lộ ra web — ghi nhận ở kế hoạch kiểm thử (TS-SEL/TS-ADM).
 
 **Bổ sung 25/08 (FR-126/127/128, FR-122 cập nhật):**
 - `listings.lat/lng` — geocode từ `location_raw` (edge function

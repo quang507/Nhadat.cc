@@ -65,7 +65,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-98 | UF-05 | WF-10 | SRS-4.2 | AC-03 |
 | FR-99 | — | — | — | *chưa đặc tả — `OPEN-10`* |
 | FR-100 | UF-12 | WF-11 | SRS-4.3 | AC-11 |
-| FR-101, FR-102 | UF-09 | WF-09 | SRS-3.4 | — |
+| FR-101, FR-102 | UF-09 | WF-09 | SRS-3.4 | edge `rate-ctv` + bảng `ratings` — trùng `ctv-report`, xem OPEN-23 |
 | FR-103 | UF-09 | — | SRS-5.3 | — |
 | FR-104, FR-105 | UF-06, UF-12 | — | SRS-3.8 (bất biến ẩn danh) | — |
 | FR-106, FR-107, FR-108 | UF-13 | — | SRS-3.8, SRS-5.3 | — |
@@ -127,7 +127,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR | Thiếu gì | Theo dõi ở |
 |---|---|---|
 | FR-99 (định giá so sánh) | Thuật toán, nguồn dữ liệu giá thị trường | `OPEN-10` |
-| FR-102 (chấm điểm NMG) | Quy trình thu thập rating, ngưỡng cảnh báo | `OPEN-12` |
+| FR-102 (chấm điểm NMG) | Quy trình thu thập rating, ngưỡng cảnh báo; hiện thực `rate-ctv` + bảng `ratings` trùng phần chấm điểm trong `ctv-report` | `OPEN-12`, `OPEN-23` |
 | FR-28 (tiện ích quanh BĐS) | Nguồn dữ liệu POI (Google Places? tự nhập?) | `OPEN-13` |
 | FR-16 (fingerprint) | Thư viện, chính sách lưu trữ, cơ chế từ chối | `OPEN-14` |
 | FR-118 (`ward_mapping`) | Nguồn dữ liệu máy-đọc-được danh mục phường cũ↔mới (NQ 202/2025/QH15), schema bảng trong SRS | — |

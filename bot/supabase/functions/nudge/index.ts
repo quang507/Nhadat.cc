@@ -3,35 +3,16 @@
 // 2. reengage: buyer im lặng 5-6 ngày → hỏi thăm ngắn, kịch bản đa dạng (góc
 //    ngẫu nhiên + tránh lặp 2 tin bot gần nhất), trước mốc Zalo xoá 7 ngày (INS-03).
 // POST {} (cron) | { dry_run?: bool } — trả về tóm tắt việc đã làm.
-import Anthropic from "npm:@anthropic-ai/sdk";
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import {
+  anthropicClient,
+  escalationText,
+  jsonResponse,
+  MODEL,
+  secretOf,
+  sendZalo,
+  serviceClient,
+} from "../_shared/claude.ts";
 import { TONE_RULES } from "../_shared/prompts.ts";
-
-const MODEL = "claude-opus-5";
-
-function db(): SupabaseClient {
-  return createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
-}
-
-async function secret(client: SupabaseClient, name: string): Promise<string | null> {
-  const fromEnv = Deno.env.get(name);
-  if (fromEnv) return fromEnv;
-  const { data } = await client.rpc("get_secret", { secret_name: name });
-  return (data as string) ?? null;
-}
-
-async function sendZalo(token: string, userId: string, text: string): Promise<boolean> {
-  const r = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", access_token: token },
-    body: JSON.stringify({ recipient: { user_id: userId }, message: { text } }),
-  });
-  const j = await r.json().catch(() => ({}));
-  return j?.error === 0;
-}
 
 // Kịch bản đa dạng cho reengage — chọn ngẫu nhiên, đổi góc mỗi lần
 const ANGLES = [
@@ -48,16 +29,13 @@ Deno.serve(async (req) => {
   // ngoài cửa sổ thì để nhịp cron sau xử — reminder vẫn pending, không mất.
   const vnHour = (new Date(Date.now() + 7 * 3600e3)).getUTCHours();
   if (!force && (vnHour < 8 || vnHour >= 21)) {
-    return new Response(JSON.stringify({ done: 0, skipped: "quiet_hours", vn_hour: vnHour }), {
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    });
+    return jsonResponse({ done: 0, skipped: "quiet_hours", vn_hour: vnHour });
   }
   // Lệch phút ngẫu nhiên — đừng gửi đúng boong :00/:30 như máy
   if (!dry_run) await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 45000)));
-  const client = db();
-  const apiKey = await secret(client, "ANTHROPIC_API_KEY");
-  const anthropic = new Anthropic({ apiKey: apiKey! });
-  const oaToken = await secret(client, "ZALO_OA_ACCESS_TOKEN");
+  const client = serviceClient();
+  const anthropic = await anthropicClient(client);
+  const oaToken = await secretOf(client, "ZALO_OA_ACCESS_TOKEN");
   // FR-138: tone cấu hình được từ bảng bot_prompts (sửa ở dashboard, khỏi deploy)
   const { data: toneRow } = await client.from("bot_prompts")
     .select("content").eq("key", "tone_rules").maybeSingle();
@@ -104,15 +82,9 @@ Deno.serve(async (req) => {
     if (!target) {
       const { data: adm } = await client.from("admins")
         .select("zalo_user_id").not("zalo_user_id", "is", null).limit(1).maybeSingle();
-      target = adm?.zalo_user_id ?? (await secret(client, "ZALO_ADMIN_ZALO_ID"));
+      target = adm?.zalo_user_id ?? (await secretOf(client, "ZALO_ADMIN_ZALO_ID"));
     }
-    // FR-149 report: gửi NGUYÊN VĂN (báo cáo CTV 17h). FR-144: đích là chính chủ
-    // → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ.
-    const text = r.kind === "report"
-      ? String(r.note)
-      : r.seller_id
-      ? `Chào anh/chị, em bên nhadat.cc ạ. ${r.note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`
-      : `🔔 nhadat.cc: ${r.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
+    const text = escalationText(r);
     let sent = "none";
     if (!dry_run && target && oaToken && !target.startsWith("TEST")) {
       sent = (await sendZalo(oaToken, target, text)) ? "zalo_oa" : "zalo_error";
@@ -255,7 +227,5 @@ Deno.serve(async (req) => {
     out.push({ kind: "reengage", buyer: b.id, angle, text, sent });
   }
 
-  return new Response(JSON.stringify({ done: out.length, dry_run, results: out }), {
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-  });
+  return jsonResponse({ done: out.length, dry_run, results: out });
 });

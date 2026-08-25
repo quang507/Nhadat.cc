@@ -27,6 +27,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-20 | Gamification điểm uy tín người rao (Đồng/Bạc/Vàng) theo AOND — có đem vào nhadat.cc không | Trung bình | FR-102, FR-103 |
 | OPEN-21 | Vai người rao 5 loại (CĐT/sàn/NMG/lướt sóng/chủ nhà) + phí riêng cho CĐT — mở rộng nhị phân CCRB/NMG? | Trung bình | BR-05, FR-101 |
 | OPEN-22 | Một người **vừa mua vừa bán** bằng cùng một Zalo: hiện `chat-reply` hễ khớp `sellers.zalo_user_id` là luôn tiếp theo vai người bán — người này không hỏi mua được. Dữ liệu tin thì an toàn (mọi quan tâm/hỏi đáp bám theo mã căn, FR-139/140), chỉ vướng vai hội thoại. Phương án: (a) bot tự đoán vai theo nội dung tin từng lượt; (b) lệnh chuyển vai ("tôi muốn tìm mua"); khuyến nghị BA: (b) trước, (a) sau. Chờ chủ dự án chốt | Trung bình | FR-129, FR-130 |
+| OPEN-23 | Edge function `rate-ctv` (FR-102) **trùng chức năng** với phần chấm điểm CTV nằm sẵn trong `ctv-report` (cùng rubric `RATE_CTV_RUBRIC`, cùng 4 tiêu chí): không có cron, không nơi nào gọi, bảng `ratings` nó ghi vào đang 0 dòng và không màn hình nào đọc. Phương án: (a) xoá `rate-ctv` + bảng `ratings`, đánh dấu FR-102 `[deprecated → FR-137]`; (b) giữ làm cửa chấm-lại-một-hội-thoại theo yêu cầu (admin bấm nút), khi đó cần màn hình đọc `ratings`. Khuyến nghị BA: (a) — chấm điểm đã nằm trong báo cáo 17h, giữ hai đường chấm là nguồn lệch số. Chờ chủ dự án chốt | Thấp | FR-102, FR-137 |
 
 ---
 
@@ -283,3 +284,22 @@ tốn một lượt model); (b) lệnh chuyển vai tường minh — khách nh�
 muốn tìm mua" thì lượt đó đi luồng buyer (rẻ, dễ kiểm soát).
 **Khuyến nghị BA**: làm (b) trước, cân nhắc (a) sau khi có dữ liệu thật.
 Chờ chủ dự án chốt.
+
+### OPEN-23 · `rate-ctv` trùng chức năng với `ctv-report`
+
+**Phát hiện**: đợt dọn logic dư 25/08/2026.
+
+**Nguyên nhân**: FR-102 (`rate-ctv`) được dựng trước, chấm CSKH một hội thoại
+theo yêu cầu. Sau đó FR-137 (`ctv-report`, báo cáo 17h) chấm luôn tối đa 3 hội
+thoại/CTV/ngày bằng **cùng** `RATE_CTV_RUBRIC` và **cùng** 4 tiêu chí. Hiện
+`rate-ctv` không có cron, không function/bridge/web nào gọi; bảng `ratings` nó
+ghi vào có 0 dòng và không màn hình nào đọc.
+
+**Phương án**
+- (a) **Xoá** `rate-ctv` + bảng `ratings`, đánh dấu FR-102 `[deprecated → FR-137]`.
+- (b) **Giữ** làm cửa chấm-lại-một-hội-thoại theo yêu cầu (admin bấm nút trong
+  dashboard), khi đó phải làm màn hình đọc `ratings` để nó có ích.
+
+**Khuyến nghị BA**: (a). Chấm điểm đã nằm trong báo cáo 17h; giữ hai đường chấm
+ghi vào hai bảng khác nhau là nguồn lệch số về sau. Xoá một FR là quyết định của
+chủ dự án nên chưa tự làm.
