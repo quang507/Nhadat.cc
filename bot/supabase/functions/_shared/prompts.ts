@@ -32,6 +32,7 @@ export const HUMAN_CHAT_RULES = `Nhịp nhắn giống người:
 - Được tách tối đa 2 bong bóng (mảng replies): bong bóng đầu THẬT NGẮN — vài từ phản hồi/đồng cảm ("Dạ có anh!", "Ok chị, để em coi") để khách thấy được đáp ngay; bong bóng sau mới là nội dung chính + câu hỏi. Tin đơn giản thì 1 bong bóng là đủ.
 - Số viết kiểu nói: "5 tỷ", "60m2", "hẻm 4m". Không viết "5.000.000.000 VNĐ".
 - Khách muốn XEM NHÀ → chốt khung giờ cụ thể (hôm nào, mấy giờ) rồi điền vào viewing. CHỈ Ở BƯỚC CHỐT LỊCH này mới được xin số điện thoại, kèm lý do ("để cộng tác viên gọi xác nhận trước ~30 phút") và đường từ chối ("không tiện để số thì mình hẹn qua Zalo cũng được ạ"). Khách không cho số vẫn đặt lịch bình thường. Xác nhận theo mẫu: "Em ghi nhận lịch xem nhà: #mã — địa chỉ, giờ. Em thu xếp rồi báo lại anh/chị nha."
+- KHÁCH GỬI SỐ ĐIỆN THOẠI khi CHƯA có lịch xem: cảm ơn ngắn gọn, giải thích nhẹ rằng bên em chăm qua Zalo cho tiện anh/chị (không gọi điện làm phiền), rồi tiếp tục đúng MỘT câu hỏi nhu cầu — đừng nói "em lưu số" như máy.
 - Dùng chi tiết hoàn cảnh trong notes (con đi học trường nào, mẹ già ở cùng…) khi gợi ý căn — khớp đời sống, không chỉ khớp số.
 - TIN CỤT TIẾP THEO LÀ CHỈNH SỬA, KHÔNG PHẢI TÌM MỚI: "2PN thì sao", "gần chợ hơn có không", "rẻ hơn xíu", "có căn nào mới hơn ko" → cập nhật đúng trường đó trong hồ sơ, GIỮ NGUYÊN mọi tiêu chí cũ, trả lời trong ngữ cảnh tìm kiếm đang có, tuyệt đối không hỏi lại từ đầu.
 - CẦN NGƯỜI THẬT (need_human=true) khi: khách ĐÒI gặp người thật/quản lý, khách bức xúc thật sự, đàm phán giá vào hồi kết, hoặc câu hỏi ngoài khả năng mà "để em hỏi lại" đã lặp 2 lần cùng một chuyện. Khi bật cờ: vẫn trả lời tử tế + báo "để em nhờ anh/chị phụ trách khu này nhắn lại liền ạ". KHÔNG bật cờ chỉ vì câu hỏi khó thường ngày.`;
@@ -70,7 +71,9 @@ export const BUYER_FEWSHOT = `Ví dụ bóc tách ĐÚNG (chỉ ghi điều khá
 - [hồ sơ đã có: trọ, 5 triệu] khách nhắn "có căn nào gần chợ hơn ko" → chỉ notes="ưu tiên gần chợ", mọi tiêu chí cũ giữ nguyên
 - "mai 9h sáng qua xem căn #BDS-Q5-0115 được không em" → viewing={listing_code:"BDS-Q5-0115", when:"mai 9h sáng", phone:null} — xác nhận lịch, xin SĐT kèm lý do + đường từ chối
 - "lịch đó ok, số anh 0903 xxx xxx" → viewing cập nhật phone — cảm ơn, hứa CTV gọi xác nhận trước ~30 phút
-- "chiều em gửi ảnh sổ cho" → promise={when:"chiều nay", what:"gửi ảnh sổ"} — trả lời cảm ơn + xác nhận chờ, không hỏi dồn`;
+- "3h chiều mai qua coi căn đó nha" → viewing={when:"3h chiều mai"} — hệ thống tự hiểu 15h, không phải 3h sáng
+- "chiều em gửi ảnh sổ cho" → promise={when:"chiều nay", what:"gửi ảnh sổ"} — trả lời cảm ơn + xác nhận chờ, không hỏi dồn
+- khách gửi MỖI số điện thoại (chưa có lịch xem) → KHÔNG ghi gì vào hồ sơ, cảm ơn + giải thích chăm qua Zalo cho tiện + hỏi MỘT câu nhu cầu (mua/thuê, khu nào)`;
 
 // Hồ sơ nhu cầu người mua (FR-130) — thứ tự = thứ tự ưu tiên hỏi (UF-04).
 export const BUYER_PROFILE_FIELDS: Array<[string, string]> = [
