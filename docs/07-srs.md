@@ -316,6 +316,20 @@ tạo info_request; `unit_status` là nguồn sự thật cho "căn X còn khôn
 `last_confirmed_at` (FR-107) thì xác nhận lại với S trước khi khẳng định. MVP chưa
 có UI giỏ hàng riêng — cập nhật `unit_status` qua luồng rao/sửa tin và bảng `deals`.
 
+### SRS-3.11 · Tài khoản NMG + mặt công khai (FR-124, FR-125 — 25/08/2026)
+
+- `sellers.auth_user_id uuid unique fk auth.users` — nối tài khoản Supabase Auth
+  (magic-link email) với hồ sơ NMG. CCRB và buyer **không có** tài khoản.
+- RLS `authenticated`: đọc/ghi `sellers` của chính mình; đọc `listings` của
+  mình mọi status; insert `listings` chỉ với `status='unverified'` và
+  `seller_id` thuộc về mình (`listings_own_read`, `listings_own_insert`).
+- View `agents_public` (definer): lộ đúng `name, seller_type, rating_sum,
+  rating_count, listing_count` của NMG — **không bao giờ** lộ `phone`,
+  `zalo_user_id`, `phone_proxy` (bất biến FR-104).
+- Đọc công khai (anon): hiện tạm cho đọc cả `unverified` vì kho khởi tạo 173
+  tin chưa qua duyệt; khi luồng duyệt admin chạy (FR-76) sẽ siết về
+  `status='active'` — ghi nhận ở kế hoạch kiểm thử (TS-SEL/TS-ADM).
+
 ---
 
 ## 4. Đặc tả giao diện lập trình

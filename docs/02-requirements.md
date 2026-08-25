@@ -204,6 +204,10 @@ Phạm vi MVP: **đặt nền dữ liệu**, chưa làm UI giỏ hàng riêng.
 | FR-119 | Máy tính lãi vay `/tinh-lai-vay`: trả góp đều (annuity), nhập giá/trả trước/lãi suất/thời hạn, biểu đồ dư nợ; nhận `?price=` từ trang chi tiết tin; kèm ghi chú "chỉ tham khảo, không phải đề nghị cho vay" | M | OPEN-19 chốt (b) 25/08/2026; port từ repo NhaDat-Radar của chủ dự án |
 | FR-120 | Trang `/thong-ke`: giá rao trung bình mỗi m² theo phường Quận 5 tính từ listing thật đang rao; phường dưới 2 tin không hiển thị; ghi rõ là giá rao, không phải giá chốt (tránh RSK-03) | S | port từ NhaDat-Radar |
 | FR-121 | Lưu tin yêu thích **không cần tài khoản** (localStorage trình duyệt), nút tim trên card/chi tiết, xem lại ở `/yeu-thich`; muốn nhớ dài hạn đa thiết bị → đẩy sang chat Zalo | S | INS-04 (không bắt đăng ký); port từ NhaDat-Radar |
+| FR-122 | Bản đồ `/ban-do` (Leaflet + OpenStreetMap): chấm tin theo **tâm phường + độ lệch ngẫu nhiên định trước** — cố ý KHÔNG hiện vị trí chính xác vì buyer chỉ được biết mức phường tới khi hẹn xem (FR-104); ghi chú điều này ngay trên bản đồ | S | port từ NhaDat-Radar, đã điều chỉnh theo bất biến ẩn danh |
+| FR-123 | Bộ lọc danh sách: khoảng giá (bậc theo loại giao dịch), khoảng diện tích, sắp xếp (mới nhất / giá tăng / giá giảm / DT lớn) — dạng link thuần giữ được URL chia sẻ; lọc số phòng ngủ chờ dữ liệu có cấu trúc từ `listing_facts` | M | port từ NhaDat-Radar |
+| FR-124 | Tài khoản **chỉ cho NMG**: đăng nhập magic-link email `/dang-nhap`, dashboard `/quan-ly` xem tin của mình + đăng tin bằng MỘT câu rao (đúng INS-05) → status `unverified` chờ duyệt. CCRB không cần tài khoản (Zalo/token FR-100 giữ nguyên); buyer tuyệt đối không tài khoản | S | port từ NhaDat-Radar; bổ trợ FR-100/SRS-4.3 |
+| FR-125 | Trang `/moi-gioi` công khai mạng lưới NMG: tên + số tin đang rao + điểm trung bình (qua view `agents_public`, không lộ liên hệ) + khối tuyển NMG nêu chuẩn chất lượng | S | port từ NhaDat-Radar; BR-02 |
 
 ---
 

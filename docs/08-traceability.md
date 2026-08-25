@@ -80,6 +80,10 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-119 | — | — | app/tinh-lai-vay (client, không đụng DB) | — |
 | FR-120 | — | — | app/thong-ke (đọc listings qua RLS anon) | — |
 | FR-121 | — | — | localStorage phía trình duyệt, không lưu server | — |
+| FR-122 | — | — | app/ban-do + lib/geo (tâm phường, tôn trọng SRS-3.8 ẩn danh) | — |
+| FR-123 | UF-01 | WF-03 | app/mua-ban, cho-thue (query param) | — |
+| FR-124 | UF-09 | — | sellers.auth_user_id + RLS listings_own_* | — |
+| FR-125 | — | — | view `agents_public` (không lộ phone) | — |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp

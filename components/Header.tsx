@@ -5,8 +5,9 @@ import { zaloLink } from "@/lib/format";
 const NAV = [
   { href: "/mua-ban", label: "Mua bán" },
   { href: "/cho-thue", label: "Cho thuê" },
+  { href: "/ban-do", label: "Bản đồ" },
   { href: "/thong-ke", label: "Giá theo phường" },
-  { href: "/tinh-lai-vay", label: "Tính lãi vay" },
+  { href: "/moi-gioi", label: "Môi giới" },
   { href: "/raoban", label: "Rao bán" },
 ];
 
