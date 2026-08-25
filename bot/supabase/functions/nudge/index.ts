@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
       messages: [{
         role: "user",
         content: r.kind === "viewing"
-          ? `${whoLabel} có ${r.note} (sắp tới giờ). Soạn MỘT tin Zalo RẤT NGẮN nhắc lịch theo mẫu §6.8: "Em là Trai, có hẹn xem nhà với anh/chị lúc … Hẹn gặp anh/chị nha." Thân thiện, không markdown.`
+          ? `${whoLabel} có ${r.note} (sắp tới giờ). Soạn MỘT tin Zalo RẤT NGẮN nhắc lịch theo mẫu §6.8: "Em là Thái, có hẹn xem nhà với anh/chị lúc … Hẹn gặp anh/chị nha." Thân thiện, không markdown.`
           : r.kind === "followup"
           ? `${whoLabel} hỏi về căn này rồi im ~2-3 tiếng: ${canInfo || r.note}. ` +
             `Soạn MỘT tin Zalo NGẮN (1-2 câu) CHỦ ĐỘNG kể thêm MỘT chi tiết đáng giá về đúng căn đó (chỉ từ dữ liệu trên, không bịa; chưa xác minh thì không khẳng định). Không thúc ép, kết bằng câu hỏi nhẹ hoặc một câu khẳng định rồi chờ.`
