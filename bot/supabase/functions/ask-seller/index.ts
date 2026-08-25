@@ -1,7 +1,9 @@
-// ask-seller — FR-40…47 + INS-06: đọc listing_missing_facts, sinh MỘT tin nhắn
-// hỏi S các thông tin còn thiếu (ưu tiên cao trước, tối đa 3 câu), ghi info_requests.
-// POST { "listing_id": "<uuid>", "dry_run": true|false }
-// Trả: { message, asked: [fact_key], skipped_pending: [fact_key] }
+// ask-seller — FR-40…47 + FR-129 (hỏi nhỏ giọt): sinh câu hỏi bổ sung cho S.
+// mode "batch" (mặc định cũ): gộp tối đa 3 câu một tin.
+// mode "drip": hỏi ĐÚNG MỘT câu ưu tiên nhất — dùng cho trigger sau khi đăng
+// tin và cron nhắc nhịp; nếu seller có zalo_user_id + có ZALO_OA_ACCESS_TOKEN
+// thì gửi thẳng qua OA, không thì câu hỏi nằm ở info_requests cho CTV gửi tay.
+// POST { listing_id, mode?: "batch"|"drip", dry_run?: bool }
 import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
@@ -24,15 +26,16 @@ const OutSchema = z.object({
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return jsonResponse({ error: "POST only" }, 405);
-  const { listing_id, dry_run = false } = await req.json().catch(() => ({}));
+  const { listing_id, mode = "batch", dry_run = false } = await req.json().catch(() => ({}));
   if (!listing_id) return jsonResponse({ error: "listing_id bắt buộc" }, 400);
+  const drip = mode === "drip";
 
   const db = serviceClient();
 
   const { data: listing, error: lErr } = await db
     .from("listings")
     .select(
-      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, sellers(name, seller_type)",
+      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, sellers(name, seller_type, zalo_user_id)",
     )
     .eq("id", listing_id)
     .single();
@@ -43,7 +46,6 @@ Deno.serve(async (req) => {
     }, 422);
   }
 
-  // Fact còn thiếu (view đối chiếu required_facts ↔ listing_facts)
   const { data: missing, error: mErr } = await db
     .from("listing_missing_facts")
     .select("fact_key, priority")
@@ -51,14 +53,15 @@ Deno.serve(async (req) => {
     .order("priority");
   if (mErr) return jsonResponse({ error: mErr.message }, 500);
 
-  // Không hỏi lại điều đang chờ S trả lời (idempotency — không spam S, INS-09)
+  // Không hỏi lại điều đang chờ trả lời (chống spam — INS-09)
   const { data: pending } = await db
     .from("info_requests")
     .select("question")
     .eq("listing_id", listing_id)
     .eq("status", "pending");
   const pendingKeys = new Set((pending ?? []).map((r) => r.question));
-  const toAsk = (missing ?? []).filter((f) => !pendingKeys.has(f.fact_key)).slice(0, 3);
+  const candidates = (missing ?? []).filter((f) => !pendingKeys.has(f.fact_key));
+  const toAsk = candidates.slice(0, drip ? 1 : 3);
 
   if (toAsk.length === 0) {
     return jsonResponse({
@@ -69,16 +72,30 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Drip: câu đầu tiên của listing thì chào; các câu sau nối tiếp hội thoại
+  const { count: askedBefore } = await db
+    .from("info_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("listing_id", listing_id);
+  const isFirst = (askedBefore ?? 0) === 0;
+
   const factList = toAsk
     .map((f) => `- ${f.fact_key}: ${FACT_LABELS[f.fact_key] ?? f.fact_key}`)
     .join("\n");
-  const sellerName = (listing.sellers as { name?: string } | null)?.name ?? null;
-  const sellerType = (listing.sellers as { seller_type?: string } | null)?.seller_type;
+  const seller = listing.sellers as
+    | { name?: string; seller_type?: string; zalo_user_id?: string | null }
+    | null;
+
+  const instruction = drip
+    ? (isFirst
+        ? `Soạn MỘT tin nhắn Zalo NGẮN (tối đa 3 câu) gửi người bán ngay sau khi họ vừa đăng tin: cảm ơn đã gửi tin, báo tin đang được xử lý, rồi hỏi ĐÚNG MỘT câu về thông tin dưới đây. Không hỏi gì khác.`
+        : `Soạn MỘT tin nhắn Zalo RẤT NGẮN (1-2 câu) hỏi tiếp ĐÚNG MỘT thông tin dưới đây, giọng nối tiếp cuộc trò chuyện đang có (ví dụ mở đầu "Dạ em hỏi thêm xíu:"). Không chào lại từ đầu, không hỏi gì khác.`)
+    : `Soạn MỘT tin nhắn Zalo gửi người bán để xin bổ sung thông tin cho tin rao: gộp hết vào một tin duy nhất, mỗi thông tin một câu hỏi rõ ràng, mở đầu chào đúng tone, nói rõ "có khách đang hỏi" để tạo động lực trả lời, kết thúc bằng lời cảm ơn + câu hỏi. Không hỏi gì ngoài danh sách.`;
 
   const anthropic = await anthropicClient(db);
   const resp = await anthropic.messages.parse({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: 1024,
     output_config: {
       effort: "medium",
       format: zodOutputFormat(OutSchema),
@@ -87,13 +104,12 @@ Deno.serve(async (req) => {
     messages: [{
       role: "user",
       content:
-        `Soạn MỘT tin nhắn Zalo gửi người bán để xin bổ sung thông tin cho tin rao.\n` +
-        `Người bán: ${sellerName ?? "chưa rõ tên (gọi anh/chị)"} — loại: ${
-          sellerType === "nmg" ? "nhà môi giới (được phép hỏi gọn, chuyên nghiệp)" : "chính chủ (giải thích ngắn vì sao cần, giọng gần gũi)"
+        `${instruction}\n` +
+        `Người bán: ${seller?.name ?? "chưa rõ tên (gọi anh/chị)"} — loại: ${
+          seller?.seller_type === "nmg" ? "nhà môi giới (hỏi gọn, chuyên nghiệp)" : "chính chủ (giọng gần gũi)"
         }\n` +
         `Tin rao: #${listing.code ?? listing.id} — ${listing.location_raw ?? ""} ${listing.ward ?? ""} ${listing.district ?? ""}, giá ${listing.price_raw ?? "?"}\n` +
-        `Các thông tin cần hỏi (đã có người mua quan tâm hỏi tới):\n${factList}\n\n` +
-        `Yêu cầu: gộp hết vào một tin duy nhất, mỗi thông tin một câu hỏi rõ ràng, mở đầu chào đúng tone, nói rõ "có khách đang hỏi" để tạo động lực trả lời, kết thúc bằng lời cảm ơn + câu hỏi. Không hỏi gì ngoài danh sách trên.`,
+        `Thông tin cần hỏi:\n${factList}`,
     }],
   });
 
@@ -101,21 +117,43 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Không sinh được tin nhắn", stop_reason: resp.stop_reason }, 502);
   }
   const out = resp.parsed_output;
+  let sent_via: string = "none";
 
   if (!dry_run) {
-    const rows = out.questions.map((q) => ({
+    const rows = toAsk.map((f) => ({
       listing_id,
-      question: q.fact_key,
+      question: f.fact_key,
       status: "pending",
     }));
     const { error: iErr } = await db.from("info_requests").insert(rows);
     if (iErr) return jsonResponse({ error: iErr.message, message: out.message }, 500);
+
+    // Gửi thẳng qua Zalo OA nếu có kênh (FR-129)
+    if (seller?.zalo_user_id) {
+      const { data: token } = await db.rpc("get_secret", {
+        secret_name: "ZALO_OA_ACCESS_TOKEN",
+      });
+      if (token) {
+        const send = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", access_token: token as string },
+          body: JSON.stringify({
+            recipient: { user_id: seller.zalo_user_id },
+            message: { text: out.message },
+          }),
+        });
+        const sr = await send.json().catch(() => ({}));
+        sent_via = sr?.error === 0 ? "zalo_oa" : `zalo_oa_error:${sr?.error}`;
+      }
+    }
   }
 
   return jsonResponse({
     message: out.message,
-    asked: out.questions.map((q) => q.fact_key),
-    skipped_pending: [...pendingKeys],
+    asked: toAsk.map((f) => f.fact_key),
+    mode,
+    is_first: isFirst,
+    sent_via,
     dry_run,
   });
 });

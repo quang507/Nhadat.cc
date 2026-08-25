@@ -3,7 +3,7 @@
 // POST { external_user_id, text, msg_id?, channel? } → { reply, conversation_id }
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { TONE_RULES } from "../_shared/prompts.ts";
+import { FACT_LABELS, TONE_RULES } from "../_shared/prompts.ts";
 
 const MODEL = "claude-opus-5";
 
@@ -33,6 +33,69 @@ Deno.serve(async (req) => {
   }
 
   const client = db();
+
+  // NGƯỜI BÁN nhắn? (FR-129 — hỏi nhỏ giọt): nếu khớp sellers.zalo_user_id và
+  // đang có câu hỏi chờ, coi tin nhắn là CÂU TRẢ LỜI → lưu fact, hỏi câu kế.
+  const { data: sellerRow } = await client
+    .from("sellers").select("id, name")
+    .eq("zalo_user_id", externalUserId).maybeSingle();
+  if (sellerRow) {
+    const { data: pendingReq } = await client
+      .from("info_requests")
+      .select("id, listing_id, question, listings!inner(seller_id, code)")
+      .eq("listings.seller_id", sellerRow.id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1).maybeSingle();
+
+    if (pendingReq) {
+      await client.from("listing_facts").insert({
+        listing_id: pendingReq.listing_id,
+        question: pendingReq.question,
+        answer: text,
+        source: "seller_chat",
+      });
+      await client.from("info_requests").update({
+        status: "answered", answer: text, answered_at: new Date().toISOString(),
+      }).eq("id", pendingReq.id);
+
+      // Câu kế tiếp (chưa pending) theo ưu tiên
+      const { data: nextFacts } = await client
+        .from("listing_missing_facts")
+        .select("fact_key, priority")
+        .eq("listing_id", pendingReq.listing_id)
+        .order("priority").limit(3);
+      const { data: stillPending } = await client
+        .from("info_requests").select("question")
+        .eq("listing_id", pendingReq.listing_id).eq("status", "pending");
+      const pendSet = new Set((stillPending ?? []).map((r) => r.question));
+      const next = (nextFacts ?? []).find((f) => !pendSet.has(f.fact_key));
+
+      const apiKey2 = await secret(client, "ANTHROPIC_API_KEY");
+      const anthropic2 = new Anthropic({ apiKey: apiKey2! });
+      const prompt = next
+        ? `Người bán vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}". Soạn MỘT tin RẤT NGẮN (1-2 câu): cảm ơn/ghi nhận tự nhiên, rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[next.fact_key] ?? next.fact_key}. Không hỏi gì khác.`
+        : `Người bán vừa trả lời câu hỏi cuối: "${text}". Soạn MỘT tin NGẮN cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem anh chị còn muốn bổ sung gì không.`;
+      const r2 = await anthropic2.messages.create({
+        model: MODEL, max_tokens: 512,
+        output_config: { effort: "medium" },
+        system: [{ type: "text", text: TONE_RULES, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: prompt }],
+      });
+      const sellerReply = r2.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+
+      if (next && sellerReply) {
+        await client.from("info_requests").insert({
+          listing_id: pendingReq.listing_id, question: next.fact_key, status: "pending",
+        });
+      }
+      return new Response(
+        JSON.stringify({ reply: sellerReply, role: "seller", saved_fact: pendingReq.question }),
+        { headers: { "Content-Type": "application/json; charset=utf-8" } },
+      );
+    }
+    // Seller nhắn nhưng không có câu chờ → rơi xuống luồng hội thoại thường
+  }
 
   // Nhớ người trò chuyện (FR-21/26)
   let { data: buyer } = await client
