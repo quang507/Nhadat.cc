@@ -27,12 +27,15 @@ async function sha256hex(s: string): Promise<string> {
 async function handleEvent(raw: string): Promise<void> {
   const client = db();
   const ev = JSON.parse(raw);
-  if (ev.event_name !== "user_send_text") return; // MVP: chỉ tin văn bản
+  const isText = ev.event_name === "user_send_text";
+  const isImage = ev.event_name === "user_send_image"; // FR-134: bot đọc ảnh
+  if (!isText && !isImage) return;
 
   const zaloUserId = String(ev.sender?.id ?? "");
   const text = String(ev.message?.text ?? "").trim();
+  const imageUrl = isImage ? String(ev.message?.attachments?.[0]?.payload?.url ?? "") : "";
   const zaloMsgId = ev.message?.msg_id ? String(ev.message.msg_id) : null;
-  if (!zaloUserId || !text) return;
+  if (!zaloUserId || (!text && !imageUrl)) return;
 
   // Bộ não dùng chung (NFR-12): nhớ khách, hồ sơ nhu cầu FR-130, dedupe msg_id
   const brain = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/chat-reply`, {
@@ -44,6 +47,7 @@ async function handleEvent(raw: string): Promise<void> {
     body: JSON.stringify({
       external_user_id: zaloUserId,
       text,
+      image_url: imageUrl || undefined,
       msg_id: zaloMsgId,
       channel: "zalo_oa",
     }),
@@ -60,9 +64,11 @@ async function handleEvent(raw: string): Promise<void> {
   const accessToken = await secret(client, "ZALO_OA_ACCESS_TOKEN");
   if (!accessToken) return; // chưa cấu hình OA — chỉ ghi log (đã lưu messages)
 
-  // FR-130: gửi từng bong bóng, trễ theo độ dài như người đang gõ
-  for (const bubble of bubbles) {
-    await new Promise((r) => setTimeout(r, Math.min(800 + bubble.length * 25, 4000)));
+  // FR-130: phản ứng nhanh trước, nội dung sau — bong bóng ĐẦU gửi gần như ngay
+  // (khách thấy được đáp liền), các bong bóng sau trễ theo độ dài như người gõ.
+  for (const [i, bubble] of bubbles.entries()) {
+    await new Promise((r) =>
+      setTimeout(r, i === 0 ? 400 : Math.min(800 + bubble.length * 25, 4000)));
     const send = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
       method: "POST",
       headers: { "Content-Type": "application/json", access_token: accessToken },
