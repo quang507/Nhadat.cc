@@ -66,9 +66,10 @@ api.listener.on("message", async (message) => {
     if (!bubbles.length) return;
 
     // FR-130: phản ứng nhanh trước, nội dung sau — bong bóng đầu đi ngay,
-    // các bong bóng sau trễ theo độ dài như người đang gõ.
+    // các bong bóng sau trễ nhẹ theo độ dài (model vốn đã mất vài giây, đừng
+    // cộng thêm nhiều nữa kẻo khách sốt ruột).
     for (const [i, bubble] of bubbles.entries()) {
-      const typingMs = i === 0 ? 500 : Math.min(1000 + bubble.length * 35, 6000);
+      const typingMs = i === 0 ? 250 : Math.min(600 + bubble.length * 15, 2000);
       await new Promise((r) => setTimeout(r, typingMs));
       await api.sendMessage(bubble, message.threadId, ThreadType.User);
       console.log(`→ ${bubble.slice(0, 80)}…`);
