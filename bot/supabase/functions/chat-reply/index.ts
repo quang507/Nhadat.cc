@@ -44,12 +44,20 @@ function mapDue(when: string): string {
   const vn = new Date(now + 7 * 3600e3);
   let day = 0;
   if (/mai|hôm sau/.test(t)) day = 1;
+  // "thứ 7", "chủ nhật/CN" → số ngày tới thứ đó (trùng hôm nay thì lấy hôm nay)
+  const wd = /thứ\s*([2-7])/.exec(t);
+  if (wd) day = ((parseInt(wd[1], 10) - 1) - vn.getUTCDay() + 7) % 7;
+  else if (/chủ nhật|\bcn\b/.test(t)) day = (7 - vn.getUTCDay()) % 7;
   let hour = 15;
   const hm = /(\d{1,2})\s*(?:h|giờ)/.exec(t);
-  if (hm) hour = Math.min(23, Math.max(0, parseInt(hm[1], 10)));
-  else if (/sáng/.test(t)) hour = 9;
+  if (hm) {
+    hour = Math.min(23, Math.max(0, parseInt(hm[1], 10)));
+    // "3h chiều", "8h tối" — giờ kèm buổi thì cộng 12, kẻo thành 3h/8h SÁNG
+    if (hour < 12 && /chiều|tối|đêm/.test(t)) hour += 12;
+  } else if (/sáng/.test(t)) hour = 9;
   else if (/trưa/.test(t)) hour = 12;
-  else if (/tối/.test(t)) hour = 19;
+  else if (/chiều/.test(t)) hour = 15;
+  else if (/tối|đêm/.test(t)) hour = 19;
   else if (/cuối tuần/.test(t)) { day = ((6 - vn.getUTCDay()) + 7) % 7 || 6; hour = 10; }
   let due = Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate() + day, hour - 7);
   if (due <= now) due = now + 2 * 3600e3; // đã qua giờ đó → nhắc sau 2 tiếng
@@ -58,17 +66,30 @@ function mapDue(when: string): string {
 // Regex bắt lời hứa cho nhánh seller (không qua parse có cấu trúc)
 const PROMISE_RE = /(sáng mai|chiều|tối|trưa|mai|cuối tuần)[^.,;!?]{0,30}?(gửi|chụp|báo|đưa|bổ sung|cho em|check|coi lại)|(gửi|chụp|báo|đưa|bổ sung|check|coi lại)[^.,;!?]{0,30}?(sáng mai|chiều|tối|trưa|mai|cuối tuần)/i;
 
-// SRS-4.5: "tầm 5 tỷ" / "dưới 4 tỷ" trong hồ sơ → cận trên VND để lọc kho bằng
-// price_vnd (cột số, parse_vnd phía DB — hướng parseVnd của NhaDat-Radar).
-function budgetMaxVnd(budget: unknown): number | null {
+// SRS-4.5: khoảng giá trong hồ sơ → biên VND để lọc kho bằng price_vnd
+// (cột số, parse_vnd phía DB — hướng parseVnd của NhaDat-Radar).
+// "tầm/dưới 5 tỷ" → cận trên ×1.15; "trên/từ 4 tỷ" → cận DƯỚI; "5-6 tỷ" → cả hai.
+function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null {
   if (typeof budget !== "string") return null;
+  const unitOf = (u: string) => (/tỷ|ty|tỏi|tỉ/i.test(u) ? 1e9 : 1e6);
+  const num = (s: string) => parseFloat(s.replace(",", "."));
+  const range =
+    /([\d][\d.,]*)\s*[-–~]\s*([\d][\d.,]*)\s*(tỷ|ty|tỏi|tỉ|triệu|trieu|củ)/i.exec(budget);
+  if (range) {
+    const u = unitOf(range[3]);
+    const a = num(range[1]) * u, b = num(range[2]) * u;
+    if (Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a) {
+      return { min: Math.round(a * 0.95), max: Math.round(b * 1.1) };
+    }
+  }
   const m = /([\d][\d.,]*)\s*(tỷ|ty|tỏi|tỉ)/i.exec(budget) ??
     /([\d][\d.,]*)\s*(triệu|trieu|củ|tr\b)/i.exec(budget);
   if (!m) return null;
-  const n = parseFloat(m[1].replace(",", "."));
+  const n = num(m[1]);
   if (!Number.isFinite(n) || n <= 0) return null;
-  const base = /tỷ|ty|tỏi|tỉ/i.test(m[2]) ? n * 1e9 : n * 1e6;
-  return Math.round(base * 1.15); // nới ~15%: khách nói "5 tỷ" vẫn nên thấy căn 5,5 tỷ
+  const base = n * unitOf(m[2]);
+  if (/trên|hơn|từ|tối thiểu|ít nhất/i.test(budget)) return { min: Math.round(base * 0.95) };
+  return { max: Math.round(base * 1.15) };
 }
 
 // FR-29: mã căn khách nhắc ("#BDS-Q5-0115", từ web bấm sang) — chào đúng căn đó
@@ -136,12 +157,28 @@ Deno.serve(async (req) => {
 
   const client = db();
 
+  // FR-138: "não" cấu hình được từ dashboard — bảng bot_prompts đè lên mặc định
+  // trong prompts.ts. Chủ dự án sửa content ở Table Editor là bot đổi ngay lượt
+  // sau, không cần deploy. Không có dòng nào thì dùng bản trong code.
+  const { data: promptRows } = await client.from("bot_prompts").select("key, content");
+  const P: Record<string, string> = Object.fromEntries(
+    (promptRows ?? []).map((r) => [r.key, r.content]),
+  );
+  const TONE = P.tone_rules ?? TONE_RULES;
+  const HUMAN = P.human_chat_rules ?? HUMAN_CHAT_RULES;
+  const FEES = P.fee_rules ?? FEE_RULES;
+  const SELLER_SCRIPT = P.seller_script_rules ?? SELLER_SCRIPT_RULES;
+  const SLANG = P.slang_notes ?? SLANG_NOTES;
+  const FEWSHOT = P.buyer_fewshot ?? BUYER_FEWSHOT;
+
   // NGƯỜI BÁN nhắn? (FR-129 — hỏi nhỏ giọt): nếu khớp sellers.zalo_user_id và
   // đang có câu hỏi chờ, coi tin nhắn là CÂU TRẢ LỜI → lưu fact, hỏi câu kế.
   const { data: sellerRow } = await client
     .from("sellers").select("id, name")
     .eq("zalo_user_id", externalUserId).maybeSingle();
   if (sellerRow) {
+    const apiKeyS = await secret(client, "ANTHROPIC_API_KEY");
+    const anthropicS = new Anthropic({ apiKey: apiKeyS! });
     const { data: pendingReq } = await client
       .from("info_requests")
       .select("id, listing_id, question, listings!inner(seller_id, code)")
@@ -159,6 +196,22 @@ Deno.serve(async (req) => {
         kind: "promise", seller_id: sellerRow.id,
         due_at: mapDue(text), note: text.slice(0, 200),
       });
+    }
+    // Seller gửi ẢNH không kèm chữ → ghi nhận ảnh, TUYỆT ĐỐI không coi chuỗi
+    // rỗng là "câu trả lời" cho câu hỏi đang chờ (từng làm mất fact pháp lý)
+    if (!text && imageUrl) {
+      if (pendingReq) {
+        await client.from("listing_facts").insert({
+          listing_id: pendingReq.listing_id, question: "hinh_anh",
+          answer: `[ảnh] ${imageUrl}`, source: "seller_chat",
+        });
+      }
+      const thanks =
+        "Dạ em nhận được ảnh rồi ạ, em bổ sung vào tin ngay. Cảm ơn anh/chị nhiều!";
+      return new Response(
+        JSON.stringify({ reply: thanks, replies: [thanks], role: "seller" }),
+        { headers: { "Content-Type": "application/json; charset=utf-8" } },
+      );
     }
     if (pendingReq) {
       await client.from("listing_facts").insert({
@@ -183,17 +236,15 @@ Deno.serve(async (req) => {
       const pendSet = new Set((stillPending ?? []).map((r) => r.question));
       const next = (nextFacts ?? []).find((f) => !pendSet.has(f.fact_key));
 
-      const apiKey2 = await secret(client, "ANTHROPIC_API_KEY");
-      const anthropic2 = new Anthropic({ apiKey: apiKey2! });
       const prompt = next
         ? `Người bán vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}". Soạn MỘT tin RẤT NGẮN (~30 từ): ghi nhận/khen tự nhiên câu trả lời (điểm mạnh thật của nhà nếu có), rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[next.fact_key] ?? next.fact_key}. Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
         : `Người bán vừa trả lời câu hỏi cuối: "${text}". Soạn MỘT tin NGẮN cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem anh chị còn muốn bổ sung gì không.`;
-      const r2 = await anthropic2.messages.create({
+      const r2 = await anthropicS.messages.create({
         model: MODEL, max_tokens: 512,
         output_config: { effort: "medium" },
         system: [{
           type: "text",
-          text: TONE_RULES + "\n\n" + SELLER_SCRIPT_RULES,
+          text: TONE + "\n\n" + SELLER_SCRIPT,
           cache_control: { type: "ephemeral" },
         }],
         messages: [{ role: "user", content: prompt }],
@@ -215,7 +266,37 @@ Deno.serve(async (req) => {
         { headers: { "Content-Type": "application/json; charset=utf-8" } },
       );
     }
-    // Seller nhắn nhưng không có câu chờ → rơi xuống luồng hội thoại thường
+    // Seller nhắn nhưng KHÔNG có câu chờ → vẫn trả lời ĐÚNG VAI người bán
+    // (trước đây rơi xuống luồng mua → bot hỏi "anh tìm khu nào" với chính chủ nhà)
+    const { data: sellerLst } = await client.from("listings")
+      .select("code, location_raw, ward, price_raw")
+      .eq("seller_id", sellerRow.id)
+      .order("created_at", { ascending: false }).limit(5);
+    const lstLines = (sellerLst ?? [])
+      .map((l) => `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? "?"}`)
+      .join("\n");
+    const r3 = await anthropicS.messages.create({
+      model: MODEL, max_tokens: 512,
+      output_config: { effort: "low" },
+      system: [{
+        type: "text",
+        text: TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + FEES,
+        cache_control: { type: "ephemeral" },
+      }],
+      messages: [{
+        role: "user",
+        content:
+          `NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
+          `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN — tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
+          `Không bịa tình trạng tin/lượt khách quan tâm; điều chưa nắm thì nói "để em kiểm tra rồi báo lại anh/chị liền".`,
+      }],
+    });
+    const sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ??
+      "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha.";
+    return new Response(
+      JSON.stringify({ reply: sReply, replies: [sReply], role: "seller" }),
+      { headers: { "Content-Type": "application/json; charset=utf-8" } },
+    );
   }
 
   // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130).
@@ -278,10 +359,13 @@ Deno.serve(async (req) => {
   const wardNum = typeof prefs.area === "string"
     ? /ph(?:ường|uong)?\s*\.?\s*(\d{1,2})|(?:^|\W)p\.?\s*(\d{1,2})/i.exec(prefs.area)
     : null;
-  if (wardNum) khoQ = khoQ.ilike("ward", `%${wardNum[1] ?? wardNum[2]}%`);
+  // Khớp ĐÚNG số phường (ilike không wildcard = so khớp nguyên chuỗi,
+  // không phân biệt hoa thường) — '%1%' cũ khiến P1 dính cả P10-P16
+  if (wardNum) khoQ = khoQ.ilike("ward", `Phường ${wardNum[1] ?? wardNum[2]}`);
   if (typeof prefs.bedrooms === "number") khoQ = khoQ.gte("bedrooms", prefs.bedrooms);
-  const maxVnd = budgetMaxVnd(prefs.budget);
-  if (maxVnd) khoQ = khoQ.lte("price_vnd", maxVnd);
+  const budgetR = budgetRangeVnd(prefs.budget);
+  if (budgetR?.max) khoQ = khoQ.lte("price_vnd", budgetR.max);
+  if (budgetR?.min) khoQ = khoQ.gte("price_vnd", budgetR.min);
 
   // FR-29/30: khách nhắc mã căn (gõ tay hoặc bấm từ trang chi tiết web sang)
   const mentioned = [...new Set(
@@ -382,7 +466,7 @@ Deno.serve(async (req) => {
       output_config: { effort: "medium", format: zodOutputFormat(BuyerTurn) },
       system: [{
         type: "text",
-        text: TONE_RULES + "\n\n" + HUMAN_CHAT_RULES + "\n\n" + FEE_RULES + "\n\n" + SLANG_NOTES + "\n\n" + BUYER_FEWSHOT +
+        text: TONE + "\n\n" + HUMAN + "\n\n" + FEES + "\n\n" + SLANG + "\n\n" + FEWSHOT +
           "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO dưới đây, không bịa.\n\nKHO HIỆN CÓ:\n" +
           (kho || "(trống)") +
           (askedBlock
@@ -439,10 +523,19 @@ Deno.serve(async (req) => {
     };
   }
 
-  // Gộp hồ sơ: chỉ ghi đè trường model bóc được (không xoá điều đã biết)
+  // Gộp hồ sơ: chỉ ghi đè trường model bóc được (không xoá điều đã biết).
+  // Riêng notes (hoàn cảnh) là TÍCH LUỸ — nối thêm, đừng ghi đè mất "mẹ già ở
+  // cùng" chỉ vì hôm nay khách nói "ưu tiên gần chợ".
   const delta: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(out.profile)) {
-    if (v !== null && v !== "" && k !== "name") delta[k] = v;
+    if (v === null || v === "" || k === "name") continue;
+    if (k === "notes" && typeof prefs.notes === "string" && prefs.notes) {
+      if (!prefs.notes.includes(String(v))) {
+        delta.notes = `${prefs.notes}; ${v}`.slice(-500);
+      }
+    } else {
+      delta[k] = v;
+    }
   }
   if (Object.keys(delta).length > 0) {
     await client.from("buyers")
@@ -467,7 +560,9 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Khách chốt lịch xem nhà (UF-06 / FR-50…53) → ghi viewings + nhắc trước giờ
+  // Khách chốt lịch xem nhà (UF-06 / FR-50…53) → ghi viewings + nhắc trước giờ.
+  // Khách bổ sung SĐT / đổi giờ ở lượt sau là CẬP NHẬT lịch pending đang có,
+  // không tạo lịch trùng (từng tạo 2 dòng cho 1 cuộc hẹn).
   if (out.viewing?.when) {
     let listingId: string | null = null;
     if (out.viewing.listing_code) {
@@ -476,19 +571,48 @@ Deno.serve(async (req) => {
       listingId = lst?.id ?? null;
     }
     const slot = mapDue(out.viewing.when);
-    const { data: vw } = await client.from("viewings").insert({
-      buyer_id: buyer.id, listing_id: listingId,
-      listing_code: out.viewing.listing_code, time_text: out.viewing.when,
-      slot, phone: out.viewing.phone ?? null, status: "pending", source: "bot",
-    }).select("id").single();
-    // Nhắc trước buổi xem ~45 phút (mẫu §6.8); lịch quá gần thì thôi
     const slotMs = Date.parse(slot);
-    if (vw && slotMs - Date.now() > 90 * 60e3) {
-      await client.from("reminders").insert({
-        kind: "viewing", buyer_id: buyer.id, viewing_id: vw.id,
-        due_at: new Date(slotMs - 45 * 60e3).toISOString(),
-        note: `lịch xem ${out.viewing.listing_code ? "#" + out.viewing.listing_code : "nhà"} lúc ${out.viewing.when}`,
-      });
+    const { data: existVw } = await client.from("viewings")
+      .select("id, listing_code")
+      .eq("buyer_id", buyer.id).eq("status", "pending")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const sameAppt = existVw &&
+      (!out.viewing.listing_code || !existVw.listing_code ||
+        existVw.listing_code === out.viewing.listing_code);
+    let vwId: string | null = null;
+    if (existVw && sameAppt) {
+      const patch: Record<string, unknown> = { time_text: out.viewing.when, slot };
+      if (out.viewing.phone) patch.phone = out.viewing.phone;
+      if (out.viewing.listing_code && !existVw.listing_code) {
+        patch.listing_code = out.viewing.listing_code;
+        patch.listing_id = listingId;
+      }
+      await client.from("viewings").update(patch).eq("id", existVw.id);
+      vwId = existVw.id;
+      // dời giờ nhắc theo slot mới
+      await client.from("reminders")
+        .update({ due_at: new Date(slotMs - 45 * 60e3).toISOString() })
+        .eq("viewing_id", vwId).eq("kind", "viewing").eq("status", "pending");
+    } else {
+      const { data: vw } = await client.from("viewings").insert({
+        buyer_id: buyer.id, listing_id: listingId,
+        listing_code: out.viewing.listing_code, time_text: out.viewing.when,
+        slot, phone: out.viewing.phone ?? null, status: "pending", source: "bot",
+      }).select("id").single();
+      vwId = vw?.id ?? null;
+    }
+    // Nhắc trước buổi xem ~45 phút (mẫu §6.8); lịch quá gần hoặc đã có nhắc thì thôi
+    if (vwId && slotMs - Date.now() > 90 * 60e3) {
+      const { count: remCnt } = await client.from("reminders")
+        .select("id", { count: "exact", head: true })
+        .eq("viewing_id", vwId).eq("status", "pending");
+      if ((remCnt ?? 0) === 0) {
+        await client.from("reminders").insert({
+          kind: "viewing", buyer_id: buyer.id, viewing_id: vwId,
+          due_at: new Date(slotMs - 45 * 60e3).toISOString(),
+          note: `lịch xem ${out.viewing.listing_code ? "#" + out.viewing.listing_code : "nhà"} lúc ${out.viewing.when}`,
+        });
+      }
     }
   }
 
@@ -507,9 +631,12 @@ Deno.serve(async (req) => {
   const repliedCode = [...replies.join("\n").matchAll(CODE_RE)]
     .map((m) => m[1].toUpperCase())[0] ?? mentioned[0];
   if (repliedCode && !out.viewing) {
+    // Trần 1 lần/24h chỉ đếm nhắc còn hiệu lực — nhắc đã CANCELLED (khách nhắn
+    // lại nên chưa hề gửi) không được chặn follow-up mới
     const { count: fu24 } = await client.from("reminders")
       .select("id", { count: "exact", head: true })
       .eq("buyer_id", buyer.id).eq("kind", "followup")
+      .in("status", ["pending", "sent"])
       .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
     if ((fu24 ?? 0) === 0) {
       const { data: fuLst } = await client.from("listings").select("id")

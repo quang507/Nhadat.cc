@@ -4,7 +4,8 @@
 
 -- ============ SRS-4.5: giá dạng số để lọc "dưới 4 tỷ" bằng SQL ============
 -- Hướng parseVnd của NhaDat-Radar: "5,5 tỷ"→5.5e9; "3 tỷ 200"→3.2e9;
--- "12 triệu/tháng"→12e6; "thương lượng"→NULL.
+-- "5 tỷ 5"→5.5e9 (vế sau 1 chữ số = ×100 triệu); "12 triệu/tháng"→12e6;
+-- "thương lượng"→NULL. (bản đã vá qua fix_parse_vnd_colloquial_tenths)
 create or replace function public.parse_vnd(p text) returns bigint
 language plpgsql immutable as $$
 declare
@@ -13,7 +14,10 @@ begin
   if p is null or btrim(p) = '' then return null; end if;
   m := regexp_match(p, '([0-9]+)\s*t[ỷỉyĩ]\w*\s*([0-9]{1,3})(?!\s*m)', 'i');
   if m is not null then
-    return m[1]::numeric * 1e9 + m[2]::numeric * 1e6;
+    if length(m[2]) = 1 then
+      return m[1]::numeric * 1e9 + m[2]::numeric * 1e8;  -- "5 tỷ 5" → 5,5 tỷ
+    end if;
+    return m[1]::numeric * 1e9 + m[2]::numeric * 1e6;    -- "3 tỷ 200" → 3,2 tỷ
   end if;
   m := regexp_match(p, '([0-9]+[.,]?[0-9]*)\s*t[ỷỉyĩ]', 'i');
   if m is not null then
@@ -125,3 +129,14 @@ begin
   );
 end $$;
 select cron.schedule('ctv-report-tick', '0 10 * * *', 'select public.ctv_report_tick()');
+
+-- ============ FR-138: cấu hình "não" bot từ dashboard ============
+-- (đã áp kèm seed 7 key từ _shared/prompts.ts qua migration
+--  add_bot_prompts_runtime_config; schema tham chiếu:)
+create table if not exists public.bot_prompts (
+  key text primary key,   -- tone_rules | human_chat_rules | fee_rules |
+                          -- seller_script_rules | slang_notes | buyer_fewshot | rate_ctv_rubric
+  content text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.bot_prompts enable row level security;  -- chỉ service_role

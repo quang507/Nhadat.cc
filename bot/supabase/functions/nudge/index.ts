@@ -58,6 +58,10 @@ Deno.serve(async (req) => {
   const apiKey = await secret(client, "ANTHROPIC_API_KEY");
   const anthropic = new Anthropic({ apiKey: apiKey! });
   const oaToken = await secret(client, "ZALO_OA_ACCESS_TOKEN");
+  // FR-138: tone cấu hình được từ bảng bot_prompts (sửa ở dashboard, khỏi deploy)
+  const { data: toneRow } = await client.from("bot_prompts")
+    .select("content").eq("key", "tone_rules").maybeSingle();
+  const TONE = toneRow?.content ?? TONE_RULES;
   const out: Record<string, unknown>[] = [];
 
   // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) ----
@@ -89,7 +93,7 @@ Deno.serve(async (req) => {
     const resp = await anthropic.messages.create({
       model: MODEL, max_tokens: 256,
       output_config: { effort: "low" },
-      system: [{ type: "text", text: TONE_RULES, cache_control: { type: "ephemeral" } }],
+      system: [{ type: "text", text: TONE, cache_control: { type: "ephemeral" } }],
       messages: [{
         role: "user",
         content: r.kind === "viewing"
@@ -108,6 +112,11 @@ Deno.serve(async (req) => {
     if (!dry_run) {
       if (who?.zalo_user_id && oaToken && !who.zalo_user_id.startsWith("TEST")) {
         sent = (await sendZalo(oaToken, who.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
+      }
+      if (sent === "zalo_error") {
+        // Gửi lỗi → GIỮ pending cho nhịp cron sau thử lại, đừng nuốt mất lời nhắc
+        out.push({ kind: r.kind, id: r.id, text, sent, retry: true });
+        continue;
       }
       if (r.buyer_id) {
         const { data: conv } = await client.from("conversations").select("id")
@@ -153,7 +162,7 @@ Deno.serve(async (req) => {
     const resp = await anthropic.messages.create({
       model: MODEL, max_tokens: 256,
       output_config: { effort: "low" },
-      system: [{ type: "text", text: TONE_RULES, cache_control: { type: "ephemeral" } }],
+      system: [{ type: "text", text: TONE, cache_control: { type: "ephemeral" } }],
       messages: [{
         role: "user",
         content:
@@ -169,6 +178,12 @@ Deno.serve(async (req) => {
     if (!dry_run) {
       if (b.zalo_user_id && oaToken && !b.zalo_user_id.startsWith("TEST")) {
         sent = (await sendZalo(oaToken, b.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
+      }
+      if (sent === "zalo_error") {
+        // Gửi lỗi → không ghi vết "đã hỏi thăm", nhịp sau thử lại người này
+        reengaged++;
+        out.push({ kind: "reengage", buyer: b.id, angle, text, sent, retry: true });
+        continue;
       }
       if (conv) await client.from("messages").insert({ conversation_id: conv.id, sender: "bot", body: text });
       await client.from("reminders").insert({

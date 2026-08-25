@@ -20,6 +20,12 @@ Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 
 ## Cấu hình
 
+- **Sửa "não" không cần deploy (FR-138)**: bảng `bot_prompts` (key/content) chứa
+  toàn bộ văn phong + luật phí + nhịp nhắn + kịch bản người bán + từ điển lóng +
+  few-shot + rubric chấm CTV. Vào Supabase → Table Editor → `bot_prompts`, sửa
+  `content` là bot đổi NGAY lượt sau. Key: `tone_rules`, `human_chat_rules`,
+  `fee_rules`, `seller_script_rules`, `slang_notes`, `buyer_fewshot`,
+  `rate_ctv_rubric`. Xoá dòng = quay về mặc định trong `_shared/prompts.ts`.
 - **Model**: `claude-opus-5`, structured output (zod v4 + `zodOutputFormat`),
   `effort: medium`. System prompt được cache (`cache_control: ephemeral`).
 - **ANTHROPIC_API_KEY**: đọc từ env secret của Edge Functions; nếu chưa đặt thì
