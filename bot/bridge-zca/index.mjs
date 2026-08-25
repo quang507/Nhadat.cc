@@ -65,12 +65,10 @@ api.listener.on("message", async (message) => {
     const bubbles = Array.isArray(replies) && replies.length ? replies : reply ? [reply] : [];
     if (!bubbles.length) return;
 
-    // FR-130: phản ứng nhanh trước, nội dung sau — bong bóng đầu đi ngay,
-    // các bong bóng sau trễ nhẹ theo độ dài (model vốn đã mất vài giây, đừng
-    // cộng thêm nhiều nữa kẻo khách sốt ruột).
+    // Quyết định 25/08: KHÔNG delay nhân tạo — bong bóng đầu đi ngay lập tức,
+    // giữa các bong bóng chỉ chừa 300ms cho Zalo giao đúng thứ tự.
     for (const [i, bubble] of bubbles.entries()) {
-      const typingMs = i === 0 ? 250 : Math.min(600 + bubble.length * 15, 2000);
-      await new Promise((r) => setTimeout(r, typingMs));
+      if (i > 0) await new Promise((r) => setTimeout(r, 300));
       await api.sendMessage(bubble, message.threadId, ThreadType.User);
       console.log(`→ ${bubble.slice(0, 80)}…`);
     }
