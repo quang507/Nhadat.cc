@@ -137,6 +137,10 @@ const BuyerTurn = z.object({
     when: z.string().describe("Khung giờ khách chốt, nguyên văn: 'mai 9h sáng', 'chiều thứ 7'…"),
     phone: z.string().nullable().describe("SĐT khách TỰ cho ở bước chốt lịch; không có thì null"),
   }).nullable().describe("CHỈ điền khi khách chốt/đề nghị lịch xem nhà cụ thể (UF-06). Không suy diễn."),
+  ask_owner: z.object({
+    listing_code: z.string().nullable().describe("Mã căn cần hỏi, ví dụ 'BDS-Q5-0164' (không có # đầu)"),
+    question: z.string().describe("Điều cần hỏi/xin từ chủ tin, ngắn gọn: 'hình + địa chỉ chi tiết', 'pháp lý', 'còn bán không'…"),
+  }).nullable().describe("CHỈ điền khi em vừa hứa 'để em hỏi lại chủ nhà / xin hình rồi gửi anh chị' về MỘT căn cụ thể. Không suy diễn."),
   need_human: z.boolean().describe(
     "true CHỈ khi: khách đòi gặp người thật/quản lý, khách bức xúc thật sự, đàm phán giá vào hồi kết, hoặc đã 'để em hỏi lại' 2 lần cùng một chuyện. Câu hỏi khó thường ngày thì false.",
   ),
@@ -333,10 +337,11 @@ Deno.serve(async (req) => {
     .update({ last_message_at: new Date().toISOString() }).eq("id", convId);
 
   // FR-131: gộp tin gõ vụn — debounce THÍCH ỨNG: tin ngắn cụt không dấu kết câu
-  // ("tìm nhà", "quận 10") là kiểu đang gõ tiếp → đợi 3.5s gom chùm; tin đủ ý
-  // thì chỉ đợi 1.5s cho đỡ chậm. Có tin mới hơn trong lúc đợi thì nhường lượt.
+  // ("tìm nhà", "quận 10") là kiểu đang gõ tiếp → đợi 2.5s gom chùm; tin đủ ý
+  // gần như trả lời ngay (400ms chỉ để bắt tin bắn liền tay). Check superseded
+  // ngay dưới vẫn chặn trả lời đôi nếu khách gõ tiếp trong lúc bot đang nghĩ.
   const looksFragment = text.length > 0 && text.length < 18 && !/[?.!…]$/.test(text);
-  await new Promise((r) => setTimeout(r, looksFragment ? 3500 : 1500));
+  await new Promise((r) => setTimeout(r, looksFragment ? 2500 : 400));
   const { data: newest } = await client
     .from("messages").select("id")
     .eq("conversation_id", convId).eq("sender", "buyer")
@@ -356,6 +361,7 @@ Deno.serve(async (req) => {
     .from("listings")
     .select("code, ward, location_raw, price_raw, area_m2, bedrooms")
     .eq("deal", prefs.deal === "thue" ? "thue" : "ban")
+    .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ gợi ý tin đang lên kệ
     .not("price_raw", "is", null).neq("price_raw", "")
     .order("created_at", { ascending: false }).limit(6);
   const wardNum = typeof prefs.area === "string"
@@ -387,7 +393,7 @@ Deno.serve(async (req) => {
     // Căn khách đang nhắc tới — kèm facts đã xác minh từ chủ nhà (FR-29)
     mentioned.length
       ? client.from("listings")
-        .select("code, ward, location_raw, price_raw, area_m2, bedrooms, listing_facts(question, answer)")
+        .select("code, status, ward, location_raw, price_raw, area_m2, bedrooms, listing_facts(question, answer)")
         .in("code", mentioned).limit(3)
       : Promise.resolve({ data: [] as never[] }),
   ]);
@@ -399,9 +405,16 @@ Deno.serve(async (req) => {
       `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}`)
     .join("\n");
 
-  // Khối "căn khách đang nhắc" (FR-29): đủ chi tiết + facts đã xác minh
+  // Khối "căn khách đang nhắc" (FR-29): đủ chi tiết + facts đã xác minh + trạng thái
+  const STATUS_VI: Record<string, string> = {
+    cho_thong_tin: "đang chờ bổ sung thông tin, chưa lên kệ",
+    dang_ban: "đang bán",
+    dang_quan_tam: "đang được nhiều khách quan tâm",
+    da_chot: "ĐÃ CHỐT GIAO DỊCH — báo thật với khách là căn này đã chốt rồi gợi ý căn tương tự trong KHO",
+    an: "đã gỡ khỏi kệ",
+  };
   type Asked = {
-    code: string; ward?: string | null; location_raw?: string | null;
+    code: string; status?: string | null; ward?: string | null; location_raw?: string | null;
     price_raw?: string | null; area_m2?: number | null; bedrooms?: number | null;
     listing_facts?: Array<{ question: string; answer: string }> | null;
   };
@@ -409,7 +422,7 @@ Deno.serve(async (req) => {
     .map((l) => {
       const facts = (l.listing_facts ?? [])
         .map((f) => `${f.question}: ${f.answer}`).join("; ");
-      return `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}`;
+      return `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${l.status ? ` · trạng thái: ${STATUS_VI[l.status] ?? l.status}` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}`;
     }).join("\n");
 
   // Khối DỰ ÁN (FR-113…115/FR-132): kiến thức chung đã xác thực, bot trả lời
@@ -458,6 +471,7 @@ Deno.serve(async (req) => {
       profile: Record<string, unknown>; replies: string[];
       promise?: { when: string; what: string } | null;
       viewing?: { listing_code: string | null; when: string; phone: string | null } | null;
+      ask_owner?: { listing_code: string | null; question: string } | null;
       need_human?: boolean;
     }
     | null = null;
@@ -561,6 +575,30 @@ Deno.serve(async (req) => {
       .eq("id", convId);
   }
 
+  // FR-140: bot hứa "để em hỏi lại chủ nhà" → tạo info_request; trigger DB
+  // định tuyến: chính chủ có Zalo → CTV còn liên lạc được → admin phụ trách
+  // (kèm reminder escalation để nudge/bridge đi báo ngay).
+  if (out.ask_owner?.question) {
+    const aoCode = (out.ask_owner.listing_code ?? mentioned[0] ?? "").toUpperCase();
+    if (aoCode) {
+      const { data: aoLst } = await client.from("listings").select("id")
+        .eq("code", aoCode).maybeSingle();
+      if (aoLst) {
+        // chống hỏi trùng: đã có yêu cầu pending của khách cho căn này trong 24h thì thôi
+        const { count: aoDup } = await client.from("info_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("listing_id", aoLst.id).eq("status", "pending").eq("source", "buyer_ask")
+          .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
+        if ((aoDup ?? 0) === 0) {
+          await client.from("info_requests").insert({
+            listing_id: aoLst.id, buyer_id: buyer.id,
+            question: out.ask_owner.question, status: "pending", source: "buyer_ask",
+          });
+        }
+      }
+    }
+  }
+
   // Khách hứa gửi gì đó → đặt hẹn nhắc (FR-133)
   if (out.promise?.when && out.promise?.what) {
     await client.from("reminders").insert({
@@ -637,8 +675,16 @@ Deno.serve(async (req) => {
   // khách nhắn lại thì reminder này bị hủy ở đầu lượt sau).
   // Mã trong câu trả lời, không có thì lấy mã khách vừa nhắc (bot hay gọi căn
   // bằng tên đường thay vì lặp lại mã)
-  const repliedCode = [...replies.join("\n").matchAll(CODE_RE)]
-    .map((m) => m[1].toUpperCase())[0] ?? mentioned[0];
+  const repliedCodes = [...replies.join("\n").matchAll(CODE_RE)]
+    .map((m) => m[1].toUpperCase());
+  const repliedCode = repliedCodes[0] ?? mentioned[0];
+
+  // FR-139: khách hỏi / bot đưa căn nào ra → đánh dấu "đang được quan tâm"
+  // (7 ngày không ai hỏi nữa thì cron tự trả về đang bán)
+  const interestCodes = [...new Set([...mentioned, ...repliedCodes])];
+  if (interestCodes.length) {
+    await client.rpc("mark_listing_interest", { p_codes: interestCodes });
+  }
   if (repliedCode && !out.viewing) {
     // Trần 1 lần/24h chỉ đếm nhắc còn hiệu lực — nhắc đã CANCELLED (khách nhắn
     // lại nên chưa hề gửi) không được chặn follow-up mới

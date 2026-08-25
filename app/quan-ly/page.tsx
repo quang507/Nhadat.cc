@@ -10,14 +10,17 @@ import { formatPrice } from "@/lib/format";
 
 const WARDS = Array.from({ length: 15 }, (_, i) => `Phường ${i + 1}`);
 
+// Vòng đời tin FR-139 (kèm nhãn cũ để tin lịch sử vẫn đọc được)
 const STATUS_LABEL: Record<string, string> = {
-  unverified: "Chờ duyệt",
-  draft: "Nháp",
-  pending_review: "Chờ duyệt",
-  active: "Đang rao",
-  negotiating: "Đang thương lượng",
-  sold: "Đã bán",
-  expired: "Hết hạn",
+  cho_thong_tin: "Chờ đủ thông tin",
+  dang_ban: "Đang rao trên web",
+  dang_quan_tam: "🔥 Đang được khách quan tâm",
+  da_chot: "Đã chốt",
+  an: "Đã ẩn",
+  unverified: "Chờ đủ thông tin",
+  active: "Đang rao trên web",
+  sold: "Đã chốt",
+  expired: "Đã ẩn",
 };
 
 export default function Page() {
@@ -72,7 +75,7 @@ export default function Page() {
         ward,
         description: rao.trim(),
         price_raw: priceRaw.trim() || null,
-        status: "unverified",
+        status: "cho_thong_tin",
       })
       .select("*").single();
     if (error) return setMsg("Đăng không được: " + error.message);
@@ -151,8 +154,8 @@ export default function Page() {
               </p>
             </div>
             <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${
-              l.status === "active" ? "bg-brand/10 text-brand"
-              : l.status === "sold" ? "bg-navy/10 text-navy"
+              l.status === "dang_ban" || l.status === "dang_quan_tam" ? "bg-brand/10 text-brand"
+              : l.status === "da_chot" ? "bg-navy/10 text-navy"
               : "bg-cream text-mute"
             }`}>
               {STATUS_LABEL[l.status] ?? l.status}

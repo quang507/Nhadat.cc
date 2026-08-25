@@ -79,4 +79,53 @@ api.listener.on("message", async (message) => {
   }
 });
 
+// FR-140: mỗi phút kéo việc "báo CTV/admin" (khách hỏi căn không có chính chủ)
+// từ escalation-feed, resolve SĐT → uid Zalo rồi nhắn từ acc clone, xong ack.
+// OA duyệt xong thì nudge tự gửi phía server, vòng này tự hết việc.
+const FEED_URL =
+  "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/escalation-feed";
+const feedHeaders = {
+  Authorization: `Bearer ${ANON_KEY}`,
+  "Content-Type": "application/json",
+  ...(process.env.BRIDGE_SECRET ? { "x-bridge-secret": process.env.BRIDGE_SECRET } : {}),
+};
+const uidCache = new Map(); // SĐT → uid, khỏi findUser lặp lại
+async function pumpEscalations() {
+  try {
+    const res = await fetch(FEED_URL, {
+      method: "POST", headers: feedHeaders, body: JSON.stringify({ action: "pull" }),
+    });
+    const { items, error } = await res.json();
+    if (error) return console.error("escalation-feed lỗi:", error);
+    for (const it of items ?? []) {
+      try {
+        let uid = it.zalo_user_id;
+        if (!uid && it.phone) {
+          if (!uidCache.has(it.phone)) {
+            const u = await api.findUser(it.phone).catch(() => null);
+            uidCache.set(it.phone, u?.uid ?? u?.userId ?? null);
+          }
+          uid = uidCache.get(it.phone);
+        }
+        if (!uid) { console.error(`escalation ${it.id}: không resolve được ${it.name}`); continue; }
+        await api.sendMessage(
+          `🔔 nhadat.cc: ${it.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`,
+          String(uid), ThreadType.User,
+        );
+        await fetch(FEED_URL, {
+          method: "POST", headers: feedHeaders,
+          body: JSON.stringify({ action: "ack", id: it.id }),
+        });
+        console.log(`🔔 đã báo ${it.name}: ${String(it.note).slice(0, 70)}…`);
+      } catch (e) {
+        console.error(`escalation ${it.id} lỗi:`, e?.message ?? e); // giữ pending, vòng sau thử lại
+      }
+    }
+  } catch (e) {
+    console.error("pumpEscalations:", e?.message ?? e);
+  }
+}
+setInterval(pumpEscalations, 60_000);
+pumpEscalations();
+
 api.listener.start();

@@ -14,6 +14,7 @@ tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/pro
 | `zalo-webhook` | SRS-4.4 | Nhận event OA (`user_send_text`/`user_send_image`), verify chữ ký nếu có app secret, trả 200 <1s, chuyển vào chat-reply rồi gửi bong bóng (bong bóng đầu gần như ngay, sau trễ theo độ dài). verify_jwt **tắt**. |
 | `nudge` | FR-133, FR-32 | Cron 30': nhắc lời hứa tới hạn, nhắc lịch xem trước ~45', follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); chỉ gửi 8h–21h VN + jitter 0-45s; `{dry_run, force}` để test. |
 | `ctv-report` | FR-136/137 | Cron 17h VN: tổng hợp đơn per-CTV (chia xoay vòng bằng trigger), lịch xem, đơn chờ người thật, chấm điểm hội thoại theo `RATE_CTV_RUBRIC` → gửi Zalo admin (`ZALO_ADMIN_ZALO_ID`) + lưu `ctv_daily_reports`. |
+| `escalation-feed` | FR-140 | Cửa cho bridge acc clone kéo việc "báo CTV/admin" (khách hỏi căn không có chính chủ): `{action:"pull"}` trả danh sách kèm SĐT/Zalo đích (bảng `ctvs`/`admins`), `{action:"ack", id}` đánh dấu đã gửi. Tuỳ chọn secret `BRIDGE_SECRET` trong Vault → yêu cầu header `x-bridge-secret`. Nudge cũng tự gửi các escalation này qua OA khi có token. |
 
 Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 `Authorization: Bearer <anon key>` (verify_jwt bật, trừ `zalo-webhook`).
@@ -27,7 +28,9 @@ Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
   `fee_rules`, `seller_script_rules`, `slang_notes`, `buyer_fewshot`,
   `rate_ctv_rubric`. Xoá dòng = quay về mặc định trong `_shared/prompts.ts`.
 - **Model**: `claude-opus-5`, structured output (zod v4 + `zodOutputFormat`),
-  `effort: medium`. System prompt được cache (`cache_control: ephemeral`).
+  `effort: low` (nhanh, few-shot + luật gánh chất lượng). System prompt tách
+  2 khối: khối luật ổn định được cache (`cache_control: ephemeral`), khối kho
+  biến động nằm sau điểm cache.
 - **ANTHROPIC_API_KEY**: đọc từ env secret của Edge Functions; nếu chưa đặt thì
   fallback đọc Supabase **Vault** qua RPC `get_secret` (chỉ `service_role` gọi
   được). Key hiện nằm trong Vault; muốn chuyển sang env:

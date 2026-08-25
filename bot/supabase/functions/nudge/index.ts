@@ -64,6 +64,35 @@ Deno.serve(async (req) => {
   const TONE = toneRow?.content ?? TONE_RULES;
   const out: Record<string, unknown>[] = [];
 
+  // ---- 0. Escalation (FR-140): khách hỏi căn không có chính chủ → báo CTV/admin.
+  // Tin nội bộ, không cần model. Gửi OA được thì đánh sent; không có kênh thì
+  // GIỮ pending — bridge acc clone sẽ kéo qua escalation-feed và tự ack.
+  const { data: escDue } = await client
+    .from("reminders")
+    .select("id, note, ctv_id, ctvs(name, zalo_user_id)")
+    .eq("status", "pending").eq("kind", "escalation")
+    .lte("due_at", new Date().toISOString())
+    .limit(10);
+  for (const r of escDue ?? []) {
+    const ctv = r.ctvs as { name?: string | null; zalo_user_id?: string | null } | null;
+    let target = ctv?.zalo_user_id ?? null;
+    if (!target) {
+      const { data: adm } = await client.from("admins")
+        .select("zalo_user_id").not("zalo_user_id", "is", null).limit(1).maybeSingle();
+      target = adm?.zalo_user_id ?? (await secret(client, "ZALO_ADMIN_ZALO_ID"));
+    }
+    const text = `🔔 nhadat.cc: ${r.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
+    let sent = "none";
+    if (!dry_run && target && oaToken && !target.startsWith("TEST")) {
+      sent = (await sendZalo(oaToken, target, text)) ? "zalo_oa" : "zalo_error";
+      if (sent === "zalo_oa") {
+        await client.from("reminders")
+          .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);
+      }
+    }
+    out.push({ kind: "escalation", id: r.id, text, sent });
+  }
+
   // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) ----
   const { data: due } = await client
     .from("reminders")

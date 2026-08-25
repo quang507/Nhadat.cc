@@ -59,6 +59,7 @@ export default async function Page({
       .select("*")
       .eq("deal", listing.deal)
       .neq("id", listing.id)
+      .in("status", ["dang_ban", "dang_quan_tam"])
       .not("price_raw", "is", null)
       .neq("price_raw", "")
       .eq("ward", listing.ward ?? "")
@@ -100,6 +101,18 @@ export default async function Page({
           <h1 className="mt-5 text-2xl font-extrabold md:text-3xl">
             {listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất {loc}
           </h1>
+
+          {/* FR-139: căn đã chốt vẫn mở được link cũ nhưng nói thật với khách */}
+          {listing.status === "da_chot" && (
+            <div className="mt-3 rounded-king border border-navy/20 bg-navy/5 px-4 py-3 text-sm font-semibold text-navy">
+              Căn này đã giao dịch xong. Nhắn Zalo để tụi em gửi các căn tương tự đang bán nha.
+            </div>
+          )}
+          {listing.status === "dang_quan_tam" && (
+            <div className="mt-3 inline-block rounded-full bg-brand/10 px-3 py-1 text-xs font-bold text-brand">
+              🔥 Đang được nhiều khách quan tâm
+            </div>
+          )}
 
           <div className="mt-4 flex flex-wrap gap-6 rounded-king border border-line bg-white p-4">
             <div>

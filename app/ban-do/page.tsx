@@ -14,6 +14,7 @@ export default async function Page() {
   const { data } = await supabase
     .from("listings")
     .select("*")
+    .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
     .not("price_raw", "is", null)
     .neq("price_raw", "")
     .not("ward", "is", null)

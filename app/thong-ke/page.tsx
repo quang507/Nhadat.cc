@@ -21,6 +21,7 @@ export default async function Page() {
     .from("listings")
     .select("ward, price_vnd, area_m2")
     .eq("deal", "ban")
+    .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: thống kê trên tin đang bán
     .gt("price_vnd", 0)
     .gt("area_m2", 0);
 
