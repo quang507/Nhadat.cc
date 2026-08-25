@@ -1,8 +1,8 @@
 "use client";
 // Dashboard nhà môi giới (FR-124 — port ý tưởng dashboard NhaDat-Radar).
 // Đăng tin vẫn theo tinh thần INS-05: MỘT câu rao + phường + giá, AI bóc tách
-// chi tiết sau (bot ask-seller sẽ hỏi bổ sung). Tin mới vào trạng thái
-// unverified, admin duyệt mới hiện công khai.
+// chi tiết sau (bot ask-seller sẽ hỏi bổ sung). Tin mới vào `cho_thong_tin`,
+// đủ giá + diện tích + phường thì trigger FR-139 tự đẩy lên web.
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
@@ -10,17 +10,15 @@ import { formatPrice } from "@/lib/format";
 
 const WARDS = Array.from({ length: 15 }, (_, i) => `Phường ${i + 1}`);
 
-// Vòng đời tin FR-139 (kèm nhãn cũ để tin lịch sử vẫn đọc được)
+// Vòng đời tin FR-139 — đúng 5 trạng thái của CHECK trên listings.status.
+// (Nhãn tiếng Anh cũ đã bỏ: migration FR-139 dịch hết dữ liệu sang tiếng Việt
+// và type enum listing_status đã DROP, không dòng nào mang giá trị cũ nữa.)
 const STATUS_LABEL: Record<string, string> = {
   cho_thong_tin: "Chờ đủ thông tin",
   dang_ban: "Đang rao trên web",
   dang_quan_tam: "🔥 Đang được khách quan tâm",
   da_chot: "Đã chốt",
   an: "Đã ẩn",
-  unverified: "Chờ đủ thông tin",
-  active: "Đang rao trên web",
-  sold: "Đã chốt",
-  expired: "Đã ẩn",
 };
 
 export default function Page() {
@@ -81,7 +79,7 @@ export default function Page() {
     if (error) return setMsg("Đăng không được: " + error.message);
     setMine((m) => [data as Listing, ...m]);
     setRao(""); setPriceRaw("");
-    setMsg(`Đã nhận tin #${code} — tụi em bóc tách chi tiết rồi duyệt trong hôm nay.`);
+    setMsg(`Đã nhận tin #${code} — tụi em bóc tách chi tiết, đủ thông tin là tin tự lên web.`);
   };
 
   if (email === undefined) {

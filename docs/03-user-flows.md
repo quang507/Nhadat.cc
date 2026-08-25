@@ -275,7 +275,7 @@ quyết định đảo chiều theo [nguồn: artifact "Cầu Nối BĐS" v2, ph
 3. Khu vực không khớp danh mục chuẩn → bot đưa lựa chọn quận/phường để S chọn.
 4. Bot yêu cầu gửi ảnh: mặt tiền · nội thất · sổ.
 5. Ảnh Zalo là URL tạm → tải về ngay, upload kho file qua adapter, ghi bảng `media` (FR-111).
-6. Listing vào `pending_review` chờ admin duyệt; thiếu thông tin hoặc **ảnh lộ SĐT** → trả về S bổ sung.
+6. Listing vào `cho_thong_tin`; đủ giá + diện tích + phường thì trigger FR-139 tự đẩy sang `dang_ban`. Thiếu thông tin hoặc **ảnh lộ SĐT** → bot hỏi tiếp S bổ sung (FR-144).
 7. Duyệt đạt → `active`, cấp mã công khai (định dạng: `OPEN-17`), sẵn sàng matching.
 
 Một S có nhiều BĐS: mỗi lần đăng tạo một listing riêng với mã riêng. Mã công khai
@@ -319,20 +319,20 @@ không lộ thông tin cá nhân của B trên trang.
 ---
 
 ## UF-13 — Vòng đời listing & báo sold cho người đang chờ
-**Actor** hệ thống, admin, S, B · **FR** FR-106, FR-107, FR-108 · [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]
+**Actor** hệ thống, admin, S, B · **FR** FR-139, FR-107, FR-108 · *(FR-106 bản cũ
+tiếng Anh đã deprecated 25/08/2026 — 5 trạng thái dưới đây là bản đang chạy)* ·
+[nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]
 
 ```mermaid
 stateDiagram-v2
-    [*] --> draft: S bắt đầu đăng
-    draft --> pending_review: đủ thông tin + ảnh
-    pending_review --> active: admin duyệt, cấp mã
-    pending_review --> draft: thiếu / ảnh lộ SĐT
-    active --> negotiating: chốt lịch xem
-    negotiating --> active: không chốt được
-    active --> sold: S báo đã bán
-    negotiating --> sold: chốt giao dịch
-    active --> expired: quá TTL không xác nhận
-    expired --> active: S xác nhận còn bán
+    [*] --> cho_thong_tin: S nhắn câu rao (FR-144)
+    cho_thong_tin --> dang_ban: đủ giá + diện tích + phường (auto-publish)
+    dang_ban --> dang_quan_tam: khách hỏi / bot đưa căn ra
+    dang_quan_tam --> dang_ban: 7 ngày không ai hỏi (cron)
+    dang_ban --> da_chot: khách đồng ý chốt (FR-142)
+    dang_quan_tam --> da_chot: khách đồng ý chốt (FR-142)
+    dang_ban --> an: S báo ngừng bán / quá TTL không xác nhận
+    an --> dang_ban: S xác nhận còn bán
 ```
 
 1. Trạng thái gắn vào **từng BĐS**, không gắn vào người bán; S báo "bán rồi" ở bất kỳ đâu trong hội thoại đều được nhận diện.

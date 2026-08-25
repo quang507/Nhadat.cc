@@ -5,40 +5,20 @@
 //    thật (needs_human), lịch xem nhà sắp tới.
 // 2. Chấm điểm chất lượng chăm khách bằng RATE_CTV_RUBRIC (tối đa 3 hội thoại
 //    hoạt động gần nhất mỗi CTV) — le_phep / dung_luat_hoi / hieu_bds / cham_khach.
-// 3. Gửi MỘT tin tổng hợp vào Zalo cá nhân admin (secret ZALO_ADMIN_ZALO_ID qua
-//    OA API) và lưu ctv_daily_reports để tra cứu + chống gửi đôi.
+// 3. Gửi MỘT tin tổng hợp về Zalo cá nhân admin (FR-149: qua hàng đợi bridge;
+//    còn OA thì gửi thẳng) và lưu ctv_daily_reports để tra cứu + chống gửi đôi.
 // POST {} (cron) | { dry_run?: bool, force?: bool } — force = chạy lại dù hôm nay đã gửi.
-import Anthropic from "npm:@anthropic-ai/sdk";
 import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import {
+  anthropicClient,
+  jsonResponse,
+  MODEL,
+  secretOf,
+  sendZalo,
+  serviceClient,
+} from "../_shared/claude.ts";
 import { RATE_CTV_RUBRIC } from "../_shared/prompts.ts";
-
-const MODEL = "claude-opus-5";
-
-function db(): SupabaseClient {
-  return createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
-}
-
-async function secret(client: SupabaseClient, name: string): Promise<string | null> {
-  const fromEnv = Deno.env.get(name);
-  if (fromEnv) return fromEnv;
-  const { data } = await client.rpc("get_secret", { secret_name: name });
-  return (data as string) ?? null;
-}
-
-async function sendZalo(token: string, userId: string, text: string): Promise<boolean> {
-  const r = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", access_token: token },
-    body: JSON.stringify({ recipient: { user_id: userId }, message: { text } }),
-  });
-  const j = await r.json().catch(() => ({}));
-  return j?.error === 0;
-}
 
 const Score = z.object({
   le_phep: z.number().min(1).max(5),
@@ -52,7 +32,7 @@ const Score = z.object({
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
   const { dry_run = false, force = false } = await req.json().catch(() => ({}));
-  const client = db();
+  const client = serviceClient();
   const now = Date.now();
   const vnDate = new Date(now + 7 * 3600e3).toISOString().slice(0, 10); // ngày giờ VN
 
@@ -61,14 +41,11 @@ Deno.serve(async (req) => {
     const { count } = await client.from("ctv_daily_reports")
       .select("id", { count: "exact", head: true }).eq("report_date", vnDate);
     if ((count ?? 0) > 0) {
-      return new Response(JSON.stringify({ skipped: "already_reported", report_date: vnDate }), {
-        headers: { "Content-Type": "application/json; charset=utf-8" },
-      });
+      return jsonResponse({ skipped: "already_reported", report_date: vnDate });
     }
   }
 
-  const apiKey = await secret(client, "ANTHROPIC_API_KEY");
-  const anthropic = new Anthropic({ apiKey: apiKey! });
+  const anthropic = await anthropicClient(client);
   const { data: ctvs } = await client.from("ctvs")
     .select("id, name").eq("active", true).order("created_at");
 
@@ -154,12 +131,12 @@ Deno.serve(async (req) => {
     // FR-149 (quyết định 25/08): báo cáo về Zalo CÁ NHÂN admin, không qua OA.
     // Đẩy vào reminders kind='report' → bridge acc clone kéo qua escalation-feed
     // và nhắn tới số admin trong bảng `admins`. Còn OA thì gửi thẳng luôn.
-    const oaToken = await secret(client, "ZALO_OA_ACCESS_TOKEN");
-    const adminId = await secret(client, "ZALO_ADMIN_ZALO_ID");
-    if (oaToken && adminId) {
-      sentTo = (await sendZalo(oaToken, adminId, reportText)) ? `zalo_oa:${adminId}` : "zalo_error";
-    }
-    if (sentTo !== `zalo_oa:${adminId}`) {
+    const oaToken = await secretOf(client, "ZALO_OA_ACCESS_TOKEN");
+    const adminId = await secretOf(client, "ZALO_ADMIN_ZALO_ID");
+    const viaOa = !!oaToken && !!adminId && await sendZalo(oaToken, adminId, reportText);
+    if (viaOa) {
+      sentTo = `zalo_oa:${adminId}`;
+    } else {
       await client.from("reminders").insert({
         kind: "report", due_at: new Date().toISOString(), note: reportText,
       });
@@ -173,8 +150,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(
-    JSON.stringify({ report_date: vnDate, dry_run, sent_to: sentTo, report: reportText }),
-    { headers: { "Content-Type": "application/json; charset=utf-8" } },
-  );
+  return jsonResponse({ report_date: vnDate, dry_run, sent_to: sentTo, report: reportText });
 });

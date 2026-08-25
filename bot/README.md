@@ -9,9 +9,9 @@ tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/pro
 | Function | FR | Việc |
 |---|---|---|
 | `ask-seller` | FR-40…47, INS-06 | Đọc view `listing_missing_facts` của một listing, sinh MỘT tin Zalo hỏi S tối đa 3 thông tin thiếu (ưu tiên cao trước), ghi `info_requests` (bỏ qua fact đang `pending` — không spam S, INS-09). `dry_run: true` để xem tin không ghi DB. |
-| `rate-ctv` | FR-102 | Chấm CSKH của CTV/bot từ log hội thoại (bảng `messages` hoặc transcript truyền vào), 4 tiêu chí ×1-5 + stars tổng, ghi `ratings` (`rated_by='ai_qa'`, chi tiết trong `details` jsonb). Idempotent theo conversation. |
-| `chat-reply` | NFR-12, FR-129…135, FR-29/32, UF-06 | **Bộ não hội thoại** dùng chung mọi kênh: nhánh seller (hỏi nhỏ giọt), nhánh buyer (hồ sơ nhu cầu + trả lời tự nhiên, debounce gộp tin, lọc kho theo giá số `price_vnd`, tra căn theo mã, kho dự án, đặt lịch xem nhà + xin SĐT đúng kịch bản, bóc lời hứa, cờ `need_human`, follow-up im lặng ngắn, đọc ảnh `image_url`). |
-| `zalo-webhook` | SRS-4.4 | Nhận event OA (`user_send_text`/`user_send_image`), verify chữ ký nếu có app secret, trả 200 <1s, chuyển vào chat-reply rồi gửi bong bóng (bong bóng đầu gần như ngay, sau trễ theo độ dài). verify_jwt **tắt**. |
+| `rate-ctv` | FR-102 *(trùng chức năng với phần chấm điểm trong `ctv-report` — xem OPEN-23)* | Chấm CSKH của CTV/bot từ log hội thoại (bảng `messages` hoặc transcript truyền vào), 4 tiêu chí ×1-5 + stars tổng, ghi `ratings` (`rated_by='ai_qa'`, chi tiết trong `details` jsonb). Idempotent theo conversation. |
+| `chat-reply` | NFR-12, FR-129…135, FR-29/32, UF-06 | **Bộ não hội thoại** dùng chung mọi kênh: nhánh seller (hỏi nhỏ giọt), nhánh buyer (hồ sơ nhu cầu + trả lời tự nhiên, không delay nhân tạo, lọc kho theo giá số `price_vnd`, tra căn theo mã, kho dự án, đặt lịch xem nhà + xin SĐT đúng kịch bản, bóc lời hứa, cờ `need_human`, follow-up im lặng ngắn, đọc ảnh `image_url`). |
+| `zalo-webhook` | SRS-4.4 | Nhận event OA (`user_send_text`/`user_send_image`), verify chữ ký nếu có app secret, trả 200 <1s, chuyển vào chat-reply rồi gửi bong bóng (FR-131: không delay nhân tạo, giữa hai bong bóng chỉ 300ms cho Zalo giao đúng thứ tự). verify_jwt **tắt**. |
 | `nudge` | FR-133, FR-32 | Cron 30': nhắc lời hứa tới hạn, nhắc lịch xem trước ~45', follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); chỉ gửi 8h–21h VN + jitter 0-45s; `{dry_run, force}` để test. |
 | `ctv-report` | FR-136/137, FR-149 | Cron 17h VN: tổng hợp đơn per-CTV (chia xoay vòng bằng trigger), lịch xem, đơn chờ người thật, chấm điểm hội thoại theo `RATE_CTV_RUBRIC` → còn OA thì gửi thẳng, không thì đẩy vào `reminders` kind `report` (`sent_to: "queued_bridge"`) để bridge nhắn số Zalo cá nhân admin; lưu `ctv_daily_reports`. |
 | `escalation-feed` | FR-140/144, FR-147/149 | Cửa cho bridge acc clone kéo việc "hỏi chính chủ / báo CTV/admin / báo cáo 17h": `{action:"pull"}` trả danh sách kèm `text` soạn sẵn đúng vai (chính chủ → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ; kind `report` → NGUYÊN VĂN, không bọc lời chào) + SĐT/Zalo đích (bảng `sellers`/`ctvs`/`admins`), `{action:"ack", id}` đánh dấu đã gửi. Tuỳ chọn secret `BRIDGE_SECRET` trong Vault → yêu cầu header `x-bridge-secret`. Nudge cũng tự gửi các việc này qua OA khi có token. |
@@ -33,6 +33,13 @@ web rơi về ảnh minh hoạ, bot đi đường hỏi-chủ-nhà FR-140.
 
 Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 `Authorization: Bearer <anon key>` (verify_jwt bật, trừ `zalo-webhook`).
+
+**Hạ tầng dùng chung** nằm ở `_shared/claude.ts`: `serviceClient()`,
+`secretOf()`, `anthropicClient()`, `jsonResponse()`, `sendZalo()`,
+`sendZaloImage()`, `escalationText()`, hằng `MODEL`. Function mới **phải** import
+từ đây, đừng chép lại — trước 25/08 `db()`/`secret()` có 5 bản, `sendZalo()` 2
+bản, và text escalation trùng byte giữa `nudge` với `escalation-feed` (thêm kind
+`report` phải sửa cả hai nơi, quên một là lệch giọng bot).
 
 ## Cấu hình
 
@@ -58,7 +65,7 @@ Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 
 `required_facts` (37 fact chuẩn theo `property_type`) + view
 `listing_missing_facts`; `conversations` + `messages` (log hội thoại);
-`ratings` (+ `rated_by`, `conversation_id`, `details`); `ctvs`; `deals.ctv_id`;
+`ratings` (+ `rated_by`, `conversation_id`, `details`) *(0 dòng, chưa màn hình nào đọc — OPEN-23)*; `ctvs`; `deals.ctv_id`;
 `buyers.preferences/last_contact_at/notes`; `projects` + `listings.unit_status`.
 
 ## Chưa làm (theo thứ tự SRS §8)
