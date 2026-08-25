@@ -213,10 +213,16 @@ Deno.serve(async (req) => {
   if (wardNum) khoQ = khoQ.ilike("ward", `%${wardNum[1] ?? wardNum[2]}%`);
   if (typeof prefs.bedrooms === "number") khoQ = khoQ.gte("bedrooms", prefs.bedrooms);
 
-  const [{ data: history }, { data: listings }] = await Promise.all([
+  const [{ data: history }, { data: listings }, { data: partnerProj }, { data: matchedProj }] = await Promise.all([
     client.from("messages").select("sender, body")
       .eq("conversation_id", convId).order("created_at", { ascending: false }).limit(12),
     khoQ,
+    // FR-132: dự án nhà mình phân phối trực tiếp — luôn đứng đầu khối dự án
+    client.from("projects")
+      .select("name, developer, district, ward, location_raw, legal_status, status_text, amenities, specs, unit_types")
+      .eq("is_partner", true).order("priority").limit(1),
+    // Khách nhắc tên dự án nào trong kho (mogi/aond) thì nạp kiến thức dự án đó
+    client.rpc("match_projects", { p_text: text }),
   ]);
   const ordered = (history ?? []).reverse();
   const convo = ordered
@@ -225,6 +231,31 @@ Deno.serve(async (req) => {
     .map((l) =>
       `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}`)
     .join("\n");
+
+  // Khối DỰ ÁN (FR-113…115/FR-132): kiến thức chung đã xác thực, bot trả lời
+  // tầng dự án trực tiếp; Ny'ah (is_partner) luôn ở trên cùng.
+  type Proj = {
+    name: string; developer?: string | null; district?: string | null;
+    location_raw?: string | null; legal_status?: string | null; status_text?: string | null;
+    amenities?: unknown; specs?: unknown; unit_types?: unknown; description?: string | null;
+  };
+  const projLine = (p: Proj, full: boolean) => {
+    const parts = [`${p.name} — CĐT ${p.developer ?? "?"} · ${p.location_raw ?? p.district ?? ""}`];
+    if (p.legal_status) parts.push(`pháp lý: ${p.legal_status}`);
+    if (p.status_text) parts.push(`tình trạng: ${p.status_text}`);
+    if (Array.isArray(p.amenities)) parts.push(`tiện ích: ${(p.amenities as string[]).join(", ")}`);
+    if (full && p.specs) parts.push(`thông số: ${JSON.stringify(p.specs)}`);
+    if (full && p.unit_types) parts.push(`mẫu nhà/căn: ${JSON.stringify(p.unit_types)}`);
+    if (!full && p.description) parts.push(String(p.description).slice(0, 280));
+    return "• " + parts.join(" · ");
+  };
+  const partner = (partnerProj ?? [])[0] as Proj | undefined;
+  const matched = ((matchedProj ?? []) as Proj[])
+    .filter((m) => m.name !== partner?.name);
+  const duanBlock = [
+    ...(partner ? [projLine(partner, true)] : []),
+    ...matched.map((m) => projLine(m, true)),
+  ].join("\n");
 
   // Chống hỏi cung: 2 tin gần nhất của bot đều là câu hỏi → lượt này đưa giá trị
   const botMsgs = ordered.filter((m) => m.sender === "bot");
@@ -252,7 +283,11 @@ Deno.serve(async (req) => {
         type: "text",
         text: TONE_RULES + "\n\n" + HUMAN_CHAT_RULES + "\n\n" + SLANG_NOTES + "\n\n" + BUYER_FEWSHOT +
           "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO dưới đây, không bịa.\n\nKHO HIỆN CÓ:\n" +
-          (kho || "(trống)"),
+          (kho || "(trống)") +
+          (duanBlock
+            ? "\n\nKHO DỰ ÁN (kiến thức chung ĐÃ XÁC THỰC — dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có trong kho: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Dự án ĐẦU TIÊN là dự án nhà mình đang phân phối trực tiếp — khi khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
+              duanBlock
+            : ""),
         cache_control: { type: "ephemeral" },
       }],
       messages: [{
