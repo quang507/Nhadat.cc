@@ -14,7 +14,14 @@ tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/pro
 | `zalo-webhook` | SRS-4.4 | Nhận event OA (`user_send_text`/`user_send_image`), verify chữ ký nếu có app secret, trả 200 <1s, chuyển vào chat-reply rồi gửi bong bóng (bong bóng đầu gần như ngay, sau trễ theo độ dài). verify_jwt **tắt**. |
 | `nudge` | FR-133, FR-32 | Cron 30': nhắc lời hứa tới hạn, nhắc lịch xem trước ~45', follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); chỉ gửi 8h–21h VN + jitter 0-45s; `{dry_run, force}` để test. |
 | `ctv-report` | FR-136/137 | Cron 17h VN: tổng hợp đơn per-CTV (chia xoay vòng bằng trigger), lịch xem, đơn chờ người thật, chấm điểm hội thoại theo `RATE_CTV_RUBRIC` → gửi Zalo admin (`ZALO_ADMIN_ZALO_ID`) + lưu `ctv_daily_reports`. |
-| `escalation-feed` | FR-140 | Cửa cho bridge acc clone kéo việc "báo CTV/admin" (khách hỏi căn không có chính chủ): `{action:"pull"}` trả danh sách kèm SĐT/Zalo đích (bảng `ctvs`/`admins`), `{action:"ack", id}` đánh dấu đã gửi. Tuỳ chọn secret `BRIDGE_SECRET` trong Vault → yêu cầu header `x-bridge-secret`. Nudge cũng tự gửi các escalation này qua OA khi có token. |
+| `escalation-feed` | FR-140/144 | Cửa cho bridge acc clone kéo việc "hỏi chính chủ / báo CTV/admin": `{action:"pull"}` trả danh sách kèm `text` soạn sẵn đúng vai (chính chủ → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ) + SĐT/Zalo đích (bảng `sellers`/`ctvs`/`admins`), `{action:"ack", id}` đánh dấu đã gửi. Tuỳ chọn secret `BRIDGE_SECRET` trong Vault → yêu cầu header `x-bridge-secret`. Nudge cũng tự gửi các escalation này qua OA khi có token. |
+
+Chat-reply từ 25/08 thêm: `human_note` (bridge báo người thật gõ tay → bot nhường
+sân 30 phút, FR-141), `agreed_deal` (khách đồng ý chốt bằng chữ/emoji/like-tim →
+ghi deals + da_chot, FR-142, tín hiệu cấu hình ở `bot_prompts.agree_rules`),
+`send_photos` + mảng `photos` trong response (gửi hình thật từ facts hinh_anh,
+FR-143), nhánh tạo tin nháp khi chính chủ nhắn câu rao mới + ngừng drip khi tin
+đủ đăng (FR-144).
 
 Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 `Authorization: Bearer <anon key>` (verify_jwt bật, trừ `zalo-webhook`).

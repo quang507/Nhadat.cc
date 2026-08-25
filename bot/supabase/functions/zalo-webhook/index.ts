@@ -79,6 +79,26 @@ async function handleEvent(raw: string): Promise<void> {
     const sendResult = await send.json().catch(() => ({}));
     console.log("zalo send:", JSON.stringify(sendResult));
   }
+
+  // FR-143: bộ não trả về hình thật (URL chính chủ gửi) → gửi từng ảnh qua OA
+  const photos: string[] = Array.isArray(out?.photos) ? out.photos : [];
+  for (const url of photos) {
+    const sendImg = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", access_token: accessToken },
+      body: JSON.stringify({
+        recipient: { user_id: zaloUserId },
+        message: {
+          attachment: {
+            type: "template",
+            payload: { template_type: "media", elements: [{ media_type: "image", url }] },
+          },
+        },
+      }),
+    });
+    const imgResult = await sendImg.json().catch(() => ({}));
+    console.log("zalo send image:", JSON.stringify(imgResult));
+  }
 }
 
 Deno.serve(async (req) => {

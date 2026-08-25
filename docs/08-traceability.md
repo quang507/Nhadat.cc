@@ -99,6 +99,11 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-138 | — | — | bảng `bot_prompts` (seed từ _shared/prompts.ts) + loader trong `chat-reply`/`nudge` (DB đè code, fallback về prompts.ts) | — |
 | FR-139 | UF-04, UF-05 | WF-04/06 (badge/banner) | `listings.status` text 5 trạng thái + trigger `trg_z_listings_normalize_status` (dịch nhãn cũ, auto-publish khi đủ giá+diện tích+phường) + RPC `mark_listing_interest` (gọi từ chat-reply theo mã căn) + cron `listing-interest-decay` 7 ngày + RLS anon chỉ đọc dang_ban/dang_quan_tam/da_chot; web: badge 🔥, banner đã chốt, admin duyệt cho_thong_tin | — |
 | FR-140 | UF-04, UF-09 | — | trường `ask_owner` (BuyerTurn) → `info_requests` source `buyer_ask` + trigger `trg_route_info_request` (seller → CTV còn liên lạc → admin) + `trg_notify_info_request_escalation` (reminder `escalation`) + nhánh escalation trong `nudge` (OA) + edge `escalation-feed` + vòng poll bridge zca-js (resolve SĐT admin/CTV từ bảng `admins`/`ctvs`) | — |
+| FR-141 | UF-04 | — | cột `conversations.human_touch_at` + `messages.sender='human'` + bridge phân biệt tin bot/người thật (botSent set) + endpoint `human_note` và cửa im-30-phút trong chat-reply | — |
+| FR-142 | UF-04, UF-07 | — | trường `agreed_deal` (BuyerTurn) + `bot_prompts.agree_rules` + insert `deals` (fee 1%/0.5%) + listing → `da_chot` + reminder escalation 🤝; bridge map sticker/reaction thành "[sticker cảm xúc]"/"[khách thả cảm xúc]" | — |
+| FR-143 | UF-04 | — | facts `hinh_anh` → mảng `photos` trong response chat-reply (trường `send_photos` + fallback regex, ≤4 hình); bridge tải URL gửi ảnh đính kèm; zalo-webhook gửi OA media template | — |
+| FR-144 | UF-05, UF-09 | — | nhánh `wantsSell` trong chat-reply (tạo tin nháp + hỏi câu đầu) + đồng bộ `area_m2` từ fact diện tích + điều kiện `published` ngừng drip + trigger escalation cho assignee seller (source buyer_ask) + guard một-câu-một-lúc trong `ask-seller` drip | — |
+| FR-145 | UF-01, UF-03 | WF-01 | component `ZaloWidget` (client, ẩn trên `/nha-dat/*`) gắn ở `app/layout.tsx`; link cấu hình `ZALO_OA_URL` / env `NEXT_PUBLIC_ZALO_URL` (lib/format.ts) | — |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp

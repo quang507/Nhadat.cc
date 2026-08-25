@@ -69,19 +69,23 @@ Deno.serve(async (req) => {
   // GIỮ pending — bridge acc clone sẽ kéo qua escalation-feed và tự ack.
   const { data: escDue } = await client
     .from("reminders")
-    .select("id, note, ctv_id, ctvs(name, zalo_user_id)")
+    .select("id, note, ctv_id, seller_id, ctvs(name, zalo_user_id), sellers(name, zalo_user_id)")
     .eq("status", "pending").eq("kind", "escalation")
     .lte("due_at", new Date().toISOString())
     .limit(10);
   for (const r of escDue ?? []) {
     const ctv = r.ctvs as { name?: string | null; zalo_user_id?: string | null } | null;
-    let target = ctv?.zalo_user_id ?? null;
+    const seller = r.sellers as { name?: string | null; zalo_user_id?: string | null } | null;
+    let target = seller?.zalo_user_id ?? ctv?.zalo_user_id ?? null;
     if (!target) {
       const { data: adm } = await client.from("admins")
         .select("zalo_user_id").not("zalo_user_id", "is", null).limit(1).maybeSingle();
       target = adm?.zalo_user_id ?? (await secret(client, "ZALO_ADMIN_ZALO_ID"));
     }
-    const text = `🔔 nhadat.cc: ${r.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
+    // FR-144: đích là chính chủ → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ
+    const text = r.seller_id
+      ? `Chào anh/chị, em bên nhadat.cc ạ. ${r.note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`
+      : `🔔 nhadat.cc: ${r.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
     let sent = "none";
     if (!dry_run && target && oaToken && !target.startsWith("TEST")) {
       sent = (await sendZalo(oaToken, target, text)) ? "zalo_oa" : "zalo_error";

@@ -60,6 +60,17 @@ Deno.serve(async (req) => {
     .eq("listing_id", listing_id)
     .eq("status", "pending");
   const pendingKeys = new Set((pending ?? []).map((r) => r.question));
+
+  // FR-144: chế độ drip là MỘT-CÂU-MỘT-LÚC — listing đang có bất kỳ câu pending
+  // nào (vd chat-reply vừa hỏi ngay lúc nhận tin rao) thì nhịp này bỏ qua, kẻo
+  // hai câu hỏi song song làm câu trả lời của chủ nhà bị ghi nhầm fact.
+  if (drip && pendingKeys.size > 0) {
+    return jsonResponse({
+      message: null, asked: [], skipped_pending: [...pendingKeys],
+      note: "drip: đang có câu chờ trả lời — không hỏi chồng",
+    });
+  }
+
   const candidates = (missing ?? []).filter((f) => !pendingKeys.has(f.fact_key));
   const toAsk = candidates.slice(0, drip ? 1 : 3);
 

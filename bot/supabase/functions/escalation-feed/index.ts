@@ -38,24 +38,33 @@ Deno.serve(async (req) => {
     });
   }
 
-  // pull: escalation pending tới hạn + đích liên lạc (CTV được giao, không thì admin)
+  // pull: escalation pending tới hạn + đích liên lạc theo vai:
+  // seller (FR-144 — chủ động hỏi chính chủ) → CTV được giao → admin.
   const { data: due } = await client
     .from("reminders")
-    .select("id, note, ctv_id, ctvs(name, zalo_user_id, phone)")
+    .select("id, note, ctv_id, seller_id, ctvs(name, zalo_user_id, phone), sellers(name, zalo_user_id, phone)")
     .eq("status", "pending").eq("kind", "escalation")
     .lte("due_at", new Date().toISOString())
     .limit(10);
   const { data: adm } = await client.from("admins")
     .select("zalo_user_id, zalo_phone").limit(1).maybeSingle();
 
+  type Target = { name?: string | null; zalo_user_id?: string | null; phone?: string | null } | null;
   const items = (due ?? []).map((r) => {
-    const ctv = r.ctvs as { name?: string | null; zalo_user_id?: string | null; phone?: string | null } | null;
+    const ctv = r.ctvs as Target;
+    const seller = r.sellers as Target;
+    // Text soạn sẵn đúng vai: hỏi chính chủ thì lễ phép kiểu CSKH,
+    // báo CTV/admin thì kiểu thông báo nội bộ.
+    const text = r.seller_id
+      ? `Chào anh/chị, em bên nhadat.cc ạ. ${r.note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`
+      : `🔔 nhadat.cc: ${r.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
     return {
       id: r.id,
       note: r.note,
-      name: ctv?.name ?? "admin",
-      zalo_user_id: ctv?.zalo_user_id ?? adm?.zalo_user_id ?? null,
-      phone: ctv?.phone ?? adm?.zalo_phone ?? null,
+      text,
+      name: seller?.name ?? ctv?.name ?? "admin",
+      zalo_user_id: seller?.zalo_user_id ?? ctv?.zalo_user_id ?? adm?.zalo_user_id ?? null,
+      phone: seller?.phone ?? ctv?.phone ?? adm?.zalo_phone ?? null,
     };
   });
   return new Response(JSON.stringify({ items }), {
