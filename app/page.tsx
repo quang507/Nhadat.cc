@@ -16,6 +16,7 @@ async function getListings(deal: "ban" | "cho_thue", limit: number) {
     .from("listings")
     .select("*")
     .eq("deal", deal)
+    .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
     .not("price_raw", "is", null)
     .neq("price_raw", "")
     .order("created_at", { ascending: false })

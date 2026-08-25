@@ -1,7 +1,7 @@
 "use client";
-// Admin (FR-127): duyệt tin unverified → active / ẩn (expired).
-// Quyền cấp theo bảng `admins` (email) — RLS phía DB mới là hàng rào thật,
-// trang này chỉ là UI. Thêm admin: insert email vào bảng admins.
+// Admin (FR-127): duyệt tin cho_thong_tin → dang_ban / ẩn (an) theo vòng đời
+// FR-139 (cho_thong_tin → dang_ban → dang_quan_tam → da_chot). Quyền cấp theo
+// bảng `admins` (email) — RLS phía DB mới là hàng rào thật, trang này chỉ là UI.
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
@@ -14,13 +14,13 @@ export default function Page() {
 
   const load = async () => {
     const { data } = await supabase
-      .from("listings").select("*").eq("status", "unverified")
+      .from("listings").select("*").eq("status", "cho_thong_tin")
       .order("created_at", { ascending: false }).limit(50);
     setPending((data ?? []) as Listing[]);
     const [{ count: tong }, { count: active }, { count: cho }] = await Promise.all([
       supabase.from("listings").select("id", { count: "exact", head: true }),
-      supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "active"),
-      supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "unverified"),
+      supabase.from("listings").select("id", { count: "exact", head: true }).in("status", ["dang_ban", "dang_quan_tam"]),
+      supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "cho_thong_tin"),
     ]);
     setCounts({ tong: tong ?? 0, active: active ?? 0, cho: cho ?? 0 });
   };
@@ -36,7 +36,7 @@ export default function Page() {
     });
   }, []);
 
-  const setStatus = async (id: string, status: "active" | "expired") => {
+  const setStatus = async (id: string, status: "dang_ban" | "an") => {
     const { error } = await supabase.from("listings").update({ status }).eq("id", id);
     if (!error) setPending((p) => p.filter((l) => l.id !== id));
   };
@@ -80,11 +80,11 @@ export default function Page() {
               {sanitizeDescription(l.description) || l.location_raw}
             </p>
             <div className="mt-4 flex gap-3">
-              <button onClick={() => setStatus(l.id, "active")}
+              <button onClick={() => setStatus(l.id, "dang_ban")}
                 className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">
                 Duyệt — cho rao
               </button>
-              <button onClick={() => setStatus(l.id, "expired")}
+              <button onClick={() => setStatus(l.id, "an")}
                 className="rounded-full border border-line px-5 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand active:scale-[0.98]">
                 Ẩn tin
               </button>

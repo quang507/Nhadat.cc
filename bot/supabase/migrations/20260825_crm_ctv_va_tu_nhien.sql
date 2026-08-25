@@ -55,7 +55,8 @@ alter table public.conversations
 -- ============ FR-32: hỏi một căn rồi im ~2,5h → chủ động gửi thêm ============
 alter table public.reminders drop constraint if exists reminders_kind_check;
 alter table public.reminders add constraint reminders_kind_check
-  check (kind in ('promise', 'reengage', 'viewing', 'followup'));
+  -- 'escalation' dùng cho FR-140 (báo CTV/admin) — xem cuối file
+  check (kind in ('promise', 'reengage', 'viewing', 'followup', 'escalation'));
 alter table public.reminders add column if not exists listing_id uuid references public.listings(id);
 
 -- ============ FR-136: CRM CTV — chia đơn xoay vòng ============
@@ -140,3 +141,39 @@ create table if not exists public.bot_prompts (
   updated_at timestamptz not null default now()
 );
 alter table public.bot_prompts enable row level security;  -- chỉ service_role
+
+-- ============ FR-139: vòng đời tin (đã áp qua migration add_listing_lifecycle) ============
+-- listings.status (text) 5 trạng thái: cho_thong_tin → dang_ban → dang_quan_tam
+-- → da_chot, + an (gỡ tay). Kèm cột last_interest_at.
+--   * trg_z_listings_normalize_status (BEFORE INSERT/UPDATE): dịch nhãn cũ
+--     (unverified→cho_thong_tin, active→dang_ban, sold→da_chot, expired→an,
+--     negotiating→dang_quan_tam) + AUTO-PUBLISH: đang cho_thong_tin mà UPDATE
+--     đủ price_vnd + area_m2 + ward thì tự nhảy dang_ban.
+--     (tên trg_z_ để chạy SAU trg_listings_price_vnd theo thứ tự abc)
+--   * mark_listing_interest(p_codes text[]) SECURITY DEFINER (revoke anon):
+--     chat-reply gọi khi khách hỏi / bot giới thiệu căn — dang_ban → dang_quan_tam
+--     + last_interest_at = now(). Bám theo MÃ CĂN, không theo người.
+--   * cron listing-interest-decay (0 20 * * * UTC = 3h sáng VN): 7 ngày không
+--     ai hỏi thì dang_quan_tam trả về dang_ban.
+--   * RLS anon (web) chỉ đọc dang_ban / dang_quan_tam / da_chot;
+--     listings_own_insert with_check status='cho_thong_tin'.
+
+-- ============ FR-140: fallback hỏi-chủ-nhà → CTV → admin ============
+-- (đã áp qua migration add_info_request_escalation_fr140; schema tham chiếu:)
+alter table info_requests
+  add column if not exists assignee text check (assignee in ('seller','ctv','admin')),
+  add column if not exists ctv_id uuid references ctvs(id),
+  add column if not exists source text not null default 'seller_flow';
+-- Kênh liên lạc admin: GIÁ TRỊ THẬT (SĐT/Zalo id) nhập thẳng DB, không commit vào repo
+alter table admins
+  add column if not exists zalo_user_id text,
+  add column if not exists zalo_phone text;
+alter table reminders add column if not exists ctv_id uuid references ctvs(id);
+-- reminders.kind thêm 'escalation' (promise|reengage|viewing|followup|escalation)
+-- trigger trg_route_info_request (BEFORE INSERT khi assignee null):
+--   seller có zalo_user_id → 'seller'; không thì CTV active CÒN LIÊN LẠC ĐƯỢC
+--   (có zalo hoặc SĐT) ít việc nhất → 'ctv' (+ cập nhật last_assigned_at);
+--   không có CTV → 'admin'.
+-- trigger trg_notify_info_request_escalation (AFTER INSERT, assignee ctv/admin):
+--   sinh reminder kind='escalation' due ngay — nudge gửi OA, hoặc bridge kéo
+--   qua edge escalation-feed rồi ack.

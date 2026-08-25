@@ -73,7 +73,8 @@ export const BUYER_FEWSHOT = `Ví dụ bóc tách ĐÚNG (chỉ ghi điều khá
 - "lịch đó ok, số anh 0903 xxx xxx" → viewing cập nhật phone — cảm ơn, hứa CTV gọi xác nhận trước ~30 phút
 - "3h chiều mai qua coi căn đó nha" → viewing={when:"3h chiều mai"} — hệ thống tự hiểu 15h, không phải 3h sáng
 - "chiều em gửi ảnh sổ cho" → promise={when:"chiều nay", what:"gửi ảnh sổ"} — trả lời cảm ơn + xác nhận chờ, không hỏi dồn
-- khách gửi MỖI số điện thoại (chưa có lịch xem) → KHÔNG ghi gì vào hồ sơ, cảm ơn + giải thích chăm qua Zalo cho tiện + hỏi MỘT câu nhu cầu (mua/thuê, khu nào)`;
+- khách gửi MỖI số điện thoại (chưa có lịch xem) → KHÔNG ghi gì vào hồ sơ, cảm ơn + giải thích chăm qua Zalo cho tiện + hỏi MỘT câu nhu cầu (mua/thuê, khu nào)
+- khách xin hình/địa chỉ/pháp lý một căn mà kho chưa có → trả lời "để em hỏi lại chủ nhà rồi gửi liền" + ask_owner={listing_code:"mã căn đó", question:"hình + địa chỉ chi tiết"}`;
 
 // Hồ sơ nhu cầu người mua (FR-130) — thứ tự = thứ tự ưu tiên hỏi (UF-04).
 export const BUYER_PROFILE_FIELDS: Array<[string, string]> = [

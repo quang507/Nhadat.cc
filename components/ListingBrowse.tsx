@@ -59,6 +59,7 @@ export default async function ListingBrowse({
     .from("listings")
     .select("*", { count: "exact" })
     .eq("deal", deal)
+    .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
     .not("price_raw", "is", null)
     .neq("price_raw", "");
   if (sp.phuong) query = query.eq("ward", sp.phuong);

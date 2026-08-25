@@ -26,6 +26,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-19 | ~~3 công cụ B-side kiểu radanhadat~~ **Đã chốt (b)** 25/08/2026 — tính lãi vay làm rồi (FR-119, port NhaDat-Radar); quy hoạch không tự khẳng định; thời gian di chuyển để giai đoạn 2 | — | FR-119 |
 | OPEN-20 | Gamification điểm uy tín người rao (Đồng/Bạc/Vàng) theo AOND — có đem vào nhadat.cc không | Trung bình | FR-102, FR-103 |
 | OPEN-21 | Vai người rao 5 loại (CĐT/sàn/NMG/lướt sóng/chủ nhà) + phí riêng cho CĐT — mở rộng nhị phân CCRB/NMG? | Trung bình | BR-05, FR-101 |
+| OPEN-22 | Một người **vừa mua vừa bán** bằng cùng một Zalo: hiện `chat-reply` hễ khớp `sellers.zalo_user_id` là luôn tiếp theo vai người bán — người này không hỏi mua được. Dữ liệu tin thì an toàn (mọi quan tâm/hỏi đáp bám theo mã căn, FR-139/140), chỉ vướng vai hội thoại. Phương án: (a) bot tự đoán vai theo nội dung tin từng lượt; (b) lệnh chuyển vai ("tôi muốn tìm mua"); khuyến nghị BA: (b) trước, (a) sau. Chờ chủ dự án chốt | Trung bình | FR-129, FR-130 |
 
 ---
 
@@ -269,3 +270,16 @@ rộng `seller_type` thành 5 vai + luật hỏi theo giai đoạn (FR-113…117
 hàng dự án); (c) chờ gặp CĐT thật mới quyết.
 **Khuyến nghị**: (a) ngay (một cột + một câu luật trong prompt, chặn rủi ro báo
 phí sai), (b) khi có dự án sơ cấp đầu tiên vào kho.
+
+### OPEN-22 · Một người vừa mua vừa bán cùng một Zalo
+
+**Nguyên nhân**: `chat-reply` phân vai theo `sellers.zalo_user_id` — hễ khớp là
+tiếp theo vai NGƯỜI BÁN cho mọi tin nhắn, nên chính chủ đang rao muốn hỏi mua
+căn khác sẽ không vào được luồng người mua. Dữ liệu tin không bị ảnh hưởng:
+quan tâm / hỏi đáp / escalation đều bám theo **mã căn** (FR-139, FR-140),
+không bám theo người — chỉ vướng vai hội thoại.
+**Phương án**: (a) bot tự đoán vai theo nội dung từng lượt (rủi ro đoán sai,
+tốn một lượt model); (b) lệnh chuyển vai tường minh — khách nhắn kiểu "tôi
+muốn tìm mua" thì lượt đó đi luồng buyer (rẻ, dễ kiểm soát).
+**Khuyến nghị BA**: làm (b) trước, cân nhắc (a) sau khi có dữ liệu thật.
+Chờ chủ dự án chốt.
