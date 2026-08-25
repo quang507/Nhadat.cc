@@ -10,6 +10,7 @@ import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   BUYER_FEWSHOT,
+  FEE_RULES,
   BUYER_PROFILE_FIELDS,
   FACT_LABELS,
   HUMAN_CHAT_RULES,
@@ -44,7 +45,9 @@ function mapDue(when: string): string {
   let day = 0;
   if (/mai|hôm sau/.test(t)) day = 1;
   let hour = 15;
-  if (/sáng/.test(t)) hour = 9;
+  const hm = /(\d{1,2})\s*(?:h|giờ)/.exec(t);
+  if (hm) hour = Math.min(23, Math.max(0, parseInt(hm[1], 10)));
+  else if (/sáng/.test(t)) hour = 9;
   else if (/trưa/.test(t)) hour = 12;
   else if (/tối/.test(t)) hour = 19;
   else if (/cuối tuần/.test(t)) { day = ((6 - vn.getUTCDay()) + 7) % 7 || 6; hour = 10; }
@@ -54,6 +57,22 @@ function mapDue(when: string): string {
 }
 // Regex bắt lời hứa cho nhánh seller (không qua parse có cấu trúc)
 const PROMISE_RE = /(sáng mai|chiều|tối|trưa|mai|cuối tuần)[^.,;!?]{0,30}?(gửi|chụp|báo|đưa|bổ sung|cho em|check|coi lại)|(gửi|chụp|báo|đưa|bổ sung|check|coi lại)[^.,;!?]{0,30}?(sáng mai|chiều|tối|trưa|mai|cuối tuần)/i;
+
+// SRS-4.5: "tầm 5 tỷ" / "dưới 4 tỷ" trong hồ sơ → cận trên VND để lọc kho bằng
+// price_vnd (cột số, parse_vnd phía DB — hướng parseVnd của NhaDat-Radar).
+function budgetMaxVnd(budget: unknown): number | null {
+  if (typeof budget !== "string") return null;
+  const m = /([\d][\d.,]*)\s*(tỷ|ty|tỏi|tỉ)/i.exec(budget) ??
+    /([\d][\d.,]*)\s*(triệu|trieu|củ|tr\b)/i.exec(budget);
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const base = /tỷ|ty|tỏi|tỉ/i.test(m[2]) ? n * 1e9 : n * 1e6;
+  return Math.round(base * 1.15); // nới ~15%: khách nói "5 tỷ" vẫn nên thấy căn 5,5 tỷ
+}
+
+// FR-29: mã căn khách nhắc ("#BDS-Q5-0115", từ web bấm sang) — chào đúng căn đó
+const CODE_RE = /(?:#\s*)?\b([A-Za-z]{2,5}(?:-[A-Za-z0-9]{1,8}){1,3})\b/g;
 
 const MODEL = "claude-opus-5";
 
@@ -92,6 +111,14 @@ const BuyerTurn = z.object({
     when: z.string().describe("Mốc hẹn nguyên văn: 'chiều nay', 'mai', 'tối', 'cuối tuần'…"),
     what: z.string().describe("Khách hứa làm gì: 'gửi ảnh sổ', 'báo lại tài chính'…"),
   }).nullable().describe("CHỈ điền khi khách chủ động hứa sẽ gửi/báo gì đó vào một mốc thời gian. Không suy diễn."),
+  viewing: z.object({
+    listing_code: z.string().nullable().describe("Mã căn muốn xem, ví dụ 'BDS-Q5-0115' (không có # đầu)"),
+    when: z.string().describe("Khung giờ khách chốt, nguyên văn: 'mai 9h sáng', 'chiều thứ 7'…"),
+    phone: z.string().nullable().describe("SĐT khách TỰ cho ở bước chốt lịch; không có thì null"),
+  }).nullable().describe("CHỈ điền khi khách chốt/đề nghị lịch xem nhà cụ thể (UF-06). Không suy diễn."),
+  need_human: z.boolean().describe(
+    "true CHỈ khi: khách đòi gặp người thật/quản lý, khách bức xúc thật sự, đàm phán giá vào hồi kết, hoặc đã 'để em hỏi lại' 2 lần cùng một chuyện. Câu hỏi khó thường ngày thì false.",
+  ),
 });
 
 Deno.serve(async (req) => {
@@ -101,9 +128,11 @@ Deno.serve(async (req) => {
   const text = String(body.text ?? "").trim();
   const msgId = body.msg_id ? String(body.msg_id) : null;
   const channel = String(body.channel ?? "zalo_oa");
-  if (!externalUserId || !text) {
-    return new Response(JSON.stringify({ error: "external_user_id và text bắt buộc" }), { status: 400 });
+  const imageUrl = body.image_url ? String(body.image_url) : null;
+  if (!externalUserId || (!text && !imageUrl)) {
+    return new Response(JSON.stringify({ error: "external_user_id và text (hoặc image_url) bắt buộc" }), { status: 400 });
   }
+  const textOrTag = text || "[khách gửi ảnh]";
 
   const client = db();
 
@@ -206,7 +235,9 @@ Deno.serve(async (req) => {
 
   // Dedupe theo msg_id (retry không tạo tin đôi)
   const { data: insMsg, error: msgErr } = await client.from("messages").insert({
-    conversation_id: convId, sender: "buyer", body: text, zalo_msg_id: msgId,
+    conversation_id: convId, sender: "buyer",
+    body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
+    zalo_msg_id: msgId,
   }).select("id").single();
   if (msgErr?.code === "23505") {
     // Retry của kênh (cùng msg_id) — đã trả lời rồi, đừng trả lời lần hai
@@ -233,11 +264,11 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Buyer quay lại nhắn → hủy nhắc-lời-hứa đang chờ (FR-133)
+  // Buyer quay lại nhắn → hủy nhắc-lời-hứa + follow-up đang chờ (FR-133/FR-32)
   await client.from("reminders").update({ status: "cancelled" })
-    .eq("buyer_id", buyer.id).eq("kind", "promise").eq("status", "pending");
+    .eq("buyer_id", buyer.id).in("kind", ["promise", "followup"]).eq("status", "pending");
 
-  // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN
+  // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN, cận trên giá (SRS-4.5)
   let khoQ = client
     .from("listings")
     .select("code, ward, location_raw, price_raw, area_m2, bedrooms")
@@ -249,8 +280,15 @@ Deno.serve(async (req) => {
     : null;
   if (wardNum) khoQ = khoQ.ilike("ward", `%${wardNum[1] ?? wardNum[2]}%`);
   if (typeof prefs.bedrooms === "number") khoQ = khoQ.gte("bedrooms", prefs.bedrooms);
+  const maxVnd = budgetMaxVnd(prefs.budget);
+  if (maxVnd) khoQ = khoQ.lte("price_vnd", maxVnd);
 
-  const [{ data: history }, { data: listings }, { data: partnerProj }, { data: matchedProj }] = await Promise.all([
+  // FR-29/30: khách nhắc mã căn (gõ tay hoặc bấm từ trang chi tiết web sang)
+  const mentioned = [...new Set(
+    [...textOrTag.matchAll(CODE_RE)].map((m) => m[1].toUpperCase()),
+  )].slice(0, 3);
+
+  const [{ data: history }, { data: listings }, { data: partnerProj }, { data: matchedProj }, { data: askedListings }] = await Promise.all([
     client.from("messages").select("sender, body")
       .eq("conversation_id", convId).order("created_at", { ascending: false }).limit(12),
     khoQ,
@@ -260,6 +298,12 @@ Deno.serve(async (req) => {
       .eq("is_partner", true).order("priority").limit(1),
     // Khách nhắc tên dự án nào trong kho (mogi/aond) thì nạp kiến thức dự án đó
     client.rpc("match_projects", { p_text: text }),
+    // Căn khách đang nhắc tới — kèm facts đã xác minh từ chủ nhà (FR-29)
+    mentioned.length
+      ? client.from("listings")
+        .select("code, ward, location_raw, price_raw, area_m2, bedrooms, listing_facts(question, answer)")
+        .in("code", mentioned).limit(3)
+      : Promise.resolve({ data: [] as never[] }),
   ]);
   const ordered = (history ?? []).reverse();
   const convo = ordered
@@ -268,6 +312,19 @@ Deno.serve(async (req) => {
     .map((l) =>
       `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}`)
     .join("\n");
+
+  // Khối "căn khách đang nhắc" (FR-29): đủ chi tiết + facts đã xác minh
+  type Asked = {
+    code: string; ward?: string | null; location_raw?: string | null;
+    price_raw?: string | null; area_m2?: number | null; bedrooms?: number | null;
+    listing_facts?: Array<{ question: string; answer: string }> | null;
+  };
+  const askedBlock = ((askedListings ?? []) as Asked[])
+    .map((l) => {
+      const facts = (l.listing_facts ?? [])
+        .map((f) => `${f.question}: ${f.answer}`).join("; ");
+      return `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}`;
+    }).join("\n");
 
   // Khối DỰ ÁN (FR-113…115/FR-132): kiến thức chung đã xác thực, bot trả lời
   // tầng dự án trực tiếp; Ny'ah (is_partner) luôn ở trên cùng.
@@ -310,7 +367,14 @@ Deno.serve(async (req) => {
 
   const apiKey = await secret(client, "ANTHROPIC_API_KEY");
   const anthropic = new Anthropic({ apiKey: apiKey! });
-  let out: { profile: Record<string, unknown>; replies: string[] } | null = null;
+  let out:
+    | {
+      profile: Record<string, unknown>; replies: string[];
+      promise?: { when: string; what: string } | null;
+      viewing?: { listing_code: string | null; when: string; phone: string | null } | null;
+      need_human?: boolean;
+    }
+    | null = null;
   try {
     const resp = await anthropic.messages.parse({
       model: MODEL,
@@ -318,9 +382,13 @@ Deno.serve(async (req) => {
       output_config: { effort: "medium", format: zodOutputFormat(BuyerTurn) },
       system: [{
         type: "text",
-        text: TONE_RULES + "\n\n" + HUMAN_CHAT_RULES + "\n\n" + SLANG_NOTES + "\n\n" + BUYER_FEWSHOT +
+        text: TONE_RULES + "\n\n" + HUMAN_CHAT_RULES + "\n\n" + FEE_RULES + "\n\n" + SLANG_NOTES + "\n\n" + BUYER_FEWSHOT +
           "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO dưới đây, không bịa.\n\nKHO HIỆN CÓ:\n" +
           (kho || "(trống)") +
+          (askedBlock
+            ? "\n\nCĂN KHÁCH ĐANG NHẮC TỚI (khách vào từ web hoặc gõ mã — chào ĐÚNG căn này, trả lời thẳng vào nó; mục 'đã xác minh từ chủ nhà' được nói chắc, còn lại vẫn 'để em hỏi lại'):\n" +
+              askedBlock
+            : "") +
           (duanBlock
             ? "\n\nKHO DỰ ÁN (kiến thức chung ĐÃ XÁC THỰC — dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có trong kho: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Dự án ĐẦU TIÊN là dự án nhà mình đang phân phối trực tiếp — khi khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
               duanBlock
@@ -329,7 +397,11 @@ Deno.serve(async (req) => {
       }],
       messages: [{
         role: "user",
-        content:
+        content: [
+          ...(imageUrl
+            ? [{ type: "image" as const, source: { type: "url" as const, url: imageUrl } }]
+            : []),
+          { type: "text" as const, text:
           `HỒ SƠ ĐÃ BIẾT về khách${buyer.name ? ` (tên: ${buyer.name})` : ""}:\n${known || "(chưa biết gì)"}\n\n` +
           `CÒN THIẾU (thứ tự ưu tiên hỏi, mỗi lượt chỉ hỏi MỘT):\n${missing || "(đã đủ)"}\n\n` +
           (minimumMet
@@ -338,7 +410,10 @@ Deno.serve(async (req) => {
           (interrogated
             ? "Hai tin trước em đều đã đặt câu hỏi — lượt này ĐƯA GIÁ TRỊ trước (gợi ý/thông tin), hỏi thật nhẹ hoặc không hỏi.\n"
             : "") +
-          `\nHội thoại tới giờ:\n${convo}\n\nSoạn lượt trả lời tiếp theo của EM và cập nhật hồ sơ:`,
+          `\nHội thoại tới giờ:\n${convo}\n` +
+          (imageUrl ? "\nKhách VỪA GỬI KÈM MỘT TẤM ẢNH (đính trên). Mô tả trung thực điều thấy được; đoán thì nói 'hình như là…' và xác nhận lại; KHÔNG suy diễn vật liệu/pháp lý từ ảnh.\n" : "") +
+          `\nSoạn lượt trả lời tiếp theo của EM và cập nhật hồ sơ:` },
+        ],
       }],
     });
     if (resp.stop_reason !== "refusal" && resp.parsed_output) {
@@ -377,13 +452,44 @@ Deno.serve(async (req) => {
     await client.from("buyers").update({ name: out.profile.name }).eq("id", buyer.id);
   }
 
+  // Bot bí / khách đòi người thật → gắn cờ cho CTV tiếp quản (FR-135)
+  if (out.need_human) {
+    await client.from("conversations")
+      .update({ needs_human: true, needs_human_at: new Date().toISOString() })
+      .eq("id", convId);
+  }
+
   // Khách hứa gửi gì đó → đặt hẹn nhắc (FR-133)
-  const promise = (out as { promise?: { when: string; what: string } | null }).promise;
-  if (promise?.when && promise?.what) {
+  if (out.promise?.when && out.promise?.what) {
     await client.from("reminders").insert({
       kind: "promise", buyer_id: buyer.id,
-      due_at: mapDue(promise.when), note: `${promise.what} (hẹn: ${promise.when})`,
+      due_at: mapDue(out.promise.when), note: `${out.promise.what} (hẹn: ${out.promise.when})`,
     });
+  }
+
+  // Khách chốt lịch xem nhà (UF-06 / FR-50…53) → ghi viewings + nhắc trước giờ
+  if (out.viewing?.when) {
+    let listingId: string | null = null;
+    if (out.viewing.listing_code) {
+      const { data: lst } = await client.from("listings").select("id")
+        .eq("code", out.viewing.listing_code).maybeSingle();
+      listingId = lst?.id ?? null;
+    }
+    const slot = mapDue(out.viewing.when);
+    const { data: vw } = await client.from("viewings").insert({
+      buyer_id: buyer.id, listing_id: listingId,
+      listing_code: out.viewing.listing_code, time_text: out.viewing.when,
+      slot, phone: out.viewing.phone ?? null, status: "pending", source: "bot",
+    }).select("id").single();
+    // Nhắc trước buổi xem ~45 phút (mẫu §6.8); lịch quá gần thì thôi
+    const slotMs = Date.parse(slot);
+    if (vw && slotMs - Date.now() > 90 * 60e3) {
+      await client.from("reminders").insert({
+        kind: "viewing", buyer_id: buyer.id, viewing_id: vw.id,
+        due_at: new Date(slotMs - 45 * 60e3).toISOString(),
+        note: `lịch xem ${out.viewing.listing_code ? "#" + out.viewing.listing_code : "nhà"} lúc ${out.viewing.when}`,
+      });
+    }
   }
 
   const replies = out.replies.map((r) => r.trim()).filter(Boolean);
@@ -391,6 +497,31 @@ Deno.serve(async (req) => {
     await client.from("messages").insert({
       conversation_id: convId, sender: "bot", body: r,
     });
+  }
+
+  // FR-32: lượt này có nói về một căn cụ thể mà khách KHÔNG chốt lịch → nếu
+  // khách im ~2,5 tiếng thì chủ động gửi thêm thông tin căn đó (tối đa 1 lần/24h;
+  // khách nhắn lại thì reminder này bị hủy ở đầu lượt sau).
+  // Mã trong câu trả lời, không có thì lấy mã khách vừa nhắc (bot hay gọi căn
+  // bằng tên đường thay vì lặp lại mã)
+  const repliedCode = [...replies.join("\n").matchAll(CODE_RE)]
+    .map((m) => m[1].toUpperCase())[0] ?? mentioned[0];
+  if (repliedCode && !out.viewing) {
+    const { count: fu24 } = await client.from("reminders")
+      .select("id", { count: "exact", head: true })
+      .eq("buyer_id", buyer.id).eq("kind", "followup")
+      .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
+    if ((fu24 ?? 0) === 0) {
+      const { data: fuLst } = await client.from("listings").select("id")
+        .eq("code", repliedCode).maybeSingle();
+      if (fuLst) {
+        await client.from("reminders").insert({
+          kind: "followup", buyer_id: buyer.id, listing_id: fuLst.id,
+          due_at: new Date(Date.now() + 2.5 * 3600e3).toISOString(),
+          note: `khách hỏi #${repliedCode} rồi im — chủ động gửi thêm thông tin căn này`,
+        });
+      }
+    }
   }
 
   return new Response(

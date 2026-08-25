@@ -48,8 +48,8 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-17 | — | WF-04 | NFR-09 | — |
 | FR-20…FR-26 | UF-04 | WF-05 | SRS-5.1 | AC-02 |
 | FR-27, FR-28 | UF-04 | WF-03, WF-05 | SRS-3.8 `photos` | — |
-| FR-29, FR-30 | UF-03, UF-04 | WF-05 | SRS-4.7 | AC-01 |
-| FR-31, FR-32 | UF-04 | WF-05 | SRS-5.2 | — |
+| FR-29, FR-30 | UF-03, UF-04 | WF-05 | SRS-4.7; chat-reply: khối "CĂN KHÁCH ĐANG NHẮC" (tra mã căn trong tin + facts đã xác minh, chào đúng căn) | AC-01 |
+| FR-31, FR-32 | UF-04 | WF-05 | SRS-5.2; FR-32: reminder `followup` 2,5h sau khi bot nói về một căn (huỷ khi khách nhắn lại, ≤1/24h) + nhánh followup trong edge `nudge` | — |
 | FR-40…FR-47 | UF-05 | WF-06, WF-10 | SRS-3.6, SRS-4.1, SRS-4.2 | AC-03 |
 | FR-50…FR-57 | UF-06 | WF-07 | SRS-3.7 | AC-04 |
 | FR-56 | UF-07 | — | SRS-5.2 (loại listing đã từ chối) | AC-05 |
@@ -91,7 +91,11 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-130 | UF-04, UF-08 | WF-05 | `buyers.preferences` + chat-reply (bóc tách hồ sơ + nhịp hỏi §6.8 FR-130) | — |
 | FR-131 | UF-04 | — | chat-reply debounce ~5s (nhường lượt khi có tin mới hơn) + RPC `ensure_buyer_conversation` (advisory lock) | — |
 | FR-132 | UF-04, UF-05 | — | bảng `projects` (chỉ Ny'ah — seed mogi đã gỡ theo quyết định 25/08, cơ chế nạp giữ ở code) + RPC `match_projects` + khối KHO DỰ ÁN trong chat-reply (thực thi FR-115) | AC-13 |
-| FR-133 | UF-05, UF-08 | — | bảng `reminders` + chat-reply (bóc promise, hủy khi quay lại) + edge `nudge` + cron `nudge-tick` 30' (thực thi FR-63 phía bot) | AC-06 |
+| FR-133 | UF-05, UF-08 | — | bảng `reminders` + chat-reply (bóc promise, hủy khi quay lại) + edge `nudge` + cron `nudge-tick` 30' (thực thi FR-63 phía bot); giờ gửi 8h–21h VN + jitter 0–45s trong `nudge` | AC-06 |
+| FR-134 | UF-04 | — | chat-reply nhận `image_url` (content block image, chỉ dẫn "hình như là"); zalo-webhook bắt `user_send_image`; bridge zca-js bắt content.href | — |
+| FR-135 | UF-04 | — | trường `need_human` trong BuyerTurn (chat-reply) + cột `conversations.needs_human/needs_human_at`; đơn chờ hiện trong báo cáo FR-137 | — |
+| FR-136 | — | — | bảng `ctvs` + cột `conversations.ctv_id` + trigger `assign_ctv_round_robin` (ít đơn 30-ngày nhất nhận trước) | — |
+| FR-137 | — | — | edge `ctv-report` + cron `ctv-report-tick` 17h VN (10:00 UTC) + bảng `ctv_daily_reports`; chấm điểm bằng `RATE_CTV_RUBRIC` (_shared/prompts.ts) | — |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp

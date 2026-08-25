@@ -43,32 +43,62 @@ const ANGLES = [
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
-  const { dry_run = false } = await req.json().catch(() => ({}));
+  const { dry_run = false, force = false } = await req.json().catch(() => ({}));
+  // Giờ giấc con người (docs/06 §6.8): chỉ chủ động nhắn trong 8h-21h giờ VN;
+  // ngoài cửa sổ thì để nhịp cron sau xử — reminder vẫn pending, không mất.
+  const vnHour = (new Date(Date.now() + 7 * 3600e3)).getUTCHours();
+  if (!force && (vnHour < 8 || vnHour >= 21)) {
+    return new Response(JSON.stringify({ done: 0, skipped: "quiet_hours", vn_hour: vnHour }), {
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
+  // Lệch phút ngẫu nhiên — đừng gửi đúng boong :00/:30 như máy
+  if (!dry_run) await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 45000)));
   const client = db();
   const apiKey = await secret(client, "ANTHROPIC_API_KEY");
   const anthropic = new Anthropic({ apiKey: apiKey! });
   const oaToken = await secret(client, "ZALO_OA_ACCESS_TOKEN");
   const out: Record<string, unknown>[] = [];
 
-  // ---- 1. Lời hứa tới hạn ----
+  // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) ----
   const { data: due } = await client
     .from("reminders")
-    .select("id, kind, note, buyer_id, seller_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id)")
-    .eq("status", "pending").eq("kind", "promise")
+    .select("id, kind, note, buyer_id, seller_id, listing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id)")
+    .eq("status", "pending").in("kind", ["promise", "viewing", "followup"])
     .lte("due_at", new Date().toISOString())
     .limit(5);
 
   for (const r of due ?? []) {
     const who = (r.buyers ?? r.sellers) as { name?: string | null; zalo_user_id?: string | null } | null;
+    // Chưa biết tên thì gọi "anh/chị" — cấm model bịa tên (nó hay mượn tên trong ví dụ tone)
+    const whoLabel = who?.name
+      ? `Anh/chị ${who.name}`
+      : "Khách (CHƯA biết tên — xưng hô 'anh/chị' chung, TUYỆT ĐỐI không bịa tên)";
+    // FR-32: nạp chi tiết căn để "gửi thêm thông tin" có nội dung thật, không bịa
+    let canInfo = "";
+    if (r.kind === "followup" && r.listing_id) {
+      const { data: l } = await client.from("listings")
+        .select("code, ward, location_raw, price_raw, area_m2, bedrooms, listing_facts(question, answer)")
+        .eq("id", r.listing_id).maybeSingle();
+      if (l) {
+        const facts = ((l.listing_facts ?? []) as Array<{ question: string; answer: string }>)
+          .map((f) => `${f.question}: ${f.answer}`).join("; ");
+        canInfo = `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? ""} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}`;
+      }
+    }
     const resp = await anthropic.messages.create({
       model: MODEL, max_tokens: 256,
       output_config: { effort: "low" },
       system: [{ type: "text", text: TONE_RULES, cache_control: { type: "ephemeral" } }],
       messages: [{
         role: "user",
-        content:
-          `${who?.name ? `Anh/chị ${who.name}` : "Khách"} có hứa: "${r.note}". Giờ đã tới hẹn. ` +
-          `Soạn MỘT tin Zalo RẤT NGẮN (~20 từ) nhắc khéo — thân thiện, KHÔNG trách móc, cho đường lùi ("khi nào tiện anh/chị gửi em nha").`,
+        content: r.kind === "viewing"
+          ? `${whoLabel} có ${r.note} (sắp tới giờ). Soạn MỘT tin Zalo RẤT NGẮN nhắc lịch theo mẫu §6.8: "Em là Trai, có hẹn xem nhà với anh/chị lúc … Hẹn gặp anh/chị nha." Thân thiện, không markdown.`
+          : r.kind === "followup"
+          ? `${whoLabel} hỏi về căn này rồi im ~2-3 tiếng: ${canInfo || r.note}. ` +
+            `Soạn MỘT tin Zalo NGẮN (1-2 câu) CHỦ ĐỘNG kể thêm MỘT chi tiết đáng giá về đúng căn đó (chỉ từ dữ liệu trên, không bịa; chưa xác minh thì không khẳng định). Không thúc ép, kết bằng câu hỏi nhẹ hoặc một câu khẳng định rồi chờ.`
+          : `${whoLabel} có hứa: "${r.note}". Giờ đã tới hẹn. ` +
+            `Soạn MỘT tin Zalo RẤT NGẮN (~20 từ) nhắc khéo — thân thiện, KHÔNG trách móc, cho đường lùi ("khi nào tiện anh/chị gửi em nha").`,
       }],
     });
     const text = resp.content.find((b) => b.type === "text")?.text?.trim();
@@ -87,7 +117,7 @@ Deno.serve(async (req) => {
       await client.from("reminders")
         .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);
     }
-    out.push({ kind: "promise", id: r.id, text, sent });
+    out.push({ kind: r.kind, id: r.id, text, sent });
   }
 
   // ---- 2. Buyer im lặng 5-6 ngày ----

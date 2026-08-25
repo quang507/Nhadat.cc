@@ -37,8 +37,13 @@ api.listener.on("message", async (message) => {
   try {
     if (message.isSelf) return; // đừng tự trả lời chính mình
     if (message.type !== ThreadType.User) return; // chỉ chat 1-1, bỏ qua nhóm
-    const text = message.data?.content;
-    if (typeof text !== "string" || !text.trim()) return; // MVP: chỉ text
+    let text = message.data?.content;
+    let imageUrl;
+    if (text && typeof text === "object" && text.href) {  // FR-134: ảnh có href
+      imageUrl = text.href;
+      text = text.title ?? "";
+    }
+    if ((typeof text !== "string" || !text.trim()) && !imageUrl) return;
 
     console.log(`← [${message.threadId}] ${text}`);
     const res = await fetch(CHAT_REPLY_URL, {
@@ -49,7 +54,8 @@ api.listener.on("message", async (message) => {
       },
       body: JSON.stringify({
         external_user_id: String(message.threadId),
-        text,
+        text: typeof text === "string" ? text : "",
+        image_url: imageUrl,
         msg_id: message.data?.msgId ? String(message.data.msgId) : undefined,
         channel: "zalo_personal_test",
       }),
@@ -59,9 +65,10 @@ api.listener.on("message", async (message) => {
     const bubbles = Array.isArray(replies) && replies.length ? replies : reply ? [reply] : [];
     if (!bubbles.length) return;
 
-    // FR-130: gửi từng bong bóng, trễ theo độ dài như người đang gõ
-    for (const bubble of bubbles) {
-      const typingMs = Math.min(1000 + bubble.length * 35, 6000);
+    // FR-130: phản ứng nhanh trước, nội dung sau — bong bóng đầu đi ngay,
+    // các bong bóng sau trễ theo độ dài như người đang gõ.
+    for (const [i, bubble] of bubbles.entries()) {
+      const typingMs = i === 0 ? 500 : Math.min(1000 + bubble.length * 35, 6000);
       await new Promise((r) => setTimeout(r, typingMs));
       await api.sendMessage(bubble, message.threadId, ThreadType.User);
       console.log(`→ ${bubble.slice(0, 80)}…`);

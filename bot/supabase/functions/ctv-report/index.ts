@@ -1,0 +1,171 @@
+// ctv-report — FR-136/137: CRM CTV tối thiểu + báo cáo 17h mỗi ngày.
+// Mỗi conversation (đơn chăm sóc) đã được gán CTV xoay vòng từ lúc tạo (trigger
+// assign_ctv_round_robin). Hàm này chạy theo cron ctv-report-tick (17h VN):
+// 1. Tổng hợp per-CTV: đơn đang chăm, đơn có tương tác hôm nay, đơn cần người
+//    thật (needs_human), lịch xem nhà sắp tới.
+// 2. Chấm điểm chất lượng chăm khách bằng RATE_CTV_RUBRIC (tối đa 3 hội thoại
+//    hoạt động gần nhất mỗi CTV) — le_phep / dung_luat_hoi / hieu_bds / cham_khach.
+// 3. Gửi MỘT tin tổng hợp vào Zalo cá nhân admin (secret ZALO_ADMIN_ZALO_ID qua
+//    OA API) và lưu ctv_daily_reports để tra cứu + chống gửi đôi.
+// POST {} (cron) | { dry_run?: bool, force?: bool } — force = chạy lại dù hôm nay đã gửi.
+import Anthropic from "npm:@anthropic-ai/sdk";
+import { z } from "npm:zod@4";
+import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { RATE_CTV_RUBRIC } from "../_shared/prompts.ts";
+
+const MODEL = "claude-opus-5";
+
+function db(): SupabaseClient {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+}
+
+async function secret(client: SupabaseClient, name: string): Promise<string | null> {
+  const fromEnv = Deno.env.get(name);
+  if (fromEnv) return fromEnv;
+  const { data } = await client.rpc("get_secret", { secret_name: name });
+  return (data as string) ?? null;
+}
+
+async function sendZalo(token: string, userId: string, text: string): Promise<boolean> {
+  const r = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", access_token: token },
+    body: JSON.stringify({ recipient: { user_id: userId }, message: { text } }),
+  });
+  const j = await r.json().catch(() => ({}));
+  return j?.error === 0;
+}
+
+const Score = z.object({
+  le_phep: z.number().min(1).max(5),
+  dung_luat_hoi: z.number().min(1).max(5),
+  hieu_bds: z.number().min(1).max(5),
+  cham_khach: z.number().min(1).max(5),
+  stars: z.number().min(1).max(5).describe("Điểm tổng theo luật trong rubric"),
+  comment: z.string().describe("1-2 câu tiếng Việt: lỗi cụ thể nhất hoặc điểm tốt nhất"),
+});
+
+Deno.serve(async (req) => {
+  if (req.method !== "POST") return new Response("POST only", { status: 405 });
+  const { dry_run = false, force = false } = await req.json().catch(() => ({}));
+  const client = db();
+  const now = Date.now();
+  const vnDate = new Date(now + 7 * 3600e3).toISOString().slice(0, 10); // ngày giờ VN
+
+  // Chống gửi đôi: hôm nay đã có báo cáo rồi thì thôi (trừ khi force)
+  if (!force) {
+    const { count } = await client.from("ctv_daily_reports")
+      .select("id", { count: "exact", head: true }).eq("report_date", vnDate);
+    if ((count ?? 0) > 0) {
+      return new Response(JSON.stringify({ skipped: "already_reported", report_date: vnDate }), {
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      });
+    }
+  }
+
+  const apiKey = await secret(client, "ANTHROPIC_API_KEY");
+  const anthropic = new Anthropic({ apiKey: apiKey! });
+  const { data: ctvs } = await client.from("ctvs")
+    .select("id, name").eq("active", true).order("created_at");
+
+  const vnStartOfDay = new Date(now + 7 * 3600e3);
+  const todayUtc = Date.UTC(
+    vnStartOfDay.getUTCFullYear(), vnStartOfDay.getUTCMonth(), vnStartOfDay.getUTCDate(),
+  ) - 7 * 3600e3; // 0h VN hôm nay tính theo UTC
+  const sections: string[] = [];
+  const saved: Record<string, unknown>[] = [];
+
+  for (const ctv of ctvs ?? []) {
+    const { data: convs } = await client.from("conversations")
+      .select("id, buyer_id, needs_human, last_message_at, buyers(name, preferences)")
+      .eq("ctv_id", ctv.id)
+      .gte("last_message_at", new Date(now - 30 * 864e5).toISOString())
+      .order("last_message_at", { ascending: false }).limit(50);
+    const all = convs ?? [];
+    const today = all.filter((c) => Date.parse(c.last_message_at) >= todayUtc);
+    const needHuman = all.filter((c) => c.needs_human);
+    const buyerIds = all.map((c) => c.buyer_id).filter(Boolean);
+    const { data: vws } = buyerIds.length
+      ? await client.from("viewings")
+        .select("listing_code, time_text, slot, buyers(name)")
+        .in("buyer_id", buyerIds).eq("status", "pending")
+        .gte("slot", new Date().toISOString()).order("slot").limit(10)
+      : { data: [] as never[] };
+
+    // Chấm điểm tối đa 3 hội thoại có tương tác trong 24h qua
+    const toScore = all
+      .filter((c) => Date.parse(c.last_message_at) >= now - 864e5).slice(0, 3);
+    const scores: Array<z.infer<typeof Score> & { conversation_id: string }> = [];
+    for (const c of toScore) {
+      const { data: msgs } = await client.from("messages")
+        .select("sender, body").eq("conversation_id", c.id)
+        .order("created_at", { ascending: false }).limit(20);
+      const convo = (msgs ?? []).reverse()
+        .map((m) => `${m.sender === "buyer" ? "KHÁCH" : "CTV/BOT"}: ${m.body}`).join("\n");
+      if (!convo) continue;
+      try {
+        const resp = await anthropic.messages.parse({
+          model: MODEL, max_tokens: 512,
+          output_config: { effort: "low", format: zodOutputFormat(Score) },
+          system: [{ type: "text", text: RATE_CTV_RUBRIC, cache_control: { type: "ephemeral" } }],
+          messages: [{ role: "user", content: `Hội thoại cần chấm:\n${convo}` }],
+        });
+        if (resp.stop_reason !== "refusal" && resp.parsed_output) {
+          scores.push({ ...(resp.parsed_output as z.infer<typeof Score>), conversation_id: c.id });
+        }
+      } catch (e) {
+        console.error("ctv-report score:", (e as Error)?.message);
+      }
+    }
+    const avg = scores.length
+      ? (scores.reduce((s, x) => s + x.stars, 0) / scores.length).toFixed(1)
+      : null;
+
+    const khachToday = today.slice(0, 5).map((c) => {
+      const b = c.buyers as { name?: string | null; preferences?: Record<string, unknown> } | null;
+      const p = b?.preferences ?? {};
+      return `${b?.name ?? "khách mới"} (${[p.area, p.budget].filter(Boolean).join(", ") || "chưa rõ nhu cầu"})`;
+    }).join("; ");
+    const lich = ((vws ?? []) as Array<{ listing_code?: string | null; time_text?: string | null; buyers?: { name?: string | null } | null }>)
+      .map((v) => `${v.buyers?.name ?? "khách"} xem ${v.listing_code ? "#" + v.listing_code : "nhà"} (${v.time_text ?? ""})`)
+      .join("; ");
+
+    const body =
+      `【${ctv.name}】\n` +
+      `- Đang chăm: ${all.length} đơn (hôm nay có tương tác: ${today.length})\n` +
+      (khachToday ? `- Hôm nay: ${khachToday}\n` : "") +
+      (lich ? `- Lịch xem sắp tới: ${lich}\n` : "") +
+      (needHuman.length ? `- ⚠ CẦN NGƯỜI THẬT: ${needHuman.length} đơn đang chờ tiếp quản\n` : "") +
+      (avg
+        ? `- Điểm chăm khách: ${avg}/5 (${scores.length} hội thoại). ${scores[0]?.comment ?? ""}`
+        : `- Điểm chăm khách: chưa có hội thoại mới để chấm`);
+    sections.push(body);
+    saved.push({ ctv_id: ctv.id, body, scores });
+  }
+
+  const reportText = `Báo cáo CTV ${vnDate} (17h)\n\n${sections.join("\n\n")}`;
+
+  let sentTo = "none";
+  if (!dry_run) {
+    const oaToken = await secret(client, "ZALO_OA_ACCESS_TOKEN");
+    const adminId = await secret(client, "ZALO_ADMIN_ZALO_ID");
+    if (oaToken && adminId) {
+      sentTo = (await sendZalo(oaToken, adminId, reportText)) ? `zalo_oa:${adminId}` : "zalo_error";
+    }
+    for (const s of saved) {
+      await client.from("ctv_daily_reports").upsert({
+        report_date: vnDate, ctv_id: s.ctv_id as string,
+        body: s.body as string, scores: s.scores, sent_to: sentTo,
+      }, { onConflict: "report_date,ctv_id" });
+    }
+  }
+
+  return new Response(
+    JSON.stringify({ report_date: vnDate, dry_run, sent_to: sentTo, report: reportText }),
+    { headers: { "Content-Type": "application/json; charset=utf-8" } },
+  );
+});
