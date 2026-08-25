@@ -23,7 +23,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | INS-01 | Chat là sản phẩm | FR-13, IA-P1, UI-P1, WF-01 |
 | INS-02 | Chu kỳ mua 3–4 năm | FR-60…FR-65, UF-08 |
 | INS-03 | Zalo xoá sau 7 ngày | FR-63, SRS-5.3 `zalo_keepalive`, AC-06 |
-| INS-04 | Riêng tư là khác biệt | FR-04, NFR-07, WF-07, AC-04 |
+| INS-04 | Riêng tư là khác biệt | FR-04, FR-121, NFR-07, WF-07, AC-04 |
 | INS-05 | S không điền form | FR-91, UI-C08, WF-08, AC-07 |
 | INS-06 | Thiếu thông tin là tính năng | FR-40…FR-47, UF-05, SRS-3.6, AC-03 |
 | INS-07 | Ngôn ngữ nói ≠ bộ lọc | FR-02, FR-09, FR-22, FR-23, SRS-4.5, AC-12 |
@@ -77,6 +77,18 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-115, FR-116 | UF-05 | — | SRS-3.10, SRS-5.1 (nhánh tầng dự án / tồn kho căn) | AC-13 |
 | FR-117 | — | — | *giai đoạn 2 — chưa đặc tả UI* | — |
 | FR-118 | — | — | *chưa đặc tả kỹ thuật — bảng `ward_mapping` sẽ vào SRS-3.x khi chốt nguồn dữ liệu NQ 202/2025/QH15* | — |
+| FR-119 | — | — | app/tinh-lai-vay (client, không đụng DB) | — |
+| FR-120 | — | — | app/thong-ke (đọc listings qua RLS anon) | — |
+| FR-121 | — | — | localStorage phía trình duyệt, không lưu server | — |
+| FR-122 | — | — | app/ban-do + lib/geo (tâm phường, tôn trọng SRS-3.8 ẩn danh) | — |
+| FR-123 | UF-01 | WF-03 | app/mua-ban, cho-thue (query param) | — |
+| FR-124 | UF-09 | — | sellers.auth_user_id + RLS listings_own_* | — |
+| FR-125 | — | — | view `agents_public` (không lộ phone) | — |
+| FR-126 | UF-08 | — | `buyers.auth_user_id`, `listing_views`, app/tai-khoan | — |
+| FR-127 | UF-11 | WF-12 | bảng `admins` + RLS `listings_admin_*`, app/admin | — |
+| FR-128 | UF-01 | WF-03 | `listings.bedrooms` + backfill regex | — |
+| FR-129 | UF-05, UF-09 | — | trigger `listing_insert_drip` + cron `seller_drip_tick` + ask-seller mode drip + chat-reply nhánh seller | — |
+| FR-130 | UF-04, UF-08 | WF-05 | `buyers.preferences` + chat-reply (bóc tách hồ sơ + nhịp hỏi §6.8 FR-130) | — |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp

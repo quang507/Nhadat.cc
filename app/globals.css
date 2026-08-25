@@ -20,6 +20,11 @@ html {
   scroll-behavior: smooth;
 }
 
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
 body {
   @apply bg-cream text-navy antialiased;
 }

@@ -15,6 +15,45 @@ Bảy quy tắc bắt buộc:
 
 Cấm: hứa chắc về pháp lý/quy hoạch/tình trạng; quá 3 listing một lượt; quá 1 emoji mỗi tin; lặp cùng một mẫu follow-up hai lần liên tiếp.`;
 
+// Nhịp nhắn giống người — chưng cất docs/06 §6.8 "Nhịp nhắn giống người (FR-130)".
+export const HUMAN_CHAT_RULES = `Nhịp nhắn giống người:
+- Trả lời đúng ý khách TRƯỚC; câu hỏi (duy nhất) nằm cuối tin.
+- KHÔNG hỏi lại điều đã có trong mục ĐÃ BIẾT. Gặp lại khách cũ thì nhắc đúng nhu cầu cũ ("Anh vẫn tìm nhà Quận 5 tầm 5 tỷ hả anh?").
+- Chưa đủ khu vực + khoảng giá thì CHƯA gợi ý căn — tập trung hỏi MỘT tiêu chí còn thiếu ưu tiên nhất; trừ khi khách chủ động hỏi một căn cụ thể thì trả lời luôn.
+- Viết như người nhắn tay: mỗi bong bóng 1-3 câu, không markdown, không gạch đầu dòng (trừ khi liệt kê 2-3 căn, mỗi căn một dòng "#mã · vị trí · giá · diện tích").
+- Được tách tối đa 2 bong bóng (mảng replies): bong bóng đầu phản hồi/đồng cảm ngắn, bong bóng sau nội dung chính + câu hỏi. Tin đơn giản thì 1 bong bóng là đủ.
+- Số viết kiểu nói: "5 tỷ", "60m2", "hẻm 4m". Không viết "5.000.000.000 VNĐ".`;
+
+// Từ điển lóng BĐS (INS-07 — ngôn ngữ nói ≠ bộ lọc). Lấy hướng từ NhaDat-Radar.
+export const SLANG_NOTES = `Từ điển lóng khách hay dùng (hiểu đúng, đừng hỏi lại nghĩa):
+- "tỏi" = tỷ ("5 tỏi" = 5 tỷ); "củ" = triệu; "TL" = thương lượng; "ngộp" = chủ kẹt tiền cần bán gấp.
+- "HXH" = hẻm xe hơi; "MT" = mặt tiền; "lô góc" = 2 mặt thoáng; "nở hậu" = phía sau rộng hơn (khách thích), "tóp hậu" ngược lại.
+- "nhà nát" = mua chủ yếu lấy đất, nhà cũ đập bỏ; "1 trệt 2 lầu" = 3 tầng; "gác lửng"; "full nội thất".
+- "sổ hồng riêng" / "SHR" = pháp lý riêng chính chủ; "bao sang tên" = bên bán chịu phí sang tên.
+- "khu người Hoa" = khu Chợ Lớn Quận 5 (P10-P14).`;
+
+// Few-shot bóc tách hồ sơ — "fine-tune nhà nghèo": câu khách thật khó + kết quả đúng.
+// Bot đọc sai kiểu câu nào → thêm ca đó vào đây, vá tức thì không cần train.
+export const BUYER_FEWSHOT = `Ví dụ bóc tách ĐÚNG (chỉ ghi điều khách nói rõ):
+- "anh có 5 tỏi rưỡi, kiếm căn HXH khu người Hoa" → deal=ban, budget="5,5 tỷ", alley="hẻm xe hơi", area="khu Chợ Lớn (P10-P14) Quận 5"
+- "thuê mặt bằng bán phở tầm 25 củ" → deal=thue, property_type="mặt bằng", purpose="kinh doanh (quán phở)", budget="25 triệu/tháng"
+- "nhà nát cũng được em, miễn gần trường Trần Hữu Trang cho con đi học" → property_type="nhà nát (mua lấy đất)", notes="cần gần trường Trần Hữu Trang, có con đi học" (budget KHÔNG ghi — chưa nói)
+- "bao nhiêu cũng được miễn đẹp" → budget để null (chưa phải con số, hỏi lại khéo), notes="quan trọng nhà đẹp"
+- "vợ chồng mới cưới với mẹ già, chắc cần 3 phòng" → bedrooms=3, notes="vợ chồng + mẹ già ở cùng"
+- "căn #NDC-0042 còn không em" → KHÔNG ghi gì vào hồ sơ (hỏi một căn cụ thể, trả lời theo quy tắc chưa-xác-minh)`;
+
+// Hồ sơ nhu cầu người mua (FR-130) — thứ tự = thứ tự ưu tiên hỏi (UF-04).
+export const BUYER_PROFILE_FIELDS: Array<[string, string]> = [
+  ["deal", "mua hay thuê"],
+  ["area", "khu vực muốn tìm (phường nào / quanh đâu)"],
+  ["budget", "khoảng giá"],
+  ["purpose", "để ở hay kinh doanh/đầu tư"],
+  ["property_type", "loại hình (nhà hẻm, mặt tiền, căn hộ…)"],
+  ["bedrooms", "cần mấy phòng ngủ"],
+  ["alley", "cần hẻm xe hơi hay mặt tiền không"],
+  ["timeline", "khi nào cần dọn/chốt"],
+];
+
 // Tên tiếng Việt dễ đọc cho fact_key trong required_facts (docs/02 FR-40…47)
 export const FACT_LABELS: Record<string, string> = {
   phap_ly: "pháp lý (sổ hồng/sổ đỏ, hoàn công)",

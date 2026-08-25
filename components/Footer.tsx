@@ -20,7 +20,10 @@ export default function Footer() {
             <ul className="space-y-2">
               <li><Link href="/mua-ban" className="hover:text-brand">Mua bán nhà đất Quận 5</Link></li>
               <li><Link href="/cho-thue" className="hover:text-brand">Cho thuê nhà đất Quận 5</Link></li>
-              <li><Link href="/raoban" className="hover:text-brand">Rao bán — một câu là xong</Link></li>
+              <li><Link href="/ban-do" className="hover:text-brand">Bản đồ nhà đất</Link></li>
+              <li><Link href="/tinh-lai-vay" className="hover:text-brand">Tính lãi vay</Link></li>
+              <li><Link href="/thong-ke" className="hover:text-brand">Giá theo phường</Link></li>
+              <li><Link href="/dang-nhap" className="hover:text-brand">Dành cho nhà môi giới</Link></li>
             </ul>
           </div>
           <div className="text-sm">
