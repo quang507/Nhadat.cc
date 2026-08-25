@@ -22,7 +22,8 @@ export const HUMAN_CHAT_RULES = `Nhịp nhắn giống người:
 - Chưa đủ khu vực + khoảng giá thì CHƯA gợi ý căn — tập trung hỏi MỘT tiêu chí còn thiếu ưu tiên nhất; trừ khi khách chủ động hỏi một căn cụ thể thì trả lời luôn.
 - Viết như người nhắn tay: mỗi bong bóng 1-3 câu, không markdown, không gạch đầu dòng (trừ khi liệt kê 2-3 căn, mỗi căn một dòng "#mã · vị trí · giá · diện tích").
 - Được tách tối đa 2 bong bóng (mảng replies): bong bóng đầu phản hồi/đồng cảm ngắn, bong bóng sau nội dung chính + câu hỏi. Tin đơn giản thì 1 bong bóng là đủ.
-- Số viết kiểu nói: "5 tỷ", "60m2", "hẻm 4m". Không viết "5.000.000.000 VNĐ".`;
+- Số viết kiểu nói: "5 tỷ", "60m2", "hẻm 4m". Không viết "5.000.000.000 VNĐ".
+- TIN CỤT TIẾP THEO LÀ CHỈNH SỬA, KHÔNG PHẢI TÌM MỚI: "2PN thì sao", "gần chợ hơn có không", "rẻ hơn xíu", "có căn nào mới hơn ko" → cập nhật đúng trường đó trong hồ sơ, GIỮ NGUYÊN mọi tiêu chí cũ, trả lời trong ngữ cảnh tìm kiếm đang có, tuyệt đối không hỏi lại từ đầu.`;
 
 // Kịch bản người bán — chưng cất "AOND req + chat examples.docx" (Luân Ngô-Trần,
 // 23/06/2026) §I-II + Phần I-II. Ghi ở docs/06 §6.8 "Kịch bản người bán".
@@ -51,7 +52,10 @@ export const BUYER_FEWSHOT = `Ví dụ bóc tách ĐÚNG (chỉ ghi điều khá
 - "nhà nát cũng được em, miễn gần trường Trần Hữu Trang cho con đi học" → property_type="nhà nát (mua lấy đất)", notes="cần gần trường Trần Hữu Trang, có con đi học" (budget KHÔNG ghi — chưa nói)
 - "bao nhiêu cũng được miễn đẹp" → budget để null (chưa phải con số, hỏi lại khéo), notes="quan trọng nhà đẹp"
 - "vợ chồng mới cưới với mẹ già, chắc cần 3 phòng" → bedrooms=3, notes="vợ chồng + mẹ già ở cùng"
-- "căn #NDC-0042 còn không em" → KHÔNG ghi gì vào hồ sơ (hỏi một căn cụ thể, trả lời theo quy tắc chưa-xác-minh)`;
+- "căn #NDC-0042 còn không em" → KHÔNG ghi gì vào hồ sơ (hỏi một căn cụ thể, trả lời theo quy tắc chưa-xác-minh)
+- "tìm nhà" (chỉ vậy, chưa có gì khác) → deal=ban thôi; trả lời bằng MỘT câu hỏi khu vực/tầm giá, KHÔNG xổ listing ngẫu nhiên
+- [hồ sơ đã có: Quận 5, 5 tỷ] khách nhắn "2PN thì sao" → chỉ bedrooms=2, khu vực + giá GIỮ NGUYÊN — đây là chỉnh sửa tìm kiếm cũ
+- [hồ sơ đã có: trọ, 5 triệu] khách nhắn "có căn nào gần chợ hơn ko" → chỉ notes="ưu tiên gần chợ", mọi tiêu chí cũ giữ nguyên`;
 
 // Hồ sơ nhu cầu người mua (FR-130) — thứ tự = thứ tự ưu tiên hỏi (UF-04).
 export const BUYER_PROFILE_FIELDS: Array<[string, string]> = [

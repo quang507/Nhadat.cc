@@ -156,32 +156,25 @@ Deno.serve(async (req) => {
     // Seller nhắn nhưng không có câu chờ → rơi xuống luồng hội thoại thường
   }
 
-  // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130)
-  let { data: buyer } = await client
-    .from("buyers").select("id, name, preferences")
-    .eq("zalo_user_id", externalUserId).maybeSingle();
-  if (!buyer) {
-    const ins = await client.from("buyers")
-      .insert({ zalo_user_id: externalUserId }).select("id, name, preferences").single();
-    buyer = ins.data!;
+  // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130).
+  // Get-or-create buyer + conversation qua RPC advisory-lock (FR-131 —
+  // 3 tin gõ vụn đến đồng thời không được tạo trùng buyer/conversation).
+  const { data: bc, error: bcErr } = await client
+    .rpc("ensure_buyer_conversation", {
+      p_zalo_user_id: externalUserId,
+      p_channel: channel,
+    }).single();
+  if (bcErr || !bc) {
+    return new Response(JSON.stringify({ error: bcErr?.message ?? "ensure_buyer_conversation" }), { status: 500 });
   }
-  await client.from("buyers")
-    .update({ last_contact_at: new Date().toISOString() }).eq("id", buyer.id);
-  const prefs: Record<string, unknown> = (buyer.preferences as Record<string, unknown>) ?? {};
-
-  let { data: conv } = await client
-    .from("conversations").select("id").eq("buyer_id", buyer.id)
-    .order("started_at", { ascending: false }).limit(1).maybeSingle();
-  if (!conv) {
-    const ins = await client.from("conversations")
-      .insert({ buyer_id: buyer.id, channel }).select("id").single();
-    conv = ins.data!;
-  }
+  const buyer = { id: bc.b_id as string, name: bc.b_name as string | null };
+  const convId = bc.c_id as string;
+  const prefs: Record<string, unknown> = (bc.b_prefs as Record<string, unknown>) ?? {};
 
   // Dedupe theo msg_id (retry không tạo tin đôi)
-  const { error: msgErr } = await client.from("messages").insert({
-    conversation_id: conv.id, sender: "buyer", body: text, zalo_msg_id: msgId,
-  });
+  const { data: insMsg, error: msgErr } = await client.from("messages").insert({
+    conversation_id: convId, sender: "buyer", body: text, zalo_msg_id: msgId,
+  }).select("id").single();
   if (msgErr?.code === "23505") {
     // Retry của kênh (cùng msg_id) — đã trả lời rồi, đừng trả lời lần hai
     return new Response(JSON.stringify({ reply: null, replies: [], deduped: true }), {
@@ -192,7 +185,20 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: msgErr.message }), { status: 500 });
   }
   await client.from("conversations")
-    .update({ last_message_at: new Date().toISOString() }).eq("id", conv.id);
+    .update({ last_message_at: new Date().toISOString() }).eq("id", convId);
+
+  // FR-131: gộp tin gõ vụn — đợi ~4.5s; nếu khách đã nhắn tiếp trong lúc đợi
+  // thì nhường lượt (tin cuối chùm sẽ trả lời trên toàn bộ ngữ cảnh gộp).
+  await new Promise((r) => setTimeout(r, 4500));
+  const { data: newest } = await client
+    .from("messages").select("id")
+    .eq("conversation_id", convId).eq("sender", "buyer")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (newest && insMsg && newest.id !== insMsg.id) {
+    return new Response(JSON.stringify({ reply: null, replies: [], superseded: true }), {
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
 
   // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN
   let khoQ = client
@@ -209,7 +215,7 @@ Deno.serve(async (req) => {
 
   const [{ data: history }, { data: listings }] = await Promise.all([
     client.from("messages").select("sender, body")
-      .eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(12),
+      .eq("conversation_id", convId).order("created_at", { ascending: false }).limit(12),
     khoQ,
   ]);
   const ordered = (history ?? []).reverse();
@@ -302,12 +308,12 @@ Deno.serve(async (req) => {
   const replies = out.replies.map((r) => r.trim()).filter(Boolean);
   for (const r of replies) {
     await client.from("messages").insert({
-      conversation_id: conv.id, sender: "bot", body: r,
+      conversation_id: convId, sender: "bot", body: r,
     });
   }
 
   return new Response(
-    JSON.stringify({ reply: replies.join("\n"), replies, conversation_id: conv.id }),
+    JSON.stringify({ reply: replies.join("\n"), replies, conversation_id: convId }),
     { headers: { "Content-Type": "application/json; charset=utf-8" } },
   );
 });
