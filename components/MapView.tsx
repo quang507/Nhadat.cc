@@ -24,7 +24,9 @@ export default function MapView({ listings }: { listings: Listing[] }) {
 
       for (const l of listings) {
         const code = l.code ?? l.id.slice(0, 8);
-        const p = wardPoint(l.ward, code);
+        // Toạ độ geocode từ địa chỉ tương đối (FR-122); thiếu thì rơi về tâm phường
+        const p: [number, number] | null =
+          l.lat && l.lng ? [Number(l.lat), Number(l.lng)] : wardPoint(l.ward, code);
         if (!p) continue;
         const marker = L.circleMarker(p, {
           radius: 9,

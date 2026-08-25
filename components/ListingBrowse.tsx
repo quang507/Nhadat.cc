@@ -34,8 +34,9 @@ const XEP = [
   { key: "gia-giam", label: "Giá cao → thấp" },
   { key: "dt-lon", label: "Diện tích lớn" },
 ];
+const PN = [1, 2, 3, 4]; // "từ N phòng ngủ trở lên" (FR-128)
 
-type Params = { phuong?: string; trang?: string; gia?: string; dt?: string; xep?: string };
+type Params = { phuong?: string; trang?: string; gia?: string; dt?: string; xep?: string; pn?: string };
 
 export default async function ListingBrowse({
   deal,
@@ -67,6 +68,8 @@ export default async function ListingBrowse({
   if (dt?.min) query = query.gte("area_m2", dt.min);
   if (dt?.max) query = query.lt("area_m2", dt.max);
   if (dt) query = query.gt("area_m2", 0);
+  const pn = PN.includes(Number(sp.pn)) ? Number(sp.pn) : null;
+  if (pn) query = query.gte("bedrooms", pn);
   query =
     xep.key === "gia-tang" ? query.order("price_vnd", { ascending: true, nullsFirst: false })
     : xep.key === "gia-giam" ? query.order("price_vnd", { ascending: false, nullsFirst: false })
@@ -119,6 +122,14 @@ export default async function ListingBrowse({
           {DT.map((d) => (
             <Link key={d.key} href={withParam({ dt: sp.dt === d.key ? undefined : d.key })} className={chip(sp.dt === d.key)}>
               {d.label}
+            </Link>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-16 text-xs font-semibold uppercase tracking-wide text-mute">Phòng ngủ</span>
+          {PN.map((n) => (
+            <Link key={n} href={withParam({ pn: sp.pn === String(n) ? undefined : String(n) })} className={chip(sp.pn === String(n))}>
+              {n}+ PN
             </Link>
           ))}
         </div>

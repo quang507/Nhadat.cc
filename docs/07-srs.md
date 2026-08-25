@@ -330,6 +330,16 @@ có UI giỏ hàng riêng — cập nhật `unit_status` qua luồng rao/sửa t
   tin chưa qua duyệt; khi luồng duyệt admin chạy (FR-76) sẽ siết về
   `status='active'` — ghi nhận ở kế hoạch kiểm thử (TS-SEL/TS-ADM).
 
+**Bổ sung 25/08 (FR-126/127/128, FR-122 cập nhật):**
+- `listings.lat/lng` — geocode từ `location_raw` (edge function
+  `geocode-listings`: Nominatim, cache theo đường, 1 req/1.1s);
+  `listings.bedrooms int` — backfill regex từ mô tả, bot bổ sung dần.
+- `buyers.auth_user_id uuid unique fk auth.users` (tài khoản tự nguyện) +
+  bảng `listing_views(auth_user_id, listing_id, viewed_at)` RLS own-only —
+  nền cho "tin đã xem" và khuyến nghị.
+- Bảng `admins(email pk)` + RLS `listings_admin_read/update`: admin duyệt
+  tin trên web (`/admin`). Thêm admin = insert email.
+
 ---
 
 ## 4. Đặc tả giao diện lập trình

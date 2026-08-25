@@ -26,4 +26,7 @@ export type Listing = {
   unit_status: string | null;
   last_confirmed_at: string | null;
   created_at: string;
+  lat: number | null;
+  lng: number | null;
+  bedrooms: number | null;
 };

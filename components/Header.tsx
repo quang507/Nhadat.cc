@@ -34,6 +34,16 @@ export default function Header() {
           >
             <IconHeart className="h-4.5 w-4.5" />
           </Link>
+          <Link
+            href="/tai-khoan"
+            aria-label="Tài khoản"
+            className="grid h-9 w-9 place-items-center rounded-full border border-line text-navy transition hover:border-brand hover:text-brand"
+          >
+            <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" aria-hidden>
+              <circle cx="12" cy="8" r="3.5" />
+              <path d="M5 19.5c1.2-3 3.8-4.5 7-4.5s5.8 1.5 7 4.5" />
+            </svg>
+          </Link>
           <a
             href={zaloLink("header")}
             className="rounded-full bg-zalo px-4 py-2 text-sm font-semibold text-white shadow transition hover:opacity-90 active:scale-[0.98]"

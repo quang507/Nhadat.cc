@@ -84,6 +84,9 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-123 | UF-01 | WF-03 | app/mua-ban, cho-thue (query param) | — |
 | FR-124 | UF-09 | — | sellers.auth_user_id + RLS listings_own_* | — |
 | FR-125 | — | — | view `agents_public` (không lộ phone) | — |
+| FR-126 | UF-08 | — | `buyers.auth_user_id`, `listing_views`, app/tai-khoan | — |
+| FR-127 | UF-11 | WF-12 | bảng `admins` + RLS `listings_admin_*`, app/admin | — |
+| FR-128 | UF-01 | WF-03 | `listings.bedrooms` + backfill regex | — |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ListingCard from "@/components/ListingCard";
+import TrackView from "@/components/TrackView";
 import { supabase, type Listing } from "@/lib/supabase";
 import {
   formatArea,
@@ -71,6 +72,7 @@ export default async function Page({
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
+      <TrackView code={code} listingId={listing.id} />
       <nav className="mb-4 text-sm text-mute">
         <Link href="/" className="hover:text-brand">Trang chủ</Link>
         {" / "}

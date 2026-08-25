@@ -30,8 +30,8 @@ export default async function Page() {
         </p>
       </div>
       <p className="mt-1 text-xs text-mute/70">
-        Vị trí hiển thị tương đối trong phường — địa chỉ chính xác tụi em chỉ
-        chia sẻ khi hẹn xem nhà, để chủ nhà không bị làm phiền.
+        Chấm theo địa chỉ trên tin (đường/hẻm, chưa tới số nhà) — địa chỉ chính
+        xác tụi em chia sẻ khi hẹn xem nhà.
       </p>
 
       <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_340px]">
