@@ -177,3 +177,14 @@ alter table reminders add column if not exists ctv_id uuid references ctvs(id);
 -- trigger trg_notify_info_request_escalation (AFTER INSERT, assignee ctv/admin):
 --   sinh reminder kind='escalation' due ngay — nudge gửi OA, hoặc bridge kéo
 --   qua edge escalation-feed rồi ack.
+
+-- ============ FR-141/142/144: takeover + chốt theo đồng ý + drip chính chủ ============
+-- (đã áp qua migration add_takeover_agree_seller_escalation; schema tham chiếu:)
+alter table conversations add column if not exists human_touch_at timestamptz;
+-- messages.sender nhận thêm 'human' (không có check constraint)
+-- bot_prompts thêm key 'agree_rules' (tín hiệu đồng ý — chữ/emoji/like-tim,
+-- sửa ở Table Editor); deals được ghi tự động khi khách đồng ý chốt (FR-142).
+-- trigger notify_info_request_escalation mở rộng: assignee='seller' và
+-- source='buyer_ask' → reminder escalation kèm seller_id (nudge/bridge chủ
+-- động nhắn chính chủ xin bổ sung — FR-144); ask-seller drip thêm guard
+-- một-câu-một-lúc (đang có pending thì nhịp cron bỏ qua, không hỏi chồng).

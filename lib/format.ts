@@ -26,8 +26,11 @@ export function formatArea(m2: number | null): string {
   return m2 ? `${Number(m2).toLocaleString("vi-VN")} m²` : "—";
 }
 
-// Deep-link Zalo OA mang ngữ cảnh (FR-13/14) — OA id thật thay sau khi OA duyệt
-export const ZALO_OA_URL = "https://zalo.me/nhadatcc";
+// Deep-link Zalo mang ngữ cảnh (FR-13/14). Đang chạy acc CLONE trong lúc chờ
+// OA duyệt: đặt NEXT_PUBLIC_ZALO_URL=https://zalo.me/<SĐT acc clone> trong env
+// Vercel (hoặc sửa fallback dưới); OA duyệt xong đổi về link OA.
+export const ZALO_OA_URL =
+  process.env.NEXT_PUBLIC_ZALO_URL ?? "https://zalo.me/nhadatcc";
 export function zaloLink(context?: string): string {
   return context ? `${ZALO_OA_URL}?ref=${encodeURIComponent(context)}` : ZALO_OA_URL;
 }

@@ -81,7 +81,16 @@ export const BUYER_FEWSHOT = `Ví dụ bóc tách ĐÚNG (chỉ ghi điều khá
 - "3h chiều mai qua coi căn đó nha" → viewing={when:"3h chiều mai"} — hệ thống tự hiểu 15h, không phải 3h sáng
 - "chiều em gửi ảnh sổ cho" → promise={when:"chiều nay", what:"gửi ảnh sổ"} — trả lời cảm ơn + xác nhận chờ, không hỏi dồn
 - khách gửi MỖI số điện thoại (chưa có lịch xem) → KHÔNG ghi gì vào hồ sơ, cảm ơn + giải thích chăm qua Zalo cho tiện + hỏi MỘT câu nhu cầu (mua/thuê, khu nào)
-- khách xin hình/địa chỉ/pháp lý một căn mà kho chưa có → trả lời "để em hỏi lại chủ nhà rồi gửi liền" + ask_owner={listing_code:"mã căn đó", question:"hình + địa chỉ chi tiết"}`;
+- khách xin hình/địa chỉ/pháp lý một căn mà kho chưa có → trả lời "để em hỏi lại chủ nhà rồi gửi liền" + ask_owner={listing_code:"mã căn đó", question:"hình + địa chỉ chi tiết"}
+- khách xin hình căn có ghi "CÓ HÌNH SẴN" → trả lời "dạ em gửi hình liền đây ạ" + send_photos="mã căn đó" (KHÔNG ask_owner)
+- [tin trước của EM: "mình chốt hợp đồng căn #X nhé?"] khách nhắn "ok em" hoặc 👍 → agreed_deal={listing_code:"X"} — chúc mừng + báo bên em liên hệ làm hợp đồng ngay`;
+
+// FR-142: tín hiệu đồng ý (chốt hợp đồng / chốt lịch xem) — bản DB (bot_prompts
+// key agree_rules) đè lên bản này, chủ dự án chỉnh icon/từ ngữ ở Table Editor.
+export const AGREE_RULES = `TÍN HIỆU ĐỒNG Ý (AGREE_RULES): khách được coi là ĐỒNG Ý khi trả lời bằng chữ ("ok", "oke", "ừ", "đồng ý", "chốt đi", "được đó", "vậy đi") HOẶC gửi emoji/sticker vui vẻ, like, tim (👍 ❤️ 😍 🥰 😊, "[sticker cảm xúc]", "[khách thả tim]").
+- Tin ngay trước của EM có đề nghị CHỐT HỢP ĐỒNG/CỌC và khách đồng ý → điền agreed_deal với mã căn đó.
+- Tin ngay trước của EM có đề xuất LỊCH XEM NHÀ cụ thể và khách đồng ý (kể cả chỉ bằng emoji) → điền viewing với khung giờ đã đề xuất.
+- Khách đồng ý chung chung khi không có đề nghị nào đứng trước → KHÔNG điền gì, chỉ trò chuyện tiếp.`;
 
 // Hồ sơ nhu cầu người mua (FR-130) — thứ tự = thứ tự ưu tiên hỏi (UF-04).
 export const BUYER_PROFILE_FIELDS: Array<[string, string]> = [
