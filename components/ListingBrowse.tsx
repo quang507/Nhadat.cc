@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ListingCard from "@/components/ListingCard";
+import { coverByCode } from "@/lib/photos";
 import { supabase, type Listing } from "@/lib/supabase";
 import { zaloLink } from "@/lib/format";
 
@@ -80,6 +81,7 @@ export default async function ListingBrowse({
 
   const { data, count } = await query;
   const listings = (data ?? []) as Listing[];
+  const covers = await coverByCode(listings.map((l) => l.code)); // FR-148
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -145,7 +147,9 @@ export default async function ListingBrowse({
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {listings.map((l) => <ListingCard key={l.id} listing={l} />)}
+        {listings.map((l) => (
+          <ListingCard key={l.id} listing={l} photo={l.code ? covers[l.code] : null} />
+        ))}
       </div>
 
       {listings.length === 0 && (

@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     if (!id) return new Response(JSON.stringify({ error: "id bắt buộc" }), { status: 400 });
     await client.from("reminders")
       .update({ status: "sent", sent_at: new Date().toISOString() })
-      .eq("id", id).eq("kind", "escalation");
+      .eq("id", id).in("kind", ["escalation", "report"]);
     return new Response(JSON.stringify({ ok: true }), {
       headers: { "Content-Type": "application/json; charset=utf-8" },
     });
@@ -42,8 +42,8 @@ Deno.serve(async (req) => {
   // seller (FR-144 — chủ động hỏi chính chủ) → CTV được giao → admin.
   const { data: due } = await client
     .from("reminders")
-    .select("id, note, ctv_id, seller_id, ctvs(name, zalo_user_id, phone), sellers(name, zalo_user_id, phone)")
-    .eq("status", "pending").eq("kind", "escalation")
+    .select("id, kind, note, ctv_id, seller_id, ctvs(name, zalo_user_id, phone), sellers(name, zalo_user_id, phone)")
+    .eq("status", "pending").in("kind", ["escalation", "report"])
     .lte("due_at", new Date().toISOString())
     .limit(10);
   const { data: adm } = await client.from("admins")
@@ -55,7 +55,9 @@ Deno.serve(async (req) => {
     const seller = r.sellers as Target;
     // Text soạn sẵn đúng vai: hỏi chính chủ thì lễ phép kiểu CSKH,
     // báo CTV/admin thì kiểu thông báo nội bộ.
-    const text = r.seller_id
+    const text = r.kind === "report"
+      ? String(r.note) // FR-149: báo cáo CTV 17h gửi nguyên văn về Zalo admin
+      : r.seller_id
       ? `Chào anh/chị, em bên nhadat.cc ạ. ${r.note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`
       : `🔔 nhadat.cc: ${r.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
     return {

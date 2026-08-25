@@ -67,10 +67,34 @@ Deno.serve(async (req) => {
   // ---- 0. Escalation (FR-140): khách hỏi căn không có chính chủ → báo CTV/admin.
   // Tin nội bộ, không cần model. Gửi OA được thì đánh sent; không có kênh thì
   // GIỮ pending — bridge acc clone sẽ kéo qua escalation-feed và tự ack.
+  // FR-147: "cần người thật" quá 30 phút mà chưa ai gõ tay (human_touch_at cũ
+  // hơn needs_human_at) → leo tiếp lên admin, đánh dấu human_escalated_at để
+  // khỏi báo lặp. Người thật vào chat là chat-reply tự hạ cờ + huỷ nhắc.
+  const { data: stuck } = await client.from("conversations")
+    .select("id, buyer_id, needs_human_at, human_touch_at, human_escalated_at, buyers(name)")
+    .eq("needs_human", true)
+    .lte("needs_human_at", new Date(Date.now() - 30 * 60e3).toISOString())
+    .is("human_escalated_at", null)
+    .limit(10);
+  for (const c of stuck ?? []) {
+    if (c.human_touch_at && Date.parse(c.human_touch_at as string) >= Date.parse(c.needs_human_at as string)) continue;
+    const who = (c.buyers as { name?: string | null } | null)?.name;
+    if (!dry_run) {
+      await client.from("reminders").insert({
+        kind: "escalation", buyer_id: c.buyer_id, ctv_id: null,
+        due_at: new Date().toISOString(),
+        note: `⚠️ khách${who ? ` ${who}` : ""} cần người thật đã 30 phút mà CTV chưa vào. Anh/chị xử giúp`,
+      });
+      await client.from("conversations")
+        .update({ human_escalated_at: new Date().toISOString() }).eq("id", c.id);
+    }
+    out.push({ kind: "escalate_admin", conversation: c.id });
+  }
+
   const { data: escDue } = await client
     .from("reminders")
-    .select("id, note, ctv_id, seller_id, ctvs(name, zalo_user_id), sellers(name, zalo_user_id)")
-    .eq("status", "pending").eq("kind", "escalation")
+    .select("id, kind, note, ctv_id, seller_id, ctvs(name, zalo_user_id), sellers(name, zalo_user_id)")
+    .eq("status", "pending").in("kind", ["escalation", "report"])
     .lte("due_at", new Date().toISOString())
     .limit(10);
   for (const r of escDue ?? []) {
@@ -82,8 +106,11 @@ Deno.serve(async (req) => {
         .select("zalo_user_id").not("zalo_user_id", "is", null).limit(1).maybeSingle();
       target = adm?.zalo_user_id ?? (await secret(client, "ZALO_ADMIN_ZALO_ID"));
     }
-    // FR-144: đích là chính chủ → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ
-    const text = r.seller_id
+    // FR-149 report: gửi NGUYÊN VĂN (báo cáo CTV 17h). FR-144: đích là chính chủ
+    // → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ.
+    const text = r.kind === "report"
+      ? String(r.note)
+      : r.seller_id
       ? `Chào anh/chị, em bên nhadat.cc ạ. ${r.note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`
       : `🔔 nhadat.cc: ${r.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
     let sent = "none";
@@ -94,7 +121,7 @@ Deno.serve(async (req) => {
           .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);
       }
     }
-    out.push({ kind: "escalation", id: r.id, text, sent });
+    out.push({ kind: r.kind, id: r.id, text, sent });
   }
 
   // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) ----

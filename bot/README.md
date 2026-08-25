@@ -13,15 +13,23 @@ tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/pro
 | `chat-reply` | NFR-12, FR-129…135, FR-29/32, UF-06 | **Bộ não hội thoại** dùng chung mọi kênh: nhánh seller (hỏi nhỏ giọt), nhánh buyer (hồ sơ nhu cầu + trả lời tự nhiên, debounce gộp tin, lọc kho theo giá số `price_vnd`, tra căn theo mã, kho dự án, đặt lịch xem nhà + xin SĐT đúng kịch bản, bóc lời hứa, cờ `need_human`, follow-up im lặng ngắn, đọc ảnh `image_url`). |
 | `zalo-webhook` | SRS-4.4 | Nhận event OA (`user_send_text`/`user_send_image`), verify chữ ký nếu có app secret, trả 200 <1s, chuyển vào chat-reply rồi gửi bong bóng (bong bóng đầu gần như ngay, sau trễ theo độ dài). verify_jwt **tắt**. |
 | `nudge` | FR-133, FR-32 | Cron 30': nhắc lời hứa tới hạn, nhắc lịch xem trước ~45', follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); chỉ gửi 8h–21h VN + jitter 0-45s; `{dry_run, force}` để test. |
-| `ctv-report` | FR-136/137 | Cron 17h VN: tổng hợp đơn per-CTV (chia xoay vòng bằng trigger), lịch xem, đơn chờ người thật, chấm điểm hội thoại theo `RATE_CTV_RUBRIC` → gửi Zalo admin (`ZALO_ADMIN_ZALO_ID`) + lưu `ctv_daily_reports`. |
-| `escalation-feed` | FR-140/144 | Cửa cho bridge acc clone kéo việc "hỏi chính chủ / báo CTV/admin": `{action:"pull"}` trả danh sách kèm `text` soạn sẵn đúng vai (chính chủ → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ) + SĐT/Zalo đích (bảng `sellers`/`ctvs`/`admins`), `{action:"ack", id}` đánh dấu đã gửi. Tuỳ chọn secret `BRIDGE_SECRET` trong Vault → yêu cầu header `x-bridge-secret`. Nudge cũng tự gửi các escalation này qua OA khi có token. |
+| `ctv-report` | FR-136/137, FR-149 | Cron 17h VN: tổng hợp đơn per-CTV (chia xoay vòng bằng trigger), lịch xem, đơn chờ người thật, chấm điểm hội thoại theo `RATE_CTV_RUBRIC` → còn OA thì gửi thẳng, không thì đẩy vào `reminders` kind `report` (`sent_to: "queued_bridge"`) để bridge nhắn số Zalo cá nhân admin; lưu `ctv_daily_reports`. |
+| `escalation-feed` | FR-140/144, FR-147/149 | Cửa cho bridge acc clone kéo việc "hỏi chính chủ / báo CTV/admin / báo cáo 17h": `{action:"pull"}` trả danh sách kèm `text` soạn sẵn đúng vai (chính chủ → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ; kind `report` → NGUYÊN VĂN, không bọc lời chào) + SĐT/Zalo đích (bảng `sellers`/`ctvs`/`admins`), `{action:"ack", id}` đánh dấu đã gửi. Tuỳ chọn secret `BRIDGE_SECRET` trong Vault → yêu cầu header `x-bridge-secret`. Nudge cũng tự gửi các việc này qua OA khi có token. |
 
 Chat-reply từ 25/08 thêm: `human_note` (bridge báo người thật gõ tay → bot nhường
 sân 30 phút, FR-141), `agreed_deal` (khách đồng ý chốt bằng chữ/emoji/like-tim →
 ghi deals + da_chot, FR-142, tín hiệu cấu hình ở `bot_prompts.agree_rules`),
 `send_photos` + mảng `photos` trong response (gửi hình thật từ facts hinh_anh,
 FR-143), nhánh tạo tin nháp khi chính chủ nhắn câu rao mới + ngừng drip khi tin
-đủ đăng (FR-144).
+đủ đăng (FR-144), trần **100 tin/24h** mỗi khách (`rate_limited`, FR-146) và leo
+thang cần-người-thật **CTV → admin sau 30 phút** (FR-147, nửa sau nằm ở `nudge`).
+
+**Ảnh thật của tin (FR-148)** nằm trên Supabase Storage, bucket công khai
+`listing-photos`, đường dẫn `<mã tin>/<tên file>` — ví dụ `BDS-Q5-0164/01.jpg`.
+Up bằng tay: Supabase → Storage → `listing-photos` → tạo thư mục đúng mã tin rồi
+kéo ảnh vào; thứ tự hiển thị theo tên file (`01`, `02`…). Web và bot đọc chung
+qua view `public.listing_photos_v` (`code`, `url`, `path`). Tin chưa có ảnh thì
+web rơi về ảnh minh hoạ, bot đi đường hỏi-chủ-nhà FR-140.
 
 Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 `Authorization: Bearer <anon key>` (verify_jwt bật, trừ `zalo-webhook`).

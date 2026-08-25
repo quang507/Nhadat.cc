@@ -3,6 +3,7 @@ import ListingCard from "@/components/ListingCard";
 import { IconAsk, IconCalc, IconChart, IconClock, IconShield } from "@/components/icons";
 import { supabase, type Listing } from "@/lib/supabase";
 import { placeholderImg, zaloLink } from "@/lib/format";
+import { coverByCode } from "@/lib/photos";
 
 export const revalidate = 300;
 
@@ -26,6 +27,8 @@ async function getListings(deal: "ban" | "cho_thue", limit: number) {
 
 export default async function Home() {
   const [ban, thue] = await Promise.all([getListings("ban", 9), getListings("cho_thue", 4)]);
+  // FR-148: ảnh bìa thật theo mã tin (bucket listing-photos), thiếu thì ảnh minh hoạ
+  const covers = await coverByCode([...ban, ...thue].map((l) => l.code));
 
   return (
     <>
@@ -120,10 +123,12 @@ export default async function Home() {
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {ban[0] && (
             <div className="sm:col-span-2 sm:row-span-2 lg:col-span-2">
-              <ListingCard listing={ban[0]} featured />
+              <ListingCard listing={ban[0]} featured photo={ban[0].code ? covers[ban[0].code] : null} />
             </div>
           )}
-          {ban.slice(1).map((l) => <ListingCard key={l.id} listing={l} />)}
+          {ban.slice(1).map((l) => (
+            <ListingCard key={l.id} listing={l} photo={l.code ? covers[l.code] : null} />
+          ))}
         </div>
       </section>
 
@@ -163,7 +168,9 @@ export default async function Home() {
             </Link>
           </div>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {thue.map((l) => <ListingCard key={l.id} listing={l} />)}
+            {thue.map((l) => (
+              <ListingCard key={l.id} listing={l} photo={l.code ? covers[l.code] : null} />
+            ))}
           </div>
         </section>
       )}
