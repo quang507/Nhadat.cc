@@ -336,12 +336,9 @@ Deno.serve(async (req) => {
   await client.from("conversations")
     .update({ last_message_at: new Date().toISOString() }).eq("id", convId);
 
-  // FR-131: gộp tin gõ vụn — debounce THÍCH ỨNG: tin ngắn cụt không dấu kết câu
-  // ("tìm nhà", "quận 10") là kiểu đang gõ tiếp → đợi 2.5s gom chùm; tin đủ ý
-  // gần như trả lời ngay (400ms chỉ để bắt tin bắn liền tay). Check superseded
-  // ngay dưới vẫn chặn trả lời đôi nếu khách gõ tiếp trong lúc bot đang nghĩ.
-  const looksFragment = text.length > 0 && text.length < 18 && !/[?.!…]$/.test(text);
-  await new Promise((r) => setTimeout(r, looksFragment ? 2500 : 400));
+  // FR-131: KHÔNG delay nhân tạo (quyết định chủ dự án 25/08 — "càng nhanh càng
+  // tốt"). Chỉ giữ check nhường-lượt: tin mới hơn của cùng khách đã vào trong
+  // lúc xử lý thì lượt này im, lượt của tin cuối trả lời trên ngữ cảnh gộp.
   const { data: newest } = await client
     .from("messages").select("id")
     .eq("conversation_id", convId).eq("sender", "buyer")
