@@ -203,6 +203,12 @@ Chưng cất từ 24 hội thoại mẫu trong `chats w B.docx`. Đây là đặ
   vài giây (kênh bridge/OA mô phỏng thời gian gõ phím).
 - Chưa đủ tiêu chí tối thiểu (khu vực + khoảng giá — UF-04) thì chưa gợi ý
   căn, tập trung khai thác; trừ khi khách chủ động hỏi một căn cụ thể.
+- **Tin cụt tiếp theo là chỉnh sửa, không phải tìm mới**: "2PN thì sao",
+  "gần chợ hơn có không", "rẻ hơn xíu" → cập nhật đúng trường đó trong hồ sơ,
+  **giữ nguyên mọi tiêu chí cũ**, không hỏi lại từ đầu.
+- **Khách gõ vụn nhiều tin liên tiếp** ("tìm nhà" / "quận 10" / "tầm 2 tỷ") →
+  đợi ~5 giây gom lại, trả lời MỘT lần trên ngữ cảnh gộp (FR-131) — không trả
+  lời từng tin một thành 3 câu chồng nhau.
 
 [nguồn: quyết định chủ dự án 25/08/2026; chưng cất `chats w B.docx`]
 

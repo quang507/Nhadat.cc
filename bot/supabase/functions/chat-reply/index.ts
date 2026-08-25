@@ -36,6 +36,25 @@ function regexProfileFallback(text: string): Record<string, string> {
   return delta;
 }
 
+// FR-133: "chiều/mai/tối… em gửi" → hẹn giờ nhắc (giờ VN = UTC+7)
+function mapDue(when: string): string {
+  const t = when.toLowerCase();
+  const now = Date.now();
+  const vn = new Date(now + 7 * 3600e3);
+  let day = 0;
+  if (/mai|hôm sau/.test(t)) day = 1;
+  let hour = 15;
+  if (/sáng/.test(t)) hour = 9;
+  else if (/trưa/.test(t)) hour = 12;
+  else if (/tối/.test(t)) hour = 19;
+  else if (/cuối tuần/.test(t)) { day = ((6 - vn.getUTCDay()) + 7) % 7 || 6; hour = 10; }
+  let due = Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate() + day, hour - 7);
+  if (due <= now) due = now + 2 * 3600e3; // đã qua giờ đó → nhắc sau 2 tiếng
+  return new Date(due).toISOString();
+}
+// Regex bắt lời hứa cho nhánh seller (không qua parse có cấu trúc)
+const PROMISE_RE = /(sáng mai|chiều|tối|trưa|mai|cuối tuần)[^.,;!?]{0,30}?(gửi|chụp|báo|đưa|bổ sung|cho em|check|coi lại)|(gửi|chụp|báo|đưa|bổ sung|check|coi lại)[^.,;!?]{0,30}?(sáng mai|chiều|tối|trưa|mai|cuối tuần)/i;
+
 const MODEL = "claude-opus-5";
 
 function db(): SupabaseClient {
@@ -69,6 +88,10 @@ const BuyerTurn = z.object({
   }).describe("CHỈ ghi điều khách NÓI RÕ trong hội thoại. Không suy diễn. Chưa biết để null."),
   replies: z.array(z.string()).min(1).max(2)
     .describe("1-2 bong bóng tin nhắn gửi khách, theo đúng nhịp nhắn giống người"),
+  promise: z.object({
+    when: z.string().describe("Mốc hẹn nguyên văn: 'chiều nay', 'mai', 'tối', 'cuối tuần'…"),
+    what: z.string().describe("Khách hứa làm gì: 'gửi ảnh sổ', 'báo lại tài chính'…"),
+  }).nullable().describe("CHỈ điền khi khách chủ động hứa sẽ gửi/báo gì đó vào một mốc thời gian. Không suy diễn."),
 });
 
 Deno.serve(async (req) => {
@@ -98,6 +121,16 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(1).maybeSingle();
 
+    // Seller quay lại nhắn → hủy nhắc-lời-hứa đang chờ (FR-133)
+    await client.from("reminders").update({ status: "cancelled" })
+      .eq("seller_id", sellerRow.id).eq("kind", "promise").eq("status", "pending");
+    // Seller hứa "chiều gửi ảnh…" → đặt hẹn nhắc
+    if (PROMISE_RE.test(text)) {
+      await client.from("reminders").insert({
+        kind: "promise", seller_id: sellerRow.id,
+        due_at: mapDue(text), note: text.slice(0, 200),
+      });
+    }
     if (pendingReq) {
       await client.from("listing_facts").insert({
         listing_id: pendingReq.listing_id,
@@ -156,32 +189,25 @@ Deno.serve(async (req) => {
     // Seller nhắn nhưng không có câu chờ → rơi xuống luồng hội thoại thường
   }
 
-  // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130)
-  let { data: buyer } = await client
-    .from("buyers").select("id, name, preferences")
-    .eq("zalo_user_id", externalUserId).maybeSingle();
-  if (!buyer) {
-    const ins = await client.from("buyers")
-      .insert({ zalo_user_id: externalUserId }).select("id, name, preferences").single();
-    buyer = ins.data!;
+  // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130).
+  // Get-or-create buyer + conversation qua RPC advisory-lock (FR-131 —
+  // 3 tin gõ vụn đến đồng thời không được tạo trùng buyer/conversation).
+  const { data: bc, error: bcErr } = await client
+    .rpc("ensure_buyer_conversation", {
+      p_zalo_user_id: externalUserId,
+      p_channel: channel,
+    }).single();
+  if (bcErr || !bc) {
+    return new Response(JSON.stringify({ error: bcErr?.message ?? "ensure_buyer_conversation" }), { status: 500 });
   }
-  await client.from("buyers")
-    .update({ last_contact_at: new Date().toISOString() }).eq("id", buyer.id);
-  const prefs: Record<string, unknown> = (buyer.preferences as Record<string, unknown>) ?? {};
-
-  let { data: conv } = await client
-    .from("conversations").select("id").eq("buyer_id", buyer.id)
-    .order("started_at", { ascending: false }).limit(1).maybeSingle();
-  if (!conv) {
-    const ins = await client.from("conversations")
-      .insert({ buyer_id: buyer.id, channel }).select("id").single();
-    conv = ins.data!;
-  }
+  const buyer = { id: bc.b_id as string, name: bc.b_name as string | null };
+  const convId = bc.c_id as string;
+  const prefs: Record<string, unknown> = (bc.b_prefs as Record<string, unknown>) ?? {};
 
   // Dedupe theo msg_id (retry không tạo tin đôi)
-  const { error: msgErr } = await client.from("messages").insert({
-    conversation_id: conv.id, sender: "buyer", body: text, zalo_msg_id: msgId,
-  });
+  const { data: insMsg, error: msgErr } = await client.from("messages").insert({
+    conversation_id: convId, sender: "buyer", body: text, zalo_msg_id: msgId,
+  }).select("id").single();
   if (msgErr?.code === "23505") {
     // Retry của kênh (cùng msg_id) — đã trả lời rồi, đừng trả lời lần hai
     return new Response(JSON.stringify({ reply: null, replies: [], deduped: true }), {
@@ -192,7 +218,24 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: msgErr.message }), { status: 500 });
   }
   await client.from("conversations")
-    .update({ last_message_at: new Date().toISOString() }).eq("id", conv.id);
+    .update({ last_message_at: new Date().toISOString() }).eq("id", convId);
+
+  // FR-131: gộp tin gõ vụn — đợi ~4.5s; nếu khách đã nhắn tiếp trong lúc đợi
+  // thì nhường lượt (tin cuối chùm sẽ trả lời trên toàn bộ ngữ cảnh gộp).
+  await new Promise((r) => setTimeout(r, 4500));
+  const { data: newest } = await client
+    .from("messages").select("id")
+    .eq("conversation_id", convId).eq("sender", "buyer")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (newest && insMsg && newest.id !== insMsg.id) {
+    return new Response(JSON.stringify({ reply: null, replies: [], superseded: true }), {
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
+
+  // Buyer quay lại nhắn → hủy nhắc-lời-hứa đang chờ (FR-133)
+  await client.from("reminders").update({ status: "cancelled" })
+    .eq("buyer_id", buyer.id).eq("kind", "promise").eq("status", "pending");
 
   // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN
   let khoQ = client
@@ -207,10 +250,16 @@ Deno.serve(async (req) => {
   if (wardNum) khoQ = khoQ.ilike("ward", `%${wardNum[1] ?? wardNum[2]}%`);
   if (typeof prefs.bedrooms === "number") khoQ = khoQ.gte("bedrooms", prefs.bedrooms);
 
-  const [{ data: history }, { data: listings }] = await Promise.all([
+  const [{ data: history }, { data: listings }, { data: partnerProj }, { data: matchedProj }] = await Promise.all([
     client.from("messages").select("sender, body")
-      .eq("conversation_id", conv.id).order("created_at", { ascending: false }).limit(12),
+      .eq("conversation_id", convId).order("created_at", { ascending: false }).limit(12),
     khoQ,
+    // FR-132: dự án nhà mình phân phối trực tiếp — luôn đứng đầu khối dự án
+    client.from("projects")
+      .select("name, developer, district, ward, location_raw, legal_status, status_text, amenities, specs, unit_types")
+      .eq("is_partner", true).order("priority").limit(1),
+    // Khách nhắc tên dự án nào trong kho (mogi/aond) thì nạp kiến thức dự án đó
+    client.rpc("match_projects", { p_text: text }),
   ]);
   const ordered = (history ?? []).reverse();
   const convo = ordered
@@ -219,6 +268,31 @@ Deno.serve(async (req) => {
     .map((l) =>
       `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}`)
     .join("\n");
+
+  // Khối DỰ ÁN (FR-113…115/FR-132): kiến thức chung đã xác thực, bot trả lời
+  // tầng dự án trực tiếp; Ny'ah (is_partner) luôn ở trên cùng.
+  type Proj = {
+    name: string; developer?: string | null; district?: string | null;
+    location_raw?: string | null; legal_status?: string | null; status_text?: string | null;
+    amenities?: unknown; specs?: unknown; unit_types?: unknown; description?: string | null;
+  };
+  const projLine = (p: Proj, full: boolean) => {
+    const parts = [`${p.name} — CĐT ${p.developer ?? "?"} · ${p.location_raw ?? p.district ?? ""}`];
+    if (p.legal_status) parts.push(`pháp lý: ${p.legal_status}`);
+    if (p.status_text) parts.push(`tình trạng: ${p.status_text}`);
+    if (Array.isArray(p.amenities)) parts.push(`tiện ích: ${(p.amenities as string[]).join(", ")}`);
+    if (full && p.specs) parts.push(`thông số: ${JSON.stringify(p.specs)}`);
+    if (full && p.unit_types) parts.push(`mẫu nhà/căn: ${JSON.stringify(p.unit_types)}`);
+    if (!full && p.description) parts.push(String(p.description).slice(0, 280));
+    return "• " + parts.join(" · ");
+  };
+  const partner = (partnerProj ?? [])[0] as Proj | undefined;
+  const matched = ((matchedProj ?? []) as Proj[])
+    .filter((m) => m.name !== partner?.name);
+  const duanBlock = [
+    ...(partner ? [projLine(partner, true)] : []),
+    ...matched.map((m) => projLine(m, true)),
+  ].join("\n");
 
   // Chống hỏi cung: 2 tin gần nhất của bot đều là câu hỏi → lượt này đưa giá trị
   const botMsgs = ordered.filter((m) => m.sender === "bot");
@@ -246,7 +320,11 @@ Deno.serve(async (req) => {
         type: "text",
         text: TONE_RULES + "\n\n" + HUMAN_CHAT_RULES + "\n\n" + SLANG_NOTES + "\n\n" + BUYER_FEWSHOT +
           "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO dưới đây, không bịa.\n\nKHO HIỆN CÓ:\n" +
-          (kho || "(trống)"),
+          (kho || "(trống)") +
+          (duanBlock
+            ? "\n\nKHO DỰ ÁN (kiến thức chung ĐÃ XÁC THỰC — dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có trong kho: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Dự án ĐẦU TIÊN là dự án nhà mình đang phân phối trực tiếp — khi khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
+              duanBlock
+            : ""),
         cache_control: { type: "ephemeral" },
       }],
       messages: [{
@@ -299,15 +377,24 @@ Deno.serve(async (req) => {
     await client.from("buyers").update({ name: out.profile.name }).eq("id", buyer.id);
   }
 
+  // Khách hứa gửi gì đó → đặt hẹn nhắc (FR-133)
+  const promise = (out as { promise?: { when: string; what: string } | null }).promise;
+  if (promise?.when && promise?.what) {
+    await client.from("reminders").insert({
+      kind: "promise", buyer_id: buyer.id,
+      due_at: mapDue(promise.when), note: `${promise.what} (hẹn: ${promise.when})`,
+    });
+  }
+
   const replies = out.replies.map((r) => r.trim()).filter(Boolean);
   for (const r of replies) {
     await client.from("messages").insert({
-      conversation_id: conv.id, sender: "bot", body: r,
+      conversation_id: convId, sender: "bot", body: r,
     });
   }
 
   return new Response(
-    JSON.stringify({ reply: replies.join("\n"), replies, conversation_id: conv.id }),
+    JSON.stringify({ reply: replies.join("\n"), replies, conversation_id: convId }),
     { headers: { "Content-Type": "application/json; charset=utf-8" } },
   );
 });
