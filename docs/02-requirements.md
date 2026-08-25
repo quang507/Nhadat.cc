@@ -211,6 +211,7 @@ Phạm vi MVP: **đặt nền dữ liệu**, chưa làm UI giỏ hàng riêng.
 | FR-126 | Tài khoản **người mua tự nguyện** (Google OAuth / magic-link): trang `/tai-khoan` với tin đã xem gần đây (localStorage + đồng bộ `listing_views` khi đăng nhập), khuyến nghị cùng khu + tầm giá quanh tin xem gần nhất, hồ sơ tên/SĐT **không bắt buộc** kèm cam kết "chỉ để CTV gọi xác nhận lịch xem, không chào hàng, xoá được". Luồng Zalo vẫn không hỏi số (BR-06 giữ nguyên ở kênh chat) | S | quyết định chủ dự án 25/08/2026 — chấp nhận nới BR-06 ở kênh web dạng opt-in |
 | FR-127 | Trang `/admin` duyệt tin trên web: danh sách `unverified` → Duyệt (active) / Ẩn (expired), số liệu tổng quan; quyền theo bảng `admins` (email) + RLS `listings_admin_*` — bổ trợ WF-12 (admin email hiện có) | S | quyết định chủ dự án 25/08/2026 |
 | FR-128 | Cột `listings.bedrooms` + lọc "N+ phòng ngủ" trong danh sách; backfill bằng regex từ mô tả (79/173 tin), phần còn lại do bot bóc tách khi hỏi S (INS-06) | S | hoàn thiện FR-123 |
+| FR-129 | **Hỏi nhỏ giọt người bán**: đăng tin xong bot chào + hỏi ĐÚNG MỘT thông tin thiếu ưu tiên nhất; S trả lời → lưu `listing_facts`, đóng câu hỏi, hỏi câu kế trong cùng phiên chat; S im lặng → cron 30 phút nhắc theo nhịp với trần chống spam (không hỏi khi còn câu chờ, ≤3 câu/24h/tin, ≤10 tin/nhịp, chỉ tin <7 ngày hoặc seller có kênh Zalo). Bổ trợ FR-109/FR-40…47, thay chế độ gộp 3 câu khi cần hội thoại kéo dài | M | quyết định chủ dự án 25/08/2026; INS-06, INS-09 |
 
 ---
 
