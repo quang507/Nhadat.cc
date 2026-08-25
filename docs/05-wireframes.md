@@ -197,7 +197,7 @@ Tag rỗng → giữ nguyên bố cục, thay lưới card bằng hộp mời k�
 │ │ Nhã Đạt CC xin cảm ơn! Công ty em  │   │
 │ │ có 30 nhà môi giới túc trực để tìm │   │
 │ │ nhà đất chung cư cho anh/chị.      │   │
-│ │ Em tên là Trai. Em xin tên anh/chị │   │
+│ │ Em tên là Thái. Em xin tên anh/chị │   │
 │ │ để xưng hô cho lễ phép ạ           │   │
 │ └────────────────────────────────────┘   │
 │                        ┌───────────┐     │

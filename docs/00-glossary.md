@@ -13,7 +13,7 @@ nhiều biến thể; cột "Biến thể trong tài liệu gốc" để tra ng�
 | **NMG** | Nhà Môi Giới có hợp đồng môi giới với chủ sở hữu. Phí 0.5%. | môi giới, agent, broker |
 | **CTV** | Cộng Tác Viên của nhadat.cc — người thật, dẫn khách xem nhà, quản lý NMG. Hưởng 0.5%. | cộng tác viên |
 | **Chuyên viên** | Nhân sự nội bộ nhadat.cc xử lý ca chat AI không giải quyết được. | admin, nhân viên |
-| **Trai / Trang AI** | Tên nhân cách hoá của trợ lý AI khi chat. | Trai, Trang AI, nhân viên AI |
+| **Thái** | Tên nhân cách hoá của trợ lý AI khi chat *[đổi 25/08/2026, trước là "Trai"]*. | Thái, Trai [cũ], nhân viên AI |
 
 ## Nghiệp vụ BĐS
 

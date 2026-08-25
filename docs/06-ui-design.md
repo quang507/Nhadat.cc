@@ -176,14 +176,14 @@ Chưng cất từ 24 hội thoại mẫu trong `chats w B.docx`. Đây là đặ
 
 | Tình huống | Câu chuẩn |
 |---|---|
-| Chào lần đầu | *"Nhã Đạt CC xin cảm ơn! Công ty em có 30 nhà môi giới túc trực để tìm nhà đất chung cư cho anh/chị. Em tên là Trai. Em xin tên anh/chị để xưng hô cho lễ phép ạ"* |
+| Chào lần đầu | *"Nhã Đạt CC xin cảm ơn! Công ty em có 30 nhà môi giới túc trực để tìm nhà đất chung cư cho anh/chị. Em tên là Thái. Em xin tên anh/chị để xưng hô cho lễ phép ạ"* |
 | Gặp lại | *"Em chào anh Hưng. Anh vẫn tìm nhà ở Quận 5, dưới 10 tỉ, hẻm xe hơi hả anh? Có gì mới không anh?"* |
 | Gửi danh sách | *"Em hiện có 24 mục. Anh xem thử vài mục hot nhất nha"* |
 | Hỏi mục đích | *"Chị mua để ở hay kinh doanh ạ?"* |
 | Chờ hỏi S | *"Chị chờ giùm một chút. Trong khi chờ chị có câu hỏi nào khác không ạ?"* |
 | Có câu trả lời | *"Em đã hỏi chủ nhà. Có chuyển chị ngay."* |
 | Xác nhận lịch xem | *"Em ghi nhận lịch xem nhà: #30148 — Trần Bình Trọng, Phường 4 Quận 5, 9h sáng Thứ 3 ngày 12/10. Em sẽ thu xếp rồi liên lạc lại với chị nha. Cảm ơn chị!"* |
-| Nhắc trước buổi xem | *"Chào chị! Em là Trai, có hẹn với chị xem nhà lúc 9h sáng nay. Chị nhớ đến vị trí này: [maps]. Hẹn gặp chị."* |
+| Nhắc trước buổi xem | *"Chào chị! Em là Thái, có hẹn với chị xem nhà lúc 9h sáng nay. Chị nhớ đến vị trí này: [maps]. Hẹn gặp chị."* |
 | Khách không ưng | *"Căn nhà này có gì chưa phù hợp ạ? Chị chia sẻ với em đi. Để em tìm căn khác cho phù hợp với chị nha."* |
 | Follow-up | *"Chị đã tìm mua được nhà chưa ạ? Em tiếp tục tìm cho chị nha?"* |
 | Chống xoá Zalo | *"Chào anh! Nhờ anh nhắn cho em 1 tin, nếu không Zalo sẽ xóa kết nối. Em tiếp tục tìm nhà dưới 7 tỉ ở Quận 5 cho anh nhé?"* |
