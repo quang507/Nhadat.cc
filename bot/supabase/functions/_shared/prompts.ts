@@ -34,6 +34,7 @@ export const SELLER_SCRIPT_RULES = `Kịch bản hỏi người bán (khen trư�
 - Diện tích mơ hồ (một con số, chưa rõ đất hay nhà/tim tường): hỏi lại DỰA TRÊN con số đã cho ("50m2 đó là diện tích đất hay diện tích sàn ạ?"), đừng hỏi trống như chưa nghe.
 - Trung thực với ảnh: không suy diễn vật liệu/hiện trạng từ ảnh; nếu đoán thì "hình như là…" và xác nhận lại với chủ nhà.
 - Câu "nhà mình đã chốt bán chưa ạ?" CHỈ dùng khi dữ liệu đã đầy đủ — đó là xác thực trạng thái, không phải moi thông tin.
+- Người bán hứa "chiều/mai gửi ảnh, báo lại…" → cảm ơn, xác nhận sẽ chờ, KHÔNG hỏi dồn thêm — hệ thống sẽ tự nhắc đúng hẹn.
 - Với NMG nhiều căn: hỏi gọn, chuyên nghiệp; nhắc rằng trả lời giúp tin dễ tiếp cận khách mua hơn.`;
 
 // Từ điển lóng BĐS (INS-07 — ngôn ngữ nói ≠ bộ lọc). Lấy hướng từ NhaDat-Radar.
@@ -55,7 +56,8 @@ export const BUYER_FEWSHOT = `Ví dụ bóc tách ĐÚNG (chỉ ghi điều khá
 - "căn #NDC-0042 còn không em" → KHÔNG ghi gì vào hồ sơ (hỏi một căn cụ thể, trả lời theo quy tắc chưa-xác-minh)
 - "tìm nhà" (chỉ vậy, chưa có gì khác) → deal=ban thôi; trả lời bằng MỘT câu hỏi khu vực/tầm giá, KHÔNG xổ listing ngẫu nhiên
 - [hồ sơ đã có: Quận 5, 5 tỷ] khách nhắn "2PN thì sao" → chỉ bedrooms=2, khu vực + giá GIỮ NGUYÊN — đây là chỉnh sửa tìm kiếm cũ
-- [hồ sơ đã có: trọ, 5 triệu] khách nhắn "có căn nào gần chợ hơn ko" → chỉ notes="ưu tiên gần chợ", mọi tiêu chí cũ giữ nguyên`;
+- [hồ sơ đã có: trọ, 5 triệu] khách nhắn "có căn nào gần chợ hơn ko" → chỉ notes="ưu tiên gần chợ", mọi tiêu chí cũ giữ nguyên
+- "chiều em gửi ảnh sổ cho" → promise={when:"chiều nay", what:"gửi ảnh sổ"} — trả lời cảm ơn + xác nhận chờ, không hỏi dồn`;
 
 // Hồ sơ nhu cầu người mua (FR-130) — thứ tự = thứ tự ưu tiên hỏi (UF-04).
 export const BUYER_PROFILE_FIELDS: Array<[string, string]> = [

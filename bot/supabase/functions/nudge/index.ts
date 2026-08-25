@@ -1,0 +1,156 @@
+// nudge — FR-133: hai loại "cú hích" chạy theo cron nudge-tick (30 phút):
+// 1. promise: người ta hứa "chiều gửi ảnh/thông tin" → tới hẹn nhắc khéo MỘT tin.
+// 2. reengage: buyer im lặng 5-6 ngày → hỏi thăm ngắn, kịch bản đa dạng (góc
+//    ngẫu nhiên + tránh lặp 2 tin bot gần nhất), trước mốc Zalo xoá 7 ngày (INS-03).
+// POST {} (cron) | { dry_run?: bool } — trả về tóm tắt việc đã làm.
+import Anthropic from "npm:@anthropic-ai/sdk";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { TONE_RULES } from "../_shared/prompts.ts";
+
+const MODEL = "claude-opus-5";
+
+function db(): SupabaseClient {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+}
+
+async function secret(client: SupabaseClient, name: string): Promise<string | null> {
+  const fromEnv = Deno.env.get(name);
+  if (fromEnv) return fromEnv;
+  const { data } = await client.rpc("get_secret", { secret_name: name });
+  return (data as string) ?? null;
+}
+
+async function sendZalo(token: string, userId: string, text: string): Promise<boolean> {
+  const r = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", access_token: token },
+    body: JSON.stringify({ recipient: { user_id: userId }, message: { text } }),
+  });
+  const j = await r.json().catch(() => ({}));
+  return j?.error === 0;
+}
+
+// Kịch bản đa dạng cho reengage — chọn ngẫu nhiên, đổi góc mỗi lần
+const ANGLES = [
+  "hỏi thăm tiến độ tìm nhà, nhẹ nhàng, không thúc ép",
+  "hỏi xem tiêu chí có gì thay đổi không (giá/khu vực/loại nhà)",
+  "nhắc khéo giữ kết nối Zalo (nhắn lại một tin kẻo Zalo tự ngắt), kèm cam kết vẫn đang tìm giúp",
+  "kể MỘT quan sát thị trường ngắn gọn thật thà (ví dụ khu người ta hay hỏi gần đây) rồi hỏi còn quan tâm không",
+];
+
+Deno.serve(async (req) => {
+  if (req.method !== "POST") return new Response("POST only", { status: 405 });
+  const { dry_run = false } = await req.json().catch(() => ({}));
+  const client = db();
+  const apiKey = await secret(client, "ANTHROPIC_API_KEY");
+  const anthropic = new Anthropic({ apiKey: apiKey! });
+  const oaToken = await secret(client, "ZALO_OA_ACCESS_TOKEN");
+  const out: Record<string, unknown>[] = [];
+
+  // ---- 1. Lời hứa tới hạn ----
+  const { data: due } = await client
+    .from("reminders")
+    .select("id, kind, note, buyer_id, seller_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id)")
+    .eq("status", "pending").eq("kind", "promise")
+    .lte("due_at", new Date().toISOString())
+    .limit(5);
+
+  for (const r of due ?? []) {
+    const who = (r.buyers ?? r.sellers) as { name?: string | null; zalo_user_id?: string | null } | null;
+    const resp = await anthropic.messages.create({
+      model: MODEL, max_tokens: 256,
+      output_config: { effort: "low" },
+      system: [{ type: "text", text: TONE_RULES, cache_control: { type: "ephemeral" } }],
+      messages: [{
+        role: "user",
+        content:
+          `${who?.name ? `Anh/chị ${who.name}` : "Khách"} có hứa: "${r.note}". Giờ đã tới hẹn. ` +
+          `Soạn MỘT tin Zalo RẤT NGẮN (~20 từ) nhắc khéo — thân thiện, KHÔNG trách móc, cho đường lùi ("khi nào tiện anh/chị gửi em nha").`,
+      }],
+    });
+    const text = resp.content.find((b) => b.type === "text")?.text?.trim();
+    if (!text) continue;
+
+    let sent = "none";
+    if (!dry_run) {
+      if (who?.zalo_user_id && oaToken && !who.zalo_user_id.startsWith("TEST")) {
+        sent = (await sendZalo(oaToken, who.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
+      }
+      if (r.buyer_id) {
+        const { data: conv } = await client.from("conversations").select("id")
+          .eq("buyer_id", r.buyer_id).order("started_at", { ascending: false }).limit(1).maybeSingle();
+        if (conv) await client.from("messages").insert({ conversation_id: conv.id, sender: "bot", body: text });
+      }
+      await client.from("reminders")
+        .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);
+    }
+    out.push({ kind: "promise", id: r.id, text, sent });
+  }
+
+  // ---- 2. Buyer im lặng 5-6 ngày ----
+  const now = Date.now();
+  const { data: quiet } = await client
+    .from("buyers")
+    .select("id, name, zalo_user_id, preferences, last_contact_at")
+    .gte("last_contact_at", new Date(now - 7 * 864e5).toISOString())
+    .lte("last_contact_at", new Date(now - 5 * 864e5).toISOString())
+    .limit(20);
+
+  let reengaged = 0;
+  for (const b of quiet ?? []) {
+    if (reengaged >= 5) break;
+    // chống spam: đã hỏi thăm trong 5 ngày qua thì thôi
+    const { count } = await client.from("reminders")
+      .select("id", { count: "exact", head: true })
+      .eq("buyer_id", b.id).eq("kind", "reengage")
+      .gte("created_at", new Date(now - 5 * 864e5).toISOString());
+    if ((count ?? 0) > 0) continue;
+
+    const { data: conv } = await client.from("conversations").select("id")
+      .eq("buyer_id", b.id).order("started_at", { ascending: false }).limit(1).maybeSingle();
+    let lastBot: string[] = [];
+    if (conv) {
+      const { data: msgs } = await client.from("messages").select("body")
+        .eq("conversation_id", conv.id).eq("sender", "bot")
+        .order("created_at", { ascending: false }).limit(2);
+      lastBot = (msgs ?? []).map((m) => m.body);
+    }
+    const angle = ANGLES[Math.floor(Math.random() * ANGLES.length)];
+
+    const resp = await anthropic.messages.create({
+      model: MODEL, max_tokens: 256,
+      output_config: { effort: "low" },
+      system: [{ type: "text", text: TONE_RULES, cache_control: { type: "ephemeral" } }],
+      messages: [{
+        role: "user",
+        content:
+          `Khách${b.name ? ` tên ${b.name}` : ""} là NGƯỜI MUA đang TÌM nhà (họ KHÔNG bán — đừng nhầm vai). Hồ sơ nhu cầu tìm mua: ${JSON.stringify(b.preferences ?? {})}. Im lặng ~5-6 ngày.\n` +
+          `Hai tin gần nhất em đã gửi (TRÁNH lặp giọng/mẫu): ${JSON.stringify(lastBot)}.\n` +
+          `Soạn MỘT tin Zalo NGẮN (1-2 câu) theo góc: ${angle}. Nhắc đúng nhu cầu cũ nếu có. Kết thúc bằng một câu hỏi nhẹ.`,
+      }],
+    });
+    const text = resp.content.find((bk) => bk.type === "text")?.text?.trim();
+    if (!text) continue;
+
+    let sent = "none";
+    if (!dry_run) {
+      if (b.zalo_user_id && oaToken && !b.zalo_user_id.startsWith("TEST")) {
+        sent = (await sendZalo(oaToken, b.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
+      }
+      if (conv) await client.from("messages").insert({ conversation_id: conv.id, sender: "bot", body: text });
+      await client.from("reminders").insert({
+        kind: "reengage", buyer_id: b.id, due_at: new Date().toISOString(),
+        note: angle, status: "sent", sent_at: new Date().toISOString(),
+      });
+    }
+    reengaged++;
+    out.push({ kind: "reengage", buyer: b.id, angle, text, sent });
+  }
+
+  return new Response(JSON.stringify({ done: out.length, dry_run, results: out }), {
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+});

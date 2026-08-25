@@ -36,6 +36,25 @@ function regexProfileFallback(text: string): Record<string, string> {
   return delta;
 }
 
+// FR-133: "chiều/mai/tối… em gửi" → hẹn giờ nhắc (giờ VN = UTC+7)
+function mapDue(when: string): string {
+  const t = when.toLowerCase();
+  const now = Date.now();
+  const vn = new Date(now + 7 * 3600e3);
+  let day = 0;
+  if (/mai|hôm sau/.test(t)) day = 1;
+  let hour = 15;
+  if (/sáng/.test(t)) hour = 9;
+  else if (/trưa/.test(t)) hour = 12;
+  else if (/tối/.test(t)) hour = 19;
+  else if (/cuối tuần/.test(t)) { day = ((6 - vn.getUTCDay()) + 7) % 7 || 6; hour = 10; }
+  let due = Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate() + day, hour - 7);
+  if (due <= now) due = now + 2 * 3600e3; // đã qua giờ đó → nhắc sau 2 tiếng
+  return new Date(due).toISOString();
+}
+// Regex bắt lời hứa cho nhánh seller (không qua parse có cấu trúc)
+const PROMISE_RE = /(sáng mai|chiều|tối|trưa|mai|cuối tuần)[^.,;!?]{0,30}?(gửi|chụp|báo|đưa|bổ sung|cho em|check|coi lại)|(gửi|chụp|báo|đưa|bổ sung|check|coi lại)[^.,;!?]{0,30}?(sáng mai|chiều|tối|trưa|mai|cuối tuần)/i;
+
 const MODEL = "claude-opus-5";
 
 function db(): SupabaseClient {
@@ -69,6 +88,10 @@ const BuyerTurn = z.object({
   }).describe("CHỈ ghi điều khách NÓI RÕ trong hội thoại. Không suy diễn. Chưa biết để null."),
   replies: z.array(z.string()).min(1).max(2)
     .describe("1-2 bong bóng tin nhắn gửi khách, theo đúng nhịp nhắn giống người"),
+  promise: z.object({
+    when: z.string().describe("Mốc hẹn nguyên văn: 'chiều nay', 'mai', 'tối', 'cuối tuần'…"),
+    what: z.string().describe("Khách hứa làm gì: 'gửi ảnh sổ', 'báo lại tài chính'…"),
+  }).nullable().describe("CHỈ điền khi khách chủ động hứa sẽ gửi/báo gì đó vào một mốc thời gian. Không suy diễn."),
 });
 
 Deno.serve(async (req) => {
@@ -98,6 +121,16 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(1).maybeSingle();
 
+    // Seller quay lại nhắn → hủy nhắc-lời-hứa đang chờ (FR-133)
+    await client.from("reminders").update({ status: "cancelled" })
+      .eq("seller_id", sellerRow.id).eq("kind", "promise").eq("status", "pending");
+    // Seller hứa "chiều gửi ảnh…" → đặt hẹn nhắc
+    if (PROMISE_RE.test(text)) {
+      await client.from("reminders").insert({
+        kind: "promise", seller_id: sellerRow.id,
+        due_at: mapDue(text), note: text.slice(0, 200),
+      });
+    }
     if (pendingReq) {
       await client.from("listing_facts").insert({
         listing_id: pendingReq.listing_id,
@@ -199,6 +232,10 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json; charset=utf-8" },
     });
   }
+
+  // Buyer quay lại nhắn → hủy nhắc-lời-hứa đang chờ (FR-133)
+  await client.from("reminders").update({ status: "cancelled" })
+    .eq("buyer_id", buyer.id).eq("kind", "promise").eq("status", "pending");
 
   // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN
   let khoQ = client
@@ -338,6 +375,15 @@ Deno.serve(async (req) => {
   }
   if (out.profile.name && !buyer.name) {
     await client.from("buyers").update({ name: out.profile.name }).eq("id", buyer.id);
+  }
+
+  // Khách hứa gửi gì đó → đặt hẹn nhắc (FR-133)
+  const promise = (out as { promise?: { when: string; what: string } | null }).promise;
+  if (promise?.when && promise?.what) {
+    await client.from("reminders").insert({
+      kind: "promise", buyer_id: buyer.id,
+      due_at: mapDue(promise.when), note: `${promise.what} (hẹn: ${promise.when})`,
+    });
   }
 
   const replies = out.replies.map((r) => r.trim()).filter(Boolean);
