@@ -642,9 +642,11 @@ Deno.serve(async (req) => {
             : []),
           { type: "text" as const, text:
           `HỒ SƠ ĐÃ BIẾT về khách${buyer.name ? ` (tên: ${buyer.name})` : ""}:\n${known || "(chưa biết gì)"}\n\n` +
-          `CÒN THIẾU (thứ tự ưu tiên hỏi, mỗi lượt chỉ hỏi MỘT):\n${missing || "(đã đủ)"}\n\n` +
           (minimumMet
-            ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) — được gợi ý căn khớp hồ sơ.\n"
+            ? `CHƯA BIẾT (chỉ NHẶT khi khách tự kể hoặc khi khách chê căn vừa gửi, TUYỆT ĐỐI không hỏi chủ động — đủ khu vực + giá là ngừng dò hồ sơ):\n${missing || "(đã đủ)"}\n\n`
+            : `CÒN THIẾU (hỏi theo thứ tự ưu tiên; gộp 2-3 ý vào MỘT câu hỏi liền mạch cũng được, đừng thành bảng hỏi):\n${missing || "(đã đủ)"}\n\n`) +
+          (minimumMet
+            ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) — NGỪNG hỏi hồ sơ, chuyển sang gợi ý căn khớp và để khách dẫn chuyện.\n"
             : "CHƯA đủ tiêu chí tối thiểu (khu vực + giá) — chưa gợi ý căn trừ khi khách hỏi thẳng một căn.\n") +
           (interrogated
             ? "Hai tin trước em đều đã đặt câu hỏi — lượt này ĐƯA GIÁ TRỊ trước (gợi ý/thông tin), hỏi thật nhẹ hoặc không hỏi.\n"
