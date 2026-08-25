@@ -12,7 +12,7 @@ import {
   MODEL,
   serviceClient,
 } from "../_shared/claude.ts";
-import { FACT_LABELS, TONE_RULES } from "../_shared/prompts.ts";
+import { FACT_LABELS, SELLER_SCRIPT_RULES, TONE_RULES } from "../_shared/prompts.ts";
 
 const OutSchema = z.object({
   message: z.string().describe("Tin nhắn Zalo gửi người bán, tiếng Việt"),
@@ -88,9 +88,9 @@ Deno.serve(async (req) => {
 
   const instruction = drip
     ? (isFirst
-        ? `Soạn MỘT tin nhắn Zalo NGẮN (tối đa 3 câu) gửi người bán ngay sau khi họ vừa đăng tin: cảm ơn đã gửi tin, báo tin đang được xử lý, rồi hỏi ĐÚNG MỘT câu về thông tin dưới đây. Không hỏi gì khác.`
-        : `Soạn MỘT tin nhắn Zalo RẤT NGẮN (1-2 câu) hỏi tiếp ĐÚNG MỘT thông tin dưới đây, giọng nối tiếp cuộc trò chuyện đang có (ví dụ mở đầu "Dạ em hỏi thêm xíu:"). Không chào lại từ đầu, không hỏi gì khác.`)
-    : `Soạn MỘT tin nhắn Zalo gửi người bán để xin bổ sung thông tin cho tin rao: gộp hết vào một tin duy nhất, mỗi thông tin một câu hỏi rõ ràng, mở đầu chào đúng tone, nói rõ "có khách đang hỏi" để tạo động lực trả lời, kết thúc bằng lời cảm ơn + câu hỏi. Không hỏi gì ngoài danh sách.`;
+        ? `Soạn MỘT tin nhắn Zalo NGẮN (~30 từ) gửi người bán ngay sau khi họ vừa đăng tin: cảm ơn, KHEN một điểm mạnh thật của tin rao (vị trí/hẻm/giá…), rồi hỏi ĐÚNG MỘT câu về thông tin dưới đây. Không hỏi gì khác.`
+        : `Soạn MỘT tin nhắn Zalo RẤT NGẮN (1-2 câu, ~30 từ) hỏi tiếp ĐÚNG MỘT thông tin dưới đây, giọng nối tiếp cuộc trò chuyện đang có, kèm lý do vì-khách khi tự nhiên ("khách mua đang hỏi…"). Không chào lại từ đầu, không hỏi gì khác.`)
+    : `Soạn MỘT tin nhắn Zalo gửi người bán để xin bổ sung thông tin cho tin rao: gộp hết vào một tin duy nhất, mỗi thông tin một câu hỏi rõ ràng, mở đầu chào đúng tone + khen một điểm mạnh của tin, nói rõ "có khách đang hỏi" để tạo động lực trả lời, kết thúc bằng lời cảm ơn + câu hỏi. Không hỏi gì ngoài danh sách.`;
 
   const anthropic = await anthropicClient(db);
   const resp = await anthropic.messages.parse({
@@ -100,7 +100,11 @@ Deno.serve(async (req) => {
       effort: "medium",
       format: zodOutputFormat(OutSchema),
     },
-    system: [{ type: "text", text: TONE_RULES, cache_control: { type: "ephemeral" } }],
+    system: [{
+      type: "text",
+      text: TONE_RULES + "\n\n" + SELLER_SCRIPT_RULES,
+      cache_control: { type: "ephemeral" },
+    }],
     messages: [{
       role: "user",
       content:

@@ -24,6 +24,17 @@ export const HUMAN_CHAT_RULES = `Nhịp nhắn giống người:
 - Được tách tối đa 2 bong bóng (mảng replies): bong bóng đầu phản hồi/đồng cảm ngắn, bong bóng sau nội dung chính + câu hỏi. Tin đơn giản thì 1 bong bóng là đủ.
 - Số viết kiểu nói: "5 tỷ", "60m2", "hẻm 4m". Không viết "5.000.000.000 VNĐ".`;
 
+// Kịch bản người bán — chưng cất "AOND req + chat examples.docx" (Luân Ngô-Trần,
+// 23/06/2026) §I-II + Phần I-II. Ghi ở docs/06 §6.8 "Kịch bản người bán".
+export const SELLER_SCRIPT_RULES = `Kịch bản hỏi người bán (khen trước — hỏi sau):
+- KHEN một điểm mạnh thật của BĐS trước ("vị trí trung tâm quá anh ơi!", "xe hơi tới cửa là điểm cộng cực lớn"), rồi mới hỏi ĐÚNG MỘT thông tin. Không bắt điền form.
+- Tin thu thập giữ NGẮN ~30 từ. Chỉ khi người bán yêu cầu "xem lại tin/đăng đầy đủ" mới soạn bài dài.
+- Nêu lý do VÌ KHÁCH để tạo động lực trả lời: "khách mua đang hỏi…", "để em nhấn mạnh vào bài giới thiệu…".
+- Diện tích mơ hồ (một con số, chưa rõ đất hay nhà/tim tường): hỏi lại DỰA TRÊN con số đã cho ("50m2 đó là diện tích đất hay diện tích sàn ạ?"), đừng hỏi trống như chưa nghe.
+- Trung thực với ảnh: không suy diễn vật liệu/hiện trạng từ ảnh; nếu đoán thì "hình như là…" và xác nhận lại với chủ nhà.
+- Câu "nhà mình đã chốt bán chưa ạ?" CHỈ dùng khi dữ liệu đã đầy đủ — đó là xác thực trạng thái, không phải moi thông tin.
+- Với NMG nhiều căn: hỏi gọn, chuyên nghiệp; nhắc rằng trả lời giúp tin dễ tiếp cận khách mua hơn.`;
+
 // Từ điển lóng BĐS (INS-07 — ngôn ngữ nói ≠ bộ lọc). Lấy hướng từ NhaDat-Radar.
 export const SLANG_NOTES = `Từ điển lóng khách hay dùng (hiểu đúng, đừng hỏi lại nghĩa):
 - "tỏi" = tỷ ("5 tỏi" = 5 tỷ); "củ" = triệu; "TL" = thương lượng; "ngộp" = chủ kẹt tiền cần bán gấp.

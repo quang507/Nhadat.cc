@@ -24,6 +24,8 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-17 | Định dạng mã công khai listing (#35148 vs BDS-Q5-0012) | Thấp | Copy web + chat |
 | OPEN-18 | Kho file: Supabase Storage vs OneDrive (qua adapter) | Trung bình | FR-111, NFR-06 |
 | OPEN-19 | ~~3 công cụ B-side kiểu radanhadat~~ **Đã chốt (b)** 25/08/2026 — tính lãi vay làm rồi (FR-119, port NhaDat-Radar); quy hoạch không tự khẳng định; thời gian di chuyển để giai đoạn 2 | — | FR-119 |
+| OPEN-20 | Gamification điểm uy tín người rao (Đồng/Bạc/Vàng) theo AOND — có đem vào nhadat.cc không | Trung bình | FR-102, FR-103 |
+| OPEN-21 | Vai người rao 5 loại (CĐT/sàn/NMG/lướt sóng/chủ nhà) + phí riêng cho CĐT — mở rộng nhị phân CCRB/NMG? | Trung bình | BR-05, FR-101 |
 
 ---
 
@@ -230,3 +232,40 @@ theo nguồn dữ liệu/chi phí riêng: routing API (Goong/Mapbox), dữ liệ
 món rẻ nhất (tính khoản vay trong chat); (c) làm cả ba.
 **Khuyến nghị**: (a) cho quy hoạch (rủi ro khẳng định sai — chuyển thành câu hỏi
 cho S theo INS-06), (b) cho khoản vay; thời gian di chuyển để giai đoạn 2.
+
+### OPEN-20 · Gamification điểm uy tín người rao (theo AOND)
+
+**Nguồn**: `AOND req + chat examples.docx` §IV (SRD "AI Ơi Nhà Đất", Luân
+Ngô-Trần, 23/06/2026) — dự án chị em cùng chủ. AOND chấm **Điểm Uy tín người
+rao** = trung bình điểm các BĐS đang rao × hệ số thưởng quy mô (NMG càng nhiều
+căn thưởng lũy tiến càng chậm); điểm BĐS = 50% độ hoàn chỉnh dữ liệu + 50% độ
+kịp thời phản hồi; hạng **Đồng** (<50đ, giới hạn 5 căn) / **Bạc** (50–79đ) /
+**Vàng** (≥80đ, ưu tiên chuyển khách nét). Kịch bản chat gắn điểm vào từng câu
+hỏi ("bổ sung ảnh bếp để cộng 5 điểm").
+**Quan hệ với nhadat.cc**: FR-102 (chấm điểm NMG, đang treo OPEN-12) và FR-103
+(không spam S) đã chạm một phần; nhadat-bot có sẵn `ratings` + độ đo
+`listing_missing_facts` — nghĩa là 50% "độ hoàn chỉnh" tính được ngay.
+**Phương án**: (a) không làm MVP, chỉ giữ số liệu ngầm (đếm fact đủ/thiếu, tốc
+độ trả lời) để sau này quy đổi điểm; (b) làm điểm + hạng nhưng **không nói ra
+trong chat** (dùng nội bộ xếp ưu tiên CTV/khách nét); (c) làm đầy đủ như AOND,
+điểm hiện trong tin nhắn.
+**Khuyến nghị**: (a) → (b). Đo ngầm từ bây giờ (rẻ), quyết định "nói ra trong
+chat" sau khi có ≥20 NMG thật — nói điểm sớm quá với ít người dùng dễ thành trò
+đùa. (c) chỉ khi hai dự án hợp nhất cơ chế.
+
+### OPEN-21 · Vai người rao 5 loại + phí riêng cho chủ đầu tư
+
+**Nguồn**: `AOND req + chat examples.docx` §V + `docs/data-model.md` AOND (kiến
+thức ngành 24/06/2026). Thực tế có 5 vai: **chủ đầu tư** (bán sơ cấp — thường
+trả hoa hồng cho sàn/môi giới, KHÔNG trả phí 1% như chính chủ), **sàn giao
+dịch** (phân phối F1), **NMG**, **nhà đầu tư lướt sóng** (giữ HĐMB, bán chênh),
+**chủ nhà** (=CCRB). Nhị phân CCRB 1% / NMG 0.5% của BR-05 là đơn giản hóa: map
+= bên sở hữu (chủ nhà, lướt sóng) vs bên môi giới (sàn, NMG); CĐT là ca đặc
+biệt phải thoả thuận riêng, bot **không được tự báo con số phí** khi gặp CĐT.
+Hệ quả hành vi bot: hỏi theo giai đoạn dự án (chưa bàn giao sổ → hỏi HĐMB/mức
+chênh, KHÔNG đòi sổ hồng; mở bán → hỏi theo mẫu căn).
+**Phương án**: (a) giữ nhị phân, thêm cờ `là CĐT?` để bot né báo phí; (b) mở
+rộng `seller_type` thành 5 vai + luật hỏi theo giai đoạn (FR-113…117 đã có nền
+hàng dự án); (c) chờ gặp CĐT thật mới quyết.
+**Khuyến nghị**: (a) ngay (một cột + một câu luật trong prompt, chặn rủi ro báo
+phí sai), (b) khi có dự án sơ cấp đầu tiên vào kho.

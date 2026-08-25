@@ -35,6 +35,7 @@ Quy trình cập nhật tài liệu: [`.claude/skills/ba-pipeline/SKILL.md`](.cl
 | `demo2Vitalify.docx` | Concept gốc (tiếng Anh) |
 | `OKRs eo2024.pptx` | Định vị "the permanent agent of agents" |
 | `dự kiến vốn 6 tháng đầu.xlsx` | Ngân sách 6 tháng (800tr) |
+| `AOND req + chat examples.docx` | SRD "AI Ơi Nhà Đất" + thư viện kịch bản người bán (dự án chị em, Luân Ngô-Trần) |
 | `Vedoo pages/` | Ảnh chụp theme tham chiếu Veedoo |
 | `hình samples/` | Ảnh listing mẫu |
 | `.claude/` | Cấu hình Claude Code của dự án |

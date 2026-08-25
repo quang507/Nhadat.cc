@@ -206,6 +206,31 @@ Chưng cất từ 24 hội thoại mẫu trong `chats w B.docx`. Đây là đặ
 
 [nguồn: quyết định chủ dự án 25/08/2026; chưng cất `chats w B.docx`]
 
+### Kịch bản người bán — khen trước, hỏi sau (FR-129)
+
+Chưng cất từ `AOND req + chat examples.docx` (SRD "AI Ơi Nhà Đất" + thư viện
+kịch bản, Luân Ngô-Trần, 23/06/2026) — dự án chị em cùng chủ, dùng làm chuẩn
+văn phong hỏi nhỏ giọt người bán:
+
+- **Khen một điểm mạnh thật trước, hỏi sau**: *"Nhà mình hẻm 123 X vị trí trung
+  tâm quá anh ơi! Hẻm trước nhà mình rộng khoảng mấy mét, ô tô vào lọt không anh?"*
+- **Tin thu thập ~30 từ**; chỉ khi S yêu cầu "xem lại tin/đăng đầy đủ" mới soạn dài.
+- **Lý do vì-khách** tạo động lực trả lời: *"khách mua đang hỏi…"*, *"để em nhấn
+  mạnh vào bài giới thiệu…"*.
+- **Diện tích mơ hồ** (một con số, chưa rõ đất/nhà): hỏi lại dựa trên con số đã
+  cho, không hỏi trống như chưa nghe.
+- **Trung thực với ảnh**: không suy diễn vật liệu/hiện trạng từ ảnh; đoán thì
+  *"hình như là…"* + xác nhận lại (khớp quy tắc 4 — RSK-03).
+- **"Nhà mình đã chốt bán chưa ạ?"** chỉ hỏi khi dữ liệu đã đầy đủ — là xác thực
+  trạng thái (keep-alive INS-03), không phải moi thông tin.
+- **NMG rổ nhiều căn**: mỗi ngày hỏi tối đa **1–2 căn** mỗi seller (chống spam
+  INS-09) — đã cài vào `seller_drip_tick`; trả lời 1 căn = gia hạn cửa sổ Zalo.
+
+Khác biệt giữ nguyên theo nhadat.cc: tối đa 1 emoji/tin (AOND dùng 🎉✨ thoải mái
+hơn — không theo); xưng hô và 7 quy tắc §6.8 vẫn là luật gốc khi hai bản vênh nhau.
+
+[nguồn: AOND req + chat examples.docx §I–II, Phần I–II]
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |

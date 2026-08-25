@@ -13,6 +13,7 @@ import {
   BUYER_PROFILE_FIELDS,
   FACT_LABELS,
   HUMAN_CHAT_RULES,
+  SELLER_SCRIPT_RULES,
   SLANG_NOTES,
   TONE_RULES,
 } from "../_shared/prompts.ts";
@@ -123,12 +124,16 @@ Deno.serve(async (req) => {
       const apiKey2 = await secret(client, "ANTHROPIC_API_KEY");
       const anthropic2 = new Anthropic({ apiKey: apiKey2! });
       const prompt = next
-        ? `Người bán vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}". Soạn MỘT tin RẤT NGẮN (1-2 câu): cảm ơn/ghi nhận tự nhiên, rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[next.fact_key] ?? next.fact_key}. Không hỏi gì khác.`
+        ? `Người bán vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}". Soạn MỘT tin RẤT NGẮN (~30 từ): ghi nhận/khen tự nhiên câu trả lời (điểm mạnh thật của nhà nếu có), rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[next.fact_key] ?? next.fact_key}. Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
         : `Người bán vừa trả lời câu hỏi cuối: "${text}". Soạn MỘT tin NGẮN cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem anh chị còn muốn bổ sung gì không.`;
       const r2 = await anthropic2.messages.create({
         model: MODEL, max_tokens: 512,
         output_config: { effort: "medium" },
-        system: [{ type: "text", text: TONE_RULES, cache_control: { type: "ephemeral" } }],
+        system: [{
+          type: "text",
+          text: TONE_RULES + "\n\n" + SELLER_SCRIPT_RULES,
+          cache_control: { type: "ephemeral" },
+        }],
         messages: [{ role: "user", content: prompt }],
       });
       const sellerReply = r2.content.find((b) => b.type === "text")?.text?.trim() ?? null;
