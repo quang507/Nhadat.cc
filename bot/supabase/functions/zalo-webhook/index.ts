@@ -65,10 +65,11 @@ async function handleEvent(raw: string): Promise<void> {
   if (!accessToken) return; // chưa cấu hình OA — chỉ ghi log (đã lưu messages)
 
   // FR-130: phản ứng nhanh trước, nội dung sau — bong bóng ĐẦU gửi gần như ngay
-  // (khách thấy được đáp liền), các bong bóng sau trễ theo độ dài như người gõ.
+  // (khách thấy được đáp liền), các bong bóng sau trễ nhẹ theo độ dài (model
+  // vốn đã mất vài giây, đừng cộng thêm nhiều nữa).
   for (const [i, bubble] of bubbles.entries()) {
     await new Promise((r) =>
-      setTimeout(r, i === 0 ? 400 : Math.min(800 + bubble.length * 25, 4000)));
+      setTimeout(r, i === 0 ? 250 : Math.min(600 + bubble.length * 15, 2000)));
     const send = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
       method: "POST",
       headers: { "Content-Type": "application/json", access_token: accessToken },

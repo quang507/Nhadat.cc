@@ -241,7 +241,7 @@ Deno.serve(async (req) => {
         : `Người bán vừa trả lời câu hỏi cuối: "${text}". Soạn MỘT tin NGẮN cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem anh chị còn muốn bổ sung gì không.`;
       const r2 = await anthropicS.messages.create({
         model: MODEL, max_tokens: 512,
-        output_config: { effort: "medium" },
+        output_config: { effort: "low" },
         system: [{
           type: "text",
           text: TONE + "\n\n" + SELLER_SCRIPT,
@@ -332,9 +332,11 @@ Deno.serve(async (req) => {
   await client.from("conversations")
     .update({ last_message_at: new Date().toISOString() }).eq("id", convId);
 
-  // FR-131: gộp tin gõ vụn — đợi ~4.5s; nếu khách đã nhắn tiếp trong lúc đợi
-  // thì nhường lượt (tin cuối chùm sẽ trả lời trên toàn bộ ngữ cảnh gộp).
-  await new Promise((r) => setTimeout(r, 4500));
+  // FR-131: gộp tin gõ vụn — debounce THÍCH ỨNG: tin ngắn cụt không dấu kết câu
+  // ("tìm nhà", "quận 10") là kiểu đang gõ tiếp → đợi 3.5s gom chùm; tin đủ ý
+  // thì chỉ đợi 1.5s cho đỡ chậm. Có tin mới hơn trong lúc đợi thì nhường lượt.
+  const looksFragment = text.length > 0 && text.length < 18 && !/[?.!…]$/.test(text);
+  await new Promise((r) => setTimeout(r, looksFragment ? 3500 : 1500));
   const { data: newest } = await client
     .from("messages").select("id")
     .eq("conversation_id", convId).eq("sender", "buyer")
@@ -463,11 +465,19 @@ Deno.serve(async (req) => {
     const resp = await anthropic.messages.parse({
       model: MODEL,
       max_tokens: 1024,
-      output_config: { effort: "medium", format: zodOutputFormat(BuyerTurn) },
+      // effort low: nhanh hơn rõ rệt, few-shot + luật đã gánh chất lượng (nudge
+      // chạy low được chấm 4.5-4.7/5); cần sâu hơn thì nâng lại "medium"
+      output_config: { effort: "low", format: zodOutputFormat(BuyerTurn) },
+      // Tách 2 khối: khối LUẬT ổn định được cache (đỡ ~7KB prefill mỗi lượt);
+      // khối KHO biến động theo hồ sơ nằm SAU điểm cache nên không phá cache.
       system: [{
         type: "text",
         text: TONE + "\n\n" + HUMAN + "\n\n" + FEES + "\n\n" + SLANG + "\n\n" + FEWSHOT +
-          "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO dưới đây, không bịa.\n\nKHO HIỆN CÓ:\n" +
+          "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO ở khối sau, không bịa.",
+        cache_control: { type: "ephemeral" },
+      }, {
+        type: "text",
+        text: "KHO HIỆN CÓ:\n" +
           (kho || "(trống)") +
           (askedBlock
             ? "\n\nCĂN KHÁCH ĐANG NHẮC TỚI (khách vào từ web hoặc gõ mã — chào ĐÚNG căn này, trả lời thẳng vào nó; mục 'đã xác minh từ chủ nhà' được nói chắc, còn lại vẫn 'để em hỏi lại'):\n" +
@@ -477,7 +487,6 @@ Deno.serve(async (req) => {
             ? "\n\nKHO DỰ ÁN (kiến thức chung ĐÃ XÁC THỰC — dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có trong kho: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Dự án ĐẦU TIÊN là dự án nhà mình đang phân phối trực tiếp — khi khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
               duanBlock
             : ""),
-        cache_control: { type: "ephemeral" },
       }],
       messages: [{
         role: "user",
