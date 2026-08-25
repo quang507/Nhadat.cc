@@ -23,7 +23,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-16 | ~~Có cần CRM riêng không?~~ **Đã chốt (b)** — bảng deals, không CRM ngoài | — | OPEN-02 |
 | OPEN-17 | Định dạng mã công khai listing (#35148 vs BDS-Q5-0012) | Thấp | Copy web + chat |
 | OPEN-18 | Kho file: Supabase Storage vs OneDrive (qua adapter) | Trung bình | FR-111, NFR-06 |
-| OPEN-19 | Có làm 3 công cụ B-side kiểu radanhadat (thời gian di chuyển, quy hoạch, tài chính) dạng trả lời trong chat không, giai đoạn nào | Thấp | docs/01 §1.5b |
+| OPEN-19 | ~~3 công cụ B-side kiểu radanhadat~~ **Đã chốt (b)** 25/08/2026 — tính lãi vay làm rồi (FR-119, port NhaDat-Radar); quy hoạch không tự khẳng định; thời gian di chuyển để giai đoạn 2 | — | FR-119 |
 
 ---
 
@@ -212,6 +212,14 @@ lạnh (ảnh gốc dung lượng lớn) nếu chi phí Storage thành vấn đ�
 > ≈ đủ MVP Quận 5); vượt free thì cân nhắc Cloudflare R2 trước khi trả Supabase Pro.
 
 ### OPEN-19 · Công cụ B-side kiểu radanhadat: làm không, làm lúc nào
+
+> ✅ **ĐÃ CHỐT — phương án (b)**, chủ dự án, 25/08/2026 → FR-119.
+> Tính lãi vay làm dạng **trang web** `/tinh-lai-vay` (không phải chat như phân
+> tích dưới) vì port sẵn từ repo NhaDat-Radar của chủ dự án; trang nhận
+> `?price=` từ tin và CTA chốt vẫn đẩy về Zalo — không trái IA-P1. Bot trả lời
+> câu tính vay trong chat làm ở vòng sau. Quy hoạch: không tự khẳng định
+> (RSK-03). Thời gian di chuyển: giai đoạn 2.
+
 **Nguồn**: phân tích đối thủ radanhadat.vn (`01 §1.5b`, WebSearch 24/08/2026).
 Ba công cụ phía người mua của radanhadat — (1) tìm theo thời gian di chuyển,
 (2) kiểm tra quy hoạch, (3) phân tích tài chính/khoản vay — đều khả thi ở dạng

@@ -201,6 +201,9 @@ Phạm vi MVP: **đặt nền dữ liệu**, chưa làm UI giỏ hàng riêng.
 | FR-116 | "Căn X của dự án Y còn không?" → đọc `unit_status`; quá TTL xác nhận (FR-107) thì xác nhận lại với S trước khi khẳng định; căn chuyển đã bán → báo mọi B đang chờ (interests, FR-108) kèm gợi ý căn thay thế **cùng dự án** | M | INS-10; Cầu Nối §F2 |
 | FR-117 | Trang dự án `/du-an/{slug}` + màn quản lý giỏ hàng cho admin/NMG — **giai đoạn 2**, ngoài phạm vi MVP | S | OPEN-15 (b) |
 | FR-118 | Địa giới hành chính dùng **bản cũ trước sáp nhập 1/7/2025** làm trục chính (Quận 5, phường cũ) trên toàn hệ thống: URL, taxonomy, chat. Bảng ánh xạ `ward_mapping` (phường cũ ↔ phường mới theo NQ 202/2025/QH15) để: (a) bot hiểu cả hai cách gọi và quy về một khu vực, (b) hiển thị kèm tên mới khi nói chuyện pháp lý/sổ đỏ, (c) nội dung SEO tra cứu cũ↔mới | M | INS-12; quyết định chủ dự án 24/08/2026 |
+| FR-119 | Máy tính lãi vay `/tinh-lai-vay`: trả góp đều (annuity), nhập giá/trả trước/lãi suất/thời hạn, biểu đồ dư nợ; nhận `?price=` từ trang chi tiết tin; kèm ghi chú "chỉ tham khảo, không phải đề nghị cho vay" | M | OPEN-19 chốt (b) 25/08/2026; port từ repo NhaDat-Radar của chủ dự án |
+| FR-120 | Trang `/thong-ke`: giá rao trung bình mỗi m² theo phường Quận 5 tính từ listing thật đang rao; phường dưới 2 tin không hiển thị; ghi rõ là giá rao, không phải giá chốt (tránh RSK-03) | S | port từ NhaDat-Radar |
+| FR-121 | Lưu tin yêu thích **không cần tài khoản** (localStorage trình duyệt), nút tim trên card/chi tiết, xem lại ở `/yeu-thich`; muốn nhớ dài hạn đa thiết bị → đẩy sang chat Zalo | S | INS-04 (không bắt đăng ký); port từ NhaDat-Radar |
 
 ---
 

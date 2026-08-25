@@ -23,7 +23,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | INS-01 | Chat là sản phẩm | FR-13, IA-P1, UI-P1, WF-01 |
 | INS-02 | Chu kỳ mua 3–4 năm | FR-60…FR-65, UF-08 |
 | INS-03 | Zalo xoá sau 7 ngày | FR-63, SRS-5.3 `zalo_keepalive`, AC-06 |
-| INS-04 | Riêng tư là khác biệt | FR-04, NFR-07, WF-07, AC-04 |
+| INS-04 | Riêng tư là khác biệt | FR-04, FR-121, NFR-07, WF-07, AC-04 |
 | INS-05 | S không điền form | FR-91, UI-C08, WF-08, AC-07 |
 | INS-06 | Thiếu thông tin là tính năng | FR-40…FR-47, UF-05, SRS-3.6, AC-03 |
 | INS-07 | Ngôn ngữ nói ≠ bộ lọc | FR-02, FR-09, FR-22, FR-23, SRS-4.5, AC-12 |
@@ -77,6 +77,9 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-115, FR-116 | UF-05 | — | SRS-3.10, SRS-5.1 (nhánh tầng dự án / tồn kho căn) | AC-13 |
 | FR-117 | — | — | *giai đoạn 2 — chưa đặc tả UI* | — |
 | FR-118 | — | — | *chưa đặc tả kỹ thuật — bảng `ward_mapping` sẽ vào SRS-3.x khi chốt nguồn dữ liệu NQ 202/2025/QH15* | — |
+| FR-119 | — | — | app/tinh-lai-vay (client, không đụng DB) | — |
+| FR-120 | — | — | app/thong-ke (đọc listings qua RLS anon) | — |
+| FR-121 | — | — | localStorage phía trình duyệt, không lưu server | — |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp

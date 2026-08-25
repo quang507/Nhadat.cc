@@ -151,13 +151,21 @@ export default async function Page({
           </p>
           <a
             href={zaloLink(`#${listing.code}`)}
-            className="mt-4 block rounded-full bg-zalo py-3 text-center font-bold text-white hover:opacity-90"
+            className="mt-4 block rounded-full bg-zalo py-3 text-center font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
           >
             Chat Zalo về căn này
           </a>
           <p className="mt-3 text-center text-xs text-mute/70">
             Miễn phí · không cần để lại số điện thoại
           </p>
+          {listing.price_vnd && listing.price_vnd > 0 && (
+            <Link
+              href={`/tinh-lai-vay?price=${listing.price_vnd}`}
+              className="mt-3 block rounded-full border border-line py-2.5 text-center text-sm font-semibold transition hover:border-brand hover:text-brand"
+            >
+              Tính lãi vay với giá căn này
+            </Link>
+          )}
         </aside>
       </div>
 
