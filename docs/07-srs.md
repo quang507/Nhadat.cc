@@ -133,7 +133,9 @@ id                uuid pk
 code              int unique          -- mã hiển thị #35148, sequence
 slug              text unique
 deal_type         enum(sale, rent)
-property_type     enum(nha_pho, chung_cu, dat, mat_tien, biet_thu, phong_tro, mat_bang)
+property_type     enum(nha_pho, nha_cap4, chung_cu, dat, biet_thu, phong_tro, mat_bang, chua_ro)
+                  -- chua_ro = giá trị THẬT (FR-150), không phải NULL ngầm;
+                  -- trigger trg_listings_fill_property_type tự lấp từ mô tả
 -- vị trí
 street            text
 alley             text                -- "hẻm 174", "hẻm XH 572"
