@@ -25,10 +25,30 @@ Deno.serve(async (req) => {
   if (action === "ack") {
     const id = String(body.id ?? "");
     if (!id) return jsonResponse({ error: "id bắt buộc" }, 400);
+
+    // TỰ HỌC Zalo ID: bridge chỉ có SĐT thì nó gọi findUser để ra uid. Ghi ngược
+    // uid đó vào đúng người — lần sau chat-reply nhận ra vai NGƯỜI BÁN ngay từ
+    // tin đầu, khỏi chờ ai điền tay. Chỉ ghi khi ô đang trống, không đè.
+    const learned = body.zalo_user_id ? String(body.zalo_user_id).trim() : "";
+    if (learned) {
+      const { data: r } = await client.from("reminders")
+        .select("seller_id, ctv_id").eq("id", id).maybeSingle();
+      if (r?.seller_id) {
+        await client.from("sellers").update({ zalo_user_id: learned })
+          .eq("id", r.seller_id).is("zalo_user_id", null);
+      } else if (r?.ctv_id) {
+        await client.from("ctvs").update({ zalo_user_id: learned })
+          .eq("id", r.ctv_id).is("zalo_user_id", null);
+      } else {
+        await client.from("admins").update({ zalo_user_id: learned })
+          .is("zalo_user_id", null);
+      }
+    }
+
     await client.from("reminders")
       .update({ status: "sent", sent_at: new Date().toISOString() })
       .eq("id", id).in("kind", KINDS);
-    return jsonResponse({ ok: true });
+    return jsonResponse({ ok: true, learned_zalo_id: !!learned });
   }
 
   // pull: việc pending tới hạn + đích liên lạc theo vai:
