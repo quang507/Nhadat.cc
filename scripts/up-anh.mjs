@@ -18,7 +18,7 @@
 // trước dấu '/' làm mã tin, nên PHẢI có đúng một cấp thư mục — để ảnh ở gốc
 // bucket là web không thấy.
 //
-// Có `sharp` thì tự nén còn ngang ≤1600px / JPEG q80 (masterDB ~179MB, đẩy
+// Có `sharp` thì tự nén còn ngang ≤2500px / JPEG q80 (masterDB ~179MB, đẩy
 // nguyên bản là trang chi tiết tải nặng và ăn hết dung lượng free tier).
 // Không có sharp cũng chạy, chỉ cảnh báo file nặng:  bun add -d sharp
 import fs from "node:fs";
@@ -90,7 +90,7 @@ for (const dir of dirs) {
     let mime = { ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp" }[ext];
     if (sharp) {
       buf = await sharp(buf).rotate()
-        .resize({ width: 1600, withoutEnlargement: true })
+        .resize({ width: 2500, withoutEnlargement: true })
         .jpeg({ quality: 80 }).toBuffer();
       outExt = ".jpg"; mime = "image/jpeg";
     } else if (buf.length > 600_000) {
