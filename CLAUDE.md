@@ -94,6 +94,23 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
 - **Script vận hành** ở `scripts/` — chạy trên máy local, không deploy.
   `up-anh.mjs` đẩy ảnh thật lên bucket `listing-photos` theo mã tin (FR-148);
   nó chỉ ĐỌC `masterDB/`, không bao giờ copy ảnh vào repo.
+  `sao-luu.mjs` kéo cả 23 bảng về JSON — **bậc Supabase Free không có backup tự
+  động**, đây là bản sao duy nhất đang tồn tại (OPEN-25). Cần
+  `SUPABASE_SERVICE_ROLE_KEY` trong biến môi trường; khoá đó bỏ qua mọi RLS nên
+  tuyệt đối không ghi vào file trong repo, và thư mục đích mặc định nằm NGOÀI
+  repo vì bản sao chứa SĐT thật.
+
+**Trang tin phải nằm trong cache** (NFR-17). Route động có tham số đường dẫn mà
+thiếu `generateStaticParams()` thì `export const revalidate` là chữ chết —
+Next 15 để `prerender-manifest.dynamicRoutes` rỗng và mỗi lượt xem là một lambda
++ đủ số query. Kiểm bằng bảng route sau `bun run build`: trang tin phải là `●`
+hoặc `○`, thấy `ƒ` là hỏng. Route đọc `searchParams` thì không ISR được, phải
+bọc truy vấn trong `unstable_cache`.
+
+**Đừng tin `cron.job_run_details.status`** (NFR-18). `net.http_post()` trả về
+ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge function trả
+500. Kết quả thật nằm ở `net._http_response`, và được `bot_health_tick()` quét
+sang `bot_errors` (FR-152). Xem sức khoẻ ở trang `/admin`.
 
 **Repo hiện đang PUBLIC** (kiểm 26/08/2026 qua API GitHub: `"private": false`).
 Nghĩa là mọi file đang track đều đọc được công khai, kể cả tài liệu gốc ở thư

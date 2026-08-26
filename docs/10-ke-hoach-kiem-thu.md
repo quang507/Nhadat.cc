@@ -158,3 +158,33 @@ bot vẫn trả lời tử tế, chỉ là không tin thuê nào được tạo 
 
 Dọn sau khi chạy: xoá `listings` mã `CCRB-*` vừa sinh (SRS-3.8a sinh ra từ đúng
 vòng test này ngày 26/08).
+
+### TS-CACHE — chứng minh trang tin thật sự nằm trong cache (NFR-17)
+
+Bẫy đã cắn thật: `export const revalidate = 300` trong `app/nha-dat/[code]/page.tsx`
+**không làm gì cả** suốt thời gian route đó chưa khai `generateStaticParams()`.
+Không có lỗi, không có cảnh báo — chỉ là mỗi lượt xem một tin đi thẳng xuống
+Supabase. Nhìn code không thấy; phải đo.
+
+| ID | Bước | Kỳ vọng |
+|---|---|---|
+| TS-CACHE-01 | `bun run build`, đọc bảng route | `/nha-dat/[code]` là `●` (SSG), **không** phải `ƒ` |
+| TS-CACHE-02 | `node -e "console.log(Object.keys(require('./.next/prerender-manifest.json').dynamicRoutes))"` | Có `/nha-dat/[code]` |
+| TS-CACHE-03 | `bun run start`, `curl -D - http://127.0.0.1:3000/` | `x-nextjs-cache: HIT` + `Cache-Control: s-maxage=300` |
+| TS-CACHE-04 | Trên bản đã deploy: mở một trang tin hai lần, xem header `x-vercel-cache` | Lần hai là `HIT` (hoặc `STALE`), không phải `MISS` liên tục |
+| TS-CACHE-05 | `/mua-ban?gia=duoi-5` hai lần trong 5 phút, đếm query ở Supabase → Logs | Lần hai **không** sinh query `listings` mới (Data Cache của `layTin`) |
+
+### TS-HEALTH — còi báo lỗi có kêu không (FR-152)
+
+| ID | Bước | Kỳ vọng |
+|---|---|---|
+| TS-HEALTH-01 | `select net.http_post(url := '<project>/functions/v1/khong-he-ton-tai', ...)`, chờ 15s, rồi `select public.bot_health_tick()` | Trả `loi_moi = 1` |
+| TS-HEALTH-02 | `select * from public.bot_errors order by id desc limit 1` | Một dòng `source='pg_net'`, `status_code=404` |
+| TS-HEALTH-03 | `select note from reminders where note like '🩺%'` | Đúng MỘT tin, dù chạy `bot_health_tick()` nhiều lần trong cùng giờ |
+| TS-HEALTH-04 | `select cron.job_run_details` cho chính lần chạy hỏng ở TS-HEALTH-01 | Vẫn ghi `succeeded` — đây chính là lý do FR-152 tồn tại, đừng tin cột này |
+| TS-HEALTH-05 | Gọi `escalation-feed` kèm `x-bridge-secret` đúng | `bot_health` có dòng `who='bridge-zca'`, `at` = vừa xong |
+| TS-HEALTH-06 | Xoá dòng `bridge-zca` khỏi `bot_health` rồi chạy `bot_health_tick()` | `bridge_im = false` — chưa từng có nhịp thì KHÔNG báo |
+
+Dọn sau khi chạy: `delete from bot_errors; delete from reminders where note like '🩺%';`
+và đẩy `bot_health.last_id` của `pg_net` lên `max(id)` của `net._http_response`.
+

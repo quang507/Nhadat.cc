@@ -29,6 +29,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-22 | Một người **vừa mua vừa bán** bằng cùng một Zalo: hiện `chat-reply` hễ khớp `sellers.zalo_user_id` là luôn tiếp theo vai người bán — người này không hỏi mua được. Dữ liệu tin thì an toàn (mọi quan tâm/hỏi đáp bám theo mã căn, FR-139/140), chỉ vướng vai hội thoại. Phương án: (a) bot tự đoán vai theo nội dung tin từng lượt; (b) lệnh chuyển vai ("tôi muốn tìm mua"); khuyến nghị BA: (b) trước, (a) sau. Chờ chủ dự án chốt | Trung bình | FR-129, FR-130 |
 | OPEN-23 | Edge function `rate-ctv` (FR-102) **trùng chức năng** với phần chấm điểm CTV nằm sẵn trong `ctv-report` (cùng rubric `RATE_CTV_RUBRIC`, cùng 4 tiêu chí): không có cron, không nơi nào gọi, bảng `ratings` nó ghi vào đang 0 dòng và không màn hình nào đọc. Phương án: (a) xoá `rate-ctv` + bảng `ratings`, đánh dấu FR-102 `[deprecated → FR-137]`; (b) giữ làm cửa chấm-lại-một-hội-thoại theo yêu cầu (admin bấm nút), khi đó cần màn hình đọc `ratings`. Khuyến nghị BA: (a) — chấm điểm đã nằm trong báo cáo 17h, giữ hai đường chấm là nguồn lệch số. Chờ chủ dự án chốt | Thấp | FR-102, FR-137 |
 | OPEN-24 | `pg_net` mở cho `anon`: `has_schema_privilege('anon','net','usage')` và `has_function_privilege('anon','net.http_post…')` đều `true` → mồi **SSRF** (ai cầm anon key mà chọc tới `net.*` là sai DB gọi HTTP đi bất cứ đâu, từ IP của Supabase). Hôm nay chưa khai thác được vì PostgREST chỉ phơi `public` — nhưng đó là hàng rào cấu hình, không phải hàng rào quyền. **Không tự vá được**: schema `net` do `supabase_admin` sở hữu, ta là `postgres`, REVOKE thành no-op im lặng. Phương án: (a) gác cửa (giữ Exposed schemas đúng `public, graphql_public`; cấm hàm SECURITY INVOKER trong `public` gọi `net.*`); (b) mở ticket Supabase xin thu hồi grant mặc định. Khuyến nghị BA: (a) ngay + (b) song song | Cao | NFR-06, SRS-3.9 |
+| OPEN-25 | **Bậc miễn phí không có lưới an toàn** (soát 27/08/2026, đối chiếu docs Supabase): (a) Supabase Free **KHÔNG có backup tự động** — docs ghi rõ chỉ Pro/Team/Enterprise mới được sao lưu hằng ngày, và bản sao lưu "không tải xuống được" với Free; hôm nay một câu `delete` nhỡ tay là mất 173 tin + toàn bộ lịch sử hội thoại, không có nút hoàn tác. (b) Không có PITR. (c) Vercel **Hobby cấm dùng thương mại**, mà site này thu phí giao dịch 1%/0.5% → rủi ro bị đình chỉ, không báo trước. (d) Bridge zca-js là MỘT tiến trình trên máy cá nhân, không có trình giám sát khởi động lại. Đã vá tạm: `scripts/sao-luu.mjs` (sao lưu tay) + FR-152 (nhịp tim + sổ lỗi). Phương án: (a) lên Supabase Pro + Vercel Pro; (b) ở lại Free và chấp nhận, nhưng phải đặt lịch chạy `sao-luu.mjs` và có trình giám sát cho bridge. Khuyến nghị BA: (a) trước khi có giao dịch thật đầu tiên — một cái sổ đỏ chốt hụt vì mất dữ liệu đắt hơn nhiều lần tiền hai gói | Cao | NFR-16, NFR-03, FR-152 |
 
 ---
 
@@ -349,3 +350,59 @@ revoke thật phải là `supabase_admin`, vai Supabase không cấp cho khách.
 
 **Khuyến nghị BA**: (a) ngay, kèm (b) song song. (a) không tốn gì và đã đủ chặn
 đường khai thác hiện có; (b) mới là dứt điểm nhưng phụ thuộc Supabase.
+
+---
+
+### OPEN-25 · Bậc miễn phí không có lưới an toàn (backup, PITR, license, bridge)
+
+**Phát hiện**: soát cloud/compute 27/08/2026 (mục *Availability & Recovery*).
+
+**(a) Không có backup — không phải "ít", là KHÔNG CÓ.**
+
+Trích docs Supabase (*Database Backups*, *Production Checklist*):
+
+> "We automatically back up all **Pro, Team, and Enterprise** Plan projects on
+> a daily basis."
+>
+> "Database backups are **not available for download** for Free Plan projects."
+>
+> "We recommend that free tier plan projects regularly export their data using
+> the Supabase CLI `db dump` command."
+
+Project `nhadat-cc` đang ở org bậc **Free**. Nghĩa là ngay lúc này, kho 173 tin,
+toàn bộ `messages`, `conversations`, `buyers.preferences` (hồ sơ nhu cầu — thứ
+làm nên FR-130, không dựng lại được từ đâu) đều **không có bản sao nào**. Một
+migration viết sai một dòng `where` là mất sạch.
+
+*Đã vá tạm*: `scripts/sao-luu.mjs` — kéo cả 23 bảng về JSON bằng service_role.
+Chạy tay, chưa có lịch. Đây là băng gạc, không phải backup thật: nó không có
+WAL, không khôi phục về đúng một thời điểm được, và chỉ tốt bằng lần cuối ai đó
+nhớ chạy nó.
+
+**(b) Không có PITR.** Đi kèm gói trả phí. RPO hiện tại = khoảng cách giữa hai
+lần chạy `sao-luu.mjs` bằng tay.
+
+**(c) Vercel Hobby cấm dùng thương mại.** Site này thu 1% (CCRB) / 0.5% (NMG)
+giá trị giao dịch — đúng định nghĩa thương mại. Vercel đình chỉ project vì
+license thì không báo trước và không có SLA nào để bám.
+
+**(d) Bridge là điểm chết đơn.** `bot/bridge-zca` là một tiến trình Node trên
+máy cá nhân chủ dự án, giữ phiên Zalo acc clone. Máy ngủ / mất mạng / process
+chết → toàn bộ đường chat phía B đứng, mà **cửa báo động cũng đi qua chính nó**.
+FR-152 gỡ một nửa (ghi sổ + hiện trên `/admin`), nửa còn lại — báo chủ động khi
+bridge chết — chưa có đường nào không vòng lại qua bridge.
+
+**Phương án**
+
+- **(a) Lên Pro cả hai** (Supabase Pro + Vercel Pro): có backup ngày, có PITR
+  (add-on), hết rủi ro license, hết auto-pause.
+- **(b) Ở lại Free**: bắt buộc đặt lịch `sao-luu.mjs` (Task Scheduler / cron
+  trên máy chủ dự án, ngày một lần, cất ra ổ khác) + trình giám sát cho bridge
+  (pm2 / systemd / NSSM) để nó tự dựng lại.
+
+**Khuyến nghị BA**: (a), và làm **trước** giao dịch thật đầu tiên. Một cái sổ đỏ
+chốt hụt vì mất dữ liệu đắt hơn nhiều lần tiền hai gói. Trong lúc chờ, làm (b)
+ngay — nó rẻ và mất 20 phút.
+
+**Chờ chủ dự án chốt.**
+

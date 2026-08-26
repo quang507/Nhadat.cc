@@ -11,6 +11,12 @@ export default function Page() {
   const [role, setRole] = useState<"loading" | "anon" | "user" | "admin">("loading");
   const [pending, setPending] = useState<Listing[]>([]);
   const [counts, setCounts] = useState<{ tong: number; active: number; cho: number }>();
+  // FR-152: sức khoẻ bot. Đọc THẲNG từ DB bằng phiên admin — cố tình KHÔNG đi
+  // qua bridge, vì còi báo "bridge chết" mà lại gửi bằng bridge thì vô nghĩa.
+  const [health, setHealth] = useState<{
+    beat: string | null;
+    errs: { id: number; at: string; source: string; status_code: number | null; detail: string | null }[];
+  }>();
 
   const load = async () => {
     const { data } = await supabase
@@ -23,6 +29,13 @@ export default function Page() {
       supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "cho_thong_tin"),
     ]);
     setCounts({ tong: tong ?? 0, active: active ?? 0, cho: cho ?? 0 });
+
+    const [beatRes, errRes] = await Promise.all([
+      supabase.from("bot_health").select("at").eq("who", "bridge-zca").maybeSingle(),
+      supabase.from("bot_errors").select("id, at, source, status_code, detail")
+        .order("at", { ascending: false }).limit(10),
+    ]);
+    setHealth({ beat: (beatRes.data?.at as string) ?? null, errs: errRes.data ?? [] });
   };
 
   useEffect(() => {
@@ -67,6 +80,35 @@ export default function Page() {
         </p>
       )}
 
+      {/* FR-152 — sức khoẻ bot */}
+      {health && (
+        <div className="mt-6 rounded-king border border-line bg-white p-5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="eyebrow text-mute">Sức khoẻ bot</span>
+            <BridgeBadge at={health.beat} />
+            <span className="text-sm text-mute">
+              {health.errs.length ? `${health.errs.length} lỗi gần nhất` : "Không có lỗi nào được ghi"}
+            </span>
+          </div>
+          {health.errs.length > 0 && (
+            <ul className="mt-3 divide-y divide-line text-sm">
+              {health.errs.map((e) => (
+                <li key={e.id} className="flex flex-wrap gap-x-3 py-2">
+                  <span className="w-32 shrink-0 tabular-nums text-mute">
+                    {new Date(e.at).toLocaleString("vi-VN")}
+                  </span>
+                  <span className="font-semibold">
+                    {e.source}
+                    {e.status_code ? ` · ${e.status_code}` : ""}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-navy/75">{e.detail}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <div className="mt-6 space-y-4">
         {pending.map((l) => (
           <div key={l.id} className="rounded-king border border-line bg-white p-5">
@@ -102,5 +144,28 @@ export default function Page() {
         )}
       </div>
     </div>
+  );
+}
+
+// Nhịp tim bridge. Ba trạng thái, không phải hai: "chưa từng chạy" khác hẳn
+// "đã chết" — báo nhầm cái đầu thành cái sau là còi giả ngay ngày đầu.
+function BridgeBadge({ at }: { at: string | null }) {
+  if (!at) {
+    return (
+      <span className="rounded-full bg-line px-3 py-1 text-xs font-bold text-mute">
+        bridge: chưa từng gõ cửa
+      </span>
+    );
+  }
+  const phut = Math.round((Date.now() - new Date(at).getTime()) / 60000);
+  const song = phut <= 15;
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-bold ${
+        song ? "bg-brand/10 text-brand" : "bg-navy text-white"
+      }`}
+    >
+      bridge: {song ? "đang sống" : `im ${phut} phút`}
+    </span>
   );
 }

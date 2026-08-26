@@ -16,6 +16,26 @@ import {
 
 export const revalidate = 300;
 
+// KHÔNG có generateStaticParams thì `revalidate` ở trên là CHỮ CHẾT. Next 15
+// xếp route động chưa khai báo param vào nhóm "dựng lại từng request":
+// prerender-manifest.dynamicRoutes rỗng → không có ISR → mỗi lượt xem một tin
+// là 3 query Supabase + 1 query ảnh, và Vercel chạy hẳn một lambda.
+// Đo tại chỗ 26/08 (next start, production build):
+//   /                 → x-nextjs-cache: HIT, Cache-Control: s-maxage=300
+//   route [param] bất kỳ → Cache-Control: private, no-cache, no-store
+// Đây lại đúng là 164 trang SEO — thứ Google cào nhiều nhất. Khai báo sẵn mã
+// tin đang lên kệ để dựng lúc build; mã lạ (tin mới, tin đã chốt mở link cũ)
+// vẫn render on-demand vì dynamicParams mặc định = true, và render xong cũng
+// được nằm trong cache 5 phút như các trang kia.
+export async function generateStaticParams() {
+  const { data } = await supabase
+    .from("listings")
+    .select("code")
+    .in("status", ["dang_ban", "dang_quan_tam"])
+    .not("code", "is", null);
+  return (data ?? []).map((l) => ({ code: l.code as string }));
+}
+
 const TYPE_LABEL: Record<string, string> = {
   nha_pho: "Nhà phố",
   nha_cap4: "Nhà cấp 4",
