@@ -92,3 +92,52 @@ Bổ sung các bài chuyên sâu:
 
 Quy tắc: bug tìm thấy sau release phải có test tái hiện trước khi sửa —
 suite chỉ phình ra, không teo lại.
+
+## 10.7 Bộ test chạy tay — bản chạy được ngay (26/08/2026)
+
+Hai suite dưới đây là **lệnh dán vào chạy được**, không phải mô tả. Sinh ra từ
+đợt soát bảo mật 26/08 và đợt bật bridge acc clone. ID cấp mới, bất biến.
+
+### TS-SEC — hồi quy bảo mật (chạy sau MỌI migration đụng RLS/GRANT)
+
+Chạy bằng SQL Editor của Supabase. Nguyên tắc: **đóng vai `anon` rồi thử phá** —
+anon key là key công khai (nằm trong bundle web và trong `bot/bridge-zca`), nên
+nó là đúng góc nhìn của kẻ tấn công. Repo để private **không** làm key này bí mật.
+
+| ID | Bài | Kết quả PHẢI ra |
+|---|---|---|
+| TS-SEC-01 | `set role anon; select count(*) from reminders;` | `0` — hàng đợi nhắc việc chứa trích đoạn tin khách |
+| TS-SEC-02 | `set role anon; delete from reminders;` | lỗi quyền |
+| TS-SEC-03 | `set role anon; select count(*) from public_listings;` | lỗi quyền — view này không lọc trạng thái, để hở là lộ tin nháp |
+| TS-SEC-04 | `set role anon; select public.seller_drip_tick();` và `ctv_report_tick()` | lỗi quyền — chạy được nghĩa là người lạ ép bot nhắn tin hàng loạt / spam Zalo admin |
+| TS-SEC-05 | `set role anon; insert into listings…` · `update bot_prompts…` | lỗi quyền cả hai |
+| TS-SEC-06 | `set role anon; select count(*) from sellers/ctvs/messages/conversations/viewings/deals;` | `0` hết |
+| TS-SEC-07 | `set role anon; select count(*) from listings;` | bằng số tin `dang_ban + dang_quan_tam + da_chot`, **nhỏ hơn** tổng tin — tin `cho_thong_tin` phải khuất |
+| TS-SEC-08 | `set role anon;` đọc `listings`, `agents_public`, `listing_photos_v`, `projects`, `listing_facts` | ra dữ liệu bình thường — đây là 5 đường web thật sự cần, chặn nhầm là hỏng site |
+| TS-SEC-09 | `select proname, proacl from pg_proc … where proname='get_secret'` | ACL chỉ có `postgres` và `service_role` — Vault (ANTHROPIC_API_KEY) không bao giờ chạm tới anon |
+| TS-SEC-10 | Mở trang `/nha-dat/<mã>` của tin có fact chứa SĐT | SĐT hiện thành `[liên hệ qua Zalo nhadat.cc]` (FR-104) — cả `description` lẫn `answer` của fact |
+
+Bộ script đóng vai anon: `bot/supabase/migrations/20260826c_soat_bao_mat.sql`
+(phần cuối, khối `-- KIỂM CHỨNG`).
+
+### TS-LIVE — thông tuyến thật qua Zalo (chạy khi bật bridge)
+
+Điều kiện: `node bot/bridge-zca/index.mjs` chạy, **không** còn dòng
+`pumpEscalations: fetch failed`.
+
+| ID | Làm gì | Kết quả PHẢI ra |
+|---|---|---|
+| TS-LIVE-01 | Trong cmd: `curl` POST tới `/functions/v1/escalation-feed` với anon key | HTTP 200. Không ra 200 thì mọi bài dưới vô nghĩa — sửa mạng/Node trước |
+| TS-LIVE-02 | Từ acc Zalo khác nhắn acc clone: `chào em, anh tìm nhà quận 5 tầm 5 tỷ` | Bot trả trong ~vài giây, hỏi/gợi ý căn khớp ngân sách, **không** xổ listing ngẫu nhiên |
+| TS-LIVE-03 | `căn BDS-Q5-0133 còn không em` | Chào đúng căn đó (Phường 16 · 4,8 tỷ · 57.4m²), không bịa tình trạng |
+| TS-LIVE-04 | `gửi anh xem hình căn đó với` | Căn chưa có ảnh → nói "để em hỏi lại chủ nhà", tuyệt đối không bịa là có hình |
+| TS-LIVE-05 | `cho anh gặp người thật đi` | `conversations.needs_human = true` + sinh 1 dòng `reminders` kind `escalation` gán CTV |
+| TS-LIVE-06 | Điền `phone` cho CTV trong bảng `ctvs`, chờ ≤60s | Bridge resolve SĐT → uid, nhắn CTV, rồi ghi ngược `ctvs.zalo_user_id` (FR-150 ack) |
+| TS-LIVE-07 | Gán `sellers.zalo_user_id` = uid acc test, nhắn: `Bán nhà hẻm xe hơi phường 8, DT đất 4x16, 1 trệt 2 lầu, giá 8.5 tỷ` | Tạo tin `cho_thong_tin`; `property_type = nha_pho` (KHÔNG phải `dat`); `price_raw = "8.5 tỷ"`; câu hỏi đầu là diện tích đất, **không hỏi loại BĐS** |
+| TS-LIVE-08 | Trả lời câu hỏi diện tích | Fact được lưu, đủ giá + diện tích + phường thì tin tự nhảy `dang_ban` và bot báo "đã lên web" |
+| TS-LIVE-09 | Với tin không đoán được loại, trả lời `hông biết nữa` | Bot **hỏi lại kèm lựa chọn**, không ghi fact `loai_bds` — tin không được kẹt `chua_ro` vĩnh viễn |
+| TS-LIVE-10 | Người thật gõ tay từ acc clone trả lời khách | Bot im 30 phút (FR-141), hạ cờ `needs_human`, huỷ escalation đang chờ |
+
+Ghi nhận hạn chế: TS-LIVE chạy trên project thật (chưa có project staging) nên
+sau mỗi vòng phải dọn dữ liệu test — xoá `listings` mã `CCRB-*` phát sinh,
+`sellers`/`ctvs` test, và các dòng `reminders` liên quan.
