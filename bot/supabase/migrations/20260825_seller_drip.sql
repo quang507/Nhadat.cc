@@ -1,4 +1,4 @@
--- FR-129: hỏi nhỏ giọt người bán (bản lưu tham chiếu — đã áp lên nhadat-bot
+-- FR-129: hỏi nhỏ giọt người bán (bản lưu tham chiếu — đã áp lên nhadat-cc
 -- qua MCP apply_migration 'add_seller_drip_trigger_and_cron', 25/08/2026).
 -- Trigger sau khi đăng tin → ask-seller mode drip (chào + 1 câu đầu).
 -- Cron 30 phút seller_drip_tick(): hỏi tiếp listing đủ điều kiện, chống spam:

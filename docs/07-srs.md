@@ -259,7 +259,7 @@ outcome_feedback text, rating int
 ```
 
 ### SRS-3.8 · Bảng broker — theo spec Cầu Nối BĐS v2
-Schema đã được hiện thực sẵn trên Supabase project `nhadat-bot` [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]:
+Schema đã được hiện thực sẵn trên Supabase project `nhadat-cc` [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]:
 
 ```
 listings.status            text CHECK (cho_thong_tin|dang_ban|dang_quan_tam|da_chot|an)  -- FR-139

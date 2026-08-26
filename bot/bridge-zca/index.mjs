@@ -50,21 +50,44 @@ const rememberSent = (t) => {
 const wasBotSent = (t) =>
   botSent.some((b) => b.t === t && Date.now() - b.at < 10 * 60e3);
 
+// undici chỉ ném "fetch failed"; mã lỗi thật (ENOTFOUND/ECONNRESET/UND_ERR_*,
+// lỗi chứng thư TLS…) nằm ở e.cause — không in ra thì không cách nào chẩn đoán.
+const errDetail = (e) => {
+  const c = e?.cause;
+  const code = c?.code ?? c?.errno ?? c?.name;
+  return [e?.message ?? String(e), code, c?.message !== e?.message ? c?.message : null]
+    .filter(Boolean).join(" · ");
+};
+
+// Mạng nhà/VPS rớt vài giây là chuyện thường: timeout 20s rồi thử lại 1 lần
+// trước khi kêu lỗi, để một cú nghẽn không làm mất luôn lượt trả lời khách.
+async function postJson(url, headers, payload) {
+  let last;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST", headers, body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(20_000),
+      });
+      return await res.json();
+    } catch (e) {
+      last = e;
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  throw last;
+}
+
 // Gửi một tin (kèm ảnh nếu bộ não trả về) — dùng chung cho tin nhắn và reaction
 async function handleIncoming(threadId, text, imageUrl, msgId) {
   console.log(`← [${threadId}] ${text || "[ảnh]"}`);
-  const res = await fetch(CHAT_REPLY_URL, {
-    method: "POST",
-    headers: brainHeaders,
-    body: JSON.stringify({
-      external_user_id: String(threadId),
-      text: typeof text === "string" ? text : "",
-      image_url: imageUrl,
-      msg_id: msgId,
-      channel: "zalo_personal_test",
-    }),
+  const { reply, replies, photos, error } = await postJson(CHAT_REPLY_URL, brainHeaders, {
+    external_user_id: String(threadId),
+    text: typeof text === "string" ? text : "",
+    image_url: imageUrl,
+    msg_id: msgId,
+    channel: "zalo_personal_test",
   });
-  const { reply, replies, photos, error } = await res.json();
   if (error) return console.error("chat-reply lỗi:", error);
   const bubbles = Array.isArray(replies) && replies.length ? replies : reply ? [reply] : [];
 
@@ -92,7 +115,7 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
       fs.unlinkSync(f);
       console.log(`→ 📷 ${url.slice(0, 70)}…`);
     } catch (e) {
-      console.error("gửi ảnh lỗi:", e?.message ?? e);
+      console.error("gửi ảnh lỗi:", errDetail(e));
     }
   }
 }
@@ -140,7 +163,7 @@ api.listener.on("message", async (message) => {
       message.data?.msgId ? String(message.data.msgId) : undefined,
     );
   } catch (e) {
-    console.error("Lỗi xử lý tin:", e?.message ?? e);
+    console.error("Lỗi xử lý tin:", errDetail(e));
   }
 });
 
@@ -153,9 +176,23 @@ try {
       const tid = String(r?.threadId ?? r?.data?.threadId ?? "");
       if (!tid) return;
       const icon = r?.data?.content?.rIcon ?? r?.data?.rIcon ?? "❤️";
-      await handleIncoming(tid, `[khách thả cảm xúc ${icon}]`, undefined, undefined);
+      // msg_id BẮT BUỘC có: postJson() thử lại khi mạng nghẽn, mà chat-reply
+      // chống trả lời hai lần bằng khoá trùng zalo_msg_id. Đường tin nhắn
+      // thường có sẵn msgId; đường reaction thì phải tự dựng.
+      // Id phải vừa GIỐNG nhau giữa hai lượt thử của CÙNG cú thả tim (nên tính
+      // MỘT lần ở đây, ngoài postJson), vừa KHÁC nhau giữa hai cú thả tim khác
+      // nhau — lấy icon làm khoá là khách thả tim lần hai bị bot ngó lơ vĩnh
+      // viễn, vì khoá trùng nằm vĩnh viễn trong DB.
+      const rMsgId = r?.data?.content?.rMsg?.[0]?.gMsgID ?? r?.data?.msgId ??
+        r?.data?.content?.rMsgId ?? Date.now();
+      await handleIncoming(
+        tid,
+        `[khách thả cảm xúc ${icon}]`,
+        undefined,
+        `react-${tid}-${rMsgId}`,
+      );
     } catch (e) {
-      console.error("reaction lỗi:", e?.message ?? e);
+      console.error("reaction lỗi:", errDetail(e));
     }
   });
 } catch { /* phiên bản zca-js không hỗ trợ reaction */ }
@@ -172,10 +209,7 @@ const feedHeaders = {
 const uidCache = new Map(); // SĐT → uid, khỏi findUser lặp lại
 async function pumpEscalations() {
   try {
-    const res = await fetch(FEED_URL, {
-      method: "POST", headers: feedHeaders, body: JSON.stringify({ action: "pull" }),
-    });
-    const { items, error } = await res.json();
+    const { items, error } = await postJson(FEED_URL, feedHeaders, { action: "pull" });
     if (error) return console.error("escalation-feed lỗi:", error);
     for (const it of items ?? []) {
       try {
@@ -191,19 +225,18 @@ async function pumpEscalations() {
         const msg = it.text ?? `🔔 nhadat.cc: ${it.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
         rememberSent(msg);
         await api.sendMessage(msg, String(uid), ThreadType.User);
-        await fetch(FEED_URL, {
-          method: "POST", headers: feedHeaders,
-          // Gửi kèm uid vừa resolve từ SĐT: server ghi ngược vào sellers/ctvs/admins
-          // để lần sau bot nhận ra người này ngay từ tin đầu (khỏi điền tay).
-          body: JSON.stringify({ action: "ack", id: it.id, zalo_user_id: String(uid) }),
+        // Gửi kèm uid vừa resolve từ SĐT: server ghi ngược vào sellers/ctvs/admins
+        // để lần sau bot nhận ra người này ngay từ tin đầu (khỏi điền tay).
+        await postJson(FEED_URL, feedHeaders, {
+          action: "ack", id: it.id, zalo_user_id: String(uid),
         });
         console.log(`🔔 đã nhắn ${it.name}: ${String(it.note).slice(0, 70)}…`);
       } catch (e) {
-        console.error(`escalation ${it.id} lỗi:`, e?.message ?? e); // giữ pending, vòng sau thử lại
+        console.error(`escalation ${it.id} lỗi:`, errDetail(e)); // giữ pending, vòng sau thử lại
       }
     }
   } catch (e) {
-    console.error("pumpEscalations:", e?.message ?? e);
+    console.error("pumpEscalations:", errDetail(e));
   }
 }
 setInterval(pumpEscalations, 60_000);

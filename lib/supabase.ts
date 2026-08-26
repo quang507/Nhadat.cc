@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 // Anon/publishable key là key công khai (chỉ đọc được thứ RLS cho phép) —
-// env override được, mặc định trỏ project nhadat-bot.
+// env override được, mặc định trỏ project nhadat-cc.
 const url =
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
 const key =
