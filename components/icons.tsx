@@ -62,3 +62,48 @@ export function IconHeart({ className, filled }: P & { filled?: boolean }) {
     </svg>
   );
 }
+
+// Bộ icon thông số căn — theo hàng meta của card Veedoo (loại · diện tích · PN)
+export function IconPin({ className }: P) {
+  return (
+    <svg {...base} className={className} aria-hidden>
+      <path d="M12 21s6.5-5.7 6.5-10a6.5 6.5 0 10-13 0c0 4.3 6.5 10 6.5 10z" />
+      <circle cx="12" cy="10.8" r="2.4" />
+    </svg>
+  );
+}
+
+export function IconHouse({ className }: P) {
+  return (
+    <svg {...base} className={className} aria-hidden>
+      <path d="M4 10.6L12 4l8 6.6" />
+      <path d="M6 9.8V19h12V9.8" />
+    </svg>
+  );
+}
+
+export function IconArea({ className }: P) {
+  return (
+    <svg {...base} className={className} aria-hidden>
+      <path d="M4 9V4h5M20 15v5h-5M20 9V4h-5M4 15v5h5" />
+    </svg>
+  );
+}
+
+export function IconBed({ className }: P) {
+  return (
+    <svg {...base} className={className} aria-hidden>
+      <path d="M3 18v-8M3 13h18v5M21 18v-3" />
+      <path d="M7 13v-2.5a1.5 1.5 0 011.5-1.5h8A1.5 1.5 0 0118 10.5V13" />
+    </svg>
+  );
+}
+
+export function IconSearch({ className }: P) {
+  return (
+    <svg {...base} className={className} aria-hidden>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M15.8 15.8L20 20" />
+    </svg>
+  );
+}

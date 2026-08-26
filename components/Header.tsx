@@ -44,11 +44,14 @@ export default function Header() {
               <path d="M5 19.5c1.2-3 3.8-4.5 7-4.5s5.8 1.5 7 4.5" />
             </svg>
           </Link>
+          {/* CTA chính của header dùng CAM thương hiệu (Veedoo để nút accent ở
+              đúng chỗ này). Xanh Zalo chỉ dành cho widget nổi — trước đây cả
+              hai cùng xanh nên trang có ba nút Zalo tranh nhau. */}
           <a
             href={zaloLink("header")}
-            className="rounded-full bg-zalo px-4 py-2 text-sm font-semibold text-white shadow transition hover:opacity-90 active:scale-[0.98]"
+            className="rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
           >
-            Chat Zalo — miễn phí
+            Chat Zalo
           </a>
         </div>
       </div>
