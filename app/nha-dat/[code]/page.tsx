@@ -165,10 +165,12 @@ export default async function Page({
             <div className="mt-6">
               <h2 className="text-lg font-bold">Đã xác minh với chủ nhà</h2>
               <ul className="mt-2 divide-y divide-line rounded-king border border-line bg-white">
+                {/* FR-104: answer là chữ chính chủ gõ trong Zalo, hay kèm SĐT —
+                    phải lọc y như description, đừng in thẳng ra web. */}
                 {facts.map((f, i) => (
                   <li key={i} className="flex gap-3 p-3 text-sm">
                     <span className="min-w-32 font-medium text-mute">{f.question}</span>
-                    <span>{f.answer}</span>
+                    <span>{sanitizeDescription(f.answer)}</span>
                   </li>
                 ))}
               </ul>
