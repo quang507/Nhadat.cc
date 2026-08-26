@@ -102,18 +102,25 @@ export default async function ListingBrowse({
     }`;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="text-2xl font-extrabold md:text-3xl">
-        {title} {sp.phuong ? `— ${sp.phuong}` : "Quận 5"}
-      </h1>
-      <p className="mt-1 text-sm text-mute">
-        {total} tin · hỏi chi tiết bất kỳ căn nào qua Zalo
-      </p>
+    <>
+      {/* Dải tiêu đề navy + thẻ lọc trắng nổi đè lên chân dải — đúng chỗ thanh
+          "Search Property" của Veedoo, nhưng là link thuần nên không cần JS. */}
+      <div className="bg-navy pb-16 pt-10 text-white">
+        <div className="mx-auto max-w-6xl px-4">
+          <p className="eyebrow text-brand">Kho tin Quận 5</p>
+          <h1 className="mt-2 text-3xl font-extrabold md:text-4xl">
+            {title} {sp.phuong ? `— ${sp.phuong}` : "Quận 5"}
+          </h1>
+          <p className="mt-2 text-white/60">
+            {total} tin · hỏi chi tiết bất kỳ căn nào qua Zalo
+          </p>
+        </div>
+      </div>
 
-      {/* Bộ lọc giá / diện tích / sắp xếp — link thuần, không JS */}
-      <div className="mt-5 space-y-2.5">
+      <div className="mx-auto max-w-6xl px-4 pb-12">
+        <div className="-mt-10 space-y-3 rounded-king bg-white p-5 shadow-[0_18px_40px_rgba(13,37,61,0.14)]">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 text-xs font-semibold uppercase tracking-wide text-mute">Giá</span>
+          <span className="w-24 shrink-0 eyebrow text-mute">Giá</span>
           {GIA[deal].map((g) => (
             <Link key={g.key} href={withParam({ gia: sp.gia === g.key ? undefined : g.key })} className={chip(sp.gia === g.key)}>
               {g.label}
@@ -121,7 +128,7 @@ export default async function ListingBrowse({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 text-xs font-semibold uppercase tracking-wide text-mute">Diện tích</span>
+          <span className="w-24 shrink-0 eyebrow text-mute">Diện tích</span>
           {DT.map((d) => (
             <Link key={d.key} href={withParam({ dt: sp.dt === d.key ? undefined : d.key })} className={chip(sp.dt === d.key)}>
               {d.label}
@@ -129,7 +136,7 @@ export default async function ListingBrowse({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 text-xs font-semibold uppercase tracking-wide text-mute">Phòng ngủ</span>
+          <span className="w-24 shrink-0 eyebrow text-mute">Phòng ngủ</span>
           {PN.map((n) => (
             <Link key={n} href={withParam({ pn: sp.pn === String(n) ? undefined : String(n) })} className={chip(sp.pn === String(n))}>
               {n}+ PN
@@ -137,30 +144,30 @@ export default async function ListingBrowse({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 text-xs font-semibold uppercase tracking-wide text-mute">Xếp theo</span>
+          <span className="w-24 shrink-0 eyebrow text-mute">Xếp theo</span>
           {XEP.map((x) => (
             <Link key={x.key} href={withParam({ xep: x.key === "moi" ? undefined : x.key })} className={chip(xep.key === x.key)}>
               {x.label}
             </Link>
           ))}
         </div>
-      </div>
+        </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {listings.map((l) => (
           <ListingCard key={l.id} listing={l} photo={l.code ? covers[l.code] : null} />
         ))}
       </div>
 
       {listings.length === 0 && (
-        <div className="mt-10 rounded-king border border-line bg-white p-8 text-center">
+        <div className="mt-10 rounded-king bg-white p-10 text-center shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
           <p className="font-semibold">Chưa có tin nào khớp bộ lọc này.</p>
           <p className="mt-1 text-sm text-mute">
             Nới bớt một tiêu chí, hoặc nhắn Zalo — có khi hàng chưa kịp lên web.
           </p>
           <a
             href={zaloLink(`empty:${sp.phuong ?? deal}`)}
-            className="mt-4 inline-block rounded-full bg-zalo px-5 py-2.5 font-semibold text-white transition hover:opacity-90 active:scale-[0.98]"
+            className="mt-5 inline-block rounded-full bg-brand px-6 py-3 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
           >
             Hỏi qua Zalo
           </a>
@@ -170,18 +177,19 @@ export default async function ListingBrowse({
       {totalPages > 1 && (
         <div className="mt-8 flex items-center justify-center gap-2 text-sm">
           {page > 1 && (
-            <Link href={withParam({ trang: String(page - 1) })} className="rounded-full border border-line bg-white px-4 py-2 transition hover:border-brand">
+            <Link href={withParam({ trang: String(page - 1) })} className="rounded-full border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
               ← Trước
             </Link>
           )}
           <span className="px-3 text-mute tabular-nums">Trang {page}/{totalPages}</span>
           {page < totalPages && (
-            <Link href={withParam({ trang: String(page + 1) })} className="rounded-full border border-line bg-white px-4 py-2 transition hover:border-brand">
+            <Link href={withParam({ trang: String(page + 1) })} className="rounded-full border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
               Sau →
             </Link>
           )}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -1,19 +1,29 @@
 @import "tailwindcss";
 
-/* Skin theo theme King (kingthemes.net — nhánh kingtheme):
-   Nunito · nền #f6f7f9 · card trắng bo 14px viền #eef0f3 · nút pill ·
-   chữ #13151d / phụ #687686. Primary = đỏ King #e60023
-   (chốt chủ dự án 24/08/2026 — thay cam #E2571E của tokens.json cũ). */
+/* Skin theo theme tham chiếu VEEDOO (Vedoo pages/ — ảnh chụp nguyên trang).
+   Màu lấy bằng cách lọc điểm ảnh trội trong chính ảnh chụp, không đoán:
+     cam nút chính  #ec6324   (15.341 điểm trong vùng nút "Search Property")
+     navy           #0d253d   (thanh trên + khối thông số nổi trang chi tiết)
+     nền trang      #eaf0f5   (xanh xám lạnh, KHÔNG phải trắng)
+   Trước 26/08 skin đi theo theme King — nhưng King là "WordPress Viral
+   Magazine Theme", trong 225KB CSS của nó có 0 class property/listing/agent,
+   không có gì để mượn cho trang nhà đất. Đổi về Veedoo (quyết định 26/08). */
 @theme {
-  --color-brand: #e60023;
-  --color-brand-dark: #c2001e;
-  --color-navy: #13151d;
+  --color-brand: #ec6324;
+  --color-brand-dark: #d0511a;
+  --color-navy: #0d253d;
+  --color-navy-soft: #14324f;
   --color-zalo: #0068ff;
-  --color-cream: #f6f7f9;
-  --color-line: #eef0f3;
-  --color-mute: #687686;
+  --color-cream: #eaf0f5;
+  --color-line: #e3e9f0;
+  --color-mute: #667a8e;
+
+  /* Bo góc Veedoo đi theo CẶP: khung ngoài to, ảnh bên trong nhỏ hơn một nấc.
+     Đó là thứ tạo cảm giác "ảnh nằm trong khung" chứ không phải "ảnh bị cắt". */
+  --radius-king: 20px;
+  --radius-shot: 14px;
+
   --font-sans: var(--font-nunito), system-ui, sans-serif;
-  --radius-king: 14px;
 }
 
 html {
@@ -27,4 +37,9 @@ html {
 
 body {
   @apply bg-cream text-navy antialiased;
+}
+
+/* Nhãn nhỏ chữ hoa giãn chữ — Veedoo dùng cho label trên khối thông số */
+.eyebrow {
+  @apply text-xs font-bold uppercase tracking-[0.14em];
 }

@@ -4,7 +4,7 @@ import { zaloLink } from "@/lib/format";
 export default function Footer() {
   return (
     <>
-      <footer className="mt-16 bg-navy text-white/80">
+      <footer className="bg-navy text-white/80">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-3">
           <div>
             <p className="text-xl font-extrabold text-white">
@@ -39,13 +39,8 @@ export default function Footer() {
           © 2026 nhadat.cc — Người môi giới thường trực của anh chị
         </div>
       </footer>
-      {/* Sticky CTA Zalo trên mobile (docs/05) */}
-      <a
-        href={zaloLink("sticky")}
-        className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-zalo px-6 py-3 text-sm font-bold text-white shadow-xl md:hidden"
-      >
-        💬 Hỏi nhà qua Zalo
-      </a>
+      {/* Bỏ nút sticky mobile cũ ở đây: nó trùng y hệt ZaloWidget (FR-145) vốn
+          đã nổi sẵn mọi trang, nên trên mobile hiện hai nút Zalo chồng nhau. */}
     </>
   );
 }
