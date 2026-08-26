@@ -1,4 +1,4 @@
--- Bản sao tham chiếu các migration đã áp lên project nhadat-bot ngày 25/08/2026
+-- Bản sao tham chiếu các migration đã áp lên project nhadat-cc ngày 25/08/2026
 -- (áp qua MCP apply_migration; file này để đọc-hiểu và dựng lại môi trường mới).
 -- Gồm: SRS-4.5 giá số, FR-135 cờ người thật, FR-32 follow-up, FR-136/137 CRM CTV.
 

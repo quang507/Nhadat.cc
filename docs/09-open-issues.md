@@ -185,7 +185,7 @@ phí) — nên chốt hai mục này cùng lúc.
 
 **Trạng thái: ĐÃ CHỐT phương án (b)** — spec "Cầu Nối BĐS" v2 của chủ dự án đưa
 bảng `deals` vào thiết kế chính thức (FR-112), và schema đã tồn tại trên Supabase
-`nhadat-bot`. Còn treo duy nhất: định nghĩa stage chờ `OPEN-02`.
+`nhadat-cc`. Còn treo duy nhất: định nghĩa stage chờ `OPEN-02`.
 
 ### OPEN-17 · Định dạng mã công khai listing
 Bộ docs dùng `#35148` (số tự tăng, cue "Khi Zalo nhớ hỏi #35148"); spec Cầu Nối
@@ -245,7 +245,7 @@ kịp thời phản hồi; hạng **Đồng** (<50đ, giới hạn 5 căn) / **B
 **Vàng** (≥80đ, ưu tiên chuyển khách nét). Kịch bản chat gắn điểm vào từng câu
 hỏi ("bổ sung ảnh bếp để cộng 5 điểm").
 **Quan hệ với nhadat.cc**: FR-102 (chấm điểm NMG, đang treo OPEN-12) và FR-103
-(không spam S) đã chạm một phần; nhadat-bot có sẵn `ratings` + độ đo
+(không spam S) đã chạm một phần; nhadat-cc có sẵn `ratings` + độ đo
 `listing_missing_facts` — nghĩa là 50% "độ hoàn chỉnh" tính được ngay.
 **Phương án**: (a) không làm MVP, chỉ giữ số liệu ngầm (đếm fact đủ/thiếu, tốc
 độ trả lời) để sau này quy đổi điểm; (b) làm điểm + hạng nhưng **không nói ra

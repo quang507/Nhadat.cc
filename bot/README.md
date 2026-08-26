@@ -1,7 +1,7 @@
 # bot/ — Edge functions của bot Zalo OA (Supabase)
 
 Tầng thi công đầu tiên của bot, chạy trên **Supabase Edge Functions** (Deno),
-project `nhadat-bot` (tbcdpupiarkuxtntmosl). Suy ra từ đặc tả `docs/07-srs.md`;
+project `nhadat-cc` (tbcdpupiarkuxtntmosl). Suy ra từ đặc tả `docs/07-srs.md`;
 tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/prompts.ts` sau).
 
 ## Function đã deploy
@@ -61,7 +61,7 @@ bản, và text escalation trùng byte giữa `nudge` với `escalation-feed` (t
   nếu deploy bằng CLI `supabase functions deploy` thì cấu trúc `_shared/` dùng
   được nguyên trạng.
 
-## Bảng liên quan (migration đã áp trên nhadat-bot)
+## Bảng liên quan (migration đã áp trên nhadat-cc)
 
 `required_facts` (37 fact chuẩn theo `property_type`) + view
 `listing_missing_facts`; `conversations` + `messages` (log hội thoại);

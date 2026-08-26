@@ -26,5 +26,6 @@ node_modules/
 
 # Bridge zca-js (chạy máy local) — cookie phiên Zalo là CREDENTIAL, cấm commit
 bot/bridge-zca/zalo-session.json
+bot/bridge-zca/qr.png
 bot/bridge-zca/package.json
 bot/bridge-zca/package-lock.json

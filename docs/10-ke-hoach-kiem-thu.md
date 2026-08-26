@@ -71,7 +71,7 @@ Bổ sung các bài chuyên sâu:
   trường CI) · **A11y**: axe-core · **Perf**: Lighthouse CI.
 - **CI**: GitHub Actions free (2.000 phút/tháng) — chạy lint + unit mỗi PR, E2E
   nightly; Vercel preview mỗi PR (đã hoạt động trên PR #1).
-- **DB test**: org Supabase free đã đủ 2 project — `nhadat-bot` là môi trường
+- **DB test**: org Supabase free đã đủ 2 project — `nhadat-cc` là môi trường
   chính, **không** chạy test phá hoại lên nó; test DB dùng Postgres chạy trong CI
   (docker) áp cùng bộ migration.
 - **Zalo**: OA thật ở chế độ ẩn + tài khoản Zalo test của CTV; chưa có sandbox
