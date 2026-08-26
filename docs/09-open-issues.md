@@ -83,7 +83,8 @@ trong repo**, và dữ liệu từ **2014**.
 >   (ii) chỉ lấy HTML/CSS của theme cắt sang Next.js. Khuyến nghị (ii).
 > Tông màu/copy vẫn theo design system `docs/06`; token có thể map lại theo theme.
 
-`ThemeForest/` (274MB) bị loại khỏi repo vì bản quyền; `Vedoo pages/` chỉ là ảnh chụp.
+`ThemeForest/` (274MB) bị loại khỏi repo vì bản quyền; `Vedoo pages/` chỉ là ảnh
+chụp, cũng đã xoá khỏi repo 26/08/2026.
 **Phương án cũ**: (a) mua license Veedoo và dùng cho WordPress; (b) tự dựng UI trên
 Next.js + Tailwind theo design system ở `06`.
 **Khuyến nghị cũ**: (b). Quyết định thực tế của chủ dự án: dùng KingTheme (license

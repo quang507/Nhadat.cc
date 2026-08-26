@@ -1,9 +1,13 @@
 # 01 — Research
 
 > Nguồn: `biz model.docx/.pdf`, `OKRs eo2024.pptx`, `demo2Vitalify.docx`,
-> `chats w B.docx`, `S's side.docx`, `dự kiến vốn 6 tháng đầu.xlsx`,
-> `Vedoo pages/`. Mọi số liệu thị trường ngoài các file này đều là **giả định BA**
+> `chats w B.docx`, `S's side.docx`, `dự kiến vốn 6 tháng đầu.xlsx`.
+> Mọi số liệu thị trường ngoài các file này đều là **giả định BA**
 > và được đánh dấu rõ.
+>
+> *(`Vedoo pages/` — ảnh chụp theme tham chiếu — đã xoá khỏi repo 26/08/2026
+> theo quyết định chủ dự án. Phần đã chưng cất từ nó nằm ở `06-ui-design.md`
+> §Kế thừa từ Veedoo / Loại bỏ; muốn xem lại ảnh gốc thì lấy trong lịch sử git.)*
 
 ## 1.1 Bối cảnh & định vị
 
@@ -294,9 +298,11 @@ Ba công cụ B-side của họ (thời gian di chuyển, quy hoạch, tài chí
 tính năng giai đoạn sau cho ta ở dạng **trả lời trong chat** thay vì widget —
 chưa đưa vào FR, chờ chủ dự án chọn phạm vi: ghi `OPEN-19`.
 
-Tham chiếu giao diện: theme **Veedoo** (`Vedoo pages/`) — cấu trúc card listing,
+Tham chiếu giao diện: theme **Veedoo** — cấu trúc card listing,
 thanh search dính đầu trang, khối thông số nổi trên ảnh hero ở trang chi tiết.
-Chi tiết cách kế thừa/né: `06-ui-design.md`.
+Chi tiết cách kế thừa/né: `06-ui-design.md` §Kế thừa từ Veedoo / Loại bỏ.
+Ảnh chụp theme (`Vedoo pages/`) đã xoá khỏi repo 26/08/2026 — điều cần giữ
+đã chưng cất hết vào `06`, đây chỉ còn là tên gọi của gốc bố cục.
 
 > **Lưu ý bản quyền.** Theme thương mại nằm ở `ThemeForest/` đã bị loại khỏi repo.
 > Chỉ tham chiếu *bố cục*, không sao chép asset. Xem `OPEN-07`.

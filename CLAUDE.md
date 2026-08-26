@@ -52,7 +52,6 @@ chỉnh sửa, không "dọn dẹp". Mọi diễn giải phải đi vào `docs/`
 | `OKRs eo2024.pptx` | `01` (định vị: *permanent agent of agents*) |
 | `dự kiến vốn 6 tháng đầu.xlsx` | `01` (ngân sách, ràng buộc nguồn lực) |
 | `AOND req + chat examples.docx` | `06` §6.8 (kịch bản người bán), `09` OPEN-20/21 (gamification, vai người rao) |
-| `Vedoo pages/` | `06` (tham chiếu theme thương mại) |
 | `hình samples/` | `05`, `06` (ảnh listing mẫu) |
 
 ## 4. Quy ước làm việc
