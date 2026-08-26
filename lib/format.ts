@@ -36,9 +36,11 @@ export function zaloLink(context?: string): string {
 }
 
 // Ảnh placeholder xoay vòng theo mã tin (ảnh thật nằm OneDrive, chờ pipeline OPEN-18).
-// Serve từ GitHub raw (repo public) để deploy tay không phải đóng gói ảnh.
-const IMG_BASE =
-  "https://raw.githubusercontent.com/quang507/Nhadat.cc/main/public/img";
+// Serve TỪ CHÍNH SITE (`public/img/` được Next.js phục vụ ở gốc). Bản cũ trỏ
+// raw.githubusercontent.com — repo chuyển sang private ngày 26/08 là raw trả
+// 404, tức MỌI ảnh trên web vỡ hết. Đường dẫn tương đối vừa miễn nhiễm chuyện
+// đó vừa nhanh hơn (cùng origin, qua CDN của Vercel).
+const IMG_BASE = "/img";
 export function placeholderImg(seed: string): string {
   let h = 0;
   for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
