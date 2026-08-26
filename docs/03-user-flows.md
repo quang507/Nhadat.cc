@@ -271,12 +271,12 @@ cho CCRB (INS-05 giữ nguyên).
 quyết định đảo chiều theo [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026])*
 
 1. S nhắn Zalo OA: *"Cần bán nhà MT Trần Bình Trọng giá 6 tỉ"*.
-2. Bot hỏi **lần lượt từng bước**: khu vực → loại BĐS → giá → diện tích → pháp lý → mô tả.
+2. Bot hỏi **lần lượt từng bước**: khu vực → giá → diện tích → pháp lý → mô tả. **Loại BĐS KHÔNG hỏi** — trigger DB tự suy từ chính câu rao (FR-150); chỉ tin nào câu chữ không đủ để đoán mới bị hỏi `loai_bds`, và trả lời không đọc ra loại thì bot hỏi lại kèm lựa chọn chứ không bỏ qua.
 3. Khu vực không khớp danh mục chuẩn → bot đưa lựa chọn quận/phường để S chọn.
 4. Bot yêu cầu gửi ảnh: mặt tiền · nội thất · sổ.
 5. Ảnh Zalo là URL tạm → tải về ngay, upload kho file qua adapter, ghi bảng `media` (FR-111).
 6. Listing vào `cho_thong_tin`; đủ giá + diện tích + phường thì trigger FR-139 tự đẩy sang `dang_ban`. Thiếu thông tin hoặc **ảnh lộ SĐT** → bot hỏi tiếp S bổ sung (FR-144).
-7. Duyệt đạt → `active`, cấp mã công khai (định dạng: `OPEN-17`), sẵn sàng matching.
+7. Lên kệ rồi thì vòng đời chạy theo FR-139: `dang_ban` → `dang_quan_tam` (có khách hỏi) → `da_chot` / `an`. Mã công khai cấp theo định dạng còn treo ở `OPEN-17`.
 
 Một S có nhiều BĐS: mỗi lần đăng tạo một listing riêng với mã riêng. Mã công khai
 là danh tính duy nhất B nhìn thấy (FR-104). Mini-site `/raoban` (UF-09) vẫn tồn tại

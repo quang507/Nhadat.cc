@@ -30,7 +30,7 @@ import {
 function regexProfileFallback(text: string): Record<string, string> {
   const t = text.toLowerCase();
   const delta: Record<string, string> = {};
-  const money = /([\d][\d.,]*)\s*(tỷ|ty|tỏi|tr\b|triệu|củ)/.exec(t);
+  const money = /([\d][\d.,]*)\s*(tỷ|tỉ|ty|tỏi|tr(?![a-zA-ZÀ-ỹ])|triệu|củ)/.exec(t);
   if (money) {
     const unit = /tr|triệu|củ/.test(money[2]) ? "triệu" : "tỷ";
     delta.budget = `${money[1]} ${unit}`;
@@ -88,27 +88,13 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
     }
   }
   const m = /([\d][\d.,]*)\s*(tỷ|ty|tỏi|tỉ)/i.exec(budget) ??
-    /([\d][\d.,]*)\s*(triệu|trieu|củ|tr\b)/i.exec(budget);
+    /([\d][\d.,]*)\s*(triệu|trieu|củ|tr(?![a-zA-ZÀ-ỹ]))/i.exec(budget);
   if (!m) return null;
   const n = num(m[1]);
   if (!Number.isFinite(n) || n <= 0) return null;
   const base = n * unitOf(m[2]);
   if (/trên|hơn|từ|tối thiểu|ít nhất/i.test(budget)) return { min: Math.round(base * 0.95) };
   return { max: Math.round(base * 1.15) };
-}
-
-// Đoán loại BĐS từ câu chữ tự nhiên. Dùng chung cho câu rao mới (FR-144) và cho
-// câu trả lời fact `loai_bds` khi tin chưa rõ loại — xét "đất" trước "nhà" kẻo
-// "bán đất có nhà cấp 4" bị đọc thành nhà.
-function guessPropertyType(text: string): string | null {
-  if (/mặt bằng/i.test(text)) return "mat_bang";
-  if (/chung cư|căn hộ/i.test(text)) return "chung_cu";
-  if (/\bđất\b|\bnền\b/i.test(text)) return "dat";
-  if (/phòng trọ|nhà trọ|\btrọ\b/i.test(text)) return "phong_tro";
-  if (/biệt thự|villa/i.test(text)) return "biet_thu";
-  if (/cấp 4|cấp bốn/i.test(text)) return "nha_cap4";
-  if (/nhà phố|nhà riêng|nhà hẻm|nhà mặt tiền|\bnhà\b/i.test(text)) return "nha_pho";
-  return null;
 }
 
 // FR-29: mã căn khách nhắc ("#BDS-Q5-0115", từ web bấm sang) — chào đúng căn đó
@@ -263,11 +249,23 @@ Deno.serve(async (req) => {
       }
       // Tin "chưa rõ loại" vừa được khai loại → ghi vào cột, lượt sau
       // listing_missing_facts tự đổi sang đúng bộ câu hỏi của loại đó.
+      // Dùng hàm DB (FR-150) — một bộ trích xuất chung cho trigger/backfill/chat;
+      // bản _answer nhận cả từ cụt ("đất", "trọ") vì đây là câu TRẢ LỜI đúng
+      // câu hỏi loại, không phải cả câu rao.
       if (pendingReq.question === "loai_bds") {
-        const pt = guessPropertyType(text);
+        const { data: pt } = await client.rpc("guess_property_type_answer", { p_text: text });
         if (pt) {
           await client.from("listings").update({ property_type: pt })
             .eq("id", pendingReq.listing_id);
+        } else {
+          // Không đọc ra loại → HỎI LẠI, giữ nguyên câu hỏi pending. TUYỆT ĐỐI
+          // không ghi fact `loai_bds`: ghi xong là listing_missing_facts hết
+          // hỏi, tin nằm `chua_ro` vĩnh viễn — đúng kiểu chết lặng FR-150 diệt.
+          const again =
+            "Dạ em chưa rõ lắm ạ, nhà mình thuộc loại nào ta: nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng ạ?";
+          return jsonResponse({
+            reply: again, replies: [again], role: "seller", reask: "loai_bds",
+          });
         }
       }
 
@@ -336,18 +334,23 @@ Deno.serve(async (req) => {
     // thì nghỉ; khách quan tâm hỏi thêm thì FR-140 mở lại vòng hỏi.
     const wantsSell = /\b(bán|rao|cho thuê)\b/i.test(text) &&
       /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text) &&
-      /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr\b)|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text);
+      /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text);
     if (wantsSell) {
-      const ptype = guessPropertyType(text) ?? "chua_ro";
+      // Loại BĐS KHÔNG hỏi: trigger trg_listings_fill_property_type đọc chính
+      // câu rao (description) mà điền (FR-150). Chỉ tin nào câu chữ không đủ
+      // để đoán mới nằm lại 'chua_ro' và bị hỏi ở vòng drip.
       const sDeal = /cho thuê/i.test(text) ? "thue" : "ban";
       const wardM = /ph(?:ường|uong)\s*\.?\s*(\d{1,2})/i.exec(text);
-      const priceM = /([\d][\d.,]*\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr\b)[^,.;\n]*)/i.exec(text);
+      // "tr" viết tắt của triệu, nhưng \b sau "tr" khớp luôn "TRệt" (dấu tiếng
+      // Việt không phải ký tự \w) — từng làm price_raw thành "1 trệt 2 lầu".
+      // Lookahead chặn mọi chữ cái có dấu đứng sau.
+      const priceM = /([\d][\d.,]*\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))[^,.;\n]*)/i.exec(text);
       const newCode = `CCRB-${Date.now().toString(36).toUpperCase()}`;
       const { data: newLst } = await client.from("listings").insert({
         code: newCode, seller_id: sellerRow.id, deal: sDeal, district: "Quận 5",
         ward: wardM ? `Phường ${wardM[1]}` : null,
         description: text, price_raw: priceM?.[1]?.trim() ?? null,
-        property_type: ptype, status: "cho_thong_tin",
+        property_type: "chua_ro", status: "cho_thong_tin",
       }).select("id, code").single();
       if (newLst) {
         const { data: firstFacts } = await client.from("listing_missing_facts")
