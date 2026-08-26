@@ -10,6 +10,7 @@ import {
   anthropicClient,
   jsonResponse,
   MODEL,
+  secretOf,
   serviceClient,
 } from "../_shared/claude.ts";
 import {
@@ -164,6 +165,22 @@ Deno.serve(async (req) => {
 
   const client = serviceClient();
 
+  // ─── CỔNG 1: bí mật dùng chung (tuỳ chọn, cùng khuôn với escalation-feed).
+  // chat-reply KHÔNG phải endpoint công khai: chỉ bridge (máy local) và
+  // zalo-webhook (server-to-server) gọi nó, không trình duyệt nào cả. Nhưng nó
+  // đang mở cho bất kỳ ai cầm anon key — mà anon key nằm sẵn trong bundle JS
+  // của web VÀ trong bot/bridge-zca/index.mjs của repo PUBLIC này.
+  // Đặt secret BRIDGE_SECRET trong Vault là bật cổng; chưa đặt thì chạy như cũ,
+  // không làm gãy bridge đang chạy. zalo-webhook gọi bằng service_role key nên
+  // luôn được cho qua.
+  const gate = await secretOf(client, "BRIDGE_SECRET");
+  const isService =
+    req.headers.get("authorization") ===
+      `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  if (gate && !isService && req.headers.get("x-bridge-secret") !== gate) {
+    return jsonResponse({ error: "forbidden" }, 403);
+  }
+
   // FR-141: bridge báo NGƯỜI THẬT (CTV/admin gõ tay từ acc clone) vừa nhắn cho
   // khách này → ghi tin sender='human' + đặt human_touch_at; bot nhường sân
   // 30 phút, hết yên ắng thì tự tiếp sức lại như thường.
@@ -193,6 +210,22 @@ Deno.serve(async (req) => {
       }
     }
     return jsonResponse({ ok: true, human_note: true });
+  }
+
+  // ─── CỔNG 2: trần TOÀN CỤC lượt gọi model mỗi ngày.
+  // Trần 100 tin/24h bên dưới đếm theo `conversation_id`, mà conversation sinh
+  // ra từ `external_user_id` — chuỗi do người gọi tự đặt và KHÔNG được kiểm.
+  // Đổi id mỗi request là bộ đếm đó về 0, tức nó chặn khách thật nhắn nhiều
+  // chứ không chặn được ai cố tình đốt tiền. Trần này đếm theo ngày, không phụ
+  // thuộc thứ gì người gọi kiểm soát, nên là chốt chặn cuối về TIỀN.
+  // Chỉnh bằng secret DAILY_MODEL_CALL_CAP trong Vault; mặc định 1000/ngày.
+  const capRaw = await secretOf(client, "DAILY_MODEL_CALL_CAP");
+  const dailyCap = Number(capRaw) > 0 ? Number(capRaw) : 1000;
+  const { data: underQuota } = await client.rpc("bump_model_quota", { p_limit: dailyCap });
+  if (underQuota === false) {
+    // Im lặng hoàn toàn: trả lời thì vẫn tốn lượt model, mà đây đúng là thứ
+    // đang cần chặn. bump_model_quota đã báo admin đúng một lần trong ngày.
+    return jsonResponse({ reply: null, replies: [], quota_exceeded: true }, 429);
   }
 
   // FR-138: "não" cấu hình được từ dashboard — bảng bot_prompts đè lên mặc định

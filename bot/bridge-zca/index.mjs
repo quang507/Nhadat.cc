@@ -38,6 +38,9 @@ console.log("Bridge sẵn sàng — nhắn thử vào acc clone từ một acc k
 const brainHeaders = {
   Authorization: `Bearer ${ANON_KEY}`,
   "Content-Type": "application/json",
+  // Đặt BRIDGE_SECRET ở CẢ hai nơi (Vault của Supabase + env máy chạy bridge)
+  // là chat-reply chỉ còn nhận request từ bridge. Chưa đặt thì vẫn chạy như cũ.
+  ...(process.env.BRIDGE_SECRET ? { "x-bridge-secret": process.env.BRIDGE_SECRET } : {}),
 };
 
 // FR-141: phân biệt tin bot vừa gửi vs NGƯỜI THẬT gõ tay trên acc clone —
@@ -202,10 +205,7 @@ try {
 // OA duyệt xong thì nudge tự gửi phía server, vòng này tự hết việc.
 const FEED_URL =
   "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/escalation-feed";
-const feedHeaders = {
-  ...brainHeaders,
-  ...(process.env.BRIDGE_SECRET ? { "x-bridge-secret": process.env.BRIDGE_SECRET } : {}),
-};
+const feedHeaders = brainHeaders; // brainHeaders đã kèm x-bridge-secret
 const uidCache = new Map(); // SĐT → uid, khỏi findUser lặp lại
 async function pumpEscalations() {
   try {
