@@ -141,3 +141,20 @@ Bộ script đóng vai anon: `bot/supabase/migrations/20260826c_soat_bao_mat.sql
 Ghi nhận hạn chế: TS-LIVE chạy trên project thật (chưa có project staging) nên
 sau mỗi vòng phải dọn dữ liệu test — xoá `listings` mã `CCRB-*` phát sinh,
 `sellers`/`ctvs` test, và các dòng `reminders` liên quan.
+
+### TS-RENT — hồi quy luồng CHO THUÊ (chạy sau MỌI lần sửa `chat-reply`)
+
+Hai lỗi ở SRS-3.8a từng làm luồng thuê chết hẳn mà **không báo lỗi ra ngoài** —
+bot vẫn trả lời tử tế, chỉ là không tin thuê nào được tạo và không căn thuê nào
+được gợi ý. Không có bài test nào ở trên bắt được. Đây là bộ bắt:
+
+| ID | Bước | Kỳ vọng |
+|---|---|---|
+| TS-RENT-01 | Nhắn từ acc đã gán `sellers.zalo_user_id`: `cho thuê nhà mặt tiền phường 11, 60m2, giá 25 triệu/tháng` | Tin được tạo (không im lặng bỏ qua); `deal = 'cho_thue'`; `property_type = 'nha_pho'`; `price_raw = "25 triệu/tháng"`; `price_vnd = 25000000` |
+| TS-RENT-02 | Nhắn từ acc khách: `anh muốn thuê nhà quận 5 tầm 20 triệu` | `buyers.preferences.deal = "thue"`; bot gợi ý căn **cho thuê**, không xổ căn bán |
+| TS-RENT-03 | SQL: `select count(*) from listings where deal='cho_thue' and status in ('dang_ban','dang_quan_tam')` | Ra số > 0 và trùng số căn bot gợi ý được (26/08: 11 tin) |
+| TS-RENT-04 | Nhắn: `cho anh hỏi đóng thuế nhà đất ở đâu` | **Không** bị hiểu thành nhu cầu thuê — `preferences.deal` không đổi thành `thue` |
+| TS-RENT-05 | Đọc log function sau TS-RENT-01 | Không có `invalid input value for enum listing_deal` |
+
+Dọn sau khi chạy: xoá `listings` mã `CCRB-*` vừa sinh (SRS-3.8a sinh ra từ đúng
+vòng test này ngày 26/08).

@@ -37,7 +37,9 @@ function regexProfileFallback(text: string): Record<string, string> {
   }
   if (/hxh|hẻm xe hơi/.test(t)) delta.alley = "hẻm xe hơi";
   else if (/mặt tiền|\bmt\b/.test(t)) delta.alley = "mặt tiền";
-  if (/\bthuê\b|cho thuê/.test(t)) delta.deal = "thue";
+  // \b của JS chỉ biết ký tự ASCII, mà "thuê" kết bằng "ê" → /\bthuê\b/ KHÔNG
+  // BAO GIỜ khớp. Tự dựng biên từ bằng lớp chữ tiếng Việt. ("thuế" phải trượt.)
+  if (/(^|[^a-zà-ỹ])thu[êe](?![a-zà-ỹ])/.test(t)) delta.deal = "thue";
   else if (/\bmua\b/.test(t)) delta.deal = "ban";
   return delta;
 }
@@ -96,6 +98,15 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
   if (/trên|hơn|từ|tối thiểu|ít nhất/i.test(budget)) return { min: Math.round(base * 0.95) };
   return { max: Math.round(base * 1.15) };
 }
+
+// HAI BẢNG TỪ VỰNG cho cùng một khái niệm mua/thuê, đừng lẫn:
+//   · cột DB `listings.deal` là enum `ban | cho_thue`;
+//   · hồ sơ khách (buyers.preferences, JSON) và schema model dùng từ ngắn `thue`.
+// Chạm vào CỘT thì phải quy đổi, không thì INSERT tin cho thuê nổ vì sai enum,
+// còn bộ lọc kho .eq("deal","thue") lỗi truy vấn → khách tìm thuê không bao giờ
+// được gợi ý căn nào.
+const dealCol = (v: unknown): "ban" | "cho_thue" =>
+  v === "thue" || v === "cho_thue" ? "cho_thue" : "ban";
 
 // FR-29: mã căn khách nhắc ("#BDS-Q5-0115", từ web bấm sang) — chào đúng căn đó
 const CODE_RE = /(?:#\s*)?\b([A-Za-z]{2,5}(?:-[A-Za-z0-9]{1,8}){1,3})\b/g;
@@ -332,14 +343,18 @@ Deno.serve(async (req) => {
     // giá) → tạo tin nháp cho_thong_tin ngay + mở vòng hỏi nhỏ giọt, hỏi tới
     // khi đủ-để-đăng (giá + diện tích + phường, trigger FR-139 tự đẩy lên web)
     // thì nghỉ; khách quan tâm hỏi thêm thì FR-140 mở lại vòng hỏi.
-    const wantsSell = /\b(bán|rao|cho thuê)\b/i.test(text) &&
+    // \b cuối cụm chặn "cho thuê": "ê" ngoài ASCII nên sau nó không bao giờ là biên
+    // từ → MỌI câu rao CHO THUÊ từ trước tới giờ đều rơi âm thầm, không tạo tin.
+    const wantsSell = (/\b(bán|rao)\b|cho thu[êe]/i.test(text)) &&
       /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text) &&
       /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text);
     if (wantsSell) {
       // Loại BĐS KHÔNG hỏi: trigger trg_listings_fill_property_type đọc chính
       // câu rao (description) mà điền (FR-150). Chỉ tin nào câu chữ không đủ
       // để đoán mới nằm lại 'chua_ro' và bị hỏi ở vòng drip.
-      const sDeal = /cho thuê/i.test(text) ? "thue" : "ban";
+      // Cùng một mẫu với cổng wantsSell ở trên — lệch một chữ là câu rao lọt
+      // cổng "cho thue" nhưng bị ghi thành tin BÁN.
+      const sDeal = dealCol(/cho thu[êe]/i.test(text) ? "thue" : "ban");
       const wardM = /ph(?:ường|uong)\s*\.?\s*(\d{1,2})/i.exec(text);
       // "tr" viết tắt của triệu, nhưng \b sau "tr" khớp luôn "TRệt" (dấu tiếng
       // Việt không phải ký tự \w) — từng làm price_raw thành "1 trệt 2 lầu".
@@ -507,7 +522,7 @@ Deno.serve(async (req) => {
   let khoQ = client
     .from("listings")
     .select("code, ward, location_raw, price_raw, area_m2, bedrooms")
-    .eq("deal", prefs.deal === "thue" ? "thue" : "ban")
+    .eq("deal", dealCol(prefs.deal))
     .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ gợi ý tin đang lên kệ
     .not("price_raw", "is", null).neq("price_raw", "")
     .order("created_at", { ascending: false }).limit(6);

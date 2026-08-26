@@ -281,6 +281,46 @@ users.rating               -- điểm sao từng tương tác (chấm dứt NMG:
 tên hay liên hệ của S; mọi payload relay đi qua bộ lọc SĐT/Zalo/địa chỉ chính xác
 trước khi gửi; danh tính chỉ xuất hiện trong luồng xác nhận lịch xem (UF-06).
 
+### SRS-3.8a · Hai cái bẫy chữ nghĩa đã cắn thật [giả định BA — rút từ sự cố 26/08/2026]
+
+Hai lỗi dưới đây không phải chuyện phong cách code: mỗi cái đã tự mình làm
+**chết hẳn luồng CHO THUÊ** trên production, im lặng, không báo lỗi ra ngoài.
+Ghi vào SRS để mọi người sau khỏi giẫm lại.
+
+**(a) `deal` có HAI bảng từ vựng.**
+
+| Nơi dùng | Giá trị | Ví dụ |
+|---|---|---|
+| Cột DB `listings.deal` (enum `listing_deal`) | `ban` \| `cho_thue` | `insert … deal = 'cho_thue'` |
+| Hồ sơ khách `buyers.preferences` (JSON) và schema tool của model | `ban` \| `thue` | `{"deal":"thue"}` |
+
+Bảng JSON dùng từ ngắn vì đó là chữ model sinh ra; cột DB dùng `cho_thue` vì
+enum đã có từ trước. **Mọi chỗ chạm vào CỘT phải quy đổi** — trong
+`chat-reply/index.ts` là hàm `dealCol()`. Quên quy đổi thì: INSERT tin thuê nổ
+`invalid input value for enum listing_deal`, còn bộ lọc kho
+`.eq("deal","thue")` lỗi truy vấn → khách tìm thuê **không bao giờ** được gợi ý
+căn nào (11 tin thuê trong kho bị khuất sạch).
+
+**(b) `\b` của JavaScript chỉ biết ký tự ASCII.**
+
+`\w` = `[A-Za-z0-9_]`, nên **chữ có dấu tiếng Việt không phải `\w`**. Hệ quả:
+`\b` đặt cạnh chữ có dấu cho kết quả ngược với trực giác.
+
+| Mẫu sai | Chuyện xảy ra |
+|---|---|
+| `/\bthuê\b/` | "ê" ngoài ASCII → sau nó không bao giờ là biên từ → **không bao giờ khớp** |
+| `/\b(bán\|rao\|cho thuê)\b/` | mọi câu rao CHO THUÊ rơi âm thầm, không tạo tin |
+| `/\btr\b/` (viết tắt "triệu") | khớp luôn **"TRệt"** → `price_raw` thành "1 trệt 2 lầu" |
+
+Cách viết đúng: tự dựng biên từ bằng lớp chữ tiếng Việt —
+`/(^|[^a-zà-ỹ])thu[êe](?![a-zà-ỹ])/` (vẫn để "thuế" trượt),
+`/tr(?![a-zA-ZÀ-ỹ])/`. **Luật: không đặt `\b` cạnh chữ tiếng Việt có dấu.**
+
+Giới hạn còn lại (chưa vá, chưa có FR): toàn bộ đường bóc tách vẫn giả định
+người dùng gõ **có dấu**. Câu rao "cho thue nha hem phuong 5" không qua cổng —
+không phải do lỗi trên mà do các mẫu loại BĐS / phường / giá đều viết có dấu.
+Muốn hỗ trợ gõ không dấu thì phải chuẩn hoá dấu ở đầu vào, cần FR riêng.
+
 ### SRS-3.8b · Bảng phụ trợ
 ```
 tags                id, slug unique, keyword, title, description, criteria jsonb
