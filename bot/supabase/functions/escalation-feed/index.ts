@@ -19,6 +19,13 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "bridge secret sai" }, 401);
   }
 
+  // FR-152 nhịp tim: bridge gõ cửa đây mỗi phút, nên đây là chỗ RẺ NHẤT để
+  // biết nó còn sống — khỏi thêm một dòng nào vào máy chạy bridge. Quá 15
+  // phút không thấy nhịp trong giờ làm thì bot_health_tick() ghi sổ + báo.
+  // (Lưu ý thật: tin báo đi ĐƯỜNG BRIDGE, nên bridge chết là tin nằm chờ tới
+  //  lúc nó sống lại. Muốn biết ngay thì mở /admin — trang đó đọc bot_health.)
+  await client.rpc("beat", { p_who: "bridge-zca" });
+
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? "pull");
 

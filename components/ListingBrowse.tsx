@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import ListingCard from "@/components/ListingCard";
 import { coverByCode } from "@/lib/photos";
 import { supabase, type Listing } from "@/lib/supabase";
@@ -39,6 +40,51 @@ const PN = [1, 2, 3, 4]; // "từ N phòng ngủ trở lên" (FR-128)
 
 type Params = { phuong?: string; trang?: string; gia?: string; dt?: string; xep?: string; pn?: string };
 
+// Trang này ĐỌC searchParams nên Next đánh dấu ƒ — dựng lại từng request, ISR
+// không với tới (tổ hợp bộ lọc là vô hạn, không prerender được). Chỗ tốn thật
+// không phải HTML mà là query Supabase: gói nó vào Data Cache, khoá theo đúng
+// bộ lọc. Hai người bấm cùng "Dưới 5 tỷ · Phường 5" trong 5 phút thì DB chỉ bị
+// hỏi một lần. Free tier chỉ có 60 max_connections nên đây là chỗ đáng giữ.
+type Truy = {
+  deal: "ban" | "cho_thue";
+  phuong?: string;
+  giaMin?: number; giaMax?: number; loGia: boolean;
+  dtMin?: number; dtMax?: number; loDt: boolean;
+  pn: number | null;
+  xep: string;
+  page: number;
+};
+
+const layTin = unstable_cache(
+  async (t: Truy) => {
+    let q = supabase
+      .from("listings")
+      .select("*", { count: "exact" })
+      .eq("deal", t.deal)
+      .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
+      .not("price_raw", "is", null)
+      .neq("price_raw", "");
+    if (t.phuong) q = q.eq("ward", t.phuong);
+    if (t.giaMin) q = q.gte("price_vnd", t.giaMin);
+    if (t.giaMax) q = q.lt("price_vnd", t.giaMax);
+    if (t.loGia) q = q.gt("price_vnd", 0);
+    if (t.dtMin) q = q.gte("area_m2", t.dtMin);
+    if (t.dtMax) q = q.lt("area_m2", t.dtMax);
+    if (t.loDt) q = q.gt("area_m2", 0);
+    if (t.pn) q = q.gte("bedrooms", t.pn);
+    q =
+      t.xep === "gia-tang" ? q.order("price_vnd", { ascending: true, nullsFirst: false })
+      : t.xep === "gia-giam" ? q.order("price_vnd", { ascending: false, nullsFirst: false })
+      : t.xep === "dt-lon" ? q.order("area_m2", { ascending: false, nullsFirst: false })
+      : q.order("created_at", { ascending: false });
+    q = q.range((t.page - 1) * PAGE_SIZE, t.page * PAGE_SIZE - 1);
+    const { data, count } = await q;
+    return { rows: (data ?? []) as Listing[], total: count ?? 0 };
+  },
+  ["listing-browse"],
+  { revalidate: 300, tags: ["listings"] },
+);
+
 export default async function ListingBrowse({
   deal,
   title,
@@ -56,33 +102,17 @@ export default async function ListingBrowse({
   const dt = DT.find((d) => d.key === sp.dt);
   const xep = XEP.find((x) => x.key === sp.xep) ?? XEP[0];
 
-  let query = supabase
-    .from("listings")
-    .select("*", { count: "exact" })
-    .eq("deal", deal)
-    .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
-    .not("price_raw", "is", null)
-    .neq("price_raw", "");
-  if (sp.phuong) query = query.eq("ward", sp.phuong);
-  if (gia?.min) query = query.gte("price_vnd", gia.min);
-  if (gia?.max) query = query.lt("price_vnd", gia.max);
-  if (gia) query = query.gt("price_vnd", 0);
-  if (dt?.min) query = query.gte("area_m2", dt.min);
-  if (dt?.max) query = query.lt("area_m2", dt.max);
-  if (dt) query = query.gt("area_m2", 0);
   const pn = PN.includes(Number(sp.pn)) ? Number(sp.pn) : null;
-  if (pn) query = query.gte("bedrooms", pn);
-  query =
-    xep.key === "gia-tang" ? query.order("price_vnd", { ascending: true, nullsFirst: false })
-    : xep.key === "gia-giam" ? query.order("price_vnd", { ascending: false, nullsFirst: false })
-    : xep.key === "dt-lon" ? query.order("area_m2", { ascending: false, nullsFirst: false })
-    : query.order("created_at", { ascending: false });
-  query = query.range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-
-  const { data, count } = await query;
-  const listings = (data ?? []) as Listing[];
+  const { rows: listings, total } = await layTin({
+    deal,
+    phuong: sp.phuong,
+    giaMin: gia?.min, giaMax: gia?.max, loGia: !!gia,
+    dtMin: dt?.min, dtMax: dt?.max, loDt: !!dt,
+    pn,
+    xep: xep.key,
+    page,
+  });
   const covers = await coverByCode(listings.map((l) => l.code)); // FR-148
-  const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // Link giữ nguyên các lọc khác, đổi một tham số (trang reset về 1)
