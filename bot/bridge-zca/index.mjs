@@ -176,7 +176,21 @@ try {
       const tid = String(r?.threadId ?? r?.data?.threadId ?? "");
       if (!tid) return;
       const icon = r?.data?.content?.rIcon ?? r?.data?.rIcon ?? "❤️";
-      await handleIncoming(tid, `[khách thả cảm xúc ${icon}]`, undefined, undefined);
+      // msg_id BẮT BUỘC có: postJson() thử lại khi mạng nghẽn, mà chat-reply
+      // chống trả lời hai lần bằng khoá trùng zalo_msg_id. Đường tin nhắn
+      // thường có sẵn msgId; đường reaction thì phải tự dựng.
+      // Id phải vừa GIỐNG nhau giữa hai lượt thử của CÙNG cú thả tim (nên tính
+      // MỘT lần ở đây, ngoài postJson), vừa KHÁC nhau giữa hai cú thả tim khác
+      // nhau — lấy icon làm khoá là khách thả tim lần hai bị bot ngó lơ vĩnh
+      // viễn, vì khoá trùng nằm vĩnh viễn trong DB.
+      const rMsgId = r?.data?.content?.rMsg?.[0]?.gMsgID ?? r?.data?.msgId ??
+        r?.data?.content?.rMsgId ?? Date.now();
+      await handleIncoming(
+        tid,
+        `[khách thả cảm xúc ${icon}]`,
+        undefined,
+        `react-${tid}-${rMsgId}`,
+      );
     } catch (e) {
       console.error("reaction lỗi:", errDetail(e));
     }
