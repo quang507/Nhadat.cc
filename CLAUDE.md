@@ -96,10 +96,18 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   `up-anh.mjs` đẩy ảnh thật lên bucket `listing-photos` theo mã tin (FR-148);
   nó chỉ ĐỌC `masterDB/`, không bao giờ copy ảnh vào repo.
 
-**Repo là PRIVATE (từ 26/08/2026).** Đừng bao giờ để web trỏ tới
-`raw.githubusercontent.com/quang507/Nhadat.cc/...` — raw của repo private trả
-404, và đúng vì vậy mà toàn bộ ảnh placeholder từng vỡ hết. Tài nguyên tĩnh để
-trong `public/` rồi tham chiếu bằng đường dẫn tương đối (`/img/house1.jpg`).
+**Repo hiện đang PUBLIC** (kiểm 26/08/2026 qua API GitHub: `"private": false`).
+Nghĩa là mọi file đang track đều đọc được công khai, kể cả tài liệu gốc ở thư
+mục gốc: `biz model.docx`, `dự kiến vốn 6 tháng đầu.xlsx`, `chats w B.docx`,
+`S's side.docx`, `Tài liệu hệ thống nhadat.cc.pdf`, `hình samples/`. Muốn đóng
+thì đổi visibility ở GitHub Settings — nhưng đóng KHÔNG xoá được lịch sử người
+khác đã clone.
+
+Dù public hay private, **đừng để web trỏ tới
+`raw.githubusercontent.com/quang507/Nhadat.cc/...`**: nó buộc ảnh của web phụ
+thuộc vào một thiết lập GitHub chẳng liên quan gì, set private một cái là raw
+trả 404 và ảnh vỡ sạch. Tài nguyên tĩnh để trong `public/` rồi tham chiếu bằng
+đường dẫn tương đối (`/img/house1.jpg`).
 
 Thư mục `nhadat-cc/` cũ (máy local) không dùng nữa. Quy tắc giữ nguyên: tính
 năng mới phải có FR/SRS tương ứng trong `docs/` trước khi code.
