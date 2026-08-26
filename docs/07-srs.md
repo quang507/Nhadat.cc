@@ -298,6 +298,37 @@ escalations         id, type enum(QUESTION, VOICE, VIEWING, UPSET), buyer_id, pr
 - RLS bật trên mọi bảng; `anon` chỉ đọc được `properties` có `status='dang_rao'`,
   `photos` có `is_public=true`, và `tags`.
 
+**Mô hình quyền thực tế (soát bảo mật 26/08/2026).** Anon key là key **công
+khai** — nó nằm trong bundle JS của web và trong `bot/bridge-zca`; repo để
+private không làm nó bí mật. Vì vậy RLS + GRANT là bức tường duy nhất, và luật
+là:
+
+1. **Vai `anon` chỉ được ĐỌC.** Mọi quyền INSERT/UPDATE/DELETE/TRUNCATE trên
+   schema `public` đã thu hồi khỏi `anon`; `authenticated` giữ quyền ghi có
+   policy gác (buyers, listings nháp, listing_views), không ai có TRUNCATE.
+2. **Bảng chỉ dành cho bot** (`reminders`, `messages`, `conversations`,
+   `info_requests`, `viewings`, `deals`, `ctvs`, `ctv_daily_reports`,
+   `bot_prompts`, `required_facts`, `interests`, `ratings`) bật RLS và **cố ý
+   không có policy nào** — service_role bỏ qua RLS nên bot chạy bình thường,
+   còn anon đọc ra 0 dòng. Cảnh báo `rls_enabled_no_policy` của Supabase ở các
+   bảng này là *kỳ vọng*, không phải lỗi.
+3. **Hàm là nội bộ trừ khi chứng minh ngược lại.** Toàn bộ hàm trong `public`
+   đã thu hồi EXECUTE khỏi `public/anon/authenticated`; chỉ `service_role` và
+   `postgres` gọi được. Trước đó `seller_drip_tick`, `ctv_report_tick`,
+   `mark_listing_interest`… gọi được bằng anon key qua `/rest/v1/rpc/…`.
+   Mọi hàm cũng ghim `search_path = public, pg_temp`.
+4. **View không được là cửa hậu.** View SECURITY DEFINER chạy bằng quyền chủ
+   view nên đi vòng RLS. `public_listings`, `public_media`,
+   `listing_missing_facts` đã chuyển `security_invoker = on` và khoá khỏi anon
+   (web không dùng). Hai view cố ý giữ definer: `agents_public` (chỉ tên NMG +
+   số tin, nguồn trang `/moi-gioi`) và `listing_photos_v` (chỉ path của bucket
+   vốn công khai) — cả hai chỉ còn quyền SELECT.
+5. **Vault không bao giờ chạm anon**: `get_secret()` chỉ cấp cho `postgres` và
+   `service_role`.
+
+Hồi quy: TS-SEC-01…10 trong `docs/10 §10.7`, chạy lại sau mọi migration đụng
+RLS hoặc GRANT.
+
 ### SRS-3.10 · `projects` — hàng dự án (FR-113, OPEN-15 phương án b)
 ```
 id             uuid pk
