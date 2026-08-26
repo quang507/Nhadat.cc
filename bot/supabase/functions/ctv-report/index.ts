@@ -85,8 +85,13 @@ Deno.serve(async (req) => {
         .map((m) => `${m.sender === "buyer" ? "KHÁCH" : "CTV/BOT"}: ${m.body}`).join("\n");
       if (!convo) continue;
       try {
+        // 512 là QUÁ CHẶT cho schema Score: 4 điểm thành phần + comment tiếng
+        // Việt 1-2 câu có trích nguyên văn tin vi phạm. Model bị cắt giữa chuỗi
+        // → JSON hụt đuôi → parse ném → catch nuốt → điểm CTV mất im lặng.
+        // Đã xảy ra thật 26/08 ("Unterminated string at position 349").
+        // 2048 cho khớp rate-ctv, vốn dùng đúng schema và đúng rubric này.
         const resp = await anthropic.messages.parse({
-          model: MODEL, max_tokens: 512,
+          model: MODEL, max_tokens: 2048,
           output_config: { effort: "low", format: zodOutputFormat(Score) },
           system: [{ type: "text", text: RATE_CTV_RUBRIC, cache_control: { type: "ephemeral" } }],
           messages: [{ role: "user", content: `Hội thoại cần chấm:\n${convo}` }],
@@ -95,7 +100,8 @@ Deno.serve(async (req) => {
           scores.push({ ...(resp.parsed_output as z.infer<typeof Score>), conversation_id: c.id });
         }
       } catch (e) {
-        console.error("ctv-report score:", (e as Error)?.message);
+        // Nêu rõ hội thoại nào hỏng: mất một điểm thì avg lệch mà không ai biết.
+        console.error(`ctv-report score (conversation ${c.id}):`, (e as Error)?.message);
       }
     }
     const avg = scores.length
