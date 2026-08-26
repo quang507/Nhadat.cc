@@ -71,7 +71,20 @@ revoke execute on function public.bump_model_quota(integer)
 --           Bridge gửi header khi máy chạy bridge có env BRIDGE_SECRET.
 --   CỔNG 2  bump_model_quota(DAILY_MODEL_CALL_CAP ?? 1000) → vượt thì 429 + im.
 --
--- HAI VIỆC PHẢI LÀM TAY để cổng 1 có tác dụng (chưa làm thì chỉ có cổng 2 chạy):
---   1. Supabase Dashboard → Vault → thêm secret `BRIDGE_SECRET` = chuỗi ngẫu nhiên.
---   2. Máy chạy bridge: đặt env `BRIDGE_SECRET` ĐÚNG chuỗi đó rồi khởi động lại.
--- Đặt sai một bên là bot câm ngay (403), nên đặt Vault trước, bridge sau.
+-- THỨ TỰ BẬT CỔNG 1 — LÀM ĐÚNG CHIỀU NÀY:
+--   1. Máy chạy bridge: đặt env `BRIDGE_SECRET` TRƯỚC, khởi động lại.
+--   2. Rồi mới cất secret cùng tên vào Vault.
+-- Lý do: bridge gửi header khi Vault chưa có secret thì header bị bỏ qua, VÔ
+-- HẠI. Ngược lại, bật Vault trước khi bridge biết chuỗi là mọi request từ
+-- bridge ăn 403 ngay — bot câm cho tới lúc bridge được khởi động lại.
+-- (Bản đầu của file này ghi ngược thứ tự. Đã sửa 27/08.)
+--
+-- TẮT khẩn cấp nếu lỡ lệch: xoá secret là cổng tự mở lại như cũ —
+--   delete from vault.secrets where name = 'BRIDGE_SECRET';
+--
+-- 27/08: secret đã được sinh NGAY TRONG DB bằng
+--   vault.create_secret(encode(extensions.gen_random_bytes(32),'base64'), 'BRIDGE_SECRET', …)
+-- nên giá trị chưa từng đi qua log hay khung chat. Đọc ở Dashboard → Vault.
+-- Kiểm chứng cùng ngày: gọi KHÔNG header → 403 forbidden; gọi CÓ header lấy từ
+-- Vault → 200 kèm câu trả lời thật. Cổng cũng bao luôn `escalation-feed` vì hai
+-- function dùng chung một tên secret.
