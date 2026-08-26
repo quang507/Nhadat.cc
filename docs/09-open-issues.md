@@ -28,6 +28,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-21 | Vai người rao 5 loại (CĐT/sàn/NMG/lướt sóng/chủ nhà) + phí riêng cho CĐT — mở rộng nhị phân CCRB/NMG? | Trung bình | BR-05, FR-101 |
 | OPEN-22 | Một người **vừa mua vừa bán** bằng cùng một Zalo: hiện `chat-reply` hễ khớp `sellers.zalo_user_id` là luôn tiếp theo vai người bán — người này không hỏi mua được. Dữ liệu tin thì an toàn (mọi quan tâm/hỏi đáp bám theo mã căn, FR-139/140), chỉ vướng vai hội thoại. Phương án: (a) bot tự đoán vai theo nội dung tin từng lượt; (b) lệnh chuyển vai ("tôi muốn tìm mua"); khuyến nghị BA: (b) trước, (a) sau. Chờ chủ dự án chốt | Trung bình | FR-129, FR-130 |
 | OPEN-23 | Edge function `rate-ctv` (FR-102) **trùng chức năng** với phần chấm điểm CTV nằm sẵn trong `ctv-report` (cùng rubric `RATE_CTV_RUBRIC`, cùng 4 tiêu chí): không có cron, không nơi nào gọi, bảng `ratings` nó ghi vào đang 0 dòng và không màn hình nào đọc. Phương án: (a) xoá `rate-ctv` + bảng `ratings`, đánh dấu FR-102 `[deprecated → FR-137]`; (b) giữ làm cửa chấm-lại-một-hội-thoại theo yêu cầu (admin bấm nút), khi đó cần màn hình đọc `ratings`. Khuyến nghị BA: (a) — chấm điểm đã nằm trong báo cáo 17h, giữ hai đường chấm là nguồn lệch số. Chờ chủ dự án chốt | Thấp | FR-102, FR-137 |
+| OPEN-24 | `pg_net` mở cho `anon`: `has_schema_privilege('anon','net','usage')` và `has_function_privilege('anon','net.http_post…')` đều `true` → mồi **SSRF** (ai cầm anon key mà chọc tới `net.*` là sai DB gọi HTTP đi bất cứ đâu, từ IP của Supabase). Hôm nay chưa khai thác được vì PostgREST chỉ phơi `public` — nhưng đó là hàng rào cấu hình, không phải hàng rào quyền. **Không tự vá được**: schema `net` do `supabase_admin` sở hữu, ta là `postgres`, REVOKE thành no-op im lặng. Phương án: (a) gác cửa (giữ Exposed schemas đúng `public, graphql_public`; cấm hàm SECURITY INVOKER trong `public` gọi `net.*`); (b) mở ticket Supabase xin thu hồi grant mặc định. Khuyến nghị BA: (a) ngay + (b) song song | Cao | NFR-06, SRS-3.9 |
 
 ---
 
@@ -304,3 +305,47 @@ ghi vào có 0 dòng và không màn hình nào đọc.
 **Khuyến nghị BA**: (a). Chấm điểm đã nằm trong báo cáo 17h; giữ hai đường chấm
 ghi vào hai bảng khác nhau là nguồn lệch số về sau. Xoá một FR là quyết định của
 chủ dự án nên chưa tự làm.
+
+### OPEN-24 · `pg_net` mở cho `anon` — mồi SSRF không vá được bằng SQL
+
+**Phát hiện**: soát cloud/compute 26/08/2026.
+
+**Hiện trạng đo được**:
+
+```
+has_schema_privilege('anon','net','usage')                    → true
+has_function_privilege('anon','net.http_post(...)','execute') → true
+```
+
+`net.http_post` là cửa cho Postgres tự gọi HTTP ra ngoài. Ai cầm anon key —
+key nằm sẵn trong bundle JS của web, ai mở trang cũng lấy được — mà chọc tới
+được `net.*` thì sai được DB gọi HTTP đi bất cứ đâu, **từ mạng và IP của
+Supabase**. Đó là SSRF.
+
+**Vì sao hôm nay chưa khai thác được**: PostgREST chỉ phơi schema `public` (+
+`graphql_public`), mà `net` không nằm trong đó, nên `/rest/v1/rpc/http_post`
+không tồn tại. Nhưng đó là hàng rào **cấu hình**, không phải hàng rào **quyền**.
+Thủng ngay khi:
+- (a) ai đó thêm `net` vào *Exposed schemas* (Dashboard → Settings → API); hoặc
+- (b) có hàm `SECURITY INVOKER` mới trong `public` gọi `net.*` — hàm đó chạy
+  bằng quyền người gọi, mà `anon` đang có đủ quyền.
+
+**Vì sao không tự vá được**: schema `net` thuộc sở hữu `supabase_admin`, còn ta
+kết nối bằng `postgres`. `REVOKE` quyền mình không cấp, trên object mình không
+sở hữu, thì Postgres chỉ cảnh báo rồi bỏ qua — **không báo lỗi**. Migration
+`soat_cloud_va_compute_26_08` có chạy lệnh revoke và `apply_migration` trả
+success, nhưng kiểm lại `has_*_privilege` vẫn `true`: no-op hoàn toàn. Muốn
+revoke thật phải là `supabase_admin`, vai Supabase không cấp cho khách.
+
+**Phương án**
+- (a) **Sống chung + gác cửa**: giữ *Exposed schemas* đúng `public,
+  graphql_public` và kiểm định kỳ; cấm tuyệt đối hàm `SECURITY INVOKER` trong
+  `public` gọi `net.*` (hàm nào cần HTTP thì `SECURITY DEFINER` + thu hồi
+  EXECUTE khỏi `public, anon, authenticated`, đúng như `20260826c` đã làm).
+- (b) **Mở ticket với Supabase** xin thu hồi grant mặc định của `pg_net` cho
+  `anon`/`authenticated` trên project này.
+- (c) Bỏ hẳn `pg_net` — không khả thi: cron `nudge_tick`/`seller_drip_tick` gọi
+  edge function qua nó.
+
+**Khuyến nghị BA**: (a) ngay, kèm (b) song song. (a) không tốn gì và đã đủ chặn
+đường khai thác hiện có; (b) mới là dứt điểm nhưng phụ thuộc Supabase.
