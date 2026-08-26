@@ -97,6 +97,20 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
   return { max: Math.round(base * 1.15) };
 }
 
+// Đoán loại BĐS từ câu chữ tự nhiên. Dùng chung cho câu rao mới (FR-144) và cho
+// câu trả lời fact `loai_bds` khi tin chưa rõ loại — xét "đất" trước "nhà" kẻo
+// "bán đất có nhà cấp 4" bị đọc thành nhà.
+function guessPropertyType(text: string): string | null {
+  if (/mặt bằng/i.test(text)) return "mat_bang";
+  if (/chung cư|căn hộ/i.test(text)) return "chung_cu";
+  if (/\bđất\b|\bnền\b/i.test(text)) return "dat";
+  if (/phòng trọ|nhà trọ|\btrọ\b/i.test(text)) return "phong_tro";
+  if (/biệt thự|villa/i.test(text)) return "biet_thu";
+  if (/cấp 4|cấp bốn/i.test(text)) return "nha_cap4";
+  if (/nhà phố|nhà riêng|nhà hẻm|nhà mặt tiền|\bnhà\b/i.test(text)) return "nha_pho";
+  return null;
+}
+
 // FR-29: mã căn khách nhắc ("#BDS-Q5-0115", từ web bấm sang) — chào đúng căn đó
 const CODE_RE = /(?:#\s*)?\b([A-Za-z]{2,5}(?:-[A-Za-z0-9]{1,8}){1,3})\b/g;
 
@@ -238,6 +252,25 @@ Deno.serve(async (req) => {
       return jsonResponse({ reply: thanks, replies: [thanks], role: "seller" });
     }
     if (pendingReq) {
+      // Câu trả lời nào cập nhật thẳng một CỘT của listings thì ghi cột TRƯỚC,
+      // ghi fact sau: trigger đẩy-lên-web đọc được giá trị mới ngay lượt này.
+      if (/^dien_tich/.test(pendingReq.question)) {
+        const areaM = /([\d]+(?:[.,]\d+)?)\s*(?:m2|m²|mét)?/i.exec(text);
+        const areaV = areaM ? parseFloat(areaM[1].replace(",", ".")) : NaN;
+        if (Number.isFinite(areaV) && areaV > 5 && areaV < 5000) {
+          await client.from("listings").update({ area_m2: areaV }).eq("id", pendingReq.listing_id);
+        }
+      }
+      // Tin "chưa rõ loại" vừa được khai loại → ghi vào cột, lượt sau
+      // listing_missing_facts tự đổi sang đúng bộ câu hỏi của loại đó.
+      if (pendingReq.question === "loai_bds") {
+        const pt = guessPropertyType(text);
+        if (pt) {
+          await client.from("listings").update({ property_type: pt })
+            .eq("id", pendingReq.listing_id);
+        }
+      }
+
       await client.from("listing_facts").insert({
         listing_id: pendingReq.listing_id,
         question: pendingReq.question,
@@ -247,16 +280,6 @@ Deno.serve(async (req) => {
       await client.from("info_requests").update({
         status: "answered", answer: text, answered_at: new Date().toISOString(),
       }).eq("id", pendingReq.id);
-
-      // Trả lời diện tích → đồng bộ vào listings.area_m2 (trigger auto-publish
-      // FR-139 sẽ tự đẩy tin lên web khi đủ giá + diện tích + phường)
-      if (/^dien_tich/.test(pendingReq.question)) {
-        const areaM = /([\d]+(?:[.,]\d+)?)\s*(?:m2|m²|mét)?/i.exec(text);
-        const areaV = areaM ? parseFloat(areaM[1].replace(",", ".")) : NaN;
-        if (Number.isFinite(areaV) && areaV > 5 && areaV < 5000) {
-          await client.from("listings").update({ area_m2: areaV }).eq("id", pendingReq.listing_id);
-        }
-      }
 
       // FR-144: tin ĐÃ ĐỦ ĐĂNG (auto-publish xong, hết cho_thong_tin) → NGỪNG
       // hỏi drip, để yên; khách quan tâm hỏi thêm thì FR-140 tự mở lại vòng hỏi.
@@ -315,13 +338,7 @@ Deno.serve(async (req) => {
       /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text) &&
       /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr\b)|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text);
     if (wantsSell) {
-      const ptype = /mặt bằng/i.test(text) ? "mat_bang"
-        : /chung cư|căn hộ/i.test(text) ? "chung_cu"
-        : /\bđất\b/i.test(text) ? "dat"
-        : /phòng trọ|\btrọ\b/i.test(text) ? "phong_tro"
-        : /biệt thự/i.test(text) ? "biet_thu"
-        : /cấp 4/i.test(text) ? "nha_cap4"
-        : "nha_pho";
+      const ptype = guessPropertyType(text) ?? "chua_ro";
       const sDeal = /cho thuê/i.test(text) ? "thue" : "ban";
       const wardM = /ph(?:ường|uong)\s*\.?\s*(\d{1,2})/i.exec(text);
       const priceM = /([\d][\d.,]*\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr\b)[^,.;\n]*)/i.exec(text);

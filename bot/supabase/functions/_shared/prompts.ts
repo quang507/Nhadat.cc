@@ -108,6 +108,7 @@ export const BUYER_PROFILE_FIELDS: Array<[string, string]> = [
 
 // Tên tiếng Việt dễ đọc cho fact_key trong required_facts (docs/02 FR-40…47)
 export const FACT_LABELS: Record<string, string> = {
+  loai_bds: "loại bất động sản (nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng)",
   phap_ly: "pháp lý (sổ hồng/sổ đỏ, hoàn công)",
   dien_tich_dat: "diện tích đất",
   dien_tich: "diện tích",

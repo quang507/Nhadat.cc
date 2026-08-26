@@ -193,7 +193,9 @@ async function pumpEscalations() {
         await api.sendMessage(msg, String(uid), ThreadType.User);
         await fetch(FEED_URL, {
           method: "POST", headers: feedHeaders,
-          body: JSON.stringify({ action: "ack", id: it.id }),
+          // Gửi kèm uid vừa resolve từ SĐT: server ghi ngược vào sellers/ctvs/admins
+          // để lần sau bot nhận ra người này ngay từ tin đầu (khỏi điền tay).
+          body: JSON.stringify({ action: "ack", id: it.id, zalo_user_id: String(uid) }),
         });
         console.log(`🔔 đã nhắn ${it.name}: ${String(it.note).slice(0, 70)}…`);
       } catch (e) {
