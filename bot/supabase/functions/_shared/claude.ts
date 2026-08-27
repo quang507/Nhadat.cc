@@ -108,3 +108,73 @@ export function escalationText(
     ? `Chào anh/chị, em bên nhadat.cc ạ. ${r.note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`
     : `🔔 nhadat.cc: ${r.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
 }
+
+/**
+ * FR-158 — token Zalo OA tự làm mới.
+ *
+ * Access token của Zalo OA sống 25 tiếng. Trước bản này token nằm CHẾT trong
+ * Vault (`ZALO_OA_ACCESS_TOKEN`): quá 25 tiếng là mọi lượt `sendZalo` trả
+ * error != 0, bot câm với khách mà mã HTTP vẫn 200 — đúng kiểu hỏng im lặng.
+ *
+ * Giờ token sống nằm ở bảng `bot_tokens`, được `zalo-token-refresh` (cron 12h)
+ * ghi đè. Vault chỉ còn là hạt giống cho lần chạy đầu.
+ *
+ * Đọc token PHẢI đi qua hàm này, đừng gọi thẳng `secretOf(db,
+ * "ZALO_OA_ACCESS_TOKEN")` nữa — gọi thẳng là đọc lại hạt giống đã hết hạn.
+ */
+export async function zaloToken(db: SupabaseClient): Promise<string | null> {
+  const { data } = await db.from("bot_tokens")
+    .select("access_token, expires_at").eq("name", "zalo_oa").maybeSingle();
+  const row = data as { access_token?: string; expires_at?: string } | null;
+  if (row?.access_token) {
+    // Còn hạn (chừa 10 phút biên) thì dùng; hết hạn vẫn thử — token cũ đôi khi
+    // còn ân hạn, và im lặng vẫn tệ hơn một cú gửi hụt có ghi sổ.
+    if (!row.expires_at || Date.parse(row.expires_at) - Date.now() > 10 * 60e3) {
+      return row.access_token;
+    }
+    await ghiLoi(db, "zalo token", `access_token hết hạn lúc ${row.expires_at} — cron zalo-token-refresh có chạy không?`);
+    return row.access_token;
+  }
+  return await secretOf(db, "ZALO_OA_ACCESS_TOKEN");
+}
+
+/**
+ * FR-159 — kéo ảnh Zalo về kho của mình.
+ *
+ * Link ảnh Zalo trả trong webhook là CDN TẠM. Lưu thẳng link đó vào
+ * `listing_facts` thì vài tuần sau nó trả 404: tin trên web mất ảnh, bot gửi
+ * lại cho khách cũng ra ảnh vỡ, mà không có lỗi nào nổ ở đâu cả — dữ liệu chỉ
+ * lặng lẽ mục đi.
+ *
+ * Tải về rồi đẩy lên bucket `listing-photos/<mã tin>/…` (đúng quy ước FR-148,
+ * nên view `listing_photos_v` thấy được ngay và trang tin tự có ảnh).
+ * Trả về URL công khai bền, hoặc `null` nếu hỏng — nơi gọi tự quyết định có
+ * dùng link tạm làm đường lùi hay không.
+ */
+export async function luuAnhVaoKho(
+  db: SupabaseClient,
+  listingCode: string,
+  url: string,
+): Promise<string | null> {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+    if (!r.ok) throw new Error(`tải ảnh HTTP ${r.status}`);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    // Zalo không luôn trả Content-Type tử tế; đuôi lấy từ URL, không có thì .jpg
+    const ext = /\.(jpe?g|png|webp|gif)(?:$|\?)/i.exec(url)?.[1]?.toLowerCase() ?? "jpg";
+    const contentType = r.headers.get("content-type")?.split(";")[0] ||
+      `image/${ext === "jpg" ? "jpeg" : ext}`;
+    // Tên file có thời điểm → xếp theo tên là xếp theo thời gian gửi (view
+    // listing_photos_v order by path), ảnh chủ nhà gửi sau nằm sau.
+    const path = `${listingCode}/chat-${new Date().toISOString()
+      .replace(/[:.]/g, "-")}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await db.storage.from("listing-photos")
+      .upload(path, buf, { contentType, upsert: false });
+    if (error) throw error;
+    const { data } = db.storage.from("listing-photos").getPublicUrl(path);
+    return data?.publicUrl ?? null;
+  } catch (e) {
+    await ghiLoi(db, "luuAnhVaoKho", e);
+    return null;
+  }
+}

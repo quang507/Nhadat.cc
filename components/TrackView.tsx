@@ -27,7 +27,18 @@ export default function TrackView({ code, listingId }: { code: string; listingId
         auth_user_id: user.id,
         listing_id: listingId,
         viewed_at: new Date().toISOString(),
-      }).then(() => {});
+      }, {
+        // Khai rõ khoá đụng độ. PostgREST đang tự suy ra khoá chính
+        // (auth_user_id, listing_id) nên hiện tại vẫn chạy đúng — nhưng đó là
+        // suy diễn ngầm, và ngày nào bảng thêm một unique index khác thì nó
+        // suy ra cái khác mà không báo gì, biến "xem lại một tin" thành lỗi
+        // 409 hoặc thành hai dòng. Viết ra thì nó khoá vào đúng ý mình.
+        onConflict: "auth_user_id,listing_id",
+      }).then(({ error }) => {
+        // Ghi "tin đã xem" hụt không được làm hỏng trang, nhưng cũng đừng nuốt
+        // hẳn — im lặng ở đây là lý do FR-126 hỏng mà không ai biết.
+        if (error) console.warn("TrackView: không ghi được listing_views —", error.message);
+      });
     });
   }, [code, listingId]);
   return null;

@@ -18,7 +18,24 @@ export default function Page() {
       .from("listings")
       .select("*")
       .in("code", codes)
-      .then(({ data }) => setListings((data ?? []) as Listing[]));
+      .then(({ data }) => {
+        // FR-168 — `.in()` KHÔNG trả về theo thứ tự mảng truyền vào.
+        //
+        // Không có ORDER BY thì Postgres trả theo thứ tự nào tiện cho nó (hay
+        // gặp nhất là thứ tự vật lý trong bảng, tức thứ tự tin được TẠO). Nên
+        // trang "tin anh chị đã lưu" xếp theo ngày đăng tin của người bán, chứ
+        // không theo lúc khách bấm tim. Khách lưu 12 căn rồi mở lại, thấy một
+        // thứ tự chẳng liên quan gì tới mình và không hiểu vì sao.
+        //
+        // localStorage nối tin mới vào CUỐI mảng (FavButton), nên đảo lại để
+        // căn vừa thích nằm trên cùng — đó mới là thứ khách đang tìm.
+        const hang = new Map(codes.map((c, i) => [c, i]));
+        const rows = ((data ?? []) as Listing[]).sort(
+          (a, b) =>
+            (hang.get(b.code ?? "") ?? -1) - (hang.get(a.code ?? "") ?? -1),
+        );
+        setListings(rows);
+      });
   }, []);
 
   return (

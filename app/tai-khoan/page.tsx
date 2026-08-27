@@ -48,10 +48,26 @@ export default function Page() {
       for (const l of [...(byCode.data ?? []), ...(byId.data ?? [])] as Listing[]) {
         seen.set(l.id, l);
       }
-      // Giữ thứ tự theo danh sách xem gần nhất (codes trước)
-      const ordered = [...seen.values()].sort(
-        (a, b) => codes.indexOf(a.code ?? "") - codes.indexOf(b.code ?? ""),
-      );
+      // FR-168 — thứ tự "đã xem gần đây" phải là thứ tự THẬT SỰ vừa xem.
+      //
+      // Bản cũ sắp bằng `codes.indexOf(a.code) - codes.indexOf(b.code)`. Với
+      // tin chỉ có ở phía DB (xem từ máy khác) thì indexOf trả -1, mà -1 nhỏ
+      // hơn MỌI chỉ số hợp lệ — nên một tin xem từ điện thoại tuần trước bị
+      // đẩy lên trên căn vừa mở cách đây hai phút trên chính máy này. Càng
+      // đăng nhập nhiều thiết bị thì càng lộn.
+      //
+      // Sửa: xếp theo MỐC THỜI GIAN. localStorage không lưu thời điểm, nhưng
+      // nó có thứ tự (mới nhất ở đầu), nên chỉ số trong mảng đủ làm hạng; tin
+      // chỉ có ở DB thì xếp sau toàn bộ tin của máy này, giữ nguyên thứ tự
+      // viewed_at mà truy vấn đã trả về.
+      const hangDb = new Map(ids.map((id, i) => [id, i]));
+      const hang = (l: Listing) => {
+        const iMay = l.code ? codes.indexOf(l.code) : -1;
+        if (iMay >= 0) return iMay;                       // 0..n-1: máy này
+        const iDb = hangDb.get(l.id);
+        return codes.length + (iDb ?? Number.MAX_SAFE_INTEGER); // sau đó: thiết bị khác
+      };
+      const ordered = [...seen.values()].sort((a, b) => hang(a) - hang(b));
       setRecent(ordered.slice(0, 8));
 
       // Khuyến nghị: cùng phường + giá ±35% quanh tin xem gần nhất, loại đã xem

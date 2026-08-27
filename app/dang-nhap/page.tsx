@@ -6,9 +6,27 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+// Đích cho phép sau khi đăng nhập (FR-166).
+//
+// Bản cũ chỉ biết đúng một chỗ: `next === "quan-ly" ? "/quan-ly" : "/tai-khoan"`.
+// Nghĩa là admin bấm "Đăng nhập" từ /admin bị ném về /tai-khoan, rồi phải tự
+// gõ lại /admin trên thanh địa chỉ — mỗi lần đăng nhập. Cũng vậy cho /raoban
+// và /yeu-thich sau này.
+//
+// Vẫn giữ DANH SÁCH TRẮNG chứ không nhận thẳng `next` làm URL: `next` là chuỗi
+// trong query string, ai cũng sửa được. Nhận bừa là mở đường open-redirect —
+// gửi cho người ta link /dang-nhap?next=https://trang-lua-dao... rồi họ đăng
+// nhập xong bị bắn thẳng sang đó, với vẻ ngoài là nhadat.cc vừa chuyển trang.
+const DICH_HOP_LE: Record<string, string> = {
+  "quan-ly": "/quan-ly",
+  admin: "/admin",
+  "tai-khoan": "/tai-khoan",
+  "yeu-thich": "/yeu-thich",
+};
+
 function LoginForm() {
   const q = useSearchParams();
-  const next = q.get("next") === "quan-ly" ? "/quan-ly" : "/tai-khoan";
+  const next = DICH_HOP_LE[q.get("next") ?? ""] ?? "/tai-khoan";
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errMsg, setErrMsg] = useState("");

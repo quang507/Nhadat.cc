@@ -8,9 +8,11 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  ghiLoi,
   jsonResponse,
   MODEL,
   serviceClient,
+  zaloToken,
 } from "../_shared/claude.ts";
 import { FACT_LABELS, SELLER_SCRIPT_RULES, TONE_RULES } from "../_shared/prompts.ts";
 
@@ -145,13 +147,15 @@ Deno.serve(async (req) => {
 
     // Gửi thẳng qua Zalo OA nếu có kênh (FR-129)
     if (seller?.zalo_user_id) {
-      const { data: token } = await db.rpc("get_secret", {
-        secret_name: "ZALO_OA_ACCESS_TOKEN",
-      });
+      // FR-158: token SỐNG (bảng bot_tokens). Bản cũ đọc thẳng Vault qua
+      // get_secret — chuỗi đó chết sau 25 tiếng và không ai đổi hộ, nên câu
+      // hỏi nhỏ giọt lặng lẽ ngừng tới được chính chủ, mà `sent_via` chỉ ghi
+      // một mã lỗi không ai đọc.
+      const token = await zaloToken(db);
       if (token) {
         const send = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
           method: "POST",
-          headers: { "Content-Type": "application/json", access_token: token as string },
+          headers: { "Content-Type": "application/json", access_token: token },
           body: JSON.stringify({
             recipient: { user_id: seller.zalo_user_id },
             message: { text: out.message },
@@ -159,6 +163,23 @@ Deno.serve(async (req) => {
         });
         const sr = await send.json().catch(() => ({}));
         sent_via = sr?.error === 0 ? "zalo_oa" : `zalo_oa_error:${sr?.error}`;
+        // Gửi hụt ở đây rất kín: `info_requests` đã ghi `pending` ngay phía
+        // trên, nên hệ thống tin rằng đã hỏi chính chủ rồi và ngồi chờ câu trả
+        // lời không bao giờ tới. Tin rao đứng im ở `cho_thong_tin`, không lỗi
+        // nào nổ. Phải vào sổ (FR-152).
+        if (sr?.error !== 0) {
+          await ghiLoi(
+            db,
+            "ask-seller gửi OA",
+            `tin #${listing.code ?? listing_id}: Zalo trả ${JSON.stringify(sr).slice(0, 160)}`,
+          );
+        }
+      } else {
+        await ghiLoi(
+          db,
+          "ask-seller gửi OA",
+          `tin #${listing.code ?? listing_id}: chính chủ có Zalo ID nhưng KHÔNG có token OA — câu hỏi nằm chờ ở info_requests, phải gửi tay`,
+        );
       }
     }
   }

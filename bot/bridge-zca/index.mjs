@@ -182,19 +182,28 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
   // FR-143: đính kèm hình thật (URL chính chủ gửi, bộ não chọn) — tải về file
   // tạm rồi gửi như ảnh đính kèm; lỗi một tấm thì bỏ qua tấm đó.
   for (const url of Array.isArray(photos) ? photos : []) {
+    // File tạm phải khai NGOÀI try, và xoá trong `finally`. Bản cũ đặt
+    // `unlinkSync` ngay sau `sendMessage`: hễ gửi lỗi (mạng rớt, zca-js ném,
+    // acc bị treo) là nhảy thẳng vào catch và bỏ qua dòng xoá. Bridge chạy nền
+    // hàng tuần, mỗi tấm ảnh gửi hụt để lại một file kẹt vĩnh viễn trong tmpdir
+    // — Windows không tự dọn %TEMP%, nên nó chỉ lớn dần cho tới lúc đầy ổ.
+    let f = null;
     try {
       const img = await fetch(url);
       if (!img.ok) continue;
-      const f = path.join(
+      f = path.join(
         os.tmpdir(),
         `nhadat-${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`,
       );
       fs.writeFileSync(f, Buffer.from(await img.arrayBuffer()));
       await api.sendMessage({ msg: "", attachments: [f] }, String(threadId), ThreadType.User);
-      fs.unlinkSync(f);
       console.log(`→ 📷 ${url.slice(0, 70)}…`);
     } catch (e) {
       await ghiLoi("gửi ảnh", errDetail(e));
+    } finally {
+      // Xoá cũng có thể ném (file đang bị zca-js giữ) — nuốt riêng cú đó, đừng
+      // để việc dọn dẹp làm hỏng vòng gửi những tấm còn lại.
+      if (f) try { fs.unlinkSync(f); } catch { /* dọn hụt thì thôi */ }
     }
   }
 }
@@ -280,7 +289,21 @@ try {
 // escalation-feed, resolve SĐT → uid Zalo rồi nhắn từ acc clone, xong ack.
 // OA duyệt xong thì nudge tự gửi phía server, vòng này tự hết việc.
 const uidCache = new Map(); // SĐT → uid, khỏi findUser lặp lại
+
+// Cờ chống chồng nhịp. `setInterval(fn, 60_000)` KHÔNG chờ lượt trước xong —
+// nó bắn lượt mới đúng 60 giây một lần bất kể lượt cũ còn chạy hay không. Mà
+// một lượt ở đây có thể dài hơn thế dễ dàng: `pull` (retry 2 lần, timeout 20s
+// mỗi lần) + `findUser` cho từng SĐT lạ + `sendMessage` từng người + `ack`.
+// Mạng chậm là hai lượt chạy song song, cùng `pull` về ĐÚNG danh sách pending
+// đó (dòng chỉ chuyển `sent` ở bước ack cuối cùng), và chính chủ nhận hai tin
+// giống hệt nhau cách nhau vài giây.
+let dangBom = false;
 async function pumpEscalations() {
+  if (dangBom) {
+    console.log("⏭ bỏ nhịp escalation: lượt trước còn chạy");
+    return;
+  }
+  dangBom = true;
   try {
     const { items, error } = await postJson(FEED_URL, feedHeaders, { action: "pull" });
     if (error) return await ghiLoi("escalation-feed", error);
@@ -310,9 +333,19 @@ async function pumpEscalations() {
     }
   } catch (e) {
     await ghiLoi("pumpEscalations", errDetail(e));
+  } finally {
+    dangBom = false;
   }
 }
-setInterval(pumpEscalations, 60_000);
-pumpEscalations();
+
+// Vòng lặp bằng setTimeout thay cho setInterval: nhịp sau chỉ hẹn giờ SAU KHI
+// nhịp trước kết thúc, nên khoảng cách luôn là "xong rồi chờ 60 giây" chứ
+// không phải "cứ 60 giây một phát bất kể". Cờ `dangBom` ở trên vẫn giữ, vì
+// escalation-feed cũng là nhịp tim FR-152 và có thể có nơi khác gọi tay.
+async function vongBom() {
+  await pumpEscalations();
+  setTimeout(vongBom, 60_000);
+}
+vongBom();
 
 api.listener.start();

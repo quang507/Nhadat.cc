@@ -7,6 +7,7 @@ import { supabase, type Listing } from "@/lib/supabase";
 import { coverByCode, photosOfCode } from "@/lib/photos";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
 import {
+  factLabel,
   formatArea,
   formatPrice,
   placeholderImg,
@@ -231,7 +232,9 @@ export default async function Page({
                       phải lọc y như description, đừng in thẳng ra web. */}
                   {facts.map((f, i) => (
                     <li key={i} className="flex gap-4 py-3 text-sm">
-                      <span className="min-w-36 font-semibold text-mute">{f.question}</span>
+                      {/* FR-165: nhãn tiếng Việt, không in thẳng khoá DB
+                          ("do_rong_hem", "phap_ly") ra mặt khách. */}
+                      <span className="min-w-36 font-semibold text-mute">{factLabel(f.question)}</span>
                       <span>{sanitizeDescription(f.answer)}</span>
                     </li>
                   ))}

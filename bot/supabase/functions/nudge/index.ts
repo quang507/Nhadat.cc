@@ -11,6 +11,7 @@ import {
   secretOf,
   sendZalo,
   serviceClient,
+  zaloToken,
 } from "../_shared/claude.ts";
 import { TONE_RULES } from "../_shared/prompts.ts";
 
@@ -35,7 +36,8 @@ Deno.serve(async (req) => {
   if (!dry_run) await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 45000)));
   const client = serviceClient();
   const anthropic = await anthropicClient(client);
-  const oaToken = await secretOf(client, "ZALO_OA_ACCESS_TOKEN");
+  // FR-158: token SỐNG (bot_tokens), không phải chuỗi chết trong Vault.
+  const oaToken = await zaloToken(client);
   // FR-138: tone cấu hình được từ bảng bot_prompts (sửa ở dashboard, khỏi deploy)
   const { data: toneRow } = await client.from("bot_prompts")
     .select("content").eq("key", "tone_rules").maybeSingle();
@@ -106,6 +108,34 @@ Deno.serve(async (req) => {
 
   for (const r of due ?? []) {
     const who = (r.buyers ?? r.sellers) as { name?: string | null; zalo_user_id?: string | null } | null;
+    const zid = who?.zalo_user_id ?? null;
+    const laTest = !!zid && zid.startsWith("TEST");
+
+    // FR-163 — KHÔNG CÓ KÊNH THÌ KHÔNG ĐƯỢC GHI LÀ ĐÃ GỬI.
+    //
+    // Bản cũ để `sent` nguyên giá trị "none" khi người này không có Zalo ID,
+    // rồi rơi thẳng xuống hai dòng cuối: ghi một dòng `messages` sender='bot'
+    // và đóng reminder thành `sent`. Không tin nào từng rời khỏi máy chủ.
+    // Ba thứ hỏng cùng lúc, và không thứ nào tự lộ:
+    //   · sổ hội thoại có tin bot chưa hề tồn tại — CTV mở ra đọc, tưởng khách
+    //     đã được nhắc rồi, nên không nhắc nữa;
+    //   · lời nhắc đóng vĩnh viễn, không nhịp cron nào cứu;
+    //   · vẫn tốn một lượt model để soạn câu không ai đọc.
+    // Chặn TRƯỚC khi gọi model — vừa hết tin ảo vừa hết đốt tiền.
+    if (!dry_run && !zid) {
+      // Không có Zalo ID là hỏng CƠ CẤU, không phải trục trặc nhất thời: giữ
+      // pending thì nhịp sau lại kéo đúng mấy dòng này lên, mà truy vấn có
+      // `.limit(5)` — chúng chiếm chỗ vĩnh viễn của những lời nhắc gửi được.
+      await client.from("reminders").update({ status: "cancelled" }).eq("id", r.id);
+      out.push({ kind: r.kind, id: r.id, sent: "none", bo_qua: "người này chưa có Zalo ID" });
+      continue;
+    }
+    if (!dry_run && !oaToken && !laTest) {
+      // Chưa cấu hình OA là trục trặc TẠM: giữ pending cho nhịp sau, và cũng
+      // không gọi model (soạn xong cũng không gửi được).
+      out.push({ kind: r.kind, id: r.id, sent: "none", giu_pending: "chưa có token OA" });
+      continue;
+    }
     // Chưa biết tên thì gọi "anh/chị" — cấm model bịa tên (nó hay mượn tên trong ví dụ tone)
     const whoLabel = who?.name
       ? `Anh/chị ${who.name}`
@@ -142,11 +172,14 @@ Deno.serve(async (req) => {
 
     let sent = "none";
     if (!dry_run) {
-      if (who?.zalo_user_id && oaToken && !who.zalo_user_id.startsWith("TEST")) {
-        sent = (await sendZalo(oaToken, who.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
+      if (laTest) sent = "test"; // luồng kiểm thử: không bắn thật, vẫn đóng sổ
+      else if (zid && oaToken) {
+        sent = (await sendZalo(oaToken, zid, text)) ? "zalo_oa" : "zalo_error";
       }
-      if (sent === "zalo_error") {
-        // Gửi lỗi → GIỮ pending cho nhịp cron sau thử lại, đừng nuốt mất lời nhắc
+      // Chỉ ghi sổ + đóng reminder khi tin THẬT SỰ đã rời khỏi đây. Mọi kết cục
+      // khác đều giữ pending cho nhịp cron sau — đừng nuốt mất lời nhắc, và
+      // tuyệt đối đừng ghi một dòng bot chưa từng gửi.
+      if (sent !== "zalo_oa" && sent !== "test") {
         out.push({ kind: r.kind, id: r.id, text, sent, retry: true });
         continue;
       }
@@ -173,6 +206,13 @@ Deno.serve(async (req) => {
   let reengaged = 0;
   for (const b of quiet ?? []) {
     if (reengaged >= 5) break;
+    // FR-163: cùng lý do với nhánh reminder ở trên — không có kênh tới người
+    // này thì đừng gọi model, đừng ghi tin ảo vào sổ, và đừng ghi một dòng
+    // `reengage` status='sent' cho một tin chưa bao giờ được gửi. Dòng ảo đó
+    // còn tự bịt miệng mình 5 ngày, vì chính nó là thứ bộ đếm chống-spam ngay
+    // bên dưới đi tìm.
+    const bTest = !!b.zalo_user_id && b.zalo_user_id.startsWith("TEST");
+    if (!dry_run && !(b.zalo_user_id && oaToken) && !bTest) continue;
     // chống spam: đã hỏi thăm trong 5 ngày qua thì thôi
     const { count } = await client.from("reminders")
       .select("id", { count: "exact", head: true })
@@ -208,11 +248,12 @@ Deno.serve(async (req) => {
 
     let sent = "none";
     if (!dry_run) {
-      if (b.zalo_user_id && oaToken && !b.zalo_user_id.startsWith("TEST")) {
+      if (bTest) sent = "test";
+      else if (b.zalo_user_id && oaToken) {
         sent = (await sendZalo(oaToken, b.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
       }
-      if (sent === "zalo_error") {
-        // Gửi lỗi → không ghi vết "đã hỏi thăm", nhịp sau thử lại người này
+      if (sent !== "zalo_oa" && sent !== "test") {
+        // Gửi hụt → không ghi vết "đã hỏi thăm", nhịp sau thử lại người này
         reengaged++;
         out.push({ kind: "reengage", buyer: b.id, angle, text, sent, retry: true });
         continue;

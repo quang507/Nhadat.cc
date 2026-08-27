@@ -8,7 +8,10 @@ import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatPrice } from "@/lib/format";
 
-const WARDS = Array.from({ length: 15 }, (_, i) => `Phường ${i + 1}`);
+// 16 phường, khớp ô xổ của /admin/dang-tin và khớp dữ liệu thật (`listings`
+// đang có tin ở Phường 16). Để 15 ở đây là NMG không chọn được P16, mà tin P16
+// thì vẫn tồn tại — lệch giữa hai đường đăng tin của cùng một hệ thống.
+const WARDS = Array.from({ length: 16 }, (_, i) => `Phường ${i + 1}`);
 
 // Vòng đời tin FR-139 — đúng 5 trạng thái của CHECK trên listings.status.
 // (Nhãn tiếng Anh cũ đã bỏ: migration FR-139 dịch hết dữ liệu sang tiếng Việt
@@ -29,6 +32,13 @@ export default function Page() {
   const [ward, setWard] = useState("Phường 1");
   const [priceRaw, setPriceRaw] = useState("");
   const [msg, setMsg] = useState("");
+  // FR-164: NMG đăng được cả tin CHO THUÊ. Bản cũ gán cứng deal: "ban" lúc
+  // insert, nên nhà môi giới muốn rao mặt bằng/phòng trọ cho thuê thì tin vẫn
+  // vào kho dưới cờ BÁN. Hỏng theo dây chuyền và không có lỗi nào nổ: tin nằm
+  // sai ở /mua-ban thay vì /cho-thue, và bộ lọc kho của bot (.eq("deal", …))
+  // không bao giờ đưa nó cho khách đang tìm thuê. Cách duy nhất để chữa là
+  // admin vào Table Editor sửa tay từng dòng.
+  const [deal, setDeal] = useState<"ban" | "cho_thue">("ban");
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -68,7 +78,7 @@ export default function Page() {
       .insert({
         code,
         seller_id: sellerId,
-        deal: "ban",
+        deal,
         district: "Quận 5",
         ward,
         description: rao.trim(),
@@ -118,7 +128,18 @@ export default function Page() {
           placeholder="Ví dụ: Bán nhà HXH xe tải quay đầu, gần ngã tư Trần Bình Trọng, 4x16 một trệt hai lầu, 9 tỉ bớt lộc"
           className="mt-3 w-full rounded-lg border border-line px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-brand"
         />
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <label>
+            <span className="mb-1 block text-xs font-semibold text-mute">Loại giao dịch</span>
+            <select
+              value={deal}
+              onChange={(e) => setDeal(e.target.value as "ban" | "cho_thue")}
+              className="w-full rounded-lg border border-line bg-white px-3 py-2.5"
+            >
+              <option value="ban">Bán</option>
+              <option value="cho_thue">Cho thuê</option>
+            </select>
+          </label>
           <label>
             <span className="mb-1 block text-xs font-semibold text-mute">Phường (Quận 5)</span>
             <select value={ward} onChange={(e) => setWard(e.target.value)}

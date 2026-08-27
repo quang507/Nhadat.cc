@@ -31,10 +31,16 @@
 //
 // ĐÃ THỬ TỚI ĐÂU (27/08/2026): phần phân trang có chạy thật, trên một server
 // giả lập PostgREST — bảng 2300 dòng kéo về đủ 2300, dòng đầu 0, dòng cuối
-// 2299, không trùng không sót; 23/23 bảng ra file. Phần CHƯA thử là lần bắt
-// tay thật với supabase.co (môi trường soạn script không có đường ra Internet
-// tới đó). Nên lần chạy đầu trên máy chủ dự án hãy đối chiếu số dòng nó in ra
-// với số dòng trong Dashboard, ít nhất cho `listings` và `messages`.
+// 2299, không trùng không sót. Phần CHƯA thử là lần bắt tay thật với
+// supabase.co (môi trường soạn script không có đường ra Internet tới đó). Nên
+// lần chạy đầu trên máy chủ dự án hãy đối chiếu số dòng nó in ra với số dòng
+// trong Dashboard, ít nhất cho `listings` và `messages`.
+//
+// SỬA 27/08 (chiều): bản trước phân trang bằng header Range mà KHÔNG có
+// `order=`. Server giả lập trả dòng theo đúng thứ tự chèn nên bài thử trên qua
+// hết — còn Postgres thật thì không hứa hẹn gì về thứ tự khi thiếu ORDER BY.
+// Bảng nào trên 1000 dòng đều có thể mất/lặp dòng ở biên trang, mà script vẫn
+// in ra "đủ bảng" và một con số tổng trông hợp lý. Xem chú thích ở keoBang().
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
@@ -80,23 +86,70 @@ if (!KHOA) {
 // Danh sách bảng public tính tới 27/08/2026. Thêm bảng mới thì thêm vào đây —
 // script CỐ TÌNH không tự dò bảng: tự dò thì thêm bảng mà quên là im lặng bỏ
 // sót, còn liệt kê tay thì thiếu là thấy ngay khi so với Dashboard.
+//
+// Cột thứ hai là KHOÁ SẮP XẾP, và nó bắt buộc phải có — xem chú thích ở
+// keoBang(). Lấy đúng khoá chính của bảng để thứ tự là toàn phần (không hai
+// dòng nào bằng nhau), nên phân trang không bao giờ nhập nhằng.
+// (`ratings` đã bị xoá theo OPEN-23 ngày 27/08/2026.)
 const BANG = [
-  // (`ratings` đã bị xoá theo OPEN-23 ngày 27/08/2026.)
-  "admins", "bot_errors", "bot_health", "bot_prompts", "bot_usage",
-  "buyers", "conversations", "ctv_daily_reports", "ctvs", "deals",
-  "info_requests", "interests", "listing_facts", "listing_views", "listings",
-  "media", "messages", "projects", "reminders", "required_facts",
-  "sellers", "viewings",
+  ["admins",            "email"],
+  ["bot_errors",        "id"],
+  ["bot_health",        "who"],
+  ["bot_prompts",       "key"],
+  ["bot_tokens",        "name"],          // FR-158 — xem chú thích dưới
+  ["bot_usage",         "day"],
+  ["buyers",            "id"],
+  ["conversations",     "id"],
+  ["ctv_daily_reports", "id"],
+  ["ctvs",              "id"],
+  ["deals",             "id"],
+  ["info_requests",     "id"],
+  ["interests",         "buyer_id,listing_id"],
+  ["listing_facts",     "id"],
+  ["listing_views",     "auth_user_id,listing_id"],
+  ["listings",          "id"],
+  ["media",             "id"],
+  ["messages",          "id"],
+  ["projects",          "id"],
+  ["reminders",         "id"],
+  ["required_facts",    "fact_key,property_type"],
+  ["sellers",           "id"],
+  ["viewings",          "id"],
 ];
+// CỐ Ý KHÔNG sao lưu `rate_counters` (FR-162): bộ đếm dùng một lần rồi bỏ, tự
+// dọn sau 3 ngày. Khôi phục nó chỉ tổ dựng lại mấy con số vô nghĩa.
+//
+// `bot_tokens` thì NGƯỢC LẠI — bảng quan trọng nhất trong danh sách này sau
+// `listings`/`messages`. Zalo XOAY refresh_token mỗi lần đổi, nên dòng trong
+// đó là chìa khoá DUY NHẤT còn dùng được để bot gửi tin. Mất là phải vào Zalo
+// Developers cấp tay lại từ đầu. (Cũng vì vậy mà bản sao lưu này càng phải cất
+// ngoài repo và ngoài máy chạy DB.)
 
 const TRANG = 1000; // PostgREST mặc định trần 1000 dòng/lượt
 
-async function keoBang(ten) {
+async function keoBang(ten, khoaSapXep) {
   const rows = [];
   for (let tu = 0; ; tu += TRANG) {
     const den = tu + TRANG - 1;
+    // `order=` KHÔNG PHẢI trang trí — không có nó thì phân trang này SAI.
+    //
+    // Postgres không hứa hẹn gì về thứ tự dòng của một SELECT không ORDER BY.
+    // Giữa hai lượt fetch, planner có thể đổi cách quét, autovacuum có thể dời
+    // dòng, và một INSERT xen vào (bot vẫn đang chạy trong lúc sao lưu) là đủ
+    // để cả tập dịch chuyển. Range 0-999 rồi 1000-1999 khi đó cắt trên hai thứ
+    // tự khác nhau: vài dòng bị lấy hai lần, vài dòng không bao giờ được lấy.
+    //
+    // Đây là kiểu hỏng tệ nhất mà một script sao lưu có thể mắc — nó vẫn in ra
+    // "23/23 bảng" và một con số tổng trông rất hợp lý; chỉ tới ngày phải khôi
+    // phục thật mới biết vài trăm tin nhắn không có ở đó. Với bảng dưới 1000
+    // dòng thì không bao giờ lộ, vì chỉ có đúng một lượt fetch.
+    //
+    // Sắp theo KHOÁ CHÍNH (thứ tự toàn phần) chứ không theo created_at: hai
+    // dòng cùng created_at thì thứ tự giữa chúng lại không xác định, và lỗ
+    // hổng quay về nguyên vẹn ngay tại biên trang.
+    const order = khoaSapXep.split(",").map((c) => `${c.trim()}.asc`).join(",");
     const r = await fetch(
-      `${URL_DU_AN}/rest/v1/${ten}?select=*`,
+      `${URL_DU_AN}/rest/v1/${ten}?select=*&order=${encodeURIComponent(order)}`,
       {
         headers: {
           apikey: KHOA,
@@ -123,9 +176,9 @@ console.log(`Sao lưu → ${dich}\n`);
 
 let tongDong = 0;
 const hong = [];
-for (const ten of BANG) {
+for (const [ten, khoaSapXep] of BANG) {
   try {
-    const rows = await keoBang(ten);
+    const rows = await keoBang(ten, khoaSapXep);
     await writeFile(join(dich, `${ten}.json`), JSON.stringify(rows, null, 1));
     tongDong += rows.length;
     console.log(`  ${ten.padEnd(20)} ${String(rows.length).padStart(6)} dòng`);

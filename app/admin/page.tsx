@@ -63,15 +63,34 @@ export default function Page() {
     setHang((hg ?? []) as Ng[]);
   };
 
+  // FR-167: trang này KHÔNG được treo ở "Đang kiểm tra quyền…" vô hạn.
+  //
+  // Bản cũ là `getUser().then(...)` trần, không `.catch()`. Mạng chớp một cái,
+  // Supabase Auth trả 5xx, hay phiên hỏng — promise reject, `.then` không chạy,
+  // `role` nằm nguyên ở "loading", và màn hình đứng im mãi mãi. Không thông
+  // báo, không nút thử lại, không dấu vết trong console ngoài một unhandled
+  // rejection. Người dùng chỉ thấy trang chết, và F5 cũng ra y như vậy.
+  // Lỗi thì phải NÓI RA (FR-152) và cho một đường đi tiếp.
+  const [loi, setLoi] = useState<string | null>(null);
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return setRole("anon");
-      const { data: a } = await supabase
-        .from("admins").select("email").eq("email", user.email ?? "").maybeSingle();
-      if (!a) return setRole("user");
-      setRole("admin");
-      load();
-    });
+    (async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        if (!user) return setRole("anon");
+        const { data: a, error: aErr } = await supabase
+          .from("admins").select("email").eq("email", user.email ?? "").maybeSingle();
+        if (aErr) throw aErr;
+        if (!a) return setRole("user");
+        setRole("admin");
+        await load();
+      } catch (e) {
+        // Rơi về "anon" kèm lời giải thích: an toàn hơn hẳn treo, và cũng
+        // không cấp quyền nhầm cho ai — RLS phía DB mới là hàng rào thật.
+        setLoi(e instanceof Error ? e.message : String(e));
+        setRole("anon");
+      }
+    })();
   }, []);
 
   const setStatus = async (id: string, status: "dang_ban" | "an") => {
@@ -87,8 +106,16 @@ export default function Page() {
         <p className="mt-2 text-mute">
           {role === "anon" ? "Cần đăng nhập bằng tài khoản quản trị." : "Tài khoản này không có quyền quản trị."}
         </p>
+        {loi && (
+          <p className="mt-3 rounded-lg bg-brand/5 px-4 py-3 text-left text-sm text-brand">
+            Không kiểm tra được quyền: {loi}. Thử tải lại trang; còn lỗi thì
+            kiểm tra mạng hoặc trạng thái Supabase Auth.
+          </p>
+        )}
         {role === "anon" && (
-          <Link href="/dang-nhap" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white">
+          // FR-166: mang theo đích để đăng nhập xong quay lại ĐÂY, đừng ném
+          // admin về /tai-khoan rồi bắt tự gõ lại /admin.
+          <Link href="/dang-nhap?next=admin" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white">
             Đăng nhập
           </Link>
         )}
