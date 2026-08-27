@@ -16,9 +16,12 @@
 // hoàn tác nào hết. Script này là cái nút đó, chạy bằng tay.
 //
 // ============================== CÁCH DÙNG ==============================
-//   export SUPABASE_SERVICE_ROLE_KEY='...'      # Dashboard → Settings → API
-//   node scripts/sao-luu.mjs                    # ghi ra ../nhadat-backup/<ngày>/
-//   node scripts/sao-luu.mjs /duong/dan/khac
+//   Đặt khoá MỘT LẦN vào scripts/.env (file này tự đọc, đã gitignore):
+//       SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
+//   rồi:
+//       node scripts/sao-luu.mjs                # ghi ra ../nhadat-backup/<ngày>/
+//       node scripts/sao-luu.mjs /duong/dan/khac
+//   PHẢI có chữ `node` ở đầu. Gõ mỗi `sao-luu.mjs` thì Windows mở Notepad.
 //
 // KHÓA service_role BỎ QUA MỌI RLS. Đừng dán nó vào file trong repo, đừng
 // commit, đừng gõ nó vào chat. Chỉ để trong biến môi trường của máy chủ dự án.
@@ -34,7 +37,28 @@
 // với số dòng trong Dashboard, ít nhất cho `listings` và `messages`.
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Nạp scripts/.env — cùng lý do với bridge: `set SUPABASE_SERVICE_ROLE_KEY=...`
+// trong cmd chỉ sống đúng cửa sổ đó, đóng cửa sổ là mất. Bắt nhớ gõ lại mỗi lần
+// thì sớm muộn cũng quên, mà quên ở đây nghĩa là KHÔNG CÓ bản sao lưu nào.
+// Đọc theo thư mục của chính file này, không theo thư mục đang đứng.
+const HERE = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));
+const ENV_FILE = join(HERE, ".env");
+if (existsSync(ENV_FILE)) {
+  const tuFile = {};
+  for (const line of readFileSync(ENV_FILE, "utf8").split(/\r?\n/)) {
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!m || line.trim().startsWith("#")) continue;
+    const val = m[2].trim().replace(/^(['"])(.*)\1$/, "$2").replace(/^<(.*)>$/, "$1");
+    if (val) tuFile[m[1]] = val;           // dòng sau đè dòng trước, rỗng thì bỏ
+  }
+  for (const [k, v] of Object.entries(tuFile)) {
+    if (!(k in process.env)) process.env[k] = v;
+  }
+}
 
 const URL_DU_AN = process.env.SUPABASE_URL
   ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
@@ -43,9 +67,12 @@ const KHOA = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!KHOA) {
   console.error(
     "Thiếu SUPABASE_SERVICE_ROLE_KEY.\n" +
-    "  Lấy ở Dashboard → Settings → API → service_role.\n" +
-    "  export SUPABASE_SERVICE_ROLE_KEY='...' rồi chạy lại.\n" +
-    "  (Đừng ghi khoá vào file nào trong repo — repo đang public.)",
+    "  1. Dashboard → Project Settings → API keys → service_role → copy.\n" +
+    `  2. Tạo file ${ENV_FILE} với đúng một dòng (dán TRẦN, không ngoặc nhọn):\n` +
+    "       SUPABASE_SERVICE_ROLE_KEY=eyJhbG...\n" +
+    "  3. Chạy lại `node sao-luu.mjs`. (.env đã nằm trong .gitignore.)\n" +
+    "  Lưu ý: phải gõ `node sao-luu.mjs`, gõ mỗi `sao-luu.mjs` thì Windows mở\n" +
+    "  Notepad chứ không chạy.",
   );
   process.exit(1);
 }
@@ -54,10 +81,11 @@ if (!KHOA) {
 // script CỐ TÌNH không tự dò bảng: tự dò thì thêm bảng mà quên là im lặng bỏ
 // sót, còn liệt kê tay thì thiếu là thấy ngay khi so với Dashboard.
 const BANG = [
+  // (`ratings` đã bị xoá theo OPEN-23 ngày 27/08/2026.)
   "admins", "bot_errors", "bot_health", "bot_prompts", "bot_usage",
   "buyers", "conversations", "ctv_daily_reports", "ctvs", "deals",
   "info_requests", "interests", "listing_facts", "listing_views", "listings",
-  "media", "messages", "projects", "ratings", "reminders", "required_facts",
+  "media", "messages", "projects", "reminders", "required_facts",
   "sellers", "viewings",
 ];
 

@@ -9,7 +9,7 @@ tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/pro
 | Function | FR | Việc |
 |---|---|---|
 | `ask-seller` | FR-40…47, INS-06 | Đọc view `listing_missing_facts` của một listing, sinh MỘT tin Zalo hỏi S tối đa 3 thông tin thiếu (ưu tiên cao trước), ghi `info_requests` (bỏ qua fact đang `pending` — không spam S, INS-09). `dry_run: true` để xem tin không ghi DB. |
-| `rate-ctv` | FR-102 *(trùng chức năng với phần chấm điểm trong `ctv-report` — xem OPEN-23)* | Chấm CSKH của CTV/bot từ log hội thoại (bảng `messages` hoặc transcript truyền vào), 4 tiêu chí ×1-5 + stars tổng, ghi `ratings` (`rated_by='ai_qa'`, chi tiết trong `details` jsonb). Idempotent theo conversation. |
+| ~~`rate-ctv`~~ | *ĐÃ XOÁ 27/08/2026 (OPEN-23)* — trùng phần chấm điểm trong `ctv-report`. Nội dung cũ: FR-102, chấm CSKH của CTV/bot từ log hội thoại (bảng `messages` hoặc transcript truyền vào), 4 tiêu chí ×1-5 + stars tổng, ghi `ratings` (`rated_by='ai_qa'`, chi tiết trong `details` jsonb). Idempotent theo conversation. |
 | `chat-reply` | NFR-12, FR-129…135, FR-29/32, UF-06 | **Bộ não hội thoại** dùng chung mọi kênh: nhánh seller (hỏi nhỏ giọt), nhánh buyer (hồ sơ nhu cầu + trả lời tự nhiên, không delay nhân tạo, lọc kho theo giá số `price_vnd`, tra căn theo mã, kho dự án, đặt lịch xem nhà + xin SĐT đúng kịch bản, bóc lời hứa, cờ `need_human`, follow-up im lặng ngắn, đọc ảnh `image_url`). |
 | `zalo-webhook` | SRS-4.4 | Nhận event OA (`user_send_text`/`user_send_image`), verify chữ ký nếu có app secret, trả 200 <1s, chuyển vào chat-reply rồi gửi bong bóng (FR-131: không delay nhân tạo, giữa hai bong bóng chỉ 300ms cho Zalo giao đúng thứ tự). verify_jwt **tắt**. |
 | `nudge` | FR-133, FR-32 | Cron 30': nhắc lời hứa tới hạn, nhắc lịch xem trước ~45', follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); chỉ gửi 8h–21h VN + jitter 0-45s; `{dry_run, force}` để test. |
@@ -98,7 +98,7 @@ từ đâu cũng được. `.env` đã nằm trong `.gitignore`; repo này đang
 
 `required_facts` (37 fact chuẩn theo `property_type`) + view
 `listing_missing_facts`; `conversations` + `messages` (log hội thoại);
-`ratings` (+ `rated_by`, `conversation_id`, `details`) *(0 dòng, chưa màn hình nào đọc — OPEN-23)*; `ctvs`; `deals.ctv_id`;
+`ctvs`; `deals.ctv_id`;
 `buyers.preferences/last_contact_at/notes`; `projects` + `listings.unit_status`.
 
 ## Chưa làm (theo thứ tự SRS §8)

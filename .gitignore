@@ -33,3 +33,7 @@ bot/bridge-zca/package-lock.json
 # nghĩa. Bản mẫu không có giá trị thật thì vẫn commit (.env.example).
 bot/bridge-zca/.env
 !bot/bridge-zca/.env.example
+# scripts/.env giữ SUPABASE_SERVICE_ROLE_KEY — khoá bỏ qua mọi RLS, lọt ra là
+# mất sạch dữ liệu khách. Nguy hơn cả BRIDGE_SECRET.
+scripts/.env
+!scripts/.env.example

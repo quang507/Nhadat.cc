@@ -169,7 +169,7 @@ Cổng NMG tự phục vụ đầy đủ (MVP dùng CTV vận hành thủ công)
 | FR-99 | Hỗ trợ định giá bằng cách so sánh nhanh với BĐS cạnh tranh trên thị trường | S | S's side.docx §Dịch vụ của nhadatCC cho S |
 | FR-100 | URL "Show a list": tạo danh sách vài chục BĐS riêng cho một B, nhận User ID + danh sách BĐS ID | M | S's side.docx §Show a list |
 | FR-101 | Phân loại S là CCRB hay NMG để áp đúng mức phí | M | biz model.docx |
-| FR-102 | Theo dõi tiêu chuẩn NMG: ≥10 listing, tỉ lệ thành công ≥5% (MA 6 tháng), rating >3/5 | S | biz model.docx §NMG |
+| FR-102 | *[deprecated 27/08/2026 → FR-137]* Theo dõi tiêu chuẩn NMG: ≥10 listing, tỉ lệ thành công ≥5% (MA 6 tháng), rating >3/5. Phần chấm điểm đã nằm trọn trong báo cáo CTV 17h (FR-137, cùng rubric `RATE_CTV_RUBRIC`); đường thứ hai (`rate-ctv` + bảng `ratings`) đã xoá theo OPEN-23 — giữ hai đường chấm là nguồn lệch số | S | biz model.docx §NMG; chủ dự án chốt 27/08/2026 |
 | FR-103 | Lời hứa "rao một lần là xong" với S: hệ thống theo đuổi việc bán tới khi gặp người mua phù hợp; chỉ liên hệ lại S khi cần xác minh thông tin hoặc chốt lịch xem — không spam S; tin không bị bỏ rơi (kết hợp `stale_listing_check`) | M | trao đổi chủ dự án 22/08/2026; INS-09 |
 
 ### H. Trung gian ẩn danh & vòng đời listing (BROKER)
