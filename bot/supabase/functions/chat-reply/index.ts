@@ -266,6 +266,68 @@ Deno.serve(async (req) => {
   if (sellerRow && !hoiMua) {
     const anthropicS = await anthropicClient(client);
 
+    // FR-141/FR-152 — hội thoại NGƯỜI BÁN cũng phải vào sổ.
+    // Trước bản này nhánh seller trả lời rồi `return` thẳng, không ghi dòng nào
+    // vào `messages`: CTV mở hội thoại chủ nhà thấy trống trơn, không có gì để
+    // bàn giao khi người thật tiếp quản. `conversations.seller_id` vốn đã có
+    // sẵn kèm khoá ngoại — chỉ là chưa đường code nào ghi vào.
+    // Hàm get-or-create ở migration 20260827i_hoi_thoai_nguoi_ban.sql, có
+    // advisory lock như bên mua (chủ nhà gõ vụn 3 tin là 3 lượt gọi đồng thời).
+    const { data: convS } = await client
+      .rpc("ensure_seller_conversation", {
+        p_seller_id: sellerRow.id,
+        p_channel: channel,
+      }).single();
+    const convSRow = convS as
+      { c_id?: string; c_human_touch_at?: string | null } | null;
+    const convSId = convSRow?.c_id ?? null;
+
+    // Ghi tin CHỦ NHÀ trước khi gọi model: model lỗi giữa chừng thì vẫn còn dấu
+    // vết chủ nhà đã nhắn gì. Trùng `zalo_msg_id` (23505) = kênh gửi lại tin cũ
+    // → đã trả lời rồi, đừng trả lời lần hai. Cùng ngữ nghĩa với nhánh mua.
+    if (convSId) {
+      const { error: msgSErr } = await client.from("messages").insert({
+        conversation_id: convSId,
+        sender: "seller",
+        body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
+        zalo_msg_id: msgId,
+      });
+      if (msgSErr?.code === "23505") {
+        return jsonResponse({ reply: null, replies: [], role: "seller", deduped: true });
+      }
+      await client.from("conversations")
+        .update({ last_message_at: new Date().toISOString() }).eq("id", convSId);
+    }
+
+    // FR-141 — người thật gõ tay trong 30 phút gần đây thì bot im.
+    // Cổng này trước chỉ có ở nhánh mua, nên CTV đang thương lượng với chủ nhà
+    // mà chủ nhắn tiếp là bot nhảy vào nói chen giữa cuộc.
+    const nguoiThatDangCham = convSRow?.c_human_touch_at;
+    if (nguoiThatDangCham &&
+        Date.now() - Date.parse(nguoiThatDangCham) < 30 * 60e3) {
+      return jsonResponse({ reply: null, replies: [], role: "seller", human_active: true });
+    }
+
+    // MỌI đường ra của nhánh này phải đi qua đây — trả lời của bot cũng là một
+    // dòng trong sổ. Thêm `return jsonResponse(...)` trần ở nhánh seller là
+    // thủng lại đúng chỗ vừa vá, và thủng im lặng.
+    const traLoiSeller = async (
+      replies: string[],
+      extra: Record<string, unknown> = {},
+    ) => {
+      const sach = replies.map((r) => r.trim()).filter(Boolean);
+      if (convSId) {
+        for (const r of sach) {
+          await client.from("messages").insert({
+            conversation_id: convSId, sender: "bot", body: r,
+          });
+        }
+      }
+      return jsonResponse({
+        reply: sach.join("\n") || null, replies: sach, role: "seller", ...extra,
+      });
+    };
+
     // NEO NGỮ CẢNH THEO CĂN, không theo "câu hỏi mới nhất" (FR-157).
     // Người bán 2-3 căn, cả hai đều đang thiếu thông tin: bot vừa hỏi căn B,
     // chủ nhớ ra chuyện căn A và nhắn "căn A hoàn công 2020 nha em" — lấy
@@ -314,7 +376,7 @@ Deno.serve(async (req) => {
       }
       const thanks =
         "Dạ em nhận được ảnh rồi ạ, em bổ sung vào tin ngay. Cảm ơn anh/chị nhiều!";
-      return jsonResponse({ reply: thanks, replies: [thanks], role: "seller" });
+      return await traLoiSeller([thanks]);
     }
     if (pendingReq) {
       // Câu trả lời nào cập nhật thẳng một CỘT của listings thì ghi cột TRƯỚC,
@@ -342,9 +404,7 @@ Deno.serve(async (req) => {
           // hỏi, tin nằm `chua_ro` vĩnh viễn — đúng kiểu chết lặng FR-150 diệt.
           const again =
             "Dạ em chưa rõ lắm ạ, nhà mình thuộc loại nào ta: nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng ạ?";
-          return jsonResponse({
-            reply: again, replies: [again], role: "seller", reask: "loai_bds",
-          });
+          return await traLoiSeller([again], { reask: "loai_bds" });
         }
       }
 
@@ -409,10 +469,7 @@ Deno.serve(async (req) => {
           listing_id: pendingReq.listing_id, question: next.fact_key, status: "pending",
         });
       }
-      return jsonResponse({
-        reply: sellerReply,
-        replies: sellerReply ? [sellerReply] : [],
-        role: "seller",
+      return await traLoiSeller(sellerReply ? [sellerReply] : [], {
         saved_fact: pendingReq.question,
       });
     }
@@ -473,7 +530,7 @@ Deno.serve(async (req) => {
         });
         const raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ??
           `Dạ em nhận tin rao rồi ạ, em tạo tin #${newLst.code} và sẽ hỏi thêm vài thông tin để đăng cho đẹp nha.`;
-        return jsonResponse({ reply: raoReply, replies: [raoReply], role: "seller", listing_code: newLst.code });
+        return await traLoiSeller([raoReply], { listing_code: newLst.code });
       }
     }
     // Seller nhắn nhưng KHÔNG có câu chờ → vẫn trả lời ĐÚNG VAI người bán
@@ -503,7 +560,7 @@ Deno.serve(async (req) => {
     });
     const sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ??
       "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha.";
-    return jsonResponse({ reply: sReply, replies: [sReply], role: "seller" });
+    return await traLoiSeller([sReply]);
   }
 
   // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130).
