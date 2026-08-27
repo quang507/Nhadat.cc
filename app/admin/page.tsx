@@ -7,6 +7,21 @@ import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription } from "@/lib/format";
 
+type Ng = {
+  id: string;
+  name: string | null;
+  seller_type: string;
+  active_count: number;
+  closed_count: number;
+  rank: string;
+};
+
+const HANG: Record<string, { ten: string; lop: string }> = {
+  vang: { ten: "Vàng", lop: "bg-[#f6c453] text-navy" },
+  bac:  { ten: "Bạc",  lop: "bg-line text-navy" },
+  dong: { ten: "Đồng", lop: "bg-[#e2c9b0] text-navy" },
+};
+
 export default function Page() {
   const [role, setRole] = useState<"loading" | "anon" | "user" | "admin">("loading");
   const [pending, setPending] = useState<Listing[]>([]);
@@ -17,6 +32,10 @@ export default function Page() {
     beat: string | null;
     errs: { id: number; at: string; source: string; status_code: number | null; detail: string | null }[];
   }>();
+  // FR-155: hạng người rao. CHỈ hiện ở đây, không hiện trên web (OPEN-26 —
+  // quyết định chủ dự án 27/08/2026). Chưa ai chốt được căn nào nên chưa ai lên
+  // Vàng được; đưa ra trước mặt khách lúc này là dựng thang bịt bậc trên cùng.
+  const [hang, setHang] = useState<Ng[]>([]);
 
   const load = async () => {
     const { data } = await supabase
@@ -36,6 +55,12 @@ export default function Page() {
         .order("at", { ascending: false }).limit(10),
     ]);
     setHealth({ beat: (beatRes.data?.at as string) ?? null, errs: errRes.data ?? [] });
+
+    const { data: hg } = await supabase
+      .from("seller_ranks")
+      .select("id, name, seller_type, active_count, closed_count, rank")
+      .order("active_count", { ascending: false });
+    setHang((hg ?? []) as Ng[]);
   };
 
   useEffect(() => {
@@ -114,6 +139,32 @@ export default function Page() {
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* FR-155 — hạng người rao. Nội bộ, KHÔNG lên web (OPEN-26). */}
+      {hang.length > 0 && (
+        <div className="mt-6 rounded-king border border-line bg-white p-5">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <span className="eyebrow text-mute">Hạng người rao</span>
+            <span className="text-sm text-mute">
+              chưa hiện trên web — chờ có giao dịch chốt thật (OPEN-26)
+            </span>
+          </div>
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {hang.map((n) => (
+              <li key={n.id} className="flex flex-wrap items-center gap-x-3 py-2">
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${HANG[n.rank]?.lop ?? "bg-line"}`}>
+                  {HANG[n.rank]?.ten ?? n.rank}
+                </span>
+                <span className="font-semibold">{n.name ?? "Không tên"}</span>
+                <span className="text-mute">{n.seller_type.toUpperCase()}</span>
+                <span className="ml-auto tabular-nums text-mute">
+                  {n.active_count} tin đang rao · {n.closed_count} đã chốt
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

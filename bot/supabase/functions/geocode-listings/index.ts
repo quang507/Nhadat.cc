@@ -4,26 +4,41 @@
 //
 // ĐƯA VÀO REPO 27/08/2026 (soát mã nguồn). Trước đó function này ACTIVE trên
 // Supabase từ 25/08 mà KHÔNG có một dòng nào trong git: dựng lại project từ
-// repo là mất hẳn, mà sửa hay review thì không có gì để đọc. Bản này chép
-// nguyên văn từ bản đang chạy (version 1), không sửa một ký tự.
+// repo là mất hẳn, mà sửa hay review thì không có gì để đọc.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const UA = "nhadatcc-geocoder/1.0 (admin.buyerside@nhadat.cc)";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function queriesFor(row: { location_raw: string | null; ward: string | null }): string[] {
+// SỬA 27/08/2026: quận lấy từ CHÍNH DÒNG TIN, không hardcode "Quận 5" nữa.
+// Kho có tin Quận 1 (BDS-Q5-0154, mặt tiền Trần Hưng Đạo) — mọi truy vấn của nó
+// đều bị dán đuôi ", Quận 5" nên Nominatim trả rỗng, tin nằm ngoài bản đồ vĩnh
+// viễn mà không ai thấy lỗi. Mã tin mang tiền tố BDS-Q5 không có nghĩa BĐS ở Q5.
+//
+// Thêm một nấc lùi nữa: BỎ PHƯỜNG. Thử thật 27/08 trên chính tin đó —
+//   "Đường Trần Hưng Đạo, Phường Nguyễn Cư Trinh, Quận 1, TP.HCM" → []
+//   "Đường Trần Hưng Đạo, Quận 1, Thành phố Hồ Chí Minh"          → 10.7561670, 106.6844352
+// Tên phường sau sáp nhập 2025 nhiều chỗ chưa có trong OSM; kèm vào là giết
+// luôn kết quả đúng. Thứ tự: hẹp trước, mỗi nấc bỏ bớt một ràng buộc.
+function queriesFor(
+  row: { location_raw: string | null; ward: string | null; district: string | null },
+): string[] {
   const out: string[] = [];
   const raw = (row.location_raw ?? "").trim();
+  const quan = (row.district ?? "Quận 5").trim();
+  const duoi = `${quan}, Thành phố Hồ Chí Minh`;
   const ward = row.ward ? `, ${row.ward}` : "";
   if (raw) {
-    out.push(`${raw}${ward}, Quận 5, Thành phố Hồ Chí Minh`);
+    out.push(`${raw}${ward}, ${duoi}`);
+    if (ward) out.push(`${raw}, ${duoi}`);
     // bỏ "hẻm 123 " / số nhà đầu chuỗi → chỉ còn tên đường
     const street = raw.replace(/^\s*(hẻm|hem)?\s*[\d/]+\s*/i, "").trim();
     if (street && street !== raw) {
-      out.push(`${street}${ward}, Quận 5, Thành phố Hồ Chí Minh`);
+      out.push(`${street}${ward}, ${duoi}`);
+      if (ward) out.push(`${street}, ${duoi}`);
     }
   }
-  if (row.ward) out.push(`${row.ward}, Quận 5, Thành phố Hồ Chí Minh`);
+  if (row.ward) out.push(`${row.ward}, ${duoi}`);
   return out;
 }
 
@@ -32,10 +47,14 @@ Deno.serve(async () => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+  // Tin KHÔNG có cả địa chỉ lẫn phường thì không có gì để tra — lọc ngay ở đây
+  // thay vì đếm chúng vào `failed` mỗi lần chạy. Kho 27/08 có 9 dòng rỗng hoàn
+  // toàn (0165–0173, nhập hụt từ Excel), chúng làm báo cáo lúc nào cũng đỏ.
   const { data: rows } = await db
     .from("listings")
-    .select("id, location_raw, ward")
+    .select("id, location_raw, ward, district")
     .is("lat", null)
+    .or("location_raw.not.is.null,ward.not.is.null")
     .limit(300);
 
   const cache = new Map<string, [number, number] | null>();
@@ -59,8 +78,16 @@ Deno.serve(async () => {
         );
         const js = await res.json();
         point = js?.[0] ? [Number(js[0].lat), Number(js[0].lon)] : null;
-      } catch {
+      } catch (e) {
+        // FR-152: đừng nuốt. Hàm này trả 200 kèm `failed` dù mọi lượt đều hỏng,
+        // nên không có sổ thì một đợt Nominatim chặn IP nhìn hệt như "địa chỉ
+        // khó tra". Gọi thẳng RPC để khỏi kéo thêm file vào bản deploy.
         point = null;
+        await db.rpc("log_loi", {
+          p_source: "geocode-listings",
+          p_detail: `${q} → ${e instanceof Error ? e.message : String(e)}`,
+          p_code: null,
+        });
       }
       cache.set(q, point);
       if (point) break;

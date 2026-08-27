@@ -8,6 +8,13 @@
 // thị nghĩa là hứa với khách một thứ VĨNH VIỄN không xảy ra — mọi môi giới sẽ
 // mang nhãn "chưa có đánh giá" tới hết đời. Muốn có điểm NMG thật thì phải
 // dựng nguồn ghi mới trước (OPEN-12), rồi hãy đưa lại lên trang.
+//
+// CŨNG KHÔNG hiện hạng Đồng/Bạc/Vàng (quyết định chủ dự án 27/08/2026: "ẩn hạng
+// khỏi web đi" — OPEN-26 phương án b). Hạng vẫn được tính và vẫn xem được trong
+// `/admin`; chỉ là chưa đưa ra trước mặt khách. Lý do: kho chưa có giao dịch
+// `da_chot` nào nên KHÔNG NGƯỜI NÀO có thể lên Vàng — đưa lên web lúc này là
+// dựng một cái thang mà bậc trên cùng bị bịt, đúng lỗi vừa gỡ ở đoạn trên.
+// Đưa lại khi có giao dịch thật đầu tiên và khi chốt được hạng kèm quyền lợi gì.
 import type { Metadata } from "next";
 import { supabase } from "@/lib/supabase";
 import { zaloLink } from "@/lib/format";
@@ -23,30 +30,6 @@ type Agent = {
   id: string;
   name: string | null;
   listing_count: number;
-  /** FR-155 — hạng Đồng/Bạc/Vàng, tính từ số tin đang rao + tỷ lệ chốt */
-  rank: string | null;
-  closed_count: number | null;
-};
-
-// Hạng KHÔNG phải huy hiệu trang trí: mỗi bậc phải nói được nó dựa trên cái gì,
-// nếu không nó là ngôi-sao-đánh-giá phiên bản mới — thứ vừa gỡ khỏi trang này
-// vì hứa một điểm số không có nguồn ghi.
-const HANG: Record<string, { ten: string; giaiThich: string; lop: string }> = {
-  vang: {
-    ten: "Vàng",
-    giaiThich: "từ 10 tin đang rao và tỷ lệ chốt từ 5%",
-    lop: "bg-[#f6c453] text-navy",
-  },
-  bac: {
-    ten: "Bạc",
-    giaiThich: "từ 5 tin đang rao, hoặc đã chốt ít nhất 1 căn",
-    lop: "bg-line text-navy",
-  },
-  dong: {
-    ten: "Đồng",
-    giaiThich: "mới vào mạng lưới",
-    lop: "bg-[#e2c9b0] text-navy",
-  },
 };
 
 export default async function Page() {
@@ -63,11 +46,6 @@ export default async function Page() {
         Mạng lưới môi giới chuyên một quận, giữ tối thiểu 10 tin đang rao. Anh
         chị không cần chọn người — nhắn Zalo là tụi em điều phối.
       </p>
-      <p className="mt-2 max-w-xl text-sm text-mute">
-        Hạng <b>Đồng</b> mới vào mạng lưới · <b>Bạc</b> từ 5 tin đang rao hoặc đã
-        chốt ít nhất 1 căn · <b>Vàng</b> từ 10 tin đang rao và tỷ lệ chốt từ 5%.
-        Hạng tính lại theo dữ liệu thật, không ai tự phong.
-      </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
         {agents.map((a) => {
@@ -77,20 +55,9 @@ export default async function Page() {
                 {(a.name ?? "M").trim().charAt(0).toUpperCase()}
               </span>
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="truncate font-bold">{a.name ?? "Nhà môi giới"}</p>
-                  {a.rank && HANG[a.rank] && (
-                    <span
-                      title={`Hạng ${HANG[a.rank].ten} — ${HANG[a.rank].giaiThich}`}
-                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${HANG[a.rank].lop}`}
-                    >
-                      {HANG[a.rank].ten}
-                    </span>
-                  )}
-                </div>
+                <p className="truncate font-bold">{a.name ?? "Nhà môi giới"}</p>
                 <p className="text-sm text-mute tabular-nums">
                   {a.listing_count} tin đang rao
-                  {a.closed_count ? ` · ${a.closed_count} căn đã chốt` : ""}
                 </p>
               </div>
             </div>
