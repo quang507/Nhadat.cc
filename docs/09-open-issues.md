@@ -406,3 +406,39 @@ ngay — nó rẻ và mất 20 phút.
 
 **Chờ chủ dự án chốt.**
 
+---
+
+### Soát mã nguồn 27/08/2026 — kết luận về advisor Supabase
+
+Advisor bảo mật đang báo **2 ERROR**. Đã soi từng cái, **cả hai là cố ý và an
+toàn** — ghi lại đây để lần sau không ai đi "vá" nhầm:
+
+**`security_definer_view` trên `public.agents_public`** — view phơi đúng
+`id, name, seller_type, rating_sum, rating_count, listing_count`, lọc
+`seller_type = 'nmg'`. **Không có** `phone`, `zalo_user_id`, `email`, `auth_user_id`.
+Nó PHẢI là SECURITY DEFINER thì anon mới đọc được qua RLS của `sellers` — đó
+chính là mục đích của FR-125: một hình chiếu công khai đã cắt sạch liên hệ.
+
+**`security_definer_view` trên `public.listing_photos_v`** — đọc `storage.objects`
+lọc `bucket_id = 'listing-photos'`, trả `code/url/path`. Bucket đó **công khai**,
+URL ai cũng mở được; view chỉ tiết kiệm cho web khỏi tự ghép đường dẫn. anon
+không có quyền đọc thẳng `storage.objects`, nên bỏ SECURITY DEFINER là gãy ảnh
+toàn web mà chẳng che thêm được gì.
+
+**`anon_security_definer_function_executable` trên `log_loi`** (WARN) — cố ý,
+xem FR-152 (d). Server Next.js chạy bằng publishable key nên bắt buộc mở cho
+`anon`; bù lại có hai van 20 dòng/nguồn/giờ và 200 dòng/giờ, đã thử thật.
+
+**`extension_in_public` cho `pg_net`** (WARN) — không tự chuyển được, schema do
+`supabase_admin` sở hữu. Cùng gốc với OPEN-24.
+
+**12 INFO `rls_enabled_no_policy`** — bật RLS mà không policy = **chặn hết**,
+đúng ý: các bảng đó (`messages`, `conversations`, `reminders`, `deals`…) chỉ
+`service_role` được đụng. Không phải lỗi.
+
+Advisor hiệu năng: 8 index chưa dùng (bảng còn nhỏ, để đó) và 1 WARN
+`multiple_permissive_policies` trên `listings` cho vai `authenticated` (3 policy
+`anon_read_listings` / `listings_admin_read` / `listings_own_read` cùng chạy mỗi
+query SELECT). Gộp lại được nhưng ở quy mô 164 tin thì chưa đáng đánh đổi độ
+rõ ràng của luật quyền. Xem lại khi `listings` qua ~10k dòng.
+
