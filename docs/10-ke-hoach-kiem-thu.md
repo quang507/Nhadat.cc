@@ -197,7 +197,7 @@ Loại lỗi này TRẢ 200 nên TS-HEALTH ở trên không bắt được. Ph�
 | TS-LOG-01 | `do $$ begin for i in 1..25 loop perform log_loi('thu-van','x',null); end loop; end $$;` | Đúng **20** dòng — van theo nguồn cắt 5 lượt sau |
 | TS-LOG-02 | Lặp 600 lượt với 30 giá trị `p_source` khác nhau, chạy bằng `set local role anon` | Tổng bảng dừng ở đúng **200** — van tổng chặn kẻ đổi nguồn để lách |
 | TS-LOG-03 | Gọi `escalation-feed` `{"action":"log","source":"x","detail":"y"}` kèm `x-bridge-secret` | 200 `{"ok":true}`; `bot_errors` có dòng `source='bridge x'` |
-| TS-LOG-04 | Tạm đổi `ANTHROPIC_API_KEY` trong Vault thành rác, nhắn một tin vào bot, rồi trả key về | `bot_errors` có `source='chat-reply model'`; khách vẫn nhận được câu trả lời (regex fallback) |
+| TS-LOG-04 | Nhắn một tin kèm `image_url` trỏ tới host không tồn tại (ĐỪNG phá `ANTHROPIC_API_KEY` — cách đó làm chết bot thật trong lúc thử) | HTTP vẫn **200**, khách vẫn nhận được câu trả lời (regex fallback), mà `bot_errors` có `source='chat-reply model'` kèm lỗi API. Đã chạy thật 27/08: `400 Unable to download the file` |
 | TS-LOG-05 | Mở một route web ném lỗi có chủ ý trên bản deploy | `bot_errors` có `source='web app'` kèm đường dẫn; khách thấy `app/error.tsx` chứ không phải màn hình trắng |
 | TS-LOG-06 | Chạy `bot_health_tick()` sau TS-LOG-04 | Có reminder `🩺` — còi đếm cả lỗi ứng dụng, không chỉ lỗi HTTP |
 

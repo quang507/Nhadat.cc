@@ -60,6 +60,30 @@ bản, và text escalation trùng byte giữa `nudge` với `escalation-feed` (t
 - Deploy qua MCP (dashboard) — import `_shared/` được nắn thành file cùng cấp;
   nếu deploy bằng CLI `supabase functions deploy` thì cấu trúc `_shared/` dùng
   được nguyên trạng.
+- **Deploy qua MCP phải chép tay nguyên văn mọi file phụ thuộc.** Rủi ro tỉ lệ
+  thuận với số dấu `\` trong file, vì mỗi cái phải nhân đôi khi đóng gói JSON —
+  chép sót một cái thì `\d` thành `d`: **vẫn biên dịch, vẫn chạy, chỉ là bóc
+  sai**, không cửa nào báo. Đếm 27/08: `escalation-feed` 0, `zalo-webhook` 0,
+  `ctv-report` 11, `chat-reply` **123** (toàn regex bóc giá/giờ hẹn/mã căn).
+  Deploy `chat-reply` bằng MCP thì BẮT BUỘC chạy lại bộ TS-CHATREPLY dưới đây
+  trước khi coi là xong. Đường an toàn hơn: `npx supabase login` một lần rồi
+  `npx supabase functions deploy chat-reply` — không qua chép tay.
+
+### TS-CHATREPLY — bộ kiểm sau mỗi lần deploy `chat-reply`
+
+Bốn bài, mỗi bài soi một họ regex khác nhau. Chạy bằng `net.http_post` kèm
+`x-bridge-secret` lấy thẳng từ Vault. Kết quả lần chạy 27/08 (v32):
+
+| Bài | Nhắn gì | Soi cái gì | Kết quả |
+|---|---|---|---|
+| A | `anh co 5 tỏi rưỡi, tìm nhà quận 5 phường 9, coi giúp anh căn #BDS-Q5-0164` | `CODE_RE`, regex tiền, `budgetRangeVnd`, `wardNum` | Đạt — trả đúng căn 0164, còn phát hiện nó ở P16 Q8 chứ không phải P9 |
+| B | `anh muốn thuê nhà quận 5 tầm 20 triệu một tháng` rồi `để ở, tìm luôn đi` | `dealCol()` + lọc kho `deal='cho_thue'` | Đạt — lượt 2 trả 3 căn cho thuê thật |
+| C | `cho thuê nhà mặt tiền phường 11, 60m2, giá 25 triệu một tháng` (từ acc đã gán `sellers.zalo_user_id`) | `wantsSell`, `sDeal`, `wardM`, `priceM` | Đạt — tạo tin `deal=cho_thue`, Phường 11, giá đúng |
+| D | tin kèm `image_url` trỏ host không tồn tại | `ghiLoi()` trong catch (FR-152 d) | Đạt — HTTP 200, khách vẫn được trả lời, `bot_errors` ghi `chat-reply model` |
+
+Dọn sau khi chạy: trả `sellers.zalo_user_id` về NULL, xoá tin `CCRB-*` vừa sinh
+(kèm `info_requests`/`listing_facts`/`reminders` của nó), xoá buyer/conversation
+`ZZTEST-*`, xoá `bot_errors`, đẩy `bot_health.last_id` lên `max(id)` hiện tại.
 
 ## Chạy bridge trên máy (bắt buộc đọc trước khi kêu "sao nó sai")
 
