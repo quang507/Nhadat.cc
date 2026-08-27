@@ -289,3 +289,29 @@ Dọn sau khi chạy: xoá fact vừa chèn **và** trả cột về NULL (trigg
 
 Dọn sau khi chạy: xoá tin `BDS-Q5-####` vừa tạo, các dòng `info_requests` trỏ
 vào nó, và người bán thử nghiệm — rồi kiểm lại `listings` = 173, `sellers` = 3.
+
+### TS-NEO — neo hội thoại người bán theo căn, và tách vai (FR-157)
+
+Cần một người bán thử có `zalo_user_id` và **hai** tin cùng đang thiếu thông
+tin. Gọi `chat-reply` qua `net.http_post` từ SQL editor (bí mật lấy bằng
+`get_secret('BRIDGE_SECRET')` ngay trong `DO` block để không in ra màn hình).
+
+| Mã | Việc | Kỳ vọng |
+|---|---|---|
+| TS-NEO-01 | Tạo câu hỏi pending cho căn A, rồi cho căn B (B mới hơn) | `sellers.active_listing_id` = **B**. Trigger neo chạy trên INSERT, không cần code |
+| TS-NEO-02 | Người bán nhắn "căn BDS-Q5-9001 xây năm 2015 nha em" (9001 = căn **A**) | Fact `nam_xay` vào **A**, KHÔNG vào B. Trước FR-157 nó vào B vì B là câu mới nhất |
+| TS-NEO-03 | Đọc câu bot hỏi tiếp | Phải **nhắc rõ mã căn + tên đường**. Đã chạy thật 27/08 trên v33: *"Cho em hỏi căn #BDS-Q5-9001 ở Trần Bình Trọng diện tích đất bao nhiêu m2 ạ?"* |
+| TS-NEO-04 | Cùng Zalo ID đó nhắn "giờ anh muốn mua thêm một căn nữa ở quận 5 tầm 4 tỷ" | Rơi sang **nhánh buyer** (response có `conversation_id`, không có `role: seller`), và câu hỏi chờ của A/B vẫn `pending` |
+
+Đã chạy thật 27/08/2026 trên `chat-reply` v33, cả 4 ca đúng. Kèm một ca nhánh
+mua trên kho thật: *"anh tìm nhà quận 5 tầm 5 tỏi rưỡi, hẻm xe hơi"* → bot đọc
+đúng "5 tỏi rưỡi" (FR-154), gợi ý căn có thật, 2 bong bóng, không markdown.
+
+Dọn sau khi chạy: xoá `listing_facts`, `info_requests`, `reminders`, `listings`
+của người bán thử, đặt `active_listing_id = null` rồi xoá `sellers`; xoá luôn
+`messages`/`conversations`/`buyers` sinh ra ở TS-NEO-04. Kiểm lại: `listings`
+= 173, `sellers` = 3, `buyers` = 2, `listing_facts` = 0.
+
+**Cái test này KHÔNG phủ**: câu hỏi chờ bị bỏ lại khi người bán rẽ sang nhánh
+mua thì bao lâu cron drip mới hỏi lại — phụ thuộc lịch `seller_drip_tick`,
+chưa đo.
