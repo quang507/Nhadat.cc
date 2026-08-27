@@ -29,6 +29,18 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const action = String(body.action ?? "pull");
 
+  // FR-152: bridge chạy trên máy chủ dự án, console.error của nó hiện ở terminal
+  // rồi mất theo cửa sổ. Cho nó một đường đẩy lỗi lên sổ chung — cùng cổng
+  // x-bridge-secret đã có, khỏi mở thêm cửa nào.
+  if (action === "log") {
+    await client.rpc("log_loi", {
+      p_source: `bridge ${String(body.source ?? "").slice(0, 30)}`.trim(),
+      p_detail: String(body.detail ?? ""),
+      p_code: null,
+    });
+    return jsonResponse({ ok: true });
+  }
+
   if (action === "ack") {
     const id = String(body.id ?? "");
     if (!id) return jsonResponse({ error: "id bắt buộc" }, 400);

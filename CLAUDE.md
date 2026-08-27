@@ -112,6 +112,14 @@ ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge funct
 500. Kết quả thật nằm ở `net._http_response`, và được `bot_health_tick()` quét
 sang `bot_errors` (FR-152). Xem sức khoẻ ở trang `/admin`.
 
+**Mọi `catch` mới phải nối dây vào sổ** (FR-152 d). `console.error` một mình là
+mất: log edge function bậc Free chỉ giữ 1 ngày, còn loại lỗi nguy nhất ở đây
+lại TRẢ 200 nên `bot_health_tick` — vốn chỉ soi mã HTTP — không thấy gì. Trong
+edge function dùng `ghiLoi(client, "tên chỗ", e)` của `_shared/claude.ts`;
+trong bridge dùng `ghiLoi("tên chỗ", detail)`; phía web thì `instrumentation.ts`
+đã bắt sẵn mọi lỗi server chưa bắt. Thêm `catch` mà quên nối là thêm một chỗ
+hỏng im lặng.
+
 **Repo hiện đang PUBLIC** (kiểm 26/08/2026 qua API GitHub: `"private": false`).
 Nghĩa là mọi file đang track đều đọc được công khai, kể cả tài liệu gốc ở thư
 mục gốc: `biz model.docx`, `dự kiến vốn 6 tháng đầu.xlsx`, `chats w B.docx`,

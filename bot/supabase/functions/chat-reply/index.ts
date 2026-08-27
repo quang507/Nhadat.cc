@@ -8,6 +8,7 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  ghiLoi,
   jsonResponse,
   MODEL,
   secretOf,
@@ -748,7 +749,10 @@ Deno.serve(async (req) => {
       out = resp.parsed_output as typeof out;
     }
   } catch (e) {
-    console.error("chat-reply model:", (e as Error)?.message);
+    // Chỗ này nguy hơn vẻ ngoài: model hỏng thì khối dưới vẫn dựng câu trả lời
+    // bằng regex và trả 200 tử tế. Khách không thấy gì lạ, mã HTTP không thấy
+    // gì lạ, nên bot_health_tick cũng mù. Phải tự ghi sổ (FR-152).
+    await ghiLoi(client, "chat-reply model", e);
   }
 
   // Fallback quy tắc: model hỏng ≠ khách nói không rõ — đừng đổ lỗi cho khách,

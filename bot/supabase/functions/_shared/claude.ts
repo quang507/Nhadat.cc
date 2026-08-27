@@ -29,6 +29,32 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   return new Anthropic({ apiKey });
 }
 
+/**
+ * FR-152 — ghi một lỗi tầng ứng dụng vào sổ bền `bot_errors` (hiện ở /admin).
+ *
+ * `console.error` KHÔNG đủ: log edge function bậc Free chỉ giữ 1 ngày, mà loại
+ * lỗi nguy nhất ở đây lại trả 200 (catch nuốt exception rồi hàm chạy tiếp), nên
+ * bot_health_tick — vốn chỉ soi mã HTTP — không thấy gì. Vẫn giữ console.error
+ * để đọc realtime lúc đang debug, và ghi thêm vào sổ để mai còn tra được.
+ *
+ * KHÔNG BAO GIỜ NÉM. Mọi nơi gọi hàm này đều đang ở trong `catch` — ném ở đây
+ * là biến một lỗi thành hai, mà lỗi thứ hai còn không ai bắt.
+ */
+export async function ghiLoi(
+  db: SupabaseClient,
+  source: string,
+  detail: unknown,
+  code?: number,
+): Promise<void> {
+  const text = detail instanceof Error
+    ? (detail.message || String(detail))
+    : String(detail ?? "");
+  console.error(`${source}:`, text);
+  try {
+    await db.rpc("log_loi", { p_source: source, p_detail: text, p_code: code ?? null });
+  } catch { /* sổ hỏng thì thôi, đừng kéo theo cả luồng chính */ }
+}
+
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,

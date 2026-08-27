@@ -12,6 +12,7 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  ghiLoi,
   jsonResponse,
   MODEL,
   secretOf,
@@ -101,7 +102,9 @@ Deno.serve(async (req) => {
         }
       } catch (e) {
         // Nêu rõ hội thoại nào hỏng: mất một điểm thì avg lệch mà không ai biết.
-        console.error(`ctv-report score (conversation ${c.id}):`, (e as Error)?.message);
+        // Đây đúng là con bug 26/08 (JSON hụt đuôi) — hồi đó chỉ có
+        // console.error nên nó nằm im tới lúc tình cờ đọc log. Giờ vào sổ.
+        await ghiLoi(client, "ctv-report score", `hội thoại ${c.id}: ${(e as Error)?.message}`);
       }
     }
     const avg = scores.length

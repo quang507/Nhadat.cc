@@ -4,6 +4,7 @@
 // Secrets: ZALO_OA_ACCESS_TOKEN (bắt buộc để trả lời), ZALO_APP_SECRET + ZALO_APP_ID
 // (tuỳ chọn — có thì verify chữ ký X-ZEvent-Signature), đặt qua env hoặc Vault.
 import {
+  ghiLoi,
   jsonResponse,
   secretOf,
   sendZalo,
@@ -45,7 +46,9 @@ async function handleEvent(raw: string): Promise<void> {
     }),
   });
   const out = await brain.json().catch(() => ({}));
-  if (out?.error) return console.error("chat-reply:", out.error);
+  // Bộ não từ chối (403 cổng FR-151, 429 trần model, lỗi model…) → khách KHÔNG
+  // nhận được câu trả lời nào, mà webhook đã trả 200 cho Zalo từ lâu. Ghi sổ.
+  if (out?.error) return await ghiLoi(client, "zalo-webhook brain", out.error, brain.status);
   const bubbles: string[] = Array.isArray(out?.replies) && out.replies.length
     ? out.replies
     : out?.reply
@@ -61,14 +64,16 @@ async function handleEvent(raw: string): Promise<void> {
   for (const [i, bubble] of bubbles.entries()) {
     if (i > 0) await new Promise((r) => setTimeout(r, 300));
     const ok = await sendZalo(accessToken, zaloUserId, bubble);
-    if (!ok) console.error("zalo send lỗi, bong bóng:", bubble.slice(0, 60));
+    // Gửi hụt = khách ngồi chờ một câu không bao giờ tới. Đây là hỏng nặng
+    // nhất phía B mà lại im nhất, vì mọi mã HTTP trên đường đều 200.
+    if (!ok) await ghiLoi(client, "zalo-webhook send", `bong bóng: ${bubble.slice(0, 80)}`);
   }
 
   // FR-143: bộ não trả về hình thật (kho ảnh theo mã + URL chính chủ gửi)
   const photos: string[] = Array.isArray(out?.photos) ? out.photos : [];
   for (const url of photos) {
     const ok = await sendZaloImage(accessToken, zaloUserId, url);
-    if (!ok) console.error("zalo send ảnh lỗi:", url);
+    if (!ok) await ghiLoi(client, "zalo-webhook send ảnh", url);
   }
 }
 
@@ -92,8 +97,12 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Trả 200 ngay, xử lý nền (SRS-4.4: <1s)
+  // Trả 200 ngay, xử lý nền (SRS-4.4: <1s).
+  // Chạy nền: không ai await cái này, nên exception ở đây rơi vào hư không.
+  // (@ts-ignore phải nằm SÁT dòng lệnh, chèn comment vào giữa là nó hết tác dụng.)
   // @ts-ignore EdgeRuntime có trong môi trường Supabase
-  EdgeRuntime.waitUntil(handleEvent(raw).catch((e) => console.error("handleEvent:", e)));
+  EdgeRuntime.waitUntil(
+    handleEvent(raw).catch((e) => ghiLoi(client, "zalo-webhook handleEvent", e)),
+  );
   return jsonResponse({ ok: true });
 });

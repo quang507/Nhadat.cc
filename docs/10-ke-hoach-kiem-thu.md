@@ -188,3 +188,22 @@ Supabase. Nhìn code không thấy; phải đo.
 Dọn sau khi chạy: `delete from bot_errors; delete from reminders where note like '🩺%';`
 và đẩy `bot_health.last_id` của `pg_net` lên `max(id)` của `net._http_response`.
 
+### TS-LOG — lỗi tầng ứng dụng có vào sổ không (FR-152 d)
+
+Loại lỗi này TRẢ 200 nên TS-HEALTH ở trên không bắt được. Phải thử riêng.
+
+| ID | Bước | Kỳ vọng |
+|---|---|---|
+| TS-LOG-01 | `do $$ begin for i in 1..25 loop perform log_loi('thu-van','x',null); end loop; end $$;` | Đúng **20** dòng — van theo nguồn cắt 5 lượt sau |
+| TS-LOG-02 | Lặp 600 lượt với 30 giá trị `p_source` khác nhau, chạy bằng `set local role anon` | Tổng bảng dừng ở đúng **200** — van tổng chặn kẻ đổi nguồn để lách |
+| TS-LOG-03 | Gọi `escalation-feed` `{"action":"log","source":"x","detail":"y"}` kèm `x-bridge-secret` | 200 `{"ok":true}`; `bot_errors` có dòng `source='bridge x'` |
+| TS-LOG-04 | Tạm đổi `ANTHROPIC_API_KEY` trong Vault thành rác, nhắn một tin vào bot, rồi trả key về | `bot_errors` có `source='chat-reply model'`; khách vẫn nhận được câu trả lời (regex fallback) |
+| TS-LOG-05 | Mở một route web ném lỗi có chủ ý trên bản deploy | `bot_errors` có `source='web app'` kèm đường dẫn; khách thấy `app/error.tsx` chứ không phải màn hình trắng |
+| TS-LOG-06 | Chạy `bot_health_tick()` sau TS-LOG-04 | Có reminder `🩺` — còi đếm cả lỗi ứng dụng, không chỉ lỗi HTTP |
+
+Dọn sau khi chạy: `delete from bot_errors; delete from reminders where note like '🩺%';`
+
+**Cái test này KHÔNG phủ**: log thô của edge function (Supabase Free giữ 1 ngày).
+`bot_errors` là bản trích những chỗ đã được nối dây, không phải bản đầy đủ. Chỗ
+nào chưa gọi `ghiLoi()` thì vẫn im như cũ — thêm `catch` mới là phải nối dây mới.
+

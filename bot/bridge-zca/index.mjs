@@ -62,6 +62,25 @@ const errDetail = (e) => {
     .filter(Boolean).join(" · ");
 };
 
+const FEED_URL =
+  "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/escalation-feed";
+const feedHeaders = brainHeaders; // brainHeaders đã kèm x-bridge-secret
+
+// FR-152: đẩy lỗi lên sổ chung `bot_errors` (xem ở /admin). console.error chỉ
+// sống trong cửa sổ terminal đang mở — đóng cửa sổ là mất, mà bridge thì chạy
+// nền hàng tuần. Dùng luôn cổng escalation-feed đã có secret, khỏi mở cửa mới.
+// KHÔNG BAO GIỜ ném: mọi nơi gọi hàm này đều đang trong catch.
+async function ghiLoi(source, detail) {
+  console.error(`${source}:`, detail);
+  try {
+    await fetch(FEED_URL, {
+      method: "POST",
+      headers: feedHeaders,
+      body: JSON.stringify({ action: "log", source, detail: String(detail) }),
+    });
+  } catch { /* mất mạng thì thôi, đừng làm hỏng thêm luồng đang lỗi */ }
+}
+
 // Mạng nhà/VPS rớt vài giây là chuyện thường: timeout 20s rồi thử lại 1 lần
 // trước khi kêu lỗi, để một cú nghẽn không làm mất luôn lượt trả lời khách.
 async function postJson(url, headers, payload) {
@@ -91,7 +110,7 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
     msg_id: msgId,
     channel: "zalo_personal_test",
   });
-  if (error) return console.error("chat-reply lỗi:", error);
+  if (error) return await ghiLoi("chat-reply", error);
   const bubbles = Array.isArray(replies) && replies.length ? replies : reply ? [reply] : [];
 
   // Quyết định 25/08: KHÔNG delay nhân tạo — bong bóng đầu đi ngay lập tức,
@@ -118,7 +137,7 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
       fs.unlinkSync(f);
       console.log(`→ 📷 ${url.slice(0, 70)}…`);
     } catch (e) {
-      console.error("gửi ảnh lỗi:", errDetail(e));
+      await ghiLoi("gửi ảnh", errDetail(e));
     }
   }
 }
@@ -166,7 +185,7 @@ api.listener.on("message", async (message) => {
       message.data?.msgId ? String(message.data.msgId) : undefined,
     );
   } catch (e) {
-    console.error("Lỗi xử lý tin:", errDetail(e));
+    await ghiLoi("xử lý tin", errDetail(e));
   }
 });
 
@@ -203,14 +222,11 @@ try {
 // FR-140/144: mỗi phút kéo việc "hỏi chính chủ / báo CTV/admin" từ
 // escalation-feed, resolve SĐT → uid Zalo rồi nhắn từ acc clone, xong ack.
 // OA duyệt xong thì nudge tự gửi phía server, vòng này tự hết việc.
-const FEED_URL =
-  "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/escalation-feed";
-const feedHeaders = brainHeaders; // brainHeaders đã kèm x-bridge-secret
 const uidCache = new Map(); // SĐT → uid, khỏi findUser lặp lại
 async function pumpEscalations() {
   try {
     const { items, error } = await postJson(FEED_URL, feedHeaders, { action: "pull" });
-    if (error) return console.error("escalation-feed lỗi:", error);
+    if (error) return await ghiLoi("escalation-feed", error);
     for (const it of items ?? []) {
       try {
         let uid = it.zalo_user_id;
@@ -221,7 +237,7 @@ async function pumpEscalations() {
           }
           uid = uidCache.get(it.phone);
         }
-        if (!uid) { console.error(`escalation ${it.id}: không resolve được ${it.name}`); continue; }
+        if (!uid) { await ghiLoi("escalation", `${it.id}: không resolve được ${it.name}`); continue; }
         const msg = it.text ?? `🔔 nhadat.cc: ${it.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
         rememberSent(msg);
         await api.sendMessage(msg, String(uid), ThreadType.User);
@@ -232,11 +248,11 @@ async function pumpEscalations() {
         });
         console.log(`🔔 đã nhắn ${it.name}: ${String(it.note).slice(0, 70)}…`);
       } catch (e) {
-        console.error(`escalation ${it.id} lỗi:`, errDetail(e)); // giữ pending, vòng sau thử lại
+        await ghiLoi("escalation", `${it.id}: ${errDetail(e)}`); // giữ pending, vòng sau thử lại
       }
     }
   } catch (e) {
-    console.error("pumpEscalations:", errDetail(e));
+    await ghiLoi("pumpEscalations", errDetail(e));
   }
 }
 setInterval(pumpEscalations, 60_000);
