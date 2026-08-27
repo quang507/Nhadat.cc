@@ -29,3 +29,7 @@ bot/bridge-zca/zalo-session.json
 bot/bridge-zca/qr.png
 bot/bridge-zca/package.json
 bot/bridge-zca/package-lock.json
+# .env chứa BRIDGE_SECRET. Repo đang PUBLIC — lọt ra là cổng FR-151 thành vô
+# nghĩa. Bản mẫu không có giá trị thật thì vẫn commit (.env.example).
+bot/bridge-zca/.env
+!bot/bridge-zca/.env.example

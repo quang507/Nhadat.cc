@@ -9,13 +9,55 @@ import { Zalo, ThreadType } from "zca-js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Nạp bot/bridge-zca/.env — KHÔNG cần thư viện nào.
+// Vì sao cần: BRIDGE_SECRET (FR-151) phải có trong env, mà `set BRIDGE_SECRET=…`
+// trong cmd chỉ sống đúng cửa sổ đó — đóng cửa sổ hay reboot là mất, chạy
+// `node index.mjs` từ cửa sổ mới là dính ngay "bridge secret sai" (401/403).
+// Đọc theo đường dẫn của CHÍNH FILE NÀY, không theo thư mục đang đứng: chạy
+// `node bot/bridge-zca/index.mjs` từ gốc repo thì cwd khác, mà .env vẫn phải tìm ra.
+// Biến đã có sẵn trong env thật thì KHÔNG đè — máy chủ/CI đặt gì thì thắng.
+// `import.meta.dirname` chỉ có từ Node 20.11. Đường lùi phải đi qua
+// fileURLToPath: trên Windows, `new URL(...).pathname` trả "/C:/qc/..." — cái
+// dấu / thừa đằng trước làm fs không mở được file.
+const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url));
+const ENV_FILE = path.join(HERE, ".env");
+if (fs.existsSync(ENV_FILE)) {
+  for (const line of fs.readFileSync(ENV_FILE, "utf8").split(/\r?\n/)) {
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!m || line.trim().startsWith("#")) continue;
+    // Bỏ nháy bao ngoài nếu có, và bỏ khoảng trắng cuối dòng — dán từ Dashboard
+    // rất hay dính một dấu cách vô hình, mà secret lệch một ký tự là 401.
+    const val = m[2].trim().replace(/^(['"])(.*)\1$/, "$2");
+    if (!(m[1] in process.env)) process.env[m[1]] = val;
+  }
+  console.log(`Đã nạp ${ENV_FILE}`);
+}
 
 const CHAT_REPLY_URL =
   "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/chat-reply";
 const ANON_KEY =
   "sb_publishable_zmJBmEgFPn3bBKx_1ve6Pg_dXdo4haX"; // key công khai, chỉ gọi được function
 
-const SESSION_FILE = "./zalo-session.json";
+// Nói thẳng lúc khởi động thay vì để nó chết lặng ở lượt gọi đầu. Cổng
+// BRIDGE_SECRET bật ở phía server rồi mà bridge không có secret thì mọi request
+// đều 401/403 — không có tin nào tới khách, mà terminal chỉ hiện một dòng
+// "bridge secret sai" giữa đống log khác.
+if (!process.env.BRIDGE_SECRET) {
+  console.log(
+    "⚠ CHƯA CÓ BRIDGE_SECRET. Cổng FR-151 đang bật trên Supabase nên bridge sẽ\n" +
+    "  bị chặn 401/403 ở MỌI lượt gọi. Cách sửa (làm một lần):\n" +
+    `  1. Supabase Dashboard → Project Settings → Vault → copy giá trị BRIDGE_SECRET\n` +
+    `  2. Tạo file ${ENV_FILE} với đúng một dòng:\n` +
+    "       BRIDGE_SECRET=<dán giá trị vừa copy>\n" +
+    "  3. Chạy lại `node index.mjs`. (File .env đã nằm trong .gitignore.)",
+  );
+}
+
+// Bám theo thư mục của script, không theo cwd: chạy từ gốc repo cũng phải tìm
+// ra đúng session cũ, đừng bắt quét QR lại vô cớ.
+const SESSION_FILE = path.join(HERE, "zalo-session.json");
 
 const zalo = new Zalo();
 let api;

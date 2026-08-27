@@ -61,6 +61,39 @@ bản, và text escalation trùng byte giữa `nudge` với `escalation-feed` (t
   nếu deploy bằng CLI `supabase functions deploy` thì cấu trúc `_shared/` dùng
   được nguyên trạng.
 
+## Chạy bridge trên máy (bắt buộc đọc trước khi kêu "sao nó sai")
+
+```
+cd bot/bridge-zca
+npm i
+copy .env.example .env        # Windows;  Linux/macOS: cp .env.example .env
+node index.mjs
+```
+
+Bước tạo `.env` KHÔNG bỏ được. Cổng FR-151 đang **bật** trên Supabase: cả
+`chat-reply` lẫn `escalation-feed` chỉ nhận request kèm header
+`x-bridge-secret` khớp secret cùng tên trong Vault. Thiếu nó thì:
+
+| Triệu chứng ở terminal | Nghĩa là |
+|---|---|
+| `escalation-feed: bridge secret sai` | 401 — bridge không gửi header, hoặc gửi sai |
+| `chat-reply: forbidden` | 403 — cùng nguyên nhân, chỉ khác cửa |
+
+Bridge vẫn đăng nhập Zalo được và vẫn in "Bridge sẵn sàng" — nên rất dễ tưởng
+là chạy ngon. Thực tế nó không nói chuyện được với server, khách nhắn vào là im.
+
+Lấy giá trị: **Dashboard → Project Settings → Vault → `BRIDGE_SECRET`**, dán vào
+`.env`. Dán nguyên văn, không nháy, không dấu cách thừa — lệch một ký tự là 401.
+(File đọc theo thư mục của `index.mjs`, không theo thư mục đang đứng, nên chạy
+từ đâu cũng được. `.env` đã nằm trong `.gitignore`; repo này đang PUBLIC.)
+
+Đừng dùng `set BRIDGE_SECRET=...` trong cmd: nó chỉ sống trong đúng cửa sổ đó,
+đóng cửa sổ hay reboot là mất, mở cửa sổ mới chạy lại là sai y như cũ.
+
+**Thứ tự khi bật/tắt cổng** — làm ngược là bridge chết trong khoảng giữa:
+- Bật: điền `.env` **trước** → tạo secret trong Vault **sau**.
+- Tắt khẩn: `delete from vault.secrets where name = 'BRIDGE_SECRET';`
+
 ## Bảng liên quan (migration đã áp trên nhadat-cc)
 
 `required_facts` (37 fact chuẩn theo `property_type`) + view
