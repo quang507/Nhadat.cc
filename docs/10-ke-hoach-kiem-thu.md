@@ -364,7 +364,15 @@ hoạt khi tin KHÔNG có dấu — tin có dấu phải đi đúng đường c�
 Đã chạy thật 27/08/2026: TS-KD-05 + 7 ca DB khác đúng cả (kể cả có dấu giữ
 nguyên hành vi); phía chat-reply 18 ca cổng chạy đơn vị bằng bun đều pass
 (gồm *"đang bàn về căn nhà"* KHÔNG sinh tin, *"ban oi nha minh the nao roi"*
-KHÔNG sinh tin). TS-KD-01/02 chạy live sau khi deploy v36 — xem PR.
+KHÔNG sinh tin). **TS-KD-01/02 đã chạy live trên v36**: `ban nha hem xe hoi
+phuong 8 gia 8.5 ty` → tin `BDS-Q5-0174` với `ward="Phường 8"`,
+`price_raw="8.5 ty"`, `price_vnd=8.5e9`, `property_type=nha_pho` — ĐÚNG TRỌN;
+`toi muon mua nha quan 5 tam 5 ty` → rẽ nhánh buyer, fallback bóc được
+`deal=ban, budget="5 tỷ"`. Dọn sạch, kho về đúng 173 tin.
+
+Lượt KD-01 trả HTTP 500 dù tin đã sinh đúng — KHÔNG phải lỗi FR-161: API key
+Anthropic của bot **hết credit** đúng lúc chạy test, và nhánh seller gọi model
+KHÔNG bọc try/catch (khác nhánh mua vốn có fallback) → xem OPEN-30.
 
 **Chấp nhận có chủ đích**: không dấu thì "ban" ôm cả bán/bàn/bạn — cổng vẫn
 đòi đủ ba vế nên dương-tính-giả hiếm, nhưng KHÔNG phải không thể; "toi" ôm cả

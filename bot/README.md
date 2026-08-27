@@ -91,3 +91,10 @@ câu rao cho thuê · ghiLoi trong catch). Kế hoạch test nằm MỘT chỗ �
    quyền chat (hiện mới có cờ `needs_human` + báo cáo CTV).
 4. Secrets còn chờ: `ZALO_OA_ACCESS_TOKEN` (OA duyệt xong), `ZALO_ADMIN_ZALO_ID`
    (Zalo admin nhận báo cáo 17h), `ZALO_APP_SECRET`/`ZALO_APP_ID` (verify chữ ký).
+
+## Ghi chú deploy 27/08/2026
+
+`chat-reply` v36 deploy qua MCP với bản **đã bỏ dòng comment** (nội dung code
+giống hệt repo từng dòng — kiểm bằng script đối chiếu — chỉ thiếu comment, vì
+trần payload một lượt). Repo vẫn là nguồn sự thật; lần deploy tới bằng
+`supabase functions deploy chat-reply` từ máy local sẽ tự đồng bộ bản đầy đủ.
