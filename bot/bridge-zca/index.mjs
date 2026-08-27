@@ -24,15 +24,29 @@ import { fileURLToPath } from "node:url";
 const HERE = import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url));
 const ENV_FILE = path.join(HERE, ".env");
 if (fs.existsSync(ENV_FILE)) {
+  const tuFile = {};
   for (const line of fs.readFileSync(ENV_FILE, "utf8").split(/\r?\n/)) {
     const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
     if (!m || line.trim().startsWith("#")) continue;
-    // Bỏ nháy bao ngoài nếu có, và bỏ khoảng trắng cuối dòng — dán từ Dashboard
-    // rất hay dính một dấu cách vô hình, mà secret lệch một ký tự là 401.
-    const val = m[2].trim().replace(/^(['"])(.*)\1$/, "$2");
-    if (!(m[1] in process.env)) process.env[m[1]] = val;
+    const val = m[2].trim()
+      // Bỏ nháy bao ngoài — dán từ Dashboard hay dính thêm nháy hoặc dấu cách
+      // vô hình, mà secret lệch một ký tự là 401.
+      .replace(/^(['"])(.*)\1$/, "$2")
+      // Bỏ ngoặc nhọn bao ngoài: hướng dẫn viết "BRIDGE_SECRET=<dán giá trị>"
+      // nên người ta gõ luôn cả cặp <>. Base64 không bao giờ có < hay > nên
+      // cắt là an toàn. (Lỗi này xảy ra thật 27/08.)
+      .replace(/^<(.*)>$/, "$1");
+    // DÒNG SAU ĐÈ DÒNG TRƯỚC, và giá trị RỖNG thì bỏ qua hẳn. Bản đầu lấy
+    // "dòng đầu thắng" nên `.env` chép từ `.env.example` — vốn có sẵn một dòng
+    // `BRIDGE_SECRET=` trống ở trên — khoá luôn biến thành chuỗi rỗng, dòng
+    // thật gõ bên dưới không bao giờ tới lượt. Im lặng và rất khó đoán.
+    if (val) tuFile[m[1]] = val;
   }
-  console.log(`Đã nạp ${ENV_FILE}`);
+  // env thật của máy vẫn thắng .env — máy chủ/CI đặt gì thì giữ nguyên.
+  for (const [k, v] of Object.entries(tuFile)) {
+    if (!(k in process.env)) process.env[k] = v;
+  }
+  console.log(`Đã nạp ${ENV_FILE} (${Object.keys(tuFile).join(", ") || "không có biến nào"})`);
 }
 
 const CHAT_REPLY_URL =
@@ -49,8 +63,9 @@ if (!process.env.BRIDGE_SECRET) {
     "⚠ CHƯA CÓ BRIDGE_SECRET. Cổng FR-151 đang bật trên Supabase nên bridge sẽ\n" +
     "  bị chặn 401/403 ở MỌI lượt gọi. Cách sửa (làm một lần):\n" +
     `  1. Supabase Dashboard → Project Settings → Vault → copy giá trị BRIDGE_SECRET\n` +
-    `  2. Tạo file ${ENV_FILE} với đúng một dòng:\n` +
-    "       BRIDGE_SECRET=<dán giá trị vừa copy>\n" +
+    `  2. Trong file ${ENV_FILE}, điền vào dòng BRIDGE_SECRET= giá trị vừa copy.\n` +
+    "     Dán TRẦN, không ngoặc nhọn, không nháy. Ví dụ đúng:\n" +
+    "       BRIDGE_SECRET=aB3xY9...=\n" +
     "  3. Chạy lại `node index.mjs`. (File .env đã nằm trong .gitignore.)",
   );
 }
