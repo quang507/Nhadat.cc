@@ -66,58 +66,15 @@ bản, và text escalation trùng byte giữa `nudge` với `escalation-feed` (t
   chép sót một cái thì `\d` thành `d`: **vẫn biên dịch, vẫn chạy, chỉ là bóc
   sai**, không cửa nào báo. Đếm 27/08: `escalation-feed` 0, `zalo-webhook` 0,
   `ctv-report` 11, `chat-reply` **123** (toàn regex bóc giá/giờ hẹn/mã căn).
-  Deploy `chat-reply` bằng MCP thì BẮT BUỘC chạy lại bộ TS-CHATREPLY dưới đây
-  trước khi coi là xong. Đường an toàn hơn: `npx supabase login` một lần rồi
+  Deploy `chat-reply` bằng MCP thì BẮT BUỘC chạy lại bộ TS-CHATREPLY-01…04
+  (`docs/10` §10.7) trước khi coi là xong. Đường an toàn hơn: `npx supabase login` một lần rồi
   `npx supabase functions deploy chat-reply` — không qua chép tay.
 
-### TS-CHATREPLY — bộ kiểm sau mỗi lần deploy `chat-reply`
-
-Bốn bài, mỗi bài soi một họ regex khác nhau. Chạy bằng `net.http_post` kèm
-`x-bridge-secret` lấy thẳng từ Vault. Kết quả lần chạy 27/08 (v32):
-
-| Bài | Nhắn gì | Soi cái gì | Kết quả |
-|---|---|---|---|
-| A | `anh co 5 tỏi rưỡi, tìm nhà quận 5 phường 9, coi giúp anh căn #BDS-Q5-0164` | `CODE_RE`, regex tiền, `budgetRangeVnd`, `wardNum` | Đạt — trả đúng căn 0164, còn phát hiện nó ở P16 Q8 chứ không phải P9 |
-| B | `anh muốn thuê nhà quận 5 tầm 20 triệu một tháng` rồi `để ở, tìm luôn đi` | `dealCol()` + lọc kho `deal='cho_thue'` | Đạt — lượt 2 trả 3 căn cho thuê thật |
-| C | `cho thuê nhà mặt tiền phường 11, 60m2, giá 25 triệu một tháng` (từ acc đã gán `sellers.zalo_user_id`) | `wantsSell`, `sDeal`, `wardM`, `priceM` | Đạt — tạo tin `deal=cho_thue`, Phường 11, giá đúng |
-| D | tin kèm `image_url` trỏ host không tồn tại | `ghiLoi()` trong catch (FR-152 d) | Đạt — HTTP 200, khách vẫn được trả lời, `bot_errors` ghi `chat-reply model` |
-
-Dọn sau khi chạy: trả `sellers.zalo_user_id` về NULL, xoá tin `CCRB-*` vừa sinh
-(kèm `info_requests`/`listing_facts`/`reminders` của nó), xoá buyer/conversation
-`ZZTEST-*`, xoá `bot_errors`, đẩy `bot_health.last_id` lên `max(id)` hiện tại.
-
-## Chạy bridge trên máy (bắt buộc đọc trước khi kêu "sao nó sai")
-
-```
-cd bot/bridge-zca
-npm i
-copy .env.example .env        # Windows;  Linux/macOS: cp .env.example .env
-node index.mjs
-```
-
-Bước tạo `.env` KHÔNG bỏ được. Cổng FR-151 đang **bật** trên Supabase: cả
-`chat-reply` lẫn `escalation-feed` chỉ nhận request kèm header
-`x-bridge-secret` khớp secret cùng tên trong Vault. Thiếu nó thì:
-
-| Triệu chứng ở terminal | Nghĩa là |
-|---|---|
-| `escalation-feed: bridge secret sai` | 401 — bridge không gửi header, hoặc gửi sai |
-| `chat-reply: forbidden` | 403 — cùng nguyên nhân, chỉ khác cửa |
-
-Bridge vẫn đăng nhập Zalo được và vẫn in "Bridge sẵn sàng" — nên rất dễ tưởng
-là chạy ngon. Thực tế nó không nói chuyện được với server, khách nhắn vào là im.
-
-Lấy giá trị: **Dashboard → Project Settings → Vault → `BRIDGE_SECRET`**, dán vào
-`.env`. Dán nguyên văn, không nháy, không dấu cách thừa — lệch một ký tự là 401.
-(File đọc theo thư mục của `index.mjs`, không theo thư mục đang đứng, nên chạy
-từ đâu cũng được. `.env` đã nằm trong `.gitignore`; repo này đang PUBLIC.)
-
-Đừng dùng `set BRIDGE_SECRET=...` trong cmd: nó chỉ sống trong đúng cửa sổ đó,
-đóng cửa sổ hay reboot là mất, mở cửa sổ mới chạy lại là sai y như cũ.
-
-**Thứ tự khi bật/tắt cổng** — làm ngược là bridge chết trong khoảng giữa:
-- Bật: điền `.env` **trước** → tạo secret trong Vault **sau**.
-- Tắt khẩn: `delete from vault.secrets where name = 'BRIDGE_SECRET';`
+Bộ kiểm bắt buộc sau mỗi lần deploy `chat-reply`: **TS-CHATREPLY-01…04** trong
+[`docs/10-ke-hoach-kiem-thu.md`](../docs/10-ke-hoach-kiem-thu.md) §10.7 — bốn
+bài, mỗi bài soi một họ regex khác nhau (mã căn/tiền/khoảng giá · nhánh thuê ·
+câu rao cho thuê · ghiLoi trong catch). Kế hoạch test nằm MỘT chỗ ở `docs/10`,
+đừng chép lại vào đây.
 
 ## Bảng liên quan (migration đã áp trên nhadat-cc)
 

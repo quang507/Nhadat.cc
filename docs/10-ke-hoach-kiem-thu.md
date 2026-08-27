@@ -173,10 +173,10 @@ không ra khỏi Postgres). Kết quả lần chạy 27/08 trên v32:
 
 | ID | Nhắn gì | Soi họ regex nào | Kỳ vọng |
 |---|---|---|---|
-| TS-CHATREPLY-A | `anh co 5 tỏi rưỡi, tìm nhà quận 5 phường 9, coi giúp anh căn #BDS-Q5-0164` | `CODE_RE`, regex tiền, `budgetRangeVnd`, `wardNum` | Trả đúng căn được nhắc, lọc kho theo tầm giá đã bóc |
-| TS-CHATREPLY-B | `anh muốn thuê nhà quận 5 tầm 20 triệu một tháng` → lượt 2 `để ở, tìm luôn đi` | `dealCol()` + lọc kho `deal='cho_thue'` | Lượt 2 trả căn CHO THUÊ thật, không phải căn bán |
-| TS-CHATREPLY-C | `cho thuê nhà mặt tiền phường 11, 60m2, giá 25 triệu một tháng` (từ acc đã gán `sellers.zalo_user_id`) | `wantsSell`, `sDeal`, `wardM`, `priceM` | Tạo tin `deal=cho_thue`, đúng phường, `price_raw` không dính "trệt" |
-| TS-CHATREPLY-D | tin kèm `image_url` trỏ host không tồn tại | `ghiLoi()` trong catch (FR-152 d) | HTTP **200**, khách VẪN nhận câu trả lời (fallback regex), mà `bot_errors` có `source='chat-reply model'` |
+| TS-CHATREPLY-01 | `anh co 5 tỏi rưỡi, tìm nhà quận 5 phường 9, coi giúp anh căn #BDS-Q5-0164` | `CODE_RE`, regex tiền, `budgetRangeVnd`, `wardNum` | Trả đúng căn được nhắc, lọc kho theo tầm giá đã bóc |
+| TS-CHATREPLY-02 | `anh muốn thuê nhà quận 5 tầm 20 triệu một tháng` → lượt 2 `để ở, tìm luôn đi` | `dealCol()` + lọc kho `deal='cho_thue'` | Lượt 2 trả căn CHO THUÊ thật, không phải căn bán |
+| TS-CHATREPLY-03 | `cho thuê nhà mặt tiền phường 11, 60m2, giá 25 triệu một tháng` (từ acc đã gán `sellers.zalo_user_id`) | `wantsSell`, `sDeal`, `wardM`, `priceM` | Tạo tin `deal=cho_thue`, đúng phường, `price_raw` không dính "trệt" |
+| TS-CHATREPLY-04 | tin kèm `image_url` trỏ host không tồn tại | `ghiLoi()` trong catch (FR-152 d) | HTTP **200**, khách VẪN nhận câu trả lời (fallback regex), mà `bot_errors` có `source='chat-reply model'` |
 
 Dọn sau khi chạy: trả `sellers.zalo_user_id` về NULL, xoá tin `CCRB-*` vừa sinh
 (kèm `info_requests`/`listing_facts`/`reminders` của nó), xoá buyer/conversation
