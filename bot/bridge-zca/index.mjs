@@ -160,13 +160,23 @@ async function postJson(url, headers, payload) {
 // Gửi một tin (kèm ảnh nếu bộ não trả về) — dùng chung cho tin nhắn và reaction
 async function handleIncoming(threadId, text, imageUrl, msgId) {
   console.log(`← [${threadId}] ${text || "[ảnh]"}`);
-  const { reply, replies, photos, error } = await postJson(CHAT_REPLY_URL, brainHeaders, {
+  const payload = {
     external_user_id: String(threadId),
     text: typeof text === "string" ? text : "",
     image_url: imageUrl,
     msg_id: msgId,
     channel: "zalo_personal_test",
-  });
+  };
+  let out = await postJson(CHAT_REPLY_URL, brainHeaders, payload);
+  // FR-162: in_flight = một bản sao của CÙNG tin này đang được xử lý — thường
+  // là chính lượt đầu của postJson bị timeout 20s nên lượt thử lại chạm mặt nó.
+  // Đừng bỏ đi tay không: chờ rồi hỏi lại (tối đa 3 lần), lượt kia xong là
+  // server PHÁT LẠI câu trả lời đã lưu trong sổ — không gọi model lần hai.
+  for (let i = 0; i < 3 && out?.in_flight; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    out = await postJson(CHAT_REPLY_URL, brainHeaders, payload);
+  }
+  const { reply, replies, photos, error } = out ?? {};
   if (error) return await ghiLoi("chat-reply", error);
   const bubbles = Array.isArray(replies) && replies.length ? replies : reply ? [reply] : [];
 

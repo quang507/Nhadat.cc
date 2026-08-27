@@ -379,3 +379,32 @@ KHÔNG bọc try/catch (khác nhánh mua vốn có fallback) → xem OPEN-30.
 tôi/tối (lệch giờ nhắc, không mất nhắc); từ "anh" trần không được coi là xin
 ảnh.
 
+### TS-IDEM — sổ idempotency + retry (FR-162)
+
+Hai tầng: SQL gọi thẳng `claim_inbound` (nhanh, tất định), rồi E2E bắn
+`net.http_post` vào chat-reply thật. E2E dùng **nhánh buyer** vì nhánh đó có
+fallback khi model hỏng (OPEN-30) — Anthropic đang hết credit vẫn test được
+trọn luồng ghi/đọc sổ. Đo quota bằng `bot_usage.model_calls` trước/sau từng ca.
+
+| Mã | Việc | Kỳ vọng |
+|---|---|---|
+| TS-IDEM-01 | SQL `claim_inbound('x')` lần đầu | `claimed`, attempts 1 |
+| TS-IDEM-02 | Gọi lại ngay khi hàng còn `received` tươi | `in_flight` |
+| TS-IDEM-03 | Đặt `completed` + reply rồi claim lại | `completed` kèm nguyên reply |
+| TS-IDEM-04 | Đặt `failed` rồi claim lại | `claimed`, attempts 2 |
+| TS-IDEM-05 | Đặt `processing` lùi `updated_at` 200 s | `claimed` (reclaim sau 150 s) |
+| TS-IDEM-06 | `claim_inbound(null)` | `claimed` — không msg_id thì không chống trùng |
+| TS-IDEM-07 | E2E: tin buyer mới, msg_id mới | 200 + replies; sổ `completed` lưu payload; quota **+1** |
+| TS-IDEM-08 | E2E: gửi LẠI đúng msg_id đó | `replayed: true` + NGUYÊN câu trả lời cũ; quota **+0**; `messages` vẫn 1 dòng |
+| TS-IDEM-09 | E2E: 2 request cùng msg_id bắn đồng thời | một bên trả lời đủ, bên kia `in_flight`; quota chỉ **+1** |
+| TS-IDEM-10 | E2E: sửa sổ thành `failed` rồi gửi lại | Xử lý THẬT (không bị 23505 nuốt): replies đầy đủ, attempts 2, `messages` vẫn 1 dòng; quota **+1** (retry thật, đúng luật) |
+
+Đã chạy thật 27/08/2026 trên bản deploy chat-reply v37 + migration
+`20260827m`: **10/10 đạt**. Quota đo được `8 → 9 (07) → 9 (08) → 10 (09)
+→ 11 (10)` — đúng từng lượt: chỉ 3 lần xử lý thật tốn quota, replay và
+in_flight không tốn. Dọn sạch: `inbound_ledger` về 0 dòng, buyer/conversation/
+messages test xoá hết.
+
+Lưu ý khi test lại: CTE nhiều nhánh gọi `claim_inbound` trong CÙNG một
+statement chạy không theo thứ tự viết — tách từng lệnh, đừng gộp `with`.
+

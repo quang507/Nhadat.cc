@@ -286,6 +286,66 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, human_note: true, cham });
   }
 
+  // ─── SỔ INBOUND (FR-162): mỗi zalo_msg_id là MỘT vòng đời xử lý
+  // received → processing → completed/failed, lưu nguyên payload trả lời.
+  // Đứng TRƯỚC cổng quota là cố ý: tin duplicate không được đốt lượt model.
+  //   * completed → PHÁT LẠI payload đã lưu. Kênh gửi hụt (Zalo lỗi, bridge
+  //     timeout) cứ gọi lại cùng msg_id là lấy lại được câu trả lời — retry
+  //     outbound không cần chạy lại AI.
+  //   * in_flight → bản sao thứ hai của cùng tin đang được lượt khác xử lý
+  //     NGAY LÚC NÀY (race hai bản sao). Đứng ngoài, không xử lý đôi; bridge
+  //     thấy cờ này thì chờ rồi hỏi lại.
+  //   * claimed  → làm như thường. r_attempts > 1 nghĩa là lượt trước
+  //     failed/chết giữa chừng — tin có thể ĐÃ nằm trong `messages`, nên 23505
+  //     ở dưới không được nuốt nữa mà phải đi tiếp trả lời nốt.
+  // Sổ hỏng (RPC lỗi) thì chạy như cũ — unique index messages.zalo_msg_id vẫn
+  // là lưới đỡ cuối — nhưng phải vào bot_errors (FR-152).
+  let coSo = false;      // lượt này có cầm sổ không
+  let soAttempts = 1;    // lần thử thứ mấy của msg_id này
+  if (msgId) {
+    const { data: so, error: soErr } = await client
+      .rpc("claim_inbound", { p_msg_id: msgId }).single();
+    const soRow = so as {
+      r_state?: string; r_reply?: Record<string, unknown> | null; r_attempts?: number;
+    } | null;
+    if (soErr || !soRow?.r_state) {
+      await ghiLoi(client, "chat-reply claim_inbound",
+        soErr?.message ?? "không trả về r_state");
+    } else if (soRow.r_state === "completed") {
+      return jsonResponse({
+        reply: null, replies: [], ...(soRow.r_reply ?? {}),
+        deduped: true, replayed: true,
+      });
+    } else if (soRow.r_state === "in_flight") {
+      return jsonResponse({ reply: null, replies: [], deduped: true, in_flight: true });
+    } else {
+      coSo = true;
+      soAttempts = soRow.r_attempts ?? 1;
+    }
+  }
+  // MỌI đường ra phía sau phải đi qua một trong hai cửa này, để sổ không bao
+  // giờ kẹt ở processing oan (kẹt thật — function chết — thì claim_inbound tự
+  // reclaim sau 150s). Ghi sổ hụt không được chặn đường trả lời: chỉ ghiLoi.
+  const hoanTat = async (payload: Record<string, unknown>, code = 200) => {
+    if (coSo) {
+      const { error: soErr2 } = await client.from("inbound_ledger").update({
+        status: "completed", reply: payload, updated_at: new Date().toISOString(),
+      }).eq("zalo_msg_id", msgId);
+      if (soErr2) await ghiLoi(client, "chat-reply hoanTat ledger", soErr2.message);
+    }
+    return jsonResponse(payload, code);
+  };
+  const baoHong = async (payload: Record<string, unknown>, code: number, detail: string) => {
+    if (coSo) {
+      const { error: soErr3 } = await client.from("inbound_ledger").update({
+        status: "failed", detail: detail.slice(0, 500),
+        updated_at: new Date().toISOString(),
+      }).eq("zalo_msg_id", msgId);
+      if (soErr3) await ghiLoi(client, "chat-reply baoHong ledger", soErr3.message);
+    }
+    return jsonResponse(payload, code);
+  };
+
   // ─── CỔNG 2: trần TOÀN CỤC lượt gọi model mỗi ngày.
   // Trần 100 tin/24h bên dưới đếm theo `conversation_id`, mà conversation sinh
   // ra từ `external_user_id` — chuỗi do người gọi tự đặt và KHÔNG được kiểm.
@@ -299,7 +359,19 @@ Deno.serve(async (req) => {
   if (underQuota === false) {
     // Im lặng hoàn toàn: trả lời thì vẫn tốn lượt model, mà đây đúng là thứ
     // đang cần chặn. bump_model_quota đã báo admin đúng một lần trong ngày.
-    return jsonResponse({ reply: null, replies: [], quota_exceeded: true }, 429);
+    // Sổ ghi failed chứ không completed: sang ngày quota reset, kênh gửi lại
+    // cùng msg_id thì tin ĐƯỢC xử lý thật chứ không bị phát lại cái rỗng.
+    return await baoHong(
+      { reply: null, replies: [], quota_exceeded: true }, 429, "quota ngày đã chạm trần",
+    );
+  }
+
+  // Qua hết các cổng — từ đây là xử lý thật.
+  if (coSo) {
+    const { error: soPErr } = await client.from("inbound_ledger").update({
+      status: "processing", updated_at: new Date().toISOString(),
+    }).eq("zalo_msg_id", msgId);
+    if (soPErr) await ghiLoi(client, "chat-reply ledger processing", soPErr.message);
   }
 
   // FR-138: "não" cấu hình được từ dashboard — bảng bot_prompts đè lên mặc định
@@ -363,9 +435,9 @@ Deno.serve(async (req) => {
     // HTTP vẫn 200 nên bot_health_tick không thấy gì. Nhánh mua ở đây trả 500 —
     // nhánh bán phải cùng ngữ nghĩa (FR-152).
     if (convSErr || !convSId) {
-      await ghiLoi(client, "chat-reply ensure_seller_conversation",
-        convSErr?.message ?? "không trả về c_id");
-      return jsonResponse({ error: convSErr?.message ?? "ensure_seller_conversation" }, 500);
+      const detail = convSErr?.message ?? "không trả về c_id";
+      await ghiLoi(client, "chat-reply ensure_seller_conversation", detail);
+      return await baoHong({ error: detail }, 500, detail);
     }
 
     // Ghi tin CHỦ NHÀ trước khi gọi model: model lỗi giữa chừng thì vẫn còn dấu
@@ -377,15 +449,21 @@ Deno.serve(async (req) => {
       body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
       zalo_msg_id: msgId,
     });
-    if (msgSErr?.code === "23505") {
-      return jsonResponse({ reply: null, replies: [], role: "seller", deduped: true });
+    if (msgSErr?.code === "23505" && !(coSo && soAttempts > 1)) {
+      // Trùng từ THỜI TRƯỚC SỔ (sổ chưa có dòng nào cho msg_id này mà messages
+      // đã có): lượt cũ đã trả lời rồi — dừng, và chốt sổ completed-rỗng để
+      // các retry sau không quay lại đây nữa.
+      return await hoanTat({ reply: null, replies: [], role: "seller", deduped: true });
     }
-    if (msgSErr) {
+    if (msgSErr && msgSErr.code !== "23505") {
       // Mọi lỗi KHÁC 23505 (khoá ngoại, timeout, enum sai…) trước đây rơi im:
       // bot vẫn trả lời vào một hội thoại thiếu đúng dòng chủ nhà vừa nhắn.
       await ghiLoi(client, "chat-reply messages seller", msgSErr.message);
-      return jsonResponse({ error: msgSErr.message }, 500);
+      return await baoHong({ error: msgSErr.message }, 500, msgSErr.message);
     }
+    // 23505 khi soAttempts > 1: lượt trước của CHÍNH msg_id này chết giữa chừng
+    // — tin chủ nhà đã nằm trong sổ messages rồi. Đi tiếp trả lời nốt, đừng
+    // nuốt (đây đúng là ca "AI chưa kịp chạy / Zalo chưa kịp gửi thì hỏng").
     await client.from("conversations")
       .update({ last_message_at: new Date().toISOString() }).eq("id", convSId);
 
@@ -410,7 +488,7 @@ Deno.serve(async (req) => {
     ) => {
       if (humanActive) {
         // FR-141 — người thật đang cầm cuộc: không gửi, không ghi dòng bot nào.
-        return jsonResponse({
+        return await hoanTat({
           reply: null, replies: [], role: "seller", human_active: true, ...extra,
         });
       }
@@ -423,7 +501,7 @@ Deno.serve(async (req) => {
         // Không chặn đường trả lời chủ nhà, nhưng phải vào bot_errors (FR-152).
         if (botErr) await ghiLoi(client, "chat-reply messages bot(seller)", botErr.message);
       }
-      return jsonResponse({
+      return await hoanTat({
         reply: sach.join("\n") || null, replies: sach, role: "seller", ...extra,
       });
     };
@@ -735,7 +813,8 @@ Deno.serve(async (req) => {
       p_channel: channel,
     }).single();
   if (bcErr || !bc) {
-    return jsonResponse({ error: bcErr?.message ?? "ensure_buyer_conversation" }, 500);
+    const detail = bcErr?.message ?? "ensure_buyer_conversation";
+    return await baoHong({ error: detail }, 500, detail);
   }
   const buyer = { id: bc.b_id as string, name: bc.b_name as string | null };
   const convId = bc.c_id as string;
@@ -747,12 +826,22 @@ Deno.serve(async (req) => {
     body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
     zalo_msg_id: msgId,
   }).select("id").single();
-  if (msgErr?.code === "23505") {
-    // Retry của kênh (cùng msg_id) — đã trả lời rồi, đừng trả lời lần hai
-    return jsonResponse({ reply: null, replies: [], deduped: true });
+  if (msgErr?.code === "23505" && !(coSo && soAttempts > 1)) {
+    // Trùng từ THỜI TRƯỚC SỔ — lượt cũ đã trả lời rồi, đừng trả lời lần hai.
+    // Chốt sổ completed-rỗng để retry sau không quay lại đây.
+    return await hoanTat({ reply: null, replies: [], deduped: true });
   }
-  if (msgErr) {
-    return jsonResponse({ error: msgErr.message }, 500);
+  if (msgErr && msgErr.code !== "23505") {
+    return await baoHong({ error: msgErr.message }, 500, msgErr.message);
+  }
+  // 23505 khi soAttempts > 1: lượt trước của chính msg_id này chết giữa chừng,
+  // tin khách ĐÃ nằm trong messages — lấy lại id dòng cũ (check nhường-lượt
+  // FR-131 bên dưới cần nó) rồi đi tiếp trả lời nốt, đừng nuốt.
+  let insMsgId = insMsg?.id ?? null;
+  if (!insMsgId && msgId) {
+    const { data: cu } = await client.from("messages").select("id")
+      .eq("zalo_msg_id", msgId).maybeSingle();
+    insMsgId = cu?.id ?? null;
   }
   await client.from("conversations")
     .update({ last_message_at: new Date().toISOString() }).eq("id", convId);
@@ -763,7 +852,7 @@ Deno.serve(async (req) => {
     .select("ctv_id, human_touch_at").eq("id", convId).maybeSingle();
   if (convRow?.human_touch_at &&
       Date.now() - Date.parse(convRow.human_touch_at as string) < 30 * 60e3) {
-    return jsonResponse({ reply: null, replies: [], human_active: true });
+    return await hoanTat({ reply: null, replies: [], human_active: true });
   }
 
   // FR-146: trần 100 tin/24h mỗi khách. Chống người ta lấy anon key gọi thẳng
@@ -781,7 +870,7 @@ Deno.serve(async (req) => {
       .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
     if ((quotaEsc ?? 0) > 0) {
       // đã báo rồi → im tới hết ngày, không tốn thêm lượt model nào
-      return jsonResponse({ reply: null, replies: [], rate_limited: true });
+      return await hoanTat({ reply: null, replies: [], rate_limited: true });
     }
     const capMsg =
       "Dạ hôm nay mình trao đổi nhiều rồi, để em nhờ anh/chị phụ trách nhắn lại trực tiếp cho mình nha!";
@@ -797,7 +886,7 @@ Deno.serve(async (req) => {
       due_at: new Date().toISOString(),
       note: `khách nhắn hơn ${DAILY_LIMIT} tin trong 24h, bot tạm dừng trả lời. Anh/chị vào xem giúp`,
     });
-    return jsonResponse({ reply: capMsg, replies: [capMsg], rate_limited: true });
+    return await hoanTat({ reply: capMsg, replies: [capMsg], rate_limited: true });
   }
 
   // FR-131: KHÔNG delay nhân tạo (quyết định chủ dự án 25/08 — "càng nhanh càng
@@ -807,8 +896,10 @@ Deno.serve(async (req) => {
     .from("messages").select("id")
     .eq("conversation_id", convId).eq("sender", "buyer")
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (newest && insMsg && newest.id !== insMsg.id) {
-    return jsonResponse({ reply: null, replies: [], superseded: true });
+  if (newest && insMsgId && newest.id !== insMsgId) {
+    // Completed-rỗng là ĐÚNG cả với sổ: tin này được lượt của tin cuối trả lời
+    // trên ngữ cảnh gộp — phát lại rỗng, không phát lại đôi.
+    return await hoanTat({ reply: null, replies: [], superseded: true });
   }
 
   // Buyer quay lại nhắn → hủy nhắc-lời-hứa + follow-up đang chờ (FR-133/FR-32)
@@ -1264,5 +1355,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return jsonResponse({ reply: replies.join("\n"), replies, photos, conversation_id: convId });
+  return await hoanTat({ reply: replies.join("\n"), replies, photos, conversation_id: convId });
 });

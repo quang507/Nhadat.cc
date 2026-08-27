@@ -61,12 +61,38 @@ async function handleEvent(raw: string): Promise<void> {
 
   // Quyết định 25/08: KHÔNG delay nhân tạo — bong bóng đầu đi ngay lập tức,
   // giữa các bong bóng chỉ chừa 300ms cho Zalo giao đúng thứ tự.
+  let guiHut = 0; // FR-162: đếm bong bóng gửi hụt để ghi vào sổ inbound_ledger
   for (const [i, bubble] of bubbles.entries()) {
     if (i > 0) await new Promise((r) => setTimeout(r, 300));
-    const ok = await sendZalo(accessToken, zaloUserId, bubble);
+    let ok = await sendZalo(accessToken, zaloUserId, bubble);
+    if (!ok) {
+      // FR-162: OA nghẹn thoáng qua là chuyện có thật — thử lại ĐÚNG MỘT lần
+      // sau 2s trước khi bỏ cuộc. Câu trả lời đã nằm trong inbound_ledger nên
+      // kể cả bỏ cuộc, gọi lại chat-reply cùng msg_id là phát lại được.
+      await new Promise((r) => setTimeout(r, 2000));
+      ok = await sendZalo(accessToken, zaloUserId, bubble);
+    }
     // Gửi hụt = khách ngồi chờ một câu không bao giờ tới. Đây là hỏng nặng
     // nhất phía B mà lại im nhất, vì mọi mã HTTP trên đường đều 200.
-    if (!ok) await ghiLoi(client, "zalo-webhook send", `bong bóng: ${bubble.slice(0, 80)}`);
+    if (!ok) {
+      guiHut++;
+      await ghiLoi(client, "zalo-webhook send", `bong bóng: ${bubble.slice(0, 80)}`);
+    }
+  }
+
+  // FR-162: chốt kết quả GỬI vào sổ — sent_at nghĩa là mọi bong bóng đã tới
+  // Zalo; send_error là bằng chứng "AI đã chạy mà khách chưa nhận được", chỗ
+  // duy nhất phân biệt nổi ca này với ca thành công (mọi HTTP đều 200).
+  // Dòng sổ không tồn tại (msg_id null / sổ hỏng) thì update là no-op, kệ.
+  if (zaloMsgId && bubbles.length) {
+    const { error: soErr } = await client.from("inbound_ledger").update(
+      guiHut
+        ? { send_error: `${guiHut}/${bubbles.length} bong bóng gửi hụt`,
+            updated_at: new Date().toISOString() }
+        : { sent_at: new Date().toISOString(), send_error: null,
+            updated_at: new Date().toISOString() },
+    ).eq("zalo_msg_id", zaloMsgId);
+    if (soErr) await ghiLoi(client, "zalo-webhook ledger send", soErr.message);
   }
 
   // FR-143: bộ não trả về hình thật (kho ảnh theo mã + URL chính chủ gửi)
