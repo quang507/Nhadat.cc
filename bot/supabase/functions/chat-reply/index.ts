@@ -26,64 +26,87 @@ import {
   TONE_RULES,
 } from "../_shared/prompts.ts";
 
+// FR-161 — RẤT NHIỀU người nhắn Zalo không bỏ dấu, mà mọi cổng regex ở đây
+// từng viết bằng chữ có dấu: "ban nha quan 5 gia 5 ty" trượt cổng rao im lặng,
+// "toi muon mua nha" không tách được vai, "chieu gui anh" không thành lời hứa.
+// Chữa ở GỐC chứ không vá từng mẫu: chuẩn hoá đầu vào một lần rồi khớp.
+//
+// Luật hai chế độ: tin CÓ DẤU thì khớp bằng bộ regex có dấu như cũ (dấu của
+// người gõ là thông tin — "đang bàn" khác "đang bán", đừng vứt đi); tin KHÔNG
+// DẤU mới rơi về bộ regex đã bỏ dấu, chấp nhận nhập nhằng vốn có của tiếng
+// Việt không dấu (ban = bán/bàn/bạn). Model thì đọc text GỐC — model không mù
+// dấu, chỉ regex là mù.
+const boDau = (s: string): string =>
+  s.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const CO_DAU_RE =
+  /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i;
+
 // Fallback quy tắc khi model lỗi/hết quota (hướng parseVnd của NhaDat-Radar):
 // bắt tối thiểu ngân sách + hẻm/mặt tiền bằng regex để hồ sơ không mất dữ liệu,
 // và trả lời template thay vì im lặng hay đổ lỗi cho khách.
 function regexProfileFallback(text: string): Record<string, string> {
-  const t = text.toLowerCase();
+  // Chạy trên bản BỎ DẤU (FR-161): fallback này chỉ nhặt số + từ khoá thô,
+  // và bản không dấu phủ được cả hai kiểu gõ. "thuế" → "thue" vẫn dính nhầm
+  // như trước, chấp nhận — đây là lưới cuối khi model đã hỏng.
+  const t = boDau(text);
   const delta: Record<string, string> = {};
-  const money = /([\d][\d.,]*)\s*(tỷ|tỉ|ty|tỏi|tr(?![a-zA-ZÀ-ỹ])|triệu|củ)/.exec(t);
+  const money = /([\d][\d.,]*)\s*(ty|ti|toi|tr(?![a-z])|trieu|cu)/.exec(t);
   if (money) {
-    const unit = /tr|triệu|củ/.test(money[2]) ? "triệu" : "tỷ";
+    const unit = /^(tr|trieu|cu)$/.test(money[2]) ? "triệu" : "tỷ";
     delta.budget = `${money[1]} ${unit}`;
   }
-  if (/hxh|hẻm xe hơi/.test(t)) delta.alley = "hẻm xe hơi";
-  else if (/mặt tiền|\bmt\b/.test(t)) delta.alley = "mặt tiền";
-  // \b của JS chỉ biết ký tự ASCII, mà "thuê" kết bằng "ê" → /\bthuê\b/ KHÔNG
-  // BAO GIỜ khớp. Tự dựng biên từ bằng lớp chữ tiếng Việt. ("thuế" phải trượt.)
-  if (/(^|[^a-zà-ỹ])thu[êe](?![a-zà-ỹ])/.test(t)) delta.deal = "thue";
+  if (/hxh|hem xe hoi/.test(t)) delta.alley = "hẻm xe hơi";
+  else if (/mat tien|\bmt\b/.test(t)) delta.alley = "mặt tiền";
+  if (/(^|[^a-z])thue(?![a-z])/.test(t)) delta.deal = "thue";
   else if (/\bmua\b/.test(t)) delta.deal = "ban";
   return delta;
 }
 
 // FR-133: "chiều/mai/tối… em gửi" → hẹn giờ nhắc (giờ VN = UTC+7)
 function mapDue(when: string): string {
-  const t = when.toLowerCase();
+  // Bản bỏ dấu (FR-161) phủ cả hai kiểu gõ: "chieu mai" hẹn được y như
+  // "chiều mai". Đổi lại "tôi"/"tối" nhập một — chỉ lệch GIỜ nhắc, không mất nhắc.
+  const t = boDau(when);
   const now = Date.now();
   const vn = new Date(now + 7 * 3600e3);
   let day = 0;
-  if (/mai|hôm sau/.test(t)) day = 1;
+  if (/mai|hom sau/.test(t)) day = 1;
   // "thứ 7", "chủ nhật/CN" → số ngày tới thứ đó (trùng hôm nay thì lấy hôm nay)
-  const wd = /thứ\s*([2-7])/.exec(t);
+  const wd = /thu\s*([2-7])/.exec(t);
   if (wd) day = ((parseInt(wd[1], 10) - 1) - vn.getUTCDay() + 7) % 7;
-  else if (/chủ nhật|\bcn\b/.test(t)) day = (7 - vn.getUTCDay()) % 7;
+  else if (/chu nhat|\bcn\b/.test(t)) day = (7 - vn.getUTCDay()) % 7;
   let hour = 15;
-  const hm = /(\d{1,2})\s*(?:h|giờ)/.exec(t);
+  const hm = /(\d{1,2})\s*(?:h|gio)/.exec(t);
   if (hm) {
     hour = Math.min(23, Math.max(0, parseInt(hm[1], 10)));
     // "3h chiều", "8h tối" — giờ kèm buổi thì cộng 12, kẻo thành 3h/8h SÁNG
-    if (hour < 12 && /chiều|tối|đêm/.test(t)) hour += 12;
-  } else if (/sáng/.test(t)) hour = 9;
-  else if (/trưa/.test(t)) hour = 12;
-  else if (/chiều/.test(t)) hour = 15;
-  else if (/tối|đêm/.test(t)) hour = 19;
-  else if (/cuối tuần/.test(t)) { day = ((6 - vn.getUTCDay()) + 7) % 7 || 6; hour = 10; }
+    if (hour < 12 && /chieu|toi|dem/.test(t)) hour += 12;
+  } else if (/sang/.test(t)) hour = 9;
+  else if (/trua/.test(t)) hour = 12;
+  else if (/chieu/.test(t)) hour = 15;
+  else if (/toi|dem/.test(t)) hour = 19;
+  else if (/cuoi tuan/.test(t)) { day = ((6 - vn.getUTCDay()) + 7) % 7 || 6; hour = 10; }
   let due = Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate() + day, hour - 7);
   if (due <= now) due = now + 2 * 3600e3; // đã qua giờ đó → nhắc sau 2 tiếng
   return new Date(due).toISOString();
 }
-// Regex bắt lời hứa cho nhánh seller (không qua parse có cấu trúc)
+// Regex bắt lời hứa cho nhánh seller (không qua parse có cấu trúc).
+// Hai bản có-dấu / không-dấu, chọn theo tin (FR-161).
 const PROMISE_RE = /(sáng mai|chiều|tối|trưa|mai|cuối tuần)[^.,;!?]{0,30}?(gửi|chụp|báo|đưa|bổ sung|cho em|check|coi lại)|(gửi|chụp|báo|đưa|bổ sung|check|coi lại)[^.,;!?]{0,30}?(sáng mai|chiều|tối|trưa|mai|cuối tuần)/i;
+const PROMISE_RE_KD = /(sang mai|chieu|toi|trua|mai|cuoi tuan)[^.,;!?]{0,30}?(gui|chup|bao|dua|bo sung|cho em|check|coi lai)|(gui|chup|bao|dua|bo sung|check|coi lai)[^.,;!?]{0,30}?(sang mai|chieu|toi|trua|mai|cuoi tuan)/;
 
 // SRS-4.5: khoảng giá trong hồ sơ → biên VND để lọc kho bằng price_vnd
 // (cột số, parse_vnd phía DB — hướng parseVnd của NhaDat-Radar).
 // "tầm/dưới 5 tỷ" → cận trên ×1.15; "trên/từ 4 tỷ" → cận DƯỚI; "5-6 tỷ" → cả hai.
 function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null {
   if (typeof budget !== "string") return null;
-  const unitOf = (u: string) => (/tỷ|ty|tỏi|tỉ/i.test(u) ? 1e9 : 1e6);
+  // Bỏ dấu một lần (FR-161): hồ sơ do model bóc thì có dấu, do fallback regex
+  // thì không — hàm này phải nuốt được cả hai mà không nhân đôi bảng mẫu.
+  const bd = boDau(budget);
+  const unitOf = (u: string) => (/^(ty|ti|toi)$/.test(u) ? 1e9 : 1e6);
   const num = (s: string) => parseFloat(s.replace(",", "."));
   const range =
-    /([\d][\d.,]*)\s*[-–~]\s*([\d][\d.,]*)\s*(tỷ|ty|tỏi|tỉ|triệu|trieu|củ)/i.exec(budget);
+    /([\d][\d.,]*)\s*[-–~]\s*([\d][\d.,]*)\s*(ty|ti|toi|trieu|cu)/.exec(bd);
   if (range) {
     const u = unitOf(range[3]);
     const a = num(range[1]) * u, b = num(range[2]) * u;
@@ -91,13 +114,13 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
       return { min: Math.round(a * 0.95), max: Math.round(b * 1.1) };
     }
   }
-  const m = /([\d][\d.,]*)\s*(tỷ|ty|tỏi|tỉ)/i.exec(budget) ??
-    /([\d][\d.,]*)\s*(triệu|trieu|củ|tr(?![a-zA-ZÀ-ỹ]))/i.exec(budget);
+  const m = /([\d][\d.,]*)\s*(ty|ti|toi)(?![a-z])/.exec(bd) ??
+    /([\d][\d.,]*)\s*(trieu|cu|tr(?![a-z]))/.exec(bd);
   if (!m) return null;
   const n = num(m[1]);
   if (!Number.isFinite(n) || n <= 0) return null;
   const base = n * unitOf(m[2]);
-  if (/trên|hơn|từ|tối thiểu|ít nhất/i.test(budget)) return { min: Math.round(base * 0.95) };
+  if (/tren|hon|\btu\b|toi thieu|it nhat/.test(bd)) return { min: Math.round(base * 0.95) };
   return { max: Math.round(base * 1.15) };
 }
 
@@ -163,6 +186,11 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "external_user_id và text (hoặc image_url) bắt buộc" }, 400);
   }
   const textOrTag = text || "[khách gửi ảnh]";
+
+  // FR-161: tin có dấu → khớp bộ regex có dấu (chính xác, không đổi hành vi
+  // cũ); tin không dấu → rơi về bộ đã bỏ dấu. Model vẫn nhận `text` gốc.
+  const coDauTin = CO_DAU_RE.test(text);
+  const tKD = boDau(text);
 
   const client = serviceClient();
 
@@ -303,10 +331,13 @@ Deno.serve(async (req) => {
   // buyer, bot cứ hỏi ngược lại về căn của họ.
   // Câu hỏi chờ KHÔNG mất khi rẽ sang nhánh mua: `info_requests` vẫn
   // `pending`, cron drip sẽ hỏi lại.
-  const hoiMua =
-    /(muốn|cần|tìm|kiếm|đang coi|đang xem)\s*(mua|thu[êe]|nhà|căn|đất|phòng|mặt bằng|chung cư)/i
-      .test(text) ||
-    /(có|còn)\s*căn nào|xem nhà|coi nhà|tư vấn (mua|thu[êe])/i.test(text);
+  const hoiMua = coDauTin
+    ? /(muốn|cần|tìm|kiếm|đang coi|đang xem)\s*(mua|thu[êe]|nhà|căn|đất|phòng|mặt bằng|chung cư)/i
+        .test(text) ||
+      /(có|còn)\s*căn nào|xem nhà|coi nhà|tư vấn (mua|thu[êe])/i.test(text)
+    : /(muon|can|tim|kiem|dang coi|dang xem)\s*(mua|thue|nha|can|dat|phong|mat bang|chung cu)/
+        .test(tKD) ||
+      /(co|con)\s*can nao|xem nha|coi nha|tu van (mua|thue)/.test(tKD);
 
   if (sellerRow && !hoiMua) {
     const anthropicS = await anthropicClient(client);
@@ -406,7 +437,7 @@ Deno.serve(async (req) => {
     // Một dãy mã duy nhất kể từ FR-158 — nhánh `CCRB-` cũ bỏ đi vì kho chưa bao
     // giờ có mã đó (kiểm 27/08/2026: 173 tin, 100% BDS-Q5-####).
     const codeInText =
-      /(BDS-Q5-[A-Za-z0-9]+)/.exec(text)?.[1]?.toUpperCase() ?? null;
+      /(bds-q5-[a-z0-9]+)/.exec(tKD)?.[1]?.toUpperCase() ?? null;
     const { data: pendings } = await client
       .from("info_requests")
       .select("id, listing_id, question, created_at, listings!inner(seller_id, code, location_raw)")
@@ -430,7 +461,7 @@ Deno.serve(async (req) => {
     await client.from("reminders").update({ status: "cancelled" })
       .eq("seller_id", sellerRow.id).eq("kind", "promise").eq("status", "pending");
     // Seller hứa "chiều gửi ảnh…" → đặt hẹn nhắc
-    if (PROMISE_RE.test(text)) {
+    if (coDauTin ? PROMISE_RE.test(text) : PROMISE_RE_KD.test(tKD)) {
       await client.from("reminders").insert({
         kind: "promise", seller_id: sellerRow.id,
         due_at: mapDue(text), note: text.slice(0, 200),
@@ -567,18 +598,29 @@ Deno.serve(async (req) => {
     // không phải danh sách từ khoá: "nhà mình bán chưa em?" có đủ cả "bán" lẫn
     // "nhà" nhưng không có cặp "bán nhà" hay "muốn bán" — nó là câu hỏi về tin
     // cũ, không phải câu rao mới.
-    const coChiTiet =
-      /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text);
-    const coYDinhRao =
-      /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe])/i.test(text) ||
-      /(bán|rao|cho thu[êe])\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i
-        .test(text);
+    // FR-161: mỗi vế hai bản có-dấu/không-dấu, chọn theo tin. Không dấu thì
+    // "ban" ôm cả bán/bàn/bạn — chấp nhận, vì cổng vẫn đòi ĐỦ BA VẾ mới sinh
+    // tin, và giá của chiều ngược lại (mất trắng câu rao) đắt hơn nhiều.
+    const coChiTiet = coDauTin
+      ? /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text)
+      : /[\d][\d.,]*\s*(ty|ti|toi|trieu|tr(?![a-z]))|\d+\s*m2|\bhem\b|mat tien|phuong/.test(tKD);
+    const coYDinhRao = coDauTin
+      ? /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe])/i.test(text) ||
+        /(bán|rao|cho thu[êe])\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i
+          .test(text)
+      : /(muon|can|dang|nho|ky gui)\s+(ban|cho thue)\b/.test(tKD) ||
+        /(ban|rao|cho thue)\s+(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|can)\b/
+          .test(tKD);
     // Chỉ chặn câu hỏi tình trạng khi câu KHÔNG kèm chi tiết thật nào. Có giá
     // hay diện tích trong câu thì cứ coi là rao, người ta hỏi han kèm kệ họ.
-    const laCauHoiTinhTrang =
-      /(chưa|sao r[oồ]i|th[eế] n[aà]o|ra sao|đư[ơợ]c không|đc ko|xong ch[uư]a)/i.test(text);
-    const wantsSell = (/\b(bán|rao)\b|cho thu[êe]/i.test(text)) &&
-      /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text) &&
+    const laCauHoiTinhTrang = coDauTin
+      ? /(chưa|sao r[oồ]i|th[eế] n[aà]o|ra sao|đư[ơợ]c không|đc ko|xong ch[uư]a)/i.test(text)
+      : /(chua|sao roi|the nao|ra sao|duoc khong|dc ko|xong chua)/.test(tKD);
+    const wantsSell = (coDauTin
+        ? /\b(bán|rao)\b|cho thu[êe]/i.test(text) &&
+          /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text)
+        : /\b(ban|rao)\b|cho thue/.test(tKD) &&
+          /(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|\bcan\b)/.test(tKD)) &&
       (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang));
     if (wantsSell) {
       // Loại BĐS KHÔNG hỏi: trigger trg_listings_fill_property_type đọc chính
@@ -586,12 +628,18 @@ Deno.serve(async (req) => {
       // để đoán mới nằm lại 'chua_ro' và bị hỏi ở vòng drip.
       // Cùng một mẫu với cổng wantsSell ở trên — lệch một chữ là câu rao lọt
       // cổng "cho thue" nhưng bị ghi thành tin BÁN.
-      const sDeal = dealCol(/cho thu[êe]/i.test(text) ? "thue" : "ban");
-      const wardM = /ph(?:ường|uong)\s*\.?\s*(\d{1,2})/i.exec(text);
+      const sDeal = dealCol(/cho thue/.test(tKD) ? "thue" : "ban");
+      // Phường bắt trên bản bỏ dấu — chỉ lấy CON SỐ nên bỏ dấu không mất gì
+      const wardM = /phuong\s*\.?\s*(\d{1,2})/.exec(tKD);
       // "tr" viết tắt của triệu, nhưng \b sau "tr" khớp luôn "TRệt" (dấu tiếng
       // Việt không phải ký tự \w) — từng làm price_raw thành "1 trệt 2 lầu".
       // Lookahead chặn mọi chữ cái có dấu đứng sau.
-      const priceM = /([\d][\d.,]*\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))[^,.;\n]*)/i.exec(text);
+      // price_raw cắt từ text GỐC (giữ nguyên chữ người gõ); tin không dấu thì
+      // text gốc vốn đã ascii nên bản nào cũng là chữ của họ. parse_vnd phía DB
+      // đã nuốt được "ty"/"trieu" (kiểm 27/08).
+      const priceM = coDauTin
+        ? /([\d][\d.,]*\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))[^,.;\n]*)/i.exec(text)
+        : /([\d][\d.,]*\s*(?:ty|ti|toi|trieu|tr(?![a-zA-Z]))[^,.;\n]*)/i.exec(text);
       // FR-158: mã do trigger `trg_listings_fill_code` cấp, nối tiếp đúng dãy
       // BDS-Q5-#### mà admin và web đang dùng. Đưa `code: null` xuống là cố ý —
       // bộ đúc mã `CCRB-<base36>` cũ ở đây là dãy thứ hai không ai cần, lại
@@ -1174,8 +1222,10 @@ Deno.serve(async (req) => {
   // hinh_anh). Model điền send_photos; khách xin hình mà model quên thì vẫn
   // tự đính kèm theo mã khách nhắc.
   let photos: string[] = [];
+  // "hinh" không dấu thêm vào (FR-161); "anh" trần thì KHÔNG — đó là đại từ,
+  // thêm vào là mọi câu có chữ "anh" đều bị coi là xin ảnh.
   const photoWanted = out.send_photos ??
-    (/hình|ảnh|hinh anh|photo|\bpic\b/i.test(text) ? (mentioned[0] ?? repliedCode ?? null) : null);
+    (/hình|ảnh|\bhinh\b|hinh anh|photo|\bpic\b/i.test(text) ? (mentioned[0] ?? repliedCode ?? null) : null);
   if (photoWanted) {
     const pCode = photoWanted.toUpperCase();
     const inAsked = ((askedListings ?? []) as Asked[]).find((l) => l.code === pCode);

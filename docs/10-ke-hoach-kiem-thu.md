@@ -348,3 +348,26 @@ Dọn sau khi chạy: xoá `info_requests`, `listings` của người bán thử
 **Cái test này KHÔNG phủ**: người lạ chưa có dòng `sellers` nhắn câu rao — vẫn
 rơi vào nhánh người mua, chưa sửa (quyết định chủ dự án 27/08/2026, để sau).
 
+### TS-KD — tiếng Việt không dấu (FR-161)
+
+Cùng cách dựng người bán thử như TS-MA. Mấu chốt: bộ không dấu chỉ được kích
+hoạt khi tin KHÔNG có dấu — tin có dấu phải đi đúng đường cũ.
+
+| Mã | Việc | Kỳ vọng |
+|---|---|---|
+| TS-KD-01 | Người bán nhắn `ban nha hem xe hoi phuong 8 gia 8.5 ty` | Sinh tin: `ward = "Phường 8"`, `price_raw = "8.5 ty"`, `price_vnd = 8.5e9` (parse_vnd nuốt "ty"), `property_type = nha_pho` (bo_dau phía DB) |
+| TS-KD-02 | Cùng người đó nhắn `toi muon mua nha quan 5` | Rẽ nhánh **buyer** (`hoiMua` bản không dấu), KHÔNG tạo tin |
+| TS-KD-03 | Người bán nhắn `nha minh ban chua em` | KHÔNG sinh tin — giờ trượt vì bộ chặn câu hỏi tình trạng bản không dấu, không phải trượt "ăn may" ở `\b(bán\|rao)\b` như trước |
+| TS-KD-04 | Người bán (có câu chờ) nhắn `chieu gui anh so cho em` | `PROMISE_RE_KD` bắt được → tạo reminder `promise` |
+| TS-KD-05 | SQL: `select guess_property_type('ban dat nen quan 5'), guess_property_type('chưa đạt thoả thuận')` | `dat` và `NULL` — bản không dấu bắt đúng, bản có dấu KHÔNG nhiễm ("đạt" ≠ "đất") |
+
+Đã chạy thật 27/08/2026: TS-KD-05 + 7 ca DB khác đúng cả (kể cả có dấu giữ
+nguyên hành vi); phía chat-reply 18 ca cổng chạy đơn vị bằng bun đều pass
+(gồm *"đang bàn về căn nhà"* KHÔNG sinh tin, *"ban oi nha minh the nao roi"*
+KHÔNG sinh tin). TS-KD-01/02 chạy live sau khi deploy v36 — xem PR.
+
+**Chấp nhận có chủ đích**: không dấu thì "ban" ôm cả bán/bàn/bạn — cổng vẫn
+đòi đủ ba vế nên dương-tính-giả hiếm, nhưng KHÔNG phải không thể; "toi" ôm cả
+tôi/tối (lệch giờ nhắc, không mất nhắc); từ "anh" trần không được coi là xin
+ảnh.
+

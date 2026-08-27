@@ -119,6 +119,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-158 | UF-05, UF-09 | — | cổng `wantsSell` nới trong `chat-reply` (ý định rao theo thứ tự từ + chặn câu hỏi tình trạng) + `code: null` khi tạo tin rao; hàm DB `next_listing_code()` + trigger `trg_listings_fill_code`; `admin_dang_tin` bỏ bộ sinh mã chép tay, đọc mã bằng RETURNING; migration `20260827k_ma_tin_dung_chung.sql` | TS-MA-01…05 |
 | FR-159 | UF-04, UF-05 | — | *chưa dựng* — mặc định hiện tại: người lạ không có dòng `sellers` thì `chat-reply` đi thẳng nhánh buyer, đúng ý FR-159 nhưng chưa có câu hỏi mở đầu phân vai | — |
 | FR-160 | UF-09 | — | *chưa dựng* — chờ OPEN-28 chốt phí trước khi suy `seller_type` từ số tin | — |
+| FR-161 | UF-04, UF-05, UF-09 | — | `boDau()`/`CO_DAU_RE` + mọi cổng hai chế độ trong `chat-reply` (hoiMua, wantsSell, PROMISE_RE_KD, ward/price, regexProfileFallback, mapDue, budgetRangeVnd); SQL `bo_dau()` + `guess_property_type(_answer)` hai chế độ; migration `20260827l_bo_dau_guess_property.sql` | TS-KD-01…05 |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp
