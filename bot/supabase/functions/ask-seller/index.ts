@@ -8,6 +8,7 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  ghiLoi,
   jsonResponse,
   MODEL,
   serviceClient,
@@ -159,6 +160,26 @@ Deno.serve(async (req) => {
         });
         const sr = await send.json().catch(() => ({}));
         sent_via = sr?.error === 0 ? "zalo_oa" : `zalo_oa_error:${sr?.error}`;
+        // Câu hỏi ĐÃ GỬI ĐI thì phải vào sổ hội thoại người bán, không thì
+        // hội thoại chỉ còn câu trả lời trơ trọi và CTV tiếp quản không có gì
+        // để bám (FR-141/FR-152). Chỉ ghi khi Zalo nhận thật (error === 0).
+        if (sr?.error === 0 && listing.seller_id) {
+          const { data: sc, error: scErr } = await db
+            .rpc("ensure_seller_conversation", {
+              p_seller_id: listing.seller_id, p_channel: "zalo_oa",
+            }).single();
+          const scId = (sc as { c_id?: string } | null)?.c_id ?? null;
+          if (scErr || !scId) {
+            await ghiLoi(db, "ask-seller ensure_seller_conversation",
+              scErr?.message ?? "không trả về c_id");
+          } else {
+            const { error: logErr } = await db.from("messages")
+              .insert({ conversation_id: scId, sender: "bot", body: out.message });
+            if (logErr) await ghiLoi(db, "ask-seller messages bot", logErr.message);
+            await db.from("conversations")
+              .update({ last_message_at: new Date().toISOString() }).eq("id", scId);
+          }
+        }
       }
     }
   }

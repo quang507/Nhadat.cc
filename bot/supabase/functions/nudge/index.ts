@@ -6,6 +6,7 @@
 import {
   anthropicClient,
   escalationText,
+  ghiLoi,
   jsonResponse,
   MODEL,
   secretOf,
@@ -150,10 +151,30 @@ Deno.serve(async (req) => {
         out.push({ kind: r.kind, id: r.id, text, sent, retry: true });
         continue;
       }
+      // Tin bot CHỦ ĐỘNG gửi cũng là một dòng trong sổ — cả phía mua lẫn phía
+      // bán. Trước bản này chỉ ghi khi có buyer_id, nên hội thoại người bán
+      // hiện ra toàn câu trả lời mà không có câu hỏi nào: CTV tiếp quản không
+      // biết chủ nhà đang trả lời cái gì (FR-141/FR-152).
+      let convLog: string | null = null;
       if (r.buyer_id) {
         const { data: conv } = await client.from("conversations").select("id")
           .eq("buyer_id", r.buyer_id).order("started_at", { ascending: false }).limit(1).maybeSingle();
-        if (conv) await client.from("messages").insert({ conversation_id: conv.id, sender: "bot", body: text });
+        convLog = conv?.id ?? null;
+      } else if (r.seller_id) {
+        const { data: sc, error: scErr } = await client
+          .rpc("ensure_seller_conversation", { p_seller_id: r.seller_id, p_channel: "zalo_oa" })
+          .single();
+        convLog = (sc as { c_id?: string } | null)?.c_id ?? null;
+        if (scErr || !convLog) {
+          await ghiLoi(client, "nudge ensure_seller_conversation", scErr?.message ?? "không trả về c_id");
+        }
+      }
+      if (convLog) {
+        const { error: logErr } = await client.from("messages")
+          .insert({ conversation_id: convLog, sender: "bot", body: text });
+        if (logErr) await ghiLoi(client, "nudge messages bot", logErr.message);
+        await client.from("conversations")
+          .update({ last_message_at: new Date().toISOString() }).eq("id", convLog);
       }
       await client.from("reminders")
         .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);

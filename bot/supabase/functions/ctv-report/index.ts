@@ -30,6 +30,19 @@ const Score = z.object({
   comment: z.string().describe("1-2 câu tiếng Việt: lỗi cụ thể nhất hoặc điểm tốt nhất"),
 });
 
+// Nhãn vai khi dựng bản ghi hội thoại cho model chấm. Gộp mọi thứ không phải
+// `buyer` vào "CTV/BOT" là chấm lời của người khác lên đầu CTV — từ khi nhánh
+// người bán được ghi sổ (FR-141/FR-152) thì `seller` và `human` cũng nằm trong
+// bảng `messages`, và điểm sai đó được ghi thẳng vào ctv_daily_reports.
+const VAI_NHAN: Record<string, string> = {
+  buyer: "KHÁCH",
+  seller: "CHỦ NHÀ",
+  system: "HỆ THỐNG",
+  bot: "CTV/BOT",
+  ctv: "CTV/BOT",
+  human: "CTV/BOT",
+};
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
   const { dry_run = false, force = false } = await req.json().catch(() => ({}));
@@ -61,6 +74,11 @@ Deno.serve(async (req) => {
     const { data: convs } = await client.from("conversations")
       .select("id, buyer_id, needs_human, last_message_at, buyers(name, preferences)")
       .eq("ctv_id", ctv.id)
+      // Hội thoại NGƯỜI BÁN cũng được trigger xoay vòng gán ctv_id, và từ khi
+      // FR-141/FR-152 ghi sổ nhánh seller thì cũng có last_message_at. Báo cáo
+      // này đếm ĐƠN KHÁCH MUA — để lọt vào là hiện ra hàng "khách mới (chưa rõ
+      // nhu cầu)" ma và chấm điểm CTV trên chính lời chủ nhà.
+      .not("buyer_id", "is", null)
       .gte("last_message_at", new Date(now - 30 * 864e5).toISOString())
       .order("last_message_at", { ascending: false }).limit(50);
     const all = convs ?? [];
@@ -83,7 +101,8 @@ Deno.serve(async (req) => {
         .select("sender, body").eq("conversation_id", c.id)
         .order("created_at", { ascending: false }).limit(20);
       const convo = (msgs ?? []).reverse()
-        .map((m) => `${m.sender === "buyer" ? "KHÁCH" : "CTV/BOT"}: ${m.body}`).join("\n");
+        .map((m) => `${VAI_NHAN[m.sender] ?? String(m.sender).toUpperCase()}: ${m.body}`)
+        .join("\n");
       if (!convo) continue;
       try {
         // 512 là QUÁ CHẶT cho schema Score: 4 điểm thành phần + comment tiếng

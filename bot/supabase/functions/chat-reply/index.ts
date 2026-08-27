@@ -185,32 +185,77 @@ Deno.serve(async (req) => {
   // FR-141: bridge báo NGƯỜI THẬT (CTV/admin gõ tay từ acc clone) vừa nhắn cho
   // khách này → ghi tin sender='human' + đặt human_touch_at; bot nhường sân
   // 30 phút, hết yên ắng thì tự tiếp sức lại như thường.
+  //
+  // Tin gõ tay KHÔNG mang theo vai, mà một Zalo có thể vừa bán vừa mua
+  // (OPEN-22/FR-157). Trước bản này `if (!hSeller)` bỏ qua SẠCH người bán —
+  // tức `human_touch_at` không bao giờ được đặt trên hội thoại người bán, nên
+  // cổng nhường sân bên nhánh seller là code chết: CTV đang thương lượng với
+  // chủ nhà mà chủ nhắn tiếp thì bot vẫn chen ngang. Giờ đóng cổng ở MỌI hội
+  // thoại đang có của người này.
   if (body.human_note) {
+    const now141 = new Date().toISOString();
+    const cham: string[] = [];
+    const chamVao = async (convId: string, vai: string) => {
+      const { error: hErr } = await client.from("messages").insert({
+        conversation_id: convId, sender: "human", body: text,
+      });
+      if (hErr) await ghiLoi(client, `chat-reply human_note messages(${vai})`, hErr.message);
+      // FR-147: người thật đã vào tay → hạ cờ cần-người-thật, khỏi leo lên admin
+      await client.from("conversations").update({
+        human_touch_at: now141, last_message_at: now141, needs_human: false,
+      }).eq("id", convId);
+      cham.push(vai);
+    };
+
     const { data: hSeller } = await client.from("sellers").select("id")
       .eq("zalo_user_id", externalUserId).maybeSingle();
-    if (!hSeller) {
-      const { data: hbc } = await client.rpc("ensure_buyer_conversation", {
+
+    if (hSeller) {
+      const { data: hsc, error: hscErr } = await client
+        .rpc("ensure_seller_conversation", {
+          p_seller_id: hSeller.id, p_channel: channel,
+        }).single();
+      const hsConvId = (hsc as { c_id?: string } | null)?.c_id ?? null;
+      if (hscErr || !hsConvId) {
+        await ghiLoi(client, "chat-reply human_note ensure_seller_conversation",
+          hscErr?.message ?? "không trả về c_id");
+      } else {
+        await chamVao(hsConvId, "seller");
+      }
+
+      // Người đang bán VẪN có thể đang có hội thoại mua (FR-157) — cổng phải
+      // phủ luôn nhánh đó. Nhưng chỉ đụng hội thoại ĐÃ CÓ: tạo mới buyer cho
+      // một người đang bán là bịa ra một đơn khách không tồn tại.
+      const { data: hBuyer } = await client.from("buyers").select("id")
+        .eq("zalo_user_id", externalUserId).maybeSingle();
+      if (hBuyer) {
+        const { data: hbConv } = await client.from("conversations").select("id")
+          .eq("buyer_id", hBuyer.id).order("started_at", { ascending: false })
+          .limit(1).maybeSingle();
+        if (hbConv) {
+          await chamVao(hbConv.id, "buyer");
+          await client.from("reminders").update({ status: "cancelled" })
+            .eq("buyer_id", hBuyer.id).eq("kind", "escalation").eq("status", "pending");
+        }
+      }
+    } else {
+      const { data: hbc, error: hbcErr } = await client.rpc("ensure_buyer_conversation", {
         p_zalo_user_id: externalUserId, p_channel: channel,
       }).single();
-      const hConvId = (hbc as { c_id?: string } | null)?.c_id;
-      const hBuyerId = (hbc as { b_id?: string } | null)?.b_id;
-      if (hConvId) {
-        await client.from("messages").insert({
-          conversation_id: hConvId, sender: "human", body: text,
-        });
-        // FR-147: người thật đã vào tay → hạ cờ cần-người-thật, khỏi leo lên admin
-        await client.from("conversations").update({
-          human_touch_at: new Date().toISOString(),
-          last_message_at: new Date().toISOString(),
-          needs_human: false,
-        }).eq("id", hConvId);
+      const hConvId = (hbc as { c_id?: string } | null)?.c_id ?? null;
+      const hBuyerId = (hbc as { b_id?: string } | null)?.b_id ?? null;
+      if (hbcErr || !hConvId) {
+        await ghiLoi(client, "chat-reply human_note ensure_buyer_conversation",
+          hbcErr?.message ?? "không trả về c_id");
+      } else {
+        await chamVao(hConvId, "buyer");
         if (hBuyerId) {
           await client.from("reminders").update({ status: "cancelled" })
             .eq("buyer_id", hBuyerId).eq("kind", "escalation").eq("status", "pending");
         }
       }
     }
-    return jsonResponse({ ok: true, human_note: true });
+    return jsonResponse({ ok: true, human_note: true, cham });
   }
 
   // ─── CỔNG 2: trần TOÀN CỤC lượt gọi model mỗi ngày.
@@ -273,7 +318,7 @@ Deno.serve(async (req) => {
     // sẵn kèm khoá ngoại — chỉ là chưa đường code nào ghi vào.
     // Hàm get-or-create ở migration 20260827i_hoi_thoai_nguoi_ban.sql, có
     // advisory lock như bên mua (chủ nhà gõ vụn 3 tin là 3 lượt gọi đồng thời).
-    const { data: convS } = await client
+    const { data: convS, error: convSErr } = await client
       .rpc("ensure_seller_conversation", {
         p_seller_id: sellerRow.id,
         p_channel: channel,
@@ -281,32 +326,49 @@ Deno.serve(async (req) => {
     const convSRow = convS as
       { c_id?: string; c_human_touch_at?: string | null } | null;
     const convSId = convSRow?.c_id ?? null;
+    // Hàm thiếu / mất quyền / DB nghẽn mà đi tiếp thì bot vẫn trả lời trong khi
+    // KHÔNG ghi được dòng nào: dedup 23505 tắt (Zalo gửi lại là bóc fact hai
+    // lần, câu rao gửi lại là đẻ thêm một tin CCRB), cổng nhường sân tắt, mà
+    // HTTP vẫn 200 nên bot_health_tick không thấy gì. Nhánh mua ở đây trả 500 —
+    // nhánh bán phải cùng ngữ nghĩa (FR-152).
+    if (convSErr || !convSId) {
+      await ghiLoi(client, "chat-reply ensure_seller_conversation",
+        convSErr?.message ?? "không trả về c_id");
+      return jsonResponse({ error: convSErr?.message ?? "ensure_seller_conversation" }, 500);
+    }
 
     // Ghi tin CHỦ NHÀ trước khi gọi model: model lỗi giữa chừng thì vẫn còn dấu
     // vết chủ nhà đã nhắn gì. Trùng `zalo_msg_id` (23505) = kênh gửi lại tin cũ
     // → đã trả lời rồi, đừng trả lời lần hai. Cùng ngữ nghĩa với nhánh mua.
-    if (convSId) {
-      const { error: msgSErr } = await client.from("messages").insert({
-        conversation_id: convSId,
-        sender: "seller",
-        body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
-        zalo_msg_id: msgId,
-      });
-      if (msgSErr?.code === "23505") {
-        return jsonResponse({ reply: null, replies: [], role: "seller", deduped: true });
-      }
-      await client.from("conversations")
-        .update({ last_message_at: new Date().toISOString() }).eq("id", convSId);
+    const { error: msgSErr } = await client.from("messages").insert({
+      conversation_id: convSId,
+      sender: "seller",
+      body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
+      zalo_msg_id: msgId,
+    });
+    if (msgSErr?.code === "23505") {
+      return jsonResponse({ reply: null, replies: [], role: "seller", deduped: true });
     }
+    if (msgSErr) {
+      // Mọi lỗi KHÁC 23505 (khoá ngoại, timeout, enum sai…) trước đây rơi im:
+      // bot vẫn trả lời vào một hội thoại thiếu đúng dòng chủ nhà vừa nhắn.
+      await ghiLoi(client, "chat-reply messages seller", msgSErr.message);
+      return jsonResponse({ error: msgSErr.message }, 500);
+    }
+    await client.from("conversations")
+      .update({ last_message_at: new Date().toISOString() }).eq("id", convSId);
 
     // FR-141 — người thật gõ tay trong 30 phút gần đây thì bot im.
     // Cổng này trước chỉ có ở nhánh mua, nên CTV đang thương lượng với chủ nhà
     // mà chủ nhắn tiếp là bot nhảy vào nói chen giữa cuộc.
+    // Trả về NGAY tại đây là bỏ luôn khúc bóc fact bên dưới: câu trả lời của
+    // chủ nhà không vào `listing_facts`, `info_requests` nằm `pending` mãi, và
+    // vòng drip hỏi lại đúng câu người ta vừa trả lời — CTV vào tay một cái là
+    // dữ liệu căn đó đứng hình. Nên cổng chỉ khoá ĐƯỜNG RA (traLoiSeller) và
+    // khoá lượt gọi model, không khoá đường ghi.
     const nguoiThatDangCham = convSRow?.c_human_touch_at;
-    if (nguoiThatDangCham &&
-        Date.now() - Date.parse(nguoiThatDangCham) < 30 * 60e3) {
-      return jsonResponse({ reply: null, replies: [], role: "seller", human_active: true });
-    }
+    const humanActive = !!nguoiThatDangCham &&
+      Date.now() - Date.parse(nguoiThatDangCham) < 30 * 60e3;
 
     // MỌI đường ra của nhánh này phải đi qua đây — trả lời của bot cũng là một
     // dòng trong sổ. Thêm `return jsonResponse(...)` trần ở nhánh seller là
@@ -315,13 +377,20 @@ Deno.serve(async (req) => {
       replies: string[],
       extra: Record<string, unknown> = {},
     ) => {
+      if (humanActive) {
+        // FR-141 — người thật đang cầm cuộc: không gửi, không ghi dòng bot nào.
+        return jsonResponse({
+          reply: null, replies: [], role: "seller", human_active: true, ...extra,
+        });
+      }
       const sach = replies.map((r) => r.trim()).filter(Boolean);
-      if (convSId) {
-        for (const r of sach) {
-          await client.from("messages").insert({
-            conversation_id: convSId, sender: "bot", body: r,
-          });
-        }
+      for (const r of sach) {
+        const { error: botErr } = await client.from("messages").insert({
+          conversation_id: convSId, sender: "bot", body: r,
+        });
+        // Ghi hụt câu bot vừa nói = sổ một chiều (có trả lời, không có câu hỏi).
+        // Không chặn đường trả lời chủ nhà, nhưng phải vào bot_errors (FR-152).
+        if (botErr) await ghiLoi(client, "chat-reply messages bot(seller)", botErr.message);
       }
       return jsonResponse({
         reply: sach.join("\n") || null, replies: sach, role: "seller", ...extra,
@@ -418,6 +487,13 @@ Deno.serve(async (req) => {
         status: "answered", answer: text, answered_at: new Date().toISOString(),
       }).eq("id", pendingReq.id);
 
+      // Fact đã vào sổ — từ đây trở xuống là phần "nói". Người thật đang cầm
+      // cuộc thì dừng: không gọi model, và KHÔNG mở câu hỏi pending mới (bot
+      // có hỏi đâu mà chờ trả lời). Cron drip hỏi tiếp khi CTV buông tay.
+      if (humanActive) {
+        return await traLoiSeller([], { saved_fact: pendingReq.question });
+      }
+
       // FR-144: tin ĐÃ ĐỦ ĐĂNG (auto-publish xong, hết cho_thong_tin) → NGỪNG
       // hỏi drip, để yên; khách quan tâm hỏi thêm thì FR-140 tự mở lại vòng hỏi.
       const { data: lstNow } = await client.from("listings")
@@ -502,6 +578,11 @@ Deno.serve(async (req) => {
         property_type: "chua_ro", status: "cho_thong_tin",
       }).select("id, code").single();
       if (newLst) {
+        // Tin nháp vẫn phải tạo (không được đánh rơi câu rao), nhưng người thật
+        // đang cầm cuộc thì không hỏi, không nói.
+        if (humanActive) {
+          return await traLoiSeller([], { listing_code: newLst.code });
+        }
         const { data: firstFacts } = await client.from("listing_missing_facts")
           .select("fact_key").eq("listing_id", newLst.id).order("priority").limit(1);
         const firstKey = firstFacts?.[0]?.fact_key ?? null;
@@ -535,6 +616,9 @@ Deno.serve(async (req) => {
     }
     // Seller nhắn nhưng KHÔNG có câu chờ → vẫn trả lời ĐÚNG VAI người bán
     // (trước đây rơi xuống luồng mua → bot hỏi "anh tìm khu nào" với chính chủ nhà)
+    // Không có câu chờ mà người thật đang cầm cuộc → im, khỏi tốn lượt model.
+    if (humanActive) return await traLoiSeller([]);
+
     const { data: sellerLst } = await client.from("listings")
       .select("code, location_raw, ward, price_raw")
       .eq("seller_id", sellerRow.id)
