@@ -330,6 +330,18 @@ Cần một người bán thử có `zalo_user_id` và **không** có câu hỏi
 | TS-MA-04 | Người bán nhắn `bán nhà hẻm xe hơi phường 8, 4x16, 8.5 tỷ` | Vẫn sinh tin như trước (đường có chi tiết không đổi); `price_raw = "8.5 tỷ"`, `ward = "Phường 8"` |
 | TS-MA-05 | Hai lượt rao gửi đồng thời cùng một người bán | Hai mã khác nhau, **không deadlock** — advisory lock, không `lock table` |
 
+Đã chạy thật 27/08/2026 trên `chat-reply` v35: TS-MA-01 cấp `BDS-Q5-0174`;
+TS-MA-02 *"anh muốn bán căn nhà"* → tin `BDS-Q5-0174`, `property_type = nha_pho`
+(trigger đoán từ chính câu rao, KHÔNG hỏi loại BĐS), câu đầu là `dien_tich_dat`,
+bot trả *"Dạ em ghi nhận tin rao của anh rồi, mã #BDS-Q5-0174…"*; TS-MA-03
+*"nhà mình bán chưa em"* → **0 tin**, bot trả đúng vai chăm sóc. `bot_errors`
+sạch. TS-MA-04/05 chưa chạy.
+
+**Cảnh báo cách chạy test**: lượt đầu mình gõ KHÔNG DẤU (`nha minh ban chua em`)
+và nó "pass" — nhưng pass giả, vì cổng trượt ngay từ vế `\b(bán|rao)\b` chứ không
+phải nhờ bộ chặn câu hỏi. Test cổng rao **phải gõ có dấu**, không thì đang đo
+nhầm thứ (xem OPEN-29).
+
 Dọn sau khi chạy: xoá `info_requests`, `listings` của người bán thử, đặt
 `active_listing_id = null` rồi xoá `messages`/`conversations`/`sellers`.
 
