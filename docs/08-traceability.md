@@ -116,6 +116,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-155 | UF-09, UF-10 | — | hàm `seller_rank()` + view `seller_ranks` (chỉ tên/số đếm/hạng) + `agents_public` thêm `rank`, `closed_count`; `app/moi-gioi/page.tsx` huy hiệu + chú thích; migration `20260827g_seller_rank_admin_dang_tin.sql` | TS-HANG-01…03 |
 | FR-156 | UF-09, UF-13 | — | RPC `admin_dang_tin(jsonb)` (security definer, kiểm bảng `admins`, sinh mã `BDS-Q5-####` có `lock table`, gộp người bán trùng zalo/SĐT); `app/admin/dang-tin/page.tsx`; nút vào từ `/admin`; migration `20260827g_seller_rank_admin_dang_tin.sql` | TS-DANGTIN-01…05 |
 | FR-157 | UF-05, UF-09, UF-10 | — | cột `sellers.active_listing_id` + trigger `trg_info_request_set_active_listing`; `chat-reply` v33: chọn pending theo mã-trong-tin → neo → mới nhất, cổng `hoiMua` rẽ vai, prompt drip vắt vai mã căn; migration `20260827h_seller_active_listing.sql` | TS-NEO-01…04 |
+| FR-158 | UF-05, UF-09 | — | cổng `wantsSell` nới trong `chat-reply` (ý định rao theo thứ tự từ + chặn câu hỏi tình trạng) + `code: null` khi tạo tin rao; hàm DB `next_listing_code()` + trigger `trg_listings_fill_code`; `admin_dang_tin` bỏ bộ sinh mã chép tay, đọc mã bằng RETURNING; migration `20260827k_ma_tin_dung_chung.sql` | TS-MA-01…05 |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp

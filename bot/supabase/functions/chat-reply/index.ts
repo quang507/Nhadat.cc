@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
     const convSId = convSRow?.c_id ?? null;
     // Hàm thiếu / mất quyền / DB nghẽn mà đi tiếp thì bot vẫn trả lời trong khi
     // KHÔNG ghi được dòng nào: dedup 23505 tắt (Zalo gửi lại là bóc fact hai
-    // lần, câu rao gửi lại là đẻ thêm một tin CCRB), cổng nhường sân tắt, mà
+    // lần, câu rao gửi lại là đẻ thêm một tin rao trùng), cổng nhường sân tắt, mà
     // HTTP vẫn 200 nên bot_health_tick không thấy gì. Nhánh mua ở đây trả 500 —
     // nhánh bán phải cùng ngữ nghĩa (FR-152).
     if (convSErr || !convSId) {
@@ -403,8 +403,10 @@ Deno.serve(async (req) => {
     // `limit 1` theo created_at là ghi thẳng dữ liệu căn A vào căn B. Sai kiểu
     // này KHÔNG bao giờ tự lộ: fact vẫn có, tin vẫn lên web, chỉ là sai nhà.
     // Thứ tự tin cậy: mã tin chủ tự nhắc > căn bot vừa hỏi > câu mới nhất.
+    // Một dãy mã duy nhất kể từ FR-158 — nhánh `CCRB-` cũ bỏ đi vì kho chưa bao
+    // giờ có mã đó (kiểm 27/08/2026: 173 tin, 100% BDS-Q5-####).
     const codeInText =
-      /((?:BDS-Q5|CCRB)-[A-Za-z0-9]+)/.exec(text)?.[1]?.toUpperCase() ?? null;
+      /(BDS-Q5-[A-Za-z0-9]+)/.exec(text)?.[1]?.toUpperCase() ?? null;
     const { data: pendings } = await client
       .from("info_requests")
       .select("id, listing_id, question, created_at, listings!inner(seller_id, code, location_raw)")
@@ -555,9 +557,29 @@ Deno.serve(async (req) => {
     // thì nghỉ; khách quan tâm hỏi thêm thì FR-140 mở lại vòng hỏi.
     // \b cuối cụm chặn "cho thuê": "ê" ngoài ASCII nên sau nó không bao giờ là biên
     // từ → MỌI câu rao CHO THUÊ từ trước tới giờ đều rơi âm thầm, không tạo tin.
+    //
+    // FR-158 — cổng KHÔNG còn bắt buộc phải có giá/diện tích. Trước bản này một
+    // câu rao trần trụi ("anh muốn bán căn nhà") trượt vế thứ ba: không sinh
+    // tin, không có mã, chủ nhà rơi xuống nhánh chăm sóc chung và câu rao bay
+    // mất — trong khi cả điểm của vòng drip là hỏi cho ĐỦ những thứ còn thiếu.
+    //
+    // Nới thì phải có thứ khác gánh chỗ dương-tính-giả. Thứ đó là THỨ TỰ TỪ,
+    // không phải danh sách từ khoá: "nhà mình bán chưa em?" có đủ cả "bán" lẫn
+    // "nhà" nhưng không có cặp "bán nhà" hay "muốn bán" — nó là câu hỏi về tin
+    // cũ, không phải câu rao mới.
+    const coChiTiet =
+      /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text);
+    const coYDinhRao =
+      /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe])/i.test(text) ||
+      /(bán|rao|cho thu[êe])\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i
+        .test(text);
+    // Chỉ chặn câu hỏi tình trạng khi câu KHÔNG kèm chi tiết thật nào. Có giá
+    // hay diện tích trong câu thì cứ coi là rao, người ta hỏi han kèm kệ họ.
+    const laCauHoiTinhTrang =
+      /(chưa|sao r[oồ]i|th[eế] n[aà]o|ra sao|đư[ơợ]c không|đc ko|xong ch[uư]a)/i.test(text);
     const wantsSell = (/\b(bán|rao)\b|cho thu[êe]/i.test(text)) &&
       /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text) &&
-      /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text);
+      (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang));
     if (wantsSell) {
       // Loại BĐS KHÔNG hỏi: trigger trg_listings_fill_property_type đọc chính
       // câu rao (description) mà điền (FR-150). Chỉ tin nào câu chữ không đủ
@@ -570,13 +592,22 @@ Deno.serve(async (req) => {
       // Việt không phải ký tự \w) — từng làm price_raw thành "1 trệt 2 lầu".
       // Lookahead chặn mọi chữ cái có dấu đứng sau.
       const priceM = /([\d][\d.,]*\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))[^,.;\n]*)/i.exec(text);
-      const newCode = `CCRB-${Date.now().toString(36).toUpperCase()}`;
-      const { data: newLst } = await client.from("listings").insert({
-        code: newCode, seller_id: sellerRow.id, deal: sDeal, district: "Quận 5",
+      // FR-158: mã do trigger `trg_listings_fill_code` cấp, nối tiếp đúng dãy
+      // BDS-Q5-#### mà admin và web đang dùng. Đưa `code: null` xuống là cố ý —
+      // bộ đúc mã `CCRB-<base36>` cũ ở đây là dãy thứ hai không ai cần, lại
+      // không khoá gì nên hai chủ nhà rao cùng lúc là có cửa trùng mã.
+      const { data: newLst, error: newLstErr } = await client.from("listings").insert({
+        code: null, seller_id: sellerRow.id, deal: sDeal, district: "Quận 5",
         ward: wardM ? `Phường ${wardM[1]}` : null,
         description: text, price_raw: priceM?.[1]?.trim() ?? null,
         property_type: "chua_ro", status: "cho_thong_tin",
       }).select("id, code").single();
+      // Tạo tin hỏng mà đi tiếp là NUỐT MẤT CÂU RAO: chủ nhà nhận một câu chăm
+      // sóc chung chung ở nhánh dưới, tưởng đã rao xong, còn kho thì không có
+      // gì. Vào sổ rồi mới đi tiếp (FR-152).
+      if (newLstErr) {
+        await ghiLoi(client, "chat-reply tao tin rao", newLstErr.message);
+      }
       if (newLst) {
         // Tin nháp vẫn phải tạo (không được đánh rơi câu rao), nhưng người thật
         // đang cầm cuộc thì không hỏi, không nói.

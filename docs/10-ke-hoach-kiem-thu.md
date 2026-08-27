@@ -315,3 +315,24 @@ của người bán thử, đặt `active_listing_id = null` rồi xoá `sellers
 **Cái test này KHÔNG phủ**: câu hỏi chờ bị bỏ lại khi người bán rẽ sang nhánh
 mua thì bao lâu cron drip mới hỏi lại — phụ thuộc lịch `seller_drip_tick`,
 chưa đo.
+
+### TS-MA — câu rao sinh mã tin, và một dãy mã duy nhất (FR-158)
+
+Cần một người bán thử có `zalo_user_id` và **không** có câu hỏi nào đang chờ
+(có câu chờ thì tin nhắn bị coi là câu trả lời, không tới được cổng rao). Gọi
+`chat-reply` qua `net.http_post` như TS-NEO.
+
+| Mã | Việc | Kỳ vọng |
+|---|---|---|
+| TS-MA-01 | `insert into listings (code, ...) values (null, ...)` rồi `rollback` | Trigger `trg_listings_fill_code` điền mã nối tiếp dãy, không lỗi NOT NULL |
+| TS-MA-02 | Người bán nhắn câu rao trần trụi: `anh muốn bán căn nhà` | **Sinh tin** `cho_thong_tin` + mã `BDS-Q5-####`; trước FR-158 câu này trượt cổng và không tạo gì |
+| TS-MA-03 | Người bán nhắn `nhà mình bán chưa em` | **KHÔNG** sinh tin — có đủ "bán" + "nhà" nhưng là câu hỏi tình trạng, không phải câu rao |
+| TS-MA-04 | Người bán nhắn `bán nhà hẻm xe hơi phường 8, 4x16, 8.5 tỷ` | Vẫn sinh tin như trước (đường có chi tiết không đổi); `price_raw = "8.5 tỷ"`, `ward = "Phường 8"` |
+| TS-MA-05 | Hai lượt rao gửi đồng thời cùng một người bán | Hai mã khác nhau, **không deadlock** — advisory lock, không `lock table` |
+
+Dọn sau khi chạy: xoá `info_requests`, `listings` của người bán thử, đặt
+`active_listing_id = null` rồi xoá `messages`/`conversations`/`sellers`.
+
+**Cái test này KHÔNG phủ**: người lạ chưa có dòng `sellers` nhắn câu rao — vẫn
+rơi vào nhánh người mua, chưa sửa (quyết định chủ dự án 27/08/2026, để sau).
+
