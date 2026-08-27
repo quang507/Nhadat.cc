@@ -144,13 +144,21 @@ export default async function Page({
       <div className="mx-auto max-w-6xl px-4 pb-14 pt-8">
         {/* FR-148: ảnh thật up theo mã tin (bucket listing-photos/<mã>/…) */}
         <div className="relative">
-          <div className="overflow-hidden rounded-king bg-navy/5">
+          <div className="relative overflow-hidden rounded-king bg-navy/5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={photos[0] ?? placeholderImg(code)}
               alt={loc}
               className="aspect-[16/9] w-full object-cover"
             />
+            {/* Dòng chữ dưới gallery đã nói "ảnh thật gửi qua Zalo", nhưng nó
+                nằm dưới tấm ảnh to này — người lướt nhanh chỉ thấy ảnh. Dán
+                nhãn ngay TRÊN ảnh mới thật sự là nói. */}
+            {photos.length === 0 && (
+              <span className="absolute bottom-3 right-4 rounded-full bg-navy/80 px-3 py-1.5 text-xs font-semibold text-white">
+                Ảnh minh hoạ — chưa có ảnh thật của căn này
+              </span>
+            )}
           </div>
 
           {/* Khối thông số NỔI đè chân ảnh — chữ ký của Veedoo (docs/01) */}

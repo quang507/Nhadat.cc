@@ -60,6 +60,15 @@ export default function ListingCard({
         <span className="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-navy">
           {listing.deal === "cho_thue" ? "Cho thuê" : "Bán"}
         </span>
+        {/* Chưa có ảnh thật của căn này → NÓI RA. Ảnh đang hiện là ảnh minh hoạ
+            dùng chung, không phải căn ở địa chỉ này. Không ghi thì khách đi xem
+            nhà dựa trên một tấm hình của căn khác — đúng thứ FR-104 và cả tinh
+            thần "trung thực với ảnh" trong kịch bản bot sinh ra để tránh. */}
+        {!photo && (
+          <span className="absolute bottom-2.5 right-3 rounded-full bg-navy/75 px-2.5 py-1 text-[11px] font-semibold text-white/95">
+            Ảnh minh hoạ
+          </span>
+        )}
         <span className="absolute right-3 top-3">
           <FavButton code={code} small={!featured} />
         </span>
