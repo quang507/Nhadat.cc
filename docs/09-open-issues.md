@@ -248,8 +248,10 @@ kịp thời phản hồi; hạng **Đồng** (<50đ, giới hạn 5 căn) / **B
 **Vàng** (≥80đ, ưu tiên chuyển khách nét). Kịch bản chat gắn điểm vào từng câu
 hỏi ("bổ sung ảnh bếp để cộng 5 điểm").
 **Quan hệ với nhadat.cc**: FR-102 (chấm điểm NMG, đang treo OPEN-12) và FR-103
-(không spam S) đã chạm một phần; nhadat-cc có sẵn `ratings` + độ đo
+(không spam S) đã chạm một phần; nhadat-cc có sẵn độ đo
 `listing_missing_facts` — nghĩa là 50% "độ hoàn chỉnh" tính được ngay.
+*(Cập nhật 27/08/2026: bảng `ratings` từng nêu ở đây đã XOÁ theo OPEN-23; nếu
+làm gamification thì phải dựng nguồn chấm điểm mới, đừng tính là đã có sẵn.)*
 **Phương án**: (a) không làm MVP, chỉ giữ số liệu ngầm (đếm fact đủ/thiếu, tốc
 độ trả lời) để sau này quy đổi điểm; (b) làm điểm + hạng nhưng **không nói ra
 trong chat** (dùng nội bộ xếp ưu tiên CTV/khách nét); (c) làm đầy đủ như AOND,

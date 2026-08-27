@@ -348,7 +348,7 @@ là:
    policy gác (buyers, listings nháp, listing_views), không ai có TRUNCATE.
 2. **Bảng chỉ dành cho bot** (`reminders`, `messages`, `conversations`,
    `info_requests`, `viewings`, `deals`, `ctvs`, `ctv_daily_reports`,
-   `bot_prompts`, `required_facts`, `interests`, `ratings`) bật RLS và **cố ý
+   `bot_prompts`, `required_facts`, `interests`) bật RLS và **cố ý
    không có policy nào** — service_role bỏ qua RLS nên bot chạy bình thường,
    còn anon đọc ra 0 dòng. Cảnh báo `rls_enabled_no_policy` của Supabase ở các
    bảng này là *kỳ vọng*, không phải lỗi.
@@ -400,6 +400,13 @@ có UI giỏ hàng riêng — cập nhật `unit_status` qua luồng rao/sửa t
 - View `agents_public` (definer): lộ đúng `name, seller_type, rating_sum,
   rating_count, listing_count` của NMG — **không bao giờ** lộ `phone`,
   `zalo_user_id`, `phone_proxy` (bất biến FR-104).
+  *(27/08/2026: hai cột `rating_sum`/`rating_count` vẫn còn trong view nhưng đã
+  CHẾT — nguồn ghi duy nhất là bảng `ratings`, xoá theo OPEN-23. Web không render
+  chúng nữa, xem FR-125. Giữ cột lại để khỏi phải đổi view khi có nguồn chấm điểm
+  NMG mới (OPEN-12); đừng dùng chúng cho tới lúc đó.)*
+  Advisor Supabase báo view này `security_definer_view` mức ERROR — **cố ý**:
+  bỏ định danh đó thì `anon` không đọc được qua RLS của `sellers`, tức phá đúng
+  mục đích FR-125. Kết luận soát ghi ở `docs/09` (mục soát 27/08/2026).
 - Đọc công khai (anon): chỉ các trạng thái đang lên kệ
   `dang_ban` / `dang_quan_tam` / `da_chot` (FR-139); tin `cho_thong_tin` (chưa đủ
   thông tin) và `an` không lộ ra web — ghi nhận ở kế hoạch kiểm thử (TS-SEL/TS-ADM).
@@ -413,6 +420,56 @@ có UI giỏ hàng riêng — cập nhật `unit_status` qua luồng rao/sửa t
   nền cho "tin đã xem" và khuyến nghị.
 - Bảng `admins(email pk)` + RLS `listings_admin_read/update`: admin duyệt
   tin trên web (`/admin`). Thêm admin = insert email.
+
+### SRS-3.12 · Bảng vận hành & quan trắc (FR-146, FR-151, FR-152 — 27/08/2026)
+
+```
+bot_usage    day date pk (giờ VN), model_calls int, capped_at timestamptz   -- FR-151a
+bot_errors   id bigserial pk, at timestamptz, source text, status_code int,
+             detail text (cắt 500)                                          -- FR-152
+bot_health   who text pk, at timestamptz, last_id bigint                    -- FR-152
+```
+
+Cả ba bật RLS và `revoke all from anon, authenticated`. Riêng `bot_errors` và
+`bot_health` có policy SELECT cho `authenticated` là admin (cùng khuôn
+`listings_admin_read`) để trang `/admin` hiện được sức khoẻ bot.
+
+| Hàm | Vai trò | Ai gọi được |
+|---|---|---|
+| `bump_model_quota(p_limit)` | Đếm lượt vào bộ não theo ngày, vượt trần trả `false` + báo admin đúng một lần | chỉ `service_role` |
+| `log_loi(source, detail, code)` | Cửa ghi lỗi tầng ứng dụng. **Van: 20 dòng/nguồn/giờ và 200 dòng/giờ tổng** | mở cho `anon` (bắt buộc — server Next chạy bằng publishable key) |
+| `bot_health_tick()` | Quét `net._http_response` tìm phản hồi không 2xx → `bot_errors`; kiểm nhịp tim bridge; gộp báo admin 1 tin/giờ; dọn sổ > 30 ngày | chỉ `service_role`, chạy bằng cron `*/15` |
+| `beat(who)` | Ghi nhịp tim. `escalation-feed` gọi mỗi lần bridge kéo việc | chỉ `service_role` |
+
+**Vì sao phải có `bot_errors` thay vì đọc log**: log edge function bậc Free chỉ
+giữ 1 ngày, mà loại lỗi nguy nhất ở hệ này **TRẢ 200** (`catch` nuốt exception
+rồi hàm chạy tiếp) nên không cửa nào mã-HTTP thấy được. Đã đo thật 27/08: bắn
+một tin kèm `image_url` hỏng → HTTP 200, khách vẫn nhận câu trả lời qua fallback
+regex, mà `bot_errors` ghi `chat-reply model → 400 Unable to download the file`.
+
+**Cổng FR-151b**: secret `BRIDGE_SECRET` trong Vault. Có secret thì `chat-reply`
+và `escalation-feed` chỉ nhận request kèm header `x-bridge-secret` khớp, hoặc
+request mang `service_role` key (`zalo-webhook`). Chưa đặt secret thì chạy như
+cũ. **Thứ tự bật bắt buộc**: điền `.env` phía bridge TRƯỚC, tạo secret trong
+Vault SAU — làm ngược là bridge chết trong khoảng giữa. Tắt khẩn:
+`delete from vault.secrets where name = 'BRIDGE_SECRET';`
+
+### SRS-3.13 · Tầng cache của web (NFR-17 — 27/08/2026)
+
+Ba nhóm route, ba cách giữ:
+
+| Nhóm | Route | Cách |
+|---|---|---|
+| Tĩnh/ISR | `/`, `/ban-do` (5 phút); `/moi-gioi`, `/thong-ke` (1 giờ) | `export const revalidate` là đủ |
+| Động **có tham số đường dẫn** | `/nha-dat/[code]` | `export const revalidate` **KHÔNG đủ** — bắt buộc kèm `generateStaticParams()` |
+| Động đọc `searchParams` | `/mua-ban`, `/cho-thue` | ISR không với tới (tổ hợp lọc vô hạn) → bọc truy vấn Supabase trong `unstable_cache` (TTL 300s), khoá theo chính bộ lọc |
+
+**Cái bẫy**: thiếu `generateStaticParams()` thì Next 15 để
+`prerender-manifest.dynamicRoutes` **rỗng** và `revalidate` thành chữ chết —
+không lỗi, không cảnh báo, chỉ là mỗi lượt xem một tin đi thẳng xuống Supabase.
+Đo tại chỗ 27/08: `/` trả `x-nextjs-cache: HIT` + `s-maxage=300`, còn route
+`[param]` trả `Cache-Control: private, no-cache, no-store`. Đúng 164 trang tin
+— toàn bộ mặt SEO — đang ở tình trạng đó. Cách nghiệm thu ở TS-CACHE.
 
 ---
 
@@ -541,6 +598,23 @@ Loại khỏi kết quả: `status ≠ 'dang_rao'`, và listing B đã từ ch�
 | `stale_listing_check` | thứ 2 hằng tuần | *(tinh chỉnh theo FR-107)* TTL xác nhận là **7 ngày**, kiểm tra **tại thời điểm matching**: quá hạn thì hỏi S trước khi giới thiệu; job tuần chỉ quét listing không có lượt matching nào |
 | `close_conversations` | mỗi 5 phút | đóng hội thoại im lặng > 30 phút (FR-72) |
 
+**Cron THẬT đang chạy trên `nhadat-cc`** (pg_cron, kiểm 27/08/2026 — bảng trên
+là thiết kế, bảng dưới là thực tế):
+
+| Job | Lịch | Gọi gì |
+|---|---|---|
+| `seller-drip-tick` | `*/30 * * * *` | `ask-seller` — hỏi nhỏ giọt chính chủ (FR-129/144) |
+| `nudge-tick` | `*/30 * * * *` | `nudge` — nhắc lời hứa, nhắc lịch xem, leo thang (FR-133/32/147) |
+| `ctv-report-tick` | `0 10 * * *` (17h VN) | `ctv-report` — báo cáo CTV (FR-137/149) |
+| `listing-interest-decay` | `0 20 * * *` | trả tin `dang_quan_tam` về `dang_ban` sau 7 ngày (FR-139) |
+| `bot-health-tick` | `*/15 * * * *` | `bot_health_tick()` — SQL thuần, không HTTP (FR-152) |
+
+**Đừng tin `cron.job_run_details.status`** (NFR-18): `net.http_post()` trả về
+ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge function trả
+500. Đo 27/08: 3 ngày có 147 lượt cron "succeeded" mà `net._http_response` chỉ
+còn 16 dòng (Supabase tự dọn sau vài giờ). Kết quả thật phải qua
+`bot_health_tick()` → `bot_errors`.
+
 ### SRS-5.4 · Phát hiện phản ứng tiêu cực (FR-77)
 Đánh dấu `sentiment = negative` khi thoả **bất kỳ**:
 - Khớp từ điển bực bội tiếng Việt (*"hỏi hoài không trả lời"*, *"chán"*, *"lừa"*, *"phiền"*, *"thôi khỏi"*).
@@ -580,6 +654,8 @@ thất bại vẫn phải giữ bản ghi trong `escalations` để admin không
 | NFR-09 | Google Search Console: 100 URL tag được index, 0 lỗi structured data |
 | NFR-11 | Kết nối Excel qua Postgres/REST, xuất được 3 bảng thống kê |
 | NFR-12 | Thêm adapter Telegram giả lập không sửa file trong `core/` |
+| NFR-17 | Bảng route sau `bun run build`: trang tin là `●`/`○`, không `ƒ`; `prerender-manifest.dynamicRoutes` có `/nha-dat/[code]`; trên bản deploy `x-vercel-cache` lần hai là `HIT`/`STALE` (TS-CACHE) |
+| NFR-18 | Bắn một request tới function không tồn tại → `bot_health_tick()` trả `loi_moi ≥ 1` và `bot_errors` có dòng, trong khi `cron.job_run_details` vẫn `succeeded` (TS-HEALTH) |
 
 ---
 

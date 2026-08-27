@@ -159,6 +159,29 @@ bot vẫn trả lời tử tế, chỉ là không tin thuê nào được tạo 
 Dọn sau khi chạy: xoá `listings` mã `CCRB-*` vừa sinh (SRS-3.8a sinh ra từ đúng
 vòng test này ngày 26/08).
 
+### TS-CHATREPLY — bộ kiểm sau MỌI lần deploy `chat-reply`
+
+Bắt buộc khi deploy qua MCP, vì đường đó phải chép tay nguyên văn: rủi ro tỉ lệ
+thuận với số dấu `\` trong file (mỗi cái phải nhân đôi khi đóng gói JSON), mà
+chép sót một cái thì `\d` thành `d` — **vẫn biên dịch, vẫn chạy, chỉ là bóc
+sai** và không cửa nào báo. Đếm 27/08: `escalation-feed` 0, `zalo-webhook` 0,
+`ctv-report` 11, `chat-reply` **123**. Deploy bằng `npx supabase functions
+deploy` thì không có rủi ro này, nhưng bộ test vẫn nên chạy.
+
+Chạy bằng `net.http_post` kèm `x-bridge-secret` lấy thẳng từ Vault (giá trị
+không ra khỏi Postgres). Kết quả lần chạy 27/08 trên v32:
+
+| ID | Nhắn gì | Soi họ regex nào | Kỳ vọng |
+|---|---|---|---|
+| TS-CHATREPLY-A | `anh co 5 tỏi rưỡi, tìm nhà quận 5 phường 9, coi giúp anh căn #BDS-Q5-0164` | `CODE_RE`, regex tiền, `budgetRangeVnd`, `wardNum` | Trả đúng căn được nhắc, lọc kho theo tầm giá đã bóc |
+| TS-CHATREPLY-B | `anh muốn thuê nhà quận 5 tầm 20 triệu một tháng` → lượt 2 `để ở, tìm luôn đi` | `dealCol()` + lọc kho `deal='cho_thue'` | Lượt 2 trả căn CHO THUÊ thật, không phải căn bán |
+| TS-CHATREPLY-C | `cho thuê nhà mặt tiền phường 11, 60m2, giá 25 triệu một tháng` (từ acc đã gán `sellers.zalo_user_id`) | `wantsSell`, `sDeal`, `wardM`, `priceM` | Tạo tin `deal=cho_thue`, đúng phường, `price_raw` không dính "trệt" |
+| TS-CHATREPLY-D | tin kèm `image_url` trỏ host không tồn tại | `ghiLoi()` trong catch (FR-152 d) | HTTP **200**, khách VẪN nhận câu trả lời (fallback regex), mà `bot_errors` có `source='chat-reply model'` |
+
+Dọn sau khi chạy: trả `sellers.zalo_user_id` về NULL, xoá tin `CCRB-*` vừa sinh
+(kèm `info_requests`/`listing_facts`/`reminders` của nó), xoá buyer/conversation
+`ZZTEST-*`, xoá `bot_errors`, đẩy `bot_health.last_id` lên `max(id)` hiện tại.
+
 ### TS-CACHE — chứng minh trang tin thật sự nằm trong cache (NFR-17)
 
 Bẫy đã cắn thật: `export const revalidate = 300` trong `app/nha-dat/[code]/page.tsx`

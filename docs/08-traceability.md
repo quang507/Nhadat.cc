@@ -109,6 +109,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-148 | UF-01, UF-03, UF-04 | WF-02, WF-03 | bucket Storage công khai `listing-photos` (`<mã>/<file>`) + view `public.listing_photos_v`; web `lib/photos.ts` (`coverByCode`, `photosOfCode`) → `ListingCard` prop `photo` + gallery trang chi tiết; bot gộp ảnh kho + facts `hinh_anh` khi trả `photos` | — |
 | FR-149 | UF-09 | — | `admins.zalo_phone` (số admin, không nằm trong code); `reminders.kind='report'` + `ctv-report` đẩy hàng đợi (`queued_bridge`) + `escalation-feed` phục vụ cả `escalation`/`report` (report gửi nguyên văn) + `nudge` gửi OA khi còn OA + vòng poll bridge zca-js | — |
 | FR-150 | UF-05, UF-09, UF-10, UF-13 | — | enum `property_type.chua_ro` + `required_facts(chua_ro, loai_bds)` + view `listing_missing_facts` coalesce; `listings_try_publish()` + trigger `trg_listings_autopublish`; `trg_listings_price_vnd` thêm UPDATE OF price_raw; `seller_drip_tick`/`trg_listing_drip` theo trạng thái FR-139; `guess_property_type()` + trigger `trg_listings_fill_property_type` + backfill 164/173, `guess_property_type_answer()` cho nhánh fact `loai_bds` (không đọc ra loại thì hỏi lại, không ghi fact); `escalation-feed` action `ack` ghi ngược zalo_user_id | — |
+| FR-151 | UF-04 | — | (a) bảng `bot_usage` + RPC `bump_model_quota(p_limit)` gọi ngay đầu `chat-reply`, vượt trần trả 429 và im; secret `DAILY_MODEL_CALL_CAP` (Vault), mặc định 1000/ngày. (b) secret `BRIDGE_SECRET` (Vault) → `chat-reply` + `escalation-feed` đòi header `x-bridge-secret`, trừ request mang service_role key (`zalo-webhook`); bridge đọc secret từ `bot/bridge-zca/.env`. SRS-3.12 | — |
 | FR-152 | UF-09 | — | bảng `bot_errors` + `bot_health` (RLS, admin đăng nhập đọc được); RPC `beat(who)` gọi từ `escalation-feed`; `bot_health_tick()` quét `net._http_response` → `bot_errors` → `reminders` kind `escalation` (gộp 1 tin/giờ); cron `bot-health-tick` `*/15 * * * *`; RPC `log_loi(source, detail, code)` (van 20/nguồn/giờ + 200/giờ) + helper `ghiLoi()` trong `_shared/claude.ts` và trong `bridge-zca`; `escalation-feed` action `log`; web `instrumentation.ts` `onRequestError` + `app/error.tsx`; khối "Sức khoẻ bot" trên `/admin` | — |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
@@ -123,6 +124,20 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | RSK-05 | UF-06 nhánh lỗi, SRS-5.2 xếp hạng |
 | RSK-06 | `last_verified_at`, SRS-5.3 `stale_listing_check`, WF-03 |
 | RSK-07 | NFR-06, SRS-3.9, §6.7 |
+
+## 8.6 NFR → hiện thực → cách nghiệm thu
+
+Trước 27/08/2026 ma trận không theo dõi NFR ở đâu cả — NFR chỉ nằm rải trong
+`02` và `07 §6`. Soát mã nguồn 27/08 phát hiện thiếu, bổ sung mục này cho các
+NFR **đã có hiện thực trong code** (những NFR còn là mục tiêu thì vẫn ở `07 §6`).
+
+| NFR | Hiện thực ở | Nghiệm thu |
+|---|---|---|
+| NFR-16 (free-tier trước) | Supabase Free + Vercel Hobby; quyết định giữ nguyên 27/08 (OPEN-25) | Ràng buộc kèm theo: chạy `scripts/sao-luu.mjs` định kỳ vì Free KHÔNG có backup tự động |
+| NFR-17 (trang tin phải trong cache) | `generateStaticParams()` ở `app/nha-dat/[code]/page.tsx`; `unstable_cache` bọc truy vấn trong `components/ListingBrowse.tsx` và `lib/photos.ts`; SRS-3.13 | TS-CACHE-01…05 |
+| NFR-18 (xanh phải là xanh thật) | `bot_health_tick()` quét `net._http_response` → `bot_errors`; `log_loi()` + `ghiLoi()` cho lỗi trả-200; SRS-3.12 | TS-HEALTH-01…06, TS-LOG-01…06 |
+
+---
 
 ## 8.5 FR chưa có đặc tả kỹ thuật đầy đủ
 
