@@ -247,17 +247,51 @@ Deno.serve(async (req) => {
   // NGƯỜI BÁN nhắn? (FR-129 — hỏi nhỏ giọt): nếu khớp sellers.zalo_user_id và
   // đang có câu hỏi chờ, coi tin nhắn là CÂU TRẢ LỜI → lưu fact, hỏi câu kế.
   const { data: sellerRow } = await client
-    .from("sellers").select("id, name")
+    .from("sellers").select("id, name, active_listing_id")
     .eq("zalo_user_id", externalUserId).maybeSingle();
-  if (sellerRow) {
+
+  // OPEN-22 / FR-157: một Zalo VỪA BÁN VỪA MUA. Nhận diện người vẫn theo
+  // zalo_user_id (quyết định chủ dự án 27/08/2026), nhưng VAI thì xét từng
+  // lượt: có dòng `sellers` không có nghĩa cả đời người này chỉ được bán.
+  // Trước bản này, hễ khớp `sellers` là chốt vai bán cho MỌI tin — chính chủ
+  // vừa rao xong muốn hỏi mua căn khác thì không có đường nào đi tới nhánh
+  // buyer, bot cứ hỏi ngược lại về căn của họ.
+  // Câu hỏi chờ KHÔNG mất khi rẽ sang nhánh mua: `info_requests` vẫn
+  // `pending`, cron drip sẽ hỏi lại.
+  const hoiMua =
+    /(muốn|cần|tìm|kiếm|đang coi|đang xem)\s*(mua|thu[êe]|nhà|căn|đất|phòng|mặt bằng|chung cư)/i
+      .test(text) ||
+    /(có|còn)\s*căn nào|xem nhà|coi nhà|tư vấn (mua|thu[êe])/i.test(text);
+
+  if (sellerRow && !hoiMua) {
     const anthropicS = await anthropicClient(client);
-    const { data: pendingReq } = await client
+
+    // NEO NGỮ CẢNH THEO CĂN, không theo "câu hỏi mới nhất" (FR-157).
+    // Người bán 2-3 căn, cả hai đều đang thiếu thông tin: bot vừa hỏi căn B,
+    // chủ nhớ ra chuyện căn A và nhắn "căn A hoàn công 2020 nha em" — lấy
+    // `limit 1` theo created_at là ghi thẳng dữ liệu căn A vào căn B. Sai kiểu
+    // này KHÔNG bao giờ tự lộ: fact vẫn có, tin vẫn lên web, chỉ là sai nhà.
+    // Thứ tự tin cậy: mã tin chủ tự nhắc > căn bot vừa hỏi > câu mới nhất.
+    const codeInText =
+      /((?:BDS-Q5|CCRB)-[A-Za-z0-9]+)/.exec(text)?.[1]?.toUpperCase() ?? null;
+    const { data: pendings } = await client
       .from("info_requests")
-      .select("id, listing_id, question, listings!inner(seller_id, code)")
+      .select("id, listing_id, question, created_at, listings!inner(seller_id, code, location_raw)")
       .eq("listings.seller_id", sellerRow.id)
       .eq("status", "pending")
       .order("created_at", { ascending: false })
-      .limit(1).maybeSingle();
+      .limit(20);
+    type PendRow = {
+      id: string; listing_id: string; question: string;
+      listings: { code: string | null; location_raw: string | null };
+    };
+    const ds = (pendings ?? []) as unknown as PendRow[];
+    const pendingReq: PendRow | null =
+      (codeInText ? ds.find((p) => p.listings?.code?.toUpperCase() === codeInText) : null) ??
+      (sellerRow.active_listing_id
+        ? ds.find((p) => p.listing_id === sellerRow.active_listing_id)
+        : null) ??
+      ds[0] ?? null;
 
     // Seller quay lại nhắn → hủy nhắc-lời-hứa đang chờ (FR-133)
     await client.from("reminders").update({ status: "cancelled" })
@@ -344,8 +378,17 @@ Deno.serve(async (req) => {
         ? undefined
         : (nextFacts ?? []).find((f) => !pendSet.has(f.fact_key));
 
+      // Câu hỏi drip PHẢI vắt vai mã căn + địa chỉ (FR-157). Người bán nhiều
+      // căn mà nghe "hoàn công năm nào ạ?" trống không thì họ trả lời về căn
+      // đang nghĩ trong đầu, không phải căn bot đang hỏi — neo phía DB xong mà
+      // câu chữ không neo thì vẫn lệch, chỉ là lệch ở đầu bên kia.
+      const neo = [
+        lstNow?.code ? `#${lstNow.code}` : null,
+        pendingReq.listings?.location_raw?.split(",")[0]?.trim() || null,
+      ].filter(Boolean).join(" ở ");
+
       const prompt = next
-        ? `Người bán vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}". Soạn MỘT tin RẤT NGẮN (~30 từ): ghi nhận/khen tự nhiên câu trả lời (điểm mạnh thật của nhà nếu có), rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[next.fact_key] ?? next.fact_key}. Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
+        ? `Người bán vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}". Soạn MỘT tin RẤT NGẮN (~30 từ): ghi nhận/khen tự nhiên câu trả lời (điểm mạnh thật của nhà nếu có), rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[next.fact_key] ?? next.fact_key}. ${neo ? `BẮT BUỘC nhắc rõ đang hỏi về căn ${neo} ngay trong câu hỏi (người này rao nhiều căn, không nói rõ là họ trả lời nhầm căn khác).` : ""} Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
         : published
         ? `Người bán vừa trả lời: "${text}". Tin #${lstNow?.code ?? ""} giờ đã đủ thông tin và ĐÃ LÊN WEB nhadat.cc. Soạn MỘT tin NGẮN cảm ơn + báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG hỏi thêm thông tin nào nữa.`
         : `Người bán vừa trả lời câu hỏi cuối: "${text}". Soạn MỘT tin NGẮN cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem anh chị còn muốn bổ sung gì không.`;
