@@ -230,3 +230,62 @@ Dọn sau khi chạy: `delete from bot_errors; delete from reminders where note 
 `bot_errors` là bản trích những chỗ đã được nối dây, không phải bản đầy đủ. Chỗ
 nào chưa gọi `ghiLoi()` thì vẫn im như cũ — thêm `catch` mới là phải nối dây mới.
 
+
+---
+
+### TS-GIA — bóc giá tiếng lóng ra số (FR-154)
+
+Chạy thẳng trên SQL editor. Đây là **test hồi quy**: mỗi lần sửa `parse_vnd`
+phải chạy lại đủ bộ, vì hai ca cuối là hai con bọ đã cắn thật.
+
+```sql
+select s, parse_vnd(s) from unnest(array[
+  '5 tỏi rưỡi','5 tỏi','5 tỷ rưỡi','5,5 tỷ','5 tỷ 5','3 tỷ 200','800 triệu',
+  '12 củ','15tr/th','900tr','1 trệt 2 lầu','5t5','2 tỉ 8','giá 6ty2 TL',
+  '7 tỏi 3','nhà 4x15 giá 8 tỏi','25 củ/tháng','5 cây vàng','5 tỏi 500 triệu',
+  'tỷ lệ chốt 5%','giá 5 tỷ 50m2','đất 100m2 giá 4ty','2 tý','thuê 8 củ rưỡi',
+  '5 tỷ 120m2','1 tỷ 050'
+]) s;
+```
+
+| Mã | Việc | Kỳ vọng |
+|---|---|---|
+| TS-GIA-01 | Bộ 26 ca ở trên | Khớp đủ 26. Đã chạy thật 27/08/2026: đúng hết |
+| TS-GIA-02 | `'giá 5 tỷ 50m2'` | **5.000.000.000**, KHÔNG phải 5,5 tỷ. Regex từng lùi `{1,3}` từ "50" về "5" để né lookahead `m` rồi đọc phần lẻ sai |
+| TS-GIA-03 | `'1 trệt 2 lầu'` | **NULL**. Chữ `tr` ở đây là "trệt". Postgres `\M` hiểu chữ có dấu nên chặn được — đừng bê logic này sang JavaScript, `\b` bên đó chỉ biết ASCII |
+| TS-GIA-04 | `'5 cây vàng'`, `'2 tý'` | **NULL** cả hai. Vàng không tự quy ra tiền (tỷ giá đổi mỗi ngày); "tý" là "một tý", không phải tỷ |
+| TS-GIA-05 | `select count(*) from listings where price_vnd is distinct from parse_vnd(price_raw)` | **0** — kho đang khớp với bộ bóc hiện hành. Khác 0 nghĩa là vừa sửa hàm mà chưa backfill |
+
+### TS-SPECS — fact nhỏ giọt chảy vào cột (FR-153)
+
+| Mã | Việc | Kỳ vọng |
+|---|---|---|
+| TS-SPECS-01 | Chọn một tin `bedrooms is null`, `insert into listing_facts(listing_id,question,answer,source) values (…, 'so_phong_ngu','3PN 2wc','thu')` | `listings.bedrooms = 3` |
+| TS-SPECS-02 | Chèn tiếp `('so_phong_ngu','9 phòng')` cho chính tin đó | Vẫn **3** — chỉ ghi khi cột trống, không đè lên số đã có |
+| TS-SPECS-03 | `('huong','Đông Nam')` trên tin `direction is null` | `direction = 'Đông Nam'`. Chuỗi dài quá 40 ký tự thì BỎ QUA (người bán kể chuyện, không phải hướng) |
+| TS-SPECS-04 | `('so_phong_ngu','ba phòng ngủ')` | `bedrooms` vẫn NULL — không có chữ số thì không đoán bừa |
+
+Dọn sau khi chạy: xoá fact vừa chèn **và** trả cột về NULL (trigger không tự lùi).
+
+### TS-HANG — hạng Đồng/Bạc/Vàng (FR-155)
+
+| Mã | Việc | Kỳ vọng |
+|---|---|---|
+| TS-HANG-01 | `select * from seller_ranks` | Mỗi người bán đúng một dòng; NMG 17–22 tin đang rao, 0 căn chốt → **bac** (27/08/2026: 3/3 NMG đều Bạc) |
+| TS-HANG-02 | `select * from seller_ranks` với vai `anon` | Chạy được, và **không có** cột `phone` / `zalo_user_id` (FR-104) |
+| TS-HANG-03 | Đặt tay một tin sang `da_chot` cho một NMG có ≥10 tin rồi đọc lại | Nhảy **vang**. Nhớ trả lại trạng thái cũ sau khi thử |
+
+**Cái test này KHÔNG phủ**: ngưỡng có ĐÚNG không — đó là OPEN-26, không phải lỗi mã.
+
+### TS-DANGTIN — admin tự đăng tin (FR-156)
+
+| Mã | Việc | Kỳ vọng |
+|---|---|---|
+| TS-DANGTIN-01 | Gọi `admin_dang_tin('{"price_raw":"1 tỷ"}')` khi **không** có JWT admin | Lỗi `42501` "Khong co quyen quan tri". Đã chạy thật 27/08: chặn đúng |
+| TS-DANGTIN-02 | Đặt `request.jwt.claims` bằng email trong bảng `admins`, gọi với `price_raw = '5 tỏi rưỡi'` | Trả `code = BDS-Q5-####` nối tiếp dãy, `price_vnd = 5500000000` |
+| TS-DANGTIN-03 | Cùng lệnh trên, **không** gửi `seller_phone`/`seller_zalo` | Người bán mới có `phone IS NULL` **và** `zalo_user_id IS NULL` |
+| TS-DANGTIN-04 | Gọi lần hai với cùng `seller_zalo` (hoặc cùng `seller_phone`) | Dùng lại `seller_id` cũ, KHÔNG đẻ dòng `sellers` thứ hai |
+| TS-DANGTIN-05 | Mở `/admin/dang-tin` bằng tài khoản không nằm trong `admins` | Thấy màn hình "Cần đăng nhập bằng tài khoản quản trị", không thấy form |
+
+Dọn sau khi chạy: xoá tin `BDS-Q5-####` vừa tạo, các dòng `info_requests` trỏ
+vào nó, và người bán thử nghiệm — rồi kiểm lại `listings` = 173, `sellers` = 3.

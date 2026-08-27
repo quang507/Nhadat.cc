@@ -73,7 +73,15 @@ export default function Page() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
-      <h1 className="text-2xl font-extrabold">Duyệt tin</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h1 className="text-2xl font-extrabold">Duyệt tin</h1>
+        <Link
+          href="/admin/dang-tin"
+          className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+        >
+          + Đăng tin thủ công
+        </Link>
+      </div>
       {counts && (
         <p className="mt-1 text-sm text-mute tabular-nums">
           {counts.tong} tin tổng · {counts.active} đang rao · {counts.cho} chờ duyệt

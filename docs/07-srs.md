@@ -471,6 +471,72 @@ không lỗi, không cảnh báo, chỉ là mỗi lượt xem một tin đi th�
 `[param]` trả `Cache-Control: private, no-cache, no-store`. Đúng 164 trang tin
 — toàn bộ mặt SEO — đang ở tình trạng đó. Cách nghiệm thu ở TS-CACHE.
 
+### SRS-3.14 · Đặc tính riêng theo loại BĐS, hạng người rao, cửa đăng tin admin (FR-153…FR-156 — 27/08/2026)
+
+**Đặc tính riêng theo loại hình** không nằm ở cột riêng cho từng loại (nhà phố
+một bảng, chung cư một bảng) mà ở cặp `required_facts` × `listing_facts`:
+
+```
+required_facts   (property_type, fact_key, priority)   -- BỘ CÂU HỎI của từng loại
+listing_facts    (listing_id, question, answer, source) -- CÂU TRẢ LỜI, dạng chữ
+listing_missing_facts (view)  = required_facts ⋈ property_type − listing_facts
+```
+
+Đổi `listings.property_type` là **đổi cả bộ câu hỏi ở lượt kế tiếp**, không cần
+migration nào. Bộ câu hỏi đang chạy (đọc từ DB 27/08/2026, theo thứ tự ưu tiên):
+
+| Loại | Bộ câu hỏi riêng |
+|---|---|
+| `nha_pho` | ket_cau, dien_tich_dat, do_rong_hem, phap_ly, huong, quy_hoach, nam_xay |
+| `nha_cap4` | dien_tich_dat, phap_ly, do_rong_hem, hien_trang, quy_hoach |
+| `chung_cu` | phap_ly, so_phong_ngu, tang, dien_tich_tim_tuong, huong, phi_quan_ly, noi_that |
+| `dat` | phap_ly, dien_tich, quy_hoach, tho_cu, do_rong_duong |
+| `biet_thu` | phap_ly, ket_cau, dien_tich_dat, huong, san_vuon |
+| `phong_tro` | gia_dien_nuoc, dien_tich, noi_that, gio_giac |
+| `mat_bang` | dien_tich, mat_tien, thoi_han_thue, nganh_hang_phu_hop |
+| `chua_ro` | loai_bds *(hỏi đúng một câu để biết mình đang ở nhánh nào)* |
+
+Bảng một-cột-một-loại thì mỗi lần thêm loại là một lần đổi lược đồ; ở đây chỉ là
+thêm dòng vào `required_facts`.
+
+Cái giá của EAV là **fact nằm dạng chữ nên không lọc được**. FR-153 trả cái giá
+đó bằng trigger `trg_listing_facts_sync_cols` (AFTER INSERT trên `listing_facts`):
+
+| fact_key | Cột đổ vào | Ràng buộc |
+|---|---|---|
+| `so_phong_ngu` | `listings.bedrooms` | 1…20, phải có chữ số |
+| `dien_tich*` | `listings.area_m2` | >5 và <5000 |
+| `tang` | `listings.floor` | 0…80 (0 = trệt) |
+| `huong` | `listings.direction` | độ dài 2…40 ký tự |
+
+Tất cả **chỉ ghi khi cột đang trống** — không bao giờ đè lên số đã xác minh — và
+**không đụng `description`**: câu rao gốc là văn phong người bán, fact hiện ở
+khối "Thông tin thêm" riêng trên trang tin.
+
+**Hạng người rao** (FR-155) là `seller_rank()` + view `seller_ranks`, tính tại
+chỗ từ số tin. Cố ý không lưu thành cột: cột thì phải có người cập nhật, mà thứ
+không ai cập nhật sẽ đóng băng rồi nói dối — đúng vết `sellers.rating_sum` đã đổ
+(OPEN-23). View chỉ lộ `id, name, seller_type, active_count, closed_count,
+total_count, rank`; `phone` và `zalo_user_id` KHÔNG bao giờ đi qua đây, vì trang
+admin đọc view này từ trình duyệt.
+
+**Cửa đăng tin admin** (FR-156) là RPC `admin_dang_tin(jsonb)` `security definer`:
+
+```
+admin_dang_tin(p jsonb) → jsonb {id, code, price_vnd, seller_id}
+  1. auth.jwt()->>'email' phải có trong `admins`, không thì 42501
+  2. seller_id có sẵn → dùng; không thì tra theo zalo/SĐT; vẫn không → tạo mới
+  3. lock table listings in share row exclusive mode
+  4. code = 'BDS-Q5-' || lpad(max(seq)+1, 4, '0')
+  5. insert listings (trigger giá FR-154 + trigger loại FR-150 tự chạy)
+```
+
+Vì sao là RPC chứ không phải policy INSERT: mở policy thì trang admin còn phải
+đọc được bảng `sellers` để đổ ô xổ xuống chọn người bán — mà bảng đó chứa số
+điện thoại thật của dân. Bọc vào hàm thì admin **gọi được hàm nhưng không đọc
+được bảng**. `lock table` ở bước 3 là để hai admin bấm cùng lúc không sinh trùng
+mã: `code` là thứ khách đọc qua Zalo, trùng mã là chỉ nhầm căn.
+
 ---
 
 ## 4. Đặc tả giao diện lập trình

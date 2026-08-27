@@ -59,12 +59,65 @@ export const SELLER_SCRIPT_RULES = `Kịch bản hỏi người bán (khen trư�
 - Với NMG nhiều căn: hỏi gọn, chuyên nghiệp; nhắc rằng trả lời giúp tin dễ tiếp cận khách mua hơn.`;
 
 // Từ điển lóng BĐS (INS-07 — ngôn ngữ nói ≠ bộ lọc). Lấy hướng từ NhaDat-Radar.
+//
+// ĐÂY LÀ BỘ VÁ RẺ NHẤT CỦA HỆ THỐNG. Bot đọc sai một chữ lóng thì hỏng cả lượt:
+// "5 tỏi" thành 5 đồng, "4x15" thành 4m2, "1 trệt 2 lầu" thành giá 1 triệu.
+// Nghe khách dùng từ nào lạ mà bot hỏi lại nghĩa → thêm dòng vào đây.
+// Bản DB (bot_prompts key `slang_notes`) ĐÈ lên hằng này lúc chạy (FR-138):
+// sửa ở Table Editor là đổi hành vi bot ngay, KHÔNG cần deploy lại chat-reply.
 export const SLANG_NOTES = `Từ điển lóng khách hay dùng (hiểu đúng, đừng hỏi lại nghĩa):
-- "tỏi" = tỷ ("5 tỏi" = 5 tỷ); "củ" = triệu; "TL" = thương lượng; "ngộp" = chủ kẹt tiền cần bán gấp.
-- "HXH" = hẻm xe hơi; "MT" = mặt tiền; "lô góc" = 2 mặt thoáng; "nở hậu" = phía sau rộng hơn (khách thích), "tóp hậu" ngược lại.
-- "nhà nát" = mua chủ yếu lấy đất, nhà cũ đập bỏ; "1 trệt 2 lầu" = 3 tầng; "gác lửng"; "full nội thất".
-- "sổ hồng riêng" / "SHR" = pháp lý riêng chính chủ; "bao sang tên" = bên bán chịu phí sang tên.
-- "khu người Hoa" = khu Chợ Lớn Quận 5 (P10-P14).`;
+
+TIỀN VÀ GIÁ
+- "tỏi" = tỷ ("5 tỏi" = 5 tỷ); "củ" = triệu; "xị" = trăm nghìn; "chục" = 10.
+- Cách nói số: "5 tỏi rưỡi" / "5 tỷ rưỡi" / "5t5" / "5tỷ2" = 5,5 và 5,2 tỷ; "4 tỷ 8" = 4,8 tỷ; "800tr" = 800 triệu; "15tr/th" = 15 triệu một tháng.
+- Khoảng giá: "tầm 5 tỷ", "trên dưới 5 tỷ", "5-6 tỷ", "hơn 5 tỷ xíu", "dưới 6 tỷ" — ghi nguyên khoảng, đừng tự chốt một con số.
+- "cây" / "lượng" = vàng SJC (nhà cũ hay ra giá bằng vàng) — ghi nguyên văn, không tự quy ra tiền.
+- "TL" / "thương lượng" / "giá còn TL" = giá mềm, chưa chốt; "giá net" / "giá bao" = đã là giá cuối.
+- "ngộp" / "kẹt" / "cần tiền gấp" / "cắt lỗ" / "bán lỗ" = chủ đang cần thanh khoản nhanh, thường thương lượng mạnh.
+- "bao sang tên" / "bao thuế phí" = bên bán chịu chi phí sang tên; "thuế phí 50-50" = chia đôi.
+- "cọc" = đặt cọc; "công chứng" = ký hợp đồng mua bán ở phòng công chứng.
+
+VỊ TRÍ, ĐƯỜNG SÁ
+- "MT" = mặt tiền (nhà giáp mặt đường lớn); "MTKD" = mặt tiền kinh doanh được.
+- "HXH" = hẻm xe hơi (xe 4 chỗ vô tới cửa); "HXH thông" = hẻm xe hơi không cụt; "hẻm ba gác" = chỉ xe ba gác vô; "hẻm xe máy" = chỉ xe máy.
+- "hẻm thông" / "hẻm cụt"; "hẻm 4m" = hẻm rộng 4 mét; "cách MT 50m"; "vô 1 xuyệt / 2 xuyệt" = qua 1-2 lần rẽ hẻm (càng nhiều xuyệt càng sâu, càng rẻ).
+- "lô góc" / "căn góc" = 2 mặt thoáng; "2 mặt tiền"; "nhà nở hậu" = phía sau rộng hơn phía trước (khách thích), "tóp hậu" ngược lại; "vuông vức" = đất đều cạnh.
+- "khu người Hoa" / "Chợ Lớn" = khu Quận 5 quanh P10-P14; hay nhắc: Hải Thượng Lãn Ông, Trần Hưng Đạo, An Dương Vương, Hồng Bàng, Nguyễn Trãi, Trần Bình Trọng, chợ Kim Biên, chợ An Đông, Bệnh viện Chợ Rẫy, Đại học Sài Gòn.
+- "khu chợ" / "khu sung" = đông đúc buôn bán; "khu yên tĩnh" ngược lại.
+
+KẾT CẤU NHÀ
+- "tấm" = một sàn bê tông đúc: "nhà 4 tấm" = trệt + 3 lầu; "1 trệt 2 lầu" = 3 tầng; "trệt lửng 2 lầu ST" = trệt + lửng + 2 lầu + sân thượng.
+- "ST" = sân thượng; "gác lửng" / "lửng" = tầng nửa, trần thấp; "gác gỗ" = gác tạm, không phải sàn bê tông; "hầm" = tầng hầm để xe.
+- "đúc thật" = sàn bê tông cốt thép; "đúc giả" = sàn giả, nhẹ và rẻ hơn.
+- "nhà nát" = mua chủ yếu lấy đất, nhà cũ đập bỏ; "nhà cấp 4" = nhà trệt mái tôn/ngói; "nhà nguyên căn" = thuê/bán cả căn, không chia phòng.
+- Kích thước viết tắt "4x15" = ngang 4m dài 15m (~60m2); "DT" = diện tích; "DTSD" = diện tích sử dụng (tổng sàn); "DTCN" = diện tích công nhận trong sổ. Đất và sàn KHÁC nhau, mơ hồ thì hỏi lại.
+- "hoàn công" = đã đăng ký phần xây dựng vào sổ; "chưa hoàn công" = nhà xây nhưng sổ chỉ ghi đất.
+- "NT" = nội thất; "full nội thất" = có sẵn hết; "NT cơ bản" = máy lạnh, tủ bếp, nóng lạnh; "nhà thô" / "bàn giao thô" = chưa hoàn thiện.
+
+PHÁP LÝ
+- "sổ hồng" / "sổ đỏ" ở TP.HCM dân nói lẫn nhau, cùng nghĩa giấy chứng nhận; "SHR" = sổ hồng riêng (một chủ đứng tên, sang tên bình thường).
+- "sổ chung" / "đồng sở hữu" = nhiều người chung một sổ, khó vay và khó bán lại — luôn nói rõ với khách.
+- "giấy tay" = mua bán viết tay, chưa có sổ; "vi bằng" = thừa phát lại lập, KHÔNG phải giấy tờ sở hữu.
+- "thổ cư" / "ODT" = đất ở đô thị; "CLN" = đất trồng cây lâu năm (không phải đất ở).
+- "dính quy hoạch" / "quy hoạch treo" / "lộ giới" = phần đất bị hạn chế xây dựng — thuộc nhóm KHÔNG được khẳng định, phải hỏi lại chủ.
+- "chính chủ" = chủ nhà tự rao; "miễn trung gian" / "miễn tiếp cò" = chủ không muốn môi giới gọi.
+
+CHUNG CƯ
+- "PN" = phòng ngủ, "WC" = toilet ("2PN2WC"); "block" / "tháp" = toà; "tầng trung/tầng cao"; "view thoáng", "view hồ bơi".
+- "phí quản lý" tính theo m2/tháng; "officetel", "duplex", "penthouse", "shophouse" = các loại căn đặc biệt.
+
+THUÊ VÀ MẶT BẰNG
+- "cọc 1 đóng 3" = cọc 1 tháng, đóng trước 3 tháng; "giá thuê chưa VAT".
+- "sang quán" / "sang nhượng mặt bằng" = trả tiền cho người thuê cũ để lấy chỗ, KHÁC với thuê trực tiếp từ chủ.
+- "ở ghép" / "share phòng"; "giờ giấc tự do" = không khoá cửa giờ giấc; "điện 3k5" = 3.500đ/kWh.
+
+NGƯỜI TRONG NGHỀ
+- "cò" = môi giới tự do (khách hay nói xấu — đừng lặp lại từ này với khách); "ký gửi" = chủ giao tin cho môi giới rao; "dắt khách" = đưa khách đi xem; "hoa hồng" / "hoả hồng" = phí môi giới.
+
+LUẬT DÙNG TỪ ĐIỂN NÀY
+- Từ lóng nào trong danh sách thì hiểu ngầm, TUYỆT ĐỐI không hỏi lại nghĩa và không giải thích lại cho khách (khách biết rồi, hỏi lại nghe như máy).
+- Từ viết tắt KHÔNG có trong danh sách mà đụng tới GIÁ, DIỆN TÍCH hoặc PHÁP LÝ thì đừng đoán bừa — hỏi lại một câu gọn dựa trên chính con số khách vừa đưa.
+- Khi trả lời khách, viết lại bằng chữ dễ hiểu ("hẻm xe hơi" thay vì "HXH"), nhưng vẫn giữ giọng gần gũi của khu.`;
 
 // Few-shot bóc tách hồ sơ — "fine-tune nhà nghèo": câu khách thật khó + kết quả đúng.
 // Bot đọc sai kiểu câu nào → thêm ca đó vào đây, vá tức thì không cần train.
