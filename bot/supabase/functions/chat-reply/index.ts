@@ -1148,8 +1148,12 @@ Deno.serve(async (req) => {
     }
   }
   if (Object.keys(delta).length > 0) {
-    await client.from("buyers")
-      .update({ preferences: { ...prefs, ...delta } }).eq("id", buyer.id);
+    // FR-163: trộn bằng `||` phía DB (merge_buyer_prefs) thay vì ghi đè cả
+    // object {...prefs, ...delta} — bản ghi-đè là đọc-trộn-ghi kinh điển: hai
+    // lượt gối nhau là lượt sau chôn mất delta lượt trước bằng prefs cũ.
+    const { error: prefErr } = await client
+      .rpc("merge_buyer_prefs", { p_buyer_id: buyer.id, p_delta: delta });
+    if (prefErr) await ghiLoi(client, "chat-reply merge_buyer_prefs", prefErr.message);
   }
   if (out.profile.name && !buyer.name) {
     await client.from("buyers").update({ name: out.profile.name }).eq("id", buyer.id);

@@ -435,3 +435,35 @@ Bẫy đã gặp: `now()` của Postgres cố định theo TRANSACTION — hai l
 `ghi_su_kien_inbound` trong cùng một request thì `last_seen_at` không nhích dù
 có `pg_sleep`; muốn thấy timestamp khác nhau phải gọi ở hai request rời.
 
+### TS-TOANVEN — toàn vẹn dữ liệu tầng DB (FR-163)
+
+Chạy bằng MỘT khối DO trên DB test, bắt exception cho các ca "phải bị chặn",
+kết quả ghi vào bảng tạm rồi đọc ra (RAISE NOTICE không về được qua MCP).
+
+| Mã | Kịch bản | Kỳ vọng |
+|---|---|---|
+| 01 | Fact `so_phong_ngu` "3 phòng" rồi SỬA "4 phòng ngủ" | `bedrooms = 4` — fact mới nhất thắng |
+| 02a | Fact `dien_tich_tim_tuong` "120m2" | `area_m2` KHÔNG đổi (tim tường ≠ đất/sàn) |
+| 02b | Fact `dien_tich` "50m2" | `area_m2 = 50` |
+| 03 | Fact `loai_bds` "nhà phố ạ" | `property_type=nha_pho` + `property_type_source=chu_xac_nhan` |
+| 04 | UPDATE thẳng `price_vnd = 999` | Bị trigger đè lại = `parse_vnd(price_raw)` |
+| 05a | INSERT 2 deals cùng (listing, buyer NULL) | 23505 — **lần chạy đầu FAIL** vì unique thường coi NULL ≠ NULL, chữa bằng `NULLS NOT DISTINCT` rồi PASS |
+| 05b | DELETE deal có `closed_at` | Trigger raise |
+| 05c | Gỡ `closed_at` rồi DELETE | Được — đường thoát hai bước tường minh |
+| 06a | Viewing không có cả `listing_id` lẫn `listing_code` | CHECK chặn |
+| 06b | Viewing chỉ có `listing_code` | Được (trước đây NOT NULL nuốt mất lịch) |
+| 06c | Viewing `status='tùm lum'` | CHECK chặn |
+| 07a | Conversation có CẢ buyer lẫn seller | CHECK một-vai chặn |
+| 07b | Seller thứ hai hội thoại | Unique chặn |
+| 08 | Reminder `cancelled` bị UPDATE thành `sent` | Revert êm: vẫn `cancelled`, `sent_at` không bị đóng dấu |
+| 09 | Ledger `completed` bị hạ xuống `failed` | Raise |
+
+Đã chạy 28/08/2026: **15/15 đạt** (05a qua hai vòng như ghi trên). EXPLAIN
+`where conversation_id order by seq desc limit 12` → `Index Scan using
+messages_conv_seq_idx`, hết nút Sort. E2E trên chat-reply v39: hồ sơ buyer
+merge qua `merge_buyer_prefs` sống, và model bóc đủ 5 trường — **key
+Anthropic đã có credit lại** (OPEN-30 hạ nhiệt, vẫn nên bọc try/catch nhánh
+seller). Security advisor: không cảnh báo MỚI nào ngoài search_path +
+execute-quyền của chính các hàm guard vừa tạo — đã vá trong (10) của
+migration; các cảnh báo còn lại đều có từ trước (log_loi mở anon là chủ đích).
+
