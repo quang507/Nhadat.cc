@@ -408,3 +408,30 @@ messages test xoá hết.
 Lưu ý khi test lại: CTE nhiều nhánh gọi `claim_inbound` trong CÙNG một
 statement chạy không theo thứ tự viết — tách từng lệnh, đừng gộp `with`.
 
+### TS-IDEM2 — sự kiện tách khỏi job, exactly-once chiều gửi, thứ tự tất định (FR-162 phần 2)
+
+Cùng harness với TS-IDEM (đường buyer + fallback, đo `bot_usage.model_calls`).
+Chín kịch bản ứng thẳng với yêu cầu "provider giao trùng thì business effect
+chỉ chạy MỘT lần":
+
+| Mã | Kịch bản | Kỳ vọng |
+|---|---|---|
+| TS-IDEM2-A | Cùng webhook giao 2 lần | Lần 2 `replayed` + nguyên câu trả lời; quota +0 |
+| TS-IDEM2-B | Cùng webhook giao 10 lần | 1 dòng `messages`, attempts 1, 9/9 replay; quota cả cụm **+1** |
+| TS-IDEM2-C | 2 bản sao đến ĐỒNG THỜI | Một bên trả lời đủ, bên kia `in_flight` rỗng; 1 dòng messages |
+| TS-IDEM2-D | Worker retry sau `failed` | Xử lý THẬT, attempts +1, messages vẫn 1 dòng; quota +1 (đúng luật) |
+| TS-IDEM2-E | Chết SAU khi AI chạy, TRƯỚC commit (`processing` kẹt, reply chưa lưu, lùi 200 s) | Reclaim sau 150 s → xử lý thật, reply được lưu, messages vẫn 1 dòng |
+| TS-IDEM2-F | Chết SAU commit, TRƯỚC ack (caller mất response, gọi lại) | Replay nguyên payload, không business effect mới |
+| TS-IDEM2-G | Lần trước GỬI HỤT (`send_error` có, `sent_at` trống) | Replay với `already_sent=false` → kênh ĐƯỢC gửi lại |
+| TS-IDEM2-H | Lần trước gửi THÀNH CÔNG (`sent_at` có), provider giao trùng | Replay với `already_sent=true` → webhook IM, khách không nhận đúp |
+| TS-IDEM2-I | Cùng event giao nhiều lần, timestamp giao khác nhau | `inbound_events` MỘT dòng, `delivery_count` đếm đủ, payload giữ bản đầu, `last_seen_at` nhích |
+
+Đã chạy thật 28/08/2026 trên chat-reply **v38** + zalo-webhook **v9** +
+migration `20260827n`: **9/9 đạt**. Quota cả phiên `11 → 16` = đúng 5 lượt xử
+lý thật (A-lần-1, B-lần-1, C-bên-thắng, D-retry, E-retry); mọi duplicate +0.
+Dọn sạch: `inbound_ledger` và `inbound_events` về 0, buyer test xoá hết.
+
+Bẫy đã gặp: `now()` của Postgres cố định theo TRANSACTION — hai lần gọi
+`ghi_su_kien_inbound` trong cùng một request thì `last_seen_at` không nhích dù
+có `pg_sleep`; muốn thấy timestamp khác nhau phải gọi ở hai request rời.
+

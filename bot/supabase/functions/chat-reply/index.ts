@@ -307,14 +307,18 @@ Deno.serve(async (req) => {
       .rpc("claim_inbound", { p_msg_id: msgId }).single();
     const soRow = so as {
       r_state?: string; r_reply?: Record<string, unknown> | null; r_attempts?: number;
+      r_sent_at?: string | null;
     } | null;
     if (soErr || !soRow?.r_state) {
       await ghiLoi(client, "chat-reply claim_inbound",
         soErr?.message ?? "không trả về r_state");
     } else if (soRow.r_state === "completed") {
+      // `already_sent` = lần trước MỌI bong bóng đã tới Zalo (webhook ghi
+      // sent_at). Kênh dựa vào cờ này để exactly-once chiều gửi: provider giao
+      // trùng thì im (khách không nhận đúp), gửi hụt lần trước thì gửi lại.
       return jsonResponse({
         reply: null, replies: [], ...(soRow.r_reply ?? {}),
-        deduped: true, replayed: true,
+        deduped: true, replayed: true, already_sent: !!soRow.r_sent_at,
       });
     } else if (soRow.r_state === "in_flight") {
       return jsonResponse({ reply: null, replies: [], deduped: true, in_flight: true });
@@ -825,7 +829,7 @@ Deno.serve(async (req) => {
     conversation_id: convId, sender: "buyer",
     body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
     zalo_msg_id: msgId,
-  }).select("id").single();
+  }).select("id, seq").single();
   if (msgErr?.code === "23505" && !(coSo && soAttempts > 1)) {
     // Trùng từ THỜI TRƯỚC SỔ — lượt cũ đã trả lời rồi, đừng trả lời lần hai.
     // Chốt sổ completed-rỗng để retry sau không quay lại đây.
@@ -835,13 +839,13 @@ Deno.serve(async (req) => {
     return await baoHong({ error: msgErr.message }, 500, msgErr.message);
   }
   // 23505 khi soAttempts > 1: lượt trước của chính msg_id này chết giữa chừng,
-  // tin khách ĐÃ nằm trong messages — lấy lại id dòng cũ (check nhường-lượt
+  // tin khách ĐÃ nằm trong messages — lấy lại seq dòng cũ (check nhường-lượt
   // FR-131 bên dưới cần nó) rồi đi tiếp trả lời nốt, đừng nuốt.
-  let insMsgId = insMsg?.id ?? null;
-  if (!insMsgId && msgId) {
-    const { data: cu } = await client.from("messages").select("id")
+  let insMsgSeq = insMsg?.seq ?? null;
+  if (insMsgSeq == null && msgId) {
+    const { data: cu } = await client.from("messages").select("seq")
       .eq("zalo_msg_id", msgId).maybeSingle();
-    insMsgId = cu?.id ?? null;
+    insMsgSeq = cu?.seq ?? null;
   }
   await client.from("conversations")
     .update({ last_message_at: new Date().toISOString() }).eq("id", convId);
@@ -892,11 +896,15 @@ Deno.serve(async (req) => {
   // FR-131: KHÔNG delay nhân tạo (quyết định chủ dự án 25/08 — "càng nhanh càng
   // tốt"). Chỉ giữ check nhường-lượt: tin mới hơn của cùng khách đã vào trong
   // lúc xử lý thì lượt này im, lượt của tin cuối trả lời trên ngữ cảnh gộp.
+  // "Tin mới nhất" xếp theo `seq` (identity DB cấp, không bao giờ hoà) chứ
+  // không theo `created_at` — hai tin cùng mili-giây là created_at bốc thăm.
+  // Lượt này vẫn xử lý ĐÚNG tin của nó (insMsgSeq), không lấy "tin mới nhất"
+  // làm danh tính; câu này chỉ quyết định NHƯỜNG hay không.
   const { data: newest } = await client
-    .from("messages").select("id")
+    .from("messages").select("seq")
     .eq("conversation_id", convId).eq("sender", "buyer")
-    .order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (newest && insMsgId && newest.id !== insMsgId) {
+    .order("seq", { ascending: false }).limit(1).maybeSingle();
+  if (newest && insMsgSeq != null && (newest.seq as number) > insMsgSeq) {
     // Completed-rỗng là ĐÚNG cả với sổ: tin này được lượt của tin cuối trả lời
     // trên ngữ cảnh gộp — phát lại rỗng, không phát lại đôi.
     return await hoanTat({ reply: null, replies: [], superseded: true });
@@ -932,7 +940,7 @@ Deno.serve(async (req) => {
 
   const [{ data: history }, { data: listings }, { data: partnerProj }, { data: matchedProj }, { data: askedListings }, { data: askedPhotos }] = await Promise.all([
     client.from("messages").select("sender, body")
-      .eq("conversation_id", convId).order("created_at", { ascending: false }).limit(12),
+      .eq("conversation_id", convId).order("seq", { ascending: false }).limit(12),
     khoQ,
     // FR-132: dự án nhà mình phân phối trực tiếp — luôn đứng đầu khối dự án
     client.from("projects")

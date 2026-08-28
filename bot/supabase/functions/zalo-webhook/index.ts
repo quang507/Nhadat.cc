@@ -49,6 +49,11 @@ async function handleEvent(raw: string): Promise<void> {
   // Bộ não từ chối (403 cổng FR-151, 429 trần model, lỗi model…) → khách KHÔNG
   // nhận được câu trả lời nào, mà webhook đã trả 200 cho Zalo từ lâu. Ghi sổ.
   if (out?.error) return await ghiLoi(client, "zalo-webhook brain", out.error, brain.status);
+  // FR-162: exactly-once chiều GỬI. Replay + already_sent = câu trả lời này
+  // ĐÃ tới tay khách ở lần giao trước — provider giao trùng thì im, đừng bắn
+  // đúp bong bóng. already_sent còn trống (lần trước gửi hụt / chưa kịp gửi)
+  // thì đi tiếp: đây chính là đường retry outbound.
+  if (out?.replayed && out?.already_sent) return;
   const bubbles: string[] = Array.isArray(out?.replies) && out.replies.length
     ? out.replies
     : out?.reply
@@ -121,6 +126,28 @@ Deno.serve(async (req) => {
       console.log("zalo-webhook: sai chữ ký, từ chối");
       return new Response("invalid signature", { status: 401 });
     }
+  }
+
+  // FR-162: ghi SỰ KIỆN vào sổ `inbound_events` TRƯỚC khi ack — verify xong →
+  // insert idempotent (PK event_id, giao trùng chỉ tăng delivery_count) →
+  // commit → 200 → xử lý nền. Instance chết ngay sau ack thì vẫn còn nguyên
+  // payload trong sổ để xử lý lại, không mất tin không dấu vết.
+  // Ghi hụt thì vào bot_errors rồi VẪN ack + xử lý — sổ sự kiện là lưới an
+  // toàn, không phải cổng chặn.
+  try {
+    const ev = JSON.parse(raw);
+    const evMsgId = ev?.message?.msg_id ? String(ev.message.msg_id) : null;
+    const evText = ev?.event_name === "user_send_text" || ev?.event_name === "user_send_image";
+    if (evText && evMsgId) {
+      const { error: seErr } = await client.rpc("ghi_su_kien_inbound", {
+        p_event_id: evMsgId,
+        p_zalo_user_id: String(ev?.sender?.id ?? ""),
+        p_payload: ev,
+      });
+      if (seErr) await ghiLoi(client, "zalo-webhook ghi_su_kien", seErr.message);
+    }
+  } catch (e) {
+    await ghiLoi(client, "zalo-webhook ghi_su_kien", e);
   }
 
   // Trả 200 ngay, xử lý nền (SRS-4.4: <1s).

@@ -120,7 +120,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-159 | UF-04, UF-05 | — | *chưa dựng* — mặc định hiện tại: người lạ không có dòng `sellers` thì `chat-reply` đi thẳng nhánh buyer, đúng ý FR-159 nhưng chưa có câu hỏi mở đầu phân vai | — |
 | FR-160 | UF-09 | — | *chưa dựng* — chờ OPEN-28 chốt phí trước khi suy `seller_type` từ số tin | — |
 | FR-161 | UF-04, UF-05, UF-09 | — | `boDau()`/`CO_DAU_RE` + mọi cổng hai chế độ trong `chat-reply` (hoiMua, wantsSell, PROMISE_RE_KD, ward/price, regexProfileFallback, mapDue, budgetRangeVnd); SQL `bo_dau()` + `guess_property_type(_answer)` hai chế độ; migration `20260827l_bo_dau_guess_property.sql` | TS-KD-01…05 |
-| FR-162 | UF-04, UF-05 | — | bảng `inbound_ledger` + RPC `claim_inbound` (migration `20260827m_so_inbound_idempotency.sql`); `chat-reply` (claim trước quota, helper `hoanTat`/`baoHong` ở mọi đường ra, 23505 đi tiếp khi `attempts > 1`); `zalo-webhook` (retry gửi + ghi `sent_at`/`send_error`); `bridge-zca/index.mjs` (poll khi `in_flight`) | TS-IDEM-01…10 |
+| FR-162 | UF-04, UF-05 | — | bảng `inbound_ledger` + RPC `claim_inbound` (migration `20260827m_so_inbound_idempotency.sql`); bảng `inbound_events` + RPC `ghi_su_kien_inbound` + cột `messages.seq` (unique) + `claim_inbound` trả `r_sent_at` (migration `20260827n_su_kien_inbound_va_thu_tu.sql`); `chat-reply` (claim trước quota, helper `hoanTat`/`baoHong` ở mọi đường ra, 23505 đi tiếp khi `attempts > 1`, cờ `already_sent`, nhường-lượt so `seq`); `zalo-webhook` (ghi sự kiện trước ack, retry gửi + ghi `sent_at`/`send_error`, im khi replay đã `already_sent`); `bridge-zca/index.mjs` (poll khi `in_flight`) | TS-IDEM-01…10, TS-IDEM2-A…I |
 | FR-97 | *[deprecated → FR-109]* | — | — | — |
 
 ## 8.4 Rủi ro → biện pháp
