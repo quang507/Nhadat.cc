@@ -416,7 +416,17 @@ Deno.serve(async (req) => {
       /(co|con)\s*can nao|xem nha|coi nha|tu van (mua|thue)/.test(tKD);
 
   if (sellerRow && !hoiMua) {
-    const anthropicS = await anthropicClient(client);
+    // OPEN-30 → đóng: model là NGƯỜI SOẠN CÂU CHỮ, không phải điều kiện sống
+    // của nhánh. Key hỏng/hết credit thì mọi lệnh gọi bên dưới rơi về câu mẫu
+    // tất định — chủ nhà không bao giờ nhận im lặng + 500 như trước, và lỗi
+    // vào sổ qua ghiLoi (FR-152) thay vì xuyên thẳng ra ngoài không dấu vết.
+    // Nhánh mua đã làm đúng bài này từ đầu; đây là đưa nhánh bán về cùng chuẩn.
+    let anthropicS: Awaited<ReturnType<typeof anthropicClient>> | null = null;
+    try {
+      anthropicS = await anthropicClient(client);
+    } catch (e) {
+      await ghiLoi(client, "chat-reply anthropic(seller)", e);
+    }
 
     // FR-141/FR-152 — hội thoại NGƯỜI BÁN cũng phải vào sổ.
     // Trước bản này nhánh seller trả lời rồi `return` thẳng, không ghi dòng nào
@@ -643,24 +653,41 @@ Deno.serve(async (req) => {
         : published
         ? `Người bán vừa trả lời: "${text}". Tin #${lstNow?.code ?? ""} giờ đã đủ thông tin và ĐÃ LÊN WEB nhadat.cc. Soạn MỘT tin NGẮN cảm ơn + báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG hỏi thêm thông tin nào nữa.`
         : `Người bán vừa trả lời câu hỏi cuối: "${text}". Soạn MỘT tin NGẮN cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem anh chị còn muốn bổ sung gì không.`;
-      const r2 = await anthropicS.messages.create({
-        model: MODEL, max_tokens: 512,
-        output_config: { effort: "low" },
-        system: [{
-          type: "text",
-          text: TONE + "\n\n" + SELLER_SCRIPT,
-          cache_control: { type: "ephemeral" },
-        }],
-        messages: [{ role: "user", content: prompt }],
-      });
-      const sellerReply = r2.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+      // OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định — vòng drip không
+      // đứng lại chờ model sống. Câu mẫu CÓ hỏi thật (kèm neo căn) nên mở
+      // info_request bên dưới vẫn đúng luật "không mở khi chưa hỏi được".
+      let sellerReply: string | null = null;
+      if (anthropicS) {
+        try {
+          const r2 = await anthropicS.messages.create({
+            model: MODEL, max_tokens: 512,
+            output_config: { effort: "low" },
+            system: [{
+              type: "text",
+              text: TONE + "\n\n" + SELLER_SCRIPT,
+              cache_control: { type: "ephemeral" },
+            }],
+            messages: [{ role: "user", content: prompt }],
+          });
+          sellerReply = r2.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+        } catch (e) {
+          await ghiLoi(client, "chat-reply model r2(seller)", e);
+        }
+      }
+      if (!sellerReply) {
+        sellerReply = next
+          ? `Dạ em ghi nhận rồi ạ. Anh/chị cho em xin thêm ${FACT_LABELS[next.fact_key] ?? next.fact_key}${neo ? ` của căn ${neo}` : ""} nha?`
+          : published
+          ? `Dạ em cảm ơn anh/chị! Tin ${lstNow?.code ? `#${lstNow.code} ` : ""}đã đủ thông tin và lên web rồi ạ, có khách quan tâm là em báo liền.`
+          : `Dạ em cảm ơn anh/chị, tin rao giờ đã đầy đủ thông tin. Có khách quan tâm là em báo anh/chị ngay ạ.`;
+      }
 
       if (next && sellerReply) {
         await client.from("info_requests").insert({
           listing_id: pendingReq.listing_id, question: next.fact_key, status: "pending",
         });
       }
-      return await traLoiSeller(sellerReply ? [sellerReply] : [], {
+      return await traLoiSeller([sellerReply], {
         saved_fact: pendingReq.question,
       });
     }
@@ -752,26 +779,40 @@ Deno.serve(async (req) => {
             listing_id: newLst.id, question: firstKey, status: "pending",
           });
         }
-        const r1 = await anthropicS.messages.create({
-          model: MODEL, max_tokens: 512,
-          output_config: { effort: "low" },
-          system: [{
-            type: "text",
-            text: TONE + "\n\n" + SELLER_SCRIPT,
-            cache_control: { type: "ephemeral" },
-          }],
-          messages: [{
-            role: "user",
-            content:
-              `Chính chủ vừa nhắn rao: "${text}". Em đã tạo tin #${newLst.code}. ` +
-              `Soạn MỘT tin NGẮN (~35 từ): khen một điểm mạnh thật của BĐS + báo em đã ghi nhận tin rao` +
-              (firstKey
-                ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey}. Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
-                : ` và sẽ đăng lên web ngay.`),
-          }],
-        });
-        const raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ??
-          `Dạ em nhận tin rao rồi ạ, em tạo tin #${newLst.code} và sẽ hỏi thêm vài thông tin để đăng cho đẹp nha.`;
+        // OPEN-30: tin rao ĐÃ tạo xong (mã đã cấp) — model chỉ soạn lời chào.
+        // Model hỏng thì chào bằng câu mẫu, kèm luôn câu hỏi đầu nếu có.
+        let raoReply: string | null = null;
+        if (anthropicS) {
+          try {
+            const r1 = await anthropicS.messages.create({
+              model: MODEL, max_tokens: 512,
+              output_config: { effort: "low" },
+              system: [{
+                type: "text",
+                text: TONE + "\n\n" + SELLER_SCRIPT,
+                cache_control: { type: "ephemeral" },
+              }],
+              messages: [{
+                role: "user",
+                content:
+                  `Chính chủ vừa nhắn rao: "${text}". Em đã tạo tin #${newLst.code}. ` +
+                  `Soạn MỘT tin NGẮN (~35 từ): khen một điểm mạnh thật của BĐS + báo em đã ghi nhận tin rao` +
+                  (firstKey
+                    ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey}. Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
+                    : ` và sẽ đăng lên web ngay.`),
+              }],
+            });
+            raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+          } catch (e) {
+            await ghiLoi(client, "chat-reply model r1(seller)", e);
+          }
+        }
+        if (!raoReply) {
+          raoReply = `Dạ em nhận tin rao rồi ạ, em tạo tin #${newLst.code}.` +
+            (firstKey
+              ? ` Anh/chị cho em xin thêm ${FACT_LABELS[firstKey] ?? firstKey} để em đăng cho đẹp nha?`
+              : ` Em sẽ đăng lên web ngay ạ.`);
+        }
         return await traLoiSeller([raoReply], { listing_code: newLst.code });
       }
     }
@@ -787,25 +828,34 @@ Deno.serve(async (req) => {
     const lstLines = (sellerLst ?? [])
       .map((l) => `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? "?"}`)
       .join("\n");
-    const r3 = await anthropicS.messages.create({
-      model: MODEL, max_tokens: 512,
-      output_config: { effort: "low" },
-      system: [{
-        type: "text",
-        text: TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + FEES,
-        cache_control: { type: "ephemeral" },
-      }],
-      messages: [{
-        role: "user",
-        content:
-          `NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
-          `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN — tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
-          `Không bịa tình trạng tin/lượt khách quan tâm; điều chưa nắm thì nói "để em kiểm tra rồi báo lại anh/chị liền".`,
-      }],
-    });
-    const sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ??
-      "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha.";
-    return await traLoiSeller([sReply]);
+    // OPEN-30: chăm sóc chung — model hỏng thì ghi nhận bằng câu mẫu.
+    let sReply: string | null = null;
+    if (anthropicS) {
+      try {
+        const r3 = await anthropicS.messages.create({
+          model: MODEL, max_tokens: 512,
+          output_config: { effort: "low" },
+          system: [{
+            type: "text",
+            text: TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + FEES,
+            cache_control: { type: "ephemeral" },
+          }],
+          messages: [{
+            role: "user",
+            content:
+              `NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
+              `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN — tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
+              `Không bịa tình trạng tin/lượt khách quan tâm; điều chưa nắm thì nói "để em kiểm tra rồi báo lại anh/chị liền".`,
+          }],
+        });
+        sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+      } catch (e) {
+        await ghiLoi(client, "chat-reply model r3(seller)", e);
+      }
+    }
+    return await traLoiSeller([
+      sReply ?? "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha.",
+    ]);
   }
 
   // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130).
