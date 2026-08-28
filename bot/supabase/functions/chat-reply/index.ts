@@ -559,40 +559,158 @@ Deno.serve(async (req) => {
         due_at: mapDue(text), note: text.slice(0, 200),
       });
     }
+    // ─── CỔNG CÂU RAO MỚI (dùng ở khối `wantsSell` bên dưới; tính SỚM vì bộ
+    // bắt-lời-sửa FR-164 ngay sau đây phải biết "đây có phải câu rao mới không"
+    // — câu rao cũng chứa "giá …", "phường …", nếu không hỏi cổng này trước thì
+    // câu rao mới bị hiểu thành lời sửa tin cũ và không tin nào được tạo).
+    //
+    // \b cuối cụm chặn "cho thuê": "ê" ngoài ASCII nên sau nó không bao giờ là
+    // biên từ → MỌI câu rao CHO THUÊ từng rơi âm thầm, không tạo tin.
+    // FR-158 — cổng KHÔNG còn bắt buộc có giá/diện tích: câu rao trần trụi
+    // ("anh muốn bán căn nhà") từng trượt vế thứ ba và bay mất, trong khi cả
+    // điểm của vòng drip là hỏi cho ĐỦ những thứ còn thiếu. Nới thì phải có thứ
+    // khác gánh dương-tính-giả — thứ đó là THỨ TỰ TỪ: "nhà mình bán chưa em?"
+    // có đủ "bán" lẫn "nhà" nhưng không có cặp "bán nhà"/"muốn bán".
+    // FR-161: mỗi vế hai bản có-dấu/không-dấu, chọn theo tin.
+    const coChiTiet = coDauTin
+      ? /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text)
+      : /[\d][\d.,]*\s*(ty|ti|toi|trieu|tr(?![a-z]))|\d+\s*m2|\bhem\b|mat tien|phuong/.test(tKD);
+    const coYDinhRao = coDauTin
+      ? /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe])/i.test(text) ||
+        /(bán|rao|cho thu[êe])\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i
+          .test(text)
+      : /(muon|can|dang|nho|ky gui)\s+(ban|cho thue)\b/.test(tKD) ||
+        /(ban|rao|cho thue)\s+(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|can)\b/
+          .test(tKD);
+    // Chỉ chặn câu hỏi tình trạng khi câu KHÔNG kèm chi tiết thật nào.
+    const laCauHoiTinhTrang = coDauTin
+      ? /(chưa|sao r[oồ]i|th[eế] n[aà]o|ra sao|đư[ơợ]c không|đc ko|xong ch[uư]a)/i.test(text)
+      : /(chua|sao roi|the nao|ra sao|duoc khong|dc ko|xong chua)/.test(tKD);
+    const wantsSell = (coDauTin
+        ? /\b(bán|rao)\b|cho thu[êe]/i.test(text) &&
+          /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text)
+        : /\b(ban|rao)\b|cho thue/.test(tKD) &&
+          /(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|\bcan\b)/.test(tKD)) &&
+      (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang));
+
+    // ─── FR-164: CHỦ NHÀ SỬA THÔNG TIN GIỮA CHỪNG.
+    // "à giá 6.8 tỷ nha em", "nhà ở phường 12 chứ không phải 8" — trước bản này
+    // KHÔNG có đường nào nhận: đang có câu hỏi chờ thì lời sửa bị ghi thành câu
+    // TRẢ LỜI cho câu hỏi đó (sai chỗ), không có thì rơi xuống nhánh chăm sóc
+    // chung rồi bay mất. Mà giá và phường là hai trong ba trường quyết định tin
+    // có được lên kệ hay không.
+    //
+    // CHỈ bắt khi câu có NHÃN tường minh ("giá …", "phường …", "… phòng ngủ",
+    // "diện tích …"). Câu trả lời cho drip thường KHÔNG lặp nhãn ("50m2", "sổ
+    // hồng") nên hai đường không giẫm chân nhau; ai có lặp nhãn đúng lúc đang
+    // được hỏi chính trường đó thì nhường hẳn cho đường drip bên dưới.
+    // Ghi qua `ghi_fact_listing` — cửa fact duy nhất; chuẩn hoá, kiểm giá trị và
+    // đo bậc ưu tiên đều nằm ở tầng DB, không chép luật lên đây.
+    const suaFacts: Array<[string, string]> = [];
+    if (!wantsSell) {
+      const mGia =
+        /gi[áa]\s*[^0-9]{0,12}?([\d][\d.,]*\s*(?:tỷ|tỉ|tỏi|triệu|ty|ti|toi|trieu|tr)(?![a-zA-ZÀ-ỹ])[^,.;\n]*)/i
+          .exec(text);
+      // Đuôi `[^,.;\n]*` giữ phần CÓ NGHĨA đi sau đơn vị ("6 tỷ 8", "5 tỷ
+      // thương lượng"), nhưng cũng vơ luôn tiểu từ cuối câu ("6.8 tỷ nha em").
+      // KHÔNG cắt ở đây: chuỗi này là bằng chứng thô, còn `price_raw` do
+      // `chuan_hoa_gia_raw()` ở tầng DB gọt — một luật, một chỗ, và mọi cửa ghi
+      // (form admin, câu trả lời drip) đều đi qua nó chứ không riêng cửa này.
+      if (mGia) suaFacts.push(["gia", mGia[1].trim()]);
+      const mPhuong = /(?:phường|phuong)\s*\.?\s*(\d{1,2})\b/i.exec(text);
+      if (mPhuong) suaFacts.push(["phuong", `Phường ${mPhuong[1]}`]);
+      const mPN = /(\d{1,2})\s*(?:phòng ngủ|phong ngu|\bpn\b)/i.exec(text);
+      if (mPN) suaFacts.push(["so_phong_ngu", mPN[1]]);
+      const mDT =
+        /(?:diện tích|dien tich|\bdt\b)\s*[^0-9]{0,8}?(\d{1,4}(?:[.,]\d+)?)\s*m2?/i.exec(text);
+      if (mDT) suaFacts.push(["dien_tich", `${mDT[1]}m2`]);
+    }
+    // Trường nào đang là câu hỏi chờ thì để đường drip xử — tránh vừa ghi lời
+    // sửa vừa bỏ lửng câu hỏi đang treo.
+    const suaThat = suaFacts.filter(([k]) =>
+      !(pendingReq &&
+        (k === pendingReq.question ||
+          (k === "dien_tich" && /^dien_tich/.test(pendingReq.question)))));
+
+    if (suaThat.length) {
+      // Neo đúng CĂN theo cùng thứ tự tin cậy của FR-157: mã chủ tự nhắc > căn
+      // bot đang hỏi > căn của câu hỏi chờ > tin mới nhất của người này.
+      let suaId: string | null = null;
+      if (codeInText) {
+        const { data: cl } = await client.from("listings").select("id")
+          .eq("code", codeInText).eq("seller_id", sellerRow.id).maybeSingle();
+        suaId = cl?.id ?? null;
+      }
+      suaId = suaId ?? sellerRow.active_listing_id ?? pendingReq?.listing_id ?? null;
+      if (!suaId) {
+        const { data: ml } = await client.from("listings").select("id")
+          .eq("seller_id", sellerRow.id).order("created_at", { ascending: false })
+          .limit(1).maybeSingle();
+        suaId = ml?.id ?? null;
+      }
+      if (suaId) {
+        const NHAN: Record<string, string> = {
+          gia: "giá", phuong: "phường",
+          so_phong_ngu: "số phòng ngủ", dien_tich: "diện tích",
+        };
+        const daGhi: string[] = [];
+        for (const [k, v] of suaThat) {
+          const { error: fErr } = await client.rpc("ghi_fact_listing", {
+            p_listing_id: suaId, p_question: k, p_answer: v, p_source: "seller_chat",
+          });
+          if (fErr) await ghiLoi(client, `chat-reply ghi_fact_listing(${k})`, fErr.message);
+          // Giá trị đã tự mang nhãn ("Phường 3") thì đừng dán nhãn lần nữa —
+          // "phường Phường 3" đọc như máy hỏng.
+          else {
+            const nhan = NHAN[k] ?? k;
+            daGhi.push(
+              boDau(v).startsWith(boDau(nhan)) ? v : `${nhan} ${v}`,
+            );
+          }
+        }
+        if (daGhi.length) {
+          return await traLoiSeller(
+            [`Dạ em cập nhật lại rồi ạ: ${daGhi.join(", ")}. Cảm ơn anh/chị đã báo em nha!`],
+            { sua_fact: suaThat.map(([k]) => k) },
+          );
+        }
+      }
+    }
+
     // Seller gửi ẢNH không kèm chữ → ghi nhận ảnh, TUYỆT ĐỐI không coi chuỗi
     // rỗng là "câu trả lời" cho câu hỏi đang chờ (từng làm mất fact pháp lý)
     if (!text && imageUrl) {
       if (pendingReq) {
-        await client.from("listing_facts").insert({
-          listing_id: pendingReq.listing_id, question: "hinh_anh",
-          answer: `[ảnh] ${imageUrl}`, source: "seller_chat",
+        // FR-164: qua cửa fact chung như mọi bằng chứng khác.
+        const { error: aErr } = await client.rpc("ghi_fact_listing", {
+          p_listing_id: pendingReq.listing_id, p_question: "hinh_anh",
+          p_answer: `[ảnh] ${imageUrl}`, p_source: "seller_chat",
         });
+        if (aErr) await ghiLoi(client, "chat-reply ghi_fact_listing(anh)", aErr.message);
       }
       const thanks =
         "Dạ em nhận được ảnh rồi ạ, em bổ sung vào tin ngay. Cảm ơn anh/chị nhiều!";
       return await traLoiSeller([thanks]);
     }
     if (pendingReq) {
-      // Câu trả lời nào cập nhật thẳng một CỘT của listings thì ghi cột TRƯỚC,
-      // ghi fact sau: trigger đẩy-lên-web đọc được giá trị mới ngay lượt này.
-      if (/^dien_tich/.test(pendingReq.question)) {
-        const areaM = /([\d]+(?:[.,]\d+)?)\s*(?:m2|m²|mét)?/i.exec(text);
-        const areaV = areaM ? parseFloat(areaM[1].replace(",", ".")) : NaN;
-        if (Number.isFinite(areaV) && areaV > 5 && areaV < 5000) {
-          await client.from("listings").update({ area_m2: areaV }).eq("id", pendingReq.listing_id);
-        }
-      }
-      // Tin "chưa rõ loại" vừa được khai loại → ghi vào cột, lượt sau
-      // listing_missing_facts tự đổi sang đúng bộ câu hỏi của loại đó.
-      // Dùng hàm DB (FR-150) — một bộ trích xuất chung cho trigger/backfill/chat;
-      // bản _answer nhận cả từ cụt ("đất", "trọ") vì đây là câu TRẢ LỜI đúng
-      // câu hỏi loại, không phải cả câu rao.
+      // FR-164: KHÔNG còn ghi thẳng cột ở đây nữa.
+      // Trước bản này khối này tự UPDATE `area_m2` rồi `property_type` trước khi
+      // ghi fact — một nhà chức trách THỨ HAI ghi đúng những cột mà trigger fact
+      // đang ghi, và nó lách được hai luật:
+      //   * bậc ưu tiên: ghi đè bất kể cột đang do admin giữ, lại không đặt
+      //     `property_type_source` nên giá trị mới đội lốt nhãn nguồn cũ;
+      //   * luật tim-tường FR-163: `/^dien_tich/` khớp luôn `dien_tich_tim_tuong`
+      //     nên diện tích tim tường vẫn đè area_m2 của nhà phố — đúng cái chỗ
+      //     FR-163 vừa bịt ở tầng DB, thủng lại từ phía app.
+      // Nay chỉ ghi FACT; `listing_facts_sync_cols` lo chuẩn hoá, kiểm giá trị,
+      // đo bậc ưu tiên và đặt nhãn nguồn. Một luật, một chỗ.
+      //
+      // Riêng loai_bds vẫn hỏi hàm DB TRƯỚC, nhưng chỉ để quyết định có HỎI LẠI
+      // không — không ghi cột. Dùng hàm DB (FR-150/FR-164) nên câu có phủ định
+      // ("nhà phố chứ không phải chung cư") cũng đọc đúng.
       if (pendingReq.question === "loai_bds") {
         const { data: pt } = await client.rpc("guess_property_type_answer", { p_text: text });
-        if (pt) {
-          await client.from("listings").update({ property_type: pt })
-            .eq("id", pendingReq.listing_id);
-        } else {
+        if (!pt) {
           // Không đọc ra loại → HỎI LẠI, giữ nguyên câu hỏi pending. TUYỆT ĐỐI
           // không ghi fact `loai_bds`: ghi xong là listing_missing_facts hết
           // hỏi, tin nằm `chua_ro` vĩnh viễn — đúng kiểu chết lặng FR-150 diệt.
@@ -602,12 +720,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      await client.from("listing_facts").insert({
-        listing_id: pendingReq.listing_id,
-        question: pendingReq.question,
-        answer: text,
-        source: "seller_chat",
+      const { error: factErr } = await client.rpc("ghi_fact_listing", {
+        p_listing_id: pendingReq.listing_id,
+        p_question: pendingReq.question,
+        p_answer: text,
+        p_source: "seller_chat",
       });
+      if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
       await client.from("info_requests").update({
         status: "answered", answer: text, answered_at: new Date().toISOString(),
       }).eq("id", pendingReq.id);
@@ -691,46 +810,11 @@ Deno.serve(async (req) => {
         saved_fact: pendingReq.question,
       });
     }
-    // FR-144: chính chủ nhắn CÂU RAO MỚI (bán/cho thuê + loại BĐS, thường kèm
-    // giá) → tạo tin nháp cho_thong_tin ngay + mở vòng hỏi nhỏ giọt, hỏi tới
-    // khi đủ-để-đăng (giá + diện tích + phường, trigger FR-139 tự đẩy lên web)
-    // thì nghỉ; khách quan tâm hỏi thêm thì FR-140 mở lại vòng hỏi.
-    // \b cuối cụm chặn "cho thuê": "ê" ngoài ASCII nên sau nó không bao giờ là biên
-    // từ → MỌI câu rao CHO THUÊ từ trước tới giờ đều rơi âm thầm, không tạo tin.
-    //
-    // FR-158 — cổng KHÔNG còn bắt buộc phải có giá/diện tích. Trước bản này một
-    // câu rao trần trụi ("anh muốn bán căn nhà") trượt vế thứ ba: không sinh
-    // tin, không có mã, chủ nhà rơi xuống nhánh chăm sóc chung và câu rao bay
-    // mất — trong khi cả điểm của vòng drip là hỏi cho ĐỦ những thứ còn thiếu.
-    //
-    // Nới thì phải có thứ khác gánh chỗ dương-tính-giả. Thứ đó là THỨ TỰ TỪ,
-    // không phải danh sách từ khoá: "nhà mình bán chưa em?" có đủ cả "bán" lẫn
-    // "nhà" nhưng không có cặp "bán nhà" hay "muốn bán" — nó là câu hỏi về tin
-    // cũ, không phải câu rao mới.
-    // FR-161: mỗi vế hai bản có-dấu/không-dấu, chọn theo tin. Không dấu thì
-    // "ban" ôm cả bán/bàn/bạn — chấp nhận, vì cổng vẫn đòi ĐỦ BA VẾ mới sinh
-    // tin, và giá của chiều ngược lại (mất trắng câu rao) đắt hơn nhiều.
-    const coChiTiet = coDauTin
-      ? /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text)
-      : /[\d][\d.,]*\s*(ty|ti|toi|trieu|tr(?![a-z]))|\d+\s*m2|\bhem\b|mat tien|phuong/.test(tKD);
-    const coYDinhRao = coDauTin
-      ? /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe])/i.test(text) ||
-        /(bán|rao|cho thu[êe])\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i
-          .test(text)
-      : /(muon|can|dang|nho|ky gui)\s+(ban|cho thue)\b/.test(tKD) ||
-        /(ban|rao|cho thue)\s+(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|can)\b/
-          .test(tKD);
-    // Chỉ chặn câu hỏi tình trạng khi câu KHÔNG kèm chi tiết thật nào. Có giá
-    // hay diện tích trong câu thì cứ coi là rao, người ta hỏi han kèm kệ họ.
-    const laCauHoiTinhTrang = coDauTin
-      ? /(chưa|sao r[oồ]i|th[eế] n[aà]o|ra sao|đư[ơợ]c không|đc ko|xong ch[uư]a)/i.test(text)
-      : /(chua|sao roi|the nao|ra sao|duoc khong|dc ko|xong chua)/.test(tKD);
-    const wantsSell = (coDauTin
-        ? /\b(bán|rao)\b|cho thu[êe]/i.test(text) &&
-          /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text)
-        : /\b(ban|rao)\b|cho thue/.test(tKD) &&
-          /(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|\bcan\b)/.test(tKD)) &&
-      (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang));
+    // FR-144: chính chủ nhắn CÂU RAO MỚI → tạo tin nháp cho_thong_tin ngay + mở
+    // vòng hỏi nhỏ giọt, hỏi tới khi đủ-để-đăng (giá + diện tích + phường) thì
+    // nghỉ; khách quan tâm hỏi thêm thì FR-140 mở lại vòng hỏi.
+    // (Cổng `wantsSell` tính ở trên — FR-164 cần nó sớm để bộ bắt-lời-sửa không
+    //  nuốt mất câu rao mới.)
     if (wantsSell) {
       // Loại BĐS KHÔNG hỏi: trigger trg_listings_fill_property_type đọc chính
       // câu rao (description) mà điền (FR-150). Chỉ tin nào câu chữ không đủ

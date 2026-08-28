@@ -261,7 +261,7 @@ select s, parse_vnd(s) from unnest(array[
 | Mã | Việc | Kỳ vọng |
 |---|---|---|
 | TS-SPECS-01 | Chọn một tin `bedrooms is null`, `insert into listing_facts(listing_id,question,answer,source) values (…, 'so_phong_ngu','3PN 2wc','thu')` | `listings.bedrooms = 3` |
-| TS-SPECS-02 | Chèn tiếp `('so_phong_ngu','9 phòng')` cho chính tin đó | Vẫn **3** — chỉ ghi khi cột trống, không đè lên số đã có |
+| TS-SPECS-02 | Chèn tiếp `('so_phong_ngu','9 phòng')` cho chính tin đó | **9** — fact mới nhất thắng *[cập nhật 28/08/2026 — kỳ vọng cũ "vẫn 3, chỉ ghi khi cột trống" thuộc luật đã bỏ ở FR-163(a): nó làm mọi lời đính chính của chủ nhà rơi vào hư không. Nay chặn ghi đè là việc của bậc nguồn FR-164(a), không phải của cột-đang-trống]* |
 | TS-SPECS-03 | `('huong','Đông Nam')` trên tin `direction is null` | `direction = 'Đông Nam'`. Chuỗi dài quá 40 ký tự thì BỎ QUA (người bán kể chuyện, không phải hướng) |
 | TS-SPECS-04 | `('so_phong_ngu','ba phòng ngủ')` | `bedrooms` vẫn NULL — không có chữ số thì không đoán bừa |
 
@@ -467,3 +467,56 @@ seller). Security advisor: không cảnh báo MỚI nào ngoài search_path +
 execute-quyền của chính các hàm guard vừa tạo — đã vá trong (10) của
 migration; các cảnh báo còn lại đều có từ trước (log_loi mở anon là chủ đích).
 
+### TS-OUNG — đường ống dữ liệu tin rao (FR-164)
+
+Chạy bằng SQL trên bản live 28/08/2026 (DO block ghi kết quả vào bảng tạm —
+`RAISE NOTICE` không nổi lên qua MCP), cộng E2E qua `chat-reply` v42.
+
+| Mã | Kịch bản | Mong đợi |
+|---|---|---|
+| TS-OUNG-01 | Fact vào TRƯỚC khi cột cấu trúc được ghi | Cột theo fact, `*_source` đóng dấu đúng bậc |
+| TS-OUNG-02 | Cột cấu trúc ghi trước, fact đến sau | Fact chủ nhà (`chu_xac_nhan`) thắng, đè lên `suy_doan` |
+| TS-OUNG-03 | Hai fact cùng trường ghi đồng thời | Không mất cập nhật; giá trị cuối là fact sau, không kẹt khoá |
+| TS-OUNG-04 | Chủ sửa: giá 6.5→6.8 tỷ, DT 25→27, PN 3→4, loại chưa rõ→nhà phố, phường 1→3 | Cả năm đổi; cột đang non-NULL KHÔNG chặn giá trị mới |
+| TS-OUNG-05 | Tin thiếu giá / thiếu diện tích / thiếu phường | `listing_du_dang_tin()` false, giữ `cho_thong_tin` |
+| TS-OUNG-06 | `property_type` chưa rõ | Vẫn đăng được — loại BĐS không nằm trong ba trường quyết định |
+| TS-OUNG-07 | Loại suy ra từ mô tả | `property_type_source='suy_doan'`, phân biệt được với lời chủ |
+| TS-OUNG-08 | Chủ xác nhận loại, có phủ định: "nhà phố chứ không phải chung cư em" | `nha_pho` — **lần chạy đầu FAIL trả `chung_cu`** (nhánh `chung cư` xét trước `nhà`), chữa bằng `cat_truoc_phu_dinh()` rồi PASS |
+| TS-OUNG-09 | `parse_vnd()` không đọc được chuỗi giá | Không ghi gì; `price_raw`/`price_vnd` giữ nguyên, không sinh cặp mâu thuẫn |
+| TS-OUNG-10 | Diện tích dị dạng ("mấy chục mét") | Không ghi; fact vẫn lưu làm bằng chứng |
+| TS-OUNG-11 | Tin đủ thông tin | Tự lên `dang_ban`, một trigger quyết định |
+| TS-OUNG-12 | Tin đang bán bị gỡ mất một trường | Tự hạ về `cho_thong_tin` — đường HẠ kệ trước đây không có |
+
+Đã chạy 28/08/2026: **23/23 đạt** (ca 08 qua hai vòng như ghi trên; ca 06 FAIL
+một lần do LỖI SOẠN TEST — mô tả mẫu chứa chữ "nhà" nên FR-150 suy ra
+`nha_pho` hoàn toàn đúng, sửa mô tả rồi PASS). Bộ đua riêng 3/3. Bộ
+`chuan_hoa_gia_raw` 14/14: cắt "6.8 tỷ nha em" → "6.8 tỷ", giữ nguyên "6 tỷ 8",
+"5 tỷ thương lượng", "5 tỏi rưỡi", "20 triệu 1 tháng", "5 tỷ bao sang tên".
+
+Kiểm dữ liệu SẴN CÓ trước khi bật luật đăng tin mới: 154 tin `dang_ban` + 10
+tin `dang_quan_tam` đều đủ ba trường, 9 tin `cho_thong_tin` đều thiếu — luật
+mới khớp 100% hiện trạng, không tin nào bị đăng nhầm hay hạ nhầm.
+
+E2E trên chat-reply v42 (dữ liệu thử đã xoá sạch sau khi chạy): chủ nhắn "à em
+ơi giá 6.8 tỷ nha, phường 3 chứ không phải phường 1, 4 phòng ngủ, diện tích
+27m2" → cả bốn trường vào đúng cột, `price_source`/`ward_source` lên
+`chu_xac_nhan`, `price_raw` = "6.8 tỷ" trong khi fact giữ nguyên văn "6.8 tỷ
+nha em". Nhánh người mua vẫn chạy đủ (bóc 4 trường hồ sơ, lọc kho theo phường
++ ngân sách, trả lời có mã tin).
+
+Security advisor sau khi áp: hai cảnh báo MỚI đều do đợt này gây ra và đã vá
+bằng `20260828e` — ba hàm `bac_nguon`/`chuan_hoa_phuong`/`listing_du_dang_tin`
+chưa ghim `search_path` (chúng được gọi từ bên trong hai hàm `security
+definer`), và bảng `public.ts5_kq` là rác test của đợt TS-TOANVEN tạo nhầm
+bằng `create table` nên ở lại thật trong schema `public`. Các cảnh báo còn lại
+đều có từ trước (`log_loi` mở cho anon là chủ đích).
+
+Thử `admin_dang_tin` (chạy trong DO block rồi `raise` để cuộn lại, không để lại
+dòng nào) lộ ra một lỗ ngoài bộ test: form admin ghi `ward`/`price_raw` NGUYÊN
+XI, không đi qua `chuan_hoa_phuong`/`chuan_hoa_gia_raw` như cửa fact — cùng một
+cột hai luật trình bày. Vá bằng `20260828f`: chuẩn hoá chuyển xuống trigger
+`trg_listings_chuan_hoa_cot` trên chính `listings` nên mọi cửa ghi đều qua.
+Chạy lại: `"7 tỷ nha em"` → `"7 tỷ"`, `"phường 8"` → `"Phường 8"`, `price_vnd`
+và bậc nguồn giữ nguyên. Đếm trước khi áp: 173/173 giá trị `ward` đã đúng chuẩn
+(kể cả phường tên chữ), chỉ 9 dòng `price_raw` đổi và cả 9 là chuỗi RỖNG → NULL
+trên tin nháp — không tin nào đổi trạng thái.

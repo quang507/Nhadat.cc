@@ -98,3 +98,12 @@ câu rao cho thuê · ghiLoi trong catch). Kế hoạch test nằm MỘT chỗ �
 giống hệt repo từng dòng — kiểm bằng script đối chiếu — chỉ thiếu comment, vì
 trần payload một lượt). Repo vẫn là nguồn sự thật; lần deploy tới bằng
 `supabase functions deploy chat-reply` từ máy local sẽ tự đồng bộ bản đầy đủ.
+
+**Cập nhật 28/08/2026 — `chat-reply` đang chạy v42** (FR-164). Vẫn deploy bằng
+bản đã bỏ comment như trên; đối chiếu lần này: 1087 dòng code không-comment ở cả
+hai bên, và bản rút gọn transpile sạch trước khi gửi. Kiểm sau deploy bằng hành
+vi thật chứ không chỉ bằng việc nó bundle được: gọi cả nhánh người bán (lời sửa
+fact) lẫn nhánh người mua (bóc hồ sơ + lọc kho) trên bản đang chạy, rồi xoá sạch
+dữ liệu thử. Lưu ý khi tự gọi hàm từ SQL: `net.http_post` bỏ cuộc sau 5 s nên
+nhánh người mua (có gọi model) luôn báo timeout ở `net._http_response` — đó là
+hạn của người gọi, không phải hàm hỏng; xác nhận bằng cách soi DB.

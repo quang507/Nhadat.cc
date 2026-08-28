@@ -505,13 +505,28 @@ Cái giá của EAV là **fact nằm dạng chữ nên không lọc được**. 
 | fact_key | Cột đổ vào | Ràng buộc |
 |---|---|---|
 | `so_phong_ngu` | `listings.bedrooms` | 1…20, phải có chữ số |
-| `dien_tich*` | `listings.area_m2` | >5 và <5000 |
+| `dien_tich`, `dien_tich_dat` | `listings.area_m2` | >5 và <5000 |
+| `dien_tich_tim_tuong` | `listings.area_m2` | >5 và <5000, **chỉ khi `property_type = chung_cu`** (FR-163: tim tường của nhà phố là con số phụ, đè vào là hỏng diện tích đất) |
 | `tang` | `listings.floor` | 0…80 (0 = trệt) |
 | `huong` | `listings.direction` | độ dài 2…40 ký tự |
+| `gia` | `listings.price_raw` (+ `price_source`) | `parse_vnd()` phải đọc ra số trong 1e8…1e12; `price_vnd` do trigger giá dẫn xuất, không ghi tay (FR-164) |
+| `phuong` | `listings.ward` (+ `ward_source`) | qua `chuan_hoa_phuong()` → `Phường N` (1…25) hoặc tên chữ 2…50 ký tự (FR-164) |
+| `loai_bds` | `listings.property_type` (+ `property_type_source`) | qua `guess_property_type_answer()`; không đọc ra loại thì KHÔNG ghi, hỏi lại (FR-150/FR-164) |
 
-Tất cả **chỉ ghi khi cột đang trống** — không bao giờ đè lên số đã xác minh — và
-**không đụng `description`**: câu rao gốc là văn phong người bán, fact hiện ở
-khối "Thông tin thêm" riêng trên trang tin.
+Luật ghi đè là **bậc nguồn** `bac_nguon()` (FR-164a): `chu_xac_nhan` (3) >
+`admin` (2) > `suy_doan` (1). Fact chỉ ghi vào cột khi bậc của nó **lớn hơn hoặc
+bằng** bậc đang giữ cột, và trong cùng một bậc thì giá trị MỚI NHẤT thắng — chủ
+nhà sửa 3PN thành 4PN là `bedrooms` đổi theo. Luật bậc chỉ áp cho BA trường có
+cột `*_source` (`price_raw`, `ward`, `property_type`) — đúng ba trường có đường
+SUY ĐOÁN cạnh tranh; bốn trường còn lại (`bedrooms`, `area_m2`, `floor`,
+`direction`) không có nguồn nào ngoài chủ nhà và admin nên không có tranh chấp
+để phân xử, chỉ theo luật mới-nhất-thắng của FR-163(a). *[cập nhật 28/08/2026 — thay câu
+bất biến cũ "tất cả chỉ ghi khi cột đang trống"; luật đó bị FR-163(a) bỏ vì nó
+làm mọi lời đính chính của chủ nhà rơi vào hư không]*
+
+Vẫn **không đụng `description`**: câu rao gốc là văn phong người bán, fact hiện ở
+khối "Thông tin thêm" riêng trên trang tin. `listing_facts.answer` giữ NGUYÊN VĂN
+làm bằng chứng — chuẩn hoá chỉ xảy ra trên đường vào CỘT.
 
 **Hạng người rao** (FR-155) là `seller_rank()` + view `seller_ranks`, tính tại
 chỗ từ số tin. Cố ý không lưu thành cột: cột thì phải có người cập nhật, mà thứ

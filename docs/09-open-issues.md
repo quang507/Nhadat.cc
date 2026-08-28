@@ -35,6 +35,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-28 | **Phí có đi theo phân loại tự động của FR-160 không?** FR-160 chốt "≥3 tin rao bán = môi giới", nhưng `seller_type` đang đồng thời là thứ tính phí (BR-05: CCRB 1%, NMG 0.5%). Ghép thẳng hai thứ nghĩa là một chính chủ mở tin thứ ba thì phí tự rơi từ 1% xuống 0.5%, và tự leo lại khi tin cũ bị gỡ — mức phí nhảy theo một con số không ai báo cho họ biết. Hai phương án: (a) **tách hai khái niệm** — thêm cột dẫn xuất `vai_hanh_vi` (suy từ số tin, dùng cho giọng hỏi drip + hạng FR-155) và GIỮ `seller_type` khai bằng tay làm căn cứ tính phí; (b) ghép làm một đúng như lời chốt, chấp nhận phí trôi theo số tin. Khuyến nghị BA: (a) — số đếm là chỉ dấu hành vi tốt, nhưng phí là cam kết với người ta, không nên đổi sau lưng. Cần chủ dự án chốt trước khi code FR-160 | **Cao** | FR-160, BR-05, FR-155, OPEN-21 |
 | OPEN-29 | ✅ **ĐÃ CHỐT 27/08/2026 — LÀM PHƯƠNG ÁN (a), ĐÃ DỰNG THÀNH FR-161** (chủ dự án: "sửa theo khuyến nghị rồi deploy hết đi"). Nội dung gốc: **Bot ĐIẾC với tiếng Việt không dấu — mà rất nhiều người nhắn Zalo không bỏ dấu.** Phát hiện 27/08/2026 lúc chạy TS-MA: gõ `nha minh ban chua em` thì cổng rao trượt ngay ở vế `\b(bán\|rao)\b` vì `"ban"` không khớp `"bán"`. Kiểm cả `bot/supabase/functions/` lẫn `lib/`: **không một chỗ nào bỏ dấu trước khi khớp**. Hệ quả trải khắp: câu rao không dấu (`ban nha quan 5 gia 5 ty`) KHÔNG sinh tin dù có đủ giá — im lặng y hệt con bug FR-158 vừa vá, chỉ khác nguyên nhân; `hoiMua` không tách được vai (`toi muon mua nha`); `PROMISE_RE` không bắt được lời hứa (`chieu gui anh`); regex phường/giá cũng vậy. Riêng phía người mua thì đỡ hơn vì mặc định đã rơi vào nhánh mua (FR-159), nhưng phía bán là mất trắng câu rao. Phương án: (a) chuẩn hoá `text` một lần đầu hàm (`normalize('NFD')` + bỏ dấu) rồi cho MỌI regex cổng chạy trên bản không dấu, giữ `text` gốc để lưu `description` và đưa cho model — model đọc không dấu vẫn tốt, chỉ regex là mù; (b) viết mỗi regex thành hai nhánh có-dấu/không-dấu. Khuyến nghị BA: (a), vì (b) là nhân đôi số chỗ phải sửa mỗi lần thêm từ. Chưa code, cần chốt trước khi chạy thật | **Cao** | FR-158, FR-129, FR-133, FR-157 |
 | OPEN-30 | ✅ **ĐÃ SỬA 28/08/2026 — chat-reply v40** (chủ dự án: "Fix đi"). Cả BA lệnh gọi model nhánh seller (`r1`/`r2`/`r3`) và cả bước tạo `anthropicClient` giờ bọc try/catch + `ghiLoi` + câu mẫu tất định, cùng chuẩn với nhánh mua. Câu mẫu của `r2` CÓ hỏi câu drip kế tiếp (kèm neo căn từ FACT_LABELS) nên `info_requests` chỉ mở khi câu hỏi THẬT SỰ được gửi — đúng luật "không mở khi chưa hỏi được"; `r1` chào bằng mẫu kèm câu hỏi đầu; `r3` ghi nhận bằng mẫu. Test sống trên v40: câu rao sinh tin + model soạn reply bình thường (key đã có credit lại); đường fallback kiểm bằng review vì không giả lập được key hỏng trên môi trường sống. Nội dung gốc: **Nhánh seller gọi model KHÔNG có lưới đỡ — model lỗi là chủ nhà nhận im lặng + HTTP 500.** Lộ ra 27/08 khi chạy TS-KD-01 đúng lúc API key Anthropic của bot hết credit: tin rao vẫn sinh ĐỦ và ĐÚNG (dữ liệu ghi trước khi gọi model, đúng thiết kế FR-152) nhưng ba lệnh gọi model của nhánh seller (`r1` chào tin mới, `r2` hỏi drip, `r3` chăm sóc chung) đều trần trụi — exception xuyên thẳng ra 500, chủ nhà không nhận được chữ nào, và vì là exception nên cũng KHÔNG qua `ghiLoi`. Nhánh mua làm đúng bài từ đầu: try/catch + `ghiLoi` + câu trả lời template. Chữa: bọc ba lệnh gọi trong try/catch, lỗi thì `ghiLoi` + trả template ("Dạ em nhận tin rồi ạ, em xử lý rồi báo lại anh/chị liền nha") — KHÔNG mở `info_requests` mới khi chưa hỏi được. Việc riêng, chưa làm | Trung bình | FR-152, FR-158, FR-161 |
+| OPEN-31 | **Bậc nguồn `chu_xac_nhan > admin`: admin cầm sổ đỏ mà chủ nhà nhớ nhầm thì ai thắng?** FR-164(a) khoá cột trước lời admin; cần một bậc riêng cho bằng chứng giấy tờ hay không | Trung bình | FR-164, FR-156, FR-129, FR-163 |
 
 ---
 
@@ -433,6 +434,32 @@ ngay — nó rẻ và mất 20 phút.
 **Chờ chủ dự án chốt.**
 
 ---
+
+### OPEN-31 · Bậc nguồn khi admin cầm bằng chứng cứng
+
+FR-164(a) xếp `chu_xac_nhan` (3) > `admin` (2) > `suy_doan` (1). Lý lẽ chắc và
+khớp hai tài liệu có sẵn: FR-156 nói rõ tin admin nhập là tin "nhặt trên
+Facebook, Chợ Tốt, Batdongsan, sổ tay CTV" — tức nguồn bên thứ ba; còn cả vòng
+drip FR-129 sinh ra chỉ để lấy bằng được lời của người thật sự có căn nhà. Lời
+chủ mà thua admin thì drip vô nghĩa.
+
+**Nhưng thứ bậc đó KHOÁ cột.** Một khi chủ nhà đã trả lời, admin không ghi đè
+được nữa — kể cả khi admin đang cầm sổ đỏ trong tay và con số trên sổ khác con
+số chủ nhà nhớ nhầm. Diện tích và phường là hai thứ người ta hay nhớ sai nhất.
+
+Hai phương án:
+
+- **(a)** Thêm một bậc `admin_xac_minh` (4) dành riêng cho trường hợp admin đã
+  đối chiếu giấy tờ. Chủ nhà vẫn thắng admin thường, nhưng giấy tờ thắng tất.
+- **(b)** Giữ nguyên hoàn toàn, coi sai lệch là chuyện của con người: admin thấy
+  sai thì nhắn hỏi lại để chủ nhà TỰ sửa, hệ thống không có cửa hậu nào.
+
+**Khuyến nghị (a).** Bằng chứng giấy tờ là loại dữ liệu khác hẳn lời nói; gộp nó
+chung một bậc với "admin gõ tay từ tin Chợ Tốt" là đánh đồng hai thứ không cùng
+độ tin. Phương án (b) gọn hơn nhưng đẩy toàn bộ gánh nặng sang thao tác tay, mà
+chủ nhà im lặng thì không có đường nào sửa.
+
+Chưa dựng. Chờ chủ dự án chốt.
 
 ### Soát mã nguồn 27/08/2026 — kết luận về advisor Supabase
 

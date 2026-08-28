@@ -319,14 +319,15 @@ không lộ thông tin cá nhân của B trên trang.
 ---
 
 ## UF-13 — Vòng đời listing & báo sold cho người đang chờ
-**Actor** hệ thống, admin, S, B · **FR** FR-139, FR-107, FR-108 · *(FR-106 bản cũ
+**Actor** hệ thống, admin, S, B · **FR** FR-139, FR-107, FR-108, FR-164 · *(FR-106 bản cũ
 tiếng Anh đã deprecated 25/08/2026 — 5 trạng thái dưới đây là bản đang chạy)* ·
 [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]
 
 ```mermaid
 stateDiagram-v2
     [*] --> cho_thong_tin: S nhắn câu rao (FR-144)
-    cho_thong_tin --> dang_ban: đủ giá + diện tích + phường (auto-publish)
+    cho_thong_tin --> dang_ban: đủ giá + diện tích + phường (trg_zz_listings_dang_tin — FR-164d)
+    dang_ban --> cho_thong_tin: mất một trong ba trường đó (FR-164d)
     dang_ban --> dang_quan_tam: khách hỏi / bot đưa căn ra
     dang_quan_tam --> dang_ban: 7 ngày không ai hỏi (cron)
     dang_ban --> da_chot: khách đồng ý chốt (FR-142)
