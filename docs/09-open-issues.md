@@ -37,6 +37,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-30 | ✅ **ĐÃ SỬA 28/08/2026 — chat-reply v40** (chủ dự án: "Fix đi"). Cả BA lệnh gọi model nhánh seller (`r1`/`r2`/`r3`) và cả bước tạo `anthropicClient` giờ bọc try/catch + `ghiLoi` + câu mẫu tất định, cùng chuẩn với nhánh mua. Câu mẫu của `r2` CÓ hỏi câu drip kế tiếp (kèm neo căn từ FACT_LABELS) nên `info_requests` chỉ mở khi câu hỏi THẬT SỰ được gửi — đúng luật "không mở khi chưa hỏi được"; `r1` chào bằng mẫu kèm câu hỏi đầu; `r3` ghi nhận bằng mẫu. Test sống trên v40: câu rao sinh tin + model soạn reply bình thường (key đã có credit lại); đường fallback kiểm bằng review vì không giả lập được key hỏng trên môi trường sống. Nội dung gốc: **Nhánh seller gọi model KHÔNG có lưới đỡ — model lỗi là chủ nhà nhận im lặng + HTTP 500.** Lộ ra 27/08 khi chạy TS-KD-01 đúng lúc API key Anthropic của bot hết credit: tin rao vẫn sinh ĐỦ và ĐÚNG (dữ liệu ghi trước khi gọi model, đúng thiết kế FR-152) nhưng ba lệnh gọi model của nhánh seller (`r1` chào tin mới, `r2` hỏi drip, `r3` chăm sóc chung) đều trần trụi — exception xuyên thẳng ra 500, chủ nhà không nhận được chữ nào, và vì là exception nên cũng KHÔNG qua `ghiLoi`. Nhánh mua làm đúng bài từ đầu: try/catch + `ghiLoi` + câu trả lời template. Chữa: bọc ba lệnh gọi trong try/catch, lỗi thì `ghiLoi` + trả template ("Dạ em nhận tin rồi ạ, em xử lý rồi báo lại anh/chị liền nha") — KHÔNG mở `info_requests` mới khi chưa hỏi được. Việc riêng, chưa làm | Trung bình | FR-152, FR-158, FR-161 |
 | OPEN-31 | **Bậc nguồn `chu_xac_nhan > admin`: admin cầm sổ đỏ mà chủ nhà nhớ nhầm thì ai thắng?** FR-164(a) khoá cột trước lời admin; cần một bậc riêng cho bằng chứng giấy tờ hay không | Trung bình | FR-164, FR-156, FR-129, FR-163 |
 | OPEN-32 | **Ảnh chủ nhà gửi qua chat KHÔNG đi qua hai bucket, nên tách công khai/riêng tư của FR-165 không phủ được nó.** `chat-reply` lưu mọi ảnh người bán gửi thành fact `hinh_anh` (URL Zalo CDN, không vào kho ta), rồi FR-143 gộp thẳng vào `photos` gửi cho NGƯỜI MUA. Mà vòng drip FR-129 có hỏi `phap_ly` — chủ nhà trả lời câu đó bằng ảnh chụp sổ là chuyện thường, và ảnh đó bị ghi nhãn `hinh_anh` bất kể đang hỏi gì. Sửa được nhưng phải đụng luồng chat, mà đợt này chủ dự án khoanh vùng "do not change chat logic" | **Cao** | FR-165, FR-143, FR-129, FR-105, NFR-06 |
+| OPEN-33 | **Webhook Zalo nhận sự kiện KHÔNG kiểm chữ ký — ai cũng giả được tin nhắn đến.** `zalo-webhook` buộc chạy `verify_jwt=false` (Zalo không gửi JWT Supabase được) nên chữ ký `X-ZEvent-Signature` là hàng rào DUY NHẤT; khối verify chỉ chạy khi có đủ `ZALO_APP_SECRET` + `ZALO_APP_ID`, mà hai secret đó KHÔNG có trong Vault. Đo 29/08: POST sự kiện bịa, không khoá không chữ ký → 200. Giả được tin nhắn với BẤT KỲ `sender.id` nào (đội lốt chủ nhà bơm fact vào tin họ, hoặc bơm tin rác đốt tiền model). Không tự chặn cứng vì chặn là bot chết với người dùng thật — quyết định vận hành của chủ dự án; bản FR-167 cho nó kêu vào `bot_errors`. Chữa = đặt hai secret vào Vault, không sửa dòng code nào | **Cao** | FR-167, FR-162, SRS-4.4, NFR-06 |
 
 ---
 
@@ -493,37 +494,6 @@ vòng lặp.]*
 
 ---
 
-### OPEN-33 · Webhook Zalo đang nhận sự kiện KHÔNG kiểm chữ ký
-
-**Mức: CAO. Phát hiện 29/08/2026 khi soát bảo mật (FR-167), đo được chứ không suy đoán.**
-
-`zalo-webhook` buộc phải chạy `verify_jwt=false` — Zalo không gửi được JWT của
-Supabase. Nên hàng rào DUY NHẤT của nó là chữ ký `X-ZEvent-Signature`. Mà khối
-verify chỉ chạy khi có ĐỦ `ZALO_APP_SECRET` và `ZALO_APP_ID`; hai secret đó hiện
-KHÔNG có trong Vault, nên khối bị nhảy qua và hàm nhận mọi thứ.
-
-Đo thật 29/08: POST một sự kiện bịa, không khoá không chữ ký → **200 `{"ok":true}`**.
-
-**Khai thác được gì**: giả tin nhắn đến với BẤT KỲ `sender.id` nào. Đội lốt Zalo
-ID của một chủ nhà là bơm được fact vào tin của họ (giá, phường, pháp lý — những
-thứ FR-164 đóng dấu `chu_xac_nhan` rồi KHOÁ cột); bơm tin rác là đốt tiền model
-và làm ngập `messages`.
-
-**Vì sao đợt soát KHÔNG tự chặn cứng**: chặn là bot chết ngay với người dùng
-thật. Đó là đánh đổi vận hành, thuộc quyền chủ dự án, không phải quyền của một
-đợt soát bảo mật. Thay vào đó bản này cho nó KÊU TO: mỗi lượt bỏ qua verify ghi
-một dòng `zalo-webhook KHONG VERIFY` vào `bot_errors` (có van 20 dòng/giờ của
-`log_loi` nên không ngập sổ), hiện ở trang `/admin`.
-
-**Khuyến nghị**: đặt `ZALO_APP_SECRET` + `ZALO_APP_ID` vào Vault. Có hai secret
-đó là khối verify tự bật, không phải sửa dòng code nào — chữ ký sai sẽ bị trả
-401 như thiết kế ban đầu. Đây là việc 5 phút và nó đóng lỗ nghiêm trọng nhất còn
-lại của hệ thống.
-
-**Chờ chủ dự án chốt.**
-
----
-
 ### OPEN-31 · Bậc nguồn khi admin cầm bằng chứng cứng
 
 FR-164(a) xếp `chu_xac_nhan` (3) > `admin` (2) > `suy_doan` (1). Lý lẽ chắc và
@@ -579,6 +549,37 @@ Ba hướng, chưa chọn:
 **Khuyến nghị (a)**, và làm sớm: đây là đường rò giấy tờ đất của người dân ra
 người lạ, không phải lỗi hiển thị. Chưa dựng vì đợt FR-165 được khoanh vùng
 "không đụng luồng chat".
+
+### OPEN-33 · Webhook Zalo đang nhận sự kiện KHÔNG kiểm chữ ký
+
+**Mức: CAO. Phát hiện 29/08/2026 khi soát bảo mật (FR-167), đo được chứ không suy đoán.**
+
+`zalo-webhook` buộc phải chạy `verify_jwt=false` — Zalo không gửi được JWT của
+Supabase. Nên hàng rào DUY NHẤT của nó là chữ ký `X-ZEvent-Signature`. Mà khối
+verify chỉ chạy khi có ĐỦ `ZALO_APP_SECRET` và `ZALO_APP_ID`; hai secret đó hiện
+KHÔNG có trong Vault, nên khối bị nhảy qua và hàm nhận mọi thứ.
+
+Đo thật 29/08: POST một sự kiện bịa, không khoá không chữ ký → **200 `{"ok":true}`**.
+
+**Khai thác được gì**: giả tin nhắn đến với BẤT KỲ `sender.id` nào. Đội lốt Zalo
+ID của một chủ nhà là bơm được fact vào tin của họ (giá, phường, pháp lý — những
+thứ FR-164 đóng dấu `chu_xac_nhan` rồi KHOÁ cột); bơm tin rác là đốt tiền model
+và làm ngập `messages`.
+
+**Vì sao đợt soát KHÔNG tự chặn cứng**: chặn là bot chết ngay với người dùng
+thật. Đó là đánh đổi vận hành, thuộc quyền chủ dự án, không phải quyền của một
+đợt soát bảo mật. Thay vào đó bản này cho nó KÊU TO: mỗi lượt bỏ qua verify ghi
+một dòng `zalo-webhook KHONG VERIFY` vào `bot_errors` (có van 20 dòng/giờ của
+`log_loi` nên không ngập sổ), hiện ở trang `/admin`.
+
+**Khuyến nghị**: đặt `ZALO_APP_SECRET` + `ZALO_APP_ID` vào Vault. Có hai secret
+đó là khối verify tự bật, không phải sửa dòng code nào — chữ ký sai sẽ bị trả
+401 như thiết kế ban đầu. Đây là việc 5 phút và nó đóng lỗ nghiêm trọng nhất còn
+lại của hệ thống.
+
+**Chờ chủ dự án chốt.**
+
+---
 
 ### Soát mã nguồn 27/08/2026 — kết luận về advisor Supabase
 

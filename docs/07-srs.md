@@ -360,6 +360,9 @@ escalations         id, type enum(QUESTION, VOICE, VIEWING, UPSET), buyer_id, pr
 - `buyers.phone` mã hoá at-rest, chỉ CTV được cấp quyền đọc.
 - RLS bật trên mọi bảng; `anon` chỉ đọc được `properties` có `status='dang_rao'`,
   `listing_media` có `bucket='listing-public'`, và `tags`.
+  *[siết 29/08/2026 — FR-167c: `listing_media` còn phải thuộc TIN ĐÃ LÊN KỆ.
+  Bucket là chuyện của FILE, đăng hay chưa là chuyện của TIN — hỏi thiếu vế sau
+  thì ảnh và mã của tin `cho_thong_tin` đọc được từ Internet, đã đo thật.]*
 
 **Mô hình quyền thực tế (soát bảo mật 26/08/2026).** Anon key là key **công
 khai** — nó nằm trong bundle JS của web và trong `bot/bridge-zca`; repo để
@@ -384,8 +387,12 @@ là:
    view nên đi vòng RLS. `public_listings`, `public_media`,
    `listing_missing_facts` đã chuyển `security_invoker = on` và khoá khỏi anon
    (web không dùng). Hai view cố ý giữ definer: `agents_public` (chỉ tên NMG +
-   số tin, nguồn trang `/moi-gioi`) và `listing_photos_v` (chỉ path của bucket
-   vốn công khai) — cả hai chỉ còn quyền SELECT.
+   số tin, nguồn trang `/moi-gioi`) và `listing_photos_v` — cả hai chỉ còn
+   quyền SELECT. *[chỉnh 29/08/2026 — FR-167c. Lý do THẬT phải giữ definer cho
+   `listing_photos_v` không phải "path vốn công khai" mà là: thân view đọc
+   `app_config`, đổi sang invoker là anon vỡ view (đúng bẫy TS-KHO-21). Và nó
+   KHÔNG còn chỉ lọc bucket — nay lọc cả trạng thái tin, vì quyền của chủ view
+   từng là đường vòng qua RLS của `listings`.]*
 5. **Vault không bao giờ chạm anon**: `get_secret()` chỉ cấp cho `postgres` và
    `service_role`.
 
@@ -482,10 +489,16 @@ rồi hàm chạy tiếp) nên không cửa nào mã-HTTP thấy được. Đã 
 một tin kèm `image_url` hỏng → HTTP 200, khách vẫn nhận câu trả lời qua fallback
 regex, mà `bot_errors` ghi `chat-reply model → 400 Unable to download the file`.
 
-**Cổng FR-151b**: secret `BRIDGE_SECRET` trong Vault. Có secret thì `chat-reply`
-và `escalation-feed` chỉ nhận request kèm header `x-bridge-secret` khớp, hoặc
-request mang `service_role` key (`zalo-webhook`). Chưa đặt secret thì chạy như
-cũ. **Thứ tự bật bắt buộc**: điền `.env` phía bridge TRƯỚC, tạo secret trong
+**Cổng FR-151b**: secret `BRIDGE_SECRET` trong Vault. Có secret thì function
+chỉ nhận request kèm header `x-bridge-secret` khớp, hoặc request mang
+`service_role` key. Chưa đặt secret thì chạy như cũ.
+*[mở rộng 29/08/2026 — FR-167b: từ HAI function (`chat-reply`,
+`escalation-feed`) lên **TÁM**, thêm `nudge`, `ask-seller`, `ctv-report`,
+`geocode-listings`, `media-cleanup`, `inbound-sweep`. Lý do: `verify_jwt=true`
+KHÔNG phải xác thực — nó chỉ đòi publishable key, mà khoá đó nằm trong bundle JS
+của web. Bảng "ai gọi hợp lệ" ở `bot/README.md`. Mọi hàm SQL gọi sang phải mang
+theo bí mật — bỏ sót một cái là đường đó đứt IM LẶNG vì `net.http_post` bắn-rồi-
+quên (đã vấp: `ask_seller_drip`, vá ở `20260829e`).]* **Thứ tự bật bắt buộc**: điền `.env` phía bridge TRƯỚC, tạo secret trong
 Vault SAU — làm ngược là bridge chết trong khoảng giữa. Tắt khẩn:
 `delete from vault.secrets where name = 'BRIDGE_SECRET';`
 

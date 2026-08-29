@@ -31,8 +31,8 @@ khi đổi model/prompt).
 | Mục | Kiểm gì | Tham chiếu |
 |---|---|---|
 | API contract | SRS-4.1…4.7: schema request/response, idempotency (request_id trùng → trả kết quả cũ, không nhân đôi), mã lỗi 404/409 | FR-41, FR-43 |
-| Database | RLS: anon chỉ đọc listing active + media public; unique (project_id, unit_code); enum unit_status/status không nhận giá trị lạ; last_confirmed_at cập nhật đúng | SRS-3.9, FR-107, FR-113 |
-| Webhook Zalo | Trả 200 < 1s; xử lý bất đồng bộ; chữ ký sai → từ chối; retry không tạo tin nhắn đôi | SRS-4.4 |
+| Database | RLS: anon chỉ đọc listing active + media public *(và từ FR-167c: media còn phải thuộc TIN ĐÃ LÊN KỆ)*; unique (project_id, unit_code); enum unit_status/status không nhận giá trị lạ; last_confirmed_at cập nhật đúng | SRS-3.9, FR-107, FR-113 |
+| Webhook Zalo | Trả 200 < 1s; xử lý bất đồng bộ; chữ ký sai → từ chối *[29/08/2026 — vế chữ ký CHƯA hiệu lực: thiếu ZALO_APP_SECRET/ZALO_APP_ID nên khối verify bị nhảy qua, xem OPEN-33]*; retry không tạo tin nhắn đôi | SRS-4.4, OPEN-33 |
 | Hàng đợi | Chaos test: tắt worker 10 phút → 0 tin mất sau khôi phục *[29/08/2026 — đã có bộ kiểm thật: TS-JOB, dựng cảnh sập bằng tay vì không giết được instance Edge Function theo ý muốn]* | NFR-04, OPEN-11, FR-166 |
 | Kho file | Ảnh sổ đỏ: signed URL hết hạn ≤15 phút, truy cập thẳng bucket bị chặn; adapter đổi backend không đụng logic bot | NFR-06, FR-111 |
 | Migration | Mỗi migration chạy được trên project trống + project có dữ liệu mẫu; không phá dữ liệu cũ | — |
@@ -719,6 +719,21 @@ lấy từ tầng SQL, chỗ có bằng chứng.)*
 `ask-seller` và `ctv-report` gọi lại bằng đúng bridge secret vẫn qua cổng
 (400 "listing_id bắt buộc" và chạy tới model) — cổng chặn người lạ, không chặn
 đường vận hành.
+
+**Hồi quy do chính bản vá gây ra — bắt bằng soát truy vết, không phải bằng test.**
+Gắn cổng cho `ask-seller` nhưng chỉ sửa `nudge_tick` + `ctv_report_tick`; người
+gọi thứ ba là `ask_seller_drip()` (cron `seller-drip-tick` mỗi 30 phút **và**
+trigger `trg_listing_drip` mỗi lần có tin mới) vẫn gửi mỗi anon JWT → 403. Vì
+`net.http_post` bắn-rồi-quên nên cron báo `succeeded` như thường: vòng drip
+FR-129/144 **đứt im lặng**. Bộ kiểm TS-SEC2 không thấy vì nó gọi thẳng
+`ask-seller` bằng bridge secret và thấy qua — đúng chỗ mù của "test cái mình vừa
+sửa". Vá ở `20260829e`, kiểm lại bằng cách dựng ĐÚNG bộ header mà hàm sinh ra rồi
+bắn thử: **400 "listing_id bắt buộc"** (qua cổng) thay vì 403. Quét thêm toàn bộ
+hàm SQL có `net.http_post`: cả 5 (`ask_seller_drip`, `nudge_tick`,
+`ctv_report_tick`, `media_cleanup_tick`, `inbound_sweep_tick`) nay đều mang bí
+mật, đều dùng `app_config`, không cái nào còn anon JWT nhúng cứng. Bridge
+(`bot/bridge-zca`) chỉ gọi `chat-reply` + `escalation-feed` và vốn đã gửi
+`x-bridge-secret` — không ảnh hưởng.
 
 **Advisor sau khi vá**: 4 cảnh báo `function_search_path_mutable` biến mất; ba
 hàm SECURITY DEFINER `next_listing_code`/`listings_fill_code`/

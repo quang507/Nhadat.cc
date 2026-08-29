@@ -200,7 +200,7 @@ Chưa đặt secret thì cổng mở như cũ — nhưng nó ĐANG được đ�
 | `ctv-report` | cron `ctv_report_tick` (mang bridge secret) |
 | `media-cleanup` | cron `media_cleanup_tick` |
 | `inbound-sweep` | cron `inbound_sweep_tick` |
-| `ask-seller` | gọi tay / bridge |
+| `ask-seller` | cron `seller-drip-tick` + trigger `trg_listing_drip`, cả hai qua `ask_seller_drip()` — **hàm đó PHẢI mang bridge secret**, xem `20260829e` / gọi tay / bridge |
 | `geocode-listings` | gọi tay |
 | `escalation-feed` | bridge (dùng 401 thay vì 403, có từ trước) |
 
