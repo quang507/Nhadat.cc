@@ -145,22 +145,36 @@ Deno.serve(async (req) => {
   // khâu chứa luật chống-gửi-đúp. Một đường, dùng chung.
   // Chỉ service_role gọi được — payload lấy từ sổ, không tin gì từ người gọi
   // ngoài chính cái id.
+  // `catch` CHỈ bọc đúng `JSON.parse`. Bản trước bọc cả khối phát lại, nên một
+  // exception từ `handleEvent` (model ném, mạng đứt, Zalo 500) bị nuốt SẠCH:
+  // không ghi sổ, rồi rơi tuột xuống đường webhook thường và trả về 200.
+  // `inbound-sweep` đọc 200 là "đã cứu xong" nên KHÔNG gọi `bao_hong_inbound`,
+  // `attempts` không tăng, `next_retry_at` không đặt — nó phát lại đúng việc ấy
+  // mỗi phút, suốt 24 giờ, và không ai thấy gì.
+  let body: Record<string, unknown> | null = null;
   try {
-    const body = JSON.parse(raw);
-    if (body?.replay_event_id) {
-      const isService = req.headers.get("authorization") ===
-        `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-      if (!isService) return jsonResponse({ error: "forbidden" }, 403);
+    body = JSON.parse(raw);
+  } catch { /* không phải JSON → đi tiếp đường webhook thường */ }
 
-      const db = serviceClient();
-      const { data: ev } = await db.from("inbound_events")
-        .select("payload").eq("event_id", String(body.replay_event_id)).maybeSingle();
-      if (!ev?.payload) return jsonResponse({ error: "khong thay su kien" }, 404);
+  if (body?.replay_event_id) {
+    const isService = req.headers.get("authorization") ===
+      `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+    if (!isService) return jsonResponse({ error: "forbidden" }, 403);
 
+    const db = serviceClient();
+    const { data: ev } = await db.from("inbound_events")
+      .select("payload").eq("event_id", String(body.replay_event_id)).maybeSingle();
+    if (!ev?.payload) return jsonResponse({ error: "khong thay su kien" }, 404);
+
+    try {
       await handleEvent(JSON.stringify(ev.payload));
-      return jsonResponse({ ok: true, replayed_event: body.replay_event_id });
+    } catch (e) {
+      // Cứu hụt thì phải NÓI THẬT. Trả 200 ở đây là nói dối đường cứu.
+      await ghiLoi(db, "zalo-webhook replay", e);
+      return jsonResponse({ error: "replay hong" }, 500);
     }
-  } catch { /* không phải JSON phát lại thì đi tiếp đường webhook thường */ }
+    return jsonResponse({ ok: true, replayed_event: body.replay_event_id });
+  }
 
   // Verify chữ ký nếu đã cấu hình app secret (mac = sha256(appId+data+timeStamp+secret))
   const client = serviceClient();

@@ -478,7 +478,8 @@ Cả ba bật RLS và `revoke all from anon, authenticated`. Riêng `bot_errors`
 | `nhan_viec_nhac(kinds, limit, worker)` | Giành lời nhắc tới hạn bằng hợp đồng thuê 5 phút (`for update skip locked`) — cửa DUY NHẤT để `nudge` lấy việc (FR-166 f) | chỉ `service_role` |
 | `bao_hong_nhac(id, detail)` | Đã THỬ mà hụt: nhả hợp đồng thuê + hẹn giờ lùi dần; quá 5 lần → `dead` | chỉ `service_role` |
 | `next_listing_code()` | Cấp mã tin kế tiếp (max+1). Chỉ gọi từ trong trigger `listings_fill_code()`; **siết 29/08 (FR-167)** vì gọi trực tiếp là đếm `listings` vượt RLS | chỉ `service_role` |
-| `nha_viec_nhac(id)` | CHƯA THỬ được (thiếu đích/token OA — việc của bridge): trả việc lại nguyên vẹn và hoàn luôn lượt đếm `attempts` (`20260829c`) | chỉ `service_role` |
+| `nha_viec_nhac(id, worker)` | CHƯA THỬ được (thiếu đích/token OA — việc của bridge): trả việc lại nguyên vẹn và hoàn luôn lượt đếm `attempts` (`20260829c`). **Thêm `worker` ở `20260829f`**: chỉ nhả khi `locked_by` khớp — thiếu vế này thì worker treo quá hạn xoá được khoá của worker đang chạy | chỉ `service_role` |
+| `bo_dem_nhac_treo(gio)` | Đếm lời nhắc `escalation`/`report` nằm chờ quá `gio` giờ và tự ghi `bot_errors` (`20260829f`). Con mắt bù cho việc `nha_viec_nhac` **cố ý không có trần thử lại**: bridge không tới lấy thì `attempts` cứ về 0 mỗi nhịp, không gì tự lộ (FR-152, NFR-18) | chỉ `service_role` |
 | `nhan_viec_don_media(limit)` | Giành việc dọn file, `attempts < 6` (FR-165 e, FR-166 g) | chỉ `service_role` |
 | `chon_viec_don_chet()` | Dán nhãn `chet` cho việc dọn đã hết đường thử lại | chỉ `service_role` |
 | view `job_suc_khoe` | Một cửa sổ cho ba hàng đợi: job id, attempts, lỗi, started/finished, next_retry (FR-166). **Chưa nối vào `/admin`** — trang đó đọc Supabase bằng publishable key tức vai `anon`, mà view này `revoke all` khỏi anon; muốn hiện thì phải mở qua một RPC security-definer có kiểm quyền admin, như `bot_health_tick`. Hiện chỉ đọc được bằng service key | `revoke all` khỏi anon/authenticated |
@@ -501,6 +502,23 @@ theo bí mật — bỏ sót một cái là đường đó đứt IM LẶNG vì 
 quên (đã vấp: `ask_seller_drip`, vá ở `20260829e`).]* **Thứ tự bật bắt buộc**: điền `.env` phía bridge TRƯỚC, tạo secret trong
 Vault SAU — làm ngược là bridge chết trong khoảng giữa. Tắt khẩn:
 `delete from vault.secrets where name = 'BRIDGE_SECRET';`
+
+**Cổng này FAIL-OPEN, và đó là chủ ý** (gắn cổng trước khi có bí mật thì cron
+không gãy) — nhưng chủ ý ấy có giá: đọc hụt bí mật MỘT lần là function thành
+công khai mà không ai hay. Từ `20260829f` cả tám cửa ghi `bot_errors` nguồn
+`<tên function> CONG MO` khi không đọc được `BRIDGE_SECRET`; van của `log_loi`
+(20 dòng/nguồn/giờ) chặn spam. Đọc bí mật phải qua `secretOf()` — **biến môi
+trường trước, Vault sau**; `get_secret` trần chỉ hỏi Vault, nên bí mật đặt bằng
+env của function thì cửa đó mở toang trong khi cả nhà đã đóng (đã vấp:
+`geocode-listings`, `escalation-feed`).
+
+**Cửa `mark_sent` của `chat-reply`** (FR-162, `29/08`): `POST {mark_sent: msg_id,
+sent_bubbles: n, done: bool}` → ghi `inbound_ledger.sent_bubbles`/`sent_at`. Có
+vì `zalo-webhook` cầm service key nên tự ghi sổ được, còn bridge chỉ có
+publishable key + bí mật cổng. Thiếu cửa này thì `already_sent` bên kênh
+`zalo_personal_test` **vĩnh viễn false**, tức cờ chống-gửi-đúp là chữ chết ở
+đúng cái kênh đang chạy thật. Cửa dùng chung cổng `x-bridge-secret`, không mở
+thêm lối nào.
 
 ### SRS-3.13 · Tầng cache của web (NFR-17 — 27/08/2026)
 

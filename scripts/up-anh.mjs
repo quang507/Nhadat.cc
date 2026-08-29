@@ -108,7 +108,9 @@ for (const dir of dirs) {
         .jpeg({ quality: 80 }).toBuffer();
       outExt = ".jpg"; mime = "image/jpeg";
     } else if (buf.length > 600_000) {
-      console.warn(`⚠ ${dest0(code, f, outExt)} nặng ${(buf.length / 1e6).toFixed(1)}MB — nên cài sharp để nén`);
+      // Nhắc theo ĐƯỜNG DẪN NGUỒN: tên trên kho là UUID sinh ở dưới, lúc này
+      // chưa có, mà người đọc cảnh báo cần biết phải đi nén file nào.
+      console.warn(`⚠ ${dir}/${f} nặng ${(buf.length / 1e6).toFixed(1)}MB — nên cài sharp để nén`);
     }
     // Tên file trên kho là UUID của chính dòng media — sinh TRƯỚC khi up để
     // file và dòng DB mang cùng một danh tính, khỏi phải đoán ngược.

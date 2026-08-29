@@ -53,6 +53,13 @@ Deno.serve(async (req) => {
   // tiền model. Cron mang `x-bridge-secret` (xem `ctv_report_tick`).
   const cong = serviceClient();
   const bimat = await secretOf(cong, "BRIDGE_SECRET");
+  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
+  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
+  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
+  if (!bimat) {
+    await ghiLoi(cong, "ctv-report CONG MO",
+      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
+  }
   const laDichVu = req.headers.get("authorization") ===
     `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
   if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {

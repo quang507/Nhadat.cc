@@ -760,3 +760,46 @@ chủ đích, `log_loi` mở cho anon (có van), `admin_dang_tin` mở cho authe
 thái ĐÚNG (bật RLS, không policy = từ chối tất cả trừ service_role), `pg_net`
 trong schema public là nợ cũ ở OPEN-24.
 
+
+### TS-HQ — hồi quy sau soát thù địch + hai lượt review diff (29/08/2026)
+
+Mười lỗi, **cả mười nằm trong chính phần FR-161…FR-167 vừa làm**, và **năm cái
+được hai lượt review độc lập chỉ vào cùng một dòng**. Không cái nào do test cũ
+bắt được: TS-JOB/TS-SEC2 kiểm hàm DB theo vai thật, còn chỗ hỏng lần này gần
+như đều nằm ở tầng TypeScript — nơi chưa có lấy một test nào. Đó mới là bài học
+của đợt này, không phải mười cái vá.
+
+Hai ca chạy được bằng máy, đặt ở `bot/tests/` (Node, không cần mạng):
+
+| Mã | Bất biến | Cách chạy | Kết quả |
+|---|---|---|---|
+| TS-HQ-01 | Câu gõ LẪN dấu vẫn nhận ra là câu rao (`ban nha q5 giá 5 ty`) | `node bot/tests/fr161-go-lan-dau.mjs` | ✅ 9/9 (bản cũ trượt 2) |
+| TS-HQ-02 | Câu gõ LẪN dấu vẫn nhận ra là câu hỏi mua | ↑ cùng file | ✅ |
+| TS-HQ-03 | Câu vừa sửa một trường vừa trả lời câu hỏi treo → ghi CẢ HAI | `node bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs` | ✅ 8/8 |
+| TS-HQ-04 | Câu CHỈ có lời sửa → KHÔNG rơi xuống khối câu hỏi treo (chiều ngược, dễ vá hỏng hơn chiều xuôi) | ↑ cùng file | ✅ |
+
+Tám ca còn lại chưa có test tự động — ghi lại đây làm bất biến để lần sau đụng
+vào thì biết mình đang phá cái gì:
+
+| Mã | Bất biến | Hỏng thì mất gì | Vá ở |
+|---|---|---|---|
+| TS-HQ-05 | `chat-reply` gặp job `dead` thì DỪNG, không gọi model | Đốt một lượt model cho dòng đã bỏ; và vì nhánh đó không cầm hợp đồng thuê, hai lượt giao cùng lúc **đều gửi** — vỡ exactly-once FR-162 | `chat-reply` nhánh `r_state === "dead"` |
+| TS-HQ-06 | Báo hỏng job phải qua `bao_hong_inbound`, không ghi thẳng `status='failed'` | Không có `next_retry_at` → `inbound-sweep` cứu lại mỗi phút, đốt sạch 8 lượt trong 8 phút rồi vứt tin của khách vĩnh viễn | `chat-reply` hàm `baoHong` |
+| TS-HQ-07 | `nudge --dry_run` KHÔNG được đụng lời nhắc thật | Lượt "chỉ xem" với key model hỏng đẩy 5 dòng pending thật sang thư chết | `nudge` hàm `baoHongNhac` |
+| TS-HQ-08 | Dòng giữ chỗ `reengage` mồ côi phải được dọn | Index duy nhất khoá cứng: khách đó **không bao giờ** được hỏi thăm nữa, không một dòng lỗi | `nudge`, quét >15 phút |
+| TS-HQ-09 | Lỗi chèn dòng giữ chỗ khác 23505 phải vào `bot_errors` | `continue` trần nuốt cả lỗi thật lẫn lỗi đua (FR-152 d) | `nudge` |
+| TS-HQ-10 | `catch` ở cửa phát lại chỉ bọc `JSON.parse` | `handleEvent` ném → nuốt sạch → trả 200 → `inbound-sweep` tưởng đã cứu, phát lại mỗi phút suốt 24h | `zalo-webhook` |
+| TS-HQ-11 | Bridge tôn trọng `replayed`+`already_sent`, và ghi lại `sent_at` | Hai lượt thả tim cùng map về `react-<tid>-<gMsgID>` → khách nhận lại nguyên loạt bong bóng | `bridge-zca` + cửa `mark_sent` |
+| TS-HQ-12 | `nha_viec_nhac` chỉ nhả việc của CHÍNH worker đó | Worker treo quá hạn xoá khoá worker đang chạy → worker thứ ba giành cùng dòng | `20260829f` |
+
+**Hạn còn lại, biết mà chưa vá** (đừng để nó trôi thành "đã xong"):
+
+1. Bridge **chưa tiếp tục từ `sent_bubbles`** — gửi hụt giữa chừng rồi giao lại
+   vẫn phát từ bong bóng đầu. Muốn hết thì `claim_inbound` phải trả thêm
+   `sent_bubbles`, tức đổi chữ ký hàm DB.
+2. `bot/tests/*.mjs` **chép lại** regex của `chat-reply` chứ không import được
+   (Node không nạp module Deno, máy build không có Deno). Sửa regex mà quên sửa
+   test là test vẫn xanh trong khi hàm thật đã đổi — đã ghi cảnh báo ở
+   `bot/tests/README.md`.
+3. Tầng TypeScript vẫn **chưa có test nào chạy trong CI**. Hai file trên phải
+   gọi bằng tay.

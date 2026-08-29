@@ -38,9 +38,6 @@ import {
 // dấu, chỉ regex là mù.
 const boDau = (s: string): string =>
   s.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-const CO_DAU_RE =
-  /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i;
-
 // Fallback quy tắc khi model lỗi/hết quota (hướng parseVnd của NhaDat-Radar):
 // bắt tối thiểu ngân sách + hẻm/mặt tiền bằng regex để hồ sơ không mất dữ liệu,
 // và trả lời template thay vì im lặng hay đổ lỗi cho khách.
@@ -182,15 +179,24 @@ Deno.serve(async (req) => {
   const msgId = body.msg_id ? String(body.msg_id) : null;
   const channel = String(body.channel ?? "zalo_oa");
   const imageUrl = body.image_url ? String(body.image_url) : null;
-  if (!externalUserId || (!text && !imageUrl)) {
+  // `mark_sent` là cửa ghi sổ, không phải tin nhắn — nó không có người gửi lẫn
+  // nội dung. Xử ở dưới, SAU cổng bí mật.
+  if (!body.mark_sent && (!externalUserId || (!text && !imageUrl))) {
     return jsonResponse({ error: "external_user_id và text (hoặc image_url) bắt buộc" }, 400);
   }
   const textOrTag = text || "[khách gửi ảnh]";
 
-  // FR-161: tin có dấu → khớp bộ regex có dấu (chính xác, không đổi hành vi
-  // cũ); tin không dấu → rơi về bộ đã bỏ dấu. Model vẫn nhận `text` gốc.
-  const coDauTin = CO_DAU_RE.test(text);
+  // FR-161: người ta gõ LẪN dấu suốt — "ban nha q5 giá 5 ty" có đúng một chữ
+  // có dấu. Bản trước dò một cờ "câu này có dấu không" (bật khi câu chứa BẤT KỲ
+  // ký tự có dấu nào) rồi chọn MỘT bộ regex theo cờ đó, nên câu lẫn dấu bị dồn
+  // hết vào bộ CÓ DẤU và "ban", "nha" không khớp "bán", "nhà" — câu rơi im
+  // lặng. Cờ đó nay bỏ hẳn: giữ lại là mời người sau dùng lại đúng cái bẫy.
+  // `khop` thử CẢ HAI rồi lấy hợp: bộ không dấu chạy trên `tKD` (đã bỏ dấu)
+  // nên phủ luôn câu gõ đủ dấu, bộ có dấu giữ cụm chỉ đúng khi có dấu. Chỉ nới
+  // thêm, không bỏ mất khớp nào. Model vẫn nhận `text` gốc.
   const tKD = boDau(text);
+  const khop = (coDau: RegExp, khongDau: RegExp) =>
+    coDau.test(text) || khongDau.test(tKD);
 
   const client = serviceClient();
 
@@ -203,11 +209,40 @@ Deno.serve(async (req) => {
   // không làm gãy bridge đang chạy. zalo-webhook gọi bằng service_role key nên
   // luôn được cho qua.
   const gate = await secretOf(client, "BRIDGE_SECRET");
+  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
+  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
+  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
+  if (!gate) {
+    await ghiLoi(client, "chat-reply CONG MO",
+      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
+  }
   const isService =
     req.headers.get("authorization") ===
       `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
   if (gate && !isService && req.headers.get("x-bridge-secret") !== gate) {
     return jsonResponse({ error: "forbidden" }, 403);
+  }
+
+  // FR-162 — CỬA GHI NHẬN ĐÃ GỬI, cho người gọi không cầm service key.
+  // `zalo-webhook` có service key nên tự ghi `sent_bubbles`/`sent_at` vào sổ.
+  // Bridge (máy local) chỉ có publishable key + bí mật cổng, không đụng bảng
+  // được — nên bên kênh `zalo_personal_test`, `sent_at` KHÔNG BAO GIỜ được ghi
+  // và `already_sent` vĩnh viễn false. Tức cờ chống-gửi-đúp của FR-162 là chữ
+  // chết ở đúng cái kênh đang chạy thật: một `msg_id` giao hai lần — hai lượt
+  // thả tim cùng map về `react-<tid>-<gMsgID>` — là khách nhận lại nguyên loạt
+  // bong bóng. Cửa này trả cho bridge đúng nửa còn thiếu.
+  if (body.mark_sent) {
+    const soDaGui = Number(body.sent_bubbles ?? 0);
+    const xong = body.done !== false;
+    const { error: msErr } = await client.from("inbound_ledger").update({
+      sent_bubbles: Number.isFinite(soDaGui) ? soDaGui : 0,
+      ...(xong
+        ? { sent_at: new Date().toISOString(), send_error: null }
+        : { send_error: "gửi hụt giữa chừng — bridge báo lại" }),
+      updated_at: new Date().toISOString(),
+    }).eq("zalo_msg_id", String(body.mark_sent));
+    if (msErr) await ghiLoi(client, "chat-reply mark_sent", msErr.message);
+    return jsonResponse({ ok: !msErr, marked: String(body.mark_sent), done: xong });
   }
 
   // FR-141: bridge báo NGƯỜI THẬT (CTV/admin gõ tay từ acc clone) vừa nhắn cho
@@ -322,6 +357,24 @@ Deno.serve(async (req) => {
       });
     } else if (soRow.r_state === "in_flight") {
       return jsonResponse({ reply: null, replies: [], deduped: true, in_flight: true });
+    } else if (soRow.r_state === "dead" || soRow.r_dead) {
+      // FR-166 bất biến 7: đã hỏng đủ 8 lượt, ĐỪNG THỬ NỮA. Trước bản này
+      // `dead` rơi tuột vào nhánh `else` bên dưới và được xử như việc mới:
+      //   * đốt một lượt gọi model đầy đủ cho một dòng đã bị bỏ,
+      //   * `baoHong` sau đó va guard `inbound_ledger_giu_completed` nên không
+      //     ghi được gì — hỏng im lặng,
+      //   * và vì nhánh này KHÔNG cầm hợp đồng thuê, hai lượt giao cùng lúc của
+      //     cùng msg_id đều chạy tới cuối và ĐỀU GỬI, phá đúng cái bất biến
+      //     exactly-once mà cả FR-162 dựng lên để giữ.
+      // Không giành sổ (`coSo` giữ false) nên mọi đường ra phía sau không đụng
+      // vào dòng thư chết nữa.
+      await ghiLoi(client, "chat-reply dead",
+        `msg_id ${msgId} đã ở thư chết sau ${soRow.r_attempts ?? "?"} lượt — bỏ qua, ` +
+          `không gọi model. Xem /admin để xử tay.`);
+      return jsonResponse({
+        reply: null, replies: [], deduped: true, dead: true,
+        already_sent: !!soRow.r_sent_at,
+      });
     } else {
       coSo = true;
       soAttempts = soRow.r_attempts ?? 1;
@@ -341,10 +394,18 @@ Deno.serve(async (req) => {
   };
   const baoHong = async (payload: Record<string, unknown>, code: number, detail: string) => {
     if (coSo) {
-      const { error: soErr3 } = await client.from("inbound_ledger").update({
-        status: "failed", detail: detail.slice(0, 500),
-        updated_at: new Date().toISOString(),
-      }).eq("zalo_msg_id", msgId);
+      // FR-166: PHẢI đi qua `bao_hong_inbound`, đừng ghi thẳng `status='failed'`.
+      // Hàm đó mới là chỗ đặt `next_retry_at = now() + lan_thu_ke(attempts)` và
+      // tự chuyển thư chết ở lượt thứ 8. Ghi tay như trước là bỏ mất giờ hẹn:
+      // `inbound-sweep` quét `failed` với `next_retry_at` NULL thì coi là tới
+      // giờ NGAY, nên nó cứu lại mỗi phút một lượt — một tin gặp lỗi hết hạn
+      // mức (quota) đốt sạch 8 lượt trong 8 phút rồi nằm `dead` vĩnh viễn,
+      // đúng ngược lại lời hứa "lùi dần" ghi trong chính comment cũ.
+      // Hàm này cũng tự né dòng đã `completed` (guard FR-163), nên không cần
+      // kiểm trước ở đây.
+      const { error: soErr3 } = await client.rpc("bao_hong_inbound", {
+        p_msg_id: msgId, p_detail: detail.slice(0, 500),
+      });
       if (soErr3) await ghiLoi(client, "chat-reply baoHong ledger", soErr3.message);
     }
     return jsonResponse(payload, code);
@@ -407,13 +468,19 @@ Deno.serve(async (req) => {
   // buyer, bot cứ hỏi ngược lại về căn của họ.
   // Câu hỏi chờ KHÔNG mất khi rẽ sang nhánh mua: `info_requests` vẫn
   // `pending`, cron drip sẽ hỏi lại.
-  const hoiMua = coDauTin
-    ? /(muốn|cần|tìm|kiếm|đang coi|đang xem)\s*(mua|thu[êe]|nhà|căn|đất|phòng|mặt bằng|chung cư)/i
-        .test(text) ||
-      /(có|còn)\s*căn nào|xem nhà|coi nhà|tư vấn (mua|thu[êe])/i.test(text)
-    : /(muon|can|tim|kiem|dang coi|dang xem)\s*(mua|thue|nha|can|dat|phong|mat bang|chung cu)/
-        .test(tKD) ||
-      /(co|con)\s*can nao|xem nha|coi nha|tu van (mua|thue)/.test(tKD);
+  // Cổng này quyết định NGƯỜI BÁN nhắn có được rẽ sang nhánh mua hay không, nên
+  // trượt vì gõ lẫn dấu là nặng nhất trong ba chỗ: "toi muon mua nha q5, giá
+  // tốt ko" có đúng hai chữ có dấu, bản trước dồn vào bộ có dấu, không khớp vế
+  // nào, và người hỏi mua bị bot hỏi ngược về căn của chính họ.
+  const hoiMua =
+    khop(
+      /(muốn|cần|tìm|kiếm|đang coi|đang xem)\s*(mua|thu[êe]|nhà|căn|đất|phòng|mặt bằng|chung cư)/i,
+      /(muon|can|tim|kiem|dang coi|dang xem)\s*(mua|thue|nha|can|dat|phong|mat bang|chung cu)/,
+    ) ||
+    khop(
+      /(có|còn)\s*căn nào|xem nhà|coi nhà|tư vấn (mua|thu[êe])/i,
+      /(co|con)\s*can nao|xem nha|coi nha|tu van (mua|thue)/,
+    );
 
   if (sellerRow && !hoiMua) {
     // OPEN-30 → đóng: model là NGƯỜI SOẠN CÂU CHỮ, không phải điều kiện sống
@@ -496,6 +563,11 @@ Deno.serve(async (req) => {
     // MỌI đường ra của nhánh này phải đi qua đây — trả lời của bot cũng là một
     // dòng trong sổ. Thêm `return jsonResponse(...)` trần ở nhánh seller là
     // thủng lại đúng chỗ vừa vá, và thủng im lặng.
+    // FR-164: lời cảm ơn cho phần SỬA FACT, gắn vào bong bóng ĐẦU của bất kỳ
+    // đường ra nào phía sau. Để ở đây (trước `traLoiSeller`) vì nhánh người bán
+    // có sáu lối thoát khác nhau — chép câu cảm ơn ra từng lối là kiểu bỏ sót
+    // đúng một chỗ rồi không ai thấy.
+    let ackSua: string | null = null;
     const traLoiSeller = async (
       replies: string[],
       extra: Record<string, unknown> = {},
@@ -506,7 +578,9 @@ Deno.serve(async (req) => {
           reply: null, replies: [], role: "seller", human_active: true, ...extra,
         });
       }
-      const sach = replies.map((r) => r.trim()).filter(Boolean);
+      const sach = [...(ackSua ? [ackSua] : []), ...replies]
+        .map((r) => r.trim()).filter(Boolean);
+      ackSua = null;
       for (const r of sach) {
         const { error: botErr } = await client.from("messages").insert({
           conversation_id: convSId, sender: "bot", body: r,
@@ -553,7 +627,7 @@ Deno.serve(async (req) => {
     await client.from("reminders").update({ status: "cancelled" })
       .eq("seller_id", sellerRow.id).eq("kind", "promise").eq("status", "pending");
     // Seller hứa "chiều gửi ảnh…" → đặt hẹn nhắc
-    if (coDauTin ? PROMISE_RE.test(text) : PROMISE_RE_KD.test(tKD)) {
+    if (khop(PROMISE_RE, PROMISE_RE_KD)) {
       await client.from("reminders").insert({
         kind: "promise", seller_id: sellerRow.id,
         due_at: mapDue(text), note: text.slice(0, 200),
@@ -571,26 +645,38 @@ Deno.serve(async (req) => {
     // điểm của vòng drip là hỏi cho ĐỦ những thứ còn thiếu. Nới thì phải có thứ
     // khác gánh dương-tính-giả — thứ đó là THỨ TỰ TỪ: "nhà mình bán chưa em?"
     // có đủ "bán" lẫn "nhà" nhưng không có cặp "bán nhà"/"muốn bán".
-    // FR-161: mỗi vế hai bản có-dấu/không-dấu, chọn theo tin.
-    const coChiTiet = coDauTin
-      ? /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text)
-      : /[\d][\d.,]*\s*(ty|ti|toi|trieu|tr(?![a-z]))|\d+\s*m2|\bhem\b|mat tien|phuong/.test(tKD);
-    const coYDinhRao = coDauTin
-      ? /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe])/i.test(text) ||
-        /(bán|rao|cho thu[êe])\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i
-          .test(text)
-      : /(muon|can|dang|nho|ky gui)\s+(ban|cho thue)\b/.test(tKD) ||
-        /(ban|rao|cho thue)\s+(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|can)\b/
-          .test(tKD);
+    // FR-161: tin gõ LẪN dấu là chuyện thường — "ban nha q5 giá 5 ty" có đúng
+    // MỘT chữ có dấu. `coDauTin` bật khi câu chứa BẤT KỲ ký tự có dấu nào, nên
+    // bản trước dồn cả câu vào bộ regex CÓ DẤU: "ban"/"nha" không khớp
+    // "bán"/"nhà", `wantsSell` ra false và câu rao rơi IM LẶNG — đúng cái hỏng
+    // FR-161 sinh ra để bịt, chỉ đổi sang một dạng khác.
+    // Nay thử CẢ HAI bộ rồi lấy hợp. Bộ không dấu chạy trên `tKD` (đã bỏ dấu)
+    // nên nó phủ luôn câu gõ đủ dấu; bộ có dấu giữ những cụm chỉ đúng khi có
+    // dấu. Phép hợp chỉ NỚI THÊM, không bỏ mất khớp nào so với bản cũ.
+    const coChiTiet = khop(
+      /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i,
+      /[\d][\d.,]*\s*(ty|ti|toi|trieu|tr(?![a-z]))|\d+\s*m2|\bhem\b|mat tien|phuong/,
+    );
+    const coYDinhRao =
+      khop(
+        /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe])/i,
+        /(muon|can|dang|nho|ky gui)\s+(ban|cho thue)\b/,
+      ) ||
+      khop(
+        /(bán|rao|cho thu[êe])\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i,
+        /(ban|rao|cho thue)\s+(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|can)\b/,
+      );
     // Chỉ chặn câu hỏi tình trạng khi câu KHÔNG kèm chi tiết thật nào.
-    const laCauHoiTinhTrang = coDauTin
-      ? /(chưa|sao r[oồ]i|th[eế] n[aà]o|ra sao|đư[ơợ]c không|đc ko|xong ch[uư]a)/i.test(text)
-      : /(chua|sao roi|the nao|ra sao|duoc khong|dc ko|xong chua)/.test(tKD);
-    const wantsSell = (coDauTin
-        ? /\b(bán|rao)\b|cho thu[êe]/i.test(text) &&
-          /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text)
-        : /\b(ban|rao)\b|cho thue/.test(tKD) &&
-          /(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|\bcan\b)/.test(tKD)) &&
+    const laCauHoiTinhTrang = khop(
+      /(chưa|sao r[oồ]i|th[eế] n[aà]o|ra sao|đư[ơợ]c không|đc ko|xong ch[uư]a)/i,
+      /(chua|sao roi|the nao|ra sao|duoc khong|dc ko|xong chua)/,
+    );
+    const wantsSell =
+      khop(/\b(bán|rao)\b|cho thu[êe]/i, /\b(ban|rao)\b|cho thue/) &&
+      khop(
+        /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i,
+        /(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|\bcan\b)/,
+      ) &&
       (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang));
 
     // ─── FR-164: CHỦ NHÀ SỬA THÔNG TIN GIỮA CHỪNG.
@@ -607,6 +693,18 @@ Deno.serve(async (req) => {
     // Ghi qua `ghi_fact_listing` — cửa fact duy nhất; chuẩn hoá, kiểm giá trị và
     // đo bậc ưu tiên đều nằm ở tầng DB, không chép luật lên đây.
     const suaFacts: Array<[string, string]> = [];
+    // Vị trí các đoạn đã được nhận là "lời sửa". Bóc chúng ra khỏi câu thì phần
+    // CÒN LẠI cho biết câu này có kèm câu trả lời cho câu hỏi đang treo không.
+    const nhipSua: Array<[number, number]> = [];
+    const batSua = (
+      m: RegExpExecArray | null,
+      key: string,
+      lay: (m: RegExpExecArray) => string,
+    ) => {
+      if (!m) return;
+      suaFacts.push([key, lay(m)]);
+      nhipSua.push([m.index, m.index + m[0].length]);
+    };
     if (!wantsSell) {
       const mGia =
         /gi[áa]\s*[^0-9]{0,12}?([\d][\d.,]*\s*(?:tỷ|tỉ|tỏi|triệu|ty|ti|toi|trieu|tr)(?![a-zA-ZÀ-ỹ])[^,.;\n]*)/i
@@ -616,14 +714,14 @@ Deno.serve(async (req) => {
       // KHÔNG cắt ở đây: chuỗi này là bằng chứng thô, còn `price_raw` do
       // `chuan_hoa_gia_raw()` ở tầng DB gọt — một luật, một chỗ, và mọi cửa ghi
       // (form admin, câu trả lời drip) đều đi qua nó chứ không riêng cửa này.
-      if (mGia) suaFacts.push(["gia", mGia[1].trim()]);
-      const mPhuong = /(?:phường|phuong)\s*\.?\s*(\d{1,2})\b/i.exec(text);
-      if (mPhuong) suaFacts.push(["phuong", `Phường ${mPhuong[1]}`]);
-      const mPN = /(\d{1,2})\s*(?:phòng ngủ|phong ngu|\bpn\b)/i.exec(text);
-      if (mPN) suaFacts.push(["so_phong_ngu", mPN[1]]);
-      const mDT =
-        /(?:diện tích|dien tich|\bdt\b)\s*[^0-9]{0,8}?(\d{1,4}(?:[.,]\d+)?)\s*m2?/i.exec(text);
-      if (mDT) suaFacts.push(["dien_tich", `${mDT[1]}m2`]);
+      batSua(mGia, "gia", (m) => m[1].trim());
+      batSua(/(?:phường|phuong)\s*\.?\s*(\d{1,2})\b/i.exec(text), "phuong",
+        (m) => `Phường ${m[1]}`);
+      batSua(/(\d{1,2})\s*(?:phòng ngủ|phong ngu|\bpn\b)/i.exec(text), "so_phong_ngu",
+        (m) => m[1]);
+      batSua(
+        /(?:diện tích|dien tich|\bdt\b)\s*[^0-9]{0,8}?(\d{1,4}(?:[.,]\d+)?)\s*m2?/i.exec(text),
+        "dien_tich", (m) => `${m[1]}m2`);
     }
     // Trường nào đang là câu hỏi chờ thì để đường drip xử — tránh vừa ghi lời
     // sửa vừa bỏ lửng câu hỏi đang treo.
@@ -631,6 +729,25 @@ Deno.serve(async (req) => {
       !(pendingReq &&
         (k === pendingReq.question ||
           (k === "dien_tich" && /^dien_tich/.test(pendingReq.question)))));
+
+    // Bóc các đoạn "lời sửa" ra, cắt từ PHẢI sang TRÁI để chỉ số không trượt.
+    const conLai = nhipSua.length
+      ? nhipSua.slice().sort((a, b) => b[0] - a[0])
+        .reduce((s, [i, j]) => `${s.slice(0, i)} ${s.slice(j)}`, text)
+        .replace(/\s+/g, " ").replace(/^[\s,.;:–-]+|[\s,.;:–-]+$/g, "").trim()
+      : text;
+    // Tiểu từ đứng trơ một mình KHÔNG phải câu trả lời: "à giá 6.8 tỷ nha em"
+    // bóc xong còn "à em" — đó vẫn chỉ là lời sửa. Lọc sau `boDau` nên danh
+    // sách chỉ cần bản không dấu.
+    const conChu = boDau(conLai)
+      .replace(
+        /\b(a|u|o|da|vang|em|anh|chi|nha|nhe|nhen|ha|hen|ok|oke|roi|thi|ma|voi|va|do|luon)\b/gi,
+        "",
+      )
+      .replace(/[^a-z0-9]+/gi, "");
+    // Câu VỪA sửa một trường VỪA trả lời câu hỏi đang treo. Hai việc, không
+    // được chọn một: đây chính là chỗ bản trước làm rơi câu trả lời drip.
+    const vuaTraLoiVuaSua = !!pendingReq && conChu.length >= 2;
 
     if (suaThat.length) {
       // Neo đúng CĂN theo cùng thứ tự tin cậy của FR-157: mã chủ tự nhắc > căn
@@ -669,10 +786,19 @@ Deno.serve(async (req) => {
           }
         }
         if (daGhi.length) {
-          return await traLoiSeller(
-            [`Dạ em cập nhật lại rồi ạ: ${daGhi.join(", ")}. Cảm ơn anh/chị đã báo em nha!`],
-            { sua_fact: suaThat.map(([k]) => k) },
-          );
+          const cau =
+            `Dạ em cập nhật lại rồi ạ: ${daGhi.join(", ")}. Cảm ơn anh/chị đã báo em nha!`;
+          if (!vuaTraLoiVuaSua) {
+            return await traLoiSeller([cau], { sua_fact: suaThat.map(([k]) => k) });
+          }
+          // KHÔNG dừng ở đây. Trước bản này khối này `return` thẳng, nên câu
+          // "sổ hồng rồi em, à giá 6.8 tỷ nha" (đang treo câu hỏi pháp lý) chỉ
+          // ghi được GIÁ: câu trả lời pháp lý bay mất, `info_requests` kẹt
+          // `pending`, và nhịp drip sau lại hỏi đúng cái chủ nhà vừa trả lời —
+          // bot hỏi lại điều vừa được đáp là kiểu mất mặt FR-144 sinh ra để
+          // tránh. Gắn lời cảm ơn vào đường ra chung rồi đi tiếp xuống khối
+          // `pendingReq` để câu trả lời cũng vào sổ.
+          ackSua = cau;
         }
       }
     }
@@ -708,8 +834,12 @@ Deno.serve(async (req) => {
       // Riêng loai_bds vẫn hỏi hàm DB TRƯỚC, nhưng chỉ để quyết định có HỎI LẠI
       // không — không ghi cột. Dùng hàm DB (FR-150/FR-164) nên câu có phủ định
       // ("nhà phố chứ không phải chung cư") cũng đọc đúng.
+      // Câu có kèm lời sửa thì phần ĐÃ BÓC mới là câu trả lời. Giữ nguyên cả
+      // câu là nhét "giá 6.8 tỷ" vào fact pháp lý — bằng chứng sai chỗ còn tệ
+      // hơn thiếu bằng chứng, vì nó trông như chủ nhà đã xác nhận.
+      const dapAn = ackSua ? conLai : text;
       if (pendingReq.question === "loai_bds") {
-        const { data: pt } = await client.rpc("guess_property_type_answer", { p_text: text });
+        const { data: pt } = await client.rpc("guess_property_type_answer", { p_text: dapAn });
         if (!pt) {
           // Không đọc ra loại → HỎI LẠI, giữ nguyên câu hỏi pending. TUYỆT ĐỐI
           // không ghi fact `loai_bds`: ghi xong là listing_missing_facts hết
@@ -723,12 +853,12 @@ Deno.serve(async (req) => {
       const { error: factErr } = await client.rpc("ghi_fact_listing", {
         p_listing_id: pendingReq.listing_id,
         p_question: pendingReq.question,
-        p_answer: text,
+        p_answer: dapAn,
         p_source: "seller_chat",
       });
       if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
       await client.from("info_requests").update({
-        status: "answered", answer: text, answered_at: new Date().toISOString(),
+        status: "answered", answer: dapAn, answered_at: new Date().toISOString(),
       }).eq("id", pendingReq.id);
 
       // Fact đã vào sổ — từ đây trở xuống là phần "nói". Người thật đang cầm
@@ -830,9 +960,13 @@ Deno.serve(async (req) => {
       // price_raw cắt từ text GỐC (giữ nguyên chữ người gõ); tin không dấu thì
       // text gốc vốn đã ascii nên bản nào cũng là chữ của họ. parse_vnd phía DB
       // đã nuốt được "ty"/"trieu" (kiểm 27/08).
-      const priceM = coDauTin
-        ? /([\d][\d.,]*\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))[^,.;\n]*)/i.exec(text)
-        : /([\d][\d.,]*\s*(?:ty|ti|toi|trieu|tr(?![a-zA-Z]))[^,.;\n]*)/i.exec(text);
+      // Hai bộ cùng chạy trên `text` GỐC (giữ nguyên chữ người gõ cho
+      // `price_raw`), thử bộ có dấu trước rồi mới tới bộ không dấu. Chọn MỘT bộ
+      // theo `coDauTin` như bản trước là hụt đơn vị gõ lẫn: "giá 5 ti" có dấu ở
+      // "giá" nên đi bộ có dấu, mà bộ đó có "tỉ" chứ không có "ti" trần.
+      const priceM =
+        /([\d][\d.,]*\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))[^,.;\n]*)/i.exec(text) ??
+          /([\d][\d.,]*\s*(?:ty|ti|toi|trieu|tr(?![a-zA-Z]))[^,.;\n]*)/i.exec(text);
       // FR-158: mã do trigger `trg_listings_fill_code` cấp, nối tiếp đúng dãy
       // BDS-Q5-#### mà admin và web đang dùng. Đưa `code: null` xuống là cố ý —
       // bộ đúc mã `CCRB-<base36>` cũ ở đây là dãy thứ hai không ai cần, lại

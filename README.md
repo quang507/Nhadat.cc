@@ -33,6 +33,7 @@ Từ 24/08/2026 code nằm **trong chính repo này** (trước đó ở thư m�
 | `bot/supabase/functions/` | 9 edge function (Deno) — bộ não chat, webhook Zalo, cron nhắc/báo cáo |
 | `bot/supabase/migrations/` | Bản sao tham chiếu của migration đã áp (áp thật qua MCP) |
 | `bot/bridge-zca/` | Bridge Zalo acc clone — chạy trên máy chủ dự án, không deploy |
+| `bot/tests/` | Test hồi quy chạy tay bằng Node (`docs/10 §TS-HQ`) |
 | `scripts/` | Script vận hành chạy tay: up ảnh, sao lưu DB |
 | `design/` | Design token + 13 artboard nguồn |
 

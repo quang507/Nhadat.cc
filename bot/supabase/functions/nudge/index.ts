@@ -35,6 +35,13 @@ Deno.serve(async (req) => {
   // inbound-sweep đã dùng — cron mang `x-bridge-secret` (xem `nudge_tick`).
   const cong = serviceClient();
   const bimat = await secretOf(cong, "BRIDGE_SECRET");
+  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
+  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
+  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
+  if (!bimat) {
+    await ghiLoi(cong, "nudge CONG MO",
+      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
+  }
   const laDichVu = req.headers.get("authorization") ===
     `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
   if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
@@ -54,6 +61,17 @@ Deno.serve(async (req) => {
   // Lệch phút ngẫu nhiên — đừng gửi đúng boong :00/:30 như máy
   if (!dry_run) await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 45000)));
   const client = serviceClient();
+  // FR-166: MỌI đường báo hỏng đi qua đây. `bao_hong_nhac` đẩy `next_retry_at`
+  // và lật sang `dead` khi quá 5 lượt — tức nó GHI ĐÈ lời nhắc THẬT. Trước bản
+  // này ba chỗ gọi thẳng nó nằm ngoài mọi guard `!dry_run`, nên một lượt chạy
+  // thử với key model hỏng (`!anthropic`) quét đúng 5 dòng pending có thật rồi
+  // đẩy hết sang thư chết — lượt "chỉ xem, không đụng" mà xoá được lời hứa với
+  // khách. `dry_run` đã cố ý KHÔNG giành việc (không tăng `attempts`) ở hai chỗ
+  // claim bên dưới; cổng này giữ nốt nửa còn lại của cùng lời hứa đó.
+  const baoHongNhac = async (id: string, detail: string) => {
+    if (dry_run) return;
+    await client.rpc("bao_hong_nhac", { p_id: id, p_detail: detail });
+  };
   // FR-166: khối leo thang KHÔNG cần model. Để `anthropicClient` ném thẳng ra
   // ngoài là một cái key hỏng kéo sập cả lượt chạy, kể cả phần chẳng liên quan
   // tới AI. Cùng lưới đã dựng cho chat-reply ở OPEN-30.
@@ -142,7 +160,7 @@ Deno.serve(async (req) => {
         } else {
           // FR-166 bất biến 6/7: nhả hợp đồng thuê + hẹn giờ lùi dần; quá 5 lần
           // thì cho vào thư chết thay vì đập lại OA mỗi 30 phút đến hết đời.
-          await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: "gửi OA hụt" });
+          await baoHongNhac(r.id, "gửi OA hụt");
         }
       } else {
         // Thiếu đích hoặc thiếu token OA: việc này KHÔNG phải của đường OA, nó
@@ -150,10 +168,22 @@ Deno.serve(async (req) => {
         // hợp đồng thuê là khoá vô ích, còn để `attempts` tăng mỗi nửa tiếng là
         // biến bộ đếm thành lời nói dối (FR-166: chưa thử thì không tính là đã
         // thử). Lỗi này lộ ra khi soi DB sau lượt cron thật đầu tiên.
-        await client.rpc("nha_viec_nhac", { p_id: r.id });
+        // `p_worker` BẮT BUỘC truyền: nhả mà không kiểm ai đang giữ thì một
+        // worker treo quá hạn có thể xoá khoá của worker đang chạy, mở đường
+        // cho worker thứ ba giành cùng dòng (H2, migration 20260829f).
+        await client.rpc("nha_viec_nhac", { p_id: r.id, p_worker: workerId });
       }
     }
     out.push({ kind: r.kind, id: r.id, text, sent });
+  }
+
+  // Con mắt bù cho chỗ `nha_viec_nhac` cố ý không có trần thử lại: dòng
+  // escalation/report nào nằm chờ quá 24h nghĩa là bridge không tới lấy, và vì
+  // mỗi nhịp lại nhả ra nên `attempts` luôn về 0 — không có gì tự lộ. Hàm DB tự
+  // ghi `bot_errors` khi đếm > 0 (van của `log_loi` chặn spam).
+  if (!dry_run) {
+    const { error: treoErr } = await client.rpc("bo_dem_nhac_treo", { p_gio: 24 });
+    if (treoErr) await ghiLoi(client, "nudge bo_dem_nhac_treo", treoErr.message);
   }
 
   // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) ----
@@ -195,7 +225,7 @@ Deno.serve(async (req) => {
     // thoát khỏi CẢ vòng lặp — những lời nhắc còn lại mất lượt, mà chúng đã bị
     // giành (locked_at) nên treo 5 phút mới ai đụng lại được.
     if (!anthropic) {
-      await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: "khong co client model" });
+      await baoHongNhac(r.id, "khong co client model");
       continue;
     }
     let resp;
@@ -217,12 +247,12 @@ Deno.serve(async (req) => {
     });
     } catch (e) {
       await ghiLoi(client, "nudge model(nhac)", e);
-      await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: `model: ${String(e).slice(0, 120)}` });
+      await baoHongNhac(r.id, `model: ${String(e).slice(0, 120)}`);
       continue;
     }
     const text = resp.content.find((b) => b.type === "text")?.text?.trim();
     if (!text) {
-      await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: "model tra rong" });
+      await baoHongNhac(r.id, "model tra rong");
       continue;
     }
 
@@ -236,7 +266,7 @@ Deno.serve(async (req) => {
         // FR-166: nhả hợp đồng thuê + hẹn giờ theo luật lùi dần. Không nhả thì
         // dòng này bị khoá 5 phút vô ích; không hẹn giờ thì cứ 30 phút lại đập
         // vào OA đúng cái đang hỏng, và không bao giờ dừng.
-        await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: "gửi OA hụt" });
+        await baoHongNhac(r.id, "gửi OA hụt");
         out.push({ kind: r.kind, id: r.id, text, sent, retry: true });
         continue;
       }
@@ -272,6 +302,27 @@ Deno.serve(async (req) => {
   }
 
   // ---- 2. Buyer im lặng 5-6 ngày ----
+  // FR-166: DỌN DÒNG GIỮ CHỖ MỒ CÔI trước đã.
+  // Đường bình thường đóng dòng giữ chỗ trong vài giây: gửi xong → `sent`,
+  // gửi hụt → `cancelled`, model ném hoặc trả rỗng → xoá. Còn `pending` quá 15
+  // phút chỉ có một nghĩa: instance bị thu hồi giữa lúc gọi model, không ai
+  // đóng dòng đó nữa. Mà `reminders_mot_reengage_cho_idx` chỉ cho MỘT dòng
+  // reengage pending mỗi khách, nên dòng mồ côi KHOÁ CỨNG đúng khách ấy —
+  // không bao giờ được hỏi thăm lần nữa, không một dòng lỗi nào, và chẳng ai
+  // biết cho tới lúc soi tay. `nudge` là nơi DUY NHẤT ghi `kind='reengage'`
+  // (đã soát 29/08) nên quét ở đây là đủ, khỏi thêm cron riêng.
+  if (!dry_run) {
+    const { data: donRows, error: donErr } = await client.from("reminders")
+      .update({ status: "cancelled", last_error: "mo coi — instance chet giua chung" })
+      .eq("kind", "reengage").eq("status", "pending")
+      .lt("created_at", new Date(Date.now() - 15 * 60e3).toISOString())
+      .select("id");
+    if (donErr) await ghiLoi(client, "nudge don reengage mo coi", donErr.message);
+    else if (donRows?.length) {
+      out.push({ kind: "don_reengage_mo_coi", so: donRows.length });
+    }
+  }
+
   const now = Date.now();
   const { data: quiet } = await client
     .from("buyers")
@@ -312,7 +363,17 @@ Deno.serve(async (req) => {
         kind: "reengage", buyer_id: b.id, due_at: new Date().toISOString(),
         note: angle, status: "pending",
       }).select("id").single();
-      if (choErr) continue;
+      if (choErr) {
+        // 23505 = thua cuộc đua với lượt chạy song song. ĐÚNG như thiết kế:
+        // index duy nhất là trọng tài, bên thua nhường, không ồn ào.
+        // Mọi mã khác (hết quyền, sai ràng buộc, mất kết nối) là hỏng THẬT và
+        // phải vào sổ — `continue` trần nuốt sạch cả hai loại như nhau, đúng
+        // kiểu hỏng im lặng FR-152 d cấm.
+        if (choErr.code !== "23505") {
+          await ghiLoi(client, "nudge giu cho reengage", choErr.message);
+        }
+        continue;
+      }
       giuCho = cho?.id ?? null;
     }
 

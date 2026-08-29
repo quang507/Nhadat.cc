@@ -93,6 +93,22 @@ câu rao cho thuê · ghiLoi trong catch). Kế hoạch test nằm MỘT chỗ �
 4. Secrets còn chờ: `ZALO_OA_ACCESS_TOKEN` (OA duyệt xong), `ZALO_ADMIN_ZALO_ID`
    (Zalo admin nhận báo cáo 17h), `ZALO_APP_SECRET`/`ZALO_APP_ID` (verify chữ ký).
 
+## Test hồi quy (`bot/tests/`)
+
+```bash
+node bot/tests/fr161-go-lan-dau.mjs
+node bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs
+```
+
+Chạy bằng Node, không cần Deno / mạng / Supabase; hỏng thì thoát khác 0. Sinh ra
+sau đợt soát 29/08 vì mười lỗi tìm được lần đó **gần như đều ở tầng TypeScript**
+— nơi trước giờ chưa có lấy một test nào, trong khi hàm DB đã có TS-JOB/TS-SEC2
+phủ dày. Chi tiết bất biến: `docs/10 §TS-HQ`.
+
+Hai file này **chép lại** regex của `chat-reply` chứ không import (Node không nạp
+được module Deno). Sửa regex ở `chat-reply/index.ts` mà quên sửa ở đây thì test
+vẫn xanh trong khi hàm thật đã đổi — xem `bot/tests/README.md`.
+
 ## Ghi chú deploy 27/08/2026
 
 `chat-reply` v36 deploy qua MCP với bản **đã bỏ dòng comment** (nội dung code
@@ -205,6 +221,18 @@ Chưa đặt secret thì cổng mở như cũ — nhưng nó ĐANG được đ�
 | `escalation-feed` | bridge (dùng 401 thay vì 403, có từ trước) |
 
 Sửa hàm tick TRƯỚC rồi mới deploy function, để cron không đứt nhịp nào.
+
+**Đọc bí mật phải qua `secretOf()` — env TRƯỚC, Vault SAU.** `get_secret` trần
+chỉ hỏi Vault, nên nếu `BRIDGE_SECRET` được đặt bằng biến môi trường của
+function thì cửa đó đọc ra `null` và **mở toang trong khi cả nhà đã đóng**. Đã
+vấp đúng hai chỗ (`geocode-listings`, `escalation-feed`), vá 29/08.
+
+**Cổng fail-open là chủ ý, nhưng không được im.** Gắn cổng trước khi có bí mật
+thì cron không gãy — cái giá là một lần đọc hụt bí mật biến function thành công
+khai mà không ai hay. Cả tám cửa nay ghi `bot_errors` nguồn
+`<tên function> CONG MO` khi không đọc được `BRIDGE_SECRET` (van `log_loi` 20
+dòng/nguồn/giờ chặn spam). Thấy dòng đó ở `/admin` là **đang hở**, không phải
+cảnh báo cho vui.
 
 **`zalo-webhook` là ngoại lệ và đang HỞ** — nó buộc phải `verify_jwt=false` (Zalo
 không gửi JWT Supabase được), hàng rào duy nhất là chữ ký `X-ZEvent-Signature`,

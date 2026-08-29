@@ -176,17 +176,52 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
     await new Promise((r) => setTimeout(r, 5000));
     out = await postJson(CHAT_REPLY_URL, brainHeaders, payload);
   }
-  const { reply, replies, photos, error } = out ?? {};
+  const { reply, replies, photos, error, replayed, already_sent } = out ?? {};
   if (error) return await ghiLoi("chat-reply", error);
+
+  // FR-162: cùng `msg_id` giao lần hai VÀ lần trước đã gửi đủ → im.
+  // `zalo-webhook` kiểm đúng cặp cờ này từ lâu, bridge thì không — nên riêng
+  // kênh acc clone, một tin giao trùng là khách nhận lại y nguyên loạt bong
+  // bóng. Chạm được thật: hai lượt thả tim trên cùng một tin đều quy về
+  // `react-<tid>-<gMsgID>`, tức CÙNG một msg_id.
+  if (replayed && already_sent) {
+    console.log(`↩ [${threadId}] ${msgId} đã trả lời và đã gửi xong — bỏ bản trùng`);
+    return;
+  }
+
   const bubbles = Array.isArray(replies) && replies.length ? replies : reply ? [reply] : [];
 
   // Quyết định 25/08: KHÔNG delay nhân tạo — bong bóng đầu đi ngay lập tức,
   // giữa các bong bóng chỉ chừa 300ms cho Zalo giao đúng thứ tự.
-  for (const [i, bubble] of bubbles.entries()) {
-    if (i > 0) await new Promise((r) => setTimeout(r, 300));
-    rememberSent(bubble);
-    await api.sendMessage(bubble, String(threadId), ThreadType.User);
-    console.log(`→ ${bubble.slice(0, 80)}…`);
+  let daGui = 0;
+  try {
+    for (const [i, bubble] of bubbles.entries()) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 300));
+      rememberSent(bubble);
+      await api.sendMessage(bubble, String(threadId), ThreadType.User);
+      daGui = i + 1;
+      console.log(`→ ${bubble.slice(0, 80)}…`);
+    }
+  } finally {
+    // Ghi vào sổ là ĐÃ GỬI. Không có bước này thì `already_sent` bên trên vĩnh
+    // viễn false và cái cổng vừa thêm là chữ chết: bridge không cầm service key
+    // nên phải nhờ `chat-reply` ghi hộ (cửa `mark_sent`, cùng bí mật cổng).
+    // Đặt trong `finally` để tin gửi hụt GIỮA CHỪNG cũng kịp ghi được đã đi tới
+    // đâu — ném ra mà không ghi thì sổ nói "chưa gửi gì" trong khi khách đã cầm
+    // ba bong bóng đầu.
+    // Hạn còn lại, biết mà chưa vá: bridge chưa TIẾP TỤC từ `sent_bubbles`, nên
+    // gửi hụt giữa chừng rồi giao lại vẫn phát từ bong bóng đầu. Muốn hết thì
+    // `claim_inbound` phải trả thêm `sent_bubbles` — đổi chữ ký hàm DB, để dịp
+    // khác chứ không nhét vào bản vá này.
+    if (msgId && bubbles.length) {
+      try {
+        await postJson(CHAT_REPLY_URL, brainHeaders, {
+          mark_sent: msgId, sent_bubbles: daGui, done: daGui === bubbles.length,
+        });
+      } catch (e) {
+        await ghiLoi("mark_sent", errDetail(e));
+      }
+    }
   }
 
   // FR-143: đính kèm hình thật (URL chính chủ gửi, bộ não chọn) — tải về file
