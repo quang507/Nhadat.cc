@@ -656,3 +656,76 @@ rồi để `inbound-sweep` nhặt: job về `completed`, `reply` nằm trong s�
    hụt" phải lùi dần và phải chết sau 5 lần, "chưa thử được" thì không.
 
 **30/30 đạt.**
+
+### TS-SEC2 — soát bảo mật theo VAI THẬT (FR-167)
+
+Chạy 29/08/2026 trên bản live. **Cách làm khác các đợt trước**: không đọc policy
+rồi suy diễn, mà đóng vai thật — `set local role anon` / `authenticated` kèm
+`request.jwt.claims` để `auth.uid()` và `auth.jwt()` trả đúng danh tính — rồi
+thử đọc/ghi/gọi RPC. Phần edge function gọi HTTP thật bằng đúng **publishable
+key** (khoá nằm sẵn trong bundle JS của web, ai mở trang cũng có). Toàn bộ dựng
+cảnh nằm trong một khối DO rồi `raise` để cuộn lại; kiểm sau khi chạy: 0 dòng
+sót ở `auth.users`, `sellers`, `listings`, `buyers`, `admins`, 0 hàm test còn
+lại, `listing-private` vẫn `public=false`.
+
+**Ba cái bẫy của chính bộ kiểm, phải nói ra vì chúng suýt cho kết luận sai:**
+
+1. *UPDATE bị RLS chặn KHÔNG ném lỗi* — nó sửa 0 dòng rồi báo thành công. Lượt
+   đầu tôi chấm theo "có exception hay không" nên S10/S12/S16 hiện FAIL, đọc như
+   "anon bật được bucket riêng thành công khai". Chấm lại theo SỐ DÒNG và soi
+   trạng thái bucket trước/sau: 0 dòng, `public` vẫn `false`. Không phải lỗ.
+2. *`select count(*) from (select f())` không gọi f()* — planner bỏ qua vì
+   count(\*) không cần giá trị cột. Lượt đầu vì thế báo `cau_hinh` "chạy được"
+   trong khi thật ra nó bị chặn. Chữa: `execute ... into v` để ép đánh giá.
+3. *Cảnh "tin nháp" tự lên kệ* — tin dựng để test có đủ giá/diện tích/phường nên
+   trigger FR-164 đẩy thẳng sang `dang_ban`, làm test đọc-chéo hiện FAIL giả.
+   Dựng lại tin THIẾU thông tin mới ra kết quả thật.
+
+| Nhóm | Số ca | Nội dung | Kết quả |
+|---|---|---|---|
+| TS-SEC2-01…22 | 22 | `anon` ĐỌC: sellers (SĐT), buyers (ghi chú CRM), messages, conversations, deals, viewings, reminders, admins, ctvs, info_requests, bot_prompts, app_config, bot_errors, inbound_ledger, media_cleanup_queue, job_suc_khoe, tin nháp, fact địa chỉ/hình, media bucket riêng, media + ảnh của tin nháp | 22/22 chặn |
+| TS-SEC2-23…41 | 19 | Người lạ ĐÃ ĐĂNG NHẬP GHI: sửa/xoá tin người khác, tạo tin đội tên seller khác, tự phong admin, sửa SĐT chủ nhà, tạo seller/buyer đội tên, sửa ghi chú CRM, sửa phí, chốt/xoá giao dịch, chèn tin nhắn vào hội thoại người khác, sửa + spam lời nhắc, sửa prompt hệ thống, thêm media/fact vào tin người khác, tạo lịch xem giả, xoá hội thoại, sửa app_config | 19/19 chặn |
+| TS-SEC2-42…56 | 15 | Người lạ gọi RPC: get_secret, cau_hinh, next_listing_code, listings_fill_code, info_request_set_active_listing, ghi_fact_listing, merge_buyer_prefs, claim_inbound, nhan_viec_nhac, bump_model_quota, beat, bot_health_tick, inbound_sweep_tick, nudge_tick, ctv_report_tick | 15/15 chặn |
+| TS-SEC2-57…59 | 3 | **Chéo người bán**: seller B đọc hồ sơ A, đọc tin NHÁP của A, CƯỚP tin của A (đổi `seller_id`) | 3/3 chặn |
+| TS-SEC2-60…61 | 2 | **Không vỡ nghiệp vụ**: anon vẫn đọc được tin ĐÃ LÊN KỆ và ảnh của nó | 2/2 đạt |
+
+**Kiểm quyền riêng (`admin_dang_tin`)**: hàm này CỐ Ý mở cho `authenticated` vì
+trang `/admin` gọi nó, nhưng nó tự kiểm `admins.email = auth.jwt()->>'email'` và
+ném 42501 nếu không phải admin. Gọi bằng vai người lạ → bị chặn đúng như thiết kế.
+
+**Kho file — 16 ca, tất cả chặn.** `storage.objects` và `storage.buckets` bật
+RLS với **0 policy**, nên mọi vai không-bypass đều bị từ chối bất kể quyền GRANT
+rộng: anon/authenticated ghi thẳng `storage.objects` (cả hai bucket), ghi đường
+dẫn leo thư mục `../..`, chuyển file riêng sang bucket công khai, xoá sạch
+objects, bật `public` cho bucket riêng, nới `file_size_limit`, tạo bucket mới.
+Qua HTTP: đọc route `/object/public/` của bucket riêng trả `NoSuchBucket`, tạo
+bucket trả 403 AccessDenied. *(Hai ca liệt-kê-bucket vẫn trả `200 []` — kho đang
+rỗng nên `[]` không phân biệt được "RLS lọc" với "cho phép nhưng rỗng"; kết luận
+lấy từ tầng SQL, chỗ có bằng chứng.)*
+
+**Edge function — 8 ca HTTP trên bản deploy, sau khi vá:**
+
+| Mã | Gọi bằng | Trước | Sau |
+|---|---|---|---|
+| TS-SEC2-H1 | `nudge`, KHÔNG kèm khoá nào | **200 + lộ danh sách lời nhắc** | 403 |
+| TS-SEC2-H2 | `nudge` + publishable key | **200** | 403 |
+| TS-SEC2-H3 | `nudge` + `x-bridge-secret` đúng (đường cron) | 200 | 200 (giữ nguyên) |
+| TS-SEC2-H4 | `nudge` + bridge secret SAI | — | 403 |
+| TS-SEC2-H5 | `ask-seller` + publishable key | **400 (đã qua cổng, vào logic)** | 403 |
+| TS-SEC2-H6 | `ctv-report` + publishable key | **đang chạy (timeout 5s của pg_net)** | 403 |
+| TS-SEC2-H7 | `geocode-listings` + publishable key | **200, ghi lat/lng** | 403 |
+| TS-SEC2-H8 | `chat-reply` / `escalation-feed` / `media-cleanup` / `inbound-sweep` + publishable key | 403/401/403/403 | không đổi (vốn đã kín) |
+
+`ask-seller` và `ctv-report` gọi lại bằng đúng bridge secret vẫn qua cổng
+(400 "listing_id bắt buộc" và chạy tới model) — cổng chặn người lạ, không chặn
+đường vận hành.
+
+**Advisor sau khi vá**: 4 cảnh báo `function_search_path_mutable` biến mất; ba
+hàm SECURITY DEFINER `next_listing_code`/`listings_fill_code`/
+`info_request_set_active_listing` rời khỏi danh sách anon/authenticated gọi được.
+Còn lại đều là CỐ Ý và đã ghi lý do: `listing_photos_v` là security-definer có
+chủ đích, `log_loi` mở cho anon (có van), `admin_dang_tin` mở cho authenticated
+(tự kiểm admin bên trong), 16 dòng INFO `rls_enabled_no_policy` chính là trạng
+thái ĐÚNG (bật RLS, không policy = từ chối tất cả trừ service_role), `pg_net`
+trong schema public là nợ cũ ở OPEN-24.
+

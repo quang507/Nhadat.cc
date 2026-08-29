@@ -11,6 +11,7 @@ import {
   ghiLoi,
   jsonResponse,
   MODEL,
+  secretOf,
   serviceClient,
 } from "../_shared/claude.ts";
 import { FACT_LABELS, SELLER_SCRIPT_RULES, TONE_RULES } from "../_shared/prompts.ts";
@@ -27,6 +28,21 @@ const OutSchema = z.object({
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return jsonResponse({ error: "POST only" }, 405);
+
+  // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
+  // verify_jwt=true KHÔNG phải là xác thực: nó chỉ đòi publishable key, mà khoá
+  // đó nằm sẵn trong bundle JS của web — ai mở trang cũng có. Đo thật: gọi bằng
+  // đúng khoá công khai đó thì hàm chạy tới tận logic nghiệp vụ (trả 400
+  // "listing_id bắt buộc"). Có listing_id là người lạ bắt bot NHẮN THẬT cho
+  // chủ nhà — đường quấy rối, và đốt tiền model.
+  const cong = serviceClient();
+  const bimat = await secretOf(cong, "BRIDGE_SECRET");
+  const laDichVu = req.headers.get("authorization") ===
+    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
+    return jsonResponse({ error: "forbidden" }, 403);
+  }
+
   const { listing_id, mode = "batch", dry_run = false } = await req.json().catch(() => ({}));
   if (!listing_id) return jsonResponse({ error: "listing_id bắt buộc" }, 400);
   const drip = mode === "drip";

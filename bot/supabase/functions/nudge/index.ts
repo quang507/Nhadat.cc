@@ -26,6 +26,21 @@ const ANGLES = [
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
 
+  // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
+  // Hàm này chạy verify_jwt=false và TRƯỚC bản này KHÔNG kiểm gì hết. Đo thật:
+  // POST tay, KHÔNG kèm một cái khoá nào, trả về 200 kèm nguyên danh sách lời
+  // nhắc đang chờ (có cả text leo thang nội bộ). Với `dry_run` mặc định là
+  // FALSE, người lạ gọi phát nữa là bot NHẮN THẬT cho khách, đốt tiền model và
+  // lật trạng thái `reminders`. Cùng cái cổng mà chat-reply / media-cleanup /
+  // inbound-sweep đã dùng — cron mang `x-bridge-secret` (xem `nudge_tick`).
+  const cong = serviceClient();
+  const bimat = await secretOf(cong, "BRIDGE_SECRET");
+  const laDichVu = req.headers.get("authorization") ===
+    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
+    return jsonResponse({ error: "forbidden" }, 403);
+  }
+
   // FR-166: dấu tay của lượt chạy này, ghi vào `reminders.locked_by` để nhìn
   // ra ai đang giữ việc khi có hai worker chạy chồng nhau.
   const workerId = `nudge-${crypto.randomUUID().slice(0, 8)}`;

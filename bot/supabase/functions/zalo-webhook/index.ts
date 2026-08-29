@@ -166,6 +166,26 @@ Deno.serve(async (req) => {
   const client = serviceClient();
   const appSecret = await secretOf(client, "ZALO_APP_SECRET");
   const appId = await secretOf(client, "ZALO_APP_ID");
+  if (!appSecret || !appId) {
+    // SOÁT BẢO MẬT 29/08/2026 — LỖ ĐANG MỞ, cần chủ dự án ra tay.
+    // Hàm này buộc phải chạy verify_jwt=false (Zalo không gửi được JWT của
+    // Supabase), nên CHỮ KÝ `X-ZEvent-Signature` là hàng rào DUY NHẤT. Chưa đặt
+    // ZALO_APP_SECRET/ZALO_APP_ID thì khối verify bên dưới bị nhảy qua — đo
+    // thật 29/08: POST một sự kiện bịa, không khoá không chữ ký, nhận 200.
+    // Nghĩa là người lạ giả được tin nhắn đến với BẤT KỲ sender.id nào: đội lốt
+    // Zalo ID của một chủ nhà để bơm fact vào tin của họ, hoặc bơm tin rác để
+    // đốt tiền model.
+    // CỐ Ý KHÔNG chặn cứng ở đây: chặn là bot chết ngay với người dùng thật,
+    // mà đó là quyết định của chủ dự án chứ không phải của đợt soát. Thay vào
+    // đó kêu to — `log_loi` có van 20 dòng/nguồn/giờ nên không ngập sổ, và
+    // trang /admin sẽ thấy. CHỮA THẬT = đặt hai secret đó vào Vault.
+    await ghiLoi(
+      client,
+      "zalo-webhook KHONG VERIFY",
+      "Thiếu ZALO_APP_SECRET/ZALO_APP_ID — webhook đang nhận sự kiện KHÔNG kiểm chữ ký. " +
+        "Ai cũng giả được tin nhắn đến. Đặt hai secret này vào Vault để đóng lỗ.",
+    );
+  }
   if (appSecret && appId) {
     const sig = req.headers.get("X-ZEvent-Signature") ?? "";
     const ts = JSON.parse(raw).timestamp ?? "";

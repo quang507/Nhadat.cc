@@ -493,6 +493,37 @@ vòng lặp.]*
 
 ---
 
+### OPEN-33 · Webhook Zalo đang nhận sự kiện KHÔNG kiểm chữ ký
+
+**Mức: CAO. Phát hiện 29/08/2026 khi soát bảo mật (FR-167), đo được chứ không suy đoán.**
+
+`zalo-webhook` buộc phải chạy `verify_jwt=false` — Zalo không gửi được JWT của
+Supabase. Nên hàng rào DUY NHẤT của nó là chữ ký `X-ZEvent-Signature`. Mà khối
+verify chỉ chạy khi có ĐỦ `ZALO_APP_SECRET` và `ZALO_APP_ID`; hai secret đó hiện
+KHÔNG có trong Vault, nên khối bị nhảy qua và hàm nhận mọi thứ.
+
+Đo thật 29/08: POST một sự kiện bịa, không khoá không chữ ký → **200 `{"ok":true}`**.
+
+**Khai thác được gì**: giả tin nhắn đến với BẤT KỲ `sender.id` nào. Đội lốt Zalo
+ID của một chủ nhà là bơm được fact vào tin của họ (giá, phường, pháp lý — những
+thứ FR-164 đóng dấu `chu_xac_nhan` rồi KHOÁ cột); bơm tin rác là đốt tiền model
+và làm ngập `messages`.
+
+**Vì sao đợt soát KHÔNG tự chặn cứng**: chặn là bot chết ngay với người dùng
+thật. Đó là đánh đổi vận hành, thuộc quyền chủ dự án, không phải quyền của một
+đợt soát bảo mật. Thay vào đó bản này cho nó KÊU TO: mỗi lượt bỏ qua verify ghi
+một dòng `zalo-webhook KHONG VERIFY` vào `bot_errors` (có van 20 dòng/giờ của
+`log_loi` nên không ngập sổ), hiện ở trang `/admin`.
+
+**Khuyến nghị**: đặt `ZALO_APP_SECRET` + `ZALO_APP_ID` vào Vault. Có hai secret
+đó là khối verify tự bật, không phải sửa dòng code nào — chữ ký sai sẽ bị trả
+401 như thiết kế ban đầu. Đây là việc 5 phút và nó đóng lỗ nghiêm trọng nhất còn
+lại của hệ thống.
+
+**Chờ chủ dự án chốt.**
+
+---
+
 ### OPEN-31 · Bậc nguồn khi admin cầm bằng chứng cứng
 
 FR-164(a) xếp `chu_xac_nhan` (3) > `admin` (2) > `suy_doan` (1). Lý lẽ chắc và

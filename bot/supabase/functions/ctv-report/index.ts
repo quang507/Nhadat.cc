@@ -45,6 +45,20 @@ const VAI_NHAN: Record<string, string> = {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
+
+  // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
+  // Như ask-seller: verify_jwt=true chỉ đòi khoá công khai. Đo thật bằng đúng
+  // khoá đó thì hàm CHẠY (quá 5 s của pg_net vì đang gọi model). Người lạ gọi
+  // được nghĩa là ép sinh + GỬI báo cáo CTV (số liệu kinh doanh nội bộ) và đốt
+  // tiền model. Cron mang `x-bridge-secret` (xem `ctv_report_tick`).
+  const cong = serviceClient();
+  const bimat = await secretOf(cong, "BRIDGE_SECRET");
+  const laDichVu = req.headers.get("authorization") ===
+    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
+    return jsonResponse({ error: "forbidden" }, 403);
+  }
+
   const { dry_run = false, force = false } = await req.json().catch(() => ({}));
   const client = serviceClient();
   const now = Date.now();

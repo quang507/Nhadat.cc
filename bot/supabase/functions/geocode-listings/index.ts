@@ -42,11 +42,27 @@ function queriesFor(
   return out;
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   const db = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
+  // Hàm này không có cron, "gọi tay khi có tin mới" — nhưng đo thật bằng
+  // publishable key (khoá công khai nằm trong bundle JS) thì nó CHẠY: trả 200
+  // và ghi lat/lng. Nghĩa là người lạ bắn được vòng lặp gọi Nominatim/OSM bằng
+  // User-Agent của dự án (dễ ăn ban IP của bên thứ ba) và ghi đè toạ độ tin.
+  // Không import _shared/claude.ts để giữ hàm này độc lập như cũ.
+  const { data: bimat } = await db.rpc("get_secret", { secret_name: "BRIDGE_SECRET" });
+  const laDichVu = req.headers.get("authorization") ===
+    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
   // Tin KHÔNG có cả địa chỉ lẫn phường thì không có gì để tra — lọc ngay ở đây
   // thay vì đếm chúng vào `failed` mỗi lần chạy. Kho 27/08 có 9 dòng rỗng hoàn
   // toàn (0165–0173, nhập hụt từ Excel), chúng làm báo cáo lúc nào cũng đỏ.

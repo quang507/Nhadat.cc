@@ -180,3 +180,35 @@ chỉ chạy khi đường nhanh đã hỏng, nên thấy nó là có chuyện. 
 v3.0). Nên chống gửi đúp bằng cách ĐẾM: `inbound_ledger.sent_bubbles` ghi sau
 MỖI bong bóng tới nơi, lần thử sau bỏ qua đúng bấy nhiêu tấm đầu và dừng hẳn khi
 gửi hụt (không gửi lệch thứ tự).
+
+## Cổng cho edge function (FR-167, 29/08/2026)
+
+**`verify_jwt=true` KHÔNG phải là xác thực.** Nó chỉ đòi publishable key, mà
+khoá đó nằm sẵn trong bundle JS của web — ai mở trang cũng có. Đợt soát bảo mật
+29/08 gọi thử bằng đúng khoá đó và `ask-seller`, `ctv-report`,
+`geocode-listings` đều CHẠY; `nudge` thì còn tệ hơn, `verify_jwt=false` và không
+kiểm gì cả nên POST tay không kèm khoá nào cũng chạy.
+
+Nay **tám** function dùng chung một cổng: qua nếu (a) `Authorization` là service
+key, hoặc (b) header `x-bridge-secret` khớp secret `BRIDGE_SECRET` trong Vault.
+Chưa đặt secret thì cổng mở như cũ — nhưng nó ĐANG được đặt.
+
+| Function | Ai gọi hợp lệ |
+|---|---|
+| `chat-reply` | `zalo-webhook` (service key), bridge |
+| `nudge` | cron `nudge_tick` (mang bridge secret) |
+| `ctv-report` | cron `ctv_report_tick` (mang bridge secret) |
+| `media-cleanup` | cron `media_cleanup_tick` |
+| `inbound-sweep` | cron `inbound_sweep_tick` |
+| `ask-seller` | gọi tay / bridge |
+| `geocode-listings` | gọi tay |
+| `escalation-feed` | bridge (dùng 401 thay vì 403, có từ trước) |
+
+Sửa hàm tick TRƯỚC rồi mới deploy function, để cron không đứt nhịp nào.
+
+**`zalo-webhook` là ngoại lệ và đang HỞ** — nó buộc phải `verify_jwt=false` (Zalo
+không gửi JWT Supabase được), hàng rào duy nhất là chữ ký `X-ZEvent-Signature`,
+mà `ZALO_APP_SECRET`/`ZALO_APP_ID` chưa có trong Vault nên khối verify bị nhảy
+qua. Đặt hai secret đó vào Vault là đóng, không phải sửa code. Xem **OPEN-33**.
+Trong lúc chờ, mỗi lượt bỏ qua verify ghi một dòng `zalo-webhook KHONG VERIFY`
+vào `bot_errors`.

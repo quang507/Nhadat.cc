@@ -470,6 +470,7 @@ Cả ba bật RLS và `revoke all from anon, authenticated`. Riêng `bot_errors`
 | `inbound_sweep_tick()` | Cron 1 phút: có việc bỏ rơi thì gọi `inbound-sweep`, không thì return ngay | chỉ `service_role` |
 | `nhan_viec_nhac(kinds, limit, worker)` | Giành lời nhắc tới hạn bằng hợp đồng thuê 5 phút (`for update skip locked`) — cửa DUY NHẤT để `nudge` lấy việc (FR-166 f) | chỉ `service_role` |
 | `bao_hong_nhac(id, detail)` | Đã THỬ mà hụt: nhả hợp đồng thuê + hẹn giờ lùi dần; quá 5 lần → `dead` | chỉ `service_role` |
+| `next_listing_code()` | Cấp mã tin kế tiếp (max+1). Chỉ gọi từ trong trigger `listings_fill_code()`; **siết 29/08 (FR-167)** vì gọi trực tiếp là đếm `listings` vượt RLS | chỉ `service_role` |
 | `nha_viec_nhac(id)` | CHƯA THỬ được (thiếu đích/token OA — việc của bridge): trả việc lại nguyên vẹn và hoàn luôn lượt đếm `attempts` (`20260829c`) | chỉ `service_role` |
 | `nhan_viec_don_media(limit)` | Giành việc dọn file, `attempts < 6` (FR-165 e, FR-166 g) | chỉ `service_role` |
 | `chon_viec_don_chet()` | Dán nhãn `chet` cho việc dọn đã hết đường thử lại | chỉ `service_role` |
