@@ -22,7 +22,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-15 | Hàng dự án (căn/giỏ hàng) — **ĐÃ CHỐT: phương án (b)**, 24/08/2026 | Cao | → FR-113…FR-117 |
 | OPEN-16 | ~~Có cần CRM riêng không?~~ **Đã chốt (b)** — bảng deals, không CRM ngoài | — | OPEN-02 |
 | OPEN-17 | Định dạng mã công khai listing (#35148 vs BDS-Q5-0012) | Thấp | Copy web + chat |
-| OPEN-18 | Kho file: Supabase Storage vs OneDrive (qua adapter) | Trung bình | FR-111, NFR-06 |
+| OPEN-18 | ✅ **CHỐT TRÊN THỰC TẾ 29/08/2026 — SUPABASE STORAGE** (FR-165 dựng hai bucket `listing-public`/`listing-private`, bảng `listing_media`, worker dọn file; kiểm TS-KHO 25/25). Không dựng adapter OneDrive: adapter chỉ có giá khi thật sự đổi kho, mà đổi kho chưa từng được yêu cầu — dựng sẵn một lớp trừu tượng cho việc chưa xảy ra là tự thêm chỗ hỏng. Cần đổi thì đổi lúc đó, lúc này đã có `app_config` để trỏ URL đi nơi khác. *(Nội dung thảo luận cũ giữ ở mục thân bên dưới.)* | Trung bình | FR-111, NFR-06, FR-165 |
 | OPEN-19 | ~~3 công cụ B-side kiểu radanhadat~~ **Đã chốt (b)** 25/08/2026 — tính lãi vay làm rồi (FR-119, port NhaDat-Radar); quy hoạch không tự khẳng định; thời gian di chuyển để giai đoạn 2 | — | FR-119 |
 | OPEN-20 | ✅ **ĐÃ CHỐT 27/08/2026 — LÀM** (chủ dự án: "AOND có hệ thống hạng Đồng/Bạc/Vàng cho người rao cứ làm đi test sau"). Đã dựng FR-155, nhưng **bằng công thức KHÁC AOND** — xem OPEN-26. Nội dung gốc giữ ở §OPEN-20 bên dưới | Trung bình | FR-155, OPEN-26 |
 | OPEN-21 | Vai người rao 5 loại (CĐT/sàn/NMG/lướt sóng/chủ nhà) + phí riêng cho CĐT — mở rộng nhị phân CCRB/NMG? | Trung bình | BR-05, FR-101 |
@@ -503,11 +503,16 @@ toàn** — ghi lại đây để lần sau không ai đi "vá" nhầm:
 Nó PHẢI là SECURITY DEFINER thì anon mới đọc được qua RLS của `sellers` — đó
 chính là mục đích của FR-125: một hình chiếu công khai đã cắt sạch liên hệ.
 
-**`security_definer_view` trên `public.listing_photos_v`** — đọc `storage.objects`
-lọc `bucket_id = 'listing-photos'`, trả `code/url/path`. Bucket đó **công khai**,
-URL ai cũng mở được; view chỉ tiết kiệm cho web khỏi tự ghép đường dẫn. anon
-không có quyền đọc thẳng `storage.objects`, nên bỏ SECURITY DEFINER là gãy ảnh
-toàn web mà chẳng che thêm được gì.
+**`security_definer_view` trên `public.listing_photos_v`** — *[viết lại
+29/08/2026 theo FR-165; bản cũ mô tả view đọc `storage.objects` lọc
+`bucket_id='listing-photos'`, không còn đúng]*. Nay view đọc bảng
+`listing_media`, lọc `bucket='listing-public'`, trả `code/url/path/sort_order/
+is_cover/created_at`. Bucket đó **công khai**, URL ai cũng mở được. Lý do THẬT
+phải giữ SECURITY DEFINER là view ghép URL từ `app_config`, mà `app_config` đã
+bị thu hồi quyền đọc của anon — bỏ definer là anon vỡ ngay
+("permission denied"), đo được ở TS-KHO-21. Cũng vì thế view đọc `app_config`
+bằng subquery chứ không gọi `cau_hinh()`: quyền EXECUTE một HÀM vẫn xét theo
+người gọi, không theo chủ view.
 
 **`anon_security_definer_function_executable` trên `log_loi`** (WARN) — cố ý,
 xem FR-152 (d). Server Next.js chạy bằng publishable key nên bắt buộc mở cho

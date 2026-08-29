@@ -541,7 +541,7 @@ chính sách mạng chặn CONNECT tới host Supabase.
 | TS-KHO-10 | Xoá tin | media cascade về 0, cả 4 file vào hàng đợi (kể cả file riêng tư) | ✅ |
 | TS-KHO-11 | Upload hỏng (có dòng, chưa có file) | `media_mo_coi_db` soi ra | ✅ |
 | TS-KHO-12 | Worker nhận việc | `dang_lam`, attempts=1 | ✅ |
-| TS-KHO-13 | Xoá hỏng rồi quá 10 phút | Nhận lại được, attempts=2 | ✅ |
+| TS-KHO-13 | Xoá hỏng rồi quá 10 phút | Nhận lại được, attempts=2 | ✅ *(FAIL lần đầu, xem dưới)* |
 | TS-KHO-14 | Việc đã `xong` | Không bị nhận lại, và không lùi trạng thái được | ✅ |
 | TS-KHO-15 | Worker chạy thật với file KHÔNG tồn tại | `da_xoa=1` — coi là xong | ✅ *(FAIL lần đầu, xem dưới)* |
 | TS-KHO-16 | anon xin quyền GHI vào `listing-public` | 403 AccessDenied (RLS) | ✅ |

@@ -269,8 +269,9 @@ interests                  id, listing_id, buyer_id, created_at
                            -- B đang quan tâm căn nào; sold → báo tất cả (FR-108)
 listing_facts              id, listing_id, question_norm, answer, source_info_request_id
                            -- kho hỏi-đáp tích luỹ: có sẵn thì trả ngay, không hỏi S
-media                      id, listing_id, kind, storage_ref, is_public
-                           -- ảnh Zalo URL tạm → tải về, đẩy kho file qua ADAPTER (FR-111, OPEN-18)
+media                      [thay bởi listing_media 29/08/2026 — FR-165. Bản phác này còn giữ
+                           `is_public`, đúng cột FR-165 bỏ hẳn vì `bucket` đã nói điều đó.
+                           Ảnh Zalo URL tạm thì VẪN chưa tải về kho — xem OPEN-32.]
 deals                      id, listing_id, buyer_id, seller_id, stage, price_final,
                            fee_rate, fee_amount, ctv_id, closed_at
                            -- căn cứ tính phí + tỉ lệ chốt NMG (FR-112, OPEN-16 đã chốt (b))
@@ -338,8 +339,11 @@ escalations         id, type enum(QUESTION, VOICE, VIEWING, UPSET), buyer_id, pr
 **SRS-3.9 · Bảo mật dữ liệu**
 - `listing_media.media_type in ('so_do','giay_to')` → **bắt buộc** `bucket =
   'listing-private'` (CHECK ở DB, FR-165). Bucket riêng không phục vụ qua route
-  `/object/public` — đo được: trả `NoSuchBucket`. Chỉ truy cập bằng signed URL
-  hạn **≤ 15 phút** (NFR-06); ký URL là việc của service_role.
+  `/object/public` — đo được: trả `NoSuchBucket`. Cách truy cập hợp lệ DUY NHẤT
+  là signed URL hạn **≤ 15 phút** do service_role ký (NFR-06) — **nhưng đường ký
+  đó CHƯA DỰNG**: quét toàn repo không có `createSignedUrl`, cũng chưa chỗ nào
+  đọc `listing-private`. Nghĩa là hôm nay bucket riêng đóng kín (đúng), nhưng
+  cũng chưa ai lấy file ra được. Nửa còn lại là việc phải làm.
   *[cập nhật 29/08/2026 — câu cũ nói `photos.kind='so_do'` → `is_public=false`;
   bảng `photos` chưa từng được dựng, nay là `listing_media` và `is_public` bỏ
   hẳn vì `bucket` đã là thứ quyết định]*

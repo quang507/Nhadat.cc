@@ -9,7 +9,7 @@ tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/pro
 | Function | FR | Việc |
 |---|---|---|
 | `ask-seller` | FR-40…47, INS-06 | Đọc view `listing_missing_facts` của một listing, sinh MỘT tin Zalo hỏi S tối đa 3 thông tin thiếu (ưu tiên cao trước), ghi `info_requests` (bỏ qua fact đang `pending` — không spam S, INS-09). `dry_run: true` để xem tin không ghi DB. |
-| ~~`rate-ctv`~~ | *ĐÃ XOÁ 27/08/2026 (OPEN-23)* — trùng phần chấm điểm trong `ctv-report`. Nội dung cũ: FR-102, chấm CSKH của CTV/bot từ log hội thoại (bảng `messages` hoặc transcript truyền vào), 4 tiêu chí ×1-5 + stars tổng, ghi `ratings` (`rated_by='ai_qa'`, chi tiết trong `details` jsonb). Idempotent theo conversation. |
+| ~~`rate-ctv`~~ | — | *ĐÃ XOÁ 27/08/2026 (OPEN-23)* — trùng phần chấm điểm trong `ctv-report`. Nội dung cũ: FR-102, chấm CSKH của CTV/bot từ log hội thoại (bảng `messages` hoặc transcript truyền vào), 4 tiêu chí ×1-5 + stars tổng, ghi `ratings` (`rated_by='ai_qa'`, chi tiết trong `details` jsonb). Idempotent theo conversation. |
 | `chat-reply` | NFR-12, FR-129…135, FR-29/32, UF-06 | **Bộ não hội thoại** dùng chung mọi kênh: nhánh seller (hỏi nhỏ giọt), nhánh buyer (hồ sơ nhu cầu + trả lời tự nhiên, không delay nhân tạo, lọc kho theo giá số `price_vnd`, tra căn theo mã, kho dự án, đặt lịch xem nhà + xin SĐT đúng kịch bản, bóc lời hứa, cờ `need_human`, follow-up im lặng ngắn, đọc ảnh `image_url`). |
 | `zalo-webhook` | SRS-4.4 | Nhận event OA (`user_send_text`/`user_send_image`), verify chữ ký nếu có app secret, trả 200 <1s, chuyển vào chat-reply rồi gửi bong bóng (FR-131: không delay nhân tạo, giữa hai bong bóng chỉ 300ms cho Zalo giao đúng thứ tự). verify_jwt **tắt**. |
 | `nudge` | FR-133, FR-32 | Cron 30': nhắc lời hứa tới hạn, nhắc lịch xem trước ~45', follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); chỉ gửi 8h–21h VN + jitter 0-45s; `{dry_run, force}` để test. |
@@ -25,12 +25,11 @@ FR-143), nhánh tạo tin nháp khi chính chủ nhắn câu rao mới + ngừng
 đủ đăng (FR-144), trần **100 tin/24h** mỗi khách (`rate_limited`, FR-146) và leo
 thang cần-người-thật **CTV → admin sau 30 phút** (FR-147, nửa sau nằm ở `nudge`).
 
-**Ảnh thật của tin (FR-148)** nằm trên Supabase Storage, bucket công khai
-`listing-photos`, đường dẫn `<mã tin>/<tên file>` — ví dụ `BDS-Q5-0164/01.jpg`.
-Up bằng tay: Supabase → Storage → `listing-photos` → tạo thư mục đúng mã tin rồi
-kéo ảnh vào; thứ tự hiển thị theo tên file (`01`, `02`…). Web và bot đọc chung
-qua view `public.listing_photos_v` (`code`, `url`, `path`). Tin chưa có ảnh thì
-web rơi về ảnh minh hoạ, bot đi đường hỏi-chủ-nhà FR-140.
+**Ảnh thật của tin** — xem mục "Kho ảnh (FR-165)" ở cuối file. *(Lối cũ FR-148
+— bucket `listing-photos`, thư mục theo mã tin, thứ tự theo tên file — đã bỏ từ
+29/08/2026: mã tin đổi được, đổi là ảnh rơi khỏi tin.)* Web và bot vẫn đọc chung
+qua view `public.listing_photos_v` (`code`, `url`, `path` — hợp đồng giữ nguyên).
+Tin chưa có ảnh thì web rơi về ảnh minh hoạ, bot đi đường hỏi-chủ-nhà FR-140.
 
 Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 `Authorization: Bearer <anon key>` (verify_jwt bật, trừ `zalo-webhook`).

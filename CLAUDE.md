@@ -92,7 +92,8 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   (lọc SĐT — FR-104) trước khi render.
 - **Bot** ở `bot/` — Supabase Edge Functions (xem `bot/README.md`).
 - **Script vận hành** ở `scripts/` — chạy trên máy local, không deploy.
-  `up-anh.mjs` đẩy ảnh thật lên bucket `listing-photos` theo mã tin (FR-148);
+  `up-anh.mjs` đẩy ảnh thật lên bucket `listing-public` theo UUID của tin và
+  ghi kèm dòng `listing_media` (FR-165; lối cũ theo mã tin của FR-148 đã bỏ);
   nó chỉ ĐỌC `masterDB/`, không bao giờ copy ảnh vào repo.
   `sao-luu.mjs` kéo cả 23 bảng về JSON — **bậc Supabase Free không có backup tự
   động**, đây là bản sao duy nhất đang tồn tại (OPEN-25). Cần
