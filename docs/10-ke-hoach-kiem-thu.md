@@ -731,9 +731,25 @@ sửa". Vá ở `20260829e`, kiểm lại bằng cách dựng ĐÚNG bộ header
 bắn thử: **400 "listing_id bắt buộc"** (qua cổng) thay vì 403. Quét thêm toàn bộ
 hàm SQL có `net.http_post`: cả 5 (`ask_seller_drip`, `nudge_tick`,
 `ctv_report_tick`, `media_cleanup_tick`, `inbound_sweep_tick`) nay đều mang bí
-mật, đều dùng `app_config`, không cái nào còn anon JWT nhúng cứng. Bridge
+mật, **URL** đều lấy từ `app_config`, không cái nào còn anon JWT nhúng cứng.
+(Publishable key thì VẪN nhúng cứng trong cả 5 — không phải lỗ vì khoá đó vốn
+công khai, nhưng xoay khoá project là phải sửa cả 5 hàm.) Bridge
 (`bot/bridge-zca`) chỉ gọi `chat-reply` + `escalation-feed` và vốn đã gửi
 `x-bridge-secret` — không ảnh hưởng.
+
+**Năm ca BẤT BIẾN thêm sau hồi quy drip (TS-SEC2-62…66)** — chính là thứ lẽ ra
+phải có ngay từ đầu, vì test "gọi thẳng function bằng bridge secret" không bao
+giờ bắt được người gọi bị bỏ sót. Hai ca đầu chạy bằng MỘT câu SQL trên
+`pg_get_functiondef`, nên lần sau gắn cổng cho function khác mà quên người gọi
+là đỏ ngay:
+
+| Mã | Bất biến | Kết quả |
+|---|---|---|
+| TS-SEC2-62 | Mọi hàm SQL có `net.http_post` đều mang `x-bridge-secret` | ✅ 5/5, danh sách thiếu rỗng |
+| TS-SEC2-63 | Không hàm nào còn nhúng cứng anon JWT đời cũ (`eyJhbGciOi…`) | ✅ rỗng |
+| TS-SEC2-64 | `authenticated` gọi `ask_seller_drip()` | ✅ chặn |
+| TS-SEC2-65 | `anon` gọi `ask_seller_drip()` | ✅ chặn |
+| TS-SEC2-66 | `seller_drip_tick` + `trg_listing_drip` vẫn SECURITY DEFINER (siết `ask_seller_drip` không gãy đường vận hành) | ✅ 2/2 |
 
 **Advisor sau khi vá**: 4 cảnh báo `function_search_path_mutable` biến mất; ba
 hàm SECURITY DEFINER `next_listing_code`/`listings_fill_code`/

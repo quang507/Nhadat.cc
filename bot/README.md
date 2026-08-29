@@ -198,8 +198,8 @@ Chưa đặt secret thì cổng mở như cũ — nhưng nó ĐANG được đ�
 | `chat-reply` | `zalo-webhook` (service key), bridge |
 | `nudge` | cron `nudge_tick` (mang bridge secret) |
 | `ctv-report` | cron `ctv_report_tick` (mang bridge secret) |
-| `media-cleanup` | cron `media_cleanup_tick` |
-| `inbound-sweep` | cron `inbound_sweep_tick` |
+| `media-cleanup` | cron `media_cleanup_tick` (mang bridge secret) |
+| `inbound-sweep` | cron `inbound_sweep_tick` (mang bridge secret) |
 | `ask-seller` | cron `seller-drip-tick` + trigger `trg_listing_drip`, cả hai qua `ask_seller_drip()` — **hàm đó PHẢI mang bridge secret**, xem `20260829e` / gọi tay / bridge |
 | `geocode-listings` | gọi tay |
 | `escalation-feed` | bridge (dùng 401 thay vì 403, có từ trước) |
@@ -212,3 +212,15 @@ mà `ZALO_APP_SECRET`/`ZALO_APP_ID` chưa có trong Vault nên khối verify b�
 qua. Đặt hai secret đó vào Vault là đóng, không phải sửa code. Xem **OPEN-33**.
 Trong lúc chờ, mỗi lượt bỏ qua verify ghi một dòng `zalo-webhook KHONG VERIFY`
 vào `bot_errors`.
+
+### Điểm mù: migration stub
+
+`bot/supabase/migrations/20260825_seller_drip.sql` là **stub 6 dòng ghi chú**,
+không có SQL thật — DDL được áp qua MCP mà không lưu lại. Hệ quả cụ thể: thân
+`ask_seller_drip()` **chưa từng có mặt trong repo** cho tới `20260829e`, nên mọi
+lượt soát tĩnh bằng grep đều không thấy nó nhúng anon JWT và không thấy nó gọi
+`ask-seller`. Đó chính là lý do đợt vá cổng FR-167 bỏ sót người gọi này.
+
+Đã quét cả thư mục: đây là stub DUY NHẤT, các file khác đều có SQL thật. Nhưng
+bài học giữ nguyên — **"bản sao tham chiếu" mà thiếu một hàm thì nó nói dối**.
+Áp DDL qua MCP xong phải chép lại nội dung thật vào file migration tương ứng.

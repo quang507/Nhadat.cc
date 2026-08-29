@@ -595,8 +595,9 @@ chính là mục đích của FR-125: một hình chiếu công khai đã cắt 
 **`security_definer_view` trên `public.listing_photos_v`** — *[viết lại
 29/08/2026 theo FR-165; bản cũ mô tả view đọc `storage.objects` lọc
 `bucket_id='listing-photos'`, không còn đúng]*. Nay view đọc bảng
-`listing_media`, lọc `bucket='listing-public'`, trả `code/url/path/sort_order/
-is_cover/created_at`. Bucket đó **công khai**, URL ai cũng mở được. Lý do THẬT
+`listing_media`, lọc `bucket='listing-public'` **và tin ĐÃ LÊN KỆ** *(vế thứ hai
+siết thêm 29/08/2026 — FR-167c, sau khi đo thấy anon đọc ra mã tin + đường dẫn
+ảnh của tin `cho_thong_tin`)*, trả `code/url/path/sort_order/is_cover/created_at`. Bucket đó **công khai**, URL ai cũng mở được. Lý do THẬT
 phải giữ SECURITY DEFINER là view ghép URL từ `app_config`, mà `app_config` đã
 bị thu hồi quyền đọc của anon — bỏ definer là anon vỡ ngay
 ("permission denied"), đo được ở TS-KHO-21. Cũng vì thế view đọc `app_config`

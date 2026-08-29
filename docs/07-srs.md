@@ -382,7 +382,7 @@ là:
    đã thu hồi EXECUTE khỏi `public/anon/authenticated`; chỉ `service_role` và
    `postgres` gọi được. Trước đó `seller_drip_tick`, `ctv_report_tick`,
    `mark_listing_interest`… gọi được bằng anon key qua `/rest/v1/rpc/…`.
-   Mọi hàm cũng ghim `search_path = public, pg_temp`.
+   Mọi hàm cũng ghim `search_path` (`public` hoặc `public, pg_temp`).
 4. **View không được là cửa hậu.** View SECURITY DEFINER chạy bằng quyền chủ
    view nên đi vòng RLS. `public_listings`, `public_media`,
    `listing_missing_facts` đã chuyển `security_invoker = on` và khoá khỏi anon
