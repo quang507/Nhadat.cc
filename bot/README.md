@@ -125,6 +125,34 @@ dữ liệu thử. Lưu ý khi tự gọi hàm từ SQL: `net.http_post` bỏ cu
 nhánh người mua (có gọi model) luôn báo timeout ở `net._http_response` — đó là
 hạn của người gọi, không phải hàm hỏng; xác nhận bằng cách soi DB.
 
+### ⚠️ 29/08/2026 — deploy qua MCP là CHÉP TAY, và chép tay thì SAI
+
+Công cụ MCP `deploy_edge_function` chỉ nhận **nội dung file dán thẳng vào lời
+gọi**, không nhận đường dẫn. Nghĩa là mỗi lần deploy là một lần chép tay lại
+toàn bộ file. Đợt 29/08 đo được tỷ lệ thật: bản `_shared/prompts.ts` 21KB bị
+**sai 3 ký tự** — `LỊCH`→`LỊ CH`, `LỊCH`→`LẪCH`, `SẴN`→`SẮN`, tức khoảng
+**một lỗi mỗi 7KB**. Cả ba là chữ HOA có dấu, gõ nhầm mã `\uXXXX` (`Ẫ` Ẫ
+thay `Ị` Ị; `Ắ` Ắ thay `Ẵ` Ẵ).
+
+Hai luật rút ra:
+
+1. **Viết ký tự UTF-8 thẳng, đừng dùng `\uXXXX`.** JSON nhận UTF-8; chép
+   ký-tự-sang-ký-tự an toàn hơn hẳn việc mã hoá qua số.
+2. **Deploy xong PHẢI kéo lại bằng `get_edge_function` và đối chiếu.** Không
+   đối chiếu thì không biết. Ba lỗi trên chỉ lộ ra nhờ bước này.
+
+**Hệ quả cho `chat-reply`:** bản rút gọn của nó là **57.7KB, 1145 dòng, 65 dòng
+chứa regex**. Với tỷ lệ đo được thì chép tay nó là khoảng **8 lỗi**, và chúng
+rơi vào đúng đám regex nhận diện câu rao / định tuyến mua-bán — hỏng ở đó là
+hỏng IM LẶNG, không parse error nào bắt được. Vì vậy `chat-reply` **không deploy
+qua MCP nữa**. Cách đúng, chạy từ máy local, gửi đúng byte của repo:
+
+```bash
+supabase functions deploy chat-reply --project-ref tbcdpupiarkuxtntmosl
+```
+
+Cách này cũng bỏ luôn được trò bỏ-comment: CLI gửi thẳng file đầy đủ.
+
 ## Kho ảnh (FR-165, 29/08/2026)
 
 Hai bucket: **`listing-public`** (công khai, chỉ MIME ảnh, 10MB/file) và
