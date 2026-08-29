@@ -1,7 +1,12 @@
-// FR-148: ảnh thật của tin nằm trên Supabase Storage, bucket `listing-photos`,
-// đường dẫn "<mã tin>/<tên file>" (vd "BDS-Q5-0164/01.jpg"). Chủ dự án up qua
-// Supabase → Storage; web và bot đọc chung qua view `listing_photos_v`.
+// FR-165: ảnh thật của tin nằm trên Supabase Storage, bucket `listing-public`,
+// đường dẫn "<listing UUID>/<media UUID>.<đuôi>" — neo vào ID BẤT BIẾN của tin,
+// không neo vào mã tin (mã đổi được, đổi là ảnh rơi khỏi tin). Bảng
+// `listing_media` giữ metadata; web và bot đọc chung qua view `listing_photos_v`.
 // Tin chưa có ảnh thì rơi về ảnh minh hoạ (placeholderImg).
+//
+// THỨ TỰ: xếp theo (sort_order, created_at, media_id) — KHÔNG xếp theo tên file.
+// Xếp theo tên thì "1.jpg, 10.jpg, 2.jpg" ra 1, 10, 2, và ảnh bìa phụ thuộc
+// người đặt tên file. Ảnh bìa lấy thẳng cờ `is_cover` do DB giữ tất định.
 import { unstable_cache } from "next/cache";
 import { supabase } from "@/lib/supabase";
 
@@ -12,7 +17,7 @@ import { supabase } from "@/lib/supabase";
 // khoá theo chính tham số truyền vào — trùng bộ lọc là dùng lại, khỏi hỏi DB.
 const TTL = 300;
 
-/** Ảnh bìa (tấm đầu theo tên file) cho một loạt mã tin — dùng cho lưới thẻ. */
+/** Ảnh bìa (cờ is_cover do DB giữ) cho một loạt mã tin — dùng cho lưới thẻ. */
 export const coverByCode = unstable_cache(
   _coverByCode,
   ["listing-covers"],
@@ -26,9 +31,9 @@ async function _coverByCode(
   if (!list.length) return {};
   const { data } = await supabase
     .from("listing_photos_v")
-    .select("code, url, path")
+    .select("code, url")
     .in("code", list)
-    .order("path");
+    .eq("is_cover", true);
   const cover: Record<string, string> = {};
   for (const r of data ?? []) {
     if (!cover[r.code as string]) cover[r.code as string] = r.url as string;
@@ -36,7 +41,7 @@ async function _coverByCode(
   return cover;
 }
 
-/** Toàn bộ ảnh của một tin, xếp theo tên file — dùng cho trang chi tiết. */
+/** Toàn bộ ảnh của một tin, xếp theo sort_order — dùng cho trang chi tiết. */
 export const photosOfCode = unstable_cache(
   _photosOfCode,
   ["listing-photos"],
@@ -46,9 +51,11 @@ export const photosOfCode = unstable_cache(
 async function _photosOfCode(code: string, limit = 12): Promise<string[]> {
   const { data } = await supabase
     .from("listing_photos_v")
-    .select("url, path")
+    .select("url, sort_order, created_at, media_id")
     .eq("code", code)
-    .order("path")
+    .order("sort_order")
+    .order("created_at")
+    .order("media_id")
     .limit(limit);
   return (data ?? []).map((r) => r.url as string);
 }

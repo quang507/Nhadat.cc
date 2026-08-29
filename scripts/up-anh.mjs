@@ -14,14 +14,21 @@
 // (1, 2, 007…) hoặc thẳng mã tin (BDS-Q5-0007). Script tự quy đổi STT → mã:
 // `listings.legacy_sst` = STT, `code` = 'BDS-Q5-' + STT đệm 4 số.
 //
-// Đích: listing-photos/<MÃ TIN>/<tên file>. View `listing_photos_v` cắt đoạn
-// trước dấu '/' làm mã tin, nên PHẢI có đúng một cấp thư mục — để ảnh ở gốc
-// bucket là web không thấy.
+// Đích (FR-165): listing-public/<LISTING UUID>/<MEDIA UUID>.<đuôi>, kèm MỘT
+// dòng `listing_media` cho mỗi file. Đường dẫn neo vào ID BẤT BIẾN của tin chứ
+// không vào mã tin: mã đổi được, mà đổi mã theo lối cũ là toàn bộ ảnh rơi khỏi
+// tin, âm thầm. Thư mục nguồn vẫn đặt tên theo STT/mã như cũ — script tự tra ra
+// UUID, mày không phải đổi thói quen.
+//
+// Thứ tự ảnh KHÔNG còn theo tên file (xếp tên thì "1, 10, 2"): số trong tên file
+// được đọc thành `sort_order`, hết số thì rơi về thứ tự đọc thư mục. Ảnh bìa do
+// DB tự chọn (tấm sort_order nhỏ nhất) — không cần đặt tên file cho khéo.
 //
 // Có `sharp` thì tự nén còn ngang ≤2500px / JPEG q80 (masterDB ~179MB, đẩy
 // nguyên bản là trang chi tiết tải nặng và ăn hết dung lượng free tier).
 // Không có sharp cũng chạy, chỉ cảnh báo file nặng:  bun add -d sharp
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
@@ -47,7 +54,12 @@ const db = KEY ? createClient(URL, KEY) : null;
 const OK_EXT = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 
 // Tên thư mục → mã tin. Nhận cả 'BDS-Q5-0007', '7', '007'.
-const dest0 = (code, file, ext) => `${code}/${path.parse(file).name.toLowerCase()}${ext}`;
+// Số trong tên file → sort_order ("03.jpg" → 3, "anh-2.png" → 2). Không có số
+// thì trả null, để thứ tự đọc thư mục quyết định.
+const thuTuTuTen = (file) => {
+  const m = /(\d+)/.exec(path.parse(file).name);
+  return m ? parseInt(m[1], 10) : null;
+};
 const toCode = (dir) => {
   const s = dir.trim();
   if (/^BDS-Q5-\d{4}$/i.test(s)) return s.toUpperCase();
@@ -58,9 +70,10 @@ const toCode = (dir) => {
 // Đối chiếu với DB: mã nào không có tin thật thì bỏ, đừng đẩy rác lên bucket.
 let known = null;
 if (db) {
-  const { data, error } = await db.from("listings").select("code");
+  const { data, error } = await db.from("listings").select("id, code");
   if (error) { console.error("Không đọc được bảng listings:", error.message); process.exit(1); }
-  known = new Set(data.map((r) => r.code));
+  // mã → UUID: đường dẫn kho ảnh neo vào UUID, mã chỉ là thứ mày gõ ở tên thư mục.
+  known = new Map(data.map((r) => [r.code, r.id]));
 }
 
 const dirs = fs.readdirSync(SRC, { withFileTypes: true })
@@ -75,12 +88,13 @@ for (const dir of dirs) {
   const code = toCode(dir);
   if (!code) { console.warn(`⚠ bỏ qua "${dir}" — không đọc ra mã tin`); nBad++; continue; }
   if (known && !known.has(code)) { console.warn(`⚠ bỏ qua "${dir}" → ${code} — không có tin này trong DB`); nBad++; continue; }
+  const listingId = known ? known.get(code) : null;
 
   const files = fs.readdirSync(path.join(SRC, dir))
     .filter((f) => OK_EXT.has(path.extname(f).toLowerCase())).sort();
   if (!files.length) continue;
 
-  for (const f of files) {
+  for (const [idx, f] of files.entries()) {
     const src = path.join(SRC, dir, f);
     const ext = path.extname(f).toLowerCase();
     let buf = fs.readFileSync(src);
@@ -96,13 +110,33 @@ for (const dir of dirs) {
     } else if (buf.length > 600_000) {
       console.warn(`⚠ ${dest0(code, f, outExt)} nặng ${(buf.length / 1e6).toFixed(1)}MB — nên cài sharp để nén`);
     }
-    const dest = dest0(code, f, outExt);
+    // Tên file trên kho là UUID của chính dòng media — sinh TRƯỚC khi up để
+    // file và dòng DB mang cùng một danh tính, khỏi phải đoán ngược.
+    const mediaId = randomUUID();
+    const dest = `${listingId}/${mediaId}${outExt}`;
+    const sortOrder = thuTuTuTen(f) ?? (idx + 1);
     bytes += buf.length;
-    if (DRY) { console.log(`(thử) ${src}  →  ${dest}  ${(buf.length / 1024).toFixed(0)}KB`); nUp++; continue; }
-    const { error } = await db.storage.from("listing-photos")
-      .upload(dest, buf, { contentType: mime, upsert: true });
-    if (error) { console.error(`✗ ${dest}: ${error.message}`); nSkip++; }
-    else { console.log(`✓ ${dest}`); nUp++; }
+    if (DRY) { console.log(`(thử) ${src}  →  ${dest}  sort=${sortOrder}  ${(buf.length / 1024).toFixed(0)}KB`); nUp++; continue; }
+
+    // UP FILE TRƯỚC, GHI DÒNG SAU. Ngược lại thì dòng DB trỏ vào file chưa tồn
+    // tại; hỏng giữa chừng là có ảnh vỡ trên web. Theo thứ tự này, hỏng giữa
+    // chừng chỉ để lại một file mồ côi — `media_mo_coi_storage` soi ra được, và
+    // nó không hiện lên web vì web đọc từ `listing_media`.
+    const { error } = await db.storage.from("listing-public")
+      .upload(dest, buf, { contentType: mime, upsert: false });
+    if (error) { console.error(`✗ ${dest}: ${error.message}`); nSkip++; continue; }
+
+    const { error: mErr } = await db.from("listing_media").insert({
+      id: mediaId, listing_id: listingId, bucket: "listing-public",
+      storage_path: dest, media_type: "khac", mime_type: mime,
+      sort_order: sortOrder,
+    });
+    if (mErr) {
+      // Ghi dòng hỏng → dọn luôn file vừa up, đừng để lại rác mồ côi.
+      await db.storage.from("listing-public").remove([dest]);
+      console.error(`✗ ${dest} (ghi listing_media): ${mErr.message}`); nSkip++; continue;
+    }
+    console.log(`✓ ${dest}  sort=${sortOrder}`); nUp++;
   }
 }
 

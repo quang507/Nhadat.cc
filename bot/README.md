@@ -107,3 +107,30 @@ fact) lẫn nhánh người mua (bóc hồ sơ + lọc kho) trên bản đang ch
 dữ liệu thử. Lưu ý khi tự gọi hàm từ SQL: `net.http_post` bỏ cuộc sau 5 s nên
 nhánh người mua (có gọi model) luôn báo timeout ở `net._http_response` — đó là
 hạn của người gọi, không phải hàm hỏng; xác nhận bằng cách soi DB.
+
+## Kho ảnh (FR-165, 29/08/2026)
+
+Hai bucket: **`listing-public`** (công khai, chỉ MIME ảnh, 10MB/file) và
+**`listing-private`** (riêng tư, thêm PDF, 20MB) cho sổ đỏ/giấy tờ. Đường dẫn
+là `<listing UUID>/<media UUID>.<đuôi>` — neo vào ID BẤT BIẾN của tin, không
+neo vào mã tin.
+
+Bucket `listing-photos` cũ đã bị tước quyền (hạ khỏi public, siết MIME/dung
+lượng) chứ không xoá được bằng SQL: Supabase chặn `delete from storage.buckets`
+("Use the Storage API instead"). Nó đang rỗng. Muốn xoá hẳn thì xoá ở
+Dashboard → Storage.
+
+Mỗi file PHẢI có một dòng `listing_media`; web và bot đọc qua
+`listing_photos_v` (chỉ lộ bucket công khai). Up ảnh bằng
+`node scripts/up-anh.mjs <thư-mục>` — script tự tra UUID từ mã ở tên thư mục,
+up file trước rồi mới ghi dòng DB, ghi hỏng thì dọn luôn file vừa up.
+
+Xoá/thay ảnh KHÔNG xoá file ngay: trigger ghi vào `media_cleanup_queue`, edge
+function `media-cleanup` (cron `media-cleanup-tick`, 5 phút) gọi Storage API rồi
+đánh dấu. Việc chưa `xong` thì còn nằm đó nên thử lại được. Soi mồ côi bằng hai
+view `media_mo_coi_storage` và `media_mo_coi_db`.
+
+URL gốc của bucket nằm ở bảng `app_config` (`storage_public_base_url`,
+`functions_base_url`) chứ không nhúng cứng trong view như trước — đổi project
+thì UPDATE hai dòng đó. Các cron cũ (`ctv_report_tick`, `bot_health_tick`…) vẫn
+nhúng cứng host, chưa dọn — việc còn lại.

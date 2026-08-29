@@ -34,7 +34,7 @@ flowchart LR
 | [06-ui-design.md](06-ui-design.md) | Design system + tone giọng chat | UI, Dev, Content |
 | [07-srs.md](07-srs.md) | Đặc tả kỹ thuật: kiến trúc, DB, API, NFR | Dev, QA, Vendor |
 | [08-traceability.md](08-traceability.md) | Ma trận truy vết | PO, QA |
-| [09-open-issues.md](09-open-issues.md) | 31 vấn đề (11 đã chốt, 20 cần chủ dự án chốt) | Founder, PO |
+| [09-open-issues.md](09-open-issues.md) | 32 vấn đề (11 đã chốt, 21 cần chủ dự án chốt) | Founder, PO |
 | [10-ke-hoach-kiem-thu.md](10-ke-hoach-kiem-thu.md) | Kế hoạch kiểm thử 4 tầng (suite TS-*) | QA, Dev, PO |
 
 ## Đọc từ đâu

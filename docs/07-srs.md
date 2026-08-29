@@ -327,16 +327,25 @@ tags                id, slug unique, keyword, title, description, criteria jsonb
 property_tags       property_id, tag_id
 saved_criteria      id, buyer_id, criteria jsonb, active bool     -- FR-64
 curated_lists       id, token unique, buyer_id, property_ids[], created_at, expires_at  -- FR-100
-photos              id, property_id, storage_path, kind enum(mat_tien, trong_nha, hem, so_do, khac), sort_order, is_public
+listing_media       id, listing_id FK->listings(id) ON DELETE CASCADE, bucket, storage_path,
+                    media_type enum-check(mat_tien, trong_nha, hem, so_do, giay_to, khac),
+                    mime_type, sort_order, is_cover, created_at        -- FR-165 (đã dựng)
+media_cleanup_queue id, bucket, storage_path, trang_thai, attempts, last_error, created_at, updated_at  -- FR-165
+photos              [thay bởi listing_media 29/08/2026 — `is_public` bỏ, `bucket` đã nói điều đó]
 escalations         id, type enum(QUESTION, VOICE, VIEWING, UPSET), buyer_id, property_id, payload jsonb, emailed_at  -- FR-77..81
 ```
 
 **SRS-3.9 · Bảo mật dữ liệu**
-- `photos.kind = 'so_do'` → `is_public = false` bắt buộc, bucket riêng, chỉ truy cập
-  bằng signed URL hạn **≤ 15 phút** (NFR-06).
+- `listing_media.media_type in ('so_do','giay_to')` → **bắt buộc** `bucket =
+  'listing-private'` (CHECK ở DB, FR-165). Bucket riêng không phục vụ qua route
+  `/object/public` — đo được: trả `NoSuchBucket`. Chỉ truy cập bằng signed URL
+  hạn **≤ 15 phút** (NFR-06); ký URL là việc của service_role.
+  *[cập nhật 29/08/2026 — câu cũ nói `photos.kind='so_do'` → `is_public=false`;
+  bảng `photos` chưa từng được dựng, nay là `listing_media` và `is_public` bỏ
+  hẳn vì `bucket` đã là thứ quyết định]*
 - `buyers.phone` mã hoá at-rest, chỉ CTV được cấp quyền đọc.
 - RLS bật trên mọi bảng; `anon` chỉ đọc được `properties` có `status='dang_rao'`,
-  `photos` có `is_public=true`, và `tags`.
+  `listing_media` có `bucket='listing-public'`, và `tags`.
 
 **Mô hình quyền thực tế (soát bảo mật 26/08/2026).** Anon key là key **công
 khai** — nó nằm trong bundle JS của web và trong `bot/bridge-zca`; repo để

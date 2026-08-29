@@ -36,6 +36,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-29 | ✅ **ĐÃ CHỐT 27/08/2026 — LÀM PHƯƠNG ÁN (a), ĐÃ DỰNG THÀNH FR-161** (chủ dự án: "sửa theo khuyến nghị rồi deploy hết đi"). Nội dung gốc: **Bot ĐIẾC với tiếng Việt không dấu — mà rất nhiều người nhắn Zalo không bỏ dấu.** Phát hiện 27/08/2026 lúc chạy TS-MA: gõ `nha minh ban chua em` thì cổng rao trượt ngay ở vế `\b(bán\|rao)\b` vì `"ban"` không khớp `"bán"`. Kiểm cả `bot/supabase/functions/` lẫn `lib/`: **không một chỗ nào bỏ dấu trước khi khớp**. Hệ quả trải khắp: câu rao không dấu (`ban nha quan 5 gia 5 ty`) KHÔNG sinh tin dù có đủ giá — im lặng y hệt con bug FR-158 vừa vá, chỉ khác nguyên nhân; `hoiMua` không tách được vai (`toi muon mua nha`); `PROMISE_RE` không bắt được lời hứa (`chieu gui anh`); regex phường/giá cũng vậy. Riêng phía người mua thì đỡ hơn vì mặc định đã rơi vào nhánh mua (FR-159), nhưng phía bán là mất trắng câu rao. Phương án: (a) chuẩn hoá `text` một lần đầu hàm (`normalize('NFD')` + bỏ dấu) rồi cho MỌI regex cổng chạy trên bản không dấu, giữ `text` gốc để lưu `description` và đưa cho model — model đọc không dấu vẫn tốt, chỉ regex là mù; (b) viết mỗi regex thành hai nhánh có-dấu/không-dấu. Khuyến nghị BA: (a), vì (b) là nhân đôi số chỗ phải sửa mỗi lần thêm từ. Chưa code, cần chốt trước khi chạy thật | **Cao** | FR-158, FR-129, FR-133, FR-157 |
 | OPEN-30 | ✅ **ĐÃ SỬA 28/08/2026 — chat-reply v40** (chủ dự án: "Fix đi"). Cả BA lệnh gọi model nhánh seller (`r1`/`r2`/`r3`) và cả bước tạo `anthropicClient` giờ bọc try/catch + `ghiLoi` + câu mẫu tất định, cùng chuẩn với nhánh mua. Câu mẫu của `r2` CÓ hỏi câu drip kế tiếp (kèm neo căn từ FACT_LABELS) nên `info_requests` chỉ mở khi câu hỏi THẬT SỰ được gửi — đúng luật "không mở khi chưa hỏi được"; `r1` chào bằng mẫu kèm câu hỏi đầu; `r3` ghi nhận bằng mẫu. Test sống trên v40: câu rao sinh tin + model soạn reply bình thường (key đã có credit lại); đường fallback kiểm bằng review vì không giả lập được key hỏng trên môi trường sống. Nội dung gốc: **Nhánh seller gọi model KHÔNG có lưới đỡ — model lỗi là chủ nhà nhận im lặng + HTTP 500.** Lộ ra 27/08 khi chạy TS-KD-01 đúng lúc API key Anthropic của bot hết credit: tin rao vẫn sinh ĐỦ và ĐÚNG (dữ liệu ghi trước khi gọi model, đúng thiết kế FR-152) nhưng ba lệnh gọi model của nhánh seller (`r1` chào tin mới, `r2` hỏi drip, `r3` chăm sóc chung) đều trần trụi — exception xuyên thẳng ra 500, chủ nhà không nhận được chữ nào, và vì là exception nên cũng KHÔNG qua `ghiLoi`. Nhánh mua làm đúng bài từ đầu: try/catch + `ghiLoi` + câu trả lời template. Chữa: bọc ba lệnh gọi trong try/catch, lỗi thì `ghiLoi` + trả template ("Dạ em nhận tin rồi ạ, em xử lý rồi báo lại anh/chị liền nha") — KHÔNG mở `info_requests` mới khi chưa hỏi được. Việc riêng, chưa làm | Trung bình | FR-152, FR-158, FR-161 |
 | OPEN-31 | **Bậc nguồn `chu_xac_nhan > admin`: admin cầm sổ đỏ mà chủ nhà nhớ nhầm thì ai thắng?** FR-164(a) khoá cột trước lời admin; cần một bậc riêng cho bằng chứng giấy tờ hay không | Trung bình | FR-164, FR-156, FR-129, FR-163 |
+| OPEN-32 | **Ảnh chủ nhà gửi qua chat KHÔNG đi qua hai bucket, nên tách công khai/riêng tư của FR-165 không phủ được nó.** `chat-reply` lưu mọi ảnh người bán gửi thành fact `hinh_anh` (URL Zalo CDN, không vào kho ta), rồi FR-143 gộp thẳng vào `photos` gửi cho NGƯỜI MUA. Mà vòng drip FR-129 có hỏi `phap_ly` — chủ nhà trả lời câu đó bằng ảnh chụp sổ là chuyện thường, và ảnh đó bị ghi nhãn `hinh_anh` bất kể đang hỏi gì. Sửa được nhưng phải đụng luồng chat, mà đợt này chủ dự án khoanh vùng "do not change chat logic" | **Cao** | FR-165, FR-143, FR-129, FR-105, NFR-06 |
 
 ---
 
@@ -460,6 +461,36 @@ chung một bậc với "admin gõ tay từ tin Chợ Tốt" là đánh đồng 
 chủ nhà im lặng thì không có đường nào sửa.
 
 Chưa dựng. Chờ chủ dự án chốt.
+
+### OPEN-32 · Ảnh gửi qua chat nằm ngoài ranh giới công khai/riêng tư
+
+FR-165 dựng hai bucket và ràng ở DB rằng `so_do`/`giay_to` phải nằm trong
+`listing-private`. Ràng buộc đó chỉ có hiệu lực với file ĐI QUA KHO CỦA TA.
+
+Ảnh chủ nhà gửi qua Zalo thì không đi qua đó. `chat-reply` lưu URL Zalo CDN
+thành fact `hinh_anh`, và FR-143 gộp chính những URL đó vào mảng `photos` gửi
+cho người mua. Hai chi tiết làm nó thành rủi ro thật chứ không phải giả định:
+
+1. Vòng drip FR-129 có hỏi `phap_ly`. Người bán trả lời câu đó bằng ảnh chụp
+   sổ hồng là chuyện bình thường.
+2. Nhánh ảnh trong `chat-reply` ghi nhãn `hinh_anh` cho MỌI ảnh không kèm chữ,
+   bất kể câu hỏi đang chờ là gì. Nên ảnh sổ vào kho ảnh của tin, rồi ra với
+   khách mua.
+
+FR-105 vốn đã ghi "ảnh duyệt tay giai đoạn đầu" — nhưng chưa có ai duyệt.
+
+Ba hướng, chưa chọn:
+
+- **(a)** Ảnh trả lời câu `phap_ly` (hoặc ảnh mà model đọc ra là giấy tờ) thì
+  ghi nhãn `giay_to`, không vào `photos` gửi khách. Đúng gốc nhất, nhưng phải
+  sửa nhánh ảnh của `chat-reply`.
+- **(b)** Kéo ảnh chat về `listing-private` rồi mới phân loại — có kho, có
+  provenance, nhưng thêm một pipeline tải file.
+- **(c)** Giữ nguyên, chặn ở khâu duyệt tay theo FR-105.
+
+**Khuyến nghị (a)**, và làm sớm: đây là đường rò giấy tờ đất của người dân ra
+người lạ, không phải lỗi hiển thị. Chưa dựng vì đợt FR-165 được khoanh vùng
+"không đụng luồng chat".
 
 ### Soát mã nguồn 27/08/2026 — kết luận về advisor Supabase
 

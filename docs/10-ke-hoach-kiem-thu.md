@@ -520,3 +520,63 @@ Chạy lại: `"7 tỷ nha em"` → `"7 tỷ"`, `"phường 8"` → `"Phường 
 và bậc nguồn giữ nguyên. Đếm trước khi áp: 173/173 giá trị `ward` đã đúng chuẩn
 (kể cả phường tên chữ), chỉ 9 dòng `price_raw` đổi và cả 9 là chuỗi RỖNG → NULL
 trên tin nháp — không tin nào đổi trạng thái.
+
+### TS-KHO — kho ảnh tin rao theo UUID (FR-165)
+
+Chạy 29/08/2026 trên bản live. Phần DB chạy trong DO block rồi `raise` để cuộn
+lại (không để lại dòng nào); phần HTTP gọi bằng `pg_net` vì máy chạy agent bị
+chính sách mạng chặn CONNECT tới host Supabase.
+
+| Mã | Kịch bản | Mong đợi | Kết quả |
+|---|---|---|---|
+| TS-KHO-01 | Upload: ghi dòng media đúng quy ước | Nhận, và tự thành ảnh bìa | ✅ |
+| TS-KHO-02 | Upload đường dẫn theo MÃ TIN (lối cũ) | CHECK chặn | ✅ |
+| TS-KHO-03 | Upload trùng (bucket, path) | UNIQUE chặn | ✅ |
+| TS-KHO-04 | `so_do` vào bucket công khai | CHECK chặn | ✅ |
+| TS-KHO-05 | Thứ tự: sort_order NGƯỢC thứ tự tên file | Ra `10,2,1` — xếp theo tên sẽ ra `1,10,2` | ✅ |
+| TS-KHO-06 | Ảnh bìa | Tấm sort_order nhỏ nhất, không phải tấm tên nhỏ nhất | ✅ |
+| TS-KHO-07 | **Đổi mã tin** | 3/3 ảnh còn nguyên, view đổi theo mã mới | ✅ |
+| TS-KHO-08 | Replace (đổi storage_path) | Đường dẫn CŨ vào hàng đợi dọn | ✅ |
+| TS-KHO-09 | Xoá ảnh đang là bìa | Vào hàng đợi + tấm kế lên làm bìa | ✅ |
+| TS-KHO-10 | Xoá tin | media cascade về 0, cả 4 file vào hàng đợi (kể cả file riêng tư) | ✅ |
+| TS-KHO-11 | Upload hỏng (có dòng, chưa có file) | `media_mo_coi_db` soi ra | ✅ |
+| TS-KHO-12 | Worker nhận việc | `dang_lam`, attempts=1 | ✅ |
+| TS-KHO-13 | Xoá hỏng rồi quá 10 phút | Nhận lại được, attempts=2 | ✅ |
+| TS-KHO-14 | Việc đã `xong` | Không bị nhận lại, và không lùi trạng thái được | ✅ |
+| TS-KHO-15 | Worker chạy thật với file KHÔNG tồn tại | `da_xoa=1` — coi là xong | ✅ *(FAIL lần đầu, xem dưới)* |
+| TS-KHO-16 | anon xin quyền GHI vào `listing-public` | 403 AccessDenied (RLS) | ✅ |
+| TS-KHO-17 | anon xin quyền GHI vào `listing-private` | 403 AccessDenied | ✅ |
+| TS-KHO-18 | anon tự tạo bucket | 403 AccessDenied | ✅ |
+| TS-KHO-19 | Đọc `/object/public/` của bucket RIÊNG | `NoSuchBucket` — route công khai không phục vụ | ✅ |
+| TS-KHO-20 | anon đọc `listing_media` | Chỉ thấy dòng `listing-public`; dòng `so_do` bị RLS lọc | ✅ |
+| TS-KHO-21 | anon đọc view sau khi siết execute | Vẫn ra URL đúng dạng UUID | ✅ *(FAIL lần đầu, xem dưới)* |
+| TS-KHO-22 | Đường dẫn có `..` (leo thư mục) | CHECK chặn | ✅ |
+| TS-KHO-23 | Đường dẫn có `//` | CHECK chặn | ✅ |
+| TS-KHO-24 | Ảnh thường (không phải giấy tờ) vào bucket riêng | Cho — bucket riêng không cấm ảnh thường | ✅ |
+| TS-KHO-25 | Đặt `is_cover` cho file ở bucket riêng | CHECK chặn (bìa là thứ hiện công khai) | ✅ |
+
+**25/25 đạt**, sau khi chữa ba lỗi mà chính bộ test lôi ra:
+
+1. **TS-KHO-13 FAIL lần đầu** — trigger ép cứng `updated_at := now()` nên không
+   ai lùi được mốc thời gian, mà đó là thứ DUY NHẤT quyết định bao giờ một việc
+   `loi` được nhận lại. Không kiểm thử được, cũng không vận hành được. Sửa: chỉ
+   tự đóng dấu khi người gọi không tự đặt.
+2. **TS-KHO-15 FAIL lần đầu** — worker coi "file đã không còn" là LỖI nên việc
+   dọn quay vòng vô tận. Gốc: Storage của Supabase **không** trả HTTP 404 cho
+   vật thể thiếu, nó trả **HTTP 400** với thân JSON `{"statusCode":"404"}`. Bản
+   đầu chỉ soi mã HTTP nên không bao giờ khớp. Sửa: đọc thân.
+3. **TS-KHO-21 FAIL lần đầu** — siết `execute` xong là anon vỡ view
+   ("permission denied for function cau_hinh"). View security-definer cho đọc
+   BẢNG bằng quyền chủ view, nhưng quyền EXECUTE một HÀM vẫn xét theo NGƯỜI
+   GỌI. Sửa: view đọc thẳng `app_config` bằng subquery, không gọi hàm.
+
+**Chưa kết luận được (ghi thẳng, không tính là đạt):** anon LIỆT KÊ bucket riêng
+trả `200 []`. Với bucket rỗng thì `[]` không phân biệt được "RLS lọc sạch" và
+"cho phép nhưng chẳng có gì". Lập luận cấu hình thì an toàn (`storage.objects`
+bật RLS, KHÔNG có policy SELECT nào cho anon), nhưng đó là suy từ cấu hình chứ
+không phải quan sát được. Kiểm lại khi kho có ảnh thật.
+
+Advisor sau khi áp: các hàm mới đều đã rời khỏi danh sách "public gọi được".
+Bẫy bắt được: `revoke ... from anon, authenticated` KHÔNG có tác dụng với hàm —
+Postgres cấp EXECUTE cho PUBLIC theo mặc định và hai role đó thừa kế qua đó;
+phải revoke từ chính PUBLIC.
