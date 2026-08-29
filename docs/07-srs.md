@@ -331,7 +331,17 @@ curated_lists       id, token unique, buyer_id, property_ids[], created_at, expi
 listing_media       id, listing_id FK->listings(id) ON DELETE CASCADE, bucket, storage_path,
                     media_type enum-check(mat_tien, trong_nha, hem, so_do, giay_to, khac),
                     mime_type, sort_order, is_cover, created_at        -- FR-165 (đã dựng)
-media_cleanup_queue id, bucket, storage_path, trang_thai, attempts, last_error, created_at, updated_at  -- FR-165
+media_cleanup_queue id, bucket, storage_path, trang_thai enum-check(cho, dang_lam, xong, loi, chet),
+                    attempts, last_error, next_retry_at, created_at, updated_at   -- FR-165, FR-166g
+inbound_events      event_id PK (= zalo_msg_id thật), zalo_user_id, payload jsonb, delivery_count,
+                    first_seen_at, last_seen_at                                   -- FR-162 phần 2
+inbound_ledger      zalo_msg_id PK, status enum-check(received, processing, completed, failed, dead),
+                    attempts, reply jsonb, detail, sent_at, send_error, sent_bubbles,
+                    next_retry_at, locked_by, started_at, finished_at, created_at, updated_at
+                                                                                  -- FR-162, FR-166b
+reminders           id, kind, buyer_id, seller_id, ctv_id, listing_id, viewing_id, due_at, note,
+                    status enum-check(pending, sent, cancelled, dead), sent_at, created_at,
+                    locked_at, locked_by, attempts, next_retry_at, last_error      -- FR-32, FR-166f
 photos              [thay bởi listing_media 29/08/2026 — `is_public` bỏ, `bucket` đã nói điều đó]
 escalations         id, type enum(QUESTION, VOICE, VIEWING, UPSET), buyer_id, property_id, payload jsonb, emailed_at  -- FR-77..81
 ```
@@ -453,6 +463,17 @@ Cả ba bật RLS và `revoke all from anon, authenticated`. Riêng `bot_errors`
 | `log_loi(source, detail, code)` | Cửa ghi lỗi tầng ứng dụng. **Van: 20 dòng/nguồn/giờ và 200 dòng/giờ tổng** | mở cho `anon` (bắt buộc — server Next chạy bằng publishable key) |
 | `bot_health_tick()` | Quét `net._http_response` tìm phản hồi không 2xx → `bot_errors`; kiểm nhịp tim bridge; gộp báo admin 1 tin/giờ; dọn sổ > 30 ngày | chỉ `service_role`, chạy bằng cron `*/15` |
 | `beat(who)` | Ghi nhịp tim. `escalation-feed` gọi mỗi lần bridge kéo việc | chỉ `service_role` |
+| `lan_thu_ke(attempts)` | Khoảng chờ trước lần thử kế — nhân đôi dần, chặn ở 1 tiếng, nhiễu ±20%. Luật chung cho cả ba hàng đợi (FR-166 a) | chỉ `service_role` |
+| `claim_inbound(msg_id, stale_secs, worker)` | Giành job tin đến, atomic. Trả `received`/`in_flight`/`completed`/`dead` + payload trả lời đã lưu. Quá 8 lần → `dead` (FR-162 a, FR-166 c) | chỉ `service_role` |
+| `bao_hong_inbound(msg_id, detail)` | Ghi hỏng + hẹn giờ lùi dần, hoặc chuyển thư chết. Dòng đã `completed` thì KHÔNG đụng (khỏi va guard FR-163 g) | chỉ `service_role` |
+| `viec_inbound_bo_roi(limit)` | Tìm việc đường nhanh chưa làm xong: `chua_co_job` / `job_do_dang` / `chua_gui`. Cửa sổ 24h (FR-166 d) | chỉ `service_role` |
+| `inbound_sweep_tick()` | Cron 1 phút: có việc bỏ rơi thì gọi `inbound-sweep`, không thì return ngay | chỉ `service_role` |
+| `nhan_viec_nhac(kinds, limit, worker)` | Giành lời nhắc tới hạn bằng hợp đồng thuê 5 phút (`for update skip locked`) — cửa DUY NHẤT để `nudge` lấy việc (FR-166 f) | chỉ `service_role` |
+| `bao_hong_nhac(id, detail)` | Đã THỬ mà hụt: nhả hợp đồng thuê + hẹn giờ lùi dần; quá 5 lần → `dead` | chỉ `service_role` |
+| `nha_viec_nhac(id)` | CHƯA THỬ được (thiếu đích/token OA — việc của bridge): trả việc lại nguyên vẹn và hoàn luôn lượt đếm `attempts` (`20260829c`) | chỉ `service_role` |
+| `nhan_viec_don_media(limit)` | Giành việc dọn file, `attempts < 6` (FR-165 e, FR-166 g) | chỉ `service_role` |
+| `chon_viec_don_chet()` | Dán nhãn `chet` cho việc dọn đã hết đường thử lại | chỉ `service_role` |
+| view `job_suc_khoe` | Một cửa sổ cho ba hàng đợi: job id, attempts, lỗi, started/finished, next_retry (FR-166). **Chưa nối vào `/admin`** — trang đó đọc Supabase bằng publishable key tức vai `anon`, mà view này `revoke all` khỏi anon; muốn hiện thì phải mở qua một RPC security-definer có kiểm quyền admin, như `bot_health_tick`. Hiện chỉ đọc được bằng service key | `revoke all` khỏi anon/authenticated |
 
 **Vì sao phải có `bot_errors` thay vì đọc log**: log edge function bậc Free chỉ
 giữ 1 ngày, mà loại lỗi nguy nhất ở hệ này **TRẢ 200** (`catch` nuốt exception
@@ -692,7 +713,7 @@ Loại khỏi kết quả: `status ≠ 'dang_rao'`, và listing B đã từ ch�
 | `stale_listing_check` | thứ 2 hằng tuần | *(tinh chỉnh theo FR-107)* TTL xác nhận là **7 ngày**, kiểm tra **tại thời điểm matching**: quá hạn thì hỏi S trước khi giới thiệu; job tuần chỉ quét listing không có lượt matching nào |
 | `close_conversations` | mỗi 5 phút | đóng hội thoại im lặng > 30 phút (FR-72) |
 
-**Cron THẬT đang chạy trên `nhadat-cc`** (pg_cron, kiểm 27/08/2026 — bảng trên
+**Cron THẬT đang chạy trên `nhadat-cc`** (pg_cron, kiểm 29/08/2026 — bảng trên
 là thiết kế, bảng dưới là thực tế):
 
 | Job | Lịch | Gọi gì |
@@ -702,6 +723,11 @@ là thiết kế, bảng dưới là thực tế):
 | `ctv-report-tick` | `0 10 * * *` (17h VN) | `ctv-report` — báo cáo CTV (FR-137/149) |
 | `listing-interest-decay` | `0 20 * * *` | trả tin `dang_quan_tam` về `dang_ban` sau 7 ngày (FR-139) |
 | `bot-health-tick` | `*/15 * * * *` | `bot_health_tick()` — SQL thuần, không HTTP (FR-152) |
+| `media-cleanup-tick` | `*/5 * * * *` | `media-cleanup` — xoá file đã bị gỡ khỏi DB (FR-165 e) |
+| `inbound-sweep-tick` | `* * * * *` | `inbound_sweep_tick()` → `inbound-sweep`. Không có việc bỏ rơi thì RETURN NGAY, không gọi HTTP (FR-166 d) |
+| `media-chet-tick` | `0 * * * *` | `chon_viec_don_chet()` — SQL thuần, dán nhãn thư chết cho việc dọn quá 6 lần (FR-166 g) |
+
+*(Ba dòng CUỐI bảng bổ sung 29/08/2026. `media-cleanup-tick` chạy từ 29/08 theo FR-165 nhưng trước lần này chưa từng được ghi vào bảng.)*
 
 **Đừng tin `cron.job_run_details.status`** (NFR-18): `net.http_post()` trả về
 ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge function trả

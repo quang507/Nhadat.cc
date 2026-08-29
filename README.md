@@ -11,7 +11,7 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 |---|---|---|
 | 0 | [Glossary](docs/00-glossary.md) | Từ điển thuật ngữ (B, S, CCRB, NMG, HXH…) |
 | 1 | [Research](docs/01-research.md) | Insight, persona, mô hình KD, ngân sách, rủi ro |
-| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 140 FR (3 deprecated) · 18 NFR · 5 giả định |
+| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 141 FR (3 deprecated) · 18 NFR · 5 giả định |
 | 3 | [User Flow](docs/03-user-flows.md) | 13 luồng end-to-end |
 | 4 | [Information Architecture](docs/04-information-architecture.md) | Sitemap, URL/SEO, content model |
 | 5 | [Wireframe](docs/05-wireframes.md) | 14 màn hình low-fi |
@@ -30,7 +30,7 @@ Từ 24/08/2026 code nằm **trong chính repo này** (trước đó ở thư m�
 | Đường dẫn | Là gì |
 |---|---|
 | `app/`, `components/`, `lib/`, `public/` | Web Next.js 15 + Tailwind 4 (App Router), Vercel build từ gốc repo, package manager **Bun** |
-| `bot/supabase/functions/` | 7 edge function (Deno) — bộ não chat, webhook Zalo, cron nhắc/báo cáo |
+| `bot/supabase/functions/` | 9 edge function (Deno) — bộ não chat, webhook Zalo, cron nhắc/báo cáo |
 | `bot/supabase/migrations/` | Bản sao tham chiếu của migration đã áp (áp thật qua MCP) |
 | `bot/bridge-zca/` | Bridge Zalo acc clone — chạy trên máy chủ dự án, không deploy |
 | `scripts/` | Script vận hành chạy tay: up ảnh, sao lưu DB |

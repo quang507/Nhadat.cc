@@ -64,10 +64,24 @@ async function handleEvent(raw: string): Promise<void> {
   const accessToken = await secretOf(client, "ZALO_OA_ACCESS_TOKEN");
   if (!accessToken) return; // chưa cấu hình OA — chỉ ghi log (đã lưu messages)
 
+  // FR-166 bất biến 10/12 — ĐIỂM NỐI LẠI.
+  // Trước bản này, sập giữa chừng là lần sau phát lại TỪ ĐẦU: bong bóng 1 đã
+  // tới tay khách rồi vẫn bị gửi lần nữa. `sent_bubbles` đếm số tấm ĐÃ tới
+  // Zalo, ghi ngay sau từng tấm, nên lần thử sau đi tiếp đúng chỗ đang dở.
+  // Zalo OA `message/cs` không có khoá idempotency phía nhà cung cấp, nên đếm
+  // ở phía mình là cách an toàn mạnh nhất mà tích hợp hiện tại cho phép.
+  let daGui = 0;
+  if (zaloMsgId) {
+    const { data: so } = await client.from("inbound_ledger")
+      .select("sent_bubbles").eq("zalo_msg_id", zaloMsgId).maybeSingle();
+    daGui = Math.min(so?.sent_bubbles ?? 0, bubbles.length);
+  }
+
   // Quyết định 25/08: KHÔNG delay nhân tạo — bong bóng đầu đi ngay lập tức,
   // giữa các bong bóng chỉ chừa 300ms cho Zalo giao đúng thứ tự.
   let guiHut = 0; // FR-162: đếm bong bóng gửi hụt để ghi vào sổ inbound_ledger
-  for (const [i, bubble] of bubbles.entries()) {
+  for (let i = daGui; i < bubbles.length; i++) {
+    const bubble = bubbles[i];
     if (i > 0) await new Promise((r) => setTimeout(r, 300));
     let ok = await sendZalo(accessToken, zaloUserId, bubble);
     if (!ok) {
@@ -80,8 +94,18 @@ async function handleEvent(raw: string): Promise<void> {
     // Gửi hụt = khách ngồi chờ một câu không bao giờ tới. Đây là hỏng nặng
     // nhất phía B mà lại im nhất, vì mọi mã HTTP trên đường đều 200.
     if (!ok) {
-      guiHut++;
+      guiHut = bubbles.length - i; // số tấm CÒN LẠI chưa tới
       await ghiLoi(client, "zalo-webhook send", `bong bóng: ${bubble.slice(0, 80)}`);
+      // DỪNG HẲN, không gửi nốt tấm sau: gửi tiếp thì khách nhận lộn thứ tự,
+      // và điểm nối lại thành mơ hồ (tấm 2 tới mà tấm 1 chưa).
+      break;
+    }
+    // Ghi NGAY sau từng tấm — sập ở dòng kế tiếp thì lần sau vẫn biết đã tới đâu.
+    daGui = i + 1;
+    if (zaloMsgId) {
+      await client.from("inbound_ledger")
+        .update({ sent_bubbles: daGui, updated_at: new Date().toISOString() })
+        .eq("zalo_msg_id", zaloMsgId);
     }
   }
 
@@ -113,6 +137,30 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method", { status: 405 });
 
   const raw = await req.text();
+
+  // FR-166 — CỬA PHÁT LẠI cho đường cứu.
+  // `inbound-sweep` gọi vào đây với `{replay_event_id}` để chạy lại đúng việc
+  // đã bỏ dở. Cố ý KHÔNG viết một đường gửi riêng cho worker: hai đường gửi
+  // song song là hai chỗ để hành vi trôi khỏi nhau, mà khâu gửi lại chính là
+  // khâu chứa luật chống-gửi-đúp. Một đường, dùng chung.
+  // Chỉ service_role gọi được — payload lấy từ sổ, không tin gì từ người gọi
+  // ngoài chính cái id.
+  try {
+    const body = JSON.parse(raw);
+    if (body?.replay_event_id) {
+      const isService = req.headers.get("authorization") ===
+        `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+      if (!isService) return jsonResponse({ error: "forbidden" }, 403);
+
+      const db = serviceClient();
+      const { data: ev } = await db.from("inbound_events")
+        .select("payload").eq("event_id", String(body.replay_event_id)).maybeSingle();
+      if (!ev?.payload) return jsonResponse({ error: "khong thay su kien" }, 404);
+
+      await handleEvent(JSON.stringify(ev.payload));
+      return jsonResponse({ ok: true, replayed_event: body.replay_event_id });
+    }
+  } catch { /* không phải JSON phát lại thì đi tiếp đường webhook thường */ }
 
   // Verify chữ ký nếu đã cấu hình app secret (mac = sha256(appId+data+timeStamp+secret))
   const client = serviceClient();

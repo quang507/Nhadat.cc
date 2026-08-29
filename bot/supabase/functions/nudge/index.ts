@@ -25,6 +25,10 @@ const ANGLES = [
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
+
+  // FR-166: dấu tay của lượt chạy này, ghi vào `reminders.locked_by` để nhìn
+  // ra ai đang giữ việc khi có hai worker chạy chồng nhau.
+  const workerId = `nudge-${crypto.randomUUID().slice(0, 8)}`;
   const { dry_run = false, force = false } = await req.json().catch(() => ({}));
   // Giờ giấc con người (docs/06 §6.8): chỉ chủ động nhắn trong 8h-21h giờ VN;
   // ngoài cửa sổ thì để nhịp cron sau xử — reminder vẫn pending, không mất.
@@ -35,7 +39,15 @@ Deno.serve(async (req) => {
   // Lệch phút ngẫu nhiên — đừng gửi đúng boong :00/:30 như máy
   if (!dry_run) await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 45000)));
   const client = serviceClient();
-  const anthropic = await anthropicClient(client);
+  // FR-166: khối leo thang KHÔNG cần model. Để `anthropicClient` ném thẳng ra
+  // ngoài là một cái key hỏng kéo sập cả lượt chạy, kể cả phần chẳng liên quan
+  // tới AI. Cùng lưới đã dựng cho chat-reply ở OPEN-30.
+  let anthropic: Awaited<ReturnType<typeof anthropicClient>> | null = null;
+  try {
+    anthropic = await anthropicClient(client);
+  } catch (e) {
+    await ghiLoi(client, "nudge anthropicClient", e);
+  }
   const oaToken = await secretOf(client, "ZALO_OA_ACCESS_TOKEN");
   // FR-138: tone cấu hình được từ bảng bot_prompts (sửa ở dashboard, khỏi deploy)
   const { data: toneRow } = await client.from("bot_prompts")
@@ -70,12 +82,31 @@ Deno.serve(async (req) => {
     out.push({ kind: "escalate_admin", conversation: c.id });
   }
 
-  const { data: escDue } = await client
-    .from("reminders")
-    .select("id, kind, note, ctv_id, seller_id, ctvs(name, zalo_user_id), sellers(name, zalo_user_id)")
-    .eq("status", "pending").in("kind", ["escalation", "report"])
-    .lte("due_at", new Date().toISOString())
-    .limit(10);
+  // FR-166 bất biến 13 — GIÀNH VIỆC TRƯỚC, GỬI SAU.
+  // Trước bản này khối này SELECT thẳng status='pending' rồi gửi rồi mới đánh
+  // 'sent'. Hai lượt chạy chồng nhau (cron gối nhau, hoặc gọi tay lúc cron
+  // đang chạy) cùng thấy một dòng pending và CÙNG GỬI — khách nhận hai tin y
+  // hệt. `nhan_viec_nhac` lật cờ thuê atomic bằng `for update skip locked`,
+  // nên chỉ một lượt cầm được việc.
+  // `dry_run` KHÔNG được giành việc: giành là tăng `attempts`, mà năm lượt chạy
+  // thử là đủ đẩy lời nhắc THẬT vào thư chết dù chưa gửi đi đâu cả. Chạy thử
+  // thì chỉ nhìn, đọc thẳng bảng.
+  const escClaimRes = dry_run
+    ? await client.from("reminders").select("id")
+      .eq("status", "pending").in("kind", ["escalation", "report"])
+      .lte("due_at", new Date().toISOString()).limit(10)
+    : await client.rpc("nhan_viec_nhac", {
+      p_kinds: ["escalation", "report"], p_limit: 10, p_worker: workerId,
+    });
+  const { data: escClaim, error: escErr } = escClaimRes;
+  if (escErr) await ghiLoi(client, "nudge nhan_viec_nhac(esc)", escErr.message);
+  const escIds = (escClaim ?? []).map((r: { id: string }) => r.id);
+  // Giành xong mới lấy kèm quan hệ — RPC trả cột trần, không kèm join được.
+  const { data: escDue } = escIds.length
+    ? await client.from("reminders")
+      .select("id, kind, note, ctv_id, seller_id, ctvs(name, zalo_user_id), sellers(name, zalo_user_id)")
+      .in("id", escIds)
+    : { data: [] as never[] };
   for (const r of escDue ?? []) {
     const ctv = r.ctvs as { name?: string | null; zalo_user_id?: string | null } | null;
     const seller = r.sellers as { name?: string | null; zalo_user_id?: string | null } | null;
@@ -87,23 +118,45 @@ Deno.serve(async (req) => {
     }
     const text = escalationText(r);
     let sent = "none";
-    if (!dry_run && target && oaToken && !target.startsWith("TEST")) {
-      sent = (await sendZalo(oaToken, target, text)) ? "zalo_oa" : "zalo_error";
-      if (sent === "zalo_oa") {
-        await client.from("reminders")
-          .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);
+    if (!dry_run) {
+      if (target && oaToken && !target.startsWith("TEST")) {
+        sent = (await sendZalo(oaToken, target, text)) ? "zalo_oa" : "zalo_error";
+        if (sent === "zalo_oa") {
+          await client.from("reminders")
+            .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);
+        } else {
+          // FR-166 bất biến 6/7: nhả hợp đồng thuê + hẹn giờ lùi dần; quá 5 lần
+          // thì cho vào thư chết thay vì đập lại OA mỗi 30 phút đến hết đời.
+          await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: "gửi OA hụt" });
+        }
+      } else {
+        // Thiếu đích hoặc thiếu token OA: việc này KHÔNG phải của đường OA, nó
+        // nằm chờ bridge kéo qua `escalation-feed`. Trả lại nguyên vẹn — giữ
+        // hợp đồng thuê là khoá vô ích, còn để `attempts` tăng mỗi nửa tiếng là
+        // biến bộ đếm thành lời nói dối (FR-166: chưa thử thì không tính là đã
+        // thử). Lỗi này lộ ra khi soi DB sau lượt cron thật đầu tiên.
+        await client.rpc("nha_viec_nhac", { p_id: r.id });
       }
     }
     out.push({ kind: r.kind, id: r.id, text, sent });
   }
 
   // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) ----
-  const { data: due } = await client
-    .from("reminders")
-    .select("id, kind, note, buyer_id, seller_id, listing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id)")
-    .eq("status", "pending").in("kind", ["promise", "viewing", "followup"])
-    .lte("due_at", new Date().toISOString())
-    .limit(5);
+  const dueClaimRes = dry_run
+    ? await client.from("reminders").select("id")
+      .eq("status", "pending").in("kind", ["promise", "viewing", "followup"])
+      .lte("due_at", new Date().toISOString()).limit(5)
+    : await client.rpc("nhan_viec_nhac", {
+      p_kinds: ["promise", "viewing", "followup"], p_limit: 5, p_worker: workerId,
+    });
+  const { data: dueClaim, error: dueErr } = dueClaimRes;
+  if (dueErr) await ghiLoi(client, "nudge nhan_viec_nhac(due)", dueErr.message);
+  const dueIds = (dueClaim ?? []).map((r: { id: string }) => r.id);
+  const { data: due } = dueIds.length
+    ? await client.from("reminders")
+      .select("id, kind, note, buyer_id, seller_id, listing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id)")
+      .in("id", dueIds)
+    : { data: [] as never[] };
 
   for (const r of due ?? []) {
     const who = (r.buyers ?? r.sellers) as { name?: string | null; zalo_user_id?: string | null } | null;
@@ -123,7 +176,16 @@ Deno.serve(async (req) => {
         canInfo = `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? ""} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}`;
       }
     }
-    const resp = await anthropic.messages.create({
+    // FR-166: model 500 / hết giờ là chuyện thường. Không bọc thì exception
+    // thoát khỏi CẢ vòng lặp — những lời nhắc còn lại mất lượt, mà chúng đã bị
+    // giành (locked_at) nên treo 5 phút mới ai đụng lại được.
+    if (!anthropic) {
+      await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: "khong co client model" });
+      continue;
+    }
+    let resp;
+    try {
+      resp = await anthropic.messages.create({
       model: MODEL, max_tokens: 256,
       output_config: { effort: "low" },
       system: [{ type: "text", text: TONE, cache_control: { type: "ephemeral" } }],
@@ -138,8 +200,16 @@ Deno.serve(async (req) => {
             `Soạn MỘT tin Zalo RẤT NGẮN (~20 từ) nhắc khéo — thân thiện, KHÔNG trách móc, cho đường lùi ("khi nào tiện anh/chị gửi em nha").`,
       }],
     });
+    } catch (e) {
+      await ghiLoi(client, "nudge model(nhac)", e);
+      await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: `model: ${String(e).slice(0, 120)}` });
+      continue;
+    }
     const text = resp.content.find((b) => b.type === "text")?.text?.trim();
-    if (!text) continue;
+    if (!text) {
+      await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: "model tra rong" });
+      continue;
+    }
 
     let sent = "none";
     if (!dry_run) {
@@ -147,7 +217,11 @@ Deno.serve(async (req) => {
         sent = (await sendZalo(oaToken, who.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
       }
       if (sent === "zalo_error") {
-        // Gửi lỗi → GIỮ pending cho nhịp cron sau thử lại, đừng nuốt mất lời nhắc
+        // Gửi lỗi → GIỮ pending cho nhịp cron sau thử lại, đừng nuốt mất lời nhắc.
+        // FR-166: nhả hợp đồng thuê + hẹn giờ theo luật lùi dần. Không nhả thì
+        // dòng này bị khoá 5 phút vô ích; không hẹn giờ thì cứ 30 phút lại đập
+        // vào OA đúng cái đang hỏng, và không bao giờ dừng.
+        await client.rpc("bao_hong_nhac", { p_id: r.id, p_detail: "gửi OA hụt" });
         out.push({ kind: r.kind, id: r.id, text, sent, retry: true });
         continue;
       }
@@ -212,7 +286,24 @@ Deno.serve(async (req) => {
     }
     const angle = ANGLES[Math.floor(Math.random() * ANGLES.length)];
 
-    const resp = await anthropic.messages.create({
+    // FR-166 bất biến 13 — GIỮ CHỖ TRƯỚC, GỬI SAU.
+    // Trước bản này: ĐẾM xem đã hỏi thăm chưa → gửi → mới ghi vết. Hai lượt
+    // chạy chồng nhau cùng đếm ra 0 và CÙNG GỬI. Nay chèn dòng `pending`
+    // TRƯỚC, index duy nhất khiến bên thua nhận 23505 rồi nhường.
+    if (!anthropic) continue;
+    let giuCho: string | null = null;
+    if (!dry_run) {
+      const { data: cho, error: choErr } = await client.from("reminders").insert({
+        kind: "reengage", buyer_id: b.id, due_at: new Date().toISOString(),
+        note: angle, status: "pending",
+      }).select("id").single();
+      if (choErr) continue;
+      giuCho = cho?.id ?? null;
+    }
+
+    let resp;
+    try {
+      resp = await anthropic.messages.create({
       model: MODEL, max_tokens: 256,
       output_config: { effort: "low" },
       system: [{ type: "text", text: TONE, cache_control: { type: "ephemeral" } }],
@@ -224,8 +315,16 @@ Deno.serve(async (req) => {
           `Soạn MỘT tin Zalo NGẮN (1-2 câu) theo góc: ${angle}. Nhắc đúng nhu cầu cũ nếu có. Kết thúc bằng một câu hỏi nhẹ.`,
       }],
     });
+    } catch (e) {
+      await ghiLoi(client, "nudge model(reengage)", e);
+      if (giuCho) await client.from("reminders").delete().eq("id", giuCho);
+      continue;
+    }
     const text = resp.content.find((bk) => bk.type === "text")?.text?.trim();
-    if (!text) continue;
+    if (!text) {
+      if (giuCho) await client.from("reminders").delete().eq("id", giuCho);
+      continue;
+    }
 
     let sent = "none";
     if (!dry_run) {
@@ -233,16 +332,27 @@ Deno.serve(async (req) => {
         sent = (await sendZalo(oaToken, b.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
       }
       if (sent === "zalo_error") {
-        // Gửi lỗi → không ghi vết "đã hỏi thăm", nhịp sau thử lại người này
+        // ĐÓNG chỗ giữ lại, đừng để nó nằm `pending` mãi. Index duy nhất
+        // `reminders_mot_reengage_cho_idx` chỉ cho MỘT dòng reengage pending
+        // mỗi khách, nên một dòng pending không ai xử lý là khoá cứng: khách
+        // đó không bao giờ được hỏi thăm nữa. `cancelled` nhả khoá mà vẫn để
+        // lại vết (khác `delete`), và cổng chống-spam 5 ngày đếm theo
+        // `created_at` bất kể trạng thái nên vẫn giữ đúng nhịp không làm phiền.
+        // Cố ý KHÔNG hẹn lùi dần ở đây: dòng reengage không nằm trong bộ
+        // `nhan_viec_nhac` nào cả, hẹn giờ cho nó là hẹn cho người không tới.
+        if (giuCho) {
+          await client.from("reminders")
+            .update({ status: "cancelled", last_error: "gửi OA hụt" }).eq("id", giuCho);
+        }
         reengaged++;
         out.push({ kind: "reengage", buyer: b.id, angle, text, sent, retry: true });
         continue;
       }
       if (conv) await client.from("messages").insert({ conversation_id: conv.id, sender: "bot", body: text });
-      await client.from("reminders").insert({
-        kind: "reengage", buyer_id: b.id, due_at: new Date().toISOString(),
-        note: angle, status: "sent", sent_at: new Date().toISOString(),
-      });
+      if (giuCho) {
+        await client.from("reminders")
+          .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", giuCho);
+      }
     }
     reengaged++;
     out.push({ kind: "reengage", buyer: b.id, angle, text, sent });

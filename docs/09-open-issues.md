@@ -126,6 +126,15 @@ Xem ghi chú kiến trúc ở `07-srs.md §SRS-2.1`. Logstash không bảo đả
 Logstash + ElasticSearch cho log và phân tích sự kiện. Cần chủ dự án chốt với vendor vì
 ảnh hưởng báo giá.
 
+*[cập nhật 29/08/2026]* Phần THỰC HÀNH của khuyến nghị này đã được dựng bằng FR-166:
+hàng đợi nghiệp vụ nằm trong chính Postgres (`inbound_events` → `inbound_ledger`,
+`reminders`, `media_cleanup_queue`) với worker là edge function do pg_cron gọi — không
+Redis, không Kafka, không thêm hạ tầng nào. Yêu cầu của chủ dự án 29/08 nói thẳng "Do
+not introduce Redis unless the repository proves it is necessary", và repo không chứng
+minh được điều đó. Nghiệm thu: TS-JOB-01…30.
+**Vẫn treo**: chốt với vendor về Logstash trong bản đề xuất kỹ thuật — đó là chuyện báo
+giá và hợp đồng, không phải chuyện code, nên vẫn chờ chủ dự án.
+
 ### OPEN-12 · Chấm điểm & chấm dứt NMG
 Quy định *"chấm dứt hợp đồng ngay khi bị chấm ≤3/5 ở mọi tương tác"* là rất khắt khe —
 một đánh giá xấu đơn lẻ có thể do khách khó tính. Chưa có quy trình khiếu nại.
@@ -433,6 +442,54 @@ chốt hụt vì mất dữ liệu đắt hơn nhiều lần tiền hai gói. Tr
 ngay — nó rẻ và mất 20 phút.
 
 **Chờ chủ dự án chốt.**
+
+---
+
+### OPEN-26 · Ngưỡng hạng Đồng/Bạc/Vàng
+
+Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: FR-155 đã dựng bộ khung và đang
+chạy với ngưỡng **[giả định BA]**, chưa ai chốt. Hạng hiện ra mắt người dùng,
+nên đổi ngưỡng về sau là đổi hạng của người đang có hạng.
+
+**Chờ chủ dự án chốt** (mức: Trung bình).
+
+---
+
+### OPEN-27 · Mở địa bàn ra HCM mới + Long An/Tây Ninh
+
+Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: quyết định 27/08/2026 mở địa bàn
+nhưng hiển thị và tìm kiếm **giữ tên cũ**. Còn treo phần đường cơ sở: dữ liệu,
+mã tin, taxonomy và SEO đang neo vào Quận 5.
+
+**Chờ chủ dự án chốt** (mức: Cao).
+
+---
+
+### OPEN-28 · Phí có đi theo phân loại tự động của FR-160 không?
+
+Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: FR-160 suy `seller_type` từ số tin
+đang rao (≥3 → NMG), mà `seller_type` đồng thời là thứ tính phí (BR-05: CCRB 1%,
+NMG 0.5%). Chính chủ mở tin thứ ba là phí TỰ RƠI MỘT NỬA, và rơi ngược lại khi gỡ
+tin. FR-160 vì vậy **chưa dựng**.
+
+**Chờ chủ dự án chốt** (mức: Cao).
+
+---
+
+### OPEN-29 · Bot điếc với tiếng Việt không dấu
+
+✅ **ĐÃ CHỐT 27/08/2026 — làm phương án (a), đã dựng thành FR-161.** Nội dung gốc
+và lý lẽ ở bảng tóm tắt đầu file.
+
+---
+
+### OPEN-30 · Một lệnh gọi model hỏng kéo sập cả lượt chat
+
+✅ **ĐÃ SỬA 28/08/2026 — chat-reply v40.** Ba lệnh gọi model nhánh seller và bước
+tạo `anthropicClient` đều đã bọc try/catch. Chi tiết ở bảng tóm tắt đầu file.
+*[29/08/2026 — cùng lưới đã trải sang `nudge` v14+ theo FR-166: `anthropicClient`
+và cả hai lệnh gọi model đều bọc, hỏng thì `bao_hong_nhac` chứ không thoát khỏi
+vòng lặp.]*
 
 ---
 

@@ -33,7 +33,7 @@ khi đổi model/prompt).
 | API contract | SRS-4.1…4.7: schema request/response, idempotency (request_id trùng → trả kết quả cũ, không nhân đôi), mã lỗi 404/409 | FR-41, FR-43 |
 | Database | RLS: anon chỉ đọc listing active + media public; unique (project_id, unit_code); enum unit_status/status không nhận giá trị lạ; last_confirmed_at cập nhật đúng | SRS-3.9, FR-107, FR-113 |
 | Webhook Zalo | Trả 200 < 1s; xử lý bất đồng bộ; chữ ký sai → từ chối; retry không tạo tin nhắn đôi | SRS-4.4 |
-| Hàng đợi | Chaos test: tắt worker 10 phút → 0 tin mất sau khôi phục | NFR-04, OPEN-11 |
+| Hàng đợi | Chaos test: tắt worker 10 phút → 0 tin mất sau khôi phục *[29/08/2026 — đã có bộ kiểm thật: TS-JOB, dựng cảnh sập bằng tay vì không giết được instance Edge Function theo ý muốn]* | NFR-04, OPEN-11, FR-166 |
 | Kho file | Ảnh sổ đỏ: signed URL hết hạn ≤15 phút, truy cập thẳng bucket bị chặn; adapter đổi backend không đụng logic bot | NFR-06, FR-111 |
 | Migration | Mỗi migration chạy được trên project trống + project có dữ liệu mẫu; không phá dữ liệu cũ | — |
 
@@ -54,7 +54,7 @@ khi đổi model/prompt).
 
 ## 10.4 Kiểm thử phi chức năng (Non-functional)
 
-Bảng NFR-01…16 với cách đo đã nằm ở `docs/07 §6` — giữ đó làm nguồn sự thật.
+Bảng NFR-01…18 với cách đo đã nằm ở `docs/07 §6` — giữ đó làm nguồn sự thật.
 Bổ sung các bài chuyên sâu:
 
 | Bài | Nội dung |
@@ -93,9 +93,9 @@ Bổ sung các bài chuyên sâu:
 Quy tắc: bug tìm thấy sau release phải có test tái hiện trước khi sửa —
 suite chỉ phình ra, không teo lại.
 
-## 10.7 Bộ test chạy tay — bản chạy được ngay (26/08/2026)
+## 10.7 Bộ test chạy tay — bản chạy được ngay (cập nhật 29/08/2026)
 
-Hai suite dưới đây là **lệnh dán vào chạy được**, không phải mô tả. Sinh ra từ
+Các suite dưới đây là **lệnh dán vào chạy được**, không phải mô tả. Sinh ra từ
 đợt soát bảo mật 26/08 và đợt bật bridge acc clone. ID cấp mới, bất biến.
 
 ### TS-SEC — hồi quy bảo mật (chạy sau MỌI migration đụng RLS/GRANT)
@@ -580,3 +580,79 @@ Advisor sau khi áp: các hàm mới đều đã rời khỏi danh sách "public
 Bẫy bắt được: `revoke ... from anon, authenticated` KHÔNG có tác dụng với hàm —
 Postgres cấp EXECUTE cho PUBLIC theo mặc định và hai role đó thừa kế qua đó;
 phải revoke từ chính PUBLIC.
+
+### TS-JOB — việc chạy nền tin cậy (FR-166)
+
+Chạy 29/08/2026 trên bản live, một khối DO duy nhất rồi `raise` để cuộn lại —
+kiểm sau khi chạy: 0 dòng `TSJOB%` còn sót ở `inbound_ledger`, `inbound_events`,
+`buyers`, `reminders`. Ba nhóm đầu là kịch bản HỎNG dựng bằng tay (sập giữa
+chừng = để `updated_at` lùi quá hạn thuê; hết đường thử lại = đẩy `attempts` lên
+trần), vì không có cách nào giết một instance Edge Function theo ý muốn.
+
+| Mã | Kịch bản | Mong đợi | Kết quả |
+|---|---|---|---|
+| TS-JOB-01 | Claim tin lần đầu | `received`, attempts=1, sổ ghi `processing` | ✅ |
+| TS-JOB-02 | Hai worker giành cùng một tin | Bên thua nhận `in_flight`, không xử lý đôi | ✅ |
+| TS-JOB-03 | **Worker sập**: `processing` quá hạn thuê 150s | Worker sau nhận lại được, attempts=2 | ✅ |
+| TS-JOB-04 | Báo hỏng một job | `failed` + có `next_retry_at` | ✅ |
+| TS-JOB-05 | Claim trước giờ thử lại | `in_flight` — không đập lại API sớm | ✅ |
+| TS-JOB-06 | Luật lùi dần `lan_thu_ke()` | Nhân đôi dần, chặn ở 1 tiếng, nhiễu trong ±20% | ✅ |
+| TS-JOB-07 | **Hỏng vĩnh viễn**: lần thứ 8 | Chuyển thư chết `dead`, thôi thử lại | ✅ |
+| TS-JOB-08 | Claim một việc đã `dead` | Trả `dead` + cờ `r_dead` để bên gọi biết dừng | ✅ |
+| TS-JOB-09 | Lùi `dead` → `processing` | Guard chặn (chỉ gỡ được bằng `completed`) | ✅ |
+| TS-JOB-10 | Báo hỏng trên dòng đã `completed` | `da_completed`, không đụng status — khỏi va guard FR-163 | ✅ |
+| TS-JOB-11 | Nudge giành việc nhắc tới hạn | 1 dòng, `locked_by`, attempts=1 | ✅ |
+| TS-JOB-12 | **Hai worker nudge chạy chồng** | Worker thứ hai lấy 0 dòng — hết cảnh gửi đúp | ✅ |
+| TS-JOB-13 | Gửi nhắc hụt | Nhả hợp đồng thuê + hẹn giờ lùi dần | ✅ |
+| TS-JOB-14 | Giành nhắc trước giờ thử lại | 0 dòng | ✅ |
+| TS-JOB-15 | Nhắc hỏng lần thứ 5 | `dead` | ✅ |
+| TS-JOB-16 | Lùi nhắc `dead` → `pending` | Guard giữ nguyên `dead` | ✅ |
+| TS-JOB-17 | **Hai lời hỏi thăm cùng một khách** | 23505 — unique index chặn, bên thua nhường | ✅ |
+| TS-JOB-18 | Nhắc chưa tới hạn | Không bị nhặt | ✅ |
+| TS-JOB-19 | Worker nhận việc dọn file | `dang_lam`, attempts=1 | ✅ |
+| TS-JOB-20 | Việc dọn file quá 6 lần | Thôi nhận — hết thử lại vô hạn | ✅ |
+| TS-JOB-21 | `chon_viec_don_chet()` | Đổi sang `chet` | ✅ |
+| TS-JOB-22 | **Sập trước khi gọi chat-reply**: có sự kiện, không có job | Đường cứu thấy, lý do `chua_co_job` | ✅ |
+| TS-JOB-23 | **Sập giữa lúc gọi model**: job kẹt `processing` | Đường cứu thấy, `job_do_dang` | ✅ |
+| TS-JOB-24 | **Sập sau AI, trước lần gửi đầu** (`completed`/`sent_at` null/`send_error` null/`sent_bubbles` 0) | Đường cứu thấy, `chua_gui` | ✅ |
+| TS-JOB-25 | Đã gửi đủ bong bóng | KHÔNG liệt kê — không gửi lại cho khách | ✅ |
+| TS-JOB-26 | Việc đã `dead` | KHÔNG liệt kê — thôi quét | ✅ |
+| TS-JOB-27 | View `job_suc_khoe` | Thấy việc dở của cả ba hàng đợi | ✅ |
+| TS-JOB-28 | **Giành được nhưng KHÔNG thử gửi** (thiếu đích/thiếu token OA — việc của bridge) | `nha_viec_nhac` trả việc: hết khoá, `attempts` về lại 0 | ✅ |
+| TS-JOB-29 | Nhả xong, worker sau nhặt lại | Lấy được ngay, không phải chờ hết hạn thuê | ✅ |
+| TS-JOB-30 | Nhả một việc đã `sent` | `khong_co` — chỉ nhả được việc còn `pending` | ✅ |
+
+**Ngoài bảng — E2E trên bản đang chạy.** Dựng một sự kiện mồ côi thật trong
+`inbound_events` (có payload, không có job — đúng cảnh instance chết sau ack),
+rồi để `inbound-sweep` nhặt: job về `completed`, `reply` nằm trong sổ, 3 dòng
+`messages` được ghi, và lượt quét sau không còn liệt kê nó nữa.
+
+**Bốn lỗi do chính bộ kiểm này lộ ra** (đã chữa trước khi chốt):
+
+1. *Vị ngữ đường cứu lọt lưới TS-JOB-24.* Bản đầu đợi `send_error` để biết gửi
+   hụt. Nhưng sập NGAY SAU khi model trả về và TRƯỚC lần gửi đầu thì không có
+   `send_error` nào cả — dòng đó lọt lưới và câu trả lời không bao giờ tới tay
+   khách. Chữa: so `jsonb_array_length(reply->'replies')` với `sent_bubbles`.
+2. *Tên hàm guard đoán sai.* Migration viết theo trí nhớ (`reminders_giu_trang_thai`,
+   `inbound_ledger_giu_trang_thai`); tên thật là `reminders_giu_trang_thai_ket` và
+   `inbound_ledger_giu_completed`. Đoán trúng thì tạo hàm MỚI và guard cũ vẫn chạy
+   nguyên bản cũ. Chữa bằng cách tra `pg_get_functiondef` trước khi ghi đè.
+3. *Nạp chồng `claim_inbound`.* Thêm tham số thứ ba mà không DROP thì Postgres
+   giữ cả hai bản và PostgREST có thể chọn nhầm. Chữa: DROP bản `(text,int)`
+   trước, và giữ nguyên `p_stale_secs` để bên gọi cũ không gãy.
+4. *`dry_run` của nudge vẫn ĂN lượt thử.* Bản đầu cho `dry_run` đi qua
+   `nhan_viec_nhac` như thật, nên `attempts` tăng — 5 lần chạy thử là nhắc THẬT
+   của khách bị đẩy vào thư chết. Chữa: `dry_run` đọc bằng SELECT thường, không
+   giành việc. 10 dòng bị ảnh hưởng lúc thử đã được đặt lại (`locked_at` null,
+   `attempts` 0).
+5. *Bộ đếm `attempts` nói dối trên việc CHƯA THỬ.* Lộ ra khi soi DB sau lượt cron
+   THẬT đầu tiên (02:00): 10 dòng `escalation`/`report` có `locked_at`, `attempts`
+   = 1, mà `last_error` rỗng. Không có gì hỏng — chúng là việc dành cho bridge kéo
+   qua `escalation-feed`, và khối escalation của `nudge` chỉ gửi khi có đủ đích +
+   token OA. Từ khi `nhan_viec_nhac` là cửa lấy việc, mỗi lượt cron không-thử-được
+   vẫn +1, nửa tiếng một lần, vô hạn — `job_suc_khoe` sẽ khoe "đã thử 40 lần" cho
+   một việc chưa ai thử lần nào. Chữa bằng `nha_viec_nhac()` (`20260829c`): trả
+   việc và hoàn luôn lượt đếm. Cố ý KHÔNG dùng `bao_hong_nhac` ở đây — "thử rồi
+   hụt" phải lùi dần và phải chết sau 5 lần, "chưa thử được" thì không.
+
+**30/30 đạt.**
