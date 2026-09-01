@@ -8,6 +8,7 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  doTien,
   ghiLoi,
   jsonResponse,
   MODEL,
@@ -919,6 +920,7 @@ Deno.serve(async (req) => {
             messages: [{ role: "user", content: prompt }],
           });
           sellerReply = r2.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+          await doTien(client, r2.usage);
         } catch (e) {
           await ghiLoi(client, "chat-reply model r2(seller)", e);
         }
@@ -1021,6 +1023,7 @@ Deno.serve(async (req) => {
               }],
             });
             raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+            await doTien(client, r1.usage);
           } catch (e) {
             await ghiLoi(client, "chat-reply model r1(seller)", e);
           }
@@ -1067,6 +1070,7 @@ Deno.serve(async (req) => {
           }],
         });
         sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+        await doTien(client, r3.usage);
       } catch (e) {
         await ghiLoi(client, "chat-reply model r3(seller)", e);
       }
@@ -1292,10 +1296,14 @@ Deno.serve(async (req) => {
   const partner = (partnerProj ?? [])[0] as Proj | undefined;
   const matched = ((matchedProj ?? []) as Proj[])
     .filter((m) => m.name !== partner?.name);
-  const duanBlock = [
-    ...(partner ? [projLine(partner, true)] : []),
-    ...matched.map((m) => projLine(m, true)),
-  ].join("\n");
+  // Dự án nhà mình đứng RIÊNG khỏi khối kho: nó giống hệt nhau cho mọi khách và
+  // gần như không đổi, nên chỗ của nó là trong phần được nhớ tạm (rẻ 1/10), chứ
+  // không phải nằm chung với khối kho biến động theo từng hồ sơ. Riêng thông số
+  // + mẫu căn đã là 1.350 ký tự, gửi đủ giá mỗi lượt cho cả khách chưa hỏi tới
+  // dự án là phí. Xem bot/README §01/09.
+  const duanNhaMinh = partner ? projLine(partner, true) : "";
+  // Dự án khách vừa nhắc tên thì mới nạp — biến động, phải nằm sau điểm nhớ tạm.
+  const duanBlock = matched.map((m) => projLine(m, true)).join("\n");
 
   // Chống hỏi cung: 2 tin gần nhất của bot đều là câu hỏi → lượt này đưa giá trị
   const botMsgs = ordered.filter((m) => m.sender === "bot");
@@ -1332,13 +1340,37 @@ Deno.serve(async (req) => {
       // effort low: nhanh hơn rõ rệt, few-shot + luật đã gánh chất lượng (nudge
       // chạy low được chấm 4.5-4.7/5); cần sâu hơn thì nâng lại "medium"
       output_config: { effort: "low", format: zodOutputFormat(BuyerTurn) },
-      // Tách 2 khối: khối LUẬT ổn định được cache (đỡ ~7KB prefill mỗi lượt);
-      // khối KHO biến động theo hồ sơ nằm SAU điểm cache nên không phá cache.
+      // Tách 2 khối theo GIÁ, không theo chủ đề: mọi thứ giống hệt nhau cho mọi
+      // khách nằm trước điểm nhớ tạm (đọc lại chỉ tốn 1/10 giá); mọi thứ đổi
+      // theo hồ sơ từng khách nằm sau (phải trả đủ giá dù có cache hay không).
+      //
+      // TTL 1 GIỜ, KHÔNG PHẢI 5 PHÚT MẶC ĐỊNH — và đây là lựa chọn theo LƯU
+      // LƯỢNG, phải xem lại khi lưu lượng đổi. Khối tĩnh ~5.800 token. Nạp lại
+      // tốn 1,25 lần giá gốc ở nhịp 5 phút, 2 lần ở nhịp 1 giờ; đọc lại tốn
+      // 1/10. Đồng hồ đếm từ lúc BẮT ĐẦU mỗi lượt và mỗi lần đọc lại đặt lại
+      // đồng hồ, nên cái quyết định là KHOẢNG CÁCH giữa hai lượt bất kỳ dùng
+      // chung khối này — của mọi khách cộng lại, không phải của riêng một khách.
+      //
+      //   cách nhau < 5 phút  → để 5 phút: lượt nào cũng làm nóng lại, rẻ nhất
+      //   cách nhau 5–60 phút → để 1 giờ: đây là khoảng DUY NHẤT bù nổi giá nạp
+      //   cách nhau > 1 giờ   → cả hai đều không cứu; chịu lượt nguội
+      //
+      // Hôm nay khách thưa, khoảng cách rơi vào 5–60 phút. Ở nhịp đó để 5 phút
+      // thì lượt nào cũng trượt, mà một lượt trượt (1,25) còn ĐẮT HƠN không
+      // dùng nhớ tạm (1,0) — mất tiền để không được gì.
+      //
+      // ĐỔI NGƯỢC LẠI VỀ 5 PHÚT khi vượt ~12 lượt trả lời/giờ (cỡ 10 khách/ngày
+      // trong giờ làm). Lúc đó lưu lượng tự giữ nóng và giá nạp gấp đôi thành
+      // lỗ thuần. Đọc số thật ở cache_read_input_tokens trong usage.
       system: [{
         type: "text",
         text: TONE + "\n\n" + HUMAN + "\n\n" + FEES + "\n\n" + SLANG + "\n\n" + AGREE + "\n\n" + FEWSHOT +
-          "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO ở khối sau, không bịa.",
-        cache_control: { type: "ephemeral" },
+          "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO ở khối sau, không bịa." +
+          (duanNhaMinh
+            ? "\n\nDỰ ÁN NHÀ MÌNH ĐANG PHÂN PHỐI TRỰC TIẾP (kiến thức chung ĐÃ XÁC THỰC — trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
+              duanNhaMinh
+            : ""),
+        cache_control: { type: "ephemeral", ttl: "1h" },
       }, {
         type: "text",
         text: "KHO HIỆN CÓ:\n" +
@@ -1348,7 +1380,7 @@ Deno.serve(async (req) => {
               askedBlock
             : "") +
           (duanBlock
-            ? "\n\nKHO DỰ ÁN (kiến thức chung ĐÃ XÁC THỰC — dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có trong kho: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Dự án ĐẦU TIÊN là dự án nhà mình đang phân phối trực tiếp — khi khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
+            ? "\n\nDỰ ÁN KHÁCH VỪA NHẮC TỚI (kiến thức chung ĐÃ XÁC THỰC — dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'):\n" +
               duanBlock
             : ""),
       }],
@@ -1378,6 +1410,9 @@ Deno.serve(async (req) => {
     if (resp.stop_reason !== "refusal" && resp.parsed_output) {
       out = resp.parsed_output as typeof out;
     }
+    // Đo SAU khi đã cầm chắc câu trả lời trong tay: lượt buyer là lượt đắt nhất
+    // (khối tĩnh ~5.800 chữ-máy), nên đây là con số quan trọng nhất của đồng hồ.
+    await doTien(client, resp.usage);
   } catch (e) {
     // Chỗ này nguy hơn vẻ ngoài: model hỏng thì khối dưới vẫn dựng câu trả lời
     // bằng regex và trả 200 tử tế. Khách không thấy gì lạ, mã HTTP không thấy

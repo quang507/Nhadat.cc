@@ -803,3 +803,75 @@ vào thì biết mình đang phá cái gì:
    `bot/tests/README.md`.
 3. Tầng TypeScript vẫn **chưa có test nào chạy trong CI**. Hai file trên phải
    gọi bằng tay.
+
+---
+
+### TS-TIEN — đồng hồ đo tiền bộ não (FR-169)
+
+Chạy 01/09/2026 thẳng trên Supabase thật, gói trong khối `DO … raise exception`
+để **cuộn lại toàn bộ**: kiểm xong đối chiếu `bot_usage` còn đúng 3 dòng cũ
+(27/08, 28/08, 29/08), không sinh dòng 01/09 nào. Kết quả gói vào chính câu lỗi
+vì kênh MCP không trả `notice` về.
+
+| ID | Ca | Chờ đợi | Kết quả |
+|---|---|---|---|
+| TS-TIEN-01 | `cong_token(1000,200,5000,0)` khi ngày chưa có dòng nào | Tự tạo dòng, `model_calls` giữ 0 (đo ≠ đếm lượt) | calls=0 in=1000 out=200 nạp=5000 đọc=0 ✅ |
+| TS-TIEN-02 | Gọi tiếp `cong_token(300,100,0,5000)` | CỘNG DỒN chứ không ghi đè | in=1300 out=300 nạp=5000 đọc=5000 ✅ |
+| TS-TIEN-03 | `cong_token(null,null,null,null)` | `coalesce` về 0, không làm hỏng dòng | in=1300 đọc=5000, không đổi ✅ |
+| TS-TIEN-04 | `bump_model_quota(1000)` chạy SAU `cong_token` | Tăng đúng lượt trên CÙNG dòng, không đè số chữ | calls=0→1, in=1300 nguyên ✅ |
+| TS-TIEN-05 | Vai `anon` đọc `bot_usage` | Chặn ngay ở tầng quyền (không được cấp SELECT) | bị chặn ✅ |
+| TS-TIEN-06 | Vai `authenticated`, email KHÔNG có trong `admins` | Qua tầng quyền nhưng RLS lọc còn 0 dòng | 0 dòng ✅ |
+| TS-TIEN-07 | Vai `authenticated`, email CÓ trong `admins` | Thấy đủ dòng | 3 dòng ✅ |
+
+**TS-TIEN-04 là ca đáng giá nhất**: `cong_token` dùng `insert … on conflict` chứ
+không `update` thẳng, vì lượt gọi model đầu tiên trong ngày có thể là lượt KHÔNG
+đi qua `bump_model_quota` (nudge/ctv-report/ask-seller chạy theo lịch) — khi đó
+dòng của ngày chưa tồn tại và một câu `update` thuần sẽ lặng lẽ ghi vào hư
+không. Ca này kiểm hai hàm không giẫm chân nhau theo cả hai chiều gọi.
+
+**Chưa kiểm được ở đây** (cần bản deploy, mà `chat-reply` đang chờ deploy bằng
+CLI): số chữ THẬT do model trả về có chảy đúng vào bốn cột không, và nhịp nhớ
+tạm 1 giờ có thật sự cho tỷ lệ đọc-lại cao hơn không. Cách kiểm sau khi deploy:
+nhắn bot 3 lượt cách nhau ~10 phút rồi mở `/admin` — `cache_read_tokens` phải
+lớn hơn `cache_write_tokens`. Nếu ngược lại thì nhịp đang sai, xem khối bình
+luận tại chỗ `cache_control` trong `chat-reply` để chọn lại.
+
+**Điểm mù đã biết**: đồng hồ mới nối ở `chat-reply`. `nudge`, `ask-seller`,
+`ctv-report` chưa gắn `doTien()`, nên số trong bảng là SÀN chứ không phải tổng —
+đã ghi thẳng câu này lên thẻ ở `/admin` để người đọc số không hiểu nhầm.
+
+---
+
+### TS-CHUONG — chuông báo hết tiền tài khoản AI (FR-168)
+
+Chạy 01/09/2026 trên Supabase thật, cùng khuôn TS-TIEN: gói trong
+`DO … raise exception` để cuộn lại. Đối chiếu sau khi kiểm: `bot_errors` về đúng
+239 dòng, 0 dòng `HET TIEN API`, 0 lời nhắc còn sót.
+
+| ID | Ca | Chờ đợi | Kết quả |
+|---|---|---|---|
+| TS-CHUONG-01 | Ghi lỗi `Your credit balance is too low…` | Chuông kêu, đúng 1 dòng nguồn `HET TIEN API` | 1 ✅ |
+| TS-CHUONG-02 | Ghi tiếp một lỗi hết tiền nữa trong cùng 6 giờ | Vẫn 1 dòng — van hãm nhịp giữ | 1 ✅ |
+| TS-CHUONG-03 | Ghi thẳng một dòng nguồn `HET TIEN API` | Không tự soi mình, không đệ quy | 2 dòng (1 chuông + 1 chèn tay), không bùng ✅ |
+| TS-CHUONG-04 | Sau khi chuông kêu, soi bảng `reminders` | 0 — cố ý KHÔNG đẩy qua cầu nối | 0 ✅ |
+| TS-CHUONG-05 | Nội dung dòng chuông | Mở đầu bằng câu báo bộ não câm, có đường dẫn nạp tiền | `🔴 BỘ NÃO ĐANG CÂM — HẾT TIỀN TÀI KHOẢN AI. Mọi…` ✅ |
+| TS-CHUONG-06 | **ÂM TÍNH** — ba lỗi thường (`Overloaded`, `Unterminated string`, `connection reset`), hai trong đó `status_code` RỖNG | Chuông im | **❌ KÊU** → vá `20260901c` → chạy lại **0 ✅** |
+| TS-CHUONG-07 | Mã HTTP 402, nội dung không khớp mẫu chữ nào | Chuông kêu | 1 ✅ |
+
+**TS-CHUONG-06 là lý do bộ kiểm này tồn tại.** `20260901a` đã được thử với dữ
+liệu hết tiền thật hôm áp và thấy "chạy đúng" — nhưng chưa ai thử một lỗi BÌNH
+THƯỜNG để xem nó có im không. Nó không im: `new.status_code = 402` với cột rỗng
+cho ra `NULL`, `false or NULL` = `NULL`, `not NULL` = `NULL`, và `if NULL then`
+không chạy nên hàm rơi thẳng xuống nhánh kêu chuông. Mà gần như MỌI dòng trong
+`bot_errors` đều có `status_code` rỗng — `ghiLoi()` không truyền mã — nên chuông
+sẽ kêu 6 tiếng một lần trên lỗi vặt bất kỳ, tức là biến thành báo động giả rồi bị
+bỏ qua, đúng cái bệnh nó sinh ra để chữa. Vá ở `20260901c`: bọc
+`coalesce(new.status_code, 0)`.
+
+Hai luật rút ra, áp cho mọi trigger lọc sau này:
+
+1. Trong mệnh đề `or` dùng để **lọc bỏ**, mọi vế so sánh với cột cho phép rỗng
+   phải bọc `coalesce`. Một `NULL` lọt vào giữa chuỗi `or` là cả mệnh đề mất
+   nghĩa, mà `if` thì im lặng coi `NULL` như false.
+2. Kiểm một điều kiện lọc thì **ca âm tính quan trọng ngang ca dương tính**.
+   "Chạy đúng khi có sự cố" mới là nửa bài; nửa còn lại là "im khi không có".

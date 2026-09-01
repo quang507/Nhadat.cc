@@ -1,5 +1,11 @@
 -- 20260901a — Chuông báo HẾT TIỀN API
 --
+-- ⚠️ BẢN NÀY CÓ LỖI, ĐÃ ĐƯỢC `20260901c` THAY THẾ CÙNG NGÀY. Điều kiện lọc dưới
+-- đây so `new.status_code = 402` mà không bọc `coalesce`, nên với cột rỗng thì
+-- cả mệnh đề ra NULL, `not NULL` cũng NULL, `if` không chạy và chuông kêu trên
+-- MỌI lỗi. Giữ file này nguyên trạng làm chứng tích; muốn đọc hàm đang chạy thật
+-- thì mở `20260901c`.
+--
 -- VÌ SAO CẦN. Ngày 28/08 sổ `bot_errors` có 9 dòng `chat-reply model` với nội
 -- dung "Your credit balance is too low to access the Anthropic API". Nghĩa là
 -- bộ não CÂM HOÀN TOÀN: mọi tin khách nhắn vào đều không có câu trả lời. Nhưng

@@ -38,7 +38,10 @@ Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 
 **Hạ tầng dùng chung** nằm ở `_shared/claude.ts`: `serviceClient()`,
 `secretOf()`, `anthropicClient()`, `jsonResponse()`, `sendZalo()`,
-`sendZaloImage()`, `escalationText()`, hằng `MODEL`. Function mới **phải** import
+`sendZaloImage()`, `escalationText()`, `ghiLoi()`, `doTien()`, hằng `MODEL`.
+Function nào gọi model thì gọi kèm `await doTien(client, r.usage)` ngay sau chỗ
+lấy kết quả ra — không có dòng đó thì lượt gọi ấy vô hình với đồng hồ đo tiền ở
+`/admin` (FR-169). Function mới **phải** import
 từ đây, đừng chép lại — trước 25/08 `db()`/`secret()` có 5 bản, `sendZalo()` 2
 bản, và text escalation trùng byte giữa `nudge` với `escalation-feed` (thêm kind
 `report` phải sửa cả hai nơi, quên một là lệch giọng bot).
@@ -53,8 +56,11 @@ bản, và text escalation trùng byte giữa `nudge` với `escalation-feed` (t
   `rate_ctv_rubric`. Xoá dòng = quay về mặc định trong `_shared/prompts.ts`.
 - **Model**: `claude-opus-5`, structured output (zod v4 + `zodOutputFormat`),
   `effort: low` (nhanh, few-shot + luật gánh chất lượng). System prompt tách
-  2 khối: khối luật ổn định được cache (`cache_control: ephemeral`), khối kho
-  biến động nằm sau điểm cache.
+  2 khối **theo GIÁ chứ không theo chủ đề**: khối giống nhau cho mọi khách (luật
+  + ví dụ mẫu + dự án nhà mình) nằm trước điểm nhớ tạm, khối đổi theo từng khách
+  (kho, căn khách nhắc, dự án khách nhắc) nằm sau. Nhánh buyer để
+  `cache_control: { type: "ephemeral", ttl: "1h" }` — nhịp chọn theo lưu lượng,
+  xem mục "Tiền bộ não" ở cuối file trước khi đổi.
 - **ANTHROPIC_API_KEY**: đọc từ env secret của Edge Functions; nếu chưa đặt thì
   fallback đọc Supabase **Vault** qua RPC `get_secret` (chỉ `service_role` gọi
   được). Key hiện nằm trong Vault; muốn chuyển sang env:
@@ -280,3 +286,118 @@ lượt soát tĩnh bằng grep đều không thấy nó nhúng anon JWT và kh�
 Đã quét cả thư mục: đây là stub DUY NHẤT, các file khác đều có SQL thật. Nhưng
 bài học giữ nguyên — **"bản sao tham chiếu" mà thiếu một hàm thì nó nói dối**.
 Áp DDL qua MCP xong phải chép lại nội dung thật vào file migration tương ứng.
+
+## Tiền bộ não (FR-168, FR-169, 01/09/2026)
+
+### Một lượt khách nhắn tốn gì
+
+Gói gửi lên mỗi lượt buyer ~19–20 nghìn ký tự. Chia làm hai nửa **giá lệch nhau
+10 lần**, và đó là toàn bộ câu chuyện chi phí:
+
+| Nửa | Nội dung | Cỡ | Giá |
+|---|---|---|---|
+| Trước điểm nhớ tạm | 6 khối luật + ví dụ mẫu + dự án nhà mình | ~13.000 ký tự (~5.800 chữ-máy) | đọc lại: 1/10 |
+| Sau điểm nhớ tạm | kho 6 căn, căn khách nhắc, dự án khách nhắc, hồ sơ, 12 tin gần nhất | ~6.000 ký tự (~2.800 chữ-máy) | đủ giá |
+
+Giá niêm yết Opus 5: 5 đô/triệu chữ-máy vào, 25 đô/triệu ra; nạp bộ nhớ tạm
+1,25× (nhịp 5 phút) hoặc 2× (nhịp 1 giờ); đọc lại 0,1×.
+
+Ra tiền một lượt: **trúng nhớ tạm ~0,027 đô**, **không dùng nhớ tạm ~0,053 đô**,
+**trượt nhớ tạm ~0,060 đô**. Đọc lại dòng cuối cho kỹ — **một lượt TRƯỢT đắt hơn
+là không bật nhớ tạm**. Đó không phải nghịch lý, đó là hoá đơn: đã trả phí nạp
+mà không ai đọc lại.
+
+### Chọn nhịp nhớ tạm theo LƯU LƯỢNG, không phải chọn một lần rồi thôi
+
+Đồng hồ đếm từ lúc BẮT ĐẦU mỗi lượt, và mỗi lần đọc lại đặt lại đồng hồ. Nên cái
+quyết định là **khoảng cách giữa hai lượt bất kỳ dùng chung khối luật** — cộng
+gộp mọi khách, vì khối đó giống hệt nhau cho tất cả:
+
+| Khoảng cách | Nhịp nên dùng |
+|---|---|
+| dưới 5 phút | 5 phút — lượt nào cũng làm nóng lại, rẻ nhất |
+| 5–60 phút | **1 giờ** — khoảng DUY NHẤT bù nổi giá nạp gấp đôi |
+| trên 1 giờ | cả hai đều không cứu, chịu lượt nguội |
+
+Hôm nay khách thưa nên đang để **1 giờ**. **Vượt ~12 lượt/giờ (cỡ 10 khách/ngày
+trong giờ làm) thì phải đổi ngược về 5 phút** — lúc đó lưu lượng tự giữ nóng và
+giá nạp gấp đôi thành lỗ thuần. Điều kiện đổi ghi ngay tại chỗ `cache_control`
+trong `chat-reply/index.ts`, đừng sửa mà không đọc.
+
+Hệ quả ngược đời đáng nhớ: **càng đông khách, giá trên đầu lượt càng RẺ.** Sợ
+scale lên không chịu nổi là sợ nhầm chiều.
+
+### Nguyên tắc chia prompt: theo GIÁ, không theo chủ đề
+
+Cái gì **giống nhau cho mọi khách** thì lên trước điểm nhớ tạm. Cái gì **đổi
+theo từng khách** thì xuống sau. Đừng nhóm theo chủ đề cho gọn mắt.
+
+Đúng một lỗi loại này đã bị bắt hôm 01/09: khối dự án Ny'ah (~1.900 ký tự, riêng
+thông số + mẫu căn đã 1.350) nằm chung với khối kho ở nửa sau, nên gửi đủ giá mỗi
+lượt cho **cả khách chưa hề hỏi tới dự án**. Nó giống hệt nhau cho mọi người —
+chỗ của nó là nửa trước. Dời sang: rẻ đi 10 lần, không mất chi tiết nào. Dự án
+khách VỪA NHẮC TÊN thì khác, cái đó biến động, ở lại nửa sau.
+
+### Đọc số thật ở đâu
+
+`/admin` → thẻ **"Tiền bộ não · 7 ngày"**. Ba điều cần biết khi đọc:
+
+1. **Nhìn TRUNG BÌNH MỘT LƯỢT, đừng nhìn tổng.** Tổng lớn lên theo số khách là
+   lành mạnh. Trung bình một lượt phình ra mới là bệnh — prompt đang béo dần
+   hoặc nhớ tạm đang trượt.
+2. **Cột "đọc lại" dưới 50% là đang lỗ.** Nạp nhiều mà đọc lại ít nghĩa là lượt
+   nào cũng trượt. Đổi nhịp theo bảng ở trên.
+3. **Số đó là SÀN, không phải tổng.** Mới nối `doTien()` ở `chat-reply`. `nudge`,
+   `ask-seller`, `ctv-report` chưa gắn. Gắn thêm chỉ là một dòng
+   `await doTien(client, r.usage)` ngay sau chỗ lấy text ra.
+
+Trần chặn đốt tiền vẫn là `bump_model_quota` đếm LƯỢT (FR-151a, mặc định
+1000 lượt/ngày qua secret `DAILY_MODEL_CALL_CAP`). Đồng hồ đo chữ **không chặn
+gì cả** — hỏng thì im, tuyệt đối không được kéo câu trả lời của khách xuống
+nhánh dự phòng.
+
+### Chuông hết tiền
+
+Hết tiền tài khoản AI là **bộ não câm hoàn toàn** — mọi tin khách nhắn vào đều
+không có câu trả lời. Ngày 28/08 chuyện này đã xảy ra thật và nằm im trong sổ
+lỗi dưới cùng một tên nguồn với lỗi model thường ngày, không ai biết.
+
+Nay trigger `trg_bot_errors_het_tien` soi mỗi dòng ghi vào `bot_errors`, thấy
+dấu hiệu hết tiền thì dựng một dòng riêng tên nguồn `HET TIEN API`, hiện ở
+`/admin`. Ba điều cố ý làm khác thường, đừng "dọn dẹp" mất:
+
+- **Ghi thẳng, không qua `log_loi`.** Van chống ngập sổ (20 dòng/nguồn/giờ,
+  200/giờ tổng) đúng cho lỗi thường, nhưng chuông báo sập hệ thống mà bị van
+  nuốt đúng lúc sổ đang ngập thì vô dụng — mà sổ ngập chính là lúc dễ có sự cố
+  lớn nhất.
+- **Không đẩy qua cầu nối.** Cầu nối chết từ 27/08, và hậu quả là 83 dòng cảnh
+  báo "cầu nối đang im" xếp hàng chờ **chính cái cầu nối đang im** để được gửi
+  đi. Chuông hết tiền không được rơi vào cùng cái bẫy đó.
+- **Sáu tiếng mới kêu lại.** Bài học từ `bo_dem_nhac_treo` (29/08): ghi mỗi 30
+  phút → 48 dòng/ngày → sau hai ngày chiếm gần nửa sổ lỗi. Báo đúng mà nhịp sai
+  cũng là một dạng làm ngập sổ.
+
+### Một cái núm đang không làm gì (đừng tưởng nó có tác dụng)
+
+Ngưỡng tối thiểu để nhớ tạm hoạt động trên Opus 5 là **512 chữ-máy**. Ngắn hơn
+thì `cache_control` bị bỏ qua **im lặng** — không lỗi, không cảnh báo, chỉ là
+không có gì xảy ra. Đo 01/09:
+
+| Chỗ | Khối được đánh dấu nhớ tạm | ~chữ-máy | Thực tế |
+|---|---|---|---|
+| `chat-reply` buyer | 6 khối luật + ví dụ mẫu + dự án nhà mình | 5.700 | chạy |
+| `chat-reply` seller r1/r2 | TONE + SELLER_SCRIPT | 1.520 | chạy |
+| `chat-reply` seller r3 | TONE + SELLER_SCRIPT + FEES | 1.700 | chạy |
+| `ask-seller` | TONE + SELLER_SCRIPT | 1.520 | chạy |
+| `nudge` | TONE | 1.057 | chạy |
+| `ctv-report` | RATE_CTV_RUBRIC | **414** | **KHÔNG chạy** |
+
+`ctv-report` để đó cũng được, không hại gì: nó chạy mỗi ngày một lần và khối
+rubric quá ngắn để đáng tiết kiệm. Nhưng **đừng nhồi chữ vào rubric chỉ để vượt
+ngưỡng** — trả tiền cho chữ vô nghĩa để được giảm giá trên chính chữ vô nghĩa đó
+là lỗ. Ghi ra đây để người sau khỏi tưởng nó đang tiết kiệm được gì.
+
+Các khối seller để **nhịp 5 phút mặc định**, cố ý không đổi sang 1 giờ: chúng chỉ
+~1.500 chữ-máy nên chênh lệch cả hai chiều đều dưới một xu mỗi lượt, không đáng
+đụng vào một file đang chờ deploy. Chỉ khối buyer 5.700 chữ-máy mới đáng chọn
+nhịp.

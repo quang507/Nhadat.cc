@@ -451,23 +451,32 @@ có UI giỏ hàng riêng — cập nhật `unit_status` qua luồng rao/sửa t
 - Bảng `admins(email pk)` + RLS `listings_admin_read/update`: admin duyệt
   tin trên web (`/admin`). Thêm admin = insert email.
 
-### SRS-3.12 · Bảng vận hành & quan trắc (FR-146, FR-151, FR-152 — 27/08/2026)
+### SRS-3.12 · Bảng vận hành & quan trắc (FR-146, FR-151, FR-152, FR-168, FR-169 — 27/08 → 01/09/2026)
 
 ```
-bot_usage    day date pk (giờ VN), model_calls int, capped_at timestamptz   -- FR-151a
+bot_usage    day date pk (giờ VN), model_calls int, capped_at timestamptz,  -- FR-151a
+             in_tokens, out_tokens, cache_write_tokens,
+             cache_read_tokens bigint                                       -- FR-169
+             (đếm CHỮ, không lưu thành tiền — giá nhân lúc đọc ở /admin;
+              admin đọc qua policy bot_usage_admin_read)
 bot_errors   id bigserial pk, at timestamptz, source text, status_code int,
              detail text (cắt 500)                                          -- FR-152
 bot_health   who text pk, at timestamptz, last_id bigint                    -- FR-152
 ```
 
-Cả ba bật RLS và `revoke all from anon, authenticated`. Riêng `bot_errors` và
-`bot_health` có policy SELECT cho `authenticated` là admin (cùng khuôn
-`listings_admin_read`) để trang `/admin` hiện được sức khoẻ bot.
+Cả ba bật RLS và `revoke all from anon`. Cả ba đều có policy SELECT cho
+`authenticated` là admin (cùng khuôn `listings_admin_read`) — `bot_errors_admin_read`,
+`bot_health_admin_read` từ 27/08, `bot_usage_admin_read` từ 01/09 (FR-169) — để
+trang `/admin` hiện được sức khoẻ bot và tiền bộ não. Ghi thì vẫn chỉ
+`service_role`: cấp SELECT mà quên policy là mọi người đăng nhập đọc được, hai vế
+phải đi cùng nhau.
 
 | Hàm | Vai trò | Ai gọi được |
 |---|---|---|
 | `bump_model_quota(p_limit)` | Đếm lượt vào bộ não theo ngày, vượt trần trả `false` + báo admin đúng một lần | chỉ `service_role` |
+| `cong_token(in, out, cache_write, cache_read)` | Cộng dồn số CHỮ của một lượt gọi model vào dòng hôm nay của `bot_usage` (FR-169). Dùng `insert … on conflict` chứ không `update`, vì lượt đầu trong ngày có thể không đi qua `bump_model_quota`. Chỉ ĐO, không chặn; nuốt mọi lỗi để không kéo câu trả lời của khách xuống nhánh dự phòng | chỉ `service_role` |
 | `log_loi(source, detail, code)` | Cửa ghi lỗi tầng ứng dụng. **Van: 20 dòng/nguồn/giờ và 200 dòng/giờ tổng** | mở cho `anon` (bắt buộc — server Next chạy bằng publishable key) |
+| `bat_het_tien_api()` | Trigger AFTER INSERT trên `bot_errors` (FR-168): thấy dấu hiệu hết tiền tài khoản AI (`credit balance`, `plans & billing`, `insufficient…quota`, `billing`, mã 402) thì dựng một dòng cảnh báo nguồn `HET TIEN API`. **Ghi THẲNG, không qua `log_loi`** — van chống ngập sổ không được nuốt chuông báo sập hệ thống, mà sổ ngập chính là lúc dễ có sự cố lớn nhất. Tự hãm 6 giờ/lần; không tạo escalation vì đường đó đi qua cầu nối vốn có thể đang chết | trigger, không ai gọi tay |
 | `bot_health_tick()` | Quét `net._http_response` tìm phản hồi không 2xx → `bot_errors`; kiểm nhịp tim bridge; gộp báo admin 1 tin/giờ; dọn sổ > 30 ngày | chỉ `service_role`, chạy bằng cron `*/15` |
 | `beat(who)` | Ghi nhịp tim. `escalation-feed` gọi mỗi lần bridge kéo việc | chỉ `service_role` |
 | `lan_thu_ke(attempts)` | Khoảng chờ trước lần thử kế — nhân đôi dần, chặn ở 1 tiếng, nhiễu ±20%. Luật chung cho cả ba hàng đợi (FR-166 a) | chỉ `service_role` |
