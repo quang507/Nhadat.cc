@@ -138,15 +138,25 @@ async function ghiLoi(source, detail) {
   } catch { /* mất mạng thì thôi, đừng làm hỏng thêm luồng đang lỗi */ }
 }
 
-// Mạng nhà/VPS rớt vài giây là chuyện thường: timeout 20s rồi thử lại 1 lần
-// trước khi kêu lỗi, để một cú nghẽn không làm mất luôn lượt trả lời khách.
-async function postJson(url, headers, payload) {
+// Mạng nhà/VPS rớt vài giây là chuyện thường: hết giờ thì thử lại 1 lần trước
+// khi kêu lỗi, để một cú nghẽn không làm mất luôn lượt trả lời khách.
+//
+// HẠN CHỜ PHẢI DÀI HƠN VIỆC PHÍA SERVER, nếu không là tự đá vào chân mình.
+// Bản trước để cứng 20 giây cho MỌI lượt gọi. Nhưng lượt gọi bộ não có kèm
+// gọi model với prompt to (giọng + luật + từ điển lóng + ví dụ + kho tin), chậm
+// hơn 20 giây là chuyện thường. Khi đó: client cắt ngang → thử lại → lượt thử
+// lại đụng đúng lượt đầu vẫn đang chạy nên nhận `in_flight` → rơi vào vòng chờ
+// 3 lần × 5 giây. Cộng dồn xấu nhất là KHOẢNG BA PHÚT khách ngồi nhìn màn hình
+// trống, trong khi server đã trả lời xong từ giây thứ 25.
+// Nay tách hạn chờ theo loại việc: lượt gọi bộ não được 90 giây (đủ cho model),
+// còn lượt hỏi-lại và lượt ghi sổ chỉ 10 giây vì chúng trả về ngay.
+async function postJson(url, headers, payload, hanCho = 20_000) {
   let last;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetch(url, {
         method: "POST", headers, body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.timeout(hanCho),
       });
       return await res.json();
     } catch (e) {
@@ -156,6 +166,9 @@ async function postJson(url, headers, payload) {
   }
   throw last;
 }
+
+const HAN_CHO_BO_NAO = 90_000; // lượt gọi có kèm model
+const HAN_CHO_NGAN = 10_000;   // hỏi lại / ghi sổ — trả về ngay
 
 // Gửi một tin (kèm ảnh nếu bộ não trả về) — dùng chung cho tin nhắn và reaction
 async function handleIncoming(threadId, text, imageUrl, msgId) {
@@ -167,14 +180,14 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
     msg_id: msgId,
     channel: "zalo_personal_test",
   };
-  let out = await postJson(CHAT_REPLY_URL, brainHeaders, payload);
+  let out = await postJson(CHAT_REPLY_URL, brainHeaders, payload, HAN_CHO_BO_NAO);
   // FR-162: in_flight = một bản sao của CÙNG tin này đang được xử lý — thường
   // là chính lượt đầu của postJson bị timeout 20s nên lượt thử lại chạm mặt nó.
   // Đừng bỏ đi tay không: chờ rồi hỏi lại (tối đa 3 lần), lượt kia xong là
   // server PHÁT LẠI câu trả lời đã lưu trong sổ — không gọi model lần hai.
   for (let i = 0; i < 3 && out?.in_flight; i++) {
     await new Promise((r) => setTimeout(r, 5000));
-    out = await postJson(CHAT_REPLY_URL, brainHeaders, payload);
+    out = await postJson(CHAT_REPLY_URL, brainHeaders, payload, HAN_CHO_NGAN);
   }
   const { reply, replies, photos, error, replayed, already_sent } = out ?? {};
   if (error) return await ghiLoi("chat-reply", error);
@@ -217,7 +230,7 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
       try {
         await postJson(CHAT_REPLY_URL, brainHeaders, {
           mark_sent: msgId, sent_bubbles: daGui, done: daGui === bubbles.length,
-        });
+        }, HAN_CHO_NGAN);
       } catch (e) {
         await ghiLoi("mark_sent", errDetail(e));
       }
@@ -228,7 +241,9 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
   // tạm rồi gửi như ảnh đính kèm; lỗi một tấm thì bỏ qua tấm đó.
   for (const url of Array.isArray(photos) ? photos : []) {
     try {
-      const img = await fetch(url);
+      // Hạn chờ BẮT BUỘC: một URL ảnh treo mà không có hạn là kẹt luôn cả vòng
+      // gửi ảnh, khách chờ mãi không thấy tấm nào.
+      const img = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       if (!img.ok) continue;
       const f = path.join(
         os.tmpdir(),
@@ -253,16 +268,20 @@ api.listener.on("message", async (message) => {
     if (message.isSelf) {
       const selfText = typeof message.data?.content === "string" ? message.data.content : "";
       if (!selfText || wasBotSent(selfText)) return;
-      await fetch(CHAT_REPLY_URL, {
-        method: "POST",
-        headers: brainHeaders,
-        body: JSON.stringify({
+      // Ghi hụt chỗ này KHÔNG được nuốt. Đây là tin báo "người thật đã vào
+      // cuộc"; mất nó là bot không biết mà nhường sân, rồi chen ngang đúng lúc
+      // cộng tác viên đang thương lượng giá với khách. Bản trước dùng
+      // `.catch(() => {})` — hỏng hoàn toàn im lặng.
+      try {
+        await postJson(CHAT_REPLY_URL, brainHeaders, {
           external_user_id: String(message.threadId),
           text: selfText,
           human_note: true,
           channel: "zalo_personal_test",
-        }),
-      }).catch(() => {});
+        }, HAN_CHO_NGAN);
+      } catch (e) {
+        await ghiLoi("bao nguoi that vao cuoc", errDetail(e));
+      }
       console.log(`👤 người thật nhắn [${message.threadId}] — bot nhường sân 30 phút`);
       return;
     }
@@ -325,7 +344,20 @@ try {
 // escalation-feed, resolve SĐT → uid Zalo rồi nhắn từ acc clone, xong ack.
 // OA duyệt xong thì nudge tự gửi phía server, vòng này tự hết việc.
 const uidCache = new Map(); // SĐT → uid, khỏi findUser lặp lại
+
+// CHỐNG CHỒNG LƯỢT. `setInterval` cứ 60 giây là bắn một lượt, KHÔNG cần biết
+// lượt trước xong chưa. Mỗi việc phải đi ba lượt mạng (tìm người → nhắn → báo
+// đã xong), nên khi hàng đợi dồn (đang 85 việc) hoặc mạng chậm, một lượt vượt
+// 60 giây là chuyện thường → hai lượt chạy chồng nhau.
+// Mà cửa `pull` chỉ SELECT theo trạng thái `pending`, KHÔNG giành việc. Hai lượt
+// chồng nhau thấy đúng cùng một danh sách và CÙNG GỬI → cộng tác viên nhận tin
+// đúp. Đây đúng là cảnh mà bên `nudge` đã phải dựng cơ chế giành việc để chặn;
+// đường này chưa có, nên chặn tạm bằng một cái cờ ngay trong tiến trình.
+let dangKeoViec = false;
+
 async function pumpEscalations() {
+  if (dangKeoViec) return;
+  dangKeoViec = true;
   try {
     const { items, error } = await postJson(FEED_URL, feedHeaders, { action: "pull" });
     if (error) return await ghiLoi("escalation-feed", error);
@@ -333,11 +365,19 @@ async function pumpEscalations() {
       try {
         let uid = it.zalo_user_id;
         if (!uid && it.phone) {
-          if (!uidCache.has(it.phone)) {
+          // CHỈ NHỚ KHI TÌM RA. Bản trước nhớ cả kết quả thất bại: `findUser`
+          // hụt một lần vì mạng chớp hay Zalo chặn tần suất là số đó bị ghim
+          // `null` VĨNH VIỄN tới lúc khởi động lại tiến trình. Từ đó mỗi phút
+          // ghi một dòng "không resolve được", còn lời nhắc thì nằm `pending`
+          // mãi mãi. Nhiều khả năng đây là lý do việc dồn ứ ngay cả lúc cầu
+          // nối còn sống.
+          if (uidCache.has(it.phone)) {
+            uid = uidCache.get(it.phone);
+          } else {
             const u = await api.findUser(it.phone).catch(() => null);
-            uidCache.set(it.phone, u?.uid ?? u?.userId ?? null);
+            uid = u?.uid ?? u?.userId ?? null;
+            if (uid) uidCache.set(it.phone, uid);
           }
-          uid = uidCache.get(it.phone);
         }
         if (!uid) { await ghiLoi("escalation", `${it.id}: không resolve được ${it.name}`); continue; }
         const msg = it.text ?? `🔔 nhadat.cc: ${it.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
@@ -355,6 +395,10 @@ async function pumpEscalations() {
     }
   } catch (e) {
     await ghiLoi("pumpEscalations", errDetail(e));
+  } finally {
+    // Phải nằm trong `finally`: nhánh `return` giữa chừng ở trên mà không hạ cờ
+    // là kẹt cứng, từ đó không lượt nào chạy nữa và hàng đợi đứng im mãi.
+    dangKeoViec = false;
   }
 }
 setInterval(pumpEscalations, 60_000);
