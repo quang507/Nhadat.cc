@@ -49,7 +49,7 @@ create index if not exists listings_access_idx on public.listings (deal, status,
 create index if not exists listings_floors_idx on public.listings (deal, status, floors);
 
 -- ── 2. Tên đường từ location_raw ───────────────────────────────────────────
--- "Số 88, Đường Trần Hưng Đạo, Phường 7, Quận 5" → "Trần Hưng Đạo";
+-- "Số 1xx, Đường Trần Hưng Đạo, Phường 7, Quận 5" → "Trần Hưng Đạo";
 -- "Dự án Tản Đà Court, Đường Tản Đà, Phường 11" → "Tản Đà". Chỉ lấy tên, không
 -- lấy số nhà (FR-104: web không phơi số nhà, đó là việc của lúc hẹn xem).
 create or replace function public.boc_ten_duong(p text)

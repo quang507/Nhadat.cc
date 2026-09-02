@@ -527,7 +527,7 @@ phải đi cùng nhau.
 | `tao_followup(buyer_id, code)` | FR-32 qua một hàm (FR-171 h): tra tin theo mã, kiểm "đã có nhắc `followup` pending/sent trong 24h chưa", chèn `reminders` hẹn +150 phút. Trả `true` khi chèn; `false` khi không có tin hoặc đã có nhắc. Trước đó là ba vòng riêng trong `chat-reply` | chỉ `service_role` |
 | `messages_bump_last_message()` | Trigger AFTER INSERT trên `messages` (FR-171 h): đẩy `conversations.last_message_at = greatest(cũ, tin mới)`. Thay cho bốn chỗ UPDATE tay (`chat-reply` ×2, `nudge`, `ask-seller`) — và sửa luôn lệch cũ: `chat-reply` chỉ ghi mốc ở tin KHÁCH, không ghi ở tin bot | trigger, không ai gọi tay |
 | `boc_thong_so(p_text, p_type)` | FR-172: bóc thông số từ mô tả / câu trả lời → jsonb chỉ chứa khoá BẮT ĐƯỢC (ngang, dài, nở hậu, DT công nhận/xây dựng, số tầng + chữ kết cấu, PN, WC, đường vào, hẻm rộng, cách MT, pháp lý, hoàn công, quy hoạch, thang máy, xe hơi, căn góc, nội thất, năm xây, hướng, thương lượng, thu nhập thuê). Chạy trên `bo_dau()` nên có dấu/không dấu/viết tắt là một; giá trị ngoài dải hợp lý thì BỎ, không đoán. `immutable` | ai cũng gọi được (hàm thuần) |
-| `boc_ten_duong(location_raw)` | FR-172: tên đường từ địa chỉ — bỏ số nhà, "Dự án…", "Hẻm 23/", tiền tố "Đường/Phố" | hàm thuần |
+| `boc_ten_duong(location_raw)` | FR-172: tên đường từ địa chỉ — bỏ số nhà, "Dự án…", "Hẻm xx/", tiền tố "Đường/Phố" | hàm thuần |
 | `listings_boc_thong_so()` | Trigger BEFORE INSERT/UPDATE OF `description, location_raw, property_type` (`trg_y_…`, chạy sau `fill_property_type`): điền cột còn TRỐNG từ `boc_thong_so`; mô tả đổi mà `specs_source` còn là `boc_mo_ta` thì đè. Không bao giờ đè lời chủ nhà/admin | trigger |
 | `media_cleanup_tick()` | Cron 5 phút: gọi `media-cleanup` CHỈ KHI có việc nhận được — vị từ y hệt `nhan_viec_don_media` (`cho`, hoặc `dang_lam`/`loi` quá 10 phút; `attempts < 6`; tới giờ thử lại). Guard cũ đếm mọi dòng `loi` nên một dòng đang chờ giờ làm cron gọi lambda 12 lần/giờ mà không claim được gì (FR-171 c) | chỉ `service_role` |
 | `bat_het_tien_api()` | Trigger AFTER INSERT trên `bot_errors` (FR-168): thấy dấu hiệu hết tiền tài khoản AI (`credit balance`, `plans & billing`, `insufficient…quota`, `billing`, mã 402) thì dựng một dòng cảnh báo nguồn `HET TIEN API`. **Ghi THẲNG, không qua `log_loi`** — van chống ngập sổ không được nuốt chuông báo sập hệ thống, mà sổ ngập chính là lúc dễ có sự cố lớn nhất. Tự hãm 6 giờ/lần; không tạo escalation vì đường đó đi qua cầu nối vốn có thể đang chết | trigger, không ai gọi tay |
@@ -637,8 +637,10 @@ listing_missing_facts (view)  = required_facts ⋈ property_type − listing_fac
 `quy_hoach` ↔ `planning_status`. Bất kể bậc nguồn: câu rao đã nói "hẻm xe hơi
 6m" thì hỏi lại là mất mặt, còn muốn CHỦ XÁC NHẬN thì đó là việc của khách hỏi
 (FR-140), không phải của vòng nhỏ giọt. Đo trên kho 173 tin: 1.140 câu thiếu →
-638. `listing_facts_sync_cols` mở rộng theo cùng ánh xạ, lời chủ nhà đè bậc
-`boc_mo_ta`.)*
+638. `listing_facts_sync_cols` mở rộng theo cùng ánh xạ; ghi khi cột trống hoặc
+`bac_nguon(fact) ≥ bac_nguon(specs_source)` — chủ nhà > admin > bóc mô tả, câu
+chủ nhà mới nhất thắng (`20260902g`, sửa sau soát truy vết: bản đầu chỉ đè
+`boc_mo_ta`).)*
 
 Đổi `listings.property_type` là **đổi cả bộ câu hỏi ở lượt kế tiếp**, không cần
 migration nào. Bộ câu hỏi đang chạy (đọc từ DB 27/08/2026, theo thứ tự ưu tiên):

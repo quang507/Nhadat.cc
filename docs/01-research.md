@@ -180,8 +180,9 @@ có trình duyệt thật].
 Ba điều rút ra:
 1. **Bộ tối thiểu thị trường đã đồng thuận** = diện tích, giá, ngang×dài, số
    tầng, PN, WC, hướng, đường vào, pháp lý (+ giá/m², dự án). SRS-3.1 đã đặc
-   tả gần đủ từ đầu, nhưng bảng thật chỉ có 5 trường — 164 mô tả tin của ta
-   chứa đủ 9 trường kia ở dạng chữ. Đưa bảng thật về đúng đặc tả (FR-172).
+   tả gần đủ từ đầu, nhưng bảng thật chỉ có diện tích, giá, PN (dở), hướng và
+   tầng (rỗng) — ngang×dài, số tầng, WC, đường vào, pháp lý thì 164 mô tả tin
+   của ta chứa ở dạng chữ, không cột nào giữ. Đưa bảng thật về đúng đặc tả (FR-172).
 2. **Khe hở để chiếm**: không sàn nào có giá đã giao dịch, lịch sử tin, so sánh
    cùng hẻm — đúng thứ `deals` + `masterDB/` Quận 5 tích luỹ được. Và mogi lộ
    SĐT + toạ độ chính xác ngay trong HTML: ẩn danh hai chiều (INS-11, FR-104)

@@ -1039,11 +1039,12 @@ sửa regex — giảm là phải giải thích), 09–12 là hành vi.
 | TS-THONGSO-05 | Pháp lý "sổ hồng riêng/SHR" → `so_hong_rieng`; "sổ hồng/sổ đỏ/sổ chính chủ" → `so_hong`; "sổ chung" → `so_hong_chung`; "hoàn công" / "chưa hoàn công" → bool; "pháp lý rõ ràng" trơ → KHÔNG đoán | ≥ 70/164 | pháp lý 75, hoàn công 37, quy hoạch 6 ✅ |
 | TS-THONGSO-06 | PN/WC "4PN 5WC", "3 phòng ngủ 4 nhà vệ sinh", "Số phòng ngủ: 4 Số phòng vệ sinh: 5" | PN không ghi đè giá trị đã có (79 giữ nguyên), WC ≥ 60 | PN 81 (+2 mới, 0 lệch), WC 63 ✅ |
 | TS-THONGSO-07 | Tiện ích/khác: thang máy, xe hơi vô nhà, căn góc/2MT, nội thất, năm xây ("xây từ giữa năm 2020"), hướng (chỉ chữ la bàn sau "hướng"), TL, "đang cho thuê 20 triệu/tháng" (chỉ tin bán) | có, không bịa | thang máy 10, xe hơi 6, góc 21, nội thất 25, năm 4, hướng 7, TL 52, thuê 17 ✅ |
-| TS-THONGSO-08 | `street` từ `location_raw`: "Số 88, Đường Trần Hưng Đạo, …" → "Trần Hưng Đạo"; "Hẻm 23/, Đường Hồ Thành Biên" → "Hồ Thành Biên" (`20260902f`); "Dự án Tản Đà Court, Đường Tản Đà" → "Tản Đà"; "Phường 2, Quận 5" → null | mọi tin có tên đường trong địa chỉ | 159/164 tin có `location_raw` (5 tin địa chỉ chỉ ghi phường → null, đúng) ✅ |
+| TS-THONGSO-08 | `street` từ `location_raw`: "Số 1xx, Đường Trần Hưng Đạo, …" → "Trần Hưng Đạo"; "Hẻm xx/, Đường Hồ Thành Biên" → "Hồ Thành Biên" (`20260902f`); "Dự án Tản Đà Court, Đường Tản Đà" → "Tản Đà"; "Phường 2, Quận 5" → null | mọi tin có tên đường trong địa chỉ | 159/164 tin có `location_raw` (5 tin địa chỉ chỉ ghi phường → null, đúng) ✅ |
 | TS-THONGSO-09 | `listing_missing_facts` sau backfill | giảm rõ, KHÔNG về 0 (hướng/quy hoạch/năm xây mô tả ít nói) | 1.140 → 638; ba câu kết cấu/pháp lý/hẻm 447 → 142; còn nhiều nhất: hướng 152, quy hoạch 139, năm xây 137 ✅ |
 | TS-THONGSO-10 | `price_per_m2_vnd` sinh cho mọi tin có giá + diện tích; tin thuê tính theo tháng | 164/164 | ✅ (tin thuê 70 tr/64m² → 1,1 tr/m²/tháng) |
 | TS-THONGSO-11 | e2e THONGSO-01: căn có thông số → dòng KHO gửi model là "4x12.5m · trệt + 2 lầu · 3WC · hẻm xe hơi 6m · sổ hồng riêng, hoàn công" | khớp regex | ✅ (67/67) |
 | TS-THONGSO-12 | e2e THONGSO-02: khách gõ mã căn → khối "căn khách đang nhắc" cũng mang thông số | có "hẻm xe hơi 6m" + "sổ hồng riêng" | ✅ |
+| TS-THONGSO-13 | **Bậc nguồn khi fact chủ nhà chảy vào cột** (`20260902g`, thêm sau soát truy vết). Tin thử mô tả "hẻm xe hơi 5m, 1 trệt 2 lầu, 3PN 2WC, sổ hồng riêng" → bóc ra `boc_mo_ta`; (1) chủ nhà trả lời `ket_cau` "trệt 3 lầu, 4 toilet"; (2) admin đặt `alley_width_m = 4`, `specs_source = admin`, rồi chủ nhà nói "hẻm 6m xe tải vô được"; (3) fact nguồn `admin_form` "hẻm 3m" sau đó; (4) view thiếu | (0) floors 3, WC 2, hẻm 5 HXH, SHR, `boc_mo_ta`; (1) floors 4, WC 4, `chu_xac_nhan` — chủ nhà đè bóc mô tả; (2) hẻm 6 → `hem_xe_tai` — chủ nhà đè admin (FR-164 a); (3) vẫn 6 — admin KHÔNG đè chủ nhà; (4) 0 câu thiếu trong kết cấu/hẻm/pháp lý | đúng cả 4 ✅ — chạy trên DB thật trong một giao dịch rồi rollback, kho vẫn 173 tin |
 
 **Giới hạn nhìn thấy khi soi tay** (đều ghi lại, chưa vá vì hiếm): "Diện tích
 306m² (4,2mx22m), 4 tầng" — 306 là tổng sàn, `area_m2` của tin vốn đã ghi 306
@@ -1053,6 +1054,9 @@ cùng bài — luật "nhà hẻm thắng" chỉ áp khi câu mở đầu nói h
 đoán sai (chung cư gán `nha_pho`) thì "tầng 25" bị đọc thành 25 tầng — bị chặn
 bởi dải 1–30 nên ra null, không ra sai.
 
-**Chưa kiểm được**: fact chủ nhà chảy vào cột mới (TS-THONGSO cho
-`listing_facts_sync_cols` mở rộng) — `listing_facts` thật đang rỗng, chờ đợt nhắn
-thật; hàm được kiểm gián tiếp qua `boc_thong_so` dùng chung.
+**Bài học từ soát truy vết cùng ngày**: bản đầu `20260902e` viết "đè khi
+`specs_source = boc_mo_ta`" — nghe hợp lý, nhưng ngược hai luật đã có: chủ nhà
+không đè được số admin nhập (FR-164 a) và câu trả lời lần 2 của chính chủ nhà
+không đè lần 1 (FR-163 a). Agent soát bắt bằng cách đọc mã cạnh FR, không phải
+bằng test — vì `listing_facts` thật đang rỗng nên không ca nào chạy qua hàm đó.
+TS-THONGSO-13 sinh ra để lấp đúng lỗ này.
