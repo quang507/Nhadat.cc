@@ -29,5 +29,5 @@ dấu bằng comment `// ĐỒNG BỘ VỚI chat-reply/index.ts`.
 Bốn vai người nhắn (FR-159, FR-170): cổng `hoiMua` (người bán có đang hỏi mua
 không), cổng `tuNhanCoBDS` (người lạ có tự nhận có BĐS không), `budgetRangeVnd`
 (khoảng giá lọc kho — kiểm bằng "có ÔM căn giá X không"), phần tiền của
-`regexProfileFallback`. 50 ca. Sửa `hoiMua` ở `chat-reply` thì sửa CẢ file này
+`regexProfileFallback`, và nhãn chính chủ/môi giới gán lúc bóc tách. 59 ca. Sửa `hoiMua` ở `chat-reply` thì sửa CẢ file này
 LẪN `fr161-go-lan-dau.mjs` (bản rút gọn hai vế).
