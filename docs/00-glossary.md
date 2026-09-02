@@ -47,6 +47,9 @@ nhiều biến thể; cột "Biến thể trong tài liệu gốc" để tra ng�
 | **Cuộc trò chuyện** | Chuỗi tin nhắn liên tục, khoảng cách giữa 2 tin ≤ 30 phút. |
 | **Hộp mời kết nối** | Widget CTA trên web đẩy người dùng sang Zalo OA, mang theo ngữ cảnh tìm kiếm. |
 | **Cue** | Câu nhắc mã listing trên trang chi tiết: *"Khi Zalo nhớ hỏi #35148"*. |
+| **Việc bỏ rơi** | Việc chạy nền mà đường nhanh không làm xong: có sự kiện mà không có job, job kẹt ở `processing`, hoặc trả lời đã soạn xong mà chưa gửi hết (FR-166). |
+| **Thư chết** (dead letter) | Việc đã hết đường thử lại, ngừng quét để khỏi kẹt hàng đợi. Trong DB mang **hai tên** vì hai bảng đặt tên khác nhau và trạng thái đã nằm trong CHECK: `dead` ở `inbound_ledger` và `reminders`, `chet` ở `media_cleanup_queue`. Cùng một khái niệm (FR-166 b, g). |
+| **Hợp đồng thuê** (lease) | Cách một worker báo "việc này của tôi" mà không cần thêm trạng thái: đóng dấu `locked_at`/`locked_by`, hết hạn thì worker khác nhặt lại. Dùng cho `reminders` (5 phút) và `inbound_ledger` (150 giây) (FR-166 b, f). |
 
 ## Lưu ý về tên thương hiệu
 

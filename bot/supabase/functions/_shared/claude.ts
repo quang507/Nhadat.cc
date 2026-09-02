@@ -55,6 +55,51 @@ export async function ghiLoi(
   } catch { /* sổ hỏng thì thôi, đừng kéo theo cả luồng chính */ }
 }
 
+/**
+ * Đồng hồ đo tiền (migration 20260901b) — ghi số CHỮ thật của một lượt gọi bộ
+ * não vào `bot_usage` của ngày hôm nay.
+ *
+ * Vì sao cần, khi đã có `bump_model_quota` đếm lượt: tiền tính theo chữ chứ
+ * không theo lượt, và bốn loại chữ có bốn giá lệch nhau tới 50 lần. Không đo
+ * thì mọi câu trả lời cho "tốn bao nhiêu, scale lên có chịu nổi không" đều là
+ * ước tính từ số ký tự, sai số lớn.
+ *
+ * Cặp số đáng nhìn nhất là cache_write so với cache_read: write cao mà read
+ * thấp nghĩa là lượt nào cũng trượt bộ nhớ tạm — đang trả THÊM tiền để không
+ * được gì, và phải đổi nhịp nhớ tạm (xem khối bình luận ở chỗ cache_control
+ * trong chat-reply).
+ *
+ * KHÔNG BAO GIỜ NÉM, cùng lý do với ghiLoi: mọi nơi gọi hàm này đều đã có sẵn
+ * câu trả lời cho khách trong tay. Đồng hồ hỏng thì thôi, không được phép kéo
+ * câu trả lời đó xuống nhánh dự phòng.
+ *
+ * Hiện mới nối ở `chat-reply`. `nudge`, `ask-seller`, `ctv-report` chưa gắn nên
+ * số trong bảng là SÀN, không phải tổng — nhớ điều này khi đọc số.
+ */
+export async function doTien(
+  db: SupabaseClient,
+  usage: {
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+    cache_creation_input_tokens?: number | null;
+    cache_read_input_tokens?: number | null;
+  } | null | undefined,
+): Promise<void> {
+  if (!usage) return;
+  try {
+    await db.rpc("cong_token", {
+      p_in: usage.input_tokens ?? 0,
+      p_out: usage.output_tokens ?? 0,
+      p_cache_write: usage.cache_creation_input_tokens ?? 0,
+      p_cache_read: usage.cache_read_input_tokens ?? 0,
+    });
+  } catch (e) {
+    // Nối dây vào sổ (FR-152) — một `catch` im lặng ở đây là một đồng hồ chết
+    // mà không ai biết, rồi số liệu tiền lặng lẽ sai.
+    await ghiLoi(db, "do tien", e);
+  }
+}
+
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,

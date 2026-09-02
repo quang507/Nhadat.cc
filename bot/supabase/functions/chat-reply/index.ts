@@ -8,6 +8,7 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  doTien,
   ghiLoi,
   jsonResponse,
   MODEL,
@@ -26,78 +27,137 @@ import {
   TONE_RULES,
 } from "../_shared/prompts.ts";
 
+// FR-161 — RẤT NHIỀU người nhắn Zalo không bỏ dấu, mà mọi cổng regex ở đây
+// từng viết bằng chữ có dấu: "ban nha quan 5 gia 5 ty" trượt cổng rao im lặng,
+// "toi muon mua nha" không tách được vai, "chieu gui anh" không thành lời hứa.
+// Chữa ở GỐC chứ không vá từng mẫu: chuẩn hoá đầu vào một lần rồi khớp.
+//
+// Luật hai chế độ: tin CÓ DẤU thì khớp bằng bộ regex có dấu như cũ (dấu của
+// người gõ là thông tin — "đang bàn" khác "đang bán", đừng vứt đi); tin KHÔNG
+// DẤU mới rơi về bộ regex đã bỏ dấu, chấp nhận nhập nhằng vốn có của tiếng
+// Việt không dấu (ban = bán/bàn/bạn). Model thì đọc text GỐC — model không mù
+// dấu, chỉ regex là mù.
+const boDau = (s: string): string =>
+  s.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 // Fallback quy tắc khi model lỗi/hết quota (hướng parseVnd của NhaDat-Radar):
 // bắt tối thiểu ngân sách + hẻm/mặt tiền bằng regex để hồ sơ không mất dữ liệu,
 // và trả lời template thay vì im lặng hay đổ lỗi cho khách.
 function regexProfileFallback(text: string): Record<string, string> {
-  const t = text.toLowerCase();
+  // Chạy trên bản BỎ DẤU (FR-161): fallback này chỉ nhặt số + từ khoá thô,
+  // và bản không dấu phủ được cả hai kiểu gõ. "thuế" → "thue" vẫn dính nhầm
+  // như trước, chấp nhận — đây là lưới cuối khi model đã hỏng.
+  const t = boDau(text);
   const delta: Record<string, string> = {};
-  const money = /([\d][\d.,]*)\s*(tỷ|tỉ|ty|tỏi|tr(?![a-zA-ZÀ-ỹ])|triệu|củ)/.exec(t);
+  // "5 ty 8" / "5 ty ruoi": giữ cả phần lẻ, vì budgetRangeVnd đọc được nó. Bản
+  // cũ cắt còn "5 tỷ" → cận trên 5,75 tỷ → căn 5,8 tỷ khách đang hỏi bị lọc mất.
+  // "toi" là "tỏi" (tỷ) CHỈ khi sau nó không có số: "5 toi 6 ty" là "5 TỚI 6".
+  const money =
+    /([\d][\d.,]*)\s*(ty|ti|toi(?!\s*\d)|tr(?![a-z])|trieu|cu)(?![a-z])(\s*(?:ruoi|\d{1,3}(?![\d.,]|\s*m)))?/
+      .exec(t);
   if (money) {
-    const unit = /tr|triệu|củ/.test(money[2]) ? "triệu" : "tỷ";
-    delta.budget = `${money[1]} ${unit}`;
+    const unit = /^(tr|trieu|cu)$/.test(money[2]) ? "triệu" : "tỷ";
+    delta.budget = `${money[1]} ${unit}${money[3] ? ` ${money[3].trim()}` : ""}`;
   }
-  if (/hxh|hẻm xe hơi/.test(t)) delta.alley = "hẻm xe hơi";
-  else if (/mặt tiền|\bmt\b/.test(t)) delta.alley = "mặt tiền";
-  // \b của JS chỉ biết ký tự ASCII, mà "thuê" kết bằng "ê" → /\bthuê\b/ KHÔNG
-  // BAO GIỜ khớp. Tự dựng biên từ bằng lớp chữ tiếng Việt. ("thuế" phải trượt.)
-  if (/(^|[^a-zà-ỹ])thu[êe](?![a-zà-ỹ])/.test(t)) delta.deal = "thue";
+  if (/hxh|hem xe hoi/.test(t)) delta.alley = "hẻm xe hơi";
+  else if (/mat tien|\bmt\b/.test(t)) delta.alley = "mặt tiền";
+  if (/(^|[^a-z])thue(?![a-z])/.test(t)) delta.deal = "thue";
   else if (/\bmua\b/.test(t)) delta.deal = "ban";
   return delta;
 }
 
 // FR-133: "chiều/mai/tối… em gửi" → hẹn giờ nhắc (giờ VN = UTC+7)
 function mapDue(when: string): string {
-  const t = when.toLowerCase();
+  // Bản bỏ dấu (FR-161) phủ cả hai kiểu gõ: "chieu mai" hẹn được y như
+  // "chiều mai". Đổi lại "tôi"/"tối" nhập một — chỉ lệch GIỜ nhắc, không mất nhắc.
+  const t = boDau(when);
   const now = Date.now();
   const vn = new Date(now + 7 * 3600e3);
   let day = 0;
-  if (/mai|hôm sau/.test(t)) day = 1;
+  if (/mai|hom sau/.test(t)) day = 1;
   // "thứ 7", "chủ nhật/CN" → số ngày tới thứ đó (trùng hôm nay thì lấy hôm nay)
-  const wd = /thứ\s*([2-7])/.exec(t);
+  const wd = /thu\s*([2-7])/.exec(t);
   if (wd) day = ((parseInt(wd[1], 10) - 1) - vn.getUTCDay() + 7) % 7;
-  else if (/chủ nhật|\bcn\b/.test(t)) day = (7 - vn.getUTCDay()) % 7;
+  else if (/chu nhat|\bcn\b/.test(t)) day = (7 - vn.getUTCDay()) % 7;
   let hour = 15;
-  const hm = /(\d{1,2})\s*(?:h|giờ)/.exec(t);
+  const hm = /(\d{1,2})\s*(?:h|gio)/.exec(t);
   if (hm) {
     hour = Math.min(23, Math.max(0, parseInt(hm[1], 10)));
     // "3h chiều", "8h tối" — giờ kèm buổi thì cộng 12, kẻo thành 3h/8h SÁNG
-    if (hour < 12 && /chiều|tối|đêm/.test(t)) hour += 12;
-  } else if (/sáng/.test(t)) hour = 9;
-  else if (/trưa/.test(t)) hour = 12;
-  else if (/chiều/.test(t)) hour = 15;
-  else if (/tối|đêm/.test(t)) hour = 19;
-  else if (/cuối tuần/.test(t)) { day = ((6 - vn.getUTCDay()) + 7) % 7 || 6; hour = 10; }
+    if (hour < 12 && /chieu|toi|dem/.test(t)) hour += 12;
+  } else if (/sang/.test(t)) hour = 9;
+  else if (/trua/.test(t)) hour = 12;
+  else if (/chieu/.test(t)) hour = 15;
+  else if (/toi|dem/.test(t)) hour = 19;
+  else if (/cuoi tuan/.test(t)) { day = ((6 - vn.getUTCDay()) + 7) % 7 || 6; hour = 10; }
   let due = Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate() + day, hour - 7);
   if (due <= now) due = now + 2 * 3600e3; // đã qua giờ đó → nhắc sau 2 tiếng
   return new Date(due).toISOString();
 }
-// Regex bắt lời hứa cho nhánh seller (không qua parse có cấu trúc)
+// Regex bắt lời hứa cho nhánh seller (không qua parse có cấu trúc).
+// Hai bản có-dấu / không-dấu, chọn theo tin (FR-161).
 const PROMISE_RE = /(sáng mai|chiều|tối|trưa|mai|cuối tuần)[^.,;!?]{0,30}?(gửi|chụp|báo|đưa|bổ sung|cho em|check|coi lại)|(gửi|chụp|báo|đưa|bổ sung|check|coi lại)[^.,;!?]{0,30}?(sáng mai|chiều|tối|trưa|mai|cuối tuần)/i;
+const PROMISE_RE_KD = /(sang mai|chieu|toi|trua|mai|cuoi tuan)[^.,;!?]{0,30}?(gui|chup|bao|dua|bo sung|cho em|check|coi lai)|(gui|chup|bao|dua|bo sung|check|coi lai)[^.,;!?]{0,30}?(sang mai|chieu|toi|trua|mai|cuoi tuan)/;
 
-// SRS-4.5: khoảng giá trong hồ sơ → biên VND để lọc kho bằng price_vnd
+// SRS-3.3/SRS-5.2: khoảng giá trong hồ sơ → biên VND để lọc kho bằng price_vnd
+// (bản cũ ghi "SRS-4.5" — đó là POST /api/search, trích nhầm)
 // (cột số, parse_vnd phía DB — hướng parseVnd của NhaDat-Radar).
 // "tầm/dưới 5 tỷ" → cận trên ×1.15; "trên/từ 4 tỷ" → cận DƯỚI; "5-6 tỷ" → cả hai.
+//
+// Soát 01/09 (vai người mua) — ba cách nói giá RẤT thường gặp từng bị đọc sai:
+//   "5 tỷ 8"        → đọc thành 5 tỷ → cận trên 5,75 tỷ → căn 5,8 tỷ khách đang
+//                     hỏi bị LỌC KHỎI KHO. Phía DB `parse_vnd` đọc đúng "5 tỷ 8"
+//                     cho GIÁ TIN từ 25/08, nên tin ghi 5,8 tỷ và khách nói
+//                     5 tỷ 8 không bao giờ gặp nhau.
+//   "từ 5 đến 6 tỷ" → bắt "6 tỷ" + "từ" thành CẬN DƯỚI 5,7 tỷ — loại hết
+//                     5,0–5,69 tỷ, đúng khoảng khách muốn.
+//   "5 tới 6 tỷ"    → "tới" bị đọc thành "tỏi" (lóng của tỷ) → "5 tỏi".
+// Luật phần lẻ chép từ parse_vnd: 1 chữ số sau "tỷ" là phần mười, 2-3 chữ số là
+// triệu; "rưỡi" = +0,5. Một luật, hai chỗ — cố ý, vì hàm DB trả MỘT số còn ở
+// đây cần KHOẢNG; đổi luật thì đổi cả hai.
 function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null {
   if (typeof budget !== "string") return null;
-  const unitOf = (u: string) => (/tỷ|ty|tỏi|tỉ/i.test(u) ? 1e9 : 1e6);
+  // Bỏ dấu một lần (FR-161): hồ sơ do model bóc thì có dấu, do fallback regex
+  // thì không — hàm này phải nuốt được cả hai mà không nhân đôi bảng mẫu.
+  const bd = boDau(budget);
   const num = (s: string) => parseFloat(s.replace(",", "."));
-  const range =
-    /([\d][\d.,]*)\s*[-–~]\s*([\d][\d.,]*)\s*(tỷ|ty|tỏi|tỉ|triệu|trieu|củ)/i.exec(budget);
-  if (range) {
-    const u = unitOf(range[3]);
-    const a = num(range[1]) * u, b = num(range[2]) * u;
+  // Một lượng tiền: số + đơn vị + phần lẻ tuỳ chọn. "toi" là tỏi (tỷ) chỉ khi
+  // sau nó KHÔNG có số — "5 toi 6" là "tới". Phần lẻ không được dính "m" (m2).
+  const TIEN =
+    /(\d+(?:[.,]\d+)?)\s*(ty|ti|toi(?!\s*\d)|trieu|tr(?![a-z])|cu)(?![a-z])(?:\s*(ruoi)|\s*(\d{1,3})(?![\d.,]|\s*m))?/g;
+  const doc = (m: RegExpMatchArray): number => {
+    const laTy = /^(ty|ti|toi)$/.test(m[2]);
+    let v = num(m[1]) * (laTy ? 1e9 : 1e6);
+    if (laTy && Number.isInteger(num(m[1]))) {
+      if (m[3]) v += 0.5e9;
+      else if (m[4]) v += m[4].length === 1 ? Number(m[4]) * 1e8 : Number(m[4]) * 1e6;
+    }
+    return v;
+  };
+  const cac: number[] = [];
+  for (const m of bd.matchAll(TIEN)) {
+    const v = doc(m);
+    if (Number.isFinite(v) && v > 0) cac.push(v);
+  }
+  // "5-6 tỷ", "từ 5 đến 6 tỷ", "5 tới 6 tỷ", "khoảng 5 6 tỷ": số đầu KHÔNG mang
+  // đơn vị, mượn đơn vị của số sau.
+  const chung =
+    /(\d+(?:[.,]\d+)?)\s*(?:-|–|~|den|toi|hoac|hay|\s)\s*(\d+(?:[.,]\d+)?)\s*(ty|ti|toi|trieu|tr(?![a-z])|cu)(?![a-z])/
+      .exec(bd);
+  if (chung) {
+    const u = /^(ty|ti|toi)$/.test(chung[3]) ? 1e9 : 1e6;
+    const a = num(chung[1]) * u, b = num(chung[2]) * u;
     if (Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a) {
       return { min: Math.round(a * 0.95), max: Math.round(b * 1.1) };
     }
   }
-  const m = /([\d][\d.,]*)\s*(tỷ|ty|tỏi|tỉ)/i.exec(budget) ??
-    /([\d][\d.,]*)\s*(triệu|trieu|củ|tr(?![a-zA-ZÀ-ỹ]))/i.exec(budget);
-  if (!m) return null;
-  const n = num(m[1]);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  const base = n * unitOf(m[2]);
-  if (/trên|hơn|từ|tối thiểu|ít nhất/i.test(budget)) return { min: Math.round(base * 0.95) };
+  // "5 tỷ đến 6 tỷ", "5 tỷ 8 - 6 tỷ": hai lượng tiền đủ đơn vị.
+  if (cac.length >= 2) {
+    const a = Math.min(cac[0], cac[1]), b = Math.max(cac[0], cac[1]);
+    return { min: Math.round(a * 0.95), max: Math.round(b * 1.1) };
+  }
+  if (!cac.length) return null;
+  const base = cac[0];
+  if (/tren|hon|\btu\b|toi thieu|it nhat/.test(bd)) return { min: Math.round(base * 0.95) };
   return { max: Math.round(base * 1.15) };
 }
 
@@ -159,10 +219,24 @@ Deno.serve(async (req) => {
   const msgId = body.msg_id ? String(body.msg_id) : null;
   const channel = String(body.channel ?? "zalo_oa");
   const imageUrl = body.image_url ? String(body.image_url) : null;
-  if (!externalUserId || (!text && !imageUrl)) {
+  // `mark_sent` là cửa ghi sổ, không phải tin nhắn — nó không có người gửi lẫn
+  // nội dung. Xử ở dưới, SAU cổng bí mật.
+  if (!body.mark_sent && (!externalUserId || (!text && !imageUrl))) {
     return jsonResponse({ error: "external_user_id và text (hoặc image_url) bắt buộc" }, 400);
   }
   const textOrTag = text || "[khách gửi ảnh]";
+
+  // FR-161: người ta gõ LẪN dấu suốt — "ban nha q5 giá 5 ty" có đúng một chữ
+  // có dấu. Bản trước dò một cờ "câu này có dấu không" (bật khi câu chứa BẤT KỲ
+  // ký tự có dấu nào) rồi chọn MỘT bộ regex theo cờ đó, nên câu lẫn dấu bị dồn
+  // hết vào bộ CÓ DẤU và "ban", "nha" không khớp "bán", "nhà" — câu rơi im
+  // lặng. Cờ đó nay bỏ hẳn: giữ lại là mời người sau dùng lại đúng cái bẫy.
+  // `khop` thử CẢ HAI rồi lấy hợp: bộ không dấu chạy trên `tKD` (đã bỏ dấu)
+  // nên phủ luôn câu gõ đủ dấu, bộ có dấu giữ cụm chỉ đúng khi có dấu. Chỉ nới
+  // thêm, không bỏ mất khớp nào. Model vẫn nhận `text` gốc.
+  const tKD = boDau(text);
+  const khop = (coDau: RegExp, khongDau: RegExp) =>
+    coDau.test(text) || khongDau.test(tKD);
 
   const client = serviceClient();
 
@@ -175,6 +249,13 @@ Deno.serve(async (req) => {
   // không làm gãy bridge đang chạy. zalo-webhook gọi bằng service_role key nên
   // luôn được cho qua.
   const gate = await secretOf(client, "BRIDGE_SECRET");
+  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
+  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
+  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
+  if (!gate) {
+    await ghiLoi(client, "chat-reply CONG MO",
+      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
+  }
   const isService =
     req.headers.get("authorization") ===
       `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
@@ -182,36 +263,193 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "forbidden" }, 403);
   }
 
+  // FR-162 — CỬA GHI NHẬN ĐÃ GỬI, cho người gọi không cầm service key.
+  // `zalo-webhook` có service key nên tự ghi `sent_bubbles`/`sent_at` vào sổ.
+  // Bridge (máy local) chỉ có publishable key + bí mật cổng, không đụng bảng
+  // được — nên bên kênh `zalo_personal_test`, `sent_at` KHÔNG BAO GIỜ được ghi
+  // và `already_sent` vĩnh viễn false. Tức cờ chống-gửi-đúp của FR-162 là chữ
+  // chết ở đúng cái kênh đang chạy thật: một `msg_id` giao hai lần — hai lượt
+  // thả tim cùng map về `react-<tid>-<gMsgID>` — là khách nhận lại nguyên loạt
+  // bong bóng. Cửa này trả cho bridge đúng nửa còn thiếu.
+  if (body.mark_sent) {
+    const soDaGui = Number(body.sent_bubbles ?? 0);
+    const xong = body.done !== false;
+    const { error: msErr } = await client.from("inbound_ledger").update({
+      sent_bubbles: Number.isFinite(soDaGui) ? soDaGui : 0,
+      ...(xong
+        ? { sent_at: new Date().toISOString(), send_error: null }
+        : { send_error: "gửi hụt giữa chừng — bridge báo lại" }),
+      updated_at: new Date().toISOString(),
+    }).eq("zalo_msg_id", String(body.mark_sent));
+    if (msErr) await ghiLoi(client, "chat-reply mark_sent", msErr.message);
+    return jsonResponse({ ok: !msErr, marked: String(body.mark_sent), done: xong });
+  }
+
   // FR-141: bridge báo NGƯỜI THẬT (CTV/admin gõ tay từ acc clone) vừa nhắn cho
   // khách này → ghi tin sender='human' + đặt human_touch_at; bot nhường sân
   // 30 phút, hết yên ắng thì tự tiếp sức lại như thường.
+  //
+  // Tin gõ tay KHÔNG mang theo vai, mà một Zalo có thể vừa bán vừa mua
+  // (OPEN-22/FR-157). Trước bản này `if (!hSeller)` bỏ qua SẠCH người bán —
+  // tức `human_touch_at` không bao giờ được đặt trên hội thoại người bán, nên
+  // cổng nhường sân bên nhánh seller là code chết: CTV đang thương lượng với
+  // chủ nhà mà chủ nhắn tiếp thì bot vẫn chen ngang. Giờ đóng cổng ở MỌI hội
+  // thoại đang có của người này.
   if (body.human_note) {
+    const now141 = new Date().toISOString();
+    const cham: string[] = [];
+    const chamVao = async (convId: string, vai: string) => {
+      const { error: hErr } = await client.from("messages").insert({
+        conversation_id: convId, sender: "human", body: text,
+      });
+      if (hErr) await ghiLoi(client, `chat-reply human_note messages(${vai})`, hErr.message);
+      // FR-147: người thật đã vào tay → hạ cờ cần-người-thật, khỏi leo lên admin
+      await client.from("conversations").update({
+        human_touch_at: now141, last_message_at: now141, needs_human: false,
+      }).eq("id", convId);
+      cham.push(vai);
+    };
+
     const { data: hSeller } = await client.from("sellers").select("id")
       .eq("zalo_user_id", externalUserId).maybeSingle();
-    if (!hSeller) {
-      const { data: hbc } = await client.rpc("ensure_buyer_conversation", {
+
+    if (hSeller) {
+      const { data: hsc, error: hscErr } = await client
+        .rpc("ensure_seller_conversation", {
+          p_seller_id: hSeller.id, p_channel: channel,
+        }).single();
+      const hsConvId = (hsc as { c_id?: string } | null)?.c_id ?? null;
+      if (hscErr || !hsConvId) {
+        await ghiLoi(client, "chat-reply human_note ensure_seller_conversation",
+          hscErr?.message ?? "không trả về c_id");
+      } else {
+        await chamVao(hsConvId, "seller");
+      }
+
+      // Người đang bán VẪN có thể đang có hội thoại mua (FR-157) — cổng phải
+      // phủ luôn nhánh đó. Nhưng chỉ đụng hội thoại ĐÃ CÓ: tạo mới buyer cho
+      // một người đang bán là bịa ra một đơn khách không tồn tại.
+      const { data: hBuyer } = await client.from("buyers").select("id")
+        .eq("zalo_user_id", externalUserId).maybeSingle();
+      if (hBuyer) {
+        const { data: hbConv } = await client.from("conversations").select("id")
+          .eq("buyer_id", hBuyer.id).order("started_at", { ascending: false })
+          .limit(1).maybeSingle();
+        if (hbConv) {
+          await chamVao(hbConv.id, "buyer");
+          await client.from("reminders").update({ status: "cancelled" })
+            .eq("buyer_id", hBuyer.id).eq("kind", "escalation").eq("status", "pending");
+        }
+      }
+    } else {
+      const { data: hbc, error: hbcErr } = await client.rpc("ensure_buyer_conversation", {
         p_zalo_user_id: externalUserId, p_channel: channel,
       }).single();
-      const hConvId = (hbc as { c_id?: string } | null)?.c_id;
-      const hBuyerId = (hbc as { b_id?: string } | null)?.b_id;
-      if (hConvId) {
-        await client.from("messages").insert({
-          conversation_id: hConvId, sender: "human", body: text,
-        });
-        // FR-147: người thật đã vào tay → hạ cờ cần-người-thật, khỏi leo lên admin
-        await client.from("conversations").update({
-          human_touch_at: new Date().toISOString(),
-          last_message_at: new Date().toISOString(),
-          needs_human: false,
-        }).eq("id", hConvId);
+      const hConvId = (hbc as { c_id?: string } | null)?.c_id ?? null;
+      const hBuyerId = (hbc as { b_id?: string } | null)?.b_id ?? null;
+      if (hbcErr || !hConvId) {
+        await ghiLoi(client, "chat-reply human_note ensure_buyer_conversation",
+          hbcErr?.message ?? "không trả về c_id");
+      } else {
+        await chamVao(hConvId, "buyer");
         if (hBuyerId) {
           await client.from("reminders").update({ status: "cancelled" })
             .eq("buyer_id", hBuyerId).eq("kind", "escalation").eq("status", "pending");
         }
       }
     }
-    return jsonResponse({ ok: true, human_note: true });
+    return jsonResponse({ ok: true, human_note: true, cham });
   }
+
+  // ─── SỔ INBOUND (FR-162): mỗi zalo_msg_id là MỘT vòng đời xử lý
+  // received → processing → completed/failed, lưu nguyên payload trả lời.
+  // Đứng TRƯỚC cổng quota là cố ý: tin duplicate không được đốt lượt model.
+  //   * completed → PHÁT LẠI payload đã lưu. Kênh gửi hụt (Zalo lỗi, bridge
+  //     timeout) cứ gọi lại cùng msg_id là lấy lại được câu trả lời — retry
+  //     outbound không cần chạy lại AI.
+  //   * in_flight → bản sao thứ hai của cùng tin đang được lượt khác xử lý
+  //     NGAY LÚC NÀY (race hai bản sao). Đứng ngoài, không xử lý đôi; bridge
+  //     thấy cờ này thì chờ rồi hỏi lại.
+  //   * claimed  → làm như thường. r_attempts > 1 nghĩa là lượt trước
+  //     failed/chết giữa chừng — tin có thể ĐÃ nằm trong `messages`, nên 23505
+  //     ở dưới không được nuốt nữa mà phải đi tiếp trả lời nốt.
+  // Sổ hỏng (RPC lỗi) thì chạy như cũ — unique index messages.zalo_msg_id vẫn
+  // là lưới đỡ cuối — nhưng phải vào bot_errors (FR-152).
+  let coSo = false;      // lượt này có cầm sổ không
+  let soAttempts = 1;    // lần thử thứ mấy của msg_id này
+  if (msgId) {
+    const { data: so, error: soErr } = await client
+      .rpc("claim_inbound", { p_msg_id: msgId }).single();
+    const soRow = so as {
+      r_state?: string; r_reply?: Record<string, unknown> | null; r_attempts?: number;
+      r_sent_at?: string | null;
+    } | null;
+    if (soErr || !soRow?.r_state) {
+      await ghiLoi(client, "chat-reply claim_inbound",
+        soErr?.message ?? "không trả về r_state");
+    } else if (soRow.r_state === "completed") {
+      // `already_sent` = lần trước MỌI bong bóng đã tới Zalo (webhook ghi
+      // sent_at). Kênh dựa vào cờ này để exactly-once chiều gửi: provider giao
+      // trùng thì im (khách không nhận đúp), gửi hụt lần trước thì gửi lại.
+      return jsonResponse({
+        reply: null, replies: [], ...(soRow.r_reply ?? {}),
+        deduped: true, replayed: true, already_sent: !!soRow.r_sent_at,
+      });
+    } else if (soRow.r_state === "in_flight") {
+      return jsonResponse({ reply: null, replies: [], deduped: true, in_flight: true });
+    } else if (soRow.r_state === "dead" || soRow.r_dead) {
+      // FR-166 bất biến 7: đã hỏng đủ 8 lượt, ĐỪNG THỬ NỮA. Trước bản này
+      // `dead` rơi tuột vào nhánh `else` bên dưới và được xử như việc mới:
+      //   * đốt một lượt gọi model đầy đủ cho một dòng đã bị bỏ,
+      //   * `baoHong` sau đó va guard `inbound_ledger_giu_completed` nên không
+      //     ghi được gì — hỏng im lặng,
+      //   * và vì nhánh này KHÔNG cầm hợp đồng thuê, hai lượt giao cùng lúc của
+      //     cùng msg_id đều chạy tới cuối và ĐỀU GỬI, phá đúng cái bất biến
+      //     exactly-once mà cả FR-162 dựng lên để giữ.
+      // Không giành sổ (`coSo` giữ false) nên mọi đường ra phía sau không đụng
+      // vào dòng thư chết nữa.
+      await ghiLoi(client, "chat-reply dead",
+        `msg_id ${msgId} đã ở thư chết sau ${soRow.r_attempts ?? "?"} lượt — bỏ qua, ` +
+          `không gọi model. Xem /admin để xử tay.`);
+      return jsonResponse({
+        reply: null, replies: [], deduped: true, dead: true,
+        already_sent: !!soRow.r_sent_at,
+      });
+    } else {
+      coSo = true;
+      soAttempts = soRow.r_attempts ?? 1;
+    }
+  }
+  // MỌI đường ra phía sau phải đi qua một trong hai cửa này, để sổ không bao
+  // giờ kẹt ở processing oan (kẹt thật — function chết — thì claim_inbound tự
+  // reclaim sau 150s). Ghi sổ hụt không được chặn đường trả lời: chỉ ghiLoi.
+  const hoanTat = async (payload: Record<string, unknown>, code = 200) => {
+    if (coSo) {
+      const { error: soErr2 } = await client.from("inbound_ledger").update({
+        status: "completed", reply: payload, updated_at: new Date().toISOString(),
+      }).eq("zalo_msg_id", msgId);
+      if (soErr2) await ghiLoi(client, "chat-reply hoanTat ledger", soErr2.message);
+    }
+    return jsonResponse(payload, code);
+  };
+  const baoHong = async (payload: Record<string, unknown>, code: number, detail: string) => {
+    if (coSo) {
+      // FR-166: PHẢI đi qua `bao_hong_inbound`, đừng ghi thẳng `status='failed'`.
+      // Hàm đó mới là chỗ đặt `next_retry_at = now() + lan_thu_ke(attempts)` và
+      // tự chuyển thư chết ở lượt thứ 8. Ghi tay như trước là bỏ mất giờ hẹn:
+      // `inbound-sweep` quét `failed` với `next_retry_at` NULL thì coi là tới
+      // giờ NGAY, nên nó cứu lại mỗi phút một lượt — một tin gặp lỗi hết hạn
+      // mức (quota) đốt sạch 8 lượt trong 8 phút rồi nằm `dead` vĩnh viễn,
+      // đúng ngược lại lời hứa "lùi dần" ghi trong chính comment cũ.
+      // Hàm này cũng tự né dòng đã `completed` (guard FR-163), nên không cần
+      // kiểm trước ở đây.
+      const { error: soErr3 } = await client.rpc("bao_hong_inbound", {
+        p_msg_id: msgId, p_detail: detail.slice(0, 500),
+      });
+      if (soErr3) await ghiLoi(client, "chat-reply baoHong ledger", soErr3.message);
+    }
+    return jsonResponse(payload, code);
+  };
 
   // ─── CỔNG 2: trần TOÀN CỤC lượt gọi model mỗi ngày.
   // Trần 100 tin/24h bên dưới đếm theo `conversation_id`, mà conversation sinh
@@ -226,7 +464,19 @@ Deno.serve(async (req) => {
   if (underQuota === false) {
     // Im lặng hoàn toàn: trả lời thì vẫn tốn lượt model, mà đây đúng là thứ
     // đang cần chặn. bump_model_quota đã báo admin đúng một lần trong ngày.
-    return jsonResponse({ reply: null, replies: [], quota_exceeded: true }, 429);
+    // Sổ ghi failed chứ không completed: sang ngày quota reset, kênh gửi lại
+    // cùng msg_id thì tin ĐƯỢC xử lý thật chứ không bị phát lại cái rỗng.
+    return await baoHong(
+      { reply: null, replies: [], quota_exceeded: true }, 429, "quota ngày đã chạm trần",
+    );
+  }
+
+  // Qua hết các cổng — từ đây là xử lý thật.
+  if (coSo) {
+    const { error: soPErr } = await client.from("inbound_ledger").update({
+      status: "processing", updated_at: new Date().toISOString(),
+    }).eq("zalo_msg_id", msgId);
+    if (soPErr) await ghiLoi(client, "chat-reply ledger processing", soPErr.message);
   }
 
   // FR-138: "não" cấu hình được từ dashboard — bảng bot_prompts đè lên mặc định
@@ -246,9 +496,20 @@ Deno.serve(async (req) => {
 
   // NGƯỜI BÁN nhắn? (FR-129 — hỏi nhỏ giọt): nếu khớp sellers.zalo_user_id và
   // đang có câu hỏi chờ, coi tin nhắn là CÂU TRẢ LỜI → lưu fact, hỏi câu kế.
-  const { data: sellerRow } = await client
-    .from("sellers").select("id, name, active_listing_id")
+  type SellerRow = {
+    id: string; name: string | null; active_listing_id: string | null;
+    seller_type?: string | null;
+  };
+  const { data: sellerCu } = await client
+    .from("sellers").select("id, name, active_listing_id, seller_type")
     .eq("zalo_user_id", externalUserId).maybeSingle();
+  let sellerRow = (sellerCu ?? null) as SellerRow | null;
+  // Người này VỪA được mở hồ sơ bán trong lượt này (FR-159) — nhánh bán cần
+  // biết để không chăm sóc như khách quen "đang rao các tin".
+  let sellerMoi = false;
+  // Nhãn VỪA gán trong lượt này (mở hồ sơ từ chat, hoặc hồ sơ tạo tay được gán)
+  // — để nhánh bán báo cho chính người đó biết nhãn + mức phí (02/09).
+  let nhanVuaGan: "ccrb" | "nmg" | null = null;
 
   // OPEN-22 / FR-157: một Zalo VỪA BÁN VỪA MUA. Nhận diện người vẫn theo
   // zalo_user_id (quyết định chủ dự án 27/08/2026), nhưng VAI thì xét từng
@@ -258,13 +519,203 @@ Deno.serve(async (req) => {
   // buyer, bot cứ hỏi ngược lại về căn của họ.
   // Câu hỏi chờ KHÔNG mất khi rẽ sang nhánh mua: `info_requests` vẫn
   // `pending`, cron drip sẽ hỏi lại.
+  // Cổng này quyết định NGƯỜI BÁN nhắn có được rẽ sang nhánh mua hay không, nên
+  // trượt vì gõ lẫn dấu là nặng nhất trong ba chỗ: "toi muon mua nha q5, giá
+  // tốt ko" có đúng hai chữ có dấu, bản trước dồn vào bộ có dấu, không khớp vế
+  // nào, và người hỏi mua bị bot hỏi ngược về căn của chính họ.
+  //
+  // Soát 01/09 (vai người bán): bản cũ nhận "muốn/cần + nhà/căn" và "xem nhà"/
+  // "coi nhà" TRẦN là hỏi mua, nên "có khách nào coi nhà chưa em?", "tôi muốn
+  // nhà mình lên web sớm", "cần căn này bán nhanh", "em đang xem nhà tôi tới
+  // đâu rồi" — toàn câu CHỦ NHÀ hỏi về căn của họ — bị đẩy sang nhánh mua, bot
+  // mở hồ sơ mua cho họ rồi hỏi ngược "anh tìm khu nào ạ?". Đo được 5/7 câu
+  // chủ nhà thường nói bị rẽ nhầm. Nay: động từ phải là mua/thuê/tìm/kiếm
+  // (không nhận danh từ làm tân ngữ); "xem/coi nhà" chỉ khi CHÍNH HỌ xin/hẹn
+  // xem; và câu đang nói về KHÁCH/AI xem-mua thì không phải mình muốn mua.
+  // Cổng này chỉ có tác dụng với người ĐÃ có hồ sơ bán, nên mập mờ thì nghiêng
+  // về vai bán là đúng chiều.
   const hoiMua =
-    /(muốn|cần|tìm|kiếm|đang coi|đang xem)\s*(mua|thu[êe]|nhà|căn|đất|phòng|mặt bằng|chung cư)/i
-      .test(text) ||
-    /(có|còn)\s*căn nào|xem nhà|coi nhà|tư vấn (mua|thu[êe])/i.test(text);
+    (khop(
+      /(muốn|cần|đang|định|đi)\s*(mua|thu[êe]|tìm|kiếm)\b/i,
+      /(muon|can|dang|dinh|di)\s*(mua|thue|tim|kiem)\b/,
+    ) ||
+      khop(
+        /\b(tìm|kiếm|mua)\s*(nhà|căn|đất|phòng|mặt bằng|chung cư|q\s*\d|quận|phường|khu|chỗ|gần)|(?<!cho\s)thu[êe]\s*(nhà|căn|phòng|mặt bằng)/i,
+        /\b(tim|kiem|mua)\s*(nha|can|dat|phong|mat bang|chung cu|q\s*\d|quan|phuong|khu|cho|gan)|(?<!cho\s)thue\s*(nha|can|phong|mat bang)/,
+      ) ||
+      khop(
+        /(có|còn)\s*căn nào|tư vấn (mua|thu[êe])/i,
+        /(co|con)\s*can nao|tu van (mua|thue)/,
+      ) ||
+      khop(
+        /(cho|xin|muốn|được|đi|qua|tới|hẹn|đặt lịch)\s*(em|anh|chị|tôi|mình)?\s*(xem|coi)\s*(nhà|căn)/i,
+        /(cho|xin|muon|duoc|di|qua|toi|hen|dat lich)\s*(em|anh|chi|toi|minh)?\s*(xem|coi)\s*(nha|can)/,
+      )) &&
+    !khop(
+      /(khách|ai|người)\s*(nào)?\s*(đã|có|tới|đến)?\s*(xem|coi|mua|thu[êe]|hỏi)/i,
+      /(khach|ai|nguoi)\s*(nao)?\s*(da|co|toi|den)?\s*(xem|coi|mua|thue|hoi)/,
+    );
+
+  // ─── CỔNG CÂU RAO MỚI (dùng ở khối `wantsSell` trong nhánh bán; tính SỚM vì
+  // (1) bộ bắt-lời-sửa FR-164 phải biết "đây có phải câu rao mới không" — câu
+  // rao cũng chứa "giá …", "phường …", không hỏi cổng này trước thì câu rao mới
+  // bị hiểu thành lời sửa tin cũ; (2) FR-159 ngay dưới cần nó để nhận ra người
+  // LẠ đang tự rao nhà — nên cổng đứng TRƯỚC cả nhánh bán).
+  //
+  // \b cuối cụm chặn "cho thuê": "ê" ngoài ASCII nên sau nó không bao giờ là
+  // biên từ → MỌI câu rao CHO THUÊ từng rơi âm thầm, không tạo tin.
+  // FR-158 — cổng KHÔNG còn bắt buộc có giá/diện tích: câu rao trần trụi
+  // ("anh muốn bán căn nhà") từng trượt vế thứ ba và bay mất, trong khi cả
+  // điểm của vòng drip là hỏi cho ĐỦ những thứ còn thiếu. Nới thì phải có thứ
+  // khác gánh dương-tính-giả — thứ đó là THỨ TỰ TỪ: "nhà mình bán chưa em?"
+  // có đủ "bán" lẫn "nhà" nhưng không có cặp "bán nhà"/"muốn bán".
+  // FR-161: tin gõ LẪN dấu là chuyện thường — "ban nha q5 giá 5 ty" có đúng
+  // MỘT chữ có dấu. Thử CẢ HAI bộ rồi lấy hợp (`khop`): bộ không dấu chạy trên
+  // `tKD` nên phủ luôn câu gõ đủ dấu; phép hợp chỉ NỚI THÊM.
+  const coChiTiet = khop(
+    /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i,
+    /[\d][\d.,]*\s*(ty|ti|toi|trieu|tr(?![a-z]))|\d+\s*m2|\bhem\b|mat tien|phuong/,
+  );
+  const coYDinhRao =
+    khop(
+      /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe])/i,
+      /(muon|can|dang|nho|ky gui)\s+(ban|cho thue)\b/,
+    ) ||
+    khop(
+      /(bán|rao|cho thu[êe])\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i,
+      /(ban|rao|cho thue)\s+(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|can)\b/,
+    );
+  // Chỉ chặn câu hỏi tình trạng khi câu KHÔNG kèm chi tiết thật nào.
+  const laCauHoiTinhTrang = khop(
+    /(chưa|sao r[oồ]i|th[eế] n[aà]o|ra sao|đư[ơợ]c không|đc ko|xong ch[uư]a)/i,
+    /(chua|sao roi|the nao|ra sao|duoc khong|dc ko|xong chua)/,
+  );
+  const wantsSell =
+    khop(/\b(bán|rao)\b|cho thu[êe]/i, /\b(ban|rao)\b|cho thue/) &&
+    khop(
+      /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i,
+      /(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|\bcan\b)/,
+    ) &&
+    (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang));
+  // Phường trong câu rao, bắt trên bản bỏ dấu — chỉ lấy CON SỐ nên bỏ dấu
+  // không mất gì. Tự kiểm 02/09 (bơm câu rao qua handler thật): "bán nhà P4
+  // giá 5 tỷ 8 50m2" tạo tin với phường RỖNG — bản cũ chỉ hiểu "phường 4",
+  // trong khi "P4"/"p.4" là cách gõ nhiều nhất, và nhánh MUA hiểu từ lâu.
+  // Dùng chung cho tạo tin lẫn cho phép so "căn khác phường" ở nhánh bán.
+  const wardM = /phuong\s*\.?\s*(\d{1,2})|(?:^|[^a-z0-9])p\.?\s*(\d{1,2})(?![0-9])/.exec(tKD);
+  const wardNo = wardM ? (wardM[1] ?? wardM[2]) : null;
+
+  // ─── FR-159 (nửa 1/2): người CHƯA có hồ sơ bán mà TỰ NHẬN có bất động sản →
+  // mở hồ sơ bán NGAY lượt này rồi đi tiếp vào nhánh bán như người bán quen.
+  // Trước bản này cổng câu rao nằm bên trong `if (sellerRow …)`, mà dòng
+  // `sellers` chỉ được tạo bằng form admin — nên NGƯỜI LẠ nhắn "tôi muốn bán
+  // nhà q5 giá 5 tỷ" rơi thẳng xuống nhánh MUA: bot bóc "khu vực q5, ngân sách
+  // 5 tỷ" thành hồ sơ NGƯỜI MUA rồi hỏi "anh tìm khu nào ạ?". Câu rao mất.
+  //
+  // Ranh giới giữ đúng chữ FR-158/159, và CHIỀU của sai số: FR-159 nói rõ đoán
+  // nhầm NGƯỜI MUA thành người bán là lỗi đắt ("nhà mình ở đâu ạ?" với một
+  // người đang đi tìm nhà), còn chiều ngược lại chỉ tốn một câu hỏi thừa. Nên
+  // chỉ mở hồ sơ bán ở hai mức:
+  //   * TỰ NHẬN RÕ, ở bất kỳ tin nào: câu rao thật (wantsSell), "chính chủ",
+  //     "ký gửi", "cần rao", "đăng bán" — người mua không nói mấy chữ này.
+  //   * "tôi có căn nhà / nhà mình có…" — CHỈ khi đang trả lời câu hỏi vai
+  //     (cờ `hoi_vai`). Đứng một mình thì mập mờ: "tôi có căn nhà ở Q10, giờ
+  //     tìm Q5" là người mua kể hoàn cảnh, mở hồ sơ bán cho họ là sai chiều đắt.
+  // KHÔNG mở vì một chữ "bán" lẻ hay từ câu chào — câu chào đi hỏi vai ở nửa
+  // 2/2 dưới nhánh mua. `(?!\s*nào)` chặn "anh có nhà nào 2PN không em" (khách
+  // hỏi kho), `!hoiMua` chặn "tôi có nhà rồi, giờ muốn mua thêm".
+  // Đọc cờ `hoi_vai` trước khi có dòng buyer (nhánh mua mới nạp): một truy vấn
+  // nhỏ, chỉ với người chưa có hồ sơ bán.
+  // Cờ giữ NGUYÊN giá trị: `true` = đã hỏi; `"nmg"` = đã hỏi VÀ tin đầu của
+  // người này có dấu hiệu môi giới ("em là sale bên sàn…") — để lượt trả lời
+  // "có căn cần bán" vẫn nhận đúng nhãn, không rơi về chính chủ vì câu trả lời
+  // không nhắc lại chữ "môi giới" (tự kiểm 02/09).
+  let dangTraLoiHoiVai: false | true | "nmg" = false;
+  if (!sellerRow) {
+    const { data: bCu } = await client.from("buyers").select("preferences")
+      .eq("zalo_user_id", externalUserId).maybeSingle();
+    const hv = (bCu?.preferences as Record<string, unknown> | null)?.hoi_vai;
+    dangTraLoiHoiVai = hv === "nmg" ? "nmg" : !!hv;
+  }
+  const tuNhanCoBDS = wantsSell ||
+    khop(
+      /chính chủ|ký gửi|cần rao|muốn rao|đăng tin bán|đăng bán/i,
+      /chinh chu|ky gui|can rao|muon rao|dang tin ban|dang ban/,
+    ) ||
+    (!!dangTraLoiHoiVai && (
+      // "tôi có căn nhà…" / "có nhà" (đầu câu, không cần đại từ)
+      khop(
+        /(?:^|(?:tôi|em|mình|anh|chị|tui|bên mình|nhà mình|gia đình)\s*)(đang\s*)?có\s*(một\s*|1\s*)?(căn|nhà|đất|bất động sản|bđs|mặt bằng|chung cư|phòng trọ|biệt thự|lô)(?!\s*nào)/i,
+        /(?:^|(?:toi|em|minh|anh|chi|tui|ben minh|nha minh|gia dinh)\s*)(dang\s*)?co\s*(mot\s*|1\s*)?(can|nha|dat|bat dong san|bds|mat bang|chung cu|phong tro|biet thu|lo)(?!\s*nao)/,
+      ) ||
+      // Trả lời cụt: "bán", "muốn bán", "tôi bán", "bên bán", "cho thuê" — đang
+      // trả lời "mua hay bán?" thì một chữ là đủ (tự kiểm 02/09: bản cũ đòi cả
+      // câu rao nên "bán" trơ bị xếp vào hàng mua).
+      khop(
+        /^\s*(tôi|em|mình|anh|chị)?\s*(muốn|cần|bên|là bên)?\s*(bán|cho thu[êe]|rao)\b/i,
+        /^\s*(toi|em|minh|anh|chi)?\s*(muon|can|ben|la ben)?\s*(ban|cho thue|rao)\b/,
+      )
+    ));
+  // ─── NHÃN chính chủ / môi giới — gán NGAY lúc bóc tách (quyết định chủ dự
+  // án 02/09/2026: "gán nhãn khi bóc tách là họ có BĐS muốn bán"). Ai nói mình
+  // CÓ bất động sản muốn bán là CHÍNH CHỦ; chỉ khi tự xưng môi giới mới là NMG
+  // — môi giới không "có" nhà, họ bán nhà người khác, và họ hay tự xưng ("em
+  // là sale", "bán giúp chủ", "hàng ký gửi"). Không đoán từ hành vi (số tin) ở
+  // đây — đó là FR-160/OPEN-28. Nhãn quyết định mức phí (BR-05) nên phải có
+  // ngay khi hồ sơ mở: hồ sơ không nhãn là deal không phí (FR-170 f).
+  // Cố ý KHÔNG dùng "bên em có…": với người bán, "em" là bot ("bên em có khách
+  // chưa?"), bắt cụm đó là dán nhãn môi giới lên chính chủ.
+  const tinHieuMoiGioi = khop(
+    /môi giới|\bsale\b|sàn (giao dịch|bđs|bất động sản)|nhân viên kinh doanh|chuyên viên (bđs|bất động sản|kinh doanh)|bán (giúp|hộ|giùm|dùm)|chủ nhà (gửi|nhờ)|khách gửi bán|hàng ký gửi/i,
+    /moi gioi|\bsale\b|san (giao dich|bds|bat dong san)|nhan vien kinh doanh|chuyen vien (bds|bat dong san|kinh doanh)|ban (giup|ho|gium|dum)|chu nha (gui|nho)|khach gui ban|hang ky gui/,
+  );
+  const nhanNguoiBan: "ccrb" | "nmg" =
+    tinHieuMoiGioi || dangTraLoiHoiVai === "nmg" ? "nmg" : "ccrb";
+  const canMoHoSo = !sellerRow && tuNhanCoBDS && !hoiMua;
+  // Hồ sơ đã có nhưng chưa nhãn (tạo tay mà không ghi loại) → gán khi họ tự
+  // nhận hoặc tự xưng. Hàm DB chỉ nâng `unknown`, không ghi đè nhãn đã có.
+  const canGanNhan = !!sellerRow && sellerRow.seller_type === "unknown" && !hoiMua &&
+    (tuNhanCoBDS || tinHieuMoiGioi);
+  if (canMoHoSo || canGanNhan) {
+    const { data: moi, error: moiErr } = await client
+      .rpc("mo_ho_so_nguoi_ban", {
+        p_zalo_user_id: externalUserId, p_seller_type: nhanNguoiBan,
+      }).maybeSingle();
+    if (moiErr || !moi) {
+      // Mở hụt thì đi tiếp như cũ — tệ hơn nhưng không câm; và vào sổ.
+      await ghiLoi(client, "chat-reply mo_ho_so_nguoi_ban",
+        moiErr?.message ?? "không trả về dòng");
+    } else {
+      sellerMoi = !sellerRow;
+      sellerRow = moi as SellerRow;
+      nhanVuaGan = sellerRow.seller_type === "nmg" ? "nmg" : "ccrb";
+      // Báo ADMIN (quyết định 02/09 "hiện thông báo cho admin"): một việc trong
+      // hàng escalation — bridge/OA chuyển tới Zalo admin, và trang /admin đọc
+      // thẳng bảng nên thấy ngay cả khi bridge chết. KHÔNG đặt `seller_id`:
+      // cột đó nghĩa là "đích là chính chủ" (escalationText) — đặt vào là gửi
+      // thông báo nội bộ cho chính người bán.
+      const { error: nhErr } = await client.from("reminders").insert({
+        kind: "escalation", due_at: new Date().toISOString(),
+        note: `🆕 Hồ sơ người bán ${sellerMoi ? "MỞ TỪ CHAT" : "tạo tay, nay gán nhãn từ chat"} — nhãn ${
+          nhanVuaGan === "nmg" ? "MÔI GIỚI (phí 0,5%)" : "CHÍNH CHỦ (phí 1%)"
+        }${sellerRow.name ? ` · ${sellerRow.name}` : ""} · Zalo …${externalUserId.slice(-4)}. Bot đã báo họ nhãn và mức phí. Sai thì đổi ở /admin.`,
+      });
+      if (nhErr) await ghiLoi(client, "chat-reply bao admin nhan", nhErr.message);
+    }
+  }
 
   if (sellerRow && !hoiMua) {
-    const anthropicS = await anthropicClient(client);
+    // OPEN-30 → đóng: model là NGƯỜI SOẠN CÂU CHỮ, không phải điều kiện sống
+    // của nhánh. Key hỏng/hết credit thì mọi lệnh gọi bên dưới rơi về câu mẫu
+    // tất định — chủ nhà không bao giờ nhận im lặng + 500 như trước, và lỗi
+    // vào sổ qua ghiLoi (FR-152) thay vì xuyên thẳng ra ngoài không dấu vết.
+    // Nhánh mua đã làm đúng bài này từ đầu; đây là đưa nhánh bán về cùng chuẩn.
+    let anthropicS: Awaited<ReturnType<typeof anthropicClient>> | null = null;
+    try {
+      anthropicS = await anthropicClient(client);
+    } catch (e) {
+      await ghiLoi(client, "chat-reply anthropic(seller)", e);
+    }
 
     // FR-141/FR-152 — hội thoại NGƯỜI BÁN cũng phải vào sổ.
     // Trước bản này nhánh seller trả lời rồi `return` thẳng, không ghi dòng nào
@@ -273,7 +724,7 @@ Deno.serve(async (req) => {
     // sẵn kèm khoá ngoại — chỉ là chưa đường code nào ghi vào.
     // Hàm get-or-create ở migration 20260827i_hoi_thoai_nguoi_ban.sql, có
     // advisory lock như bên mua (chủ nhà gõ vụn 3 tin là 3 lượt gọi đồng thời).
-    const { data: convS } = await client
+    const { data: convS, error: convSErr } = await client
       .rpc("ensure_seller_conversation", {
         p_seller_id: sellerRow.id,
         p_channel: channel,
@@ -281,52 +732,131 @@ Deno.serve(async (req) => {
     const convSRow = convS as
       { c_id?: string; c_human_touch_at?: string | null } | null;
     const convSId = convSRow?.c_id ?? null;
+    // Hàm thiếu / mất quyền / DB nghẽn mà đi tiếp thì bot vẫn trả lời trong khi
+    // KHÔNG ghi được dòng nào: dedup 23505 tắt (Zalo gửi lại là bóc fact hai
+    // lần, câu rao gửi lại là đẻ thêm một tin rao trùng), cổng nhường sân tắt, mà
+    // HTTP vẫn 200 nên bot_health_tick không thấy gì. Nhánh mua ở đây trả 500 —
+    // nhánh bán phải cùng ngữ nghĩa (FR-152).
+    if (convSErr || !convSId) {
+      const detail = convSErr?.message ?? "không trả về c_id";
+      await ghiLoi(client, "chat-reply ensure_seller_conversation", detail);
+      return await baoHong({ error: detail }, 500, detail);
+    }
 
     // Ghi tin CHỦ NHÀ trước khi gọi model: model lỗi giữa chừng thì vẫn còn dấu
     // vết chủ nhà đã nhắn gì. Trùng `zalo_msg_id` (23505) = kênh gửi lại tin cũ
     // → đã trả lời rồi, đừng trả lời lần hai. Cùng ngữ nghĩa với nhánh mua.
-    if (convSId) {
-      const { error: msgSErr } = await client.from("messages").insert({
-        conversation_id: convSId,
-        sender: "seller",
-        body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
-        zalo_msg_id: msgId,
-      });
-      if (msgSErr?.code === "23505") {
-        return jsonResponse({ reply: null, replies: [], role: "seller", deduped: true });
-      }
-      await client.from("conversations")
-        .update({ last_message_at: new Date().toISOString() }).eq("id", convSId);
+    const { error: msgSErr } = await client.from("messages").insert({
+      conversation_id: convSId,
+      sender: "seller",
+      body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
+      zalo_msg_id: msgId,
+    });
+    if (msgSErr?.code === "23505" && !(coSo && soAttempts > 1)) {
+      // Trùng từ THỜI TRƯỚC SỔ (sổ chưa có dòng nào cho msg_id này mà messages
+      // đã có): lượt cũ đã trả lời rồi — dừng, và chốt sổ completed-rỗng để
+      // các retry sau không quay lại đây nữa.
+      return await hoanTat({ reply: null, replies: [], role: "seller", deduped: true });
     }
+    if (msgSErr && msgSErr.code !== "23505") {
+      // Mọi lỗi KHÁC 23505 (khoá ngoại, timeout, enum sai…) trước đây rơi im:
+      // bot vẫn trả lời vào một hội thoại thiếu đúng dòng chủ nhà vừa nhắn.
+      await ghiLoi(client, "chat-reply messages seller", msgSErr.message);
+      return await baoHong({ error: msgSErr.message }, 500, msgSErr.message);
+    }
+    // 23505 khi soAttempts > 1: lượt trước của CHÍNH msg_id này chết giữa chừng
+    // — tin chủ nhà đã nằm trong sổ messages rồi. Đi tiếp trả lời nốt, đừng
+    // nuốt (đây đúng là ca "AI chưa kịp chạy / Zalo chưa kịp gửi thì hỏng").
+    await client.from("conversations")
+      .update({ last_message_at: new Date().toISOString() }).eq("id", convSId);
 
     // FR-141 — người thật gõ tay trong 30 phút gần đây thì bot im.
     // Cổng này trước chỉ có ở nhánh mua, nên CTV đang thương lượng với chủ nhà
     // mà chủ nhắn tiếp là bot nhảy vào nói chen giữa cuộc.
+    // Trả về NGAY tại đây là bỏ luôn khúc bóc fact bên dưới: câu trả lời của
+    // chủ nhà không vào `listing_facts`, `info_requests` nằm `pending` mãi, và
+    // vòng drip hỏi lại đúng câu người ta vừa trả lời — CTV vào tay một cái là
+    // dữ liệu căn đó đứng hình. Nên cổng chỉ khoá ĐƯỜNG RA (traLoiSeller) và
+    // khoá lượt gọi model, không khoá đường ghi.
     const nguoiThatDangCham = convSRow?.c_human_touch_at;
-    if (nguoiThatDangCham &&
-        Date.now() - Date.parse(nguoiThatDangCham) < 30 * 60e3) {
-      return jsonResponse({ reply: null, replies: [], role: "seller", human_active: true });
-    }
+    const humanActive = !!nguoiThatDangCham &&
+      Date.now() - Date.parse(nguoiThatDangCham) < 30 * 60e3;
 
     // MỌI đường ra của nhánh này phải đi qua đây — trả lời của bot cũng là một
     // dòng trong sổ. Thêm `return jsonResponse(...)` trần ở nhánh seller là
     // thủng lại đúng chỗ vừa vá, và thủng im lặng.
+    // FR-164: lời cảm ơn cho phần SỬA FACT, gắn vào bong bóng ĐẦU của bất kỳ
+    // đường ra nào phía sau. Để ở đây (trước `traLoiSeller`) vì nhánh người bán
+    // có sáu lối thoát khác nhau — chép câu cảm ơn ra từng lối là kiểu bỏ sót
+    // đúng một chỗ rồi không ai thấy.
+    let ackSua: string | null = null;
+    // "Hiện thông báo cho người ta" (02/09): vừa gán nhãn thì nói thẳng cho họ
+    // nhãn gì, phí bao nhiêu, và cách sửa nếu sai. Đứng CUỐI loạt bong bóng
+    // (sau lời chào/câu hỏi của model) để đúng nhịp: chào trước, giấy tờ sau.
+    const cauNhan = (t: "ccrb" | "nmg") =>
+      t === "nmg"
+        ? "Em ghi nhận anh/chị là MÔI GIỚI ạ. Bên em chỉ thu phí khi giao dịch thành công: bán 0,5% giá chốt, cho thuê 3/4 tháng tiền thuê. Nếu anh/chị là chính chủ thì nhắn em để em ghi lại đúng nha."
+        : "Em ghi nhận anh/chị là CHÍNH CHỦ ạ. Bên em chỉ thu phí khi giao dịch thành công: bán 1% giá chốt, cho thuê 3/4 tháng tiền thuê. Nếu anh/chị là môi giới thì nhắn em để em ghi lại đúng nha.";
+    let thongBaoNhan: string | null = nhanVuaGan ? cauNhan(nhanVuaGan) : null;
     const traLoiSeller = async (
       replies: string[],
       extra: Record<string, unknown> = {},
     ) => {
-      const sach = replies.map((r) => r.trim()).filter(Boolean);
-      if (convSId) {
-        for (const r of sach) {
-          await client.from("messages").insert({
-            conversation_id: convSId, sender: "bot", body: r,
-          });
-        }
+      if (humanActive) {
+        // FR-141 — người thật đang cầm cuộc: không gửi, không ghi dòng bot nào.
+        return await hoanTat({
+          reply: null, replies: [], role: "seller", human_active: true, ...extra,
+        });
       }
-      return jsonResponse({
+      const sach = [...(ackSua ? [ackSua] : []), ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
+        .map((r) => r.trim()).filter(Boolean);
+      ackSua = null;
+      thongBaoNhan = null;
+      for (const r of sach) {
+        const { error: botErr } = await client.from("messages").insert({
+          conversation_id: convSId, sender: "bot", body: r,
+        });
+        // Ghi hụt câu bot vừa nói = sổ một chiều (có trả lời, không có câu hỏi).
+        // Không chặn đường trả lời chủ nhà, nhưng phải vào bot_errors (FR-152).
+        if (botErr) await ghiLoi(client, "chat-reply messages bot(seller)", botErr.message);
+      }
+      return await hoanTat({
         reply: sach.join("\n") || null, replies: sach, role: "seller", ...extra,
       });
     };
+
+    // Người bán ĐÃ có nhãn mà tự xưng ngược lại ("em là môi giới mà" khi đang
+    // CHÍNH CHỦ; "tôi là chính chủ" khi đang MÔI GIỚI) → KHÔNG tự lật (nhãn có
+    // thể do admin gán), mà báo admin xác nhận + nói với họ là đã báo. Tối đa
+    // một lần mỗi 24h cho mỗi người, kẻo mỗi câu "em là sale" là một việc.
+    const xinDoiNhan: "ccrb" | "nmg" | null = nhanVuaGan
+      ? null
+      : sellerRow.seller_type === "ccrb" && tinHieuMoiGioi
+      ? "nmg"
+      : sellerRow.seller_type === "nmg" &&
+          khop(/chính chủ|tôi là chủ|nhà của tôi|không phải môi giới/i, /chinh chu|toi la chu|nha cua toi|khong phai moi gioi/)
+      ? "ccrb"
+      : null;
+    if (xinDoiNhan) {
+      const dau = `✏️ Zalo …${externalUserId.slice(-4)}`;
+      const { count: daBao } = await client.from("reminders")
+        .select("id", { count: "exact", head: true })
+        .eq("kind", "escalation").in("status", ["pending", "sent"])
+        .ilike("note", `${dau}%`)
+        .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
+      if ((daBao ?? 0) === 0) {
+        const { error: xErr } = await client.from("reminders").insert({
+          kind: "escalation", due_at: new Date().toISOString(),
+          note: `${dau}${sellerRow.name ? ` (${sellerRow.name})` : ""} đang nhãn ${
+            sellerRow.seller_type === "nmg" ? "MÔI GIỚI" : "CHÍNH CHỦ"
+          } nhưng tự xưng ${xinDoiNhan === "nmg" ? "MÔI GIỚI" : "CHÍNH CHỦ"}: "${text.slice(0, 120)}". Xác nhận rồi đổi ở /admin.`,
+        });
+        if (xErr) await ghiLoi(client, "chat-reply xin doi nhan", xErr.message);
+      }
+      thongBaoNhan = xinDoiNhan === "nmg"
+        ? "Dạ em ghi nhận anh/chị là môi giới, em đã báo bên quản lý cập nhật lại (phí bán 0,5% khi giao dịch thành công) nha."
+        : "Dạ em ghi nhận anh/chị là chính chủ, em đã báo bên quản lý cập nhật lại (phí bán 1% khi giao dịch thành công) nha.";
+    }
 
     // NEO NGỮ CẢNH THEO CĂN, không theo "câu hỏi mới nhất" (FR-157).
     // Người bán 2-3 căn, cả hai đều đang thiếu thông tin: bot vừa hỏi căn B,
@@ -334,18 +864,20 @@ Deno.serve(async (req) => {
     // `limit 1` theo created_at là ghi thẳng dữ liệu căn A vào căn B. Sai kiểu
     // này KHÔNG bao giờ tự lộ: fact vẫn có, tin vẫn lên web, chỉ là sai nhà.
     // Thứ tự tin cậy: mã tin chủ tự nhắc > căn bot vừa hỏi > câu mới nhất.
+    // Một dãy mã duy nhất kể từ FR-158 — nhánh `CCRB-` cũ bỏ đi vì kho chưa bao
+    // giờ có mã đó (kiểm 27/08/2026: 173 tin, 100% BDS-Q5-####).
     const codeInText =
-      /((?:BDS-Q5|CCRB)-[A-Za-z0-9]+)/.exec(text)?.[1]?.toUpperCase() ?? null;
+      /(bds-q5-[a-z0-9]+)/.exec(tKD)?.[1]?.toUpperCase() ?? null;
     const { data: pendings } = await client
       .from("info_requests")
-      .select("id, listing_id, question, created_at, listings!inner(seller_id, code, location_raw)")
+      .select("id, listing_id, question, created_at, listings!inner(seller_id, code, location_raw, ward)")
       .eq("listings.seller_id", sellerRow.id)
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(20);
     type PendRow = {
       id: string; listing_id: string; question: string;
-      listings: { code: string | null; location_raw: string | null };
+      listings: { code: string | null; location_raw: string | null; ward?: string | null };
     };
     const ds = (pendings ?? []) as unknown as PendRow[];
     const pendingReq: PendRow | null =
@@ -359,46 +891,216 @@ Deno.serve(async (req) => {
     await client.from("reminders").update({ status: "cancelled" })
       .eq("seller_id", sellerRow.id).eq("kind", "promise").eq("status", "pending");
     // Seller hứa "chiều gửi ảnh…" → đặt hẹn nhắc
-    if (PROMISE_RE.test(text)) {
+    if (khop(PROMISE_RE, PROMISE_RE_KD)) {
       await client.from("reminders").insert({
         kind: "promise", seller_id: sellerRow.id,
         due_at: mapDue(text), note: text.slice(0, 200),
       });
     }
+    // (Cổng câu rao mới `wantsSell` tính ở TRÊN nhánh này — FR-159 cần nó trước
+    //  khi biết người nhắn có phải người bán hay không.)
+
+    // ─── FR-164: CHỦ NHÀ SỬA THÔNG TIN GIỮA CHỪNG.
+    // "à giá 6.8 tỷ nha em", "nhà ở phường 12 chứ không phải 8" — trước bản này
+    // KHÔNG có đường nào nhận: đang có câu hỏi chờ thì lời sửa bị ghi thành câu
+    // TRẢ LỜI cho câu hỏi đó (sai chỗ), không có thì rơi xuống nhánh chăm sóc
+    // chung rồi bay mất. Mà giá và phường là hai trong ba trường quyết định tin
+    // có được lên kệ hay không.
+    //
+    // CHỈ bắt khi câu có NHÃN tường minh ("giá …", "phường …", "… phòng ngủ",
+    // "diện tích …"). Câu trả lời cho drip thường KHÔNG lặp nhãn ("50m2", "sổ
+    // hồng") nên hai đường không giẫm chân nhau; ai có lặp nhãn đúng lúc đang
+    // được hỏi chính trường đó thì nhường hẳn cho đường drip bên dưới.
+    // Ghi qua `ghi_fact_listing` — cửa fact duy nhất; chuẩn hoá, kiểm giá trị và
+    // đo bậc ưu tiên đều nằm ở tầng DB, không chép luật lên đây.
+    const suaFacts: Array<[string, string]> = [];
+    // Vị trí các đoạn đã được nhận là "lời sửa". Bóc chúng ra khỏi câu thì phần
+    // CÒN LẠI cho biết câu này có kèm câu trả lời cho câu hỏi đang treo không.
+    const nhipSua: Array<[number, number]> = [];
+    const batSua = (
+      m: RegExpExecArray | null,
+      key: string,
+      lay: (m: RegExpExecArray) => string,
+    ) => {
+      if (!m) return;
+      suaFacts.push([key, lay(m)]);
+      nhipSua.push([m.index, m.index + m[0].length]);
+    };
+    if (!wantsSell) {
+      const mGia =
+        /gi[áa]\s*[^0-9]{0,12}?([\d][\d.,]*\s*(?:tỷ|tỉ|tỏi|triệu|ty|ti|toi|trieu|tr)(?![a-zA-ZÀ-ỹ])[^,.;\n]*)/i
+          .exec(text);
+      // Đuôi `[^,.;\n]*` giữ phần CÓ NGHĨA đi sau đơn vị ("6 tỷ 8", "5 tỷ
+      // thương lượng"), nhưng cũng vơ luôn tiểu từ cuối câu ("6.8 tỷ nha em").
+      // KHÔNG cắt ở đây: chuỗi này là bằng chứng thô, còn `price_raw` do
+      // `chuan_hoa_gia_raw()` ở tầng DB gọt — một luật, một chỗ, và mọi cửa ghi
+      // (form admin, câu trả lời drip) đều đi qua nó chứ không riêng cửa này.
+      batSua(mGia, "gia", (m) => m[1].trim());
+      batSua(/(?:phường|phuong)\s*\.?\s*(\d{1,2})\b/i.exec(text), "phuong",
+        (m) => `Phường ${m[1]}`);
+      batSua(/(\d{1,2})\s*(?:phòng ngủ|phong ngu|\bpn\b)/i.exec(text), "so_phong_ngu",
+        (m) => m[1]);
+      batSua(
+        /(?:diện tích|dien tich|\bdt\b)\s*[^0-9]{0,8}?(\d{1,4}(?:[.,]\d+)?)\s*m2?/i.exec(text),
+        "dien_tich", (m) => `${m[1]}m2`);
+    }
+    // Trường nào đang là câu hỏi chờ thì để đường drip xử — tránh vừa ghi lời
+    // sửa vừa bỏ lửng câu hỏi đang treo.
+    const suaThat = suaFacts.filter(([k]) =>
+      !(pendingReq &&
+        (k === pendingReq.question ||
+          (k === "dien_tich" && /^dien_tich/.test(pendingReq.question)))));
+
+    // Bóc các đoạn "lời sửa" ra, cắt từ PHẢI sang TRÁI để chỉ số không trượt.
+    const conLai = nhipSua.length
+      ? nhipSua.slice().sort((a, b) => b[0] - a[0])
+        .reduce((s, [i, j]) => `${s.slice(0, i)} ${s.slice(j)}`, text)
+        .replace(/\s+/g, " ").replace(/^[\s,.;:–-]+|[\s,.;:–-]+$/g, "").trim()
+      : text;
+    // Tiểu từ đứng trơ một mình KHÔNG phải câu trả lời: "à giá 6.8 tỷ nha em"
+    // bóc xong còn "à em" — đó vẫn chỉ là lời sửa. Lọc sau `boDau` nên danh
+    // sách chỉ cần bản không dấu.
+    const conChu = boDau(conLai)
+      .replace(
+        /\b(a|u|o|da|vang|em|anh|chi|nha|nhe|nhen|ha|hen|ok|oke|roi|thi|ma|voi|va|do|luon)\b/gi,
+        "",
+      )
+      .replace(/[^a-z0-9]+/gi, "");
+    // Câu VỪA sửa một trường VỪA trả lời câu hỏi đang treo. Hai việc, không
+    // được chọn một: đây chính là chỗ bản trước làm rơi câu trả lời drip.
+    const vuaTraLoiVuaSua = !!pendingReq && conChu.length >= 2;
+
+    if (suaThat.length) {
+      // Neo đúng CĂN theo cùng thứ tự tin cậy của FR-157: mã chủ tự nhắc > căn
+      // bot đang hỏi > căn của câu hỏi chờ > tin mới nhất của người này.
+      let suaId: string | null = null;
+      if (codeInText) {
+        const { data: cl } = await client.from("listings").select("id")
+          .eq("code", codeInText).eq("seller_id", sellerRow.id).maybeSingle();
+        suaId = cl?.id ?? null;
+      }
+      suaId = suaId ?? sellerRow.active_listing_id ?? pendingReq?.listing_id ?? null;
+      if (!suaId) {
+        const { data: ml } = await client.from("listings").select("id")
+          .eq("seller_id", sellerRow.id).order("created_at", { ascending: false })
+          .limit(1).maybeSingle();
+        suaId = ml?.id ?? null;
+      }
+      if (suaId) {
+        const NHAN: Record<string, string> = {
+          gia: "giá", phuong: "phường",
+          so_phong_ngu: "số phòng ngủ", dien_tich: "diện tích",
+        };
+        const daGhi: string[] = [];
+        for (const [k, v] of suaThat) {
+          const { error: fErr } = await client.rpc("ghi_fact_listing", {
+            p_listing_id: suaId, p_question: k, p_answer: v, p_source: "seller_chat",
+          });
+          if (fErr) await ghiLoi(client, `chat-reply ghi_fact_listing(${k})`, fErr.message);
+          // Giá trị đã tự mang nhãn ("Phường 3") thì đừng dán nhãn lần nữa —
+          // "phường Phường 3" đọc như máy hỏng.
+          else {
+            const nhan = NHAN[k] ?? k;
+            daGhi.push(
+              boDau(v).startsWith(boDau(nhan)) ? v : `${nhan} ${v}`,
+            );
+          }
+        }
+        if (daGhi.length) {
+          const cau =
+            `Dạ em cập nhật lại rồi ạ: ${daGhi.join(", ")}. Cảm ơn anh/chị đã báo em nha!`;
+          if (!vuaTraLoiVuaSua) {
+            return await traLoiSeller([cau], { sua_fact: suaThat.map(([k]) => k) });
+          }
+          // KHÔNG dừng ở đây. Trước bản này khối này `return` thẳng, nên câu
+          // "sổ hồng rồi em, à giá 6.8 tỷ nha" (đang treo câu hỏi pháp lý) chỉ
+          // ghi được GIÁ: câu trả lời pháp lý bay mất, `info_requests` kẹt
+          // `pending`, và nhịp drip sau lại hỏi đúng cái chủ nhà vừa trả lời —
+          // bot hỏi lại điều vừa được đáp là kiểu mất mặt FR-144 sinh ra để
+          // tránh. Gắn lời cảm ơn vào đường ra chung rồi đi tiếp xuống khối
+          // `pendingReq` để câu trả lời cũng vào sổ.
+          ackSua = cau;
+        }
+      }
+    }
+
     // Seller gửi ẢNH không kèm chữ → ghi nhận ảnh, TUYỆT ĐỐI không coi chuỗi
     // rỗng là "câu trả lời" cho câu hỏi đang chờ (từng làm mất fact pháp lý)
     if (!text && imageUrl) {
       if (pendingReq) {
-        await client.from("listing_facts").insert({
-          listing_id: pendingReq.listing_id, question: "hinh_anh",
-          answer: `[ảnh] ${imageUrl}`, source: "seller_chat",
+        // FR-164: qua cửa fact chung như mọi bằng chứng khác.
+        const { error: aErr } = await client.rpc("ghi_fact_listing", {
+          p_listing_id: pendingReq.listing_id, p_question: "hinh_anh",
+          p_answer: `[ảnh] ${imageUrl}`, p_source: "seller_chat",
         });
+        if (aErr) await ghiLoi(client, "chat-reply ghi_fact_listing(anh)", aErr.message);
       }
       const thanks =
         "Dạ em nhận được ảnh rồi ạ, em bổ sung vào tin ngay. Cảm ơn anh/chị nhiều!";
       return await traLoiSeller([thanks]);
     }
-    if (pendingReq) {
-      // Câu trả lời nào cập nhật thẳng một CỘT của listings thì ghi cột TRƯỚC,
-      // ghi fact sau: trigger đẩy-lên-web đọc được giá trị mới ngay lượt này.
-      if (/^dien_tich/.test(pendingReq.question)) {
-        const areaM = /([\d]+(?:[.,]\d+)?)\s*(?:m2|m²|mét)?/i.exec(text);
-        const areaV = areaM ? parseFloat(areaM[1].replace(",", ".")) : NaN;
-        if (Number.isFinite(areaV) && areaV > 5 && areaV < 5000) {
-          await client.from("listings").update({ area_m2: areaV }).eq("id", pendingReq.listing_id);
-        }
+    // Soát 01/09 (vai người bán): ảnh KÈM CHÚ THÍCH từng rơi mất. Khối trên chỉ
+    // bắt ảnh gửi TRẦN; còn "sổ hồng đây em" + tấm ảnh sổ thì chữ được ghi làm
+    // câu trả lời, ảnh chỉ nằm trong body tin nhắn ("[ảnh: url]") — không vào
+    // `listing_facts`, nên web không hiện, khách xin hình bot không có. Mà chủ
+    // nhà gửi ảnh thì hầu như luôn kèm một câu. Neo căn theo thứ tự FR-157.
+    // Tin rao MỚI (wantsSell) thì căn chưa tồn tại — ghi sau khi tạo, ở dưới.
+    const ghiAnhKem = async (listingId: string | null) => {
+      if (!imageUrl || !text) return;
+      let id = listingId;
+      if (!id) {
+        const { data: ml } = await client.from("listings").select("id")
+          .eq("seller_id", sellerRow!.id).order("created_at", { ascending: false })
+          .limit(1).maybeSingle();
+        id = ml?.id ?? null;
       }
-      // Tin "chưa rõ loại" vừa được khai loại → ghi vào cột, lượt sau
-      // listing_missing_facts tự đổi sang đúng bộ câu hỏi của loại đó.
-      // Dùng hàm DB (FR-150) — một bộ trích xuất chung cho trigger/backfill/chat;
-      // bản _answer nhận cả từ cụt ("đất", "trọ") vì đây là câu TRẢ LỜI đúng
-      // câu hỏi loại, không phải cả câu rao.
+      if (!id) return;
+      const { error: aErr } = await client.rpc("ghi_fact_listing", {
+        p_listing_id: id, p_question: "hinh_anh",
+        p_answer: `[ảnh] ${imageUrl}`, p_source: "seller_chat",
+      });
+      if (aErr) await ghiLoi(client, "chat-reply ghi_fact_listing(anh kem chu)", aErr.message);
+    };
+    if (!wantsSell) {
+      await ghiAnhKem(pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null);
+    }
+    // Tự kiểm 02/09: chủ nhà đang bị hỏi dở (pendingReq) mà nhắn RAO THÊM CĂN
+    // KHÁC → bản cũ ghi cả câu rao làm CÂU TRẢ LỜI cho câu hỏi đang treo, vì
+    // khối pendingReq đứng trước khối wantsSell và không hỏi gì thêm. Câu rao
+    // thật KÈM dấu hiệu "căn khác" (thêm/nữa/căn khác, hoặc phường KHÁC phường
+    // căn đang hỏi) thì đi tạo tin. "bán 5 tỷ nhà này" trả lời câu hỏi giá thì
+    // không có dấu hiệu đó → vẫn là câu trả lời, không đẻ tin trùng.
+    const raoMoiKhiDangHoi = !!pendingReq && wantsSell && (
+      khop(
+        /\b(thêm|nữa|căn khác|căn thứ|còn (một|1) căn|lô khác)\b/i,
+        /\b(them|nua|can khac|can thu|con (mot|1) can|lo khac)\b/,
+      ) ||
+      (!!wardNo && !!pendingReq.listings?.ward &&
+        `Phường ${wardNo}` !== pendingReq.listings.ward)
+    );
+    if (pendingReq && !raoMoiKhiDangHoi) {
+      // FR-164: KHÔNG còn ghi thẳng cột ở đây nữa.
+      // Trước bản này khối này tự UPDATE `area_m2` rồi `property_type` trước khi
+      // ghi fact — một nhà chức trách THỨ HAI ghi đúng những cột mà trigger fact
+      // đang ghi, và nó lách được hai luật:
+      //   * bậc ưu tiên: ghi đè bất kể cột đang do admin giữ, lại không đặt
+      //     `property_type_source` nên giá trị mới đội lốt nhãn nguồn cũ;
+      //   * luật tim-tường FR-163: `/^dien_tich/` khớp luôn `dien_tich_tim_tuong`
+      //     nên diện tích tim tường vẫn đè area_m2 của nhà phố — đúng cái chỗ
+      //     FR-163 vừa bịt ở tầng DB, thủng lại từ phía app.
+      // Nay chỉ ghi FACT; `listing_facts_sync_cols` lo chuẩn hoá, kiểm giá trị,
+      // đo bậc ưu tiên và đặt nhãn nguồn. Một luật, một chỗ.
+      //
+      // Riêng loai_bds vẫn hỏi hàm DB TRƯỚC, nhưng chỉ để quyết định có HỎI LẠI
+      // không — không ghi cột. Dùng hàm DB (FR-150/FR-164) nên câu có phủ định
+      // ("nhà phố chứ không phải chung cư") cũng đọc đúng.
+      // Câu có kèm lời sửa thì phần ĐÃ BÓC mới là câu trả lời. Giữ nguyên cả
+      // câu là nhét "giá 6.8 tỷ" vào fact pháp lý — bằng chứng sai chỗ còn tệ
+      // hơn thiếu bằng chứng, vì nó trông như chủ nhà đã xác nhận.
+      const dapAn = ackSua ? conLai : text;
       if (pendingReq.question === "loai_bds") {
-        const { data: pt } = await client.rpc("guess_property_type_answer", { p_text: text });
-        if (pt) {
-          await client.from("listings").update({ property_type: pt })
-            .eq("id", pendingReq.listing_id);
-        } else {
+        const { data: pt } = await client.rpc("guess_property_type_answer", { p_text: dapAn });
+        if (!pt) {
           // Không đọc ra loại → HỎI LẠI, giữ nguyên câu hỏi pending. TUYỆT ĐỐI
           // không ghi fact `loai_bds`: ghi xong là listing_missing_facts hết
           // hỏi, tin nằm `chua_ro` vĩnh viễn — đúng kiểu chết lặng FR-150 diệt.
@@ -408,15 +1110,23 @@ Deno.serve(async (req) => {
         }
       }
 
-      await client.from("listing_facts").insert({
-        listing_id: pendingReq.listing_id,
-        question: pendingReq.question,
-        answer: text,
-        source: "seller_chat",
+      const { error: factErr } = await client.rpc("ghi_fact_listing", {
+        p_listing_id: pendingReq.listing_id,
+        p_question: pendingReq.question,
+        p_answer: dapAn,
+        p_source: "seller_chat",
       });
+      if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
       await client.from("info_requests").update({
-        status: "answered", answer: text, answered_at: new Date().toISOString(),
+        status: "answered", answer: dapAn, answered_at: new Date().toISOString(),
       }).eq("id", pendingReq.id);
+
+      // Fact đã vào sổ — từ đây trở xuống là phần "nói". Người thật đang cầm
+      // cuộc thì dừng: không gọi model, và KHÔNG mở câu hỏi pending mới (bot
+      // có hỏi đâu mà chờ trả lời). Cron drip hỏi tiếp khi CTV buông tay.
+      if (humanActive) {
+        return await traLoiSeller([], { saved_fact: pendingReq.question });
+      }
 
       // FR-144: tin ĐÃ ĐỦ ĐĂNG (auto-publish xong, hết cho_thong_tin) → NGỪNG
       // hỏi drip, để yên; khách quan tâm hỏi thêm thì FR-140 tự mở lại vòng hỏi.
@@ -452,56 +1162,118 @@ Deno.serve(async (req) => {
         : published
         ? `Người bán vừa trả lời: "${text}". Tin #${lstNow?.code ?? ""} giờ đã đủ thông tin và ĐÃ LÊN WEB nhadat.cc. Soạn MỘT tin NGẮN cảm ơn + báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG hỏi thêm thông tin nào nữa.`
         : `Người bán vừa trả lời câu hỏi cuối: "${text}". Soạn MỘT tin NGẮN cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem anh chị còn muốn bổ sung gì không.`;
-      const r2 = await anthropicS.messages.create({
-        model: MODEL, max_tokens: 512,
-        output_config: { effort: "low" },
-        system: [{
-          type: "text",
-          text: TONE + "\n\n" + SELLER_SCRIPT,
-          cache_control: { type: "ephemeral" },
-        }],
-        messages: [{ role: "user", content: prompt }],
-      });
-      const sellerReply = r2.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+      // OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định — vòng drip không
+      // đứng lại chờ model sống. Câu mẫu CÓ hỏi thật (kèm neo căn) nên mở
+      // info_request bên dưới vẫn đúng luật "không mở khi chưa hỏi được".
+      let sellerReply: string | null = null;
+      if (anthropicS) {
+        try {
+          const r2 = await anthropicS.messages.create({
+            model: MODEL, max_tokens: 512,
+            output_config: { effort: "low" },
+            system: [{
+              type: "text",
+              text: TONE + "\n\n" + SELLER_SCRIPT,
+              cache_control: { type: "ephemeral" },
+            }],
+            messages: [{ role: "user", content: prompt }],
+          });
+          sellerReply = r2.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+          await doTien(client, r2.usage);
+        } catch (e) {
+          await ghiLoi(client, "chat-reply model r2(seller)", e);
+        }
+      }
+      if (!sellerReply) {
+        sellerReply = next
+          ? `Dạ em ghi nhận rồi ạ. Anh/chị cho em xin thêm ${FACT_LABELS[next.fact_key] ?? next.fact_key}${neo ? ` của căn ${neo}` : ""} nha?`
+          : published
+          ? `Dạ em cảm ơn anh/chị! Tin ${lstNow?.code ? `#${lstNow.code} ` : ""}đã đủ thông tin và lên web rồi ạ, có khách quan tâm là em báo liền.`
+          : `Dạ em cảm ơn anh/chị, tin rao giờ đã đầy đủ thông tin. Có khách quan tâm là em báo anh/chị ngay ạ.`;
+      }
 
       if (next && sellerReply) {
         await client.from("info_requests").insert({
           listing_id: pendingReq.listing_id, question: next.fact_key, status: "pending",
         });
       }
-      return await traLoiSeller(sellerReply ? [sellerReply] : [], {
+      return await traLoiSeller([sellerReply], {
         saved_fact: pendingReq.question,
       });
     }
-    // FR-144: chính chủ nhắn CÂU RAO MỚI (bán/cho thuê + loại BĐS, thường kèm
-    // giá) → tạo tin nháp cho_thong_tin ngay + mở vòng hỏi nhỏ giọt, hỏi tới
-    // khi đủ-để-đăng (giá + diện tích + phường, trigger FR-139 tự đẩy lên web)
-    // thì nghỉ; khách quan tâm hỏi thêm thì FR-140 mở lại vòng hỏi.
-    // \b cuối cụm chặn "cho thuê": "ê" ngoài ASCII nên sau nó không bao giờ là biên
-    // từ → MỌI câu rao CHO THUÊ từ trước tới giờ đều rơi âm thầm, không tạo tin.
-    const wantsSell = (/\b(bán|rao)\b|cho thu[êe]/i.test(text)) &&
-      /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b)/i.test(text) &&
-      /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i.test(text);
+    // FR-144: chính chủ nhắn CÂU RAO MỚI → tạo tin nháp cho_thong_tin ngay + mở
+    // vòng hỏi nhỏ giọt, hỏi tới khi đủ-để-đăng (giá + diện tích + phường) thì
+    // nghỉ; khách quan tâm hỏi thêm thì FR-140 mở lại vòng hỏi.
+    // (Cổng `wantsSell` tính ở trên — FR-164 cần nó sớm để bộ bắt-lời-sửa không
+    //  nuốt mất câu rao mới.)
     if (wantsSell) {
       // Loại BĐS KHÔNG hỏi: trigger trg_listings_fill_property_type đọc chính
       // câu rao (description) mà điền (FR-150). Chỉ tin nào câu chữ không đủ
       // để đoán mới nằm lại 'chua_ro' và bị hỏi ở vòng drip.
       // Cùng một mẫu với cổng wantsSell ở trên — lệch một chữ là câu rao lọt
       // cổng "cho thue" nhưng bị ghi thành tin BÁN.
-      const sDeal = dealCol(/cho thu[êe]/i.test(text) ? "thue" : "ban");
-      const wardM = /ph(?:ường|uong)\s*\.?\s*(\d{1,2})/i.exec(text);
+      const sDeal = dealCol(/cho thue/.test(tKD) ? "thue" : "ban");
+      // (wardNo — số phường trong câu rao — tính ở trên, trước nhánh bán.)
       // "tr" viết tắt của triệu, nhưng \b sau "tr" khớp luôn "TRệt" (dấu tiếng
       // Việt không phải ký tự \w) — từng làm price_raw thành "1 trệt 2 lầu".
       // Lookahead chặn mọi chữ cái có dấu đứng sau.
-      const priceM = /([\d][\d.,]*\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))[^,.;\n]*)/i.exec(text);
-      const newCode = `CCRB-${Date.now().toString(36).toUpperCase()}`;
-      const { data: newLst } = await client.from("listings").insert({
-        code: newCode, seller_id: sellerRow.id, deal: sDeal, district: "Quận 5",
-        ward: wardM ? `Phường ${wardM[1]}` : null,
+      // price_raw cắt từ text GỐC (giữ nguyên chữ người gõ); tin không dấu thì
+      // text gốc vốn đã ascii nên bản nào cũng là chữ của họ. parse_vnd phía DB
+      // đã nuốt được "ty"/"trieu" (kiểm 27/08).
+      // Hai bộ cùng chạy trên `text` GỐC (giữ nguyên chữ người gõ cho
+      // `price_raw`), thử bộ có dấu trước rồi mới tới bộ không dấu. Chọn MỘT bộ
+      // theo `coDauTin` như bản trước là hụt đơn vị gõ lẫn: "giá 5 ti" có dấu ở
+      // "giá" nên đi bộ có dấu, mà bộ đó có "tỉ" chứ không có "ti" trần.
+      // Đuôi `[^,.;\n]*` giữ phần lẻ ("5 tỷ 8", "5 tỷ thương lượng") nhưng
+      // từng vơ luôn diện tích đứng sau ("5 tỷ 8 50m2" → price_raw dính "50m2");
+      // `chuan_hoa_gia_raw` phía DB chỉ gọt tiểu từ, không gọt "50m2". Dừng
+      // TRƯỚC một cụm số+m2.
+      const DUOI_GIA = "(?:(?!\\s*\\d+(?:[.,]\\d+)?\\s*m2)[^,.;\\n])*";
+      const priceM =
+        new RegExp(`([\\d][\\d.,]*\\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))${DUOI_GIA})`, "i").exec(text) ??
+          new RegExp(`([\\d][\\d.,]*\\s*(?:ty|ti|toi|trieu|tr(?![a-zA-Z]))${DUOI_GIA})`, "i").exec(text);
+      // Diện tích + số phòng ngủ có sẵn trong câu rao thì ghi luôn qua cửa fact
+      // (FR-164) sau khi tạo tin — không thì vòng nhỏ giọt hỏi lại đúng cái chủ
+      // nhà vừa nói ("nhà 50m2" rồi bot hỏi "diện tích bao nhiêu ạ?"), kiểu mất
+      // mặt FR-144 sinh ra để tránh. Giá/phường vào cột ngay lúc insert như cũ.
+      const areaM = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(tKD);
+      const pnM = /(\d{1,2})\s*(?:phong ngu|\bpn\b)/.exec(tKD);
+      // FR-158: mã do trigger `trg_listings_fill_code` cấp, nối tiếp đúng dãy
+      // BDS-Q5-#### mà admin và web đang dùng. Đưa `code: null` xuống là cố ý —
+      // bộ đúc mã `CCRB-<base36>` cũ ở đây là dãy thứ hai không ai cần, lại
+      // không khoá gì nên hai chủ nhà rao cùng lúc là có cửa trùng mã.
+      const { data: newLst, error: newLstErr } = await client.from("listings").insert({
+        code: null, seller_id: sellerRow.id, deal: sDeal, district: "Quận 5",
+        ward: wardNo ? `Phường ${wardNo}` : null,
         description: text, price_raw: priceM?.[1]?.trim() ?? null,
         property_type: "chua_ro", status: "cho_thong_tin",
       }).select("id, code").single();
+      // Tạo tin hỏng mà đi tiếp là NUỐT MẤT CÂU RAO: chủ nhà nhận một câu chăm
+      // sóc chung chung ở nhánh dưới, tưởng đã rao xong, còn kho thì không có
+      // gì. Vào sổ rồi mới đi tiếp (FR-152).
+      if (newLstErr) {
+        await ghiLoi(client, "chat-reply tao tin rao", newLstErr.message);
+      }
       if (newLst) {
+        // Diện tích / phòng ngủ đã nói trong câu rao → vào fact ngay, trước khi
+        // hỏi câu nhỏ giọt đầu tiên (view thiếu-thông-tin đọc cột đã sync).
+        for (const [k, v] of [
+          ["dien_tich", areaM ? `${areaM[1].replace(",", ".")}m2` : null],
+          ["so_phong_ngu", pnM ? pnM[1] : null],
+        ] as Array<[string, string | null]>) {
+          if (!v) continue;
+          const { error: fErr } = await client.rpc("ghi_fact_listing", {
+            p_listing_id: newLst.id, p_question: k, p_answer: v, p_source: "seller_chat",
+          });
+          if (fErr) await ghiLoi(client, `chat-reply ghi_fact_listing(rao:${k})`, fErr.message);
+        }
+        // Ảnh gửi kèm câu rao → là ảnh của chính căn vừa tạo.
+        await ghiAnhKem(newLst.id);
+        // Tin nháp vẫn phải tạo (không được đánh rơi câu rao), nhưng người thật
+        // đang cầm cuộc thì không hỏi, không nói.
+        if (humanActive) {
+          return await traLoiSeller([], { listing_code: newLst.code });
+        }
         const { data: firstFacts } = await client.from("listing_missing_facts")
           .select("fact_key").eq("listing_id", newLst.id).order("priority").limit(1);
         const firstKey = firstFacts?.[0]?.fact_key ?? null;
@@ -510,31 +1282,49 @@ Deno.serve(async (req) => {
             listing_id: newLst.id, question: firstKey, status: "pending",
           });
         }
-        const r1 = await anthropicS.messages.create({
-          model: MODEL, max_tokens: 512,
-          output_config: { effort: "low" },
-          system: [{
-            type: "text",
-            text: TONE + "\n\n" + SELLER_SCRIPT,
-            cache_control: { type: "ephemeral" },
-          }],
-          messages: [{
-            role: "user",
-            content:
-              `Chính chủ vừa nhắn rao: "${text}". Em đã tạo tin #${newLst.code}. ` +
-              `Soạn MỘT tin NGẮN (~35 từ): khen một điểm mạnh thật của BĐS + báo em đã ghi nhận tin rao` +
-              (firstKey
-                ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey}. Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
-                : ` và sẽ đăng lên web ngay.`),
-          }],
-        });
-        const raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ??
-          `Dạ em nhận tin rao rồi ạ, em tạo tin #${newLst.code} và sẽ hỏi thêm vài thông tin để đăng cho đẹp nha.`;
+        // OPEN-30: tin rao ĐÃ tạo xong (mã đã cấp) — model chỉ soạn lời chào.
+        // Model hỏng thì chào bằng câu mẫu, kèm luôn câu hỏi đầu nếu có.
+        let raoReply: string | null = null;
+        if (anthropicS) {
+          try {
+            const r1 = await anthropicS.messages.create({
+              model: MODEL, max_tokens: 512,
+              output_config: { effort: "low" },
+              system: [{
+                type: "text",
+                text: TONE + "\n\n" + SELLER_SCRIPT,
+                cache_control: { type: "ephemeral" },
+              }],
+              messages: [{
+                role: "user",
+                content:
+                  `Chính chủ vừa nhắn rao: "${text}". Em đã tạo tin #${newLst.code}. ` +
+                  `Soạn MỘT tin NGẮN (~35 từ): khen một điểm mạnh thật của BĐS + báo em đã ghi nhận tin rao` +
+                  (firstKey
+                    ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey}. Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
+                    : ` và sẽ đăng lên web ngay.`),
+              }],
+            });
+            raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+            await doTien(client, r1.usage);
+          } catch (e) {
+            await ghiLoi(client, "chat-reply model r1(seller)", e);
+          }
+        }
+        if (!raoReply) {
+          raoReply = `Dạ em nhận tin rao rồi ạ, em tạo tin #${newLst.code}.` +
+            (firstKey
+              ? ` Anh/chị cho em xin thêm ${FACT_LABELS[firstKey] ?? firstKey} để em đăng cho đẹp nha?`
+              : ` Em sẽ đăng lên web ngay ạ.`);
+        }
         return await traLoiSeller([raoReply], { listing_code: newLst.code });
       }
     }
     // Seller nhắn nhưng KHÔNG có câu chờ → vẫn trả lời ĐÚNG VAI người bán
     // (trước đây rơi xuống luồng mua → bot hỏi "anh tìm khu nào" với chính chủ nhà)
+    // Không có câu chờ mà người thật đang cầm cuộc → im, khỏi tốn lượt model.
+    if (humanActive) return await traLoiSeller([]);
+
     const { data: sellerLst } = await client.from("listings")
       .select("code, location_raw, ward, price_raw")
       .eq("seller_id", sellerRow.id)
@@ -542,25 +1332,40 @@ Deno.serve(async (req) => {
     const lstLines = (sellerLst ?? [])
       .map((l) => `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? "?"}`)
       .join("\n");
-    const r3 = await anthropicS.messages.create({
-      model: MODEL, max_tokens: 512,
-      output_config: { effort: "low" },
-      system: [{
-        type: "text",
-        text: TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + FEES,
-        cache_control: { type: "ephemeral" },
-      }],
-      messages: [{
-        role: "user",
-        content:
-          `NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
-          `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN — tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
-          `Không bịa tình trạng tin/lượt khách quan tâm; điều chưa nắm thì nói "để em kiểm tra rồi báo lại anh/chị liền".`,
-      }],
-    });
-    const sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ??
-      "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha.";
-    return await traLoiSeller([sReply]);
+    // OPEN-30: chăm sóc chung — model hỏng thì ghi nhận bằng câu mẫu.
+    let sReply: string | null = null;
+    if (anthropicS) {
+      try {
+        const r3 = await anthropicS.messages.create({
+          model: MODEL, max_tokens: 512,
+          output_config: { effort: "low" },
+          system: [{
+            type: "text",
+            text: TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + FEES,
+            cache_control: { type: "ephemeral" },
+          }],
+          messages: [{
+            role: "user",
+            content:
+              `NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
+              (sellerMoi
+                ? `Người này VỪA cho biết đang có bất động sản muốn rao nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN chào + mời họ nhắn địa chỉ (đường/phường), giá mong muốn và diện tích để em lên tin — KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
+                : `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN — tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
+                  `Không bịa tình trạng tin/lượt khách quan tâm; điều chưa nắm thì nói "để em kiểm tra rồi báo lại anh/chị liền".`),
+          }],
+        });
+        sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+        await doTien(client, r3.usage);
+      } catch (e) {
+        await ghiLoi(client, "chat-reply model r3(seller)", e);
+      }
+    }
+    return await traLoiSeller([
+      sReply ??
+        (sellerMoi
+          ? "Dạ em chào anh/chị! Anh/chị nhắn giúp em địa chỉ (đường/phường), giá mong muốn và diện tích căn nhà để em lên tin nha."
+          : "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha."),
+    ]);
   }
 
   // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130).
@@ -572,7 +1377,8 @@ Deno.serve(async (req) => {
       p_channel: channel,
     }).single();
   if (bcErr || !bc) {
-    return jsonResponse({ error: bcErr?.message ?? "ensure_buyer_conversation" }, 500);
+    const detail = bcErr?.message ?? "ensure_buyer_conversation";
+    return await baoHong({ error: detail }, 500, detail);
   }
   const buyer = { id: bc.b_id as string, name: bc.b_name as string | null };
   const convId = bc.c_id as string;
@@ -583,13 +1389,23 @@ Deno.serve(async (req) => {
     conversation_id: convId, sender: "buyer",
     body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
     zalo_msg_id: msgId,
-  }).select("id").single();
-  if (msgErr?.code === "23505") {
-    // Retry của kênh (cùng msg_id) — đã trả lời rồi, đừng trả lời lần hai
-    return jsonResponse({ reply: null, replies: [], deduped: true });
+  }).select("id, seq").single();
+  if (msgErr?.code === "23505" && !(coSo && soAttempts > 1)) {
+    // Trùng từ THỜI TRƯỚC SỔ — lượt cũ đã trả lời rồi, đừng trả lời lần hai.
+    // Chốt sổ completed-rỗng để retry sau không quay lại đây.
+    return await hoanTat({ reply: null, replies: [], deduped: true });
   }
-  if (msgErr) {
-    return jsonResponse({ error: msgErr.message }, 500);
+  if (msgErr && msgErr.code !== "23505") {
+    return await baoHong({ error: msgErr.message }, 500, msgErr.message);
+  }
+  // 23505 khi soAttempts > 1: lượt trước của chính msg_id này chết giữa chừng,
+  // tin khách ĐÃ nằm trong messages — lấy lại seq dòng cũ (check nhường-lượt
+  // FR-131 bên dưới cần nó) rồi đi tiếp trả lời nốt, đừng nuốt.
+  let insMsgSeq = insMsg?.seq ?? null;
+  if (insMsgSeq == null && msgId) {
+    const { data: cu } = await client.from("messages").select("seq")
+      .eq("zalo_msg_id", msgId).maybeSingle();
+    insMsgSeq = cu?.seq ?? null;
   }
   await client.from("conversations")
     .update({ last_message_at: new Date().toISOString() }).eq("id", convId);
@@ -600,8 +1416,9 @@ Deno.serve(async (req) => {
     .select("ctv_id, human_touch_at").eq("id", convId).maybeSingle();
   if (convRow?.human_touch_at &&
       Date.now() - Date.parse(convRow.human_touch_at as string) < 30 * 60e3) {
-    return jsonResponse({ reply: null, replies: [], human_active: true });
+    return await hoanTat({ reply: null, replies: [], human_active: true });
   }
+
 
   // FR-146: trần 100 tin/24h mỗi khách. Chống người ta lấy anon key gọi thẳng
   // function đốt tiền model; khách thật nhắn nhiều đến mức này thì cũng nên có
@@ -618,7 +1435,7 @@ Deno.serve(async (req) => {
       .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
     if ((quotaEsc ?? 0) > 0) {
       // đã báo rồi → im tới hết ngày, không tốn thêm lượt model nào
-      return jsonResponse({ reply: null, replies: [], rate_limited: true });
+      return await hoanTat({ reply: null, replies: [], rate_limited: true });
     }
     const capMsg =
       "Dạ hôm nay mình trao đổi nhiều rồi, để em nhờ anh/chị phụ trách nhắn lại trực tiếp cho mình nha!";
@@ -634,25 +1451,73 @@ Deno.serve(async (req) => {
       due_at: new Date().toISOString(),
       note: `khách nhắn hơn ${DAILY_LIMIT} tin trong 24h, bot tạm dừng trả lời. Anh/chị vào xem giúp`,
     });
-    return jsonResponse({ reply: capMsg, replies: [capMsg], rate_limited: true });
+    return await hoanTat({ reply: capMsg, replies: [capMsg], rate_limited: true });
   }
 
   // FR-131: KHÔNG delay nhân tạo (quyết định chủ dự án 25/08 — "càng nhanh càng
   // tốt"). Chỉ giữ check nhường-lượt: tin mới hơn của cùng khách đã vào trong
   // lúc xử lý thì lượt này im, lượt của tin cuối trả lời trên ngữ cảnh gộp.
+  // "Tin mới nhất" xếp theo `seq` (identity DB cấp, không bao giờ hoà) chứ
+  // không theo `created_at` — hai tin cùng mili-giây là created_at bốc thăm.
+  // Lượt này vẫn xử lý ĐÚNG tin của nó (insMsgSeq), không lấy "tin mới nhất"
+  // làm danh tính; câu này chỉ quyết định NHƯỜNG hay không.
   const { data: newest } = await client
-    .from("messages").select("id")
+    .from("messages").select("seq")
     .eq("conversation_id", convId).eq("sender", "buyer")
-    .order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (newest && insMsg && newest.id !== insMsg.id) {
-    return jsonResponse({ reply: null, replies: [], superseded: true });
+    .order("seq", { ascending: false }).limit(1).maybeSingle();
+  if (newest && insMsgSeq != null && (newest.seq as number) > insMsgSeq) {
+    // Completed-rỗng là ĐÚNG cả với sổ: tin này được lượt của tin cuối trả lời
+    // trên ngữ cảnh gộp — phát lại rỗng, không phát lại đôi.
+    return await hoanTat({ reply: null, replies: [], superseded: true });
+  }
+
+  // ─── FR-159 (nửa 2/2): người LẠ nhắn câu KHÔNG rõ vai → HỎI, không đoán.
+  // "Dạ em chào anh" / "nhà phường 4 tầm 5 tỷ" — câu đầu tiên của một người
+  // chưa có hồ sơ nào có thể là người mua lẫn người bán. FR-159: đoán nhầm
+  // người mua thành người bán là lượt khó chịu, chiều ngược lại chỉ tốn một câu
+  // hỏi thừa → HỎI đúng một lần, không gọi model (đỡ một lượt tiền), mặc định
+  // NGƯỜI MUA. Câu trả lời tự nhận có BĐS thì nửa 1/2 ở trên bắt ở lượt kế
+  // (cờ `hoi_vai` mở đúng vế "tôi có căn nhà"); còn lại ở hàng người mua.
+  // KHÔNG hỏi khi đã rõ: đang hỏi mua, nhắc mã căn (từ web sang), gửi ảnh (để
+  // model đọc ảnh), hay đã có hồ sơ nhu cầu. Chỉ hỏi ở TIN ĐẦU TIÊN của hội
+  // thoại, và đứng SAU kiểm tra nhường-lượt: khách gõ "chào em" rồi "tôi muốn
+  // mua nhà" liền tay thì lượt đầu nhường, không hỏi vai thừa.
+  const nhacMaCan = [...textOrTag.matchAll(CODE_RE)].length > 0;
+  const daCoHoSo = BUYER_PROFILE_FIELDS.some(([k]) => prefs[k] != null && prefs[k] !== "");
+  if (!sellerRow && !prefs.hoi_vai && !hoiMua && !nhacMaCan && !imageUrl && !daCoHoSo) {
+    const { count: tinTruoc } = await client.from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", convId).eq("sender", "buyer");
+    if ((tinTruoc ?? 0) <= 1) {
+      const cauHoiVai =
+        "Dạ em chào anh/chị, em là Thái bên nhadat.cc ạ. Anh/chị đang muốn tìm mua/thuê nhà, hay đang có bất động sản cần rao ạ?";
+      const { error: hvErr } = await client.from("messages").insert({
+        conversation_id: convId, sender: "bot", body: cauHoiVai,
+      });
+      if (hvErr) await ghiLoi(client, "chat-reply messages hoi_vai", hvErr.message);
+      const { error: pErr } = await client
+        .rpc("merge_buyer_prefs", { p_buyer_id: buyer.id, p_delta: { hoi_vai: tinHieuMoiGioi ? "nmg" : true } });
+      if (pErr) await ghiLoi(client, "chat-reply merge_buyer_prefs(hoi_vai)", pErr.message);
+      return await hoanTat({
+        reply: cauHoiVai, replies: [cauHoiVai], conversation_id: convId, hoi_vai: true,
+      });
+    }
+  }
+  if (prefs.hoi_vai) {
+    // Đã hỏi; câu này không tự nhận có BĐS (nửa 1/2 đã xét, không mở hồ sơ bán)
+    // → ở lại hàng người mua, xoá cờ để không hỏi lại. Model đọc câu trả lời
+    // qua lịch sử hội thoại (câu hỏi vai đã nằm trong `messages`).
+    const { error: pErr } = await client
+      .rpc("merge_buyer_prefs", { p_buyer_id: buyer.id, p_delta: { hoi_vai: null } });
+    if (pErr) await ghiLoi(client, "chat-reply merge_buyer_prefs(xoa hoi_vai)", pErr.message);
+    delete prefs.hoi_vai;
   }
 
   // Buyer quay lại nhắn → hủy nhắc-lời-hứa + follow-up đang chờ (FR-133/FR-32)
   await client.from("reminders").update({ status: "cancelled" })
     .eq("buyer_id", buyer.id).in("kind", ["promise", "followup"]).eq("status", "pending");
 
-  // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN, cận trên giá (SRS-4.5)
+  // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN, cận trên giá (SRS-5.2)
   let khoQ = client
     .from("listings")
     .select("code, ward, location_raw, price_raw, area_m2, bedrooms")
@@ -678,7 +1543,7 @@ Deno.serve(async (req) => {
 
   const [{ data: history }, { data: listings }, { data: partnerProj }, { data: matchedProj }, { data: askedListings }, { data: askedPhotos }] = await Promise.all([
     client.from("messages").select("sender, body")
-      .eq("conversation_id", convId).order("created_at", { ascending: false }).limit(12),
+      .eq("conversation_id", convId).order("seq", { ascending: false }).limit(12),
     khoQ,
     // FR-132: dự án nhà mình phân phối trực tiếp — luôn đứng đầu khối dự án
     client.from("projects")
@@ -686,11 +1551,21 @@ Deno.serve(async (req) => {
       .eq("is_partner", true).order("priority").limit(1),
     // Khách nhắc tên dự án nào trong kho (mogi/aond) thì nạp kiến thức dự án đó
     client.rpc("match_projects", { p_text: text }),
-    // Căn khách đang nhắc tới — kèm facts đã xác minh từ chủ nhà (FR-29)
+    // Căn khách đang nhắc tới — kèm facts đã xác minh từ chủ nhà (FR-29).
+    // Soát 01/09 (vai người mua đã nhắm căn): bản cũ KHÔNG lọc trạng thái, mà
+    // mã tin là dãy đếm BDS-Q5-#### đoán được — gõ một mã bất kỳ là bot đọc ra
+    // địa chỉ, giá, diện tích, fact đã xác minh và URL ảnh của tin CHƯA ĐĂNG
+    // (`cho_thong_tin`) lẫn tin chủ nhà ĐÃ GỠ (`an`). Web đã chặn đúng những
+    // tin này với người lạ từ FR-167c; bot phải cùng ranh giới. Tin chưa đăng
+    // thì không ai có thể biết mã hợp lệ → coi như không có. Tin đã gỡ vẫn nạp
+    // nhưng CHỈ mã + trạng thái (khối askedBlock cắt chi tiết), để bot nói
+    // thật "căn đó đã gỡ" thay vì "em không thấy mã này".
     mentioned.length
       ? client.from("listings")
         .select("code, status, ward, location_raw, price_raw, area_m2, bedrooms, listing_facts(question, answer)")
-        .in("code", mentioned).limit(3)
+        .in("code", mentioned)
+        .in("status", ["dang_ban", "dang_quan_tam", "da_chot", "an"])
+        .limit(3)
       : Promise.resolve({ data: [] as never[] }),
     // FR-148: kho ảnh thật up theo MÃ tin (bucket listing-photos/<mã>/…)
     mentioned.length
@@ -727,14 +1602,19 @@ Deno.serve(async (req) => {
   for (const p of (askedPhotos ?? []) as Array<{ code: string; url: string }>) {
     (photoByCode[p.code] ??= []).push(p.url);
   }
-  const photosOf = (l: Asked): string[] => [
-    ...(photoByCode[l.code] ?? []),
-    ...(l.listing_facts ?? [])
-      .filter((f) => f.question === "hinh_anh")
-      .flatMap((f) => f.answer.match(PHOTO_URL_RE) ?? []),
-  ];
+  const photosOf = (l: Asked): string[] =>
+    l.status === "an" ? [] : [
+      ...(photoByCode[l.code] ?? []),
+      ...(l.listing_facts ?? [])
+        .filter((f) => f.question === "hinh_anh")
+        .flatMap((f) => f.answer.match(PHOTO_URL_RE) ?? []),
+    ];
   const askedBlock = ((askedListings ?? []) as Asked[])
     .map((l) => {
+      // Tin chủ nhà đã gỡ: chỉ nói trạng thái, KHÔNG lộ địa chỉ/giá/ảnh.
+      if (l.status === "an") {
+        return `#${l.code} · ${STATUS_VI.an} — KHÔNG nêu địa chỉ hay giá của căn này, báo thật là chủ nhà đã gỡ rồi gợi ý căn tương tự trong KHO`;
+      }
       const facts = (l.listing_facts ?? [])
         .filter((f) => f.question !== "hinh_anh")
         .map((f) => `${f.question}: ${f.answer}`).join("; ");
@@ -762,10 +1642,14 @@ Deno.serve(async (req) => {
   const partner = (partnerProj ?? [])[0] as Proj | undefined;
   const matched = ((matchedProj ?? []) as Proj[])
     .filter((m) => m.name !== partner?.name);
-  const duanBlock = [
-    ...(partner ? [projLine(partner, true)] : []),
-    ...matched.map((m) => projLine(m, true)),
-  ].join("\n");
+  // Dự án nhà mình đứng RIÊNG khỏi khối kho: nó giống hệt nhau cho mọi khách và
+  // gần như không đổi, nên chỗ của nó là trong phần được nhớ tạm (rẻ 1/10), chứ
+  // không phải nằm chung với khối kho biến động theo từng hồ sơ. Riêng thông số
+  // + mẫu căn đã là 1.350 ký tự, gửi đủ giá mỗi lượt cho cả khách chưa hỏi tới
+  // dự án là phí. Xem bot/README §01/09.
+  const duanNhaMinh = partner ? projLine(partner, true) : "";
+  // Dự án khách vừa nhắc tên thì mới nạp — biến động, phải nằm sau điểm nhớ tạm.
+  const duanBlock = matched.map((m) => projLine(m, true)).join("\n");
 
   // Chống hỏi cung: 2 tin gần nhất của bot đều là câu hỏi → lượt này đưa giá trị
   const botMsgs = ordered.filter((m) => m.sender === "bot");
@@ -802,13 +1686,37 @@ Deno.serve(async (req) => {
       // effort low: nhanh hơn rõ rệt, few-shot + luật đã gánh chất lượng (nudge
       // chạy low được chấm 4.5-4.7/5); cần sâu hơn thì nâng lại "medium"
       output_config: { effort: "low", format: zodOutputFormat(BuyerTurn) },
-      // Tách 2 khối: khối LUẬT ổn định được cache (đỡ ~7KB prefill mỗi lượt);
-      // khối KHO biến động theo hồ sơ nằm SAU điểm cache nên không phá cache.
+      // Tách 2 khối theo GIÁ, không theo chủ đề: mọi thứ giống hệt nhau cho mọi
+      // khách nằm trước điểm nhớ tạm (đọc lại chỉ tốn 1/10 giá); mọi thứ đổi
+      // theo hồ sơ từng khách nằm sau (phải trả đủ giá dù có cache hay không).
+      //
+      // TTL 1 GIỜ, KHÔNG PHẢI 5 PHÚT MẶC ĐỊNH — và đây là lựa chọn theo LƯU
+      // LƯỢNG, phải xem lại khi lưu lượng đổi. Khối tĩnh ~5.800 token. Nạp lại
+      // tốn 1,25 lần giá gốc ở nhịp 5 phút, 2 lần ở nhịp 1 giờ; đọc lại tốn
+      // 1/10. Đồng hồ đếm từ lúc BẮT ĐẦU mỗi lượt và mỗi lần đọc lại đặt lại
+      // đồng hồ, nên cái quyết định là KHOẢNG CÁCH giữa hai lượt bất kỳ dùng
+      // chung khối này — của mọi khách cộng lại, không phải của riêng một khách.
+      //
+      //   cách nhau < 5 phút  → để 5 phút: lượt nào cũng làm nóng lại, rẻ nhất
+      //   cách nhau 5–60 phút → để 1 giờ: đây là khoảng DUY NHẤT bù nổi giá nạp
+      //   cách nhau > 1 giờ   → cả hai đều không cứu; chịu lượt nguội
+      //
+      // Hôm nay khách thưa, khoảng cách rơi vào 5–60 phút. Ở nhịp đó để 5 phút
+      // thì lượt nào cũng trượt, mà một lượt trượt (1,25) còn ĐẮT HƠN không
+      // dùng nhớ tạm (1,0) — mất tiền để không được gì.
+      //
+      // ĐỔI NGƯỢC LẠI VỀ 5 PHÚT khi vượt ~12 lượt trả lời/giờ (cỡ 10 khách/ngày
+      // trong giờ làm). Lúc đó lưu lượng tự giữ nóng và giá nạp gấp đôi thành
+      // lỗ thuần. Đọc số thật ở cache_read_input_tokens trong usage.
       system: [{
         type: "text",
         text: TONE + "\n\n" + HUMAN + "\n\n" + FEES + "\n\n" + SLANG + "\n\n" + AGREE + "\n\n" + FEWSHOT +
-          "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO ở khối sau, không bịa.",
-        cache_control: { type: "ephemeral" },
+          "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO ở khối sau, không bịa." +
+          (duanNhaMinh
+            ? "\n\nDỰ ÁN NHÀ MÌNH ĐANG PHÂN PHỐI TRỰC TIẾP (kiến thức chung ĐÃ XÁC THỰC — trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
+              duanNhaMinh
+            : ""),
+        cache_control: { type: "ephemeral", ttl: "1h" },
       }, {
         type: "text",
         text: "KHO HIỆN CÓ:\n" +
@@ -818,7 +1726,7 @@ Deno.serve(async (req) => {
               askedBlock
             : "") +
           (duanBlock
-            ? "\n\nKHO DỰ ÁN (kiến thức chung ĐÃ XÁC THỰC — dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có trong kho: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Dự án ĐẦU TIÊN là dự án nhà mình đang phân phối trực tiếp — khi khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
+            ? "\n\nDỰ ÁN KHÁCH VỪA NHẮC TỚI (kiến thức chung ĐÃ XÁC THỰC — dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'):\n" +
               duanBlock
             : ""),
       }],
@@ -848,6 +1756,9 @@ Deno.serve(async (req) => {
     if (resp.stop_reason !== "refusal" && resp.parsed_output) {
       out = resp.parsed_output as typeof out;
     }
+    // Đo SAU khi đã cầm chắc câu trả lời trong tay: lượt buyer là lượt đắt nhất
+    // (khối tĩnh ~5.800 chữ-máy), nên đây là con số quan trọng nhất của đồng hồ.
+    await doTien(client, resp.usage);
   } catch (e) {
     // Chỗ này nguy hơn vẻ ngoài: model hỏng thì khối dưới vẫn dựng câu trả lời
     // bằng regex và trả 200 tử tế. Khách không thấy gì lạ, mã HTTP không thấy
@@ -886,8 +1797,12 @@ Deno.serve(async (req) => {
     }
   }
   if (Object.keys(delta).length > 0) {
-    await client.from("buyers")
-      .update({ preferences: { ...prefs, ...delta } }).eq("id", buyer.id);
+    // FR-163: trộn bằng `||` phía DB (merge_buyer_prefs) thay vì ghi đè cả
+    // object {...prefs, ...delta} — bản ghi-đè là đọc-trộn-ghi kinh điển: hai
+    // lượt gối nhau là lượt sau chôn mất delta lượt trước bằng prefs cũ.
+    const { error: prefErr } = await client
+      .rpc("merge_buyer_prefs", { p_buyer_id: buyer.id, p_delta: delta });
+    if (prefErr) await ghiLoi(client, "chat-reply merge_buyer_prefs", prefErr.message);
   }
   if (out.profile.name && !buyer.name) {
     await client.from("buyers").update({ name: out.profile.name }).eq("id", buyer.id);
@@ -948,10 +1863,17 @@ Deno.serve(async (req) => {
   // Khách bổ sung SĐT / đổi giờ ở lượt sau là CẬP NHẬT lịch pending đang có,
   // không tạo lịch trùng (từng tạo 2 dòng cho 1 cuộc hẹn).
   if (out.viewing?.when) {
+    // Soát 01/09 (vai người mua đã nhắm căn): mã do model điền chép theo cách
+    // khách gõ — "bds-q5-0115" thường — mà kho lưu HOA và `.eq` phân biệt hoa
+    // thường. Mọi cửa khác (ask_owner, agreed_deal, send_photos) đều `toUpperCase`
+    // rồi, riêng cửa này thì không: lịch xem ghi thiếu `listing_id`, và lượt sau
+    // khách bổ sung SĐT với mã viết hoa thì so sánh lệch → tạo lịch THỨ HAI, đúng
+    // cái lỗi khối này từng được sửa để tránh.
+    const vwCode = out.viewing.listing_code?.trim().toUpperCase() || null;
     let listingId: string | null = null;
-    if (out.viewing.listing_code) {
+    if (vwCode) {
       const { data: lst } = await client.from("listings").select("id")
-        .eq("code", out.viewing.listing_code).maybeSingle();
+        .eq("code", vwCode).maybeSingle();
       listingId = lst?.id ?? null;
     }
     const slot = mapDue(out.viewing.when);
@@ -961,14 +1883,14 @@ Deno.serve(async (req) => {
       .eq("buyer_id", buyer.id).eq("status", "pending")
       .order("created_at", { ascending: false }).limit(1).maybeSingle();
     const sameAppt = existVw &&
-      (!out.viewing.listing_code || !existVw.listing_code ||
-        existVw.listing_code === out.viewing.listing_code);
+      (!vwCode || !existVw.listing_code ||
+        String(existVw.listing_code).toUpperCase() === vwCode);
     let vwId: string | null = null;
     if (existVw && sameAppt) {
       const patch: Record<string, unknown> = { time_text: out.viewing.when, slot };
       if (out.viewing.phone) patch.phone = out.viewing.phone;
-      if (out.viewing.listing_code && !existVw.listing_code) {
-        patch.listing_code = out.viewing.listing_code;
+      if (vwCode && !existVw.listing_code) {
+        patch.listing_code = vwCode;
         patch.listing_id = listingId;
       }
       await client.from("viewings").update(patch).eq("id", existVw.id);
@@ -980,7 +1902,7 @@ Deno.serve(async (req) => {
     } else {
       const { data: vw } = await client.from("viewings").insert({
         buyer_id: buyer.id, listing_id: listingId,
-        listing_code: out.viewing.listing_code, time_text: out.viewing.when,
+        listing_code: vwCode, time_text: out.viewing.when,
         slot, phone: out.viewing.phone ?? null, status: "pending", source: "bot",
       }).select("id").single();
       vwId = vw?.id ?? null;
@@ -994,7 +1916,7 @@ Deno.serve(async (req) => {
         await client.from("reminders").insert({
           kind: "viewing", buyer_id: buyer.id, viewing_id: vwId,
           due_at: new Date(slotMs - 45 * 60e3).toISOString(),
-          note: `lịch xem ${out.viewing.listing_code ? "#" + out.viewing.listing_code : "nhà"} lúc ${out.viewing.when}`,
+          note: `lịch xem ${vwCode ? "#" + vwCode : "nhà"} lúc ${out.viewing.when}`,
         });
       }
     }
@@ -1041,7 +1963,12 @@ Deno.serve(async (req) => {
             listing_id: dl.id, buyer_id: buyer.id,
             ctv_id: convRow?.ctv_id ?? null,
             price_vnd: dl.price_vnd ?? null,
-            fee_pct: sType === "ccrb" ? 1.0 : sType ? 0.5 : null,
+            // Chỉ hai loại có mức phí (BR-05: chính chủ 1%, môi giới 0,5%).
+            // `unknown` — người bán mở từ chat (FR-159) chưa được phân loại —
+            // phải để null chứ không được đổ về 0,5%: bản cũ `sType ? 0.5` coi
+            // mọi giá trị khác `ccrb` là môi giới, tức chính chủ vào qua chat mà
+            // chốt kèo trước khi phân loại là bị tính phí SAI một nửa. Xem OPEN-28.
+            fee_pct: sType === "ccrb" ? 1.0 : sType === "nmg" ? 0.5 : null,
             closed_at: new Date().toISOString(),
           });
           await client.from("listings").update({ status: "da_chot" }).eq("id", dl.id);
@@ -1059,18 +1986,24 @@ Deno.serve(async (req) => {
   // hinh_anh). Model điền send_photos; khách xin hình mà model quên thì vẫn
   // tự đính kèm theo mã khách nhắc.
   let photos: string[] = [];
+  // "hinh" không dấu thêm vào (FR-161); "anh" trần thì KHÔNG — đó là đại từ,
+  // thêm vào là mọi câu có chữ "anh" đều bị coi là xin ảnh.
   const photoWanted = out.send_photos ??
-    (/hình|ảnh|hinh anh|photo|\bpic\b/i.test(text) ? (mentioned[0] ?? repliedCode ?? null) : null);
+    (/hình|ảnh|\bhinh\b|hinh anh|photo|\bpic\b/i.test(text) ? (mentioned[0] ?? repliedCode ?? null) : null);
   if (photoWanted) {
     const pCode = photoWanted.toUpperCase();
     const inAsked = ((askedListings ?? []) as Asked[]).find((l) => l.code === pCode);
     if (inAsked) photos = photosOf(inAsked).slice(0, 4);
     else {
+      // Cùng ranh giới với khối askedListings: `listing_photos_v` tự lọc tin đã
+      // lên kệ (FR-167c), còn fact ảnh thì phải lọc ở đây — không thì URL ảnh
+      // của tin chưa đăng / đã gỡ vẫn lọt qua cửa này.
       const [{ data: pStore }, { data: pFacts }] = await Promise.all([
         client.from("listing_photos_v").select("url").eq("code", pCode).limit(4),
         client.from("listing_facts")
-          .select("answer, listings!inner(code)")
-          .eq("question", "hinh_anh").eq("listings.code", pCode).limit(4),
+          .select("answer, listings!inner(code, status)")
+          .eq("question", "hinh_anh").eq("listings.code", pCode)
+          .in("listings.status", ["dang_ban", "dang_quan_tam", "da_chot"]).limit(4),
       ]);
       photos = [
         ...(pStore ?? []).map((p) => p.url as string),
@@ -1099,5 +2032,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return jsonResponse({ reply: replies.join("\n"), replies, photos, conversation_id: convId });
+  return await hoanTat({ reply: replies.join("\n"), replies, photos, conversation_id: convId });
 });

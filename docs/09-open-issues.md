@@ -22,7 +22,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-15 | Hàng dự án (căn/giỏ hàng) — **ĐÃ CHỐT: phương án (b)**, 24/08/2026 | Cao | → FR-113…FR-117 |
 | OPEN-16 | ~~Có cần CRM riêng không?~~ **Đã chốt (b)** — bảng deals, không CRM ngoài | — | OPEN-02 |
 | OPEN-17 | Định dạng mã công khai listing (#35148 vs BDS-Q5-0012) | Thấp | Copy web + chat |
-| OPEN-18 | Kho file: Supabase Storage vs OneDrive (qua adapter) | Trung bình | FR-111, NFR-06 |
+| OPEN-18 | ✅ **CHỐT TRÊN THỰC TẾ 29/08/2026 — SUPABASE STORAGE** (FR-165 dựng hai bucket `listing-public`/`listing-private`, bảng `listing_media`, worker dọn file; kiểm TS-KHO 25/25). Không dựng adapter OneDrive: adapter chỉ có giá khi thật sự đổi kho, mà đổi kho chưa từng được yêu cầu — dựng sẵn một lớp trừu tượng cho việc chưa xảy ra là tự thêm chỗ hỏng. Cần đổi thì đổi lúc đó, lúc này đã có `app_config` để trỏ URL đi nơi khác. *(Nội dung thảo luận cũ giữ ở mục thân bên dưới.)* | Trung bình | FR-111, NFR-06, FR-165 |
 | OPEN-19 | ~~3 công cụ B-side kiểu radanhadat~~ **Đã chốt (b)** 25/08/2026 — tính lãi vay làm rồi (FR-119, port NhaDat-Radar); quy hoạch không tự khẳng định; thời gian di chuyển để giai đoạn 2 | — | FR-119 |
 | OPEN-20 | ✅ **ĐÃ CHỐT 27/08/2026 — LÀM** (chủ dự án: "AOND có hệ thống hạng Đồng/Bạc/Vàng cho người rao cứ làm đi test sau"). Đã dựng FR-155, nhưng **bằng công thức KHÁC AOND** — xem OPEN-26. Nội dung gốc giữ ở §OPEN-20 bên dưới | Trung bình | FR-155, OPEN-26 |
 | OPEN-21 | Vai người rao 5 loại (CĐT/sàn/NMG/lướt sóng/chủ nhà) + phí riêng cho CĐT — mở rộng nhị phân CCRB/NMG? | Trung bình | BR-05, FR-101 |
@@ -31,6 +31,13 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-24 | `pg_net` mở cho `anon`: `has_schema_privilege('anon','net','usage')` và `has_function_privilege('anon','net.http_post…')` đều `true` → mồi **SSRF** (ai cầm anon key mà chọc tới `net.*` là sai DB gọi HTTP đi bất cứ đâu, từ IP của Supabase). Hôm nay chưa khai thác được vì PostgREST chỉ phơi `public` — nhưng đó là hàng rào cấu hình, không phải hàng rào quyền. **Không tự vá được**: schema `net` do `supabase_admin` sở hữu, ta là `postgres`, REVOKE thành no-op im lặng. Phương án: (a) gác cửa (giữ Exposed schemas đúng `public, graphql_public`; cấm hàm SECURITY INVOKER trong `public` gọi `net.*`); (b) mở ticket Supabase xin thu hồi grant mặc định. Khuyến nghị BA: (a) ngay + (b) song song | Cao | NFR-06, SRS-3.9 |
 | OPEN-25 | ✅ **ĐÃ CHỐT 27/08/2026 — Ở LẠI FREE** (chủ dự án: "free trước đi, đã có user đâu"). Kèm điều kiện bắt buộc: phải chạy `scripts/sao-luu.mjs` định kỳ (Free KHÔNG có backup tự động) và bọc bridge bằng trình giám sát. **Xem lại quyết định này ngay khi có giao dịch thật đầu tiên** — lúc đó Vercel Hobby cấm dùng thương mại thành rủi ro thật, không còn là lý thuyết. Nội dung gốc: **bậc miễn phí không có lưới an toàn** (soát 27/08/2026, đối chiếu docs Supabase): (a) Supabase Free **KHÔNG có backup tự động** — docs ghi rõ chỉ Pro/Team/Enterprise mới được sao lưu hằng ngày, và bản sao lưu "không tải xuống được" với Free; hôm nay một câu `delete` nhỡ tay là mất 173 tin + toàn bộ lịch sử hội thoại, không có nút hoàn tác. (b) Không có PITR. (c) Vercel **Hobby cấm dùng thương mại**, mà site này thu phí giao dịch 1%/0.5% → rủi ro bị đình chỉ, không báo trước. (d) Bridge zca-js là MỘT tiến trình trên máy cá nhân, không có trình giám sát khởi động lại. Đã vá tạm: `scripts/sao-luu.mjs` (sao lưu tay) + FR-152 (nhịp tim + sổ lỗi). Phương án: (a) lên Supabase Pro + Vercel Pro; (b) ở lại Free và chấp nhận, nhưng phải đặt lịch chạy `sao-luu.mjs` và có trình giám sát cho bridge. Khuyến nghị BA: (a) trước khi có giao dịch thật đầu tiên — một cái sổ đỏ chốt hụt vì mất dữ liệu đắt hơn nhiều lần tiền hai gói | Cao | NFR-16, NFR-03, FR-152 |
 | OPEN-26 | **Ngưỡng hạng Đồng/Bạc/Vàng là [giả định BA], chưa ai chốt.** FR-155 đã dựng bộ khung và đang chạy với: NMG — Vàng ≥10 tin đang rao **và** tỷ lệ chốt ≥5%, Bạc ≥5 tin đang rao **hoặc** ≥1 căn đã chốt, còn lại Đồng; CCRB — Vàng khi đã chốt ≥1 căn, Bạc khi tin đã đủ thông tin lên sàn, Đồng khi mới rao. Chỉ hai vế NMG có nguồn (ràng buộc "tối thiểu 10 tin và tỷ lệ chốt từ 5%" đã công bố trên `/moi-gioi`, `biz model.docx`); ba vế còn lại là BA tự đặt cho khớp. Hôm nay cả 3 NMG đều Bạc và **chưa ai có thể lên Vàng vì kho chưa có giao dịch `da_chot` nào** — hạng cao nhất đang là thứ không ai với tới, giống hệt lỗi "chưa có đánh giá" của OPEN-23. Phương án: (a) chủ dự án chốt ngưỡng thật (kèm quyền lợi mỗi hạng — hạng không kèm quyền lợi thì chỉ là màu sắc); (b) giữ ngưỡng tạm, nhưng ẨN hạng khỏi web tới khi có giao dịch thật đầu tiên, chỉ hiện trong `/admin`. ✅ **ĐÃ CHỐT PHẦN HIỂN THỊ 27/08/2026 — ẨN KHỎI WEB** (chủ dự án: "ẩn hạng khỏi web đi"), tức phương án (b): hạng vẫn tính và vẫn xem được ở `/admin`, chỉ chưa đưa ra trước mặt khách. Ngưỡng thì VẪN CHƯA CHỐT. Khuyến nghị BA: (a) khi có số thật để định cỡ. **Đã đối chiếu tài liệu gốc 27/08**: `AOND req + chat examples.docx` §IV có công thức riêng (điểm = 50% độ hoàn chỉnh dữ liệu + 50% độ kịp thời phản hồi; Đồng <50đ và bị giới hạn 5 căn, Bạc 50–79đ, Vàng ≥80đ) — FR-155 **KHÔNG** dùng công thức đó, vì cả hai vế hiện đo ra 0 cho toàn kho (xem OPEN-20). Câu hỏi treo còn lại: AOND buộc hạng vào **quyền lợi** gì (ưu tiên chuyển khách nét? giảm phí? chỉ huy hiệu?) và có áp trần số căn cho hạng Đồng không | Trung bình | FR-155, OPEN-20, OPEN-23, OPEN-12 |
+| OPEN-27 | **Mở địa bàn ra HCM mới + Long An/Tây Ninh, nhưng hiển thị và tìm kiếm giữ TÊN CŨ.** Quyết định chủ dự án 27/08/2026 ("tao sẽ đánh bds trong khu vực hcm mới và long an tây ninh, nhưng hiển thị hoặc tìm kiếm vẫn là tên cũ cho user dễ dùng"). Cả bộ tài liệu và toàn bộ code đang đóng đinh **một quận**: `chat-reply` ghi cứng `district: "Quận 5"` khi tạo tin, regex phường chỉ bắt `Phường 1–16`, form `/admin/dang-tin` xổ đúng 16 phường, tone bot tự giới thiệu "môi giới bất động sản Quận 5", từ điển lóng neo vào Chợ Lớn/P10-P14, và **20 file** `.ts/.tsx` có nhắc Quận 5 hoặc `district`. Câu hỏi phải chốt trước khi code: (a) "tên cũ" lấy theo mốc nào — trước NQ 202/2025/QH15, hay theo tên dân vẫn gọi ("Chợ Lớn", "Phú Nhuận") kể cả khi hai thứ đó lệch nhau? (b) lưu trong DB là tên cũ hay tên mới, và bên nào là bản dịch (đây chính là bảng `ward_mapping` treo ở FR-118, giờ thành đường găng); (c) tiền tố mã tin `BDS-Q5-####` vừa được FR-158 chốt làm dãy duy nhất — giữ làm ID vô nghĩa (đã có tiền lệ: `geocode-listings` ghi rõ "mã tin mang tiền tố BDS-Q5 không có nghĩa BĐS ở Q5") hay đổi? Khuyến nghị BA: giữ tiền tố như ID vô nghĩa (đổi là gãy URL `/tin/<mã>` và cả thư mục ảnh `listing-photos/<mã>/`), và chốt (a)+(b) trước, vì mọi thứ còn lại phụ thuộc | **Cao** | FR-118, FR-158, BR-01 |
+| OPEN-28 | **Phí có đi theo phân loại tự động của FR-160 không?** FR-160 chốt "≥3 tin rao bán = môi giới", nhưng `seller_type` đang đồng thời là thứ tính phí (BR-05: CCRB 1%, NMG 0.5%). Ghép thẳng hai thứ nghĩa là một chính chủ mở tin thứ ba thì phí tự rơi từ 1% xuống 0.5%, và tự leo lại khi tin cũ bị gỡ — mức phí nhảy theo một con số không ai báo cho họ biết. Hai phương án: (a) **tách hai khái niệm** — thêm cột dẫn xuất `vai_hanh_vi` (suy từ số tin, dùng cho giọng hỏi drip + hạng FR-155) và GIỮ `seller_type` khai bằng tay làm căn cứ tính phí; (b) ghép làm một đúng như lời chốt, chấp nhận phí trôi theo số tin. Khuyến nghị BA: (a) — số đếm là chỉ dấu hành vi tốt, nhưng phí là cam kết với người ta, không nên đổi sau lưng. Cần chủ dự án chốt trước khi code FR-160 | **Cao** | FR-160, BR-05, FR-155, OPEN-21 |
+| OPEN-29 | ✅ **ĐÃ CHỐT 27/08/2026 — LÀM PHƯƠNG ÁN (a), ĐÃ DỰNG THÀNH FR-161** (chủ dự án: "sửa theo khuyến nghị rồi deploy hết đi"). Nội dung gốc: **Bot ĐIẾC với tiếng Việt không dấu — mà rất nhiều người nhắn Zalo không bỏ dấu.** Phát hiện 27/08/2026 lúc chạy TS-MA: gõ `nha minh ban chua em` thì cổng rao trượt ngay ở vế `\b(bán\|rao)\b` vì `"ban"` không khớp `"bán"`. Kiểm cả `bot/supabase/functions/` lẫn `lib/`: **không một chỗ nào bỏ dấu trước khi khớp**. Hệ quả trải khắp: câu rao không dấu (`ban nha quan 5 gia 5 ty`) KHÔNG sinh tin dù có đủ giá — im lặng y hệt con bug FR-158 vừa vá, chỉ khác nguyên nhân; `hoiMua` không tách được vai (`toi muon mua nha`); `PROMISE_RE` không bắt được lời hứa (`chieu gui anh`); regex phường/giá cũng vậy. Riêng phía người mua thì đỡ hơn vì mặc định đã rơi vào nhánh mua (FR-159), nhưng phía bán là mất trắng câu rao. Phương án: (a) chuẩn hoá `text` một lần đầu hàm (`normalize('NFD')` + bỏ dấu) rồi cho MỌI regex cổng chạy trên bản không dấu, giữ `text` gốc để lưu `description` và đưa cho model — model đọc không dấu vẫn tốt, chỉ regex là mù; (b) viết mỗi regex thành hai nhánh có-dấu/không-dấu. Khuyến nghị BA: (a), vì (b) là nhân đôi số chỗ phải sửa mỗi lần thêm từ. Chưa code, cần chốt trước khi chạy thật | **Cao** | FR-158, FR-129, FR-133, FR-157 |
+| OPEN-30 | ✅ **ĐÃ SỬA 28/08/2026 — chat-reply v40** (chủ dự án: "Fix đi"). Cả BA lệnh gọi model nhánh seller (`r1`/`r2`/`r3`) và cả bước tạo `anthropicClient` giờ bọc try/catch + `ghiLoi` + câu mẫu tất định, cùng chuẩn với nhánh mua. Câu mẫu của `r2` CÓ hỏi câu drip kế tiếp (kèm neo căn từ FACT_LABELS) nên `info_requests` chỉ mở khi câu hỏi THẬT SỰ được gửi — đúng luật "không mở khi chưa hỏi được"; `r1` chào bằng mẫu kèm câu hỏi đầu; `r3` ghi nhận bằng mẫu. Test sống trên v40: câu rao sinh tin + model soạn reply bình thường (key đã có credit lại); đường fallback kiểm bằng review vì không giả lập được key hỏng trên môi trường sống. Nội dung gốc: **Nhánh seller gọi model KHÔNG có lưới đỡ — model lỗi là chủ nhà nhận im lặng + HTTP 500.** Lộ ra 27/08 khi chạy TS-KD-01 đúng lúc API key Anthropic của bot hết credit: tin rao vẫn sinh ĐỦ và ĐÚNG (dữ liệu ghi trước khi gọi model, đúng thiết kế FR-152) nhưng ba lệnh gọi model của nhánh seller (`r1` chào tin mới, `r2` hỏi drip, `r3` chăm sóc chung) đều trần trụi — exception xuyên thẳng ra 500, chủ nhà không nhận được chữ nào, và vì là exception nên cũng KHÔNG qua `ghiLoi`. Nhánh mua làm đúng bài từ đầu: try/catch + `ghiLoi` + câu trả lời template. Chữa: bọc ba lệnh gọi trong try/catch, lỗi thì `ghiLoi` + trả template ("Dạ em nhận tin rồi ạ, em xử lý rồi báo lại anh/chị liền nha") — KHÔNG mở `info_requests` mới khi chưa hỏi được. Việc riêng, chưa làm | Trung bình | FR-152, FR-158, FR-161 |
+| OPEN-31 | **Bậc nguồn `chu_xac_nhan > admin`: admin cầm sổ đỏ mà chủ nhà nhớ nhầm thì ai thắng?** FR-164(a) khoá cột trước lời admin; cần một bậc riêng cho bằng chứng giấy tờ hay không | Trung bình | FR-164, FR-156, FR-129, FR-163 |
+| OPEN-32 | **Ảnh chủ nhà gửi qua chat KHÔNG đi qua hai bucket, nên tách công khai/riêng tư của FR-165 không phủ được nó.** `chat-reply` lưu mọi ảnh người bán gửi thành fact `hinh_anh` (URL Zalo CDN, không vào kho ta), rồi FR-143 gộp thẳng vào `photos` gửi cho NGƯỜI MUA. Mà vòng drip FR-129 có hỏi `phap_ly` — chủ nhà trả lời câu đó bằng ảnh chụp sổ là chuyện thường, và ảnh đó bị ghi nhãn `hinh_anh` bất kể đang hỏi gì. Sửa được nhưng phải đụng luồng chat, mà đợt này chủ dự án khoanh vùng "do not change chat logic" | **Cao** | FR-165, FR-143, FR-129, FR-105, NFR-06 |
+| OPEN-33 | **Webhook Zalo nhận sự kiện KHÔNG kiểm chữ ký — ai cũng giả được tin nhắn đến.** `zalo-webhook` buộc chạy `verify_jwt=false` (Zalo không gửi JWT Supabase được) nên chữ ký `X-ZEvent-Signature` là hàng rào DUY NHẤT; khối verify chỉ chạy khi có đủ `ZALO_APP_SECRET` + `ZALO_APP_ID`, mà hai secret đó KHÔNG có trong Vault. Đo 29/08: POST sự kiện bịa, không khoá không chữ ký → 200. Giả được tin nhắn với BẤT KỲ `sender.id` nào (đội lốt chủ nhà bơm fact vào tin họ, hoặc bơm tin rác đốt tiền model). Không tự chặn cứng vì chặn là bot chết với người dùng thật — quyết định vận hành của chủ dự án; bản FR-167 cho nó kêu vào `bot_errors`. Chữa = đặt hai secret vào Vault, không sửa dòng code nào | **Cao** | FR-167, FR-162, SRS-4.4, NFR-06 |
 
 ---
 
@@ -119,6 +126,15 @@ Xem ghi chú kiến trúc ở `07-srs.md §SRS-2.1`. Logstash không bảo đả
 **Khuyến nghị**: Postgres outbox + worker (hoặc pgmq) cho hàng đợi nghiệp vụ; giữ
 Logstash + ElasticSearch cho log và phân tích sự kiện. Cần chủ dự án chốt với vendor vì
 ảnh hưởng báo giá.
+
+*[cập nhật 29/08/2026]* Phần THỰC HÀNH của khuyến nghị này đã được dựng bằng FR-166:
+hàng đợi nghiệp vụ nằm trong chính Postgres (`inbound_events` → `inbound_ledger`,
+`reminders`, `media_cleanup_queue`) với worker là edge function do pg_cron gọi — không
+Redis, không Kafka, không thêm hạ tầng nào. Yêu cầu của chủ dự án 29/08 nói thẳng "Do
+not introduce Redis unless the repository proves it is necessary", và repo không chứng
+minh được điều đó. Nghiệm thu: TS-JOB-01…30.
+**Vẫn treo**: chốt với vendor về Logstash trong bản đề xuất kỹ thuật — đó là chuyện báo
+giá và hợp đồng, không phải chuyện code, nên vẫn chờ chủ dự án.
 
 ### OPEN-12 · Chấm điểm & chấm dứt NMG
 Quy định *"chấm dứt hợp đồng ngay khi bị chấm ≤3/5 ở mọi tương tác"* là rất khắt khe —
@@ -430,6 +446,158 @@ ngay — nó rẻ và mất 20 phút.
 
 ---
 
+### OPEN-26 · Ngưỡng hạng Đồng/Bạc/Vàng
+
+Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: FR-155 đã dựng bộ khung và đang
+chạy với ngưỡng **[giả định BA]**, chưa ai chốt. Hạng hiện ra mắt người dùng,
+nên đổi ngưỡng về sau là đổi hạng của người đang có hạng.
+
+**Chờ chủ dự án chốt** (mức: Trung bình).
+
+---
+
+### OPEN-27 · Mở địa bàn ra HCM mới + Long An/Tây Ninh
+
+Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: quyết định 27/08/2026 mở địa bàn
+nhưng hiển thị và tìm kiếm **giữ tên cũ**. Còn treo phần đường cơ sở: dữ liệu,
+mã tin, taxonomy và SEO đang neo vào Quận 5.
+
+**Chờ chủ dự án chốt** (mức: Cao).
+
+---
+
+### OPEN-28 · Phí có đi theo phân loại tự động của FR-160 không?
+
+Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: FR-160 suy `seller_type` từ số tin
+đang rao (≥3 → NMG), mà `seller_type` đồng thời là thứ tính phí (BR-05: CCRB 1%,
+NMG 0.5%). Chính chủ mở tin thứ ba là phí TỰ RƠI MỘT NỬA, và rơi ngược lại khi gỡ
+tin. FR-160 vì vậy **chưa dựng**.
+
+*[01/09/2026 — thêm một cạnh]* Từ FR-159, người bán mở hồ sơ ngay trong chat
+mang `seller_type = unknown` cho tới khi được phân loại. Lúc chốt kèo (FR-142)
+`chat-reply` tính `fee_pct` theo `seller_type`; bản trước coi mọi giá trị khác
+`ccrb` là môi giới 0,5% — tức chính chủ vào qua chat mà chốt trước khi phân loại
+bị tính phí SAI một nửa. Đã sửa: `unknown` → `fee_pct = null`, tức deal ghi
+KHÔNG CÓ mức phí, cần người thật gán trước khi lập hợp đồng. Câu hỏi thêm cho
+chủ dự án: ai gán, ở đâu (form admin? bot hỏi "anh là chính chủ hay môi giới"?),
+và có được gán tự động theo FR-160 không — cùng một nút với câu hỏi gốc.
+
+*[02/09/2026 — chủ dự án chốt NỬA ĐẦU]*: "Gán nhãn khi ai bóc tách là họ có
+bds muốn bán" — nhãn gán ngay lúc hồ sơ mở từ chat: có BĐS muốn bán = chính chủ,
+tự xưng môi giới = môi giới (FR-159 đoạn 02/09, migration `20260902a`). Hồ sơ
+mở qua chat không còn `unknown`. **Còn treo nửa sau, đúng câu hỏi gốc**: người
+đã mang nhãn chính chủ mà rao tới tin thứ ba thì có TỰ LẬT sang môi giới theo
+FR-160 không, và phí của tin đang rao có đổi theo không. Hàm DB hiện KHÔNG ghi
+đè nhãn đã có, nên nếu chốt "có lật" thì phải mở thêm một đường riêng cho FR-160.
+
+**Chờ chủ dự án chốt nửa sau** (mức: Cao).
+
+---
+
+### OPEN-29 · Bot điếc với tiếng Việt không dấu
+
+✅ **ĐÃ CHỐT 27/08/2026 — làm phương án (a), đã dựng thành FR-161.** Nội dung gốc
+và lý lẽ ở bảng tóm tắt đầu file.
+
+---
+
+### OPEN-30 · Một lệnh gọi model hỏng kéo sập cả lượt chat
+
+✅ **ĐÃ SỬA 28/08/2026 — chat-reply v40.** Ba lệnh gọi model nhánh seller và bước
+tạo `anthropicClient` đều đã bọc try/catch. Chi tiết ở bảng tóm tắt đầu file.
+*[29/08/2026 — cùng lưới đã trải sang `nudge` v14+ theo FR-166: `anthropicClient`
+và cả hai lệnh gọi model đều bọc, hỏng thì `bao_hong_nhac` chứ không thoát khỏi
+vòng lặp.]*
+
+---
+
+### OPEN-31 · Bậc nguồn khi admin cầm bằng chứng cứng
+
+FR-164(a) xếp `chu_xac_nhan` (3) > `admin` (2) > `suy_doan` (1). Lý lẽ chắc và
+khớp hai tài liệu có sẵn: FR-156 nói rõ tin admin nhập là tin "nhặt trên
+Facebook, Chợ Tốt, Batdongsan, sổ tay CTV" — tức nguồn bên thứ ba; còn cả vòng
+drip FR-129 sinh ra chỉ để lấy bằng được lời của người thật sự có căn nhà. Lời
+chủ mà thua admin thì drip vô nghĩa.
+
+**Nhưng thứ bậc đó KHOÁ cột.** Một khi chủ nhà đã trả lời, admin không ghi đè
+được nữa — kể cả khi admin đang cầm sổ đỏ trong tay và con số trên sổ khác con
+số chủ nhà nhớ nhầm. Diện tích và phường là hai thứ người ta hay nhớ sai nhất.
+
+Hai phương án:
+
+- **(a)** Thêm một bậc `admin_xac_minh` (4) dành riêng cho trường hợp admin đã
+  đối chiếu giấy tờ. Chủ nhà vẫn thắng admin thường, nhưng giấy tờ thắng tất.
+- **(b)** Giữ nguyên hoàn toàn, coi sai lệch là chuyện của con người: admin thấy
+  sai thì nhắn hỏi lại để chủ nhà TỰ sửa, hệ thống không có cửa hậu nào.
+
+**Khuyến nghị (a).** Bằng chứng giấy tờ là loại dữ liệu khác hẳn lời nói; gộp nó
+chung một bậc với "admin gõ tay từ tin Chợ Tốt" là đánh đồng hai thứ không cùng
+độ tin. Phương án (b) gọn hơn nhưng đẩy toàn bộ gánh nặng sang thao tác tay, mà
+chủ nhà im lặng thì không có đường nào sửa.
+
+Chưa dựng. Chờ chủ dự án chốt.
+
+### OPEN-32 · Ảnh gửi qua chat nằm ngoài ranh giới công khai/riêng tư
+
+FR-165 dựng hai bucket và ràng ở DB rằng `so_do`/`giay_to` phải nằm trong
+`listing-private`. Ràng buộc đó chỉ có hiệu lực với file ĐI QUA KHO CỦA TA.
+
+Ảnh chủ nhà gửi qua Zalo thì không đi qua đó. `chat-reply` lưu URL Zalo CDN
+thành fact `hinh_anh`, và FR-143 gộp chính những URL đó vào mảng `photos` gửi
+cho người mua. Hai chi tiết làm nó thành rủi ro thật chứ không phải giả định:
+
+1. Vòng drip FR-129 có hỏi `phap_ly`. Người bán trả lời câu đó bằng ảnh chụp
+   sổ hồng là chuyện bình thường.
+2. Nhánh ảnh trong `chat-reply` ghi nhãn `hinh_anh` cho MỌI ảnh không kèm chữ,
+   bất kể câu hỏi đang chờ là gì. Nên ảnh sổ vào kho ảnh của tin, rồi ra với
+   khách mua.
+
+FR-105 vốn đã ghi "ảnh duyệt tay giai đoạn đầu" — nhưng chưa có ai duyệt.
+
+Ba hướng, chưa chọn:
+
+- **(a)** Ảnh trả lời câu `phap_ly` (hoặc ảnh mà model đọc ra là giấy tờ) thì
+  ghi nhãn `giay_to`, không vào `photos` gửi khách. Đúng gốc nhất, nhưng phải
+  sửa nhánh ảnh của `chat-reply`.
+- **(b)** Kéo ảnh chat về `listing-private` rồi mới phân loại — có kho, có
+  provenance, nhưng thêm một pipeline tải file.
+- **(c)** Giữ nguyên, chặn ở khâu duyệt tay theo FR-105.
+
+**Khuyến nghị (a)**, và làm sớm: đây là đường rò giấy tờ đất của người dân ra
+người lạ, không phải lỗi hiển thị. Chưa dựng vì đợt FR-165 được khoanh vùng
+"không đụng luồng chat".
+
+### OPEN-33 · Webhook Zalo đang nhận sự kiện KHÔNG kiểm chữ ký
+
+**Mức: CAO. Phát hiện 29/08/2026 khi soát bảo mật (FR-167), đo được chứ không suy đoán.**
+
+`zalo-webhook` buộc phải chạy `verify_jwt=false` — Zalo không gửi được JWT của
+Supabase. Nên hàng rào DUY NHẤT của nó là chữ ký `X-ZEvent-Signature`. Mà khối
+verify chỉ chạy khi có ĐỦ `ZALO_APP_SECRET` và `ZALO_APP_ID`; hai secret đó hiện
+KHÔNG có trong Vault, nên khối bị nhảy qua và hàm nhận mọi thứ.
+
+Đo thật 29/08: POST một sự kiện bịa, không khoá không chữ ký → **200 `{"ok":true}`**.
+
+**Khai thác được gì**: giả tin nhắn đến với BẤT KỲ `sender.id` nào. Đội lốt Zalo
+ID của một chủ nhà là bơm được fact vào tin của họ (giá, phường, pháp lý — những
+thứ FR-164 đóng dấu `chu_xac_nhan` rồi KHOÁ cột); bơm tin rác là đốt tiền model
+và làm ngập `messages`.
+
+**Vì sao đợt soát KHÔNG tự chặn cứng**: chặn là bot chết ngay với người dùng
+thật. Đó là đánh đổi vận hành, thuộc quyền chủ dự án, không phải quyền của một
+đợt soát bảo mật. Thay vào đó bản này cho nó KÊU TO: mỗi lượt bỏ qua verify ghi
+một dòng `zalo-webhook KHONG VERIFY` vào `bot_errors` (có van 20 dòng/giờ của
+`log_loi` nên không ngập sổ), hiện ở trang `/admin`.
+
+**Khuyến nghị**: đặt `ZALO_APP_SECRET` + `ZALO_APP_ID` vào Vault. Có hai secret
+đó là khối verify tự bật, không phải sửa dòng code nào — chữ ký sai sẽ bị trả
+401 như thiết kế ban đầu. Đây là việc 5 phút và nó đóng lỗ nghiêm trọng nhất còn
+lại của hệ thống.
+
+**Chờ chủ dự án chốt.**
+
+---
+
 ### Soát mã nguồn 27/08/2026 — kết luận về advisor Supabase
 
 Advisor bảo mật đang báo **2 ERROR**. Đã soi từng cái, **cả hai là cố ý và an
@@ -441,11 +609,17 @@ toàn** — ghi lại đây để lần sau không ai đi "vá" nhầm:
 Nó PHẢI là SECURITY DEFINER thì anon mới đọc được qua RLS của `sellers` — đó
 chính là mục đích của FR-125: một hình chiếu công khai đã cắt sạch liên hệ.
 
-**`security_definer_view` trên `public.listing_photos_v`** — đọc `storage.objects`
-lọc `bucket_id = 'listing-photos'`, trả `code/url/path`. Bucket đó **công khai**,
-URL ai cũng mở được; view chỉ tiết kiệm cho web khỏi tự ghép đường dẫn. anon
-không có quyền đọc thẳng `storage.objects`, nên bỏ SECURITY DEFINER là gãy ảnh
-toàn web mà chẳng che thêm được gì.
+**`security_definer_view` trên `public.listing_photos_v`** — *[viết lại
+29/08/2026 theo FR-165; bản cũ mô tả view đọc `storage.objects` lọc
+`bucket_id='listing-photos'`, không còn đúng]*. Nay view đọc bảng
+`listing_media`, lọc `bucket='listing-public'` **và tin ĐÃ LÊN KỆ** *(vế thứ hai
+siết thêm 29/08/2026 — FR-167c, sau khi đo thấy anon đọc ra mã tin + đường dẫn
+ảnh của tin `cho_thong_tin`)*, trả `code/url/path/sort_order/is_cover/created_at`. Bucket đó **công khai**, URL ai cũng mở được. Lý do THẬT
+phải giữ SECURITY DEFINER là view ghép URL từ `app_config`, mà `app_config` đã
+bị thu hồi quyền đọc của anon — bỏ definer là anon vỡ ngay
+("permission denied"), đo được ở TS-KHO-21. Cũng vì thế view đọc `app_config`
+bằng subquery chứ không gọi `cau_hinh()`: quyền EXECUTE một HÀM vẫn xét theo
+người gọi, không theo chủ view.
 
 **`anon_security_definer_function_executable` trên `log_loi`** (WARN) — cố ý,
 xem FR-152 (d). Server Next.js chạy bằng publishable key nên bắt buộc mở cho

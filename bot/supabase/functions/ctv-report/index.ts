@@ -30,8 +30,42 @@ const Score = z.object({
   comment: z.string().describe("1-2 câu tiếng Việt: lỗi cụ thể nhất hoặc điểm tốt nhất"),
 });
 
+// Nhãn vai khi dựng bản ghi hội thoại cho model chấm. Gộp mọi thứ không phải
+// `buyer` vào "CTV/BOT" là chấm lời của người khác lên đầu CTV — từ khi nhánh
+// người bán được ghi sổ (FR-141/FR-152) thì `seller` và `human` cũng nằm trong
+// bảng `messages`, và điểm sai đó được ghi thẳng vào ctv_daily_reports.
+const VAI_NHAN: Record<string, string> = {
+  buyer: "KHÁCH",
+  seller: "CHỦ NHÀ",
+  system: "HỆ THỐNG",
+  bot: "CTV/BOT",
+  ctv: "CTV/BOT",
+  human: "CTV/BOT",
+};
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
+
+  // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
+  // Như ask-seller: verify_jwt=true chỉ đòi khoá công khai. Đo thật bằng đúng
+  // khoá đó thì hàm CHẠY (quá 5 s của pg_net vì đang gọi model). Người lạ gọi
+  // được nghĩa là ép sinh + GỬI báo cáo CTV (số liệu kinh doanh nội bộ) và đốt
+  // tiền model. Cron mang `x-bridge-secret` (xem `ctv_report_tick`).
+  const cong = serviceClient();
+  const bimat = await secretOf(cong, "BRIDGE_SECRET");
+  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
+  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
+  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
+  if (!bimat) {
+    await ghiLoi(cong, "ctv-report CONG MO",
+      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
+  }
+  const laDichVu = req.headers.get("authorization") ===
+    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
+    return jsonResponse({ error: "forbidden" }, 403);
+  }
+
   const { dry_run = false, force = false } = await req.json().catch(() => ({}));
   const client = serviceClient();
   const now = Date.now();
@@ -61,6 +95,11 @@ Deno.serve(async (req) => {
     const { data: convs } = await client.from("conversations")
       .select("id, buyer_id, needs_human, last_message_at, buyers(name, preferences)")
       .eq("ctv_id", ctv.id)
+      // Hội thoại NGƯỜI BÁN cũng được trigger xoay vòng gán ctv_id, và từ khi
+      // FR-141/FR-152 ghi sổ nhánh seller thì cũng có last_message_at. Báo cáo
+      // này đếm ĐƠN KHÁCH MUA — để lọt vào là hiện ra hàng "khách mới (chưa rõ
+      // nhu cầu)" ma và chấm điểm CTV trên chính lời chủ nhà.
+      .not("buyer_id", "is", null)
       .gte("last_message_at", new Date(now - 30 * 864e5).toISOString())
       .order("last_message_at", { ascending: false }).limit(50);
     const all = convs ?? [];
@@ -83,7 +122,8 @@ Deno.serve(async (req) => {
         .select("sender, body").eq("conversation_id", c.id)
         .order("created_at", { ascending: false }).limit(20);
       const convo = (msgs ?? []).reverse()
-        .map((m) => `${m.sender === "buyer" ? "KHÁCH" : "CTV/BOT"}: ${m.body}`).join("\n");
+        .map((m) => `${VAI_NHAN[m.sender] ?? String(m.sender).toUpperCase()}: ${m.body}`)
+        .join("\n");
       if (!convo) continue;
       try {
         // 512 là QUÁ CHẶT cho schema Score: 4 điểm thành phần + comment tiếng

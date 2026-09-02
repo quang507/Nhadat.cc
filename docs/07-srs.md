@@ -205,10 +205,18 @@ preferences       jsonb               -- tiêu chí học được (UF-07)
 
 ### SRS-3.4 · `sellers`
 ```
-id             uuid pk
-zalo_user_id   text unique
-seller_type    enum(ccrb, nmg)        -- quyết định mức phí (FR-101)
-name, email    text
+id                 uuid pk
+zalo_user_id       text unique
+seller_type        enum(ccrb, nmg, unknown) default unknown
+                   -- quyết định mức phí (FR-101). `unknown` = chưa phân loại,
+                   -- chỉ còn ở hồ sơ tạo tay không ghi loại; dòng mở từ chat
+                   -- (FR-159) mang nhãn ngay lúc bóc tách từ 02/09 (ccrb mặc
+                   -- định, nmg khi tự xưng). Chốt kèo lúc còn unknown thì
+                   -- fee_pct = null (OPEN-28) [nguồn: DB thực tế, TS-VAI-01/06]
+active_listing_id  uuid null           -- căn bot đang hỏi, neo ngữ cảnh (FR-157)
+-- RLS 02/09: sellers_admin_read/update (email trong admins) để /admin xem và
+-- đổi nhãn; reminders_admin_read/update cùng khuôn để /admin đọc việc chờ.
+name, email        text
 fee_rate       numeric                -- 1.0 hoặc 0.5
 -- chỉ NMG (FR-102)
 active_listings_count  int
@@ -269,8 +277,9 @@ interests                  id, listing_id, buyer_id, created_at
                            -- B đang quan tâm căn nào; sold → báo tất cả (FR-108)
 listing_facts              id, listing_id, question_norm, answer, source_info_request_id
                            -- kho hỏi-đáp tích luỹ: có sẵn thì trả ngay, không hỏi S
-media                      id, listing_id, kind, storage_ref, is_public
-                           -- ảnh Zalo URL tạm → tải về, đẩy kho file qua ADAPTER (FR-111, OPEN-18)
+media                      [thay bởi listing_media 29/08/2026 — FR-165. Bản phác này còn giữ
+                           `is_public`, đúng cột FR-165 bỏ hẳn vì `bucket` đã nói điều đó.
+                           Ảnh Zalo URL tạm thì VẪN chưa tải về kho — xem OPEN-32.]
 deals                      id, listing_id, buyer_id, seller_id, stage, price_final,
                            fee_rate, fee_amount, ctv_id, closed_at
                            -- căn cứ tính phí + tỉ lệ chốt NMG (FR-112, OPEN-16 đã chốt (b))
@@ -327,16 +336,41 @@ tags                id, slug unique, keyword, title, description, criteria jsonb
 property_tags       property_id, tag_id
 saved_criteria      id, buyer_id, criteria jsonb, active bool     -- FR-64
 curated_lists       id, token unique, buyer_id, property_ids[], created_at, expires_at  -- FR-100
-photos              id, property_id, storage_path, kind enum(mat_tien, trong_nha, hem, so_do, khac), sort_order, is_public
+listing_media       id, listing_id FK->listings(id) ON DELETE CASCADE, bucket, storage_path,
+                    media_type enum-check(mat_tien, trong_nha, hem, so_do, giay_to, khac),
+                    mime_type, sort_order, is_cover, created_at        -- FR-165 (đã dựng)
+media_cleanup_queue id, bucket, storage_path, trang_thai enum-check(cho, dang_lam, xong, loi, chet),
+                    attempts, last_error, next_retry_at, created_at, updated_at   -- FR-165, FR-166g
+inbound_events      event_id PK (= zalo_msg_id thật), zalo_user_id, payload jsonb, delivery_count,
+                    first_seen_at, last_seen_at                                   -- FR-162 phần 2
+inbound_ledger      zalo_msg_id PK, status enum-check(received, processing, completed, failed, dead),
+                    attempts, reply jsonb, detail, sent_at, send_error, sent_bubbles,
+                    next_retry_at, locked_by, started_at, finished_at, created_at, updated_at
+                                                                                  -- FR-162, FR-166b
+reminders           id, kind, buyer_id, seller_id, ctv_id, listing_id, viewing_id, due_at, note,
+                    status enum-check(pending, sent, cancelled, dead), sent_at, created_at,
+                    locked_at, locked_by, attempts, next_retry_at, last_error      -- FR-32, FR-166f
+photos              [thay bởi listing_media 29/08/2026 — `is_public` bỏ, `bucket` đã nói điều đó]
 escalations         id, type enum(QUESTION, VOICE, VIEWING, UPSET), buyer_id, property_id, payload jsonb, emailed_at  -- FR-77..81
 ```
 
 **SRS-3.9 · Bảo mật dữ liệu**
-- `photos.kind = 'so_do'` → `is_public = false` bắt buộc, bucket riêng, chỉ truy cập
-  bằng signed URL hạn **≤ 15 phút** (NFR-06).
+- `listing_media.media_type in ('so_do','giay_to')` → **bắt buộc** `bucket =
+  'listing-private'` (CHECK ở DB, FR-165). Bucket riêng không phục vụ qua route
+  `/object/public` — đo được: trả `NoSuchBucket`. Cách truy cập hợp lệ DUY NHẤT
+  là signed URL hạn **≤ 15 phút** do service_role ký (NFR-06) — **nhưng đường ký
+  đó CHƯA DỰNG**: quét toàn repo không có `createSignedUrl`, cũng chưa chỗ nào
+  đọc `listing-private`. Nghĩa là hôm nay bucket riêng đóng kín (đúng), nhưng
+  cũng chưa ai lấy file ra được. Nửa còn lại là việc phải làm.
+  *[cập nhật 29/08/2026 — câu cũ nói `photos.kind='so_do'` → `is_public=false`;
+  bảng `photos` chưa từng được dựng, nay là `listing_media` và `is_public` bỏ
+  hẳn vì `bucket` đã là thứ quyết định]*
 - `buyers.phone` mã hoá at-rest, chỉ CTV được cấp quyền đọc.
 - RLS bật trên mọi bảng; `anon` chỉ đọc được `properties` có `status='dang_rao'`,
-  `photos` có `is_public=true`, và `tags`.
+  `listing_media` có `bucket='listing-public'`, và `tags`.
+  *[siết 29/08/2026 — FR-167c: `listing_media` còn phải thuộc TIN ĐÃ LÊN KỆ.
+  Bucket là chuyện của FILE, đăng hay chưa là chuyện của TIN — hỏi thiếu vế sau
+  thì ảnh và mã của tin `cho_thong_tin` đọc được từ Internet, đã đo thật.]*
 
 **Mô hình quyền thực tế (soát bảo mật 26/08/2026).** Anon key là key **công
 khai** — nó nằm trong bundle JS của web và trong `bot/bridge-zca`; repo để
@@ -356,13 +390,17 @@ là:
    đã thu hồi EXECUTE khỏi `public/anon/authenticated`; chỉ `service_role` và
    `postgres` gọi được. Trước đó `seller_drip_tick`, `ctv_report_tick`,
    `mark_listing_interest`… gọi được bằng anon key qua `/rest/v1/rpc/…`.
-   Mọi hàm cũng ghim `search_path = public, pg_temp`.
+   Mọi hàm cũng ghim `search_path` (`public` hoặc `public, pg_temp`).
 4. **View không được là cửa hậu.** View SECURITY DEFINER chạy bằng quyền chủ
    view nên đi vòng RLS. `public_listings`, `public_media`,
    `listing_missing_facts` đã chuyển `security_invoker = on` và khoá khỏi anon
    (web không dùng). Hai view cố ý giữ definer: `agents_public` (chỉ tên NMG +
-   số tin, nguồn trang `/moi-gioi`) và `listing_photos_v` (chỉ path của bucket
-   vốn công khai) — cả hai chỉ còn quyền SELECT.
+   số tin, nguồn trang `/moi-gioi`) và `listing_photos_v` — cả hai chỉ còn
+   quyền SELECT. *[chỉnh 29/08/2026 — FR-167c. Lý do THẬT phải giữ definer cho
+   `listing_photos_v` không phải "path vốn công khai" mà là: thân view đọc
+   `app_config`, đổi sang invoker là anon vỡ view (đúng bẫy TS-KHO-21). Và nó
+   KHÔNG còn chỉ lọc bucket — nay lọc cả trạng thái tin, vì quyền của chủ view
+   từng là đường vòng qua RLS của `listings`.]*
 5. **Vault không bao giờ chạm anon**: `get_secret()` chỉ cấp cho `postgres` và
    `service_role`.
 
@@ -421,25 +459,48 @@ có UI giỏ hàng riêng — cập nhật `unit_status` qua luồng rao/sửa t
 - Bảng `admins(email pk)` + RLS `listings_admin_read/update`: admin duyệt
   tin trên web (`/admin`). Thêm admin = insert email.
 
-### SRS-3.12 · Bảng vận hành & quan trắc (FR-146, FR-151, FR-152 — 27/08/2026)
+### SRS-3.12 · Bảng vận hành & quan trắc + bảng hàm RPC (FR-146, FR-151, FR-152, FR-159, FR-168, FR-169 — 27/08 → 01/09/2026)
 
 ```
-bot_usage    day date pk (giờ VN), model_calls int, capped_at timestamptz   -- FR-151a
+bot_usage    day date pk (giờ VN), model_calls int, capped_at timestamptz,  -- FR-151a
+             in_tokens, out_tokens, cache_write_tokens,
+             cache_read_tokens bigint                                       -- FR-169
+             (đếm CHỮ, không lưu thành tiền — giá nhân lúc đọc ở /admin;
+              admin đọc qua policy bot_usage_admin_read)
 bot_errors   id bigserial pk, at timestamptz, source text, status_code int,
              detail text (cắt 500)                                          -- FR-152
 bot_health   who text pk, at timestamptz, last_id bigint                    -- FR-152
 ```
 
-Cả ba bật RLS và `revoke all from anon, authenticated`. Riêng `bot_errors` và
-`bot_health` có policy SELECT cho `authenticated` là admin (cùng khuôn
-`listings_admin_read`) để trang `/admin` hiện được sức khoẻ bot.
+Cả ba bật RLS và `revoke all from anon`. Cả ba đều có policy SELECT cho
+`authenticated` là admin (cùng khuôn `listings_admin_read`) — `bot_errors_admin_read`,
+`bot_health_admin_read` từ 27/08, `bot_usage_admin_read` từ 01/09 (FR-169) — để
+trang `/admin` hiện được sức khoẻ bot và tiền bộ não. Ghi thì vẫn chỉ
+`service_role`: cấp SELECT mà quên policy là mọi người đăng nhập đọc được, hai vế
+phải đi cùng nhau.
 
 | Hàm | Vai trò | Ai gọi được |
 |---|---|---|
 | `bump_model_quota(p_limit)` | Đếm lượt vào bộ não theo ngày, vượt trần trả `false` + báo admin đúng một lần | chỉ `service_role` |
+| `mo_ho_so_nguoi_ban(p_zalo_user_id, p_seller_type default ccrb)` | FR-159: mở (hoặc lấy lại) hồ sơ `sellers` theo Zalo id khi người nhắn TỰ NHẬN có BĐS, kèm NHÃN gán lúc bóc tách (02/09: có BĐS = `ccrb`, tự xưng môi giới = `nmg`). `insert … on conflict do update … returning` — idempotent, ba tin gõ vụn đồng thời cùng nhận một id; chỉ nâng `unknown` → nhãn, KHÔNG ghi đè nhãn đã có | chỉ `service_role` |
+| `cong_token(in, out, cache_write, cache_read)` | Cộng dồn số CHỮ của một lượt gọi model vào dòng hôm nay của `bot_usage` (FR-169). Dùng `insert … on conflict` chứ không `update`, vì lượt đầu trong ngày có thể không đi qua `bump_model_quota`. Chỉ ĐO, không chặn; nuốt mọi lỗi để không kéo câu trả lời của khách xuống nhánh dự phòng | chỉ `service_role` |
 | `log_loi(source, detail, code)` | Cửa ghi lỗi tầng ứng dụng. **Van: 20 dòng/nguồn/giờ và 200 dòng/giờ tổng** | mở cho `anon` (bắt buộc — server Next chạy bằng publishable key) |
+| `bat_het_tien_api()` | Trigger AFTER INSERT trên `bot_errors` (FR-168): thấy dấu hiệu hết tiền tài khoản AI (`credit balance`, `plans & billing`, `insufficient…quota`, `billing`, mã 402) thì dựng một dòng cảnh báo nguồn `HET TIEN API`. **Ghi THẲNG, không qua `log_loi`** — van chống ngập sổ không được nuốt chuông báo sập hệ thống, mà sổ ngập chính là lúc dễ có sự cố lớn nhất. Tự hãm 6 giờ/lần; không tạo escalation vì đường đó đi qua cầu nối vốn có thể đang chết | trigger, không ai gọi tay |
 | `bot_health_tick()` | Quét `net._http_response` tìm phản hồi không 2xx → `bot_errors`; kiểm nhịp tim bridge; gộp báo admin 1 tin/giờ; dọn sổ > 30 ngày | chỉ `service_role`, chạy bằng cron `*/15` |
 | `beat(who)` | Ghi nhịp tim. `escalation-feed` gọi mỗi lần bridge kéo việc | chỉ `service_role` |
+| `lan_thu_ke(attempts)` | Khoảng chờ trước lần thử kế — nhân đôi dần, chặn ở 1 tiếng, nhiễu ±20%. Luật chung cho cả ba hàng đợi (FR-166 a) | chỉ `service_role` |
+| `claim_inbound(msg_id, stale_secs, worker)` | Giành job tin đến, atomic. Trả `received`/`in_flight`/`completed`/`dead` + payload trả lời đã lưu. Quá 8 lần → `dead` (FR-162 a, FR-166 c) | chỉ `service_role` |
+| `bao_hong_inbound(msg_id, detail)` | Ghi hỏng + hẹn giờ lùi dần, hoặc chuyển thư chết. Dòng đã `completed` thì KHÔNG đụng (khỏi va guard FR-163 g) | chỉ `service_role` |
+| `viec_inbound_bo_roi(limit)` | Tìm việc đường nhanh chưa làm xong: `chua_co_job` / `job_do_dang` / `chua_gui`. Cửa sổ 24h (FR-166 d) | chỉ `service_role` |
+| `inbound_sweep_tick()` | Cron 1 phút: có việc bỏ rơi thì gọi `inbound-sweep`, không thì return ngay | chỉ `service_role` |
+| `nhan_viec_nhac(kinds, limit, worker)` | Giành lời nhắc tới hạn bằng hợp đồng thuê 5 phút (`for update skip locked`) — cửa DUY NHẤT để `nudge` lấy việc (FR-166 f) | chỉ `service_role` |
+| `bao_hong_nhac(id, detail)` | Đã THỬ mà hụt: nhả hợp đồng thuê + hẹn giờ lùi dần; quá 5 lần → `dead` | chỉ `service_role` |
+| `next_listing_code()` | Cấp mã tin kế tiếp (max+1). Chỉ gọi từ trong trigger `listings_fill_code()`; **siết 29/08 (FR-167)** vì gọi trực tiếp là đếm `listings` vượt RLS | chỉ `service_role` |
+| `nha_viec_nhac(id, worker)` | CHƯA THỬ được (thiếu đích/token OA — việc của bridge): trả việc lại nguyên vẹn và hoàn luôn lượt đếm `attempts` (`20260829c`). **Thêm `worker` ở `20260829f`**: chỉ nhả khi `locked_by` khớp — thiếu vế này thì worker treo quá hạn xoá được khoá của worker đang chạy | chỉ `service_role` |
+| `bo_dem_nhac_treo(gio)` | Đếm lời nhắc `escalation`/`report` nằm chờ quá `gio` giờ và tự ghi `bot_errors` (`20260829f`). Con mắt bù cho việc `nha_viec_nhac` **cố ý không có trần thử lại**: bridge không tới lấy thì `attempts` cứ về 0 mỗi nhịp, không gì tự lộ (FR-152, NFR-18) | chỉ `service_role` |
+| `nhan_viec_don_media(limit)` | Giành việc dọn file, `attempts < 6` (FR-165 e, FR-166 g) | chỉ `service_role` |
+| `chon_viec_don_chet()` | Dán nhãn `chet` cho việc dọn đã hết đường thử lại | chỉ `service_role` |
+| view `job_suc_khoe` | Một cửa sổ cho ba hàng đợi: job id, attempts, lỗi, started/finished, next_retry (FR-166). **Chưa nối vào `/admin`** — trang đó đọc Supabase bằng publishable key tức vai `anon`, mà view này `revoke all` khỏi anon; muốn hiện thì phải mở qua một RPC security-definer có kiểm quyền admin, như `bot_health_tick`. Hiện chỉ đọc được bằng service key | `revoke all` khỏi anon/authenticated |
 
 **Vì sao phải có `bot_errors` thay vì đọc log**: log edge function bậc Free chỉ
 giữ 1 ngày, mà loại lỗi nguy nhất ở hệ này **TRẢ 200** (`catch` nuốt exception
@@ -447,12 +508,35 @@ rồi hàm chạy tiếp) nên không cửa nào mã-HTTP thấy được. Đã 
 một tin kèm `image_url` hỏng → HTTP 200, khách vẫn nhận câu trả lời qua fallback
 regex, mà `bot_errors` ghi `chat-reply model → 400 Unable to download the file`.
 
-**Cổng FR-151b**: secret `BRIDGE_SECRET` trong Vault. Có secret thì `chat-reply`
-và `escalation-feed` chỉ nhận request kèm header `x-bridge-secret` khớp, hoặc
-request mang `service_role` key (`zalo-webhook`). Chưa đặt secret thì chạy như
-cũ. **Thứ tự bật bắt buộc**: điền `.env` phía bridge TRƯỚC, tạo secret trong
+**Cổng FR-151b**: secret `BRIDGE_SECRET` trong Vault. Có secret thì function
+chỉ nhận request kèm header `x-bridge-secret` khớp, hoặc request mang
+`service_role` key. Chưa đặt secret thì chạy như cũ.
+*[mở rộng 29/08/2026 — FR-167b: từ HAI function (`chat-reply`,
+`escalation-feed`) lên **TÁM**, thêm `nudge`, `ask-seller`, `ctv-report`,
+`geocode-listings`, `media-cleanup`, `inbound-sweep`. Lý do: `verify_jwt=true`
+KHÔNG phải xác thực — nó chỉ đòi publishable key, mà khoá đó nằm trong bundle JS
+của web. Bảng "ai gọi hợp lệ" ở `bot/README.md`. Mọi hàm SQL gọi sang phải mang
+theo bí mật — bỏ sót một cái là đường đó đứt IM LẶNG vì `net.http_post` bắn-rồi-
+quên (đã vấp: `ask_seller_drip`, vá ở `20260829e`).]* **Thứ tự bật bắt buộc**: điền `.env` phía bridge TRƯỚC, tạo secret trong
 Vault SAU — làm ngược là bridge chết trong khoảng giữa. Tắt khẩn:
 `delete from vault.secrets where name = 'BRIDGE_SECRET';`
+
+**Cổng này FAIL-OPEN, và đó là chủ ý** (gắn cổng trước khi có bí mật thì cron
+không gãy) — nhưng chủ ý ấy có giá: đọc hụt bí mật MỘT lần là function thành
+công khai mà không ai hay. Từ `20260829f` cả tám cửa ghi `bot_errors` nguồn
+`<tên function> CONG MO` khi không đọc được `BRIDGE_SECRET`; van của `log_loi`
+(20 dòng/nguồn/giờ) chặn spam. Đọc bí mật phải qua `secretOf()` — **biến môi
+trường trước, Vault sau**; `get_secret` trần chỉ hỏi Vault, nên bí mật đặt bằng
+env của function thì cửa đó mở toang trong khi cả nhà đã đóng (đã vấp:
+`geocode-listings`, `escalation-feed`).
+
+**Cửa `mark_sent` của `chat-reply`** (FR-162, `29/08`): `POST {mark_sent: msg_id,
+sent_bubbles: n, done: bool}` → ghi `inbound_ledger.sent_bubbles`/`sent_at`. Có
+vì `zalo-webhook` cầm service key nên tự ghi sổ được, còn bridge chỉ có
+publishable key + bí mật cổng. Thiếu cửa này thì `already_sent` bên kênh
+`zalo_personal_test` **vĩnh viễn false**, tức cờ chống-gửi-đúp là chữ chết ở
+đúng cái kênh đang chạy thật. Cửa dùng chung cổng `x-bridge-secret`, không mở
+thêm lối nào.
 
 ### SRS-3.13 · Tầng cache của web (NFR-17 — 27/08/2026)
 
@@ -505,13 +589,28 @@ Cái giá của EAV là **fact nằm dạng chữ nên không lọc được**. 
 | fact_key | Cột đổ vào | Ràng buộc |
 |---|---|---|
 | `so_phong_ngu` | `listings.bedrooms` | 1…20, phải có chữ số |
-| `dien_tich*` | `listings.area_m2` | >5 và <5000 |
+| `dien_tich`, `dien_tich_dat` | `listings.area_m2` | >5 và <5000 |
+| `dien_tich_tim_tuong` | `listings.area_m2` | >5 và <5000, **chỉ khi `property_type = chung_cu`** (FR-163: tim tường của nhà phố là con số phụ, đè vào là hỏng diện tích đất) |
 | `tang` | `listings.floor` | 0…80 (0 = trệt) |
 | `huong` | `listings.direction` | độ dài 2…40 ký tự |
+| `gia` | `listings.price_raw` (+ `price_source`) | `parse_vnd()` phải đọc ra số trong 1e8…1e12; `price_vnd` do trigger giá dẫn xuất, không ghi tay (FR-164) |
+| `phuong` | `listings.ward` (+ `ward_source`) | qua `chuan_hoa_phuong()` → `Phường N` (1…25) hoặc tên chữ 2…50 ký tự (FR-164) |
+| `loai_bds` | `listings.property_type` (+ `property_type_source`) | qua `guess_property_type_answer()`; không đọc ra loại thì KHÔNG ghi, hỏi lại (FR-150/FR-164) |
 
-Tất cả **chỉ ghi khi cột đang trống** — không bao giờ đè lên số đã xác minh — và
-**không đụng `description`**: câu rao gốc là văn phong người bán, fact hiện ở
-khối "Thông tin thêm" riêng trên trang tin.
+Luật ghi đè là **bậc nguồn** `bac_nguon()` (FR-164a): `chu_xac_nhan` (3) >
+`admin` (2) > `suy_doan` (1). Fact chỉ ghi vào cột khi bậc của nó **lớn hơn hoặc
+bằng** bậc đang giữ cột, và trong cùng một bậc thì giá trị MỚI NHẤT thắng — chủ
+nhà sửa 3PN thành 4PN là `bedrooms` đổi theo. Luật bậc chỉ áp cho BA trường có
+cột `*_source` (`price_raw`, `ward`, `property_type`) — đúng ba trường có đường
+SUY ĐOÁN cạnh tranh; bốn trường còn lại (`bedrooms`, `area_m2`, `floor`,
+`direction`) không có nguồn nào ngoài chủ nhà và admin nên không có tranh chấp
+để phân xử, chỉ theo luật mới-nhất-thắng của FR-163(a). *[cập nhật 28/08/2026 — thay câu
+bất biến cũ "tất cả chỉ ghi khi cột đang trống"; luật đó bị FR-163(a) bỏ vì nó
+làm mọi lời đính chính của chủ nhà rơi vào hư không]*
+
+Vẫn **không đụng `description`**: câu rao gốc là văn phong người bán, fact hiện ở
+khối "Thông tin thêm" riêng trên trang tin. `listing_facts.answer` giữ NGUYÊN VĂN
+làm bằng chứng — chuẩn hoá chỉ xảy ra trên đường vào CỘT.
 
 **Hạng người rao** (FR-155) là `seller_rank()` + view `seller_ranks`, tính tại
 chỗ từ số tin. Cố ý không lưu thành cột: cột thì phải có người cập nhật, mà thứ
@@ -664,7 +763,7 @@ Loại khỏi kết quả: `status ≠ 'dang_rao'`, và listing B đã từ ch�
 | `stale_listing_check` | thứ 2 hằng tuần | *(tinh chỉnh theo FR-107)* TTL xác nhận là **7 ngày**, kiểm tra **tại thời điểm matching**: quá hạn thì hỏi S trước khi giới thiệu; job tuần chỉ quét listing không có lượt matching nào |
 | `close_conversations` | mỗi 5 phút | đóng hội thoại im lặng > 30 phút (FR-72) |
 
-**Cron THẬT đang chạy trên `nhadat-cc`** (pg_cron, kiểm 27/08/2026 — bảng trên
+**Cron THẬT đang chạy trên `nhadat-cc`** (pg_cron, kiểm 29/08/2026 — bảng trên
 là thiết kế, bảng dưới là thực tế):
 
 | Job | Lịch | Gọi gì |
@@ -674,6 +773,11 @@ là thiết kế, bảng dưới là thực tế):
 | `ctv-report-tick` | `0 10 * * *` (17h VN) | `ctv-report` — báo cáo CTV (FR-137/149) |
 | `listing-interest-decay` | `0 20 * * *` | trả tin `dang_quan_tam` về `dang_ban` sau 7 ngày (FR-139) |
 | `bot-health-tick` | `*/15 * * * *` | `bot_health_tick()` — SQL thuần, không HTTP (FR-152) |
+| `media-cleanup-tick` | `*/5 * * * *` | `media-cleanup` — xoá file đã bị gỡ khỏi DB (FR-165 e) |
+| `inbound-sweep-tick` | `* * * * *` | `inbound_sweep_tick()` → `inbound-sweep`. Không có việc bỏ rơi thì RETURN NGAY, không gọi HTTP (FR-166 d) |
+| `media-chet-tick` | `0 * * * *` | `chon_viec_don_chet()` — SQL thuần, dán nhãn thư chết cho việc dọn quá 6 lần (FR-166 g) |
+
+*(Ba dòng CUỐI bảng bổ sung 29/08/2026. `media-cleanup-tick` chạy từ 29/08 theo FR-165 nhưng trước lần này chưa từng được ghi vào bảng.)*
 
 **Đừng tin `cron.job_run_details.status`** (NFR-18): `net.http_post()` trả về
 ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge function trả
