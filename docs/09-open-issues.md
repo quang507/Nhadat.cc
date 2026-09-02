@@ -648,6 +648,71 @@ cố định). Chốt sau khi có số thật ở `/admin` (thẻ "Tiền bộ n
 
 ---
 
+### OPEN-36 · Xác thực (KYC) người bán/môi giới có mâu thuẫn với ẩn danh hai chiều không?
+
+**Mức: TRUNG BÌNH. Nêu 02/09/2026 từ đối chiếu ba sàn (docs/01 §1.5c).**
+
+Cả mogi (`IsVerifiedIDCard`, `AgentCerNo`) lẫn batdongsan (CCCD + selfie +
+Zalo + chứng chỉ, danh hiệu "Môi giới chuyên nghiệp", điều kiện duy trì ≥5
+tin/30 ngày) đều coi **người đăng đã xác thực** là tài sản uy tín và là trang
+SEO thứ hai sau tin. Mình thì INS-11 ẩn danh hai chiều: khách chỉ thấy mã tin,
+người bán không lộ tên/số. `sellers` hiện có `seller_type`, `rating_*` và
+`agents_public` chỉ lộ tên NMG + số tin.
+
+**Hai phương án**: (a) giữ nguyên — uy tín là của nhadat.cc, không của từng
+người bán; bot nói "tin đã xác minh với chủ nhà ngày X" là đủ; (b) thêm
+`sellers.verified_at` + bằng chứng KYC (CCCD lưu bucket riêng, không bao giờ
+hiện) và nhãn "chính chủ đã xác thực" trên tin — không lộ danh tính nhưng lộ
+*trạng thái xác thực*. (b) tốn một luồng thu CCCD qua chat (nhạy cảm, đúng thứ
+`sổ đỏ samples/` bị cấm) và luật lưu trữ. Khuyến nghị (a) cho tới khi có NMG
+thật; nếu chọn (b) thì làm cùng đường signed URL NFR-06 còn thiếu.
+
+**Chờ chủ dự án chốt.**
+
+---
+
+### OPEN-37 · Lớp dữ liệu vị trí (quy hoạch, ngập, POI): lấy từ đâu, trả bao nhiêu?
+
+**Mức: TRUNG BÌNH. Nêu 02/09/2026 (docs/01 §1.5c).**
+
+radanhadat mua lớp FIMO (ảnh vệ tinh: quy hoạch + quyết định, ngập, mật độ,
+cập nhật tháng) và biến "rà" thành tên thương hiệu; mogi có "địa điểm" (trường,
+KCN) để sinh landing "gần X"; batdongsan có POI quanh dự án. Mình có
+`lat/lng` cho 164/173 tin qua Nominatim (FR-122) và INS-07 nói khách hỏi "gần
+hồ bơi Lam Sơn", "gần ngã tư X–Y" — đúng câu hỏi mà POI trả lời được.
+
+**Ba mức, tăng dần tiền**: (1) `pois` Quận 5 tự nhập + OSM (chợ, trường, bệnh
+viện, ngã tư, hồ bơi — vài trăm điểm, 0 đồng, làm được ngay, đề xuất mục 6 ở
+§1.5c); (2) khoảng cách/thời gian đi tới POI tính sẵn cho mỗi tin (OSRM công
+cộng hoặc tự tính đường chim bay); (3) quy hoạch/ngập theo thửa — cần nguồn trả
+tiền hoặc bản đồ quy hoạch quận (PDF) số hoá tay, và câu trả lời sai về quy
+hoạch là rủi ro pháp lý (TONE §6.8 cấm khẳng định quy hoạch). Khuyến nghị làm
+(1) và (2); (3) chỉ khi có nguồn chính thức.
+
+**Chờ chủ dự án chốt.**
+
+---
+
+### OPEN-38 · Ảnh tin: thumbnail và watermark trên bậc Free
+
+**Mức: THẤP. Nêu 02/09/2026 (docs/01 §1.5c).**
+
+Ba sàn đều phục vụ ảnh qua CDN có nhiều cỡ (crop 200×200, 600×800…) và
+batdongsan đóng watermark. Mình lưu file gốc từ điện thoại (vài MB/tấm) trong
+`listing-public`, thẻ tin tải lazy nhưng vẫn là file gốc; lưới 24 thẻ = vài
+chục MB nếu tin có ảnh thật. Biến đổi ảnh của Supabase Storage là tính năng
+bậc Pro (NFR-16: free trước).
+
+**Phương án**: (a) `scripts/up-anh.mjs` sinh thêm bản 480px lúc up (sharp),
+lưu cùng thư mục UUID, `listing_media.variants`; (b) `next/image` với loader
+tự viết — Vercel Hobby có hạn mức tối ưu ảnh; (c) chờ lên Pro. Watermark: chỉ
+đáng khi có tin bị sao chép — chưa thấy. Khuyến nghị (a), làm khi có > 20 tin
+có ảnh thật.
+
+**Chờ chủ dự án chốt.**
+
+---
+
 ### Soát mã nguồn 27/08/2026 — kết luận về advisor Supabase
 
 Advisor bảo mật đang báo **2 ERROR**. Đã soi từng cái, **cả hai là cố ý và an

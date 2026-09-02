@@ -344,6 +344,55 @@ Chi tiết cách kế thừa/né: `06-ui-design.md` §Kế thừa từ Veedoo / 
 > **Lưu ý bản quyền.** Theme thương mại nằm ở `ThemeForest/` đã bị loại khỏi repo.
 > Chỉ tham chiếu *bố cục*, không sao chép asset. Xem `OPEN-07`.
 
+### 1.5c Đối chiếu MÔ HÌNH DỮ LIỆU với ba sàn: họ lưu gì, mình còn thiếu gì (02/09/2026)
+
+Yêu cầu chủ dự án: *"xem mấy web kia nó lưu cái gì vào db, xong xem còn thiếu
+gì so với project mình"*. Ba sàn: **mogi.vn** (đọc qua bản HTML thật lưu trong
+repo công khai + 4 crawler mở), **radanhadat.vn** (quy chế sàn, bảng giá tin,
+mô tả app, snippet index — chỉ đoạn trích), **batdongsan.com.vn** (fixture HTML
+trang tin 2024, template site 2021, 8 crawler mở, trợ giúp) — cả ba chặn truy
+cập trực tiếp từ môi trường phân tích [nguồn: WebSearch + GitHub 02/09/2026;
+mức tin cậy ghi từng dòng trong báo cáo agent, tóm ở đây]. Phía mình: 27 bảng
+thật trên Supabase + những bảng SRS đã đặc tả mà chưa dựng.
+
+| Thực thể | mogi | radanhadat | batdongsan | nhadat.cc hôm nay | Còn thiếu / đánh giá |
+|---|---|---|---|---|---|
+| **Tin rao** (trường chuẩn) | ~7 trường | 10 bắt buộc + kích thước | "Đặc điểm BĐS" 8 trường + giá/m² + tags | 24 cột thông số + giá/m² (FR-172) | **Đủ**. Thêm được `rental_yield_pct` (rada tính sẵn tỉ suất thuê từ `rent_income_vnd`) — rẻ |
+| **Vòng đời tin** | ngày đăng, hạn 30 ngày tính lại theo lần làm mới, dịch vụ mua trên tin | **tin không bao giờ xoá**, lịch sử đăng lại / nâng cấp / từng lượt đẩy | ngày đăng, hết hạn, hẹn giờ, tự đăng lại, hạ/xoá, nháp — mỗi bước là một giao dịch | `status` 5 trạng thái + `created/updated/last_confirmed/last_interest_at` | **THIẾU `listing_events`** — SRS-3.2 đã đặc tả (FR-70, FR-73 "BĐS hot nhất", đều **M**) mà chưa dựng. Rẻ: trigger ghi sự kiện đổi trạng thái / quan tâm / lượt xem / xác nhận |
+| **Người đăng / môi giới** | thực thể riêng: `JoinedDate`, `IsVerifiedIDCard`, `AgentCerNo`, `UserTypeId`, hồ sơ công khai `/moi-gioi/…-uid` là landing SEO thứ hai | không thấy hồ sơ công khai; xếp hạng top 10 môi giới/tháng | KYC đầy đủ (CCCD, selfie, Zalo, chứng chỉ, năm kinh nghiệm, khu vực × loại hình chuyên), điều kiện duy trì ≥5 tin/30 ngày, doanh nghiệp là tài khoản cha | `sellers` (tên, SĐT, nhãn ccrb/nmg, rating), view `agents_public`, `/moi-gioi` | Cố ý KHÔNG lộ danh tính (INS-11). Thiếu thật: `verified_at` / bằng chứng KYC cho NMG, và "khu vực × loại hình chuyên" — **OPEN-36** (KYC người bán vs ẩn danh) |
+| **Tài khoản · ví · gói tin · thanh toán** | 3 gói tháng, hạn mức tin, Tin TOP/VIP/UP/nhãn, ví Mogi, mã thưởng, VAT | điểm theo **khung giờ** (1/5/20), ví hai túi (chính + KM hạn 3 tháng), combo, QR chuyển khoản, hoàn tiền hẹp | 2–4 túi tiền có HSD, mã CK định danh, sổ giao dịch có số dư sau mỗi dòng, giá theo ngày, tin tài trợ đấu giá | **không có** — doanh thu 100% phí thành công (biz model), `deals.fee_pct` | **Không phải khoảng trống**: mô hình khác. Chỉ thiếu sổ thu phí sau chốt (`deals` chưa có `fee_invoiced_at/fee_paid_at`) — ASM-05 nói thu ngoài hệ thống, để đó |
+| **Lưu tin · tìm kiếm đã lưu · thông báo tin mới** | có cả hai; tìm kiếm băm thành `searchkey`; hộp thông báo | lưu tin, tin đã xem; **không thấy** tìm kiếm đã lưu | lưu tin (báo khi tin cập nhật), lưu tìm kiếm → thông báo tin mới, email/app | tim = localStorage (FR-121); `interests` phía bot; `buyers.preferences` chính là tiêu chí đã lưu | **THIẾU job `match_new_listings`** (SRS-5.3, FR-64 **M**): tin mới khớp `buyers.preferences` → bot chủ động nhắn. Đây là lõi "chat không bao giờ kết thúc", kênh của mình là Zalo chứ không phải email |
+| **Lượt xem · thống kê cho người đăng** | lượt xem + thời gian dịch vụ trên trang thống kê; tracking sự kiện có nghĩa (gọi, hỏi, báo, lưu) | lượt xem, lịch sử đẩy | theo NGÀY: hiển thị / xem tin / xem SĐT / "khách hàng" 60 ngày | `listing_views` chỉ cho người đăng nhập; không đếm ẩn danh; chủ nhà không thấy gì | **THIẾU `listing_stats_daily`** (đếm ẩn danh từ `TrackView`, đã có sẵn điểm chạm) → bot báo chủ nhà "tuần này căn anh có 12 khách xem, 2 khách hỏi hẻm" — vừa là dữ liệu vừa là lý-do-vì-khách để chủ trả lời drip |
+| **Lead / khách hàng của môi giới** | hộp thư `userInbox`, bấm hiện số, form vay | CRM app: khách + nhu cầu + lịch sử gửi căn + matching, chia sẻ giỏ giữa môi giới | lead = xem SĐT / gọi lại / SMS / email / form dự án, gắn SĐT đã OTP, dashboard "Khách hàng" | `conversations`/`messages`/`buyers.preferences`/`interests`/`viewings`/`deals` — **giàu hơn cả ba** vì chat-first | Đủ. Thứ ba sàn có mà mình không cần: SĐT khách (INS-04) |
+| **Kiểm duyệt · báo tin xấu · khiếu nại** | duyệt trước, từ chối trùng, khoá tài khoản leo thang, nút báo xấu | state machine có SLA 4 giờ, lý do từ chối, khiếu nại mốc 7/15 ngày | duyệt ≤8h, lý do theo quy định, báo xấu + hotline, "tin đã bị báo xấu" | `cho_thong_tin` → admin duyệt (FR-127); tin nhặt từ nguồn thứ ba (FR-156) không có cửa báo sai | **THIẾU `listing_reports`** ("tin này bán rồi", "giá sai", "không liên lạc được") từ web lẫn chat + lý do khi admin gỡ. Kho 173 tin phần lớn nhặt từ ngoài — tin cũ là rủi ro uy tín lớn nhất (RSK-06) |
+| **Xác thực tin** | — | — | hồ sơ xác thực: sổ + media geotag/timestamp + đối chiếu giá thị trường; nhãn **45 ngày**, gia hạn, gỡ khi bị báo | `last_confirmed_at`, `specs_source = chu_xac_nhan`, bucket `listing-private` cho sổ | Có nguyên liệu, **thiếu nhãn + hạn** trên web/bot ("xác minh với chủ nhà ngày X, còn hiệu lực"). Rẻ: suy từ cột đã có |
+| **Taxonomy khu vực · đường · sáp nhập** | bảng phẳng có id mọi cấp, **polygon ranh giới**, `SEOTitle`, bảng tra sáp nhập 2025 | quận cũ trên URL, tin hiện "Phường Sài Gòn (Quận 1 cũ)" | id ở tỉnh/quận/phường/**đường**/dự án, mỗi cấp một trang SEO có đếm tin | `ward` text, `street` (FR-172, 65 đường), tâm phường trong code, `ward_mapping` (FR-118) chưa dựng | **THIẾU bảng `streets`** (Quận 5 có ~65 đường trong kho → trang `/duong/tran-hung-dao`, đúng khe "sâu một quận" INS-08) và `ward_mapping` (FR-118) |
+| **Địa điểm · POI · thời gian di chuyển · quy hoạch** | địa điểm `pid` (trường, KCN) ngang hàng khu vực → landing "gần X" | lớp FIMO theo toạ độ/thửa: quy hoạch + quyết định, ngập, mật độ; POI bán kính; isochrone | POI quanh dự án; "Bản đồ nhà đất" | `landmarks jsonb` (SRS-3.1) chưa dựng; `lat/lng` 164/173; INS-07 nói "gần hồ bơi Lam Sơn" là cách khách hỏi | **THIẾU `pois`** cho Quận 5 (chợ, trường, bệnh viện, ngã tư, hồ bơi) — lấy từ OSM đã dùng ở `geocode-listings`, tính khoảng cách mỗi tin. Lớp quy hoạch/ngập: **OPEN-37** (nguồn dữ liệu, tiền) |
+| **Dự án · chủ đầu tư** | `prj`/`oid` có id riêng, review cộng đồng | dự án có schema (CĐT, block/tầng/căn, mật độ, năm bàn giao, giá/m²) | dự án + doanh nghiệp là hai bảng, tiến độ timeline, tiện ích chuẩn, FAQ, tính lãi vay | `projects` (jsonb tiện ích/mặt bằng/loại căn), 1 dự án đối tác | Đủ cho quy mô hiện tại; `developers` tách bảng khi có > 3 dự án |
+| **Giá theo khu vực · lịch sử giá** | `/gia-nha-dat-*`: đường × loại (MT/hẻm/CC) × **tháng**, % biến động, 10 năm dữ liệu | chỉ bài viết biên tập | phường × loại hình × **quý** (cờ tháng), giá phổ biến + khoảng + số tin + YoY, dùng lại khi duyệt tin; API `GetPricingHistory` | `/thong-ke` tính **tại chỗ** từ tin đang có (FR-120), `price_per_m2_vnd`, `deals.price_vnd` | **THIẾU snapshot `gia_khu_vuc` hằng tháng** (phường × loại × đường vào: trung vị giá/m², số tin, và **giá đã chốt** từ `deals` — thứ không sàn nào có). Không chụp từ bây giờ thì sau này không có lịch sử |
+| **Ảnh** | CDN crop nhiều cỡ, lazy | ảnh + video review | crop theo kích thước + **watermark**, 3–24 ảnh, video ≤50MB, 360° | `listing_media` file gốc (vài MB/tấm), thẻ tin lazy | Thiếu thumbnail/watermark — Supabase Free không có biến đổi ảnh: **OPEN-38** |
+| **Tỉ suất · công cụ tài chính** | tính vay UOB | tỉ suất lợi nhuận **trên từng tin**, phân tích đầu tư, tính giá đất theo bảng giá nhà nước | tính lãi suất ở trang dự án | `/tinh-lai-vay` (FR-119) | Thêm `rental_yield_pct` là xong (đã có `rent_income_vnd` 17 tin) |
+
+**Kết luận.** Về *tin rao* mình đã ngang hoặc hơn (sau FR-172). Về *khách*
+mình hơn hẳn vì chat-first. Khoảng trống thật nằm ở **lớp "chuyện gì đã xảy
+ra với tin theo thời gian"** — sự kiện, lượt xem, giá theo tháng, báo tin sai —
+là thứ cả ba sàn đều lưu và đều dùng lại (xếp hạng hot, duyệt tin, định giá).
+SRS đã đặc tả đúng những bảng đó từ đầu (SRS-3.2, SRS-3.8b, SRS-5.3) nhưng chưa
+dựng. Thứ tự đề xuất, mỗi việc là một migration nhỏ:
+
+1. `listing_events` + `hot_score` (FR-70, FR-73 — M, SRS-3.2 có sẵn).
+2. `match_new_listings` ↔ `buyers.preferences` → bot nhắn (FR-64 — M, SRS-5.3).
+3. `gia_khu_vuc` snapshot tháng từ `listings` + `deals` (FR-99, FR-120).
+4. `listing_reports` + lý do gỡ tin (RSK-06, FR-127).
+5. `streets` + `ward_mapping` (FR-118, INS-08 — SEO cấp đường).
+6. `pois` Quận 5 + khoảng cách mỗi tin (INS-07, SRS-3.1 `landmarks`).
+7. Nhãn "đã xác minh với chủ nhà ngày X" + `rental_yield_pct` (chỉ hiển thị).
+
+Ba việc chờ chủ dự án: OPEN-36 (KYC người bán), OPEN-37 (lớp quy hoạch/ngập),
+OPEN-38 (thumbnail/watermark ảnh). Không đề xuất: ví/gói tin/đẩy tin (khác mô
+hình doanh thu), SĐT khách trong lead (INS-04), CRM chia sẻ giữa môi giới
+(OPEN-16 đã treo).
+
 ## 1.6 Rủi ro đã nhận diện
 
 | ID | Rủi ro | Mức | Giảm thiểu |

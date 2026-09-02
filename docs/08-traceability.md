@@ -32,7 +32,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | INS-10 | Hàng dự án: dữ liệu hai tầng, tồn kho theo căn | FR-113…FR-117 (OPEN-15 chốt phương án b, 24/08) |
 | INS-11 | Trung gian toàn phần, ẩn danh hai chiều | FR-104…FR-112, UF-10, UF-13, SRS-3.8 |
 | INS-12 | Sau sáp nhập 2025, địa giới cũ vẫn là ngôn ngữ thị trường | FR-118 (`ward_mapping`), Taxonomy §4.6 (04), FR-12 (trang tag) — quyết định chủ dự án 24/08/2026 |
-| INS-13 | Bộ trường tin rao "chuẩn sàn" là mẫu số chung (mogi/radanhadat) | FR-172, SRS-3.1 (bảng thật ↔ đặc tả), SRS-3.14 — đối chiếu 02/09/2026 |
+| INS-13 | Bộ trường tin rao "chuẩn sàn" là mẫu số chung (mogi/radanhadat) | FR-172, SRS-3.1 (bảng thật ↔ đặc tả), SRS-3.14 — đối chiếu 02/09/2026; mở rộng ra MÔ HÌNH DỮ LIỆU ba sàn ở §1.5c (01): khoảng trống = SRS-3.2 `property_events` (FR-70/73), SRS-5.3 `match_new_listings` (FR-64), snapshot giá (FR-99/120), `listing_reports`, `streets`/`ward_mapping` (FR-118), `pois` (INS-07); OPEN-36/37/38 |
 
 ## 8.3 FR → UF → WF → SRS → AC
 
