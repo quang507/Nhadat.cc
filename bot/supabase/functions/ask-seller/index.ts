@@ -185,8 +185,7 @@ Deno.serve(async (req) => {
             const { error: logErr } = await db.from("messages")
               .insert({ conversation_id: scId, sender: "bot", body: out.message });
             if (logErr) await ghiLoi(db, "ask-seller messages bot", logErr.message);
-            await db.from("conversations")
-              .update({ last_message_at: new Date().toISOString() }).eq("id", scId);
+            // (`last_message_at` do trigger trên `messages` đẩy — 20260902d.)
           }
         }
       }

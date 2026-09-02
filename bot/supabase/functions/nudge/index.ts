@@ -283,8 +283,7 @@ Deno.serve(async (req) => {
         const { error: logErr } = await client.from("messages")
           .insert({ conversation_id: convLog, sender: "bot", body: text });
         if (logErr) await ghiLoi(client, "nudge messages bot", logErr.message);
-        await client.from("conversations")
-          .update({ last_message_at: new Date().toISOString() }).eq("id", convLog);
+        // (`last_message_at` do trigger trên `messages` đẩy — 20260902d.)
       }
       await client.from("reminders")
         .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);
