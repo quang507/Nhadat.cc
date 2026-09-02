@@ -473,6 +473,15 @@ Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: FR-160 suy `sel
 NMG 0.5%). Chính chủ mở tin thứ ba là phí TỰ RƠI MỘT NỬA, và rơi ngược lại khi gỡ
 tin. FR-160 vì vậy **chưa dựng**.
 
+*[01/09/2026 — thêm một cạnh]* Từ FR-159, người bán mở hồ sơ ngay trong chat
+mang `seller_type = unknown` cho tới khi được phân loại. Lúc chốt kèo (FR-142)
+`chat-reply` tính `fee_pct` theo `seller_type`; bản trước coi mọi giá trị khác
+`ccrb` là môi giới 0,5% — tức chính chủ vào qua chat mà chốt trước khi phân loại
+bị tính phí SAI một nửa. Đã sửa: `unknown` → `fee_pct = null`, tức deal ghi
+KHÔNG CÓ mức phí, cần người thật gán trước khi lập hợp đồng. Câu hỏi thêm cho
+chủ dự án: ai gán, ở đâu (form admin? bot hỏi "anh là chính chủ hay môi giới"?),
+và có được gán tự động theo FR-160 không — cùng một nút với câu hỏi gốc.
+
 **Chờ chủ dự án chốt** (mức: Cao).
 
 ---

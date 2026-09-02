@@ -23,3 +23,11 @@ dấu bằng comment `// ĐỒNG BỘ VỚI chat-reply/index.ts`.
 |---|---|---|
 | `fr161-go-lan-dau.mjs` | Câu gõ LẪN dấu vẫn nhận ra là câu rao / câu hỏi mua | Tin rao rơi im lặng; người hỏi mua bị bot hỏi ngược về căn của họ |
 | `fr164-loi-sua-va-cau-hoi-treo.mjs` | Câu vừa sửa một trường vừa trả lời câu hỏi đang treo thì ghi CẢ HAI | Câu trả lời drip bay mất, `info_requests` kẹt `pending`, bot hỏi lại điều vừa được đáp |
+
+## `fr159-bon-vai.mjs` (01/09/2026)
+
+Bốn vai người nhắn (FR-159, FR-170): cổng `hoiMua` (người bán có đang hỏi mua
+không), cổng `tuNhanCoBDS` (người lạ có tự nhận có BĐS không), `budgetRangeVnd`
+(khoảng giá lọc kho — kiểm bằng "có ÔM căn giá X không"), phần tiền của
+`regexProfileFallback`. 50 ca. Sửa `hoiMua` ở `chat-reply` thì sửa CẢ file này
+LẪN `fr161-go-lan-dau.mjs` (bản rút gọn hai vế).

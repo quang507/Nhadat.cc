@@ -875,3 +875,44 @@ Hai luật rút ra, áp cho mọi trigger lọc sau này:
    nghĩa, mà `if` thì im lặng coi `NULL` như false.
 2. Kiểm một điều kiện lọc thì **ca âm tính quan trọng ngang ca dương tính**.
    "Chạy đúng khi có sự cố" mới là nửa bài; nửa còn lại là "im khi không có".
+
+---
+
+### TS-VAI — bóc dữ liệu theo bốn vai người nhắn (FR-159, FR-170)
+
+Soát 01/09/2026 theo bốn vai chủ dự án nêu. Hai tầng kiểm:
+
+**Tầng regex/parser** — `bot/tests/fr159-bon-vai.mjs`, chạy `node`, 50 ca, chép
+regex từ `chat-reply` (xem `bot/tests/README.md`). Bốn nhóm: 7 câu chủ nhà nói
+về căn của họ phải Ở LẠI nhánh bán; 8 câu hỏi mua thật phải rẽ sang nhánh mua;
+14 câu người lạ (5 mở hồ sơ bán, 9 không — trong đó "tôi có căn nhà ở Q10, giờ tìm Q5"
+phải KHÔNG mở dù đang trả lời câu hỏi vai); 18 ca khoảng giá đo bằng bất biến
+"khoảng lọc có ÔM căn giá X không" + 3 ca fallback. **50/50.** Chạy lại
+`fr161-go-lan-dau.mjs` sau khi đồng bộ `hoiMua`: **9/9.**
+
+Con số đáng nhớ trước khi vá: **5/7** câu chủ nhà thường nói ("có khách nào coi
+nhà chưa em?", "tôi muốn nhà mình lên web sớm"…) bị rẽ sang nhánh mua; "5 tỷ 8"
+cho cận trên 5,75 tỷ nên căn 5,8 tỷ bị lọc mất; "từ 5 đến 6 tỷ" cho CẬN DƯỚI
+5,7 tỷ.
+
+**Tầng DB** — RPC `mo_ho_so_nguoi_ban` (migration `20260901d`), gói `DO … raise
+exception` cuộn lại, đối chiếu sau: 0 dòng `sellers` có `zalo_user_id` bắt đầu
+bằng `test-fr159-`.
+
+| ID | Ca | Chờ đợi | Kết quả |
+|---|---|---|---|
+| TS-VAI-01 | Zalo id lạ | Tạo đúng 1 dòng, có id, `seller_type = unknown` | 1 dòng, unknown ✅ |
+| TS-VAI-02 | Gọi lần hai cùng id (gõ vụn / race) | CÙNG id, không 23505, vẫn 1 dòng | cùng id, 1 dòng ✅ |
+| TS-VAI-03 | Người đã có tên gọi lại | Trả về đúng tên cũ, không xoá | `Chị D.` ✅ |
+| TS-VAI-04 | Vai `anon` gọi | Chặn | chặn ✅ |
+| TS-VAI-05 | Vai `authenticated` gọi | Chặn | chặn ✅ |
+
+**Chưa kiểm được ở đây** (cần bản deploy): trọn luồng người lạ → câu hỏi vai →
+trả lời "tôi có căn nhà" → hồ sơ bán mở → câu rao tạo tin. Cách kiểm sau khi
+deploy, bằng một Zalo chưa từng nhắn: (1) nhắn "chào em" → phải nhận đúng câu
+hỏi vai, `buyers.preferences.hoi_vai = true`, KHÔNG có lượt gọi model
+(`bot_usage.model_calls` không tăng); (2) nhắn "tôi có căn nhà ở P4 muốn bán"
+→ `sellers` có dòng mới, trả lời mời gửi địa chỉ/giá/diện tích; (3) nhắn "bán
+nhà P4 giá 5 tỷ 8 50m2" → tin `cho_thong_tin` tạo, câu hỏi nhỏ giọt đầu tiên.
+Và một Zalo khác: nhắn "#BDS-Q5-0001" với một mã đang `cho_thong_tin` → bot
+KHÔNG được nêu địa chỉ/giá.

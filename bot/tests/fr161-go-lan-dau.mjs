@@ -21,10 +21,13 @@ const R = {
              /(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|\bcan\b)/],
   chiTiet:  [/[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i,
              /[\d][\d.,]*\s*(ty|ti|toi|trieu|tr(?![a-z]))|\d+\s*m2|\bhem\b|mat tien|phuong/],
-  muaA:     [/(muốn|cần|tìm|kiếm|đang coi|đang xem)\s*(mua|thu[êe]|nhà|căn|đất|phòng|mặt bằng|chung cư)/i,
-             /(muon|can|tim|kiem|dang coi|dang xem)\s*(mua|thue|nha|can|dat|phong|mat bang|chung cu)/],
-  muaB:     [/(có|còn)\s*căn nào|xem nhà|coi nhà|tư vấn (mua|thu[êe])/i,
-             /(co|con)\s*can nao|xem nha|coi nha|tu van (mua|thue)/],
+  // hoiMua siết lại 01/09 (FR-170 a): động từ phải là mua/thuê/tìm/kiếm, không
+  // nhận danh từ làm tân ngữ. Bộ đầy đủ (kèm vế phủ định "khách/ai xem") nằm ở
+  // fr159-bon-vai.mjs; ở đây chỉ giữ hai vế đủ cho các ca FR-161.
+  muaA:     [/(muốn|cần|đang|định|đi)\s*(mua|thu[êe]|tìm|kiếm)\b/i,
+             /(muon|can|dang|dinh|di)\s*(mua|thue|tim|kiem)\b/],
+  muaB:     [/(có|còn)\s*căn nào|tư vấn (mua|thu[êe])/i,
+             /(co|con)\s*can nao|tu van (mua|thue)/],
 };
 
 function danhGia(text) {
