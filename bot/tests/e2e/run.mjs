@@ -181,6 +181,36 @@ globalThis.__model.parse = () => OUT({ send_photos: "BDS-Q5-0002" });
 r = await send({ external_user_id: "nham-1", text: "cho xem hình #BDS-Q5-0002" });
 check("V4.7 xin hình tin CHƯA ĐĂNG → không có ảnh nào lọt ra", (r.body.photos ?? []).length === 0, JSON.stringify(r.body.photos));
 
+// ── TS-TOIUU: đếm VÒNG ĐI VỀ DB mỗi đường (FR-171 h) — mock ghi mọi truy vấn/RPC vào db().log
+const vong = async (body) => { const n0 = db().log.length; const r = await send(body); return { r, n: db().log.length - n0 }; };
+fresh(seedKho);
+globalThis.__model.parse = () => OUT({ replies: ["Dạ có căn #BDS-Q5-0001 hợp anh nè"] });
+let v = await vong({ external_user_id: "do-1", text: "chào em" });
+// Số đếm là TRUY VẤN (mỗi câu select/insert/rpc một đơn vị), không phải vòng
+// đi về: các câu trong một Promise.all chỉ tốn một lần thời gian mạng. Ngưỡng
+// đặt = số đo 02/09 để làm chốt chặn hồi quy; bản v43 đo được 18 / 20 / 24 / 21.
+console.log(`   [đo] người lạ hỏi vai: ${v.n} truy vấn`);
+check("TOIUU-01 người lạ hỏi vai ≤ 11 truy vấn (v43: 18), 0 model", v.n <= 11 && parseCalls().length === 0, `${v.n}`);
+v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
+console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
+check("TOIUU-02 người mua lượt đầu ≤ 17 truy vấn", v.n <= 17, `${v.n}`);
+v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
+console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
+check("TOIUU-03 người mua có hồ sơ ≤ 16 truy vấn (v43: 24)", v.n <= 16, `${v.n}`);
+check("TOIUU-04 follow-up FR-32 đi qua RPC tao_followup, không đếm/tra/chèn tay", db().log.some((l) => l.rpc === "tao_followup") && db().t.reminders.some((x) => x.kind === "followup"));
+check("TOIUU-05 bot_prompts chỉ đọc MỘT lần cho cả ba lượt (nhớ tạm 60 s)", db().log.filter((l) => l.table === "bot_prompts").length <= 1, String(db().log.filter((l) => l.table === "bot_prompts").length));
+check("TOIUU-06 loạt bong bóng bot vào sổ bằng MỘT câu INSERT mảng", db().log.some((l) => l.table === "messages" && l.op === "insert" && Array.isArray(l.payload)));
+fresh(seedKho);
+db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
+v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
+console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 15 truy vấn (v43: 21)", v.n <= 15 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
+check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
+fresh();
+v = await vong({ external_user_id: "la-x", text: "chào em" });
+check("TOIUU-10 lượt đầu chưa đủ khu vực+giá → KHÔNG lọc kho (không select listings)", !db().log.some((l) => l.table === "listings" && l.op === "select"));
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

@@ -92,8 +92,11 @@ Deno.serve(async (req) => {
     .eq("status", "pending").in("kind", KINDS)
     .lte("due_at", new Date().toISOString())
     .limit(10);
-  const { data: adm } = await client.from("admins")
-    .select("zalo_user_id, zalo_phone").limit(1).maybeSingle();
+  // Đích admin chỉ cần khi có việc — 99% lượt kéo là rỗng, đọc `admins` ở đó
+  // là một truy vấn thừa mỗi phút (FR-171 c).
+  const { data: adm } = due?.length
+    ? await client.from("admins").select("zalo_user_id, zalo_phone").limit(1).maybeSingle()
+    : { data: null };
 
   type Target = { name?: string | null; zalo_user_id?: string | null; phone?: string | null } | null;
   const items = (due ?? []).map((r) => {

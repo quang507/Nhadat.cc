@@ -12,6 +12,7 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  doTien,
   ghiLoi,
   jsonResponse,
   MODEL,
@@ -137,6 +138,7 @@ Deno.serve(async (req) => {
           system: [{ type: "text", text: RATE_CTV_RUBRIC, cache_control: { type: "ephemeral" } }],
           messages: [{ role: "user", content: `Hội thoại cần chấm:\n${convo}` }],
         });
+        await doTien(client, resp.usage); // FR-171 e
         if (resp.stop_reason !== "refusal" && resp.parsed_output) {
           scores.push({ ...(resp.parsed_output as z.infer<typeof Score>), conversation_id: c.id });
         }

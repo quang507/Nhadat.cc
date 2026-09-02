@@ -355,12 +355,23 @@ const uidCache = new Map(); // SĐT → uid, khỏi findUser lặp lại
 // đường này chưa có, nên chặn tạm bằng một cái cờ ngay trong tiến trình.
 let dangKeoViec = false;
 
+// LÙI DẦN KHI RỖNG (FR-171 c). Kéo mỗi 60 giây bất kể có việc hay không là
+// 1.440 lượt lambda/ngày, mỗi lượt 3 câu SQL, trong khi hàng đợi trống 99%
+// thời gian. Nay: có việc → 60 s; rỗng → nhân đôi tới trần 5 phút; có việc trở
+// lại → về 60 s. Trần 5 phút chứ không 10 vì `bot_health_tick` coi bridge là
+// chết khi 15 phút không thấy nhịp tim (nhịp tim đi kèm mỗi lượt kéo) — phải
+// còn dư hai lượt trước ngưỡng đó.
+const NHIP_NHANH = 60_000;
+const NHIP_TRAN = 5 * 60_000;
+let nhipKeo = NHIP_NHANH;
+
 async function pumpEscalations() {
   if (dangKeoViec) return;
   dangKeoViec = true;
   try {
     const { items, error } = await postJson(FEED_URL, feedHeaders, { action: "pull" });
     if (error) return await ghiLoi("escalation-feed", error);
+    nhipKeo = items?.length ? NHIP_NHANH : Math.min(nhipKeo * 2, NHIP_TRAN);
     for (const it of items ?? []) {
       try {
         let uid = it.zalo_user_id;
@@ -401,7 +412,13 @@ async function pumpEscalations() {
     dangKeoViec = false;
   }
 }
-setInterval(pumpEscalations, 60_000);
-pumpEscalations();
+// `setTimeout` xích nhau thay cho `setInterval`: nhịp đọc lại sau MỖI lượt,
+// và một lượt kéo dài không bao giờ bị lượt sau đè lên (cờ `dangKeoViec` vẫn
+// giữ làm lưới thứ hai).
+async function vongKeo() {
+  await pumpEscalations();
+  setTimeout(vongKeo, nhipKeo);
+}
+vongKeo();
 
 api.listener.start();

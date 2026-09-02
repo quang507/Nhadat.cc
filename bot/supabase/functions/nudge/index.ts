@@ -5,6 +5,7 @@
 // POST {} (cron) | { dry_run?: bool } — trả về tóm tắt việc đã làm.
 import {
   anthropicClient,
+  doTien,
   escalationText,
   ghiLoi,
   jsonResponse,
@@ -58,8 +59,10 @@ Deno.serve(async (req) => {
   if (!force && (vnHour < 8 || vnHour >= 21)) {
     return jsonResponse({ done: 0, skipped: "quiet_hours", vn_hour: vnHour });
   }
-  // Lệch phút ngẫu nhiên — đừng gửi đúng boong :00/:30 như máy
-  if (!dry_run) await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 45000)));
+  // Lệch phút để không gửi đúng boong :00/:30 như máy — nay nằm ở LỊCH CRON
+  // (`7,37 1-13 * * *`, migration 20260902c), không ngủ trong lambda nữa: đoạn
+  // ngủ ngẫu nhiên tới 45 s cộng vài lượt model là vượt trần 55 s của
+  // `nudge_tick`, pg_net ghi timeout và `bot_health_tick` ghi lỗi giả (FR-171 d).
   const client = serviceClient();
   // FR-166: MỌI đường báo hỏng đi qua đây. `bao_hong_nhac` đẩy `next_retry_at`
   // và lật sang `dead` khi quá 5 lượt — tức nó GHI ĐÈ lời nhắc THẬT. Trước bản
@@ -250,6 +253,7 @@ Deno.serve(async (req) => {
       await baoHongNhac(r.id, `model: ${String(e).slice(0, 120)}`);
       continue;
     }
+    await doTien(client, resp.usage); // FR-171 e: đồng hồ tiền đếm cả lượt nhắc
     const text = resp.content.find((b) => b.type === "text")?.text?.trim();
     if (!text) {
       await baoHongNhac(r.id, "model tra rong");
@@ -396,6 +400,7 @@ Deno.serve(async (req) => {
       if (giuCho) await client.from("reminders").delete().eq("id", giuCho);
       continue;
     }
+    await doTien(client, resp.usage);
     const text = resp.content.find((bk) => bk.type === "text")?.text?.trim();
     if (!text) {
       if (giuCho) await client.from("reminders").delete().eq("id", giuCho);
