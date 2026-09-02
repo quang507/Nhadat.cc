@@ -926,3 +926,42 @@ hỏi vai, `buyers.preferences.hoi_vai = true`, KHÔNG có lượt gọi model
 nhà P4 giá 5 tỷ 8 50m2" → tin `cho_thong_tin` tạo, câu hỏi nhỏ giọt đầu tiên.
 Và một Zalo khác: nhắn "#BDS-Q5-0001" với một mã đang `cho_thong_tin` → bot
 KHÔNG được nêu địa chỉ/giá.
+
+
+---
+
+### TS-E2E — chạy `chat-reply` THẬT trong Node, Supabase + model giả lập (02/09/2026)
+
+Cách kiểm mới, khác hẳn hai tầng trước. Các file `bot/tests/*.mjs` chỉ chép
+regex ra thử; còn đây là **bơm tin nhắn qua đúng handler thật**: `bun build`
+đóng gói `chat-reply/index.ts` (Deno) thành một file Node, đổi specifier `npm:`
+sang gói thật (`zod`, `@anthropic-ai/sdk/helpers/zod`) và gói GIẢ
+(`mock-supabase.mjs` — DB trong bộ nhớ có query builder, embed, RPC;
+`mock-anthropic.mjs` — model trả theo kịch bản, ghi lại mọi lượt gọi). Không
+cần Deno, không đụng DB thật, chạy trong 1 giây.
+
+```
+cd bot/tests/e2e && bun install && ./chay.sh
+```
+
+Thứ nó bắt được mà đọc code không thấy (đều đã vá cùng ngày — FR-170 g…j):
+
+| Kịch bản | Bản trước | Bản sau |
+|---|---|---|
+| Người lạ: "chào em" → "tôi có căn nhà ở phường 4" → "bán nhà P4 giá 5 tỷ 8 50m2" | tin tạo với **phường rỗng**, giá thô "5 tỷ 8 50m2", **diện tích bỏ qua** → hỏi lại "diện tích bao nhiêu?" | Phường 4, giá "5 tỷ 8", 50m2 vào fact, tin lên kệ ngay, không hỏi thêm |
+| Chủ nhà đang bị hỏi pháp lý, nhắn "bán thêm căn nữa ở P5 giá 6 tỷ 60m2" | câu rao **ghi thành câu trả lời pháp lý**, không tin nào tạo | tin mới Phường 5, câu hỏi pháp lý vẫn treo |
+| Chủ nhà đang bị hỏi giá, trả lời "giá bán nhà này 5 tỷ 9" | — | vẫn là câu trả lời, KHÔNG đẻ tin trùng |
+| Người lạ "em là sale bên sàn giao dịch ABC" → "có căn nhà cần bán ở P6 giá 7 tỷ" | nhãn **chính chủ** (câu sau không nhắc "sale") | nhãn môi giới, nhớ từ tin đầu |
+| Trả lời câu hỏi vai bằng "bán" / "có nhà" / "cho thuê" | xếp vào **hàng mua** | mở hồ sơ bán |
+
+50 kịch bản, chia theo bốn vai (17 người lạ, 8 người bán, 5 người tìm nhà,
+10 người đã nhắm căn, còn lại là các bất biến chéo: nhường lượt, model hỏng,
+ảnh trần, mã từ web). **50/50.** Mỗi kịch bản khẳng định trên DB giả (dòng
+`sellers`/`listings`/`viewings`/`deals` sinh ra) hoặc trên PROMPT thật gửi
+model (khối KHO có/không có mã nào), chứ không chỉ trên câu trả lời.
+
+**Giới hạn phải nhớ**: DB giả chép lại NGHĨA của các RPC/trigger (auto-publish
+khi đủ giá+phường+diện tích, `listing_missing_facts`, `parse_vnd` rút gọn) chứ
+không chạy SQL thật — RPC thật đổi hành vi thì bộ này không tự biết. Nó kiểm
+LUỒNG trong `chat-reply`; tầng DB kiểm bằng TS-VAI/TS-TIEN/TS-CHUONG trên máy
+thật như trước. Hai tầng bổ cho nhau, không thay nhau.

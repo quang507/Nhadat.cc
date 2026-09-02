@@ -31,3 +31,19 @@ không), cổng `tuNhanCoBDS` (người lạ có tự nhận có BĐS không), `
 (khoảng giá lọc kho — kiểm bằng "có ÔM căn giá X không"), phần tiền của
 `regexProfileFallback`, và nhãn chính chủ/môi giới gán lúc bóc tách. 59 ca. Sửa `hoiMua` ở `chat-reply` thì sửa CẢ file này
 LẪN `fr161-go-lan-dau.mjs` (bản rút gọn hai vế).
+
+
+## `e2e/` — chạy handler THẬT với Supabase + model giả (02/09/2026)
+
+Khác hẳn các file trên: không chép regex, mà đóng gói `chat-reply` bằng bun
+rồi bơm tin nhắn qua đúng `Deno.serve` handler trong Node, với DB trong bộ nhớ
+(`mock-supabase.mjs`) và model theo kịch bản (`mock-anthropic.mjs`). Bắt được
+lỗi LUỒNG (thứ tự các khối, cờ, gọi RPC nào với tham số gì) mà test regex mù.
+
+```
+cd bot/tests/e2e && bun install && ./chay.sh
+```
+
+Thêm kịch bản: mở `run.mjs`, dùng `fresh(seed)` → `send({...})` → `check(...)`.
+Sửa RPC/trigger phía DB thì phải sửa nghĩa tương ứng trong `mock-supabase.mjs`
+— DB giả không tự biết. Xem `docs/10` §TS-E2E.

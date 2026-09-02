@@ -65,11 +65,16 @@ const tuNhanCoBDS = (text, dangTraLoiHoiVai = false) => {
   const khop = khopVoi(text);
   return wantsSell(text) ||
     khop(/chính chủ|ký gửi|cần rao|muốn rao|đăng tin bán|đăng bán/i, /chinh chu|ky gui|can rao|muon rao|dang tin ban|dang ban/) ||
-    (dangTraLoiHoiVai &&
+    (!!dangTraLoiHoiVai && (
       khop(
-        /(tôi|em|mình|anh|chị|tui|bên mình|nhà mình|gia đình)\s*(đang\s*)?có\s*(một\s*|1\s*)?(căn|nhà|đất|bất động sản|bđs|mặt bằng|chung cư|phòng trọ|biệt thự|lô)(?!\s*nào)/i,
-        /(toi|em|minh|anh|chi|tui|ben minh|nha minh|gia dinh)\s*(dang\s*)?co\s*(mot\s*|1\s*)?(can|nha|dat|bat dong san|bds|mat bang|chung cu|phong tro|biet thu|lo)(?!\s*nao)/,
-      ));
+        /(?:^|(?:tôi|em|mình|anh|chị|tui|bên mình|nhà mình|gia đình)\s*)(đang\s*)?có\s*(một\s*|1\s*)?(căn|nhà|đất|bất động sản|bđs|mặt bằng|chung cư|phòng trọ|biệt thự|lô)(?!\s*nào)/i,
+        /(?:^|(?:toi|em|minh|anh|chi|tui|ben minh|nha minh|gia dinh)\s*)(dang\s*)?co\s*(mot\s*|1\s*)?(can|nha|dat|bat dong san|bds|mat bang|chung cu|phong tro|biet thu|lo)(?!\s*nao)/,
+      ) ||
+      khop(
+        /^\s*(tôi|em|mình|anh|chị)?\s*(muốn|cần|bên|là bên)?\s*(bán|cho thu[êe]|rao)\b/i,
+        /^\s*(toi|em|minh|anh|chi)?\s*(muon|can|ben|la ben)?\s*(ban|cho thue|rao)\b/,
+      )
+    ));
 };
 // ── nhãn chính chủ / môi giới gán lúc bóc tách (chat-reply, 02/09/2026) ──
 const tinHieuMoiGioi = (text) => khopVoi(text)(
@@ -165,6 +170,12 @@ const CA = [
   ["lạ: có nhà rồi, muốn mua thêm", () => moHoSoBan("tôi có nhà rồi, giờ muốn mua thêm căn nữa"), false],
   ["lạ: hỏi tình trạng",            () => moHoSoBan("nhà mình bán chưa em?"), false],
   ["lạ: muốn mua chính chủ",        () => moHoSoBan("muốn mua nhà chính chủ"), false],
+  ["lạ trả lời vai: 'bán' trơ → mở",         () => moHoSoBan("bán", true), true],
+  ["lạ trả lời vai: 'muốn bán' → mở",        () => moHoSoBan("muốn bán", true), true],
+  ["lạ trả lời vai: 'có nhà' → mở",          () => moHoSoBan("có nhà", true), true],
+  ["lạ trả lời vai: 'cho thuê' → mở",        () => moHoSoBan("cho thuê", true), true],
+  ["lạ trả lời vai: 'mua' → không mở",       () => moHoSoBan("mua", true), false],
+  ["lạ KHÔNG hỏi vai: 'bán' trơ → không mở", () => moHoSoBan("bán", false), false],
   // (1) NHÃN gán lúc bóc tách: có BĐS = chính chủ, trừ khi tự xưng môi giới
   ["nhãn: câu rao trần → chính chủ",           () => nhanNguoiBan("bán nhà q5 giá 5 tỷ"), "ccrb"],
   ["nhãn: nhà tôi muốn bán → chính chủ",       () => nhanNguoiBan("nhà tôi ở P4 muốn bán"), "ccrb"],
