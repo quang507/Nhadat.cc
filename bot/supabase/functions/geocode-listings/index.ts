@@ -5,7 +5,8 @@
 // ĐƯA VÀO REPO 27/08/2026 (soát mã nguồn). Trước đó function này ACTIVE trên
 // Supabase từ 25/08 mà KHÔNG có một dòng nào trong git: dựng lại project từ
 // repo là mất hẳn, mà sửa hay review thì không có gì để đọc.
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { serviceClient } from "../_shared/claude.ts";
+import { congBiMat } from "../_shared/gate.ts";
 
 const UA = "nhadatcc-geocoder/1.0 (admin.buyerside@nhadat.cc)";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -43,41 +44,17 @@ function queriesFor(
 }
 
 Deno.serve(async (req) => {
-  const db = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const db = serviceClient();
 
   // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
   // Hàm này không có cron, "gọi tay khi có tin mới" — nhưng đo thật bằng
   // publishable key (khoá công khai nằm trong bundle JS) thì nó CHẠY: trả 200
   // và ghi lat/lng. Nghĩa là người lạ bắn được vòng lặp gọi Nominatim/OSM bằng
   // User-Agent của dự án (dễ ăn ban IP của bên thứ ba) và ghi đè toạ độ tin.
-  // Không import _shared/claude.ts để giữ hàm này độc lập như cũ — nhưng PHẢI
-  // đọc bí mật theo đúng thứ tự của `secretOf`: BIẾN MÔI TRƯỜNG TRƯỚC, Vault
-  // sau. Bản trước chỉ hỏi Vault (`get_secret` trần), nên nếu BRIDGE_SECRET
-  // được đặt bằng env của function — cách mọi cổng anh em vẫn ưu tiên — thì
-  // riêng chỗ này đọc ra null và cổng MỞ TOANG trong khi cả nhà đã đóng.
-  const bimat = Deno.env.get("BRIDGE_SECRET") ??
-    (await db.rpc("get_secret", { secret_name: "BRIDGE_SECRET" })).data ?? null;
-  const laDichVu = req.headers.get("authorization") ===
-    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  // Cổng fail-open là lựa chọn có chủ ý (đặt cổng trước khi có bí mật thì cron
-  // không gãy), nhưng KHÔNG được im: một lần Vault đọc hụt là hàm này thành
-  // công khai mà chẳng ai hay. Ghi sổ để `/admin` thấy.
-  if (!bimat) {
-    await db.rpc("log_loi", {
-      p_source: "geocode-listings CONG MO",
-      p_detail: "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.",
-      p_code: null,
-    });
-  }
-  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
-    return new Response(JSON.stringify({ error: "forbidden" }), {
-      status: 403,
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-    });
-  }
+  // 02/09 (FR-171 k): dùng cổng chung `_shared/gate.ts` — lý do "giữ độc lập"
+  // cũ không còn, vì mọi function đều deploy bằng bundle bun (một file).
+  const chan = await congBiMat(req, db, "geocode-listings");
+  if (chan) return chan;
   // Tin KHÔNG có cả địa chỉ lẫn phường thì không có gì để tra — lọc ngay ở đây
   // thay vì đếm chúng vào `failed` mỗi lần chạy. Kho 27/08 có 9 dòng rỗng hoàn
   // toàn (0165–0173, nhập hụt từ Excel), chúng làm báo cáo lúc nào cũng đỏ.

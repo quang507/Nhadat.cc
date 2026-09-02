@@ -14,6 +14,7 @@ import {
   sendZalo,
   serviceClient,
 } from "../_shared/claude.ts";
+import { congBiMat } from "../_shared/gate.ts";
 import { TONE_RULES } from "../_shared/prompts.ts";
 
 // Kịch bản đa dạng cho reengage — chọn ngẫu nhiên, đổi góc mỗi lần
@@ -28,26 +29,13 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
 
   // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
-  // Hàm này chạy verify_jwt=false và TRƯỚC bản này KHÔNG kiểm gì hết. Đo thật:
-  // POST tay, KHÔNG kèm một cái khoá nào, trả về 200 kèm nguyên danh sách lời
-  // nhắc đang chờ (có cả text leo thang nội bộ). Với `dry_run` mặc định là
-  // FALSE, người lạ gọi phát nữa là bot NHẮN THẬT cho khách, đốt tiền model và
-  // lật trạng thái `reminders`. Cùng cái cổng mà chat-reply / media-cleanup /
-  // inbound-sweep đã dùng — cron mang `x-bridge-secret` (xem `nudge_tick`).
-  const cong = serviceClient();
-  const bimat = await secretOf(cong, "BRIDGE_SECRET");
-  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
-  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
-  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
-  if (!bimat) {
-    await ghiLoi(cong, "nudge CONG MO",
-      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
-  }
-  const laDichVu = req.headers.get("authorization") ===
-    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
-    return jsonResponse({ error: "forbidden" }, 403);
-  }
+  // Hàm này chạy verify_jwt=false và TRƯỚC 29/08 KHÔNG kiểm gì hết: POST tay
+  // không kèm khoá là nhận nguyên danh sách lời nhắc, gọi phát nữa là bot NHẮN
+  // THẬT cho khách. Cổng dùng chung `_shared/gate.ts` — cron mang
+  // `x-bridge-secret` (xem `nudge_tick`).
+  const client = serviceClient();
+  const chan = await congBiMat(req, client, "nudge");
+  if (chan) return chan;
 
   // FR-166: dấu tay của lượt chạy này, ghi vào `reminders.locked_by` để nhìn
   // ra ai đang giữ việc khi có hai worker chạy chồng nhau.
@@ -63,7 +51,6 @@ Deno.serve(async (req) => {
   // (`7,37 1-13 * * *`, migration 20260902c), không ngủ trong lambda nữa: đoạn
   // ngủ ngẫu nhiên tới 45 s cộng vài lượt model là vượt trần 55 s của
   // `nudge_tick`, pg_net ghi timeout và `bot_health_tick` ghi lỗi giả (FR-171 d).
-  const client = serviceClient();
   // FR-166: MỌI đường báo hỏng đi qua đây. `bao_hong_nhac` đẩy `next_retry_at`
   // và lật sang `dead` khi quá 5 lượt — tức nó GHI ĐÈ lời nhắc THẬT. Trước bản
   // này ba chỗ gọi thẳng nó nằm ngoài mọi guard `!dry_run`, nên một lượt chạy

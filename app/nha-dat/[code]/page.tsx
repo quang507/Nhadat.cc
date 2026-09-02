@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ListingCard from "@/components/ListingCard";
 import TrackView from "@/components/TrackView";
-import { supabase, type Listing } from "@/lib/supabase";
+import { CARD_COLS, supabase, type Listing, type ListingCard as CardRow } from "@/lib/supabase";
 import { coverByCode, photosOfCode } from "@/lib/photos";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
 import {
@@ -11,6 +12,7 @@ import {
   formatPrice,
   placeholderImg,
   sanitizeDescription,
+  TYPE_LABEL,
   zaloLink,
 } from "@/lib/format";
 
@@ -36,24 +38,18 @@ export async function generateStaticParams() {
   return (data ?? []).map((l) => ({ code: l.code as string }));
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  nha_pho: "Nhà phố",
-  nha_cap4: "Nhà cấp 4",
-  chung_cu: "Chung cư",
-  dat: "Đất",
-  biet_thu: "Biệt thự",
-  phong_tro: "Phòng trọ",
-  mat_bang: "Mặt bằng",
-};
-
-async function getListing(code: string): Promise<Listing | null> {
+// `cache` của React gộp hai lượt gọi cùng tham số trong MỘT lần render —
+// `generateMetadata` và `Page` cùng hỏi đúng tin này. supabase-js không đi qua
+// fetch-cache của Next nên không tự gộp: trước bản này mỗi trang tin là HAI
+// truy vấn y hệt, lúc build nhân với ~164 tin (FR-171 j).
+const getListing = cache(async (code: string): Promise<Listing | null> => {
   const { data } = await supabase
     .from("listings")
     .select("*")
     .eq("code", code)
     .maybeSingle();
   return data as Listing | null;
-}
+});
 
 export async function generateMetadata({
   params,
@@ -88,7 +84,7 @@ export default async function Page({
       .limit(20),
     supabase
       .from("listings")
-      .select("*")
+      .select(CARD_COLS)
       .eq("deal", listing.deal)
       .neq("id", listing.id)
       .in("status", ["dang_ban", "dang_quan_tam"])
@@ -99,7 +95,7 @@ export default async function Page({
     photosOfCode(code), // FR-148
   ]);
   const facts = factsRes.data ?? [];
-  const related = (relatedRes.data ?? []) as Listing[];
+  const related = (relatedRes.data ?? []) as CardRow[];
   const relCovers = await coverByCode(related.map((l) => l.code));
 
   const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
@@ -149,6 +145,8 @@ export default async function Page({
             <img
               src={photos[0] ?? placeholderImg(code)}
               alt={loc}
+              fetchPriority="high"
+              decoding="async"
               className="aspect-[16/9] w-full object-cover"
             />
             {/* Dòng chữ dưới gallery đã nói "ảnh thật gửi qua Zalo", nhưng nó
@@ -185,6 +183,8 @@ export default async function Page({
                 key={url}
                 src={url}
                 alt={loc}
+                loading="lazy"
+                decoding="async"
                 className="aspect-[4/3] w-full rounded-shot object-cover"
               />
             ))}

@@ -6,13 +6,8 @@
 // POST { action: "ack", id } → { ok: true }
 // Bảo vệ thêm (tuỳ chọn): đặt secret BRIDGE_SECRET trong Vault thì mọi request
 // phải kèm header x-bridge-secret khớp; chưa đặt thì chỉ cần anon key như cũ.
-import {
-  escalationText,
-  ghiLoi,
-  jsonResponse,
-  secretOf,
-  serviceClient,
-} from "../_shared/claude.ts";
+import { escalationText, jsonResponse, serviceClient } from "../_shared/claude.ts";
+import { congBiMat } from "../_shared/gate.ts";
 
 const KINDS = ["escalation", "report"];
 
@@ -20,18 +15,11 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
   const client = serviceClient();
 
-  // `secretOf` chứ không phải `get_secret` trần: bí mật đặt bằng biến môi
-  // trường của function thì `get_secret` (chỉ hỏi Vault) đọc ra null và cổng
-  // MỞ TOANG trong khi mọi cổng anh em đã đóng.
-  const gate = await secretOf(client, "BRIDGE_SECRET");
-  if (!gate) {
-    await ghiLoi(client, "escalation-feed CONG MO",
-      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng kéo được " +
-        "hàng đợi leo thang (có SĐT thật của khách).");
-  }
-  if (gate && req.headers.get("x-bridge-secret") !== gate) {
-    return jsonResponse({ error: "bridge secret sai" }, 401);
-  }
+  // Cổng dùng chung `_shared/gate.ts` (FR-171 k). Giữ mã 401 + chữ lỗi cũ vì
+  // bridge đã quen; hàng đợi này có SĐT thật của khách nên đọc hụt bí mật là
+  // ghi sổ ngay như mọi cổng anh em.
+  const chan = await congBiMat(req, client, "escalation-feed", 401, "bridge secret sai");
+  if (chan) return chan;
 
   // FR-152 nhịp tim: bridge gõ cửa đây mỗi phút, nên đây là chỗ RẺ NHẤT để
   // biết nó còn sống — khỏi thêm một dòng nào vào máy chạy bridge. Quá 15

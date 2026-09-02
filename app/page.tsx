@@ -1,28 +1,24 @@
 import Link from "next/link";
 import ListingCard from "@/components/ListingCard";
 import { IconAsk, IconChart, IconCalc, IconClock, IconSearch, IconShield } from "@/components/icons";
-import { supabase, type Listing } from "@/lib/supabase";
+import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase";
 import { placeholderImg, zaloLink } from "@/lib/format";
 import { coverByCode } from "@/lib/photos";
+import { WARDS } from "@/lib/geo";
 
 export const revalidate = 300;
-
-const WARDS = [
-  "Phường 1", "Phường 2", "Phường 3", "Phường 4", "Phường 5", "Phường 6", "Phường 7",
-  "Phường 8", "Phường 9", "Phường 10", "Phường 11", "Phường 12", "Phường 13", "Phường 14",
-];
 
 async function getListings(deal: "ban" | "cho_thue", limit: number) {
   const { data } = await supabase
     .from("listings")
-    .select("*")
+    .select(CARD_COLS) // FR-171 j: thẻ không cần mô tả
     .eq("deal", deal)
     .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
     .not("price_raw", "is", null)
     .neq("price_raw", "")
     .order("created_at", { ascending: false })
     .limit(limit);
-  return (data ?? []) as Listing[];
+  return (data ?? []) as CardRow[];
 }
 
 export default async function Home() {
@@ -75,6 +71,8 @@ export default async function Home() {
               <img
                 src={placeholderImg("hero-q5")}
                 alt="Nhà phố Quận 5"
+                fetchPriority="high"
+                decoding="async"
                 className="aspect-[4/5] w-full object-cover"
               />
             </div>

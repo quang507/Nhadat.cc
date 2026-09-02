@@ -13,7 +13,8 @@
 //
 // Đường NHANH vẫn nguyên vẹn: bình thường webhook làm xong trong vài giây và
 // hàm này không thấy việc gì. Nó chỉ bận khi có thứ hỏng.
-import { ghiLoi, jsonResponse, secretOf, serviceClient } from "../_shared/claude.ts";
+import { ghiLoi, jsonResponse, serviceClient } from "../_shared/claude.ts";
+import { congBiMat } from "../_shared/gate.ts";
 
 type Viec = { event_id: string; ly_do: string; attempts: number };
 
@@ -22,19 +23,9 @@ Deno.serve(async (req) => {
 
   const client = serviceClient();
 
-  const gate = await secretOf(client, "BRIDGE_SECRET");
-  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
-  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
-  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
-  if (!gate) {
-    await ghiLoi(client, "inbound-sweep CONG MO",
-      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
-  }
-  const isService = req.headers.get("authorization") ===
-    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (gate && !isService && req.headers.get("x-bridge-secret") !== gate) {
-    return jsonResponse({ error: "forbidden" }, 403);
-  }
+  // Cổng dùng chung `_shared/gate.ts` (FR-171 k).
+  const chan = await congBiMat(req, client, "inbound-sweep");
+  if (chan) return chan;
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

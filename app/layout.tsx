@@ -7,7 +7,9 @@ import "./globals.css";
 
 const nunito = Nunito({
   subsets: ["latin", "vietnamese"],
-  weight: ["400", "600", "700", "800", "900"],
+  // Không có `font-black` nào trong app — bỏ 900 là bớt hai file font
+  // (latin + vietnamese) mỗi lượt tải đầu (FR-171 j).
+  weight: ["400", "600", "700", "800"],
   variable: "--font-nunito",
 });
 

@@ -16,6 +16,7 @@ import {
   sendZalo,
   serviceClient,
 } from "../_shared/claude.ts";
+import { congBiMat } from "../_shared/gate.ts";
 import { FACT_LABELS, SELLER_SCRIPT_RULES, TONE_RULES } from "../_shared/prompts.ts";
 
 const OutSchema = z.object({
@@ -33,30 +34,16 @@ Deno.serve(async (req) => {
 
   // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
   // verify_jwt=true KHÔNG phải là xác thực: nó chỉ đòi publishable key, mà khoá
-  // đó nằm sẵn trong bundle JS của web — ai mở trang cũng có. Đo thật: gọi bằng
-  // đúng khoá công khai đó thì hàm chạy tới tận logic nghiệp vụ (trả 400
-  // "listing_id bắt buộc"). Có listing_id là người lạ bắt bot NHẮN THẬT cho
-  // chủ nhà — đường quấy rối, và đốt tiền model.
-  const cong = serviceClient();
-  const bimat = await secretOf(cong, "BRIDGE_SECRET");
-  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
-  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
-  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
-  if (!bimat) {
-    await ghiLoi(cong, "ask-seller CONG MO",
-      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
-  }
-  const laDichVu = req.headers.get("authorization") ===
-    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
-    return jsonResponse({ error: "forbidden" }, 403);
-  }
+  // đó nằm sẵn trong bundle JS của web. Có listing_id là người lạ bắt bot NHẮN
+  // THẬT cho chủ nhà — đường quấy rối, và đốt tiền model. Cổng dùng chung
+  // `_shared/gate.ts`.
+  const db = serviceClient();
+  const chan = await congBiMat(req, db, "ask-seller");
+  if (chan) return chan;
 
   const { listing_id, mode = "batch", dry_run = false } = await req.json().catch(() => ({}));
   if (!listing_id) return jsonResponse({ error: "listing_id bắt buộc" }, 400);
   const drip = mode === "drip";
-
-  const db = serviceClient();
 
   const { data: listing, error: lErr } = await db
     .from("listings")

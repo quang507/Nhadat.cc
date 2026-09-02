@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import ListingBrowse from "@/components/ListingBrowse";
 
-export const revalidate = 300;
+// Trang này đọc `searchParams` nên Next dựng lại từng request (ƒ); dòng
+// `export const revalidate` từng nằm đây là CHỮ CHẾT — cache thật là
+// `unstable_cache` trong ListingBrowse (NFR-17). Bỏ để khỏi gây hiểu lầm.
 export const metadata: Metadata = {
   title: "Mua bán nhà đất Quận 5 — giá mới nhất",
   description:

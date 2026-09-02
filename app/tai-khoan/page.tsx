@@ -6,13 +6,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import ListingCard from "@/components/ListingCard";
 import { readRecent } from "@/components/TrackView";
-import { supabase, type Listing } from "@/lib/supabase";
+import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase";
 
 export default function Page() {
   const [email, setEmail] = useState<string | null | undefined>(undefined);
   const [userId, setUserId] = useState<string | null>(null);
-  const [recent, setRecent] = useState<Listing[]>([]);
-  const [suggest, setSuggest] = useState<Listing[]>([]);
+  const [recent, setRecent] = useState<CardRow[]>([]);
+  const [suggest, setSuggest] = useState<CardRow[]>([]);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [saveMsg, setSaveMsg] = useState("");
@@ -27,25 +27,28 @@ export default function Page() {
       const codes = readRecent();
       let ids: string[] = [];
       if (user) {
-        const { data: v } = await supabase
-          .from("listing_views").select("listing_id")
-          .eq("auth_user_id", user.id)
-          .order("viewed_at", { ascending: false }).limit(24);
+        // Hai truy vấn độc lập chạy cùng lúc (FR-171 j)
+        const [{ data: v }, { data: b }] = await Promise.all([
+          supabase
+            .from("listing_views").select("listing_id")
+            .eq("auth_user_id", user.id)
+            .order("viewed_at", { ascending: false }).limit(24),
+          supabase
+            .from("buyers").select("name, phone").eq("auth_user_id", user.id).maybeSingle(),
+        ]);
         ids = (v ?? []).map((r) => r.listing_id);
-        const { data: b } = await supabase
-          .from("buyers").select("name, phone").eq("auth_user_id", user.id).maybeSingle();
         if (b) { setName(b.name ?? ""); setPhone(b.phone ?? ""); }
       }
       const [byCode, byId] = await Promise.all([
         codes.length
-          ? supabase.from("listings").select("*").in("code", codes)
-          : Promise.resolve({ data: [] as Listing[] }),
+          ? supabase.from("listings").select(CARD_COLS).in("code", codes)
+          : Promise.resolve({ data: [] as CardRow[] }),
         ids.length
-          ? supabase.from("listings").select("*").in("id", ids)
-          : Promise.resolve({ data: [] as Listing[] }),
+          ? supabase.from("listings").select(CARD_COLS).in("id", ids)
+          : Promise.resolve({ data: [] as CardRow[] }),
       ]);
-      const seen = new Map<string, Listing>();
-      for (const l of [...(byCode.data ?? []), ...(byId.data ?? [])] as Listing[]) {
+      const seen = new Map<string, CardRow>();
+      for (const l of [...(byCode.data ?? []), ...(byId.data ?? [])] as CardRow[]) {
         seen.set(l.id, l);
       }
       // Giữ thứ tự theo danh sách xem gần nhất (codes trước)
@@ -57,15 +60,16 @@ export default function Page() {
       // Khuyến nghị: cùng phường + giá ±35% quanh tin xem gần nhất, loại đã xem
       const anchor = ordered[0];
       if (anchor?.ward) {
-        let q = supabase.from("listings").select("*")
+        let q = supabase.from("listings").select(CARD_COLS)
           .eq("deal", anchor.deal).eq("ward", anchor.ward)
+          .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
           .not("price_raw", "is", null).neq("price_raw", "")
           .limit(12);
         if (anchor.price_vnd && anchor.price_vnd > 0) {
           q = q.gte("price_vnd", anchor.price_vnd * 0.65).lte("price_vnd", anchor.price_vnd * 1.35);
         }
         const { data: s } = await q;
-        setSuggest(((s ?? []) as Listing[]).filter((l) => !seen.has(l.id)).slice(0, 4));
+        setSuggest(((s ?? []) as CardRow[]).filter((l) => !seen.has(l.id)).slice(0, 4));
       }
     })();
   }, []);

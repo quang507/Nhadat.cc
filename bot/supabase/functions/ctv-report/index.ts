@@ -20,6 +20,7 @@ import {
   sendZalo,
   serviceClient,
 } from "../_shared/claude.ts";
+import { congBiMat } from "../_shared/gate.ts";
 import { RATE_CTV_RUBRIC } from "../_shared/prompts.ts";
 
 const Score = z.object({
@@ -48,27 +49,15 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
 
   // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
-  // Như ask-seller: verify_jwt=true chỉ đòi khoá công khai. Đo thật bằng đúng
-  // khoá đó thì hàm CHẠY (quá 5 s của pg_net vì đang gọi model). Người lạ gọi
-  // được nghĩa là ép sinh + GỬI báo cáo CTV (số liệu kinh doanh nội bộ) và đốt
-  // tiền model. Cron mang `x-bridge-secret` (xem `ctv_report_tick`).
-  const cong = serviceClient();
-  const bimat = await secretOf(cong, "BRIDGE_SECRET");
-  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
-  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
-  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
-  if (!bimat) {
-    await ghiLoi(cong, "ctv-report CONG MO",
-      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
-  }
-  const laDichVu = req.headers.get("authorization") ===
-    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
-    return jsonResponse({ error: "forbidden" }, 403);
-  }
+  // Như ask-seller: verify_jwt=true chỉ đòi khoá công khai. Người lạ gọi được
+  // nghĩa là ép sinh + GỬI báo cáo CTV (số liệu kinh doanh nội bộ) và đốt tiền
+  // model. Cron mang `x-bridge-secret` (xem `ctv_report_tick`). Cổng dùng chung
+  // `_shared/gate.ts`.
+  const client = serviceClient();
+  const chan = await congBiMat(req, client, "ctv-report");
+  if (chan) return chan;
 
   const { dry_run = false, force = false } = await req.json().catch(() => ({}));
-  const client = serviceClient();
   const now = Date.now();
   const vnDate = new Date(now + 7 * 3600e3).toISOString().slice(0, 10); // ngày giờ VN
 

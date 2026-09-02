@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import ListingBrowse from "@/components/ListingBrowse";
 
-export const revalidate = 300;
+// Đọc `searchParams` → route ƒ; `revalidate` ở đây là chữ chết (xem /mua-ban).
 export const metadata: Metadata = {
   title: "Cho thuê nhà đất Quận 5",
   description:

@@ -5,20 +5,20 @@
 import { useEffect, useState } from "react";
 import ListingCard from "@/components/ListingCard";
 import { readFavs } from "@/components/FavButton";
-import { supabase, type Listing } from "@/lib/supabase";
+import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase";
 import { zaloLink } from "@/lib/format";
 
 export default function Page() {
-  const [listings, setListings] = useState<Listing[] | null>(null);
+  const [listings, setListings] = useState<CardRow[] | null>(null);
 
   useEffect(() => {
     const codes = readFavs();
     if (codes.length === 0) return setListings([]);
     supabase
       .from("listings")
-      .select("*")
-      .in("code", codes)
-      .then(({ data }) => setListings((data ?? []) as Listing[]));
+      .select(CARD_COLS) // FR-171 j
+      .in("code", codes.slice(0, 48))
+      .then(({ data }) => setListings((data ?? []) as CardRow[]));
   }, []);
 
   return (

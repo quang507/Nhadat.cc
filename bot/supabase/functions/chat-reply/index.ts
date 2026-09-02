@@ -42,6 +42,23 @@ const boDau = (s: string): string =>
 // Fallback quy tắc khi model lỗi/hết quota (hướng parseVnd của NhaDat-Radar):
 // bắt tối thiểu ngân sách + hẻm/mặt tiền bằng regex để hồ sơ không mất dữ liệu,
 // và trả lời template thay vì im lặng hay đổ lỗi cho khách.
+// ĐƠN VỊ TIỀN — MỘT nguồn cho năm chỗ từng chép riêng (FR-171 k: fallback hồ
+// sơ, khoảng giá, cổng "có chi tiết", lời sửa giá, giá trong câu rao). Bản
+// không dấu (KD) chạy trên `tKD`; bản có dấu (CD) chạy trên text gốc. "toi" là
+// tỏi (tỷ) CHỈ khi sau nó không có số — "5 toi 6 ty" là "5 TỚI 6". "tr" viết
+// tắt của triệu, nhưng \b sau "tr" khớp luôn "TRệt" (dấu tiếng Việt không phải
+// \w) — từng làm price_raw thành "1 trệt 2 lầu"; lookahead chặn mọi chữ cái
+// (kể cả có dấu) đứng sau. Sửa luật tiền là sửa ở đây, không đi tìm năm chỗ.
+const TIEN_KD = "ty|ti|toi(?!\\s*\\d)|trieu|tr(?![a-z])|cu";
+const TIEN_CD = "tỷ|tỉ|tỏi|triệu|ty|ti|toi(?!\\s*\\d)|trieu|tr(?![a-zA-ZÀ-ỹ])|cu";
+// SỐ PHƯỜNG trong một chuỗi ĐÃ BỎ DẤU: "phường 4", "phuong4", "p.4", "P4". Chỉ
+// lấy con số nên bỏ dấu không mất gì. Dùng cho câu rao, hồ sơ khách và so
+// "căn khác phường" ở nhánh bán.
+const PHUONG_KD = /phuong\s*\.?\s*(\d{1,2})|(?:^|[^a-z0-9])p\.?\s*(\d{1,2})(?![0-9])/;
+const soPhuong = (kd: string): string | null => {
+  const m = PHUONG_KD.exec(kd);
+  return m ? (m[1] ?? m[2]) : null;
+};
 function regexProfileFallback(text: string): Record<string, string> {
   // Chạy trên bản BỎ DẤU (FR-161): fallback này chỉ nhặt số + từ khoá thô,
   // và bản không dấu phủ được cả hai kiểu gõ. "thuế" → "thue" vẫn dính nhầm
@@ -51,9 +68,9 @@ function regexProfileFallback(text: string): Record<string, string> {
   // "5 ty 8" / "5 ty ruoi": giữ cả phần lẻ, vì budgetRangeVnd đọc được nó. Bản
   // cũ cắt còn "5 tỷ" → cận trên 5,75 tỷ → căn 5,8 tỷ khách đang hỏi bị lọc mất.
   // "toi" là "tỏi" (tỷ) CHỈ khi sau nó không có số: "5 toi 6 ty" là "5 TỚI 6".
-  const money =
-    /([\d][\d.,]*)\s*(ty|ti|toi(?!\s*\d)|tr(?![a-z])|trieu|cu)(?![a-z])(\s*(?:ruoi|\d{1,3}(?![\d.,]|\s*m)))?/
-      .exec(t);
+  const money = new RegExp(
+    `([\\d][\\d.,]*)\\s*(${TIEN_KD})(?![a-z])(\\s*(?:ruoi|\\d{1,3}(?![\\d.,]|\\s*m)))?`,
+  ).exec(t);
   if (money) {
     const unit = /^(tr|trieu|cu)$/.test(money[2]) ? "triệu" : "tỷ";
     delta.budget = `${money[1]} ${unit}${money[3] ? ` ${money[3].trim()}` : ""}`;
@@ -122,8 +139,10 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
   const num = (s: string) => parseFloat(s.replace(",", "."));
   // Một lượng tiền: số + đơn vị + phần lẻ tuỳ chọn. "toi" là tỏi (tỷ) chỉ khi
   // sau nó KHÔNG có số — "5 toi 6" là "tới". Phần lẻ không được dính "m" (m2).
-  const TIEN =
-    /(\d+(?:[.,]\d+)?)\s*(ty|ti|toi(?!\s*\d)|trieu|tr(?![a-z])|cu)(?![a-z])(?:\s*(ruoi)|\s*(\d{1,3})(?![\d.,]|\s*m))?/g;
+  const TIEN = new RegExp(
+    `(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(ruoi)|\\s*(\\d{1,3})(?![\\d.,]|\\s*m))?`,
+    "g",
+  );
   const doc = (m: RegExpMatchArray): number => {
     const laTy = /^(ty|ti|toi)$/.test(m[2]);
     let v = num(m[1]) * (laTy ? 1e9 : 1e6);
@@ -140,9 +159,9 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
   }
   // "5-6 tỷ", "từ 5 đến 6 tỷ", "5 tới 6 tỷ", "khoảng 5 6 tỷ": số đầu KHÔNG mang
   // đơn vị, mượn đơn vị của số sau.
-  const chung =
-    /(\d+(?:[.,]\d+)?)\s*(?:-|–|~|den|toi|hoac|hay|\s)\s*(\d+(?:[.,]\d+)?)\s*(ty|ti|toi|trieu|tr(?![a-z])|cu)(?![a-z])/
-      .exec(bd);
+  const chung = new RegExp(
+    `(\\d+(?:[.,]\\d+)?)\\s*(?:-|–|~|den|toi|hoac|hay|\\s)\\s*(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])`,
+  ).exec(bd);
   if (chung) {
     const u = /^(ty|ti|toi)$/.test(chung[3]) ? 1e9 : 1e6;
     const a = num(chung[1]) * u, b = num(chung[2]) * u;
@@ -637,8 +656,8 @@ Deno.serve(async (req) => {
   // MỘT chữ có dấu. Thử CẢ HAI bộ rồi lấy hợp (`khop`): bộ không dấu chạy trên
   // `tKD` nên phủ luôn câu gõ đủ dấu; phép hợp chỉ NỚI THÊM.
   const coChiTiet = khop(
-    /[\d][\d.,]*\s*(tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))|\d+\s*m2|hẻm|mặt tiền|phường/i,
-    /[\d][\d.,]*\s*(ty|ti|toi|trieu|tr(?![a-z]))|\d+\s*m2|\bhem\b|mat tien|phuong/,
+    new RegExp(`[\\d][\\d.,]*\\s*(${TIEN_CD})|\\d+\\s*m2|hẻm|mặt tiền|phường`, "i"),
+    new RegExp(`[\\d][\\d.,]*\\s*(${TIEN_KD})|\\d+\\s*m2|\\bhem\\b|mat tien|phuong`),
   );
   const coYDinhRao =
     khop(
@@ -666,8 +685,7 @@ Deno.serve(async (req) => {
   // giá 5 tỷ 8 50m2" tạo tin với phường RỖNG — bản cũ chỉ hiểu "phường 4",
   // trong khi "P4"/"p.4" là cách gõ nhiều nhất, và nhánh MUA hiểu từ lâu.
   // Dùng chung cho tạo tin lẫn cho phép so "căn khác phường" ở nhánh bán.
-  const wardM = /phuong\s*\.?\s*(\d{1,2})|(?:^|[^a-z0-9])p\.?\s*(\d{1,2})(?![0-9])/.exec(tKD);
-  const wardNo = wardM ? (wardM[1] ?? wardM[2]) : null;
+  const wardNo = soPhuong(tKD);
 
   // ─── FR-159 (nửa 1/2): người CHƯA có hồ sơ bán mà TỰ NHẬN có bất động sản →
   // mở hồ sơ bán NGAY lượt này rồi đi tiếp vào nhánh bán như người bán quen.
@@ -995,9 +1013,10 @@ Deno.serve(async (req) => {
       nhipSua.push([m.index, m.index + m[0].length]);
     };
     if (!wantsSell) {
-      const mGia =
-        /gi[áa]\s*[^0-9]{0,12}?([\d][\d.,]*\s*(?:tỷ|tỉ|tỏi|triệu|ty|ti|toi|trieu|tr)(?![a-zA-ZÀ-ỹ])[^,.;\n]*)/i
-          .exec(text);
+      const mGia = new RegExp(
+        `gi[áa]\\s*[^0-9]{0,12}?([\\d][\\d.,]*\\s*(?:${TIEN_CD})(?![a-zA-ZÀ-ỹ])[^,.;\\n]*)`,
+        "i",
+      ).exec(text);
       // Đuôi `[^,.;\n]*` giữ phần CÓ NGHĨA đi sau đơn vị ("6 tỷ 8", "5 tỷ
       // thương lượng"), nhưng cũng vơ luôn tiểu từ cuối câu ("6.8 tỷ nha em").
       // KHÔNG cắt ở đây: chuỗi này là bằng chứng thô, còn `price_raw` do
@@ -1280,24 +1299,16 @@ Deno.serve(async (req) => {
       // cổng "cho thue" nhưng bị ghi thành tin BÁN.
       const sDeal = dealCol(/cho thue/.test(tKD) ? "thue" : "ban");
       // (wardNo — số phường trong câu rao — tính ở trên, trước nhánh bán.)
-      // "tr" viết tắt của triệu, nhưng \b sau "tr" khớp luôn "TRệt" (dấu tiếng
-      // Việt không phải ký tự \w) — từng làm price_raw thành "1 trệt 2 lầu".
-      // Lookahead chặn mọi chữ cái có dấu đứng sau.
-      // price_raw cắt từ text GỐC (giữ nguyên chữ người gõ); tin không dấu thì
-      // text gốc vốn đã ascii nên bản nào cũng là chữ của họ. parse_vnd phía DB
-      // đã nuốt được "ty"/"trieu" (kiểm 27/08).
-      // Hai bộ cùng chạy trên `text` GỐC (giữ nguyên chữ người gõ cho
-      // `price_raw`), thử bộ có dấu trước rồi mới tới bộ không dấu. Chọn MỘT bộ
-      // theo `coDauTin` như bản trước là hụt đơn vị gõ lẫn: "giá 5 ti" có dấu ở
-      // "giá" nên đi bộ có dấu, mà bộ đó có "tỉ" chứ không có "ti" trần.
+      // price_raw cắt từ text GỐC (giữ nguyên chữ người gõ); đơn vị tiền lấy từ
+      // TIEN_CD (đủ cả dạng có dấu lẫn không dấu — "giá 5 ti" gõ lẫn vẫn khớp).
+      // parse_vnd phía DB đã nuốt được "ty"/"trieu" (kiểm 27/08).
       // Đuôi `[^,.;\n]*` giữ phần lẻ ("5 tỷ 8", "5 tỷ thương lượng") nhưng
       // từng vơ luôn diện tích đứng sau ("5 tỷ 8 50m2" → price_raw dính "50m2");
       // `chuan_hoa_gia_raw` phía DB chỉ gọt tiểu từ, không gọt "50m2". Dừng
       // TRƯỚC một cụm số+m2.
       const DUOI_GIA = "(?:(?!\\s*\\d+(?:[.,]\\d+)?\\s*m2)[^,.;\\n])*";
       const priceM =
-        new RegExp(`([\\d][\\d.,]*\\s*(?:tỷ|tỉ|ty|tỏi|triệu|tr(?![a-zA-ZÀ-ỹ]))${DUOI_GIA})`, "i").exec(text) ??
-          new RegExp(`([\\d][\\d.,]*\\s*(?:ty|ti|toi|trieu|tr(?![a-zA-Z]))${DUOI_GIA})`, "i").exec(text);
+        new RegExp(`([\\d][\\d.,]*\\s*(?:${TIEN_CD})${DUOI_GIA})`, "i").exec(text);
       // Diện tích + số phòng ngủ có sẵn trong câu rao thì ghi luôn qua cửa fact
       // (FR-164) sau khi tạo tin — không thì vòng nhỏ giọt hỏi lại đúng cái chủ
       // nhà vừa nói ("nhà 50m2" rồi bot hỏi "diện tích bao nhiêu ạ?"), kiểu mất
@@ -1610,12 +1621,10 @@ Deno.serve(async (req) => {
     .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ gợi ý tin đang lên kệ
     .not("price_raw", "is", null).neq("price_raw", "")
     .order("created_at", { ascending: false }).limit(6);
-  const wardNum = typeof prefs.area === "string"
-    ? /ph(?:ường|uong)?\s*\.?\s*(\d{1,2})|(?:^|\W)p\.?\s*(\d{1,2})/i.exec(prefs.area)
-    : null;
+  const wardNum = typeof prefs.area === "string" ? soPhuong(boDau(prefs.area)) : null;
   // Khớp ĐÚNG số phường (ilike không wildcard = so khớp nguyên chuỗi,
   // không phân biệt hoa thường) — '%1%' cũ khiến P1 dính cả P10-P16
-  if (wardNum) khoQ = khoQ.ilike("ward", `Phường ${wardNum[1] ?? wardNum[2]}`);
+  if (wardNum) khoQ = khoQ.ilike("ward", `Phường ${wardNum}`);
   if (typeof prefs.bedrooms === "number") khoQ = khoQ.gte("bedrooms", prefs.bedrooms);
   const budgetR = budgetRangeVnd(prefs.budget);
   if (budgetR?.max) khoQ = khoQ.lte("price_vnd", budgetR.max);

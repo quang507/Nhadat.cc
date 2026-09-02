@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import MapView from "@/components/MapView";
 import ListingCard from "@/components/ListingCard";
-import { supabase, type Listing } from "@/lib/supabase";
+import { MAP_COLS, supabase, type MapRow } from "@/lib/supabase";
 
 export const revalidate = 300;
 export const metadata: Metadata = {
@@ -11,16 +11,18 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
+  // FR-171 j: 300 dòng này đi thẳng vào HTML (MapView là client component),
+  // kéo "*" là nhét 300 mô tả vào trang; MAP_COLS chỉ lấy cột thẻ + toạ độ.
   const { data } = await supabase
     .from("listings")
-    .select("*")
+    .select(MAP_COLS)
     .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
     .not("price_raw", "is", null)
     .neq("price_raw", "")
     .not("ward", "is", null)
     .order("created_at", { ascending: false })
     .limit(300);
-  const listings = (data ?? []) as Listing[];
+  const listings = (data ?? []) as MapRow[];
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6">

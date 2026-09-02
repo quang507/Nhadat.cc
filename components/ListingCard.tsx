@@ -1,25 +1,16 @@
 import Link from "next/link";
 import FavButton from "@/components/FavButton";
-import type { Listing } from "@/lib/supabase";
-import { formatArea, formatPrice, placeholderImg } from "@/lib/format";
+import type { ListingCard as CardRow } from "@/lib/supabase";
+import { formatArea, formatPrice, placeholderImg, TYPE_LABEL } from "@/lib/format";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
-
-const TYPE_LABEL: Record<string, string> = {
-  nha_pho: "Nhà phố",
-  nha_cap4: "Nhà cấp 4",
-  chung_cu: "Chung cư",
-  dat: "Đất",
-  biet_thu: "Biệt thự",
-  phong_tro: "Phòng trọ",
-  mat_bang: "Mặt bằng",
-};
 
 export default function ListingCard({
   listing,
   featured,
   photo,
 }: {
-  listing: Listing;
+  /** Chỉ cần các cột CARD_COLS (lib/supabase) — không cần mô tả. */
+  listing: CardRow;
   featured?: boolean;
   /** FR-148: ảnh bìa thật (bucket listing-photos theo mã); không có thì ảnh minh hoạ */
   photo?: string | null;
@@ -42,9 +33,14 @@ export default function ListingCard({
         }`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
+        {/* Ảnh thẻ là ảnh gốc từ điện thoại (vài MB/tấm) trong lưới 24 thẻ:
+            lazy + decoding async để ảnh ngoài màn hình không chặn tải trang
+            (FR-171 j). Ảnh bìa trang chi tiết mới ưu tiên cao. */}
         <img
           src={photo ?? placeholderImg(code)}
           alt={title}
+          loading="lazy"
+          decoding="async"
           className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]"
         />
         {/* Giá ĐÈ THẲNG lên ảnh, không chip — chữ trắng trên vệt tối chân ảnh */}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { unstable_cache } from "next/cache";
 import ListingCard from "@/components/ListingCard";
 import { coverByCode } from "@/lib/photos";
-import { supabase, type Listing } from "@/lib/supabase";
+import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase";
 import { zaloLink } from "@/lib/format";
 
 const PAGE_SIZE = 24;
@@ -59,7 +59,7 @@ const layTin = unstable_cache(
   async (t: Truy) => {
     let q = supabase
       .from("listings")
-      .select("*", { count: "exact" })
+      .select(CARD_COLS, { count: "exact" }) // FR-171 j: lưới thẻ không cần mô tả
       .eq("deal", t.deal)
       .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
       .not("price_raw", "is", null)
@@ -79,7 +79,7 @@ const layTin = unstable_cache(
       : q.order("created_at", { ascending: false });
     q = q.range((t.page - 1) * PAGE_SIZE, t.page * PAGE_SIZE - 1);
     const { data, count } = await q;
-    return { rows: (data ?? []) as Listing[], total: count ?? 0 };
+    return { rows: (data ?? []) as CardRow[], total: count ?? 0 };
   },
   ["listing-browse"],
   { revalidate: 300, tags: ["listings"] },

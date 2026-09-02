@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { TYPE_LABEL } from "@/lib/format";
 
 const NGUON = [
   ["admin", "Tự nhập (admin)"],
@@ -25,16 +26,12 @@ const NGUON = [
   ["khac", "Nguồn khác"],
 ] as const;
 
-const LOAI = [
+// Nhãn loại BĐS lấy từ bảng dùng chung (lib/format TYPE_LABEL — FR-171 j),
+// thêm lựa chọn "chưa rõ" riêng của form.
+const LOAI: readonly (readonly [string, string])[] = [
   ["chua_ro", "Chưa rõ — để bot tự đoán"],
-  ["nha_pho", "Nhà phố"],
-  ["nha_cap4", "Nhà cấp 4"],
-  ["chung_cu", "Chung cư / căn hộ"],
-  ["dat", "Đất"],
-  ["biet_thu", "Biệt thự"],
-  ["phong_tro", "Phòng trọ"],
-  ["mat_bang", "Mặt bằng"],
-] as const;
+  ...Object.entries(TYPE_LABEL),
+];
 
 const TRANG_THAI = [
   ["cho_thong_tin", "Chờ duyệt — chưa lên web"],

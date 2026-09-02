@@ -7,6 +7,12 @@ import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription } from "@/lib/format";
 
+// Tin chờ duyệt: chỉ các cột thẻ duyệt cần, không kéo "*".
+type TinCho = Pick<
+  Listing,
+  "id" | "code" | "ward" | "price_vnd" | "price_raw" | "area_m2" | "description" | "location_raw" | "created_at"
+>;
+
 type Ng = {
   id: string;
   name: string | null;
@@ -54,7 +60,7 @@ const HANG: Record<string, { ten: string; lop: string }> = {
 
 export default function Page() {
   const [role, setRole] = useState<"loading" | "anon" | "user" | "admin">("loading");
-  const [pending, setPending] = useState<Listing[]>([]);
+  const [pending, setPending] = useState<TinCho[]>([]);
   const [counts, setCounts] = useState<{ tong: number; active: number; cho: number }>();
   // FR-152: sức khoẻ bot. Đọc THẲNG từ DB bằng phiên admin — cố tình KHÔNG đi
   // qua bridge, vì còi báo "bridge chết" mà lại gửi bằng bridge thì vô nghĩa.
@@ -77,32 +83,26 @@ export default function Page() {
   // Người bán mới 14 ngày: nhãn bot gán lúc bóc tách — sai thì đổi ở đây.
   const [nguoiBan, setNguoiBan] = useState<NguoiBan[]>([]);
 
+  // MỘT đợt cho cả trang (FR-171 j). Trước bản này là 5 đợt nối tiếp (12 truy
+  // vấn), mỗi đợt một lần thời gian mạng VN→Supabase ~150-250 ms, tức 1-1,5 s
+  // trước khi có số. Không truy vấn nào ở đây cần kết quả của truy vấn khác.
+  // Ba lần `count: exact` trên `listings` (3 lần quét bảng) thay bằng MỘT lượt
+  // đọc cột `status` rồi đếm tại chỗ — kho ~200 dòng, rẻ hơn ba lần quét.
   const load = async () => {
-    const { data } = await supabase
-      .from("listings").select("*").eq("status", "cho_thong_tin")
-      .order("created_at", { ascending: false }).limit(50);
-    setPending((data ?? []) as Listing[]);
-    const [{ count: tong }, { count: active }, { count: cho }] = await Promise.all([
-      supabase.from("listings").select("id", { count: "exact", head: true }),
-      supabase.from("listings").select("id", { count: "exact", head: true }).in("status", ["dang_ban", "dang_quan_tam"]),
-      supabase.from("listings").select("id", { count: "exact", head: true }).eq("status", "cho_thong_tin"),
-    ]);
-    setCounts({ tong: tong ?? 0, active: active ?? 0, cho: cho ?? 0 });
-
-    const [beatRes, errRes] = await Promise.all([
+    const [pend, st, beatRes, errRes, tn, vc, nb, hg] = await Promise.all([
+      supabase
+        .from("listings")
+        .select("id, code, ward, price_vnd, price_raw, area_m2, description, location_raw, created_at")
+        .eq("status", "cho_thong_tin")
+        .order("created_at", { ascending: false }).limit(50),
+      supabase.from("listings").select("status"),
       supabase.from("bot_health").select("at").eq("who", "bridge-zca").maybeSingle(),
       supabase.from("bot_errors").select("id, at, source, status_code, detail")
         .order("at", { ascending: false }).limit(10),
-    ]);
-    setHealth({ beat: (beatRes.data?.at as string) ?? null, errs: errRes.data ?? [] });
-
-    const { data: tn } = await supabase
-      .from("bot_usage")
-      .select("day, model_calls, in_tokens, out_tokens, cache_write_tokens, cache_read_tokens")
-      .order("day", { ascending: false }).limit(7);
-    setTien((tn ?? []) as Tien[]);
-
-    const [{ data: vc }, { data: nb }] = await Promise.all([
+      supabase
+        .from("bot_usage")
+        .select("day, model_calls, in_tokens, out_tokens, cache_write_tokens, cache_read_tokens")
+        .order("day", { ascending: false }).limit(7),
       supabase.from("reminders")
         .select("id, kind, note, due_at, created_at")
         .eq("status", "pending").in("kind", ["escalation", "report"])
@@ -111,15 +111,23 @@ export default function Page() {
         .select("id, name, seller_type, created_at, zalo_user_id")
         .gte("created_at", new Date(Date.now() - 14 * 86400e3).toISOString())
         .order("created_at", { ascending: false }).limit(20),
+      supabase
+        .from("seller_ranks")
+        .select("id, name, seller_type, active_count, closed_count, rank")
+        .order("active_count", { ascending: false }).limit(50),
     ]);
-    setViec((vc ?? []) as Viec[]);
-    setNguoiBan((nb ?? []) as NguoiBan[]);
-
-    const { data: hg } = await supabase
-      .from("seller_ranks")
-      .select("id, name, seller_type, active_count, closed_count, rank")
-      .order("active_count", { ascending: false });
-    setHang((hg ?? []) as Ng[]);
+    setPending((pend.data ?? []) as TinCho[]);
+    const trangThai = (st.data ?? []).map((r) => r.status as string);
+    setCounts({
+      tong: trangThai.length,
+      active: trangThai.filter((s) => s === "dang_ban" || s === "dang_quan_tam").length,
+      cho: trangThai.filter((s) => s === "cho_thong_tin").length,
+    });
+    setHealth({ beat: (beatRes.data?.at as string) ?? null, errs: errRes.data ?? [] });
+    setTien((tn.data ?? []) as Tien[]);
+    setViec((vc.data ?? []) as Viec[]);
+    setNguoiBan((nb.data ?? []) as NguoiBan[]);
+    setHang((hg.data ?? []) as Ng[]);
   };
 
   useEffect(() => {
@@ -413,9 +421,9 @@ function TheTien({ rows }: { rows: Tien[] }) {
 
       <p className="mt-3 text-xs text-mute">
         Cận trên: tính giá nạp theo nhịp 1 giờ (2× — nhịp của lượt khách mua). Lượt
-        người bán để nhịp 5 phút nên rẻ hơn một chút. Số này mới đếm{" "}
-        <code>chat-reply</code>; nudge, ask-seller, ctv-report chưa gắn đồng hồ nên
-        đây là SÀN, không phải tổng.
+        người bán để nhịp 5 phút nên rẻ hơn một chút. Từ 02/09 cả bốn nơi gọi bộ
+        não (chat-reply, nudge, ask-seller, ctv-report) đều gắn đồng hồ — đây là
+        tổng, không còn là sàn.
       </p>
     </div>
   );

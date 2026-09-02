@@ -7,8 +7,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatPrice } from "@/lib/format";
-
-const WARDS = Array.from({ length: 15 }, (_, i) => `Phường ${i + 1}`);
+import { WARDS } from "@/lib/geo"; // một danh sách phường cho cả web (FR-171 j)
 
 // Vòng đời tin FR-139 — đúng 5 trạng thái của CHECK trên listings.status.
 // (Nhãn tiếng Anh cũ đã bỏ: migration FR-139 dịch hết dữ liệu sang tiếng Việt

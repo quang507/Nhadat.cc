@@ -3,11 +3,11 @@
 // Leaflet đụng window lúc import nên phải import động trong useEffect.
 import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
-import type { Listing } from "@/lib/supabase";
+import type { MapRow } from "@/lib/supabase";
 import { formatPrice } from "@/lib/format";
 import { Q5_CENTER, wardPoint } from "@/lib/geo";
 
-export default function MapView({ listings }: { listings: Listing[] }) {
+export default function MapView({ listings }: { listings: MapRow[] }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

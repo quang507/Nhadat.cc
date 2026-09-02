@@ -1,3 +1,5 @@
+import { hashSeed } from "@/lib/geo";
+
 // Ẩn danh hai chiều (FR-104): web không bao giờ lộ SĐT/Zalo trong mô tả gốc.
 const PHONE_RE = /(\+?84|0)[\s.\-]?(\d[\s.\-]?){8,10}/g;
 const SOCIAL_RE = /\b(zalo|z@lo|fb|facebook|viber|telegram)\b\s*:?\s*[\w.@/]*/gi;
@@ -26,6 +28,19 @@ export function formatArea(m2: number | null): string {
   return m2 ? `${Number(m2).toLocaleString("vi-VN")} m²` : "—";
 }
 
+// Nhãn loại BĐS (enum `property_type` của DB) — MỘT bảng cho thẻ tin, trang
+// chi tiết và form admin; trước đây chép ba nơi, lệch một chữ là web nói hai
+// giọng (FR-171 j).
+export const TYPE_LABEL: Record<string, string> = {
+  nha_pho: "Nhà phố",
+  nha_cap4: "Nhà cấp 4",
+  chung_cu: "Chung cư",
+  dat: "Đất",
+  biet_thu: "Biệt thự",
+  phong_tro: "Phòng trọ",
+  mat_bang: "Mặt bằng",
+};
+
 // Deep-link Zalo mang ngữ cảnh (FR-13/14). Đang chạy acc CLONE trong lúc chờ
 // OA duyệt: đặt NEXT_PUBLIC_ZALO_URL=https://zalo.me/<SĐT acc clone> trong env
 // Vercel (hoặc sửa fallback dưới); OA duyệt xong đổi về link OA.
@@ -43,7 +58,5 @@ export function zaloLink(context?: string): string {
 // ràng buộc đó, lại nhanh hơn (cùng origin, qua CDN của Vercel).
 const IMG_BASE = "/img";
 export function placeholderImg(seed: string): string {
-  let h = 0;
-  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return `${IMG_BASE}/house${(h % 5) + 1}.jpg`;
+  return `${IMG_BASE}/house${(hashSeed(seed) % 5) + 1}.jpg`;
 }
