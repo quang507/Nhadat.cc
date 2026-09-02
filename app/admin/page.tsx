@@ -40,6 +40,12 @@ const tienNgay = (t: Tien) =>
     t.cache_write_tokens * GIA_VAO * HE_SO_NAP +
     t.cache_read_tokens * GIA_VAO * HE_SO_DOC) / 1_000_000;
 
+type Viec = { id: string; kind: string; note: string | null; due_at: string; created_at: string };
+type NguoiBan = {
+  id: string; name: string | null; seller_type: string; created_at: string; zalo_user_id: string | null;
+};
+const NHAN: Record<string, string> = { ccrb: "Chính chủ · 1%", nmg: "Môi giới · 0,5%", unknown: "Chưa nhãn" };
+
 const HANG: Record<string, { ten: string; lop: string }> = {
   vang: { ten: "Vàng", lop: "bg-[#f6c453] text-navy" },
   bac:  { ten: "Bạc",  lop: "bg-line text-navy" },
@@ -64,6 +70,12 @@ export default function Page() {
   // lên có chịu nổi không" — tiền tính theo CHỮ, và bốn loại chữ lệch giá tới
   // 50 lần. Đây là chỗ đọc số thật thay vì ước tính.
   const [tien, setTien] = useState<Tien[]>([]);
+  // 02/09 — "hiện thông báo cho admin". Đường cũ là hàng escalation đi qua
+  // bridge tới Zalo admin; bridge chết từ 27/08 nên 85 việc xếp hàng không ai
+  // thấy. Đọc THẲNG bảng ở đây, đóng việc ngay tại chỗ.
+  const [viec, setViec] = useState<Viec[]>([]);
+  // Người bán mới 14 ngày: nhãn bot gán lúc bóc tách — sai thì đổi ở đây.
+  const [nguoiBan, setNguoiBan] = useState<NguoiBan[]>([]);
 
   const load = async () => {
     const { data } = await supabase
@@ -90,6 +102,19 @@ export default function Page() {
       .order("day", { ascending: false }).limit(7);
     setTien((tn ?? []) as Tien[]);
 
+    const [{ data: vc }, { data: nb }] = await Promise.all([
+      supabase.from("reminders")
+        .select("id, kind, note, due_at, created_at")
+        .eq("status", "pending").in("kind", ["escalation", "report"])
+        .order("due_at", { ascending: true }).limit(30),
+      supabase.from("sellers")
+        .select("id, name, seller_type, created_at, zalo_user_id")
+        .gte("created_at", new Date(Date.now() - 14 * 86400e3).toISOString())
+        .order("created_at", { ascending: false }).limit(20),
+    ]);
+    setViec((vc ?? []) as Viec[]);
+    setNguoiBan((nb ?? []) as NguoiBan[]);
+
     const { data: hg } = await supabase
       .from("seller_ranks")
       .select("id, name, seller_type, active_count, closed_count, rank")
@@ -107,6 +132,18 @@ export default function Page() {
       load();
     });
   }, []);
+
+  // Đóng một việc chờ: đánh dấu đã gửi (admin đã đọc ở đây thay vì qua Zalo).
+  const dongViec = async (id: string) => {
+    const { error } = await supabase.from("reminders")
+      .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", id);
+    if (!error) setViec((v) => v.filter((x) => x.id !== id));
+  };
+  // Đổi nhãn người bán. RLS phía DB (sellers_admin_update) mới là hàng rào.
+  const doiNhan = async (id: string, seller_type: "ccrb" | "nmg") => {
+    const { error } = await supabase.from("sellers").update({ seller_type }).eq("id", id);
+    if (!error) setNguoiBan((l) => l.map((s) => (s.id === id ? { ...s, seller_type } : s)));
+  };
 
   const setStatus = async (id: string, status: "dang_ban" | "an") => {
     const { error } = await supabase.from("listings").update({ status }).eq("id", id);
@@ -173,6 +210,66 @@ export default function Page() {
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* Việc chờ admin — đọc thẳng bảng, không qua bridge (02/09) */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <span className="eyebrow text-mute">Việc chờ admin</span>
+          <span className="text-sm text-mute">
+            {viec.length ? `${viec.length} việc đang chờ` : "Không có việc nào chờ"}
+          </span>
+        </div>
+        {viec.length > 0 && (
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {viec.map((v) => (
+              <li key={v.id} className="flex flex-wrap items-start gap-x-3 py-2">
+                <span className="w-32 shrink-0 tabular-nums text-mute">
+                  {new Date(v.created_at).toLocaleString("vi-VN")}
+                </span>
+                <span className="min-w-0 flex-1 text-navy/85">{v.note}</span>
+                <button onClick={() => dongViec(v.id)}
+                  className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand">
+                  Đã xử lý
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Người bán mới — nhãn bot gán lúc bóc tách, sửa tại chỗ (02/09) */}
+      {nguoiBan.length > 0 && (
+        <div className="mt-6 rounded-king border border-line bg-white p-5">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <span className="eyebrow text-mute">Người bán 14 ngày qua</span>
+            <span className="text-sm text-mute">nhãn quyết định mức phí — bấm để đổi nếu bot gán sai</span>
+          </div>
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {nguoiBan.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-x-3 py-2">
+                <span className="w-28 shrink-0 tabular-nums text-mute">
+                  {new Date(s.created_at).toLocaleDateString("vi-VN")}
+                </span>
+                <span className="font-semibold">{s.name ?? "Chưa có tên"}</span>
+                <span className="text-mute">{s.zalo_user_id ? "từ chat" : "tạo tay"}</span>
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                  s.seller_type === "unknown" ? "bg-navy text-white" : "bg-brand/10 text-brand"
+                }`}>
+                  {NHAN[s.seller_type] ?? s.seller_type}
+                </span>
+                <span className="ml-auto flex gap-2">
+                  {(["ccrb", "nmg"] as const).filter((t) => t !== s.seller_type).map((t) => (
+                    <button key={t} onClick={() => doiNhan(s.id, t)}
+                      className="rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand">
+                      Đổi thành {t === "ccrb" ? "chính chủ" : "môi giới"}
+                    </button>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

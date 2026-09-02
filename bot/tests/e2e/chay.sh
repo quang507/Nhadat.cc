@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Đóng gói chat-reply (Deno) thành một file Node rồi bơm kịch bản qua handler thật.
-# Cần: bun (đóng gói), node ≥ 20, và `bun install` trong thư mục này một lần.
+# Cần: bun (đóng gói + chạy) và `bun install` trong thư mục này một lần. Toàn bộ bằng bun, không cần Node.
 set -euo pipefail
 cd "$(dirname "$0")"
 SRC=../../supabase/functions/chat-reply/index.ts
@@ -12,4 +12,4 @@ sed -i.bak \
   -e 's#"npm:@anthropic-ai/sdk"#"./mock-anthropic.mjs"#g' \
   -e 's#"npm:zod@4"#"zod"#g' chat-reply.bundle.mjs
 rm -f chat-reply.bundle.mjs.bak
-node run.mjs
+bun run.mjs

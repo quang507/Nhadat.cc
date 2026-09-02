@@ -507,6 +507,9 @@ Deno.serve(async (req) => {
   // Người này VỪA được mở hồ sơ bán trong lượt này (FR-159) — nhánh bán cần
   // biết để không chăm sóc như khách quen "đang rao các tin".
   let sellerMoi = false;
+  // Nhãn VỪA gán trong lượt này (mở hồ sơ từ chat, hoặc hồ sơ tạo tay được gán)
+  // — để nhánh bán báo cho chính người đó biết nhãn + mức phí (02/09).
+  let nhanVuaGan: "ccrb" | "nmg" | null = null;
 
   // OPEN-22 / FR-157: một Zalo VỪA BÁN VỪA MUA. Nhận diện người vẫn theo
   // zalo_user_id (quyết định chủ dự án 27/08/2026), nhưng VAI thì xét từng
@@ -685,6 +688,19 @@ Deno.serve(async (req) => {
     } else {
       sellerMoi = !sellerRow;
       sellerRow = moi as SellerRow;
+      nhanVuaGan = sellerRow.seller_type === "nmg" ? "nmg" : "ccrb";
+      // Báo ADMIN (quyết định 02/09 "hiện thông báo cho admin"): một việc trong
+      // hàng escalation — bridge/OA chuyển tới Zalo admin, và trang /admin đọc
+      // thẳng bảng nên thấy ngay cả khi bridge chết. KHÔNG đặt `seller_id`:
+      // cột đó nghĩa là "đích là chính chủ" (escalationText) — đặt vào là gửi
+      // thông báo nội bộ cho chính người bán.
+      const { error: nhErr } = await client.from("reminders").insert({
+        kind: "escalation", due_at: new Date().toISOString(),
+        note: `🆕 Hồ sơ người bán ${sellerMoi ? "MỞ TỪ CHAT" : "tạo tay, nay gán nhãn từ chat"} — nhãn ${
+          nhanVuaGan === "nmg" ? "MÔI GIỚI (phí 0,5%)" : "CHÍNH CHỦ (phí 1%)"
+        }${sellerRow.name ? ` · ${sellerRow.name}` : ""} · Zalo …${externalUserId.slice(-4)}. Bot đã báo họ nhãn và mức phí. Sai thì đổi ở /admin.`,
+      });
+      if (nhErr) await ghiLoi(client, "chat-reply bao admin nhan", nhErr.message);
     }
   }
 
@@ -774,6 +790,14 @@ Deno.serve(async (req) => {
     // có sáu lối thoát khác nhau — chép câu cảm ơn ra từng lối là kiểu bỏ sót
     // đúng một chỗ rồi không ai thấy.
     let ackSua: string | null = null;
+    // "Hiện thông báo cho người ta" (02/09): vừa gán nhãn thì nói thẳng cho họ
+    // nhãn gì, phí bao nhiêu, và cách sửa nếu sai. Đứng CUỐI loạt bong bóng
+    // (sau lời chào/câu hỏi của model) để đúng nhịp: chào trước, giấy tờ sau.
+    const cauNhan = (t: "ccrb" | "nmg") =>
+      t === "nmg"
+        ? "Em ghi nhận anh/chị là MÔI GIỚI ạ. Bên em chỉ thu phí khi giao dịch thành công: bán 0,5% giá chốt, cho thuê 3/4 tháng tiền thuê. Nếu anh/chị là chính chủ thì nhắn em để em ghi lại đúng nha."
+        : "Em ghi nhận anh/chị là CHÍNH CHỦ ạ. Bên em chỉ thu phí khi giao dịch thành công: bán 1% giá chốt, cho thuê 3/4 tháng tiền thuê. Nếu anh/chị là môi giới thì nhắn em để em ghi lại đúng nha.";
+    let thongBaoNhan: string | null = nhanVuaGan ? cauNhan(nhanVuaGan) : null;
     const traLoiSeller = async (
       replies: string[],
       extra: Record<string, unknown> = {},
@@ -784,9 +808,10 @@ Deno.serve(async (req) => {
           reply: null, replies: [], role: "seller", human_active: true, ...extra,
         });
       }
-      const sach = [...(ackSua ? [ackSua] : []), ...replies]
+      const sach = [...(ackSua ? [ackSua] : []), ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
         .map((r) => r.trim()).filter(Boolean);
       ackSua = null;
+      thongBaoNhan = null;
       for (const r of sach) {
         const { error: botErr } = await client.from("messages").insert({
           conversation_id: convSId, sender: "bot", body: r,
@@ -799,6 +824,39 @@ Deno.serve(async (req) => {
         reply: sach.join("\n") || null, replies: sach, role: "seller", ...extra,
       });
     };
+
+    // Người bán ĐÃ có nhãn mà tự xưng ngược lại ("em là môi giới mà" khi đang
+    // CHÍNH CHỦ; "tôi là chính chủ" khi đang MÔI GIỚI) → KHÔNG tự lật (nhãn có
+    // thể do admin gán), mà báo admin xác nhận + nói với họ là đã báo. Tối đa
+    // một lần mỗi 24h cho mỗi người, kẻo mỗi câu "em là sale" là một việc.
+    const xinDoiNhan: "ccrb" | "nmg" | null = nhanVuaGan
+      ? null
+      : sellerRow.seller_type === "ccrb" && tinHieuMoiGioi
+      ? "nmg"
+      : sellerRow.seller_type === "nmg" &&
+          khop(/chính chủ|tôi là chủ|nhà của tôi|không phải môi giới/i, /chinh chu|toi la chu|nha cua toi|khong phai moi gioi/)
+      ? "ccrb"
+      : null;
+    if (xinDoiNhan) {
+      const dau = `✏️ Zalo …${externalUserId.slice(-4)}`;
+      const { count: daBao } = await client.from("reminders")
+        .select("id", { count: "exact", head: true })
+        .eq("kind", "escalation").in("status", ["pending", "sent"])
+        .ilike("note", `${dau}%`)
+        .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
+      if ((daBao ?? 0) === 0) {
+        const { error: xErr } = await client.from("reminders").insert({
+          kind: "escalation", due_at: new Date().toISOString(),
+          note: `${dau}${sellerRow.name ? ` (${sellerRow.name})` : ""} đang nhãn ${
+            sellerRow.seller_type === "nmg" ? "MÔI GIỚI" : "CHÍNH CHỦ"
+          } nhưng tự xưng ${xinDoiNhan === "nmg" ? "MÔI GIỚI" : "CHÍNH CHỦ"}: "${text.slice(0, 120)}". Xác nhận rồi đổi ở /admin.`,
+        });
+        if (xErr) await ghiLoi(client, "chat-reply xin doi nhan", xErr.message);
+      }
+      thongBaoNhan = xinDoiNhan === "nmg"
+        ? "Dạ em ghi nhận anh/chị là môi giới, em đã báo bên quản lý cập nhật lại (phí bán 0,5% khi giao dịch thành công) nha."
+        : "Dạ em ghi nhận anh/chị là chính chủ, em đã báo bên quản lý cập nhật lại (phí bán 1% khi giao dịch thành công) nha.";
+    }
 
     // NEO NGỮ CẢNH THEO CĂN, không theo "câu hỏi mới nhất" (FR-157).
     // Người bán 2-3 căn, cả hai đều đang thiếu thông tin: bot vừa hỏi căn B,
@@ -1291,7 +1349,7 @@ Deno.serve(async (req) => {
             content:
               `NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
               (sellerMoi
-                ? `Người này VỪA cho biết đang có bất động sản muốn rao nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN chào + mời họ nhắn địa chỉ (đường/phường), giá mong muốn và diện tích để em lên tin — KHÔNG hỏi nhu cầu mua nhà.`
+                ? `Người này VỪA cho biết đang có bất động sản muốn rao nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN chào + mời họ nhắn địa chỉ (đường/phường), giá mong muốn và diện tích để em lên tin — KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
                 : `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN — tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
                   `Không bịa tình trạng tin/lượt khách quan tâm; điều chưa nắm thì nói "để em kiểm tra rồi báo lại anh/chị liền".`),
           }],

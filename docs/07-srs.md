@@ -214,6 +214,8 @@ seller_type        enum(ccrb, nmg, unknown) default unknown
                    -- định, nmg khi tự xưng). Chốt kèo lúc còn unknown thì
                    -- fee_pct = null (OPEN-28) [nguồn: DB thực tế, TS-VAI-01/06]
 active_listing_id  uuid null           -- căn bot đang hỏi, neo ngữ cảnh (FR-157)
+-- RLS 02/09: sellers_admin_read/update (email trong admins) để /admin xem và
+-- đổi nhãn; reminders_admin_read/update cùng khuôn để /admin đọc việc chờ.
 name, email        text
 fee_rate       numeric                -- 1.0 hoặc 0.5
 -- chỉ NMG (FR-102)

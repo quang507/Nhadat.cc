@@ -41,7 +41,7 @@ rồi bơm tin nhắn qua đúng `Deno.serve` handler trong Node, với DB trong
 lỗi LUỒNG (thứ tự các khối, cờ, gọi RPC nào với tham số gì) mà test regex mù.
 
 ```
-cd bot/tests/e2e && bun install && ./chay.sh
+cd bot/tests/e2e && bun install && ./chay.sh   # toàn bộ bằng bun
 ```
 
 Thêm kịch bản: mở `run.mjs`, dùng `fresh(seed)` → `send({...})` → `check(...)`.

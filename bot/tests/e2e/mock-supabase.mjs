@@ -37,6 +37,7 @@ export class FakeDB {
       r.seq = ++this.seq;
       if (globalThis.__afterInsertMsg && r.sender === 'buyer') { const h = globalThis.__afterInsertMsg; globalThis.__afterInsertMsg = null; this.rows('messages').push(r); h(this, r); return { data: r }; }
     }
+    if (table === "reminders") r.status = r.status ?? "pending"; // DB default 'pending'
     if (table === "listings") {
       r.code = r.code ?? `BDS-Q5-${String(this.t.listings.length + 1).padStart(4, "0")}`;
       r.status = r.status ?? "cho_thong_tin";

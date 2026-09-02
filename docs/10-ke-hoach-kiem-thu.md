@@ -913,6 +913,14 @@ bằng `test-fr159-`.
 | TS-VAI-10 *(02/09)* | Vai `anon` gọi chữ ký mới | Chặn | chặn ✅ |
 | TS-VAI-11 *(02/09)* | Vai `authenticated` gọi chữ ký mới | Chặn | chặn ✅ |
 
+| TS-VAI-12 *(02/09)* | Vai `anon` đọc `sellers` | 0 dòng | 0 ✅ |
+| TS-VAI-13 *(02/09)* | Đăng nhập không phải admin đọc `sellers` | 0 dòng | 0 ✅ |
+| TS-VAI-14 *(02/09)* | Đăng nhập không phải admin đọc `reminders` | 0 dòng | 0 ✅ |
+| TS-VAI-15 *(02/09)* | Admin đọc `sellers` | Thấy đủ | 3 ✅ |
+| TS-VAI-16 *(02/09)* | Admin đọc `reminders` đang chờ | Thấy | 93 ✅ |
+| TS-VAI-17 *(02/09)* | Admin update `sellers.seller_type` | Được | 3 dòng ✅ |
+| TS-VAI-18 *(02/09)* | Admin update `reminders.status` | Được | 93 dòng ✅ |
+
 *(02/09/2026 — chữ ký hàm đổi thành `(zalo, nhãn default ccrb)` theo quyết định
 "gán nhãn khi bóc tách"; TS-VAI-01…05 chạy lại trên chữ ký mới cùng ngày, kết
 quả giữ nguyên. Cuộn lại sau kiểm: 0 dòng `test-fr159-%`.)*
@@ -954,9 +962,10 @@ Thứ nó bắt được mà đọc code không thấy (đều đã vá cùng ng
 | Người lạ "em là sale bên sàn giao dịch ABC" → "có căn nhà cần bán ở P6 giá 7 tỷ" | nhãn **chính chủ** (câu sau không nhắc "sale") | nhãn môi giới, nhớ từ tin đầu |
 | Trả lời câu hỏi vai bằng "bán" / "có nhà" / "cho thuê" | xếp vào **hàng mua** | mở hồ sơ bán |
 
-50 kịch bản, chia theo bốn vai (17 người lạ, 8 người bán, 5 người tìm nhà,
+55 kịch bản, chia theo bốn vai (19 người lạ, 10 người bán, 5 người tìm nhà,
 10 người đã nhắm căn, còn lại là các bất biến chéo: nhường lượt, model hỏng,
-ảnh trần, mã từ web). **50/50.** Mỗi kịch bản khẳng định trên DB giả (dòng
+ảnh trần, mã từ web), gồm cả thông báo nhãn cho người bán + việc cho admin +
+xin đổi nhãn (02/09). **55/55**, chạy bằng `bun`. Mỗi kịch bản khẳng định trên DB giả (dòng
 `sellers`/`listings`/`viewings`/`deals` sinh ra) hoặc trên PROMPT thật gửi
 model (khối KHO có/không có mã nào), chứ không chỉ trên câu trả lời.
 

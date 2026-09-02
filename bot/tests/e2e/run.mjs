@@ -42,6 +42,8 @@ check("V1.1 cờ hoi_vai lưu trên buyer", db().t.buyers[0]?.preferences?.hoi_v
 check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /cần rao/.test(m.body)));
 r = await send({ external_user_id: "la-1", text: "tôi có căn nhà ở phường 4" });
 check("V1.2 trả lời có nhà → mở hồ sơ bán, nhãn chính chủ", db().t.sellers.length === 1 && db().t.sellers[0].seller_type === "ccrb" && r.body.role === "seller", JSON.stringify(r.body));
+check("V1.2 người đó được BÁO nhãn + phí ở bong bóng cuối", /CHÍNH CHỦ/.test(r.body.replies.at(-1)) && /1%/.test(r.body.replies.at(-1)), JSON.stringify(r.body.replies));
+check("V1.2 ADMIN nhận việc: hồ sơ mở từ chat, nhãn chính chủ", db().t.reminders.some((x) => x.kind === "escalation" && /🆕/.test(x.note) && /CHÍNH CHỦ/.test(x.note) && !x.seller_id), JSON.stringify(db().t.reminders));
 check("V1.2 chưa tạo tin (chưa có chi tiết), model được báo là người bán MỚI", db().t.listings.length === 0 && createCalls().some((c) => /VỪA cho biết/.test(c.params.messages[0].content)));
 r = await send({ external_user_id: "la-1", text: "bán nhà P4 giá 5 tỷ 8 50m2" });
 const L = db().t.listings[0];
@@ -61,6 +63,7 @@ r = await send({ external_user_id: "la-2", text: "tôi muốn bán nhà q5 giá 
 check("V1.5 câu rao đầy đủ ngay tin đầu → không hỏi vai, mở hồ sơ + tạo tin", !r.body.hoi_vai && db().t.sellers.length === 1 && db().t.listings.length === 1 && db().t.sellers[0].seller_type === "ccrb", JSON.stringify(r.body));
 fresh();
 r = await send({ external_user_id: "la-3", text: "em là sale, có căn q5 cần bán 6 tỷ" });
+check("V1.6 người đó được báo nhãn MÔI GIỚI 0,5%; admin nhận việc MÔI GIỚI", /MÔI GIỚI/.test(r.body.replies.at(-1)) && /0,5%/.test(r.body.replies.at(-1)) && db().t.reminders.some((x) => /🆕/.test(x.note) && /MÔI GIỚI/.test(x.note)), JSON.stringify(r.body.replies));
 check("V1.6 tự xưng sale → nhãn môi giới", db().t.sellers[0]?.seller_type === "nmg" && db().t.listings.length === 1, JSON.stringify(db().t.sellers));
 fresh();
 r = await send({ external_user_id: "la-4", text: "nhà mình bán chưa em?" });
@@ -123,6 +126,12 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "gia", status: "pending" });
 r = await send({ external_user_id: "z-ccrb", text: "giá bán nhà này 5 tỷ 9" });
 check("V2.8 đang bị hỏi giá, trả lời có chữ 'bán nhà' → vẫn là câu trả lời, KHÔNG đẻ tin trùng", db().t.listings.length === 5 && db().t.info_requests.some((q) => q.question === "gia" && q.status === "answered"), JSON.stringify(db().t.info_requests));
+
+fresh(seedKho);
+r = await send({ external_user_id: "z-ccrb", text: "em là môi giới mà, không phải chủ" });
+check("V2.9 chính chủ tự xưng môi giới → KHÔNG tự lật nhãn, báo admin xác nhận, nói với họ đã báo", db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb").seller_type === "ccrb" && db().t.reminders.some((x) => /✏️/.test(x.note) && /tự xưng MÔI GIỚI/.test(x.note)) && r.body.replies.some((t) => /báo bên quản lý/.test(t)), JSON.stringify({ rem: db().t.reminders, rep: r.body.replies }));
+r = await send({ external_user_id: "z-ccrb", text: "em là sale thật đó" });
+check("V2.9 lặp lại trong 24h → không đẻ thêm việc cho admin", db().t.reminders.filter((x) => /✏️/.test(x.note)).length === 1);
 
 // ── VAI 3: người hỏi tìm nhà ──────────────────────────────────────────────────
 fresh(seedKho);
