@@ -322,6 +322,12 @@ users.rating               -- điểm sao từng tương tác (chấm dứt NMG:
 **Bất biến ẩn danh (FR-104/105)**: view công khai không bao giờ trả về số nhà,
 tên hay liên hệ của S; mọi payload relay đi qua bộ lọc SĐT/Zalo/địa chỉ chính xác
 trước khi gửi; danh tính chỉ xuất hiện trong luồng xác nhận lịch xem (UF-06).
+*[chỉnh 02/09/2026 — OPEN-36: bất biến này là về VIEW CÔNG KHAI và LIÊN HỆ.
+Trong hội thoại, khách hỏi một căn thì bot khai mọi thứ đã lưu về căn đó
+("lưu hết, khai khi hỏi" — quyết định chủ dự án); chỉ SĐT/Zalo người bán còn
+giữ tới UF-06. Bộ lọc SĐT phía bot (FR-105) hiện CHƯA có — `chat-reply` đưa
+fact thẳng vào prompt; web lọc bằng `sanitizeDescription()`. Ghi nhận để làm
+cùng đợt `listing_reports`.]*
 
 ### SRS-3.8a · Hai cái bẫy chữ nghĩa đã cắn thật [giả định BA — rút từ sự cố 26/08/2026]
 

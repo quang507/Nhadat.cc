@@ -648,9 +648,29 @@ cố định). Chốt sau khi có số thật ở `/admin` (thẻ "Tiền bộ n
 
 ---
 
-### OPEN-36 · Xác thực (KYC) người bán/môi giới có mâu thuẫn với ẩn danh hai chiều không?
+### OPEN-36 · Xác thực (KYC) người bán/môi giới có mâu thuẫn với ẩn danh hai chiều không? — **ĐÃ CHỐT 02/09/2026**
 
-**Mức: TRUNG BÌNH. Nêu 02/09/2026 từ đối chiếu ba sàn (docs/01 §1.5c).**
+**Quyết định chủ dự án (02/09/2026, nguyên văn):** *"Không phải ẩn danh nhưng
+tất cả thông tin người bán đã chia sẻ sẽ lưu và khi khách hỏi thì mới khai báo
+chứ."* Tức nguyên tắc là **LƯU HẾT — KHAI KHI HỎI**, không phải "giấu":
+
+1. Mọi thứ người bán đã chia sẻ (câu rao, câu trả lời nhỏ giọt, ảnh, sổ) đều
+   lưu — đã đúng như hiện nay (`listing_facts` append-only, `listing_media`).
+2. Bot **không chủ động phơi** trên web/kho, nhưng khách hỏi tới đâu thì khai
+   tới đó từ dữ liệu đã lưu; chỉ thứ CHƯA có mới "để em hỏi lại chủ nhà".
+   Khối "căn khách đang nhắc" trong `chat-reply` đã làm đúng thế (địa chỉ,
+   thông số FR-172, fact đã xác minh); thứ cần sửa là chữ "ẩn danh" trong docs.
+3. KYC (CCCD, chứng chỉ) vì thế không mâu thuẫn — nếu có thì cũng là "thông
+   tin người bán đã chia sẻ", lưu và khai khi hỏi. Chưa làm cho tới khi có NMG
+   thật.
+
+**Ranh giới còn giữ (giả định BA, chủ dự án chưa nói tới):** số điện thoại /
+Zalo của người bán vẫn chỉ mở ở bước chốt lịch xem (UF-06), vì đó là chốt giữ
+phí thành công (INS-11 điều 1); ảnh sổ nằm bucket riêng, khai khi hỏi cần
+đường signed URL (NFR-06, chưa dựng). Nếu chủ dự án muốn khai cả SĐT khi khách
+hỏi thì ghi lại đây và sửa FR-104.
+
+*(Phân tích ban đầu giữ bên dưới để đối chiếu.)*
 
 Cả mogi (`IsVerifiedIDCard`, `AgentCerNo`) lẫn batdongsan (CCCD + selfie +
 Zalo + chứng chỉ, danh hiệu "Môi giới chuyên nghiệp", điều kiện duy trì ≥5
@@ -667,7 +687,7 @@ hiện) và nhãn "chính chủ đã xác thực" trên tin — không lộ danh
 `sổ đỏ samples/` bị cấm) và luật lưu trữ. Khuyến nghị (a) cho tới khi có NMG
 thật; nếu chọn (b) thì làm cùng đường signed URL NFR-06 còn thiếu.
 
-**Chờ chủ dự án chốt.**
+~~Chờ chủ dự án chốt.~~ Đã chốt như trên.
 
 ---
 

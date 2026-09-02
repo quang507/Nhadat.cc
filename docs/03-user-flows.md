@@ -179,7 +179,9 @@ xác nhận (FR-107). Căn đã bán → báo mọi B đang chờ kèm căn thay
 **Mở khoá danh tính (FR-104 · Cầu Nối §F4)** — toàn hệ thống chỉ có đúng một khoảnh
 khắc hai bên biết nhau: khi lịch xem **đã chốt**. Lúc đó B nhận địa chỉ chính xác +
 tên, SĐT người dẫn xem (CTV nếu chủ tin là CCRB, chính NMG nếu là NMG); S nhận tên +
-SĐT người mua. Trước thời điểm này: ẩn danh tuyệt đối cả hai chiều.
+SĐT người mua. Trước thời điểm này: không mở liên hệ hai chiều *[chỉnh 02/09/2026 —
+OPEN-36: "ẩn danh tuyệt đối" là chữ cũ; nay là "lưu hết, khai khi khách hỏi" — bot
+khai địa chỉ/thông số/fact đã lưu khi khách hỏi căn, chỉ SĐT/Zalo chờ tới đây]*.
 
 **Nhánh lỗi**
 - B từ chối cho số ĐT → vẫn nhận lịch, liên hệ hoàn toàn qua Zalo (bắt buộc, theo NFR-07).

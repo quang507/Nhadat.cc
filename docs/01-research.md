@@ -121,7 +121,12 @@ Hàng dự án (sơ cấp) khác hàng lẻ (thứ cấp) ở ba điểm cấu t
 Phạm vi đưa hàng dự án vào MVP hay giai đoạn sau: quyết định ở `OPEN-15`.
 Nhu cầu "kiểm soát đã bán những căn nào" cũng mở câu hỏi CRM: `OPEN-16`.
 
-### INS-11 — Bot là trung gian toàn phần: ẩn danh hai chiều tới lúc chốt lịch xem
+### INS-11 — Bot là trung gian toàn phần: lưu hết, khai khi khách hỏi, liên hệ mở lúc chốt lịch xem
+*[chỉnh 02/09/2026 — quyết định chủ dự án (OPEN-36): "không phải ẩn danh nhưng
+tất cả thông tin người bán đã chia sẻ sẽ lưu và khi khách hỏi thì mới khai
+báo". Đoạn dưới là bản gốc 08/2026; đọc "ẩn danh" là "không chủ động phơi",
+không phải "giấu khi được hỏi". Ranh giới còn giữ: SĐT/Zalo người bán mở ở
+bước chốt lịch xem.]*
 Spec "Cầu Nối BĐS" v2 của chủ dự án đẩy INS-04 đi xa hơn hẳn: không chỉ
 không-thu-số-điện-thoại, mà **hai bên không bao giờ nhắn trực tiếp cho nhau** —
 mọi trao đổi qua bot; buyer chỉ thấy mã listing + khu vực mức phường (không số

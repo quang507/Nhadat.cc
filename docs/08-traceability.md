@@ -30,7 +30,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | INS-08 | Sâu một quận trước | BR-01, SRS-8 (thứ tự P1 trước P2) |
 | INS-09 | "Rao một lần là xong", không spam S | FR-103, §6.9 (06), SRS-5.3 `stale_listing_check` |
 | INS-10 | Hàng dự án: dữ liệu hai tầng, tồn kho theo căn | FR-113…FR-117 (OPEN-15 chốt phương án b, 24/08) |
-| INS-11 | Trung gian toàn phần, ẩn danh hai chiều | FR-104…FR-112, UF-10, UF-13, SRS-3.8 |
+| INS-11 | Trung gian toàn phần: lưu hết, khai khi khách hỏi; liên hệ mở lúc chốt lịch xem (chỉnh 02/09/2026, OPEN-36) | FR-104…FR-112, UF-10, UF-13, SRS-3.8 |
 | INS-12 | Sau sáp nhập 2025, địa giới cũ vẫn là ngôn ngữ thị trường | FR-118 (`ward_mapping`), Taxonomy §4.6 (04), FR-12 (trang tag) — quyết định chủ dự án 24/08/2026 |
 | INS-13 | Bộ trường tin rao "chuẩn sàn" là mẫu số chung (mogi/radanhadat) | FR-172, SRS-3.1 (bảng thật ↔ đặc tả), SRS-3.14 — đối chiếu 02/09/2026; mở rộng ra MÔ HÌNH DỮ LIỆU ba sàn ở §1.5c (01): khoảng trống = SRS-3.2 `property_events` (FR-70/73), SRS-5.3 `match_new_listings` (FR-64), snapshot giá (FR-99/120), `listing_reports`, `streets`/`ward_mapping` (FR-118), `pois` (INS-07); OPEN-36/37/38 |
 
@@ -68,7 +68,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-100 | UF-12 | WF-11 | SRS-4.3 | AC-11 |
 | FR-101, FR-102 | UF-09 | WF-09 | SRS-3.4 | *[FR-102 deprecated → FR-137]* Chấm điểm CTV/NMG nằm trong `ctv-report` (rubric `RATE_CTV_RUBRIC`). Edge `rate-ctv` + bảng `ratings` đã XOÁ 27/08/2026 theo OPEN-23 |
 | FR-103 | UF-09 | — | SRS-5.3 | — |
-| FR-104, FR-105 | UF-06, UF-12 | — | SRS-3.8 (bất biến ẩn danh) | — |
+| FR-104, FR-105 | UF-06, UF-12 | — | SRS-3.8 (bất biến ẩn danh — chỉnh 02/09/2026 theo OPEN-36: lưu hết, khai khi khách hỏi; SĐT/Zalo giữ tới UF-06); bộ lọc SĐT phía bot (FR-105) chưa dựng | — |
 | FR-106, FR-107, FR-108 | UF-13 | — | SRS-3.8, SRS-5.3 | — |
 | FR-109, FR-111 | UF-10 | — | SRS-3.8 | — |
 | FR-110 | UF-05 | WF-06 | SRS-5.3 `info_request_sla` | — |
