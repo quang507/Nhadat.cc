@@ -40,7 +40,10 @@ Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 `secretOf()`, `anthropicClient()`, `jsonResponse()`, `sendZalo()`,
 `sendZaloImage()`, `escalationText()`, `ghiLoi()`, `doTien()`, hằng `MODEL`;
 và `_shared/gate.ts`: `congBiMat(req, client, "tên")` — cổng bí mật dùng chung
-(FR-171 g), trả `Response` để return ngay hoặc `null` để đi tiếp. Function nào
+(FR-171 g), trả `Response` để return ngay hoặc `null` để đi tiếp; và
+`_shared/thong_so.ts`: `SPEC_COLS` (danh sách cột thông số FR-172 để `select`)
++ `thongSoNgan(row)` (viết ra " · 4x15m · trệt + 2 lầu · 3WC · hẻm xe hơi 6m ·
+sổ hồng riêng") — một chỗ, để bot không nói hai giọng về cùng một căn. Function nào
 gọi model thì gọi kèm `await doTien(client, r.usage)` ngay sau chỗ lấy kết quả
 ra — không có dòng đó thì lượt gọi ấy vô hình với đồng hồ đo tiền ở `/admin`
 (FR-169); từ 02/09 cả bốn function gọi model đều đã nối. Function mới **phải** import
@@ -209,7 +212,11 @@ một file `index.ts`, `_shared/` gộp vào). Bản đang chạy sau đợt nà
 
 `zalo-webhook` giữ v11. Kiểm sau deploy: e2e 65/65 chạy trên nội dung
 `chat-reply` kéo ngược từ Supabase (không phải trên nguồn), bảy bản còn lại
-trùng byte với bundle sau khi chuẩn hoá `\uXXXX`. Lệnh bundle:
+trùng byte với bundle sau khi chuẩn hoá `\uXXXX`.
+
+*Cùng ngày, FR-172 (tin rao có cấu trúc): `chat-reply` **v45**, `nudge` **v22**
+— dòng KHO / căn khách nhắc / follow-up mang thông số từ cột mới qua
+`_shared/thong_so.ts`; đối chiếu byte như trên, e2e 67/67.* Lệnh bundle:
 
 ```bash
 bun build bot/supabase/functions/<fn>/index.ts --target=node --external 'npm:*' \

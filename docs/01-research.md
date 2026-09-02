@@ -155,6 +155,41 @@ Hệ quả:
 3. Bot phải hiểu cả hai cách gọi trong chat ("Phường 4 Quận 5" và tên phường mới)
    và quy về cùng một khu vực.
 
+### INS-13 — Bộ trường tin rao "chuẩn sàn" là mẫu số chung của thị trường
+Đối chiếu 02/09/2026 hai sàn theo yêu cầu chủ dự án ("fetch db mogi.vn,
+radanhadat.vn xem họ lấy gì"). Cả hai site chặn egress từ môi trường phân tích,
+nên **mogi.vn** đọc qua bản HTML thật lưu trong một repo công khai (fixture
+crawler, tin đăng 06/2026) + mã nguồn 7 crawler mở; **radanhadat.vn** đọc qua
+quy chế đăng tin (`hotro.radanhadat.vn`) + snippet index Google [nguồn:
+WebSearch + GitHub 02/09/2026 — chưa đọc DOM trực tiếp, cần xác minh lại khi
+có trình duyệt thật].
+
+| Trường | mogi.vn | radanhadat.vn | nhadat.cc TRƯỚC 02/09 | nhadat.cc SAU (FR-172) |
+|---|---|---|---|---|
+| Giá · diện tích · giá/m² | có · có · **không** | có · có · **có (tự tính)** | có · có · không | có · có · có (`price_per_m2_vnd`) |
+| Ngang × dài | gộp trong ngoặc "145 m² (8x18,12)" | trường riêng "kích thước" | chỉ trong mô tả | `frontage_m`, `length_m`, `rear_width_m` |
+| Số tầng · PN · WC | không · có · "nhà tắm" | **bắt buộc** cả ba | không · 79/173 · không | `floors`(+`floors_text`) · `bedrooms` · `bathrooms` |
+| Đường vào (mặt tiền/hẻm) | ở **cấp danh mục** (`mua-nha-mat-tien-pho` / `mua-nha-hem-ngo`) | bắt buộc, text | chỉ trong mô tả | `access_type` + `alley_width_m` + `distance_to_street_m` |
+| Pháp lý · hoàn công | enum · không | bắt buộc · không | không | `legal_status` · `has_completion` |
+| Hướng | tuỳ chọn, thường trống | bắt buộc; chung cư tách hướng cửa/ban công | `direction` 0/173 | bóc từ mô tả + fact chủ nhà |
+| Nội thất · năm xây · quy hoạch | không | nội thất có; năm xây không; quy hoạch là **công cụ** (lớp bản đồ) | không | `furnishing` · `year_built` · `planning_status` |
+| Dự án · đường phố | dự án `-prj####`, đường `-sid####` | dự án là chiều địa lý thứ 5 | `project_id`, đường trong `location_raw` | + `street` bóc từ địa chỉ |
+| Chính chủ / môi giới | **không có** (mọi tài khoản = môi giới) | quy chế nói kiểm duyệt, không thấy nhãn | `seller_type` gán từ chat (FR-159) | giữ |
+| Lịch sử giá · giá đã giao dịch | không | không | `deals` (FR-142) | giữ — **khe hở cả hai sàn chưa lấp** |
+
+Ba điều rút ra:
+1. **Bộ tối thiểu thị trường đã đồng thuận** = diện tích, giá, ngang×dài, số
+   tầng, PN, WC, hướng, đường vào, pháp lý (+ giá/m², dự án). SRS-3.1 đã đặc
+   tả gần đủ từ đầu, nhưng bảng thật chỉ có 5 trường — 164 mô tả tin của ta
+   chứa đủ 9 trường kia ở dạng chữ. Đưa bảng thật về đúng đặc tả (FR-172).
+2. **Khe hở để chiếm**: không sàn nào có giá đã giao dịch, lịch sử tin, so sánh
+   cùng hẻm — đúng thứ `deals` + `masterDB/` Quận 5 tích luỹ được. Và mogi lộ
+   SĐT + toạ độ chính xác ngay trong HTML: ẩn danh hai chiều (INS-11, FR-104)
+   vẫn là khác biệt thật.
+3. **Đừng bắt điền form** (INS-05 giữ nguyên): radanhadat bắt buộc 10 trường
+   lúc đăng; ta lấy cùng 10 trường đó bằng cách bóc câu rao + hỏi nhỏ giọt phần
+   thiếu — cột nào đã bóc được thì không hỏi lại (FR-172 d).
+
 ## 1.2 Người dùng
 
 ### Bên mua (B)
@@ -235,6 +270,7 @@ Hệ quả cho phạm vi sản phẩm:
 | Sàn/môi giới truyền thống | Đại lý khu vực | Quan hệ, biết hàng thật | Không trực 24/7, phủ hẹp, không lưu nhu cầu khách |
 | Chat-first quốc tế | (concept trong `demo2Vitalify.docx`) | — | Chưa có bản địa hoá Zalo cho thị trường VN |
 | Portal thế hệ mới | **radanhadat.vn** (MCDX, ra mắt 10/2024) | Đăng tin 0đ, công cụ cho môi giới, SEO facet mạnh | Vẫn là mô hình listing-first bán hiển thị; không có tầng hội thoại giữ khách — chi tiết §1.5b |
+| Portal tối giản | **mogi.vn** | Danh mục 2 cấp phân biệt mặt tiền/hẻm ngay ở loại BĐS; SEO tới cấp đường (`-sid####`); trang giá theo quận | Tin chỉ ~7 trường cấu trúc (ngang×dài, HXH, số tầng nằm trong tiêu đề/mô tả tự do); lộ SĐT + toạ độ trong HTML dù UI che (ngược FR-104); mọi tài khoản là "môi giới", không có khái niệm chính chủ — INS-13 |
 
 ### 1.5b Phân tích sâu đối thủ trực tiếp: radanhadat.vn
 

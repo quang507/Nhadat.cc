@@ -37,8 +37,24 @@ const XEP = [
   { key: "dt-lon", label: "Diện tích lớn" },
 ];
 const PN = [1, 2, 3, 4]; // "từ N phòng ngủ trở lên" (FR-128)
+// FR-172: ba bộ lọc trên cột có cấu trúc (migration 20260902e). "Hẻm xe hơi trở
+// lên" gộp cả hẻm xe tải và mặt tiền — khách hỏi "xe hơi vô được không", không
+// hỏi đúng cỡ hẻm.
+const VAO = [
+  { key: "mt", label: "Mặt tiền", types: ["mat_tien"] },
+  { key: "hxh", label: "Hẻm xe hơi trở lên", types: ["mat_tien", "hem_xe_tai", "hem_xe_hoi"] },
+  { key: "hem", label: "Trong hẻm", types: ["hem_xe_tai", "hem_xe_hoi", "hem_xe_may", "hem"] },
+];
+const TANG = [2, 3, 4]; // "từ N tầng trở lên"
+const PL = [
+  { key: "so-rieng", label: "Sổ hồng riêng", statuses: ["so_hong_rieng"] },
+  { key: "co-so", label: "Có sổ", statuses: ["so_hong_rieng", "so_hong_chung", "so_hong"] },
+];
 
-type Params = { phuong?: string; trang?: string; gia?: string; dt?: string; xep?: string; pn?: string };
+type Params = {
+  phuong?: string; trang?: string; gia?: string; dt?: string; xep?: string; pn?: string;
+  vao?: string; tang?: string; pl?: string;
+};
 
 // Trang này ĐỌC searchParams nên Next đánh dấu ƒ — dựng lại từng request, ISR
 // không với tới (tổ hợp bộ lọc là vô hạn, không prerender được). Chỗ tốn thật
@@ -51,6 +67,7 @@ type Truy = {
   giaMin?: number; giaMax?: number; loGia: boolean;
   dtMin?: number; dtMax?: number; loDt: boolean;
   pn: number | null;
+  vao?: string[]; tang?: number; pl?: string[];
   xep: string;
   page: number;
 };
@@ -72,6 +89,9 @@ const layTin = unstable_cache(
     if (t.dtMax) q = q.lt("area_m2", t.dtMax);
     if (t.loDt) q = q.gt("area_m2", 0);
     if (t.pn) q = q.gte("bedrooms", t.pn);
+    if (t.vao?.length) q = q.in("access_type", t.vao);
+    if (t.tang) q = q.gte("floors", t.tang);
+    if (t.pl?.length) q = q.in("legal_status", t.pl);
     q =
       t.xep === "gia-tang" ? q.order("price_vnd", { ascending: true, nullsFirst: false })
       : t.xep === "gia-giam" ? q.order("price_vnd", { ascending: false, nullsFirst: false })
@@ -103,12 +123,16 @@ export default async function ListingBrowse({
   const xep = XEP.find((x) => x.key === sp.xep) ?? XEP[0];
 
   const pn = PN.includes(Number(sp.pn)) ? Number(sp.pn) : null;
+  const vao = VAO.find((v) => v.key === sp.vao);
+  const tang = TANG.includes(Number(sp.tang)) ? Number(sp.tang) : undefined;
+  const pl = PL.find((p) => p.key === sp.pl);
   const { rows: listings, total } = await layTin({
     deal,
     phuong: sp.phuong,
     giaMin: gia?.min, giaMax: gia?.max, loGia: !!gia,
     dtMin: dt?.min, dtMax: dt?.max, loDt: !!dt,
     pn,
+    vao: vao?.types, tang, pl: pl?.statuses,
     xep: xep.key,
     page,
   });
@@ -173,6 +197,30 @@ export default async function ListingBrowse({
             </Link>
           ))}
         </div>
+        {/* FR-172: lọc trên cột thông số — trước đây "hẻm xe hơi" chỉ nằm trong mô tả */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-24 shrink-0 eyebrow text-mute">Đường vào</span>
+          {VAO.map((v) => (
+            <Link key={v.key} href={withParam({ vao: sp.vao === v.key ? undefined : v.key })} className={chip(sp.vao === v.key)}>
+              {v.label}
+            </Link>
+          ))}
+        </div>
+        {deal === "ban" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-24 shrink-0 eyebrow text-mute">Tầng · sổ</span>
+            {TANG.map((n) => (
+              <Link key={n} href={withParam({ tang: sp.tang === String(n) ? undefined : String(n) })} className={chip(sp.tang === String(n))}>
+                {n}+ tầng
+              </Link>
+            ))}
+            {PL.map((p) => (
+              <Link key={p.key} href={withParam({ pl: sp.pl === p.key ? undefined : p.key })} className={chip(sp.pl === p.key)}>
+                {p.label}
+              </Link>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Xếp theo</span>
           {XEP.map((x) => (

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import FavButton from "@/components/FavButton";
 import type { ListingCard as CardRow } from "@/lib/supabase";
-import { formatArea, formatPrice, placeholderImg, TYPE_LABEL } from "@/lib/format";
+import { ACCESS_SHORT, formatArea, formatPrice, placeholderImg, TYPE_LABEL } from "@/lib/format";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
 
 export default function ListingCard({
@@ -53,8 +53,16 @@ export default function ListingCard({
             {formatPrice(listing.price_vnd, listing.price_raw)}
           </p>
         </div>
-        <span className="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-navy">
-          {listing.deal === "cho_thue" ? "Cho thuê" : "Bán"}
+        <span className="absolute left-3 top-3 flex items-center gap-1.5">
+          <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-navy">
+            {listing.deal === "cho_thue" ? "Cho thuê" : "Bán"}
+          </span>
+          {/* FR-172: đường vào là thứ khách Quận 5 hỏi đầu tiên — nói ngay trên thẻ */}
+          {listing.access_type && ACCESS_SHORT[listing.access_type] && (
+            <span className="rounded-full bg-navy/80 px-2.5 py-1 text-[11px] font-bold text-white">
+              {ACCESS_SHORT[listing.access_type]}
+            </span>
+          )}
         </span>
         {/* Chưa có ảnh thật của căn này → NÓI RA. Ảnh đang hiện là ảnh minh hoạ
             dùng chung, không phải căn ở địa chỉ này. Không ghi thì khách đi xem
@@ -105,6 +113,13 @@ export default function ListingCard({
               <IconBed className="h-4 w-4 text-mute/70" />
               {listing.bedrooms} PN
             </span>
+          ) : null}
+          {/* FR-172: WC + số tầng — hai cột Veedoo có mà kho trước đây không có */}
+          {listing.bathrooms ? (
+            <span className="tabular-nums">{listing.bathrooms} WC</span>
+          ) : null}
+          {listing.floors ? (
+            <span className="tabular-nums">{listing.floors} tầng</span>
           ) : null}
         </div>
       </div>

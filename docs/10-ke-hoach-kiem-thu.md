@@ -1021,3 +1021,38 @@ ngược bằng `get_edge_function` và trùng byte với bundle sau khi chuẩn
 **Đo cách build** (cùng máy, xoá cache trước): `bun install` 4,4 s, `npm
 install` 20,1 s; `next build` sạch ~34 s và có cache ~25 s ở CẢ HAI — bun chỉ
 nhanh ở khâu cài gói, khâu build là Next tự chạy. Repo đã là bun (`bun.lock`).
+
+---
+
+### TS-THONGSO — tin rao có cấu trúc: bóc từ mô tả, cột đã có thì không hỏi (FR-172, 02/09/2026)
+
+Chạy trên DB thật qua MCP ngay sau `20260902e` + `20260902f`, trên đúng 173 tin
+đang có (164 tin có mô tả). Ca 01–08 là số đo bao phủ (chốt chống hồi quy khi
+sửa regex — giảm là phải giải thích), 09–12 là hành vi.
+
+| ID | Kịch bản | Kỳ vọng | Kết quả |
+|---|---|---|---|
+| TS-THONGSO-01 | Ngang × dài từ "4x16m", "4m x 15m", "3m6 x 16", "ngang 4.6m dài 13.2m", "3.8m dài 24m", "4*15" | ≥ 115/164 có `frontage_m` | ngang 121, dài 118, nở hậu 11 ✅ |
+| TS-THONGSO-02 | Số tầng từ "1 trệt 3 lầu" (=4), "5 tầng", "x 3T", "Tổng số tầng: 4", "trệt, lầu" (=2), "nhà C4" (=1); chung cư "tầng 25" → `floor`, KHÔNG phải `floors` | ≥ 135/164; 2 chung cư có `floor` | tầng 141, `floor` 2 ✅ |
+| TS-THONGSO-03 | Đường vào: "mặt tiền"/"MT"/"2MT"/"có vỉa hè" → mặt tiền; "HXH"/"hẻm xe hơi"/"xe hơi vô" → hẻm xe hơi; "HXT"/"xe tải" → hẻm xe tải; "nhà hẻm … cách mặt tiền 20m" → HẺM (không phải mặt tiền); "hẻm hông 6m" không tính | ≥ 120/164 | 126: MT 53, HXH 42, HXT 9, xe máy 2, hẻm chưa rõ cỡ 20 ✅ |
+| TS-THONGSO-04 | Hẻm rộng "hẻm 4m", "HXH 5.5m", "đường rộng 8m"; cách MT "cách mặt tiền 40m", "cách 50m ra mặt tiền" | số hợp lý (1–40 m / 5–500 m) | hẻm rộng 25, cách MT 19 ✅ |
+| TS-THONGSO-05 | Pháp lý "sổ hồng riêng/SHR" → `so_hong_rieng`; "sổ hồng/sổ đỏ/sổ chính chủ" → `so_hong`; "sổ chung" → `so_hong_chung`; "hoàn công" / "chưa hoàn công" → bool; "pháp lý rõ ràng" trơ → KHÔNG đoán | ≥ 70/164 | pháp lý 75, hoàn công 37, quy hoạch 6 ✅ |
+| TS-THONGSO-06 | PN/WC "4PN 5WC", "3 phòng ngủ 4 nhà vệ sinh", "Số phòng ngủ: 4 Số phòng vệ sinh: 5" | PN không ghi đè giá trị đã có (79 giữ nguyên), WC ≥ 60 | PN 81 (+2 mới, 0 lệch), WC 63 ✅ |
+| TS-THONGSO-07 | Tiện ích/khác: thang máy, xe hơi vô nhà, căn góc/2MT, nội thất, năm xây ("xây từ giữa năm 2020"), hướng (chỉ chữ la bàn sau "hướng"), TL, "đang cho thuê 20 triệu/tháng" (chỉ tin bán) | có, không bịa | thang máy 10, xe hơi 6, góc 21, nội thất 25, năm 4, hướng 7, TL 52, thuê 17 ✅ |
+| TS-THONGSO-08 | `street` từ `location_raw`: "Số 88, Đường Trần Hưng Đạo, …" → "Trần Hưng Đạo"; "Hẻm 23/, Đường Hồ Thành Biên" → "Hồ Thành Biên" (`20260902f`); "Dự án Tản Đà Court, Đường Tản Đà" → "Tản Đà"; "Phường 2, Quận 5" → null | mọi tin có tên đường trong địa chỉ | 159/164 tin có `location_raw` (5 tin địa chỉ chỉ ghi phường → null, đúng) ✅ |
+| TS-THONGSO-09 | `listing_missing_facts` sau backfill | giảm rõ, KHÔNG về 0 (hướng/quy hoạch/năm xây mô tả ít nói) | 1.140 → 638; ba câu kết cấu/pháp lý/hẻm 447 → 142; còn nhiều nhất: hướng 152, quy hoạch 139, năm xây 137 ✅ |
+| TS-THONGSO-10 | `price_per_m2_vnd` sinh cho mọi tin có giá + diện tích; tin thuê tính theo tháng | 164/164 | ✅ (tin thuê 70 tr/64m² → 1,1 tr/m²/tháng) |
+| TS-THONGSO-11 | e2e THONGSO-01: căn có thông số → dòng KHO gửi model là "4x12.5m · trệt + 2 lầu · 3WC · hẻm xe hơi 6m · sổ hồng riêng, hoàn công" | khớp regex | ✅ (67/67) |
+| TS-THONGSO-12 | e2e THONGSO-02: khách gõ mã căn → khối "căn khách đang nhắc" cũng mang thông số | có "hẻm xe hơi 6m" + "sổ hồng riêng" | ✅ |
+
+**Giới hạn nhìn thấy khi soi tay** (đều ghi lại, chưa vá vì hiếm): "Diện tích
+306m² (4,2mx22m), 4 tầng" — 306 là tổng sàn, `area_m2` của tin vốn đã ghi 306
+từ Excel, regex không phân xử được (6 tin có ngang×dài lệch `area_m2` > 35%,
+xem `dt_lech`); "nhà cách mặt tiền 40m" đôi khi đi cùng "nhà mặt tiền" trong
+cùng bài — luật "nhà hẻm thắng" chỉ áp khi câu mở đầu nói hẻm; `property_type`
+đoán sai (chung cư gán `nha_pho`) thì "tầng 25" bị đọc thành 25 tầng — bị chặn
+bởi dải 1–30 nên ra null, không ra sai.
+
+**Chưa kiểm được**: fact chủ nhà chảy vào cột mới (TS-THONGSO cho
+`listing_facts_sync_cols` mở rộng) — `listing_facts` thật đang rỗng, chờ đợt nhắn
+thật; hàm được kiểm gián tiếp qua `boc_thong_so` dùng chung.

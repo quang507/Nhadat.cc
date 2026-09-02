@@ -14,17 +14,23 @@ export const supabase = createClient(url, key);
 // đọc `description` (cột text nặng nhất), `lat/lng`, `unit_status`,
 // `last_confirmed_at`; kéo "*" cho lưới 24 thẻ là kéo 24 mô tả rồi vứt — và
 // với /ban-do là 300 mô tả bị serialize vào HTML. Trang chi tiết mới cần "*".
+// FR-172: thẻ tin thêm ba cột thông số nhẹ (đường vào, số tầng, WC) — đúng thứ
+// khách Quận 5 nhìn đầu tiên ("HXH hay MT? mấy tầng?"), không kéo mô tả.
 export const CARD_COLS =
-  "id, code, deal, district, ward, location_raw, area_m2, price_vnd, price_raw, property_type, bedrooms, status, created_at";
+  "id, code, deal, district, ward, street, location_raw, area_m2, price_vnd, price_raw, property_type, bedrooms, bathrooms, floors, access_type, status, created_at";
 /** Bản đồ: thẻ + toạ độ, vẫn không kéo mô tả. */
 export const MAP_COLS = `${CARD_COLS}, lat, lng`;
 export type MapRow = ListingCard & Pick<Listing, "lat" | "lng">;
 /** Kiểu dữ liệu của một dòng đọc bằng CARD_COLS — đủ cho ListingCard. */
 export type ListingCard = Pick<
   Listing,
-  | "id" | "code" | "deal" | "district" | "ward" | "location_raw" | "area_m2"
-  | "price_vnd" | "price_raw" | "property_type" | "bedrooms" | "status" | "created_at"
+  | "id" | "code" | "deal" | "district" | "ward" | "street" | "location_raw" | "area_m2"
+  | "price_vnd" | "price_raw" | "property_type" | "bedrooms" | "bathrooms" | "floors"
+  | "access_type" | "status" | "created_at"
 >;
+
+/** FR-172: đường vào — giá trị trong DB (CHECK ở migration 20260902e). */
+export type AccessType = "mat_tien" | "hem_xe_tai" | "hem_xe_hoi" | "hem_xe_may" | "hem";
 
 export type Listing = {
   id: string;
@@ -45,4 +51,31 @@ export type Listing = {
   lat: number | null;
   lng: number | null;
   bedrooms: number | null;
+  // FR-172 — thông số có cấu trúc (migration 20260902e). Bậc nguồn ở specs_source.
+  street: string | null;
+  access_type: AccessType | null;
+  alley_width_m: number | null;
+  distance_to_street_m: number | null;
+  frontage_m: number | null;
+  length_m: number | null;
+  rear_width_m: number | null;
+  legal_area_m2: number | null;
+  built_area_m2: number | null;
+  floors: number | null;
+  floors_text: string | null;
+  floor: number | null;
+  bathrooms: number | null;
+  direction: string | null;
+  legal_status: "so_hong_rieng" | "so_hong_chung" | "so_hong" | "hdmb" | "giay_tay" | null;
+  has_completion: boolean | null;
+  planning_status: string | null;
+  has_elevator: boolean | null;
+  car_in_house: boolean | null;
+  corner_lot: boolean | null;
+  furnishing: "full" | "co_ban" | "khong" | null;
+  year_built: number | null;
+  negotiable: boolean | null;
+  rent_income_vnd: number | null;
+  specs_source: string | null;
+  price_per_m2_vnd: number | null;
 };

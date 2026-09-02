@@ -8,9 +8,15 @@ import { CARD_COLS, supabase, type Listing, type ListingCard as CardRow } from "
 import { coverByCode, photosOfCode } from "@/lib/photos";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
 import {
+  ACCESS_LABEL,
   formatArea,
+  formatDims,
   formatPrice,
+  formatPricePerM2,
+  FURNISH_LABEL,
+  LEGAL_LABEL,
   placeholderImg,
+  PLANNING_LABEL,
   sanitizeDescription,
   TYPE_LABEL,
   zaloLink,
@@ -115,6 +121,38 @@ export default async function Page({
       : null,
   ].filter(Boolean) as Array<{ Icon: (p: { className?: string }) => React.ReactElement; label: string; value: string }>;
 
+  // FR-172: bảng thông số chuẩn sàn (mogi/radanhadat đều có bộ này) — CHỈ hiện
+  // dòng nào tin thật sự có; null = chưa xác minh thì không hiện, không đoán.
+  // Nguồn của cụm số này (bóc từ mô tả / chủ nhà xác nhận) nói ở chân bảng.
+  const dims = formatDims(listing.frontage_m, listing.length_m, listing.rear_width_m);
+  const n = (v: number) => Number(v).toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+  const specs: Array<[string, string]> = [];
+  const push = (k: string, v: string | null | undefined) => { if (v) specs.push([k, v]); };
+  push("Giá / m²", formatPricePerM2(listing.price_per_m2_vnd, listing.deal));
+  push("Kích thước", dims);
+  push("DT công nhận", listing.legal_area_m2 ? `${n(listing.legal_area_m2)} m²` : null);
+  push("DT xây dựng", listing.built_area_m2 ? `${n(listing.built_area_m2)} m²` : null);
+  push("Kết cấu", listing.floors_text ?? (listing.floors ? `${listing.floors} tầng` : null));
+  push("Tầng (chung cư)", listing.floor != null && listing.property_type === "chung_cu" ? `Tầng ${listing.floor}` : null);
+  push("Phòng", [listing.bedrooms ? `${listing.bedrooms} PN` : null, listing.bathrooms ? `${listing.bathrooms} WC` : null].filter(Boolean).join(" · ") || null);
+  push("Đường vào", listing.access_type
+    ? `${ACCESS_LABEL[listing.access_type] ?? listing.access_type}${listing.alley_width_m ? ` · rộng ${n(listing.alley_width_m)} m` : ""}${listing.distance_to_street_m ? ` · cách mặt tiền ${n(listing.distance_to_street_m)} m` : ""}`
+    : null);
+  push("Pháp lý", listing.legal_status
+    ? `${LEGAL_LABEL[listing.legal_status] ?? listing.legal_status}${listing.has_completion === true ? " · đã hoàn công" : listing.has_completion === false ? " · chưa hoàn công" : ""}`
+    : listing.has_completion === true ? "Đã hoàn công" : null);
+  push("Quy hoạch", listing.planning_status ? PLANNING_LABEL[listing.planning_status] ?? listing.planning_status : null);
+  push("Hướng", listing.direction);
+  push("Nội thất", listing.furnishing ? FURNISH_LABEL[listing.furnishing] : null);
+  push("Năm xây", listing.year_built ? String(listing.year_built) : null);
+  push("Tiện ích", [
+    listing.has_elevator ? "thang máy" : null,
+    listing.car_in_house ? "xe hơi vô nhà" : null,
+    listing.corner_lot ? "căn góc / 2 mặt tiền" : null,
+  ].filter(Boolean).join(" · ") || null);
+  push("Đang cho thuê", listing.deal === "ban" && listing.rent_income_vnd ? `${n(listing.rent_income_vnd / 1_000_000)} tr/tháng` : null);
+  push("Thương lượng", listing.negotiable === true ? "Còn thương lượng" : listing.negotiable === false ? "Giá chốt" : null);
+
   return (
     <>
       <TrackView code={code} listingId={listing.id} />
@@ -215,6 +253,24 @@ export default async function Page({
               <p className="mt-1.5 text-4xl font-extrabold text-brand tabular-nums">
                 {formatPrice(listing.price_vnd, listing.price_raw)}
               </p>
+              {specs.length > 0 && (
+                <>
+                  <h2 className="mt-8 text-lg font-extrabold">Thông số</h2>
+                  <dl className="mt-3 grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                    {specs.map(([k, v]) => (
+                      <div key={k} className="flex justify-between gap-4 border-b border-line py-2.5 text-sm">
+                        <dt className="shrink-0 text-mute">{k}</dt>
+                        <dd className="text-right font-semibold">{v}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <p className="mt-2 text-xs text-mute/80">
+                    {listing.specs_source === "chu_xac_nhan"
+                      ? "Thông số do chủ nhà xác nhận qua Zalo."
+                      : "Thông số đọc từ tin rao, chưa xác minh với chủ nhà — hỏi qua Zalo là tụi em đi hỏi giùm."}
+                  </p>
+                </>
+              )}
               {desc && (
                 <>
                   <h2 className="mt-8 text-lg font-extrabold">Mô tả</h2>

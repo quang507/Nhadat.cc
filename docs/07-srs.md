@@ -177,6 +177,33 @@ hot_score         int default 0       -- FR-73, tính lại hằng ngày
 dùng Việt Nam phân biệt rõ, gộp lại là sai nghiệp vụ.
 Trường pháp lý `null` phải hiển thị "Chờ xác minh" (UI-C05), **không** hiển thị "Không".
 
+**Bảng THẬT `listings` so với đặc tả trên** *(FR-172, 02/09/2026)*. Trước 02/09
+bảng thật chỉ có `area_m2`, `price_vnd/price_raw`, `bedrooms`, `direction`,
+`floor`, `property_type`, `ward/district/location_raw` — phần còn lại của khối
+"vị trí / quy mô / pháp lý" chưa từng tồn tại, dữ liệu nằm trong `description`.
+Migration `20260902e` đưa về khớp, tên cột giữ theo đặc tả khi trùng:
+
+| Đặc tả | Cột thật | Ghi chú |
+|---|---|---|
+| `street`, `alley` | `street` | tên đường bóc từ `location_raw` (`boc_ten_duong`); số hẻm KHÔNG lưu riêng (FR-104: số nhà là việc lúc hẹn xem) |
+| `access_type` enum | `access_type` text + CHECK | thêm giá trị `hem` = trong hẻm nhưng chưa rõ cỡ |
+| `alley_width_m` | `alley_width_m`, + `distance_to_street_m` | "cách mặt tiền 40m" là thứ khách Quận 5 hỏi ngay sau cỡ hẻm |
+| `land_area_m2` | `area_m2` (đã có, giữ tên) | diện tích chính của tin; chung cư = tim tường |
+| `legal_area_m2`, `built_area_m2` | cùng tên | công nhận / xây dựng (DTXD, DT sàn) |
+| `frontage_m`, `length_m` | cùng tên, + `rear_width_m` | nở hậu — người mua hỏi, chủ nhà khoe |
+| `floors text` | `floors int` + `floors_text` | số để lọc ("1 trệt 3 lầu" = 4), chữ để hiện ("trệt + lửng + 3 lầu + sân thượng"); `floor` riêng cho tầng căn chung cư |
+| `bathrooms` | `bathrooms` | |
+| `negotiable` | `negotiable` | |
+| `has_red_book`, `completion_year` | `legal_status` enum + `has_completion` bool | "sổ" ở Quận 5 có 5 trạng thái khác nhau về giá, bool không đủ |
+| `planning_status` | `planning_status` | `khong_lo_gioi` / `khong_quy_hoach` / `dinh_lo_gioi` |
+| — | `has_elevator`, `car_in_house`, `corner_lot`, `furnishing`, `year_built`, `rent_income_vnd` | thêm từ đối chiếu sàn + mô tả thật (INS-13) |
+| — | `price_per_m2_vnd` (generated) | mogi không có, radanhadat có — trục so giá |
+| — | `specs_source` | bậc nguồn CỦA CỤM cột trên: `boc_mo_ta` < `admin` < `chu_xac_nhan` (FR-164) |
+
+Ba cột `*_source` cũ (`property_type_source`, `price_source`, `ward_source`)
+giữ nguyên; cụm thông số mới dùng một `specs_source` chung vì chúng đến cùng
+một đường (một câu rao / một câu trả lời).
+
 ### SRS-3.2 · `property_events` — FR-70
 ```
 id            uuid pk
@@ -499,6 +526,9 @@ phải đi cùng nhau.
 | `ensure_buyer_conversation(zalo_user_id, channel)` | Mở/lấy `buyers` + hội thoại mở gần nhất, khoá advisory theo Zalo id. **FR-171 h trả thêm `c_ctv_id`, `c_human_touch_at`** (cùng khuôn `ensure_seller_conversation`) để `chat-reply` khỏi SELECT lại `conversations` cho cổng nhường sân FR-141; cột thêm ở CUỐI nên người gọi cũ không gãy | chỉ `service_role` |
 | `tao_followup(buyer_id, code)` | FR-32 qua một hàm (FR-171 h): tra tin theo mã, kiểm "đã có nhắc `followup` pending/sent trong 24h chưa", chèn `reminders` hẹn +150 phút. Trả `true` khi chèn; `false` khi không có tin hoặc đã có nhắc. Trước đó là ba vòng riêng trong `chat-reply` | chỉ `service_role` |
 | `messages_bump_last_message()` | Trigger AFTER INSERT trên `messages` (FR-171 h): đẩy `conversations.last_message_at = greatest(cũ, tin mới)`. Thay cho bốn chỗ UPDATE tay (`chat-reply` ×2, `nudge`, `ask-seller`) — và sửa luôn lệch cũ: `chat-reply` chỉ ghi mốc ở tin KHÁCH, không ghi ở tin bot | trigger, không ai gọi tay |
+| `boc_thong_so(p_text, p_type)` | FR-172: bóc thông số từ mô tả / câu trả lời → jsonb chỉ chứa khoá BẮT ĐƯỢC (ngang, dài, nở hậu, DT công nhận/xây dựng, số tầng + chữ kết cấu, PN, WC, đường vào, hẻm rộng, cách MT, pháp lý, hoàn công, quy hoạch, thang máy, xe hơi, căn góc, nội thất, năm xây, hướng, thương lượng, thu nhập thuê). Chạy trên `bo_dau()` nên có dấu/không dấu/viết tắt là một; giá trị ngoài dải hợp lý thì BỎ, không đoán. `immutable` | ai cũng gọi được (hàm thuần) |
+| `boc_ten_duong(location_raw)` | FR-172: tên đường từ địa chỉ — bỏ số nhà, "Dự án…", "Hẻm 23/", tiền tố "Đường/Phố" | hàm thuần |
+| `listings_boc_thong_so()` | Trigger BEFORE INSERT/UPDATE OF `description, location_raw, property_type` (`trg_y_…`, chạy sau `fill_property_type`): điền cột còn TRỐNG từ `boc_thong_so`; mô tả đổi mà `specs_source` còn là `boc_mo_ta` thì đè. Không bao giờ đè lời chủ nhà/admin | trigger |
 | `media_cleanup_tick()` | Cron 5 phút: gọi `media-cleanup` CHỈ KHI có việc nhận được — vị từ y hệt `nhan_viec_don_media` (`cho`, hoặc `dang_lam`/`loi` quá 10 phút; `attempts < 6`; tới giờ thử lại). Guard cũ đếm mọi dòng `loi` nên một dòng đang chờ giờ làm cron gọi lambda 12 lần/giờ mà không claim được gì (FR-171 c) | chỉ `service_role` |
 | `bat_het_tien_api()` | Trigger AFTER INSERT trên `bot_errors` (FR-168): thấy dấu hiệu hết tiền tài khoản AI (`credit balance`, `plans & billing`, `insufficient…quota`, `billing`, mã 402) thì dựng một dòng cảnh báo nguồn `HET TIEN API`. **Ghi THẲNG, không qua `log_loi`** — van chống ngập sổ không được nuốt chuông báo sập hệ thống, mà sổ ngập chính là lúc dễ có sự cố lớn nhất. Tự hãm 6 giờ/lần; không tạo escalation vì đường đó đi qua cầu nối vốn có thể đang chết | trigger, không ai gọi tay |
 | `bot_health_tick()` | Quét `net._http_response` tìm phản hồi không 2xx → `bot_errors`; kiểm nhịp tim bridge; gộp báo admin 1 tin/giờ; dọn sổ > 30 ngày | chỉ `service_role`, chạy bằng cron `*/15` |
@@ -596,7 +626,19 @@ một bảng, chung cư một bảng) mà ở cặp `required_facts` × `listing
 required_facts   (property_type, fact_key, priority)   -- BỘ CÂU HỎI của từng loại
 listing_facts    (listing_id, question, answer, source) -- CÂU TRẢ LỜI, dạng chữ
 listing_missing_facts (view)  = required_facts ⋈ property_type − listing_facts
+                                − {fact_key mà CỘT tương ứng đã có}   -- FR-172 d
 ```
+
+*(FR-172 d, 02/09/2026: view trừ thêm câu nào cột `listings` đã điền — `ket_cau`
+↔ `floors`, `do_rong_hem`/`do_rong_duong` ↔ `alley_width_m` hoặc
+`access_type = mat_tien`, `phap_ly` ↔ `legal_status`, `huong` ↔ `direction`,
+`so_phong_ngu` ↔ `bedrooms`, `tang` ↔ `floor`, `dien_tich*` ↔ `area_m2`,
+`nam_xay` ↔ `year_built`, `noi_that` ↔ `furnishing`, `mat_tien` ↔ `frontage_m`,
+`quy_hoach` ↔ `planning_status`. Bất kể bậc nguồn: câu rao đã nói "hẻm xe hơi
+6m" thì hỏi lại là mất mặt, còn muốn CHỦ XÁC NHẬN thì đó là việc của khách hỏi
+(FR-140), không phải của vòng nhỏ giọt. Đo trên kho 173 tin: 1.140 câu thiếu →
+638. `listing_facts_sync_cols` mở rộng theo cùng ánh xạ, lời chủ nhà đè bậc
+`boc_mo_ta`.)*
 
 Đổi `listings.property_type` là **đổi cả bộ câu hỏi ở lượt kế tiếp**, không cần
 migration nào. Bộ câu hỏi đang chạy (đọc từ DB 27/08/2026, theo thứ tự ưu tiên):

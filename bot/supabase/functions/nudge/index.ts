@@ -15,6 +15,7 @@ import {
   serviceClient,
 } from "../_shared/claude.ts";
 import { congBiMat } from "../_shared/gate.ts";
+import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { TONE_RULES } from "../_shared/prompts.ts";
 
 // Kịch bản đa dạng cho reengage — chọn ngẫu nhiên, đổi góc mỗi lần
@@ -203,12 +204,14 @@ Deno.serve(async (req) => {
     let canInfo = "";
     if (r.kind === "followup" && r.listing_id) {
       const { data: l } = await client.from("listings")
-        .select("code, ward, location_raw, price_raw, area_m2, bedrooms, listing_facts(question, answer)")
+        .select(`code, ward, location_raw, price_raw, area_m2, bedrooms, ${SPEC_COLS}, listing_facts(question, answer)`) // FR-172
         .eq("id", r.listing_id).maybeSingle();
       if (l) {
         const facts = ((l.listing_facts ?? []) as Array<{ question: string; answer: string }>)
           .map((f) => `${f.question}: ${f.answer}`).join("; ");
-        canInfo = `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? ""} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}`;
+        // FR-172: thông số có cấu trúc đi kèm — "chi tiết đáng giá" để kể thêm
+        // (hẻm xe hơi, sổ hồng riêng, 3 lầu) giờ có sẵn trong cột, không cần fact.
+        canInfo = `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? ""} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l as SpecRow)}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}`;
       }
     }
     // FR-166: model 500 / hết giờ là chuyện thường. Không bọc thì exception

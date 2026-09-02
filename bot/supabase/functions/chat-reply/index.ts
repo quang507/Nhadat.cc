@@ -26,6 +26,7 @@ import {
   SLANG_NOTES,
   TONE_RULES,
 } from "../_shared/prompts.ts";
+import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 
 // FR-161 — RẤT NHIỀU người nhắn Zalo không bỏ dấu, mà mọi cổng regex ở đây
 // từng viết bằng chữ có dấu: "ban nha quan 5 gia 5 ty" trượt cổng rao im lặng,
@@ -1616,7 +1617,7 @@ Deno.serve(async (req) => {
   // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN, cận trên giá (SRS-5.2)
   let khoQ = client
     .from("listings")
-    .select("code, ward, location_raw, price_raw, area_m2, bedrooms")
+    .select(`code, ward, location_raw, price_raw, area_m2, bedrooms, ${SPEC_COLS}`) // FR-172
     .eq("deal", dealCol(prefs.deal))
     .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ gợi ý tin đang lên kệ
     .not("price_raw", "is", null).neq("price_raw", "")
@@ -1649,7 +1650,7 @@ Deno.serve(async (req) => {
     // thật "căn đó đã gỡ" thay vì "em không thấy mã này".
     mentioned.length
       ? client.from("listings")
-        .select("code, status, ward, location_raw, price_raw, area_m2, bedrooms, listing_facts(question, answer)")
+        .select(`code, status, ward, location_raw, price_raw, area_m2, bedrooms, ${SPEC_COLS}, listing_facts(question, answer)`) // FR-172
         .in("code", mentioned)
         .in("status", ["dang_ban", "dang_quan_tam", "da_chot", "an"])
         .limit(3)
@@ -1669,14 +1670,17 @@ Deno.serve(async (req) => {
         m.sender === "buyer" ? m.body.slice(0, 400) : m.body
       }`)
     .join("\n");
+  // FR-172: kèm thông số có cấu trúc (ngang×dài, kết cấu, WC, đường vào, pháp
+  // lý) — trước đây "hẻm xe hơi", "sổ hồng riêng" nằm trong mô tả mà KHO không
+  // nạp mô tả, nên bot trả lời "để em hỏi lại chủ nhà" cho thứ tin rao đã ghi.
   const kho = (listings ?? [])
     .map((l) =>
-      `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}`)
+      `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l as SpecRow)}`)
     .join("\n");
 
   // Khối "căn khách đang nhắc" (FR-29): đủ chi tiết + facts đã xác minh + trạng
   // thái (`STATUS_VI` ở tầng module).
-  type Asked = {
+  type Asked = SpecRow & {
     code: string; status?: string | null; ward?: string | null; location_raw?: string | null;
     price_raw?: string | null; area_m2?: number | null; bedrooms?: number | null;
     listing_facts?: Array<{ question: string; answer: string }> | null;
@@ -1706,7 +1710,7 @@ Deno.serve(async (req) => {
         .filter((f) => f.question !== "hinh_anh")
         .map((f) => `${f.question}: ${f.answer}`).join("; ").slice(0, 300);
       const nPhotos = photosOf(l).length;
-      return `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${l.status ? ` · trạng thái: ${STATUS_VI[l.status] ?? l.status}` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}${nPhotos ? ` · CÓ ${nPhotos} HÌNH SẴN (khách xin hình thì điền send_photos, hệ thống tự đính kèm — ĐỪNG hứa đi hỏi chủ nhà)` : " · chưa có hình sẵn"}`;
+      return `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l)}${l.status ? ` · trạng thái: ${STATUS_VI[l.status] ?? l.status}` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}${nPhotos ? ` · CÓ ${nPhotos} HÌNH SẴN (khách xin hình thì điền send_photos, hệ thống tự đính kèm — ĐỪNG hứa đi hỏi chủ nhà)` : " · chưa có hình sẵn"}`;
     }).join("\n");
 
   // Khối DỰ ÁN (FR-113…115/FR-132): kiến thức chung đã xác thực, bot trả lời

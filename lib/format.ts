@@ -41,6 +41,57 @@ export const TYPE_LABEL: Record<string, string> = {
   mat_bang: "Mặt bằng",
 };
 
+// FR-172 — nhãn cho các cột thông số có cấu trúc (migration 20260902e). Một
+// bảng cho thẻ tin, trang chi tiết, bộ lọc và form admin.
+export const ACCESS_LABEL: Record<string, string> = {
+  mat_tien: "Mặt tiền",
+  hem_xe_tai: "Hẻm xe tải",
+  hem_xe_hoi: "Hẻm xe hơi",
+  hem_xe_may: "Hẻm xe máy",
+  hem: "Trong hẻm",
+};
+/** Nhãn ngắn cho thẻ tin (khách Quận 5 đọc "HXH"/"MT" quen hơn chữ đầy đủ). */
+export const ACCESS_SHORT: Record<string, string> = {
+  mat_tien: "MT",
+  hem_xe_tai: "HXT",
+  hem_xe_hoi: "HXH",
+  hem_xe_may: "Hẻm xe máy",
+  hem: "Hẻm",
+};
+export const LEGAL_LABEL: Record<string, string> = {
+  so_hong_rieng: "Sổ hồng riêng",
+  so_hong_chung: "Sổ hồng chung",
+  so_hong: "Sổ hồng / sổ đỏ",
+  hdmb: "Hợp đồng mua bán",
+  giay_tay: "Giấy tay / vi bằng",
+};
+export const FURNISH_LABEL: Record<string, string> = {
+  full: "Đầy đủ",
+  co_ban: "Cơ bản",
+  khong: "Không nội thất",
+};
+export const PLANNING_LABEL: Record<string, string> = {
+  khong_lo_gioi: "Không lộ giới",
+  khong_quy_hoach: "Không dính quy hoạch",
+  dinh_lo_gioi: "Có lộ giới / quy hoạch",
+};
+
+/** "4 x 15 m", có nở hậu thì "4 x 15 m (nở hậu 4,5)". */
+export function formatDims(frontage: number | null, length: number | null, rear?: number | null): string | null {
+  if (!frontage && !length) return null;
+  const n = (v: number) => Number(v).toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+  const base = frontage && length ? `${n(frontage)} x ${n(length)} m` : frontage ? `ngang ${n(frontage)} m` : `dài ${n(length!)} m`;
+  return rear ? `${base} (nở hậu ${n(rear)})` : base;
+}
+
+/** Giá mỗi m²: tin bán "≈ 150 tr/m²", tin thuê "≈ 1,1 tr/m²/tháng". */
+export function formatPricePerM2(vnd: number | null, deal: "ban" | "cho_thue"): string | null {
+  if (!vnd || vnd <= 0) return null;
+  const tr = vnd / 1_000_000;
+  const s = tr >= 10 ? Math.round(tr).toLocaleString("vi-VN") : tr.toLocaleString("vi-VN", { maximumFractionDigits: 1 });
+  return `≈ ${s} tr/m²${deal === "cho_thue" ? "/tháng" : ""}`;
+}
+
 // Deep-link Zalo mang ngữ cảnh (FR-13/14). Đang chạy acc CLONE trong lúc chờ
 // OA duyệt: đặt NEXT_PUBLIC_ZALO_URL=https://zalo.me/<SĐT acc clone> trong env
 // Vercel (hoặc sửa fallback dưới); OA duyệt xong đổi về link OA.
