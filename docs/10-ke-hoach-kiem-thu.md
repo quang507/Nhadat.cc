@@ -829,9 +829,10 @@ không `update` thẳng, vì lượt gọi model đầu tiên trong ngày có th
 dòng của ngày chưa tồn tại và một câu `update` thuần sẽ lặng lẽ ghi vào hư
 không. Ca này kiểm hai hàm không giẫm chân nhau theo cả hai chiều gọi.
 
-**Chưa kiểm được ở đây** (cần bản deploy, mà `chat-reply` đang chờ deploy bằng
-CLI): số chữ THẬT do model trả về có chảy đúng vào bốn cột không, và nhịp nhớ
-tạm 1 giờ có thật sự cho tỷ lệ đọc-lại cao hơn không. Cách kiểm sau khi deploy:
+**Chưa kiểm được ở đây** (`chat-reply` v43 đã deploy 02/09/2026 — xem
+`bot/README.md` — nhưng chưa có lượt nhắn thật nào đi qua nó): số chữ THẬT do
+model trả về có chảy đúng vào bốn cột không, và nhịp nhớ tạm 1 giờ có thật sự
+cho tỷ lệ đọc-lại cao hơn không. Cách kiểm:
 nhắn bot 3 lượt cách nhau ~10 phút rồi mở `/admin` — `cache_read_tokens` phải
 lớn hơn `cache_write_tokens`. Nếu ngược lại thì nhịp đang sai, xem khối bình
 luận tại chỗ `cache_control` trong `chat-reply` để chọn lại.

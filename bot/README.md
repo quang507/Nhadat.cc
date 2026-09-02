@@ -159,6 +159,35 @@ supabase functions deploy chat-reply --project-ref tbcdpupiarkuxtntmosl
 
 Cách này cũng bỏ luôn được trò bỏ-comment: CLI gửi thẳng file đầy đủ.
 
+### 02/09/2026 — `chat-reply` v43: đóng gói bằng bun rồi mới deploy qua MCP
+
+Không có máy local nên không dùng được CLI; thay vào đó là cách vừa đi vừa được
+kiểm, và nó ĐÃ QUA được bước đối chiếu byte mà lối chép tay 29/08 trượt:
+
+1. **Đóng gói một file** bằng bun, giữ nguyên `npm:` cho Deno tự lo:
+   ```bash
+   cd bot/supabase/functions/chat-reply
+   bun build index.ts --target=node --external 'npm:*' --minify-whitespace \
+     --outfile <scratch>/index.ts
+   ```
+   Kết quả 67,5KB, một file `index.ts` duy nhất (đã gộp `_shared/claude.ts`,
+   `_shared/prompts.ts`), không còn import tương đối nên deploy chỉ cần một
+   file, entrypoint `index.ts`, `verify_jwt=false` như cũ.
+2. **Nội dung dán vào `deploy_edge_function` lấy thẳng từ file bundle**, không
+   gõ lại — đó là điểm khác với 29/08.
+3. **Kéo ngược bằng `get_edge_function` rồi so từng byte** với file bundle.
+   Lớp JSON của MCP giải mã mọi `\uXXXX` trong nguồn thành ký tự thật (🏠, dải
+   `̀-ͯ` bỏ dấu…), nên phải chuẩn hoá chuỗi thoát trước khi so. Bản
+   43: sau chuẩn hoá chỉ lệch đúng một ký tự xuống dòng cuối file, còn lại trùng
+   67.424 byte. Về nghĩa JavaScript thì `"🏠"` và `"🏠"` là một.
+4. **Chạy 55 kịch bản e2e (`bot/tests/e2e/`) trên chính nội dung vừa kéo
+   ngược** chứ không phải trên nguồn: ghi nó vào `chat-reply.bundle.mjs` rồi
+   `bun run.mjs` → 55/55. Đây là lần đầu bản đang chạy trên Supabase được chạy
+   thử ở đây trước khi khách chạm vào.
+
+Việc còn lại sau v43: nhắn thật 3 lượt cách nhau ~10 phút rồi xem `/admin` để
+xác nhận tỷ lệ đọc-lại cache (TS-TIEN), và soi `bot_errors` ngày đầu.
+
 ## Kho ảnh (FR-165, 29/08/2026)
 
 Hai bucket: **`listing-public`** (công khai, chỉ MIME ảnh, 10MB/file) và
