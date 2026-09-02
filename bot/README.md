@@ -216,7 +216,9 @@ trùng byte với bundle sau khi chuẩn hoá `\uXXXX`.
 
 *Cùng ngày, FR-172 (tin rao có cấu trúc): `chat-reply` **v45**, `nudge` **v22**
 — dòng KHO / căn khách nhắc / follow-up mang thông số từ cột mới qua
-`_shared/thong_so.ts`; đối chiếu byte như trên, e2e 67/67.* Lệnh bundle:
+`_shared/thong_so.ts`; đối chiếu byte như trên, e2e 67/67. Rồi FR-140 c:
+`nudge` **v23** — nhắc `followup` có ghi chú "chủ nhà vừa trả lời" (trigger
+`20260902h`) thì soạn tin báo lại khách đúng câu trả lời của chủ.* Lệnh bundle:
 
 ```bash
 bun build bot/supabase/functions/<fn>/index.ts --target=node --external 'npm:*' \

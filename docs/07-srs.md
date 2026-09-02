@@ -289,6 +289,14 @@ applied_to_listing  bool default false   -- FR-44
 status              enum(pending, answered, escalated, expired)
 ```
 
+*Bảng thật có thêm `assignee` (seller/ctv/admin), `ctv_id`, `source`
+(`seller_flow` | `buyer_ask`), `buyer_id` (FR-140). Hai trigger (02/09/2026,
+`20260902h`): `trg_notify_info_request_escalation` — mỗi câu `buyer_ask` sinh
+nhắc cho chủ nhà/CTV **và một dòng báo admin**; `trg_info_request_bao_lai_khach`
+— chuyển `answered` thì sinh nhắc `followup` "chủ nhà vừa trả lời" cho khách,
+`nudge` báo lại đúng câu trả lời. Đóng vòng INS-06: hỏi → hỏi chủ → chủ trả lời
+→ khách nhận, admin thấy cả ba bước.*
+
 ### SRS-3.7 · `viewings` — FR-50…FR-57
 ```
 id, property_id, buyer_id, requested_at,

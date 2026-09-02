@@ -231,6 +231,12 @@ Deno.serve(async (req) => {
         role: "user",
         content: r.kind === "viewing"
           ? `${whoLabel} có ${r.note} (sắp tới giờ). Soạn MỘT tin Zalo RẤT NGẮN nhắc lịch theo mẫu §6.8: "Em là Thái, có hẹn xem nhà với anh/chị lúc … Hẹn gặp anh/chị nha." Thân thiện, không markdown.`
+          // FR-140 c (02/09): chủ nhà vừa trả lời câu khách hỏi → báo lại ĐÚNG câu
+          // trả lời, không phải "kể thêm một chi tiết". Trigger DB đặt ghi chú bắt
+          // đầu bằng "chủ nhà vừa trả lời" (20260902h).
+          : r.kind === "followup" && /^chủ nhà vừa trả lời/.test(r.note ?? "")
+          ? `${whoLabel} trước đó hỏi một điều về căn ${canInfo ? `(${canInfo})` : ""} mà em phải đi hỏi chủ nhà. Giờ ${r.note}. ` +
+            `Soạn MỘT tin Zalo NGẮN (1-2 câu) báo lại cho khách ĐÚNG câu trả lời của chủ nhà (nói chắc vì chủ đã xác nhận; KHÔNG thêm chi tiết nào chủ không nói), rồi kết bằng một câu hỏi nhẹ (còn muốn hỏi gì nữa / muốn qua xem không).`
           : r.kind === "followup"
           ? `${whoLabel} hỏi về căn này rồi im ~2-3 tiếng: ${canInfo || r.note}. ` +
             `Soạn MỘT tin Zalo NGẮN (1-2 câu) CHỦ ĐỘNG kể thêm MỘT chi tiết đáng giá về đúng căn đó (chỉ từ dữ liệu trên, không bịa; chưa xác minh thì không khẳng định). Không thúc ép, kết bằng câu hỏi nhẹ hoặc một câu khẳng định rồi chờ.`

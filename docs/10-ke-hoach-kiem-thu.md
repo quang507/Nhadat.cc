@@ -1024,6 +1024,24 @@ nhanh ở khâu cài gói, khâu build là Next tự chạy. Repo đã là bun (
 
 ---
 
+### TS-HOICHU — khách hỏi → báo admin + hỏi chủ → chủ trả lời → báo lại khách (FR-140 b/c, 02/09/2026)
+
+Chạy trên DB thật trong một giao dịch rồi rollback (tin, chủ, khách đều là dòng
+thử): chủ có Zalo, khách gửi `info_requests` nguồn `buyer_ask` "hẻm có xe hơi vô
+được không", rồi chủ trả lời "Hẻm 5m, xe 7 chỗ vô tới cửa".
+
+| ID | Bước | Kỳ vọng | Kết quả |
+|---|---|---|---|
+| TS-HOICHU-01 | Chèn câu hỏi `buyer_ask`, tin có chủ trên Zalo | HAI dòng `reminders` kind `escalation`: một gắn `seller_id` (đi tới chủ nhà, lời "khách đang quan tâm căn … cần bổ sung"), một KHÔNG gắn ai (đi đường admin, lời "❓ Khách hỏi căn #…: '…' — bot đã nhắn chủ nhà hỏi") | đúng 2 dòng ✅ |
+| TS-HOICHU-02 | `info_requests` chuyển `answered` | thêm một dòng `followup` gắn `buyer_id`, ghi chú bắt đầu "chủ nhà vừa trả lời câu khách hỏi về #… — '…': Hẻm 5m…"; nhắc im lặng đang treo cùng căn bị huỷ | ✅ |
+| TS-HOICHU-03 | `assignee` sau định tuyến | `seller` (chủ có Zalo); nguồn giữ `buyer_ask` | ✅ |
+
+Chưa kiểm trên Zalo thật: `nudge` v23 soạn tin báo lại khách từ ghi chú đó —
+prompt riêng, chờ đợt nhắn thật. Không có chủ trên Zalo thì đi CTV/admin như cũ,
+vẫn thêm dòng báo admin.
+
+---
+
 ### TS-THONGSO — tin rao có cấu trúc: bóc từ mô tả, cột đã có thì không hỏi (FR-172, 02/09/2026)
 
 Chạy trên DB thật qua MCP ngay sau `20260902e` + `20260902f`, trên đúng 173 tin
