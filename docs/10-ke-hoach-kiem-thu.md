@@ -882,12 +882,12 @@ Hai luật rút ra, áp cho mọi trigger lọc sau này:
 
 Soát 01/09/2026 theo bốn vai chủ dự án nêu. Hai tầng kiểm:
 
-**Tầng regex/parser** — `bot/tests/fr159-bon-vai.mjs`, chạy `node`, 50 ca, chép
+**Tầng regex/parser** — `bot/tests/fr159-bon-vai.mjs`, chạy `node`, 59 ca, chép
 regex từ `chat-reply` (xem `bot/tests/README.md`). Bốn nhóm: 7 câu chủ nhà nói
 về căn của họ phải Ở LẠI nhánh bán; 8 câu hỏi mua thật phải rẽ sang nhánh mua;
 14 câu người lạ (5 mở hồ sơ bán, 9 không — trong đó "tôi có căn nhà ở Q10, giờ tìm Q5"
 phải KHÔNG mở dù đang trả lời câu hỏi vai); 18 ca khoảng giá đo bằng bất biến
-"khoảng lọc có ÔM căn giá X không" + 3 ca fallback. **50/50.** Chạy lại
+"khoảng lọc có ÔM căn giá X không" + 3 ca fallback; 9 ca nhãn chính chủ/môi giới (02/09). **59/59.** Chạy lại
 `fr161-go-lan-dau.mjs` sau khi đồng bộ `hoiMua`: **9/9.**
 
 Con số đáng nhớ trước khi vá: **5/7** câu chủ nhà thường nói ("có khách nào coi
@@ -906,6 +906,16 @@ bằng `test-fr159-`.
 | TS-VAI-03 | Người đã có tên gọi lại | Trả về đúng tên cũ, không xoá | `Chị D.` ✅ |
 | TS-VAI-04 | Vai `anon` gọi | Chặn | chặn ✅ |
 | TS-VAI-05 | Vai `authenticated` gọi | Chặn | chặn ✅ |
+| TS-VAI-06 *(02/09)* | Mở với nhãn `nmg` | Dòng mới mang `nmg` | nmg ✅ |
+| TS-VAI-07 *(02/09)* | Mở KHÔNG truyền nhãn | Mặc định `ccrb` — "có BĐS muốn bán = chính chủ" | ccrb ✅ |
+| TS-VAI-08 *(02/09)* | Hồ sơ tạo tay còn `unknown`, gọi lại với `ccrb` | Được NÂNG thành `ccrb` | unknown → ccrb ✅ |
+| TS-VAI-09 *(02/09)* | Nhãn đã có `ccrb`, gọi lại với `nmg` | KHÔNG ghi đè — lời tự xưng trong chat không lật nhãn admin đã gán | giữ ccrb ✅ |
+| TS-VAI-10 *(02/09)* | Vai `anon` gọi chữ ký mới | Chặn | chặn ✅ |
+| TS-VAI-11 *(02/09)* | Vai `authenticated` gọi chữ ký mới | Chặn | chặn ✅ |
+
+*(02/09/2026 — chữ ký hàm đổi thành `(zalo, nhãn default ccrb)` theo quyết định
+"gán nhãn khi bóc tách"; TS-VAI-01…05 chạy lại trên chữ ký mới cùng ngày, kết
+quả giữ nguyên. Cuộn lại sau kiểm: 0 dòng `test-fr159-%`.)*
 
 **Chưa kiểm được ở đây** (cần bản deploy): trọn luồng người lạ → câu hỏi vai →
 trả lời "tôi có căn nhà" → hồ sơ bán mở → câu rao tạo tin. Cách kiểm sau khi

@@ -496,9 +496,12 @@ Deno.serve(async (req) => {
 
   // NGƯỜI BÁN nhắn? (FR-129 — hỏi nhỏ giọt): nếu khớp sellers.zalo_user_id và
   // đang có câu hỏi chờ, coi tin nhắn là CÂU TRẢ LỜI → lưu fact, hỏi câu kế.
-  type SellerRow = { id: string; name: string | null; active_listing_id: string | null };
+  type SellerRow = {
+    id: string; name: string | null; active_listing_id: string | null;
+    seller_type?: string | null;
+  };
   const { data: sellerCu } = await client
-    .from("sellers").select("id, name, active_listing_id")
+    .from("sellers").select("id, name, active_listing_id, seller_type")
     .eq("zalo_user_id", externalUserId).maybeSingle();
   let sellerRow = (sellerCu ?? null) as SellerRow | null;
   // Người này VỪA được mở hồ sơ bán trong lượt này (FR-159) — nhánh bán cần
@@ -629,16 +632,37 @@ Deno.serve(async (req) => {
         /(tôi|em|mình|anh|chị|tui|bên mình|nhà mình|gia đình)\s*(đang\s*)?có\s*(một\s*|1\s*)?(căn|nhà|đất|bất động sản|bđs|mặt bằng|chung cư|phòng trọ|biệt thự|lô)(?!\s*nào)/i,
         /(toi|em|minh|anh|chi|tui|ben minh|nha minh|gia dinh)\s*(dang\s*)?co\s*(mot\s*|1\s*)?(can|nha|dat|bat dong san|bds|mat bang|chung cu|phong tro|biet thu|lo)(?!\s*nao)/,
       ));
-  if (!sellerRow && tuNhanCoBDS && !hoiMua) {
+  // ─── NHÃN chính chủ / môi giới — gán NGAY lúc bóc tách (quyết định chủ dự
+  // án 02/09/2026: "gán nhãn khi bóc tách là họ có BĐS muốn bán"). Ai nói mình
+  // CÓ bất động sản muốn bán là CHÍNH CHỦ; chỉ khi tự xưng môi giới mới là NMG
+  // — môi giới không "có" nhà, họ bán nhà người khác, và họ hay tự xưng ("em
+  // là sale", "bán giúp chủ", "hàng ký gửi"). Không đoán từ hành vi (số tin) ở
+  // đây — đó là FR-160/OPEN-28. Nhãn quyết định mức phí (BR-05) nên phải có
+  // ngay khi hồ sơ mở: hồ sơ không nhãn là deal không phí (FR-170 f).
+  // Cố ý KHÔNG dùng "bên em có…": với người bán, "em" là bot ("bên em có khách
+  // chưa?"), bắt cụm đó là dán nhãn môi giới lên chính chủ.
+  const tinHieuMoiGioi = khop(
+    /môi giới|\bsale\b|sàn (giao dịch|bđs|bất động sản)|nhân viên kinh doanh|chuyên viên (bđs|bất động sản|kinh doanh)|bán (giúp|hộ|giùm|dùm)|chủ nhà (gửi|nhờ)|khách gửi bán|hàng ký gửi/i,
+    /moi gioi|\bsale\b|san (giao dich|bds|bat dong san)|nhan vien kinh doanh|chuyen vien (bds|bat dong san|kinh doanh)|ban (giup|ho|gium|dum)|chu nha (gui|nho)|khach gui ban|hang ky gui/,
+  );
+  const nhanNguoiBan: "ccrb" | "nmg" = tinHieuMoiGioi ? "nmg" : "ccrb";
+  const canMoHoSo = !sellerRow && tuNhanCoBDS && !hoiMua;
+  // Hồ sơ đã có nhưng chưa nhãn (tạo tay mà không ghi loại) → gán khi họ tự
+  // nhận hoặc tự xưng. Hàm DB chỉ nâng `unknown`, không ghi đè nhãn đã có.
+  const canGanNhan = !!sellerRow && sellerRow.seller_type === "unknown" && !hoiMua &&
+    (tuNhanCoBDS || tinHieuMoiGioi);
+  if (canMoHoSo || canGanNhan) {
     const { data: moi, error: moiErr } = await client
-      .rpc("mo_ho_so_nguoi_ban", { p_zalo_user_id: externalUserId }).maybeSingle();
+      .rpc("mo_ho_so_nguoi_ban", {
+        p_zalo_user_id: externalUserId, p_seller_type: nhanNguoiBan,
+      }).maybeSingle();
     if (moiErr || !moi) {
-      // Mở hụt thì đi tiếp như người mua — tệ hơn nhưng không câm; và vào sổ.
+      // Mở hụt thì đi tiếp như cũ — tệ hơn nhưng không câm; và vào sổ.
       await ghiLoi(client, "chat-reply mo_ho_so_nguoi_ban",
         moiErr?.message ?? "không trả về dòng");
     } else {
+      sellerMoi = !sellerRow;
       sellerRow = moi as SellerRow;
-      sellerMoi = true;
     }
   }
 

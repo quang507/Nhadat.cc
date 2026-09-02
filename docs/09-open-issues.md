@@ -482,7 +482,15 @@ KHÔNG CÓ mức phí, cần người thật gán trước khi lập hợp đồ
 chủ dự án: ai gán, ở đâu (form admin? bot hỏi "anh là chính chủ hay môi giới"?),
 và có được gán tự động theo FR-160 không — cùng một nút với câu hỏi gốc.
 
-**Chờ chủ dự án chốt** (mức: Cao).
+*[02/09/2026 — chủ dự án chốt NỬA ĐẦU]*: "Gán nhãn khi ai bóc tách là họ có
+bds muốn bán" — nhãn gán ngay lúc hồ sơ mở từ chat: có BĐS muốn bán = chính chủ,
+tự xưng môi giới = môi giới (FR-159 đoạn 02/09, migration `20260902a`). Hồ sơ
+mở qua chat không còn `unknown`. **Còn treo nửa sau, đúng câu hỏi gốc**: người
+đã mang nhãn chính chủ mà rao tới tin thứ ba thì có TỰ LẬT sang môi giới theo
+FR-160 không, và phí của tin đang rao có đổi theo không. Hàm DB hiện KHÔNG ghi
+đè nhãn đã có, nên nếu chốt "có lật" thì phải mở thêm một đường riêng cho FR-160.
+
+**Chờ chủ dự án chốt nửa sau** (mức: Cao).
 
 ---
 

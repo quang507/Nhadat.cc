@@ -208,10 +208,11 @@ preferences       jsonb               -- tiêu chí học được (UF-07)
 id                 uuid pk
 zalo_user_id       text unique
 seller_type        enum(ccrb, nmg, unknown) default unknown
-                   -- quyết định mức phí (FR-101). `unknown` = chưa phân loại:
-                   -- dòng mở từ chat qua mo_ho_so_nguoi_ban (FR-159) mang giá
-                   -- trị này tới khi admin/FR-160 gán; chốt kèo lúc còn unknown
-                   -- thì fee_pct = null (OPEN-28) [nguồn: DB thực tế, TS-VAI-01]
+                   -- quyết định mức phí (FR-101). `unknown` = chưa phân loại,
+                   -- chỉ còn ở hồ sơ tạo tay không ghi loại; dòng mở từ chat
+                   -- (FR-159) mang nhãn ngay lúc bóc tách từ 02/09 (ccrb mặc
+                   -- định, nmg khi tự xưng). Chốt kèo lúc còn unknown thì
+                   -- fee_pct = null (OPEN-28) [nguồn: DB thực tế, TS-VAI-01/06]
 active_listing_id  uuid null           -- căn bot đang hỏi, neo ngữ cảnh (FR-157)
 name, email        text
 fee_rate       numeric                -- 1.0 hoặc 0.5
@@ -479,7 +480,7 @@ phải đi cùng nhau.
 | Hàm | Vai trò | Ai gọi được |
 |---|---|---|
 | `bump_model_quota(p_limit)` | Đếm lượt vào bộ não theo ngày, vượt trần trả `false` + báo admin đúng một lần | chỉ `service_role` |
-| `mo_ho_so_nguoi_ban(p_zalo_user_id)` | FR-159: mở (hoặc lấy lại) hồ sơ `sellers` theo Zalo id khi người nhắn TỰ NHẬN có BĐS. `insert … on conflict do update … returning` — idempotent, ba tin gõ vụn đồng thời cùng nhận một id. `seller_type` để `unknown` (phân loại là việc FR-160) | chỉ `service_role` |
+| `mo_ho_so_nguoi_ban(p_zalo_user_id, p_seller_type default ccrb)` | FR-159: mở (hoặc lấy lại) hồ sơ `sellers` theo Zalo id khi người nhắn TỰ NHẬN có BĐS, kèm NHÃN gán lúc bóc tách (02/09: có BĐS = `ccrb`, tự xưng môi giới = `nmg`). `insert … on conflict do update … returning` — idempotent, ba tin gõ vụn đồng thời cùng nhận một id; chỉ nâng `unknown` → nhãn, KHÔNG ghi đè nhãn đã có | chỉ `service_role` |
 | `cong_token(in, out, cache_write, cache_read)` | Cộng dồn số CHỮ của một lượt gọi model vào dòng hôm nay của `bot_usage` (FR-169). Dùng `insert … on conflict` chứ không `update`, vì lượt đầu trong ngày có thể không đi qua `bump_model_quota`. Chỉ ĐO, không chặn; nuốt mọi lỗi để không kéo câu trả lời của khách xuống nhánh dự phòng | chỉ `service_role` |
 | `log_loi(source, detail, code)` | Cửa ghi lỗi tầng ứng dụng. **Van: 20 dòng/nguồn/giờ và 200 dòng/giờ tổng** | mở cho `anon` (bắt buộc — server Next chạy bằng publishable key) |
 | `bat_het_tien_api()` | Trigger AFTER INSERT trên `bot_errors` (FR-168): thấy dấu hiệu hết tiền tài khoản AI (`credit balance`, `plans & billing`, `insufficient…quota`, `billing`, mã 402) thì dựng một dòng cảnh báo nguồn `HET TIEN API`. **Ghi THẲNG, không qua `log_loi`** — van chống ngập sổ không được nuốt chuông báo sập hệ thống, mà sổ ngập chính là lúc dễ có sự cố lớn nhất. Tự hãm 6 giờ/lần; không tạo escalation vì đường đó đi qua cầu nối vốn có thể đang chết | trigger, không ai gọi tay |

@@ -71,6 +71,13 @@ const tuNhanCoBDS = (text, dangTraLoiHoiVai = false) => {
         /(toi|em|minh|anh|chi|tui|ben minh|nha minh|gia dinh)\s*(dang\s*)?co\s*(mot\s*|1\s*)?(can|nha|dat|bat dong san|bds|mat bang|chung cu|phong tro|biet thu|lo)(?!\s*nao)/,
       ));
 };
+// ── nhãn chính chủ / môi giới gán lúc bóc tách (chat-reply, 02/09/2026) ──
+const tinHieuMoiGioi = (text) => khopVoi(text)(
+  /môi giới|\bsale\b|sàn (giao dịch|bđs|bất động sản)|nhân viên kinh doanh|chuyên viên (bđs|bất động sản|kinh doanh)|bán (giúp|hộ|giùm|dùm)|chủ nhà (gửi|nhờ)|khách gửi bán|hàng ký gửi/i,
+  /moi gioi|\bsale\b|san (giao dich|bds|bat dong san)|nhan vien kinh doanh|chuyen vien (bds|bat dong san|kinh doanh)|ban (giup|ho|gium|dum)|chu nha (gui|nho)|khach gui ban|hang ky gui/,
+);
+const nhanNguoiBan = (text) => (tinHieuMoiGioi(text) ? "nmg" : "ccrb");
+
 // Cái quyết định thật ở chat-reply là tổ hợp: mở hồ sơ bán khi tự nhận CÓ BĐS
 // và KHÔNG đang hỏi mua.
 const moHoSoBan = (text, dangTraLoiHoiVai = false) => tuNhanCoBDS(text, dangTraLoiHoiVai) && !hoiMua(text);
@@ -158,6 +165,16 @@ const CA = [
   ["lạ: có nhà rồi, muốn mua thêm", () => moHoSoBan("tôi có nhà rồi, giờ muốn mua thêm căn nữa"), false],
   ["lạ: hỏi tình trạng",            () => moHoSoBan("nhà mình bán chưa em?"), false],
   ["lạ: muốn mua chính chủ",        () => moHoSoBan("muốn mua nhà chính chủ"), false],
+  // (1) NHÃN gán lúc bóc tách: có BĐS = chính chủ, trừ khi tự xưng môi giới
+  ["nhãn: câu rao trần → chính chủ",           () => nhanNguoiBan("bán nhà q5 giá 5 tỷ"), "ccrb"],
+  ["nhãn: nhà tôi muốn bán → chính chủ",       () => nhanNguoiBan("nhà tôi ở P4 muốn bán"), "ccrb"],
+  ["nhãn: 'em là sale' → môi giới",            () => nhanNguoiBan("em là sale, có căn q5 cần bán"), "nmg"],
+  ["nhãn: 'môi giới' không dấu → môi giới",    () => nhanNguoiBan("em lam moi gioi, ban nha q5"), "nmg"],
+  ["nhãn: 'bán giúp chủ' → môi giới",          () => nhanNguoiBan("em bán giúp chủ căn hẻm xe hơi"), "nmg"],
+  ["nhãn: 'hàng ký gửi' → môi giới",           () => nhanNguoiBan("hàng ký gửi của khách, bán 5 tỷ"), "nmg"],
+  ["nhãn: 'bên em có khách chưa' KHÔNG phải môi giới", () => nhanNguoiBan("bên em có khách nào hỏi chưa"), "ccrb"],
+  ["nhãn: 'sân thượng' không dính 'sàn'",      () => nhanNguoiBan("nhà có sân thượng, bán 6 tỷ"), "ccrb"],
+  ["nhãn: 'chuyên viên tư vấn' (bot) không dính", () => nhanNguoiBan("em là chuyên viên tư vấn hả"), "ccrb"],
   // (3) NGƯỜI MUA nói giá — khoảng lọc phải ÔM căn khách muốn
   ["giá: '5 tỷ 8' ôm căn 5,8 tỷ",   () => om("5 tỷ 8", 5.8 * TY), true],
   ["giá: '5tỷ8' ôm 5,8 tỷ",         () => om("tầm 5tỷ8", 5.8 * TY), true],
