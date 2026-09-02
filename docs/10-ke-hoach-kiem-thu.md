@@ -975,3 +975,49 @@ khi đủ giá+phường+diện tích, `listing_missing_facts`, `parse_vnd` rút
 không chạy SQL thật — RPC thật đổi hành vi thì bộ này không tự biết. Nó kiểm
 LUỒNG trong `chat-reply`; tầng DB kiểm bằng TS-VAI/TS-TIEN/TS-CHUONG trên máy
 thật như trước. Hai tầng bổ cho nhau, không thay nhau.
+
+*(02/09/2026, sau FR-171: bộ này lên **65 kịch bản**, thêm 10 ca TS-TOIUU bên
+dưới. DB giả có thêm trigger đẩy `last_message_at`, RPC `tao_followup`, và
+`ensure_buyer_conversation` trả 6 cột — đúng nghĩa các hàm thật ở `20260902d`.)*
+
+---
+
+### TS-TOIUU — đếm vòng đi về DB và bất biến tối ưu (FR-171, 02/09/2026)
+
+Cùng bộ `bot/tests/e2e/`, nhưng đo thứ khác: mock Supabase ghi MỌI truy vấn /
+RPC vào `db().log`, nên mỗi kịch bản đếm được "một tin tốn bao nhiêu vòng".
+Ngưỡng đặt bằng số đo SAU khi sửa — đây là chốt chống hồi quy, ai thêm một
+truy vấn vào đường nóng là đỏ ngay, phải giải thích.
+
+```
+cd bot/tests/e2e && bun install && ./chay.sh      # 65/65, có 10 ca TOIUU
+```
+
+| ID | Kịch bản | Bất biến | Trước (v43) | Sau (v44) |
+|---|---|---|---|---|
+| TS-TOIUU-01 | Người lạ nhắn câu mập mờ → bot hỏi vai | ≤ 11 truy vấn, **0** lượt model | 18 | 11 ✅ |
+| TS-TOIUU-02 | Người mua lượt đầu (chưa hồ sơ) | ≤ 17 truy vấn | 20 | 17 ✅ |
+| TS-TOIUU-03 | Người mua đã có hồ sơ, hỏi tiếp | ≤ 16 truy vấn | 24 | 16 ✅ |
+| TS-TOIUU-04 | Khách hỏi một căn rồi im | follow-up đi qua RPC `tao_followup`, có dòng `reminders` kind `followup`; không đếm/tra/chèn tay | 3 vòng | 1 RPC ✅ |
+| TS-TOIUU-05 | Ba lượt liên tiếp trong 60 s | `bot_prompts` đọc ≤ 1 lần (nhớ tạm module) | 3 | 1 ✅ |
+| TS-TOIUU-06 | Bot trả 2–3 bong bóng | vào sổ `messages` bằng MỘT câu INSERT mảng | n câu | 1 ✅ |
+| TS-TOIUU-07 | Người bán trả lời câu hỏi đang chờ | ≤ 15 truy vấn, `role = seller` | 21 | 15 ✅ |
+| TS-TOIUU-08 | Mọi kịch bản | không còn UPDATE `conversations` chỉ để ghi `last_message_at` | có | không ✅ |
+| TS-TOIUU-09 | Mọi kịch bản | hội thoại nào có tin thì `last_message_at` đã được trigger (giả) đẩy | — | ✅ |
+| TS-TOIUU-10 | Người mua lượt đầu, chưa đủ khu vực + giá | KHÔNG `select listings` (không lọc kho vô nghĩa) | có | không ✅ |
+
+Ba ca 01/03/07 là số đo chính của FR-171 h; 05/06/08/10 là bất biến giữ cho
+những sửa đổi đó không bị "sửa lại cho gọn" rồi mất. Ca 09 kiểm chính mock —
+nếu ai đổi trigger thật ở DB mà quên mock thì 08/09 vẫn xanh giả, xem giới hạn
+ở TS-E2E.
+
+**Kiểm ngoài e2e cùng ngày** (DB thật, MCP): `log_loi` sau khi đổi vẫn chặn
+đúng ở 20 dòng/nguồn/giờ; `media_cleanup_tick` với một dòng `loi` chờ giờ thì
+KHÔNG gọi HTTP; `cron.job` hiện đúng ba lịch mới; `ensure_buyer_conversation`
+chỉ `service_role` gọi được (revoke đã kiểm). Tám function deploy xong đều kéo
+ngược bằng `get_edge_function` và trùng byte với bundle sau khi chuẩn hoá
+`\uXXXX` — cách làm ở `bot/README.md` §02/09.
+
+**Đo cách build** (cùng máy, xoá cache trước): `bun install` 4,4 s, `npm
+install` 20,1 s; `next build` sạch ~34 s và có cache ~25 s ở CẢ HAI — bun chỉ
+nhanh ở khâu cài gói, khâu build là Next tự chạy. Repo đã là bun (`bun.lock`).

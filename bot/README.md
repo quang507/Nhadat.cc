@@ -12,7 +12,7 @@ tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/pro
 | ~~`rate-ctv`~~ | — | *ĐÃ XOÁ 27/08/2026 (OPEN-23)* — trùng phần chấm điểm trong `ctv-report`. Nội dung cũ: FR-102, chấm CSKH của CTV/bot từ log hội thoại (bảng `messages` hoặc transcript truyền vào), 4 tiêu chí ×1-5 + stars tổng, ghi `ratings` (`rated_by='ai_qa'`, chi tiết trong `details` jsonb). Idempotent theo conversation. |
 | `chat-reply` | NFR-12, FR-129…135, FR-29/32, FR-159, FR-170, UF-06 | **Bộ não hội thoại** dùng chung mọi kênh — phân vai trước (FR-159: người lạ tự nhận có BĐS → mở hồ sơ bán ngay kèm nhãn: có BĐS = chính chủ, tự xưng môi giới = môi giới; bot nói thẳng nhãn + mức phí cho họ ở bong bóng cuối, và đẩy một việc cho admin (hàng escalation + thẻ "Việc chờ admin" trên /admin); câu mập mờ ở tin đầu → hỏi "đang muốn tìm mua/thuê nhà, hay đang có bất động sản cần rao ạ?" một lần, không gọi model; mặc định người mua): nhánh seller (hỏi nhỏ giọt), nhánh buyer (hồ sơ nhu cầu + trả lời tự nhiên, không delay nhân tạo, lọc kho theo giá số `price_vnd`, tra căn theo mã, kho dự án, đặt lịch xem nhà + xin SĐT đúng kịch bản, bóc lời hứa, cờ `need_human`, follow-up im lặng ngắn, đọc ảnh `image_url`). |
 | `zalo-webhook` | SRS-4.4 | Nhận event OA (`user_send_text`/`user_send_image`), verify chữ ký nếu có app secret, trả 200 <1s, chuyển vào chat-reply rồi gửi bong bóng (FR-131: không delay nhân tạo, giữa hai bong bóng chỉ 300ms cho Zalo giao đúng thứ tự). verify_jwt **tắt**. Từ FR-166 có thêm cửa `{replay_event_id}` (chỉ service key) để đường cứu gọi lại, và gửi tiếp từ `sent_bubbles` thay vì phát lại từ bong bóng đầu. |
-| `nudge` | FR-133, FR-32 | Cron 30': nhắc lời hứa tới hạn, nhắc lịch xem trước ~45', follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); chỉ gửi 8h–21h VN + jitter 0-45s; `{dry_run, force}` để test. Từ FR-166 giành việc qua `nhan_viec_nhac` (hợp đồng thuê 5 phút) nên hai lượt chạy chồng nhau không gửi đúp; `dry_run` KHÔNG giành việc. |
+| `nudge` | FR-133, FR-32 | Cron hai lượt/giờ trong 8h–20h VN (phút 7 và 37 — FR-171 d, trước là `*/30` suốt ngày đêm): nhắc lời hứa tới hạn, nhắc lịch xem trước ~45', follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); hàm vẫn tự chặn ngoài 8h–21h VN; **không còn ngủ ngẫu nhiên 0-45 s** (vượt trần 55 s của `net.http_post` → lỗi giả); `{dry_run, force}` để test. Từ FR-166 giành việc qua `nhan_viec_nhac` (hợp đồng thuê 5 phút) nên hai lượt chạy chồng nhau không gửi đúp; `dry_run` KHÔNG giành việc. |
 | `ctv-report` | FR-136/137, FR-149 | Cron 17h VN: tổng hợp đơn per-CTV (chia xoay vòng bằng trigger), lịch xem, đơn chờ người thật, chấm điểm hội thoại theo `RATE_CTV_RUBRIC` → còn OA thì gửi thẳng, không thì đẩy vào `reminders` kind `report` (`sent_to: "queued_bridge"`) để bridge nhắn số Zalo cá nhân admin; lưu `ctv_daily_reports`. |
 | `geocode-listings` | FR-122 | Điền `lat`/`lng` cho listing từ `location_raw` qua Nominatim/OSM (1 req/s, cache theo câu query, tự dừng ở ~90s để chạy lặp). Không cron, gọi tay khi có tin mới cần lên bản đồ. **Đưa vào repo 27/08/2026** — trước đó ACTIVE trên Supabase từ 25/08 mà không có dòng nào trong git. |
 | `inbound-sweep` | FR-166 | Đường CỨU cho tin nhắn đến. Cron `inbound-sweep-tick` (1 phút) hỏi `viec_inbound_bo_roi()` xem việc nào đường nhanh chưa làm xong, rồi gọi ngược `zalo-webhook` ở cửa phát lại — cố ý không tự gửi lấy, vì khâu gửi là chỗ giữ luật chống-gửi-đúp. Bình thường không có việc thì hàm tick return ngay, không gọi gì. |
@@ -38,10 +38,12 @@ Gọi: `POST {SUPABASE_URL}/functions/v1/<name>` với header
 
 **Hạ tầng dùng chung** nằm ở `_shared/claude.ts`: `serviceClient()`,
 `secretOf()`, `anthropicClient()`, `jsonResponse()`, `sendZalo()`,
-`sendZaloImage()`, `escalationText()`, `ghiLoi()`, `doTien()`, hằng `MODEL`.
-Function nào gọi model thì gọi kèm `await doTien(client, r.usage)` ngay sau chỗ
-lấy kết quả ra — không có dòng đó thì lượt gọi ấy vô hình với đồng hồ đo tiền ở
-`/admin` (FR-169). Function mới **phải** import
+`sendZaloImage()`, `escalationText()`, `ghiLoi()`, `doTien()`, hằng `MODEL`;
+và `_shared/gate.ts`: `congBiMat(req, client, "tên")` — cổng bí mật dùng chung
+(FR-171 g), trả `Response` để return ngay hoặc `null` để đi tiếp. Function nào
+gọi model thì gọi kèm `await doTien(client, r.usage)` ngay sau chỗ lấy kết quả
+ra — không có dòng đó thì lượt gọi ấy vô hình với đồng hồ đo tiền ở `/admin`
+(FR-169); từ 02/09 cả bốn function gọi model đều đã nối. Function mới **phải** import
 từ đây, đừng chép lại — trước 25/08 `db()`/`secret()` có 5 bản, `sendZalo()` 2
 bản, và text escalation trùng byte giữa `nudge` với `escalation-feed` (thêm kind
 `report` phải sửa cả hai nơi, quên một là lệch giọng bot).
@@ -51,7 +53,8 @@ bản, và text escalation trùng byte giữa `nudge` với `escalation-feed` (t
 - **Sửa "não" không cần deploy (FR-138)**: bảng `bot_prompts` (key/content) chứa
   toàn bộ văn phong + luật phí + nhịp nhắn + kịch bản người bán + từ điển lóng +
   few-shot + rubric chấm CTV. Vào Supabase → Table Editor → `bot_prompts`, sửa
-  `content` là bot đổi NGAY lượt sau. Key: `tone_rules`, `human_chat_rules`,
+  `content` là bot đổi **trong vòng 1 phút** (từ 02/09 `chat-reply` nhớ tạm
+  bảng này 60 s trong isolate — FR-171 h; trước đó đổi ngay lượt sau). Key: `tone_rules`, `human_chat_rules`,
   `fee_rules`, `seller_script_rules`, `slang_notes`, `buyer_fewshot`,
   `rate_ctv_rubric`. Xoá dòng = quay về mặc định trong `_shared/prompts.ts`.
 - **Model**: `claude-opus-5`, structured output (zod v4 + `zodOutputFormat`),
@@ -188,6 +191,35 @@ kiểm, và nó ĐÃ QUA được bước đối chiếu byte mà lối chép ta
 Việc còn lại sau v43: nhắn thật 3 lượt cách nhau ~10 phút rồi xem `/admin` để
 xác nhận tỷ lệ đọc-lại cache (TS-TIEN), và soi `bot_errors` ngày đầu.
 
+### 02/09/2026 — đợt tối ưu FR-171: cả tám function đi cùng một đường
+
+Cùng cách bun bundle + kéo ngược đối chiếu như v43, áp cho mọi function (mỗi cái
+một file `index.ts`, `_shared/` gộp vào). Bản đang chạy sau đợt này:
+
+| Function | Bản | `verify_jwt` | Đổi gì |
+|---|---|---|---|
+| `chat-reply` | v44 | false | nhớ tạm cấu hình 60 s, một lượt `messages`, insert mảng, hậu kỳ song song, `SELLER_SYSTEM`, regex tiền/phường một nguồn |
+| `nudge` | v21 | false | bỏ ngủ 45 s, `doTien`, cổng chung, bỏ UPDATE `last_message_at` tay |
+| `ask-seller` | v9 | true | `low`/512, một truy vấn `info_requests`, `secretOf`/`sendZalo` chung, `doTien`, cổng chung |
+| `ctv-report` | v9 | true | `doTien`, cổng chung |
+| `escalation-feed` | v10 | true | chỉ đọc `admins` khi có việc, cổng chung (401) |
+| `media-cleanup` | v4 | false | cổng chung |
+| `inbound-sweep` | v3 | false | cổng chung |
+| `geocode-listings` | v5 | true | bỏ cổng tự viết, dùng `serviceClient` + cổng chung |
+
+`zalo-webhook` giữ v11. Kiểm sau deploy: e2e 65/65 chạy trên nội dung
+`chat-reply` kéo ngược từ Supabase (không phải trên nguồn), bảy bản còn lại
+trùng byte với bundle sau khi chuẩn hoá `\uXXXX`. Lệnh bundle:
+
+```bash
+bun build bot/supabase/functions/<fn>/index.ts --target=node --external 'npm:*' \
+  --minify-whitespace --outfile <scratch>/<fn>.ts
+```
+
+Việc chưa làm, chờ tín hiệu chủ dự án: nhắn thật để đo thời gian model và tỷ
+lệ đọc-lại cache (TS-TIEN) — mọi số ở FR-171 là số vòng DB đo bằng e2e, chưa
+phải giây đo trên Zalo.
+
 ## Kho ảnh (FR-165, 29/08/2026)
 
 Hai bucket: **`listing-public`** (công khai, chỉ MIME ảnh, 10MB/file) và
@@ -270,7 +302,11 @@ kiểm gì cả nên POST tay không kèm khoá nào cũng chạy.
 
 Nay **tám** function dùng chung một cổng: qua nếu (a) `Authorization` là service
 key, hoặc (b) header `x-bridge-secret` khớp secret `BRIDGE_SECRET` trong Vault.
-Chưa đặt secret thì cổng mở như cũ — nhưng nó ĐANG được đặt.
+Chưa đặt secret thì cổng mở như cũ — nhưng nó ĐANG được đặt. Từ 02/09/2026
+(FR-171 g) cổng là MỘT hàm `congBiMat()` trong `_shared/gate.ts` cho bảy
+function (`chat-reply` giữ bản riêng vì đọc bí mật chung một lượt nạp với
+`bot_prompts`); trước đó là bảy bản chép tay, `geocode-listings` còn tự viết
+một bản khác.
 
 | Function | Ai gọi hợp lệ |
 |---|---|

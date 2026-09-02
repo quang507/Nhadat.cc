@@ -61,7 +61,7 @@ begin
      where (trang_thai = 'cho'
             or (trang_thai in ('dang_lam','loi') and updated_at < now() - interval '10 minutes'))
        and attempts < 6
-       and coalesce(next_retry_at, '-infinity'::timestamptz) <= now')
+       and coalesce(next_retry_at, '-infinity'::timestamptz) <= now())
   then return; end if;
 
   perform net.http_post(

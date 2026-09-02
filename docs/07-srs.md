@@ -240,6 +240,12 @@ messages
 **Quy tắc cắt hội thoại (FR-72)**: tin nhắn mới thuộc cuộc trò chuyện đang mở nếu
 cách tin trước **≤ 30 phút**; ngược lại đóng cuộc cũ và mở cuộc mới.
 
+**`conversations.last_message_at` do trigger giữ** *(FR-171 h, 02/09/2026)*:
+mọi dòng `messages` chèn vào — của khách hay của bot — đều đẩy mốc qua
+`trg_messages_bump_last_message`; ứng dụng KHÔNG ghi tay cột này nữa. Báo cáo
+CTV và `nudge` đọc mốc chỉ để biết "hội thoại còn sống không", không phân biệt
+ai nói câu cuối. Chi tiết hàm ở SRS-3.12.
+
 ### SRS-3.6 · `info_requests` — FR-40…FR-44, FR-76
 ```
 id                  uuid pk           -- = Requested Info ID
@@ -459,7 +465,7 @@ có UI giỏ hàng riêng — cập nhật `unit_status` qua luồng rao/sửa t
 - Bảng `admins(email pk)` + RLS `listings_admin_read/update`: admin duyệt
   tin trên web (`/admin`). Thêm admin = insert email.
 
-### SRS-3.12 · Bảng vận hành & quan trắc + bảng hàm RPC (FR-146, FR-151, FR-152, FR-159, FR-168, FR-169 — 27/08 → 01/09/2026)
+### SRS-3.12 · Bảng vận hành & quan trắc + bảng hàm RPC (FR-146, FR-151, FR-152, FR-159, FR-168, FR-169, FR-171 — 27/08 → 02/09/2026)
 
 ```
 bot_usage    day date pk (giờ VN), model_calls int, capped_at timestamptz,  -- FR-151a
@@ -469,8 +475,13 @@ bot_usage    day date pk (giờ VN), model_calls int, capped_at timestamptz,  --
               admin đọc qua policy bot_usage_admin_read)
 bot_errors   id bigserial pk, at timestamptz, source text, status_code int,
              detail text (cắt 500)                                          -- FR-152
+             index (at desc) cho /admin; index (source, at desc) cho van
+             log_loi + trigger bat_het_tien_api                             -- FR-171 a
 bot_health   who text pk, at timestamptz, last_id bigint                    -- FR-152
 ```
+
+*(FR-171 a cũng thêm index `inbound_events(first_seen_at)` — SRS-3.8b — vì
+`viec_inbound_bo_roi()` lọc + sắp theo cột đó 1.440 lần/ngày.)*
 
 Cả ba bật RLS và `revoke all from anon`. Cả ba đều có policy SELECT cho
 `authenticated` là admin (cùng khuôn `listings_admin_read`) — `bot_errors_admin_read`,
@@ -484,7 +495,11 @@ phải đi cùng nhau.
 | `bump_model_quota(p_limit)` | Đếm lượt vào bộ não theo ngày, vượt trần trả `false` + báo admin đúng một lần | chỉ `service_role` |
 | `mo_ho_so_nguoi_ban(p_zalo_user_id, p_seller_type default ccrb)` | FR-159: mở (hoặc lấy lại) hồ sơ `sellers` theo Zalo id khi người nhắn TỰ NHẬN có BĐS, kèm NHÃN gán lúc bóc tách (02/09: có BĐS = `ccrb`, tự xưng môi giới = `nmg`). `insert … on conflict do update … returning` — idempotent, ba tin gõ vụn đồng thời cùng nhận một id; chỉ nâng `unknown` → nhãn, KHÔNG ghi đè nhãn đã có | chỉ `service_role` |
 | `cong_token(in, out, cache_write, cache_read)` | Cộng dồn số CHỮ của một lượt gọi model vào dòng hôm nay của `bot_usage` (FR-169). Dùng `insert … on conflict` chứ không `update`, vì lượt đầu trong ngày có thể không đi qua `bump_model_quota`. Chỉ ĐO, không chặn; nuốt mọi lỗi để không kéo câu trả lời của khách xuống nhánh dự phòng | chỉ `service_role` |
-| `log_loi(source, detail, code)` | Cửa ghi lỗi tầng ứng dụng. **Van: 20 dòng/nguồn/giờ và 200 dòng/giờ tổng** | mở cho `anon` (bắt buộc — server Next chạy bằng publishable key) |
+| `log_loi(source, detail, code)` | Cửa ghi lỗi tầng ứng dụng. **Van: 20 dòng/nguồn/giờ và 200 dòng/giờ tổng** — từ FR-171 b đếm cả hai van bằng MỘT câu `count(*) filter (where source = …)` trên cửa sổ 1 giờ | mở cho `anon` (bắt buộc — server Next chạy bằng publishable key) |
+| `ensure_buyer_conversation(zalo_user_id, channel)` | Mở/lấy `buyers` + hội thoại mở gần nhất, khoá advisory theo Zalo id. **FR-171 h trả thêm `c_ctv_id`, `c_human_touch_at`** (cùng khuôn `ensure_seller_conversation`) để `chat-reply` khỏi SELECT lại `conversations` cho cổng nhường sân FR-141; cột thêm ở CUỐI nên người gọi cũ không gãy | chỉ `service_role` |
+| `tao_followup(buyer_id, code)` | FR-32 qua một hàm (FR-171 h): tra tin theo mã, kiểm "đã có nhắc `followup` pending/sent trong 24h chưa", chèn `reminders` hẹn +150 phút. Trả `true` khi chèn; `false` khi không có tin hoặc đã có nhắc. Trước đó là ba vòng riêng trong `chat-reply` | chỉ `service_role` |
+| `messages_bump_last_message()` | Trigger AFTER INSERT trên `messages` (FR-171 h): đẩy `conversations.last_message_at = greatest(cũ, tin mới)`. Thay cho bốn chỗ UPDATE tay (`chat-reply` ×2, `nudge`, `ask-seller`) — và sửa luôn lệch cũ: `chat-reply` chỉ ghi mốc ở tin KHÁCH, không ghi ở tin bot | trigger, không ai gọi tay |
+| `media_cleanup_tick()` | Cron 5 phút: gọi `media-cleanup` CHỈ KHI có việc nhận được — vị từ y hệt `nhan_viec_don_media` (`cho`, hoặc `dang_lam`/`loi` quá 10 phút; `attempts < 6`; tới giờ thử lại). Guard cũ đếm mọi dòng `loi` nên một dòng đang chờ giờ làm cron gọi lambda 12 lần/giờ mà không claim được gì (FR-171 c) | chỉ `service_role` |
 | `bat_het_tien_api()` | Trigger AFTER INSERT trên `bot_errors` (FR-168): thấy dấu hiệu hết tiền tài khoản AI (`credit balance`, `plans & billing`, `insufficient…quota`, `billing`, mã 402) thì dựng một dòng cảnh báo nguồn `HET TIEN API`. **Ghi THẲNG, không qua `log_loi`** — van chống ngập sổ không được nuốt chuông báo sập hệ thống, mà sổ ngập chính là lúc dễ có sự cố lớn nhất. Tự hãm 6 giờ/lần; không tạo escalation vì đường đó đi qua cầu nối vốn có thể đang chết | trigger, không ai gọi tay |
 | `bot_health_tick()` | Quét `net._http_response` tìm phản hồi không 2xx → `bot_errors`; kiểm nhịp tim bridge; gộp báo admin 1 tin/giờ; dọn sổ > 30 ngày | chỉ `service_role`, chạy bằng cron `*/15` |
 | `beat(who)` | Ghi nhịp tim. `escalation-feed` gọi mỗi lần bridge kéo việc | chỉ `service_role` |
@@ -554,6 +569,23 @@ không lỗi, không cảnh báo, chỉ là mỗi lượt xem một tin đi th�
 Đo tại chỗ 27/08: `/` trả `x-nextjs-cache: HIT` + `s-maxage=300`, còn route
 `[param]` trả `Cache-Control: private, no-cache, no-store`. Đúng 164 trang tin
 — toàn bộ mặt SEO — đang ở tình trạng đó. Cách nghiệm thu ở TS-CACHE.
+
+**Bớt việc bên trong một lần dựng trang** *(FR-171 j, 02/09/2026)* — cache trả
+lời câu "dựng bao nhiêu lần", còn đây là "mỗi lần dựng tốn gì":
+
+- `/nha-dat/[code]`: `generateMetadata` và trang cùng gọi `getListing`, bọc
+  `React.cache` nên một lượt dựng chỉ hỏi DB MỘT lần thay vì hai.
+- Danh sách tin đọc `CARD_COLS` (13 cột thẻ), bản đồ đọc `MAP_COLS`; không
+  `select("*")` nữa — `/ban-do` 300 dòng từng kéo cả `description` vào HTML.
+- `TrackView` (theo dõi lượt xem cho tài khoản) chỉ `import()` supabase-js khi
+  localStorage có phiên `sb-*-auth-token`; khách vãng lai không tải ~63KB gzip.
+- `/mua-ban`, `/cho-thue` bỏ `export const revalidate` — route đọc
+  `searchParams` nên dòng đó vô hiệu; cache thật nằm ở `unstable_cache`.
+- `/admin`: 12 truy vấn 5 đợt → một `Promise.all`; ba `count(*)` thành đọc cột
+  `status` rồi đếm tại chỗ.
+
+Bằng chứng giữ nguyên NFR-17: bảng route sau `bun run build` vẫn `●` cho
+`/nha-dat/[code]`.
 
 ### SRS-3.14 · Đặc tính riêng theo loại BĐS, hạng người rao, cửa đăng tin admin (FR-153…FR-156 — 27/08/2026)
 
@@ -768,8 +800,9 @@ là thiết kế, bảng dưới là thực tế):
 
 | Job | Lịch | Gọi gì |
 |---|---|---|
-| `seller-drip-tick` | `*/30 * * * *` | `ask-seller` — hỏi nhỏ giọt chính chủ (FR-129/144) |
-| `nudge-tick` | `*/30 * * * *` | `nudge` — nhắc lời hứa, nhắc lịch xem, leo thang (FR-133/32/147) |
+| `seller-drip-tick` | `22,52 1-13 * * *` (8h–20h VN, hai lượt/giờ) | `ask-seller` — hỏi nhỏ giọt chính chủ (FR-129/144). *Trước 02/09: `*/30` suốt ngày đêm — hỏi chủ nhà lúc 2 giờ sáng, mà hàm tick không tự kiểm giờ (FR-171 d)* |
+| `nudge-tick` | `7,37 1-13 * * *` (8h–20h VN, hai lượt/giờ) | `nudge` — nhắc lời hứa, nhắc lịch xem, leo thang (FR-133/32/147). *Trước 02/09: `*/30` suốt ngày, 22h–8h vào rồi thoát; phút lệch thay cho đoạn ngủ ngẫu nhiên 45 s trong lambda (FR-171 d)* |
+| `cron-don-so` | `15 18 * * *` | SQL thuần: xoá `cron.job_run_details` quá 7 ngày. Trước đó không ai dọn, 8.600 dòng/tuần (FR-171 d) |
 | `ctv-report-tick` | `0 10 * * *` (17h VN) | `ctv-report` — báo cáo CTV (FR-137/149) |
 | `listing-interest-decay` | `0 20 * * *` | trả tin `dang_quan_tam` về `dang_ban` sau 7 ngày (FR-139) |
 | `bot-health-tick` | `*/15 * * * *` | `bot_health_tick()` — SQL thuần, không HTTP (FR-152) |
@@ -777,7 +810,12 @@ là thiết kế, bảng dưới là thực tế):
 | `inbound-sweep-tick` | `* * * * *` | `inbound_sweep_tick()` → `inbound-sweep`. Không có việc bỏ rơi thì RETURN NGAY, không gọi HTTP (FR-166 d) |
 | `media-chet-tick` | `0 * * * *` | `chon_viec_don_chet()` — SQL thuần, dán nhãn thư chết cho việc dọn quá 6 lần (FR-166 g) |
 
-*(Ba dòng CUỐI bảng bổ sung 29/08/2026. `media-cleanup-tick` chạy từ 29/08 theo FR-165 nhưng trước lần này chưa từng được ghi vào bảng.)*
+*(Ba dòng `media-cleanup-tick`/`inbound-sweep-tick`/`media-chet-tick` bổ sung 29/08/2026 — `media-cleanup-tick` chạy từ 29/08 theo FR-165 nhưng trước lần này chưa từng được ghi vào bảng. Lịch `nudge-tick`/`seller-drip-tick` và dòng `cron-don-so` đổi 02/09/2026 theo FR-171 d, kiểm lại trên `cron.job` cùng ngày.)*
+
+**Số đo làm gốc cho FR-171** (7 ngày trước 02/09/2026, DB thật): 8.605 lượt
+cron trong đó 5.911 là `inbound-sweep-tick`; chỉ 12 lượt `net.http_post` thật
+sự đi ra. Nghĩa là gần như toàn bộ việc của bot là tự đánh thức mình — đó là
+lý do đợt này đi vào guard, index và giờ chạy trước khi đụng tới model.
 
 **Đừng tin `cron.job_run_details.status`** (NFR-18): `net.http_post()` trả về
 ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge function trả

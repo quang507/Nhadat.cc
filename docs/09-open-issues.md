@@ -598,6 +598,56 @@ lại của hệ thống.
 
 ---
 
+### OPEN-34 · Gộp `zalo-webhook` → `chat-reply` thành một lambda?
+
+**Mức: TRUNG BÌNH. Nêu 02/09/2026 trong đợt tối ưu FR-171, cố ý KHÔNG làm.**
+
+Hiện một tin khách nhắn đi qua HAI edge function: `zalo-webhook` nhận, ghi
+`inbound_events`, ack 200, rồi gọi HTTP sang `chat-reply`; xong lại nhận kết
+quả về để gửi bong bóng. Tức mỗi tin là hai lần khởi động lambda, hai lần đọc
+bí mật, một lượt HTTP nội bộ giữa chừng — đo sơ khoảng 200–400 ms và một phần
+tiền compute, trên MỌI tin.
+
+**Vì sao chưa gộp**: đó là đổi kiến trúc, không phải tối ưu tại chỗ. Ranh giới
+hai hàm đang là chỗ giữ đúng luật chống-gửi-đúp (FR-162/166: `sent_bubbles`,
+cửa `replay_event_id`, đường cứu `inbound-sweep` gọi ngược `zalo-webhook`), và
+`chat-reply` còn là "bộ não dùng chung mọi kênh" (NFR-12) mà bridge acc clone
+gọi thẳng. Gộp là phải thiết kế lại cả ba thứ đó, có test riêng.
+
+**Hai phương án**: (a) giữ hai hàm, chấp nhận chi phí cố định — hợp với lưu
+lượng hiện nay (10 chat/ngày, BR-03); (b) gộp khi lưu lượng lên ~10× — lúc đó
+`chat-reply` nhận thẳng event Zalo, `zalo-webhook` chỉ còn là cửa cho bridge
+và đường cứu. Khuyến nghị (a) cho tới khi `/admin` cho thấy compute là thứ
+đáng tiền; hiện thứ đáng tiền là model, không phải lambda.
+
+**Chờ chủ dự án chốt.**
+
+---
+
+### OPEN-35 · Nhắc lời hứa / hỏi thăm khách im: mẫu câu hay lượt model?
+
+**Mức: THẤP. Nêu 02/09/2026 (FR-171), là quyết định sản phẩm.**
+
+`nudge` gọi model cho MỖI tin nhắc (lời hứa tới hẹn, lịch xem, follow-up căn,
+hỏi thăm khách im 5–6 ngày) và `ask-seller` gọi model cho mỗi câu hỏi nhỏ giọt.
+Đó là những tin ~20–30 từ, khuôn cố định, nội dung động chỉ là tên khách + mã
+căn + một chi tiết. Một bộ mẫu câu (xoay 3–4 biến thể để không lặp — luật §6.8
+"không lặp mẫu hai lần liên tiếp") làm được ~80% số đó với chi phí bằng 0 và
+không bao giờ bịa.
+
+**Đánh đổi**: mẫu câu nghe "máy" hơn ở đúng chỗ bot đang cố nghe như người
+(INS-01, tone §6.8); và follow-up căn (FR-32) cần "kể thêm MỘT chi tiết đáng
+giá" từ fact — việc đó mẫu câu làm dở. Đợt FR-171 đã hạ `ask-seller` xuống
+`effort: low`/512 và `nudge` vốn đã `low`/256, tức phần tiền còn lại nhỏ.
+
+**Khuyến nghị**: giữ model cho follow-up căn và câu hỏi nhỏ giọt (cần nội
+dung thật); cân nhắc mẫu câu cho nhắc lịch xem và nhắc lời hứa (khuôn gần như
+cố định). Chốt sau khi có số thật ở `/admin` (thẻ "Tiền bộ não") vài tuần.
+
+**Chờ chủ dự án chốt.**
+
+---
+
 ### Soát mã nguồn 27/08/2026 — kết luận về advisor Supabase
 
 Advisor bảo mật đang báo **2 ERROR**. Đã soi từng cái, **cả hai là cố ý và an
