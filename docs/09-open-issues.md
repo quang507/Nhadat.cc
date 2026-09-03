@@ -859,6 +859,16 @@ bị thu hồi quyền đọc của anon — bỏ definer là anon vỡ ngay
 bằng subquery chứ không gọi `cau_hinh()`: quyền EXECUTE một HÀM vẫn xét theo
 người gọi, không theo chủ view.
 
+**`security_definer_view` trên `public.ctv_ranks`** *(thêm 03/09/2026, FR-173)* —
+cố ý, cùng lý do với `seller_ranks` ngược lại: `ctvs` và `info_requests` bật RLS
+không policy, nên view chạy quyền người gọi thì admin đăng nhập bằng JWT đọc ra
+rỗng. View tự gác cổng bằng `auth.role() = 'service_role'` hoặc email trong
+`admins` (hàm `auth.*` xét theo phiên người gọi, không theo chủ view); đã đo
+anon nhận 0 dòng, service_role đọc đủ (TS-CTV, 03/09). Không phơi SĐT/Zalo —
+chỉ tên CTV và bốn con số đếm. Cùng đợt: `20260903b` thu hồi EXECUTE của
+anon/authenticated trên `info_request_sla_tick()` và
+`info_request_bao_lai_khach()`, cố định `search_path` cho `ctv_sla_phut()`.
+
 **`anon_security_definer_function_executable` trên `log_loi`** (WARN) — cố ý,
 xem FR-152 (d). Server Next.js chạy bằng publishable key nên bắt buộc mở cho
 `anon`; bù lại có hai van 20 dòng/nguồn/giờ và 200 dòng/giờ, đã thử thật.

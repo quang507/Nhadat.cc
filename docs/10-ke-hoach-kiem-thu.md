@@ -1044,6 +1044,11 @@ mới kiểm ở TS-CTV bên dưới; TS-HOICHU-02 (chủ/CTV trả lời → b�
 
 Chạy trên DB thật trong `begin … rollback` (migration `20260903a`); phần chat-reply
 chạy e2e trên mock (`bot/tests/e2e`, ca CTV-01…04, bộ lên **71 kịch bản**).
+Chạy lại lần 2 ngày 03/09 sau khi deploy (khối `do … raise exception` để rollback,
+10 bước): định tuyến + hạn 120', nhắc CTV không nhắc admin, drip đi chủ, tick quá
+hạn một lần duy nhất, `nguoi_noi_bo`, fact nguồn `ctv`, `followup` cho khách,
+`ctv_ranks` theo vai — đều đạt. Advisor Supabase sau đó: `20260903b` khoá hai
+hàm khỏi REST; `ctv_ranks` vẫn bị báo "security definer view" — cố ý, xem `09`.
 
 | ID | Bước | Kỳ vọng | Kết quả 03/09 |
 |---|---|---|---|

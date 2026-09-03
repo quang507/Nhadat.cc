@@ -227,7 +227,21 @@ trùng byte với bundle sau khi chuẩn hoá `\uXXXX`.
 "em là Thái, bên Aioinhadat" (OPEN-39, cả `bot_prompts` trên DB). `ctv-report`
 **v10** — dòng "Hạng trả lời khách" đọc view `ctv_ranks`. e2e 71/71 (thêm
 CTV-01…04). `nudge` giữ v23: TONE đọc từ `bot_prompts` nên đã đổi xưng theo, bản
-dự phòng trong code sẽ theo ở lần deploy tới.* Lệnh bundle:
+dự phòng trong code sẽ theo ở lần deploy tới.*
+
+*03/09/2026 (soát lại sau deploy) — chạy lại cả vòng FR-173 trên DB thật trong
+một transaction rollback, 10 bước đều đúng: khách hỏi → giao CTV ít việc nhất +
+hạn 120 phút + một dòng nhắc CTV (không nhắc admin); câu drip vẫn đi chủ nhà;
+quá hạn → `info_request_sla_tick()` sinh đúng một dòng nhắc admin và không lặp
+ở nhịp sau; `nguoi_noi_bo` nhận CTV theo Zalo uid; CTV trả lời → fact nguồn
+`ctv`, câu hỏi đóng, khách được `followup`; `ctv_ranks` đọc được bằng
+service_role, rỗng với anon. Migration `20260903b` theo advisor: khoá
+`info_request_sla_tick()` / `info_request_bao_lai_khach()` khỏi REST (anon,
+authenticated), cố định `search_path` cho `ctv_sla_phut()`. **Điều kiện vận
+hành:** CTV chỉ được nhận diện khi `ctvs.zalo_user_id` có giá trị — hôm nay CTV
+đang hoạt động mới có SĐT; `escalation-feed` tự học uid ở lần bridge gửi nhắc
+đầu tiên (ack kèm `zalo_user_id`), nên CTV phải nhận được ít nhất một lời nhắc
+qua bridge trước khi câu `#mã tin: …` của họ được ghi nhận.* Lệnh bundle:
 
 ```bash
 bun build bot/supabase/functions/<fn>/index.ts --target=node --external 'npm:*' \
