@@ -38,7 +38,9 @@ const TRANG_THAI = [
   ["dang_ban", "Đăng luôn — lên web ngay"],
 ] as const;
 
-// Kho đang có tin ở Phường 1–16 (Quận 5 cũ + rìa Quận 10/1 sáp nhập).
+// Kho đang có tin ở Phường 1–16 (Quận 5 cũ + rìa Quận 10/1 sáp nhập). Địa bàn
+// đã mở ra Sài Gòn (phường mới) + Long An (FR-174): quận/huyện gõ tay ở ô riêng,
+// danh sách phường theo địa giới mới chờ bảng `wards` (OPEN-27 nửa sau).
 const PHUONG = Array.from({ length: 16 }, (_, i) => `Phường ${i + 1}`);
 
 type Ng = { id: string; name: string | null; seller_type: string; active_count: number; rank: string };
@@ -55,6 +57,7 @@ export default function Page() {
   const [deal, setDeal] = useState("ban");
   const [loai, setLoai] = useState("chua_ro");
   const [ward, setWard] = useState("");
+  const [quan, setQuan] = useState("Quận 5");
   const [diaChi, setDiaChi] = useState("");
   const [giaRaw, setGiaRaw] = useState("");
   const [dienTich, setDienTich] = useState("");
@@ -118,6 +121,7 @@ export default function Page() {
         deal,
         property_type: loai,
         ward: ward || null,
+        district: quan.trim() || null,
         location_raw: diaChi || null,
         price_raw: giaRaw,
         area_m2: dienTich || null,
@@ -183,8 +187,10 @@ export default function Page() {
             <Chon nhan="Hình thức" giaTri={deal} doi={setDeal}
               chon={[["ban", "Bán"], ["cho_thue", "Cho thuê"]]} />
             <Chon nhan="Loại bất động sản" giaTri={loai} doi={setLoai} chon={LOAI} />
-            <Chon nhan="Phường" giaTri={ward} doi={setWard}
+            <Chon nhan="Phường (khu Quận 5 cũ)" giaTri={ward} doi={setWard}
               chon={[["", "— chưa rõ —"], ...PHUONG.map((p) => [p, p] as [string, string])]} />
+            <O nhan="Quận / huyện, tỉnh" giaTri={quan} doi={setQuan}
+              goiY="VD: Quận 5 · Quận Tân Bình · Bến Lức, Long An" />
             <O nhan="Địa chỉ / tên đường" giaTri={diaChi} doi={setDiaChi}
               goiY="VD: 123/45 Trần Bình Trọng" />
           </div>

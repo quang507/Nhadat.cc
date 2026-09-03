@@ -5,9 +5,9 @@ import { MAP_COLS, supabase, type MapRow } from "@/lib/supabase";
 
 export const revalidate = 300;
 export const metadata: Metadata = {
-  title: "Bản đồ nhà đất Quận 5",
+  title: "Bản đồ nhà đất",
   description:
-    "Xem nhà đất đang bán và cho thuê tại Quận 5 trên bản đồ, vị trí hiển thị theo phường.",
+    "Xem nhà đất đang bán và cho thuê trên bản đồ, vị trí hiển thị theo phường (kho hiện tập trung khu Quận 5 cũ).",
 };
 
 export default async function Page() {
@@ -27,7 +27,7 @@ export default async function Page() {
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-2xl font-extrabold">Bản đồ nhà đất Quận 5</h1>
+        <h1 className="text-2xl font-extrabold">Bản đồ nhà đất</h1>
         <p className="text-sm text-mute">
           {listings.length} tin · chấm đậm = bán, chấm nhạt = cho thuê
         </p>

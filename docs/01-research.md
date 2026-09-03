@@ -150,7 +150,10 @@ quận/phường cũ (`/mua-ban-nha-dat-thanh-pho-ho-chi-minh-quan-go-vap`,
 cũ↔mới [nguồn: WebSearch 24/08/2026 — index Google site radanhadat.vn; bài
 "Bản đồ TPHCM sau sáp nhập 2025" trên radanhadat.vn/edutech]. Chủ dự án chốt
 cùng hướng: **nhadat.cc dùng vị trí lúc chưa sáp nhập** (Quận 5, phường cũ) làm
-trục taxonomy chính [nguồn: trao đổi chủ dự án, 24/08/2026].
+trục taxonomy chính [nguồn: trao đổi chủ dự án, 24/08/2026]. *[03/09/2026 —
+địa bàn chốt là Sài Gòn theo PHƯỜNG MỚI + Long An (OPEN-27 nửa đầu, FR-174);
+trục tên cũ hay mới cho hiển thị là OPEN-27 nửa sau (e) — insight này vẫn
+đứng: dân gọi tên cũ, hệ thống phải hiểu cả hai.]*
 
 Hệ quả:
 1. Taxonomy khu vực ở `04` giữ nguyên Quận 5 + phường cũ — không đổi URL.

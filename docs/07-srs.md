@@ -716,7 +716,10 @@ không ai cập nhật sẽ đóng băng rồi nói dối — đúng vết `sell
 total_count, rank`; `phone` và `zalo_user_id` KHÔNG bao giờ đi qua đây, vì trang
 admin đọc view này từ trình duyệt.
 
-**Cửa đăng tin admin** (FR-156) là RPC `admin_dang_tin(jsonb)` `security definer`:
+**Cửa đăng tin admin** (FR-156) là RPC `admin_dang_tin(jsonb)` `security definer`
+(từ `20260903d` — FR-174 — nhận thêm `district` từ form, không có thì mặc định
+"Quận 5"; `chat-reply` tạo tin từ câu rao cũng bóc quận/huyện bằng `bocQuan`
+thay vì ghi cứng):
 
 ```
 admin_dang_tin(p jsonb) → jsonb {id, code, price_vnd, seller_id}

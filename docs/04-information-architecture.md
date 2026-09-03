@@ -150,7 +150,7 @@ Bộ chiều mà cả web search lẫn bot phải hiểu (FR-09, FR-22, FR-23):
 |---|---|
 | Giao dịch | mua, bán, thuê, cho thuê |
 | Loại hình | nhà phố, nhà cấp 4, chung cư/căn hộ, đất, biệt thự, nhà trọ, mặt bằng |
-| Khu vực | quận → phường → đường → hẻm số → **ngã tư X và Y** → **mốc tiện ích** ("gần hồ bơi Lam Sơn") → **"gần căn này"** |
+| Khu vực | tỉnh/thành (Sài Gòn, Long An — FR-174, 03/09/2026) → quận/huyện (tên cũ, INS-12) → phường (cũ ↔ mới, FR-118 / OPEN-27 nửa sau) → đường → hẻm số → **ngã tư X và Y** → **mốc tiện ích** ("gần hồ bơi Lam Sơn") → **"gần căn này"** |
 | Giá | "khoảng 10 tỉ", "dưới 10 tỉ", "trên 9 dưới 10", "giá cỡ căn này quanh đây" |
 | Tiếp cận | HXH, hẻm xe tải, ô tô vô nhà, MT, hẻm 2 xe máy tránh nhau |
 | Quy mô | m², "3.9x20", số tầng, số PN |

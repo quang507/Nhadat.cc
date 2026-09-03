@@ -119,7 +119,7 @@ export default function Page() {
         />
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label>
-            <span className="mb-1 block text-xs font-semibold text-mute">Phường (Quận 5)</span>
+            <span className="mb-1 block text-xs font-semibold text-mute">Phường (khu Quận 5 cũ — khu khác ghi trong câu rao)</span>
             <select value={ward} onChange={(e) => setWard(e.target.value)}
               className="w-full rounded-lg border border-line bg-white px-3 py-2.5">
               {WARDS.map((w) => <option key={w}>{w}</option>)}

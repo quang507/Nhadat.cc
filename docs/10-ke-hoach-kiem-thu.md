@@ -1050,6 +1050,19 @@ hạn một lần duy nhất, `nguoi_noi_bo`, fact nguồn `ctv`, `followup` cho
 `ctv_ranks` theo vai — đều đạt. Advisor Supabase sau đó: `20260903b` khoá hai
 hàm khỏi REST; `ctv_ranks` vẫn bị báo "security definer view" — cố ý, xem `09`.
 
+### TS-DIABAN — địa bàn mở: quận/huyện từ câu rao, không ghi cứng Quận 5 (FR-174 đợt 1, 03/09/2026)
+
+Ba ca e2e thêm vào `bot/tests/e2e` (bộ lên **74 kịch bản**, chạy bằng `chay.sh` —
+script tự đóng gói lại từ nguồn; chạy `run.mjs` trực tiếp là chạy trên bundle
+cũ, bài học 03/09); ca DB thật chạy trong `do … raise` để rollback.
+
+| ID | Bước | Kỳ vọng | Kết quả 03/09 |
+|---|---|---|---|
+| TS-DIABAN-01 | e2e DIABAN-01: chính chủ rao "bán nhà Bến Lức Long An 2 tỷ 80m2" | tin `district = "Bến Lức, Long An"` | ✅ |
+| TS-DIABAN-02 | e2e DIABAN-02: "bán nhà P4 giá 5 tỷ 8 50m2" (không nói quận) | `district = "Quận 5"` (mặc định cụm khởi điểm), `ward = Phường 4` | ✅ |
+| TS-DIABAN-03 | e2e DIABAN-03: "bán nhà Tân Bình hẻm 6m 6 tỷ 60m2" | `district = "Quận Tân Bình"` | ✅ |
+| TS-DIABAN-04 | `admin_dang_tin` (`20260903d`) với `district = "Đức Hoà, Long An"` và không có `district` — DB thật, `do … raise` rollback, JWT admin giả | tin ghi "Đức Hoà, Long An" / mặc định "Quận 5" | ✅ |
+
 | ID | Bước | Kỳ vọng | Kết quả 03/09 |
 |---|---|---|---|
 | TS-CTV-01 | Chèn `info_requests` nguồn `buyer_ask` cho tin có chủ trên Zalo, có một CTV `active` | `assignee = ctv`, `ctv_id` gán, `sla_due_at = now() + 120 phút`; KHÔNG giao chủ nhà dù chủ có Zalo | `ctv ctv=true hạn=120 phút` ✅ |

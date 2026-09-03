@@ -21,9 +21,9 @@ import { zaloLink } from "@/lib/format";
 
 export const revalidate = 3600;
 export const metadata: Metadata = {
-  title: "Nhà môi giới Quận 5",
+  title: "Nhà môi giới Sài Gòn & Long An",
   description:
-    "Mạng lưới nhà môi giới chuyên Quận 5 của nhadat.cc — giữ tối thiểu 10 tin đang rao và tỷ lệ chốt từ 5%.",
+    "Mạng lưới nhà môi giới Sài Gòn và Long An của nhadat.cc, mỗi người chuyên một khu — giữ tối thiểu 10 tin đang rao và tỷ lệ chốt từ 5%.",
 };
 
 type Agent = {
@@ -41,7 +41,7 @@ export default async function Page() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
-      <h1 className="text-3xl font-extrabold [text-wrap:balance]">Nhà môi giới chuyên Quận 5</h1>
+      <h1 className="text-3xl font-extrabold [text-wrap:balance]">Nhà môi giới chuyên từng khu — Sài Gòn & Long An</h1>
       <p className="mt-2 max-w-xl text-mute">
         Mạng lưới môi giới chuyên một quận, giữ tối thiểu 10 tin đang rao. Anh
         chị không cần chọn người — nhắn Zalo là tụi em điều phối.
@@ -65,13 +65,13 @@ export default async function Page() {
         })}
         {agents.length === 0 && (
           <div className="rounded-king border border-line bg-white p-8 text-center text-mute sm:col-span-2">
-            Mạng lưới đang tuyển — mục tiêu 20 nhà môi giới chuyên Quận 5.
+            Mạng lưới đang tuyển — mục tiêu 20 nhà môi giới, khởi điểm khu Quận 5 cũ rồi mở ra các phường Sài Gòn và Long An.
           </div>
         )}
       </div>
 
       <div className="mt-10 rounded-king bg-navy px-6 py-8 text-white">
-        <h2 className="text-xl font-extrabold">Anh chị là môi giới khu Quận 5?</h2>
+        <h2 className="text-xl font-extrabold">Anh chị là môi giới ở Sài Gòn hay Long An?</h2>
         <p className="mt-1 max-w-lg text-white/70">
           Vào mạng lưới: phí 0.5% mỗi giao dịch thành công, khách tụi em chuyển
           tận nơi. Yêu cầu giữ tối thiểu 10 tin và tỷ lệ chốt từ 5%.

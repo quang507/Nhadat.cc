@@ -15,11 +15,11 @@ const nunito = Nunito({
 
 export const metadata: Metadata = {
   title: {
-    default: "nhadat.cc — Mua bán nhà đất Quận 5, chat là xong",
+    default: "nhadat.cc — Mua bán nhà đất Sài Gòn & Long An, chat là xong",
     template: "%s | nhadat.cc",
   },
   description:
-    "Môi giới bất động sản Quận 5 trực 24/7 qua Zalo. Không thu số điện thoại, không spam. Nhà phố, hẻm xe hơi, mặt tiền — hỏi là có.",
+    "Môi giới bất động sản Sài Gòn (các phường mới) và Long An, trực 24/7 qua Zalo. Không thu số điện thoại, không spam. Nhà phố, hẻm xe hơi, mặt tiền — hỏi là có.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

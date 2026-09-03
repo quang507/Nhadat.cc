@@ -41,9 +41,9 @@ export default async function Home() {
         </div>
         <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-28 pt-14 md:grid-cols-[1.15fr_.85fr] md:pt-16">
           <div>
-            <p className="eyebrow text-brand">Môi giới thường trực · Quận 5</p>
+            <p className="eyebrow text-brand">Môi giới thường trực · Sài Gòn & Long An</p>
             <h1 className="mt-4 text-4xl font-extrabold leading-[1.08] [text-wrap:balance] md:text-5xl">
-              Tìm nhà Quận 5?
+              Tìm nhà Sài Gòn, Long An?
               <br />
               Nhắn một câu là xong.
             </h1>
@@ -120,7 +120,7 @@ export default async function Home() {
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
             <p className="eyebrow text-brand">Kho tin</p>
-            <h2 className="mt-1.5 text-2xl font-extrabold md:text-3xl">Nhà đất đang bán tại Quận 5</h2>
+            <h2 className="mt-1.5 text-2xl font-extrabold md:text-3xl">Nhà đất đang bán — khởi điểm khu Quận 5 cũ</h2>
           </div>
           <Link
             href="/mua-ban"
@@ -166,7 +166,7 @@ export default async function Home() {
         <div className="grid gap-4 sm:grid-cols-2">
           {[
             { href: "/tinh-lai-vay", Icon: IconCalc, t: "Tính lãi vay mua nhà", d: "Mỗi tháng trả bao nhiêu, xem trước rồi hãy quyết." },
-            { href: "/thong-ke", Icon: IconChart, t: "Giá theo phường Quận 5", d: "Phường nào đang rao đắt nhất, tính từ tin thật." },
+            { href: "/thong-ke", Icon: IconChart, t: "Giá theo phường", d: "Phường nào đang rao đắt nhất, tính từ tin thật trong kho." },
           ].map(({ href, Icon, t, d }) => (
             <Link
               key={href}

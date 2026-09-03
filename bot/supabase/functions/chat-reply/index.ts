@@ -27,6 +27,7 @@ import {
   TONE_RULES,
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
+import { bocQuan } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao
 
 // FR-161 — RẤT NHIỀU người nhắn Zalo không bỏ dấu, mà mọi cổng regex ở đây
 // từng viết bằng chữ có dấu: "ban nha quan 5 gia 5 ty" trượt cổng rao im lặng,
@@ -1362,8 +1363,11 @@ Deno.serve(async (req) => {
       // BDS-Q5-#### mà admin và web đang dùng. Đưa `code: null` xuống là cố ý —
       // bộ đúc mã `CCRB-<base36>` cũ ở đây là dãy thứ hai không ai cần, lại
       // không khoá gì nên hai chủ nhà rao cùng lúc là có cửa trùng mã.
+      // FR-174: quận/huyện lấy từ chính câu rao ("Tân Bình", "q4", "Bến Lức
+      // Long An"); không nói thì mặc định cụm khởi điểm Quận 5 — kho 173/173
+      // tin ở đó và người rao ở đó chỉ nói "P4" [giả định BA, OPEN-27 nửa sau].
       const { data: newLst, error: newLstErr } = await client.from("listings").insert({
-        code: null, seller_id: sellerRow.id, deal: sDeal, district: "Quận 5",
+        code: null, seller_id: sellerRow.id, deal: sDeal, district: bocQuan(tKD) ?? "Quận 5",
         ward: wardNo ? `Phường ${wardNo}` : null,
         description: text, price_raw: priceM?.[1]?.trim() ?? null,
         property_type: "chua_ro", status: "cho_thong_tin",

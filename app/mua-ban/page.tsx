@@ -5,9 +5,9 @@ import ListingBrowse from "@/components/ListingBrowse";
 // `export const revalidate` từng nằm đây là CHỮ CHẾT — cache thật là
 // `unstable_cache` trong ListingBrowse (NFR-17). Bỏ để khỏi gây hiểu lầm.
 export const metadata: Metadata = {
-  title: "Mua bán nhà đất Quận 5 — giá mới nhất",
+  title: "Mua bán nhà đất Sài Gòn & Long An — giá mới nhất",
   description:
-    "Danh sách nhà đất đang bán tại Quận 5, TP.HCM: nhà phố, hẻm xe hơi, mặt tiền. Hỏi chi tiết từng căn qua Zalo, không cần để lại số điện thoại.",
+    "Danh sách nhà đất đang bán tại Sài Gòn (các phường mới, khởi điểm khu Quận 5 cũ) và Long An: nhà phố, hẻm xe hơi, mặt tiền. Hỏi chi tiết từng căn qua Zalo, không cần để lại số điện thoại.",
 };
 
 export default function Page({

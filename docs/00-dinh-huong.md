@@ -1,6 +1,6 @@
 # 00 — Định hướng (BRD hợp nhất Aioinhadat × nhadat.cc)
 
-Phiên bản: **v1.1** · Ngày: **03/09/2026** · Trạng thái: **tên + luồng CTV đã chốt; còn §0.8**
+Phiên bản: **v1.2** · Ngày: **03/09/2026** · Trạng thái: **tên, luồng CTV, địa bàn đã chốt; còn §0.8**
 
 > Bộ `docs/` viết từ tài liệu nhadat.cc 2024; từ 25/08/2026 code chạy theo SRD
 > "AI Ơi Nhà Đất" (AOND, `AOND req + chat examples.docx`) ở ngày càng nhiều chỗ.
@@ -20,6 +20,12 @@ với hai mặt [nguồn: chốt 03/09/2026, OPEN-39]:
 | **Bán** | AOND §I–§VI | Rao một câu + ảnh, không form; khen trước hỏi sau, 1 thông tin/lần, nhặt dần nhiều ngày; người rao có hạng | FR-129, FR-144, FR-155, FR-172 |
 | **Mua** | nhadat.cc 2024 | Web là phễu SEO đẩy về Zalo; khách không để SĐT; trả lời như người, ≤3 căn/tin, không khẳng định điều chưa xác minh; kết nối sống 3–4 năm | INS-01…04, FR-01…65 |
 | **Vòng nối** | Cả hai (INS-06 = AOND §VII) | Khách hỏi → bot không biết → **CTV** hỏi chủ, nhắn lại `#mã tin: câu trả lời` → tin giàu thêm → bot báo lại khách. CTV quá 120' → admin đỡ khách, CTV tụt hạng | FR-140 c, **FR-173** |
+
+**Địa bàn: Sài Gòn (TP.HCM theo phường mới sau 01/07/2025) + Long An; trọng
+tâm là bán; khởi điểm cụm Quận 5 cũ** [nguồn: chốt 03/09/2026 — "bán sản phẩm
+bất động sản ở Sài Gòn, các phường mới và Long An"; OPEN-27 nửa đầu, FR-174].
+Cho thuê giữ như đang có *[giả định BA]*; tên hiển thị cũ/mới và thứ tự mở
+từng cụm là OPEN-27 nửa sau.
 
 **AOND là cách nhận và nuôi hàng; nhadat.cc là cách bán hàng.** Không có
 "chuyển dự án" — một sản phẩm, hai bản thiết kế, một người đứng giữa là CTV.
@@ -49,7 +55,7 @@ cả hai phía (`06 §6.8`).
 | Khách hỏi điều bot không biết | Hỏi chủ | Bot-to-bot hỏi chủ | **Giao CTV**, quá hạn → admin | FR-173 |
 | Xếp hạng | NMG ≥10 tin, chốt ≥5% | Đồng/Bạc/Vàng người rao | Hạng người rao (ẩn) + **hạng CTV** theo đúng hạn | FR-155, FR-173, OPEN-26/42 |
 | Phí | CCRB 1% · NMG 0.5% · thuê ¾ tháng | Giống | Giống | BR-05, AOND §V |
-| Địa bàn | Quận 5 | Quận 5 rồi mở | Quận 5 + HCM mới, Long An, Tây Ninh | BR-01, OPEN-27 |
+| Địa bàn | Quận 5 | Quận 5 rồi mở | **Sài Gòn (phường mới) + Long An**, trọng tâm bán; khởi điểm Q5 cũ (chốt 03/09) | BR-01, OPEN-27, FR-174 |
 | Hạ tầng | Vendor, Slack, Logstash | Gemini → local, SharePoint | Supabase Edge + Claude, Storage, bridge Zalo, `/admin` | SRS-2, OPEN-41 |
 | Vận hành | 1.5 CTV | CTV dẫn khách | 2 CTV xoay vòng + báo cáo 17h + hạng | FR-136/137/173 |
 
@@ -84,7 +90,7 @@ cả hai phía (`06 §6.8`).
 | Ô | Nội dung | Neo |
 |---|---|---|
 | Tầm nhìn | Môi giới thường trực đứng sau mọi môi giới; hội thoại bắt đầu thì không kết thúc | OKRs eo2024; demo2Vitalify |
-| Phân khúc | Trước: người rao Q5 (P3 chính chủ, P4 NMG 10–30 căn). Sau: người mua ở (P1), đầu tư (P2). Bán trước vì không hàng thì chat rỗng | 02 §2.2, RSK-04 |
+| Phân khúc | Trước: người rao ở cụm Q5 cũ, rồi Sài Gòn (phường mới) + Long An (P3 chính chủ, P4 NMG 10–30 căn). Sau: người mua ở (P1), đầu tư (P2). Bán trước vì không hàng thì chat rỗng | 02 §2.2, RSK-04, FR-174 |
 | Chi phí | Không phí đăng, không phí mua, thu khi chốt. Build ≤418tr; vận hành Free-tier + 20tr/tháng | NFR-14/16, §1.3–1.4 |
 | Giá trị | Người rao: "rao một lần là xong". Người mua: được trả lời thật, không lộ số (thay cho 40 cuộc gọi/3 ngày) | INS-04/06/09 |
 | KHÔNG làm | App · form nhiều trường · phí đăng · hỏi SĐT · marketplace tự phục vụ · công nghiệp (OPEN-40) · đa ngôn ngữ · Messenger/Telegram · khẳng định pháp lý | 02 §2.3, DH-02 |
@@ -93,8 +99,8 @@ cả hai phía (`06 §6.8`).
 | Năng lực | Tin có cấu trúc (FR-172) · não cấu hình (FR-138) · Zalo + bridge · 2 CTV có hàng đợi + hạng (FR-136/173) · sổ lỗi (FR-152) | 07 §2 |
 | Khó sao chép | Kho hỏi-đáp đã xác minh theo từng căn; kết nối Zalo nhiều năm; mạng NMG chịu luật 10 tin/5% | INS-02/06, BR-02 |
 
-Chỗ chưa khớp: ô Phân khúc nói Q5, OPEN-27 đã mở địa bàn — giữ "mật độ trước
-độ phủ" (INS-08) tới khi OPEN-27 chốt.
+Địa bàn đã chốt 03/09 (Sài Gòn + Long An); mở cụm nào trước vẫn theo "mật độ
+trước độ phủ" (INS-08) — OPEN-27 nửa sau (d).
 
 ## 0.5 Sao Bắc Đẩu
 
@@ -126,8 +132,9 @@ báo cáo 17h; sổ lỗi, nhịp tim, chuông hết tiền; kiểm thử 4 tầ
 
 | Đợt | Việc | Neo |
 |---|---|---|
-| 1 · Chốt | §0.8 (OPEN-40/41/42) + OPEN-21 (5 vai), 26 (quyền lợi hạng), 27 (địa bàn), 28 (phí) | 09 |
+| 1 · Chốt | §0.8 (OPEN-40/41/42, 27 nửa sau) + OPEN-21 (5 vai), 26 (quyền lợi hạng), 28 (phí) | 09 |
 | 2 · Đo I3 | 20 tin có chủ thật vào vòng CTV; đo tỷ lệ trả lời trong 120' / 24h; định cỡ lại OPEN-42 | FR-173 |
+| 2b · Địa bàn | Đợt 1 xong 03/09 (không ghi cứng Quận 5, copy nói Sài Gòn + Long An). Đợt 2 khi OPEN-27 nửa sau chốt: bảng `wards` một nguồn, SEO theo khu mới, mở cụm kề Q5 cũ + một huyện Long An có hàng thật | FR-174 |
 | 3 · Dữ liệu | 7 hạng mục theo `01 §1.5c` (sự kiện tin, khớp tin–hồ sơ, giá khu vực…) | INS-13 |
 | 4 · AOND còn thiếu | Màn hình nhãn + nút cướp quyền; thông số cho thuê/đất nếu OPEN-40 chốt; thưởng quy mô nếu OPEN-26 chốt | FR-135/141/172 |
 | 5 · Vận hành | Sao lưu định kỳ; lên Pro ngay khi có giao dịch thật đầu tiên | NFR-16, OPEN-25 |
@@ -142,7 +149,7 @@ Ngoài 90 ngày: thoại, Messenger/Telegram, app, công nghiệp, đổi domain
 | 2 | **Khách chịu chat bot** không cần người thật ngay (INS-04) | Hội thoại → lịch xem <2%; cờ cần người >30% | Cờ >30% | Widget Zalo trên 20 trang tin nhiều view; đọc 50 hội thoại |
 | 3 | **Hạng làm người ta chăm hơn** (AOND §IV) | Hạng lên/xuống không đổi tỷ lệ trả lời | Không lệch sau 30 ngày | Nói hạng qua Zalo cho 3 NMG + 2 CTV, chưa cần UI |
 | 4 | **Free-tier chịu tới giao dịch đầu** (NFR-16) | Mất dữ liệu; Vercel đình chỉ | Một sự cố | Sao lưu hằng ngày, thử khôi phục một lần |
-| 5 | **Mở địa bàn không loãng kho** (OPEN-27 vs INS-08) | >50% phường mở có <5 tin sau 60 ngày | — | Mở cụm phường kề Q5 trước |
+| 5 | **Mở Sài Gòn + Long An không loãng kho** (FR-174 vs INS-08) | >50% phường/huyện mở có <5 tin sau 60 ngày | — | Mở cụm phường kề Q5 cũ trước; Long An theo một huyện có nguồn hàng thật |
 
 Đứng vững: không thu SĐT; rao một câu (173 tin); phí chỉ khi chốt; một tên
 bot Thái. Chưa đánh giá được: OKR "1 giao dịch/2 ngày" (OPEN-01); nhu cầu
@@ -151,10 +158,12 @@ nhóm công nghiệp.
 ## 0.8 Chờ chủ dự án chốt
 
 Đã chốt 03/09/2026: **OPEN-08 + OPEN-39** (Aioinhadat, một bot Thái, không
-•ai), **luồng CTV** (FR-173). Còn:
+•ai), **luồng CTV** (FR-173), **địa bàn — OPEN-27 nửa đầu** (Sài Gòn phường
+mới + Long An, trọng tâm bán — FR-174). Còn:
 
 | ID | Câu hỏi | Khuyến nghị BA |
 |---|---|---|
+| OPEN-27 nửa sau | Tên hiển thị cũ hay mới; DB lưu gì; mã tin; mở phường/huyện nào trước; cho thuê có giữ | Hiển thị cả hai tên; bảng `wards` một nguồn; giữ mã tin; mở cụm kề Q5 cũ + một huyện Long An có hàng; giữ cho thuê như đang có |
 | OPEN-40 | Thông số cho thuê / đất / công nghiệp — làm gì, khi nào | Cho thuê: làm. Đất: chờ OPEN-37. Công nghiệp: không, tới khi có khách hỏi thật |
 | OPEN-41 | Model: giữ Claude/Supabase hay Gemini → local theo AOND §VII | Giữ; lớp gọi model đã gom một chỗ, đổi sau được |
 | OPEN-42 | CTV: hạn trả lời (đang 120') và mốc Vàng ≥90% / Bạc ≥70% / Đồng; hệ quả của hạng | Giữ tới khi có ~30 câu thật rồi định cỡ; chốt hệ quả cùng lúc |

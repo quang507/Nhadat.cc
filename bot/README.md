@@ -243,7 +243,11 @@ authenticated), cố định `search_path` cho `ctv_sla_phut()`. Soát bóc tác
 nhánh chung cư, "N tấm" chưa hiểu — đã vá; và fact có `question` chữ tự do (câu
 khách hỏi) trước đây KHÔNG vào cột nào, nay `listing_facts_sync_cols` đổ hết qua
 `ap_thong_so()` theo luật bậc, nên CTV trả lời "sổ hồng riêng, hoàn công" là
-`legal_status` có ngay. **Điều kiện vận
+`legal_status` có ngay. Địa bàn (FR-174, chốt 03/09: Sài Gòn phường mới + Long
+An, trọng tâm bán): `chat-reply` **v47** tạo tin với `district` bóc từ câu rao
+(`_shared/dia_ban.ts` — "Tân Bình", "q4", "Bến Lức Long An"; không nói thì "Quận
+5"), `admin_dang_tin` nhận `district` (`20260903d`), TONE_RULES + `bot_prompts`
+tự giới thiệu đúng địa bàn; e2e 74/74 (thêm DIABAN-01…03). **Điều kiện vận
 hành:** CTV chỉ được nhận diện khi `ctvs.zalo_user_id` có giá trị — hôm nay CTV
 đang hoạt động mới có SĐT; `escalation-feed` tự học uid ở lần bridge gửi nhắc
 đầu tiên (ack kèm `zalo_user_id`), nên CTV phải nhận được ít nhất một lời nhắc

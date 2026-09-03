@@ -161,9 +161,9 @@ export default async function ListingBrowse({
           "Search Property" của Veedoo, nhưng là link thuần nên không cần JS. */}
       <div className="bg-navy pb-16 pt-10 text-white">
         <div className="mx-auto max-w-6xl px-4">
-          <p className="eyebrow text-brand">Kho tin Quận 5</p>
+          <p className="eyebrow text-brand">Kho tin · Sài Gòn & Long An</p>
           <h1 className="mt-2 text-3xl font-extrabold md:text-4xl">
-            {title} {sp.phuong ? `— ${sp.phuong}` : "Quận 5"}
+            {title} {sp.phuong ? `— ${sp.phuong}` : "Sài Gòn & Long An"}
           </h1>
           <p className="mt-2 text-white/60">
             {total} tin · hỏi chi tiết bất kỳ căn nào qua Zalo

@@ -11,15 +11,15 @@ export default function Footer() {
               nhadat<span className="text-brand">.cc</span>
             </p>
             <p className="mt-3 text-sm leading-6">
-              Môi giới bất động sản Quận 5 trực 24/7 qua Zalo. Không thu số điện
+              Môi giới bất động sản Sài Gòn và Long An, trực 24/7 qua Zalo. Không thu số điện
               thoại, không spam — trò chuyện tới khi anh chị tìm được nhà.
             </p>
           </div>
           <div className="text-sm">
             <p className="mb-3 font-semibold text-white">Khu vực</p>
             <ul className="space-y-2">
-              <li><Link href="/mua-ban" className="hover:text-brand">Mua bán nhà đất Quận 5</Link></li>
-              <li><Link href="/cho-thue" className="hover:text-brand">Cho thuê nhà đất Quận 5</Link></li>
+              <li><Link href="/mua-ban" className="hover:text-brand">Mua bán nhà đất Sài Gòn & Long An</Link></li>
+              <li><Link href="/cho-thue" className="hover:text-brand">Cho thuê nhà đất</Link></li>
               <li><Link href="/ban-do" className="hover:text-brand">Bản đồ nhà đất</Link></li>
               <li><Link href="/tinh-lai-vay" className="hover:text-brand">Tính lãi vay</Link></li>
               <li><Link href="/thong-ke" className="hover:text-brand">Giá theo phường</Link></li>
