@@ -44,6 +44,18 @@ fileKey `mcyVWTPlbyCpHv0RV0DYxy`). Đã có:
   JetBrains Mono (Medium).
 - Mỗi call use_figma ≤ ~1 khung; `setCurrentPageAsync` đúng 1 lần/call; return node IDs.
 
+**Page `00 · Định hướng` (thêm 03/09/2026).** Bản trực quan của
+`docs/00-dinh-huong.md` — 4 khung xếp ngang, y=0, cách 60px: (1) Định vị · hai mặt
+một bot (§0.1 + sơ đồ 3 hộp), (2) Hai nguồn gốc, một sản phẩm (§0.2), (3) SRD AOND
+· nhận / sửa / chưa nhận (§0.3, trạng thái là chip chữ, không emoji), (4) Sao Bắc
+Đẩu · lộ trình · quyết định (§0.5, §0.6, §0.8). Canvas §0.4 và phản biện §0.7 chỉ
+có trong docs. Khi `00-dinh-huong.md` đổi thì dựng lại khung tương ứng, không sửa
+tay trong Figma.
+
+**Lưu ý:** 7 khung toàn văn trên page `03 · SRS` chụp bộ docs ở mốc 21–24/08/2026
+(ví dụ "09 · Open Issues — 14 mục", nay 41). Chúng là ảnh chụp, không phải nguồn;
+nguồn luôn là `docs/*.md`.
+
 **Sau khi xong.** Chụp screenshot page `1:3`, báo lại kèm link file.
 
 **Ràng buộc.** Nội dung lấy NGUYÊN VĂN từ `docs/*.md` — không tóm tắt, không thêm ý.

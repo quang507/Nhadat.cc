@@ -38,6 +38,14 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-31 | **Bậc nguồn `chu_xac_nhan > admin`: admin cầm sổ đỏ mà chủ nhà nhớ nhầm thì ai thắng?** FR-164(a) khoá cột trước lời admin; cần một bậc riêng cho bằng chứng giấy tờ hay không | Trung bình | FR-164, FR-156, FR-129, FR-163 |
 | OPEN-32 | **Ảnh chủ nhà gửi qua chat KHÔNG đi qua hai bucket, nên tách công khai/riêng tư của FR-165 không phủ được nó.** `chat-reply` lưu mọi ảnh người bán gửi thành fact `hinh_anh` (URL Zalo CDN, không vào kho ta), rồi FR-143 gộp thẳng vào `photos` gửi cho NGƯỜI MUA. Mà vòng drip FR-129 có hỏi `phap_ly` — chủ nhà trả lời câu đó bằng ảnh chụp sổ là chuyện thường, và ảnh đó bị ghi nhãn `hinh_anh` bất kể đang hỏi gì. Sửa được nhưng phải đụng luồng chat, mà đợt này chủ dự án khoanh vùng "do not change chat logic" | **Cao** | FR-165, FR-143, FR-129, FR-105, NFR-06 |
 | OPEN-33 | **Webhook Zalo nhận sự kiện KHÔNG kiểm chữ ký — ai cũng giả được tin nhắn đến.** `zalo-webhook` buộc chạy `verify_jwt=false` (Zalo không gửi JWT Supabase được) nên chữ ký `X-ZEvent-Signature` là hàng rào DUY NHẤT; khối verify chỉ chạy khi có đủ `ZALO_APP_SECRET` + `ZALO_APP_ID`, mà hai secret đó KHÔNG có trong Vault. Đo 29/08: POST sự kiện bịa, không khoá không chữ ký → 200. Giả được tin nhắn với BẤT KỲ `sender.id` nào (đội lốt chủ nhà bơm fact vào tin họ, hoặc bơm tin rác đốt tiền model). Không tự chặn cứng vì chặn là bot chết với người dùng thật — quyết định vận hành của chủ dự án; bản FR-167 cho nó kêu vào `bot_errors`. Chữa = đặt hai secret vào Vault, không sửa dòng code nào | **Cao** | FR-167, FR-162, SRS-4.4, NFR-06 |
+| OPEN-34 | Gộp `zalo-webhook` → `chat-reply` thành một lambda? Nêu trong đợt FR-171, cố ý chưa làm | Trung bình | FR-171, SRS-2 |
+| OPEN-35 | Nhắc lời hứa / hỏi thăm khách im: mẫu câu cố định hay lượt model? | Thấp | FR-133, FR-171 |
+| OPEN-36 | ✅ **ĐÃ CHỐT 02/09/2026** — lưu hết thông tin chủ chia sẻ, khách hỏi mới khai; liên hệ mở lúc chốt lịch xem (INS-11 chỉnh lại) | — | INS-11, FR-104 |
+| OPEN-37 | Lớp dữ liệu vị trí (quy hoạch, ngập, tiện ích): lấy từ đâu, trả bao nhiêu? | Trung bình | FR-28, INS-13, OPEN-40 |
+| OPEN-38 | Ảnh tin: thumbnail và watermark trên bậc Free | Thấp | FR-165, NFR-16 |
+| OPEN-39 | **Tên thương hiệu và tên trợ lý**: nhadat.cc / aioinhadat / gia đình •ai (AOND §II) — nêu 03/09/2026 từ `00-dinh-huong.md` | Trung bình | OPEN-08, FR-20, DH-01 |
+| OPEN-40 | **Phạm vi loại BĐS**: thông số cho thuê, đất nền, nhóm công nghiệp (AOND §III) | Trung bình | FR-172, OPEN-37, DH-03 |
+| OPEN-41 | **Nhà cung cấp model**: giữ Claude trên Supabase hay theo AOND §VII (Gemini rồi local) | Thấp | SRS-2, FR-138, FR-168, DH-06 |
 
 ---
 
@@ -728,6 +736,71 @@ lưu cùng thư mục UUID, `listing_media.variants`; (b) `next/image` với loa
 tự viết — Vercel Hobby có hạn mức tối ưu ảnh; (c) chờ lên Pro. Watermark: chỉ
 đáng khi có tin bị sao chép — chưa thấy. Khuyến nghị (a), làm khi có > 20 tin
 có ảnh thật.
+
+**Chờ chủ dự án chốt.**
+
+### OPEN-39 · Tên thương hiệu và tên trợ lý: nhadat.cc, aioinhadat, hay cả hai?
+
+**Mức: TRUNG BÌNH. Nêu 03/09/2026 (`docs/00-dinh-huong.md §0.8`).**
+
+**Nguồn**: quyết định chủ dự án 03/09/2026 *"giờ làm theo hướng aioinhadat nhiều
+hơn là nhadat.cc rồi"*; `AOND req + chat examples.docx` §II (SRD AI Ơi Nhà Đất,
+aioinhadat.com): kho tên trợ lý ghép phụ âm + "•ai" (m•ai cho người mua, t•ai
+cho người bán…). Hôm nay bot xưng **một** tên "Thái" (`06 §6.8`), domain là
+nhadat.cc, Zalo OA mang tên nhadat.cc; OPEN-08 (tên thương hiệu) vẫn treo từ
+21/08/2026. Đổi tên là đổi domain, OA, copy toàn hệ thống, `TONE_RULES`,
+`bot_prompts.tone_rules`, và cả cách bot tự giới thiệu ở FR-20.
+
+**Phương án**: (a) giữ nhadat.cc + "Thái" như đang chạy, aioinhadat chỉ là nguồn
+thiết kế; (b) đổi thương hiệu sang aioinhadat, gia đình trợ lý •ai đúng AOND §II
+(hai tên trước mặt khách: m•ai / t•ai); (c) lai — thương hiệu giữ, bot mang hai
+tên nội bộ theo vai để log và báo cáo phân biệt, trước mặt khách vẫn một tên.
+**Khuyến nghị BA**: (c) ngay (không tốn gì: `sender` đã tách vai từng lượt theo
+FR-157), và chỉ chuyển sang (b) khi chốt OPEN-08 — làm một lần, đừng đổi tên bot
+trước rồi đổi domain sau.
+
+**Chờ chủ dự án chốt.**
+
+### OPEN-40 · Phạm vi loại BĐS: thông số cho thuê, đất nền, và nhóm công nghiệp
+
+**Mức: TRUNG BÌNH. Nêu 03/09/2026 (`docs/00-dinh-huong.md §0.3`).**
+
+**Nguồn**: `AOND req + chat examples.docx` §III (cấu trúc dữ liệu động theo ba
+nhóm BĐS + thông số cho thuê). FR-172 mới phủ nhóm 1 (nhà ở: kết cấu, hẻm, hoàn
+công, pháp lý). Còn lại: *cho thuê* (thời hạn hợp đồng, mức cọc, trượt giá, thời
+gian fit-out) — kho đã có tin cho thuê và phí ¾ tháng đã chốt (§1.3) nhưng cột
+chỉ có `rent_income_vnd`; *đất* (chỉ tiêu xây dựng, vướng cột điện/hố ga) — có
+`planning_status`, `frontage_m × length_m`, nguồn quy hoạch treo ở OPEN-37; *công
+nghiệp* (đất SKC/TMD, kho, xưởng: thời hạn sử dụng đất, chiều cao trần, tải trọng
+sàn, trạm biến áp, container) — 173 tin không có loại này, chưa khách nào hỏi.
+
+**Phương án**: (a) làm thông số cho thuê ngay (4 cột + regex bóc + drip hỏi),
+đất chờ OPEN-37, công nghiệp không làm; (b) làm cả ba nhóm đúng AOND §III để
+schema "động" từ đầu; (c) không làm gì thêm cho tới khi có khách hỏi.
+**Khuyến nghị BA**: (a). Cho thuê là loại giao dịch đã có phí và đã có tin; công
+nghiệp là thị trường khác (khu công nghiệp, không phải Quận 5) và kéo theo bộ câu
+hỏi drip riêng — mở khi có tin thật đầu tiên.
+
+**Chờ chủ dự án chốt.**
+
+### OPEN-41 · Nhà cung cấp model: giữ Claude trên Supabase, hay theo AOND (Gemini rồi chạy local)?
+
+**Mức: THẤP. Nêu 03/09/2026 (`docs/00-dinh-huong.md §0.3`).**
+
+**Nguồn**: `AOND req + chat examples.docx` §VII: "bắt đầu bằng Google Gemini API
+(1.5 Flash cho text, 1.5 Pro cho OCR) để ra mắt nhanh, viết code chuẩn cắm-rút
+để sau này chuyển về chạy local trên máy ASUS Ascent GX10". Hệ thống thật đang
+chạy Claude qua Supabase Edge (`SRS-2`), một lớp gọi model ở `_shared/claude.ts`,
+"não" cấu hình được không cần deploy (FR-138), đo tiền theo chữ (FR-169), chuông
+hết tiền (FR-168). Bộ kiểm thử `10` (67 kịch bản e2e + regex) neo vào hành vi
+model hiện tại.
+
+**Phương án**: (a) giữ như đang chạy, ghi nhận lớp gọi model là chỗ đổi duy nhất;
+(b) đổi sang Gemini theo AOND; (c) lai — Gemini cho OCR ảnh giấy tờ (nếu FR-134
+mở rộng sang đọc sổ), Claude cho hội thoại.
+**Khuyến nghị BA**: (a). Chưa có lý do chi phí hay chất lượng để đổi; đổi là chạy
+lại toàn bộ `10`. Xem lại khi hoá đơn model vượt ngưỡng FR-168 hai tháng liền
+hoặc khi cần OCR giấy tờ thật.
 
 **Chờ chủ dự án chốt.**
 

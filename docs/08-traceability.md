@@ -2,6 +2,18 @@
 
 Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` (quy ước 4, `CLAUDE.md`).
 
+## 8.0 Định hướng → tầng dưới (`00-dinh-huong.md`, 03/09/2026)
+
+| DH | Nội dung | Neo ở tầng dưới |
+|---|---|---|
+| DH-01 | Định vị hợp nhất: mặt bán theo SRD AOND, mặt mua + web theo nhadat.cc, một vòng lặp nối | INS-01, INS-06, FR-140 b/c, FR-157, FR-159, SRS-5.1 |
+| DH-02 | Bốn bất biến hướng nào cũng giữ | IA-P1, NFR-07 / FR-53, RSK-03 / FR-40, INS-11 / FR-104 (OPEN-36) |
+| DH-03 | Mặt bán lấy AOND làm chuẩn | FR-129, FR-144, FR-153, FR-155, FR-172, `06 §6.8` kịch bản người bán; bảng §0.3 (00) liệt kê từng mục AOND §I–§VII ↔ FR |
+| DH-04 | Mặt mua và web lấy nhadat.cc làm chuẩn | FR-01…FR-65, UF-01…UF-08, IA-P1…P5 |
+| DH-05 | Sao Bắc Đẩu: lịch xem nhà chốt mỗi tuần; đầu vào I1–I5; OMTM = câu khách hỏi được chủ trả lời trong 24h *[giả định BA]* | FR-57 / SRS-5.3 (viewing), FR-139 (`dang_ban`), UF-04, FR-140 / FR-110, BR-07 / FR-63, FR-155 |
+| DH-06 | Lộ trình 90 ngày: chốt hướng → đo I3 → 7 hạng mục dữ liệu → phần AOND còn thiếu → vận hành | OPEN-21/26/27/28/39/40/41; FR-140; `01 §1.5c`; FR-135/141 (takeover UI ⏳); NFR-16 / OPEN-25 |
+| DH-07 | Cho tới khi §0.8 chốt, đi theo khuyến nghị BA và ghi `[giả định BA]` | OPEN-39, OPEN-40, OPEN-41 |
+
 ## 8.1 Business Requirement → Functional Requirement
 
 | BR | Mục tiêu | FR liên quan |

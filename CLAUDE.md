@@ -24,6 +24,7 @@ Thứ tự đọc = thứ tự phụ thuộc. Tài liệu sau **không được 
 
 | # | File | Nội dung | ID prefix |
 |---|---|---|---|
+| 0 | `docs/00-dinh-huong.md` | **Định hướng** — BRD hợp nhất nhadat.cc × AOND: mặt bán theo SRD AOND, mặt mua + web theo nhadat.cc; bất biến, sao Bắc Đẩu, lộ trình, quyết định treo. Đứng trên mọi tầng dưới | `DH-` |
 | 0 | `docs/00-glossary.md` | Từ điển thuật ngữ (B, S, CCRB, NMG, CTV, HXH…) | — |
 | 1 | `docs/01-research.md` | Nghiên cứu thị trường, người dùng, đối thủ, insight | `INS-` |
 | 2 | `docs/02-requirements.md` | Mục tiêu KD, persona, yêu cầu chức năng / phi chức năng | `BR- FR- NFR-` |
@@ -148,6 +149,23 @@ làm tham chiếu khi code. Xem `design/README.md`.
 
 Xem `.claude/skills/ba-pipeline/SKILL.md` — quy trình chuẩn để tạo mới hoặc cập
 nhật một tầng tài liệu mà không phá vỡ truy vết.
+
+**Skill PM mượn ngoài** (`phuryn/pm-skills`, MIT — marketplace đã khai ở
+`.claude/settings.json`, Claude Code sẽ hỏi cài lần đầu mở repo). Dùng làm
+*khung trình bày*, không thay `ba-pipeline`; chúng viết bằng tiếng Anh và không
+biết ID truy vết, nên kết quả phải đổi sang tiếng Việt và gắn `BR-/FR-/DH-` tay:
+
+| Việc | Skill | Đã dùng ở |
+|---|---|---|
+| Canvas chiến lược 9 ô | `/product-strategy` | `docs/00-dinh-huong.md §0.4` |
+| Chỉ số sao Bắc Đẩu + chỉ số đầu vào | `/north-star-metric` | `§0.5` |
+| Phản biện kế hoạch (giả định chịu lực) | `/strategy-red-team` | `§0.7` |
+| Đối chiếu tài liệu ↔ code theo ranh giới tin cậy | `/intended-vs-implemented` | soát bảo mật kiểu FR-167 |
+| Kịch bản kiểm thử từ tiêu chí nghiệm thu | `/test-scenarios` | nháp cho `docs/10` (giữ ID `TS-` của mình) |
+| Job story cho tính năng chat | `/job-stories` | nháp UF mới |
+
+Không dùng: `competitor-analysis` / `competitive-battlecard` (tìm nguồn tiếng
+Anh, không biết batdongsan/mogi), `pm-toolkit`, `pm-data-analytics`.
 
 ## 8. Dùng với Cline (VS Code, chạy local)
 

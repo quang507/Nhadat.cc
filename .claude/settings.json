@@ -23,5 +23,19 @@
       "WebSearch",
       "WebFetch"
     ]
+  },
+  "extraKnownMarketplaces": {
+    "pm-skills": {
+      "source": {
+        "source": "github",
+        "repo": "phuryn/pm-skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "pm-product-strategy@pm-skills": true,
+    "pm-execution@pm-skills": true,
+    "pm-ai-shipping@pm-skills": true,
+    "pm-marketing-growth@pm-skills": true
   }
 }

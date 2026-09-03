@@ -9,6 +9,7 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 
 | | Tài liệu | Nội dung |
 |---|---|---|
+| 0 | [Định hướng](docs/00-dinh-huong.md) | **BRD hợp nhất nhadat.cc × AI Ơi Nhà Đất**: sản phẩm hôm nay là gì, nhận gì từ SRD AOND, sao Bắc Đẩu, lộ trình 90 ngày, quyết định treo |
 | 0 | [Glossary](docs/00-glossary.md) | Từ điển thuật ngữ (B, S, CCRB, NMG, HXH…) |
 | 1 | [Research](docs/01-research.md) | Insight, persona, mô hình KD, ngân sách, rủi ro |
 | 2 | [Requirements](docs/02-requirements.md) | 9 BR · 147 FR (3 deprecated) · 18 NFR · 5 giả định |
@@ -18,7 +19,7 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 | 6 | [UI Design](docs/06-ui-design.md) | Design system + tone giọng chat |
 | 7 | [SRS](docs/07-srs.md) | Kiến trúc, data model, API, 13 tiêu chí nghiệm thu |
 | 8 | [Traceability](docs/08-traceability.md) | Ma trận truy vết BR→FR→UF→WF→SRS→AC |
-| 9 | [Open Issues](docs/09-open-issues.md) | 38 vấn đề — 12 đã chốt (OPEN-26 chốt một phần), 26 còn chờ chủ dự án |
+| 9 | [Open Issues](docs/09-open-issues.md) | 41 vấn đề — 12 đã chốt (OPEN-26 chốt một phần), 29 còn chờ chủ dự án |
 
 Quy ước làm việc và ranh giới bảo mật: [`CLAUDE.md`](CLAUDE.md).
 Quy trình cập nhật tài liệu: [`.claude/skills/ba-pipeline/SKILL.md`](.claude/skills/ba-pipeline/SKILL.md).
