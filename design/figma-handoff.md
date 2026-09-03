@@ -60,7 +60,7 @@ sơ đồ (CTV, quá hạn) cùng màu chờ chốt. Canvas §0.4 chỉ có tron
 `00-dinh-huong.md` đổi thì dựng lại khung tương ứng, không sửa tay trong Figma.
 
 **Lưu ý:** 7 khung toàn văn trên page `03 · SRS` chụp bộ docs ở mốc 21–24/08/2026
-(ví dụ "09 · Open Issues — 14 mục", nay 41). Chúng là ảnh chụp, không phải nguồn;
+(ví dụ "09 · Open Issues — 14 mục", nay 42). Chúng là ảnh chụp, không phải nguồn;
 nguồn luôn là `docs/*.md`.
 
 **Sau khi xong.** Chụp screenshot page `1:3`, báo lại kèm link file.

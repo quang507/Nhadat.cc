@@ -1059,8 +1059,8 @@ chạy e2e trên mock (`bot/tests/e2e`, ca CTV-01…04, bộ lên **71 kịch b�
 | e2e CTV-04 | Người LẠ nhắn "#BDS-Q5-0001 còn không em" | tra `nguoi_noi_bo` đúng một lượt rồi đi nhánh mua (không `noi_bo`, không fact) | ✅ |
 
 Chưa kiểm trên Zalo thật: `nudge` v23 soạn tin báo lại khách từ ghi chú đó —
-prompt riêng, chờ đợt nhắn thật. Không có chủ trên Zalo thì đi CTV/admin như cũ,
-vẫn thêm dòng báo admin.
+prompt riêng, chờ đợt nhắn thật. Từ 03/09/2026 câu `buyer_ask` luôn giao CTV
+(không có CTV → admin); admin chỉ được báo khi quá hạn `sla_due_at` (TS-CTV-03).
 
 ---
 

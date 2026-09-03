@@ -157,6 +157,11 @@ xác nhận (FR-107). Căn đã bán → báo mọi B đang chờ kèm căn thay
 **không bao giờ khẳng định**. Mẫu đúng quan sát được:
 > *"Cho tới 15h ngày 17/9 thì còn. Nhưng để em hỏi lại anh nhé."*
 
+*[cập nhật 03/09/2026 — FR-173: câu khách hỏi (`buyer_ask`) giao thẳng CTV
+đang hoạt động, ít việc nhất (không có CTV → admin); CTV trả lời bot theo mẫu
+`#mã tin: câu trả lời`; quá 120' → nhắc admin đỡ khách, CTV tụt hạng. Câu nhỏ
+giọt nuôi tin vẫn đi S.]*
+
 **Nhánh lỗi**: S không trả lời trong SLA → escalate CTV → chuyên viên (FR-47);
 đồng thời báo B trung thực: *"Em chưa liên lạc được chủ nhà, em báo chị ngay khi có."*
 
