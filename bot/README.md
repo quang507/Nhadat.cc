@@ -237,7 +237,13 @@ quá hạn → `info_request_sla_tick()` sinh đúng một dòng nhắc admin v�
 `ctv`, câu hỏi đóng, khách được `followup`; `ctv_ranks` đọc được bằng
 service_role, rỗng với anon. Migration `20260903b` theo advisor: khoá
 `info_request_sla_tick()` / `info_request_bao_lai_khach()` khỏi REST (anon,
-authenticated), cố định `search_path` cho `ctv_sla_phut()`. **Điều kiện vận
+authenticated), cố định `search_path` cho `ctv_sla_phut()`. Soát bóc tách
+(`20260903c`, TS-THONGSO-14/15): 20 câu mẫu qua `boc_thong_so()` lộ 4 lỗi —
+"hẻm 2m" mất đường vào, "cách mặt tiền 30m" thành ngang 30, `p_type` NULL rơi
+nhánh chung cư, "N tấm" chưa hiểu — đã vá; và fact có `question` chữ tự do (câu
+khách hỏi) trước đây KHÔNG vào cột nào, nay `listing_facts_sync_cols` đổ hết qua
+`ap_thong_so()` theo luật bậc, nên CTV trả lời "sổ hồng riêng, hoàn công" là
+`legal_status` có ngay. **Điều kiện vận
 hành:** CTV chỉ được nhận diện khi `ctvs.zalo_user_id` có giá trị — hôm nay CTV
 đang hoạt động mới có SĐT; `escalation-feed` tự học uid ở lần bridge gửi nhắc
 đầu tiên (ack kèm `zalo_user_id`), nên CTV phải nhận được ít nhất một lời nhắc
