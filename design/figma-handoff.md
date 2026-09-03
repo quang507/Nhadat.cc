@@ -44,11 +44,18 @@ fileKey `mcyVWTPlbyCpHv0RV0DYxy`). Đã có:
   JetBrains Mono (Medium).
 - Mỗi call use_figma ≤ ~1 khung; `setCurrentPageAsync` đúng 1 lần/call; return node IDs.
 
-**Page `00 · Định hướng` (thêm 03/09/2026).** Bản trực quan của
-`docs/00-dinh-huong.md` — 4 khung xếp ngang, y=0, cách 60px: (1) Định vị · hai mặt
-một bot (§0.1 + sơ đồ 3 hộp), (2) Hai nguồn gốc, một sản phẩm (§0.2), (3) SRD AOND
-· nhận / sửa / chưa nhận (§0.3, trạng thái là chip chữ, không emoji), (4) Sao Bắc
-Đẩu · lộ trình · quyết định (§0.5, §0.6, §0.8). Canvas §0.4 và phản biện §0.7 chỉ
+**Page `00 · Định hướng` (id `54:2`, dựng 03/09/2026).** Bản trực quan của
+`docs/00-dinh-huong.md` — 4 khung xếp ngang, y=0, cách 60px, width 1000:
+
+| x | Khung | Node | Nguồn |
+|---|---|---|---|
+| 0 | Định vị · hai mặt một bot (DH-01, sơ đồ 3 hộp, bảng DH-02) | `54:3` | §0.1 |
+| 1060 | Hai nguồn gốc, một sản phẩm (bảng 9 hàng) | `55:2` | §0.2 |
+| 2120 | SRD AOND · nhận / sửa / chưa nhận (bảng §I–§VII, chip trạng thái bằng chữ, note card DH-03/04) | `56:2` | §0.3 |
+| 3180 | Sao Bắc Đẩu · lộ trình · quyết định (DH-05 + I1–I5, DH-06, OPEN-39/40/41, DH-07) | `58:2` | §0.5, §0.6, §0.8 |
+
+Chip trạng thái: đã làm `#12805C` · làm khác `#B45309` · chưa làm `#E3E8EF` ·
+không nhận `#B42318` · chờ chốt nền `#FFF3EC` chữ/viền `#E2571E`. Canvas §0.4 và phản biện §0.7 chỉ
 có trong docs. Khi `00-dinh-huong.md` đổi thì dựng lại khung tương ứng, không sửa
 tay trong Figma.
 
