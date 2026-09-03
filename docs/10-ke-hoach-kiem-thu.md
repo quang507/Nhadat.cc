@@ -1050,6 +1050,15 @@ hạn một lần duy nhất, `nguoi_noi_bo`, fact nguồn `ctv`, `followup` cho
 `ctv_ranks` theo vai — đều đạt. Advisor Supabase sau đó: `20260903b` khoá hai
 hàm khỏi REST; `ctv_ranks` vẫn bị báo "security definer view" — cố ý, xem `09`.
 
+| ID | Bước | Kỳ vọng | Kết quả 03/09 |
+|---|---|---|---|
+| TS-CTV-01 | Chèn `info_requests` nguồn `buyer_ask` cho tin có chủ trên Zalo, có một CTV `active` | `assignee = ctv`, `ctv_id` gán, `sla_due_at = now() + 120 phút`; KHÔNG giao chủ nhà dù chủ có Zalo | `ctv ctv=true hạn=120 phút` ✅ |
+| TS-CTV-02 | Dòng nhắc sinh ra | MỘT dòng `escalation` gắn `ctv_id`, lời "khách hỏi #…: '…'. Anh/chị hỏi chủ rồi nhắn lại em theo mẫu `#mã: câu trả lời` trong 120 phút"; **0** dòng đi đường admin | 1 dòng CTV, 0 dòng admin ✅ |
+| TS-CTV-03 | Lùi `sla_due_at` về quá khứ, gọi `info_request_sla_tick()` hai lần | Lần 1 trả 1, sinh MỘT dòng admin "⏰ CTV … chưa trả lời câu khách hỏi #… sau 120 phút. Admin đỡ khách giúp…", `sla_missed_at` được đánh dấu; lần 2 trả 0 (không báo lại) | 1 → dòng admin ✅ → đánh dấu ✅ → lần 2 = 0 ✅ |
+| TS-CTV-04 | `nguoi_noi_bo('<zalo CTV>')` / `nguoi_noi_bo('nguoi-la')` | (`ctv`, tên) / 0 dòng | ✅ / 0 ✅ |
+| TS-CTV-05 | `ghi_fact_listing(…, 'ctv')` rồi `info_requests → answered` | `listing_facts.source = ctv`, `bac_nguon('ctv') = 2`; trigger FR-140 c sinh `followup` gắn `buyer_id` ghi chú "chủ nhà vừa trả lời…" | ctv=2 ✅; followup ✅ |
+| TS-CTV-06 | View `ctv_ranks` (đọc với `request.jwt.claims` role `service_role`): 4 câu 30 ngày, 3 trả lời đúng hạn, 1 trễ | `tong=4 tra_loi=3 dung_han=3 tre=1 ty_le=0.75 rank=bac`; đọc bằng vai `postgres` không có jwt → 0 dòng (view khoá) | ✅ (0 dòng khi không jwt: ✅) |
+
 ### TS-DIABAN — địa bàn mở: quận/huyện từ câu rao, không ghi cứng Quận 5 (FR-174 đợt 1, 03/09/2026)
 
 Ba ca e2e thêm vào `bot/tests/e2e` (bộ lên **74 kịch bản**, chạy bằng `chay.sh` —
@@ -1062,15 +1071,6 @@ cũ, bài học 03/09); ca DB thật chạy trong `do … raise` để rollback.
 | TS-DIABAN-02 | e2e DIABAN-02: "bán nhà P4 giá 5 tỷ 8 50m2" (không nói quận) | `district = "Quận 5"` (mặc định cụm khởi điểm), `ward = Phường 4` | ✅ |
 | TS-DIABAN-03 | e2e DIABAN-03: "bán nhà Tân Bình hẻm 6m 6 tỷ 60m2" | `district = "Quận Tân Bình"` | ✅ |
 | TS-DIABAN-04 | `admin_dang_tin` (`20260903d`) với `district = "Đức Hoà, Long An"` và không có `district` — DB thật, `do … raise` rollback, JWT admin giả | tin ghi "Đức Hoà, Long An" / mặc định "Quận 5" | ✅ |
-
-| ID | Bước | Kỳ vọng | Kết quả 03/09 |
-|---|---|---|---|
-| TS-CTV-01 | Chèn `info_requests` nguồn `buyer_ask` cho tin có chủ trên Zalo, có một CTV `active` | `assignee = ctv`, `ctv_id` gán, `sla_due_at = now() + 120 phút`; KHÔNG giao chủ nhà dù chủ có Zalo | `ctv ctv=true hạn=120 phút` ✅ |
-| TS-CTV-02 | Dòng nhắc sinh ra | MỘT dòng `escalation` gắn `ctv_id`, lời "khách hỏi #…: '…'. Anh/chị hỏi chủ rồi nhắn lại em theo mẫu `#mã: câu trả lời` trong 120 phút"; **0** dòng đi đường admin | 1 dòng CTV, 0 dòng admin ✅ |
-| TS-CTV-03 | Lùi `sla_due_at` về quá khứ, gọi `info_request_sla_tick()` hai lần | Lần 1 trả 1, sinh MỘT dòng admin "⏰ CTV … chưa trả lời câu khách hỏi #… sau 120 phút. Admin đỡ khách giúp…", `sla_missed_at` được đánh dấu; lần 2 trả 0 (không báo lại) | 1 → dòng admin ✅ → đánh dấu ✅ → lần 2 = 0 ✅ |
-| TS-CTV-04 | `nguoi_noi_bo('<zalo CTV>')` / `nguoi_noi_bo('nguoi-la')` | (`ctv`, tên) / 0 dòng | ✅ / 0 ✅ |
-| TS-CTV-05 | `ghi_fact_listing(…, 'ctv')` rồi `info_requests → answered` | `listing_facts.source = ctv`, `bac_nguon('ctv') = 2`; trigger FR-140 c sinh `followup` gắn `buyer_id` ghi chú "chủ nhà vừa trả lời…" | ctv=2 ✅; followup ✅ |
-| TS-CTV-06 | View `ctv_ranks` (đọc với `request.jwt.claims` role `service_role`): 4 câu 30 ngày, 3 trả lời đúng hạn, 1 trễ | `tong=4 tra_loi=3 dung_han=3 tre=1 ty_le=0.75 rank=bac`; đọc bằng vai `postgres` không có jwt → 0 dòng (view khoá) | ✅ (0 dòng khi không jwt: ✅) |
 | e2e CTV-01 | CTV (`ctvs.zalo_user_id`) nhắn "#BDS-Q5-0001: chủ nói còn bán, sổ hồng riêng" | câu `buyer_ask` đang chờ → `answered` với đúng câu trả lời; `listing_facts` có dòng nguồn `ctv` | ✅ |
 | e2e CTV-02 | Cùng lượt | bot trả câu mẫu "…em báo lại khách hỏi #… liền", `noi_bo = ctv`, **0** lượt model | ✅ |
 | e2e CTV-03 | CTV nhắn mã tin không có trong kho | "Em không thấy tin #… trong kho ạ", không ghi fact | ✅ |
