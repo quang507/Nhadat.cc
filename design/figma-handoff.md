@@ -44,7 +44,7 @@ fileKey `mcyVWTPlbyCpHv0RV0DYxy`). Đã có:
   JetBrains Mono (Medium).
 - Mỗi call use_figma ≤ ~1 khung; `setCurrentPageAsync` đúng 1 lần/call; return node IDs.
 
-**Page `00 · Định hướng` (id `54:2`, dựng lại 03/09/2026 theo v1.1 — gọn, đặc).**
+**Page `00 · Định hướng` (id `54:2`, dựng lại 03/09/2026 theo v1.1 — gọn, đặc; cập nhật chữ theo v1.2 cùng ngày: địa bàn Sài Gòn + Long An, hàng "2b · Địa bàn" ở §0.6 và "OPEN-27 ½ sau" ở §0.8).**
 Bản trực quan của `docs/00-dinh-huong.md` — 2 khung xếp ngang, y=0, cách 60px,
 width 1000, padding 34/40, chữ Inter 11.5 / bảng hàng cao 5px (4 khung cũ
 `54:3` `55:2` `56:2` `58:2` đã xoá):
