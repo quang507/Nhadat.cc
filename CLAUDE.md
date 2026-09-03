@@ -150,8 +150,9 @@ làm tham chiếu khi code. Xem `design/README.md`.
 Xem `.claude/skills/ba-pipeline/SKILL.md` — quy trình chuẩn để tạo mới hoặc cập
 nhật một tầng tài liệu mà không phá vỡ truy vết.
 
-**Skill PM mượn ngoài** (`phuryn/pm-skills`, MIT — marketplace đã khai ở
-`.claude/settings.json`, Claude Code sẽ hỏi cài lần đầu mở repo). Dùng làm
+**Skill PM mượn ngoài** (`phuryn/pm-skills`, MIT — kiểm license 03/09/2026;
+marketplace đã khai ở `.claude/settings.json` không ghim commit, nên nội dung
+skill đổi theo thượng nguồn; Claude Code sẽ hỏi cài lần đầu mở repo). Dùng làm
 *khung trình bày*, không thay `ba-pipeline`; chúng viết bằng tiếng Anh và không
 biết ID truy vết, nên kết quả phải đổi sang tiếng Việt và gắn `BR-/FR-/DH-` tay:
 

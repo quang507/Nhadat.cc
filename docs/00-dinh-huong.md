@@ -68,7 +68,7 @@ Ký hiệu: ✅ đã làm đúng · 🔶 làm nhưng khác bản gốc · ⏳ ch
 
 | AOND | Nội dung | Trạng thái | Ở nhadat.cc |
 |---|---|---|---|
-| §I | Rao tự nhiên: text thô, không form, không dropdown | ✅ | FR-92, FR-109, FR-158, FR-161 (không dấu) |
+| §I | Rao tự nhiên: text thô, không form, không dropdown | ✅ | FR-92, FR-158, FR-144, FR-161 (không dấu); FR-109 (hỏi tuần tự) chỉ là đường phụ |
 | §I | Tin nhắn thoại | ⏳ | FR-134 ghi rõ "voice/STT chưa làm" |
 | §I | Tích lũy dữ liệu ngầm, nhặt dần qua các phiên | ✅ | FR-129, FR-144, FR-153, FR-172 (bóc thông số từ mô tả) |
 | §I | 200–300 người dùng/ngày, 6.000–9.000 tin/ngày; phủ 90% Quận 5 | 🔶 | NFR-05 (~300 chat sống, 5.000 tin), BR-01; hạ tầng đang Free-tier (NFR-16) — chưa đo ở tải đó |
@@ -78,7 +78,7 @@ Ký hiệu: ✅ đã làm đúng · 🔶 làm nhưng khác bản gốc · ⏳ ch
 | §II | Trung thực với ảnh, "hình như là", xác nhận lại | ✅ | FR-134 |
 | §III | Nhóm 1 nhà ở: kết cấu, lộ giới/hẻm, bàn giao, hoàn công | ✅ | FR-172: `floors`, `access_type`, `alley_width_m`, `has_completion`, `legal_status`… (INS-13) |
 | §III | Nhóm 2 đất: kích thước, chỉ tiêu xây dựng, quy hoạch, hạ tầng | ⏳ | Có `planning_status`, `frontage_m × length_m`; chỉ tiêu xây dựng và cột điện/hố ga chưa có; nguồn quy hoạch treo ở OPEN-37 |
-| §III | Nhóm 3 sản xuất/thương mại: kho, xưởng, đất SKC/TMD | ❓ | Kho 173 tin không có loại này; ngoài phạm vi MVP → **OPEN-40** |
+| §III | Nhóm 3 sản xuất/thương mại: kho, xưởng, đất SKC/TMD | ❓ | Enum `property_type` (SRS-3.1) chưa có loại này *[giả định BA: chưa đếm DB, chưa có khách hỏi được ghi nhận]*; ngoài phạm vi MVP → **OPEN-40** |
 | §III | Thông số cho thuê: thời hạn HĐ, cọc, trượt giá, fit-out | ⏳ | Mới có `rent_income_vnd` và bậc giá theo loại giao dịch (FR-123) → **OPEN-40** |
 | §IV | Điểm uy tín = trung bình điểm BĐS × hệ số quy mô; điểm BĐS = 50% hoàn chỉnh + 50% kịp thời | 🔶 | FR-155 tính bằng số tin + tỷ lệ chốt, vì hai vế AOND đo ra 0 khi mới nhập kho (OPEN-20). Nay `listing_missing_facts` đã nhìn cả cột (FR-172) → vế "hoàn chỉnh" đo được rồi |
 | §IV | Thưởng quy mô NMG theo bậc ≤10 / ≤30 / >30 căn | ⏳ | Chưa có |
@@ -96,7 +96,8 @@ Ký hiệu: ✅ đã làm đúng · 🔶 làm nhưng khác bản gốc · ⏳ ch
 
 **DH-03 · Mặt bán lấy AOND làm chuẩn.** Mọi quyết định về cách hỏi, nhịp hỏi, dữ
 liệu cần gom và xếp hạng người rao tra về AOND §I–§VI trước; chỗ nào nhadat.cc
-gốc vênh (ví dụ TTL 7 ngày FR-107) thì AOND thắng, trừ khi đụng DH-02.
+gốc vênh thì AOND thắng, trừ khi đụng DH-02. Ví dụ: TTL xác nhận 7 ngày (FR-107)
+được thay bằng vòng nhỏ giọt FR-129/FR-144 — FR-107 giữ ID, ghi chú 03/09/2026.
 
 **DH-04 · Mặt mua và web lấy nhadat.cc làm chuẩn.** AOND không đặc tả phía mua
 ngoài một dòng bot-to-bot; `chats w B.docx` và `nhadat.cc website.docx` vẫn là
@@ -108,7 +109,7 @@ nguồn cho FR-01…FR-65. Văn phong AOND được mượn cho cả hai phía (
 |---|---|---|
 | **1. Tầm nhìn** | Người môi giới thường trực, không nghỉ, đứng sau mọi môi giới khác; cuộc trò chuyện một khi bắt đầu thì không kết thúc | OKRs eo2024.pptx; demo2Vitalify.docx |
 | **2. Phân khúc** | *Đầu tiên: người rao ở Quận 5* — chính chủ chỉ biết Zalo (P3) và NMG có 10–30 căn (P4). Việc cần làm: rao mà không tốn công, có người dẫn khách. *Sau đó: người mua* để ở (P1) và đầu tư (P2) — việc cần làm: được trả lời thật, nhanh, không bị gọi. Chọn phía bán trước vì **không có hàng thì chat rỗng** (RSK-04) | 02 §2.2; INS-08; RSK-04 |
-| **3. Chi phí tương đối** | Rẻ hơn sàn ở cả hai phía: không phí đăng tin, không phí người mua, chỉ thu khi chốt. Chi phí vận hành neo Free-tier + 20tr/tháng (NFR-14, NFR-16); bot chạy rỗ khi im (FR-171) | §1.3, §1.4 |
+| **3. Chi phí tương đối** | Rẻ hơn sàn ở cả hai phía: không phí đăng tin, không phí người mua, chỉ thu khi chốt. Build ≤418tr (NFR-14); vận hành neo Free-tier (NFR-16) + 20tr/tháng duy trì (§1.4); bot chạy rỗ khi im (FR-171) | §1.3, §1.4 |
 | **4. Giá trị** | *Người rao* — trước: đăng 5 sàn, điền form, bị hỏi lại, tin chết sau 7 ngày; cách: gõ một câu, bot nhặt dần, CTV dẫn khách; sau: "rao một lần là xong" (INS-09). Thay thế hiện có: batdongsan, chợ tốt, nhóm Zalo. *Người mua* — trước: để số là 40 cuộc gọi trong 3 ngày (INS-04); cách: chat trên Zalo, hỏi gì bot đi hỏi chủ; sau: được trả lời thật mà không lộ số. Thay thế: sàn lớn + tự gọi môi giới | INS-04, INS-06, INS-09 |
 | **5. Đánh đổi — KHÔNG làm** | App native · form nhập nhiều trường · thu phí đăng tin · hỏi số điện thoại người mua · marketplace tự phục vụ · nhóm 3 BĐS công nghiệp (chờ OPEN-40) · đa ngôn ngữ · Messenger/Telegram trước khi Zalo ổn · khẳng định pháp lý thay chủ | 02 §2.3; DH-02 |
 | **6. Chỉ số** | Sao Bắc Đẩu và chỉ số đầu vào ở §0.5 | — |
@@ -160,9 +161,10 @@ mắt xích duy nhất chưa có số, và là mắt xích cả hai tài liệu 
 ## 0.6 Lộ trình
 
 **Đã chạy trên hệ thống thật (đến 02/09/2026):** web Next.js + Supabase; bot hai
-mặt trên Zalo OA + bridge; 173 tin có cấu trúc; drip người bán; hỏi-đáp khép vòng;
-hạng người rao (ẩn); CTV chia đơn + báo cáo 17h; sổ lỗi, nhịp tim, chuông hết
-tiền; kiểm thử 4 tầng (`10`). Chi tiết ở `07 §8` và `bot/README.md`.
+mặt trên Zalo qua bridge acc clone (OA đang chờ — FR-145); 173 tin có cấu trúc;
+drip người bán; hỏi-đáp khép vòng; hạng người rao (ẩn); CTV chia đơn + báo cáo
+17h; sổ lỗi, nhịp tim, chuông hết tiền; kiểm thử 4 tầng (`10`). Hiện trạng chi
+tiết ở `bot/README.md` và `10`; kế hoạch phát hành gốc ở `07 §8`.
 
 **DH-06 · 90 ngày tới, theo thứ tự:**
 
@@ -186,7 +188,7 @@ rẻ nhất. Xếp theo tác động × khả năng sai × rẻ để thử.
 |---|---|---|---|---|---|
 | 1 | **Chủ nhà chịu trả lời bot** khi khách hỏi (INS-06, AOND §VI) | <30% câu hỏi được trả lời trong 48h → vòng lặp trung tâm thành "để em hỏi lại" rồi im | `select count(*) filter (where answered_at is not null) … from info_requests` sau khi có ≥20 câu thật | 2 tuần liền dưới 30% | Đưa 20 tin có chủ thật vào vòng; bot hỏi đúng câu khách hỏi, không hỏi chung chung |
 | 2 | **Người mua chịu chat với bot mà không cần người thật ngay** (INS-04) | Tỷ lệ hội thoại → lịch xem <2%, hoặc >30% bật cờ cần người thật | `conversations.needs_human` và `reminders viewing` trên 100 hội thoại đầu | Cờ cần người thật >30% | Bật widget Zalo (FR-145) trên 20 trang tin nhiều lượt xem nhất, đọc 50 hội thoại đầu bằng mắt |
-| 3 | **Hạng Đồng/Bạc/Vàng làm NMG chăm tin hơn** (AOND §IV) | Hạng lên/xuống không đổi tỷ lệ trả lời drip của NMG | So tỷ lệ trả lời drip 3 NMG hiện có, trước/sau khi nói hạng cho họ biết | Không lệch sau 30 ngày | Nói hạng qua Zalo cho đúng 3 NMG, không cần UI |
+| 3 | **Hạng Đồng/Bạc/Vàng làm NMG chăm tin hơn** (AOND §IV) | Hạng lên/xuống không đổi tỷ lệ trả lời drip của NMG | So tỷ lệ trả lời drip 3 NMG hiện có (TS-HANG-01), trước/sau khi nói hạng cho họ biết | Không lệch sau 30 ngày | Nói hạng qua Zalo cho đúng 3 NMG, không cần UI |
 | 4 | **Free-tier chịu được tới giao dịch đầu tiên** (NFR-16, OPEN-25) | Mất dữ liệu một lần, hoặc Vercel đình chỉ vì dùng thương mại | Nhật ký `sao-luu.mjs`, `bot_errors` loại hạ tầng | Một sự cố mất dữ liệu | Chạy sao lưu mỗi ngày bằng lịch, thử khôi phục từ bản sao một lần |
 | 5 | **Mở địa bàn ra HCM mới + Long An + Tây Ninh không làm loãng kho** (OPEN-27 vs INS-08) | Số tin mỗi phường mới dưới 5 sau 60 ngày → khách hỏi khu nào cũng "chưa có" | `listings` nhóm theo `ward` sau khi mở | >50% phường mở có <5 tin | Mở từng cụm phường liền kề Quận 5 trước, không mở cả tỉnh |
 

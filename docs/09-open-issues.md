@@ -747,7 +747,7 @@ có ảnh thật.
 hơn là nhadat.cc rồi"*; `AOND req + chat examples.docx` §II (SRD AI Ơi Nhà Đất,
 aioinhadat.com): kho tên trợ lý ghép phụ âm + "•ai" (m•ai cho người mua, t•ai
 cho người bán…). Hôm nay bot xưng **một** tên "Thái" (`06 §6.8`), domain là
-nhadat.cc, Zalo OA mang tên nhadat.cc; OPEN-08 (tên thương hiệu) vẫn treo từ
+nhadat.cc, kênh Zalo là acc clone qua bridge (OA đang chờ — FR-145); OPEN-08 (tên thương hiệu) vẫn treo từ
 21/08/2026. Đổi tên là đổi domain, OA, copy toàn hệ thống, `TONE_RULES`,
 `bot_prompts.tone_rules`, và cả cách bot tự giới thiệu ở FR-20.
 
@@ -792,8 +792,8 @@ hỏi drip riêng — mở khi có tin thật đầu tiên.
 để sau này chuyển về chạy local trên máy ASUS Ascent GX10". Hệ thống thật đang
 chạy Claude qua Supabase Edge (`SRS-2`), một lớp gọi model ở `_shared/claude.ts`,
 "não" cấu hình được không cần deploy (FR-138), đo tiền theo chữ (FR-169), chuông
-hết tiền (FR-168). Bộ kiểm thử `10` (67 kịch bản e2e + regex) neo vào hành vi
-model hiện tại.
+hết tiền (FR-168). Bộ kiểm thử `10` (67 kịch bản e2e + regex [nguồn:
+bot/README.md, 02/09/2026]) neo vào hành vi model hiện tại.
 
 **Phương án**: (a) giữ như đang chạy, ghi nhận lớp gọi model là chỗ đổi duy nhất;
 (b) đổi sang Gemini theo AOND; (c) lai — Gemini cho OCR ảnh giấy tờ (nếu FR-134

@@ -81,7 +81,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-101, FR-102 | UF-09 | WF-09 | SRS-3.4 | *[FR-102 deprecated → FR-137]* Chấm điểm CTV/NMG nằm trong `ctv-report` (rubric `RATE_CTV_RUBRIC`). Edge `rate-ctv` + bảng `ratings` đã XOÁ 27/08/2026 theo OPEN-23 |
 | FR-103 | UF-09 | — | SRS-5.3 | — |
 | FR-104, FR-105 | UF-06, UF-12 | — | SRS-3.8 (bất biến ẩn danh — chỉnh 02/09/2026 theo OPEN-36: lưu hết, khai khi khách hỏi; SĐT/Zalo giữ tới UF-06); bộ lọc SĐT phía bot (FR-105) chưa dựng | — |
-| FR-106, FR-107, FR-108 | UF-13 | — | SRS-3.8, SRS-5.3 | — |
+| FR-106, FR-107, FR-108 | UF-13 | — | SRS-3.8, SRS-5.3 (FR-107: thay bằng FR-129/FR-144 theo DH-03, 03/09/2026) | — |
 | FR-109, FR-111 | UF-10 | — | SRS-3.8 | — |
 | FR-110 | UF-05 | WF-06 | SRS-5.3 `info_request_sla` | — |
 | FR-112 | UF-07 | — | SRS-3.8 `deals` | — |

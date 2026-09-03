@@ -977,7 +977,7 @@ LUỒNG trong `chat-reply`; tầng DB kiểm bằng TS-VAI/TS-TIEN/TS-CHUONG tr�
 thật như trước. Hai tầng bổ cho nhau, không thay nhau.
 
 *(02/09/2026, sau FR-171: bộ này lên **65 kịch bản**, thêm 10 ca TS-TOIUU bên
-dưới. DB giả có thêm trigger đẩy `last_message_at`, RPC `tao_followup`, và
+dưới; sau FR-172 cùng ngày lên **67** với 2 ca TS-THONGSO. DB giả có thêm trigger đẩy `last_message_at`, RPC `tao_followup`, và
 `ensure_buyer_conversation` trả 6 cột — đúng nghĩa các hàm thật ở `20260902d`.)*
 
 ---
@@ -990,7 +990,7 @@ Ngưỡng đặt bằng số đo SAU khi sửa — đây là chốt chống hồ
 truy vấn vào đường nóng là đỏ ngay, phải giải thích.
 
 ```
-cd bot/tests/e2e && bun install && ./chay.sh      # 65/65, có 10 ca TOIUU
+cd bot/tests/e2e && bun install && ./chay.sh      # 67/67, có 10 ca TOIUU + 2 ca THONGSO
 ```
 
 | ID | Kịch bản | Bất biến | Trước (v43) | Sau (v44) |
