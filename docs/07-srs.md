@@ -290,9 +290,15 @@ status              enum(pending, answered, escalated, expired)
 ```
 
 *Bảng thật có thêm `assignee` (seller/ctv/admin), `ctv_id`, `source`
-(`seller_flow` | `buyer_ask`), `buyer_id` (FR-140). Hai trigger (02/09/2026,
-`20260902h`): `trg_notify_info_request_escalation` — mỗi câu `buyer_ask` sinh
-nhắc cho chủ nhà/CTV **và một dòng báo admin**; `trg_info_request_bao_lai_khach`
+(`seller_flow` | `buyer_ask`), `buyer_id` (FR-140), và từ `20260903a` (FR-173):
+`sla_due_at` (hạn CTV = lúc hỏi + `ctv_sla_phut()` = 120 phút, chỉ với
+`buyer_ask` giao CTV), `sla_missed_at` (đã báo admin quá hạn). Định tuyến
+03/09/2026: `buyer_ask` → CTV đang hoạt động ít việc nhất (không seller), không
+có CTV → admin; drip vẫn → seller. Trigger `trg_notify_info_request_escalation` —
+`buyer_ask` sinh MỘT nhắc cho CTV kèm mẫu trả lời "`#mã: câu trả lời`", KHÔNG báo
+admin (bản 02/09 báo admin mỗi câu đã bỏ); `info_request_sla_tick()` (cron
+`ctv-sla-tick`) quá hạn → nhắc admin + `sla_missed_at`. View `ctv_ranks` xếp
+hạng CTV từ chính cột này (SRS-3.14). `trg_info_request_bao_lai_khach`
 — chuyển `answered` thì sinh nhắc `followup` "chủ nhà vừa trả lời" cho khách,
 `nudge` báo lại đúng câu trả lời. Đóng vòng INS-06: hỏi → hỏi chủ → chủ trả lời
 → khách nhận, admin thấy cả ba bước.*
@@ -861,7 +867,8 @@ là thiết kế, bảng dưới là thực tế):
 | `seller-drip-tick` | `22,52 1-13 * * *` (8h–20h VN, hai lượt/giờ) | `ask-seller` — hỏi nhỏ giọt chính chủ (FR-129/144). *Trước 02/09: `*/30` suốt ngày đêm — hỏi chủ nhà lúc 2 giờ sáng, mà hàm tick không tự kiểm giờ (FR-171 d)* |
 | `nudge-tick` | `7,37 1-13 * * *` (8h–20h VN, hai lượt/giờ) | `nudge` — nhắc lời hứa, nhắc lịch xem, leo thang (FR-133/32/147). *Trước 02/09: `*/30` suốt ngày, 22h–8h vào rồi thoát; phút lệch thay cho đoạn ngủ ngẫu nhiên 45 s trong lambda (FR-171 d)* |
 | `cron-don-so` | `15 18 * * *` | SQL thuần: xoá `cron.job_run_details` quá 7 ngày. Trước đó không ai dọn, 8.600 dòng/tuần (FR-171 d) |
-| `ctv-report-tick` | `0 10 * * *` (17h VN) | `ctv-report` — báo cáo CTV (FR-137/149) |
+| `ctv-report-tick` | `0 10 * * *` (17h VN) | `ctv-report` — báo cáo CTV (FR-137/149), từ v10 có dòng hạng CTV (FR-173 e) |
+| `ctv-sla-tick` | `*/15 1-13 * * *` (8h–20h VN, 15 phút/lượt) | hàm SQL `info_request_sla_tick()` — câu khách hỏi giao CTV quá `ctv_sla_phut()` (120 phút) chưa trả lời → một dòng nhắc admin + `sla_missed_at` (FR-173 c, migration `20260903a`). Không gọi edge function |
 | `listing-interest-decay` | `0 20 * * *` | trả tin `dang_quan_tam` về `dang_ban` sau 7 ngày (FR-139) |
 | `bot-health-tick` | `*/15 * * * *` | `bot_health_tick()` — SQL thuần, không HTTP (FR-152) |
 | `media-cleanup-tick` | `*/5 * * * *` | `media-cleanup` — xoá file đã bị gỡ khỏi DB (FR-165 e) |

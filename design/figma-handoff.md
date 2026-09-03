@@ -44,20 +44,20 @@ fileKey `mcyVWTPlbyCpHv0RV0DYxy`). Đã có:
   JetBrains Mono (Medium).
 - Mỗi call use_figma ≤ ~1 khung; `setCurrentPageAsync` đúng 1 lần/call; return node IDs.
 
-**Page `00 · Định hướng` (id `54:2`, dựng 03/09/2026).** Bản trực quan của
-`docs/00-dinh-huong.md` — 4 khung xếp ngang, y=0, cách 60px, width 1000:
+**Page `00 · Định hướng` (id `54:2`, dựng lại 03/09/2026 theo v1.1 — gọn, đặc).**
+Bản trực quan của `docs/00-dinh-huong.md` — 2 khung xếp ngang, y=0, cách 60px,
+width 1000, padding 34/40, chữ Inter 11.5 / bảng hàng cao 5px (4 khung cũ
+`54:3` `55:2` `56:2` `58:2` đã xoá):
 
 | x | Khung | Node | Nguồn |
 |---|---|---|---|
-| 0 | Định vị · hai mặt một bot (DH-01, sơ đồ 3 hộp, bảng DH-02) | `54:3` | §0.1 |
-| 1060 | Hai nguồn gốc, một sản phẩm (bảng 9 hàng) | `55:2` | §0.2 |
-| 2120 | SRD AOND · nhận / sửa / chưa nhận (bảng §I–§VII, chip trạng thái bằng chữ, note card DH-03/04) | `56:2` | §0.3 |
-| 3180 | Sao Bắc Đẩu · lộ trình · quyết định (DH-05 + I1–I5, DH-06, OPEN-39/40/41, DH-07) | `58:2` | §0.5, §0.6, §0.8 |
+| 0 | (1/2) Định vị DH-01 (bảng Bán / Mua / Vòng nối) · **sơ đồ luồng câu khách hỏi FR-173** (khách → Thái → CTV 120' → chủ → báo lại; quá hạn → admin; chip hạng CTV) · DH-02 bốn bất biến · §0.2 hai nguồn gốc (10 hàng) | `65:2` | §0.1, §0.2 |
+| 1060 | (2/2) §0.3 SRD AOND 19 hàng chip trạng thái · §0.5 DH-05 + I1–I5 · §0.6 DH-06 · §0.7 giả định chịu lực · §0.8 note "đã chốt" + OPEN-40/41/42, DH-07 | `65:7` | §0.3, §0.5–§0.8 |
 
-Chip trạng thái: đã làm `#12805C` · làm khác `#B45309` · chưa làm `#E3E8EF` ·
-không nhận `#B42318` · chờ chốt nền `#FFF3EC` chữ/viền `#E2571E`. Canvas §0.4 và phản biện §0.7 chỉ
-có trong docs. Khi `00-dinh-huong.md` đổi thì dựng lại khung tương ứng, không sửa
-tay trong Figma.
+Chip trạng thái: đúng `#12805C` · khác bản gốc `#B45309` · chưa `#E3E8EF` ·
+không nhận `#B42318` · chờ chốt nền `#FFF3EC` chữ/viền `#E2571E`. Hộp nhấn trong
+sơ đồ (CTV, quá hạn) cùng màu chờ chốt. Canvas §0.4 chỉ có trong docs. Khi
+`00-dinh-huong.md` đổi thì dựng lại khung tương ứng, không sửa tay trong Figma.
 
 **Lưu ý:** 7 khung toàn văn trên page `03 · SRS` chụp bộ docs ở mốc 21–24/08/2026
 (ví dụ "09 · Open Issues — 14 mục", nay 41). Chúng là ảnh chụp, không phải nguồn;

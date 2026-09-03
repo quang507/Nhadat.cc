@@ -218,7 +218,16 @@ trùng byte với bundle sau khi chuẩn hoá `\uXXXX`.
 — dòng KHO / căn khách nhắc / follow-up mang thông số từ cột mới qua
 `_shared/thong_so.ts`; đối chiếu byte như trên, e2e 67/67. Rồi FR-140 c:
 `nudge` **v23** — nhắc `followup` có ghi chú "chủ nhà vừa trả lời" (trigger
-`20260902h`) thì soạn tin báo lại khách đúng câu trả lời của chủ.* Lệnh bundle:
+`20260902h`) thì soạn tin báo lại khách đúng câu trả lời của chủ.*
+
+*03/09/2026 — FR-173 (câu khách hỏi về CTV, migration `20260903a`): `chat-reply`
+**v46** — nhánh người nội bộ: CTV/admin nhắn `#mã tin: câu trả lời` → tra
+`nguoi_noi_bo` (chỉ khi tin mở đầu bằng mã tin), ghi fact nguồn `ctv`/`admin`,
+đóng `info_requests`, trả câu mẫu không tốn lượt model; đổi cách xưng
+"em là Thái, bên Aioinhadat" (OPEN-39, cả `bot_prompts` trên DB). `ctv-report`
+**v10** — dòng "Hạng trả lời khách" đọc view `ctv_ranks`. e2e 71/71 (thêm
+CTV-01…04). `nudge` giữ v23: TONE đọc từ `bot_prompts` nên đã đổi xưng theo, bản
+dự phòng trong code sẽ theo ở lần deploy tới.* Lệnh bundle:
 
 ```bash
 bun build bot/supabase/functions/<fn>/index.ts --target=node --external 'npm:*' \

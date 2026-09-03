@@ -12,7 +12,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-05 | Xin số ĐT có phá vỡ lời hứa riêng tư? | Cao | FR-53, NFR-07 |
 | OPEN-06 | Thiếu file TOP-100 keyword | Cao | FR-12, toàn bộ SEO |
 | OPEN-07 | Theme — **ĐÃ CHỐT: KingTheme (HTML template), cắt vào Next.js**, 24/08/2026 | Trung bình | Toàn bộ `06` |
-| OPEN-08 | Tên thương hiệu và tên miền | Thấp | Copy toàn hệ thống |
+| OPEN-08 | ✅ **ĐÃ CHỐT 03/09/2026 — thương hiệu Aioinhadat**, bot "Thái" (xem OPEN-39). Tên miền web hiện vẫn nhadat.cc [giả định BA: chưa có chỉ đạo đổi domain] | — | Copy toàn hệ thống |
 | OPEN-09 | Zalo OA có cho gửi tin chủ động ở tần suất cần? | Cao | FR-63, FR-64 |
 | OPEN-10 | FR-99 định giá so sánh — chưa có đặc tả | Trung bình | FR-99 |
 | OPEN-11 | Logstash làm hàng đợi tin nhắn | Cao | NFR-04 |
@@ -43,9 +43,10 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-36 | ✅ **ĐÃ CHỐT 02/09/2026** — lưu hết thông tin chủ chia sẻ, khách hỏi mới khai; liên hệ mở lúc chốt lịch xem (INS-11 chỉnh lại) | — | INS-11, FR-104 |
 | OPEN-37 | Lớp dữ liệu vị trí (quy hoạch, ngập, tiện ích): lấy từ đâu, trả bao nhiêu? | Trung bình | FR-28, INS-13, OPEN-40 |
 | OPEN-38 | Ảnh tin: thumbnail và watermark trên bậc Free | Thấp | FR-165, NFR-16 |
-| OPEN-39 | **Tên thương hiệu và tên trợ lý**: nhadat.cc / aioinhadat / gia đình •ai (AOND §II) — nêu 03/09/2026 từ `00-dinh-huong.md` | Trung bình | OPEN-08, FR-20, DH-01 |
+| OPEN-39 | ✅ **ĐÃ CHỐT 03/09/2026** (chủ dự án: *"bot Thái và Aioinhadat, không có gia đình trợ lý gì hết"*) — thương hiệu **Aioinhadat**, MỘT trợ lý tên **Thái**, KHÔNG nhận kho tên •ai của AOND §II. Đã đổi `TONE_RULES` + `bot_prompts.tone_rules`/`rate_ctv_rubric` ("em là Thái, bên Aioinhadat") | — | OPEN-08, FR-20, DH-01 |
 | OPEN-40 | **Phạm vi loại BĐS**: thông số cho thuê, đất nền, nhóm công nghiệp (AOND §III) | Trung bình | FR-172, OPEN-37, DH-03 |
 | OPEN-41 | **Nhà cung cấp model**: giữ Claude trên Supabase hay theo AOND §VII (Gemini rồi local) | Thấp | SRS-2, FR-138, FR-168, DH-06 |
+| OPEN-42 | **Ngưỡng CTV**: hạn trả lời câu khách hỏi (đang 120 phút) và ngưỡng hạng Vàng ≥90% / Bạc ≥70% / dưới 3 câu = chưa đủ — đều [giả định BA] | Trung bình | FR-173, FR-137, DH-03 |
 
 ---
 
@@ -109,10 +110,13 @@ Next.js + Tailwind theo design system ở `06`.
 ThemeForest regular: 1 end product — hợp lệ cho nhadat.cc; asset của theme dùng
 được trong sản phẩm, nhưng **không commit theme vào repo public**).
 
-### OPEN-08 · Tên thương hiệu
+### OPEN-08 · Tên thương hiệu — **ĐÃ CHỐT 03/09/2026**
 Tài liệu dùng lẫn `nhadat.cc`, `nhadatCC`, `Nhã Đạt CC`, `nhaadaat.com`.
-**Khuyến nghị**: tên miền `nhadat.cc`, tên đọc **Nhã Đạt CC**, tên viết trong sản phẩm
-**nhadat.cc**. Bỏ hẳn `nhaadaat.com`. Cần xác nhận trước khi in ấn/quảng cáo.
+**Khuyến nghị cũ**: tên miền `nhadat.cc`, tên đọc **Nhã Đạt CC**, tên viết trong sản phẩm
+**nhadat.cc**. Bỏ hẳn `nhaadaat.com`.
+**Chốt 03/09/2026** (cùng OPEN-39): thương hiệu là **Aioinhadat**; bot tự giới thiệu
+"em là Thái, bên Aioinhadat". Tên miền web vẫn `nhadat.cc` cho tới khi có chỉ đạo
+đổi [giả định BA]; bộ docs/ vẫn gọi dự án là nhadat.cc theo tên repo.
 
 ### OPEN-09 · Hạn mức tin chủ động của Zalo OA
 ASM-01 giả định Zalo cho phép gửi tin chủ động đủ để chạy FR-63, FR-64. Zalo OA thực tế
@@ -759,7 +763,10 @@ tên nội bộ theo vai để log và báo cáo phân biệt, trước mặt kh
 FR-157), và chỉ chuyển sang (b) khi chốt OPEN-08 — làm một lần, đừng đổi tên bot
 trước rồi đổi domain sau.
 
-**Chờ chủ dự án chốt.**
+**ĐÃ CHỐT 03/09/2026** — chủ dự án: *"bot Thái và Aioinhadat, không có gia đình
+trợ lý gì hết"*. Tức: thương hiệu Aioinhadat, một trợ lý tên Thái, bỏ hẳn kho tên
+•ai. Đã sửa `_shared/prompts.ts` (TONE_RULES, RATE_CTV_RUBRIC) và hai dòng
+`bot_prompts` tương ứng trên DB; docs/06 §6.8 ghi theo. Domain chưa đổi (OPEN-08).
 
 ### OPEN-40 · Phạm vi loại BĐS: thông số cho thuê, đất nền, và nhóm công nghiệp
 
@@ -801,6 +808,29 @@ mở rộng sang đọc sổ), Claude cho hội thoại.
 **Khuyến nghị BA**: (a). Chưa có lý do chi phí hay chất lượng để đổi; đổi là chạy
 lại toàn bộ `10`. Xem lại khi hoá đơn model vượt ngưỡng FR-168 hai tháng liền
 hoặc khi cần OCR giấy tờ thật.
+
+**Chờ chủ dự án chốt.**
+
+### OPEN-42 · Ngưỡng CTV: hạn trả lời và mốc hạng Đồng/Bạc/Vàng
+
+**Mức: TRUNG BÌNH. Nêu 03/09/2026 (FR-173).**
+
+**Nguồn**: quyết định chủ dự án 03/09/2026 *"nếu CTV bận sau khoảng thời gian
+chưa rep thì chấm điểm Đồng/Bạc/Vàng, và nhắn để admin hỗ trợ khách"* — "khoảng
+thời gian" và thang điểm không được nêu số. BA đặt tạm để chạy được ngay:
+hạn **120 phút** (`ctv_sla_phut()`, nhịp kiểm 15 phút trong 8–20h VN, nên câu hỏi
+lúc 20h30 chỉ bị coi là trễ vào 8h sáng hôm sau); hạng theo **tỷ lệ trả lời đúng
+hạn 30 ngày**: Vàng ≥ 90%, Bạc ≥ 70%, còn lại Đồng; dưới 3 câu = "chưa đủ dữ
+liệu". Khác với FR-155 (hạng người rao theo số tin + tỷ lệ chốt) và với công thức
+AOND §IV (50% hoàn chỉnh + 50% kịp thời) — đây là thang riêng cho CTV, chỉ đo
+độ kịp thời, vì CTV không rao tin.
+
+**Phương án**: (a) giữ 120 phút / 90-70 tới khi có ~30 câu thật rồi định cỡ lại;
+(b) hạn theo giờ làm việc (ví dụ 60 phút trong 8–18h, đêm không tính); (c) gộp
+độ kịp thời vào điểm chăm khách 4 tiêu chí của FR-137 thành một số.
+**Khuyến nghị BA**: (a), và ghi ngưỡng ở một hàm DB như đang làm để đổi không
+cần deploy. Hạng chỉ có nghĩa khi đi kèm hệ quả (ưu tiên nhận đơn? thưởng?) —
+chưa có, cần chốt cùng lúc.
 
 **Chờ chủ dự án chốt.**
 

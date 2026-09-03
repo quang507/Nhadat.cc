@@ -81,7 +81,19 @@ Deno.serve(async (req) => {
   const sections: string[] = [];
   const saved: Record<string, unknown>[] = [];
 
+  // FR-173 e: hạng CTV theo tỷ lệ trả lời câu khách hỏi ĐÚNG HẠN 30 ngày (view
+  // `ctv_ranks`, migration 20260903a). Một lượt đọc cho mọi CTV.
+  const HANG: Record<string, string> = { vang: "Vàng", bac: "Bạc", dong: "Đồng", chua_du: "chưa đủ dữ liệu" };
+  const { data: hangRows, error: hangErr } = await client.from("ctv_ranks")
+    .select("id, rank, tong, dung_han, tre");
+  if (hangErr) await ghiLoi(client, "ctv-report ctv_ranks", hangErr.message);
+  const hangCua = new Map((hangRows ?? []).map((h) => [h.id as string, h]));
+
   for (const ctv of ctvs ?? []) {
+    const h = hangCua.get(ctv.id);
+    const dongHang = h
+      ? `- Hạng trả lời khách: ${HANG[h.rank as string] ?? h.rank} (${h.dung_han}/${h.tong} đúng hạn, ${h.tre} trễ, 30 ngày)\n`
+      : "";
     const { data: convs } = await client.from("conversations")
       .select("id, buyer_id, needs_human, last_message_at, buyers(name, preferences)")
       .eq("ctv_id", ctv.id)
@@ -157,6 +169,7 @@ Deno.serve(async (req) => {
       (khachToday ? `- Hôm nay: ${khachToday}\n` : "") +
       (lich ? `- Lịch xem sắp tới: ${lich}\n` : "") +
       (needHuman.length ? `- ⚠ CẦN NGƯỜI THẬT: ${needHuman.length} đơn đang chờ tiếp quản\n` : "") +
+      dongHang +
       (avg
         ? `- Điểm chăm khách: ${avg}/5 (${scores.length} hội thoại). ${scores[0]?.comment ?? ""}`
         : `- Điểm chăm khách: chưa có hội thoại mới để chấm`);

@@ -8,7 +8,8 @@ export class FakeDB {
   constructor() {
     this.t = {};
     for (const n of ["sellers","buyers","conversations","messages","listings","listing_facts","info_requests",
-      "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log"]) this.t[n] = [];
+      "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log",
+      "ctvs","admins"]) this.t[n] = [];
     this.seq = 0; this.log = [];
   }
   rows(n) {
@@ -202,6 +203,14 @@ class RpcCall {
       case "guess_property_type_answer": { const t = String(a.p_text).toLowerCase(); return { data: /nhà phố|nha pho/.test(t) ? "nha_pho" : /chung cư|chung cu/.test(t) ? "chung_cu" : null, error: null }; }
       case "mark_listing_interest": { let n = 0; for (const l of db.t.listings) if (a.p_codes.includes(l.code) && ["dang_ban", "dang_quan_tam"].includes(l.status)) { l.status = "dang_quan_tam"; n++; } return { data: n, error: null }; }
       case "match_projects": return { data: [], error: null };
+      case "nguoi_noi_bo": {
+        // 20260903a (FR-173 d): CTV đang hoạt động trước, rồi admin; người lạ → null
+        const c = db.t.ctvs.find((x) => x.active !== false && x.zalo_user_id === a.p_zalo);
+        if (c) return { data: { vai: "ctv", id: c.id, name: c.name }, error: null };
+        const ad = db.t.admins.find((x) => x.zalo_user_id === a.p_zalo);
+        if (ad) return { data: { vai: "admin", id: null, name: ad.email ?? "admin" }, error: null };
+        return { data: null, error: null };
+      }
     }
     return { data: null, error: { message: `rpc ${this.name} chưa giả lập` } };
   }

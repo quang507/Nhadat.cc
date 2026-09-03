@@ -9,17 +9,17 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 
 | | Tài liệu | Nội dung |
 |---|---|---|
-| 0 | [Định hướng](docs/00-dinh-huong.md) | **BRD hợp nhất nhadat.cc × AI Ơi Nhà Đất**: sản phẩm hôm nay là gì, nhận gì từ SRD AOND, sao Bắc Đẩu, lộ trình 90 ngày, quyết định treo |
+| 0 | [Định hướng](docs/00-dinh-huong.md) | **BRD hợp nhất Aioinhadat × nhadat.cc** (thương hiệu Aioinhadat, một bot Thái): sản phẩm hôm nay là gì, nhận gì từ SRD AOND, câu khách hỏi đi về CTV, sao Bắc Đẩu, lộ trình 90 ngày, quyết định treo |
 | 0 | [Glossary](docs/00-glossary.md) | Từ điển thuật ngữ (B, S, CCRB, NMG, HXH…) |
 | 1 | [Research](docs/01-research.md) | Insight, persona, mô hình KD, ngân sách, rủi ro |
-| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 147 FR (3 deprecated) · 18 NFR · 5 giả định |
+| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 148 FR (3 deprecated) · 18 NFR · 5 giả định |
 | 3 | [User Flow](docs/03-user-flows.md) | 13 luồng end-to-end |
 | 4 | [Information Architecture](docs/04-information-architecture.md) | Sitemap, URL/SEO, content model |
 | 5 | [Wireframe](docs/05-wireframes.md) | 14 màn hình low-fi |
 | 6 | [UI Design](docs/06-ui-design.md) | Design system + tone giọng chat |
 | 7 | [SRS](docs/07-srs.md) | Kiến trúc, data model, API, 13 tiêu chí nghiệm thu |
 | 8 | [Traceability](docs/08-traceability.md) | Ma trận truy vết BR→FR→UF→WF→SRS→AC |
-| 9 | [Open Issues](docs/09-open-issues.md) | 41 vấn đề — 12 đã chốt (OPEN-26 chốt một phần), 29 còn chờ chủ dự án |
+| 9 | [Open Issues](docs/09-open-issues.md) | 42 vấn đề — 14 đã chốt (OPEN-26 chốt một phần), 28 còn chờ chủ dự án |
 
 Quy ước làm việc và ranh giới bảo mật: [`CLAUDE.md`](CLAUDE.md).
 Quy trình cập nhật tài liệu: [`.claude/skills/ba-pipeline/SKILL.md`](.claude/skills/ba-pipeline/SKILL.md).

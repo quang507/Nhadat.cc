@@ -1036,6 +1036,28 @@ thử): chủ có Zalo, khách gửi `info_requests` nguồn `buyer_ask` "hẻm 
 | TS-HOICHU-02 | `info_requests` chuyển `answered` | thêm một dòng `followup` gắn `buyer_id`, ghi chú bắt đầu "chủ nhà vừa trả lời câu khách hỏi về #… — '…': Hẻm 5m…"; nhắc im lặng đang treo cùng căn bị huỷ | ✅ |
 | TS-HOICHU-03 | `assignee` sau định tuyến | `seller` (chủ có Zalo); nguồn giữ `buyer_ask` | ✅ |
 
+*(03/09/2026 — FR-173 thay đường đi của `buyer_ask`: TS-HOICHU-01 và -03 không còn
+đúng với bản đang chạy — câu khách hỏi giao CTV, admin không bị báo mỗi câu. Bản
+mới kiểm ở TS-CTV bên dưới; TS-HOICHU-02 (chủ/CTV trả lời → báo lại khách) vẫn đúng.)*
+
+### TS-CTV — câu khách hỏi về CTV; CTV chậm → admin đỡ khách; hạng CTV (FR-173, 03/09/2026)
+
+Chạy trên DB thật trong `begin … rollback` (migration `20260903a`); phần chat-reply
+chạy e2e trên mock (`bot/tests/e2e`, ca CTV-01…04, bộ lên **71 kịch bản**).
+
+| ID | Bước | Kỳ vọng | Kết quả 03/09 |
+|---|---|---|---|
+| TS-CTV-01 | Chèn `info_requests` nguồn `buyer_ask` cho tin có chủ trên Zalo, có một CTV `active` | `assignee = ctv`, `ctv_id` gán, `sla_due_at = now() + 120 phút`; KHÔNG giao chủ nhà dù chủ có Zalo | `ctv ctv=true hạn=120 phút` ✅ |
+| TS-CTV-02 | Dòng nhắc sinh ra | MỘT dòng `escalation` gắn `ctv_id`, lời "khách hỏi #…: '…'. Anh/chị hỏi chủ rồi nhắn lại em theo mẫu `#mã: câu trả lời` trong 120 phút"; **0** dòng đi đường admin | 1 dòng CTV, 0 dòng admin ✅ |
+| TS-CTV-03 | Lùi `sla_due_at` về quá khứ, gọi `info_request_sla_tick()` hai lần | Lần 1 trả 1, sinh MỘT dòng admin "⏰ CTV … chưa trả lời câu khách hỏi #… sau 120 phút. Admin đỡ khách giúp…", `sla_missed_at` được đánh dấu; lần 2 trả 0 (không báo lại) | 1 → dòng admin ✅ → đánh dấu ✅ → lần 2 = 0 ✅ |
+| TS-CTV-04 | `nguoi_noi_bo('<zalo CTV>')` / `nguoi_noi_bo('nguoi-la')` | (`ctv`, tên) / 0 dòng | ✅ / 0 ✅ |
+| TS-CTV-05 | `ghi_fact_listing(…, 'ctv')` rồi `info_requests → answered` | `listing_facts.source = ctv`, `bac_nguon('ctv') = 2`; trigger FR-140 c sinh `followup` gắn `buyer_id` ghi chú "chủ nhà vừa trả lời…" | ctv=2 ✅; followup ✅ |
+| TS-CTV-06 | View `ctv_ranks` (đọc với `request.jwt.claims` role `service_role`): 4 câu 30 ngày, 3 trả lời đúng hạn, 1 trễ | `tong=4 tra_loi=3 dung_han=3 tre=1 ty_le=0.75 rank=bac`; đọc bằng vai `postgres` không có jwt → 0 dòng (view khoá) | ✅ (0 dòng khi không jwt: ✅) |
+| e2e CTV-01 | CTV (`ctvs.zalo_user_id`) nhắn "#BDS-Q5-0001: chủ nói còn bán, sổ hồng riêng" | câu `buyer_ask` đang chờ → `answered` với đúng câu trả lời; `listing_facts` có dòng nguồn `ctv` | ✅ |
+| e2e CTV-02 | Cùng lượt | bot trả câu mẫu "…em báo lại khách hỏi #… liền", `noi_bo = ctv`, **0** lượt model | ✅ |
+| e2e CTV-03 | CTV nhắn mã tin không có trong kho | "Em không thấy tin #… trong kho ạ", không ghi fact | ✅ |
+| e2e CTV-04 | Người LẠ nhắn "#BDS-Q5-0001 còn không em" | tra `nguoi_noi_bo` đúng một lượt rồi đi nhánh mua (không `noi_bo`, không fact) | ✅ |
+
 Chưa kiểm trên Zalo thật: `nudge` v23 soạn tin báo lại khách từ ghi chú đó —
 prompt riêng, chờ đợt nhắn thật. Không có chủ trên Zalo thì đi CTV/admin như cũ,
 vẫn thêm dòng báo admin.

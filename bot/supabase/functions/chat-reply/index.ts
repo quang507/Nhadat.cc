@@ -572,6 +572,48 @@ Deno.serve(async (req) => {
   // 170 chữ-máy FEES thừa ở r1/r2 rẻ hơn hẳn một ô nhớ tạm riêng.
   const SELLER_SYSTEM = TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + FEES;
 
+  // ─── FR-173 d: NGƯỜI NỘI BỘ (CTV/admin) nhắn "#mã tin: câu trả lời" ──────────
+  // Câu khách hỏi đi về CTV (quyết định 03/09/2026); CTV hỏi chủ xong nhắn lại
+  // bot theo mẫu này → ghi fact nguồn `ctv`/`admin`, đóng câu hỏi, trigger DB
+  // `info_request_bao_lai_khach` báo lại khách. Chỉ tra `nguoi_noi_bo` khi tin
+  // MỞ ĐẦU bằng mã tin, nên người mua hỏi "#BDS-… còn không em" chỉ tốn thêm
+  // đúng một lượt RPC rồi rơi xuống nhánh mua như thường (FR-171 h).
+  const noiBo = text.match(/^\s*#?\s*(BDS-[A-Z0-9]+-\d+)\s*[:\-–]?\s*([\s\S]+)$/i);
+  if (noiBo) {
+    const { data: nb } = await client.rpc("nguoi_noi_bo", { p_zalo: externalUserId }).maybeSingle();
+    const vai = (nb as { vai?: string; id?: string | null; name?: string | null } | null)?.vai ?? null;
+    if (vai) {
+      const maTin = noiBo[1].toUpperCase();
+      const traLoi = noiBo[2].trim();
+      const { data: lst } = await client.from("listings").select("id")
+        .eq("code", maTin).maybeSingle();
+      if (!lst) {
+        const khong = `Em không thấy tin #${maTin} trong kho ạ, anh/chị xem lại mã giúp em.`;
+        return await hoanTat({ reply: khong, replies: [khong], noi_bo: vai });
+      }
+      // Câu khách hỏi CŨ NHẤT đang chờ của căn này là câu được trả lời; không
+      // có câu nào thì vẫn ghi làm fact bổ sung (CTV đi hỏi rồi, đừng bỏ).
+      const { data: pend } = await client.from("info_requests").select("id, question")
+        .eq("listing_id", lst.id).eq("status", "pending").eq("source", "buyer_ask")
+        .order("created_at", { ascending: true }).limit(1).maybeSingle();
+      const { error: fErr } = await client.rpc("ghi_fact_listing", {
+        p_listing_id: lst.id, p_question: pend?.question ?? "bo_sung",
+        p_answer: traLoi, p_source: vai,
+      });
+      if (fErr) await ghiLoi(client, "chat-reply ghi_fact_listing(noi_bo)", fErr.message);
+      if (pend) {
+        const { error: uErr } = await client.from("info_requests").update({
+          status: "answered", answer: traLoi, answered_at: new Date().toISOString(),
+        }).eq("id", pend.id);
+        if (uErr) await ghiLoi(client, "chat-reply info_requests answered(noi_bo)", uErr.message);
+      }
+      const rep = pend
+        ? `Em ghi nhận rồi ạ, em báo lại khách hỏi #${maTin} liền.`
+        : `Em ghi vào tin #${maTin} rồi ạ, hiện không có câu khách nào đang chờ căn này.`;
+      return await hoanTat({ reply: rep, replies: [rep], noi_bo: vai, answered: !!pend });
+    }
+  }
+
   // NGƯỜI BÁN nhắn? (FR-129 — hỏi nhỏ giọt): nếu khớp sellers.zalo_user_id và
   // đang có câu hỏi chờ, coi tin nhắn là CÂU TRẢ LỜI → lưu fact, hỏi câu kế.
   // Hồ sơ bán và cờ hỏi-vai bên mua đọc CÙNG LÚC (FR-171 h): hai truy vấn độc
@@ -1582,7 +1624,7 @@ Deno.serve(async (req) => {
     }
     if (tinTruoc <= 1) {
       const cauHoiVai =
-        "Dạ em chào anh/chị, em là Thái bên nhadat.cc ạ. Anh/chị đang muốn tìm mua/thuê nhà, hay đang có bất động sản cần rao ạ?";
+        "Dạ em chào anh/chị, em là Thái bên Aioinhadat ạ. Anh/chị đang muốn tìm mua/thuê nhà, hay đang có bất động sản cần rao ạ?";
       const { error: hvErr } = await client.from("messages").insert({
         conversation_id: convId, sender: "bot", body: cauHoiVai,
       });

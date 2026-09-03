@@ -56,6 +56,14 @@ const HANG: Record<string, { ten: string; lop: string }> = {
   vang: { ten: "Vàng", lop: "bg-[#f6c453] text-navy" },
   bac:  { ten: "Bạc",  lop: "bg-line text-navy" },
   dong: { ten: "Đồng", lop: "bg-[#e2c9b0] text-navy" },
+  chua_du: { ten: "Chưa đủ dữ liệu", lop: "bg-line text-mute" },
+};
+
+// FR-173 e: hạng CTV theo tỷ lệ trả lời câu khách hỏi đúng hạn (view `ctv_ranks`).
+type HangCtv = {
+  id: string; name: string | null; active: boolean;
+  tong: number; tra_loi: number; dung_han: number; tre: number;
+  ty_le_dung_han: number | null; rank: string;
 };
 
 export default function Page() {
@@ -82,6 +90,8 @@ export default function Page() {
   const [viec, setViec] = useState<Viec[]>([]);
   // Người bán mới 14 ngày: nhãn bot gán lúc bóc tách — sai thì đổi ở đây.
   const [nguoiBan, setNguoiBan] = useState<NguoiBan[]>([]);
+  // FR-173 e (03/09): CTV nhận câu khách hỏi, trễ hạn thì rớt hạng — xem ở đây.
+  const [hangCtv, setHangCtv] = useState<HangCtv[]>([]);
 
   // MỘT đợt cho cả trang (FR-171 j). Trước bản này là 5 đợt nối tiếp (12 truy
   // vấn), mỗi đợt một lần thời gian mạng VN→Supabase ~150-250 ms, tức 1-1,5 s
@@ -89,7 +99,7 @@ export default function Page() {
   // Ba lần `count: exact` trên `listings` (3 lần quét bảng) thay bằng MỘT lượt
   // đọc cột `status` rồi đếm tại chỗ — kho ~200 dòng, rẻ hơn ba lần quét.
   const load = async () => {
-    const [pend, st, beatRes, errRes, tn, vc, nb, hg] = await Promise.all([
+    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc] = await Promise.all([
       supabase
         .from("listings")
         .select("id, code, ward, price_vnd, price_raw, area_m2, description, location_raw, created_at")
@@ -115,7 +125,12 @@ export default function Page() {
         .from("seller_ranks")
         .select("id, name, seller_type, active_count, closed_count, rank")
         .order("active_count", { ascending: false }).limit(50),
+      supabase
+        .from("ctv_ranks")
+        .select("id, name, active, tong, tra_loi, dung_han, tre, ty_le_dung_han, rank")
+        .order("name").limit(20),
     ]);
+    setHangCtv((hc.data ?? []) as HangCtv[]);
     setPending((pend.data ?? []) as TinCho[]);
     const trangThai = (st.data ?? []).map((r) => r.status as string);
     setCounts({
@@ -283,6 +298,33 @@ export default function Page() {
 
       {/* Tiền bộ não — số ĐO, không phải ước tính (migration 20260901b) */}
       {tien.length > 0 && <TheTien rows={tien} />}
+
+      {/* FR-173 — hạng CTV theo độ kịp thời trả lời câu khách hỏi (03/09). */}
+      {hangCtv.length > 0 && (
+        <div className="mt-6 rounded-king border border-line bg-white p-5">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <span className="eyebrow text-mute">Hạng CTV</span>
+            <span className="text-sm text-mute">
+              tỷ lệ trả lời câu khách hỏi trong hạn (30 ngày) — Vàng ≥90%, Bạc ≥70%, còn lại Đồng
+            </span>
+          </div>
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {hangCtv.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-x-3 py-2">
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${HANG[c.rank]?.lop ?? "bg-line"}`}>
+                  {HANG[c.rank]?.ten ?? c.rank}
+                </span>
+                <span className="font-semibold">{c.name ?? "Không tên"}</span>
+                {!c.active && <span className="text-mute">tạm nghỉ</span>}
+                <span className="ml-auto tabular-nums text-mute">
+                  {c.dung_han}/{c.tong} đúng hạn · {c.tre} trễ
+                  {c.ty_le_dung_han != null ? ` · ${Math.round(c.ty_le_dung_han * 100)}%` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* FR-155 — hạng người rao. Nội bộ, KHÔNG lên web (OPEN-26). */}
       {hang.length > 0 && (
