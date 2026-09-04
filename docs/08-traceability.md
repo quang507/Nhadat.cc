@@ -50,49 +50,49 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 
 | FR | User Flow | Wireframe | SRS | Acceptance |
 |---|---|---|---|---|
-| FR-01…06 | UF-01 | WF-01 | SRS-2.1 | — |
-| FR-07, FR-08 | UF-01 | WF-02 | SRS-4.5 | AC-01 |
-| FR-09 | UF-01 | WF-02 | SRS-4.5 | AC-12 |
-| FR-10, FR-11 | UF-02 | WF-03 | SRS-3.1 | AC-01 |
+| FR-01…06 | UF-01 | WF-01 | SRS-2.1; FR-01/03/04 (04/09/2026): `app/page.tsx` khối "Lời hứa" 3 mục + bong bóng CSS (`HoiThoai`), khối vòng hỏi 3 bước (`VONG_HOI`), khối riêng tư 3 vế; FR-02: form GET `/api/search?go=1` ở hero | TS-WEB2-W01/W02 |
+| FR-07, FR-08 | UF-01 | WF-02 | SRS-4.5; FR-08 (04/09/2026): `components/ListingBrowse` nhận `q` → "Tìm thấy N tin theo yêu cầu: <tiêu đề>" + hộp Zalo `search:<q>`; `/mua-ban`, `/cho-thue` `noindex` khi có `q` | AC-01; TS-WEB2-W03/W04 |
+| FR-09 | UF-01 | WF-02 | SRS-4.5 (04/09/2026): `lib/parse-query.ts` (`parseQuery`, luật, có/không dấu) + `app/api/search/route.ts` (GET/POST, `go=1` → 302) + tham số mới `gmin/gmax/dtmin/dtmax/quan/loai/duong/moc` ở `ListingBrowse` | AC-12; TS-WEB2-S01…S10 |
+| FR-10, FR-11 | UF-02 | WF-03 | SRS-3.1; FR-10 bản đồ (04/09/2026): `components/WardMap` (dynamic ssr:false bọc `MapView` có `center/zoom`) một chấm `wardPoint`, ghi "vị trí ở mức phường" | AC-01; TS-WEB2-W05 |
 | FR-12 | UF-01 | WF-04 | §4.4 (IA); `lib/tags.ts` + `app/[tag]/page.tsx` (SSG, 64 tag, 04/09) | TS-SEO-01…06 |
 | FR-13, FR-14 | UF-03 | WF-01, WF-02 | SRS-4.7 | AC-01 |
 | FR-15 | UF-02 | WF-03, WF-04 | — | — |
 | FR-16 | UF-01 | — | SRS-3.3 `fingerprint_ids` | — |
 | FR-17 | — | WF-04 | NFR-09; `app/sitemap.ts`, `app/robots.ts`, `metadataBase`/canonical/OpenGraph (`app/layout.tsx`, trang tin, trang tag), JSON-LD `RealEstateListing` ở `app/nha-dat/[code]/page.tsx` (04/09) | TS-SEO-01…06 |
 | FR-20…FR-26 | UF-04 | WF-05 | SRS-5.1 | AC-02 |
-| FR-27, FR-28 | UF-04 | WF-03, WF-05 | SRS-3.8 `photos` | — |
+| FR-27, FR-28 | UF-04 | WF-03, WF-05 | SRS-3.8 `photos`; FR-27: `chat-reply` v48 (04/09/2026) ≤4 tấm/lượt + `buyers.preferences.photo_offset` + "xem thêm" → 4 tấm kế (SRS-5.1 nhánh XIN HÌNH) | TS-V48-27a/b/c |
 | FR-29, FR-30 | UF-03, UF-04 | WF-05 | SRS-4.7; chat-reply: khối "CĂN KHÁCH ĐANG NHẮC" (tra mã căn trong tin + facts đã xác minh, chào đúng căn) | AC-01 |
-| FR-31, FR-32 | UF-04 | WF-05 | SRS-5.2; FR-32: reminder `followup` 2,5h sau khi bot nói về một căn (huỷ khi khách nhắn lại, ≤1/24h) + nhánh followup trong edge `nudge` | — |
-| FR-40…FR-47 | UF-05 | WF-06, WF-10 | SRS-3.6, SRS-4.1, SRS-4.2 | AC-03 |
-| FR-50…FR-57 | UF-06 | WF-07 | SRS-3.7 | AC-04 |
+| FR-31, FR-32 | UF-04 | WF-05 | SRS-5.2 (04/09/2026: luật "căn tương tự" thật trong `chat-reply` v48 thay công thức trọng số — khối CĂN TƯƠNG TỰ khi căn khách hỏi đã chốt/gỡ hoặc khách hỏi "giống giống vầy"); FR-32: reminder `followup` 2,5h sau khi bot nói về một căn (huỷ khi khách nhắn lại, ≤1/24h) + nhánh followup trong edge `nudge` | TS-V48-31a/b |
+| FR-40…FR-47 | UF-05 | WF-06, WF-10 | SRS-3.6, SRS-4.1, SRS-4.2; FR-45: luật `HUMAN_CHAT_RULES` + few-shot v48 (04/09/2026) — `ask_owner` kết bằng "Trong khi chờ, anh/chị có câu hỏi gì khác về căn này không ạ?" (`bot_prompts` đồng bộ) | AC-03; TS-V48-45 |
+| FR-50…FR-57 | UF-06 | WF-07 | SRS-3.7; FR-52/57 (04/09/2026, `20260904f`): trigger `viewings_bao_ctv_va_email` — nhắc CTV/admin ngay + câu `xac_nhan_lich` (`buyer_ask`) + email `[VIEWING]`; CTV trả lời → `viewings.status='confirmed'` (giá trị mới) + followup mẫu cố định ở `nudge` v25 (SRS-3.12) | AC-04; TS-GIUCHAN-01 |
 | FR-54 | UF-06 | WF-07 | `nudge` v24 (04/09/2026): nhắc `viewing` nối dòng "Bản đồ: maps.google.com/?q=lat,lng" khi `listings.lat/lng` có (qua `viewings → listings`); toạ độ do `geocode-listings` (FR-122) điền | TS-MATCH-08 (docs/10 §10.7) |
 | FR-56 | UF-07 | — | SRS-5.2 (loại listing đã từ chối); SRS-3.8b `reminders.kind = feedback` + SRS-3.12 trigger `reminders_hen_hoi_cam_nhan` (`20260904d`): nhắc `viewing` đánh `sent` → hẹn `feedback` giờ xem + 4h; `nudge` v24 gửi mẫu cố định | AC-05; TS-MATCH-06/07/09 |
-| FR-60…FR-65 | UF-08 | — | SRS-5.3 | AC-06 |
+| FR-60…FR-65 | UF-08 | — | SRS-5.3; FR-65 (04/09/2026, thời điểm sau xem nhà): `chat-reply` v48 bắt "N sao / N/5 / chấm N" trong 48h sau nhắc `feedback` `sent` → RPC `ghi_danh_gia` (SRS-5.1 nhánh CHẤM SAO, SRS-5.4); phía DB `ghi_danh_gia` + `ratings_log` (`20260904f`, SRS-3.12), `feedback` ở `nudge` v25 thêm câu chấm sao. **FR-60/61/62/63 (04/09/2026, mốc 5 ngày chủ dự án chốt)**: `nudge` v25 — im đủ 5 ngày hỏi thăm một lần/lượt im; sáu góc xoay vòng tất định (`can_cuoi`/`tien_do`/`xem_anh`/`tieu_chi`/`dat_lich`/`thi_truong`); kho cùng khu từ `can_cung_khu()` (SRS-3.12); im ≥ 6 ngày buộc `giu_ket_noi` mẫu cố định. SRS-5.3 `followup_d3`/`zalo_keepalive` ghi chú tương ứng | AC-06; TS-V48-65a/b/c; TS-GIUCHAN-02, 07, 08 |
 | FR-64 | UF-08 | — | SRS-3.8b `reminders.kind = match` + index `(buyer_id, listing_id)`; SRS-3.12 `bao_tin_moi_khop()` + trigger `trg_listings_bao_tin_moi_khop` (`20260904d`, thay job `match_new_listings` SRS-5.3); `nudge` v24 gửi mẫu cố định. Tiêu chí = `buyers.preferences`, không dựng `saved_criteria` | AC-06; TS-MATCH-01…05, 09 |
-| FR-70, FR-72, FR-73 | — | WF-12 | SRS-3.2 (chưa dựng — OPEN-43) | AC-09 |
+| FR-70, FR-72, FR-73 | — | WF-12 | SRS-3.2 **đã dựng** (`20260904f`): bảng `property_events` + trigger `trg_property_event` từ 7 bảng nguồn, view `bds_hot` (FR-73), view `hoi_thoai_phien` (FR-72 — tách phiên > 30 phút bằng window `lag`, không đổi model `conversations`), view `bot_do_tre` (NFR-01) — SRS-3.12; web: thẻ "BĐS hot · 60 ngày" + "Độ trễ bot · 7 ngày" ở `app/admin/page.tsx` (04/09/2026, chịu được view chưa có) | AC-09; TS-WEB2-W06; TS-GIUCHAN-01, 04, 05 |
 | FR-71 | — | WF-12 | SRS-3.11 (04/09/2026): view `hoi_thoai_thong_ke` + policy `conversations/messages_admin_read`; thẻ "Thống kê hội thoại · 30 ngày" + CSV ở `app/admin/page.tsx` | AC-09 · TS-ADM2-07, TS-ADM2-12 |
 | FR-74, FR-75 | — | WF-13 | SRS-3.11 (04/09/2026): policy `buyers_admin_read`; ô "Tìm khách" + link `zalo.me/<uid>` (best-effort) ở `app/admin/page.tsx`, không chọn `phone` | AC-09 · TS-ADM2-03, TS-ADM2-11 |
 | FR-76 | UF-05, UF-11 | WF-12 | SRS-3.6; SRS-3.11 (04/09/2026): policy `info_requests_admin_read`, `ctvs_admin_read`; thẻ "Câu hỏi đang chờ" ở `app/admin/page.tsx` | AC-09 · TS-ADM2-01, TS-ADM2-05, TS-ADM2-11 |
 | FR-77 | UF-11 | WF-14 | SRS-5.4; SRS-3.11 (04/09/2026): view `khach_can_nguoi_that` (cờ `needs_human` làm proxy); thẻ "Khách cần người thật" | AC-10 · TS-ADM2-06 |
 | FR-78 | UF-06, UF-11 | WF-14 | SRS-3.7; SRS-3.11 (04/09/2026): policy `viewings_admin_read`; thẻ "Lịch xem nhà" ở `app/admin/page.tsx` | AC-10 · TS-ADM2-02, TS-ADM2-11 |
-| FR-79 | UF-06, UF-11 | WF-14 | SRS-3.8 (chưa dựng — OPEN-43) | AC-10 |
+| FR-79 | UF-06, UF-11 | WF-14 | SRS-3.8; SRS-5.1 nhánh MUỐN GỌI ĐIỆN (04/09/2026, `chat-reply` v48): cờ `voice_request` + regex → `need_human` + `reminders(kind='escalation', note 'VOICE: <uid>…')`; email [VOICE] SRS-5.5 ở tầng DB (agent SQL); thẻ riêng trên /admin chưa có (OPEN-43 phần còn lại) | AC-10; TS-V48-79a…d |
 | FR-80 | — | WF-12…14 | UI-C10; `usePhanTrang` 20 mục/trang ở `app/admin/page.tsx` (04/09/2026) | AC-09 · TS-ADM2-12 |
-| FR-81 | UF-11 | — | SRS-5.5 | AC-10 |
-| FR-90…FR-96 | UF-09 | WF-08, WF-09 | SRS-4.6 | AC-07 |
+| FR-81 | UF-11 | — | SRS-5.5 (hiện thực 04/09/2026 qua ntfy.sh, `20260904f`): `canh_bao_ngoai(…, p_email)` + `email_admin()` + 4 nguồn ([VIEWING] trigger viewings, [UPSET] trigger needs_human, [QUESTION] `info_request_sla_tick`, [VOICE] trigger reminders note "VOICE:"); `app_config.admin_email` + secret `NTFY_TOKEN` (ntfy từ chối email ẩn danh — thử thật 400, chờ tài khoản ntfy) | AC-10; TS-GIUCHAN-06 |
+| FR-90…FR-96 | UF-09 | WF-08, WF-09 | SRS-4.6 (FR-92 xem trước: `app/api/listing/parse` + `parseListing`, 04/09/2026); FR-96 (04/09/2026): `components/UploadAnh` ở `/admin/dang-tin`, `/admin` (tin chờ duyệt), `/quan-ly`; migration `20260904g` policy `storage.objects` + `listing_media` (SRS-3.9) | AC-07; TS-WEB2-P01…P06, S09, W07 |
 | FR-98 | UF-05 | WF-10 | SRS-4.2 | AC-03 |
-| FR-99 | — | — | — | *chưa đặc tả — `OPEN-10`* |
-| FR-100 | UF-12 | WF-11 | SRS-4.3 | AC-11 |
+| FR-99 | UF-04 | WF-05 | SRS-5.1 (04/09/2026, `chat-reply` v48): dòng "giá TB phường" trong KHO tính từ `listings` cùng deal+phường, nhớ tạm 60 s; bot so khi khách hỏi "giá vậy ok không" | TS-V48-99a/b/c; *nguồn giá ngoài + phía người bán vẫn `OPEN-10`*; web (04/09/2026): dòng "So với giá trung bình phường ±X% (N tin)" ở `app/nha-dat/[code]/page.tsx` (`giaPhuong` `unstable_cache` 3600 s, ẩn khi N < 3) — TS-WEB2-W08 |
+| FR-100 | UF-12 | WF-11 | SRS-4.3 (ĐÃ DỰNG 04/09/2026 dạng RPC): SRS-3.8b `curated_lists` + `tao_danh_sach`/`doc_danh_sach` (`20260904g`); `app/ds/[token]/page.tsx` (noindex/nofollow, hết hạn → trang + Zalo); ô "Danh sách riêng cho khách" ở `/admin` | AC-11; TS-WEB2-P06…P10, W09 |
 | FR-101, FR-102 | UF-09 | WF-09 | SRS-3.4 | *[FR-102 deprecated → FR-137]* Chấm điểm CTV/NMG nằm trong `ctv-report` (rubric `RATE_CTV_RUBRIC`). Edge `rate-ctv` + bảng `ratings` đã XOÁ 27/08/2026 theo OPEN-23 |
-| FR-103 | UF-09 | — | SRS-5.3 | — |
-| FR-104, FR-105 | UF-06, UF-12 | — | SRS-3.8 (bất biến ẩn danh — chỉnh 02/09/2026 theo OPEN-36: lưu hết, khai khi khách hỏi; SĐT/Zalo giữ tới UF-06); bộ lọc SĐT phía bot (FR-105) chưa dựng | — |
-| FR-106, FR-107, FR-108 | UF-13 | — | SRS-3.8, SRS-5.3 (FR-107: thay bằng FR-129/FR-144 theo DH-03, 03/09/2026) | — |
+| FR-103 | UF-09 | — | SRS-5.3 `stale_listing_check` → cron thật `stale-listing-tick` 9h VN + `stale_listing_tick()` (`20260904f`, SRS-3.12): tin `dang_ban` im 30 ngày → `info_requests(con_ban)` 1 lần/30 ngày + escalation hỏi chủ/CTV, trần 5 tin/ngày | TS-GIUCHAN-03 |
+| FR-104, FR-105 | UF-06, UF-12 | — | SRS-3.8 (bất biến ẩn danh — chỉnh 02/09/2026 theo OPEN-36: lưu hết, khai khi khách hỏi; SĐT/Zalo giữ tới UF-06); FR-105 (04/09/2026): `locLienHe()` trong `chat-reply` v48 — cùng regex với `lib/format.ts sanitizeDescription`, áp cho fact/địa chỉ vào prompt và mọi bong bóng gửi người mua, không áp nhánh bán/CTV/admin (SRS-5.1 nhánh LỌC LIÊN HỆ) | TS-V48-105a…d |
+| FR-106, FR-107, FR-108 | UF-13 | — | SRS-3.8, SRS-5.3 (FR-107: thay bằng FR-129/FR-144 theo DH-03, 03/09/2026); FR-108 nửa "ghi" (04/09/2026): `chat-reply` v48 gọi `mark_listing_interest(p_codes, p_buyer_id)` cho căn khách nhắc / bot gợi / xin hình / nhờ hỏi chủ (overload `20260904f`, agent SQL); nửa "chốt → báo" (`20260904f`, SRS-3.12): trigger `trg_listings_bao_can_da_chot` → `reminders` kind `sold` + căn thay thế từ `can_cung_khu`, `nudge` v25 mẫu cố định; SRS-3.8b kind `sold` + index | TS-V48-108a/b/c; TS-GIUCHAN-01 |
 | FR-109, FR-111 | UF-10 | — | SRS-3.8 | — |
-| FR-110 | UF-05 | WF-06 | *chưa dựng* — SRS-5.3 `info_request_sla` (thiết kế) không tồn tại; cron thật `ctv-sla-tick` → `info_request_sla_tick()` chỉ áp CTV 120' (FR-173); `reminded_at`/`expired` không ai ghi (nghiệm thu 04/09, OPEN-43) | — |
+| FR-110 | UF-05 | WF-06 | SRS-5.3 `info_request_sla` → cron thật `info-timeout-tick` mỗi giờ 8–20h VN + `info_request_timeout_tick()` (`20260904f`, SRS-3.12): `seller_flow` > 24h `reminded_at`, > 48h `expired`; `buyer_ask` > 48h `expired` + `followup` "chủ nhà chưa phản hồi #mã, gợi ý căn khác" → `nudge` v25 mẫu cố định. Nhánh CTV 120' vẫn là `ctv-sla-tick` (FR-173). *(Nghiệm thu 04/09 sáng ghi "chưa dựng", OPEN-43 — dựng cùng ngày)* | TS-GIUCHAN-01 |
 | FR-112 | UF-07 | — | SRS-3.8 `deals` | — |
 | FR-113 | — | — | SRS-3.10 `projects` | AC-13 |
-| FR-114 | UF-09, UF-10 | WF-09 | SRS-3.10 | AC-13 |
-| FR-115, FR-116 | UF-05 | — | SRS-3.10, SRS-5.1 (nhánh tầng dự án / tồn kho căn) | AC-13 |
-| FR-117 | — | — | *giai đoạn 2 — chưa đặc tả UI* | — |
+| FR-114 | UF-09, UF-10 | WF-09 | SRS-3.10; luồng Zalo (04/09/2026, `chat-reply` v48): câu rao khớp `match_projects` → `project_id` + `unit_code` + `unit_status='con_ban'` + `last_confirmed_at`; `/raoban` web + form admin chưa | AC-13; TS-V48-114/114b |
+| FR-115, FR-116 | UF-05 | — | SRS-3.10, SRS-5.1 (nhánh tầng dự án / tồn kho căn — FR-116 dựng 04/09/2026 trong `chat-reply` v48: khối CĂN TRONG DỰ ÁN đọc `unit_status`, TTL 7 ngày → "xác nhận lại chủ" + `ask_owner`) | AC-13; TS-V48-116a/b/c |
+| FR-117 | — | — | SRS-3.10; nửa trang (04/09/2026): `app/du-an/[slug]/page.tsx` SSG + `app/sitemap.ts` + link từ trang tin (`Listing.project_id/unit_code`); màn quản lý giỏ hàng chưa | TS-WEB2-W10 |
 | FR-118 | — | — | *chưa đặc tả kỹ thuật — bảng `ward_mapping` sẽ vào SRS-3.x khi chốt nguồn dữ liệu NQ 202/2025/QH15* | — |
 | FR-119 | — | — | app/tinh-lai-vay (client, không đụng DB) | — |
 | FR-120 | — | — | app/thong-ke (đọc listings qua RLS anon) | — |
@@ -108,7 +108,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-130 | UF-04, UF-08 | WF-05 | `buyers.preferences` + chat-reply (bóc tách hồ sơ + nhịp hỏi §6.8 FR-130) | — |
 | FR-131 | UF-04 | — | chat-reply KHÔNG delay nhân tạo (chỉ check nhường-lượt khi có tin mới hơn) + RPC `ensure_buyer_conversation` (advisory lock); bridge/zalo-webhook bỏ typing giả, giữa 2 bong bóng chỉ 300ms giữ thứ tự | — |
 | FR-132 | UF-04, UF-05 | — | bảng `projects` (chỉ Ny'ah — seed mogi đã gỡ theo quyết định 25/08, cơ chế nạp giữ ở code) + RPC `match_projects` + khối KHO DỰ ÁN trong chat-reply (thực thi FR-115) | AC-13 |
-| FR-133 | UF-05, UF-08 | — | bảng `reminders` + chat-reply (bóc promise, hủy khi quay lại) + edge `nudge` + cron `nudge-tick` 30' (thực thi FR-63 phía bot); giờ gửi 8h–21h VN (jitter 0–45s đã bỏ theo FR-171 d) | AC-06 |
+| FR-133 | UF-05, UF-08 | — | bảng `reminders` + chat-reply (bóc promise, hủy khi quay lại) + edge `nudge` + cron `nudge-tick` `7,37 1-13 * * *` (hai lượt/giờ, 8–20h VN) (thực thi FR-63 phía bot); giờ gửi 8h–21h VN (jitter 0–45s đã bỏ theo FR-171 d) | AC-06 |
 | FR-134 | UF-04 | — | chat-reply nhận `image_url` (content block image, chỉ dẫn "hình như là"); zalo-webhook bắt `user_send_image`; bridge zca-js bắt content.href | — |
 | FR-135 | UF-04 | — | trường `need_human` trong BuyerTurn (chat-reply) + cột `conversations.needs_human/needs_human_at`; đơn chờ hiện trong báo cáo FR-137 | — |
 | FR-136 | — | — | bảng `ctvs` + cột `conversations.ctv_id` + trigger `trg_conversations_assign_ctv` (function `assign_ctv_round_robin`) (ít đơn 30-ngày nhất nhận trước) | — |
@@ -172,11 +172,11 @@ NFR **đã có hiện thực trong code** (những NFR còn là mục tiêu thì
 
 | NFR | Hiện thực ở | Nghiệm thu |
 |---|---|---|
-| NFR-01 (bot trả lời < 3 s p95) | **Nửa đo được 02/09 (FR-171 h)**: số vòng đi về DB trong một tin, mỗi vòng 20–40 ms — người lạ hỏi vai 18→11, người mua có hồ sơ 24→16, người bán trả lời câu chờ 21→15; cấu hình/prompt nhớ tạm 60 s trong isolate, hậu kỳ sau model chạy song song. **Nửa chưa đo**: thời gian model trả lời (phần lớn của 3 s) — chờ đợt nhắn thật (TS-TIEN) | TS-TOIUU-01…10 |
+| NFR-01 (bot trả lời < 3 s p95) | **Nửa đo được 02/09 (FR-171 h)**: số vòng đi về DB trong một tin, mỗi vòng 20–40 ms — người lạ hỏi vai 18→11, người mua có hồ sơ 24→16, người bán trả lời câu chờ 21→15; cấu hình/prompt nhớ tạm 60 s trong isolate, hậu kỳ sau model chạy song song. **Nửa chưa đo**: thời gian model trả lời (phần lớn của 3 s) — chờ đợt nhắn thật (TS-TIEN). **Đồng hồ đã dựng 04/09/2026**: view `bot_do_tre` (`20260904f`, SRS-3.12) — p50/p95/max giây của `inbound_ledger.finished_at - started_at` 7 ngày (trọn đường tin đến → gửi xong), thẻ "Độ trễ bot · 7 ngày" ở `/admin`; hôm nay 0 lượt thật (`inbound_ledger` chưa có dòng có `finished_at`) nên số đầu tiên chỉ có sau đợt nhắn thật | TS-TOIUU-01…10; TS-GIUCHAN-05 |
 | NFR-04 (tin nhắn không được mất khi một bên offline) | **Đã dựng 29/08 (FR-166)**: sự kiện bền `inbound_events` + job `inbound_ledger` (vòng đời có `dead`) + đường cứu `viec_inbound_bo_roi()` → edge function `inbound-sweep` (cron 1 phút) + luật lùi dần `lan_thu_ke()`. Trước đó `inbound_events` được ghi mà KHÔNG ai đọc, nên instance chết là mất tin. Đường nhanh inline vẫn giữ để không phạm FR-131 | TS-JOB-01…30 |
-| NFR-06 (giấy tờ không lộ) | **Nửa đã dựng**: bucket `listing-private` (không công khai) + CHECK bắt `so_do`/`giay_to` phải nằm ở đó + RLS lọc dòng riêng tư khỏi anon (FR-165, **siết lại ở FR-167c** sau khi đo thấy media và view của tin CHƯA ĐĂNG vẫn lọt qua anon). Đo được: route `/object/public` của bucket riêng trả `NoSuchBucket`. **Nửa CHƯA dựng**: đường ký signed URL ≤15 phút — quét repo không có `createSignedUrl`, chưa chỗ nào đọc `listing-private`. Và ảnh gửi qua chat vẫn nằm ngoài ranh giới này (OPEN-32) | TS-KHO-04, TS-KHO-17, TS-KHO-19, TS-KHO-20, TS-KHO-25 |
+| NFR-06 (giấy tờ không lộ) | **Nửa đã dựng**: bucket `listing-private` (không công khai) + CHECK bắt `so_do`/`giay_to` phải nằm ở đó + RLS lọc dòng riêng tư khỏi anon (FR-165, **siết lại ở FR-167c** sau khi đo thấy media và view của tin CHƯA ĐĂNG vẫn lọt qua anon). Đo được: route `/object/public` của bucket riêng trả `NoSuchBucket`. ~~**Nửa CHƯA dựng**: đường ký signed URL ≤15 phút~~ **Dựng 04/09/2026** (`20260904g`): admin ký `createSignedUrl(path, 900)` ở `/admin` thẻ "Giấy tờ (bucket riêng)"; policy `storage_admin_private_all` + `listing_media_admin_all`; người bán không có cửa vào bucket riêng (TS-WEB2-P03). Còn: ảnh gửi qua chat vẫn nằm ngoài ranh giới này (OPEN-32) | TS-KHO-04, TS-KHO-17, TS-KHO-19, TS-KHO-20, TS-KHO-25; TS-WEB2-P03/P07/P10, W11 |
 | NFR-16 (free-tier trước) | Supabase Free + Vercel Hobby; quyết định giữ nguyên 27/08 (OPEN-25) | Ràng buộc kèm theo: chạy `scripts/sao-luu.mjs` định kỳ vì Free KHÔNG có backup tự động |
-| NFR-17 (trang tin phải trong cache) | `generateStaticParams()` ở `app/nha-dat/[code]/page.tsx`; `unstable_cache` bọc truy vấn trong `components/ListingBrowse.tsx` và `lib/photos.ts`; SRS-3.13 | TS-CACHE-01…05 |
+| NFR-17 (trang tin phải trong cache) | `generateStaticParams()` ở `app/nha-dat/[code]/page.tsx`; `unstable_cache` bọc truy vấn trong `components/ListingBrowse.tsx` và `lib/photos.ts`; SRS-3.13 *[04/09: thêm `app/du-an/[slug]` ● (`generateStaticParams` + revalidate 3600); `app/ds/[token]` CỐ Ý ƒ (`force-dynamic`, token bí mật, noindex — IA-11) là ngoại lệ được phép]* | TS-CACHE-01…05 |
 | NFR-18 (xanh phải là xanh thật) | `bot_health_tick()` quét `net._http_response` → `bot_errors`; `log_loi()` + `ghiLoi()` cho lỗi trả-200; SRS-3.12 | TS-HEALTH-01…06, TS-LOG-01…06 |
 | NFR-09 (SEO) | `app/sitemap.ts`, `app/robots.ts`, `metadataBase`/canonical/OpenGraph ở `app/layout.tsx` + trang tin + `app/[tag]`, JSON-LD `RealEstateListing` ở `app/nha-dat/[code]/page.tsx`, `lib/tags.ts` (64 tag — chờ TOP-100 OPEN-06) | TS-SEO-01…06 |
 

@@ -78,4 +78,7 @@ export type Listing = {
   rent_income_vnd: number | null;
   specs_source: string | null;
   price_per_m2_vnd: number | null;
+  // FR-113/FR-117 — tin thuộc dự án (SRS-3.10): null với hàng lẻ.
+  project_id: string | null;
+  unit_code: string | null;
 };

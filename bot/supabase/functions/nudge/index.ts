@@ -1,11 +1,18 @@
 // nudge — FR-133: hai loại "cú hích" chạy theo cron nudge-tick (30 phút):
 // 1. promise: người ta hứa "chiều gửi ảnh/thông tin" → tới hẹn nhắc khéo MỘT tin.
-// 2. reengage: buyer im lặng 5-6 ngày → hỏi thăm ngắn, kịch bản đa dạng (góc
-//    ngẫu nhiên + tránh lặp 2 tin bot gần nhất), trước mốc Zalo xoá 7 ngày (INS-03).
+// 2. reengage (v25, 04/09/2026 — chủ dự án chốt "giữ chân 5 ngày"): buyer im
+//    ĐỦ 5 ngày → hỏi thăm MỘT lần cho mỗi lượt im (FR-60), góc xoay vòng tất
+//    định (FR-61: căn cuối / mời xem ảnh / mời đặt lịch + ba góc cũ), kèm kho
+//    "căn khác cùng khu" từ `can_cung_khu` (FR-62); im ≥ 6 ngày → BUỘC góc giữ
+//    kết nối Zalo bằng mẫu cố định (FR-63), trước mốc Zalo xoá 7 ngày (INS-03).
 // 3. (04/09/2026, migration 20260904d) match: tin mới khớp tiêu chí khách (FR-64,
 //    trigger DB chèn) và feedback: hỏi cảm nhận 4 giờ sau buổi xem (FR-56, trigger
 //    DB chèn khi nhắc `viewing` được đánh sent). Cả hai đi MẪU CỐ ĐỊNH, không gọi
 //    model. Nhắc `viewing` kèm link bản đồ khi tin có toạ độ (FR-54).
+// 4. (v25, migration 20260904f) thêm mẫu cố định: `sold` (căn khách quan tâm đã
+//    chốt + căn thay thế, FR-108), `rating` (xin sao, FR-65 — dự phòng, chưa ai
+//    chèn), `followup` có ghi chú "chủ nhà chưa phản hồi" (FR-110) hoặc "lịch
+//    xem … đã được xác nhận" (FR-52); `feedback` thêm câu chấm sao (FR-65).
 // POST {} (cron) | { dry_run?: bool } — trả về tóm tắt việc đã làm.
 import {
   anthropicClient,
@@ -22,13 +29,73 @@ import { congBiMat } from "../_shared/gate.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { TONE_RULES } from "../_shared/prompts.ts";
 
-// Kịch bản đa dạng cho reengage — chọn ngẫu nhiên, đổi góc mỗi lần
-const ANGLES = [
-  "hỏi thăm tiến độ tìm nhà, nhẹ nhàng, không thúc ép",
-  "hỏi xem tiêu chí có gì thay đổi không (giá/khu vực/loại nhà)",
-  "nhắc khéo giữ kết nối Zalo (nhắn lại một tin kẻo Zalo tự ngắt), kèm cam kết vẫn đang tìm giúp",
-  "kể MỘT quan sát thị trường ngắn gọn thật thà (ví dụ khu người ta hay hỏi gần đây) rồi hỏi còn quan tâm không",
+// FR-61: kịch bản reengage — XOAY VÒNG TẤT ĐỊNH theo số lần đã hỏi thăm khách
+// đó (mọi trạng thái) % số góc, không random: hai lượt chạy khác nhau cho cùng
+// khách ra cùng góc, và khách quay lại lần sau nhận góc kế tiếp chứ không trúng
+// lại góc cũ. Góc cần "căn cuối" (`can: true`) mà khách chưa có căn nào → nhảy
+// sang góc kế. Góc giữ kết nối Zalo (FR-63) KHÔNG nằm trong vòng: nó bị BUỘC ở
+// mốc ≥ 6 ngày và đi mẫu cố định (xem `KEEPALIVE`).
+const ANGLES: { key: string; can: boolean; anh?: boolean; text: string }[] = [
+  { key: "can_cuoi", can: true, text: "hỏi khách nghĩ sao về CĂN CUỐI (nêu đúng mã #), còn cân nhắc không hay muốn em tìm hướng khác" },
+  { key: "tien_do", can: false, text: "hỏi thăm tiến độ tìm nhà, nhẹ nhàng, không thúc ép" },
+  { key: "xem_anh", can: true, anh: true, text: "mời khách xem ẢNH THẬT của CĂN CUỐI (nêu mã #, nói em có sẵn ảnh), hỏi có muốn em gửi không" },
+  { key: "tieu_chi", can: false, text: "hỏi xem tiêu chí có gì thay đổi không (giá/khu vực/loại nhà)" },
+  { key: "dat_lich", can: true, text: "mời khách ĐẶT LỊCH XEM căn cuối (nêu mã #), gợi một khung giờ chung chung (cuối tuần hoặc chiều), hỏi tiện không" },
+  { key: "thi_truong", can: false, text: "kể MỘT quan sát thị trường ngắn gọn thật thà (ví dụ khu người ta hay hỏi gần đây) rồi hỏi còn quan tâm không" },
 ];
+// FR-63: mốc ≥ 6 ngày im. Mẫu cố định — chạy được cả khi key model hỏng, và
+// câu "nhắn lại một chữ kẻo Zalo ngắt" phải đúng chữ, không để model diễn.
+const KEEPALIVE = (goi: string) =>
+  `${goi} ơi, em vẫn đang để mắt tìm căn hợp ý cho mình. Nhờ anh/chị nhắn lại em một chữ thôi, kẻo Zalo tự ngắt kết nối thì em không nhắn được nữa ạ 🙏`;
+const MA_TIN = /#(BDS-[A-Z0-9]+-\d+)/i;
+
+/**
+ * Mẫu cố định cho các kind không cần model (OPEN-35 nghiêng mẫu câu): nội dung
+ * là dữ liệu cột đã ghép sẵn trong `note` bởi trigger/hàm DB, model không có gì
+ * để thêm ngoài rủi ro bịa, và mẫu chạy được cả khi key model hỏng. Giọng theo
+ * TONE_RULES: xưng em, gọi anh/chị, không gạch dài, tối đa 1 emoji, tối đa 2
+ * bong bóng (ở đây luôn 1). Trả `undefined` = kind này đi đường model.
+ */
+function mauCoDinh(
+  r: { kind: string; note: string | null },
+  goi: string,
+  code: string | null | undefined,
+): string | undefined {
+  const note = (r.note ?? "").trim();
+  if (r.kind === "match") {
+    return `${goi} ơi, vừa có căn mới khớp tiêu chí mình đang tìm: ${note}. Anh/chị muốn em gửi hình hay hẹn xem không ạ?`;
+  }
+  if (r.kind === "feedback") {
+    // FR-56 + FR-65 (thời điểm "sau xem nhà"): chat-reply bắt "N sao"/"N/5" → ghi_danh_gia
+    return `${goi} xem căn ${code ? `#${code}` : "vừa rồi"} rồi thấy sao ạ? Ưng chỗ nào, chưa ưng chỗ nào để em lọc tiếp cho đúng ý. Tiện thì anh/chị chấm giúp em mấy sao (1-5) nha.`;
+  }
+  if (r.kind === "rating") {
+    return `${goi} chấm giúp em 1 đến 5 sao cho lần tìm nhà vừa rồi nha, để em làm tốt hơn ạ.`;
+  }
+  if (r.kind === "sold") {
+    // FR-108: note = "#mã đã chốt · thay thế: #a (…); #b (…)" (bao_can_da_chot)
+    const [chot, thay] = note.split(" · thay thế: ");
+    const ma = chot.match(MA_TIN)?.[0] ?? (code ? `#${code}` : "mình quan tâm");
+    return thay
+      ? `${goi} ơi, căn ${ma} mình quan tâm vừa được chốt với khách khác rồi ạ, em báo thật để mình khỏi chờ. Em có căn tương tự cùng khu: ${thay}. Anh/chị muốn xem thử không ạ?`
+      : `${goi} ơi, căn ${ma} mình quan tâm vừa được chốt với khách khác rồi ạ, em báo thật để mình khỏi chờ. Tiêu chí của mình còn như cũ không, để em tìm căn khác liền?`;
+  }
+  if (r.kind === "followup" && /^chủ nhà chưa phản hồi/.test(note)) {
+    // FR-110: note = "chủ nhà chưa phản hồi #mã, gợi ý căn khác: …" (info_request_timeout_tick)
+    const [dau, thay] = note.split(", gợi ý căn khác: ");
+    const ma = dau.match(MA_TIN)?.[0] ?? (code ? `#${code}` : "đó");
+    return thay
+      ? `${goi} ơi, câu mình hỏi về căn ${ma} chủ nhà vẫn chưa phản hồi, em không muốn để anh/chị chờ thêm. Em có căn khác cùng khu: ${thay}. Anh/chị xem thử không ạ?`
+      : `${goi} ơi, câu mình hỏi về căn ${ma} chủ nhà vẫn chưa phản hồi, em không muốn để anh/chị chờ thêm. Em sẽ báo ngay khi chủ trả lời, anh/chị muốn em tìm thêm căn khác cùng khu không ạ?`;
+  }
+  if (r.kind === "followup" && /^lịch xem/.test(note)) {
+    // FR-52: note = "lịch xem #mã đã được xác nhận: ok 9h" (info_request_bao_lai_khach)
+    const ma = note.match(MA_TIN)?.[0] ?? (code ? `#${code}` : "");
+    const ans = note.split(" đã được xác nhận: ")[1]?.trim();
+    return `${goi} ơi, lịch xem căn ${ma} đã được chủ nhà xác nhận rồi ạ${ans ? ` (${ans})` : ""}. Em gặp anh/chị đúng giờ nha 🏠`;
+  }
+  return undefined;
+}
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
@@ -182,8 +249,9 @@ Deno.serve(async (req) => {
   }
 
   // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) /
-  //         tin mới khớp (FR-64) / cảm nhận sau xem (FR-56) ----
-  const DUE_KINDS = ["promise", "viewing", "followup", "match", "feedback"];
+  //         tin mới khớp (FR-64) / cảm nhận sau xem (FR-56) / căn đã chốt
+  //         (FR-108) / xin sao (FR-65) ----
+  const DUE_KINDS = ["promise", "viewing", "followup", "match", "feedback", "sold", "rating"];
   const dueClaimRes = dry_run
     ? await client.from("reminders").select("id")
       .eq("status", "pending").in("kind", DUE_KINDS)
@@ -226,18 +294,13 @@ Deno.serve(async (req) => {
         canInfo = `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? ""} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l as SpecRow)}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}`;
       }
     }
-    let text: string | undefined;
-    if (r.kind === "match" || r.kind === "feedback") {
-      // FR-64 / FR-56: MẪU CỐ ĐỊNH, không gọi model (OPEN-35 nghiêng mẫu câu).
-      // Nội dung là dữ liệu cột đã ghép sẵn trong `note` (`bao_tin_moi_khop`)
-      // hoặc mã căn — model không có gì để thêm ngoài rủi ro bịa, và mẫu thì
-      // chạy được cả khi key model hỏng. Giọng theo TONE_RULES: xưng em, gọi
-      // anh/chị, không gạch dài, tối đa 1 emoji.
-      const goi = who?.name ? `Anh/chị ${who.name}` : "Anh/chị";
-      text = r.kind === "match"
-        ? `${goi} ơi, vừa có căn mới khớp tiêu chí mình đang tìm: ${(r.note ?? "").trim()}. Anh/chị muốn em gửi hình hay hẹn xem không ạ?`
-        : `${goi} xem căn ${tin?.code ? `#${tin.code}` : "vừa rồi"} rồi thấy sao ạ? Ưng chỗ nào, chưa ưng chỗ nào để em lọc tiếp cho đúng ý.`;
-    } else {
+    // FR-64/56/108/65/110/52: các kind có MẪU CỐ ĐỊNH đi trước, không gọi model.
+    let text: string | undefined = mauCoDinh(
+      r as { kind: string; note: string | null },
+      who?.name ? `Anh/chị ${who.name}` : "Anh/chị",
+      tin?.code,
+    );
+    if (text === undefined) {
       // FR-166: model 500 / hết giờ là chuyện thường. Không bọc thì exception
       // thoát khỏi CẢ vòng lặp — những lời nhắc còn lại mất lượt, mà chúng đã bị
       // giành (locked_at) nên treo 5 phút mới ai đụng lại được.
@@ -334,7 +397,7 @@ Deno.serve(async (req) => {
     out.push({ kind: r.kind, id: r.id, text, sent });
   }
 
-  // ---- 2. Buyer im lặng 5-6 ngày ----
+  // ---- 2. Buyer im lặng ĐỦ 5 ngày (FR-60, chủ dự án chốt 04/09/2026) ----
   // FR-166: DỌN DÒNG GIỮ CHỖ MỒ CÔI trước đã.
   // Đường bình thường đóng dòng giữ chỗ trong vài giây: gửi xong → `sent`,
   // gửi hụt → `cancelled`, model ném hoặc trả rỗng → xoá. Còn `pending` quá 15
@@ -357,6 +420,8 @@ Deno.serve(async (req) => {
   }
 
   const now = Date.now();
+  // Cửa sổ: im từ 5 ngày tới 7 ngày. Quá 7 ngày Zalo đã tự ngắt (INS-03), nhắn
+  // cũng không tới; dưới 5 ngày là chưa tới mốc chủ dự án chốt.
   const { data: quiet } = await client
     .from("buyers")
     .select("id, name, zalo_user_id, preferences, last_contact_at")
@@ -367,34 +432,100 @@ Deno.serve(async (req) => {
   let reengaged = 0;
   for (const b of quiet ?? []) {
     if (reengaged >= 5) break;
-    // chống spam: đã hỏi thăm trong 5 ngày qua thì thôi
-    const { count } = await client.from("reminders")
-      .select("id", { count: "exact", head: true })
+    const imNgay = (now - Date.parse(b.last_contact_at as string)) / 864e5;
+    // FR-60: MỘT lần cho mỗi LƯỢT IM — đếm các lời hỏi thăm tạo SAU lần khách
+    // nhắn cuối (mọi trạng thái, kể cả gửi hụt — giữ nhịp không làm phiền).
+    // FR-63: im ≥ 6 ngày mà lượt này chưa có câu giữ kết nối → BUỘC, không random,
+    // kể cả khi đã hỏi thăm ở mốc 5 ngày (đó là hai việc khác nhau: một là hỏi
+    // thăm, một là cứu kết nối trước mốc 7 ngày).
+    const { data: luotNay, error: luotErr } = await client.from("reminders").select("note")
       .eq("buyer_id", b.id).eq("kind", "reengage")
-      .gte("created_at", new Date(now - 5 * 864e5).toISOString());
-    if ((count ?? 0) > 0) continue;
+      .gte("created_at", b.last_contact_at as string);
+    if (luotErr) { await ghiLoi(client, "nudge luot im", luotErr.message); continue; }
+    const daGiuKetNoi = (luotNay ?? []).some((x) => /^giu_ket_noi/.test(x.note ?? ""));
+    const daHoiTham = (luotNay ?? []).length > 0;
+    const keepalive = imNgay >= 6 && !daGiuKetNoi;
+    if (!keepalive && daHoiTham) continue;
 
     const { data: conv } = await client.from("conversations").select("id")
       .eq("buyer_id", b.id).order("started_at", { ascending: false }).limit(1).maybeSingle();
     let lastBot: string[] = [];
+    let botMsgs: string[] = [];
     if (conv) {
       const { data: msgs } = await client.from("messages").select("body")
         .eq("conversation_id", conv.id).eq("sender", "bot")
-        .order("created_at", { ascending: false }).limit(2);
-      lastBot = (msgs ?? []).map((m) => m.body);
+        .order("created_at", { ascending: false }).limit(10);
+      botMsgs = (msgs ?? []).map((m) => m.body as string);
+      lastBot = botMsgs.slice(0, 2);
     }
-    const angle = ANGLES[Math.floor(Math.random() * ANGLES.length)];
+    const goi = b.name ? `Anh/chị ${b.name}` : "Anh/chị";
+
+    // FR-61: CĂN CUỐI khách được gửi/hỏi — tin bot gần nhất có mã, không có thì
+    // `interests` mới nhất. Chỉ tính khi căn còn trên kệ (đã chốt thì có `sold`
+    // lo, FR-108). Ảnh thật đếm qua `listing_photos_v` (FR-165).
+    type CanCuoi = { id: string; code: string; tomTat: string; anh: number };
+    let canCuoi: CanCuoi | null = null;
+    if (!keepalive) {
+      let maCuoi = botMsgs.map((m) => m.match(MA_TIN)?.[1]?.toUpperCase()).find(Boolean) ?? null;
+      if (!maCuoi) {
+        const { data: it } = await client.from("interests").select("listings(code)")
+          .eq("buyer_id", b.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        maCuoi = (it?.listings as { code?: string } | null)?.code ?? null;
+      }
+      if (maCuoi) {
+        const { data: l } = await client.from("listings")
+          .select("id, code, ward, district, price_raw, area_m2, status")
+          .eq("code", maCuoi).in("status", ["dang_ban", "dang_quan_tam"]).maybeSingle();
+        if (l) {
+          const { count: soAnh } = await client.from("listing_photos_v")
+            .select("path", { count: "exact", head: true }).eq("code", l.code);
+          canCuoi = {
+            id: l.id, code: l.code, anh: soAnh ?? 0,
+            tomTat: `#${l.code} · ${l.ward ?? ""}${l.district ? `, ${l.district}` : ""}${l.price_raw ? ` · ${l.price_raw}` : ""}${l.area_m2 ? ` · ${l.area_m2}m2` : ""}`,
+          };
+        }
+      }
+    }
+    // FR-62: kho "căn khác cùng khu" (cùng phường/quận, giá 0,7–1,15×, trừ căn đã gửi)
+    let kho: string[] = [];
+    if (!keepalive) {
+      const { data: k, error: kErr } = await client.rpc("can_cung_khu", {
+        p_buyer_id: b.id, p_listing_id: canCuoi?.id ?? null, p_limit: 3,
+      });
+      if (kErr) await ghiLoi(client, "nudge can_cung_khu", kErr.message);
+      kho = ((k ?? []) as { tom_tat: string }[]).map((x) => x.tom_tat);
+    }
+    // FR-61: góc xoay vòng tất định — chỉ số = số lần đã hỏi thăm khách này.
+    let angle = ANGLES[0];
+    if (!keepalive) {
+      const { count: daHoi } = await client.from("reminders")
+        .select("id", { count: "exact", head: true })
+        .eq("buyer_id", b.id).eq("kind", "reengage");
+      const bat = (daHoi ?? 0) % ANGLES.length;
+      for (let i = 0; i < ANGLES.length; i++) {
+        const a = ANGLES[(bat + i) % ANGLES.length];
+        if (a.can && !canCuoi) continue;
+        if (a.anh && !(canCuoi && canCuoi.anh > 0)) continue;
+        angle = a;
+        break;
+      }
+    }
+    const noteAngle = keepalive
+      ? "giu_ket_noi: nhắc giữ kết nối Zalo trước mốc 7 ngày (FR-63, im ≥ 6 ngày)"
+      : `${angle.key}: ${angle.text}`;
 
     // FR-166 bất biến 13 — GIỮ CHỖ TRƯỚC, GỬI SAU.
     // Trước bản này: ĐẾM xem đã hỏi thăm chưa → gửi → mới ghi vết. Hai lượt
     // chạy chồng nhau cùng đếm ra 0 và CÙNG GỬI. Nay chèn dòng `pending`
     // TRƯỚC, index duy nhất khiến bên thua nhận 23505 rồi nhường.
-    if (!anthropic) continue;
+    // Góc giữ kết nối là mẫu cố định nên không cần model — key hỏng vẫn cứu
+    // được kết nối, đó là việc quan trọng nhất của khối này.
+    if (!keepalive && !anthropic) continue;
     let giuCho: string | null = null;
     if (!dry_run) {
       const { data: cho, error: choErr } = await client.from("reminders").insert({
         kind: "reengage", buyer_id: b.id, due_at: new Date().toISOString(),
-        note: angle, status: "pending",
+        note: noteAngle, status: "pending",
       }).select("id").single();
       if (choErr) {
         // 23505 = thua cuộc đua với lượt chạy song song. ĐÚNG như thiết kế:
@@ -410,31 +541,41 @@ Deno.serve(async (req) => {
       giuCho = cho?.id ?? null;
     }
 
-    let resp;
-    try {
-      resp = await anthropic.messages.create({
-      model: MODEL, max_tokens: 256,
-      output_config: { effort: "low" },
-      system: [{ type: "text", text: TONE, cache_control: { type: "ephemeral" } }],
-      messages: [{
-        role: "user",
-        content:
-          `Khách${b.name ? ` tên ${b.name}` : ""} là NGƯỜI MUA đang TÌM nhà (họ KHÔNG bán — đừng nhầm vai). Hồ sơ nhu cầu tìm mua: ${JSON.stringify(b.preferences ?? {})}. Im lặng ~5-6 ngày.\n` +
-          `Hai tin gần nhất em đã gửi (TRÁNH lặp giọng/mẫu): ${JSON.stringify(lastBot)}.\n` +
-          `Soạn MỘT tin Zalo NGẮN (1-2 câu) theo góc: ${angle}. Nhắc đúng nhu cầu cũ nếu có. Kết thúc bằng một câu hỏi nhẹ.`,
-      }],
-    });
-    } catch (e) {
-      await ghiLoi(client, "nudge model(reengage)", e);
-      if (giuCho) await client.from("reminders").delete().eq("id", giuCho);
-      continue;
+    let text: string | undefined;
+    if (keepalive) {
+      text = KEEPALIVE(goi);
+    } else {
+      let resp;
+      try {
+        resp = await anthropic!.messages.create({
+          model: MODEL, max_tokens: 256,
+          output_config: { effort: "low" },
+          system: [{ type: "text", text: TONE, cache_control: { type: "ephemeral" } }],
+          messages: [{
+            role: "user",
+            content:
+              `Khách${b.name ? ` tên ${b.name}` : ""} là NGƯỜI MUA đang TÌM nhà (họ KHÔNG bán — đừng nhầm vai). Hồ sơ nhu cầu tìm mua: ${JSON.stringify(b.preferences ?? {})}. Im lặng ${Math.floor(imNgay)} ngày.\n` +
+              (canCuoi ? `CĂN CUỐI khách được gửi/hỏi: ${canCuoi.tomTat}${canCuoi.anh > 0 ? ` · em có ${canCuoi.anh} ảnh thật` : " · chưa có ảnh"}.\n` : "Chưa có căn nào cụ thể.\n") +
+              (kho.length ? `KHO CÙNG KHU (chỉ được nhắc căn trong danh sách này, nguyên mã #): ${kho.join("; ")}.\n` : "") +
+              `Hai tin gần nhất em đã gửi (TRÁNH lặp giọng/mẫu): ${JSON.stringify(lastBot)}.\n` +
+              `Soạn MỘT tin Zalo NGẮN theo góc: ${angle.text}.` +
+              (kho.length && !angle.can ? " Nếu hợp thì chào thêm đúng MỘT căn trong KHO CÙNG KHU." : "") +
+              ` Tối đa 2 câu, tối đa 1 emoji, KHÔNG gạch dài, không markdown, không bịa số liệu ngoài dữ liệu trên. Nhắc đúng nhu cầu cũ nếu có. Kết thúc bằng một câu hỏi nhẹ.`,
+          }],
+        });
+      } catch (e) {
+        await ghiLoi(client, "nudge model(reengage)", e);
+        if (giuCho) await client.from("reminders").delete().eq("id", giuCho);
+        continue;
+      }
+      await doTien(client, resp.usage);
+      text = resp.content.find((bk) => bk.type === "text")?.text?.trim();
     }
-    await doTien(client, resp.usage);
-    const text = resp.content.find((bk) => bk.type === "text")?.text?.trim();
     if (!text) {
       if (giuCho) await client.from("reminders").delete().eq("id", giuCho);
       continue;
     }
+    const angleKey = keepalive ? "giu_ket_noi" : angle.key;
 
     let sent = "none";
     if (!dry_run) {
@@ -455,7 +596,7 @@ Deno.serve(async (req) => {
             .update({ status: "cancelled", last_error: "gửi OA hụt" }).eq("id", giuCho);
         }
         reengaged++;
-        out.push({ kind: "reengage", buyer: b.id, angle, text, sent, retry: true });
+        out.push({ kind: "reengage", buyer: b.id, angle: angleKey, text, sent, retry: true });
         continue;
       }
       if (conv) await client.from("messages").insert({ conversation_id: conv.id, sender: "bot", body: text });
@@ -465,7 +606,7 @@ Deno.serve(async (req) => {
       }
     }
     reengaged++;
-    out.push({ kind: "reengage", buyer: b.id, angle, text, sent });
+    out.push({ kind: "reengage", buyer: b.id, angle: angleKey, im_ngay: Math.floor(imNgay), can_cuoi: canCuoi?.code ?? null, kho: kho.length, text, sent });
   }
 
   return jsonResponse({ done: out.length, dry_run, results: out });

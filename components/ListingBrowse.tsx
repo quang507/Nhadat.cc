@@ -4,6 +4,7 @@ import ListingCard from "@/components/ListingCard";
 import { coverByCode } from "@/lib/photos";
 import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase";
 import { zaloLink } from "@/lib/format";
+import { parseQuery } from "@/lib/parse-query";
 
 const PAGE_SIZE = 24;
 const TY = 1_000_000_000;
@@ -54,7 +55,18 @@ const PL = [
 type Params = {
   phuong?: string; trang?: string; gia?: string; dt?: string; xep?: string; pn?: string;
   vao?: string; tang?: string; pl?: string;
+  // FR-08/09 (04/09/2026): tham số do /api/search sinh — khoảng giá / diện tích
+  // tự do (VND, m²), quận/huyện, loại, tên đường, mốc, và câu gốc `q`.
+  q?: string; gmin?: string; gmax?: string; dtmin?: string; dtmax?: string;
+  quan?: string; loai?: string; duong?: string; moc?: string;
 };
+
+// Cột enum có thật — chỉ nhận giá trị trong bảng này, không cho gõ tuỳ ý.
+const LOAI_HOP_LE = new Set(["nha_pho", "nha_cap4", "chung_cu", "dat", "biet_thu", "phong_tro", "mat_bang", "chua_ro"]);
+// Chữ tự do đi vào `ilike`: bỏ ký tự cú pháp của bộ lọc PostgREST (dấu phẩy,
+// ngoặc, %, *) để câu gõ không thành mệnh đề lọc; cắt 60 ký tự.
+const sachIlike = (v?: string) => (v ?? "").replace(/[,()%*"\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+const soDuong = (v?: string) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined; };
 
 // Trang này ĐỌC searchParams nên Next đánh dấu ƒ — dựng lại từng request, ISR
 // không với tới (tổ hợp bộ lọc là vô hạn, không prerender được). Chỗ tốn thật
@@ -68,6 +80,7 @@ type Truy = {
   dtMin?: number; dtMax?: number; loDt: boolean;
   pn: number | null;
   vao?: string[]; tang?: number; pl?: string[];
+  quan?: string; loai?: string[]; duong?: string; moc?: string;
   xep: string;
   page: number;
 };
@@ -92,6 +105,11 @@ const layTin = unstable_cache(
     if (t.vao?.length) q = q.in("access_type", t.vao);
     if (t.tang) q = q.gte("floors", t.tang);
     if (t.pl?.length) q = q.in("legal_status", t.pl);
+    // FR-09: tham số từ câu tìm kiếm tự nhiên (đã làm sạch ở trên).
+    if (t.quan) q = q.ilike("district", `%${t.quan}%`);
+    if (t.loai?.length) q = q.in("property_type", t.loai);
+    if (t.duong) q = q.ilike("street", `%${t.duong}%`);
+    if (t.moc) q = q.or(`description.ilike.%${t.moc}%,location_raw.ilike.%${t.moc}%`);
     q =
       t.xep === "gia-tang" ? q.order("price_vnd", { ascending: true, nullsFirst: false })
       : t.xep === "gia-giam" ? q.order("price_vnd", { ascending: false, nullsFirst: false })
@@ -126,23 +144,39 @@ export default async function ListingBrowse({
   const vao = VAO.find((v) => v.key === sp.vao);
   const tang = TANG.includes(Number(sp.tang)) ? Number(sp.tang) : undefined;
   const pl = PL.find((p) => p.key === sp.pl);
+  // FR-08/09: khoảng giá / diện tích tự do từ /api/search ưu tiên hơn chip cố định.
+  const gmin = soDuong(sp.gmin), gmax = soDuong(sp.gmax);
+  const dtmin = soDuong(sp.dtmin), dtmax = soDuong(sp.dtmax);
+  const loai = (sp.loai ?? "").split(",").map((x) => x.trim()).filter((x) => LOAI_HOP_LE.has(x));
+  const q = (sp.q ?? "").slice(0, 300).trim();
+  // Diễn giải lại câu hỏi bằng CÙNG bộ luật đã sinh URL — không lệch nhau.
+  const dienGiai = q ? parseQuery(q) : null;
   const { rows: listings, total } = await layTin({
     deal,
     phuong: sp.phuong,
-    giaMin: gia?.min, giaMax: gia?.max, loGia: !!gia,
-    dtMin: dt?.min, dtMax: dt?.max, loDt: !!dt,
+    giaMin: gmin ?? gia?.min, giaMax: gmax ?? gia?.max, loGia: !!gia || !!gmin || !!gmax,
+    dtMin: dtmin ?? dt?.min, dtMax: dtmax ?? dt?.max, loDt: !!dt || !!dtmin || !!dtmax,
     pn,
     vao: vao?.types, tang, pl: pl?.statuses,
+    quan: sachIlike(sp.quan) || undefined,
+    loai: loai.length ? loai : undefined,
+    duong: sachIlike(sp.duong) || undefined,
+    moc: sachIlike(sp.moc) || undefined,
     xep: xep.key,
     page,
   });
   const covers = await coverByCode(listings.map((l) => l.code)); // FR-148
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  // Link giữ nguyên các lọc khác, đổi một tham số (trang reset về 1)
+  // Link giữ nguyên các lọc khác, đổi một tham số (trang reset về 1). Bấm chip
+  // là rời khỏi câu hỏi tự nhiên: bỏ `q` (tiêu đề diễn giải sẽ sai) và bỏ
+  // khoảng giá/diện tích tự do khi chọn chip giá/diện tích tương ứng.
   const withParam = (patch: Partial<Params>) => {
     const merged: Record<string, string> = {};
-    for (const [k, v] of Object.entries({ ...sp, trang: undefined, ...patch })) {
+    const bo: Partial<Params> = { trang: undefined, q: undefined };
+    if ("gia" in patch) { bo.gmin = undefined; bo.gmax = undefined; }
+    if ("dt" in patch) { bo.dtmin = undefined; bo.dtmax = undefined; }
+    for (const [k, v] of Object.entries({ ...sp, ...bo, ...patch })) {
       if (v) merged[k] = String(v);
     }
     const qs = new URLSearchParams(merged).toString();
@@ -163,16 +197,50 @@ export default async function ListingBrowse({
         <div className="mx-auto max-w-6xl px-4">
           <p className="eyebrow text-brand">Kho tin · Sài Gòn & Long An</p>
           <h1 className="mt-2 text-3xl font-extrabold md:text-4xl">
-            {title} {sp.phuong ? `— ${sp.phuong}` : "Sài Gòn & Long An"}
+            {title} {sp.phuong ? `— ${sp.phuong}` : sp.quan ? `— ${sachIlike(sp.quan)}` : "Sài Gòn & Long An"}
           </h1>
-          <p className="mt-2 text-white/60">
-            {total} tin · hỏi chi tiết bất kỳ căn nào qua Zalo
-          </p>
+          {/* FR-08: "Tìm thấy N tin theo yêu cầu" + tiêu đề diễn giải lại truy vấn */}
+          {dienGiai && !dienGiai.empty ? (
+            <p className="mt-2 text-white/80">
+              Tìm thấy <span className="font-bold text-white">{total}</span> tin theo yêu cầu:{" "}
+              <span className="font-semibold text-white">{dienGiai.title}</span>
+              <span className="text-white/50"> · anh chị hỏi “{q}”</span>
+            </p>
+          ) : (
+            <p className="mt-2 text-white/60">
+              {total} tin · hỏi chi tiết bất kỳ căn nào qua Zalo
+            </p>
+          )}
         </div>
       </div>
 
       <div className="mx-auto max-w-6xl px-4 pb-12">
-        <div className="-mt-10 space-y-3 rounded-king bg-white p-5 shadow-[0_18px_40px_rgba(13,37,61,0.14)]">
+        {/* FR-13: hộp mời kết nối trên MỌI trang kết quả tìm kiếm — mang theo câu
+            gốc sang Zalo (FR-14). Câu không bóc được gì thì hộp này là câu trả
+            lời chính, không phải phụ. */}
+        {q && (
+          <div className={`-mt-10 mb-4 flex flex-col gap-3 rounded-king p-5 shadow-[0_18px_40px_rgba(13,37,61,0.14)] sm:flex-row sm:items-center ${
+            dienGiai?.empty ? "bg-white" : "bg-white/95"
+          }`}>
+            <div className="flex-1">
+              <p className="font-extrabold">
+                {dienGiai?.empty
+                  ? "Câu này tụi em chưa hiểu hết — nhắn Zalo, người thật trả lời liền."
+                  : "Chưa đúng ý? Nhắn nguyên câu này qua Zalo, tụi em lọc tay cho anh chị."}
+              </p>
+              <p className="mt-1 text-sm text-mute">
+                “{q}” — không cần để lại số điện thoại, ngắt kết nối bất cứ lúc nào.
+              </p>
+            </div>
+            <a
+              href={zaloLink(`search:${q}`)}
+              className="shrink-0 rounded-full bg-brand px-6 py-3 text-center font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+            >
+              Hỏi qua Zalo
+            </a>
+          </div>
+        )}
+        <div className={`${q ? "" : "-mt-10 "}space-y-3 rounded-king bg-white p-5 shadow-[0_18px_40px_rgba(13,37,61,0.14)]`}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Giá</span>
           {GIA[deal].map((g) => (
@@ -244,7 +312,7 @@ export default async function ListingBrowse({
             Nới bớt một tiêu chí, hoặc nhắn Zalo — có khi hàng chưa kịp lên web.
           </p>
           <a
-            href={zaloLink(`empty:${sp.phuong ?? deal}`)}
+            href={zaloLink(q ? `search:${q}` : `empty:${sp.phuong ?? deal}`)}
             className="mt-5 inline-block rounded-full bg-brand px-6 py-3 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
           >
             Hỏi qua Zalo

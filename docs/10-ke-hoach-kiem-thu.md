@@ -16,7 +16,7 @@ trong `chats w B.docx` (đã ẩn danh) — đây là bộ dữ liệu vàng, kh
 | TS-BOT | FR-20…32 | 4 bất biến I1–I4 (SRS-5.1) là test chặn release: ≤3 listing/tin · tin chủ động kết thúc bằng câu hỏi · không khẳng định điều chưa xác minh · không hỏi số ĐT sai chỗ |
 | TS-ASK | FR-40…47, FR-110 | Kho tích luỹ trả trước, hỏi S sau · idempotency theo request_id · timeout 24h/48h · FR-44 cập nhật listing (AC-03) |
 | TS-VIEW | FR-50…57 | Từ chối cho số ĐT vẫn đặt được lịch (AC-04) · email [VIEWING] |
-| TS-RET | FR-60…65 | Mốc 3 ngày / 5–6 ngày · nội dung xoay vòng không lặp (AC-06) |
+| TS-RET | FR-60…65 | Mốc 5 ngày (FR-60) / ≥6 ngày giữ kết nối (FR-63) · nội dung xoay vòng không lặp (AC-06) · ca chạy được: TS-GIUCHAN, TS-V48 |
 | TS-ADM | FR-70…81 | 20 mục/trang · 4 loại email đúng subject/body (AC-09, AC-10) |
 | TS-SEL | FR-90…103, FR-109 | Bóc tách ≥4 trường (AC-07) · rao từng bước trong Zalo · không spam S |
 | TS-BROKER | FR-104…112 | Ẩn danh hai chiều: lọc SĐT/Zalo ID/địa chỉ trong relay · vòng đời listing · sold → báo interests |
@@ -1202,6 +1202,117 @@ nó nói rằng từ giờ mỗi tin thật lên `dang_ban` là có khách thậ
 cron kế. Van 1 tin/khách/24h là hàng rào duy nhất; muốn siết thêm thì đổi ở
 `bao_tin_moi_khop`, không ở `nudge`.
 
+### TS-WEB2 — search NL, upload ảnh, dự án, danh sách riêng, giấy tờ (04/09/2026)
+
+Đợt "dựng hết phần tài liệu có mà code chưa" — luồng WEB (FR-01/02/03/04/08/09/10,
+FR-70/73 phía web, FR-96, FR-99 phía web, FR-100, FR-117 nửa trang, NFR-06 đường
+ký) + migration `20260904g`. Ba nhóm ca: **P** = policy/RPC trên DB thật (một khối
+`do … raise exception`, luôn rollback — khối nằm cuối file migration, chạy lại sau
+mọi lần đụng RLS `storage.objects`/`listing_media`/`curated_lists`); **S** = bóc câu
+qua `next start` + curl (không đụng DB); **W** = trang web. Sandbox chặn host
+Supabase theo chính sách egress (`Host not in allowlist`) nên `bun run build` ở đây
+prerender 0 trang tin/dự án và các ca cần DB từ web đánh ⏭ — trên Vercel
+(host được phép) chúng chạy như các trang cũ.
+
+| ID | Kịch bản | Kỳ vọng | Kết quả |
+|---|---|---|---|
+| TS-WEB2-P01 | Người bán đăng nhập (auth.users giả + `sellers.auth_user_id`) insert `storage.objects` bucket `listing-public` đường dẫn `<uuid tin của mình>/a.jpg` | được | ✅ OK |
+| TS-WEB2-P02 | Cùng người bán, đường dẫn `<uuid tin người khác>/b.jpg` | chặn | ✅ 42501 |
+| TS-WEB2-P03 | Cùng người bán, bucket `listing-private` | chặn | ✅ 42501 |
+| TS-WEB2-P04 | Người bán insert `listing_media` (public) cho tin mình, đọc lại được | được, đọc = 1 | ✅ OK, doc=true |
+| TS-WEB2-P05 | Người bán insert `listing_media` cho tin người khác | chặn | ✅ 42501 |
+| TS-WEB2-P06 | Người bán gọi `tao_danh_sach` | chặn | ✅ 42501 |
+| TS-WEB2-P07 | Admin (JWT email từ `admins`): insert object bucket public mọi đường dẫn + bucket private + SELECT lại object private + insert `listing_media` `so_do` bucket private | được cả bốn | ✅ OK, doc_private=true |
+| TS-WEB2-P08 | Admin `tao_danh_sach([mã tin A, mã tin B], 'TS-WEB2 ds')`; rồi với mã lạ | `{token 24 hex, n=2}`; mã lạ → lỗi "Khong co tin" | ✅ n=2, len=24; P0001 |
+| TS-WEB2-P09 | Anon `doc_danh_sach(token)`; token sai | có `listings`, không có `buyer_id`; NULL | ✅ n=1 (tin thử B không đủ diện tích nên trigger FR-164 giữ `cho_thong_tin` — đúng luật chỉ tin lên kệ), co_buyer=false, token_sai_null=true |
+| TS-WEB2-P10 | Anon: `select` thẳng `curated_lists`; insert `storage.objects`; đếm `listing_media` bucket private | chặn; chặn; 0 | ✅ 42501; 42501; 0 |
+| — | Sau khối: `curated_lists`/`sellers` TS-WEB2/`listings` TS-WEB2/`storage.objects`/`listing_media`/`auth.users` ts-web2 | đều 0 (rollback) | ✅ 0/0/0/0/0/0 |
+| TS-WEB2-S01 | `GET /api/search?q=tìm mua nhà phố HXH 8 tỉ ở Q5` | ban, nhóm nhà, HXH, 6,8–9,2 tỉ, Quận 5; title "Mua nhà phố hẻm xe hơi khoảng 8 tỉ, Quận 5"; url `/mua-ban?gmin&gmax&vao=hxh&loai&q` | ✅ |
+| TS-WEB2-S02 | Câu S01 KHÔNG dấu `tim mua nha pho hxh 8 ti o q5` | y hệt S01 | ✅ cùng filters/title |
+| TS-WEB2-S03 | `thuê căn hộ 2 phòng ngủ dưới 15tr/tháng phường 4` | cho_thue, chung_cu, Phường 4, max 15 tr, 2 PN; url `/cho-thue?phuong&gmax=15000000&pn=2&loai=chung_cu&q` | ✅ title "Thuê căn hộ 2+ phòng ngủ dưới 15 triệu/tháng, Phường 4" |
+| TS-WEB2-S04 | `ban nha mat tien duong Tran Binh Trong quan 5 duoi 5 ty` | mt, street "Tran Binh Trong", max 5 tỉ; `duong=` vào ilike `street` | ✅ |
+| TS-WEB2-S05 | `đất Bình Chánh 5-8 tỷ gần chợ Bình Điền` | dat, Bình Chánh (`quan=`), 5–8 tỉ, mốc "chợ Bình Điền" giữ dấu (`moc=` → ilike mô tả/địa chỉ) | ✅ title "Mua đất 5 tỉ – 8 tỉ gần chợ Bình Điền, Bình Chánh" |
+| TS-WEB2-S06 | `cho em hỏi giá nhà ở đây thế nào` (không tín hiệu mạnh) | `empty: true`, url `/mua-ban?q=`; trang hiện hộp "Câu này tụi em chưa hiểu hết — nhắn Zalo" | ✅ (lần chạy đầu ra `/ban-nha-quan-5` vì chỉ chữ "nhà" — sửa luật: loại BĐS một mình chưa đủ) |
+| TS-WEB2-S07 | `ban nha hxh phuong 5` / `cần thuê mặt bằng Q5` | khớp tag → `/ban-nha-hem-xe-hoi-phuong-5-quan-5` / `/cho-thue-mat-bang-quan-5` | ✅ |
+| TS-WEB2-S08 | `?go=1` với S01 và S06 | 302 → url tương ứng | ✅ 302 cả hai |
+| TS-WEB2-S09 | `POST /api/listing/parse` câu rao "Bán nhà HXH xe tải quay đầu, gần ngã tư Trần Bình Trọng, 4x16 một trệt hai lầu, 3PN, sổ hồng riêng, phường 5 Q5, 9 tỉ bớt lộc" | deal ban, nha_pho, P5/Q5, mốc "ngã tư Trần Bình Trọng", 3 PN, price_raw "9 tỉ" → 9e9, hem_xe_hoi, 4×16, area 64 (0,6 → needs_review), floors 3, so_hong_rieng, negotiable | ✅ (lần đầu mốc cắt còn "ngã" vì "tư" trùng từ dừng, price_raw dính ", 9 ti", "một trệt hai lầu" → 1 — sửa cả ba) |
+| TS-WEB2-S10 | `POST /api/search {"q":"nha 3pn q5"}`; `GET ?text=cho thue mat bang duong nguyen trai q5 dt 60m2 15tr/thang` | 200 JSON; mat_bang + street + 60 m² + 15 tr/tháng, không đọc "60 m2" thành 60 triệu | ✅ |
+| TS-WEB2-W01 | `/` HTML có 3 khối FR-01 + khối "Hỏi bất kỳ, có tức thì" + ba vế FR-04 | có | ✅ grep thấy "Hỏi bất kỳ, có tức thì", "Ngắt kết nối bất cứ lúc nào" |
+| TS-WEB2-W02 | `/` form `action="/api/search"` + placeholder "tìm mua nhà phố HXH 8 tỉ ở Q5" | có, không JS | ✅ |
+| TS-WEB2-W03 | `/mua-ban?q=…` | `<meta name="robots" content="noindex, follow">` + dải "Tìm thấy N tin theo yêu cầu: …" | ✅ meta; dải tiêu đề ⏭ (cần DB — sandbox chặn) |
+| TS-WEB2-W04 | `/mua-ban?q=cho+em+hoi+gia` | hộp Zalo "Câu này tụi em chưa hiểu hết…" | ✅ |
+| TS-WEB2-W05 | Trang tin: `WardMap` chỉ vẽ khi phường có toạ độ, chấm = `wardPoint`, lat/lng bị xoá trước khi đưa vào `MapView` | kiểm tĩnh (tsc) | ✅ tsc; trình duyệt ⏭ |
+| TS-WEB2-W06 | `/admin` thẻ BĐS hot / Độ trễ bot khi view CHƯA có | thẻ ghi "chưa có dữ liệu (+lỗi)", các thẻ khác vẫn tải | kiểm tĩnh: `hot.error`/`tre.error` tách khỏi `setLoi` chính ✅; trình duyệt ⏭ |
+| TS-WEB2-W07 | `UploadAnh`: up file → ghi dòng; ghi dòng hỏng → remove file; lỗi từng tấm ra UI | kiểm tĩnh | ✅ tsc; trình duyệt ⏭ (P01–P05 đã kiểm hàng rào) |
+| TS-WEB2-W08 | Trang tin dòng FR-99 | ẩn khi < 3 tin khác; tự loại chính tin | kiểm tĩnh `soSanhGia` ✅; DB ⏭ (kho thật: Phường 1 có 23 tin bán có giá/m² → sẽ hiện) |
+| TS-WEB2-W09 | `/ds/abcdefabcdefabcdefabcdef` | `<meta robots noindex, nofollow>`; trang "hết hạn" + Zalo, không 404 | ✅ meta; nội dung ⏭ (RPC cần DB) |
+| TS-WEB2-W10 | `bun run build` | `/du-an/[slug]` ●, `/nha-dat/[code]` ●, `/[tag]` ●, `/ds/[token]` ƒ, `/api/*` ƒ | ✅ (prerender 0 đường cho nha-dat/du-an TẠI SANDBOX vì host bị chặn; trên Vercel `generateStaticParams` đọc được) |
+| TS-WEB2-W11 | `/admin` "Xem giấy tờ" → `createSignedUrl(path, 900)`; đường dẫn không in ra | kiểm tĩnh ✅; trình duyệt ⏭ (P07 đã kiểm SELECT object private của admin) |
+| TS-WEB2-W12 | `bunx tsc --noEmit` | sạch | ✅ |
+| TS-WEB2-W13 | `/robots.txt` chặn `/ds/`, `/api/`; `/sitemap.xml` có `/du-an/<slug>` | có | ✅ robots; sitemap ⏭ (DB) |
+
+### TS-GIUCHAN — giữ chân 5 ngày, vòng đời, email (FR-60…65/70/72/73/81/103/108/110/52, 04/09/2026)
+
+Chủ dự án chốt "dựng hết, giữ chân 5 ngày". Dựng bằng migration `20260904f` +
+`nudge` **v25**. Ca 01–05 chạy trên DB thật trong khối `do … raise exception`
+(cuộn lại toàn bộ; uid thử `TEST-gc-*`); ca 06 là một `net.http_post` thật tới
+ntfy; ca 07–08 chạy trên bản `nudge` **đang deploy** với dữ liệu thử `TEST-GCN`
+được commit rồi xoá (pg_net chỉ gửi sau commit), `dry_run: true`.
+
+| ID | Kịch bản | Kỳ vọng | Kết quả |
+|---|---|---|---|
+| TS-GIUCHAN-01 | **Vòng đời một khách** (FR-108/70/52/57/65/110/103): khách `TEST-gc-uid` (hồ sơ phường X Quận 5, 5 tỷ) → `mark_listing_interest([mã1], khách)` ×2 → hỏi một câu (`buyer_ask`) → đặt lịch (`viewings` pending) → CTV trả lời `xac_nhan_lich` "ok 9h" → nhắc `match` tin 2 đánh `sent` → `deals` tin 1 → tin 1 `da_chot` (×2, qua `dang_ban` ở giữa) → `ghi_danh_gia(4)` rồi `(5)` → chèn 3 câu hỏi cũ (buyer_ask 49h, seller_flow 25h, seller_flow 49h) → `info_request_timeout_tick()` → tin 2 lùi `updated_at` 31 ngày → `stale_listing_tick()` ×2 → giơ cờ `needs_human` + chèn escalation "VOICE:" (admin_email rỗng) | `interests` 1 (không đúp); `property_events`: interest 1, status→dang_quan_tam 1, asked 1, viewing 1, match_sent 1, deal 1; escalation "Lịch xem #mã1 · giờ · khách …, … "#mã1: ok …"" 1 và KHÔNG có escalation mặc định "khách hỏi #…xac_nhan_lich"; câu `xac_nhan_lich` pending 1 → sau trả lời `viewings.status=confirmed` + followup "lịch xem #mã1 đã được xác nhận: ok 9h"; `sold` đúng 1 với note "#mã1 đã chốt · thay thế: #a (…); #b (…)"; `buyer_rating=4`, `rating_count` +1 và `rating_sum` +4 (lần 5 sao không cộng); tick trả `{nhac_24h, het_han_seller, het_han_buyer_ask}`, câu 25h có `reminded_at`, hai câu 49h `expired`, followup "chủ nhà chưa phản hồi #mã2, gợi ý căn khác: …"; stale lần 1 = 1 (câu `con_ban` pending + escalation "tin #mã2 đăng đã 30 ngày…"), lần 2 = 0 thêm; `bot_errors` mới = 0 | ✅ tất cả đúng: interests=1, pe interest/status/asked/viewing/match_sent/deal = 1/1/1/1/1/1, esc=1 (note "Lịch xem #BDS-Q5-0032 · 19:46 06/09 · khách TEST-GC khách, xác nhận với chủ nhà rồi nhắn lại em "#BDS-Q5-0032: ok 19h" nha"), ir_xnl=1 → confirmed, fu "lịch xem #BDS-Q5-0032 đã được xác nhận: ok 9h"; sold=1, note "#BDS-Q5-0032 đã chốt · thay thế: #BDS-Q5-0127 · Phường 2, Quận 5 · 6,5 tỷ · 48.8m2; #BDS-Q5-0093 · …"; rating=4, rc 0→1, sum=4; timeout `{"nhac_24h": 2, "het_han_seller": 1, "het_han_buyer_ask": 1}`, reminded=t, expired/expired, fu2 "chủ nhà chưa phản hồi #BDS-Q5-0035, gợi ý căn khác: #BDS-Q5-0093 · …; #BDS-Q5-0062 · …"; stale=1 (đi nhánh CTV vì chủ chưa có Zalo), q=1, lần 2 = 0; bot_errors mới = 0 |
+| TS-GIUCHAN-02 | Van FR-108: cùng tin `da_chot` lần hai | không thêm `sold` (index + van 24h) | ✅ vẫn 1 |
+| TS-GIUCHAN-03 | FR-103 trần và lặp: chạy `stale_listing_tick()` hai lần cùng ngày | lần 2 không hỏi lại tin vừa hỏi | ✅ 0 (đã ghi ở ca 01) |
+| TS-GIUCHAN-04 | **Ba view qua vai admin (JWT email trong `admins`)**: hội thoại thử 5 tin bot/khách cách nhau 10', 40', 5', 2h → `hoi_thoai_phien`; `interests` 1 → `bds_hot`; 2 dòng `inbound_ledger` 1,2 s và 4,8 s → `bot_do_tre`; đọc bảng `property_events` | 3 phiên `2/buyer, 2/buyer, 1/bot`; `bds_hot` 1 dòng/tin, tin thử `so_su_kien_60d=1`; `bot_do_tre` `so_luot=2`, `p95≈4,6`; admin đọc được `property_events` | ✅ phiên=3 [2/buyer,2/buyer,1/bot]; bds_hot 173 dòng, tin thử =1; do_tre luot=2 p95=4.62; admin đọc pe=1. *(`listing_views` không thử được: FK tới `auth.users`, project chưa có user auth nào)* |
+| TS-GIUCHAN-05 | **Anon**: đọc `bds_hot`/`hoi_thoai_phien`/`bot_do_tre`, SELECT `property_events`, EXECUTE `ghi_danh_gia`/`can_cung_khu`/`mark_listing_interest(text[],uuid)`/`info_request_timeout_tick`/`canh_bao_ngoai` | tất cả bị chặn | ✅ ba view `insufficient_privilege`; `has_table_privilege`=f; 5 hàm `has_function_privilege`=f |
+| TS-GIUCHAN-06 | **ntfy email thật**: `net.http_post` tới ntfy.sh, topic đang dùng, `email: test@example.com` | 200, hoặc mã lỗi cho biết vì sao | ⚠️ **400** `{"code":40053,"error":"invalid request: anonymous email sending is not allowed"}` — ntfy.sh không cho email ẩn danh; cần tài khoản + token. Đã thêm đường đọc `NTFY_TOKEN` từ Vault; ghi vào `02` FR-81 / `07` SRS-5.5 chờ chủ dự án. Dòng 400 này sẽ hiện một lần ở `bot_errors` nguồn `pg_net` (cố ý không xoá bằng chứng) |
+| TS-GIUCHAN-07 | **Deploy `nudge` v25** theo quy trình 02/09: bun bundle → đổi `\uXXXX` thành UTF-8 → `deploy_edge_function` (`verify_jwt=false` như v24, kiểm `list_edge_functions`) → `get_edge_function` → so byte | trùng byte | ✅ v25, 24.203 byte, `cmp` trùng, cùng SHA-256 `d7fb2323…` |
+| TS-GIUCHAN-08 | **`nudge` v25 `dry_run`** gọi bằng `net.http_post` với `x-bridge-secret` lấy từ Vault ngay trong SQL (không in): (a) ngay sau deploy, kho thật; (b) với dữ liệu thử `TEST-GCN` đã commit: 5 nhắc tới hạn `sold` (có/không căn thay thế), `followup` "chủ nhà chưa phản hồi", `followup` "lịch xem … đã được xác nhận", `feedback`, `rating`; khách im 6,5 ngày (giữ kết nối) và khách im 5,2 ngày có căn cuối `#mã` trong tin bot | (a) 200, JSON hợp lệ, không `bot_errors` nudge; (b) năm mẫu đúng chữ, không gọi model; khách 6,5 ngày ra `angle=giu_ket_noi` với câu "nhờ anh/chị nhắn lại em một chữ thôi, kẻo Zalo tự ngắt kết nối"; khách 5,2 ngày ra góc `can_cuoi` (chỉ số 0, có căn) kèm `can_cuoi=#mã`, `kho>0`; `sent=none`, không dòng mới ở `reminders`/`messages` | (a) ✅ 200, `done=7` (toàn việc escalation/report có sẵn của bridge), `bot_errors` nudge mới = 0. (b) ✅ 200, `done=14`: sold "Anh/chị TEST-GCN A ơi, căn #BDS-Q5-0032 mình quan tâm vừa được chốt với khách khác rồi ạ, em báo thật để mình khỏi chờ. Em có căn tương tự cùng khu: #BDS-Q5-0035 · Phường 2, Quận 5 · 6,5 tỷ · 48.8m2. Anh/chị muốn xem thử không ạ?"; followup lịch "… lịch xem căn #BDS-Q5-0032 đã được chủ nhà xác nhận rồi ạ (ok 9h sáng mai). Em gặp anh/chị đúng giờ nha 🏠"; followup chủ nhà "… câu mình hỏi về căn #BDS-Q5-0035 chủ nhà vẫn chưa phản hồi, em không muốn để anh/chị chờ thêm. Em có căn khác cùng khu: #BDS-Q5-0032 · … Anh/chị xem thử không ạ?"; feedback "… rồi thấy sao ạ? Ưng chỗ nào, chưa ưng chỗ nào để em lọc tiếp cho đúng ý. Tiện thì anh/chị chấm giúp em mấy sao (1-5) nha."; rating "… chấm giúp em 1 đến 5 sao …"; khách A `angle=giu_ket_noi, im_ngay=6` đúng câu mẫu; khách B `angle=can_cuoi, im_ngay=5, can_cuoi=BDS-Q5-0032, kho=3`, model soạn 2 câu 1 emoji nhắc đúng #mã và một căn trong kho; một khách THẬT im 6 ngày cũng ra `giu_ket_noi` (dry_run không gửi — từ nhịp cron kế sẽ gửi thật); `sent=none` cả 14, `reminders` thử không đổi trạng thái, 0 tin bot mới, `bot_errors` nudge = 0; dọn xong: 5 reminders, 2 messages, 1 conversation, 2 buyers, còn sót 0 |
+
+Điều nên biết sau đợt này: (1) trigger FR-52 mở câu `xac_nhan_lich` với
+`source='buyer_ask'` — cố ý, vì nhánh nội bộ của `chat-reply` chỉ đóng nguồn đó;
+hệ quả là câu này ĐẾM vào `ctv_ranks` như một câu khách hỏi (SLA 120') — hợp lý,
+xác nhận lịch cũng là việc CTV phải trả lời đúng hạn [giả định BA]. (2) FR-103 chỉ
+hỏi tin CÓ chủ; 158 tin nhập Excel không có chủ sẽ không bao giờ được hỏi "còn
+bán không" — muốn hỏi thì gán `seller_id` trước. (3) `email_admin` với
+`admin_email` rỗng im hoàn toàn, kể cả push — chủ ý, để topic ntfy chỉ là còi
+sức khoẻ.
+
+### TS-V48 — chat-reply v48 (FR-27/31/45/65/79/99/105/108/114/116, 04/09/2026)
+
+Mười FR có tài liệu mà bot chưa làm (lộ ở §10.8), chủ dự án chốt "dựng hết":
+một bản `chat-reply` **v48** + `_shared/prompts.ts` (hai khoá `human_chat_rules`,
+`buyer_fewshot` đồng bộ xuống `bot_prompts` bằng SQL sinh từ file, không gõ
+tay). Ca chạy trong bộ e2e (`bot/tests/e2e`, `bash chay.sh`): **74 → 102/102**,
+lần cuối chạy trên chính nội dung kéo ngược từ Supabase sau deploy. Ba test hồi
+quy `fr159` / `fr161` / `fr164`: 65 / 9 / 8 xanh. Mock mở rộng: bảng
+`interests`, `ratings`; RPC `mark_listing_interest(p_codes, p_buyer_id)`,
+`ghi_danh_gia`.
+
+| ID | Kịch bản | Kỳ vọng | Kết quả |
+|---|---|---|---|
+| TS-V48-105a…c | fact chủ nhà có SĐT + "zalo 0903…" + "nhà số 12 Trần Hưng Đạo"; model trả lời có số | prompt gửi model không còn số, có "[liên hệ qua Zalo]", "số 12" bị bỏ mà tên đường giữ; bong bóng gửi khách không còn số; `location_raw` trong KHO giữ nguyên số nhà (OPEN-36) | ✅ |
+| TS-V48-105d | chính chủ trả lời câu chờ kèm SĐT | nhánh bán KHÔNG lọc, fact giữ nguyên số để CTV gọi | ✅ |
+| TS-V48-108a…c | khách nhắc căn; `ask_owner` một căn; overload thiếu (PGRST202) | `mark_listing_interest(p_codes, p_buyer_id)` + dòng `interests`; căn nhờ hỏi chủ cũng vào; overload thiếu → gọi lại bản cũ + `bot_errors`, khách vẫn có trả lời | ✅ |
+| TS-V48-45 | khối luật + few-shot | có câu "Trong khi chờ, anh/chị có câu hỏi gì khác về căn này không ạ?", `voice_request=true`, "giá TB phường", CĂN TƯƠNG TỰ, CHẤM SAO | ✅ |
+| TS-V48-31a | hỏi căn ĐÃ GỠ (P12, 9 tỷ, hẻm xe hơi); kho có P12 8 tỷ HXH / 12 tỷ / 7 tỷ MT | khối CĂN TƯƠNG TỰ có 8 tỷ + 7 tỷ (0,7–1,3×), không 12 tỷ, HXH xếp trước; khối căn nhắc không lộ địa chỉ/giá căn đã gỡ | ✅ |
+| TS-V48-31b | bot vừa nói #0006; khách "còn căn nào giống giống vầy không" (không mã) | căn gốc = #0006 từ lịch sử, tương tự có #0008 | ✅ |
+| TS-V48-27a…c | căn có 6 hình, khách xin hình; rồi "xem thêm" | 4 tấm đầu + "xem thêm hình không ạ?" + `more_photos` + `preferences.photo_offset={code,n:4}`; "xem thêm" → 2 tấm kế, hết thì không hỏi, offset xoá; model được báo | ✅ |
+| TS-V48-79a…d | người lạ "alo được không em, gọi cho anh đi"; lặp; model bật `voice_request`; model hỏng + không dấu | không hỏi vai; `need_human`; `reminders(kind='escalation', note 'VOICE: <uid> muốn gọi điện…')`; `voice_request` trong payload; 24h không đẻ thêm; câu mẫu "gọi lại" khi model hỏng | ✅ |
+| TS-V48-65a…c | nhắc `feedback` `sent` 1h trước, khách "4 sao em"; nhắc 3 ngày trước, "3/5"; RPC thiếu | `ghi_danh_gia(buyer, tin của buổi xem, 4)` + model được báo + `rated:4`; quá 48h → không ghi; RPC thiếu → `bot_errors`, khách vẫn có trả lời | ✅ |
+| TS-V48-116a…c | "căn A12-05 dự án Ny'ah còn không" (giữ chỗ, xác nhận 10 ngày trước); "căn B9-99"; "#BDS… còn không" (căn con_ban, vừa xác nhận) | khối CĂN TRONG DỰ ÁN đúng căn, "đang giữ chỗ", "QUÁ 7 NGÀY" → dặn xác nhận lại chủ + ask_owner, không lộ căn khác; mã không có → nói thật; dòng căn nhắc mang dự án + "còn bán" + "chủ xác nhận 0 ngày trước" | ✅ |
+| TS-V48-114/114b | rao "bán căn A12-05 dự án Ny'ah giá 6 tỷ 60m2"; rao không dự án | tin gắn `project_id` + `unit_code A12-05` + `unit_status con_ban` + `last_confirmed_at`; hàng lẻ → null | ✅ |
+| TS-V48-99a…c | hồ sơ P4 + tầm 6 tỷ, hỏi "#… giá vậy ok không"; lượt kế; chưa đủ hồ sơ | KHO kèm "giá TB phường 4 (bán): 116 tr/m² (1 tin)"; hai lượt ≤1 truy vấn (nhớ tạm 60 s theo `deal|phường`, chỉ nhớ khi có số); chưa đủ hồ sơ → không tính, không truy vấn | ✅ *(lần đầu hỏng: cache giữ chuỗi rỗng từ ca V1.13 DB trống → sửa không nhớ kết quả rỗng)* |
+| TS-V48-DEPLOY | bun bundle (`--minify-whitespace`, đổi `\uXXXX` → UTF-8) → `deploy_edge_function` (`verify_jwt=false` như v47) → `get_edge_function` → so byte | kết quả MCP nằm sẵn trên đĩa nên so bằng script: **trùng 100%, 92.388 byte**, SHA-256 `6eb8de75…` hai bên; e2e trên bản kéo ngược 102/102 | ✅ |
+| TS-V48-PROMPTS | md5 `bot_prompts` ↔ hằng TS | trước ghi: 8/8 khoá khớp (không ghi đè sửa tay); sau ghi: `human_chat_rules` `b4633cc2…`, `buyer_fewshot` `90f602df…` = TS | ✅ |
+| TS-V48-LIVE | `net.http_post` (uid `TEST-e2e-v48`, secret đọc từ Vault ngay trong SQL, `timeout 60 s`): "nhà 3PN phường 8 tầm 5 tỷ"; rồi "mua, nhà 3PN phường 8 tầm 5 tỷ" | 200 hỏi vai (không tốn model); 200 nhánh model: hồ sơ `{deal:ban, area:"Phường 8", budget:"tầm 5 tỷ", bedrooms:3}`, hai bong bóng, `bot_errors` mới = 0; dọn `buyers/conversations/messages/reminders/interests/inbound_ledger` = 0 dòng còn lại | ✅ |
+
+Cố ý chưa làm trong đợt này (ghi ở docs/02 từng FR): hai thời điểm xin đánh giá
+còn lại của FR-65; thẻ "yêu cầu voice" riêng trên /admin (FR-79); FR-99 phía
+người bán + nguồn giá ngoài (OPEN-10); chọn dự án ở `/raoban` web (FR-114);
+"tin chốt → báo mọi B đang chờ" (FR-108/116, tầng DB); duyệt ảnh tay (FR-105).
+
 ## 10.8 Nghiệm thu theo từng tài liệu (04/09/2026)
 
 Chạy theo yêu cầu chủ dự án 04/09/2026: đi từ BRD (`00`) xuống từng tầng, đối
@@ -1286,6 +1397,9 @@ OPEN-43/44/45.
 | FR-64 tin mới khớp tiêu chí, FR-56 hỏi cảm nhận sau xem, FR-54 link bản đồ | `20260904d`, nudge v24 | TS-MATCH-01…09 ✅ (rollback + dry_run 200) |
 | FR-71/74/75/76/77/78/80 admin buyer side | `20260904c`, `app/admin/page.tsx` | TS-ADM2-01…10 ✅, 11–12 ⏭ UI |
 | I5 đo được | `20260904e` view `nmg_hoat_dong` | admin/service_role 3 dòng, 0 hoạt động; anon 0 |
+| **Đợt 2 (chiều, "dựng hết, giữ chân 5 ngày")** — FR-60/61/62/63 (mốc 5 ngày, góc căn cuối/mời ảnh/mời lịch/căn khác cùng khu, giữ kết nối từ ngày 6), FR-65, FR-70/72/73, FR-52, FR-103, FR-108, FR-110, FR-57/81 email ntfy, NFR-01 | `20260904f`, nudge v25, cron `info-timeout-tick`, `stale-listing-tick` | TS-GIUCHAN-01…05 ✅ (rollback + dry_run 200); email ntfy 400 cần tài khoản |
+| FR-27/31/45/65/79/99/105/108/114/116 | chat-reply v48 (byte trùng), `prompts.ts` + `bot_prompts` | TS-V48, e2e 102/102, live 200 |
+| FR-01/02/03/04/08/09/10, FR-96 upload ảnh, FR-99 web, FR-100 `/ds/[token]`, FR-117 `/du-an/[slug]`, SRS-4.3/4.5/4.6, NFR-06 giấy tờ | `20260904g`, `lib/parse-query.ts`, `app/api/*`, `components/UploadAnh.tsx`, `/admin` | TS-WEB2 P01…P10 ✅, S01…S10 ✅, W ⏭ UI |
 
 Dữ liệu thật đáng lưu ý: `listing_facts` 0, `info_requests` 0, `listing_media`
 0, `deals` 0, `interests` 0, `viewings` 0; `ctvs` 2 (1 bật, 0 có Zalo uid),

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatPrice } from "@/lib/format";
 import { WARDS } from "@/lib/geo"; // một danh sách phường cho cả web (FR-171 j)
+import UploadAnh from "@/components/UploadAnh";
 
 // Vòng đời tin FR-139 — đúng 5 trạng thái của CHECK trên listings.status.
 // (Nhãn tiếng Anh cũ đã bỏ: migration FR-139 dịch hết dữ liệu sang tiếng Việt
@@ -31,6 +32,9 @@ export default function Page() {
   const [quan, setQuan] = useState("Quận 5");
   const [priceRaw, setPriceRaw] = useState("");
   const [msg, setMsg] = useState("");
+  // FR-96 (04/09/2026): up ảnh cho tin của mình — policy `storage_seller_own_insert`
+  // + `listing_media_own_insert` chỉ cho ghi vào thư mục UUID tin của chính mình.
+  const [upCho, setUpCho] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -150,22 +154,36 @@ export default function Page() {
 
       <div className="mt-8 overflow-hidden rounded-king border border-line bg-white">
         {mine.map((l) => (
-          <div key={l.id} className="flex items-center gap-4 border-b border-line px-5 py-3.5 last:border-0">
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">
-                #{l.code} · {l.description?.slice(0, 60) ?? l.location_raw}
-              </p>
-              <p className="text-sm text-mute">
-                {l.ward} · {formatPrice(l.price_vnd, l.price_raw)}
-              </p>
+          <div key={l.id} className="border-b border-line px-5 py-3.5 last:border-0">
+            <div className="flex items-center gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">
+                  #{l.code} · {l.description?.slice(0, 60) ?? l.location_raw}
+                </p>
+                <p className="text-sm text-mute">
+                  {l.ward} · {formatPrice(l.price_vnd, l.price_raw)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUpCho((c) => (c === l.id ? null : l.id))}
+                className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand"
+              >
+                {upCho === l.id ? "Đóng" : "Thêm ảnh"}
+              </button>
+              <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${
+                l.status === "dang_ban" || l.status === "dang_quan_tam" ? "bg-brand/10 text-brand"
+                : l.status === "da_chot" ? "bg-navy/10 text-navy"
+                : "bg-cream text-mute"
+              }`}>
+                {STATUS_LABEL[l.status] ?? l.status}
+              </span>
             </div>
-            <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${
-              l.status === "dang_ban" || l.status === "dang_quan_tam" ? "bg-brand/10 text-brand"
-              : l.status === "da_chot" ? "bg-navy/10 text-navy"
-              : "bg-cream text-mute"
-            }`}>
-              {STATUS_LABEL[l.status] ?? l.status}
-            </span>
+            {upCho === l.id && (
+              <div className="mt-3">
+                <UploadAnh listingId={l.id} code={l.code} />
+              </div>
+            )}
           </div>
         ))}
         {mine.length === 0 && (

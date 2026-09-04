@@ -47,7 +47,7 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-40 | **Phạm vi loại BĐS**: thông số cho thuê, đất nền, nhóm công nghiệp (AOND §III) | Trung bình | FR-172, OPEN-37, DH-03 |
 | OPEN-41 | **Nhà cung cấp model**: giữ Claude trên Supabase hay theo AOND §VII (Gemini rồi local) | Thấp | SRS-2, FR-138, FR-168, DH-06 |
 | OPEN-42 | **Ngưỡng CTV**: hạn trả lời câu khách hỏi (đang 120 phút) và ngưỡng hạng Vàng ≥90% / Bạc ≥70% / dưới 3 câu = chưa đủ — đều [giả định BA] | Trung bình | FR-173, FR-137, DH-03 |
-| OPEN-43 | **Tài liệu tả nhiều thứ chưa dựng như đã có** (nghiệm thu 04/09; *cùng ngày đã dựng FR-54/56/64, FR-71…80 admin, FR-12/17 SEO — xem thân mục*): SRS-2.1 (Zalo SSO, Realtime, Logstash/ES, Slack, SMTP, fingerprint), SRS-3.2/3.8b (`property_events`, `tags`, `saved_criteria`, `curated_lists`, `escalations`), SRS-4.x (0/7 route `/api/*`), SRS-5.3 bảng "thiết kế" (7 job), SRS-5.5 email, AC-01/02/04/05/09/11/12/13; nhóm FR-60…65 (giữ chân) và FR-70…81 (admin buyer side) gần như chưa có; UF-06/07/13 nửa sau; FR-14/30 `?ref=` không ai đọc. Cần chủ dự án chốt: (a) giữ làm lộ trình và gắn nhãn `[thiết kế — chưa dựng]` hàng loạt, hay (b) `[deprecated]` những gì đã thay bằng đường khác (email → reminders/ntfy, API → bảng + trigger, curated list → bỏ) | Cao | SRS-2/3/4/5/7, FR-60…81, UF-06/07/13, `10 §10.8` |
+| OPEN-43 | **Tài liệu tả nhiều thứ chưa dựng như đã có** (nghiệm thu 04/09; *cùng ngày đã dựng gần hết theo lệnh "dựng hết" — xem thân mục; còn treo: fingerprint, Zalo SSO, FR-118/160, FR-28, FR-93/94, nút Xem thêm, `?ref=`*): SRS-2.1 (Zalo SSO, Realtime, Logstash/ES, Slack, SMTP, fingerprint), SRS-3.2/3.8b (`property_events`, `tags`, `saved_criteria`, `curated_lists`, `escalations`), SRS-4.x (0/7 route `/api/*`), SRS-5.3 bảng "thiết kế" (7 job), SRS-5.5 email, AC-01/02/04/05/09/11/12/13; nhóm FR-60…65 (giữ chân) và FR-70…81 (admin buyer side) gần như chưa có; UF-06/07/13 nửa sau; FR-14/30 `?ref=` không ai đọc. Cần chủ dự án chốt: (a) giữ làm lộ trình và gắn nhãn `[thiết kế — chưa dựng]` hàng loạt, hay (b) `[deprecated]` những gì đã thay bằng đường khác (email → reminders/ntfy, API → bảng + trigger, curated list → bỏ) | Thấp | SRS-2/3/4/5/7, FR-60…81, UF-06/07/13, `10 §10.8` |
 | OPEN-44 | **SEO** — *nền đã dựng 04/09/2026* (sitemap, robots, canonical, OpenGraph, JSON-LD, 64 trang tag SSG từ taxonomy). Còn treo: bộ TOP-100 keyword thật (OPEN-06) và tag theo khu mới sau OPEN-27; có gửi sitemap lên Google Search Console không, ai giữ tài khoản? | Thấp | FR-12, FR-17, NFR-09, IA §4.4, OPEN-06, OPEN-27 |
 | OPEN-45 | **Design token `06 §6.2` lệch code**: `app/globals.css` dùng bảng màu/khoảng cách khác tài liệu (đặt theo theme cắt), `design/tokens.json` là bản thứ ba; wireframe `05` có 6/14 màn chưa dựng (WF-08 lịch xem, WF-11 curated list, WF-13 admin tìm B…). Chọn nguồn sự thật: đổi `06`/`tokens.json` theo code, hay đổi code theo `06`? | Thấp | UI-01…, WF-01…14, `design/tokens.json`, OPEN-07 |
 
@@ -902,7 +902,23 @@ FR-12/17 + NFR-09 (SEO nền, xem OPEN-44). Vẫn chờ chốt: SRS-2.1/3.2/3.8b
 (bảng/API/stack thiết kế), FR-57/81 email, FR-60…63 (mốc 3 ngày, mời ảnh, chào
 căn khác), FR-65 đánh giá 3 thời điểm, FR-70/72/73/79, UF-06/07/13, `?ref=`.
 
-**Chờ chủ dự án chốt** (mức: Cao).
+*[04/09/2026 chiều — chủ dự án: "dựng hết đi, giữ chân 5 ngày"]* → đã dựng
+tiếp trong cùng ngày (`10 §10.8.4`, commit thứ ba): FR-60…63 giữ chân mốc 5 ngày
+(nudge v25), FR-65 (feedback + `ghi_danh_gia`), FR-70/72/73 (`property_events`,
+`bds_hot`, `hoi_thoai_phien`), FR-52, FR-103, FR-108, FR-110, FR-57/81 email qua
+ntfy (cần tài khoản ntfy + `NTFY_TOKEN`), FR-27/31/45/79/99/105/114/116 (chat-reply
+v48), FR-01/02/03/04/08/09/10 (search tự nhiên, landing), FR-96 upload ảnh,
+FR-100 danh sách riêng, FR-117 trang dự án, SRS-4.3/4.5/4.6, NFR-01/06.
+**Còn treo thật sự, không dựng được trong repo**: FR-16/NFR-08 fingerprint
+(OPEN-14 — riêng tư), FR-95 Zalo SSO (cần app Zalo), FR-118 (OPEN-27 nửa sau),
+FR-160 (OPEN-28 nửa sau), FR-28 tiện ích (OPEN-13 dữ liệu), FR-93/94 biến thể +
+xác nhận câu rao (cần lượt model riêng, để đợt sau), FR-24 nút "Xem thêm" (Zalo
+cá nhân không có nút), `?ref=` (zalo.me cá nhân rớt tham số — chờ OA, OPEN-33),
+SRS-4.1/4.2/4.4/4.7 (thay bằng bảng + trigger, ghi ở `07`), FR-65 hai thời điểm
+đầu (tránh spam, `[giả định BA]`). Mục này thu lại còn: **chốt nhãn `[deprecated]`
+cho SRS-4.1/4.2/4.4/4.7, `escalations`, email thuần (SRS-5.5 cũ)** — khuyến nghị (b).
+
+**Chờ chủ dự án chốt** (mức: Thấp — chỉ còn nhãn tài liệu).
 
 ---
 

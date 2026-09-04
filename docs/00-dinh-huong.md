@@ -164,7 +164,10 @@ nhóm công nghiệp. Giả định 4 đã **đổ một lần**: bridge chết 
 
 Đã chốt 03/09/2026: **OPEN-08 + OPEN-39** (Aioinhadat, một bot Thái, không
 •ai), **luồng CTV** (FR-173), **địa bàn — OPEN-27 nửa đầu** (Sài Gòn phường
-mới + Long An, trọng tâm bán — FR-174). Còn:
+mới + Long An, trọng tâm bán — FR-174). Đã chốt 04/09/2026: **giữ chân khách
+mốc 5 ngày** (FR-60 đổi từ 3 ngày; FR-63 buộc giữ kết nối từ ngày 6) và **dựng
+hết phần tài liệu có mà code chưa** (OPEN-43 → xem `10 §10.8.4`) [nguồn: chủ
+dự án 04/09/2026 "dựng hết đi, giữ chân 5 ngày"]. Còn:
 
 | ID | Câu hỏi | Khuyến nghị BA |
 |---|---|---|

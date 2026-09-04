@@ -10,6 +10,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription } from "@/lib/format";
+import UploadAnh from "@/components/UploadAnh";
 
 // Tin chờ duyệt: chỉ các cột thẻ duyệt cần, không kéo "*".
 type TinCho = Pick<
@@ -116,6 +117,17 @@ const TRANG_THAI_XEM: Record<string, string> = {
 };
 const NGUOI_GIAO: Record<string, string> = { ctv: "CTV", seller: "chủ nhà", admin: "admin" };
 
+// 04/09/2026 đợt 2 (FR-70/73, FR-96, FR-100, NFR-06):
+// FR-73: view `bds_hot` — số sự kiện 60 ngày theo tin (agent SQL dựng; thiếu
+// view thì thẻ nói "chưa có dữ liệu", trang không vỡ).
+type BdsHot = { listing_id: string; code: string | null; ward: string | null; so_su_kien_60d: number; last_event_at: string | null };
+// Độ trễ bot 7 ngày — view `bot_do_tre` (cùng cách). Cột thật đo bằng GIÂY
+// (`p50_giay`, `p95_giay`, `max_giay`, `so_luot`), web đổi sang ms để so mốc NFR-01.
+type DoTre = { so_luot: number | null; p50_giay: number | null; p95_giay: number | null; max_giay: number | null };
+// NFR-06: media ở bucket riêng (sổ đỏ/giấy tờ) — chỉ hiện MÃ TIN + loại; đường
+// dẫn không bao giờ in ra trang, chỉ dùng để ký URL 15 phút khi admin bấm.
+type GiayTo = { id: string; listing_id: string; storage_path: string; media_type: string; mime_type: string; created_at: string; listings: { code: string | null } | null };
+
 // FR-80: mọi danh sách admin 20 mục/trang. Phân trang phía client — dữ liệu đã
 // tải trong một đợt, lật trang không tốn thêm truy vấn.
 const MOI_TRANG = 20;
@@ -170,6 +182,19 @@ export default function Page() {
   const [qKhach, setQKhach] = useState("");
   const [khach, setKhach] = useState<Khach[] | null>(null);
   const [dangTim, setDangTim] = useState(false);
+  // 04/09 đợt 2
+  const [bdsHot, setBdsHot] = useState<BdsHot[] | null>(null);
+  const [doTre, setDoTre] = useState<DoTre | null | undefined>(undefined);
+  const [giayTo, setGiayTo] = useState<GiayTo[]>([]);
+  const [loiPhu, setLoiPhu] = useState<Record<string, string>>({});
+  // FR-100: tạo danh sách riêng — nhập mã tin cách nhau bởi dấu phẩy + tiêu đề.
+  const [dsMa, setDsMa] = useState("");
+  const [dsTieuDe, setDsTieuDe] = useState("");
+  const [dsKq, setDsKq] = useState<{ ok: boolean; text: string; path?: string } | null>(null);
+  const [dangTaoDs, setDangTaoDs] = useState(false);
+  const [daChep, setDaChep] = useState(false);
+  // FR-96: up ảnh cho một tin chờ duyệt ngay tại thẻ duyệt.
+  const [upCho, setUpCho] = useState<string | null>(null);
 
   // FR-80 — hook phân trang phải đứng TRƯỚC mọi `return` sớm theo `role`.
   const ptTin = usePhanTrang(pending);
@@ -187,7 +212,7 @@ export default function Page() {
   // 04/09: thêm 4 truy vấn buyer side vào CÙNG đợt, vẫn một vòng đi về.
   const load = async () => {
     const d7 = new Date(Date.now() - 7 * 86400e3).toISOString();
-    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk] = await Promise.all([
+    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt] = await Promise.all([
       supabase
         .from("listings")
         .select("id, code, ward, price_vnd, price_raw, area_m2, description, location_raw, created_at")
@@ -240,7 +265,24 @@ export default function Page() {
         .from("hoi_thoai_thong_ke")
         .select("ngay, hoi_thoai_khach_moi, hoi_thoai_ban_moi, tin_khach, tin_nguoi_ban, tin_bot, tin_nguoi_that, khach_moi, co_nguoi_that")
         .order("ngay", { ascending: false }),
+      // FR-73 — view `bds_hot` (gác cổng admin). Lỗi (chưa có view) → thẻ báo.
+      supabase.from("bds_hot").select("listing_id, code, ward, so_su_kien_60d, last_event_at")
+        .order("so_su_kien_60d", { ascending: false }).limit(20),
+      // Độ trễ bot 7 ngày — view `bot_do_tre`.
+      supabase.from("bot_do_tre").select("so_luot, p50_giay, p95_giay, max_giay").maybeSingle(),
+      // NFR-06 — giấy tờ ở bucket riêng (policy `listing_media_admin_all`).
+      supabase.from("listing_media")
+        .select("id, listing_id, storage_path, media_type, mime_type, created_at, listings(code)")
+        .eq("bucket", "listing-private").order("created_at", { ascending: false }).limit(100),
     ]);
+    setBdsHot(hot.error ? null : ((hot.data ?? []) as BdsHot[]));
+    setDoTre(tre.error ? null : ((tre.data as DoTre | null) ?? null));
+    setGiayTo((gt.data ?? []) as unknown as GiayTo[]);
+    setLoiPhu({
+      ...(hot.error ? { bds_hot: hot.error.message } : {}),
+      ...(tre.error ? { bot_do_tre: tre.error.message } : {}),
+      ...(gt.error ? { giay_to: gt.error.message } : {}),
+    });
     setHangCtv((hc.data ?? []) as HangCtv[]);
     setPending((pend.data ?? []) as TinCho[]);
     const trangThai = (st.data ?? []).map((r) => r.status as string);
@@ -309,6 +351,34 @@ export default function Page() {
     setDangTim(false);
     if (error) setLoi((l) => [...l, `tìm khách: ${error.message}`]);
     setKhach((data ?? []) as Khach[]);
+  };
+
+  // FR-100 — tạo danh sách riêng qua RPC `tao_danh_sach` (kiểm admin dưới DB).
+  const taoDs = async (e: FormEvent) => {
+    e.preventDefault();
+    const ma = dsMa.split(/[,\s;]+/).map((x) => x.trim()).filter(Boolean);
+    if (!ma.length) return setDsKq({ ok: false, text: "Chưa có mã tin nào." });
+    setDangTaoDs(true); setDsKq(null); setDaChep(false);
+    const { data, error } = await supabase.rpc("tao_danh_sach", { p_listing_codes: ma, p_title: dsTieuDe || null });
+    setDangTaoDs(false);
+    if (error) return setDsKq({ ok: false, text: error.message });
+    const r = data as { path: string; n: number; expires_at: string };
+    setDsKq({ ok: true, path: r.path, text: `${r.n} tin · sống tới ${new Date(r.expires_at).toLocaleDateString("vi-VN")}` });
+  };
+  const chepLink = async (path: string) => {
+    try { await navigator.clipboard.writeText(`${location.origin}${path}`); setDaChep(true); }
+    catch { setDsKq((k) => (k ? { ...k, text: `${k.text} — không chép được, bôi đen link mà copy` } : k)); }
+  };
+
+  // NFR-06 — ký URL 15 phút (900 s) cho một file bucket riêng rồi mở tab mới.
+  // Policy `storage_admin_private_all` cho admin SELECT object → ký được.
+  const xemGiayTo = async (g: GiayTo) => {
+    const { data, error } = await supabase.storage.from("listing-private").createSignedUrl(g.storage_path, 900);
+    if (error || !data?.signedUrl) {
+      setLoi((l) => [...l, `giấy tờ #${g.listings?.code ?? "?"}: ${error?.message ?? "không ký được URL"}`]);
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener");
   };
 
   // FR-71 — CSV tạo ngay trên trình duyệt (NFR-11: xem ở Excel). BOM để Excel
@@ -405,6 +475,118 @@ export default function Page() {
           )}
         </div>
       )}
+
+      {/* Độ trễ bot 7 ngày — view `bot_do_tre` (04/09 đợt 2) */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <span className="eyebrow text-mute">Độ trễ bot · 7 ngày</span>
+          {doTre === undefined ? (
+            <span className="text-sm text-mute">đang đọc…</span>
+          ) : doTre === null || doTre.so_luot == null ? (
+            <span className="text-sm text-mute">chưa có dữ liệu{loiPhu.bot_do_tre ? ` (${loiPhu.bot_do_tre})` : ""}</span>
+          ) : (
+            <span className="text-sm tabular-nums">
+              p50 <b>{Math.round((doTre.p50_giay ?? 0) * 1000).toLocaleString("vi-VN")} ms</b> · p95{" "}
+              <b className={(doTre.p95_giay ?? 0) > 3 ? "text-brand" : ""}>{Math.round((doTre.p95_giay ?? 0) * 1000).toLocaleString("vi-VN")} ms</b>
+              {doTre.max_giay != null ? ` · max ${Math.round(doTre.max_giay * 1000).toLocaleString("vi-VN")} ms` : ""}{" "}
+              · {doTre.so_luot} lượt · mốc NFR-01: p95 &lt; 3 000 ms
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* FR-70/73 — BĐS hot 60 ngày (view `bds_hot`) */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <span className="eyebrow text-mute">BĐS hot · 60 ngày</span>
+          <span className="text-sm text-mute">
+            {bdsHot === null
+              ? `chưa có dữ liệu${loiPhu.bds_hot ? ` (${loiPhu.bds_hot})` : ""}`
+              : bdsHot.length ? "đếm sự kiện (xem, hỏi, hẹn) theo tin — nhiều nhất trước" : "chưa có sự kiện nào trong 60 ngày"}
+          </span>
+        </div>
+        {bdsHot && bdsHot.length > 0 && (
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {bdsHot.map((h) => (
+              <li key={h.listing_id} className="flex flex-wrap items-center gap-x-3 py-2">
+                <span className="w-16 shrink-0 text-right font-extrabold tabular-nums text-brand">{h.so_su_kien_60d}</span>
+                <Link href={`/nha-dat/${encodeURIComponent(h.code ?? "")}`} target="_blank" className="font-semibold hover:text-brand">
+                  #{h.code ?? h.listing_id.slice(0, 8)}
+                </Link>
+                <span className="text-mute">{h.ward ?? ""}</span>
+                <span className="ml-auto text-xs text-mute tabular-nums">
+                  {h.last_event_at ? `gần nhất ${new Date(h.last_event_at).toLocaleString("vi-VN")}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* FR-100 — tạo danh sách riêng cho một khách (UF-12) */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <form onSubmit={taoDs} className="space-y-3">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <span className="eyebrow text-mute">Danh sách riêng cho khách</span>
+            <span className="text-sm text-mute">nhập mã tin cách nhau bởi dấu phẩy → link /ds/… sống 30 ngày, gửi qua Zalo</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <input value={dsMa} onChange={(e) => setDsMa(e.target.value)}
+              placeholder="BDS-Q5-0007, BDS-Q5-0012, BDS-Q5-0031"
+              className="min-w-0 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand" />
+            <input value={dsTieuDe} onChange={(e) => setDsTieuDe(e.target.value)}
+              placeholder="tiêu đề: Quận 5 · dưới 12 tỉ · HXH"
+              className="min-w-0 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand sm:w-72" />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" disabled={dangTaoDs}
+              className="rounded-full bg-brand px-5 py-1.5 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60">
+              {dangTaoDs ? "Đang tạo…" : "Tạo link"}
+            </button>
+            {dsKq && (
+              <span className={`text-sm ${dsKq.ok ? "text-navy" : "text-brand"}`}>
+                {dsKq.ok && dsKq.path ? (
+                  <>
+                    <a href={dsKq.path} target="_blank" rel="noreferrer" className="font-bold underline">{dsKq.path}</a>
+                    {" · "}{dsKq.text}{" "}
+                    <button type="button" onClick={() => chepLink(dsKq.path!)}
+                      className="rounded-full border border-line px-3 py-0.5 text-xs font-semibold transition hover:border-brand hover:text-brand">
+                      {daChep ? "Đã chép" : "Chép link"}
+                    </button>
+                  </>
+                ) : dsKq.text}
+              </span>
+            )}
+          </div>
+        </form>
+      </div>
+
+      {/* NFR-06 — giấy tờ ở bucket riêng: chỉ mã tin + loại, xem qua URL ký 15 phút */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <span className="eyebrow text-mute">Giấy tờ (bucket riêng)</span>
+          <span className="text-sm text-mute">
+            {loiPhu.giay_to
+              ? `không đọc được: ${loiPhu.giay_to}`
+              : giayTo.length ? `${giayTo.length} file · link xem sống 15 phút, không bao giờ công khai` : "chưa có file nào"}
+          </span>
+        </div>
+        {giayTo.length > 0 && (
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {giayTo.map((g) => (
+              <li key={g.id} className="flex flex-wrap items-center gap-x-3 py-2">
+                <span className="w-32 shrink-0 tabular-nums text-mute">{new Date(g.created_at).toLocaleString("vi-VN")}</span>
+                <span className="font-bold">#{g.listings?.code ?? "—"}</span>
+                <span className="text-mute">{g.media_type === "so_do" ? "sổ đỏ / sổ hồng" : g.media_type === "giay_to" ? "giấy tờ" : g.media_type} · {g.mime_type}</span>
+                <button onClick={() => xemGiayTo(g)}
+                  className="ml-auto rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand">
+                  Xem giấy tờ
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {/* Việc chờ admin — đọc thẳng bảng, không qua bridge (02/09) */}
       <div className="mt-6 rounded-king border border-line bg-white p-5">
@@ -772,11 +954,21 @@ export default function Page() {
                 className="rounded-full border border-line px-5 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand active:scale-[0.98]">
                 Ẩn tin
               </button>
+              <button onClick={() => setUpCho((c) => (c === l.id ? null : l.id))}
+                className="rounded-full border border-line px-4 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand">
+                {upCho === l.id ? "Đóng ảnh" : "Up ảnh"}
+              </button>
               <Link href={`/nha-dat/${encodeURIComponent(l.code ?? "")}`} target="_blank"
                 className="ml-auto self-center text-sm font-semibold text-mute hover:text-brand">
                 Xem trang tin →
               </Link>
             </div>
+            {/* FR-96: up ảnh cho tin chờ duyệt (policy admin, bucket listing-public) */}
+            {upCho === l.id && (
+              <div className="mt-4">
+                <UploadAnh listingId={l.id} code={l.code} />
+              </div>
+            )}
           </div>
         ))}
         {pending.length === 0 && (

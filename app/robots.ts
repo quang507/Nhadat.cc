@@ -7,7 +7,8 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/admin", "/quan-ly", "/tai-khoan", "/yeu-thich", "/dang-nhap"],
+      // IA-11 `/ds/` (danh sách riêng, token) và IA-02 kết quả tìm kiếm `/api/` không cào.
+      disallow: ["/admin", "/quan-ly", "/tai-khoan", "/yeu-thich", "/dang-nhap", "/ds/", "/api/"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };

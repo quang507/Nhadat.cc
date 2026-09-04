@@ -25,18 +25,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: "daily",
     priority: 0.7,
   }));
-  const { data } = await supabase
-    .from("listings")
-    .select("code, updated_at")
-    .in("status", ["dang_ban", "dang_quan_tam"])
-    .not("code", "is", null)
-    .order("updated_at", { ascending: false })
-    .limit(5000);
+  const [{ data }, { data: duAn }] = await Promise.all([
+    supabase
+      .from("listings")
+      .select("code, updated_at")
+      .in("status", ["dang_ban", "dang_quan_tam"])
+      .not("code", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(5000),
+    // FR-117: trang dự án. `/ds/{token}` CỐ Ý không vào sitemap (noindex, IA-11).
+    supabase.from("projects").select("slug, updated_at").not("slug", "is", null).limit(500),
+  ]);
   const tin: MetadataRoute.Sitemap = (data ?? []).map((l) => ({
     url: `${SITE_URL}/nha-dat/${encodeURIComponent(l.code as string)}`,
     lastModified: l.updated_at ? new Date(l.updated_at as string) : now,
     changeFrequency: "weekly",
     priority: 0.6,
   }));
-  return [...tinh, ...tag, ...tin];
+  const da: MetadataRoute.Sitemap = (duAn ?? []).map((p) => ({
+    url: `${SITE_URL}/du-an/${encodeURIComponent(p.slug as string)}`,
+    lastModified: p.updated_at ? new Date(p.updated_at as string) : now,
+    changeFrequency: "weekly",
+    priority: 0.7,
+  }));
+  return [...tinh, ...tag, ...da, ...tin];
 }

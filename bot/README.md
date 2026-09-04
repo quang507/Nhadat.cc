@@ -12,7 +12,7 @@ tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/pro
 | ~~`rate-ctv`~~ | — | *ĐÃ XOÁ 27/08/2026 (OPEN-23)* — trùng phần chấm điểm trong `ctv-report`. Nội dung cũ: FR-102, chấm CSKH của CTV/bot từ log hội thoại (bảng `messages` hoặc transcript truyền vào), 4 tiêu chí ×1-5 + stars tổng, ghi `ratings` (`rated_by='ai_qa'`, chi tiết trong `details` jsonb). Idempotent theo conversation. |
 | `chat-reply` | NFR-12, FR-129…135, FR-29/32, FR-159, FR-170, UF-06 | **Bộ não hội thoại** dùng chung mọi kênh — phân vai trước (FR-159: người lạ tự nhận có BĐS → mở hồ sơ bán ngay kèm nhãn: có BĐS = chính chủ, tự xưng môi giới = môi giới; bot nói thẳng nhãn + mức phí cho họ ở bong bóng cuối, và đẩy một việc cho admin (hàng escalation + thẻ "Việc chờ admin" trên /admin); câu mập mờ ở tin đầu → hỏi "đang muốn tìm mua/thuê nhà, hay đang có bất động sản cần rao ạ?" một lần, không gọi model; mặc định người mua): nhánh seller (hỏi nhỏ giọt), nhánh buyer (hồ sơ nhu cầu + trả lời tự nhiên, không delay nhân tạo, lọc kho theo giá số `price_vnd`, tra căn theo mã, kho dự án, đặt lịch xem nhà + xin SĐT đúng kịch bản, bóc lời hứa, cờ `need_human`, follow-up im lặng ngắn, đọc ảnh `image_url`). |
 | `zalo-webhook` | SRS-4.4 | Nhận event OA (`user_send_text`/`user_send_image`), verify chữ ký nếu có app secret, trả 200 <1s, chuyển vào chat-reply rồi gửi bong bóng (FR-131: không delay nhân tạo, giữa hai bong bóng chỉ 300ms cho Zalo giao đúng thứ tự). verify_jwt **tắt**. Từ FR-166 có thêm cửa `{replay_event_id}` (chỉ service key) để đường cứu gọi lại, và gửi tiếp từ `sent_bubbles` thay vì phát lại từ bong bóng đầu. |
-| `nudge` | FR-133, FR-32, FR-54/56/64 | Cron hai lượt/giờ trong 8h–20h VN (phút 7 và 37 — FR-171 d, trước là `*/30` suốt ngày đêm): nhắc lời hứa tới hạn, nhắc lịch xem trước ~45' (**v24, 04/09: kèm dòng "Bản đồ: maps.google.com/?q=lat,lng" khi tin có toạ độ — FR-54**), follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); **v24 thêm hai kind đi MẪU CỐ ĐỊNH không gọi model**: `match` (tin mới khớp tiêu chí — trigger DB `bao_tin_moi_khop`, FR-64) và `feedback` (hỏi cảm nhận 4 giờ sau buổi xem — trigger DB chèn khi nhắc `viewing` đánh `sent`, FR-56; migration `20260904d`); hàm vẫn tự chặn ngoài 8h–21h VN; **không còn ngủ ngẫu nhiên 0-45 s** (vượt trần 55 s của `net.http_post` → lỗi giả); `{dry_run, force}` để test. Từ FR-166 giành việc qua `nhan_viec_nhac` (hợp đồng thuê 5 phút) nên hai lượt chạy chồng nhau không gửi đúp; `dry_run` KHÔNG giành việc. |
+| `nudge` | FR-133, FR-32, FR-54/56/64 | Cron hai lượt/giờ trong 8h–20h VN (phút 7 và 37 — FR-171 d, trước là `*/30` suốt ngày đêm): nhắc lời hứa tới hạn, nhắc lịch xem trước ~45' (**v24, 04/09: kèm dòng "Bản đồ: maps.google.com/?q=lat,lng" khi tin có toạ độ — FR-54**), follow-up căn khách hỏi rồi im, hỏi thăm buyer im 5-6 ngày (4 góc, tránh lặp); **v24 thêm hai kind đi MẪU CỐ ĐỊNH không gọi model**: `match` (tin mới khớp tiêu chí — trigger DB `bao_tin_moi_khop`, FR-64) và `feedback` (hỏi cảm nhận 4 giờ sau buổi xem — trigger DB chèn khi nhắc `viewing` đánh `sent`, FR-56; migration `20260904d`); hàm vẫn tự chặn ngoài 8h–21h VN; **không còn ngủ ngẫu nhiên 0-45 s** (vượt trần 55 s của `net.http_post` → lỗi giả); `{dry_run, force}` để test. Từ FR-166 giành việc qua `nhan_viec_nhac` (hợp đồng thuê 5 phút) nên hai lượt chạy chồng nhau không gửi đúp; `dry_run` KHÔNG giành việc. **v25 (04/09 chiều, migration `20260904f`)**: hỏi thăm khách im ĐỦ **5 ngày** (chủ dự án chốt) một lần/lượt im, sáu góc xoay vòng tất định (căn cuối / tiến độ / mời xem ảnh / tiêu chí / mời đặt lịch / thị trường) + kho "căn khác cùng khu" từ RPC `can_cung_khu` (FR-60/61/62); im ≥ 6 ngày BUỘC câu giữ kết nối Zalo bằng mẫu cố định (FR-63); kind mới `sold` (căn khách quan tâm đã chốt + căn thay thế, FR-108) và `rating` (dự phòng, FR-65); `followup` có ghi chú "chủ nhà chưa phản hồi" (FR-110) hoặc "lịch xem … đã được xác nhận" (FR-52) đi mẫu cố định; `feedback` thêm câu chấm sao. |
 | `ctv-report` | FR-136/137, FR-149 | Cron 17h VN: tổng hợp đơn per-CTV (chia xoay vòng bằng trigger), lịch xem, đơn chờ người thật, chấm điểm hội thoại theo `RATE_CTV_RUBRIC` → còn OA thì gửi thẳng, không thì đẩy vào `reminders` kind `report` (`sent_to: "queued_bridge"`) để bridge nhắn số Zalo cá nhân admin; lưu `ctv_daily_reports`. |
 | `geocode-listings` | FR-122 | Điền `lat`/`lng` cho listing từ `location_raw` qua Nominatim/OSM (1 req/s, cache theo câu query, tự dừng ở ~90s để chạy lặp). Không cron, gọi tay khi có tin mới cần lên bản đồ. **Đưa vào repo 27/08/2026** — trước đó ACTIVE trên Supabase từ 25/08 mà không có dòng nào trong git. |
 | `inbound-sweep` | FR-166 | Đường CỨU cho tin nhắn đến. Cron `inbound-sweep-tick` (1 phút) hỏi `viec_inbound_bo_roi()` xem việc nào đường nhanh chưa làm xong, rồi gọi ngược `zalo-webhook` ở cửa phát lại — cố ý không tự gửi lấy, vì khâu gửi là chỗ giữ luật chống-gửi-đúp. Bình thường không có việc thì hàm tick return ngay, không gọi gì. |
@@ -260,6 +260,38 @@ khi tin có `lat/lng` (select thêm `listings(code,lat,lng)` và
 `viewings(listings(...))`). FR-56 đặt ở trigger DB chứ không ở nudge. Cùng quy
 trình bun bundle → deploy → kéo ngược: trùng 19.067 byte (bundle đổi `\uXXXX`
 thành UTF-8 trước khi gửi); `dry_run` với 3 nhắc thử ra đúng ba mẫu, 0 lỗi mới.*
+
+*04/09/2026 chiều — "dựng hết, giữ chân 5 ngày" (migration `20260904f`, docs/10
+TS-GIUCHAN): `nudge` **v25** — reengage viết lại theo FR-60/61/62/63 (mốc 5 ngày,
+góc xoay vòng, kho cùng khu, giữ kết nối buộc ở 6 ngày, mẫu cố định không cần
+model), hàm `mauCoDinh()` gom mọi kind đi mẫu (`match`, `feedback`, `sold`,
+`rating`, hai khuôn `followup`). Bundle 24.203 byte, kéo ngược `cmp` trùng, SHA
+`d7fb2323…`; `dry_run` 200, 0 lỗi mới. **Cron mới** (SQL thuần, không gọi edge):
+`info-timeout-tick` (`3 1-13 * * *`, FR-110 → `info_request_timeout_tick()`) và
+`stale-listing-tick` (`0 2 * * *` = 9h VN, FR-103 → `stale_listing_tick()`).
+**Trigger mới đáng biết khi đọc `reminders`**: `viewings` INSERT sinh ngay một
+escalation cho CTV/admin + câu `info_requests(xac_nhan_lich, buyer_ask)` (FR-52);
+`listings` sang `da_chot` sinh `sold` cho khách trong `interests` (FR-108); mọi
+bảng nguồn ghi `property_events` (FR-70). **Email FR-81** đi qua `email_admin()` →
+ntfy: `app_config.admin_email` rỗng = im; ntfy.sh từ chối email ẩn danh (thử thật
+400) nên cần tài khoản + secret Vault `NTFY_TOKEN` — chờ chủ dự án.*
+*04/09/2026 (chiều) — `chat-reply` **v48**, "dựng hết" mười FR có tài liệu mà
+bot chưa làm (docs/10 TS-V48): FR-105 `locLienHe()` lọc SĐT/Zalo/số nhà cho
+fact vào prompt + mọi bong bóng gửi người MUA (cùng regex `lib/format.ts`,
+không áp nhánh bán/CTV/admin); FR-108 `mark_listing_interest(p_codes,
+p_buyer_id)` ghi `interests`; FR-31 khối CĂN TƯƠNG TỰ (0,7–1,3× giá, cùng
+phường → quận, xếp hẻm/loại); FR-27 ≤4 hình/lượt + `preferences.photo_offset`
++ "xem thêm"; FR-45/79/99/65/116 qua `HUMAN_CHAT_RULES` + few-shot (đồng bộ
+`bot_prompts`, md5 khớp) — FR-79 thêm cờ `voice_request` trong schema và việc
+`reminders` note `VOICE: <uid>…`; FR-65 "N sao" trong 48h sau nhắc `feedback`
+→ RPC `ghi_danh_gia`; FR-114 câu rao khớp `match_projects` → `project_id` +
+`unit_code` + `unit_status`; FR-116 khối CĂN TRONG DỰ ÁN đọc `unit_status`,
+TTL 7 ngày; FR-99 dòng "giá TB phường" nhớ tạm 60 s. Cùng quy trình bundle →
+deploy → kéo ngược: **kết quả `get_edge_function` giờ được MCP ghi sẵn ra file
+trên đĩa** (quá trần token), nên so byte bằng script chứ không chép tay —
+trùng 100% 92.388 byte; e2e trên bản kéo ngược **102/102**; hai lượt thật qua
+`net.http_post` đều 200, 0 `bot_errors` mới, dữ liệu thử đã dọn.*
+
 Lệnh bundle:
 
 ```bash

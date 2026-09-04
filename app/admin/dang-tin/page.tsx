@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TYPE_LABEL } from "@/lib/format";
+import UploadAnh from "@/components/UploadAnh";
 
 const NGUON = [
   ["admin", "Tự nhập (admin)"],
@@ -51,7 +52,7 @@ export default function Page() {
   const [role, setRole] = useState<"loading" | "chan" | "admin">("loading");
   const [nguoiBan, setNguoiBan] = useState<Ng[]>([]);
   const [dangGui, setDangGui] = useState(false);
-  const [ketQua, setKetQua] = useState<{ ok: boolean; text: string; code?: string } | null>(null);
+  const [ketQua, setKetQua] = useState<{ ok: boolean; text: string; code?: string; id?: string } | null>(null);
 
   // Form
   const [deal, setDeal] = useState("ban");
@@ -142,10 +143,11 @@ export default function Page() {
       setKetQua({ ok: false, text: error.message });
       return;
     }
-    const r = data as { code: string; price_vnd: number | null };
+    const r = data as { id: string; code: string; price_vnd: number | null };
     setKetQua({
       ok: true,
       code: r.code,
+      id: r.id,
       text: `Đã tạo tin #${r.code}${
         r.price_vnd ? ` · giá đọc ra ${r.price_vnd.toLocaleString("vi-VN")} đ` : " · CHƯA đọc được giá ra số"
       }`,
@@ -272,6 +274,12 @@ export default function Page() {
 
         {thieu.length > 0 && (
           <p className="text-sm text-mute">Còn thiếu: {thieu.join(", ")}.</p>
+        )}
+
+        {/* FR-96 (04/09/2026): vừa lưu xong là có UUID tin → up ảnh ngay tại đây,
+            khỏi phải chạy scripts/up-anh.mjs trên máy local. */}
+        {ketQua?.ok && ketQua.id && (
+          <UploadAnh listingId={ketQua.id} code={ketQua.code} />
         )}
 
         <div className="flex flex-wrap items-center gap-4">

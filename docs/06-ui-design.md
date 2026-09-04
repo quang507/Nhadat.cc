@@ -250,6 +250,23 @@ hiệu AI như cái gạch dài"*:
   lại liền", gắn cờ cho CTV tiếp quản; không bật cờ vì câu hỏi khó thường ngày.
   Báo **CTV đang chăm đơn trước**; quá 30 phút chưa ai gõ tay mới leo lên admin
   (FR-147) — khách không thấy bước leo thang này, chỉ thấy người thật nhắn vào.
+- **Khách đòi gọi điện / voice (FR-79)** *[04/09/2026]*: bên em chăm qua chữ
+  trên Zalo — "dạ để em nhờ anh/chị phụ trách gọi lại cho mình liền ạ"; không
+  đưa số nào, không hứa giờ gọi; cờ `voice_request` mở việc VOICE cho người thật.
+- **Chờ hỏi chủ nhà (FR-45)** *[04/09/2026]*: vừa hứa "để em hỏi lại chủ nhà"
+  thì kết tin bằng "Trong khi chờ, anh/chị có câu hỏi gì khác về căn này không
+  ạ?" — khách không phải ngồi đợi trong im lặng.
+- **Gửi hình (FR-27)** *[04/09/2026]*: mỗi lượt tối đa 4 tấm, còn dư thì hỏi
+  "Anh/chị xem thêm hình không ạ?"; khách "xem thêm" → 4 tấm kế, bot chỉ nói
+  ngắn "dạ em gửi tiếp nè", không hứa đi xin chủ nhà khi hình đã có sẵn.
+- **"Giá vậy ok không?" (FR-99)** *[04/09/2026]*: so với giá trung bình phường
+  trong kho, nói rẻ/mắc hơn mặt bằng khoảng bao nhiêu %, và nói rõ là ước tính
+  từ kho bên em, không phải thẩm định; không có số thì nói chưa đủ dữ liệu.
+- **Chấm sao sau buổi xem (FR-65)** *[04/09/2026]*: cảm ơn ngắn (hệ thống đã
+  ghi); từ 3 sao trở xuống hỏi đúng MỘT câu chưa ưng chỗ nào; không hỏi lại điểm.
+- **Căn trong dự án (FR-116)** *[04/09/2026]*: nói tình trạng đúng như kho ghi
+  (còn bán / đang giữ chỗ / đã cọc / đã bán); chủ chưa xác nhận trong 7 ngày
+  thì "để em xác nhận lại chủ rồi báo anh/chị", không khẳng định còn/hết.
 - **Chạm trần 100 tin/24h (FR-146)**: đúng MỘT tin nhẹ nhàng, không trách móc,
   không giải thích cơ chế — "Dạ hôm nay mình trao đổi nhiều rồi, để em nhờ
   anh/chị phụ trách nhắn lại trực tiếp cho mình nha!" — rồi im tới hết ngày.

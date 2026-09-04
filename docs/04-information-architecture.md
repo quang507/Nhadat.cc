@@ -15,7 +15,9 @@
 
 ```mermaid
 flowchart TD
-    H["/ Trang chủ"] --> S["/tim-kiem?q=…"]
+    H["/ Trang chủ"] --> S["/tim-kiem?q=… (thật: /api/search?go=1 → 302 → /mua-ban?q= | /cho-thue?q= | /{tag})"]
+    H --> DA["/du-an/{slug} — trang dự án (FR-117)"]
+    DA --> DT
     H --> T["/{tag} — 100 trang tag SEO"]
     H --> AB["/gioi-thieu"]
     H --> RB["/raoban — mini-site người bán"]
@@ -44,7 +46,7 @@ flowchart TD
 | ID | URL | Mục đích | Index? | FR |
 |---|---|---|---|---|
 | IA-01 | `/` | Giới thiệu dịch vụ + ô search chat + hộp mời kết nối | ✅ | FR-01…06, FR-13 |
-| IA-02 | `/tim-kiem?q={truy vấn}` | Kết quả tìm kiếm ngôn ngữ tự nhiên | ❌ `noindex` | FR-08, FR-09 |
+| IA-02 | `/tim-kiem?q={truy vấn}` | Kết quả tìm kiếm ngôn ngữ tự nhiên *[dựng 04/09/2026: không có route `/tim-kiem`; form trang chủ GET `/api/search?q=&go=1` → 302 sang `/{tag}` khớp hoặc `/mua-ban?…&q=` / `/cho-thue?…&q=`; hai trang đó tự đánh `noindex` khi có `q`; `/api/` chặn trong robots]* | ❌ `noindex` | FR-08, FR-09 |
 | IA-03 | `/{tag}` | 100 trang tag SEO tĩnh | ✅ | FR-12 |
 | IA-04 | `/bds/{slug}-{id}` | Chi tiết một BĐS | ✅ | FR-10, FR-11 |
 | IA-05 | `/gioi-thieu` | Cách hoạt động, cam kết riêng tư, biểu phí | ✅ | FR-04 |
@@ -53,8 +55,10 @@ flowchart TD
 | IA-08 | `/raoban/dang-tin` | Ô nhập **một câu rao** | ❌ | FR-91 |
 | IA-09 | `/raoban/xac-nhan` | Bản bóc tách để S sửa + upload ảnh | ❌ | FR-94, FR-96 |
 | IA-10 | `/raoban/quan-ly` | Tin của tôi + câu hỏi chờ trả lời | ❌ | FR-98 |
-| IA-11 | `/ds/{token}` | Danh sách riêng gửi cho một B | ❌ `noindex` | FR-100 |
+| IA-11 | `/ds/{token}` | Danh sách riêng gửi cho một B *[dựng 04/09/2026: `app/ds/[token]`, `noindex, nofollow`, robots chặn `/ds/`, không vào sitemap]* | ❌ `noindex` | FR-100 |
 | IA-12 | `/admin/*` | Backend nội bộ, 20 mục/trang | ❌ | FR-70…81 |
+| IA-13 | `/du-an/{slug}` | Trang dự án: thông tin chung + giỏ hàng (tin `project_id`) *[dựng 04/09/2026, SSG, canonical + sitemap]* | ✅ | FR-117, FR-113 |
+| IA-14 | `/api/search`, `/api/listing/parse` | Route handler JSON (bóc câu tìm / câu rao), không phải trang *[dựng 04/09/2026]* | ❌ (robots chặn `/api/`) | FR-09, FR-92 |
 
 > `/tim-kiem` **không** index để tránh sinh vô số trang mỏng cạnh tranh với trang tag.
 > Trang tag mới là tài sản SEO (IA-P2).
@@ -133,7 +137,7 @@ erDiagram
 Thực thể **PROJECT** (FR-113): `name`, `slug`, `developer`, vị trí, `legal_status`,
 `amenities`, `floor_plans`, `handover_date` — dữ liệu **dùng chung** cho mọi căn;
 câu hỏi tầng dự án trả lời từ đây, không qua vòng info_request (FR-115). Không bao
-giờ dùng chung dữ liệu giữa hai dự án. Trang `/du-an/{slug}`: giai đoạn 2 (FR-117).
+giờ dùng chung dữ liệu giữa hai dự án. Trang `/du-an/{slug}`: giai đoạn 2 (FR-117) *[nửa trang dựng 04/09/2026 — IA-13]*.
 
 ### PROPERTY_EVENT — 5 loại sự kiện chuẩn
 [nguồn: chats w B.docx §Các sự kiện với 1 BĐS]
@@ -182,7 +186,7 @@ Biểu phí · Tài khoản Zalo.
 | Trang | Vị trí | Nội dung mang theo |
 |---|---|---|
 | `/` | Dưới ô search, và sticky bar mobile | Truy vấn vừa gõ |
-| `/tim-kiem` | Sau card thứ 3 và cuối trang | Toàn bộ tiêu chí đã parse |
+| `/tim-kiem` (thật: `/mua-ban?q=`) | Sau card thứ 3 và cuối trang *[04/09/2026: hộp đặt ĐẦU lưới, ngay dưới dải tiêu đề, và ở ô rỗng]* | Toàn bộ tiêu chí đã parse *[thật: `ref=search:<câu gốc>`]* |
 | `/{tag}` | Sau card thứ 3 và cuối trang | Tiêu chí suy từ tag |
 | `/bds/{id}` | Cạnh bảng thông số + cuối trang | **Mã BĐS** + tiêu chí phiên |
 | `/ds/{token}` | Đầu trang | ID danh sách |

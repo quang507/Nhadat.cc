@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ListingCard from "@/components/ListingCard";
 import TrackView from "@/components/TrackView";
-import { CARD_COLS, supabase, type Listing, type ListingCard as CardRow } from "@/lib/supabase";
+import WardMap from "@/components/WardMap";
+import { CARD_COLS, supabase, type Listing, type ListingCard as CardRow, type MapRow } from "@/lib/supabase";
 import { coverByCode, photosOfCode } from "@/lib/photos";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
 import {
@@ -57,6 +59,35 @@ const getListing = cache(async (code: string): Promise<Listing | null> => {
     .maybeSingle();
   return data as Listing | null;
 });
+
+// FR-99 (dựng 04/09/2026): giá/m² của mọi tin ĐANG LÊN KỆ cùng phường, cùng
+// loại giao dịch — một truy vấn nhẹ (2 cột), Data Cache 1 giờ, khoá theo
+// (phường, giao dịch). Trang tin tự loại chính nó ra khỏi mẫu và chỉ hiện khi
+// còn ≥ 3 tin khác — ít hơn thì "trung bình" là con số bịa.
+const giaPhuong = unstable_cache(
+  async (ward: string, deal: string) => {
+    const { data } = await supabase
+      .from("listings")
+      .select("id, price_per_m2_vnd")
+      .eq("ward", ward)
+      .eq("deal", deal)
+      .in("status", ["dang_ban", "dang_quan_tam"])
+      .gt("price_per_m2_vnd", 0)
+      .limit(500);
+    return (data ?? []) as { id: string; price_per_m2_vnd: number }[];
+  },
+  ["gia-phuong"],
+  { revalidate: 3600, tags: ["listings"] },
+);
+
+function soSanhGia(listing: Listing, mau: { id: string; price_per_m2_vnd: number }[]) {
+  if (!listing.price_per_m2_vnd || listing.price_per_m2_vnd <= 0) return null;
+  const khac = mau.filter((r) => r.id !== listing.id).map((r) => Number(r.price_per_m2_vnd));
+  if (khac.length < 3) return null;
+  const tb = khac.reduce((a, b) => a + b, 0) / khac.length;
+  const pct = Math.round(((Number(listing.price_per_m2_vnd) - tb) / tb) * 100);
+  return { pct, n: khac.length, tb };
+}
 
 export async function generateMetadata({
   params,
@@ -133,7 +164,7 @@ export default async function Page({
   const listing = await getListing(code);
   if (!listing) notFound();
 
-  const [factsRes, relatedRes, photos] = await Promise.all([
+  const [factsRes, relatedRes, photos, mauGia, duAnRes] = await Promise.all([
     supabase
       .from("listing_facts")
       .select("question, answer")
@@ -150,8 +181,15 @@ export default async function Page({
       .eq("ward", listing.ward ?? "")
       .limit(4),
     photosOfCode(code), // FR-148
+    listing.ward ? giaPhuong(listing.ward, listing.deal) : Promise.resolve([]), // FR-99
+    // FR-117: tin thuộc dự án → link sang trang dự án (1 truy vấn nhỏ, chỉ khi có project_id)
+    listing.project_id
+      ? supabase.from("projects").select("slug, name").eq("id", listing.project_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   const facts = factsRes.data ?? [];
+  const soSanh = soSanhGia(listing, mauGia);
+  const duAn = (duAnRes.data ?? null) as { slug: string; name: string } | null;
   const related = (relatedRes.data ?? []) as CardRow[];
   const relCovers = await coverByCode(related.map((l) => l.code));
 
@@ -314,6 +352,25 @@ export default async function Page({
               <p className="mt-1.5 text-4xl font-extrabold text-brand tabular-nums">
                 {formatPrice(listing.price_vnd, listing.price_raw)}
               </p>
+              {/* FR-99: so với giá rao trung bình mỗi m² của phường (chỉ hiện khi ≥3 tin khác) */}
+              {soSanh && (
+                <p className="mt-2 text-sm text-mute tabular-nums">
+                  So với giá trung bình phường:{" "}
+                  <span className={`font-bold ${soSanh.pct > 0 ? "text-brand" : "text-navy"}`}>
+                    {soSanh.pct > 0 ? "+" : ""}{soSanh.pct}%
+                  </span>{" "}
+                  ({soSanh.n} tin cùng phường, cùng loại giao dịch; giá rao, không phải giá chốt)
+                </p>
+              )}
+              {duAn && (
+                <p className="mt-2 text-sm">
+                  Thuộc dự án{" "}
+                  <Link href={`/du-an/${encodeURIComponent(duAn.slug)}`} className="font-bold text-brand hover:underline">
+                    {duAn.name}
+                  </Link>
+                  {listing.unit_code ? <span className="text-mute"> · căn {listing.unit_code}</span> : null}
+                </p>
+              )}
               {specs.length > 0 && (
                 <>
                   <h2 className="mt-8 text-lg font-extrabold">Thông số</h2>
@@ -339,6 +396,19 @@ export default async function Page({
                 </>
               )}
             </div>
+
+            {/* FR-10 (dựng 04/09/2026): bản đồ MỨC PHƯỜNG — chấm là tâm phường
+                + lệch định trước theo mã tin, KHÔNG phải vị trí căn (FR-104). */}
+            {listing.ward && (
+              <div className="mt-5 rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
+                <h2 className="text-lg font-extrabold">Khu vực</h2>
+                <p className="mb-3 mt-1 text-sm text-mute">
+                  Vị trí hiển thị ở mức phường ({listing.ward}) — chấm trên bản đồ không phải địa chỉ căn.
+                  Địa chỉ chính xác tụi em chia sẻ khi hẹn xem nhà.
+                </p>
+                <WardMap listing={{ ...(listing as CardRow), lat: null, lng: null } as MapRow} />
+              </div>
+            )}
 
             {facts.length > 0 && (
               <div className="mt-5 rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">

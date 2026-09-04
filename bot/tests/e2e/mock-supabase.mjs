@@ -9,7 +9,7 @@ export class FakeDB {
     this.t = {};
     for (const n of ["sellers","buyers","conversations","messages","listings","listing_facts","info_requests",
       "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log",
-      "ctvs","admins"]) this.t[n] = [];
+      "ctvs","admins","interests","ratings"]) this.t[n] = [];
     this.seq = 0; this.log = [];
   }
   rows(n) {
@@ -201,7 +201,17 @@ class RpcCall {
         return { data: null, error: null };
       }
       case "guess_property_type_answer": { const t = String(a.p_text).toLowerCase(); return { data: /nhà phố|nha pho/.test(t) ? "nha_pho" : /chung cư|chung cu/.test(t) ? "chung_cu" : null, error: null }; }
-      case "mark_listing_interest": { let n = 0; for (const l of db.t.listings) if (a.p_codes.includes(l.code) && ["dang_ban", "dang_quan_tam"].includes(l.status)) { l.status = "dang_quan_tam"; n++; } return { data: n, error: null }; }
+      case "mark_listing_interest": {
+        // v48 / 20260904f (FR-108): overload có p_buyer_id ghi thêm `interests`
+        // (PK buyer_id+listing_id — chèn trùng thì bỏ qua).
+        let n = 0;
+        for (const l of db.t.listings) if (a.p_codes.includes(l.code)) {
+          if (["dang_ban", "dang_quan_tam"].includes(l.status)) { l.status = "dang_quan_tam"; n++; }
+          if (a.p_buyer_id && !db.t.interests.some((i) => i.buyer_id === a.p_buyer_id && i.listing_id === l.id)) db.insert("interests", { buyer_id: a.p_buyer_id, listing_id: l.id });
+        }
+        return { data: n, error: null };
+      }
+      case "ghi_danh_gia": { db.insert("ratings", { buyer_id: a.p_buyer_id, listing_id: a.p_listing_id, stars: a.p_stars, note: a.p_note }); return { data: null, error: null }; }
       case "match_projects": return { data: [], error: null };
       case "nguoi_noi_bo": {
         // 20260903a (FR-173 d): CTV đang hoạt động trước, rồi admin; người lạ → null

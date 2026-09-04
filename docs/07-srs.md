@@ -216,19 +216,32 @@ một đường (một câu rao / một câu trả lời).
 
 ### SRS-3.2 · `property_events` — FR-70
 
-*[04/09/2026: bảng KHÔNG tồn tại; thay thế một phần bằng `listings.last_interest_at`
-+ `mark_listing_interest()` (FR-139). OPEN-43.]*
+*[04/09/2026 sáng: bảng KHÔNG tồn tại (OPEN-43) → **ĐÃ DỰNG cùng ngày**, migration
+`20260904f`, schema THẬT dưới đây thay bản thiết kế cũ (`property_id`/`actor_type`/
+`occurred_at` → `listing_id`/`buyer_id`/`at`; `actor_type` bỏ — nguồn sự kiện đã nói
+ai làm, phần còn lại vào `meta`).]*
 ```
-id            uuid pk
-property_id   uuid fk
-event_type    enum(CREATED, UPDATED, INFO_REQUESTED, INFO_ADDED, VIEWING_REQUESTED)
-occurred_at   timestamptz not null
-actor_type    enum(buyer, seller, ctv, system)
-actor_id      uuid
-metadata      jsonb
+id            bigserial pk
+listing_id    uuid not null fk → listings(id) on delete cascade
+event_type    text check in (view, asked, interest, photos, viewing, deal, match_sent, status)
+buyer_id      uuid null fk → buyers(id) on delete set null
+at            timestamptz not null default now()
+meta          jsonb        -- view: {auth_user_id}; asked: {question}; viewing: {viewing_id, slot, time_text};
+                           -- deal: {deal_id, price_vnd}; match_sent: {reminder_id}; status: {tu, den}
 ```
-Index `(property_id, occurred_at desc)`, `(occurred_at desc)`.
-`hot_score` = `count(*) where occurred_at > now() - interval '2 months'` (FR-73).
+Index `(listing_id, at desc)`, `(at desc)`. RLS bật: policy `property_events_admin_read`
+(email trong `admins`), anon `revoke all`, `authenticated` chỉ SELECT; ghi chỉ qua
+trigger (`security definer`). Không ai ghi tay: hàm `ghi_su_kien_bds()` (không bao
+giờ ném — lỗi → `log_loi`) được trigger `trg_property_event()` gọi từ `listing_views`
+INSERT → `view`, `info_requests` INSERT nguồn `buyer_ask` → `asked`, `interests` INSERT
+→ `interest`, `viewings` INSERT → `viewing` (tra `listing_id` từ `listing_code` khi
+thiếu), `deals` INSERT → `deal`, `reminders` kind `match` sang `sent` → `match_sent`,
+`listings` đổi `status` → `status`. Loại `photos` có trong CHECK, chưa có nguồn sinh
+(chat-reply gửi ảnh không ghi bảng nào) — việc của chat-reply.
+`hot_score` (FR-73) = view `bds_hot`: `so_su_kien_60d` (+ `xem_60d`/`hoi_60d`/
+`lich_xem_60d`), `last_event_at`, xếp giảm dần, tính lúc đọc — không có job
+`recompute_hot_score`; gác cổng admin/service_role như `ctv_ranks`. NFR-11: xuất CSV
+từ Table Editor là đủ.
 
 ### SRS-3.3 · `buyers`
 ```
@@ -239,7 +252,7 @@ phone             text null           -- CHỈ khi B tự nguyện cung cấp �
 fingerprint_ids   text[]              -- nối phiên web ↔ Zalo (FR-30)
 first_contact_at  timestamptz
 last_contact_at   timestamptz
-connection_status enum(active, at_risk, lost)   -- at_risk khi im lặng ≥5 ngày (FR-63)
+connection_status enum(active, at_risk, lost)   -- [CHƯA DỰNG — 04/09/2026: vết nằm ở reminders kind reengage / note giu_ket_noi, mốc ≥6 ngày (FR-63)]
 preferences       jsonb               -- tiêu chí học được (UF-07)
 ```
 
@@ -325,6 +338,15 @@ buyer_phone text null, maps_url text,
 status enum(requested, confirmed, reminded, completed, cancelled, no_show),
 outcome_feedback text, rating int
 ```
+*[Bảng THẬT (đối chiếu 04/09/2026): `viewings(id, listing_id, listing_code, buyer_id,
+guide, slot, time_text, phone, status, buyer_rating, note, source, created_at)`;
+`status` CHECK = `proposed, pending, confirmed, done, cancelled` — **`confirmed` thêm ở
+`20260904f` (FR-52)**: INSERT → trigger `viewings_bao_ctv_va_email` nhắc CTV của hội
+thoại (hoặc admin) ngay + mở câu `info_requests(question='xac_nhan_lich',
+source='buyer_ask')` + email `[VIEWING]`; CTV nhắn "#mã: ok 9h" → câu đóng → trigger
+`info_request_bao_lai_khach` lật `status='confirmed'` và hẹn `followup` "lịch xem #mã
+đã được xác nhận: …" cho khách. `buyer_rating` do `ghi_danh_gia()` ghi (FR-65).
+`reminded`/`no_show` chưa dùng.]*
 
 ### SRS-3.8 · Bảng broker — theo spec Cầu Nối BĐS v2
 Schema đã được hiện thực sẵn trên Supabase project `nhadat-cc` [nguồn: artifact "Cầu Nối BĐS" v2, phiên nhadat-bot, 08/2026]:
@@ -400,7 +422,11 @@ Muốn hỗ trợ gõ không dấu thì phải chuẩn hoá dấu ở đầu và
 ```
 tags / property_tags [KHÔNG dựng — 04/09/2026: tag là hằng `lib/tags.ts` (64 tag, FR-12), lọc bằng cột listings; cần bảng khi có TOP-100 keyword thật — OPEN-06]
 saved_criteria      [KHÔNG dựng — 04/09/2026: FR-64 đọc thẳng buyers.preferences, xem bao_tin_moi_khop SRS-3.12]
-curated_lists       id, token unique, buyer_id, property_ids[], created_at, expires_at  -- FR-100  [chưa dựng — OPEN-43]
+curated_lists       id uuid pk, token text unique default 24 hex (gen_random_bytes(12)), buyer_id uuid null fk buyers on delete set null,
+                    listing_ids uuid[] not null check 1..60, title text, created_at, expires_at default now()+30 ngày
+                    -- FR-100  [ĐÃ DỰNG 04/09/2026 — `20260904g`; RLS bật, KHÔNG policy anon/authenticated: đọc qua RPC
+                    --  doc_danh_sach(token) (definer, chỉ tin đang lên kệ, không trả buyer_id), tạo qua tao_danh_sach(mã tin[], tiêu đề, buyer_id)
+                    --  (admin theo `admins` hoặc service_role). `property_ids` đặc tả cũ → `listing_ids` UUID bất biến (bài học FR-165)]
 listing_media       id, listing_id FK->listings(id) ON DELETE CASCADE, bucket, storage_path,
                     media_type enum-check(mat_tien, trong_nha, hem, so_do, giay_to, khac),
                     mime_type, sort_order, is_cover, created_at        -- FR-165 (đã dựng)
@@ -413,14 +439,22 @@ inbound_ledger      zalo_msg_id PK, status enum-check(received, processing, comp
                     next_retry_at, locked_by, started_at, finished_at, created_at, updated_at
                                                                                   -- FR-162, FR-166b
 reminders           id, kind enum-check(promise, reengage, viewing, followup, escalation, report,
-                                        match, feedback),           -- match FR-64, feedback FR-56 (20260904d)
+                                        match, feedback,            -- match FR-64, feedback FR-56 (20260904d)
+                                        sold, rating),              -- sold FR-108, rating FR-65 dự phòng (20260904f)
                     buyer_id, seller_id, ctv_id, listing_id, viewing_id, due_at, note,
                     status enum-check(pending, sent, cancelled, dead), sent_at, created_at,
                     locked_at, locked_by, attempts, next_retry_at, last_error      -- FR-32, FR-166f
                     unique partial (buyer_id, listing_id) where kind='match';
-                    unique partial (viewing_id) where kind='feedback'
+                    unique partial (viewing_id) where kind='feedback';
+                    unique partial (buyer_id, listing_id) where kind='sold'
+                    -- ghi chú có khuôn để nudge đi mẫu cố định: sold "#mã đã chốt · thay thế: …";
+                    -- followup "chủ nhà chưa phản hồi #mã, gợi ý căn khác: …" (FR-110),
+                    -- "lịch xem #mã đã được xác nhận: …" (FR-52); reengage "<góc>: …" (FR-61/63)
+ratings_log         buyer_id, listing_id (pk), stars 1..5, note, at    -- FR-65 (20260904f), idempotent cho ghi_danh_gia
 photos              [thay bởi listing_media 29/08/2026 — `is_public` bỏ, `bucket` đã nói điều đó]
 escalations         id, type enum(QUESTION, VOICE, VIEWING, UPSET), buyer_id, property_id, payload jsonb, emailed_at  -- FR-77..81
+                    [KHÔNG dựng — 04/09/2026: bốn loại đi thẳng `email_admin()` → ntfy (SRS-5.5); vết việc đã
+                     nằm ở `reminders` kind escalation / `viewings` / `info_requests`, thêm bảng là thêm chỗ lệch]
 ```
 
 **SRS-3.9 · Bảo mật dữ liệu**
@@ -431,6 +465,20 @@ escalations         id, type enum(QUESTION, VOICE, VIEWING, UPSET), buyer_id, pr
   đó CHƯA DỰNG**: quét toàn repo không có `createSignedUrl`, cũng chưa chỗ nào
   đọc `listing-private`. Nghĩa là hôm nay bucket riêng đóng kín (đúng), nhưng
   cũng chưa ai lấy file ra được. Nửa còn lại là việc phải làm.
+  *[dựng 04/09/2026 — `20260904g`: admin đăng nhập web ký `createSignedUrl(path, 900)`
+  (15 phút) ở `/admin` thẻ "Giấy tờ (bucket riêng)"; policy `storage_admin_private_all`
+  cho admin SELECT/INSERT/UPDATE/DELETE object bucket riêng, `listing_media_admin_all`
+  cho admin đọc dòng media riêng. Người bán KHÔNG có cửa vào bucket riêng.]*
+- **Policy `storage.objects` (04/09/2026, FR-96)** — trước đó 0 policy, chỉ
+  service_role ghi được. Nay: `storage_admin_public_all` (admin, bucket công khai,
+  mọi thao tác); `storage_seller_own_insert` / `storage_seller_own_delete` (người bán
+  đăng nhập, bucket công khai, chỉ đường dẫn có thư mục đầu = UUID tin mà
+  `sellers.auth_user_id = auth.uid()` — hàm `tin_cua_toi(uuid)`, `thu_muc_dau_uuid(text)`
+  trả NULL với chuỗi không phải UUID để không ném 22P02). `listing_media` thêm GRANT
+  insert/delete cho `authenticated` + policy `listing_media_admin_all`,
+  `listing_media_own_read/insert/delete` (bucket công khai, tin của mình). Anon không
+  thêm quyền nào. Hàm gác `la_admin()` (definer, chỉ authenticated/service_role gọi).
+  Kiểm 10 ca đóng vai admin/người bán/anon: docs/10 TS-WEB2.
   *[cập nhật 29/08/2026 — câu cũ nói `photos.kind='so_do'` → `is_public=false`;
   bảng `photos` chưa từng được dựng, nay là `listing_media` và `is_public` bỏ
   hẳn vì `bucket` đã là thứ quyết định]*
@@ -604,7 +652,23 @@ phải đi cùng nhau.
 | `media_cleanup_tick()` | Cron 5 phút: gọi `media-cleanup` CHỈ KHI có việc nhận được — vị từ y hệt `nhan_viec_don_media` (`cho`, hoặc `dang_lam`/`loi` quá 10 phút; `attempts < 6`; tới giờ thử lại). Guard cũ đếm mọi dòng `loi` nên một dòng đang chờ giờ làm cron gọi lambda 12 lần/giờ mà không claim được gì (FR-171 c) | chỉ `service_role` |
 | `bat_het_tien_api()` | Trigger AFTER INSERT trên `bot_errors` (FR-168): thấy dấu hiệu hết tiền tài khoản AI (`credit balance`, `plans & billing`, `insufficient…quota`, `billing`, mã 402) thì dựng một dòng cảnh báo nguồn `HET TIEN API`. **Ghi THẲNG, không qua `log_loi`** — van chống ngập sổ không được nuốt chuông báo sập hệ thống, mà sổ ngập chính là lúc dễ có sự cố lớn nhất. Tự hãm 6 giờ/lần; không tạo escalation vì đường đó đi qua cầu nối vốn có thể đang chết | trigger, không ai gọi tay |
 | `bot_health_tick()` | Quét `net._http_response` tìm phản hồi không 2xx → `bot_errors`; kiểm nhịp tim bridge; gộp báo admin 1 tin/giờ (🩺 cũ chưa gửi bị huỷ khi có tin mới); **gọi `canh_bao_ngoai()` 1 tin/giờ** khi có lỗi mới hoặc bridge im (`20260904a`); huỷ báo cáo CTV treo > 36 giờ; dọn sổ > 30 ngày | chỉ `service_role`, chạy bằng cron `*/15` |
-| `canh_bao_ngoai(title, text, priority)` | FR-152 (e): `net.http_post` tới `https://ntfy.sh` với topic ở `app_config.ntfy_topic` — kênh cảnh báo KHÔNG đi qua bridge/OA, không cần token. Trả id yêu cầu pg_net; kết quả HTTP thật được chính nhịp kiểm sau soi lại | chỉ `service_role` |
+| `canh_bao_ngoai(title, text, priority, p_email default false)` | FR-152 (e): `net.http_post` tới `https://ntfy.sh` với topic ở `app_config.ntfy_topic` — kênh cảnh báo KHÔNG đi qua bridge/OA, không cần token. Trả id yêu cầu pg_net; kết quả HTTP thật được chính nhịp kiểm sau soi lại. **`20260904f` (FR-81)**: thêm `p_email` — `true` và `app_config.admin_email` có giá trị thì thêm khoá `email` vào body để ntfy chuyển tiếp email; đọc thêm secret Vault `NTFY_TOKEN` (tuỳ chọn) gắn `Authorization: Bearer` vì ntfy.sh từ chối email ẩn danh (thử thật: 400). Bản 3 tham số đã DROP (giữ cả hai là gọi 3 tham số thành "not unique") | chỉ `service_role` |
+| `email_admin(loai, zalo_uid, body, listing_id)` | FR-81 (`20260904f`): ghép tiêu đề `[LOẠI] <uid>` + thân (các trường + "BĐS: #mã · địa chỉ · giá · m2 + 300 ký tự mô tả" + giờ VN) rồi gọi `canh_bao_ngoai(…, p_email=true)`. `admin_email` rỗng → return null, KHÔNG push (topic ntfy là kênh sức khoẻ bot, không phải hộp thư việc). Không bao giờ ném (lỗi → `log_loi`). Bốn nguồn gọi: trigger `viewings_bao_ctv_va_email` `[VIEWING]`, trigger `conversations_email_upset` `[UPSET]` (needs_human bật), `info_request_sla_tick` `[QUESTION]` (trừ câu `xac_nhan_lich`), trigger `reminders_email_voice` `[VOICE]` (note bắt đầu "VOICE:") | chỉ `service_role`/trigger |
+| `ghi_su_kien_bds(listing, type, buyer, meta)` + trigger `trg_property_event()` | FR-70 (`20260904f`): ghi `property_events`; trigger chung cho 7 bảng nguồn (SRS-3.2). Không bao giờ ném | trigger |
+| view `bds_hot` | FR-73 (`20260904f`): mỗi tin một dòng, số sự kiện 60 ngày (+ tách xem/hỏi/lịch xem), `last_event_at`, xếp giảm dần | admin hoặc `service_role`; anon bị revoke |
+| view `hoi_thoai_phien` | FR-72 (`20260904f`): tách `messages` thành phiên khi hai tin cách nhau > 30 phút (window `lag` + `sum` cộng dồn), trả `conversation_id`, `buyer_id/seller_id`, `so_phien`, `phien_bat_dau/ket_thuc`, `thoi_luong`, `so_tin`, `so_tin_khach`, `so_tin_bot`, `sender_dau`. Không đổi model `conversations` | admin hoặc `service_role`; anon bị revoke |
+| view `bot_do_tre` | NFR-01 (`20260904f`): `so_luot`, `p50_giay`, `p95_giay`, `max_giay` (`percentile_cont` trên `inbound_ledger.finished_at - started_at`, 7 ngày), `tu`/`den`. Đo trọn đường tin đến → gửi xong (gồm model + Zalo) | admin hoặc `service_role`; anon bị revoke |
+| `khu_khop(area_kd, ward, district)` | Luật khớp khu vực tách từ `bao_tin_moi_khop` (nêu số phường → đúng phường; không nêu → tên phường chữ hoặc quận, so không dấu) để `can_cung_khu` dùng chung — ba chỗ không nói ba giọng | hàm thuần |
+| `can_cung_khu(buyer, listing default null, limit 3)` | FR-62/108/110 (`20260904f`): 2–3 căn `dang_ban`/`dang_quan_tam` cùng phường (ưu tiên) hoặc cùng quận, giá 0,7–1,15× mốc (căn truyền vào; không có thì `buyers.preferences` area/budget/deal), trừ căn đã gửi (`reminders` match/sold/followup, `interests`, `viewings`); trả `tom_tat` "#mã · phường, quận · giá · m2" ghép từ cột. `nudge` v25 gọi cho reengage; `bao_can_da_chot`/`info_request_timeout_tick` gọi cho căn thay thế | chỉ `service_role` |
+| `mark_listing_interest(codes, buyer_id)` | FR-108 (`20260904f`): overload — gọi bản `(text[])` cũ rồi ghi `interests` on conflict do nothing. Chữ ký cũ giữ nguyên | chỉ `service_role` |
+| `bao_can_da_chot(listing)` + trigger `trg_listings_bao_can_da_chot` | FR-108 (`20260904f`): tin sang `da_chot` → mỗi khách trong `interests` có Zalo (trừ khách có `deals` với chính căn) nhận một `reminders` kind `sold`, note "#mã đã chốt · thay thế: …" (≤2 căn từ `can_cung_khu`); van 1/khách/24h + index (buyer, listing). Lỗi → `log_loi`, không chặn đổi trạng thái | trigger |
+| `ghi_danh_gia(buyer, listing, stars, note)` | FR-65 (`20260904f`): `ratings_log` on conflict do nothing → chưa có thì ghi `viewings.buyer_rating` (buổi xem gần nhất của cặp) + cộng `sellers.rating_sum/rating_count` của chủ tin; đã có thì return (không cộng đúp). `stars` ngoài 1..5 → raise | chỉ `service_role` (chat-reply v48 gọi) |
+| `info_request_timeout_tick()` | FR-110 (`20260904f`, cron `info-timeout-tick`): `seller_flow` pending > 24h → `reminded_at`; > 48h → `expired`; `buyer_ask` > 48h → `expired` + huỷ followup cũ + `followup` "chủ nhà chưa phản hồi #mã, gợi ý căn khác: …" (nudge v25 mẫu cố định). Trả jsonb ba số đếm | chỉ `service_role` |
+| `stale_listing_tick()` | FR-103 (`20260904f`, cron `stale-listing-tick` 9h VN): tin `dang_ban` không sự kiện và không đổi `updated_at` 30 ngày, có chủ → `info_requests(source='seller_flow', question='con_ban')` 1 lần/30 ngày/tin + nhắc qua escalation (chính chủ có Zalo: hỏi thẳng; không thì giao CTV). Trần 5 tin/ngày, cũ nhất trước | chỉ `service_role` |
+| `viewings_bao_ctv_va_email()` | FR-52/57/81 (`20260904f`): trigger AFTER INSERT `viewings` — (a) `reminders` escalation cho CTV của hội thoại khách (`conversations.ctv_id`, CTV phải `active`) hoặc admin, ngay; (b) `info_requests(question='xac_nhan_lich', source='buyer_ask', assignee, ctv_id, sla_due_at 120')` — `buyer_ask` vì nhánh nội bộ chat-reply chỉ đóng nguồn đó; (c) `email_admin('VIEWING')`. Ba bước bọc riêng, sổ hỏng không chặn đặt lịch | trigger |
+| `notify_info_request_escalation()` (sửa) | `20260904f`: thêm guard bỏ qua câu `xac_nhan_lich` và `con_ban` (hai câu đó có ghi chú riêng do hàm gọi tự chèn); phần còn lại giữ nguyên chữ `20260903a` | trigger |
+| `info_request_bao_lai_khach()` (sửa) | `20260904f`: nhánh `xac_nhan_lich` → `viewings.status='confirmed'` + followup "lịch xem #mã đã được xác nhận: <trả lời>"; nhánh khác giữ nguyên `20260902h` | trigger |
+| `info_request_sla_tick()` (sửa) | `20260904f`: thêm `email_admin('QUESTION', …)` cho câu quá SLA (trừ `xac_nhan_lich`); thân cũ giữ nguyên | chỉ `service_role`, cron `ctv-sla-tick` |
 | view `nmg_hoat_dong` | I5 (`00 §0.5`, `20260904e`): NMG có tin lên kệ VÀ ≥1 câu nhỏ giọt (`info_requests.source in ('seller_flow','seller_drip')` — `seller_flow` là default cột, `seller_drip` là tên cũ trong tài liệu) trả lời trong 7 ngày; gác cổng admin/service_role như `ctv_ranks` | admin (JWT) + `service_role` |
 | `beat(who)` | Ghi nhịp tim. `escalation-feed` gọi mỗi lần bridge kéo việc | chỉ `service_role` |
 | `lan_thu_ke(attempts)` | Khoảng chờ trước lần thử kế — nhân đôi dần, chặn ở 1 tiếng, nhiễu ±20%. Luật chung cho cả ba hàng đợi (FR-166 a) | chỉ `service_role` |
@@ -797,14 +861,17 @@ mã: `code` là thứ khách đọc qua Zalo, trùng mã là chỉ nhầm căn.
 
 ## 4. Đặc tả giao diện lập trình
 
-*[04/09/2026: không route `/api/*` nào tồn tại trong `app/`; đường thật: Edge
-Functions `bot/supabase/functions/*` (bảng ở `bot/README.md`) + bảng/trigger.
-OPEN-43.]*
+*[04/09/2026: đường thật của phần lớn §4 là Edge Functions `bot/supabase/functions/*`
+(bảng ở `bot/README.md`) + bảng/trigger/RPC, KHÔNG phải REST `/api/*` — ghi "thay
+bằng" ở từng mục. Hai route handler THẬT trong `app/api/` (dựng 04/09/2026 chiều):
+`/api/search` (SRS-4.5) và `/api/listing/parse` (SRS-4.6); cả hai không đụng DB,
+không xác thực, JSON UTF-8, không `X-Request-Id`. OPEN-43 phần còn lại.]*
 
 Chuẩn chung: REST/JSON, `Content-Type: application/json`, xác thực bằng
 `Authorization: Bearer <service token>`, mọi request có `X-Request-Id` để truy vết.
 
 ### SRS-4.1 · `POST /api/s-side/info-request` — B Side → S Side (FR-41)
+*[thay bằng: bảng `info_requests` + trigger `trg_route_info_request` (FR-140/173); `chat-reply` ghi thẳng, không HTTP]*
 ```json
 {
   "request_id": "uuid",
@@ -819,6 +886,7 @@ Chuẩn chung: REST/JSON, `Content-Type: application/json`, xác thực bằng
 `404` property không tồn tại · `409` request_id trùng (idempotent, trả kết quả cũ).
 
 ### SRS-4.2 · `POST /api/b-side/info-response` — S Side → B Side (FR-43)
+*[thay bằng: `chat-reply` nhánh nội bộ "#mã: trả lời" + trigger `trg_info_request_bao_lai_khach` → `nudge` (FR-140c/173)]*
 ```json
 {
   "request_id": "uuid",
@@ -844,7 +912,10 @@ Hành vi bắt buộc khi nhận:
 `201 {"url": "https://nhadat.cc/ds/9fK2xQ", "expires_at": "..."}`
 Token ≥ 22 ký tự ngẫu nhiên; trang trả `X-Robots-Tag: noindex`.
 
+*[ĐÃ DỰNG 04/09/2026 dưới dạng RPC, không HTTP: `tao_danh_sach(p_listing_codes text[], p_title text, p_buyer_id uuid)` → `{token, path, expires_at, n}` (token 24 hex; admin qua `admins` hoặc service_role; mã lạ → lỗi "Khong co tin: …"); `doc_danh_sach(p_token)` → `{title, created_at, expires_at, listings[CARD_COLS]}` hoặc NULL. Trang `app/ds/[token]` đánh `<meta robots noindex, nofollow>` (metadata Next) thay vì header `X-Robots-Tag`; robots.txt chặn `/ds/`. Bảng: SRS-3.8b. `buyer_ref` đặc tả cũ → `buyer_id` (null được, WF-11 không hiện danh tính B).]*
+
 ### SRS-4.4 · `POST /api/webhooks/zalo` — sự kiện Zalo OA
+*[thay bằng: edge `zalo-webhook` (OA) + `bridge-zca` → `chat-reply` (FR-162: ghi `inbound_events` trước ack)]*
 Xác thực chữ ký (`X-ZEvent-Signature`). Xử lý: `user_send_text`, `user_send_image`,
 `follow`, `unfollow`. **Ghi vào hàng đợi rồi trả `200` trong < 1s**; xử lý bất đồng bộ.
 
@@ -865,11 +936,16 @@ Xác thực chữ ký (`X-ZEvent-Signature`). Xử lý: `user_send_text`, `user_
 Khi 0 kết quả: nới theo thứ tự **giá ±20% → phường → quận lân cận**, và trả
 `relaxed: {"field":"price","from":8,"to":9.6}` để giao diện nói rõ đã nới gì (WF-02).
 
+*[ĐÃ DỰNG 04/09/2026 — `app/api/search/route.ts` + `lib/parse-query.ts`, khác đặc tả ở ba chỗ: (1) **không trả `results`/`total`** — route chỉ bóc câu rồi trả `{q, filters, confidence, title, url, empty}`; kết quả do trang đích truy vấn (một nơi lọc, không hai; `GET ?go=1` trả 302 thẳng sang `url` cho form không JS). (2) **không `relaxed`** — 0 kết quả thì trang kết quả có chip lọc để nới tay + hộp Zalo mang câu gốc. (3) **không `fingerprint`** (OPEN-14). `filters` dùng tên cột thật (`deal`, `types[]`, `ward`, `district`, `priceMin/Max/Approx`, `access` mt|hxh|hem, `bedrooms`, `areaMin/Max`, `street`, `landmark`) thay `deal_type: "sale"`. `url` = `/{tag}` khi tổ hợp khớp đúng một tag, không thì `/mua-ban|/cho-thue?gmin&gmax&dtmin&dtmax&pn&vao&loai&phuong&quan&duong&moc&q`. Bóc "8 tỉ" → dải ±15 %. Kiểm 8 câu có dấu/không dấu: TS-WEB2.]*
+
 ### SRS-4.6 · `POST /api/listing/parse` — FR-92
 Vào: `{"raw_pitch": "..."}`. Ra: các trường bóc tách kèm **`confidence` từng trường**;
 trường có `confidence < 0.7` được đánh dấu để S kiểm lại (UI-C09).
 
+*[ĐÃ DỰNG 04/09/2026 — `app/api/listing/parse/route.ts` (`POST {text}` — nhận cả `raw_pitch`; `GET ?text=`): `{text, fields, confidence, needs_review[]}`; bằng luật (`parseListing` trong `lib/parse-query.ts`), KHÔNG ghi DB, không gọi model. Trường: deal, property_type, ward, district, street, landmark, bedrooms, price_raw (cắt từ bản gốc có dấu), price_vnd, access_type, alley_width_m, frontage_m/length_m/rear_width_m, area_m2 (suy từ kích thước → 0,6), floors ("một trệt hai lầu" → 3), legal_status, has_completion, negotiable, direction, has_elevator, car_in_house, corner_lot, furnishing. Đường bóc THẬT lúc đăng vẫn là `boc_thong_so()` ở DB (FR-172) — route này là bản xem trước cho `/raoban` (chưa gắn UI, WF-09).]*
+
 ### SRS-4.7 · Zalo deep link kèm ngữ cảnh — FR-14
+*[thay bằng: `zaloLink(context)` (`lib/format.ts`) — `?ref=<ngữ cảnh>` chữ thường (`#mã`, `search:<câu>`, `tag:<slug>`, `ds:<8 ký tự token>`, `du-an:<slug>`), không bảng token/TTL 24 h, không nối fingerprint (OPEN-14)]*
 `https://zalo.me/<oa_id>?ctx=<token>`; token trỏ tới bản ghi ngữ cảnh (tiêu chí đã
 parse + danh sách BĐS vừa xem), TTL 24 giờ. Khi nhận `follow`/tin đầu tiên có `ctx`,
 B Side nối `fingerprint ↔ zalo_user_id` và mở hội thoại bằng câu xác nhận nhu cầu.
@@ -887,12 +963,36 @@ nhận tin → chuẩn hoá → phân loại intent → cập nhật hồ sơ nh
                             → trả từ projects, KHÔNG info_request (FR-115)
       TỒN KHO CĂN         → "căn X còn không" → đọc unit_status; quá TTL
                             (FR-107) mới xác nhận lại với S (FR-116)
+                            [v48 04/09/2026: match_projects → khối
+                            "CĂN TRONG DỰ ÁN" (≤5 tin, lọc unit_code);
+                            last_confirmed_at > 7 ngày/null → "để em xác
+                            nhận lại chủ" + ask_owner, không khẳng định]
       CẦN XÁC MINH        → info_request (SRS-4.1) + câu giữ nhịp
+                            [v48: câu giữ nhịp FR-45 đi qua prompt —
+                            "Trong khi chờ, anh/chị có câu hỏi gì khác…"]
       ĐỦ TIÊU CHÍ         → truy vấn, trả tối đa 3 listing
+                            [v48: KHO kèm "giá TB phường" (FR-99) để so
+                            khi khách hỏi "giá vậy ok không"]
+      CĂN ĐÃ CHỐT/GỠ      → khối "CĂN TƯƠNG TỰ" theo luật SRS-5.2 (FR-31),
+      hoặc "giống vầy"      cũng ≤3 căn
+      XIN HÌNH            → ≤4 tấm/lượt (kho → fact), còn dư thì hỏi "xem
+                            thêm hình không ạ?" + preferences.photo_offset;
+                            "xem thêm" → 4 tấm kế (FR-27, v48)
+      CHẤM SAO            → "N sao / N/5 / chấm N" trong 48h sau nhắc
+                            feedback đã sent → ghi_danh_gia() (FR-65, v48)
       MUỐN XEM NHÀ        → luồng viewing
       TIÊU CỰC            → escalation UPSET + hạ nhiệt
-      MUỐN GỌI ĐIỆN       → escalation VOICE
+      MUỐN GỌI ĐIỆN       → escalation VOICE [v48: voice_request (model)
+                            hoặc regex → need_human + reminders(kind=
+                            'escalation', note 'VOICE: <uid>…'); email
+                            [VOICE] SRS-5.5 ở tầng DB]
       MUỐN BÁN            → gửi link /raoban
+  → LỌC LIÊN HỆ (FR-105, v48): mọi fact/địa chỉ vào prompt và mọi bong
+    bóng gửi người MUA qua locLienHe() (cùng regex lib/format.ts) — SĐT/
+    Zalo → "[liên hệ qua Zalo]", số nhà bỏ khỏi fact; nhánh bán/CTV/admin
+    không lọc
+  → mark_listing_interest(p_codes, p_buyer_id) cho mọi căn khách nhắc /
+    bot gợi / xin hình / nhờ hỏi chủ (FR-108, v48)
   → ghi message + property_events
 ```
 
@@ -904,25 +1004,43 @@ nhận tin → chuẩn hoá → phân loại intent → cập nhật hồ sơ nh
 - I4: không hỏi số điện thoại trừ khi `state = viewing_scheduling` (NFR-07).
 
 ### SRS-5.2 · Xếp hạng gợi ý
+
+*Công thức trọng số cũ (0,40 khớp tiêu chí + 0,25 hot_score + 0,20 đầy đủ +
+0,15 độ mới) chưa từng được dựng — **thay bằng** hai luật thật đang chạy trong
+`chat-reply` v48 (04/09/2026):*
+
+**(a) KHO gợi ý theo hồ sơ** (FR-130, giữ từ v43): lọc `deal`, đúng số phường
+(`ilike 'Phường N'`), `bedrooms ≥`, `price_vnd` trong khoảng suy từ
+`budgetRangeVnd()` ("tầm 5 tỷ" → ≤ 5,75 tỷ; "5–6 tỷ" → 4,75–6,6 tỷ), chỉ tin
+`dang_ban | dang_quan_tam` có giá số; xếp `created_at` giảm dần, lấy 6, model
+chọn ≤3 (I1).
+
+**(b) CĂN TƯƠNG TỰ** (FR-31) — chạy khi căn khách hỏi đã `da_chot`/`an`, hoặc
+câu có "giống giống vầy / tương tự / na ná":
 ```
-score = 0.40 × khớp_tiêu_chí
-      + 0.25 × hot_score_chuẩn_hoá        (FR-73)
-      + 0.20 × độ_đầy_đủ_thông_tin        -- ưu tiên tin đã được làm giàu
-      + 0.15 × độ_mới_last_verified_at    -- chống tin cũ (RSK-06)
+căn gốc  = căn khách nhắc; không có → mã cuối cùng bot nói trong 12 tin
+ứng viên = listings cùng deal, status ∈ {dang_ban, dang_quan_tam}, ≠ căn gốc,
+           price_vnd ∈ [0,7 × giá gốc, 1,3 × giá gốc] (bỏ qua nếu gốc không giá)
+           bước 1: cùng ward (≤6 tin mới nhất)
+           bước 2: nếu < 3 → thêm cùng district (≤6), bỏ trùng
+điểm     = 4·[cùng ward] + 2·[cùng access_type] + 1·[cùng property_type]
+kết quả  = 3 điểm cao nhất → khối "CĂN TƯƠNG TỰ" trong prompt
 ```
-Loại khỏi kết quả: `status ≠ 'dang_rao'`, và listing B đã từ chối sau khi xem (UF-07).
+Loại khỏi kết quả: tin không lên kệ (`cho_thong_tin`, `da_chot`, `an`). *Chưa
+dựng:* loại listing B đã từ chối sau khi xem (UF-07) và `hot_score` (FR-73,
+OPEN-43).
 
 ### SRS-5.3 · Job định kỳ
 
 | Job | Lịch | Việc |
 |---|---|---|
-| `recompute_hot_score` | 02:00 hằng ngày | FR-73 |
-| `followup_d3` | mỗi giờ | B im lặng đúng 3 ngày → FR-60 |
-| `zalo_keepalive` | mỗi giờ | B im lặng 5–6 ngày → FR-63, đặt `connection_status='at_risk'` |
+| `recompute_hot_score` | 02:00 hằng ngày | FR-73 *(04/09/2026: KHÔNG dựng job — view `bds_hot` tính lúc đọc, SRS-3.2)* |
+| `followup_d3` | mỗi giờ | B im lặng đúng ~~3~~ **5** ngày → FR-60 *(chủ dự án chốt 04/09/2026 "giữ chân 5 ngày"; dựng trong `nudge` v25 ở nhịp `nudge-tick`, không job riêng: im đủ 5 ngày → hỏi thăm một lần/lượt im, góc xoay vòng FR-61 + kho cùng khu FR-62)* |
+| `zalo_keepalive` | mỗi giờ | B im lặng 5–6 ngày → FR-63, đặt `connection_status='at_risk'` *(04/09/2026: `nudge` v25 — im ≥ 6 ngày → BUỘC góc `giu_ket_noi` mẫu cố định; không có cột `connection_status`, vết là `reminders` kind `reengage` note bắt đầu "giu_ket_noi")* |
 | `match_new_listings` | mỗi 15 phút | listing mới khớp `saved_criteria` → FR-64 *(04/09/2026: dựng bằng trigger `trg_listings_bao_tin_moi_khop` ngay lúc tin lên `dang_ban` thay cho job quét 15 phút; gửi ở nhịp `nudge-tick` kế — xem bảng thật)* |
-| `info_request_sla` | mỗi 30 phút | *(mốc theo FR-110)* pending > 24h → nhắc S một lần; > 48h → đóng (expired) + báo trung thực cho B; escalate CTV/chuyên viên chạy song song (FR-47) |
-| `stale_listing_check` | thứ 2 hằng tuần | *(tinh chỉnh theo FR-107)* TTL xác nhận là **7 ngày**, kiểm tra **tại thời điểm matching**: quá hạn thì hỏi S trước khi giới thiệu; job tuần chỉ quét listing không có lượt matching nào |
-| `close_conversations` | mỗi 5 phút | đóng hội thoại im lặng > 30 phút (FR-72) |
+| `info_request_sla` | mỗi 30 phút | *(mốc theo FR-110)* pending > 24h → nhắc S một lần; > 48h → đóng (expired) + báo trung thực cho B; escalate CTV/chuyên viên chạy song song (FR-47) *(04/09/2026: dựng thành cron `info-timeout-tick` mỗi giờ → `info_request_timeout_tick()`; nhánh CTV vẫn là `ctv-sla-tick` — xem bảng thật)* |
+| `stale_listing_check` | thứ 2 hằng tuần | *(tinh chỉnh theo FR-107)* TTL xác nhận là **7 ngày**, kiểm tra **tại thời điểm matching**: quá hạn thì hỏi S trước khi giới thiệu; job tuần chỉ quét listing không có lượt matching nào *(04/09/2026: dựng thành cron `stale-listing-tick` ngày một lần 9h VN → `stale_listing_tick()`, mốc **30 ngày** không sự kiện theo FR-103 chứ không phải TTL 7 ngày của FR-107 đã thay)* |
+| `close_conversations` | mỗi 5 phút | đóng hội thoại im lặng > 30 phút (FR-72) *(04/09/2026: KHÔNG dựng — không đóng hội thoại (FR-131 một hội thoại/khách); "cuộc trò chuyện" tính lúc đọc bằng view `hoi_thoai_phien`, SRS-3.12)* |
 
 **Cron THẬT đang chạy trên `nhadat-cc`** (pg_cron, kiểm 29/08/2026 — bảng trên
 là thiết kế, bảng dưới là thực tế):
@@ -930,7 +1048,9 @@ là thiết kế, bảng dưới là thực tế):
 | Job | Lịch | Gọi gì |
 |---|---|---|
 | `seller-drip-tick` | `22,52 1-13 * * *` (8h–20h VN, hai lượt/giờ) | `ask-seller` — hỏi nhỏ giọt chính chủ (FR-129/144). *Trước 02/09: `*/30` suốt ngày đêm — hỏi chủ nhà lúc 2 giờ sáng, mà hàm tick không tự kiểm giờ (FR-171 d)* |
-| `nudge-tick` | `7,37 1-13 * * *` (8h–20h VN, hai lượt/giờ) | `nudge` — nhắc lời hứa, nhắc lịch xem, leo thang (FR-133/32/147). *Trước 02/09: `*/30` suốt ngày, 22h–8h vào rồi thoát; phút lệch thay cho đoạn ngủ ngẫu nhiên 45 s trong lambda (FR-171 d).* **Từ v24 (04/09, không đổi lịch):** cùng nhịp gửi luôn `match` (tin mới khớp tiêu chí — FR-64, trigger DB chèn lúc tin lên `dang_ban`, gửi ở nhịp kế trong cửa 8–21h) và `feedback` (hỏi cảm nhận — FR-56, hẹn giờ xem + 4h), cả hai bằng mẫu cố định; nhắc `viewing` kèm link bản đồ khi tin có toạ độ (FR-54) |
+| `nudge-tick` | `7,37 1-13 * * *` (8h–20h VN, hai lượt/giờ) | `nudge` — nhắc lời hứa, nhắc lịch xem, leo thang (FR-133/32/147). *Trước 02/09: `*/30` suốt ngày, 22h–8h vào rồi thoát; phút lệch thay cho đoạn ngủ ngẫu nhiên 45 s trong lambda (FR-171 d).* **Từ v24 (04/09, không đổi lịch):** cùng nhịp gửi luôn `match` (tin mới khớp tiêu chí — FR-64, trigger DB chèn lúc tin lên `dang_ban`, gửi ở nhịp kế trong cửa 8–21h) và `feedback` (hỏi cảm nhận — FR-56, hẹn giờ xem + 4h), cả hai bằng mẫu cố định; nhắc `viewing` kèm link bản đồ khi tin có toạ độ (FR-54). **v25 (04/09 chiều, `20260904f`, không đổi lịch):** hỏi thăm khách im ĐỦ **5 ngày** một lần/lượt im (FR-60), sáu góc xoay vòng tất định + kho cùng khu (FR-61/62), im ≥ 6 ngày BUỘC giữ kết nối Zalo bằng mẫu cố định (FR-63); thêm kind `sold` (FR-108), `rating` (FR-65, dự phòng) và hai khuôn `followup` mẫu cố định ("chủ nhà chưa phản hồi" FR-110, "lịch xem … đã được xác nhận" FR-52); `feedback` thêm câu chấm sao |
+| `info-timeout-tick` | `3 1-13 * * *` (8h–20h VN, mỗi giờ) | hàm SQL `info_request_timeout_tick()` — FR-110: `seller_flow` > 24h → `reminded_at`, > 48h → `expired`; `buyer_ask` > 48h → `expired` + `followup` báo thật cho khách kèm căn khác (`20260904f`) |
+| `stale-listing-tick` | `0 2 * * *` (9h VN) | hàm SQL `stale_listing_tick()` — FR-103: tin `dang_ban` im 30 ngày → hỏi chủ "còn bán không" qua `info_requests(con_ban)` + escalation, tối đa 5 tin/ngày (`20260904f`) |
 | `cron-don-so` | `15 18 * * *` | SQL thuần: xoá `cron.job_run_details` quá 7 ngày. Trước đó không ai dọn, 8.600 dòng/tuần (FR-171 d) |
 | `ctv-report-tick` | `0 10 * * *` (17h VN) | `ctv-report` — báo cáo CTV (FR-137/149), từ v10 có dòng hạng CTV (FR-173 e) |
 | `ctv-sla-tick` | `*/15 1-13 * * *` (8h–20h VN, 15 phút/lượt) | hàm SQL `info_request_sla_tick()` — câu khách hỏi giao CTV quá `ctv_sla_phut()` (120 phút) chưa trả lời → một dòng nhắc admin + `sla_missed_at` (FR-173 c, migration `20260903a`). Không gọi edge function |
@@ -957,7 +1077,8 @@ còn 16 dòng (Supabase tự dọn sau vài giờ). Kết quả thật phải qu
 Đánh dấu `sentiment = negative` khi thoả **bất kỳ**:
 - Khớp từ điển bực bội tiếng Việt (*"hỏi hoài không trả lời"*, *"chán"*, *"lừa"*, *"phiền"*, *"thôi khỏi"*).
 - Cùng một câu hỏi lặp ≥ 3 lần mà chưa có `info_response`.
-- Đánh giá ≤ 3/5 (FR-65).
+- Đánh giá ≤ 3/5 (FR-65) — *đánh giá vào DB qua `ghi_danh_gia()` từ `chat-reply`
+  v48 (04/09/2026); nhánh UPSET từ điểm thấp ở tầng DB, chưa dựng.*
 - B gửi `unfollow` ngay sau một tin của hệ thống.
 
 → tạo `escalations(type='UPSET')` + email `[UPSET] <Zalo ID>` (FR-81), body kèm
@@ -975,6 +1096,34 @@ Body:
 ```
 Bốn loại: `[QUESTION] [VOICE] [VIEWING] [UPSET]`. Gửi qua hàng đợi, retry 3 lần;
 thất bại vẫn phải giữ bản ghi trong `escalations` để admin không mất việc.
+
+*[**Hiện thực 04/09/2026 — `20260904f`, qua ntfy.sh, không SMTP.** Bảng trên là
+thiết kế; thực tế:*
+- *Đường đi: sự kiện → `email_admin(loại, zalo uid, thân, listing)` →
+  `canh_bao_ngoai(title, text, priority, p_email=true)` → `net.http_post` tới
+  `https://ntfy.sh` với body `{topic, title:"[LOẠI] <uid>", message, priority,
+  email: app_config.admin_email}`. ntfy chuyển tiếp email; push vẫn tới app.*
+- *Địa chỉ đích đọc từ `app_config.admin_email` (mặc định rỗng = KHÔNG gửi gì,
+  kể cả push), không ghi cứng `admin.buyerside@nhadat.cc`. Thân email: các trường
+  của sự kiện + "BĐS: #mã · địa chỉ · giá · m2" + 300 ký tự mô tả + giờ VN. Không
+  có "Link admin" (không có trang chi tiết theo id).*
+- *Nguồn: `[VIEWING]` trigger `viewings` INSERT; `[UPSET]` trigger
+  `conversations.needs_human` false→true (cờ FR-141 là proxy của FR-77, kèm 3 tin
+  khách gần nhất); `[QUESTION]` trong `info_request_sla_tick` khi câu khách hỏi quá
+  SLA CTV (trừ `xac_nhan_lich`); `[VOICE]` trigger `reminders` INSERT có note bắt
+  đầu "VOICE:" — quy ước với chat-reply: khách muốn gọi/gửi voice thì chèn
+  `reminders(kind='escalation', buyer_id, note 'VOICE: …')`.*
+- *Không có hàng đợi/retry riêng và không có bảng `escalations`: pg_net gửi một
+  lần, kết quả nằm ở `net._http_response`, `bot_health_tick` quét sang `bot_errors`
+  khi không 2xx. Việc thật vẫn còn ở `reminders`/`viewings`/`info_requests` nên
+  email hụt không mất việc.*
+- ***Thử thật 04/09** (`net.http_post` có `email: test@example.com` tới topic đang
+  dùng): ntfy trả **400 `anonymous email sending is not allowed`** — gửi email cần
+  tài khoản ntfy (bậc trả phí, có hạn mức email/ngày) + token. Đã chừa secret Vault
+  `NTFY_TOKEN`: có thì `canh_bao_ngoai` gắn `Authorization: Bearer`. Việc chủ dự án:
+  tạo tài khoản ntfy → token → `vault.create_secret` → UPDATE `admin_email`. Cho tới
+  lúc đó bốn loại chỉ tới được app ntfy nếu `admin_email` được điền (push), còn
+  `admin_email` rỗng thì im hoàn toàn.]*
 
 ---
 
@@ -1013,7 +1162,7 @@ Hệ thống được nghiệm thu khi **toàn bộ** kịch bản sau chạy en
 | AC-03 | B hỏi "cho xem sổ đỏ" → tạo info_request → S trả lời kèm ảnh → B nhận ảnh **và** listing được cập nhật | UF-05, FR-44 |
 | AC-04 | Đặt lịch xem: xác nhận đúng căn, B **từ chối** cho số ĐT vẫn đặt được lịch, nhận link Maps, có email `[VIEWING]` | UF-06, FR-53, NFR-07 |
 | AC-05 | Sau buổi xem, B nói "chị chỉ mua MT trên 4m" → gợi ý lần sau đã loại nhà hẻm | UF-07 |
-| AC-06 | B im lặng 5 ngày → nhận tin chống-xoá-Zalo kết thúc bằng câu hỏi | UF-08, FR-63 |
+| AC-06 | B im lặng 5 ngày → tin hỏi thăm (FR-60, mốc chốt 04/09/2026); im ≥6 ngày → tin giữ kết nối Zalo mẫu cố định, kết thúc bằng câu hỏi (FR-63) | UF-08, FR-60, FR-63 |
 | AC-07 | S gõ **một** câu rao → bóc tách đúng ≥ 4 trường → sửa → đăng → có mã `#ID` | UF-09, FR-92 |
 | AC-08 | Nhắn Zalo "cần bán nhà" → nhận ngay link `/raoban` | UF-10, FR-97 |
 | AC-09 | Admin thấy đủ 5 bảng, 20 mục/trang, click B ID nhảy sang Zalo | FR-70…80 |
