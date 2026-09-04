@@ -382,6 +382,25 @@ qua. Đặt hai secret đó vào Vault là đóng, không phải sửa code. Xem
 Trong lúc chờ, mỗi lượt bỏ qua verify ghi một dòng `zalo-webhook KHONG VERIFY`
 vào `bot_errors`.
 
+### Sự cố 27/08 → 04/09/2026: bridge im 8 ngày, không ai biết
+
+Bridge chạy trên máy local, máy tắt là kênh Zalo bằng 0. Nhịp kiểm 15 phút
+PHÁT HIỆN đúng (117 dòng "bridge-zca im" trong `bot_errors`, `/admin` hiện đỏ)
+nhưng lời cảnh báo 🩺 đi ra bằng `reminders` → `escalation-feed` → chính cái
+bridge đã chết. Hệ thống biết mình chết mà chỉ tự nói với mình. Từ `20260904a`:
+
+- `canh_bao_ngoai()` — nhịp kiểm gọi thẳng **ntfy.sh** qua pg_net (không token,
+  không qua bridge/OA) tới topic ngẫu nhiên ở `app_config.ntfy_topic`; 1 tin/giờ.
+  Chủ dự án cài app ntfy, đăng ký đúng topic. Thử thật 04/09: 2 push, 200.
+- 🩺 cũ chưa gửi được bị huỷ khi có 🩺 mới; báo cáo CTV treo > 36 giờ bị huỷ —
+  bridge sống lại không xả 125 tin cũ (đã dọn tay 117 + 7 hôm 04/09).
+- Bridge chuyển lên VPS chạy systemd: `bot/bridge-zca/VPS.md` (8 bước, gồm quét
+  QR lần đầu trong tmux, session hết hạn, sao lưu đêm) + `nhadat-bridge.service`.
+
+Vẫn còn thiếu, chờ chủ dự án: `ZALO_APP_SECRET`/`ZALO_APP_ID` trong Vault (webhook
+OA đang chạy KHÔNG kiểm chữ ký — sổ lỗi ghi mỗi ngày), quyền đọc log runtime
+Vercel cho token MCP (đang 403), merge PR #33 để web production khớp DB.
+
 ### Điểm mù: migration stub
 
 `bot/supabase/migrations/20260825_seller_drip.sql` là **stub 6 dòng ghi chú**,

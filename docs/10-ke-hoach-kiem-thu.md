@@ -207,6 +207,8 @@ Supabase. Nhìn code không thấy; phải đo.
 | TS-HEALTH-04 | `select cron.job_run_details` cho chính lần chạy hỏng ở TS-HEALTH-01 | Vẫn ghi `succeeded` — đây chính là lý do FR-152 tồn tại, đừng tin cột này |
 | TS-HEALTH-05 | Gọi `escalation-feed` kèm `x-bridge-secret` đúng | `bot_health` có dòng `who='bridge-zca'`, `at` = vừa xong |
 | TS-HEALTH-06 | Xoá dòng `bridge-zca` khỏi `bot_health` rồi chạy `bot_health_tick()` | `bridge_im = false` — chưa từng có nhịp thì KHÔNG báo |
+| TS-HEALTH-07 | *(04/09/2026, `20260904a`)* Bridge im > 15 phút trong 7–22h VN, chạy `bot_health_tick()` hai lần trong cùng giờ | Lần 1: trả `ntfy = <id>`, `net._http_response` của id đó 200 từ ntfy.sh, `bot_health` có `who='ntfy'`; lần 2: `ntfy = null` (1 tin/giờ). Push tới app ntfy đăng ký topic `app_config.ntfy_topic` — chạy thật 04/09: id 2102/2103 trả 200 ✅ |
+| TS-HEALTH-08 | *(04/09/2026)* Có 117 🩺 + 8 báo cáo CTV `pending` từ 27/08 (bridge chết), chạy tick | 🩺 cũ → `cancelled`, chỉ còn 🩺 mới nhất; báo cáo CTV quá 36 giờ → `cancelled`; bridge bật lại chỉ nhận tin mới — chạy thật 04/09: huỷ 117 + 7, còn 1 ✅ |
 
 Dọn sau khi chạy: `delete from bot_errors; delete from reminders where note like '🩺%';`
 và đẩy `bot_health.last_id` của `pg_net` lên `max(id)` của `net._http_response`.
