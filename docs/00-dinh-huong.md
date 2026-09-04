@@ -57,7 +57,7 @@ cả hai phía (`06 §6.8`).
 | Phí | CCRB 1% · NMG 0.5% · thuê ¾ tháng | Giống | Giống | BR-05, AOND §V |
 | Địa bàn | Quận 5 | Quận 5 rồi mở | **Sài Gòn (phường mới) + Long An**, trọng tâm bán; khởi điểm Q5 cũ (chốt 03/09) | BR-01, OPEN-27, FR-174 |
 | Hạ tầng | Vendor, Slack, Logstash | Gemini → local, SharePoint | Supabase Edge + Claude, Storage, bridge Zalo, `/admin` | SRS-2, OPEN-41 |
-| Vận hành | 1.5 CTV | CTV dẫn khách | 2 CTV xoay vòng + báo cáo 17h + hạng *(04/09: `ctvs` 2 dòng, 1 bật, chưa CTV nào có Zalo uid — nhắc chưa tới được ai)* | FR-136/137/173 |
+| Vận hành | 1.5 CTV | CTV dẫn khách | 2 CTV xoay vòng + báo cáo 17h + hạng (CTV cần Zalo uid mới nhận được nhắc) | FR-136/137/173 |
 
 ## 0.3 SRD AOND: nhận / sửa / chưa / không
 
