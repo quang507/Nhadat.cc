@@ -125,11 +125,11 @@ kênh báo động không được đi qua thứ mà nó phải giám sát.
 
 ## Migration
 
-58 file ở `bot/supabase/migrations/`, đặt tên `YYYYMMDD<chữ>_<việc>.sql`, áp
+59 file ở `bot/supabase/migrations/`, đặt tên `YYYYMMDD<chữ>_<việc>.sql`, áp
 theo thứ tự tên. Migration là **nguồn sự thật của schema**: sửa DB bằng
 `apply_migration` với đúng nội dung file trong repo, không sửa tay ở dashboard
-rồi quên ghi lại. Đợt gần nhất: `20260904a` (còi ntfy) → `20260904g` (kho ảnh
-web + danh sách riêng).
+rồi quên ghi lại. Đợt gần nhất: `20260904a` (còi ntfy) → `20260904h` (dọn
+advisor sau merge).
 
 ## Chưa làm
 

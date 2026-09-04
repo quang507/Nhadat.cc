@@ -61,7 +61,7 @@ Bảng NFR-01…18 với cách đo nằm ở `docs/07 §6` (nguồn sự thật)
 ## 10.5 Môi trường & công cụ (free-tier)
 
 - Unit: Vitest · E2E web: Playwright · A11y: axe-core · Perf: Lighthouse CI · bot: `bot/tests/e2e` (mock Supabase + mock model, Node/Bun).
-- CI: GitHub Actions free — lint + unit mỗi PR, E2E nightly; Vercel preview mỗi PR. Tầng TypeScript của bot hiện chưa có test chạy trong CI (gọi tay).
+- CI: GitHub Actions free, `.github/workflows/kiem.yml` — mỗi PR chạy 3 job: `web` (tsc + `next build`), `bot` (102 kịch bản e2e + FR-159/161/164, mock Supabase & mock model nên không cần secret), `truyvet` (`scripts/soat-truy-vet.sh`). Vercel preview mỗi PR. **Chưa vào CI:** TS-SEC (cần SQL Editor), TS-LIVE (cần bridge + hai máy), Lighthouse/axe/k6 — xem `docs/11 §11.4` để biết chỗ nào máy không với tới.
 - DB: `nhadat-cc` là môi trường chính, **không** chạy test phá hoại; ca ghi bọc `do … raise exception` để cuộn lại. Zalo: OA thật chế độ ẩn + acc test (OPEN-09).
 - Bí mật chỉ trong biến môi trường / Vault; khoá đã dán vào chat phải rotate.
 

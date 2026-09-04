@@ -40,6 +40,7 @@ flowchart LR
 | [08-traceability.md](08-traceability.md) | Ma trận truy vết | PO, QA |
 | [09-open-issues.md](09-open-issues.md) | 45 vấn đề (14 đã chốt, 31 cần chủ dự án chốt — OPEN-26, OPEN-27 chốt một phần) | Founder, PO |
 | [10-ke-hoach-kiem-thu.md](10-ke-hoach-kiem-thu.md) | Kế hoạch kiểm thử 4 tầng (suite TS-*) | QA, Dev, PO |
+| [11-quy-trinh.md](11-quy-trinh.md) | **Quy trình BA và tester** — hai vòng làm việc, ba cổng, máy kiểm gì / người kiểm gì, định nghĩa XONG | Tất cả |
 
 ## Đọc từ đâu
 

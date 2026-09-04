@@ -36,6 +36,7 @@ Thứ tự đọc = thứ tự phụ thuộc. Tài liệu sau **không được 
 | 8 | `docs/08-traceability.md` | Ma trận truy vết BR → FR → UF → WF → SRS | — |
 | 9 | `docs/09-open-issues.md` | Mâu thuẫn / quyết định còn treo, cần chủ dự án chốt | `OPEN-` |
 | 10 | `docs/10-ke-hoach-kiem-thu.md` | Kế hoạch kiểm thử 4 tầng: chức năng, kỹ thuật, UI/UX, phi chức năng | `TS-` |
+| 11 | `docs/11-quy-trinh.md` | Quy trình BA và tester: hai vòng làm việc, ba cổng, máy kiểm gì / người kiểm gì, định nghĩa XONG. Không sinh ID mới | — |
 
 ## 3. Tài liệu gốc (không sửa)
 
@@ -147,8 +148,20 @@ làm tham chiếu khi code. Xem `design/README.md`.
 
 ## 7. Cách chạy pipeline BA
 
-Xem `.claude/skills/ba-pipeline/SKILL.md` — quy trình chuẩn để tạo mới hoặc cập
-nhật một tầng tài liệu mà không phá vỡ truy vết.
+Quy trình đầy đủ (BA + tester + ba cổng + định nghĩa XONG): `docs/11-quy-trinh.md`.
+Bản rút gọn nạp tự động cho agent: `.claude/skills/ba-pipeline/SKILL.md`.
+
+**Cổng kiểm — chạy trước mọi commit:**
+
+```bash
+bun run kiem   # = kieu (tsc) + build + test:bot (102 e2e + FR-159/161/164) + truyvet
+```
+
+Đúng ba lệnh đó chạy trong CI (`.github/workflows/kiem.yml`) mỗi PR. Người và
+máy dùng chung script trong `package.json` — đừng gõ lệnh rời, không thì "máy
+xanh, máy tao đỏ" và không ai biết bên nào đúng. `scripts/soat-truy-vet.sh` bắt
+ID gãy, FR thiếu dòng truy vết, số đếm README lệch, SĐT thật lọt vào `docs/`,
+khoá service_role bị ghi vào file, và web trỏ `raw.githubusercontent.com`.
 
 **Skill PM mượn ngoài** (`phuryn/pm-skills`, MIT — kiểm license 03/09/2026;
 marketplace đã khai ở `.claude/settings.json` không ghim commit, nên nội dung

@@ -1,0 +1,60 @@
+# Cổng kiểm tự động — chạy đúng những gì người ta vẫn chạy tay trước khi push.
+# Trước 04/09/2026 repo không có CI nào: mọi lần "tsc sạch, e2e xanh" đều là lời
+# kể của người đẩy commit. Nay máy nói.
+name: Kiểm
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  web:
+    name: Web — kiểu dữ liệu + dựng
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      # Mọi bước dưới đây gọi script trong package.json, không gõ lệnh riêng:
+      # CI và người phải chạy ĐÚNG một câu lệnh, không thì "máy xanh, máy tao
+      # đỏ" và không ai biết bên nào đúng.
+      - name: Kiểu dữ liệu
+        run: bun run kieu
+      - name: Dựng
+        # Build không có key Supabase vẫn phải qua: trang động rơi về rỗng,
+        # nhưng lỗi cú pháp / import / kiểu thì lộ ra ngay.
+        run: bun run build
+
+  bot:
+    name: Bot — e2e hội thoại
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # Suite e2e có package.json RIÊNG (`@anthropic-ai/sdk`, `zod`) và
+      # node_modules của nó nằm trong .gitignore — cài ở gốc repo là không đủ.
+      - name: Cài phụ thuộc của suite e2e
+        run: bun install --frozen-lockfile --cwd bot/tests/e2e
+      # `chay.sh` TỰ dựng lại bundle từ nguồn rồi mới chạy 102 kịch bản — đừng
+      # đổi thành `node run.mjs`, nó sẽ test bản bundle cũ nằm sẵn trong repo.
+      # Supabase và model đều là bản giả lập trong `mock-*.mjs`: không đụng DB
+      # thật, không tốn tiền model, không cần secret nào trong CI.
+      - name: e2e + hồi quy FR-159/161/164
+        run: bun run test:bot
+
+  truyvet:
+    name: Tài liệu — truy vết ID
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Không có ID gãy, số đếm khớp README, không rò PII
+        run: bash scripts/soat-truy-vet.sh
