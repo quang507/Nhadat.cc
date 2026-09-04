@@ -37,9 +37,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      # Không cần `setup-node`: ubuntu-latest có sẵn Node, và bốn file test là
+      # .mjs trần không import gói nào — thêm bước chỉ tốn 4 s tải Node 20 và
+      # kéo theo cảnh báo deprecation.
+      #
       # Suite e2e có package.json RIÊNG (`@anthropic-ai/sdk`, `zod`) và
       # node_modules của nó nằm trong .gitignore — cài ở gốc repo là không đủ.
       - name: Cài phụ thuộc của suite e2e
