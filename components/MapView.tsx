@@ -3,11 +3,20 @@
 // Leaflet đụng window lúc import nên phải import động trong useEffect.
 import { useEffect, useRef } from "react";
 import "leaflet/dist/leaflet.css";
-import type { Listing } from "@/lib/supabase";
+import type { MapRow } from "@/lib/supabase";
 import { formatPrice } from "@/lib/format";
 import { Q5_CENTER, wardPoint } from "@/lib/geo";
 
-export default function MapView({ listings }: { listings: Listing[] }) {
+export default function MapView({
+  listings,
+  center,
+  zoom = 15,
+}: {
+  listings: MapRow[];
+  /** FR-10: trang tin đặt tâm ở phường của tin; mặc định tâm Quận 5 (/ban-do). */
+  center?: [number, number];
+  zoom?: number;
+}) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -16,7 +25,7 @@ export default function MapView({ listings }: { listings: Listing[] }) {
     (async () => {
       const L = (await import("leaflet")).default;
       if (cancelled || !ref.current) return;
-      map = L.map(ref.current).setView(Q5_CENTER, 15);
+      map = L.map(ref.current).setView(center ?? Q5_CENTER, zoom);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap",
         maxZoom: 19,
@@ -48,7 +57,7 @@ export default function MapView({ listings }: { listings: Listing[] }) {
       cancelled = true;
       map?.remove();
     };
-  }, [listings]);
+  }, [listings, center, zoom]);
 
   return <div ref={ref} className="h-full w-full" />;
 }

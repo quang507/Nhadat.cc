@@ -7,8 +7,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatPrice } from "@/lib/format";
-
-const WARDS = Array.from({ length: 15 }, (_, i) => `Phường ${i + 1}`);
+import { WARDS } from "@/lib/geo"; // một danh sách phường cho cả web (FR-171 j)
+import UploadAnh from "@/components/UploadAnh";
 
 // Vòng đời tin FR-139 — đúng 5 trạng thái của CHECK trên listings.status.
 // (Nhãn tiếng Anh cũ đã bỏ: migration FR-139 dịch hết dữ liệu sang tiếng Việt
@@ -27,8 +27,14 @@ export default function Page() {
   const [mine, setMine] = useState<Listing[]>([]);
   const [rao, setRao] = useState("");
   const [ward, setWard] = useState("Phường 1");
+  // FR-174: địa bàn đã mở (Sài Gòn phường mới + Long An) — quận/huyện gõ tay,
+  // không ghi cứng "Quận 5" nữa (nghiệm thu 04/09 bắt được chỗ sót của đợt 1).
+  const [quan, setQuan] = useState("Quận 5");
   const [priceRaw, setPriceRaw] = useState("");
   const [msg, setMsg] = useState("");
+  // FR-96 (04/09/2026): up ảnh cho tin của mình — policy `storage_seller_own_insert`
+  // + `listing_media_own_insert` chỉ cho ghi vào thư mục UUID tin của chính mình.
+  const [upCho, setUpCho] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -69,7 +75,7 @@ export default function Page() {
         code,
         seller_id: sellerId,
         deal: "ban",
-        district: "Quận 5",
+        district: quan.trim() || "Quận 5",
         ward,
         description: rao.trim(),
         price_raw: priceRaw.trim() || null,
@@ -78,7 +84,7 @@ export default function Page() {
       .select("*").single();
     if (error) return setMsg("Đăng không được: " + error.message);
     setMine((m) => [data as Listing, ...m]);
-    setRao(""); setPriceRaw("");
+    setRao(""); setPriceRaw(""); setQuan("Quận 5");
     setMsg(`Đã nhận tin #${code} — tụi em bóc tách chi tiết, đủ thông tin là tin tự lên web.`);
   };
 
@@ -120,11 +126,17 @@ export default function Page() {
         />
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label>
-            <span className="mb-1 block text-xs font-semibold text-mute">Phường (Quận 5)</span>
+            <span className="mb-1 block text-xs font-semibold text-mute">Phường (khu Quận 5 cũ — khu khác ghi trong câu rao)</span>
             <select value={ward} onChange={(e) => setWard(e.target.value)}
               className="w-full rounded-lg border border-line bg-white px-3 py-2.5">
               {WARDS.map((w) => <option key={w}>{w}</option>)}
             </select>
+          </label>
+          <label>
+            <span className="mb-1 block text-xs font-semibold text-mute">Quận / huyện, tỉnh</span>
+            <input value={quan} onChange={(e) => setQuan(e.target.value)}
+              placeholder="VD: Quận 5 · Quận Tân Bình · Bến Lức, Long An"
+              className="w-full rounded-lg border border-line px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-brand" />
           </label>
           <label>
             <span className="mb-1 block text-xs font-semibold text-mute">Giá rao (ghi tự nhiên)</span>
@@ -142,22 +154,36 @@ export default function Page() {
 
       <div className="mt-8 overflow-hidden rounded-king border border-line bg-white">
         {mine.map((l) => (
-          <div key={l.id} className="flex items-center gap-4 border-b border-line px-5 py-3.5 last:border-0">
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold">
-                #{l.code} · {l.description?.slice(0, 60) ?? l.location_raw}
-              </p>
-              <p className="text-sm text-mute">
-                {l.ward} · {formatPrice(l.price_vnd, l.price_raw)}
-              </p>
+          <div key={l.id} className="border-b border-line px-5 py-3.5 last:border-0">
+            <div className="flex items-center gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">
+                  #{l.code} · {l.description?.slice(0, 60) ?? l.location_raw}
+                </p>
+                <p className="text-sm text-mute">
+                  {l.ward} · {formatPrice(l.price_vnd, l.price_raw)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUpCho((c) => (c === l.id ? null : l.id))}
+                className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand"
+              >
+                {upCho === l.id ? "Đóng" : "Thêm ảnh"}
+              </button>
+              <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${
+                l.status === "dang_ban" || l.status === "dang_quan_tam" ? "bg-brand/10 text-brand"
+                : l.status === "da_chot" ? "bg-navy/10 text-navy"
+                : "bg-cream text-mute"
+              }`}>
+                {STATUS_LABEL[l.status] ?? l.status}
+              </span>
             </div>
-            <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${
-              l.status === "dang_ban" || l.status === "dang_quan_tam" ? "bg-brand/10 text-brand"
-              : l.status === "da_chot" ? "bg-navy/10 text-navy"
-              : "bg-cream text-mute"
-            }`}>
-              {STATUS_LABEL[l.status] ?? l.status}
-            </span>
+            {upCho === l.id && (
+              <div className="mt-3">
+                <UploadAnh listingId={l.id} code={l.code} />
+              </div>
+            )}
           </div>
         ))}
         {mine.length === 0 && (

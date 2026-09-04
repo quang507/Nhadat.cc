@@ -1,28 +1,88 @@
 import Link from "next/link";
 import ListingCard from "@/components/ListingCard";
 import { IconAsk, IconChart, IconCalc, IconClock, IconSearch, IconShield } from "@/components/icons";
-import { supabase, type Listing } from "@/lib/supabase";
+import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase";
 import { placeholderImg, zaloLink } from "@/lib/format";
 import { coverByCode } from "@/lib/photos";
+import { WARDS } from "@/lib/geo";
+import { FEATURED_TAGS } from "@/lib/tags";
 
 export const revalidate = 300;
 
-const WARDS = [
-  "Phường 1", "Phường 2", "Phường 3", "Phường 4", "Phường 5", "Phường 6", "Phường 7",
-  "Phường 8", "Phường 9", "Phường 10", "Phường 11", "Phường 12", "Phường 13", "Phường 14",
+// FR-01: mỗi lợi ích một minh hoạ hội thoại ngắn (3 bong bóng). Chữ đúng tone
+// §6.8 (anh/chị – em, không markdown).
+type Bong = { ai: "khach" | "em"; noi: string };
+const LOI_HUA: Array<{ Icon: (p: { className?: string }) => React.ReactElement; t: string; d: string; chat: Bong[] }> = [
+  {
+    Icon: IconShield,
+    t: "Không thu số điện thoại",
+    d: "Để lại số trên trang nhà đất là ăn 40 cuộc gọi trong 3 ngày. Chỉ khi hẹn xem nhà mới cần liên hệ, và luôn có đường từ chối.",
+    chat: [
+      { ai: "khach", noi: "Em cần số của chị không?" },
+      { ai: "em", noi: "Dạ không chị. Mình nhắn Zalo là đủ, lúc hẹn xem nhà mới tính." },
+      { ai: "khach", noi: "Vậy đỡ bị gọi làm phiền." },
+    ],
+  },
+  {
+    Icon: IconClock,
+    t: "Trực 24/7, nhớ nhu cầu",
+    d: "Chat hôm nay, ba tháng sau quay lại vẫn tiếp đúng chỗ cũ, không hỏi lại từ đầu.",
+    chat: [
+      { ai: "khach", noi: "Hồi tháng 5 anh có hỏi nhà Phường 5 dưới 8 tỉ đó em." },
+      { ai: "em", noi: "Dạ em nhớ, hẻm xe hơi 3 phòng ngủ. Tháng này có 2 căn mới, em gửi anh liền." },
+      { ai: "khach", noi: "Ok gửi anh xem." },
+    ],
+  },
+  {
+    Icon: IconAsk,
+    t: "Thiếu gì thì đi hỏi giùm",
+    d: "Chưa rõ pháp lý, hẻm rộng bao nhiêu — tụi em hỏi chủ nhà rồi báo lại anh chị.",
+    chat: [
+      { ai: "khach", noi: "Căn #35148 hẻm mấy mét, xe hơi vô được không?" },
+      { ai: "em", noi: "Tin chưa ghi, em hỏi chủ nhà rồi báo chị trong hôm nay nha." },
+      { ai: "em", noi: "Chủ nhà xác nhận hẻm 5m, xe 7 chỗ quay đầu được chị." },
+    ],
+  },
 ];
+
+// FR-03: vòng hỏi — B hỏi → tụi em hỏi S → báo lại B.
+const VONG_HOI = [
+  { ai: "Anh chị hỏi tụi em", noi: "“Sổ riêng chưa? Có lộ giới không?”", chu: "Hỏi bằng Zalo, câu nào cũng được." },
+  { ai: "Tụi em hỏi người bán", noi: "Chuyển đúng câu đó tới chủ nhà / môi giới, có hạn trả lời.", chu: "Chủ nhà không thấy Zalo của anh chị." },
+  { ai: "Báo lại anh chị", noi: "Có câu trả lời là báo ngay, ghi vào tin để người sau khỏi hỏi lại.", chu: "Chưa có thì nói thẳng là chưa có." },
+];
+
+// Ba–bốn bong bóng chat CSS thuần: khách bên trái (xám), em bên phải (cam nhạt).
+function HoiThoai({ chat, toi }: { chat: Bong[]; toi?: boolean }) {
+  return (
+    <div className={`mt-4 flex flex-col gap-1.5 rounded-shot p-3 text-sm leading-5 ${toi ? "bg-white/10" : "bg-cream/70"}`} aria-label="Minh hoạ hội thoại">
+      {chat.map((b, i) => (
+        <p
+          key={i}
+          className={`max-w-[88%] rounded-2xl px-3 py-1.5 ${
+            b.ai === "khach"
+              ? `self-start rounded-bl-sm ${toi ? "bg-white/15 text-white" : "bg-white text-navy"}`
+              : `self-end rounded-br-sm ${toi ? "bg-brand text-white" : "bg-brand/10 text-navy"}`
+          }`}
+        >
+          {b.noi}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 async function getListings(deal: "ban" | "cho_thue", limit: number) {
   const { data } = await supabase
     .from("listings")
-    .select("*")
+    .select(CARD_COLS) // FR-171 j: thẻ không cần mô tả
     .eq("deal", deal)
     .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
     .not("price_raw", "is", null)
     .neq("price_raw", "")
     .order("created_at", { ascending: false })
     .limit(limit);
-  return (data ?? []) as Listing[];
+  return (data ?? []) as CardRow[];
 }
 
 export default async function Home() {
@@ -45,9 +105,9 @@ export default async function Home() {
         </div>
         <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-4 pb-28 pt-14 md:grid-cols-[1.15fr_.85fr] md:pt-16">
           <div>
-            <p className="eyebrow text-brand">Môi giới thường trực · Quận 5</p>
+            <p className="eyebrow text-brand">Môi giới thường trực · Sài Gòn & Long An</p>
             <h1 className="mt-4 text-4xl font-extrabold leading-[1.08] [text-wrap:balance] md:text-5xl">
-              Tìm nhà Quận 5?
+              Tìm nhà Sài Gòn, Long An?
               <br />
               Nhắn một câu là xong.
             </h1>
@@ -57,14 +117,15 @@ export default async function Home() {
               dưới 10 tỉ”.
             </p>
             <div className="mt-7 flex flex-wrap gap-2 text-sm">
-              {["Nhà phố", "Hẻm xe hơi", "Mặt tiền", "Chung cư", "Dưới 10 tỉ"].map((t) => (
-                <a
-                  key={t}
-                  href={zaloLink(`tag:${t}`)}
+              {/* FR-12: chip là link trang tag (SSG), không còn đẩy thẳng sang Zalo */}
+              {FEATURED_TAGS.slice(0, 5).map((t) => (
+                <Link
+                  key={t.slug}
+                  href={`/${t.slug}`}
                   className="rounded-full border border-white/20 px-4 py-1.5 text-white/85 transition hover:border-brand hover:bg-brand hover:text-white"
                 >
-                  {t}
-                </a>
+                  {t.keyword}
+                </Link>
               ))}
             </div>
           </div>
@@ -75,46 +136,129 @@ export default async function Home() {
               <img
                 src={placeholderImg("hero-q5")}
                 alt="Nhà phố Quận 5"
+                fetchPriority="high"
+                decoding="async"
                 className="aspect-[4/5] w-full object-cover"
               />
             </div>
           </div>
         </div>
 
-        {/* Thẻ hỏi-Zalo nổi đè lên chân hero — vị trí thanh search của Veedoo.
-            FR-02 muốn ô search dạng chat; nhưng nó KHÔNG phải ô nhập liệu, nên
-            để hẳn dạng câu hỏi trong ngoặc kép + nút, đừng giả làm input. */}
+        {/* FR-02 (dựng 04/09/2026): ô search DẠNG CHAT nổi đè chân hero — vị trí
+            thanh search của Veedoo. Form GET thuần tới /api/search?go=1: route
+            handler bóc câu bằng luật rồi 302 sang trang tag khớp hoặc
+            /mua-ban?… (FR-08/09). Không cần JS; không có JS vẫn tìm được. */}
         <div className="relative mx-auto -mb-14 max-w-6xl px-4">
-          <a
-            href={zaloLink("hero")}
-            className="flex flex-col gap-3 rounded-king bg-white p-4 text-navy shadow-[0_18px_40px_rgba(13,37,61,0.18)] transition hover:-translate-y-0.5 sm:flex-row sm:items-center sm:gap-4 sm:p-3 sm:pl-6"
+          <form
+            action="/api/search"
+            method="get"
+            role="search"
+            className="flex flex-col gap-3 rounded-king bg-white p-4 text-navy shadow-[0_18px_40px_rgba(13,37,61,0.18)] sm:flex-row sm:items-center sm:gap-4 sm:p-3 sm:pl-6"
           >
+            <input type="hidden" name="go" value="1" />
             <IconSearch className="hidden h-5 w-5 shrink-0 text-brand sm:block" />
-            <span className="flex-1 leading-6 text-mute">
-              “Có nhà gần ngã tư Nguyễn Trãi với Trần Bình Trọng không em?”
-            </span>
-            <span className="shrink-0 rounded-full bg-brand px-6 py-3 text-center font-bold text-white">
+            <input
+              name="q"
+              type="search"
+              maxLength={300}
+              autoComplete="off"
+              placeholder="tìm mua nhà phố HXH 8 tỉ ở Q5"
+              aria-label="Nhắn một câu mô tả căn anh chị đang tìm"
+              className="min-w-0 flex-1 bg-transparent px-1 py-2 leading-6 text-navy outline-none placeholder:text-mute"
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-full bg-brand px-6 py-3 text-center font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+            >
+              Tìm
+            </button>
+            <a
+              href={zaloLink("hero")}
+              className="shrink-0 rounded-full border border-line px-5 py-3 text-center text-sm font-bold text-navy transition hover:border-brand hover:text-brand"
+            >
               Hỏi qua Zalo
-            </span>
-          </a>
+            </a>
+          </form>
         </div>
       </section>
 
-      {/* LỜI HỨA */}
+      {/* LỜI HỨA — FR-01 (dựng 04/09/2026): mỗi mục MỘT lợi ích + minh hoạ hội
+          thoại ngắn kiểu whatsapp.com — ba bong bóng CSS thuần, không ảnh. */}
       <section className="mx-auto grid max-w-6xl gap-4 px-4 pb-4 pt-24 md:grid-cols-3">
-        {[
-          { Icon: IconShield, t: "Không thu số điện thoại", d: "Để lại số trên trang nhà đất là ăn 40 cuộc gọi trong 3 ngày. Chỉ khi hẹn xem nhà mới cần liên hệ, và luôn có đường từ chối." },
-          { Icon: IconClock, t: "Trực 24/7, nhớ nhu cầu", d: "Chat hôm nay, ba tháng sau quay lại vẫn tiếp đúng chỗ cũ, không hỏi lại từ đầu." },
-          { Icon: IconAsk, t: "Thiếu gì thì đi hỏi giùm", d: "Chưa rõ pháp lý, hẻm rộng bao nhiêu — tụi em hỏi chủ nhà rồi báo lại anh chị." },
-        ].map(({ Icon, t, d }) => (
-          <div key={t} className="rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
+        {LOI_HUA.map(({ Icon, t, d, chat }) => (
+          <div key={t} className="flex flex-col rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
             <span className="grid h-11 w-11 place-items-center rounded-shot bg-brand/10 text-brand">
               <Icon className="h-6 w-6" />
             </span>
             <h2 className="mt-4 text-lg font-extrabold">{t}</h2>
             <p className="mt-1.5 text-sm leading-6 text-mute">{d}</p>
+            <HoiThoai chat={chat} />
           </div>
         ))}
+      </section>
+
+      {/* FR-03 (dựng 04/09/2026): "Hỏi bất kỳ, có tức thì" — vòng B hỏi → tụi em
+          hỏi người bán → báo lại B. Ba bước nối bằng mũi tên, không JS. */}
+      <section className="mx-auto max-w-6xl px-4 pt-6">
+        <div className="rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)] md:p-8">
+          <p className="eyebrow text-brand">Hỏi bất kỳ, có tức thì</p>
+          <h2 className="mt-1.5 text-2xl font-extrabold [text-wrap:balance] md:text-3xl">
+            Câu nào tụi em chưa biết, tụi em đi hỏi chủ nhà rồi báo lại
+          </h2>
+          <ol className="mt-6 grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-stretch">
+            {VONG_HOI.map((b, i) => (
+              <li key={b.ai} className="contents">
+                <div className="rounded-shot border border-line bg-cream/60 p-4">
+                  <p className="eyebrow text-mute">{i + 1}. {b.ai}</p>
+                  <p className="mt-2 font-semibold leading-6">{b.noi}</p>
+                  <p className="mt-1 text-xs text-mute">{b.chu}</p>
+                </div>
+                {i < VONG_HOI.length - 1 && (
+                  <span aria-hidden className="hidden self-center text-2xl text-brand md:block">→</span>
+                )}
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 text-xs text-mute">
+            Điều chưa xác minh tụi em nói là chưa xác minh — không đoán thay chủ nhà.
+          </p>
+        </div>
+      </section>
+
+      {/* FR-04 (dựng 04/09/2026): cam kết riêng tư đủ BA vế — không hỏi số ĐT,
+          chỉ liên hệ qua Zalo, ngắt kết nối bất cứ lúc nào (NFR-07). */}
+      <section className="mx-auto max-w-6xl px-4 pt-4">
+        <div className="grid gap-5 rounded-king bg-navy p-6 text-white md:grid-cols-[1.1fr_.9fr] md:p-8">
+          <div>
+            <p className="eyebrow text-brand">Tụi em không hỏi số điện thoại của anh chị</p>
+            <h2 className="mt-1.5 text-2xl font-extrabold [text-wrap:balance] md:text-3xl">
+              Kết nối bằng Zalo là đủ. Muốn dừng thì dừng.
+            </h2>
+            <ul className="mt-5 space-y-2.5 text-white/85">
+              {[
+                "Không cần tiết lộ số điện thoại — chỉ khi hẹn xem nhà mới cần, và có đường từ chối.",
+                "Chỉ liên hệ bằng Zalo, đúng kênh anh chị đã chọn. Không gọi, không SMS.",
+                "Ngắt kết nối bất cứ lúc nào: chặn OA hoặc nhắn “dừng” là tụi em im — không hỏi lý do.",
+              ].map((x) => (
+                <li key={x} className="flex gap-2.5 leading-6">
+                  <span className="mt-0.5 shrink-0 text-brand">✓</span>
+                  <span>{x}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="self-center">
+            <HoiThoai
+              toi
+              chat={[
+                { ai: "khach", noi: "Cho anh số của em để anh gọi cho tiện?" },
+                { ai: "em", noi: "Dạ mình nhắn ở đây là đủ anh — tụi em không xin số, cũng không gọi." },
+                { ai: "khach", noi: "Vậy lúc nào không cần nữa thì sao?" },
+                { ai: "em", noi: "Anh nhắn “dừng” là em im liền, khỏi giải thích ạ." },
+              ]}
+            />
+          </div>
+        </div>
       </section>
 
       {/* ĐANG BÁN */}
@@ -122,7 +266,7 @@ export default async function Home() {
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
             <p className="eyebrow text-brand">Kho tin</p>
-            <h2 className="mt-1.5 text-2xl font-extrabold md:text-3xl">Nhà đất đang bán tại Quận 5</h2>
+            <h2 className="mt-1.5 text-2xl font-extrabold md:text-3xl">Nhà đất đang bán — khởi điểm khu Quận 5 cũ</h2>
           </div>
           <Link
             href="/mua-ban"
@@ -168,7 +312,7 @@ export default async function Home() {
         <div className="grid gap-4 sm:grid-cols-2">
           {[
             { href: "/tinh-lai-vay", Icon: IconCalc, t: "Tính lãi vay mua nhà", d: "Mỗi tháng trả bao nhiêu, xem trước rồi hãy quyết." },
-            { href: "/thong-ke", Icon: IconChart, t: "Giá theo phường Quận 5", d: "Phường nào đang rao đắt nhất, tính từ tin thật." },
+            { href: "/thong-ke", Icon: IconChart, t: "Giá theo phường", d: "Phường nào đang rao đắt nhất, tính từ tin thật trong kho." },
           ].map(({ href, Icon, t, d }) => (
             <Link
               key={href}

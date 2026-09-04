@@ -21,12 +21,24 @@ export const WARD_CENTROIDS: Record<string, [number, number]> = {
 
 export const Q5_CENTER: [number, number] = [10.7561, 106.6703];
 
+// Danh sách phường Quận 5 — MỘT nguồn (FR-171 j). Trước đây bốn bản lệch nhau
+// (trang chủ 14, /quan-ly 15, form admin 16, bản đồ 15); 15 phường là đúng
+// địa giới cũ đang dùng ở đây (INS-12), và là 15 phường có toạ độ.
+export const WARDS: string[] = Object.keys(WARD_CENTROIDS);
+
+// Băm chuỗi thành số 32-bit định trước — dùng cho jitter bản đồ và ảnh minh
+// hoạ xoay vòng (lib/format), cùng một hàm thay vì hai bản chép.
+export function hashSeed(seed: string): number {
+  let h = 0;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h;
+}
+
 // Jitter ±~150m định trước theo mã tin — cùng tin luôn cùng chấm, không lộ số nhà
 export function wardPoint(ward: string | null, seed: string): [number, number] | null {
   const c = ward ? WARD_CENTROIDS[ward] : null;
   if (!c) return null;
-  let h = 0;
-  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const h = hashSeed(seed);
   const dx = ((h % 1000) / 1000 - 0.5) * 0.0028;
   const dy = (((h >> 10) % 1000) / 1000 - 0.5) * 0.0028;
   return [c[0] + dx, c[1] + dy];

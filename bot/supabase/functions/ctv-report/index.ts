@@ -12,6 +12,7 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  doTien,
   ghiLoi,
   jsonResponse,
   MODEL,
@@ -19,6 +20,7 @@ import {
   sendZalo,
   serviceClient,
 } from "../_shared/claude.ts";
+import { congBiMat } from "../_shared/gate.ts";
 import { RATE_CTV_RUBRIC } from "../_shared/prompts.ts";
 
 const Score = z.object({
@@ -47,27 +49,15 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
 
   // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
-  // Như ask-seller: verify_jwt=true chỉ đòi khoá công khai. Đo thật bằng đúng
-  // khoá đó thì hàm CHẠY (quá 5 s của pg_net vì đang gọi model). Người lạ gọi
-  // được nghĩa là ép sinh + GỬI báo cáo CTV (số liệu kinh doanh nội bộ) và đốt
-  // tiền model. Cron mang `x-bridge-secret` (xem `ctv_report_tick`).
-  const cong = serviceClient();
-  const bimat = await secretOf(cong, "BRIDGE_SECRET");
-  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
-  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
-  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
-  if (!bimat) {
-    await ghiLoi(cong, "ctv-report CONG MO",
-      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
-  }
-  const laDichVu = req.headers.get("authorization") ===
-    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
-    return jsonResponse({ error: "forbidden" }, 403);
-  }
+  // Như ask-seller: verify_jwt=true chỉ đòi khoá công khai. Người lạ gọi được
+  // nghĩa là ép sinh + GỬI báo cáo CTV (số liệu kinh doanh nội bộ) và đốt tiền
+  // model. Cron mang `x-bridge-secret` (xem `ctv_report_tick`). Cổng dùng chung
+  // `_shared/gate.ts`.
+  const client = serviceClient();
+  const chan = await congBiMat(req, client, "ctv-report");
+  if (chan) return chan;
 
   const { dry_run = false, force = false } = await req.json().catch(() => ({}));
-  const client = serviceClient();
   const now = Date.now();
   const vnDate = new Date(now + 7 * 3600e3).toISOString().slice(0, 10); // ngày giờ VN
 
@@ -91,7 +81,19 @@ Deno.serve(async (req) => {
   const sections: string[] = [];
   const saved: Record<string, unknown>[] = [];
 
+  // FR-173 e: hạng CTV theo tỷ lệ trả lời câu khách hỏi ĐÚNG HẠN 30 ngày (view
+  // `ctv_ranks`, migration 20260903a). Một lượt đọc cho mọi CTV.
+  const HANG: Record<string, string> = { vang: "Vàng", bac: "Bạc", dong: "Đồng", chua_du: "chưa đủ dữ liệu" };
+  const { data: hangRows, error: hangErr } = await client.from("ctv_ranks")
+    .select("id, rank, tong, dung_han, tre");
+  if (hangErr) await ghiLoi(client, "ctv-report ctv_ranks", hangErr.message);
+  const hangCua = new Map((hangRows ?? []).map((h) => [h.id as string, h]));
+
   for (const ctv of ctvs ?? []) {
+    const h = hangCua.get(ctv.id);
+    const dongHang = h
+      ? `- Hạng trả lời khách: ${HANG[h.rank as string] ?? h.rank} (${h.dung_han}/${h.tong} đúng hạn, ${h.tre} trễ, 30 ngày)\n`
+      : "";
     const { data: convs } = await client.from("conversations")
       .select("id, buyer_id, needs_human, last_message_at, buyers(name, preferences)")
       .eq("ctv_id", ctv.id)
@@ -137,6 +139,7 @@ Deno.serve(async (req) => {
           system: [{ type: "text", text: RATE_CTV_RUBRIC, cache_control: { type: "ephemeral" } }],
           messages: [{ role: "user", content: `Hội thoại cần chấm:\n${convo}` }],
         });
+        await doTien(client, resp.usage); // FR-171 e
         if (resp.stop_reason !== "refusal" && resp.parsed_output) {
           scores.push({ ...(resp.parsed_output as z.infer<typeof Score>), conversation_id: c.id });
         }
@@ -166,6 +169,7 @@ Deno.serve(async (req) => {
       (khachToday ? `- Hôm nay: ${khachToday}\n` : "") +
       (lich ? `- Lịch xem sắp tới: ${lich}\n` : "") +
       (needHuman.length ? `- ⚠ CẦN NGƯỜI THẬT: ${needHuman.length} đơn đang chờ tiếp quản\n` : "") +
+      dongHang +
       (avg
         ? `- Điểm chăm khách: ${avg}/5 (${scores.length} hội thoại). ${scores[0]?.comment ?? ""}`
         : `- Điểm chăm khách: chưa có hội thoại mới để chấm`);

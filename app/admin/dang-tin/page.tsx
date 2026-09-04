@@ -13,6 +13,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { TYPE_LABEL } from "@/lib/format";
+import UploadAnh from "@/components/UploadAnh";
 
 const NGUON = [
   ["admin", "Tự nhập (admin)"],
@@ -25,23 +27,21 @@ const NGUON = [
   ["khac", "Nguồn khác"],
 ] as const;
 
-const LOAI = [
+// Nhãn loại BĐS lấy từ bảng dùng chung (lib/format TYPE_LABEL — FR-171 j),
+// thêm lựa chọn "chưa rõ" riêng của form.
+const LOAI: readonly (readonly [string, string])[] = [
   ["chua_ro", "Chưa rõ — để bot tự đoán"],
-  ["nha_pho", "Nhà phố"],
-  ["nha_cap4", "Nhà cấp 4"],
-  ["chung_cu", "Chung cư / căn hộ"],
-  ["dat", "Đất"],
-  ["biet_thu", "Biệt thự"],
-  ["phong_tro", "Phòng trọ"],
-  ["mat_bang", "Mặt bằng"],
-] as const;
+  ...Object.entries(TYPE_LABEL),
+];
 
 const TRANG_THAI = [
   ["cho_thong_tin", "Chờ duyệt — chưa lên web"],
   ["dang_ban", "Đăng luôn — lên web ngay"],
 ] as const;
 
-// Kho đang có tin ở Phường 1–16 (Quận 5 cũ + rìa Quận 10/1 sáp nhập).
+// Kho đang có tin ở Phường 1–16 (Quận 5 cũ + rìa Quận 10/1 sáp nhập). Địa bàn
+// đã mở ra Sài Gòn (phường mới) + Long An (FR-174): quận/huyện gõ tay ở ô riêng,
+// danh sách phường theo địa giới mới chờ bảng `wards` (OPEN-27 nửa sau).
 const PHUONG = Array.from({ length: 16 }, (_, i) => `Phường ${i + 1}`);
 
 type Ng = { id: string; name: string | null; seller_type: string; active_count: number; rank: string };
@@ -52,12 +52,13 @@ export default function Page() {
   const [role, setRole] = useState<"loading" | "chan" | "admin">("loading");
   const [nguoiBan, setNguoiBan] = useState<Ng[]>([]);
   const [dangGui, setDangGui] = useState(false);
-  const [ketQua, setKetQua] = useState<{ ok: boolean; text: string; code?: string } | null>(null);
+  const [ketQua, setKetQua] = useState<{ ok: boolean; text: string; code?: string; id?: string } | null>(null);
 
   // Form
   const [deal, setDeal] = useState("ban");
   const [loai, setLoai] = useState("chua_ro");
   const [ward, setWard] = useState("");
+  const [quan, setQuan] = useState("Quận 5");
   const [diaChi, setDiaChi] = useState("");
   const [giaRaw, setGiaRaw] = useState("");
   const [dienTich, setDienTich] = useState("");
@@ -121,6 +122,7 @@ export default function Page() {
         deal,
         property_type: loai,
         ward: ward || null,
+        district: quan.trim() || null,
         location_raw: diaChi || null,
         price_raw: giaRaw,
         area_m2: dienTich || null,
@@ -141,10 +143,11 @@ export default function Page() {
       setKetQua({ ok: false, text: error.message });
       return;
     }
-    const r = data as { code: string; price_vnd: number | null };
+    const r = data as { id: string; code: string; price_vnd: number | null };
     setKetQua({
       ok: true,
       code: r.code,
+      id: r.id,
       text: `Đã tạo tin #${r.code}${
         r.price_vnd ? ` · giá đọc ra ${r.price_vnd.toLocaleString("vi-VN")} đ` : " · CHƯA đọc được giá ra số"
       }`,
@@ -186,8 +189,10 @@ export default function Page() {
             <Chon nhan="Hình thức" giaTri={deal} doi={setDeal}
               chon={[["ban", "Bán"], ["cho_thue", "Cho thuê"]]} />
             <Chon nhan="Loại bất động sản" giaTri={loai} doi={setLoai} chon={LOAI} />
-            <Chon nhan="Phường" giaTri={ward} doi={setWard}
+            <Chon nhan="Phường (khu Quận 5 cũ)" giaTri={ward} doi={setWard}
               chon={[["", "— chưa rõ —"], ...PHUONG.map((p) => [p, p] as [string, string])]} />
+            <O nhan="Quận / huyện, tỉnh" giaTri={quan} doi={setQuan}
+              goiY="VD: Quận 5 · Quận Tân Bình · Bến Lức, Long An" />
             <O nhan="Địa chỉ / tên đường" giaTri={diaChi} doi={setDiaChi}
               goiY="VD: 123/45 Trần Bình Trọng" />
           </div>
@@ -269,6 +274,12 @@ export default function Page() {
 
         {thieu.length > 0 && (
           <p className="text-sm text-mute">Còn thiếu: {thieu.join(", ")}.</p>
+        )}
+
+        {/* FR-96 (04/09/2026): vừa lưu xong là có UUID tin → up ảnh ngay tại đây,
+            khỏi phải chạy scripts/up-anh.mjs trên máy local. */}
+        {ketQua?.ok && ketQua.id && (
+          <UploadAnh listingId={ketQua.id} code={ketQua.code} />
         )}
 
         <div className="flex flex-wrap items-center gap-4">

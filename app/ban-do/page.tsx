@@ -1,31 +1,33 @@
 import type { Metadata } from "next";
 import MapView from "@/components/MapView";
 import ListingCard from "@/components/ListingCard";
-import { supabase, type Listing } from "@/lib/supabase";
+import { MAP_COLS, supabase, type MapRow } from "@/lib/supabase";
 
 export const revalidate = 300;
 export const metadata: Metadata = {
-  title: "Bản đồ nhà đất Quận 5",
+  title: "Bản đồ nhà đất",
   description:
-    "Xem nhà đất đang bán và cho thuê tại Quận 5 trên bản đồ, vị trí hiển thị theo phường.",
+    "Xem nhà đất đang bán và cho thuê trên bản đồ, vị trí hiển thị theo phường (kho hiện tập trung khu Quận 5 cũ).",
 };
 
 export default async function Page() {
+  // FR-171 j: 300 dòng này đi thẳng vào HTML (MapView là client component),
+  // kéo "*" là nhét 300 mô tả vào trang; MAP_COLS chỉ lấy cột thẻ + toạ độ.
   const { data } = await supabase
     .from("listings")
-    .select("*")
+    .select(MAP_COLS)
     .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ tin đang lên kệ
     .not("price_raw", "is", null)
     .neq("price_raw", "")
     .not("ward", "is", null)
     .order("created_at", { ascending: false })
     .limit(300);
-  const listings = (data ?? []) as Listing[];
+  const listings = (data ?? []) as MapRow[];
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-2xl font-extrabold">Bản đồ nhà đất Quận 5</h1>
+        <h1 className="text-2xl font-extrabold">Bản đồ nhà đất</h1>
         <p className="text-sm text-mute">
           {listings.length} tin · chấm đậm = bán, chấm nhạt = cho thuê
         </p>

@@ -8,7 +8,8 @@ export class FakeDB {
   constructor() {
     this.t = {};
     for (const n of ["sellers","buyers","conversations","messages","listings","listing_facts","info_requests",
-      "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log"]) this.t[n] = [];
+      "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log",
+      "ctvs","admins","interests","ratings"]) this.t[n] = [];
     this.seq = 0; this.log = [];
   }
   rows(n) {
@@ -35,6 +36,8 @@ export class FakeDB {
         return { error: { code: "23505", message: "duplicate key value violates unique constraint messages_zalo_msg_id_key" } };
       }
       r.seq = ++this.seq;
+      // Trigger `trg_messages_bump_last_message` (20260902d): mọi tin đẩy mốc hội thoại.
+      const cv = this.t.conversations.find((c) => c.id === r.conversation_id); if (cv) cv.last_message_at = r.created_at;
       if (globalThis.__afterInsertMsg && r.sender === 'buyer') { const h = globalThis.__afterInsertMsg; globalThis.__afterInsertMsg = null; this.rows('messages').push(r); h(this, r); return { data: r }; }
     }
     if (table === "reminders") r.status = r.status ?? "pending"; // DB default 'pending'
@@ -153,9 +156,10 @@ class RpcCall {
       case "bump_model_quota": return { data: true, error: null };
       case "claim_inbound": {
         let l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
-        if (!l) { l = { zalo_msg_id: a.p_msg_id, status: "received", attempts: 1, reply: null }; db.t.inbound_ledger.push(l); return { data: { r_state: "received", r_attempts: 1 }, error: null }; }
+        // Như hàm thật: giành được sổ là dòng đã ở `processing`, app không UPDATE thêm.
+        if (!l) { l = { zalo_msg_id: a.p_msg_id, status: "processing", attempts: 1, reply: null }; db.t.inbound_ledger.push(l); return { data: { r_state: "received", r_attempts: 1 }, error: null }; }
         if (l.status === "completed") return { data: { r_state: "completed", r_reply: l.reply, r_sent_at: l.sent_at ?? null }, error: null };
-        l.attempts++; return { data: { r_state: "received", r_attempts: l.attempts }, error: null };
+        l.attempts++; l.status = "processing"; return { data: { r_state: "received", r_attempts: l.attempts }, error: null };
       }
       case "bao_hong_inbound": { const l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id); if (l) { l.status = "failed"; l.detail = a.p_detail; } return { data: null, error: null }; }
       case "ensure_buyer_conversation": {
@@ -163,7 +167,15 @@ class RpcCall {
         if (!b) b = db.insert("buyers", { zalo_user_id: a.p_zalo_user_id, name: null, preferences: {} }).data;
         let c = db.t.conversations.filter((x) => x.buyer_id === b.id).sort((x, y) => (x.started_at < y.started_at ? 1 : -1))[0];
         if (!c) c = db.insert("conversations", { buyer_id: b.id, channel: a.p_channel, started_at: now(), human_touch_at: null, ctv_id: null }).data;
-        return { data: { b_id: b.id, b_name: b.name, b_prefs: b.preferences, c_id: c.id }, error: null };
+        return { data: { b_id: b.id, b_name: b.name, b_prefs: b.preferences, c_id: c.id, c_ctv_id: c.ctv_id ?? null, c_human_touch_at: c.human_touch_at ?? null }, error: null };
+      }
+      case "tao_followup": {
+        // 20260902d: một nhắc follow-up còn hiệu lực mỗi khách mỗi 24h
+        const l = db.t.listings.find((x) => x.code === a.p_code); if (!l) return { data: false, error: null };
+        const since = Date.now() - 24 * 3600e3;
+        if (db.t.reminders.some((r) => r.buyer_id === a.p_buyer_id && r.kind === "followup" && ["pending","sent"].includes(r.status) && Date.parse(r.created_at) > since)) return { data: false, error: null };
+        db.insert("reminders", { kind: "followup", buyer_id: a.p_buyer_id, listing_id: l.id, due_at: new Date(Date.now() + 150 * 60e3).toISOString(), note: `khách hỏi #${a.p_code} rồi im — chủ động gửi thêm thông tin căn này` });
+        return { data: true, error: null };
       }
       case "ensure_seller_conversation": {
         let c = db.t.conversations.find((x) => x.seller_id === a.p_seller_id);
@@ -189,8 +201,26 @@ class RpcCall {
         return { data: null, error: null };
       }
       case "guess_property_type_answer": { const t = String(a.p_text).toLowerCase(); return { data: /nhà phố|nha pho/.test(t) ? "nha_pho" : /chung cư|chung cu/.test(t) ? "chung_cu" : null, error: null }; }
-      case "mark_listing_interest": { let n = 0; for (const l of db.t.listings) if (a.p_codes.includes(l.code) && ["dang_ban", "dang_quan_tam"].includes(l.status)) { l.status = "dang_quan_tam"; n++; } return { data: n, error: null }; }
+      case "mark_listing_interest": {
+        // v48 / 20260904f (FR-108): overload có p_buyer_id ghi thêm `interests`
+        // (PK buyer_id+listing_id — chèn trùng thì bỏ qua).
+        let n = 0;
+        for (const l of db.t.listings) if (a.p_codes.includes(l.code)) {
+          if (["dang_ban", "dang_quan_tam"].includes(l.status)) { l.status = "dang_quan_tam"; n++; }
+          if (a.p_buyer_id && !db.t.interests.some((i) => i.buyer_id === a.p_buyer_id && i.listing_id === l.id)) db.insert("interests", { buyer_id: a.p_buyer_id, listing_id: l.id });
+        }
+        return { data: n, error: null };
+      }
+      case "ghi_danh_gia": { db.insert("ratings", { buyer_id: a.p_buyer_id, listing_id: a.p_listing_id, stars: a.p_stars, note: a.p_note }); return { data: null, error: null }; }
       case "match_projects": return { data: [], error: null };
+      case "nguoi_noi_bo": {
+        // 20260903a (FR-173 d): CTV đang hoạt động trước, rồi admin; người lạ → null
+        const c = db.t.ctvs.find((x) => x.active !== false && x.zalo_user_id === a.p_zalo);
+        if (c) return { data: { vai: "ctv", id: c.id, name: c.name }, error: null };
+        const ad = db.t.admins.find((x) => x.zalo_user_id === a.p_zalo);
+        if (ad) return { data: { vai: "admin", id: null, name: ad.email ?? "admin" }, error: null };
+        return { data: null, error: null };
+      }
     }
     return { data: null, error: { message: `rpc ${this.name} chưa giả lập` } };
   }

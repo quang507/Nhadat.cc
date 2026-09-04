@@ -1,11 +1,13 @@
 # 05 — Wireframes
 
-Low-fidelity, ưu tiên **mobile-first** (đa số B đến từ Zalo và Google trên điện thoại).
-Ký hiệu: `[ ]` nút · `( )` input · `▢` ảnh · `···` nội dung lặp.
+Low-fidelity, **mobile-first**. Ký hiệu: `[ ]` nút · `( )` input · `▢` ảnh · `···` lặp.
+Mỗi màn có một dòng trạng thái dựng (đối chiếu code 04/09/2026 — `docs/10 §10.8`,
+OPEN-43/45). URL trong tiêu đề là URL đặc tả; URL thật ghi ở dòng trạng thái.
 
 ---
 
 ## WF-01 — Trang chủ `/`  → IA-01, FR-01…06, FR-13
+✅ đã dựng: `app/page.tsx` (ô chat search, hộp mời Zalo, 4 khối lời hứa, BĐS mới, CTA người bán).
 
 ```
 ┌──────────────────────────────────────────┐
@@ -14,7 +16,7 @@ Ký hiệu: `[ ]` nút · `( )` input · `▢` ảnh · `···` nội dung lặ
 ├──────────────────────────────────────────┤
 │                                          │
 │   Tìm nhà như đang trò chuyện            │
-│   Nhã Đạt CC — người môi giới không nghỉ │
+│   Aioinhadat — người môi giới không nghỉ │
 │                                          │
 │   ( tìm mua nhà phố HXH 8 tỉ ở Q8   )[→] │
 │                                          │
@@ -58,13 +60,13 @@ Ký hiệu: `[ ]` nút · `( )` input · `▢` ảnh · `···` nội dung lặ
    mobile: sticky bottom bar [● Chat Zalo]
 ```
 
-**Ghi chú thiết kế**
-- Hero **không** có form dropdown. Chỉ một ô, một dòng — INS-07.
-- Hộp mời kết nối đặt **trên** danh sách listing: mục tiêu là chat, không phải browse.
+Hero **không** có form dropdown — một ô, một dòng (INS-07). Hộp mời kết nối đặt
+**trên** danh sách listing.
 
 ---
 
 ## WF-02 — Kết quả tìm kiếm `/tim-kiem` → IA-02, FR-07, FR-08
+⛔ thay bằng `/mua-ban?q=` · `/cho-thue?q=` (`components/ListingBrowse.tsx`: lọc giá/diện tích/sắp xếp FR-123, hộp Zalo đầu lưới). Chip bỏ từng tiêu chí, nút Xem thêm, nới tiêu chí khi 0 kết quả: chưa dựng.
 
 ```
 ┌──────────────────────────────────────────┐
@@ -100,10 +102,9 @@ Ký hiệu: `[ ]` nút · `( )` input · `▢` ảnh · `···` nội dung lặ
 └──────────────────────────────────────────┘
 ```
 
-Card đúng 4 dòng thông tin theo đặc tả gốc: **mô tả rút gọn · Vị trí · DT · Giá**
-[nguồn: nhadat.cc website.docx §Listing].
+Card đúng 4 dòng: **mô tả rút gọn · Vị trí · DT · Giá** [nguồn: nhadat.cc website.docx §Listing].
 
-**Trạng thái 0 kết quả**
+**0 kết quả**
 ```
 │ Chưa có căn nào khớp đúng yêu cầu.       │
 │ Em nới giá lên 9.6 tỉ thì có 41 căn:     │  ← nói rõ đã nới gì
@@ -114,6 +115,7 @@ Card đúng 4 dòng thông tin theo đặc tả gốc: **mô tả rút gọn · 
 ---
 
 ## WF-03 — Chi tiết BĐS `/bds/{slug}-{id}` → IA-04, FR-10, FR-11
+🟡 một phần: `/nha-dat/[code]` có gallery, bảng thông số, cue mã, JSON-LD, banner "đã giao dịch"; chip câu hỏi gợi sẵn (UI-C06), khối BĐS tương tự, "cập nhật lần cuối": chưa dựng.
 
 ```
 ┌──────────────────────────────────────────┐
@@ -157,12 +159,13 @@ Card đúng 4 dòng thông tin theo đặc tả gốc: **mô tả rút gọn · 
    sticky mobile: [ 💬 Hỏi về #35148 ]
 ```
 
-**Điểm quan trọng**: các nút câu hỏi gợi sẵn biến FR-46 thành hành động một chạm —
-người dùng không phải nghĩ ra câu hỏi, và hệ thống nhận được yêu cầu đã chuẩn hoá.
+Nút câu hỏi gợi sẵn biến FR-46 thành hành động một chạm — yêu cầu tới hệ thống đã
+chuẩn hoá.
 
 ---
 
 ## WF-04 — Trang tag `/{tag}` → IA-03, FR-12
+✅ đã dựng: `app/[tag]` (H1, mô tả, lưới card, link chéo tag, tag rỗng không 404). FAQ schema: chưa.
 
 ```
 ┌──────────────────────────────────────────┐
@@ -183,18 +186,18 @@ người dùng không phải nghĩ ra câu hỏi, và hệ thống nhận đư�
 └──────────────────────────────────────────┘
 ```
 
-Tag rỗng → giữ nguyên bố cục, thay lưới card bằng hộp mời kết nối cỡ lớn + tag lân cận.
-**Không bao giờ 404** (IA-P1).
+Tag rỗng → giữ bố cục, thay lưới bằng hộp mời kết nối cỡ lớn + tag lân cận. **Không 404** (IA-P1).
 
 ---
 
 ## WF-05 — Chat Zalo: khai thác nhu cầu → UF-04
+✅ đã dựng: `chat-reply` nhánh buyer (lời chào "em là Thái, bên Aioinhadat", hồ sơ nhu cầu, tối đa 3 căn/lượt).
 
 ```
-┌─ Zalo OA · Nhã Đạt CC ───────────────────┐
+┌─ Zalo OA · Aioinhadat ───────────────────┐
 │                                          │
 │ ┌────────────────────────────────────┐   │
-│ │ Nhã Đạt CC xin cảm ơn! Công ty em  │   │
+│ │ Aioinhadat xin cảm ơn! Công ty em  │   │
 │ │ có 30 nhà môi giới túc trực để tìm │   │
 │ │ nhà đất chung cư cho anh/chị.      │   │
 │ │ Em tên là Thái. Em xin tên anh/chị │   │
@@ -224,12 +227,12 @@ Tag rỗng → giữ nguyên bố cục, thay lưới card bằng hộp mời k�
 └──────────────────────────────────────────┘
 ```
 
-**Bất biến**: đúng 3 card mỗi lượt (FR-24); mỗi tin nhắn của bot kết thúc bằng **một**
-câu hỏi; không bao giờ hỏi 2 điều cùng lúc.
+**Bất biến**: tối đa 3 card mỗi lượt (FR-24); hỏi gọn theo `06 §6.8`.
 
 ---
 
 ## WF-06 — Chat Zalo: hỏi bổ sung thông tin → UF-05
+✅ đã dựng: `ask_owner` → `info_requests`, câu giữ nhịp "Trong khi chờ…" (FR-45), báo lại khách khi chủ trả lời (`followup`).
 
 ```
 │                    ┌──────────────────┐  │
@@ -254,6 +257,7 @@ câu hỏi; không bao giờ hỏi 2 điều cùng lúc.
 ---
 
 ## WF-07 — Chat Zalo: đặt lịch xem nhà → UF-06
+✅ đã dựng: `chat-reply` chốt lịch + xin SĐT kèm lý do và đường từ chối; `nudge` nhắc trước giờ kèm link bản đồ (FR-54/55).
 
 ```
 │ ┌────────────────────────────────────┐   │
@@ -282,6 +286,7 @@ câu hỏi; không bao giờ hỏi 2 điều cùng lúc.
 ---
 
 ## WF-08 — Mini-site rao tin `/raoban/dang-tin` → UF-09, FR-91
+🟡 một phần: ô một câu rao nằm ở `/quan-ly` (cần đăng nhập) + `/api/listing/parse`; `/raoban` là landing đẩy sang Zalo. Kênh chính là rao trong Zalo (UF-10).
 
 ```
 ┌──────────────────────────────────────────┐
@@ -305,12 +310,12 @@ câu hỏi; không bao giờ hỏi 2 điều cùng lúc.
 └──────────────────────────────────────────┘
 ```
 
-Đúng **một** ô nhập. Không dropdown loại hình, không bảng giá, không chọn quận —
-INS-05. Mọi thứ khác suy ra từ câu rao và cho S sửa ở WF-09.
+Đúng **một** ô nhập, không dropdown, không chọn quận (INS-05).
 
 ---
 
 ## WF-09 — Xác nhận bản bóc tách `/raoban/xac-nhan` → FR-92, FR-94, FR-96
+🟡 một phần: bóc tách (`/api/listing/parse`, trigger `boc_thong_so`) và upload ảnh (`components/UploadAnh.tsx`) có; form sửa từng trường, chọn chính chủ/môi giới, trường dự án trên web: chưa (trong Zalo bot hỏi nhỏ giọt thay thế).
 
 ```
 ┌──────────────────────────────────────────┐
@@ -349,6 +354,7 @@ INS-05. Mọi thứ khác suy ra từ câu rao và cho S sửa ở WF-09.
 ---
 
 ## WF-10 — Tin của tôi & câu hỏi chờ trả lời `/raoban/quan-ly` → FR-98
+🟡 một phần: `/quan-ly` có "Tin của tôi" + đăng tin một câu; câu hỏi chờ trả lời trên web chưa — câu hỏi đi qua Zalo tới chủ/CTV (FR-173).
 
 ```
 ┌──────────────────────────────────────────┐
@@ -369,11 +375,10 @@ INS-05. Mọi thứ khác suy ra từ câu rao và cho S sửa ở WF-09.
 └──────────────────────────────────────────┘
 ```
 
-Trả lời được **ngay trên trang**, kèm ảnh — vì phần lớn câu hỏi cần ảnh (sổ, hẻm).
-
 ---
 
 ## WF-11 — Danh sách riêng `/ds/{token}` → FR-100, UF-12
+✅ đã dựng: `app/ds/[token]` (`20260904g`), `noindex, nofollow`, hết hạn 30 ngày → trang "hết hạn" + Zalo, không 404.
 
 ```
 ┌──────────────────────────────────────────┐
@@ -386,11 +391,12 @@ Trả lời được **ngay trên trang**, kèm ảnh — vì phần lớn câu 
 │ ··· cards, mỗi card có mã #ID ···        │
 └──────────────────────────────────────────┘
 ```
-`noindex, nofollow`. Không hiển thị tên/Zalo ID của B trên trang.
+Không hiển thị tên/Zalo ID của B trên trang.
 
 ---
 
 ## WF-12 — Admin: câu hỏi chờ S trả lời `/admin/cau-hoi` → FR-76, FR-80
+✅ đã dựng: thẻ "Câu hỏi đang chờ" trên `/admin` (`20260904c`), quá SLA tô đỏ.
 
 ```
 ┌──────────────────────────────────────────┐
@@ -407,11 +413,12 @@ Trả lời được **ngay trên trang**, kèm ảnh — vì phần lớn câu 
 │                        ‹ 1 2 3 4 5 ›     │
 └──────────────────────────────────────────┘
 ```
-`B ID` clickable → nhảy sang Zalo xem lịch sử hội thoại (FR-75).
+`B ID` clickable → lịch sử hội thoại (FR-75).
 
 ---
 
 ## WF-13 — Admin: tìm kiếm B `/admin/hoi-thoai` → FR-74
+✅ đã dựng: thẻ "Tìm khách" + "Thống kê hội thoại · 30 ngày" trên `/admin`.
 
 ```
 ┌──────────────────────────────────────────┐
@@ -428,8 +435,7 @@ Trả lời được **ngay trên trang**, kèm ảnh — vì phần lớn câu 
 ---
 
 ## WF-14 — Admin: escalation (tiêu cực / voice / xem nhà) → FR-77, FR-78, FR-79
-
-Ba bảng cùng một khuôn, 20 mục/trang, không cần filter:
+🟡 một phần: `/admin` có thẻ "Khách cần người thật" (gộp tiêu cực + voice), "Lịch xem nhà", "Việc chờ admin"; không tách ba tab, cảnh báo đi ntfy thay email.
 
 ```
 ┌──────────────────────────────────────────┐

@@ -6,6 +6,9 @@ Phiên bản: **v1.0** · Ngày: **2026-08-21** · Trạng thái: **Draft để 
 
 ```mermaid
 flowchart LR
+    D[00 Định hướng] --> R
+    D --> Q
+    D -.quyết định treo.-> O
     R[01 Research] --> Q[02 Requirements]
     Q --> UF[03 User Flow]
     UF --> IA[04 Information Architecture]
@@ -25,6 +28,7 @@ flowchart LR
 
 | File | Mô tả | Đối tượng đọc |
 |---|---|---|
+| [00-dinh-huong.md](00-dinh-huong.md) | **Định hướng (BRD hợp nhất Aioinhadat × nhadat.cc)** — thương hiệu Aioinhadat, một bot Thái; sản phẩm hôm nay là gì, giữ gì của bên nào, câu khách hỏi đi về CTV, sao Bắc Đẩu, lộ trình, quyết định treo | Founder, PO, mọi người mới vào |
 | [00-glossary.md](00-glossary.md) | Từ điển thuật ngữ | Tất cả |
 | [01-research.md](01-research.md) | Bối cảnh thị trường, người dùng, đối thủ, ràng buộc | PO, Founder, Marketing |
 | [02-requirements.md](02-requirements.md) | Mục tiêu KD, persona, FR/NFR | PO, Dev Lead, QA |
@@ -34,12 +38,12 @@ flowchart LR
 | [06-ui-design.md](06-ui-design.md) | Design system + tone giọng chat | UI, Dev, Content |
 | [07-srs.md](07-srs.md) | Đặc tả kỹ thuật: kiến trúc, DB, API, NFR | Dev, QA, Vendor |
 | [08-traceability.md](08-traceability.md) | Ma trận truy vết | PO, QA |
-| [09-open-issues.md](09-open-issues.md) | 33 vấn đề (11 đã chốt, 22 cần chủ dự án chốt) | Founder, PO |
+| [09-open-issues.md](09-open-issues.md) | 45 vấn đề (14 đã chốt, 31 cần chủ dự án chốt — OPEN-26, OPEN-27 chốt một phần) | Founder, PO |
 | [10-ke-hoach-kiem-thu.md](10-ke-hoach-kiem-thu.md) | Kế hoạch kiểm thử 4 tầng (suite TS-*) | QA, Dev, PO |
 
 ## Đọc từ đâu
 
-- **Founder / nhà đầu tư** → `01` rồi `09`.
+- **Founder / nhà đầu tư** → `00-dinh-huong` rồi `01`, rồi `09`.
 - **Vendor phát triển (Vitalify)** → `07` là hợp đồng kỹ thuật; `02` là phạm vi.
 - **Designer** → `03` → `04` → `05` → `06`.
 - **QA** → `02` (FR/NFR) + `08` (truy vết) để dựng test case.
@@ -48,6 +52,7 @@ flowchart LR
 
 | Tầng | Độ đầy đủ | Chặn bởi |
 |---|---|---|
+| 00 Định hướng | 95% — tên đã chốt (Aioinhadat, bot Thái), địa bàn đã chốt nửa đầu (Sài Gòn phường mới + Long An); chờ phạm vi loại BĐS, nhà cung cấp model, ngưỡng CTV, địa bàn nửa sau (tên hiển thị, bảng `wards`) | OPEN-40, OPEN-41, OPEN-42, OPEN-27 |
 | 01 Research | 85% — thiếu số liệu thị trường sơ cấp | OPEN-01 |
 | 02 Requirements | 90% | OPEN-02, OPEN-05 |
 | 03 User Flow | 90% | OPEN-04 |

@@ -44,6 +44,25 @@ fileKey `mcyVWTPlbyCpHv0RV0DYxy`). Đã có:
   JetBrains Mono (Medium).
 - Mỗi call use_figma ≤ ~1 khung; `setCurrentPageAsync` đúng 1 lần/call; return node IDs.
 
+**Page `00 · Định hướng` (id `54:2`, dựng lại 03/09/2026 theo v1.1 — gọn, đặc; cập nhật chữ theo v1.2 cùng ngày: địa bàn Sài Gòn + Long An, hàng "2b · Địa bàn" ở §0.6 và "OPEN-27 ½ sau" ở §0.8). *Chưa cập nhật theo v1.3 (04/09: §0.6 tách "đã dựng / đã chạy thật", §0.7 "rao một câu" chuyển sang chưa đánh giá được, I4/I5 ghi cách đo) — việc nhỏ, làm khi mở Figma lần tới.***
+Bản trực quan của `docs/00-dinh-huong.md` — 2 khung xếp ngang, y=0, cách 60px,
+width 1000, padding 34/40, chữ Inter 11.5 / bảng hàng cao 5px (4 khung cũ
+`54:3` `55:2` `56:2` `58:2` đã xoá):
+
+| x | Khung | Node | Nguồn |
+|---|---|---|---|
+| 0 | (1/2) Định vị DH-01 (bảng Bán / Mua / Vòng nối) · **sơ đồ luồng câu khách hỏi FR-173** (khách → Thái → CTV 120' → chủ → báo lại; quá hạn → admin; chip hạng CTV) · DH-02 bốn bất biến · §0.2 hai nguồn gốc (10 hàng) | `65:2` | §0.1, §0.2 |
+| 1060 | (2/2) §0.3 SRD AOND 19 hàng chip trạng thái · §0.5 DH-05 + I1–I5 · §0.6 DH-06 · §0.7 giả định chịu lực · §0.8 note "đã chốt" + OPEN-40/41/42, DH-07 | `65:7` | §0.3, §0.5–§0.8 |
+
+Chip trạng thái: đúng `#12805C` · khác bản gốc `#B45309` · chưa `#E3E8EF` ·
+không nhận `#B42318` · chờ chốt nền `#FFF3EC` chữ/viền `#E2571E`. Hộp nhấn trong
+sơ đồ (CTV, quá hạn) cùng màu chờ chốt. Canvas §0.4 chỉ có trong docs. Khi
+`00-dinh-huong.md` đổi thì dựng lại khung tương ứng, không sửa tay trong Figma.
+
+**Lưu ý:** 7 khung toàn văn trên page `03 · SRS` chụp bộ docs ở mốc 21–24/08/2026
+(ví dụ "09 · Open Issues — 14 mục", nay 42). Chúng là ảnh chụp, không phải nguồn;
+nguồn luôn là `docs/*.md`.
+
 **Sau khi xong.** Chụp screenshot page `1:3`, báo lại kèm link file.
 
 **Ràng buộc.** Nội dung lấy NGUYÊN VĂN từ `docs/*.md` — không tóm tắt, không thêm ý.

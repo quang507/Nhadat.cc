@@ -12,7 +12,8 @@
 //
 // Gọi bởi cron `media-cleanup-tick` (5 phút/lần) qua `net.http_post`, cùng lối
 // với bot_health_tick. Trả JSON { da_xoa, loi, con_lai }.
-import { ghiLoi, jsonResponse, secretOf, serviceClient } from "../_shared/claude.ts";
+import { ghiLoi, jsonResponse, serviceClient } from "../_shared/claude.ts";
+import { congBiMat } from "../_shared/gate.ts";
 
 type Viec = {
   id: string;
@@ -26,20 +27,10 @@ Deno.serve(async (req) => {
 
   const client = serviceClient();
 
-  // Cùng cổng bí mật với chat-reply: hàm này xoá file thật, không để ai gọi bừa.
-  const gate = await secretOf(client, "BRIDGE_SECRET");
-  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
-  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
-  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
-  if (!gate) {
-    await ghiLoi(client, "media-cleanup CONG MO",
-      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
-  }
-  const isService = req.headers.get("authorization") ===
-    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (gate && !isService && req.headers.get("x-bridge-secret") !== gate) {
-    return jsonResponse({ error: "forbidden" }, 403);
-  }
+  // Cùng cổng bí mật với chat-reply (`_shared/gate.ts`): hàm này xoá file
+  // thật, không để ai gọi bừa.
+  const chan = await congBiMat(req, client, "media-cleanup");
+  if (chan) return chan;
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

@@ -1,16 +1,27 @@
 import type { Metadata } from "next";
+import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ListingCard from "@/components/ListingCard";
 import TrackView from "@/components/TrackView";
-import { supabase, type Listing } from "@/lib/supabase";
+import WardMap from "@/components/WardMap";
+import { CARD_COLS, supabase, type Listing, type ListingCard as CardRow, type MapRow } from "@/lib/supabase";
 import { coverByCode, photosOfCode } from "@/lib/photos";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
 import {
+  ACCESS_LABEL,
   formatArea,
+  formatDims,
   formatPrice,
+  formatPricePerM2,
+  FURNISH_LABEL,
+  LEGAL_LABEL,
   placeholderImg,
+  PLANNING_LABEL,
   sanitizeDescription,
+  SITE_URL,
+  TYPE_LABEL,
   zaloLink,
 } from "@/lib/format";
 
@@ -36,23 +47,46 @@ export async function generateStaticParams() {
   return (data ?? []).map((l) => ({ code: l.code as string }));
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  nha_pho: "Nhà phố",
-  nha_cap4: "Nhà cấp 4",
-  chung_cu: "Chung cư",
-  dat: "Đất",
-  biet_thu: "Biệt thự",
-  phong_tro: "Phòng trọ",
-  mat_bang: "Mặt bằng",
-};
-
-async function getListing(code: string): Promise<Listing | null> {
+// `cache` của React gộp hai lượt gọi cùng tham số trong MỘT lần render —
+// `generateMetadata` và `Page` cùng hỏi đúng tin này. supabase-js không đi qua
+// fetch-cache của Next nên không tự gộp: trước bản này mỗi trang tin là HAI
+// truy vấn y hệt, lúc build nhân với ~164 tin (FR-171 j).
+const getListing = cache(async (code: string): Promise<Listing | null> => {
   const { data } = await supabase
     .from("listings")
     .select("*")
     .eq("code", code)
     .maybeSingle();
   return data as Listing | null;
+});
+
+// FR-99 (dựng 04/09/2026): giá/m² của mọi tin ĐANG LÊN KỆ cùng phường, cùng
+// loại giao dịch — một truy vấn nhẹ (2 cột), Data Cache 1 giờ, khoá theo
+// (phường, giao dịch). Trang tin tự loại chính nó ra khỏi mẫu và chỉ hiện khi
+// còn ≥ 3 tin khác — ít hơn thì "trung bình" là con số bịa.
+const giaPhuong = unstable_cache(
+  async (ward: string, deal: string) => {
+    const { data } = await supabase
+      .from("listings")
+      .select("id, price_per_m2_vnd")
+      .eq("ward", ward)
+      .eq("deal", deal)
+      .in("status", ["dang_ban", "dang_quan_tam"])
+      .gt("price_per_m2_vnd", 0)
+      .limit(500);
+    return (data ?? []) as { id: string; price_per_m2_vnd: number }[];
+  },
+  ["gia-phuong"],
+  { revalidate: 3600, tags: ["listings"] },
+);
+
+function soSanhGia(listing: Listing, mau: { id: string; price_per_m2_vnd: number }[]) {
+  if (!listing.price_per_m2_vnd || listing.price_per_m2_vnd <= 0) return null;
+  const khac = mau.filter((r) => r.id !== listing.id).map((r) => Number(r.price_per_m2_vnd));
+  if (khac.length < 3) return null;
+  const tb = khac.reduce((a, b) => a + b, 0) / khac.length;
+  const pct = Math.round(((Number(listing.price_per_m2_vnd) - tb) / tb) * 100);
+  return { pct, n: khac.length, tb };
 }
 
 export async function generateMetadata({
@@ -64,10 +98,60 @@ export async function generateMetadata({
   const listing = await getListing(decodeURIComponent(code));
   if (!listing) return { title: "Không tìm thấy tin" };
   const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
+  const title = `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất ${loc} — ${formatPrice(listing.price_vnd, listing.price_raw)} · #${listing.code}`;
+  const description = sanitizeDescription(listing.description).slice(0, 155);
+  const photos = await photosOfCode(code, 1);
+  const url = `/nha-dat/${encodeURIComponent(code)}`;
+  // NFR-09: canonical + OpenGraph (ảnh thật nếu có, không thì ảnh minh hoạ)
   return {
-    title: `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất ${loc} — ${formatPrice(listing.price_vnd, listing.price_raw)} · #${listing.code}`,
-    description: sanitizeDescription(listing.description).slice(0, 155),
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      type: "article",
+      images: [{ url: photos[0] ?? placeholderImg(code), alt: loc }],
+    },
   };
+}
+
+// NFR-09 / IA §4.4: schema.org/RealEstateListing — name, description, price,
+// floorSize, numberOfRooms, address, image, identifier = mã tin. Địa chỉ chỉ
+// tới mức phường (FR-104: số nhà không lên web).
+function jsonLd(listing: Listing, photos: string[], desc: string) {
+  const url = `${SITE_URL}/nha-dat/${encodeURIComponent(listing.code ?? listing.id)}`;
+  const o: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "RealEstateListing",
+    "@id": url,
+    url,
+    name: `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} ${TYPE_LABEL[listing.property_type ?? ""] ?? "nhà đất"} ${[listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ")}`,
+    description: desc.slice(0, 500),
+    identifier: listing.code,
+    datePosted: listing.created_at,
+    image: photos.length ? photos : undefined,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: listing.street ?? undefined,
+      addressLocality: listing.ward ?? undefined,
+      addressRegion: listing.district ?? "Quận 5",
+      addressCountry: "VN",
+    },
+  };
+  if (listing.price_vnd) {
+    o.offers = {
+      "@type": "Offer",
+      price: listing.price_vnd,
+      priceCurrency: "VND",
+      availability: "https://schema.org/InStock",
+      ...(listing.deal === "cho_thue" ? { priceSpecification: { "@type": "UnitPriceSpecification", price: listing.price_vnd, priceCurrency: "VND", unitText: "tháng" } } : {}),
+    };
+  }
+  if (listing.area_m2) o.floorSize = { "@type": "QuantitativeValue", value: listing.area_m2, unitCode: "MTK" };
+  if (listing.bedrooms) o.numberOfRooms = listing.bedrooms;
+  return JSON.stringify(o);
 }
 
 export default async function Page({
@@ -80,7 +164,7 @@ export default async function Page({
   const listing = await getListing(code);
   if (!listing) notFound();
 
-  const [factsRes, relatedRes, photos] = await Promise.all([
+  const [factsRes, relatedRes, photos, mauGia, duAnRes] = await Promise.all([
     supabase
       .from("listing_facts")
       .select("question, answer")
@@ -88,7 +172,7 @@ export default async function Page({
       .limit(20),
     supabase
       .from("listings")
-      .select("*")
+      .select(CARD_COLS)
       .eq("deal", listing.deal)
       .neq("id", listing.id)
       .in("status", ["dang_ban", "dang_quan_tam"])
@@ -97,14 +181,25 @@ export default async function Page({
       .eq("ward", listing.ward ?? "")
       .limit(4),
     photosOfCode(code), // FR-148
+    listing.ward ? giaPhuong(listing.ward, listing.deal) : Promise.resolve([]), // FR-99
+    // FR-117: tin thuộc dự án → link sang trang dự án (1 truy vấn nhỏ, chỉ khi có project_id)
+    listing.project_id
+      ? supabase.from("projects").select("slug, name").eq("id", listing.project_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   const facts = factsRes.data ?? [];
-  const related = (relatedRes.data ?? []) as Listing[];
+  const soSanh = soSanhGia(listing, mauGia);
+  const duAn = (duAnRes.data ?? null) as { slug: string; name: string } | null;
+  const related = (relatedRes.data ?? []) as CardRow[];
   const relCovers = await coverByCode(related.map((l) => l.code));
 
   const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
   const desc = sanitizeDescription(listing.description);
-  const title = listing.location_raw?.split(",")[0]?.trim() || `Nhà đất ${loc}`;
+  // FR-104: H1 lấy TÊN ĐƯỜNG đã bóc số nhà (`street`, boc_ten_duong), không lấy
+  // đoạn đầu `location_raw` — 11/164 tin có đoạn đầu là "Số 1xx" / "Hẻm xx/".
+  const title = listing.street
+    ? `${TYPE_LABEL[listing.property_type ?? ""] ?? "Nhà đất"} ${listing.street}${listing.ward ? `, ${listing.ward}` : ""}`
+    : `Nhà đất ${loc}`;
 
   // Khối thông số nổi (Veedoo) — chỉ đưa vào ô nào tin này THẬT SỰ có
   const stats = [
@@ -119,9 +214,47 @@ export default async function Page({
       : null,
   ].filter(Boolean) as Array<{ Icon: (p: { className?: string }) => React.ReactElement; label: string; value: string }>;
 
+  // FR-172: bảng thông số chuẩn sàn (mogi/radanhadat đều có bộ này) — CHỈ hiện
+  // dòng nào tin thật sự có; null = chưa xác minh thì không hiện, không đoán.
+  // Nguồn của cụm số này (bóc từ mô tả / chủ nhà xác nhận) nói ở chân bảng.
+  const dims = formatDims(listing.frontage_m, listing.length_m, listing.rear_width_m);
+  const n = (v: number) => Number(v).toLocaleString("vi-VN", { maximumFractionDigits: 2 });
+  const specs: Array<[string, string]> = [];
+  const push = (k: string, v: string | null | undefined) => { if (v) specs.push([k, v]); };
+  push("Giá / m²", formatPricePerM2(listing.price_per_m2_vnd, listing.deal));
+  push("Kích thước", dims);
+  push("DT công nhận", listing.legal_area_m2 ? `${n(listing.legal_area_m2)} m²` : null);
+  push("DT xây dựng", listing.built_area_m2 ? `${n(listing.built_area_m2)} m²` : null);
+  push("Kết cấu", listing.floors_text ?? (listing.floors ? `${listing.floors} tầng` : null));
+  push("Tầng (chung cư)", listing.floor != null && listing.property_type === "chung_cu" ? `Tầng ${listing.floor}` : null);
+  push("Phòng", [listing.bedrooms ? `${listing.bedrooms} PN` : null, listing.bathrooms ? `${listing.bathrooms} WC` : null].filter(Boolean).join(" · ") || null);
+  push("Đường vào", listing.access_type
+    ? `${ACCESS_LABEL[listing.access_type] ?? listing.access_type}${listing.alley_width_m ? ` · rộng ${n(listing.alley_width_m)} m` : ""}${listing.distance_to_street_m ? ` · cách mặt tiền ${n(listing.distance_to_street_m)} m` : ""}`
+    : null);
+  push("Pháp lý", listing.legal_status
+    ? `${LEGAL_LABEL[listing.legal_status] ?? listing.legal_status}${listing.has_completion === true ? " · đã hoàn công" : listing.has_completion === false ? " · chưa hoàn công" : ""}`
+    : listing.has_completion === true ? "Đã hoàn công" : null);
+  push("Quy hoạch", listing.planning_status ? PLANNING_LABEL[listing.planning_status] ?? listing.planning_status : null);
+  push("Hướng", listing.direction);
+  push("Nội thất", listing.furnishing ? FURNISH_LABEL[listing.furnishing] : null);
+  push("Năm xây", listing.year_built ? String(listing.year_built) : null);
+  push("Tiện ích", [
+    listing.has_elevator ? "thang máy" : null,
+    listing.car_in_house ? "xe hơi vô nhà" : null,
+    listing.corner_lot ? "căn góc / 2 mặt tiền" : null,
+  ].filter(Boolean).join(" · ") || null);
+  push("Đang cho thuê", listing.deal === "ban" && listing.rent_income_vnd ? `${n(listing.rent_income_vnd / 1_000_000)} tr/tháng` : null);
+  push("Thương lượng", listing.negotiable === true ? "Còn thương lượng" : listing.negotiable === false ? "Giá chốt" : null);
+
   return (
     <>
       <TrackView code={code} listingId={listing.id} />
+      <script
+        type="application/ld+json"
+        // Chuỗi do JSON.stringify sinh từ dữ liệu đã qua sanitizeDescription; "<"
+        // thoát để không đóng thẻ script sớm.
+        dangerouslySetInnerHTML={{ __html: jsonLd(listing, photos, desc).replace(/</g, "\\u003c") }}
+      />
 
       {/* Dải tiêu đề navy — bản Veedoo, nhưng bỏ ảnh nền (ảnh kho quá nhỏ để trải ngang) */}
       <div className="bg-navy py-10 text-white">
@@ -149,6 +282,8 @@ export default async function Page({
             <img
               src={photos[0] ?? placeholderImg(code)}
               alt={loc}
+              fetchPriority="high"
+              decoding="async"
               className="aspect-[16/9] w-full object-cover"
             />
             {/* Dòng chữ dưới gallery đã nói "ảnh thật gửi qua Zalo", nhưng nó
@@ -185,6 +320,8 @@ export default async function Page({
                 key={url}
                 src={url}
                 alt={loc}
+                loading="lazy"
+                decoding="async"
                 className="aspect-[4/3] w-full rounded-shot object-cover"
               />
             ))}
@@ -215,6 +352,43 @@ export default async function Page({
               <p className="mt-1.5 text-4xl font-extrabold text-brand tabular-nums">
                 {formatPrice(listing.price_vnd, listing.price_raw)}
               </p>
+              {/* FR-99: so với giá rao trung bình mỗi m² của phường (chỉ hiện khi ≥3 tin khác) */}
+              {soSanh && (
+                <p className="mt-2 text-sm text-mute tabular-nums">
+                  So với giá trung bình phường:{" "}
+                  <span className={`font-bold ${soSanh.pct > 0 ? "text-brand" : "text-navy"}`}>
+                    {soSanh.pct > 0 ? "+" : ""}{soSanh.pct}%
+                  </span>{" "}
+                  ({soSanh.n} tin cùng phường, cùng loại giao dịch; giá rao, không phải giá chốt)
+                </p>
+              )}
+              {duAn && (
+                <p className="mt-2 text-sm">
+                  Thuộc dự án{" "}
+                  <Link href={`/du-an/${encodeURIComponent(duAn.slug)}`} className="font-bold text-brand hover:underline">
+                    {duAn.name}
+                  </Link>
+                  {listing.unit_code ? <span className="text-mute"> · căn {listing.unit_code}</span> : null}
+                </p>
+              )}
+              {specs.length > 0 && (
+                <>
+                  <h2 className="mt-8 text-lg font-extrabold">Thông số</h2>
+                  <dl className="mt-3 grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                    {specs.map(([k, v]) => (
+                      <div key={k} className="flex justify-between gap-4 border-b border-line py-2.5 text-sm">
+                        <dt className="shrink-0 text-mute">{k}</dt>
+                        <dd className="text-right font-semibold">{v}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <p className="mt-2 text-xs text-mute/80">
+                    {listing.specs_source === "chu_xac_nhan"
+                      ? "Thông số do chủ nhà xác nhận qua Zalo."
+                      : "Thông số đọc từ tin rao, chưa xác minh với chủ nhà — hỏi qua Zalo là tụi em đi hỏi giùm."}
+                  </p>
+                </>
+              )}
               {desc && (
                 <>
                   <h2 className="mt-8 text-lg font-extrabold">Mô tả</h2>
@@ -222,6 +396,19 @@ export default async function Page({
                 </>
               )}
             </div>
+
+            {/* FR-10 (dựng 04/09/2026): bản đồ MỨC PHƯỜNG — chấm là tâm phường
+                + lệch định trước theo mã tin, KHÔNG phải vị trí căn (FR-104). */}
+            {listing.ward && (
+              <div className="mt-5 rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
+                <h2 className="text-lg font-extrabold">Khu vực</h2>
+                <p className="mb-3 mt-1 text-sm text-mute">
+                  Vị trí hiển thị ở mức phường ({listing.ward}) — chấm trên bản đồ không phải địa chỉ căn.
+                  Địa chỉ chính xác tụi em chia sẻ khi hẹn xem nhà.
+                </p>
+                <WardMap listing={{ ...(listing as CardRow), lat: null, lng: null } as MapRow} />
+              </div>
+            )}
 
             {facts.length > 0 && (
               <div className="mt-5 rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">

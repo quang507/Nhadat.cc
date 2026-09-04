@@ -73,8 +73,9 @@ export async function ghiLoi(
  * câu trả lời cho khách trong tay. Đồng hồ hỏng thì thôi, không được phép kéo
  * câu trả lời đó xuống nhánh dự phòng.
  *
- * Hiện mới nối ở `chat-reply`. `nudge`, `ask-seller`, `ctv-report` chưa gắn nên
- * số trong bảng là SÀN, không phải tổng — nhớ điều này khi đọc số.
+ * Nối ở cả bốn nơi gọi model: `chat-reply`, `nudge`, `ask-seller`, `ctv-report`
+ * (FR-171 e, 02/09/2026). Thêm một chỗ gọi model mới mà quên gọi hàm này là số
+ * trong bảng lại thành sàn.
  */
 export async function doTien(
   db: SupabaseClient,

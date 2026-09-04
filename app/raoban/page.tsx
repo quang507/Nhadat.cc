@@ -4,7 +4,7 @@ import { zaloLink } from "@/lib/format";
 export const metadata: Metadata = {
   title: "Rao bán nhà — một câu là xong",
   description:
-    "Rao bán nhà đất Quận 5 không cần điền form: nhắn một câu qua Zalo, AI bóc tách và viết tin giùm. Phí chỉ khi bán được: chính chủ 1%, môi giới 0.5%.",
+    "Rao bán nhà đất Sài Gòn, Long An không cần điền form: nhắn một câu qua Zalo, AI bóc tách và viết tin giùm. Phí chỉ khi bán được: chính chủ 1%, môi giới 0.5%.",
 };
 
 const STEPS = [

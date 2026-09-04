@@ -8,12 +8,15 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  doTien,
   ghiLoi,
   jsonResponse,
   MODEL,
   secretOf,
+  sendZalo,
   serviceClient,
 } from "../_shared/claude.ts";
+import { congBiMat } from "../_shared/gate.ts";
 import { FACT_LABELS, SELLER_SCRIPT_RULES, TONE_RULES } from "../_shared/prompts.ts";
 
 const OutSchema = z.object({
@@ -31,30 +34,16 @@ Deno.serve(async (req) => {
 
   // ── CỔNG (soát bảo mật 29/08/2026) ───────────────────────────────────────
   // verify_jwt=true KHÔNG phải là xác thực: nó chỉ đòi publishable key, mà khoá
-  // đó nằm sẵn trong bundle JS của web — ai mở trang cũng có. Đo thật: gọi bằng
-  // đúng khoá công khai đó thì hàm chạy tới tận logic nghiệp vụ (trả 400
-  // "listing_id bắt buộc"). Có listing_id là người lạ bắt bot NHẮN THẬT cho
-  // chủ nhà — đường quấy rối, và đốt tiền model.
-  const cong = serviceClient();
-  const bimat = await secretOf(cong, "BRIDGE_SECRET");
-  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
-  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
-  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
-  if (!bimat) {
-    await ghiLoi(cong, "ask-seller CONG MO",
-      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
-  }
-  const laDichVu = req.headers.get("authorization") ===
-    `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (bimat && !laDichVu && req.headers.get("x-bridge-secret") !== bimat) {
-    return jsonResponse({ error: "forbidden" }, 403);
-  }
+  // đó nằm sẵn trong bundle JS của web. Có listing_id là người lạ bắt bot NHẮN
+  // THẬT cho chủ nhà — đường quấy rối, và đốt tiền model. Cổng dùng chung
+  // `_shared/gate.ts`.
+  const db = serviceClient();
+  const chan = await congBiMat(req, db, "ask-seller");
+  if (chan) return chan;
 
   const { listing_id, mode = "batch", dry_run = false } = await req.json().catch(() => ({}));
   if (!listing_id) return jsonResponse({ error: "listing_id bắt buộc" }, 400);
   const drip = mode === "drip";
-
-  const db = serviceClient();
 
   const { data: listing, error: lErr } = await db
     .from("listings")
@@ -77,13 +66,17 @@ Deno.serve(async (req) => {
     .order("priority");
   if (mErr) return jsonResponse({ error: mErr.message }, 500);
 
-  // Không hỏi lại điều đang chờ trả lời (chống spam — INS-09)
-  const { data: pending } = await db
+  // Không hỏi lại điều đang chờ trả lời (chống spam — INS-09). Một truy vấn
+  // lấy cả hai thứ cần: câu đang chờ (status) và "đã từng hỏi căn này chưa"
+  // (số dòng) — trước đây là hai lượt đi về (FR-171 e).
+  const { data: daHoi } = await db
     .from("info_requests")
-    .select("question")
-    .eq("listing_id", listing_id)
-    .eq("status", "pending");
-  const pendingKeys = new Set((pending ?? []).map((r) => r.question));
+    .select("question, status")
+    .eq("listing_id", listing_id);
+  const pendingKeys = new Set(
+    (daHoi ?? []).filter((r) => r.status === "pending").map((r) => r.question),
+  );
+  const isFirst = (daHoi ?? []).length === 0;
 
   // FR-144: chế độ drip là MỘT-CÂU-MỘT-LÚC — listing đang có bất kỳ câu pending
   // nào (vd chat-reply vừa hỏi ngay lúc nhận tin rao) thì nhịp này bỏ qua, kẻo
@@ -108,12 +101,7 @@ Deno.serve(async (req) => {
   }
 
   // Drip: câu đầu tiên của listing thì chào; các câu sau nối tiếp hội thoại
-  const { count: askedBefore } = await db
-    .from("info_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("listing_id", listing_id);
-  const isFirst = (askedBefore ?? 0) === 0;
-
+  // (`isFirst` tính ở trên, cùng truy vấn với pendingKeys).
   const factList = toAsk
     .map((f) => `- ${f.fact_key}: ${FACT_LABELS[f.fact_key] ?? f.fact_key}`)
     .join("\n");
@@ -128,11 +116,15 @@ Deno.serve(async (req) => {
     : `Soạn MỘT tin nhắn Zalo gửi người bán để xin bổ sung thông tin cho tin rao: gộp hết vào một tin duy nhất, mỗi thông tin một câu hỏi rõ ràng, mở đầu chào đúng tone + khen một điểm mạnh của tin, nói rõ "có khách đang hỏi" để tạo động lực trả lời, kết thúc bằng lời cảm ơn + câu hỏi. Không hỏi gì ngoài danh sách.`;
 
   const anthropic = await anthropicClient(db);
+  // FR-171 e: một tin ~30 từ + tối đa 3 câu hỏi ngắn — `low`/512 là đủ, như
+  // nudge đang dùng cho việc tương đương. `medium`/1024 trước đây là trả thêm
+  // tiền suy nghĩ cho một câu chào. 512 (không phải 256) vì đầu ra là JSON có
+  // mảng questions; cắt giữa chuỗi là parse hỏng im (bài học ctv-report 26/08).
   const resp = await anthropic.messages.parse({
     model: MODEL,
-    max_tokens: 1024,
+    max_tokens: 512,
     output_config: {
-      effort: "medium",
+      effort: "low",
       format: zodOutputFormat(OutSchema),
     },
     system: [{
@@ -152,6 +144,7 @@ Deno.serve(async (req) => {
     }],
   });
 
+  await doTien(db, resp.usage); // FR-171 e: đồng hồ tiền đếm cả câu hỏi chủ nhà
   if (resp.stop_reason === "refusal" || !resp.parsed_output) {
     return jsonResponse({ error: "Không sinh được tin nhắn", stop_reason: resp.stop_reason }, 502);
   }
@@ -167,26 +160,19 @@ Deno.serve(async (req) => {
     const { error: iErr } = await db.from("info_requests").insert(rows);
     if (iErr) return jsonResponse({ error: iErr.message, message: out.message }, 500);
 
-    // Gửi thẳng qua Zalo OA nếu có kênh (FR-129)
+    // Gửi thẳng qua Zalo OA nếu có kênh (FR-129). Dùng `secretOf` + `sendZalo`
+    // dùng chung thay vì fetch tay + `get_secret` trần (FR-171 g): token đặt ở
+    // env thì `get_secret` (chỉ hỏi Vault) đọc ra null và câu hỏi không bao giờ
+    // đi — hai hàm anh em đã tránh được bẫy đó từ lâu.
     if (seller?.zalo_user_id) {
-      const { data: token } = await db.rpc("get_secret", {
-        secret_name: "ZALO_OA_ACCESS_TOKEN",
-      });
+      const token = await secretOf(db, "ZALO_OA_ACCESS_TOKEN");
       if (token) {
-        const send = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", access_token: token as string },
-          body: JSON.stringify({
-            recipient: { user_id: seller.zalo_user_id },
-            message: { text: out.message },
-          }),
-        });
-        const sr = await send.json().catch(() => ({}));
-        sent_via = sr?.error === 0 ? "zalo_oa" : `zalo_oa_error:${sr?.error}`;
+        const guiDuoc = await sendZalo(token, seller.zalo_user_id, out.message);
+        sent_via = guiDuoc ? "zalo_oa" : "zalo_oa_error";
         // Câu hỏi ĐÃ GỬI ĐI thì phải vào sổ hội thoại người bán, không thì
         // hội thoại chỉ còn câu trả lời trơ trọi và CTV tiếp quản không có gì
-        // để bám (FR-141/FR-152). Chỉ ghi khi Zalo nhận thật (error === 0).
-        if (sr?.error === 0 && listing.seller_id) {
+        // để bám (FR-141/FR-152). Chỉ ghi khi Zalo nhận thật.
+        if (guiDuoc && listing.seller_id) {
           const { data: sc, error: scErr } = await db
             .rpc("ensure_seller_conversation", {
               p_seller_id: listing.seller_id, p_channel: "zalo_oa",
@@ -199,8 +185,7 @@ Deno.serve(async (req) => {
             const { error: logErr } = await db.from("messages")
               .insert({ conversation_id: scId, sender: "bot", body: out.message });
             if (logErr) await ghiLoi(db, "ask-seller messages bot", logErr.message);
-            await db.from("conversations")
-              .update({ last_message_at: new Date().toISOString() }).eq("id", scId);
+            // (`last_message_at` do trigger trên `messages` đẩy — 20260902d.)
           }
         }
       }
