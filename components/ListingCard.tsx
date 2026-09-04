@@ -16,8 +16,10 @@ export default function ListingCard({
   photo?: string | null;
 }) {
   const code = listing.code ?? listing.id.slice(0, 8);
+  // FR-104: tiêu đề = tên đường đã bóc số nhà (`street`), không phải đoạn đầu
+  // `location_raw` (có thể là "Số 1xx"). Không có tên đường thì phường + quận.
   const title =
-    listing.location_raw?.split(",")[0]?.trim() ||
+    listing.street?.trim() ||
     `${listing.ward ?? ""} ${listing.district ?? "Quận 5"}`.trim();
   const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
 

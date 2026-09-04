@@ -10,7 +10,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | DH-02 | Bốn bất biến hướng nào cũng giữ | IA-P1, NFR-07 / FR-53, RSK-03 / FR-40, INS-11 / FR-104 (OPEN-36) |
 | DH-03 | Mặt bán lấy AOND làm chuẩn | FR-129, FR-144, FR-153, FR-155, FR-172, `06 §6.8` kịch bản người bán; bảng §0.3 (00) liệt kê từng mục AOND §I–§VII ↔ FR |
 | DH-04 | Mặt mua và web lấy nhadat.cc làm chuẩn | FR-01…FR-65, UF-01…UF-08, IA-P1…P5 |
-| DH-05 | Sao Bắc Đẩu: lịch xem nhà chốt mỗi tuần; đầu vào I1–I5; OMTM = câu khách hỏi được trả lời đúng hạn *[giả định BA]* | FR-57 / SRS-5.3 (viewing), FR-139 (`dang_ban`), UF-04, FR-173 (`sla_due_at`, `ctv_ranks`) / FR-140 c, BR-07 / FR-63, FR-155 |
+| DH-05 | Sao Bắc Đẩu: lịch xem nhà chốt mỗi tuần; đầu vào I1–I5; OMTM = câu khách hỏi được trả lời đúng hạn *[giả định BA]* | FR-57 / SRS-5.3 (viewing), FR-139 (`dang_ban`), UF-04, FR-173 (`sla_due_at`, `ctv_ranks`) / FR-140 c, BR-07 / FR-63, FR-155 / view `nmg_hoat_dong` (`20260904e`) |
 | DH-06 | Lộ trình 90 ngày: chốt hướng → đo I3 qua CTV → mở địa bàn (FR-174 đợt 1 xong, đợt 2 chờ) → 7 hạng mục dữ liệu → phần AOND còn thiếu → vận hành | OPEN-21/26/28/40/41/42, OPEN-27 nửa sau; FR-173, FR-174; `01 §1.5c`; FR-135/141 (takeover UI ⏳); NFR-16 / OPEN-25 |
 | DH-07 | Cho tới khi §0.8 chốt, đi theo khuyến nghị BA và ghi `[giả định BA]` | OPEN-40, OPEN-41, OPEN-42, OPEN-27 nửa sau |
 
@@ -54,25 +54,29 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-07, FR-08 | UF-01 | WF-02 | SRS-4.5 | AC-01 |
 | FR-09 | UF-01 | WF-02 | SRS-4.5 | AC-12 |
 | FR-10, FR-11 | UF-02 | WF-03 | SRS-3.1 | AC-01 |
-| FR-12 | UF-01 | WF-04 | §4.4 (IA) | AC-01 |
+| FR-12 | UF-01 | WF-04 | §4.4 (IA); `lib/tags.ts` + `app/[tag]/page.tsx` (SSG, 64 tag, 04/09) | TS-SEO-01…06 |
 | FR-13, FR-14 | UF-03 | WF-01, WF-02 | SRS-4.7 | AC-01 |
 | FR-15 | UF-02 | WF-03, WF-04 | — | — |
 | FR-16 | UF-01 | — | SRS-3.3 `fingerprint_ids` | — |
-| FR-17 | — | WF-04 | NFR-09 | — |
+| FR-17 | — | WF-04 | NFR-09; `app/sitemap.ts`, `app/robots.ts`, `metadataBase`/canonical/OpenGraph (`app/layout.tsx`, trang tin, trang tag), JSON-LD `RealEstateListing` ở `app/nha-dat/[code]/page.tsx` (04/09) | TS-SEO-01…06 |
 | FR-20…FR-26 | UF-04 | WF-05 | SRS-5.1 | AC-02 |
 | FR-27, FR-28 | UF-04 | WF-03, WF-05 | SRS-3.8 `photos` | — |
 | FR-29, FR-30 | UF-03, UF-04 | WF-05 | SRS-4.7; chat-reply: khối "CĂN KHÁCH ĐANG NHẮC" (tra mã căn trong tin + facts đã xác minh, chào đúng căn) | AC-01 |
 | FR-31, FR-32 | UF-04 | WF-05 | SRS-5.2; FR-32: reminder `followup` 2,5h sau khi bot nói về một căn (huỷ khi khách nhắn lại, ≤1/24h) + nhánh followup trong edge `nudge` | — |
 | FR-40…FR-47 | UF-05 | WF-06, WF-10 | SRS-3.6, SRS-4.1, SRS-4.2 | AC-03 |
 | FR-50…FR-57 | UF-06 | WF-07 | SRS-3.7 | AC-04 |
-| FR-56 | UF-07 | — | SRS-5.2 (loại listing đã từ chối) | AC-05 |
+| FR-54 | UF-06 | WF-07 | `nudge` v24 (04/09/2026): nhắc `viewing` nối dòng "Bản đồ: maps.google.com/?q=lat,lng" khi `listings.lat/lng` có (qua `viewings → listings`); toạ độ do `geocode-listings` (FR-122) điền | TS-MATCH-08 (docs/10 §10.7) |
+| FR-56 | UF-07 | — | SRS-5.2 (loại listing đã từ chối); SRS-3.8b `reminders.kind = feedback` + SRS-3.12 trigger `reminders_hen_hoi_cam_nhan` (`20260904d`): nhắc `viewing` đánh `sent` → hẹn `feedback` giờ xem + 4h; `nudge` v24 gửi mẫu cố định | AC-05; TS-MATCH-06/07/09 |
 | FR-60…FR-65 | UF-08 | — | SRS-5.3 | AC-06 |
-| FR-70…FR-73 | — | WF-12 | SRS-3.2 | AC-09 |
-| FR-74, FR-75 | — | WF-13 | SRS-3.5 | AC-09 |
-| FR-76 | UF-05, UF-11 | WF-12 | SRS-3.6 | AC-09 |
-| FR-77 | UF-11 | WF-14 | SRS-5.4 | AC-10 |
-| FR-78, FR-79 | UF-06, UF-11 | WF-14 | SRS-3.7, SRS-3.8 | AC-10 |
-| FR-80 | — | WF-12…14 | UI-C10 | AC-09 |
+| FR-64 | UF-08 | — | SRS-3.8b `reminders.kind = match` + index `(buyer_id, listing_id)`; SRS-3.12 `bao_tin_moi_khop()` + trigger `trg_listings_bao_tin_moi_khop` (`20260904d`, thay job `match_new_listings` SRS-5.3); `nudge` v24 gửi mẫu cố định. Tiêu chí = `buyers.preferences`, không dựng `saved_criteria` | AC-06; TS-MATCH-01…05, 09 |
+| FR-70, FR-72, FR-73 | — | WF-12 | SRS-3.2 (chưa dựng — OPEN-43) | AC-09 |
+| FR-71 | — | WF-12 | SRS-3.11 (04/09/2026): view `hoi_thoai_thong_ke` + policy `conversations/messages_admin_read`; thẻ "Thống kê hội thoại · 30 ngày" + CSV ở `app/admin/page.tsx` | AC-09 · TS-ADM2-07, TS-ADM2-12 |
+| FR-74, FR-75 | — | WF-13 | SRS-3.11 (04/09/2026): policy `buyers_admin_read`; ô "Tìm khách" + link `zalo.me/<uid>` (best-effort) ở `app/admin/page.tsx`, không chọn `phone` | AC-09 · TS-ADM2-03, TS-ADM2-11 |
+| FR-76 | UF-05, UF-11 | WF-12 | SRS-3.6; SRS-3.11 (04/09/2026): policy `info_requests_admin_read`, `ctvs_admin_read`; thẻ "Câu hỏi đang chờ" ở `app/admin/page.tsx` | AC-09 · TS-ADM2-01, TS-ADM2-05, TS-ADM2-11 |
+| FR-77 | UF-11 | WF-14 | SRS-5.4; SRS-3.11 (04/09/2026): view `khach_can_nguoi_that` (cờ `needs_human` làm proxy); thẻ "Khách cần người thật" | AC-10 · TS-ADM2-06 |
+| FR-78 | UF-06, UF-11 | WF-14 | SRS-3.7; SRS-3.11 (04/09/2026): policy `viewings_admin_read`; thẻ "Lịch xem nhà" ở `app/admin/page.tsx` | AC-10 · TS-ADM2-02, TS-ADM2-11 |
+| FR-79 | UF-06, UF-11 | WF-14 | SRS-3.8 (chưa dựng — OPEN-43) | AC-10 |
+| FR-80 | — | WF-12…14 | UI-C10; `usePhanTrang` 20 mục/trang ở `app/admin/page.tsx` (04/09/2026) | AC-09 · TS-ADM2-12 |
 | FR-81 | UF-11 | — | SRS-5.5 | AC-10 |
 | FR-90…FR-96 | UF-09 | WF-08, WF-09 | SRS-4.6 | AC-07 |
 | FR-98 | UF-05 | WF-10 | SRS-4.2 | AC-03 |
@@ -174,6 +178,7 @@ NFR **đã có hiện thực trong code** (những NFR còn là mục tiêu thì
 | NFR-16 (free-tier trước) | Supabase Free + Vercel Hobby; quyết định giữ nguyên 27/08 (OPEN-25) | Ràng buộc kèm theo: chạy `scripts/sao-luu.mjs` định kỳ vì Free KHÔNG có backup tự động |
 | NFR-17 (trang tin phải trong cache) | `generateStaticParams()` ở `app/nha-dat/[code]/page.tsx`; `unstable_cache` bọc truy vấn trong `components/ListingBrowse.tsx` và `lib/photos.ts`; SRS-3.13 | TS-CACHE-01…05 |
 | NFR-18 (xanh phải là xanh thật) | `bot_health_tick()` quét `net._http_response` → `bot_errors`; `log_loi()` + `ghiLoi()` cho lỗi trả-200; SRS-3.12 | TS-HEALTH-01…06, TS-LOG-01…06 |
+| NFR-09 (SEO) | `app/sitemap.ts`, `app/robots.ts`, `metadataBase`/canonical/OpenGraph ở `app/layout.tsx` + trang tin + `app/[tag]`, JSON-LD `RealEstateListing` ở `app/nha-dat/[code]/page.tsx`, `lib/tags.ts` (64 tag — chờ TOP-100 OPEN-06) | TS-SEO-01…06 |
 
 ---
 

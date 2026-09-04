@@ -96,6 +96,9 @@ export function formatPricePerM2(vnd: number | null, deal: "ban" | "cho_thue"): 
 // Deep-link Zalo mang ngữ cảnh (FR-13/14). Đang chạy acc CLONE trong lúc chờ
 // OA duyệt: đặt NEXT_PUBLIC_ZALO_URL=https://zalo.me/<SĐT acc clone> trong env
 // Vercel (hoặc sửa fallback dưới); OA duyệt xong đổi về link OA.
+// NFR-09 — gốc URL tuyệt đối cho canonical / OpenGraph / sitemap / JSON-LD.
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhadat.cc";
+
 export const ZALO_OA_URL =
   process.env.NEXT_PUBLIC_ZALO_URL ?? "https://zalo.me/nhadatcc";
 export function zaloLink(context?: string): string {

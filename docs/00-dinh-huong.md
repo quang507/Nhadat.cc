@@ -116,7 +116,7 @@ phải giá trị).
 | I2 | Hội thoại mua đủ khu vực + tầm giá | FR-130, FR-131 | `buyers.preferences` |
 | I3 | **Câu khách hỏi được trả lời đúng hạn** | **FR-173**, FR-140 c | `info_requests.answered_at ≤ sla_due_at`; `ctv_ranks` |
 | I4 | Kết nối Zalo sống sau 30 ngày | FR-63, `nudge` | `buyers.last_contact_at` (đo được từ ~21/09 — buyer đầu tạo cuối 08/2026) |
-| I5 | NMG hoạt động (có tin + trả lời drip 7 ngày) | FR-155 | `seller_ranks` (vế tin) + `info_requests(source='seller_drip', answered_at)` (vế trả lời — chưa có view, `10 §10.8.3`) |
+| I5 | NMG hoạt động (có tin + trả lời drip 7 ngày) | FR-155 | view `nmg_hoat_dong` (`20260904e`): có tin lên kệ VÀ ≥1 câu nhỏ giọt trả lời trong 7 ngày; hôm nay 0/3 |
 
 **OMTM quý này: I3.** Vòng hỏi-đáp mới khép 02–03/09/2026, `info_requests` chưa
 có lượt trả lời thật — mắt xích duy nhất chưa có số, và là mắt xích cả hai tài

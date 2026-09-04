@@ -2,7 +2,11 @@
 // Admin (FR-127): duyệt tin cho_thong_tin → dang_ban / ẩn (an) theo vòng đời
 // FR-139 (cho_thong_tin → dang_ban → dang_quan_tam → da_chot). Quyền cấp theo
 // bảng `admins` (email) — RLS phía DB mới là hàng rào thật, trang này chỉ là UI.
-import { useEffect, useState } from "react";
+//
+// 04/09/2026 — "admin buyer side" (FR-71/74/75/76/77/78/80, migration
+// 20260904c): câu khách hỏi, lịch xem nhà, khách cần người thật, thống kê hội
+// thoại 30 ngày + CSV, ô tìm khách. Mọi danh sách dài lật 20 mục/trang (FR-80).
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription } from "@/lib/format";
@@ -66,6 +70,69 @@ type HangCtv = {
   ty_le_dung_han: number | null; rank: string;
 };
 
+// ── Admin buyer side (04/09/2026) ────────────────────────────────────────────
+// FR-76: câu khách hỏi đang chờ / vừa được trả lời. `listings(code)`, `ctvs(name)`,
+// `buyers(name)` là join qua FK của PostgREST — mỗi cái là MỘT object (hoặc null).
+type CauHoi = {
+  id: string; question: string; status: string; answer: string | null; source: string | null;
+  assignee: string | null; sla_due_at: string | null; answered_at: string | null; created_at: string;
+  listings: { code: string | null } | null;
+  ctvs: { name: string | null } | null;
+  buyers: { name: string | null } | null;
+};
+// FR-78: lịch xem nhà. `listing_code` là mã tin khách gõ khi tin chưa neo được
+// vào `listing_id` (viewings_can_neo_check) — hiện cái nào có.
+type LichXem = {
+  id: string; listing_code: string | null; time_text: string | null; slot: string | null;
+  status: string; guide: string | null; source: string | null; created_at: string;
+  listings: { code: string | null } | null;
+  buyers: { name: string | null } | null;
+};
+// FR-77: view `khach_can_nguoi_that` — cờ needs_human chưa có người thật chạm.
+type KhachCan = {
+  conversation_id: string; vai: string; ten: string | null; zalo_user_id: string | null;
+  needs_human_at: string; last_message_at: string | null; ctv_name: string | null;
+  tin_khach_cuoi: string | null; tin_khach_cuoi_at: string | null;
+};
+// FR-71: view `hoi_thoai_thong_ke` — 30 dòng, mỗi ngày một dòng (giờ VN).
+type ThongKe = {
+  ngay: string; hoi_thoai_khach_moi: number; hoi_thoai_ban_moi: number;
+  tin_khach: number; tin_nguoi_ban: number; tin_bot: number; tin_nguoi_that: number;
+  khach_moi: number; co_nguoi_that: number;
+};
+const COT_THONG_KE: (keyof ThongKe)[] = [
+  "ngay", "hoi_thoai_khach_moi", "hoi_thoai_ban_moi", "tin_khach", "tin_nguoi_ban",
+  "tin_bot", "tin_nguoi_that", "khach_moi", "co_nguoi_that",
+];
+// FR-74: kết quả tìm khách. CỐ Ý không có `phone` — bảng có cột đó, policy cho
+// admin đọc cả bảng, nhưng web không bao giờ chọn nó (NFR-07, FR-104).
+type Khach = {
+  id: string; name: string | null; zalo_user_id: string | null;
+  preferences: Record<string, unknown> | null; last_contact_at: string | null; created_at: string;
+};
+const TRANG_THAI_HOI: Record<string, string> = { pending: "đang chờ", answered: "đã trả lời" };
+const TRANG_THAI_XEM: Record<string, string> = {
+  proposed: "đề xuất", pending: "đã hẹn", done: "đã xem", cancelled: "đã huỷ",
+};
+const NGUOI_GIAO: Record<string, string> = { ctv: "CTV", seller: "chủ nhà", admin: "admin" };
+
+// FR-80: mọi danh sách admin 20 mục/trang. Phân trang phía client — dữ liệu đã
+// tải trong một đợt, lật trang không tốn thêm truy vấn.
+const MOI_TRANG = 20;
+function usePhanTrang<T>(xs: T[]) {
+  const [trang, setTrang] = useState(1);
+  const soTrang = Math.max(1, Math.ceil(xs.length / MOI_TRANG));
+  // Danh sách co lại (duyệt tin xong) thì kẹp về trang cuối còn tồn tại.
+  const t = Math.min(trang, soTrang);
+  return { trang: t, soTrang, tong: xs.length, setTrang, mot: xs.slice((t - 1) * MOI_TRANG, t * MOI_TRANG) };
+}
+
+// FR-75: link mở Zalo theo uid — BEST-EFFORT. uid Zalo cá nhân đi qua bridge
+// (zca) không phải là số/alias công khai, `zalo.me/<uid>` có thể không mở
+// được; uid từ OA lại là uid ẩn danh theo app. Vẫn để link vì rẻ, và là cái
+// gần nhất với "click nhảy sang Zalo" mà không cần thêm hạ tầng.
+const linkZalo = (uid: string | null) => (uid ? `https://zalo.me/${encodeURIComponent(uid)}` : null);
+
 export default function Page() {
   const [role, setRole] = useState<"loading" | "anon" | "user" | "admin">("loading");
   const [pending, setPending] = useState<TinCho[]>([]);
@@ -92,14 +159,35 @@ export default function Page() {
   const [nguoiBan, setNguoiBan] = useState<NguoiBan[]>([]);
   // FR-173 e (03/09): CTV nhận câu khách hỏi, trễ hạn thì rớt hạng — xem ở đây.
   const [hangCtv, setHangCtv] = useState<HangCtv[]>([]);
+  // Admin buyer side (04/09) — bốn danh sách + thống kê, cùng đợt tải.
+  const [cauHoi, setCauHoi] = useState<CauHoi[]>([]);
+  const [lichXem, setLichXem] = useState<LichXem[]>([]);
+  const [khachCan, setKhachCan] = useState<KhachCan[]>([]);
+  const [thongKe, setThongKe] = useState<ThongKe[]>([]);
+  // Lỗi đọc: hiện ra UI thay vì nuốt — policy thiếu thì thấy ngay ở đây.
+  const [loi, setLoi] = useState<string[]>([]);
+  // FR-74: tìm khách theo yêu cầu, ngoài đợt tải đầu (phụ thuộc chữ admin gõ).
+  const [qKhach, setQKhach] = useState("");
+  const [khach, setKhach] = useState<Khach[] | null>(null);
+  const [dangTim, setDangTim] = useState(false);
+
+  // FR-80 — hook phân trang phải đứng TRƯỚC mọi `return` sớm theo `role`.
+  const ptTin = usePhanTrang(pending);
+  const ptNguoiBan = usePhanTrang(nguoiBan);
+  const ptCauHoi = usePhanTrang(cauHoi);
+  const ptLichXem = usePhanTrang(lichXem);
+  const ptKhachCan = usePhanTrang(khachCan);
+  const ptThongKe = usePhanTrang(thongKe);
 
   // MỘT đợt cho cả trang (FR-171 j). Trước bản này là 5 đợt nối tiếp (12 truy
   // vấn), mỗi đợt một lần thời gian mạng VN→Supabase ~150-250 ms, tức 1-1,5 s
   // trước khi có số. Không truy vấn nào ở đây cần kết quả của truy vấn khác.
   // Ba lần `count: exact` trên `listings` (3 lần quét bảng) thay bằng MỘT lượt
   // đọc cột `status` rồi đếm tại chỗ — kho ~200 dòng, rẻ hơn ba lần quét.
+  // 04/09: thêm 4 truy vấn buyer side vào CÙNG đợt, vẫn một vòng đi về.
   const load = async () => {
-    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc] = await Promise.all([
+    const d7 = new Date(Date.now() - 7 * 86400e3).toISOString();
+    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk] = await Promise.all([
       supabase
         .from("listings")
         .select("id, code, ward, price_vnd, price_raw, area_m2, description, location_raw, created_at")
@@ -120,7 +208,7 @@ export default function Page() {
       supabase.from("sellers")
         .select("id, name, seller_type, created_at, zalo_user_id")
         .gte("created_at", new Date(Date.now() - 14 * 86400e3).toISOString())
-        .order("created_at", { ascending: false }).limit(20),
+        .order("created_at", { ascending: false }).limit(100),
       supabase
         .from("seller_ranks")
         .select("id, name, seller_type, active_count, closed_count, rank")
@@ -129,6 +217,29 @@ export default function Page() {
         .from("ctv_ranks")
         .select("id, name, active, tong, tra_loi, dung_han, tre, ty_le_dung_han, rank")
         .order("name").limit(20),
+      // FR-76 — câu khách hỏi: đang chờ + vừa trả lời, mới nhất trước.
+      supabase
+        .from("info_requests")
+        .select("id, question, status, answer, source, assignee, sla_due_at, answered_at, created_at, listings(code), ctvs(name), buyers(name)")
+        .in("status", ["pending", "answered"])
+        .order("created_at", { ascending: false }).limit(100),
+      // FR-78 — lịch xem: sắp tới + 7 ngày qua; lịch chưa có giờ máy (chỉ
+      // `time_text`) thì lấy theo ngày tạo trong 7 ngày.
+      supabase
+        .from("viewings")
+        .select("id, listing_code, time_text, slot, status, guide, source, created_at, listings(code), buyers(name)")
+        .or(`slot.gte.${d7},and(slot.is.null,created_at.gte.${d7})`)
+        .order("slot", { ascending: true, nullsFirst: false }).limit(100),
+      // FR-77 — view gác cổng admin (20260904c).
+      supabase
+        .from("khach_can_nguoi_that")
+        .select("conversation_id, vai, ten, zalo_user_id, needs_human_at, last_message_at, ctv_name, tin_khach_cuoi, tin_khach_cuoi_at")
+        .order("needs_human_at", { ascending: true }).limit(100),
+      // FR-71 — view 30 ngày, ngày mới nhất trước.
+      supabase
+        .from("hoi_thoai_thong_ke")
+        .select("ngay, hoi_thoai_khach_moi, hoi_thoai_ban_moi, tin_khach, tin_nguoi_ban, tin_bot, tin_nguoi_that, khach_moi, co_nguoi_that")
+        .order("ngay", { ascending: false }),
     ]);
     setHangCtv((hc.data ?? []) as HangCtv[]);
     setPending((pend.data ?? []) as TinCho[]);
@@ -143,6 +254,15 @@ export default function Page() {
     setViec((vc.data ?? []) as Viec[]);
     setNguoiBan((nb.data ?? []) as NguoiBan[]);
     setHang((hg.data ?? []) as Ng[]);
+    setCauHoi((ch.data ?? []) as unknown as CauHoi[]);
+    setLichXem((lx.data ?? []) as unknown as LichXem[]);
+    setKhachCan((kc.data ?? []) as KhachCan[]);
+    setThongKe((tk.data ?? []) as ThongKe[]);
+    setLoi(
+      [["câu hỏi", ch.error], ["lịch xem", lx.error], ["khách cần người thật", kc.error], ["thống kê", tk.error]]
+        .filter(([, e]) => e)
+        .map(([ten, e]) => `${ten as string}: ${(e as { message: string }).message}`),
+    );
   };
 
   useEffect(() => {
@@ -173,6 +293,40 @@ export default function Page() {
     if (!error) setPending((p) => p.filter((l) => l.id !== id));
   };
 
+  // FR-74 — tìm khách theo tên Zalo hoặc uid. Bỏ ký tự cú pháp của bộ lọc
+  // PostgREST (dấu phẩy, ngoặc) để chữ gõ không thành mệnh đề lọc.
+  const timKhach = async (e: FormEvent) => {
+    e.preventDefault();
+    const q = qKhach.replace(/[,()"\\]/g, " ").trim();
+    if (!q) return setKhach(null);
+    setDangTim(true);
+    const { data, error } = await supabase
+      .from("buyers")
+      .select("id, name, zalo_user_id, preferences, last_contact_at, created_at")
+      .or(`name.ilike.%${q}%,zalo_user_id.ilike.%${q}%`)
+      .order("last_contact_at", { ascending: false, nullsFirst: false })
+      .limit(MOI_TRANG);
+    setDangTim(false);
+    if (error) setLoi((l) => [...l, `tìm khách: ${error.message}`]);
+    setKhach((data ?? []) as Khach[]);
+  };
+
+  // FR-71 — CSV tạo ngay trên trình duyệt (NFR-11: xem ở Excel). BOM để Excel
+  // đọc UTF-8; chưa có xuất Excel phía server.
+  const taiCsv = () => {
+    const dong = [
+      COT_THONG_KE.join(","),
+      ...thongKe.map((r) => COT_THONG_KE.map((c) => String(r[c])).join(",")),
+    ];
+    const blob = new Blob(["\uFEFF" + dong.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `hoi-thoai-30-ngay-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (role === "loading") return <div className="mx-auto max-w-4xl px-4 py-16 text-mute">Đang kiểm tra quyền…</div>;
   if (role !== "admin") {
     return (
@@ -190,6 +344,19 @@ export default function Page() {
     );
   }
 
+  const now = Date.now();
+  const tongTK = thongKe.reduce(
+    (s, r) => ({
+      hoi_thoai: s.hoi_thoai + r.hoi_thoai_khach_moi,
+      tin_khach: s.tin_khach + r.tin_khach,
+      tin_bot: s.tin_bot + r.tin_bot,
+      tin_nguoi_that: s.tin_nguoi_that + r.tin_nguoi_that,
+      khach_moi: s.khach_moi + r.khach_moi,
+      co: s.co + r.co_nguoi_that,
+    }),
+    { hoi_thoai: 0, tin_khach: 0, tin_bot: 0, tin_nguoi_that: 0, khach_moi: 0, co: 0 },
+  );
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -205,6 +372,9 @@ export default function Page() {
         <p className="mt-1 text-sm text-mute tabular-nums">
           {counts.tong} tin tổng · {counts.active} đang rao · {counts.cho} chờ duyệt
         </p>
+      )}
+      {loi.length > 0 && (
+        <p className="mt-2 text-sm text-brand">Không đọc được: {loi.join(" · ")}</p>
       )}
 
       {/* FR-152 — sức khoẻ bot */}
@@ -262,6 +432,233 @@ export default function Page() {
         )}
       </div>
 
+      {/* FR-77 — khách cần người thật (view khach_can_nguoi_that, 04/09) */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <span className="eyebrow text-mute">Khách cần người thật</span>
+          <span className="text-sm text-mute">
+            {khachCan.length
+              ? `${khachCan.length} hội thoại đang giơ cờ, chưa ai vào`
+              : "Không hội thoại nào đang chờ người thật"}
+          </span>
+        </div>
+        {khachCan.length > 0 && (
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {ptKhachCan.mot.map((k) => (
+              <li key={k.conversation_id} className="flex flex-wrap items-start gap-x-3 py-2">
+                <span className="w-32 shrink-0 tabular-nums text-mute">
+                  {new Date(k.needs_human_at).toLocaleString("vi-VN")}
+                </span>
+                <span className="font-semibold">{k.ten ?? "Không tên"}</span>
+                <span className="text-mute">{k.vai === "khach" ? "khách" : "người bán"}</span>
+                {k.ctv_name && <span className="text-mute">CTV {k.ctv_name}</span>}
+                <span className="min-w-0 basis-full text-navy/85 sm:basis-auto sm:flex-1">
+                  {k.tin_khach_cuoi ? `“${k.tin_khach_cuoi}”` : <span className="text-mute">chưa có tin nào</span>}
+                </span>
+                {linkZalo(k.zalo_user_id) && (
+                  <a href={linkZalo(k.zalo_user_id)!} target="_blank" rel="noreferrer"
+                    className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold text-zalo transition hover:border-zalo">
+                    Mở Zalo
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <PhanTrang {...ptKhachCan} />
+      </div>
+
+      {/* FR-76 — câu khách hỏi đang chờ / vừa trả lời (04/09) */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <span className="eyebrow text-mute">Câu hỏi đang chờ</span>
+          <span className="text-sm text-mute">
+            {cauHoi.length
+              ? `${cauHoi.filter((c) => c.status === "pending").length} đang chờ · ${cauHoi.filter((c) => c.status === "answered").length} đã trả lời`
+              : "Chưa có câu hỏi nào"}
+          </span>
+        </div>
+        {cauHoi.length > 0 && (
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {ptCauHoi.mot.map((c) => {
+              const quaHan = c.status === "pending" && !!c.sla_due_at && new Date(c.sla_due_at).getTime() < now;
+              return (
+                <li key={c.id} className="py-2">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="font-bold">#{c.listings?.code ?? "—"}</span>
+                    <span className="min-w-0 flex-1 text-navy/85">{c.question}</span>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                      c.status === "pending" ? "bg-navy text-white" : "bg-brand/10 text-brand"
+                    }`}>
+                      {TRANG_THAI_HOI[c.status] ?? c.status}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-mute tabular-nums">
+                    <span>{new Date(c.created_at).toLocaleString("vi-VN")}</span>
+                    {c.buyers?.name && <span>khách {c.buyers.name}</span>}
+                    <span>nguồn {c.source ?? "—"}</span>
+                    <span>
+                      giao {NGUOI_GIAO[c.assignee ?? ""] ?? c.assignee ?? "—"}
+                      {c.ctvs?.name ? ` ${c.ctvs.name}` : ""}
+                    </span>
+                    {c.sla_due_at && (
+                      <span className={quaHan ? "font-bold text-brand" : ""}>
+                        hạn {new Date(c.sla_due_at).toLocaleString("vi-VN")}
+                        {quaHan ? " — quá hạn" : ""}
+                      </span>
+                    )}
+                    {c.answered_at && <span>trả lời {new Date(c.answered_at).toLocaleString("vi-VN")}</span>}
+                  </div>
+                  {c.answer && <p className="mt-1 text-sm text-navy/75">↳ {c.answer}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <PhanTrang {...ptCauHoi} />
+      </div>
+
+      {/* FR-78 — lịch xem nhà: sắp tới + 7 ngày qua (04/09) */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <div className="flex flex-wrap items-baseline gap-x-3">
+          <span className="eyebrow text-mute">Lịch xem nhà</span>
+          <span className="text-sm text-mute">
+            {lichXem.length ? `${lichXem.length} lịch — sắp tới và 7 ngày qua` : "Chưa có lịch xem nào"}
+          </span>
+        </div>
+        {lichXem.length > 0 && (
+          <ul className="mt-3 divide-y divide-line text-sm">
+            {ptLichXem.mot.map((v) => (
+              <li key={v.id} className="flex flex-wrap items-center gap-x-3 py-2">
+                <span className="w-36 shrink-0 tabular-nums text-mute">
+                  {v.slot ? new Date(v.slot).toLocaleString("vi-VN") : (v.time_text ?? "chưa rõ giờ")}
+                </span>
+                <span className="font-bold">#{v.listings?.code ?? v.listing_code ?? "—"}</span>
+                <span className="font-semibold">{v.buyers?.name ?? "Khách chưa tên"}</span>
+                {v.slot && v.time_text && <span className="text-mute">“{v.time_text}”</span>}
+                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                  v.status === "pending" ? "bg-brand/10 text-brand" : "bg-line text-navy"
+                }`}>
+                  {TRANG_THAI_XEM[v.status] ?? v.status}
+                </span>
+                <span className="ml-auto text-xs text-mute">
+                  {v.guide ? `dẫn: ${v.guide}` : "chưa có người dẫn"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <PhanTrang {...ptLichXem} />
+      </div>
+
+      {/* FR-74 / FR-75 — tìm khách theo tên hoặc Zalo uid; KHÔNG hiện số điện thoại */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <form onSubmit={timKhach} className="flex flex-wrap items-center gap-3">
+          <span className="eyebrow text-mute">Tìm khách</span>
+          <input
+            value={qKhach}
+            onChange={(e) => setQKhach(e.target.value)}
+            placeholder="tên Zalo hoặc uid"
+            className="min-w-0 flex-1 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand"
+          />
+          <button type="submit" disabled={dangTim}
+            className="rounded-full bg-brand px-5 py-1.5 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60">
+            {dangTim ? "Đang tìm…" : "Tìm"}
+          </button>
+        </form>
+        {khach && (
+          khach.length === 0 ? (
+            <p className="mt-3 text-sm text-mute">Không thấy khách nào khớp.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-line text-sm">
+              {khach.map((b) => {
+                const p = b.preferences ?? {};
+                const soThich = ["area", "budget", "bedrooms"]
+                  .filter((k) => p[k] != null && p[k] !== "")
+                  .map((k) => `${{ area: "khu", budget: "ngân sách", bedrooms: "PN" }[k]}: ${String(p[k])}`);
+                return (
+                  <li key={b.id} className="flex flex-wrap items-center gap-x-3 py-2">
+                    <span className="font-semibold">{b.name ?? "Không tên"}</span>
+                    <span className="tabular-nums text-mute">{b.zalo_user_id ?? "chưa có uid"}</span>
+                    <span className="min-w-0 flex-1 text-navy/75">
+                      {soThich.length ? soThich.join(" · ") : "chưa rõ nhu cầu"}
+                    </span>
+                    <span className="text-xs text-mute tabular-nums">
+                      {b.last_contact_at
+                        ? `liên hệ cuối ${new Date(b.last_contact_at).toLocaleDateString("vi-VN")}`
+                        : `tạo ${new Date(b.created_at).toLocaleDateString("vi-VN")}`}
+                    </span>
+                    {linkZalo(b.zalo_user_id) && (
+                      <a href={linkZalo(b.zalo_user_id)!} target="_blank" rel="noreferrer"
+                        className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold text-zalo transition hover:border-zalo">
+                        Mở Zalo
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        )}
+        <p className="mt-3 text-xs text-mute">
+          Tối đa 20 kết quả, không hiện số điện thoại. Link Zalo theo uid là best-effort —
+          uid cá nhân qua bridge có thể không mở được.
+        </p>
+      </div>
+
+      {/* FR-71 — thống kê hội thoại 30 ngày (view hoi_thoai_thong_ke) + CSV */}
+      <div className="mt-6 rounded-king border border-line bg-white p-5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="eyebrow text-mute">Thống kê hội thoại · 30 ngày</span>
+          <span className="text-sm text-mute tabular-nums">
+            {tongTK.hoi_thoai} hội thoại khách mới · {tongTK.khach_moi} khách mới ·{" "}
+            {tongTK.tin_khach} tin khách / {tongTK.tin_bot} bot / {tongTK.tin_nguoi_that} người thật ·{" "}
+            {tongTK.co} lần cần người thật
+          </span>
+          <button onClick={taiCsv} disabled={!thongKe.length}
+            className="ml-auto rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40">
+            Tải CSV
+          </button>
+        </div>
+        {thongKe.length > 0 && (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm tabular-nums">
+              <thead className="text-left text-xs text-mute">
+                <tr>
+                  <th className="py-1 pr-3 font-semibold">Ngày</th>
+                  <th className="py-1 pr-3 font-semibold">HT khách</th>
+                  <th className="py-1 pr-3 font-semibold">HT bán</th>
+                  <th className="py-1 pr-3 font-semibold">Tin khách</th>
+                  <th className="py-1 pr-3 font-semibold">Tin bot</th>
+                  <th className="py-1 pr-3 font-semibold">Người thật</th>
+                  <th className="py-1 pr-3 font-semibold">Khách mới</th>
+                  <th className="py-1 font-semibold">Cờ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {ptThongKe.mot.map((r) => (
+                  <tr key={r.ngay}>
+                    <td className="py-1 pr-3 text-mute">{new Date(r.ngay).toLocaleDateString("vi-VN")}</td>
+                    <td className="py-1 pr-3">{r.hoi_thoai_khach_moi}</td>
+                    <td className="py-1 pr-3">{r.hoi_thoai_ban_moi}</td>
+                    <td className="py-1 pr-3">{r.tin_khach}</td>
+                    <td className="py-1 pr-3">{r.tin_bot}</td>
+                    <td className="py-1 pr-3">{r.tin_nguoi_that}</td>
+                    <td className="py-1 pr-3">{r.khach_moi}</td>
+                    <td className="py-1">{r.co_nguoi_that}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <PhanTrang {...ptThongKe} />
+        <p className="mt-3 text-xs text-mute">
+          Ngày theo giờ VN. Tin "người thật" = CTV hoặc admin nhắn trong hội thoại. CSV tạo trên
+          trình duyệt; chưa có xuất Excel phía server.
+        </p>
+      </div>
+
       {/* Người bán mới — nhãn bot gán lúc bóc tách, sửa tại chỗ (02/09) */}
       {nguoiBan.length > 0 && (
         <div className="mt-6 rounded-king border border-line bg-white p-5">
@@ -270,7 +667,7 @@ export default function Page() {
             <span className="text-sm text-mute">nhãn quyết định mức phí — bấm để đổi nếu bot gán sai</span>
           </div>
           <ul className="mt-3 divide-y divide-line text-sm">
-            {nguoiBan.map((s) => (
+            {ptNguoiBan.mot.map((s) => (
               <li key={s.id} className="flex flex-wrap items-center gap-x-3 py-2">
                 <span className="w-28 shrink-0 tabular-nums text-mute">
                   {new Date(s.created_at).toLocaleDateString("vi-VN")}
@@ -293,6 +690,7 @@ export default function Page() {
               </li>
             ))}
           </ul>
+          <PhanTrang {...ptNguoiBan} />
         </div>
       )}
 
@@ -352,8 +750,9 @@ export default function Page() {
         </div>
       )}
 
+      {/* Tin chờ duyệt — tải 50, hiện 20/trang (FR-80) */}
       <div className="mt-6 space-y-4">
-        {pending.map((l) => (
+        {ptTin.mot.map((l) => (
           <div key={l.id} className="rounded-king border border-line bg-white p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <p className="font-bold">
@@ -385,7 +784,28 @@ export default function Page() {
             Không còn tin chờ duyệt.
           </div>
         )}
+        <PhanTrang {...ptTin} />
       </div>
+    </div>
+  );
+}
+
+// FR-80 — thanh lật trang. Một trang thì không vẽ gì.
+function PhanTrang({ trang, soTrang, tong, setTrang }: {
+  trang: number; soTrang: number; tong: number; setTrang: (n: number) => void;
+}) {
+  if (soTrang <= 1) return null;
+  return (
+    <div className="mt-3 flex items-center justify-end gap-3 text-xs text-mute">
+      <button onClick={() => setTrang(trang - 1)} disabled={trang <= 1}
+        className="rounded-full border border-line px-3 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute">
+        ← Trước
+      </button>
+      <span className="tabular-nums">trang {trang}/{soTrang} · {tong} mục</span>
+      <button onClick={() => setTrang(trang + 1)} disabled={trang >= soTrang}
+        className="rounded-full border border-line px-3 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute">
+        Sau →
+      </button>
     </div>
   );
 }

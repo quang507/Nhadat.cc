@@ -2,6 +2,10 @@
 // 1. promise: người ta hứa "chiều gửi ảnh/thông tin" → tới hẹn nhắc khéo MỘT tin.
 // 2. reengage: buyer im lặng 5-6 ngày → hỏi thăm ngắn, kịch bản đa dạng (góc
 //    ngẫu nhiên + tránh lặp 2 tin bot gần nhất), trước mốc Zalo xoá 7 ngày (INS-03).
+// 3. (04/09/2026, migration 20260904d) match: tin mới khớp tiêu chí khách (FR-64,
+//    trigger DB chèn) và feedback: hỏi cảm nhận 4 giờ sau buổi xem (FR-56, trigger
+//    DB chèn khi nhắc `viewing` được đánh sent). Cả hai đi MẪU CỐ ĐỊNH, không gọi
+//    model. Nhắc `viewing` kèm link bản đồ khi tin có toạ độ (FR-54).
 // POST {} (cron) | { dry_run?: bool } — trả về tóm tắt việc đã làm.
 import {
   anthropicClient,
@@ -177,25 +181,33 @@ Deno.serve(async (req) => {
     if (treoErr) await ghiLoi(client, "nudge bo_dem_nhac_treo", treoErr.message);
   }
 
-  // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) ----
+  // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) /
+  //         tin mới khớp (FR-64) / cảm nhận sau xem (FR-56) ----
+  const DUE_KINDS = ["promise", "viewing", "followup", "match", "feedback"];
   const dueClaimRes = dry_run
     ? await client.from("reminders").select("id")
-      .eq("status", "pending").in("kind", ["promise", "viewing", "followup"])
+      .eq("status", "pending").in("kind", DUE_KINDS)
       .lte("due_at", new Date().toISOString()).limit(5)
     : await client.rpc("nhan_viec_nhac", {
-      p_kinds: ["promise", "viewing", "followup"], p_limit: 5, p_worker: workerId,
+      p_kinds: DUE_KINDS, p_limit: 5, p_worker: workerId,
     });
   const { data: dueClaim, error: dueErr } = dueClaimRes;
   if (dueErr) await ghiLoi(client, "nudge nhan_viec_nhac(due)", dueErr.message);
   const dueIds = (dueClaim ?? []).map((r: { id: string }) => r.id);
+  // FR-54/56: nhắc `viewing` (chat-reply tạo) chỉ có `viewing_id`, tin nằm ở
+  // `viewings.listing_id` — kéo toạ độ + mã qua hai đường: `listings` thẳng
+  // (match/feedback/followup) và `viewings → listings` (viewing).
   const { data: due } = dueIds.length
     ? await client.from("reminders")
-      .select("id, kind, note, buyer_id, seller_id, listing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id)")
+      .select("id, kind, note, buyer_id, seller_id, listing_id, viewing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id), listings(code, lat, lng), viewings(listings(code, lat, lng))")
       .in("id", dueIds)
     : { data: [] as never[] };
 
+  type TinToaDo = { code?: string | null; lat?: number | null; lng?: number | null } | null;
   for (const r of due ?? []) {
     const who = (r.buyers ?? r.sellers) as { name?: string | null; zalo_user_id?: string | null } | null;
+    const tin: TinToaDo = (r.listings as TinToaDo) ??
+      ((r.viewings as { listings?: TinToaDo } | null)?.listings ?? null);
     // Chưa biết tên thì gọi "anh/chị" — cấm model bịa tên (nó hay mượn tên trong ví dụ tone)
     const whoLabel = who?.name
       ? `Anh/chị ${who.name}`
@@ -214,46 +226,64 @@ Deno.serve(async (req) => {
         canInfo = `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? ""} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l as SpecRow)}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}`;
       }
     }
-    // FR-166: model 500 / hết giờ là chuyện thường. Không bọc thì exception
-    // thoát khỏi CẢ vòng lặp — những lời nhắc còn lại mất lượt, mà chúng đã bị
-    // giành (locked_at) nên treo 5 phút mới ai đụng lại được.
-    if (!anthropic) {
-      await baoHongNhac(r.id, "khong co client model");
-      continue;
-    }
-    let resp;
-    try {
-      resp = await anthropic.messages.create({
-      model: MODEL, max_tokens: 256,
-      output_config: { effort: "low" },
-      system: [{ type: "text", text: TONE, cache_control: { type: "ephemeral" } }],
-      messages: [{
-        role: "user",
-        content: r.kind === "viewing"
-          ? `${whoLabel} có ${r.note} (sắp tới giờ). Soạn MỘT tin Zalo RẤT NGẮN nhắc lịch theo mẫu §6.8: "Em là Thái, có hẹn xem nhà với anh/chị lúc … Hẹn gặp anh/chị nha." Thân thiện, không markdown.`
-          // FR-140 c (02/09): chủ nhà vừa trả lời câu khách hỏi → báo lại ĐÚNG câu
-          // trả lời, không phải "kể thêm một chi tiết". Trigger DB đặt ghi chú bắt
-          // đầu bằng "chủ nhà vừa trả lời" (20260902h).
-          : r.kind === "followup" && /^chủ nhà vừa trả lời/.test(r.note ?? "")
-          ? `${whoLabel} trước đó hỏi một điều về căn ${canInfo ? `(${canInfo})` : ""} mà em phải đi hỏi chủ nhà. Giờ ${r.note}. ` +
-            `Soạn MỘT tin Zalo NGẮN (1-2 câu) báo lại cho khách ĐÚNG câu trả lời của chủ nhà (nói chắc vì chủ đã xác nhận; KHÔNG thêm chi tiết nào chủ không nói), rồi kết bằng một câu hỏi nhẹ (còn muốn hỏi gì nữa / muốn qua xem không).`
-          : r.kind === "followup"
-          ? `${whoLabel} hỏi về căn này rồi im ~2-3 tiếng: ${canInfo || r.note}. ` +
-            `Soạn MỘT tin Zalo NGẮN (1-2 câu) CHỦ ĐỘNG kể thêm MỘT chi tiết đáng giá về đúng căn đó (chỉ từ dữ liệu trên, không bịa; chưa xác minh thì không khẳng định). Không thúc ép, kết bằng câu hỏi nhẹ hoặc một câu khẳng định rồi chờ.`
-          : `${whoLabel} có hứa: "${r.note}". Giờ đã tới hẹn. ` +
-            `Soạn MỘT tin Zalo RẤT NGẮN (~20 từ) nhắc khéo — thân thiện, KHÔNG trách móc, cho đường lùi ("khi nào tiện anh/chị gửi em nha").`,
-      }],
-    });
-    } catch (e) {
-      await ghiLoi(client, "nudge model(nhac)", e);
-      await baoHongNhac(r.id, `model: ${String(e).slice(0, 120)}`);
-      continue;
-    }
-    await doTien(client, resp.usage); // FR-171 e: đồng hồ tiền đếm cả lượt nhắc
-    const text = resp.content.find((b) => b.type === "text")?.text?.trim();
-    if (!text) {
-      await baoHongNhac(r.id, "model tra rong");
-      continue;
+    let text: string | undefined;
+    if (r.kind === "match" || r.kind === "feedback") {
+      // FR-64 / FR-56: MẪU CỐ ĐỊNH, không gọi model (OPEN-35 nghiêng mẫu câu).
+      // Nội dung là dữ liệu cột đã ghép sẵn trong `note` (`bao_tin_moi_khop`)
+      // hoặc mã căn — model không có gì để thêm ngoài rủi ro bịa, và mẫu thì
+      // chạy được cả khi key model hỏng. Giọng theo TONE_RULES: xưng em, gọi
+      // anh/chị, không gạch dài, tối đa 1 emoji.
+      const goi = who?.name ? `Anh/chị ${who.name}` : "Anh/chị";
+      text = r.kind === "match"
+        ? `${goi} ơi, vừa có căn mới khớp tiêu chí mình đang tìm: ${(r.note ?? "").trim()}. Anh/chị muốn em gửi hình hay hẹn xem không ạ?`
+        : `${goi} xem căn ${tin?.code ? `#${tin.code}` : "vừa rồi"} rồi thấy sao ạ? Ưng chỗ nào, chưa ưng chỗ nào để em lọc tiếp cho đúng ý.`;
+    } else {
+      // FR-166: model 500 / hết giờ là chuyện thường. Không bọc thì exception
+      // thoát khỏi CẢ vòng lặp — những lời nhắc còn lại mất lượt, mà chúng đã bị
+      // giành (locked_at) nên treo 5 phút mới ai đụng lại được.
+      if (!anthropic) {
+        await baoHongNhac(r.id, "khong co client model");
+        continue;
+      }
+      let resp;
+      try {
+        resp = await anthropic.messages.create({
+        model: MODEL, max_tokens: 256,
+        output_config: { effort: "low" },
+        system: [{ type: "text", text: TONE, cache_control: { type: "ephemeral" } }],
+        messages: [{
+          role: "user",
+          content: r.kind === "viewing"
+            ? `${whoLabel} có ${r.note} (sắp tới giờ). Soạn MỘT tin Zalo RẤT NGẮN nhắc lịch theo mẫu §6.8: "Em là Thái, có hẹn xem nhà với anh/chị lúc … Hẹn gặp anh/chị nha." Thân thiện, không markdown.`
+            // FR-140 c (02/09): chủ nhà vừa trả lời câu khách hỏi → báo lại ĐÚNG câu
+            // trả lời, không phải "kể thêm một chi tiết". Trigger DB đặt ghi chú bắt
+            // đầu bằng "chủ nhà vừa trả lời" (20260902h).
+            : r.kind === "followup" && /^chủ nhà vừa trả lời/.test(r.note ?? "")
+            ? `${whoLabel} trước đó hỏi một điều về căn ${canInfo ? `(${canInfo})` : ""} mà em phải đi hỏi chủ nhà. Giờ ${r.note}. ` +
+              `Soạn MỘT tin Zalo NGẮN (1-2 câu) báo lại cho khách ĐÚNG câu trả lời của chủ nhà (nói chắc vì chủ đã xác nhận; KHÔNG thêm chi tiết nào chủ không nói), rồi kết bằng một câu hỏi nhẹ (còn muốn hỏi gì nữa / muốn qua xem không).`
+            : r.kind === "followup"
+            ? `${whoLabel} hỏi về căn này rồi im ~2-3 tiếng: ${canInfo || r.note}. ` +
+              `Soạn MỘT tin Zalo NGẮN (1-2 câu) CHỦ ĐỘNG kể thêm MỘT chi tiết đáng giá về đúng căn đó (chỉ từ dữ liệu trên, không bịa; chưa xác minh thì không khẳng định). Không thúc ép, kết bằng câu hỏi nhẹ hoặc một câu khẳng định rồi chờ.`
+            : `${whoLabel} có hứa: "${r.note}". Giờ đã tới hẹn. ` +
+              `Soạn MỘT tin Zalo RẤT NGẮN (~20 từ) nhắc khéo — thân thiện, KHÔNG trách móc, cho đường lùi ("khi nào tiện anh/chị gửi em nha").`,
+        }],
+      });
+      } catch (e) {
+        await ghiLoi(client, "nudge model(nhac)", e);
+        await baoHongNhac(r.id, `model: ${String(e).slice(0, 120)}`);
+        continue;
+      }
+      await doTien(client, resp.usage); // FR-171 e: đồng hồ tiền đếm cả lượt nhắc
+      text = resp.content.find((b) => b.type === "text")?.text?.trim();
+      if (!text) {
+        await baoHongNhac(r.id, "model tra rong");
+        continue;
+      }
+      // FR-54: nhắc lịch xem kèm ghim bản đồ — CHỈ khi tin có toạ độ (điền bởi
+      // `geocode-listings`, FR-122); không có thì không bịa link.
+      if (r.kind === "viewing" && tin?.lat != null && tin?.lng != null) {
+        text += `\nBản đồ: https://maps.google.com/?q=${tin.lat},${tin.lng}`;
+      }
     }
 
     let sent = "none";
@@ -294,6 +324,10 @@ Deno.serve(async (req) => {
         if (logErr) await ghiLoi(client, "nudge messages bot", logErr.message);
         // (`last_message_at` do trigger trên `messages` đẩy — 20260902d.)
       }
+      // FR-56: đánh `sent` cho nhắc `viewing` là trigger DB
+      // `trg_reminders_hen_hoi_cam_nhan` (20260904d) tự chèn `feedback` hẹn
+      // giờ xem + 4h — cùng transaction, không cần thêm lượt ghi/catch ở đây;
+      // `dry_run` không đánh sent nên cũng không sinh gì.
       await client.from("reminders")
         .update({ status: "sent", sent_at: new Date().toISOString() }).eq("id", r.id);
     }

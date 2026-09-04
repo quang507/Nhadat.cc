@@ -1123,6 +1123,85 @@ không đè lần 1 (FR-163 a). Agent soát bắt bằng cách đọc mã cạnh
 bằng test — vì `listing_facts` thật đang rỗng nên không ca nào chạy qua hàm đó.
 TS-THONGSO-13 sinh ra để lấp đúng lỗ này.
 
+### TS-SEO — nền SEO: trang tag SSG, sitemap, robots, canonical, JSON-LD (FR-12/17, NFR-09, 04/09/2026)
+
+Dựng theo IA §4.4 sau nghiệm thu 04/09 (OPEN-44). Ca 01–04 chạy được trong
+sandbox (build), 05–06 cần bản deploy Vercel.
+
+| ID | Bài | Kỳ vọng | Kết quả |
+|---|---|---|---|
+| TS-SEO-01 | `bun run build`, bảng route | `/[tag]` là `●` với đủ số tag của `lib/tags.ts`; `/sitemap.xml`, `/robots.txt` có mặt; `/nha-dat/[code]` vẫn `●` | ✅ 83 trang tĩnh (17 + 64 tag + sitemap + robots), `/[tag]` ● |
+| TS-SEO-02 | `bun -e 'import {TAG_DEFS} from "./lib/tags.ts"; …'` | Mọi slug không dấu, chữ thường, gạch nối, `ty` không `tỉ`; một slug duy nhất; keyword hiển thị giữ "tỉ" | ✅ 64 slug duy nhất, keyword "Bán nhà dưới 3 tỉ Quận 5" |
+| TS-SEO-03 | `relatedTags(t)` cho một tag bất kỳ | 6–8 tag, không chứa chính nó, ưu tiên cùng giao dịch + loại + khu | ✅ 8 tag cùng nhóm |
+| TS-SEO-04 | Mở `/ban-nha-hem-xe-hoi-quan-5` trên bản build (`next start`) | H1 = keyword, đoạn mô tả 80–120 từ, lưới tin lọc `access_type in (mat_tien, hem_xe_tai, hem_xe_hoi)`, 8 link tag liên quan; slug lạ `/abc-xyz` → 404 | ⏭ sandbox không tới Supabase (lưới rỗng → hiện hộp Zalo, đúng luật trang rỗng) |
+| TS-SEO-05 | Trên Vercel: `curl -s https://nhadat.cc/sitemap.xml \| grep -c '<loc>'` | ≥ 8 trang tĩnh + 64 tag + số tin đang lên kệ (~165) | ⏭ chờ deploy |
+| TS-SEO-06 | Trang tin: xem nguồn, tìm `application/ld+json` | Một khối `RealEstateListing` có `identifier` = mã tin, `offers.price` = `price_vnd`, `address` chỉ tới phường (không số nhà — FR-104); `<link rel="canonical">` = URL tin; OG image = ảnh thật nếu có | ⏭ chờ deploy; kiểm tĩnh: `jsonLd()` chỉ dùng `street/ward/district`, không `location_raw` |
+
+**Đọc thêm**: trang tag lấy cùng luật lọc với `/mua-ban` (chỉ tin lên kệ có
+giá) nên hai đường không bao giờ ra hai kết quả cho một câu hỏi. Route
+`revalidate = 3600` nhưng bảng build in `5m` vì `coverByCode` (unstable_cache
+300 s) kéo mức làm mới của route xuống bằng nó — cố ý, ảnh bìa đổi là trang đổi.
+
+### TS-ADM2 — admin buyer side (FR-71/74/75/76/77/78/80, 04/09/2026)
+
+Trả lời kết luận nghiệm thu §10.8 ("chỉ có bảng thô, không UI, RLS không cho
+admin đọc") bằng migration `20260904c_admin_buyer_side.sql` + thẻ mới ở
+`app/admin/page.tsx`. Ca 01–09 là MỘT khối `do … raise exception 'KQ: …'` (chép
+nguyên ở cuối file migration, chạy RIÊNG sau khi áp — để trong migration là
+cuộn cả DDL lại): dựng buyer + hội thoại giơ cờ + tin khách + câu hỏi + lịch xem
+bằng vai chủ, rồi `set local role authenticated` với `request.jwt.claims` mang
+email admin lấy từ bảng `admins` (không ghi cứng, không in ra), rồi
+`set local role anon`. Ca 10 là SELECT thường sau khi khối trên đã cuộn lại.
+Chạy lại sau MỌI migration đụng RLS của sáu bảng này.
+
+| ID | Bước | Kỳ vọng | Kết quả 04/09 |
+|---|---|---|---|
+| TS-ADM2-01 | Admin đọc `info_requests` dòng thử (`source = buyer_ask`, trigger định tuyến FR-173 chạy bình thường) | 1 dòng | ✅ 1 |
+| TS-ADM2-02 | Admin đọc `viewings` của buyer thử | 1 dòng | ✅ 1 |
+| TS-ADM2-03 | Admin đọc `buyers` dòng thử — policy mở cả bảng, nhưng web chỉ chọn `id, name, zalo_user_id, preferences, last_contact_at, created_at` (soi tay `page.tsx`: không có chuỗi `phone` trong câu select nào) | 1 dòng; web không chọn `phone` | ✅ 1 · ✅ không có `phone` |
+| TS-ADM2-04 | Admin đọc `messages` của hội thoại thử | 1 dòng | ✅ 1 |
+| TS-ADM2-05 | Admin đọc `ctvs` (web chỉ chọn `name` qua join) | = số CTV thật | ✅ 2 |
+| TS-ADM2-06 | Admin đọc view `khach_can_nguoi_that` lọc `conversation_id` thử: `ten` = tên buyer thử, `tin_khach_cuoi` bắt đầu bằng chữ tin khách vừa chèn | 1 dòng | ✅ 1 |
+| TS-ADM2-07 | Admin đọc view `hoi_thoai_thong_ke`: đủ 30 dòng (kể cả ngày trống); dòng hôm nay (giờ VN) có `tin_khach` = 1 (tin thử) | 30 · 1 | ✅ 30 · 1 |
+| TS-ADM2-08 | Anon (`role anon`, claims `{"role":"anon"}`) đếm `info_requests`, `buyers`, `conversations` — bảng vẫn có GRANT SELECT cho anon nhưng không policy | 0 / 0 / 0 | ✅ 0/0/0 |
+| TS-ADM2-09 | Anon `select` hai view | `insufficient_privilege` (42501) — đã revoke, không phải "0 dòng" | ✅ 42501 |
+| TS-ADM2-10 | Sau rollback, SELECT thường: buyer thử `TEST-adm2-uid` = 0, `info_requests` = 0, `viewings` = 0 (kho thật chưa có dòng nào); hai view đọc bằng vai `postgres` không JWT → 0 dòng; `pg_policies` có đủ 6 policy `*_admin_read`; grant trên hai view chỉ `authenticated:SELECT, service_role:SELECT` (đã thu hồi ALL do default privileges cấp thừa — `ctv_ranks` cũ vẫn mang INSERT/UPDATE thừa, vô hại vì view không cập nhật được) | như kỳ vọng | ✅ (view với claims `service_role`: 4 ngày có số — 25/08: 2 HT khách, 20 tin khách, 41 tin bot, 2 khách mới) |
+| TS-ADM2-11 | **UI** — đăng nhập admin thật, mở `/admin`: năm thẻ mới ("Khách cần người thật", "Câu hỏi đang chờ", "Lịch xem nhà", "Tìm khách", "Thống kê hội thoại · 30 ngày") hiện, dòng "Không đọc được: …" KHÔNG xuất hiện; Network tab: toàn bộ truy vấn đợt đầu bắn song song trong MỘT khung thời gian (FR-171 j); câu hỏi `pending` có `sla_due_at` quá giờ → chữ "hạn … — quá hạn" màu cam; gõ tên khách → kết quả không có số điện thoại, nút "Mở Zalo" chỉ ở dòng có uid | như mô tả | ⏭ chưa chạy — sandbox không có phiên đăng nhập; `bunx tsc --noEmit` sạch, `bun run build` xanh (04/09) |
+| TS-ADM2-12 | **UI** — FR-80 + CSV: chèn tạm > 20 tin `cho_thong_tin` (hoặc > 20 câu hỏi) → thanh "trang 1/2 · N mục", nút Trước/Sau, duyệt hết trang 2 thì tự kẹp về trang 1; bấm "Tải CSV" → file `hoi-thoai-30-ngay-<ngày>.csv` có BOM UTF-8, 1 dòng tiêu đề + 30 dòng, mở Excel không vỡ dấu | như mô tả | ⏭ chưa chạy (cần trình duyệt) |
+
+Cái CỐ Ý chưa làm: bảng theo từng hội thoại của FR-71 (cần FR-72 "cách nhau ≤30
+phút" chưa dựng), lọc theo khoảng thời gian của FR-74, email FR-81, và nhãn
+"tiêu cực" thật cho FR-77 (cờ `needs_human` là proxy — [giả định BA], ghi ở `02`).
+
+### TS-MATCH — tin mới khớp tiêu chí + cảm nhận sau xem + bản đồ (FR-64/56/54, 04/09/2026)
+
+Ba FR có tài liệu mà chưa có code (lộ ra ở §10.8), dựng bằng migration
+`20260904d` + `nudge` **v24**. Ca 01–07 chạy trên DB thật trong MỘT khối
+`do … raise exception` (cuộn lại toàn bộ; sau khi chạy đếm `buyers`/`listings`/
+`viewings`/`reminders` thử = 0). Ca 08–09 chạy trên bản `nudge` **đang deploy**
+với dữ liệu thử `TEST-` được commit rồi xoá ngay (pg_net chỉ gửi sau commit),
+`dry_run: true` nên không gửi đi đâu, không giành việc. Hồ sơ khách thử:
+`{area:"phường 8 quận 5", budget:"5 tỷ", deal:"ban"}`, Zalo uid `TEST-x`.
+
+| ID | Kịch bản | Kỳ vọng | Kết quả |
+|---|---|---|---|
+| TS-MATCH-01 | Tin phường 8, Quận 5, 5,2 tỷ, 45,5 m², mặt tiền → `dang_ban` | khách x nhận đúng 1 `match`, `note` = "#mã · Phường 8, Quận 5 · 5.2 tỷ · 45.5m2 · mặt tiền"; khách y (cùng hồ sơ, KHÔNG có Zalo) 0 | ✅ x=1, y=0, note đúng. *Lần chạy đầu ra "4m2" cho tin 40 m² (cắt số 0 cuối bằng `trim`) → sửa sang `to_char … FM` ngay, chạy lại: "40m2", "45.5m2", "hẻm xe tải 4.5m" ✅* |
+| TS-MATCH-02 | Tin phường 3, Quận 5, 5,2 tỷ | khách x (nêu phường 8) 0; khách z (`area:"Quận 5"`, `budget:"tầm 5 tỷ"`, không có `deal`) 1 — quận chỉ là dự phòng khi khách không nói phường; khách w (im 40 ngày) 0 | ✅ x=0, z=1, w=0 |
+| TS-MATCH-03 | Tin phường 8, 9 tỷ | 0 (ngân sách 5 tỷ ngoài dải 0,7×–1,15× của 9 tỷ = 6,3–10,35) | ✅ 0 |
+| TS-MATCH-04 | Tin thứ hai phường 8, 5 tỷ, cùng ngày | 0 (van 1 tin/khách/24h); khách z đã có `match` từ ca 02 cũng không nhận thêm ở ca 01 | ✅ E=0, A.z=0 |
+| TS-MATCH-05 | (a) tin ca 01 sang `dang_quan_tam` rồi về `dang_ban`; (b) tin thuê phường 8, 5 tỷ; (c) tin vào `cho_thong_tin` KHÔNG giá rồi `update … set price_raw` — câu UPDATE không SET `status`, BEFORE trigger tự lật `dang_ban` | (a) không sinh thêm (vẫn 1); (b) 0 (khách tìm mua); (c) 1 — trigger bắt được đường tin lên kệ hay gặp nhất (FR-144) | ✅ (a)=1, (b)=0, (c) trước 0 → sau 1, status `dang_ban` |
+| TS-MATCH-06 | `viewings.slot` = +2h, nhắc `viewing` pending → `update reminders set status='sent'` | 1 dòng `feedback`, `listing_id` = tin của buổi xem, `due_at` = slot + 4h, note "hỏi cảm nhận sau khi xem #mã"; đánh `sent` lần nữa không sinh đúp | ✅ 0 → 1, listing_ok, gio_ok, dup=1 |
+| TS-MATCH-07 | Quyền: `anon` gọi `bao_tin_moi_khop` | không được | ✅ `has_function_privilege('anon', …) = false` |
+| TS-MATCH-08 | `nudge` v24 `dry_run` với 3 nhắc tới hạn của khách thử: `match` (trigger sinh), `viewing` (tin có `lat/lng`), `feedback` | 200, JSON hợp lệ; `match` và `feedback` là mẫu cố định đúng chữ, không gọi model; `viewing` có dòng "Bản đồ: https://maps.google.com/?q=lat,lng"; `sent = none`, không dòng mới ở `reminders`/`messages`, không `bot_errors` nguồn nudge, không dòng nào bị `locked_by nudge-…` | ✅ 200, done=10; match: "Anh/chị TEST-Nudge ơi, vừa có căn mới khớp tiêu chí mình đang tìm: #… · Phường 8, Quận 5 · 5.2 tỷ · 40m2 · hẻm xe hơi 4m. Anh/chị muốn em gửi hình hay hẹn xem không ạ?"; feedback: "Anh/chị TEST-Nudge xem căn #… rồi thấy sao ạ? Ưng chỗ nào, chưa ưng chỗ nào để em lọc tiếp cho đúng ý."; viewing: "Em là Thái, có hẹn xem nhà với anh/chị lúc 45 phút nữa, căn #…. Hẹn gặp anh/chị nha 🏠\nBản đồ: https://maps.google.com/?q=10.7546,106.6625"; `bot_errors` mới = 0; dọn xong còn sót = 0 |
+| TS-MATCH-09 | Deploy v24 theo quy trình 02/09: bun bundle → `deploy_edge_function` (`verify_jwt=false` như v23) → `get_edge_function` kéo ngược → so byte | trùng byte | ✅ 19.067 byte, cùng SHA-256 (`35152a33…`), bundle đã đổi 4 chuỗi `\uXXXX` thành UTF-8 trước khi gửi nên không cần chuẩn hoá khi so |
+
+Điều lộ ra khi chạy TS-MATCH-08 mà nên biết: trigger FR-64 khớp cả **một
+khách thật** đang có hồ sơ "Quận 5, tầm 5 tỷ" với tin thử (đúng luật quận dự
+phòng) — dòng đó đi theo cascade khi xoá tin thử và `dry_run` không gửi, nhưng
+nó nói rằng từ giờ mỗi tin thật lên `dang_ban` là có khách thật được nhắn ở nhịp
+cron kế. Van 1 tin/khách/24h là hàng rào duy nhất; muốn siết thêm thì đổi ở
+`bao_tin_moi_khop`, không ở `nudge`.
+
 ## 10.8 Nghiệm thu theo từng tài liệu (04/09/2026)
 
 Chạy theo yêu cầu chủ dự án 04/09/2026: đi từ BRD (`00`) xuống từng tầng, đối
@@ -1174,6 +1253,8 @@ OPEN-43/44/45.
 
 ### 10.8.2 Kết quả theo tài liệu
 
+*Ảnh chụp lúc nghiệm thu buổi sáng; phần dựng thêm cùng ngày xem §10.8.4.*
+
 | Tài liệu | Phạm vi kiểm | Đúng | Một phần / thiếu bằng chứng | Sai | Việc đã làm / còn treo |
 |---|---|---|---|---|---|
 | `00` Định hướng v1.2 (sau nghiệm thu lên v1.3) | 73 khẳng định §0.1–§0.8 + 14 OPEN "đã chốt" (+26/27 một phần) ở `09` | 50 | 20 | 3 | Sửa §0.6 (bridge đang dừng), §0.7 (173 tin là import, chưa phải bằng chứng "rao một câu"), OPEN-26 thân mục; OPEN-28 ghi hướng code đã đi; `/quan-ly` gỡ `Quận 5` cứng |
@@ -1195,7 +1276,16 @@ OPEN-43/44/45.
 | I2 hội thoại đủ khu vực + giá | ✅ | 3/3 (dữ liệu thử) |
 | I3 trả lời đúng hạn | ✅ cột có | 0/0 — chưa lượt hỏi thật |
 | I4 Zalo sống sau 30 ngày | ⏳ | chưa buyer nào đủ 30 ngày tuổi (sớm nhất ~21/09) |
-| I5 NMG hoạt động | ⚠ | `seller_ranks` không đo vế "trả lời drip" — cột đo cần thêm |
+| I5 NMG hoạt động | ⚠ → ✅ | `seller_ranks` không đo vế "trả lời drip" — cùng ngày dựng view `nmg_hoat_dong` (`20260904e`), hôm nay 0/3 NMG hoạt động (§10.8.4) |
+
+### 10.8.4 Dựng thêm cùng ngày (theo yêu cầu "dựng mấy thứ có trong tài liệu")
+
+| Việc | Ở đâu | Kiểm |
+|---|---|---|
+| FR-12/17, NFR-09 — SEO nền: 64 trang tag SSG, sitemap, robots, canonical/OpenGraph, JSON-LD | `lib/tags.ts`, `app/[tag]`, `app/sitemap.ts`, `app/robots.ts`, `app/layout.tsx`, trang tin | TS-SEO-01…03 ✅, 04…06 ⏭ deploy |
+| FR-64 tin mới khớp tiêu chí, FR-56 hỏi cảm nhận sau xem, FR-54 link bản đồ | `20260904d`, nudge v24 | TS-MATCH-01…09 ✅ (rollback + dry_run 200) |
+| FR-71/74/75/76/77/78/80 admin buyer side | `20260904c`, `app/admin/page.tsx` | TS-ADM2-01…10 ✅, 11–12 ⏭ UI |
+| I5 đo được | `20260904e` view `nmg_hoat_dong` | admin/service_role 3 dòng, 0 hoạt động; anon 0 |
 
 Dữ liệu thật đáng lưu ý: `listing_facts` 0, `info_requests` 0, `listing_media`
 0, `deals` 0, `interests` 0, `viewings` 0; `ctvs` 2 (1 bật, 0 có Zalo uid),

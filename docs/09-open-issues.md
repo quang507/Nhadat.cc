@@ -47,8 +47,8 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-40 | **Phạm vi loại BĐS**: thông số cho thuê, đất nền, nhóm công nghiệp (AOND §III) | Trung bình | FR-172, OPEN-37, DH-03 |
 | OPEN-41 | **Nhà cung cấp model**: giữ Claude trên Supabase hay theo AOND §VII (Gemini rồi local) | Thấp | SRS-2, FR-138, FR-168, DH-06 |
 | OPEN-42 | **Ngưỡng CTV**: hạn trả lời câu khách hỏi (đang 120 phút) và ngưỡng hạng Vàng ≥90% / Bạc ≥70% / dưới 3 câu = chưa đủ — đều [giả định BA] | Trung bình | FR-173, FR-137, DH-03 |
-| OPEN-43 | **Tài liệu tả nhiều thứ chưa dựng như đã có** (nghiệm thu 04/09): SRS-2.1 (Zalo SSO, Realtime, Logstash/ES, Slack, SMTP, fingerprint), SRS-3.2/3.8b (`property_events`, `tags`, `saved_criteria`, `curated_lists`, `escalations`), SRS-4.x (0/7 route `/api/*`), SRS-5.3 bảng "thiết kế" (7 job), SRS-5.5 email, AC-01/02/04/05/09/11/12/13; nhóm FR-60…65 (giữ chân) và FR-70…81 (admin buyer side) gần như chưa có; UF-06/07/13 nửa sau; FR-14/30 `?ref=` không ai đọc. Cần chủ dự án chốt: (a) giữ làm lộ trình và gắn nhãn `[thiết kế — chưa dựng]` hàng loạt, hay (b) `[deprecated]` những gì đã thay bằng đường khác (email → reminders/ntfy, API → bảng + trigger, curated list → bỏ) | Cao | SRS-2/3/4/5/7, FR-60…81, UF-06/07/13, `10 §10.8` |
-| OPEN-44 | **SEO chưa có nền**: không `sitemap`, `robots`, canonical, JSON-LD, OpenGraph; không trang tag (FR-12: 100 trang, IA §4.4); chip "tag" ở trang chủ trỏ sang Zalo. Làm trước hay sau khi OPEN-27 nửa sau chốt taxonomy khu mới? | Trung bình | FR-12, FR-17, NFR-09, IA §4.4, OPEN-27 |
+| OPEN-43 | **Tài liệu tả nhiều thứ chưa dựng như đã có** (nghiệm thu 04/09; *cùng ngày đã dựng FR-54/56/64, FR-71…80 admin, FR-12/17 SEO — xem thân mục*): SRS-2.1 (Zalo SSO, Realtime, Logstash/ES, Slack, SMTP, fingerprint), SRS-3.2/3.8b (`property_events`, `tags`, `saved_criteria`, `curated_lists`, `escalations`), SRS-4.x (0/7 route `/api/*`), SRS-5.3 bảng "thiết kế" (7 job), SRS-5.5 email, AC-01/02/04/05/09/11/12/13; nhóm FR-60…65 (giữ chân) và FR-70…81 (admin buyer side) gần như chưa có; UF-06/07/13 nửa sau; FR-14/30 `?ref=` không ai đọc. Cần chủ dự án chốt: (a) giữ làm lộ trình và gắn nhãn `[thiết kế — chưa dựng]` hàng loạt, hay (b) `[deprecated]` những gì đã thay bằng đường khác (email → reminders/ntfy, API → bảng + trigger, curated list → bỏ) | Cao | SRS-2/3/4/5/7, FR-60…81, UF-06/07/13, `10 §10.8` |
+| OPEN-44 | **SEO** — *nền đã dựng 04/09/2026* (sitemap, robots, canonical, OpenGraph, JSON-LD, 64 trang tag SSG từ taxonomy). Còn treo: bộ TOP-100 keyword thật (OPEN-06) và tag theo khu mới sau OPEN-27; có gửi sitemap lên Google Search Console không, ai giữ tài khoản? | Thấp | FR-12, FR-17, NFR-09, IA §4.4, OPEN-06, OPEN-27 |
 | OPEN-45 | **Design token `06 §6.2` lệch code**: `app/globals.css` dùng bảng màu/khoảng cách khác tài liệu (đặt theo theme cắt), `design/tokens.json` là bản thứ ba; wireframe `05` có 6/14 màn chưa dựng (WF-08 lịch xem, WF-11 curated list, WF-13 admin tìm B…). Chọn nguồn sự thật: đổi `06`/`tokens.json` theo code, hay đổi code theo `06`? | Thấp | UI-01…, WF-01…14, `design/tokens.json`, OPEN-07 |
 
 ---
@@ -894,6 +894,14 @@ cho đường thật; (c) cắt hẳn khỏi MVP (curated list, fingerprint, ema
 **Khuyến nghị**: (b) cho email/API/deep link, (a) cho giữ chân + admin, (c)
 cho curated list + fingerprint. Chỉ đánh dấu, không đánh số lại (quy ước 3).
 
+*[04/09/2026 — dựng cùng ngày phần dựng được trong repo]*: FR-64 (báo tin mới
+khớp tiêu chí — trigger `bao_tin_moi_khop` + nudge v24 kind `match`), FR-56
+(hỏi cảm nhận sau xem — kind `feedback`), FR-54 (link bản đồ trong nhắc lịch),
+FR-71/74/75/76/77/78/80 (admin buyer side: 6 policy + 2 view + 5 thẻ `/admin`),
+FR-12/17 + NFR-09 (SEO nền, xem OPEN-44). Vẫn chờ chốt: SRS-2.1/3.2/3.8b/4.x
+(bảng/API/stack thiết kế), FR-57/81 email, FR-60…63 (mốc 3 ngày, mời ảnh, chào
+căn khác), FR-65 đánh giá 3 thời điểm, FR-70/72/73/79, UF-06/07/13, `?ref=`.
+
 **Chờ chủ dự án chốt** (mức: Cao).
 
 ---
@@ -907,7 +915,13 @@ Trang tin có cache (NFR-17) nên nền kỹ thuật đủ, thiếu là lớp SE
 khu vực đang chờ OPEN-27 nửa sau, làm sitemap + JSON-LD + canonical trước
 (không phụ thuộc taxonomy), trang tag sau.
 
-**Chờ chủ dự án chốt thứ tự** (mức: Trung bình).
+*[04/09/2026 — đã dựng nền cùng ngày]*: `app/sitemap.ts`, `app/robots.ts`,
+canonical + OpenGraph, JSON-LD `RealEstateListing`, và khung trang tag `app/[tag]`
+với 64 tag sinh từ taxonomy (`lib/tags.ts`). Chưa phải 100 tag vì file keyword
+chưa có (OPEN-06). Việc còn lại là của chủ dự án: đăng ký Google Search Console
+cho nhadat.cc và gửi `/sitemap.xml`.
+
+**Chờ chủ dự án**: Search Console + file keyword (mức: Thấp).
 
 ---
 

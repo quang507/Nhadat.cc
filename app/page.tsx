@@ -5,6 +5,7 @@ import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase
 import { placeholderImg, zaloLink } from "@/lib/format";
 import { coverByCode } from "@/lib/photos";
 import { WARDS } from "@/lib/geo";
+import { FEATURED_TAGS } from "@/lib/tags";
 
 export const revalidate = 300;
 
@@ -53,14 +54,15 @@ export default async function Home() {
               dưới 10 tỉ”.
             </p>
             <div className="mt-7 flex flex-wrap gap-2 text-sm">
-              {["Nhà phố", "Hẻm xe hơi", "Mặt tiền", "Chung cư", "Dưới 10 tỉ"].map((t) => (
-                <a
-                  key={t}
-                  href={zaloLink(`tag:${t}`)}
+              {/* FR-12: chip là link trang tag (SSG), không còn đẩy thẳng sang Zalo */}
+              {FEATURED_TAGS.slice(0, 5).map((t) => (
+                <Link
+                  key={t.slug}
+                  href={`/${t.slug}`}
                   className="rounded-full border border-white/20 px-4 py-1.5 text-white/85 transition hover:border-brand hover:bg-brand hover:text-white"
                 >
-                  {t}
-                </a>
+                  {t.keyword}
+                </Link>
               ))}
             </div>
           </div>

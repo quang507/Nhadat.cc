@@ -18,6 +18,7 @@ import {
   placeholderImg,
   PLANNING_LABEL,
   sanitizeDescription,
+  SITE_URL,
   TYPE_LABEL,
   zaloLink,
 } from "@/lib/format";
@@ -66,10 +67,60 @@ export async function generateMetadata({
   const listing = await getListing(decodeURIComponent(code));
   if (!listing) return { title: "Không tìm thấy tin" };
   const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
+  const title = `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất ${loc} — ${formatPrice(listing.price_vnd, listing.price_raw)} · #${listing.code}`;
+  const description = sanitizeDescription(listing.description).slice(0, 155);
+  const photos = await photosOfCode(code, 1);
+  const url = `/nha-dat/${encodeURIComponent(code)}`;
+  // NFR-09: canonical + OpenGraph (ảnh thật nếu có, không thì ảnh minh hoạ)
   return {
-    title: `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất ${loc} — ${formatPrice(listing.price_vnd, listing.price_raw)} · #${listing.code}`,
-    description: sanitizeDescription(listing.description).slice(0, 155),
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      type: "article",
+      images: [{ url: photos[0] ?? placeholderImg(code), alt: loc }],
+    },
   };
+}
+
+// NFR-09 / IA §4.4: schema.org/RealEstateListing — name, description, price,
+// floorSize, numberOfRooms, address, image, identifier = mã tin. Địa chỉ chỉ
+// tới mức phường (FR-104: số nhà không lên web).
+function jsonLd(listing: Listing, photos: string[], desc: string) {
+  const url = `${SITE_URL}/nha-dat/${encodeURIComponent(listing.code ?? listing.id)}`;
+  const o: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "RealEstateListing",
+    "@id": url,
+    url,
+    name: `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} ${TYPE_LABEL[listing.property_type ?? ""] ?? "nhà đất"} ${[listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ")}`,
+    description: desc.slice(0, 500),
+    identifier: listing.code,
+    datePosted: listing.created_at,
+    image: photos.length ? photos : undefined,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: listing.street ?? undefined,
+      addressLocality: listing.ward ?? undefined,
+      addressRegion: listing.district ?? "Quận 5",
+      addressCountry: "VN",
+    },
+  };
+  if (listing.price_vnd) {
+    o.offers = {
+      "@type": "Offer",
+      price: listing.price_vnd,
+      priceCurrency: "VND",
+      availability: "https://schema.org/InStock",
+      ...(listing.deal === "cho_thue" ? { priceSpecification: { "@type": "UnitPriceSpecification", price: listing.price_vnd, priceCurrency: "VND", unitText: "tháng" } } : {}),
+    };
+  }
+  if (listing.area_m2) o.floorSize = { "@type": "QuantitativeValue", value: listing.area_m2, unitCode: "MTK" };
+  if (listing.bedrooms) o.numberOfRooms = listing.bedrooms;
+  return JSON.stringify(o);
 }
 
 export default async function Page({
@@ -106,7 +157,11 @@ export default async function Page({
 
   const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
   const desc = sanitizeDescription(listing.description);
-  const title = listing.location_raw?.split(",")[0]?.trim() || `Nhà đất ${loc}`;
+  // FR-104: H1 lấy TÊN ĐƯỜNG đã bóc số nhà (`street`, boc_ten_duong), không lấy
+  // đoạn đầu `location_raw` — 11/164 tin có đoạn đầu là "Số 1xx" / "Hẻm xx/".
+  const title = listing.street
+    ? `${TYPE_LABEL[listing.property_type ?? ""] ?? "Nhà đất"} ${listing.street}${listing.ward ? `, ${listing.ward}` : ""}`
+    : `Nhà đất ${loc}`;
 
   // Khối thông số nổi (Veedoo) — chỉ đưa vào ô nào tin này THẬT SỰ có
   const stats = [
@@ -156,6 +211,12 @@ export default async function Page({
   return (
     <>
       <TrackView code={code} listingId={listing.id} />
+      <script
+        type="application/ld+json"
+        // Chuỗi do JSON.stringify sinh từ dữ liệu đã qua sanitizeDescription; "<"
+        // thoát để không đóng thẻ script sớm.
+        dangerouslySetInnerHTML={{ __html: jsonLd(listing, photos, desc).replace(/</g, "\\u003c") }}
+      />
 
       {/* Dải tiêu đề navy — bản Veedoo, nhưng bỏ ảnh nền (ảnh kho quá nhỏ để trải ngang) */}
       <div className="bg-navy py-10 text-white">

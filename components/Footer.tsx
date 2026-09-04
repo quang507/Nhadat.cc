@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { zaloLink } from "@/lib/format";
+import { FEATURED_TAGS } from "@/lib/tags";
 
 export default function Footer() {
   return (
     <>
       <footer className="bg-navy text-white/80">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-3">
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 md:grid-cols-4">
           <div>
             <p className="text-xl font-extrabold text-white">
               nhadat<span className="text-brand">.cc</span>
@@ -24,6 +25,15 @@ export default function Footer() {
               <li><Link href="/tinh-lai-vay" className="hover:text-brand">Tính lãi vay</Link></li>
               <li><Link href="/thong-ke" className="hover:text-brand">Giá theo phường</Link></li>
               <li><Link href="/dang-nhap" className="hover:text-brand">Dành cho nhà môi giới</Link></li>
+            </ul>
+          </div>
+          <div className="text-sm">
+            {/* FR-12 / IA-P4: link chéo sang trang tag để Google đi được từ chân trang */}
+            <p className="mb-3 font-semibold text-white">Tìm nhiều</p>
+            <ul className="space-y-2">
+              {FEATURED_TAGS.map((t) => (
+                <li key={t.slug}><Link href={`/${t.slug}`} className="hover:text-brand">{t.keyword}</Link></li>
+              ))}
             </ul>
           </div>
           <div className="text-sm">

@@ -83,6 +83,10 @@ Công thức slug: `{giao-dịch}-{loại-hình}-{thuộc-tính}-{khu-vực}`
 - Trang tag rỗng: **không** trả 404 — hiển thị hộp mời kết nối Zalo + tag lân cận
   (IA-P1: không bao giờ là ngõ cụt).
 
+> **Dựng 04/09/2026**: khung trang tag đã có (`lib/tags.ts`, `app/[tag]`), 64 tag
+> sinh từ taxonomy hiện có theo đúng công thức slug và 4 quy tắc trên; bộ TOP-100
+> keyword thật vẫn chờ OPEN-06, tag theo khu mới chờ OPEN-27 nửa sau.
+
 ### Structured data
 Mỗi listing phát `schema.org/RealEstateListing` với `name`, `description`, `price`,
 `floorSize`, `numberOfRooms`, `address`, `image`, `identifier` = mã BĐS (NFR-09).
