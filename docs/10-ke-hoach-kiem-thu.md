@@ -28,7 +28,7 @@ quyết định câu vào → trường ra, bắt buộc chạy lại trước k
 | Mục | Kiểm gì | Tham chiếu | Ca chạy được |
 |---|---|---|---|
 | API contract | schema SRS-4.x; request_id trùng → trả kết quả cũ, không nhân đôi; mã 404/409 | FR-41/43 | TS-WEB2 (S), TS-IDEM |
-| Database | RLS: anon chỉ đọc tin lên kệ + media công khai của tin đó; unique/enum/CHECK; trigger toàn vẹn | SRS-3.9, FR-107/113/163/167 | TS-SEC, TS-SEC2, TS-TOANVEN |
+| Database | RLS: anon chỉ đọc tin lên kệ + media công khai của tin đó; unique/enum/CHECK; trigger toàn vẹn | SRS-3.9, FR-113/116/163/167 | TS-SEC, TS-SEC2, TS-TOANVEN |
 | Webhook Zalo | 200 < 1s; bất đồng bộ; chữ ký sai → từ chối (chưa hiệu lực: thiếu ZALO_APP_SECRET, OPEN-33); retry không tin đôi | SRS-4.4 | TS-IDEM2 |
 | Hàng đợi | worker sập / hết lượt thử → 0 tin mất (dựng cảnh sập bằng tay, không giết được instance Edge Function) | NFR-04, FR-166 | TS-JOB |
 | Kho file | signed URL ≤15 phút; bucket riêng không đọc thẳng; adapter đổi backend không đụng bot | NFR-06, FR-111/165 | TS-KHO, TS-WEB2 (P) |
@@ -674,7 +674,7 @@ côi `listing_facts_touch_status`, enum mồ côi `rating_target`.
 |---|---|---|
 | `00` Định hướng (v1.2 → v1.3) | 73 khẳng định: 50 / 20 / 3 | sửa §0.6 (bridge dừng), §0.7 (173 tin là import, chưa phải bằng chứng "rao một câu"), OPEN-26/28; `/quan-ly` gỡ `Quận 5` cứng |
 | `02` FR-01…90 | 21 / 28 / 16 chưa | RET (FR-60…65) + ADM (FR-70…81) + WEB dựng chiều — TS-GIUCHAN, TS-ADM2, TS-WEB2; còn treo ghi tại từng FR (OPEN-43) |
-| `02` FR-91…174 | 60 / 10 / 10 chưa · 3 deprecated | lệch chữ FR-133/137/110/100/108 ghi chú vào `02`; 10 FR bot dựng ở v48 (TS-V48) |
+| `02` FR-91…174 | 60 / 10 / 10 chưa · 4 deprecated | lệch chữ FR-133/137/110/100/108 ghi chú vào `02`; 10 FR bot dựng ở v48 (TS-V48) |
 | `02` NFR-01…18 | 8 / 5 / 5 chưa đo | NFR-09 SEO dựng (TS-SEO); NFR-02/05/14 vẫn chưa có số đo |
 | `03` UF-01…13 | 4 / 5 / 4 | UF-06/07/13 nửa sau: curated list + upload dựng; email cần tài khoản ntfy; fingerprint chưa (OPEN-43) |
 | `04` IA | 8 trang đặc tả chưa có, 10 route IA chưa ghi | trang tag/SEO dựng (OPEN-44); IA cập nhật đợt sau |

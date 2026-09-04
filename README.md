@@ -12,7 +12,7 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 | 0 | [Định hướng](docs/00-dinh-huong.md) | **BRD hợp nhất Aioinhadat × nhadat.cc** (thương hiệu Aioinhadat, một bot Thái): sản phẩm hôm nay là gì, nhận gì từ SRD AOND, câu khách hỏi đi về CTV, sao Bắc Đẩu, lộ trình 90 ngày, quyết định treo |
 | 0 | [Glossary](docs/00-glossary.md) | Từ điển thuật ngữ (B, S, CCRB, NMG, HXH…) |
 | 1 | [Research](docs/01-research.md) | Insight, persona, mô hình KD, ngân sách, rủi ro |
-| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 149 FR (3 deprecated) · 18 NFR · 5 giả định |
+| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 149 FR (4 deprecated) · 18 NFR · 5 giả định |
 | 3 | [User Flow](docs/03-user-flows.md) | 13 luồng end-to-end |
 | 4 | [Information Architecture](docs/04-information-architecture.md) | Sitemap, URL/SEO, content model |
 | 5 | [Wireframe](docs/05-wireframes.md) | 14 màn hình low-fi |

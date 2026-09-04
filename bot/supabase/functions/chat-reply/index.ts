@@ -272,7 +272,7 @@ function locLienHe(s: string, soNha = false): string {
 
 // ─── FR-114/116 (v48): tin thuộc dự án — mã căn trong câu ("căn A12-05", "mã
 // căn B2.07", "căn 1205") và tình trạng căn (enum `unit_status` của DB) nói
-// bằng lời. Quá 7 ngày chưa chủ xác nhận (FR-107) thì bot KHÔNG được khẳng
+// bằng lời. Quá 7 ngày chưa chủ xác nhận (FR-116) thì bot KHÔNG được khẳng
 // định còn/hết, phải "để em xác nhận lại chủ" + ask_owner.
 const MA_CAN_RE =
   /(?:mã\s*căn|ma\s*can|căn\s*hộ|can\s*ho|căn|can)\s*(?:số|so)?\s*:?\s*([A-Za-z]{0,2}\d{1,2}[-.]\d{2,3}[A-Za-z]?|[A-Za-z]\d{2,4}|\d{4})\b/i;

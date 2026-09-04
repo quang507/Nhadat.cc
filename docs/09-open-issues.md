@@ -355,7 +355,7 @@ Cùng ngày chủ dự án: "dựng hết đi, giữ chân 5 ngày" → đã d�
 FR-70…80, FR-01…10, FR-96/100/117, SEO nền, email ntfy, chat-reply v48 — TS-GIUCHAN/TS-V48/TS-WEB2).
 **Còn treo thật sự**: FR-16/NFR-08 fingerprint (OPEN-14), FR-95 Zalo SSO (cần app Zalo), FR-118
 (OPEN-27), FR-160 (OPEN-28), FR-28 POI (OPEN-13), `?ref=` (zalo.me cá nhân rớt tham số — chờ OA),
-FR-93/94 biến thể câu rao, FR-24 nút "Xem thêm" (Zalo cá nhân không có nút).
+FR-93 biến thể câu rao, FR-94 màn xác nhận bản bóc tách, FR-24 nút "Xem thêm" (Zalo cá nhân không có nút).
 **Phương án**: (a) gắn nhãn `[thiết kế — chưa dựng]` cho phần còn lại; (b) `[deprecated]` cho
 SRS-4.1/4.2/4.4/4.7, `escalations`, email thuần SRS-5.5 (đã có đường thay thế: bảng + trigger, ntfy).
 **Khuyến nghị BA**: (b) cho phần có đường thay thế, (a) cho phần còn lại; không đánh số lại (quy ước

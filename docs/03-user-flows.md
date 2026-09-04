@@ -145,7 +145,7 @@ sequenceDiagram
   (không có → admin); CTV trả lời theo mẫu `#mã tin: câu trả lời`; quá 120' nhắc
   admin, CTV tụt hạng. Câu nhỏ giọt nuôi tin vẫn đi S.
 - **Hàng dự án** (INS-10, FR-115/116): câu tầng dự án trả lời từ dữ liệu chung,
-  không info_request; câu tầng căn đọc `unit_status`, chỉ hỏi S khi quá TTL (FR-107).
+  không info_request; câu tầng căn đọc `unit_status`, chỉ hỏi S khi quá hạn xác nhận (FR-116).
 - **Quy tắc vàng (RSK-03)**: pháp lý, quy hoạch, "còn bán không" — không bao giờ
   khẳng định: *"Cho tới 15h ngày 17/9 thì còn. Nhưng để em hỏi lại anh nhé."*
 
@@ -287,8 +287,8 @@ Body chứa field của danh sách tương ứng, kèm mô tả BĐS nếu có. 
 ---
 
 ## UF-13 — Vòng đời listing & báo sold cho người đang chờ
-**Actor** hệ thống, admin, S, B · **FR** FR-139, FR-107, FR-108, FR-164, FR-103 · *(FR-106 bản cũ deprecated)* [nguồn: artifact "Cầu Nối BĐS" v2, 08/2026]
-✅ đã dựng: 5 trạng thái + trigger `trg_zz_listings_dang_tin`; `da_chot` → kind `sold` cho khách trong `interests` (nudge v25); tin im 30 ngày → hỏi chủ "còn bán không" (`stale-listing-tick`, FR-103). TTL 7 ngày (FR-107) chỉ áp cho căn trong dự án.
+**Actor** hệ thống, admin, S, B · **FR** FR-139, FR-108, FR-164, FR-103 · *(FR-106, FR-107 bản cũ deprecated)* [nguồn: artifact "Cầu Nối BĐS" v2, 08/2026]
+✅ đã dựng: 5 trạng thái + trigger `trg_zz_listings_dang_tin`; `da_chot` → kind `sold` cho khách trong `interests` (nudge v25); tin im 30 ngày → hỏi chủ "còn bán không" (`stale-listing-tick`, FR-103). TTL xác nhận 7 ngày nay chỉ còn áp cho căn trong dự án (FR-116).
 
 ```mermaid
 stateDiagram-v2

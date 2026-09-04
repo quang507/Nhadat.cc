@@ -19,10 +19,10 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | BR | Mục tiêu | FR liên quan |
 |---|---|---|
 | BR-01 | Phủ 90% nguồn hàng Q5 | FR-90…FR-97, FR-101 |
-| BR-02 | 20 NMG | FR-101, FR-102 |
+| BR-02 | 20 NMG | FR-101, FR-137 (FR-102 deprecated) |
 | BR-03 | 10 chat/ngày, ≥30 tin | FR-13, FR-14, FR-20…FR-32, FR-71 |
 | BR-04 | 1 giao dịch/2 ngày | FR-50…FR-57, FR-99 |
-| BR-05 | Thu phí bên bán | FR-101, FR-102 |
+| BR-05 | Thu phí bên bán | FR-101, FR-137 (FR-102 deprecated) |
 | BR-06 | Miễn phí, không thu số ĐT | FR-04, FR-53, NFR-07 |
 | BR-07 | Giữ kết nối 3–4 năm | FR-60…FR-65, FR-64 |
 | BR-08 | SEO 100 keyword | FR-12, FR-15, FR-17, NFR-09 |
@@ -185,7 +185,7 @@ Chỉ liệt NFR **đã có hiện thực trong code**; NFR còn là mục tiêu
 | FR | Thiếu gì | Theo dõi ở |
 |---|---|---|
 | FR-99 (định giá so sánh) | Thuật toán, nguồn dữ liệu giá thị trường | `OPEN-10` |
-| FR-102 (chấm điểm NMG) | Ngưỡng cảnh báo khi NMG dưới chuẩn (OPEN-12). Phần trùng lặp đã xử lý: `rate-ctv` + `ratings` xoá 27/08/2026 | `OPEN-12` |
+| FR-102 (chấm điểm NMG) [deprecated → FR-137] | Ngưỡng cảnh báo khi NMG dưới chuẩn (OPEN-12). Phần trùng lặp đã xử lý: `rate-ctv` + `ratings` xoá 27/08/2026 | `OPEN-12` |
 | FR-28 (tiện ích quanh BĐS) | Nguồn dữ liệu POI (Google Places? tự nhập?) | `OPEN-13` |
 | FR-16 (fingerprint) | Thư viện, chính sách lưu trữ, cơ chế từ chối | `OPEN-14` |
 | FR-118 (`ward_mapping`) | Nguồn dữ liệu máy-đọc-được danh mục phường cũ↔mới (NQ 202/2025/QH15), schema bảng trong SRS | — |
