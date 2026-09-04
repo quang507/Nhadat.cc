@@ -113,7 +113,7 @@ nó là đúng góc nhìn của kẻ tấn công. Repo để private **không** 
 | TS-SEC-05 | `set role anon; insert into listings…` · `update bot_prompts…` | lỗi quyền cả hai |
 | TS-SEC-06 | `set role anon; select count(*) from sellers/ctvs/messages/conversations/viewings/deals;` | `0` hết |
 | TS-SEC-07 | `set role anon; select count(*) from listings;` | bằng số tin `dang_ban + dang_quan_tam + da_chot`, **nhỏ hơn** tổng tin — tin `cho_thong_tin` phải khuất |
-| TS-SEC-08 | `set role anon;` đọc `listings`, `agents_public`, `listing_photos_v`, `projects`, `listing_facts` | ra dữ liệu bình thường — đây là 5 đường web thật sự cần, chặn nhầm là hỏng site |
+| TS-SEC-08 | `set role anon;` đọc `listings`, `agents_public`, `listing_photos_v`, `projects`, `listing_facts` | ra dữ liệu bình thường — đây là 5 đường web thật sự cần, chặn nhầm là hỏng site. *[04/09/2026: ĐỎ — `agents_public` trả 0/3 NMG vì `20260827g` dựng lại view với `security_invoker = true` mà `sellers` không có policy anon → `/moi-gioi` trống từ 27/08. Vá `20260904b`: view definer, tự chứa; đo lại anon = 3. Số phải ra: bằng số NMG trong `sellers`]* |
 | TS-SEC-09 | `select proname, proacl from pg_proc … where proname='get_secret'` | ACL chỉ có `postgres` và `service_role` — Vault (ANTHROPIC_API_KEY) không bao giờ chạm tới anon |
 | TS-SEC-10 | Mở trang `/nha-dat/<mã>` của tin có fact chứa SĐT | SĐT hiện thành `[liên hệ qua Zalo nhadat.cc]` (FR-104) — cả `description` lẫn `answer` của fact |
 
@@ -274,7 +274,7 @@ Dọn sau khi chạy: xoá fact vừa chèn **và** trả cột về NULL (trigg
 | Mã | Việc | Kỳ vọng |
 |---|---|---|
 | TS-HANG-01 | `select * from seller_ranks` | Mỗi người bán đúng một dòng; NMG 17–22 tin đang rao, 0 căn chốt → **bac** (27/08/2026: 3/3 NMG đều Bạc) |
-| TS-HANG-02 | `select * from seller_ranks` với vai `anon` | Chạy được, và **không có** cột `phone` / `zalo_user_id` (FR-104) |
+| TS-HANG-02 | `select * from seller_ranks` với vai `anon` | Chạy được, và **không có** cột `phone` / `zalo_user_id` (FR-104). *[04/09/2026: anon nhận **0 dòng** là ĐÚNG Ý — view invoker, hạng đã ẩn khỏi web (OPEN-26), chỉ `/admin` đọc bằng JWT admin; `agents_public` không còn join qua view này (`20260904b`)]* |
 | TS-HANG-03 | Đặt tay một tin sang `da_chot` cho một NMG có ≥10 tin rồi đọc lại | Nhảy **vang**. Nhớ trả lại trạng thái cũ sau khi thử |
 
 **Cái test này KHÔNG phủ**: ngưỡng có ĐÚNG không — đó là OPEN-26, không phải lỗi mã.
@@ -395,7 +395,7 @@ trọn luồng ghi/đọc sổ. Đo quota bằng `bot_usage.model_calls` trướ
 | TS-IDEM-03 | Đặt `completed` + reply rồi claim lại | `completed` kèm nguyên reply |
 | TS-IDEM-04 | Đặt `failed` rồi claim lại | `claimed`, attempts 2 |
 | TS-IDEM-05 | Đặt `processing` lùi `updated_at` 200 s | `claimed` (reclaim sau 150 s) |
-| TS-IDEM-06 | `claim_inbound(null)` | `claimed` — không msg_id thì không chống trùng |
+| TS-IDEM-06 | `claim_inbound(null)` | ~~`claimed` — không msg_id thì không chống trùng~~ *[04/09/2026: kỳ vọng lỗi thời — từ `20260829a` hàm insert-trước với PK `zalo_msg_id`, NULL vỡ `23502`; `chat-reply` chỉ gọi khi có `msgId` (index.ts `if (msgId)`), nên hành vi đúng là **không gọi**. Kỳ vọng mới: `23502`]* |
 | TS-IDEM-07 | E2E: tin buyer mới, msg_id mới | 200 + replies; sổ `completed` lưu payload; quota **+1** |
 | TS-IDEM-08 | E2E: gửi LẠI đúng msg_id đó | `replayed: true` + NGUYÊN câu trả lời cũ; quota **+0**; `messages` vẫn 1 dòng |
 | TS-IDEM-09 | E2E: 2 request cùng msg_id bắn đồng thời | một bên trả lời đủ, bên kia `in_flight`; quota chỉ **+1** |
@@ -476,7 +476,7 @@ Chạy bằng SQL trên bản live 28/08/2026 (DO block ghi kết quả vào b�
 
 | Mã | Kịch bản | Mong đợi |
 |---|---|---|
-| TS-OUNG-01 | Fact vào TRƯỚC khi cột cấu trúc được ghi | Cột theo fact, `*_source` đóng dấu đúng bậc |
+| TS-OUNG-01 | Fact vào TRƯỚC khi cột cấu trúc được ghi | Cột theo fact, `*_source` đóng dấu đúng bậc *[04/09/2026: ĐỎ trên DB thật — `20260902e` viết lại `listing_facts_sync_cols` làm rơi bốn nhánh `gia`/`phuong`/`loai_bds`/`dien_tich_tim_tuong`; vá `20260904b`, chạy lại xanh (§10.8)]* |
 | TS-OUNG-02 | Cột cấu trúc ghi trước, fact đến sau | Fact chủ nhà (`chu_xac_nhan`) thắng, đè lên `suy_doan` |
 | TS-OUNG-03 | Hai fact cùng trường ghi đồng thời | Không mất cập nhật; giá trị cuối là fact sau, không kẹt khoá |
 | TS-OUNG-04 | Chủ sửa: giá 6.5→6.8 tỷ, DT 25→27, PN 3→4, loại chưa rõ→nhà phố, phường 1→3 | Cả năm đổi; cột đang non-NULL KHÔNG chặn giá trị mới |
@@ -536,7 +536,7 @@ chính sách mạng chặn CONNECT tới host Supabase.
 | TS-KHO-03 | Upload trùng (bucket, path) | UNIQUE chặn | ✅ |
 | TS-KHO-04 | `so_do` vào bucket công khai | CHECK chặn | ✅ |
 | TS-KHO-05 | Thứ tự: sort_order NGƯỢC thứ tự tên file | Ra `10,2,1` — xếp theo tên sẽ ra `1,10,2` | ✅ |
-| TS-KHO-06 | Ảnh bìa | Tấm sort_order nhỏ nhất, không phải tấm tên nhỏ nhất | ✅ |
+| TS-KHO-06 | Ảnh bìa | Tấm sort_order nhỏ nhất, không phải tấm tên nhỏ nhất | ✅ *[04/09/2026: chỉ đúng khi chèn theo `sort_order` tăng dần (như `up-anh.mjs`); `listing_media_chon_bia()` CỐ Ý chỉ chọn khi chưa có bìa để admin chọn bìa tay không bị đè, nên chèn lộn thứ tự thì bìa = tấm đầu (đo được). Giữ nguyên, ghi rõ tiền đề]* |
 | TS-KHO-07 | **Đổi mã tin** | 3/3 ảnh còn nguyên, view đổi theo mã mới | ✅ |
 | TS-KHO-08 | Replace (đổi storage_path) | Đường dẫn CŨ vào hàng đợi dọn | ✅ |
 | TS-KHO-09 | Xoá ảnh đang là bìa | Vào hàng đợi + tấm kế lên làm bìa | ✅ |
@@ -747,7 +747,7 @@ là đỏ ngay:
 
 | Mã | Bất biến | Kết quả |
 |---|---|---|
-| TS-SEC2-62 | Mọi hàm SQL có `net.http_post` đều mang `x-bridge-secret` | ✅ 5/5, danh sách thiếu rỗng |
+| TS-SEC2-62 | Mọi hàm SQL có `net.http_post` đều mang `x-bridge-secret` — **trừ hàm gọi ra ngoài hệ** (`canh_bao_ngoai` → ntfy.sh, FR-152 e; loại trừ tường minh trong câu SQL: `and proname <> 'canh_bao_ngoai'`) | ✅ 5/5, danh sách thiếu rỗng *[04/09/2026: 6 hàm có http_post, 5 mang secret + `canh_bao_ngoai` loại trừ đúng]* |
 | TS-SEC2-63 | Không hàm nào còn nhúng cứng anon JWT đời cũ (`eyJhbGciOi…`) | ✅ rỗng |
 | TS-SEC2-64 | `authenticated` gọi `ask_seller_drip()` | ✅ chặn |
 | TS-SEC2-65 | `anon` gọi `ask_seller_drip()` | ✅ chặn |
@@ -1122,3 +1122,83 @@ không đè được số admin nhập (FR-164 a) và câu trả lời lần 2 c
 không đè lần 1 (FR-163 a). Agent soát bắt bằng cách đọc mã cạnh FR, không phải
 bằng test — vì `listing_facts` thật đang rỗng nên không ca nào chạy qua hàm đó.
 TS-THONGSO-13 sinh ra để lấp đúng lỗ này.
+
+## 10.8 Nghiệm thu theo từng tài liệu (04/09/2026)
+
+Chạy theo yêu cầu chủ dự án 04/09/2026: đi từ BRD (`00`) xuống từng tầng, đối
+chiếu **từng khẳng định** với code ở HEAD và DB thật `tbcdpupiarkuxtntmosl`
+(chỉ đọc, mọi ca ghi bọc `do … raise` để cuộn lại), đồng thời chạy lại toàn bộ
+suite §10.7 chạy được trong sandbox. Bảy agent song song, mỗi agent một tài
+liệu; kết quả gộp ở đây, lệch nhỏ đã sửa cùng commit, lệch lớn thành
+OPEN-43/44/45.
+
+### 10.8.1 Kết quả suite §10.7 (chạy lại 04/09/2026)
+
+| Suite | Kết quả | Ghi chú |
+|---|---|---|
+| TS-E2E (`bot/tests/e2e`, `bash chay.sh`) | ✅ 74/74 | gồm CTV, DIABAN, THONGSO |
+| `fr159-bon-vai.mjs` / `fr161-go-lan-dau.mjs` / `fr164-loi-sua-va-cau-hoi-treo.mjs` | ✅ 65 / 9 / 8 | |
+| TS-CHATREPLY-01…04, TS-RENT-01…05 (bot thật qua `net.http_post`) | ✅ 9/9 | uid `TEST-e2e-*`, dọn sau |
+| TS-CACHE-01…03 | ✅ | 04/05 ⏭ — sandbox không tới Vercel |
+| TS-SEC-01…10 | ✅ 8 · ❌ 1 · ⏭ 1 | ❌ TS-SEC-08 `agents_public` (vá `20260904b`) |
+| TS-SEC2-01…66 + kho file | ✅ · ❌ 1 (62, câu bất biến — đã sửa câu) · ⏭ H1…H8 | |
+| TS-HQ-01…12 | ✅ 12/12 | 05–11 kiểm tĩnh |
+| TS-LOG-01/02/06 | ✅ | 03/04/05 ⏭ cần HTTP/bridge/trình duyệt |
+| TS-HEALTH-02/03/04/07/08 | ✅ | 01/05/06 ⏭ |
+| TS-GIA, TS-SPECS, TS-HANG, TS-DANGTIN, TS-NEO-01, TS-MA-01, TS-KD-05 | ✅ | |
+| TS-IDEM-01…05, TS-IDEM2-I | ✅ | IDEM-06 kỳ vọng lỗi thời (sửa dòng) |
+| TS-TOANVEN | ✅ · ❌ 02b/03 (FR-164, vá `20260904b`) | |
+| TS-OUNG | ✅ · ❌ 01/02/04/08 (FR-164, vá `20260904b`) | chạy lại sau vá: xanh cả 5 |
+| TS-KHO-01…14, 20…25 | ✅ · 06 ghi tiền đề | 15…19 ⏭ worker |
+| TS-JOB-01…30, TS-TIEN-01…07, TS-CHUONG-01…07 | ✅ 44/44 | |
+| TS-LIVE | ⏭ | bridge im từ 27/08 |
+
+**Đỏ thật, đã vá (`20260904b_nghiem_thu_theo_tai_lieu.sql`)**:
+
+1. **FR-164 gãy ở tầng DB từ 02/09** — bốn nhánh fact `gia`/`phuong`/`loai_bds`/
+   `dien_tich_tim_tuong` rơi khỏi `listing_facts_sync_cols` khi `20260902e` viết
+   lại hàm để nối FR-172. Chủ nhà đính chính giá/phường/loại qua chat không vào
+   cột, tin mới có fact giá + phường kẹt `cho_thong_tin`. Không ai thấy vì
+   `listing_facts` thật rỗng và TS-THONGSO-13 chỉ thử cụm thông số. Vá: cấy lại
+   đúng luật 20260828b/d (validate + bậc riêng từng cột), thêm dải giá cho tin
+   thuê. Đo lại: OUNG-01 lên kệ `dang_ban`, OUNG-02 `6.8 tỷ/chu_xac_nhan`,
+   OUNG-04 cả 5 trường đổi, TOANVEN-02b/03 xanh; T6 admin sau chủ không đè.
+2. **`/moi-gioi` trống từ 27/08** — `agents_public` invoker → anon 0/3. Vá: view
+   definer tự chứa (không join `seller_ranks`). Đo: anon 3/3.
+3. **Người bán web tự đăng tin vỡ `42501`** — trigger gọi `parse_vnd`/
+   `guess_property_type` chỉ cấp cho service_role. Vá: cấp EXECUTE cho
+   `authenticated` (hàm thuần). Đo: insert bằng JWT seller qua, `price_vnd`
+   tính đúng.
+4. Dọn: `lan_thu_ke` thu hồi khỏi anon (đúng SRS-3.12), xoá hàm mồ côi
+   `listing_facts_touch_status`, enum mồ côi `rating_target`.
+
+### 10.8.2 Kết quả theo tài liệu
+
+| Tài liệu | Phạm vi kiểm | Đúng | Một phần / thiếu bằng chứng | Sai | Việc đã làm / còn treo |
+|---|---|---|---|---|---|
+| `00` Định hướng v1.2 (sau nghiệm thu lên v1.3) | 73 khẳng định §0.1–§0.8 + 14 OPEN "đã chốt" (+26/27 một phần) ở `09` | 50 | 20 | 3 | Sửa §0.6 (bridge đang dừng), §0.7 (173 tin là import, chưa phải bằng chứng "rao một câu"), OPEN-26 thân mục; OPEN-28 ghi hướng code đã đi; `/quan-ly` gỡ `Quận 5` cứng |
+| `02` FR-01…90 (65 FR) | code + DB | 21 đã dựng | 28 một phần | 16 chưa | RET (FR-60…65) và ADM (FR-70…81) gần như chưa có → OPEN-43 |
+| `02` FR-91…174 (84 FR) | code + DB | 60 | 10 | 10 chưa · 3 deprecated (FR-148 đã thay bởi FR-165 nhưng cửa đọc còn dùng, tính đã dựng) | Lệch chữ: FR-133 jitter, FR-137 secret, FR-110/100/108 "chỉ schema" — ghi chú vào `02` |
+| `02` NFR-01…18 | | 8 | 5 | 5 chưa đo | NFR-02/05/14 chưa có số đo; NFR-09 SEO chưa dựng → OPEN-44 |
+| `03` UF-01…13 | luồng ↔ code | 4 | 5 | 4 | UF-06/07/13 nửa sau (email, curated list, fingerprint) chưa dựng → OPEN-43 |
+| `04` IA | sitemap ↔ `app/` | — | 8 trang đặc tả chưa có, 10 route có mà IA chưa ghi | | Trang tag/SEO → OPEN-44; IA cập nhật đợt sau |
+| `05` WF-01…14 | wireframe ↔ UI | 2 | 6 | 6 | Nhãn "Nhã Đạt CC" → Aioinhadat (sửa); còn lại theo OPEN-43/45 |
+| `06` UI | token ↔ `globals.css`; tone ↔ `prompts.ts`/`bot_prompts` | tone 8/8 có | token lệch (palette code khác `06 §6.2`) | TONE_RULES #5 mâu thuẫn kịch bản người bán; DB↔TS lệch 3 khoá | Sửa #5 "một tin một thông tin", đồng bộ `bot_prompts` = `prompts.ts` (4 khoá); token → OPEN-45 |
+| `07` SRS | 2.1 stack, 3.x data model, 3.12 RPC, 4.x API, 5.3 cron, 7 AC | cron 10/10; RPC service_role đúng trừ `lan_thu_ke`; bảng phụ trợ 3.8b khớp | 3.x nhiều cột/enum lệch chưa ghi; AC 1 ✅ / 3 ⚠ / 9 ❌ | 2.1 còn Zalo SSO/Realtime/Logstash/Slack/SMTP/Fingerprint; 4.x 0/7 route `/api/*`; 3.2/3.8b bảng không tồn tại; `agents_public` DB sai so với SRS | Vá DB theo SRS (`20260904b`); SRS gắn ghi chú trạng thái → OPEN-43 |
+
+### 10.8.3 Số đo sao Bắc Đẩu hôm nay (`00 §0.5`)
+
+| Chỉ số | Đo được? | Giá trị 04/09 |
+|---|---|---|
+| NSM lịch xem (`reminders.kind='viewing'`) | ✅ | 0 |
+| I1 tin đủ thông tin lên sàn/tuần | ✅ | 0 tin mới trong 7 ngày (158 `dang_ban`, toàn bộ `source = import_excel` ngày 21/08) |
+| I2 hội thoại đủ khu vực + giá | ✅ | 3/3 (dữ liệu thử) |
+| I3 trả lời đúng hạn | ✅ cột có | 0/0 — chưa lượt hỏi thật |
+| I4 Zalo sống sau 30 ngày | ⏳ | chưa buyer nào đủ 30 ngày tuổi (sớm nhất ~21/09) |
+| I5 NMG hoạt động | ⚠ | `seller_ranks` không đo vế "trả lời drip" — cột đo cần thêm |
+
+Dữ liệu thật đáng lưu ý: `listing_facts` 0, `info_requests` 0, `listing_media`
+0, `deals` 0, `interests` 0, `viewings` 0; `ctvs` 2 (1 bật, 0 có Zalo uid),
+`sellers.zalo_user_id` 0/3; bridge im từ 27/08 16:21 (VN). Toàn bộ chuỗi
+FR-129/140/153/165/172c/173 mới có bằng chứng từ test rollback + e2e, **chưa
+có giao dịch thật nào chảy qua** — đó là điều kiện tiên quyết cho DH-06 đợt 2.

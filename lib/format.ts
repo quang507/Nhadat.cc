@@ -1,6 +1,7 @@
 import { hashSeed } from "@/lib/geo";
 
-// Ẩn danh hai chiều (FR-104): web không bao giờ lộ SĐT/Zalo trong mô tả gốc.
+// FR-104 (bản 02/09, OPEN-36): web không bao giờ lộ SĐT/Zalo trong mô tả gốc —
+// liên hệ chỉ mở ở bước chốt lịch xem, qua bot.
 const PHONE_RE = /(\+?84|0)[\s.\-]?(\d[\s.\-]?){8,10}/g;
 const SOCIAL_RE = /\b(zalo|z@lo|fb|facebook|viber|telegram)\b\s*:?\s*[\w.@/]*/gi;
 

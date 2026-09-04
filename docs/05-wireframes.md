@@ -14,7 +14,7 @@ Ký hiệu: `[ ]` nút · `( )` input · `▢` ảnh · `···` nội dung lặ
 ├──────────────────────────────────────────┤
 │                                          │
 │   Tìm nhà như đang trò chuyện            │
-│   Nhã Đạt CC — người môi giới không nghỉ │
+│   Aioinhadat — người môi giới không nghỉ │
 │                                          │
 │   ( tìm mua nhà phố HXH 8 tỉ ở Q8   )[→] │
 │                                          │
@@ -191,10 +191,10 @@ Tag rỗng → giữ nguyên bố cục, thay lưới card bằng hộp mời k�
 ## WF-05 — Chat Zalo: khai thác nhu cầu → UF-04
 
 ```
-┌─ Zalo OA · Nhã Đạt CC ───────────────────┐
+┌─ Zalo OA · Aioinhadat ───────────────────┐
 │                                          │
 │ ┌────────────────────────────────────┐   │
-│ │ Nhã Đạt CC xin cảm ơn! Công ty em  │   │
+│ │ Aioinhadat xin cảm ơn! Công ty em  │   │
 │ │ có 30 nhà môi giới túc trực để tìm │   │
 │ │ nhà đất chung cư cho anh/chị.      │   │
 │ │ Em tên là Thái. Em xin tên anh/chị │   │

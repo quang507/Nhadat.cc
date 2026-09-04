@@ -1,6 +1,6 @@
 # 00 — Định hướng (BRD hợp nhất Aioinhadat × nhadat.cc)
 
-Phiên bản: **v1.2** · Ngày: **03/09/2026** · Trạng thái: **tên, luồng CTV, địa bàn đã chốt; còn §0.8**
+Phiên bản: **v1.3** · Ngày: **04/09/2026** · Trạng thái: **tên, luồng CTV, địa bàn đã chốt; còn §0.8; nghiệm thu 04/09 ghi vào §0.6–0.7**
 
 > Bộ `docs/` viết từ tài liệu nhadat.cc 2024; từ 25/08/2026 code chạy theo SRD
 > "AI Ơi Nhà Đất" (AOND, `AOND req + chat examples.docx`) ở ngày càng nhiều chỗ.
@@ -57,7 +57,7 @@ cả hai phía (`06 §6.8`).
 | Phí | CCRB 1% · NMG 0.5% · thuê ¾ tháng | Giống | Giống | BR-05, AOND §V |
 | Địa bàn | Quận 5 | Quận 5 rồi mở | **Sài Gòn (phường mới) + Long An**, trọng tâm bán; khởi điểm Q5 cũ (chốt 03/09) | BR-01, OPEN-27, FR-174 |
 | Hạ tầng | Vendor, Slack, Logstash | Gemini → local, SharePoint | Supabase Edge + Claude, Storage, bridge Zalo, `/admin` | SRS-2, OPEN-41 |
-| Vận hành | 1.5 CTV | CTV dẫn khách | 2 CTV xoay vòng + báo cáo 17h + hạng | FR-136/137/173 |
+| Vận hành | 1.5 CTV | CTV dẫn khách | 2 CTV xoay vòng + báo cáo 17h + hạng *(04/09: `ctvs` 2 dòng, 1 bật, chưa CTV nào có Zalo uid — nhắc chưa tới được ai)* | FR-136/137/173 |
 
 ## 0.3 SRD AOND: nhận / sửa / chưa / không
 
@@ -115,8 +115,8 @@ phải giá trị).
 | I1 | Tin đủ thông tin lên sàn / tuần | FR-129, FR-172, FR-156 | `listings.status='dang_ban'` |
 | I2 | Hội thoại mua đủ khu vực + tầm giá | FR-130, FR-131 | `buyers.preferences` |
 | I3 | **Câu khách hỏi được trả lời đúng hạn** | **FR-173**, FR-140 c | `info_requests.answered_at ≤ sla_due_at`; `ctv_ranks` |
-| I4 | Kết nối Zalo sống sau 30 ngày | FR-63, `nudge` | `buyers.last_contact_at` |
-| I5 | NMG hoạt động (có tin + trả lời drip 7 ngày) | FR-155 | `seller_ranks` |
+| I4 | Kết nối Zalo sống sau 30 ngày | FR-63, `nudge` | `buyers.last_contact_at` (đo được từ ~21/09 — buyer đầu tạo cuối 08/2026) |
+| I5 | NMG hoạt động (có tin + trả lời drip 7 ngày) | FR-155 | `seller_ranks` (vế tin) + `info_requests(source='seller_drip', answered_at)` (vế trả lời — chưa có view, `10 §10.8.3`) |
 
 **OMTM quý này: I3.** Vòng hỏi-đáp mới khép 02–03/09/2026, `info_requests` chưa
 có lượt trả lời thật — mắt xích duy nhất chưa có số, và là mắt xích cả hai tài
@@ -124,9 +124,12 @@ liệu gốc đặt ở trung tâm.
 
 ## 0.6 Lộ trình
 
-Đã chạy (03/09/2026): web + Supabase; bot hai mặt qua bridge (OA chờ — FR-145);
+Đã dựng (03/09/2026): web + Supabase; bot hai mặt qua bridge (OA chờ — FR-145);
 173 tin có cấu trúc; drip người bán; hỏi-đáp qua CTV + hạng CTV; CTV chia đơn +
-báo cáo 17h; sổ lỗi, nhịp tim, chuông hết tiền; kiểm thử 4 tầng (`10`).
+báo cáo 17h; sổ lỗi, nhịp tim, chuông hết tiền, còi ngoài ntfy; kiểm thử 4 tầng
+(`10`). **Đã chạy thật** (nghiệm thu 04/09, `10 §10.8`): web + kho tin + sổ lỗi.
+Chưa: bridge **im từ 27/08** (VPS chưa bật), 0 chủ nhà/CTV có Zalo uid, 0 fact,
+0 ảnh, 0 câu hỏi khách, 0 lịch xem — mọi vòng chat mới có bằng chứng từ test.
 
 **DH-06 · 90 ngày:**
 
@@ -151,9 +154,11 @@ Ngoài 90 ngày: thoại, Messenger/Telegram, app, công nghiệp, đổi domain
 | 4 | **Free-tier chịu tới giao dịch đầu** (NFR-16) | Mất dữ liệu; Vercel đình chỉ | Một sự cố | Sao lưu hằng ngày, thử khôi phục một lần |
 | 5 | **Mở Sài Gòn + Long An không loãng kho** (FR-174 vs INS-08) | >50% phường/huyện mở có <5 tin sau 60 ngày | — | Mở cụm phường kề Q5 cũ trước; Long An theo một huyện có nguồn hàng thật |
 
-Đứng vững: không thu SĐT; rao một câu (173 tin); phí chỉ khi chốt; một tên
-bot Thái. Chưa đánh giá được: OKR "1 giao dịch/2 ngày" (OPEN-01); nhu cầu
-nhóm công nghiệp.
+Đứng vững: không thu SĐT; phí chỉ khi chốt; một tên bot Thái. Chưa đánh giá
+được: "rao một câu" — 173/173 tin là `import_excel` ngày 21/08, chưa tin nào
+sinh từ câu rao Zalo thật (04/09); OKR "1 giao dịch/2 ngày" (OPEN-01); nhu cầu
+nhóm công nghiệp. Giả định 4 đã **đổ một lần**: bridge chết 8 ngày (27/08 →
+04/09) mà không ai biết cho tới khi có còi ntfy.
 
 ## 0.8 Chờ chủ dự án chốt
 

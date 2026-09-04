@@ -47,6 +47,9 @@ nguyên nhân, các phương án, và khuyến nghị của BA. Không tự ch�
 | OPEN-40 | **Phạm vi loại BĐS**: thông số cho thuê, đất nền, nhóm công nghiệp (AOND §III) | Trung bình | FR-172, OPEN-37, DH-03 |
 | OPEN-41 | **Nhà cung cấp model**: giữ Claude trên Supabase hay theo AOND §VII (Gemini rồi local) | Thấp | SRS-2, FR-138, FR-168, DH-06 |
 | OPEN-42 | **Ngưỡng CTV**: hạn trả lời câu khách hỏi (đang 120 phút) và ngưỡng hạng Vàng ≥90% / Bạc ≥70% / dưới 3 câu = chưa đủ — đều [giả định BA] | Trung bình | FR-173, FR-137, DH-03 |
+| OPEN-43 | **Tài liệu tả nhiều thứ chưa dựng như đã có** (nghiệm thu 04/09): SRS-2.1 (Zalo SSO, Realtime, Logstash/ES, Slack, SMTP, fingerprint), SRS-3.2/3.8b (`property_events`, `tags`, `saved_criteria`, `curated_lists`, `escalations`), SRS-4.x (0/7 route `/api/*`), SRS-5.3 bảng "thiết kế" (7 job), SRS-5.5 email, AC-01/02/04/05/09/11/12/13; nhóm FR-60…65 (giữ chân) và FR-70…81 (admin buyer side) gần như chưa có; UF-06/07/13 nửa sau; FR-14/30 `?ref=` không ai đọc. Cần chủ dự án chốt: (a) giữ làm lộ trình và gắn nhãn `[thiết kế — chưa dựng]` hàng loạt, hay (b) `[deprecated]` những gì đã thay bằng đường khác (email → reminders/ntfy, API → bảng + trigger, curated list → bỏ) | Cao | SRS-2/3/4/5/7, FR-60…81, UF-06/07/13, `10 §10.8` |
+| OPEN-44 | **SEO chưa có nền**: không `sitemap`, `robots`, canonical, JSON-LD, OpenGraph; không trang tag (FR-12: 100 trang, IA §4.4); chip "tag" ở trang chủ trỏ sang Zalo. Làm trước hay sau khi OPEN-27 nửa sau chốt taxonomy khu mới? | Trung bình | FR-12, FR-17, NFR-09, IA §4.4, OPEN-27 |
+| OPEN-45 | **Design token `06 §6.2` lệch code**: `app/globals.css` dùng bảng màu/khoảng cách khác tài liệu (đặt theo theme cắt), `design/tokens.json` là bản thứ ba; wireframe `05` có 6/14 màn chưa dựng (WF-08 lịch xem, WF-11 curated list, WF-13 admin tìm B…). Chọn nguồn sự thật: đổi `06`/`tokens.json` theo code, hay đổi code theo `06`? | Thấp | UI-01…, WF-01…14, `design/tokens.json`, OPEN-07 |
 
 ---
 
@@ -247,6 +250,11 @@ lạnh (ảnh gốc dung lượng lớn) nếu chi phí Storage thành vấn đ�
 > OneDrive, ảnh nén phục vụ web trên Supabase Storage (free 1GB ≈ 8–12k ảnh nén
 > ≈ đủ MVP Quận 5); vượt free thì cân nhắc Cloudflare R2 trước khi trả Supabase Pro.
 
+> **Nghiệm thu 04/09/2026** — kho theo FR-165 dựng xong nhưng **rỗng**:
+> `listing_media` 0 dòng, `storage.objects` 0 (chưa chạy `scripts/up-anh.mjs`).
+> Tàn dư cần chủ dự án gật để dọn (là dữ liệu, không tự xoá): bảng `media` cũ
+> 1.005 dòng + view `public_media`, bucket `listing-photos` (private, rỗng).
+
 ### OPEN-19 · Công cụ B-side kiểu radanhadat: làm không, làm lúc nào
 
 > ✅ **ĐÃ CHỐT — phương án (b)**, chủ dự án, 25/08/2026 → FR-119.
@@ -442,6 +450,12 @@ chết → toàn bộ đường chat phía B đứng, mà **cửa báo động c
 FR-152 gỡ một nửa (ghi sổ + hiện trên `/admin`), nửa còn lại — báo chủ động khi
 bridge chết — chưa có đường nào không vòng lại qua bridge.
 
+*[04/09/2026]*: nửa còn lại đã có — `canh_bao_ngoai()` → ntfy.sh, `bot_health_tick`
+gọi 1 tin/giờ khi bridge im (FR-152 e); `bot/bridge-zca/VPS.md` + unit systemd.
+Nhưng bridge **đã im từ 27/08 16:21 (VN) tới lúc nghiệm thu** — 120 nhắc
+escalation bị huỷ, báo cáo CTV pending — nên điều kiện "giám sát bridge" của
+mục này mới đạt trên giấy; VPS chưa bật.
+
 **Phương án**
 
 - **(a) Lên Pro cả hai** (Supabase Pro + Vercel Pro): có backup ngày, có PITR
@@ -461,8 +475,10 @@ ngay — nó rẻ và mất 20 phút.
 ### OPEN-26 · Ngưỡng hạng Đồng/Bạc/Vàng
 
 Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: FR-155 đã dựng bộ khung và đang
-chạy với ngưỡng **[giả định BA]**, chưa ai chốt. Hạng hiện ra mắt người dùng,
-nên đổi ngưỡng về sau là đổi hạng của người đang có hạng.
+chạy với ngưỡng **[giả định BA]**, chưa ai chốt. Hạng đã **ẩn khỏi web** từ
+27/08 (chỉ hiện ở `/admin`, xem bảng tóm tắt — *sửa 04/09/2026, thân mục cũ
+viết ngược*), nên đổi ngưỡng về sau chỉ đổi số trên trang admin và trong câu
+bot nói với người rao.
 
 **Chờ chủ dự án chốt** (mức: Trung bình).
 
@@ -522,6 +538,12 @@ mở qua chat không còn `unknown`. **Còn treo nửa sau, đúng câu hỏi g�
 đã mang nhãn chính chủ mà rao tới tin thứ ba thì có TỰ LẬT sang môi giới theo
 FR-160 không, và phí của tin đang rao có đổi theo không. Hàm DB hiện KHÔNG ghi
 đè nhãn đã có, nên nếu chốt "có lật" thì phải mở thêm một đường riêng cho FR-160.
+
+*[04/09/2026 — nghiệm thu]*: FR-160 (≥3 tin → NMG) **không có** trong code;
+`mo_ho_so_nguoi_ban` gán nhãn theo lời tự xưng, mặc định `ccrb`, không suy từ
+số tin. Tức thực tế đang chạy phương án (a) của mục này — nhãn là căn cứ phí,
+tách khỏi số đếm — dù chưa ai ghi. `02` FR-160 đã đánh dấu `[chưa dựng — chờ
+OPEN-28]`.
 
 **Chờ chủ dự án chốt nửa sau** (mức: Cao).
 
@@ -857,6 +879,51 @@ chưa có, cần chốt cùng lúc.
 
 ---
 
+### OPEN-43 · Tài liệu tả nhiều thứ chưa dựng như đã có — gắn nhãn hay deprecated?
+
+Nội dung đầy đủ ở bảng tóm tắt đầu file và `10 §10.8.2`. Tóm: nghiệm thu
+04/09/2026 đối chiếu từng khẳng định của `02`/`03`/`07` với code và DB thật,
+thấy một lớp dày đặc tả **chưa dựng nhưng không đánh dấu**: tech stack SRS-2.1,
+bảng SRS-3.2/3.8b, 7 route SRS-4.x, 7 job "thiết kế" SRS-5.3, email SRS-5.5,
+9/13 AC, nhóm FR giữ chân + admin buyer side, nửa sau UF-06/07/13, ngữ cảnh
+`?ref=` (FR-14/30). Nhiều thứ đã có **đường thay thế** đang chạy (email →
+`reminders` + ntfy; API B↔S → bảng + trigger; deep link → khách gõ `#mã`).
+**Phương án**: (a) giữ nguyên làm lộ trình, gắn nhãn `[thiết kế — chưa dựng]`
+hàng loạt; (b) `[deprecated]` những gì đã có đường thay thế, cấp FR/SRS mới
+cho đường thật; (c) cắt hẳn khỏi MVP (curated list, fingerprint, email).
+**Khuyến nghị**: (b) cho email/API/deep link, (a) cho giữ chân + admin, (c)
+cho curated list + fingerprint. Chỉ đánh dấu, không đánh số lại (quy ước 3).
+
+**Chờ chủ dự án chốt** (mức: Cao).
+
+---
+
+### OPEN-44 · SEO chưa có nền
+
+Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: web hiện chỉ có `title` +
+`description` từng trang; không sitemap/robots/canonical/JSON-LD/OpenGraph
+(NFR-09), không trang tag (FR-12, IA §4.4), chip "tag" trang chủ đẩy sang Zalo.
+Trang tin có cache (NFR-17) nên nền kỹ thuật đủ, thiếu là lớp SEO. Vì taxonomy
+khu vực đang chờ OPEN-27 nửa sau, làm sitemap + JSON-LD + canonical trước
+(không phụ thuộc taxonomy), trang tag sau.
+
+**Chờ chủ dự án chốt thứ tự** (mức: Trung bình).
+
+---
+
+### OPEN-45 · Design token `06` lệch code — chọn nguồn sự thật
+
+Nội dung đầy đủ ở bảng tóm tắt đầu file. Tóm: `06 §6.2` (token), `design/tokens.json`
+và `app/globals.css` là ba bản không khớp nhau; wireframe `05` 6/14 màn chưa
+dựng. Không ảnh hưởng vận hành, nhưng mọi việc Figma (`design/figma-handoff.md`)
+đang dựng theo `06` — tức dựng thứ web không dùng. **Khuyến nghị**: lấy code
+làm gốc, sinh lại `tokens.json` từ `globals.css`, sửa `06 §6.2` theo; wireframe
+chưa dựng gắn nhãn theo OPEN-43.
+
+**Chờ chủ dự án chốt** (mức: Thấp).
+
+---
+
 ### Soát mã nguồn 27/08/2026 — kết luận về advisor Supabase
 
 Advisor bảo mật đang báo **2 ERROR**. Đã soi từng cái, **cả hai là cố ý và an
@@ -867,6 +934,9 @@ toàn** — ghi lại đây để lần sau không ai đi "vá" nhầm:
 `seller_type = 'nmg'`. **Không có** `phone`, `zalo_user_id`, `email`, `auth_user_id`.
 Nó PHẢI là SECURITY DEFINER thì anon mới đọc được qua RLS của `sellers` — đó
 chính là mục đích của FR-125: một hình chiếu công khai đã cắt sạch liên hệ.
+*[04/09/2026 — đo thấy `20260827g` đã lỡ dựng lại view với `security_invoker =
+true` (join qua `seller_ranks`), anon đọc 0/3, `/moi-gioi` trống từ 27/08; vá
+`20260904b`: definer trở lại và TỰ CHỨA, không join view khác — TS-SEC-08.]*
 
 **`security_definer_view` trên `public.listing_photos_v`** — *[viết lại
 29/08/2026 theo FR-165; bản cũ mô tả view đọc `storage.objects` lọc

@@ -19,7 +19,7 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 | 6 | [UI Design](docs/06-ui-design.md) | Design system + tone giọng chat |
 | 7 | [SRS](docs/07-srs.md) | Kiến trúc, data model, API, 13 tiêu chí nghiệm thu |
 | 8 | [Traceability](docs/08-traceability.md) | Ma trận truy vết BR→FR→UF→WF→SRS→AC |
-| 9 | [Open Issues](docs/09-open-issues.md) | 42 vấn đề — 14 đã chốt (OPEN-26, OPEN-27 chốt một phần), 28 còn chờ chủ dự án |
+| 9 | [Open Issues](docs/09-open-issues.md) | 45 vấn đề — 14 đã chốt (OPEN-26, OPEN-27 chốt một phần), 31 còn chờ chủ dự án |
 
 Quy ước làm việc và ranh giới bảo mật: [`CLAUDE.md`](CLAUDE.md).
 Quy trình cập nhật tài liệu: [`.claude/skills/ba-pipeline/SKILL.md`](.claude/skills/ba-pipeline/SKILL.md).

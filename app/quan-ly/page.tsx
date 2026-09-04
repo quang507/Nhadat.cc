@@ -26,6 +26,9 @@ export default function Page() {
   const [mine, setMine] = useState<Listing[]>([]);
   const [rao, setRao] = useState("");
   const [ward, setWard] = useState("Phường 1");
+  // FR-174: địa bàn đã mở (Sài Gòn phường mới + Long An) — quận/huyện gõ tay,
+  // không ghi cứng "Quận 5" nữa (nghiệm thu 04/09 bắt được chỗ sót của đợt 1).
+  const [quan, setQuan] = useState("Quận 5");
   const [priceRaw, setPriceRaw] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -68,7 +71,7 @@ export default function Page() {
         code,
         seller_id: sellerId,
         deal: "ban",
-        district: "Quận 5",
+        district: quan.trim() || "Quận 5",
         ward,
         description: rao.trim(),
         price_raw: priceRaw.trim() || null,
@@ -77,7 +80,7 @@ export default function Page() {
       .select("*").single();
     if (error) return setMsg("Đăng không được: " + error.message);
     setMine((m) => [data as Listing, ...m]);
-    setRao(""); setPriceRaw("");
+    setRao(""); setPriceRaw(""); setQuan("Quận 5");
     setMsg(`Đã nhận tin #${code} — tụi em bóc tách chi tiết, đủ thông tin là tin tự lên web.`);
   };
 
@@ -124,6 +127,12 @@ export default function Page() {
               className="w-full rounded-lg border border-line bg-white px-3 py-2.5">
               {WARDS.map((w) => <option key={w}>{w}</option>)}
             </select>
+          </label>
+          <label>
+            <span className="mb-1 block text-xs font-semibold text-mute">Quận / huyện, tỉnh</span>
+            <input value={quan} onChange={(e) => setQuan(e.target.value)}
+              placeholder="VD: Quận 5 · Quận Tân Bình · Bến Lức, Long An"
+              className="w-full rounded-lg border border-line px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-brand" />
           </label>
           <label>
             <span className="mb-1 block text-xs font-semibold text-mute">Giá rao (ghi tự nhiên)</span>

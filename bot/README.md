@@ -17,7 +17,7 @@ tone giọng lấy từ `docs/06 §6.8` (sửa docs trước, sửa `_shared/pro
 | `geocode-listings` | FR-122 | Điền `lat`/`lng` cho listing từ `location_raw` qua Nominatim/OSM (1 req/s, cache theo câu query, tự dừng ở ~90s để chạy lặp). Không cron, gọi tay khi có tin mới cần lên bản đồ. **Đưa vào repo 27/08/2026** — trước đó ACTIVE trên Supabase từ 25/08 mà không có dòng nào trong git. |
 | `inbound-sweep` | FR-166 | Đường CỨU cho tin nhắn đến. Cron `inbound-sweep-tick` (1 phút) hỏi `viec_inbound_bo_roi()` xem việc nào đường nhanh chưa làm xong, rồi gọi ngược `zalo-webhook` ở cửa phát lại — cố ý không tự gửi lấy, vì khâu gửi là chỗ giữ luật chống-gửi-đúp. Bình thường không có việc thì hàm tick return ngay, không gọi gì. |
 | `media-cleanup` | FR-165 | Cron `media-cleanup-tick` (5 phút): nhặt `media_cleanup_queue`, gọi Storage API xoá file rồi đánh dấu. File không còn cũng tính là xong (Supabase trả HTTP 400 với thân `{"statusCode":"404"}`, không phải 404). |
-| `escalation-feed` | FR-140/144, FR-147/149 | Cửa cho bridge acc clone kéo việc "hỏi chính chủ / báo CTV/admin / báo cáo 17h": `{action:"pull"}` trả danh sách kèm `text` soạn sẵn đúng vai (chính chủ → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ; kind `report` → NGUYÊN VĂN, không bọc lời chào) + SĐT/Zalo đích (bảng `sellers`/`ctvs`/`admins`), `{action:"ack", id}` đánh dấu đã gửi. Tuỳ chọn secret `BRIDGE_SECRET` trong Vault → yêu cầu header `x-bridge-secret`. Nudge cũng tự gửi các việc này qua OA khi có token. |
+| `escalation-feed` | FR-140/144, FR-147/149 | Cửa cho bridge acc clone kéo việc "hỏi chính chủ / báo CTV/admin / báo cáo 17h": `{action:"pull"}` trả danh sách kèm `text` soạn sẵn đúng vai (chính chủ → giọng CSKH lễ phép; CTV/admin → thông báo nội bộ; kind `report` → NGUYÊN VĂN, không bọc lời chào) + SĐT/Zalo đích (bảng `sellers`/`ctvs`/`admins`), `{action:"ack", id}` đánh dấu đã gửi, `{action:"log", …}` để bridge ghi lỗi vào sổ (FR-152 d). Tuỳ chọn secret `BRIDGE_SECRET` trong Vault → yêu cầu header `x-bridge-secret`. Nudge cũng tự gửi các việc này qua OA khi có token. |
 
 Chat-reply từ 25/08 thêm: `human_note` (bridge báo người thật gõ tay → bot nhường
 sân 30 phút, FR-141), `agreed_deal` (khách đồng ý chốt bằng chữ/emoji/like-tim →
@@ -91,7 +91,7 @@ câu rao cho thuê · ghiLoi trong catch). Kế hoạch test nằm MỘT chỗ �
 
 ## Bảng liên quan (migration đã áp trên nhadat-cc)
 
-`required_facts` (37 fact chuẩn theo `property_type`) + view
+`required_facts` (38 fact chuẩn theo `property_type`, đếm 04/09/2026) + view
 `listing_missing_facts`; `conversations` + `messages` (log hội thoại);
 `ctvs`; `deals.ctv_id`;
 `buyers.preferences/last_contact_at/notes`; `projects` + `listings.unit_status`.
@@ -210,7 +210,7 @@ một file `index.ts`, `_shared/` gộp vào). Bản đang chạy sau đợt nà
 | `inbound-sweep` | v3 | false | cổng chung |
 | `geocode-listings` | v5 | true | bỏ cổng tự viết, dùng `serviceClient` + cổng chung |
 
-`zalo-webhook` giữ v11. Kiểm sau deploy: e2e 65/65 chạy trên nội dung
+`zalo-webhook` giữ v11 *(04/09/2026: đang v12)*. Kiểm sau deploy: e2e 65/65 chạy trên nội dung
 `chat-reply` kéo ngược từ Supabase (không phải trên nguồn), bảy bản còn lại
 trùng byte với bundle sau khi chuẩn hoá `\uXXXX`.
 

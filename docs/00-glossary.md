@@ -55,4 +55,4 @@ nhiều biến thể; cột "Biến thể trong tài liệu gốc" để tra ng�
 ## Lưu ý về tên thương hiệu
 
 Tài liệu gốc dùng lẫn **nhadat.cc**, **nhadatCC**, **Nhã Đạt CC**, **nhaadaat.com**.
-Trong `docs/` thống nhất: tên miền **nhadat.cc**, tên đọc **Nhã Đạt CC**. Xem `OPEN-08`.
+Trong `docs/` thống nhất: tên miền **nhadat.cc**, thương hiệu/tên đọc **Aioinhadat** (OPEN-08 chốt 03/09/2026; "Nhã Đạt CC" chỉ còn trong trích dẫn tài liệu gốc 2024).

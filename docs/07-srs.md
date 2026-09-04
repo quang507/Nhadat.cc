@@ -32,6 +32,16 @@ Bốn phân hệ triển khai được độc lập:
 
 ## 2. Kiến trúc tổng thể
 
+> **Nghiệm thu 04/09/2026 (`10 §10.8`, OPEN-43)** — phần lớn §2.1, §3.2, §3.8b,
+> §4, §5.3 (bảng "thiết kế"), §5.5 và 9/13 AC ở §7 là **thiết kế chưa dựng**:
+> stack thật là Next.js + Supabase (Postgres/Edge/Storage/Vault, pg_net,
+> pg_cron), Google OAuth + magic link (không Zalo SSO), 3 hàng đợi Postgres
+> (không Logstash/ES), bridge Zalo + ntfy (không Slack/SMTP), Leaflet/OSM
+> (không Google Maps), không fingerprint; không route `/api/*` nào — B↔S đi
+> bằng bảng `info_requests` + trigger. Chờ chủ dự án chốt cách đánh dấu
+> (OPEN-43); trước đó, coi các mục nêu trên là lộ trình, và **§3.8b, §3.11,
+> §3.12, §3.13, §3.14 + bảng cron "thật" §5.3 là hiện trạng**.
+
 ```mermaid
 flowchart TB
     subgraph Client
@@ -205,6 +215,9 @@ giữ nguyên; cụm thông số mới dùng một `specs_source` chung vì chú
 một đường (một câu rao / một câu trả lời).
 
 ### SRS-3.2 · `property_events` — FR-70
+
+*[04/09/2026: bảng KHÔNG tồn tại; thay thế một phần bằng `listings.last_interest_at`
++ `mark_listing_interest()` (FR-139). OPEN-43.]*
 ```
 id            uuid pk
 property_id   uuid fk
@@ -449,7 +462,11 @@ là:
    `listing_missing_facts` đã chuyển `security_invoker = on` và khoá khỏi anon
    (web không dùng). Hai view cố ý giữ definer: `agents_public` (chỉ tên NMG +
    số tin, nguồn trang `/moi-gioi`) và `listing_photos_v` — cả hai chỉ còn
-   quyền SELECT. *[chỉnh 29/08/2026 — FR-167c. Lý do THẬT phải giữ definer cho
+   quyền SELECT. *[04/09/2026: `agents_public` phải **tự chứa** — definer mà
+   join qua một view invoker (`seller_ranks`) thì view trong vẫn xét quyền
+   người gọi, anon lại 0 dòng; `20260904b` dựng lại, TS-SEC-08.]* Anon còn đọc
+   được `listing_facts` (policy lọc `hinh_anh`/`dia_chi_chi_tiet` + tin lên kệ)
+   và `projects` — cố ý, web dùng. *[chỉnh 29/08/2026 — FR-167c. Lý do THẬT phải giữ definer cho
    `listing_photos_v` không phải "path vốn công khai" mà là: thân view đọc
    `app_config`, đổi sang invoker là anon vỡ view (đúng bẫy TS-KHO-21). Và nó
    KHÔNG còn chỉ lọc bucket — nay lọc cả trạng thái tin, vì quyền của chủ view
@@ -659,7 +676,9 @@ listing_missing_facts (view)  = required_facts ⋈ property_type − listing_fac
 `quy_hoach` ↔ `planning_status`. Bất kể bậc nguồn: câu rao đã nói "hẻm xe hơi
 6m" thì hỏi lại là mất mặt, còn muốn CHỦ XÁC NHẬN thì đó là việc của khách hỏi
 (FR-140), không phải của vòng nhỏ giọt. Đo trên kho 173 tin: 1.140 câu thiếu →
-638. `listing_facts_sync_cols` mở rộng theo cùng ánh xạ; ghi khi cột trống hoặc
+638. `listing_facts_sync_cols` mở rộng theo cùng ánh xạ *(bản 02/09 lỡ làm rơi
+bốn nhánh `gia`/`phuong`/`loai_bds`/`dien_tich_tim_tuong` của FR-164 — cấy lại
+`20260904b`)*; ghi khi cột trống hoặc
 `bac_nguon(fact) ≥ bac_nguon(specs_source)` — chủ nhà > admin > bóc mô tả, câu
 chủ nhà mới nhất thắng (`20260902g`, sửa sau soát truy vết: bản đầu chỉ đè
 `boc_mo_ta`).)*
@@ -740,6 +759,10 @@ mã: `code` là thứ khách đọc qua Zalo, trùng mã là chỉ nhầm căn.
 ---
 
 ## 4. Đặc tả giao diện lập trình
+
+*[04/09/2026: không route `/api/*` nào tồn tại trong `app/`; đường thật: Edge
+Functions `bot/supabase/functions/*` (bảng ở `bot/README.md`) + bảng/trigger.
+OPEN-43.]*
 
 Chuẩn chung: REST/JSON, `Content-Type: application/json`, xác thực bằng
 `Authorization: Bearer <service token>`, mọi request có `X-Request-Id` để truy vết.
@@ -938,6 +961,11 @@ thất bại vẫn phải giữ bản ghi trong `escalations` để admin không
 ---
 
 ## 7. Tiêu chí nghiệm thu MVP
+
+*[04/09/2026 (`10 §10.8`): AC-07 ✅ (TS-MA/VAI/THONGSO); AC-03/06/08 ⚠ (đường
+đã đổi theo FR-173/159 và bridge); AC-01/02/04/05/09/10/11/12/13 ❌ chưa có
+tính năng hoặc chưa có bài chạy được. AC-08 (link `/raoban`) và AC-10 (email)
+lỗi thời — chờ OPEN-43 rồi cấp AC mới theo FR-159/173.]*
 
 Hệ thống được nghiệm thu khi **toàn bộ** kịch bản sau chạy end-to-end:
 
