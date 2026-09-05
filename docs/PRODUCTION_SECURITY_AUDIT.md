@@ -496,4 +496,61 @@ condition giữa hai worker `nudge` chạy chồng.
    tiền tính theo TOKEN (SEC-06); trần toàn cục trong khi mối đe doạ là MỘT
    người (SEC-05). Cầu chì đúng chỗ nhưng nhìn nhầm dòng điện.
 
-**Chưa sửa dòng code nào.** Đợi chủ dự án cho phép trước khi vá.
+---
+
+## 8. Trạng thái vá (cập nhật 05/09/2026)
+
+Toàn bộ 10 mục Top-10 đã VÁ TRONG MÃ NGUỒN, có test, đã commit. Migration đã
+áp. Deploy edge function thì mới xong một phần — bảng dưới nói rõ cái nào đang
+thật sự chạy trên production.
+
+| ID | Vá trong mã | Đã deploy | Đã ĐO trên hệ thống thật |
+|---|---|---|---|
+| SEC-01 | ✅ | ✅ zalo-webhook v13 | ✅ sự kiện giả → **503**, `inbound_events` nhận **0 dòng** (trước: 200 + ghi sổ) |
+| SEC-02 | ✅ | 🟡 5/7 function | ✅ 3 function: bí mật sai → 403, đúng → 200. **Còn: ctv-report, ask-seller, nudge, chat-reply** |
+| SEC-03 | ✅ | ✅ escalation-feed v11 | ✅ nhánh ghi `admins` không điều kiện đã bỏ hẳn |
+| SEC-04 | ✅ | ✅ (đóng theo SEC-01) | ✅ cùng phép đo SEC-01 |
+| SEC-05 | ✅ `20260905d` | ❌ chat-reply | ✅ hàm DB: lượt 31 → false, uid rỗng → true, người quen nới ×4 |
+| SEC-06 | ✅ | 🟡 webhook có, chat-reply chưa | ✅ e2e: body >128 KB → 413, text cắt còn 4.000 |
+| SEC-07 | ✅ | ✅ escalation-feed v11 | ✅ **5/5 mục trả `phone: null`** — trước đó là 5 SĐT thật |
+| SEC-08 | ✅ | ❌ chat-reply | ✅ e2e 3 ca (host lạ, http://, giả mạo hậu tố) |
+| SEC-12 | ✅ | ✅ zalo-webhook v13 | ✅ body không phải object → 400 |
+| SEC-13 | ✅ | ❌ chat-reply | ✅ e2e: msg_id không hợp lệ → `ok:false` |
+
+**Đã deploy + đo**: `zalo-webhook` v13, `escalation-feed` v11, `inbound-sweep` v4,
+`media-cleanup` v5, `geocode-listings` v6.
+**Chưa deploy** (vẫn chạy bản fail-open cũ): `chat-reply`, `nudge`, `ask-seller`,
+`ctv-report`.
+
+**Vì sao dừng**: quy trình deploy của repo (`bot/README §Deploy`) bắt buộc bước
+**so từng byte** bản kéo ngược với bundle. Trong phiên chạy từ xa này, nội dung
+function phải đi qua context để vào lệnh deploy, và muốn so byte thì phải chép
+bản kéo ngược một lần nữa — tức không có phép kiểm độc lập nào. Bốn function
+còn lại đều nặng và dày template literal nhiều dòng (`chat-reply` 94 KB);
+CLAUDE.md nói thẳng về đúng tình huống này: *"chép tay đo được một lỗi mỗi 7 KB,
+và lỗi rơi vào regex thì hỏng im lặng"*. Đẩy bản chưa kiểm được vào bộ não hội
+thoại là loại rủi ro không đáng, khi mã đã nằm an toàn trong repo.
+
+**Cách deploy nốt** (máy có repo + Supabase CLI):
+```bash
+supabase functions deploy chat-reply nudge ask-seller ctv-report \
+  --project-ref tbcdpupiarkuxtntmosl
+bun run test:sec     # hồi quy RLS
+```
+
+### Hai điều đợt vá tự phát hiện
+
+1. **SEC-02 bắt được một ca thật ngay sau khi deploy.** Sổ lỗi ghi
+   `zalo-webhook VAULT HUT — Không đọc được secret chữ ký (JWT issued at future)`.
+   Đó là lệch đồng hồ giữa edge runtime và DB, tức **đọc hụt thật**, không phải
+   "chưa đặt secret". Với mã cũ, đúng khoảnh khắc đó cổng đã MỞ. Đây là bằng
+   chứng trực tiếp cho kịch bản tấn công mô tả ở SEC-02, không phải giả định.
+2. **Bộ e2e bắt lỗi của chính bản vá.** Danh sách host cho `image_url` bản đầu
+   chỉ có `zadn.vn` mà quên `zdn.vn` — deploy như vậy là ảnh khách gửi bị chặn
+   sạch trong khi bot vẫn trả lời tử tế, đúng kiểu hỏng im lặng. Ba ca ảnh của
+   suite đỏ ngay.
+
+### Còn treo, chưa vá trong đợt này
+
+SEC-09, SEC-10, SEC-11 (một phần — đã so hằng thời gian ở 3 chỗ, còn các chỗ
+khác), SEC-14, và toàn bộ nhóm LOW. Kèm ba mục "chưa soát" ở §6.
