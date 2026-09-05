@@ -13,3 +13,7 @@ sed -i.bak \
   -e 's#"npm:zod@4"#"zod"#g' chat-reply.bundle.mjs
 rm -f chat-reply.bundle.mjs.bak
 bun run.mjs
+# Ca "không có BRIDGE_SECRET" phải chạy TIẾN TRÌNH RIÊNG: `napCauHinh` nhớ tạm
+# cấu hình 60 giây ở tầng module, nên trong run.mjs không dựng lại được cảnh
+# `gate = null` sau lượt gọi đầu. Xem đầu file cong-thieu-bi-mat.mjs.
+bun cong-thieu-bi-mat.mjs

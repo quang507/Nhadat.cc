@@ -1,12 +1,11 @@
 import { FakeDB } from "./mock-supabase.mjs";
+import { OUT } from "./mock-anthropic.mjs";
 globalThis.__calls = []; globalThis.__db = new FakeDB();
 const ENV = { SUPABASE_URL: "http://x", SUPABASE_SERVICE_ROLE_KEY: "svc", BRIDGE_SECRET: "s3cret", ANTHROPIC_API_KEY: "test-key" };
 globalThis.Deno = { serve: (h) => { globalThis.__handler = h; }, env: { get: (k) => ENV[k] } };
 await import("./chat-reply.bundle.mjs");
 const H = globalThis.__handler;
 
-const OUT = (o = {}) => ({ profile: { name: null, deal: null, area: null, budget: null, purpose: null, property_type: null, bedrooms: null, alley: null, timeline: null, notes: null },
-  replies: ["Dạ em ghi nhận rồi ạ, anh/chị tìm khu nào ạ?"], promise: null, viewing: null, agreed_deal: null, send_photos: null, ask_owner: null, need_human: false, ...o });
 let msgN = 0;
 async function send(body, hdr = {}) {
   const b = { msg_id: `m${++msgN}`, channel: "zalo_personal_test", ...body };
@@ -430,6 +429,65 @@ globalThis.__rpc = {};
 fresh(seedKho);
 r = await send({ external_user_id: "sec-13", mark_sent: "khong-ton-tai", sent_bubbles: 1 });
 check("SEC-13 mark_sent msg_id không tồn tại → ok:false", r.body.ok === false, JSON.stringify(r.body));
+
+// ── CỔNG: bốn kiểu người gọi ─────────────────────────────────────────────
+// Bộ 112 ca ở trên đều gửi bí mật ĐÚNG, nên chúng chứng minh "bí mật đúng thì
+// qua" một cách ngầm định. Bốn ca dưới đây nói thẳng từng đường vào, để sửa
+// cổng mà làm gãy một đường thì thấy ngay đường nào.
+
+// (1) service-role: zalo-webhook gọi chat-reply bằng service key, KHÔNG có
+// x-bridge-secret. Đây là đường sống của kênh OA — gãy là bot câm với OA.
+fresh(seedKho);
+r = await send(
+  { external_user_id: "zalo-oa-1", text: "tìm nhà quận 5 tầm 5 tỷ", channel: "zalo_oa" },
+  { "x-bridge-secret": undefined, authorization: "Bearer svc" },
+);
+check("CỔNG-1 service-role (đường zalo-webhook) → qua, không cần bí mật cổng",
+  r.status === 200 && !r.body.error, JSON.stringify(r).slice(0, 200));
+check("CỔNG-1 kênh zalo_oa xử lý bình thường, có trả lời",
+  Array.isArray(r.body.replies) && r.body.replies.length > 0, JSON.stringify(r.body).slice(0, 200));
+
+// (2) bí mật ĐÚNG (đường bridge) — khẳng định tường minh, không để ngầm.
+fresh(seedKho);
+r = await send({ external_user_id: "bridge-1", text: "tìm nhà quận 5 tầm 5 tỷ" });
+check("CỔNG-2 bí mật cổng ĐÚNG (đường bridge) → qua", r.status === 200 && !r.body.error, JSON.stringify(r).slice(0, 200));
+
+// (3) service key SAI → không được mượn đường service-role.
+fresh(seedKho);
+r = await send(
+  { external_user_id: "gia-mao", text: "chào em" },
+  { "x-bridge-secret": undefined, authorization: "Bearer KHONG-PHAI-SERVICE-KEY" },
+);
+check("CỔNG-3 Bearer sai → 403 (không mượn được đường service-role)",
+  r.status === 403, JSON.stringify(r));
+
+// (4) mark_sent HAPPY PATH — bridge chốt đúng dòng nó vừa gửi.
+// Ca SEC-13 ở trên chỉ chứng minh chiều TỪ CHỐI; thiếu ca này thì một bản vá
+// siết quá tay sẽ làm bridge không bao giờ ghi được sent_at mà test vẫn xanh.
+fresh(seedKho);
+r = await send({ external_user_id: "ms-1", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "ms-happy" });
+r = await send({ external_user_id: "ms-1", mark_sent: "ms-happy", sent_bubbles: 2, done: true });
+{
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "ms-happy");
+  check("CỔNG-4 mark_sent dòng vừa gửi → ok:true và sổ ghi sent_at",
+    r.body.ok === true && !!so?.sent_at && so?.sent_bubbles === 2,
+    JSON.stringify({ body: r.body, so }));
+}
+
+// (5) human_note (FR-141) — bridge báo NGƯỜI THẬT vừa gõ tay, bot nhường sân.
+// Cửa này nằm SAU cổng bí mật và TRƯỚC sổ inbound, nên dễ bị một bản vá cổng
+// làm gãy mà không ca nào chạm tới.
+fresh(seedKho);
+r = await send({ external_user_id: "z-ccrb", text: "anh gọi chị D. rồi nhé", human_note: true });
+{
+  const conv = db().t.conversations.find((c) => c.human_touch_at);
+  check("CỔNG-5 human_note → ok, ghi tin sender='human', đặt human_touch_at",
+    r.body.ok === true && r.body.human_note === true &&
+    db().t.messages.some((m) => m.sender === "human") && !!conv,
+    JSON.stringify({ body: r.body, co_human: db().t.messages.some((m) => m.sender === "human") }));
+  check("CỔNG-5 human_note hạ cờ needs_human (FR-147)",
+    conv ? conv.needs_human === false : false, JSON.stringify(conv));
+}
 
 // ── kết ──
 let hong = 0;

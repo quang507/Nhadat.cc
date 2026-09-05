@@ -471,9 +471,12 @@ Deno.serve(async (req) => {
   // zalo-webhook (server-to-server) gọi nó, không trình duyệt nào cả. Nhưng nó
   // đang mở cho bất kỳ ai cầm anon key — mà anon key nằm sẵn trong bundle JS
   // của web VÀ trong bot/bridge-zca/index.mjs của repo PUBLIC này.
-  // Đặt secret BRIDGE_SECRET trong Vault là bật cổng; chưa đặt thì chạy như cũ,
-  // không làm gãy bridge đang chạy. zalo-webhook gọi bằng service_role key nên
-  // luôn được cho qua.
+  // BA ĐƯỜNG VÀO, không hơn: (1) service_role key ở header `authorization` —
+  // đường của zalo-webhook, luôn qua; (2) `x-bridge-secret` khớp BRIDGE_SECRET
+  // trong Vault — đường của bridge; (3) không có gì cả → KHÔNG QUA.
+  // Câu cũ ở đây nói "chưa đặt secret thì chạy như cũ, không làm gãy bridge" —
+  // đó chính là chỗ hỏng SEC-02 đã vá bên dưới; giữ lại câu đó thì lần sau có
+  // người đọc comment rồi sửa code cho khớp comment, và cửa mở lại.
   // FR-171 h: bí mật cổng + trần lượt + bot_prompts đi chung một lượt nạp,
   // nhớ tạm 60 giây ở tầng module (xem `napCauHinh`).
   const { gate, cap: dailyCap, P } = await napCauHinh(client);

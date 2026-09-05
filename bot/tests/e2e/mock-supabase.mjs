@@ -164,7 +164,12 @@ class RpcCall {
       case "claim_inbound": {
         let l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
         // Như hàm thật: giành được sổ là dòng đã ở `processing`, app không UPDATE thêm.
-        if (!l) { l = { zalo_msg_id: a.p_msg_id, status: "processing", attempts: 1, reply: null }; db.t.inbound_ledger.push(l); return { data: { r_state: "received", r_attempts: 1 }, error: null }; }
+        // `created_at` PHẢI có: bảng thật khai `created_at timestamptz not null
+        // default now()`, và cổng `mark_sent` (SEC-13) lọc `.gte("created_at",
+        // 15 phút trước)`. Mock thiếu cột này thì happy-path của mark_sent hỏng
+        // trong test nhưng chạy được ở production — mock nói dối theo hướng bi
+        // quan, và một bộ e2e nói dối kiểu nào cũng là bộ e2e không tin được.
+        if (!l) { l = { zalo_msg_id: a.p_msg_id, status: "processing", attempts: 1, reply: null, created_at: now() }; db.t.inbound_ledger.push(l); return { data: { r_state: "received", r_attempts: 1 }, error: null }; }
         if (l.status === "completed") return { data: { r_state: "completed", r_reply: l.reply, r_sent_at: l.sent_at ?? null }, error: null };
         l.attempts++; l.status = "processing"; return { data: { r_state: "received", r_attempts: l.attempts }, error: null };
       }
