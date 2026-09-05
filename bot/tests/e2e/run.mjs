@@ -607,6 +607,180 @@ fresh(seedKho);
     JSON.stringify(db().t.conversations.map((c) => c.needs_human)));
 }
 
+// ══════════ TRÙNG: claim_inbound giữ đúng-một-lần (FR-166) ══════════════════
+// KHÔNG sửa `claim_inbound` — nó đã có chốt nguyên tử trên `inbound_ledger`.
+// Mười cảnh dưới đây chỉ ĐO xem cái chốt đó có thật sự giữ bốn lời hứa không:
+// không gọi model lần hai · không đốt hạn mức lần hai · không đẻ tin trùng ·
+// không gửi trùng.
+//
+// Mock đã được chép lại cho đủ NĂM nhánh của hàm thật (received / completed /
+// in_flight / dead / failed-có-giờ-hẹn). Bản mock cũ chỉ có ba, tức bốn cảnh
+// dưới đây trước nay không kiểm được.
+const soModel = () => globalThis.__calls.filter((c) => c.kind === "parse" || c.kind === "create").length;
+const soRpc = (ten) => db().log.filter((x) => x.rpc === ten).length;
+const soDong = (b) => db().t[b].length;
+const soTin = () => db().t.messages.length;
+
+// (1) Cùng msg_id gửi HAI lần.
+fresh(seedKho);
+{
+  const r1 = await send({ external_user_id: "trung-1", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-1" });
+  const m1 = soModel(), t1 = soTin(), q1 = soRpc("bump_user_quota");
+  const r2 = await send({ external_user_id: "trung-1", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-1" });
+  check("TRÙNG-1 lần hai → deduped/replayed, không phải xử lại từ đầu",
+    r2.body.deduped === true && r2.body.replayed === true, JSON.stringify(r2.body).slice(0, 200));
+  check("TRÙNG-1 KHÔNG gọi model lần hai", soModel() === m1, `${m1} → ${soModel()}`);
+  check("TRÙNG-1 KHÔNG đốt hạn mức lần hai", soRpc("bump_user_quota") === q1,
+    `${q1} → ${soRpc("bump_user_quota")}`);
+  check("TRÙNG-1 KHÔNG đẻ tin trùng trong hội thoại", soTin() === t1, `${t1} → ${soTin()}`);
+  check("TRÙNG-1 lần hai trả lại ĐÚNG câu cũ", JSON.stringify(r2.body.replies) === JSON.stringify(r1.body.replies),
+    JSON.stringify([r1.body.replies, r2.body.replies]));
+}
+
+// (2) Cùng msg_id gửi MƯỜI lần — provider giao lại liên tục.
+fresh(seedKho);
+{
+  await send({ external_user_id: "trung-2", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-2" });
+  const m1 = soModel(), t1 = soTin(), q1 = soRpc("bump_user_quota");
+  for (let i = 0; i < 9; i++) {
+    await send({ external_user_id: "trung-2", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-2" });
+  }
+  check("TRÙNG-2 mười lượt giao → vẫn ĐÚNG MỘT lượt model", soModel() === m1, `${m1} → ${soModel()}`);
+  check("TRÙNG-2 → vẫn đúng một lượt hạn mức", soRpc("bump_user_quota") === q1, `${q1} → ${soRpc("bump_user_quota")}`);
+  check("TRÙNG-2 → không tin nào thừa", soTin() === t1, `${t1} → ${soTin()}`);
+  check("TRÙNG-2 → sổ vẫn MỘT dòng", soDong("inbound_ledger") === 1, JSON.stringify(soDong("inbound_ledger")));
+}
+
+// (3) Cùng msg_id ĐỒNG THỜI.
+fresh(seedKho);
+{
+  globalThis.__treTruyVan = (t) => (t === "messages" ? 8 : 0);
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "trung-3", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-3" }),
+    send({ external_user_id: "trung-3", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-3" }),
+  ]);
+  const chan = [ra, rb].filter((r) => r.body.in_flight === true || r.body.deduped === true).length;
+  check("TRÙNG-3 hai lượt cùng msg_id song song → đúng MỘT lượt bị chặn", chan === 1,
+    JSON.stringify([ra.body.in_flight ?? ra.body.deduped, rb.body.in_flight ?? rb.body.deduped]));
+  check("TRÙNG-3 → đúng MỘT lượt model", soModel() === 1, String(soModel()));
+  check("TRÙNG-3 → đúng MỘT lượt hạn mức", soRpc("bump_user_quota") === 1, String(soRpc("bump_user_quota")));
+}
+
+// (4) Phát lại một dòng ĐÃ completed: phải trả câu cũ + cờ already_sent theo sổ.
+fresh(seedKho);
+{
+  await send({ external_user_id: "trung-4", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-4" });
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-4");
+  so.sent_at = new Date().toISOString();          // webhook đã chốt gửi xong
+  const r = await send({ external_user_id: "trung-4", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-4" });
+  check("TRÙNG-4 completed + đã gửi → already_sent = true (kênh sẽ im, không bắn đúp)",
+    r.body.replayed === true && r.body.already_sent === true, JSON.stringify(r.body).slice(0, 160));
+  so.sent_at = null;                               // lần trước gửi hụt
+  const r2 = await send({ external_user_id: "trung-4", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-4" });
+  check("TRÙNG-4 completed + CHƯA gửi → already_sent = false (đây là đường retry gửi)",
+    r2.body.replayed === true && r2.body.already_sent === false, JSON.stringify(r2.body).slice(0, 160));
+}
+
+// (5) in_flight: lượt trước còn đang cầm sổ và còn tươi.
+fresh(seedKho);
+{
+  db().t.inbound_ledger.push({
+    zalo_msg_id: "T-5", status: "processing", attempts: 1, reply: null,
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  });
+  const r = await send({ external_user_id: "trung-5", text: "tìm nhà quận 5", msg_id: "T-5" });
+  check("TRÙNG-5 đang có lượt khác cầm sổ → in_flight, KHÔNG gọi model",
+    r.body.in_flight === true && soModel() === 0, JSON.stringify({ b: r.body, model: soModel() }));
+}
+
+// (6) processing NGUỘI (>150 giây): phải giành lại được, không kẹt vĩnh viễn.
+fresh(seedKho);
+{
+  db().t.inbound_ledger.push({
+    zalo_msg_id: "T-6", status: "processing", attempts: 1, reply: null,
+    created_at: new Date(Date.now() - 600e3).toISOString(),
+    updated_at: new Date(Date.now() - 600e3).toISOString(),
+  });
+  const r = await send({ external_user_id: "trung-6", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-6" });
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-6");
+  check("TRÙNG-6 processing nguội → GIÀNH LẠI được (function chết không khoá vĩnh viễn)",
+    !r.body.in_flight && soModel() === 1 && so.attempts === 2,
+    JSON.stringify({ in_flight: r.body.in_flight, model: soModel(), attempts: so.attempts }));
+}
+
+// (7) failed + giờ hẹn lùi dần: chưa tới giờ thì KHÔNG cho chạy lại.
+fresh(seedKho);
+{
+  db().t.inbound_ledger.push({
+    zalo_msg_id: "T-7", status: "failed", attempts: 2, reply: null,
+    created_at: new Date(Date.now() - 600e3).toISOString(),
+    updated_at: new Date(Date.now() - 600e3).toISOString(),
+    next_retry_at: new Date(Date.now() + 60e3).toISOString(),
+  });
+  const r = await send({ external_user_id: "trung-7", text: "tìm nhà quận 5", msg_id: "T-7" });
+  check("TRÙNG-7 chưa tới giờ hẹn → in_flight, không đốt thêm lượt model",
+    r.body.in_flight === true && soModel() === 0, JSON.stringify({ b: r.body, model: soModel() }));
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-7");
+  so.next_retry_at = new Date(Date.now() - 1000).toISOString();
+  const r2 = await send({ external_user_id: "trung-7", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-7" });
+  check("TRÙNG-7 tới giờ hẹn → chạy lại được", !r2.body.in_flight && soModel() === 1,
+    JSON.stringify({ b: r2.body.deduped, model: soModel() }));
+}
+
+// (8) THƯ CHẾT: đủ 8 lượt thì thôi hẳn, đừng đốt thêm lượt model nào.
+fresh(seedKho);
+{
+  db().t.inbound_ledger.push({
+    zalo_msg_id: "T-8", status: "failed", attempts: 8, reply: null,
+    created_at: new Date(Date.now() - 600e3).toISOString(),
+    updated_at: new Date(Date.now() - 600e3).toISOString(), next_retry_at: null,
+  });
+  const r = await send({ external_user_id: "trung-8", text: "tìm nhà quận 5", msg_id: "T-8" });
+  check("TRÙNG-8 thư chết → dead:true, KHÔNG gọi model",
+    r.body.dead === true && soModel() === 0, JSON.stringify({ b: r.body, model: soModel() }));
+  check("TRÙNG-8 có ghi sổ để người còn biết mà xử tay",
+    db().t.bot_errors.some((e) => String(e.source).includes("chat-reply dead")),
+    JSON.stringify(db().t.bot_errors.map((e) => e.source)));
+  check("TRÙNG-8 dòng sổ chuyển hẳn sang dead",
+    db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-8").status === "dead", "");
+}
+
+// (9) HẠN MỨC + trùng: chạm trần rồi thì lượt giao lại KHÔNG được đốt thêm.
+fresh(seedKho);
+{
+  globalThis.__rpc = { bump_user_quota: () => ({ data: false, error: null }) };
+  const r1 = await send({ external_user_id: "trung-9", text: "tìm nhà quận 5", msg_id: "T-9" });
+  const q1 = soRpc("bump_user_quota");
+  const r2 = await send({ external_user_id: "trung-9", text: "tìm nhà quận 5", msg_id: "T-9" });
+  check("TRÙNG-9 chạm trần → 429 và KHÔNG gọi model", r1.status === 429 && soModel() === 0,
+    JSON.stringify({ s: r1.status, model: soModel() }));
+  check("TRÙNG-9 giao lại khi đã chạm trần → KHÔNG hỏi hạn mức lần nữa",
+    soRpc("bump_user_quota") === q1, `${q1} → ${soRpc("bump_user_quota")}`);
+  check("TRÙNG-9 lượt giao lại vẫn không gọi model", soModel() === 0, String(soModel()));
+  check("TRÙNG-9 lượt hai được nhận diện là trùng",
+    r2.body.deduped === true || r2.body.in_flight === true, JSON.stringify(r2.body).slice(0, 160));
+}
+
+// (10) MODEL HỎNG rồi thử lại: lượt sau phải chạy lại được, không kẹt.
+fresh(seedKho);
+{
+  globalThis.__model.parse = () => { throw new Error("model chết"); };
+  const r1 = await send({ external_user_id: "trung-10", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-10" });
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-10");
+  check("TRÙNG-10 model hỏng → khách vẫn có câu trả lời (fallback), không im",
+    (r1.body.replies?.length ?? 0) > 0, JSON.stringify(r1.body).slice(0, 160));
+  check("TRÙNG-10 sổ KHÔNG bị bỏ dở: có trạng thái rõ ràng",
+    ["completed", "failed", "dead"].includes(so.status), JSON.stringify(so.status));
+  // Dựng lại cảnh "lượt trước hỏng thật, đã tới giờ hẹn"
+  so.status = "failed"; so.attempts = 1; so.next_retry_at = new Date(Date.now() - 1000).toISOString();
+  so.updated_at = new Date(Date.now() - 600e3).toISOString();
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ có căn hợp anh nè"] });
+  const truoc = soModel();
+  const r2 = await send({ external_user_id: "trung-10", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-10" });
+  check("TRÙNG-10 thử lại sau khi model hỏng → chạy lại được, gọi model lần nữa",
+    !r2.body.in_flight && soModel() > truoc, JSON.stringify({ b: r2.body.deduped, model: soModel() }));
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

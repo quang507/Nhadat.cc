@@ -269,19 +269,67 @@ class RpcCall {
       // SEC-05 — trần cá nhân. Mặc định cho qua; ca kiểm đè bằng
       // `globalThis.__rpc = { bump_user_quota: () => ({ data: false, error: null }) }`.
       case "bump_user_quota": return { data: true, error: null };
+      // ══ claim_inbound — chép ĐỦ NĂM NHÁNH của hàm thật ══
+      // (đọc `pg_get_functiondef` 05/09/2026; xem migration FR-166)
+      // Bản mock cũ chỉ có ba nhánh: mới / completed / còn lại-thì-nhận. Thiếu
+      // `in_flight` (processing còn tươi), `dead` (đủ 8 lượt) và `next_retry_at`.
+      // Thiếu đúng ba nhánh mà `chat-reply` xử KHÁC HẲN nhau — nghĩa là ba
+      // đường thoát quan trọng nhất của chống-trùng chưa từng được ca kiểm nào
+      // chạm tới. Mock hẹp hơn hàm thật thì bộ e2e xanh mà không chứng minh gì.
+      //
+      // `created_at` PHẢI có: bảng thật khai `not null default now()`, và cổng
+      // `mark_sent` (SEC-13) lọc `.gte("created_at", 15 phút trước)`.
       case "claim_inbound": {
+        const STALE = (a.p_stale_secs ?? 150) * 1000;
+        const MAX = 8;
         let l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
-        // Như hàm thật: giành được sổ là dòng đã ở `processing`, app không UPDATE thêm.
-        // `created_at` PHẢI có: bảng thật khai `created_at timestamptz not null
-        // default now()`, và cổng `mark_sent` (SEC-13) lọc `.gte("created_at",
-        // 15 phút trước)`. Mock thiếu cột này thì happy-path của mark_sent hỏng
-        // trong test nhưng chạy được ở production — mock nói dối theo hướng bi
-        // quan, và một bộ e2e nói dối kiểu nào cũng là bộ e2e không tin được.
-        if (!l) { l = { zalo_msg_id: a.p_msg_id, status: "processing", attempts: 1, reply: null, created_at: now() }; db.t.inbound_ledger.push(l); return { data: { r_state: "received", r_attempts: 1 }, error: null }; }
-        if (l.status === "completed") return { data: { r_state: "completed", r_reply: l.reply, r_sent_at: l.sent_at ?? null }, error: null };
-        l.attempts++; l.status = "processing"; return { data: { r_state: "received", r_attempts: l.attempts }, error: null };
+        if (!l) {
+          l = { zalo_msg_id: a.p_msg_id, status: "processing", attempts: 1, reply: null,
+                created_at: now(), updated_at: now(), started_at: now(), next_retry_at: null };
+          db.t.inbound_ledger.push(l);
+          return { data: { r_state: "received", r_attempts: 1, r_sent_at: null, r_dead: false }, error: null };
+        }
+        if (l.status === "completed") {
+          return { data: { r_state: "completed", r_reply: l.reply, r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: false }, error: null };
+        }
+        if (l.status === "dead") {
+          return { data: { r_state: "dead", r_reply: l.reply, r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: true }, error: null };
+        }
+        // Đang có lượt khác cầm và còn tươi → KHÔNG cấp sổ lần hai.
+        if (l.status === "processing" && Date.parse(l.updated_at ?? l.created_at) > Date.now() - STALE) {
+          return { data: { r_state: "in_flight", r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: false }, error: null };
+        }
+        // Chưa tới giờ hẹn lùi dần → cũng không cấp.
+        if (l.next_retry_at && Date.parse(l.next_retry_at) > Date.now()) {
+          return { data: { r_state: "in_flight", r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: false }, error: null };
+        }
+        if (l.attempts >= MAX) {
+          l.status = "dead"; l.finished_at = now(); l.updated_at = now();
+          return { data: { r_state: "dead", r_reply: l.reply, r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: true }, error: null };
+        }
+        l.status = "processing"; l.attempts++; l.started_at = now();
+        l.next_retry_at = null; l.updated_at = now();
+        return { data: { r_state: "received", r_reply: l.reply, r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: false }, error: null };
       }
-      case "bao_hong_inbound": { const l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id); if (l) { l.status = "failed"; l.detail = a.p_detail; } return { data: null, error: null }; }
+      // bao_hong_inbound — cũng chép đủ nhánh: `completed` thì KHÔNG hạ cấp
+      // (guard `inbound_ledger_giu_completed`), đủ 8 lượt thì sang thư chết,
+      // còn lại thì `failed` kèm giờ hẹn lùi dần.
+      case "bao_hong_inbound": {
+        const l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
+        if (!l) return { data: "khong_co", error: null };
+        if (l.status === "completed") return { data: "da_completed", error: null };
+        if (l.attempts >= 8) {
+          l.status = "dead"; l.detail = a.p_detail; l.finished_at = now(); l.updated_at = now();
+          return { data: "dead", error: null };
+        }
+        // `lan_thu_ke`: 30s × 2^(attempts-1), trần 1 giờ. Bỏ phần ngẫu nhiên
+        // ±20% của hàm thật — ca kiểm cần con số đoán được.
+        const cho = Math.min(30e3 * 2 ** (Math.max(l.attempts, 1) - 1), 3600e3);
+        l.status = "failed"; l.detail = a.p_detail;
+        l.next_retry_at = new Date(Date.now() + cho).toISOString();
+        l.updated_at = now();
+        return { data: "failed", error: null };
+      }
       case "ensure_buyer_conversation": {
         let b = db.t.buyers.find((x) => x.zalo_user_id === a.p_zalo_user_id);
         if (!b) b = db.insert("buyers", { zalo_user_id: a.p_zalo_user_id, name: null, preferences: {} }).data;
