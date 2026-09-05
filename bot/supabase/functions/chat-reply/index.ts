@@ -1517,9 +1517,14 @@ Deno.serve(async (req) => {
       }
 
       if (next && sellerReply) {
-        await client.from("info_requests").insert({
+        // 23505 = `ask-seller` (nhịp drip :22/:52) vừa mở đúng câu này. Không
+        // phải sự cố — bỏ qua. Mã khác thì vào sổ (FR-152 d).
+        const { error: irErr } = await client.from("info_requests").insert({
           listing_id: pendingReq.listing_id, question: next.fact_key, status: "pending",
         });
+        if (irErr && irErr.code !== "23505") {
+          await ghiLoi(client, "chat-reply mo cau hoi tiep", irErr.message);
+        }
       }
       return await traLoiSeller([sellerReply], {
         saved_fact: pendingReq.question,
@@ -1612,9 +1617,12 @@ Deno.serve(async (req) => {
           .select("fact_key").eq("listing_id", newLst.id).order("priority").limit(1);
         const firstKey = firstFacts?.[0]?.fact_key ?? null;
         if (firstKey) {
-          await client.from("info_requests").insert({
+          const { error: ir1Err } = await client.from("info_requests").insert({
             listing_id: newLst.id, question: firstKey, status: "pending",
           });
+          if (ir1Err && ir1Err.code !== "23505") {
+            await ghiLoi(client, "chat-reply mo cau hoi dau", ir1Err.message);
+          }
         }
         // OPEN-30: tin rao ĐÃ tạo xong (mã đã cấp) — model chỉ soạn lời chào.
         // Model hỏng thì chào bằng câu mẫu, kèm luôn câu hỏi đầu nếu có.
@@ -2377,10 +2385,16 @@ Deno.serve(async (req) => {
       .eq("listing_id", aoLst.id).eq("status", "pending").eq("source", "buyer_ask")
       .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
     if ((aoDup ?? 0) === 0) {
-      await client.from("info_requests").insert({
+      // FR-140: câu khách hỏi chủ nhà. Hai khách cùng hỏi một câu về một căn
+      // là chuyện thường — 23505 nghĩa là câu đó đang chờ chủ nhà trả lời rồi,
+      // trả lời về sẽ tới cả hai khách. Không hỏi chồng.
+      const { error: aoErr } = await client.from("info_requests").insert({
         listing_id: aoLst.id, buyer_id: buyer.id,
         question: out.ask_owner.question, status: "pending", source: "buyer_ask",
       });
+      if (aoErr && aoErr.code !== "23505") {
+        await ghiLoi(client, "chat-reply hoi chu nha", aoErr.message);
+      }
     }
   };
 
@@ -2438,12 +2452,28 @@ Deno.serve(async (req) => {
           .eq("viewing_id", vwId).eq("kind", "viewing").eq("status", "pending"),
       ]);
     } else {
-      const { data: vw } = await client.from("viewings").insert({
+      // ĐUA: `existVw` đọc ở trên rồi mới ghi ở đây. Hai tin "mai 9h anh qua
+      // xem nha" liền nhau → hai lượt cùng thấy "chưa có" → hai buổi xem cho
+      // MỘT cuộc hẹn, rồi mỗi buổi đẻ một nhắc, khách bị nhắc hai lần.
+      // `viewings_mot_hen_cho_moi_can_idx` chặn cú thứ hai; lượt thua đọc lại
+      // dòng của lượt thắng để vẫn có `vwId` mà gắn nhắc — nếu bỏ trống thì
+      // cuộc hẹn có mà không ai nhắc, tệ hơn cả trước khi vá.
+      const { data: vw, error: vwErr } = await client.from("viewings").insert({
         buyer_id: buyer.id, listing_id: listingId,
         listing_code: vwCode, time_text: out.viewing.when,
         slot, phone: out.viewing.phone ?? null, status: "pending", source: "bot",
-      }).select("id").single();
-      vwId = vw?.id ?? null;
+      }).select("id").maybeSingle();
+      if (vwErr?.code === "23505") {
+        const { data: lai } = await client.from("viewings")
+          .select("id").eq("buyer_id", buyer.id).eq("status", "pending")
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        vwId = lai?.id ?? null;
+      } else if (vwErr) {
+        await ghiLoi(client, "chat-reply ghi viewing", vwErr.message);
+        vwId = null;
+      } else {
+        vwId = vw?.id ?? null;
+      }
     }
     // Nhắc trước buổi xem ~45 phút (mẫu §6.8); lịch quá gần hoặc đã có nhắc thì thôi
     if (vwId && slotMs - Date.now() > 90 * 60e3) {
@@ -2451,11 +2481,17 @@ Deno.serve(async (req) => {
         .select("id", { count: "exact", head: true })
         .eq("viewing_id", vwId).eq("status", "pending");
       if ((remCnt ?? 0) === 0) {
-        await client.from("reminders").insert({
+        // Cùng kiểu đua với `viewings` ngay trên. 23505 nghĩa là lượt kia đã
+        // đặt nhắc cho đúng buổi xem này — im lặng bỏ qua là ĐÚNG, mọi mã lỗi
+        // khác thì phải vào sổ (FR-152 d).
+        const { error: rmErr } = await client.from("reminders").insert({
           kind: "viewing", buyer_id: buyer.id, viewing_id: vwId,
           due_at: new Date(slotMs - 45 * 60e3).toISOString(),
           note: `lịch xem ${vwCode ? "#" + vwCode : "nhà"} lúc ${out.viewing.when}`,
         });
+        if (rmErr && rmErr.code !== "23505") {
+          await ghiLoi(client, "chat-reply nhac buoi xem", rmErr.message);
+        }
       }
     }
   };
@@ -2508,7 +2544,13 @@ Deno.serve(async (req) => {
       .eq("listing_id", dl.id).eq("buyer_id", buyer.id);
     if ((dupDeal ?? 0) > 0) return;
     const sType = (dl.sellers as { seller_type?: string } | null)?.seller_type;
-    await client.from("deals").insert({
+    // ĐUA: `count` ở trên đọc "chưa có" rồi mới ghi — hai tin "ok chốt nha" cách
+    // nhau vài trăm ms là hai lượt cùng đọc 0. `deals_listing_buyer_key` chặn
+    // được cú ghi thứ hai, nhưng bản trước KHÔNG đọc `error` nên lượt thua
+    // tưởng mình ghi xong và vẫn chạy tiếp khối dưới: CTV nhận HAI tin "khách
+    // vừa ĐỒNG Ý CHỐT, liên hệ gấp" cho cùng một kèo. Ràng buộc đã có sẵn, chỗ
+    // hỏng nằm ở đây — đọc lỗi rồi dừng.
+    const { error: dealErr } = await client.from("deals").insert({
       listing_id: dl.id, buyer_id: buyer.id,
       ctv_id: convRow.ctv_id,
       price_vnd: dl.price_vnd ?? null,
@@ -2520,6 +2562,12 @@ Deno.serve(async (req) => {
       fee_pct: sType === "ccrb" ? 1.0 : sType === "nmg" ? 0.5 : null,
       closed_at: new Date().toISOString(),
     });
+    if (dealErr) {
+      // 23505 = lượt kia vừa ghi xong đúng kèo này. Không phải sự cố, nhưng
+      // cũng KHÔNG được đi tiếp — đi tiếp là báo gấp lần hai.
+      if (dealErr.code !== "23505") await ghiLoi(client, "chat-reply ghi deal", dealErr.message);
+      return;
+    }
     await Promise.all([
       client.from("listings").update({ status: "da_chot" }).eq("id", dl.id),
       client.from("reminders").insert({

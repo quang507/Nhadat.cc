@@ -25,7 +25,9 @@ async function send(body, hdr = {}) {
   return { status: res.status, body: await res.json() };
 }
 const db = () => globalThis.__db;
-function fresh(seed) { globalThis.__db = new FakeDB(); globalThis.__calls = []; globalThis.__model = { parse: () => OUT() }; globalThis.__rpc = {}; seed?.(globalThis.__db); }
+// `__treTruyVan` phải được xoá ở đây: quên là độ trễ của ca "đua" rỉ sang mọi
+// ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
+function fresh(seed) { globalThis.__db = new FakeDB(); globalThis.__calls = []; globalThis.__model = { parse: () => OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; seed?.(globalThis.__db); }
 function seedKho(d) {
   const sC = d.insert("sellers", { zalo_user_id: "z-ccrb", seller_type: "ccrb", name: "Chị D.", active_listing_id: null }).data;
   const sU = d.insert("sellers", { zalo_user_id: "z-unknown", seller_type: "unknown", name: null, active_listing_id: null }).data;
@@ -487,6 +489,98 @@ r = await send({ external_user_id: "z-ccrb", text: "anh gọi chị D. rồi nh�
     JSON.stringify({ body: r.body, co_human: db().t.messages.some((m) => m.sender === "human") }));
   check("CỔNG-5 human_note hạ cờ needs_human (FR-147)",
     conv ? conv.needs_human === false : false, JSON.stringify(conv));
+}
+
+// ── ĐUA: SELECT-kiểm-tồn-tại rồi INSERT ──────────────────────────────────
+// Zalo giao hai tin của cùng một người cách nhau vài trăm ms. `claim_inbound`
+// chỉ chặn giao TRÙNG một msg_id — hai msg_id KHÁC nhau chạy song song thật.
+// `Promise.all` dưới đây tái hiện đúng cảnh đó: hai lượt handler xen kẽ nhau ở
+// mọi điểm `await`, nên cùng đọc "chưa có" rồi cùng ghi. Mock đã mô phỏng ba
+// chỉ mục duy nhất từng phần của 20260905f/g, nên nếu code không bắt 23505 thì
+// mấy ca này đỏ.
+
+// PHẢI TRỄ CẢ CÚ GHI, không chỉ cú đọc. Bản đầu chỉ trễ `select` và ca kiểm
+// vẫn xanh kể cả khi tắt sạch chỉ mục duy nhất — đo lại mới thấy vì sao:
+// `setTimeout` là macrotask, nên khi select của lượt A xong thì TOÀN BỘ phần
+// còn lại của A (đều là microtask) chạy hết — ghi xong xuôi — trước khi timer
+// của lượt B kịp nổ. Hai lượt vẫn nối đuôi, chỉ là nối đuôi chậm hơn.
+// Cho cú ghi một độ trễ DÀI HƠN cú đọc thì thứ tự thành:
+//   đọc A (rỗng) → đọc B (rỗng) → ghi A (được) → ghi B (23505)
+// tức đúng cuộc đua thật. Kiểm bằng đột biến ở cuối: tắt mô phỏng chỉ mục
+// duy nhất thì mấy ca dưới phải ĐỎ.
+const treDoc = (bang) => (t, op) => (t !== bang ? 0 : op === "select" ? 5 : 25);
+
+// (1) Hai tin cùng hẹn một buổi xem.
+fresh(seedKho);
+globalThis.__treTruyVan = treDoc("viewings");
+globalThis.__model.parse = () => OUT({
+  viewing: { listing_code: "BDS-Q5-0001", when: "mai 9h sáng", phone: null },
+});
+{
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "dua-vw", text: "mai 9h anh qua xem căn BDS-Q5-0001 nha" }),
+    send({ external_user_id: "dua-vw", text: "mai 9h anh qua xem căn BDS-Q5-0001 nha" }),
+  ]);
+  const vws = db().t.viewings.filter((v) => v.status === "pending");
+  const nhac = db().t.reminders.filter((r) => r.kind === "viewing");
+  check("ĐUA-1 hai tin hẹn xem song song → CHỈ MỘT buổi xem", vws.length === 1,
+    JSON.stringify(vws.map((v) => ({ id: v.id, code: v.listing_code }))));
+  check("ĐUA-1 → CHỈ MỘT nhắc trước buổi xem (khách không bị nhắc hai lần)",
+    nhac.length === 1, JSON.stringify(nhac.map((r) => r.note)));
+  check("ĐUA-1 cả hai lượt vẫn trả lời được, không lượt nào 500",
+    ra.status === 200 && rb.status === 200, JSON.stringify([ra.status, rb.status]));
+  check("ĐUA-1 lượt thua vẫn gắn được nhắc vào buổi xem của lượt thắng",
+    nhac[0]?.viewing_id === vws[0]?.id, JSON.stringify({ nhac: nhac[0]?.viewing_id, vw: vws[0]?.id }));
+}
+
+// (2) Hai tin cùng chốt một kèo. `deals_listing_buyer_key` đã có từ trước, nên
+// dòng deals thứ hai vốn đã bị chặn — cái CHƯA được chặn là khối chạy TIẾP sau
+// đó: bản trước không đọc `error` nên lượt thua vẫn bắn thêm một việc
+// escalation "khách vừa ĐỒNG Ý CHỐT, liên hệ gấp". CTV nhận hai lần một kèo.
+fresh(seedKho);
+{
+  // Lượt khởi động: khách mới toanh thì lượt đầu rẽ vào nhánh HỎI VAI và không
+  // bao giờ tới khối chốt kèo — đo mới thấy (một lượt đụng `deals`, một lượt
+  // trả câu chào). Không có lượt này thì ca đua bên dưới xanh vì chỉ có MỘT
+  // lượt chạy thật, chứ không phải vì code đúng.
+  await send({ external_user_id: "dua-deal", text: "anh đang tìm mua nhà quận 5" });
+  globalThis.__treTruyVan = treDoc("deals");
+  globalThis.__model.parse = () => OUT({ agreed_deal: { listing_code: "BDS-Q5-0001" } });
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "dua-deal", text: "ok em, anh chốt căn này" }),
+    send({ external_user_id: "dua-deal", text: "ok em, anh chốt căn này" }),
+  ]);
+  const esc = db().t.reminders.filter((r) => r.kind === "escalation" && /ĐỒNG Ý CHỐT/.test(r.note ?? ""));
+  check("ĐUA-2 hai tin chốt song song → CHỈ MỘT deal", db().t.deals.length === 1,
+    JSON.stringify(db().t.deals.length));
+  check("ĐUA-2 → CHỈ MỘT việc báo gấp cho CTV", esc.length === 1,
+    JSON.stringify(esc.map((r) => r.note?.slice(0, 40))));
+  check("ĐUA-2 cả hai lượt đều 200", ra.status === 200 && rb.status === 200,
+    JSON.stringify([ra.status, rb.status]));
+}
+
+// (3) Hai khách cùng hỏi chủ nhà một câu về một căn (FR-140).
+fresh(seedKho);
+globalThis.__treTruyVan = treDoc("info_requests");
+globalThis.__model.parse = () => OUT({
+  ask_owner: { listing_code: "BDS-Q5-0001", question: "còn bán không" },
+  replies: ["Dạ để em hỏi lại chủ nhà rồi báo anh liền ạ"],
+});
+{
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "dua-ask-1", text: "căn BDS-Q5-0001 còn bán không em" }),
+    send({ external_user_id: "dua-ask-2", text: "căn BDS-Q5-0001 còn bán không em" }),
+  ]);
+  const irs = db().t.info_requests.filter((r) => r.status === "pending");
+  check("ĐUA-3 hai khách cùng hỏi một câu → CHỈ MỘT câu chờ chủ nhà",
+    irs.length === 1, JSON.stringify(irs.map((r) => r.question)));
+  check("ĐUA-3 cả hai khách vẫn nhận được trả lời",
+    ra.status === 200 && rb.status === 200 &&
+    (ra.body.replies?.length ?? 0) > 0 && (rb.body.replies?.length ?? 0) > 0,
+    JSON.stringify([ra.status, rb.status]));
+  check("ĐUA-3 không có lỗi lạ nào lọt vào sổ (23505 phải được nuốt đúng chỗ)",
+    db().t.bot_errors.filter((e) => /hoi chu nha/.test(String(e.source))).length === 0,
+    JSON.stringify(db().t.bot_errors.map((e) => e.source)));
 }
 
 // ── kết ──

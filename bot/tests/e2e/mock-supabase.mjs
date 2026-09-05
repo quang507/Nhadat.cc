@@ -41,6 +41,33 @@ export class FakeDB {
       if (globalThis.__afterInsertMsg && r.sender === 'buyer') { const h = globalThis.__afterInsertMsg; globalThis.__afterInsertMsg = null; this.rows('messages').push(r); h(this, r); return { data: r }; }
     }
     if (table === "reminders") r.status = r.status ?? "pending"; // DB default 'pending'
+    // ── Chỉ mục duy nhất TỪNG PHẦN (20260905f/g) ─────────────────────────────
+    // Ba khoá này là thứ DUY NHẤT chặn được mẫu SELECT-rồi-INSERT. Mock không
+    // mô phỏng chúng thì ca kiểm cạnh tranh sẽ XANH trong khi bản thật ném
+    // 23505 và code chưa biết bắt — tức bộ e2e nói dối theo hướng lạc quan,
+    // đúng kiểu nguy nhất. Chép sát định nghĩa trong migration.
+    const trung = (msg) => ({ error: { code: "23505", message: msg } });
+    if (table === "info_requests" && (r.status ?? "pending") === "pending" &&
+        this.t.info_requests.some((x) =>
+          x.listing_id === r.listing_id && x.question === r.question && x.status === "pending")) {
+      return trung("info_requests_mot_cau_cho_idx");
+    }
+    if (table === "viewings" && (r.status ?? "pending") === "pending") {
+      const neo = (x) => x.listing_code ?? x.listing_id ?? null;
+      if (this.t.viewings.some((x) =>
+        x.status === "pending" && x.buyer_id === r.buyer_id && neo(x) === neo(r))) {
+        return trung("viewings_mot_hen_cho_moi_can_idx");
+      }
+    }
+    if (table === "reminders" && r.kind === "viewing" && r.status === "pending" && r.viewing_id &&
+        this.t.reminders.some((x) =>
+          x.kind === "viewing" && x.status === "pending" && x.viewing_id === r.viewing_id)) {
+      return trung("reminders_mot_nhac_moi_buoi_xem_idx");
+    }
+    if (table === "deals" &&
+        this.t.deals.some((x) => x.listing_id === r.listing_id && x.buyer_id === r.buyer_id)) {
+      return trung("deals_listing_buyer_key");
+    }
     if (table === "listings") {
       r.code = r.code ?? `BDS-Q5-${String(this.t.listings.length + 1).padStart(4, "0")}`;
       r.status = r.status ?? "cho_thong_tin";
@@ -143,7 +170,19 @@ class Builder {
     if (this.mode === "single") return proj[0] ? { data: proj[0], error: null } : { data: null, error: { code: "PGRST116", message: "0 rows" } };
     return { data: proj, error: null, count: this.count ? proj.length : undefined };
   }
-  then(res, rej) { try { return Promise.resolve(this.run()).then(res, rej); } catch (e) { return Promise.reject(e).then(res, rej); } }
+  // ĐỘ TRỄ GIẢ — chỗ cuộc đua thật sự sống.
+  // Bản trước chạy `run()` gần như tức thời, nên hai handler gọi song song vẫn
+  // nối đuôi nhau: handler A xong cả khối SELECT→INSERT rồi B mới bắt đầu, và
+  // ca kiểm "đua" đo được đúng con số như khi không có đua. Đã đo: tắt hết chỉ
+  // mục duy nhất trong mock mà 129/129 vẫn xanh — bộ kiểm câm.
+  // Cuộc đua thật nằm ở ĐỘ TRỄ MẠNG giữa lúc đọc và lúc ghi. `__treTruyVan`
+  // cho ca kiểm chèn đúng độ trễ đó: `(bang, op) => số ms`.
+  then(res, rej) {
+    const tre = globalThis.__treTruyVan?.(this.table, this.op ?? "select") ?? 0;
+    const chay = () => { try { return Promise.resolve(this.run()); } catch (e) { return Promise.reject(e); } };
+    if (!tre) return chay().then(res, rej);
+    return new Promise((ok) => setTimeout(ok, tre)).then(chay).then(res, rej);
+  }
 }
 
 class RpcCall {
