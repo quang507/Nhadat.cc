@@ -583,6 +583,30 @@ globalThis.__model.parse = () => OUT({
     JSON.stringify(db().t.bot_errors.map((e) => e.source)));
 }
 
+// (4) Hai tin cùng xin gặp người thật (viecNguoiThat).
+// Bất biến: một khách đang có việc escalation CHỜ thì không mở thêm việc nữa —
+// CTV không nên nhận hai tin "khách cần người thật" cho cùng một khách.
+// Cửa sổ ở đây là "24 GIỜ TRƯỢT" (nhánh VOICE) và "còn pending" (nhánh thường),
+// không phát biểu được bằng chỉ mục duy nhất, nên vá bằng RPC nguyên tử.
+fresh(seedKho);
+{
+  await send({ external_user_id: "dua-nt", text: "anh đang tìm mua nhà quận 5" });
+  globalThis.__treTruyVan = treDoc("reminders");
+  globalThis.__model.parse = () => OUT({ need_human: true, replies: ["Dạ để em nhờ anh phụ trách ạ"] });
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "dua-nt", text: "cho anh gặp người thật đi em" }),
+    send({ external_user_id: "dua-nt", text: "cho anh gặp người thật đi em" }),
+  ]);
+  const esc = db().t.reminders.filter((r) => r.kind === "escalation");
+  check("ĐUA-4 hai tin xin người thật song song → CHỈ MỘT việc escalation",
+    esc.length === 1, JSON.stringify(esc.map((r) => r.note?.slice(0, 45))));
+  check("ĐUA-4 cả hai lượt đều 200", ra.status === 200 && rb.status === 200,
+    JSON.stringify([ra.status, rb.status]));
+  check("ĐUA-4 cờ needs_human vẫn được bật",
+    db().t.conversations.some((c) => c.needs_human === true),
+    JSON.stringify(db().t.conversations.map((c) => c.needs_human)));
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

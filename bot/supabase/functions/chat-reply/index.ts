@@ -2334,28 +2334,33 @@ Deno.serve(async (req) => {
   // trong 24h, không dính vào việc 🙋 thường (một khách có thể có cả hai).
   const viecNguoiThat = async () => {
     if (!out.need_human) return;
-    const loc = client.from("reminders")
-      .select("id", { count: "exact", head: true })
-      .eq("buyer_id", buyer.id).eq("kind", "escalation");
-    const [, { count: hEsc }] = await Promise.all([
+    // ĐUA: bản trước ĐẾM việc escalation đang chờ rồi mới GHI. Hai tin "cho anh
+    // gặp người thật" liền nhau → hai lượt cùng đếm 0 → CTV nhận hai việc cho
+    // một khách. Đã dựng lại được trong e2e (ĐUA-4) trước khi vá: 2 việc.
+    //
+    // KHÔNG vá được bằng chỉ mục duy nhất — luật ở đây là "24 GIỜ TRƯỢT"
+    // (nhánh VOICE) và "còn pending" (nhánh thường), mà cửa sổ trượt thì
+    // `create unique index` không phát biểu nổi. Còn khoá
+    // `unique (buyer_id) where kind='escalation' and status='pending'` thì SAI
+    // HẲN: khách đang có việc "cần người thật" mà chốt kèo là `viecChot` bị DB
+    // từ chối, CTV không được báo về một giao dịch đã chốt.
+    // Nên đẩy nguyên hai điều kiện lọc đó xuống `mo_viec_can_nguoi_that`
+    // (20260905h) — khoá tư vấn theo từng khách, luật giữ nguyên từng chữ.
+    const note = muonGoi
+      ? `VOICE: ${externalUserId} muốn gọi điện${buyer.name ? ` (${buyer.name})` : ""}. Tin cuối: "${text.slice(0, 120)}". Anh/chị gọi lại giúp em`
+      : `🙋 khách cần người thật${buyer.name ? ` (${buyer.name})` : ""}. Tin cuối: "${text.slice(0, 120)}"`;
+    const [, { error: nhErr }] = await Promise.all([
       client.from("conversations")
         .update({ needs_human: true, needs_human_at: new Date().toISOString() })
         .eq("id", convId),
-      muonGoi
-        ? loc.in("status", ["pending", "sent"]).ilike("note", "VOICE:%")
-          .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString())
-        : loc.eq("status", "pending"),
+      client.rpc("mo_viec_can_nguoi_that", {
+        p_buyer_id: buyer.id,
+        p_ctv_id: convRow.ctv_id ?? null,
+        p_note: note,
+        p_voice: muonGoi,
+      }),
     ]);
-    if ((hEsc ?? 0) === 0) {
-      const { error: nhErr } = await client.from("reminders").insert({
-        kind: "escalation", buyer_id: buyer.id, ctv_id: convRow.ctv_id,
-        due_at: new Date().toISOString(),
-        note: muonGoi
-          ? `VOICE: ${externalUserId} muốn gọi điện${buyer.name ? ` (${buyer.name})` : ""}. Tin cuối: "${text.slice(0, 120)}". Anh/chị gọi lại giúp em`
-          : `🙋 khách cần người thật${buyer.name ? ` (${buyer.name})` : ""}. Tin cuối: "${text.slice(0, 120)}"`,
-      });
-      if (nhErr) await ghiLoi(client, "chat-reply escalation(buyer)", nhErr.message);
-    }
+    if (nhErr) await ghiLoi(client, "chat-reply escalation(buyer)", nhErr.message);
   };
 
   // FR-65 (v48): chấm sao sau buổi xem → RPC `ghi_danh_gia` (tầng DB, cùng

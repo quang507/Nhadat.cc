@@ -219,6 +219,27 @@ class RpcCall {
         });
         return { data: 1, error: null };
       }
+      // 20260905h — chép đúng hai điều kiện lọc của hàm thật. Hàm thật xếp hàng
+      // bằng `pg_advisory_xact_lock` theo từng khách; ở đây `run()` chạy ĐỒNG BỘ
+      // (không `await` nào ở giữa) nên đọc-rồi-ghi không xen được — đúng cái mà
+      // khoá tư vấn bảo đảm bên DB. Chính vì vậy ca ĐUA-4 mới xanh sau khi vá và
+      // ĐỎ trước khi vá (lúc app còn đi hai truy vấn rời).
+      case "mo_viec_can_nguoi_that": {
+        const cua24h = Date.now() - 24 * 3600e3;
+        const da = db.t.reminders.filter((r) =>
+          r.buyer_id === a.p_buyer_id && r.kind === "escalation" &&
+          (a.p_voice
+            ? ["pending", "sent"].includes(r.status) &&
+              /^voice:/i.test(String(r.note ?? "")) &&
+              Date.parse(r.created_at) > cua24h
+            : r.status === "pending")).length;
+        if (da > 0) return { data: false, error: null };
+        db.insert("reminders", {
+          kind: "escalation", buyer_id: a.p_buyer_id, ctv_id: a.p_ctv_id ?? null,
+          due_at: now(), note: a.p_note,
+        });
+        return { data: true, error: null };
+      }
       case "log_loi": db.t.bot_errors.push({ at: now(), source: a.p_source, detail: a.p_detail, status_code: a.p_code }); return { data: null, error: null };
       case "cong_token": db.t.bot_usage.push(a); return { data: null, error: null };
       case "bump_model_quota": return { data: true, error: null };
