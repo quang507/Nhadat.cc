@@ -99,15 +99,31 @@ của người đẩy commit**. Nay chia lại cho sòng phẳng.
 
 | Tầng | Ai kiểm | Ở đâu | Chặn merge? |
 |---|---|---|---|
-| Kiểu dữ liệu TypeScript | máy | CI job `web` | có |
-| Web dựng được, trang tin còn trong cache (NFR-17) | máy dựng, người soi bảng route | CI job `web` | có / không |
-| 102 kịch bản hội thoại + FR-159/161/164 | máy | CI job `bot` | có |
-| ID gãy, truy vết thiếu, số đếm README, PII, khoá service_role | máy | CI job `truyvet` | có |
-| RLS / GRANT — tập không phá huỷ (TS-SEC-AUTO) | máy | CI job `baomat` | có |
+| Kiểu dữ liệu TypeScript | máy | CI job `web` | ⚠️ xem dưới |
+| Web dựng được, trang tin còn trong cache (NFR-17) | máy dựng, người soi bảng route | CI job `web` | ⚠️ / không |
+| 208 ca hội thoại + webhook + cổng, và 82 ca FR-159/161/164 | máy | CI job `bot` | ⚠️ |
+| Sao lưu phân biệt "đủ" với "trông như đủ" (TS-SAOLUU) | máy | CI job `saoluu` | ⚠️ |
+| ID gãy, truy vết thiếu, số đếm README, PII, khoá service_role | máy | CI job `truyvet` | ⚠️ |
+| RLS / GRANT — tập không phá huỷ (TS-SEC-AUTO) | máy | CI job `baomat` | ⚠️ |
+| RLS / GRANT — ma trận 5 vai (TS-SEC3) | người, SQL Editor | `bot/tests/vai-tro.sql` | có, tay |
 | RLS / GRANT — bài phá huỷ (xoá thật nếu RLS hỏng) | người, SQL Editor | `docs/10 §10.7` | có, tay |
 | Migration đã áp ↔ file trong repo, ảnh chụp schema còn mới | máy, chạy tay | `scripts/soat-migration.mjs` | có, tay |
 | Thông tuyến Zalo thật (TS-LIVE) | người, hai điện thoại | `docs/10 §10.7` | có, tay |
 | Tone giọng, a11y, Lighthouse, tải | người | `docs/10 §10.3–10.4` | chưa |
+| Lint | **không có** — repo chưa cài eslint/biome/prettier | — | không |
+
+**⚠️ CI CHẠY KHÔNG CÓ NGHĨA LÀ CHẶN ĐƯỢC MERGE.** Soát 06/09/2026 qua API
+GitHub: nhánh `main` trả `"protected": false`. Nghĩa là năm job kia có đỏ rực
+thì nút *Merge* vẫn bấm được, và ai cũng push thẳng vào `main` được, không qua
+PR nào. Bảng này trước đây ghi "có" ở năm dòng đầu — đó là **lời kể**, đúng thứ
+CI sinh ra để thay thế. Muốn chữ "có" thành thật thì phải bật bảo vệ nhánh, xem
+§11.5 Cổng 2.
+
+**Về lint:** repo không có eslint, biome, prettier hay oxlint — không trong
+`devDependencies`, không có file cấu hình nào. `next lint` đòi eslint cài sẵn
+nên cũng không chạy được. Vì vậy KHÔNG có script `lint` trong `package.json`:
+thêm một câu lệnh không chạy được là dựng CI giả. Muốn có lint thì đó là một
+quyết định thêm phụ thuộc, làm riêng, không lẫn vào cổng này.
 
 Chỗ máy KHÔNG với tới được là chỗ nguy nhất, vì nó im lặng: RLS hở, bridge chết,
 bot trả 200 kèm câu trả lời sai. Đó là lý do TS-SEC chạy sau **mọi** migration
@@ -139,8 +155,36 @@ bun run kiem     # kiểu + dựng + e2e bot + soát truy vết, một lệnh
 Đụng migration RLS/GRANT thì chạy thêm TS-SEC bằng tay.
 
 **Cổng 2 — trước merge** (máy, GitHub Actions `.github/workflows/kiem.yml`):
-ba job `web` / `bot` / `truyvet` phải xanh. Đỏ là không merge — không "merge
-rồi sửa sau".
+năm job `web` / `bot` / `saoluu` / `truyvet` / `baomat` phải xanh. Đỏ là không
+merge — không "merge rồi sửa sau".
+
+Nhưng tính tới 06/09/2026 câu trên mới là **kỷ luật, chưa phải hàng rào**:
+`main` chưa bật bảo vệ nhánh, nên GitHub không ngăn ai merge PR đỏ hay push
+thẳng. Cổng 2 chỉ có thật khi chủ dự án bật, ở
+**Settings → Branches → Add branch protection rule** cho `main`:
+
+- ✅ *Require a pull request before merging* — chặn push thẳng vào `main`.
+- ✅ *Require status checks to pass before merging* + ✅ *Require branches to be
+  up to date*, rồi chọn đúng năm tên check này (chép nguyên văn, kể cả dấu gạch
+  dài và dấu tiếng Việt — GitHub so khớp theo TÊN, sai một ký tự là điều kiện
+  không bao giờ thoả và PR kẹt vĩnh viễn):
+
+  | Tên check | Job | Đỏ nghĩa là gì |
+  |---|---|---|
+  | `Web — kiểu dữ liệu + dựng` | `web` | TypeScript hoặc `next build` hỏng |
+  | `Bot — e2e hội thoại` | `bot` | Hồi quy hội thoại / webhook / cổng vào gãy |
+  | `Sao lưu — tự kiểm trên PostgREST giả` | `saoluu` | Bản sao duy nhất đang tồn tại có thể báo "đủ" khi thiếu |
+  | `Tài liệu — truy vết ID` | `truyvet` | ID gãy, số đếm lệch, PII hoặc khoá lọt vào file |
+  | `Bảo mật — hồi quy RLS trên DB thật` | `baomat` | Vai `anon` với tới thứ nó không được với |
+
+**Đánh đổi phải biết trước khi bật `baomat`:** job đó cần đường ra Internet tới
+`*.supabase.co` và DB đang chạy. Supabase bậc Free **ngủ khi không ai đụng** —
+lúc đó `test:sec` thoát 2 ("chưa kiểm được"), job đỏ, và mọi PR kẹt cho tới khi
+đánh thức DB. Đó là hành vi ĐÚNG (không kiểm được thì không được merge), nhưng
+nó sẽ chặn thật, nên đừng ngạc nhiên rồi đi tắt nó lúc đang vội.
+
+Không bật ✅ *Include administrators* thì chủ repo vẫn tự bỏ qua được — tuỳ chủ
+dự án, nhưng phải là lựa chọn có ý thức, không phải mặc định quên bật.
 
 **Cổng 3 — trước deploy edge function** (người, `bot/README.md §Deploy`):
 bundle → deploy → kéo ngược → **so từng byte** → chạy e2e trên chính nội dung
@@ -163,15 +207,19 @@ qua** (`docs/10 §10.8`).
 
 ## 11.7 Lệnh
 
-| Việc | Lệnh |
-|---|---|
-| Toàn bộ cổng 1 | `bun run kiem` |
-| Chỉ kiểu dữ liệu | `bun run kieu` |
-| Chỉ e2e bot | `bun run test:bot` |
-| Chỉ soát tài liệu | `bun run truyvet` |
-| Hồi quy RLS trên DB thật (cần Internet) | `bun run test:sec` |
-| Soát trôi migration DB ↔ repo (cần khoá) | `node scripts/soat-migration.mjs` |
-| Sao lưu 30 bảng + ảnh chụp schema (cần khoá) | `node scripts/sao-luu.mjs` |
+| Việc | Lệnh | Có trong `kiem`? |
+|---|---|---|
+| Toàn bộ cổng 1 | `bun run kiem` | — |
+| Chỉ kiểu dữ liệu | `bun run kieu` | có |
+| Chỉ dựng web | `bun run build` | có |
+| Chỉ e2e bot (208 ca + 82 ca regex + 4 cảnh tự kiểm) | `bun run test:bot` | có |
+| Chỉ ba tiến trình e2e | `bun run e2e` | qua `test:bot` |
+| Chỉ tự kiểm sao lưu (21 ca) | `bun run test:saoluu` | có |
+| Chỉ soát tài liệu | `bun run truyvet` | có |
+| Hồi quy RLS trên DB thật (cần Internet) | `bun run test:sec` | **không** — cần mạng, để `kiem` không đỏ oan trên máy offline |
+| Ma trận quyền 5 vai (cần quyền SQL) | dán `bot/tests/vai-tro.sql` vào SQL Editor | không |
+| Soát trôi migration DB ↔ repo (cần khoá) | `node scripts/soat-migration.mjs` | không |
+| Sao lưu 31 bảng + ảnh chụp schema (cần khoá) | `node scripts/sao-luu.mjs` | không |
 | Soát tài liệu chi tiết hơn (agent) | gọi agent `soat-truy-vet` |
 | Review diff đụng `docs/` | gọi agent `reviewer` |
 

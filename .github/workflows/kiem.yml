@@ -45,7 +45,8 @@ jobs:
       # node_modules của nó nằm trong .gitignore — cài ở gốc repo là không đủ.
       - name: Cài phụ thuộc của suite e2e
         run: bun install --frozen-lockfile --cwd bot/tests/e2e
-      # `chay.sh` TỰ dựng lại bundle từ nguồn rồi mới chạy 102 kịch bản — đừng
+      # `chay.sh` TỰ dựng lại bundle từ nguồn rồi mới chạy 208 ca (run.mjs 160 +
+      # webhook.mjs 44 + cong-thieu-bi-mat.mjs 4, ba tiến trình) — đừng
       # đổi thành `node run.mjs`, nó sẽ test bản bundle cũ nằm sẵn trong repo.
       # Supabase và model đều là bản giả lập trong `mock-*.mjs`: không đụng DB
       # thật, không tốn tiền model, không cần secret nào trong CI.
@@ -77,8 +78,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      # Gọi script trong package.json chứ KHÔNG gõ `bash scripts/…` thẳng: hai
+      # chỗ ghi đường dẫn là hai chỗ trôi được. Không `bun install`: script là
+      # bash trần, không đụng node_modules.
       - name: Không có ID gãy, số đếm khớp README, không rò PII
-        run: bash scripts/soat-truy-vet.sh
+        run: bun run truyvet
 
   # Sao lưu là loại mã chỉ được kiểm đúng một lần trong đời — hôm mất dữ liệu.
   # Job này bơm năm cách hỏng đã biết (bảng mới chưa khai, một bảng lỗi, DB trả
@@ -89,5 +96,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
       - name: Script phân biệt được 'đủ' với 'trông như đủ'
-        run: node scripts/sao-luu.tu-kiem.mjs
+        run: bun run test:saoluu
