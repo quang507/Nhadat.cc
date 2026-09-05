@@ -36,6 +36,7 @@ Thứ tự đọc = thứ tự phụ thuộc. Tài liệu sau **không được 
 | 8 | `docs/08-traceability.md` | Ma trận truy vết BR → FR → UF → WF → SRS | — |
 | 9 | `docs/09-open-issues.md` | Mâu thuẫn / quyết định còn treo, cần chủ dự án chốt | `OPEN-` |
 | 10 | `docs/10-ke-hoach-kiem-thu.md` | Kế hoạch kiểm thử 4 tầng: chức năng, kỹ thuật, UI/UX, phi chức năng | `TS-` |
+| 11 | `docs/11-quy-trinh.md` | Quy trình BA và tester: hai vòng làm việc, ba cổng, máy kiểm gì / người kiểm gì, định nghĩa XONG. Không sinh ID mới | — |
 
 ## 3. Tài liệu gốc (không sửa)
 
@@ -96,11 +97,43 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   `up-anh.mjs` đẩy ảnh thật lên bucket `listing-public` theo UUID của tin và
   ghi kèm dòng `listing_media` (FR-165; lối cũ theo mã tin của FR-148 đã bỏ);
   nó chỉ ĐỌC `masterDB/`, không bao giờ copy ảnh vào repo.
-  `sao-luu.mjs` kéo cả 23 bảng về JSON — **bậc Supabase Free không có backup tự
-  động**, đây là bản sao duy nhất đang tồn tại (OPEN-25). Cần
+  `sao-luu.mjs` kéo cả **31 bảng** về JSON, ghi `manifest.json` (bảng · số dòng
+  · file · trạng thái) và gọi `xuat_schema()` ghi
+  `bot/supabase/schema.sql` — **bậc Supabase Free không có backup tự động**,
+  đây là bản sao duy nhất đang tồn tại (OPEN-25). Cần
   `SUPABASE_SERVICE_ROLE_KEY` trong biến môi trường; khoá đó bỏ qua mọi RLS nên
   tuyệt đối không ghi vào file trong repo, và thư mục đích mặc định nằm NGOÀI
-  repo vì bản sao chứa SĐT thật.
+  repo vì bản sao chứa SĐT thật. `soat-migration.mjs` so DB ↔ repo.
+
+**Migration ghi THAY ĐỔI, `schema.sql` mới dựng lại được** (soát 05/09/2026).
+Câu cũ ở đây nói "migration là nguồn sự thật của schema" — sai: DB đã áp 103
+migration, repo có 62 file; 44 migration 21/08 → 27/08 áp thẳng qua MCP mà
+không ai lưu file, nội dung mất vĩnh viễn (OPEN-46). Không ai thấy suốt hai
+tuần vì không có gì đối chiếu hai bên. Nay: thay đổi schema vẫn BẮT BUỘC đi qua
+một file trong `bot/supabase/migrations/`, `soat-migration.mjs` chặn trôi thêm,
+và `bot/supabase/schema.sql` là lưới an toàn để dựng lại từ số không (quy trình
+đầy đủ ở `bot/README.md §Phục hồi từ số không`).
+
+**Danh sách bảng trong `sao-luu.mjs` phải đủ.** Nó liệt kê tay là cố ý (đọc là
+thấy), nhưng suốt 27/08 → 05/09 nó thiếu 8 bảng — trong đó `listing_media`, bản
+đồ ảnh ↔ tin (FR-165): mất nó thì file trong Storage còn nguyên mà không ai
+biết ảnh của tin nào (OPEN-47). Nay `liet_ke_bang()` bắt script hỏi DB mỗi lần
+chạy, thiếu bảng là DỪNG. Thêm bảng mới thì thêm vào mảng `BANG`.
+
+Vết đó lặp lại ngay hôm sau: `chat_quota` (migration `20260905d`) sinh ra mà
+không ai thêm vào `BANG`. `liet_ke_bang()` có bắt — nhưng chỉ bắt lúc CHẠY sao
+lưu, tức đêm hôm trên máy chủ, trước mặt không ai. Nay `soat-truy-vet.sh` so
+`create table` trong migration với `BANG` và kêu **ở PR**.
+
+**Sao lưu phải phân biệt "đủ" với "trông như đủ".** Ba luật, tất cả có ca kiểm
+trong `scripts/sao-luu.tu-kiem.mjs` (PostgREST giả, không chạm DB thật):
+`Prefer: count=exact` để đối chiếu số dòng kéo về với số DB tự báo — lệch là
+hỏng, vì một file JSON ngắn không kêu ca gì; `manifest.json` ghi ra ĐĨA với
+`trang_thai` (`day_du`/`thieu`/`hong`) — thư mục thiếu ba bảng trông y hệt thư
+mục đủ nếu không có gì nói ra; và mọi đường hỏng đều thoát khác 0. Thứ KHÔNG
+nằm trong bản sao (`storage.objects`, `auth.users`, `vault.secrets`) được liệt
+kê tường minh trong manifest — "không thấy" và "cố ý bỏ" nhìn giống hệt nhau
+lúc đang chữa cháy.
 
 **Trang tin phải nằm trong cache** (NFR-17). Route động có tham số đường dẫn mà
 thiếu `generateStaticParams()` thì `export const revalidate` là chữ chết —
@@ -147,8 +180,26 @@ làm tham chiếu khi code. Xem `design/README.md`.
 
 ## 7. Cách chạy pipeline BA
 
-Xem `.claude/skills/ba-pipeline/SKILL.md` — quy trình chuẩn để tạo mới hoặc cập
-nhật một tầng tài liệu mà không phá vỡ truy vết.
+Quy trình đầy đủ (BA + tester + ba cổng + định nghĩa XONG): `docs/11-quy-trinh.md`.
+Bản rút gọn nạp tự động cho agent: `.claude/skills/ba-pipeline/SKILL.md`.
+
+**Cổng kiểm — chạy trước mọi commit:**
+
+```bash
+bun run kiem   # = kieu (tsc) + build + test:bot (149 e2e + FR-159/161/164 + tự kiểm TS-SEC) + truyvet
+bun run test:sec   # TS-SEC thật trên DB thật — cần Internet, nên KHÔNG nằm trong `kiem`
+```
+
+Bốn job đó chạy trong CI (`.github/workflows/kiem.yml`) mỗi PR, kể cả `test:sec`.
+**Thoát 2 của `test:sec` nghĩa là "chưa kiểm được", không phải "đạt"** — bản đầu
+của nó coi mọi HTTP ≥400 là bị chặn và báo 24/24 xanh trong lúc proxy chặn sạch,
+chưa request nào tới Supabase. Bài tự kiểm offline
+(`bot/tests/ts-sec-anon.tu-kiem.mjs`) dựng PostgREST giả để chứng minh nó không
+tái phạm; sửa bộ probe thì phải chạy lại bài đó. Người và
+máy dùng chung script trong `package.json` — đừng gõ lệnh rời, không thì "máy
+xanh, máy tao đỏ" và không ai biết bên nào đúng. `scripts/soat-truy-vet.sh` bắt
+ID gãy, FR thiếu dòng truy vết, số đếm README lệch, SĐT thật lọt vào `docs/`,
+khoá service_role bị ghi vào file, và web trỏ `raw.githubusercontent.com`.
 
 **Skill PM mượn ngoài** (`phuryn/pm-skills`, MIT — kiểm license 03/09/2026;
 marketplace đã khai ở `.claude/settings.json` không ghim commit, nên nội dung

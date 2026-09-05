@@ -57,11 +57,22 @@ bun build bot/supabase/functions/<fn>/index.ts --target=node \
 ## Test
 
 ```bash
-bash bot/tests/e2e/chay.sh          # 102 kịch bản, TỰ dựng lại bundle — đừng chạy run.mjs trực tiếp
+bun run test:bot                    # cả bốn bộ dưới + tự kiểm TS-SEC (offline)
+bash bot/tests/e2e/chay.sh          # 149 ca (119 chat-reply + 4 cổng-thiếu-bí-mật + 26 zalo-webhook),
+                                    # TỰ dựng lại cả hai bundle — đừng chạy run.mjs / webhook.mjs trực tiếp
 node bot/tests/fr159-bon-vai.mjs    # 65 ca phân vai
 node bot/tests/fr161-go-lan-dau.mjs # 9 ca tiếng Việt không dấu
 node bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs  # 8 ca
+
+bun run test:sec                    # TS-SEC thật: bắn anon key vào DB thật (cần Internet)
+node bot/tests/ts-sec-anon.tu-kiem.mjs   # chứng minh bộ trên không báo xanh giả
 ```
+
+`test:sec` dùng **khoá công khai** (`sb_publishable_…`, đã nằm trong
+`lib/supabase.ts`) — đừng thay bằng service_role, làm thế là bỏ qua RLS và bộ
+test mất sạch ý nghĩa. Nó thoát **2** khi không tới được DB, khác hẳn thoát 0
+là đạt: bản đầu của nó coi mọi HTTP ≥400 là "bị chặn = đạt" và báo 24/24 xanh
+trong lúc proxy chặn sạch, chưa request nào tới Supabase.
 
 Suite chạy trên DB thật (rollback) và bảng kiểm đầy đủ nằm ở `docs/10`.
 
@@ -111,7 +122,39 @@ hàng nên cron luôn báo `succeeded` kể cả khi function trả 500. Kết q
   đường báo động DUY NHẤT không vòng lại qua bridge (FR-152 e).
 - **Sao lưu**: `scripts/sao-luu.mjs` (bậc Free không có backup tự động —
   OPEN-25). Cần `SUPABASE_SERVICE_ROLE_KEY` trong biến môi trường, đích ghi
-  NGOÀI repo vì bản sao chứa SĐT thật.
+  NGOÀI repo vì bản sao chứa SĐT thật. Mỗi lần chạy nó kéo **30 bảng** + gọi
+  `xuat_schema()` ghi `bot/supabase/schema.sql`; thiếu bảng nào chưa khai là nó
+  DỪNG (mã thoát ≠ 0) chứ không bỏ sót im lặng.
+- **Soát trôi schema**: `node scripts/soat-migration.mjs` — so migration đã áp
+  trên DB với file trong repo, và kiểm ảnh chụp schema còn mới. Chạy sau mỗi
+  lần áp migration bằng MCP.
+
+### Phục hồi từ số không
+
+Thứ tự này chưa diễn tập thật (chưa có project thứ hai để thử) — nhưng từng
+mảnh đã có và kiểm được. Cái KHÔNG có mới đáng sợ, nên ghi ra đây trước.
+
+1. Tạo project Supabase mới, ghi lại URL + khoá.
+2. **Schema**: chạy `bot/supabase/schema.sql` trong SQL Editor. File này là ảnh
+   chụp DDL đầy đủ (bảng, ràng buộc, index, hàm, view, trigger, RLS, policy,
+   quyền, bucket, cron). Thứ tự trong file là bảng → hàm → view → trigger; view
+   chồng view có thể phải chạy lại lượt hai — file dùng `create or replace` và
+   `if not exists` nên chạy lại được, không cần dọn.
+   *Không dùng thư mục `migrations/` để dựng lại: 44 migration đầu không còn
+   file (OPEN-46). Migration là để ghi THAY ĐỔI, `schema.sql` mới là để dựng.*
+3. **Bí mật**: chép tay vào Vault — `ANTHROPIC_API_KEY`, `BRIDGE_SECRET`.
+   Không có trong bản sao lưu nào, cố ý.
+4. **Dữ liệu**: đổ 30 file JSON của bản sao lưu theo thứ tự khoá ngoại —
+   `admins`/`app_config`/`bot_prompts`/`required_facts` trước, rồi `projects`,
+   `sellers`, `ctvs`, `buyers`, `listings`, cuối cùng là các bảng con
+   (`listing_facts`, `listing_media`, `messages`, `reminders`…).
+5. **Storage**: hiện CHƯA có lối sao lưu file (OPEN-47). Nếu bucket còn thì giữ
+   nguyên; nếu mất thì chạy lại `scripts/up-anh.mjs` từ `masterDB/` — được vì
+   `listing_media` đã có trong bản sao nên biết ảnh nào của tin nào.
+6. **Edge function**: deploy lại 9 function từ `bot/supabase/functions/` theo
+   mục Deploy ở trên (bundle → deploy → kéo ngược → so byte).
+7. **Kiểm**: `bun run test:sec` phải xanh, `/admin` phải lên số, `/moi-gioi`
+   phải ra đủ NMG.
 - **Sức khoẻ**: trang `/admin` — sổ lỗi, nhịp tim, tiền bộ não, độ trễ bot,
   việc chờ, hạng CTV.
 
@@ -125,11 +168,17 @@ kênh báo động không được đi qua thứ mà nó phải giám sát.
 
 ## Migration
 
-58 file ở `bot/supabase/migrations/`, đặt tên `YYYYMMDD<chữ>_<việc>.sql`, áp
-theo thứ tự tên. Migration là **nguồn sự thật của schema**: sửa DB bằng
-`apply_migration` với đúng nội dung file trong repo, không sửa tay ở dashboard
-rồi quên ghi lại. Đợt gần nhất: `20260904a` (còi ntfy) → `20260904g` (kho ảnh
-web + danh sách riêng).
+62 file ở `bot/supabase/migrations/`, đặt tên `YYYYMMDD<chữ>_<việc>.sql`, áp
+theo thứ tự tên. Sửa DB bằng `apply_migration` với đúng nội dung file trong
+repo, không sửa tay ở dashboard rồi quên ghi lại. Đợt gần nhất: `20260904a`
+(còi ntfy) → `20260905c` (liệt kê migration).
+
+**Migration ghi THAY ĐỔI, `schema.sql` mới dựng lại được.** Câu cũ ở đây nói
+migration là "nguồn sự thật của schema" — soát 05/09 cho thấy sai: DB đã áp 103
+migration, repo có 62 file; 44 migration 21/08 → 27/08 áp qua MCP mà không ai
+lưu file (OPEN-46). Nội dung chúng mất vĩnh viễn. Lưới an toàn là
+`bot/supabase/schema.sql`, sinh bởi `xuat_schema()`. Chạy
+`node scripts/soat-migration.mjs` để không trôi thêm.
 
 ## Chưa làm
 

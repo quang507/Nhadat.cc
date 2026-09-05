@@ -1,0 +1,93 @@
+# Cổng kiểm tự động — chạy đúng những gì người ta vẫn chạy tay trước khi push.
+# Trước 04/09/2026 repo không có CI nào: mọi lần "tsc sạch, e2e xanh" đều là lời
+# kể của người đẩy commit. Nay máy nói.
+name: Kiểm
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  web:
+    name: Web — kiểu dữ liệu + dựng
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      # Mọi bước dưới đây gọi script trong package.json, không gõ lệnh riêng:
+      # CI và người phải chạy ĐÚNG một câu lệnh, không thì "máy xanh, máy tao
+      # đỏ" và không ai biết bên nào đúng.
+      - name: Kiểu dữ liệu
+        run: bun run kieu
+      - name: Dựng
+        # Build không có key Supabase vẫn phải qua: trang động rơi về rỗng,
+        # nhưng lỗi cú pháp / import / kiểu thì lộ ra ngay.
+        run: bun run build
+
+  bot:
+    name: Bot — e2e hội thoại
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      # Không cần `setup-node`: ubuntu-latest có sẵn Node, và bốn file test là
+      # .mjs trần không import gói nào — thêm bước chỉ tốn 4 s tải Node 20 và
+      # kéo theo cảnh báo deprecation.
+      #
+      # Suite e2e có package.json RIÊNG (`@anthropic-ai/sdk`, `zod`) và
+      # node_modules của nó nằm trong .gitignore — cài ở gốc repo là không đủ.
+      - name: Cài phụ thuộc của suite e2e
+        run: bun install --frozen-lockfile --cwd bot/tests/e2e
+      # `chay.sh` TỰ dựng lại bundle từ nguồn rồi mới chạy 102 kịch bản — đừng
+      # đổi thành `node run.mjs`, nó sẽ test bản bundle cũ nằm sẵn trong repo.
+      # Supabase và model đều là bản giả lập trong `mock-*.mjs`: không đụng DB
+      # thật, không tốn tiền model, không cần secret nào trong CI.
+      - name: e2e + hồi quy FR-159/161/164
+        run: bun run test:bot
+
+  baomat:
+    name: Bảo mật — hồi quy RLS trên DB thật
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      # Bắn anon key CÔNG KHAI (đã nằm trong lib/supabase.ts và mọi bundle web
+      # đã phát hành) vào DB thật — không cần secret nào, và đó chính là điểm:
+      # thứ phải chịu được là cái key mà ai cũng có. Chỉ các bài KHÔNG phá huỷ;
+      # bài xoá dữ liệu vẫn ở bộ chạy tay (docs/10 §10.7).
+      #
+      # Job này KHÔNG nằm trong `bun run kiem` vì nó cần đường ra Internet tới
+      # supabase.co — máy dev hoặc sandbox không có là `kiem` đỏ oan. Bù lại
+      # `test:bot` có bài tự kiểm chạy offline, chứng minh bộ này không thể
+      # báo xanh khi mất mạng (thoát 2 = "chưa kiểm được", khác 0 = "đạt").
+      - name: TS-SEC — anon không đọc/ghi được gì nội bộ, mặt công khai còn sống
+        run: bun run test:sec
+
+  truyvet:
+    name: Tài liệu — truy vết ID
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Không có ID gãy, số đếm khớp README, không rò PII
+        run: bash scripts/soat-truy-vet.sh
+
+  # Sao lưu là loại mã chỉ được kiểm đúng một lần trong đời — hôm mất dữ liệu.
+  # Job này bơm năm cách hỏng đã biết (bảng mới chưa khai, một bảng lỗi, DB trả
+  # thiếu dòng, không đọc được số dòng, xuất schema hụt) vào một PostgREST giả
+  # rồi soi mã thoát + manifest. Không chạm DB thật, không cần khoá.
+  saoluu:
+    name: Sao lưu — tự kiểm trên PostgREST giả
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Script phân biệt được 'đủ' với 'trông như đủ'
+        run: node scripts/sao-luu.tu-kiem.mjs

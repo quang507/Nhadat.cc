@@ -376,6 +376,31 @@ bản không khớp; wireframe `05` có 6/14 màn chưa dựng (WF-08, WF-11, WF
 **Phương án**: (a) code làm gốc, sinh lại `tokens.json` từ `globals.css`, sửa `06`; (b) sửa code theo `06`.
 **Khuyến nghị BA**: (a); wireframe chưa dựng gắn nhãn theo OPEN-43. **Chờ**: chủ dự án.
 
+### OPEN-46 · 44 migration đầu không còn file, chỉ sống trong DB
+**Vấn đề** (soát 05/09/2026): DB đã áp 103 migration, repo có 62 file. 44 migration
+21/08 → 27/08 áp thẳng qua MCP mà không ai lưu file — toàn bộ schema lõi (30 bảng, RLS,
+projects, conversations, reminders, CTV, drip) chỉ tồn tại trong project đang chạy. Nội
+dung từng migration đó **mất vĩnh viễn**; không dựng lại được lịch sử.
+**Đã giảm nhẹ 05/09**: `xuat_schema()` (`20260905a`) sinh DDL đầy đủ, `sao-luu.mjs` ghi
+ra `bot/supabase/schema.sql` — repo dựng lại được TRẠNG THÁI HIỆN TẠI, dù không dựng lại
+được từng bước. `soat-migration.mjs` chặn không cho trôi thêm.
+**Phương án**: (a) sống với ảnh chụp, mọi migration mới bắt buộc có file (đang làm);
+(b) viết lại 44 migration từ schema hiện tại thành một `00000_baseline.sql` — tốn công,
+và bản viết lại vẫn không phải bản đã chạy thật.
+**Khuyến nghị BA**: (a). **Chờ**: không chặn ai, ghi để không ai tưởng repo tự dựng được DB.
+
+### OPEN-47 · Tám bảng chưa từng được sao lưu
+**Vấn đề** (soát 05/09/2026): `scripts/sao-luu.mjs` liệt kê tay 22 bảng, DB có 30. Tám
+bảng chưa từng vào bản sao nào: `app_config`, `curated_lists`, `inbound_events`,
+`inbound_ledger`, `listing_media`, `media_cleanup_queue`, `property_events`,
+`ratings_log`. Nặng nhất là `listing_media` — bản đồ ảnh ↔ tin (FR-165); mất nó thì file
+trong Storage còn nguyên mà không ai biết ảnh của tin nào.
+**Đã vá 05/09**: thêm đủ 30 bảng; `liet_ke_bang()` (`20260905b`) cho script tự hỏi DB mỗi
+lần chạy, thiếu bảng là DỪNG với mã thoát khác 0 thay vì bỏ sót im lặng.
+**Còn treo**: Storage (bucket `listing-public`) vẫn CHƯA được sao lưu — `sao-luu.mjs`
+chỉ kéo bảng. Hôm nay 0 file nên chưa đau; chạy `up-anh.mjs` xong là phải có lối sao lưu
+file. **Chờ**: chủ dự án chốt nơi cất (ổ ngoài / cloud riêng).
+
 ---
 
 ### Advisor Supabase — các cảnh báo cố ý giữ
@@ -387,7 +412,13 @@ Ghi lại để lần sau không ai đi "vá" nhầm. Mọi cảnh báo dưới 
 | `security_definer_view` (ERROR) | `agents_public` | Anon phải đọc được hình chiếu NMG đã cắt sạch liên hệ (FR-125). View **tự chứa**, không join view khác — `20260827g` từng lỡ đổi sang invoker làm `/moi-gioi` trống, vá `20260904b` (TS-SEC-08) |
 | `security_definer_view` (ERROR) | `listing_photos_v` | Ghép URL từ `app_config` mà anon đã bị thu quyền đọc (TS-KHO-21); chỉ trả ảnh bucket public của tin đã lên kệ (FR-167c) |
 | `security_definer_view` (ERROR) | `ctv_ranks`, `hoi_thoai_thong_ke`, `khach_can_nguoi_that`, `nmg_hoat_dong`, `bds_hot`, `bot_do_tre` | Bảng nguồn bật RLS không policy; view tự gác cổng bằng `auth.role() = 'service_role'` hoặc email trong `admins`; anon đọc 0 dòng (TS-CTV, TS-ADM2) |
+| `anon_security_definer_function_executable` (WARN) | `doc_danh_sach(text)` | Trang `/ds/<token>` đọc bằng publishable key (FR-100); hàm chỉ trả tin đã lên kệ của một token còn hạn, không trả `buyer_id`. **Đừng thu hồi** — thu là trang danh sách riêng trắng |
 | `anon_security_definer_function_executable` (WARN) | `log_loi` | Web chạy publishable key nên phải mở cho anon (FR-152 d); có van 20 dòng/nguồn/giờ và 200 dòng/giờ |
 | `extension_in_public` (WARN) | `pg_net` | Schema thuộc `supabase_admin`, không tự chuyển được — cùng gốc OPEN-24 |
 | `rls_enabled_no_policy` (INFO ×12) | `messages`, `conversations`, `reminders`, `deals`… | Bật RLS không policy = chặn hết, chỉ `service_role` đụng được — đúng ý |
 | `multiple_permissive_policies` (WARN hiệu năng) | `listings`, vai `authenticated` | Giữ 3 policy cho rõ luật quyền; gộp khi `listings` qua ~10k dòng. 8 index chưa dùng: để đó, bảng còn nhỏ |
+
+**Đã vá, không còn trong danh sách trên** — `20260904h` (04/09/2026): 8 hàm
+trigger tạo mới ở `20260904c/d/f` nhận EXECUTE mặc định của `public` nên lộ ra
+`/rest/v1/rpc/`; nay chỉ còn `service_role`. Hàm trigger cũ không dính vì
+`create or replace` giữ nguyên quyền đã thu hồi.

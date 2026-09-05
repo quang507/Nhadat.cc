@@ -1,22 +1,33 @@
 import { FakeDB } from "./mock-supabase.mjs";
+import { OUT } from "./mock-anthropic.mjs";
 globalThis.__calls = []; globalThis.__db = new FakeDB();
 const ENV = { SUPABASE_URL: "http://x", SUPABASE_SERVICE_ROLE_KEY: "svc", BRIDGE_SECRET: "s3cret", ANTHROPIC_API_KEY: "test-key" };
 globalThis.Deno = { serve: (h) => { globalThis.__handler = h; }, env: { get: (k) => ENV[k] } };
 await import("./chat-reply.bundle.mjs");
 const H = globalThis.__handler;
 
-const OUT = (o = {}) => ({ profile: { name: null, deal: null, area: null, budget: null, purpose: null, property_type: null, bedrooms: null, alley: null, timeline: null, notes: null },
-  replies: ["Dạ em ghi nhận rồi ạ, anh/chị tìm khu nào ạ?"], promise: null, viewing: null, agreed_deal: null, send_photos: null, ask_owner: null, need_human: false, ...o });
 let msgN = 0;
 async function send(body, hdr = {}) {
   const b = { msg_id: `m${++msgN}`, channel: "zalo_personal_test", ...body };
   const hdrs = { "x-bridge-secret": "s3cret", ...hdr };
-  const req = { method: "POST", headers: { get: (k) => hdrs[k.toLowerCase()] ?? null }, json: async () => b };
+  // SEC-06: chat-reply đọc `req.text()` rồi tự parse (để chặn body khổng lồ
+  // TRƯỚC khi parse) và soi `content-length`. Request giả phải có đủ cả ba,
+  // không thì bộ e2e đo một cửa vào khác với cửa vào thật.
+  const tho = JSON.stringify(b);
+  const hdrsFull = { "content-length": String(tho.length), ...hdrs };
+  const req = {
+    method: "POST",
+    headers: { get: (k) => hdrsFull[k.toLowerCase()] ?? null },
+    text: async () => tho,
+    json: async () => b,
+  };
   const res = await H(req);
   return { status: res.status, body: await res.json() };
 }
 const db = () => globalThis.__db;
-function fresh(seed) { globalThis.__db = new FakeDB(); globalThis.__calls = []; globalThis.__model = { parse: () => OUT() }; globalThis.__rpc = {}; seed?.(globalThis.__db); }
+// `__treTruyVan` phải được xoá ở đây: quên là độ trễ của ca "đua" rỉ sang mọi
+// ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
+function fresh(seed) { globalThis.__db = new FakeDB(); globalThis.__calls = []; globalThis.__model = { parse: () => OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; seed?.(globalThis.__db); }
 function seedKho(d) {
   const sC = d.insert("sellers", { zalo_user_id: "z-ccrb", seller_type: "ccrb", name: "Chị D.", active_listing_id: null }).data;
   const sU = d.insert("sellers", { zalo_user_id: "z-unknown", seller_type: "unknown", name: null, active_listing_id: null }).data;
@@ -77,7 +88,7 @@ fresh();
 r = await send({ external_user_id: "la-5", text: "chào em" });
 r = await send({ external_user_id: "la-5", text: "muốn hỏi thông tin thôi" });
 check("V1.9 trả lời 'muốn hỏi thông tin' → hàng mua, cờ xoá, model được gọi", parseCalls().length === 1 && db().t.buyers[0].preferences.hoi_vai == null && db().t.sellers.length === 0);
-fresh(); r = await send({ external_user_id: "la-6", text: "", image_url: "https://x/a.jpg" });
+fresh(); r = await send({ external_user_id: "la-6", text: "", image_url: "https://f9-zpg.zdn.vn/a.jpg" });
 check("V1.10 lạ gửi ảnh trần → không hỏi vai, model đọc ảnh", !r.body.hoi_vai && parseCalls().length === 1 && parseCalls()[0].params.messages[0].content.some((c) => c.type === "image"));
 fresh(seedKho); r = await send({ external_user_id: "la-7", text: "#BDS-Q5-0001 còn không em" });
 check("V1.11 lạ vào từ web kèm mã → không hỏi vai, đi thẳng hàng mua", !r.body.hoi_vai && parseCalls().length === 1);
@@ -106,11 +117,11 @@ fresh(seedKho);
 let s = seedKho; // (seed đã chạy trong fresh)
 const lst1 = () => db().t.listings[0];
 db().insert("info_requests", { listing_id: lst1().id, question: "phap_ly", status: "pending" });
-r = await send({ external_user_id: "z-ccrb", text: "sổ hồng đây em", image_url: "https://x/so-hong.jpg" });
+r = await send({ external_user_id: "z-ccrb", text: "sổ hồng đây em", image_url: "https://f9-zpg.zdn.vn/so-hong.jpg" });
 const facts = db().t.listing_facts.filter((f) => f.listing_id === lst1().id);
 check("V2.1 ảnh KÈM chú thích khi đang hỏi pháp lý → ghi CẢ pháp lý LẪN ảnh", facts.some((f) => f.question === "phap_ly" && /sổ hồng/.test(f.answer)) && facts.some((f) => f.question === "hinh_anh" && /so-hong/.test(f.answer)), JSON.stringify(facts));
 check("V2.1 câu hỏi pháp lý được đóng", db().t.info_requests.every((q) => q.question !== "phap_ly" || q.status === "answered"));
-r = await send({ external_user_id: "z-ccrb", text: "thêm tấm này nữa", image_url: "https://x/them.jpg" });
+r = await send({ external_user_id: "z-ccrb", text: "thêm tấm này nữa", image_url: "https://f9-zpg.zdn.vn/them.jpg" });
 check("V2.2 ảnh kèm chữ, KHÔNG có câu hỏi treo → vẫn ghi vào tin gần nhất", db().t.listing_facts.some((f) => /them\.jpg/.test(f.answer)));
 r = await send({ external_user_id: "z-ccrb", text: "tôi muốn nhà mình lên web sớm" });
 check("V2.3 'muốn nhà mình lên web' → KHÔNG rẽ sang mua", r.body.role === "seller" && parseCalls().length === 0, JSON.stringify(r.body));
@@ -195,13 +206,13 @@ let v = await vong({ external_user_id: "do-1", text: "chào em" });
 // đi về: các câu trong một Promise.all chỉ tốn một lần thời gian mạng. Ngưỡng
 // đặt = số đo 02/09 để làm chốt chặn hồi quy; bản v43 đo được 18 / 20 / 24 / 21.
 console.log(`   [đo] người lạ hỏi vai: ${v.n} truy vấn`);
-check("TOIUU-01 người lạ hỏi vai ≤ 11 truy vấn (v43: 18), 0 model", v.n <= 11 && parseCalls().length === 0, `${v.n}`);
+check("TOIUU-01 người lạ hỏi vai ≤ 12 truy vấn (v43: 18; +1 trần cá nhân SEC-05), 0 model", v.n <= 12 && parseCalls().length === 0, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
 console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
-check("TOIUU-02 người mua lượt đầu ≤ 17 truy vấn", v.n <= 17, `${v.n}`);
+check("TOIUU-02 người mua lượt đầu ≤ 18 truy vấn (+1 trần cá nhân SEC-05)", v.n <= 18, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
 console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
-check("TOIUU-03 người mua có hồ sơ ≤ 16 truy vấn (v43: 24)", v.n <= 16, `${v.n}`);
+check("TOIUU-03 người mua có hồ sơ ≤ 17 truy vấn (v43: 24; +1 trần cá nhân SEC-05)", v.n <= 17, `${v.n}`);
 check("TOIUU-04 follow-up FR-32 đi qua RPC tao_followup, không đếm/tra/chèn tay", db().log.some((l) => l.rpc === "tao_followup") && db().t.reminders.some((x) => x.kind === "followup"));
 check("TOIUU-05 bot_prompts chỉ đọc MỘT lần cho cả ba lượt (nhớ tạm 60 s)", db().log.filter((l) => l.table === "bot_prompts").length <= 1, String(db().log.filter((l) => l.table === "bot_prompts").length));
 check("TOIUU-06 loạt bong bóng bot vào sổ bằng MỘT câu INSERT mảng", db().log.some((l) => l.table === "messages" && l.op === "insert" && Array.isArray(l.payload)));
@@ -209,7 +220,7 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
 v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
-check("TOIUU-07 người bán trả lời câu chờ ≤ 15 truy vấn (v43: 21)", v.n <= 15 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 16 truy vấn (v43: 21; +1 trần cá nhân SEC-05)", v.n <= 16 && v.r.body.role === "seller", `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
 check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
 fresh();
@@ -362,6 +373,413 @@ r = await send({ external_user_id: "v48-9", text: "còn căn khác không" });
 check("V48-99b giá TB nhớ tạm 60 s ở tầng module — hai lượt ≤ MỘT truy vấn (khoá deal|phường dùng chung mọi khách)", nGia() <= 1 && /giá TB phường 4/.test(sysText(parseCalls().pop())), String(nGia()));
 fresh(seedKho); r = await send({ external_user_id: "v48-9b", text: "#BDS-Q5-0001 sao em" });
 check("V48-99c chưa đủ hồ sơ (khu vực + giá) → không tính giá TB, không truy vấn thừa", nGia() === 0 && !/giá TB phường/.test(sysText(parseCalls().pop())));
+
+// ── SEC: hồi quy các lỗ vá 05/09/2026 (docs/PRODUCTION_SECURITY_AUDIT.md) ──
+// Mỗi ca dưới đây tương ứng một finding. Sửa cửa vào chat-reply mà làm hỏng
+// một trong số này nghĩa là đã mở lại đúng cái lỗ vừa đóng.
+
+// SEC-02 — cổng fail-CLOSED. Không kèm bí mật thì phải bị chặn, kể cả khi
+// người gọi biết đúng external_user_id.
+fresh(seedKho);
+r = await send({ external_user_id: "z-ccrb", text: "chào em" }, { "x-bridge-secret": "SAI" });
+check("SEC-02 sai bí mật cổng → 403, không xử lý", r.status === 403 && r.body.error === "forbidden", JSON.stringify(r));
+r = await send({ external_user_id: "z-ccrb", text: "chào em" }, { "x-bridge-secret": "" });
+check("SEC-02 thiếu bí mật cổng → 403", r.status === 403, JSON.stringify(r));
+
+// SEC-06 — cắt đầu vào. `text` dài phải bị cắt còn 4.000 ký tự TRƯỚC khi vào
+// prompt; body khổng lồ phải bị từ chối trước cả khi parse.
+fresh(seedKho);
+const dai = "a".repeat(9000);
+r = await send({ external_user_id: "sec-06", text: `tìm nhà quận 5 tầm 5 tỷ ${dai}` });
+const guiModel = parseCalls().pop();
+check("SEC-06 text 9.000 ký tự → chuỗi vào model bị cắt ≤ 4.000",
+  !guiModel || JSON.stringify(guiModel.params.messages).length < 9000, String(JSON.stringify(guiModel?.params?.messages ?? "").length));
+check("SEC-06 tin lưu sổ cũng đã cắt", (db().t.messages.find((m) => m.sender === "buyer")?.body?.length ?? 0) <= 4000,
+  String(db().t.messages.find((m) => m.sender === "buyer")?.body?.length));
+{
+  // Body vượt trần: đo bằng content-length như cửa thật.
+  const b = { external_user_id: "sec-06b", text: "x".repeat(200_000), msg_id: "m-big", channel: "zalo_personal_test" };
+  const tho = JSON.stringify(b);
+  const hdrs = { "x-bridge-secret": "s3cret", "content-length": String(tho.length) };
+  const res = await H({ method: "POST", headers: { get: (k) => hdrs[k.toLowerCase()] ?? null }, text: async () => tho, json: async () => b });
+  check("SEC-06 body > 128 KB → 413, không đụng DB", res.status === 413, String(res.status));
+}
+
+// SEC-08 — chỉ nhận ảnh từ host Zalo. URL lạ phải bị bỏ như thể không có ảnh,
+// và KHÔNG được ghi vào listing_facts (bảng anon đọc được).
+fresh(seedKho);
+r = await send({ external_user_id: "z-ccrb", text: "", image_url: "https://ke-tan-cong.example/beacon.png" });
+check("SEC-08 ảnh host lạ → bỏ, không ghi fact nào mang URL đó",
+  !db().t.listing_facts.some((f) => /ke-tan-cong/.test(String(f.answer))), JSON.stringify(db().t.listing_facts));
+fresh(seedKho);
+r = await send({ external_user_id: "z-ccrb", text: "", image_url: "http://f9-zpg.zdn.vn/a.jpg" });
+check("SEC-08 http:// (không TLS) cũng bị bỏ",
+  !db().t.listing_facts.some((f) => /f9-zpg/.test(String(f.answer))), JSON.stringify(db().t.listing_facts));
+fresh(seedKho);
+r = await send({ external_user_id: "z-ccrb", text: "", image_url: "https://f9-zpg.zdn.vn.ke-gian.example/a.jpg" });
+check("SEC-08 host giả mạo hậu tố (…zdn.vn.ke-gian.example) bị bỏ",
+  !db().t.listing_facts.some((f) => /ke-gian/.test(String(f.answer))), JSON.stringify(db().t.listing_facts));
+
+// SEC-05 — trần cá nhân. RPC trả false → im với RIÊNG người đó, mã 429.
+fresh(seedKho);
+globalThis.__rpc = { bump_user_quota: () => ({ data: false, error: null }) };
+r = await send({ external_user_id: "sec-05", text: "tìm nhà quận 5 tầm 5 tỷ" });
+check("SEC-05 chạm trần cá nhân → 429, không gọi model", r.status === 429 && parseCalls().length === 0, JSON.stringify(r));
+globalThis.__rpc = {};
+
+// SEC-13 — mark_sent không đụng được dòng đã chốt gửi / không tồn tại.
+fresh(seedKho);
+r = await send({ external_user_id: "sec-13", mark_sent: "khong-ton-tai", sent_bubbles: 1 });
+check("SEC-13 mark_sent msg_id không tồn tại → ok:false", r.body.ok === false, JSON.stringify(r.body));
+
+// ── CỔNG: bốn kiểu người gọi ─────────────────────────────────────────────
+// Bộ 112 ca ở trên đều gửi bí mật ĐÚNG, nên chúng chứng minh "bí mật đúng thì
+// qua" một cách ngầm định. Bốn ca dưới đây nói thẳng từng đường vào, để sửa
+// cổng mà làm gãy một đường thì thấy ngay đường nào.
+
+// (1) service-role: zalo-webhook gọi chat-reply bằng service key, KHÔNG có
+// x-bridge-secret. Đây là đường sống của kênh OA — gãy là bot câm với OA.
+fresh(seedKho);
+r = await send(
+  { external_user_id: "zalo-oa-1", text: "tìm nhà quận 5 tầm 5 tỷ", channel: "zalo_oa" },
+  { "x-bridge-secret": undefined, authorization: "Bearer svc" },
+);
+check("CỔNG-1 service-role (đường zalo-webhook) → qua, không cần bí mật cổng",
+  r.status === 200 && !r.body.error, JSON.stringify(r).slice(0, 200));
+check("CỔNG-1 kênh zalo_oa xử lý bình thường, có trả lời",
+  Array.isArray(r.body.replies) && r.body.replies.length > 0, JSON.stringify(r.body).slice(0, 200));
+
+// (2) bí mật ĐÚNG (đường bridge) — khẳng định tường minh, không để ngầm.
+fresh(seedKho);
+r = await send({ external_user_id: "bridge-1", text: "tìm nhà quận 5 tầm 5 tỷ" });
+check("CỔNG-2 bí mật cổng ĐÚNG (đường bridge) → qua", r.status === 200 && !r.body.error, JSON.stringify(r).slice(0, 200));
+
+// (3) service key SAI → không được mượn đường service-role.
+fresh(seedKho);
+r = await send(
+  { external_user_id: "gia-mao", text: "chào em" },
+  { "x-bridge-secret": undefined, authorization: "Bearer KHONG-PHAI-SERVICE-KEY" },
+);
+check("CỔNG-3 Bearer sai → 403 (không mượn được đường service-role)",
+  r.status === 403, JSON.stringify(r));
+
+// (4) mark_sent HAPPY PATH — bridge chốt đúng dòng nó vừa gửi.
+// Ca SEC-13 ở trên chỉ chứng minh chiều TỪ CHỐI; thiếu ca này thì một bản vá
+// siết quá tay sẽ làm bridge không bao giờ ghi được sent_at mà test vẫn xanh.
+fresh(seedKho);
+r = await send({ external_user_id: "ms-1", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "ms-happy" });
+r = await send({ external_user_id: "ms-1", mark_sent: "ms-happy", sent_bubbles: 2, done: true });
+{
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "ms-happy");
+  check("CỔNG-4 mark_sent dòng vừa gửi → ok:true và sổ ghi sent_at",
+    r.body.ok === true && !!so?.sent_at && so?.sent_bubbles === 2,
+    JSON.stringify({ body: r.body, so }));
+}
+
+// (5) human_note (FR-141) — bridge báo NGƯỜI THẬT vừa gõ tay, bot nhường sân.
+// Cửa này nằm SAU cổng bí mật và TRƯỚC sổ inbound, nên dễ bị một bản vá cổng
+// làm gãy mà không ca nào chạm tới.
+fresh(seedKho);
+r = await send({ external_user_id: "z-ccrb", text: "anh gọi chị D. rồi nhé", human_note: true });
+{
+  const conv = db().t.conversations.find((c) => c.human_touch_at);
+  check("CỔNG-5 human_note → ok, ghi tin sender='human', đặt human_touch_at",
+    r.body.ok === true && r.body.human_note === true &&
+    db().t.messages.some((m) => m.sender === "human") && !!conv,
+    JSON.stringify({ body: r.body, co_human: db().t.messages.some((m) => m.sender === "human") }));
+  check("CỔNG-5 human_note hạ cờ needs_human (FR-147)",
+    conv ? conv.needs_human === false : false, JSON.stringify(conv));
+}
+
+// ── ĐUA: SELECT-kiểm-tồn-tại rồi INSERT ──────────────────────────────────
+// Zalo giao hai tin của cùng một người cách nhau vài trăm ms. `claim_inbound`
+// chỉ chặn giao TRÙNG một msg_id — hai msg_id KHÁC nhau chạy song song thật.
+// `Promise.all` dưới đây tái hiện đúng cảnh đó: hai lượt handler xen kẽ nhau ở
+// mọi điểm `await`, nên cùng đọc "chưa có" rồi cùng ghi. Mock đã mô phỏng ba
+// chỉ mục duy nhất từng phần của 20260905f/g, nên nếu code không bắt 23505 thì
+// mấy ca này đỏ.
+
+// PHẢI TRỄ CẢ CÚ GHI, không chỉ cú đọc. Bản đầu chỉ trễ `select` và ca kiểm
+// vẫn xanh kể cả khi tắt sạch chỉ mục duy nhất — đo lại mới thấy vì sao:
+// `setTimeout` là macrotask, nên khi select của lượt A xong thì TOÀN BỘ phần
+// còn lại của A (đều là microtask) chạy hết — ghi xong xuôi — trước khi timer
+// của lượt B kịp nổ. Hai lượt vẫn nối đuôi, chỉ là nối đuôi chậm hơn.
+// Cho cú ghi một độ trễ DÀI HƠN cú đọc thì thứ tự thành:
+//   đọc A (rỗng) → đọc B (rỗng) → ghi A (được) → ghi B (23505)
+// tức đúng cuộc đua thật. Kiểm bằng đột biến ở cuối: tắt mô phỏng chỉ mục
+// duy nhất thì mấy ca dưới phải ĐỎ.
+const treDoc = (bang) => (t, op) => (t !== bang ? 0 : op === "select" ? 5 : 25);
+
+// (1) Hai tin cùng hẹn một buổi xem.
+fresh(seedKho);
+globalThis.__treTruyVan = treDoc("viewings");
+globalThis.__model.parse = () => OUT({
+  viewing: { listing_code: "BDS-Q5-0001", when: "mai 9h sáng", phone: null },
+});
+{
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "dua-vw", text: "mai 9h anh qua xem căn BDS-Q5-0001 nha" }),
+    send({ external_user_id: "dua-vw", text: "mai 9h anh qua xem căn BDS-Q5-0001 nha" }),
+  ]);
+  const vws = db().t.viewings.filter((v) => v.status === "pending");
+  const nhac = db().t.reminders.filter((r) => r.kind === "viewing");
+  check("ĐUA-1 hai tin hẹn xem song song → CHỈ MỘT buổi xem", vws.length === 1,
+    JSON.stringify(vws.map((v) => ({ id: v.id, code: v.listing_code }))));
+  check("ĐUA-1 → CHỈ MỘT nhắc trước buổi xem (khách không bị nhắc hai lần)",
+    nhac.length === 1, JSON.stringify(nhac.map((r) => r.note)));
+  check("ĐUA-1 cả hai lượt vẫn trả lời được, không lượt nào 500",
+    ra.status === 200 && rb.status === 200, JSON.stringify([ra.status, rb.status]));
+  check("ĐUA-1 lượt thua vẫn gắn được nhắc vào buổi xem của lượt thắng",
+    nhac[0]?.viewing_id === vws[0]?.id, JSON.stringify({ nhac: nhac[0]?.viewing_id, vw: vws[0]?.id }));
+}
+
+// (2) Hai tin cùng chốt một kèo. `deals_listing_buyer_key` đã có từ trước, nên
+// dòng deals thứ hai vốn đã bị chặn — cái CHƯA được chặn là khối chạy TIẾP sau
+// đó: bản trước không đọc `error` nên lượt thua vẫn bắn thêm một việc
+// escalation "khách vừa ĐỒNG Ý CHỐT, liên hệ gấp". CTV nhận hai lần một kèo.
+fresh(seedKho);
+{
+  // Lượt khởi động: khách mới toanh thì lượt đầu rẽ vào nhánh HỎI VAI và không
+  // bao giờ tới khối chốt kèo — đo mới thấy (một lượt đụng `deals`, một lượt
+  // trả câu chào). Không có lượt này thì ca đua bên dưới xanh vì chỉ có MỘT
+  // lượt chạy thật, chứ không phải vì code đúng.
+  await send({ external_user_id: "dua-deal", text: "anh đang tìm mua nhà quận 5" });
+  globalThis.__treTruyVan = treDoc("deals");
+  globalThis.__model.parse = () => OUT({ agreed_deal: { listing_code: "BDS-Q5-0001" } });
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "dua-deal", text: "ok em, anh chốt căn này" }),
+    send({ external_user_id: "dua-deal", text: "ok em, anh chốt căn này" }),
+  ]);
+  const esc = db().t.reminders.filter((r) => r.kind === "escalation" && /ĐỒNG Ý CHỐT/.test(r.note ?? ""));
+  check("ĐUA-2 hai tin chốt song song → CHỈ MỘT deal", db().t.deals.length === 1,
+    JSON.stringify(db().t.deals.length));
+  check("ĐUA-2 → CHỈ MỘT việc báo gấp cho CTV", esc.length === 1,
+    JSON.stringify(esc.map((r) => r.note?.slice(0, 40))));
+  check("ĐUA-2 cả hai lượt đều 200", ra.status === 200 && rb.status === 200,
+    JSON.stringify([ra.status, rb.status]));
+}
+
+// (3) Hai khách cùng hỏi chủ nhà một câu về một căn (FR-140).
+fresh(seedKho);
+globalThis.__treTruyVan = treDoc("info_requests");
+globalThis.__model.parse = () => OUT({
+  ask_owner: { listing_code: "BDS-Q5-0001", question: "còn bán không" },
+  replies: ["Dạ để em hỏi lại chủ nhà rồi báo anh liền ạ"],
+});
+{
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "dua-ask-1", text: "căn BDS-Q5-0001 còn bán không em" }),
+    send({ external_user_id: "dua-ask-2", text: "căn BDS-Q5-0001 còn bán không em" }),
+  ]);
+  const irs = db().t.info_requests.filter((r) => r.status === "pending");
+  check("ĐUA-3 hai khách cùng hỏi một câu → CHỈ MỘT câu chờ chủ nhà",
+    irs.length === 1, JSON.stringify(irs.map((r) => r.question)));
+  check("ĐUA-3 cả hai khách vẫn nhận được trả lời",
+    ra.status === 200 && rb.status === 200 &&
+    (ra.body.replies?.length ?? 0) > 0 && (rb.body.replies?.length ?? 0) > 0,
+    JSON.stringify([ra.status, rb.status]));
+  check("ĐUA-3 không có lỗi lạ nào lọt vào sổ (23505 phải được nuốt đúng chỗ)",
+    db().t.bot_errors.filter((e) => /hoi chu nha/.test(String(e.source))).length === 0,
+    JSON.stringify(db().t.bot_errors.map((e) => e.source)));
+}
+
+// (4) Hai tin cùng xin gặp người thật (viecNguoiThat).
+// Bất biến: một khách đang có việc escalation CHỜ thì không mở thêm việc nữa —
+// CTV không nên nhận hai tin "khách cần người thật" cho cùng một khách.
+// Cửa sổ ở đây là "24 GIỜ TRƯỢT" (nhánh VOICE) và "còn pending" (nhánh thường),
+// không phát biểu được bằng chỉ mục duy nhất, nên vá bằng RPC nguyên tử.
+fresh(seedKho);
+{
+  await send({ external_user_id: "dua-nt", text: "anh đang tìm mua nhà quận 5" });
+  globalThis.__treTruyVan = treDoc("reminders");
+  globalThis.__model.parse = () => OUT({ need_human: true, replies: ["Dạ để em nhờ anh phụ trách ạ"] });
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "dua-nt", text: "cho anh gặp người thật đi em" }),
+    send({ external_user_id: "dua-nt", text: "cho anh gặp người thật đi em" }),
+  ]);
+  const esc = db().t.reminders.filter((r) => r.kind === "escalation");
+  check("ĐUA-4 hai tin xin người thật song song → CHỈ MỘT việc escalation",
+    esc.length === 1, JSON.stringify(esc.map((r) => r.note?.slice(0, 45))));
+  check("ĐUA-4 cả hai lượt đều 200", ra.status === 200 && rb.status === 200,
+    JSON.stringify([ra.status, rb.status]));
+  check("ĐUA-4 cờ needs_human vẫn được bật",
+    db().t.conversations.some((c) => c.needs_human === true),
+    JSON.stringify(db().t.conversations.map((c) => c.needs_human)));
+}
+
+// ══════════ TRÙNG: claim_inbound giữ đúng-một-lần (FR-166) ══════════════════
+// KHÔNG sửa `claim_inbound` — nó đã có chốt nguyên tử trên `inbound_ledger`.
+// Mười cảnh dưới đây chỉ ĐO xem cái chốt đó có thật sự giữ bốn lời hứa không:
+// không gọi model lần hai · không đốt hạn mức lần hai · không đẻ tin trùng ·
+// không gửi trùng.
+//
+// Mock đã được chép lại cho đủ NĂM nhánh của hàm thật (received / completed /
+// in_flight / dead / failed-có-giờ-hẹn). Bản mock cũ chỉ có ba, tức bốn cảnh
+// dưới đây trước nay không kiểm được.
+const soModel = () => globalThis.__calls.filter((c) => c.kind === "parse" || c.kind === "create").length;
+const soRpc = (ten) => db().log.filter((x) => x.rpc === ten).length;
+const soDong = (b) => db().t[b].length;
+const soTin = () => db().t.messages.length;
+
+// (1) Cùng msg_id gửi HAI lần.
+fresh(seedKho);
+{
+  const r1 = await send({ external_user_id: "trung-1", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-1" });
+  const m1 = soModel(), t1 = soTin(), q1 = soRpc("bump_user_quota");
+  const r2 = await send({ external_user_id: "trung-1", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-1" });
+  check("TRÙNG-1 lần hai → deduped/replayed, không phải xử lại từ đầu",
+    r2.body.deduped === true && r2.body.replayed === true, JSON.stringify(r2.body).slice(0, 200));
+  check("TRÙNG-1 KHÔNG gọi model lần hai", soModel() === m1, `${m1} → ${soModel()}`);
+  check("TRÙNG-1 KHÔNG đốt hạn mức lần hai", soRpc("bump_user_quota") === q1,
+    `${q1} → ${soRpc("bump_user_quota")}`);
+  check("TRÙNG-1 KHÔNG đẻ tin trùng trong hội thoại", soTin() === t1, `${t1} → ${soTin()}`);
+  check("TRÙNG-1 lần hai trả lại ĐÚNG câu cũ", JSON.stringify(r2.body.replies) === JSON.stringify(r1.body.replies),
+    JSON.stringify([r1.body.replies, r2.body.replies]));
+}
+
+// (2) Cùng msg_id gửi MƯỜI lần — provider giao lại liên tục.
+fresh(seedKho);
+{
+  await send({ external_user_id: "trung-2", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-2" });
+  const m1 = soModel(), t1 = soTin(), q1 = soRpc("bump_user_quota");
+  for (let i = 0; i < 9; i++) {
+    await send({ external_user_id: "trung-2", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-2" });
+  }
+  check("TRÙNG-2 mười lượt giao → vẫn ĐÚNG MỘT lượt model", soModel() === m1, `${m1} → ${soModel()}`);
+  check("TRÙNG-2 → vẫn đúng một lượt hạn mức", soRpc("bump_user_quota") === q1, `${q1} → ${soRpc("bump_user_quota")}`);
+  check("TRÙNG-2 → không tin nào thừa", soTin() === t1, `${t1} → ${soTin()}`);
+  check("TRÙNG-2 → sổ vẫn MỘT dòng", soDong("inbound_ledger") === 1, JSON.stringify(soDong("inbound_ledger")));
+}
+
+// (3) Cùng msg_id ĐỒNG THỜI.
+fresh(seedKho);
+{
+  globalThis.__treTruyVan = (t) => (t === "messages" ? 8 : 0);
+  const [ra, rb] = await Promise.all([
+    send({ external_user_id: "trung-3", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-3" }),
+    send({ external_user_id: "trung-3", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-3" }),
+  ]);
+  const chan = [ra, rb].filter((r) => r.body.in_flight === true || r.body.deduped === true).length;
+  check("TRÙNG-3 hai lượt cùng msg_id song song → đúng MỘT lượt bị chặn", chan === 1,
+    JSON.stringify([ra.body.in_flight ?? ra.body.deduped, rb.body.in_flight ?? rb.body.deduped]));
+  check("TRÙNG-3 → đúng MỘT lượt model", soModel() === 1, String(soModel()));
+  check("TRÙNG-3 → đúng MỘT lượt hạn mức", soRpc("bump_user_quota") === 1, String(soRpc("bump_user_quota")));
+}
+
+// (4) Phát lại một dòng ĐÃ completed: phải trả câu cũ + cờ already_sent theo sổ.
+fresh(seedKho);
+{
+  await send({ external_user_id: "trung-4", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-4" });
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-4");
+  so.sent_at = new Date().toISOString();          // webhook đã chốt gửi xong
+  const r = await send({ external_user_id: "trung-4", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-4" });
+  check("TRÙNG-4 completed + đã gửi → already_sent = true (kênh sẽ im, không bắn đúp)",
+    r.body.replayed === true && r.body.already_sent === true, JSON.stringify(r.body).slice(0, 160));
+  so.sent_at = null;                               // lần trước gửi hụt
+  const r2 = await send({ external_user_id: "trung-4", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-4" });
+  check("TRÙNG-4 completed + CHƯA gửi → already_sent = false (đây là đường retry gửi)",
+    r2.body.replayed === true && r2.body.already_sent === false, JSON.stringify(r2.body).slice(0, 160));
+}
+
+// (5) in_flight: lượt trước còn đang cầm sổ và còn tươi.
+fresh(seedKho);
+{
+  db().t.inbound_ledger.push({
+    zalo_msg_id: "T-5", status: "processing", attempts: 1, reply: null,
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  });
+  const r = await send({ external_user_id: "trung-5", text: "tìm nhà quận 5", msg_id: "T-5" });
+  check("TRÙNG-5 đang có lượt khác cầm sổ → in_flight, KHÔNG gọi model",
+    r.body.in_flight === true && soModel() === 0, JSON.stringify({ b: r.body, model: soModel() }));
+}
+
+// (6) processing NGUỘI (>150 giây): phải giành lại được, không kẹt vĩnh viễn.
+fresh(seedKho);
+{
+  db().t.inbound_ledger.push({
+    zalo_msg_id: "T-6", status: "processing", attempts: 1, reply: null,
+    created_at: new Date(Date.now() - 600e3).toISOString(),
+    updated_at: new Date(Date.now() - 600e3).toISOString(),
+  });
+  const r = await send({ external_user_id: "trung-6", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-6" });
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-6");
+  check("TRÙNG-6 processing nguội → GIÀNH LẠI được (function chết không khoá vĩnh viễn)",
+    !r.body.in_flight && soModel() === 1 && so.attempts === 2,
+    JSON.stringify({ in_flight: r.body.in_flight, model: soModel(), attempts: so.attempts }));
+}
+
+// (7) failed + giờ hẹn lùi dần: chưa tới giờ thì KHÔNG cho chạy lại.
+fresh(seedKho);
+{
+  db().t.inbound_ledger.push({
+    zalo_msg_id: "T-7", status: "failed", attempts: 2, reply: null,
+    created_at: new Date(Date.now() - 600e3).toISOString(),
+    updated_at: new Date(Date.now() - 600e3).toISOString(),
+    next_retry_at: new Date(Date.now() + 60e3).toISOString(),
+  });
+  const r = await send({ external_user_id: "trung-7", text: "tìm nhà quận 5", msg_id: "T-7" });
+  check("TRÙNG-7 chưa tới giờ hẹn → in_flight, không đốt thêm lượt model",
+    r.body.in_flight === true && soModel() === 0, JSON.stringify({ b: r.body, model: soModel() }));
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-7");
+  so.next_retry_at = new Date(Date.now() - 1000).toISOString();
+  const r2 = await send({ external_user_id: "trung-7", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-7" });
+  check("TRÙNG-7 tới giờ hẹn → chạy lại được", !r2.body.in_flight && soModel() === 1,
+    JSON.stringify({ b: r2.body.deduped, model: soModel() }));
+}
+
+// (8) THƯ CHẾT: đủ 8 lượt thì thôi hẳn, đừng đốt thêm lượt model nào.
+fresh(seedKho);
+{
+  db().t.inbound_ledger.push({
+    zalo_msg_id: "T-8", status: "failed", attempts: 8, reply: null,
+    created_at: new Date(Date.now() - 600e3).toISOString(),
+    updated_at: new Date(Date.now() - 600e3).toISOString(), next_retry_at: null,
+  });
+  const r = await send({ external_user_id: "trung-8", text: "tìm nhà quận 5", msg_id: "T-8" });
+  check("TRÙNG-8 thư chết → dead:true, KHÔNG gọi model",
+    r.body.dead === true && soModel() === 0, JSON.stringify({ b: r.body, model: soModel() }));
+  check("TRÙNG-8 có ghi sổ để người còn biết mà xử tay",
+    db().t.bot_errors.some((e) => String(e.source).includes("chat-reply dead")),
+    JSON.stringify(db().t.bot_errors.map((e) => e.source)));
+  check("TRÙNG-8 dòng sổ chuyển hẳn sang dead",
+    db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-8").status === "dead", "");
+}
+
+// (9) HẠN MỨC + trùng: chạm trần rồi thì lượt giao lại KHÔNG được đốt thêm.
+fresh(seedKho);
+{
+  globalThis.__rpc = { bump_user_quota: () => ({ data: false, error: null }) };
+  const r1 = await send({ external_user_id: "trung-9", text: "tìm nhà quận 5", msg_id: "T-9" });
+  const q1 = soRpc("bump_user_quota");
+  const r2 = await send({ external_user_id: "trung-9", text: "tìm nhà quận 5", msg_id: "T-9" });
+  check("TRÙNG-9 chạm trần → 429 và KHÔNG gọi model", r1.status === 429 && soModel() === 0,
+    JSON.stringify({ s: r1.status, model: soModel() }));
+  check("TRÙNG-9 giao lại khi đã chạm trần → KHÔNG hỏi hạn mức lần nữa",
+    soRpc("bump_user_quota") === q1, `${q1} → ${soRpc("bump_user_quota")}`);
+  check("TRÙNG-9 lượt giao lại vẫn không gọi model", soModel() === 0, String(soModel()));
+  check("TRÙNG-9 lượt hai được nhận diện là trùng",
+    r2.body.deduped === true || r2.body.in_flight === true, JSON.stringify(r2.body).slice(0, 160));
+}
+
+// (10) MODEL HỎNG rồi thử lại: lượt sau phải chạy lại được, không kẹt.
+fresh(seedKho);
+{
+  globalThis.__model.parse = () => { throw new Error("model chết"); };
+  const r1 = await send({ external_user_id: "trung-10", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-10" });
+  const so = db().t.inbound_ledger.find((x) => x.zalo_msg_id === "T-10");
+  check("TRÙNG-10 model hỏng → khách vẫn có câu trả lời (fallback), không im",
+    (r1.body.replies?.length ?? 0) > 0, JSON.stringify(r1.body).slice(0, 160));
+  check("TRÙNG-10 sổ KHÔNG bị bỏ dở: có trạng thái rõ ràng",
+    ["completed", "failed", "dead"].includes(so.status), JSON.stringify(so.status));
+  // Dựng lại cảnh "lượt trước hỏng thật, đã tới giờ hẹn"
+  so.status = "failed"; so.attempts = 1; so.next_retry_at = new Date(Date.now() - 1000).toISOString();
+  so.updated_at = new Date(Date.now() - 600e3).toISOString();
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ có căn hợp anh nè"] });
+  const truoc = soModel();
+  const r2 = await send({ external_user_id: "trung-10", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-10" });
+  check("TRÙNG-10 thử lại sau khi model hỏng → chạy lại được, gọi model lần nữa",
+    !r2.body.in_flight && soModel() > truoc, JSON.stringify({ b: r2.body.deduped, model: soModel() }));
+}
 
 // ── kết ──
 let hong = 0;
