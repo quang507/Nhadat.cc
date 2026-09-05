@@ -58,7 +58,8 @@ bun build bot/supabase/functions/<fn>/index.ts --target=node \
 
 ```bash
 bun run test:bot                    # cả bốn bộ dưới + tự kiểm TS-SEC (offline)
-bash bot/tests/e2e/chay.sh          # 102 kịch bản, TỰ dựng lại bundle — đừng chạy run.mjs trực tiếp
+bash bot/tests/e2e/chay.sh          # 149 ca (119 chat-reply + 4 cổng-thiếu-bí-mật + 26 zalo-webhook),
+                                    # TỰ dựng lại cả hai bundle — đừng chạy run.mjs / webhook.mjs trực tiếp
 node bot/tests/fr159-bon-vai.mjs    # 65 ca phân vai
 node bot/tests/fr161-go-lan-dau.mjs # 9 ca tiếng Việt không dấu
 node bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs  # 8 ca

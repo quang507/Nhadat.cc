@@ -9,7 +9,7 @@ export class FakeDB {
     this.t = {};
     for (const n of ["sellers","buyers","conversations","messages","listings","listing_facts","info_requests",
       "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log",
-      "ctvs","admins","interests","ratings"]) this.t[n] = [];
+      "ctvs","admins","interests","ratings","inbound_events"]) this.t[n] = [];
     this.seq = 0; this.log = [];
   }
   rows(n) {
@@ -154,7 +154,32 @@ class RpcCall {
     const R = globalThis.__rpc ?? {};
     if (R[this.name]) return R[this.name](db, a);
     switch (this.name) {
-      case "get_secret": return { data: null, error: null };
+      // Vault giả. Mặc định RỖNG (không secret nào) — giữ nguyên hành vi cũ cho
+      // bộ chat-reply. Ca kiểm nào cần secret thì đặt `globalThis.__vault`, một
+      // hàm `(tên) => { data, error }`. Đây là cách bộ kiểm có secret riêng mà
+      // KHÔNG bao giờ chạm secret production: giá trị dưới đây là chuỗi bịa,
+      // sống trong tiến trình test, không đọc env thật, không gọi Vault thật.
+      // `error` khác null là cảnh ĐỌC HỤT — khác hẳn cảnh "chưa đặt" (data null,
+      // error null). Hai cảnh này đi hai nhánh khác nhau trong zalo-webhook, và
+      // gộp chúng làm một chính là lỗi SEC-02 cũ.
+      case "get_secret":
+        return globalThis.__vault ? globalThis.__vault(a.secret_name) : { data: null, error: null };
+      // Chép ĐÚNG ngữ nghĩa hàm thật (đã đọc `pg_get_functiondef` 05/09/2026):
+      //   insert … on conflict (event_id) do update
+      //     set delivery_count = delivery_count + 1, last_seen_at = now()
+      //   returning delivery_count
+      // Tức giao trùng KHÔNG đẻ dòng thứ hai, chỉ đếm thêm — đó là cả cái cột
+      // sống của chống-giao-trùng (FR-162). Mock mà chỉ push thêm dòng thì ca
+      // "duplicate webhook" sẽ xanh trong khi hàm thật chưa chắc đúng.
+      case "ghi_su_kien_inbound": {
+        const co = db.t.inbound_events.find((x) => x.event_id === a.p_event_id);
+        if (co) { co.delivery_count++; co.last_seen_at = now(); return { data: co.delivery_count, error: null }; }
+        db.t.inbound_events.push({
+          event_id: a.p_event_id, zalo_user_id: a.p_zalo_user_id, payload: a.p_payload,
+          delivery_count: 1, first_seen_at: now(), last_seen_at: now(),
+        });
+        return { data: 1, error: null };
+      }
       case "log_loi": db.t.bot_errors.push({ at: now(), source: a.p_source, detail: a.p_detail, status_code: a.p_code }); return { data: null, error: null };
       case "cong_token": db.t.bot_usage.push(a); return { data: null, error: null };
       case "bump_model_quota": return { data: true, error: null };
