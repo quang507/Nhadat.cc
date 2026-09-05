@@ -23,6 +23,45 @@ export async function secretOf(db: SupabaseClient, name: string): Promise<string
   return (data as string) ?? null;
 }
 
+/**
+ * SEC-02 — `secretOf` gộp hai chuyện khác hẳn nhau vào cùng một `null`:
+ * "secret CHƯA ĐẶT" và "ĐỌC HỤT secret" (Vault lỗi, DB quá tải, timeout, hết
+ * kết nối). Cổng cũ coi cả hai là "mở", nên một lần DB nghẹn là bảy edge
+ * function thành công khai — đúng lúc hệ thống yếu nhất. Hàm này tách hai
+ * trạng thái ra để nơi gọi xử khác nhau: chưa đặt thì còn cân nhắc được,
+ * đọc hụt thì luôn phải chặn.
+ */
+export async function docBiMat(
+  db: SupabaseClient,
+  name: string,
+): Promise<{ giaTri: string | null; loi: string | null }> {
+  const fromEnv = Deno.env.get(name);
+  if (fromEnv) return { giaTri: fromEnv, loi: null };
+  const { data, error } = await db.rpc("get_secret", { secret_name: name });
+  if (error) return { giaTri: null, loi: error.message };
+  return { giaTri: (data as string) ?? null, loi: null };
+}
+
+/**
+ * SEC-11 — so hai chuỗi bí mật trong thời gian không phụ thuộc nội dung.
+ * `===` trên chuỗi thoát ngay ở byte đầu khác nhau, nên đo thời gian phản hồi
+ * qua nhiều nghìn request là dò dần được từng byte. `BRIDGE_SECRET` là bí mật
+ * dài hạn nên kẻ tấn công có thừa thời gian. Băm cả hai vế rồi so từng byte
+ * của bản băm: độ dài luôn bằng nhau (32 byte) nên vòng lặp không rò gì.
+ */
+export async function bangNhau(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [x, y] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const ax = new Uint8Array(x);
+  const bx = new Uint8Array(y);
+  let khac = 0;
+  for (let i = 0; i < ax.length; i++) khac |= ax[i] ^ bx[i];
+  return khac === 0;
+}
+
 export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   const apiKey = await secretOf(db, "ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Không tìm thấy ANTHROPIC_API_KEY (env lẫn Vault)");

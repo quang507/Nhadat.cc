@@ -78,6 +78,9 @@ class Builder {
   eq(c, v) { return this._f("eq", c, v); } neq(c, v) { return this._f("neq", c, v); } in(c, v) { return this._f("in", c, v); }
   gte(c, v) { return this._f("gte", c, v); } lte(c, v) { return this._f("lte", c, v); } gt(c, v) { return this._f("gt", c, v); } lt(c, v) { return this._f("lt", c, v); }
   not(c, op, v) { return this._f("not_" + op, c, v); } ilike(c, v) { return this._f("ilike", c, v); }
+  // `.is(col, null)` của PostgREST — SEC-13 dùng nó để chỉ đụng dòng CHƯA chốt
+  // gửi. Thiếu ở mock thì bộ e2e đo một hành vi khác với bản chạy thật.
+  is(c, v) { return this._f("is", c, v); }
   order(c, o = {}) { this.ord = { c, asc: o.ascending !== false }; return this; }
   limit(n) { this.lim = n; return this; }
   maybeSingle() { this.mode = "maybe"; return this; }
@@ -87,6 +90,7 @@ class Builder {
     switch (f.kind) {
       case "eq": return v === f.val; case "neq": return v !== f.val; case "in": return f.val.includes(v);
       case "gte": return v != null && v >= f.val; case "lte": return v != null && v <= f.val; case "gt": return v > f.val; case "lt": return v < f.val;
+      case "is": return f.val === null ? v == null : v === f.val;
       case "not_is": return f.val === null ? v != null : v !== f.val;
       case "ilike": { const p = "^" + String(f.val).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*") + "$"; return new RegExp(p, "i").test(String(v ?? "")); }
     }
@@ -154,6 +158,9 @@ class RpcCall {
       case "log_loi": db.t.bot_errors.push({ at: now(), source: a.p_source, detail: a.p_detail, status_code: a.p_code }); return { data: null, error: null };
       case "cong_token": db.t.bot_usage.push(a); return { data: null, error: null };
       case "bump_model_quota": return { data: true, error: null };
+      // SEC-05 — trần cá nhân. Mặc định cho qua; ca kiểm đè bằng
+      // `globalThis.__rpc = { bump_user_quota: () => ({ data: false, error: null }) }`.
+      case "bump_user_quota": return { data: true, error: null };
       case "claim_inbound": {
         let l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
         // Như hàm thật: giành được sổ là dòng đã ở `processing`, app không UPDATE thêm.

@@ -8,6 +8,7 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  bangNhau,
   doTien,
   ghiLoi,
   jsonResponse,
@@ -386,14 +387,64 @@ async function giaTBPhuong(
   return line;
 }
 
+// SEC-08 — danh sách host được phép cho `image_url`.
+// Ảnh khách gửi qua Zalo luôn nằm trên CDN của Zalo. Mọi URL khác là URL do
+// người gọi bịa: hoặc để hạ tầng model đi lấy hộ một địa chỉ nội bộ, hoặc để
+// trỏ vào file khổng lồ cho treo hàm, hoặc để nhét một beacon vào
+// `listing_facts` — bảng mà anon đọc được và trang tin hiển thị.
+// Danh sách CHO PHÉP chứ không phải danh sách cấm: thứ không biết thì từ chối.
+// Zalo phát ảnh qua nhiều tên miền CDN khác nhau; thiếu một cái là ảnh khách
+// gửi bị chặn sạch mà bot vẫn trả lời tử tế — đúng kiểu hỏng im lặng. Bản đầu
+// của danh sách này chỉ có `zadn.vn` và quên `zdn.vn`, bộ e2e bắt được ngay.
+const HOST_ANH = [
+  "zalo.me", "zadn.vn", "zdn.vn", "zaloapp.com", "zmdcdn.me", "zingmp3.vn",
+];
+function anhHopLe(url: string | null): string | null {
+  if (!url) return null;
+  if (url.length > 2048) return null;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:") return null;
+  const h = u.hostname.toLowerCase();
+  const ok = HOST_ANH.some((d) => h === d || h.endsWith(`.${d}`));
+  return ok ? url : null;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
-  const body = await req.json().catch(() => ({}));
-  const externalUserId = String(body.external_user_id ?? "").trim();
-  const text = String(body.text ?? "").trim();
-  const msgId = body.msg_id ? String(body.msg_id) : null;
-  const channel = String(body.channel ?? "zalo_oa");
-  const imageUrl = body.image_url ? String(body.image_url) : null;
+  // SEC-06 — chặn body khổng lồ TRƯỚC khi parse. Trần model đếm LƯỢT, nhưng
+  // tiền tính theo TOKEN: một request kèm `text` 500 KB là ~125.000 token đầu
+  // vào cho đúng một "lượt", nên trần 1000 lượt/ngày không giữ được ví. Cầu
+  // chì cũ đặt đúng chỗ nhưng nhìn nhầm đại lượng.
+  const cl = Number(req.headers.get("content-length") ?? 0);
+  if (cl > 128 * 1024) return jsonResponse({ error: "payload_too_large" }, 413);
+  const tho = await req.text();
+  if (tho.length > 128 * 1024) return jsonResponse({ error: "payload_too_large" }, 413);
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(tho || "{}");
+  } catch {
+    return jsonResponse({ error: "body phải là JSON" }, 400);
+  }
+
+  const externalUserId = String(body.external_user_id ?? "").trim().slice(0, 128);
+  // SEC-06 — cắt cứng ở cửa vào. 4.000 ký tự đã dài gấp nhiều lần câu rao dài
+  // nhất từng thấy; cắt ở đây thay vì ở từng chỗ dùng, vì chuỗi này đi thẳng
+  // vào prompt model.
+  const text = String(body.text ?? "").trim().slice(0, 4000);
+  const msgId = body.msg_id ? String(body.msg_id).slice(0, 200) : null;
+  const channel = String(body.channel ?? "zalo_oa").slice(0, 40);
+  // SEC-08 — chỉ nhận ảnh từ host của Zalo. Bản trước đưa URL thô của người
+  // gọi thẳng vào `{type:"image", source:{type:"url"}}` của Anthropic: hạ tầng
+  // của họ đi lấy hộ (SSRF gián tiếp, ký bằng khoá API của dự án), URL trỏ file
+  // khổng lồ thì treo hàm và đốt token, và chuỗi đó còn được ghi vào
+  // `listing_facts` — bảng anon đọc được — nên thành nội dung lạ đứng tên tin
+  // của người khác.
+  const imageUrl = anhHopLe(body.image_url ? String(body.image_url) : null);
   // `mark_sent` là cửa ghi sổ, không phải tin nhắn — nó không có người gửi lẫn
   // nội dung. Xử ở dưới, SAU cổng bí mật.
   if (!body.mark_sent && (!externalUserId || (!text && !imageUrl))) {
@@ -426,18 +477,30 @@ Deno.serve(async (req) => {
   // FR-171 h: bí mật cổng + trần lượt + bot_prompts đi chung một lượt nạp,
   // nhớ tạm 60 giây ở tầng module (xem `napCauHinh`).
   const { gate, cap: dailyCap, P } = await napCauHinh(client);
-  // Cổng fail-open là chủ ý (gắn cổng trước khi có bí mật thì cron không gãy),
-  // nhưng KHÔNG được im: một lần đọc hụt Vault là hàm này thành công khai mà
-  // chẳng ai hay. Ghi sổ để /admin thấy — im lặng mới là cái nguy.
-  if (!gate) {
-    await ghiLoi(client, "chat-reply CONG MO",
-      "Không đọc được BRIDGE_SECRET (env lẫn Vault) — cổng đang MỞ, ai cũng gọi được.");
-  }
-  const isService =
-    req.headers.get("authorization") ===
-      `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (gate && !isService && req.headers.get("x-bridge-secret") !== gate) {
-    return jsonResponse({ error: "forbidden" }, 403);
+  const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const auth = req.headers.get("authorization") ?? "";
+  // SEC-11: so hằng thời gian cả hai đường (service key và bí mật cổng).
+  const isService = !!svcKey && auth.startsWith("Bearer ") &&
+    await bangNhau(auth.slice(7), svcKey);
+
+  // SEC-02 — FAIL-CLOSED. Bản trước: `if (gate && …)` nghĩa là `gate` rỗng thì
+  // BỎ QUA cổng hoàn toàn, chỉ ghi một dòng sổ. Mà `gate` rỗng xảy ra không chỉ
+  // khi chưa đặt secret: Vault lỗi, DB quá tải, timeout, hết kết nối — đều cho
+  // ra `null`. Kẻ tấn công không cần gây sự cố, chỉ cần thăm dò mỗi phút và đợi
+  // đúng khoảnh khắc DB nghẹn. Ghi sổ vẫn xảy ra, nhưng là ghi SAU KHI cho qua.
+  if (!isService) {
+    if (!gate) {
+      if (Deno.env.get("GATE_MO_KHI_CHUA_CO_BI_MAT") !== "1") {
+        await ghiLoi(client, "chat-reply CONG DONG",
+          "Không có BRIDGE_SECRET (chưa đặt hoặc đọc hụt) — TỪ CHỐI. Đặt secret vào " +
+          "Vault, hoặc bật tạm GATE_MO_KHI_CHUA_CO_BI_MAT=1 nếu cố ý chạy không cổng.");
+        return jsonResponse({ error: "gate_unavailable" }, 503);
+      }
+      await ghiLoi(client, "chat-reply CONG MO",
+        "GATE_MO_KHI_CHUA_CO_BI_MAT=1 — cổng đang MỞ có chủ ý, ai cũng gọi được.");
+    } else if (!await bangNhau(req.headers.get("x-bridge-secret") ?? "", gate)) {
+      return jsonResponse({ error: "forbidden" }, 403);
+    }
   }
 
   // FR-162 — CỬA GHI NHẬN ĐÃ GỬI, cho người gọi không cầm service key.
@@ -451,15 +514,33 @@ Deno.serve(async (req) => {
   if (body.mark_sent) {
     const soDaGui = Number(body.sent_bubbles ?? 0);
     const xong = body.done !== false;
-    const { error: msErr } = await client.from("inbound_ledger").update({
+    // SEC-13 — RÀNG hai điều kiện. Bản trước cho phép đặt `sent_at` lên BẤT KỲ
+    // `zalo_msg_id` nào: đánh dấu "đã gửi" cho các tin thật chưa gửi là câu trả
+    // lời không bao giờ tới khách (luật chống-gửi-đúp FR-162 nuốt nó), mà mọi
+    // mã HTTP trên đường đều 200 — đúng loại hỏng im lặng nhất.
+    //   · `.is("sent_at", null)` — không đụng được dòng ĐÃ chốt gửi.
+    //   · dòng phải mới trong 15 phút — bridge chỉ chốt việc nó vừa làm; không
+    //     ai có lý do chính đáng để chốt một tin của hôm qua.
+    const cat = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data: dong, error: msErr } = await client.from("inbound_ledger").update({
       sent_bubbles: Number.isFinite(soDaGui) ? soDaGui : 0,
       ...(xong
         ? { sent_at: new Date().toISOString(), send_error: null }
         : { send_error: "gửi hụt giữa chừng — bridge báo lại" }),
       updated_at: new Date().toISOString(),
-    }).eq("zalo_msg_id", String(body.mark_sent));
+    })
+      .eq("zalo_msg_id", String(body.mark_sent).slice(0, 200))
+      .is("sent_at", null)
+      .gte("created_at", cat)
+      .select("zalo_msg_id");
     if (msErr) await ghiLoi(client, "chat-reply mark_sent", msErr.message);
-    return jsonResponse({ ok: !msErr, marked: String(body.mark_sent), done: xong });
+    const dungDong = (dong?.length ?? 0) > 0;
+    if (!msErr && !dungDong) {
+      await ghiLoi(client, "chat-reply mark_sent tu choi",
+        `không có dòng hợp lệ cho msg_id=${String(body.mark_sent).slice(0, 60)} ` +
+        "(đã chốt gửi rồi, hoặc quá 15 phút, hoặc không tồn tại)");
+    }
+    return jsonResponse({ ok: !msErr && dungDong, marked: String(body.mark_sent), done: xong });
   }
 
   // FR-141: bridge báo NGƯỜI THẬT (CTV/admin gõ tay từ acc clone) vừa nhắn cho
@@ -628,14 +709,29 @@ Deno.serve(async (req) => {
     return jsonResponse(payload, code);
   };
 
-  // ─── CỔNG 2: trần TOÀN CỤC lượt gọi model mỗi ngày.
-  // Trần 100 tin/24h bên dưới đếm theo `conversation_id`, mà conversation sinh
-  // ra từ `external_user_id` — chuỗi do người gọi tự đặt và KHÔNG được kiểm.
-  // Đổi id mỗi request là bộ đếm đó về 0, tức nó chặn khách thật nhắn nhiều
-  // chứ không chặn được ai cố tình đốt tiền. Trần này đếm theo ngày, không phụ
-  // thuộc thứ gì người gọi kiểm soát, nên là chốt chặn cuối về TIỀN.
-  // Chỉnh bằng secret DAILY_MODEL_CALL_CAP trong Vault; mặc định 1000/ngày
-  // (đọc kèm cấu hình ở đầu hàm, nhớ tạm 60 giây).
+  // ─── CỔNG 2a: trần THEO TỪNG NGƯỜI (SEC-05, migration 20260905d).
+  // Trần toàn cục bên dưới chặn được ví nhưng KHÔNG chặn được kẻ phá: gửi 1000
+  // request rác trong vài phút là bot im với tất cả mọi người tới nửa đêm —
+  // cầu chì giữ tiền hoá ra là nút tắt dịch vụ ai cũng bấm được.
+  //
+  // Bình luận cũ ở đây nói đếm theo `external_user_id` là vô nghĩa vì chuỗi đó
+  // người gọi tự đặt. ĐÚNG khi webhook chưa kiểm chữ ký. Sau SEC-01 thì
+  // `sender.id` do Zalo ký, không bịa được, nên đếm theo uid mới có nghĩa.
+  // 30 lượt/giờ và 120 lượt/ngày cho uid lạ, nới gấp 4 cho người đã quen
+  // (có trong sellers/ctvs/admins) — chủ nhà rao một căn nhắn hàng chục lượt
+  // liền là chuyện thường, chặn nhầm họ là hỏng việc thật.
+  const { data: duoiTranNguoi } = await client.rpc("bump_user_quota", { p_uid: externalUserId });
+  if (duoiTranNguoi === false) {
+    // Im với RIÊNG người này; những người khác không bị ảnh hưởng.
+    return await baoHong(
+      { reply: null, replies: [], user_quota_exceeded: true }, 429, "trần cá nhân đã chạm",
+    );
+  }
+
+  // ─── CỔNG 2b: trần TOÀN CỤC lượt gọi model mỗi ngày.
+  // Giữ nguyên làm chốt chặn cuối về TIỀN: trần cá nhân chặn một kẻ, trần này
+  // chặn một nghìn kẻ. Chỉnh bằng secret DAILY_MODEL_CALL_CAP trong Vault;
+  // mặc định 1000/ngày (đọc kèm cấu hình ở đầu hàm, nhớ tạm 60 giây).
   const { data: underQuota } = await client.rpc("bump_model_quota", { p_limit: dailyCap });
   if (underQuota === false) {
     // Im lặng hoàn toàn: trả lời thì vẫn tốn lượt model, mà đây đúng là thứ
