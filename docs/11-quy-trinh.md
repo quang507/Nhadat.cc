@@ -103,13 +103,30 @@ của người đẩy commit**. Nay chia lại cho sòng phẳng.
 | Web dựng được, trang tin còn trong cache (NFR-17) | máy dựng, người soi bảng route | CI job `web` | có / không |
 | 102 kịch bản hội thoại + FR-159/161/164 | máy | CI job `bot` | có |
 | ID gãy, truy vết thiếu, số đếm README, PII, khoá service_role | máy | CI job `truyvet` | có |
-| RLS / GRANT sau migration (TS-SEC) | người, SQL Editor | `docs/10 §10.7` | có, tay |
+| RLS / GRANT — tập không phá huỷ (TS-SEC-AUTO) | máy | CI job `baomat` | có |
+| RLS / GRANT — bài phá huỷ (xoá thật nếu RLS hỏng) | người, SQL Editor | `docs/10 §10.7` | có, tay |
+| Migration đã áp ↔ file trong repo, ảnh chụp schema còn mới | máy, chạy tay | `scripts/soat-migration.mjs` | có, tay |
 | Thông tuyến Zalo thật (TS-LIVE) | người, hai điện thoại | `docs/10 §10.7` | có, tay |
 | Tone giọng, a11y, Lighthouse, tải | người | `docs/10 §10.3–10.4` | chưa |
 
 Chỗ máy KHÔNG với tới được là chỗ nguy nhất, vì nó im lặng: RLS hở, bridge chết,
 bot trả 200 kèm câu trả lời sai. Đó là lý do TS-SEC chạy sau **mọi** migration
 đụng RLS/GRANT, và `bot_health_tick` + còi ntfy tồn tại (FR-152, NFR-18).
+
+**Một bài kiểm im lặng còn tệ hơn không có bài nào.** Bản đầu của
+`bot/tests/ts-sec-anon.mjs` coi "HTTP ≥ 400 = bị chặn = đạt". Chạy thử: 24/24
+ĐẠT — trong khi không một request nào tới được Supabase, proxy trả 403 chữ trần.
+Mất mạng, sai URL, project bị pause đều cho ra một bộ bảo mật xanh rờn. Luật rút
+ra, áp cho mọi bài kiểm ở repo này:
+
+> Trước khi tin một bài kiểm, hỏi: **nếu thứ nó giám sát chết ngay bây giờ, bài
+> này có kêu không?** Không kêu thì nó đang đo sự im lặng, không đo sự đúng.
+
+Nên mọi bài "phải bị chặn" giờ đòi đúng hình lỗi của thứ được kiểm (PostgREST
+trả JSON có `message`), có bài dò đường chạy trước, và có mã thoát riêng cho
+"chưa kiểm được" (2) khác với "đạt" (0). Và bài tự kiểm
+`ts-sec-anon.tu-kiem.mjs` dựng PostgREST giả để bắt chính nó chứng minh điều đó
+— chạy offline, nằm trong `test:bot`.
 
 ## 11.5 Ba cổng
 
@@ -152,6 +169,9 @@ qua** (`docs/10 §10.8`).
 | Chỉ kiểu dữ liệu | `bun run kieu` |
 | Chỉ e2e bot | `bun run test:bot` |
 | Chỉ soát tài liệu | `bun run truyvet` |
+| Hồi quy RLS trên DB thật (cần Internet) | `bun run test:sec` |
+| Soát trôi migration DB ↔ repo (cần khoá) | `node scripts/soat-migration.mjs` |
+| Sao lưu 30 bảng + ảnh chụp schema (cần khoá) | `node scripts/sao-luu.mjs` |
 | Soát tài liệu chi tiết hơn (agent) | gọi agent `soat-truy-vet` |
 | Review diff đụng `docs/` | gọi agent `reviewer` |
 

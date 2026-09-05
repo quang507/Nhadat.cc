@@ -61,7 +61,7 @@ Bảng NFR-01…18 với cách đo nằm ở `docs/07 §6` (nguồn sự thật)
 ## 10.5 Môi trường & công cụ (free-tier)
 
 - Unit: Vitest · E2E web: Playwright · A11y: axe-core · Perf: Lighthouse CI · bot: `bot/tests/e2e` (mock Supabase + mock model, Node/Bun).
-- CI: GitHub Actions free, `.github/workflows/kiem.yml` — mỗi PR chạy 3 job: `web` (tsc + `next build`), `bot` (102 kịch bản e2e + FR-159/161/164, mock Supabase & mock model nên không cần secret), `truyvet` (`scripts/soat-truy-vet.sh`). Vercel preview mỗi PR. **Chưa vào CI:** TS-SEC (cần SQL Editor), TS-LIVE (cần bridge + hai máy), Lighthouse/axe/k6 — xem `docs/11 §11.4` để biết chỗ nào máy không với tới.
+- CI: GitHub Actions free, `.github/workflows/kiem.yml` — mỗi PR chạy 4 job: `web` (tsc + `next build`), `bot` (102 kịch bản e2e + FR-159/161/164 + tự kiểm TS-SEC, mock Supabase & mock model nên không cần secret), `baomat` (`TS-SEC-AUTO` bắn anon key công khai vào DB thật), `truyvet` (`scripts/soat-truy-vet.sh`). Vercel preview mỗi PR. **Chưa vào CI:** TS-SEC bài phá huỷ (xoá dữ liệu thật nếu RLS hỏng), TS-LIVE (cần bridge + hai máy), Lighthouse/axe/k6 — xem `docs/11 §11.4`.
 - DB: `nhadat-cc` là môi trường chính, **không** chạy test phá hoại; ca ghi bọc `do … raise exception` để cuộn lại. Zalo: OA thật chế độ ẩn + acc test (OPEN-09).
 - Bí mật chỉ trong biến môi trường / Vault; khoá đã dán vào chat phải rotate.
 
@@ -101,6 +101,20 @@ SQL Editor, `set role anon` rồi thử phá — anon key là key công khai, re
 | TS-SEC-08 | anon đọc `listings`, `agents_public`, `listing_photos_v`, `projects`, `listing_facts` | ra dữ liệu bình thường; `agents_public` = số NMG trong `sellers` | ✅ 04/09 (vá 20260904b, anon 3/3) |
 | TS-SEC-09 | `proacl` của `get_secret` trong `pg_proc` | chỉ `postgres` + `service_role` | ✅ 04/09 |
 | TS-SEC-10 | mở `/nha-dat/<mã>` của tin có fact chứa SĐT | SĐT → `[liên hệ qua Zalo nhadat.cc]` ở cả `description` lẫn `answer` (FR-104) | ⏭ cần bản deploy |
+
+### TS-SEC-AUTO — hồi quy RLS chạy MÁY, mỗi PR (`bun run test:sec`)
+Tập không phá huỷ của TS-SEC, bắn khoá **công khai** `sb_publishable_…` vào DB thật qua PostgREST. Bổ sung cho TS-SEC chạy tay chứ không thay: bài `delete from reminders` vẫn ở trên vì nếu RLS hỏng thật thì nó xoá dữ liệu thật. Mã thoát: 0 đạt · 1 hỏng · **2 = không tới được DB (chưa kiểm được, KHÔNG phải đạt)**.
+| ID | Bài | Kỳ vọng | Kết quả mới nhất |
+|---|---|---|---|
+| TS-SEC-AUTO-00 | dò đường: anon đọc `listings` | ra ≥1 dòng, không thì thoát 2 và bỏ chấm điểm | ⏭ CI (sandbox không có đường ra supabase.co) |
+| TS-SEC-AUTO-01 | anon đọc 14 bảng nội bộ (`reminders`, `sellers`, `messages`, `curated_lists`, `property_events`…) | PostgREST từ chối, hoặc 0 dòng | ⏭ CI |
+| TS-SEC-AUTO-02 | anon đọc `public_listings` | bị từ chối — view không lọc trạng thái | ⏭ CI |
+| TS-SEC-AUTO-03 | anon gọi 6 RPC nội bộ (`get_secret`, `seller_drip_tick`, `ctv_report_tick`, `xuat_schema`, `liet_ke_bang`, `liet_ke_migration`) | bị từ chối cả 6 | ⏭ CI |
+| TS-SEC-AUTO-04 | anon `insert listings` · `update bot_prompts` | bị từ chối; nếu lọt thì tự dọn và báo P0 | ⏭ CI |
+| TS-SEC-AUTO-05 | anon đọc `agents_public` | ra ≥1 NMG — bắt đúng lỗi làm `/moi-gioi` trắng 27/08→04/09 | ⏭ CI |
+| TS-SEC-AUTO-06 | anon đọc `projects`, `listing_facts`, `listing_photos_v` | HTTP 200 — bắt lỗi siết quá tay | ⏭ CI |
+| TS-SEC-AUTO-07 | anon lọc `status=cho_thong_tin` | 0 dòng — tin nháp không lọt ra ngoài | ⏭ CI |
+| TS-SEC-AUTO-08 | **tự kiểm bộ trên** bằng PostgREST giả, 4 cảnh (khoẻ / RLS thủng / proxy chặn / siết quá tay) | thoát đúng 0 / 1 / 2 / 1 | ✅ 05/09 (4/4, chạy offline) |
 
 ### TS-LIVE — thông tuyến thật qua Zalo (chạy khi bật bridge)
 Điều kiện: `node bot/bridge-zca/index.mjs` chạy, không còn `pumpEscalations: fetch failed`. Chạy trên project thật nên sau mỗi vòng xoá `listings` `CCRB-*`, `sellers`/`ctvs` test, `reminders` liên quan.

@@ -77,15 +77,24 @@ if (!KHOA) {
   process.exit(1);
 }
 
-// Danh sách bảng public tính tới 27/08/2026. Thêm bảng mới thì thêm vào đây —
-// script CỐ TÌNH không tự dò bảng: tự dò thì thêm bảng mà quên là im lặng bỏ
-// sót, còn liệt kê tay thì thiếu là thấy ngay khi so với Dashboard.
+// Danh sách bảng public. Thêm bảng mới thì thêm vào đây — script CỐ TÌNH không
+// tự dò bảng: tự dò thì thêm bảng mà quên là im lặng bỏ sót, còn liệt kê tay
+// thì thiếu là thấy ngay.
+//
+// 05/09/2026 — "thấy ngay" chỉ đúng nếu có người mở Dashboard ra so, và suốt
+// 27/08 → 05/09 không ai so. DB lúc đó có 30 bảng, danh sách này có 22: tám
+// bảng CHƯA TỪNG được sao lưu, trong đó `listing_media` là bản đồ ảnh ↔ tin
+// (FR-165) — mất nó thì file trong Storage còn nguyên mà không ai biết ảnh của
+// tin nào. Nay danh sách vẫn liệt kê tay (đọc là thấy) nhưng `kiemDuBang()`
+// bên dưới hỏi DB mỗi lần chạy, thiếu một bảng là DỪNG. Bỏ sót không còn im.
 const BANG = [
   // (`ratings` đã bị xoá theo OPEN-23 ngày 27/08/2026.)
-  "admins", "bot_errors", "bot_health", "bot_prompts", "bot_usage",
-  "buyers", "conversations", "ctv_daily_reports", "ctvs", "deals",
-  "info_requests", "interests", "listing_facts", "listing_views", "listings",
-  "media", "messages", "projects", "reminders", "required_facts",
+  "admins", "app_config", "bot_errors", "bot_health", "bot_prompts",
+  "bot_usage", "buyers", "conversations", "ctv_daily_reports", "ctvs",
+  "curated_lists", "deals", "inbound_events", "inbound_ledger",
+  "info_requests", "interests", "listing_facts", "listing_media",
+  "listing_views", "listings", "media", "media_cleanup_queue", "messages",
+  "projects", "property_events", "ratings_log", "reminders", "required_facts",
   "sellers", "viewings",
 ];
 
@@ -114,12 +123,67 @@ async function keoBang(ten) {
   return rows;
 }
 
+async function goiRpc(ten) {
+  const r = await fetch(`${URL_DU_AN}/rest/v1/rpc/${ten}`, {
+    method: "POST",
+    headers: {
+      apikey: KHOA,
+      Authorization: `Bearer ${KHOA}`,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+  if (!r.ok) throw new Error(`rpc/${ten}: HTTP ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+// Bảng nào có trong DB mà không có trong BANG → DỪNG. Đây là chỗ biến "quên
+// thêm bảng" từ mất dữ liệu im lặng thành một lần chạy hỏng nhìn thấy được.
+async function kiemDuBang() {
+  const trongDb = await goiRpc("liet_ke_bang");
+  const thieu = trongDb.filter((t) => !BANG.includes(t));
+  const thua = BANG.filter((t) => !trongDb.includes(t));
+  if (thua.length) {
+    console.warn(`  ! BANG khai bảng không còn trong DB: ${thua.join(", ")}`);
+  }
+  if (thieu.length) {
+    throw new Error(
+      `DB có ${thieu.length} bảng chưa khai trong BANG: ${thieu.join(", ")}\n` +
+      "  → thêm vào mảng BANG trong scripts/sao-luu.mjs rồi chạy lại.\n" +
+      "  Sao lưu thiếu bảng mà báo thành công là cái bẫy tệ nhất ở đây.",
+    );
+  }
+  console.log(`  Đủ bảng: ${trongDb.length}/${trongDb.length} bảng của DB đã khai.`);
+}
+
+// Schema không nằm trong dữ liệu. `sao-luu.mjs` cũ chỉ kéo dòng, nên bản sao là
+// một đống JSON không có cái để đổ vào: 44/51 migration đầu (21/08 → 27/08) áp
+// thẳng qua MCP mà không lưu file, schema lõi chỉ tồn tại trong project đang
+// chạy. `xuat_schema()` (migration 20260905a) sinh DDL dựng lại được.
+//
+// Ghi HAI nơi: thư mục sao lưu (đi cùng dữ liệu) và `bot/supabase/schema.sql`
+// trong repo (để repo một mình cũng dựng lại được). File chỉ có DDL, không có
+// dòng dữ liệu nào, nên không mang SĐT thật ra repo public.
+async function keoSchema(dich) {
+  const ddl = await goiRpc("xuat_schema");
+  if (typeof ddl !== "string" || ddl.length < 1000) {
+    throw new Error(`xuat_schema trả về bất thường (${typeof ddl}, ${ddl?.length} ký tự)`);
+  }
+  const trongRepo = join(HERE, "..", "bot", "supabase", "schema.sql");
+  await writeFile(join(dich, "schema.sql"), ddl);
+  await writeFile(trongRepo, ddl);
+  console.log(`  schema.sql          ${String(ddl.length).padStart(6)} ký tự → cả ${trongRepo}`);
+}
+
 const dich = process.argv[2]
   ?? join(process.cwd(), "..", "nhadat-backup",
           new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-"));
 
 await mkdir(dich, { recursive: true });
 console.log(`Sao lưu → ${dich}\n`);
+
+await kiemDuBang();
+await keoSchema(dich);
 
 let tongDong = 0;
 const hong = [];
@@ -143,3 +207,4 @@ if (hong.length) {
   process.exit(2);
 }
 console.log("Xong. Cất thư mục này ra ổ khác / cloud riêng — đừng để một chỗ với DB.");
+console.log("`bot/supabase/schema.sql` vừa được cập nhật — nhớ commit nếu nó đổi.");
