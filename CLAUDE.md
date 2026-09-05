@@ -97,7 +97,8 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   `up-anh.mjs` đẩy ảnh thật lên bucket `listing-public` theo UUID của tin và
   ghi kèm dòng `listing_media` (FR-165; lối cũ theo mã tin của FR-148 đã bỏ);
   nó chỉ ĐỌC `masterDB/`, không bao giờ copy ảnh vào repo.
-  `sao-luu.mjs` kéo cả **30 bảng** về JSON và gọi `xuat_schema()` ghi
+  `sao-luu.mjs` kéo cả **31 bảng** về JSON, ghi `manifest.json` (bảng · số dòng
+  · file · trạng thái) và gọi `xuat_schema()` ghi
   `bot/supabase/schema.sql` — **bậc Supabase Free không có backup tự động**,
   đây là bản sao duy nhất đang tồn tại (OPEN-25). Cần
   `SUPABASE_SERVICE_ROLE_KEY` trong biến môi trường; khoá đó bỏ qua mọi RLS nên
@@ -118,6 +119,21 @@ thấy), nhưng suốt 27/08 → 05/09 nó thiếu 8 bảng — trong đó `list
 đồ ảnh ↔ tin (FR-165): mất nó thì file trong Storage còn nguyên mà không ai
 biết ảnh của tin nào (OPEN-47). Nay `liet_ke_bang()` bắt script hỏi DB mỗi lần
 chạy, thiếu bảng là DỪNG. Thêm bảng mới thì thêm vào mảng `BANG`.
+
+Vết đó lặp lại ngay hôm sau: `chat_quota` (migration `20260905d`) sinh ra mà
+không ai thêm vào `BANG`. `liet_ke_bang()` có bắt — nhưng chỉ bắt lúc CHẠY sao
+lưu, tức đêm hôm trên máy chủ, trước mặt không ai. Nay `soat-truy-vet.sh` so
+`create table` trong migration với `BANG` và kêu **ở PR**.
+
+**Sao lưu phải phân biệt "đủ" với "trông như đủ".** Ba luật, tất cả có ca kiểm
+trong `scripts/sao-luu.tu-kiem.mjs` (PostgREST giả, không chạm DB thật):
+`Prefer: count=exact` để đối chiếu số dòng kéo về với số DB tự báo — lệch là
+hỏng, vì một file JSON ngắn không kêu ca gì; `manifest.json` ghi ra ĐĨA với
+`trang_thai` (`day_du`/`thieu`/`hong`) — thư mục thiếu ba bảng trông y hệt thư
+mục đủ nếu không có gì nói ra; và mọi đường hỏng đều thoát khác 0. Thứ KHÔNG
+nằm trong bản sao (`storage.objects`, `auth.users`, `vault.secrets`) được liệt
+kê tường minh trong manifest — "không thấy" và "cố ý bỏ" nhìn giống hệt nhau
+lúc đang chữa cháy.
 
 **Trang tin phải nằm trong cache** (NFR-17). Route động có tham số đường dẫn mà
 thiếu `generateStaticParams()` thì `export const revalidate` là chữ chết —

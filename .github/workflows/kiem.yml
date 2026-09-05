@@ -79,3 +79,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Không có ID gãy, số đếm khớp README, không rò PII
         run: bash scripts/soat-truy-vet.sh
+
+  # Sao lưu là loại mã chỉ được kiểm đúng một lần trong đời — hôm mất dữ liệu.
+  # Job này bơm năm cách hỏng đã biết (bảng mới chưa khai, một bảng lỗi, DB trả
+  # thiếu dòng, không đọc được số dòng, xuất schema hụt) vào một PostgREST giả
+  # rồi soi mã thoát + manifest. Không chạm DB thật, không cần khoá.
+  saoluu:
+    name: Sao lưu — tự kiểm trên PostgREST giả
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Script phân biệt được 'đủ' với 'trông như đủ'
+        run: node scripts/sao-luu.tu-kiem.mjs

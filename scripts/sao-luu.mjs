@@ -38,7 +38,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Nạp scripts/.env — cùng lý do với bridge: `set SUPABASE_SERVICE_ROLE_KEY=...`
@@ -90,18 +90,64 @@ if (!KHOA) {
 const BANG = [
   // (`ratings` đã bị xoá theo OPEN-23 ngày 27/08/2026.)
   "admins", "app_config", "bot_errors", "bot_health", "bot_prompts",
-  "bot_usage", "buyers", "conversations", "ctv_daily_reports", "ctvs",
-  "curated_lists", "deals", "inbound_events", "inbound_ledger",
+  "bot_usage", "buyers", "chat_quota", "conversations", "ctv_daily_reports",
+  "ctvs", "curated_lists", "deals", "inbound_events", "inbound_ledger",
   "info_requests", "interests", "listing_facts", "listing_media",
   "listing_views", "listings", "media", "media_cleanup_queue", "messages",
   "projects", "property_events", "ratings_log", "reminders", "required_facts",
   "sellers", "viewings",
 ];
 
+// ─────────────────── CÁI GÌ KHÔNG NẰM TRONG BẢN SAO NÀY ───────────────────
+// Liệt kê tường minh, vì "không thấy trong thư mục sao lưu" và "cố ý không sao
+// lưu" nhìn giống hệt nhau lúc 3 giờ sáng đang chữa cháy.
+//
+// · VIEW (17 cái: public_listings, ctv_ranks, bds_hot…) — dẫn xuất, không chứa
+//   dữ liệu riêng. Định nghĩa nằm trong `schema.sql`, dựng lại là có.
+// · cron.job (12 job) — KHÔNG mất: `xuat_schema()` sinh sẵn câu
+//   `cron.schedule(...)` cho từng job vào `schema.sql`. Đã kiểm 05/09/2026:
+//   cả 12 lệnh đều gọi hàm bọc (`select public.nudge_tick()`), không lệnh nào
+//   nhúng khoá, nên đưa vào repo public là an toàn.
+// · storage.buckets — định nghĩa 3 bucket (listing-public, listing-private,
+//   listing-photos) + policy của chúng nằm trong `schema.sql`.
+// · storage.objects (FILE ẢNH THẬT) — KHÔNG sao lưu ở đây, và đây là lỗ hổng
+//   thật chứ không phải quyết định thoải mái. Hôm nay 0 file nên chưa mất gì;
+//   khi `up-anh.mjs` đẩy ảnh lên thì `listing_media` (đã có trong BANG) giữ
+//   được BẢN ĐỒ ảnh ↔ tin, nhưng BYTE ảnh thì không. Nguồn gốc vẫn còn ở
+//   `masterDB/` trên máy chủ dự án — đó là bản sao duy nhất của byte ảnh.
+// · auth.users — PostgREST không với tới schema `auth`. Hôm nay 0 dòng nên
+//   chưa mất gì, nhưng `sellers.auth_user_id` có khoá ngoại trỏ sang đó: khi
+//   đã có người dùng thật, phục hồi `sellers` trước `auth.users` sẽ gãy FK.
+//   Muốn đủ thì phải `supabase db dump`, việc đó cần CLI + mật khẩu DB.
+// · vault.secrets — CỐ Ý KHÔNG sao lưu. Đổ secret ra file JSON trên đĩa là
+//   biến bản sao lưu thành kho khoá. Chép tay lại từ Dashboard khi phục hồi.
+//
+// Ba dòng cuối là việc còn treo, không phải việc đã xong — xem OPEN-25.
+const KHONG_SAO_LUU = {
+  view: "dẫn xuất — định nghĩa nằm trong schema.sql",
+  "cron.job": "có trong schema.sql (12 job, không job nào nhúng khoá)",
+  "storage.buckets": "có trong schema.sql (định nghĩa + policy)",
+  "storage.objects": "CHƯA CÓ CÁCH — byte ảnh chỉ còn ở masterDB/ trên máy chủ",
+  "auth.users": "CHƯA CÓ CÁCH — PostgREST không với tới schema auth, cần supabase db dump",
+  "vault.secrets": "cố ý bỏ — chép tay từ Dashboard, đừng đổ khoá ra đĩa",
+};
+
 const TRANG = 1000; // PostgREST mặc định trần 1000 dòng/lượt
 
+// Trả `{ rows, tong }` — `tong` là số dòng DB TỰ BÁO, không phải số mình đếm.
+//
+// VÌ SAO PHẢI HỎI SỐ: bản trước chỉ kéo tới khi trang cuối ngắn hơn 1000 rồi
+// coi là xong. Nghĩa là nó tin tuyệt đối vào chính vòng lặp của mình. Một
+// PostgREST trả trang rỗng sớm — vì `db_max_rows` bị đặt, vì proxy cắt, vì
+// timeout giữa chừng — sẽ cho ra file JSON NGẮN, và script in "đã sao lưu"
+// kèm một con số nhỏ mà không ai biết là nhỏ so với cái gì. Đây đúng kiểu hỏng
+// im lặng tệ nhất: bản sao lưu TỒN TẠI, có vẻ ổn, và thiếu dữ liệu.
+//
+// `Prefer: count=exact` bắt PostgREST trả `Content-Range: 0-999/12345`. Con số
+// sau dấu `/` là sự thật phía DB. Lệch là hỏng, và hỏng thì phải kêu.
 async function keoBang(ten) {
   const rows = [];
+  let tong = null;
   for (let tu = 0; ; tu += TRANG) {
     const den = tu + TRANG - 1;
     const r = await fetch(
@@ -112,15 +158,31 @@ async function keoBang(ten) {
           Authorization: `Bearer ${KHOA}`,
           Range: `${tu}-${den}`,
           "Range-Unit": "items",
+          // Chỉ hỏi ở trang đầu: `count=exact` bắt DB đếm cả bảng, hỏi lại mỗi
+          // trang là bắt nó đếm lại từ đầu mỗi lượt.
+          ...(tu === 0 ? { Prefer: "count=exact" } : {}),
         },
       },
     );
-    if (!r.ok) throw new Error(`${ten}: HTTP ${r.status} ${await r.text()}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
+    if (tu === 0) {
+      // Dạng "0-999/12345", hoặc "*/0" khi bảng rỗng.
+      const m = /\/(\d+)\s*$/.exec(r.headers.get("content-range") ?? "");
+      tong = m ? Number(m[1]) : null;
+    }
     const phan = await r.json();
     rows.push(...phan);
     if (phan.length < TRANG) break;
   }
-  return rows;
+  if (tong === null) {
+    // Không đọc được Content-Range thì KHÔNG im lặng cho qua — mất luôn cái
+    // lưới vừa dựng. Thà dừng còn hơn tin một con số không kiểm được.
+    throw new Error("không đọc được Content-Range → không xác minh được số dòng");
+  }
+  if (rows.length !== tong) {
+    throw new Error(`kéo về ${rows.length} dòng nhưng DB báo có ${tong} — bản sao THIẾU`);
+  }
+  return { rows, tong };
 }
 
 async function goiRpc(ten) {
@@ -175,35 +237,87 @@ async function keoSchema(dich) {
   console.log(`  schema.sql          ${String(ddl.length).padStart(6)} ký tự → cả ${trongRepo}`);
 }
 
-const dich = process.argv[2]
+const dich = resolve(process.argv[2]
   ?? join(process.cwd(), "..", "nhadat-backup",
-          new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-"));
+          new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")));
+
+// Bản sao chứa SĐT thật của khách và người bán; repo này đang PUBLIC. Mặc định
+// đã trỏ ra ngoài repo, nhưng mặc định chỉ bảo vệ người không gõ tham số. Một
+// lần `node scripts/sao-luu.mjs ./tmp` rồi `git add -A` là xong đời.
+const GOC_REPO = resolve(HERE, "..");
+if (dich === GOC_REPO || dich.startsWith(GOC_REPO + sep)) {
+  console.error(
+    `TỪ CHỐI: thư mục đích nằm TRONG repo (${dich}).\n` +
+    "  Bản sao lưu mang SĐT thật, repo này đang public. Chọn đường dẫn ngoài repo,\n" +
+    "  ví dụ: node scripts/sao-luu.mjs ../nhadat-backup/thu-cong",
+  );
+  process.exit(1);
+}
 
 await mkdir(dich, { recursive: true });
 console.log(`Sao lưu → ${dich}\n`);
 
-await kiemDuBang();
-await keoSchema(dich);
+// Manifest ghi ra ĐĨA, không chỉ in ra màn hình. Màn hình cuộn mất; thư mục
+// sao lưu thì còn đó hàng tháng, và người mở nó ra lúc chữa cháy cần biết
+// NGAY bản này đủ hay thiếu. Một thư mục thiếu ba bảng trông y hệt một thư
+// mục đủ nếu không có gì nói ra.
+const soTay = {
+  du_an: URL_DU_AN,
+  luc: new Date().toISOString(),
+  trang_thai: "dang_chay",
+  bang: [],
+  hong: [],
+  khong_sao_luu: KHONG_SAO_LUU,
+};
+async function ghiSoTay() {
+  await writeFile(join(dich, "manifest.json"), JSON.stringify(soTay, null, 2));
+}
+
+// Mọi đường hỏng đều phải để lại manifest rồi mới thoát — kể cả hỏng SỚM
+// (thiếu bảng, xuất schema hụt). Không có manifest thì thư mục dở dang lại
+// trông như một bản sao lưu bình thường.
+async function chet(ma, loi) {
+  soTay.trang_thai = "hong";
+  soTay.loi = String(loi?.message ?? loi);
+  await ghiSoTay().catch(() => {});
+  console.error(`\n${soTay.loi}`);
+  console.error("Bản sao lưu này KHÔNG đủ — đừng cất nó đi như một bản tốt.");
+  process.exit(ma);
+}
+
+try {
+  await kiemDuBang();
+  await keoSchema(dich);
+} catch (e) {
+  await chet(2, e);
+}
 
 let tongDong = 0;
-const hong = [];
 for (const ten of BANG) {
+  const file = `${ten}.json`;
   try {
-    const rows = await keoBang(ten);
-    await writeFile(join(dich, `${ten}.json`), JSON.stringify(rows, null, 1));
+    const { rows, tong } = await keoBang(ten);
+    const noiDung = JSON.stringify(rows, null, 1);
+    await writeFile(join(dich, file), noiDung);
     tongDong += rows.length;
-    console.log(`  ${ten.padEnd(20)} ${String(rows.length).padStart(6)} dòng`);
+    soTay.bang.push({ ten, dong: rows.length, db_bao: tong, file, bytes: Buffer.byteLength(noiDung) });
+    console.log(`  ${ten.padEnd(22)} ${String(rows.length).padStart(6)} dòng  → ${file}`);
   } catch (e) {
-    hong.push(ten);
-    console.error(`  ${ten.padEnd(20)} LỖI: ${e.message}`);
+    soTay.hong.push({ ten, loi: e.message });
+    console.error(`  ${ten.padEnd(22)} LỖI: ${e.message}`);
   }
 }
 
-console.log(`\n${tongDong} dòng, ${BANG.length - hong.length}/${BANG.length} bảng.`);
-if (hong.length) {
+soTay.so_bang = soTay.bang.length;
+soTay.so_dong = tongDong;
+soTay.trang_thai = soTay.hong.length ? "thieu" : "day_du";
+await ghiSoTay();
+
+console.log(`\n${tongDong} dòng, ${soTay.bang.length}/${BANG.length} bảng → manifest.json`);
+if (soTay.hong.length) {
   // Thoát khác 0 để `cron`/Task Scheduler biết là chuyến này KHÔNG thành công.
   // Sao lưu hụt mà báo thành công còn nguy hơn không sao lưu.
-  console.error(`Bảng hỏng: ${hong.join(", ")} — bản sao lưu này KHÔNG đủ.`);
+  console.error(`Bảng hỏng: ${soTay.hong.map((h) => h.ten).join(", ")} — bản sao lưu này KHÔNG đủ.`);
   process.exit(2);
 }
 console.log("Xong. Cất thư mục này ra ổ khác / cloud riêng — đừng để một chỗ với DB.");

@@ -10,7 +10,8 @@
     "test:bot": "bash bot/tests/e2e/chay.sh && node bot/tests/fr159-bon-vai.mjs && node bot/tests/fr161-go-lan-dau.mjs && node bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs && node bot/tests/ts-sec-anon.tu-kiem.mjs",
     "test:sec": "node bot/tests/ts-sec-anon.mjs",
     "truyvet": "bash scripts/soat-truy-vet.sh",
-    "kiem": "bun run kieu && bun run build && bun run test:bot && bun run truyvet"
+    "test:saoluu": "node scripts/sao-luu.tu-kiem.mjs",
+    "kiem": "bun run kieu && bun run build && bun run test:bot && bun run test:saoluu && bun run truyvet"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

@@ -167,6 +167,39 @@ else
   xanh "Tài nguyên tĩnh: không phụ thuộc raw.githubusercontent"
 fi
 
+# ── 8. Bảng mới trong migration phải có trong danh sách sao lưu ─────────────
+# `sao-luu.mjs` có `kiemDuBang()` hỏi DB mỗi lần chạy, nhưng nó chỉ kêu lúc
+# CHẠY SAO LƯU — tức đêm hôm, trên máy chủ dự án, trước mặt không ai. Suốt
+# 27/08 → 05/09 tám bảng chưa từng được sao lưu vì không có gì kêu sớm hơn thế
+# (OPEN-47), và `chat_quota` lặp lại đúng vết đó ngày 05/09.
+# Lưới này kêu ở PR, nơi có người đang nhìn.
+#
+# Chỉ soi bảng SINH RA TỪ MIGRATION CÒN TRONG REPO — 44 migration 21/08 → 27/08
+# đã mất vĩnh viễn (OPEN-46) nên phần lớn bảng lõi không có `create table` ở
+# đâu cả. Vì vậy đây là phép so MỘT CHIỀU: có trong migration mà thiếu trong
+# BANG là hỏng; ngược lại thì không kết luận gì.
+#
+# `grep -vx public` bỏ một khớp giả CÓ THẬT: `20260905a` chứa chuỗi sinh mã
+# `format(E'create table if not exists public.%I …')` bên trong `xuat_schema()`.
+# `%I` không phải tên bảng nên regex tụt về khớp chính chữ "public". Lọc ở đây
+# thay vì thắt regex, vì mọi migration đều viết `public.<tên>` và nới lỏng chỗ
+# này là cách chắc chắn để bỏ sót một bảng viết không có tiền tố schema.
+bang_mig=$(grep -rhoiE 'create table +(if not exists +)?(public\.)?[a-z_][a-z0-9_]*' \
+  bot/supabase/migrations/*.sql 2>/dev/null \
+  | sed -E 's/.*[[:space:]]//; s/^public\.//' | grep -vx 'public' | sort -u)
+khai=$(sed -n '/^const BANG = \[/,/^\];/p' scripts/sao-luu.mjs)
+thieu_bang=""
+for t in $bang_mig; do
+  grep -q "\"$t\"" <<<"$khai" || thieu_bang+="$t "
+done
+if [[ -n "$thieu_bang" ]]; then
+  canh "Bảng có migration nhưng KHÔNG có trong BANG của sao-luu.mjs: $thieu_bang"
+  printf '   → thêm vào mảng BANG trong scripts/sao-luu.mjs.\n'
+  printf '   → bảng không nằm trong BANG là bảng chưa từng được sao lưu lần nào.\n'
+else
+  printf '\033[32m✓\033[0m Sao lưu: mọi bảng sinh từ migration đều có trong BANG\n'
+fi
+
 printf '\n── Số đếm hiện tại ──\n'
 printf '%s BR · %s FR · %s NFR · %s UF · %s WF · %s OPEN · %s INS\n' \
   "$n_br" "$n_fr" "$n_nfr" "$n_uf" "$n_wf" "$n_open" "$n_ins"
