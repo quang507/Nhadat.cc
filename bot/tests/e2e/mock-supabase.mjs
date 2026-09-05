@@ -240,6 +240,29 @@ class RpcCall {
         });
         return { data: true, error: null };
       }
+      // 20260905i — lease chiều GỬI. Hàm thật là MỘT câu `update … where
+      // sent_at is null and (sending_until is null or sending_until < now())`,
+      // nguyên tử ở tầng hàng. Ở đây `run()` chạy đồng bộ nên cũng nguyên tử —
+      // đúng cái mà Postgres bảo đảm. Chép sát điều kiện, kể cả "đã gửi xong
+      // thì không giành nữa": bỏ vế đó là mock rộng hơn hàm thật.
+      case "giu_luot_gui": {
+        const l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
+        // 20260905j: KHÔNG có dòng sổ ≠ có người giữ. Gộp hai cảnh đó vào cùng
+        // một `false` là bỏ luôn cú gửi — khách không nhận được gì.
+        if (!l) return { data: true, error: null };
+        if (l.sent_at) return { data: false, error: null };
+        if (l.sending_until && Date.parse(l.sending_until) > Date.now()) {
+          return { data: false, error: null };
+        }
+        l.sending_until = new Date(Date.now() + (a.p_han_secs ?? 120) * 1000).toISOString();
+        l.updated_at = now();
+        return { data: true, error: null };
+      }
+      case "nha_luot_gui": {
+        const l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
+        if (l) { l.sending_until = null; l.updated_at = now(); }
+        return { data: null, error: null };
+      }
       case "log_loi": db.t.bot_errors.push({ at: now(), source: a.p_source, detail: a.p_detail, status_code: a.p_code }); return { data: null, error: null };
       case "cong_token": db.t.bot_usage.push(a); return { data: null, error: null };
       case "bump_model_quota": return { data: true, error: null };

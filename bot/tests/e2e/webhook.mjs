@@ -55,14 +55,35 @@ const xongViecNen = async () => { const d = nen; nen = []; await Promise.allSett
 // ── fetch giả: chặn hai đích ngoài (chat-reply và OA API) ────────────────────
 let naoTraVe = { replies: ["Dạ em ghi nhận rồi ạ."] };
 let daGuiOA = [];
+// Kịch bản OA: `(lanThu, body) => "ok" | "false" | "throw"`. Mặc định luôn ok.
+// `lanThu` đếm TỪ 1 theo mọi lượt gọi openapi.zalo.me trong ca hiện tại, kể cả
+// lượt thử lại — vì luật FR-162 là "thử lại ĐÚNG MỘT lần", muốn kiểm nó thì
+// phải đếm được cả lượt thử lại.
+let oaKichBan = () => "ok";
 globalThis.fetch = async (url, opt = {}) => {
   const u = String(url);
   if (u.includes("/functions/v1/chat-reply")) {
-    return { status: 200, json: async () => naoTraVe };
+    // Bộ não giả BÁM SỔ: `claim_inbound` thật trả `already_sent` từ
+    // `inbound_ledger.sent_at`, nên stub cũng phải đọc đúng chỗ đó. Trả cứng
+    // `already_sent:false` là dựng một thế giới mà cửa chống-gửi-đúp không
+    // bao giờ đóng — ca kiểm sẽ đo nhầm.
+    const body = JSON.parse(opt.body ?? "{}");
+    const so = globalThis.__db.t.inbound_ledger.find((x) => x.zalo_msg_id === body.msg_id);
+    return {
+      status: 200,
+      json: async () => ({
+        ...naoTraVe,
+        replayed: !!so,
+        already_sent: !!so?.sent_at,
+      }),
+    };
   }
   if (u.includes("openapi.zalo.me")) {
-    daGuiOA.push(JSON.parse(opt.body ?? "{}"));
-    return { status: 200, json: async () => ({ error: 0 }) };
+    const b = JSON.parse(opt.body ?? "{}");
+    const ket = oaKichBan(daGuiOA.length + 1, b);
+    daGuiOA.push({ ...b, ket });
+    if (ket === "throw") throw new Error("OA timeout");
+    return { status: 200, json: async () => ({ error: ket === "ok" ? 0 : -201 }) };
   }
   throw new Error(`fetch ngoài dự kiến: ${u}`);
 };
@@ -109,6 +130,8 @@ function moi() {
   globalThis.__calls = []; globalThis.__rpc = {};
   daGuiOA = []; nen = [];
   naoTraVe = { replies: ["Dạ em ghi nhận rồi ạ."] };
+  oaKichBan = () => "ok";
+  globalThis.__treTruyVan = null;
   delete ENV.ALLOW_UNVERIFIED_WEBHOOK;
 }
 const soLoi = (chua) => db().t.bot_errors.filter((e) => String(e.source).includes(chua));
@@ -281,6 +304,128 @@ const soLoi = (chua) => db().t.bot_errors.filter((e) => String(e.source).include
   moi(); globalThis.__vault = VAULT_DAY;
   const r = await goi(JSON.stringify({ replay_event_id: "khong-co" }), { authorization: "Bearer svc" });
   check("CK-8c phát lại sự kiện lạ → 404, không nói dối đường cứu", r.status === 404, JSON.stringify(r));
+}
+
+// ═══════════ GỬI ĐÚNG-MỘT-LẦN: phát lại + nối lại (FR-162, FR-166) ═══════════
+// Đường: inbound-sweep → zalo-webhook{replay_event_id} → handleEvent → sendZalo
+//        → sent_bubbles → sent_at.
+//
+// `claim_inbound` CÓ chốt cho chiều ĐẾN: `status='processing'` mà còn tươi thì
+// trả `in_flight`. Nhưng nhánh `status='completed'` trả về NGAY, không đánh dấu
+// gì — và đó đúng là trạng thái mà `viec_inbound_bo_roi` chuyên đi tìm
+// ("chua_gui": completed + sent_at null). Nên chiều GỬI không có chốt nào.
+const BONG = ["bong bóng một", "bong bóng hai"];
+// Dựng sổ ở trạng thái "bộ não xong rồi, chưa gửi xong" — chính là việc mà
+// inbound-sweep nhặt lên.
+function dungSo(evId, { sent_bubbles = 0, sent_at = null } = {}) {
+  moi();
+  globalThis.__vault = (n) => n === "ZALO_OA_ACCESS_TOKEN"
+    ? { data: "token-gia", error: null } : VAULT_DAY(n);
+  naoTraVe = { replies: BONG };
+  db().t.inbound_events.push({
+    event_id: evId, payload: JSON.parse(suKien(evId)), delivery_count: 1,
+  });
+  db().t.inbound_ledger.push({
+    zalo_msg_id: evId, status: "completed", attempts: 1,
+    reply: { replies: BONG }, sent_bubbles, sent_at,
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  });
+}
+const phatLai = (evId) =>
+  goi(JSON.stringify({ replay_event_id: evId }), { authorization: "Bearer svc" });
+const so1 = () => db().t.inbound_ledger[0];
+const daGuiText = () => daGuiOA.map((x) => x.message?.text).filter(Boolean);
+
+// (1) Phát lại MỘT lần → gửi đủ, đúng thứ tự, chốt sổ.
+{
+  dungSo("ev-g1");
+  const r = await phatLai("ev-g1");
+  check("GUI-1 phát lại một lần → 200", r.status === 200, JSON.stringify(r));
+  check("GUI-1 gửi đủ 2 bong bóng ĐÚNG THỨ TỰ",
+    JSON.stringify(daGuiText()) === JSON.stringify(BONG), JSON.stringify(daGuiText()));
+  check("GUI-1 sổ chốt sent_bubbles=2 và có sent_at",
+    so1().sent_bubbles === 2 && !!so1().sent_at, JSON.stringify(so1()));
+}
+
+// (2) Phát lại cùng event HAI lần (nối tiếp) → lần hai KHÔNG gửi lại.
+{
+  dungSo("ev-g2");
+  await phatLai("ev-g2");
+  const truoc = daGuiOA.length;
+  const r = await phatLai("ev-g2");
+  check("GUI-2 phát lại lần hai → vẫn 200", r.status === 200, JSON.stringify(r));
+  check("GUI-2 lần hai KHÔNG gửi thêm bong bóng nào",
+    daGuiOA.length === truoc, `${truoc} → ${daGuiOA.length}`);
+}
+
+// (3) Phát lại ĐỒNG THỜI cùng một event → tổng số bong bóng vẫn là 2.
+// Đây là cảnh thật: sweep chạy 1 phút/lần, một lượt gửi kéo dài (300ms giữa
+// hai bong bóng, cộng 2s thử lại nếu OA nghẹn) thì lượt sau chồng lên lượt
+// trước, mà không có gì đánh dấu "đang gửi".
+{
+  dungSo("ev-g3");
+  globalThis.__treTruyVan = (t, op) =>
+    (t === "inbound_ledger" ? (op === "select" ? 5 : 25) : 0);
+  await Promise.all([phatLai("ev-g3"), phatLai("ev-g3")]);
+  check("GUI-3 phát lại ĐỒNG THỜI → tổng cộng đúng 2 bong bóng, không đúp",
+    daGuiText().length === 2, JSON.stringify(daGuiText()));
+  check("GUI-3 sổ không vượt quá số bong bóng có thật",
+    so1().sent_bubbles <= 2, JSON.stringify(so1().sent_bubbles));
+}
+
+// (4) Bong bóng 1 đi được, bong bóng 2 hỏng.
+{
+  dungSo("ev-g4");
+  oaKichBan = (n) => (n === 1 ? "ok" : "false");   // lượt 2 và lượt thử lại đều hỏng
+  await phatLai("ev-g4");
+  check("GUI-4 bong bóng 1 tới, bong bóng 2 hỏng → sent_bubbles=1",
+    so1().sent_bubbles === 1, JSON.stringify(so1()));
+  check("GUI-4 KHÔNG chốt sent_at, có ghi send_error",
+    !so1().sent_at && /1\/2/.test(String(so1().send_error ?? "")), JSON.stringify(so1()));
+  check("GUI-4 có thử lại ĐÚNG MỘT lần cho bong bóng hỏng (FR-162)",
+    daGuiOA.filter((x) => x.message?.text === BONG[1]).length === 2,
+    JSON.stringify(daGuiText()));
+}
+
+// (5) Thử lại sau khi hỏng → NỐI TIẾP, không gửi lại bong bóng đã tới.
+{
+  dungSo("ev-g5", { sent_bubbles: 1 });
+  await phatLai("ev-g5");
+  check("GUI-5 nối lại từ bong bóng 2, KHÔNG gửi lại bong bóng 1",
+    JSON.stringify(daGuiText()) === JSON.stringify([BONG[1]]), JSON.stringify(daGuiText()));
+  check("GUI-5 chốt xong: sent_bubbles=2 + sent_at",
+    so1().sent_bubbles === 2 && !!so1().sent_at, JSON.stringify(so1()));
+}
+
+// (6) Đã gửi hết rồi mới phát lại → không gửi gì.
+{
+  dungSo("ev-g6", { sent_bubbles: 2, sent_at: new Date().toISOString() });
+  const r = await phatLai("ev-g6");
+  check("GUI-6 đã gửi xong mà phát lại → 200 và KHÔNG gửi lại",
+    r.status === 200 && daGuiOA.length === 0, JSON.stringify(daGuiText()));
+}
+
+// (7) sendZalo ném (timeout mạng).
+{
+  dungSo("ev-g7");
+  oaKichBan = () => "throw";
+  const r = await phatLai("ev-g7");
+  check("GUI-7 OA timeout → 500 'replay hong', KHÔNG nói dối đường cứu",
+    r.status === 500 && r.body.error === "replay hong", JSON.stringify(r));
+  check("GUI-7 lỗi vào sổ", soLoi("zalo-webhook replay").length === 1,
+    JSON.stringify(db().t.bot_errors.map((e) => e.source)));
+  check("GUI-7 không chốt sent_at", !so1().sent_at, JSON.stringify(so1()));
+}
+
+// (8) sendZalo trả false ngay bong bóng đầu.
+{
+  dungSo("ev-g8");
+  oaKichBan = () => "false";
+  await phatLai("ev-g8");
+  check("GUI-8 OA từ chối ngay bong bóng đầu → sent_bubbles=0, có send_error",
+    so1().sent_bubbles === 0 && /2\/2/.test(String(so1().send_error ?? "")), JSON.stringify(so1()));
+  check("GUI-8 DỪNG HẲN, không gửi bong bóng sau (giữ thứ tự)",
+    daGuiOA.every((x) => x.message?.text === BONG[0]), JSON.stringify(daGuiText()));
 }
 
 // ── kết ──

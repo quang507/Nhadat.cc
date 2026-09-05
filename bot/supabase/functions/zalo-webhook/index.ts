@@ -66,6 +66,29 @@ async function handleEvent(raw: string): Promise<void> {
   const accessToken = await secretOf(client, "ZALO_OA_ACCESS_TOKEN");
   if (!accessToken) return; // chưa cấu hình OA — chỉ ghi log (đã lưu messages)
 
+  // ─── CHỐT CHIỀU GỬI (20260905i) ────────────────────────────────────────────
+  // `claim_inbound` chốt chiều ĐẾN, nhưng nhánh `status='completed'` của nó trả
+  // về ngay không đánh dấu gì — mà đó đúng là trạng thái `viec_inbound_bo_roi()`
+  // đi tìm ("chua_gui"). Nên trước bản này hai lượt phát lại song song cùng đọc
+  // `sent_bubbles`, cùng thấy 0, cùng gửi bong bóng đầu: khách nhận đúp.
+  // Đã dựng lại được trong e2e (GUI-3) trước khi vá.
+  let giuLuot = false;
+  if (zaloMsgId) {
+    const { data: gianhDuoc, error: eGiu } = await client
+      .rpc("giu_luot_gui", { p_msg_id: zaloMsgId, p_han_secs: 120 });
+    if (eGiu) {
+      // CỐ Ý ĐI TIẾP khi không hỏi được chốt — ngược với mọi cổng bảo mật
+      // trong repo này, và có lý do: ở đây "chặn cho chắc" nghĩa là khách ngồi
+      // chờ một câu trả lời KHÔNG BAO GIỜ tới. Hỏng đó nặng hơn hẳn một bong
+      // bóng lặp, mà `sent_bubbles` vẫn còn đó làm lưới thứ hai.
+      await ghiLoi(client, "zalo-webhook giu luot gui", eGiu.message);
+    } else if (gianhDuoc === false) {
+      return; // lượt khác đang gửi đúng tin này
+    } else {
+      giuLuot = true;
+    }
+  }
+  try {
   // FR-166 bất biến 10/12 — ĐIỂM NỐI LẠI.
   // Trước bản này, sập giữa chừng là lần sau phát lại TỪ ĐẦU: bong bóng 1 đã
   // tới tay khách rồi vẫn bị gửi lần nữa. `sent_bubbles` đếm số tấm ĐÃ tới
@@ -131,6 +154,15 @@ async function handleEvent(raw: string): Promise<void> {
   for (const url of photos) {
     const ok = await sendZaloImage(accessToken, zaloUserId, url);
     if (!ok) await ghiLoi(client, "zalo-webhook send ảnh", url);
+  }
+  } finally {
+    // NHẢ NGAY, kể cả khi ném giữa chừng. Ôm lease tới lúc hết hạn (120 giây)
+    // là làm chậm đường cứu: `inbound-sweep` hiện thử lại ngay lượt cron sau,
+    // và giữ nguyên nhịp đó là một phần của "không đổi hành vi".
+    if (giuLuot && zaloMsgId) {
+      const { error: eNha } = await client.rpc("nha_luot_gui", { p_msg_id: zaloMsgId });
+      if (eNha) await ghiLoi(client, "zalo-webhook nha luot gui", eNha.message);
+    }
   }
 }
 
