@@ -147,6 +147,24 @@ ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge funct
 500. Kết quả thật nằm ở `net._http_response`, và được `bot_health_tick()` quét
 sang `bot_errors` (FR-152). Xem sức khoẻ ở trang `/admin`.
 
+**Luật đó áp cho CẢ CÁI CÒI, không chỉ cho cron** (soát 06/09/2026). Chính
+`bot_health_tick` đã tái phạm: nó gọi `canh_bao_ngoai()` — hàm này cũng chỉ
+XẾP HÀNG một `net.http_post` — rồi đóng dấu `bot_health(who='ntfy')` ngay và
+dùng con dấu đó để im lặng một giờ. Bắt tại trận: dấu lúc `00:00:00.054` trỏ
+request 2221, mà request 2221 là `Timeout of 5000 ms` lúc `00:00:00.212`. 24
+lượt timeout như vậy từ 27/08, nhiều lượt đúng phút `:00` — mỗi lượt là một giờ
+không ai được báo, và không có gì nói ra điều đó. Nay (`20260906a`) còi ĐỌC LẠI
+`net._http_response` của lượt trước rồi mới quyết im, hạn chờ nới 5→15 s, và
+lượt hụt tự ghi một dòng `coi ntfy`. **Thêm bất kỳ đường báo động nào thì phải
+hỏi: cái gì chứng minh nó tới nơi? "Đã gọi hàm gửi" không phải bằng chứng.**
+
+**SĐT không được vào sổ lỗi.** `sellers.phone` có UNIQUE, nên một lượt chèn
+trùng sinh lỗi 23505 mà PostgREST kèm nguyên `Key (phone)=(09…)`; một
+`ghiLoi(client, "...", e)` trên đường đó là SĐT khách nằm vĩnh viễn trong
+`bot_errors`, trái §5 và repo đang PUBLIC. `log_loi` nay che qua `che_sdt()` —
+che ở một chỗ vì mọi đường ghi sổ (edge function, bridge qua escalation-feed,
+web qua `instrumentation.ts`) đều chảy qua đó.
+
 **Mọi `catch` mới phải nối dây vào sổ** (FR-152 d). `console.error` một mình là
 mất: log edge function bậc Free chỉ giữ 1 ngày, còn loại lỗi nguy nhất ở đây
 lại TRẢ 200 nên `bot_health_tick` — vốn chỉ soi mã HTTP — không thấy gì. Trong
