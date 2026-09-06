@@ -101,6 +101,12 @@ jobs:
           bun-version: latest
       - name: Script phân biệt được 'đủ' với 'trông như đủ'
         run: bun run test:saoluu
+      # Cùng job, không thêm check mới: danh sách required status checks ở
+      # docs/11 §11.5 giữ nguyên 6 tên. Bản xuất rổ hàng cũng ghi file ra đĩa
+      # và cũng có thể lỡ ghi vào repo (SĐT thật → repo public), nên cùng loại
+      # rủi ro, cùng chỗ canh.
+      - name: Bản xuất rổ hàng không ghi vào repo, không nuốt dòng thiếu
+        run: bun run test:rohang
 
   # Một bản sao chưa từng phục hồi thử KHÔNG PHẢI là bản sao. Job này chạy diễn
   # tập thật: dựng schema, nạp một bản sao giả, rồi bơm 9 cách hỏng đã biết vào

@@ -12,7 +12,9 @@
     "truyvet": "bash scripts/soat-truy-vet.sh",
     "test:saoluu": "node scripts/sao-luu.tu-kiem.mjs",
     "test:phuchoi": "node scripts/soat-phuc-hoi.tu-kiem.mjs",
-    "kiem": "bun run kieu && bun run build && bun run test:bot && bun run test:saoluu && bun run truyvet"
+    "test:rohang": "node scripts/xuat-ro-hang.tu-kiem.mjs",
+    "ro-hang": "node scripts/xuat-ro-hang.mjs",
+    "kiem": "bun run kieu && bun run build && bun run test:bot && bun run test:saoluu && bun run test:rohang && bun run truyvet"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
