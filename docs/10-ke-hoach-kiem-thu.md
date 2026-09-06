@@ -77,7 +77,7 @@ Bảng NFR-01…18 với cách đo nằm ở `docs/07 §6` (nguồn sự thật)
 
 Bug tìm thấy sau release phải có test tái hiện trước khi sửa — suite chỉ phình, không teo.
 
-## 10.7 Bộ test chạy tay (cập nhật 05/09/2026)
+## 10.7 Bộ test chạy tay (cập nhật 06/09/2026)
 
 Lệnh dán vào chạy được, không phải mô tả. ID bất biến. Cột cuối là kết quả **mới
 nhất** (dd/mm); ⏭ = chưa chạy lại được trong sandbox (cần deploy/bridge/trình
@@ -112,7 +112,7 @@ khi hàm đã đổi.
 | Bộ | ID | Cần gì | Chạy sao | Đọc kết quả |
 |---|---|---|---|---|
 | `bot/tests/ts-sec-anon.mjs` | TS-SEC-AUTO | **Internet tới `*.supabase.co`** + DB production đang chạy. KHÔNG cần secret: bắn bằng khoá publishable công khai | `bun run test:sec` — có trong CI (job `baomat`), **cố ý không nằm trong `kiem`** | Thoát 0 = đạt · 1 = có cửa mở · **2 = CHƯA KIỂM ĐƯỢC** (proxy chặn, DB ngủ). Thoát 2 KHÔNG phải "đạt" |
-| `bot/tests/vai-tro.sql` | **TS-SEC3** | **Quyền SQL trên DB thật.** CI không chạy được vì CI chỉ có khoá công khai | Dashboard → SQL Editor → dán cả file → Run; hoặc MCP `execute_sql` | Kết bằng `raise exception 'KQ: …'` nên mọi dòng chèn TỰ CUỘN LẠI, không để rác trên production. Mọi mục phải `OK`; một chữ `HONG` là một cửa mở |
+| `bot/tests/vai-tro.sql` | **TS-SEC3** | **Quyền SQL trên DB thật.** CI không chạy được vì CI chỉ có khoá công khai | Dashboard → SQL Editor → dán cả file → Run; hoặc MCP `execute_sql` | Kết bằng `raise exception 'KQ: …'` nên mọi dòng chèn TỰ CUỘN LẠI, không để rác trên production. Mọi mục phải `OK`; một chữ `HONG` là một cửa mở. **Chạy 06/09/2026 qua MCP `execute_sql`: 41/41 OK**, xác minh rollback bằng đếm dòng `VAITRO*` = 0 |
 
 ### TS-SEC3 — ma trận quyền theo VAI DB (5 vai × 41 khẳng định)
 `ts-sec-anon.mjs` chỉ bắn được vai `anon` vì nó đi qua PostgREST bằng khoá công
@@ -124,14 +124,14 @@ khai. Bốn vai còn lại — `authenticated` người lạ, người dùng có
 thì "0 dòng" có thể chỉ là "bảng rỗng".
 | ID | Bài | Kỳ vọng | Kết quả mới nhất |
 |---|---|---|---|
-| TS-SEC3-01 | `anon` đọc 9 bảng kín (`buyers`, `sellers`, `messages`, `conversations`, `inbound_ledger`, `inbound_events`, `media_cleanup_queue`, `admins`, `chat_quota`) | 0 dòng hoặc thiếu grant | ✅ 05/09 |
-| TS-SEC3-02 | `anon` đọc tin CHƯA đăng; ghi `listings`; gọi `bump_user_quota` / `giu_luot_gui` / `xuat_schema` | chặn cả 5 | ✅ 05/09 |
-| TS-SEC3-03 | người lạ ĐÃ ĐĂNG NHẬP đọc 9 bảng kín | 0 dòng hoặc thiếu grant | ✅ 05/09 |
-| TS-SEC3-04 | người lạ đọc 5 view cấp cho `authenticated` (`khach_can_nguoi_that`, `hoi_thoai_phien`, `bds_hot`, `ctv_ranks`, `nmg_hoat_dong`) | 0 dòng — chủ sở hữu view là `postgres` (BYPASSRLS) nên hàng rào DUY NHẤT là mệnh đề WHERE bên trong view, phải kiểm từng cái chứ không suy ra từ RLS | ✅ 05/09 |
-| TS-SEC3-05 | người lạ đọc tin chưa đăng; gọi `admin_dang_tin` / `tao_danh_sach` | chặn cả 3 | ✅ 05/09 |
-| TS-SEC3-06 | **[dc]** admin đọc `buyers`, `messages`, view `khach_can_nguoi_that`, tin chưa đăng | THẤY được — chứng minh mọi số 0 ở trên là "RLS chặn", không phải "bảng rỗng" | ✅ 05/09 |
-| TS-SEC3-07 | admin đọc `inbound_ledger` | KHÔNG thấy (sổ nội bộ của bot, admin không có việc gì ở đó) | ✅ 05/09 |
-| TS-SEC3-08 | **[dc]** `service_role` đọc `inbound_ledger`, `messages`, gọi `giu_luot_gui` | làm được — bot phải chạy được việc của nó | ✅ 05/09 |
+| TS-SEC3-01 | `anon` đọc 9 bảng kín (`buyers`, `sellers`, `messages`, `conversations`, `inbound_ledger`, `inbound_events`, `media_cleanup_queue`, `admins`, `chat_quota`) | 0 dòng hoặc thiếu grant | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-02 | `anon` đọc tin CHƯA đăng; ghi `listings`; gọi `bump_user_quota` / `giu_luot_gui` / `xuat_schema` | chặn cả 5 | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-03 | người lạ ĐÃ ĐĂNG NHẬP đọc 9 bảng kín | 0 dòng hoặc thiếu grant | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-04 | người lạ đọc 5 view cấp cho `authenticated` (`khach_can_nguoi_that`, `hoi_thoai_phien`, `bds_hot`, `ctv_ranks`, `nmg_hoat_dong`) | 0 dòng — chủ sở hữu view là `postgres` (BYPASSRLS) nên hàng rào DUY NHẤT là mệnh đề WHERE bên trong view, phải kiểm từng cái chứ không suy ra từ RLS | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-05 | người lạ đọc tin chưa đăng; gọi `admin_dang_tin` / `tao_danh_sach` | chặn cả 3 | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-06 | **[dc]** admin đọc `buyers`, `messages`, view `khach_can_nguoi_that`, tin chưa đăng | THẤY được — chứng minh mọi số 0 ở trên là "RLS chặn", không phải "bảng rỗng" | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-07 | admin đọc `inbound_ledger` | KHÔNG thấy (sổ nội bộ của bot, admin không có việc gì ở đó) | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-08 | **[dc]** `service_role` đọc `inbound_ledger`, `messages`, gọi `giu_luot_gui` | làm được — bot phải chạy được việc của nó | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
 
 ### TS-SAOLUU — bản sao phân biệt "đủ" với "trông như đủ" (NFR-16, OPEN-25/47)
 Bậc Supabase Free KHÔNG có backup tự động: `scripts/sao-luu.mjs` là bản sao DUY
