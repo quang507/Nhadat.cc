@@ -5,6 +5,9 @@ description: Quy trình chuẩn để tạo mới hoặc cập nhật một tầ
 
 # BA Pipeline — nhadat.cc
 
+Bản rút gọn của `docs/11-quy-trinh.md` (§11.2 vòng BA). Vòng tester, ba cổng và
+định nghĩa XONG nằm ở file đó — đọc khi việc chạm tới kiểm thử hay phát hành.
+
 ## Khi nào dùng
 
 Bất cứ khi nào chạm vào `docs/`: thêm yêu cầu mới, sửa luồng, cập nhật SRS, hoặc rà
@@ -44,6 +47,9 @@ soát tính nhất quán của bộ tài liệu.
 
 ## Checklist tự kiểm trước khi commit
 
+- [ ] `bun run kiem` xanh (kiểu + dựng + e2e bot + soát truy vết). Chỉ soát tài
+      liệu thì `bun run truyvet` — nó bắt luôn ID gãy, FR thiếu dòng truy vết,
+      số đếm README lệch và SĐT thật lọt vào `docs/`.
 - [ ] Mọi `FR-` mới đều xuất hiện trong `08-traceability.md`.
 - [ ] Mọi `UF-`, `WF-`, `SRS-`, `AC-` được tham chiếu đều **tồn tại thật**.
 - [ ] Không có ID trùng, không có ID bị nhảy cóc mà không giải thích.

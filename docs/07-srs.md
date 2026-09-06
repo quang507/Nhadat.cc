@@ -110,6 +110,99 @@ Khối: `cột:kiểu`, `!` = NOT NULL, `=` = default, `→` = FK. PK `uuid` tr�
 `seller_type(ccrb, nmg, unknown)`, `request_status(pending, answered, expired)`, `msg_sender(buyer, seller, bot, ctv, system, human)`,
 `unit_status(con_ban, giu_cho, da_coc, da_ban)`.
 
+### SRS-3.0 · Bản đồ 31 bảng và đường bóc tách
+
+`[nguồn: pg_class + pg_description, DB 06/09/2026]`
+
+Ba tháng sau mở lại repo, thứ mất trước tiên là *cái nào thuộc về cái nào*. Mục
+này là bản đồ đó. Nó KHÔNG đẻ nguồn sự thật thứ hai: chú thích tương ứng đã nằm
+trong chính DB (`comment on table/column`, migration `20260906b`), hiện ra ngay
+dưới tên bảng trong Supabase Table Editor. Đây là bản in ra giấy của thứ đó.
+
+**Năm nhóm, đủ 31 bảng.** Tiền tố `[NHÓM]` nằm ngay đầu chú thích mỗi bảng, nên
+Table Editor vẫn xếp A→Z mà mắt vẫn gom được theo việc.
+
+| Nhóm | Bảng |
+|---|---|
+| `[RỔ HÀNG]` (8) | `listings` `media` `listing_media` `listing_facts` `required_facts` `media_cleanup_queue` `projects` `listing_views` |
+| `[NGƯỜI & HỘI THOẠI]` (10) | `buyers` `sellers` `conversations` `messages` `interests` `info_requests` `viewings` `deals` `reminders` `ratings_log` |
+| `[BOT & HÀNG ĐỢI]` (7) | `inbound_events` `inbound_ledger` `bot_errors` `bot_health` `bot_usage` `chat_quota` `bot_prompts` |
+| `[CTV]` (2) | `ctvs` `ctv_daily_reports` |
+| `[HỆ THỐNG]` (4) | `admins` `app_config` `curated_lists` `property_events` |
+
+**Quan hệ chính** — chỉ khoá ngoại thật, không vẽ luồng chạy:
+
+```mermaid
+erDiagram
+  projects  ||--o{ listings      : "project_id"
+  sellers   ||--o{ listings      : "seller_id"
+  listings  ||--o{ listing_facts : "hỏi–đáp chủ nhà"
+  listings  ||--o{ listing_media : "ảnh (neo UUID)"
+  listings  ||--o{ media         : "ảnh lối cũ (ngoài Supabase)"
+  listings  ||--o{ interests     : ""
+  listings  ||--o{ info_requests : ""
+  listings  ||--o{ deals         : ""
+  buyers    ||--o{ interests     : ""
+  buyers    ||--o{ deals         : ""
+  buyers    ||--o{ conversations : "XOR sellers"
+  sellers   ||--o{ conversations : "XOR buyers"
+  ctvs      ||--o{ conversations : ""
+  ctvs      ||--o{ info_requests : "SLA → hạng CTV"
+  conversations ||--o{ messages  : "sắp theo seq"
+  required_facts }o--|| listings : "theo property_type"
+```
+
+Ba chỗ hay hiểu nhầm, nói thẳng ở đây:
+
+- **Không có bảng `buyer_preferences`.** Nhu cầu khách nằm ở cột
+  `buyers.preferences` (jsonb).
+- **Không có, và không cần, bảng `<loai>_specs` cho từng loại BĐS.** Chỗ rổ
+  hàng đã chia theo loại là `required_facts` — 38 câu hỏi × 7 loại, khoá
+  `(property_type, fact_key)`. Định nghĩa thông số phía mã nguồn là `SPEC_COLS`
+  trong `bot/supabase/functions/_shared/thong_so.ts` (FR-172).
+- **`media` và `listing_media` là hai đời khác nhau.** `media` (1005 dòng) trỏ
+  file NGOÀI Supabase — đường dẫn dựng theo `listings.legacy_sst`, tức ảnh nằm
+  trong kho ảnh gốc trên máy local, không nằm trong Storage. `listing_media`
+  (FR-165) mới là ảnh trong Storage, neo `listings.id`. Hệ quả đang thấy:
+  `storage.objects` = 0 nên web phục vụ ảnh giữ chỗ cho mọi tin.
+
+**Đường bóc tách — hai nhánh chạy NGƯỢC nhau.** Đây là hình trạng thật, không
+phải hình mong muốn:
+
+```mermaid
+flowchart TB
+  subgraph S["Người bán (S)"]
+    s1["câu rao"] --> s2["INSERT listings"]
+    s2 --> s3["trigger trg_z_boc_mo_ta<br/>boc_thong_so() — regex SQL"]
+    s3 --> s4["specs_source = boc_mo_ta"]
+    s5["chủ trả lời câu hỏi"] --> s6["listing_facts<br/>source = chu_xac_nhan"]
+  end
+  subgraph B["Người mua (B)"]
+    b1["tin khách"] --> b2["MODEL Claude — AI ĐI TRƯỚC"]
+    b2 -->|"chỉ khi model hỏng"| b3["regexProfileFallback()"]
+  end
+  s4 --> r["bac_nguon()<br/>chu_xac_nhan 3 &gt; admin 2 &gt; suy_doan 1"]
+  s6 --> r
+  b2 --> r
+  b3 --> r
+  r --> db[("listings")]
+```
+
+Nhánh S đúng thứ tự *tiền định trước, model sau*. Nhánh B thì ngược: mỗi tin
+khách là một lượt gọi model, kể cả câu regex bóc được ("dưới 6 tỷ", "3 phòng
+ngủ"); regex chỉ chạy khi model chết (`chat-reply/index.ts:65`, gọi ở `:2266`).
+Đảo lại nhánh B là việc còn treo, chưa làm.
+
+**Ranh giới bóc tách ⟂ AI có máy canh.** `bot/tests/ranh-gioi.mjs` (nằm trong
+`bun run test:bot`, nên chạy ở CI mỗi PR) chặn hai chiều: mã bóc tách tiền định
+không được import SDK Anthropic / `claude.ts` / gọi RPC; tầng AI không được ghi
+bảng nghiệp vụ, chỉ ba RPC đã khai tên (`get_secret`, `log_loi`, `cong_token`).
+Bài có ca âm nên luật hỏng thì bài đỏ, không im.
+
+**Đọc rổ hàng bằng mắt người:** view `ro_hang_ban` (20 cột thay cho 56, giá quy
+ra tỷ, nhãn tiếng Việt, cột `canh_bao` chỉ đích danh trường nào là máy đoán).
+`security_invoker = on`, `anon` bị revoke.
+
 ### SRS-3.1 · `listings`
 
 ```text

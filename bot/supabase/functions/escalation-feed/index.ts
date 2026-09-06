@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     // TỰ HỌC Zalo ID: bridge chỉ có SĐT thì nó gọi findUser để ra uid. Ghi ngược
     // uid đó vào đúng người — lần sau chat-reply nhận ra vai NGƯỜI BÁN ngay từ
     // tin đầu, khỏi chờ ai điền tay. Chỉ ghi khi ô đang trống, không đè.
-    const learned = body.zalo_user_id ? String(body.zalo_user_id).trim() : "";
+    const learned = body.zalo_user_id ? String(body.zalo_user_id).trim().slice(0, 128) : "";
     if (learned) {
       const { data: r } = await client.from("reminders")
         .select("seller_id, ctv_id").eq("id", id).maybeSingle();
@@ -61,8 +61,25 @@ Deno.serve(async (req) => {
         await client.from("ctvs").update({ zalo_user_id: learned })
           .eq("id", r.ctv_id).is("zalo_user_id", null);
       } else {
-        await client.from("admins").update({ zalo_user_id: learned })
-          .is("zalo_user_id", null);
+        // SEC-03 — BỎ nhánh tự học Zalo ID của admin.
+        // Bản trước: `client.from("admins").update({zalo_user_id: learned})
+        //             .is("zalo_user_id", null)` — KHÔNG có mệnh đề khoá nào.
+        // Nó ghi đè MỌI dòng `admins` đang trống, bằng giá trị do người gọi
+        // truyền vào, và chạy bằng service_role nên RLS không cản. Ai qua được
+        // cổng chỉ cần ack một reminder không gắn seller/ctv kèm uid của mình
+        // là từ đó BÁO CÁO CTV 17H HẰNG NGÀY (đơn, lịch xem, tên khách) và mọi
+        // escalation "khách cần người thật" đi thẳng về máy họ — còn admin thật
+        // im lặng mất tin, vì ô đã hết NULL nên lần sau không ai ghi nữa.
+        //
+        // Hai nhánh trên an toàn vì có `.eq("id", …)` lấy từ chính reminder.
+        // Nhánh admin thì reminder KHÔNG mang id admin nào, nên không có gì để
+        // ràng — không ràng được thì không ghi. Admin điền tay ở Table Editor.
+        await client.rpc("log_loi", {
+          p_source: "escalation-feed admin uid",
+          p_detail: `Bỏ qua học zalo_user_id cho admin (SEC-03): reminder ${id} ` +
+            "không gắn seller/ctv nên không xác định được ghi cho ai. Điền tay ở /admin.",
+          p_code: null,
+        });
       }
     }
 
@@ -90,6 +107,8 @@ Deno.serve(async (req) => {
   const items = (due ?? []).map((r) => {
     const ctv = r.ctvs as Target;
     const seller = r.sellers as Target;
+    const uid = seller?.zalo_user_id ?? ctv?.zalo_user_id ?? adm?.zalo_user_id ?? null;
+    const sdt = seller?.phone ?? ctv?.phone ?? adm?.zalo_phone ?? null;
     return {
       id: r.id,
       note: r.note,
@@ -97,8 +116,14 @@ Deno.serve(async (req) => {
       // ra ngoài (OA và bridge) phải nói y hệt nhau.
       text: escalationText(r),
       name: seller?.name ?? ctv?.name ?? "admin",
-      zalo_user_id: seller?.zalo_user_id ?? ctv?.zalo_user_id ?? adm?.zalo_user_id ?? null,
-      phone: seller?.phone ?? ctv?.phone ?? adm?.zalo_phone ?? null,
+      zalo_user_id: uid,
+      // SEC-07 — CHỈ trả SĐT khi CHƯA biết uid Zalo.
+      // Bridge cần số điện thoại đúng một việc: `findUser` để đổi ra uid lần
+      // đầu. Biết uid rồi thì nó gửi thẳng, số kia thành thừa — mà thừa ở đây
+      // nghĩa là mỗi lượt `pull` (mỗi phút, 10 dòng) lại đẩy SĐT THẬT của chủ
+      // nhà và CTV ra khỏi DB cho bất kỳ ai qua được cổng. Gọi lặp là gom dần
+      // được cả danh bạ. Đây đúng thứ NFR-07/BR-06 hứa không đụng tới.
+      phone: uid ? null : sdt,
     };
   });
   return jsonResponse({ items });

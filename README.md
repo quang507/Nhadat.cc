@@ -19,10 +19,22 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 | 6 | [UI Design](docs/06-ui-design.md) | Design system + tone giọng chat |
 | 7 | [SRS](docs/07-srs.md) | Kiến trúc, data model, API, 13 tiêu chí nghiệm thu |
 | 8 | [Traceability](docs/08-traceability.md) | Ma trận truy vết BR→FR→UF→WF→SRS→AC |
-| 9 | [Open Issues](docs/09-open-issues.md) | 45 vấn đề — 14 đã chốt (OPEN-26, OPEN-27 chốt một phần), 31 còn chờ chủ dự án |
+| 9 | [Open Issues](docs/09-open-issues.md) | 47 vấn đề — 14 đã chốt (OPEN-26, OPEN-27 chốt một phần), 2 đã giảm nhẹ 05/09 (OPEN-46/47), 31 còn chờ chủ dự án |
+| 10 | [Kế hoạch kiểm thử](docs/10-ke-hoach-kiem-thu.md) | 4 tầng kiểm thử, bộ test chạy tay kèm kết quả mới nhất |
+| 11 | [Quy trình BA & tester](docs/11-quy-trinh.md) | Hai vòng làm việc, ba cổng, định nghĩa XONG |
 
 Quy ước làm việc và ranh giới bảo mật: [`CLAUDE.md`](CLAUDE.md).
-Quy trình cập nhật tài liệu: [`.claude/skills/ba-pipeline/SKILL.md`](.claude/skills/ba-pipeline/SKILL.md).
+Quy trình cập nhật tài liệu: [`docs/11-quy-trinh.md`](docs/11-quy-trinh.md)
+(bản rút gọn cho agent: [`.claude/skills/ba-pipeline/SKILL.md`](.claude/skills/ba-pipeline/SKILL.md)).
+
+## ✅ Cổng kiểm
+
+```bash
+bun run kiem   # kiểu dữ liệu + dựng web + 102 kịch bản e2e bot + soát truy vết
+```
+
+Cùng lệnh này chạy trong CI ([`.github/workflows/kiem.yml`](.github/workflows/kiem.yml))
+mỗi PR — ba job `web` / `bot` / `truyvet` phải xanh mới merge.
 
 ## 💻 Mã nguồn
 

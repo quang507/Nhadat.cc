@@ -150,6 +150,9 @@ Deno.serve(async (req) => {
   }
   const out = resp.parsed_output;
   let sent_via: string = "none";
+  // Khai ngoài khối `dry_run` vì câu trả lời cuối hàm đọc nó: `asked` phải là
+  // những câu THẬT SỰ được mở, không phải những câu định mở.
+  let daMo: string[] = toAsk.map((f) => f.fact_key);
 
   if (!dry_run) {
     const rows = toAsk.map((f) => ({
@@ -157,8 +160,32 @@ Deno.serve(async (req) => {
       question: f.fact_key,
       status: "pending",
     }));
+    // ĐUA: `pendingKeys` đọc ở đầu hàm, `insert` ở đây. Giữa hai mốc đó,
+    // `chat-reply` (người bán vừa nhắn) hoặc một nhịp drip khác có thể đã mở
+    // đúng câu hỏi này. Chính comment ở đầu hàm nói hậu quả: hai câu hỏi song
+    // song làm câu trả lời của chủ nhà bị ghi nhầm fact.
+    // `info_requests_mot_cau_cho_idx` nay chặn cú thứ hai. Ghi cả lô mà một
+    // câu đụng thì CẢ LÔ trượt, nên thử lại từng dòng để những câu chưa ai hỏi
+    // vẫn được mở — bỏ nguyên lô là mất câu hỏi, tức vòng hỏi đứng im.
     const { error: iErr } = await db.from("info_requests").insert(rows);
-    if (iErr) return jsonResponse({ error: iErr.message, message: out.message }, 500);
+    if (iErr?.code === "23505") {
+      daMo = [];
+      for (const r of rows) {
+        const { error: e1 } = await db.from("info_requests").insert(r);
+        if (!e1) daMo.push(r.question);
+        else if (e1.code !== "23505") await ghiLoi(db, "ask-seller info_request", e1.message);
+      }
+      if (daMo.length === 0) {
+        // Mọi câu đều đã có người hỏi → KHÔNG gửi tin, kẻo chủ nhà nhận câu
+        // hỏi trùng đúng cái mà cổng `drip` ở trên cố tránh.
+        return jsonResponse({
+          message: null, asked: [], skipped_pending: rows.map((r) => r.question),
+          note: "đua: câu hỏi vừa được mở bởi lượt khác — không hỏi chồng",
+        });
+      }
+    } else if (iErr) {
+      return jsonResponse({ error: iErr.message, message: out.message }, 500);
+    }
 
     // Gửi thẳng qua Zalo OA nếu có kênh (FR-129). Dùng `secretOf` + `sendZalo`
     // dùng chung thay vì fetch tay + `get_secret` trần (FR-171 g): token đặt ở
@@ -194,7 +221,7 @@ Deno.serve(async (req) => {
 
   return jsonResponse({
     message: out.message,
-    asked: toAsk.map((f) => f.fact_key),
+    asked: daMo,
     mode,
     is_first: isFirst,
     sent_via,

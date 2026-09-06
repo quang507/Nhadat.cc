@@ -9,7 +9,7 @@ export class FakeDB {
     this.t = {};
     for (const n of ["sellers","buyers","conversations","messages","listings","listing_facts","info_requests",
       "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log",
-      "ctvs","admins","interests","ratings"]) this.t[n] = [];
+      "ctvs","admins","interests","ratings","inbound_events"]) this.t[n] = [];
     this.seq = 0; this.log = [];
   }
   rows(n) {
@@ -41,6 +41,33 @@ export class FakeDB {
       if (globalThis.__afterInsertMsg && r.sender === 'buyer') { const h = globalThis.__afterInsertMsg; globalThis.__afterInsertMsg = null; this.rows('messages').push(r); h(this, r); return { data: r }; }
     }
     if (table === "reminders") r.status = r.status ?? "pending"; // DB default 'pending'
+    // ── Chỉ mục duy nhất TỪNG PHẦN (20260905f/g) ─────────────────────────────
+    // Ba khoá này là thứ DUY NHẤT chặn được mẫu SELECT-rồi-INSERT. Mock không
+    // mô phỏng chúng thì ca kiểm cạnh tranh sẽ XANH trong khi bản thật ném
+    // 23505 và code chưa biết bắt — tức bộ e2e nói dối theo hướng lạc quan,
+    // đúng kiểu nguy nhất. Chép sát định nghĩa trong migration.
+    const trung = (msg) => ({ error: { code: "23505", message: msg } });
+    if (table === "info_requests" && (r.status ?? "pending") === "pending" &&
+        this.t.info_requests.some((x) =>
+          x.listing_id === r.listing_id && x.question === r.question && x.status === "pending")) {
+      return trung("info_requests_mot_cau_cho_idx");
+    }
+    if (table === "viewings" && (r.status ?? "pending") === "pending") {
+      const neo = (x) => x.listing_code ?? x.listing_id ?? null;
+      if (this.t.viewings.some((x) =>
+        x.status === "pending" && x.buyer_id === r.buyer_id && neo(x) === neo(r))) {
+        return trung("viewings_mot_hen_cho_moi_can_idx");
+      }
+    }
+    if (table === "reminders" && r.kind === "viewing" && r.status === "pending" && r.viewing_id &&
+        this.t.reminders.some((x) =>
+          x.kind === "viewing" && x.status === "pending" && x.viewing_id === r.viewing_id)) {
+      return trung("reminders_mot_nhac_moi_buoi_xem_idx");
+    }
+    if (table === "deals" &&
+        this.t.deals.some((x) => x.listing_id === r.listing_id && x.buyer_id === r.buyer_id)) {
+      return trung("deals_listing_buyer_key");
+    }
     if (table === "listings") {
       r.code = r.code ?? `BDS-Q5-${String(this.t.listings.length + 1).padStart(4, "0")}`;
       r.status = r.status ?? "cho_thong_tin";
@@ -78,6 +105,9 @@ class Builder {
   eq(c, v) { return this._f("eq", c, v); } neq(c, v) { return this._f("neq", c, v); } in(c, v) { return this._f("in", c, v); }
   gte(c, v) { return this._f("gte", c, v); } lte(c, v) { return this._f("lte", c, v); } gt(c, v) { return this._f("gt", c, v); } lt(c, v) { return this._f("lt", c, v); }
   not(c, op, v) { return this._f("not_" + op, c, v); } ilike(c, v) { return this._f("ilike", c, v); }
+  // `.is(col, null)` của PostgREST — SEC-13 dùng nó để chỉ đụng dòng CHƯA chốt
+  // gửi. Thiếu ở mock thì bộ e2e đo một hành vi khác với bản chạy thật.
+  is(c, v) { return this._f("is", c, v); }
   order(c, o = {}) { this.ord = { c, asc: o.ascending !== false }; return this; }
   limit(n) { this.lim = n; return this; }
   maybeSingle() { this.mode = "maybe"; return this; }
@@ -87,6 +117,7 @@ class Builder {
     switch (f.kind) {
       case "eq": return v === f.val; case "neq": return v !== f.val; case "in": return f.val.includes(v);
       case "gte": return v != null && v >= f.val; case "lte": return v != null && v <= f.val; case "gt": return v > f.val; case "lt": return v < f.val;
+      case "is": return f.val === null ? v == null : v === f.val;
       case "not_is": return f.val === null ? v != null : v !== f.val;
       case "ilike": { const p = "^" + String(f.val).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*") + "$"; return new RegExp(p, "i").test(String(v ?? "")); }
     }
@@ -139,7 +170,19 @@ class Builder {
     if (this.mode === "single") return proj[0] ? { data: proj[0], error: null } : { data: null, error: { code: "PGRST116", message: "0 rows" } };
     return { data: proj, error: null, count: this.count ? proj.length : undefined };
   }
-  then(res, rej) { try { return Promise.resolve(this.run()).then(res, rej); } catch (e) { return Promise.reject(e).then(res, rej); } }
+  // ĐỘ TRỄ GIẢ — chỗ cuộc đua thật sự sống.
+  // Bản trước chạy `run()` gần như tức thời, nên hai handler gọi song song vẫn
+  // nối đuôi nhau: handler A xong cả khối SELECT→INSERT rồi B mới bắt đầu, và
+  // ca kiểm "đua" đo được đúng con số như khi không có đua. Đã đo: tắt hết chỉ
+  // mục duy nhất trong mock mà 129/129 vẫn xanh — bộ kiểm câm.
+  // Cuộc đua thật nằm ở ĐỘ TRỄ MẠNG giữa lúc đọc và lúc ghi. `__treTruyVan`
+  // cho ca kiểm chèn đúng độ trễ đó: `(bang, op) => số ms`.
+  then(res, rej) {
+    const tre = globalThis.__treTruyVan?.(this.table, this.op ?? "select") ?? 0;
+    const chay = () => { try { return Promise.resolve(this.run()); } catch (e) { return Promise.reject(e); } };
+    if (!tre) return chay().then(res, rej);
+    return new Promise((ok) => setTimeout(ok, tre)).then(chay).then(res, rej);
+  }
 }
 
 class RpcCall {
@@ -150,18 +193,143 @@ class RpcCall {
     const R = globalThis.__rpc ?? {};
     if (R[this.name]) return R[this.name](db, a);
     switch (this.name) {
-      case "get_secret": return { data: null, error: null };
+      // Vault giả. Mặc định RỖNG (không secret nào) — giữ nguyên hành vi cũ cho
+      // bộ chat-reply. Ca kiểm nào cần secret thì đặt `globalThis.__vault`, một
+      // hàm `(tên) => { data, error }`. Đây là cách bộ kiểm có secret riêng mà
+      // KHÔNG bao giờ chạm secret production: giá trị dưới đây là chuỗi bịa,
+      // sống trong tiến trình test, không đọc env thật, không gọi Vault thật.
+      // `error` khác null là cảnh ĐỌC HỤT — khác hẳn cảnh "chưa đặt" (data null,
+      // error null). Hai cảnh này đi hai nhánh khác nhau trong zalo-webhook, và
+      // gộp chúng làm một chính là lỗi SEC-02 cũ.
+      case "get_secret":
+        return globalThis.__vault ? globalThis.__vault(a.secret_name) : { data: null, error: null };
+      // Chép ĐÚNG ngữ nghĩa hàm thật (đã đọc `pg_get_functiondef` 05/09/2026):
+      //   insert … on conflict (event_id) do update
+      //     set delivery_count = delivery_count + 1, last_seen_at = now()
+      //   returning delivery_count
+      // Tức giao trùng KHÔNG đẻ dòng thứ hai, chỉ đếm thêm — đó là cả cái cột
+      // sống của chống-giao-trùng (FR-162). Mock mà chỉ push thêm dòng thì ca
+      // "duplicate webhook" sẽ xanh trong khi hàm thật chưa chắc đúng.
+      case "ghi_su_kien_inbound": {
+        const co = db.t.inbound_events.find((x) => x.event_id === a.p_event_id);
+        if (co) { co.delivery_count++; co.last_seen_at = now(); return { data: co.delivery_count, error: null }; }
+        db.t.inbound_events.push({
+          event_id: a.p_event_id, zalo_user_id: a.p_zalo_user_id, payload: a.p_payload,
+          delivery_count: 1, first_seen_at: now(), last_seen_at: now(),
+        });
+        return { data: 1, error: null };
+      }
+      // 20260905h — chép đúng hai điều kiện lọc của hàm thật. Hàm thật xếp hàng
+      // bằng `pg_advisory_xact_lock` theo từng khách; ở đây `run()` chạy ĐỒNG BỘ
+      // (không `await` nào ở giữa) nên đọc-rồi-ghi không xen được — đúng cái mà
+      // khoá tư vấn bảo đảm bên DB. Chính vì vậy ca ĐUA-4 mới xanh sau khi vá và
+      // ĐỎ trước khi vá (lúc app còn đi hai truy vấn rời).
+      case "mo_viec_can_nguoi_that": {
+        const cua24h = Date.now() - 24 * 3600e3;
+        const da = db.t.reminders.filter((r) =>
+          r.buyer_id === a.p_buyer_id && r.kind === "escalation" &&
+          (a.p_voice
+            ? ["pending", "sent"].includes(r.status) &&
+              /^voice:/i.test(String(r.note ?? "")) &&
+              Date.parse(r.created_at) > cua24h
+            : r.status === "pending")).length;
+        if (da > 0) return { data: false, error: null };
+        db.insert("reminders", {
+          kind: "escalation", buyer_id: a.p_buyer_id, ctv_id: a.p_ctv_id ?? null,
+          due_at: now(), note: a.p_note,
+        });
+        return { data: true, error: null };
+      }
+      // 20260905i — lease chiều GỬI. Hàm thật là MỘT câu `update … where
+      // sent_at is null and (sending_until is null or sending_until < now())`,
+      // nguyên tử ở tầng hàng. Ở đây `run()` chạy đồng bộ nên cũng nguyên tử —
+      // đúng cái mà Postgres bảo đảm. Chép sát điều kiện, kể cả "đã gửi xong
+      // thì không giành nữa": bỏ vế đó là mock rộng hơn hàm thật.
+      case "giu_luot_gui": {
+        const l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
+        // 20260905j: KHÔNG có dòng sổ ≠ có người giữ. Gộp hai cảnh đó vào cùng
+        // một `false` là bỏ luôn cú gửi — khách không nhận được gì.
+        if (!l) return { data: true, error: null };
+        if (l.sent_at) return { data: false, error: null };
+        if (l.sending_until && Date.parse(l.sending_until) > Date.now()) {
+          return { data: false, error: null };
+        }
+        l.sending_until = new Date(Date.now() + (a.p_han_secs ?? 120) * 1000).toISOString();
+        l.updated_at = now();
+        return { data: true, error: null };
+      }
+      case "nha_luot_gui": {
+        const l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
+        if (l) { l.sending_until = null; l.updated_at = now(); }
+        return { data: null, error: null };
+      }
       case "log_loi": db.t.bot_errors.push({ at: now(), source: a.p_source, detail: a.p_detail, status_code: a.p_code }); return { data: null, error: null };
       case "cong_token": db.t.bot_usage.push(a); return { data: null, error: null };
       case "bump_model_quota": return { data: true, error: null };
+      // SEC-05 — trần cá nhân. Mặc định cho qua; ca kiểm đè bằng
+      // `globalThis.__rpc = { bump_user_quota: () => ({ data: false, error: null }) }`.
+      case "bump_user_quota": return { data: true, error: null };
+      // ══ claim_inbound — chép ĐỦ NĂM NHÁNH của hàm thật ══
+      // (đọc `pg_get_functiondef` 05/09/2026; xem migration FR-166)
+      // Bản mock cũ chỉ có ba nhánh: mới / completed / còn lại-thì-nhận. Thiếu
+      // `in_flight` (processing còn tươi), `dead` (đủ 8 lượt) và `next_retry_at`.
+      // Thiếu đúng ba nhánh mà `chat-reply` xử KHÁC HẲN nhau — nghĩa là ba
+      // đường thoát quan trọng nhất của chống-trùng chưa từng được ca kiểm nào
+      // chạm tới. Mock hẹp hơn hàm thật thì bộ e2e xanh mà không chứng minh gì.
+      //
+      // `created_at` PHẢI có: bảng thật khai `not null default now()`, và cổng
+      // `mark_sent` (SEC-13) lọc `.gte("created_at", 15 phút trước)`.
       case "claim_inbound": {
+        const STALE = (a.p_stale_secs ?? 150) * 1000;
+        const MAX = 8;
         let l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
-        // Như hàm thật: giành được sổ là dòng đã ở `processing`, app không UPDATE thêm.
-        if (!l) { l = { zalo_msg_id: a.p_msg_id, status: "processing", attempts: 1, reply: null }; db.t.inbound_ledger.push(l); return { data: { r_state: "received", r_attempts: 1 }, error: null }; }
-        if (l.status === "completed") return { data: { r_state: "completed", r_reply: l.reply, r_sent_at: l.sent_at ?? null }, error: null };
-        l.attempts++; l.status = "processing"; return { data: { r_state: "received", r_attempts: l.attempts }, error: null };
+        if (!l) {
+          l = { zalo_msg_id: a.p_msg_id, status: "processing", attempts: 1, reply: null,
+                created_at: now(), updated_at: now(), started_at: now(), next_retry_at: null };
+          db.t.inbound_ledger.push(l);
+          return { data: { r_state: "received", r_attempts: 1, r_sent_at: null, r_dead: false }, error: null };
+        }
+        if (l.status === "completed") {
+          return { data: { r_state: "completed", r_reply: l.reply, r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: false }, error: null };
+        }
+        if (l.status === "dead") {
+          return { data: { r_state: "dead", r_reply: l.reply, r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: true }, error: null };
+        }
+        // Đang có lượt khác cầm và còn tươi → KHÔNG cấp sổ lần hai.
+        if (l.status === "processing" && Date.parse(l.updated_at ?? l.created_at) > Date.now() - STALE) {
+          return { data: { r_state: "in_flight", r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: false }, error: null };
+        }
+        // Chưa tới giờ hẹn lùi dần → cũng không cấp.
+        if (l.next_retry_at && Date.parse(l.next_retry_at) > Date.now()) {
+          return { data: { r_state: "in_flight", r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: false }, error: null };
+        }
+        if (l.attempts >= MAX) {
+          l.status = "dead"; l.finished_at = now(); l.updated_at = now();
+          return { data: { r_state: "dead", r_reply: l.reply, r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: true }, error: null };
+        }
+        l.status = "processing"; l.attempts++; l.started_at = now();
+        l.next_retry_at = null; l.updated_at = now();
+        return { data: { r_state: "received", r_reply: l.reply, r_attempts: l.attempts, r_sent_at: l.sent_at ?? null, r_dead: false }, error: null };
       }
-      case "bao_hong_inbound": { const l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id); if (l) { l.status = "failed"; l.detail = a.p_detail; } return { data: null, error: null }; }
+      // bao_hong_inbound — cũng chép đủ nhánh: `completed` thì KHÔNG hạ cấp
+      // (guard `inbound_ledger_giu_completed`), đủ 8 lượt thì sang thư chết,
+      // còn lại thì `failed` kèm giờ hẹn lùi dần.
+      case "bao_hong_inbound": {
+        const l = db.t.inbound_ledger.find((x) => x.zalo_msg_id === a.p_msg_id);
+        if (!l) return { data: "khong_co", error: null };
+        if (l.status === "completed") return { data: "da_completed", error: null };
+        if (l.attempts >= 8) {
+          l.status = "dead"; l.detail = a.p_detail; l.finished_at = now(); l.updated_at = now();
+          return { data: "dead", error: null };
+        }
+        // `lan_thu_ke`: 30s × 2^(attempts-1), trần 1 giờ. Bỏ phần ngẫu nhiên
+        // ±20% của hàm thật — ca kiểm cần con số đoán được.
+        const cho = Math.min(30e3 * 2 ** (Math.max(l.attempts, 1) - 1), 3600e3);
+        l.status = "failed"; l.detail = a.p_detail;
+        l.next_retry_at = new Date(Date.now() + cho).toISOString();
+        l.updated_at = now();
+        return { data: "failed", error: null };
+      }
       case "ensure_buyer_conversation": {
         let b = db.t.buyers.find((x) => x.zalo_user_id === a.p_zalo_user_id);
         if (!b) b = db.insert("buyers", { zalo_user_id: a.p_zalo_user_id, name: null, preferences: {} }).data;

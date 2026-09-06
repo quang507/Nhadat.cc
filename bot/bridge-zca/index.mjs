@@ -335,7 +335,10 @@ try {
         `react-${tid}-${rMsgId}`,
       );
     } catch (e) {
-      console.error("reaction lỗi:", errDetail(e));
+      // FR-152 d: `console.error` một mình là MẤT — bridge chạy nền hàng tuần,
+      // đóng cửa sổ terminal là hết dấu vết. Khách thả tim mà bot ngó lơ là
+      // một lượt tương tác rơi, phải nhìn thấy được ở /admin như mọi lỗi khác.
+      await ghiLoi("reaction", errDetail(e));
     }
   });
 } catch { /* phiên bản zca-js không hỗ trợ reaction */ }

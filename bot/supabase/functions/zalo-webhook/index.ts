@@ -4,6 +4,8 @@
 // Secrets: ZALO_OA_ACCESS_TOKEN (bắt buộc để trả lời), ZALO_APP_SECRET + ZALO_APP_ID
 // (tuỳ chọn — có thì verify chữ ký X-ZEvent-Signature), đặt qua env hoặc Vault.
 import {
+  bangNhau,
+  docBiMat,
   ghiLoi,
   jsonResponse,
   secretOf,
@@ -64,6 +66,29 @@ async function handleEvent(raw: string): Promise<void> {
   const accessToken = await secretOf(client, "ZALO_OA_ACCESS_TOKEN");
   if (!accessToken) return; // chưa cấu hình OA — chỉ ghi log (đã lưu messages)
 
+  // ─── CHỐT CHIỀU GỬI (20260905i) ────────────────────────────────────────────
+  // `claim_inbound` chốt chiều ĐẾN, nhưng nhánh `status='completed'` của nó trả
+  // về ngay không đánh dấu gì — mà đó đúng là trạng thái `viec_inbound_bo_roi()`
+  // đi tìm ("chua_gui"). Nên trước bản này hai lượt phát lại song song cùng đọc
+  // `sent_bubbles`, cùng thấy 0, cùng gửi bong bóng đầu: khách nhận đúp.
+  // Đã dựng lại được trong e2e (GUI-3) trước khi vá.
+  let giuLuot = false;
+  if (zaloMsgId) {
+    const { data: gianhDuoc, error: eGiu } = await client
+      .rpc("giu_luot_gui", { p_msg_id: zaloMsgId, p_han_secs: 120 });
+    if (eGiu) {
+      // CỐ Ý ĐI TIẾP khi không hỏi được chốt — ngược với mọi cổng bảo mật
+      // trong repo này, và có lý do: ở đây "chặn cho chắc" nghĩa là khách ngồi
+      // chờ một câu trả lời KHÔNG BAO GIỜ tới. Hỏng đó nặng hơn hẳn một bong
+      // bóng lặp, mà `sent_bubbles` vẫn còn đó làm lưới thứ hai.
+      await ghiLoi(client, "zalo-webhook giu luot gui", eGiu.message);
+    } else if (gianhDuoc === false) {
+      return; // lượt khác đang gửi đúng tin này
+    } else {
+      giuLuot = true;
+    }
+  }
+  try {
   // FR-166 bất biến 10/12 — ĐIỂM NỐI LẠI.
   // Trước bản này, sập giữa chừng là lần sau phát lại TỪ ĐẦU: bong bóng 1 đã
   // tới tay khách rồi vẫn bị gửi lần nữa. `sent_bubbles` đếm số tấm ĐÃ tới
@@ -130,6 +155,15 @@ async function handleEvent(raw: string): Promise<void> {
     const ok = await sendZaloImage(accessToken, zaloUserId, url);
     if (!ok) await ghiLoi(client, "zalo-webhook send ảnh", url);
   }
+  } finally {
+    // NHẢ NGAY, kể cả khi ném giữa chừng. Ôm lease tới lúc hết hạn (120 giây)
+    // là làm chậm đường cứu: `inbound-sweep` hiện thử lại ngay lượt cron sau,
+    // và giữ nguyên nhịp đó là một phần của "không đổi hành vi".
+    if (giuLuot && zaloMsgId) {
+      const { error: eNha } = await client.rpc("nha_luot_gui", { p_msg_id: zaloMsgId });
+      if (eNha) await ghiLoi(client, "zalo-webhook nha luot gui", eNha.message);
+    }
+  }
 }
 
 Deno.serve(async (req) => {
@@ -137,6 +171,12 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method", { status: 405 });
 
   const raw = await req.text();
+
+  // SEC-06 — chặn body khổng lồ trước khi đụng tới nó. Zalo không gửi sự kiện
+  // nào quá vài KB; 64 KB đã rộng gấp bội.
+  if (raw.length > 64 * 1024) {
+    return jsonResponse({ error: "payload_too_large" }, 413);
+  }
 
   // FR-166 — CỬA PHÁT LẠI cho đường cứu.
   // `inbound-sweep` gọi vào đây với `{replay_event_id}` để chạy lại đúng việc
@@ -151,14 +191,24 @@ Deno.serve(async (req) => {
   // `inbound-sweep` đọc 200 là "đã cứu xong" nên KHÔNG gọi `bao_hong_inbound`,
   // `attempts` không tăng, `next_retry_at` không đặt — nó phát lại đúng việc ấy
   // mỗi phút, suốt 24 giờ, và không ai thấy gì.
+  // SEC-12: parse ĐÚNG MỘT LẦN ở đây rồi dùng lại. Bản trước parse lần hai
+  // trong khối verify chữ ký mà không bọc `try` — vô hại lúc khối đó chưa chạy
+  // (thiếu secret), nhưng sẽ thành 500 hàng loạt ngay khi vá SEC-01. Body
+  // không phải JSON thì từ chối luôn: Zalo không bao giờ gửi thứ đó.
   let body: Record<string, unknown> | null = null;
   try {
     body = JSON.parse(raw);
-  } catch { /* không phải JSON → đi tiếp đường webhook thường */ }
+  } catch { /* xử ở ngay dưới */ }
+  if (!body || typeof body !== "object") {
+    return jsonResponse({ error: "body phải là JSON" }, 400);
+  }
 
   if (body?.replay_event_id) {
-    const isService = req.headers.get("authorization") ===
-      `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+    const auth = req.headers.get("authorization") ?? "";
+    const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    // SEC-11: so hằng thời gian.
+    const isService = !!svc && auth.startsWith("Bearer ") &&
+      await bangNhau(auth.slice(7), svc);
     if (!isService) return jsonResponse({ error: "forbidden" }, 403);
 
     const db = serviceClient();
@@ -176,37 +226,63 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true, replayed_event: body.replay_event_id });
   }
 
-  // Verify chữ ký nếu đã cấu hình app secret (mac = sha256(appId+data+timeStamp+secret))
+  // ══════════ VERIFY CHỮ KÝ — FAIL-CLOSED (SEC-01, vá 05/09/2026) ══════════
+  // Hàm này buộc chạy verify_jwt=false (Zalo không gửi được JWT của Supabase),
+  // nên chữ ký `X-ZEvent-Signature` là hàng rào DUY NHẤT.
+  //
+  // Bản trước: thiếu secret → ghi sổ rồi XỬ LÝ TIẾP. Đo Vault 05/09: cả
+  // ZALO_APP_SECRET lẫn ZALO_APP_ID đều KHÔNG tồn tại, nên nhánh verify chưa
+  // từng chạy lần nào kể từ ngày viết. Tức suốt thời gian đó ai cũng POST được
+  // một sự kiện bịa với `sender.id` bất kỳ: đội lốt Zalo ID của chủ nhà để bơm
+  // fact vào tin của họ (SEC-04), hoặc bơm tin rác để đốt hết hạn mức model
+  // của cả ngày (SEC-05).
+  //
+  // Nay chặn cứng. Đường sống thật hôm nay là bridge → chat-reply (OA còn chờ
+  // duyệt, `ZALO_OA_ACCESS_TOKEN` cũng chưa có), nên đóng cửa này KHÔNG làm
+  // gãy gì đang chạy. Muốn chạy tạm không chữ ký thì phải bật cờ tay
+  // `ALLOW_UNVERIFIED_WEBHOOK=1` — tường minh, và kêu mỗi lượt.
   const client = serviceClient();
-  const appSecret = await secretOf(client, "ZALO_APP_SECRET");
-  const appId = await secretOf(client, "ZALO_APP_ID");
-  if (!appSecret || !appId) {
-    // SOÁT BẢO MẬT 29/08/2026 — LỖ ĐANG MỞ, cần chủ dự án ra tay.
-    // Hàm này buộc phải chạy verify_jwt=false (Zalo không gửi được JWT của
-    // Supabase), nên CHỮ KÝ `X-ZEvent-Signature` là hàng rào DUY NHẤT. Chưa đặt
-    // ZALO_APP_SECRET/ZALO_APP_ID thì khối verify bên dưới bị nhảy qua — đo
-    // thật 29/08: POST một sự kiện bịa, không khoá không chữ ký, nhận 200.
-    // Nghĩa là người lạ giả được tin nhắn đến với BẤT KỲ sender.id nào: đội lốt
-    // Zalo ID của một chủ nhà để bơm fact vào tin của họ, hoặc bơm tin rác để
-    // đốt tiền model.
-    // CỐ Ý KHÔNG chặn cứng ở đây: chặn là bot chết ngay với người dùng thật,
-    // mà đó là quyết định của chủ dự án chứ không phải của đợt soát. Thay vào
-    // đó kêu to — `log_loi` có van 20 dòng/nguồn/giờ nên không ngập sổ, và
-    // trang /admin sẽ thấy. CHỮA THẬT = đặt hai secret đó vào Vault.
-    await ghiLoi(
-      client,
-      "zalo-webhook KHONG VERIFY",
-      "Thiếu ZALO_APP_SECRET/ZALO_APP_ID — webhook đang nhận sự kiện KHÔNG kiểm chữ ký. " +
-        "Ai cũng giả được tin nhắn đến. Đặt hai secret này vào Vault để đóng lỗ.",
-    );
+  const [sec, aid] = await Promise.all([
+    docBiMat(client, "ZALO_APP_SECRET"),
+    docBiMat(client, "ZALO_APP_ID"),
+  ]);
+  if (sec.loi || aid.loi) {
+    // Đọc hụt Vault ≠ chưa đặt. Đọc hụt thì luôn chặn (cùng luật với SEC-02).
+    await ghiLoi(client, "zalo-webhook VAULT HUT",
+      `Không đọc được secret chữ ký (${sec.loi ?? aid.loi}) — chặn để an toàn.`);
+    return jsonResponse({ error: "signature_unavailable" }, 503);
   }
-  if (appSecret && appId) {
+  const appSecret = sec.giaTri;
+  const appId = aid.giaTri;
+
+  if (!appSecret || !appId) {
+    if (Deno.env.get("ALLOW_UNVERIFIED_WEBHOOK") !== "1") {
+      await ghiLoi(client, "zalo-webhook CHUA CO CHU KY",
+        "Thiếu ZALO_APP_SECRET/ZALO_APP_ID — TỪ CHỐI sự kiện. Đặt hai secret vào " +
+        "Vault, hoặc bật tạm ALLOW_UNVERIFIED_WEBHOOK=1 nếu cố ý chạy không chữ ký.");
+      return jsonResponse({ error: "signature_unconfigured" }, 503);
+    }
+    await ghiLoi(client, "zalo-webhook KHONG VERIFY",
+      "ALLOW_UNVERIFIED_WEBHOOK=1 — đang nhận sự kiện KHÔNG kiểm chữ ký. Ai cũng " +
+      "giả được tin nhắn đến. Đây là cờ tạm, gỡ ngay khi có secret.");
+  } else {
     const sig = req.headers.get("X-ZEvent-Signature") ?? "";
-    const ts = JSON.parse(raw).timestamp ?? "";
-    const mac = await sha256hex(`${appId}${raw}${ts}${appSecret}`);
-    if (sig !== `mac=${mac}`) {
-      console.log("zalo-webhook: sai chữ ký, từ chối");
-      return new Response("invalid signature", { status: 401 });
+    const tsRaw = String(body.timestamp ?? "");
+
+    // Chống replay: chữ ký đúng vẫn phát lại được mãi nếu không ràng thời gian.
+    // Zalo gửi timestamp mili-giây dạng chuỗi; nhận cả giây phòng khi đổi.
+    const n = Number(tsRaw);
+    const ms = Number.isFinite(n) ? (n < 1e12 ? n * 1000 : n) : NaN;
+    if (!Number.isFinite(ms) || Math.abs(Date.now() - ms) > 5 * 60 * 1000) {
+      await ghiLoi(client, "zalo-webhook TIMESTAMP", `timestamp lệch/thiếu: "${tsRaw}"`);
+      return jsonResponse({ error: "stale_timestamp" }, 401);
+    }
+
+    const mac = await sha256hex(`${appId}${raw}${tsRaw}${appSecret}`);
+    // SEC-11: so hằng thời gian, không `!==` — chữ ký là bí mật dài hạn.
+    if (!await bangNhau(sig, `mac=${mac}`)) {
+      await ghiLoi(client, "zalo-webhook SAI CHU KY", `sig="${sig.slice(0, 24)}…"`);
+      return jsonResponse({ error: "invalid_signature" }, 401);
     }
   }
 

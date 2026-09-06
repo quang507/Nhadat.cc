@@ -7,8 +7,16 @@ import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase
 import { formatPrice, zaloLink } from "@/lib/format";
 import { TAG_DEFS, relatedTags, tagBySlug, type TagDef } from "@/lib/tags";
 
-// FR-12 / IA §4.4 — trang tag SEO. Dựng tĩnh toàn bộ lúc build (●), làm mới
-// mỗi giờ; slug lạ → 404 (dynamicParams=false) để không ai đúc được URL rác.
+// FR-12 / IA §4.4 — trang tag SEO. Dựng tĩnh toàn bộ lúc build (●); slug lạ →
+// 404 (dynamicParams=false) để không ai đúc được URL rác.
+//
+// SỐ 3600 DƯỚI ĐÂY KHÔNG PHẢI TTL THẬT — soát build 05/09/2026: bảng route báo
+// `5m`. Next 15 hạ revalidate của cả segment xuống MIN của nó và mọi
+// `unstable_cache` chạy trong lúc render, mà `coverByCode` (lib/photos.ts) đặt
+// TTL 300. Nên trang này làm mới mỗi 5 phút, không phải mỗi giờ.
+// Giữ 3600 thay vì sửa thành 300: đổi số là đổi ý định, còn hành vi thì không
+// đổi (min vẫn là 300). Muốn thật sự nới lên 1 giờ thì phải nới TTL trong
+// lib/photos.ts — và đó là quyết định về độ tươi của ẢNH, không phải của tag.
 export const revalidate = 3600;
 export const dynamicParams = false;
 

@@ -9,10 +9,15 @@ import { formatPrice, placeholderImg, SITE_URL, zaloLink } from "@/lib/format";
 
 // FR-117 (dựng 04/09/2026) — trang dự án `/du-an/{slug}`, SSG từ bảng
 // `projects` (SRS-3.10; anon đọc được qua `anon_read_projects`). Có
-// generateStaticParams nên build ra ● và ISR 1 giờ (NFR-17); slug lạ vẫn render
+// generateStaticParams nên build ra ● (NFR-17); slug lạ vẫn render
 // on-demand (dynamicParams mặc định) — dự án mới không cần build lại.
 // Phần "quản lý giỏ hàng cho admin/NMG" của FR-117 CHƯA dựng: `unit_status`
 // hiện chỉ đọc; đổi qua bảng `deals`/sửa tin (SRS-3.10).
+//
+// TTL THẬT LÀ 5 PHÚT, không phải 1 giờ (soát build 05/09/2026 — bảng route báo
+// `5m`). Cùng nguyên nhân với /[tag]: `coverByCode` đặt `unstable_cache` TTL
+// 300, và Next 15 lấy MIN của revalidate segment với mọi cache lồng trong.
+// Câu cũ ở đây khai "ISR 1 giờ" — sai, đã sửa.
 export const revalidate = 3600;
 
 type DuAn = {

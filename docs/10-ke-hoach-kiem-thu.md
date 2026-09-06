@@ -61,7 +61,7 @@ Bảng NFR-01…18 với cách đo nằm ở `docs/07 §6` (nguồn sự thật)
 ## 10.5 Môi trường & công cụ (free-tier)
 
 - Unit: Vitest · E2E web: Playwright · A11y: axe-core · Perf: Lighthouse CI · bot: `bot/tests/e2e` (mock Supabase + mock model, Node/Bun).
-- CI: GitHub Actions free — lint + unit mỗi PR, E2E nightly; Vercel preview mỗi PR. Tầng TypeScript của bot hiện chưa có test chạy trong CI (gọi tay).
+- CI: GitHub Actions free, `.github/workflows/kiem.yml` — mỗi PR chạy 5 job: `web` (tsc + `next build`), `bot` (208 ca e2e + 82 ca FR-159/161/164 + 4 cảnh tự kiểm TS-SEC, mock Supabase & mock model nên không cần secret), `saoluu` (21 ca `scripts/sao-luu.tu-kiem.mjs`, PostgREST giả), `baomat` (`TS-SEC-AUTO` bắn anon key công khai vào DB thật), `truyvet` (`scripts/soat-truy-vet.sh`). Vercel preview mỗi PR. **Chưa vào CI:** TS-SEC bài phá huỷ (xoá dữ liệu thật nếu RLS hỏng), TS-SEC3 (`bot/tests/vai-tro.sql` — cần quyền SQL, CI chỉ có khoá công khai), TS-LIVE (cần bridge + hai máy), Lighthouse/axe/k6 — xem `docs/11 §11.4`.
 - DB: `nhadat-cc` là môi trường chính, **không** chạy test phá hoại; ca ghi bọc `do … raise exception` để cuộn lại. Zalo: OA thật chế độ ẩn + acc test (OPEN-09).
 - Bí mật chỉ trong biến môi trường / Vault; khoá đã dán vào chat phải rotate.
 
@@ -77,15 +77,105 @@ Bảng NFR-01…18 với cách đo nằm ở `docs/07 §6` (nguồn sự thật)
 
 Bug tìm thấy sau release phải có test tái hiện trước khi sửa — suite chỉ phình, không teo.
 
-## 10.7 Bộ test chạy tay (cập nhật 04/09/2026)
+## 10.7 Bộ test chạy tay (cập nhật 06/09/2026)
 
 Lệnh dán vào chạy được, không phải mô tả. ID bất biến. Cột cuối là kết quả **mới
 nhất** (dd/mm); ⏭ = chưa chạy lại được trong sandbox (cần deploy/bridge/trình
 duyệt). Ca ghi trên DB thật bọc `do … raise exception` hoặc `begin … rollback`;
-bí mật lấy bằng `get_secret()` ngay trong SQL, không in ra. Bộ tự động:
-`cd bot/tests/e2e && bun install && bash chay.sh` (102 kịch bản, 04/09) và
-`node bot/tests/fr159-bon-vai.mjs` / `fr161-go-lan-dau.mjs` / `fr164-loi-sua-va-cau-hoi-treo.mjs`
-(65 / 9 / 8) — các file `.mjs` chép regex từ `chat-reply`, sửa regex phải sửa test.
+bí mật lấy bằng `get_secret()` ngay trong SQL, không in ra.
+
+### 10.7.0 Sổ đăng ký bộ test — chạy bằng lệnh nào, cần môi trường gì
+
+Bảng này là danh sách ĐỦ. Một bộ test không có tên ở đây là một bộ không ai
+chạy. Đừng gõ lệnh rời: người và CI dùng chung script trong `package.json`, không
+thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
+
+**Chín bộ CHẠY MÁY, offline (324 ca) — `bun run kiem` gọi hết, CI chạy hết:**
+
+| Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
+|---|---|---|---|---|
+| `bot/tests/e2e/run.mjs` | 160 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
+| `bot/tests/e2e/webhook.mjs` | 44 | `bun run e2e` (`chay.sh`) | TS-IDEM2; nhãn `CK-1…8c`, `GUI-1…8` | `zalo-webhook`: chữ ký + replay; gửi đúng-một-lần ra Zalo |
+| `bot/tests/e2e/cong-thieu-bi-mat.mjs` | 4 | `bun run e2e` (`chay.sh`) | TS-SEC2 phần cổng | Thiếu `BRIDGE_SECRET` thì cổng ĐÓNG, không mở. Tiến trình RIÊNG vì `napCauHinh` nhớ tạm 60 s ở tầng module |
+| `bot/tests/fr159-bon-vai.mjs` | 65 | `bun run test:bot` | TS-VAI | Bốn vai người nhắn (FR-159, FR-170) |
+| `bot/tests/fr161-go-lan-dau.mjs` | 9 | `bun run test:bot` | TS-KD | Gõ lẫn dấu vẫn nhận ra câu rao / câu hỏi mua (FR-161) |
+| `bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs` | 8 | `bun run test:bot` | TS-OUNG | Vừa sửa trường vừa trả lời câu treo thì ghi CẢ HAI (FR-164) |
+| `bot/tests/ts-sec-anon.tu-kiem.mjs` | 4 cảnh | `bun run test:bot` | TS-SEC-AUTO (bài tự kiểm) | Bộ TS-SEC phân biệt "DB từ chối" với "không tới được" — chống tái phạm ca báo 24/24 xanh trong lúc proxy chặn sạch |
+| `scripts/sao-luu.tu-kiem.mjs` | 21 | `bun run test:saoluu` | TS-SAOLUU | Sao lưu phân biệt "đủ" với "trông như đủ": đối chiếu `count=exact`, `manifest.json` ghi ra đĩa, mọi đường hỏng thoát khác 0 |
+| `bot/tests/ranh-gioi.mjs` | 9 | `bun run test:bot` (và `test:ranhgioi`) | **TS-RANHGIOI** | Ranh giới bóc tách ⟂ AI, kiểm TĨNH: mã tiền định không import SDK Anthropic / `claude.ts` / gọi RPC; tầng AI không ghi bảng nghiệp vụ, chỉ 3 RPC đã khai tên |
+
+Ba file `fr1xx-*.mjs` **chép regex** từ `chat-reply` (Node không nạp được module
+Deno) — sửa regex ở hàm thật thì phải sửa cả ở đó, không thì test vẫn xanh trong
+khi hàm đã đổi.
+
+**Hai bộ CẦN MÔI TRƯỜNG THẬT — không chạy được trong sandbox:**
+
+| Bộ | ID | Cần gì | Chạy sao | Đọc kết quả |
+|---|---|---|---|---|
+| `bot/tests/ts-sec-anon.mjs` | TS-SEC-AUTO | **Internet tới `*.supabase.co`** + DB production đang chạy. KHÔNG cần secret: bắn bằng khoá publishable công khai | `bun run test:sec` — có trong CI (job `baomat`), **cố ý không nằm trong `kiem`** | Thoát 0 = đạt · 1 = có cửa mở · **2 = CHƯA KIỂM ĐƯỢC** (proxy chặn, DB ngủ). Thoát 2 KHÔNG phải "đạt" |
+| `bot/tests/vai-tro.sql` | **TS-SEC3** | **Quyền SQL trên DB thật.** CI không chạy được vì CI chỉ có khoá công khai | Dashboard → SQL Editor → dán cả file → Run; hoặc MCP `execute_sql` | Kết bằng `raise exception 'KQ: …'` nên mọi dòng chèn TỰ CUỘN LẠI, không để rác trên production. Mọi mục phải `OK`; một chữ `HONG` là một cửa mở. **Chạy 06/09/2026 qua MCP `execute_sql`: 41/41 OK**, xác minh rollback bằng đếm dòng `VAITRO*` = 0 |
+
+### TS-SEC3 — ma trận quyền theo VAI DB (5 vai × 41 khẳng định)
+`ts-sec-anon.mjs` chỉ bắn được vai `anon` vì nó đi qua PostgREST bằng khoá công
+khai. Bốn vai còn lại — `authenticated` người lạ, người dùng có hồ sơ, admin,
+`service_role` — là nửa quan trọng hơn: RLS của repo này phân quyền chủ yếu bằng
+`auth.uid()` và `auth.jwt()->>'email'`, tức toàn bộ luật nằm ở vai
+`authenticated`. Trong 41 khẳng định có **8 đối chứng dương** (nhãn `[dc]`):
+"vai X thấy 0 dòng" chỉ có nghĩa khi có vai Y thấy được đúng dữ liệu đó — không
+thì "0 dòng" có thể chỉ là "bảng rỗng".
+| ID | Bài | Kỳ vọng | Kết quả mới nhất |
+|---|---|---|---|
+| TS-SEC3-01 | `anon` đọc 9 bảng kín (`buyers`, `sellers`, `messages`, `conversations`, `inbound_ledger`, `inbound_events`, `media_cleanup_queue`, `admins`, `chat_quota`) | 0 dòng hoặc thiếu grant | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-02 | `anon` đọc tin CHƯA đăng; ghi `listings`; gọi `bump_user_quota` / `giu_luot_gui` / `xuat_schema` | chặn cả 5 | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-03 | người lạ ĐÃ ĐĂNG NHẬP đọc 9 bảng kín | 0 dòng hoặc thiếu grant | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-04 | người lạ đọc 5 view cấp cho `authenticated` (`khach_can_nguoi_that`, `hoi_thoai_phien`, `bds_hot`, `ctv_ranks`, `nmg_hoat_dong`) | 0 dòng — chủ sở hữu view là `postgres` (BYPASSRLS) nên hàng rào DUY NHẤT là mệnh đề WHERE bên trong view, phải kiểm từng cái chứ không suy ra từ RLS | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-05 | người lạ đọc tin chưa đăng; gọi `admin_dang_tin` / `tao_danh_sach` | chặn cả 3 | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-06 | **[dc]** admin đọc `buyers`, `messages`, view `khach_can_nguoi_that`, tin chưa đăng | THẤY được — chứng minh mọi số 0 ở trên là "RLS chặn", không phải "bảng rỗng" | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-07 | admin đọc `inbound_ledger` | KHÔNG thấy (sổ nội bộ của bot, admin không có việc gì ở đó) | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+| TS-SEC3-08 | **[dc]** `service_role` đọc `inbound_ledger`, `messages`, gọi `giu_luot_gui` | làm được — bot phải chạy được việc của nó | ✅ 06/09 (chạy lại qua MCP: 41/41 OK, 0 HONG; xác minh sau đó 0 dòng VAITRO còn lại) |
+
+### TS-SAOLUU — bản sao phân biệt "đủ" với "trông như đủ" (NFR-16, OPEN-25/47)
+Bậc Supabase Free KHÔNG có backup tự động: `scripts/sao-luu.mjs` là bản sao DUY
+NHẤT đang tồn tại. Một thư mục thiếu ba bảng trông y hệt thư mục đủ, nên bài này
+kiểm chính cái script chứ không kiểm dữ liệu. `scripts/sao-luu.tu-kiem.mjs` dựng
+**PostgREST giả**, không chạm DB thật, không cần secret — nên chạy được trong CI
+(job `saoluu`) và trong `bun run kiem`. Suốt 27/08 → 05/09 danh sách bảng thiếu
+8 bảng, trong đó `listing_media` (bản đồ ảnh ↔ tin, FR-165): mất nó thì file
+trong Storage còn nguyên mà không ai biết ảnh của tin nào.
+| ID | Bài | Kỳ vọng | Kết quả mới nhất |
+|---|---|---|---|
+| TS-SAOLUU-01 | `liet_ke_bang()` hỏi DB, DB có bảng không nằm trong `BANG` | DỪNG, thoát khác 0 — không sao lưu thiếu trong im lặng | ✅ 05/09 |
+| TS-SAOLUU-02 | `Prefer: count=exact`: số dòng kéo về ≠ số DB tự báo | hỏng, thoát khác 0 — một file JSON ngắn tự nó không kêu ca gì | ✅ 05/09 |
+| TS-SAOLUU-03 | `Content-Range` không đọc được | hỏng, không coi là đủ | ✅ 05/09 |
+| TS-SAOLUU-04 | `manifest.json` ghi ra ĐĨA với `trang_thai` mỗi bảng (`day_du`/`thieu`/`hong`) | có file, đúng trạng thái; kể cả trên đường hỏng (`chet()` ghi manifest trước khi thoát) | ✅ 05/09 |
+| TS-SAOLUU-05 | Thứ KHÔNG nằm trong bản sao (`storage.objects`, `auth.users`, `vault.secrets`) | liệt kê TƯỜNG MINH trong manifest — "không thấy" và "cố ý bỏ" nhìn giống hệt nhau lúc đang chữa cháy | ✅ 05/09 |
+| TS-SAOLUU-06 | Một bảng lỗi giữa chừng | KHÔNG báo thành công; thoát khác 0 | ✅ 05/09 |
+| TS-SAOLUU-07 | Đích ghi nằm TRONG repo | từ chối, không tạo thư mục nào — bản sao chứa SĐT thật, repo đang public | ✅ 05/09 |
+| TS-SAOLUU-08 | `soat-truy-vet.sh` #8: `create table` trong migration mà thiếu trong `BANG` | kêu **ở PR**, không đợi tới đêm lúc chạy sao lưu trên máy chủ trước mặt không ai | ✅ 05/09 |
+
+### TS-RANHGIOI — bóc tách ⟂ AI (SRS-3.0, FR-171)
+Hôm nay ranh giới này đúng nhưng đúng do MAY: `boc_thong_so()` nằm trong SQL nên
+không thể gọi model được, còn `regexProfileFallback()` thì nằm ngay trong
+`chat-reply/index.ts` cách chỗ gọi model hơn hai nghìn dòng — không có gì ngăn
+lượt sửa sau nối hai thứ lại. Nối vào là mỗi tin khách một lượt đốt tiền model,
+kể cả câu regex bóc được. `bot/tests/ranh-gioi.mjs` là kiểm TĨNH (đọc chữ, không
+mạng, không DB), nằm trong `test:bot` nên chạy ở CI mỗi PR mà **không thêm tên
+check mới** — danh sách 6 required status checks ở `docs/11 §11.5` giữ nguyên.
+Mỗi luật có ca ÂM lẫn ca DƯƠNG: luật hỏng thì ca âm lọt và bài thoát khác 0, chứ
+"0 vi phạm" một mình chỉ chứng minh regex sai. Chứng minh bắt được vi phạm THẬT:
+chèn `import Anthropic` vào `_shared/thong_so.ts` → thoát 1, gỡ ra → thoát 0.
+| ID | Bài | Kỳ vọng | Kết quả mới nhất |
+|---|---|---|---|
+| TS-RANHGIOI-01 | mã bóc tách import `@anthropic-ai/sdk` | bắt | ✅ 06/09 |
+| TS-RANHGIOI-02 | mã bóc tách import `./claude.ts` | bắt | ✅ 06/09 |
+| TS-RANHGIOI-03 | mã bóc tách gọi `.rpc(` | bắt — bóc tách phải là hàm thuần | ✅ 06/09 |
+| TS-RANHGIOI-04 | mã bóc tách là hàm thuần | bỏ qua | ✅ 06/09 |
+| TS-RANHGIOI-05 | chữ "anthropic" nằm trong CHÚ THÍCH | bỏ qua — chú thích không phải mã | ✅ 06/09 |
+| TS-RANHGIOI-06 | tầng AI `.from("listings").insert(` | bắt | ✅ 06/09 |
+| TS-RANHGIOI-07 | tầng AI gọi RPC chưa khai tên | bắt — thêm RPC phải sửa file luật, tức phải có người đọc lại | ✅ 06/09 |
+| TS-RANHGIOI-08 | tầng AI gọi `log_loi` | bỏ qua — sổ lỗi là bắt buộc (FR-152), không phải dữ liệu nghiệp vụ | ✅ 06/09 |
+| TS-RANHGIOI-09 | file ngoài phạm vi hai luật | bỏ qua | ✅ 06/09 |
+| TS-RANHGIOI-10 | *(chốt lúc chạy, không phải ca giả)* KHÔNG file thật nào rơi vào luật nào | DỪNG, thoát khác 0 — đổi tên thư mục một cái là bộ này soát rỗng mà vẫn báo xanh | ✅ 06/09 (3 file thật) |
 
 ### TS-SEC — hồi quy bảo mật (chạy sau MỌI migration đụng RLS/GRANT)
 SQL Editor, `set role anon` rồi thử phá — anon key là key công khai, repo private không làm nó bí mật. Script: `bot/supabase/migrations/20260826c_soat_bao_mat.sql` khối `-- KIỂM CHỨNG`.
@@ -101,6 +191,20 @@ SQL Editor, `set role anon` rồi thử phá — anon key là key công khai, re
 | TS-SEC-08 | anon đọc `listings`, `agents_public`, `listing_photos_v`, `projects`, `listing_facts` | ra dữ liệu bình thường; `agents_public` = số NMG trong `sellers` | ✅ 04/09 (vá 20260904b, anon 3/3) |
 | TS-SEC-09 | `proacl` của `get_secret` trong `pg_proc` | chỉ `postgres` + `service_role` | ✅ 04/09 |
 | TS-SEC-10 | mở `/nha-dat/<mã>` của tin có fact chứa SĐT | SĐT → `[liên hệ qua Zalo nhadat.cc]` ở cả `description` lẫn `answer` (FR-104) | ⏭ cần bản deploy |
+
+### TS-SEC-AUTO — hồi quy RLS chạy MÁY, mỗi PR (`bun run test:sec`)
+Tập không phá huỷ của TS-SEC, bắn khoá **công khai** `sb_publishable_…` vào DB thật qua PostgREST. Bổ sung cho TS-SEC chạy tay chứ không thay: bài `delete from reminders` vẫn ở trên vì nếu RLS hỏng thật thì nó xoá dữ liệu thật. Mã thoát: 0 đạt · 1 hỏng · **2 = không tới được DB (chưa kiểm được, KHÔNG phải đạt)**.
+| ID | Bài | Kỳ vọng | Kết quả mới nhất |
+|---|---|---|---|
+| TS-SEC-AUTO-00 | dò đường: anon đọc `listings` | ra ≥1 dòng, không thì thoát 2 và bỏ chấm điểm | ⏭ CI (sandbox không có đường ra supabase.co) |
+| TS-SEC-AUTO-01 | anon đọc 14 bảng nội bộ (`reminders`, `sellers`, `messages`, `curated_lists`, `property_events`…) | PostgREST từ chối, hoặc 0 dòng | ⏭ CI |
+| TS-SEC-AUTO-02 | anon đọc `public_listings` | bị từ chối — view không lọc trạng thái | ⏭ CI |
+| TS-SEC-AUTO-03 | anon gọi 6 RPC nội bộ (`get_secret`, `seller_drip_tick`, `ctv_report_tick`, `xuat_schema`, `liet_ke_bang`, `liet_ke_migration`) | bị từ chối cả 6 | ⏭ CI |
+| TS-SEC-AUTO-04 | anon `insert listings` · `update bot_prompts` | bị từ chối; nếu lọt thì tự dọn và báo P0 | ⏭ CI |
+| TS-SEC-AUTO-05 | anon đọc `agents_public` | ra ≥1 NMG — bắt đúng lỗi làm `/moi-gioi` trắng 27/08→04/09 | ⏭ CI |
+| TS-SEC-AUTO-06 | anon đọc `projects`, `listing_facts`, `listing_photos_v` | HTTP 200 — bắt lỗi siết quá tay | ⏭ CI |
+| TS-SEC-AUTO-07 | anon lọc `status=cho_thong_tin` | 0 dòng — tin nháp không lọt ra ngoài | ⏭ CI |
+| TS-SEC-AUTO-08 | **tự kiểm bộ trên** bằng PostgREST giả, 4 cảnh (khoẻ / RLS thủng / proxy chặn / siết quá tay) | thoát đúng 0 / 1 / 2 / 1 | ✅ 05/09 (4/4, chạy offline) |
 
 ### TS-LIVE — thông tuyến thật qua Zalo (chạy khi bật bridge)
 Điều kiện: `node bot/bridge-zca/index.mjs` chạy, không còn `pumpEscalations: fetch failed`. Chạy trên project thật nên sau mỗi vòng xoá `listings` `CCRB-*`, `sellers`/`ctvs` test, `reminders` liên quan.
@@ -155,9 +259,14 @@ SQL trên DB thật. Dọn: `delete from bot_errors; delete from reminders where
 | TS-HEALTH-03 | `select note from reminders where note like '🩺%'` | đúng MỘT tin dù tick nhiều lần trong giờ | ✅ 04/09 |
 | TS-HEALTH-04 | `cron.job_run_details` của chính lần chạy hỏng ở 01 | vẫn `succeeded` — lý do FR-152 tồn tại, đừng tin cột này | ✅ 04/09 |
 | TS-HEALTH-05 | gọi `escalation-feed` kèm `x-bridge-secret` đúng | `bot_health` có `who='bridge-zca'`, `at` vừa xong | ⏭ |
-| TS-HEALTH-06 | xoá dòng `bridge-zca` khỏi `bot_health` rồi tick | `bridge_im = false` — chưa từng có nhịp thì không báo | ⏭ |
+| TS-HEALTH-06 | xoá dòng `bridge-zca` khỏi `bot_health` rồi tick | **KỲ VỌNG CŨ SAI, đã đổi 06/09:** trước ghi `bridge_im = false` ("chưa từng có nhịp thì không báo") — đó chính là lỗ. Bridge chưa từng chạy là lúc ĐÁNG báo nhất, mà nhánh canh lại không chạy: "không có" bị lẫn với "bình thường", cùng hình lỗi SEC-02. Nay (`20260906a`) trong 7–22h VN phải ra `bridge_im = true`, `bridge_chua_bao_gio = true`, và một dòng `bot_errors` nói thẳng "CHƯA TỪNG điểm danh" | ⏭ cần dựng cảnh |
 | TS-HEALTH-07 | bridge im > 15 phút trong 7–22h VN, tick hai lần cùng giờ (`20260904a`) | lần 1 `ntfy = <id>`, `net._http_response` 200 từ ntfy.sh, `bot_health` có `who='ntfy'`; lần 2 `ntfy = null` (1 tin/giờ) | ✅ 04/09 (id 2102/2103 → 200) |
 | TS-HEALTH-08 | tồn 🩺 cũ + báo cáo CTV `pending` từ 27/08, chạy tick | 🩺 cũ → `cancelled`, chỉ còn mới nhất; báo cáo CTV quá 36h → `cancelled` | ✅ 04/09 (huỷ 117 + 7, còn 1) |
+| TS-HEALTH-09 | **còi có tự nhận là đã kêu không** (`20260906a`): đối chiếu `bot_health(who='ntfy').last_id` với `net._http_response` cùng id | id đó phải là một lượt gửi **2xx**. Không phải 2xx mà còi vẫn im = còi câm | ❌→✅ 06/09 — bắt tại trận: dấu `ntfy` lúc `00:00:00.054` trỏ req **2221**, mà req 2221 là `status_code NULL`, `Timeout of 5000 ms` lúc `00:00:00.212`. Còi đóng dấu "đã gửi" trước khi pg_net kịp nói nó hụt, rồi im một giờ |
+| TS-HEALTH-10 | chạy `bot_health_tick()` sau khi áp `20260906a`, trong lúc lượt báo trước đang hụt | `lan_truoc_da_gui = false`, sinh dòng `bot_errors` nguồn `coi ntfy`, và BẮN LẠI | ✅ 06/09 — `{"ntfy":2222,"lan_truoc_da_gui":false}`; `coi ntfy: lượt báo trước (pg_net req 2221) KHÔNG tới nơi` |
+| TS-HEALTH-11 | lượt bắn lại đó có tới ntfy.sh thật không | `net._http_response` của id mới phải `200` | ✅ 06/09 — req **2222 → 200**, thân `{"id":"g55xO8pg8zLp",…}` từ ntfy.sh |
+| TS-HEALTH-12 | đếm lượt `Timeout of 5000 ms` trong `bot_errors` nguồn `pg_net` từ 27/08 | mỗi lượt rơi đúng phút `:00` là một giờ không ai được báo | ⚠️ 06/09 — **24 lượt**, nhiều lượt đúng phút `:00`. Đã nới hạn chờ `net.http_post` 5 s → 15 s cho `canh_bao_ngoai` (5 s là mặc định của pg_net, không phải con số ai chọn) |
+| TS-HEALTH-13 | `che_sdt()` — SĐT không được vào sổ lỗi (`sellers.phone` UNIQUE nên lỗi 23505 kèm nguyên số) | 6 ca dương che đúng; 5 ca âm không đụng | ✅ 06/09 — dương: 10 số, 11 số, `+84`, `84`, hai số một dòng, trong JSON. Âm: chuỗi timeout pg_net, epoch 13 số, UUID, mã tin `#BDS-0001`, dãy 12 số. Neo `\m`…`\M` là phần bắt buộc: bỏ neo thì UUID `…-000000000001` bị xén thành `…-0000xxxxxx01` |
 
 ### TS-LOG — lỗi tầng ứng dụng có vào sổ không (FR-152 d)
 Loại lỗi này TRẢ 200 nên TS-HEALTH không bắt được. Không phủ log thô edge function (Free giữ 1 ngày); chỗ chưa gọi `ghiLoi()` vẫn im. Dọn như TS-HEALTH.
@@ -455,7 +564,7 @@ Tầng regex: `node bot/tests/fr159-bon-vai.mjs` (65 ca: chủ nhà ở lại nh
 | TS-VAI-18 | admin update `reminders.status` | được | ✅ 02/09 |
 
 ### TS-E2E — chạy `chat-reply` THẬT trong Node, Supabase + model giả lập
-`bun build` đóng gói `chat-reply/index.ts` (Deno) thành file Node, thay `npm:` bằng gói thật (`zod`, `@anthropic-ai/sdk`) và gói giả (`mock-supabase.mjs` DB trong bộ nhớ, `mock-anthropic.mjs` model theo kịch bản). Không Deno, không DB thật, ~1 giây: `cd bot/tests/e2e && bun install && bash chay.sh` (`chay.sh` tự đóng gói lại — chạy `run.mjs` trực tiếp là chạy bundle cũ). Kịch bản chia bốn vai + bất biến chéo (nhường lượt, model hỏng, ảnh trần, mã từ web), khẳng định trên DB giả hoặc PROMPT thật gửi model. Giới hạn: DB giả chép NGHĨA của RPC/trigger, RPC thật đổi thì bộ này không tự biết — tầng DB kiểm bằng TS-VAI/TS-TIEN/TS-CHUONG. Kết quả mới nhất: **102/102** (04/09, trên bundle kéo ngược sau deploy v48).
+`bun build` đóng gói `chat-reply/index.ts` (Deno) thành file Node, thay `npm:` bằng gói thật (`zod`, `@anthropic-ai/sdk`) và gói giả (`mock-supabase.mjs` DB trong bộ nhớ, `mock-anthropic.mjs` model theo kịch bản). Không Deno, không DB thật, ~1 giây: `cd bot/tests/e2e && bun install && bash chay.sh` (`chay.sh` tự đóng gói lại — chạy `run.mjs` trực tiếp là chạy bundle cũ). Kịch bản chia bốn vai + bất biến chéo (nhường lượt, model hỏng, ảnh trần, mã từ web), khẳng định trên DB giả hoặc PROMPT thật gửi model. Giới hạn: DB giả chép NGHĨA của RPC/trigger, RPC thật đổi thì bộ này không tự biết — tầng DB kiểm bằng TS-SEC3/TS-TIEN/TS-CHUONG. Kết quả mới nhất: **160/160** (05/09). Từ 04/09 thêm bốn nhóm: `CỔNG-1…5` (cổng vào fail-closed), `SEC-*` (chữ ký, quyền gọi), `ĐUA-1…4` (hai lượt chạy chồng nhau — mock có móc trễ truy vấn `__treTruyVan` để dựng được cảnh interleave thật), `TRÙNG-1…10` (`claim_inbound` đủ 5 nhánh). `webhook.mjs` (44 ca) và `cong-thieu-bi-mat.mjs` (4 ca) là hai tiến trình riêng trong cùng `chay.sh` — xem §10.7.0.
 
 ### TS-TOIUU — đếm vòng đi về DB và bất biến tối ưu (FR-171)
 Cùng bộ e2e; mock ghi mọi truy vấn vào `db().log`. Ngưỡng đặt bằng số đo SAU khi sửa — ai thêm truy vấn vào đường nóng là đỏ. Đo build: `bun install` 4,4 s vs `npm` 20,1 s; `next build` ~34 s ở cả hai.
@@ -614,7 +723,7 @@ Migration `20260904f` + `nudge` v25 + cron `info-timeout-tick`, `stale-listing-t
 | TS-GIUCHAN-08 | `nudge` v25 `dry_run` (secret từ Vault trong SQL): (a) kho thật; (b) `TEST-GCN`: 5 nhắc `sold`/`followup` chủ chưa phản hồi/`followup` lịch/`feedback`/`rating`; khách im 6,5 ngày; khách im 5,2 ngày có căn cuối | (a) 200, không `bot_errors`; (b) năm mẫu đúng chữ không gọi model; 6,5 ngày → `giu_ket_noi` "nhắn lại em một chữ thôi, kẻo Zalo tự ngắt"; 5,2 ngày → `can_cuoi` kèm `#mã`, `kho>0`; `sent=none` | ✅ 04/09 (a) done=7; (b) done=14, đúng cả, dọn sót 0 |
 
 ### TS-V48 — chat-reply v48 (FR-27/31/45/65/79/99/105/108/114/116)
-Mười FR có tài liệu mà bot chưa làm (lộ ở §10.8): `chat-reply` v48 + `_shared/prompts.ts` (`human_chat_rules`, `buyer_fewshot` đồng bộ xuống `bot_prompts` bằng SQL sinh từ file). Chạy trong e2e (74 → 102 kịch bản), lần cuối trên nội dung kéo ngược sau deploy. Cố ý chưa làm (ghi ở `02` từng FR): hai thời điểm xin đánh giá còn lại FR-65; thẻ voice riêng `/admin` FR-79; FR-99 phía bán + nguồn giá ngoài (OPEN-10); chọn dự án ở `/raoban` FR-114; "tin chốt → báo mọi B" tầng DB; duyệt ảnh tay FR-105.
+Mười FR có tài liệu mà bot chưa làm (lộ ở §10.8): `chat-reply` v48 + `_shared/prompts.ts` (`human_chat_rules`, `buyer_fewshot` đồng bộ xuống `bot_prompts` bằng SQL sinh từ file). Chạy trong e2e (74 → 102 → 160 kịch bản), lần cuối trên nội dung kéo ngược sau deploy. Cố ý chưa làm (ghi ở `02` từng FR): hai thời điểm xin đánh giá còn lại FR-65; thẻ voice riêng `/admin` FR-79; FR-99 phía bán + nguồn giá ngoài (OPEN-10); chọn dự án ở `/raoban` FR-114; "tin chốt → báo mọi B" tầng DB; duyệt ảnh tay FR-105.
 | ID | Bài | Kỳ vọng | Kết quả mới nhất |
 |---|---|---|---|
 | TS-V48-105a…c | fact chủ nhà có SĐT + "zalo 0903…" + "nhà số 12 Trần Hưng Đạo"; model trả lời có số | prompt gửi model không còn số, có "[liên hệ qua Zalo]", bỏ "số 12" giữ tên đường; bong bóng gửi khách không số; `location_raw` trong KHO giữ số nhà (OPEN-36) | ✅ 04/09 |
