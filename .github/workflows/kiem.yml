@@ -101,3 +101,32 @@ jobs:
           bun-version: latest
       - name: Script phân biệt được 'đủ' với 'trông như đủ'
         run: bun run test:saoluu
+
+  # Một bản sao chưa từng phục hồi thử KHÔNG PHẢI là bản sao. Job này chạy diễn
+  # tập thật: dựng schema, nạp một bản sao giả, rồi bơm 9 cách hỏng đã biết vào
+  # và soi mã thoát — chứng minh bộ soát phân biệt được "phục hồi được" với
+  # "trông như phục hồi được". Dùng Postgres thật trong service container, không
+  # chạm production, không cần khoá nào.
+  phuchoi:
+    name: Phục hồi — diễn tập trên Postgres thật
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      # `psql` là client, không phải server — cần riêng, service container ở
+      # trên chỉ cho cái server.
+      - name: Cài psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Bộ soát phục hồi phải bắt được cả 9 cách hỏng
+        run: bun run test:phuchoi

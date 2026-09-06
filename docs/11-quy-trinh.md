@@ -103,6 +103,8 @@ của người đẩy commit**. Nay chia lại cho sòng phẳng.
 | Web dựng được, trang tin còn trong cache (NFR-17) | máy dựng, người soi bảng route | CI job `web` | ⚠️ / không |
 | 208 ca hội thoại + webhook + cổng, và 82 ca FR-159/161/164 | máy | CI job `bot` | ⚠️ |
 | Sao lưu phân biệt "đủ" với "trông như đủ" (TS-SAOLUU) | máy | CI job `saoluu` | ⚠️ |
+| Bộ soát PHỤC HỒI có mù không — 10 cảnh trên Postgres thật (TS-PHUCHOI) | máy | CI job `phuchoi` | ⚠️ |
+| Phục hồi bản sao production THẬT | người, Postgres local | `docs/12` | **CHƯA LÀM LẦN NÀO** |
 | ID gãy, truy vết thiếu, số đếm README, PII, khoá service_role | máy | CI job `truyvet` | ⚠️ |
 | RLS / GRANT — tập không phá huỷ (TS-SEC-AUTO) | máy | CI job `baomat` | ⚠️ |
 | RLS / GRANT — ma trận 5 vai (TS-SEC3) | người, SQL Editor | `bot/tests/vai-tro.sql` | có, tay |
@@ -113,7 +115,7 @@ của người đẩy commit**. Nay chia lại cho sòng phẳng.
 | Lint | **không có** — repo chưa cài eslint/biome/prettier | — | không |
 
 **⚠️ CI CHẠY KHÔNG CÓ NGHĨA LÀ CHẶN ĐƯỢC MERGE.** Soát 06/09/2026 qua API
-GitHub: nhánh `main` trả `"protected": false`. Nghĩa là năm job kia có đỏ rực
+GitHub: nhánh `main` trả `"protected": false`. Nghĩa là sáu job kia có đỏ rực
 thì nút *Merge* vẫn bấm được, và ai cũng push thẳng vào `main` được, không qua
 PR nào. Bảng này trước đây ghi "có" ở năm dòng đầu — đó là **lời kể**, đúng thứ
 CI sinh ra để thay thế. Muốn chữ "có" thành thật thì phải bật bảo vệ nhánh, xem
@@ -155,7 +157,7 @@ bun run kiem     # kiểu + dựng + e2e bot + soát truy vết, một lệnh
 Đụng migration RLS/GRANT thì chạy thêm TS-SEC bằng tay.
 
 **Cổng 2 — trước merge** (máy, GitHub Actions `.github/workflows/kiem.yml`):
-năm job `web` / `bot` / `saoluu` / `truyvet` / `baomat` phải xanh. Đỏ là không
+sáu job `web` / `bot` / `saoluu` / `phuchoi` / `truyvet` / `baomat` phải xanh. Đỏ là không
 merge — không "merge rồi sửa sau".
 
 Nhưng tính tới 06/09/2026 câu trên mới là **kỷ luật, chưa phải hàng rào**:
@@ -165,7 +167,7 @@ thẳng. Cổng 2 chỉ có thật khi chủ dự án bật, ở
 
 - ✅ *Require a pull request before merging* — chặn push thẳng vào `main`.
 - ✅ *Require status checks to pass before merging* + ✅ *Require branches to be
-  up to date*, rồi chọn đúng năm tên check này (chép nguyên văn, kể cả dấu gạch
+  up to date*, rồi chọn đúng sáu tên check này (chép nguyên văn, kể cả dấu gạch
   dài và dấu tiếng Việt — GitHub so khớp theo TÊN, sai một ký tự là điều kiện
   không bao giờ thoả và PR kẹt vĩnh viễn):
 
@@ -175,6 +177,7 @@ thẳng. Cổng 2 chỉ có thật khi chủ dự án bật, ở
   | `Bot — e2e hội thoại` | `bot` | Hồi quy hội thoại / webhook / cổng vào gãy |
   | `Sao lưu — tự kiểm trên PostgREST giả` | `saoluu` | Bản sao duy nhất đang tồn tại có thể báo "đủ" khi thiếu |
   | `Tài liệu — truy vết ID` | `truyvet` | ID gãy, số đếm lệch, PII hoặc khoá lọt vào file |
+  | `Phục hồi — diễn tập trên Postgres thật` | `phuchoi` | Bộ soát phục hồi không còn bắt được cách hỏng nào đó — bản sao có thể báo ĐẠT khi thật ra hỏng |
   | `Bảo mật — hồi quy RLS trên DB thật` | `baomat` | Vai `anon` với tới thứ nó không được với |
 
 **Đánh đổi phải biết trước khi bật `baomat`:** job đó cần đường ra Internet tới
@@ -220,6 +223,8 @@ qua** (`docs/10 §10.8`).
 | Ma trận quyền 5 vai (cần quyền SQL) | dán `bot/tests/vai-tro.sql` vào SQL Editor | không |
 | Soát trôi migration DB ↔ repo (cần khoá) | `node scripts/soat-migration.mjs` | không |
 | Sao lưu 31 bảng + ảnh chụp schema (cần khoá) | `node scripts/sao-luu.mjs` | không |
+| Diễn tập bộ soát phục hồi (cần Postgres local) | `bun run test:phuchoi` | **không** — cần Postgres đang chạy, để `kiem` không đỏ oan |
+| Phục hồi một bản sao thật rồi soát | `node scripts/phuc-hoi.mjs` rồi `soat-phuc-hoi.mjs` — xem `docs/12` | không |
 | Soát tài liệu chi tiết hơn (agent) | gọi agent `soat-truy-vet` |
 | Review diff đụng `docs/` | gọi agent `reviewer` |
 
