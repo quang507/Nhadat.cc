@@ -90,7 +90,7 @@ Bảng này là danh sách ĐỦ. Một bộ test không có tên ở đây là 
 chạy. Đừng gõ lệnh rời: người và CI dùng chung script trong `package.json`, không
 thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
-**Tám bộ CHẠY MÁY, offline (315 ca) — `bun run kiem` gọi hết, CI chạy hết:**
+**Chín bộ CHẠY MÁY, offline (324 ca) — `bun run kiem` gọi hết, CI chạy hết:**
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
@@ -102,6 +102,7 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 | `bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs` | 8 | `bun run test:bot` | TS-OUNG | Vừa sửa trường vừa trả lời câu treo thì ghi CẢ HAI (FR-164) |
 | `bot/tests/ts-sec-anon.tu-kiem.mjs` | 4 cảnh | `bun run test:bot` | TS-SEC-AUTO (bài tự kiểm) | Bộ TS-SEC phân biệt "DB từ chối" với "không tới được" — chống tái phạm ca báo 24/24 xanh trong lúc proxy chặn sạch |
 | `scripts/sao-luu.tu-kiem.mjs` | 21 | `bun run test:saoluu` | TS-SAOLUU | Sao lưu phân biệt "đủ" với "trông như đủ": đối chiếu `count=exact`, `manifest.json` ghi ra đĩa, mọi đường hỏng thoát khác 0 |
+| `bot/tests/ranh-gioi.mjs` | 9 | `bun run test:bot` (và `test:ranhgioi`) | **TS-RANHGIOI** | Ranh giới bóc tách ⟂ AI, kiểm TĨNH: mã tiền định không import SDK Anthropic / `claude.ts` / gọi RPC; tầng AI không ghi bảng nghiệp vụ, chỉ 3 RPC đã khai tên |
 
 Ba file `fr1xx-*.mjs` **chép regex** từ `chat-reply` (Node không nạp được module
 Deno) — sửa regex ở hàm thật thì phải sửa cả ở đó, không thì test vẫn xanh trong
@@ -151,6 +152,30 @@ trong Storage còn nguyên mà không ai biết ảnh của tin nào.
 | TS-SAOLUU-06 | Một bảng lỗi giữa chừng | KHÔNG báo thành công; thoát khác 0 | ✅ 05/09 |
 | TS-SAOLUU-07 | Đích ghi nằm TRONG repo | từ chối, không tạo thư mục nào — bản sao chứa SĐT thật, repo đang public | ✅ 05/09 |
 | TS-SAOLUU-08 | `soat-truy-vet.sh` #8: `create table` trong migration mà thiếu trong `BANG` | kêu **ở PR**, không đợi tới đêm lúc chạy sao lưu trên máy chủ trước mặt không ai | ✅ 05/09 |
+
+### TS-RANHGIOI — bóc tách ⟂ AI (SRS-3.0, FR-171)
+Hôm nay ranh giới này đúng nhưng đúng do MAY: `boc_thong_so()` nằm trong SQL nên
+không thể gọi model được, còn `regexProfileFallback()` thì nằm ngay trong
+`chat-reply/index.ts` cách chỗ gọi model hơn hai nghìn dòng — không có gì ngăn
+lượt sửa sau nối hai thứ lại. Nối vào là mỗi tin khách một lượt đốt tiền model,
+kể cả câu regex bóc được. `bot/tests/ranh-gioi.mjs` là kiểm TĨNH (đọc chữ, không
+mạng, không DB), nằm trong `test:bot` nên chạy ở CI mỗi PR mà **không thêm tên
+check mới** — danh sách 6 required status checks ở `docs/11 §11.5` giữ nguyên.
+Mỗi luật có ca ÂM lẫn ca DƯƠNG: luật hỏng thì ca âm lọt và bài thoát khác 0, chứ
+"0 vi phạm" một mình chỉ chứng minh regex sai. Chứng minh bắt được vi phạm THẬT:
+chèn `import Anthropic` vào `_shared/thong_so.ts` → thoát 1, gỡ ra → thoát 0.
+| ID | Bài | Kỳ vọng | Kết quả mới nhất |
+|---|---|---|---|
+| TS-RANHGIOI-01 | mã bóc tách import `@anthropic-ai/sdk` | bắt | ✅ 06/09 |
+| TS-RANHGIOI-02 | mã bóc tách import `./claude.ts` | bắt | ✅ 06/09 |
+| TS-RANHGIOI-03 | mã bóc tách gọi `.rpc(` | bắt — bóc tách phải là hàm thuần | ✅ 06/09 |
+| TS-RANHGIOI-04 | mã bóc tách là hàm thuần | bỏ qua | ✅ 06/09 |
+| TS-RANHGIOI-05 | chữ "anthropic" nằm trong CHÚ THÍCH | bỏ qua — chú thích không phải mã | ✅ 06/09 |
+| TS-RANHGIOI-06 | tầng AI `.from("listings").insert(` | bắt | ✅ 06/09 |
+| TS-RANHGIOI-07 | tầng AI gọi RPC chưa khai tên | bắt — thêm RPC phải sửa file luật, tức phải có người đọc lại | ✅ 06/09 |
+| TS-RANHGIOI-08 | tầng AI gọi `log_loi` | bỏ qua — sổ lỗi là bắt buộc (FR-152), không phải dữ liệu nghiệp vụ | ✅ 06/09 |
+| TS-RANHGIOI-09 | file ngoài phạm vi hai luật | bỏ qua | ✅ 06/09 |
+| TS-RANHGIOI-10 | *(chốt lúc chạy, không phải ca giả)* KHÔNG file thật nào rơi vào luật nào | DỪNG, thoát khác 0 — đổi tên thư mục một cái là bộ này soát rỗng mà vẫn báo xanh | ✅ 06/09 (3 file thật) |
 
 ### TS-SEC — hồi quy bảo mật (chạy sau MỌI migration đụng RLS/GRANT)
 SQL Editor, `set role anon` rồi thử phá — anon key là key công khai, repo private không làm nó bí mật. Script: `bot/supabase/migrations/20260826c_soat_bao_mat.sql` khối `-- KIỂM CHỨNG`.

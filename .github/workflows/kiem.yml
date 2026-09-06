@@ -50,7 +50,13 @@ jobs:
       # đổi thành `node run.mjs`, nó sẽ test bản bundle cũ nằm sẵn trong repo.
       # Supabase và model đều là bản giả lập trong `mock-*.mjs`: không đụng DB
       # thật, không tốn tiền model, không cần secret nào trong CI.
-      - name: e2e + hồi quy FR-159/161/164
+      #
+      # `test:bot` kéo theo cả `ranh-gioi.mjs` — kiểm tĩnh ranh giới bóc tách ⟂
+      # AI (mã tiền định không được chạm model/DB; tầng AI không được ghi bảng
+      # nghiệp vụ). Để chung job cố ý: danh sách required status checks ở
+      # docs/11 §11.5 giữ nguyên 6 tên, thêm check mới là phải sửa branch
+      # protection bằng tay và người ta sẽ quên.
+      - name: e2e + hồi quy FR-159/161/164 + ranh giới bóc tách ⟂ AI
         run: bun run test:bot
 
   baomat:

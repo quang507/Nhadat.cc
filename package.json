@@ -7,14 +7,15 @@
     "start": "next start",
     "kieu": "tsc --noEmit -p tsconfig.json",
     "e2e": "bash bot/tests/e2e/chay.sh",
-    "test:bot": "bash bot/tests/e2e/chay.sh && node bot/tests/fr159-bon-vai.mjs && node bot/tests/fr161-go-lan-dau.mjs && node bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs && node bot/tests/ts-sec-anon.tu-kiem.mjs",
+    "test:bot": "bash bot/tests/e2e/chay.sh && node bot/tests/fr159-bon-vai.mjs && node bot/tests/fr161-go-lan-dau.mjs && node bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs && node bot/tests/ts-sec-anon.tu-kiem.mjs && node bot/tests/ranh-gioi.mjs",
     "test:sec": "node bot/tests/ts-sec-anon.mjs",
     "truyvet": "bash scripts/soat-truy-vet.sh",
     "test:saoluu": "node scripts/sao-luu.tu-kiem.mjs",
     "test:phuchoi": "node scripts/soat-phuc-hoi.tu-kiem.mjs",
     "test:rohang": "node scripts/xuat-ro-hang.tu-kiem.mjs",
     "ro-hang": "node scripts/xuat-ro-hang.mjs",
-    "kiem": "bun run kieu && bun run build && bun run test:bot && bun run test:saoluu && bun run test:rohang && bun run truyvet"
+    "kiem": "bun run kieu && bun run build && bun run test:bot && bun run test:saoluu && bun run test:rohang && bun run truyvet",
+    "test:ranhgioi": "node bot/tests/ranh-gioi.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

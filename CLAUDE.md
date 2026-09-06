@@ -173,6 +173,29 @@ trong bridge dùng `ghiLoi("tên chỗ", detail)`; phía web thì `instrumentati
 đã bắt sẵn mọi lỗi server chưa bắt. Thêm `catch` mà quên nối là thêm một chỗ
 hỏng im lặng.
 
+**Chú thích bảng nằm TRONG DB, không nằm trong docs** (`20260906b`). 31/31 bảng
+và 17/17 view đã có `comment on`, cộng 69 chú thích cột; tiền tố `[RỔ HÀNG]`
+`[NGƯỜI & HỘI THOẠI]` `[BOT & HÀNG ĐỢI]` `[CTV]` `[HỆ THỐNG]` để Table Editor
+xếp A→Z mà mắt vẫn gom được theo việc. Thêm bảng hay cột mới thì **thêm
+`comment on` trong cùng migration** — chú thích ở chỗ khác là chú thích sẽ lệch.
+Bản in ra giấy (sơ đồ quan hệ + đường bóc tách) ở `docs/07-srs.md §SRS-3.0`;
+đừng mở `docs/architecture/` song song với `07-srs.md`, hai nguồn sự thật là
+đúng cái bẫy đã đẻ ra OPEN-46. Mở rổ hàng bằng mắt người thì dùng view
+`ro_hang_ban` chứ đừng mở `listings` 56 cột. **View MỚI ở project này mặc định
+LỘ**: `alter default privileges` cấp sẵn toàn quyền cho `anon` và
+`authenticated`, nên `grant select` không siết được gì — phải `revoke all …
+from anon, authenticated` TRƯỚC rồi mới grant.
+
+**Bóc tách và AI là hai tầng, có máy canh** (`bot/tests/ranh-gioi.mjs`, trong
+`bun run test:bot`). Mã bóc tách tiền định không được import SDK Anthropic hay
+`claude.ts` hay gọi RPC — nó phải chạy và kiểm được mà không tốn một đồng. Tầng
+AI không được ghi bảng nghiệp vụ; ba RPC ngoại lệ đã khai tên trong file luật
+(`get_secret`, `log_loi`, `cong_token`), muốn thêm thì phải sửa file đó, tức
+phải có người đọc lại câu "cái này có phải dữ liệu nghiệp vụ không?". Hôm nay
+ranh giới đúng nhưng đúng do may: `regexProfileFallback()` vẫn nằm trong
+`chat-reply/index.ts` cạnh chỗ gọi model, và nhánh NGƯỜI MUA đang chạy ngược —
+model trước, regex chỉ đỡ khi model chết.
+
 **Repo hiện đang PUBLIC** (kiểm 26/08/2026 qua API GitHub: `"private": false`).
 Nghĩa là mọi file đang track đều đọc được công khai, kể cả tài liệu gốc ở thư
 mục gốc: `biz model.docx`, `dự kiến vốn 6 tháng đầu.xlsx`, `chats w B.docx`,
