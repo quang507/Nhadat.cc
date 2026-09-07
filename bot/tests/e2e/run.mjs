@@ -56,7 +56,7 @@ check("V1.1 cờ hoi_vai lưu trên buyer", db().t.buyers[0]?.preferences?.hoi_v
 check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /cần rao/.test(m.body)));
 r = await send({ external_user_id: "la-1", text: "tôi có căn nhà ở phường 4" });
 check("V1.2 trả lời có nhà → mở hồ sơ bán, nhãn chính chủ", db().t.sellers.length === 1 && db().t.sellers[0].seller_type === "ccrb" && r.body.role === "seller", JSON.stringify(r.body));
-check("V1.2 người đó được BÁO nhãn + phí ở bong bóng cuối", /CHÍNH CHỦ/.test(r.body.replies.at(-1)) && /1%/.test(r.body.replies.at(-1)), JSON.stringify(r.body.replies));
+check("V1.2 người đó được BÁO nhãn ở bong bóng cuối, KHÔNG kèm biểu phí (FR-176)", /chính chủ/i.test(r.body.replies.at(-1)) && !/1%/.test(r.body.replies.at(-1)), JSON.stringify(r.body.replies));
 check("V1.2 ADMIN nhận việc: hồ sơ mở từ chat, nhãn chính chủ", db().t.reminders.some((x) => x.kind === "escalation" && /🆕/.test(x.note) && /CHÍNH CHỦ/.test(x.note) && !x.seller_id), JSON.stringify(db().t.reminders));
 check("V1.2 chưa tạo tin (chưa có chi tiết), model được báo là người bán MỚI", db().t.listings.length === 0 && createCalls().some((c) => /VỪA cho biết/.test(c.params.messages[0].content)));
 r = await send({ external_user_id: "la-1", text: "bán nhà P4 giá 5 tỷ 8 50m2" });
@@ -77,7 +77,7 @@ r = await send({ external_user_id: "la-2", text: "tôi muốn bán nhà q5 giá 
 check("V1.5 câu rao đầy đủ ngay tin đầu → không hỏi vai, mở hồ sơ + tạo tin", !r.body.hoi_vai && db().t.sellers.length === 1 && db().t.listings.length === 1 && db().t.sellers[0].seller_type === "ccrb", JSON.stringify(r.body));
 fresh();
 r = await send({ external_user_id: "la-3", text: "em là sale, có căn q5 cần bán 6 tỷ" });
-check("V1.6 người đó được báo nhãn MÔI GIỚI 0,5%; admin nhận việc MÔI GIỚI", /MÔI GIỚI/.test(r.body.replies.at(-1)) && /0,5%/.test(r.body.replies.at(-1)) && db().t.reminders.some((x) => /🆕/.test(x.note) && /MÔI GIỚI/.test(x.note)), JSON.stringify(r.body.replies));
+check("V1.6 người đó được báo nhãn môi giới (không phí — FR-176); admin nhận việc MÔI GIỚI", /môi giới/i.test(r.body.replies.at(-1)) && !/0,5%/.test(r.body.replies.at(-1)) && db().t.reminders.some((x) => /🆕/.test(x.note) && /MÔI GIỚI/.test(x.note)), JSON.stringify(r.body.replies));
 check("V1.6 tự xưng sale → nhãn môi giới", db().t.sellers[0]?.seller_type === "nmg" && db().t.listings.length === 1, JSON.stringify(db().t.sellers));
 fresh();
 r = await send({ external_user_id: "la-4", text: "nhà mình bán chưa em?" });
@@ -220,7 +220,7 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
 v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
-check("TOIUU-07 người bán trả lời câu chờ ≤ 16 truy vấn (v43: 21; +1 trần cá nhân SEC-05)", v.n <= 16 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 18 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn)", v.n <= 18 && v.r.body.role === "seller", `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
 check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
 fresh();
@@ -779,6 +779,61 @@ fresh(seedKho);
   const r2 = await send({ external_user_id: "trung-10", text: "tìm nhà quận 5 tầm 5 tỷ", msg_id: "T-10" });
   check("TRÙNG-10 thử lại sau khi model hỏng → chạy lại được, gọi model lần nữa",
     !r2.body.in_flight && soModel() > truoc, JSON.stringify({ b: r2.body.deduped, model: soModel() }));
+}
+
+// ── FR-176: giọng người bán tự nhiên — lịch sử, xưng hô, câu lệch thì hỏi lại ──
+// Tái hiện đúng lượt rao 15:37 07/09/2026 (#BDS-Q5-0174) mà sếp đọc log chê.
+{
+  fresh(seedKho);
+  const prompt = (c) => c?.params?.messages?.[0]?.content ?? "";
+  db().insert("info_requests", { listing_id: lst1().id, question: "phap_ly", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "Kêu chị nha" });
+  check("G1 'kêu chị nha' khi đang hỏi pháp lý → KHÔNG ghi fact, câu hỏi vẫn treo, không rơi xuống chăm sóc chung",
+    !db().t.listing_facts.some((f) => f.question === "phap_ly") &&
+      db().t.info_requests.some((q) => q.question === "phap_ly" && q.status === "pending") &&
+      r.body.loai_cau === "xung_ho" && r.body.reask === "phap_ly",
+    JSON.stringify(r.body));
+  check("G1 nhớ xưng hô 'chị' vào sellers.xung_ho", db().t.sellers.find((s) => s.zalo_user_id === "z-ccrb")?.xung_ho === "chị", JSON.stringify(db().t.sellers[0]));
+  check("G1 câu lệnh model mang cách gọi 'chị'", createCalls().some((c) => /Gọi chủ nhà là "chị"/.test(prompt(c))), prompt(createCalls().at(-1)));
+  r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng rồi em" });
+  const cuoi = prompt(createCalls().at(-1));
+  check("G2 lượt sau trả lời thật → ghi fact pháp lý + đóng câu hỏi",
+    db().t.listing_facts.some((f) => f.question === "phap_ly" && /sổ hồng/.test(f.answer)) &&
+      db().t.info_requests.every((q) => q.question !== "phap_ly" || q.status === "answered"),
+    JSON.stringify(db().t.info_requests));
+  check("G2 câu lệnh có LỊCH SỬ (thấy 'Kêu chị nha' của lượt trước) và vẫn gọi 'chị'",
+    /CHỦ NHÀ: Kêu chị nha/.test(cuoi) && /Gọi chủ nhà là "chị"/.test(cuoi), cuoi);
+  // Căn 0001 đã đủ thông tin → nhánh "đã lên web": người 3 căn thì vẫn được
+  // nhắc mã căn, và KHÔNG bị bảo "chỉ có một căn".
+  check("G2 chính chủ 3 căn → câu lệnh nhắc mã căn, không nói 'chỉ có một căn'", /#BDS-Q5-0001/.test(cuoi) && !/chỉ có một căn/.test(cuoi), cuoi);
+  db().insert("info_requests", { listing_id: lst1().id, question: "huong", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "16m nha" });
+  check("G3 '16m nha' khi hỏi hướng → KHÔNG ghi hướng, hỏi lại",
+    !db().t.listing_facts.some((f) => f.question === "huong") && r.body.loai_cau === "lech" && r.body.reask === "huong",
+    JSON.stringify(r.body));
+  db().insert("info_requests", { listing_id: lst1().id, question: "dien_tich_dat", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "Ngang 5" });
+  check("G4 'Ngang 5' khi hỏi diện tích → ghi MẶT TIỀN 5m, câu diện tích vẫn treo",
+    db().t.listing_facts.some((f) => f.question === "mat_tien" && f.answer === "5m") &&
+      !db().t.listing_facts.some((f) => f.question === "dien_tich_dat") &&
+      db().t.info_requests.some((q) => q.question === "dien_tich_dat" && q.status === "pending"),
+    JSON.stringify(db().t.listing_facts));
+  r = await send({ external_user_id: "z-ccrb", text: "5x16" });
+  check("G5 '5x16' → khớp diện tích, ghi fact, đóng câu",
+    db().t.listing_facts.some((f) => f.question === "dien_tich_dat" && f.answer === "5x16") &&
+      db().t.info_requests.every((q) => q.question !== "dien_tich_dat" || q.status === "answered"),
+    JSON.stringify(db().t.listing_facts));
+  db().insert("info_requests", { listing_id: lst1().id, question: "nam_xay", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "phí bên em sao?" });
+  check("G6 chủ nhà hỏi ngược khi đang bị hỏi → không ghi, loại 'hoi', câu hỏi vẫn treo",
+    r.body.loai_cau === "hoi" && db().t.info_requests.some((q) => q.question === "nam_xay" && q.status === "pending"),
+    JSON.stringify(r.body));
+
+  fresh();
+  r = await send({ external_user_id: "la-20", text: "bán nhà ở trần bình trọng q5" });
+  check("G7 chủ MỘT căn: câu lệnh nói không nhắc mã tin; bong bóng nhãn KHÔNG kèm phí",
+    createCalls().some((c) => /KHÔNG nhắc mã tin/.test(prompt(c))) && !r.body.replies.some((x) => /1%|0,5%/.test(x)),
+    JSON.stringify({ replies: r.body.replies, p: prompt(createCalls().at(-1)) }));
 }
 
 // ── kết ──

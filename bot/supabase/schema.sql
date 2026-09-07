@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-07 15:26 (giờ VN)
+-- Sinh lúc: 2026-09-07 17:33 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -411,7 +411,8 @@ create table if not exists public.sellers (
   rating_count integer not null default 0,
   created_at timestamp with time zone not null default now(),
   auth_user_id uuid,
-  active_listing_id uuid
+  active_listing_id uuid,
+  xung_ho text
 );
 
 create table if not exists public.viewings (
@@ -634,6 +635,9 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.sellers add constraint sellers_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.sellers add constraint sellers_xung_ho_check CHECK (((xung_ho IS NULL) OR (xung_ho = ANY (ARRAY['anh'::text, 'chị'::text]))));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.sellers add constraint sellers_zalo_user_id_key UNIQUE (zalo_user_id);
@@ -4094,7 +4098,7 @@ create or replace view public.listing_missing_facts as
    FROM listings l
      JOIN required_facts rf ON rf.property_type = COALESCE(l.property_type, 'chua_ro'::property_type)
      LEFT JOIN listing_facts lf ON lf.listing_id = l.id AND lf.question = rf.fact_key
-  WHERE lf.id IS NULL AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL)
+  WHERE lf.id IS NULL AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL)
   ORDER BY l.id, rf.priority, rf.fact_key;
 
 create or replace view public.public_listings as
