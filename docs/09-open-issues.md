@@ -218,6 +218,15 @@ INVOKER trong `public` gọi `net.*`; (b) ticket Supabase xin thu hồi grant m�
 ✅ Chủ dự án chốt 27/08/2026 ("free trước đi, đã có user đâu"): ở lại Supabase Free + Vercel Hobby,
 điều kiện: `scripts/sao-luu.mjs` định kỳ (Free không có backup) + giám sát bridge (ntfy + systemd đã
 có 04/09, VPS chưa bật). **Xem lại khi có giao dịch thật đầu tiên** — Vercel Hobby cấm dùng thương mại.
+**Tiến độ 07/09**: bản sao đầu tiên đã tồn tại (31/31 bảng, `trang_thai: "day_du"`, để trên OneDrive
+công ty ở thư mục hạn chế quyền) — suốt 27/08 → 06/09 điều kiện này chỉ nằm trên giấy, script chưa
+từng chạy. Bridge cũng đã sống lại (nhịp `bot_health` 07/09). Hai chỗ **chưa đạt điều kiện**: (a)
+"định kỳ" vẫn là chạy tay, chưa có Task Scheduler nào — chạy được một lần rồi quên là hình thường
+gặp nhất; (b) bot chạy trên máy cá nhân nên tối tắt máy là tắt bot, VPS vẫn chưa mua. Chủ dự án chốt
+07/09: **chạy giờ hành chính trước, mua VPS sau**. Kèm ràng buộc đã đo: bridge phải tắt HẲN ban đêm,
+đừng để chạy dở — tin vào sổ mà không gửi được thì hết 8 lượt trong ~2 giờ là `dead` vĩnh viễn
+(`claim_inbound`, `v_max = 8`, lùi dần 30s→1h), còn tắt hẳn thì tin nằm lại bên Zalo, sáng bật lên
+đọc tiếp, khách chỉ bị trả lời muộn chứ không mất.
 
 ### OPEN-26 · Ngưỡng hạng Đồng/Bạc/Vàng
 **Vấn đề**: FR-155 chạy với ngưỡng [giả định BA] (NMG: Vàng ≥10 tin và chốt ≥5%, Bạc ≥5 tin hoặc ≥1
@@ -376,14 +385,23 @@ bản không khớp; wireframe `05` có 6/14 màn chưa dựng (WF-08, WF-11, WF
 **Phương án**: (a) code làm gốc, sinh lại `tokens.json` từ `globals.css`, sửa `06`; (b) sửa code theo `06`.
 **Khuyến nghị BA**: (a); wireframe chưa dựng gắn nhãn theo OPEN-43. **Chờ**: chủ dự án.
 
-### OPEN-46 · 44 migration đầu không còn file, chỉ sống trong DB
-**Vấn đề** (soát 05/09/2026): DB đã áp 103 migration, repo có 62 file. 44 migration
-21/08 → 27/08 áp thẳng qua MCP mà không ai lưu file — toàn bộ schema lõi (30 bảng, RLS,
-projects, conversations, reminders, CTV, drip) chỉ tồn tại trong project đang chạy. Nội
-dung từng migration đó **mất vĩnh viễn**; không dựng lại được lịch sử.
+### OPEN-46 · 41 migration đầu không còn file, chỉ sống trong DB
+**Vấn đề** (đo lại 07/09/2026): DB đã áp **114** migration, `main` có **72** file →
+**41 migration** áp thẳng qua MCP mà không ai lưu file, gần hết là khối 21/08 → 27/08
+dựng schema lõi (30 bảng, RLS, projects, conversations, reminders, CTV, drip) — chỉ tồn
+tại trong project đang chạy. Nội dung từng migration đó **mất vĩnh viễn**; không dựng lại
+được lịch sử. *(Bản soát 05/09 ghi "103 áp / 62 file / 44 mất"; con số 41 ở đây là hiệu
+đếm thật giữa hai bên, tính cả file `20260907a` đang chờ ở PR #35.)*
 **Đã giảm nhẹ 05/09**: `xuat_schema()` (`20260905a`) sinh DDL đầy đủ, `sao-luu.mjs` ghi
 ra `bot/supabase/schema.sql` — repo dựng lại được TRẠNG THÁI HIỆN TẠI, dù không dựng lại
-được từng bước. `soat-migration.mjs` chặn không cho trôi thêm.
+được từng bước. `soat-migration.mjs` chặn không cho trôi thêm. **File `schema.sql` thật
+sự vào repo lần đầu 07/09** (PR #35, 5112 dòng) — trước đó lời hứa "repo một mình cũng
+dựng lại được" chưa thành sự thật vì file chưa từng được commit.
+**Suýt tái phạm 07/09**: `20260907a_sort_order_la_so_thu_tu` áp lên production xong, file
+nằm trên một nhánh đã đẩy remote **mà không ai mở PR** — đúng hình lỗi cũ, chỉ khác là
+bắt sau vài giờ thay vì hai tuần. Luật rút ra, đã ghi vào `CLAUDE.md §6`: **áp migration
+xong mà chưa mở PR cho file của nó thì việc chưa xong**; đẩy nhánh lên không phải là đưa
+file về repo.
 **Phương án**: (a) sống với ảnh chụp, mọi migration mới bắt buộc có file (đang làm);
 (b) viết lại 44 migration từ schema hiện tại thành một `00000_baseline.sql` — tốn công,
 và bản viết lại vẫn không phải bản đã chạy thật.
@@ -397,9 +415,18 @@ bảng chưa từng vào bản sao nào: `app_config`, `curated_lists`, `inbound
 trong Storage còn nguyên mà không ai biết ảnh của tin nào.
 **Đã vá 05/09**: thêm đủ 30 bảng; `liet_ke_bang()` (`20260905b`) cho script tự hỏi DB mỗi
 lần chạy, thiếu bảng là DỪNG với mã thoát khác 0 thay vì bỏ sót im lặng.
-**Còn treo**: Storage (bucket `listing-public`) vẫn CHƯA được sao lưu — `sao-luu.mjs`
-chỉ kéo bảng. Hôm nay 0 file nên chưa đau; chạy `up-anh.mjs` xong là phải có lối sao lưu
-file. **Chờ**: chủ dự án chốt nơi cất (ổ ngoài / cloud riêng).
+**Còn treo — và từ 07/09 đã thành ĐAU THẬT**: Storage (bucket `listing-public`) vẫn CHƯA
+được sao lưu, `sao-luu.mjs` chỉ kéo bảng. Câu cũ ở đây viết "hôm nay 0 file nên chưa đau;
+chạy `up-anh.mjs` xong là phải có lối sao lưu file" — `up-anh.mjs` đã chạy 07/09, bucket
+giờ có **1005 file / 148 MB**, nên điều kiện đó đã tới. Mất bucket lúc này thì DB còn đủ
+`listing_media` mà 171 tin không còn một tấm ảnh nào; dựng lại được chỉ vì `masterDB/`
+trên máy local vẫn còn — tức lưới an toàn hiện nay là **một ổ đĩa cá nhân**, không phải
+một quy trình. **Chờ**: chủ dự án chốt nơi cất (ổ ngoài / cloud riêng).
+**Bẫy thứ tự, gặp ngay lần đầu**: bản sao 07/09 chạy lúc 09:29, `up-anh.mjs` chạy sau —
+nên `listing_media.json` trong bản sao đó chỉ 1 KB trong khi bảng thật có 1005 dòng.
+Thư mục trông đủ 31 file, `trang_thai: "day_du"`, mà đúng cái cột nối ảnh ↔ tin thì rỗng.
+Luật: **đổi dữ liệu lớn xong phải sao lưu lại**, và đọc SỐ DÒNG trong `manifest.json`
+chứ đừng nhìn thư mục thấy đủ file rồi yên tâm.
 
 ---
 

@@ -163,8 +163,12 @@ Ba chỗ hay hiểu nhầm, nói thẳng ở đây:
 - **`media` và `listing_media` là hai đời khác nhau.** `media` (1005 dòng) trỏ
   file NGOÀI Supabase — đường dẫn dựng theo `listings.legacy_sst`, tức ảnh nằm
   trong kho ảnh gốc trên máy local, không nằm trong Storage. `listing_media`
-  (FR-165) mới là ảnh trong Storage, neo `listings.id`. Hệ quả đang thấy:
-  `storage.objects` = 0 nên web phục vụ ảnh giữ chỗ cho mọi tin.
+  (FR-165) mới là ảnh trong Storage, neo `listings.id`. **Từ 07/09/2026 lối mới
+  đã có dữ liệu thật**: `listing_media` 1005 dòng, `listing_photos_v` 945,
+  **171/173 tin có ảnh** (hai tin `BDS-Q5-0113`/`BDS-Q5-0124` trống vì thư mục
+  nguồn rỗng). Trước hôm đó `storage.objects` = 0 và web phục vụ ảnh giữ chỗ cho
+  mọi tin — mốc này để lần sau thấy web vỡ ảnh thì biết soi `listing_media`
+  trước. `media` giữ nguyên làm sổ đối chiếu, chưa xoá.
 
 **Đường bóc tách — hai nhánh chạy NGƯỢC nhau.** Đây là hình trạng thật, không
 phải hình mong muốn:

@@ -383,12 +383,12 @@ hơn thực tế. Không nguy hiểm ngay, nhưng số ở `/admin` không tin �
 | # | Điều kiện | Trạng thái |
 |---|---|---|
 | 1 | Schema không đủ tách property_type/spec | **KHÔNG chạm** — 23 cột spec đã có, `required_facts` đã tách 7 loại |
-| 2 | Migration có nguy cơ mất dữ liệu | **CHẠM** — chưa có bản sao nào (`sao-luu.mjs` chưa từng chạy, `schema.sql` chưa có) |
+| 2 | Migration có nguy cơ mất dữ liệu | **ĐÃ GỠ 07/09** — bản sao đầu tiên đã có (31/31 bảng, `day_du`, OneDrive thư mục hạn chế) và `schema.sql` đã sinh (PR #35). Còn một chốt: **chưa ai phục hồi thử bản sao đó**, và bản 07/09 chạy trước `up-anh.mjs` nên `listing_media` trong đó rỗng — sao lưu lại rồi hãy đụng schema |
 | 3 | Không chắc field/function có đang dùng | **CHẠM** — DDL enum `listing_deal`/`property_type` nằm trong 41 migration đã mất (OPEN-46) |
-| 4 | Test fail | Không — 315 ca offline xanh, CI 6/6 |
+| 4 | Test fail | Không — 324 ca offline xanh, CI 6/6 |
 | 5 | Taxonomy | **CHẠM** — 22 dòng `property_type` nghi sai, `guess_property_type` sai 4/5 |
 
-**→ Chưa được sang Phase 8 (migration) và Phase 11 (implementation).**
+**→ Vẫn chưa được sang Phase 8 (migration) và Phase 11 (implementation)** — điều kiện 3 và 5 còn nguyên: DDL enum vẫn chỉ sống trong DB đang chạy, và 22 dòng `property_type` vẫn nghi sai. Gỡ được điều kiện 2 mới là gỡ một trong ba.
 
 ---
 
