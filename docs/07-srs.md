@@ -211,7 +211,9 @@ ra tỷ, nhãn tiếng Việt, cột `canh_bao` chỉ đích danh trường nào
 Editor / Schema Visualizer không lẫn 31 bảng + 17 view ruột bot. Hai view:
 `so.ro_hang` — 9 cột đầu đúng thứ tự sheet Excel gốc Q5 (trong `masterDB/`) (stt · bán
 hay thuê · vị trí · diện tích · giá · mô tả · SĐT · người bán), cột thêm xếp
-sau, cả bán lẫn cho thuê; `so.nguoi_ban` — mỗi người bán một dòng, đếm tin.
+sau, cả bán lẫn cho thuê; `so.nguoi_ban` — mỗi người bán một dòng, đếm tin;
+`so.hoi_thoai` (`20260907g`) — log chat đọc được: lúc · ai · nội dung · phía bán/mua,
+lọc theo `hoi_thoai` để đọc trọn một cuộc (nguồn `messages`, không SĐT).
 PostgREST không phơi schema này, `anon`/`authenticated` bị revoke,
 `security_invoker = on`. Khác Excel: cột SĐT là SĐT **người bán đã ký** (60/173
 tin), DB không giữ SĐT theo tin (FR-104). `xuat_schema()` chỉ quét `public` nên

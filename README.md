@@ -19,7 +19,7 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 | 6 | [UI Design](docs/06-ui-design.md) | Design system + tone giọng chat |
 | 7 | [SRS](docs/07-srs.md) | Kiến trúc, data model, API, 13 tiêu chí nghiệm thu |
 | 8 | [Traceability](docs/08-traceability.md) | Ma trận truy vết BR→FR→UF→WF→SRS→AC |
-| 9 | [Open Issues](docs/09-open-issues.md) | 49 vấn đề — 28 đã chốt hoặc đã đóng (dọn 07/09: 13 mục hướng nhadat.cc 2024 không còn hợp AOND), 21 còn chờ chủ dự án (OPEN-26/27/28 chốt một phần) |
+| 9 | [Open Issues](docs/09-open-issues.md) | 49 vấn đề — 31 đã chốt hoặc đã đóng (dọn 07/09: 13 mục hướng nhadat.cc 2024 không còn hợp AOND, chốt thêm 04/05/12), 18 còn chờ chủ dự án (OPEN-26/27/28 chốt một phần) |
 | 10 | [Kế hoạch kiểm thử](docs/10-ke-hoach-kiem-thu.md) | 4 tầng kiểm thử, bộ test chạy tay kèm kết quả mới nhất |
 | 11 | [Quy trình BA & tester](docs/11-quy-trinh.md) | Hai vòng làm việc, ba cổng, định nghĩa XONG |
 
