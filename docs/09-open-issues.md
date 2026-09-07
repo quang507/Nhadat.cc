@@ -421,7 +421,13 @@ chạy `up-anh.mjs` xong là phải có lối sao lưu file" — `up-anh.mjs` đ
 giờ có **1005 file / 148 MB**, nên điều kiện đó đã tới. Mất bucket lúc này thì DB còn đủ
 `listing_media` mà 171 tin không còn một tấm ảnh nào; dựng lại được chỉ vì `masterDB/`
 trên máy local vẫn còn — tức lưới an toàn hiện nay là **một ổ đĩa cá nhân**, không phải
-một quy trình. **Chờ**: chủ dự án chốt nơi cất (ổ ngoài / cloud riêng).
+một quy trình. **ĐÃ CHỐT 07/09/2026**: chủ dự án chọn cất bản gốc lên chính Supabase —
+bucket **`masterdb-raw`** (`20260907b`), riêng tư tuyệt đối, trần 50 MB/file, KHÔNG policy nào
+cho `anon` lẫn `authenticated` nên chỉ `service_role` vào được. Khác `listing-public` ở chỗ:
+`listing-public` là ảnh ĐÃ nén để phục vụ web, còn `masterdb-raw` là bản GỐC chưa đụng vào,
+không phục vụ ai. **Còn treo**: bucket mới dựng, CHƯA có file nào trong đó — dựng cái tủ không
+phải là cất đồ vào tủ. Chừng nào chưa đẩy `masterDB/` lên thì lưới an toàn vẫn là ổ đĩa cá nhân
+y như cũ.
 **Bẫy thứ tự, gặp ngay lần đầu**: bản sao 07/09 chạy lúc 09:29, `up-anh.mjs` chạy sau —
 nên `listing_media.json` trong bản sao đó chỉ 1 KB trong khi bảng thật có 1005 dòng.
 Thư mục trông đủ 31 file, `trang_thai: "day_du"`, mà đúng cái cột nối ảnh ↔ tin thì rỗng.

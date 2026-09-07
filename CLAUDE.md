@@ -217,6 +217,32 @@ trong bridge dùng `ghiLoi("tên chỗ", detail)`; phía web thì `instrumentati
 đã bắt sẵn mọi lỗi server chưa bắt. Thêm `catch` mà quên nối là thêm một chỗ
 hỏng im lặng.
 
+**Bốn bucket Storage, đừng lẫn** (`masterdb-raw` thêm 07/09, `20260907b`):
+
+| Bucket | Chứa gì | Ai vào được |
+|---|---|---|
+| `listing-public` | ảnh ĐÃ nén (sharp ≤2500px q80) phục vụ web — 1005 file / 148 MB | **công khai** |
+| `listing-private` | sổ đỏ, giấy tờ — link ký sống 15 phút | policy riêng (NFR-06) |
+| **`masterdb-raw`** | **bản GỐC masterDB, chưa đụng vào, KHÔNG phục vụ ai** | **chỉ `service_role`** |
+| `listing-photos` | lối cũ FR-148 đã bỏ — đã bịt bằng trần 1 byte + mime không tồn tại | (đã khoá) |
+
+`masterdb-raw` **cố ý không có policy nào** cho `anon` lẫn `authenticated`: RLS trên
+`storage.objects` đang bật nên không policy = không ai vào, trừ `service_role`. Đó
+là chủ đích, không phải quên — bản gốc mang địa chỉ nhà dân (§5). **Đừng trỏ web
+vào bucket này**, nó là tủ hồ sơ chứ không phải CDN. Nó sinh ra để trả lời OPEN-47:
+bucket `listing-public` không nằm trong bản sao nào, dựng lại được chỉ vì `masterDB/`
+còn trên một ổ đĩa cá nhân. **Nhưng dựng cái tủ không phải là cất đồ vào tủ** — chừng
+nào chưa đẩy `masterDB/` lên thì lưới an toàn vẫn y như cũ.
+
+**Dữ liệu hội thoại đã dọn sạch 07/09.** Xoá 286 dòng bã kiểm thử: `messages` 69,
+`reminders` 192, `ctv_daily_reports` 15, `conversations` 3 (hai dòng
+`channel='zalo_personal_test'`), `buyers` 3 (một dòng `zalo_user_id='e2e-sweep-user'`),
+`inbound_ledger`/`inbound_events`/`property_events`. **Giữ nguyên** `listings` 173,
+`listing_media` 1005, `projects` 1, `ctvs` 2 (cấu hình FR-173), và **`sellers` 3 —
+"Trai/Ngai/Lai" tạo 21/08 đang sở hữu 60 tin, là NMG THẬT chứ không phải test**;
+khoá `listings_seller_id_fkey` là `NO ACTION` nên có xoá cũng bị chặn. Mốc sao Bắc
+Đẩu nay đếm từ số 0 thật (`docs/10 §10.9`), không còn lẫn lượt thử của nhóm làm.
+
 **Chú thích bảng nằm TRONG DB, không nằm trong docs** (`20260906b`). 31/31 bảng
 và 17/17 view đã có `comment on`, cộng 69 chú thích cột; tiền tố `[RỔ HÀNG]`
 `[NGƯỜI & HỘI THOẠI]` `[BOT & HÀNG ĐỢI]` `[CTV]` `[HỆ THỐNG]` để Table Editor
