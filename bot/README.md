@@ -101,7 +101,7 @@ hàng nên cron luôn báo `succeeded` kể cả khi function trả 500. Kết q
 
 - **Sửa "não" không cần deploy (FR-138)**: bảng `bot_prompts` (key/content) —
   `tone_rules`, `human_chat_rules`, `fee_rules`, `seller_script_rules`,
-  `slang_notes`, `buyer_fewshot`, `agree_rules`, `rate_ctv_rubric`. Sửa ở Table
+  `seller_fewshot` (FR-178), `slang_notes`, `buyer_fewshot`, `agree_rules`, `rate_ctv_rubric`. Sửa ở Table
   Editor là bot đổi trong vòng một phút (nhớ tạm 60 s). Nội dung phải khớp
   `_shared/prompts.ts` — đổi một bên thì đồng bộ bên kia bằng script, đừng gõ tay.
 - **Secret trong Vault** (đọc qua RPC `get_secret`, chỉ `service_role`):

@@ -23,7 +23,7 @@ import {
   BUYER_PROFILE_FIELDS,
   FACT_LABELS,
   HUMAN_CHAT_RULES,
-  SELLER_SCRIPT_RULES,
+  SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau,
   SLANG_NOTES,
   TONE_RULES,
 } from "../_shared/prompts.ts";
@@ -774,7 +774,9 @@ Deno.serve(async (req) => {
   // TONE+SELLER_SCRIPT còn r3 thêm FEES → hai ô nhớ tạm khác nhau cho một
   // nhánh vốn thưa lượt, gần như luôn trượt và mỗi lần trượt trả 1,25 giá.
   // 170 chữ-máy FEES thừa ở r1/r2 rẻ hơn hẳn một ô nhớ tạm riêng.
-  const SELLER_SYSTEM = TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + FEES;
+  // FR-178: few-shot người bán (giọng Aioinhadat + kịch bản sếp) đi cùng luật.
+  const SELLER_FEW = P.seller_fewshot ?? SELLER_FEWSHOT;
+  const SELLER_SYSTEM = TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + SELLER_FEW + "\n\n" + FEES;
 
   // ─── FR-173 d: NGƯỜI NỘI BỘ (CTV/admin) nhắn "#mã tin: câu trả lời" ──────────
   // Câu khách hỏi đi về CTV (quyết định 03/09/2026); CTV hỏi chủ xong nhắn lại
@@ -1485,7 +1487,7 @@ Deno.serve(async (req) => {
       const fact = (k: string) => (facts ?? []).find((f) => f.question === k)?.answer ?? null;
       const specs = thongSoNgan(l as SpecRow).replace(/^ · /, "");
       const dong: string[] = [];
-      dong.push(`📋 BẢN NHÁP TIN${nhieuCan && l.code ? ` #${l.code}` : ""} — điểm đầy đủ ${d.diem}/100`);
+      dong.push(`📋 BẢN NHÁP TIN — điểm đầy đủ ${d.diem}/100`);
       dong.push(`🏠 ${LOAI_VI[l.property_type ?? ""] ?? "Nhà"} ${l.deal === "cho_thue" ? "cho thuê" : "bán"} ${[l.location_raw, l.ward, l.district].filter(Boolean).join(", ")}`);
       const dt2 = [
         l.area_m2 ? `${l.area_m2}m2` : null,
@@ -1498,7 +1500,8 @@ Deno.serve(async (req) => {
       const tn = fact("tiem_nang") ?? goiYTiemNang(l as SpecRow & { property_type?: string | null; bedrooms?: number | null });
       if (tn) dong.push(`💡 Tiềm năng: ${tn}`);
       if (l.price_raw) dong.push(`💰 ${l.price_raw}`);
-      dong.push(`👉 Khách quan tâm nhắn Zalo${l.code ? ` #${l.code}` : ""} để hẹn xem nhà`);
+      // FR-178: không đọc mã tin cho khách — mã chỉ ở web, CTV, admin.
+      dong.push(`👉 Khách quan tâm nhắn Zalo cho em để hẹn xem nhà`);
       const thieu = [...(d.thieu ?? []), ...(d.co_anh ? [] : ["ảnh sổ, mặt tiền, hẻm"])];
       if (thieu.length) dong.push(`Thêm ${thieu.slice(0, 2).join(" và ")} là tin mạnh hơn nữa ạ.`);
       dong.push(lai
@@ -1633,7 +1636,7 @@ Deno.serve(async (req) => {
         const promptLai =
           `${boiCanh}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${text}". ${viSao}\n` +
           `Viết MỘT tin ngắn (15–35 từ) như người thật: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
-          `Không hỏi gì khác, không xin lỗi dài, không nhắc mã tin${nhieuCan ? " trừ khi cần phân biệt căn" : ""}.`;
+          `Không hỏi gì khác, không xin lỗi dài, KHÔNG nhắc mã tin${nhieuCan ? " (nhiều căn thì gọi bằng địa chỉ)" : ""}.`;
         let hoiLai: string | null = null;
         if (anthropicS) {
           try {
@@ -1680,7 +1683,7 @@ Deno.serve(async (req) => {
           .eq("id", pendingReq.listing_id).maybeSingle();
         const len = !!lstOk && lstOk.status !== "cho_thong_tin";
         const cau = len
-          ? `Dạ em cảm ơn ${cachGoi}! Tin${nhieuCan && lstOk?.code ? ` #${lstOk.code}` : ""} đã lên web nhadat.cc rồi ạ. Em sẽ rao tích cực, có khách quan tâm là em báo ${cachGoi} liền.`
+          ? `Dạ em cảm ơn ${cachGoi}! Tin nhà mình đã lên web nhadat.cc rồi ạ. Em sẽ rao tích cực, có khách quan tâm là em báo ${cachGoi} liền.`
           : `Dạ em ghi nhận rồi ạ. Tin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm ${cachGoi} vài thông tin nữa nha.`;
         return await traLoiSeller([cau], { duyet: true, listing_status: lstOk?.status ?? null });
       }
@@ -1732,11 +1735,10 @@ Deno.serve(async (req) => {
       // câu chữ không neo thì vẫn lệch, chỉ là lệch ở đầu bên kia.
       // FR-176: neo mã căn CHỈ khi người này rao nhiều căn (FR-157 c sinh ra
       // cho ca đó). Một căn mà tin nào cũng "#BDS-Q5-0174" là giọng máy.
+      // FR-178: neo bằng ĐỊA CHỈ, không đọc mã tin cho khách (mã chỉ ở web/CTV/admin).
       const neo = nhieuCan
-        ? [
-          lstNow?.code ? `#${lstNow.code}` : null,
-          pendingReq.listings?.location_raw?.split(",")[0]?.trim() || null,
-        ].filter(Boolean).join(" ở ")
+        ? (pendingReq.listings?.location_raw?.split(",")[0]?.trim() ||
+          pendingReq.listings?.ward || "")
         : "";
       const phiMotCau = sellerRow.seller_type === "nmg"
         ? "phí chỉ thu khi giao dịch thành công, 0,5% giá chốt"
@@ -1744,14 +1746,14 @@ Deno.serve(async (req) => {
 
       const prompt = nextKey
         ? `${boiCanh}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n` +
-          `Viết MỘT tin ngắn (20–40 từ) như người thật nhắn Zalo: nhắc lại chi tiết vừa nghe kèm MỘT câu khích lệ có nghĩa gắn với khách mua (chỉ khi có gì đáng nói thật, không khen suông) — rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
-          (neo
-            ? `Người này rao nhiều căn: nhắc rõ đang hỏi căn ${neo}. `
+          `Viết MỘT tin dưới 30 từ như người thật nhắn Zalo: nhắc lại chi tiết vừa nghe kèm MỘT câu khích lệ có nghĩa gắn với khách mua (chỉ khi có gì đáng nói thật, không khen suông) — rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey} (câu gợi ý: "${cauHoiMau(nextKey, cachGoi)}", diễn đạt lại cho hợp mạch). ` +
+          (nhieuCan
+            ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
             : `Người này chỉ có một căn: KHÔNG nhắc mã tin. `) +
           `Lý do "vì khách hỏi" chỉ dùng nếu 3 tin gần nhất của em trong lịch sử chưa dùng. Không hỏi gì khác.`
         : published
-        ? `${boiCanh}Chủ nhà vừa trả lời: "${text}". Tin${nhieuCan && lstNow?.code ? ` #${lstNow.code}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB nhadat.cc. ` +
-          `Viết MỘT tin ngắn (20–40 từ): cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG hỏi thêm thông tin nào nữa.`
+        ? `${boiCanh}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB nhadat.cc. ` +
+          `Viết MỘT tin dưới 30 từ: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
         : thieuDiem.length
         ? `${boiCanh}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu: ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn (20–40 từ): ghi nhận, rồi hỏi ĐÚNG MỘT thứ trong danh sách thiếu đó. Không hỏi gì khác.`
         : `${boiCanh}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
@@ -1776,12 +1778,13 @@ Deno.serve(async (req) => {
         }
       }
       if (!sellerReply) {
+        // FR-178: câu mẫu cũng phải là câu người nói, không đọc tên trường.
         sellerReply = nextKey
-          ? `Dạ em ghi nhận rồi ạ. ${CachGoi} cho em xin thêm ${FACT_LABELS[nextKey] ?? nextKey}${neo ? ` của căn ${neo}` : ""} nha?`
+          ? `Dạ em ghi rồi ạ. ${neo ? `Căn ${neo} nha, ` : ""}${cauHoiMau(nextKey, cachGoi)}`
           : thieuDiem.length
-          ? `Dạ em ghi nhận rồi ạ. Để tin đủ điều kiện đăng, ${cachGoi} cho em xin thêm ${thieuDiem[0]} nha?`
+          ? `Dạ em ghi rồi ạ. Để tin đủ điều kiện đăng, ${cachGoi} cho em hỏi thêm ${thieuDiem[0]} nha?`
           : published
-          ? `Dạ em cảm ơn ${cachGoi}! Tin ${nhieuCan && lstNow?.code ? `#${lstNow.code} ` : ""}đã đủ thông tin và lên web rồi ạ, có khách quan tâm là em báo liền.`
+          ? `Dạ em cảm ơn ${cachGoi}! Tin ${neo ? `căn ${neo} ` : "nhà mình "}đã đủ thông tin và lên web rồi ạ, có khách quan tâm là em báo liền.`
           : `Dạ em cảm ơn ${cachGoi}, tin rao giờ đã đầy đủ thông tin. Có khách quan tâm là em báo ${cachGoi} ngay ạ.`;
       }
 
@@ -1910,10 +1913,10 @@ Deno.serve(async (req) => {
               messages: [{
                 role: "user",
                 content:
-                  `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin${nhieuCan ? ` #${newLst.code}` : ""}. ` +
-                  `Viết MỘT tin ngắn (25–40 từ) như người thật: nhận câu rao (nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi) + xác nhận lại địa điểm nghe được` +
+                  `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ` +
+                  `Viết MỘT tin dưới 30 từ như người thật: nhận câu rao (nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi) + xác nhận lại địa điểm nghe được` +
                   (firstKey
-                    ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey}. Không cần nêu lý do, KHÔNG nhắc phí, KHÔNG nhắc mã tin. Không hỏi gì khác.`
+                    ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey} (câu gợi ý: "${cauHoiMau(firstKey, cachGoi)}"). Không cần nêu lý do, KHÔNG nhắc phí, KHÔNG nhắc mã tin. Không hỏi gì khác.`
                     : ` và báo sẽ đăng lên web ngay.`),
               }],
             });
@@ -1924,10 +1927,8 @@ Deno.serve(async (req) => {
           }
         }
         if (!raoReply) {
-          raoReply = `Dạ em nhận tin rao rồi ạ${nhieuCan ? `, em tạo tin #${newLst.code}` : ""}.` +
-            (firstKey
-              ? ` ${CachGoi} cho em xin thêm ${FACT_LABELS[firstKey] ?? firstKey} để em đăng cho đẹp nha?`
-              : ` Em sẽ đăng lên web ngay ạ.`);
+          raoReply = `Dạ em nhận tin rao rồi ạ.` +
+            (firstKey ? ` ${cauHoiMau(firstKey, cachGoi)}` : ` Em sẽ đăng lên web ngay ạ.`);
         }
         return await traLoiSeller([raoReply], { listing_code: newLst.code });
       }
@@ -1942,7 +1943,7 @@ Deno.serve(async (req) => {
       .eq("seller_id", sellerRow.id)
       .order("created_at", { ascending: false }).limit(5);
     const lstLines = (sellerLst ?? [])
-      .map((l) => `#${l.code} · ${l.location_raw ?? ""} ${l.ward ?? ""} · ${l.price_raw ?? "?"}`)
+      .map((l) => `${l.location_raw ?? "(chưa rõ địa chỉ)"} ${l.ward ?? ""} · ${l.price_raw ?? "?"}`)
       .join("\n");
     // OPEN-30: chăm sóc chung — model hỏng thì ghi nhận bằng câu mẫu.
     let sReply: string | null = null;
