@@ -52,8 +52,20 @@ const MOI_TRANG = 20;
 // Một cột = nhãn + cách lấy giá trị hiển thị + giá trị để sắp xếp. CSV dùng
 // đúng danh sách này nên bảng trên màn hình và file tải về không bao giờ lệch.
 type Cot = { key: string; ten: string; lay: (d: Dong) => string; sap?: (d: Dong) => number | string };
+// Cùng cách trình bày với view `so.ro_hang` (20260907f): vị trí bỏ đuôi
+// ", Quận 5, Hồ Chí Minh" (cả rổ đều Quận 5 — 146/174 tin thừa đuôi này), mô tả
+// gộp xuống dòng thành " · " và bỏ gạch đầu dòng (163/174 câu rao có CRLF).
+// Tin câu rao ghi "Quận 8" vẫn còn chữ "Quận 8" — cố ý để lộ lệch district.
+const DUOI_THANH_PHO = /(,\s*Quận 5)?,\s*(tp\.?|thành phố)?\s*Hồ Chí Minh\.?\s*$/i;
 const viTri = (d: Dong) =>
-  (d.location_raw ?? [d.street, d.ward, d.district].filter(Boolean).join(", ")).replace(/\r?\n/g, " — ");
+  (d.location_raw ?? [d.street, d.ward, d.district].filter(Boolean).join(", "))
+    .trim()
+    .replace(/\r?\n/g, " — ")
+    .replace(DUOI_THANH_PHO, "");
+const moTa = (d: Dong) =>
+  sanitizeDescription(d.description)
+    .replace(/\s*\r?\n\s*[-•+*]?\s*/g, " · ")
+    .replace(/^[-•+*]\s*/, "");
 const soAnh = (d: Dong) => (d.media?.[0]?.count ?? 0) + (d.listing_media?.[0]?.count ?? 0);
 const COT: Cot[] = [
   { key: "stt", ten: "STT", lay: (d) => (d.legacy_sst != null ? String(d.legacy_sst) : ""), sap: (d) => d.legacy_sst ?? 1e9 },
@@ -61,7 +73,7 @@ const COT: Cot[] = [
   { key: "vi_tri", ten: "Vị trí", lay: viTri, sap: viTri },
   { key: "dien_tich", ten: "Diện tích", lay: (d) => formatArea(d.area_m2), sap: (d) => d.area_m2 ?? -1 },
   { key: "gia", ten: "Giá", lay: (d) => formatPrice(d.price_vnd, d.price_raw), sap: (d) => d.price_vnd ?? -1 },
-  { key: "mo_ta", ten: "Mô tả", lay: (d) => sanitizeDescription(d.description).replace(/\r?\n/g, " ") },
+  { key: "mo_ta", ten: "Mô tả", lay: moTa },
   { key: "nguoi_ban", ten: "Người bán", lay: (d) => d.sellers?.name ?? "", sap: (d) => d.sellers?.name ?? "" },
   { key: "sdt", ten: "SĐT người bán", lay: (d) => d.sellers?.phone ?? "", sap: (d) => d.sellers?.phone ?? "" },
   { key: "ma", ten: "Mã tin", lay: (d) => d.code ?? "", sap: (d) => d.code ?? "" },
