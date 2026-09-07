@@ -37,3 +37,6 @@ bot/bridge-zca/.env
 # mất sạch dữ liệu khách. Nguy hơn cả BRIDGE_SECRET.
 scripts/.env
 !scripts/.env.example
+
+# Bản sao lưu DB + rổ hàng (SĐT thật, địa chỉ thật) — nhadat-sao-luu.cmd đổi vào đây, repo đang PUBLIC
+nhadat-backup/

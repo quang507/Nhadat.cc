@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-07 09:00 (giờ VN)
+-- Sinh lúc: 2026-09-07 15:09 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -538,6 +538,9 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.listing_media add constraint listing_media_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.listing_media add constraint listing_media_sort_order_hop_le CHECK (((sort_order IS NULL) OR ((sort_order >= 0) AND (sort_order <= 9999))));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.listing_views add constraint listing_views_pkey PRIMARY KEY (auth_user_id, listing_id);
@@ -5085,6 +5088,7 @@ grant execute on function public.xuat_schema() to service_role;
 insert into storage.buckets (id, name, public) values ('listing-photos', 'listing-photos', 'f') on conflict (id) do nothing;
 insert into storage.buckets (id, name, public) values ('listing-private', 'listing-private', 'f') on conflict (id) do nothing;
 insert into storage.buckets (id, name, public) values ('listing-public', 'listing-public', 't') on conflict (id) do nothing;
+insert into storage.buckets (id, name, public) values ('masterdb-raw', 'masterdb-raw', 'f') on conflict (id) do nothing;
 
 -- ══ Storage policy ══
 drop policy if exists storage_admin_private_all on storage.objects;
