@@ -38,7 +38,7 @@ flowchart LR
 | [06-ui-design.md](06-ui-design.md) | Design system + tone giọng chat | UI, Dev, Content |
 | [07-srs.md](07-srs.md) | Đặc tả kỹ thuật: kiến trúc, DB, API, NFR | Dev, QA, Vendor |
 | [08-traceability.md](08-traceability.md) | Ma trận truy vết | PO, QA |
-| [09-open-issues.md](09-open-issues.md) | 49 vấn đề (14 đã chốt, 2 đã giảm nhẹ 05/09, 33 cần chủ dự án chốt — OPEN-26, OPEN-27 chốt một phần) | Founder, PO |
+| [09-open-issues.md](09-open-issues.md) | 49 vấn đề (28 đã chốt hoặc đã đóng — dọn 07/09, 21 cần chủ dự án chốt) | Founder, PO |
 | [10-ke-hoach-kiem-thu.md](10-ke-hoach-kiem-thu.md) | Kế hoạch kiểm thử 4 tầng (suite TS-*) | QA, Dev, PO |
 | [11-quy-trinh.md](11-quy-trinh.md) | **Quy trình BA và tester** — hai vòng làm việc, ba cổng, máy kiểm gì / người kiểm gì, định nghĩa XONG | Tất cả |
 
@@ -53,7 +53,7 @@ flowchart LR
 
 | Tầng | Độ đầy đủ | Chặn bởi |
 |---|---|---|
-| 00 Định hướng | 95% — tên đã chốt (Aioinhadat, bot Thái), địa bàn đã chốt nửa đầu (Sài Gòn phường mới + Long An); chờ phạm vi loại BĐS, nhà cung cấp model, ngưỡng CTV, địa bàn nửa sau (tên hiển thị, bảng `wards`); 07/09 thêm: bớt kế thừa nhadat.cc, hỏi người bán giống người hơn nữa | OPEN-40, OPEN-41, OPEN-42, OPEN-27, OPEN-48, OPEN-49 |
+| 00 Định hướng | 95% — tên đã chốt (Aioinhadat, bot Thái), địa bàn đã chốt nửa đầu (Sài Gòn phường mới + Long An); chờ phạm vi loại BĐS, nhà cung cấp model, ngưỡng CTV, địa bàn nửa sau (tên hiển thị, bảng `wards`); 07/09 thêm: bớt kế thừa nhadat.cc (OPEN-48); hỏi người bán đã chốt theo kịch bản Gemini → FR-177 | OPEN-40, OPEN-41, OPEN-42, OPEN-27, OPEN-48 |
 | 01 Research | 85% — thiếu số liệu thị trường sơ cấp | OPEN-01 |
 | 02 Requirements | 90% | OPEN-02, OPEN-05 |
 | 03 User Flow | 90% | OPEN-04 |

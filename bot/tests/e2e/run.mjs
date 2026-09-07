@@ -374,7 +374,7 @@ check("V48-99b giá TB nhớ tạm 60 s ở tầng module — hai lượt ≤ M�
 fresh(seedKho); r = await send({ external_user_id: "v48-9b", text: "#BDS-Q5-0001 sao em" });
 check("V48-99c chưa đủ hồ sơ (khu vực + giá) → không tính giá TB, không truy vấn thừa", nGia() === 0 && !/giá TB phường/.test(sysText(parseCalls().pop())));
 
-// ── SEC: hồi quy các lỗ vá 05/09/2026 (docs/PRODUCTION_SECURITY_AUDIT.md) ──
+// ── SEC: hồi quy các lỗ vá 05/09/2026 (soát bảo mật 05/09 → FR-167; file audit đã xoá 07/09) ──
 // Mỗi ca dưới đây tương ứng một finding. Sửa cửa vào chat-reply mà làm hỏng
 // một trong số này nghĩa là đã mở lại đúng cái lỗ vừa đóng.
 

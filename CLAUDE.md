@@ -55,6 +55,7 @@ chỉnh sửa, không "dọn dẹp". Mọi diễn giải phải đi vào `docs/`
 | `dự kiến vốn 6 tháng đầu.xlsx` | `01` (ngân sách, ràng buộc nguồn lực) |
 | `AOND req + chat examples.docx` | `06` §6.8 (kịch bản người bán), `09` OPEN-20/21 (gamification, vai người rao) |
 | `hình samples/` | `05`, `06` (ảnh listing mẫu) |
+| `Kịch bản huấn luyện môi giới (Gemini 07-09-2026).md` | `02` FR-177 (hỏi người bán 1 thông tin/lần + khích lệ, bản nháp tin, điểm 7 tiêu chí), `09` OPEN-49 |
 
 ## 4. Quy ước làm việc
 
