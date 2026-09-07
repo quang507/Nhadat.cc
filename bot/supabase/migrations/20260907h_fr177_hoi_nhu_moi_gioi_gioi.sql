@@ -149,6 +149,8 @@ declare
   d_gia    int := 0;
   d_tn     int := 0;
   d_cta    int := 0;
+  -- `text[] || 'chữ'` bị Postgres đọc là nối HAI MẢNG ("malformed array
+  -- literal") — bắt lúc áp 07/09; phải dùng array_append.
   thieu    text[] := '{}';
   mo_ta    text := public.bo_dau(coalesce(l.description, ''));
 begin
@@ -168,7 +170,7 @@ begin
   d_vi_tri := (case when coalesce(btrim(l.location_raw), '') <> '' then 7 else 0 end)
             + (case when coalesce(btrim(l.ward), '') <> '' then 4 else 0 end)
             + (case when co_hem then 4 else 0 end);
-  if not co_hem then thieu := thieu || 'hẻm rộng mấy mét, xe hơi vào được không'; end if;
+  if not co_hem then thieu := array_append(thieu, 'hẻm rộng mấy mét, xe hơi vào được không'); end if;
 
   -- 2. Thông số diện tích (20): diện tích 12 · ngang/dài 8 (chung cư, phòng
   --    trọ không có mặt tiền nên diện tích là đủ).
@@ -177,9 +179,9 @@ begin
            or coalesce(f->>'dien_tich_dat', f->>'dien_tich', '') ~ '\d\s*[xX×]\s*\d';
   if l.area_m2 is not null then
     d_dt := 12 + (case when co_mt then 8 else 0 end);
-    if not co_mt then thieu := thieu || 'chiều ngang mặt tiền'; end if;
+    if not co_mt then thieu := array_append(thieu, 'chiều ngang mặt tiền'); end if;
   else
-    thieu := thieu || 'diện tích';
+    thieu := array_append(thieu, 'diện tích');
   end if;
 
   -- 3. Kết cấu & công năng (15): tầng 8 · phòng ngủ 7. Loại không có tầng/
@@ -187,29 +189,29 @@ begin
   --    thất; mặt bằng = tầng hoặc ngành hàng; nhà cấp 4 = hiện trạng thay tầng.
   if l.property_type = 'dat' then
     d_kc := case when (f ? 'tho_cu') or l.planning_status is not null then 15 else 0 end;
-    if d_kc = 0 then thieu := thieu || 'thổ cư bao nhiêu, quy hoạch ra sao'; end if;
+    if d_kc = 0 then thieu := array_append(thieu, 'thổ cư bao nhiêu, quy hoạch ra sao'); end if;
   elsif l.property_type = 'phong_tro' then
     d_kc := case when l.furnishing is not null or (f ? 'noi_that') then 15 else 0 end;
-    if d_kc = 0 then thieu := thieu || 'nội thất có gì'; end if;
+    if d_kc = 0 then thieu := array_append(thieu, 'nội thất có gì'); end if;
   elsif l.property_type = 'mat_bang' then
     d_kc := case when l.floors is not null or (f ? 'ket_cau') or (f ? 'nganh_hang_phu_hop') then 15 else 0 end;
-    if d_kc = 0 then thieu := thieu || 'mấy tầng, hợp ngành gì'; end if;
+    if d_kc = 0 then thieu := array_append(thieu, 'mấy tầng, hợp ngành gì'); end if;
   else
     co_kc := l.floors is not null or coalesce(btrim(l.floors_text), '') <> ''
              or (f ? 'ket_cau') or l.floor is not null or (f ? 'tang')
              or (l.property_type = 'nha_cap4' and (f ? 'hien_trang'));
     co_pn := l.bedrooms is not null or (f ? 'so_phong_ngu');
     d_kc := (case when co_kc then 8 else 0 end) + (case when co_pn then 7 else 0 end);
-    if not co_kc then thieu := thieu || 'mấy tầng'; end if;
-    if not co_pn then thieu := thieu || 'mấy phòng ngủ'; end if;
+    if not co_kc then thieu := array_append(thieu, 'mấy tầng'); end if;
+    if not co_pn then thieu := array_append(thieu, 'mấy phòng ngủ'); end if;
   end if;
 
   -- 4. Pháp lý (10). Phòng trọ cho thuê không hỏi sổ.
   if l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro' then d_pl := 10;
-  else thieu := thieu || 'pháp lý (sổ hồng riêng/chung, hoàn công)'; end if;
+  else thieu := array_append(thieu, 'pháp lý (sổ hồng riêng/chung, hoàn công)'); end if;
 
   -- 5. Giá (10).
-  if l.price_vnd is not null then d_gia := 10; else thieu := thieu || 'giá'; end if;
+  if l.price_vnd is not null then d_gia := 10; else thieu := array_append(thieu, 'giá'); end if;
 
   -- 6. Tiềm năng sử dụng (20): chủ/bot đã nêu rõ → 20; suy được từ dữ liệu
   --    (nhà nhiều tầng/phòng, hẻm xe hơi hay mặt tiền, loại hình cho thuê,
@@ -219,8 +221,8 @@ begin
      or l.access_type = 'mat_tien' or coalesce(l.alley_width_m, 0) >= 4
      or l.property_type in ('chung_cu', 'mat_bang', 'phong_tro', 'biet_thu') or (f ? 'san_vuon')
      or mo_ta ~ '(kinh doanh|cho thue|chdv|dau tu|van phong|o ngay|buon ban|mo shop|mo quan)'
-  then d_tn := 10; thieu := thieu || 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)';
-  else thieu := thieu || 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)'; end if;
+  then d_tn := 10; thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)');
+  else thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)'); end if;
 
   -- 7. Lời gọi hành động (10): tin có mã → khách nhắn Zalo #mã (DH-02).
   if l.code is not null then d_cta := 10; end if;
