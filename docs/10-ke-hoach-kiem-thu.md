@@ -790,7 +790,7 @@ côi `listing_facts_touch_status`, enum mồ côi `rating_target`.
 | `05` WF-01…14 | 2 / 6 / 6 | nhãn "Nhã Đạt CC" → Aioinhadat (sửa); còn lại theo OPEN-43/45 |
 | `06` UI | tone 8/8; TONE_RULES #5 mâu thuẫn; DB↔TS lệch 3 khoá | #5 → "một tin một thông tin"; `bot_prompts` = `prompts.ts`; token lệch `06 §6.2` → OPEN-45 |
 | `07` SRS | cron 10/10; RPC service_role đúng trừ `lan_thu_ke`; AC 1 ✅ / 3 ⚠ / 9 ❌; 2.1 còn Zalo SSO/Realtime/Logstash/Slack/SMTP/Fingerprint; `/api/*` 0/7 | DB vá theo SRS (`20260904b`); `/api/search`, `/api/listing/parse` dựng (TS-WEB2); SRS gắn ghi chú trạng thái → OPEN-43 |
-| `00 §0.5` sao Bắc Đẩu | NSM lịch xem 0 · I1 0 tin mới/7 ngày (158 `dang_ban` toàn `import_excel` 21/08) · I2 3/3 (thử) · I3 0/0 · I4 chờ ~21/09 | I5 đo được qua view `nmg_hoat_dong` (`20260904e`): 0/3 NMG hoạt động |
+| `00 §0.5` sao Bắc Đẩu | **Đo lại 07/09 SAU khi dọn bã kiểm thử**: NSM lịch xem 0 · I1 0 tin mới/7 ngày (160 `dang_ban`, 173 tin toàn `import_excel` 21/08, chưa khách nào đăng) · I2 **0/0** · I3 0/0 · I4 chờ ~21/09 | I5 qua view `nmg_hoat_dong` (`20260904e`): 0/3 NMG hoạt động. Con số I2 cũ (3/3) là hội thoại THỬ của chính nhóm làm, đã xoá — mốc sao Bắc Đẩu nay tính từ số 0 thật |
 
 ### 10.8.4 Dựng thêm cùng ngày (theo yêu cầu "dựng mấy thứ có trong tài liệu")
 
