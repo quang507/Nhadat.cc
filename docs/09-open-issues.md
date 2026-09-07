@@ -51,6 +51,8 @@ lý lẽ gốc nằm trong lịch sử git. Ký hiệu: ✅ đã chốt · 🟡 
 | OPEN-43 | 🟡 **CHỐT MỘT PHẦN 04/09** — "dựng hết" đã làm gần hết; còn: FR-16/NFR-08, FR-95, FR-118, FR-160, FR-28, `?ref=`; và nhãn `[deprecated]` cho SRS-4.1/4.2/4.4/4.7 | Thấp | SRS-2/4/5, `10 §10.8` |
 | OPEN-44 | 🟡 **CHỐT MỘT PHẦN 04/09** — SEO nền đã dựng (sitemap, robots, canonical, JSON-LD, 64 tag); còn TOP-100 keyword (OPEN-06) + Google Search Console | Thấp | FR-12, NFR-09, OPEN-06 |
 | OPEN-45 | Design token `06 §6.2`, `design/tokens.json` và `app/globals.css` là ba bản lệch nhau — chọn nguồn sự thật nào? | Thấp | UI-01…, OPEN-07 |
+| OPEN-48 | Sếp muốn **bớt kế thừa nhadat.cc, giống Aioinhadat hơn** (07/09): bỏ mảng nào trong 14 FR chỉ có ở nhadat.cc 2024, giữ mảng nào vì bất biến DH-02 | Cao | DH-01…04, `00 §0.2–0.3`, OPEN-49 |
+| OPEN-49 | **Hỏi người bán giống người hơn nữa** — 6 chỗ bản chạy còn khác kịch bản AOND (câu hỏi có lý do vì lợi ích người rao, nhận xét ảnh trước khi hỏi, điểm uy tín nói ra, câu đóng phiên, nút bấm, thoại); chọn làm gì trước | Cao | FR-176, FR-129, OPEN-20/26, AOND §II, §VI |
 
 ### OPEN-01 · Toán học OKR không khớp
 **Vấn đề**: `biz model.docx §OKRs` — OKR 3 tạo ~1.800 chat/6 tháng, OKR 4 đòi ~90 giao dịch → chuyển
@@ -458,3 +460,82 @@ Ghi lại để lần sau không ai đi "vá" nhầm. Mọi cảnh báo dưới 
 trigger tạo mới ở `20260904c/d/f` nhận EXECUTE mặc định của `public` nên lộ ra
 `/rest/v1/rpc/`; nay chỉ còn `service_role`. Hàm trigger cũ không dính vì
 `create or replace` giữ nguyên quyền đã thu hồi.
+
+### OPEN-48 · Bớt kế thừa nhadat.cc — bỏ gì để giống Aioinhadat hơn
+[nguồn: sếp qua chủ dự án 07/09/2026 — "bớt kế thừa các tính năng của nhadat.cc, làm cho giống
+Aioinhadat hơn"; đối chiếu `AOND req + chat examples.docx` §I–§VII với bảng FR `docs/02`]
+**Nguồn sếp chưa đọc được:** yêu cầu đầy đủ nằm ở Gemini share `z7XT8gqQzGCI` (chủ dự án gửi
+07/09) — môi trường làm việc bị chặn `share.gemini.google`, nên bản dưới chỉ dựa trên SRD AOND
+và câu tóm tắt của chủ dự án. **Cần chép nội dung share đó vào thư mục gốc (tài liệu gốc, chỉ
+đọc) rồi soát lại danh mục A/B/C** trước khi sếp tick.
+
+**Vấn đề.** `00 §0.1` chốt "mặt bán theo AOND, mặt mua + web theo nhadat.cc" (03/09). Sếp nay
+muốn nghiêng hẳn về AOND. Nhưng "giống AOND hơn" không tự nói bỏ cái gì: SRD AOND KHÔNG có
+website, KHÔNG có tài khoản, KHÔNG có trang phụ — chỉ có Zalo + kho + CTV. Nếu cắt đúng theo
+SRD thì cắt cả phễu web, mà DH-02 bất biến 1 ("mọi trang web là phễu về Zalo") và INS-01 vẫn
+đứng. Dưới đây là danh mục **chỉ có ở nhadat.cc 2024, AOND không có** để sếp tick từng dòng;
+BA không tự cắt (quy ước 2).
+
+**A · Có thể bỏ ngay — không đụng DH-02, AOND không có, hoặc đã có đường thay:**
+
+| FR | Là gì | Vì sao bỏ được | Trạng thái |
+|---|---|---|---|
+| FR-90, FR-94 | Mini-site `/raoban` 3 bước + `/quan-ly` xác nhận bản bóc tách | AOND §I: rao trong Zalo, không form; FR-158 đã thay bằng câu rao Zalo sinh mã tin | ✅ đang chạy |
+| FR-124, FR-126, FR-121, FR-95 | Đăng nhập NMG magic-link, tài khoản người mua, tin yêu thích, Zalo SSO | AOND không có tài khoản; người rao sống trong Zalo (`sellers.zalo_user_id`) | ✅/✅/✅/❌ |
+| FR-119, FR-120, FR-122, FR-125 | `/tinh-lai-vay`, `/thong-ke`, `/ban-do`, `/moi-gioi` | Trang phụ SEO, không nằm trong hai luồng Zalo | ✅ |
+| FR-93, FR-16, FR-28, FR-15 | Biến thể câu rao, fingerprint, tiện ích quanh nhà, điều hướng nội bộ | Chưa dựng hoặc một phần — bỏ là bỏ trên giấy | ❌/❌/❌/🟡 |
+| FR-56, FR-65 | Xin đánh giá 3 thời điểm, chấm sao sau xem | AOND §V chỉ có "NMG < 3 sao ngưng hợp tác" — một chỗ, không phải ba | 🟡 |
+| FR-81, FR-57 | Email `[QUESTION]/[VIEWING]` cho admin | AOND §VII: Live Chat Monitor + nhãn; ta đã có Zalo admin (FR-149) + còi ntfy | 🟡 |
+| FR-100 | Danh sách riêng cho một khách (`curated_lists`) | AOND không có; 0 dòng dữ liệu | 🟡 |
+
+**B · Giữ, vì bất biến hoặc vì AOND cũng cần:** phễu web tối thiểu (FR-01/07/10/13/14/17/145 —
+DH-02 #1, INS-01), toàn bộ mặt mua trong Zalo (FR-20…32, 40…47, 50…55, 60…64 — AOND §VII
+bot-to-bot cũng cần một "tổ người mua"), phí BR-05, CTV FR-136/173 (AOND §V "hệ thống điều
+phối CTV"), sổ lỗi/nhịp tim (vận hành, không phải tính năng).
+
+**C · Hỏi lại trước khi đụng:** tầng dự án sơ cấp FR-113…117, FR-132 (AOND không có nhóm này,
+nhưng kho đang giữ dự án Ny'ah Phú Đông và OPEN-21 CĐT còn treo); admin FR-70…80 (AOND có
+Live Chat Monitor — giữ `/admin` nhưng dựng theo nhãn `[AI_HANDLING]/[NEED_HUMAN]` thay bảng
+thống kê kiểu 2024?).
+
+**Phương án.** (a) Bỏ hẳn nhóm A: gỡ route, đánh `[deprecated]` trong `02`, cập nhật `04`
+sitemap + `08`; (b) **Ẩn trước, xoá sau**: gỡ khỏi menu/sitemap/nội dung SEO nhưng giữ code
+một đợt, để đo có ai vào không; (c) giữ nguyên, chỉ đổi copy cho giống AOND.
+**Khuyến nghị BA:** (b) ngay cho A, vì repo và web đang public, trang đã được index — xoá là
+mất link Google đã có; đo 30 ngày rồi (a). Nhóm C hỏi sếp từng dòng. Mọi dòng A bỏ thì
+`00 §0.2` cột "Hôm nay" và `§0.3` đổi theo, `02` đánh `[deprecated → …]` không đánh số lại.
+**Chờ:** sếp tick A và trả lời C. Cho tới lúc đó không gỡ gì (DH-07).
+
+### OPEN-49 · Hỏi người bán giống người hơn nữa — bước sau FR-176
+[nguồn: sếp qua chủ dự án 07/09/2026 — "cách hỏi thêm khách sẽ giống người hơn nữa";
+`AOND req + chat examples.docx` phần II (30 câu) và phần I nhóm 1–2; `06 §6.8`; `prompts.ts`
+`SELLER_SCRIPT_RULES`]
+
+**Vấn đề.** FR-176 (07/09) đã sửa bốn lỗi lộ ở lượt rao #BDS-Q5-0174 (lịch sử, xưng hô, câu
+lệch, thứ tự hỏi). Sếp vẫn muốn "giống người hơn nữa" nhưng chưa chỉ lượt chat nào còn máy.
+Đối chiếu kịch bản 30 câu của AOND với luật đang chạy, còn **sáu chỗ khác nhau**:
+
+| # | AOND làm | Bản chạy hôm nay | Nguồn |
+|---|---|---|---|
+| 1 | Mỗi câu hỏi kèm **lý do có lợi cho NGƯỜI RAO**: "cho em xin địa chỉ để em *kiểm tra giá thị trường khu mình*", "có chỗ đậu ô tô không *để em nhấn mạnh vào bài giới thiệu*" | Lý do duy nhất là "vì khách đang hỏi", đã bị giới hạn 1 lần/3 tin (FR-176 b); các câu còn lại hỏi trần | AOND II câu 1, I §2.1 |
+| 2 | Nhận ảnh thì **nhận xét cái nhìn thấy** rồi mới hỏi ("mặt tiền khang trang ghê", "diện tích công nhận 50m² chuẩn quá") | FR-134 có vision cho ảnh khách gửi; nhánh người bán chưa có luật "nhận xét ảnh trước, hỏi sau" — *cần kiểm log* | AOND I §1.2–1.3 |
+| 3 | **Điểm uy tín nói ra trong chat** sau mỗi lần bổ sung ("nhảy lên 70 điểm", "thêm 2 ảnh là 100 điểm VIP") — đó là lý do tự nhiên để hỏi tiếp | Hạng ẩn khỏi mọi mặt trừ `/admin` (OPEN-26 chốt một phần); bot không có gì để "khen tiến bộ" | AOND II câu 5, 7; §IV |
+| 4 | **Câu đóng phiên** rõ khi đủ dữ liệu: "thông tin nhà mình chuẩn rồi, em chuyển hồ sơ qua tổ người mua/CTV tìm khách" | Tin lên web có một câu báo (FR-176 d) nhưng chưa có câu "xong việc, giờ em đi tìm khách" | AOND I §5.1, II câu 8 |
+| 5 | **Nút bấm** hai lựa chọn cho câu có/không | Bridge Zalo cá nhân không có quick-reply; thay bằng câu hỏi đóng ngắn ("có / không ạ?") | AOND I §2.1–2.4 |
+| 6 | Nhận **tin nhắn thoại** | FR-134 "STT chưa làm" | AOND §I |
+
+Thứ đã giống và KHÔNG làm lại: khen trước hỏi sau, 1 thông tin/lần, ~30 từ, "hình như là",
+xoay tua 1–2 căn/ngày, keep-alive 5 ngày (FR-129/134/144, `06 §6.8`). Thứ AOND có mà docs đã
+chốt KHÔNG theo: xưng tên bot mỗi tin ("T•ai chào anh", "chụp giúp Kh•ai") — một tên Thái,
+chào một lần (OPEN-39).
+
+**Phương án.** (a) Làm #1, #2, #4, #5 bằng luật trong `SELLER_SCRIPT_RULES` + `bot_prompts`
+(FR-138, không đổi schema) và thêm ca e2e; (b) (a) + mở #3: nói điểm trong chat → phải chốt
+OPEN-26 (ngưỡng, quyền lợi) trước, và nghĩa là hạng KHÔNG còn ẩn; (c) #6 thoại — đợt sau
+(ngoài 90 ngày, `00 §0.6`).
+**Khuyến nghị BA:** (a) ngay; đo bằng cách sếp đọc 10 lượt rao thật kế tiếp và chỉ tin còn
+máy, như đã làm với #0174 — đó là tín hiệu rẻ nhất, hơn mọi bảng luật. (b) khi OPEN-26 chốt.
+**Giả định BA:** "giống người hơn" = giống kịch bản AOND phần II hơn. Yêu cầu chi tiết của sếp
+nằm ở Gemini share `z7XT8gqQzGCI` (07/09) — **chưa đọc được** từ môi trường làm việc (proxy chặn
+`share.gemini.google`); cần chép vào tài liệu gốc rồi đối chiếu lại bảng 6 chỗ ở trên.
+**Chờ:** sếp chọn (a)/(b) và cho 2–3 lượt chat mẫu.

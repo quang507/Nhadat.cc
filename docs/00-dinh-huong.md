@@ -1,6 +1,6 @@
 # 00 — Định hướng (BRD hợp nhất Aioinhadat × nhadat.cc)
 
-Phiên bản: **v1.3** · Ngày: **04/09/2026** · Trạng thái: **tên, luồng CTV, địa bàn đã chốt; còn §0.8; nghiệm thu 04/09 ghi vào §0.6–0.7**
+Phiên bản: **v1.4** · Ngày: **07/09/2026** · Trạng thái: **tên, luồng CTV, địa bàn đã chốt; còn §0.8 — thêm OPEN-48/49 (07/09: sếp muốn bớt kế thừa nhadat.cc, hỏi người bán giống người hơn nữa); Figma page 00 vẫn ở v1.3**
 
 > Bộ `docs/` viết từ tài liệu nhadat.cc 2024; từ 25/08/2026 code chạy theo SRD
 > "AI Ơi Nhà Đất" (AOND, `AOND req + chat examples.docx`) ở ngày càng nhiều chỗ.
@@ -175,6 +175,8 @@ dự án 04/09/2026 "dựng hết đi, giữ chân 5 ngày"]. Còn:
 | OPEN-40 | Thông số cho thuê / đất / công nghiệp — làm gì, khi nào | Cho thuê: làm. Đất: chờ OPEN-37. Công nghiệp: không, tới khi có khách hỏi thật |
 | OPEN-41 | Model: giữ Claude/Supabase hay Gemini → local theo AOND §VII | Giữ; lớp gọi model đã gom một chỗ, đổi sau được |
 | OPEN-42 | CTV: hạn trả lời (đang 120') và mốc Vàng ≥90% / Bạc ≥70% / Đồng; hệ quả của hạng | Giữ tới khi có ~30 câu thật rồi định cỡ; chốt hệ quả cùng lúc |
+| **OPEN-48** | Sếp muốn bớt kế thừa nhadat.cc (07/09): trong 14 FR chỉ có ở nhadat.cc 2024 (mini-site rao, tài khoản, trang phụ SEO, đánh giá 3 thời điểm, email admin, danh sách riêng) bỏ dòng nào; tầng dự án và `/admin` giữ hay dựng lại theo Live Chat Monitor | Ẩn trước, xoá sau (web đang public, đã index); giữ phễu web tối thiểu vì DH-02 #1; sếp tick từng dòng nhóm A, trả lời nhóm C |
+| **OPEN-49** | Hỏi người bán giống người hơn nữa: 6 chỗ còn khác kịch bản AOND (lý do vì lợi ích người rao, nhận xét ảnh trước, điểm uy tín nói ra, câu đóng phiên, nút bấm, thoại) | Làm 4 chỗ bằng luật prompt ngay; điểm uy tín nói ra chỉ khi OPEN-26 chốt; thoại đợt sau. Đo bằng sếp đọc 10 lượt rao thật kế tiếp |
 
 **DH-07.** Cho tới khi §0.8 chốt, việc mới đi theo cột phải và tầng dưới ghi
 `[giả định BA]` ở chỗ phụ thuộc.
