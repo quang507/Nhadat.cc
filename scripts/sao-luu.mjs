@@ -29,6 +29,23 @@
 // Thư mục đích nằm NGOÀI repo theo mặc định — bản sao lưu chứa SĐT thật của
 // khách và người bán, repo này thì đang PUBLIC.
 //
+// CHỖ CẤT ĐANG DÙNG (chủ dự án chốt 07/09/2026) — OneDrive công ty, đồng bộ,
+// máy truy cập được 24/24:
+//   "C:\Users\<user>\OneDrive - Nha Dat Co Ltd\Team Mktg - CAG mktg\
+//    003-Content\Nhadat.cc-Aioinhadat\nhadat-backup\<ngày>\"
+// Gọi kèm đường dẫn đó làm tham số; script KHÔNG tự thêm dấu ngày vào tham số
+// mày truyền, nên phải tự đặt tên thư mục con theo ngày, kẻo lần chạy sau đè
+// lần trước và chỉ còn đúng một bản.
+//
+// HAI VIỆC PHẢI NHỚ VỚI CHỖ NÀY:
+//  1. Bật "Luôn giữ trên thiết bị này" cho thư mục đó. OneDrive Files
+//     On-Demand biến file thành placeholder rỗng, mà một bản sao lưu không đọc
+//     được lúc DB sập thì không phải bản sao lưu.
+//  2. Thư mục nằm trong thư viện dùng chung `Team Mktg - CAG mktg`. Chủ dự án
+//     xác nhận 07/09/2026 chỉ mình anh dùng nhánh này. Nếu sau này có người
+//     khác được cấp quyền vào đó thì PHẢI chuyển chỗ khác — bản sao mang SĐT
+//     thật, tên thật và toàn bộ lịch sử hội thoại của khách.
+//
 // ĐÃ THỬ TỚI ĐÂU (27/08/2026): phần phân trang có chạy thật, trên một server
 // giả lập PostgREST — bảng 2300 dòng kéo về đủ 2300, dòng đầu 0, dòng cuối
 // 2299, không trùng không sót; 23/23 bảng ra file. Phần CHƯA thử là lần bắt
