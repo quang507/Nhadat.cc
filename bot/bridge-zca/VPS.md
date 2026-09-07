@@ -6,7 +6,7 @@ máy local là chết theo máy local (sự cố 27/08 → 04/09/2026: bridge im
 kênh Zalo bằng 0, 117 lời cảnh báo không gửi được vì chính chúng đi qua bridge).
 VPS nhỏ nhất là đủ (1 vCPU, 1 GB, Ubuntu 22.04/24.04).
 
-## 0. Cách nhanh — một lệnh (07/09/2026)
+## 0. Cách nhanh — một lệnh (07/09/2026, sửa QR 08/09)
 
 `cai-vps.sh` gói mục 1, 2, 4 dưới đây, chạy lại được, không in secret:
 
@@ -15,8 +15,19 @@ curl -fsSL https://raw.githubusercontent.com/quang507/Nhadat.cc/main/bot/bridge-
 sudo BRIDGE_SECRET='<giá trị trong Supabase → Vault → BRIDGE_SECRET>' bash cai-vps.sh
 ```
 
-Xong nó in đúng mấy lệnh của mục 3 (quét QR) — bước đó vẫn phải làm tay.
+Cần bản trên một nhánh chưa merge thì thêm `NHANH=<tên nhánh>` trước `bash`
+(và tải `cai-vps.sh` từ đúng nhánh đó). Xong nó bật service ngay; chưa có
+session Zalo thì service đứng chờ quét QR — link ảnh QR nằm trong log (mục 3).
 Đổi máy thì chạy lại y vậy trên máy mới, rồi quét QR lại.
+
+### 0b. Lười gõ: để Claude Code làm qua SSH
+
+Claude Code desktop → menu chọn máy (cạnh ô nhập) → **SSH → Add SSH connection**
+→ host `<ip VPS>`, user `root`, mật khẩu root. Phiên mới mở ra chạy NGAY TRÊN
+VPS; dán cho nó câu: *"Chạy bot/bridge-zca/VPS.md §0 (nhánh main) rồi đọc
+journalctl lấy link QR cho tôi"*. Nó sẽ hỏi `BRIDGE_SECRET` — giá trị đó đi vào
+transcript của phiên, chấp nhận được thì dán, không thì tự gõ dòng `.env` (mục 2).
+Bước quét QR (mục 3) vẫn là điện thoại của người.
 
 ## 1. Chuẩn bị máy (một lần)
 
@@ -41,16 +52,25 @@ BRIDGE_SECRET=<giá trị trong Supabase → Project Settings → Vault → BRID
 Dán trần, không nháy, không ngoặc nhọn. Sai một ký tự là mọi lượt gọi 401/403
 và sổ lỗi ghi "bridge secret sai".
 
-## 3. Quét QR lần đầu (bắt buộc chạy tay)
+## 3. Quét QR lần đầu (bắt buộc làm tay — điện thoại)
+
+zca-js **không in QR ra terminal** (nó ghi `qr.png` — tài liệu trước 08/09 nói
+sai). Bridge nhận ảnh QR qua callback và phát tạm qua http ở một đường dẫn có
+token ngẫu nhiên; đăng nhập xong là đóng.
 
 ```bash
-tmux new -s bridge
-cd /opt/nhadat/bot/bridge-zca && node index.mjs
+journalctl -u nhadat-bridge -n 30 --no-pager      # tìm dòng "▶ QUÉT QR"
+# → http://<ip>:8787/qr-<token>.png — mở trên điện thoại hoặc trình duyệt
 ```
 
 Mở Zalo trên điện thoại **bằng acc clone** (không dùng acc chính — zca-js là API
-không chính thức, Zalo có thể khoá), quét QR trong terminal. Thấy "Bridge sẵn
-sàng" là session đã lưu vào `zalo-session.json`. `Ctrl-C` rồi thoát tmux.
+không chính thức, Zalo có thể khoá), biểu tượng QR ở thanh tìm kiếm → quét ảnh
+đó. Log hiện "Bridge sẵn sàng" là session đã lưu vào `zalo-session.json`, service
+tự chạy tiếp. QR hết hạn thì zca-js sinh mã mới ở cùng link — tải lại trang.
+Không mở được link → mở cổng 8787 ở Firewall của nhà cung cấp, hoặc
+`scp root@<ip>:/opt/nhadat/bot/bridge-zca/qr.png .` rồi mở file. Đổi cổng bằng
+`QR_PORT` trong `.env`. Chạy tay không qua service (`node index.mjs`) cũng in
+đúng dòng đó.
 
 ## 4. Bật thành service
 
@@ -65,9 +85,8 @@ Kiểm từ phía DB (Supabase SQL editor): `select * from bot_health where who 
 
 ## 5. Khi session Zalo hết hạn
 
-Log hiện "Session cũ hết hạn — quét QR lại" và service khởi động lại liên tục.
-Làm lại mục 3 (dừng service trước: `sudo systemctl stop nhadat-bridge`), rồi
-`sudo systemctl start nhadat-bridge`. Cảnh báo "bridge-zca đang im" sẽ tới
+Log hiện "Session cũ hết hạn — quét QR lại" rồi dòng "▶ QUÉT QR" với link mới.
+Làm lại mục 3, không cần dừng service. Cảnh báo "bridge-zca đang im" sẽ tới
 điện thoại qua ntfy (mục 6) sau 15 phút.
 
 ## 6. Cảnh báo tới điện thoại không qua bridge

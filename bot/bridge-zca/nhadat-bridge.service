@@ -2,8 +2,9 @@
 # Cài:  sudo cp nhadat-bridge.service /etc/systemd/system/ && sudo systemctl daemon-reload
 #       sudo systemctl enable --now nhadat-bridge
 # Xem:  journalctl -u nhadat-bridge -f
-# LẦN ĐẦU phải chạy tay `node index.mjs` trong tmux để quét QR (xem VPS.md);
-# có zalo-session.json rồi mới bật service.
+# LẦN ĐẦU chưa có zalo-session.json: bridge chờ quét QR — link ảnh QR nằm trong
+# `journalctl -u nhadat-bridge -f` (http://<ip>:8787/qr-<token>.png), mở trên
+# điện thoại và quét bằng acc clone (VPS.md §3). Không cần tmux.
 [Unit]
 Description=nhadat.cc — bridge Zalo (zca-js) nối acc clone với chat-reply
 After=network-online.target

@@ -12,6 +12,8 @@
 set -euo pipefail
 
 REPO=https://github.com/quang507/Nhadat.cc.git
+# Nhánh lấy code (mặc định main). Cần chạy bản chưa merge thì NHANH=<tên nhánh>.
+NHANH="${NHANH:-main}"
 DIR=/opt/nhadat
 BR=$DIR/bot/bridge-zca
 
@@ -35,9 +37,9 @@ buoc "2/5 user nhadat + $DIR"
 id nhadat >/dev/null 2>&1 || useradd -m -s /bin/bash nhadat
 mkdir -p "$DIR" && chown nhadat:nhadat "$DIR"
 if [ -d "$DIR/.git" ]; then
-  sudo -u nhadat git -C "$DIR" pull --ff-only -q && xong "repo đã có, pull xong"
+  sudo -u nhadat git -C "$DIR" fetch -q origin "$NHANH" && sudo -u nhadat git -C "$DIR" checkout -q "$NHANH" && sudo -u nhadat git -C "$DIR" pull --ff-only -q origin "$NHANH" && xong "repo đã có, nhánh $NHANH, pull xong"
 else
-  sudo -u nhadat git clone -q "$REPO" "$DIR" && xong "clone xong"
+  sudo -u nhadat git clone -q -b "$NHANH" "$REPO" "$DIR" && xong "clone xong (nhánh $NHANH)"
 fi
 
 buoc "3/5 npm i zca-js"
@@ -69,19 +71,20 @@ if [ -f "$BR/zalo-session.json" ]; then
   systemctl restart nhadat-bridge && xong "đã có zalo-session.json → service đang chạy"
   echo "  Xem log: journalctl -u nhadat-bridge -f"
 else
+  systemctl restart nhadat-bridge
+  xong "service đang chạy và CHỜ QUÉT QR"
   cat <<'HD'
 
 ════════════════════════════════════════════════════════════════
 CÒN MỘT BƯỚC LÀM TAY: quét QR bằng acc Zalo CLONE (VPS.md §3)
 
-    sudo -iu nhadat
-    tmux new -s bridge
-    cd /opt/nhadat/bot/bridge-zca && node index.mjs
-    # mở Zalo trên điện thoại (acc clone) → quét QR trong terminal
-    # thấy "Bridge sẵn sàng" → Ctrl-C, gõ exit (thoát tmux), exit (thoát user)
-    sudo systemctl start nhadat-bridge
-    journalctl -u nhadat-bridge -f
+    journalctl -u nhadat-bridge -n 30 --no-pager
+    # → có dòng "▶ QUÉT QR" kèm link http://<ip>:8787/qr-<token>.png
+    # mở link đó trên điện thoại (hoặc trình duyệt máy tính), Zalo app → QR → quét
+    # thấy "Bridge sẵn sàng" trong log là xong; service tự chạy tiếp, không cần làm gì thêm
 
+Không mở được link → mở cổng 8787 ở Firewall của nhà cung cấp, hoặc:
+    scp root@<ip>:/opt/nhadat/bot/bridge-zca/qr.png .   (rồi mở file mà quét)
 Kiểm từ DB: select * from bot_health where who = 'bridge-zca'  → cột at phải nhích.
 ════════════════════════════════════════════════════════════════
 HD
