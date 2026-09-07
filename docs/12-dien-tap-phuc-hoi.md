@@ -1,10 +1,22 @@
 # 12 — Diễn tập phục hồi từ bản sao
 
-**Trạng thái tính tới 06/09/2026: CHƯA CÓ BẢN SAO NÀO TỒN TẠI.**
-`scripts/sao-luu.mjs` chưa từng chạy, `bot/supabase/schema.sql` chưa có.
-Vì vậy **KHÔNG có bản sao production nào được coi là "phục hồi ĐẠT"**. Tài liệu
-này là quy trình + công cụ để lúc có bản sao thì chạy được ngay, cộng với phần
-đã diễn tập thật và phần chưa.
+**Trạng thái 07/09/2026: ĐÃ CÓ BẢN SAO ĐẦU TIÊN — nhưng CHƯA PHỤC HỒI THỬ.**
+`scripts/sao-luu.mjs` đã chạy thật (31/31 bảng, `trang_thai: "day_du"`, cất trên
+OneDrive công ty ở thư mục hạn chế quyền) và `bot/supabase/schema.sql` đã sinh ra
+(5112 dòng, vào repo ở PR #35). Suốt 06/09 trở về trước cả hai đều chưa tồn tại.
+
+Nhưng **vẫn KHÔNG bản sao production nào được coi là "phục hồi ĐẠT"** — chưa ai
+nạp nó vào một DB rỗng và chạy `soat-phuc-hoi.mjs` lấy mã thoát. Có file không
+phải là phục hồi được. Đó chính là việc tiếp theo, và làm được ngay bây giờ vì
+đủ cả hai đầu vào; §Chạy diễn tập ở dưới là quy trình.
+
+Hai chỗ phải biết trước khi tin vào bản sao 07/09:
+- **`listing_media.json` trong bản đó chỉ 1 KB** trong khi bảng thật có 1005
+  dòng — sao lưu chạy 09:29, `up-anh.mjs` đẩy ảnh SAU đó. Phục hồi từ bản này ra
+  một DB không biết tấm ảnh nào của tin nào (OPEN-47). Sao lưu lại trước khi
+  diễn tập, hoặc diễn tập rồi ghi rõ là đã biết chỗ hụt này.
+- **Storage không nằm trong bản sao.** Bucket có 1005 file/148 MB; phục hồi DB
+  xong mà bucket trống thì web vẫn vỡ ảnh.
 
 Một bản sao chưa từng phục hồi thử **không phải là bản sao** — nó là một thư
 mục file JSON mà chưa ai biết có dùng được không. Bậc Supabase Free không có
@@ -128,10 +140,10 @@ một dấu hiệu chữ trong đầu ra; ca nào quên khai dấu hiệu thì s
 
 | Thứ | Vì sao chưa |
 |---|---|
-| Phục hồi từ **bản sao production thật** | Chưa có bản sao nào. `sao-luu.mjs` chưa từng chạy |
-| Dựng lại từ **`schema.sql` thật** | File chưa tồn tại. Tự kiểm dùng **schema giả** 31 bảng, giữ đúng hình khoá ngoại của các bảng chính, KHÔNG phải schema thật (RLS, policy, trigger, RPC, view, extension đều không có) |
+| Phục hồi từ **bản sao production thật** | Bản sao đã CÓ từ 07/09, nhưng chưa ai nạp nó vào DB rỗng và chấm bằng `soat-phuc-hoi.mjs`. Không còn thiếu đầu vào — chỉ là chưa làm |
+| Dựng lại từ **`schema.sql` thật** | File đã sinh 07/09 (5112 dòng, PR #35) nhưng CHƯA ai dựng DB từ nó. Bài tự kiểm vẫn đang dùng **schema giả** 31 bảng — giữ đúng hình khoá ngoại của các bảng chính, KHÔNG phải schema thật (RLS, policy, trigger, RPC, view, extension đều không có) |
 | Phục hồi trên **Postgres 17** | Local là 16.13, production là **17.6**. `schema.sql` sinh từ 17 có thể dùng cú pháp 16 không hiểu — chỉ biết được khi chạy thật |
-| **Storage** (file ảnh) | Không nằm trong bản sao. `media`/`listing_media` chỉ là đường dẫn; phục hồi metadata xong mà bucket trống thì web vẫn vỡ ảnh |
+| **Storage** (file ảnh) | Không nằm trong bản sao. `media`/`listing_media` chỉ là đường dẫn; phục hồi metadata xong mà bucket trống thì web vẫn vỡ ảnh. Từ 07/09 bucket có **1005 file / 148 MB** nên đây không còn là rủi ro lý thuyết — dựng lại được chỉ nhờ `masterDB/` trên máy local, tức lưới an toàn hiện là một ổ đĩa cá nhân (OPEN-47) |
 | `auth.users`, `vault.secrets`, `cron.job`, edge function | Cố ý không sao lưu, ghi rõ trong manifest. Phục hồi DB xong **bot vẫn chưa chạy được** cho tới khi deploy lại function và nạp lại secret |
 
 ---

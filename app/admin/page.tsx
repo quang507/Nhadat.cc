@@ -6,7 +6,7 @@
 // 04/09/2026 — "admin buyer side" (FR-71/74/75/76/77/78/80, migration
 // 20260904c): câu khách hỏi, lịch xem nhà, khách cần người thật, thống kê hội
 // thoại 30 ngày + CSV, ô tìm khách. Mọi danh sách dài lật 20 mục/trang (FR-80).
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription } from "@/lib/format";
@@ -427,38 +427,334 @@ export default function Page() {
     { hoi_thoai: 0, tin_khach: 0, tin_bot: 0, tin_nguoi_that: 0, khach_moi: 0, co: 0 },
   );
 
+  // Việc đang chờ người thật. Đây là con số duy nhất đáng đặt lên đầu trang:
+  // admin mở trang này để hỏi "có gì cần tao không?", không phải để ngắm số liệu.
+  const cauHoiCho = cauHoi.filter((c) => c.status === "pending").length;
+  const lichSapToi = lichXem.filter(
+    (v) => v.slot && new Date(v.slot).getTime() >= now && v.status !== "cancelled",
+  ).length;
+  const canXuLy = pending.length + khachCan.length + cauHoiCho + viec.length;
+
+  // Câu hỏi quá hạn SLA — đếm riêng vì nó khác "đang chờ": đã trễ hẹn với khách.
+  const cauHoiQuaHan = cauHoi.filter(
+    (c) => c.status === "pending" && !!c.sla_due_at && new Date(c.sla_due_at).getTime() < now,
+  ).length;
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="text-2xl font-extrabold">Duyệt tin</h1>
+    <div className="mx-auto max-w-5xl px-4 pb-24 pt-10">
+      {/* ═══ Đầu trang: một câu trả lời cho "có gì cần tao không?" ═══ */}
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Quản trị</h1>
+          <p className="mt-1 text-sm text-mute tabular-nums">
+            {counts
+              ? `${counts.tong} tin trong rổ · ${counts.active} đang rao · ${counts.cho} chờ duyệt`
+              : "đang đọc rổ hàng…"}
+          </p>
+        </div>
         <Link
           href="/admin/dang-tin"
-          className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+          className="rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
         >
           + Đăng tin thủ công
         </Link>
-      </div>
-      {counts && (
-        <p className="mt-1 text-sm text-mute tabular-nums">
-          {counts.tong} tin tổng · {counts.active} đang rao · {counts.cho} chờ duyệt
+      </header>
+
+      {loi.length > 0 && (
+        <p className="mt-4 rounded-shot border border-brand/30 bg-brand/5 px-4 py-2.5 text-sm text-brand">
+          Không đọc được: {loi.join(" · ")}
         </p>
       )}
-      {loi.length > 0 && (
-        <p className="mt-2 text-sm text-brand">Không đọc được: {loi.join(" · ")}</p>
-      )}
 
-      {/* FR-152 — sức khoẻ bot */}
-      {health && (
-        <div className="mt-6 rounded-king border border-line bg-white p-5">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="eyebrow text-mute">Sức khoẻ bot</span>
-            <BridgeBadge at={health.beat} />
-            <span className="text-sm text-mute">
-              {health.errs.length ? `${health.errs.length} lỗi gần nhất` : "Không có lỗi nào được ghi"}
+      {/* ═══ TẦNG 1 — việc cần làm ═══
+          Đặt trước mọi thứ khác, và tin chờ duyệt đứng đầu vì đó là việc admin
+          làm nhiều nhất. Trước đây nó nằm cuối cùng, sau 17 khối tra cứu. */}
+      <section className="mt-12">
+        <div className="flex flex-wrap items-baseline gap-x-3 border-b-2 border-navy pb-2">
+          <h2 className="text-xl font-extrabold tracking-tight">Cần xử lý</h2>
+          <span className="text-sm text-mute tabular-nums">
+            {canXuLy > 0 ? `${canXuLy} việc đang chờ` : "hết việc — rổ sạch"}
+          </span>
+          {cauHoiQuaHan > 0 && (
+            <span className="rounded-full bg-brand px-3 py-0.5 text-xs font-extrabold text-white tabular-nums">
+              {cauHoiQuaHan} câu quá hạn
             </span>
-          </div>
-          {health.errs.length > 0 && (
+          )}
+        </div>
+
+        {/* ── Tin chờ duyệt ── */}
+        <Muc ten="Tin chờ duyệt" dem={pending.length} phu="bot bóc từ câu rao — duyệt thì mới lên kệ">
+          {pending.length === 0 ? (
+            <Rong>Không còn tin nào chờ duyệt.</Rong>
+          ) : (
+            <>
+              <div className="mt-4 space-y-3">
+                {ptTin.mot.map((l) => (
+                  <article key={l.id} className="rounded-shot border border-line bg-white p-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="font-bold">
+                        #{l.code} · {l.ward} · {formatPrice(l.price_vnd, l.price_raw)} ·{" "}
+                        {formatArea(l.area_m2)}
+                      </p>
+                      <span className="text-xs text-mute tabular-nums">
+                        {new Date(l.created_at).toLocaleString("vi-VN")}
+                      </span>
+                    </div>
+                    <p className="mt-2 line-clamp-3 max-w-[70ch] text-sm text-navy/80">
+                      {sanitizeDescription(l.description) || l.location_raw}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setStatus(l.id, "dang_ban")}
+                        className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+                      >
+                        Duyệt — cho rao
+                      </button>
+                      <button
+                        onClick={() => setStatus(l.id, "an")}
+                        className="rounded-full border border-line px-5 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand active:scale-[0.98]"
+                      >
+                        Ẩn tin
+                      </button>
+                      <button
+                        onClick={() => setUpCho((c) => (c === l.id ? null : l.id))}
+                        className="rounded-full border border-line px-4 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand"
+                      >
+                        {upCho === l.id ? "Đóng ảnh" : "Up ảnh"}
+                      </button>
+                      <Link
+                        href={`/nha-dat/${encodeURIComponent(l.code ?? "")}`}
+                        target="_blank"
+                        className="ml-auto self-center text-sm font-semibold text-mute transition hover:text-brand"
+                      >
+                        Xem trang tin →
+                      </Link>
+                    </div>
+                    {/* FR-96: up ảnh cho tin chờ duyệt (policy admin, bucket listing-public) */}
+                    {upCho === l.id && (
+                      <div className="mt-4">
+                        <UploadAnh listingId={l.id} code={l.code} />
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+              <PhanTrang {...ptTin} />
+            </>
+          )}
+        </Muc>
+
+        {/* ── FR-77 — khách cần người thật ── */}
+        <Muc
+          ten="Khách cần người thật"
+          dem={khachCan.length}
+          phu="bot đã giơ cờ, chưa ai vào"
+        >
+          {khachCan.length === 0 ? (
+            <Rong>Không hội thoại nào đang chờ người thật.</Rong>
+          ) : (
+            <>
+              <ul className="mt-3 divide-y divide-line text-sm">
+                {ptKhachCan.mot.map((k) => (
+                  <li key={k.conversation_id} className="flex flex-wrap items-start gap-x-3 py-2.5">
+                    <span className="w-32 shrink-0 tabular-nums text-mute">
+                      {new Date(k.needs_human_at).toLocaleString("vi-VN")}
+                    </span>
+                    <span className="font-semibold">{k.ten ?? "Không tên"}</span>
+                    <span className="text-mute">{k.vai === "khach" ? "khách" : "người bán"}</span>
+                    {k.ctv_name && <span className="text-mute">CTV {k.ctv_name}</span>}
+                    <span className="min-w-0 basis-full text-navy/85 sm:basis-auto sm:flex-1">
+                      {k.tin_khach_cuoi ? `“${k.tin_khach_cuoi}”` : (
+                        <span className="text-mute">chưa có tin nào</span>
+                      )}
+                    </span>
+                    {linkZalo(k.zalo_user_id) && (
+                      <a
+                        href={linkZalo(k.zalo_user_id)!}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold text-zalo transition hover:border-zalo"
+                      >
+                        Mở Zalo
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <PhanTrang {...ptKhachCan} />
+            </>
+          )}
+        </Muc>
+
+        {/* ── FR-76 — câu khách hỏi ── */}
+        <Muc
+          ten="Câu khách hỏi"
+          dem={cauHoiCho}
+          phu={
+            cauHoi.length
+              ? `${cauHoiCho} đang chờ · ${cauHoi.length - cauHoiCho} đã trả lời`
+              : "chưa có câu hỏi nào"
+          }
+        >
+          {cauHoi.length === 0 ? (
+            <Rong>Chưa có câu hỏi nào.</Rong>
+          ) : (
+            <>
+              <ul className="mt-3 divide-y divide-line text-sm">
+                {ptCauHoi.mot.map((c) => {
+                  const quaHan =
+                    c.status === "pending" && !!c.sla_due_at &&
+                    new Date(c.sla_due_at).getTime() < now;
+                  return (
+                    <li key={c.id} className="py-2.5">
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="font-bold">#{c.listings?.code ?? "—"}</span>
+                        <span className="min-w-0 max-w-[70ch] flex-1 text-navy/85">{c.question}</span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                            quaHan
+                              ? "bg-brand text-white"
+                              : c.status === "pending"
+                                ? "bg-navy text-white"
+                                : "bg-brand/10 text-brand"
+                          }`}
+                        >
+                          {quaHan ? "quá hạn" : (TRANG_THAI_HOI[c.status] ?? c.status)}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-mute tabular-nums">
+                        <span>{new Date(c.created_at).toLocaleString("vi-VN")}</span>
+                        {c.buyers?.name && <span>khách {c.buyers.name}</span>}
+                        <span>nguồn {c.source ?? "—"}</span>
+                        <span>
+                          giao {NGUOI_GIAO[c.assignee ?? ""] ?? c.assignee ?? "—"}
+                          {c.ctvs?.name ? ` ${c.ctvs.name}` : ""}
+                        </span>
+                        {c.sla_due_at && (
+                          <span className={quaHan ? "font-bold text-brand" : ""}>
+                            hạn {new Date(c.sla_due_at).toLocaleString("vi-VN")}
+                          </span>
+                        )}
+                        {c.answered_at && (
+                          <span>trả lời {new Date(c.answered_at).toLocaleString("vi-VN")}</span>
+                        )}
+                      </div>
+                      {c.answer && <p className="mt-1 max-w-[70ch] text-sm text-navy/75">↳ {c.answer}</p>}
+                    </li>
+                  );
+                })}
+              </ul>
+              <PhanTrang {...ptCauHoi} />
+            </>
+          )}
+        </Muc>
+
+        {/* ── Việc chờ admin ── */}
+        <Muc ten="Việc chờ admin" dem={viec.length} phu="bot đẩy lên, đọc xong thì đóng">
+          {viec.length === 0 ? (
+            <Rong>Không có việc nào chờ.</Rong>
+          ) : (
             <ul className="mt-3 divide-y divide-line text-sm">
+              {viec.map((v) => (
+                <li key={v.id} className="flex flex-wrap items-start gap-x-3 py-2.5">
+                  <span className="w-32 shrink-0 tabular-nums text-mute">
+                    {new Date(v.created_at).toLocaleString("vi-VN")}
+                  </span>
+                  <span className="min-w-0 max-w-[70ch] flex-1 text-navy/85">{v.note}</span>
+                  <button
+                    onClick={() => dongViec(v.id)}
+                    className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand"
+                  >
+                    Đã xử lý
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Muc>
+
+        {/* ── FR-78 — lịch xem nhà ── */}
+        <Muc
+          ten="Lịch xem nhà"
+          dem={lichSapToi}
+          phu={lichXem.length ? `${lichXem.length} lịch — sắp tới và 7 ngày qua` : "chưa có lịch nào"}
+        >
+          {lichXem.length === 0 ? (
+            <Rong>Chưa có lịch xem nào.</Rong>
+          ) : (
+            <>
+              <ul className="mt-3 divide-y divide-line text-sm">
+                {ptLichXem.mot.map((v) => (
+                  <li key={v.id} className="flex flex-wrap items-center gap-x-3 py-2.5">
+                    <span className="w-36 shrink-0 tabular-nums text-mute">
+                      {v.slot
+                        ? new Date(v.slot).toLocaleString("vi-VN")
+                        : (v.time_text ?? "chưa rõ giờ")}
+                    </span>
+                    <span className="font-bold">#{v.listings?.code ?? v.listing_code ?? "—"}</span>
+                    <span className="font-semibold">{v.buyers?.name ?? "Khách chưa tên"}</span>
+                    {v.slot && v.time_text && <span className="text-mute">“{v.time_text}”</span>}
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                        v.status === "pending" ? "bg-brand/10 text-brand" : "bg-line text-navy"
+                      }`}
+                    >
+                      {TRANG_THAI_XEM[v.status] ?? v.status}
+                    </span>
+                    <span className="ml-auto text-xs text-mute">
+                      {v.guide ? `dẫn: ${v.guide}` : "chưa có người dẫn"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <PhanTrang {...ptLichXem} />
+            </>
+          )}
+        </Muc>
+      </section>
+
+      {/* ═══ TẦNG 2 — bot còn sống không ═══
+          Một dải, không phải ba thẻ. Chỉ nở ra khi có lỗi (FR-152, NFR-01). */}
+      <section className="mt-16">
+        <div className="flex flex-wrap items-baseline gap-x-3 border-b-2 border-navy pb-2">
+          <h2 className="text-xl font-extrabold tracking-tight">Bot</h2>
+          <span className="text-sm text-mute">nhịp tim, độ trễ, sổ lỗi</span>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          {health ? <BridgeBadge at={health.beat} /> : <span className="text-mute">đang đọc…</span>}
+
+          <span className="tabular-nums text-mute">
+            {doTre === undefined
+              ? "độ trễ: đang đọc…"
+              : doTre === null || doTre.so_luot == null
+                ? `độ trễ: chưa có dữ liệu${loiPhu.bot_do_tre ? ` (${loiPhu.bot_do_tre})` : ""}`
+                : null}
+            {doTre && doTre.so_luot != null && (
+              <>
+                p50 <b className="text-navy">{Math.round((doTre.p50_giay ?? 0) * 1000).toLocaleString("vi-VN")} ms</b>
+                {" · p95 "}
+                <b className={(doTre.p95_giay ?? 0) > 3 ? "text-brand" : "text-navy"}>
+                  {Math.round((doTre.p95_giay ?? 0) * 1000).toLocaleString("vi-VN")} ms
+                </b>
+                {" · "}{doTre.so_luot} lượt · mốc NFR-01 p95 &lt; 3 000 ms
+              </>
+            )}
+          </span>
+
+          {health && (
+            <span className={health.errs.length ? "font-semibold text-brand" : "text-mute"}>
+              {health.errs.length ? `${health.errs.length} lỗi gần nhất` : "sổ lỗi sạch"}
+            </span>
+          )}
+        </div>
+
+        {health && health.errs.length > 0 && (
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm font-semibold text-mute transition hover:text-brand">
+              Xem {health.errs.length} lỗi
+            </summary>
+            <ul className="mt-2 divide-y divide-line text-sm">
               {health.errs.map((e) => (
                 <li key={e.id} className="flex flex-wrap gap-x-3 py-2">
                   <span className="w-32 shrink-0 tabular-nums text-mute">
@@ -472,514 +768,422 @@ export default function Page() {
                 </li>
               ))}
             </ul>
-          )}
-        </div>
-      )}
-
-      {/* Độ trễ bot 7 ngày — view `bot_do_tre` (04/09 đợt 2) */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <span className="eyebrow text-mute">Độ trễ bot · 7 ngày</span>
-          {doTre === undefined ? (
-            <span className="text-sm text-mute">đang đọc…</span>
-          ) : doTre === null || doTre.so_luot == null ? (
-            <span className="text-sm text-mute">chưa có dữ liệu{loiPhu.bot_do_tre ? ` (${loiPhu.bot_do_tre})` : ""}</span>
-          ) : (
-            <span className="text-sm tabular-nums">
-              p50 <b>{Math.round((doTre.p50_giay ?? 0) * 1000).toLocaleString("vi-VN")} ms</b> · p95{" "}
-              <b className={(doTre.p95_giay ?? 0) > 3 ? "text-brand" : ""}>{Math.round((doTre.p95_giay ?? 0) * 1000).toLocaleString("vi-VN")} ms</b>
-              {doTre.max_giay != null ? ` · max ${Math.round(doTre.max_giay * 1000).toLocaleString("vi-VN")} ms` : ""}{" "}
-              · {doTre.so_luot} lượt · mốc NFR-01: p95 &lt; 3 000 ms
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* FR-70/73 — BĐS hot 60 ngày (view `bds_hot`) */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <span className="eyebrow text-mute">BĐS hot · 60 ngày</span>
-          <span className="text-sm text-mute">
-            {bdsHot === null
-              ? `chưa có dữ liệu${loiPhu.bds_hot ? ` (${loiPhu.bds_hot})` : ""}`
-              : bdsHot.length ? "đếm sự kiện (xem, hỏi, hẹn) theo tin — nhiều nhất trước" : "chưa có sự kiện nào trong 60 ngày"}
-          </span>
-        </div>
-        {bdsHot && bdsHot.length > 0 && (
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {bdsHot.map((h) => (
-              <li key={h.listing_id} className="flex flex-wrap items-center gap-x-3 py-2">
-                <span className="w-16 shrink-0 text-right font-extrabold tabular-nums text-brand">{h.so_su_kien_60d}</span>
-                <Link href={`/nha-dat/${encodeURIComponent(h.code ?? "")}`} target="_blank" className="font-semibold hover:text-brand">
-                  #{h.code ?? h.listing_id.slice(0, 8)}
-                </Link>
-                <span className="text-mute">{h.ward ?? ""}</span>
-                <span className="ml-auto text-xs text-mute tabular-nums">
-                  {h.last_event_at ? `gần nhất ${new Date(h.last_event_at).toLocaleString("vi-VN")}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
+          </details>
         )}
-      </div>
+      </section>
 
-      {/* FR-100 — tạo danh sách riêng cho một khách (UF-12) */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <form onSubmit={taoDs} className="space-y-3">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <span className="eyebrow text-mute">Danh sách riêng cho khách</span>
-            <span className="text-sm text-mute">nhập mã tin cách nhau bởi dấu phẩy → link /ds/… sống 30 ngày, gửi qua Zalo</span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-            <input value={dsMa} onChange={(e) => setDsMa(e.target.value)}
-              placeholder="BDS-Q5-0007, BDS-Q5-0012, BDS-Q5-0031"
-              className="min-w-0 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand" />
-            <input value={dsTieuDe} onChange={(e) => setDsTieuDe(e.target.value)}
-              placeholder="tiêu đề: Quận 5 · dưới 12 tỉ · HXH"
-              className="min-w-0 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand sm:w-72" />
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <button type="submit" disabled={dangTaoDs}
-              className="rounded-full bg-brand px-5 py-1.5 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60">
-              {dangTaoDs ? "Đang tạo…" : "Tạo link"}
-            </button>
-            {dsKq && (
-              <span className={`text-sm ${dsKq.ok ? "text-navy" : "text-brand"}`}>
-                {dsKq.ok && dsKq.path ? (
-                  <>
-                    <a href={dsKq.path} target="_blank" rel="noreferrer" className="font-bold underline">{dsKq.path}</a>
-                    {" · "}{dsKq.text}{" "}
-                    <button type="button" onClick={() => chepLink(dsKq.path!)}
-                      className="rounded-full border border-line px-3 py-0.5 text-xs font-semibold transition hover:border-brand hover:text-brand">
-                      {daChep ? "Đã chép" : "Chép link"}
-                    </button>
-                  </>
-                ) : dsKq.text}
-              </span>
-            )}
-          </div>
-        </form>
-      </div>
-
-      {/* NFR-06 — giấy tờ ở bucket riêng: chỉ mã tin + loại, xem qua URL ký 15 phút */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <span className="eyebrow text-mute">Giấy tờ (bucket riêng)</span>
-          <span className="text-sm text-mute">
-            {loiPhu.giay_to
-              ? `không đọc được: ${loiPhu.giay_to}`
-              : giayTo.length ? `${giayTo.length} file · link xem sống 15 phút, không bao giờ công khai` : "chưa có file nào"}
-          </span>
+      {/* ═══ TẦNG 3 — tra cứu ═══
+          Gập lại hết. Đây là thứ mở ra khi cần trả lời một câu hỏi cụ thể,
+          không phải thứ phải cuộn qua mỗi lần vào trang. */}
+      <section className="mt-16">
+        <div className="flex flex-wrap items-baseline gap-x-3 border-b-2 border-navy pb-2">
+          <h2 className="text-xl font-extrabold tracking-tight">Tra cứu</h2>
+          <span className="text-sm text-mute">mở khi cần, không phải thứ nhìn hằng ngày</span>
         </div>
-        {giayTo.length > 0 && (
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {giayTo.map((g) => (
-              <li key={g.id} className="flex flex-wrap items-center gap-x-3 py-2">
-                <span className="w-32 shrink-0 tabular-nums text-mute">{new Date(g.created_at).toLocaleString("vi-VN")}</span>
-                <span className="font-bold">#{g.listings?.code ?? "—"}</span>
-                <span className="text-mute">{g.media_type === "so_do" ? "sổ đỏ / sổ hồng" : g.media_type === "giay_to" ? "giấy tờ" : g.media_type} · {g.mime_type}</span>
-                <button onClick={() => xemGiayTo(g)}
-                  className="ml-auto rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand">
-                  Xem giấy tờ
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
 
-      {/* Việc chờ admin — đọc thẳng bảng, không qua bridge (02/09) */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <span className="eyebrow text-mute">Việc chờ admin</span>
-          <span className="text-sm text-mute">
-            {viec.length ? `${viec.length} việc đang chờ` : "Không có việc nào chờ"}
-          </span>
-        </div>
-        {viec.length > 0 && (
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {viec.map((v) => (
-              <li key={v.id} className="flex flex-wrap items-start gap-x-3 py-2">
-                <span className="w-32 shrink-0 tabular-nums text-mute">
-                  {new Date(v.created_at).toLocaleString("vi-VN")}
-                </span>
-                <span className="min-w-0 flex-1 text-navy/85">{v.note}</span>
-                <button onClick={() => dongViec(v.id)}
-                  className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand">
-                  Đã xử lý
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* FR-77 — khách cần người thật (view khach_can_nguoi_that, 04/09) */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <span className="eyebrow text-mute">Khách cần người thật</span>
-          <span className="text-sm text-mute">
-            {khachCan.length
-              ? `${khachCan.length} hội thoại đang giơ cờ, chưa ai vào`
-              : "Không hội thoại nào đang chờ người thật"}
-          </span>
-        </div>
-        {khachCan.length > 0 && (
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {ptKhachCan.mot.map((k) => (
-              <li key={k.conversation_id} className="flex flex-wrap items-start gap-x-3 py-2">
-                <span className="w-32 shrink-0 tabular-nums text-mute">
-                  {new Date(k.needs_human_at).toLocaleString("vi-VN")}
-                </span>
-                <span className="font-semibold">{k.ten ?? "Không tên"}</span>
-                <span className="text-mute">{k.vai === "khach" ? "khách" : "người bán"}</span>
-                {k.ctv_name && <span className="text-mute">CTV {k.ctv_name}</span>}
-                <span className="min-w-0 basis-full text-navy/85 sm:basis-auto sm:flex-1">
-                  {k.tin_khach_cuoi ? `“${k.tin_khach_cuoi}”` : <span className="text-mute">chưa có tin nào</span>}
-                </span>
-                {linkZalo(k.zalo_user_id) && (
-                  <a href={linkZalo(k.zalo_user_id)!} target="_blank" rel="noreferrer"
-                    className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold text-zalo transition hover:border-zalo">
-                    Mở Zalo
-                  </a>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        <PhanTrang {...ptKhachCan} />
-      </div>
-
-      {/* FR-76 — câu khách hỏi đang chờ / vừa trả lời (04/09) */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <span className="eyebrow text-mute">Câu hỏi đang chờ</span>
-          <span className="text-sm text-mute">
-            {cauHoi.length
-              ? `${cauHoi.filter((c) => c.status === "pending").length} đang chờ · ${cauHoi.filter((c) => c.status === "answered").length} đã trả lời`
-              : "Chưa có câu hỏi nào"}
-          </span>
-        </div>
-        {cauHoi.length > 0 && (
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {ptCauHoi.mot.map((c) => {
-              const quaHan = c.status === "pending" && !!c.sla_due_at && new Date(c.sla_due_at).getTime() < now;
-              return (
-                <li key={c.id} className="py-2">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className="font-bold">#{c.listings?.code ?? "—"}</span>
-                    <span className="min-w-0 flex-1 text-navy/85">{c.question}</span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
-                      c.status === "pending" ? "bg-navy text-white" : "bg-brand/10 text-brand"
-                    }`}>
-                      {TRANG_THAI_HOI[c.status] ?? c.status}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-mute tabular-nums">
-                    <span>{new Date(c.created_at).toLocaleString("vi-VN")}</span>
-                    {c.buyers?.name && <span>khách {c.buyers.name}</span>}
-                    <span>nguồn {c.source ?? "—"}</span>
-                    <span>
-                      giao {NGUOI_GIAO[c.assignee ?? ""] ?? c.assignee ?? "—"}
-                      {c.ctvs?.name ? ` ${c.ctvs.name}` : ""}
-                    </span>
-                    {c.sla_due_at && (
-                      <span className={quaHan ? "font-bold text-brand" : ""}>
-                        hạn {new Date(c.sla_due_at).toLocaleString("vi-VN")}
-                        {quaHan ? " — quá hạn" : ""}
-                      </span>
-                    )}
-                    {c.answered_at && <span>trả lời {new Date(c.answered_at).toLocaleString("vi-VN")}</span>}
-                  </div>
-                  {c.answer && <p className="mt-1 text-sm text-navy/75">↳ {c.answer}</p>}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <PhanTrang {...ptCauHoi} />
-      </div>
-
-      {/* FR-78 — lịch xem nhà: sắp tới + 7 ngày qua (04/09) */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <span className="eyebrow text-mute">Lịch xem nhà</span>
-          <span className="text-sm text-mute">
-            {lichXem.length ? `${lichXem.length} lịch — sắp tới và 7 ngày qua` : "Chưa có lịch xem nào"}
-          </span>
-        </div>
-        {lichXem.length > 0 && (
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {ptLichXem.mot.map((v) => (
-              <li key={v.id} className="flex flex-wrap items-center gap-x-3 py-2">
-                <span className="w-36 shrink-0 tabular-nums text-mute">
-                  {v.slot ? new Date(v.slot).toLocaleString("vi-VN") : (v.time_text ?? "chưa rõ giờ")}
-                </span>
-                <span className="font-bold">#{v.listings?.code ?? v.listing_code ?? "—"}</span>
-                <span className="font-semibold">{v.buyers?.name ?? "Khách chưa tên"}</span>
-                {v.slot && v.time_text && <span className="text-mute">“{v.time_text}”</span>}
-                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
-                  v.status === "pending" ? "bg-brand/10 text-brand" : "bg-line text-navy"
-                }`}>
-                  {TRANG_THAI_XEM[v.status] ?? v.status}
-                </span>
-                <span className="ml-auto text-xs text-mute">
-                  {v.guide ? `dẫn: ${v.guide}` : "chưa có người dẫn"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <PhanTrang {...ptLichXem} />
-      </div>
-
-      {/* FR-74 / FR-75 — tìm khách theo tên hoặc Zalo uid; KHÔNG hiện số điện thoại */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <form onSubmit={timKhach} className="flex flex-wrap items-center gap-3">
-          <span className="eyebrow text-mute">Tìm khách</span>
-          <input
-            value={qKhach}
-            onChange={(e) => setQKhach(e.target.value)}
-            placeholder="tên Zalo hoặc uid"
-            className="min-w-0 flex-1 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand"
-          />
-          <button type="submit" disabled={dangTim}
-            className="rounded-full bg-brand px-5 py-1.5 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60">
-            {dangTim ? "Đang tìm…" : "Tìm"}
-          </button>
-        </form>
-        {khach && (
-          khach.length === 0 ? (
-            <p className="mt-3 text-sm text-mute">Không thấy khách nào khớp.</p>
-          ) : (
-            <ul className="mt-3 divide-y divide-line text-sm">
-              {khach.map((b) => {
-                const p = b.preferences ?? {};
-                const soThich = ["area", "budget", "bedrooms"]
-                  .filter((k) => p[k] != null && p[k] !== "")
-                  .map((k) => `${{ area: "khu", budget: "ngân sách", bedrooms: "PN" }[k]}: ${String(p[k])}`);
-                return (
-                  <li key={b.id} className="flex flex-wrap items-center gap-x-3 py-2">
-                    <span className="font-semibold">{b.name ?? "Không tên"}</span>
-                    <span className="tabular-nums text-mute">{b.zalo_user_id ?? "chưa có uid"}</span>
-                    <span className="min-w-0 flex-1 text-navy/75">
-                      {soThich.length ? soThich.join(" · ") : "chưa rõ nhu cầu"}
-                    </span>
-                    <span className="text-xs text-mute tabular-nums">
-                      {b.last_contact_at
-                        ? `liên hệ cuối ${new Date(b.last_contact_at).toLocaleDateString("vi-VN")}`
-                        : `tạo ${new Date(b.created_at).toLocaleDateString("vi-VN")}`}
-                    </span>
-                    {linkZalo(b.zalo_user_id) && (
-                      <a href={linkZalo(b.zalo_user_id)!} target="_blank" rel="noreferrer"
-                        className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold text-zalo transition hover:border-zalo">
-                        Mở Zalo
+        {/* FR-100 — danh sách riêng cho một khách (UF-12) */}
+        <TraCuu ten="Tạo danh sách riêng cho khách" phu="link /ds/… sống 30 ngày, gửi qua Zalo">
+          <form onSubmit={taoDs} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <input
+                value={dsMa}
+                onChange={(e) => setDsMa(e.target.value)}
+                placeholder="BDS-Q5-0007, BDS-Q5-0012, BDS-Q5-0031"
+                className="min-w-0 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand"
+              />
+              <input
+                value={dsTieuDe}
+                onChange={(e) => setDsTieuDe(e.target.value)}
+                placeholder="tiêu đề: Quận 5 · dưới 12 tỉ · HXH"
+                className="min-w-0 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand sm:w-72"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                disabled={dangTaoDs}
+                className="rounded-full bg-brand px-5 py-1.5 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60"
+              >
+                {dangTaoDs ? "Đang tạo…" : "Tạo link"}
+              </button>
+              {dsKq && (
+                <span className={`text-sm ${dsKq.ok ? "text-navy" : "text-brand"}`}>
+                  {dsKq.ok && dsKq.path ? (
+                    <>
+                      <a href={dsKq.path} target="_blank" rel="noreferrer" className="font-bold underline">
+                        {dsKq.path}
                       </a>
-                    )}
-                  </li>
-                );
-              })}
+                      {" · "}
+                      {dsKq.text}{" "}
+                      <button
+                        type="button"
+                        onClick={() => chepLink(dsKq.path!)}
+                        className="rounded-full border border-line px-3 py-0.5 text-xs font-semibold transition hover:border-brand hover:text-brand"
+                      >
+                        {daChep ? "Đã chép" : "Chép link"}
+                      </button>
+                    </>
+                  ) : (
+                    dsKq.text
+                  )}
+                </span>
+              )}
+            </div>
+          </form>
+        </TraCuu>
+
+        {/* FR-74 / FR-75 — tìm khách; KHÔNG hiện số điện thoại */}
+        <TraCuu ten="Tìm khách" phu="theo tên Zalo hoặc uid — không hiện số điện thoại">
+          <form onSubmit={timKhach} className="flex flex-wrap items-center gap-3">
+            <input
+              value={qKhach}
+              onChange={(e) => setQKhach(e.target.value)}
+              placeholder="tên Zalo hoặc uid"
+              className="min-w-0 flex-1 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand"
+            />
+            <button
+              type="submit"
+              disabled={dangTim}
+              className="rounded-full bg-brand px-5 py-1.5 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60"
+            >
+              {dangTim ? "Đang tìm…" : "Tìm"}
+            </button>
+          </form>
+          {khach &&
+            (khach.length === 0 ? (
+              <p className="mt-3 text-sm text-mute">Không thấy khách nào khớp.</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-line text-sm">
+                {khach.map((b) => {
+                  const p = b.preferences ?? {};
+                  const soThich = ["area", "budget", "bedrooms"]
+                    .filter((k) => p[k] != null && p[k] !== "")
+                    .map((k) => `${{ area: "khu", budget: "ngân sách", bedrooms: "PN" }[k]}: ${String(p[k])}`);
+                  return (
+                    <li key={b.id} className="flex flex-wrap items-center gap-x-3 py-2.5">
+                      <span className="font-semibold">{b.name ?? "Không tên"}</span>
+                      <span className="tabular-nums text-mute">{b.zalo_user_id ?? "chưa có uid"}</span>
+                      <span className="min-w-0 flex-1 text-navy/75">
+                        {soThich.length ? soThich.join(" · ") : "chưa rõ nhu cầu"}
+                      </span>
+                      <span className="text-xs text-mute tabular-nums">
+                        {b.last_contact_at
+                          ? `liên hệ cuối ${new Date(b.last_contact_at).toLocaleDateString("vi-VN")}`
+                          : `tạo ${new Date(b.created_at).toLocaleDateString("vi-VN")}`}
+                      </span>
+                      {linkZalo(b.zalo_user_id) && (
+                        <a
+                          href={linkZalo(b.zalo_user_id)!}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold text-zalo transition hover:border-zalo"
+                        >
+                          Mở Zalo
+                        </a>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ))}
+          <p className="mt-3 max-w-[70ch] text-xs text-mute">
+            Tối đa 20 kết quả. Link Zalo theo uid là best-effort — uid cá nhân qua bridge có thể
+            không mở được.
+          </p>
+        </TraCuu>
+
+        {/* FR-70/73 — BĐS hot 60 ngày (view `bds_hot`) */}
+        <TraCuu
+          ten="BĐS hot · 60 ngày"
+          dem={bdsHot?.length ?? 0}
+          phu="đếm sự kiện (xem, hỏi, hẹn) theo tin — nhiều nhất trước"
+        >
+          {bdsHot === null ? (
+            <Rong>chưa có dữ liệu{loiPhu.bds_hot ? ` (${loiPhu.bds_hot})` : ""}</Rong>
+          ) : bdsHot.length === 0 ? (
+            <Rong>Chưa có sự kiện nào trong 60 ngày.</Rong>
+          ) : (
+            <ul className="divide-y divide-line text-sm">
+              {bdsHot.map((h) => (
+                <li key={h.listing_id} className="flex flex-wrap items-center gap-x-3 py-2.5">
+                  <span className="w-12 shrink-0 text-right font-extrabold tabular-nums text-brand">
+                    {h.so_su_kien_60d}
+                  </span>
+                  <Link
+                    href={`/nha-dat/${encodeURIComponent(h.code ?? "")}`}
+                    target="_blank"
+                    className="font-semibold transition hover:text-brand"
+                  >
+                    #{h.code ?? h.listing_id.slice(0, 8)}
+                  </Link>
+                  <span className="text-mute">{h.ward ?? ""}</span>
+                  <span className="ml-auto text-xs text-mute tabular-nums">
+                    {h.last_event_at
+                      ? `gần nhất ${new Date(h.last_event_at).toLocaleString("vi-VN")}`
+                      : ""}
+                  </span>
+                </li>
+              ))}
             </ul>
-          )
-        )}
-        <p className="mt-3 text-xs text-mute">
-          Tối đa 20 kết quả, không hiện số điện thoại. Link Zalo theo uid là best-effort —
-          uid cá nhân qua bridge có thể không mở được.
-        </p>
-      </div>
+          )}
+        </TraCuu>
 
-      {/* FR-71 — thống kê hội thoại 30 ngày (view hoi_thoai_thong_ke) + CSV */}
-      <div className="mt-6 rounded-king border border-line bg-white p-5">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="eyebrow text-mute">Thống kê hội thoại · 30 ngày</span>
-          <span className="text-sm text-mute tabular-nums">
-            {tongTK.hoi_thoai} hội thoại khách mới · {tongTK.khach_moi} khách mới ·{" "}
-            {tongTK.tin_khach} tin khách / {tongTK.tin_bot} bot / {tongTK.tin_nguoi_that} người thật ·{" "}
-            {tongTK.co} lần cần người thật
-          </span>
-          <button onClick={taiCsv} disabled={!thongKe.length}
-            className="ml-auto rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40">
-            Tải CSV
-          </button>
-        </div>
-        {thongKe.length > 0 && (
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-sm tabular-nums">
-              <thead className="text-left text-xs text-mute">
-                <tr>
-                  <th className="py-1 pr-3 font-semibold">Ngày</th>
-                  <th className="py-1 pr-3 font-semibold">HT khách</th>
-                  <th className="py-1 pr-3 font-semibold">HT bán</th>
-                  <th className="py-1 pr-3 font-semibold">Tin khách</th>
-                  <th className="py-1 pr-3 font-semibold">Tin bot</th>
-                  <th className="py-1 pr-3 font-semibold">Người thật</th>
-                  <th className="py-1 pr-3 font-semibold">Khách mới</th>
-                  <th className="py-1 font-semibold">Cờ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {ptThongKe.mot.map((r) => (
-                  <tr key={r.ngay}>
-                    <td className="py-1 pr-3 text-mute">{new Date(r.ngay).toLocaleDateString("vi-VN")}</td>
-                    <td className="py-1 pr-3">{r.hoi_thoai_khach_moi}</td>
-                    <td className="py-1 pr-3">{r.hoi_thoai_ban_moi}</td>
-                    <td className="py-1 pr-3">{r.tin_khach}</td>
-                    <td className="py-1 pr-3">{r.tin_bot}</td>
-                    <td className="py-1 pr-3">{r.tin_nguoi_that}</td>
-                    <td className="py-1 pr-3">{r.khach_moi}</td>
-                    <td className="py-1">{r.co_nguoi_that}</td>
+        {/* FR-71 — thống kê hội thoại 30 ngày (view hoi_thoai_thong_ke) + CSV */}
+        <TraCuu
+          ten="Thống kê hội thoại · 30 ngày"
+          phu={`${tongTK.hoi_thoai} hội thoại khách mới · ${tongTK.khach_moi} khách mới · ${tongTK.co} lần cần người thật`}
+        >
+          <div className="flex justify-end">
+            <button
+              onClick={taiCsv}
+              disabled={!thongKe.length}
+              className="rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40"
+            >
+              Tải CSV
+            </button>
+          </div>
+          {thongKe.length > 0 && (
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full text-sm tabular-nums">
+                <thead className="text-left text-xs text-mute">
+                  <tr>
+                    <th className="py-1 pr-3 font-semibold">Ngày</th>
+                    <th className="py-1 pr-3 font-semibold">HT khách</th>
+                    <th className="py-1 pr-3 font-semibold">HT bán</th>
+                    <th className="py-1 pr-3 font-semibold">Tin khách</th>
+                    <th className="py-1 pr-3 font-semibold">Tin bot</th>
+                    <th className="py-1 pr-3 font-semibold">Người thật</th>
+                    <th className="py-1 pr-3 font-semibold">Khách mới</th>
+                    <th className="py-1 font-semibold">Cờ</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <PhanTrang {...ptThongKe} />
-        <p className="mt-3 text-xs text-mute">
-          Ngày theo giờ VN. Tin "người thật" = CTV hoặc admin nhắn trong hội thoại. CSV tạo trên
-          trình duyệt; chưa có xuất Excel phía server.
-        </p>
-      </div>
-
-      {/* Người bán mới — nhãn bot gán lúc bóc tách, sửa tại chỗ (02/09) */}
-      {nguoiBan.length > 0 && (
-        <div className="mt-6 rounded-king border border-line bg-white p-5">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <span className="eyebrow text-mute">Người bán 14 ngày qua</span>
-            <span className="text-sm text-mute">nhãn quyết định mức phí — bấm để đổi nếu bot gán sai</span>
-          </div>
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {ptNguoiBan.mot.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center gap-x-3 py-2">
-                <span className="w-28 shrink-0 tabular-nums text-mute">
-                  {new Date(s.created_at).toLocaleDateString("vi-VN")}
-                </span>
-                <span className="font-semibold">{s.name ?? "Chưa có tên"}</span>
-                <span className="text-mute">{s.zalo_user_id ? "từ chat" : "tạo tay"}</span>
-                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
-                  s.seller_type === "unknown" ? "bg-navy text-white" : "bg-brand/10 text-brand"
-                }`}>
-                  {NHAN[s.seller_type] ?? s.seller_type}
-                </span>
-                <span className="ml-auto flex gap-2">
-                  {(["ccrb", "nmg"] as const).filter((t) => t !== s.seller_type).map((t) => (
-                    <button key={t} onClick={() => doiNhan(s.id, t)}
-                      className="rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand">
-                      Đổi thành {t === "ccrb" ? "chính chủ" : "môi giới"}
-                    </button>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {ptThongKe.mot.map((r) => (
+                    <tr key={r.ngay}>
+                      <td className="py-1 pr-3 text-mute">
+                        {new Date(r.ngay).toLocaleDateString("vi-VN")}
+                      </td>
+                      <td className="py-1 pr-3">{r.hoi_thoai_khach_moi}</td>
+                      <td className="py-1 pr-3">{r.hoi_thoai_ban_moi}</td>
+                      <td className="py-1 pr-3">{r.tin_khach}</td>
+                      <td className="py-1 pr-3">{r.tin_bot}</td>
+                      <td className="py-1 pr-3">{r.tin_nguoi_that}</td>
+                      <td className="py-1 pr-3">{r.khach_moi}</td>
+                      <td className="py-1">{r.co_nguoi_that}</td>
+                    </tr>
                   ))}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <PhanTrang {...ptNguoiBan} />
-        </div>
-      )}
-
-      {/* Tiền bộ não — số ĐO, không phải ước tính (migration 20260901b) */}
-      {tien.length > 0 && <TheTien rows={tien} />}
-
-      {/* FR-173 — hạng CTV theo độ kịp thời trả lời câu khách hỏi (03/09). */}
-      {hangCtv.length > 0 && (
-        <div className="mt-6 rounded-king border border-line bg-white p-5">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <span className="eyebrow text-mute">Hạng CTV</span>
-            <span className="text-sm text-mute">
-              tỷ lệ trả lời câu khách hỏi trong hạn (30 ngày) — Vàng ≥90%, Bạc ≥70%, còn lại Đồng
-            </span>
-          </div>
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {hangCtv.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-x-3 py-2">
-                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${HANG[c.rank]?.lop ?? "bg-line"}`}>
-                  {HANG[c.rank]?.ten ?? c.rank}
-                </span>
-                <span className="font-semibold">{c.name ?? "Không tên"}</span>
-                {!c.active && <span className="text-mute">tạm nghỉ</span>}
-                <span className="ml-auto tabular-nums text-mute">
-                  {c.dung_han}/{c.tong} đúng hạn · {c.tre} trễ
-                  {c.ty_le_dung_han != null ? ` · ${Math.round(c.ty_le_dung_han * 100)}%` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* FR-155 — hạng người rao. Nội bộ, KHÔNG lên web (OPEN-26). */}
-      {hang.length > 0 && (
-        <div className="mt-6 rounded-king border border-line bg-white p-5">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <span className="eyebrow text-mute">Hạng người rao</span>
-            <span className="text-sm text-mute">
-              chưa hiện trên web — chờ có giao dịch chốt thật (OPEN-26)
-            </span>
-          </div>
-          <ul className="mt-3 divide-y divide-line text-sm">
-            {hang.map((n) => (
-              <li key={n.id} className="flex flex-wrap items-center gap-x-3 py-2">
-                <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${HANG[n.rank]?.lop ?? "bg-line"}`}>
-                  {HANG[n.rank]?.ten ?? n.rank}
-                </span>
-                <span className="font-semibold">{n.name ?? "Không tên"}</span>
-                <span className="text-mute">{n.seller_type.toUpperCase()}</span>
-                <span className="ml-auto tabular-nums text-mute">
-                  {n.active_count} tin đang rao · {n.closed_count} đã chốt
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Tin chờ duyệt — tải 50, hiện 20/trang (FR-80) */}
-      <div className="mt-6 space-y-4">
-        {ptTin.mot.map((l) => (
-          <div key={l.id} className="rounded-king border border-line bg-white p-5">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="font-bold">
-                #{l.code} · {l.ward} · {formatPrice(l.price_vnd, l.price_raw)} · {formatArea(l.area_m2)}
-              </p>
-              <span className="text-xs text-mute">{new Date(l.created_at).toLocaleString("vi-VN")}</span>
+                </tbody>
+              </table>
             </div>
-            <p className="mt-2 line-clamp-3 text-sm text-navy/80">
-              {sanitizeDescription(l.description) || l.location_raw}
-            </p>
-            <div className="mt-4 flex gap-3">
-              <button onClick={() => setStatus(l.id, "dang_ban")}
-                className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">
-                Duyệt — cho rao
-              </button>
-              <button onClick={() => setStatus(l.id, "an")}
-                className="rounded-full border border-line px-5 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand active:scale-[0.98]">
-                Ẩn tin
-              </button>
-              <button onClick={() => setUpCho((c) => (c === l.id ? null : l.id))}
-                className="rounded-full border border-line px-4 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand">
-                {upCho === l.id ? "Đóng ảnh" : "Up ảnh"}
-              </button>
-              <Link href={`/nha-dat/${encodeURIComponent(l.code ?? "")}`} target="_blank"
-                className="ml-auto self-center text-sm font-semibold text-mute hover:text-brand">
-                Xem trang tin →
-              </Link>
-            </div>
-            {/* FR-96: up ảnh cho tin chờ duyệt (policy admin, bucket listing-public) */}
-            {upCho === l.id && (
-              <div className="mt-4">
-                <UploadAnh listingId={l.id} code={l.code} />
-              </div>
-            )}
-          </div>
-        ))}
-        {pending.length === 0 && (
-          <div className="rounded-king border border-line bg-white p-10 text-center text-mute">
-            Không còn tin chờ duyệt.
-          </div>
+          )}
+          <PhanTrang {...ptThongKe} />
+          <p className="mt-3 max-w-[70ch] text-xs text-mute">
+            Ngày theo giờ VN. Tin “người thật” = CTV hoặc admin nhắn trong hội thoại. CSV tạo trên
+            trình duyệt; chưa có xuất Excel phía server.
+          </p>
+        </TraCuu>
+
+        {/* Người bán mới — nhãn bot gán lúc bóc tách, sửa tại chỗ (02/09) */}
+        {nguoiBan.length > 0 && (
+          <TraCuu
+            ten="Người bán · 14 ngày qua"
+            dem={nguoiBan.length}
+            phu="nhãn quyết định mức phí — bấm để đổi nếu bot gán sai"
+          >
+            <ul className="divide-y divide-line text-sm">
+              {ptNguoiBan.mot.map((s) => (
+                <li key={s.id} className="flex flex-wrap items-center gap-x-3 py-2.5">
+                  <span className="w-28 shrink-0 tabular-nums text-mute">
+                    {new Date(s.created_at).toLocaleDateString("vi-VN")}
+                  </span>
+                  <span className="font-semibold">{s.name ?? "Chưa có tên"}</span>
+                  <span className="text-mute">{s.zalo_user_id ? "từ chat" : "tạo tay"}</span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                      s.seller_type === "unknown" ? "bg-navy text-white" : "bg-brand/10 text-brand"
+                    }`}
+                  >
+                    {NHAN[s.seller_type] ?? s.seller_type}
+                  </span>
+                  <span className="ml-auto flex gap-2">
+                    {(["ccrb", "nmg"] as const)
+                      .filter((t) => t !== s.seller_type)
+                      .map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => doiNhan(s.id, t)}
+                          className="rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand"
+                        >
+                          Đổi thành {t === "ccrb" ? "chính chủ" : "môi giới"}
+                        </button>
+                      ))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <PhanTrang {...ptNguoiBan} />
+          </TraCuu>
         )}
-        <PhanTrang {...ptTin} />
-      </div>
+
+        {/* Tiền bộ não — số ĐO, không phải ước tính (migration 20260901b) */}
+        {tien.length > 0 && <TheTien rows={tien} />}
+
+        {/* FR-173 — hạng CTV theo độ kịp thời trả lời câu khách hỏi (03/09) */}
+        {hangCtv.length > 0 && (
+          <TraCuu
+            ten="Hạng CTV"
+            phu="tỷ lệ trả lời trong hạn 30 ngày — Vàng ≥90%, Bạc ≥70%, còn lại Đồng"
+          >
+            <ul className="divide-y divide-line text-sm">
+              {hangCtv.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center gap-x-3 py-2.5">
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                      HANG[c.rank]?.lop ?? "bg-line"
+                    }`}
+                  >
+                    {HANG[c.rank]?.ten ?? c.rank}
+                  </span>
+                  <span className="font-semibold">{c.name ?? "Không tên"}</span>
+                  {!c.active && <span className="text-mute">tạm nghỉ</span>}
+                  <span className="ml-auto tabular-nums text-mute">
+                    {c.dung_han}/{c.tong} đúng hạn · {c.tre} trễ
+                    {c.ty_le_dung_han != null ? ` · ${Math.round(c.ty_le_dung_han * 100)}%` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </TraCuu>
+        )}
+
+        {/* FR-155 — hạng người rao. Nội bộ, KHÔNG lên web (OPEN-26). */}
+        {hang.length > 0 && (
+          <TraCuu ten="Hạng người rao" phu="chưa hiện trên web — chờ có giao dịch chốt thật (OPEN-26)">
+            <ul className="divide-y divide-line text-sm">
+              {hang.map((n) => (
+                <li key={n.id} className="flex flex-wrap items-center gap-x-3 py-2.5">
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
+                      HANG[n.rank]?.lop ?? "bg-line"
+                    }`}
+                  >
+                    {HANG[n.rank]?.ten ?? n.rank}
+                  </span>
+                  <span className="font-semibold">{n.name ?? "Không tên"}</span>
+                  <span className="text-mute">{n.seller_type.toUpperCase()}</span>
+                  <span className="ml-auto tabular-nums text-mute">
+                    {n.active_count} tin đang rao · {n.closed_count} đã chốt
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </TraCuu>
+        )}
+
+        {/* NFR-06 — giấy tờ ở bucket riêng: link ký 15 phút */}
+        <TraCuu
+          ten="Giấy tờ (bucket riêng)"
+          dem={giayTo.length}
+          phu="link xem sống 15 phút, không bao giờ công khai"
+        >
+          {loiPhu.giay_to ? (
+            <Rong>không đọc được: {loiPhu.giay_to}</Rong>
+          ) : giayTo.length === 0 ? (
+            <Rong>Chưa có file nào.</Rong>
+          ) : (
+            <ul className="divide-y divide-line text-sm">
+              {giayTo.map((g) => (
+                <li key={g.id} className="flex flex-wrap items-center gap-x-3 py-2.5">
+                  <span className="w-32 shrink-0 tabular-nums text-mute">
+                    {new Date(g.created_at).toLocaleString("vi-VN")}
+                  </span>
+                  <span className="font-bold">#{g.listings?.code ?? "—"}</span>
+                  <span className="text-mute">
+                    {g.media_type === "so_do"
+                      ? "sổ đỏ / sổ hồng"
+                      : g.media_type === "giay_to"
+                        ? "giấy tờ"
+                        : g.media_type}{" "}
+                    · {g.mime_type}
+                  </span>
+                  <button
+                    onClick={() => xemGiayTo(g)}
+                    className="ml-auto rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand"
+                  >
+                    Xem giấy tờ
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </TraCuu>
+      </section>
     </div>
   );
+}
+
+// ── Nguyên liệu bố cục ───────────────────────────────────────────────────────
+//
+// Trước bản này mọi khối trên trang đều là MỘT hình dạng: thẻ trắng bo góc,
+// cách nhau đúng một giá trị `mt-6`, mở đầu bằng cùng một nhãn `.eyebrow` xám.
+// Mười tám lần. Nhíu mắt lại thì không có gì nổi lên trước gì — đó chính là
+// "không có thứ bậc", và nó không sửa được bằng cách đổi màu hay bo góc.
+//
+// Hai nguyên liệu dưới đây phân biệt hai loại nội dung khác nhau về BẢN CHẤT:
+// việc phải làm hôm nay (mở sẵn, có số đếm, đứng trên nền trang) và tra cứu
+// (gập lại, chỉ mở khi cần trả lời một câu hỏi cụ thể).
+
+/** Một mục việc trong tầng "Cần xử lý". Tiêu đề là `h2` thật — số đếm ở bên
+ *  phải tiêu đề chứ không trộn vào câu mô tả, để nhìn lướt là ra số. */
+function Muc({ ten, phu, dem, children }: {
+  ten: string; phu?: string; dem?: number; children: ReactNode;
+}) {
+  const co = (dem ?? 0) > 0;
+  return (
+    <section className="mt-8">
+      <div className="flex flex-wrap items-baseline gap-x-2.5">
+        <h3 className="text-base font-extrabold tracking-tight">{ten}</h3>
+        {dem !== undefined && (
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold tabular-nums ${
+              co ? "bg-brand text-white" : "bg-line text-mute"
+            }`}
+          >
+            {dem}
+          </span>
+        )}
+        {phu && <span className="text-sm text-mute">{phu}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Một khối tra cứu — gập lại mặc định. `<details>` là đúng thứ ở đây: nó giữ
+ *  được bàn phím và trình đọc màn hình mà không cần một dòng JS nào. */
+function TraCuu({ ten, phu, dem, children }: {
+  ten: string; phu?: string; dem?: number; children: ReactNode;
+}) {
+  return (
+    <details className="group mt-3 border-b border-line pb-3">
+      <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2.5 rounded-shot py-1.5 transition hover:text-brand">
+        <span className="text-base font-bold tracking-tight">{ten}</span>
+        {dem !== undefined && dem > 0 && (
+          <span className="rounded-full bg-line px-2 py-0.5 text-xs font-bold tabular-nums text-navy">
+            {dem}
+          </span>
+        )}
+        {phu && <span className="text-sm font-normal text-mute">{phu}</span>}
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
+}
+
+/** Trạng thái rỗng. Một dòng, không phải một thẻ trắng cao 100px — ngày yên ắng
+ *  thì năm khối rỗng chiếm hết màn hình mà chẳng nói gì. */
+function Rong({ children }: { children: ReactNode }) {
+  return <p className="mt-2 text-sm text-mute">{children}</p>;
 }
 
 // FR-80 — thanh lật trang. Một trang thì không vẽ gì.
@@ -1023,35 +1227,24 @@ function TheTien({ rows }: { rows: Tien[] }) {
   const tyLeDoc = tongNap + tongDoc > 0 ? tongDoc / (tongNap + tongDoc) : null;
 
   return (
-    <div className="mt-6 rounded-king border border-line bg-white p-5">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="eyebrow text-mute">Tiền bộ não · 7 ngày</span>
-        {daDo ? (
-          <>
-            <span className="font-bold tabular-nums">${tong.toFixed(2)}</span>
-            <span className="text-sm text-mute tabular-nums">
-              {tongLuot} lượt · trung bình ${tongLuot ? (tong / tongLuot).toFixed(3) : "—"}/lượt
-            </span>
-            {tyLeDoc !== null && (
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-bold ${
-                  tyLeDoc >= 0.5 ? "bg-brand/10 text-brand" : "bg-navy text-white"
-                }`}
-              >
-                nhớ tạm: đọc lại {Math.round(tyLeDoc * 100)}%
-                {tyLeDoc >= 0.5 ? "" : " — đang lỗ, xem lại nhịp"}
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="text-sm text-mute">
-            chưa đo được chữ — bản chat-reply có đồng hồ chưa được deploy; cột dưới
-            mới chỉ đếm lượt
-          </span>
-        )}
-      </div>
+    <TraCuu
+      ten="Tiền bộ não · 7 ngày"
+      phu={
+        daDo
+          ? `$${tong.toFixed(2)} · ${tongLuot} lượt · trung bình $${tongLuot ? (tong / tongLuot).toFixed(3) : "—"}/lượt`
+          : "chưa đo được chữ — bản chat-reply có đồng hồ chưa được deploy"
+      }
+    >
+      {daDo && tyLeDoc !== null && (
+        <p
+          className={`text-sm font-bold ${tyLeDoc >= 0.5 ? "text-brand" : "text-navy"}`}
+        >
+          nhớ tạm: đọc lại {Math.round(tyLeDoc * 100)}%
+          {tyLeDoc >= 0.5 ? "" : " — đang lỗ, xem lại nhịp"}
+        </p>
+      )}
 
-      <ul className="mt-3 divide-y divide-line text-sm">
+      <ul className="mt-2 divide-y divide-line text-sm">
         {rows.map((t) => (
           <li key={t.day} className="flex flex-wrap gap-x-3 py-2">
             <span className="w-28 shrink-0 tabular-nums text-mute">
@@ -1073,13 +1266,13 @@ function TheTien({ rows }: { rows: Tien[] }) {
         ))}
       </ul>
 
-      <p className="mt-3 text-xs text-mute">
+      <p className="mt-3 max-w-[70ch] text-xs text-mute">
         Cận trên: tính giá nạp theo nhịp 1 giờ (2× — nhịp của lượt khách mua). Lượt
         người bán để nhịp 5 phút nên rẻ hơn một chút. Từ 02/09 cả bốn nơi gọi bộ
         não (chat-reply, nudge, ask-seller, ctv-report) đều gắn đồng hồ — đây là
         tổng, không còn là sàn.
       </p>
-    </div>
+    </TraCuu>
   );
 }
 

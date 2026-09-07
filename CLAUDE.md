@@ -96,23 +96,54 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
 - **Script vận hành** ở `scripts/` — chạy trên máy local, không deploy.
   `up-anh.mjs` đẩy ảnh thật lên bucket `listing-public` theo UUID của tin và
   ghi kèm dòng `listing_media` (FR-165; lối cũ theo mã tin của FR-148 đã bỏ);
-  nó chỉ ĐỌC `masterDB/`, không bao giờ copy ảnh vào repo.
+  nó chỉ ĐỌC `masterDB/`, không bao giờ copy ảnh vào repo. **Đã chạy thật
+  07/09/2026**: `listing_media` 1005 dòng, `listing_photos_v` 945, **171/173 tin
+  có ảnh** (`BDS-Q5-0113` và `BDS-Q5-0124` trống vì thư mục nguồn rỗng, không
+  phải lỗi script). Trước hôm đó `storage.objects` = 0 và web hiện ảnh giữ chỗ
+  cho MỌI tin — nếu thấy lại cảnh đó thì kiểm `listing_media` trước tiên.
+  Lần chạy đầu để lộ một bẫy đáng nhớ: `sort_order` là `int4`, hai ảnh mang tên
+  là dấu thời gian 14 chữ số làm tràn kiểu, insert nổ **sau khi** file đã lên
+  kho nên nhánh dọn dẹp xoá mất file vừa up, để lại một dòng lỗi trôi giữa 1005
+  dòng thành công. Vá ở CẢ HAI tầng (`20260907a`: `CHECK sort_order 0..9999`;
+  script: chỉ nhận số ≤4 chữ số) — vì `1700000000` vừa khít `int4` nên kiểu dữ
+  liệu một mình không bắt được.
   `sao-luu.mjs` kéo cả **31 bảng** về JSON, ghi `manifest.json` (bảng · số dòng
   · file · trạng thái) và gọi `xuat_schema()` ghi
   `bot/supabase/schema.sql` — **bậc Supabase Free không có backup tự động**,
-  đây là bản sao duy nhất đang tồn tại (OPEN-25). Cần
-  `SUPABASE_SERVICE_ROLE_KEY` trong biến môi trường; khoá đó bỏ qua mọi RLS nên
-  tuyệt đối không ghi vào file trong repo, và thư mục đích mặc định nằm NGOÀI
-  repo vì bản sao chứa SĐT thật. `soat-migration.mjs` so DB ↔ repo.
+  đây là bản sao duy nhất đang tồn tại (OPEN-25). **Bản sao ĐẦU TIÊN đã có
+  07/09/2026**: 31/31 bảng, `trang_thai: "day_du"`, nằm trên OneDrive công ty ở
+  thư mục hạn chế quyền — trước hôm đó script chưa từng chạy lần nào. Cần
+  `SUPABASE_SERVICE_ROLE_KEY` (đặt trong `scripts/.env`, đã gitignore); khoá đó
+  bỏ qua mọi RLS nên tuyệt đối không ghi vào file được track, và thư mục đích
+  mặc định nằm NGOÀI repo vì bản sao chứa SĐT thật.
+  **Sao lưu phải chạy SAU khi dữ liệu đổi, không phải trước.** Bản 07/09 chạy
+  lúc 09:29, `up-anh.mjs` chạy sau — nên `listing_media.json` trong đó chỉ 1 KB
+  trong khi bảng thật có 1005 dòng: file ảnh còn nguyên trong Storage mà không
+  gì nói tấm nào của tin nào, đúng kịch bản OPEN-47. Đổi dữ liệu lớn thì sao lưu
+  lại, và đọc `manifest.json` xác nhận SỐ DÒNG chứ đừng nhìn thư mục thấy đủ file.
+  `soat-migration.mjs` so DB ↔ repo. `phuc-hoi.mjs` + `soat-phuc-hoi.mjs` nạp
+  bản sao vào một DB RỖNG rồi chấm đạt/không (quy trình ở `docs/12`).
+  `xuat-ro-hang.mjs` xuất rổ hàng ra thứ NGƯỜI đọc được — mỗi tin một thư mục
+  (`tin.md` + `anh/`) kèm `ro-hang.csv` mở thẳng Excel; nó **không phải bản sao
+  lưu** (chỉ 3/31 bảng, không giữ UUID/khoá ngoại) và `manifest.json` của nó ghi
+  thẳng chữ `KHONG_PHAI_BAN_SAO_LUU`.
 
-**Migration ghi THAY ĐỔI, `schema.sql` mới dựng lại được** (soát 05/09/2026).
-Câu cũ ở đây nói "migration là nguồn sự thật của schema" — sai: DB đã áp 103
-migration, repo có 62 file; 44 migration 21/08 → 27/08 áp thẳng qua MCP mà
-không ai lưu file, nội dung mất vĩnh viễn (OPEN-46). Không ai thấy suốt hai
-tuần vì không có gì đối chiếu hai bên. Nay: thay đổi schema vẫn BẮT BUỘC đi qua
-một file trong `bot/supabase/migrations/`, `soat-migration.mjs` chặn trôi thêm,
-và `bot/supabase/schema.sql` là lưới an toàn để dựng lại từ số không (quy trình
+**Migration ghi THAY ĐỔI, `schema.sql` mới dựng lại được** (soát lại 07/09/2026).
+Câu cũ ở đây nói "migration là nguồn sự thật của schema" — sai. Số đo 07/09: DB
+đã áp **114** migration, `main` có **72** file, tức **41 migration áp thẳng qua
+MCP mà không ai lưu file** — gần hết là khối 21/08 → 27/08 dựng schema lõi (30
+bảng, RLS, projects, conversations, reminders, CTV, drip). Nội dung chúng mất
+vĩnh viễn (OPEN-46). Không ai thấy suốt hai tuần vì không có gì đối chiếu hai
+bên. Nay: thay đổi schema vẫn BẮT BUỘC đi qua một file trong
+`bot/supabase/migrations/`, `soat-migration.mjs` chặn trôi thêm, và
+`bot/supabase/schema.sql` là lưới an toàn để dựng lại từ số không (quy trình
 đầy đủ ở `bot/README.md §Phục hồi từ số không`).
+
+**Vết đó suýt lặp lại 07/09.** `20260907a_sort_order_la_so_thu_tu` áp lên
+production xong, file thì nằm trên một nhánh đã đẩy lên remote **mà không ai mở
+PR** — đúng hình lỗi đẻ ra OPEN-46, chỉ khác là bắt được sau vài giờ chứ không
+phải hai tuần (nay là PR #35). **Áp migration xong mà chưa mở PR cho file của nó
+thì việc chưa xong.** Đẩy nhánh lên không phải là đưa file về repo.
 
 **Danh sách bảng trong `sao-luu.mjs` phải đủ.** Nó liệt kê tay là cố ý (đọc là
 thấy), nhưng suốt 27/08 → 05/09 nó thiếu 8 bảng — trong đó `listing_media`, bản
@@ -134,6 +165,19 @@ mục đủ nếu không có gì nói ra; và mọi đường hỏng đều tho�
 nằm trong bản sao (`storage.objects`, `auth.users`, `vault.secrets`) được liệt
 kê tường minh trong manifest — "không thấy" và "cố ý bỏ" nhìn giống hệt nhau
 lúc đang chữa cháy.
+
+**`bun run build` có thể im lặng bỏ sót lớp Tailwind MỚI** (bắt 07/09/2026 lúc
+dựng lại `/admin`). Lượt build đầu sau khi sửa giao diện sinh ra CSS **thiếu
+`mt-16`, `gap-x-2.5`, `pb-24`, `max-w-[70ch]`** — đúng những lớp vừa đặt lần đầu
+trong dự án; các lớp đã dùng ở chỗ khác (`mt-12`, `mt-8`, `gap-x-3`) thì có đủ.
+Không lỗi, không cảnh báo: `tsc` sạch, build xanh, trang lên — chỉ là các khối
+dính vào nhau vì margin không tồn tại. `rm -rf .next/cache && bun run build` là
+hết. **Vercel có khôi phục `.next/cache` giữa các lần build, nên vết này ra được
+tới production.** Sửa giao diện mà thấy khoảng cách sai so với mã nguồn thì
+việc đầu tiên là soi CSS đã build (`grep -o 'mt-16' .next/static/css/*.css`),
+đừng sửa lại mã theo cái mình thấy — cách đó dẫn tới việc bịa số cho vừa một
+bản dựng hỏng. Đây cũng là lý do phải CHỤP MÀN HÌNH bản dựng thật khi đổi bố
+cục: đọc mã nguồn không bao giờ thấy được lớp bị rụng.
 
 **Trang tin phải nằm trong cache** (NFR-17). Route động có tham số đường dẫn mà
 thiếu `generateStaticParams()` thì `export const revalidate` là chữ chết —

@@ -168,16 +168,24 @@ kênh báo động không được đi qua thứ mà nó phải giám sát.
 
 ## Migration
 
-62 file ở `bot/supabase/migrations/`, đặt tên `YYYYMMDD<chữ>_<việc>.sql`, áp
+72 file ở `bot/supabase/migrations/`, đặt tên `YYYYMMDD<chữ>_<việc>.sql`, áp
 theo thứ tự tên. Sửa DB bằng `apply_migration` với đúng nội dung file trong
-repo, không sửa tay ở dashboard rồi quên ghi lại. Đợt gần nhất: `20260904a`
-(còi ntfy) → `20260905c` (liệt kê migration).
+repo, không sửa tay ở dashboard rồi quên ghi lại. Đợt gần nhất: `20260906a`
+(còi ntfy đọc lại kết quả) → `20260906b` (chú thích bảng + view `ro_hang_ban`)
+→ `20260907a` (`CHECK sort_order`, đang ở PR #35).
+
+**Áp migration xong mà chưa mở PR cho file của nó thì việc CHƯA XONG.** Đẩy
+nhánh lên remote không phải là đưa file về repo — 07/09 `20260907a` đã áp lên
+production trong khi file chỉ nằm trên một nhánh không có PR, đúng hình lỗi đẻ
+ra OPEN-46 (chỉ khác là bắt sau vài giờ thay vì hai tuần).
 
 **Migration ghi THAY ĐỔI, `schema.sql` mới dựng lại được.** Câu cũ ở đây nói
-migration là "nguồn sự thật của schema" — soát 05/09 cho thấy sai: DB đã áp 103
-migration, repo có 62 file; 44 migration 21/08 → 27/08 áp qua MCP mà không ai
-lưu file (OPEN-46). Nội dung chúng mất vĩnh viễn. Lưới an toàn là
-`bot/supabase/schema.sql`, sinh bởi `xuat_schema()`. Chạy
+migration là "nguồn sự thật của schema" — sai. Đo lại 07/09: DB đã áp **114**
+migration, `main` có **72** file → **41** migration (gần hết là khối 21/08 →
+27/08) áp qua MCP mà không ai lưu file (OPEN-46). Nội dung chúng mất vĩnh viễn.
+Lưới an toàn là `bot/supabase/schema.sql`, sinh bởi `xuat_schema()` — **file đó
+thật sự vào repo lần đầu 07/09** (5112 dòng, PR #35); trước đó lời hứa "repo một
+mình cũng dựng lại được" chưa thành sự thật vì chưa ai commit nó. Chạy
 `node scripts/soat-migration.mjs` để không trôi thêm.
 
 ## Chưa làm
