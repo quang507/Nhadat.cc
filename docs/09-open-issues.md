@@ -5,14 +5,14 @@ tự chốt (quy ước 2, `CLAUDE.md`). Mục đã chốt hoặc đã đóng ch
 thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm trong lịch sử git. Ký hiệu:
 ✅ đã chốt · 🚫 đóng vì không còn hợp hướng AOND · 🟡 chốt một phần (vẫn tính còn chờ).
 
-## Còn chờ chủ dự án (21)
+## Còn chờ chủ dự án (18)
 
 | ID | Vấn đề | Mức | Liên quan |
 |---|---|---|---|
 | OPEN-02 | "Giao dịch thành công" tính phí ở thời điểm nào: đặt cọc, công chứng hay sang tên? | Cao | BR-05, OPEN-16 |
-| OPEN-04 | Ai dẫn khách xem nhà khi NMG bận hoặc không phản hồi? | Trung bình | UF-06 |
-| OPEN-05 | Xin số ĐT lúc đặt lịch có phá lời hứa "không hỏi số ĐT" không? | Cao | FR-53, NFR-07 |
-| OPEN-12 | Quy trình chấm điểm & chấm dứt NMG ("≤3/5 một lần là chấm dứt" quá khắt khe) | Trung bình | FR-137, OPEN-26 |
+| OPEN-04 | ✅ **ĐÃ CHỐT 07/09/2026** — CTV chốt lịch và dẫn khách (FR-52, FR-173); NMG bận thì CTV thay, AOND §V "hệ thống tự điều phối CTV dẫn khách" | UF-06 |
+| OPEN-05 | ✅ **ĐÃ CHỐT 07/09/2026** — phương án (b): chỉ xin SĐT ở bước chốt lịch xem, nêu mục đích, cho phép từ chối — đã là bất biến DH-02 #2 (03/09), FR-53 | FR-53, NFR-07 |
+| OPEN-12 | ✅ **ĐÃ CHỐT 07/09/2026** — theo AOND §V nguyên văn: NMG bị chấm < 3 sao ngưng hợp tác (DH-03: AOND thắng ở mặt bán); phúc tra thủ công bởi admin trước khi ngưng [giả định BA] | FR-137, OPEN-26 |
 | OPEN-21 | Vai người rao 5 loại (CĐT/sàn/NMG/lướt sóng/chủ nhà) + phí riêng cho CĐT — mở rộng nhị phân CCRB/NMG? | Trung bình | BR-05, OPEN-28 |
 | OPEN-24 | `pg_net` mở cho `anon` (mồi SSRF), REVOKE từ vai `postgres` là no-op — gác cửa cấu hình + ticket Supabase? | Cao | NFR-06, SRS-3.9 |
 | OPEN-26 | 🟡 **CHỐT MỘT PHẦN 27/08** — hạng ẩn khỏi web, chỉ hiện `/admin`; ngưỡng Đồng/Bạc/Vàng và quyền lợi mỗi hạng vẫn [giả định BA] | Trung bình | FR-155, OPEN-20 |
@@ -31,7 +31,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-47 | Tám bảng chưa từng được sao lưu — đã vá; còn treo: bucket `masterdb-raw` chưa có file, Storage `listing-public` chưa nằm trong bản sao nào | Cao | FR-165, OPEN-25 |
 | OPEN-48 | Sếp muốn **bớt kế thừa nhadat.cc, giống Aioinhadat hơn** (07/09): bỏ mảng nào trong 14 FR chỉ có ở nhadat.cc 2024, giữ mảng nào vì bất biến DH-02 | Cao | DH-01…04, `00 §0.2–0.3`, OPEN-49 |
 
-## Đã chốt / đã đóng (28)
+## Đã chốt / đã đóng (31)
 
 | ID | Kết luận | Liên quan |
 |---|---|---|
@@ -73,30 +73,6 @@ thuộc câu này.
 **Phương án**: (a) đặt cọc; (b) công chứng HĐMB; (c) sang tên.
 **Khuyến nghị BA**: (b); MVP ghi nhận thủ công trong admin, chưa cần module hợp đồng.
 **Chờ**: chủ dự án.
-
-### OPEN-04 · Ai dẫn khách xem nhà
-**Vấn đề**: CCRB thì CTV dẫn, NMG thì NMG dẫn [nguồn: biz model.docx], nhưng chỉ có 1.5 CTV (RSK-05)
-và chưa có quy tắc khi NMG bận/không phản hồi.
-**Phương án**: (a) SLA cho NMG, quá hạn CTV tiếp quản và NMG mất phần phí dẫn xem; (b) NMG luôn tự
-dẫn, khách chờ.
-**Khuyến nghị BA**: (a) với SLA 4 giờ. **Chờ**: chủ dự án.
-
-### OPEN-05 · Xin số điện thoại
-**Vấn đề**: `nhadat.cc website.docx` cam kết "không hỏi số ĐT", nhưng `chats w B.docx §Hẹn xem nhà`
-xin số hai lần.
-**Phương án**: (a) không bao giờ xin, liên hệ 100% qua Zalo; (b) xin CHỈ ở bước đặt lịch, nêu mục
-đích, cho phép từ chối; (c) bỏ cam kết.
-**Khuyến nghị BA**: (b) — đã đặc tả ở FR-53/WF-07 có đường từ chối; sửa copy web thành "không hỏi số
-ĐT để spam".
-**Chờ**: chủ dự án.
-
-### OPEN-12 · Chấm điểm & chấm dứt NMG
-**Vấn đề**: quy định "chấm dứt ngay khi bị chấm ≤3/5 ở mọi tương tác" rất khắt khe — một đánh giá
-xấu đơn lẻ có thể do khách khó tính; chưa có quy trình khiếu nại. Nguồn chấm hiện là báo cáo 17h
-(FR-137), `rate-ctv` đã xoá (OPEN-23).
-**Phương án**: (a) trung bình trượt 5 lượt gần nhất: <3.5 cảnh báo, <3.0 chấm dứt, có phúc tra bởi
-CTV; (b) giữ luật gốc.
-**Khuyến nghị BA**: (a). **Chờ**: chủ dự án.
 
 ### OPEN-21 · Vai người rao 5 loại + phí riêng cho chủ đầu tư
 **Vấn đề**: `AOND req + chat examples.docx §V` — thực tế có 5 vai: CĐT (bán sơ cấp, trả hoa hồng cho
