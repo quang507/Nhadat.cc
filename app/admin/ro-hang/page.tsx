@@ -4,10 +4,13 @@
 // bán), lọc, sắp xếp, tìm, tải CSV mở thẳng bằng Excel. Cùng dữ liệu với view
 // `so.ro_hang` phía DB (20260907c) nhưng không cần vào Supabase.
 //
-// KHÔNG có cột số điện thoại — trang web không bao giờ chọn `sellers.phone`
-// (NFR-07, FR-104), kể cả cho admin. SĐT xem ở Supabase → schema `so`.
-// Quyền: RLS `listings_admin_read` + `sellers_admin_read` mới là hàng rào,
-// trang này chỉ là UI; người không phải admin nhìn thấy trang chặn.
+// CÓ cột SĐT NGƯỜI BÁN (quyết định chủ dự án 07/09/2026): đây là SĐT người
+// rao đã ký với bên mình, admin cần để gọi. NFR-07 cấm đọc SĐT của KHÁCH MUA
+// (`buyers.phone`), không cấm cột này. Hàng rào thật là RLS `sellers_admin_read`:
+// không phải admin thì `sellers` trả null, cột trống. Mô tả vẫn qua
+// `sanitizeDescription` (FR-104) vì đó là SĐT lạ dán trong câu rao.
+// Quyền trang: RLS `listings_admin_read` mới là hàng rào, trang này chỉ là
+// UI; người không phải admin nhìn thấy trang chặn.
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -29,13 +32,13 @@ type Dong = {
   property_type: string | null;
   status: string;
   created_at: string;
-  sellers: { name: string | null; seller_type: string } | null;
+  sellers: { name: string | null; phone: string | null; seller_type: string } | null;
   media: { count: number }[] | null;
   listing_media: { count: number }[] | null;
 };
 
 const COT_CHON =
-  "id, code, legacy_sst, deal, district, ward, street, location_raw, area_m2, price_vnd, price_raw, description, property_type, status, created_at, sellers!listings_seller_id_fkey(name, seller_type), media(count), listing_media(count)";
+  "id, code, legacy_sst, deal, district, ward, street, location_raw, area_m2, price_vnd, price_raw, description, property_type, status, created_at, sellers!listings_seller_id_fkey(name, phone, seller_type), media(count), listing_media(count)";
 
 const TRANG_THAI: Record<string, string> = {
   cho_thong_tin: "chờ thông tin",
@@ -60,6 +63,7 @@ const COT: Cot[] = [
   { key: "gia", ten: "Giá", lay: (d) => formatPrice(d.price_vnd, d.price_raw), sap: (d) => d.price_vnd ?? -1 },
   { key: "mo_ta", ten: "Mô tả", lay: (d) => sanitizeDescription(d.description).replace(/\r?\n/g, " ") },
   { key: "nguoi_ban", ten: "Người bán", lay: (d) => d.sellers?.name ?? "", sap: (d) => d.sellers?.name ?? "" },
+  { key: "sdt", ten: "SĐT người bán", lay: (d) => d.sellers?.phone ?? "", sap: (d) => d.sellers?.phone ?? "" },
   { key: "ma", ten: "Mã tin", lay: (d) => d.code ?? "", sap: (d) => d.code ?? "" },
   { key: "loai", ten: "Loại", lay: (d) => TYPE_LABEL[d.property_type ?? ""] ?? "chưa rõ", sap: (d) => d.property_type ?? "" },
   { key: "trang_thai", ten: "Trạng thái", lay: (d) => TRANG_THAI[d.status] ?? d.status, sap: (d) => d.status },
@@ -170,7 +174,7 @@ export default function Page() {
           </p>
           <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Rổ hàng</h1>
           <p className="mt-1 text-sm text-mute tabular-nums">
-            {rows.length} tin · đang hiện {loc.length} · cột xếp như file Excel gốc · không có cột số điện thoại
+            {rows.length} tin · đang hiện {loc.length} · cột xếp như file Excel gốc · SĐT là của người bán đã ký, chỉ admin thấy
           </p>
         </div>
         <button
