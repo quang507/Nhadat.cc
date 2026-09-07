@@ -39,7 +39,92 @@ body {
   @apply bg-cream text-navy antialiased;
 }
 
-/* Nhãn nhỏ chữ hoa giãn chữ — Veedoo dùng cho label trên khối thông số */
+/* Nhãn nhỏ chữ hoa giãn chữ — Veedoo dùng cho label trên khối thông số.
+   CHỈ dùng làm nhãn cho một CON SỐ hay một ô dữ liệu. KHÔNG dùng làm tiêu đề
+   khối: trang /admin từng có 18 khối mở đầu bằng đúng nhãn này, và hệ quả là
+   không khối nào nổi lên trước khối nào. Tiêu đề thì dùng h2/h3 thật. */
 .eyebrow {
   @apply text-xs font-bold uppercase tracking-[0.14em];
+}
+
+/* ── Bề mặt do TRÌNH DUYỆT vẽ ────────────────────────────────────────────────
+   Bôi đen, thanh cuộn, mũi tên <details>, gạch chân link — mấy thứ này mặc
+   định mang màu của trình duyệt, không mang màu của ai cả. Để nguyên là trang
+   trông như được lắp lại từ linh kiện; nhuộm theo bảng màu là trang trông như
+   được dựng. Rẻ nhất trong mọi việc làm đẹp, và hay bị bỏ quên nhất. */
+
+::selection {
+  background: color-mix(in srgb, var(--color-brand) 22%, transparent);
+  color: var(--color-navy);
+}
+
+/* Con trỏ nhập liệu theo màu thương hiệu, không phải đen hệ thống */
+input,
+textarea {
+  caret-color: var(--color-brand);
+}
+
+/* Thanh cuộn: mảnh, theo màu đường kẻ, đậm lên khi rê chuột */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-mute);
+  background-clip: padding-box;
+}
+
+/* Gạch chân link rời khỏi chữ một chút, không cắt qua phần đuôi chữ — tiếng
+   Việt nhiều dấu dưới (ạ, ợ, ụ) nên mặc định của trình duyệt cắt vào dấu. */
+a:not([class*="rounded"]) {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+/* Mũi tên của <details> quay 90° khi mở — chuyển động DUY NHẤT được authored
+   trên trang quản trị, đúng một khoảnh khắc chứ không rải hiệu ứng khắp nơi. */
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details > summary::before {
+  content: "";
+  display: inline-block;
+  width: 0.45em;
+  height: 0.45em;
+  margin-right: 0.6em;
+  border-right: 2px solid var(--color-mute);
+  border-bottom: 2px solid var(--color-mute);
+  transform: rotate(-45deg) translate(-0.1em, -0.1em);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+details[open] > summary::before {
+  transform: rotate(45deg) translate(-0.05em, -0.05em);
+}
+details > summary:hover::before {
+  border-color: var(--color-brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  details > summary::before {
+    transition: none;
+  }
 }

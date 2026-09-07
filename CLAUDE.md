@@ -166,6 +166,19 @@ nằm trong bản sao (`storage.objects`, `auth.users`, `vault.secrets`) đượ
 kê tường minh trong manifest — "không thấy" và "cố ý bỏ" nhìn giống hệt nhau
 lúc đang chữa cháy.
 
+**`bun run build` có thể im lặng bỏ sót lớp Tailwind MỚI** (bắt 07/09/2026 lúc
+dựng lại `/admin`). Lượt build đầu sau khi sửa giao diện sinh ra CSS **thiếu
+`mt-16`, `gap-x-2.5`, `pb-24`, `max-w-[70ch]`** — đúng những lớp vừa đặt lần đầu
+trong dự án; các lớp đã dùng ở chỗ khác (`mt-12`, `mt-8`, `gap-x-3`) thì có đủ.
+Không lỗi, không cảnh báo: `tsc` sạch, build xanh, trang lên — chỉ là các khối
+dính vào nhau vì margin không tồn tại. `rm -rf .next/cache && bun run build` là
+hết. **Vercel có khôi phục `.next/cache` giữa các lần build, nên vết này ra được
+tới production.** Sửa giao diện mà thấy khoảng cách sai so với mã nguồn thì
+việc đầu tiên là soi CSS đã build (`grep -o 'mt-16' .next/static/css/*.css`),
+đừng sửa lại mã theo cái mình thấy — cách đó dẫn tới việc bịa số cho vừa một
+bản dựng hỏng. Đây cũng là lý do phải CHỤP MÀN HÌNH bản dựng thật khi đổi bố
+cục: đọc mã nguồn không bao giờ thấy được lớp bị rụng.
+
 **Trang tin phải nằm trong cache** (NFR-17). Route động có tham số đường dẫn mà
 thiếu `generateStaticParams()` thì `export const revalidate` là chữ chết —
 Next 15 để `prerender-manifest.dynamicRoutes` rỗng và mỗi lượt xem là một lambda
