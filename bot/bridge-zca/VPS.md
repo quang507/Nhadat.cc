@@ -6,6 +6,18 @@ máy local là chết theo máy local (sự cố 27/08 → 04/09/2026: bridge im
 kênh Zalo bằng 0, 117 lời cảnh báo không gửi được vì chính chúng đi qua bridge).
 VPS nhỏ nhất là đủ (1 vCPU, 1 GB, Ubuntu 22.04/24.04).
 
+## 0. Cách nhanh — một lệnh (07/09/2026)
+
+`cai-vps.sh` gói mục 1, 2, 4 dưới đây, chạy lại được, không in secret:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/quang507/Nhadat.cc/main/bot/bridge-zca/cai-vps.sh -o cai-vps.sh
+sudo BRIDGE_SECRET='<giá trị trong Supabase → Vault → BRIDGE_SECRET>' bash cai-vps.sh
+```
+
+Xong nó in đúng mấy lệnh của mục 3 (quét QR) — bước đó vẫn phải làm tay.
+Đổi máy thì chạy lại y vậy trên máy mới, rồi quét QR lại.
+
 ## 1. Chuẩn bị máy (một lần)
 
 ```bash
