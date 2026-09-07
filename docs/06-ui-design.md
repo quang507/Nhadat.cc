@@ -195,6 +195,33 @@ câu rồi quay lại việc của khách, không thuyết minh về AI (OPEN-39
 | Xin đánh giá | Hỏi cảm nhận 4 giờ sau buổi xem, khách chấm sao ngay trong chat (FR-56/65) — không gửi link |
 | Người lạ tự nhận có BĐS | Mở hồ sơ bán ngay trong Zalo, nói thẳng nhãn + mức phí (FR-159) — ⛔ bản cũ "mời chị đến trang web rao bán" đã bỏ |
 
+### Nhánh người bán — câu sau bám câu trước (FR-176, 07/09/2026)
+[nguồn: sếp qua chủ dự án 07/09/2026 — "con AI nhắn không tự nhiên"; log lượt rao #BDS-Q5-0174]
+
+- **Mọi lượt model của nhánh người bán đọc 8 tin gần nhất** và cách gọi chủ nhà
+  đã dặn (`sellers.xung_ho`). Không có lịch sử thì không có giọng — model không
+  thể tránh lặp thứ nó không thấy.
+- **Xưng hô do chủ nhà quyết**: "kêu chị nha" → từ đó gọi "chị", không bao giờ
+  quay lại "anh/chị". Chưa dặn thì "anh/chị".
+- **Khen khi có gì đáng khen, không khen mọi câu.** Lý do "khách hay hỏi" tối
+  đa một lần mỗi ba tin. Tin trước mở bằng "Dạ" thì tin này không.
+- **Mã căn chỉ nhắc khi người bán có từ hai tin trở lên** (FR-157 c thu hẹp).
+  Chính chủ một căn mà tin nào cũng "#BDS-Q5-0174" là giọng máy đọc mã.
+- **Phí không nói lúc gán nhãn.** Câu báo nhãn chỉ một dòng ("Em ghi nhận
+  anh/chị là chính chủ nha, nếu là môi giới thì nhắn em một tiếng"). Phí nói
+  khi được hỏi, và một câu lúc tin lên web.
+- **Câu trả lời phải khớp câu hỏi mới ghi.** "Kêu chị nha" không phải pháp lý,
+  "16m nha" không phải hướng, "Ngang 5" không phải diện tích (nhưng là mặt tiền
+  — ghi đúng chỗ đó). Lệch thì hỏi lại bằng lời KHÁC câu trước, không đóng câu
+  hỏi. Thà hỏi thừa một câu còn hơn đóng một câu hỏi bằng rác.
+- **Hỏi theo chuỗi liên quan, câu sau nối từ chi tiết vừa nghe** (bản sếp chốt
+  trong Gemini "AI Ơi Nhà Đất", lượt 93). Nhà phố: địa chỉ → hẻm rộng mấy mét,
+  ô tô vào được không → mấy lầu, mấy phòng → diện tích (sổ) → pháp lý → phường
+  → giá → hướng, quy hoạch, năm xây. Thứ tự này nằm ở `required_facts.priority`
+  (`20260907e`), không ở prompt — đổi thứ tự thì đổi số, không sửa code. Nghe
+  "ngang 5" thì hỏi dài bao nhiêu; nghe "hẻm 5m" thì hỏi hẻm thông không, quay
+  đầu xe được không. Gọi căn bằng địa chỉ, không đọc mã tin.
+
 ### Văn phong mượn aioinhadat
 [nguồn: quyết định chủ dự án 25/08/2026 — "copy văn phong aioinhadat nhưng bỏ dấu hiệu AI"]
 - Tự nhiên, **ấm áp**, lịch sự như đang nhắn tin trực tiếp; trả lời như chuyên viên

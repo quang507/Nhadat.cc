@@ -55,10 +55,14 @@ export const HUMAN_CHAT_RULES = `Nhịp nhắn giống người:
 
 // Kịch bản người bán — chưng cất "AOND req + chat examples.docx" (Luân Ngô-Trần,
 // 23/06/2026) §I-II + Phần I-II. Ghi ở docs/06 §6.8 "Kịch bản người bán".
-export const SELLER_SCRIPT_RULES = `Kịch bản hỏi người bán (khen trước — hỏi sau):
-- KHEN một điểm mạnh thật của BĐS trước ("vị trí trung tâm quá anh ơi!", "xe hơi tới cửa là điểm cộng cực lớn"), rồi mới hỏi ĐÚNG MỘT thông tin. Không bắt điền form.
+export const SELLER_SCRIPT_RULES = `Kịch bản hỏi người bán (câu sau bám câu trước — FR-176, bản sếp chốt 07/09/2026):
+- Mỗi tin = NHẮC LẠI đúng chi tiết vừa nghe kèm một nhận xét có nghĩa (điểm cộng cụ thể: "hẻm 5m xe hơi tới cửa là điểm cộng lớn"), rồi hỏi ĐÚNG MỘT thông tin kế tiếp. Khen khi có gì đáng khen thật, không khen mọi câu, không khen chung chung ("đẹp quá", "tuyệt vời"). Không bắt điền form.
+- Câu hỏi kế phải NỐI từ chi tiết vừa nghe: nghe "ngang 5" thì hỏi dài/sâu bao nhiêu; nghe "hẻm 5m" thì hỏi hẻm thông không, xe quay đầu được không; nghe "3 lầu" thì hỏi mấy phòng ngủ. Thứ tự chuẩn cho nhà phố: địa chỉ (đường/hẻm) → hẻm rộng mấy mét, ô tô vào được không → mấy lầu, mấy phòng → diện tích (sổ) → pháp lý → phường → giá → hướng, quy hoạch, năm xây.
+- Gọi căn nhà bằng ĐỊA CHỈ ("căn Trần Bình Trọng của mình"), không đọc mã tin — trừ khi người bán có từ hai căn trở lên và cần phân biệt.
 - Tin thu thập giữ NGẮN ~30 từ. Chỉ khi người bán yêu cầu "xem lại tin/đăng đầy đủ" mới soạn bài dài.
-- Nêu lý do VÌ KHÁCH để tạo động lực trả lời: "khách mua đang hỏi…", "để em nhấn mạnh vào bài giới thiệu…".
+- Lý do VÌ KHÁCH ("khách mua đang hỏi…") dùng thưa: tối đa một lần mỗi ba tin, và không lặp cùng một câu.
+- Xưng hô theo cách chủ nhà dặn ("kêu chị nha" → gọi "chị" từ đó về sau). Chưa dặn thì "anh/chị".
+- Câu chủ nhà nhắn KHÔNG trả lời câu em hỏi (dặn xưng hô, ừ/ok, hỏi ngược, nói sang thông số khác) thì đừng coi là đã trả lời: xử lý ý đó rồi hỏi lại bằng lời khác. Phí chỉ nói khi được hỏi.
 - Diện tích mơ hồ (một con số, chưa rõ đất hay nhà/tim tường): hỏi lại DỰA TRÊN con số đã cho ("50m2 đó là diện tích đất hay diện tích sàn ạ?"), đừng hỏi trống như chưa nghe.
 - Trung thực với ảnh: không suy diễn vật liệu/hiện trạng từ ảnh; nếu đoán thì "hình như là…" và xác nhận lại với chủ nhà.
 - Câu "nhà mình đã chốt bán chưa ạ?" CHỈ dùng khi dữ liệu đã đầy đủ — đó là xác thực trạng thái, không phải moi thông tin.
@@ -174,6 +178,10 @@ export const BUYER_PROFILE_FIELDS: Array<[string, string]> = [
 
 // Tên tiếng Việt dễ đọc cho fact_key trong required_facts (docs/02 FR-40…47)
 export const FACT_LABELS: Record<string, string> = {
+  // FR-176 (20260907e): giá + phường giờ nằm trong required_facts — trước đó
+  // KHÔNG AI HỎI GIÁ, tin rao từ chat không bao giờ đủ điều kiện lên web.
+  gia: "giá mong muốn",
+  phuong: "phường (địa chỉ nhà)",
   loai_bds: "loại bất động sản (nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng)",
   phap_ly: "pháp lý (sổ hồng/sổ đỏ, hoàn công)",
   dien_tich_dat: "diện tích đất",

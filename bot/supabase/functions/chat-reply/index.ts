@@ -29,6 +29,10 @@ import {
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { bocQuan } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao
+// FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
+import {
+  batXungHo, NHAN_HOI_LAI, phanLoaiCauTraLoi, type KetQuaKhop,
+} from "../_shared/extraction/khop-cau-tra-loi.ts";
 
 // FR-161 — RẤT NHIỀU người nhắn Zalo không bỏ dấu, mà mọi cổng regex ở đây
 // từng viết bằng chữ có dấu: "ban nha quan 5 gia 5 ty" trượt cổng rao im lặng,
@@ -308,11 +312,14 @@ const VOICE_RE_KD = /goi dien|goi (cho|lai) (em|anh|chi|toi|minh|tui)|\balo\b|\b
 // Khách chấm sao sau buổi xem (FR-65): "4 sao", "3/5", "chấm 4", "5 điểm".
 const SAO_RE_KD = /(?:^|[^\d])([1-5])\s*(?:sao\b|\/\s*5\b|diem\b)|cham\s*(?:cho\s*)?(?:em\s*)?([1-5])\b/;
 // "Hiện thông báo cho người ta" (02/09): vừa gán nhãn thì nói thẳng cho họ
-// nhãn gì, phí bao nhiêu, và cách sửa nếu sai.
+// nhãn gì và cách sửa nếu sai. FR-176 (07/09): BỎ biểu phí khỏi câu này —
+// người ta vừa nhắn một câu rao, chưa hỏi gì mà nhận ngay một đoạn "1% giá
+// chốt, 3/4 tháng tiền thuê" là giọng máy phát tờ rơi. Phí nói khi họ HỎI
+// (FEE_RULES) và nhắc một câu lúc tin lên web. Admin vẫn nhận đủ nhãn + phí.
 const cauNhan = (t: "ccrb" | "nmg") =>
   t === "nmg"
-    ? "Em ghi nhận anh/chị là MÔI GIỚI ạ. Bên em chỉ thu phí khi giao dịch thành công: bán 0,5% giá chốt, cho thuê 3/4 tháng tiền thuê. Nếu anh/chị là chính chủ thì nhắn em để em ghi lại đúng nha."
-    : "Em ghi nhận anh/chị là CHÍNH CHỦ ạ. Bên em chỉ thu phí khi giao dịch thành công: bán 1% giá chốt, cho thuê 3/4 tháng tiền thuê. Nếu anh/chị là môi giới thì nhắn em để em ghi lại đúng nha.";
+    ? "Em ghi nhận anh/chị là môi giới nha. Nếu là chính chủ thì nhắn em một tiếng để em sửa lại."
+    : "Em ghi nhận anh/chị là chính chủ nha. Nếu là môi giới thì nhắn em một tiếng để em sửa lại.";
 
 // NHỚ TẠM CẤU HÌNH 60 giây: bí mật cổng, trần lượt model/ngày và bảng
 // `bot_prompts`. Trước bản này ba thứ đó là ba vòng đi về DB ở ĐẦU MỌI TIN
@@ -818,9 +825,10 @@ Deno.serve(async (req) => {
   type SellerRow = {
     id: string; name: string | null; active_listing_id: string | null;
     seller_type?: string | null;
+    xung_ho?: "anh" | "chị" | null; // FR-176: chủ nhà dặn gọi anh hay chị
   };
   const [{ data: sellerCu }, { data: bCu }] = await Promise.all([
-    client.from("sellers").select("id, name, active_listing_id, seller_type")
+    client.from("sellers").select("id, name, active_listing_id, seller_type, xung_ho")
       .eq("zalo_user_id", externalUserId).maybeSingle(),
     client.from("buyers").select("preferences")
       .eq("zalo_user_id", externalUserId).maybeSingle(),
@@ -1142,6 +1150,51 @@ Deno.serve(async (req) => {
       });
     };
 
+    // ─── FR-176: NGỮ CẢNH CHUNG cho mọi lượt gọi model của nhánh người bán.
+    // Trước bản này mỗi lượt là một cuộc gọi CỤT: model chỉ thấy đúng một câu
+    // lệnh "chủ nhà vừa trả lời X, khen rồi hỏi Y", không thấy 5 tin trước —
+    // nên tin nào cũng cùng khuôn (khen + mã căn + hỏi + "khách hay hỏi lắm"),
+    // và "kêu chị nha" sống đúng một lượt rồi câu sau lại "anh". Sếp đọc log
+    // 07/09/2026: "con AI nhắn không tự nhiên". Nay: 8 tin gần nhất + cách gọi
+    // đã dặn (`sellers.xung_ho`, migration 20260907d) đi vào MỌI lượt.
+    const xungHoMoi = batXungHo(text);
+    if (xungHoMoi && xungHoMoi !== sellerRow.xung_ho) {
+      const { error: xhErr } = await client.from("sellers")
+        .update({ xung_ho: xungHoMoi }).eq("id", sellerRow.id);
+      if (xhErr) await ghiLoi(client, "chat-reply sellers.xung_ho", xhErr.message);
+      else sellerRow.xung_ho = xungHoMoi;
+    }
+    const goiNguoi = sellerRow.xung_ho ?? null;
+    const cachGoi = goiNguoi ?? "anh/chị";
+    const CachGoi = goiNguoi ? goiNguoi.charAt(0).toUpperCase() + goiNguoi.slice(1) : "Anh/chị";
+    const [{ data: lichSuS }, { data: tinCuaNguoi }] = await Promise.all([
+      client.from("messages").select("sender, body, seq")
+        .eq("conversation_id", convSId).order("seq", { ascending: false }).limit(9),
+      client.from("listings").select("id").eq("seller_id", sellerRow.id).limit(2),
+    ]);
+    // Mã căn chỉ đáng nhắc khi người này rao TỪ HAI CĂN trở lên (FR-157 c sinh
+    // ra cho người nhiều căn). Chính chủ một căn mà tin nào cũng "#BDS-Q5-0174"
+    // là giọng máy đọc mã.
+    const nhieuCan = (tinCuaNguoi ?? []).length >= 2;
+    // Tin chủ nhà VỪA nhắn đã nằm trong sổ (ghi trước khi gọi model) — bỏ nó
+    // khỏi lịch sử vì câu lệnh dẫn riêng.
+    const lichSuRows = ((lichSuS ?? []) as Array<{ sender: string; body: string | null; seq: number }>)
+      .slice().reverse();
+    if (lichSuRows.length && lichSuRows[lichSuRows.length - 1].sender === "seller") lichSuRows.pop();
+    const lichSuText = lichSuRows.filter((m) => m.body)
+      .map((m) =>
+        `${m.sender === "seller" ? "CHỦ NHÀ" : m.sender === "human" ? "EM (người thật bên mình nhắn tay)" : "EM"}: ${
+          (m.body ?? "").slice(0, 300)
+        }`)
+      .join("\n");
+    const boiCanh =
+      `NGỮ CẢNH (đọc kỹ trước khi viết):\n` +
+      `- Gọi chủ nhà là "${cachGoi}"${
+        goiNguoi ? ` — chủ nhà đã dặn, tuyệt đối không đổi, không dùng "anh/chị"` : " (chưa biết nam hay nữ)"
+      }.\n` +
+      `- Lịch sử gần nhất, tin mới ở cuối. KHÔNG lặp lại khuôn câu, lời khen, hay lý do "khách hay hỏi" đã dùng trong đó; tin trước của em mở bằng "Dạ" thì tin này đừng mở bằng "Dạ"; viết như người thật nhắn tay, mỗi tin một giọng:\n` +
+      `${lichSuText || "(chưa có tin nào trước đó)"}\n\n`;
+
     // Người bán ĐÃ có nhãn mà tự xưng ngược lại ("em là môi giới mà" khi đang
     // CHÍNH CHỦ; "tôi là chính chủ" khi đang MÔI GIỚI) → KHÔNG tự lật (nhãn có
     // thể do admin gán), mà báo admin xác nhận + nói với họ là đã báo. Tối đa
@@ -1436,6 +1489,68 @@ Deno.serve(async (req) => {
         }
       }
 
+      // FR-176: CÂU VỪA NHẮN CÓ PHẢI CÂU TRẢ LỜI KHÔNG? Trước bản này khối
+      // này lấy NGUYÊN câu chat làm đáp án: "Kêu chị nha" đóng câu pháp lý,
+      // "16m nha" thành hướng nhà, "Ngang 5" đóng câu diện tích mà area_m2 vẫn
+      // trống — và bot không bao giờ hỏi lại. Luật: thà hỏi lại một câu thừa
+      // còn hơn đóng một câu hỏi bằng rác. Phân loại ở tầng tiền định
+      // (`_shared/extraction/khop-cau-tra-loi.ts`), model chỉ lo NÓI.
+      const kq: KetQuaKhop = pendingReq.question === "loai_bds"
+        ? { loai: "khop" }
+        : phanLoaiCauTraLoi(pendingReq.question, dapAn);
+      if (kq.loai !== "khop") {
+        // "Ngang 5" khi đang hỏi diện tích: vẫn là dữ liệu thật — ghi đúng
+        // fact (mặt tiền) chứ không vứt, còn câu diện tích thì giữ treo.
+        if (kq.chuyenSang) {
+          const { error: csErr } = await client.rpc("ghi_fact_listing", {
+            p_listing_id: pendingReq.listing_id, p_question: kq.chuyenSang.question,
+            p_answer: kq.chuyenSang.answer, p_source: "seller_chat",
+          });
+          if (csErr) await ghiLoi(client, "chat-reply ghi_fact_listing(chuyen sang)", csErr.message);
+        }
+        if (humanActive) {
+          return await traLoiSeller([], { reask: pendingReq.question, loai_cau: kq.loai });
+        }
+        const nhanDangHoi = FACT_LABELS[pendingReq.question] ?? pendingReq.question;
+        const nhanHoiLai = NHAN_HOI_LAI[pendingReq.question] ?? nhanDangHoi;
+        const viSao = kq.loai === "xung_ho"
+          ? `Chủ nhà dặn gọi họ là "${kq.xungHo}": nhận bằng một câu thật ngắn, từ nay gọi đúng vậy.`
+          : kq.loai === "hoi"
+          ? `Chủ nhà đang HỎI NGƯỢC: trả lời thẳng câu đó trước (phí thì theo luật phí; điều chưa nắm thì "để em kiểm tra rồi báo lại").`
+          : kq.loai === "ack"
+          ? `Chủ nhà chỉ ừ/ok, chưa trả lời.`
+          : kq.chuyenSang
+          ? `Câu đó là ${FACT_LABELS[kq.chuyenSang.question] ?? kq.chuyenSang.question} (em đã ghi ${kq.chuyenSang.answer}), chưa phải ${nhanDangHoi}.`
+          : `Câu đó KHÔNG trả lời được câu em hỏi — có thể chủ nhà hiểu nhầm, hoặc đang nói một thông số khác. Đoán được họ đang nói gì thì nhắc lại để xác nhận, nhưng KHÔNG tự coi là đã ghi.`;
+        const promptLai =
+          `${boiCanh}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${text}". ${viSao}\n` +
+          `Viết MỘT tin ngắn (15–35 từ) như người thật: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
+          `Không hỏi gì khác, không xin lỗi dài, không nhắc mã tin${nhieuCan ? " trừ khi cần phân biệt căn" : ""}.`;
+        let hoiLai: string | null = null;
+        if (anthropicS) {
+          try {
+            const r2b = await anthropicS.messages.create({
+              model: MODEL, max_tokens: 400,
+              output_config: { effort: "medium" },
+              system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }],
+              messages: [{ role: "user", content: promptLai }],
+            });
+            hoiLai = r2b.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+            await doTien(client, r2b.usage);
+          } catch (e) {
+            await ghiLoi(client, "chat-reply model r2b(hoi lai)", e);
+          }
+        }
+        if (!hoiLai) {
+          hoiLai = (kq.loai === "xung_ho"
+            ? `Dạ em nhớ rồi, em gọi ${kq.xungHo} nha. `
+            : kq.chuyenSang
+            ? `Em ghi ${FACT_LABELS[kq.chuyenSang.question] ?? kq.chuyenSang.question} ${kq.chuyenSang.answer} rồi ạ. `
+            : "") + `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`;
+        }
+        return await traLoiSeller([hoiLai], { reask: pendingReq.question, loai_cau: kq.loai });
+      }
+
       const { error: factErr } = await client.rpc("ghi_fact_listing", {
         p_listing_id: pendingReq.listing_id,
         p_question: pendingReq.question,
@@ -1480,16 +1595,29 @@ Deno.serve(async (req) => {
       // căn mà nghe "hoàn công năm nào ạ?" trống không thì họ trả lời về căn
       // đang nghĩ trong đầu, không phải căn bot đang hỏi — neo phía DB xong mà
       // câu chữ không neo thì vẫn lệch, chỉ là lệch ở đầu bên kia.
-      const neo = [
-        lstNow?.code ? `#${lstNow.code}` : null,
-        pendingReq.listings?.location_raw?.split(",")[0]?.trim() || null,
-      ].filter(Boolean).join(" ở ");
+      // FR-176: neo mã căn CHỈ khi người này rao nhiều căn (FR-157 c sinh ra
+      // cho ca đó). Một căn mà tin nào cũng "#BDS-Q5-0174" là giọng máy.
+      const neo = nhieuCan
+        ? [
+          lstNow?.code ? `#${lstNow.code}` : null,
+          pendingReq.listings?.location_raw?.split(",")[0]?.trim() || null,
+        ].filter(Boolean).join(" ở ")
+        : "";
+      const phiMotCau = sellerRow.seller_type === "nmg"
+        ? "phí chỉ thu khi giao dịch thành công, 0,5% giá chốt"
+        : "phí chỉ thu khi giao dịch thành công, 1% giá chốt";
 
       const prompt = next
-        ? `Người bán vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}". Soạn MỘT tin RẤT NGẮN (~30 từ): ghi nhận/khen tự nhiên câu trả lời (điểm mạnh thật của nhà nếu có), rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[next.fact_key] ?? next.fact_key}. ${neo ? `BẮT BUỘC nhắc rõ đang hỏi về căn ${neo} ngay trong câu hỏi (người này rao nhiều căn, không nói rõ là họ trả lời nhầm căn khác).` : ""} Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
+        ? `${boiCanh}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n` +
+          `Viết MỘT tin ngắn (20–40 từ) như người thật nhắn Zalo: ghi nhận câu trả lời bằng lời tự nhiên — khen CHỈ KHI có gì đáng khen thật, không khen mọi câu — rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[next.fact_key] ?? next.fact_key}. ` +
+          (neo
+            ? `Người này rao nhiều căn: nhắc rõ đang hỏi căn ${neo}. `
+            : `Người này chỉ có một căn: KHÔNG nhắc mã tin. `) +
+          `Lý do "vì khách hỏi" chỉ dùng nếu 3 tin gần nhất của em trong lịch sử chưa dùng. Không hỏi gì khác.`
         : published
-        ? `Người bán vừa trả lời: "${text}". Tin #${lstNow?.code ?? ""} giờ đã đủ thông tin và ĐÃ LÊN WEB nhadat.cc. Soạn MỘT tin NGẮN cảm ơn + báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG hỏi thêm thông tin nào nữa.`
-        : `Người bán vừa trả lời câu hỏi cuối: "${text}". Soạn MỘT tin NGẮN cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem anh chị còn muốn bổ sung gì không.`;
+        ? `${boiCanh}Chủ nhà vừa trả lời: "${text}". Tin${nhieuCan && lstNow?.code ? ` #${lstNow.code}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB nhadat.cc. ` +
+          `Viết MỘT tin ngắn (20–40 từ): cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG hỏi thêm thông tin nào nữa.`
+        : `${boiCanh}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
       // OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định — vòng drip không
       // đứng lại chờ model sống. Câu mẫu CÓ hỏi thật (kèm neo căn) nên mở
       // info_request bên dưới vẫn đúng luật "không mở khi chưa hỏi được".
@@ -1498,7 +1626,9 @@ Deno.serve(async (req) => {
         try {
           const r2 = await anthropicS.messages.create({
             model: MODEL, max_tokens: 512,
-            output_config: { effort: "low" },
+            // FR-176: có lịch sử để đọc thì cho model đọc — "low" là đủ khi
+            // câu lệnh cụt, giờ nó phải tránh lặp khuôn của 8 tin trước.
+            output_config: { effort: "medium" },
             system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }],
             messages: [{ role: "user", content: prompt }],
           });
@@ -1510,10 +1640,10 @@ Deno.serve(async (req) => {
       }
       if (!sellerReply) {
         sellerReply = next
-          ? `Dạ em ghi nhận rồi ạ. Anh/chị cho em xin thêm ${FACT_LABELS[next.fact_key] ?? next.fact_key}${neo ? ` của căn ${neo}` : ""} nha?`
+          ? `Dạ em ghi nhận rồi ạ. ${CachGoi} cho em xin thêm ${FACT_LABELS[next.fact_key] ?? next.fact_key}${neo ? ` của căn ${neo}` : ""} nha?`
           : published
-          ? `Dạ em cảm ơn anh/chị! Tin ${lstNow?.code ? `#${lstNow.code} ` : ""}đã đủ thông tin và lên web rồi ạ, có khách quan tâm là em báo liền.`
-          : `Dạ em cảm ơn anh/chị, tin rao giờ đã đầy đủ thông tin. Có khách quan tâm là em báo anh/chị ngay ạ.`;
+          ? `Dạ em cảm ơn ${cachGoi}! Tin ${nhieuCan && lstNow?.code ? `#${lstNow.code} ` : ""}đã đủ thông tin và lên web rồi ạ, có khách quan tâm là em báo liền.`
+          : `Dạ em cảm ơn ${cachGoi}, tin rao giờ đã đầy đủ thông tin. Có khách quan tâm là em báo ${cachGoi} ngay ạ.`;
       }
 
       if (next && sellerReply) {
@@ -1636,11 +1766,11 @@ Deno.serve(async (req) => {
               messages: [{
                 role: "user",
                 content:
-                  `Chính chủ vừa nhắn rao: "${text}". Em đã tạo tin #${newLst.code}. ` +
-                  `Soạn MỘT tin NGẮN (~35 từ): khen một điểm mạnh thật của BĐS + báo em đã ghi nhận tin rao` +
+                  `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin${nhieuCan ? ` #${newLst.code}` : ""}. ` +
+                  `Viết MỘT tin ngắn (25–40 từ) như người thật: nhận câu rao (nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi) + xác nhận lại địa điểm nghe được` +
                   (firstKey
-                    ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey}. Kèm lý do vì-khách nếu tự nhiên. Không hỏi gì khác.`
-                    : ` và sẽ đăng lên web ngay.`),
+                    ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey}. Không cần nêu lý do, KHÔNG nhắc phí, KHÔNG nhắc mã tin. Không hỏi gì khác.`
+                    : ` và báo sẽ đăng lên web ngay.`),
               }],
             });
             raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ?? null;
@@ -1650,9 +1780,9 @@ Deno.serve(async (req) => {
           }
         }
         if (!raoReply) {
-          raoReply = `Dạ em nhận tin rao rồi ạ, em tạo tin #${newLst.code}.` +
+          raoReply = `Dạ em nhận tin rao rồi ạ${nhieuCan ? `, em tạo tin #${newLst.code}` : ""}.` +
             (firstKey
-              ? ` Anh/chị cho em xin thêm ${FACT_LABELS[firstKey] ?? firstKey} để em đăng cho đẹp nha?`
+              ? ` ${CachGoi} cho em xin thêm ${FACT_LABELS[firstKey] ?? firstKey} để em đăng cho đẹp nha?`
               : ` Em sẽ đăng lên web ngay ạ.`);
         }
         return await traLoiSeller([raoReply], { listing_code: newLst.code });
@@ -1681,7 +1811,7 @@ Deno.serve(async (req) => {
           messages: [{
             role: "user",
             content:
-              `NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
+              `${boiCanh}NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
               (sellerMoi
                 ? `Người này VỪA cho biết đang có bất động sản muốn rao nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN chào + mời họ nhắn địa chỉ (đường/phường), giá mong muốn và diện tích để em lên tin — KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
                 : `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN — tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
