@@ -1,6 +1,6 @@
 # 00 — Định hướng (BRD hợp nhất Aioinhadat × nhadat.cc)
 
-Phiên bản: **v1.3** · Ngày: **04/09/2026** · Trạng thái: **tên, luồng CTV, địa bàn đã chốt; còn §0.8; nghiệm thu 04/09 ghi vào §0.6–0.7**
+Phiên bản: **v1.4** · Ngày: **07/09/2026** · Trạng thái: **tên, luồng CTV, địa bàn đã chốt; còn §0.8 — thêm OPEN-48 (07/09: sếp muốn bớt kế thừa nhadat.cc); OPEN-49 hỏi người bán ĐÃ CHỐT 07/09 theo kịch bản Gemini của sếp → FR-177; dọn 13 OPEN hướng 2024; Figma page 00 vẫn ở v1.3**
 
 > Bộ `docs/` viết từ tài liệu nhadat.cc 2024; từ 25/08/2026 code chạy theo SRD
 > "AI Ơi Nhà Đất" (AOND, `AOND req + chat examples.docx`) ở ngày càng nhiều chỗ.
@@ -175,6 +175,14 @@ dự án 04/09/2026 "dựng hết đi, giữ chân 5 ngày"]. Còn:
 | OPEN-40 | Thông số cho thuê / đất / công nghiệp — làm gì, khi nào | Cho thuê: làm. Đất: chờ OPEN-37. Công nghiệp: không, tới khi có khách hỏi thật |
 | OPEN-41 | Model: giữ Claude/Supabase hay Gemini → local theo AOND §VII | Giữ; lớp gọi model đã gom một chỗ, đổi sau được |
 | OPEN-42 | CTV: hạn trả lời (đang 120') và mốc Vàng ≥90% / Bạc ≥70% / Đồng; hệ quả của hạng | Giữ tới khi có ~30 câu thật rồi định cỡ; chốt hệ quả cùng lúc |
+| **OPEN-48** | Sếp muốn bớt kế thừa nhadat.cc (07/09): trong 14 FR chỉ có ở nhadat.cc 2024 (mini-site rao, tài khoản, trang phụ SEO, đánh giá 3 thời điểm, email admin, danh sách riêng) bỏ dòng nào; tầng dự án và `/admin` giữ hay dựng lại theo Live Chat Monitor | Ẩn trước, xoá sau (web đang public, đã index); giữ phễu web tối thiểu vì DH-02 #1; sếp tick từng dòng nhóm A, trả lời nhóm C |
+
+**Đã chốt 07/09/2026: cách hỏi người bán** — theo kịch bản huấn luyện môi giới sếp
+làm trong Gemini (tài liệu gốc ở thư mục gốc): một thông tin/lần theo thứ tự địa chỉ →
+giá → hẻm → diện tích → tầng → phòng → pháp lý → ảnh → lịch khảo sát; mỗi câu trả lời
+được khích lệ; đủ thì gửi bản nháp tin kèm điểm 100 theo 7 tiêu chí, đủ điểm mới rao
+(FR-177, thay thứ tự FR-176 f). Cùng ngày, 13 mục OPEN của hướng nhadat.cc 2024 đóng
+vì không còn hợp AOND (`09` bảng "đã chốt / đã đóng").
 
 **DH-07.** Cho tới khi §0.8 chốt, việc mới đi theo cột phải và tầng dưới ghi
 `[giả định BA]` ở chỗ phụ thuộc.

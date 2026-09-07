@@ -53,10 +53,13 @@ kiem_id "WF" \
   "grep -oh 'WF-[0-9]\+' docs/0[1-4]*.md docs/0[6-9]*.md docs/1[0-9]*.md" \
   "thêm mục '## WF-xx' vào docs/05."
 
+# Từ 07/09/2026 mục đã chốt/đã đóng chỉ còn MỘT hàng trong bảng (thân mục xoá), nên
+# định nghĩa của một OPEN là hàng '| OPEN-xx |' trong docs/09 — mục còn chờ có thêm
+# '### OPEN-xx' ở dưới, mục đã đóng thì không.
 kiem_id "OPEN" \
-  "grep -o '^### OPEN-[0-9]\+' docs/09-open-issues.md | sed 's/^### //'" \
+  "grep -o '^| OPEN-[0-9]\+' docs/09-open-issues.md | sed 's/^| //'" \
   "grep -oh 'OPEN-[0-9]\+' docs/*.md CLAUDE.md" \
-  "thêm mục '### OPEN-xx' vào docs/09."
+  "thêm hàng '| OPEN-xx |' vào bảng trong docs/09."
 
 # ── 2. FR mới phải có dòng trong ma trận truy vết ───────────────────────────
 # Luật CLAUDE.md §4: sửa tầng trên thì cập nhật docs/08 CÙNG COMMIT. Thiếu là
@@ -92,7 +95,7 @@ n_nfr=$(grep -ohE '\bNFR-[0-9]+' docs/02-requirements.md | sort -u | wc -l)
 n_br=$(grep -ohE '\bBR-[0-9]+' docs/02-requirements.md | sort -u | wc -l)
 n_uf=$(grep -c '^## UF-' docs/03-user-flows.md)
 n_wf=$(grep -c '^## WF-' docs/05-wireframes.md)
-n_open=$(grep -c '^### OPEN-' docs/09-open-issues.md)
+n_open=$(grep -c '^| OPEN-' docs/09-open-issues.md)
 n_ins=$(grep -c '^### INS-' docs/01-research.md)
 
 kiem_dem() {

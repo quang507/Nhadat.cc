@@ -43,7 +43,9 @@ Một khung `73:3`, width 1000, cao ~1040 — ảnh chụp nghiệm thu ngày 04
 
 ## Đã đồng bộ tới đâu
 
-`00 · Định hướng` khớp `docs/00-dinh-huong.md` **v1.3 · 04/09/2026**: tiêu đề phụ
+`00 · Định hướng` khớp `docs/00-dinh-huong.md` **v1.3 · 04/09/2026** — **CHƯA** có
+v1.4 (07/09: §0.8 thêm OPEN-48/49); dựng lại khung `65:7` sau khi sếp chốt hai mục đó,
+đừng dựng bản đang treo. Chi tiết v1.3 đã khớp: tiêu đề phụ
 hai khung, §0.2 hàng "Vận hành", §0.5 cách đo I4 và I5 (view `nmg_hoat_dong`),
 §0.6 tách "đã dựng" / "đã chạy thật", §0.7 "rao một câu" chuyển sang *chưa đánh
 giá được* + giả định 4 đã đổ một lần, §0.8 mốc đã chốt 04/09.
