@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "nhadat-cc",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "nhadat-cc", "run", "dev"],
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
       "port": 3000
     }
   ]

@@ -452,12 +452,21 @@ export default function Page() {
               : "đang đọc rổ hàng…"}
           </p>
         </div>
-        <Link
-          href="/admin/dang-tin"
-          className="rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
-        >
-          + Đăng tin thủ công
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* FR-175: rổ hàng đọc như Excel — bảng lọc/sắp/tải CSV, không cần vào Supabase */}
+          <Link
+            href="/admin/ro-hang"
+            className="rounded-full border border-line px-5 py-2.5 text-sm font-bold text-navy transition hover:border-brand hover:text-brand active:scale-[0.98]"
+          >
+            Rổ hàng (như Excel)
+          </Link>
+          <Link
+            href="/admin/dang-tin"
+            className="rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+          >
+            + Đăng tin thủ công
+          </Link>
+        </div>
       </header>
 
       {loi.length > 0 && (
