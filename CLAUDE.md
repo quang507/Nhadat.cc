@@ -261,7 +261,11 @@ xếp A→Z mà mắt vẫn gom được theo việc. Thêm bảng hay cột m�
 Bản in ra giấy (sơ đồ quan hệ + đường bóc tách) ở `docs/07-srs.md §SRS-3.0`;
 đừng mở `docs/architecture/` song song với `07-srs.md`, hai nguồn sự thật là
 đúng cái bẫy đã đẻ ra OPEN-46. Mở rổ hàng bằng mắt người thì dùng view
-`ro_hang_ban` chứ đừng mở `listings` 56 cột. **View MỚI ở project này mặc định
+`ro_hang_ban` chứ đừng mở `listings` 56 cột — hoặc chọn schema **`so`** trong
+Table Editor (`20260907c`): chỉ hai view `so.ro_hang` (9 cột đầu đúng thứ tự
+sheet Excel gốc Q5 trong `masterDB/`) và `so.nguoi_ban`, không lẫn ruột bot, PostgREST không
+phơi, `anon`/`authenticated` bị revoke; `xuat_schema()` không quét `so` nên
+dựng lại phải chạy thêm file migration đó. **View MỚI ở project này mặc định
 LỘ**: `alter default privileges` cấp sẵn toàn quyền cho `anon` và
 `authenticated`, nên `grant select` không siết được gì — phải `revoke all …
 from anon, authenticated` TRƯỚC rồi mới grant.

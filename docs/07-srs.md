@@ -207,6 +207,17 @@ Bài có ca âm nên luật hỏng thì bài đỏ, không im.
 ra tỷ, nhãn tiếng Việt, cột `canh_bao` chỉ đích danh trường nào là máy đoán).
 `security_invoker = on`, `anon` bị revoke.
 
+**Nhìn như Excel:** schema `so` (`20260907c`) tách riêng khỏi `public` để Table
+Editor / Schema Visualizer không lẫn 31 bảng + 17 view ruột bot. Hai view:
+`so.ro_hang` — 9 cột đầu đúng thứ tự sheet Excel gốc Q5 (trong `masterDB/`) (stt · bán
+hay thuê · vị trí · diện tích · giá · mô tả · SĐT · người bán), cột thêm xếp
+sau, cả bán lẫn cho thuê; `so.nguoi_ban` — mỗi người bán một dòng, đếm tin.
+PostgREST không phơi schema này, `anon`/`authenticated` bị revoke,
+`security_invoker = on`. Khác Excel: cột SĐT là SĐT **người bán đã ký** (60/173
+tin), DB không giữ SĐT theo tin (FR-104). `xuat_schema()` chỉ quét `public` nên
+`so` không nằm trong `schema.sql`; dựng lại phải chạy thêm file migration
+[giả định BA: chấp nhận vì view không mang dữ liệu].
+
 ### SRS-3.1 · `listings`
 
 ```text

@@ -146,10 +146,13 @@ fi
 # publishable key thì được phép (nó vốn công khai). Đòi ≥30 ký tự base64 sau
 # `eyJ` để chỗ hướng dẫn viết tắt `eyJhbG...` trong scripts/sao-luu.mjs không
 # bị báo oan — một khoá thật dài hơn thế nhiều.
-khoa=$(grep -rn -E 'SUPABASE_SERVICE_ROLE_KEY[[:space:]]*=[[:space:]]*["'"'"']?eyJ[A-Za-z0-9_-]{30,}' \
-        --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.next . 2>/dev/null)
+# Chỉ soi file GIT ĐANG TRACK: `scripts/.env` và `bot/bridge-zca/.env` giữ khoá
+# thật THEO THIẾT KẾ và đã gitignore — quét cả working tree thì máy chủ dự án
+# đỏ mãi trong khi CI xanh (07/09/2026). Và chỉ in file:dòng, KHÔNG in khoá —
+# in ra là khoá nằm trong log CI / terminal, tức là lộ bằng chính bài kiểm.
+khoa=$(git ls-files -z 2>/dev/null | xargs -0 grep -ln -E 'SUPABASE_SERVICE_ROLE_KEY[[:space:]]*=[[:space:]]*["'"'"']?eyJ[A-Za-z0-9_-]{30,}' 2>/dev/null)
 if [[ -n "$khoa" ]]; then
-  canh "Khoá service_role bị ghi vào file trong repo:"
+  canh "Khoá service_role bị ghi vào file GIT ĐANG TRACK:"
   printf '%s\n' "$khoa" | sed 's/^/   /'
   printf '   → xoá ngay, xoay khoá ở Supabase, đọc từ biến môi trường.\n'
 else
