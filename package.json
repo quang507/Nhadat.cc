@@ -14,8 +14,10 @@
     "test:phuchoi": "node scripts/soat-phuc-hoi.tu-kiem.mjs",
     "test:rohang": "node scripts/xuat-ro-hang.tu-kiem.mjs",
     "ro-hang": "node scripts/xuat-ro-hang.mjs",
-    "kiem": "bun run kieu && bun run build && bun run test:bot && bun run test:saoluu && bun run test:rohang && bun run truyvet",
-    "test:ranhgioi": "node bot/tests/ranh-gioi.mjs"
+    "kiem": "bun run kieu && bun run build && bun run test:bot && bun run test:saoluu && bun run test:rohang && bun run test:masterdb && bun run truyvet",
+    "test:ranhgioi": "node bot/tests/ranh-gioi.mjs",
+    "up-masterdb": "node scripts/up-masterdb.mjs",
+    "test:masterdb": "node scripts/up-masterdb.tu-kiem.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

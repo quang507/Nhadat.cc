@@ -90,7 +90,7 @@ Bảng này là danh sách ĐỦ. Một bộ test không có tên ở đây là 
 chạy. Đừng gõ lệnh rời: người và CI dùng chung script trong `package.json`, không
 thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
-**Chín bộ CHẠY MÁY, offline (324 ca) — `bun run kiem` gọi hết, CI chạy hết:**
+**Mười bộ CHẠY MÁY, offline (348 ca) — `bun run kiem` gọi hết, CI chạy hết:**
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
@@ -103,6 +103,7 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 | `bot/tests/ts-sec-anon.tu-kiem.mjs` | 4 cảnh | `bun run test:bot` | TS-SEC-AUTO (bài tự kiểm) | Bộ TS-SEC phân biệt "DB từ chối" với "không tới được" — chống tái phạm ca báo 24/24 xanh trong lúc proxy chặn sạch |
 | `scripts/sao-luu.tu-kiem.mjs` | 21 | `bun run test:saoluu` | TS-SAOLUU | Sao lưu phân biệt "đủ" với "trông như đủ": đối chiếu `count=exact`, `manifest.json` ghi ra đĩa, mọi đường hỏng thoát khác 0 |
 | `bot/tests/ranh-gioi.mjs` | 9 | `bun run test:bot` (và `test:ranhgioi`) | **TS-RANHGIOI** | Ranh giới bóc tách ⟂ AI, kiểm TĨNH: mã tiền định không import SDK Anthropic / `claude.ts` / gọi RPC; tầng AI không ghi bảng nghiệp vụ, chỉ 3 RPC đã khai tên |
+| `scripts/up-masterdb.tu-kiem.mjs` | 24 | `bun run test:masterdb` | **TS-MASTERDB** | Đẩy bản gốc masterDB lên bucket `masterdb-raw`: KHÔNG nén, chạy lại bỏ qua file đã có, và **bắt được lúc bucket trả 200 mà không cất** (đối chiếu đếm đĩa ↔ đếm bucket) |
 
 Ba file `fr1xx-*.mjs` **chép regex** từ `chat-reply` (Node không nạp được module
 Deno) — sửa regex ở hàm thật thì phải sửa cả ở đó, không thì test vẫn xanh trong
@@ -176,6 +177,26 @@ chèn `import Anthropic` vào `_shared/thong_so.ts` → thoát 1, gỡ ra → th
 | TS-RANHGIOI-08 | tầng AI gọi `log_loi` | bỏ qua — sổ lỗi là bắt buộc (FR-152), không phải dữ liệu nghiệp vụ | ✅ 06/09 |
 | TS-RANHGIOI-09 | file ngoài phạm vi hai luật | bỏ qua | ✅ 06/09 |
 | TS-RANHGIOI-10 | *(chốt lúc chạy, không phải ca giả)* KHÔNG file thật nào rơi vào luật nào | DỪNG, thoát khác 0 — đổi tên thư mục một cái là bộ này soát rỗng mà vẫn báo xanh | ✅ 06/09 (3 file thật) |
+
+### TS-MASTERDB — đẩy bản gốc lên bucket (OPEN-47, NFR-16)
+`scripts/up-masterdb.mjs` đưa `masterDB/` lên bucket `masterdb-raw` (`20260907b`) để cái ổ
+đĩa cá nhân thôi làm mắt xích duy nhất. Thứ phải chứng minh KHÔNG phải "đẩy được" — mà là
+**"biết khi nào mình đẩy hụt"**: Storage trả `200` cho một lượt PUT rồi không cất file thì
+vòng lặp vẫn chạy hết và vẫn báo xong, y hệt hình lỗi `net.http_post` của NFR-18. Bài này
+dựng **Storage giả** trong bộ nhớ (không chạm bucket thật, không cần khoá, chạy offline nên
+vào được `kiem` và CI).
+| ID | Bài | Kỳ vọng | Kết quả mới nhất |
+|---|---|---|---|
+| TS-MASTERDB-01 | đường suôn 4 file | thoát 0, đủ file, cấu trúc thư mục giữ nguyên | ✅ 07/09 |
+| TS-MASTERDB-02 | **KHÔNG nén** — byte trên bucket = byte dưới đĩa | khớp từng byte; đây là bản GỐC, nén là hỏng mục đích | ✅ 07/09 |
+| TS-MASTERDB-03 | chạy lần hai | bỏ qua file đã có đúng kích thước, không đẩy lại 179 MB | ✅ 07/09 |
+| TS-MASTERDB-04 | **bucket NUỐT IM** (trả 200, không cất) | thoát khác 0, nói ra ĐÍCH DANH file thiếu, sổ tay `thieu` | ✅ 07/09 |
+| TS-MASTERDB-05 | một file lỗi khi đẩy | thoát khác 0, sổ tay ghi đường dẫn hỏng | ✅ 07/09 |
+| TS-MASTERDB-06 | không liệt kê được bucket | thoát khác 0 — đẩy xong mà không đối chiếu được thì coi như CHƯA xong | ✅ 07/09 |
+| TS-MASTERDB-07 | nguồn nằm TRONG repo | từ chối, nhắc CLAUDE.md §5 (repo đang public) | ✅ 07/09 |
+| TS-MASTERDB-08 | `--dry` | không đẩy file nào, chạy được mà không cần khoá | ✅ 07/09 |
+| TS-MASTERDB-09 | rác OneDrive/Windows (`Thumbs.db`, `desktop.ini`, `.DS_Store`) | bỏ qua, chỉ file thật lên bucket | ✅ 07/09 |
+| TS-MASTERDB-10 | sổ tay | ghi thẳng `KHONG_PHAI_BAN_SAO_DU_LIEU` — đây là bản gốc FILE, dữ liệu Postgres vẫn phải chạy `sao-luu.mjs` | ✅ 07/09 |
 
 ### TS-SEC — hồi quy bảo mật (chạy sau MỌI migration đụng RLS/GRANT)
 SQL Editor, `set role anon` rồi thử phá — anon key là key công khai, repo private không làm nó bí mật. Script: `bot/supabase/migrations/20260826c_soat_bao_mat.sql` khối `-- KIỂM CHỨNG`.
