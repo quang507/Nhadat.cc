@@ -226,6 +226,16 @@ hỏng im lặng.
 | **`masterdb-raw`** | **bản GỐC masterDB, chưa đụng vào, KHÔNG phục vụ ai** | **chỉ `service_role`** |
 | `listing-photos` | lối cũ FR-148 đã bỏ — đã bịt bằng trần 1 byte + mime không tồn tại | (đã khoá) |
 
+Đường đẩy là **`scripts/up-masterdb.mjs`** (chạy trên máy local, `--dry` xem trước).
+Nó **KHÔNG nén** — ai định thêm `sharp` vào đó thì đọc lại: `up-anh.mjs` nén để
+phục vụ web, file này giữ nguyên byte để mai kia còn dựng lại được thứ khác từ
+bản gốc. Chạy lại được (bỏ qua file đã có đúng kích thước — 179 MB qua mạng nhà
+đứt giữa chừng là chuyện thường), và **cuối cùng đối chiếu đếm đĩa ↔ đếm bucket
+rồi mới dám báo xong**: Storage trả `200` cho một lượt PUT rồi không cất file
+thì vòng lặp vẫn chạy hết và vẫn báo thành công — cùng một hình lỗi với
+`net.http_post` ở NFR-18. Bài tự kiểm TS-MASTERDB (24 ca, Storage giả) canh
+đúng chỗ đó.
+
 `masterdb-raw` **cố ý không có policy nào** cho `anon` lẫn `authenticated`: RLS trên
 `storage.objects` đang bật nên không policy = không ai vào, trừ `service_role`. Đó
 là chủ đích, không phải quên — bản gốc mang địa chỉ nhà dân (§5). **Đừng trỏ web

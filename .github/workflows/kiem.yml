@@ -113,6 +113,11 @@ jobs:
       # rủi ro, cùng chỗ canh.
       - name: Bản xuất rổ hàng không ghi vào repo, không nuốt dòng thiếu
         run: bun run test:rohang
+      # Cùng job, cùng lý do: `up-masterdb.mjs` đẩy bản gốc lên bucket, và cái
+      # phải chứng minh không phải "đẩy được" mà là "biết khi nào mình đẩy hụt"
+      # — bucket trả 200 mà không cất thì vòng lặp vẫn báo xong.
+      - name: Đẩy masterDB biết khi nào mình đẩy hụt
+        run: bun run test:masterdb
 
   # Một bản sao chưa từng phục hồi thử KHÔNG PHẢI là bản sao. Job này chạy diễn
   # tập thật: dựng schema, nạp một bản sao giả, rồi bơm 9 cách hỏng đã biết vào
