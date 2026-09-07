@@ -17,17 +17,70 @@ export class FakeDB {
     return this.t[n] ?? (this.t[n] = []);
   }
   // FR-144/FR-140: view thiếu-thông-tin — chỉ tin còn cho_thong_tin
+  // FR-177 (20260907h): nhóm co_ban (1–9) → chuyen_mon (10–19) → phu (20+),
+  // đúng chuỗi nhà phố của required_facts thật. "Đã có" đọc từ cột như view.
   missingFacts() {
-    const REQ = ["gia","dien_tich","phuong","phap_ly","loai_bds","so_phong_ngu","hinh_anh"];
+    const REQ = [
+      ["loai_bds", 1, "co_ban"], ["phuong", 2, "co_ban"], ["dien_tich", 3, "co_ban"], ["gia", 8, "co_ban"],
+      ["do_rong_hem", 10, "chuyen_mon"], ["ket_cau", 11, "chuyen_mon"], ["so_phong_ngu", 12, "chuyen_mon"],
+      ["phap_ly", 13, "chuyen_mon"], ["hinh_anh", 19, "chuyen_mon"],
+      ["huong", 20, "phu"], ["quy_hoach", 21, "phu"], ["nam_xay", 22, "phu"],
+    ];
     const out = [];
     for (const l of this.t.listings) {
       if (l.status !== "cho_thong_tin") continue;
       const have = new Set(this.t.listing_facts.filter((f) => f.listing_id === l.id).map((f) => f.question));
       if (l.price_raw) have.add("gia"); if (l.area_m2) have.add("dien_tich"); if (l.ward) have.add("phuong");
       if (l.property_type && l.property_type !== "chua_ro") have.add("loai_bds"); if (l.bedrooms) have.add("so_phong_ngu");
-      REQ.forEach((k, i) => { if (!have.has(k)) out.push({ listing_id: l.id, fact_key: k, priority: i + 1 }); });
+      if (l.alley_width_m || l.access_type === "mat_tien") have.add("do_rong_hem"); if (l.floors) have.add("ket_cau");
+      if (l.legal_status) have.add("phap_ly"); if (l.direction) have.add("huong");
+      if (l.planning_status) have.add("quy_hoach"); if (l.year_built) have.add("nam_xay");
+      for (const [k, priority, nhom] of REQ) if (!have.has(k)) out.push({ listing_id: l.id, fact_key: k, priority, nhom });
     }
     return out;
+  }
+  // FR-177 d — bản JS của `diem_tin` (20260907h), cùng 7 tiêu chí, cùng điểm.
+  diemTin(l) {
+    const f = {};
+    for (const x of this.t.listing_facts.filter((x) => x.listing_id === l.id)) f[x.question] = x.answer;
+    const has = (k) => Object.prototype.hasOwnProperty.call(f, k);
+    const thieu = [];
+    const coHem = l.alley_width_m != null || l.access_type === "mat_tien" || has("do_rong_hem") || has("do_rong_duong") || ["chung_cu", "phong_tro"].includes(l.property_type);
+    const viTri = (l.location_raw ? 7 : 0) + (l.ward ? 4 : 0) + (coHem ? 4 : 0);
+    if (!coHem) thieu.push("hẻm rộng mấy mét, xe hơi vào được không");
+    const coMt = l.frontage_m != null || has("mat_tien") || ["chung_cu", "phong_tro"].includes(l.property_type) || /\d\s*[xX×]\s*\d/.test(f.dien_tich_dat ?? f.dien_tich ?? "");
+    let dt = 0;
+    if (l.area_m2 != null) { dt = 12 + (coMt ? 8 : 0); if (!coMt) thieu.push("chiều ngang mặt tiền"); } else thieu.push("diện tích");
+    let kc = 0;
+    if (l.property_type === "dat") { kc = has("tho_cu") || l.planning_status ? 15 : 0; if (!kc) thieu.push("thổ cư bao nhiêu, quy hoạch ra sao"); }
+    else if (l.property_type === "phong_tro") { kc = l.furnishing || has("noi_that") ? 15 : 0; if (!kc) thieu.push("nội thất có gì"); }
+    else if (l.property_type === "mat_bang") { kc = l.floors || has("ket_cau") || has("nganh_hang_phu_hop") ? 15 : 0; if (!kc) thieu.push("mấy tầng, hợp ngành gì"); }
+    else {
+      const coKc = l.floors != null || l.floors_text || has("ket_cau") || l.floor != null || has("tang") || (l.property_type === "nha_cap4" && has("hien_trang"));
+      const coPn = l.bedrooms != null || has("so_phong_ngu");
+      kc = (coKc ? 8 : 0) + (coPn ? 7 : 0);
+      if (!coKc) thieu.push("mấy tầng"); if (!coPn) thieu.push("mấy phòng ngủ");
+    }
+    let pl = 0;
+    if (l.legal_status || has("phap_ly") || l.property_type === "phong_tro") pl = 10; else thieu.push("pháp lý (sổ hồng riêng/chung, hoàn công)");
+    const gia = l.price_vnd != null ? 10 : 0; if (!gia) thieu.push("giá");
+    let tn = 0;
+    const moTa = String(l.description ?? "").toLowerCase();
+    if (has("tiem_nang")) tn = 20;
+    else {
+      if ((l.floors ?? 0) >= 3 || (l.bedrooms ?? 0) >= 3 || l.access_type === "mat_tien" || (l.alley_width_m ?? 0) >= 4 || ["chung_cu", "mat_bang", "phong_tro", "biet_thu"].includes(l.property_type) || has("san_vuon") || /kinh doanh|cho thu|chdv|đầu tư|dau tu|văn phòng|van phong|buôn bán|mở shop|mở quán/.test(moTa)) tn = 10;
+      thieu.push("tiềm năng sử dụng (ở, cho thuê hay kinh doanh)");
+    }
+    const cta = l.code ? 10 : 0;
+    const coAnh = has("hinh_anh");
+    return { diem: viTri + dt + kc + pl + gia + tn + cta, chi_tiet: { vi_tri_hem: viTri, dien_tich: dt, ket_cau: kc, phap_ly: pl, gia, tiem_nang: tn, goi_hanh_dong: cta }, thieu, co_anh: coAnh };
+  }
+  // trg_zz_listings_dang_tin (20260828b + 20260907h): cho_thong_tin ↔ dang_ban.
+  quyetDinhDangTin(l) {
+    let du = !!(l.price_raw && l.area_m2 && l.ward);
+    if (du && l.can_chu_duyet) du = !!l.chu_duyet_at && this.diemTin(l).diem >= 70;
+    if (du && l.status === "cho_thong_tin") l.status = "dang_ban";
+    else if (!du && l.status === "dang_ban") l.status = "cho_thong_tin";
   }
   insert(table, row) {
     const r = { id: randomUUID(), created_at: now(), ...row };
@@ -72,6 +125,13 @@ export class FakeDB {
       r.code = r.code ?? `BDS-Q5-${String(this.t.listings.length + 1).padStart(4, "0")}`;
       r.status = r.status ?? "cho_thong_tin";
       if (r.price_raw && r.price_vnd == null) r.price_vnd = parseVnd(r.price_raw);
+      // trg_listings_fill_property_type (FR-150): đoán loại từ câu rao.
+      if ((r.property_type ?? "chua_ro") === "chua_ro" && r.description) {
+        const d = String(r.description).toLowerCase();
+        r.property_type = /chung cư|chung cu|căn hộ|can ho/.test(d) ? "chung_cu" : /\bđất\b|\bdat\b|lô đất/.test(d) ? "dat" : /nhà|nha\b/.test(d) ? "nha_pho" : "chua_ro";
+      }
+      // (Không chạy quyết định lên kệ lúc chèn: seed cố ý dựng tin "chưa đăng"
+      //  có đủ giá/diện tích/phường để kiểm SEC — V4.1/V4.7.)
     }
     this.rows(table).push(r);
     return { data: r };
@@ -138,7 +198,11 @@ class Builder {
       return this.mode === "single" ? { data: out[0], error: null } : { data: out, error: null };
     }
     let rows = db.rows(t).filter((r) => this.filters.every((f) => Builder.test(f, r)));
-    if (this.op === "update") { rows.forEach((r) => Object.assign(r, this.payload)); return { data: rows, error: null }; }
+    if (this.op === "update") {
+      rows.forEach((r) => Object.assign(r, this.payload));
+      if (t === "listings") rows.forEach((r) => db.quyetDinhDangTin(r));
+      return { data: rows, error: null };
+    }
     const items = parseSelect(this.sel);
     // lọc theo embed (vd listings.seller_id) + !inner
     rows = rows.filter((r) => {
@@ -363,10 +427,23 @@ class RpcCall {
         db.insert("listing_facts", { listing_id: l.id, question: a.p_question, answer: a.p_answer, source: a.p_source });
         if (a.p_question === "gia") { l.price_raw = a.p_answer; l.price_vnd = parseVnd(a.p_answer); }
         if (a.p_question === "phuong") l.ward = a.p_answer;
-        if (a.p_question === "dien_tich") l.area_m2 = parseFloat(a.p_answer);
+        if (a.p_question === "dien_tich" || a.p_question === "dien_tich_dat") {
+          const m = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(a.p_answer);
+          l.area_m2 = m ? parseFloat(m[1].replace(",", ".")) * parseFloat(m[2].replace(",", ".")) : parseFloat(String(a.p_answer).replace(",", "."));
+          if (m) l.frontage_m = parseFloat(m[1].replace(",", "."));
+        }
         if (a.p_question === "so_phong_ngu") l.bedrooms = parseInt(a.p_answer, 10);
-        if (l.status === "cho_thong_tin" && l.price_raw && l.area_m2 && l.ward) l.status = "dang_ban";
+        // listing_facts_sync_cols + boc_thong_so (rút gọn): đủ để điểm FR-177 đo được.
+        if (a.p_question === "mat_tien") l.frontage_m = parseFloat(String(a.p_answer).replace(",", "."));
+        if (a.p_question === "do_rong_hem") { const m = /(\d+(?:[.,]\d+)?)/.exec(a.p_answer); if (m) l.alley_width_m = parseFloat(m[1].replace(",", ".")); if (/xe hơi|xe hoi/i.test(a.p_answer)) l.access_type = l.access_type ?? "hem_xe_hoi"; }
+        if (a.p_question === "ket_cau") { const m = /(\d+)\s*(?:lầu|lau|tầng|tang|tấm|tam)/i.exec(a.p_answer); if (m) l.floors = parseInt(m[1], 10) + (/lầu|lau/i.test(a.p_answer) ? 1 : 0); const pn = /(\d+)\s*(?:phòng ngủ|phong ngu|pn)/i.exec(a.p_answer); if (pn) l.bedrooms = parseInt(pn[1], 10); }
+        if (a.p_question === "phap_ly" && /sổ hồng riêng|so hong rieng|shr/i.test(a.p_answer)) l.legal_status = "so_hong_rieng";
+        db.quyetDinhDangTin(l);
         return { data: null, error: null };
+      }
+      case "diem_tin": {
+        const l = db.t.listings.find((x) => x.id === a.p_listing_id);
+        return { data: l ? db.diemTin(l) : null, error: null };
       }
       case "guess_property_type_answer": { const t = String(a.p_text).toLowerCase(); return { data: /nhà phố|nha pho/.test(t) ? "nha_pho" : /chung cư|chung cu/.test(t) ? "chung_cu" : null, error: null }; }
       case "mark_listing_interest": {

@@ -55,14 +55,17 @@ export const HUMAN_CHAT_RULES = `Nhịp nhắn giống người:
 
 // Kịch bản người bán — chưng cất "AOND req + chat examples.docx" (Luân Ngô-Trần,
 // 23/06/2026) §I-II + Phần I-II. Ghi ở docs/06 §6.8 "Kịch bản người bán".
-export const SELLER_SCRIPT_RULES = `Kịch bản hỏi người bán (câu sau bám câu trước — FR-176, bản sếp chốt 07/09/2026):
+export const SELLER_SCRIPT_RULES = `Kịch bản hỏi người bán như một môi giới giỏi (FR-176/FR-177, bản sếp chốt 07/09/2026):
 - Mỗi tin = NHẮC LẠI đúng chi tiết vừa nghe kèm một nhận xét có nghĩa (điểm cộng cụ thể: "hẻm 5m xe hơi tới cửa là điểm cộng lớn"), rồi hỏi ĐÚNG MỘT thông tin kế tiếp. Khen khi có gì đáng khen thật, không khen mọi câu, không khen chung chung ("đẹp quá", "tuyệt vời"). Không bắt điền form.
-- Câu hỏi kế phải NỐI từ chi tiết vừa nghe: nghe "ngang 5" thì hỏi dài/sâu bao nhiêu; nghe "hẻm 5m" thì hỏi hẻm thông không, xe quay đầu được không; nghe "3 lầu" thì hỏi mấy phòng ngủ. Thứ tự chuẩn cho nhà phố: địa chỉ (đường/hẻm) → hẻm rộng mấy mét, ô tô vào được không → mấy lầu, mấy phòng → diện tích (sổ) → pháp lý → phường → giá → hướng, quy hoạch, năm xây.
+- Mỗi câu trả lời được đáp bằng MỘT câu khích lệ CÓ NGHĨA gắn với khách mua hay thanh khoản ("hẻm ô tô là khách rất chuộng", "nở hậu thì khách đầu tư thích", "pháp lý chuẩn giúp khách chốt cọc nhanh"), rồi mới hỏi câu kế. Một thông tin mỗi lần.
+- Thứ tự hỏi: làm rõ CƠ BẢN trước — loại nhà, vị trí (đường, phường), diện tích, giá — thứ tự trong nhóm bám theo thứ chủ nhà đang nói (đang nói mặt tiền mấy mét thì hỏi tiếp chiều dài/diện tích, chưa nhảy sang giá). Xong cơ bản mới tới: hẻm rộng mấy mét, ô tô vào được không → mấy lầu, mấy phòng (+WC) → pháp lý: sổ hồng riêng chưa, hoàn công chưa, sổ cầm tay hay đang ở ngân hàng → xin ảnh sổ, mặt tiền, hẻm. Hướng, quy hoạch, năm xây KHÔNG hỏi — chủ tự kể thì ghi.
+- Câu hỏi kế phải NỐI từ chi tiết vừa nghe: nghe "ngang 5" thì hỏi dài/sâu bao nhiêu; nghe "hẻm 5m" thì hỏi xe quay đầu được không; nghe "3 lầu" thì hỏi mấy phòng ngủ.
+- Đủ thông tin thì gửi BẢN NHÁP TIN (tiêu đề · vị trí · diện tích, ngang dài · kết cấu · pháp lý · tiềm năng sử dụng · giá · "nhắn Zalo #mã để xem nhà" — KHÔNG số điện thoại) kèm điểm đầy đủ ("tin mình 85/100, thêm ảnh sổ là đủ") và hỏi "như vậy được chưa?". Chủ gật → tin lên kệ, hứa rao tích cực. Chủ sửa → ghi rồi gửi lại bản nháp.
 - Gọi căn nhà bằng ĐỊA CHỈ ("căn Trần Bình Trọng của mình"), không đọc mã tin — trừ khi người bán có từ hai căn trở lên và cần phân biệt.
 - Tin thu thập giữ NGẮN ~30 từ. Chỉ khi người bán yêu cầu "xem lại tin/đăng đầy đủ" mới soạn bài dài.
 - Lý do VÌ KHÁCH ("khách mua đang hỏi…") dùng thưa: tối đa một lần mỗi ba tin, và không lặp cùng một câu.
 - Xưng hô theo cách chủ nhà dặn ("kêu chị nha" → gọi "chị" từ đó về sau). Chưa dặn thì "anh/chị".
-- Câu chủ nhà nhắn KHÔNG trả lời câu em hỏi (dặn xưng hô, ừ/ok, hỏi ngược, nói sang thông số khác) thì đừng coi là đã trả lời: xử lý ý đó rồi hỏi lại bằng lời khác. Phí chỉ nói khi được hỏi.
+- Câu chủ nhà nhắn KHÔNG trả lời câu em hỏi (dặn xưng hô, ừ/ok, hỏi ngược, nói sang thông số khác) thì đừng coi là đã trả lời: xử lý ý đó rồi hỏi lại bằng lời khác. Nói sang thông số khác thì thông số đó VẪN được ghi (hệ thống tự ghi) — nhắc lại cho chủ biết đã ghi rồi mới hỏi lại. Phí chỉ nói khi được hỏi.
 - Diện tích mơ hồ (một con số, chưa rõ đất hay nhà/tim tường): hỏi lại DỰA TRÊN con số đã cho ("50m2 đó là diện tích đất hay diện tích sàn ạ?"), đừng hỏi trống như chưa nghe.
 - Trung thực với ảnh: không suy diễn vật liệu/hiện trạng từ ảnh; nếu đoán thì "hình như là…" và xác nhận lại với chủ nhà.
 - Câu "nhà mình đã chốt bán chưa ạ?" CHỈ dùng khi dữ liệu đã đầy đủ — đó là xác thực trạng thái, không phải moi thông tin.
@@ -205,6 +208,11 @@ export const FACT_LABELS: Record<string, string> = {
   nganh_hang_phu_hop: "ngành hàng phù hợp",
   thoi_han_thue: "thời hạn thuê tối thiểu",
   san_vuon: "sân vườn",
+  // FR-177
+  hinh_anh: "vài tấm ảnh (sổ, mặt tiền nhà, hẻm)",
+  tiem_nang: "tiềm năng sử dụng (để ở, cho thuê hay kinh doanh)",
+  bo_sung: "thông tin bổ sung",
+  duyet_tin: "chủ nhà duyệt bản nháp tin",
 };
 
 export const RATE_CTV_RUBRIC = `Bạn là QA của Aioinhadat, chấm chất lượng chăm sóc khách của CTV/bot trong một hội thoại Zalo.
