@@ -215,7 +215,9 @@ sau, cả bán lẫn cho thuê; `so.nguoi_ban` — mỗi người bán một dò
 PostgREST không phơi schema này, `anon`/`authenticated` bị revoke,
 `security_invoker = on`. Khác Excel: cột SĐT là SĐT **người bán đã ký** (60/173
 tin), DB không giữ SĐT theo tin (FR-104). `xuat_schema()` chỉ quét `public` nên
-`so` không nằm trong `schema.sql`; dựng lại phải chạy thêm file migration
+`so` không nằm trong `schema.sql`; dựng lại phải chạy thêm hai file migration
+(`20260907c`, rồi `20260907f` — ô đọc một dòng: mô tả gộp xuống dòng thành
+` · `, vị trí bỏ đuôi `, Quận 5, Hồ Chí Minh`, diện tích dấu phẩy thập phân)
 [giả định BA: chấp nhận vì view không mang dữ liệu].
 
 ### SRS-3.1 · `listings`

@@ -142,7 +142,8 @@ mảnh đã có và kiểm được. Cái KHÔNG có mới đáng sợ, nên ghi
    `if not exists` nên chạy lại được, không cần dọn.
    *Không dùng thư mục `migrations/` để dựng lại: 44 migration đầu không còn
    file (OPEN-46). Migration là để ghi THAY ĐỔI, `schema.sql` mới là để dựng.*
-   Xong thì chạy thêm `migrations/20260907c_schema_so_doc_nhu_excel.sql`:
+   Xong thì chạy thêm `migrations/20260907c_schema_so_doc_nhu_excel.sql` rồi
+   `migrations/20260907f_so_ro_hang_doc_mot_dong.sql`:
    schema `so` (hai view nhìn như Excel) nằm NGOÀI vùng `xuat_schema()` quét
    nên không có trong `schema.sql`. Bỏ qua cũng không mất dữ liệu — chỉ là view.
 3. **Bí mật**: chép tay vào Vault — `ANTHROPIC_API_KEY`, `BRIDGE_SECRET`.
