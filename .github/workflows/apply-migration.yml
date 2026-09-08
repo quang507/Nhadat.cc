@@ -42,8 +42,28 @@ jobs:
           echo "Đang áp migration: $TARGET"
           SQL=$(cat "$TARGET")
           PAYLOAD=$(jq -n --arg q "$SQL" '{query: $q}')
-          RES=$(curl -sS -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+          # `-f`: HTTP ≥400 phải làm job ĐỎ. Bản đầu không có cờ này nên SQL lỗi
+          # (Management API trả 400 kèm thông báo) vẫn in "Kết quả: …" và job xanh.
+          RES=$(curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
           echo "Kết quả: $RES"
+
+          # GHI SỔ. Endpoint /database/query chạy SQL trần, KHÔNG ghi vào
+          # supabase_migrations.schema_migrations như `apply_migration` của MCP.
+          # 20260908e áp qua đường này 08/09 và biến mất khỏi sổ: DB có trigger
+          # mà `liet_ke_migration()` không thấy, `soat-migration.mjs` kêu "chưa áp"
+          # — đúng hình lỗi OPEN-46, chiều ngược. Tên = tên file bỏ .sql, version =
+          # dấu thời gian lúc áp (cùng cách MCP đặt). Chạy lại cùng file thì
+          # `on conflict do nothing`, không đẻ dòng trùng.
+          NAME="${FILE%.sql}"
+          VERSION=$(date -u +%Y%m%d%H%M%S)
+          SO=$(jq -n --arg n "$NAME" --arg v "$VERSION" \
+            '($n | gsub("'"'"'"; "'"'"''"'"'")) as $qn | ($v | gsub("'"'"'"; "'"'"''"'"'")) as $qv
+             | {query: ("insert into supabase_migrations.schema_migrations (version, name, statements) select '"'"'" + $qv + "'"'"', '"'"'" + $qn + "'"'"', array[]::text[] where not exists (select 1 from supabase_migrations.schema_migrations where name = '"'"'" + $qn + "'"'"')")}')
+          curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$SO" >/dev/null
+          echo "Đã ghi sổ: $VERSION $NAME"

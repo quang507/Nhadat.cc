@@ -185,6 +185,22 @@ class Builder {
   // `.is(col, null)` của PostgREST — SEC-13 dùng nó để chỉ đụng dòng CHƯA chốt
   // gửi. Thiếu ở mock thì bộ e2e đo một hành vi khác với bản chạy thật.
   is(c, v) { return this._f("is", c, v); }
+  // `.or("code.ilike.X,legacy_code.ilike.X")` của PostgREST — chat-reply (03724e4,
+  // chuẩn hoá mã tin) tra mã bằng CẢ `code` lẫn `legacy_code`. Cú pháp: các mệnh
+  // đề `cột.toán_tử.giá_trị` cách nhau dấu phẩy, khớp MỘT mệnh đề là đủ. Thiếu
+  // hàm này thì bundle ném TypeError ngay lượt đầu và 208 ca không chạy ca nào
+  // (CI đỏ 6 lần liên tiếp 08/09 mà không ai nhìn). Mệnh đề lạ → ném lỗi, không
+  // lặng lẽ coi là đúng.
+  or(expr) {
+    const items = String(expr).split(",").map((s) => {
+      const m = /^([a-z_]+)\.(eq|neq|gt|gte|lt|lte|ilike|like|is)\.(.*)$/i.exec(s.trim());
+      if (!m) throw new Error(`mock-supabase: .or() không hiểu mệnh đề "${s}"`);
+      let val = m[3];
+      if (m[2] === "is") val = val === "null" ? null : val === "true";
+      return { kind: m[2] === "like" ? "ilike" : m[2], col: m[1], val };
+    });
+    return this._f("or", "__or__", items);
+  }
   order(c, o = {}) { this.ord = { c, asc: o.ascending !== false }; return this; }
   limit(n) { this.lim = n; return this; }
   maybeSingle() { this.mode = "maybe"; return this; }
@@ -195,6 +211,7 @@ class Builder {
       case "eq": return v === f.val; case "neq": return v !== f.val; case "in": return f.val.includes(v);
       case "gte": return v != null && v >= f.val; case "lte": return v != null && v <= f.val; case "gt": return v > f.val; case "lt": return v < f.val;
       case "is": return f.val === null ? v == null : v === f.val;
+      case "or": return f.val.some((sub) => Builder.test(sub, row));
       case "not_is": return f.val === null ? v != null : v !== f.val;
       case "ilike": { const p = "^" + String(f.val).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*") + "$"; return new RegExp(p, "i").test(String(v ?? "")); }
     }
