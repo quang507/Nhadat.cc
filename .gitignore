@@ -40,3 +40,13 @@ scripts/.env
 
 # Bản sao lưu DB + rổ hàng (SĐT thật, địa chỉ thật) — nhadat-sao-luu.cmd đổi vào đây, repo đang PUBLIC
 nhadat-backup/
+
+# Dữ liệu crawl & Design artifacts (để nhẹ repo, tránh tràn RAM VPS)
+radanhadat-scrape/
+design/
+Vedoo pages/
+hình samples/
+SS/
+*.docx
+*.pptx
+*.xlsx
