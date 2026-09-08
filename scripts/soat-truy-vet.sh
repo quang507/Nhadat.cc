@@ -206,6 +206,38 @@ else
   printf '\033[32m✓\033[0m Sao lưu: mọi bảng sinh từ migration đều có trong BANG\n'
 fi
 
+# ── schema.sql có theo kịp migration không? ─────────────────────────────────
+# `schema.sql` là lưới an toàn DUY NHẤT để dựng lại từ số không (CLAUDE.md §6),
+# nhưng nó do `xuat_schema()` sinh ra khi CHẠY `scripts/sao-luu.mjs` — ai áp
+# migration qua MCP rồi quên chạy sao lưu là nó lặng lẽ tụt lại. Bắt 08/09/2026:
+# `20260907h` merge hôm trước mà `schema.sql` không hề có `diem_tin`,
+# `can_chu_duyet` — đúng hình lỗi đẻ ra OPEN-46, chỉ khác là lần này thiếu
+# NGƯỢC (repo thiếu so với DB) chứ không phải DB thiếu so với repo.
+#
+# Chỉ soi tên HÀM: tên bảng đã có khối trên lo, còn cột thì nhiều migration
+# thêm bằng `add column if not exists` khó tách chắc chắn.
+ham_mig=$(grep -rhoiE 'create or replace function +(public\.)?[a-z_][a-z0-9_]*' \
+  bot/supabase/migrations/*.sql 2>/dev/null \
+  | sed -E 's/.*[[:space:]]//; s/^public\.//' | grep -vx 'public' | sort -u)
+# Hàm sinh ra rồi bị migration SAU gỡ đi thì không còn phải có trong schema.sql
+# (`listing_facts_touch_status`: tạo 20260826, gỡ 20260904b — dương tính giả đầu
+#  tiên mà phép kiểm này bắt được, 08/09/2026).
+ham_bo=$(grep -rhoiE 'drop function +(if exists +)?(public\.)?[a-z_][a-z0-9_]*' \
+  bot/supabase/migrations/*.sql 2>/dev/null \
+  | sed -E 's/.*[[:space:]]//; s/^public\.//' | grep -vx 'public' | sort -u)
+thieu_ham=""
+for f in $ham_mig; do
+  grep -qxF "$f" <<<"$ham_bo" && continue
+  grep -qi "FUNCTION public\.$f(" bot/supabase/schema.sql || thieu_ham+="$f "
+done
+if [[ -n "$thieu_ham" ]]; then
+  canh "Hàm có trong migration nhưng KHÔNG có trong schema.sql: $thieu_ham"
+  printf '   → chạy `node scripts/sao-luu.mjs` (cần SUPABASE_SERVICE_ROLE_KEY) để sinh lại schema.sql.\n'
+  printf '   → schema.sql cũ là dựng lại từ số không sẽ thiếu đúng mấy hàm đó.\n'
+else
+  printf '\033[32m✓\033[0m schema.sql có đủ hàm mà migration sinh ra\n'
+fi
+
 printf '\n── Số đếm hiện tại ──\n'
 printf '%s BR · %s FR · %s NFR · %s UF · %s WF · %s OPEN · %s INS\n' \
   "$n_br" "$n_fr" "$n_nfr" "$n_uf" "$n_wf" "$n_open" "$n_ins"

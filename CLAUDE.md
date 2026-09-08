@@ -187,6 +187,31 @@ Next 15 để `prerender-manifest.dynamicRoutes` rỗng và mỗi lượt xem l�
 hoặc `○`, thấy `ƒ` là hỏng. Route đọc `searchParams` thì không ISR được, phải
 bọc truy vấn trong `unstable_cache`.
 
+**Đường đi ĐÚNG THIẾT KẾ không được ghi vào sổ lỗi** (bắt 08/09/2026). Sổ lỗi
+`bot_errors` là ĐẦU VÀO của còi: `bot_health_tick` mỗi giờ đếm lỗi trong một giờ
+qua, có lỗi thì đẻ một tin 🩺 gửi Zalo admin. `escalation-feed` có một nhánh từ
+chối học `zalo_user_id` của admin (bản vá SEC-03, hoàn toàn đúng) — nhưng nhánh
+đó lại `log_loi`. Bridge gửi tin 🩺 xong gọi `ack`, rơi đúng nhánh ấy, ghi thêm
+một dòng lỗi, giờ sau còi lại đếm được. **Vòng tự nuôi**: sổ lỗi 07/09 có đúng
+một dòng `escalation-feed admin uid` mỗi giờ có tin 🩺 được gửi, liên tục 05:00
+→ 10:00 UTC, và tin nào cũng chỉ nói "1 lỗi trong 1 giờ qua" mà không nói lỗi
+gì. Nay nhánh đó `console.log`. Thêm bất kỳ `log_loi` nào thì hỏi: đây là SỰ CỐ
+hay là đường đi bình thường?
+
+**Bot hỏi thứ chính luật cấm hỏi** (cùng ngày). `20260907h` xếp nhóm `phu`
+(hướng, quy hoạch, năm xây) priority ≥ 20 với ý "không bao giờ tới lượt" — nhưng
+khi các nhóm trên trả lời hết thì `phu` LÀ nhóm còn lại, `chonCauKe()` bốc ngay.
+Log 07/09 đúng vậy. Ngưỡng ưu tiên không phải là cấm; muốn cấm thì phải LỌC.
+Nay `listing_missing_facts` bỏ hẳn `nhom = 'phu'`, và mock e2e bỏ theo — mock
+lệch bản thật ở chỗ nào thì bộ e2e đo sai ở chỗ đó.
+
+**`schema.sql` tụt lại sau migration mà không ai biết** (cùng ngày). Nó do
+`xuat_schema()` sinh ra khi CHẠY `scripts/sao-luu.mjs`; áp migration qua MCP rồi
+quên chạy sao lưu là nó lặng lẽ cũ đi — `20260907h` merge hôm trước mà
+`schema.sql` không hề có `diem_tin`, `can_chu_duyet`. Đúng hình lỗi OPEN-46 nhưng
+thiếu NGƯỢC (repo thiếu so với DB), nên `soat-migration.mjs` không thấy. Nay
+`soat-truy-vet.sh` so tên hàm trong migration với `schema.sql` và kêu ở PR.
+
 **Đừng tin `cron.job_run_details.status`** (NFR-18). `net.http_post()` trả về
 ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge function trả
 500. Kết quả thật nằm ở `net._http_response`, và được `bot_health_tick()` quét

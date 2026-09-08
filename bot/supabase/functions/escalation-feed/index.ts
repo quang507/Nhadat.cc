@@ -74,12 +74,17 @@ Deno.serve(async (req) => {
         // Hai nhánh trên an toàn vì có `.eq("id", …)` lấy từ chính reminder.
         // Nhánh admin thì reminder KHÔNG mang id admin nào, nên không có gì để
         // ràng — không ràng được thì không ghi. Admin điền tay ở Table Editor.
-        await client.rpc("log_loi", {
-          p_source: "escalation-feed admin uid",
-          p_detail: `Bỏ qua học zalo_user_id cho admin (SEC-03): reminder ${id} ` +
-            "không gắn seller/ctv nên không xác định được ghi cho ai. Điền tay ở /admin.",
-          p_code: null,
-        });
+        // KHÔNG ghi vào `bot_errors`. Đây là đường ĐÚNG THEO THIẾT KẾ, không
+        // phải sự cố — mà ghi vào sổ lỗi thì nó thành VÒNG TỰ NUÔI: mỗi giờ
+        // `bot_health_tick` đếm "1 lỗi trong 1 giờ qua" → đẻ một reminder 🩺 →
+        // bridge gửi vào Zalo admin → ack lại rơi đúng nhánh này → ghi thêm
+        // một dòng lỗi → giờ sau lại đếm được. Sổ lỗi 07/09 có đúng một dòng
+        // `escalation-feed admin uid` mỗi giờ có tin 🩺 được gửi, liên tục từ
+        // 05:00 tới 10:00 UTC. (Bắt 08/09/2026.)
+        console.log(
+          `escalation-feed: reminder ${id} không gắn seller/ctv nên không học ` +
+          "zalo_user_id cho admin (SEC-03) — đúng thiết kế. Điền tay ở /admin.",
+        );
       }
     }
 
