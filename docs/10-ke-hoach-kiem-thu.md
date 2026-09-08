@@ -90,11 +90,11 @@ Bảng này là danh sách ĐỦ. Một bộ test không có tên ở đây là 
 chạy. Đừng gõ lệnh rời: người và CI dùng chung script trong `package.json`, không
 thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
-**Mười bộ CHẠY MÁY, offline (348 ca) — `bun run kiem` gọi hết, CI chạy hết:**
+**Mười ba bộ CHẠY MÁY, offline (502 ca) — `bun run kiem` gọi hết, CI chạy hết:**
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
-| `bot/tests/e2e/run.mjs` | 160 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
+| `bot/tests/e2e/run.mjs` | 184 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
 | `bot/tests/e2e/webhook.mjs` | 44 | `bun run e2e` (`chay.sh`) | TS-IDEM2; nhãn `CK-1…8c`, `GUI-1…8` | `zalo-webhook`: chữ ký + replay; gửi đúng-một-lần ra Zalo |
 | `bot/tests/e2e/cong-thieu-bi-mat.mjs` | 4 | `bun run e2e` (`chay.sh`) | TS-SEC2 phần cổng | Thiếu `BRIDGE_SECRET` thì cổng ĐÓNG, không mở. Tiến trình RIÊNG vì `napCauHinh` nhớ tạm 60 s ở tầng module |
 | `bot/tests/fr159-bon-vai.mjs` | 65 | `bun run test:bot` | TS-VAI | Bốn vai người nhắn (FR-159, FR-170) |
@@ -102,6 +102,9 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 | `bot/tests/fr164-loi-sua-va-cau-hoi-treo.mjs` | 8 | `bun run test:bot` | TS-OUNG | Vừa sửa trường vừa trả lời câu treo thì ghi CẢ HAI (FR-164) |
 | `bot/tests/ts-sec-anon.tu-kiem.mjs` | 4 cảnh | `bun run test:bot` | TS-SEC-AUTO (bài tự kiểm) | Bộ TS-SEC phân biệt "DB từ chối" với "không tới được" — chống tái phạm ca báo 24/24 xanh trong lúc proxy chặn sạch |
 | `scripts/sao-luu.tu-kiem.mjs` | 21 | `bun run test:saoluu` | TS-SAOLUU | Sao lưu phân biệt "đủ" với "trông như đủ": đối chiếu `count=exact`, `manifest.json` ghi ra đĩa, mọi đường hỏng thoát khác 0 |
+| `bot/tests/fr176-khop-cau-tra-loi.mjs` | 49 | `bun run test:bot` | **TS-KYGUI** phần khớp câu | Câu chủ nhà nhắn CÓ PHẢI câu trả lời không (FR-176) — chạy bằng `bun` vì import thẳng `.ts` |
+| `bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs` | 63 | `bun run test:bot` | **TS-KYGUI** phần nhận fact / chọn câu kế / gật | `nhanDienFact`, `chonCauKe`, `laDongY` (FR-177/178) — tiền định, không tốn model |
+| `scripts/xuat-ro-hang.tu-kiem.mjs` | 18 | `bun run test:rohang` | TS-ROHANG | Bản xuất rổ hàng người đọc được: không ghi vào repo, không nuốt dòng thiếu, không nhận nhầm là bản sao lưu |
 | `bot/tests/ranh-gioi.mjs` | 9 | `bun run test:bot` (và `test:ranhgioi`) | **TS-RANHGIOI** | Ranh giới bóc tách ⟂ AI, kiểm TĨNH: mã tiền định không import SDK Anthropic / `claude.ts` / gọi RPC; tầng AI không ghi bảng nghiệp vụ, chỉ 3 RPC đã khai tên |
 | `scripts/up-masterdb.tu-kiem.mjs` | 24 | `bun run test:masterdb` | **TS-MASTERDB** | Đẩy bản gốc masterDB lên bucket `masterdb-raw`: KHÔNG nén, chạy lại bỏ qua file đã có, và **bắt được lúc bucket trả 200 mà không cất** (đối chiếu đếm đĩa ↔ đếm bucket) |
 
@@ -587,6 +590,16 @@ Tầng regex: `node bot/tests/fr159-bon-vai.mjs` (65 ca: chủ nhà ở lại nh
 ### TS-E2E — chạy `chat-reply` THẬT trong Node, Supabase + model giả lập
 `bun build` đóng gói `chat-reply/index.ts` (Deno) thành file Node, thay `npm:` bằng gói thật (`zod`, `@anthropic-ai/sdk`) và gói giả (`mock-supabase.mjs` DB trong bộ nhớ, `mock-anthropic.mjs` model theo kịch bản). Không Deno, không DB thật, ~1 giây: `cd bot/tests/e2e && bun install && bash chay.sh` (`chay.sh` tự đóng gói lại — chạy `run.mjs` trực tiếp là chạy bundle cũ). Kịch bản chia bốn vai + bất biến chéo (nhường lượt, model hỏng, ảnh trần, mã từ web), khẳng định trên DB giả hoặc PROMPT thật gửi model. Giới hạn: DB giả chép NGHĨA của RPC/trigger, RPC thật đổi thì bộ này không tự biết — tầng DB kiểm bằng TS-SEC3/TS-TIEN/TS-CHUONG. Kết quả mới nhất: **160/160** (05/09). Từ 04/09 thêm bốn nhóm: `CỔNG-1…5` (cổng vào fail-closed), `SEC-*` (chữ ký, quyền gọi), `ĐUA-1…4` (hai lượt chạy chồng nhau — mock có móc trễ truy vấn `__treTruyVan` để dựng được cảnh interleave thật), `TRÙNG-1…10` (`claim_inbound` đủ 5 nhánh). `webhook.mjs` (44 ca) và `cong-thieu-bi-mat.mjs` (4 ca) là hai tiến trình riêng trong cùng `chay.sh` — xem §10.7.0.
 
+**Mốc thời gian trong mock phải DUY NHẤT** (bắt 08/09/2026). `mock-supabase.mjs`
+lấy `new Date().toISOString()` làm `created_at` — chỉ có mili giây. Ba câu hỏi chờ
+mở liên tiếp rơi trọn trong một mili giây là chuyện thường; khi đó
+`order("created_at", { ascending: false })` **hoà**, `Array.sort` ổn định giữ
+nguyên thứ tự chèn, nên `ds[0]` hoá ra câu **cũ nhất** trong nhóm hoà thay vì mới
+nhất — `chat-reply` bốc nhầm câu đang treo và ca **G5 đỏ chừng 1/6 lượt chạy**.
+Postgres lưu timestamp tới micro giây nên không hoà; mock nay có bộ đếm đơn điệu
+cho khớp. Bài học chung: **mock lệch bản thật ở chỗ nào thì bộ e2e đo sai ở chỗ
+đó**, và triệu chứng ra ngoài dưới dạng "test chập chờn" chứ không phải "test sai".
+
 ### TS-TOIUU — đếm vòng đi về DB và bất biến tối ưu (FR-171)
 Cùng bộ e2e; mock ghi mọi truy vấn vào `db().log`. Ngưỡng đặt bằng số đo SAU khi sửa — ai thêm truy vấn vào đường nóng là đỏ. Đo build: `bun install` 4,4 s vs `npm` 20,1 s; `next build` ~34 s ở cả hai.
 | ID | Bài | Kỳ vọng | Kết quả mới nhất |
@@ -762,6 +775,35 @@ Mười FR có tài liệu mà bot chưa làm (lộ ở §10.8): `chat-reply` v4
 | TS-V48-DEPLOY | bun bundle (`--minify-whitespace`, `\uXXXX` → UTF-8) → `deploy_edge_function` (`verify_jwt=false`) → `get_edge_function` → so byte | trùng 100% | ✅ 04/09 (92.388 byte, SHA-256 `6eb8de75…`; e2e trên bản kéo ngược 102/102) |
 | TS-V48-PROMPTS | md5 `bot_prompts` ↔ hằng TS | trước ghi 8/8 khoá khớp (không đè sửa tay); sau ghi `human_chat_rules` `b4633cc2…`, `buyer_fewshot` `90f602df…` = TS | ✅ 04/09 |
 | TS-V48-LIVE | `net.http_post` uid `TEST-e2e-v48`: "nhà 3PN phường 8 tầm 5 tỷ"; rồi "mua, nhà 3PN phường 8 tầm 5 tỷ" | 200 hỏi vai (không tốn model); 200 nhánh model: hồ sơ `{deal:ban, area:"Phường 8", budget:"tầm 5 tỷ", bedrooms:3}`, hai bong bóng, `bot_errors` 0; dọn sạch | ✅ 04/09 |
+
+### TS-KYGUI — nhận ký gửi như môi giới giỏi (FR-176/177/178, 07/09/2026)
+Ba tầng, ba cách chạy. **Tầng tiền định** (`fr176-…`, `fr177-…`) chạy offline, không
+model, không DB — sửa luật khớp câu hay thứ tự hỏi thì phải chạy lại hai bộ này.
+**Tầng luồng** (e2e `run.mjs`, nhóm `H`) chạy `chat-reply` thật với Supabase +
+model giả. **Tầng DB** chạy trên DB thật sau khi áp `20260907h`. Không phủ: giọng
+văn model sinh ra (không kiểm tự động được — đọc `so.hoi_thoai` bằng mắt sau mỗi
+đợt), và cron `ask-seller` chưa biết gửi bản nháp (ghi ở FR-177).
+
+| ID | Bài | Kỳ vọng | Kết quả mới nhất |
+|---|---|---|---|
+| TS-KYGUI-01 | `bun bot/tests/fr176-khop-cau-tra-loi.mjs` | 49/49: "Kêu chị nha" → `xung_ho`, "16m nha" khi hỏi hướng → `lech`, "5x16" → `khop` | ✅ 07/09 |
+| TS-KYGUI-02 | `bun bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs` | 63/63: `nhanDienFact` 23 ca, `chonCauKe` 8 ca, `laDongY` 22 ca | ✅ 07/09 |
+| TS-KYGUI-03 | e2e H1: rao "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2" | tin `can_chu_duyet = true`, **chưa** lên kệ, câu đầu là `do_rong_hem` (hết nhóm cơ bản) | ✅ 07/09 |
+| TS-KYGUI-04 | e2e H2: trả lời "hẻm 4m xe hơi vào tận nhà" | ghi fact hẻm; câu kế là `ket_cau` (liên quan), KHÔNG nhảy sang pháp lý | ✅ 07/09 |
+| TS-KYGUI-05 | e2e H3: đang hỏi kết cấu, chủ nhắn "sổ hồng riêng rồi em" | ghi fact `phap_ly` nguyên văn; câu `ket_cau` VẪN treo; bot hỏi lại | ✅ 07/09 |
+| TS-KYGUI-06 | e2e H4: chủ nhắn "nhà nở hậu chút" | ghi nguyên văn vào fact `bo_sung`; câu hỏi gốc vẫn treo | ✅ 07/09 |
+| TS-KYGUI-07 | e2e H5: trả nốt "3 lầu 4 phòng ngủ" | gửi BẢN NHÁP TIN, điểm ≥ 70, mở câu chờ `duyet_tin`, tin vẫn `cho_thong_tin`; bản nháp KHÔNG do model soạn | ✅ 07/09 |
+| TS-KYGUI-08 | e2e H6: đang chờ duyệt, chủ nhắn "à giá 6 tỷ nha" | ghi giá mới rồi GỬI LẠI bản nháp với giá mới; câu duyệt vẫn treo | ✅ 07/09 |
+| TS-KYGUI-09 | e2e H7: đang chờ duyệt, chủ hỏi "phí sao em?" | loại `hoi`, không đóng dấu duyệt, câu duyệt vẫn treo | ✅ 07/09 |
+| TS-KYGUI-10 | e2e H8: chủ nhắn "ok đăng đi em" | `chu_duyet_at` có, tin sang `dang_ban`, bong bóng báo đã lên web | ✅ 07/09 |
+| TS-KYGUI-11 | e2e H8b/c/d | KHÔNG bong bóng nào chứa `#BDS`; câu mẫu là câu người nói (không "kết cấu (số tầng, phòng)"); system prompt có few-shot ĐÚNG/SAI | ✅ 07/09 |
+| TS-KYGUI-12 | e2e H9: tin nhập tay (`can_chu_duyet = false`) đủ giá + dt + phường | lên kệ theo luật cũ, KHÔNG đòi duyệt | ✅ 07/09 |
+| TS-KYGUI-13 | DB: `select diem_tin(l) from listings l where code = 'BDS-Q5-0174'` | trả `{diem, chi_tiet, thieu[], co_anh}`; tin thiếu diện tích/giá/pháp lý → 28/100 | ✅ 07/09 |
+| TS-KYGUI-14 | DB: đếm tin đang rao có điểm < 70 | 38/164 — nhưng tất cả `can_chu_duyet = false` nên KHÔNG bị kéo xuống `cho_thong_tin` | ✅ 07/09 |
+| TS-KYGUI-15 | DB: `select fact_key, priority, nhom from listing_missing_facts` cho một tin `nha_pho` | cơ bản (1–9) trước chuyên môn (10–19); `huong`/`quy_hoach`/`nam_xay` ≥ 20 | ✅ 07/09 |
+| TS-KYGUI-16 | DB: md5 `bot_prompts` ↔ hằng trong `_shared/prompts.ts` | 4/4 khớp (`tone_rules`, `human_chat_rules`, `seller_script_rules`, `seller_fewshot`) | ✅ 07/09 |
+| TS-KYGUI-17 | Sau deploy `chat-reply`: nhắn thật một lượt rao qua Zalo, đọc `so.hoi_thoai` | mỗi tin dưới 30 từ, có khích lệ thật, không đọc mã tin, không đọc tên trường | ⏭ chờ deploy + bridge |
+
 
 ## 10.8 Nghiệm thu theo từng tài liệu (04/09/2026)
 

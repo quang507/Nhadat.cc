@@ -5,7 +5,7 @@ tự chốt (quy ước 2, `CLAUDE.md`). Mục đã chốt hoặc đã đóng ch
 thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm trong lịch sử git. Ký hiệu:
 ✅ đã chốt · 🚫 đóng vì không còn hợp hướng AOND · 🟡 chốt một phần (vẫn tính còn chờ).
 
-## Còn chờ chủ dự án (18)
+## Còn chờ chủ dự án (19)
 
 | ID | Vấn đề | Mức | Liên quan |
 |---|---|---|---|
@@ -30,6 +30,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-45 | Design token `06 §6.2`, `design/tokens.json` và `app/globals.css` là ba bản lệch nhau — chọn nguồn sự thật nào? | Thấp | UI-01…, OPEN-07 |
 | OPEN-47 | Tám bảng chưa từng được sao lưu — đã vá; còn treo: bucket `masterdb-raw` chưa có file, Storage `listing-public` chưa nằm trong bản sao nào | Cao | FR-165, OPEN-25 |
 | OPEN-48 | Sếp muốn **bớt kế thừa nhadat.cc, giống Aioinhadat hơn** (07/09): bỏ mảng nào trong 14 FR chỉ có ở nhadat.cc 2024, giữ mảng nào vì bất biến DH-02 | Cao | DH-01…04, `00 §0.2–0.3`, OPEN-49 |
+| OPEN-50 | **Ngưỡng điểm để tin được rao, và tin cũ có bị đo lại không** (FR-177 d, 07/09): (a) ngưỡng **70/100** là *[giả định BA]* — kịch bản Gemini của sếp chỉ nói "càng đủ điểm càng cao và được rao", không nêu con số. Cao quá thì chính chủ hụt vài điểm bị chặn rao; thấp quá thì cổng vô nghĩa. (b) Hiện chỉ tin **tạo từ chat** (`can_chu_duyet`) chịu cổng điểm + phải chủ gật; **173 tin nhập Excel/admin giữ luật cũ** (giá + diện tích + phường) — 38/164 tin đang rao có điểm < 70, nếu áp cổng cho cả chúng thì rổ hàng tụt ngay 23%. Phương án: (1) giữ nguyên — cổng chỉ cho hàng mới từ chat, hàng cũ để yên, dọn dần bằng vòng hỏi; (2) hạ ngưỡng xuống 60 rồi áp cho tất cả; (3) áp cho tất cả ở ngưỡng 70, chấp nhận 38 tin tụt về `cho_thong_tin` cho tới khi bổ sung. **Khuyến nghị BA: (1)** — sao Bắc Đẩu là lịch xem nhà, chặn hàng đang chạy không đổi lại được gì. | Trung bình | FR-177, FR-155, OPEN-26, DH-03 |
 
 ## Đã chốt / đã đóng (31)
 

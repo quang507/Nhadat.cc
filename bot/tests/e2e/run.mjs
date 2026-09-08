@@ -62,7 +62,9 @@ check("V1.2 chưa tạo tin (chưa có chi tiết), model được báo là ngư
 r = await send({ external_user_id: "la-1", text: "bán nhà P4 giá 5 tỷ 8 50m2" });
 const L = db().t.listings[0];
 check("V1.3 câu rao → tạo tin nháp đúng giá/phường", L && L.ward === "Phường 4" && /5 tỷ 8/.test(L.price_raw) && L.price_vnd === 5.8e9 && r.body.listing_code === L.code, JSON.stringify({ L, body: r.body }));
-check("V1.3 rao đủ giá+phường+diện tích → lên kệ ngay, KHÔNG hỏi thêm", L?.status === "dang_ban" && !db().t.info_requests.some((q) => q.listing_id === L?.id), JSON.stringify(db().t.info_requests));
+// FR-177 d: tin từ chat KHÔNG còn lên kệ chỉ vì đủ giá+phường+diện tích — phải
+// đủ 70 điểm và chủ gật bản nháp. Đủ nhóm cơ bản thì câu đầu là chuyên môn (hẻm).
+check("V1.3 rao đủ giá+phường+diện tích → vẫn cho_thong_tin (can_chu_duyet), hỏi tiếp câu chuyên môn đầu: hẻm", L?.status === "cho_thong_tin" && L?.can_chu_duyet === true && db().t.info_requests.some((q) => q.listing_id === L?.id && q.question === "do_rong_hem" && q.status === "pending"), JSON.stringify({ L, ir: db().t.info_requests }));
 check("V1.3 rao đã nói 50m2 → diện tích được ghi, drip KHÔNG hỏi lại", L?.area_m2 === 50 && !db().t.info_requests.some((q) => q.listing_id === L?.id && q.question === "dien_tich"), JSON.stringify(db().t.info_requests));
 check("V1.3 giá thô không dính đuôi '50m2'", L && !/m2/.test(L.price_raw), L?.price_raw);
 r = await send({ external_user_id: "la-1", text: "có khách nào coi nhà chưa em" });
@@ -805,7 +807,8 @@ fresh(seedKho);
     /CHỦ NHÀ: Kêu chị nha/.test(cuoi) && /Gọi chủ nhà là "chị"/.test(cuoi), cuoi);
   // Căn 0001 đã đủ thông tin → nhánh "đã lên web": người 3 căn thì vẫn được
   // nhắc mã căn, và KHÔNG bị bảo "chỉ có một căn".
-  check("G2 chính chủ 3 căn → câu lệnh nhắc mã căn, không nói 'chỉ có một căn'", /#BDS-Q5-0001/.test(cuoi) && !/chỉ có một căn/.test(cuoi), cuoi);
+  // FR-178: nhiều căn thì neo bằng ĐỊA CHỈ, không đọc mã tin cho khách.
+  check("G2 chính chủ 3 căn → câu lệnh neo căn bằng địa chỉ (12 Trần Hưng Đạo), KHÔNG mã tin, không nói 'chỉ có một căn'", /12 Trần Hưng Đạo/.test(cuoi) && !/#BDS-Q5-0001/.test(cuoi) && !/chỉ có một căn/.test(cuoi), cuoi);
   db().insert("info_requests", { listing_id: lst1().id, question: "huong", status: "pending" });
   r = await send({ external_user_id: "z-ccrb", text: "16m nha" });
   check("G3 '16m nha' khi hỏi hướng → KHÔNG ghi hướng, hỏi lại",
@@ -834,6 +837,61 @@ fresh(seedKho);
   check("G7 chủ MỘT căn: câu lệnh nói không nhắc mã tin; bong bóng nhãn KHÔNG kèm phí",
     createCalls().some((c) => /KHÔNG nhắc mã tin/.test(prompt(c))) && !r.body.replies.some((x) => /1%|0,5%/.test(x)),
     JSON.stringify({ replies: r.body.replies, p: prompt(createCalls().at(-1)) }));
+}
+
+// ── FR-177: hỏi như môi giới giỏi — bám câu khách, câu lệch vẫn ghi, bản nháp + duyệt ──
+{
+  fresh();
+  const prompt = (c) => c?.params?.messages?.[0]?.content ?? "";
+  const pend = (q) => db().t.info_requests.some((x) => x.question === q && x.status === "pending");
+  const fact = (q) => db().t.listing_facts.find((f) => f.question === q);
+  r = await send({ external_user_id: "h-1", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2" });
+  const H = db().t.listings[0];
+  check("H1 rao đủ cơ bản → tin can_chu_duyet, chưa lên kệ, câu đầu là HẺM (nhóm chuyên môn, ưu tiên 1)",
+    H?.can_chu_duyet === true && H?.status === "cho_thong_tin" && pend("do_rong_hem"), JSON.stringify({ H, ir: db().t.info_requests }));
+  r = await send({ external_user_id: "h-1", text: "hẻm 4m xe hơi vào tận nhà" });
+  check("H2 trả lời hẻm → ghi fact, câu kế LIÊN QUAN: kết cấu (không nhảy sang pháp lý)",
+    fact("do_rong_hem") && pend("ket_cau") && !pend("phap_ly"), JSON.stringify(db().t.info_requests));
+  check("H2 câu lệnh model có KHÍCH LỆ gắn khách mua", /khích lệ có nghĩa gắn với khách mua/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
+  r = await send({ external_user_id: "h-1", text: "sổ hồng riêng rồi em" });
+  check("H3 hỏi kết cấu, trả lời pháp lý → VẪN GHI phap_ly, câu kết cấu vẫn treo, hỏi lại",
+    fact("phap_ly")?.answer === "sổ hồng riêng rồi em" && !fact("ket_cau") && pend("ket_cau") && r.body.reask === "ket_cau",
+    JSON.stringify({ body: r.body, f: db().t.listing_facts }));
+  r = await send({ external_user_id: "h-1", text: "nhà nở hậu chút" });
+  check("H4 câu lệch không nhận ra fact nào → ghi nguyên văn vào bo_sung, câu kết cấu vẫn treo",
+    fact("bo_sung")?.answer === "nhà nở hậu chút" && pend("ket_cau") && r.body.loai_cau === "lech",
+    JSON.stringify({ body: r.body, f: db().t.listing_facts }));
+  r = await send({ external_user_id: "h-1", text: "3 lầu 4 phòng ngủ" });
+  const nhap = r.body.replies.join("\n");
+  check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
+    r.body.ban_nhap === true && r.body.diem >= 70 && /BẢN NHÁP TIN/.test(nhap) && /5 tỷ 8/.test(nhap) &&
+      /nhắn Zalo cho em/.test(nhap) && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /BẢN NHÁP/.test(prompt(c))) &&
+      pend("duyet_tin") && H.status === "cho_thong_tin",
+    JSON.stringify({ body: r.body, H }));
+  r = await send({ external_user_id: "h-1", text: "à giá 6 tỷ nha" });
+  check("H6 chủ sửa giá lúc đang duyệt → ghi giá mới, GỬI LẠI bản nháp với giá mới, câu duyệt vẫn treo",
+    r.body.sua_nhap === true && H.price_raw && /6 tỷ/.test(H.price_raw) && r.body.replies.some((x) => /6 tỷ/.test(x) && /BẢN NHÁP/.test(x)) && pend("duyet_tin"),
+    JSON.stringify({ body: r.body, H }));
+  r = await send({ external_user_id: "h-1", text: "phí sao em?" });
+  check("H7 hỏi ngược lúc đang duyệt → loại 'hoi', câu duyệt vẫn treo, không đóng dấu",
+    r.body.loai_cau === "hoi" && pend("duyet_tin") && !H.chu_duyet_at, JSON.stringify(r.body));
+  r = await send({ external_user_id: "h-1", text: "ok đăng đi em" });
+  check("H8 chủ GẬT → chu_duyet_at, tin lên kệ (dang_ban), câu duyệt đóng, bong bóng báo đã lên web",
+    r.body.duyet === true && !!H.chu_duyet_at && H.status === "dang_ban" && !pend("duyet_tin") && /lên web/.test(r.body.replies[0]),
+    JSON.stringify({ body: r.body, H }));
+  // FR-178: suốt luồng người bán, KHÔNG bong bóng nào đọc mã tin; câu mẫu là câu
+  // người nói (không "kết cấu (số tầng, phòng)"); system prompt có few-shot người bán.
+  const botMsgs = db().t.messages.filter((m) => m.sender === "bot").map((m) => m.body);
+  check("H8b không bong bóng nào gửi chủ nhà chứa mã tin #BDS", botMsgs.length > 0 && !botMsgs.some((b) => /#BDS/.test(b)), JSON.stringify(botMsgs));
+  check("H8c câu mẫu hỏi tiếp là câu người nói, không đọc tên trường", !botMsgs.some((b) => /kết cấu \(số tầng/.test(b)) && botMsgs.some((b) => /mấy tầng|phòng ngủ|sổ hồng/.test(b)), JSON.stringify(botMsgs));
+  check("H8d system prompt người bán có few-shot (giọng đúng/sai)", createCalls().some((c) => /Ví dụ giọng ĐÚNG/.test(c.params.system[0].text) && /Ví dụ giọng SAI/.test(c.params.system[0].text)));
+  // Tin KHÔNG từ chat (Excel/admin): luật cũ, không cần duyệt.
+  fresh(seedKho);
+  const L2 = db().t.listings[1];
+  db().insert("info_requests", { listing_id: L2.id, question: "do_rong_hem", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "#BDS-Q5-0002 hẻm 3m" });
+  check("H9 tin nhập tay (can_chu_duyet=false) đủ giá+dt+phường → lên kệ theo luật cũ, không đòi duyệt",
+    L2.status === "dang_ban" && !pend("duyet_tin"), JSON.stringify({ L2, body: r.body }));
 }
 
 // ── kết ──

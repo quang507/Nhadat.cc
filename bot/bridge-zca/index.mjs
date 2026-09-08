@@ -3,10 +3,15 @@
 // thức, Zalo có thể khoá acc). Tin nhắn đến → gọi edge function chat-reply
 // (bộ não) → gửi câu trả lời (kèm hình nếu có) lại. Cài & chạy:
 //   cd bot/bridge-zca && npm init -y && npm i zca-js && node index.mjs
-// Lần đầu hiện QR trong terminal → mở Zalo app trên điện thoại (đăng nhập acc
-// clone) → Quét QR. Cookie lưu ./zalo-session.json, lần sau khỏi quét lại.
-import { Zalo, ThreadType } from "zca-js";
+// Lần đầu cần quét QR: zca-js KHÔNG in QR ra terminal (nó ghi qr.png — bắt
+// 08/09/2026 khi dựng VPS, tài liệu cũ nói sai), nên bridge nhận ảnh QR qua
+// callback rồi PHÁT TẠM qua http ở một đường dẫn ngẫu nhiên; mở link đó trên
+// điện thoại/trình duyệt → Zalo app (acc clone) → quét. Cookie lưu
+// ./zalo-session.json, lần sau khỏi quét lại.
+import * as zca from "zca-js";
 import fs from "node:fs";
+import http from "node:http";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -74,6 +79,7 @@ if (!process.env.BRIDGE_SECRET) {
 // ra đúng session cũ, đừng bắt quét QR lại vô cớ.
 const SESSION_FILE = path.join(HERE, "zalo-session.json");
 
+const { Zalo, ThreadType } = zca;
 const zalo = new Zalo();
 let api;
 if (fs.existsSync(SESSION_FILE)) {
@@ -85,7 +91,61 @@ if (fs.existsSync(SESSION_FILE)) {
   }
 }
 if (!api) {
-  api = await zalo.loginQR(); // in QR ra terminal
+  // Ảnh QR đi ra bằng HAI đường: file qr.png cạnh index.mjs, và một http server
+  // tạm (cổng QR_PORT, mặc định 8787) ở đường dẫn có token ngẫu nhiên — chỉ ai
+  // đọc được log mới biết link, và server đóng ngay khi đăng nhập xong. Chạy
+  // dưới systemd thì link nằm trong `journalctl -u nhadat-bridge`, không cần
+  // tmux. Tên sự kiện lấy từ enum của zca-js, có số dự phòng nếu bản mới
+  // không export enum (0 = sinh QR, 1 = hết hạn, 2 = đã quét, 3 = từ chối).
+  const EV = zca.LoginQRCallbackEventType ?? {};
+  const QR_FILE = path.join(HERE, "qr.png");
+  const QR_PORT = Number(process.env.QR_PORT || 8787);
+  const token = crypto.randomBytes(6).toString("hex");
+  const ipMay = () =>
+    Object.values(os.networkInterfaces()).flat()
+      .find((i) => i && i.family === "IPv4" && !i.internal)?.address ?? "<IP máy này>";
+  let qrPng = null;
+  let qrServer = null;
+  const dongQr = () => {
+    try { qrServer?.close(); } catch { /* đã đóng */ }
+    qrServer = null;
+    try { fs.unlinkSync(QR_FILE); } catch { /* không có file */ }
+  };
+  api = await zalo.loginQR({ qrPath: QR_FILE }, (ev) => {
+    const type = ev?.type;
+    if (type === (EV.QRCodeGenerated ?? 0) && ev?.data?.image) {
+      qrPng = Buffer.from(String(ev.data.image).replace(/^data:image\/png;base64,/, ""), "base64");
+      try { fs.writeFileSync(QR_FILE, qrPng); } catch { /* đĩa chỉ đọc thì còn đường http */ }
+      if (!qrServer) {
+        qrServer = http.createServer((req, res) => {
+          if (req.url === `/qr-${token}.png` && qrPng) {
+            res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-store" });
+            res.end(qrPng);
+          } else {
+            res.writeHead(404);
+            res.end();
+          }
+        });
+        qrServer.on("error", (e) =>
+          console.log(`Không mở được cổng ${QR_PORT} (${e.message}) — tải file ${QR_FILE} về máy mà quét.`));
+        qrServer.listen(QR_PORT);
+      }
+      console.log(
+        `\n▶ QUÉT QR bằng acc Zalo CLONE:\n` +
+        `  1. Mở trên điện thoại hoặc trình duyệt:  http://${ipMay()}:${QR_PORT}/qr-${token}.png\n` +
+        `     (không mở được thì mở cổng ${QR_PORT} ở Firewall của nhà cung cấp, hoặc tải ${QR_FILE} về máy)\n` +
+        `  2. Zalo app → biểu tượng QR ở thanh tìm kiếm → quét ảnh đó.\n` +
+        `  QR hết hạn thì zca-js tự sinh mã mới ở cùng link — tải lại trang.`,
+      );
+    } else if (type === (EV.QRCodeScanned ?? 2)) {
+      console.log("Đã quét — xác nhận đăng nhập trên điện thoại.");
+    } else if (type === (EV.QRCodeExpired ?? 1)) {
+      console.log("QR hết hạn, đang sinh mã mới…");
+    } else if (type === (EV.QRCodeDeclined ?? 3)) {
+      console.log("Điện thoại từ chối đăng nhập — chạy lại để lấy QR mới.");
+    }
+  });
+  dongQr();
   try {
     fs.writeFileSync(SESSION_FILE, JSON.stringify(api.getContext?.() ?? {}));
   } catch { /* zca-js đổi API thì bỏ qua, chỉ mất tính năng nhớ session */ }

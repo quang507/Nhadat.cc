@@ -70,12 +70,15 @@ cả hai phía (`06 §6.8`).
 | §I | Tích lũy ngầm nhiều phiên | ✅ | FR-129/144/153/172 |
 | §I | 200–300 người/ngày, 6–9k tin, phủ 90% Q5 | 🔶 | NFR-05; Free-tier chưa đo (NFR-16) |
 | §II | Kho tên •ai (m•ai, t•ai…) | ❌ | Chốt 03/09: một tên Thái (OPEN-39) |
-| §II | Quy tắc 30 từ | 🔶 | Thu thập ~30; trả lời khách 30–90 (`06 §6.8`) |
-| §II | Khen trước, hỏi 1/lần; "hình như là" | ✅ | FR-129, FR-134 |
+| §II | Quy tắc 30 từ | ✅ | FR-178 (07/09): mọi tin dưới 30 từ, kể cả nhánh mua; dài hơn chỉ khi liệt kê 2–3 căn (`06 §6.8`) |
+| §II | Khen trước, hỏi 1/lần; "hình như là" | ✅ | FR-129, FR-134, FR-177 b (khích lệ phải gắn khách mua, không khen suông) |
+| §II | Giọng mẫu: transcript 30 câu người bán | ✅ | FR-178 d: `SELLER_FEWSHOT` 16 cặp chép từ transcript AOND + kịch bản Gemini của sếp, khoá `bot_prompts.seller_fewshot` |
+| §II | Nút bấm nhanh trong tin (`[Vẫn đang bán]`…) | ⏳ | Bridge zca-js gửi chữ, chưa gửi nút — OPEN-33 (Zalo OA) |
 | §III | Nhóm 1 nhà ở | ✅ | FR-172 |
 | §III | Nhóm 2 đất; thông số cho thuê | ⏳ | OPEN-40, OPEN-37 |
 | §III | Nhóm 3 công nghiệp | ❓ | OPEN-40 |
 | §IV | Điểm uy tín 50% hoàn chỉnh + 50% kịp thời | 🔶 | FR-155 (số tin + chốt); CTV đo kịp thời riêng — FR-173 |
+| §IV | Điểm **từng tin** (khác điểm người rao) | ✅ | FR-177 d: `diem_tin()` 7 tiêu chí 0–100 theo kịch bản Gemini; ngưỡng rao 70 chờ chốt — OPEN-50 |
 | §IV | Thưởng quy mô; quyền lợi Đồng/Bạc/Vàng | ❓ | OPEN-26 (người rao), OPEN-42 (CTV) |
 | §V | Phí; NMG ≥10 tin, chốt 5% | ✅ | BR-05, FR-125, FR-155 |
 | §V | Hệ thống điều phối CTV | ✅ | FR-136, FR-173 |
@@ -183,6 +186,15 @@ giá → hẻm → diện tích → tầng → phòng → pháp lý → ảnh �
 được khích lệ; đủ thì gửi bản nháp tin kèm điểm 100 theo 7 tiêu chí, đủ điểm mới rao
 (FR-177, thay thứ tự FR-176 f). Cùng ngày, 13 mục OPEN của hướng nhadat.cc 2024 đóng
 vì không còn hợp AOND (`09` bảng "đã chốt / đã đóng").
+
+**Đã chốt 07/09/2026 tối: giọng bot xây từ AOND lên, không đọc mã tin** (FR-178,
+chủ dự án) — `TONE_RULES` viết lại theo SRD AOND §II (mỗi tin dưới 30 từ, khen
+điểm mạnh thật gắn khách mua rồi hỏi đúng một thứ, không đọc tên trường), few-shot
+người bán chép từ transcript AOND 30 câu + kịch bản Gemini của sếp, và **mã tin
+không bao giờ đọc ra trong chat** — mua lẫn bán, gọi căn bằng địa chỉ. Mã vẫn là
+khoá liên kết web ↔ chat (IA-P3): web hiện, khách gõ vào thì bot hiểu, chỉ không
+tự đọc. Còn treo: ngưỡng điểm để tin được rao (**OPEN-50**), và mặt MUA vẫn theo
+`chats w B.docx` cho tới khi OPEN-48 chốt bỏ mảng nào.
 
 **DH-07.** Cho tới khi §0.8 chốt, việc mới đi theo cột phải và tầng dưới ghi
 `[giả định BA]` ở chỗ phụ thuộc.

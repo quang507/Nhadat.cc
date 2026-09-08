@@ -27,7 +27,11 @@ export type KetQuaKhop = {
   loai: LoaiCau;
   /** Cách xưng hô chủ nhà dặn, chỉ có khi loai = "xung_ho". */
   xungHo?: "anh" | "chị";
-  /** Câu không khớp câu đang hỏi nhưng khớp RÕ một fact khác → ghi vào đó. */
+  /**
+   * Câu không khớp câu đang hỏi nhưng khớp RÕ một fact khác → ghi vào đó
+   * (FR-177 e: hỏi một đường, trả lời một nẻo thì VẪN ghi). Không nhận ra
+   * fact nào thì tầng trên ghi nguyên văn vào fact `bo_sung`.
+   */
   chuyenSang?: { question: string; answer: string };
 };
 
@@ -83,6 +87,19 @@ const CAU_HOI_RE = /\?|^\s*(?:phi|bao nhieu|sao|the nao|nhu the nao|bao gio|khi 
  * `text` là phần còn lại SAU khi tầng trên đã bóc lời sửa (FR-164).
  */
 export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
+  const kq = phanLoaiTho(question, text);
+  // FR-177 e: câu LỆCH mà nhận ra chủ nhà đang nói fact nào thì trỏ sang đó.
+  if (kq.loai === "lech" && !kq.chuyenSang) {
+    const nd = nhanDienFact(text);
+    if (nd && nd.question !== question &&
+        !(nd.question === "dien_tich" && /^dien_tich/.test(question))) {
+      return { ...kq, chuyenSang: nd };
+    }
+  }
+  return kq;
+}
+
+function phanLoaiTho(question: string, text: string): KetQuaKhop {
   const kd = boDau(text.trim());
   const xungHo = batXungHo(text);
   const chu = conChu(kd.replace(XUNG_HO_RE, " "));
@@ -119,12 +136,18 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
     return ketQua("lech");
   }
 
+  // Ảnh (FR-177 a): ảnh thật đi đường ghiAnhKem, chữ chỉ "khớp" khi chủ nói
+  // KHÔNG có ảnh; "chiều gửi" là lời hứa (PROMISE_RE tầng trên đặt nhắc).
+  if (question === "hinh_anh") {
+    return ketQua(/\b(khong co|ko co|k co|chua co|chua chup|khong chup|ko chup)\b/.test(kd) ? "khop" : "lech");
+  }
+
   if (HOI_SO.has(question)) {
     if (CO_SO.test(kd) || SO_CHU.test(kd)) {
       // Số đi kèm đơn vị của trường KHÁC thì lệch: hỏi năm xây mà nhận "5 tỷ".
       if (question !== "gia" && /\b(ty|ti|trieu|tr)\b/.test(kd)) return ketQua("lech");
       // "80m2": không có ranh giới từ giữa "80" và "m2", nên đừng dùng \b trước m2.
-      if (question === "gia" && /(m2|m²|met vuong|\btang\b|\blau\b|\btam\b)/.test(kd) && !/\b(ty|ti|trieu|tr|k)\b/.test(kd)) return ketQua("lech");
+      if (question === "gia" && /(m2|m²|met vuong|\btang\b|\blau\b|\btam\b|\bngang\b|\brong\b|\bdai\b|\bsau\b|\bhem\b|\bmat tien\b)/.test(kd) && !/\b(ty|ti|toi|trieu|tr|k)\b/.test(kd)) return ketQua("lech");
       return ketQua("khop");
     }
     // "chưa rõ / không nhớ" là câu trả lời hợp lệ cho năm xây, phí quản lý…
@@ -157,4 +180,112 @@ export const NHAN_HOI_LAI: Record<string, string> = {
   gia: "giá mình muốn bán bao nhiêu",
   phuong: "nhà mình thuộc phường mấy",
   do_rong_hem: "hẻm trước nhà rộng mấy mét, xe hơi vào được không",
+  hinh_anh: "mình gửi giúp em vài tấm ảnh sổ, mặt tiền nhà và hẻm",
+  duyet_tin: "bản nháp tin như vậy đã được chưa, hay mình muốn sửa chỗ nào",
 };
+
+// ── FR-177 e: chủ nhà đang nói FACT NÀO? ─────────────────────────────────────
+// Chỉ nhận khi câu có NHÃN hoặc ĐƠN VỊ rõ ("ngang 5", "80m2", "5 tỷ", "hẻm 4m",
+// "3 lầu", "2 phòng ngủ", "sổ hồng", "hướng đông", "phường 5", "xây 2010").
+// Một con số trần ("16m nha") thì KHÔNG đoán — về `bo_sung`, người đọc sau.
+// Đáp án là chuỗi ĐÃ BỎ DẤU cho các trường số (parse_vnd/boc_thong_so phía DB
+// đọc được "ty"/"trieu"), còn trường chữ (pháp lý, hướng, quy hoạch, nội thất)
+// giữ nguyên văn để tầng DB bóc theo từ khoá có dấu.
+type NhanDien = { question: string; answer: string };
+const SO = "(\\d+(?:[.,]\\d+)?)";
+export function nhanDienFact(text: string): NhanDien | null {
+  const goc = text.trim();
+  const kd = boDau(goc);
+  let m: RegExpExecArray | null;
+  if (/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|shc|giay tay|cam ngan hang|dang the chap)\b/.test(kd)) {
+    return { question: "phap_ly", answer: goc };
+  }
+  if ((m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?${SO}\\s*(?:m|met)?\\b`).exec(kd)) ||
+      (m = new RegExp(`${SO}\\s*(?:m|met)\\s*hem\\b`).exec(kd))) {
+    return { question: "do_rong_hem", answer: `hẻm ${m[1]}m` };
+  }
+  if (/\b(hem xe hoi|hem oto|hem o to|xe hoi (?:vao|toi|tới) (?:duoc|tan|toi)|hem xe tai)\b/.test(kd)) {
+    return { question: "do_rong_hem", answer: goc };
+  }
+  if ((m = new RegExp(`\\b(?:ngang|rong|mat tien|mt)\\s*(?:la\\s*)?${SO}\\s*(?:m|met)?\\b`).exec(kd)) &&
+      !/\b(dai|sau)\b/.test(kd)) {
+    return { question: "mat_tien", answer: `${m[1]}m` };
+  }
+  if ((m = new RegExp(`${SO}\\s*(?:m2|m²|met vuong|mv)\\b`).exec(kd)) ||
+      (m = new RegExp(`${SO}\\s*x\\s*${SO}`).exec(kd))) {
+    return { question: "dien_tich", answer: m[0].replace(/\s+/g, " ") };
+  }
+  if ((m = new RegExp(`${SO}\\s*(?:ty|ti|toi|trieu|tr)\\b(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kd))) {
+    return { question: "gia", answer: m[0].trim() };
+  }
+  if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:lau|tang|tam)\b/.exec(kd)) || /\btret\b/.test(kd)) {
+    return { question: "ket_cau", answer: goc };
+  }
+  if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:phong ngu|pn)\b/.exec(kd))) {
+    return { question: "so_phong_ngu", answer: m[1] };
+  }
+  if ((m = /\b(?:phuong|p)\.?\s*(\d{1,2})\b/.exec(kd))) {
+    return { question: "phuong", answer: `Phường ${m[1]}` };
+  }
+  if ((m = /\b(?:xay|hoan cong|xd)\s*(?:nam\s*|tu\s*)?((?:19|20)\d{2})\b/.exec(kd))) {
+    return { question: "nam_xay", answer: m[1] };
+  }
+  if (/\bhuong\s*(dong|tay|nam|bac)\b/.test(kd)) return { question: "huong", answer: goc };
+  if (/\b(quy hoach|lo gioi|giai toa)\b/.test(kd)) return { question: "quy_hoach", answer: goc };
+  if (/\bnoi that\b/.test(kd)) return { question: "noi_that", answer: goc };
+  if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd)) {
+    return { question: "tiem_nang", answer: goc };
+  }
+  return null;
+}
+
+// ── FR-177 a: câu hỏi KẾ TIẾP bám câu chủ nhà vừa nói ────────────────────────
+// Nhóm ưu tiên cao nhất còn thiếu quyết định TẬP ứng viên (co_ban trước);
+// trong tập đó, chọn câu LIÊN QUAN tới fact vừa ghi (nghe "ngang 5" thì hỏi
+// diện tích, nghe "3 lầu" thì hỏi phòng ngủ), không có thì lấy câu đầu.
+// Nhóm đọc từ cột `nhom` của view; view cũ không có cột thì tra bảng dưới.
+export const NHOM_FACT: Record<string, "co_ban" | "chuyen_mon" | "phu"> = {
+  loai_bds: "co_ban", phuong: "co_ban", dien_tich: "co_ban", dien_tich_dat: "co_ban",
+  dien_tich_tim_tuong: "co_ban", tho_cu: "co_ban", gia: "co_ban", mat_tien: "co_ban",
+  huong: "phu", quy_hoach: "phu", nam_xay: "phu",
+};
+const LIEN_QUAN: Record<string, string[]> = {
+  mat_tien: ["dien_tich_dat", "dien_tich", "dien_tich_tim_tuong", "tho_cu"],
+  dien_tich: ["mat_tien", "gia"], dien_tich_dat: ["mat_tien", "tho_cu", "gia"],
+  dien_tich_tim_tuong: ["gia"], tho_cu: ["gia"],
+  gia: ["phuong"], phuong: ["dien_tich_dat", "dien_tich", "dien_tich_tim_tuong"],
+  loai_bds: ["phuong"],
+  do_rong_hem: ["ket_cau", "mat_tien"], do_rong_duong: ["mat_tien"],
+  ket_cau: ["so_phong_ngu", "phap_ly"], tang: ["so_phong_ngu"], so_phong_ngu: ["phap_ly"],
+  phap_ly: ["hinh_anh"], hinh_anh: [],
+};
+export type CauThieu = { fact_key: string; priority?: number; nhom?: string | null };
+export function chonCauKe(vuaNoi: string[], conThieu: CauThieu[]): string | undefined {
+  if (!conThieu.length) return undefined;
+  const nhom = (c: CauThieu) => c.nhom ?? NHOM_FACT[c.fact_key] ?? "chuyen_mon";
+  const dau = conThieu[0];
+  const ungVien = conThieu.filter((c) => nhom(c) === nhom(dau)).map((c) => c.fact_key);
+  for (const k of [...vuaNoi].reverse()) {
+    for (const lq of LIEN_QUAN[k] ?? []) {
+      if (ungVien.includes(lq)) return lq;
+    }
+  }
+  return dau.fact_key;
+}
+
+// ── FR-177 c: chủ nhà GẬT bản nháp? (AGREE_RULES, bản tiền định) ─────────────
+// Gật = câu chỉ gồm từ đồng ý + tiểu từ, không có từ phủ định/sửa; hoặc emoji
+// vui, like, tim. "ok nhưng sửa giá" là KHÔNG gật — sửa đi trước.
+const TU_GAT = new Set(["da","vang","ok","oke","okie","okay","u","uh","um","duoc","dc","chuan","dung","dong","y","chot","len","dang","vay","tot","hay","dep","on","nhat","tri","xin","cam","on","yes","yep"]);
+const TU_DEM = new Set(["nha","nhe","nhen","em","e","a","roi","do","day","luon","di","thoi","ha","rat","qua","lam","cu","the","nhu","tin","vay","cho","chi","anh","minh","toi","ne","het","cai","nay","ma"]);
+const EMOJI_VUI = /(👍|❤️|❤|😍|🥰|😊|🙂|👌|🔥|💯|\[sticker|\[khach tha tim|\[thả tim|\[like)/;
+export function laDongY(text: string): boolean {
+  const goc = text.trim();
+  if (!goc) return false;
+  if (EMOJI_VUI.test(goc)) return true;
+  const kd = boDau(goc).replace(/[^a-z0-9\s]/g, " ").trim();
+  if (!kd) return false;
+  if (/\b(khong|ko|k|chua|sua|doi|sai|nham|bo|them|thieu|nhung)\b/.test(kd)) return false;
+  const tu = kd.split(/\s+/);
+  return tu.every((w) => TU_GAT.has(w) || TU_DEM.has(w)) && tu.some((w) => TU_GAT.has(w));
+}
