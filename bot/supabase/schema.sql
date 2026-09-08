@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-08 15:55 (giờ VN)
+-- Sinh lúc: 2026-09-08 16:41 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -1571,13 +1571,13 @@ CREATE OR REPLACE FUNCTION public.bot_health_tick()
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public', 'net'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare
   v_from bigint; v_to bigint; v_new integer := 0;
   v_beat timestamptz; v_co_hang boolean; v_hour integer;
   v_dead boolean := false; v_chua_bao_gio boolean := false;
-  v_cnt integer; v_last text; v_ntfy bigint;
+  v_cnt integer; v_ntfy bigint;
   v_ntfy_truoc bigint; v_ma_truoc integer; v_co_dau_vet boolean;
   v_da_gui boolean := false;
 begin
@@ -1640,32 +1640,27 @@ begin
     end if;
   end if;
 
-  select count(*) into v_cnt from bot_errors where at > now() - interval '1 hour';
-
-  if (v_new > 0 or v_dead or v_cnt > 0)
+  -- QUY TẮC: CHỈ báo động khi bot trên VPS đang tắt (v_dead = true)
+  if v_dead
      and not exists (select 1 from reminders
-                     where kind = 'escalation' and note like '🩺%'
+                     where kind = 'escalation' and note like '🚨%'
                        and created_at > now() - interval '1 hour') then
     update reminders set status = 'cancelled'
-     where kind = 'escalation' and status = 'pending' and note like '🩺%';
+     where kind = 'escalation' and status = 'pending' and note like '🚨%';
     insert into reminders (kind, due_at, note)
     values ('escalation', now(),
-      format('🩺 nhadat.cc: %s lỗi trong 1 giờ qua%s. Xem trang /admin.',
-             v_cnt, case when v_dead then ' + bridge-zca đang im' else '' end));
+      format('🚨 CẢNH BÁO: Bot trên VPS (bridge-zca) đang tắt hoặc im từ %s. Cần kiểm tra VPS!',
+             case when v_chua_bao_gio then 'chưa từng điểm danh'
+                  else to_char(v_beat at time zone 'Asia/Ho_Chi_Minh', 'DD/MM HH24:MI') end));
   end if;
 
-  if (v_new > 0 or v_dead or v_cnt > 0) and not v_da_gui then
-    select left(source || ': ' || coalesce(detail, ''), 200) into v_last
-      from bot_errors order by at desc limit 1;
+  if v_dead and not v_da_gui then
     v_ntfy := public.canh_bao_ngoai(
-      case when v_dead then 'nhadat.cc: bridge Zalo đang im' else 'nhadat.cc: có lỗi mới' end,
-      format('%s lỗi trong 1 giờ qua%s. Mới nhất: %s. Xem /admin.',
-             v_cnt,
-             case when v_chua_bao_gio then ' + bridge-zca chưa từng điểm danh'
-                  when v_dead then ' + bridge-zca im từ ' || to_char(v_beat at time zone 'Asia/Ho_Chi_Minh', 'DD/MM HH24:MI')
-                  else '' end,
-             coalesce(v_last, '-')),
-      case when v_dead then 5 else 4 end);
+      '🚨 [BOT VPS TẮT] Mất kết nối bridge Zalo',
+      format('Bot trên VPS đang im tiếng từ %s. Vui lòng kiểm tra dịch vụ nhadat-bridge trên VPS.',
+             case when v_chua_bao_gio then 'chưa từng điểm danh'
+                  else to_char(v_beat at time zone 'Asia/Ho_Chi_Minh', 'DD/MM HH24:MI') end),
+      5, false);
     insert into bot_health (who, at, last_id) values ('ntfy', now(), coalesce(v_ntfy, 0))
     on conflict (who) do update set at = now(), last_id = excluded.last_id;
   end if;
@@ -2258,12 +2253,11 @@ CREATE OR REPLACE FUNCTION public.email_admin(p_loai text, p_zalo_uid text, p_bo
  RETURNS bigint
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare v_mail text; v_bds text; v_id bigint;
 begin
   select value into v_mail from app_config where key = 'admin_email';
-  if v_mail is null or btrim(v_mail) = '' then return null; end if;
   if p_listing_id is not null then
     select '#' || code || ' · ' || coalesce(location_raw, '') || ' ' || coalesce(ward, '')
            || coalesce(', ' || district, '') || coalesce(' · ' || price_raw, '')
@@ -2276,7 +2270,7 @@ begin
     coalesce(p_body, '') || coalesce(E'\nBĐS: ' || v_bds, '')
       || E'\nThời điểm: ' || to_char(now() at time zone 'Asia/Ho_Chi_Minh', 'DD/MM HH24:MI'),
     case when p_loai in ('UPSET', 'VOICE') then 5 else 4 end,
-    true);
+    (v_mail is not null and btrim(v_mail) <> ''));
   return v_id;
 exception when others then
   perform public.log_loi('email_admin', left(p_loai || ': ' || sqlerrm, 400), null::integer);
@@ -3332,7 +3326,8 @@ begin
       'Content-Type','application/json',
       'Authorization','Bearer ' || public.cau_hinh('publishable_key'),
       'x-bridge-secret', public.get_secret('BRIDGE_SECRET')),
-    body := '{}'::jsonb);
+    body := '{}'::jsonb,
+    timeout_milliseconds := 30000);
 end $function$
 ;
 
@@ -4061,6 +4056,34 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.trg_info_request_thong_bao_khach_hoi()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_bds text;
+  v_buyer text;
+begin
+  if new.question is not null and btrim(new.question) <> '' then
+    select coalesce('#' || code, '') into v_bds from listings where id = new.listing_id;
+    select coalesce(name, 'Khách hàng') into v_buyer from buyers where id = new.buyer_id;
+
+    perform public.canh_bao_ngoai(
+      format('[KHÁCH HỎI BĐS] %s', coalesce(v_bds, 'Tin')),
+      format('%s vừa hỏi về căn %s: "%s". Cần kiểm tra và hỗ trợ khách.',
+             coalesce(v_buyer, 'Khách'),
+             coalesce(v_bds, ''),
+             left(new.question, 300)),
+      4, false);
+  end if;
+  return new;
+exception when others then
+  return new;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.trg_listing_drip()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -4071,6 +4094,33 @@ begin
   if new.seller_id is not null and new.status = 'cho_thong_tin' then
     perform ask_seller_drip(new.id);
   end if;
+  return new;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.trg_listing_thong_bao_tao_tin()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_title text;
+  v_text text;
+begin
+  v_title := '[TIN MỚI] ' || coalesce(new.code, 'BĐS');
+  v_text := format('Có tin BĐS mới vừa được tạo: %s · %s%s · Giá: %s · DT: %sm2. Trạng thái: %s',
+                   coalesce(new.code, 'Chưa mã'),
+                   coalesce(new.property_type, 'BĐS'),
+                   case when new.location_raw is not null then ' tại ' || new.location_raw else '' end,
+                   coalesce(new.price_raw, 'Thương lượng'),
+                   coalesce(new.area_m2::text, '-'),
+                   case when new.status = 'cho_thong_tin' then 'Chờ thông tin'
+                        when new.status = 'dang_ban' then 'Đang bán'
+                        else new.status end);
+  perform public.canh_bao_ngoai(v_title, v_text, 4, false);
+  return new;
+exception when others then
   return new;
 end $function$
 ;
@@ -4889,6 +4939,8 @@ drop trigger if exists trg_info_request_bao_lai_khach on public.info_requests;
 CREATE TRIGGER trg_info_request_bao_lai_khach AFTER UPDATE OF status ON public.info_requests FOR EACH ROW EXECUTE FUNCTION info_request_bao_lai_khach();
 drop trigger if exists trg_info_request_set_active_listing on public.info_requests;
 CREATE TRIGGER trg_info_request_set_active_listing AFTER INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION info_request_set_active_listing();
+drop trigger if exists trg_info_request_thong_bao_khach_hoi on public.info_requests;
+CREATE TRIGGER trg_info_request_thong_bao_khach_hoi AFTER INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION trg_info_request_thong_bao_khach_hoi();
 drop trigger if exists trg_notify_info_request_escalation on public.info_requests;
 CREATE TRIGGER trg_notify_info_request_escalation AFTER INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION notify_info_request_escalation();
 drop trigger if exists trg_pe_info_requests on public.info_requests;
@@ -4907,6 +4959,8 @@ drop trigger if exists trg_pe_listing_views on public.listing_views;
 CREATE TRIGGER trg_pe_listing_views AFTER INSERT ON public.listing_views FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists listing_insert_drip on public.listings;
 CREATE TRIGGER listing_insert_drip AFTER INSERT ON public.listings FOR EACH ROW EXECUTE FUNCTION trg_listing_drip();
+drop trigger if exists trg_listing_thong_bao_tao_tin on public.listings;
+CREATE TRIGGER trg_listing_thong_bao_tao_tin AFTER INSERT ON public.listings FOR EACH ROW EXECUTE FUNCTION trg_listing_thong_bao_tao_tin();
 drop trigger if exists trg_listings_bao_can_da_chot on public.listings;
 CREATE TRIGGER trg_listings_bao_can_da_chot AFTER UPDATE OF status ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_bao_can_da_chot();
 drop trigger if exists trg_listings_bao_tin_moi_khop on public.listings;
@@ -5052,6 +5106,10 @@ drop policy if exists views_own_all on public.listing_views;
 create policy views_own_all on public.listing_views as permissive for ALL to authenticated using ((auth_user_id = ( SELECT auth.uid() AS uid))) with check ((auth_user_id = ( SELECT auth.uid() AS uid)));
 drop policy if exists anon_read_listings on public.listings;
 create policy anon_read_listings on public.listings as permissive for SELECT to anon, authenticated using ((status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text, 'da_chot'::text])));
+drop policy if exists listings_admin_delete on public.listings;
+create policy listings_admin_delete on public.listings as permissive for DELETE to authenticated using ((EXISTS ( SELECT 1
+   FROM admins a
+  WHERE (a.email = (auth.jwt() ->> 'email'::text)))));
 drop policy if exists listings_admin_read on public.listings;
 create policy listings_admin_read on public.listings as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
@@ -5482,8 +5540,16 @@ grant execute on function public.thu_muc_dau_uuid(p_name text) to service_role;
 revoke all on function public.tin_cua_toi(p_listing uuid) from public, anon, authenticated;
 grant execute on function public.tin_cua_toi(p_listing uuid) to authenticated;
 grant execute on function public.tin_cua_toi(p_listing uuid) to service_role;
+revoke all on function public.trg_info_request_thong_bao_khach_hoi() from public, anon, authenticated;
+grant execute on function public.trg_info_request_thong_bao_khach_hoi() to anon;
+grant execute on function public.trg_info_request_thong_bao_khach_hoi() to authenticated;
+grant execute on function public.trg_info_request_thong_bao_khach_hoi() to service_role;
 revoke all on function public.trg_listing_drip() from public, anon, authenticated;
 grant execute on function public.trg_listing_drip() to service_role;
+revoke all on function public.trg_listing_thong_bao_tao_tin() from public, anon, authenticated;
+grant execute on function public.trg_listing_thong_bao_tao_tin() to anon;
+grant execute on function public.trg_listing_thong_bao_tao_tin() to authenticated;
+grant execute on function public.trg_listing_thong_bao_tao_tin() to service_role;
 revoke all on function public.trg_property_event() from public, anon, authenticated;
 grant execute on function public.trg_property_event() to service_role;
 revoke all on function public.viec_inbound_bo_roi(p_limit integer) from public, anon, authenticated;
