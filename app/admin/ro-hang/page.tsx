@@ -94,7 +94,7 @@ export default function Page() {
   const [q, setQ] = useState("");
   const [deal, setDeal] = useState<"" | "ban" | "cho_thue">("");
   const [trangThai, setTrangThai] = useState("");
-  const [sap, setSap] = useState<{ key: string; tang: boolean }>({ key: "stt", tang: true });
+  const [sap, setSap] = useState<{ key: string; tang: boolean }>({ key: "ngay", tang: false });
   const [trang, setTrang] = useState(1);
   const [mo, setMo] = useState<Set<string>>(new Set());
 
@@ -108,8 +108,7 @@ export default function Page() {
       const { data, error } = await supabase
         .from("listings")
         .select(COT_CHON)
-        .order("legacy_sst", { ascending: true, nullsFirst: false })
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(2000);
       if (error) setLoi(error.message);
       setRows((data ?? []) as unknown as Dong[]);

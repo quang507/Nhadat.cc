@@ -263,7 +263,7 @@ export default function Page() {
       supabase.from("reminders")
         .select("id, kind, note, due_at, created_at")
         .eq("status", "pending").in("kind", ["escalation", "report"])
-        .order("due_at", { ascending: true }).limit(30),
+        .order("created_at", { ascending: false }).limit(30),
       supabase.from("sellers")
         .select("id, name, seller_type, created_at, zalo_user_id, active_listing_id, listings:active_listing_id(id, code, legacy_code, location_raw, price_raw, status)")
         .order("created_at", { ascending: false }).limit(100),
@@ -284,11 +284,11 @@ export default function Page() {
         .from("viewings")
         .select("id, listing_code, time_text, slot, status, guide, source, created_at, listings(code), buyers(name)")
         .or(`slot.gte.${d7},and(slot.is.null,created_at.gte.${d7})`)
-        .order("slot", { ascending: true, nullsFirst: false }).limit(100),
+        .order("created_at", { ascending: false, nullsFirst: false }).limit(100),
       supabase
         .from("khach_can_nguoi_that")
         .select("conversation_id, vai, ten, zalo_user_id, needs_human_at, last_message_at, ctv_name, tin_khach_cuoi, tin_khach_cuoi_at")
-        .order("needs_human_at", { ascending: true }).limit(100),
+        .order("needs_human_at", { ascending: false }).limit(100),
       supabase
         .from("hoi_thoai_thong_ke")
         .select("ngay, hoi_thoai_khach_moi, hoi_thoai_ban_moi, tin_khach, tin_nguoi_ban, tin_bot, tin_nguoi_that, khach_moi, co_nguoi_that")
@@ -433,6 +433,14 @@ export default function Page() {
         interests: [],
       });
     }
+
+    // Sắp xếp CRM theo thời gian từ mới đến cũ
+    crmItems.sort((a, b) => {
+      const tA = new Date(a.created_at).getTime() || 0;
+      const tB = new Date(b.created_at).getTime() || 0;
+      return tB - tA;
+    });
+
     setDanhSachCrm(crmItems);
 
     setLoi(
