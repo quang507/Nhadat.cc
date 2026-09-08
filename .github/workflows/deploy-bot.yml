@@ -7,9 +7,16 @@
 # là hỏng im lặng, và chữa cũng phải chép tay 120 KB nữa. Ở đây runner tự
 # checkout, tự build, tự đẩy — bytes không đi qua tay ai.
 #
-# Cần secret `SUPABASE_ACCESS_TOKEN` (Personal Access Token, tạo ở
+# Cần `SUPABASE_ACCESS_TOKEN` (Personal Access Token, tạo ở
 # https://supabase.com/dashboard/account/tokens). Không có nó thì job dừng ngay
 # ở bước đầu chứ không chạy nửa vời.
+#
+# Nhận cả `secrets.` lẫn `vars.`, secret được ưu tiên. Đặt làm secret thì hơn:
+# GitHub tự che secret trong log, variable thì KHÔNG — chỉ cần một step lỡ in
+# nó ra là token nằm nguyên trong log, mà repo này PUBLIC nên log ai cũng đọc
+# được. Đi lối variable thì bước `Che token trong log` phải chạy TRƯỚC mọi bước
+# đụng tới token: `::add-mask::` bảo Actions bôi đen giá trị đó ở mọi dòng log
+# SAU nó. Che sau khi đã in ra thì không cứu được gì.
 
 name: Deploy bot lên Supabase
 
@@ -41,15 +48,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Phải có SUPABASE_ACCESS_TOKEN
+      - name: Che token trong log, và phải có token
         env:
-          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+          TU_SECRET: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "::error::Thiếu secret SUPABASE_ACCESS_TOKEN."
+            echo "::error::Thiếu SUPABASE_ACCESS_TOKEN — không có ở cả secret lẫn variable."
             echo "Tạo token ở https://supabase.com/dashboard/account/tokens rồi thêm vào"
             echo "Settings → Secrets and variables → Actions của repo này."
             exit 1
+          fi
+          # Che NGAY, trước mọi bước dùng tới nó. Secret thì GitHub che sẵn;
+          # variable thì không, nên dòng này là thứ duy nhất đứng giữa token và
+          # log của một repo public.
+          echo "::add-mask::$TOKEN"
+          if [ "$TU_SECRET" = "true" ]; then
+            echo "Nguồn token: secret"
+          else
+            echo "Nguồn token: variable — nên chuyển sang secret, variable không được che sẵn"
           fi
 
       # verify_jwt KHÔNG được đoán và KHÔNG được chép cứng vào file này — chép
@@ -59,7 +76,7 @@ jobs:
       - name: Đọc verify_jwt của bản đang chạy
         id: truoc
         env:
-          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
           api="https://api.supabase.com/v1/projects/$PROJECT_REF/functions/${{ inputs.ham }}"
@@ -84,7 +101,7 @@ jobs:
 
       - name: Deploy
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
         working-directory: bot
         run: |
           set -euo pipefail
@@ -98,7 +115,7 @@ jobs:
       # giữ nguyên.
       - name: Chứng minh nó tới nơi
         env:
-          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
           api="https://api.supabase.com/v1/projects/$PROJECT_REF/functions/${{ inputs.ham }}"
