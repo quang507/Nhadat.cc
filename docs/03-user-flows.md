@@ -241,20 +241,67 @@ không thêm ma sát cho CCRB (INS-05).
 ---
 
 ## UF-10 — S rao tin ngay trong Zalo (F1)
-**Actor** CCRB / NMG · **FR** FR-109, FR-111, FR-106, FR-144, FR-150 · *(FR-97 bản cũ deprecated)* [nguồn: artifact "Cầu Nối BĐS" v2, 08/2026]
-✅ đã dựng: `chat-reply` nhánh seller (tạo tin nháp, hỏi nhỏ giọt, `ask-seller` cron), ảnh về bucket `listing-public` (FR-165), trigger tự lên `dang_ban` khi đủ giá + diện tích + phường.
+**Actor** CCRB / NMG · **FR** FR-109, FR-111, FR-106, FR-144, FR-150, FR-157, FR-176, FR-177, FR-178 · *(FR-97 bản cũ deprecated)* [nguồn: artifact "Cầu Nối BĐS" v2, 08/2026; kịch bản Gemini của sếp 07/09/2026; SRD AOND §I–II]
+✅ đã dựng: `chat-reply` nhánh seller (tạo tin nháp, hỏi nhỏ giọt, `ask-seller` cron), ảnh về bucket `listing-public` (FR-165), `20260907h` chấm điểm + cổng duyệt.
 
-1. S nhắn *"Cần bán nhà MT Trần Bình Trọng giá 6 tỉ"*.
-2. Bot hỏi từng bước: khu vực → giá → diện tích → pháp lý → mô tả. Loại BĐS không
-   hỏi — trigger tự suy từ câu rao (FR-150), chỉ hỏi khi không đoán được.
-3. Khu vực lạ → bot đưa lựa chọn quận/phường.
-4. Ảnh Zalo là URL tạm → tải về, lưu kho, ghi `listing_media` (FR-111/165).
-5. Listing vào `cho_thong_tin`; đủ giá + diện tích + phường → `dang_ban` (FR-139).
-   Thiếu thông tin hoặc ảnh lộ SĐT → bot hỏi tiếp S (FR-144).
-6. Vòng đời sau đó theo UF-13. Mã công khai: OPEN-17.
+```mermaid
+flowchart TD
+    A["S nhắn câu rao"] --> B["Tạo tin cho_thong_tin, can_chu_duyet = true"]
+    B --> C{Còn thiếu gì?}
+    C -->|Nhóm CƠ BẢN| D["Hỏi: loại · phường · diện tích · giá<br/>(thứ tự bám câu S vừa nói)"]
+    C -->|Nhóm CHUYÊN MÔN| E["Hỏi: hẻm → kết cấu → phòng ngủ → pháp lý → ảnh"]
+    D --> F{Câu S nhắn có trả lời không?}
+    E --> F
+    F -->|Khớp| G["Ghi fact, đóng câu hỏi"]
+    F -->|Lệch, nhận ra fact khác| H["Ghi fact ĐÓ, câu hỏi gốc VẪN treo"]
+    F -->|Lệch, không nhận ra| I["Ghi nguyên văn vào bo_sung, câu hỏi gốc vẫn treo"]
+    F -->|Ừ/ok · dặn xưng hô · hỏi ngược| J["Xử lý ý đó, KHÔNG ghi fact"]
+    G --> C
+    H --> C
+    I --> C
+    J --> C
+    C -->|Hết câu + điểm ≥ 70| K["Gửi BẢN NHÁP TIN + điểm<br/>hỏi: như vậy được chưa?"]
+    C -->|Hết câu, điểm < 70| L["Nói còn thiếu gì, hỏi tiếp"]
+    L --> C
+    K --> M{S trả lời}
+    M -->|Gật| N["chu_duyet_at → tin LÊN KỆ dang_ban"]
+    M -->|Sửa| O["Ghi fact mới, gửi LẠI bản nháp"]
+    O --> M
+    M -->|Hỏi ngược| P["Trả lời rồi hỏi lại"]
+    P --> M
+    N --> Q["Vòng đời theo UF-13"]
+```
 
-Mỗi lần đăng là một listing riêng; mã công khai là danh tính duy nhất B thấy (FR-104).
-`/raoban` (UF-09) là kênh song song.
+1. S nhắn *"Cần bán nhà MT Trần Bình Trọng giá 6 tỉ"* → tin `cho_thong_tin`, cờ
+   `can_chu_duyet` bật (FR-177 c). Loại BĐS **không hỏi** — trigger suy từ chính
+   câu rao (FR-150), chỉ hỏi khi không đoán được.
+2. **Thứ tự hỏi** (FR-177 a): nhóm **cơ bản** trước (loại, phường, diện tích, giá);
+   trong nhóm thì bám thứ S vừa nhắc — nghe "ngang 5" hỏi tiếp chiều dài, chưa
+   nhảy sang giá. Xong cơ bản mới tới **chuyên môn**: hẻm rộng mấy mét, ô tô vào
+   được không → mấy lầu → mấy phòng ngủ → pháp lý → xin ảnh. Hướng, quy hoạch,
+   năm xây **không hỏi**, chỉ ghi khi S tự kể. Thứ tự nằm ở `required_facts`
+   (`nhom` + `priority`), không ở prompt.
+3. **Mỗi tin dưới 30 từ**: nhắc lại chi tiết vừa nghe kèm một câu khích lệ có nghĩa
+   gắn với khách mua, rồi hỏi đúng **một** thông tin (FR-177 b, FR-178 b).
+4. **Hỏi một đường, trả lời một nẻo thì VẪN GHI** (FR-177 e): nhận ra S đang nói
+   fact nào thì ghi vào đúng fact đó; không nhận ra thì ghi nguyên văn vào
+   `bo_sung`. Câu hỏi gốc vẫn treo, bot hỏi lại bằng lời khác. Chỉ ừ/ok, dặn xưng
+   hô, hỏi ngược là không ghi (FR-176).
+5. Ảnh Zalo là URL tạm → tải về, lưu kho, ghi `listing_media` (FR-111/165).
+6. **Đủ thông tin → gửi bản nháp tin** (FR-177 c): tiêu đề · vị trí · thông số ·
+   kết cấu · pháp lý · tiềm năng · giá · lời gọi hành động, kèm **điểm đầy đủ
+   0–100** (7 tiêu chí, FR-177 d) và câu "như vậy được chưa?". Bản nháp là chữ
+   **tiền định**, không do model soạn — số liệu phải đúng từng chữ với cột.
+7. **S gật → tin lên kệ** (`chu_duyet_at`, rồi `dang_ban`). S sửa → ghi fact rồi
+   gửi lại bản nháp. Điều kiện lên kệ của tin tạo từ chat: đủ giá + diện tích +
+   phường **và** điểm ≥ 70 **và** S đã gật *[ngưỡng 70 là giả định BA — OPEN-50]*.
+   Tin nhập Excel/admin (`can_chu_duyet = false`) giữ luật cũ (FR-139/144).
+8. Vòng đời sau đó theo UF-13. Mã công khai: OPEN-17.
+
+**Không đọc mã tin cho S** (FR-178 a): gọi căn bằng địa chỉ ("căn Trần Bình Trọng
+của mình"); S rao nhiều căn thì phân biệt cũng bằng địa chỉ. Mã vẫn sinh, vẫn lưu,
+vẫn hiện trên web và trong tin cho CTV/admin — chỉ không đọc ra trong chat.
+Mỗi lần đăng là một listing riêng (FR-104). `/raoban` (UF-09) là kênh song song.
 
 ---
 

@@ -2,7 +2,19 @@
 import { randomUUID } from "node:crypto";
 
 const singular = (t) => t.replace(/s$/, "");
-const now = () => new Date().toISOString();
+// Mốc thời gian phải DUY NHẤT, như Postgres. `toISOString()` chỉ có mili giây,
+// mà ba câu hỏi chờ mở liên tiếp rơi trọn trong một mili giây là chuyện thường —
+// khi đó `order("created_at", { ascending: false })` HOÀ, `Array.sort` ổn định
+// giữ nguyên thứ tự chèn, nên `ds[0]` hoá ra câu CŨ NHẤT trong nhóm hoà thay vì
+// mới nhất: chat-reply bốc nhầm câu đang treo và ca G5 đỏ chừng 1/6 lượt chạy.
+// Postgres lưu timestamp tới micro giây nên hoà gần như không xảy ra; mock phải
+// giống chỗ đó, không thì bộ e2e đo một hành vi khác bản thật. (Bắt 08/09/2026.)
+let mocNhoNhat = 0;
+const now = () => {
+  const t = Math.max(Date.now(), mocNhoNhat + 1);
+  mocNhoNhat = t;
+  return new Date(t).toISOString();
+};
 
 export class FakeDB {
   constructor() {
