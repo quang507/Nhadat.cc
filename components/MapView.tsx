@@ -44,10 +44,13 @@ export default function MapView({
           fillColor: "#e60023",
           fillOpacity: l.deal === "cho_thue" ? 0.25 : 0.65,
         }).addTo(map);
+        // Popup là CHUỖI HTML, không phải JSX: price_raw và ward là chữ người bán
+        // gõ, phải escape trước khi nhét vào.
+        const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
         marker.bindPopup(
           `<div style="font-family:inherit;min-width:170px">
-            <strong>${formatPrice(l.price_vnd, l.price_raw)}</strong> · ${l.ward ?? ""}<br/>
-            <span style="color:#687686">#${code} · ${l.deal === "cho_thue" ? "cho thuê" : "bán"}</span><br/>
+            <strong>${esc(formatPrice(l.price_vnd, l.price_raw))}</strong> · ${esc(l.ward ?? "")}<br/>
+            <span style="color:#687686">#${esc(code)} · ${l.deal === "cho_thue" ? "cho thuê" : "bán"}</span><br/>
             <a href="/nha-dat/${encodeURIComponent(code)}" style="color:#e60023;font-weight:700">Xem tin →</a>
           </div>`,
         );

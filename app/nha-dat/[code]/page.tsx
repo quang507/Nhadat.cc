@@ -39,11 +39,17 @@ export const revalidate = 300;
 // vẫn render on-demand vì dynamicParams mặc định = true, và render xong cũng
 // được nằm trong cache 5 phút như các trang kia.
 export async function generateStaticParams() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("listings")
     .select("code")
     .in("status", ["dang_ban", "dang_quan_tam"])
     .not("code", "is", null);
+  // Không tới được DB lúc build thì hàm này trả [] và build VẪN XANH: 0 trang tin
+  // được dựng sẵn, bảng route vẫn hiện ● nên kiểm NFR-17 không bắt được (đo
+  // 08/09: prerender-manifest có 80 route, 0 route /nha-dat/). Nói ra ở đây.
+  if (error || !data?.length) {
+    console.warn(`[nha-dat] generateStaticParams: ${error ? error.message : "0 tin"} — không dựng sẵn trang tin nào, chỉ render on-demand.`);
+  }
   return (data ?? []).map((l) => ({ code: l.code as string }));
 }
 
@@ -52,10 +58,15 @@ export async function generateStaticParams() {
 // fetch-cache của Next nên không tự gộp: trước bản này mỗi trang tin là HAI
 // truy vấn y hệt, lúc build nhân với ~164 tin (FR-171 j).
 const getListing = cache(async (code: string): Promise<Listing | null> => {
+  // Đoạn đường dẫn đi THẲNG vào chuỗi `.or()` của PostgREST, nơi `,` `(` `)` là
+  // ngữ pháp và `%` `_` là wildcard: `/nha-dat/%25` là "mọi tin", `/nha-dat/x,status.eq.an`
+  // là ghép thêm điều kiện. Mã tin chỉ có [A-Za-z0-9-]; thứ khác trả 404 ngay.
+  if (!/^[A-Za-z0-9-]{1,40}$/.test(code)) return null;
   const { data } = await supabase
     .from("listings")
     .select("*")
     .or(`code.ilike.${code},legacy_code.ilike.${code}`)
+    .limit(1)
     .maybeSingle();
   return data as Listing | null;
 });
@@ -100,8 +111,12 @@ export async function generateMetadata({
   const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
   const title = `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất ${loc} — ${formatPrice(listing.price_vnd, listing.price_raw)} · #${listing.code}`;
   const description = sanitizeDescription(listing.description).slice(0, 155);
-  const photos = await photosOfCode(code, 1);
-  const url = `/nha-dat/${encodeURIComponent(code)}`;
+  // Canonical theo MÃ THẬT của tin, không theo tham số URL: tin mở được bằng
+  // cả legacy_code (20260908c), mà hai URL cùng tự nhận canonical là Google thấy
+  // hai trang cho một tin — JSON-LD bên dưới đã dùng listing.code từ trước.
+  const maThat = listing.code ?? code;
+  const photos = await photosOfCode(maThat, 1);
+  const url = `/nha-dat/${encodeURIComponent(maThat)}`;
   // NFR-09: canonical + OpenGraph (ảnh thật nếu có, không thì ảnh minh hoạ)
   return {
     title,

@@ -49,6 +49,8 @@ export const photosOfCode = unstable_cache(
 );
 
 async function _photosOfCode(code: string, limit = 12): Promise<string[]> {
+  // Cùng lý do với getListing ở app/nha-dat/[code]: mã đi thẳng vào chuỗi .or().
+  if (!/^[A-Za-z0-9-]{1,40}$/.test(code)) return [];
   const { data } = await supabase
     .from("listing_photos_v")
     .select("url, sort_order, created_at, media_id")

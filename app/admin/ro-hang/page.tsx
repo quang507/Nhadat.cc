@@ -204,6 +204,16 @@ export default function Page() {
     });
   };
 
+  // "60,5" là cách người Việt gõ số; Number("60,5") = NaN và JSON hoá thành
+  // null → PostgREST nhận null, ô diện tích bị XOÁ mà không báo gì. Đổi phẩy
+  // thành chấm; vẫn không ra số thì trả null có chủ đích.
+  const soVN = (s: string): number | null => {
+    const t = s.trim().replace(/\s/g, "").replace(",", ".");
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  };
+
   // Lưu chỉnh sửa vào database
   const luuSua = async () => {
     if (!dangSua) return;
@@ -213,12 +223,12 @@ export default function Page() {
       status: formSua.status,
       property_type: formSua.property_type || null,
       price_raw: formSua.price_raw.trim() || null,
-      price_vnd: formSua.price_vnd ? Number(formSua.price_vnd) : null,
-      area_m2: formSua.area_m2 ? Number(formSua.area_m2) : null,
-      frontage_m: formSua.frontage_m.trim() || null,
-      length_m: formSua.length_m.trim() || null,
-      floors: formSua.floors ? Number(formSua.floors) : null,
-      bedrooms: formSua.bedrooms ? Number(formSua.bedrooms) : null,
+      price_vnd: soVN(formSua.price_vnd),
+      area_m2: soVN(formSua.area_m2),
+      frontage_m: soVN(formSua.frontage_m),
+      length_m: soVN(formSua.length_m),
+      floors: soVN(formSua.floors),
+      bedrooms: soVN(formSua.bedrooms),
       location_raw: formSua.location_raw.trim() || null,
       district: formSua.district.trim() || null,
       ward: formSua.ward.trim() || null,

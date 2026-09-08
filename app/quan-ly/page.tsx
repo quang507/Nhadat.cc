@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
-import { formatPrice } from "@/lib/format";
+import { formatPrice, sanitizeDescription } from "@/lib/format";
 import { WARDS } from "@/lib/geo"; // một danh sách phường cho cả web (FR-171 j)
 import UploadAnh from "@/components/UploadAnh";
 
@@ -158,7 +158,7 @@ export default function Page() {
             <div className="flex items-center gap-4">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold">
-                  #{l.code} · {l.description?.slice(0, 60) ?? l.location_raw}
+                  #{l.code} · {l.description ? sanitizeDescription(l.description).slice(0, 60) : l.location_raw}
                 </p>
                 <p className="text-sm text-mute">
                   {l.ward} · {formatPrice(l.price_vnd, l.price_raw)}
