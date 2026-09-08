@@ -106,7 +106,8 @@ const layTin = unstable_cache(
     if (t.tang) q = q.gte("floors", t.tang);
     if (t.pl?.length) q = q.in("legal_status", t.pl);
     // FR-09: tham số từ câu tìm kiếm tự nhiên (đã làm sạch ở trên).
-    if (t.quan) q = q.ilike("district", `%${t.quan}%`);
+    // Không bọc %: "%Quận 1%" khớp cả Quận 10/11/12. Giá trị đã chuẩn "Quận N".
+    if (t.quan) q = q.ilike("district", t.quan);
     if (t.loai?.length) q = q.in("property_type", t.loai);
     if (t.duong) q = q.ilike("street", `%${t.duong}%`);
     if (t.moc) q = q.or(`description.ilike.%${t.moc}%,location_raw.ilike.%${t.moc}%`);
@@ -173,7 +174,10 @@ export default async function ListingBrowse({
   // khoảng giá/diện tích tự do khi chọn chip giá/diện tích tương ứng.
   const withParam = (patch: Partial<Params>) => {
     const merged: Record<string, string> = {};
-    const bo: Partial<Params> = { trang: undefined, q: undefined };
+    const bo: Partial<Params> = { trang: undefined };
+    // Sang trang thì vẫn là câu hỏi đó: giữ `q` để tiêu đề diễn giải + hộp Zalo
+    // (FR-13) không biến mất ở trang 2.
+    if (!("trang" in patch)) bo.q = undefined;
     if ("gia" in patch) { bo.gmin = undefined; bo.gmax = undefined; }
     if ("dt" in patch) { bo.dtmin = undefined; bo.dtmax = undefined; }
     for (const [k, v] of Object.entries({ ...sp, ...bo, ...patch })) {

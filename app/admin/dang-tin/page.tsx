@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TYPE_LABEL } from "@/lib/format";
+import { WARDS } from "@/lib/geo"; // một danh sách phường cho cả web (FR-171 j)
 import UploadAnh from "@/components/UploadAnh";
 
 const NGUON = [
@@ -42,7 +43,10 @@ const TRANG_THAI = [
 // Kho đang có tin ở Phường 1–16 (Quận 5 cũ + rìa Quận 10/1 sáp nhập). Địa bàn
 // đã mở ra Sài Gòn (phường mới) + Long An (FR-174): quận/huyện gõ tay ở ô riêng,
 // danh sách phường theo địa giới mới chờ bảng `wards` (OPEN-27 nửa sau).
-const PHUONG = Array.from({ length: 16 }, (_, i) => `Phường ${i + 1}`);
+// Trước đây tự đếm 1..16 — "Phường 16" không có trong WARD_CENTROIDS nên trang
+// tin không vẽ được bản đồ và không vào trang tag phường nào (FR-171 j gọi đích
+// danh bản 16 này là một trong bốn bản lệch).
+const PHUONG = WARDS;
 
 type Ng = { id: string; name: string | null; seller_type: string; active_count: number; rank: string };
 

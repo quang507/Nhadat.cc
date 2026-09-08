@@ -199,6 +199,15 @@ const dealCol = (v: unknown): "ban" | "cho_thue" =>
 
 // FR-29: mã căn khách nhắc ("#BDS-Q5-0115", từ web bấm sang) — chào đúng căn đó
 const CODE_RE = /(?:#\s*)?\b([A-Za-z]{2,5}(?:-[A-Za-z0-9]{1,15}){1,4})\b/g;
+// Mã tin trước khi nhét vào chuỗi `.or("code.ilike.X,legacy_code.ilike.X")` của
+// PostgREST: ở đó dấu phẩy / ngoặc là NGỮ PHÁP và %/_ là wildcard. Ba chỗ dùng
+// (hỏi chủ, hẹn xem, chốt) lấy mã từ ĐẦU RA MODEL — không bị CODE_RE ràng buộc —
+// nên model trả "BDS-NP-Q5-0001, BDS-NP-Q5-0002" là PostgREST 400, `{ data }`
+// thành null và bot lặng lẽ đi nhánh "không thấy tin". Chỉ nhận [A-Z0-9-].
+const maTinSach = (s: string | null | undefined): string => {
+  const v = (s ?? "").trim().toUpperCase();
+  return /^[A-Z0-9-]{3,40}$/.test(v) ? v : "";
+};
 
 // Hồ sơ + trả lời trong MỘT lượt gọi model (FR-130)
 const BuyerTurn = z.object({
@@ -792,7 +801,7 @@ Deno.serve(async (req) => {
       const maTin = noiBo[1].toUpperCase();
       const traLoi = noiBo[2].trim();
       const { data: lst } = await client.from("listings").select("id")
-        .or(`code.ilike.${maTin},legacy_code.ilike.${maTin}`).maybeSingle();
+        .or(`code.ilike.${maTin},legacy_code.ilike.${maTin}`).limit(1).maybeSingle();
       if (!lst) {
         const khong = `Em không thấy tin #${maTin} trong kho ạ, anh/chị xem lại mã giúp em.`;
         return await hoanTat({ reply: khong, replies: [khong], noi_bo: vai });
@@ -2653,10 +2662,12 @@ Deno.serve(async (req) => {
   // (kèm reminder escalation để nudge/bridge đi báo ngay).
   const viecHoiChu = async () => {
     if (!out.ask_owner?.question) return;
-    const aoCode = (out.ask_owner.listing_code ?? mentioned[0] ?? "").toUpperCase();
+    const aoCode = maTinSach(out.ask_owner.listing_code ?? mentioned[0]);
     if (!aoCode) return;
+    // .limit(1): một mã có thể khớp cả `code` của tin này lẫn `legacy_code` của
+    // tin khác; maybeSingle() gặp 2 dòng là PGRST116 và cũng rơi về "không thấy".
     const { data: aoLst } = await client.from("listings").select("id")
-      .or(`code.ilike.${aoCode},legacy_code.ilike.${aoCode}`).maybeSingle();
+      .or(`code.ilike.${aoCode},legacy_code.ilike.${aoCode}`).limit(1).maybeSingle();
     if (!aoLst) return;
     // chống hỏi trùng: đã có yêu cầu pending của khách cho căn này trong 24h thì thôi
     const { count: aoDup } = await client.from("info_requests")
@@ -2697,13 +2708,13 @@ Deno.serve(async (req) => {
     // rồi, riêng cửa này thì không: lịch xem ghi thiếu `listing_id`, và lượt sau
     // khách bổ sung SĐT với mã viết hoa thì so sánh lệch → tạo lịch THỨ HAI, đúng
     // cái lỗi khối này từng được sửa để tránh.
-    const vwCode = out.viewing.listing_code?.trim().toUpperCase() || null;
+    const vwCode = maTinSach(out.viewing.listing_code) || null;
     const slot = mapDue(out.viewing.when);
     const slotMs = Date.parse(slot);
     // Tra mã căn và lịch đang chờ cùng lúc — hai câu không nhìn nhau.
     const [{ data: lst }, { data: existVw }] = await Promise.all([
       vwCode
-        ? client.from("listings").select("id").or(`code.ilike.${vwCode},legacy_code.ilike.${vwCode}`).maybeSingle()
+        ? client.from("listings").select("id").or(`code.ilike.${vwCode},legacy_code.ilike.${vwCode}`).limit(1).maybeSingle()
         : Promise.resolve({ data: null as { id: string } | null }),
       client.from("viewings")
         .select("id, listing_code")
@@ -2812,11 +2823,11 @@ Deno.serve(async (req) => {
   // ghi deals + listing sang da_chot + báo gấp CTV/admin qua kênh escalation.
   const viecChot = async () => {
     if (!out.agreed_deal) return;
-    const dealCode = (out.agreed_deal.listing_code ?? mentioned[0] ?? repliedCode ?? "").toUpperCase();
+    const dealCode = maTinSach(out.agreed_deal.listing_code ?? mentioned[0] ?? repliedCode);
     if (!dealCode) return;
     const { data: dl } = await client.from("listings")
       .select("id, price_vnd, seller_id, sellers(seller_type)")
-      .or(`code.ilike.${dealCode},legacy_code.ilike.${dealCode}`).maybeSingle();
+      .or(`code.ilike.${dealCode},legacy_code.ilike.${dealCode}`).limit(1).maybeSingle();
     if (!dl) return;
     const { count: dupDeal } = await client.from("deals")
       .select("id", { count: "exact", head: true })

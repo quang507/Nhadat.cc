@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import ListingCard from "@/components/ListingCard";
 import { coverByCode } from "@/lib/photos";
 import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase";
-import { formatPrice, placeholderImg, SITE_URL, zaloLink } from "@/lib/format";
+import { formatPrice, placeholderImg, sanitizeDescription, SITE_URL, zaloLink } from "@/lib/format";
 
 // FR-117 (dựng 04/09/2026) — trang dự án `/du-an/{slug}`, SSG từ bảng
 // `projects` (SRS-3.10; anon đọc được qua `anon_read_projects`). Có
@@ -76,7 +76,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const p = await getProject(decodeURIComponent(slug));
   if (!p) return { title: "Không tìm thấy dự án" };
   const title = `Dự án ${p.name}${p.district ? ` — ${p.district}` : ""}`;
-  const description = (p.description ?? `${p.name}${p.developer ? ` của ${p.developer}` : ""}, ${viTri(p)}.`).slice(0, 155);
+  const description = (p.description ? sanitizeDescription(p.description) : `${p.name}${p.developer ? ` của ${p.developer}` : ""}, ${viTri(p)}.`).slice(0, 155);
   const url = `/du-an/${encodeURIComponent(p.slug)}`;
   const img = anhDuAn(p.images)[0] ?? placeholderImg(p.slug);
   return {
@@ -116,7 +116,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
     "@id": url,
     url,
     name: p.name,
-    description: (p.description ?? "").slice(0, 500),
+    description: sanitizeDescription(p.description).slice(0, 500),
     image: anh.length ? anh : undefined,
     address: { "@type": "PostalAddress", addressLocality: p.ward ?? undefined, addressRegion: p.district ?? undefined, addressCountry: "VN" },
   }).replace(/</g, "\\u003c");
@@ -192,7 +192,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
               {p.description && (
                 <>
                   <h2 className="mt-8 text-lg font-extrabold">Giới thiệu</h2>
-                  <p className="mt-2.5 whitespace-pre-line leading-7 text-navy/80">{p.description}</p>
+                  <p className="mt-2.5 whitespace-pre-line leading-7 text-navy/80">{sanitizeDescription(p.description)}</p>
                 </>
               )}
             </div>
