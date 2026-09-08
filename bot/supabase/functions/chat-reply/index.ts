@@ -198,7 +198,7 @@ const dealCol = (v: unknown): "ban" | "cho_thue" =>
   v === "thue" || v === "cho_thue" ? "cho_thue" : "ban";
 
 // FR-29: mã căn khách nhắc ("#BDS-Q5-0115", từ web bấm sang) — chào đúng căn đó
-const CODE_RE = /(?:#\s*)?\b([A-Za-z]{2,5}(?:-[A-Za-z0-9]{1,8}){1,3})\b/g;
+const CODE_RE = /(?:#\s*)?\b([A-Za-z]{2,5}(?:-[A-Za-z0-9]{1,15}){1,4})\b/g;
 
 // Hồ sơ + trả lời trong MỘT lượt gọi model (FR-130)
 const BuyerTurn = z.object({
@@ -221,16 +221,16 @@ const BuyerTurn = z.object({
     what: z.string().describe("Khách hứa làm gì: 'gửi ảnh sổ', 'báo lại tài chính'…"),
   }).nullable().describe("CHỈ điền khi khách chủ động hứa sẽ gửi/báo gì đó vào một mốc thời gian. Không suy diễn."),
   viewing: z.object({
-    listing_code: z.string().nullable().describe("Mã căn muốn xem, ví dụ 'BDS-Q5-0115' (không có # đầu)"),
+    listing_code: z.string().nullable().describe("Mã căn muốn xem, ví dụ 'BDS-NP-BINHTAN-0001', 'BDS-NP-Q5-0001' (không có # đầu)"),
     when: z.string().describe("Khung giờ khách chốt, nguyên văn: 'mai 9h sáng', 'chiều thứ 7'…"),
     phone: z.string().nullable().describe("SĐT khách TỰ cho ở bước chốt lịch; không có thì null"),
   }).nullable().describe("CHỈ điền khi khách chốt/đề nghị lịch xem nhà cụ thể (UF-06). Không suy diễn."),
   agreed_deal: z.object({
-    listing_code: z.string().nullable().describe("Mã căn khách vừa đồng ý chốt, ví dụ 'BDS-Q5-0164'; không rõ mã thì null"),
+    listing_code: z.string().nullable().describe("Mã căn khách vừa đồng ý chốt, ví dụ 'BDS-NP-BINHTAN-0001', 'BDS-NP-Q5-0001'; không rõ mã thì null"),
   }).nullable().describe("CHỈ điền khi tin NGAY TRƯỚC của EM có đề nghị chốt hợp đồng/cọc và khách vừa ĐỒNG Ý theo AGREE_RULES (bằng chữ, emoji vui, like/tim). Không suy diễn."),
   send_photos: z.string().nullable().describe("Mã căn cần gửi hình kèm tin này — CHỈ điền khi khách xin hình và khối căn ghi 'có hình sẵn'; không thì null"),
   ask_owner: z.object({
-    listing_code: z.string().nullable().describe("Mã căn cần hỏi, ví dụ 'BDS-Q5-0164' (không có # đầu)"),
+    listing_code: z.string().nullable().describe("Mã căn cần hỏi, ví dụ 'BDS-NP-BINHTAN-0001', 'BDS-NP-Q5-0001' (không có # đầu)"),
     question: z.string().describe("Điều cần hỏi/xin từ chủ tin, ngắn gọn: 'hình + địa chỉ chi tiết', 'pháp lý', 'còn bán không'…"),
   }).nullable().describe("CHỈ điền khi em vừa hứa 'để em hỏi lại chủ nhà / xin hình rồi gửi anh chị' về MỘT căn cụ thể. Không suy diễn."),
   need_human: z.boolean().describe(
@@ -784,7 +784,7 @@ Deno.serve(async (req) => {
   // `info_request_bao_lai_khach` báo lại khách. Chỉ tra `nguoi_noi_bo` khi tin
   // MỞ ĐẦU bằng mã tin, nên người mua hỏi "#BDS-… còn không em" chỉ tốn thêm
   // đúng một lượt RPC rồi rơi xuống nhánh mua như thường (FR-171 h).
-  const noiBo = text.match(/^\s*#?\s*(BDS-[A-Z0-9]+-\d+)\s*[:\-–]?\s*([\s\S]+)$/i);
+  const noiBo = text.match(/^\s*#?\s*(BDS-[A-Z0-9]+(?:-[A-Z0-9]+)*-\d+)\s*[:\-–]?\s*([\s\S]+)$/i);
   if (noiBo) {
     const { data: nb } = await client.rpc("nguoi_noi_bo", { p_zalo: externalUserId }).maybeSingle();
     const vai = (nb as { vai?: string; id?: string | null; name?: string | null } | null)?.vai ?? null;
@@ -792,7 +792,7 @@ Deno.serve(async (req) => {
       const maTin = noiBo[1].toUpperCase();
       const traLoi = noiBo[2].trim();
       const { data: lst } = await client.from("listings").select("id")
-        .eq("code", maTin).maybeSingle();
+        .or(`code.ilike.${maTin},legacy_code.ilike.${maTin}`).maybeSingle();
       if (!lst) {
         const khong = `Em không thấy tin #${maTin} trong kho ạ, anh/chị xem lại mã giúp em.`;
         return await hoanTat({ reply: khong, replies: [khong], noi_bo: vai });
@@ -1238,9 +1238,8 @@ Deno.serve(async (req) => {
     // này KHÔNG bao giờ tự lộ: fact vẫn có, tin vẫn lên web, chỉ là sai nhà.
     // Thứ tự tin cậy: mã tin chủ tự nhắc > căn bot vừa hỏi > câu mới nhất.
     // Một dãy mã duy nhất kể từ FR-158 — nhánh `CCRB-` cũ bỏ đi vì kho chưa bao
-    // giờ có mã đó (kiểm 27/08/2026: 173 tin, 100% BDS-Q5-####).
     const codeInText =
-      /(bds-q5-[a-z0-9]+)/.exec(tKD)?.[1]?.toUpperCase() ?? null;
+      /(bds-[a-z0-9]+(?:-[a-z0-9]+)+)/.exec(tKD)?.[1]?.toUpperCase() ?? null;
     // Câu hỏi chờ + huỷ nhắc-lời-hứa cũ (FR-133) chạy song song: hai việc
     // không nhìn nhau (FR-171 h). Embed lấy luôn `status` của tin để khối drip
     // bên dưới khỏi hỏi lại.
@@ -2657,7 +2656,7 @@ Deno.serve(async (req) => {
     const aoCode = (out.ask_owner.listing_code ?? mentioned[0] ?? "").toUpperCase();
     if (!aoCode) return;
     const { data: aoLst } = await client.from("listings").select("id")
-      .eq("code", aoCode).maybeSingle();
+      .or(`code.ilike.${aoCode},legacy_code.ilike.${aoCode}`).maybeSingle();
     if (!aoLst) return;
     // chống hỏi trùng: đã có yêu cầu pending của khách cho căn này trong 24h thì thôi
     const { count: aoDup } = await client.from("info_requests")
@@ -2704,7 +2703,7 @@ Deno.serve(async (req) => {
     // Tra mã căn và lịch đang chờ cùng lúc — hai câu không nhìn nhau.
     const [{ data: lst }, { data: existVw }] = await Promise.all([
       vwCode
-        ? client.from("listings").select("id").eq("code", vwCode).maybeSingle()
+        ? client.from("listings").select("id").or(`code.ilike.${vwCode},legacy_code.ilike.${vwCode}`).maybeSingle()
         : Promise.resolve({ data: null as { id: string } | null }),
       client.from("viewings")
         .select("id, listing_code")
@@ -2817,7 +2816,7 @@ Deno.serve(async (req) => {
     if (!dealCode) return;
     const { data: dl } = await client.from("listings")
       .select("id, price_vnd, seller_id, sellers(seller_type)")
-      .eq("code", dealCode).maybeSingle();
+      .or(`code.ilike.${dealCode},legacy_code.ilike.${dealCode}`).maybeSingle();
     if (!dl) return;
     const { count: dupDeal } = await client.from("deals")
       .select("id", { count: "exact", head: true })

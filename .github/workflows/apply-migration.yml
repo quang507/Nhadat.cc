@@ -1,0 +1,49 @@
+name: Apply Database Migration on Supabase
+
+on:
+  workflow_dispatch:
+    inputs:
+      migration_file:
+        description: File migration name in bot/supabase/migrations/
+        required: true
+        default: '20260908c_chuan_hoa_ma_tin_va_boc_thong_so.sql'
+
+env:
+  PROJECT_REF: tbcdpupiarkuxtntmosl
+
+jobs:
+  migrate:
+    name: Apply Migration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Che token trong log
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Thiếu SUPABASE_ACCESS_TOKEN"
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+
+      - name: Chạy migration qua Supabase Management API
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          FILE="${{ inputs.migration_file }}"
+          TARGET="bot/supabase/migrations/$FILE"
+          if [ ! -f "$TARGET" ]; then
+            echo "::error::Không tìm thấy file $TARGET"
+            exit 1
+          fi
+          echo "Đang áp migration: $TARGET"
+          SQL=$(cat "$TARGET")
+          PAYLOAD=$(jq -n --arg q "$SQL" '{query: $q}')
+          RES=$(curl -sS -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          echo "Kết quả: $RES"

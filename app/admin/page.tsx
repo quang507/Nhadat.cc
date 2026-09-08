@@ -6,7 +6,7 @@
 // 04/09/2026 — "admin buyer side" (FR-71/74/75/76/77/78/80, migration
 // 20260904c): câu khách hỏi, lịch xem nhà, khách cần người thật, thống kê hội
 // thoại 30 ngày + CSV, ô tìm khách. Mọi danh sách dài lật 20 mục/trang (FR-80).
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription } from "@/lib/format";
@@ -105,11 +105,34 @@ const COT_THONG_KE: (keyof ThongKe)[] = [
   "ngay", "hoi_thoai_khach_moi", "hoi_thoai_ban_moi", "tin_khach", "tin_nguoi_ban",
   "tin_bot", "tin_nguoi_that", "khach_moi", "co_nguoi_that",
 ];
-// FR-74: kết quả tìm khách. CỐ Ý không có `phone` — bảng có cột đó, policy cho
-// admin đọc cả bảng, nhưng web không bao giờ chọn nó (NFR-07, FR-104).
-type Khach = {
-  id: string; name: string | null; zalo_user_id: string | null;
-  preferences: Record<string, unknown> | null; last_contact_at: string | null; created_at: string;
+// FR-74 & CRM: Hồ sơ khách hàng hai vai (Vừa mua vừa bán · Gắn BĐS quan tâm)
+type KhachCrm = {
+  id: string;
+  name: string | null;
+  zalo_user_id: string | null;
+  preferences: Record<string, unknown> | null;
+  notes: string | null;
+  last_contact_at: string | null;
+  created_at: string;
+  seller?: {
+    id: string;
+    seller_type: string;
+    active_listing?: {
+      id: string;
+      code: string | null;
+      legacy_code: string | null;
+      location_raw: string | null;
+      price_raw: string | null;
+      status: string | null;
+    } | null;
+  } | null;
+  interests?: {
+    listing_id: string;
+    code: string | null;
+    legacy_code: string | null;
+    price_raw: string | null;
+    location_raw: string | null;
+  }[];
 };
 const TRANG_THAI_HOI: Record<string, string> = { pending: "đang chờ", answered: "đã trả lời" };
 const TRANG_THAI_XEM: Record<string, string> = {
@@ -178,10 +201,22 @@ export default function Page() {
   const [thongKe, setThongKe] = useState<ThongKe[]>([]);
   // Lỗi đọc: hiện ra UI thay vì nuốt — policy thiếu thì thấy ngay ở đây.
   const [loi, setLoi] = useState<string[]>([]);
-  // FR-74: tìm khách theo yêu cầu, ngoài đợt tải đầu (phụ thuộc chữ admin gõ).
-  const [qKhach, setQKhach] = useState("");
-  const [khach, setKhach] = useState<Khach[] | null>(null);
-  const [dangTim, setDangTim] = useState(false);
+  // CRM Khách hàng & Hai vai (Vừa mua vừa bán · Gắn BĐS quan tâm · Nhu cầu)
+  const [danhSachCrm, setDanhSachCrm] = useState<KhachCrm[]>([]);
+  const [qCrm, setQCrm] = useState("");
+  const [dangGanBds, setDangGanBds] = useState<string | null>(null);
+  const [maBdsGan, setMaBdsGan] = useState("");
+  const [dangLuuBds, setDangLuuBds] = useState(false);
+  const [suaNhuCauId, setSuaNhuCauId] = useState<string | null>(null);
+  const [formNhuCau, setFormNhuCau] = useState({
+    area: "",
+    property_type: "",
+    deal: "ban",
+    bedrooms: "",
+    budget: "",
+    notes: "",
+  });
+
   // 04/09 đợt 2
   const [bdsHot, setBdsHot] = useState<BdsHot[] | null>(null);
   const [doTre, setDoTre] = useState<DoTre | null | undefined>(undefined);
@@ -196,6 +231,31 @@ export default function Page() {
   // FR-96: up ảnh cho một tin chờ duyệt ngay tại thẻ duyệt.
   const [upCho, setUpCho] = useState<string | null>(null);
 
+  // Lọc CRM phía client
+  const filteredCrm = useMemo(() => {
+    if (!qCrm.trim()) return danhSachCrm;
+    const q = qCrm.toLowerCase().trim();
+    return danhSachCrm.filter((k) => {
+      const name = (k.name ?? "").toLowerCase();
+      const zalo = (k.zalo_user_id ?? "").toLowerCase();
+      const notes = (k.notes ?? "").toLowerCase();
+      const p = k.preferences ?? {};
+      const area = String(p.area ?? "").toLowerCase();
+      const ptype = String(p.property_type ?? "").toLowerCase();
+      const sellCode = (k.seller?.active_listing?.code ?? "").toLowerCase();
+      const intCodes = (k.interests ?? []).map((i) => (i.code ?? "").toLowerCase()).join(" ");
+      return (
+        name.includes(q) ||
+        zalo.includes(q) ||
+        notes.includes(q) ||
+        area.includes(q) ||
+        ptype.includes(q) ||
+        sellCode.includes(q) ||
+        intCodes.includes(q)
+      );
+    });
+  }, [danhSachCrm, qCrm]);
+
   // FR-80 — hook phân trang phải đứng TRƯỚC mọi `return` sớm theo `role`.
   const ptTin = usePhanTrang(pending);
   const ptNguoiBan = usePhanTrang(nguoiBan);
@@ -203,6 +263,7 @@ export default function Page() {
   const ptLichXem = usePhanTrang(lichXem);
   const ptKhachCan = usePhanTrang(khachCan);
   const ptThongKe = usePhanTrang(thongKe);
+  const ptCrm = usePhanTrang(filteredCrm);
 
   // MỘT đợt cho cả trang (FR-171 j). Trước bản này là 5 đợt nối tiếp (12 truy
   // vấn), mỗi đợt một lần thời gian mạng VN→Supabase ~150-250 ms, tức 1-1,5 s
@@ -212,7 +273,7 @@ export default function Page() {
   // 04/09: thêm 4 truy vấn buyer side vào CÙNG đợt, vẫn một vòng đi về.
   const load = async () => {
     const d7 = new Date(Date.now() - 7 * 86400e3).toISOString();
-    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt] = await Promise.all([
+    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt, buyRes, intRes] = await Promise.all([
       supabase
         .from("listings")
         .select("id, code, ward, price_vnd, price_raw, area_m2, description, location_raw, created_at")
@@ -231,8 +292,7 @@ export default function Page() {
         .eq("status", "pending").in("kind", ["escalation", "report"])
         .order("due_at", { ascending: true }).limit(30),
       supabase.from("sellers")
-        .select("id, name, seller_type, created_at, zalo_user_id")
-        .gte("created_at", new Date(Date.now() - 14 * 86400e3).toISOString())
+        .select("id, name, seller_type, created_at, zalo_user_id, active_listing_id, listings:active_listing_id(id, code, legacy_code, location_raw, price_raw, status)")
         .order("created_at", { ascending: false }).limit(100),
       supabase
         .from("seller_ranks")
@@ -274,6 +334,14 @@ export default function Page() {
       supabase.from("listing_media")
         .select("id, listing_id, storage_path, media_type, mime_type, created_at, listings(code)")
         .eq("bucket", "listing-private").order("created_at", { ascending: false }).limit(100),
+      // CRM: người mua & BĐS quan tâm
+      supabase
+        .from("buyers")
+        .select("id, name, zalo_user_id, preferences, notes, last_contact_at, created_at")
+        .order("created_at", { ascending: false }).limit(100),
+      supabase
+        .from("interests")
+        .select("buyer_id, listing_id, listings(id, code, legacy_code, location_raw, price_raw, status)"),
     ]);
     setBdsHot(hot.error ? null : ((hot.data ?? []) as BdsHot[]));
     setDoTre(tre.error ? null : ((tre.data as DoTre | null) ?? null));
@@ -300,8 +368,69 @@ export default function Page() {
     setLichXem((lx.data ?? []) as unknown as LichXem[]);
     setKhachCan((kc.data ?? []) as KhachCan[]);
     setThongKe((tk.data ?? []) as ThongKe[]);
+
+    // Xử lý danh sách CRM khách hàng hai vai & gắn BĐS quan tâm
+    const rawBuyers = (buyRes.data ?? []) as any[];
+    const rawSellers = (nb.data ?? []) as any[];
+    const rawInterests = (intRes.data ?? []) as any[];
+
+    const crmItems: KhachCrm[] = [];
+    const seenZalo = new Set<string>();
+
+    for (const b of rawBuyers) {
+      if (b.zalo_user_id) seenZalo.add(b.zalo_user_id);
+      const s = b.zalo_user_id ? rawSellers.find((x) => x.zalo_user_id === b.zalo_user_id) : null;
+      const bInts = rawInterests
+        .filter((i) => i.buyer_id === b.id)
+        .map((i) => ({
+          listing_id: i.listing_id,
+          code: i.listings?.code ?? null,
+          legacy_code: i.listings?.legacy_code ?? null,
+          price_raw: i.listings?.price_raw ?? null,
+          location_raw: i.listings?.location_raw ?? null,
+        }));
+
+      crmItems.push({
+        id: b.id,
+        name: b.name || s?.name || null,
+        zalo_user_id: b.zalo_user_id,
+        preferences: b.preferences,
+        notes: b.notes,
+        last_contact_at: b.last_contact_at,
+        created_at: b.created_at,
+        seller: s
+          ? {
+              id: s.id,
+              seller_type: s.seller_type,
+              active_listing: s.listings ?? null,
+            }
+          : null,
+        interests: bInts,
+      });
+    }
+
+    for (const s of rawSellers) {
+      if (s.zalo_user_id && seenZalo.has(s.zalo_user_id)) continue;
+      crmItems.push({
+        id: s.id,
+        name: s.name,
+        zalo_user_id: s.zalo_user_id,
+        preferences: null,
+        notes: null,
+        last_contact_at: null,
+        created_at: s.created_at,
+        seller: {
+          id: s.id,
+          seller_type: s.seller_type,
+          active_listing: s.listings ?? null,
+        },
+        interests: [],
+      });
+    }
+    setDanhSachCrm(crmItems);
+
     setLoi(
-      [["câu hỏi", ch.error], ["lịch xem", lx.error], ["khách cần người thật", kc.error], ["thống kê", tk.error]]
+      [["câu hỏi", ch.error], ["lịch xem", lx.error], ["khách cần người thật", kc.error], ["thống kê", tk.error], ["người mua", buyRes.error]]
         .filter(([, e]) => e)
         .map(([ten, e]) => `${ten as string}: ${(e as { message: string }).message}`),
     );
@@ -342,22 +471,70 @@ export default function Page() {
     else alert(`Lỗi xoá: ${error.message}`);
   };
 
-  // FR-74 — tìm khách theo tên Zalo hoặc uid. Bỏ ký tự cú pháp của bộ lọc
-  // PostgREST (dấu phẩy, ngoặc) để chữ gõ không thành mệnh đề lọc.
-  const timKhach = async (e: FormEvent) => {
-    e.preventDefault();
-    const q = qKhach.replace(/[,()"\\]/g, " ").trim();
-    if (!q) return setKhach(null);
-    setDangTim(true);
-    const { data, error } = await supabase
-      .from("buyers")
-      .select("id, name, zalo_user_id, preferences, last_contact_at, created_at")
-      .or(`name.ilike.%${q}%,zalo_user_id.ilike.%${q}%`)
-      .order("last_contact_at", { ascending: false, nullsFirst: false })
-      .limit(MOI_TRANG);
-    setDangTim(false);
-    if (error) setLoi((l) => [...l, `tìm khách: ${error.message}`]);
-    setKhach((data ?? []) as Khach[]);
+  // CRM: Gắn BĐS quan tâm cho khách
+  const ganBdsQuanTam = async (buyerId: string) => {
+    if (!maBdsGan.trim()) return;
+    setDangLuuBds(true);
+    const { data, error } = await supabase.rpc("admin_gan_bds_quan_tam", {
+      p_buyer_id: buyerId,
+      p_code: maBdsGan.trim(),
+    });
+    setDangLuuBds(false);
+    if (error || (data && !data.ok)) {
+      alert(error?.message || data?.error || "Lỗi gắn BĐS quan tâm");
+    } else {
+      setMaBdsGan("");
+      setDangGanBds(null);
+      load();
+    }
+  };
+
+  // CRM: Gỡ BĐS quan tâm
+  const xoaBdsQuanTam = async (buyerId: string, listingId: string) => {
+    if (!confirm("Gỡ BĐS quan tâm này khỏi khách?")) return;
+    const { error } = await supabase.rpc("admin_xoa_bds_quan_tam", {
+      p_buyer_id: buyerId,
+      p_listing_id: listingId,
+    });
+    if (error) alert(error.message);
+    else load();
+  };
+
+  // CRM: Mở form sửa nhu cầu
+  const moSuaNhuCau = (k: KhachCrm) => {
+    const p = k.preferences ?? {};
+    setSuaNhuCauId(k.id);
+    setFormNhuCau({
+      area: String(p.area ?? ""),
+      property_type: String(p.property_type ?? ""),
+      deal: String(p.deal ?? "ban"),
+      bedrooms: p.bedrooms != null ? String(p.bedrooms) : "",
+      budget: String(p.budget ?? ""),
+      notes: k.notes ?? String(p.notes ?? ""),
+    });
+  };
+
+  // CRM: Lưu cập nhật nhu cầu khách
+  const luuSuaNhuCau = async (buyerId: string) => {
+    const newPrefs: Record<string, unknown> = {};
+    if (formNhuCau.area.trim()) newPrefs.area = formNhuCau.area.trim();
+    if (formNhuCau.property_type.trim()) newPrefs.property_type = formNhuCau.property_type.trim();
+    if (formNhuCau.deal.trim()) newPrefs.deal = formNhuCau.deal.trim();
+    if (formNhuCau.bedrooms.trim()) newPrefs.bedrooms = Number(formNhuCau.bedrooms.trim()) || null;
+    if (formNhuCau.budget.trim()) newPrefs.budget = formNhuCau.budget.trim();
+    if (formNhuCau.notes.trim()) newPrefs.notes = formNhuCau.notes.trim();
+
+    const { data, error } = await supabase.rpc("admin_cap_nhat_khach", {
+      p_buyer_id: buyerId,
+      p_preferences: newPrefs,
+      p_notes: formNhuCau.notes.trim() || null,
+    });
+    if (error || (data && !data.ok)) {
+      alert(error?.message || "Lỗi lưu nhu cầu khách");
+    } else {
+      setSuaNhuCauId(null);
+      load();
+    }
   };
 
   // FR-100 — tạo danh sách riêng qua RPC `tao_danh_sach` (kiểm admin dưới DB).
@@ -854,64 +1031,305 @@ export default function Page() {
           </form>
         </TraCuu>
 
-        {/* FR-74 / FR-75 — tìm khách; KHÔNG hiện số điện thoại */}
-        <TraCuu ten="Tìm khách" phu="theo tên Zalo hoặc uid — không hiện số điện thoại">
-          <form onSubmit={timKhach} className="flex flex-wrap items-center gap-3">
+        {/* CRM Khách hàng & Hai vai (Vừa mua vừa bán · Gắn BĐS quan tâm · Nhu cầu) */}
+        <TraCuu
+          ten="Khách hàng & CRM (Vừa mua vừa bán · Gắn BĐS quan tâm)"
+          dem={filteredCrm.length}
+          phu="hồ sơ hai vai, nhu cầu mua/thuê, căn đang rao và BĐS quan tâm"
+        >
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <input
-              value={qKhach}
-              onChange={(e) => setQKhach(e.target.value)}
-              placeholder="tên Zalo hoặc uid"
-              className="min-w-0 flex-1 rounded-full border border-line px-4 py-1.5 text-sm outline-none focus:border-brand"
+              value={qCrm}
+              onChange={(e) => setQCrm(e.target.value)}
+              placeholder="Lọc nhanh theo tên, Zalo UID, khu vực, mã BĐS rao hoặc quan tâm…"
+              className="min-w-0 flex-1 rounded-full border border-line px-4 py-2 text-sm outline-none focus:border-brand"
             />
-            <button
-              type="submit"
-              disabled={dangTim}
-              className="rounded-full bg-brand px-5 py-1.5 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60"
-            >
-              {dangTim ? "Đang tìm…" : "Tìm"}
-            </button>
-          </form>
-          {khach &&
-            (khach.length === 0 ? (
-              <p className="mt-3 text-sm text-mute">Không thấy khách nào khớp.</p>
-            ) : (
-              <ul className="mt-3 divide-y divide-line text-sm">
-                {khach.map((b) => {
-                  const p = b.preferences ?? {};
-                  const soThich = ["area", "budget", "bedrooms"]
-                    .filter((k) => p[k] != null && p[k] !== "")
-                    .map((k) => `${{ area: "khu", budget: "ngân sách", bedrooms: "PN" }[k]}: ${String(p[k])}`);
-                  return (
-                    <li key={b.id} className="flex flex-wrap items-center gap-x-3 py-2.5">
-                      <span className="font-semibold">{b.name ?? "Không tên"}</span>
-                      <span className="tabular-nums text-mute">{b.zalo_user_id ?? "chưa có uid"}</span>
-                      <span className="min-w-0 flex-1 text-navy/75">
-                        {soThich.length ? soThich.join(" · ") : "chưa rõ nhu cầu"}
-                      </span>
-                      <span className="text-xs text-mute tabular-nums">
-                        {b.last_contact_at
-                          ? `liên hệ cuối ${new Date(b.last_contact_at).toLocaleDateString("vi-VN")}`
-                          : `tạo ${new Date(b.created_at).toLocaleDateString("vi-VN")}`}
-                      </span>
-                      {linkZalo(b.zalo_user_id) && (
-                        <a
-                          href={linkZalo(b.zalo_user_id)!}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold text-zalo transition hover:border-zalo"
-                        >
-                          Mở Zalo
-                        </a>
+            {qCrm && (
+              <button
+                type="button"
+                onClick={() => setQCrm("")}
+                className="rounded-full border border-line px-3 py-1 text-xs text-mute transition hover:border-brand hover:text-brand"
+              >
+                Xoá lọc
+              </button>
+            )}
+          </div>
+
+          {filteredCrm.length === 0 ? (
+            <Rong>Chưa có khách hàng nào khớp.</Rong>
+          ) : (
+            <ul className="divide-y divide-line text-sm">
+              {ptCrm.mot.map((k) => {
+                const p = k.preferences ?? {};
+                const isDual = !!k.seller && !!k.preferences;
+                const isSellerOnly = !!k.seller && !k.preferences;
+                const isEditing = suaNhuCauId === k.id;
+                const isAssigning = dangGanBds === k.id;
+
+                return (
+                  <li key={k.id} className="space-y-2.5 py-4">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="text-base font-bold text-navy">{k.name ?? "Chưa rõ tên"}</span>
+                      {k.zalo_user_id && (
+                        <span className="tabular-nums text-xs text-mute font-mono">
+                          Zalo: {k.zalo_user_id}
+                        </span>
                       )}
-                    </li>
-                  );
-                })}
-              </ul>
-            ))}
-          <p className="mt-3 max-w-[70ch] text-xs text-mute">
-            Tối đa 20 kết quả. Link Zalo theo uid là best-effort — uid cá nhân qua bridge có thể
-            không mở được.
-          </p>
+
+                      {/* Vai trò */}
+                      {isDual ? (
+                        <span className="rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 text-xs font-extrabold shadow-sm">
+                          ✨ Vừa mua vừa bán
+                        </span>
+                      ) : isSellerOnly ? (
+                        <span className="rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-0.5 text-xs font-bold">
+                          {k.seller?.seller_type === "ccrb" ? "Chính chủ bán" : "Môi giới bán"}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-blue-100 text-blue-800 border border-blue-300 px-2.5 py-0.5 text-xs font-bold">
+                          Khách mua / thuê
+                        </span>
+                      )}
+
+                      <span className="ml-auto flex items-center gap-2">
+                        {linkZalo(k.zalo_user_id) && (
+                          <a
+                            href={linkZalo(k.zalo_user_id)!}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-line px-3 py-1 text-xs font-semibold text-zalo transition hover:border-zalo"
+                          >
+                            Mở Zalo
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => (isEditing ? setSuaNhuCauId(null) : moSuaNhuCau(k))}
+                          className="rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand"
+                        >
+                          {isEditing ? "Đóng" : "Sửa nhu cầu"}
+                        </button>
+                      </span>
+                    </div>
+
+                    {/* Chi tiết người bán nếu có */}
+                    {k.seller?.active_listing && (
+                      <div className="rounded-md bg-amber-50/60 border border-amber-200/70 p-2.5 text-xs flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="font-bold text-amber-900">Căn đang rao bán:</span>
+                        <Link
+                          href={`/nha-dat/${encodeURIComponent(k.seller.active_listing.code ?? "")}`}
+                          target="_blank"
+                          className="font-extrabold text-brand hover:underline"
+                        >
+                          #{k.seller.active_listing.code}
+                          {k.seller.active_listing.legacy_code && (
+                            <span className="text-mute font-normal"> ({k.seller.active_listing.legacy_code})</span>
+                          )}
+                        </Link>
+                        {k.seller.active_listing.location_raw && (
+                          <span className="text-navy/80">{k.seller.active_listing.location_raw}</span>
+                        )}
+                        {k.seller.active_listing.price_raw && (
+                          <span className="font-bold text-navy">{k.seller.active_listing.price_raw}</span>
+                        )}
+                        <span className="rounded bg-white/80 border border-line px-1.5 py-0.5 text-[10px] text-mute">
+                          {k.seller.active_listing.status}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Nhu cầu mua/thuê */}
+                    {Boolean(k.preferences) && (
+                      <div className="rounded-md bg-slate-50 border border-slate-200/80 p-2.5 text-xs space-y-1">
+                        <div className="flex flex-wrap items-center gap-x-2">
+                          <span className="font-bold text-navy">Nhu cầu:</span>
+                          <span className="rounded bg-brand/10 text-brand px-1.5 py-0.5 font-bold">
+                            {p.deal === "thue" ? "Cần thuê" : "Cần mua"}
+                          </span>
+                          {Boolean(p.property_type) && (
+                            <span className="font-semibold text-navy">· Loại: {String(p.property_type)}</span>
+                          )}
+                          {Boolean(p.area) && (
+                            <span className="font-semibold text-navy">· Khu vực: {String(p.area)}</span>
+                          )}
+                          {p.bedrooms != null && (
+                            <span className="font-semibold text-navy">· {String(p.bedrooms)} PN</span>
+                          )}
+                          {Boolean(p.budget) && (
+                            <span className="font-semibold text-navy">· Giá: {String(p.budget)}</span>
+                          )}
+                        </div>
+                        {Boolean(p.notes || k.notes) && (
+                          <p className="text-mute italic">
+                            Ghi chú: {String(k.notes || p.notes)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Form sửa nhu cầu khi bấm "Sửa nhu cầu" */}
+                    {isEditing && (
+                      <div className="rounded-lg border-2 border-brand/40 bg-white p-3.5 shadow-sm space-y-3">
+                        <h4 className="font-bold text-xs uppercase tracking-wider text-brand">
+                          Can thiệp hồ sơ nhu cầu khách: {k.name ?? k.zalo_user_id}
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                          <div>
+                            <label className="block font-semibold mb-1 text-mute">Nhu cầu deal</label>
+                            <select
+                              value={formNhuCau.deal}
+                              onChange={(e) => setFormNhuCau({ ...formNhuCau, deal: e.target.value })}
+                              className="w-full rounded border border-line p-1.5 bg-white"
+                            >
+                              <option value="ban">Mua BĐS</option>
+                              <option value="thue">Thuê BĐS</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1 text-mute">Khu vực tìm kiếm</label>
+                            <input
+                              value={formNhuCau.area}
+                              onChange={(e) => setFormNhuCau({ ...formNhuCau, area: e.target.value })}
+                              placeholder="Vd: Bình Tân, Quận 5..."
+                              className="w-full rounded border border-line p-1.5"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1 text-mute">Loại BĐS</label>
+                            <input
+                              value={formNhuCau.property_type}
+                              onChange={(e) => setFormNhuCau({ ...formNhuCau, property_type: e.target.value })}
+                              placeholder="Vd: căn hộ, nhà phố..."
+                              className="w-full rounded border border-line p-1.5"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1 text-mute">Số phòng ngủ</label>
+                            <input
+                              type="number"
+                              value={formNhuCau.bedrooms}
+                              onChange={(e) => setFormNhuCau({ ...formNhuCau, bedrooms: e.target.value })}
+                              placeholder="Vd: 3"
+                              className="w-full rounded border border-line p-1.5"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1 text-mute">Khoảng giá / Ngân sách</label>
+                            <input
+                              value={formNhuCau.budget}
+                              onChange={(e) => setFormNhuCau({ ...formNhuCau, budget: e.target.value })}
+                              placeholder="Vd: 8-10 triệu/tháng, 5 tỷ..."
+                              className="w-full rounded border border-line p-1.5"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold mb-1 text-mute">Ghi chú CSKH</label>
+                            <input
+                              value={formNhuCau.notes}
+                              onChange={(e) => setFormNhuCau({ ...formNhuCau, notes: e.target.value })}
+                              placeholder="Vd: diện tích 50m2, dọn vào ngay..."
+                              className="w-full rounded border border-line p-1.5"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setSuaNhuCauId(null)}
+                            className="rounded px-3 py-1 text-xs font-semibold text-mute hover:text-navy"
+                          >
+                            Huỷ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => luuSuaNhuCau(k.id)}
+                            className="rounded bg-brand px-4 py-1 text-xs font-bold text-white hover:bg-brand-dark transition"
+                          >
+                            Lưu nhu cầu
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* BĐS quan tâm & Gắn BĐS */}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <span className="text-xs font-semibold text-mute">BĐS quan tâm:</span>
+                      {k.interests && k.interests.length > 0 ? (
+                        k.interests.map((it) => (
+                          <span
+                            key={it.listing_id}
+                            className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-300 px-2.5 py-0.5 text-xs text-navy"
+                          >
+                            <Link
+                              href={`/nha-dat/${encodeURIComponent(it.code ?? "")}`}
+                              target="_blank"
+                              className="font-bold text-brand hover:underline"
+                            >
+                              #{it.code}
+                            </Link>
+                            {it.price_raw && <span className="text-mute">({it.price_raw})</span>}
+                            <button
+                              type="button"
+                              onClick={() => xoaBdsQuanTam(k.id, it.listing_id)}
+                              title="Gỡ BĐS quan tâm"
+                              className="ml-1 text-mute hover:text-red-600 font-bold"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-mute italic">Chưa gắn BĐS nào</span>
+                      )}
+
+                      {/* Nút / Ô gắn BĐS */}
+                      {isAssigning ? (
+                        <div className="inline-flex items-center gap-1">
+                          <input
+                            value={maBdsGan}
+                            onChange={(e) => setMaBdsGan(e.target.value)}
+                            placeholder="Mã tin (vd: BDS-CH-Q5-0001)"
+                            className="rounded-full border border-brand px-2.5 py-0.5 text-xs outline-none w-48"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => ganBdsQuanTam(k.id)}
+                            disabled={dangLuuBds}
+                            className="rounded-full bg-brand px-2.5 py-0.5 text-xs font-bold text-white hover:bg-brand-dark"
+                          >
+                            {dangLuuBds ? "Đang gắn…" : "Gắn"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDangGanBds(null);
+                              setMaBdsGan("");
+                            }}
+                            className="text-xs text-mute hover:text-navy px-1"
+                          >
+                            Huỷ
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDangGanBds(k.id);
+                            setMaBdsGan("");
+                          }}
+                          className="rounded-full border border-dashed border-line px-2.5 py-0.5 text-xs font-semibold text-brand transition hover:border-brand"
+                        >
+                          + Gắn BĐS quan tâm
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <PhanTrang {...ptCrm} />
         </TraCuu>
 
         {/* FR-70/73 — BĐS hot 60 ngày (view `bds_hot`) */}

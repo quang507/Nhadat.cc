@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-07 17:33 (giờ VN)
+-- Sinh lúc: 2026-09-08 15:13 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -287,13 +287,14 @@ create table if not exists public.listings (
   negotiable boolean,
   rent_income_vnd bigint,
   specs_source text,
-  can_chu_duyet boolean not null default false,
-  chu_duyet_at timestamp with time zone,
   price_per_m2_vnd bigint default 
 CASE
     WHEN ((price_vnd IS NOT NULL) AND (area_m2 > (0)::numeric)) THEN (((price_vnd)::numeric / area_m2))::bigint
     ELSE NULL::bigint
-END
+END,
+  can_chu_duyet boolean not null default false,
+  chu_duyet_at timestamp with time zone,
+  legacy_code text
 );
 
 create table if not exists public.media (
@@ -628,6 +629,9 @@ do $d$ begin
   alter table public.reminders add constraint reminders_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'sent'::text, 'cancelled'::text, 'dead'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.required_facts add constraint required_facts_nhom_check CHECK ((nhom = ANY (ARRAY['co_ban'::text, 'chuyen_mon'::text, 'phu'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.required_facts add constraint required_facts_pkey PRIMARY KEY (property_type, fact_key);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -826,6 +830,34 @@ CREATE UNIQUE INDEX viewings_mot_hen_cho_moi_can_idx ON public.viewings USING bt
 create index if not exists viewings_status_slot_idx ON public.viewings USING btree (status, slot);
 
 -- ══ Hàm ══
+CREATE OR REPLACE FUNCTION public.admin_cap_nhat_khach(p_buyer_id uuid, p_preferences jsonb, p_notes text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_is_admin boolean;
+begin
+  select exists (
+    select 1 from public.admins a
+    where a.email = ((select auth.jwt()) ->> 'email')
+  ) into v_is_admin;
+
+  if not v_is_admin and current_user not in ('service_role', 'postgres') then
+    raise exception 'Chỉ admin mới có quyền thực hiện';
+  end if;
+
+  update public.buyers
+  set preferences = p_preferences,
+      notes = p_notes
+  where id = p_buyer_id;
+
+  return jsonb_build_object('ok', true);
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.admin_dang_tin(p jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -898,6 +930,73 @@ begin
     'id', v_id, 'code', v_code, 'price_vnd', v_price, 'seller_id', v_seller
   );
 end
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_gan_bds_quan_tam(p_buyer_id uuid, p_code text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_listing_id uuid;
+  v_is_admin boolean;
+begin
+  select exists (
+    select 1 from public.admins a
+    where a.email = ((select auth.jwt()) ->> 'email')
+  ) into v_is_admin;
+
+  if not v_is_admin and current_user not in ('service_role', 'postgres') then
+    raise exception 'Chỉ admin mới có quyền thực hiện';
+  end if;
+
+  select id into v_listing_id
+  from public.listings
+  where code ilike trim(p_code) or legacy_code ilike trim(p_code)
+  limit 1;
+
+  if v_listing_id is null then
+    return jsonb_build_object('ok', false, 'error', 'Không tìm thấy BĐS có mã ' || p_code);
+  end if;
+
+  insert into public.interests (buyer_id, listing_id)
+  values (p_buyer_id, v_listing_id)
+  on conflict (buyer_id, listing_id) do nothing;
+
+  update public.listings
+  set status = 'dang_quan_tam', last_interest_at = now()
+  where id = v_listing_id and status in ('dang_ban', 'dang_quan_tam');
+
+  return jsonb_build_object('ok', true, 'listing_id', v_listing_id);
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_is_admin boolean;
+begin
+  select exists (
+    select 1 from public.admins a
+    where a.email = ((select auth.jwt()) ->> 'email')
+  ) into v_is_admin;
+
+  if not v_is_admin and current_user not in ('service_role', 'postgres') then
+    raise exception 'Chỉ admin mới có quyền thực hiện';
+  end if;
+
+  delete from public.interests
+  where buyer_id = p_buyer_id and listing_id = p_listing_id;
+
+  return jsonb_build_object('ok', true);
+end;
 $function$
 ;
 
@@ -1366,7 +1465,8 @@ begin
     m := regexp_match(k, '(\d+)\s*lau\M');
     if m is not null and m[1]::int between 1 and 30 and j->>'floors' is null then n_lau := m[1]::int; end if;
     if n_lau is null then
-      m := regexp_match(k, '(\d+)\s*(?:tang|t)\M');
+      -- BỎ |t ở đây kẻo "7t" (7 tỷ) thành 7 tầng
+      m := regexp_match(k, '(\d+)\s*tang\M');
       if m is not null and m[1]::int between 1 and 30 and j->>'floors' is null then
         j := j || jsonb_build_object('floors', m[1]::int);
       end if;
@@ -2021,6 +2121,109 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.diem_tin(l listings)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  f        jsonb;
+  co_anh   boolean;
+  co_hem   boolean;
+  co_mt    boolean;
+  co_kc    boolean;
+  co_pn    boolean;
+  d_vi_tri int := 0;
+  d_dt     int := 0;
+  d_kc     int := 0;
+  d_pl     int := 0;
+  d_gia    int := 0;
+  d_tn     int := 0;
+  d_cta    int := 0;
+  thieu    text[] := '{}';
+  mo_ta    text := public.bo_dau(coalesce(l.description, ''));
+begin
+  if l.id is null then return null; end if;
+  select coalesce(jsonb_object_agg(x.question, x.answer), '{}'::jsonb) into f
+    from (select distinct on (question) question, answer
+            from public.listing_facts where listing_id = l.id
+           order by question, created_at desc) x;
+  co_anh := (f ? 'hinh_anh')
+            or exists (select 1 from public.listing_media m where m.listing_id = l.id);
+
+  co_hem := l.alley_width_m is not null or l.access_type = 'mat_tien'
+            or (f ? 'do_rong_hem') or (f ? 'do_rong_duong')
+            or l.property_type in ('chung_cu', 'phong_tro');
+  d_vi_tri := (case when coalesce(btrim(l.location_raw), '') <> '' then 7 else 0 end)
+            + (case when coalesce(btrim(l.ward), '') <> '' then 4 else 0 end)
+            + (case when co_hem then 4 else 0 end);
+  if not co_hem then thieu := array_append(thieu, 'hẻm rộng mấy mét, xe hơi vào được không'); end if;
+
+  co_mt := l.frontage_m is not null or (f ? 'mat_tien')
+           or l.property_type in ('chung_cu', 'phong_tro')
+           or coalesce(f->>'dien_tich_dat', f->>'dien_tich', '') ~ '\d\s*[xX×]\s*\d';
+  if l.area_m2 is not null then
+    d_dt := 12 + (case when co_mt then 8 else 0 end);
+    if not co_mt then thieu := array_append(thieu, 'chiều ngang mặt tiền'); end if;
+  else
+    thieu := array_append(thieu, 'diện tích');
+  end if;
+
+  if l.property_type = 'dat' then
+    d_kc := case when (f ? 'tho_cu') or l.planning_status is not null then 15 else 0 end;
+    if d_kc = 0 then thieu := array_append(thieu, 'thổ cư bao nhiêu, quy hoạch ra sao'); end if;
+  elsif l.property_type = 'phong_tro' then
+    d_kc := case when l.furnishing is not null or (f ? 'noi_that') then 15 else 0 end;
+    if d_kc = 0 then thieu := array_append(thieu, 'nội thất có gì'); end if;
+  elsif l.property_type = 'mat_bang' then
+    d_kc := case when l.floors is not null or (f ? 'ket_cau') or (f ? 'nganh_hang_phu_hop') then 15 else 0 end;
+    if d_kc = 0 then thieu := array_append(thieu, 'mấy tầng, hợp ngành gì'); end if;
+  else
+    co_kc := l.floors is not null or coalesce(btrim(l.floors_text), '') <> ''
+             or (f ? 'ket_cau') or l.floor is not null or (f ? 'tang')
+             or (l.property_type = 'nha_cap4' and (f ? 'hien_trang'));
+    co_pn := l.bedrooms is not null or (f ? 'so_phong_ngu');
+    d_kc := (case when co_kc then 8 else 0 end) + (case when co_pn then 7 else 0 end);
+    if not co_kc then thieu := array_append(thieu, 'mấy tầng'); end if;
+    if not co_pn then thieu := array_append(thieu, 'mấy phòng ngủ'); end if;
+  end if;
+
+  if l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro' then d_pl := 10;
+  else thieu := array_append(thieu, 'pháp lý (sổ hồng riêng/chung, hoàn công)'); end if;
+
+  if l.price_vnd is not null then d_gia := 10; else thieu := array_append(thieu, 'giá'); end if;
+
+  if f ? 'tiem_nang' then d_tn := 20;
+  elsif coalesce(l.floors, 0) >= 3 or coalesce(l.bedrooms, 0) >= 3
+     or l.access_type = 'mat_tien' or coalesce(l.alley_width_m, 0) >= 4
+     or l.property_type in ('chung_cu', 'mat_bang', 'phong_tro', 'biet_thu') or (f ? 'san_vuon')
+     or mo_ta ~ '(kinh doanh|cho thue|chdv|dau tu|van phong|o ngay|buon ban|mo shop|mo quan)'
+  then d_tn := 10; thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)');
+  else thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)'); end if;
+
+  if l.code is not null then d_cta := 10; end if;
+
+  return jsonb_build_object(
+    'diem', d_vi_tri + d_dt + d_kc + d_pl + d_gia + d_tn + d_cta,
+    'chi_tiet', jsonb_build_object(
+      'vi_tri_hem', d_vi_tri, 'dien_tich', d_dt, 'ket_cau', d_kc, 'phap_ly', d_pl,
+      'gia', d_gia, 'tiem_nang', d_tn, 'goi_hanh_dong', d_cta),
+    'thieu', to_jsonb(thieu),
+    'co_anh', co_anh);
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.diem_tin(p_listing_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select public.diem_tin(l) from public.listings l where l.id = p_listing_id;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.doc_danh_sach(p_token text)
  RETURNS jsonb
  LANGUAGE sql
@@ -2330,6 +2533,31 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.huy_nhac_khi_da_tra_loi()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_nhan text;
+begin
+  if new.status not in ('answered', 'expired') or old.status is not distinct from new.status then
+    return null;
+  end if;
+  v_nhan := public.nhan_fact(coalesce(new.question, ''));
+  -- Nhãn rơi về mặc định 'thông tin' thì KHÔNG lọc theo nhãn nữa: chuỗi đó có
+  -- trong gần như mọi ghi chú, huỷ theo nó là huỷ nhầm tin của câu khác.
+  if v_nhan = 'thông tin' then
+    return null;
+  end if;
+  update reminders set status = 'cancelled'
+   where kind = 'escalation' and status = 'pending'
+     and listing_id = new.listing_id
+     and note like '%' || v_nhan || '%';
+  return null;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.inbound_ledger_giu_completed()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2591,188 +2819,6 @@ AS $function$
 $function$
 ;
 
-create or replace function public.diem_tin(l public.listings)
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path to 'public'
-as $function$
-declare
-  f        jsonb;
-  co_anh   boolean;
-  co_hem   boolean;
-  co_mt    boolean;
-  co_kc    boolean;
-  co_pn    boolean;
-  d_vi_tri int := 0;
-  d_dt     int := 0;
-  d_kc     int := 0;
-  d_pl     int := 0;
-  d_gia    int := 0;
-  d_tn     int := 0;
-  d_cta    int := 0;
-  -- `text[] || 'chữ'` bị Postgres đọc là nối HAI MẢNG ("malformed array
-  -- literal") — bắt lúc áp 07/09; phải dùng array_append.
-  thieu    text[] := '{}';
-  mo_ta    text := public.bo_dau(coalesce(l.description, ''));
-begin
-  if l.id is null then return null; end if;
-  -- Fact mới nhất của mỗi câu.
-  select coalesce(jsonb_object_agg(x.question, x.answer), '{}'::jsonb) into f
-    from (select distinct on (question) question, answer
-            from public.listing_facts where listing_id = l.id
-           order by question, created_at desc) x;
-  co_anh := (f ? 'hinh_anh')
-            or exists (select 1 from public.listing_media m where m.listing_id = l.id);
-
-  -- 1. Vị trí & hẻm (15): địa chỉ 7 · phường 4 · hẻm/mặt tiền 4.
-  co_hem := l.alley_width_m is not null or l.access_type = 'mat_tien'
-            or (f ? 'do_rong_hem') or (f ? 'do_rong_duong')
-            or l.property_type in ('chung_cu', 'phong_tro');
-  d_vi_tri := (case when coalesce(btrim(l.location_raw), '') <> '' then 7 else 0 end)
-            + (case when coalesce(btrim(l.ward), '') <> '' then 4 else 0 end)
-            + (case when co_hem then 4 else 0 end);
-  if not co_hem then thieu := array_append(thieu, 'hẻm rộng mấy mét, xe hơi vào được không'); end if;
-
-  -- 2. Thông số diện tích (20): diện tích 12 · ngang/dài 8 (chung cư, phòng
-  --    trọ không có mặt tiền nên diện tích là đủ).
-  co_mt := l.frontage_m is not null or (f ? 'mat_tien')
-           or l.property_type in ('chung_cu', 'phong_tro')
-           or coalesce(f->>'dien_tich_dat', f->>'dien_tich', '') ~ '\d\s*[xX×]\s*\d';
-  if l.area_m2 is not null then
-    d_dt := 12 + (case when co_mt then 8 else 0 end);
-    if not co_mt then thieu := array_append(thieu, 'chiều ngang mặt tiền'); end if;
-  else
-    thieu := array_append(thieu, 'diện tích');
-  end if;
-
-  -- 3. Kết cấu & công năng (15): tầng 8 · phòng ngủ 7. Loại không có tầng/
-  --    phòng thì tiêu chí đổi nghĩa: đất = thổ cư/quy hoạch; phòng trọ = nội
-  --    thất; mặt bằng = tầng hoặc ngành hàng; nhà cấp 4 = hiện trạng thay tầng.
-  if l.property_type = 'dat' then
-    d_kc := case when (f ? 'tho_cu') or l.planning_status is not null then 15 else 0 end;
-    if d_kc = 0 then thieu := array_append(thieu, 'thổ cư bao nhiêu, quy hoạch ra sao'); end if;
-  elsif l.property_type = 'phong_tro' then
-    d_kc := case when l.furnishing is not null or (f ? 'noi_that') then 15 else 0 end;
-    if d_kc = 0 then thieu := array_append(thieu, 'nội thất có gì'); end if;
-  elsif l.property_type = 'mat_bang' then
-    d_kc := case when l.floors is not null or (f ? 'ket_cau') or (f ? 'nganh_hang_phu_hop') then 15 else 0 end;
-    if d_kc = 0 then thieu := array_append(thieu, 'mấy tầng, hợp ngành gì'); end if;
-  else
-    co_kc := l.floors is not null or coalesce(btrim(l.floors_text), '') <> ''
-             or (f ? 'ket_cau') or l.floor is not null or (f ? 'tang')
-             or (l.property_type = 'nha_cap4' and (f ? 'hien_trang'));
-    co_pn := l.bedrooms is not null or (f ? 'so_phong_ngu');
-    d_kc := (case when co_kc then 8 else 0 end) + (case when co_pn then 7 else 0 end);
-    if not co_kc then thieu := array_append(thieu, 'mấy tầng'); end if;
-    if not co_pn then thieu := array_append(thieu, 'mấy phòng ngủ'); end if;
-  end if;
-
-  -- 4. Pháp lý (10). Phòng trọ cho thuê không hỏi sổ.
-  if l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro' then d_pl := 10;
-  else thieu := array_append(thieu, 'pháp lý (sổ hồng riêng/chung, hoàn công)'); end if;
-
-  -- 5. Giá (10).
-  if l.price_vnd is not null then d_gia := 10; else thieu := array_append(thieu, 'giá'); end if;
-
-  -- 6. Tiềm năng sử dụng (20): chủ/bot đã nêu rõ → 20; suy được từ dữ liệu
-  --    (nhà nhiều tầng/phòng, hẻm xe hơi hay mặt tiền, loại hình cho thuê,
-  --    mô tả có nói mục đích) → 10.
-  if f ? 'tiem_nang' then d_tn := 20;
-  elsif coalesce(l.floors, 0) >= 3 or coalesce(l.bedrooms, 0) >= 3
-     or l.access_type = 'mat_tien' or coalesce(l.alley_width_m, 0) >= 4
-     or l.property_type in ('chung_cu', 'mat_bang', 'phong_tro', 'biet_thu') or (f ? 'san_vuon')
-     or mo_ta ~ '(kinh doanh|cho thue|chdv|dau tu|van phong|o ngay|buon ban|mo shop|mo quan)'
-  then d_tn := 10; thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)');
-  else thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)'); end if;
-
-  -- 7. Lời gọi hành động (10): tin có mã → khách nhắn Zalo #mã (DH-02).
-  if l.code is not null then d_cta := 10; end if;
-
-  return jsonb_build_object(
-    'diem', d_vi_tri + d_dt + d_kc + d_pl + d_gia + d_tn + d_cta,
-    'chi_tiet', jsonb_build_object(
-      'vi_tri_hem', d_vi_tri, 'dien_tich', d_dt, 'ket_cau', d_kc, 'phap_ly', d_pl,
-      'gia', d_gia, 'tiem_nang', d_tn, 'goi_hanh_dong', d_cta),
-    'thieu', to_jsonb(thieu),
-    'co_anh', co_anh);
-end $function$;
-
-create or replace function public.diem_tin(p_listing_id uuid)
-returns jsonb
-language sql
-stable
-security definer
-set search_path to 'public'
-as $function$
-  select public.diem_tin(l) from public.listings l where l.id = p_listing_id;
-$function$;
-
-create or replace function public.nhan_fact(p_key text)
-returns text
-language sql
-immutable
-set search_path to 'public'
-as $function$
-  select case p_key
-    when 'gia' then 'giá mong muốn'
-    when 'phuong' then 'phường'
-    when 'loai_bds' then 'loại bất động sản'
-    when 'phap_ly' then 'pháp lý (sổ hồng, hoàn công)'
-    when 'dien_tich_dat' then 'diện tích đất'
-    when 'dien_tich' then 'diện tích'
-    when 'dien_tich_tim_tuong' then 'diện tích tim tường'
-    when 'ket_cau' then 'kết cấu, mấy tầng'
-    when 'do_rong_hem' then 'độ rộng hẻm'
-    when 'do_rong_duong' then 'độ rộng đường'
-    when 'huong' then 'hướng nhà'
-    when 'quy_hoach' then 'tình trạng quy hoạch'
-    when 'nam_xay' then 'năm xây'
-    when 'hien_trang' then 'hiện trạng nhà'
-    when 'tang' then 'tầng'
-    when 'phi_quan_ly' then 'phí quản lý'
-    when 'so_phong_ngu' then 'số phòng ngủ'
-    when 'noi_that' then 'nội thất'
-    when 'tho_cu' then 'diện tích thổ cư'
-    when 'gia_dien_nuoc' then 'giá điện nước'
-    when 'gio_giac' then 'giờ giấc'
-    when 'mat_tien' then 'chiều ngang mặt tiền'
-    when 'nganh_hang_phu_hop' then 'ngành hàng phù hợp'
-    when 'thoi_han_thue' then 'thời hạn thuê'
-    when 'san_vuon' then 'sân vườn'
-    when 'hinh_anh' then 'hình ảnh'
-    when 'tiem_nang' then 'tiềm năng sử dụng'
-    when 'bo_sung' then 'thông tin bổ sung'
-    when 'duyet_tin' then 'duyệt bản nháp tin'
-    else coalesce(nullif(btrim(p_key), ''), 'thông tin')
-  end;
-$function$;
-
-create or replace function public.huy_nhac_khi_da_tra_loi()
-returns trigger
-language plpgsql
-security definer
-set search_path to 'public'
-as $function$
-declare v_nhan text;
-begin
-  if new.status not in ('answered', 'expired') or old.status is not distinct from new.status then
-    return null;
-  end if;
-  v_nhan := public.nhan_fact(coalesce(new.question, ''));
-  -- Nhãn rơi về mặc định 'thông tin' thì KHÔNG lọc theo nhãn nữa: chuỗi đó có
-  -- trong gần như mọi ghi chú, huỷ theo nó là huỷ nhầm tin của câu khác.
-  if v_nhan = 'thông tin' then
-    return null;
-  end if;
-  update reminders set status = 'cancelled'
-   where kind = 'escalation' and status = 'pending'
-     and listing_id = new.listing_id
-     and note like '%' || v_nhan || '%';
-  return null;
-end $function$;
-
 CREATE OR REPLACE FUNCTION public.listing_facts_sync_cols()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2809,6 +2855,9 @@ begin
 
   -- Diện tích đất / diện tích chung. KHÔNG khớp `dien_tich_tim_tuong` (FR-163).
   elsif new.question in ('dien_tich', 'dien_tich_dat') then
+    -- "6x11" là NGANG x DÀI, không phải 6 m2. Bản trước lấy SỐ ĐẦU TIÊN nên
+    -- diện tích thành 6 — qua lọt vì 6 > 5 (bắt 08/09/2026, bàn giao §7).
+    -- `boc_thong_so` đã tách đúng hai chiều rồi; ở đây chỉ việc nhân.
     if (j ? 'frontage_m') and (j ? 'length_m') then
       v_num := round((j->>'frontage_m')::numeric * (j->>'length_m')::numeric, 1);
     else
@@ -3080,10 +3129,11 @@ CREATE OR REPLACE FUNCTION public.listings_fill_code()
 AS $function$
 begin
   if new.code is null or btrim(new.code) = '' then
-    new.code := public.next_listing_code();
+    new.code := public.next_listing_code(new.property_type::text, new.district, null);
   end if;
   return new;
-end $function$
+end;
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.listings_fill_property_type()
@@ -3202,7 +3252,8 @@ declare
 begin
   update public.listings
   set status = 'dang_quan_tam', last_interest_at = now()
-  where code = any(p_codes) and status in ('dang_ban', 'dang_quan_tam');
+  where (code = any(p_codes) or legacy_code = any(p_codes))
+    and status in ('dang_ban', 'dang_quan_tam');
   get diagnostics n = row_count;
   return n;
 end $function$
@@ -3220,7 +3271,8 @@ begin
   if p_buyer_id is not null then
     insert into interests (buyer_id, listing_id)
     select p_buyer_id, l.id from listings l
-     where l.code = any(p_codes) and l.status in ('dang_ban', 'dang_quan_tam', 'da_chot')
+     where (l.code = any(p_codes) or l.legacy_code = any(p_codes))
+       and l.status in ('dang_ban', 'dang_quan_tam', 'da_chot')
     on conflict (buyer_id, listing_id) do nothing;
   end if;
   return n;
@@ -3390,6 +3442,70 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.next_listing_code(p_property_type text DEFAULT NULL::text, p_district text DEFAULT NULL::text, p_province text DEFAULT NULL::text)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_type text;
+  v_loc text;
+  v_prefix text;
+  v_num int;
+begin
+  perform pg_advisory_xact_lock(hashtext('listing_code'));
+
+  -- Chuẩn hoá loại BĐS
+  v_type := case lower(coalesce(p_property_type, 'nha_pho'))
+    when 'chung_cu' then 'CH'
+    when 'can_ho' then 'CH'
+    when 'dat' then 'DAT'
+    when 'dat_nen' then 'DAT'
+    when 'biet_thu' then 'BT'
+    when 'nha_cap4' then 'C4'
+    when 'mat_bang' then 'MB'
+    when 'phong_tro' then 'PT'
+    else 'NP'
+  end;
+
+  -- Chuẩn hoá khu vực (quận/huyện hoặc tỉnh)
+  v_loc := public.bo_dau(coalesce(p_district, p_province, 'Q5'));
+  v_loc := upper(regexp_replace(v_loc, '[^a-zA-Z0-9]', '', 'g'));
+
+  if v_loc ~ 'BINHTAN' then v_loc := 'BINHTAN';
+  elsif v_loc ~ 'QUAN5|^Q5' then v_loc := 'Q5';
+  elsif v_loc ~ 'QUAN1|^Q1' then v_loc := 'Q1';
+  elsif v_loc ~ 'QUAN3|^Q3' then v_loc := 'Q3';
+  elsif v_loc ~ 'QUAN10|^Q10' then v_loc := 'Q10';
+  elsif v_loc ~ 'QUAN11|^Q11' then v_loc := 'Q11';
+  elsif v_loc ~ 'QUAN6|^Q6' then v_loc := 'Q6';
+  elsif v_loc ~ 'QUAN8|^Q8' then v_loc := 'Q8';
+  elsif v_loc ~ 'BINHTHANH' then v_loc := 'BINHTHANH';
+  elsif v_loc ~ 'TANBINH' then v_loc := 'TANBINH';
+  elsif v_loc ~ 'TANPHU' then v_loc := 'TANPHU';
+  elsif v_loc ~ 'GOVAP' then v_loc := 'GOVAP';
+  elsif v_loc ~ 'THUDUC' then v_loc := 'THUDUC';
+  elsif v_loc ~ 'BINHDUONG' then v_loc := 'BINHDUONG';
+  elsif v_loc ~ 'TAYNINH' then v_loc := 'TAYNINH';
+  elsif v_loc ~ 'DONGNAI' then v_loc := 'DONGNAI';
+  elsif v_loc ~ 'LONGAN' then v_loc := 'LONGAN';
+  end if;
+
+  if v_loc is null or v_loc = '' then v_loc := 'Q5'; end if;
+
+  v_prefix := 'BDS-' || v_type || '-' || v_loc || '-';
+
+  select coalesce(max((regexp_match(code, '^' || v_prefix || '([0-9]+)$'))[1]::int), 0) + 1
+    into v_num
+    from listings
+   where code ~ ('^' || v_prefix || '[0-9]+$');
+
+  return v_prefix || lpad(v_num::text, 4, '0');
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.nguoi_noi_bo(p_zalo text)
  RETURNS TABLE(vai text, id uuid, name text)
  LANGUAGE sql
@@ -3434,6 +3550,47 @@ begin
   if not found then return 'khong_co'; end if;
   return 'da_nha';
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.nhan_fact(p_key text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  select case p_key
+    when 'gia' then 'giá mong muốn'
+    when 'phuong' then 'phường'
+    when 'loai_bds' then 'loại bất động sản'
+    when 'phap_ly' then 'pháp lý (sổ hồng, hoàn công)'
+    when 'dien_tich_dat' then 'diện tích đất'
+    when 'dien_tich' then 'diện tích'
+    when 'dien_tich_tim_tuong' then 'diện tích tim tường'
+    when 'ket_cau' then 'kết cấu, mấy tầng'
+    when 'do_rong_hem' then 'độ rộng hẻm'
+    when 'do_rong_duong' then 'độ rộng đường'
+    when 'huong' then 'hướng nhà'
+    when 'quy_hoach' then 'tình trạng quy hoạch'
+    when 'nam_xay' then 'năm xây'
+    when 'hien_trang' then 'hiện trạng nhà'
+    when 'tang' then 'tầng'
+    when 'phi_quan_ly' then 'phí quản lý'
+    when 'so_phong_ngu' then 'số phòng ngủ'
+    when 'noi_that' then 'nội thất'
+    when 'tho_cu' then 'diện tích thổ cư'
+    when 'gia_dien_nuoc' then 'giá điện nước'
+    when 'gio_giac' then 'giờ giấc'
+    when 'mat_tien' then 'chiều ngang mặt tiền'
+    when 'nganh_hang_phu_hop' then 'ngành hàng phù hợp'
+    when 'thoi_han_thue' then 'thời hạn thuê'
+    when 'san_vuon' then 'sân vườn'
+    when 'hinh_anh' then 'hình ảnh'
+    when 'tiem_nang' then 'tiềm năng sử dụng'
+    when 'bo_sung' then 'thông tin bổ sung'
+    when 'duyet_tin' then 'duyệt bản nháp tin'
+    else coalesce(nullif(btrim(p_key), ''), 'thông tin')
+  end;
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.nhan_viec_don_media(p_limit integer DEFAULT 50)
@@ -3510,6 +3667,10 @@ begin
         || ' · tin không có chính chủ trên hệ thống → giao ctv');
     end if;
 
+  -- CHỈ báo chủ nhà khi câu hỏi ĐẾN TỪ KHÁCH. Vòng drip (`seller_flow`,
+  -- `seller_drip`) là bot đang hỏi họ ngay trong chat — bắn thêm một tin
+  -- "khách đang quan tâm… cần bổ sung: dien_tich_dat" vừa dội vừa nói sai:
+  -- không có khách nào cả. Bắt 08/09/2026 từ log Zalo của chủ dự án.
   elsif new.assignee = 'seller' and v_seller is not null
         and coalesce(new.source, '') = 'buyer_ask' then
     insert into reminders (kind, listing_id, seller_id, due_at, note)
@@ -4287,14 +4448,6 @@ create or replace view public.public_media as
    FROM media m
   WHERE approved;
 
-create or replace view public.listing_missing_facts as
- SELECT l.id AS listing_id, rf.fact_key, rf.priority, rf.nhom
-   FROM listings l
-     JOIN required_facts rf ON rf.property_type = COALESCE(l.property_type, 'chua_ro'::property_type)
-     LEFT JOIN listing_facts lf ON lf.listing_id = l.id AND lf.question = rf.fact_key
-  WHERE lf.id IS NULL AND rf.nhom <> 'phu' AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'hinh_anh'::text AND (EXISTS (SELECT 1 FROM listing_media m WHERE m.listing_id = l.id)))
-  ORDER BY l.id, rf.priority, rf.fact_key;
-
 create or replace view public.public_listings as
  SELECT id,
     code,
@@ -4306,7 +4459,8 @@ create or replace view public.public_listings as
     price_raw,
     description,
     status,
-    last_confirmed_at
+    last_confirmed_at,
+    legacy_code
    FROM listings;
 
 create or replace view public.agents_public as
@@ -4373,7 +4527,8 @@ create or replace view public.listing_photos_v as
     m.is_cover,
     m.created_at,
     m.listing_id,
-    m.id AS media_id
+    m.id AS media_id,
+    l.legacy_code
    FROM listing_media m
      JOIN listings l ON l.id = m.listing_id
   WHERE m.bucket = 'listing-public'::text AND (l.status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text, 'da_chot'::text]));
@@ -4700,6 +4855,19 @@ create or replace view public.ro_hang_ban as
    FROM listings l
   WHERE deal = 'ban'::listing_deal;
 
+create or replace view public.listing_missing_facts as
+ SELECT l.id AS listing_id,
+    rf.fact_key,
+    rf.priority,
+    rf.nhom
+   FROM listings l
+     JOIN required_facts rf ON rf.property_type = COALESCE(l.property_type, 'chua_ro'::property_type)
+     LEFT JOIN listing_facts lf ON lf.listing_id = l.id AND lf.question = rf.fact_key
+  WHERE lf.id IS NULL AND rf.nhom <> 'phu'::text AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'hinh_anh'::text AND (EXISTS ( SELECT 1
+           FROM listing_media m
+          WHERE m.listing_id = l.id)))
+  ORDER BY l.id, rf.priority, rf.fact_key;
+
 -- ══ Trigger ══
 drop trigger if exists trg_bot_errors_het_tien on public.bot_errors;
 CREATE TRIGGER trg_bot_errors_het_tien AFTER INSERT ON public.bot_errors FOR EACH ROW EXECUTE FUNCTION bat_het_tien_api();
@@ -4715,14 +4883,14 @@ drop trigger if exists trg_pe_deals on public.deals;
 CREATE TRIGGER trg_pe_deals AFTER INSERT ON public.deals FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_inbound_ledger_trang_thai on public.inbound_ledger;
 CREATE TRIGGER trg_inbound_ledger_trang_thai BEFORE UPDATE ON public.inbound_ledger FOR EACH ROW EXECUTE FUNCTION inbound_ledger_giu_completed();
+drop trigger if exists trg_huy_nhac_khi_da_tra_loi on public.info_requests;
+CREATE TRIGGER trg_huy_nhac_khi_da_tra_loi AFTER UPDATE OF status ON public.info_requests FOR EACH ROW EXECUTE FUNCTION huy_nhac_khi_da_tra_loi();
 drop trigger if exists trg_info_request_bao_lai_khach on public.info_requests;
 CREATE TRIGGER trg_info_request_bao_lai_khach AFTER UPDATE OF status ON public.info_requests FOR EACH ROW EXECUTE FUNCTION info_request_bao_lai_khach();
 drop trigger if exists trg_info_request_set_active_listing on public.info_requests;
 CREATE TRIGGER trg_info_request_set_active_listing AFTER INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION info_request_set_active_listing();
 drop trigger if exists trg_notify_info_request_escalation on public.info_requests;
 CREATE TRIGGER trg_notify_info_request_escalation AFTER INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION notify_info_request_escalation();
-drop trigger if exists trg_huy_nhac_khi_da_tra_loi on public.info_requests;
-CREATE TRIGGER trg_huy_nhac_khi_da_tra_loi AFTER UPDATE OF status ON public.info_requests FOR EACH ROW EXECUTE FUNCTION huy_nhac_khi_da_tra_loi();
 drop trigger if exists trg_pe_info_requests on public.info_requests;
 CREATE TRIGGER trg_pe_info_requests AFTER INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_route_info_request on public.info_requests;
@@ -4828,6 +4996,12 @@ drop policy if exists buyers_admin_read on public.buyers;
 create policy buyers_admin_read on public.buyers as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists buyers_admin_update on public.buyers;
+create policy buyers_admin_update on public.buyers as permissive for UPDATE to authenticated using ((EXISTS ( SELECT 1
+   FROM admins a
+  WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text))))) with check ((EXISTS ( SELECT 1
+   FROM admins a
+  WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
 drop policy if exists buyers_self_insert on public.buyers;
 create policy buyers_self_insert on public.buyers as permissive for INSERT to authenticated with check ((auth_user_id = ( SELECT auth.uid() AS uid)));
 drop policy if exists buyers_self_read on public.buyers;
@@ -4844,6 +5018,18 @@ create policy ctvs_admin_read on public.ctvs as permissive for SELECT to authent
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
 drop policy if exists info_requests_admin_read on public.info_requests;
 create policy info_requests_admin_read on public.info_requests as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
+   FROM admins a
+  WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists interests_admin_delete on public.interests;
+create policy interests_admin_delete on public.interests as permissive for DELETE to authenticated using ((EXISTS ( SELECT 1
+   FROM admins a
+  WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists interests_admin_insert on public.interests;
+create policy interests_admin_insert on public.interests as permissive for INSERT to authenticated with check ((EXISTS ( SELECT 1
+   FROM admins a
+  WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists interests_admin_select on public.interests;
+create policy interests_admin_select on public.interests as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
 drop policy if exists anon_read_listing_facts on public.listing_facts;
@@ -5027,14 +5213,25 @@ grant SELECT on public.hoi_thoai_thong_ke to service_role;
 grant SELECT on public.khach_can_nguoi_that to authenticated;
 grant SELECT on public.khach_can_nguoi_that to service_role;
 grant SELECT on public.listing_media to anon;
+grant SELECT on public.public_listings to anon;
+grant SELECT on public.public_listings to authenticated;
 grant SELECT on public.ro_hang_ban to authenticated;
 grant SELECT on public.seller_ranks to anon;
 grant SELECT on public.seller_ranks to authenticated;
 
 -- ══ Quyền hàm (FR-167) ══
+revoke all on function public.admin_cap_nhat_khach(p_buyer_id uuid, p_preferences jsonb, p_notes text) from public, anon, authenticated;
+grant execute on function public.admin_cap_nhat_khach(p_buyer_id uuid, p_preferences jsonb, p_notes text) to authenticated;
+grant execute on function public.admin_cap_nhat_khach(p_buyer_id uuid, p_preferences jsonb, p_notes text) to service_role;
 revoke all on function public.admin_dang_tin(p jsonb) from public, anon, authenticated;
 grant execute on function public.admin_dang_tin(p jsonb) to authenticated;
 grant execute on function public.admin_dang_tin(p jsonb) to service_role;
+revoke all on function public.admin_gan_bds_quan_tam(p_buyer_id uuid, p_code text) from public, anon, authenticated;
+grant execute on function public.admin_gan_bds_quan_tam(p_buyer_id uuid, p_code text) to authenticated;
+grant execute on function public.admin_gan_bds_quan_tam(p_buyer_id uuid, p_code text) to service_role;
+revoke all on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) from public, anon, authenticated;
+grant execute on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) to authenticated;
+grant execute on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) to service_role;
 revoke all on function public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean) from public, anon, authenticated;
 grant execute on function public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean) to service_role;
 revoke all on function public.ask_seller_drip(p_listing_id uuid) from public, anon, authenticated;
@@ -5119,6 +5316,10 @@ grant execute on function public.ctv_sla_phut() to authenticated;
 grant execute on function public.ctv_sla_phut() to service_role;
 revoke all on function public.deals_chan_xoa_da_chot() from public, anon, authenticated;
 grant execute on function public.deals_chan_xoa_da_chot() to service_role;
+revoke all on function public.diem_tin(l listings) from public, anon, authenticated;
+grant execute on function public.diem_tin(l listings) to service_role;
+revoke all on function public.diem_tin(p_listing_id uuid) from public, anon, authenticated;
+grant execute on function public.diem_tin(p_listing_id uuid) to service_role;
 revoke all on function public.doc_danh_sach(p_token text) from public, anon, authenticated;
 grant execute on function public.doc_danh_sach(p_token text) to anon;
 grant execute on function public.doc_danh_sach(p_token text) to authenticated;
@@ -5146,6 +5347,8 @@ grant execute on function public.guess_property_type(p_text text) to authenticat
 grant execute on function public.guess_property_type(p_text text) to service_role;
 revoke all on function public.guess_property_type_answer(p_text text) from public, anon, authenticated;
 grant execute on function public.guess_property_type_answer(p_text text) to service_role;
+revoke all on function public.huy_nhac_khi_da_tra_loi() from public, anon, authenticated;
+grant execute on function public.huy_nhac_khi_da_tra_loi() to service_role;
 revoke all on function public.inbound_ledger_giu_completed() from public, anon, authenticated;
 grant execute on function public.inbound_ledger_giu_completed() to service_role;
 revoke all on function public.inbound_sweep_tick() from public, anon, authenticated;
@@ -5229,12 +5432,18 @@ revoke all on function public.mo_viec_can_nguoi_that(p_buyer_id uuid, p_ctv_id u
 grant execute on function public.mo_viec_can_nguoi_that(p_buyer_id uuid, p_ctv_id uuid, p_note text, p_voice boolean) to service_role;
 revoke all on function public.next_listing_code() from public, anon, authenticated;
 grant execute on function public.next_listing_code() to service_role;
+revoke all on function public.next_listing_code(p_property_type text, p_district text, p_province text) from public, anon, authenticated;
+grant execute on function public.next_listing_code(p_property_type text, p_district text, p_province text) to authenticated;
+grant execute on function public.next_listing_code(p_property_type text, p_district text, p_province text) to service_role;
 revoke all on function public.nguoi_noi_bo(p_zalo text) from public, anon, authenticated;
 grant execute on function public.nguoi_noi_bo(p_zalo text) to service_role;
 revoke all on function public.nha_luot_gui(p_msg_id text) from public, anon, authenticated;
 grant execute on function public.nha_luot_gui(p_msg_id text) to service_role;
 revoke all on function public.nha_viec_nhac(p_id uuid, p_worker text) from public, anon, authenticated;
 grant execute on function public.nha_viec_nhac(p_id uuid, p_worker text) to service_role;
+revoke all on function public.nhan_fact(p_key text) from public, anon, authenticated;
+grant execute on function public.nhan_fact(p_key text) to authenticated;
+grant execute on function public.nhan_fact(p_key text) to service_role;
 revoke all on function public.nhan_viec_don_media(p_limit integer) from public, anon, authenticated;
 grant execute on function public.nhan_viec_don_media(p_limit integer) to service_role;
 revoke all on function public.nhan_viec_nhac(p_kinds text[], p_limit integer, p_worker text) from public, anon, authenticated;

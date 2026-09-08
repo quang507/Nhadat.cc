@@ -55,7 +55,7 @@ const getListing = cache(async (code: string): Promise<Listing | null> => {
   const { data } = await supabase
     .from("listings")
     .select("*")
-    .eq("code", code)
+    .or(`code.ilike.${code},legacy_code.ilike.${code}`)
     .maybeSingle();
   return data as Listing | null;
 });

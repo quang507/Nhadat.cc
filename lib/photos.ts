@@ -52,7 +52,7 @@ async function _photosOfCode(code: string, limit = 12): Promise<string[]> {
   const { data } = await supabase
     .from("listing_photos_v")
     .select("url, sort_order, created_at, media_id")
-    .eq("code", code)
+    .or(`code.ilike.${code},legacy_code.ilike.${code}`)
     .order("sort_order")
     .order("created_at")
     .order("media_id")

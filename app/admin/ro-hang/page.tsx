@@ -19,6 +19,7 @@ import { formatArea, formatPrice, sanitizeDescription, TYPE_LABEL } from "@/lib/
 type Dong = {
   id: string;
   code: string | null;
+  legacy_code?: string | null;
   legacy_sst: number | null;
   deal: "ban" | "cho_thue";
   district: string | null;
@@ -38,7 +39,7 @@ type Dong = {
 };
 
 const COT_CHON =
-  "id, code, legacy_sst, deal, district, ward, street, location_raw, area_m2, price_vnd, price_raw, description, property_type, status, created_at, sellers!listings_seller_id_fkey(name, phone, seller_type), media(count), listing_media(count)";
+  "id, code, legacy_code, legacy_sst, deal, district, ward, street, location_raw, area_m2, price_vnd, price_raw, description, property_type, status, created_at, sellers!listings_seller_id_fkey(name, phone, seller_type), media(count), listing_media(count)";
 
 const TRANG_THAI: Record<string, string> = {
   cho_thong_tin: "chờ thông tin",
