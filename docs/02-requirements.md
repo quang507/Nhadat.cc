@@ -159,7 +159,7 @@ Facebook Messenger / Telegram · Đa ngôn ngữ · Cổng NMG tự phục vụ 
 
 | ID | Yêu cầu | Ưu tiên | Nguồn |
 |---|---|---|---|
-| FR-90 | ✅ **Mini-site rao bán/cho thuê** tại `nhadat.cc/raoban`. Hiện thực: `app/raoban` (3 bước + CTA Zalo). | M | S's side.docx §Từ trang web nhadat.cc |
+| FR-90 | ✅ **Mini-site rao bán/cho thuê** tại `nhadat-cc.vercel.app/raoban`. Hiện thực: `app/raoban` (3 bước + CTA Zalo). | M | S's side.docx §Từ trang web nhadat.cc |
 | FR-91 | ✅ **Rao bằng một câu thông thường**, không bắt điền form nhiều trường. Hiện thực: `/raoban` → Zalo, nhánh câu rao của `chat-reply`. | M | S's side.docx; INS-05 |
 | FR-92 | ✅ **AI bóc tách trường từ câu rao**: vị trí, đường/loại hẻm, quy mô, giá, mua/thuê. Hiện thực: `app/api/listing/parse` (xem trước) + `boc_thong_so()` phía DB (FR-172). | M | S's side.docx §Bóc tách trường |
 | FR-93 | ❌ **Sinh nhiều biến thể câu rao** theo độ dài và theo khía cạnh B quan tâm. Chưa: chưa dựng ở cả web lẫn bot. | M | S's side.docx |

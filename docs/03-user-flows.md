@@ -217,7 +217,7 @@ mục tiêu là B *nhắn lại*, chỉ gửi trong 8h–21h VN (FR-133).
 
 ```mermaid
 flowchart TD
-    A["Vào nhadat.cc/raoban"] --> B[Đăng nhập]
+    A["Vào nhadat-cc.vercel.app/raoban"] --> B[Đăng nhập]
     B --> C["Gõ MỘT câu rao thông thường"]
     C --> D[AI bóc tách trường]
     D --> E["Hiển thị bản đã bóc tách: Vị trí / Đường / Quy mô / Giá"]
@@ -326,7 +326,7 @@ Body chứa field của danh sách tương ứng, kèm mô tả BĐS nếu có. 
 🟡 một phần: trang `/ds/[token]` đã có (`20260904g`, `noindex`, robots chặn `/ds/`); bot chưa tự tạo danh sách và gửi link.
 
 1. B Side tạo danh sách `{User ID, [BĐS ID…]}` khi cần chào nhiều hơn 3 căn (FR-24).
-2. Sinh URL `nhadat.cc/ds/<token>`; bot gửi link kèm câu hỏi xin phép.
+2. Sinh URL `nhadat-cc.vercel.app/ds/<token>`; bot gửi link kèm câu hỏi xin phép.
 3. B mở → trang listing lọc sẵn, mỗi card có cue mã để hỏi lại trên Zalo.
 
 **Riêng tư**: token không đoán được, `noindex`, không lộ thông tin B trên trang.

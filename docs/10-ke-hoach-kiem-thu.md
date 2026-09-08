@@ -692,7 +692,7 @@ Dựng theo IA §4.4 sau nghiệm thu 04/09 (OPEN-44). 01–04 chạy trong sand
 | TS-SEO-02 | `bun -e 'import {TAG_DEFS} from "./lib/tags.ts"; …'` | slug không dấu, chữ thường, gạch nối, `ty` không `tỉ`, duy nhất; keyword hiển thị giữ "tỉ" | ✅ 04/09 (64 slug duy nhất) |
 | TS-SEO-03 | `relatedTags(t)` | 6–8 tag, không chứa chính nó, ưu tiên cùng giao dịch + loại + khu | ✅ 04/09 |
 | TS-SEO-04 | `/ban-nha-hem-xe-hoi-quan-5` trên `next start` | H1 = keyword, mô tả 80–120 từ, lưới lọc `access_type in (mat_tien, hem_xe_tai, hem_xe_hoi)`, 8 tag liên quan; `/abc-xyz` → 404 | ⏭ sandbox không tới Supabase (lưới rỗng → hộp Zalo, đúng luật) |
-| TS-SEO-05 | `curl -s https://nhadat.cc/sitemap.xml \| grep -c '<loc>'` | ≥ 8 tĩnh + 64 tag + số tin lên kệ (~165) | ⏭ chờ deploy |
+| TS-SEO-05 | `curl -s https://nhadat-cc.vercel.app/sitemap.xml \| grep -c '<loc>'` | ≥ 8 tĩnh + 64 tag + số tin lên kệ (~165) | ⏭ chờ deploy |
 | TS-SEO-06 | trang tin: `application/ld+json` + canonical + OG | một `RealEstateListing`, `identifier` = mã, `offers.price` = `price_vnd`, `address` chỉ tới phường (FR-104); canonical = URL tin; OG = ảnh thật nếu có | ⏭ chờ deploy; kiểm tĩnh `jsonLd()` không dùng `location_raw` |
 
 ### TS-ADM2 — admin buyer side (FR-71/74/75/76/77/78/80)

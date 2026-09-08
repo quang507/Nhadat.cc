@@ -97,7 +97,7 @@ export function formatPricePerM2(vnd: number | null, deal: "ban" | "cho_thue"): 
 // OA duyệt: đặt NEXT_PUBLIC_ZALO_URL=https://zalo.me/<SĐT acc clone> trong env
 // Vercel (hoặc sửa fallback dưới); OA duyệt xong đổi về link OA.
 // NFR-09 — gốc URL tuyệt đối cho canonical / OpenGraph / sitemap / JSON-LD.
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhadat.cc";
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhadat-cc.vercel.app";
 
 export const ZALO_OA_URL =
   process.env.NEXT_PUBLIC_ZALO_URL ?? "https://zalo.me/nhadatcc";

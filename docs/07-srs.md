@@ -35,7 +35,7 @@ mở rộng mà không lệch khỏi yêu cầu ở `02-requirements.md`.
 
 ```mermaid
 flowchart TB
-    W["Web nhadat.cc<br/>Next.js 15 · Vercel"]
+    W["Web https://nhadat-cc.vercel.app/<br/>Next.js 15 · Vercel"]
     ZB["Zalo app (B)"]
     ZS["Zalo app (S / CTV / admin)"]
     OA["Zalo OA API (chờ duyệt)"]

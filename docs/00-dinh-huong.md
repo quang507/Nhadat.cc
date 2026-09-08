@@ -48,7 +48,7 @@ cả hai phía (`06 §6.8`).
 
 | Khía cạnh | nhadat.cc (2024) | AOND SRD (06/2026) | Hôm nay | Neo |
 |---|---|---|---|---|
-| Tên | nhadat.cc, "Thái" | aioinhadat.com, gia đình •ai | **Aioinhadat**, một bot **Thái**; domain web còn nhadat.cc *[giả định BA]* | OPEN-08, OPEN-39 |
+| Tên | nhadat.cc, "Thái" | aioinhadat.com, gia đình •ai | **Aioinhadat**, một bot **Thái**; domain web: https://nhadat-cc.vercel.app/ *[giả định BA]* | OPEN-08, OPEN-39 |
 | Trọng tâm | Khách chat Zalo; web SEO | Người rao gửi hàng tự nhiên | Cả hai, một `chat-reply`, tách vai từng lượt | FR-157, FR-159 |
 | Nhận tin rao | `/raoban` + câu rao | Text/thoại/ảnh, không form | Câu rao trong Zalo sinh mã tin; ảnh có; thoại chưa | FR-158, FR-134 |
 | Nuôi tin | TTL 7 ngày | 1 thông tin/lần, 1–2 căn/ngày | Đúng AOND | FR-129, FR-144 |
