@@ -208,17 +208,30 @@ export default function Page() {
   const luuSua = async () => {
     if (!dangSua) return;
     setDangLuu(true);
+    const numOrNull = (v: string) => {
+      const s = v.trim().replace(',', '.');
+      if (!s) return null;
+      const n = Number(s);
+      return isNaN(n) ? null : n;
+    };
+    const intOrNull = (v: string) => {
+      const s = v.trim();
+      if (!s) return null;
+      const n = parseInt(s, 10);
+      return isNaN(n) ? null : n;
+    };
+
     const updates = {
       deal: formSua.deal,
       status: formSua.status,
       property_type: formSua.property_type || null,
       price_raw: formSua.price_raw.trim() || null,
-      price_vnd: formSua.price_vnd ? Number(formSua.price_vnd) : null,
-      area_m2: formSua.area_m2 ? Number(formSua.area_m2) : null,
-      frontage_m: formSua.frontage_m.trim() || null,
-      length_m: formSua.length_m.trim() || null,
-      floors: formSua.floors ? Number(formSua.floors) : null,
-      bedrooms: formSua.bedrooms ? Number(formSua.bedrooms) : null,
+      price_vnd: numOrNull(formSua.price_vnd),
+      area_m2: numOrNull(formSua.area_m2),
+      frontage_m: numOrNull(formSua.frontage_m),
+      length_m: numOrNull(formSua.length_m),
+      floors: intOrNull(formSua.floors),
+      bedrooms: intOrNull(formSua.bedrooms),
       location_raw: formSua.location_raw.trim() || null,
       district: formSua.district.trim() || null,
       ward: formSua.ward.trim() || null,
