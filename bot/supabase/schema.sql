@@ -287,6 +287,8 @@ create table if not exists public.listings (
   negotiable boolean,
   rent_income_vnd bigint,
   specs_source text,
+  can_chu_duyet boolean not null default false,
+  chu_duyet_at timestamp with time zone,
   price_per_m2_vnd bigint default 
 CASE
     WHEN ((price_vnd IS NOT NULL) AND (area_m2 > (0)::numeric)) THEN (((price_vnd)::numeric / area_m2))::bigint
@@ -397,7 +399,8 @@ create table if not exists public.reminders (
 create table if not exists public.required_facts (
   property_type property_type not null,
   fact_key text not null,
-  priority integer not null default 1
+  priority integer not null default 1,
+  nhom text not null default 'chuyen_mon'::text
 );
 
 create table if not exists public.sellers (
@@ -2588,6 +2591,188 @@ AS $function$
 $function$
 ;
 
+create or replace function public.diem_tin(l public.listings)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+as $function$
+declare
+  f        jsonb;
+  co_anh   boolean;
+  co_hem   boolean;
+  co_mt    boolean;
+  co_kc    boolean;
+  co_pn    boolean;
+  d_vi_tri int := 0;
+  d_dt     int := 0;
+  d_kc     int := 0;
+  d_pl     int := 0;
+  d_gia    int := 0;
+  d_tn     int := 0;
+  d_cta    int := 0;
+  -- `text[] || 'chữ'` bị Postgres đọc là nối HAI MẢNG ("malformed array
+  -- literal") — bắt lúc áp 07/09; phải dùng array_append.
+  thieu    text[] := '{}';
+  mo_ta    text := public.bo_dau(coalesce(l.description, ''));
+begin
+  if l.id is null then return null; end if;
+  -- Fact mới nhất của mỗi câu.
+  select coalesce(jsonb_object_agg(x.question, x.answer), '{}'::jsonb) into f
+    from (select distinct on (question) question, answer
+            from public.listing_facts where listing_id = l.id
+           order by question, created_at desc) x;
+  co_anh := (f ? 'hinh_anh')
+            or exists (select 1 from public.listing_media m where m.listing_id = l.id);
+
+  -- 1. Vị trí & hẻm (15): địa chỉ 7 · phường 4 · hẻm/mặt tiền 4.
+  co_hem := l.alley_width_m is not null or l.access_type = 'mat_tien'
+            or (f ? 'do_rong_hem') or (f ? 'do_rong_duong')
+            or l.property_type in ('chung_cu', 'phong_tro');
+  d_vi_tri := (case when coalesce(btrim(l.location_raw), '') <> '' then 7 else 0 end)
+            + (case when coalesce(btrim(l.ward), '') <> '' then 4 else 0 end)
+            + (case when co_hem then 4 else 0 end);
+  if not co_hem then thieu := array_append(thieu, 'hẻm rộng mấy mét, xe hơi vào được không'); end if;
+
+  -- 2. Thông số diện tích (20): diện tích 12 · ngang/dài 8 (chung cư, phòng
+  --    trọ không có mặt tiền nên diện tích là đủ).
+  co_mt := l.frontage_m is not null or (f ? 'mat_tien')
+           or l.property_type in ('chung_cu', 'phong_tro')
+           or coalesce(f->>'dien_tich_dat', f->>'dien_tich', '') ~ '\d\s*[xX×]\s*\d';
+  if l.area_m2 is not null then
+    d_dt := 12 + (case when co_mt then 8 else 0 end);
+    if not co_mt then thieu := array_append(thieu, 'chiều ngang mặt tiền'); end if;
+  else
+    thieu := array_append(thieu, 'diện tích');
+  end if;
+
+  -- 3. Kết cấu & công năng (15): tầng 8 · phòng ngủ 7. Loại không có tầng/
+  --    phòng thì tiêu chí đổi nghĩa: đất = thổ cư/quy hoạch; phòng trọ = nội
+  --    thất; mặt bằng = tầng hoặc ngành hàng; nhà cấp 4 = hiện trạng thay tầng.
+  if l.property_type = 'dat' then
+    d_kc := case when (f ? 'tho_cu') or l.planning_status is not null then 15 else 0 end;
+    if d_kc = 0 then thieu := array_append(thieu, 'thổ cư bao nhiêu, quy hoạch ra sao'); end if;
+  elsif l.property_type = 'phong_tro' then
+    d_kc := case when l.furnishing is not null or (f ? 'noi_that') then 15 else 0 end;
+    if d_kc = 0 then thieu := array_append(thieu, 'nội thất có gì'); end if;
+  elsif l.property_type = 'mat_bang' then
+    d_kc := case when l.floors is not null or (f ? 'ket_cau') or (f ? 'nganh_hang_phu_hop') then 15 else 0 end;
+    if d_kc = 0 then thieu := array_append(thieu, 'mấy tầng, hợp ngành gì'); end if;
+  else
+    co_kc := l.floors is not null or coalesce(btrim(l.floors_text), '') <> ''
+             or (f ? 'ket_cau') or l.floor is not null or (f ? 'tang')
+             or (l.property_type = 'nha_cap4' and (f ? 'hien_trang'));
+    co_pn := l.bedrooms is not null or (f ? 'so_phong_ngu');
+    d_kc := (case when co_kc then 8 else 0 end) + (case when co_pn then 7 else 0 end);
+    if not co_kc then thieu := array_append(thieu, 'mấy tầng'); end if;
+    if not co_pn then thieu := array_append(thieu, 'mấy phòng ngủ'); end if;
+  end if;
+
+  -- 4. Pháp lý (10). Phòng trọ cho thuê không hỏi sổ.
+  if l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro' then d_pl := 10;
+  else thieu := array_append(thieu, 'pháp lý (sổ hồng riêng/chung, hoàn công)'); end if;
+
+  -- 5. Giá (10).
+  if l.price_vnd is not null then d_gia := 10; else thieu := array_append(thieu, 'giá'); end if;
+
+  -- 6. Tiềm năng sử dụng (20): chủ/bot đã nêu rõ → 20; suy được từ dữ liệu
+  --    (nhà nhiều tầng/phòng, hẻm xe hơi hay mặt tiền, loại hình cho thuê,
+  --    mô tả có nói mục đích) → 10.
+  if f ? 'tiem_nang' then d_tn := 20;
+  elsif coalesce(l.floors, 0) >= 3 or coalesce(l.bedrooms, 0) >= 3
+     or l.access_type = 'mat_tien' or coalesce(l.alley_width_m, 0) >= 4
+     or l.property_type in ('chung_cu', 'mat_bang', 'phong_tro', 'biet_thu') or (f ? 'san_vuon')
+     or mo_ta ~ '(kinh doanh|cho thue|chdv|dau tu|van phong|o ngay|buon ban|mo shop|mo quan)'
+  then d_tn := 10; thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)');
+  else thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)'); end if;
+
+  -- 7. Lời gọi hành động (10): tin có mã → khách nhắn Zalo #mã (DH-02).
+  if l.code is not null then d_cta := 10; end if;
+
+  return jsonb_build_object(
+    'diem', d_vi_tri + d_dt + d_kc + d_pl + d_gia + d_tn + d_cta,
+    'chi_tiet', jsonb_build_object(
+      'vi_tri_hem', d_vi_tri, 'dien_tich', d_dt, 'ket_cau', d_kc, 'phap_ly', d_pl,
+      'gia', d_gia, 'tiem_nang', d_tn, 'goi_hanh_dong', d_cta),
+    'thieu', to_jsonb(thieu),
+    'co_anh', co_anh);
+end $function$;
+
+create or replace function public.diem_tin(p_listing_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path to 'public'
+as $function$
+  select public.diem_tin(l) from public.listings l where l.id = p_listing_id;
+$function$;
+
+create or replace function public.nhan_fact(p_key text)
+returns text
+language sql
+immutable
+set search_path to 'public'
+as $function$
+  select case p_key
+    when 'gia' then 'giá mong muốn'
+    when 'phuong' then 'phường'
+    when 'loai_bds' then 'loại bất động sản'
+    when 'phap_ly' then 'pháp lý (sổ hồng, hoàn công)'
+    when 'dien_tich_dat' then 'diện tích đất'
+    when 'dien_tich' then 'diện tích'
+    when 'dien_tich_tim_tuong' then 'diện tích tim tường'
+    when 'ket_cau' then 'kết cấu, mấy tầng'
+    when 'do_rong_hem' then 'độ rộng hẻm'
+    when 'do_rong_duong' then 'độ rộng đường'
+    when 'huong' then 'hướng nhà'
+    when 'quy_hoach' then 'tình trạng quy hoạch'
+    when 'nam_xay' then 'năm xây'
+    when 'hien_trang' then 'hiện trạng nhà'
+    when 'tang' then 'tầng'
+    when 'phi_quan_ly' then 'phí quản lý'
+    when 'so_phong_ngu' then 'số phòng ngủ'
+    when 'noi_that' then 'nội thất'
+    when 'tho_cu' then 'diện tích thổ cư'
+    when 'gia_dien_nuoc' then 'giá điện nước'
+    when 'gio_giac' then 'giờ giấc'
+    when 'mat_tien' then 'chiều ngang mặt tiền'
+    when 'nganh_hang_phu_hop' then 'ngành hàng phù hợp'
+    when 'thoi_han_thue' then 'thời hạn thuê'
+    when 'san_vuon' then 'sân vườn'
+    when 'hinh_anh' then 'hình ảnh'
+    when 'tiem_nang' then 'tiềm năng sử dụng'
+    when 'bo_sung' then 'thông tin bổ sung'
+    when 'duyet_tin' then 'duyệt bản nháp tin'
+    else coalesce(nullif(btrim(p_key), ''), 'thông tin')
+  end;
+$function$;
+
+create or replace function public.huy_nhac_khi_da_tra_loi()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare v_nhan text;
+begin
+  if new.status not in ('answered', 'expired') or old.status is not distinct from new.status then
+    return null;
+  end if;
+  v_nhan := public.nhan_fact(coalesce(new.question, ''));
+  -- Nhãn rơi về mặc định 'thông tin' thì KHÔNG lọc theo nhãn nữa: chuỗi đó có
+  -- trong gần như mọi ghi chú, huỷ theo nó là huỷ nhầm tin của câu khác.
+  if v_nhan = 'thông tin' then
+    return null;
+  end if;
+  update reminders set status = 'cancelled'
+   where kind = 'escalation' and status = 'pending'
+     and listing_id = new.listing_id
+     and note like '%' || v_nhan || '%';
+  return null;
+end $function$;
+
 CREATE OR REPLACE FUNCTION public.listing_facts_sync_cols()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2624,7 +2809,11 @@ begin
 
   -- Diện tích đất / diện tích chung. KHÔNG khớp `dien_tich_tim_tuong` (FR-163).
   elsif new.question in ('dien_tich', 'dien_tich_dat') then
-    v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
+    if (j ? 'frontage_m') and (j ? 'length_m') then
+      v_num := round((j->>'frontage_m')::numeric * (j->>'length_m')::numeric, 1);
+    else
+      v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
+    end if;
     if v_num is not null and v_num > 5 and v_num < 5000 then
       update listings set area_m2 = v_num, specs_source = bac
        where id = new.listing_id and (area_m2 is null or de)
@@ -2945,6 +3134,10 @@ CREATE OR REPLACE FUNCTION public.listings_quyet_dinh_dang_tin()
 AS $function$
 declare v_du boolean := public.listing_du_dang_tin(new.price_vnd, new.area_m2, new.ward);
 begin
+  if v_du and new.can_chu_duyet then
+    v_du := new.chu_duyet_at is not null
+        and coalesce((public.diem_tin(new)->>'diem')::int, 0) >= 70;
+  end if;
   if v_du and new.status = 'cho_thong_tin' then
     new.status := 'dang_ban';
   elsif not v_du and new.status = 'dang_ban' then
@@ -3313,14 +3506,16 @@ begin
     else
       insert into reminders (kind, listing_id, ctv_id, due_at, note)
       values ('escalation', new.listing_id, new.ctv_id, now(),
-        'khách hỏi #' || coalesce(v_code, '?') || ' · cần: ' || v_hoi
+        'khách hỏi #' || coalesce(v_code, '?') || ' · cần: ' || public.nhan_fact(v_hoi)
         || ' · tin không có chính chủ trên hệ thống → giao ctv');
     end if;
 
-  elsif new.assignee = 'seller' and v_seller is not null then
+  elsif new.assignee = 'seller' and v_seller is not null
+        and coalesce(new.source, '') = 'buyer_ask' then
     insert into reminders (kind, listing_id, seller_id, due_at, note)
     values ('escalation', new.listing_id, v_seller, now(),
-      'khách đang quan tâm căn #' || coalesce(v_code, '?') || ' của mình, cần bổ sung: ' || v_hoi);
+      'khách đang quan tâm căn #' || coalesce(v_code, '?') || ' của mình, cần bổ sung: '
+      || public.nhan_fact(v_hoi));
   end if;
   return new;
 end $function$
@@ -3367,6 +3562,7 @@ begin
   t := regexp_replace(t, '([0-9])\s*t\s*([0-9])',  '\1 _ty \2', 'g');
   t := regexp_replace(t, '([0-9])\s*ty\M',         '\1 _ty ',   'g');
   t := regexp_replace(t, '([0-9])\s*tr\M',         '\1 _trieu ', 'g');
+  t := regexp_replace(t, '([0-9])\s*t\M',          '\1 _ty ',   'g');
 
   -- Phan le sau don vi: "5 ty 5" = 5,5 ty | "3 ty 200" = 3,2 ty.
   -- Chan hai kieu bat nham: "5 ty 50m2" (dien tich) va viec cat bot chu so
@@ -4092,13 +4288,11 @@ create or replace view public.public_media as
   WHERE approved;
 
 create or replace view public.listing_missing_facts as
- SELECT l.id AS listing_id,
-    rf.fact_key,
-    rf.priority
+ SELECT l.id AS listing_id, rf.fact_key, rf.priority, rf.nhom
    FROM listings l
      JOIN required_facts rf ON rf.property_type = COALESCE(l.property_type, 'chua_ro'::property_type)
      LEFT JOIN listing_facts lf ON lf.listing_id = l.id AND lf.question = rf.fact_key
-  WHERE lf.id IS NULL AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL)
+  WHERE lf.id IS NULL AND rf.nhom <> 'phu' AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'hinh_anh'::text AND (EXISTS (SELECT 1 FROM listing_media m WHERE m.listing_id = l.id)))
   ORDER BY l.id, rf.priority, rf.fact_key;
 
 create or replace view public.public_listings as
@@ -4527,6 +4721,8 @@ drop trigger if exists trg_info_request_set_active_listing on public.info_reques
 CREATE TRIGGER trg_info_request_set_active_listing AFTER INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION info_request_set_active_listing();
 drop trigger if exists trg_notify_info_request_escalation on public.info_requests;
 CREATE TRIGGER trg_notify_info_request_escalation AFTER INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION notify_info_request_escalation();
+drop trigger if exists trg_huy_nhac_khi_da_tra_loi on public.info_requests;
+CREATE TRIGGER trg_huy_nhac_khi_da_tra_loi AFTER UPDATE OF status ON public.info_requests FOR EACH ROW EXECUTE FUNCTION huy_nhac_khi_da_tra_loi();
 drop trigger if exists trg_pe_info_requests on public.info_requests;
 CREATE TRIGGER trg_pe_info_requests AFTER INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_route_info_request on public.info_requests;

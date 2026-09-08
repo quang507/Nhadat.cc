@@ -90,7 +90,7 @@ Bảng này là danh sách ĐỦ. Một bộ test không có tên ở đây là 
 chạy. Đừng gõ lệnh rời: người và CI dùng chung script trong `package.json`, không
 thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
-**Mười ba bộ CHẠY MÁY, offline (502 ca) — `bun run kiem` gọi hết, CI chạy hết:**
+**Mười bốn bộ CHẠY MÁY, offline (522 ca) — `bun run kiem` gọi hết, CI chạy hết:**
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
@@ -104,6 +104,7 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 | `scripts/sao-luu.tu-kiem.mjs` | 21 | `bun run test:saoluu` | TS-SAOLUU | Sao lưu phân biệt "đủ" với "trông như đủ": đối chiếu `count=exact`, `manifest.json` ghi ra đĩa, mọi đường hỏng thoát khác 0 |
 | `bot/tests/fr176-khop-cau-tra-loi.mjs` | 49 | `bun run test:bot` | **TS-KYGUI** phần khớp câu | Câu chủ nhà nhắn CÓ PHẢI câu trả lời không (FR-176) — chạy bằng `bun` vì import thẳng `.ts` |
 | `bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs` | 63 | `bun run test:bot` | **TS-KYGUI** phần nhận fact / chọn câu kế / gật | `nhanDienFact`, `chonCauKe`, `laDongY` (FR-177/178) — tiền định, không tốn model |
+| `bot/tests/tin-nhac.mjs` | 20 | `bun run test:bot` | **TS-NHAC** | Chữ gửi ra Zalo cho việc trong hàng đợi `reminders`: không lặp tên, không thừa dấu chấm, không bảo admin trả lời khách với tin hệ thống |
 | `scripts/xuat-ro-hang.tu-kiem.mjs` | 18 | `bun run test:rohang` | TS-ROHANG | Bản xuất rổ hàng người đọc được: không ghi vào repo, không nuốt dòng thiếu, không nhận nhầm là bản sao lưu |
 | `bot/tests/ranh-gioi.mjs` | 9 | `bun run test:bot` (và `test:ranhgioi`) | **TS-RANHGIOI** | Ranh giới bóc tách ⟂ AI, kiểm TĨNH: mã tiền định không import SDK Anthropic / `claude.ts` / gọi RPC; tầng AI không ghi bảng nghiệp vụ, chỉ 3 RPC đã khai tên |
 | `scripts/up-masterdb.tu-kiem.mjs` | 24 | `bun run test:masterdb` | **TS-MASTERDB** | Đẩy bản gốc masterDB lên bucket `masterdb-raw`: KHÔNG nén, chạy lại bỏ qua file đã có, và **bắt được lúc bucket trả 200 mà không cất** (đối chiếu đếm đĩa ↔ đếm bucket) |
@@ -599,6 +600,26 @@ nhất — `chat-reply` bốc nhầm câu đang treo và ca **G5 đỏ chừng 1
 Postgres lưu timestamp tới micro giây nên không hoà; mock nay có bộ đếm đơn điệu
 cho khớp. Bài học chung: **mock lệch bản thật ở chỗ nào thì bộ e2e đo sai ở chỗ
 đó**, và triệu chứng ra ngoài dưới dạng "test chập chờn" chứ không phải "test sai".
+
+### TS-NHAC — tin nhắc đi ra Zalo, và vòng tự nuôi của còi (08/09/2026)
+Sinh ra từ ảnh Zalo admin của chủ dự án. Hai lớp: chữ (`bot/tests/tin-nhac.mjs`,
+offline) và hành vi DB (chạy tay, bọc `do … raise exception` để rollback).
+
+| ID | Bài | Kỳ vọng | Kết quả mới nhất |
+|---|---|---|---|
+| TS-NHAC-01 | `bun bot/tests/tin-nhac.mjs` | 20/20: tin có dấu hiệu đầu (🩺 🆕 ❓ ✏️) gửi nguyên; CTV vẫn có tiền tố + đuôi; chính chủ giọng CSKH; `report` nguyên văn | ✅ 08/09 |
+| TS-NHAC-02 | chèn `info_requests(source='seller_flow', assignee='seller')` | **0** dòng `reminders` — vòng drip không dội tin cho chủ nhà | ✅ 08/09 (rollback) |
+| TS-NHAC-03 | chèn `info_requests(source='buyer_ask', assignee='seller')` | 1 dòng, ghi chú đọc "cần bổ sung: **diện tích đất**", không phải `dien_tich_dat` | ✅ 08/09 (rollback) |
+| TS-NHAC-04 | `update info_requests set status='answered'` | tin nhắc escalation cùng căn + cùng nhãn chuyển `cancelled` | ⏭ chưa chạy |
+| TS-NHAC-05 | ack một reminder không gắn seller/ctv qua `escalation-feed` | **không** thêm dòng `bot_errors` nào — cắt vòng tự nuôi | ⏭ chờ deploy |
+
+**Vòng tự nuôi của còi báo lỗi** (bắt 08/09/2026): `bot_health_tick` mỗi giờ đếm
+`bot_errors` trong một giờ qua, có lỗi thì đẻ một reminder 🩺 gửi Zalo admin.
+Bridge gửi xong gọi `ack`, rơi vào nhánh "không học được uid admin (SEC-03)" —
+nhánh ĐÚNG THEO THIẾT KẾ — nhưng nhánh đó lại `log_loi`. Giờ sau đếm được đúng
+dòng vừa ghi, lại đẻ tin. Sổ lỗi 07/09 có đúng một dòng `escalation-feed admin
+uid` mỗi giờ có tin 🩺 được gửi, từ 05:00 tới 10:00 UTC. **Bài học: đường đi
+đúng thiết kế không được ghi vào sổ lỗi — sổ lỗi là đầu vào của còi.**
 
 ### TS-TOIUU — đếm vòng đi về DB và bất biến tối ưu (FR-171)
 Cùng bộ e2e; mock ghi mọi truy vấn vào `db().log`. Ngưỡng đặt bằng số đo SAU khi sửa — ai thêm truy vấn vào đường nóng là đỏ. Đo build: `bun install` 4,4 s vs `npm` 20,1 s; `next build` ~34 s ở cả hai.

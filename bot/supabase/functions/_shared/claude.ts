@@ -177,19 +177,5 @@ export async function sendZaloImage(token: string, userId: string, url: string):
   return j?.error === 0;
 }
 
-/**
- * Text của một việc trong hàng đợi `reminders` khi đi ra ngoài (OA hoặc bridge).
- * Dùng CHUNG cho `nudge` (đường OA) và `escalation-feed` (đường bridge) — hai
- * đường phải nói y hệt nhau.
- * - kind `report` (FR-149): báo cáo CTV 17h → gửi NGUYÊN VĂN về Zalo admin.
- * - có seller_id (FR-144): đích là chính chủ → giọng CSKH lễ phép.
- * - còn lại: CTV/admin → thông báo nội bộ.
- */
-export function escalationText(
-  r: { kind: string; note: unknown; seller_id?: string | null },
-): string {
-  if (r.kind === "report") return String(r.note);
-  return r.seller_id
-    ? `Chào anh/chị, em bên nhadat.cc ạ. ${r.note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`
-    : `🔔 nhadat.cc: ${r.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
-}
+// Chữ của việc nội bộ tách sang `tin_nhac.ts` (thuần, kiểm được offline).
+export { escalationText } from "./tin_nhac.ts";

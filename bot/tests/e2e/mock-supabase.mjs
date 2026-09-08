@@ -36,7 +36,9 @@ export class FakeDB {
       ["loai_bds", 1, "co_ban"], ["phuong", 2, "co_ban"], ["dien_tich", 3, "co_ban"], ["gia", 8, "co_ban"],
       ["do_rong_hem", 10, "chuyen_mon"], ["ket_cau", 11, "chuyen_mon"], ["so_phong_ngu", 12, "chuyen_mon"],
       ["phap_ly", 13, "chuyen_mon"], ["hinh_anh", 19, "chuyen_mon"],
-      ["huong", 20, "phu"], ["quy_hoach", 21, "phu"], ["nam_xay", 22, "phu"],
+      // Nhóm `phu` (hướng, quy hoạch, năm xây) KHÔNG có ở đây: view thật lọc
+      // chúng từ 20260908a vì FR-177 cấm hỏi. Để lại là mock hỏi thứ bản thật
+      // không hỏi, và e2e xanh trong khi bot ngoài đời hỏi bậy.
     ];
     const out = [];
     for (const l of this.t.listings) {
@@ -155,6 +157,9 @@ export function parseVnd(s) {
   let m = /(\d+)\s*ty\s*(\d)(?!\d)/.exec(t); if (m) return +m[1] * 1e9 + +m[2] * 1e8;
   m = /(\d+(?:[.,]\d+)?)\s*(ty|ti)/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e9);
   m = /(\d+(?:[.,]\d+)?)\s*(trieu|tr)/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e6);
+  // "7t" = 7 tỷ (20260908a). Sau luật `tr` để "7tr" vẫn là triệu; \b sau `t`
+  // nên "7 tấm" không dính (bản thật dùng \M của Postgres, cùng ý).
+  m = /(\d+(?:[.,]\d+)?)\s*t\b/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e9);
   return null;
 }
 
