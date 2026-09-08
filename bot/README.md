@@ -35,8 +35,32 @@ thì lượt đó vô hình với đồng hồ tiền ở `/admin` (FR-169).
 
 ## Deploy
 
-Không có máy local nên dùng MCP, nhưng **không chép tay** — chép tay đo được
-một lỗi mỗi 7 KB, và lỗi rơi vào regex thì hỏng im lặng:
+**Đường chính: workflow `Deploy bot lên Supabase`** (tab Actions → Run workflow
+→ chọn hàm). Runner tự checkout, Supabase CLI tự tìm `_shared/` và đẩy thẳng
+file NGUỒN lên — không bundle, và quan trọng hơn là **bytes không đi qua tay
+ai**. Cần secret `SUPABASE_ACCESS_TOKEN` của repo (Personal Access Token ở
+https://supabase.com/dashboard/account/tokens); thiếu nó job dừng ngay bước
+đầu.
+
+Workflow tự đọc `verify_jwt` của bản đang chạy rồi deploy lại đúng giá trị đó —
+**không chép cứng vào file**, vì chép cứng là sẽ lệch (đúng vết `schema.sql` đã
+lệch với DB). Đặt sai cờ này là bot câm: `chat-reply` đang `false`, bật lên thì
+`zalo-webhook` gọi vào ăn 401. Xong nó đọc lại lần nữa: version phải TĂNG,
+`verify_jwt` phải GIỮ NGUYÊN — "đã gọi lệnh deploy" không phải bằng chứng đã
+deploy, cùng cái bẫy NFR-18.
+
+Chạy tay trên máy có CLI thì tương đương:
+
+```bash
+cd bot && supabase functions deploy <fn> --project-ref tbcdpupiarkuxtntmosl \
+  [--no-verify-jwt nếu bản đang chạy là false]
+```
+
+**Lối MCP chỉ dùng cho hàm NHỎ** (dưới ~10 KB sau bundle), vì nó bắt chép tay
+nội dung vào lời gọi tool — và chép tay đo được **một lỗi mỗi 7 KB**, lỗi rơi
+vào regex thì hỏng im lặng. `escalation-feed` 5 KB thì còn kiểm được bằng cách
+so từng byte; `chat-reply` 120 KB thì không, 17 lỗi kỳ vọng và chữa cũng phải
+chép tay 120 KB nữa. Khi buộc phải đi lối đó:
 
 ```bash
 bun build bot/supabase/functions/<fn>/index.ts --target=node \
@@ -48,11 +72,14 @@ bun build bot/supabase/functions/<fn>/index.ts --target=node \
    `verify_jwt` của bản đang chạy.
 3. `get_edge_function` kéo ngược, chuẩn hoá `\uXXXX` rồi **so từng byte** với
    bundle. Lệch là deploy lại, không được để bản lệch.
-4. Chạy e2e **trên chính nội dung kéo ngược** (ghi vào
-   `bot/tests/e2e/chat-reply.bundle.mjs`) trước khi coi là xong.
+4. Chạy e2e **trên chính nội dung kéo ngược** trước khi coi là xong.
 5. Gọi thử một lượt thật bằng `net.http_post` từ SQL (uid `TEST-…`, secret đọc
    từ `vault.decrypted_secrets` ngay trong câu truy vấn, không in ra), rồi dọn
-   dữ liệu thử.
+   dữ liệu thử. Đọc kết quả ở `net._http_response`, đừng tin `net.http_post`.
+
+Hai lối đẻ ra hai hình hài khác nhau trên server: CLI để lại **nhiều file
+nguồn**, MCP để lại **một file bundle**. `get_edge_function` trả về cái nào là
+biết lần trước ai deploy.
 
 ## Test
 
