@@ -335,6 +335,13 @@ export default function Page() {
     if (!error) setPending((p) => p.filter((l) => l.id !== id));
   };
 
+  const xoaTin = async (id: string, code: string | null) => {
+    if (!confirm(`Xoá tin ${code ? `#${code}` : ""}?`)) return;
+    const { error } = await supabase.from("listings").delete().eq("id", id);
+    if (!error) setPending((p) => p.filter((l) => l.id !== id));
+    else alert(`Lỗi xoá: ${error.message}`);
+  };
+
   // FR-74 — tìm khách theo tên Zalo hoặc uid. Bỏ ký tự cú pháp của bộ lọc
   // PostgREST (dấu phẩy, ngoặc) để chữ gõ không thành mệnh đề lọc.
   const timKhach = async (e: FormEvent) => {
@@ -502,17 +509,21 @@ export default function Page() {
                   <article key={l.id} className="rounded-shot border border-line bg-white p-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <p className="font-bold">
-                        #{l.code} · {l.ward} · {formatPrice(l.price_vnd, l.price_raw)} ·{" "}
-                        {formatArea(l.area_m2)}
+                        #{l.code}
+                        {l.ward ? ` · ${l.ward}` : ""}
+                        {l.price_raw || l.price_vnd ? ` · ${formatPrice(l.price_vnd, l.price_raw)}` : " · Giá chưa có"}
+                        {l.area_m2 ? ` · ${formatArea(l.area_m2)}` : ""}
                       </p>
                       <span className="text-xs text-mute tabular-nums">
                         {new Date(l.created_at).toLocaleString("vi-VN")}
                       </span>
                     </div>
                     <p className="mt-2 line-clamp-3 max-w-[70ch] text-sm text-navy/80">
-                      {sanitizeDescription(l.description) || l.location_raw}
+                      {sanitizeDescription(l.description) || l.location_raw || (
+                        <span className="italic text-mute">Tin chưa có nội dung mô tả</span>
+                      )}
                     </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => setStatus(l.id, "dang_ban")}
                         className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
@@ -526,18 +537,20 @@ export default function Page() {
                         Ẩn tin
                       </button>
                       <button
+                        onClick={() => xoaTin(l.id, l.code)}
+                        className="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:border-red-300 active:scale-[0.98]"
+                      >
+                        Xoá tin
+                      </button>
+                      <button
                         onClick={() => setUpCho((c) => (c === l.id ? null : l.id))}
                         className="rounded-full border border-line px-4 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand"
                       >
                         {upCho === l.id ? "Đóng ảnh" : "Up ảnh"}
                       </button>
-                      <Link
-                        href={`/nha-dat/${encodeURIComponent(l.code ?? "")}`}
-                        target="_blank"
-                        className="ml-auto self-center text-sm font-semibold text-mute transition hover:text-brand"
-                      >
-                        Xem trang tin →
-                      </Link>
+                      <span className="ml-auto text-xs text-mute">
+                        (Duyệt để xem công khai)
+                      </span>
                     </div>
                     {/* FR-96: up ảnh cho tin chờ duyệt (policy admin, bucket listing-public) */}
                     {upCho === l.id && (
