@@ -5,7 +5,7 @@ tự chốt (quy ước 2, `CLAUDE.md`). Mục đã chốt hoặc đã đóng ch
 thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm trong lịch sử git. Ký hiệu:
 ✅ đã chốt · 🚫 đóng vì không còn hợp hướng AOND · 🟡 chốt một phần (vẫn tính còn chờ).
 
-## Còn chờ chủ dự án (19)
+## Còn chờ chủ dự án (21)
 
 | ID | Vấn đề | Mức | Liên quan |
 |---|---|---|---|
@@ -31,6 +31,8 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-47 | Tám bảng chưa từng được sao lưu — đã vá; còn treo: bucket `masterdb-raw` chưa có file, Storage `listing-public` chưa nằm trong bản sao nào | Cao | FR-165, OPEN-25 |
 | OPEN-48 | Sếp muốn **bớt kế thừa nhadat.cc, giống Aioinhadat hơn** (07/09): bỏ mảng nào trong 14 FR chỉ có ở nhadat.cc 2024, giữ mảng nào vì bất biến DH-02 | Cao | DH-01…04, `00 §0.2–0.3`, OPEN-49 |
 | OPEN-50 | **Ngưỡng điểm để tin được rao, và tin cũ có bị đo lại không** (FR-177 d, 07/09): (a) ngưỡng **70/100** là *[giả định BA]* — kịch bản Gemini của sếp chỉ nói "càng đủ điểm càng cao và được rao", không nêu con số. Cao quá thì chính chủ hụt vài điểm bị chặn rao; thấp quá thì cổng vô nghĩa. (b) Hiện chỉ tin **tạo từ chat** (`can_chu_duyet`) chịu cổng điểm + phải chủ gật; **173 tin nhập Excel/admin giữ luật cũ** (giá + diện tích + phường) — 38/164 tin đang rao có điểm < 70, nếu áp cổng cho cả chúng thì rổ hàng tụt ngay 23%. Phương án: (1) giữ nguyên — cổng chỉ cho hàng mới từ chat, hàng cũ để yên, dọn dần bằng vòng hỏi; (2) hạ ngưỡng xuống 60 rồi áp cho tất cả; (3) áp cho tất cả ở ngưỡng 70, chấp nhận 38 tin tụt về `cho_thong_tin` cho tới khi bổ sung. **Khuyến nghị BA: (1)** — sao Bắc Đẩu là lịch xem nhà, chặn hàng đang chạy không đổi lại được gì. | Trung bình | FR-177, FR-155, OPEN-26, DH-03 |
+| OPEN-51 | **Token Zalo OA sống 25 tiếng, không ai làm mới** — việc đã viết xong trên nhánh `claude/sua-25-loi` (commit `70a63ab`) nhưng chưa từng vào `main` và chưa từng áp lên DB. Chưa đau vì bot đang đi bridge zca-js, không dùng OA API | Thấp | FR-152, NFR-18, OPEN-46 |
+| OPEN-52 | **Trần lượt đếm theo thứ người gọi tự đặt được** (`external_user_id`) — xoay id là bộ đếm về 0. Bản vá `rate_counters` cũng nằm ở `70a63ab`, chưa merge | Thấp | FR-146, FR-151, SEC-02 |
 
 ## Đã chốt / đã đóng (31)
 
@@ -299,3 +301,57 @@ mất link Google đã có; đo 30 ngày rồi (a). Nhóm C hỏi sếp từng d
 `00 §0.2` cột "Hôm nay" và `§0.3` đổi theo, `02` đánh `[deprecated → …]` không đánh số lại.
 **Chờ:** sếp tick A và trả lời C. Cho tới lúc đó không gỡ gì (DH-07).
 
+
+### OPEN-51 · Token Zalo OA sống 25 tiếng, không ai làm mới
+
+**Vấn đề** (dựng lại 08/09/2026 từ nhánh `claude/sua-25-loi`, commit `70a63ab`): access
+token của Zalo OA hết hạn sau **25 giờ**, nhưng nó nằm chết một chỗ trong Vault
+(`ZALO_OA_ACCESS_TOKEN`) — không cron nào, không dòng code nào đổi nó. Cấp tay một lần thì
+bot sống được một ngày rồi câm, và câm theo kiểu tệ nhất: `sendZalo()` trả `error != 0` →
+hàm trả `false`, edge function **vẫn trả HTTP 200**, nên `bot_health_tick()` (chỉ soi mã
+HTTP) không thấy gì. Đúng loại hỏng im lặng NFR-18 nói tới.
+
+**Vì sao chưa đau** (đo 08/09/2026): `vault.secrets` hiện **không có secret Zalo nào**, và
+bot đang nói chuyện qua bridge zca-js trên tài khoản clone chứ không qua OA API. Đường này
+chỉ sống lại khi chuyển sang Zalo OA thật.
+
+**Đã có sẵn nhưng chưa dùng được**: `70a63ab` có bảng `bot_tokens` (giữ cặp
+access/refresh + hạn + lỗi lần gần nhất), edge function `zalo-token-refresh`, và cron 12
+tiếng. **Không merge thẳng được**: nhánh đó chậm 93 commit và số hiệu FR đã bị cấp lại —
+`FR-158` ở đó là "token Zalo tự làm mới", `FR-158` trên `main` là "câu rao sinh mã tin
+ngay". Dựng lại thì phải cấp FR mới và viết migration mới theo schema hiện tại.
+
+**Một chi tiết dễ mất**: Zalo **XOAY** refresh_token — mỗi lần đổi là cái cũ chết ngay. Nên
+bảng giữ nó là bản duy nhất còn dùng được; mất là phải vào Zalo Developers cấp tay từ đầu,
+và nó phải nằm trong mảng `BANG` của `scripts/sao-luu.mjs`.
+
+**Phương án**: (a) để treo tới khi thật sự dùng OA API; (b) dựng lại ngay thành FR mới.
+**Khuyến nghị BA**: (a) — dựng một đường làm mới token cho một API không ai gọi là code
+chết, mà code chết thì không ai chạy nên hỏng lúc nào không biết. **Chờ**: chủ dự án chốt
+có chuyển sang Zalo OA hay ở lại bridge (OPEN-48 cũng đụng chuyện này).
+
+### OPEN-52 · Trần lượt đếm theo thứ người gọi tự đặt được
+
+**Vấn đề** (cùng nguồn `70a63ab`): FR-146 đếm lượt theo `conversation_id`, mà conversation
+sinh ra từ `external_user_id` — một chuỗi **do người gọi tự đặt** và không ai kiểm. Đổi id
+mỗi request là bộ đếm về 0. Trần chặn đúng người nó không định chặn (khách thật nhắn nhiều)
+và không chặn được người nó định chặn.
+
+**Rủi ro thấp hơn lời mô tả gốc**: comment trong `70a63ab` viết trước khi có cổng SEC-02
+fail-closed. Đo thật 08/09/2026 — POST body hợp lệ vào `chat-reply` không kèm
+`x-bridge-secret` trả **403 `forbidden`**, không ghi dòng nào. Nên muốn xoay id thì trước
+hết phải cầm được `BRIDGE_SECRET` hoặc service key. Trần toàn cục theo ngày (FR-151,
+`bump_model_quota`) vẫn giữ phần tiền.
+
+**Còn hở ở đâu**: ai đã cầm được bí mật cổng thì xoay id vẫn đốt sạch hạn mức ngày của cả
+hệ, và khách thật ăn 429 tới hết ngày. Bản vá là bảng `rate_counters` (cửa sổ cố định, một
+dòng cho mỗi khoá mỗi cửa sổ) đếm theo thứ người gọi KHÔNG tự đặt được.
+
+**Một điểm cần soát lại nếu dựng**: câu kiểm tham số (`external_user_id và text bắt buộc`,
+trả 400) đứng **trước** cổng bí mật, nên người chưa qua cổng vẫn phân biệt được 400 với
+403. Không mất gì — nhánh 400 return trước mọi truy vấn — nhưng nó nói ra tên tham số. Dựng
+lại thì đảo thứ tự luôn.
+
+**Phương án**: (a) treo; (b) dựng `rate_counters` thành FR mới.
+**Khuyến nghị BA**: (a) chừng nào `BRIDGE_SECRET` chưa từng lộ; chuyển sang (b) ngay khi có
+thêm người gọi ngoài bridge và zalo-webhook. **Chờ**: chủ dự án.
