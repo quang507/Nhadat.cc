@@ -38,10 +38,13 @@ Thứ tự đọc = thứ tự phụ thuộc. Tài liệu sau **không được 
 | 10 | `docs/10-ke-hoach-kiem-thu.md` | Kế hoạch kiểm thử 4 tầng: chức năng, kỹ thuật, UI/UX, phi chức năng | `TS-` |
 | 11 | `docs/11-quy-trinh.md` | Quy trình BA và tester: hai vòng làm việc, ba cổng, máy kiểm gì / người kiểm gì, định nghĩa XONG. Không sinh ID mới | — |
 
-## 3. Tài liệu gốc (không sửa)
+## 3. Tài liệu gốc & Phân định phạm vi
 
-Các file ở thư mục gốc là **input thô do chủ dự án cung cấp** — chỉ đọc, không
-chỉnh sửa, không "dọn dẹp". Mọi diễn giải phải đi vào `docs/` kèm trích nguồn.
+Các file tài liệu 2024 ở thư mục gốc (`Tài liệu hệ thống nhadat.cc.pdf`, `nhadat.cc website.docx`, `biz model.docx`, `S's side.docx`, `chats w B.docx`, `OKRs eo2024.pptx`) là **tư liệu lịch sử 2024 cũ**, đã được Sếp và Chủ dự án quyết định ngưng kế thừa (chốt ngày 08/09/2026 - OPEN-48).
+**Nguồn sự thật chuẩn duy nhất hiện nay của hệ thống là:**
+1. Bộ tài liệu `docs/` đã được chuẩn hóa theo **Aioinhadat 2026**.
+2. Kịch bản Gemini mới của Sếp: `Kịch bản huấn luyện môi giới (Gemini 07-09-2026).md`.
+3. SRD Aioinhadat: `AOND req + chat examples.docx`.
 
 | File gốc | Được chưng cất vào |
 |---|---|

@@ -5,7 +5,7 @@ tự chốt (quy ước 2, `CLAUDE.md`). Mục đã chốt hoặc đã đóng ch
 thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm trong lịch sử git. Ký hiệu:
 ✅ đã chốt · 🚫 đóng vì không còn hợp hướng AOND · 🟡 chốt một phần (vẫn tính còn chờ).
 
-## Còn chờ chủ dự án (21)
+## Còn chờ chủ dự án (20)
 
 | ID | Vấn đề | Mức | Liên quan |
 |---|---|---|---|
@@ -29,12 +29,11 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-42 | Ngưỡng CTV: hạn trả lời 120 phút, hạng Vàng ≥90% / Bạc ≥70% — đều [giả định BA] | Trung bình | FR-173, FR-137, DH-03 |
 | OPEN-45 | Design token `06 §6.2`, `design/tokens.json` và `app/globals.css` là ba bản lệch nhau — chọn nguồn sự thật nào? | Thấp | UI-01…, OPEN-07 |
 | OPEN-47 | Tám bảng chưa từng được sao lưu — đã vá; còn treo: bucket `masterdb-raw` chưa có file, Storage `listing-public` chưa nằm trong bản sao nào | Cao | FR-165, OPEN-25 |
-| OPEN-48 | Sếp muốn **bớt kế thừa nhadat.cc, giống Aioinhadat hơn** (07/09): bỏ mảng nào trong 14 FR chỉ có ở nhadat.cc 2024, giữ mảng nào vì bất biến DH-02 | Cao | DH-01…04, `00 §0.2–0.3`, OPEN-49 |
 | OPEN-50 | **Ngưỡng điểm để tin được rao, và tin cũ có bị đo lại không** (FR-177 d, 07/09): (a) ngưỡng **70/100** là *[giả định BA]* — kịch bản Gemini của sếp chỉ nói "càng đủ điểm càng cao và được rao", không nêu con số. Cao quá thì chính chủ hụt vài điểm bị chặn rao; thấp quá thì cổng vô nghĩa. (b) Hiện chỉ tin **tạo từ chat** (`can_chu_duyet`) chịu cổng điểm + phải chủ gật; **173 tin nhập Excel/admin giữ luật cũ** (giá + diện tích + phường) — 38/164 tin đang rao có điểm < 70, nếu áp cổng cho cả chúng thì rổ hàng tụt ngay 23%. Phương án: (1) giữ nguyên — cổng chỉ cho hàng mới từ chat, hàng cũ để yên, dọn dần bằng vòng hỏi; (2) hạ ngưỡng xuống 60 rồi áp cho tất cả; (3) áp cho tất cả ở ngưỡng 70, chấp nhận 38 tin tụt về `cho_thong_tin` cho tới khi bổ sung. **Khuyến nghị BA: (1)** — sao Bắc Đẩu là lịch xem nhà, chặn hàng đang chạy không đổi lại được gì. | Trung bình | FR-177, FR-155, OPEN-26, DH-03 |
 | OPEN-51 | **Token Zalo OA sống 25 tiếng, không ai làm mới** — việc đã viết xong trên nhánh `claude/sua-25-loi` (commit `70a63ab`) nhưng chưa từng vào `main` và chưa từng áp lên DB. Chưa đau vì bot đang đi bridge zca-js, không dùng OA API | Thấp | FR-152, NFR-18, OPEN-46 |
 | OPEN-52 | **Trần lượt đếm theo thứ người gọi tự đặt được** (`external_user_id`) — xoay id là bộ đếm về 0. Bản vá `rate_counters` cũng nằm ở `70a63ab`, chưa merge | Thấp | FR-146, FR-151, SEC-02 |
 
-## Đã chốt / đã đóng (31)
+## Đã chốt / đã đóng (32)
 
 | ID | Kết luận | Liên quan |
 |---|---|---|
@@ -65,6 +64,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-43 | 🚫 Đóng 07/09/2026 — gộp vào OPEN-48: phần còn lại (FR-16/95/28/160/118, `?ref=`) đều nằm trong danh mục bỏ/giữ ở đó | SRS-2/4/5, `10 §10.8` |
 | OPEN-44 | 🚫 Đóng 07/09/2026 — gộp vào OPEN-48: SEO nền đã dựng; TOP-100 keyword chết theo OPEN-06; Search Console là việc vận hành, không phải quyết định | FR-12, NFR-09, OPEN-06 |
 | OPEN-46 | 🚫 Đóng 07/09/2026 — đã giảm nhẹ 05/09, không còn gì để chốt: `soat-migration.mjs` chặn trôi, `schema.sql` là lưới dựng lại; nội dung 41 migration mất vĩnh viễn | NFR-04, `bot/README.md` |
+| OPEN-48 | ✅ **ĐÃ CHỐT 08/09/2026** — Sếp và Chủ dự án quyết định bỏ nhóm tính năng thừa kế 2024 (form web /raoban, tài khoản cá nhân, trang phụ SEO, đánh giá 3 thời điểm), chuẩn hóa 100% tài liệu theo Aioinhadat 2026 | DH-01…04, `00 §0.2–0.3`, OPEN-49 |
 | OPEN-49 | ✅ **ĐÃ CHỐT 07/09/2026** theo kịch bản Gemini của sếp (tài liệu gốc `Kịch bản huấn luyện môi giới (Gemini 07-09-2026).md`) → FR-177: hỏi 1 thông tin/lần theo thứ tự địa chỉ → giá → hẻm → diện tích → tầng → phòng → pháp lý → ảnh → lịch khảo sát; mỗi câu trả lời có khích lệ; đủ thì gửi bản nháp tin + điểm 100/7 tiêu chí; đủ điểm mới rao | FR-176, FR-129, OPEN-20/26, AOND §II, §VI |
 
 ---
@@ -257,8 +257,9 @@ trigger tạo mới ở `20260904c/d/f` nhận EXECUTE mặc định của `publ
 `create or replace` giữ nguyên quyền đã thu hồi.
 
 ### OPEN-48 · Bớt kế thừa nhadat.cc — bỏ gì để giống Aioinhadat hơn
-[nguồn: sếp qua chủ dự án 07/09/2026 — "bớt kế thừa các tính năng của nhadat.cc, làm cho giống
-Aioinhadat hơn"; đối chiếu `AOND req + chat examples.docx` §I–§VII với bảng FR `docs/02`]
+✅ **ĐÃ CHỐT 08/09/2026**: Sếp và Chủ dự án quyết định đóng dứt điểm nhóm A (tính năng 2024 cũ),
+bỏ hoàn toàn việc bắt điền form trên web `/raoban`, bỏ tài khoản người dùng và các trang phụ SEO cũ,
+tập trung 100% tài liệu và sản phẩm vào triết lý Aioinhadat 2026 (Zalo chat tự nhiên + Rổ hàng + Hẹn xem nhà).
 **Nguồn sếp chưa đọc được:** yêu cầu đầy đủ nằm ở Gemini share `z7XT8gqQzGCI` (chủ dự án gửi
 07/09) — môi trường làm việc bị chặn `share.gemini.google`, nên bản dưới chỉ dựa trên SRD AOND
 và câu tóm tắt của chủ dự án. **Cần chép nội dung share đó vào thư mục gốc (tài liệu gốc, chỉ

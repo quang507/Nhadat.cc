@@ -178,7 +178,7 @@ dự án 04/09/2026 "dựng hết đi, giữ chân 5 ngày"]. Còn:
 | OPEN-40 | Thông số cho thuê / đất / công nghiệp — làm gì, khi nào | Cho thuê: làm. Đất: chờ OPEN-37. Công nghiệp: không, tới khi có khách hỏi thật |
 | OPEN-41 | Model: giữ Claude/Supabase hay Gemini → local theo AOND §VII | Giữ; lớp gọi model đã gom một chỗ, đổi sau được |
 | OPEN-42 | CTV: hạn trả lời (đang 120') và mốc Vàng ≥90% / Bạc ≥70% / Đồng; hệ quả của hạng | Giữ tới khi có ~30 câu thật rồi định cỡ; chốt hệ quả cùng lúc |
-| **OPEN-48** | Sếp muốn bớt kế thừa nhadat.cc (07/09): trong 14 FR chỉ có ở nhadat.cc 2024 (mini-site rao, tài khoản, trang phụ SEO, đánh giá 3 thời điểm, email admin, danh sách riêng) bỏ dòng nào; tầng dự án và `/admin` giữ hay dựng lại theo Live Chat Monitor | Ẩn trước, xoá sau (web đang public, đã index); giữ phễu web tối thiểu vì DH-02 #1; sếp tick từng dòng nhóm A, trả lời nhóm C |
+| **OPEN-48** | ✅ **ĐÃ CHỐT 08/09/2026**: Bỏ toàn bộ nhóm tính năng thừa kế 2024 (mini-site rao web, tài khoản, trang phụ SEO cũ). Chuẩn hóa 100% tài liệu theo Aioinhadat 2026 | Đã chốt theo lệnh sếp và chủ dự án |
 
 **Đã chốt 07/09/2026: cách hỏi người bán** — theo kịch bản huấn luyện môi giới sếp
 làm trong Gemini (tài liệu gốc ở thư mục gốc): một thông tin/lần theo thứ tự địa chỉ →
