@@ -16,7 +16,7 @@ import UploadAnh from "@/components/UploadAnh";
 const STATUS_LABEL: Record<string, string> = {
   cho_thong_tin: "Chờ đủ thông tin",
   dang_ban: "Đang rao trên web",
-  dang_quan_tam: "🔥 Đang được khách quan tâm",
+  dang_quan_tam: "Đang được khách quan tâm",
   da_chot: "Đã chốt",
   an: "Đã ẩn",
 };

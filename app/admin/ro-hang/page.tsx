@@ -307,12 +307,12 @@ export default function Page() {
   if (role !== "admin") {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <h1 className="text-2xl font-extrabold text-navy">Khu vực quản trị</h1>
+        <h1 className="text-2xl font-bold text-navy">Khu vực quản trị</h1>
         <p className="mt-2 text-mute text-sm">
           {role === "anon" ? "Cần đăng nhập bằng tài khoản quản trị." : "Tài khoản này không có quyền quản trị."}
         </p>
         {role === "anon" && (
-          <Link href="/dang-nhap" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white shadow-sm hover:bg-brand-dark transition">
+          <Link href="/dang-nhap" className="mt-5 inline-block rounded-md bg-brand px-6 py-2.5 font-bold text-white hover:bg-brand-dark transition">
             Đăng nhập
           </Link>
         )}
@@ -333,7 +333,7 @@ export default function Page() {
             <span className="text-mute text-xs">/</span>
             <span className="text-xs text-mute font-medium">Quản lý rổ hàng</span>
           </div>
-          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-navy">Rổ hàng BĐS (Dạng Excel)</h1>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">Rổ hàng BĐS (Dạng Excel)</h1>
           <p className="mt-1 text-sm text-mute tabular-nums">
             {rows.length} tin trong rổ · đang lọc hiển thị {loc.length} · hỗ trợ sửa trực tiếp giá, trạng thái, vị trí & mô tả
           </p>
@@ -341,13 +341,13 @@ export default function Page() {
         <div className="flex items-center gap-2.5">
           <Link
             href="/admin/dang-tin"
-            className="rounded-full border border-line px-4 py-2 text-sm font-bold text-navy hover:border-brand hover:text-brand bg-white transition shadow-2xs"
+            className="rounded-md border border-line px-4 py-2 text-sm font-bold text-navy hover:border-brand hover:text-brand bg-white transition"
           >
             + Đăng tin mới
           </Link>
           <Link
             href="/admin/ro-hang/json"
-            className="rounded-full border border-line px-4 py-2 text-sm font-bold text-navy hover:border-brand hover:text-brand bg-white transition shadow-2xs"
+            className="rounded-md border border-line px-4 py-2 text-sm font-bold text-navy hover:border-brand hover:text-brand bg-white transition"
             title="Rổ hàng dạng JSON kèm bóc tách (FR-177 h)"
           >
             {"{ }"} JSON
@@ -356,16 +356,16 @@ export default function Page() {
             type="button"
             onClick={taiCsv}
             disabled={loc.length === 0}
-            className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60 shadow-xs"
+            className="rounded-md bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60"
           >
-            📥 Tải CSV ({loc.length} dòng)
+            Tải CSV ({loc.length} dòng)
           </button>
         </div>
       </header>
 
       {loi && (
         <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 px-4 py-2.5 text-sm text-brand">
-          ⚠️ Không đọc được: {loi}
+          Không đọc được: {loi}
         </div>
       )}
 
@@ -374,8 +374,8 @@ export default function Page() {
         <input
           value={q}
           onChange={(e) => { setQ(e.target.value); setTrang(1); }}
-          placeholder="🔍 Tìm nhanh: mã tin, đường, phường, giá, mô tả, người bán…"
-          className={`${o} min-w-0 flex-1 px-4 shadow-2xs`}
+          placeholder="Tìm nhanh: mã tin, đường, phường, giá, mô tả, người bán…"
+          className={`${o} min-w-0 flex-1 px-4`}
         />
         <select value={deal} onChange={(e) => { setDeal(e.target.value as typeof deal); setTrang(1); }} className={o}>
           <option value="">Tất cả (Bán + Thuê)</option>
@@ -391,7 +391,7 @@ export default function Page() {
       </div>
 
       {/* Bảng dữ liệu Rổ Hàng có Sửa trực tiếp */}
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-white shadow-xs">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-white">
         <table className="w-full min-w-[1200px] text-left text-sm">
           <thead className="sticky top-0 bg-slate-50 border-b border-line">
             <tr className="text-xs uppercase tracking-wide text-mute">
@@ -498,24 +498,24 @@ export default function Page() {
                   })}
 
                   {/* Cột nút thao tác */}
-                  <td className="whitespace-nowrap px-3 py-3 text-center sticky right-0 bg-white/95 backdrop-blur-xs">
+                  <td className="whitespace-nowrap px-3 py-3 text-center sticky right-0 bg-white/95-xs">
                     <div className="flex items-center justify-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => moSua(d)}
-                        className="rounded-full bg-brand/10 border border-brand/30 px-3 py-1 text-xs font-bold text-brand hover:bg-brand hover:text-white transition shadow-2xs"
+                        className="rounded-md bg-brand/10 border border-brand/30 px-3 py-1 text-xs font-bold text-brand hover:bg-brand hover:text-white transition"
                         title="Chỉnh sửa thông tin tin này"
                       >
-                        ✏️ Sửa
+                        Sửa
                       </button>
                       {d.code && (
                         <Link
                           href={`/nha-dat/${encodeURIComponent(d.code)}`}
                           target="_blank"
-                          className="rounded-full border border-line px-2.5 py-1 text-xs font-semibold text-mute hover:text-navy hover:border-slate-400 transition"
+                          className="rounded-md border border-line px-2.5 py-1 text-xs font-semibold text-mute hover:text-navy hover:border-slate-400 transition"
                           title="Xem trang hiển thị công khai"
                         >
-                          👁️
+                          Xem
                         </Link>
                       )}
                     </div>
@@ -541,7 +541,7 @@ export default function Page() {
             type="button"
             disabled={t <= 1}
             onClick={() => setTrang(t - 1)}
-            className="rounded-full border border-line px-4 py-1.5 font-semibold text-navy hover:border-brand hover:text-brand disabled:opacity-40 bg-white shadow-2xs"
+            className="rounded-md border border-line px-4 py-1.5 font-semibold text-navy hover:border-brand hover:text-brand disabled:opacity-40 bg-white"
           >
             ← Trước
           </button>
@@ -550,7 +550,7 @@ export default function Page() {
             type="button"
             disabled={t >= soTrang}
             onClick={() => setTrang(t + 1)}
-            className="rounded-full border border-line px-4 py-1.5 font-semibold text-navy hover:border-brand hover:text-brand disabled:opacity-40 bg-white shadow-2xs"
+            className="rounded-md border border-line px-4 py-1.5 font-semibold text-navy hover:border-brand hover:text-brand disabled:opacity-40 bg-white"
           >
             Sau →
           </button>
@@ -559,12 +559,12 @@ export default function Page() {
 
       {/* ════ MODAL CHỈNH SỬA TRỰC TIẾP TIN BĐS ════ */}
       {dangSua && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4-xs animate-in fade-in">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl border border-line max-h-[90vh] overflow-y-auto space-y-4">
             <div className="flex items-center justify-between border-b border-line pb-3">
               <div>
-                <h3 className="text-lg font-extrabold text-navy flex items-center gap-2">
-                  <span>✏️ Chỉnh sửa BĐS:</span>
+                <h3 className="text-lg font-bold text-navy flex items-center gap-2">
+                  <span>Chỉnh sửa BĐS:</span>
                   <span className="text-brand font-mono">#{dangSua.code}</span>
                 </h3>
                 <p className="text-xs text-mute mt-0.5">
@@ -576,7 +576,7 @@ export default function Page() {
                 onClick={() => setDangSua(null)}
                 className="text-mute hover:text-navy text-xl font-bold p-1"
               >
-                ✕
+                ×
               </button>
             </div>
 
@@ -764,15 +764,15 @@ export default function Page() {
               <button
                 type="button"
                 onClick={() => xoaTin(dangSua.id, dangSua.code)}
-                className="rounded-full border border-red-200 px-4 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition"
+                className="rounded-md border border-red-200 px-4 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition"
               >
-                🗑️ Xoá tin này
+                Xoá tin này
               </button>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setDangSua(null)}
-                  className="rounded-full border border-line px-5 py-2 text-xs font-bold text-mute hover:text-navy transition"
+                  className="rounded-md border border-line px-5 py-2 text-xs font-bold text-mute hover:text-navy transition"
                 >
                   Huỷ bỏ
                 </button>
@@ -780,7 +780,7 @@ export default function Page() {
                   type="button"
                   onClick={luuSua}
                   disabled={dangLuu}
-                  className="rounded-full bg-brand px-6 py-2 text-sm font-bold text-white hover:bg-brand-dark transition disabled:opacity-60 shadow-xs"
+                  className="rounded-md bg-brand px-6 py-2 text-sm font-bold text-white hover:bg-brand-dark transition disabled:opacity-60"
                 >
                   {dangLuu ? "Đang lưu…" : "Lưu thay đổi"}
                 </button>

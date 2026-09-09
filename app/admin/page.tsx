@@ -610,12 +610,12 @@ function BanLamViec() {
   if (role !== "admin") {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <h1 className="text-2xl font-extrabold text-navy">Khu vực quản trị</h1>
+        <h1 className="text-2xl font-bold text-navy">Khu vực quản trị</h1>
         <p className="mt-2 text-mute text-sm">
           {role === "anon" ? "Cần đăng nhập bằng tài khoản quản trị." : "Tài khoản này không có quyền quản trị."}
         </p>
         {role === "anon" && (
-          <Link href="/dang-nhap" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white shadow-sm hover:bg-brand-dark transition">
+          <Link href="/dang-nhap" className="mt-5 inline-block rounded-md bg-brand px-6 py-2.5 font-bold text-white hover:bg-brand-dark transition">
             Đăng nhập
           </Link>
         )}
@@ -656,12 +656,12 @@ function BanLamViec() {
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-brand/10 text-brand px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider">
-              Admin Console
+            <span className="rounded bg-brand/10 text-brand px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider">
+              Quản trị
             </span>
             <span className="text-xs text-mute font-medium">nhadat.cc</span>
           </div>
-          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-navy">Bàn làm việc Quản trị</h1>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">Bàn làm việc Quản trị</h1>
           <p className="mt-1 text-sm text-mute tabular-nums">
             {counts
               ? `${counts.tong} tin trong rổ · ${counts.active} đang rao · ${counts.cho} chờ duyệt`
@@ -673,7 +673,7 @@ function BanLamViec() {
 
       {loi.length > 0 && (
         <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 px-4 py-2.5 text-sm text-brand">
-          ⚠️ Không đọc được: {loi.join(" · ")}
+          Không đọc được: {loi.join(" · ")}
         </div>
       )}
 
@@ -686,18 +686,18 @@ function BanLamViec() {
           className={`text-left rounded-2xl p-4 border transition-all ${
             activeTab === "crm"
               ? "border-brand bg-brand/5 shadow ring-2 ring-brand/20"
-              : "border-line bg-white hover:border-brand/40 hover:shadow-sm"
+              : "border-line bg-white hover:border-brand/40 hover:"
           }`}
         >
           <div className="text-xs font-semibold text-mute flex items-center justify-between">
-            <span>👥 Khách hàng CRM</span>
-            <span className="rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5">
+            <span>Khách hàng CRM</span>
+            <span className="rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5">
               {dualCount} hai vai
             </span>
           </div>
-          <div className="mt-2 text-3xl font-extrabold tracking-tight text-navy">{danhSachCrm.length}</div>
+          <div className="mt-2 text-3xl font-bold tracking-tight text-navy">{danhSachCrm.length}</div>
           <div className="mt-1 text-xs text-mute truncate">
-            {dualCount > 0 ? `✨ ${dualCount} vừa mua vừa bán · ` : ""}{buyerCount} mua/thuê
+            {dualCount > 0 ? `${dualCount} vừa mua vừa bán · ` : ""}{buyerCount} mua/thuê
           </div>
         </button>
 
@@ -708,22 +708,22 @@ function BanLamViec() {
           className={`text-left rounded-2xl p-4 border transition-all ${
             activeTab === "todo"
               ? "border-brand bg-brand/5 shadow ring-2 ring-brand/20"
-              : "border-line bg-white hover:border-brand/40 hover:shadow-sm"
+              : "border-line bg-white hover:border-brand/40 hover:"
           }`}
         >
           <div className="text-xs font-semibold text-mute flex items-center justify-between">
-            <span>⚡ Cần xử lý</span>
+            <span>Cần xử lý</span>
             {canXuLy > 0 ? (
-              <span className="rounded-full bg-brand text-white text-[10px] font-extrabold px-2 py-0.5">
+              <span className="rounded bg-brand text-white text-[10px] font-bold px-2 py-0.5">
                 {canXuLy} việc
               </span>
             ) : (
-              <span className="rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5">
+              <span className="rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5">
                 sạch
               </span>
             )}
           </div>
-          <div className={`mt-2 text-3xl font-extrabold tracking-tight ${canXuLy > 0 ? "text-brand" : "text-navy"}`}>
+          <div className={`mt-2 text-3xl font-bold tracking-tight ${canXuLy > 0 ? "text-brand" : "text-navy"}`}>
             {canXuLy}
           </div>
           <div className="mt-1 text-xs text-mute truncate">
@@ -734,13 +734,13 @@ function BanLamViec() {
         {/* Card 3: Rổ hàng */}
         <Link
           href="/admin/ro-hang"
-          className="text-left rounded-2xl p-4 border border-line bg-white hover:border-brand/40 hover:shadow-sm transition-all block group"
+          className="text-left rounded-2xl p-4 border border-line bg-white hover:border-brand/40 hover: transition-all block group"
         >
           <div className="text-xs font-semibold text-mute flex items-center justify-between">
-            <span>📋 Rổ hàng BĐS</span>
+            <span>Rổ hàng BĐS</span>
             <span className="text-[10px] text-brand font-semibold group-hover:underline">Xem bảng ↗</span>
           </div>
-          <div className="mt-2 text-3xl font-extrabold tracking-tight text-navy">
+          <div className="mt-2 text-3xl font-bold tracking-tight text-navy">
             {counts?.active ?? "—"}
           </div>
           <div className="mt-1 text-xs text-mute truncate">
@@ -755,14 +755,14 @@ function BanLamViec() {
           className={`text-left rounded-2xl p-4 border transition-all ${
             activeTab === "ops"
               ? "border-brand bg-brand/5 shadow ring-2 ring-brand/20"
-              : "border-line bg-white hover:border-brand/40 hover:shadow-sm"
+              : "border-line bg-white hover:border-brand/40 hover:"
           }`}
         >
           <div className="text-xs font-semibold text-mute flex items-center justify-between">
-            <span>🤖 Trợ lý AI Bot</span>
-            <span className={`inline-block w-2.5 h-2.5 rounded-full ${bridgeSong ? "bg-emerald-500 animate-pulse" : "bg-brand"}`} />
+            <span>Trợ lý AI Bot</span>
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${bridgeSong ? "bg-emerald-500" : "bg-brand"}`} />
           </div>
-          <div className="mt-2 text-xl font-extrabold tracking-tight text-navy">
+          <div className="mt-2 text-xl font-bold tracking-tight text-navy">
             {bridgeSong ? "Đang trực" : "Cần kiểm tra"}
           </div>
           <div className="mt-1 text-xs text-mute truncate">
@@ -778,10 +778,10 @@ function BanLamViec() {
          ═══════════════════════════════════════════════════════════════ */}
       {activeTab === "crm" && (
         <section className="mt-6 space-y-6">
-          <div className="rounded-2xl border border-line bg-white p-5 shadow-xs space-y-4">
+          <div className="rounded-2xl border border-line bg-white p-5 space-y-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div>
-                <h2 className="text-xl font-extrabold tracking-tight text-navy">
+                <h2 className="text-xl font-bold tracking-tight text-navy">
                   Hồ sơ Khách hàng & Phân hệ Hai Vai
                 </h2>
                 <p className="text-xs text-mute mt-0.5">
@@ -800,7 +800,7 @@ function BanLamViec() {
                 type="button"
                 onClick={() => setCrmFilterRole("all")}
                 className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-                  crmFilterRole === "all" ? "bg-navy text-white shadow-2xs" : "bg-line/60 text-navy hover:bg-line"
+                  crmFilterRole === "all" ? "bg-navy text-white" : "bg-line/60 text-navy hover:bg-line"
                 }`}
               >
                 Tất cả ({danhSachCrm.length})
@@ -810,18 +810,18 @@ function BanLamViec() {
                 onClick={() => setCrmFilterRole("dual")}
                 className={`rounded-full px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "dual"
-                    ? "bg-emerald-700 text-white shadow-2xs"
+                    ? "bg-emerald-700 text-white"
                     : "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
                 }`}
               >
-                ✨ Vừa mua vừa bán ({dualCount})
+                Vừa mua vừa bán ({dualCount})
               </button>
               <button
                 type="button"
                 onClick={() => setCrmFilterRole("buyer")}
                 className={`rounded-full px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "buyer"
-                    ? "bg-blue-700 text-white shadow-2xs"
+                    ? "bg-blue-700 text-white"
                     : "bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100"
                 }`}
               >
@@ -832,7 +832,7 @@ function BanLamViec() {
                 onClick={() => setCrmFilterRole("seller")}
                 className={`rounded-full px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "seller"
-                    ? "bg-amber-700 text-white shadow-2xs"
+                    ? "bg-amber-700 text-white"
                     : "bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100"
                 }`}
               >
@@ -847,15 +847,14 @@ function BanLamViec() {
                   value={qCrm}
                   onChange={(e) => setQCrm(e.target.value)}
                   placeholder="Lọc theo tên (vd: Thu Ngô), Zalo UID, khu vực, mã BĐS rao hoặc quan tâm…"
-                  className="w-full rounded-full border border-line px-4 py-2 text-sm outline-none focus:border-brand pl-9 bg-slate-50/50"
+                  className="w-full rounded-md border border-line px-4 py-2 text-sm outline-none focus:border-brand pl-9 bg-slate-50/50"
                 />
-                <span className="absolute left-3.5 top-2.5 text-mute text-xs">🔍</span>
-              </div>
+                </div>
               {qCrm && (
                 <button
                   type="button"
                   onClick={() => setQCrm("")}
-                  className="rounded-full border border-line px-3.5 py-1.5 text-xs text-mute transition hover:border-brand hover:text-brand"
+                  className="rounded-md border border-line px-3.5 py-1.5 text-xs text-mute transition hover:border-brand hover:text-brand"
                 >
                   Xoá lọc
                 </button>
@@ -881,7 +880,7 @@ function BanLamViec() {
                 return (
                   <article
                     key={k.id}
-                    className={`rounded-2xl border bg-white p-5 shadow-xs transition-all ${
+                    className={`rounded-2xl border bg-white p-5 transition-all ${
                       isDual
                         ? "border-emerald-300 ring-1 ring-emerald-200/80"
                         : "border-line hover:border-slate-300"
@@ -890,7 +889,7 @@ function BanLamViec() {
                     {/* Header Row */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/60 pb-3">
                       <div className="flex flex-wrap items-center gap-2.5">
-                        <span className="text-lg font-extrabold text-navy">
+                        <span className="text-lg font-bold text-navy">
                           {k.name ?? "Khách chưa rõ tên"}
                         </span>
                         {k.zalo_user_id && (
@@ -900,15 +899,15 @@ function BanLamViec() {
                         )}
                         {/* Role Badge */}
                         {isDual ? (
-                          <span className="rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 px-3 py-0.5 text-xs font-extrabold shadow-2xs">
-                            ✨ Vừa mua vừa bán
+                          <span className="rounded bg-emerald-100 text-emerald-900 border border-emerald-300 px-3 py-0.5 text-xs font-bold">
+                            Vừa mua vừa bán
                           </span>
                         ) : isSellerOnly ? (
-                          <span className="rounded-full bg-amber-100 text-amber-900 border border-amber-300 px-3 py-0.5 text-xs font-bold">
+                          <span className="rounded bg-amber-100 text-amber-900 border border-amber-300 px-3 py-0.5 text-xs font-bold">
                             {k.seller?.seller_type === "ccrb" ? "Chính chủ bán" : "Môi giới bán"}
                           </span>
                         ) : (
-                          <span className="rounded-full bg-blue-100 text-blue-900 border border-blue-300 px-3 py-0.5 text-xs font-bold">
+                          <span className="rounded bg-blue-100 text-blue-900 border border-blue-300 px-3 py-0.5 text-xs font-bold">
                             Khách mua / thuê
                           </span>
                         )}
@@ -921,17 +920,17 @@ function BanLamViec() {
                             href={linkZalo(k.zalo_user_id)!}
                             target="_blank"
                             rel="noreferrer"
-                            className="rounded-full border border-blue-300 bg-blue-50/60 px-3 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                            className="rounded-md border border-blue-300 bg-blue-50/60 px-3 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
                           >
-                            💬 Mở Zalo
+                            Mở Zalo
                           </a>
                         )}
                         <button
                           type="button"
                           onClick={() => (isEditing ? setSuaNhuCauId(null) : moSuaNhuCau(k))}
-                          className="rounded-full border border-line px-3.5 py-1 text-xs font-bold text-navy transition hover:border-brand hover:text-brand bg-white"
+                          className="rounded-md border border-line px-3.5 py-1 text-xs font-bold text-navy transition hover:border-brand hover:text-brand bg-white"
                         >
-                          {isEditing ? "Đóng sửa" : "✏️ Sửa nhu cầu"}
+                          {isEditing ? "Đóng sửa" : "Sửa nhu cầu"}
                         </button>
                       </div>
                     </div>
@@ -942,8 +941,8 @@ function BanLamViec() {
                       {k.seller?.active_listing ? (
                         <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs space-y-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="font-extrabold text-amber-900 flex items-center gap-1">
-                              🏠 Căn đang rao bán:
+                            <span className="font-bold text-amber-900 flex items-center gap-1">
+                              Căn đang rao bán:
                             </span>
                             <span className="rounded bg-white/90 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800">
                               {k.seller.active_listing.status}
@@ -953,7 +952,7 @@ function BanLamViec() {
                             <Link
                               href={`/nha-dat/${encodeURIComponent(k.seller.active_listing.code ?? "")}`}
                               target="_blank"
-                              className="font-extrabold text-brand hover:underline text-sm"
+                              className="font-bold text-brand hover:underline text-sm"
                             >
                               #{k.seller.active_listing.code}
                             </Link>
@@ -963,12 +962,12 @@ function BanLamViec() {
                           </div>
                           {k.seller.active_listing.location_raw && (
                             <div className="text-navy font-medium">
-                              📍 {k.seller.active_listing.location_raw}
+                              {k.seller.active_listing.location_raw}
                             </div>
                           )}
                           {k.seller.active_listing.price_raw && (
-                            <div className="font-extrabold text-navy">
-                              💰 Giá: {k.seller.active_listing.price_raw}
+                            <div className="font-bold text-navy">
+                              Giá: {k.seller.active_listing.price_raw}
                             </div>
                           )}
                         </div>
@@ -982,10 +981,10 @@ function BanLamViec() {
                       {k.preferences ? (
                         <div className="rounded-xl border border-sky-200 bg-sky-50/50 p-3 text-xs space-y-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="font-extrabold text-sky-900 flex items-center gap-1">
-                              🎯 Nhu cầu tìm kiếm:
+                            <span className="font-bold text-sky-900 flex items-center gap-1">
+                              Nhu cầu tìm kiếm:
                             </span>
-                            <span className="rounded-full bg-brand/10 text-brand px-2 py-0.5 text-[10px] font-extrabold">
+                            <span className="rounded bg-brand/10 text-brand px-2 py-0.5 text-[10px] font-bold">
                               {p.deal === "thue" ? "Cần thuê" : "Cần mua"}
                             </span>
                           </div>
@@ -1009,7 +1008,7 @@ function BanLamViec() {
                           </div>
                           {(p.notes || k.notes) && (
                             <div className="border-t border-sky-100 pt-1 text-mute">
-                              📝 <span className="text-navy font-medium">{String(k.notes || p.notes)}</span>
+                              <span className="text-navy font-medium">{String(k.notes || p.notes)}</span>
                             </div>
                           )}
                         </div>
@@ -1023,7 +1022,7 @@ function BanLamViec() {
                     {/* Inline Form Edit Preferences */}
                     {isEditing && (
                       <div className="mt-3.5 rounded-xl border border-brand/40 bg-brand/[0.02] p-4 text-xs space-y-3">
-                        <div className="font-extrabold text-sm text-navy flex items-center justify-between">
+                        <div className="font-bold text-sm text-navy flex items-center justify-between">
                           <span>Chỉnh sửa hồ sơ nhu cầu khách hàng:</span>
                           <span className="text-mute font-normal">Cập nhật lưu trực tiếp vào database</span>
                         </div>
@@ -1097,7 +1096,7 @@ function BanLamViec() {
                           <button
                             type="button"
                             onClick={() => luuSuaNhuCau(k.id)}
-                            className="rounded bg-brand px-5 py-1.5 text-xs font-bold text-white hover:bg-brand-dark transition shadow-xs"
+                            className="rounded bg-brand px-5 py-1.5 text-xs font-bold text-white hover:bg-brand-dark transition"
                           >
                             Lưu nhu cầu
                           </button>
@@ -1107,17 +1106,17 @@ function BanLamViec() {
 
                     {/* Interested Properties Section */}
                     <div className="mt-3.5 pt-3 border-t border-line/60 flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-extrabold text-navy">BĐS đang quan tâm:</span>
+                      <span className="text-xs font-bold text-navy">BĐS đang quan tâm:</span>
                       {k.interests && k.interests.length > 0 ? (
                         k.interests.map((it) => (
                           <span
                             key={it.listing_id}
-                            className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-300 px-3 py-1 text-xs text-navy font-semibold shadow-2xs"
+                            className="inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-300 px-3 py-1 text-xs text-navy font-semibold"
                           >
                             <Link
                               href={`/nha-dat/${encodeURIComponent(it.code ?? "")}`}
                               target="_blank"
-                              className="font-extrabold text-brand hover:underline"
+                              className="font-bold text-brand hover:underline"
                             >
                               #{it.code}
                             </Link>
@@ -1128,7 +1127,7 @@ function BanLamViec() {
                               title="Gỡ BĐS quan tâm này"
                               className="ml-1 text-mute hover:text-red-600 font-bold transition"
                             >
-                              ✕
+                              ×
                             </button>
                           </span>
                         ))
@@ -1143,14 +1142,14 @@ function BanLamViec() {
                             value={maBdsGan}
                             onChange={(e) => setMaBdsGan(e.target.value)}
                             placeholder="Nhập mã (vd: BDS-CH-Q5-0001)"
-                            className="rounded-full border border-brand px-3 py-1 text-xs outline-none w-52"
+                            className="rounded-md border border-brand px-3 py-1 text-xs outline-none w-52"
                             autoFocus
                           />
                           <button
                             type="button"
                             onClick={() => ganBdsQuanTam(k.id)}
                             disabled={dangLuuBds}
-                            className="rounded-full bg-brand px-3 py-1 text-xs font-bold text-white hover:bg-brand-dark shadow-xs"
+                            className="rounded-md bg-brand px-3 py-1 text-xs font-bold text-white hover:bg-brand-dark"
                           >
                             {dangLuuBds ? "Đang gắn…" : "Gắn"}
                           </button>
@@ -1172,7 +1171,7 @@ function BanLamViec() {
                             setDangGanBds(k.id);
                             setMaBdsGan("");
                           }}
-                          className="rounded-full border border-dashed border-line px-3 py-1 text-xs font-bold text-brand transition hover:border-brand hover:bg-brand/5 ml-auto sm:ml-2"
+                          className="rounded-md border border-dashed border-line px-3 py-1 text-xs font-bold text-brand transition hover:border-brand hover:bg-brand/5 ml-auto sm:ml-2"
                         >
                           + Gắn BĐS quan tâm
                         </button>
@@ -1193,11 +1192,11 @@ function BanLamViec() {
       {activeTab === "todo" && (
         <section className="mt-6 space-y-8">
           {/* Tin chờ duyệt */}
-          <div className="rounded-2xl border border-line bg-white p-6 shadow-xs">
+          <div className="rounded-2xl border border-line bg-white p-6">
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2.5">
-                <h2 className="text-lg font-extrabold tracking-tight text-navy">Tin chờ duyệt</h2>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold tabular-nums ${
+                <h2 className="text-lg font-bold tracking-tight text-navy">Tin chờ duyệt</h2>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
                   pending.length > 0 ? "bg-brand text-white" : "bg-line text-mute"
                 }`}>
                   {pending.length}
@@ -1232,25 +1231,25 @@ function BanLamViec() {
                       <div className="mt-4 flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setStatus(l.id, "dang_ban")}
-                          className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98] shadow-xs"
+                          className="rounded-md bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark"
                         >
                           Duyệt — cho rao
                         </button>
                         <button
                           onClick={() => setStatus(l.id, "an")}
-                          className="rounded-full border border-line px-5 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand active:scale-[0.98] bg-white"
+                          className="rounded-md border border-line px-5 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand bg-white"
                         >
                           Ẩn tin
                         </button>
                         <button
                           onClick={() => xoaTin(l.id, l.code)}
-                          className="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:border-red-300 active:scale-[0.98] bg-white"
+                          className="rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:border-red-300 bg-white"
                         >
                           Xoá tin
                         </button>
                         <button
                           onClick={() => setUpCho((c) => (c === l.id ? null : l.id))}
-                          className="rounded-full border border-line px-4 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand bg-white"
+                          className="rounded-md border border-line px-4 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand bg-white"
                         >
                           {upCho === l.id ? "Đóng ảnh" : "Up ảnh"}
                         </button>
@@ -1272,11 +1271,11 @@ function BanLamViec() {
           </div>
 
           {/* Khách cần người thật */}
-          <div className="rounded-2xl border border-line bg-white p-6 shadow-xs">
+          <div className="rounded-2xl border border-line bg-white p-6">
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2.5">
-                <h2 className="text-lg font-extrabold tracking-tight text-navy">Khách cần người thật</h2>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold tabular-nums ${
+                <h2 className="text-lg font-bold tracking-tight text-navy">Khách cần người thật</h2>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
                   khachCan.length > 0 ? "bg-brand text-white" : "bg-line text-mute"
                 }`}>
                   {khachCan.length}
@@ -1293,8 +1292,8 @@ function BanLamViec() {
                   {ptKhachCan.mot.map((k) => (
                     <li key={k.conversation_id} className="py-3">
                       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="font-extrabold text-navy">{k.ten ?? "Khách chưa tên"}</span>
-                        <span className="rounded-full bg-line px-2 py-0.5 text-[11px] font-bold text-navy uppercase">
+                        <span className="font-bold text-navy">{k.ten ?? "Khách chưa tên"}</span>
+                        <span className="rounded bg-line px-2 py-0.5 text-[11px] font-bold text-navy uppercase">
                           {k.vai}
                         </span>
                         {linkZalo(k.zalo_user_id) && (
@@ -1302,7 +1301,7 @@ function BanLamViec() {
                             href={linkZalo(k.zalo_user_id)!}
                             target="_blank"
                             rel="noreferrer"
-                            className="rounded-full border border-blue-300 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                            className="rounded border border-blue-300 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                           >
                             Mở Zalo
                           </a>
@@ -1327,16 +1326,16 @@ function BanLamViec() {
           {/* Câu khách hỏi & Lịch xem nhà & Việc chờ admin */}
           <div className="grid gap-6 sm:grid-cols-2">
             {/* Câu khách hỏi */}
-            <div className="rounded-2xl border border-line bg-white p-5 shadow-xs space-y-3">
+            <div className="rounded-2xl border border-line bg-white p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-line pb-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-navy">Câu khách hỏi</h3>
-                  <span className="rounded-full bg-line px-2 py-0.5 text-xs font-bold text-navy tabular-nums">
+                  <h3 className="font-bold text-navy">Câu khách hỏi</h3>
+                  <span className="rounded bg-line px-2 py-0.5 text-xs font-bold text-navy tabular-nums">
                     {cauHoiCho}
                   </span>
                 </div>
                 {cauHoiQuaHan > 0 && (
-                  <span className="rounded-full bg-brand text-white text-[10px] font-extrabold px-2 py-0.5">
+                  <span className="rounded bg-brand text-white text-[10px] font-bold px-2 py-0.5">
                     {cauHoiQuaHan} quá hạn
                   </span>
                 )}
@@ -1364,11 +1363,11 @@ function BanLamViec() {
             </div>
 
             {/* Lịch xem nhà */}
-            <div className="rounded-2xl border border-line bg-white p-5 shadow-xs space-y-3">
+            <div className="rounded-2xl border border-line bg-white p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-line pb-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-navy">Lịch xem nhà</h3>
-                  <span className="rounded-full bg-line px-2 py-0.5 text-xs font-bold text-navy tabular-nums">
+                  <h3 className="font-bold text-navy">Lịch xem nhà</h3>
+                  <span className="rounded bg-line px-2 py-0.5 text-xs font-bold text-navy tabular-nums">
                     {lichSapToi}
                   </span>
                 </div>
@@ -1398,11 +1397,11 @@ function BanLamViec() {
           </div>
 
           {/* Việc chờ admin */}
-          <div className="rounded-2xl border border-line bg-white p-5 shadow-xs space-y-3">
+          <div className="rounded-2xl border border-line bg-white p-5 space-y-3">
             <div className="flex items-center justify-between border-b border-line pb-2">
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-navy">Việc chờ admin</h3>
-                <span className="rounded-full bg-line px-2 py-0.5 text-xs font-bold text-navy tabular-nums">
+                <h3 className="font-bold text-navy">Việc chờ admin</h3>
+                <span className="rounded bg-line px-2 py-0.5 text-xs font-bold text-navy tabular-nums">
                   {viec.length}
                 </span>
               </div>
@@ -1422,7 +1421,7 @@ function BanLamViec() {
                     </div>
                     <button
                       onClick={() => dongViec(v.id)}
-                      className="rounded-full border border-line px-3.5 py-1 text-xs font-bold text-navy hover:border-brand hover:text-brand bg-white shrink-0"
+                      className="rounded-md border border-line px-3.5 py-1 text-xs font-bold text-navy hover:border-brand hover:text-brand bg-white shrink-0"
                     >
                       Đã xử lý
                     </button>
@@ -1440,10 +1439,10 @@ function BanLamViec() {
       {activeTab === "stats" && (
         <section className="mt-6 space-y-6">
           {/* Thống kê hội thoại 30 ngày */}
-          <div className="rounded-2xl border border-line bg-white p-6 shadow-xs space-y-4">
+          <div className="rounded-2xl border border-line bg-white p-6 space-y-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
               <div>
-                <h2 className="text-lg font-extrabold tracking-tight text-navy">Thống kê hội thoại · 30 ngày</h2>
+                <h2 className="text-lg font-bold tracking-tight text-navy">Thống kê hội thoại · 30 ngày</h2>
                 <p className="text-xs text-mute mt-0.5">
                   {tongTK.hoi_thoai} hội thoại khách mới · {tongTK.khach_moi} khách mới · {tongTK.co} lần cần người thật
                 </p>
@@ -1451,9 +1450,9 @@ function BanLamViec() {
               <button
                 onClick={taiCsv}
                 disabled={!thongKe.length}
-                className="rounded-full border border-line px-4 py-1.5 text-xs font-bold text-navy transition hover:border-brand hover:text-brand disabled:opacity-40 bg-white shadow-2xs"
+                className="rounded-md border border-line px-4 py-1.5 text-xs font-bold text-navy transition hover:border-brand hover:text-brand disabled:opacity-40 bg-white"
               >
-                📥 Tải CSV
+                Tải CSV
               </button>
             </div>
 
@@ -1497,9 +1496,9 @@ function BanLamViec() {
           {/* BĐS Hot & Người bán mới */}
           <div className="grid gap-6 sm:grid-cols-2">
             {/* BĐS hot 60 ngày */}
-            <div className="rounded-2xl border border-line bg-white p-5 shadow-xs space-y-3">
+            <div className="rounded-2xl border border-line bg-white p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-line pb-2">
-                <h3 className="font-extrabold text-navy">BĐS hot · 60 ngày</h3>
+                <h3 className="font-bold text-navy">BĐS hot · 60 ngày</h3>
                 <span className="text-xs text-mute">xem, hỏi, hẹn nhiều nhất</span>
               </div>
               {bdsHot === null ? (
@@ -1511,7 +1510,7 @@ function BanLamViec() {
                   {bdsHot.map((h) => (
                     <li key={h.listing_id} className="py-2 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-brand tabular-nums">{h.so_su_kien_60d} sk</span>
+                        <span className="font-bold text-brand tabular-nums">{h.so_su_kien_60d} sk</span>
                         <Link
                           href={`/nha-dat/${encodeURIComponent(h.code ?? "")}`}
                           target="_blank"
@@ -1531,9 +1530,9 @@ function BanLamViec() {
             </div>
 
             {/* Người bán 14 ngày */}
-            <div className="rounded-2xl border border-line bg-white p-5 shadow-xs space-y-3">
+            <div className="rounded-2xl border border-line bg-white p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-line pb-2">
-                <h3 className="font-extrabold text-navy">Người bán mới · 14 ngày</h3>
+                <h3 className="font-bold text-navy">Người bán mới · 14 ngày</h3>
                 <span className="text-xs text-mute">nhãn tính phí</span>
               </div>
               {nguoiBan.length === 0 ? (
@@ -1573,7 +1572,7 @@ function BanLamViec() {
           </div>
 
           {/* Chi phí Model (Tiền bộ não 7 ngày) */}
-          <div className="rounded-2xl border border-line bg-white p-5 shadow-xs">
+          <div className="rounded-2xl border border-line bg-white p-5">
             <TheTien rows={tien} />
           </div>
         </section>
@@ -1585,10 +1584,10 @@ function BanLamViec() {
       {activeTab === "ops" && (
         <section className="mt-6 space-y-6">
           {/* Tình trạng Bot AI */}
-          <div className="rounded-2xl border border-line bg-white p-6 shadow-xs space-y-4">
+          <div className="rounded-2xl border border-line bg-white p-6 space-y-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
               <div>
-                <h2 className="text-lg font-extrabold tracking-tight text-navy">Tình trạng Trợ lý Bot & Hạ tầng</h2>
+                <h2 className="text-lg font-bold tracking-tight text-navy">Tình trạng Trợ lý Bot & Hạ tầng</h2>
                 <p className="text-xs text-mute mt-0.5">Nhịp tim bridge Zalo, độ trễ và nhật ký lỗi gần nhất</p>
               </div>
               {health && <BridgeBadge at={health.beat} />}
@@ -1599,7 +1598,7 @@ function BanLamViec() {
                 <span className="text-xs font-bold text-mute uppercase tracking-wider block">Độ trễ phản hồi (7 ngày)</span>
                 {doTre && doTre.so_luot != null ? (
                   <div className="space-y-1">
-                    <div className="text-lg font-extrabold text-navy">
+                    <div className="text-lg font-bold text-navy">
                       p50: {Math.round((doTre.p50_giay ?? 0) * 1000).toLocaleString("vi-VN")} ms
                       {" · "}p95:{" "}
                       <span className={(doTre.p95_giay ?? 0) > 3 ? "text-brand" : "text-navy"}>
@@ -1617,7 +1616,7 @@ function BanLamViec() {
 
               <div className="rounded-xl border border-line p-4 bg-slate-50/50 space-y-1">
                 <span className="text-xs font-bold text-mute uppercase tracking-wider block">Nhật ký lỗi hệ thống</span>
-                <div className="text-lg font-extrabold text-navy">
+                <div className="text-lg font-bold text-navy">
                   {health?.errs.length ? `${health.errs.length} lỗi gần nhất` : "Sổ lỗi sạch (0 lỗi)"}
                 </div>
                 <div className="text-xs text-mute">
@@ -1647,9 +1646,9 @@ function BanLamViec() {
           </div>
 
           {/* Tạo danh sách riêng cho khách */}
-          <div className="rounded-2xl border border-line bg-white p-6 shadow-xs space-y-4">
+          <div className="rounded-2xl border border-line bg-white p-6 space-y-4">
             <div className="border-b border-line pb-3">
-              <h2 className="text-lg font-extrabold tracking-tight text-navy">Tạo danh sách riêng cho khách</h2>
+              <h2 className="text-lg font-bold tracking-tight text-navy">Tạo danh sách riêng cho khách</h2>
               <p className="text-xs text-mute mt-0.5">Tạo link /ds/… sống 30 ngày để gửi qua Zalo cho từng khách</p>
             </div>
             <form onSubmit={taoDs} className="space-y-3">
@@ -1658,20 +1657,20 @@ function BanLamViec() {
                   value={dsMa}
                   onChange={(e) => setDsMa(e.target.value)}
                   placeholder="Nhập mã tin cách nhau bởi dấu phẩy (vd: BDS-NP-BINHTAN-0001, BDS-CH-Q5-0001)"
-                  className="min-w-0 rounded-full border border-line px-4 py-2 text-sm outline-none focus:border-brand"
+                  className="min-w-0 rounded-md border border-line px-4 py-2 text-sm outline-none focus:border-brand"
                 />
                 <input
                   value={dsTieuDe}
                   onChange={(e) => setDsTieuDe(e.target.value)}
                   placeholder="Tiêu đề: Căn hộ Bình Tân · dưới 10 tr"
-                  className="min-w-0 rounded-full border border-line px-4 py-2 text-sm outline-none focus:border-brand sm:w-72"
+                  className="min-w-0 rounded-md border border-line px-4 py-2 text-sm outline-none focus:border-brand sm:w-72"
                 />
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="submit"
                   disabled={dangTaoDs}
-                  className="rounded-full bg-brand px-6 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60 shadow-xs"
+                  className="rounded-md bg-brand px-6 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60"
                 >
                   {dangTaoDs ? "Đang tạo…" : "Tạo link danh sách"}
                 </button>
@@ -1686,7 +1685,7 @@ function BanLamViec() {
                         <button
                           type="button"
                           onClick={() => chepLink(dsKq.path!)}
-                          className="rounded-full border border-line px-3 py-0.5 text-xs font-semibold hover:border-brand hover:text-brand ml-1"
+                          className="rounded border border-line px-3 py-0.5 text-xs font-semibold hover:border-brand hover:text-brand ml-1"
                         >
                           {daChep ? "Đã chép" : "Chép link"}
                         </button>
@@ -1701,9 +1700,9 @@ function BanLamViec() {
           </div>
 
           {/* Giấy tờ bảo mật (bucket riêng) */}
-          <div className="rounded-2xl border border-line bg-white p-6 shadow-xs space-y-4">
+          <div className="rounded-2xl border border-line bg-white p-6 space-y-4">
             <div className="border-b border-line pb-3">
-              <h2 className="text-lg font-extrabold tracking-tight text-navy">Giấy tờ & Sổ đỏ (Bucket bảo mật)</h2>
+              <h2 className="text-lg font-bold tracking-tight text-navy">Giấy tờ & Sổ đỏ (Bucket bảo mật)</h2>
               <p className="text-xs text-mute mt-0.5">Link ký tạm thời 15 phút, không bao giờ công khai</p>
             </div>
             {giayTo.length === 0 ? (
@@ -1720,7 +1719,7 @@ function BanLamViec() {
                     </div>
                     <button
                       onClick={() => xemGiayTo(g)}
-                      className="rounded-full border border-line px-4 py-1 text-xs font-bold text-navy hover:border-brand hover:text-brand bg-white shadow-2xs"
+                      className="rounded-md border border-line px-4 py-1 text-xs font-bold text-navy hover:border-brand hover:text-brand bg-white"
                     >
                       Xem giấy tờ ↗
                     </button>
@@ -1743,10 +1742,10 @@ function Muc({ ten, phu, dem, children }: {
   return (
     <section className="mt-6">
       <div className="flex flex-wrap items-baseline gap-x-2.5">
-        <h3 className="text-base font-extrabold tracking-tight text-navy">{ten}</h3>
+        <h3 className="text-base font-bold tracking-tight text-navy">{ten}</h3>
         {dem !== undefined && (
           <span
-            className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold tabular-nums ${
+            className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
               co ? "bg-brand text-white" : "bg-line text-mute"
             }`}
           >
@@ -1768,7 +1767,7 @@ function TraCuu({ ten, phu, dem, children }: {
       <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2.5 rounded-shot py-1.5 transition hover:text-brand">
         <span className="text-base font-bold tracking-tight text-navy">{ten}</span>
         {dem !== undefined && dem > 0 && (
-          <span className="rounded-full bg-line px-2 py-0.5 text-xs font-bold tabular-nums text-navy">
+          <span className="rounded bg-line px-2 py-0.5 text-xs font-bold tabular-nums text-navy">
             {dem}
           </span>
         )}
@@ -1790,12 +1789,12 @@ function PhanTrang({ trang, soTrang, tong, setTrang }: {
   return (
     <div className="mt-4 flex items-center justify-end gap-3 text-xs text-mute">
       <button onClick={() => setTrang(trang - 1)} disabled={trang <= 1}
-        className="rounded-full border border-line px-3.5 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute bg-white">
+        className="rounded-md border border-line px-3.5 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute bg-white">
         ← Trước
       </button>
       <span className="tabular-nums font-medium">trang {trang}/{soTrang} · {tong} mục</span>
       <button onClick={() => setTrang(trang + 1)} disabled={trang >= soTrang}
-        className="rounded-full border border-line px-3.5 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute bg-white">
+        className="rounded-md border border-line px-3.5 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute bg-white">
         Sau →
       </button>
     </div>
@@ -1813,7 +1812,7 @@ function TheTien({ rows }: { rows: Tien[] }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2">
-        <h3 className="font-extrabold text-navy">Chi phí Model & Tiền bộ não (7 ngày)</h3>
+        <h3 className="font-bold text-navy">Chi phí Model & Tiền bộ não (7 ngày)</h3>
         <span className="text-xs text-mute tabular-nums">
           {daDo ? `$${tong.toFixed(2)} · ${tongLuot} lượt · trung bình $${tongLuot ? (tong / tongLuot).toFixed(3) : "—"}/lượt` : "chưa đo"}
         </span>
@@ -1846,7 +1845,7 @@ function TheTien({ rows }: { rows: Tien[] }) {
 function BridgeBadge({ at }: { at: string | null }) {
   if (!at) {
     return (
-      <span className="rounded-full bg-line px-3 py-1 text-xs font-bold text-mute">
+      <span className="rounded-md bg-line px-3 py-1 text-xs font-bold text-mute">
         bridge: chưa từng gõ cửa
       </span>
     );

@@ -7,6 +7,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { Btn } from "@/components/ui";
+import { IconChat, IconRefresh, IconTrash } from "@/components/icons";
 
 type HoiThoai = {
   id: string; channel: string | null; seller_id: string | null; buyer_id: string | null;
@@ -44,6 +46,7 @@ export default function Page() {
   const [dangSua, setDangSua] = useState<string | null>(null);
   const [nhap, setNhap] = useState("");
   const [dangLuu, setDangLuu] = useState(false);
+  const [thongBao, setThongBao] = useState<string | null>(null);
 
   const napMau = async () => {
     const { data } = await supabase.from("mau_cau").select("id, message_id, conversation_id, cau_chuan, dung_lam").limit(3000);
@@ -100,6 +103,30 @@ export default function Page() {
     );
   }, [hoiThoai, q, locPhia, chiCanNguoi, chiChuaMau, mau]);
 
+  // Xoá khách (20260909f): xoá sạch số Zalo này — tin, fact, ảnh, chat, hồ sơ.
+  // Xác nhận nói rõ hậu quả (NN/g: error prevention), báo kết quả sau khi xoá.
+  const xoaKhach = async () => {
+    if (!chon) return;
+    const zalo = chon.sellers?.zalo_user_id ?? chon.buyers?.zalo_user_id;
+    if (!zalo) { setLoi("Hội thoại này không gắn số Zalo nào, không xoá được."); return; }
+    const ok = confirm(`Xoá khách "${ten(chon)}"?\n\nSẽ xoá vĩnh viễn: tin rao + ảnh + thông số của họ, toàn bộ hội thoại, hồ sơ mua/bán, lịch hẹn. Mẫu câu chuẩn đã lưu KHÔNG bị xoá.\nKhông hoàn tác được.`);
+    if (!ok) return;
+    const { data, error } = await supabase.rpc("admin_xoa_khach", { p_zalo: zalo });
+    if (error) { setLoi(error.message); return; }
+    const d = (data ?? {}) as { listings?: number; messages?: number; conversations?: number };
+    setThongBao(`Đã xoá khách "${ten(chon)}": ${d.listings ?? 0} tin, ${d.messages ?? 0} tin nhắn, ${d.conversations ?? 0} hội thoại.`);
+    setChon(null); setTin([]);
+    await Promise.all([napHoiThoai(), napMau()]);
+  };
+  // Cần người thật → đã xử lý: hạ cờ để bot tiếp sức lại (FR-147).
+  const daXuLy = async () => {
+    if (!chon) return;
+    const { error } = await supabase.from("conversations").update({ needs_human: false }).eq("id", chon.id);
+    if (error) { setLoi(error.message); return; }
+    setChon({ ...chon, needs_human: false });
+    setThongBao(`Đã đánh dấu "${ten(chon)}" là đã xử lý.`);
+    await napHoiThoai();
+  };
   const luu = async (t: Tin) => {
     if (!chon || !nhap.trim()) return;
     setDangLuu(true);
@@ -124,9 +151,9 @@ export default function Page() {
   if (role !== "admin") {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <h1 className="text-2xl font-extrabold text-navy">Khu vực quản trị</h1>
+        <h1 className="text-2xl font-bold text-navy">Khu vực quản trị</h1>
         <p className="mt-2 text-mute text-sm">{role === "anon" ? "Cần đăng nhập bằng tài khoản quản trị." : "Tài khoản này không có quyền quản trị."}</p>
-        {role === "anon" && <Link href="/dang-nhap" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white shadow-sm hover:bg-brand-dark transition">Đăng nhập</Link>}
+        {role === "anon" && <Link href="/dang-nhap" className="mt-5 inline-block rounded-md bg-brand px-6 py-2.5 font-bold text-white hover:bg-brand-dark transition">Đăng nhập</Link>}
       </div>
     );
   }
@@ -142,8 +169,8 @@ export default function Page() {
         <button type="button" className={chip(locPhia === "ban")} onClick={() => setLocPhia(locPhia === "ban" ? "" : "ban")}>Người bán <span className="float-right text-xs opacity-70">{dem.ban}</span></button>
         <button type="button" className={chip(locPhia === "mua")} onClick={() => setLocPhia(locPhia === "mua" ? "" : "mua")}>Người mua <span className="float-right text-xs opacity-70">{dem.tong - dem.ban}</span></button>
         <div className="mb-1 mt-3 px-1 text-[11px] font-bold uppercase tracking-wider text-mute">Cần làm</div>
-        <button type="button" className={chip(chiCanNguoi)} onClick={() => setChiCanNguoi(!chiCanNguoi)}>🔥 Cần người thật <span className="float-right text-xs opacity-70">{dem.canNguoi}</span></button>
-        <button type="button" className={chip(chiChuaMau)} onClick={() => setChiChuaMau(!chiChuaMau)}>✏️ Chưa có mẫu chuẩn <span className="float-right text-xs opacity-70">{dem.chuaMau}</span></button>
+        <button type="button" className={chip(chiCanNguoi)} onClick={() => setChiCanNguoi(!chiCanNguoi)}>Cần người thật <span className="float-right text-xs opacity-70">{dem.canNguoi}</span></button>
+        <button type="button" className={chip(chiChuaMau)} onClick={() => setChiChuaMau(!chiChuaMau)}>Chưa có mẫu chuẩn <span className="float-right text-xs opacity-70">{dem.chuaMau}</span></button>
         <div className="mt-auto rounded-xl border border-line bg-white p-3 text-xs text-mute">
           Mẫu chuẩn: <b className="text-navy">{mau.filter((m) => m.dung_lam !== "bo").length}/300</b>
           <Link href="/admin/mau-cau" className="ml-1 font-semibold text-brand hover:underline">kho mẫu →</Link>
@@ -153,8 +180,13 @@ export default function Page() {
       {/* Cột 2: hội thoại */}
       <section className="flex flex-col overflow-hidden border-r border-line">
         <div className="border-b border-line p-3">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Tìm theo tên, Zalo ID…" className="w-full rounded-lg border border-line bg-cream/60 px-3 py-2 text-sm outline-none focus:border-brand" />
-          <div className="mt-2 text-xs text-mute tabular-nums">{danhSach.length} hội thoại · mới nhất lên trên</div>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm theo tên, Zalo ID…" className="w-full rounded-lg border border-line bg-cream/60 px-3 py-2 text-sm outline-none focus:border-brand" />
+          <div className="mt-2 flex items-center justify-between text-xs text-mute tabular-nums">
+            <span>{danhSach.length} hội thoại · mới nhất lên trên</span>
+            <button type="button" onClick={() => { napHoiThoai(); napMau(); }} className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium text-navy hover:bg-cream/70" title="Tải lại danh sách">
+              <IconRefresh className="h-3.5 w-3.5" /> Làm mới
+            </button>
+          </div>
         </div>
         <ul className="flex-1 overflow-y-auto">
           {danhSach.map((h) => {
@@ -163,13 +195,13 @@ export default function Page() {
               <li key={h.id}>
                 <button type="button" onClick={() => moHoiThoai(h)} className={`flex w-full flex-col gap-1 border-b border-line/70 px-3 py-2.5 text-left hover:bg-cream/60 ${chon?.id === h.id ? "bg-brand/5" : ""}`}>
                   <div className="flex items-center gap-2">
-                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-extrabold text-white ${h.seller_id ? "bg-amber-500" : "bg-zalo"}`}>{ten(h).slice(0, 1).toUpperCase()}</span>
+                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white ${h.seller_id ? "bg-amber-500" : "bg-zalo"}`}>{ten(h).slice(0, 1).toUpperCase()}</span>
                     <span className="min-w-0 flex-1 truncate text-sm font-bold text-navy">{ten(h)}</span>
                     <span className="text-[11px] text-mute tabular-nums">{gioNgan(h.last_message_at)}</span>
                   </div>
                   <div className="flex flex-wrap gap-1 pl-10">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${h.seller_id ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}>{h.seller_id ? "bán" : "mua"}</span>
-                    {h.needs_human && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">🔥 cần người thật</span>}
+                    {h.needs_human && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">cần người thật</span>}
                     {h.human_touch_at && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-mute">người thật đã vào</span>}
                     {n > 0 && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">{n} mẫu</span>}
                   </div>
@@ -184,16 +216,20 @@ export default function Page() {
       {/* Cột 3: tin nhắn */}
       <section className="flex flex-col overflow-hidden bg-cream/30">
         {!chon ? (
-          <div className="grid flex-1 place-items-center text-center text-sm text-mute"><div><div className="text-5xl">💬</div><div className="mt-2">Chọn cuộc trò chuyện</div></div></div>
+          <div className="grid flex-1 place-items-center text-center text-sm text-mute"><div><IconChat className="mx-auto h-10 w-10 text-mute/60" /><div className="mt-2">Chọn một hội thoại ở cột giữa để đọc và sửa câu bot.</div></div></div>
         ) : (
           <>
             <div className="flex items-center justify-between border-b border-line bg-white px-4 py-2.5">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-extrabold text-navy">{ten(chon)}</span>
+                <span className="text-sm font-bold text-navy">{ten(chon)}</span>
                 <span className="text-xs text-mute">· {chon.seller_id ? "người bán" : "người mua"} · {chon.channel}</span>
-                {chon.needs_human && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">🔥 cần người thật</span>}
+                {chon.needs_human && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">cần người thật</span>}
               </div>
-              <span className="text-xs text-mute tabular-nums">{tin.length} lượt</span>
+              <div className="flex items-center gap-2">
+                <span className="mr-1 text-xs text-mute tabular-nums">{tin.length} lượt</span>
+                {chon.needs_human && <Btn onClick={daXuLy} className="py-1.5 text-xs">Đã xử lý</Btn>}
+                <Btn variant="danger" onClick={xoaKhach} className="py-1.5 text-xs" title="Xoá vĩnh viễn khách này cùng tin, ảnh, hội thoại"><IconTrash className="h-3.5 w-3.5" /> Xoá khách</Btn>
+              </div>
             </div>
             <ol className="flex-1 space-y-2 overflow-y-auto p-4">
               {tin.map((t) => {
@@ -202,14 +238,14 @@ export default function Page() {
                 const sua = dangSua === t.id;
                 return (
                   <li key={t.id} className={`flex ${bot ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[78%] rounded-2xl px-3.5 py-2 shadow-2xs ${bot ? "bg-navy text-white" : t.sender === "human" ? "bg-emerald-50 text-navy" : "bg-white text-navy"}`}>
+                    <div className={`max-w-[78%] rounded-2xl px-3.5 py-2 ${bot ? "bg-navy text-white" : t.sender === "human" ? "bg-emerald-50 text-navy" : "bg-white text-navy"}`}>
                       <div className={`flex items-center justify-between gap-3 text-[10px] ${bot ? "text-white/60" : "text-mute"}`}>
                         <span className="font-bold">{AI_VI[t.sender] ?? t.sender}</span><span className="tabular-nums">{luc(t.created_at)}</span>
                       </div>
                       <div className="mt-0.5 whitespace-pre-wrap text-sm">{t.body}</div>
                       {bot && !sua && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
-                          <button type="button" onClick={() => { setDangSua(t.id); setNhap(co?.cau_chuan ?? t.body); }} className="font-bold text-brand hover:underline">✏️ {co ? "Sửa lại câu chuẩn" : "Sửa thành câu chuẩn"}</button>
+                          <button type="button" onClick={() => { setDangSua(t.id); setNhap(co?.cau_chuan ?? t.body); }} className="font-bold text-brand hover:underline">{co ? "Sửa lại câu chuẩn" : "Sửa thành câu chuẩn"}</button>
                           {co && <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-emerald-200">đã có mẫu</span>}
                         </div>
                       )}
@@ -217,7 +253,7 @@ export default function Page() {
                         <div className="mt-2 space-y-1.5">
                           <textarea value={nhap} onChange={(e) => setNhap(e.target.value)} rows={3} className="w-full rounded-lg bg-white px-2.5 py-1.5 text-sm text-navy outline-none" placeholder="Câu anh/sếp muốn bot nói…" />
                           <div className="flex gap-2 text-xs">
-                            <button type="button" disabled={dangLuu || !nhap.trim()} onClick={() => luu(t)} className="rounded-full bg-brand px-3 py-1 font-bold text-white disabled:opacity-60">{dangLuu ? "Đang lưu…" : "Lưu mẫu"}</button>
+                            <button type="button" disabled={dangLuu || !nhap.trim()} onClick={() => luu(t)} className="rounded-md bg-brand px-3 py-1 font-bold text-white disabled:opacity-60">{dangLuu ? "Đang lưu…" : "Lưu mẫu"}</button>
                             <button type="button" onClick={() => setDangSua(null)} className="text-white/70 hover:underline">huỷ</button>
                           </div>
                         </div>
@@ -230,7 +266,18 @@ export default function Page() {
           </>
         )}
       </section>
-      {loi && <div className="fixed bottom-4 right-4 rounded-xl border border-brand/30 bg-white px-4 py-2 text-sm text-brand shadow">⚠️ {loi}</div>}
+      {loi && (
+        <div role="alert" className="fixed bottom-4 right-4 flex items-center gap-3 rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800">
+          <span>Lỗi: {loi}</span>
+          <button type="button" onClick={() => setLoi(null)} aria-label="Đóng" className="font-bold">×</button>
+        </div>
+      )}
+      {thongBao && (
+        <div role="status" className="fixed bottom-4 right-4 flex items-center gap-3 rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          <span>{thongBao}</span>
+          <button type="button" onClick={() => setThongBao(null)} aria-label="Đóng" className="font-bold">×</button>
+        </div>
+      )}
     </div>
   );
 }

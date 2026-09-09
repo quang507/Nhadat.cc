@@ -142,12 +142,12 @@ export default function Page() {
   if (role !== "admin") {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <h1 className="text-2xl font-extrabold text-navy">Khu vực quản trị</h1>
+        <h1 className="text-2xl font-bold text-navy">Khu vực quản trị</h1>
         <p className="mt-2 text-mute text-sm">
           {role === "anon" ? "Cần đăng nhập bằng tài khoản quản trị." : "Tài khoản này không có quyền quản trị."}
         </p>
         {role === "anon" && (
-          <Link href="/dang-nhap" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white shadow-sm hover:bg-brand-dark transition">
+          <Link href="/dang-nhap" className="mt-5 inline-block rounded-md bg-brand px-6 py-2.5 font-bold text-white hover:bg-brand-dark transition">
             Đăng nhập
           </Link>
         )}
@@ -166,7 +166,7 @@ export default function Page() {
             <span className="text-mute text-xs">/</span>
             <span className="text-xs text-mute font-medium">JSON</span>
           </div>
-          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-navy">Rổ hàng BĐS (Dạng JSON)</h1>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">Rổ hàng BĐS (Dạng JSON)</h1>
           <p className="mt-1 text-sm text-mute tabular-nums">
             {rows.length} tin · hiển thị {loc.length} · mỗi tin kèm <code className="rounded bg-slate-100 px-1">boc_tach</code> — những gì bot bóc được từ câu rao và câu trả lời của chủ nhà, không liệt kê trường trống
           </p>
@@ -175,15 +175,15 @@ export default function Page() {
           type="button"
           onClick={taiJson}
           disabled={loc.length === 0}
-          className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60 shadow-xs"
+          className="rounded-md bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60"
         >
-          📥 Tải JSON ({loc.length} tin)
+          Tải JSON ({loc.length} tin)
         </button>
       </header>
 
       {loi && (
         <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 px-4 py-2.5 text-sm text-brand">
-          ⚠️ Không đọc được: {loi}
+          Không đọc được: {loi}
         </div>
       )}
 
@@ -191,8 +191,8 @@ export default function Page() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="🔍 Tìm: mã tin, đường, phường, người bán, nội dung bóc tách…"
-          className="min-w-[280px] flex-1 rounded-full border border-line bg-white px-4 py-2 text-sm outline-none focus:border-brand"
+          placeholder="Tìm: mã tin, đường, phường, người bán, nội dung bóc tách…"
+          className="min-w-[280px] flex-1 rounded-md border border-line bg-white px-4 py-2 text-sm outline-none focus:border-brand"
         />
         <label className="flex items-center gap-2 text-sm text-navy">
           <input type="checkbox" checked={chiBocTach} onChange={(e) => setChiBocTach(e.target.checked)} />
@@ -205,7 +205,7 @@ export default function Page() {
           const dangMo = mo.has(t.id);
           const soKhoa = t.boc_tach ? Object.keys(t.boc_tach).filter((k) => !k.startsWith("_")).length : 0;
           return (
-            <section key={t.id} className="rounded-2xl border border-line bg-white shadow-2xs">
+            <section key={t.id} className="rounded-2xl border border-line bg-white">
               <button
                 type="button"
                 onClick={() => setMo((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })}
@@ -216,15 +216,15 @@ export default function Page() {
                   {[t.location_raw, t.ward, t.district].filter(Boolean).join(", ") || "—"}
                 </span>
                 <span className="text-xs text-mute">{t.deal === "ban" ? "Bán" : "Cho thuê"} · {t.price_raw ?? "—"} · {t.status}</span>
-                {t.gap === true && <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700">gấp</span>}
-                {t.chu_noi_du_at && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-mute">chủ nói đủ</span>}
+                {t.gap === true && <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700">gấp</span>}
+                {t.chu_noi_du_at && <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-mute">chủ nói đủ</span>}
                 <span className="ml-auto text-xs text-mute tabular-nums">{soKhoa} khoá bóc tách · {dangMo ? "thu gọn ▲" : "xem JSON ▼"}</span>
               </button>
               {dangMo && (
                 <div className="border-t border-line px-4 py-3">
                   <div className="mb-2 flex justify-end">
                     <button type="button" onClick={() => chepMot(t)} className="text-xs font-semibold text-brand hover:underline">
-                      📋 Chép JSON tin này
+                      Chép JSON tin này
                     </button>
                   </div>
                   <pre className="overflow-x-auto rounded-xl bg-slate-900 p-4 text-xs leading-relaxed text-slate-100">

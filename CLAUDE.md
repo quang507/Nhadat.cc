@@ -255,6 +255,7 @@ hỏng im lặng.
 | **`masterdb-raw`** | **bản GỐC masterDB, chưa đụng vào, KHÔNG phục vụ ai** | **chỉ `service_role`** |
 | `listing-photos` | lối cũ FR-148 đã bỏ — đã bịt bằng trần 1 byte + mime không tồn tại | (đã khoá) |
 
+**09/09/2026: `masterDB/` KHÔNG còn trên máy chủ dự án** (chủ dự án chốt xoá dữ liệu cũ; thư mục đã không tồn tại ở máy này khi soát), `masterdb-raw` và `listing-public` đều 0 file — `up-anh.mjs`/`up-masterdb.mjs` không còn nguồn để chạy. Rổ hàng từ đây là tin rao THẬT qua chat.
 Đường đẩy là **`scripts/up-masterdb.mjs`** (chạy trên máy local, `--dry` xem trước).
 Nó **KHÔNG nén** — ai định thêm `sharp` vào đó thì đọc lại: `up-anh.mjs` nén để
 phục vụ web, file này giữ nguyên byte để mai kia còn dựng lại được thứ khác từ

@@ -166,9 +166,9 @@ export default function Page() {
   if (role === "chan") {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <h1 className="text-2xl font-extrabold">Khu vực quản trị</h1>
+        <h1 className="text-2xl font-bold">Khu vực quản trị</h1>
         <p className="mt-2 text-mute">Cần đăng nhập bằng tài khoản quản trị.</p>
-        <Link href="/dang-nhap" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white">
+        <Link href="/dang-nhap" className="mt-5 inline-block rounded-md bg-brand px-6 py-2.5 font-bold text-white">
           Đăng nhập
         </Link>
       </div>
@@ -178,7 +178,7 @@ export default function Page() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="text-2xl font-extrabold">Đăng tin thủ công</h1>
+        <h1 className="text-2xl font-bold">Đăng tin thủ công</h1>
         <Link href="/admin" className="text-sm font-semibold text-mute hover:text-brand">
           ← Về trang duyệt tin
         </Link>
@@ -289,7 +289,7 @@ export default function Page() {
         <div className="flex flex-wrap items-center gap-4">
           <button
             onClick={guiDi} disabled={dangGui || thieu.length > 0}
-            className="rounded-full bg-brand px-7 py-2.5 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98] disabled:opacity-40"
+            className="rounded-md bg-brand px-7 py-2.5 font-bold text-white transition hover:bg-brand-dark disabled:opacity-40"
           >
             {dangGui ? "Đang lưu…" : "Lưu tin"}
           </button>

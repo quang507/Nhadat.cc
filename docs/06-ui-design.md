@@ -343,6 +343,29 @@ Khác AOND: tối đa 1 emoji/tin; bảy quy tắc trên là luật gốc khi ha
 | Khối riêng tư | *"Để lại số ĐT trên trang BĐS khác nghĩa là 40 cuộc gọi trong 3 ngày. Ở đây: không một cuộc nào."* |
 | Lời hứa với người bán | *"Bên em rao cho đến khi gặp người mua phù hợp nhất — anh/chị chỉ cần nhắn một lần."* |
 
+## 6.11 Khu quản trị theo chuẩn NN/g — cấm dấu hiệu AI trên web (09/09/2026)
+
+[nguồn: chủ dự án 09/09/2026 — "thiết kế giao diện lại cho chuẩn tiêu chuẩn của NN Group, các yếu tố làm web giống AI bỏ hết"]. Áp cho mọi trang `/admin/*`; trang công khai vốn đã sạch.
+
+**Mười heuristic của Nielsen Norman Group → luật cụ thể của mình:**
+
+| # | Heuristic | Luật trong CRM |
+|---|---|---|
+| 1 | Trạng thái hệ thống nhìn thấy | Mọi lượt lưu/xoá có thông báo kết quả (số dòng đã xoá); nút đang chạy đổi chữ ("Đang lưu…"); chuông trên thanh đếm việc chờ + lỗi bot |
+| 2 | Khớp thế giới thật | Chữ người dùng Việt, không đọc tên cột (`boc_tach` → "JSON bóc tách") |
+| 3 | Người dùng kiểm soát | Mọi form có Huỷ; xoá có hộp xác nhận nêu hậu quả và "không hoàn tác" |
+| 4 | Nhất quán | Một bộ nút (`components/ui.tsx`: primary/secondary/danger/ghost), một bộ icon SVG (`icons.tsx`), tab = URL |
+| 5 | Ngăn lỗi | Xoá khách/tin phải confirm; JSON prompt hỏng thì dùng bản mã, không câm |
+| 6 | Nhận ra hơn nhớ | Icon luôn kèm chữ trên màn rộng; breadcrumb; đường dẫn hiện tại sáng |
+| 7 | Linh hoạt | Ô tìm chung trên thanh; lọc bằng chip; phím tab đi được |
+| 8 | Tối giản | Không emoji, không pill tròn cho nút/ô nhập, không đổ bóng, không gradient, không nhấp nháy |
+| 9 | Lỗi có cách sửa | Hộp lỗi nói "Lỗi: …" kèm nút đóng; không toast biến mất tự động |
+| 10 | Trợ giúp | Tooltip (`title`) trên nút đặc biệt; trang mẫu câu có câu dẫn cách dùng |
+
+**Cấm dấu hiệu AI trên web** (song song với "Cấm dấu hiệu AI trong tin nhắn" §6.8): emoji làm icon; nút/ô nhập bo tròn hoàn toàn (`rounded-full`) trừ avatar và chấm trạng thái; `shadow-*` trên thẻ và nút (chỉ modal/menu nổi được `shadow-lg`); gradient; `animate-pulse`; chữ `font-extrabold` khắp nơi; nhãn kiểu "Admin Console", "✨"; mô tả sáo. Kiểm bằng `bun run truyvet`? — chưa; soát tay bằng lệnh đếm emoji trong `app/` + `components/` (0 là đạt, trừ `✓`/`✗` dạng chữ).
+
+**Nút bắt buộc có ở đúng chỗ (soát 09/09):** thanh trên: Đăng tin, chuông, tìm, đăng xuất có chữ · Tin nhắn: Làm mới, Đã xử lý (khi cần người thật), Xoá khách, Sửa thành câu chuẩn ở mỗi câu bot · Rổ hàng: Sửa, Xoá tin, Tải CSV, JSON, Đăng tin · Mẫu câu: Sửa, Xoá, Mở chat, Tải JSONL · Bàn làm việc: bốn thẻ KPI bấm được.
+
 ## 6.10 Accessibility
 
 - Tương phản chữ ≥ 4.5:1, chữ lớn ≥ 3:1; vùng chạm ≥ 44×44px (persona P3, 61 tuổi).

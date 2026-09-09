@@ -93,9 +93,9 @@ export default function Page() {
   if (role !== "admin") {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <h1 className="text-2xl font-extrabold text-navy">Khu vực quản trị</h1>
+        <h1 className="text-2xl font-bold text-navy">Khu vực quản trị</h1>
         <p className="mt-2 text-mute text-sm">{role === "anon" ? "Cần đăng nhập bằng tài khoản quản trị." : "Tài khoản này không có quyền quản trị."}</p>
-        {role === "anon" && <Link href="/dang-nhap" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white shadow-sm hover:bg-brand-dark transition">Đăng nhập</Link>}
+        {role === "anon" && <Link href="/dang-nhap" className="mt-5 inline-block rounded-md bg-brand px-6 py-2.5 font-bold text-white hover:bg-brand-dark transition">Đăng nhập</Link>}
       </div>
     );
   }
@@ -105,7 +105,7 @@ export default function Page() {
     <div className="mx-auto max-w-[1400px] px-4 pb-24 pt-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-navy">Kho mẫu câu chuẩn</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-navy">Kho mẫu câu chuẩn</h1>
           <p className="mt-1 text-sm text-mute">
             Sửa câu bot ở <Link href="/admin/tin-nhan" className="font-semibold text-brand hover:underline">Tin nhắn</Link>; ở đây xem lại, chỉnh, xoá và xuất. Bot bắt chước 12 mẫu mới nhất mỗi phía trong vòng 1 phút.
           </p>
@@ -119,16 +119,16 @@ export default function Page() {
         </div>
       </header>
 
-      {loi && <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 px-4 py-2.5 text-sm text-brand">⚠️ {loi}</div>}
+      {loi && <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 px-4 py-2.5 text-sm text-brand">{loi}</div>}
 
-      <div className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-white p-3 shadow-2xs">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Tìm trong câu khách, câu bot, câu chuẩn, ghi chú…" className={`${o} min-w-[260px] flex-1`} />
+      <div className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-white p-3">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm trong câu khách, câu bot, câu chuẩn, ghi chú…" className={`${o} min-w-[260px] flex-1`} />
         <select value={locPhia} onChange={(e) => setLocPhia(e.target.value as "" | "ban" | "mua")} className={o}><option value="">Cả hai phía</option><option value="ban">Bán</option><option value="mua">Mua</option></select>
         <select value={locDung} onChange={(e) => setLocDung(e.target.value as "" | Mau["dung_lam"])} className={o}><option value="">Mọi cách dùng</option>{(Object.keys(DUNG_LAM_VI) as Mau["dung_lam"][]).map((k) => <option key={k} value={k}>{DUNG_LAM_VI[k]}</option>)}</select>
-        <button type="button" onClick={taiJsonl} disabled={loc.length === 0} className="rounded-lg bg-brand px-4 py-1.5 text-sm font-bold text-white hover:bg-brand-dark disabled:opacity-60">📥 Tải JSONL ({loc.filter((m) => m.dung_lam !== "bo" && m.dung_lam !== "vi_du").length})</button>
+        <button type="button" onClick={taiJsonl} disabled={loc.length === 0} className="rounded-lg bg-brand px-4 py-1.5 text-sm font-bold text-white hover:bg-brand-dark disabled:opacity-60">Tải JSONL ({loc.filter((m) => m.dung_lam !== "bo" && m.dung_lam !== "vi_du").length})</button>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-white shadow-2xs">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-white">
         <table className="w-full text-sm">
           <thead className="bg-cream/60 text-[11px] uppercase tracking-wider text-mute">
             <tr><th className="px-3 py-2 text-left">Lúc</th><th className="px-3 py-2 text-left">Phía</th><th className="px-3 py-2 text-left">Khách nói</th><th className="px-3 py-2 text-left">Bot đã nói</th><th className="px-3 py-2 text-left">Câu chuẩn</th><th className="px-3 py-2 text-left">Dùng</th><th className="px-3 py-2 text-left">Người sửa</th><th className="px-3 py-2"></th></tr>
@@ -140,7 +140,7 @@ export default function Page() {
                 <td className="px-3 py-2"><span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${m.phia === "ban" ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}>{m.phia}</span></td>
                 <td className="max-w-[220px] px-3 py-2 text-xs text-navy">{khachNoi(m).slice(0, 140)}</td>
                 <td className="max-w-[260px] px-3 py-2 text-xs text-mute line-through decoration-mute/40">{m.cau_bot.slice(0, 160)}</td>
-                <td className="max-w-[320px] px-3 py-2 text-sm font-medium text-navy">{m.cau_chuan}{m.ghi_chu && <div className="mt-1 text-[11px] font-normal text-mute">📝 {m.ghi_chu}</div>}</td>
+                <td className="max-w-[320px] px-3 py-2 text-sm font-medium text-navy">{m.cau_chuan}{m.ghi_chu && <div className="mt-1 text-[11px] font-normal text-mute">{m.ghi_chu}</div>}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-mute">{DUNG_LAM_VI[m.dung_lam]}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-mute">{m.nguoi_sua?.split("@")[0] ?? "—"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs">
@@ -160,7 +160,7 @@ export default function Page() {
       {sua && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-navy/40 p-4" onClick={() => setSua(null)}>
           <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-extrabold text-navy">Sửa mẫu</h2>
+            <h2 className="text-lg font-bold text-navy">Sửa mẫu</h2>
             <div className="mt-2 rounded-xl bg-cream/60 p-3 text-xs text-navy"><b>Khách:</b> {khachNoi(sua) || "(không có)"}<br /><b>Bot đã nói:</b> {sua.cau_bot}</div>
             <textarea value={form.cau_chuan} onChange={(e) => setForm({ ...form, cau_chuan: e.target.value })} rows={4} className="mt-3 w-full rounded-xl border border-brand/40 px-3 py-2 text-sm outline-none focus:border-brand" />
             <div className="mt-2 flex flex-wrap gap-2">
