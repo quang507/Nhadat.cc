@@ -2006,7 +2006,37 @@ Deno.serve(async (req) => {
           : `Dạ em cảm ơn ${cachGoi} đã góp ý ạ, em sẽ cố gắng hơn.\nCó khách quan tâm là em báo ${cachGoi} liền.`;
         return await traLoiSeller([camOn], { saved_fact: "danh_gia", danh_gia: dapAn });
       }
-      if (kq.loai !== "khop") {
+      // 09/09 tối (chạy kịch bản lần 2): câu "địa chỉ cụ thể" treo MÃI — chủ nhà
+      // cứ trả lời thứ khác (đều ghi đúng ô), bot cứ hỏi lại địa chỉ mỗi lượt,
+      // không bao giờ tới bản nháp. Luật: câu hỏi bị NÉ 2 lần (2 fact khác đã
+      // ghi từ lúc mở câu) hoặc chủ "ok/được/đăng đi" mà tin đã đủ điểm → THÔI
+      // câu đó (expired), đi tiếp câu kế; vòng hỏi bù sẽ hỏi lại sau.
+      let boQuaCauTreo = false;
+      // "ok / được / đăng đi" khi đang treo một câu thông số → chủ muốn ĐĂNG.
+      const chuMuonDang = pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
+        pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh" &&
+        (laDongY(dapAn) || laDuRoi(dapAn) || /^\s*(dang|dang di|dang len|dang luon|len tin|ok dang|dang giup|dang nha)\b/.test(boDau(dapAn))) &&
+        boDau(dapAn).split(/\s+/).length <= 6;
+      if (chuMuonDang) {
+        const { error: neErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
+        if (neErr) await ghiLoi(client, "chat-reply bo qua cau treo(dang)", neErr.message);
+        boQuaCauTreo = true;
+      }
+      if (!boQuaCauTreo && kq.loai !== "khop" && pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
+          pendingReq.question !== "danh_gia" && (kq.chuyenSang || kq.loai === "ack")) {
+        const { count: daNe } = await client.from("listing_facts")
+          .select("id", { count: "exact", head: true })
+          .eq("listing_id", pendingReq.listing_id)
+          .neq("question", pendingReq.question)
+          .gt("created_at", pendingReq.created_at ?? new Date(0).toISOString());
+        const gat = kq.loai === "ack" && laDongY(dapAn);
+        if ((kq.chuyenSang && (daNe ?? 0) >= 2) || gat) {
+          const { error: neErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
+          if (neErr) await ghiLoi(client, "chat-reply bo qua cau treo", neErr.message);
+          boQuaCauTreo = true;
+        }
+      }
+      if (kq.loai !== "khop" && !boQuaCauTreo) {
         // "Ngang 5" khi đang hỏi diện tích: vẫn là dữ liệu thật — ghi đúng
         // fact (mặt tiền) chứ không vứt, còn câu diện tích thì giữ treo.
         if (kq.chuyenSang) {
@@ -2077,27 +2107,33 @@ Deno.serve(async (req) => {
         return await traLoiSeller([hoiLai], { reask: pendingReq.question, loai_cau: kq.loai });
       }
 
-      const { error: factErr } = await client.rpc("ghi_fact_listing", {
-        p_listing_id: pendingReq.listing_id,
-        p_question: pendingReq.question,
-        p_answer: dapAn,
-        p_source: "seller_chat",
-      });
-      if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
+      // Câu hỏi treo bị bỏ qua (né 2 lần / chủ gật): KHÔNG ghi câu này vào ô đang
+      // hỏi — chỉ ghi fact nhận ra được (nếu có), rồi đi tiếp như vừa trả lời xong.
+      if (!boQuaCauTreo) {
+        const { error: factErr } = await client.rpc("ghi_fact_listing", {
+          p_listing_id: pendingReq.listing_id,
+          p_question: pendingReq.question,
+          p_answer: dapAn,
+          p_source: "seller_chat",
+        });
+        if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
+      }
       // Câu khớp nhưng còn kèm fact khác ("3 lầu, 4 phòng ngủ" khi hỏi kết cấu;
       // "Đường 12m, hướng Bắc" khi hỏi đường) → ghi luôn, đỡ hỏi lại (09/09 tối).
       if (pendingReq.question !== "duyet_tin" && pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh") {
         for (const f of nhanDienNhieuFact(dapAn)) {
-          if (cungHoFact(f.question, pendingReq.question)) continue;
+          if (!boQuaCauTreo && cungHoFact(f.question, pendingReq.question)) continue;
           const { error: ndErr } = await client.rpc("ghi_fact_listing", {
             p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat",
           });
           if (ndErr) await ghiLoi(client, "chat-reply ghi_fact_listing(kem)", ndErr.message);
         }
       }
-      await client.from("info_requests").update({
-        status: "answered", answer: dapAn, answered_at: new Date().toISOString(),
-      }).eq("id", pendingReq.id);
+      if (!boQuaCauTreo) {
+        await client.from("info_requests").update({
+          status: "answered", answer: dapAn, answered_at: new Date().toISOString(),
+        }).eq("id", pendingReq.id);
+      }
 
       // FR-177 c: chủ nhà GẬT bản nháp → đóng dấu; trigger
       // `listings_quyet_dinh_dang_tin` (điểm ≥ 70 + dấu) đưa tin lên kệ.
@@ -2164,6 +2200,18 @@ Deno.serve(async (req) => {
           .eq("listing_id", pendingReq.listing_id).order("priority").limit(8),
       ]);
       const published = !!lstNow && lstNow.status !== "cho_thong_tin";
+      // Chủ nói "đăng đi / ok / được" giữa vòng hỏi (09/09 tối lần 2): đủ 70 điểm
+      // thì gửi BẢN NHÁP ngay (bỏ câu đang treo), dưới 70 thì nói rõ còn thiếu gì
+      // rồi hỏi tiếp — không ghi "đăng đi" thành câu trả lời, không hỏi lại câu cũ.
+      if (chuMuonDang && !published && lstNow?.can_chu_duyet && !lstNow.chu_duyet_at) {
+        const nhap = await guiBanNhap(pendingReq.listing_id, { saved_fact: null, chu_muon_dang: true });
+        if (!Array.isArray(nhap)) return nhap;
+        const thieuVan = nhap.slice(0, 2).join(" và ");
+        return await traLoiSeller(
+          [`Dạ em đăng liền cho ${cachGoi}, chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.`],
+          { chu_muon_dang: true, thieu: nhap },
+        );
+      }
       // Câu còn treo của căn này = mọi câu chờ đã nạp ở đầu nhánh, trừ câu vừa
       // được trả lời.
       const pendSet = new Set(

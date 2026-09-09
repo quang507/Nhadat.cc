@@ -63,7 +63,7 @@ export class FakeDB {
       // 20260909a: view thật không lọc status — tin dang_ban vẫn có câu còn thiếu
       // để cron hỏi bù. Mock lọc là mock nói dối đúng chỗ tính năng này đo.
       const have = new Set(this.t.listing_facts.filter((f) => f.listing_id === l.id).map((f) => f.question));
-      if (l.location_raw) have.add("vi_tri");
+      if (l.location_raw || l.street || l.project_id) have.add("vi_tri"); // 20260909m
       if (l.price_raw) have.add("gia"); if (l.area_m2) { have.add("dien_tich"); have.add("dien_tich_dat"); have.add("dien_tich_tim_tuong"); } if (l.ward) have.add("phuong");
       if (l.property_type && l.property_type !== "chua_ro") have.add("loai_bds"); if (l.bedrooms) have.add("so_phong_ngu");
       if (l.alley_width_m || l.access_type === "mat_tien") { have.add("do_rong_hem"); have.add("do_rong_duong"); } if (l.floors) have.add("ket_cau");
