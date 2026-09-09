@@ -41,6 +41,7 @@ flowchart LR
 | [09-open-issues.md](09-open-issues.md) | 55 vấn đề (35 đã chốt hoặc đã đóng — dọn 07/09, chốt thêm 09/09 theo chat Gemini OPEN-55 và OPEN-40; 20 cần chủ dự án chốt) | Founder, PO |
 | [10-ke-hoach-kiem-thu.md](10-ke-hoach-kiem-thu.md) | Kế hoạch kiểm thử 4 tầng (suite TS-*) | QA, Dev, PO |
 | [11-quy-trinh.md](11-quy-trinh.md) | **Quy trình BA và tester** — hai vòng làm việc, ba cổng, máy kiểm gì / người kiểm gì, định nghĩa XONG | Tất cả |
+| [13-so-do-nhan-va-boc-tach.md](13-so-do-nhan-va-boc-tach.md) | **Sơ đồ luồng bot** (09/09/2026) — tin Zalo vào → nhận vai → bóc tách tiền định → hỏi câu kế → prompt bot 4 lượt → JSON chia nhóm; hai tầng bóc tách ⟂ AI; cron người bán. Mermaid, không sinh ID | Dev, chủ dự án |
 
 ## Đọc từ đâu
 
