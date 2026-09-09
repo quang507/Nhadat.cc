@@ -55,4 +55,4 @@ nhiều biến thể; cột "Biến thể trong tài liệu gốc" để tra ng�
 ## Lưu ý về tên thương hiệu
 
 Tài liệu gốc dùng lẫn **nhadat.cc**, **nhadatCC**, **Nhã Đạt CC**, **nhaadaat.com**.
-Trong `docs/` thống nhất: tên miền web **https://nhadat-cc.vercel.app/**, thương hiệu/tên đọc **Aioinhadat** (OPEN-08 chốt 03/09/2026; "Nhã Đạt CC" chỉ còn trong trích dẫn tài liệu gốc 2024).
+Trong `docs/` thống nhất: tên miền web **https://aioinhadat.vercel.app/** (project Vercel đổi tên 09/09/2026, chủ dự án chốt; `nhadat-cc.vercel.app` cũ không còn), thương hiệu/tên đọc **Aioinhadat**, tên VIẾT cho khách và trên web **AI Ơi Nhà Đất** (mọi chữ "nhadat.cc" trong giao diện, prompt, tin bot đã đổi 09/09 — email `admin.buyerside@nhadat.cc` giữ nguyên vì là hộp thư thật) (OPEN-08 chốt 03/09/2026; "Nhã Đạt CC" chỉ còn trong trích dẫn tài liệu gốc 2024).

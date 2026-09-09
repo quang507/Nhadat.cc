@@ -26,7 +26,7 @@ export default function Page() {
       <h1 className="text-3xl font-extrabold">Tin anh chị đã lưu</h1>
       <p className="mt-2 text-mute">
         Lưu trên máy này, không cần tài khoản. Muốn giữ lâu dài qua nhiều thiết
-        bị thì nhắn Zalo — tụi em nhớ giùm.
+        bị thì nhắn Zalo - tụi em nhớ giùm.
       </p>
 
       {listings === null && (

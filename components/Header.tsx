@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { IconHeart } from "@/components/icons";
+import Logo from "@/components/Logo";
 import { zaloLink } from "@/lib/format";
 
 const NAV = [
@@ -21,10 +22,7 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
-        <Link href="/" className="flex items-baseline gap-0.5 text-2xl font-extrabold">
-          <span className="text-navy">nhadat</span>
-          <span className="text-brand">.cc</span>
-        </Link>
+        <Logo size={40} />
         <nav className="hidden items-center gap-5 text-sm font-medium lg:flex">
           {NAV.map((n) => (
             <Link key={n.href} href={n.href} className="transition hover:text-brand">
@@ -51,7 +49,7 @@ export default function Header() {
             </svg>
           </Link>
           {/* CTA chính của header dùng CAM thương hiệu (Veedoo để nút accent ở
-              đúng chỗ này). Xanh Zalo chỉ dành cho widget nổi — trước đây cả
+              đúng chỗ này). Xanh Zalo chỉ dành cho widget nổi - trước đây cả
               hai cùng xanh nên trang có ba nút Zalo tranh nhau. */}
           <a
             href={zaloLink("header")}

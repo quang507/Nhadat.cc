@@ -167,7 +167,7 @@ async function handleEvent(raw: string): Promise<void> {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "GET") return new Response("nhadat.cc zalo-webhook OK");
+  if (req.method === "GET") return new Response("AI Ơi Nhà Đất zalo-webhook OK");
   if (req.method !== "POST") return new Response("method", { status: 405 });
 
   const raw = await req.text();

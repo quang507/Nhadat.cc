@@ -28,7 +28,7 @@ export default function Error({ reset }: { error: Error; reset: () => void }) {
         </a>
       </div>
       <Link href="/" className="mt-6 inline-block text-sm font-semibold text-mute hover:text-brand">
-        ← Về trang chủ
+        Về trang chủ
       </Link>
     </div>
   );

@@ -33,8 +33,8 @@ const DT = [
 ];
 const XEP = [
   { key: "moi", label: "Mới nhất" },
-  { key: "gia-tang", label: "Giá thấp → cao" },
-  { key: "gia-giam", label: "Giá cao → thấp" },
+  { key: "gia-tang", label: "Giá thấp - cao" },
+  { key: "gia-giam", label: "Giá cao - thấp" },
   { key: "dt-lon", label: "Diện tích lớn" },
 ];
 const PN = [1, 2, 3, 4]; // "từ N phòng ngủ trở lên" (FR-128)
@@ -195,13 +195,13 @@ export default async function ListingBrowse({
 
   return (
     <>
-      {/* Dải tiêu đề navy + thẻ lọc trắng nổi đè lên chân dải — đúng chỗ thanh
+      {/* Dải tiêu đề navy + thẻ lọc trắng nổi đè lên chân dải - đúng chỗ thanh
           "Search Property" của Veedoo, nhưng là link thuần nên không cần JS. */}
       <div className="bg-navy pb-16 pt-10 text-white">
         <div className="mx-auto max-w-6xl px-4">
           <p className="eyebrow text-brand">Kho tin · Sài Gòn & Long An</p>
           <h1 className="mt-2 text-3xl font-extrabold md:text-4xl">
-            {title} {sp.phuong ? `— ${sp.phuong}` : sp.quan ? `— ${sachIlike(sp.quan)}` : "Sài Gòn & Long An"}
+            {title} {sp.phuong ? `- ${sp.phuong}` : sp.quan ? `- ${sachIlike(sp.quan)}` : "Sài Gòn & Long An"}
           </h1>
           {/* FR-08: "Tìm thấy N tin theo yêu cầu" + tiêu đề diễn giải lại truy vấn */}
           {dienGiai && !dienGiai.empty ? (
@@ -219,7 +219,7 @@ export default async function ListingBrowse({
       </div>
 
       <div className="mx-auto max-w-6xl px-4 pb-12">
-        {/* FR-13: hộp mời kết nối trên MỌI trang kết quả tìm kiếm — mang theo câu
+        {/* FR-13: hộp mời kết nối trên MỌI trang kết quả tìm kiếm - mang theo câu
             gốc sang Zalo (FR-14). Câu không bóc được gì thì hộp này là câu trả
             lời chính, không phải phụ. */}
         {q && (
@@ -229,11 +229,11 @@ export default async function ListingBrowse({
             <div className="flex-1">
               <p className="font-extrabold">
                 {dienGiai?.empty
-                  ? "Câu này tụi em chưa hiểu hết — nhắn Zalo, người thật trả lời liền."
+                  ? "Câu này tụi em chưa hiểu hết - nhắn Zalo, người thật trả lời liền."
                   : "Chưa đúng ý? Nhắn nguyên câu này qua Zalo, tụi em lọc tay cho anh chị."}
               </p>
               <p className="mt-1 text-sm text-mute">
-                “{q}” — không cần để lại số điện thoại, ngắt kết nối bất cứ lúc nào.
+                “{q}” - không cần để lại số điện thoại, ngắt kết nối bất cứ lúc nào.
               </p>
             </div>
             <a
@@ -269,7 +269,7 @@ export default async function ListingBrowse({
             </Link>
           ))}
         </div>
-        {/* FR-172: lọc trên cột thông số — trước đây "hẻm xe hơi" chỉ nằm trong mô tả */}
+        {/* FR-172: lọc trên cột thông số - trước đây "hẻm xe hơi" chỉ nằm trong mô tả */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Đường vào</span>
           {VAO.map((v) => (
@@ -313,7 +313,7 @@ export default async function ListingBrowse({
         <div className="mt-10 rounded-king bg-white p-10 text-center shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
           <p className="font-semibold">Chưa có tin nào khớp bộ lọc này.</p>
           <p className="mt-1 text-sm text-mute">
-            Nới bớt một tiêu chí, hoặc nhắn Zalo — có khi hàng chưa kịp lên web.
+            Nới bớt một tiêu chí, hoặc nhắn Zalo - có khi hàng chưa kịp lên web.
           </p>
           <a
             href={zaloLink(q ? `search:${q}` : `empty:${sp.phuong ?? deal}`)}
@@ -328,13 +328,13 @@ export default async function ListingBrowse({
         <div className="mt-8 flex items-center justify-center gap-2 text-sm">
           {page > 1 && (
             <Link href={withParam({ trang: String(page - 1) })} className="rounded-full border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
-              ← Trước
+              Trước
             </Link>
           )}
           <span className="px-3 text-mute tabular-nums">Trang {page}/{totalPages}</span>
           {page < totalPages && (
             <Link href={withParam({ trang: String(page + 1) })} className="rounded-full border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
-              Sau →
+              Sau -
             </Link>
           )}
         </div>

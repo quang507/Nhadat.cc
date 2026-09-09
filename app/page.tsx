@@ -36,7 +36,7 @@ const LOI_HUA: Array<{ Icon: (p: { className?: string }) => React.ReactElement; 
   {
     Icon: IconAsk,
     t: "Thiếu gì thì đi hỏi giùm",
-    d: "Chưa rõ pháp lý, hẻm rộng bao nhiêu — tụi em hỏi chủ nhà rồi báo lại anh chị.",
+    d: "Chưa rõ pháp lý, hẻm rộng bao nhiêu - tụi em hỏi chủ nhà rồi báo lại anh chị.",
     chat: [
       { ai: "khach", noi: "Căn #35148 hẻm mấy mét, xe hơi vô được không?" },
       { ai: "em", noi: "Tin chưa ghi, em hỏi chủ nhà rồi báo chị trong hôm nay nha." },
@@ -92,7 +92,7 @@ export default async function Home() {
 
   return (
     <>
-      {/* HERO — hai cột. Ảnh minh hoạ trong kho chỉ 450×600 (DỌC); bản cũ trải
+      {/* HERO - hai cột. Ảnh minh hoạ trong kho chỉ 450×600 (DỌC); bản cũ trải
           nó full-bleed ngang 1900px, phóng hơn 4 lần nên nhoè nhoẹt rồi phải
           dìm opacity-25 thành mảng xám. Đặt vào panel dọc bên phải là ảnh chạy
           gần đúng cỡ thật, sắc nét, mà bố cục lại thoáng hơn. */}
@@ -144,7 +144,7 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* FR-02 (dựng 04/09/2026): ô search DẠNG CHAT nổi đè chân hero — vị trí
+        {/* FR-02 (dựng 04/09/2026): ô search DẠNG CHAT nổi đè chân hero - vị trí
             thanh search của Veedoo. Form GET thuần tới /api/search?go=1: route
             handler bóc câu bằng luật rồi 302 sang trang tag khớp hoặc
             /mua-ban?… (FR-08/09). Không cần JS; không có JS vẫn tìm được. */}
@@ -182,8 +182,8 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* LỜI HỨA — FR-01 (dựng 04/09/2026): mỗi mục MỘT lợi ích + minh hoạ hội
-          thoại ngắn kiểu whatsapp.com — ba bong bóng CSS thuần, không ảnh. */}
+      {/* LỜI HỨA - FR-01 (dựng 04/09/2026): mỗi mục MỘT lợi ích + minh hoạ hội
+          thoại ngắn kiểu whatsapp.com - ba bong bóng CSS thuần, không ảnh. */}
       <section className="mx-auto grid max-w-6xl gap-4 px-4 pb-4 pt-24 md:grid-cols-3">
         {LOI_HUA.map(({ Icon, t, d, chat }) => (
           <div key={t} className="flex flex-col rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
@@ -197,8 +197,8 @@ export default async function Home() {
         ))}
       </section>
 
-      {/* FR-03 (dựng 04/09/2026): "Hỏi bất kỳ, có tức thì" — vòng B hỏi → tụi em
-          hỏi người bán → báo lại B. Ba bước nối bằng mũi tên, không JS. */}
+      {/* FR-03 (dựng 04/09/2026): "Hỏi bất kỳ, có tức thì" - vòng B hỏi - tụi em
+          hỏi người bán - báo lại B. Ba bước nối bằng mũi tên, không JS. */}
       <section className="mx-auto max-w-6xl px-4 pt-6">
         <div className="rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)] md:p-8">
           <p className="eyebrow text-brand">Hỏi bất kỳ, có tức thì</p>
@@ -214,18 +214,18 @@ export default async function Home() {
                   <p className="mt-1 text-xs text-mute">{b.chu}</p>
                 </div>
                 {i < VONG_HOI.length - 1 && (
-                  <span aria-hidden className="hidden self-center text-2xl text-brand md:block">→</span>
+                  <span aria-hidden className="hidden self-center text-2xl text-brand md:block">-</span>
                 )}
               </li>
             ))}
           </ol>
           <p className="mt-4 text-xs text-mute">
-            Điều chưa xác minh tụi em nói là chưa xác minh — không đoán thay chủ nhà.
+            Điều chưa xác minh tụi em nói là chưa xác minh - không đoán thay chủ nhà.
           </p>
         </div>
       </section>
 
-      {/* FR-04 (dựng 04/09/2026): cam kết riêng tư đủ BA vế — không hỏi số ĐT,
+      {/* FR-04 (dựng 04/09/2026): cam kết riêng tư đủ BA vế - không hỏi số ĐT,
           chỉ liên hệ qua Zalo, ngắt kết nối bất cứ lúc nào (NFR-07). */}
       <section className="mx-auto max-w-6xl px-4 pt-4">
         <div className="grid gap-5 rounded-king bg-navy p-6 text-white md:grid-cols-[1.1fr_.9fr] md:p-8">
@@ -236,9 +236,9 @@ export default async function Home() {
             </h2>
             <ul className="mt-5 space-y-2.5 text-white/85">
               {[
-                "Không cần tiết lộ số điện thoại — chỉ khi hẹn xem nhà mới cần, và có đường từ chối.",
+                "Không cần tiết lộ số điện thoại - chỉ khi hẹn xem nhà mới cần, và có đường từ chối.",
                 "Chỉ liên hệ bằng Zalo, đúng kênh anh chị đã chọn. Không gọi, không SMS.",
-                "Ngắt kết nối bất cứ lúc nào: chặn OA hoặc nhắn “dừng” là tụi em im — không hỏi lý do.",
+                "Ngắt kết nối bất cứ lúc nào: chặn OA hoặc nhắn “dừng” là tụi em im - không hỏi lý do.",
               ].map((x) => (
                 <li key={x} className="flex gap-2.5 leading-6">
                   <span className="mt-0.5 shrink-0 text-brand">✓</span>
@@ -252,7 +252,7 @@ export default async function Home() {
               toi
               chat={[
                 { ai: "khach", noi: "Cho anh số của em để anh gọi cho tiện?" },
-                { ai: "em", noi: "Dạ mình nhắn ở đây là đủ anh — tụi em không xin số, cũng không gọi." },
+                { ai: "em", noi: "Dạ mình nhắn ở đây là đủ anh - tụi em không xin số, cũng không gọi." },
                 { ai: "khach", noi: "Vậy lúc nào không cần nữa thì sao?" },
                 { ai: "em", noi: "Anh nhắn “dừng” là em im liền, khỏi giải thích ạ." },
               ]}
@@ -266,7 +266,7 @@ export default async function Home() {
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
             <p className="eyebrow text-brand">Kho tin</p>
-            <h2 className="mt-1.5 text-2xl font-extrabold md:text-3xl">Nhà đất đang bán — khởi điểm khu Quận 5 cũ</h2>
+            <h2 className="mt-1.5 text-2xl font-extrabold md:text-3xl">Nhà đất đang bán - khởi điểm khu Quận 5 cũ</h2>
           </div>
           <Link
             href="/mua-ban"
@@ -275,7 +275,7 @@ export default async function Home() {
             Xem tất cả
           </Link>
         </div>
-        {/* Lưới đều 4 cột — bản cũ cho căn đầu chiếm 2×2 giữa lưới 4 cột với 9
+        {/* Lưới đều 4 cột - bản cũ cho căn đầu chiếm 2×2 giữa lưới 4 cột với 9
             tin, đội hình vỡ và luôn hụt một ô. Đều thì gọn. */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {ban.map((l) => (
@@ -307,7 +307,7 @@ export default async function Home() {
         </section>
       )}
 
-      {/* CÔNG CỤ + PHƯỜNG — gộp một hàng cho đỡ rời rạc */}
+      {/* CÔNG CỤ + PHƯỜNG - gộp một hàng cho đỡ rời rạc */}
       <section className="mx-auto grid max-w-6xl gap-4 px-4 pb-10 lg:grid-cols-2">
         <div className="grid gap-4 sm:grid-cols-2">
           {[
@@ -344,7 +344,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* CTA RAO BÁN — navy như khối thông số Veedoo, không dùng ảnh kéo giãn */}
+      {/* CTA RAO BÁN - navy như khối thông số Veedoo, không dùng ảnh kéo giãn */}
       <section className="mx-auto max-w-6xl px-4 pb-14">
         <div className="relative overflow-hidden rounded-king bg-navy px-6 py-12 text-white md:px-12">
           <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-brand/25 blur-3xl" />
@@ -355,14 +355,14 @@ export default async function Home() {
             </h2>
             <p className="mt-3 leading-7 text-white/75">
               “Bán nhà HXH xe tải quay đầu, gần ngã tư Trần Bình Trọng, 9 tỉ bớt
-              lộc” — nhắn vậy là đủ. Tụi em viết lại tin, trả lời khách, chỉ liên
+              lộc” - nhắn vậy là đủ. Tụi em viết lại tin, trả lời khách, chỉ liên
               hệ anh chị khi thật sự cần.
             </p>
             <Link
               href="/raoban"
               className="mt-7 inline-block rounded-full bg-brand px-7 py-3.5 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
             >
-              Rao bán ngay — miễn phí
+              Rao bán ngay - miễn phí
             </Link>
           </div>
         </div>

@@ -128,8 +128,8 @@ export default function UploadAnh({
       </label>
       {!gon && (
         <p className="mt-2 text-xs text-mute">
-          Tự nén còn ≤1600px trước khi gửi. Tối đa 20 tấm mỗi đợt. Ảnh bìa là tấm đầu — DB tự chọn.
-          Sổ đỏ / giấy tờ KHÔNG up ở đây (bucket công khai) — gửi qua Zalo cho admin.
+          Tự nén còn ≤1600px trước khi gửi. Tối đa 20 tấm mỗi đợt. Ảnh bìa là tấm đầu - DB tự chọn.
+          Sổ đỏ / giấy tờ KHÔNG up ở đây (bucket công khai) - gửi qua Zalo cho admin.
         </p>
       )}
       {hang.length > 0 && (
@@ -137,7 +137,7 @@ export default function UploadAnh({
           {hang.map((x, i) => (
             <li key={i} className={x.tt === "loi" ? "text-brand" : x.tt === "xong" ? "text-mute" : "text-navy"}>
               {x.tt === "xong" ? "✓" : x.tt === "loi" ? "✗" : x.tt === "dang" ? "…" : "·"} {x.ten}
-              {x.loi ? ` — ${x.loi}` : ""}
+              {x.loi ? ` - ${x.loi}` : ""}
             </li>
           ))}
           {!dangUp && (

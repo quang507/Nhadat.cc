@@ -6,13 +6,13 @@ import { useSearchParams } from "next/navigation";
 import { zaloLink } from "@/lib/format";
 
 const VND = new Intl.NumberFormat("vi-VN");
-const money = (v: number) => (Number.isFinite(v) ? VND.format(Math.round(v)) + " ₫" : "—");
+const money = (v: number) => (Number.isFinite(v) ? VND.format(Math.round(v)) + " ₫" : "-");
 
 const TIPS: [string, string][] = [
   ["Tỷ lệ vay an toàn", "Ngân hàng thường cho vay tối đa 70–80% giá trị nhà; khoản trả hàng tháng không nên vượt 40% thu nhập."],
-  ["Lãi suất ưu đãi", "Nhiều ngân hàng ưu đãi 1–2 năm đầu rồi thả nổi — tính theo lãi thả nổi để không bị động."],
+  ["Lãi suất ưu đãi", "Nhiều ngân hàng ưu đãi 1–2 năm đầu rồi thả nổi - tính theo lãi thả nổi để không bị động."],
   ["Trả trước hạn", "Hỏi rõ phí trả nợ trước hạn, thường 1–3% số tiền trả trước trong các năm đầu."],
-  ["So sánh nhiều ngân hàng", "Chênh 0.5%/năm trên khoản vay 2 tỷ trong 20 năm là hàng trăm triệu — so ít nhất 3 ngân hàng."],
+  ["So sánh nhiều ngân hàng", "Chênh 0.5%/năm trên khoản vay 2 tỷ trong 20 năm là hàng trăm triệu - so ít nhất 3 ngân hàng."],
 ];
 
 function clampNum(v: string | null, fallback: number, min: number, max: number) {
@@ -63,7 +63,7 @@ function Calc() {
       <h1 className="text-3xl font-extrabold [text-wrap:balance]">Tính lãi vay mua nhà</h1>
       <p className="mt-2 max-w-xl text-mute">
         Xem trước mỗi tháng trả bao nhiêu rồi hãy quyết. Kết quả tính theo kiểu
-        trả góp đều mà ngân hàng Việt Nam hay dùng — chỉ để tham khảo.
+        trả góp đều mà ngân hàng Việt Nam hay dùng - chỉ để tham khảo.
       </p>
 
       <div className="mt-8 grid items-start gap-5 lg:grid-cols-[360px_1fr]">
@@ -129,7 +129,7 @@ function Calc() {
             href={zaloLink(`laivay:${price}`)}
             className="block rounded-full bg-zalo py-3 text-center font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
           >
-            Nhắn Zalo — tụi em tìm căn vừa túi tiền này
+            Nhắn Zalo - tụi em tìm căn vừa túi tiền này
           </a>
         </div>
       </div>

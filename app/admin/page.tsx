@@ -580,7 +580,7 @@ function BanLamViec() {
   };
   const chepLink = async (path: string) => {
     try { await navigator.clipboard.writeText(`${location.origin}${path}`); setDaChep(true); }
-    catch { setDsKq((k) => (k ? { ...k, text: `${k.text} — không chép được, bôi đen link mà copy` } : k)); }
+    catch { setDsKq((k) => (k ? { ...k, text: `${k.text} - không chép được, bôi đen link mà copy` } : k)); }
   };
 
   const xemGiayTo = async (g: GiayTo) => {
@@ -659,7 +659,7 @@ function BanLamViec() {
             <span className="rounded bg-brand/10 text-brand px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider">
               Quản trị
             </span>
-            <span className="text-xs text-mute font-medium">nhadat.cc</span>
+            <span className="text-xs text-mute font-medium">AI Ơi Nhà Đất</span>
           </div>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">Bàn làm việc Quản trị</h1>
           <p className="mt-1 text-sm text-mute tabular-nums">
@@ -738,13 +738,13 @@ function BanLamViec() {
         >
           <div className="text-xs font-semibold text-mute flex items-center justify-between">
             <span>Rổ hàng BĐS</span>
-            <span className="text-[10px] text-brand font-semibold group-hover:underline">Xem bảng ↗</span>
+            <span className="text-[10px] text-brand font-semibold group-hover:underline">Xem bảng</span>
           </div>
           <div className="mt-2 text-3xl font-bold tracking-tight text-navy">
-            {counts?.active ?? "—"}
+            {counts?.active ?? "-"}
           </div>
           <div className="mt-1 text-xs text-mute truncate">
-            đang rao · {counts?.cho ?? 0} chờ duyệt · {counts?.tong ?? "—"} tổng
+            đang rao · {counts?.cho ?? 0} chờ duyệt · {counts?.tong ?? "-"} tổng
           </div>
         </Link>
 
@@ -771,7 +771,7 @@ function BanLamViec() {
         </button>
       </div>
 
-      {/* Thanh chuyển phân hệ nằm trên khung CRM (AdminShell) — 09/09/2026 */}
+      {/* Thanh chuyển phân hệ nằm trên khung CRM (AdminShell) - 09/09/2026 */}
 
       {/* ═══════════════════════════════════════════════════════════════
           TAB 1: CRM KHÁCH HÀNG & HAI VAI
@@ -1202,11 +1202,11 @@ function BanLamViec() {
                   {pending.length}
                 </span>
               </div>
-              <span className="text-xs text-mute">bot bóc từ câu rao — duyệt thì mới lên kệ công khai</span>
+              <span className="text-xs text-mute">bot bóc từ câu rao - duyệt thì mới lên kệ công khai</span>
             </div>
 
             {pending.length === 0 ? (
-              <Rong>Không còn tin nào chờ duyệt — rổ sạch.</Rong>
+              <Rong>Không còn tin nào chờ duyệt - rổ sạch.</Rong>
             ) : (
               <>
                 <div className="mt-4 space-y-3">
@@ -1233,7 +1233,7 @@ function BanLamViec() {
                           onClick={() => setStatus(l.id, "dang_ban")}
                           className="rounded-md bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark"
                         >
-                          Duyệt — cho rao
+                          Duyệt - cho rao
                         </button>
                         <button
                           onClick={() => setStatus(l.id, "an")}
@@ -1285,7 +1285,7 @@ function BanLamViec() {
             </div>
 
             {khachCan.length === 0 ? (
-              <Rong>Không có hội thoại nào cần người thật — bot đang tự lo tốt.</Rong>
+              <Rong>Không có hội thoại nào cần người thật - bot đang tự lo tốt.</Rong>
             ) : (
               <>
                 <ul className="mt-3 divide-y divide-line text-sm">
@@ -1347,7 +1347,7 @@ function BanLamViec() {
                   {cauHoi.slice(0, 10).map((c) => (
                     <li key={c.id} className="py-2.5 space-y-1">
                       <div className="flex items-baseline justify-between gap-1">
-                        <span className="font-bold text-brand">#{c.listings?.code ?? "—"}</span>
+                        <span className="font-bold text-brand">#{c.listings?.code ?? "-"}</span>
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                           c.status === "pending" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-mute"
                         }`}>
@@ -1380,7 +1380,7 @@ function BanLamViec() {
                   {lichXem.slice(0, 10).map((v) => (
                     <li key={v.id} className="py-2.5 space-y-1">
                       <div className="flex items-baseline justify-between gap-1">
-                        <span className="font-bold text-brand">#{v.listings?.code ?? v.listing_code ?? "—"}</span>
+                        <span className="font-bold text-brand">#{v.listings?.code ?? v.listing_code ?? "-"}</span>
                         <span className="font-semibold text-navy">{v.buyers?.name ?? "Khách chưa tên"}</span>
                       </div>
                       <div className="text-mute flex items-center justify-between">
@@ -1712,7 +1712,7 @@ function BanLamViec() {
                 {giayTo.map((g) => (
                   <li key={g.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
                     <div className="flex items-center gap-3">
-                      <span className="font-bold text-navy">#{g.listings?.code ?? "—"}</span>
+                      <span className="font-bold text-navy">#{g.listings?.code ?? "-"}</span>
                       <span className="text-mute text-xs">
                         {g.media_type === "so_do" ? "sổ đỏ / sổ hồng" : g.media_type} · {g.mime_type}
                       </span>
@@ -1721,7 +1721,7 @@ function BanLamViec() {
                       onClick={() => xemGiayTo(g)}
                       className="rounded-md border border-line px-4 py-1 text-xs font-bold text-navy hover:border-brand hover:text-brand bg-white"
                     >
-                      Xem giấy tờ ↗
+                      Xem giấy tờ
                     </button>
                   </li>
                 ))}
@@ -1790,12 +1790,12 @@ function PhanTrang({ trang, soTrang, tong, setTrang }: {
     <div className="mt-4 flex items-center justify-end gap-3 text-xs text-mute">
       <button onClick={() => setTrang(trang - 1)} disabled={trang <= 1}
         className="rounded-md border border-line px-3.5 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute bg-white">
-        ← Trước
+        Trước
       </button>
       <span className="tabular-nums font-medium">trang {trang}/{soTrang} · {tong} mục</span>
       <button onClick={() => setTrang(trang + 1)} disabled={trang >= soTrang}
         className="rounded-md border border-line px-3.5 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute bg-white">
-        Sau →
+        Sau -
       </button>
     </div>
   );
@@ -1814,12 +1814,12 @@ function TheTien({ rows }: { rows: Tien[] }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2">
         <h3 className="font-bold text-navy">Chi phí Model & Tiền bộ não (7 ngày)</h3>
         <span className="text-xs text-mute tabular-nums">
-          {daDo ? `$${tong.toFixed(2)} · ${tongLuot} lượt · trung bình $${tongLuot ? (tong / tongLuot).toFixed(3) : "—"}/lượt` : "chưa đo"}
+          {daDo ? `$${tong.toFixed(2)} · ${tongLuot} lượt · trung bình $${tongLuot ? (tong / tongLuot).toFixed(3) : "-"}/lượt` : "chưa đo"}
         </span>
       </div>
       {daDo && tyLeDoc !== null && (
         <p className={`text-xs font-bold ${tyLeDoc >= 0.5 ? "text-emerald-700" : "text-brand"}`}>
-          Tỷ lệ đọc lại cache: {Math.round(tyLeDoc * 100)}% {tyLeDoc >= 0.5 ? "— bộ nhớ tạm đang hoạt động tốt" : "— cần theo dõi"}
+          Tỷ lệ đọc lại cache: {Math.round(tyLeDoc * 100)}% {tyLeDoc >= 0.5 ? "- bộ nhớ tạm đang hoạt động tốt" : "- cần theo dõi"}
         </p>
       )}
       <ul className="divide-y divide-line text-xs">
@@ -1830,7 +1830,7 @@ function TheTien({ rows }: { rows: Tien[] }) {
             </span>
             <span className="tabular-nums w-16">{t.model_calls} lượt</span>
             <span className="tabular-nums font-bold text-navy w-20">
-              {t.in_tokens + t.out_tokens + t.cache_write_tokens + t.cache_read_tokens > 0 ? `$${tienNgay(t).toFixed(3)}` : "—"}
+              {t.in_tokens + t.out_tokens + t.cache_write_tokens + t.cache_read_tokens > 0 ? `$${tienNgay(t).toFixed(3)}` : "-"}
             </span>
             <span className="text-mute tabular-nums text-[11px] min-w-0 flex-1 truncate">
               vào {t.in_tokens.toLocaleString("vi-VN")} · ra {t.out_tokens.toLocaleString("vi-VN")} · nạp {t.cache_write_tokens.toLocaleString("vi-VN")} · đọc {t.cache_read_tokens.toLocaleString("vi-VN")}

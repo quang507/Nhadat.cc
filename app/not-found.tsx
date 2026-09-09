@@ -8,7 +8,7 @@ export default function NotFound() {
       <h1 className="mt-3 text-2xl font-extrabold">Trang này không có, nhưng nhà thì có</h1>
       <p className="mt-2 text-mute">
         Có thể tin đã bán xong hoặc đường dẫn gõ nhầm. Căn anh chị đang tìm chưa
-        chắc đã mất — nhắn tụi em kiểm tra giùm cho.
+        chắc đã mất - nhắn tụi em kiểm tra giùm cho.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <Link

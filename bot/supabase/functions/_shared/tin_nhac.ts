@@ -21,16 +21,16 @@ export function escalationText(
   // Ghi chú thường kết bằng dấu chấm rồi khuôn nối thêm ". " → "…/admin.."
   const note = String(r.note ?? "").trim().replace(/\s*\.+\s*$/, "");
   // FR-177 f (09/09/2026): "💬 " = câu hỏi bù ask-seller đã soạn sẵn cho chủ nhà
-  // (đường bridge, khi không có OA). Gửi NGUYÊN VĂN, không bọc "em bên nhadat.cc".
+  // (đường bridge, khi không có OA). Gửi NGUYÊN VĂN, không bọc "em bên AI Ơi Nhà Đất".
   if (note.startsWith("💬")) return note.replace(/^💬\s*/, "");
   if (r.seller_id) {
-    return `Chào anh/chị, em bên nhadat.cc ạ. ${note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`;
+    return `Chào anh/chị, em bên AI Ơi Nhà Đất ạ. ${note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`;
   }
   // Tin NỘI BỘ đã tự mang dấu hiệu ở đầu (🩺 sức khoẻ, 🆕 hồ sơ mới, ❓ khách
-  // hỏi, ✏️ xin đổi nhãn): gửi nguyên. Dán thêm "🔔 nhadat.cc:" thì admin đọc
-  // ra "nhadat.cc: 🩺 nhadat.cc: 4 lỗi…", và đuôi "trả lời khách sớm nha" là
+  // hỏi, ✏️ xin đổi nhãn): gửi nguyên. Dán thêm "🔔 AI Ơi Nhà Đất:" thì admin đọc
+  // ra "AI Ơi Nhà Đất: 🩺 AI Ơi Nhà Đất: 4 lỗi…", và đuôi "trả lời khách sớm nha" là
   // vô nghĩa với một tin báo hệ thống — chẳng có khách nào để trả lời.
   // (Bắt 08/09/2026 từ ảnh Zalo admin của chủ dự án.)
   if (/^[^\p{L}\p{N}]/u.test(note)) return note;
-  return `🔔 nhadat.cc: ${note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
+  return `🔔 AI Ơi Nhà Đất: ${note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
 }

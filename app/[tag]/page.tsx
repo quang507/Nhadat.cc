@@ -57,7 +57,7 @@ function moTa(t: TagDef, rows: CardRow[], total: number): string {
     : "";
   const dtTxt = dt.length ? `, diện tích ${Math.round(Math.min(...dt))}–${Math.round(Math.max(...dt))} m²` : "";
   const dau = total
-    ? `${kw}: đang có ${total} tin rao trên nhadat.cc, cập nhật từ chủ nhà và môi giới trong khu. ${khoang}${dtTxt}.`
+    ? `${kw}: đang có ${total} tin rao trên AI Ơi Nhà Đất, cập nhật từ chủ nhà và môi giới trong khu. ${khoang}${dtTxt}.`
     : `${kw}: hiện chưa có tin nào đang lên kệ đúng tiêu chí này, nhưng kho tin đổi mỗi ngày.`;
   return (
     `${dau} Mỗi tin ghi rõ đường vào (mặt tiền, hẻm xe hơi hay hẻm xe máy), kết cấu, pháp lý và số phòng theo lời chủ nhà xác nhận, không đoán. ` +
@@ -70,8 +70,8 @@ export async function generateMetadata({ params }: { params: Promise<{ tag: stri
   const { tag } = await params;
   const t = tagBySlug(tag);
   if (!t) return { title: "Không tìm thấy" };
-  const title = `${t.keyword} — giá mới nhất, hỏi qua Zalo`;
-  const description = `${t.keyword} trên nhadat.cc: tin từ chủ nhà và môi giới, ghi rõ đường vào, pháp lý, kết cấu. Hỏi chi tiết từng căn qua Zalo, không cần để lại số điện thoại.`;
+  const title = `${t.keyword} - giá mới nhất, hỏi qua Zalo`;
+  const description = `${t.keyword} trên AI Ơi Nhà Đất: tin từ chủ nhà và môi giới, ghi rõ đường vào, pháp lý, kết cấu. Hỏi chi tiết từng căn qua Zalo, không cần để lại số điện thoại.`;
   return {
     title,
     description,
@@ -135,7 +135,7 @@ export default async function Page({ params }: { params: Promise<{ tag: string }
         {total > rows.length && (
           <p className="mt-6 text-center">
             <Link href={t.filter.ward ? `${goc}?phuong=${encodeURIComponent(t.filter.ward)}` : goc} className="font-semibold text-brand hover:underline">
-              Xem cả {total} tin trong kho →
+              Xem cả {total} tin trong kho -
             </Link>
           </p>
         )}

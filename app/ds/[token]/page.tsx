@@ -63,11 +63,11 @@ export default async function Page({ params }: { params: Promise<{ token: string
       </div>
 
       <div className="mx-auto max-w-6xl px-4 pb-12">
-        {/* WF-11: hộp mời chat ĐẦU trang — mỗi thẻ có mã #ID để hỏi lại (IA-P3) */}
+        {/* WF-11: hộp mời chat ĐẦU trang - mỗi thẻ có mã #ID để hỏi lại (IA-P3) */}
         <div className="-mt-10 flex flex-col gap-3 rounded-king bg-white p-5 shadow-[0_18px_40px_rgba(13,37,61,0.14)] sm:flex-row sm:items-center">
           <div className="flex-1">
             <p className="font-extrabold">Ưng căn nào, nhắn mã căn đó qua Zalo là tụi em gửi thêm hình và hẹn xem.</p>
-            <p className="mt-1 text-sm text-mute">Không ưng căn nào cũng nói giùm tụi em một câu — để lọc đợt sau sát hơn.</p>
+            <p className="mt-1 text-sm text-mute">Không ưng căn nào cũng nói giùm tụi em một câu - để lọc đợt sau sát hơn.</p>
           </div>
           <a href={zaloLink(`ds:${token.slice(0, 8)}`)}
             className="shrink-0 rounded-full bg-brand px-6 py-3 text-center font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">

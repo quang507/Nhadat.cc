@@ -75,7 +75,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const p = await getProject(decodeURIComponent(slug));
   if (!p) return { title: "Không tìm thấy dự án" };
-  const title = `Dự án ${p.name}${p.district ? ` — ${p.district}` : ""}`;
+  const title = `Dự án ${p.name}${p.district ? ` - ${p.district}` : ""}`;
   const description = (p.description ? sanitizeDescription(p.description) : `${p.name}${p.developer ? ` của ${p.developer}` : ""}, ${viTri(p)}.`).slice(0, 155);
   const url = `/du-an/${encodeURIComponent(p.slug)}`;
   const img = anhDuAn(p.images)[0] ?? placeholderImg(p.slug);
@@ -134,7 +134,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
             <span>Dự án</span>
           </nav>
           <p className="eyebrow mt-3 text-brand">
-            Dự án{p.is_partner ? " · nhadat.cc phân phối" : ""}{p.status_text ? ` · ${p.status_text}` : ""}
+            Dự án{p.is_partner ? " · AI Ơi Nhà Đất phân phối" : ""}{p.status_text ? ` · ${p.status_text}` : ""}
           </p>
           <h1 className="mt-1.5 text-3xl font-extrabold [text-wrap:balance] md:text-4xl">{p.name}</h1>
           <p className="mt-2 text-white/70">
@@ -157,7 +157,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={placeholderImg(p.slug)} alt={p.name} className="aspect-[21/9] w-full object-cover" />
             <span className="absolute bottom-3 right-4 rounded-full bg-navy/80 px-3 py-1.5 text-xs font-semibold text-white">
-              Ảnh minh hoạ — hình dự án gửi qua Zalo
+              Ảnh minh hoạ - hình dự án gửi qua Zalo
             </span>
           </div>
         )}
@@ -233,7 +233,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
           <aside className="h-fit rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)] lg:sticky lg:top-20">
             <p className="text-lg font-extrabold">Hỏi về {p.name}</p>
             <p className="mt-2 text-sm leading-6 text-mute">
-              Còn căn nào? Pháp lý từng lô? Tiến độ? — tầng dự án tụi em trả lời ngay, tầng căn thì hỏi chủ đầu tư giùm.
+              Còn căn nào? Pháp lý từng lô? Tiến độ? - tầng dự án tụi em trả lời ngay, tầng căn thì hỏi chủ đầu tư giùm.
             </p>
             <a href={zaloLink(`du-an:${p.slug}`)}
               className="mt-5 block rounded-full bg-brand py-3.5 text-center font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">
@@ -262,7 +262,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
             </div>
           ) : (
             <div className="rounded-king border border-line bg-cream p-8 text-center">
-              <p className="font-bold">Giỏ hàng cập nhật qua Zalo — nhắn tụi em gửi bảng căn còn bán.</p>
+              <p className="font-bold">Giỏ hàng cập nhật qua Zalo - nhắn tụi em gửi bảng căn còn bán.</p>
               <a href={zaloLink(`du-an:${p.slug}:gio`)} className="mt-4 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white">
                 Xin bảng giỏ hàng
               </a>

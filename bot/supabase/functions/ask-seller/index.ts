@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   if (lErr || !listing) return jsonResponse({ error: "listing không tồn tại" }, 404);
   if (!listing.property_type) {
     return jsonResponse({
-      error: "listing chưa có property_type — chưa xác định được checklist required_facts",
+      error: "listing chưa có property_type - chưa xác định được checklist required_facts",
     }, 422);
   }
 
@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
   if (drip && pendingKeys.size > 0) {
     return jsonResponse({
       message: null, asked: [], skipped_pending: [...pendingKeys],
-      note: "drip: đang có câu chờ trả lời — không hỏi chồng",
+      note: "drip: đang có câu chờ trả lời - không hỏi chồng",
     });
   }
 
@@ -136,10 +136,10 @@ Deno.serve(async (req) => {
       role: "user",
       content:
         `${instruction}\n` +
-        `Người bán: ${seller?.name ?? "chưa rõ tên (gọi anh/chị)"} — loại: ${
+        `Người bán: ${seller?.name ?? "chưa rõ tên (gọi anh/chị)"} - loại: ${
           seller?.seller_type === "nmg" ? "nhà môi giới (hỏi gọn, chuyên nghiệp)" : "chính chủ (giọng gần gũi)"
         }\n` +
-        `Tin rao: #${listing.code ?? listing.id} — ${listing.location_raw ?? ""} ${listing.ward ?? ""} ${listing.district ?? ""}, giá ${listing.price_raw ?? "?"}\n` +
+        `Tin rao: #${listing.code ?? listing.id} - ${listing.location_raw ?? ""} ${listing.ward ?? ""} ${listing.district ?? ""}, giá ${listing.price_raw ?? "?"}\n` +
         `Thông tin cần hỏi:\n${factList}`,
     }],
   });
@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
         // hỏi trùng đúng cái mà cổng `drip` ở trên cố tránh.
         return jsonResponse({
           message: null, asked: [], skipped_pending: rows.map((r) => r.question),
-          note: "đua: câu hỏi vừa được mở bởi lượt khác — không hỏi chồng",
+          note: "đua: câu hỏi vừa được mở bởi lượt khác - không hỏi chồng",
         });
       }
     } else if (iErr) {

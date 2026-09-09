@@ -142,7 +142,7 @@ export default function Page() {
                 <td className="max-w-[260px] px-3 py-2 text-xs text-mute line-through decoration-mute/40">{m.cau_bot.slice(0, 160)}</td>
                 <td className="max-w-[320px] px-3 py-2 text-sm font-medium text-navy">{m.cau_chuan}{m.ghi_chu && <div className="mt-1 text-[11px] font-normal text-mute">{m.ghi_chu}</div>}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-mute">{DUNG_LAM_VI[m.dung_lam]}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-xs text-mute">{m.nguoi_sua?.split("@")[0] ?? "—"}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-xs text-mute">{m.nguoi_sua?.split("@")[0] ?? "-"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs">
                   <button type="button" onClick={() => { setSua(m); setForm({ cau_chuan: m.cau_chuan, dung_lam: m.dung_lam, ghi_chu: m.ghi_chu ?? "" }); }} className="font-bold text-brand hover:underline">Sửa</button>
                   <span className="mx-1 text-mute">·</span>

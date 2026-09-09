@@ -31,13 +31,13 @@ const NGUON = [
 // Nhãn loại BĐS lấy từ bảng dùng chung (lib/format TYPE_LABEL — FR-171 j),
 // thêm lựa chọn "chưa rõ" riêng của form.
 const LOAI: readonly (readonly [string, string])[] = [
-  ["chua_ro", "Chưa rõ — để bot tự đoán"],
+  ["chua_ro", "Chưa rõ - để bot tự đoán"],
   ...Object.entries(TYPE_LABEL),
 ];
 
 const TRANG_THAI = [
-  ["cho_thong_tin", "Chờ duyệt — chưa lên web"],
-  ["dang_ban", "Đăng luôn — lên web ngay"],
+  ["cho_thong_tin", "Chờ duyệt - chưa lên web"],
+  ["dang_ban", "Đăng luôn - lên web ngay"],
 ] as const;
 
 // Kho đang có tin ở Phường 1–16 (Quận 5 cũ + rìa Quận 10/1 sáp nhập). Địa bàn
@@ -180,7 +180,7 @@ export default function Page() {
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-2xl font-bold">Đăng tin thủ công</h1>
         <Link href="/admin" className="text-sm font-semibold text-mute hover:text-brand">
-          ← Về trang duyệt tin
+          Về trang duyệt tin
         </Link>
       </div>
       <p className="mt-1 text-sm text-mute">
@@ -194,7 +194,7 @@ export default function Page() {
               chon={[["ban", "Bán"], ["cho_thue", "Cho thuê"]]} />
             <Chon nhan="Loại bất động sản" giaTri={loai} doi={setLoai} chon={LOAI} />
             <Chon nhan="Phường (khu Quận 5 cũ)" giaTri={ward} doi={setWard}
-              chon={[["", "— chưa rõ —"], ...PHUONG.map((p) => [p, p] as [string, string])]} />
+              chon={[["", "- chưa rõ -"], ...PHUONG.map((p) => [p, p] as [string, string])]} />
             <O nhan="Quận / huyện, tỉnh" giaTri={quan} doi={setQuan}
               goiY="VD: Quận 5 · Quận Tân Bình · Bến Lức, Long An" />
             <O nhan="Địa chỉ / tên đường" giaTri={diaChi} doi={setDiaChi}
@@ -214,7 +214,7 @@ export default function Page() {
                   ? "Máy sẽ tự đổi ra số để lọc theo khoảng giá."
                   : giaSo
                     ? `Máy đọc ra: ${giaSo.toLocaleString("vi-VN")} đ`
-                    : "Máy CHƯA đọc ra số — tin vẫn đăng được nhưng sẽ không hiện ở bộ lọc theo giá."}
+                    : "Máy CHƯA đọc ra số - tin vẫn đăng được nhưng sẽ không hiện ở bộ lọc theo giá."}
               </p>
             </div>
             <O nhan="Diện tích (m²)" giaTri={dienTich} doi={setDienTich} goiY="60" kieu="number" />
@@ -222,10 +222,10 @@ export default function Page() {
             <Chon nhan="Trạng thái" giaTri={trangThai} doi={setTrangThai} chon={TRANG_THAI} />
           </div>
           <div className="mt-4">
-            <label className="eyebrow text-mute">Mô tả — giữ nguyên văn người rao</label>
+            <label className="eyebrow text-mute">Mô tả - giữ nguyên văn người rao</label>
             <textarea
               value={moTa} onChange={(e) => setMoTa(e.target.value)} rows={5}
-              placeholder="Dán nguyên câu rao vào đây. Đừng viết lại cho hay — văn phong người rao là thứ khách tin."
+              placeholder="Dán nguyên câu rao vào đây. Đừng viết lại cho hay - văn phong người rao là thứ khách tin."
               className="mt-1.5 w-full rounded-shot border border-line bg-white px-3.5 py-2.5 outline-none focus:border-brand"
             />
             <p className="mt-1 text-xs text-mute">
@@ -242,7 +242,7 @@ export default function Page() {
           <Chon
             nhan="Gắn tin cho ai" giaTri={banAi} doi={setBanAi}
             chon={[
-              ["", "— không gắn ai (điền sau) —"],
+              ["", "- không gắn ai (điền sau) -"],
               ["moi", "+ Thêm người bán mới"],
               ...nguoiBan.map((n) => [
                 n.id,
@@ -256,11 +256,11 @@ export default function Page() {
               <div className="grid gap-4 sm:grid-cols-2">
                 <O nhan="Tên người bán" giaTri={tenBan} doi={setTenBan} goiY="VD: chị Dương" />
                 <Chon nhan="Vai" giaTri={loaiBan} doi={setLoaiBan}
-                  chon={[["ccrb", "CCRB — chính chủ"], ["nmg", "NMG — nhà môi giới"]]} />
+                  chon={[["ccrb", "CCRB - chính chủ"], ["nmg", "NMG - nhà môi giới"]]} />
               </div>
 
               {/* Hai ô tích này là ranh giới dữ liệu cá nhân, không phải tiện ích
-                  UI. Không tích thì cột trong DB là NULL — mình không giữ số của
+                  UI. Không tích thì cột trong DB là NULL - mình không giữ số của
                   người chưa đồng ý cho giữ. */}
               <TichVaO
                 tich={luuSdt} doiTich={setLuuSdt} giaTri={sdt} doi={setSdt}
@@ -280,7 +280,7 @@ export default function Page() {
           <p className="text-sm text-mute">Còn thiếu: {thieu.join(", ")}.</p>
         )}
 
-        {/* FR-96 (04/09/2026): vừa lưu xong là có UUID tin → up ảnh ngay tại đây,
+        {/* FR-96 (04/09/2026): vừa lưu xong là có UUID tin - up ảnh ngay tại đây,
             khỏi phải chạy scripts/up-anh.mjs trên máy local. */}
         {ketQua?.ok && ketQua.id && (
           <UploadAnh listingId={ketQua.id} code={ketQua.code} />
@@ -299,7 +299,7 @@ export default function Page() {
               {ketQua.ok && ketQua.code && (
                 <Link href={`/nha-dat/${encodeURIComponent(ketQua.code)}`} target="_blank"
                   className="ml-2 underline">
-                  xem tin →
+                  xem tin -
                 </Link>
               )}
             </span>

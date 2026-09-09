@@ -237,7 +237,7 @@ const BuyerTurn = z.object({
   agreed_deal: z.object({
     listing_code: z.string().nullable().describe("Mã căn khách vừa đồng ý chốt, ví dụ 'BDS-NP-BINHTAN-0001', 'BDS-NP-Q5-0001'; không rõ mã thì null"),
   }).nullable().describe("CHỈ điền khi tin NGAY TRƯỚC của EM có đề nghị chốt hợp đồng/cọc và khách vừa ĐỒNG Ý theo AGREE_RULES (bằng chữ, emoji vui, like/tim). Không suy diễn."),
-  send_photos: z.string().nullable().describe("Mã căn cần gửi hình kèm tin này — CHỈ điền khi khách xin hình và khối căn ghi 'có hình sẵn'; không thì null"),
+  send_photos: z.string().nullable().describe("Mã căn cần gửi hình kèm tin này - CHỈ điền khi khách xin hình và khối căn ghi 'có hình sẵn'; không thì null"),
   ask_owner: z.object({
     listing_code: z.string().nullable().describe("Mã căn cần hỏi, ví dụ 'BDS-NP-BINHTAN-0001', 'BDS-NP-Q5-0001' (không có # đầu)"),
     question: z.string().describe("Điều cần hỏi/xin từ chủ tin, ngắn gọn: 'hình + địa chỉ chi tiết', 'pháp lý', 'còn bán không'…"),
@@ -261,7 +261,7 @@ const STATUS_VI: Record<string, string> = {
   cho_thong_tin: "đang chờ bổ sung thông tin, chưa lên kệ",
   dang_ban: "đang bán",
   dang_quan_tam: "đang được nhiều khách quan tâm",
-  da_chot: "ĐÃ CHỐT GIAO DỊCH — báo thật với khách là căn này đã chốt rồi gợi ý căn tương tự trong KHO",
+  da_chot: "ĐÃ CHỐT GIAO DỊCH - báo thật với khách là căn này đã chốt rồi gợi ý căn tương tự trong KHO",
   an: "đã gỡ khỏi kệ",
 };
 const PHOTO_URL_RE = /https?:\/\/\S+/g;
@@ -306,8 +306,8 @@ function duAnNgan(l: DuAnRow): string {
   const p = [`dự án ${l.projects?.name ?? "(chưa rõ tên)"}${l.unit_code ? ` căn ${l.unit_code}` : ""}`];
   if (l.unit_status) p.push(`tình trạng căn: ${UNIT_VI[l.unit_status] ?? l.unit_status}`);
   p.push(xacNhanCu(l.last_confirmed_at)
-    ? "chủ xác nhận lần cuối QUÁ 7 NGÀY (hoặc chưa từng) — nói 'để em xác nhận lại chủ rồi báo anh/chị' và điền ask_owner, KHÔNG khẳng định còn/hết"
-    : `chủ xác nhận ${Math.max(0, Math.round((Date.now() - Date.parse(l.last_confirmed_at!)) / 864e5))} ngày trước — nói được theo tình trạng trên`);
+    ? "chủ xác nhận lần cuối QUÁ 7 NGÀY (hoặc chưa từng) - nói 'để em xác nhận lại chủ rồi báo anh/chị' và điền ask_owner, KHÔNG khẳng định còn/hết"
+    : `chủ xác nhận ${Math.max(0, Math.round((Date.now() - Date.parse(l.last_confirmed_at!)) / 864e5))} ngày trước - nói được theo tình trạng trên`);
   return " · " + p.join(" · ");
 }
 
@@ -527,12 +527,12 @@ Deno.serve(async (req) => {
     if (!gate) {
       if (Deno.env.get("GATE_MO_KHI_CHUA_CO_BI_MAT") !== "1") {
         await ghiLoi(client, "chat-reply CONG DONG",
-          "Không có BRIDGE_SECRET (chưa đặt hoặc đọc hụt) — TỪ CHỐI. Đặt secret vào " +
+          "Không có BRIDGE_SECRET (chưa đặt hoặc đọc hụt) - TỪ CHỐI. Đặt secret vào " +
           "Vault, hoặc bật tạm GATE_MO_KHI_CHUA_CO_BI_MAT=1 nếu cố ý chạy không cổng.");
         return jsonResponse({ error: "gate_unavailable" }, 503);
       }
       await ghiLoi(client, "chat-reply CONG MO",
-        "GATE_MO_KHI_CHUA_CO_BI_MAT=1 — cổng đang MỞ có chủ ý, ai cũng gọi được.");
+        "GATE_MO_KHI_CHUA_CO_BI_MAT=1 - cổng đang MỞ có chủ ý, ai cũng gọi được.");
     } else if (!await bangNhau(req.headers.get("x-bridge-secret") ?? "", gate)) {
       return jsonResponse({ error: "forbidden" }, 403);
     }
@@ -561,7 +561,7 @@ Deno.serve(async (req) => {
       sent_bubbles: Number.isFinite(soDaGui) ? soDaGui : 0,
       ...(xong
         ? { sent_at: new Date().toISOString(), send_error: null }
-        : { send_error: "gửi hụt giữa chừng — bridge báo lại" }),
+        : { send_error: "gửi hụt giữa chừng - bridge báo lại" }),
       updated_at: new Date().toISOString(),
     })
       .eq("zalo_msg_id", String(body.mark_sent).slice(0, 200))
@@ -717,7 +717,7 @@ Deno.serve(async (req) => {
       // Không giành sổ (`coSo` giữ false) nên mọi đường ra phía sau không đụng
       // vào dòng thư chết nữa.
       await ghiLoi(client, "chat-reply dead",
-        `msg_id ${msgId} đã ở thư chết sau ${soRow.r_attempts ?? "?"} lượt — bỏ qua, ` +
+        `msg_id ${msgId} đã ở thư chết sau ${soRow.r_attempts ?? "?"} lượt - bỏ qua, ` +
           `không gọi model. Xem /admin để xử tay.`);
       return jsonResponse({
         reply: null, replies: [], deduped: true, dead: true,
@@ -822,7 +822,7 @@ Deno.serve(async (req) => {
   const SELLER_SCRIPT = P.seller_script_rules ?? SELLER_SCRIPT_RULES;
   const SLANG = P.slang_notes ?? SLANG_NOTES;
   // FR-180: mẫu chuẩn thật (nếu có) nối sau few-shot soạn tay, cả hai phía.
-  const MAU_CHUAN_TD = "Ví dụ CHUẨN do anh/sếp sửa tay từ hội thoại thật (FR-180) — ưu tiên bắt chước giọng này hơn mọi ví dụ khác:";
+  const MAU_CHUAN_TD = "Ví dụ CHUẨN do anh/sếp sửa tay từ hội thoại thật (FR-180) - ưu tiên bắt chước giọng này hơn mọi ví dụ khác:";
   const FEWSHOT = (P.buyer_fewshot ?? BUYER_FEWSHOT) + (mauMua ? "\n\n" + MAU_CHUAN_TD + "\n" + mauMua : "");
   const AGREE = P.agree_rules ?? AGREE_RULES;
   // MỘT prefix cho cả ba lượt gọi phía người bán (FR-171 h). Bản cũ r1/r2 dùng
@@ -1081,7 +1081,7 @@ Deno.serve(async (req) => {
       // thông báo nội bộ cho chính người bán.
       const { error: nhErr } = await client.from("reminders").insert({
         kind: "escalation", due_at: new Date().toISOString(),
-        note: `🆕 Hồ sơ người bán ${sellerMoi ? "MỞ TỪ CHAT" : "tạo tay, nay gán nhãn từ chat"} — nhãn ${
+        note: `🆕 Hồ sơ người bán ${sellerMoi ? "MỞ TỪ CHAT" : "tạo tay, nay gán nhãn từ chat"} - nhãn ${
           nhanVuaGan === "nmg" ? "MÔI GIỚI (phí 0,5%)" : "CHÍNH CHỦ (phí 1%)"
         }${sellerRow.name ? ` · ${sellerRow.name}` : ""} · Zalo …${externalUserId.slice(-4)}. Bot đã báo họ nhãn và mức phí. Sai thì đổi ở /admin.`,
       });
@@ -1248,7 +1248,7 @@ Deno.serve(async (req) => {
     const boiCanh =
       `NGỮ CẢNH (đọc kỹ trước khi viết):\n` +
       `- Gọi chủ nhà là "${cachGoi}"${
-        goiNguoi ? ` — chủ nhà đã dặn, tuyệt đối không đổi, không dùng "anh/chị"` : " (chưa biết nam hay nữ)"
+        goiNguoi ? ` - chủ nhà đã dặn, tuyệt đối không đổi, không dùng "anh/chị"` : " (chưa biết nam hay nữ)"
       }.\n` +
       `- Lịch sử gần nhất, tin mới ở cuối. KHÔNG lặp lại khuôn câu, lời khen, hay lý do "khách hay hỏi" đã dùng trong đó; tin trước của em mở bằng "Dạ" thì tin này đừng mở bằng "Dạ"; viết như người thật nhắn tay, mỗi tin một giọng:\n` +
       `${lichSuText || "(chưa có tin nào trước đó)"}\n\n`;
@@ -1557,7 +1557,7 @@ Deno.serve(async (req) => {
       const fact = (k: string) => (facts ?? []).find((f) => f.question === k)?.answer ?? null;
       const specs = thongSoNgan(l as SpecRow).replace(/^ · /, "");
       const dong: string[] = [];
-      dong.push(`📋 BẢN NHÁP TIN — điểm đầy đủ ${d.diem}/100`);
+      dong.push(`📋 BẢN NHÁP TIN - điểm đầy đủ ${d.diem}/100`);
       dong.push(`🏠 ${LOAI_VI[l.property_type ?? ""] ?? "Nhà"} ${l.deal === "cho_thue" ? "cho thuê" : "bán"} ${[l.location_raw, l.ward, l.district].filter(Boolean).join(", ")}`);
       const dt2 = [
         l.area_m2 ? `${l.area_m2}m2` : null,
@@ -1746,7 +1746,7 @@ Deno.serve(async (req) => {
           ? `Câu đó là ${FACT_LABELS[kq.chuyenSang.question] ?? kq.chuyenSang.question} (em đã ghi ${kq.chuyenSang.answer}), chưa phải ${nhanDangHoi}.`
           : pendingReq.question === "duyet_tin"
           ? `Chủ nhà chưa gật bản nháp, cũng chưa nói sửa gì rõ.`
-          : `Câu đó KHÔNG trả lời được câu em hỏi — có thể chủ nhà hiểu nhầm, hoặc đang nói một thông số khác. Em đã ghi chú lại nguyên văn (không mất), nhắc lại ngắn gọn để xác nhận rồi hỏi lại.`;
+          : `Câu đó KHÔNG trả lời được câu em hỏi - có thể chủ nhà hiểu nhầm, hoặc đang nói một thông số khác. Em đã ghi chú lại nguyên văn (không mất), nhắc lại ngắn gọn để xác nhận rồi hỏi lại.`;
         const promptLai =
           `${boiCanh}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${text}". ${viSao}\n` +
           `Viết MỘT tin ngắn (15–35 từ) như người thật: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
@@ -1813,7 +1813,7 @@ Deno.serve(async (req) => {
             `\nEm sẽ hỏi thêm mình vài câu trong mấy ngày tới, khi nào ${cachGoi} thấy đủ thì nói em nha.`
           : "";
         const cau = len
-          ? `Dạ em cảm ơn ${cachGoi}! Chúc mừng ${cachGoi}, tin nhà mình đã lên web nhadat.cc${dk ? ` với điểm đầy đủ ${dk.diem}/100` : ""}.` +
+          ? `Dạ em cảm ơn ${cachGoi}! Chúc mừng ${cachGoi}, tin nhà mình đã lên web AI Ơi Nhà Đất${dk ? ` với điểm đầy đủ ${dk.diem}/100` : ""}.` +
             `\nEm sẽ rao tích cực, có khách quan tâm là em báo ${cachGoi} liền.${themDiem}`
           : `Dạ em ghi nhận rồi ạ.\nTin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm ${cachGoi} vài thông tin nữa nha.`;
         return await traLoiSeller([cau], {
@@ -1879,13 +1879,13 @@ Deno.serve(async (req) => {
 
       const prompt = nextKey
         ? `${boiCanh}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n` +
-          `Viết MỘT tin dưới 30 từ như người thật nhắn Zalo: nhắc lại chi tiết vừa nghe kèm MỘT câu khích lệ có nghĩa gắn với khách mua (chỉ khi có gì đáng nói thật, không khen suông) — rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey} (câu gợi ý: "${cauHoiMau(nextKey, cachGoi)}", diễn đạt lại cho hợp mạch). ` +
+          `Viết MỘT tin dưới 30 từ như người thật nhắn Zalo: nhắc lại chi tiết vừa nghe kèm MỘT câu khích lệ có nghĩa gắn với khách mua (chỉ khi có gì đáng nói thật, không khen suông) - rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey} (câu gợi ý: "${cauHoiMau(nextKey, cachGoi)}", diễn đạt lại cho hợp mạch). ` +
           (nhieuCan
             ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
             : `Người này chỉ có một căn: KHÔNG nhắc mã tin. `) +
           `Lý do "vì khách hỏi" chỉ dùng nếu 3 tin gần nhất của em trong lịch sử chưa dùng. Không hỏi gì khác.`
         : published
-        ? `${boiCanh}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB nhadat.cc. ` +
+        ? `${boiCanh}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
           `Viết MỘT tin dưới 30 từ: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
         : thieuDiem.length
         ? `${boiCanh}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu: ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn (20–40 từ): ghi nhận, rồi hỏi ĐÚNG MỘT thứ trong danh sách thiếu đó. Không hỏi gì khác.`
@@ -2082,7 +2082,7 @@ Deno.serve(async (req) => {
                 role: "user",
                 content:
                   `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ` +
-                  `Viết MỘT tin dưới 30 từ như người thật: nhận câu rao (nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi — KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
+                  `Viết MỘT tin dưới 30 từ như người thật: nhận câu rao (nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi - KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
                   (firstKey
                     ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey} (câu gợi ý: "${cauHoiMau(firstKey, cachGoi)}"). Không cần nêu lý do, KHÔNG nhắc phí, KHÔNG nhắc mã tin. Không hỏi gì khác.`
                     : ` và báo sẽ đăng lên web ngay.`),
@@ -2146,8 +2146,8 @@ Deno.serve(async (req) => {
             content:
               `${boiCanh}NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
               (sellerMoi
-                ? `Người này VỪA cho biết đang có bất động sản muốn rao nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN chào + mời họ nhắn địa chỉ (đường/phường), giá mong muốn và diện tích để em lên tin — KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
-                : `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN — tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
+                ? `Người này VỪA cho biết đang có bất động sản muốn rao nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN chào + mời họ nhắn địa chỉ (đường/phường), giá mong muốn và diện tích để em lên tin - KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
+                : `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN - tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
                   `Không bịa tình trạng tin/lượt khách quan tâm; điều chưa nắm thì nói "để em kiểm tra rồi báo lại anh/chị liền".`),
           }],
         });
@@ -2463,7 +2463,7 @@ Deno.serve(async (req) => {
     .map((l) => {
       // Tin chủ nhà đã gỡ: chỉ nói trạng thái, KHÔNG lộ địa chỉ/giá/ảnh.
       if (l.status === "an") {
-        return `#${l.code} · ${STATUS_VI.an} — KHÔNG nêu địa chỉ hay giá của căn này, báo thật là chủ nhà đã gỡ rồi gợi ý căn tương tự trong KHO`;
+        return `#${l.code} · ${STATUS_VI.an} - KHÔNG nêu địa chỉ hay giá của căn này, báo thật là chủ nhà đã gỡ rồi gợi ý căn tương tự trong KHO`;
       }
       // Fact cắt 300 ký tự (FR-171 i): mỗi căn khách nhắc là một khối không nhớ
       // tạm; chủ nhà kể dài thì phần đầu (giá, pháp lý, diện tích) là phần đáng.
@@ -2473,7 +2473,7 @@ Deno.serve(async (req) => {
         .filter((f) => f.question !== "hinh_anh")
         .map((f) => `${f.question}: ${locLienHe(f.answer, true)}`).join("; ").slice(0, 300);
       const nPhotos = photosOf(l).length;
-      return `${dongKho(l)}${l.status ? ` · trạng thái: ${STATUS_VI[l.status] ?? l.status}` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}${nPhotos ? ` · CÓ ${nPhotos} HÌNH SẴN (khách xin hình thì điền send_photos, hệ thống tự đính kèm tối đa 4 tấm/lượt và tự hỏi xem thêm — ĐỪNG hứa đi hỏi chủ nhà)` : " · chưa có hình sẵn"}`;
+      return `${dongKho(l)}${l.status ? ` · trạng thái: ${STATUS_VI[l.status] ?? l.status}` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}${nPhotos ? ` · CÓ ${nPhotos} HÌNH SẴN (khách xin hình thì điền send_photos, hệ thống tự đính kèm tối đa 4 tấm/lượt và tự hỏi xem thêm - ĐỪNG hứa đi hỏi chủ nhà)` : " · chưa có hình sẵn"}`;
     }).join("\n");
 
   // Khối DỰ ÁN (FR-113…115/FR-132): kiến thức chung đã xác thực, bot trả lời
@@ -2484,7 +2484,7 @@ Deno.serve(async (req) => {
     amenities?: unknown; specs?: unknown; unit_types?: unknown; description?: string | null;
   };
   const projLine = (p: Proj, full: boolean) => {
-    const parts = [`${p.name} — CĐT ${p.developer ?? "?"} · ${p.location_raw ?? p.district ?? ""}`];
+    const parts = [`${p.name} - CĐT ${p.developer ?? "?"} · ${p.location_raw ?? p.district ?? ""}`];
     if (p.legal_status) parts.push(`pháp lý: ${p.legal_status}`);
     if (p.status_text) parts.push(`tình trạng: ${p.status_text}`);
     if (Array.isArray(p.amenities)) parts.push(`tiện ích: ${(p.amenities as string[]).join(", ")}`);
@@ -2529,7 +2529,7 @@ Deno.serve(async (req) => {
     ? (canDuAn.length
       ? canDuAn.map(dongKho).join("\n")
       : maCanHoi
-      ? `căn ${maCanHoi}: KHÔNG có trong kho — nói thật là em chưa có căn này, để em hỏi bộ phận dự án rồi báo lại`
+      ? `căn ${maCanHoi}: KHÔNG có trong kho - nói thật là em chưa có căn này, để em hỏi bộ phận dự án rồi báo lại`
       : "")
     : "";
 
@@ -2646,9 +2646,9 @@ Deno.serve(async (req) => {
       system: [{
         type: "text",
         text: TONE + "\n\n" + HUMAN + "\n\n" + FEES + "\n\n" + SLANG + "\n\n" + AGREE + "\n\n" + FEWSHOT +
-          "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh — nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO ở khối sau, không bịa." +
+          "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh - nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO ở khối sau, không bịa." +
           (duanNhaMinh
-            ? "\n\nDỰ ÁN NHÀ MÌNH ĐANG PHÂN PHỐI TRỰC TIẾP (kiến thức chung ĐÃ XÁC THỰC — trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
+            ? "\n\nDỰ ÁN NHÀ MÌNH ĐANG PHÂN PHỐI TRỰC TIẾP (kiến thức chung ĐÃ XÁC THỰC - trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao - KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
               duanNhaMinh
             : ""),
         cache_control: { type: "ephemeral", ttl: "1h" },
@@ -2657,16 +2657,16 @@ Deno.serve(async (req) => {
         text: "KHO HIỆN CÓ:\n" +
           (kho || (minimumMet || mentioned.length
             ? "(trống)"
-            : "(chưa lọc — chưa đủ khu vực + giá để lọc, đừng nói kho trống)")) +
+            : "(chưa lọc - chưa đủ khu vực + giá để lọc, đừng nói kho trống)")) +
           (giaTB
-            ? `\n(${giaTB} — ước tính từ kho bên em, dùng để so khi khách hỏi "giá vậy ok không": nói rẻ/mắc hơn mặt bằng khoảng bao nhiêu %, KHÔNG gọi là thẩm định)`
+            ? `\n(${giaTB} - ước tính từ kho bên em, dùng để so khi khách hỏi "giá vậy ok không": nói rẻ/mắc hơn mặt bằng khoảng bao nhiêu %, KHÔNG gọi là thẩm định)`
             : "") +
           (askedBlock
-            ? "\n\nCĂN KHÁCH ĐANG NHẮC TỚI (khách vào từ web hoặc gõ mã — chào ĐÚNG căn này, trả lời thẳng vào nó; mục 'đã xác minh từ chủ nhà' được nói chắc, còn lại vẫn 'để em hỏi lại'):\n" +
+            ? "\n\nCĂN KHÁCH ĐANG NHẮC TỚI (khách vào từ web hoặc gõ mã - chào ĐÚNG căn này, trả lời thẳng vào nó; mục 'đã xác minh từ chủ nhà' được nói chắc, còn lại vẫn 'để em hỏi lại'):\n" +
               askedBlock
             : "") +
           (tuongTuBlock
-            ? `\n\nCĂN TƯƠNG TỰ (cùng khu, giá 0,7–1,3 lần căn #${canGoc?.code ?? ""} — dùng khi căn khách hỏi đã chốt/đã gỡ hoặc khách hỏi "giống giống vầy"; nêu điểm giống, vẫn tối đa 3 căn một tin):\n` +
+            ? `\n\nCĂN TƯƠNG TỰ (cùng khu, giá 0,7–1,3 lần căn #${canGoc?.code ?? ""} - dùng khi căn khách hỏi đã chốt/đã gỡ hoặc khách hỏi "giống giống vầy"; nêu điểm giống, vẫn tối đa 3 căn một tin):\n` +
               tuongTuBlock
             : "") +
           (canDuAnBlock
@@ -2674,7 +2674,7 @@ Deno.serve(async (req) => {
               canDuAnBlock
             : "") +
           (duanBlock
-            ? "\n\nDỰ ÁN KHÁCH VỪA NHẮC TỚI (kiến thức chung ĐÃ XÁC THỰC — dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao — KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'):\n" +
+            ? "\n\nDỰ ÁN KHÁCH VỪA NHẮC TỚI (kiến thức chung ĐÃ XÁC THỰC - dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao - KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'):\n" +
               duanBlock
             : ""),
       }],
@@ -2687,13 +2687,13 @@ Deno.serve(async (req) => {
           { type: "text" as const, text:
           `HỒ SƠ ĐÃ BIẾT về khách${buyer.name ? ` (tên: ${buyer.name})` : ""}:\n${known || "(chưa biết gì)"}\n\n` +
           (minimumMet
-            ? `CHƯA BIẾT (chỉ NHẶT khi khách tự kể hoặc khi khách chê căn vừa gửi, TUYỆT ĐỐI không hỏi chủ động — đủ khu vực + giá là ngừng dò hồ sơ):\n${missing || "(đã đủ)"}\n\n`
+            ? `CHƯA BIẾT (chỉ NHẶT khi khách tự kể hoặc khi khách chê căn vừa gửi, TUYỆT ĐỐI không hỏi chủ động - đủ khu vực + giá là ngừng dò hồ sơ):\n${missing || "(đã đủ)"}\n\n`
             : `CÒN THIẾU (hỏi theo thứ tự ưu tiên; gộp 2-3 ý vào MỘT câu hỏi liền mạch cũng được, đừng thành bảng hỏi):\n${missing || "(đã đủ)"}\n\n`) +
           (minimumMet
-            ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) — NGỪNG hỏi hồ sơ, chuyển sang gợi ý căn khớp và để khách dẫn chuyện.\n"
-            : "CHƯA đủ tiêu chí tối thiểu (khu vực + giá) — chưa gợi ý căn trừ khi khách hỏi thẳng một căn.\n") +
+            ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) - NGỪNG hỏi hồ sơ, chuyển sang gợi ý căn khớp và để khách dẫn chuyện.\n"
+            : "CHƯA đủ tiêu chí tối thiểu (khu vực + giá) - chưa gợi ý căn trừ khi khách hỏi thẳng một căn.\n") +
           (interrogated
-            ? "Hai tin trước em đều đã đặt câu hỏi — lượt này ĐƯA GIÁ TRỊ trước (gợi ý/thông tin), hỏi thật nhẹ hoặc không hỏi.\n"
+            ? "Hai tin trước em đều đã đặt câu hỏi - lượt này ĐƯA GIÁ TRỊ trước (gợi ý/thông tin), hỏi thật nhẹ hoặc không hỏi.\n"
             : "") +
           `\nHội thoại tới giờ:\n${convo}\n` +
           (imageUrl ? "\nKhách VỪA GỬI KÈM MỘT TẤM ẢNH (đính trên). Mô tả trung thực điều thấy được; đoán thì nói 'hình như là…' và xác nhận lại; KHÔNG suy diễn vật liệu/pháp lý từ ảnh.\n" : "") +
@@ -2704,7 +2704,7 @@ Deno.serve(async (req) => {
             ? `\nKhách VỪA CHẤM ${danhGia.stars}/5 SAO cho căn vừa xem (hệ thống đã ghi nhận, đừng hỏi lại điểm): cảm ơn ngắn${danhGia.stars <= 3 ? ", rồi hỏi đúng MỘT câu chưa ưng chỗ nào để em lọc tiếp" : ", hỏi có muốn xem thêm căn khác không"}.\n`
             : "") +
           (xemThemHinh
-            ? "\nKhách VỪA XIN XEM THÊM HÌNH căn bot gửi lượt trước — hệ thống tự gửi 4 tấm kế, em chỉ nói ngắn 'dạ em gửi tiếp nè', KHÔNG hứa đi xin chủ nhà.\n"
+            ? "\nKhách VỪA XIN XEM THÊM HÌNH căn bot gửi lượt trước - hệ thống tự gửi 4 tấm kế, em chỉ nói ngắn 'dạ em gửi tiếp nè', KHÔNG hứa đi xin chủ nhà.\n"
             : "") +
           `\nSoạn lượt trả lời tiếp theo của EM và cập nhật hồ sơ:` },
         ],

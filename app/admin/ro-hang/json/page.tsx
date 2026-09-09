@@ -120,7 +120,7 @@ export default function Page() {
 
   const taiJson = () => {
     const goi = {
-      nguon: "nhadat.cc /admin/ro-hang/json",
+      nguon: "AI Ơi Nhà Đất /admin/ro-hang/json",
       xuat_luc: new Date().toISOString(),
       so_tin: loc.length,
       tin: loc.map(gon),
@@ -161,14 +161,14 @@ export default function Page() {
         <div>
           <div className="flex items-center gap-2">
             <Link href="/admin/ro-hang" className="text-sm font-semibold text-brand hover:underline">
-              ← Rổ hàng (Excel)
+              Rổ hàng (Excel)
             </Link>
             <span className="text-mute text-xs">/</span>
             <span className="text-xs text-mute font-medium">JSON</span>
           </div>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">Rổ hàng BĐS (Dạng JSON)</h1>
           <p className="mt-1 text-sm text-mute tabular-nums">
-            {rows.length} tin · hiển thị {loc.length} · mỗi tin kèm <code className="rounded bg-slate-100 px-1">boc_tach</code> — những gì bot bóc được từ câu rao và câu trả lời của chủ nhà, không liệt kê trường trống
+            {rows.length} tin · hiển thị {loc.length} · mỗi tin kèm <code className="rounded bg-slate-100 px-1">boc_tach</code> - những gì bot bóc được từ câu rao và câu trả lời của chủ nhà, không liệt kê trường trống
           </p>
         </div>
         <button
@@ -213,9 +213,9 @@ export default function Page() {
               >
                 <span className="font-mono text-sm font-bold text-brand">{t.code ?? "(chưa mã)"}</span>
                 <span className="text-sm text-navy">
-                  {[t.location_raw, t.ward, t.district].filter(Boolean).join(", ") || "—"}
+                  {[t.location_raw, t.ward, t.district].filter(Boolean).join(", ") || "-"}
                 </span>
-                <span className="text-xs text-mute">{t.deal === "ban" ? "Bán" : "Cho thuê"} · {t.price_raw ?? "—"} · {t.status}</span>
+                <span className="text-xs text-mute">{t.deal === "ban" ? "Bán" : "Cho thuê"} · {t.price_raw ?? "-"} · {t.status}</span>
                 {t.gap === true && <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700">gấp</span>}
                 {t.chu_noi_du_at && <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-mute">chủ nói đủ</span>}
                 <span className="ml-auto text-xs text-mute tabular-nums">{soKhoa} khoá bóc tách · {dangMo ? "thu gọn ▲" : "xem JSON ▼"}</span>

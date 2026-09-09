@@ -8,8 +8,8 @@ const SOCIAL_RE = /\b(zalo|z@lo|fb|facebook|viber|telegram)\b\s*:?\s*[\w.@/]*/gi
 export function sanitizeDescription(text: string | null): string {
   if (!text) return "";
   return text
-    .replace(PHONE_RE, " [liên hệ qua Zalo nhadat.cc] ")
-    .replace(SOCIAL_RE, " [liên hệ qua Zalo nhadat.cc] ")
+    .replace(PHONE_RE, " [liên hệ qua Zalo AI Ơi Nhà Đất] ")
+    .replace(SOCIAL_RE, " [liên hệ qua Zalo AI Ơi Nhà Đất] ")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
 }
@@ -26,7 +26,7 @@ export function formatPrice(priceVnd: number | null, priceRaw: string | null): s
 }
 
 export function formatArea(m2: number | null): string {
-  return m2 ? `${Number(m2).toLocaleString("vi-VN")} m²` : "—";
+  return m2 ? `${Number(m2).toLocaleString("vi-VN")} m²` : "-";
 }
 
 // Nhãn loại BĐS (enum `property_type` của DB) — MỘT bảng cho thẻ tin, trang
@@ -97,7 +97,8 @@ export function formatPricePerM2(vnd: number | null, deal: "ban" | "cho_thue"): 
 // OA duyệt: đặt NEXT_PUBLIC_ZALO_URL=https://zalo.me/<SĐT acc clone> trong env
 // Vercel (hoặc sửa fallback dưới); OA duyệt xong đổi về link OA.
 // NFR-09 — gốc URL tuyệt đối cho canonical / OpenGraph / sitemap / JSON-LD.
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://nhadat-cc.vercel.app";
+// 09/09/2026: project Vercel đổi tên nhadat-cc → aioinhadat, domain theo tên.
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aioinhadat.vercel.app";
 
 export const ZALO_OA_URL =
   process.env.NEXT_PUBLIC_ZALO_URL ?? "https://zalo.me/nhadatcc";

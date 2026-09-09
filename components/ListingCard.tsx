@@ -45,7 +45,7 @@ export default function ListingCard({
           decoding="async"
           className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.06]"
         />
-        {/* Giá ĐÈ THẲNG lên ảnh, không chip — chữ trắng trên vệt tối chân ảnh */}
+        {/* Giá ĐÈ THẲNG lên ảnh, không chip - chữ trắng trên vệt tối chân ảnh */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-navy/85 via-navy/35 to-transparent pt-12">
           <p
             className={`px-4 pb-3.5 font-extrabold text-white tabular-nums drop-shadow ${
@@ -59,16 +59,16 @@ export default function ListingCard({
           <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-navy">
             {listing.deal === "cho_thue" ? "Cho thuê" : "Bán"}
           </span>
-          {/* FR-172: đường vào là thứ khách Quận 5 hỏi đầu tiên — nói ngay trên thẻ */}
+          {/* FR-172: đường vào là thứ khách Quận 5 hỏi đầu tiên - nói ngay trên thẻ */}
           {listing.access_type && ACCESS_SHORT[listing.access_type] && (
             <span className="rounded-full bg-navy/80 px-2.5 py-1 text-[11px] font-bold text-white">
               {ACCESS_SHORT[listing.access_type]}
             </span>
           )}
         </span>
-        {/* Chưa có ảnh thật của căn này → NÓI RA. Ảnh đang hiện là ảnh minh hoạ
+        {/* Chưa có ảnh thật của căn này - NÓI RA. Ảnh đang hiện là ảnh minh hoạ
             dùng chung, không phải căn ở địa chỉ này. Không ghi thì khách đi xem
-            nhà dựa trên một tấm hình của căn khác — đúng thứ FR-104 và cả tinh
+            nhà dựa trên một tấm hình của căn khác - đúng thứ FR-104 và cả tinh
             thần "trung thực với ảnh" trong kịch bản bot sinh ra để tránh. */}
         {!photo && (
           <span className="absolute bottom-2.5 right-3 rounded-full bg-navy/75 px-2.5 py-1 text-[11px] font-semibold text-white/95">
@@ -95,7 +95,7 @@ export default function ListingCard({
           </span>
         </p>
 
-        {/* Hàng thông số icon mảnh — chỉ hiện thứ tin này THẬT SỰ có.
+        {/* Hàng thông số icon mảnh - chỉ hiện thứ tin này THẬT SỰ có.
             Veedoo còn cột toilet/chỗ đậu xe, kho mình không có nên bỏ. */}
         <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line pt-3 text-sm text-mute">
           {listing.property_type && TYPE_LABEL[listing.property_type] && (
@@ -116,7 +116,7 @@ export default function ListingCard({
               {listing.bedrooms} PN
             </span>
           ) : null}
-          {/* FR-172: WC + số tầng — hai cột Veedoo có mà kho trước đây không có */}
+          {/* FR-172: WC + số tầng - hai cột Veedoo có mà kho trước đây không có */}
           {listing.bathrooms ? (
             <span className="tabular-nums">{listing.bathrooms} WC</span>
           ) : null}

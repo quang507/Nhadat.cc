@@ -173,7 +173,7 @@ export default function Page() {
         <button type="button" className={chip(chiChuaMau)} onClick={() => setChiChuaMau(!chiChuaMau)}>Chưa có mẫu chuẩn <span className="float-right text-xs opacity-70">{dem.chuaMau}</span></button>
         <div className="mt-auto rounded-xl border border-line bg-white p-3 text-xs text-mute">
           Mẫu chuẩn: <b className="text-navy">{mau.filter((m) => m.dung_lam !== "bo").length}/300</b>
-          <Link href="/admin/mau-cau" className="ml-1 font-semibold text-brand hover:underline">kho mẫu →</Link>
+          <Link href="/admin/mau-cau" className="ml-1 font-semibold text-brand hover:underline">kho mẫu -</Link>
         </div>
       </aside>
 

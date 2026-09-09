@@ -22,7 +22,7 @@ function LoginForm() {
       setState("error");
       setErrMsg(
         "Google chưa bật: " + error.message +
-        " (cần bật Google provider trong Supabase → Authentication → Providers)",
+        " (cần bật Google provider trong Supabase - Authentication - Providers)",
       );
     }
   };
@@ -31,7 +31,7 @@ function LoginForm() {
     e.preventDefault();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       setState("error");
-      setErrMsg("Email chưa đúng định dạng — anh chị xem lại giúp em.");
+      setErrMsg("Email chưa đúng định dạng - anh chị xem lại giúp em.");
       return;
     }
     setState("sending");
@@ -67,7 +67,7 @@ function LoginForm() {
         </svg>
         Đăng nhập bằng Google
       </button>
-      <p className="my-4 text-center text-xs text-mute">— hoặc qua email —</p>
+      <p className="my-4 text-center text-xs text-mute">- hoặc qua email -</p>
 
       {state === "sent" ? (
         <div className="mt-8 rounded-king border border-line bg-white p-6">
@@ -101,7 +101,7 @@ function LoginForm() {
       )}
 
       <p className="mt-6 text-sm text-mute">
-        Anh chị là <strong>chính chủ</strong> muốn rao? Không cần tài khoản —{" "}
+        Anh chị là <strong>chính chủ</strong> muốn rao? Không cần tài khoản -{" "}
         <a href="/raoban" className="font-semibold text-brand hover:underline">rao qua Zalo một câu là xong</a>.
       </p>
     </div>

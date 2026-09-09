@@ -19,14 +19,14 @@ const nunito = Nunito({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "nhadat.cc — Mua bán nhà đất Sài Gòn & Long An, chat là xong",
-    template: "%s | nhadat.cc",
+    default: "AI Ơi Nhà Đất - Mua bán nhà đất Sài Gòn và Long An, chat là xong",
+    template: "%s | AI Ơi Nhà Đất",
   },
   description:
-    "Môi giới bất động sản Sài Gòn (các phường mới) và Long An, trực 24/7 qua Zalo. Không thu số điện thoại, không spam. Nhà phố, hẻm xe hơi, mặt tiền — hỏi là có.",
+    "Môi giới bất động sản Sài Gòn (các phường mới) và Long An, trực 24/7 qua Zalo. Không thu số điện thoại, không spam. Nhà phố, hẻm xe hơi, mặt tiền - hỏi là có.",
   alternates: { canonical: "./" },
   openGraph: {
-    siteName: "nhadat.cc",
+    siteName: "AI Ơi Nhà Đất",
     locale: "vi_VN",
     type: "website",
     images: [{ url: "/img/house1.jpg", width: 1200, height: 800, alt: "Nhà phố Sài Gòn" }],

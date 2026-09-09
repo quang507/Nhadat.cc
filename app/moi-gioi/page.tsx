@@ -23,7 +23,7 @@ export const revalidate = 3600;
 export const metadata: Metadata = {
   title: "Nhà môi giới Sài Gòn & Long An",
   description:
-    "Mạng lưới nhà môi giới Sài Gòn và Long An của nhadat.cc, mỗi người chuyên một khu — giữ tối thiểu 10 tin đang rao và tỷ lệ chốt từ 5%.",
+    "Mạng lưới nhà môi giới Sài Gòn và Long An của AI Ơi Nhà Đất, mỗi người chuyên một khu - giữ tối thiểu 10 tin đang rao và tỷ lệ chốt từ 5%.",
 };
 
 type Agent = {
@@ -41,10 +41,10 @@ export default async function Page() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
-      <h1 className="text-3xl font-extrabold [text-wrap:balance]">Nhà môi giới chuyên từng khu — Sài Gòn & Long An</h1>
+      <h1 className="text-3xl font-extrabold [text-wrap:balance]">Nhà môi giới chuyên từng khu - Sài Gòn & Long An</h1>
       <p className="mt-2 max-w-xl text-mute">
         Mạng lưới môi giới chuyên một quận, giữ tối thiểu 10 tin đang rao. Anh
-        chị không cần chọn người — nhắn Zalo là tụi em điều phối.
+        chị không cần chọn người - nhắn Zalo là tụi em điều phối.
       </p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
@@ -65,7 +65,7 @@ export default async function Page() {
         })}
         {agents.length === 0 && (
           <div className="rounded-king border border-line bg-white p-8 text-center text-mute sm:col-span-2">
-            Mạng lưới đang tuyển — mục tiêu 20 nhà môi giới, khởi điểm khu Quận 5 cũ rồi mở ra các phường Sài Gòn và Long An.
+            Mạng lưới đang tuyển - mục tiêu 20 nhà môi giới, khởi điểm khu Quận 5 cũ rồi mở ra các phường Sài Gòn và Long An.
           </div>
         )}
       </div>

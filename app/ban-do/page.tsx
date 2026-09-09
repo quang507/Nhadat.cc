@@ -33,7 +33,7 @@ export default async function Page() {
         </p>
       </div>
       <p className="mt-1 text-xs text-mute/70">
-        Chấm theo địa chỉ trên tin (đường/hẻm, chưa tới số nhà) — địa chỉ chính
+        Chấm theo địa chỉ trên tin (đường/hẻm, chưa tới số nhà) - địa chỉ chính
         xác tụi em chia sẻ khi hẹn xem nhà.
       </p>
 

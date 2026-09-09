@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
     // Chưa biết tên thì gọi "anh/chị" — cấm model bịa tên (nó hay mượn tên trong ví dụ tone)
     const whoLabel = who?.name
       ? `Anh/chị ${who.name}`
-      : "Khách (CHƯA biết tên — xưng hô 'anh/chị' chung, TUYỆT ĐỐI không bịa tên)";
+      : "Khách (CHƯA biết tên - xưng hô 'anh/chị' chung, TUYỆT ĐỐI không bịa tên)";
     // FR-32: nạp chi tiết căn để "gửi thêm thông tin" có nội dung thật, không bịa
     let canInfo = "";
     if (r.kind === "followup" && r.listing_id) {
@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
             ? `${whoLabel} hỏi về căn này rồi im ~2-3 tiếng: ${canInfo || r.note}. ` +
               `Soạn MỘT tin Zalo NGẮN (1-2 câu) CHỦ ĐỘNG kể thêm MỘT chi tiết đáng giá về đúng căn đó (chỉ từ dữ liệu trên, không bịa; chưa xác minh thì không khẳng định). Không thúc ép, kết bằng câu hỏi nhẹ hoặc một câu khẳng định rồi chờ.`
             : `${whoLabel} có hứa: "${r.note}". Giờ đã tới hẹn. ` +
-              `Soạn MỘT tin Zalo RẤT NGẮN (~20 từ) nhắc khéo — thân thiện, KHÔNG trách móc, cho đường lùi ("khi nào tiện anh/chị gửi em nha").`,
+              `Soạn MỘT tin Zalo RẤT NGẮN (~20 từ) nhắc khéo - thân thiện, KHÔNG trách móc, cho đường lùi ("khi nào tiện anh/chị gửi em nha").`,
         }],
       });
       } catch (e) {
@@ -409,7 +409,7 @@ Deno.serve(async (req) => {
   // (đã soát 29/08) nên quét ở đây là đủ, khỏi thêm cron riêng.
   if (!dry_run) {
     const { data: donRows, error: donErr } = await client.from("reminders")
-      .update({ status: "cancelled", last_error: "mo coi — instance chet giua chung" })
+      .update({ status: "cancelled", last_error: "mo coi - instance chet giua chung" })
       .eq("kind", "reengage").eq("status", "pending")
       .lt("created_at", new Date(Date.now() - 15 * 60e3).toISOString())
       .select("id");
@@ -554,7 +554,7 @@ Deno.serve(async (req) => {
           messages: [{
             role: "user",
             content:
-              `Khách${b.name ? ` tên ${b.name}` : ""} là NGƯỜI MUA đang TÌM nhà (họ KHÔNG bán — đừng nhầm vai). Hồ sơ nhu cầu tìm mua: ${JSON.stringify(b.preferences ?? {})}. Im lặng ${Math.floor(imNgay)} ngày.\n` +
+              `Khách${b.name ? ` tên ${b.name}` : ""} là NGƯỜI MUA đang TÌM nhà (họ KHÔNG bán - đừng nhầm vai). Hồ sơ nhu cầu tìm mua: ${JSON.stringify(b.preferences ?? {})}. Im lặng ${Math.floor(imNgay)} ngày.\n` +
               (canCuoi ? `CĂN CUỐI khách được gửi/hỏi: ${canCuoi.tomTat}${canCuoi.anh > 0 ? ` · em có ${canCuoi.anh} ảnh thật` : " · chưa có ảnh"}.\n` : "Chưa có căn nào cụ thể.\n") +
               (kho.length ? `KHO CÙNG KHU (chỉ được nhắc căn trong danh sách này, nguyên mã #): ${kho.join("; ")}.\n` : "") +
               `Hai tin gần nhất em đã gửi (TRÁNH lặp giọng/mẫu): ${JSON.stringify(lastBot)}.\n` +

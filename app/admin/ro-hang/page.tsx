@@ -62,7 +62,7 @@ const DUOI_THANH_PHO = /(,\s*Quận 5)?,\s*(tp\.?|thành phố)?\s*Hồ Chí Min
 const viTri = (d: Dong) =>
   (d.location_raw ?? [d.street, d.ward, d.district].filter(Boolean).join(", "))
     .trim()
-    .replace(/\r?\n/g, " — ")
+    .replace(/\r?\n/g, " - ")
     .replace(DUOI_THANH_PHO, "");
 const moTa = (d: Dong) =>
   sanitizeDescription(d.description)
@@ -328,7 +328,7 @@ export default function Page() {
         <div>
           <div className="flex items-center gap-2">
             <Link href="/admin" className="text-sm font-semibold text-brand hover:underline">
-              ← Quay lại Bàn quản trị
+              Quay lại Bàn quản trị
             </Link>
             <span className="text-mute text-xs">/</span>
             <span className="text-xs text-mute font-medium">Quản lý rổ hàng</span>
@@ -543,7 +543,7 @@ export default function Page() {
             onClick={() => setTrang(t - 1)}
             className="rounded-md border border-line px-4 py-1.5 font-semibold text-navy hover:border-brand hover:text-brand disabled:opacity-40 bg-white"
           >
-            ← Trước
+            Trước
           </button>
           <span className="text-mute tabular-nums font-medium">trang {t}/{soTrang} · {MOI_TRANG} tin mỗi trang</span>
           <button
@@ -552,7 +552,7 @@ export default function Page() {
             onClick={() => setTrang(t + 1)}
             className="rounded-md border border-line px-4 py-1.5 font-semibold text-navy hover:border-brand hover:text-brand disabled:opacity-40 bg-white"
           >
-            Sau →
+            Sau -
           </button>
         </div>
       )}
@@ -568,7 +568,7 @@ export default function Page() {
                   <span className="text-brand font-mono">#{dangSua.code}</span>
                 </h3>
                 <p className="text-xs text-mute mt-0.5">
-                  Cập nhật trực tiếp vào cơ sở dữ liệu rổ hàng nhadat.cc
+                  Cập nhật trực tiếp vào cơ sở dữ liệu rổ hàng AI Ơi Nhà Đất
                 </p>
               </div>
               <button

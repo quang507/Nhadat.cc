@@ -64,7 +64,7 @@ export default function Page() {
     e.preventDefault();
     if (!sellerId) return;
     if (rao.trim().length < 15) {
-      setMsg("Câu rao ngắn quá — ghi thêm vị trí, quy mô, giá giúp em.");
+      setMsg("Câu rao ngắn quá - ghi thêm vị trí, quy mô, giá giúp em.");
       return;
     }
     setMsg("Đang đăng…");
@@ -85,7 +85,7 @@ export default function Page() {
     if (error) return setMsg("Đăng không được: " + error.message);
     setMine((m) => [data as Listing, ...m]);
     setRao(""); setPriceRaw(""); setQuan("Quận 5");
-    setMsg(`Đã nhận tin #${code} — tụi em bóc tách chi tiết, đủ thông tin là tin tự lên web.`);
+    setMsg(`Đã nhận tin #${code} - tụi em bóc tách chi tiết, đủ thông tin là tin tự lên web.`);
   };
 
   if (email === undefined) {
@@ -116,7 +116,7 @@ export default function Page() {
       </div>
 
       <form onSubmit={submit} className="mt-6 rounded-king border border-line bg-white p-5">
-        <h2 className="font-bold">Đăng tin mới — một câu là đủ</h2>
+        <h2 className="font-bold">Đăng tin mới - một câu là đủ</h2>
         <textarea
           value={rao}
           onChange={(e) => setRao(e.target.value)}
@@ -126,7 +126,7 @@ export default function Page() {
         />
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label>
-            <span className="mb-1 block text-xs font-semibold text-mute">Phường (khu Quận 5 cũ — khu khác ghi trong câu rao)</span>
+            <span className="mb-1 block text-xs font-semibold text-mute">Phường (khu Quận 5 cũ - khu khác ghi trong câu rao)</span>
             <select value={ward} onChange={(e) => setWard(e.target.value)}
               className="w-full rounded-lg border border-line bg-white px-3 py-2.5">
               {WARDS.map((w) => <option key={w}>{w}</option>)}
@@ -187,7 +187,7 @@ export default function Page() {
           </div>
         ))}
         {mine.length === 0 && (
-          <p className="p-8 text-center text-mute">Chưa có tin nào — đăng tin đầu tiên ở trên.</p>
+          <p className="p-8 text-center text-mute">Chưa có tin nào - đăng tin đầu tiên ở trên.</p>
         )}
       </div>
     </div>

@@ -67,10 +67,11 @@ function ThanhTren() {
     <header className="sticky top-0 z-40 border-b border-navy-soft bg-navy text-white">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-1 px-3">
         <Link href="/admin" className="mr-3 flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-white/10" aria-label="Về bàn làm việc">
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-white/15 text-sm font-bold">AI</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/img/logo.svg" alt="" width={32} height={32} className="h-8 w-8 rounded-md bg-white p-0.5" />
           <span className="hidden leading-tight md:block">
             <span className="block text-sm font-bold">AI Ơi Nhà Đất</span>
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-white/60">Quản trị · nhadat.cc</span>
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-white/60">Quản trị</span>
           </span>
         </Link>
         <nav aria-label="Phân hệ" className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">

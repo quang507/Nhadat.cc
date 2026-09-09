@@ -51,7 +51,7 @@ export default function MapView({
           `<div style="font-family:inherit;min-width:170px">
             <strong>${esc(formatPrice(l.price_vnd, l.price_raw))}</strong> · ${esc(l.ward ?? "")}<br/>
             <span style="color:#687686">#${esc(code)} · ${l.deal === "cho_thue" ? "cho thuê" : "bán"}</span><br/>
-            <a href="/nha-dat/${encodeURIComponent(code)}" style="color:#e60023;font-weight:700">Xem tin →</a>
+            <a href="/nha-dat/${encodeURIComponent(code)}" style="color:#e60023;font-weight:700">Xem tin -</a>
           </div>`,
         );
       }

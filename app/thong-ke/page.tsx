@@ -9,7 +9,7 @@ export const revalidate = 3600;
 export const metadata: Metadata = {
   title: "Giá nhà đất Quận 5 theo phường",
   description:
-    "Giá rao trung bình mỗi m² nhà đất Quận 5 theo từng phường, tính từ tin rao đang có trên nhadat.cc.",
+    "Giá rao trung bình mỗi m² nhà đất Quận 5 theo từng phường, tính từ tin rao đang có trên AI Ơi Nhà Đất.",
 };
 
 const VND = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
@@ -50,11 +50,11 @@ export default async function Page() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
       <h1 className="text-3xl font-extrabold [text-wrap:balance]">
-        Giá nhà đất Quận 5 — nhìn theo phường
+        Giá nhà đất Quận 5 - nhìn theo phường
       </h1>
       <p className="mt-2 max-w-xl text-mute">
-        Tính từ {total} tin đang rao bán có đủ giá và diện tích trên nhadat.cc.
-        Đây là giá rao, không phải giá chốt — muốn biết giá chốt thật của khu nào,
+        Tính từ {total} tin đang rao bán có đủ giá và diện tích trên AI Ơi Nhà Đất.
+        Đây là giá rao, không phải giá chốt - muốn biết giá chốt thật của khu nào,
         nhắn tụi em.
       </p>
 
@@ -83,7 +83,7 @@ export default async function Page() {
         ))}
         {rows.length === 0 && (
           <p className="p-8 text-center text-mute">
-            Chưa đủ dữ liệu để thống kê — quay lại sau vài ngày nữa.
+            Chưa đủ dữ liệu để thống kê - quay lại sau vài ngày nữa.
           </p>
         )}
       </div>

@@ -11,7 +11,7 @@ type SP = Promise<{ phuong?: string; trang?: string; q?: string }>;
 export async function generateMetadata({ searchParams }: { searchParams: SP }): Promise<Metadata> {
   const { q } = await searchParams;
   return {
-    title: "Mua bán nhà đất Sài Gòn & Long An — giá mới nhất",
+    title: "Mua bán nhà đất Sài Gòn & Long An - giá mới nhất",
     description:
       "Danh sách nhà đất đang bán tại Sài Gòn (các phường mới, khởi điểm khu Quận 5 cũ) và Long An: nhà phố, hẻm xe hơi, mặt tiền. Hỏi chi tiết từng căn qua Zalo, không cần để lại số điện thoại.",
     ...(q ? { robots: { index: false, follow: true } } : {}),

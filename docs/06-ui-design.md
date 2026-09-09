@@ -362,7 +362,7 @@ Khác AOND: tối đa 1 emoji/tin; bảy quy tắc trên là luật gốc khi ha
 | 9 | Lỗi có cách sửa | Hộp lỗi nói "Lỗi: …" kèm nút đóng; không toast biến mất tự động |
 | 10 | Trợ giúp | Tooltip (`title`) trên nút đặc biệt; trang mẫu câu có câu dẫn cách dùng |
 
-**Cấm dấu hiệu AI trên web** (song song với "Cấm dấu hiệu AI trong tin nhắn" §6.8): emoji làm icon; nút/ô nhập bo tròn hoàn toàn (`rounded-full`) trừ avatar và chấm trạng thái; `shadow-*` trên thẻ và nút (chỉ modal/menu nổi được `shadow-lg`); gradient; `animate-pulse`; chữ `font-extrabold` khắp nơi; nhãn kiểu "Admin Console", "✨"; mô tả sáo. Kiểm bằng `bun run truyvet`? — chưa; soát tay bằng lệnh đếm emoji trong `app/` + `components/` (0 là đạt, trừ `✓`/`✗` dạng chữ).
+**Cấm dấu hiệu AI trên web** (song song với "Cấm dấu hiệu AI trong tin nhắn" §6.8): dấu gạch dài "—" (dùng "-" hoặc dấu chấm, chủ dự án 09/09); mũi tên "→ ↗ ←" trong nút và nhãn (dùng chữ: "Quay lại", "Xem bảng", "thành"); emoji làm icon; nút/ô nhập bo tròn hoàn toàn (`rounded-full`) trừ avatar và chấm trạng thái; `shadow-*` trên thẻ và nút (chỉ modal/menu nổi được `shadow-lg`); gradient; `animate-pulse`; chữ `font-extrabold` khắp nơi; nhãn kiểu "Admin Console", "✨"; mô tả sáo. Kiểm bằng `bun run truyvet`? — chưa; soát tay bằng lệnh đếm emoji trong `app/` + `components/` (0 là đạt, trừ `✓`/`✗` dạng chữ).
 
 **Nút bắt buộc có ở đúng chỗ (soát 09/09):** thanh trên: Đăng tin, chuông, tìm, đăng xuất có chữ · Tin nhắn: Làm mới, Đã xử lý (khi cần người thật), Xoá khách, Sửa thành câu chuẩn ở mỗi câu bot · Rổ hàng: Sửa, Xoá tin, Tải CSV, JSON, Đăng tin · Mẫu câu: Sửa, Xoá, Mở chat, Tải JSONL · Bàn làm việc: bốn thẻ KPI bấm được.
 

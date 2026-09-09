@@ -16,7 +16,7 @@ export default function ZaloWidget() {
       href={zaloLink(`widget:${pathname ?? "/"}`)}
       target="_blank"
       rel="noopener"
-      aria-label="Chat Zalo với nhadat.cc"
+      aria-label="Chat Zalo với AI Ơi Nhà Đất"
       className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-full bg-zalo py-2.5 pl-3 pr-4 font-bold text-white shadow-lg shadow-zalo/30 transition hover:opacity-90 active:scale-[0.97]"
     >
       {/* logo chat bubble tối giản, không kéo thư viện icon */}

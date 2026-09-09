@@ -48,7 +48,7 @@ export async function generateStaticParams() {
   // được dựng sẵn, bảng route vẫn hiện ● nên kiểm NFR-17 không bắt được (đo
   // 08/09: prerender-manifest có 80 route, 0 route /nha-dat/). Nói ra ở đây.
   if (error || !data?.length) {
-    console.warn(`[nha-dat] generateStaticParams: ${error ? error.message : "0 tin"} — không dựng sẵn trang tin nào, chỉ render on-demand.`);
+    console.warn(`[nha-dat] generateStaticParams: ${error ? error.message : "0 tin"} - không dựng sẵn trang tin nào, chỉ render on-demand.`);
   }
   return (data ?? []).map((l) => ({ code: l.code as string }));
 }
@@ -109,7 +109,7 @@ export async function generateMetadata({
   const listing = await getListing(decodeURIComponent(code));
   if (!listing) return { title: "Không tìm thấy tin" };
   const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
-  const title = `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất ${loc} — ${formatPrice(listing.price_vnd, listing.price_raw)} · #${listing.code}`;
+  const title = `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất ${loc} - ${formatPrice(listing.price_vnd, listing.price_raw)} · #${listing.code}`;
   const description = sanitizeDescription(listing.description).slice(0, 155);
   // Canonical theo MÃ THẬT của tin, không theo tham số URL: tin mở được bằng
   // cả legacy_code (20260908c), mà hai URL cùng tự nhận canonical là Google thấy
@@ -271,7 +271,7 @@ export default async function Page({
         dangerouslySetInnerHTML={{ __html: jsonLd(listing, photos, desc).replace(/</g, "\\u003c") }}
       />
 
-      {/* Dải tiêu đề navy — bản Veedoo, nhưng bỏ ảnh nền (ảnh kho quá nhỏ để trải ngang) */}
+      {/* Dải tiêu đề navy - bản Veedoo, nhưng bỏ ảnh nền (ảnh kho quá nhỏ để trải ngang) */}
       <div className="bg-navy py-10 text-white">
         <div className="mx-auto max-w-6xl px-4">
           <nav className="text-sm text-white/55">
@@ -302,16 +302,16 @@ export default async function Page({
               className="aspect-[16/9] w-full object-cover"
             />
             {/* Dòng chữ dưới gallery đã nói "ảnh thật gửi qua Zalo", nhưng nó
-                nằm dưới tấm ảnh to này — người lướt nhanh chỉ thấy ảnh. Dán
+                nằm dưới tấm ảnh to này - người lướt nhanh chỉ thấy ảnh. Dán
                 nhãn ngay TRÊN ảnh mới thật sự là nói. */}
             {photos.length === 0 && (
               <span className="absolute bottom-3 right-4 rounded-full bg-navy/80 px-3 py-1.5 text-xs font-semibold text-white">
-                Ảnh minh hoạ — chưa có ảnh thật của căn này
+                Ảnh minh hoạ - chưa có ảnh thật của căn này
               </span>
             )}
           </div>
 
-          {/* Khối thông số NỔI đè chân ảnh — chữ ký của Veedoo (docs/01) */}
+          {/* Khối thông số NỔI đè chân ảnh - chữ ký của Veedoo (docs/01) */}
           {stats.length > 0 && (
             <div className="mx-auto -mt-10 w-[92%] rounded-king bg-navy px-6 py-6 text-white shadow-[0_18px_40px_rgba(13,37,61,0.28)] md:-mt-14 md:w-[86%] md:px-10 md:py-8">
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
@@ -345,7 +345,7 @@ export default async function Page({
         <p className="mt-3 text-xs text-mute/80">
           {photos.length
             ? `${photos.length} ảnh thật của căn này. Cần thêm góc nào, nhắn Zalo tụi em gửi liền.`
-            : `Ảnh thật của căn này gửi qua Zalo — nhắn “cho em xem hình #${listing.code}”.`}
+            : `Ảnh thật của căn này gửi qua Zalo - nhắn “cho em xem hình #${listing.code}”.`}
         </p>
 
         <div className="mt-10 grid gap-8 lg:grid-cols-3">
@@ -400,7 +400,7 @@ export default async function Page({
                   <p className="mt-2 text-xs text-mute/80">
                     {listing.specs_source === "chu_xac_nhan"
                       ? "Thông số do chủ nhà xác nhận qua Zalo."
-                      : "Thông số đọc từ tin rao, chưa xác minh với chủ nhà — hỏi qua Zalo là tụi em đi hỏi giùm."}
+                      : "Thông số đọc từ tin rao, chưa xác minh với chủ nhà - hỏi qua Zalo là tụi em đi hỏi giùm."}
                   </p>
                 </>
               )}
@@ -412,13 +412,13 @@ export default async function Page({
               )}
             </div>
 
-            {/* FR-10 (dựng 04/09/2026): bản đồ MỨC PHƯỜNG — chấm là tâm phường
+            {/* FR-10 (dựng 04/09/2026): bản đồ MỨC PHƯỜNG - chấm là tâm phường
                 + lệch định trước theo mã tin, KHÔNG phải vị trí căn (FR-104). */}
             {listing.ward && (
               <div className="mt-5 rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
                 <h2 className="text-lg font-extrabold">Khu vực</h2>
                 <p className="mb-3 mt-1 text-sm text-mute">
-                  Vị trí hiển thị ở mức phường ({listing.ward}) — chấm trên bản đồ không phải địa chỉ căn.
+                  Vị trí hiển thị ở mức phường ({listing.ward}) - chấm trên bản đồ không phải địa chỉ căn.
                   Địa chỉ chính xác tụi em chia sẻ khi hẹn xem nhà.
                 </p>
                 <WardMap listing={{ ...(listing as CardRow), lat: null, lng: null } as MapRow} />
@@ -429,7 +429,7 @@ export default async function Page({
               <div className="mt-5 rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
                 <h2 className="text-lg font-extrabold">Đã xác minh với chủ nhà</h2>
                 <ul className="mt-3 divide-y divide-line">
-                  {/* FR-104: answer là chữ chính chủ gõ trong Zalo, hay kèm SĐT —
+                  {/* FR-104: answer là chữ chính chủ gõ trong Zalo, hay kèm SĐT -
                       phải lọc y như description, đừng in thẳng ra web. */}
                   {facts.map((f, i) => (
                     <li key={i} className="flex gap-4 py-3 text-sm">
@@ -446,7 +446,7 @@ export default async function Page({
           <aside className="h-fit rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)] lg:sticky lg:top-20">
             <p className="text-lg font-extrabold">Hỏi về căn #{listing.code}</p>
             <p className="mt-2 text-sm leading-6 text-mute">
-              Còn không? Hẻm rộng bao nhiêu? Sổ sách sao? — nhắn Zalo, tụi em trả
+              Còn không? Hẻm rộng bao nhiêu? Sổ sách sao? - nhắn Zalo, tụi em trả
               lời ngay, chưa rõ thì đi hỏi chủ nhà giùm anh chị.
             </p>
             <a

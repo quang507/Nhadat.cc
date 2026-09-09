@@ -2,13 +2,13 @@ import type { Metadata } from "next";
 import { zaloLink } from "@/lib/format";
 
 export const metadata: Metadata = {
-  title: "Rao bán nhà — một câu là xong",
+  title: "Rao bán nhà - một câu là xong",
   description:
     "Rao bán nhà đất Sài Gòn, Long An không cần điền form: nhắn một câu qua Zalo, AI bóc tách và viết tin giùm. Phí chỉ khi bán được: chính chủ 1%, môi giới 0.5%.",
 };
 
 const STEPS = [
-  ["1", "Nhắn một câu", "“Bán nhà HXH xe tải quay đầu, gần ngã tư Trần Bình Trọng, 9 tỉ bớt lộc, Phường 4 Quận 5” — vậy là đủ."],
+  ["1", "Nhắn một câu", "“Bán nhà HXH xe tải quay đầu, gần ngã tư Trần Bình Trọng, 9 tỉ bớt lộc, Phường 4 Quận 5” - vậy là đủ."],
   ["2", "Tụi em viết tin giùm", "AI bóc tách vị trí, giá, quy mô và viết lại nhiều phiên bản; anh chị duyệt một cái là đăng."],
   ["3", "Rao tới khi gặp đúng người mua", "Khách hỏi gì tụi em trả lời; chỉ nhắn anh chị khi thật sự cần xác minh hoặc chốt lịch xem. Không spam."],
 ];
@@ -21,7 +21,7 @@ export default function Page() {
       </h1>
       <p className="mt-3 text-navy/70">
         Không form, không tài khoản, không phí đăng tin. Phí chỉ phát sinh khi
-        bán được: chính chủ 1% — môi giới 0.5% giá trị giao dịch.
+        bán được: chính chủ 1% - môi giới 0.5% giá trị giao dịch.
       </p>
 
       <div className="mt-8 space-y-4">
@@ -45,7 +45,7 @@ export default function Page() {
         Nhắn câu rao qua Zalo ngay
       </a>
       <p className="mt-3 text-center text-sm text-mute">
-        Chủ nhà ngại gõ? Gọi tụi em đọc miệng cũng được — CTV ghi giùm.
+        Chủ nhà ngại gõ? Gọi tụi em đọc miệng cũng được - CTV ghi giùm.
       </p>
     </div>
   );

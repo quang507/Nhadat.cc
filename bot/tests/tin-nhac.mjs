@@ -21,7 +21,7 @@ for (const [ten, note] of [
   ["xin đổi nhãn", "✏️ Zalo …8895 đang nhãn CHÍNH CHỦ nhưng tự xưng MÔI GIỚI."],
 ]) {
   const t = escalationText({ kind: "escalation", note, seller_id: null });
-  ok(`${ten}: không dán thêm "🔔 nhadat.cc:"`, !/🔔 nhadat\.cc:/.test(t), t);
+  ok(`${ten}: không dán thêm "🔔 AI Ơi Nhà Đất:"`, !/🔔 AI Ơi Nhà Đất:/.test(t), t);
   ok(`${ten}: không có hai dấu chấm cuối`, !/\.\.\s*$/.test(t), t);
   ok(`${ten}: không bảo trả lời khách`, !/trả lời khách sớm/.test(t), t);
 }
@@ -33,7 +33,7 @@ for (const [ten, note] of [
     note: "khách hỏi #BDS-Q5-0001 · cần: pháp lý (sổ hồng, hoàn công) · giao ctv.",
     seller_id: null,
   });
-  ok("CTV: có tiền tố nhadat.cc", /^🔔 nhadat\.cc: khách hỏi/.test(t), t);
+  ok("CTV: có tiền tố AI Ơi Nhà Đất", /^🔔 AI Ơi Nhà Đất: khách hỏi/.test(t), t);
   ok("CTV: có đuôi nhắc trả lời khách", /trả lời khách sớm nha\.$/.test(t), t);
   ok("CTV: không hai dấu chấm", !/\.\.\s/.test(t), t);
 }
@@ -45,7 +45,7 @@ for (const [ten, note] of [
     note: "khách đang quan tâm căn #BDS-Q5-0001 của mình, cần bổ sung: diện tích đất.",
     seller_id: "s-1",
   });
-  ok("chính chủ: mở bằng lời chào", /^Chào anh\/chị, em bên nhadat\.cc ạ\./.test(t), t);
+  ok("chính chủ: mở bằng lời chào", /^Chào anh\/chị, em bên AI Ơi Nhà Đất ạ\./.test(t), t);
   ok("chính chủ: không hai dấu chấm", !/\.\.\s/.test(t), t);
   ok("chính chủ: đọc nhãn tiếng người, không đọc tên cột", /diện tích đất/.test(t) && !/dien_tich_dat/.test(t), t);
 }
@@ -54,7 +54,7 @@ for (const [ten, note] of [
 {
   const t = escalationText({ kind: "escalation", note: "💬 Dạ anh ơi, nhà mình sổ hồng riêng chưa ạ?", seller_id: "s-1" });
   ok("💬: gửi nguyên câu bot soạn", t === "Dạ anh ơi, nhà mình sổ hồng riêng chưa ạ?", t);
-  ok("💬: không có lời chào nhadat.cc", !/nhadat\.cc/.test(t), t);
+  ok("💬: không có lời chào AI Ơi Nhà Đất", !/em bên AI Ơi Nhà Đất/.test(t), t);
 }
 
 // ── report (báo cáo CTV 17h): gửi NGUYÊN VĂN, không thêm gì ─────────────────
