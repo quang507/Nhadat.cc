@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-09 22:19 (giờ VN)
+-- Sinh lúc: 2026-09-09 22:31 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -5807,6 +5807,7 @@ grant execute on function public.bo_dau(t text) to service_role;
 revoke all on function public.bo_dem_nhac_treo(p_gio integer) from public, anon, authenticated;
 grant execute on function public.bo_dem_nhac_treo(p_gio integer) to service_role;
 revoke all on function public.boc_tach_nhom(l listings) from public, anon, authenticated;
+grant execute on function public.boc_tach_nhom(l listings) to authenticated;
 grant execute on function public.boc_tach_nhom(l listings) to service_role;
 revoke all on function public.boc_tach_nhom(p_listing_id uuid) from public, anon, authenticated;
 grant execute on function public.boc_tach_nhom(p_listing_id uuid) to authenticated;
