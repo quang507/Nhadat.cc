@@ -138,6 +138,8 @@ export default function Page() {
   const [dangLuu, setDangLuu] = useState(false);
 
   useEffect(() => {
+    // Ô tìm trên thanh CRM (AdminShell) đưa ?q= sang đây.
+    try { const k = new URLSearchParams(location.search).get("q"); if (k) setQ(k); } catch { /* SSR */ }
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return setRole("anon");
       const { data: a } = await supabase

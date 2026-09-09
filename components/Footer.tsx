@@ -1,8 +1,13 @@
+"use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { zaloLink } from "@/lib/format";
 import { FEATURED_TAGS } from "@/lib/tags";
 
 export default function Footer() {
+  // Dưới /admin/* là khung CRM, không có chân trang công khai (09/09/2026).
+  const pathname = usePathname();
+  if (pathname?.startsWith("/admin")) return null;
   return (
     <>
       <footer className="bg-navy text-white/80">

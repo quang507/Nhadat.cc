@@ -1,4 +1,8 @@
+"use client";
+// Dưới /admin/* khung CRM (components/AdminShell.tsx) có thanh riêng — header
+// công khai tự ẩn để không có hai thanh chồng nhau (09/09/2026).
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { IconHeart } from "@/components/icons";
 import { zaloLink } from "@/lib/format";
 
@@ -12,6 +16,8 @@ const NAV = [
 ];
 
 export default function Header() {
+  const pathname = usePathname();
+  if (pathname?.startsWith("/admin")) return null;
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">

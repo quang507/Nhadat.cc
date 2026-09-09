@@ -8,8 +8,9 @@
 // thoại 30 ngày + CSV, ô tìm khách. Mọi danh sách dài lật 20 mục/trang (FR-80).
 // 08/09/2026 — Phân hệ CRM Khách Hàng Hai Vai (vừa mua vừa bán · gắn BĐS quan tâm · nhu cầu)
 // và Tái cấu trúc Phân Cấp Giao Diện (Hierarchical Tabs & KPI Overview Cards).
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription } from "@/lib/format";
 import UploadAnh from "@/components/UploadAnh";
@@ -150,7 +151,19 @@ function usePhanTrang<T>(xs: T[]) {
 
 const linkZalo = (uid: string | null) => (uid ? `https://zalo.me/${encodeURIComponent(uid)}` : null);
 
+// Khung CRM (09/09/2026): tab đi theo URL ?tab=todo|crm|stats|ops để thanh
+// trên (AdminShell) và các link chia sẻ được. useSearchParams cần Suspense.
 export default function Page() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-4xl px-4 py-16 text-mute font-medium">Đang mở bàn làm việc…</div>}>
+      <BanLamViec />
+    </Suspense>
+  );
+}
+
+function BanLamViec() {
+  const sp = useSearchParams();
+  const tabUrl = sp.get("tab");
   const [role, setRole] = useState<"loading" | "anon" | "user" | "admin">("loading");
   const [pending, setPending] = useState<TinCho[]>([]);
   const [counts, setCounts] = useState<{ tong: number; active: number; cho: number }>();
@@ -187,7 +200,12 @@ export default function Page() {
   });
 
   // Điều hướng phân hệ giao diện (Tabs Hierarchy)
-  const [activeTab, setActiveTab] = useState<"crm" | "todo" | "stats" | "ops">("crm");
+  const [activeTab, setActiveTab] = useState<"crm" | "todo" | "stats" | "ops">(
+    tabUrl === "crm" || tabUrl === "stats" || tabUrl === "ops" ? tabUrl : "todo",
+  );
+  useEffect(() => {
+    if (tabUrl === "crm" || tabUrl === "stats" || tabUrl === "ops" || tabUrl === "todo") setActiveTab(tabUrl);
+  }, [tabUrl]);
 
   const [bdsHot, setBdsHot] = useState<BdsHot[] | null>(null);
   const [doTre, setDoTre] = useState<DoTre | null | undefined>(undefined);
@@ -650,27 +668,7 @@ export default function Page() {
               : "đang đọc rổ hàng…"}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <Link
-            href="/admin/ro-hang"
-            className="rounded-full border border-line px-5 py-2 text-sm font-bold text-navy transition hover:border-brand hover:text-brand active:scale-[0.98] shadow-xs bg-white"
-          >
-            📋 Rổ hàng (như Excel)
-          </Link>
-          <Link
-            href="/admin/mau-cau"
-            title="FR-180: sửa câu bot thành câu chuẩn — tài sản huấn luyện giọng"
-            className="rounded-full border border-line px-5 py-2 text-sm font-bold text-navy transition hover:border-brand hover:text-brand active:scale-[0.98] shadow-xs bg-white"
-          >
-            ✏️ Mẫu câu chuẩn
-          </Link>
-          <Link
-            href="/admin/dang-tin"
-            className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98] shadow-xs"
-          >
-            + Đăng tin thủ công
-          </Link>
-        </div>
+        <p className="text-xs text-mute">Chuyển phân hệ bằng thanh trên; thẻ dưới đây cũng bấm được.</p>
       </header>
 
       {loi.length > 0 && (
@@ -684,7 +682,7 @@ export default function Page() {
         {/* Card 1: Khách CRM */}
         <button
           type="button"
-          onClick={() => setActiveTab("crm")}
+          onClick={() => { setActiveTab("crm"); history.replaceState(null, "", "/admin?tab=crm"); }}
           className={`text-left rounded-2xl p-4 border transition-all ${
             activeTab === "crm"
               ? "border-brand bg-brand/5 shadow ring-2 ring-brand/20"
@@ -706,7 +704,7 @@ export default function Page() {
         {/* Card 2: Việc cần xử lý */}
         <button
           type="button"
-          onClick={() => setActiveTab("todo")}
+          onClick={() => { setActiveTab("todo"); history.replaceState(null, "", "/admin?tab=todo"); }}
           className={`text-left rounded-2xl p-4 border transition-all ${
             activeTab === "todo"
               ? "border-brand bg-brand/5 shadow ring-2 ring-brand/20"
@@ -753,7 +751,7 @@ export default function Page() {
         {/* Card 4: Trạng thái Bot */}
         <button
           type="button"
-          onClick={() => setActiveTab("ops")}
+          onClick={() => { setActiveTab("ops"); history.replaceState(null, "", "/admin?tab=ops"); }}
           className={`text-left rounded-2xl p-4 border transition-all ${
             activeTab === "ops"
               ? "border-brand bg-brand/5 shadow ring-2 ring-brand/20"
@@ -773,66 +771,7 @@ export default function Page() {
         </button>
       </div>
 
-      {/* ═══ THANH CHUYỂN PHÂN HỆ (TABS NAVIGATION) ═══ */}
-      <nav className="mt-8 flex flex-wrap gap-2 border-b border-line pb-3">
-        <button
-          type="button"
-          onClick={() => setActiveTab("crm")}
-          className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all ${
-            activeTab === "crm"
-              ? "bg-navy text-white shadow-md"
-              : "bg-line/60 text-navy hover:bg-line"
-          }`}
-        >
-          <span>👥 CRM Khách Hàng & Hai Vai</span>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-extrabold ${
-            activeTab === "crm" ? "bg-white/20 text-white" : "bg-white text-navy"
-          }`}>
-            {danhSachCrm.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("todo")}
-          className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all ${
-            activeTab === "todo"
-              ? "bg-navy text-white shadow-md"
-              : "bg-line/60 text-navy hover:bg-line"
-          }`}
-        >
-          <span>⚡ Việc cần xử lý</span>
-          {canXuLy > 0 && (
-            <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-extrabold text-white">
-              {canXuLy}
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("stats")}
-          className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all ${
-            activeTab === "stats"
-              ? "bg-navy text-white shadow-md"
-              : "bg-line/60 text-navy hover:bg-line"
-          }`}
-        >
-          <span>📊 Báo cáo & Thống kê</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("ops")}
-          className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all ${
-            activeTab === "ops"
-              ? "bg-navy text-white shadow-md"
-              : "bg-line/60 text-navy hover:bg-line"
-          }`}
-        >
-          <span>🛠️ Vận hành & Tiện ích</span>
-        </button>
-      </nav>
+      {/* Thanh chuyển phân hệ nằm trên khung CRM (AdminShell) — 09/09/2026 */}
 
       {/* ═══════════════════════════════════════════════════════════════
           TAB 1: CRM KHÁCH HÀNG & HAI VAI

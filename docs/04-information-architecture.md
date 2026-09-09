@@ -53,7 +53,7 @@ flowchart TD
 | IA-09 | `/raoban/xac-nhan` | Bản bóc tách để S sửa + upload ảnh | ❌ | FR-94, FR-96 | ⛔ gộp vào `/raoban` |
 | IA-10 | `/raoban/quan-ly` → thật `/quan-ly` | Tin của tôi + câu hỏi chờ trả lời | ❌ | FR-98 | 🟡 tin của tôi có; câu hỏi chờ trả lời chưa |
 | IA-11 | `/ds/{token}` | Danh sách riêng cho một B (`noindex, nofollow`, robots chặn) | ❌ | FR-100 | ✅ trang có; bot chưa tự tạo (UF-12) |
-| IA-12 | `/admin`, `/admin/dang-tin` | Sức khoẻ bot, việc chờ, buyer side, đăng tin tay | ❌ | FR-70…81, FR-152 | ✅ đã dựng |
+| IA-12 | `/admin` (?tab=todo·crm·stats·ops), `/admin/tin-nhan`, `/admin/ro-hang` (+`/json`), `/admin/dang-tin`, `/admin/mau-cau` | Khung CRM (09/09/2026, bố cục theo ZaloCRM): thanh navy với tab theo phân hệ, ô tìm, chuông việc, avatar; Header/Footer công khai ẩn dưới `/admin` | ❌ | FR-70…81, FR-127, FR-152, FR-175, FR-180 | ✅ đã dựng |
 | IA-13 | `/du-an/{slug}` | Trang dự án + giỏ hàng (tin `project_id`), SSG | ✅ | FR-117, FR-113 | ✅ đã dựng |
 | IA-14 | `/api/search`, `/api/listing/parse` | Route handler JSON, không phải trang | ❌ robots chặn `/api/` | FR-09, FR-92 | ✅ đã dựng |
 | IA-15 | `/mua-ban`, `/cho-thue` | Lưới listing theo giao dịch, lọc bằng searchParams (`unstable_cache`) | ✅ (❌ khi có `q`) | FR-07, FR-08 | ✅ đã dựng |
