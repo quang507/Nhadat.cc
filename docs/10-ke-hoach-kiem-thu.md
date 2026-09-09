@@ -829,7 +829,7 @@ văn model sinh ra (không kiểm tự động được — đọc `so.hoi_thoai
 | TS-KYGUI-20 | e2e H8e/H8f: chủ gật bản nháp | bong bóng "Chúc mừng … X/100", cách thêm điểm, nhắc ảnh, hứa hỏi thêm; tin `dang_ban` vẫn còn câu thiếu trong view để cron hỏi bù | ✅ 09/09 |
 | TS-KYGUI-21 | e2e H10/H10b/H10c: mở câu ảnh (mô phỏng cron) → chủ nhắn "đủ rồi em, đừng hỏi nữa" → chấm "8 điểm" | `chu_noi_du_at` có, câu treo đóng, điểm KHÔNG đổi, không gọi model; bong bóng 2 xin chấm điểm; "8 điểm" → fact `danh_gia` + `boc_tach`, cảm ơn tiền định, không hỏi lại | ✅ 09/09 |
 | TS-KYGUI-22 | e2e H11/H12: rao "cần bán gấp nhà 123/4 an dương vương p9 …" / "… không gấp" | `gap` = true, `boc_tach.gap` = true, `location_raw` = "123/4 an dương vương"; "không gấp" → `gap` = false | ✅ 09/09 |
-| TS-KYGUI-23 | DB sau `20260909a`: `select diem_tin(l) from listings l`; `select * from cron.job where jobname='seller-hoi-bu-tick'`; md5 `bot_prompts` ↔ TS | `chi_tiet.anh` + `so_anh` có; cron */5 1-13; `seller_fewshot` và `seller_script_rules` khớp TS | ⏳ sau khi áp migration |
+| TS-KYGUI-23 | DB sau `20260909a`: `select diem_tin(l) from listings l`; `select * from cron.job where jobname='seller-hoi-bu-tick'`; md5 `bot_prompts` ↔ TS | `chi_tiet.anh` + `so_anh` có; cron */5 1-13; `seller_fewshot` và `seller_script_rules` khớp TS | ✅ 09/09 — áp qua execute_sql + ghi sổ; cron */5 1-13; md5 40de5445… / 5ce10f4a… khớp; diem_tin tin thật 78/89/10 có `anh`, `so_anh`; chat-reply v52, ask-seller v10, escalation-feed v15, nudge v26 |
 
 
 ## 10.8 Nghiệm thu theo từng tài liệu (04/09/2026)
