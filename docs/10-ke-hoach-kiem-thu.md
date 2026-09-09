@@ -39,7 +39,7 @@ quyết định câu vào → trường ra, bắt buộc chạy lại trước k
 
 | Bài | Kiểm gì | Công cụ |
 |---|---|---|
-| Đối chiếu thiết kế | từng màn so canvas/Figma; token `design/tokens.json` — sai token là lỗi, không phải "gần đúng" | soi tay |
+| Đối chiếu thiết kế | từng màn so với `06` (canvas/Figma và `design/tokens.json` đã xoá 08/09/2026); token thật là `app/globals.css` — sai token là lỗi, không phải "gần đúng" | soi tay |
 | Responsive | 375/768/1440px; bảng rộng cuộn trong container, body không cuộn ngang; sticky CTA Zalo mobile | Playwright |
 | Tone giọng chat | 7 quy tắc + mục Cấm (`docs/06 §6.8`) trên 50 hội thoại: đếm câu hỏi/lượt, tin kết thúc "?", từ cấm | script đếm trên log |
 | Accessibility | tương phản ≥4.5:1, vùng chạm ≥44px, focus ring, alt ảnh | axe-core + duyệt tay (persona P3) |

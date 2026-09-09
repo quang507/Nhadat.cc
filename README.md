@@ -19,7 +19,7 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 | 6 | [UI Design](docs/06-ui-design.md) | Design system + tone giọng chat |
 | 7 | [SRS](docs/07-srs.md) | Kiến trúc, data model, API, 13 tiêu chí nghiệm thu |
 | 8 | [Traceability](docs/08-traceability.md) | Ma trận truy vết BR→FR→UF→WF→SRS→AC |
-| 9 | [Open Issues](docs/09-open-issues.md) | 55 vấn đề — 35 đã chốt hoặc đã đóng (dọn 07/09: 13 mục hướng nhadat.cc 2024 không còn hợp AOND; 09/09 chiều chốt OPEN-32 ảnh vào kho, chốt lại OPEN-39 tên theo khách, OPEN-55 bảng 14 dòng chat Gemini ↔ hệ thống; 09/09 tối chốt OPEN-40 đủ loại BĐS), 20 còn chờ chủ dự án (OPEN-26/27/28 chốt một phần; OPEN-51/52 dựng lại từ nhánh cũ 08/09; OPEN-53 ảnh đếm tấm, OPEN-54 ngưỡng fine-tune 09/09) |
+| 9 | [Open Issues](docs/09-open-issues.md) | 55 vấn đề — 36 đã chốt hoặc đã đóng (dọn 07/09: 13 mục hướng nhadat.cc 2024 không còn hợp AOND; 09/09 chiều chốt OPEN-32 ảnh vào kho, chốt lại OPEN-39 tên theo khách, OPEN-55 bảng 14 dòng chat Gemini ↔ hệ thống; 09/09 tối chốt OPEN-40 đủ loại BĐS; 10/09 đóng OPEN-45 vì design/ đã xoá), 19 còn chờ chủ dự án (OPEN-26/27/28 chốt một phần; OPEN-51/52 dựng lại từ nhánh cũ 08/09; OPEN-53 ảnh đếm tấm, OPEN-54 ngưỡng fine-tune 09/09) |
 | 10 | [Kế hoạch kiểm thử](docs/10-ke-hoach-kiem-thu.md) | 4 tầng kiểm thử, bộ test chạy tay kèm kết quả mới nhất |
 | 11 | [Quy trình BA & tester](docs/11-quy-trinh.md) | Hai vòng làm việc, ba cổng, định nghĩa XONG |
 
@@ -48,25 +48,19 @@ Từ 24/08/2026 code nằm **trong chính repo này** (trước đó ở thư m�
 | `bot/bridge-zca/` | Bridge Zalo acc clone — chạy trên máy chủ dự án, không deploy |
 | `bot/tests/` | Test hồi quy chạy tay bằng Node (`docs/10 §TS-HQ`) |
 | `scripts/` | Script vận hành chạy tay: up ảnh, sao lưu DB |
-| `design/` | Design token + 13 artboard nguồn |
 
 Chi tiết bot: [`bot/README.md`](bot/README.md). Quy ước và ranh giới bảo mật:
 [`CLAUDE.md`](CLAUDE.md).
 
-## 📂 Tài liệu gốc (input thô — chỉ đọc)
+## 📂 Tài liệu gốc
+
+Tài liệu 2024 (`.pdf/.docx/.pptx/.xlsx`, `SS/`, `hình samples/`) và `design/` đã **xoá khỏi repo** 08/09/2026 (commit `459008d`, OPEN-48: ngưng kế thừa nhadat.cc 2024). Nội dung đã chưng cất vào `docs/`; bản đồ file gốc → tài liệu ở `CLAUDE.md §3`. Còn lại ở gốc:
 
 | Mục | Mô tả |
 |---|---|
-| `Tài liệu hệ thống nhadat.cc.pdf`, `SS/` | Tài liệu hệ thống (Le Duong, 10/2024, v.5) |
-| `nhadat.cc website.docx` | Mục tiêu website, SEO, hộp mời kết nối Zalo |
-| `biz model.docx` / `biz model.pdf` | Mô hình kinh doanh, biểu phí, OKRs |
-| `S's side.docx` | Luồng người bán, API S Side ↔ B Side |
-| `chats w B.docx` | 24 kịch bản chat với người mua + đặc tả backend B Side |
-| `demo2Vitalify.docx` | Concept gốc (tiếng Anh) |
-| `OKRs eo2024.pptx` | Định vị "the permanent agent of agents" |
-| `dự kiến vốn 6 tháng đầu.xlsx` | Ngân sách 6 tháng (800tr) |
-| `AOND req + chat examples.docx` | SRD "AI Ơi Nhà Đất" + thư viện kịch bản người bán (dự án chị em, Luân Ngô-Trần) |
-| `hình samples/` | Ảnh listing mẫu |
+| `Kịch bản huấn luyện môi giới (Gemini 07-09-2026).md` | Kịch bản sếp chốt 07/09 → FR-177 |
+| `Kịch bản AI Ơi Nhà Đất (Gemini 21-06-2026, share).md` | Chat Gemini gốc 21/06, chốt 14 dòng OPEN-55 → FR-181…187 |
+| `train/` | Lộ trình fine-tune giọng bot (Qwen/Unsloth), chưa chạy |
 | `.claude/` | Cấu hình Claude Code của dự án |
 
 ## 🚫 Không nằm trong repo

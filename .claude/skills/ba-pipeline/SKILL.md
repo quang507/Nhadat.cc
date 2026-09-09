@@ -15,8 +15,9 @@ soát tính nhất quán của bộ tài liệu.
 
 ## Nguyên tắc bất di bất dịch
 
-1. **Chỉ đọc tài liệu gốc, không sửa.** Các file `.docx`, `.pdf`, `.pptx`, `.xlsx` ở
-   thư mục gốc là input của chủ dự án.
+1. **Tài liệu gốc 2024 đã xoá khỏi repo** (08/09/2026, commit `459008d`, OPEN-48). Nguồn
+   sự thật là `docs/` + hai file `Kịch bản … (Gemini …).md` ở gốc. Trích dẫn `[nguồn: file §mục]`
+   cũ giữ nguyên làm dấu vết; cần đọc lại thì `git show 459008d^:"<tên file>"`.
 2. **Mọi khẳng định phải có nguồn**: `[nguồn: <file> §<mục>]` hoặc `[giả định BA]`.
 3. **Không tự chốt điều mơ hồ** — tạo `OPEN-xx` trong `docs/09-open-issues.md` với
    phương án + khuyến nghị.
@@ -67,10 +68,5 @@ soát tính nhất quán của bộ tài liệu.
 
 ## Trích xuất tài liệu gốc
 
-```bash
-pip install python-docx openpyxl python-pptx pypdf
-# .docx  → paragraphs + tables (bảng chứa phần lớn kịch bản chat)
-# .pdf   → pypdf, mở file bằng glob để tránh lỗi encoding tên file tiếng Việt
-# .pptx  → shapes.text_frame.text
-```
-Đặt output trung gian vào thư mục scratchpad của phiên, **không** commit.
+Không còn file `.docx/.pdf/.pptx` trong repo. Nếu chủ dự án đưa tài liệu mới dạng đó, trích bằng
+`python-docx` / `pypdf` / `python-pptx` vào scratchpad của phiên, **không** commit file gốc lẫn output.
