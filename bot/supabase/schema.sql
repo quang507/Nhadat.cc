@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-09 22:31 (giờ VN)
+-- Sinh lúc: 2026-09-09 23:24 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -3420,6 +3420,15 @@ AS $function$
 begin
   new.price_raw := public.chuan_hoa_gia_raw(new.price_raw);
   new.ward      := public.chuan_hoa_phuong(new.ward);
+  -- 20260909k: ngang × dài → diện tích (chỉ khi chưa có; 5…5000 m² như listing_facts_sync_cols)
+  if new.area_m2 is null and new.frontage_m is not null and new.length_m is not null then
+    if new.frontage_m * new.length_m between 5 and 5000 then
+      new.area_m2 := round((new.frontage_m * new.length_m)::numeric, 1);
+    end if;
+  end if;
+  if new.location_raw is not null then
+    new.location_raw := btrim(regexp_replace(regexp_replace(new.location_raw, '\s*,(\s*,)+', ',', 'g'), '^[\s,]+|[\s,]+$', '', 'g'));
+  end if;
   return new;
 end;
 $function$
@@ -4276,7 +4285,8 @@ begin
         and (s.zalo_user_id is not null or l.created_at > now() - interval '7 days')
         and exists (select 1 from listing_missing_facts m where m.listing_id = l.id)
         and not exists (select 1 from info_requests q where q.listing_id = l.id and q.status = 'pending')
-        and (select count(*) from info_requests q where q.listing_id = l.id and q.created_at > now() - interval '24 hours') < 3
+        -- 20260909l: một LƯỢT hỏi bù mỗi ngày mỗi tin (một lượt = một tin gom 2–3 câu)
+        and not exists (select 1 from info_requests q where q.listing_id = l.id and q.created_at > now() - interval '24 hours')
     )
     select id from cand where rn + asked24 <= 2 order by created_at desc limit 10
   loop

@@ -84,7 +84,7 @@ check("V1.1 cờ hoi_vai lưu trên buyer", db().t.buyers[0]?.preferences?.hoi_v
 check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /anh Thu/.test(m.body)));
 r = await send({ external_user_id: "la-1", text: "tôi có căn nhà ở phường 4" });
 check("V1.2 trả lời có nhà → mở hồ sơ bán, nhãn chính chủ", db().t.sellers.length === 1 && db().t.sellers[0].seller_type === "ccrb" && r.body.role === "seller", JSON.stringify(r.body));
-check("V1.2 người đó được BÁO nhãn ở bong bóng cuối, KHÔNG kèm biểu phí (FR-176)", /chính chủ/i.test(r.body.replies.at(-1)) && !/1%/.test(r.body.replies.at(-1)), JSON.stringify(r.body.replies));
+check("V1.2 người đó KHÔNG được báo nhãn, KHÔNG kèm biểu phí (chủ dự án 09/09 tối: gán im lặng)", !r.body.replies.some((x) => /ghi nhận anh.chị là (chính chủ|môi giới)/i.test(x)) && !r.body.replies.some((x) => /1%|0,5%/.test(x)), JSON.stringify(r.body.replies));
 check("V1.2 ADMIN nhận việc: hồ sơ mở từ chat, nhãn chính chủ", db().t.reminders.some((x) => x.kind === "escalation" && /🆕/.test(x.note) && /CHÍNH CHỦ/.test(x.note) && !x.seller_id), JSON.stringify(db().t.reminders));
 check("V1.2 chưa tạo tin (chưa có chi tiết), model được báo là người bán MỚI", db().t.listings.length === 0 && createCalls().some((c) => /VỪA cho biết/.test(c.params.messages[0].content)));
 r = await send({ external_user_id: "la-1", text: "bán nhà P4 giá 5 tỷ 8 50m2" });
@@ -112,7 +112,7 @@ r = await send({ external_user_id: "la-2", text: "tôi muốn bán nhà q5 giá 
 check("V1.5 câu rao đầy đủ ngay tin đầu → không hỏi vai, mở hồ sơ + tạo tin", !r.body.hoi_vai && db().t.sellers.length === 1 && db().t.listings.length === 1 && db().t.sellers[0].seller_type === "ccrb", JSON.stringify(r.body));
 fresh();
 r = await send({ external_user_id: "la-3", text: "em là sale, có căn q5 cần bán 6 tỷ" });
-check("V1.6 người đó được báo nhãn môi giới (không phí — FR-176); admin nhận việc MÔI GIỚI", /môi giới/i.test(r.body.replies.at(-1)) && !/0,5%/.test(r.body.replies.at(-1)) && db().t.reminders.some((x) => /🆕/.test(x.note) && /MÔI GIỚI/.test(x.note)), JSON.stringify(r.body.replies));
+check("V1.6 người đó KHÔNG được báo nhãn môi giới, không phí (09/09 tối); admin vẫn nhận việc MÔI GIỚI", !r.body.replies.some((x) => /ghi nhận anh.chị là môi giới/i.test(x)) && !r.body.replies.some((x) => /0,5%/.test(x)) && db().t.reminders.some((x) => /🆕/.test(x.note) && /MÔI GIỚI/.test(x.note)), JSON.stringify(r.body.replies));
 check("V1.6 tự xưng sale → nhãn môi giới", db().t.sellers[0]?.seller_type === "nmg" && db().t.listings.length === 1, JSON.stringify(db().t.sellers));
 fresh();
 r = await send({ external_user_id: "la-4", text: "nhà mình bán chưa em?" });

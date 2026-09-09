@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
 
   const { data: missing, error: mErr } = await db
     .from("listing_missing_facts")
-    .select("fact_key, priority")
+    .select("fact_key, priority, nhom")
     .eq("listing_id", listing_id)
     .order("priority");
   if (mErr) return jsonResponse({ error: mErr.message }, 500);
@@ -88,8 +88,18 @@ Deno.serve(async (req) => {
     });
   }
 
-  const candidates = (missing ?? []).filter((f) => !pendingKeys.has(f.fact_key));
-  const toAsk = candidates.slice(0, drip ? 1 : 3);
+  // Chủ dự án 09/09/2026 tối: hỏi bù là MỘT LẦN gom 2–3 thông tin còn thiếu,
+  // ưu tiên thứ quan trọng (giá, diện tích, pháp lý, vị trí) hoặc ẢNH + SỔ —
+  // không phải mỗi nhịp một câu lắt nhắt. Thứ tự: ảnh/sổ/giá/diện tích/vị trí
+  // lên đầu, rồi cơ bản → chuyên môn → sau đăng theo priority.
+  const QUAN_TRONG = ["hinh_anh", "phap_ly", "gia", "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "vi_tri", "phuong"];
+  const bac = (f: { fact_key: string; nhom?: string | null }) =>
+    (QUAN_TRONG.includes(f.fact_key) ? 0 : 10) +
+    (f.nhom === "co_ban" ? 0 : f.nhom === "chuyen_mon" ? 1 : f.nhom === "sau_dang" ? 2 : 3);
+  const candidates = (missing ?? [])
+    .filter((f) => !pendingKeys.has(f.fact_key))
+    .sort((a, b) => bac(a) - bac(b) || (a.priority ?? 0) - (b.priority ?? 0));
+  const toAsk = candidates.slice(0, 3);
 
   if (toAsk.length === 0) {
     return jsonResponse({
@@ -114,8 +124,8 @@ Deno.serve(async (req) => {
 
   const instruction = drip
     ? (isFirst
-        ? `Soạn MỘT tin nhắn Zalo NGẮN (~30 từ) gửi người bán ngay sau khi họ vừa đăng tin: cảm ơn, KHEN một điểm mạnh thật của tin rao (vị trí/hẻm/giá…), rồi hỏi ĐÚNG MỘT câu về thông tin dưới đây. Không hỏi gì khác.`
-        : `Soạn MỘT tin nhắn Zalo RẤT NGẮN (1-2 câu, ~30 từ) hỏi tiếp ĐÚNG MỘT thông tin dưới đây, giọng nối tiếp cuộc trò chuyện đang có, kèm lý do vì-khách khi tự nhiên ("khách mua đang hỏi…"). Không chào lại từ đầu, không hỏi gì khác.`)
+        ? `Soạn MỘT tin nhắn Zalo NGẮN (35–60 từ) gửi người bán ngay sau khi họ vừa đăng tin: cảm ơn, KHEN một điểm mạnh thật của tin rao (vị trí/hẻm/giá…), rồi hỏi GỌN trong một tin ${toAsk.length} thông tin dưới đây — mỗi thông tin một dòng ngắn, không thành bảng hỏi. Không hỏi gì khác.`
+        : `Soạn MỘT tin nhắn Zalo NGẮN (35–60 từ) hỏi bù ${toAsk.length} thông tin dưới đây trong CÙNG MỘT tin (mỗi thông tin một dòng ngắn, xuống dòng), giọng nối tiếp cuộc trò chuyện đang có, kèm lý do vì-khách khi tự nhiên ("khách mua đang hỏi…"). Không chào lại từ đầu, không hỏi gì khác.`)
     : `Soạn MỘT tin nhắn Zalo gửi người bán để xin bổ sung thông tin cho tin rao: gộp hết vào một tin duy nhất, mỗi thông tin một câu hỏi rõ ràng, mở đầu chào đúng tone + khen một điểm mạnh của tin, nói rõ "có khách đang hỏi" để tạo động lực trả lời, kết thúc bằng lời cảm ơn + câu hỏi. Không hỏi gì ngoài danh sách.`;
 
   const anthropic = await anthropicClient(db);
