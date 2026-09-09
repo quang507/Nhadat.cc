@@ -2013,13 +2013,17 @@ Deno.serve(async (req) => {
       // câu đó (expired), đi tiếp câu kế; vòng hỏi bù sẽ hỏi lại sau.
       let boQuaCauTreo = false;
       // "ok / được / đăng đi" khi đang treo một câu thông số → chủ muốn ĐĂNG.
+      // "ừ / dạ / vâng" trơ trọi chỉ là ừ (ack), KHÔNG phải muốn đăng (lần 3: "ừ"
+      // làm hết hạn câu hẻm rồi đòi đăng tin 51 điểm).
+      const kdDang = boDau(dapAn).replace(/[^a-z0-9\s]/g, " ").trim();
       const chuMuonDang = pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
         pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh" &&
-        (laDongY(dapAn) || laDuRoi(dapAn) || /^\s*(dang|dang di|dang len|dang luon|len tin|ok dang|dang giup|dang nha)\b/.test(boDau(dapAn))) &&
-        boDau(dapAn).split(/\s+/).length <= 6;
+        kdDang.split(/\s+/).length <= 6 &&
+        (laDuRoi(dapAn) || /\b(dang|len tin|len ke|post)\b/.test(kdDang) ||
+          (laDongY(dapAn) && /\b(ok|oke|okie|duoc|dc|chot|dong y|xong)\b/.test(kdDang)));
       if (chuMuonDang) {
-        const { error: neErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
-        if (neErr) await ghiLoi(client, "chat-reply bo qua cau treo(dang)", neErr.message);
+        // Chỉ bỏ câu treo khi tin ĐỦ điểm để gửi nháp; chưa đủ thì câu treo giữ nguyên
+        // và nói rõ còn thiếu gì (xử ở dưới, sau khi đọc trạng thái tin).
         boQuaCauTreo = true;
       }
       if (!boQuaCauTreo && kq.loai !== "khop" && pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
@@ -2122,7 +2126,8 @@ Deno.serve(async (req) => {
       // "Đường 12m, hướng Bắc" khi hỏi đường) → ghi luôn, đỡ hỏi lại (09/09 tối).
       if (pendingReq.question !== "duyet_tin" && pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh") {
         for (const f of nhanDienNhieuFact(dapAn)) {
-          if (!boQuaCauTreo && cungHoFact(f.question, pendingReq.question)) continue;
+          // Cùng họ vẫn ghi ("phường Tân Hưng" trả lời địa chỉ thì phường cũng có), chỉ bỏ trùng khoá.
+          if (!boQuaCauTreo && f.question === pendingReq.question) continue;
           const { error: ndErr } = await client.rpc("ghi_fact_listing", {
             p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat",
           });
@@ -2193,24 +2198,39 @@ Deno.serve(async (req) => {
       // Trạng thái phải đọc LẠI sau khi ghi fact (fact vừa ghi có thể là mảnh
       // cuối làm tin tự lên kệ) — nhưng đọc cùng lúc với câu kế tiếp, và danh
       // sách câu còn treo suy ra từ `ds` đã có (FR-171 h: 3 vòng → 1).
-      const [{ data: lstNow }, { data: nextFacts }] = await Promise.all([
+      const [{ data: lstNow }, { data: nextFactsTho }, { data: daHetHan }] = await Promise.all([
         client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at")
           .eq("id", pendingReq.listing_id).maybeSingle(),
         client.from("listing_missing_facts").select("fact_key, priority, nhom")
-          .eq("listing_id", pendingReq.listing_id).order("priority").limit(8),
+          .eq("listing_id", pendingReq.listing_id).order("priority").limit(12),
+        // Câu đã bị NÉ (expired) thì KHÔNG mở lại ngay trong cùng vòng — lần 3
+        // kịch bản thật: địa chỉ hết hạn xong được chọn lại làm câu kế, hết hạn,
+        // chọn lại… Vòng hỏi bù (cron) hỏi lại sau.
+        client.from("info_requests").select("question").eq("listing_id", pendingReq.listing_id).eq("status", "expired"),
       ]);
+      const hetHanSet = new Set((daHetHan ?? []).map((q) => q.question));
+      const nextFacts = (nextFactsTho ?? []).filter((f) => !hetHanSet.has(f.fact_key));
       const published = !!lstNow && lstNow.status !== "cho_thong_tin";
       // Chủ nói "đăng đi / ok / được" giữa vòng hỏi (09/09 tối lần 2): đủ 70 điểm
       // thì gửi BẢN NHÁP ngay (bỏ câu đang treo), dưới 70 thì nói rõ còn thiếu gì
       // rồi hỏi tiếp — không ghi "đăng đi" thành câu trả lời, không hỏi lại câu cũ.
       if (chuMuonDang && !published && lstNow?.can_chu_duyet && !lstNow.chu_duyet_at) {
         const nhap = await guiBanNhap(pendingReq.listing_id, { saved_fact: null, chu_muon_dang: true });
-        if (!Array.isArray(nhap)) return nhap;
+        if (!Array.isArray(nhap)) {
+          // Nháp đã gửi → câu thông số đang treo thôi, câu duyệt thay chỗ.
+          await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
+          return nhap;
+        }
+        // Chưa đủ điểm: giữ câu treo, nói còn thiếu gì rồi hỏi lại câu đó.
         const thieuVan = nhap.slice(0, 2).join(" và ");
         return await traLoiSeller(
-          [`Dạ em đăng liền cho ${cachGoi}, chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.`],
-          { chu_muon_dang: true, thieu: nhap },
+          [`Dạ em đăng liền cho ${cachGoi}, chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.\n${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type)}`],
+          { chu_muon_dang: true, thieu: nhap, reask: pendingReq.question },
         );
+      }
+      if (chuMuonDang) {
+        // Tin đã lên kệ / không tự chốt: "ok" chỉ là ừ — thôi câu treo, đi tiếp.
+        await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
       }
       // Câu còn treo của căn này = mọi câu chờ đã nạp ở đầu nhánh, trừ câu vừa
       // được trả lời.
@@ -2502,6 +2522,43 @@ Deno.serve(async (req) => {
     // (trước đây rơi xuống luồng mua → bot hỏi "anh tìm khu nào" với chính chủ nhà)
     // Không có câu chờ mà người thật đang cầm cuộc → im, khỏi tốn lượt model.
     if (humanActive) return await traLoiSeller([]);
+
+    // 09/09 tối lần 3: KHÔNG có câu chờ mà chủ nhà vẫn nhắn thông số ("sổ đỏ,
+    // đất thuê nhà nước tới 2058") → trước đây rơi xuống chăm sóc chung, fact BAY
+    // MẤT. Nay: ghi mọi fact nhận ra vào căn đang neo (tin mới nhất chưa chốt), và
+    // nếu tin chưa lên kệ thì mở luôn câu kế (tiền định) thay vì tán gẫu.
+    const factRoi = wantsSell ? [] : nhanDienNhieuFact(text).filter((f) => f.question !== "bo_sung");
+    if (factRoi.length) {
+      const { data: canNeo } = await client.from("listings")
+        .select("id, code, status, can_chu_duyet, chu_duyet_at, property_type")
+        .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban"])
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (canNeo) {
+        for (const f of factRoi) {
+          const { error: frErr } = await client.rpc("ghi_fact_listing", {
+            p_listing_id: canNeo.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat",
+          });
+          if (frErr) await ghiLoi(client, "chat-reply ghi_fact_listing(roi)", frErr.message);
+        }
+        const daGhi = factRoi.map((f) => `${FACT_LABELS[f.question] ?? f.question}`).join(", ");
+        if (canNeo.status === "cho_thong_tin" || (canNeo.can_chu_duyet && !canNeo.chu_duyet_at)) {
+          const [{ data: thieuRoi }, { data: hetHanRoi }] = await Promise.all([
+            client.from("listing_missing_facts").select("fact_key, priority, nhom").eq("listing_id", canNeo.id).order("priority").limit(12),
+            client.from("info_requests").select("question").eq("listing_id", canNeo.id).eq("status", "expired"),
+          ]);
+          const hh = new Set((hetHanRoi ?? []).map((q) => q.question));
+          const keRoi = chonCauKe(factRoi.map((f) => f.question), (thieuRoi ?? []).filter((f) => !hh.has(f.fact_key) && f.nhom !== "sau_dang"));
+          if (keRoi && keRoi !== "hinh_anh") {
+            const { error: irRoi } = await client.from("info_requests").insert({ listing_id: canNeo.id, question: keRoi, status: "pending" });
+            if (irRoi && irRoi.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(roi)", irRoi.message);
+            return await traLoiSeller([`Dạ em ghi ${daGhi} rồi ạ.\n${cauHoiMau(keRoi, cachGoi, canNeo.property_type)}`], { saved_fact: factRoi.map((f) => f.question), asked: keRoi });
+          }
+          const nhapRoi = await guiBanNhap(canNeo.id, { saved_fact: factRoi.map((f) => f.question) });
+          if (!Array.isArray(nhapRoi)) return nhapRoi;
+        }
+        return await traLoiSeller([`Dạ em ghi ${daGhi} vào tin rồi ạ. Có khách quan tâm là em báo ${cachGoi} liền.`], { saved_fact: factRoi.map((f) => f.question) });
+      }
+    }
 
     const { data: sellerLst } = await client.from("listings")
       .select("code, location_raw, ward, price_raw")

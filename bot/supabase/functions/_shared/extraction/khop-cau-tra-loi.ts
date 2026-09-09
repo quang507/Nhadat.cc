@@ -346,8 +346,14 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(thue toi thieu|toi thieu \d+ (?:nam|thang)|hop dong \d+ (?:nam|thang)|thoi han thue|ky \d+ nam|thue \d+ nam)\b/.test(kd)) {
     return { question: "thoi_han_thue", answer: goc };
   }
-  if (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8) {
+  if ((/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8) ||
+      (/\b(o hoac|hoac lam|deu duoc|lam can ho dich vu|lam chdv|hop (?:de )?(?:o|kinh doanh|cho thue|lam))\b/.test(kd) && kd.split(/\s+/).length <= 14 &&
+        !/\b(showroom|lam xuong|van phong cong ty|nha hang|benh vien|truong hoc|lam kho)\b/.test(kd))) {
     return { question: "tiem_nang", answer: goc };
+  }
+  // Nội thất: "để lại máy lạnh, bếp", "full nội thất", "nhà trống".
+  if (/\b(de lai|full noi that|noi that (?:co ban|day du|full)|may lanh|tu lanh|giuong|bep|ban giao (?:tho|trong|nha trong)|nha trong)\b/.test(kd) && !/\b(mat tien|m2|ty|trieu)\b/.test(kd)) {
+    return { question: "noi_that", answer: goc };
   }
   // "phường Tân Hưng" (tên chữ, câu ngắn) — phường số bắt ở dưới.
   if (/^\s*(?:phuong|p\.)\s+[a-z][a-z ]{2,25}\s*$/.test(kd) && !/\d/.test(kd)) return { question: "phuong", answer: goc };
