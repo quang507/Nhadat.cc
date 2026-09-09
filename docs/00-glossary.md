@@ -14,7 +14,7 @@ nhiều biến thể; cột "Biến thể trong tài liệu gốc" để tra ng�
 | **CTV** | Cộng Tác Viên của nhadat.cc — người thật, dẫn khách xem nhà, quản lý NMG. Hưởng 0.5%. Từ 03/09/2026 còn nhận câu khách hỏi mà bot không biết, hỏi chủ rồi trả lời bot theo mẫu `#mã tin: câu trả lời` trong hạn; trễ thì tụt hạng Đồng/Bạc/Vàng (FR-173). | cộng tác viên |
 | **Chuyên viên** | Nhân sự nội bộ nhadat.cc xử lý ca chat AI không giải quyết được. | admin, nhân viên |
 | **Thái** | Tên nhân cách hoá của trợ lý AI khi chat *[đổi 25/08/2026, trước là "Trai"]*. Một tên duy nhất cho cả hai phía, không có "gia đình trợ lý" (OPEN-39). | Thái, Trai [cũ], nhân viên AI |
-| **Aioinhadat** | Tên thương hiệu sản phẩm, chốt 03/09/2026 (OPEN-08/39); bot tự giới thiệu "em là Thái bên Aioinhadat". Tên miền web vẫn `nhadat.cc`, tài liệu vẫn gọi dự án theo tên repo. | AI Ơi Nhà Đất, AOND (SRD gốc) |
+| **Aioinhadat** | Tên thương hiệu sản phẩm, chốt 03/09/2026 (OPEN-08/39). **Cách VIẾT ra cho khách và trên web: "AI Ơi Nhà Đất", tách chữ, không viết gộp** [chủ dự án 09/09/2026]; "Aioinhadat" chỉ là tên gọi tắt trong tài liệu/repo. Bot tự giới thiệu "em là Thái bên AI Ơi Nhà Đất". Tên miền web vẫn `nhadat.cc`, tài liệu vẫn gọi dự án theo tên repo. | AI Ơi Nhà Đất, AOND (SRD gốc) |
 
 ## Nghiệp vụ BĐS
 

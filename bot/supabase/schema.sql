@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-09 09:38 (giờ VN)
+-- Sinh lúc: 2026-09-09 10:01 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -3794,6 +3794,42 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.reset_nguoi_test(p_zalo text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_sellers uuid[]; v_buyers uuid[]; v_listings uuid[]; v_convs uuid[];
+  n_listings int := 0; n_msgs int := 0; n_convs int := 0; n_sellers int := 0; n_buyers int := 0;
+begin
+  if coalesce(btrim(p_zalo), '') = '' then return jsonb_build_object('ok', false, 'ly_do', 'thiếu zalo'); end if;
+  select coalesce(array_agg(id), '{}') into v_sellers from sellers where zalo_user_id = p_zalo;
+  select coalesce(array_agg(id), '{}') into v_buyers  from buyers  where zalo_user_id = p_zalo;
+  select coalesce(array_agg(id), '{}') into v_listings from listings where seller_id = any(v_sellers);
+  select coalesce(array_agg(id), '{}') into v_convs from conversations where seller_id = any(v_sellers) or buyer_id = any(v_buyers);
+  delete from deals where listing_id = any(v_listings) or buyer_id = any(v_buyers);
+  delete from viewings where listing_id = any(v_listings) or buyer_id = any(v_buyers);
+  delete from listing_views where listing_id = any(v_listings);
+  delete from info_requests where listing_id = any(v_listings) or buyer_id = any(v_buyers);
+  delete from messages where conversation_id = any(v_convs);
+  get diagnostics n_msgs = row_count;
+  delete from conversations where id = any(v_convs);
+  get diagnostics n_convs = row_count;
+  update sellers set active_listing_id = null where id = any(v_sellers);
+  delete from listings where id = any(v_listings);
+  get diagnostics n_listings = row_count;
+  delete from sellers where id = any(v_sellers);
+  get diagnostics n_sellers = row_count;
+  delete from buyers where id = any(v_buyers);
+  get diagnostics n_buyers = row_count;
+  delete from chat_quota where zalo_user_id = p_zalo;
+  return jsonb_build_object('ok', true, 'listings', n_listings, 'messages', n_msgs,
+    'conversations', n_convs, 'sellers', n_sellers, 'buyers', n_buyers);
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.route_info_request()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -5560,6 +5596,8 @@ revoke all on function public.reminders_giu_trang_thai_ket() from public, anon, 
 grant execute on function public.reminders_giu_trang_thai_ket() to service_role;
 revoke all on function public.reminders_hen_hoi_cam_nhan() from public, anon, authenticated;
 grant execute on function public.reminders_hen_hoi_cam_nhan() to service_role;
+revoke all on function public.reset_nguoi_test(p_zalo text) from public, anon, authenticated;
+grant execute on function public.reset_nguoi_test(p_zalo text) to service_role;
 revoke all on function public.route_info_request() from public, anon, authenticated;
 grant execute on function public.route_info_request() to service_role;
 revoke all on function public.seller_drip_tick() from public, anon, authenticated;

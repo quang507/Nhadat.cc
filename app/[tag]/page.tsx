@@ -61,7 +61,7 @@ function moTa(t: TagDef, rows: CardRow[], total: number): string {
     : `${kw}: hiện chưa có tin nào đang lên kệ đúng tiêu chí này, nhưng kho tin đổi mỗi ngày.`;
   return (
     `${dau} Mỗi tin ghi rõ đường vào (mặt tiền, hẻm xe hơi hay hẻm xe máy), kết cấu, pháp lý và số phòng theo lời chủ nhà xác nhận, không đoán. ` +
-    `Muốn biết thêm căn nào, anh chị nhắn mã tin qua Zalo: trợ lý Thái của Aioinhadat trực 24/7, hỏi lại chủ nhà giúp và hẹn xem tận nơi, ` +
+    `Muốn biết thêm căn nào, anh chị nhắn mã tin qua Zalo: trợ lý Thái của AI Ơi Nhà Đất trực 24/7, hỏi lại chủ nhà giúp và hẹn xem tận nơi, ` +
     `không cần để lại số điện thoại. Người mua hoàn toàn miễn phí; bên bán chỉ trả phí khi giao dịch thành công.`
   );
 }

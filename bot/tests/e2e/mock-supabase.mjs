@@ -308,6 +308,27 @@ class RpcCall {
       // gộp chúng làm một chính là lỗi SEC-02 cũ.
       case "get_secret":
         return globalThis.__vault ? globalThis.__vault(a.secret_name) : { data: null, error: null };
+      // 20260909b — công tắc test: mặc định BẬT trong e2e (như DB test hiện tại).
+      case "cau_hinh":
+        return { data: (globalThis.__cauHinh ?? { test_reset_hello: "1" })[a.p_key] ?? null, error: null };
+      case "reset_nguoi_test": {
+        const z = a.p_zalo;
+        const sIds = db.t.sellers.filter((s) => s.zalo_user_id === z).map((s) => s.id);
+        const bIds = db.t.buyers.filter((b) => b.zalo_user_id === z).map((b) => b.id);
+        const lIds = db.t.listings.filter((l) => sIds.includes(l.seller_id)).map((l) => l.id);
+        const cIds = db.t.conversations.filter((c) => sIds.includes(c.seller_id) || bIds.includes(c.buyer_id)).map((c) => c.id);
+        const bo = (t, f) => { const n = db.t[t].length; db.t[t] = db.t[t].filter((r) => !f(r)); return n - db.t[t].length; };
+        bo("deals", (r) => lIds.includes(r.listing_id) || bIds.includes(r.buyer_id));
+        bo("viewings", (r) => lIds.includes(r.listing_id) || bIds.includes(r.buyer_id));
+        bo("info_requests", (r) => lIds.includes(r.listing_id) || bIds.includes(r.buyer_id));
+        const nM = bo("messages", (r) => cIds.includes(r.conversation_id));
+        const nC = bo("conversations", (r) => cIds.includes(r.id));
+        for (const t of ["listing_facts", "interests", "reminders", "ratings"]) bo(t, (r) => lIds.includes(r.listing_id) || bIds.includes(r.buyer_id) || sIds.includes(r.seller_id));
+        const nL = bo("listings", (r) => lIds.includes(r.id));
+        const nS = bo("sellers", (r) => sIds.includes(r.id));
+        const nB = bo("buyers", (r) => bIds.includes(r.id));
+        return { data: { ok: true, listings: nL, messages: nM, conversations: nC, sellers: nS, buyers: nB }, error: null };
+      }
       // Chép ĐÚNG ngữ nghĩa hàm thật (đã đọc `pg_get_functiondef` 05/09/2026):
       //   insert … on conflict (event_id) do update
       //     set delivery_count = delivery_count + 1, last_seen_at = now()

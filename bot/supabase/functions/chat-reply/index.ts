@@ -449,6 +449,8 @@ Deno.serve(async (req) => {
   }
 
   const externalUserId = String(body.external_user_id ?? "").trim().slice(0, 128);
+  // Chế độ test "hello" (20260909b): câu báo đã xoá, gửi kèm lượt trả lời đầu.
+  let thongBaoNhanTest: string | null = null;
   // SEC-06 — cắt cứng ở cửa vào. 4.000 ký tự đã dài gấp nhiều lần câu rao dài
   // nhất từng thấy; cắt ở đây thay vì ở từng chỗ dùng, vì chuỗi này đi thẳng
   // vào prompt model.
@@ -561,6 +563,21 @@ Deno.serve(async (req) => {
         "(đã chốt gửi rồi, hoặc quá 15 phút, hoặc không tồn tại)");
     }
     return jsonResponse({ ok: !msErr && dungDong, marked: String(body.mark_sent), done: xong });
+  }
+
+  // CHẾ ĐỘ TEST (20260909b, chủ dự án 09/09/2026): ai nhắn đúng chữ "hello" là
+  // xoá sạch dữ liệu số Zalo đó rồi tiếp đón như khách mới. Đứng SAU cổng bí
+  // mật (người lạ không xoá được ai), TRƯỚC mọi lượt tra vai. Công tắc
+  // `app_config.test_reset_hello` đọc mỗi lần gặp "hello" — không cache, tắt là
+  // hết ngay. Chạy thật phải đặt 0: khách thật chào "hello" mà mất tin là sự cố.
+  if (!body.human_note && /^\s*hello\s*[.!]*\s*$/i.test(text)) {
+    const { data: congTac } = await client.rpc("cau_hinh", { p_key: "test_reset_hello" });
+    if (String(congTac ?? "") === "1") {
+      const { data: daXoa, error: xoaErr } = await client.rpc("reset_nguoi_test", { p_zalo: externalUserId });
+      if (xoaErr) await ghiLoi(client, "chat-reply reset_nguoi_test", xoaErr.message);
+      else console.log(`TEST reset "hello" ${externalUserId.slice(-4)}: ${JSON.stringify(daXoa)}`);
+      thongBaoNhanTest = daXoa ? `(TEST) Em đã xoá dữ liệu cũ của mình: ${(daXoa as { listings?: number }).listings ?? 0} tin, ${(daXoa as { messages?: number }).messages ?? 0} tin nhắn. Bắt đầu lại như khách mới nha.` : null;
+    }
   }
 
   // FR-141: bridge báo NGƯỜI THẬT (CTV/admin gõ tay từ acc clone) vừa nhắn cho
@@ -701,7 +718,7 @@ Deno.serve(async (req) => {
   // MỌI đường ra phía sau phải đi qua một trong hai cửa này, để sổ không bao
   // giờ kẹt ở processing oan (kẹt thật — function chết — thì claim_inbound tự
   // reclaim sau 150s). Ghi sổ hụt không được chặn đường trả lời: chỉ ghiLoi.
-  const hoanTat = async (payload: Record<string, unknown>, code = 200) => {
+  const hoanTatGoc = async (payload: Record<string, unknown>, code = 200) => {
     if (coSo) {
       const { error: soErr2 } = await client.from("inbound_ledger").update({
         status: "completed", reply: payload, updated_at: new Date().toISOString(),
@@ -709,6 +726,15 @@ Deno.serve(async (req) => {
       if (soErr2) await ghiLoi(client, "chat-reply hoanTat ledger", soErr2.message);
     }
     return jsonResponse(payload, code);
+  };
+  // 20260909b: câu "(TEST) Em đã xoá…" đi kèm lượt trả lời đầu sau khi reset.
+  const hoanTat = async (payload: Record<string, unknown>, code = 200) => {
+    if (thongBaoNhanTest && Array.isArray(payload.replies)) {
+      const replies = [thongBaoNhanTest, ...(payload.replies as string[])];
+      payload = { ...payload, replies, reply: replies.join("\n"), test_reset: true };
+      thongBaoNhanTest = null;
+    }
+    return await hoanTatGoc(payload, code);
   };
   const baoHong = async (payload: Record<string, unknown>, code: number, detail: string) => {
     if (coSo) {
@@ -783,7 +809,7 @@ Deno.serve(async (req) => {
   // TONE+SELLER_SCRIPT còn r3 thêm FEES → hai ô nhớ tạm khác nhau cho một
   // nhánh vốn thưa lượt, gần như luôn trượt và mỗi lần trượt trả 1,25 giá.
   // 170 chữ-máy FEES thừa ở r1/r2 rẻ hơn hẳn một ô nhớ tạm riêng.
-  // FR-178: few-shot người bán (giọng Aioinhadat + kịch bản sếp) đi cùng luật.
+  // FR-178: few-shot người bán (giọng AI Ơi Nhà Đất + kịch bản sếp) đi cùng luật.
   const SELLER_FEW = P.seller_fewshot ?? SELLER_FEWSHOT;
   const SELLER_SYSTEM = TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + SELLER_FEW + "\n\n" + FEES;
 
@@ -2266,7 +2292,7 @@ Deno.serve(async (req) => {
     }
     if (tinTruoc <= 1) {
       const cauHoiVai =
-        "Dạ em chào anh/chị, em là Thái bên Aioinhadat ạ. Anh/chị đang muốn tìm mua/thuê nhà, hay đang có bất động sản cần rao ạ?";
+        "Dạ em chào anh/chị, em là Thái bên AI Ơi Nhà Đất ạ. Anh/chị đang muốn tìm mua/thuê nhà, hay đang có bất động sản cần rao ạ?";
       const { error: hvErr } = await client.from("messages").insert({
         conversation_id: convId, sender: "bot", body: cauHoiVai,
       });
