@@ -1790,6 +1790,8 @@ Deno.serve(async (req) => {
       // fact chủ nhà đã nói (fact mới nhất mỗi khoá); không có thì không có dòng,
       // KHÔNG đoán tiềm năng thay chủ nhà.
       const fact = (k: string) => (facts ?? []).find((f) => f.question === k)?.answer ?? null;
+      // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành "thuê tối thiểu thuê tối thiểu 3 năm".
+      const nhan = (n: string, v: string | null, sep = " ") => v ? (boDau(v).includes(boDau(n).replace(/:$/, "")) ? v : `${n}${sep}${v}`) : null;
       const lx = l as SpecRow & { floor?: number | null; rear_width_m?: number | null; furnishing?: string | null; negotiable?: boolean | null; gap?: boolean | null; bedrooms?: number | null; property_type?: string | null; deal?: string | null; price_raw?: string | null; area_m2?: number | null; location_raw?: string | null; ward?: string | null; district?: string | null };
       const loai = lx.property_type ?? "";
       const thue = lx.deal === "cho_thue";
@@ -1813,40 +1815,40 @@ Deno.serve(async (req) => {
         lx.floor ? `tầng ${lx.floor}` : fact("tang") ? `tầng ${fact("tang")}` : null,
         lx.bedrooms ? `${lx.bedrooms} phòng ngủ` : fact("so_phong_ngu") ? `${fact("so_phong_ngu")} phòng ngủ` : null,
         lx.bathrooms ? `${lx.bathrooms} WC` : fact("so_wc") ? `${fact("so_wc")} WC` : null,
-        fact("thang_may") ? `thang máy: ${fact("thang_may")}` : null,
+        nhan("thang máy:", fact("thang_may")),
         fact("san_vuon") ? `sân vườn: ${fact("san_vuon")}` : null,
         fact("hien_trang"), fact("nam_xay") ? `xây ${fact("nam_xay")}` : null,
-        fact("can_goc") ? `căn góc: ${fact("can_goc")}` : null, fact("view") ? `view: ${fact("view")}` : null,
+        nhan("căn góc:", fact("can_goc")), nhan("view:", fact("view")),
       ]);
       them("🛣", "Đường vào", [
         lx.access_type ? `${thongSoNgan({ access_type: lx.access_type, alley_width_m: lx.alley_width_m } as SpecRow).replace(/^ · /, "")}` : (fact("do_rong_hem") ?? fact("do_rong_duong") ?? fact("duong_vao")),
         fact("cach_mat_tien") ? `cách mặt tiền ${fact("cach_mat_tien")}` : null,
-        fact("hem_thong"), fact("ngap_nuoc") ? `ngập nước: ${fact("ngap_nuoc")}` : null,
-        fact("ha_tang"), fact("duong_container") ? `container: ${fact("duong_container")}` : null,
+        fact("hem_thong"), nhan("ngập nước:", fact("ngap_nuoc")),
+        fact("ha_tang"), nhan("container:", fact("duong_container")),
       ]);
       them("🧭", "Hướng", [lx.direction ?? fact("huong")]);
       them("📜", "Pháp lý", [
         lx.legal_status ? thongSoNgan({ legal_status: lx.legal_status, has_completion: lx.has_completion } as SpecRow).replace(/^ · /, "") : fact("phap_ly"),
-        fact("quy_hoach") ? `quy hoạch: ${fact("quy_hoach")}` : null,
-        fact("the_chap") ? `sổ: ${fact("the_chap")}` : null,
+        nhan("quy hoạch:", fact("quy_hoach")),
+        nhan("sổ:", fact("the_chap")),
         fact("xay_dung"), fact("so_huu"), fact("thoi_han_su_dung"), fact("hinh_thuc_thue_dat"), fact("len_tho_cu"),
       ]);
       if (loai === "toa_nha" || loai === "kho_xuong") {
         them("🏢", loai === "toa_nha" ? "Khai thác" : "Kho xưởng", [
           fact("so_phong") ? `${fact("so_phong")} phòng` : null, fact("ty_le_lap_day") ? `lấp đầy ${fact("ty_le_lap_day")}` : null,
-          fact("doanh_thu"), fact("pccc") ? `PCCC: ${fact("pccc")}` : null,
+          fact("doanh_thu"), nhan("PCCC:", fact("pccc")),
           fact("chieu_cao") ? `cao ${fact("chieu_cao")}` : null, fact("tai_trong_san") ? `tải trọng ${fact("tai_trong_san")}` : null,
-          fact("tram_bien_ap") ? `điện ${fact("tram_bien_ap")}` : null, fact("xu_ly_nuoc_thai") ? `nước thải: ${fact("xu_ly_nuoc_thai")}` : null,
+          fact("tram_bien_ap") ? `điện ${fact("tram_bien_ap")}` : null, nhan("nước thải:", fact("xu_ly_nuoc_thai")),
         ]);
       }
       if (loai === "dat_nong_nghiep" || loai === "dat_kinh_doanh") {
-        them("🌱", "Đất", [fact("nguon_nuoc") ? `nước: ${fact("nguon_nuoc")}` : null, fact("ranh_gioi") ? `ranh: ${fact("ranh_gioi")}` : null, fact("mat_do_xd") ? `mật độ XD ${fact("mat_do_xd")}` : null, fact("tang_cao_toi_da") ? `xây tối đa ${fact("tang_cao_toi_da")} tầng` : null]);
+        them("🌱", "Đất", [nhan("nước:", fact("nguon_nuoc")), nhan("ranh:", fact("ranh_gioi")), fact("mat_do_xd") ? `mật độ XD ${fact("mat_do_xd")}` : null, fact("tang_cao_toi_da") ? `xây tối đa ${fact("tang_cao_toi_da")} tầng` : null]);
       }
-      them("🛋", "Nội thất", [lx.furnishing ?? fact("noi_that"), fact("hien_trang_su_dung") ? `hiện: ${fact("hien_trang_su_dung")}` : null]);
+      them("🛋", "Nội thất", [lx.furnishing ?? fact("noi_that"), nhan("hiện:", fact("hien_trang_su_dung"))]);
       if (thue) {
         them("📝", "Điều kiện thuê", [
-          fact("tien_coc"), fact("thoi_han_thue") ? `thuê tối thiểu ${fact("thoi_han_thue")}` : null,
-          fact("truot_gia") ? `tăng ${fact("truot_gia")}` : null, fact("fit_out") ? `sửa chữa miễn phí ${fact("fit_out")}` : null,
+          fact("tien_coc"), nhan("thuê tối thiểu", fact("thoi_han_thue")),
+          nhan("tăng", fact("truot_gia")), nhan("sửa chữa miễn phí", fact("fit_out")),
           fact("phi_quan_ly") ? `phí QL ${fact("phi_quan_ly")}` : null, fact("phi_gui_xe") ? `gửi xe ${fact("phi_gui_xe")}` : null,
           fact("gia_dien_nuoc") ? `điện nước ${fact("gia_dien_nuoc")}` : null, fact("gio_giac"),
         ]);
