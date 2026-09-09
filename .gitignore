@@ -53,3 +53,7 @@ SS/
 
 # FR-180: kết quả train (adapter, GGUF) — nặng và sinh từ chat thật
 train/out/
+
+# vercel link kéo env về đây (chứa khoá) — chỉ ở gốc; .env.example trong scripts/ và bot/ vẫn được track
+/.env.local
+/.env*.local
