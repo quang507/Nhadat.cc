@@ -62,7 +62,7 @@ Các file tài liệu 2024 ở thư mục gốc (`Tài liệu hệ thống nhada
 | `AOND req + chat examples.docx` | `06` §6.8 (kịch bản người bán), `09` OPEN-20/21 (gamification, vai người rao) |
 | `hình samples/` | `05`, `06` (ảnh listing mẫu) |
 | `Kịch bản huấn luyện môi giới (Gemini 07-09-2026).md` | `02` FR-177 (hỏi người bán 1 thông tin/lần + khích lệ, bản nháp tin, điểm 7 tiêu chí), `09` OPEN-49 |
-| `Kịch bản AI Ơi Nhà Đất (Gemini 21-06-2026, share).md` | `09` OPEN-55 (14 dòng chốt 09/09), `02` FR-181 (tên trợ lý theo khách), FR-183 (điểm người rao), FR-184 (bán rồi), FR-185 (ảnh vào kho), FR-186 (câu hỏi theo loại), FR-173 a (chủ nhà trước 12 giờ), FR-114 d (kiến thức dự án), FR-177 h (giá thị trường khu vực) |
+| `Kịch bản AI Ơi Nhà Đất (Gemini 21-06-2026, share).md` | `09` OPEN-55 (14 dòng chốt 09/09), `02` FR-181 (tên trợ lý theo khách), FR-183 (điểm người rao), FR-184 (bán rồi), FR-185 (ảnh vào kho), FR-186 (câu hỏi theo loại; tối 09/09 thêm 4 loại toà nhà/đất nông nghiệp/đất SKC/kho xưởng + nhóm hỏi bù `sau_dang`), FR-187 (JSON chia nhóm từng tin), FR-173 a (chủ nhà trước 12 giờ), FR-114 d (kiến thức dự án), FR-177 h (giá thị trường khu vực) |
 
 ## 4. Quy ước làm việc
 
@@ -346,7 +346,7 @@ Bản rút gọn nạp tự động cho agent: `.claude/skills/ba-pipeline/SKILL
 **Cổng kiểm — chạy trước mọi commit:**
 
 ```bash
-bun run kiem   # = kieu (tsc) + build + test:bot (226 e2e + FR-159/161/164/176/177 + tự kiểm TS-SEC) + truyvet
+bun run kiem   # = kieu (tsc) + build + test:bot (229 e2e + FR-159/161/164/176/177 + tự kiểm TS-SEC) + truyvet
 bun run test:sec   # TS-SEC thật trên DB thật — cần Internet, nên KHÔNG nằm trong `kiem`
 ```
 

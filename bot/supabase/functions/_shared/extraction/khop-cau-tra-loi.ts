@@ -70,6 +70,14 @@ const HOI_SO = new Set([
   "phi_quan_ly", "gia_dien_nuoc", "thoi_han_thue", "gia",
   // FR-186 (09/09/2026, cho thuê): cọc mấy tháng, trượt giá mấy % — đều là số.
   "tien_coc", "truot_gia",
+  // 20260909i: câu hỏi bù sau đăng + loại mới.
+  "so_wc", "cach_mat_tien", "no_hau", "phi_gui_xe", "mat_do_xd", "tang_cao_toi_da", "fit_out",
+  "so_phong", "ty_le_lap_day", "doanh_thu", "chieu_cao", "tai_trong_san", "tram_bien_ap",
+]);
+// Câu hỏi CÓ/KHÔNG: "có", "không", "rồi", "chưa" là câu trả lời đủ (không phải ack).
+const HOI_CO_KHONG = new Set([
+  "hem_thong", "ngap_nuoc", "the_chap", "thuong_luong", "can_goc", "thang_may", "pccc", "len_tho_cu",
+  "ranh_gioi", "xu_ly_nuoc_thai", "duong_container", "nguon_nuoc", "hien_trang_su_dung", "so_huu",
 ]);
 
 // Từ khoá tối thiểu cho các câu hỏi CHỮ. Không có từ nào trong đây thì coi là
@@ -116,6 +124,11 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
 
   // Dặn xưng hô mà ngoài ra không còn nội dung → nhớ, hỏi lại.
   if (xungHo && chu.length < 3) return { loai: "xung_ho", xungHo };
+  // Câu hỏi có/không (20260909i): "có", "không", "rồi", "chưa", "cụt", "thông"… là đáp án thật.
+  if (HOI_CO_KHONG.has(question) &&
+      /^\s*(co|khong|ko|k|chua|roi|da|cut|thong|ngap|kho|cam tay|the chap|ngan hang|dang o|cho thue|trong|lau dai|50 nam|tl|thuong luong|cung duoc|de o)\b/.test(kd)) {
+    return { loai: "khop", ...(xungHo ? { xungHo } : {}) };
+  }
   if (chu.length < 2 && !CO_SO.test(kd)) return { loai: "ack" };
 
   // Chủ nhà hỏi ngược. Có số kèm dấu hỏi ("5 tỷ được không?") vẫn là câu hỏi
@@ -244,6 +257,10 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(hem xe hoi|hem oto|hem o to|xe hoi (?:vao|toi|tới) (?:duoc|tan|toi)|hem xe tai)\b/.test(kd)) {
     return { question: "do_rong_hem", answer: goc };
   }
+  // 20260909i: "cách mặt tiền 50m" là KHOẢNG CÁCH, không phải chiều ngang.
+  if ((m = new RegExp(`\\bcach\\s*(?:mat tien|duong lon|duong chinh|mt)\\s*(?:khoang|tam|chung)?\\s*${SO}\\s*(?:m|met)?\\b`).exec(kd))) {
+    return { question: "cach_mat_tien", answer: `${m[1]}m` };
+  }
   if ((m = new RegExp(`\\b(?:ngang|rong|mat tien|mt)\\s*(?:la\\s*)?${SO}\\s*(?:m|met)?\\b`).exec(kd)) &&
       !/\b(dai|sau)\b/.test(kd)) {
     return { question: "mat_tien", answer: `${m[1]}m` };
@@ -255,6 +272,8 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = new RegExp(`${SO}\\s*(?:ty|ti|toi|trieu|tr)\\b(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kd))) {
     return { question: "gia", answer: m[0].trim() };
   }
+  // 20260909i: "xây tối đa 5 tầng" là TẦNG CAO CHO PHÉP của lô đất, không phải kết cấu nhà.
+  if ((m = /\b(?:xay|cao)\s*(?:toi da|duoc)\s*(\d{1,2})\s*(?:tang|lau|tam)\b/.exec(kd))) return { question: "tang_cao_toi_da", answer: m[1] };
   if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:lau|tang|tam)\b/.exec(kd)) || /\btret\b/.test(kd)) {
     return { question: "ket_cau", answer: goc };
   }
@@ -275,6 +294,46 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = /\b(?:tang|truot gia|len)\s*(?:gia\s*)?(?:khoang\s*)?(\d{1,2})\s*%/.exec(kd)) || (m = /(\d{1,2})\s*%\s*(?:moi|1|mot)?\s*nam\b/.exec(kd))) {
     return { question: "truot_gia", answer: `${m[1]}%/năm` };
   }
+  // 20260909i: câu hỏi bù sau đăng (chat 21/06 lượt 65–67, chat 07/09).
+  if ((m = /\b(\d{1,2})\s*(?:wc|toilet|ve sinh|nha ve sinh)\b/.exec(kd)) || (m = /\b(?:wc|toilet)\s*(\d{1,2})\b/.exec(kd))) {
+    return { question: "so_wc", answer: m[1] };
+  }
+  if ((m = new RegExp(`\\bcach\\s*(?:mat tien|duong lon|duong chinh|mt)\\s*(?:khoang|tam|chung)?\\s*${SO}\\s*(?:m|met)?\\b`).exec(kd))) {
+    return { question: "cach_mat_tien", answer: `${m[1]}m` };
+  }
+  if ((m = new RegExp(`\\bno hau\\s*(?:la\\s*)?${SO}\\s*(?:m|met)?\\b`).exec(kd))) return { question: "no_hau", answer: `${m[1]}m` };
+  if (/\b(ngap|dong nuoc|khong ngap|ko ngap|kho rao|cao rao)\b/.test(kd) && /\b(mua|nuoc|ngap|cao rao|kho rao)\b/.test(kd)) {
+    return { question: "ngap_nuoc", answer: goc };
+  }
+  if (/\b(hem thong|hem cut|quay dau|thong ra|khong thong|ko thong)\b/.test(kd)) return { question: "hem_thong", answer: goc };
+  if (/\b(dang the chap|the chap|cam ngan hang|so cam tay|cam tay|trong ngan hang|ket sat)\b/.test(kd)) return { question: "the_chap", answer: goc };
+  if (/\b(thuong luong|\btl\b|bot chut|fix|cung duoc|con bot|gia net|gia chot)\b/.test(kd) && !/\d\s*(ty|ti|trieu|tr)\b/.test(kd)) {
+    return { question: "thuong_luong", answer: goc };
+  }
+  if (/\b(dang o|dang cho thue|de trong|nha trong|con o|dang thue)\b/.test(kd) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
+  if (/\b(ly do|dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san)\b/.test(kd)) return { question: "ly_do_ban", answer: goc };
+  if (/\b(truong hoc|truong tieu hoc|cong chung|phong gym|gym|gan cho\b|cho gan\b|sieu thi|benh vien gan)\b/.test(kd)) return { question: "tien_ich_gan", answer: goc };
+  if (/\b(can goc|lo goc)\b/.test(kd)) return { question: "can_goc", answer: goc };
+  if (/\bthang may\b/.test(kd)) return { question: "thang_may", answer: goc };
+  if (/\bview\b/.test(kd)) return { question: "view", answer: goc };
+  if (/\b(pccc|phong chay)\b/.test(kd)) return { question: "pccc", answer: goc };
+  if ((m = /\b(\d{1,3})\s*(?:phong|can)\s*(?:cho thue|dich vu|khach)\b/.exec(kd))) return { question: "so_phong", answer: m[1] };
+  if ((m = /\b(?:lap day|kin phong|full phong)\s*(?:khoang|tam)?\s*(\d{1,3})\s*%/.exec(kd)) || (m = /(\d{1,3})\s*%\s*(?:lap day|kin phong)/.exec(kd))) return { question: "ty_le_lap_day", answer: `${m[1]}%` };
+  if (/\bdoanh thu\b|\bthu ve\b.*\bthang\b|\bdong tien\b/.test(kd)) return { question: "doanh_thu", answer: goc };
+  if ((m = new RegExp(`\\b(?:cao|thong thuy|chieu cao)\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:m|met)\\b`).exec(kd)) && /\b(xuong|kho|thong thuy|tran)\b/.test(kd)) return { question: "chieu_cao", answer: `${m[1]}m` };
+  if ((m = new RegExp(`\\b(?:tai trong)\\s*(?:san)?\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:tan|t)\\b`).exec(kd))) return { question: "tai_trong_san", answer: `${m[1]} tấn/m2` };
+  if ((m = new RegExp(`${SO}\\s*kva\\b`).exec(kd)) || (m = new RegExp(`\\b(?:tram|bien ap|dien)\\s*(?:khoang|tam)?\\s*${SO}\\s*kva`).exec(kd))) return { question: "tram_bien_ap", answer: `${m[1]} kVA` };
+  if (/\b(nuoc thai|xu ly nuoc)\b/.test(kd)) return { question: "xu_ly_nuoc_thai", answer: goc };
+  if (/\b(container|cont\b|xe cong)\b/.test(kd)) return { question: "duong_container", answer: goc };
+  if (/\b(len tho cu|len tho|chuyen tho cu|chuyen muc dich)\b/.test(kd)) return { question: "len_tho_cu", answer: goc };
+  if (/\b(kenh|muong|tuoi tieu|nguon nuoc|gieng)\b/.test(kd)) return { question: "nguon_nuoc", answer: goc };
+  if (/\b(cam coc|rao luoi|ranh gioi|ranh dat)\b/.test(kd)) return { question: "ranh_gioi", answer: goc };
+  if (/\b(tra (?:tien )?(?:thue dat )?(?:mot lan|hang nam|tung nam)|thue dat (?:hang nam|mot lan|nha nuoc)|dat thue)\b/.test(kd)) return { question: "hinh_thuc_thue_dat", answer: goc };
+  if (/\b(lau dai|so huu lau dai|den nam 20\d\d|thoi han su dung|50 nam)\b/.test(kd)) return { question: /\b(can ho|chung cu)\b/.test(kd) ? "so_huu" : "thoi_han_su_dung", answer: goc };
+  if (/\b(mat do xay dung|mat do xd)\b/.test(kd)) return { question: "mat_do_xd", answer: goc };
+  if (/\b(vuong vuc|bop hau|thop hau|meo|hinh dang)\b/.test(kd)) return { question: "hinh_dang", answer: goc };
+  if (new RegExp(`\\bfit.?out\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:ngay|thang|tuan)`).test(kd) || new RegExp(`\\b(?:mien phi|free)\\s*${SO}\\s*(?:ngay|thang|tuan)\\s*(?:sua|sua chua|setup|lam noi that)`).test(kd)) return { question: "fit_out", answer: goc };
+  if (/\b(showroom|van phong cong ty|lam xuong|truong hoc|benh vien|nha hang)\b/.test(kd) && /\b(hop|phu hop|lam|mo)\b/.test(kd)) return { question: "muc_dich", answer: goc };
   // FR-186: đất — hạ tầng (cột điện, hố ga), xây tự do / theo mẫu; biệt thự — compound.
   if (/\b(cot dien|ho ga|tru dien|duong dam)\b/.test(kd)) return { question: "ha_tang", answer: goc };
   if (/\b(xay tu do|theo mau|mau chu dau tu|mau cdt|xay theo)\b/.test(kd)) return { question: "xay_dung", answer: goc };

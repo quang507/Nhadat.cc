@@ -1,91 +1,46 @@
 "use client";
-// /admin/ro-hang/json — rổ hàng dưới dạng JSON (chủ dự án 09/09/2026: "1 trang
-// lưu dưới dạng json"). Mỗi tin một khối: cột chính + `boc_tach` (FR-177 h —
-// những gì bot bóc được từ câu rao và mọi fact chủ nhà trả lời, không có khoá
-// null). Nút "Tải JSON" xuất cả rổ (theo bộ lọc) thành một file .json.
-// Chỉ admin (bảng `admins`), đọc `listings` qua RLS `listings_admin_read` —
-// cùng cách với /admin/ro-hang. Không gọi RPC (diem_tin chỉ service_role).
+// /admin/ro-hang/json — JSON bóc tách CHIA NHÓM, MỖI TIN MỘT FILE (FR-187,
+// chủ dự án 09/09/2026: "file json dành cho từng mã BĐS chứ không phải nguyên
+// một rổ dài; trang nào bot đã bóc ra thì ghi trước; trường null không hiển
+// thị; chia nhóm luôn"). Đọc view `boc_tach_v` (hàm `boc_tach_nhom` gộp cột
+// listings + fact chủ nhà trả lời + ảnh trong kho + điểm tin, bỏ null) qua
+// RLS admin. Tải/chép là từng tin; không còn nút tải cả rổ.
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { TYPE_LABEL } from "@/lib/format";
+import BocTachNhom, { NHAN_NHOM, type Nhom } from "@/components/admin/BocTachNhom";
 
 type Tin = {
   id: string;
   code: string | null;
   legacy_code: string | null;
-  deal: "ban" | "cho_thue";
-  district: string | null;
-  ward: string | null;
-  street: string | null;
-  location_raw: string | null;
-  area_m2: number | null;
-  price_vnd: number | null;
-  price_raw: string | null;
-  property_type: string | null;
   status: string;
+  deal: "ban" | "cho_thue";
+  property_type: string | null;
+  location_raw: string | null;
+  ward: string | null;
+  district: string | null;
+  price_raw: string | null;
   gap: boolean | null;
-  can_chu_duyet: boolean;
-  chu_duyet_at: string | null;
   chu_noi_du_at: string | null;
-  boc_tach: Record<string, unknown> | null;
   created_at: string;
-  updated_at: string | null;
-  sellers: { name: string | null; seller_type: string } | null;
-};
-
-const COT =
-  "id, code, legacy_code, deal, district, ward, street, location_raw, area_m2, price_vnd, price_raw, property_type, status, gap, can_chu_duyet, chu_duyet_at, chu_noi_du_at, boc_tach, created_at, updated_at, sellers!listings_seller_id_fkey(name, seller_type)";
-
-// Bỏ khoá null/rỗng cho gọn — "cột null không quan trọng thì không cần liệt kê".
-const gon = (t: Tin) => {
-  const o: Record<string, unknown> = {
-    ma_tin: t.code,
-    ma_cu: t.legacy_code,
-    loai_giao_dich: t.deal,
-    loai_bds: t.property_type === "chua_ro" ? null : t.property_type,
-    vi_tri: {
-      dia_chi: t.location_raw, duong: t.street, phuong: t.ward, quan: t.district,
-    },
-    dien_tich_m2: t.area_m2,
-    gia_raw: t.price_raw,
-    gia_vnd: t.price_vnd,
-    gap: t.gap,
-    trang_thai: t.status,
-    nguoi_ban: t.sellers ? { ten: t.sellers.name, loai: t.sellers.seller_type } : null,
-    tu_chat: t.can_chu_duyet || null,
-    chu_duyet_luc: t.chu_duyet_at,
-    chu_noi_du_luc: t.chu_noi_du_at,
-    boc_tach: t.boc_tach,
-    tao_luc: t.created_at,
-    sua_luc: t.updated_at,
-    id: t.id,
-  };
-  const sach = (v: unknown): unknown => {
-    if (v === null || v === undefined || v === "") return undefined;
-    if (Array.isArray(v)) return v;
-    if (typeof v === "object") {
-      const r: Record<string, unknown> = {};
-      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
-        const y = sach(x);
-        if (y !== undefined) r[k] = y;
-      }
-      return Object.keys(r).length ? r : undefined;
-    }
-    return v;
-  };
-  return sach(o) as Record<string, unknown>;
+  nhom: Nhom;
 };
 
 const khongDau = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+
+const soNhom = (n: Nhom) => Object.keys(n).filter((k) => k !== "tin" && k !== "diem").length;
 
 export default function Page() {
   const [role, setRole] = useState<"loading" | "anon" | "user" | "admin">("loading");
   const [rows, setRows] = useState<Tin[]>([]);
   const [loi, setLoi] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [chiBocTach, setChiBocTach] = useState(false);
+  const [loai, setLoai] = useState("");
+  const [nhomLoc, setNhomLoc] = useState("");
   const [mo, setMo] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -96,8 +51,8 @@ export default function Page() {
       if (!a) return setRole("user");
       setRole("admin");
       const { data, error } = await supabase
-        .from("listings")
-        .select(COT)
+        .from("boc_tach_v")
+        .select("id, code, legacy_code, status, deal, property_type, location_raw, ward, district, price_raw, gap, chu_noi_du_at, created_at, nhom")
         .order("created_at", { ascending: false })
         .limit(2000);
       if (error) setLoi(error.message);
@@ -108,35 +63,17 @@ export default function Page() {
   const loc = useMemo(() => {
     const kq = khongDau(q.trim());
     let xs = rows;
-    if (chiBocTach) xs = xs.filter((t) => t.boc_tach && Object.keys(t.boc_tach).length > 0);
-    if (kq) {
-      xs = xs.filter((t) =>
-        khongDau([t.code ?? "", t.location_raw ?? "", t.ward ?? "", t.district ?? "", t.sellers?.name ?? "",
-          JSON.stringify(t.boc_tach ?? {})].join(" ")).includes(kq),
-      );
-    }
+    if (loai) xs = xs.filter((t) => (t.property_type ?? "chua_ro") === loai);
+    if (nhomLoc) xs = xs.filter((t) => t.nhom?.[nhomLoc] !== undefined);
+    if (kq) xs = xs.filter((t) => khongDau(JSON.stringify(t.nhom ?? {})).includes(kq));
     return xs;
-  }, [rows, q, chiBocTach]);
+  }, [rows, q, loai, nhomLoc]);
 
-  const taiJson = () => {
-    const goi = {
-      nguon: "AI Ơi Nhà Đất /admin/ro-hang/json",
-      xuat_luc: new Date().toISOString(),
-      so_tin: loc.length,
-      tin: loc.map(gon),
-    };
-    const blob = new Blob([JSON.stringify(goi, null, 2)], { type: "application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ro-hang-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const chepMot = async (t: Tin) => {
-    try { await navigator.clipboard.writeText(JSON.stringify(gon(t), null, 2)); } catch { /* trình duyệt chặn thì thôi */ }
-  };
+  const theoLoai = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of rows) { const k = t.property_type ?? "chua_ro"; m.set(k, (m.get(k) ?? 0) + 1); }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [rows]);
 
   if (role === "loading") return <div className="mx-auto max-w-4xl px-4 py-16 text-mute font-medium">Đang kiểm tra quyền…</div>;
   if (role !== "admin") {
@@ -156,29 +93,19 @@ export default function Page() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-24 pt-8">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Link href="/admin/ro-hang" className="text-sm font-semibold text-brand hover:underline">
-              Rổ hàng (Excel)
-            </Link>
-            <span className="text-mute text-xs">/</span>
-            <span className="text-xs text-mute font-medium">JSON</span>
-          </div>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">Rổ hàng BĐS (Dạng JSON)</h1>
-          <p className="mt-1 text-sm text-mute tabular-nums">
-            {rows.length} tin · hiển thị {loc.length} · mỗi tin kèm <code className="rounded bg-slate-100 px-1">boc_tach</code> - những gì bot bóc được từ câu rao và câu trả lời của chủ nhà, không liệt kê trường trống
-          </p>
+    <div className="mx-auto max-w-6xl px-4 pb-24 pt-8">
+      <header>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/ro-hang" className="text-sm font-semibold text-brand hover:underline">
+            Rổ hàng (Excel)
+          </Link>
+          <span className="text-mute text-xs">/</span>
+          <span className="text-xs text-mute font-medium">JSON</span>
         </div>
-        <button
-          type="button"
-          onClick={taiJson}
-          disabled={loc.length === 0}
-          className="rounded-md bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark disabled:opacity-60"
-        >
-          Tải JSON ({loc.length} tin)
-        </button>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">Rổ hàng BĐS (JSON từng tin)</h1>
+        <p className="mt-1 text-sm text-mute tabular-nums">
+          {rows.length} tin · hiển thị {loc.length} · mỗi tin một JSON chia {Object.keys(NHAN_NHOM).length} nhóm ({Object.values(NHAN_NHOM).join(" · ").toLowerCase()}) · trường trống không liệt kê · tải từng tin
+        </p>
       </header>
 
       {loi && (
@@ -191,19 +118,27 @@ export default function Page() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Tìm: mã tin, đường, phường, người bán, nội dung bóc tách…"
+          placeholder="Tìm trong JSON: mã tin, đường, phường, người rao, câu chủ nhà trả lời…"
           className="min-w-[280px] flex-1 rounded-md border border-line bg-white px-4 py-2 text-sm outline-none focus:border-brand"
         />
-        <label className="flex items-center gap-2 text-sm text-navy">
-          <input type="checkbox" checked={chiBocTach} onChange={(e) => setChiBocTach(e.target.checked)} />
-          chỉ tin có bóc tách
-        </label>
+        <select value={loai} onChange={(e) => setLoai(e.target.value)} className="rounded-md border border-line bg-white px-3 py-2 text-sm">
+          <option value="">Mọi loại BĐS</option>
+          {theoLoai.map(([k, n]) => (
+            <option key={k} value={k}>{k === "chua_ro" ? "Chưa rõ loại" : TYPE_LABEL[k] ?? k} ({n})</option>
+          ))}
+        </select>
+        <select value={nhomLoc} onChange={(e) => setNhomLoc(e.target.value)} className="rounded-md border border-line bg-white px-3 py-2 text-sm">
+          <option value="">Mọi nhóm</option>
+          {Object.entries(NHAN_NHOM).filter(([k]) => k !== "tin" && k !== "diem").map(([k, v]) => (
+            <option key={k} value={k}>Có nhóm: {v}</option>
+          ))}
+        </select>
       </div>
 
       <div className="mt-5 space-y-3">
         {loc.map((t) => {
           const dangMo = mo.has(t.id);
-          const soKhoa = t.boc_tach ? Object.keys(t.boc_tach).filter((k) => !k.startsWith("_")).length : 0;
+          const diem = (t.nhom?.diem as { tong?: number } | undefined)?.tong;
           return (
             <section key={t.id} className="rounded-2xl border border-line bg-white">
               <button
@@ -212,24 +147,22 @@ export default function Page() {
                 className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left"
               >
                 <span className="font-mono text-sm font-bold text-brand">{t.code ?? "(chưa mã)"}</span>
+                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-navy">
+                  {t.property_type && t.property_type !== "chua_ro" ? TYPE_LABEL[t.property_type] ?? t.property_type : "chưa rõ loại"}
+                </span>
                 <span className="text-sm text-navy">
                   {[t.location_raw, t.ward, t.district].filter(Boolean).join(", ") || "-"}
                 </span>
                 <span className="text-xs text-mute">{t.deal === "ban" ? "Bán" : "Cho thuê"} · {t.price_raw ?? "-"} · {t.status}</span>
                 {t.gap === true && <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-bold text-red-700">gấp</span>}
                 {t.chu_noi_du_at && <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-mute">chủ nói đủ</span>}
-                <span className="ml-auto text-xs text-mute tabular-nums">{soKhoa} khoá bóc tách · {dangMo ? "thu gọn ▲" : "xem JSON ▼"}</span>
+                <span className="ml-auto text-xs text-mute tabular-nums">
+                  {soNhom(t.nhom ?? {})} nhóm{typeof diem === "number" ? ` · ${diem} điểm` : ""} · {dangMo ? "thu gọn ▲" : "xem JSON ▼"}
+                </span>
               </button>
               {dangMo && (
                 <div className="border-t border-line px-4 py-3">
-                  <div className="mb-2 flex justify-end">
-                    <button type="button" onClick={() => chepMot(t)} className="text-xs font-semibold text-brand hover:underline">
-                      Chép JSON tin này
-                    </button>
-                  </div>
-                  <pre className="overflow-x-auto rounded-xl bg-slate-900 p-4 text-xs leading-relaxed text-slate-100">
-                    {JSON.stringify(gon(t), null, 2)}
-                  </pre>
+                  <BocTachNhom ma={t.code} nhom={t.nhom} />
                 </div>
               )}
             </section>

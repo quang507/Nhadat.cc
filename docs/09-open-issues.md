@@ -5,7 +5,7 @@ tự chốt (quy ước 2, `CLAUDE.md`). Mục đã chốt hoặc đã đóng ch
 thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm trong lịch sử git. Ký hiệu:
 ✅ đã chốt · 🚫 đóng vì không còn hợp hướng AOND · 🟡 chốt một phần (vẫn tính còn chờ).
 
-## Còn chờ chủ dự án (19)
+## Còn chờ chủ dự án (18)
 
 | ID | Vấn đề | Mức | Liên quan |
 |---|---|---|---|
@@ -23,7 +23,6 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-34 | Gộp `zalo-webhook` → `chat-reply` thành một lambda? | Trung bình | FR-171, SRS-2 |
 | OPEN-35 | Nhắc lời hứa / hỏi thăm khách im: mẫu câu cố định hay lượt model? | Thấp | FR-133, FR-171 |
 | OPEN-38 | Ảnh tin: thumbnail và watermark trên bậc Free | Thấp | FR-165, NFR-16 |
-| OPEN-40 | Phạm vi loại BĐS: thông số cho thuê, đất nền, nhóm công nghiệp (AOND §III) | Trung bình | FR-172, OPEN-37, DH-03 |
 | OPEN-41 | Nhà cung cấp model: giữ Claude trên Supabase hay theo AOND §VII (Gemini rồi chạy local)? | Thấp | SRS-2, FR-138, DH-06 |
 | OPEN-42 | Ngưỡng CTV: hạn trả lời 120 phút, hạng Vàng ≥90% / Bạc ≥70% — đều [giả định BA] | Trung bình | FR-173, FR-137, DH-03 |
 | OPEN-45 | Design token `06 §6.2`, `design/tokens.json` và `app/globals.css` là ba bản lệch nhau — chọn nguồn sự thật nào? | Thấp | UI-01…, OPEN-07 |
@@ -34,7 +33,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-51 | **Token Zalo OA sống 25 tiếng, không ai làm mới** — việc đã viết xong trên nhánh `claude/sua-25-loi` (commit `70a63ab`) nhưng chưa từng vào `main` và chưa từng áp lên DB. Chưa đau vì bot đang đi bridge zca-js, không dùng OA API | Thấp | FR-152, NFR-18, OPEN-46 |
 | OPEN-52 | **Trần lượt đếm theo thứ người gọi tự đặt được** (`external_user_id`) — xoay id là bộ đếm về 0. Bản vá `rate_counters` cũng nằm ở `70a63ab`, chưa merge | Thấp | FR-146, FR-151, SEC-02 |
 
-## Đã chốt / đã đóng (34)
+## Đã chốt / đã đóng (35)
 
 | ID | Kết luận | Liên quan |
 |---|---|---|
@@ -63,6 +62,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-37 | 🚫 Đóng 07/09/2026 — không còn hợp hướng: lớp POI/quy hoạch/ngập thuộc nhóm A của OPEN-48; quy hoạch vẫn là câu hỏi lại chủ (DH-02 #3) | FR-28, INS-13, OPEN-40 |
 | OPEN-32 | ✅ **ĐÃ CHỐT 09/09/2026** — phương án (b): ảnh chat kéo về kho rồi phân loại; giấy tờ / không phân loại được → `listing-private`, ảnh nhà → `listing-public`, sổ đọc diện tích đối chiếu (FR-185) | FR-185, FR-165 |
 | OPEN-39 | ✅ **CHỐT LẠI 09/09/2026** (đảo bản 03/09) — thương hiệu Aioinhadat giữ; trợ lý KHÔNG còn một tên Thái: mỗi khách một tên riêng từ kho •ai (T•ai, Kh•ai… 20 tên, viết hoa chữ đầu, không P•ai), gán tất định theo Zalo ID và giữ suốt (FR-181). Bản 03/09 "một tên Thái" chạy 03–09/09 | OPEN-08, FR-181, DH-01 |
+| OPEN-40 | ✅ **ĐÃ CHỐT 09/09/2026 tối** — phương án (b) làm cả ba nhóm AOND §III, bằng `required_facts` chứ không thêm cột: cho thuê (FR-186 chiều: nội thất, cọc, thời hạn, trượt giá, fit-out); đất (hướng, hạ tầng, xây dựng + `dat_nong_nghiep`, `dat_kinh_doanh`); công nghiệp `kho_xuong` + toà nhà dòng tiền `toa_nha` (`20260909i`). Lệnh: "đọc lại 2 cái chat Gemini xem có trường hợp nào, đây là production nên không thể bỏ sót cái gì cả" | FR-186, FR-187, DH-03 |
 | OPEN-55 | ✅ **ĐÃ CHỐT 09/09/2026** — chủ dự án đọc lại chat Gemini "AI Ơi Nhà Đất" 21–27/06 (share) + chat 07/09 (PDF) rồi chốt 14 dòng chat ↔ hệ thống: (1) kênh Zalo cá nhân qua bridge, chỉ gửi chữ — GIỮ (nút bấm chờ OA); (2) mỗi khách một tên T•ai, Kh•ai… — THEO CHAT → FR-181; (3) loại BĐS trước, vị trí linh hoạt — GIỮ (sếp 07/09); (4) hỏi hướng — THEO CHAT cho chung cư và đất, nhà phố vẫn không → FR-186; (5) hỏi đúng một thông tin — GIỮ; (6) gán nhãn tự động, không nêu phí — GIỮ; (7) khách hỏi thứ thiếu → bot hỏi CHỦ NHÀ trước, 12 giờ không hồi âm mới hỏi CTV — MỚI → FR-173 a; (8) lên kệ khi đủ giá + diện tích + phường hoặc 70 điểm, ảnh 10 điểm, sổ không bắt buộc — GIỮ; (9) hỏi địa chỉ nêu lý do "kiểm tra giá thị trường khu vực" — THEO CHAT (đảo quyết định sáng 09/09 "bỏ định giá"; bot vẫn không đưa con số) → FR-177 h; (10) có CẢ điểm từng tin và điểm người rao — THEO CHAT → FR-183; (11) nhịp hỏi bù 5 phút / 30 phút / 3 câu/ngày / 2 căn/người, KHÔNG luật 7 ngày Zalo — GIỮ; (12) bot tự nêu kiến thức dự án ("Sunrise City có hồ bơi Olympic") — THEO CHAT → FR-114 d; (13) SharePoint/Power Automate/Dialogflow — không nhận, Supabase; (14) domain aioinhadat.vercel.app — GIỮ. Thêm: "bán rồi" → FR-184; ảnh vào kho + phân loại + OCR → FR-185; bộ câu hỏi theo loại + cho thuê → FR-186. Còn treo từ chat (chưa có lệnh, chưa mở OPEN riêng): keep-alive 7 ngày + hỏi 1 thông tin thiếu, người thật cướp quyền/trả lại bot, chia tải CTV theo khu vực/trần 15 ca, phân loại ảnh đã có trong kho, hạng theo điểm người rao (OPEN-26) — chưa có lệnh, không tự làm | FR-181…186, FR-173, FR-177, FR-114 |
 | OPEN-43 | 🚫 Đóng 07/09/2026 — gộp vào OPEN-48: phần còn lại (FR-16/95/28/160/118, `?ref=`) đều nằm trong danh mục bỏ/giữ ở đó | SRS-2/4/5, `10 §10.8` |
 | OPEN-44 | 🚫 Đóng 07/09/2026 — gộp vào OPEN-48: SEO nền đã dựng; TOP-100 keyword chết theo OPEN-06; Search Console là việc vận hành, không phải quyết định | FR-12, NFR-09, OPEN-06 |
@@ -174,13 +174,6 @@ lời hứa; (b) model hết như hiện tại.
 **Phương án**: (a) `up-anh.mjs`/upload web sinh thêm bản 480px (sharp) vào `listing_media.variants`;
 (b) `next/image` loader tự viết (Hobby có hạn mức); (c) chờ Pro. Watermark: chỉ khi có tin bị chép.
 **Khuyến nghị BA**: (a), làm khi có >20 tin có ảnh thật. **Chờ**: chủ dự án.
-
-### OPEN-40 · Phạm vi loại BĐS: cho thuê, đất nền, công nghiệp
-**Vấn đề**: AOND §III tả ba nhóm BĐS + thông số cho thuê; FR-172 mới phủ nhóm nhà ở. Cho thuê đã có
-tin và phí ¾ tháng nhưng cột chỉ có `rent_income_vnd`; đất chờ nguồn quy hoạch OPEN-37; công nghiệp 0 tin.
-**Phương án**: (a) làm thông số cho thuê ngay (4 cột + regex + drip), đất chờ OPEN-37, công nghiệp
-không làm; (b) làm cả ba đúng AOND; (c) không làm gì tới khi khách hỏi.
-**Khuyến nghị BA**: (a). **Chờ**: chủ dự án.
 
 ### OPEN-41 · Nhà cung cấp model
 **Vấn đề**: AOND §VII bắt đầu bằng Gemini rồi chuyển về chạy local (máy ASUS GX10); hệ thống thật

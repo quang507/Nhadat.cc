@@ -20,6 +20,22 @@ const nextConfig = {
   // nào trong `bot_errors` vì trình duyệt chặn chứ không phải server ném.
   // Muốn thêm CSP thì phải mở trình duyệt thật kiểm từng trang, việc đó cần
   // Playwright (docs/10 §10.3) — chưa có trong CI, nên để lại thành việc riêng.
+  // 09/09/2026: domain cũ nhadat-cc.vercel.app vẫn gắn vào project → mọi đường
+  // dẫn chuyển hẳn sang aioinhadat.vercel.app (308). Trước đó Supabase Auth
+  // `site_url` còn trỏ domain cũ nên đăng nhập Google xong khách rơi về
+  // nhadat-cc.vercel.app (phiên nằm ở đó), còn aioinhadat.vercel.app/admin thì
+  // "cần đăng nhập" — hai domain là hai phiên. Auth đã đổi cùng ngày; redirect
+  // này bịt nốt đường link cũ (Zalo, SEO, bookmark).
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "nhadat-cc.vercel.app" }],
+        destination: "https://aioinhadat.vercel.app/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

@@ -52,6 +52,7 @@ export const SELLER_SCRIPT_RULES = `Kịch bản nhận ký gửi (AI Ơi Nhà �
 - Mỗi tin dưới 30 từ = [nhắc lại hoặc khen điểm mạnh THẬT, gắn với khách mua] + [hỏi đúng MỘT thông tin]. Không hỏi hai thứ một lúc, không gửi form, không đọc tên trường.
 - Thứ tự: làm rõ CƠ BẢN trước — loại nhà, đường/phường, diện tích (ngang, dài), giá mong muốn — theo thứ chủ nhà đang nói (đang nói ngang mấy mét thì hỏi dài/diện tích, chưa nhảy sang giá). Hỏi địa chỉ thì nêu lý do "để em kiểm tra giá thị trường khu vực" (chỉ là lý do hỏi; KHÔNG tự đưa con số định giá, không so giá khi chủ nhà không hỏi).
 - Rồi hỏi theo LOẠI BĐS, giống người trong nghề: NHÀ PHỐ / NHÀ CẤP 4: hẻm rộng mấy mét, ô tô vào không → mấy lầu, mấy phòng ngủ → pháp lý (sổ hồng riêng chưa, hoàn công chưa) → hợp để ở hay kinh doanh ngành gì → xin ảnh. CHUNG CƯ: dự án/toà nào → tầng mấy → mấy phòng ngủ → ban công hướng nào → bàn giao nhà trống hay để lại nội thất gì → đã ra sổ hồng chưa hay còn hợp đồng mua bán → phí quản lý → xin ảnh. ĐẤT: ngang dài, thổ cư → đường trước đất rộng mấy mét → hướng → có vướng cột điện, hố ga, đường đâm không → xây tự do hay theo mẫu chủ đầu tư → sổ riêng chính chủ hay đất dự án chờ sổ → xin ảnh. BIỆT THỰ: mấy tầng, mấy phòng → sân vườn, chỗ đậu ô tô → khu biệt lập có bảo vệ không → pháp lý, hoàn công → xin ảnh. CHO THUÊ (mọi loại): thêm nội thất để lại gì → cọc mấy tháng → thuê tối thiểu bao lâu → trượt giá mỗi năm. Không hỏi hướng với nhà phố/biệt thự, không hỏi quy hoạch, năm xây; chủ tự kể thì ghi.
+- Loại khác: TOÀ NHÀ / CHDV / KHÁCH SẠN: số phòng → tỷ lệ lấp đầy → doanh thu → kết cấu → thang máy → PCCC → pháp lý. ĐẤT NÔNG NGHIỆP: quy hoạch → lên thổ cư được không → đường vào (xe tải) → nguồn nước → ranh giới → pháp lý. ĐẤT SKC/TMD: thời hạn sử dụng → trả tiền thuê đất một lần hay hàng năm → hợp mục đích gì → đường → pháp lý. KHO XƯỞNG: chiều cao thông thủy → tải trọng sàn → trạm biến áp → nước thải → xe container → pháp lý. Sau khi tin ĐÃ LÊN KỆ, các câu hỏi bù đi sâu hơn (WC, cách mặt tiền, hẻm thông/cụt, ngập nước, đang ở hay cho thuê, sổ cầm tay hay thế chấp, tiện ích gần, lý do bán, còn thương lượng không) — mỗi lần vẫn một câu.
 - Căn thuộc DỰ ÁN có trong kho (khối "DỰ ÁN" trong ngữ cảnh): nhắc đúng MỘT tiện ích hay đặc điểm thật của dự án khi khen ("Sunrise City có hồ bơi lớn, khách gia đình chuộng lắm"), không bịa tiện ích không có trong khối đó.
 - Chủ nhà báo "bán rồi / có người thuê rồi / không bán nữa / rút tin": hệ thống tự đóng tin và trả lời; em không cần hỏi lại, không tiếc nuối dài dòng.
 - Câu kế NỐI từ chi tiết vừa nghe: "ngang 5" → dài bao nhiêu; "hẻm 4m" → ô tô tới cửa không; "3 lầu" → mấy phòng ngủ; "6 phòng" → sổ hồng hoàn công đủ chưa.
@@ -247,6 +248,21 @@ export const FACT_LABELS: Record<string, string> = {
   truot_gia: "trượt giá thuê mỗi năm",
   // FR-184: chủ nhà nhiều căn báo ngưng rao — hỏi căn nào.
   ngung_rao_can_nao: "chủ nhà chỉ căn muốn ngưng rao",
+  // 20260909i (FR-186 mở rộng, chat Gemini 21/06 lượt 38 + 65–67, chat 07/09): nhóm
+  // sau_dang (hỏi bù sau khi lên kệ) + 4 loại mới toa_nha / dat_nong_nghiep / dat_kinh_doanh / kho_xuong.
+  so_wc: "số WC", cach_mat_tien: "cách mặt tiền đường bao xa", hem_thong: "hẻm thông hay cụt, quay đầu xe được không",
+  ngap_nuoc: "có ngập nước mùa mưa không", hien_trang_su_dung: "đang ở, cho thuê hay để trống",
+  the_chap: "sổ cầm tay hay đang thế chấp ngân hàng", tien_ich_gan: "tiện ích gần (trường, công chứng, chợ, gym)",
+  ly_do_ban: "lý do bán", thuong_luong: "giá còn thương lượng không", fit_out: "thời gian sửa chữa miễn phí (fit-out)",
+  view: "view căn hộ", can_goc: "có phải căn góc không", phi_gui_xe: "phí gửi xe", so_huu: "sở hữu lâu dài hay 50 năm",
+  hinh_dang: "hình dáng đất (vuông vức, nở hậu, bóp hậu)", mat_do_xd: "mật độ xây dựng cho phép", tang_cao_toi_da: "được xây tối đa mấy tầng",
+  no_hau: "nở hậu", thang_may: "có thang máy không",
+  so_phong: "tổng số phòng cho thuê", ty_le_lap_day: "tỷ lệ lấp đầy", doanh_thu: "doanh thu mỗi tháng", pccc: "PCCC đã nghiệm thu chưa",
+  len_tho_cu: "có lên thổ cư được không", duong_vao: "đường vào (bê tông hay đất, xe tải vào được không)",
+  nguon_nuoc: "nguồn nước tưới", ranh_gioi: "ranh giới đã cắm cọc, rào chưa",
+  thoi_han_su_dung: "thời hạn sử dụng đất", hinh_thuc_thue_dat: "trả tiền thuê đất một lần hay hàng năm", muc_dich: "mục đích sử dụng phù hợp",
+  chieu_cao: "chiều cao thông thủy", tai_trong_san: "tải trọng sàn", tram_bien_ap: "trạm biến áp bao nhiêu kVA",
+  xu_ly_nuoc_thai: "hệ thống xử lý nước thải", duong_container: "xe container vào được không",
 };
 
 // FR-178: câu hỏi kiểu NGƯỜI NÓI cho từng fact — dùng làm gợi ý cho model và làm
@@ -303,6 +319,42 @@ export const CAU_HOI_MAU: Record<string, string> = {
   huong: "Nhà mình quay hướng nào {ac}?",
   quy_hoach: "Nhà có dính quy hoạch hay lộ giới gì không {ac}?",
   nam_xay: "Nhà xây năm nào {ac}?",
+  // 20260909i — câu hỏi bù SAU khi lên kệ (chat 21/06 lượt 65–67, chat 07/09) và 4 loại mới.
+  so_wc: "Nhà mình có mấy WC {ac}?",
+  cach_mat_tien: "Nhà mình cách mặt tiền đường lớn khoảng bao nhiêu mét {ac}?",
+  hem_thong: "Hẻm nhà mình thông hay cụt, xe hơi quay đầu được không {ac}?",
+  ngap_nuoc: "Khu mình mùa mưa lớn có bị ngập hay đọng nước không {ac}?",
+  hien_trang_su_dung: "Nhà hiện mình đang ở, đang cho thuê hay để trống {ac}?",
+  the_chap: "Sổ nhà mình đang cầm tay hay đang thế chấp ngân hàng {ac}?",
+  tien_ich_gan: "Quanh nhà mình có trường học, công chứng hay chợ nào gần không {ac}?",
+  ly_do_ban: "{Ac} bán căn này vì lý do gì để em tư vấn khách cho đúng ạ?",
+  thuong_luong: "Giá mình còn thương lượng được không {ac}?",
+  fit_out: "Mình cho người thuê bao nhiêu ngày sửa sang miễn phí trước khi tính tiền {ac}?",
+  view: "Căn mình nhìn ra view gì {ac}, nội khu, công viên hay sông?",
+  can_goc: "Căn mình có phải căn góc không {ac}?",
+  phi_gui_xe: "Phí gửi xe mỗi tháng tầm bao nhiêu {ac}?",
+  so_huu: "Căn mình sở hữu lâu dài hay 50 năm {ac}?",
+  hinh_dang: "Lô đất mình vuông vức, nở hậu hay bóp hậu {ac}?",
+  mat_do_xd: "Mật độ xây dựng cho phép của lô là bao nhiêu {ac}?",
+  tang_cao_toi_da: "Lô mình được xây tối đa mấy tầng {ac}?",
+  no_hau: "Nhà mình nở hậu bao nhiêu mét {ac}?",
+  thang_may: "Nhà mình có thang máy không {ac}?",
+  so_phong: "Toà mình tổng cộng bao nhiêu phòng cho thuê {ac}?",
+  ty_le_lap_day: "Tỷ lệ lấp đầy trung bình tầm bao nhiêu phần trăm {ac}?",
+  doanh_thu: "Doanh thu mỗi tháng tầm bao nhiêu {ac}?",
+  pccc: "Hệ thống PCCC đã được nghiệm thu chưa {ac}?",
+  len_tho_cu: "Đất mình có lên thổ cư được không {ac}?",
+  duong_vao: "Đường vào đất là đường bê tông hay đường đất, xe tải vào được không {ac}?",
+  nguon_nuoc: "Đất mình có kênh mương hay nguồn nước tưới không {ac}?",
+  ranh_gioi: "Ranh đất đã cắm cọc, rào lưới rõ chưa {ac}?",
+  thoi_han_su_dung: "Đất mình sở hữu lâu dài hay thuê nhà nước tới năm nào {ac}?",
+  hinh_thuc_thue_dat: "Tiền thuê đất mình trả một lần hay trả hàng năm {ac}?",
+  muc_dich: "Lô này hợp làm showroom, văn phòng hay xưởng {ac}?",
+  chieu_cao: "Xưởng mình cao thông thủy bao nhiêu mét {ac}?",
+  tai_trong_san: "Tải trọng sàn xưởng bao nhiêu tấn mỗi m2 {ac}?",
+  tram_bien_ap: "Trạm biến áp bao nhiêu kVA {ac}?",
+  xu_ly_nuoc_thai: "Xưởng có hệ thống xử lý nước thải chưa {ac}?",
+  duong_container: "Xe container 40 feet vào tận xưởng được không {ac}?",
 };
 export function cauHoiMau(
   key: string, cachGoi: string, bang: Record<string, string> = CAU_HOI_MAU, loai?: string | null,

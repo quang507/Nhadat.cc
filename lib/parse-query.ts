@@ -69,6 +69,11 @@ const NHOM_NHA = ["nha_pho", "nha_cap4", "biet_thu"];
 
 // Thứ tự QUAN TRỌNG: mẫu dài trước ("nha pho" trước "nha", "can ho" trước "ho").
 const LOAI: Array<{ re: RegExp; types: string[]; label: string; tag: string; conf: number }> = [
+  // 20260909i: loại mới — xét trước "can ho" vì "căn hộ dịch vụ" là toà nhà dòng tiền.
+  { re: /(^|[^a-z])(kho xuong|nha xuong|kho bai|nha kho|xuong)(?![a-z])/, types: ["kho_xuong"], label: "kho xưởng", tag: "kho-xuong", conf: 0.9 },
+  { re: /(^|[^a-z])(dat nong nghiep|dat vuon|dat lua|dat trong|dat ruong|dat ray)(?![a-z])/, types: ["dat_nong_nghiep"], label: "đất nông nghiệp", tag: "dat", conf: 0.9 },
+  { re: /(^|[^a-z])(dat skc|dat tmd|dat kinh doanh|dat thuong mai|thuong mai dich vu)(?![a-z])/, types: ["dat_kinh_doanh"], label: "đất kinh doanh", tag: "dat", conf: 0.9 },
+  { re: /(^|[^a-z])(can ho dich vu|chdv|khach san|toa nha|building|nha nghi)(?![a-z])/, types: ["toa_nha"], label: "toà nhà", tag: "toa-nha", conf: 0.9 },
   { re: /(^|[^a-z])(chung cu|can ho|cc|apartment|penthouse)(?![a-z])/, types: ["chung_cu"], label: "căn hộ", tag: "can-ho", conf: 0.9 },
   { re: /(^|[^a-z])(mat bang|mb|kiot|ki ot|shophouse|van phong|cua hang)(?![a-z])/, types: ["mat_bang"], label: "mặt bằng", tag: "mat-bang", conf: 0.9 },
   { re: /(^|[^a-z])(phong tro|nha tro|tro|phong(?!\s*(ngu|khach|tam|bep|wc)))(?![a-z])/, types: ["phong_tro"], label: "phòng trọ", tag: "phong-tro", conf: 0.85 },

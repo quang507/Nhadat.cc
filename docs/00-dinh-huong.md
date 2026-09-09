@@ -76,7 +76,7 @@ cả hai phía (`06 §6.8`).
 | §II | Nút bấm nhanh trong tin (`[Vẫn đang bán]`…) | ⏳ | Bridge zca-js gửi chữ, chưa gửi nút — OPEN-33 (Zalo OA) |
 | §III | Nhóm 1 nhà ở | ✅ | FR-172 |
 | §III | Nhóm 2 đất; thông số cho thuê | ✅ | FR-186 (09/09): đất hỏi đường, hướng, cột điện/hố ga, xây tự do/theo mẫu, sổ riêng/đất dự án; cho thuê hỏi nội thất, cọc, thời hạn, trượt giá |
-| §III | Nhóm 3 công nghiệp | ❓ | OPEN-40 |
+| §III | Nhóm 3 công nghiệp | ✅ | FR-186 mở rộng (09/09 tối, OPEN-40 chốt): `kho_xuong`, `toa_nha`, `dat_kinh_doanh`, `dat_nong_nghiep` — bộ câu hỏi riêng, không thêm cột |
 | §IV | Điểm uy tín 50% hoàn chỉnh + 50% kịp thời | 🔶 | FR-183 (09/09): điểm người rao = TB điểm tin × hệ số quy mô NMG, chưa có vế "kịp thời"; hạng FR-155 vẫn theo số tin; CTV đo kịp thời riêng — FR-173 |
 | §IV | Điểm **từng tin** (khác điểm người rao) | ✅ | FR-177 d: `diem_tin()` 7 tiêu chí 0–100 theo kịch bản Gemini; ngưỡng rao 70 chờ chốt — OPEN-50 |
 | §IV | Thưởng quy mô; quyền lợi Đồng/Bạc/Vàng | ❓ | OPEN-26 (người rao), OPEN-42 (CTV) |
@@ -96,7 +96,7 @@ cả hai phía (`06 §6.8`).
 | Phân khúc | Trước: người rao ở cụm Q5 cũ, rồi Sài Gòn (phường mới) + Long An (P3 chính chủ, P4 NMG 10–30 căn). Sau: người mua ở (P1), đầu tư (P2). Bán trước vì không hàng thì chat rỗng | 02 §2.2, RSK-04, FR-174 |
 | Chi phí | Không phí đăng, không phí mua, thu khi chốt. Build ≤418tr; vận hành Free-tier + 20tr/tháng | NFR-14/16, §1.3–1.4 |
 | Giá trị | Người rao: "rao một lần là xong". Người mua: được trả lời thật, không lộ số (thay cho 40 cuộc gọi/3 ngày) | INS-04/06/09 |
-| KHÔNG làm | App · form nhiều trường · phí đăng · hỏi SĐT · marketplace tự phục vụ · công nghiệp (OPEN-40) · đa ngôn ngữ · Messenger/Telegram · khẳng định pháp lý | 02 §2.3, DH-02 |
+| KHÔNG làm | App · form nhiều trường · phí đăng · hỏi SĐT · marketplace tự phục vụ · đa ngôn ngữ · Messenger/Telegram · khẳng định pháp lý | 02 §2.3, DH-02 |
 | Chỉ số | §0.5 | — |
 | Tăng trưởng | Bán: mạng NMG + admin đăng tin (FR-156). Mua: SEO 100 tag + traffic batdongsan + widget Zalo (FR-145) | BR-02/08, §1.4 |
 | Năng lực | Tin có cấu trúc (FR-172) · não cấu hình (FR-138) · Zalo + bridge · 2 CTV có hàng đợi + hạng (FR-136/173) · sổ lỗi (FR-152) | 07 §2 |
@@ -138,11 +138,11 @@ Chưa: bridge **im từ 27/08** (VPS chưa bật), 0 chủ nhà/CTV có Zalo uid
 
 | Đợt | Việc | Neo |
 |---|---|---|
-| 1 · Chốt | §0.8 (OPEN-40/41/42, 27 nửa sau) + OPEN-21 (5 vai), 26 (quyền lợi hạng), 28 (phí) | 09 |
+| 1 · Chốt | §0.8 (OPEN-41/42, 27 nửa sau; OPEN-40 chốt 09/09) + OPEN-21 (5 vai), 26 (quyền lợi hạng), 28 (phí) | 09 |
 | 2 · Đo I3 | 20 tin có chủ thật vào vòng CTV; đo tỷ lệ trả lời trong 120' / 24h; định cỡ lại OPEN-42 | FR-173 |
 | 2b · Địa bàn | Đợt 1 xong 03/09 (không ghi cứng Quận 5, copy nói Sài Gòn + Long An). Đợt 2 khi OPEN-27 nửa sau chốt: bảng `wards` một nguồn, SEO theo khu mới, mở cụm kề Q5 cũ + một huyện Long An có hàng thật | FR-174 |
 | 3 · Dữ liệu | 7 hạng mục theo `01 §1.5c` (sự kiện tin, khớp tin–hồ sơ, giá khu vực…) | INS-13 |
-| 4 · AOND còn thiếu | Màn hình nhãn + nút cướp quyền; thông số cho thuê/đất nếu OPEN-40 chốt; thưởng quy mô nếu OPEN-26 chốt | FR-135/141/172 |
+| 4 · AOND còn thiếu | Màn hình nhãn + nút cướp quyền; thông số cho thuê/đất/công nghiệp đã làm (FR-186, OPEN-40 chốt 09/09); thưởng quy mô nếu OPEN-26 chốt | FR-135/141/172 |
 | 5 · Vận hành | Sao lưu định kỳ; lên Pro ngay khi có giao dịch thật đầu tiên | NFR-16, OPEN-25 |
 
 Ngoài 90 ngày: thoại, Messenger/Telegram, app, công nghiệp, đổi domain.
@@ -175,7 +175,7 @@ dự án 04/09/2026 "dựng hết đi, giữ chân 5 ngày"]. Còn:
 | ID | Câu hỏi | Khuyến nghị BA |
 |---|---|---|
 | OPEN-27 nửa sau | Tên hiển thị cũ hay mới; DB lưu gì; mã tin; mở phường/huyện nào trước; cho thuê có giữ | Hiển thị cả hai tên; bảng `wards` một nguồn; giữ mã tin; mở cụm kề Q5 cũ + một huyện Long An có hàng; giữ cho thuê như đang có |
-| OPEN-40 | Thông số cho thuê / đất / công nghiệp — làm gì, khi nào | Cho thuê: làm. Đất: chờ OPEN-37. Công nghiệp: không, tới khi có khách hỏi thật |
+| OPEN-40 | ✅ chốt 09/09/2026 tối — làm cả ba bằng `required_facts` (FR-186 mở rộng: `toa_nha`, `dat_nong_nghiep`, `dat_kinh_doanh`, `kho_xuong`) | — |
 | OPEN-41 | Model: giữ Claude/Supabase hay Gemini → local theo AOND §VII | Giữ; lớp gọi model đã gom một chỗ, đổi sau được |
 | OPEN-42 | CTV: hạn trả lời (đang 120') và mốc Vàng ≥90% / Bạc ≥70% / Đồng; hệ quả của hạng | Giữ tới khi có ~30 câu thật rồi định cỡ; chốt hệ quả cùng lúc |
 | **OPEN-48** | ✅ **ĐÃ CHỐT 08/09/2026**: Bỏ toàn bộ nhóm tính năng thừa kế 2024 (mini-site rao web, tài khoản, trang phụ SEO cũ). Chuẩn hóa 100% tài liệu theo Aioinhadat 2026 | Đã chốt theo lệnh sếp và chủ dự án |
