@@ -98,7 +98,7 @@ function ThanhTren() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Tìm mã tin, đường, người bán"
-            className="w-56 rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-sm text-white placeholder-white/50 outline-none focus:border-white/60 focus:bg-white/15 xl:w-72"
+            className="w-44 rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-sm text-white placeholder-white/50 outline-none focus:border-white/60 focus:bg-white/15 2xl:w-64"
           />
         </form>
         <Link href="/admin/dang-tin" className="ml-1 hidden shrink-0 items-center gap-1 rounded-md bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-dark sm:flex">
