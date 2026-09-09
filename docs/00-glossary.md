@@ -13,8 +13,8 @@ nhiều biến thể; cột "Biến thể trong tài liệu gốc" để tra ng�
 | **NMG** | Nhà Môi Giới có hợp đồng môi giới với chủ sở hữu. Phí 0.5%. | môi giới, agent, broker |
 | **CTV** | Cộng Tác Viên của nhadat.cc — người thật, dẫn khách xem nhà, quản lý NMG. Hưởng 0.5%. Từ 03/09/2026 còn nhận câu khách hỏi mà bot không biết, hỏi chủ rồi trả lời bot theo mẫu `#mã tin: câu trả lời` trong hạn; trễ thì tụt hạng Đồng/Bạc/Vàng (FR-173). | cộng tác viên |
 | **Chuyên viên** | Nhân sự nội bộ nhadat.cc xử lý ca chat AI không giải quyết được. | admin, nhân viên |
-| **Thái** | Tên nhân cách hoá của trợ lý AI khi chat *[đổi 25/08/2026, trước là "Trai"]*. Một tên duy nhất cho cả hai phía, không có "gia đình trợ lý" (OPEN-39). | Thái, Trai [cũ], nhân viên AI |
-| **Aioinhadat** | Tên thương hiệu sản phẩm, chốt 03/09/2026 (OPEN-08/39). **Cách VIẾT ra cho khách và trên web: "AI Ơi Nhà Đất", tách chữ, không viết gộp** [chủ dự án 09/09/2026]; "Aioinhadat" chỉ là tên gọi tắt trong tài liệu/repo. Bot tự giới thiệu "em là Thái bên AI Ơi Nhà Đất". Tên miền web vẫn `nhadat.cc`, tài liệu vẫn gọi dự án theo tên repo. | AI Ơi Nhà Đất, AOND (SRD gốc) |
+| **Tên trợ lý (T•ai, Kh•ai…)** | Mỗi khách một tên trợ lý riêng, gán tất định theo Zalo ID từ kho 20 tên phụ âm tiếng Việt + "•ai", viết hoa chữ đầu, giữ suốt; cùng một người gặp cùng một tên ở cả nhánh mua và bán (FR-181, chốt lại 09/09/2026). *Lịch sử: "Trai" (2024) → "Thái" (25/08–09/09/2026, OPEN-39 bản 03/09).* | T•ai, Kh•ai, M•ai, gia đình •ai, Thái [cũ], Trai [cũ] |
+| **Aioinhadat** | Tên thương hiệu sản phẩm, chốt 03/09/2026 (OPEN-08/39). **Cách VIẾT ra cho khách và trên web: "AI Ơi Nhà Đất", tách chữ, không viết gộp** [chủ dự án 09/09/2026]; "Aioinhadat" chỉ là tên gọi tắt trong tài liệu/repo. Bot tự giới thiệu "em là T•ai bên AI Ơi Nhà Đất" (tên theo khách, FR-181). Tên miền web vẫn `nhadat.cc`, tài liệu vẫn gọi dự án theo tên repo. | AI Ơi Nhà Đất, AOND (SRD gốc) |
 
 ## Nghiệp vụ BĐS
 

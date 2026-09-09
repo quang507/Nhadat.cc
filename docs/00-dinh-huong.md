@@ -48,12 +48,12 @@ cả hai phía (`06 §6.8`).
 
 | Khía cạnh | nhadat.cc (2024) | AOND SRD (06/2026) | Hôm nay | Neo |
 |---|---|---|---|---|
-| Tên | nhadat.cc, "Thái" | aioinhadat.com, gia đình •ai | **Aioinhadat**, một bot **Thái**; domain web: https://nhadat-cc.vercel.app/ *[giả định BA]* | OPEN-08, OPEN-39 |
+| Tên | nhadat.cc, "Thái" | aioinhadat.com, gia đình •ai | **Aioinhadat**, viết cho khách **AI Ơi Nhà Đất**; trợ lý **mỗi khách một tên** từ kho •ai (T•ai, Kh•ai…, FR-181 — chốt lại 09/09, bản 03–09/09 là một tên Thái); domain web: https://aioinhadat.vercel.app/ | OPEN-08, OPEN-39, FR-181 |
 | Trọng tâm | Khách chat Zalo; web SEO | Người rao gửi hàng tự nhiên | Cả hai, một `chat-reply`, tách vai từng lượt | FR-157, FR-159 |
 | Nhận tin rao | `/raoban` + câu rao | Text/thoại/ảnh, không form | Câu rao trong Zalo sinh mã tin; ảnh có; thoại chưa | FR-158, FR-134 |
 | Nuôi tin | TTL 7 ngày | 1 thông tin/lần, 1–2 căn/ngày | Đúng AOND | FR-129, FR-144 |
-| Khách hỏi điều bot không biết | Hỏi chủ | Bot-to-bot hỏi chủ | **Giao CTV**, quá hạn → admin | FR-173 |
-| Xếp hạng | NMG ≥10 tin, chốt ≥5% | Đồng/Bạc/Vàng người rao | Hạng người rao (ẩn) + **hạng CTV** theo đúng hạn | FR-155, FR-173, OPEN-26/42 |
+| Khách hỏi điều bot không biết | Hỏi chủ | Bot-to-bot hỏi chủ | **Hỏi chủ nhà trước** (12 giờ), rồi CTV (120 phút), rồi admin (chốt lại 09/09) | FR-173 |
+| Xếp hạng | NMG ≥10 tin, chốt ≥5% | Đồng/Bạc/Vàng người rao | Hạng người rao (ẩn) + **điểm người rao 0–100** (09/09, FR-183) + **hạng CTV** theo đúng hạn | FR-155, FR-183, FR-173, OPEN-26/42 |
 | Phí | CCRB 1% · NMG 0.5% · thuê ¾ tháng | Giống | Giống | BR-05, AOND §V |
 | Địa bàn | Quận 5 | Quận 5 rồi mở | **Sài Gòn (phường mới) + Long An**, trọng tâm bán; khởi điểm Q5 cũ (chốt 03/09) | BR-01, OPEN-27, FR-174 |
 | Hạ tầng | Vendor, Slack, Logstash | Gemini → local, SharePoint | Supabase Edge + Claude, Storage, bridge Zalo, `/admin` | SRS-2, OPEN-41 |
@@ -69,15 +69,15 @@ cả hai phía (`06 §6.8`).
 | §I | Thoại | ⏳ | FR-134 "STT chưa làm" |
 | §I | Tích lũy ngầm nhiều phiên | ✅ | FR-129/144/153/172 |
 | §I | 200–300 người/ngày, 6–9k tin, phủ 90% Q5 | 🔶 | NFR-05; Free-tier chưa đo (NFR-16) |
-| §II | Kho tên •ai (m•ai, t•ai…) | ❌ | Chốt 03/09: một tên Thái (OPEN-39) |
+| §II | Kho tên •ai (m•ai, t•ai…) | ✅ | Chốt lại 09/09: mỗi khách một tên, gán tất định theo Zalo ID, giữ suốt (FR-181); bản 03/09 "một tên Thái" đã bỏ |
 | §II | Quy tắc 30 từ | ✅ | FR-178 (07/09): mọi tin dưới 30 từ, kể cả nhánh mua; dài hơn chỉ khi liệt kê 2–3 căn (`06 §6.8`) |
 | §II | Khen trước, hỏi 1/lần; "hình như là" | ✅ | FR-129, FR-134, FR-177 b (khích lệ phải gắn khách mua, không khen suông) |
 | §II | Giọng mẫu: transcript 30 câu người bán | ✅ | FR-178 d: `SELLER_FEWSHOT` 16 cặp chép từ transcript AOND + kịch bản Gemini của sếp, khoá `bot_prompts.seller_fewshot` |
 | §II | Nút bấm nhanh trong tin (`[Vẫn đang bán]`…) | ⏳ | Bridge zca-js gửi chữ, chưa gửi nút — OPEN-33 (Zalo OA) |
 | §III | Nhóm 1 nhà ở | ✅ | FR-172 |
-| §III | Nhóm 2 đất; thông số cho thuê | ⏳ | OPEN-40, OPEN-37 |
+| §III | Nhóm 2 đất; thông số cho thuê | ✅ | FR-186 (09/09): đất hỏi đường, hướng, cột điện/hố ga, xây tự do/theo mẫu, sổ riêng/đất dự án; cho thuê hỏi nội thất, cọc, thời hạn, trượt giá |
 | §III | Nhóm 3 công nghiệp | ❓ | OPEN-40 |
-| §IV | Điểm uy tín 50% hoàn chỉnh + 50% kịp thời | 🔶 | FR-155 (số tin + chốt); CTV đo kịp thời riêng — FR-173 |
+| §IV | Điểm uy tín 50% hoàn chỉnh + 50% kịp thời | 🔶 | FR-183 (09/09): điểm người rao = TB điểm tin × hệ số quy mô NMG, chưa có vế "kịp thời"; hạng FR-155 vẫn theo số tin; CTV đo kịp thời riêng — FR-173 |
 | §IV | Điểm **từng tin** (khác điểm người rao) | ✅ | FR-177 d: `diem_tin()` 7 tiêu chí 0–100 theo kịch bản Gemini; ngưỡng rao 70 chờ chốt — OPEN-50 |
 | §IV | Thưởng quy mô; quyền lợi Đồng/Bạc/Vàng | ❓ | OPEN-26 (người rao), OPEN-42 (CTV) |
 | §V | Phí; NMG ≥10 tin, chốt 5% | ✅ | BR-05, FR-125, FR-155 |
@@ -157,7 +157,7 @@ Ngoài 90 ngày: thoại, Messenger/Telegram, app, công nghiệp, đổi domain
 | 4 | **Free-tier chịu tới giao dịch đầu** (NFR-16) | Mất dữ liệu; Vercel đình chỉ | Một sự cố | Sao lưu hằng ngày, thử khôi phục một lần |
 | 5 | **Mở Sài Gòn + Long An không loãng kho** (FR-174 vs INS-08) | >50% phường/huyện mở có <5 tin sau 60 ngày | — | Mở cụm phường kề Q5 cũ trước; Long An theo một huyện có nguồn hàng thật |
 
-Đứng vững: không thu SĐT; phí chỉ khi chốt; một tên bot Thái. Chưa đánh giá
+Đứng vững: không thu SĐT; phí chỉ khi chốt. Đã đổi: một tên bot Thái → mỗi khách một tên (FR-181, 09/09). Chưa đánh giá
 được: "rao một câu" — 173/173 tin là `import_excel` ngày 21/08, chưa tin nào
 sinh từ câu rao Zalo thật (04/09); OKR "1 giao dịch/2 ngày" (OPEN-01); nhu cầu
 nhóm công nghiệp. Giả định 4 đã **đổ một lần**: bridge chết 8 ngày (27/08 →
@@ -165,8 +165,8 @@ nhóm công nghiệp. Giả định 4 đã **đổ một lần**: bridge chết 
 
 ## 0.8 Chờ chủ dự án chốt
 
-Đã chốt 03/09/2026: **OPEN-08 + OPEN-39** (Aioinhadat, một bot Thái, không
-•ai), **luồng CTV** (FR-173), **địa bàn — OPEN-27 nửa đầu** (Sài Gòn phường
+Đã chốt 03/09/2026: **OPEN-08 + OPEN-39** (Aioinhadat; "một bot Thái" đã đảo lại 09/09 → kho
+•ai theo khách, FR-181), **luồng CTV** (FR-173), **địa bàn — OPEN-27 nửa đầu** (Sài Gòn phường
 mới + Long An, trọng tâm bán — FR-174). Đã chốt 04/09/2026: **giữ chân khách
 mốc 5 ngày** (FR-60 đổi từ 3 ngày; FR-63 buộc giữ kết nối từ ngày 6) và **dựng
 hết phần tài liệu có mà code chưa** (OPEN-43 → xem `10 §10.8.4`) [nguồn: chủ

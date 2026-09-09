@@ -17,7 +17,7 @@ import {
   serviceClient,
 } from "../_shared/claude.ts";
 import { congBiMat } from "../_shared/gate.ts";
-import { FACT_LABELS, SELLER_SCRIPT_RULES, TONE_RULES } from "../_shared/prompts.ts";
+import { dienTen, FACT_LABELS, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
 
 const OutSchema = z.object({
   message: z.string().describe("Tin nhắn Zalo gửi người bán, tiếng Việt"),
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
   const { data: listing, error: lErr } = await db
     .from("listings")
     .select(
-      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, sellers(name, seller_type, zalo_user_id)",
+      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, sellers(name, seller_type, zalo_user_id, ten_tro_ly)",
     )
     .eq("id", listing_id)
     .single();
@@ -106,8 +106,11 @@ Deno.serve(async (req) => {
     .map((f) => `- ${f.fact_key}: ${FACT_LABELS[f.fact_key] ?? f.fact_key}`)
     .join("\n");
   const seller = listing.sellers as
-    | { name?: string; seller_type?: string; zalo_user_id?: string | null }
+    | { name?: string; seller_type?: string; zalo_user_id?: string | null; ten_tro_ly?: string | null }
     | null;
+  // FR-181: cùng một tên trợ lý với chat-reply — cột `ten_tro_ly` nếu đã có,
+  // không thì băm từ Zalo ID (cùng hàm, cùng kết quả).
+  const tenBot = seller?.ten_tro_ly ?? (seller?.zalo_user_id ? tenTroLy(seller.zalo_user_id) : "T•ai");
 
   const instruction = drip
     ? (isFirst
@@ -129,7 +132,7 @@ Deno.serve(async (req) => {
     },
     system: [{
       type: "text",
-      text: TONE_RULES + "\n\n" + SELLER_SCRIPT_RULES,
+      text: dienTen(TONE_RULES, tenBot) + "\n\n" + SELLER_SCRIPT_RULES,
       cache_control: { type: "ephemeral" },
     }],
     messages: [{

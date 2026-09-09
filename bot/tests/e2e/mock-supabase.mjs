@@ -21,8 +21,10 @@ export class FakeDB {
     this.t = {};
     for (const n of ["sellers","buyers","conversations","messages","listings","listing_facts","info_requests",
       "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log",
-      "ctvs","admins","interests","ratings","inbound_events"]) this.t[n] = [];
+      "ctvs","admins","interests","ratings","inbound_events","listing_media","app_config"]) this.t[n] = [];
     this.seq = 0; this.log = [];
+    // FR-185: kho file giả — chat-reply cất ảnh chủ nhà gửi vào Storage.
+    this.storage = [];
   }
   rows(n) {
     if (n === "listing_missing_facts") return this.missingFacts();
@@ -32,26 +34,41 @@ export class FakeDB {
   // FR-177 (20260907h): nhóm co_ban (1–9) → chuyen_mon (10–19) → phu (20+),
   // đúng chuỗi nhà phố của required_facts thật. "Đã có" đọc từ cột như view.
   missingFacts() {
-    const REQ = [
-      ["loai_bds", 1, "co_ban"], ["phuong", 2, "co_ban"], ["vi_tri", 3, "co_ban"], ["dien_tich", 4, "co_ban"], ["gia", 9, "co_ban"],
-      ["do_rong_hem", 10, "chuyen_mon"], ["ket_cau", 11, "chuyen_mon"], ["so_phong_ngu", 12, "chuyen_mon"],
-      ["phap_ly", 13, "chuyen_mon"], ["hinh_anh", 19, "chuyen_mon"],
-      // Nhóm `phu` (hướng, quy hoạch, năm xây) KHÔNG có ở đây: view thật lọc
-      // chúng từ 20260908a vì FR-177 cấm hỏi. Để lại là mock hỏi thứ bản thật
-      // không hỏi, và e2e xanh trong khi bot ngoài đời hỏi bậy.
-    ];
+    // FR-186 (20260909h): chuỗi theo LOẠI BĐS và loại giao dịch — chép đúng seed
+    // `required_facts` thật (deal null = mọi giao dịch, "cho_thue" = chỉ tin thuê).
+    // Nhóm `phu` KHÔNG có ở đây: view thật lọc (20260908a). Hướng HỎI với chung cư /
+    // đất (chuyen_mon), không hỏi với nhà phố / biệt thự (phu) — mock phải y vậy.
+    const CB = (k, p) => [k, p, "co_ban", null];
+    const CM = (k, p, deal = null) => [k, p, "chuyen_mon", deal];
+    const THUE_NHA = [CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("truot_gia", 18, "cho_thue")];
+    const REQ = {
+      chua_ro: [CB("loai_bds", 1), CB("vi_tri", 2), CB("phuong", 3), CB("gia", 9)],
+      nha_pho: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("ket_cau", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("tiem_nang", 14), ...THUE_NHA, CM("hinh_anh", 19)],
+      nha_cap4: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("hien_trang", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("tiem_nang", 14), CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
+      chung_cu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_tim_tuong", 6), CB("gia", 9), CM("tang", 10), CM("so_phong_ngu", 11), CM("huong", 12), CM("noi_that", 13), CM("phap_ly", 14), CM("phi_quan_ly", 15), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
+      dat: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("tho_cu", 8), CB("gia", 9), CM("do_rong_duong", 10), CM("huong", 11), CM("ha_tang", 12), CM("xay_dung", 13), CM("phap_ly", 14), CM("hinh_anh", 19)],
+      biet_thu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("ket_cau", 10), CM("so_phong_ngu", 11), CM("san_vuon", 12), CM("do_rong_hem", 13), CM("khu_compound", 14), CM("phap_ly", 15), CM("noi_that", 16, "cho_thue"), CM("tien_coc", 17, "cho_thue"), CM("thoi_han_thue", 18, "cho_thue"), CM("hinh_anh", 19)],
+      phong_tro: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("noi_that", 10), CM("gia_dien_nuoc", 11), CM("gio_giac", 12), CM("tien_coc", 13), CM("hinh_anh", 19)],
+      mat_bang: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("mat_tien", 7), CB("gia", 9), CM("nganh_hang_phu_hop", 10), CM("thoi_han_thue", 11), CM("tien_coc", 12), CM("truot_gia", 13), CM("hinh_anh", 19)],
+    };
     const out = [];
     for (const l of this.t.listings) {
       // 20260909a: view thật không lọc status — tin dang_ban vẫn có câu còn thiếu
       // để cron hỏi bù. Mock lọc là mock nói dối đúng chỗ tính năng này đo.
       const have = new Set(this.t.listing_facts.filter((f) => f.listing_id === l.id).map((f) => f.question));
       if (l.location_raw) have.add("vi_tri");
-      if (l.price_raw) have.add("gia"); if (l.area_m2) have.add("dien_tich"); if (l.ward) have.add("phuong");
+      if (l.price_raw) have.add("gia"); if (l.area_m2) { have.add("dien_tich"); have.add("dien_tich_dat"); have.add("dien_tich_tim_tuong"); } if (l.ward) have.add("phuong");
       if (l.property_type && l.property_type !== "chua_ro") have.add("loai_bds"); if (l.bedrooms) have.add("so_phong_ngu");
-      if (l.alley_width_m || l.access_type === "mat_tien") have.add("do_rong_hem"); if (l.floors) have.add("ket_cau");
-      if (l.legal_status) have.add("phap_ly"); if (l.direction) have.add("huong");
-      if (l.planning_status) have.add("quy_hoach"); if (l.year_built) have.add("nam_xay");
-      for (const [k, priority, nhom] of REQ) if (!have.has(k)) out.push({ listing_id: l.id, fact_key: k, priority, nhom });
+      if (l.alley_width_m || l.access_type === "mat_tien") { have.add("do_rong_hem"); have.add("do_rong_duong"); } if (l.floors) have.add("ket_cau");
+      if (l.legal_status) have.add("phap_ly"); if (l.direction) have.add("huong"); if (l.floor) have.add("tang");
+      if (l.planning_status) have.add("quy_hoach"); if (l.year_built) have.add("nam_xay"); if (l.furnishing) have.add("noi_that"); if (l.frontage_m) have.add("mat_tien");
+      // Ảnh trong kho (listing_media) = đã có ảnh, như view thật (FR-185).
+      if (this.t.listing_media.some((m) => m.listing_id === l.id)) have.add("hinh_anh");
+      const loai = REQ[l.property_type ?? "chua_ro"] ? (l.property_type ?? "chua_ro") : "chua_ro";
+      for (const [k, priority, nhom, deal] of REQ[loai]) {
+        if (deal && deal !== (l.deal ?? "ban")) continue;
+        if (!have.has(k)) out.push({ listing_id: l.id, fact_key: k, priority, nhom });
+      }
     }
     return out;
   }
@@ -90,7 +107,8 @@ export class FakeDB {
     }
     const cta = l.code ? 10 : 0;
     // Ảnh 10: đếm TẤM (fact hinh_anh + listing_media), 3 tấm = tối đa, ảnh gì cũng tính.
-    const soAnh = this.t.listing_facts.filter((x) => x.listing_id === l.id && x.question === "hinh_anh").length;
+    const soAnh = this.t.listing_facts.filter((x) => x.listing_id === l.id && x.question === "hinh_anh").length
+      + this.t.listing_media.filter((m) => m.listing_id === l.id).length;
     const anh = soAnh >= 3 ? 10 : soAnh === 2 ? 7 : soAnh === 1 ? 4 : 0;
     if (soAnh === 0) thieu.push("vài tấm ảnh (nhà, sổ, hẻm — ảnh nào cũng được)");
     else if (soAnh < 3) thieu.push(`thêm ảnh cho đủ 3 tấm (đang có ${soAnh})`);
@@ -513,6 +531,18 @@ class RpcCall {
         const l = db.t.listings.find((x) => x.id === a.p_listing_id);
         return { data: l ? db.diemTin(l) : null, error: null };
       }
+      // FR-183 (20260909h): điểm người rao = TB diem_tin các tin đang rao × hệ số
+      // quy mô NMG (+6%/căn ≤10, +4% 11–30, +1,5% >30), trần 100 — chép đúng hàm thật.
+      case "diem_nguoi_ban": {
+        const s = db.t.sellers.find((x) => x.id === a.p_seller_id);
+        if (!s) return { data: null, error: null };
+        const ls = db.t.listings.filter((l) => l.seller_id === s.id && ["dang_ban", "dang_quan_tam", "cho_thong_tin"].includes(l.status));
+        if (!ls.length) return { data: { diem: 0, diem_tb: 0, so_tin: 0, he_so: 1 }, error: null };
+        const tb = ls.reduce((t, l) => t + db.diemTin(l).diem, 0) / ls.length;
+        const n = ls.length;
+        const heSo = s.seller_type === "nmg" ? 1 + 0.06 * Math.min(n, 10) + 0.04 * Math.max(Math.min(n, 30) - 10, 0) + 0.015 * Math.max(n - 30, 0) : 1;
+        return { data: { diem: Math.min(100, Math.round(tb * heSo)), diem_tb: Math.round(tb * 10) / 10, so_tin: n, he_so: heSo }, error: null };
+      }
       case "ghi_boc_tach": {
         // 20260909a: gộp, bỏ null, đóng dấu _cap_nhat
         const l = db.t.listings.find((x) => x.id === a.p_listing_id); if (!l) return { data: null, error: null };
@@ -549,5 +579,19 @@ class RpcCall {
 
 export function createClient() {
   const db = globalThis.__db;
-  return { from: (t) => new Builder(db, t), rpc: (n, a) => new RpcCall(db, n, a) };
+  // FR-185: Storage giả — `upload` cất byte vào db.storage, `remove` gỡ. Đặt
+  // `globalThis.__storageHong = true` để dựng cảnh kho hỏng (chat-reply phải rơi
+  // về fact URL tạm + ghi sổ lỗi, không nuốt ảnh).
+  const storage = {
+    from: (bucket) => ({
+      upload: async (path, bytes, opts) => {
+        db.log.push({ storage: "upload", bucket, path });
+        if (globalThis.__storageHong) return { data: null, error: { message: "storage hỏng (giả)" } };
+        db.storage.push({ bucket, path, size: bytes?.byteLength ?? 0, contentType: opts?.contentType ?? null });
+        return { data: { path }, error: null };
+      },
+      remove: async (paths) => { db.storage = db.storage.filter((f) => !(f.bucket === bucket && paths.includes(f.path))); return { data: null, error: null }; },
+    }),
+  };
+  return { from: (t) => new Builder(db, t), rpc: (n, a) => new RpcCall(db, n, a), storage };
 }

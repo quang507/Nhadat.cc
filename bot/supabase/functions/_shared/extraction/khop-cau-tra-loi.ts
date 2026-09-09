@@ -68,6 +68,8 @@ const HOI_SO = new Set([
   "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "tho_cu", "ket_cau", "tang",
   "so_phong_ngu", "nam_xay", "mat_tien", "do_rong_hem", "do_rong_duong",
   "phi_quan_ly", "gia_dien_nuoc", "thoi_han_thue", "gia",
+  // FR-186 (09/09/2026, cho thuê): cọc mấy tháng, trượt giá mấy % — đều là số.
+  "tien_coc", "truot_gia",
 ]);
 
 // Từ khoá tối thiểu cho các câu hỏi CHỮ. Không có từ nào trong đây thì coi là
@@ -79,7 +81,12 @@ const TU_KHOA: Record<string, RegExp> = {
   loai_bds: /\b(nha|pho|cap 4|chung cu|can ho|dat|biet thu|phong tro|mat bang|kho|xuong)\b/,
   // Vị trí cụ thể (chủ dự án 09/09/2026: "hỏi vị trí cụ thể thì tốt hơn"):
   // tên đường / hẻm / số nhà / mốc gần — hoặc có số (số nhà, số hẻm).
-  vi_tri: /\b(duong|hem|hxh|so|pho|ngo|kdc|khu|toa|chung cu|cu xa|lo|kp|ap|xa|phuong|quan|gan|doi dien|nga|cho|truong|benh vien|cong vien)\b|\d/,
+  vi_tri: /\b(duong|hem|hxh|so|pho|ngo|kdc|khu|toa|chung cu|cu xa|lo|kp|ap|xa|phuong|quan|gan|doi dien|nga|cho|truong|benh vien|cong vien|du an|block|thap)\b|\d/,
+  // FR-186 (09/09/2026): bộ câu hỏi riêng cho đất / biệt thự (chat Gemini
+  // 21/06: "vướng cột điện, hố ga", "xây tự do hay theo mẫu CĐT", "compound").
+  ha_tang: /\b(cot dien|ho ga|tru dien|cong|duong dam|vuong|khong vuong|ko vuong|sach|khong co|ko co|khong|ko|trong|thoang)\b/,
+  xay_dung: /\b(tu do|theo mau|mau|chu dau tu|cdt|quy hoach|xay|tang|lau|khong|ko|duoc)\b/,
+  khu_compound: /\b(compound|biet lap|an ninh|bao ve|khu|cong|rieng|khong|ko|mo|tu do|ben ngoai|dan cu)\b/,
 };
 
 // Câu hỏi ngược của chủ nhà: có dấu hỏi hoặc mở đầu bằng từ để hỏi.
@@ -192,6 +199,17 @@ export const NHAN_HOI_LAI: Record<string, string> = {
   do_rong_hem: "hẻm trước nhà rộng mấy mét, xe hơi vào được không",
   hinh_anh: "mình gửi giúp em vài tấm ảnh sổ, mặt tiền nhà và hẻm",
   duyet_tin: "bản nháp tin như vậy đã được chưa, hay mình muốn sửa chỗ nào",
+  // FR-186
+  tang: "căn hộ mình ở tầng mấy",
+  noi_that: "bàn giao nhà trống hay để lại nội thất gì",
+  ha_tang: "lô đất có vướng cột điện, hố ga hay đường đâm gì không",
+  xay_dung: "đất được xây tự do hay phải xây theo mẫu chủ đầu tư",
+  khu_compound: "nhà nằm trong khu biệt lập có bảo vệ hay khu dân cư mở",
+  tien_coc: "mình lấy cọc mấy tháng",
+  truot_gia: "giá thuê tăng mấy phần trăm mỗi năm",
+  thoi_han_thue: "mình muốn cho thuê tối thiểu bao lâu",
+  tiem_nang: "nhà mình hợp để ở hay kinh doanh ngành gì",
+  ngung_rao_can_nao: "mình muốn ngưng rao căn nào, nhắn số thứ tự hoặc địa chỉ giúp em",
 };
 
 // ── FR-177 e: chủ nhà đang nói FACT NÀO? ─────────────────────────────────────
@@ -250,8 +268,19 @@ export function nhanDienFact(text: string): NhanDien | null {
     return { question: "nam_xay", answer: m[1] };
   }
   if (/\bhuong\s*(dong|tay|nam|bac)\b/.test(kd)) return { question: "huong", answer: goc };
+  // FR-186: cho thuê — "cọc 2 tháng", "cọc 1 đóng 3"; "tăng 5%/năm", "trượt giá 10%".
+  if ((m = /\bcoc\s*(\d{1,2})\s*(?:thang|th)?\b/.exec(kd)) || (m = /\b(\d{1,2})\s*thang\s*(?:tien\s*)?coc\b/.exec(kd))) {
+    return { question: "tien_coc", answer: `cọc ${m[1]} tháng` };
+  }
+  if ((m = /\b(?:tang|truot gia|len)\s*(?:gia\s*)?(?:khoang\s*)?(\d{1,2})\s*%/.exec(kd)) || (m = /(\d{1,2})\s*%\s*(?:moi|1|mot)?\s*nam\b/.exec(kd))) {
+    return { question: "truot_gia", answer: `${m[1]}%/năm` };
+  }
+  // FR-186: đất — hạ tầng (cột điện, hố ga), xây tự do / theo mẫu; biệt thự — compound.
+  if (/\b(cot dien|ho ga|tru dien|duong dam)\b/.test(kd)) return { question: "ha_tang", answer: goc };
+  if (/\b(xay tu do|theo mau|mau chu dau tu|mau cdt|xay theo)\b/.test(kd)) return { question: "xay_dung", answer: goc };
+  if (/\b(compound|biet lap|khu an ninh|bao ve 24)\b/.test(kd)) return { question: "khu_compound", answer: goc };
   if (/\b(quy hoach|lo gioi|giai toa)\b/.test(kd)) return { question: "quy_hoach", answer: goc };
-  if (/\bnoi that\b/.test(kd)) return { question: "noi_that", answer: goc };
+  if (/\b(noi that|ban giao|nha trong|full nt)\b/.test(kd)) return { question: "noi_that", answer: goc };
   if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd)) {
     return { question: "tiem_nang", answer: goc };
   }
@@ -275,9 +304,15 @@ const LIEN_QUAN: Record<string, string[]> = {
   gia: ["phuong"], phuong: ["vi_tri", "dien_tich_dat", "dien_tich", "dien_tich_tim_tuong"],
   vi_tri: ["phuong", "do_rong_hem", "dien_tich_dat", "dien_tich"],
   loai_bds: ["phuong"],
-  do_rong_hem: ["ket_cau", "mat_tien"], do_rong_duong: ["mat_tien"],
-  ket_cau: ["so_phong_ngu", "phap_ly"], tang: ["so_phong_ngu"], so_phong_ngu: ["phap_ly"],
-  phap_ly: ["hinh_anh"], hinh_anh: [],
+  do_rong_hem: ["ket_cau", "mat_tien"], do_rong_duong: ["huong", "ha_tang", "mat_tien"],
+  ket_cau: ["so_phong_ngu", "san_vuon", "phap_ly"], tang: ["so_phong_ngu", "huong"], so_phong_ngu: ["huong", "noi_that", "phap_ly"],
+  // FR-186 (09/09/2026): chuỗi hỏi giống người cho chung cư / đất / biệt thự / cho thuê.
+  huong: ["noi_that", "ha_tang", "phap_ly"], noi_that: ["phap_ly", "tien_coc"],
+  ha_tang: ["xay_dung", "phap_ly"], xay_dung: ["phap_ly"],
+  san_vuon: ["khu_compound", "do_rong_hem"], khu_compound: ["phap_ly"],
+  phap_ly: ["tien_coc", "tiem_nang", "hinh_anh"], tiem_nang: ["hinh_anh"],
+  tien_coc: ["thoi_han_thue"], thoi_han_thue: ["truot_gia"], truot_gia: ["hinh_anh"],
+  hinh_anh: [],
 };
 export type CauThieu = { fact_key: string; priority?: number; nhom?: string | null };
 export function chonCauKe(vuaNoi: string[], conThieu: CauThieu[]): string | undefined {
@@ -339,4 +374,64 @@ export function laGap(text: string): boolean {
   if (/\b(khong|ko|k|chua|dau co|chang)\s*(?:can\s*)?gap\b/.test(kd)) return false;
   if (/\bgap\s*(doi|ba|lan|ruoi|\d)/.test(kd)) return false; // "gấp đôi", "gấp 3" là so sánh
   return /\b(ban|thue|thanh ly|can|ra|di)\s*(?:nha\s*|dat\s*)?gap\b|\bgap\s*(lam|qua|nha|nhe|em|a)?\b|\bcan tien\b|\b(ban|di|ra)\s*nhanh\b/.test(kd);
+}
+
+// ── "Bán rồi / ngưng rao" — FR-184 (chat Gemini 21/06, chủ dự án chốt 09/09/2026) ──
+// Chủ nhà tự báo: "bán rồi", "đã bán", "có người thuê rồi", "nhận cọc rồi" →
+// `ban_roi` (tin sang da_chot); "ngưng bán", "không bán nữa", "rút tin", "để lại
+// ở" → `rut` (tin ẩn). Không phải: câu hỏi ("bán rồi hả em?"), phủ định ("chưa
+// bán", "vẫn đang bán"), lời rao ("bán nhà 5 tỷ"), hay số liệu ("chốt giá 5 tỷ").
+export type NgungRao = "ban_roi" | "rut";
+export function laNgungRao(text: string): NgungRao | null {
+  const goc = text.trim();
+  if (!goc || /\?/.test(goc)) return null;
+  const kd = boDau(goc).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return null;
+  // Phủ định / còn bán / câu hỏi tình trạng → không phải lời báo ngưng.
+  if (/\b(chua|van con|van dang|con ban|con cho thue|chua ai|chua co ai|chua chot|dang ban|dang cho thue|sao roi|the nao|ha|ha em|hong|khong a)\b/.test(kd)) return null;
+  // "chốt giá 5 tỷ", "bán 5 tỷ rồi" — có số + đơn vị tiền là dữ liệu, không phải báo bán.
+  if (/\d\s*(ty|ti|toi|trieu|tr|m2)\b/.test(kd)) return null;
+  const banRoi =
+    /\b(?:da|vua)\s*(?:ban|cho thue|chot|nhan coc|giao dich|co nguoi (?:mua|thue)|sang ten|xong)\b/.test(kd) ||
+    /\b(?:ban|cho thue|chot|giao dich|sang ten)\s*(?:duoc|xong|het|nha|dat|can|no)?\s*(?:roi|xong roi|r)\b/.test(kd) ||
+    /\b(?:co nguoi|co khach)\s*(?:mua|thue|coc)\s*(?:roi|r)?\b/.test(kd) ||
+    /\b(?:nhan|lay|da)\s*coc\s*(?:roi|xong)?\b/.test(kd) ||
+    /\bban (?:duoc|xong) roi\b/.test(kd);
+  if (banRoi) return "ban_roi";
+  const rut =
+    /\b(?:ngung|ngung|dung|thoi|het|khong|ko|k|chua muon)\s*(?:ban|cho thue|rao|dang)\s*(?:nua|nha|em|a|roi)?\b/.test(kd) ||
+    /\b(?:rut|go|xoa|huy|bo|dong)\s*(?:tin|bai|dang|ky gui|rao|ho so)\b/.test(kd) ||
+    /\b(?:de lai|giu lai)\s*(?:o|xai|dung|cho thue|nha|can)?\b/.test(kd) && /\b(khong|ko|thoi|ngung)\b/.test(kd) ||
+    /\bkhong (?:ban|cho thue|rao) nua\b/.test(kd);
+  return rut ? "rut" : null;
+}
+
+// Nhiều căn đang rao → chủ nhà chỉ căn nào? Nhận SỐ THỨ TỰ ("1", "căn 2", "cái
+// thứ 2", "số 1") hoặc ĐỊA CHỈ (chữ ≥ 4 ký tự trong location_raw / số phường
+// khớp câu). Không rõ → null, tầng trên hỏi lại.
+export type CanChon = { id: string; location_raw?: string | null; ward?: string | null; code?: string | null };
+export function chonCanTheoCau(text: string, cans: CanChon[]): CanChon | null {
+  if (!cans.length) return null;
+  const kd = boDau(text).replace(/[^a-z0-9\s/]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return null;
+  if (cans.length === 1) return cans[0];
+  const stt = /^(?:can|cai|so|thu|tin)?\s*(?:thu\s*)?(\d{1,2})\b\s*(?:nha|nhe|em|do|a)?$/.exec(kd) ||
+    /\b(?:can|cai|tin|so)\s*(?:thu\s*)?(\d{1,2})\b/.exec(kd);
+  if (stt) {
+    const i = Number(stt[1]) - 1;
+    if (i >= 0 && i < cans.length) return cans[i];
+  }
+  if (/\b(dau|dau tien|thu nhat|1st)\b/.test(kd)) return cans[0];
+  if (/\b(cuoi|sau cung|con lai)\b/.test(kd)) return cans[cans.length - 1];
+  let tot: CanChon | null = null, diemTot = 0;
+  for (const c of cans) {
+    const tu = boDau(c.location_raw ?? "").replace(/[^a-z0-9\s/]/g, " ").split(/\s+/).filter((w) => w.length >= 4 || /^\d+(\/\d+)*$/.test(w) && w.length >= 2);
+    let d = tu.filter((w) => kd.includes(w)).length;
+    const p = /\bphuong\s*(\d{1,2})\b/.exec(boDau(c.ward ?? ""));
+    if (p && new RegExp(`\\b(?:phuong|p)\\s*\\.?\\s*${p[1]}\\b`).test(kd)) d += 1;
+    if (c.code && kd.includes(boDau(c.code))) d += 3;
+    if (d > diemTot) { diemTot = d; tot = c; }
+    else if (d === diemTot && d > 0) tot = null; // hoà → không đoán
+  }
+  return diemTot > 0 ? tot : null;
 }
