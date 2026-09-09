@@ -82,7 +82,8 @@ function ThanhTren() {
                 }`}
               >
                 <span className="text-base leading-none">{t.icon}</span>
-                <span>{t.label}</span>
+                {/* Màn hẹp chỉ còn icon — bảy tab + nút Đăng tin không đè nhau (kiểm 09/09 ở 780px). */}
+                <span className={on ? "" : "hidden lg:inline"}>{t.label}</span>
               </Link>
             );
           })}

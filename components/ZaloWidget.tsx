@@ -9,6 +9,8 @@ import { zaloLink } from "@/lib/format";
 export default function ZaloWidget() {
   const pathname = usePathname();
   if (pathname?.startsWith("/nha-dat/")) return null;
+  // Khung CRM /admin/* là chỗ làm việc của admin, không mời chat Zalo (09/09/2026).
+  if (pathname?.startsWith("/admin")) return null;
   return (
     <a
       href={zaloLink(`widget:${pathname ?? "/"}`)}
