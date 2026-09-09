@@ -452,6 +452,8 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(len tho cu|len tho|chuyen tho cu|chuyen muc dich)\b/.test(kd)) return { question: "len_tho_cu", answer: goc };
   if (/\b(kenh|muong|tuoi tieu|nguon nuoc|gieng)\b/.test(kd)) return { question: "nguon_nuoc", answer: goc };
   if (/\b(cam coc|rao luoi|ranh gioi|ranh dat)\b/.test(kd)) return { question: "ranh_gioi", answer: goc };
+  // "đất thuê nhà nước TỚI 2058" có mốc năm → thời hạn sử dụng; không có năm → hình thức thuê đất.
+  if (/\b(toi|den|het|thoi han)\s*(?:nam\s*)?20\d\d\b/.test(kd) && /\b(thue|so huu|su dung|thoi han)\b/.test(kd)) return { question: "thoi_han_su_dung", answer: goc };
   if (/\b(tra (?:tien )?(?:thue dat )?(?:mot lan|hang nam|tung nam)|thue dat (?:hang nam|mot lan|nha nuoc)|dat thue)\b/.test(kd)) return { question: "hinh_thuc_thue_dat", answer: goc };
   if (/\b(lau dai|so huu lau dai|den nam 20\d\d|thoi han su dung|50 nam)\b/.test(kd)) return { question: /\b(can ho|chung cu)\b/.test(kd) ? "so_huu" : "thoi_han_su_dung", answer: goc };
   if (/\b(mat do xay dung|mat do xd)\b/.test(kd)) return { question: "mat_do_xd", answer: goc };

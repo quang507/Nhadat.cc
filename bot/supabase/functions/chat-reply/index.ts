@@ -951,6 +951,13 @@ Deno.serve(async (req) => {
     !khop(
       /(khách|ai|người)\s*(nào)?\s*(đã|có|tới|đến)?\s*(xem|coi|mua|thu[êe]|hỏi)/i,
       /(khach|ai|nguoi)\s*(nao)?\s*(da|co|toi|den)?\s*(xem|coi|mua|thue|hoi)/,
+    ) &&
+    // 09/09 tối lần 4: "sổ đỏ, đất thuê nhà nước tới 2058" khớp "thuê nhà" → tin
+    // NGƯỜI BÁN bị đẩy sang nhánh mua, fact pháp lý mất. Đất thuê nhà nước / thuê
+    // đất / cho thuê là lời người bán, không phải ý định đi thuê.
+    !khop(
+      /thu[êe]\s*(nhà nước|đất)|đất thu[êe]|tiền thu[êe] đất|đang cho thu[êe]|khách thu[êe]|người thu[êe]|thu[êe] tối thiểu|thu[êe] dài hạn/i,
+      /thue\s*(nha nuoc|dat)|dat thue|tien thue dat|dang cho thue|khach thue|nguoi thue|thue toi thieu|thue dai han/,
     );
 
   // ─── CỔNG CÂU RAO MỚI (dùng ở khối `wantsSell` trong nhánh bán; tính SỚM vì
