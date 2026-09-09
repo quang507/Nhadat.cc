@@ -4,7 +4,7 @@
 //   laDongY       — chủ nhà gật bản nháp (AGREE_RULES, bản không model)
 // Chạy: bun bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs
 import {
-  chonCauKe, laDongY, nhanDienFact, phanLoaiCauTraLoi,
+  chonCauKe, laDongY, laDuRoi, laGap, nhanDienFact, phanLoaiCauTraLoi,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 let hong = 0, tong = 0;
@@ -82,6 +82,22 @@ for (const s of ["ok", "ok em", "được đó", "đăng đi", "ừ", "vậy đi
 }
 for (const s of ["không, sửa giá lại", "sai rồi", "5 tỷ", "ok nhưng sửa giá", "chưa được", "thêm cái hẻm vào", "phí sao em?", "để coi", ""]) {
   ok(`không gật: "${s}"`, laDongY(s) === false);
+}
+
+// ── laDuRoi — FR-177 g: chủ nhà nói "đủ rồi" thì NGỪNG hỏi bù, điểm giữ nguyên ──
+for (const s of ["đủ rồi em", "vậy đủ rồi", "thôi đủ rồi, đừng hỏi nữa", "hết rồi em", "không còn gì nữa", "chỉ vậy thôi", "bấy nhiêu thôi em", "đừng hỏi nữa", "thông tin đầy đủ rồi", "vậy thôi nha", "nhiêu đó thôi"]) {
+  ok(`đủ rồi: "${s}"`, laDuRoi(s) === true);
+}
+for (const s of ["ok", "đăng đi em", "hẻm 4m", "sổ hồng riêng rồi em", "chưa đủ đâu", "thiếu cái hẻm", "còn nữa", "để em bổ sung thêm", "phí sao em?", "", "rồi", "đủ 3 lầu"]) {
+  ok(`không phải đủ rồi: "${s}"`, laDuRoi(s) === false);
+}
+
+// ── laGap — cột listings.gap: chủ nhà có nói cần bán/cho thuê GẤP không ──────
+for (const s of ["bán gấp nhà p4 5 tỷ", "cần bán gấp", "bán nhanh trong tháng", "cần tiền bán gấp", "thanh lý gấp", "gấp lắm em", "cho thuê gấp"]) {
+  ok(`gấp: "${s}"`, laGap(s) === true);
+}
+for (const s of ["bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8", "không gấp, từ từ cũng được", "chưa gấp đâu em", "ko gấp", "nhà gấp đôi nhà bên", ""]) {
+  ok(`không gấp: "${s}"`, laGap(s) === false);
 }
 
 console.log(hong ? `\nFR-177: ${hong}/${tong} CA HỎNG` : `\nFR-177: ${tong}/${tong} CA ĐẠT`);

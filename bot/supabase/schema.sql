@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-08 16:41 (giờ VN)
+-- Sinh lúc: 2026-09-09 09:00 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -3446,12 +3446,12 @@ AS $function$
 declare
   v_type text;
   v_loc text;
+  v_so text;
   v_prefix text;
   v_num int;
 begin
   perform pg_advisory_xact_lock(hashtext('listing_code'));
 
-  -- Chuẩn hoá loại BĐS
   v_type := case lower(coalesce(p_property_type, 'nha_pho'))
     when 'chung_cu' then 'CH'
     when 'can_ho' then 'CH'
@@ -3464,18 +3464,13 @@ begin
     else 'NP'
   end;
 
-  -- Chuẩn hoá khu vực (quận/huyện hoặc tỉnh)
   v_loc := public.bo_dau(coalesce(p_district, p_province, 'Q5'));
   v_loc := upper(regexp_replace(v_loc, '[^a-zA-Z0-9]', '', 'g'));
 
-  if v_loc ~ 'BINHTAN' then v_loc := 'BINHTAN';
-  elsif v_loc ~ 'QUAN5|^Q5' then v_loc := 'Q5';
-  elsif v_loc ~ 'QUAN1|^Q1' then v_loc := 'Q1';
-  elsif v_loc ~ 'QUAN3|^Q3' then v_loc := 'Q3';
-  elsif v_loc ~ 'QUAN10|^Q10' then v_loc := 'Q10';
-  elsif v_loc ~ 'QUAN11|^Q11' then v_loc := 'Q11';
-  elsif v_loc ~ 'QUAN6|^Q6' then v_loc := 'Q6';
-  elsif v_loc ~ 'QUAN8|^Q8' then v_loc := 'Q8';
+  v_so := (regexp_match(v_loc, '^(?:QUAN|Q)?([0-9]{1,2})$'))[1];
+  if v_so is not null then
+    v_loc := 'Q' || v_so::int;
+  elsif v_loc ~ 'BINHTAN' then v_loc := 'BINHTAN';
   elsif v_loc ~ 'BINHTHANH' then v_loc := 'BINHTHANH';
   elsif v_loc ~ 'TANBINH' then v_loc := 'TANBINH';
   elsif v_loc ~ 'TANPHU' then v_loc := 'TANPHU';
@@ -4066,6 +4061,8 @@ declare
   v_bds text;
   v_buyer text;
 begin
+  if new.source is distinct from 'buyer_ask' then return new; end if;
+
   if new.question is not null and btrim(new.question) <> '' then
     select coalesce('#' || code, '') into v_bds from listings where id = new.listing_id;
     select coalesce(name, 'Khách hàng') into v_buyer from buyers where id = new.buyer_id;
@@ -4080,6 +4077,7 @@ begin
   end if;
   return new;
 exception when others then
+  perform public.log_loi('trg_info_request_thong_bao_khach_hoi', left(sqlerrm, 400), null::integer);
   return new;
 end $function$
 ;
@@ -4111,7 +4109,7 @@ begin
   v_title := '[TIN MỚI] ' || coalesce(new.code, 'BĐS');
   v_text := format('Có tin BĐS mới vừa được tạo: %s · %s%s · Giá: %s · DT: %sm2. Trạng thái: %s',
                    coalesce(new.code, 'Chưa mã'),
-                   coalesce(new.property_type, 'BĐS'),
+                   coalesce(new.property_type::text, 'BĐS'),
                    case when new.location_raw is not null then ' tại ' || new.location_raw else '' end,
                    coalesce(new.price_raw, 'Thương lượng'),
                    coalesce(new.area_m2::text, '-'),
@@ -4121,6 +4119,7 @@ begin
   perform public.canh_bao_ngoai(v_title, v_text, 4, false);
   return new;
 exception when others then
+  perform public.log_loi('trg_listing_thong_bao_tao_tin', left(sqlerrm, 400), null::integer);
   return new;
 end $function$
 ;
@@ -5271,8 +5270,6 @@ grant SELECT on public.hoi_thoai_thong_ke to service_role;
 grant SELECT on public.khach_can_nguoi_that to authenticated;
 grant SELECT on public.khach_can_nguoi_that to service_role;
 grant SELECT on public.listing_media to anon;
-grant SELECT on public.public_listings to anon;
-grant SELECT on public.public_listings to authenticated;
 grant SELECT on public.ro_hang_ban to authenticated;
 grant SELECT on public.seller_ranks to anon;
 grant SELECT on public.seller_ranks to authenticated;
@@ -5491,7 +5488,6 @@ grant execute on function public.mo_viec_can_nguoi_that(p_buyer_id uuid, p_ctv_i
 revoke all on function public.next_listing_code() from public, anon, authenticated;
 grant execute on function public.next_listing_code() to service_role;
 revoke all on function public.next_listing_code(p_property_type text, p_district text, p_province text) from public, anon, authenticated;
-grant execute on function public.next_listing_code(p_property_type text, p_district text, p_province text) to authenticated;
 grant execute on function public.next_listing_code(p_property_type text, p_district text, p_province text) to service_role;
 revoke all on function public.nguoi_noi_bo(p_zalo text) from public, anon, authenticated;
 grant execute on function public.nguoi_noi_bo(p_zalo text) to service_role;
@@ -5541,14 +5537,10 @@ revoke all on function public.tin_cua_toi(p_listing uuid) from public, anon, aut
 grant execute on function public.tin_cua_toi(p_listing uuid) to authenticated;
 grant execute on function public.tin_cua_toi(p_listing uuid) to service_role;
 revoke all on function public.trg_info_request_thong_bao_khach_hoi() from public, anon, authenticated;
-grant execute on function public.trg_info_request_thong_bao_khach_hoi() to anon;
-grant execute on function public.trg_info_request_thong_bao_khach_hoi() to authenticated;
 grant execute on function public.trg_info_request_thong_bao_khach_hoi() to service_role;
 revoke all on function public.trg_listing_drip() from public, anon, authenticated;
 grant execute on function public.trg_listing_drip() to service_role;
 revoke all on function public.trg_listing_thong_bao_tao_tin() from public, anon, authenticated;
-grant execute on function public.trg_listing_thong_bao_tao_tin() to anon;
-grant execute on function public.trg_listing_thong_bao_tao_tin() to authenticated;
 grant execute on function public.trg_listing_thong_bao_tao_tin() to service_role;
 revoke all on function public.trg_property_event() from public, anon, authenticated;
 grant execute on function public.trg_property_event() to service_role;

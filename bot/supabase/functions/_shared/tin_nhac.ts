@@ -20,6 +20,9 @@ export function escalationText(
   if (r.kind === "report") return String(r.note);
   // Ghi chú thường kết bằng dấu chấm rồi khuôn nối thêm ". " → "…/admin.."
   const note = String(r.note ?? "").trim().replace(/\s*\.+\s*$/, "");
+  // FR-177 f (09/09/2026): "💬 " = câu hỏi bù ask-seller đã soạn sẵn cho chủ nhà
+  // (đường bridge, khi không có OA). Gửi NGUYÊN VĂN, không bọc "em bên nhadat.cc".
+  if (note.startsWith("💬")) return note.replace(/^💬\s*/, "");
   if (r.seller_id) {
     return `Chào anh/chị, em bên nhadat.cc ạ. ${note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`;
   }

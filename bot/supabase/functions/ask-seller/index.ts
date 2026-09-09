@@ -193,6 +193,34 @@ Deno.serve(async (req) => {
     // đi — hai hàm anh em đã tránh được bẫy đó từ lâu.
     if (seller?.zalo_user_id) {
       const token = await secretOf(db, "ZALO_OA_ACCESS_TOKEN");
+      // FR-177 f (09/09/2026): kênh đang chạy là BRIDGE (Zalo cá nhân), không
+      // có OA. Trước bản này câu hỏi drip chỉ mở info_requests rồi... im —
+      // "sent_via: none", chủ nhà không bao giờ nhận được câu hỏi bù. Nay xếp
+      // vào hàng đợi `reminders` kind escalation với seller_id + ghi chú "💬 …":
+      // escalation-feed kéo, bridge gửi nguyên văn (tin_nhac.ts), rồi ack.
+      if (!token) {
+        const { error: rErr } = await db.from("reminders").insert({
+          kind: "escalation", seller_id: listing.seller_id, listing_id,
+          due_at: new Date().toISOString(), note: `💬 ${out.message}`,
+        });
+        if (rErr) await ghiLoi(db, "ask-seller reminders(bridge)", rErr.message);
+        else {
+          sent_via = "bridge_queue";
+          const { data: sc, error: scErr } = await db
+            .rpc("ensure_seller_conversation", {
+              p_seller_id: listing.seller_id, p_channel: "zalo_personal",
+            }).single();
+          const scId = (sc as { c_id?: string } | null)?.c_id ?? null;
+          if (scErr || !scId) {
+            await ghiLoi(db, "ask-seller ensure_seller_conversation(bridge)",
+              scErr?.message ?? "không trả về c_id");
+          } else {
+            const { error: logErr } = await db.from("messages")
+              .insert({ conversation_id: scId, sender: "bot", body: out.message });
+            if (logErr) await ghiLoi(db, "ask-seller messages bot(bridge)", logErr.message);
+          }
+        }
+      }
       if (token) {
         const guiDuoc = await sendZalo(token, seller.zalo_user_id, out.message);
         sent_via = guiDuoc ? "zalo_oa" : "zalo_oa_error";
