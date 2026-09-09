@@ -104,6 +104,15 @@ nên đừng dán nó vào chỗ công khai.
 sudo -iu nhadat bash -c 'cd /opt/nhadat && git pull' && sudo systemctl restart nhadat-bridge
 ```
 
+**Mỗi lần merge `main` là phải kéo ở đây** (chủ dự án 09/09/2026: một lần sửa
+phải đồng bộ đủ ba nơi — OneDrive, GitHub, VPS). Chỉ restart service khi
+`bot/bridge-zca/` có thay đổi; migration và edge function không chạy trên VPS.
+
+Bẫy 09/09/2026: `git pull` báo `cannot open .git/FETCH_HEAD: Permission denied`
+vì ai đó đã chạy `git` bằng **root** một lần, để lại file thuộc root trong
+`.git/`. Sửa: `sudo chown -R nhadat:nhadat /opt/nhadat` rồi pull lại bằng
+`nhadat`. Từ đây trở đi đừng chạy `git` trong `/opt/nhadat` bằng root.
+
 ## 8. Sao lưu (OPEN-25) — cùng VPS
 
 Supabase Free không có backup. Đặt cron chạy `scripts/sao-luu.mjs` mỗi đêm,
