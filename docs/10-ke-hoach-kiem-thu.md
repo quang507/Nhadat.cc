@@ -94,7 +94,7 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
-| `bot/tests/e2e/run.mjs` | 193 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
+| `bot/tests/e2e/run.mjs` | 195 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
 | `bot/tests/e2e/webhook.mjs` | 44 | `bun run e2e` (`chay.sh`) | TS-IDEM2; nhãn `CK-1…8c`, `GUI-1…8` | `zalo-webhook`: chữ ký + replay; gửi đúng-một-lần ra Zalo |
 | `bot/tests/e2e/cong-thieu-bi-mat.mjs` | 4 | `bun run e2e` (`chay.sh`) | TS-SEC2 phần cổng | Thiếu `BRIDGE_SECRET` thì cổng ĐÓNG, không mở. Tiến trình RIÊNG vì `napCauHinh` nhớ tạm 60 s ở tầng module |
 | `bot/tests/fr159-bon-vai.mjs` | 65 | `bun run test:bot` | TS-VAI | Bốn vai người nhắn (FR-159, FR-170) |

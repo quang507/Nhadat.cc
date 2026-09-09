@@ -1958,7 +1958,7 @@ Deno.serve(async (req) => {
             last_confirmed_at: new Date().toISOString(),
           }
           : {}),
-      }).select("id, code").single();
+      }).select("id, code, property_type").single();
       // Tạo tin hỏng mà đi tiếp là NUỐT MẤT CÂU RAO: chủ nhà nhận một câu chăm
       // sóc chung chung ở nhánh dưới, tưởng đã rao xong, còn kho thì không có
       // gì. Vào sổ rồi mới đi tiếp (FR-152).
@@ -2036,7 +2036,7 @@ Deno.serve(async (req) => {
                 role: "user",
                 content:
                   `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ` +
-                  `Viết MỘT tin dưới 30 từ như người thật: nhận câu rao (nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi) + xác nhận lại địa điểm nghe được` +
+                  `Viết MỘT tin dưới 30 từ như người thật: nhận câu rao (nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi — KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
                   (firstKey
                     ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey} (câu gợi ý: "${cauHoiMau(firstKey, cachGoi)}"). Không cần nêu lý do, KHÔNG nhắc phí, KHÔNG nhắc mã tin. Không hỏi gì khác.`
                     : ` và báo sẽ đăng lên web ngay.`),
@@ -2052,7 +2052,27 @@ Deno.serve(async (req) => {
           raoReply = `Dạ em nhận tin rao rồi ạ.` +
             (firstKey ? ` ${cauHoiMau(firstKey, cachGoi)}` : ` Em sẽ đăng lên web ngay ạ.`);
         }
-        return await traLoiSeller([raoReply], { listing_code: newLst.code });
+        // Chủ dự án 09/09/2026: "đã bóc tách được cái gì, viết gửi lại cho khách
+        // luôn" — bong bóng TIỀN ĐỊNH liệt kê những gì vừa ghi (không liệt kê
+        // thứ trống), đứng trước lời chào/câu hỏi của model. Số liệu đúng từng
+        // chữ với cột, chủ nhà thấy sai thì sửa ngay (FR-164 bắt lời sửa).
+        const LOAI_GHI: Record<string, string> = {
+          nha_pho: "nhà phố", nha_cap4: "nhà cấp 4", chung_cu: "căn hộ", dat: "đất",
+          biet_thu: "biệt thự", phong_tro: "phòng trọ", mat_bang: "mặt bằng",
+        };
+        const loaiRao = LOAI_GHI[(newLst as { property_type?: string | null }).property_type ?? ""] ?? null;
+        const ghiNhan = [
+          `${sDeal === "cho_thue" ? "cho thuê" : "bán"}${loaiRao ? ` ${loaiRao}` : ""}`,
+          viTriRao && viTriRao.length >= 6 ? viTriRao : null,
+          [wardNo ? `Phường ${wardNo}` : null, quanRao].filter(Boolean).join(", ") || null,
+          areaM ? `${areaM[1].replace(",", ".")}m2` : null,
+          pnM ? `${pnM[1]} phòng ngủ` : null,
+          priceM?.[1]?.trim() ? `giá ${priceM[1].trim()}` : null,
+          gapCol === true ? "cần gấp" : gapCol === false ? "không gấp" : null,
+          duAn?.name ? `dự án ${duAn.name}${maCanRao ? ` căn ${maCanRao}` : ""}` : null,
+        ].filter((x): x is string => !!x);
+        const bongGhiNhan = `📝 Em ghi nhận: ${ghiNhan.join(" · ")}.\nSai chỗ nào ${cachGoi} nhắn lại giúp em nha.`;
+        return await traLoiSeller([bongGhiNhan, raoReply], { listing_code: newLst.code, ghi_nhan: ghiNhan });
       }
     }
     // Seller nhắn nhưng KHÔNG có câu chờ → vẫn trả lời ĐÚNG VAI người bán
