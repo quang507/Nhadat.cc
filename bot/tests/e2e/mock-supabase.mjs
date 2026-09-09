@@ -33,7 +33,7 @@ export class FakeDB {
   // đúng chuỗi nhà phố của required_facts thật. "Đã có" đọc từ cột như view.
   missingFacts() {
     const REQ = [
-      ["loai_bds", 1, "co_ban"], ["phuong", 2, "co_ban"], ["dien_tich", 3, "co_ban"], ["gia", 8, "co_ban"],
+      ["loai_bds", 1, "co_ban"], ["phuong", 2, "co_ban"], ["vi_tri", 3, "co_ban"], ["dien_tich", 4, "co_ban"], ["gia", 9, "co_ban"],
       ["do_rong_hem", 10, "chuyen_mon"], ["ket_cau", 11, "chuyen_mon"], ["so_phong_ngu", 12, "chuyen_mon"],
       ["phap_ly", 13, "chuyen_mon"], ["hinh_anh", 19, "chuyen_mon"],
       // Nhóm `phu` (hướng, quy hoạch, năm xây) KHÔNG có ở đây: view thật lọc
@@ -42,8 +42,10 @@ export class FakeDB {
     ];
     const out = [];
     for (const l of this.t.listings) {
-      if (l.status !== "cho_thong_tin") continue;
+      // 20260909a: view thật không lọc status — tin dang_ban vẫn có câu còn thiếu
+      // để cron hỏi bù. Mock lọc là mock nói dối đúng chỗ tính năng này đo.
       const have = new Set(this.t.listing_facts.filter((f) => f.listing_id === l.id).map((f) => f.question));
+      if (l.location_raw) have.add("vi_tri");
       if (l.price_raw) have.add("gia"); if (l.area_m2) have.add("dien_tich"); if (l.ward) have.add("phuong");
       if (l.property_type && l.property_type !== "chua_ro") have.add("loai_bds"); if (l.bedrooms) have.add("so_phong_ngu");
       if (l.alley_width_m || l.access_type === "mat_tien") have.add("do_rong_hem"); if (l.floors) have.add("ket_cau");
@@ -80,14 +82,19 @@ export class FakeDB {
     const gia = l.price_vnd != null ? 10 : 0; if (!gia) thieu.push("giá");
     let tn = 0;
     const moTa = String(l.description ?? "").toLowerCase();
-    if (has("tiem_nang")) tn = 20;
+    // 20260909a: tiềm năng 20 → 10 (nêu rõ 10, suy được 5), nhường 10 cho ảnh.
+    if (has("tiem_nang")) tn = 10;
     else {
-      if ((l.floors ?? 0) >= 3 || (l.bedrooms ?? 0) >= 3 || l.access_type === "mat_tien" || (l.alley_width_m ?? 0) >= 4 || ["chung_cu", "mat_bang", "phong_tro", "biet_thu"].includes(l.property_type) || has("san_vuon") || /kinh doanh|cho thu|chdv|đầu tư|dau tu|văn phòng|van phong|buôn bán|mở shop|mở quán/.test(moTa)) tn = 10;
+      if ((l.floors ?? 0) >= 3 || (l.bedrooms ?? 0) >= 3 || l.access_type === "mat_tien" || (l.alley_width_m ?? 0) >= 4 || ["chung_cu", "mat_bang", "phong_tro", "biet_thu"].includes(l.property_type) || has("san_vuon") || /kinh doanh|cho thu|chdv|đầu tư|dau tu|văn phòng|van phong|buôn bán|mở shop|mở quán/.test(moTa)) tn = 5;
       thieu.push("tiềm năng sử dụng (ở, cho thuê hay kinh doanh)");
     }
     const cta = l.code ? 10 : 0;
-    const coAnh = has("hinh_anh");
-    return { diem: viTri + dt + kc + pl + gia + tn + cta, chi_tiet: { vi_tri_hem: viTri, dien_tich: dt, ket_cau: kc, phap_ly: pl, gia, tiem_nang: tn, goi_hanh_dong: cta }, thieu, co_anh: coAnh };
+    // Ảnh 10: đếm TẤM (fact hinh_anh + listing_media), 3 tấm = tối đa, ảnh gì cũng tính.
+    const soAnh = this.t.listing_facts.filter((x) => x.listing_id === l.id && x.question === "hinh_anh").length;
+    const anh = soAnh >= 3 ? 10 : soAnh === 2 ? 7 : soAnh === 1 ? 4 : 0;
+    if (soAnh === 0) thieu.push("vài tấm ảnh (nhà, sổ, hẻm — ảnh nào cũng được)");
+    else if (soAnh < 3) thieu.push(`thêm ảnh cho đủ 3 tấm (đang có ${soAnh})`);
+    return { diem: viTri + dt + kc + pl + gia + tn + cta + anh, chi_tiet: { vi_tri_hem: viTri, dien_tich: dt, ket_cau: kc, phap_ly: pl, gia, tiem_nang: tn, goi_hanh_dong: cta, anh }, thieu, co_anh: soAnh > 0, so_anh: soAnh };
   }
   // trg_zz_listings_dang_tin (20260828b + 20260907h): cho_thong_tin ↔ dang_ban.
   quyetDinhDangTin(l) {
@@ -459,6 +466,9 @@ class RpcCall {
       case "ghi_fact_listing": {
         const l = db.t.listings.find((x) => x.id === a.p_listing_id); if (!l) return { data: null, error: { message: "listing khong ton tai" } };
         db.insert("listing_facts", { listing_id: l.id, question: a.p_question, answer: a.p_answer, source: a.p_source });
+        // 20260909a: trg_zz_fact_vao_boc_tach + trg_zz_vi_tri_vao_cot
+        l.boc_tach = { ...(l.boc_tach ?? {}), [a.p_question]: a.p_answer, _cap_nhat: now() };
+        if (a.p_question === "vi_tri" && !l.location_raw) l.location_raw = String(a.p_answer).trim();
         if (a.p_question === "gia") { l.price_raw = a.p_answer; l.price_vnd = parseVnd(a.p_answer); }
         if (a.p_question === "phuong") l.ward = a.p_answer;
         if (a.p_question === "dien_tich" || a.p_question === "dien_tich_dat") {
@@ -478,6 +488,13 @@ class RpcCall {
       case "diem_tin": {
         const l = db.t.listings.find((x) => x.id === a.p_listing_id);
         return { data: l ? db.diemTin(l) : null, error: null };
+      }
+      case "ghi_boc_tach": {
+        // 20260909a: gộp, bỏ null, đóng dấu _cap_nhat
+        const l = db.t.listings.find((x) => x.id === a.p_listing_id); if (!l) return { data: null, error: null };
+        const sach = Object.fromEntries(Object.entries(a.p ?? {}).filter(([, v]) => v !== null && v !== undefined));
+        l.boc_tach = { ...(l.boc_tach ?? {}), ...sach, _cap_nhat: now() };
+        return { data: null, error: null };
       }
       case "guess_property_type_answer": { const t = String(a.p_text).toLowerCase(); return { data: /nhà phố|nha pho/.test(t) ? "nha_pho" : /chung cư|chung cu/.test(t) ? "chung_cu" : null, error: null }; }
       case "mark_listing_interest": {

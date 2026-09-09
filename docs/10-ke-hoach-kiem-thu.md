@@ -94,7 +94,7 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
-| `bot/tests/e2e/run.mjs` | 184 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
+| `bot/tests/e2e/run.mjs` | 193 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
 | `bot/tests/e2e/webhook.mjs` | 44 | `bun run e2e` (`chay.sh`) | TS-IDEM2; nhãn `CK-1…8c`, `GUI-1…8` | `zalo-webhook`: chữ ký + replay; gửi đúng-một-lần ra Zalo |
 | `bot/tests/e2e/cong-thieu-bi-mat.mjs` | 4 | `bun run e2e` (`chay.sh`) | TS-SEC2 phần cổng | Thiếu `BRIDGE_SECRET` thì cổng ĐÓNG, không mở. Tiến trình RIÊNG vì `napCauHinh` nhớ tạm 60 s ở tầng module |
 | `bot/tests/fr159-bon-vai.mjs` | 65 | `bun run test:bot` | TS-VAI | Bốn vai người nhắn (FR-159, FR-170) |
@@ -103,8 +103,8 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 | `bot/tests/ts-sec-anon.tu-kiem.mjs` | 4 cảnh | `bun run test:bot` | TS-SEC-AUTO (bài tự kiểm) | Bộ TS-SEC phân biệt "DB từ chối" với "không tới được" — chống tái phạm ca báo 24/24 xanh trong lúc proxy chặn sạch |
 | `scripts/sao-luu.tu-kiem.mjs` | 21 | `bun run test:saoluu` | TS-SAOLUU | Sao lưu phân biệt "đủ" với "trông như đủ": đối chiếu `count=exact`, `manifest.json` ghi ra đĩa, mọi đường hỏng thoát khác 0 |
 | `bot/tests/fr176-khop-cau-tra-loi.mjs` | 49 | `bun run test:bot` | **TS-KYGUI** phần khớp câu | Câu chủ nhà nhắn CÓ PHẢI câu trả lời không (FR-176) — chạy bằng `bun` vì import thẳng `.ts` |
-| `bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs` | 63 | `bun run test:bot` | **TS-KYGUI** phần nhận fact / chọn câu kế / gật | `nhanDienFact`, `chonCauKe`, `laDongY` (FR-177/178) — tiền định, không tốn model |
-| `bot/tests/tin-nhac.mjs` | 20 | `bun run test:bot` | **TS-NHAC** | Chữ gửi ra Zalo cho việc trong hàng đợi `reminders`: không lặp tên, không thừa dấu chấm, không bảo admin trả lời khách với tin hệ thống |
+| `bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs` | 99 | `bun run test:bot` | **TS-KYGUI** phần nhận fact / chọn câu kế / gật / đủ rồi / gấp | `nhanDienFact`, `chonCauKe`, `laDongY`, `laDuRoi`, `laGap` (FR-177/178) — tiền định, không tốn model |
+| `bot/tests/tin-nhac.mjs` | 22 | `bun run test:bot` | **TS-NHAC** | Chữ gửi ra Zalo cho việc trong hàng đợi `reminders`: không lặp tên, không thừa dấu chấm, không bảo admin trả lời khách với tin hệ thống |
 | `scripts/xuat-ro-hang.tu-kiem.mjs` | 18 | `bun run test:rohang` | TS-ROHANG | Bản xuất rổ hàng người đọc được: không ghi vào repo, không nuốt dòng thiếu, không nhận nhầm là bản sao lưu |
 | `bot/tests/ranh-gioi.mjs` | 9 | `bun run test:bot` (và `test:ranhgioi`) | **TS-RANHGIOI** | Ranh giới bóc tách ⟂ AI, kiểm TĨNH: mã tiền định không import SDK Anthropic / `claude.ts` / gọi RPC; tầng AI không ghi bảng nghiệp vụ, chỉ 3 RPC đã khai tên |
 | `scripts/up-masterdb.tu-kiem.mjs` | 24 | `bun run test:masterdb` | **TS-MASTERDB** | Đẩy bản gốc masterDB lên bucket `masterdb-raw`: KHÔNG nén, chạy lại bỏ qua file đã có, và **bắt được lúc bucket trả 200 mà không cất** (đối chiếu đếm đĩa ↔ đếm bucket) |
@@ -607,7 +607,7 @@ offline) và hành vi DB (chạy tay, bọc `do … raise exception` để rollb
 
 | ID | Bài | Kỳ vọng | Kết quả mới nhất |
 |---|---|---|---|
-| TS-NHAC-01 | `bun bot/tests/tin-nhac.mjs` | 20/20: tin có dấu hiệu đầu (🩺 🆕 ❓ ✏️) gửi nguyên; CTV vẫn có tiền tố + đuôi; chính chủ giọng CSKH; `report` nguyên văn | ✅ 08/09 |
+| TS-NHAC-01 | `bun bot/tests/tin-nhac.mjs` | 22/22: "💬 …" (câu hỏi bù ask-seller) gửi nguyên văn; tin có dấu hiệu đầu (🩺 🆕 ❓ ✏️) gửi nguyên; CTV vẫn có tiền tố + đuôi; chính chủ giọng CSKH; `report` nguyên văn | ✅ 08/09 |
 | TS-NHAC-02 | chèn `info_requests(source='seller_flow', assignee='seller')` | **0** dòng `reminders` — vòng drip không dội tin cho chủ nhà | ✅ 08/09 (rollback) |
 | TS-NHAC-03 | chèn `info_requests(source='buyer_ask', assignee='seller')` | 1 dòng, ghi chú đọc "cần bổ sung: **diện tích đất**", không phải `dien_tich_dat` | ✅ 08/09 (rollback) |
 | TS-NHAC-04 | `update info_requests set status='answered'` | tin nhắc escalation cùng căn + cùng nhãn chuyển `cancelled` | ⏭ chưa chạy |
@@ -808,7 +808,7 @@ văn model sinh ra (không kiểm tự động được — đọc `so.hoi_thoai
 | ID | Bài | Kỳ vọng | Kết quả mới nhất |
 |---|---|---|---|
 | TS-KYGUI-01 | `bun bot/tests/fr176-khop-cau-tra-loi.mjs` | 49/49: "Kêu chị nha" → `xung_ho`, "16m nha" khi hỏi hướng → `lech`, "5x16" → `khop` | ✅ 07/09 |
-| TS-KYGUI-02 | `bun bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs` | 63/63: `nhanDienFact` 23 ca, `chonCauKe` 8 ca, `laDongY` 22 ca | ✅ 07/09 |
+| TS-KYGUI-02 | `bun bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs` | 99/99: `nhanDienFact` 23 ca, `chonCauKe` 8 ca, `laDongY` 22 ca, `laDuRoi` 23 ca, `laGap` 13 ca | ✅ 09/09 |
 | TS-KYGUI-03 | e2e H1: rao "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2" | tin `can_chu_duyet = true`, **chưa** lên kệ, câu đầu là `do_rong_hem` (hết nhóm cơ bản) | ✅ 07/09 |
 | TS-KYGUI-04 | e2e H2: trả lời "hẻm 4m xe hơi vào tận nhà" | ghi fact hẻm; câu kế là `ket_cau` (liên quan), KHÔNG nhảy sang pháp lý | ✅ 07/09 |
 | TS-KYGUI-05 | e2e H3: đang hỏi kết cấu, chủ nhắn "sổ hồng riêng rồi em" | ghi fact `phap_ly` nguyên văn; câu `ket_cau` VẪN treo; bot hỏi lại | ✅ 07/09 |
@@ -824,6 +824,12 @@ văn model sinh ra (không kiểm tự động được — đọc `so.hoi_thoai
 | TS-KYGUI-15 | DB: `select fact_key, priority, nhom from listing_missing_facts` cho một tin `nha_pho` | cơ bản (1–9) trước chuyên môn (10–19); `huong`/`quy_hoach`/`nam_xay` ≥ 20 | ✅ 07/09 |
 | TS-KYGUI-16 | DB: md5 `bot_prompts` ↔ hằng trong `_shared/prompts.ts` | 4/4 khớp (`tone_rules`, `human_chat_rules`, `seller_script_rules`, `seller_fewshot`) | ✅ 07/09 |
 | TS-KYGUI-17 | Sau deploy `chat-reply`: nhắn thật một lượt rao qua Zalo, đọc `so.hoi_thoai` | mỗi tin dưới 30 từ, có khích lệ thật, không đọc mã tin, không đọc tên trường | ⏭ chờ deploy + bridge |
+| TS-KYGUI-18 | e2e V1.3 (09/09): rao "bán nhà P4 giá 5 tỷ 8 50m2" (chưa nói đường/hẻm) | câu đầu là `vi_tri` (vị trí cụ thể, nhóm cơ bản); `boc_tach` có loại giao dịch/phường/giá thô/diện tích, KHÔNG có khoá null | ✅ 09/09 |
+| TS-KYGUI-19 | e2e H1b: rao "bán nhà hẻm trần bình trọng p4…" | fact `vi_tri` = "hẻm trần bình trọng" → `location_raw`, không hỏi lại vị trí; câu đầu vẫn là hẻm rộng | ✅ 09/09 |
+| TS-KYGUI-20 | e2e H8e/H8f: chủ gật bản nháp | bong bóng "Chúc mừng … X/100", cách thêm điểm, nhắc ảnh, hứa hỏi thêm; tin `dang_ban` vẫn còn câu thiếu trong view để cron hỏi bù | ✅ 09/09 |
+| TS-KYGUI-21 | e2e H10/H10b/H10c: mở câu ảnh (mô phỏng cron) → chủ nhắn "đủ rồi em, đừng hỏi nữa" → chấm "8 điểm" | `chu_noi_du_at` có, câu treo đóng, điểm KHÔNG đổi, không gọi model; bong bóng 2 xin chấm điểm; "8 điểm" → fact `danh_gia` + `boc_tach`, cảm ơn tiền định, không hỏi lại | ✅ 09/09 |
+| TS-KYGUI-22 | e2e H11/H12: rao "cần bán gấp nhà 123/4 an dương vương p9 …" / "… không gấp" | `gap` = true, `boc_tach.gap` = true, `location_raw` = "123/4 an dương vương"; "không gấp" → `gap` = false | ✅ 09/09 |
+| TS-KYGUI-23 | DB sau `20260909a`: `select diem_tin(l) from listings l`; `select * from cron.job where jobname='seller-hoi-bu-tick'`; md5 `bot_prompts` ↔ TS | `chi_tiet.anh` + `so_anh` có; cron */5 1-13; `seller_fewshot` và `seller_script_rules` khớp TS | ⏳ sau khi áp migration |
 
 
 ## 10.8 Nghiệm thu theo từng tài liệu (04/09/2026)

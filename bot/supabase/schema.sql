@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-08 16:41 (giờ VN)
+-- Sinh lúc: 2026-09-09 09:38 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -294,7 +294,10 @@ CASE
 END,
   can_chu_duyet boolean not null default false,
   chu_duyet_at timestamp with time zone,
-  legacy_code text
+  legacy_code text,
+  chu_noi_du_at timestamp with time zone,
+  gap boolean,
+  boc_tach jsonb
 );
 
 create table if not exists public.media (
@@ -2123,30 +2126,20 @@ CREATE OR REPLACE FUNCTION public.diem_tin(l listings)
  SET search_path TO 'public'
 AS $function$
 declare
-  f        jsonb;
-  co_anh   boolean;
-  co_hem   boolean;
-  co_mt    boolean;
-  co_kc    boolean;
-  co_pn    boolean;
-  d_vi_tri int := 0;
-  d_dt     int := 0;
-  d_kc     int := 0;
-  d_pl     int := 0;
-  d_gia    int := 0;
-  d_tn     int := 0;
-  d_cta    int := 0;
-  thieu    text[] := '{}';
-  mo_ta    text := public.bo_dau(coalesce(l.description, ''));
+  f jsonb; co_anh boolean; co_hem boolean; co_mt boolean; co_kc boolean; co_pn boolean;
+  d_vi_tri int := 0; d_dt int := 0; d_kc int := 0; d_pl int := 0; d_gia int := 0;
+  d_tn int := 0; d_cta int := 0; d_anh int := 0; so_anh int := 0;
+  thieu text[] := '{}';
+  mo_ta text := public.bo_dau(coalesce(l.description, ''));
 begin
   if l.id is null then return null; end if;
   select coalesce(jsonb_object_agg(x.question, x.answer), '{}'::jsonb) into f
     from (select distinct on (question) question, answer
             from public.listing_facts where listing_id = l.id
            order by question, created_at desc) x;
-  co_anh := (f ? 'hinh_anh')
-            or exists (select 1 from public.listing_media m where m.listing_id = l.id);
-
+  select (select count(*) from public.listing_facts x where x.listing_id = l.id and x.question = 'hinh_anh')
+       + (select count(*) from public.listing_media m where m.listing_id = l.id) into so_anh;
+  co_anh := so_anh > 0;
   co_hem := l.alley_width_m is not null or l.access_type = 'mat_tien'
             or (f ? 'do_rong_hem') or (f ? 'do_rong_duong')
             or l.property_type in ('chung_cu', 'phong_tro');
@@ -2154,17 +2147,13 @@ begin
             + (case when coalesce(btrim(l.ward), '') <> '' then 4 else 0 end)
             + (case when co_hem then 4 else 0 end);
   if not co_hem then thieu := array_append(thieu, 'hẻm rộng mấy mét, xe hơi vào được không'); end if;
-
   co_mt := l.frontage_m is not null or (f ? 'mat_tien')
            or l.property_type in ('chung_cu', 'phong_tro')
            or coalesce(f->>'dien_tich_dat', f->>'dien_tich', '') ~ '\d\s*[xX×]\s*\d';
   if l.area_m2 is not null then
     d_dt := 12 + (case when co_mt then 8 else 0 end);
     if not co_mt then thieu := array_append(thieu, 'chiều ngang mặt tiền'); end if;
-  else
-    thieu := array_append(thieu, 'diện tích');
-  end if;
-
+  else thieu := array_append(thieu, 'diện tích'); end if;
   if l.property_type = 'dat' then
     d_kc := case when (f ? 'tho_cu') or l.planning_status is not null then 15 else 0 end;
     if d_kc = 0 then thieu := array_append(thieu, 'thổ cư bao nhiêu, quy hoạch ra sao'); end if;
@@ -2183,29 +2172,25 @@ begin
     if not co_kc then thieu := array_append(thieu, 'mấy tầng'); end if;
     if not co_pn then thieu := array_append(thieu, 'mấy phòng ngủ'); end if;
   end if;
-
   if l.legal_status is not null or (f ? 'phap_ly') or l.property_type = 'phong_tro' then d_pl := 10;
   else thieu := array_append(thieu, 'pháp lý (sổ hồng riêng/chung, hoàn công)'); end if;
-
   if l.price_vnd is not null then d_gia := 10; else thieu := array_append(thieu, 'giá'); end if;
-
-  if f ? 'tiem_nang' then d_tn := 20;
+  if f ? 'tiem_nang' then d_tn := 10;
   elsif coalesce(l.floors, 0) >= 3 or coalesce(l.bedrooms, 0) >= 3
      or l.access_type = 'mat_tien' or coalesce(l.alley_width_m, 0) >= 4
      or l.property_type in ('chung_cu', 'mat_bang', 'phong_tro', 'biet_thu') or (f ? 'san_vuon')
      or mo_ta ~ '(kinh doanh|cho thue|chdv|dau tu|van phong|o ngay|buon ban|mo shop|mo quan)'
-  then d_tn := 10; thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)');
+  then d_tn := 5; thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)');
   else thieu := array_append(thieu, 'tiềm năng sử dụng (ở, cho thuê hay kinh doanh)'); end if;
-
   if l.code is not null then d_cta := 10; end if;
-
+  d_anh := case when so_anh >= 3 then 10 when so_anh = 2 then 7 when so_anh = 1 then 4 else 0 end;
+  if so_anh = 0 then thieu := array_append(thieu, 'vài tấm ảnh (nhà, sổ, hẻm — ảnh nào cũng được)');
+  elsif so_anh < 3 then thieu := array_append(thieu, format('thêm ảnh cho đủ 3 tấm (đang có %s)', so_anh)); end if;
   return jsonb_build_object(
-    'diem', d_vi_tri + d_dt + d_kc + d_pl + d_gia + d_tn + d_cta,
-    'chi_tiet', jsonb_build_object(
-      'vi_tri_hem', d_vi_tri, 'dien_tich', d_dt, 'ket_cau', d_kc, 'phap_ly', d_pl,
-      'gia', d_gia, 'tiem_nang', d_tn, 'goi_hanh_dong', d_cta),
-    'thieu', to_jsonb(thieu),
-    'co_anh', co_anh);
+    'diem', d_vi_tri + d_dt + d_kc + d_pl + d_gia + d_tn + d_cta + d_anh,
+    'chi_tiet', jsonb_build_object('vi_tri_hem', d_vi_tri, 'dien_tich', d_dt, 'ket_cau', d_kc, 'phap_ly', d_pl,
+      'gia', d_gia, 'tiem_nang', d_tn, 'goi_hanh_dong', d_cta, 'anh', d_anh),
+    'thieu', to_jsonb(thieu), 'co_anh', co_anh, 'so_anh', so_anh);
 end $function$
 ;
 
@@ -2336,6 +2321,20 @@ CREATE OR REPLACE FUNCTION public.get_secret(secret_name text)
  SET search_path TO ''
 AS $function$
   select decrypted_secret from vault.decrypted_secrets where name = secret_name;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.ghi_boc_tach(p_listing_id uuid, p jsonb)
+ RETURNS void
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  update public.listings
+     set boc_tach = coalesce(boc_tach, '{}'::jsonb)
+                 || jsonb_strip_nulls(coalesce(p, '{}'::jsonb))
+                 || jsonb_build_object('_cap_nhat', now())
+   where id = p_listing_id;
 $function$
 ;
 
@@ -3446,12 +3445,12 @@ AS $function$
 declare
   v_type text;
   v_loc text;
+  v_so text;
   v_prefix text;
   v_num int;
 begin
   perform pg_advisory_xact_lock(hashtext('listing_code'));
 
-  -- Chuẩn hoá loại BĐS
   v_type := case lower(coalesce(p_property_type, 'nha_pho'))
     when 'chung_cu' then 'CH'
     when 'can_ho' then 'CH'
@@ -3464,18 +3463,13 @@ begin
     else 'NP'
   end;
 
-  -- Chuẩn hoá khu vực (quận/huyện hoặc tỉnh)
   v_loc := public.bo_dau(coalesce(p_district, p_province, 'Q5'));
   v_loc := upper(regexp_replace(v_loc, '[^a-zA-Z0-9]', '', 'g'));
 
-  if v_loc ~ 'BINHTAN' then v_loc := 'BINHTAN';
-  elsif v_loc ~ 'QUAN5|^Q5' then v_loc := 'Q5';
-  elsif v_loc ~ 'QUAN1|^Q1' then v_loc := 'Q1';
-  elsif v_loc ~ 'QUAN3|^Q3' then v_loc := 'Q3';
-  elsif v_loc ~ 'QUAN10|^Q10' then v_loc := 'Q10';
-  elsif v_loc ~ 'QUAN11|^Q11' then v_loc := 'Q11';
-  elsif v_loc ~ 'QUAN6|^Q6' then v_loc := 'Q6';
-  elsif v_loc ~ 'QUAN8|^Q8' then v_loc := 'Q8';
+  v_so := (regexp_match(v_loc, '^(?:QUAN|Q)?([0-9]{1,2})$'))[1];
+  if v_so is not null then
+    v_loc := 'Q' || v_so::int;
+  elsif v_loc ~ 'BINHTAN' then v_loc := 'BINHTAN';
   elsif v_loc ~ 'BINHTHANH' then v_loc := 'BINHTHANH';
   elsif v_loc ~ 'TANBINH' then v_loc := 'TANBINH';
   elsif v_loc ~ 'TANPHU' then v_loc := 'TANPHU';
@@ -3554,35 +3548,21 @@ CREATE OR REPLACE FUNCTION public.nhan_fact(p_key text)
  SET search_path TO 'public'
 AS $function$
   select case p_key
-    when 'gia' then 'giá mong muốn'
-    when 'phuong' then 'phường'
-    when 'loai_bds' then 'loại bất động sản'
-    when 'phap_ly' then 'pháp lý (sổ hồng, hoàn công)'
-    when 'dien_tich_dat' then 'diện tích đất'
-    when 'dien_tich' then 'diện tích'
-    when 'dien_tich_tim_tuong' then 'diện tích tim tường'
-    when 'ket_cau' then 'kết cấu, mấy tầng'
-    when 'do_rong_hem' then 'độ rộng hẻm'
-    when 'do_rong_duong' then 'độ rộng đường'
-    when 'huong' then 'hướng nhà'
-    when 'quy_hoach' then 'tình trạng quy hoạch'
-    when 'nam_xay' then 'năm xây'
-    when 'hien_trang' then 'hiện trạng nhà'
-    when 'tang' then 'tầng'
-    when 'phi_quan_ly' then 'phí quản lý'
-    when 'so_phong_ngu' then 'số phòng ngủ'
-    when 'noi_that' then 'nội thất'
-    when 'tho_cu' then 'diện tích thổ cư'
-    when 'gia_dien_nuoc' then 'giá điện nước'
-    when 'gio_giac' then 'giờ giấc'
-    when 'mat_tien' then 'chiều ngang mặt tiền'
-    when 'nganh_hang_phu_hop' then 'ngành hàng phù hợp'
-    when 'thoi_han_thue' then 'thời hạn thuê'
-    when 'san_vuon' then 'sân vườn'
-    when 'hinh_anh' then 'hình ảnh'
-    when 'tiem_nang' then 'tiềm năng sử dụng'
-    when 'bo_sung' then 'thông tin bổ sung'
-    when 'duyet_tin' then 'duyệt bản nháp tin'
+    when 'gia' then 'giá mong muốn' when 'phuong' then 'phường'
+    when 'vi_tri' then 'vị trí cụ thể (đường, số nhà, hẻm)'
+    when 'loai_bds' then 'loại bất động sản' when 'phap_ly' then 'pháp lý (sổ hồng, hoàn công)'
+    when 'dien_tich_dat' then 'diện tích đất' when 'dien_tich' then 'diện tích'
+    when 'dien_tich_tim_tuong' then 'diện tích tim tường' when 'ket_cau' then 'kết cấu, mấy tầng'
+    when 'do_rong_hem' then 'độ rộng hẻm' when 'do_rong_duong' then 'độ rộng đường'
+    when 'huong' then 'hướng nhà' when 'quy_hoach' then 'tình trạng quy hoạch'
+    when 'nam_xay' then 'năm xây' when 'hien_trang' then 'hiện trạng nhà' when 'tang' then 'tầng'
+    when 'phi_quan_ly' then 'phí quản lý' when 'so_phong_ngu' then 'số phòng ngủ'
+    when 'noi_that' then 'nội thất' when 'tho_cu' then 'diện tích thổ cư'
+    when 'gia_dien_nuoc' then 'giá điện nước' when 'gio_giac' then 'giờ giấc'
+    when 'mat_tien' then 'chiều ngang mặt tiền' when 'nganh_hang_phu_hop' then 'ngành hàng phù hợp'
+    when 'thoi_han_thue' then 'thời hạn thuê' when 'san_vuon' then 'sân vườn'
+    when 'hinh_anh' then 'hình ảnh' when 'tiem_nang' then 'tiềm năng sử dụng'
+    when 'bo_sung' then 'thông tin bổ sung' when 'duyet_tin' then 'duyệt bản nháp tin'
     else coalesce(nullif(btrim(p_key), ''), 'thông tin')
   end;
 $function$
@@ -3876,16 +3856,39 @@ begin
       from listings l
       join sellers s on s.id = l.seller_id
       left join asked a on a.seller_id = l.seller_id
-      where l.status = 'cho_thong_tin'
+      where (l.status = 'cho_thong_tin' or (l.status = 'dang_ban' and l.can_chu_duyet))
+        and l.chu_noi_du_at is null
         and (s.zalo_user_id is not null or l.created_at > now() - interval '7 days')
         and exists (select 1 from listing_missing_facts m where m.listing_id = l.id)
-        and not exists (select 1 from info_requests q
-                          where q.listing_id = l.id and q.status = 'pending')
-        and (select count(*) from info_requests q
-               where q.listing_id = l.id and q.created_at > now() - interval '24 hours') < 3
+        and not exists (select 1 from info_requests q where q.listing_id = l.id and q.status = 'pending')
+        and (select count(*) from info_requests q where q.listing_id = l.id and q.created_at > now() - interval '24 hours') < 3
     )
-    -- rn + asked24 <= 2: một người bán không bị hỏi quá 2 căn trong 24h
     select id from cand where rn + asked24 <= 2 order by created_at desc limit 10
+  loop
+    perform ask_seller_drip(r.id);
+    n := n + 1;
+  end loop;
+  return n;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.seller_hoi_bu_tick()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare r record; n int := 0;
+begin
+  for r in
+    select l.id from listings l join sellers s on s.id = l.seller_id
+     where l.can_chu_duyet
+       and l.chu_duyet_at between now() - interval '20 minutes' and now() - interval '5 minutes'
+       and l.chu_noi_du_at is null
+       and l.status in ('dang_ban', 'cho_thong_tin')
+       and exists (select 1 from listing_missing_facts m where m.listing_id = l.id)
+       and not exists (select 1 from info_requests q where q.listing_id = l.id and q.created_at > l.chu_duyet_at)
+     order by l.chu_duyet_at limit 10
   loop
     perform ask_seller_drip(r.id);
     n := n + 1;
@@ -4056,6 +4059,21 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.trg_fact_vao_boc_tach()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  update public.listings
+     set boc_tach = coalesce(boc_tach, '{}'::jsonb)
+                 || jsonb_build_object(new.question, new.answer, '_cap_nhat', now())
+   where id = new.listing_id;
+  return null;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.trg_info_request_thong_bao_khach_hoi()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -4066,6 +4084,8 @@ declare
   v_bds text;
   v_buyer text;
 begin
+  if new.source is distinct from 'buyer_ask' then return new; end if;
+
   if new.question is not null and btrim(new.question) <> '' then
     select coalesce('#' || code, '') into v_bds from listings where id = new.listing_id;
     select coalesce(name, 'Khách hàng') into v_buyer from buyers where id = new.buyer_id;
@@ -4080,6 +4100,7 @@ begin
   end if;
   return new;
 exception when others then
+  perform public.log_loi('trg_info_request_thong_bao_khach_hoi', left(sqlerrm, 400), null::integer);
   return new;
 end $function$
 ;
@@ -4111,7 +4132,7 @@ begin
   v_title := '[TIN MỚI] ' || coalesce(new.code, 'BĐS');
   v_text := format('Có tin BĐS mới vừa được tạo: %s · %s%s · Giá: %s · DT: %sm2. Trạng thái: %s',
                    coalesce(new.code, 'Chưa mã'),
-                   coalesce(new.property_type, 'BĐS'),
+                   coalesce(new.property_type::text, 'BĐS'),
                    case when new.location_raw is not null then ' tại ' || new.location_raw else '' end,
                    coalesce(new.price_raw, 'Thương lượng'),
                    coalesce(new.area_m2::text, '-'),
@@ -4121,6 +4142,7 @@ begin
   perform public.canh_bao_ngoai(v_title, v_text, 4, false);
   return new;
 exception when others then
+  perform public.log_loi('trg_listing_thong_bao_tao_tin', left(sqlerrm, 400), null::integer);
   return new;
 end $function$
 ;
@@ -4158,6 +4180,22 @@ begin
     if tg_op = 'UPDATE' and old.status is distinct from new.status then
       perform public.ghi_su_kien_bds(new.id, 'status', null, jsonb_build_object('tu', old.status, 'den', new.status));
     end if;
+  end if;
+  return null;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.trg_vi_tri_vao_cot()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.question = 'vi_tri' and coalesce(btrim(new.answer), '') <> '' then
+    update public.listings set location_raw = btrim(new.answer)
+     where id = new.listing_id
+       and (coalesce(btrim(location_raw), '') = '' or new.source ilike 'admin%' or new.source ilike 'ctv%');
   end if;
   return null;
 end $function$
@@ -4913,7 +4951,7 @@ create or replace view public.listing_missing_facts as
    FROM listings l
      JOIN required_facts rf ON rf.property_type = COALESCE(l.property_type, 'chua_ro'::property_type)
      LEFT JOIN listing_facts lf ON lf.listing_id = l.id AND lf.question = rf.fact_key
-  WHERE lf.id IS NULL AND rf.nhom <> 'phu'::text AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'hinh_anh'::text AND (EXISTS ( SELECT 1
+  WHERE lf.id IS NULL AND rf.nhom <> 'phu'::text AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'vi_tri'::text AND COALESCE(btrim(l.location_raw), ''::text) <> ''::text OR rf.fact_key = 'hinh_anh'::text AND (EXISTS ( SELECT 1
            FROM listing_media m
           WHERE m.listing_id = l.id)))
   ORDER BY l.id, rf.priority, rf.fact_key;
@@ -4951,6 +4989,10 @@ drop trigger if exists trg_pe_interests on public.interests;
 CREATE TRIGGER trg_pe_interests AFTER INSERT ON public.interests FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_listing_facts_sync_cols on public.listing_facts;
 CREATE TRIGGER trg_listing_facts_sync_cols AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_cols();
+drop trigger if exists trg_zz_fact_vao_boc_tach on public.listing_facts;
+CREATE TRIGGER trg_zz_fact_vao_boc_tach AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION trg_fact_vao_boc_tach();
+drop trigger if exists trg_zz_vi_tri_vao_cot on public.listing_facts;
+CREATE TRIGGER trg_zz_vi_tri_vao_cot AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION trg_vi_tri_vao_cot();
 drop trigger if exists trg_listing_media_bia on public.listing_media;
 CREATE TRIGGER trg_listing_media_bia AFTER INSERT OR DELETE OR UPDATE OF is_cover, bucket, sort_order ON public.listing_media FOR EACH ROW EXECUTE FUNCTION listing_media_giu_bia();
 drop trigger if exists trg_listing_media_don_file on public.listing_media;
@@ -5271,8 +5313,6 @@ grant SELECT on public.hoi_thoai_thong_ke to service_role;
 grant SELECT on public.khach_can_nguoi_that to authenticated;
 grant SELECT on public.khach_can_nguoi_that to service_role;
 grant SELECT on public.listing_media to anon;
-grant SELECT on public.public_listings to anon;
-grant SELECT on public.public_listings to authenticated;
 grant SELECT on public.ro_hang_ban to authenticated;
 grant SELECT on public.seller_ranks to anon;
 grant SELECT on public.seller_ranks to authenticated;
@@ -5390,6 +5430,8 @@ revoke all on function public.ensure_seller_conversation(p_seller_id uuid, p_cha
 grant execute on function public.ensure_seller_conversation(p_seller_id uuid, p_channel text) to service_role;
 revoke all on function public.get_secret(secret_name text) from public, anon, authenticated;
 grant execute on function public.get_secret(secret_name text) to service_role;
+revoke all on function public.ghi_boc_tach(p_listing_id uuid, p jsonb) from public, anon, authenticated;
+grant execute on function public.ghi_boc_tach(p_listing_id uuid, p jsonb) to service_role;
 revoke all on function public.ghi_danh_gia(p_buyer_id uuid, p_listing_id uuid, p_stars integer, p_note text) from public, anon, authenticated;
 grant execute on function public.ghi_danh_gia(p_buyer_id uuid, p_listing_id uuid, p_stars integer, p_note text) to service_role;
 revoke all on function public.ghi_fact_listing(p_listing_id uuid, p_question text, p_answer text, p_source text) from public, anon, authenticated;
@@ -5491,7 +5533,6 @@ grant execute on function public.mo_viec_can_nguoi_that(p_buyer_id uuid, p_ctv_i
 revoke all on function public.next_listing_code() from public, anon, authenticated;
 grant execute on function public.next_listing_code() to service_role;
 revoke all on function public.next_listing_code(p_property_type text, p_district text, p_province text) from public, anon, authenticated;
-grant execute on function public.next_listing_code(p_property_type text, p_district text, p_province text) to authenticated;
 grant execute on function public.next_listing_code(p_property_type text, p_district text, p_province text) to service_role;
 revoke all on function public.nguoi_noi_bo(p_zalo text) from public, anon, authenticated;
 grant execute on function public.nguoi_noi_bo(p_zalo text) to service_role;
@@ -5523,6 +5564,8 @@ revoke all on function public.route_info_request() from public, anon, authentica
 grant execute on function public.route_info_request() to service_role;
 revoke all on function public.seller_drip_tick() from public, anon, authenticated;
 grant execute on function public.seller_drip_tick() to service_role;
+revoke all on function public.seller_hoi_bu_tick() from public, anon, authenticated;
+grant execute on function public.seller_hoi_bu_tick() to service_role;
 revoke all on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) from public, anon, authenticated;
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to anon;
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to authenticated;
@@ -5540,18 +5583,18 @@ grant execute on function public.thu_muc_dau_uuid(p_name text) to service_role;
 revoke all on function public.tin_cua_toi(p_listing uuid) from public, anon, authenticated;
 grant execute on function public.tin_cua_toi(p_listing uuid) to authenticated;
 grant execute on function public.tin_cua_toi(p_listing uuid) to service_role;
+revoke all on function public.trg_fact_vao_boc_tach() from public, anon, authenticated;
+grant execute on function public.trg_fact_vao_boc_tach() to service_role;
 revoke all on function public.trg_info_request_thong_bao_khach_hoi() from public, anon, authenticated;
-grant execute on function public.trg_info_request_thong_bao_khach_hoi() to anon;
-grant execute on function public.trg_info_request_thong_bao_khach_hoi() to authenticated;
 grant execute on function public.trg_info_request_thong_bao_khach_hoi() to service_role;
 revoke all on function public.trg_listing_drip() from public, anon, authenticated;
 grant execute on function public.trg_listing_drip() to service_role;
 revoke all on function public.trg_listing_thong_bao_tao_tin() from public, anon, authenticated;
-grant execute on function public.trg_listing_thong_bao_tao_tin() to anon;
-grant execute on function public.trg_listing_thong_bao_tao_tin() to authenticated;
 grant execute on function public.trg_listing_thong_bao_tao_tin() to service_role;
 revoke all on function public.trg_property_event() from public, anon, authenticated;
 grant execute on function public.trg_property_event() to service_role;
+revoke all on function public.trg_vi_tri_vao_cot() from public, anon, authenticated;
+grant execute on function public.trg_vi_tri_vao_cot() to service_role;
 revoke all on function public.viec_inbound_bo_roi(p_limit integer) from public, anon, authenticated;
 grant execute on function public.viec_inbound_bo_roi(p_limit integer) to service_role;
 revoke all on function public.viewings_bao_ctv_va_email() from public, anon, authenticated;
@@ -5588,4 +5631,5 @@ select cron.schedule('media-chet-tick', '0 * * * *', 'select public.chon_viec_do
 select cron.schedule('media-cleanup-tick', '*/5 * * * *', 'select public.media_cleanup_tick()');
 select cron.schedule('nudge-tick', '7,37 1-13 * * *', 'select nudge_tick()');
 select cron.schedule('seller-drip-tick', '22,52 1-13 * * *', 'select seller_drip_tick()');
+select cron.schedule('seller-hoi-bu-tick', '*/5 1-13 * * *', 'select seller_hoi_bu_tick()');
 select cron.schedule('stale-listing-tick', '0 2 * * *', 'select public.stale_listing_tick()');

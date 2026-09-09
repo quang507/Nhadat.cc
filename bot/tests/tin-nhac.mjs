@@ -50,6 +50,13 @@ for (const [ten, note] of [
   ok("chính chủ: đọc nhãn tiếng người, không đọc tên cột", /diện tích đất/.test(t) && !/dien_tich_dat/.test(t), t);
 }
 
+// ── 💬 câu hỏi bù của ask-seller (FR-177 f): nguyên văn, không bọc ───────────
+{
+  const t = escalationText({ kind: "escalation", note: "💬 Dạ anh ơi, nhà mình sổ hồng riêng chưa ạ?", seller_id: "s-1" });
+  ok("💬: gửi nguyên câu bot soạn", t === "Dạ anh ơi, nhà mình sổ hồng riêng chưa ạ?", t);
+  ok("💬: không có lời chào nhadat.cc", !/nhadat\.cc/.test(t), t);
+}
+
 // ── report (báo cáo CTV 17h): gửi NGUYÊN VĂN, không thêm gì ─────────────────
 {
   const bao = "Báo cáo CTV 2026-09-07 (17h)\n\n【CTV 1】\n- Đang chăm: 1 đơn";

@@ -77,6 +77,9 @@ const TU_KHOA: Record<string, RegExp> = {
   huong: /\b(dong|tay|nam|bac|huong|chua ro|khong ro|ko ro|khong biet|ko biet|chua biet)\b/,
   quy_hoach: /\b(khong|ko|k|chua|co|dinh|vuong|on|sach|quy hoach|lo gioi|treo|giai toa|an toan|khong dinh|ko dinh|chuan)\b/,
   loai_bds: /\b(nha|pho|cap 4|chung cu|can ho|dat|biet thu|phong tro|mat bang|kho|xuong)\b/,
+  // Vị trí cụ thể (chủ dự án 09/09/2026: "hỏi vị trí cụ thể thì tốt hơn"):
+  // tên đường / hẻm / số nhà / mốc gần — hoặc có số (số nhà, số hẻm).
+  vi_tri: /\b(duong|hem|hxh|so|pho|ngo|kdc|khu|toa|chung cu|cu xa|lo|kp|ap|xa|phuong|quan|gan|doi dien|nga|cho|truong|benh vien|cong vien)\b|\d/,
 };
 
 // Câu hỏi ngược của chủ nhà: có dấu hỏi hoặc mở đầu bằng từ để hỏi.
@@ -116,6 +119,11 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
 
   const ketQua = (loai: LoaiCau, them: Partial<KetQuaKhop> = {}): KetQuaKhop =>
     ({ loai, ...(xungHo ? { xungHo } : {}), ...them });
+
+  // Chấm điểm chăm sóc (09/09/2026): câu chữ tự do — "8 điểm", "giống người
+  // thật", "ổn em", "hơi lâu" đều là câu trả lời. Chỉ ack/hỏi ngược ở trên mới
+  // không tính. Không bao giờ chuyển sang fact khác.
+  if (question === "danh_gia") return ketQua("khop");
 
   if (/^dien_tich/.test(question) || question === "tho_cu") {
     // "Ngang 5" / "rộng 4m" là MẶT TIỀN, không phải diện tích. Ghi đúng chỗ
@@ -179,6 +187,8 @@ export const NHAN_HOI_LAI: Record<string, string> = {
   nam_xay: "nhà xây năm nào",
   gia: "giá mình muốn bán bao nhiêu",
   phuong: "nhà mình thuộc phường mấy",
+  vi_tri: "nhà mình ở đường nào, số mấy hay hẻm nào",
+  danh_gia: "mình chấm cách em chăm sóc mấy điểm, có góp ý gì cho em",
   do_rong_hem: "hẻm trước nhà rộng mấy mét, xe hơi vào được không",
   hinh_anh: "mình gửi giúp em vài tấm ảnh sổ, mặt tiền nhà và hẻm",
   duyet_tin: "bản nháp tin như vậy đã được chưa, hay mình muốn sửa chỗ nào",
@@ -199,6 +209,15 @@ export function nhanDienFact(text: string): NhanDien | null {
   let m: RegExpExecArray | null;
   if (/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|shc|giay tay|cam ngan hang|dang the chap)\b/.test(kd)) {
     return { question: "phap_ly", answer: goc };
+  }
+  // Vị trí cụ thể: "đường Trần Bình Trọng", "hẻm 123/45 Nguyễn Trãi", "số 12
+  // Lê Lợi", "123/4 An Dương Vương". "hẻm 4m" (độ rộng) không rơi vào đây vì
+  // sau số là đơn vị mét, không phải "/" hay tên đường.
+  if (/\b(duong|pho)\s+[a-z]{2,}/.test(kd) ||
+      /\b(?:hem|hxh)\s*\d+(?:\/\d+)+\b/.test(kd) ||
+      /\b(?:so|so nha|dia chi)\s*\d+[a-z]?(?:\/\d+)*\s+[a-z]{2,}/.test(kd) ||
+      /^\s*\d+[a-z]?(?:\/\d+[a-z]?)+\s+[a-z]{2,}/.test(kd)) {
+    return { question: "vi_tri", answer: goc };
   }
   if ((m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?${SO}\\s*(?:m|met)?\\b`).exec(kd)) ||
       (m = new RegExp(`${SO}\\s*(?:m|met)\\s*hem\\b`).exec(kd))) {
@@ -245,7 +264,7 @@ export function nhanDienFact(text: string): NhanDien | null {
 // diện tích, nghe "3 lầu" thì hỏi phòng ngủ), không có thì lấy câu đầu.
 // Nhóm đọc từ cột `nhom` của view; view cũ không có cột thì tra bảng dưới.
 export const NHOM_FACT: Record<string, "co_ban" | "chuyen_mon" | "phu"> = {
-  loai_bds: "co_ban", phuong: "co_ban", dien_tich: "co_ban", dien_tich_dat: "co_ban",
+  loai_bds: "co_ban", phuong: "co_ban", vi_tri: "co_ban", dien_tich: "co_ban", dien_tich_dat: "co_ban",
   dien_tich_tim_tuong: "co_ban", tho_cu: "co_ban", gia: "co_ban", mat_tien: "co_ban",
   huong: "phu", quy_hoach: "phu", nam_xay: "phu",
 };
@@ -253,7 +272,8 @@ const LIEN_QUAN: Record<string, string[]> = {
   mat_tien: ["dien_tich_dat", "dien_tich", "dien_tich_tim_tuong", "tho_cu"],
   dien_tich: ["mat_tien", "gia"], dien_tich_dat: ["mat_tien", "tho_cu", "gia"],
   dien_tich_tim_tuong: ["gia"], tho_cu: ["gia"],
-  gia: ["phuong"], phuong: ["dien_tich_dat", "dien_tich", "dien_tich_tim_tuong"],
+  gia: ["phuong"], phuong: ["vi_tri", "dien_tich_dat", "dien_tich", "dien_tich_tim_tuong"],
+  vi_tri: ["phuong", "do_rong_hem", "dien_tich_dat", "dien_tich"],
   loai_bds: ["phuong"],
   do_rong_hem: ["ket_cau", "mat_tien"], do_rong_duong: ["mat_tien"],
   ket_cau: ["so_phong_ngu", "phap_ly"], tang: ["so_phong_ngu"], so_phong_ngu: ["phap_ly"],
@@ -288,4 +308,35 @@ export function laDongY(text: string): boolean {
   if (/\b(khong|ko|k|chua|sua|doi|sai|nham|bo|them|thieu|nhung)\b/.test(kd)) return false;
   const tu = kd.split(/\s+/);
   return tu.every((w) => TU_GAT.has(w) || TU_DEM.has(w)) && tu.some((w) => TU_GAT.has(w));
+}
+
+// ── "Đủ rồi" — FR-177 g ───────────────────────────────────────────────────────
+// Chủ dự án 09/09/2026: "điểm đầy đủ thì chỉ khách nói là đã đầy đủ tin rồi" —
+// bot hỏi bù dần trong vài ngày, nhưng chủ nhà bảo "đủ rồi / vậy thôi / đừng
+// hỏi nữa" thì NGỪNG hỏi. Điểm KHÔNG nhảy lên 100: nó vẫn đo theo dữ liệu thật,
+// chỉ có vòng hỏi dừng lại (`listings.chu_noi_du_at`).
+// Không phải "đủ rồi": "chưa đủ", "đủ 3 lầu" (số đi kèm là dữ liệu), "còn nữa".
+const DU_ROI_RE =
+  /\b(?:(?:vay|the|nhieu do|bay nhieu|nhu vay|nhu the|chi vay|toi day|toi do)\s*(?:la\s*)?(?:du|thoi|het)\b|(?:thong tin\s*)?(?:day\s*)?du\s*(?:thong tin\s*)?roi\b|het roi\b|khong con gi(?: nua| khac)?\b|(?:dung|khoi|thoi)\s*hoi\s*(?:nua|them)?\b|(?:chi|nhieu do|bay nhieu|vay)\s*thoi\b)/;
+export function laDuRoi(text: string): boolean {
+  const kd = boDau(text).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return false;
+  // "chưa đủ", "còn nữa", "thiếu", "bổ sung thêm" là NGƯỢC lại.
+  if (/\b(chua|con nua|thieu|bo sung|them cai|them cho)\b/.test(kd)) return false;
+  // "đủ 3 lầu", "đủ 4 phòng" — số đi sau "đủ" là dữ liệu, không phải kết thúc.
+  if (/\bdu\s+\d/.test(kd)) return false;
+  return DU_ROI_RE.test(kd);
+}
+
+// ── "Gấp" — cột listings.gap ──────────────────────────────────────────────────
+// Chủ dự án 09/09/2026: tình trạng gấp hay không cần cột riêng (cùng loại giao
+// dịch, vị trí). true khi câu rao / câu chat nói bán gấp, cần tiền, thanh lý
+// gấp, bán nhanh; false khi nói rõ "không gấp"; câu không nhắc gì → tầng trên
+// giữ null (chưa rõ), không ép false.
+export function laGap(text: string): boolean {
+  const kd = boDau(text).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return false;
+  if (/\b(khong|ko|k|chua|dau co|chang)\s*(?:can\s*)?gap\b/.test(kd)) return false;
+  if (/\bgap\s*(doi|ba|lan|ruoi|\d)/.test(kd)) return false; // "gấp đôi", "gấp 3" là so sánh
+  return /\b(ban|thue|thanh ly|can|ra|di)\s*(?:nha\s*|dat\s*)?gap\b|\bgap\s*(lam|qua|nha|nhe|em|a)?\b|\bcan tien\b|\b(ban|di|ra)\s*nhanh\b/.test(kd);
 }

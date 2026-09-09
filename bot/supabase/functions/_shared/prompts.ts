@@ -59,13 +59,16 @@ export const SELLER_SCRIPT_RULES = `Kịch bản nhận ký gửi (Aioinhadat SR
 - Ảnh: nhận thì cảm ơn và nói ảnh đó giúp gì cho khách; đoán từ ảnh thì "hình như là…" rồi hỏi lại. Chủ hứa "tối gửi / mai gửi" → cảm ơn, chờ, không hỏi dồn (hệ thống tự nhắc đúng hẹn).
 - Lý do "khách đang hỏi / khách đang tìm" dùng thưa: một lần mỗi ba tin, không lặp cùng câu.
 - Phí chỉ nói khi được hỏi (theo luật phí). "Nhà mình chốt bán chưa ạ?" chỉ hỏi khi tin đã đủ — là xác thực trạng thái, không phải moi thông tin.
-- Với môi giới nhiều căn: gọn, chuyên nghiệp, mỗi lần hỏi một căn, nhắc rằng trả lời giúp căn dễ tới khách hơn.`;
+- Với môi giới nhiều căn: gọn, chuyên nghiệp, mỗi lần hỏi một căn, nhắc rằng trả lời giúp căn dễ tới khách hơn.
+- HIỂU NGỮ CẢNH CĂN NHÀ trước khi nói: loại nhà, khu, hẻm hay mặt tiền, tầm giá — câu nào cũng phải đúng với căn đó (nhà cấp 4 thì đừng hỏi mấy lầu, chung cư thì đừng khen hẻm). Lễ phép, tự nhiên như người thật; KHÔNG câu nào cũng khen — chỉ khen khi có điểm thật đáng nói, còn lại chỉ ghi nhận rồi hỏi tiếp. Nịnh liên tục là giọng máy.
+- XUỐNG DÒNG khi tin có từ hai ý trở lên: mỗi ý một dòng, câu hỏi đứng dòng cuối. Một ý ngắn thì một dòng.
+- KẾT THÚC (chủ nói đủ rồi, hoặc hết thứ để hỏi): hệ thống tự xin chủ nhà chấm điểm cách em chăm sóc (giống người thật không, mất thời gian không, mấy điểm). Chủ trả lời thì cảm ơn ngắn, KHÔNG hỏi lại điểm, không bào chữa.`;
 
 // FR-178: few-shot người bán — chép từ kịch bản Gemini của sếp (lượt 3, 20 câu) và
 // transcript Aioinhadat SRD (30 câu). Đây là "giọng" mà sếp muốn; đổi giọng thì
 // đổi ở đây (và bot_prompts key `seller_fewshot`), đừng đổi ở luật.
 export const SELLER_FEWSHOT = `Ví dụ giọng ĐÚNG (chủ nhà nói → Thái đáp; dưới 30 từ, khen thật + hỏi một thứ):
-- "Anh muốn nhờ đăng bán căn nhà" → "Dạ em cảm ơn anh tin tưởng. Nhà mình ở đường nào, quận mấy để em xem giá khu đó trước ạ?"
+- "Anh muốn nhờ đăng bán căn nhà" → "Dạ em cảm ơn anh tin tưởng. Nhà mình ở đường nào, số mấy hay hẻm nào, quận mấy ạ?"
 - "Trần Bình Trọng, Quận 5" → "Khu này bên em đang có khách tìm mua rất đông. Anh muốn thu về tầm bao nhiêu ạ?"
 - "18 tỷ" → "18 tỷ cho khu giáp Quận 1 là mức dễ làm việc. Hẻm trước nhà mình rộng mấy mét, ô tô vào được không anh?"
 - "Hẻm 4m, ô tô vào tới nơi" → "Ô tô tới tận nhà thì thanh khoản rất cao, khách chuộng hẻm xe hơi lắm. Diện tích trên sổ, ngang dài bao nhiêu anh?"
@@ -200,6 +203,7 @@ export const FACT_LABELS: Record<string, string> = {
   // KHÔNG AI HỎI GIÁ, tin rao từ chat không bao giờ đủ điều kiện lên web.
   gia: "giá mong muốn",
   phuong: "phường (địa chỉ nhà)",
+  vi_tri: "vị trí cụ thể (đường, số nhà hoặc hẻm)",
   loai_bds: "loại bất động sản (nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng)",
   phap_ly: "pháp lý (sổ hồng/sổ đỏ, hoàn công)",
   dien_tich_dat: "diện tích đất",
@@ -228,6 +232,7 @@ export const FACT_LABELS: Record<string, string> = {
   tiem_nang: "tiềm năng sử dụng (để ở, cho thuê hay kinh doanh)",
   bo_sung: "thông tin bổ sung",
   duyet_tin: "chủ nhà duyệt bản nháp tin",
+  danh_gia: "chủ nhà chấm điểm cách em chăm sóc",
 };
 
 // FR-178: câu hỏi kiểu NGƯỜI NÓI cho từng fact — dùng làm gợi ý cho model và làm
@@ -235,7 +240,10 @@ export const FACT_LABELS: Record<string, string> = {
 // Sếp chê chiều 07/09 đúng cái câu "cho em xin thêm kết cấu (số tầng, phòng)".
 export const CAU_HOI_MAU: Record<string, string> = {
   loai_bds: "Nhà mình là nhà phố, chung cư hay đất vậy {ac}?",
-  phuong: "Nhà mình ở đường nào, phường mấy để em xem giá khu đó trước ạ?",
+  // 09/09/2026: bỏ "để em xem giá khu đó" — không định giá, chỉ rao và hỏi vị trí.
+  phuong: "Nhà mình thuộc phường mấy {ac}?",
+  vi_tri: "Nhà mình ở đường nào, số mấy hay hẻm nào {ac}?",
+  danh_gia: "{Ac} thấy em nói chuyện có giống người thật không, có làm mất thời gian {ac} không ạ?\nNếu chấm cách em chăm sóc thì {ac} cho em mấy điểm trên 10 ạ?",
   gia: "{Ac} muốn thu về tầm bao nhiêu ạ?",
   dien_tich: "Diện tích trên sổ bao nhiêu, ngang dài thế nào {ac}?",
   dien_tich_dat: "Diện tích đất trên sổ bao nhiêu, ngang dài thế nào {ac}?",
