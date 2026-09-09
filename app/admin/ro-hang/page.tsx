@@ -343,6 +343,13 @@ export default function Page() {
           >
             + Đăng tin mới
           </Link>
+          <Link
+            href="/admin/ro-hang/json"
+            className="rounded-full border border-line px-4 py-2 text-sm font-bold text-navy hover:border-brand hover:text-brand bg-white transition shadow-2xs"
+            title="Rổ hàng dạng JSON kèm bóc tách (FR-177 h)"
+          >
+            {"{ }"} JSON
+          </Link>
           <button
             type="button"
             onClick={taiCsv}
