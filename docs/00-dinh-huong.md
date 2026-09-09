@@ -201,6 +201,5 @@ tự đọc. Còn treo: ngưỡng điểm để tin được rao (**OPEN-50**), 
 
 ---
 
-*Truy vết:* DH-01…DH-07 → `08-traceability.md §8.0`. Bản trực quan: page
-**00 · Định hướng** trong Figma `nhadat.cc — Design System & SRS`
-(`design/figma-handoff.md`).
+*Truy vết:* DH-01…DH-07 → `08-traceability.md §8.0`. (Bản Figma và `design/` đã xoá
+08/09/2026 — OPEN-45 đóng; không còn bản trực quan riêng.)

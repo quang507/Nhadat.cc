@@ -19,7 +19,7 @@ chat là một phần của UI, không phải phụ lục.
 > **Nguồn sự thật hiện là `app/globals.css`** (`--color-brand`, `--color-brand-dark`,
 > `--color-navy`, `--color-navy-soft`, `--color-cream`, `--color-line`, `--color-mute`,
 > `--color-zalo`, `--radius-king`, `--radius-shot`). Bảng dưới là **bản thiết kế**,
-> lệch với code và với `design/tokens.json` — OPEN-45.
+> lệch với code (`app/globals.css` là token thật); `design/tokens.json` đã xoá 08/09/2026 — OPEN-45 đóng 10/09: code làm gốc.
 
 Kế thừa cấu trúc theme tham chiếu Veedoo (cam nhấn + navy đậm), token riêng, không
 dùng asset theme (NFR-15, OPEN-07).
@@ -57,7 +57,7 @@ dùng asset theme (NFR-15, OPEN-07).
 | Mã BĐS `#35148` | JetBrains Mono | 14px | 500 |
 
 Be Vietnam Pro phủ đủ dấu tiếng Việt và giữ chiều cao dòng ổn định với dấu chồng
-(ế, ỗ, ự). Font thật đang dùng: `--font-sans` trong `globals.css` (OPEN-45).
+(ế, ỗ, ự). Font thật đang dùng: `--font-sans` trong `globals.css` (OPEN-45 đóng 10/09: code làm gốc).
 
 ## 6.4 Spacing, bo góc, đổ bóng
 

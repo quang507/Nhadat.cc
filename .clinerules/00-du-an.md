@@ -4,7 +4,8 @@
 File này chỉ nhắc các luật bất di bất dịch:
 
 1. Repo này là **tầng đặc tả**. Nguồn sự thật là `docs/00` → `docs/09`.
-   Tài liệu gốc (.docx/.pdf/.pptx/.xlsx ở thư mục gốc) CHỈ ĐỌC, không sửa.
+   Tài liệu gốc 2024 đã xoá khỏi repo (08/09/2026, commit 459008d); trích dẫn
+   `[nguồn: file §mục]` trong docs là dấu vết lịch sử, không cần mở file.
 2. Mọi khẳng định trong `docs/` phải có nguồn: `[nguồn: file §mục]`
    hoặc `[giả định BA]`. Mơ hồ → tạo `OPEN-xx` trong `docs/09`, không tự chốt.
 3. ID (`FR- UF- WF- SRS- AC- INS- OPEN-`) là bất biến — không đánh số lại,

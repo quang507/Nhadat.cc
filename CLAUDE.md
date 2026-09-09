@@ -40,14 +40,16 @@ Thứ tự đọc = thứ tự phụ thuộc. Tài liệu sau **không được 
 
 ## 3. Tài liệu gốc & Phân định phạm vi
 
-Các file tài liệu 2024 ở thư mục gốc (`Tài liệu hệ thống nhadat.cc.pdf`, `nhadat.cc website.docx`, `biz model.docx`, `S's side.docx`, `chats w B.docx`, `OKRs eo2024.pptx`) là **tư liệu lịch sử 2024 cũ**, đã được Sếp và Chủ dự án quyết định ngưng kế thừa (chốt ngày 08/09/2026 - OPEN-48).
+**Tài liệu gốc 2024 KHÔNG còn trong repo** (xoá ở commit `459008d` ngày 08/09/2026 cùng `design/`, `SS/`, `hình samples/`, dữ liệu crawl; chủ dự án 10/09: "tài liệu nào bị cũ thì xoá đi"). Chúng là tư liệu lịch sử nhadat.cc 2024, đã ngưng kế thừa (OPEN-48). Muốn xem lại thì `git show 459008d^:"<tên file>"`. Các trích dẫn `[nguồn: biz model.docx §…]` trong `docs/` giữ nguyên làm dấu vết lịch sử — không phải lời mời đi tìm file.
 **Nguồn sự thật chuẩn duy nhất hiện nay của hệ thống là:**
 1. Bộ tài liệu `docs/` đã được chuẩn hóa theo **Aioinhadat 2026**.
 2. Kịch bản Gemini mới của Sếp: `Kịch bản huấn luyện môi giới (Gemini 07-09-2026).md`.
    Chat Gemini gốc của dự án (21–27/06/2026, share `EEX3PutTDZDt`), chưng cất ở
    `Kịch bản AI Ơi Nhà Đất (Gemini 21-06-2026, share).md` — chủ dự án đối chiếu với
    hệ thống ngày 09/09/2026 và chốt 14 dòng ở `docs/09` OPEN-55 → FR-181…186.
-3. SRD Aioinhadat: `AOND req + chat examples.docx`.
+3. SRD Aioinhadat `AOND req + chat examples.docx` — đã chưng cất hết vào `06 §6.8`, `09` OPEN-20/21; file gốc cũng đã xoá.
+
+Bản đồ "file gốc (đã xoá) → chưng cất ở đâu", để đọc `[nguồn: …]` trong docs mà không phải mở file:
 
 | File gốc | Được chưng cất vào |
 |---|---|
@@ -80,8 +82,8 @@ Các file tài liệu 2024 ở thư mục gốc (`Tài liệu hệ thống nhada
 
 ## 5. Ranh giới bảo mật — TUYỆT ĐỐI
 
-Các thư mục sau đã bị loại khỏi git (`.gitignore`) và **không bao giờ** được
-đọc-rồi-chép nội dung vào `docs/`, commit message, hay PR:
+Các thư mục sau từng nằm cạnh repo (nay không còn trên máy chủ dự án — soát 10/09/2026), vẫn giữ trong `.gitignore` và **không bao giờ** được
+đọc-rồi-chép nội dung vào `docs/`, commit message, hay PR nếu ai đó chép lại:
 
 - `admin logins/` — credential.
 - `sổ đỏ samples/` — sổ đỏ, CCCD, địa chỉ thật của người dân.
@@ -333,10 +335,7 @@ năng mới phải có FR/SRS tương ứng trong `docs/` trước khi code.
 
 ## 6b. Nguồn thiết kế
 
-`design/` chứa nguồn của bản trình bày thiết kế: `tokens.json` (design token máy
-đọc được), `artboards/*.dc.html` (13 khung thiết kế), `artboards/canvas.json`
-(bố cục), `assets/` (ảnh mẫu đã downsample). Dùng để dựng lại sang Figma hoặc
-làm tham chiếu khi code. Xem `design/README.md`.
+`design/` (token, 13 artboard, canvas) và việc Figma đã **xoá** 08/09/2026 (commit `459008d`); OPEN-45 đóng 10/09. Nguồn thiết kế còn lại là `docs/06-ui-design.md` (tone giọng, component) và chính code (`app/globals.css` là token thật). Không dựng lại Figma trừ khi chủ dự án yêu cầu.
 
 ## 7. Cách chạy pipeline BA
 
@@ -382,26 +381,24 @@ Anh, không biết batdongsan/mogi), `pm-toolkit`, `pm-data-analytics`.
 ## 8. Dùng với Cline (VS Code, chạy local)
 
 `.clinerules/` chứa bản đồ tương đương cho Cline: luật dự án tự nạp +
-4 workflow gõ bằng lệnh slash trong chat Cline:
+3 workflow gõ bằng lệnh slash trong chat Cline:
 
 | Lệnh | Việc |
 |---|---|
 | `/ba-pipeline.md` | Thêm/sửa yêu cầu giữ truy vết |
 | `/soat-truy-vet.md` | Soát ID gãy trước commit |
 | `/review-docs.md` | Review diff đụng docs/ |
-| `/hoan-tat-figma.md` | Làm nốt Figma (local nói chuyện được với plugin Talk-to-Figma) |
 
-Claude Code và Cline dùng chung nguồn sự thật (`docs/`, `design/`) — harness
+Claude Code và Cline dùng chung nguồn sự thật (`docs/`) — harness
 hai bên phải được cập nhật song song khi quy ước đổi.
 
 ## 9. Agent vai phụ (.claude/agents/)
 
-Ba vai gọi được từ mọi phiên Claude Code mở repo này:
+Hai vai gọi được từ mọi phiên Claude Code mở repo này (`figma-builder` xoá 10/09/2026 cùng `design/`):
 
 | Agent | Việc | Khi nào |
 |---|---|---|
 | `soat-truy-vet` | Soát ID gãy, truy vết thiếu, số đếm lệch, PII | Trước mọi commit đụng docs/ |
 | `reviewer` | Review diff/PR theo checklist BA, chỉ báo finding | Khi review PR |
-| `figma-builder` | Dựng Figma theo `design/figma-handoff.md`, chống dựng trùng | Khi Figma MCP khả dụng |
 
 Routine nền: soát docs hằng đêm 22:00 (giờ VN) trên phiên mới, chỉ báo khi có lỗi.

@@ -5,7 +5,7 @@ tự chốt (quy ước 2, `CLAUDE.md`). Mục đã chốt hoặc đã đóng ch
 thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm trong lịch sử git. Ký hiệu:
 ✅ đã chốt · 🚫 đóng vì không còn hợp hướng AOND · 🟡 chốt một phần (vẫn tính còn chờ).
 
-## Còn chờ chủ dự án (18)
+## Còn chờ chủ dự án (17)
 
 | ID | Vấn đề | Mức | Liên quan |
 |---|---|---|---|
@@ -25,7 +25,6 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-38 | Ảnh tin: thumbnail và watermark trên bậc Free | Thấp | FR-165, NFR-16 |
 | OPEN-41 | Nhà cung cấp model: giữ Claude trên Supabase hay theo AOND §VII (Gemini rồi chạy local)? | Thấp | SRS-2, FR-138, DH-06 |
 | OPEN-42 | Ngưỡng CTV: hạn trả lời 120 phút, hạng Vàng ≥90% / Bạc ≥70% — đều [giả định BA] | Trung bình | FR-173, FR-137, DH-03 |
-| OPEN-45 | Design token `06 §6.2`, `design/tokens.json` và `app/globals.css` là ba bản lệch nhau — chọn nguồn sự thật nào? | Thấp | UI-01…, OPEN-07 |
 | OPEN-47 | Tám bảng chưa từng được sao lưu — đã vá; còn treo: bucket `masterdb-raw` chưa có file, Storage `listing-public` chưa nằm trong bản sao nào | Cao | FR-165, OPEN-25 |
 | OPEN-50 | **Ngưỡng điểm để tin được rao, và tin cũ có bị đo lại không** (FR-177 d, 07/09): (a) ngưỡng **70/100** là *[giả định BA]* — kịch bản Gemini của sếp chỉ nói "càng đủ điểm càng cao và được rao", không nêu con số. Cao quá thì chính chủ hụt vài điểm bị chặn rao; thấp quá thì cổng vô nghĩa. (b) Hiện chỉ tin **tạo từ chat** (`can_chu_duyet`) chịu cổng điểm + phải chủ gật; **173 tin nhập Excel/admin giữ luật cũ** (giá + diện tích + phường) — 38/164 tin đang rao có điểm < 70, nếu áp cổng cho cả chúng thì rổ hàng tụt ngay 23%. Phương án: (1) giữ nguyên — cổng chỉ cho hàng mới từ chat, hàng cũ để yên, dọn dần bằng vòng hỏi; (2) hạ ngưỡng xuống 60 rồi áp cho tất cả; (3) áp cho tất cả ở ngưỡng 70, chấp nhận 38 tin tụt về `cho_thong_tin` cho tới khi bổ sung. **Khuyến nghị BA: (1)** — sao Bắc Đẩu là lịch xem nhà, chặn hàng đang chạy không đổi lại được gì. | Trung bình | FR-177, FR-155, OPEN-26, DH-03 |
 | OPEN-54 | **Ngưỡng "giọng có ra không" và đường chạy thật sau fine-tune** (FR-180, 09/09/2026): chủ dự án chốt lộ trình (300 mẫu → Qwen2.5-3B/7B Unsloth trên 4060 → Gemini Flash tuning hoặc VPS GPU) nhưng chưa chốt (a) ngưỡng ưng bằng số — đề xuất sếp chấm mù 20 câu kiểm, ≥ 14/20 chọn bản mới; (b) chạy thật bằng Gemini Flash tuning (rẻ, không tự vận hành, model đóng) hay VPS GPU chạy Qwen (giữ model mở, ~1–2 triệu/tháng, phải tự trực); (c) mẫu chứa chat thật có tên/SĐT — có che trước khi đưa lên Gemini không. **Khuyến nghị BA**: (a) 14/20; (b) Gemini Flash trước, VPS GPU khi có > 1.000 mẫu và cần ghi giọng riêng; (c) che SĐT bằng `che_sdt()` lúc xuất, giữ tên. | Trung bình | FR-180, OPEN-42 |
@@ -33,7 +32,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-51 | **Token Zalo OA sống 25 tiếng, không ai làm mới** — việc đã viết xong trên nhánh `claude/sua-25-loi` (commit `70a63ab`) nhưng chưa từng vào `main` và chưa từng áp lên DB. Chưa đau vì bot đang đi bridge zca-js, không dùng OA API | Thấp | FR-152, NFR-18, OPEN-46 |
 | OPEN-52 | **Trần lượt đếm theo thứ người gọi tự đặt được** (`external_user_id`) — xoay id là bộ đếm về 0. Bản vá `rate_counters` cũng nằm ở `70a63ab`, chưa merge | Thấp | FR-146, FR-151, SEC-02 |
 
-## Đã chốt / đã đóng (35)
+## Đã chốt / đã đóng (36)
 
 | ID | Kết luận | Liên quan |
 |---|---|---|
@@ -63,6 +62,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-32 | ✅ **ĐÃ CHỐT 09/09/2026** — phương án (b): ảnh chat kéo về kho rồi phân loại; giấy tờ / không phân loại được → `listing-private`, ảnh nhà → `listing-public`, sổ đọc diện tích đối chiếu (FR-185) | FR-185, FR-165 |
 | OPEN-39 | ✅ **CHỐT LẠI 09/09/2026** (đảo bản 03/09) — thương hiệu Aioinhadat giữ; trợ lý KHÔNG còn một tên Thái: mỗi khách một tên riêng từ kho •ai (T•ai, Kh•ai… 20 tên, viết hoa chữ đầu, không P•ai), gán tất định theo Zalo ID và giữ suốt (FR-181). Bản 03/09 "một tên Thái" chạy 03–09/09 | OPEN-08, FR-181, DH-01 |
 | OPEN-40 | ✅ **ĐÃ CHỐT 09/09/2026 tối** — phương án (b) làm cả ba nhóm AOND §III, bằng `required_facts` chứ không thêm cột: cho thuê (FR-186 chiều: nội thất, cọc, thời hạn, trượt giá, fit-out); đất (hướng, hạ tầng, xây dựng + `dat_nong_nghiep`, `dat_kinh_doanh`); công nghiệp `kho_xuong` + toà nhà dòng tiền `toa_nha` (`20260909i`). Lệnh: "đọc lại 2 cái chat Gemini xem có trường hợp nào, đây là production nên không thể bỏ sót cái gì cả" | FR-186, FR-187, DH-03 |
+| OPEN-45 | 🚫 Đóng 10/09/2026 — `design/tokens.json` và Figma đã xoá khỏi repo 08/09 (commit `459008d`); chỉ còn `06 §6.2` (bản thiết kế) và `app/globals.css` (token thật) — CODE làm gốc, `06` là tham chiếu tone/component, không đối chiếu từng token nữa | UI-01…, OPEN-07 |
 | OPEN-55 | ✅ **ĐÃ CHỐT 09/09/2026** — chủ dự án đọc lại chat Gemini "AI Ơi Nhà Đất" 21–27/06 (share) + chat 07/09 (PDF) rồi chốt 14 dòng chat ↔ hệ thống: (1) kênh Zalo cá nhân qua bridge, chỉ gửi chữ — GIỮ (nút bấm chờ OA); (2) mỗi khách một tên T•ai, Kh•ai… — THEO CHAT → FR-181; (3) loại BĐS trước, vị trí linh hoạt — GIỮ (sếp 07/09); (4) hỏi hướng — THEO CHAT cho chung cư và đất, nhà phố vẫn không → FR-186; (5) hỏi đúng một thông tin — GIỮ; (6) gán nhãn tự động, không nêu phí — GIỮ; (7) khách hỏi thứ thiếu → bot hỏi CHỦ NHÀ trước, 12 giờ không hồi âm mới hỏi CTV — MỚI → FR-173 a; (8) lên kệ khi đủ giá + diện tích + phường hoặc 70 điểm, ảnh 10 điểm, sổ không bắt buộc — GIỮ; (9) hỏi địa chỉ nêu lý do "kiểm tra giá thị trường khu vực" — THEO CHAT (đảo quyết định sáng 09/09 "bỏ định giá"; bot vẫn không đưa con số) → FR-177 h; (10) có CẢ điểm từng tin và điểm người rao — THEO CHAT → FR-183; (11) nhịp hỏi bù 5 phút / 30 phút / 3 câu/ngày / 2 căn/người, KHÔNG luật 7 ngày Zalo — GIỮ; (12) bot tự nêu kiến thức dự án ("Sunrise City có hồ bơi Olympic") — THEO CHAT → FR-114 d; (13) SharePoint/Power Automate/Dialogflow — không nhận, Supabase; (14) domain aioinhadat.vercel.app — GIỮ. Thêm: "bán rồi" → FR-184; ảnh vào kho + phân loại + OCR → FR-185; bộ câu hỏi theo loại + cho thuê → FR-186. Còn treo từ chat (chưa có lệnh, chưa mở OPEN riêng): keep-alive 7 ngày + hỏi 1 thông tin thiếu, người thật cướp quyền/trả lại bot, chia tải CTV theo khu vực/trần 15 ca, phân loại ảnh đã có trong kho, hạng theo điểm người rao (OPEN-26) — chưa có lệnh, không tự làm | FR-181…186, FR-173, FR-177, FR-114 |
 | OPEN-43 | 🚫 Đóng 07/09/2026 — gộp vào OPEN-48: phần còn lại (FR-16/95/28/160/118, `?ref=`) đều nằm trong danh mục bỏ/giữ ở đó | SRS-2/4/5, `10 §10.8` |
 | OPEN-44 | 🚫 Đóng 07/09/2026 — gộp vào OPEN-48: SEO nền đã dựng; TOP-100 keyword chết theo OPEN-06; Search Console là việc vận hành, không phải quyết định | FR-12, NFR-09, OPEN-06 |
@@ -192,13 +192,6 @@ liệu (FR-173). Thang riêng cho CTV, khác FR-155.
 điểm chăm khách 4 tiêu chí FR-137.
 **Khuyến nghị BA**: (a), ngưỡng để trong hàm DB; hạng phải kèm hệ quả (ưu tiên đơn? thưởng?) — chốt
 cùng lúc. **Chờ**: chủ dự án.
-
-### OPEN-45 · Design token `06` lệch code
-**Vấn đề**: `06 §6.2`, `design/tokens.json` và `app/globals.css` (đặt theo theme cắt, OPEN-07) là ba
-bản không khớp; wireframe `05` có 6/14 màn chưa dựng (WF-08, WF-11, WF-13…). Việc Figma
-(`design/figma-handoff.md`) đang dựng theo `06` — thứ web không dùng.
-**Phương án**: (a) code làm gốc, sinh lại `tokens.json` từ `globals.css`, sửa `06`; (b) sửa code theo `06`.
-**Khuyến nghị BA**: (a); wireframe chưa dựng gắn nhãn theo OPEN-43. **Chờ**: chủ dự án.
 
 ### OPEN-47 · Tám bảng chưa từng được sao lưu
 **Vấn đề** (soát 05/09/2026): `scripts/sao-luu.mjs` liệt kê tay 22 bảng, DB có 30. Tám
