@@ -43,9 +43,12 @@ const DEAL: Record<"ban" | "cho_thue", Piece> = {
 const TYPE: Array<Piece & { types?: string[]; deals: Array<"ban" | "cho_thue"> }> = [
   { slug: "nha", label: "nhà", types: ["nha_pho", "nha_cap4", "biet_thu"], deals: ["ban", "cho_thue"] },
   { slug: "can-ho", label: "căn hộ", types: ["chung_cu"], deals: ["ban", "cho_thue"] },
-  { slug: "dat", label: "đất", types: ["dat"], deals: ["ban"] },
+  { slug: "dat", label: "đất", types: ["dat", "dat_nong_nghiep", "dat_kinh_doanh"], deals: ["ban"] },
   { slug: "mat-bang", label: "mặt bằng", types: ["mat_bang"], deals: ["cho_thue"] },
   { slug: "phong-tro", label: "phòng trọ", types: ["phong_tro"], deals: ["cho_thue"] },
+  // 20260909i: loại mới theo chat Gemini 21/06.
+  { slug: "toa-nha", label: "toà nhà", types: ["toa_nha"], deals: ["ban", "cho_thue"] },
+  { slug: "kho-xuong", label: "kho xưởng", types: ["kho_xuong"], deals: ["ban", "cho_thue"] },
 ];
 
 // Thuộc tính: chỉ ghép với loại "nhà" (là nhóm có đủ dữ liệu thông số FR-172).

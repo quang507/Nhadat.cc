@@ -134,6 +134,18 @@ for (const [cau, fact, re] of [
   ["tăng 5% mỗi năm", "truot_gia", /5%/], ["trượt giá 10%", "truot_gia", /10%/],
   ["không vướng cột điện hố ga gì", "ha_tang"], ["xây tự do em", "xay_dung"], ["phải xây theo mẫu chủ đầu tư", "xay_dung"],
   ["khu compound an ninh 24/7", "khu_compound"], ["để lại full nội thất", "noi_that"], ["bàn giao nhà trống", "noi_that"],
+  // 20260909i — câu hỏi bù sau đăng + 4 loại mới (chat 21/06 lượt 38, 65–67; chat 07/09).
+  ["nhà 2 wc em", "so_wc", /^2$/], ["cách mặt tiền 50m", "cach_mat_tien", /50m/], ["nở hậu 1.5m", "no_hau", /1.5m/],
+  ["mưa lớn không ngập", "ngap_nuoc"], ["hẻm cụt, xe quay đầu được", "hem_thong"], ["sổ đang thế chấp ngân hàng", "phap_ly"],
+  ["sổ cầm tay", "the_chap"], ["giá còn thương lượng chút", "thuong_luong"], ["nhà đang cho thuê", "hien_trang_su_dung"],
+  ["bán vì đi định cư", "ly_do_ban"], ["gần trường tiểu học", "tien_ich_gan"], ["căn góc 2 mặt thoáng", "can_goc"],
+  ["có thang máy", "thang_may"], ["view sông", "view"], ["pccc nghiệm thu rồi", "pccc"], ["toà 20 phòng cho thuê", "so_phong", /^20$/],
+  ["lấp đầy 90%", "ty_le_lap_day", /90%/], ["doanh thu 80 triệu mỗi tháng", "gia"], ["xưởng cao thông thủy 9m", "chieu_cao", /9m/],
+  ["tải trọng sàn 2 tấn", "tai_trong_san", /2 tấn/], ["trạm 250kva", "tram_bien_ap", /250 kVA/], ["có xử lý nước thải", "xu_ly_nuoc_thai"],
+  ["container 40 feet vào được", "duong_container"], ["lên thổ cư được", "len_tho_cu"], ["có kênh tưới sát đất", "nguon_nuoc"],
+  ["đã cắm cọc ranh", "ranh_gioi"], ["trả tiền thuê đất hàng năm", "hinh_thuc_thue_dat"], ["căn hộ sở hữu 50 năm", "so_huu"],
+  ["đất thời hạn sử dụng đến năm 2060", "thoi_han_su_dung"], ["mật độ xây dựng 60%", "mat_do_xd"], ["lô bóp hậu chút", "hinh_dang"],
+  ["xây tối đa 5 tầng", "tang_cao_toi_da", /^5$/], ["fit-out 15 ngày", "fit_out", /15 ngày/], ["hợp làm showroom", "muc_dich"],
 ]) {
   const nd = nhanDienFact(cau);
   ok(`nhận diện "${cau}" → ${fact}`, nd?.question === fact && (!re || re.test(nd.answer)), JSON.stringify(nd));

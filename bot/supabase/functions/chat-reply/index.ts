@@ -2050,9 +2050,12 @@ Deno.serve(async (req) => {
       );
       // FR-177 a: câu kế = nhóm ưu tiên cao nhất còn thiếu, trong nhóm chọn câu
       // LIÊN QUAN tới điều chủ nhà vừa nói (`chonCauKe`, tiền định).
+      // 20260909i: nhóm `sau_dang` (WC, cách mặt tiền, hẻm thông, ngập, thế chấp, lý do
+      // bán…) chỉ hỏi SAU khi tin lên kệ (cron hỏi bù) — trước bản nháp chỉ đợi
+      // co_ban + chuyen_mon, kẻo chủ nhà bị hỏi 15 câu mới thấy tin.
       const nextKey = published
         ? undefined
-        : chonCauKe([pendingReq.question], (nextFacts ?? []).filter((f) => !pendSet.has(f.fact_key)));
+        : chonCauKe([pendingReq.question], (nextFacts ?? []).filter((f) => !pendSet.has(f.fact_key) && f.nhom !== "sau_dang"));
       // FR-177 c: hết câu cơ bản + chuyên môn (ảnh xin trong bản nháp) và tin
       // đủ 70 điểm → gửi bản nháp thay vì hỏi tiếp. Dưới 70 thì hỏi tiếp và
       // nói rõ còn thiếu gì.
@@ -2262,7 +2265,7 @@ Deno.serve(async (req) => {
         const { data: firstFacts } = await client.from("listing_missing_facts")
           .select("fact_key, nhom").eq("listing_id", newLst.id).order("priority").limit(8);
         const vuaRao = [wardNo ? "phuong" : "", areaM ? "dien_tich" : "", priceM ? "gia" : ""].filter(Boolean);
-        const firstKey = chonCauKe(vuaRao, firstFacts ?? []) ?? null;
+        const firstKey = chonCauKe(vuaRao, (firstFacts ?? []).filter((f) => f.nhom !== "sau_dang")) ?? null;
         if (firstKey) {
           const { error: ir1Err } = await client.from("info_requests").insert({
             listing_id: newLst.id, question: firstKey, status: "pending",

@@ -40,6 +40,11 @@ export const TYPE_LABEL: Record<string, string> = {
   biet_thu: "Biệt thự",
   phong_tro: "Phòng trọ",
   mat_bang: "Mặt bằng",
+  // 20260909i (chat Gemini 21/06 lượt 38): toà nhà dòng tiền, đất nông nghiệp, đất SKC/TMD, kho xưởng.
+  toa_nha: "Toà nhà / CHDV",
+  dat_nong_nghiep: "Đất nông nghiệp",
+  dat_kinh_doanh: "Đất kinh doanh",
+  kho_xuong: "Kho xưởng",
 };
 
 // FR-172 — nhãn cho các cột thông số có cấu trúc (migration 20260902e). Một

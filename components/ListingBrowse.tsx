@@ -62,7 +62,7 @@ type Params = {
 };
 
 // Cột enum có thật — chỉ nhận giá trị trong bảng này, không cho gõ tuỳ ý.
-const LOAI_HOP_LE = new Set(["nha_pho", "nha_cap4", "chung_cu", "dat", "biet_thu", "phong_tro", "mat_bang", "chua_ro"]);
+const LOAI_HOP_LE = new Set(["nha_pho", "nha_cap4", "chung_cu", "dat", "biet_thu", "phong_tro", "mat_bang", "toa_nha", "dat_nong_nghiep", "dat_kinh_doanh", "kho_xuong", "chua_ro"]);
 // Chữ tự do đi vào `ilike`: bỏ ký tự cú pháp của bộ lọc PostgREST (dấu phẩy,
 // ngoặc, %, *) để câu gõ không thành mệnh đề lọc; cắt 60 ký tự.
 const sachIlike = (v?: string) => (v ?? "").replace(/[,()%*"\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);

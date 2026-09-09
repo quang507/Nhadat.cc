@@ -4,10 +4,23 @@
 // bán), lọc, sắp xếp, tìm, tải CSV mở thẳng bằng Excel. Cùng dữ liệu với view
 // `so.ro_hang` phía DB (20260907c) nhưng không cần vào Supabase.
 // 08/09/2026: Bổ sung tính năng SỬA TRỰC TIẾP tại chỗ (Inline Quick Status + Modal Sửa Chi Tiết).
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription, TYPE_LABEL } from "@/lib/format";
+import BocTachNhom, { useBocTach } from "@/components/admin/BocTachNhom";
+
+// FR-187: dòng JSON chia nhóm mở dưới một tin (đọc `boc_tach_v` khi bấm, không tải cả rổ).
+function DongJson({ id, ma, cot }: { id: string; ma: string | null; cot: number }) {
+  const { nhom, loi } = useBocTach(id);
+  return (
+    <tr className="bg-slate-50/70">
+      <td colSpan={cot} className="px-4 py-3">
+        <BocTachNhom ma={ma} nhom={nhom} loi={loi} />
+      </td>
+    </tr>
+  );
+}
 
 type Dong = {
   id: string;
@@ -99,6 +112,8 @@ export default function Page() {
   const [sap, setSap] = useState<{ key: string; tang: boolean }>({ key: "ngay", tang: false });
   const [trang, setTrang] = useState(1);
   const [mo, setMo] = useState<Set<string>>(new Set());
+  // FR-187: tin đang mở JSON chia nhóm.
+  const [moJson, setMoJson] = useState<Set<string>>(new Set());
 
   // Modal chỉnh sửa trực tiếp
   const [dangSua, setDangSua] = useState<Dong | null>(null);
@@ -416,9 +431,11 @@ export default function Page() {
             {mot.map((d) => {
               const moTaFull = COT[5].lay(d);
               const daMo = mo.has(d.id);
+              const daMoJson = moJson.has(d.id);
 
               return (
-                <tr key={d.id} className="align-top hover:bg-slate-50/80 transition">
+                <Fragment key={d.id}>
+                <tr className="align-top hover:bg-slate-50/80 transition">
                   {COT.map((c) => {
                     // Cột mô tả
                     if (c.key === "mo_ta") {
@@ -508,6 +525,14 @@ export default function Page() {
                       >
                         Sửa
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setMoJson((s) => { const n = new Set(s); if (n.has(d.id)) n.delete(d.id); else n.add(d.id); return n; })}
+                        className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition ${daMoJson ? "border-navy bg-navy text-white" : "border-line text-mute hover:text-navy hover:border-slate-400"}`}
+                        title="JSON bóc tách chia nhóm của tin này (FR-187)"
+                      >
+                        JSON
+                      </button>
                       {d.code && (
                         <Link
                           href={`/nha-dat/${encodeURIComponent(d.code)}`}
@@ -521,6 +546,8 @@ export default function Page() {
                     </div>
                   </td>
                 </tr>
+                {daMoJson && <DongJson id={d.id} ma={d.code} cot={COT.length + 1} />}
+                </Fragment>
               );
             })}
             {mot.length === 0 && (
@@ -616,12 +643,9 @@ export default function Page() {
                   onChange={(e) => setFormSua({ ...formSua, property_type: e.target.value })}
                   className="w-full rounded-lg border border-line p-2 text-sm font-semibold bg-white"
                 >
-                  <option value="nha_pho">Nhà phố</option>
-                  <option value="can_ho">Căn hộ</option>
-                  <option value="dat">Đất</option>
-                  <option value="biet_thu">Biệt thự</option>
-                  <option value="mat_bang">Mặt bằng</option>
-                  <option value="phong_tro">Phòng trọ</option>
+                  {/* 20260909i: lấy từ TYPE_LABEL — bản cũ chép tay có `can_ho` không tồn tại trong enum (lưu là lỗi 22P02). */}
+                  <option value="chua_ro">Chưa rõ</option>
+                  {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               </div>
             </div>

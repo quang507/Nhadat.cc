@@ -41,9 +41,16 @@ export class FakeDB {
     const CB = (k, p) => [k, p, "co_ban", null];
     const CM = (k, p, deal = null) => [k, p, "chuyen_mon", deal];
     const THUE_NHA = [CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("truot_gia", 18, "cho_thue")];
+    // 20260909i: nhóm sau_dang — hỏi bù SAU khi lên kệ; chat-reply không đợi nhóm này trước bản nháp.
+    const SD = (k, p) => [k, p, "sau_dang", null];
+    const SAU_NHA = [SD("so_wc", 30), SD("cach_mat_tien", 31), SD("hem_thong", 32), SD("ngap_nuoc", 33), SD("hien_trang_su_dung", 34), SD("the_chap", 35), SD("tien_ich_gan", 36), SD("ly_do_ban", 37), SD("thuong_luong", 38)];
     const REQ = {
+      toa_nha: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("so_phong", 10), CM("ty_le_lap_day", 11), CM("doanh_thu", 12), CM("ket_cau", 13), CM("thang_may", 14), CM("pccc", 15), CM("phap_ly", 16), CM("do_rong_hem", 17), CM("hinh_anh", 19)],
+      dat_nong_nghiep: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("quy_hoach", 10), CM("len_tho_cu", 11), CM("duong_vao", 12), CM("nguon_nuoc", 13), CM("ranh_gioi", 14), CM("phap_ly", 15), CM("hinh_anh", 19)],
+      dat_kinh_doanh: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("thoi_han_su_dung", 10), CM("hinh_thuc_thue_dat", 11), CM("muc_dich", 12), CM("do_rong_duong", 13), CM("phap_ly", 14), CM("hinh_anh", 19)],
+      kho_xuong: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("chieu_cao", 10), CM("tai_trong_san", 11), CM("tram_bien_ap", 12), CM("xu_ly_nuoc_thai", 13), CM("duong_container", 14), CM("phap_ly", 15), CM("thoi_han_su_dung", 16), CM("tien_coc", 17, "cho_thue"), CM("thoi_han_thue", 18, "cho_thue"), CM("hinh_anh", 19)],
       chua_ro: [CB("loai_bds", 1), CB("vi_tri", 2), CB("phuong", 3), CB("gia", 9)],
-      nha_pho: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("ket_cau", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("tiem_nang", 14), ...THUE_NHA, CM("hinh_anh", 19)],
+      nha_pho: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("ket_cau", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("tiem_nang", 14), ...THUE_NHA, CM("hinh_anh", 19), ...SAU_NHA],
       nha_cap4: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("hien_trang", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("tiem_nang", 14), CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
       chung_cu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_tim_tuong", 6), CB("gia", 9), CM("tang", 10), CM("so_phong_ngu", 11), CM("huong", 12), CM("noi_that", 13), CM("phap_ly", 14), CM("phi_quan_ly", 15), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
       dat: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("tho_cu", 8), CB("gia", 9), CM("do_rong_duong", 10), CM("huong", 11), CM("ha_tang", 12), CM("xay_dung", 13), CM("phap_ly", 14), CM("hinh_anh", 19)],
@@ -167,7 +174,11 @@ export class FakeDB {
       // trg_listings_fill_property_type (FR-150): đoán loại từ câu rao.
       if ((r.property_type ?? "chua_ro") === "chua_ro" && r.description) {
         const d = String(r.description).toLowerCase();
-        r.property_type = /chung cư|chung cu|căn hộ|can ho/.test(d) ? "chung_cu" : /\bđất\b|\bdat\b|lô đất/.test(d) ? "dat" : /nhà|nha\b/.test(d) ? "nha_pho" : "chua_ro";
+        r.property_type = /kho bãi|kho xưởng|nhà xưởng|kho xuong|nha xuong/.test(d) ? "kho_xuong"
+          : /nông nghiệp|đất vườn|đất lúa|nong nghiep|dat vuon/.test(d) ? "dat_nong_nghiep"
+          : /skc|tmd|thương mại dịch vụ|sản xuất kinh doanh/.test(d) ? "dat_kinh_doanh"
+          : /căn hộ dịch vụ|chdv|khách sạn|toà nhà|tòa nhà|khach san|toa nha/.test(d) ? "toa_nha"
+          : /chung cư|chung cu|căn hộ|can ho/.test(d) ? "chung_cu" : /\bđất\b|\bdat\b|lô đất/.test(d) ? "dat" : /nhà|nha\b/.test(d) ? "nha_pho" : "chua_ro";
       }
       // (Không chạy quyết định lên kệ lúc chèn: seed cố ý dựng tin "chưa đăng"
       //  có đủ giá/diện tích/phường để kiểm SEC — V4.1/V4.7.)
@@ -550,7 +561,7 @@ class RpcCall {
         l.boc_tach = { ...(l.boc_tach ?? {}), ...sach, _cap_nhat: now() };
         return { data: null, error: null };
       }
-      case "guess_property_type_answer": { const t = String(a.p_text).toLowerCase(); return { data: /nhà phố|nha pho/.test(t) ? "nha_pho" : /chung cư|chung cu/.test(t) ? "chung_cu" : null, error: null }; }
+      case "guess_property_type_answer": { const t = String(a.p_text).toLowerCase(); return { data: /kho|xưởng|xuong/.test(t) ? "kho_xuong" : /nông nghiệp|nong nghiep|đất vườn/.test(t) ? "dat_nong_nghiep" : /skc|tmd|thương mại/.test(t) ? "dat_kinh_doanh" : /dịch vụ|dich vu|khách sạn|toà nhà|tòa nhà/.test(t) ? "toa_nha" : /nhà phố|nha pho/.test(t) ? "nha_pho" : /chung cư|chung cu/.test(t) ? "chung_cu" : null, error: null }; }
       case "mark_listing_interest": {
         // v48 / 20260904f (FR-108): overload có p_buyer_id ghi thêm `interests`
         // (PK buyer_id+listing_id — chèn trùng thì bỏ qua).
