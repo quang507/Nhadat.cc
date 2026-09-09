@@ -261,7 +261,7 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
 v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
-check("TOIUU-07 người bán trả lời câu chờ ≤ 19 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu)", v.n <= 19 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 20 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại)", v.n <= 20 && v.r.body.role === "seller", `${v.n}`);
 v = await vong({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi" });
 check("TOIUU-07b lượt sau của cùng người bán ≤ 18 (không còn update tên trợ lý)", v.n <= 18, `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
