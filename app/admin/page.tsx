@@ -658,6 +658,13 @@ export default function Page() {
             📋 Rổ hàng (như Excel)
           </Link>
           <Link
+            href="/admin/mau-cau"
+            title="FR-180: sửa câu bot thành câu chuẩn — tài sản huấn luyện giọng"
+            className="rounded-full border border-line px-5 py-2 text-sm font-bold text-navy transition hover:border-brand hover:text-brand active:scale-[0.98] shadow-xs bg-white"
+          >
+            ✏️ Mẫu câu chuẩn
+          </Link>
+          <Link
             href="/admin/dang-tin"
             className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98] shadow-xs"
           >

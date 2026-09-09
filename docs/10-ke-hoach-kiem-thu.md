@@ -94,7 +94,7 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
-| `bot/tests/e2e/run.mjs` | 198 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
+| `bot/tests/e2e/run.mjs` | 199 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
 | `bot/tests/e2e/webhook.mjs` | 44 | `bun run e2e` (`chay.sh`) | TS-IDEM2; nhãn `CK-1…8c`, `GUI-1…8` | `zalo-webhook`: chữ ký + replay; gửi đúng-một-lần ra Zalo |
 | `bot/tests/e2e/cong-thieu-bi-mat.mjs` | 4 | `bun run e2e` (`chay.sh`) | TS-SEC2 phần cổng | Thiếu `BRIDGE_SECRET` thì cổng ĐÓNG, không mở. Tiến trình RIÊNG vì `napCauHinh` nhớ tạm 60 s ở tầng module |
 | `bot/tests/fr159-bon-vai.mjs` | 65 | `bun run test:bot` | TS-VAI | Bốn vai người nhắn (FR-159, FR-170) |
@@ -831,6 +831,7 @@ văn model sinh ra (không kiểm tự động được — đọc `so.hoi_thoai
 | TS-KYGUI-22 | e2e H11/H12: rao "cần bán gấp nhà 123/4 an dương vương p9 …" / "… không gấp" | `gap` = true, `boc_tach.gap` = true, `location_raw` = "123/4 an dương vương"; "không gấp" → `gap` = false | ✅ 09/09 |
 | TS-KYGUI-23 | DB sau `20260909a`: `select diem_tin(l) from listings l`; `select * from cron.job where jobname='seller-hoi-bu-tick'`; md5 `bot_prompts` ↔ TS | `chi_tiet.anh` + `so_anh` có; cron */5 1-13; `seller_fewshot` và `seller_script_rules` khớp TS | ✅ 09/09 — áp qua execute_sql + ghi sổ; cron */5 1-13; md5 40de5445… / 5ce10f4a… khớp; diem_tin tin thật 78/89/10 có `anh`, `so_anh`; chat-reply v52, ask-seller v10, escalation-feed v15, nudge v26 |
 | TS-KYGUI-24 | e2e T1/T1b/T2 (FR-179): h-1 nhắn "hello" khi công tắc bật / h-2 khi tắt | h-1 mất tin H + fact + hội thoại + dòng sellers, có câu "(TEST) Em đã xoá…", vai không còn là seller; h-2/h-3 nguyên; tắt công tắc thì "hello" không xoá gì | ✅ 09/09 |
+| TS-KYGUI-25 | FR-180: e2e H8g (mock `mau_cau_fewshot` trả 1 mẫu bán) + DB: `select mau_cau_fewshot('ban', 12)` sau khi sửa 1 câu ở `/admin/mau-cau` + `node scripts/xuat-mau-cau.mjs` | system prompt người bán có "Ví dụ CHUẨN do anh/sếp sửa tay" + câu mẫu; DB trả đúng dòng "- Khách: … → Thái: …"; script ra 2 file JSONL, đếm đúng, nói "chưa đủ 300" | ⏳ e2e ✅ 09/09; DB/script chờ mẫu đầu tiên |
 
 
 ## 10.8 Nghiệm thu theo từng tài liệu (04/09/2026)

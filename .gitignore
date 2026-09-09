@@ -50,3 +50,6 @@ SS/
 *.docx
 *.pptx
 *.xlsx
+
+# FR-180: kết quả train (adapter, GGUF) — nặng và sinh từ chat thật
+train/out/

@@ -309,6 +309,9 @@ class RpcCall {
       case "get_secret":
         return globalThis.__vault ? globalThis.__vault(a.secret_name) : { data: null, error: null };
       // 20260909b — công tắc test: mặc định BẬT trong e2e (như DB test hiện tại).
+      // FR-180: mẫu câu chuẩn cho prompt — e2e đặt globalThis.__mauCau = { ban, mua }.
+      case "mau_cau_fewshot":
+        return { data: (globalThis.__mauCau ?? {})[a.p_phia] ?? "", error: null };
       case "cau_hinh":
         return { data: (globalThis.__cauHinh ?? { test_reset_hello: "1" })[a.p_key] ?? null, error: null };
       case "reset_nguoi_test": {

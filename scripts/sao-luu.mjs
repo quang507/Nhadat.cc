@@ -110,7 +110,7 @@ const BANG = [
   "bot_usage", "buyers", "chat_quota", "conversations", "ctv_daily_reports",
   "ctvs", "curated_lists", "deals", "inbound_events", "inbound_ledger",
   "info_requests", "interests", "listing_facts", "listing_media",
-  "listing_views", "listings", "media", "media_cleanup_queue", "messages",
+  "listing_views", "listings", "mau_cau", "media", "media_cleanup_queue", "messages",
   "projects", "property_events", "ratings_log", "reminders", "required_facts",
   "sellers", "viewings",
 ];

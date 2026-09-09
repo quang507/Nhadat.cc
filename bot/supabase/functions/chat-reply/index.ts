@@ -339,20 +339,33 @@ const cauNhan = (t: "ccrb" | "nmg") =>
 // Client Supabase KHÔNG nhớ tạm: dựng nó rẻ, và bộ e2e thay DB giả giữa các
 // kịch bản bằng cách dựng client mới.
 const NHO_TAM_MS = 60e3;
-type CauHinh = { at: number; gate: string | null; cap: number; P: Record<string, string> };
+type CauHinh = {
+  at: number; gate: string | null; cap: number; P: Record<string, string>;
+  /** FR-180: mẫu câu chuẩn mới nhất theo phía (mau_cau_fewshot), rỗng khi chưa có. */
+  mauBan: string; mauMua: string;
+};
 let nhoCauHinh: CauHinh | null = null;
 async function napCauHinh(client: ReturnType<typeof serviceClient>): Promise<CauHinh> {
   if (nhoCauHinh && Date.now() - nhoCauHinh.at < NHO_TAM_MS) return nhoCauHinh;
-  const [gate, capRaw, { data: promptRows }] = await Promise.all([
+  // FR-180: mẫu câu chuẩn (anh/sếp sửa tay ở /admin/mau-cau) đi cùng lượt nạp
+  // — sửa xong, trong vòng một phút bot đã bắt chước. Lỗi RPC thì coi như
+  // chưa có mẫu, ghi sổ, không chặn lượt trả lời.
+  const [gate, capRaw, { data: promptRows }, mBan, mMua] = await Promise.all([
     secretOf(client, "BRIDGE_SECRET"),
     secretOf(client, "DAILY_MODEL_CALL_CAP"),
     client.from("bot_prompts").select("key, content"),
+    client.rpc("mau_cau_fewshot", { p_phia: "ban", p_n: 12 }),
+    client.rpc("mau_cau_fewshot", { p_phia: "mua", p_n: 12 }),
   ]);
+  if (mBan.error) await ghiLoi(client, "chat-reply mau_cau_fewshot(ban)", mBan.error.message);
+  if (mMua.error) await ghiLoi(client, "chat-reply mau_cau_fewshot(mua)", mMua.error.message);
   nhoCauHinh = {
     at: Date.now(),
     gate,
     cap: Number(capRaw) > 0 ? Number(capRaw) : 1000,
     P: Object.fromEntries((promptRows ?? []).map((r) => [r.key, r.content])),
+    mauBan: String(mBan.data ?? "").trim(),
+    mauMua: String(mMua.data ?? "").trim(),
   };
   return nhoCauHinh;
 }
@@ -498,7 +511,7 @@ Deno.serve(async (req) => {
   // người đọc comment rồi sửa code cho khớp comment, và cửa mở lại.
   // FR-171 h: bí mật cổng + trần lượt + bot_prompts đi chung một lượt nạp,
   // nhớ tạm 60 giây ở tầng module (xem `napCauHinh`).
-  const { gate, cap: dailyCap, P } = await napCauHinh(client);
+  const { gate, cap: dailyCap, P, mauBan, mauMua } = await napCauHinh(client);
   const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const auth = req.headers.get("authorization") ?? "";
   // SEC-11: so hằng thời gian cả hai đường (service key và bí mật cổng).
@@ -803,14 +816,16 @@ Deno.serve(async (req) => {
   const FEES = P.fee_rules ?? FEE_RULES;
   const SELLER_SCRIPT = P.seller_script_rules ?? SELLER_SCRIPT_RULES;
   const SLANG = P.slang_notes ?? SLANG_NOTES;
-  const FEWSHOT = P.buyer_fewshot ?? BUYER_FEWSHOT;
+  // FR-180: mẫu chuẩn thật (nếu có) nối sau few-shot soạn tay, cả hai phía.
+  const MAU_CHUAN_TD = "Ví dụ CHUẨN do anh/sếp sửa tay từ hội thoại thật (FR-180) — ưu tiên bắt chước giọng này hơn mọi ví dụ khác:";
+  const FEWSHOT = (P.buyer_fewshot ?? BUYER_FEWSHOT) + (mauMua ? "\n\n" + MAU_CHUAN_TD + "\n" + mauMua : "");
   const AGREE = P.agree_rules ?? AGREE_RULES;
   // MỘT prefix cho cả ba lượt gọi phía người bán (FR-171 h). Bản cũ r1/r2 dùng
   // TONE+SELLER_SCRIPT còn r3 thêm FEES → hai ô nhớ tạm khác nhau cho một
   // nhánh vốn thưa lượt, gần như luôn trượt và mỗi lần trượt trả 1,25 giá.
   // 170 chữ-máy FEES thừa ở r1/r2 rẻ hơn hẳn một ô nhớ tạm riêng.
   // FR-178: few-shot người bán (giọng AI Ơi Nhà Đất + kịch bản sếp) đi cùng luật.
-  const SELLER_FEW = P.seller_fewshot ?? SELLER_FEWSHOT;
+  const SELLER_FEW = (P.seller_fewshot ?? SELLER_FEWSHOT) + (mauBan ? "\n\n" + MAU_CHUAN_TD + "\n" + mauBan : "");
   const SELLER_SYSTEM = TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + SELLER_FEW + "\n\n" + FEES;
 
   // ─── FR-173 d: NGƯỜI NỘI BỘ (CTV/admin) nhắn "#mã tin: câu trả lời" ──────────

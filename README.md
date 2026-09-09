@@ -12,14 +12,14 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 | 0 | [Định hướng](docs/00-dinh-huong.md) | **BRD hợp nhất Aioinhadat × nhadat.cc** (thương hiệu Aioinhadat, một bot Thái): sản phẩm hôm nay là gì, nhận gì từ SRD AOND, câu khách hỏi đi về CTV, sao Bắc Đẩu, lộ trình 90 ngày, quyết định treo |
 | 0 | [Glossary](docs/00-glossary.md) | Từ điển thuật ngữ (B, S, CCRB, NMG, HXH…) |
 | 1 | [Research](docs/01-research.md) | Insight, persona, mô hình KD, ngân sách, rủi ro |
-| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 154 FR (4 deprecated) · 18 NFR · 5 giả định |
+| 2 | [Requirements](docs/02-requirements.md) | 9 BR · 155 FR (4 deprecated) · 18 NFR · 5 giả định |
 | 3 | [User Flow](docs/03-user-flows.md) | 13 luồng end-to-end |
 | 4 | [Information Architecture](docs/04-information-architecture.md) | Sitemap, URL/SEO, content model |
 | 5 | [Wireframe](docs/05-wireframes.md) | 14 màn hình low-fi |
 | 6 | [UI Design](docs/06-ui-design.md) | Design system + tone giọng chat |
 | 7 | [SRS](docs/07-srs.md) | Kiến trúc, data model, API, 13 tiêu chí nghiệm thu |
 | 8 | [Traceability](docs/08-traceability.md) | Ma trận truy vết BR→FR→UF→WF→SRS→AC |
-| 9 | [Open Issues](docs/09-open-issues.md) | 53 vấn đề — 31 đã chốt hoặc đã đóng (dọn 07/09: 13 mục hướng nhadat.cc 2024 không còn hợp AOND, chốt thêm 04/05/12), 22 còn chờ chủ dự án (OPEN-26/27/28 chốt một phần; OPEN-51/52 dựng lại từ nhánh cũ 08/09; OPEN-53 ảnh đếm tấm 09/09) |
+| 9 | [Open Issues](docs/09-open-issues.md) | 54 vấn đề — 31 đã chốt hoặc đã đóng (dọn 07/09: 13 mục hướng nhadat.cc 2024 không còn hợp AOND, chốt thêm 04/05/12), 23 còn chờ chủ dự án (OPEN-26/27/28 chốt một phần; OPEN-51/52 dựng lại từ nhánh cũ 08/09; OPEN-53 ảnh đếm tấm, OPEN-54 ngưỡng fine-tune 09/09) |
 | 10 | [Kế hoạch kiểm thử](docs/10-ke-hoach-kiem-thu.md) | 4 tầng kiểm thử, bộ test chạy tay kèm kết quả mới nhất |
 | 11 | [Quy trình BA & tester](docs/11-quy-trinh.md) | Hai vòng làm việc, ba cổng, định nghĩa XONG |
 

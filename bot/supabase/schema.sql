@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-09 10:01 (giờ VN)
+-- Sinh lúc: 2026-09-09 10:28 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -300,6 +300,21 @@ END,
   boc_tach jsonb
 );
 
+create table if not exists public.mau_cau (
+  id uuid not null default gen_random_uuid(),
+  message_id uuid,
+  conversation_id uuid,
+  phia text not null,
+  ngu_canh jsonb not null default '[]'::jsonb,
+  cau_bot text not null,
+  cau_chuan text not null,
+  ghi_chu text,
+  dung_lam text not null default 'ca_hai'::text,
+  nguoi_sua text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
 create table if not exists public.media (
   id uuid not null default gen_random_uuid(),
   listing_id uuid not null,
@@ -587,6 +602,18 @@ do $d$ begin
   alter table public.listings add constraint listings_ward_source_check CHECK ((ward_source = ANY (ARRAY['suy_doan'::text, 'chu_xac_nhan'::text, 'admin'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.mau_cau add constraint mau_cau_dung_lam_check CHECK ((dung_lam = ANY (ARRAY['vi_du'::text, 'fine_tune'::text, 'ca_hai'::text, 'bo'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.mau_cau add constraint mau_cau_message_id_key UNIQUE (message_id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.mau_cau add constraint mau_cau_phia_check CHECK ((phia = ANY (ARRAY['ban'::text, 'mua'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.mau_cau add constraint mau_cau_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.media add constraint media_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -727,6 +754,12 @@ do $d$ begin
   alter table public.listings add constraint listings_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES sellers(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.mau_cau add constraint mau_cau_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.mau_cau add constraint mau_cau_message_id_fkey FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.media add constraint media_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -805,6 +838,7 @@ create index if not exists listings_floors_idx ON public.listings USING btree (d
 create index if not exists listings_project_idx ON public.listings USING btree (project_id) WHERE (project_id IS NOT NULL);
 CREATE UNIQUE INDEX listings_project_unit_uniq ON public.listings USING btree (project_id, unit_code) WHERE ((project_id IS NOT NULL) AND (unit_code IS NOT NULL));
 create index if not exists listings_seller_id_idx ON public.listings USING btree (seller_id);
+create index if not exists mau_cau_phia_moi_idx ON public.mau_cau USING btree (phia, updated_at DESC) WHERE (dung_lam = ANY (ARRAY['vi_du'::text, 'ca_hai'::text]));
 create index if not exists media_cleanup_can_lam_idx ON public.media_cleanup_queue USING btree (trang_thai, created_at) WHERE (trang_thai = ANY (ARRAY['cho'::text, 'dang_lam'::text]));
 create index if not exists media_listing_id_idx ON public.media USING btree (listing_id);
 create index if not exists messages_conv_seq_idx ON public.messages USING btree (conversation_id, seq DESC);
@@ -3284,6 +3318,32 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.mau_cau_cham_moc()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin new.updated_at := now(); return new; end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.mau_cau_fewshot(p_phia text, p_n integer DEFAULT 12)
+ RETURNS text
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select string_agg(
+           format('- Khách: "%s" → Thái: "%s"',
+             left(regexp_replace(coalesce((
+               select y->>'noi_dung' from jsonb_array_elements(x.ngu_canh) with ordinality as t(y, i)
+                where y->>'ai' <> 'bot' order by i desc limit 1), '(không có câu khách)'), '\s+', ' ', 'g'), 200),
+             regexp_replace(x.cau_chuan, '\s+', ' ', 'g')),
+           E'\n' order by x.updated_at desc)
+    from (select ngu_canh, cau_chuan, updated_at from public.mau_cau
+           where phia = p_phia and dung_lam in ('vi_du', 'ca_hai')
+           order by updated_at desc limit greatest(1, least(p_n, 40))) x
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.media_cleanup_giu_trang_thai()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -3492,6 +3552,20 @@ begin
 
   return v_prefix || lpad(v_num::text, 4, '0');
 end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.ngu_canh_tin(p_message_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select coalesce(jsonb_agg(jsonb_build_object('ai', x.sender, 'noi_dung', x.body,
+           'luc', to_char(x.created_at at time zone 'Asia/Ho_Chi_Minh', 'DD/MM HH24:MI')) order by x.seq), '[]'::jsonb)
+    from (select m2.sender, m2.body, m2.created_at, m2.seq
+            from public.messages m join public.messages m2 on m2.conversation_id = m.conversation_id and m2.seq < m.seq
+           where m.id = p_message_id order by m2.seq desc limit 8) x
 $function$
 ;
 
@@ -5059,6 +5133,8 @@ drop trigger if exists trg_z_listings_normalize_status on public.listings;
 CREATE TRIGGER trg_z_listings_normalize_status BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_normalize_status();
 drop trigger if exists trg_zz_listings_dang_tin on public.listings;
 CREATE TRIGGER trg_zz_listings_dang_tin BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_quyet_dinh_dang_tin();
+drop trigger if exists trg_mau_cau_cham_moc on public.mau_cau;
+CREATE TRIGGER trg_mau_cau_cham_moc BEFORE UPDATE ON public.mau_cau FOR EACH ROW EXECUTE FUNCTION mau_cau_cham_moc();
 drop trigger if exists trg_media_cleanup_trang_thai on public.media_cleanup_queue;
 CREATE TRIGGER trg_media_cleanup_trang_thai BEFORE UPDATE ON public.media_cleanup_queue FOR EACH ROW EXECUTE FUNCTION media_cleanup_giu_trang_thai();
 drop trigger if exists trg_messages_bump_last_message on public.messages;
@@ -5098,6 +5174,7 @@ alter table public.listing_facts enable row level security;
 alter table public.listing_media enable row level security;
 alter table public.listing_views enable row level security;
 alter table public.listings enable row level security;
+alter table public.mau_cau enable row level security;
 alter table public.media enable row level security;
 alter table public.media_cleanup_queue enable row level security;
 alter table public.messages enable row level security;
@@ -5204,6 +5281,8 @@ drop policy if exists listings_own_read on public.listings;
 create policy listings_own_read on public.listings as permissive for SELECT to authenticated using ((seller_id IN ( SELECT sellers.id
    FROM sellers
   WHERE (sellers.auth_user_id = ( SELECT auth.uid() AS uid)))));
+drop policy if exists mau_cau_admin_all on public.mau_cau;
+create policy mau_cau_admin_all on public.mau_cau as permissive for ALL to authenticated using (la_admin()) with check (la_admin());
 drop policy if exists anon_read_media on public.media;
 create policy anon_read_media on public.media as permissive for SELECT to anon, authenticated using (((approved = true) AND (category = 'photo'::text)));
 drop policy if exists messages_admin_read on public.messages;
@@ -5273,6 +5352,7 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.li
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.listing_photos_v to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.listing_views to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.listings to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.mau_cau to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.media to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.media_cleanup_queue to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.media_mo_coi_db to service_role;
@@ -5310,6 +5390,7 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, UPDATE on public.required_fac
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, UPDATE on public.sellers to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, UPDATE on public.viewings to authenticated;
 grant DELETE, INSERT, SELECT on public.listing_media to authenticated;
+grant DELETE, INSERT, SELECT, UPDATE on public.mau_cau to authenticated;
 grant REFERENCES, SELECT, TRIGGER on public.admins to anon;
 grant REFERENCES, SELECT, TRIGGER on public.agents_public to anon;
 grant REFERENCES, SELECT, TRIGGER on public.agents_public to authenticated;
@@ -5554,6 +5635,12 @@ revoke all on function public.mark_listing_interest(p_codes text[], p_buyer_id u
 grant execute on function public.mark_listing_interest(p_codes text[], p_buyer_id uuid) to service_role;
 revoke all on function public.match_projects(p_text text) from public, anon, authenticated;
 grant execute on function public.match_projects(p_text text) to service_role;
+revoke all on function public.mau_cau_cham_moc() from public, anon, authenticated;
+grant execute on function public.mau_cau_cham_moc() to anon;
+grant execute on function public.mau_cau_cham_moc() to authenticated;
+grant execute on function public.mau_cau_cham_moc() to service_role;
+revoke all on function public.mau_cau_fewshot(p_phia text, p_n integer) from public, anon, authenticated;
+grant execute on function public.mau_cau_fewshot(p_phia text, p_n integer) to service_role;
 revoke all on function public.media_cleanup_giu_trang_thai() from public, anon, authenticated;
 grant execute on function public.media_cleanup_giu_trang_thai() to service_role;
 revoke all on function public.media_cleanup_tick() from public, anon, authenticated;
@@ -5570,6 +5657,9 @@ revoke all on function public.next_listing_code() from public, anon, authenticat
 grant execute on function public.next_listing_code() to service_role;
 revoke all on function public.next_listing_code(p_property_type text, p_district text, p_province text) from public, anon, authenticated;
 grant execute on function public.next_listing_code(p_property_type text, p_district text, p_province text) to service_role;
+revoke all on function public.ngu_canh_tin(p_message_id uuid) from public, anon, authenticated;
+grant execute on function public.ngu_canh_tin(p_message_id uuid) to authenticated;
+grant execute on function public.ngu_canh_tin(p_message_id uuid) to service_role;
 revoke all on function public.nguoi_noi_bo(p_zalo text) from public, anon, authenticated;
 grant execute on function public.nguoi_noi_bo(p_zalo text) to service_role;
 revoke all on function public.nha_luot_gui(p_msg_id text) from public, anon, authenticated;
