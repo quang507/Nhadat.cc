@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-09 15:32 (giờ VN)
+-- Sinh lúc: 2026-09-09 15:44 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -1035,6 +1035,20 @@ begin
   return jsonb_build_object('ok', true);
 end;
 $function$
+;
+
+CREATE OR REPLACE FUNCTION public.admin_xoa_khach(p_zalo text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not public.la_admin() then
+    raise exception 'chỉ admin được xoá khách' using errcode = '42501';
+  end if;
+  return public.reset_nguoi_test(p_zalo);
+end $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean)
@@ -5447,6 +5461,9 @@ grant execute on function public.admin_gan_bds_quan_tam(p_buyer_id uuid, p_code 
 revoke all on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) from public, anon, authenticated;
 grant execute on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) to authenticated;
 grant execute on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) to service_role;
+revoke all on function public.admin_xoa_khach(p_zalo text) from public, anon, authenticated;
+grant execute on function public.admin_xoa_khach(p_zalo text) to authenticated;
+grant execute on function public.admin_xoa_khach(p_zalo text) to service_role;
 revoke all on function public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean) from public, anon, authenticated;
 grant execute on function public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean) to service_role;
 revoke all on function public.ask_seller_drip(p_listing_id uuid) from public, anon, authenticated;
