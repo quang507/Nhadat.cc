@@ -1,6 +1,11 @@
 import { FakeDB } from "./mock-supabase.mjs";
 import { OUT } from "./mock-anthropic.mjs";
 globalThis.__calls = []; globalThis.__db = new FakeDB();
+// 09/09/2026: câu hỏi mẫu + lời chào sửa được ở Dashboard — seed bot_prompts trước lượt đầu
+// (napCauHinh nhớ tạm 60 s, đọc một lần cho cả run). vi_tri đổi câu để chứng minh bản DB đè bản code.
+const seedBotPrompts = (d) => { d.insert("bot_prompts", { key: "cau_hoi_mau", content: JSON.stringify({ vi_tri: "Nhà mình ở đâu vậy {ac}, đường nào số mấy?" }) });
+globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là Thái bên AI Ơi Nhà Đất ạ. Anh/chị đang muốn mua, thuê hay đang có nhà cần bán/cho thuê ạ?\nBên em có anh Thu phụ trách khu vực Sài Gòn, sẽ theo anh/chị tới khi bán được, cho thuê được hay mua được nhà nha." }); };
+seedBotPrompts(globalThis.__db);
 // FR-180: napCauHinh nhớ tạm 60 s ở tầng module → đặt mẫu chuẩn TRƯỚC lượt gọi đầu.
 globalThis.__mauCau = {
   ban: '- Khách: "hẻm 4m xe hơi vào tận nhà" → Thái: "Hẻm 4m ô tô tới cửa thì khách chuộng lắm anh. Nhà mình mấy lầu ạ?"',
@@ -32,7 +37,7 @@ async function send(body, hdr = {}) {
 const db = () => globalThis.__db;
 // `__treTruyVan` phải được xoá ở đây: quên là độ trễ của ca "đua" rỉ sang mọi
 // ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
-function fresh(seed) { globalThis.__db = new FakeDB(); globalThis.__calls = []; globalThis.__model = { parse: () => OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; seed?.(globalThis.__db); }
+function fresh(seed) { globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__model = { parse: () => OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; seed?.(globalThis.__db); }
 function seedKho(d) {
   const sC = d.insert("sellers", { zalo_user_id: "z-ccrb", seller_type: "ccrb", name: "Chị D.", active_listing_id: null }).data;
   const sU = d.insert("sellers", { zalo_user_id: "z-unknown", seller_type: "unknown", name: null, active_listing_id: null }).data;
@@ -56,9 +61,9 @@ const sysText = (c) => c.params.system[1].text;
 // ── VAI 1: người lạ ─────────────────────────────────────────────────────────
 fresh();
 let r = await send({ external_user_id: "la-1", text: "chào em" });
-check("V1.1 lạ 'chào em' → hỏi vai, không gọi model", r.body.hoi_vai === true && /cần rao/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
+check("V1.1 lạ 'chào em' → hỏi vai, không gọi model", r.body.hoi_vai === true && /cần bán\/cho thuê/.test(r.body.reply) && /anh Thu/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
 check("V1.1 cờ hoi_vai lưu trên buyer", db().t.buyers[0]?.preferences?.hoi_vai === true);
-check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /cần rao/.test(m.body)));
+check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /anh Thu/.test(m.body)));
 r = await send({ external_user_id: "la-1", text: "tôi có căn nhà ở phường 4" });
 check("V1.2 trả lời có nhà → mở hồ sơ bán, nhãn chính chủ", db().t.sellers.length === 1 && db().t.sellers[0].seller_type === "ccrb" && r.body.role === "seller", JSON.stringify(r.body));
 check("V1.2 người đó được BÁO nhãn ở bong bóng cuối, KHÔNG kèm biểu phí (FR-176)", /chính chủ/i.test(r.body.replies.at(-1)) && !/1%/.test(r.body.replies.at(-1)), JSON.stringify(r.body.replies));
@@ -73,6 +78,7 @@ check("V1.3 câu rao → tạo tin nháp đúng giá/phường", L && L.ward ===
 // bản, nên rao chưa nói đường/hẻm thì câu đầu là VỊ TRÍ, chưa tới hẻm rộng.
 check("V1.3 rao đủ giá+phường+diện tích nhưng chưa nói đường/hẻm → cho_thong_tin (can_chu_duyet), câu đầu là VỊ TRÍ CỤ THỂ", L?.status === "cho_thong_tin" && L?.can_chu_duyet === true && db().t.info_requests.some((q) => q.listing_id === L?.id && q.question === "vi_tri" && q.status === "pending"), JSON.stringify({ L, ir: db().t.info_requests }));
 check("V1.3 bong bóng đầu 'Em ghi nhận' liệt kê đúng thứ bóc được, không có thứ trống, đứng trước lời chào", /^📝 Em ghi nhận: bán( nhà phố)? · Phường 4, Quận 5 · 50m2 · giá 5 tỷ 8\./.test(r.body.replies[0] ?? "") && r.body.replies.length >= 2 && !/gấp|phòng ngủ/.test(r.body.replies[0]), JSON.stringify(r.body.replies));
+check("V1.3 câu hỏi mẫu vi_tri lấy từ bot_prompts.cau_hoi_mau (đè bản code)", createCalls().some((c) => /Nhà mình ở đâu vậy anh\/chị, đường nào số mấy\?/.test(c.params.messages[0].content)), createCalls().at(-1)?.params.messages[0].content.slice(0, 300));
 check("V1.3 boc_tach ghi ngay lúc tạo: loại giao dịch, phường, giá thô, diện tích; không có khoá null", L?.boc_tach?.loai_giao_dich === "ban" && L?.boc_tach?.phuong === "Phường 4" && /5 tỷ 8/.test(L?.boc_tach?.gia_raw ?? "") && L?.boc_tach?.dien_tich === "50m2" && !("gap" in (L?.boc_tach ?? {})) && !("du_an" in (L?.boc_tach ?? {})), JSON.stringify(L?.boc_tach));
 check("V1.3 rao đã nói 50m2 → diện tích được ghi, drip KHÔNG hỏi lại", L?.area_m2 === 50 && !db().t.info_requests.some((q) => q.listing_id === L?.id && q.question === "dien_tich"), JSON.stringify(db().t.info_requests));
 check("V1.3 giá thô không dính đuôi '50m2'", L && !/m2/.test(L.price_raw), L?.price_raw);

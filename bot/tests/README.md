@@ -17,7 +17,7 @@ bun run test:sec   # TS-SEC thật, DB thật — KHÔNG nằm trong `kiem`, c�
 
 | Bộ | Ca | Lệnh | Giữ bất biến nào |
 |---|---|---|---|
-| `e2e/run.mjs` | 199 | `bun run e2e` (qua `chay.sh`) | Luồng `chat-reply` thật: cổng vào (CỔNG-1…5), bảo mật (SEC-\*), tranh chấp ghi đồng thời (ĐUA-1…4), chống trùng lượt vào (TRÙNG-1…10) |
+| `e2e/run.mjs` | 200 | `bun run e2e` (qua `chay.sh`) | Luồng `chat-reply` thật: cổng vào (CỔNG-1…5), bảo mật (SEC-\*), tranh chấp ghi đồng thời (ĐUA-1…4), chống trùng lượt vào (TRÙNG-1…10) |
 | `e2e/webhook.mjs` | 44 | `bun run e2e` (qua `chay.sh`) | `zalo-webhook`: chữ ký + replay (CK-1…8c), gửi đúng-một-lần ra Zalo (GUI-1…8) |
 | `e2e/cong-thieu-bi-mat.mjs` | 4 | `bun run e2e` (qua `chay.sh`) | Thiếu `BRIDGE_SECRET` thì cổng ĐÓNG, không mở |
 | `fr159-bon-vai.mjs` | 65 | `bun run test:bot` | Bốn vai người nhắn (FR-159, FR-170) |

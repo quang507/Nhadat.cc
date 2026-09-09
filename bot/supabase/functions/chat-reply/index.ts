@@ -23,7 +23,7 @@ import {
   BUYER_PROFILE_FIELDS,
   FACT_LABELS,
   HUMAN_CHAT_RULES,
-  SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau,
+  SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau as cauHoiMauGoc, docCauHoiMau, LOI_CHAO,
   SLANG_NOTES,
   TONE_RULES,
 } from "../_shared/prompts.ts";
@@ -812,6 +812,11 @@ Deno.serve(async (req) => {
   // vòng một phút (nhớ tạm `napCauHinh`), không cần deploy. Không có dòng nào
   // thì dùng bản trong code.
   const TONE = P.tone_rules ?? TONE_RULES;
+  // 09/09/2026: câu hỏi mẫu + lời chào khách mới đọc từ bot_prompts (đè lên code).
+  const { bang: BANG_CAU, loi: loiCauMau } = docCauHoiMau(P.cau_hoi_mau);
+  if (loiCauMau) await ghiLoi(client, "chat-reply bot_prompts.cau_hoi_mau JSON", loiCauMau);
+  const cauHoiMau = (k: string, ac: string) => cauHoiMauGoc(k, ac, BANG_CAU);
+  const LOI_CHAO_DB = (P.loi_chao ?? LOI_CHAO).trim();
   const HUMAN = P.human_chat_rules ?? HUMAN_CHAT_RULES;
   const FEES = P.fee_rules ?? FEE_RULES;
   const SELLER_SCRIPT = P.seller_script_rules ?? SELLER_SCRIPT_RULES;
@@ -2306,8 +2311,8 @@ Deno.serve(async (req) => {
       tinTruoc = count ?? 0;
     }
     if (tinTruoc <= 1) {
-      const cauHoiVai =
-        "Dạ em chào anh/chị, em là Thái bên AI Ơi Nhà Đất ạ. Anh/chị đang muốn tìm mua/thuê nhà, hay đang có bất động sản cần rao ạ?";
+      // 09/09/2026: lời chào ở bot_prompts.loi_chao (có chị Thu), code chỉ là dự phòng.
+      const cauHoiVai = LOI_CHAO_DB;
       const { error: hvErr } = await client.from("messages").insert({
         conversation_id: convId, sender: "bot", body: cauHoiVai,
       });

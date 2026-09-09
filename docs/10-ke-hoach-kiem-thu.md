@@ -94,7 +94,7 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
-| `bot/tests/e2e/run.mjs` | 199 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
+| `bot/tests/e2e/run.mjs` | 200 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10` | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
 | `bot/tests/e2e/webhook.mjs` | 44 | `bun run e2e` (`chay.sh`) | TS-IDEM2; nhãn `CK-1…8c`, `GUI-1…8` | `zalo-webhook`: chữ ký + replay; gửi đúng-một-lần ra Zalo |
 | `bot/tests/e2e/cong-thieu-bi-mat.mjs` | 4 | `bun run e2e` (`chay.sh`) | TS-SEC2 phần cổng | Thiếu `BRIDGE_SECRET` thì cổng ĐÓNG, không mở. Tiến trình RIÊNG vì `napCauHinh` nhớ tạm 60 s ở tầng module |
 | `bot/tests/fr159-bon-vai.mjs` | 65 | `bun run test:bot` | TS-VAI | Bốn vai người nhắn (FR-159, FR-170) |
@@ -822,7 +822,7 @@ văn model sinh ra (không kiểm tự động được — đọc `so.hoi_thoai
 | TS-KYGUI-13 | DB: `select diem_tin(l) from listings l where code = 'BDS-Q5-0174'` | trả `{diem, chi_tiet, thieu[], co_anh}`; tin thiếu diện tích/giá/pháp lý → 28/100 | ✅ 07/09 |
 | TS-KYGUI-14 | DB: đếm tin đang rao có điểm < 70 | 38/164 — nhưng tất cả `can_chu_duyet = false` nên KHÔNG bị kéo xuống `cho_thong_tin` | ✅ 07/09 |
 | TS-KYGUI-15 | DB: `select fact_key, priority, nhom from listing_missing_facts` cho một tin `nha_pho` | cơ bản (1–9) trước chuyên môn (10–19); `huong`/`quy_hoach`/`nam_xay` ≥ 20 | ✅ 07/09 |
-| TS-KYGUI-16 | DB: md5 `bot_prompts` ↔ hằng trong `_shared/prompts.ts` | 4/4 khớp (`tone_rules`, `human_chat_rules`, `seller_script_rules`, `seller_fewshot`) | ✅ 07/09 |
+| TS-KYGUI-16 | DB: md5 `bot_prompts` ↔ hằng trong `_shared/prompts.ts` | 6/6 khớp (`tone_rules`, `human_chat_rules`, `seller_script_rules`, `seller_fewshot`, `cau_hoi_mau` = `CAU_HOI_MAU_TEXT`, `loi_chao` = `LOI_CHAO`) | ✅ 09/09 |
 | TS-KYGUI-17 | Sau deploy `chat-reply`: nhắn thật một lượt rao qua Zalo, đọc `so.hoi_thoai` | mỗi tin dưới 30 từ, có khích lệ thật, không đọc mã tin, không đọc tên trường | ⏭ chờ deploy + bridge |
 | TS-KYGUI-18 | e2e V1.3 (09/09): rao "bán nhà P4 giá 5 tỷ 8 50m2" (chưa nói đường/hẻm) | câu đầu là `vi_tri` (vị trí cụ thể, nhóm cơ bản); `boc_tach` có loại giao dịch/phường/giá thô/diện tích, KHÔNG có khoá null | ✅ 09/09 |
 | TS-KYGUI-19 | e2e H1b: rao "bán nhà hẻm trần bình trọng p4…" | fact `vi_tri` = "hẻm trần bình trọng" → `location_raw`, không hỏi lại vị trí; câu đầu vẫn là hẻm rộng | ✅ 09/09 |

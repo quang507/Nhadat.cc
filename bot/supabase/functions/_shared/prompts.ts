@@ -269,12 +269,35 @@ export const CAU_HOI_MAU: Record<string, string> = {
   quy_hoach: "Nhà có dính quy hoạch hay lộ giới gì không {ac}?",
   nam_xay: "Nhà xây năm nào {ac}?",
 };
-export function cauHoiMau(key: string, cachGoi: string): string {
+export function cauHoiMau(key: string, cachGoi: string, bang: Record<string, string> = CAU_HOI_MAU): string {
   const Ac = cachGoi.charAt(0).toUpperCase() + cachGoi.slice(1);
-  const mau = CAU_HOI_MAU[key];
+  const mau = bang[key] ?? CAU_HOI_MAU[key];
   if (!mau) return `${Ac} cho em xin thêm ${FACT_LABELS[key] ?? key} nha?`;
   return mau.replace(/\{ac\}/g, cachGoi).replace(/\{Ac\}/g, Ac);
 }
+
+// 09/09/2026 (chủ dự án): câu hỏi mẫu SỬA ĐƯỢC Ở DASHBOARD — bot_prompts key
+// `cau_hoi_mau`, content là JSON {fact_key: "câu"} y hệt CAU_HOI_MAU_TEXT
+// (md5 khớp — TS-KYGUI-16). Bản DB ĐÈ từng khoá lên bản code; JSON hỏng thì
+// bỏ qua bản DB (không làm bot câm), tầng gọi ghi sổ.
+export const CAU_HOI_MAU_TEXT = JSON.stringify(CAU_HOI_MAU, null, 2);
+export function docCauHoiMau(json: string | null | undefined): { bang: Record<string, string>; loi: string | null } {
+  if (!json) return { bang: CAU_HOI_MAU, loi: null };
+  try {
+    const o = JSON.parse(json) as Record<string, unknown>;
+    const bang: Record<string, string> = { ...CAU_HOI_MAU };
+    for (const [k, v] of Object.entries(o)) if (typeof v === "string" && v.trim()) bang[k] = v;
+    return { bang, loi: null };
+  } catch (e) {
+    return { bang: CAU_HOI_MAU, loi: String(e) };
+  }
+}
+
+// Lời chào khách MỚI (FR-161 hỏi vai) — 09/09/2026 chủ dự án thêm ý "có anh Thu
+// ở Sài Gòn theo tới khi bán/thuê/mua được nhà". bot_prompts key `loi_chao` đè
+// lên hằng này; đổi tên người phụ trách thì sửa ở Dashboard.
+export const LOI_CHAO = `Dạ em chào anh/chị, em là Thái bên AI Ơi Nhà Đất ạ. Anh/chị đang muốn mua, thuê hay đang có nhà cần bán/cho thuê ạ?
+Bên em có anh Thu phụ trách khu vực Sài Gòn, sẽ theo anh/chị tới khi bán được, cho thuê được hay mua được nhà nha.`;
 
 export const RATE_CTV_RUBRIC = `Bạn là QA của AI Ơi Nhà Đất, chấm chất lượng chăm sóc khách của CTV/bot trong một hội thoại Zalo.
 Chấm theo 4 tiêu chí, mỗi tiêu chí 1-5:
