@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-09 15:44 (giờ VN)
+-- Sinh lúc: 2026-09-09 17:25 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -195,7 +195,8 @@ create table if not exists public.info_requests (
   ctv_id uuid,
   source text not null default 'seller_flow'::text,
   sla_due_at timestamp with time zone,
-  sla_missed_at timestamp with time zone
+  sla_missed_at timestamp with time zone,
+  chu_nha_qua_han_at timestamp with time zone
 );
 
 create table if not exists public.interests (
@@ -222,7 +223,10 @@ create table if not exists public.listing_media (
   mime_type text not null,
   sort_order integer not null default 0,
   is_cover boolean not null default false,
-  created_at timestamp with time zone not null default now()
+  created_at timestamp with time zone not null default now(),
+  nguon text not null default 'kho'::text,
+  mo_ta text,
+  ocr jsonb
 );
 
 create table if not exists public.listing_views (
@@ -419,7 +423,8 @@ create table if not exists public.required_facts (
   property_type property_type not null,
   fact_key text not null,
   priority integer not null default 1,
-  nhom text not null default 'chuyen_mon'::text
+  nhom text not null default 'chuyen_mon'::text,
+  deal listing_deal
 );
 
 create table if not exists public.sellers (
@@ -434,7 +439,8 @@ create table if not exists public.sellers (
   created_at timestamp with time zone not null default now(),
   auth_user_id uuid,
   active_listing_id uuid,
-  xung_ho text
+  xung_ho text,
+  ten_tro_ly text
 );
 
 create table if not exists public.viewings (
@@ -662,9 +668,6 @@ do $d$ begin
   alter table public.required_facts add constraint required_facts_nhom_check CHECK ((nhom = ANY (ARRAY['co_ban'::text, 'chuyen_mon'::text, 'phu'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
-  alter table public.required_facts add constraint required_facts_pkey PRIMARY KEY (property_type, fact_key);
-exception when duplicate_object then null; end $d$;
-do $d$ begin
   alter table public.sellers add constraint sellers_auth_user_id_key UNIQUE (auth_user_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -860,6 +863,8 @@ CREATE UNIQUE INDEX reminders_mot_reengage_cho_idx ON public.reminders USING btr
 CREATE UNIQUE INDEX reminders_mot_sold_moi_tin_idx ON public.reminders USING btree (buyer_id, listing_id) WHERE (kind = 'sold'::text);
 create index if not exists reminders_seller_id_idx ON public.reminders USING btree (seller_id);
 create index if not exists reminders_viewing_id_idx ON public.reminders USING btree (viewing_id);
+CREATE UNIQUE INDEX required_facts_loai_fact_deal_idx ON public.required_facts USING btree (property_type, fact_key, deal) WHERE (deal IS NOT NULL);
+CREATE UNIQUE INDEX required_facts_loai_fact_moi_deal_idx ON public.required_facts USING btree (property_type, fact_key) WHERE (deal IS NULL);
 create index if not exists sellers_active_listing_idx ON public.sellers USING btree (active_listing_id) WHERE (active_listing_id IS NOT NULL);
 create index if not exists viewings_buyer_id_idx ON public.viewings USING btree (buyer_id);
 create index if not exists viewings_listing_id_idx ON public.viewings USING btree (listing_id);
@@ -1961,6 +1966,14 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.chu_nha_han_gio()
+ RETURNS integer
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$ select coalesce(nullif(public.cau_hinh('chu_nha_han_gio'), '')::int, 12) $function$
+;
+
 CREATE OR REPLACE FUNCTION public.chuan_hoa_gia_raw(p_text text)
  RETURNS text
  LANGUAGE plpgsql
@@ -2164,6 +2177,41 @@ begin
       using errcode = 'P0001';
   end if;
   return old;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.diem_nguoi_ban(p_seller_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_type seller_type;
+  v_tb numeric;
+  v_n int;
+  v_he_so numeric := 1;
+  v_diem int;
+begin
+  if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
+    raise exception 'khong du quyen' using errcode = '42501';
+  end if;
+  select seller_type into v_type from sellers where id = p_seller_id;
+  if v_type is null then return null; end if;
+  select avg((public.diem_tin(l)->>'diem')::numeric), count(*)
+    into v_tb, v_n
+    from listings l
+   where l.seller_id = p_seller_id and l.status in ('dang_ban', 'dang_quan_tam', 'cho_thong_tin');
+  if coalesce(v_n, 0) = 0 then
+    return jsonb_build_object('diem', 0, 'diem_tb', 0, 'so_tin', 0, 'he_so', 1);
+  end if;
+  if v_type = 'nmg' then
+    v_he_so := 1 + 0.06 * least(v_n, 10)
+                 + 0.04 * greatest(least(v_n, 30) - 10, 0)
+                 + 0.015 * greatest(v_n - 30, 0);
+  end if;
+  v_diem := least(100, round(v_tb * v_he_so))::int;
+  return jsonb_build_object('diem', v_diem, 'diem_tb', round(v_tb, 1), 'so_tin', v_n, 'he_so', round(v_he_so, 3));
 end $function$
 ;
 
@@ -2700,8 +2748,40 @@ CREATE OR REPLACE FUNCTION public.info_request_sla_tick()
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare r record; n int := 0;
+declare r record; n int := 0; v_ctv ctvs%rowtype;
 begin
+  for r in
+    select q.id, q.question, q.listing_id, l.code, coalesce(nullif(btrim(l.location_raw), ''), l.ward, '?') as dia_chi
+    from info_requests q join listings l on l.id = q.listing_id
+    where q.status = 'pending' and q.source = 'buyer_ask' and q.assignee = 'seller'
+      and q.sla_due_at < now() and q.chu_nha_qua_han_at is null
+    limit 50
+  loop
+    select * into v_ctv from ctvs
+    where active and (zalo_user_id is not null or phone is not null)
+    order by last_assigned_at nulls first, created_at limit 1;
+    if found then
+      update info_requests
+         set assignee = 'ctv', ctv_id = v_ctv.id, chu_nha_qua_han_at = now(),
+             sla_due_at = now() + make_interval(mins => public.ctv_sla_phut())
+       where id = r.id;
+      update ctvs set last_assigned_at = now() where id = v_ctv.id;
+      insert into reminders (kind, listing_id, ctv_id, due_at, note)
+      values ('escalation', r.listing_id, v_ctv.id, now(),
+        'khách hỏi #' || coalesce(r.code, '?') || ' (' || r.dia_chi || '): "' || coalesce(r.question, '')
+        || '". Chủ nhà ' || public.chu_nha_han_gio() || ' giờ chưa trả lời. Anh/chị hỏi chủ rồi nhắn lại em "#'
+        || coalesce(r.code, '?') || ': câu trả lời" trong ' || public.ctv_sla_phut() || ' phút nha.');
+    else
+      update info_requests set assignee = 'admin', chu_nha_qua_han_at = now(), sla_due_at = null where id = r.id;
+      insert into reminders (kind, listing_id, due_at, note)
+      values ('escalation', r.listing_id, now(),
+        '❓ Khách hỏi căn #' || coalesce(r.code, '?') || ': "' || coalesce(r.question, '')
+        || '" — chủ nhà ' || public.chu_nha_han_gio() || ' giờ chưa trả lời, không có CTV. Admin hỏi chủ rồi nhắn bot "#'
+        || coalesce(r.code, '?') || ': câu trả lời".');
+    end if;
+    n := n + 1;
+  end loop;
+
   for r in
     select q.id, q.question, q.buyer_id, q.listing_id, l.code, coalesce(c.name, '?') as ctv_name,
            b.zalo_user_id as buyer_uid, b.name as buyer_name
@@ -3346,15 +3426,19 @@ CREATE OR REPLACE FUNCTION public.mau_cau_fewshot(p_phia text, p_n integer DEFAU
  SET search_path TO 'public'
 AS $function$
   select string_agg(
-           format('- Khách: "%s" → Thái: "%s"',
+           format('- Khách: "%s" → Trợ lý: "%s"',
              left(regexp_replace(coalesce((
                select y->>'noi_dung' from jsonb_array_elements(x.ngu_canh) with ordinality as t(y, i)
                 where y->>'ai' <> 'bot' order by i desc limit 1), '(không có câu khách)'), '\s+', ' ', 'g'), 200),
              regexp_replace(x.cau_chuan, '\s+', ' ', 'g')),
            E'\n' order by x.updated_at desc)
-    from (select ngu_canh, cau_chuan, updated_at from public.mau_cau
-           where phia = p_phia and dung_lam in ('vi_du', 'ca_hai')
-           order by updated_at desc limit greatest(1, least(p_n, 40))) x
+    from (
+      select ngu_canh, cau_chuan, updated_at
+        from public.mau_cau
+       where phia = p_phia and dung_lam in ('vi_du', 'ca_hai')
+       order by updated_at desc
+       limit greatest(1, least(p_n, 40))
+    ) x
 $function$
 ;
 
@@ -3651,6 +3735,10 @@ AS $function$
     when 'thoi_han_thue' then 'thời hạn thuê' when 'san_vuon' then 'sân vườn'
     when 'hinh_anh' then 'hình ảnh' when 'tiem_nang' then 'tiềm năng sử dụng'
     when 'bo_sung' then 'thông tin bổ sung' when 'duyet_tin' then 'duyệt bản nháp tin'
+    when 'danh_gia' then 'chấm điểm chăm sóc'
+    when 'ha_tang' then 'hạ tầng lô đất (cột điện, hố ga)' when 'xay_dung' then 'xây tự do hay theo mẫu'
+    when 'khu_compound' then 'khu biệt lập / an ninh' when 'tien_coc' then 'tiền cọc'
+    when 'truot_gia' then 'trượt giá thuê' when 'ngung_rao_can_nao' then 'căn muốn ngưng rao'
     else coalesce(nullif(btrim(p_key), ''), 'thông tin')
   end;
 $function$
@@ -3703,10 +3791,13 @@ declare
   v_code   text;
   v_seller uuid;
   v_hoi    text;
+  v_dia_chi text;
+  v_goi    text;
 begin
-  if coalesce(new.question, '') in ('xac_nhan_lich', 'con_ban') then return new; end if;  -- 20260904f
+  if coalesce(new.question, '') in ('xac_nhan_lich', 'con_ban') then return new; end if;
 
-  select l.code, l.seller_id into v_code, v_seller from listings l where l.id = new.listing_id;
+  select l.code, l.seller_id, coalesce(nullif(btrim(l.location_raw), ''), l.ward, 'của mình')
+    into v_code, v_seller, v_dia_chi from listings l where l.id = new.listing_id;
   v_hoi := coalesce(new.question, 'thông tin');
 
   if new.assignee = 'admin' then
@@ -3730,16 +3821,14 @@ begin
         || ' · tin không có chính chủ trên hệ thống → giao ctv');
     end if;
 
-  -- CHỈ báo chủ nhà khi câu hỏi ĐẾN TỪ KHÁCH. Vòng drip (`seller_flow`,
-  -- `seller_drip`) là bot đang hỏi họ ngay trong chat — bắn thêm một tin
-  -- "khách đang quan tâm… cần bổ sung: dien_tich_dat" vừa dội vừa nói sai:
-  -- không có khách nào cả. Bắt 08/09/2026 từ log Zalo của chủ dự án.
   elsif new.assignee = 'seller' and v_seller is not null
         and coalesce(new.source, '') = 'buyer_ask' then
+    select coalesce(xung_ho, 'anh/chị') into v_goi from sellers where id = v_seller;
     insert into reminders (kind, listing_id, seller_id, due_at, note)
     values ('escalation', new.listing_id, v_seller, now(),
-      'khách đang quan tâm căn #' || coalesce(v_code, '?') || ' của mình, cần bổ sung: '
-      || public.nhan_fact(v_hoi));
+      '💬 ' || initcap(left(v_goi, 1)) || substr(v_goi, 2) || ' ơi, có khách đang hỏi căn ' || v_dia_chi
+      || ': "' || v_hoi || '". ' || initcap(left(v_goi, 1)) || substr(v_goi, 2)
+      || ' trả lời giúp em ở đây để em báo khách liền nha.');
   end if;
   return new;
 end $function$
@@ -3930,14 +4019,15 @@ declare
 begin
   if new.assignee is not null then return new; end if;
 
-  if coalesce(new.source, '') <> 'buyer_ask' then
-    select s.zalo_user_id into v_seller_zalo
-    from listings l join sellers s on s.id = l.seller_id
-    where l.id = new.listing_id;
-    if v_seller_zalo is not null then
-      new.assignee := 'seller';
-      return new;
+  select s.zalo_user_id into v_seller_zalo
+  from listings l join sellers s on s.id = l.seller_id
+  where l.id = new.listing_id;
+  if v_seller_zalo is not null then
+    new.assignee := 'seller';
+    if new.source = 'buyer_ask' then
+      new.sla_due_at := now() + make_interval(hours => public.chu_nha_han_gio());
     end if;
+    return new;
   end if;
 
   select * into v_ctv from ctvs
@@ -4701,7 +4791,9 @@ create or replace view public.seller_ranks with (security_invoker = true) as
     COALESCE(c.active, 0::bigint)::integer AS active_count,
     COALESCE(c.closed, 0::bigint)::integer AS closed_count,
     COALESCE(c.total, 0::bigint)::integer AS total_count,
-    seller_rank(s.seller_type, COALESCE(c.active, 0::bigint)::integer, COALESCE(c.closed, 0::bigint)::integer, COALESCE(c.total, 0::bigint)::integer) AS rank
+    seller_rank(s.seller_type, COALESCE(c.active, 0::bigint)::integer, COALESCE(c.closed, 0::bigint)::integer, COALESCE(c.total, 0::bigint)::integer) AS rank,
+    (diem_nguoi_ban(s.id) ->> 'diem'::text)::integer AS diem_nguoi_rao,
+    s.ten_tro_ly
    FROM sellers s
      LEFT JOIN LATERAL ( SELECT count(*) FILTER (WHERE l.status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text])) AS active,
             count(*) FILTER (WHERE l.status = 'da_chot'::text) AS closed,
@@ -5073,7 +5165,7 @@ create or replace view public.listing_missing_facts as
     rf.priority,
     rf.nhom
    FROM listings l
-     JOIN required_facts rf ON rf.property_type = COALESCE(l.property_type, 'chua_ro'::property_type)
+     JOIN required_facts rf ON rf.property_type = COALESCE(l.property_type, 'chua_ro'::property_type) AND (rf.deal IS NULL OR rf.deal = l.deal)
      LEFT JOIN listing_facts lf ON lf.listing_id = l.id AND lf.question = rf.fact_key
   WHERE lf.id IS NULL AND rf.nhom <> 'phu'::text AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'vi_tri'::text AND COALESCE(btrim(l.location_raw), ''::text) <> ''::text OR rf.fact_key = 'hinh_anh'::text AND (EXISTS ( SELECT 1
            FROM listing_media m
@@ -5524,6 +5616,8 @@ grant execute on function public.che_sdt(p text) to authenticated;
 grant execute on function public.che_sdt(p text) to service_role;
 revoke all on function public.chon_viec_don_chet() from public, anon, authenticated;
 grant execute on function public.chon_viec_don_chet() to service_role;
+revoke all on function public.chu_nha_han_gio() from public, anon, authenticated;
+grant execute on function public.chu_nha_han_gio() to service_role;
 revoke all on function public.chuan_hoa_gia_raw(p_text text) from public, anon, authenticated;
 grant execute on function public.chuan_hoa_gia_raw(p_text text) to anon;
 grant execute on function public.chuan_hoa_gia_raw(p_text text) to authenticated;
@@ -5548,6 +5642,9 @@ grant execute on function public.ctv_sla_phut() to authenticated;
 grant execute on function public.ctv_sla_phut() to service_role;
 revoke all on function public.deals_chan_xoa_da_chot() from public, anon, authenticated;
 grant execute on function public.deals_chan_xoa_da_chot() to service_role;
+revoke all on function public.diem_nguoi_ban(p_seller_id uuid) from public, anon, authenticated;
+grant execute on function public.diem_nguoi_ban(p_seller_id uuid) to authenticated;
+grant execute on function public.diem_nguoi_ban(p_seller_id uuid) to service_role;
 revoke all on function public.diem_tin(l listings) from public, anon, authenticated;
 grant execute on function public.diem_tin(l listings) to service_role;
 revoke all on function public.diem_tin(p_listing_id uuid) from public, anon, authenticated;

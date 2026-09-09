@@ -20,7 +20,7 @@ type Tin = { id: string; sender: string; body: string; seq: number; created_at: 
 type Mau = { id: string; message_id: string | null; conversation_id: string | null; cau_chuan: string; dung_lam: string };
 
 const AI_VI: Record<string, string> = {
-  bot: "Thái", buyer: "Khách", seller: "Chủ nhà", human: "Người thật", ctv: "CTV", system: "Hệ thống",
+  bot: "Trợ lý", buyer: "Khách", seller: "Chủ nhà", human: "Người thật", ctv: "CTV", system: "Hệ thống",
 };
 const luc = (s: string | null) => s ? new Date(s).toLocaleString("vi-VN", { hour12: false }) : "";
 const gioNgan = (s: string | null) => {

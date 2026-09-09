@@ -5,7 +5,7 @@ tự chốt (quy ước 2, `CLAUDE.md`). Mục đã chốt hoặc đã đóng ch
 thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm trong lịch sử git. Ký hiệu:
 ✅ đã chốt · 🚫 đóng vì không còn hợp hướng AOND · 🟡 chốt một phần (vẫn tính còn chờ).
 
-## Còn chờ chủ dự án (20)
+## Còn chờ chủ dự án (19)
 
 | ID | Vấn đề | Mức | Liên quan |
 |---|---|---|---|
@@ -19,7 +19,6 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-27 | 🟡 **CHỐT MỘT PHẦN 03/09** — địa bàn = Sài Gòn phường mới + Long An, khởi điểm Quận 5 cũ (FR-174 đợt 1); còn: tên hiển thị, lưu DB, mã tin, thứ tự mở | Cao | FR-118, FR-174, BR-01 |
 | OPEN-28 | 🟡 **CHỐT MỘT PHẦN 02/09** — nhãn CCRB/NMG gán lúc mở hồ sơ từ chat; còn: chính chủ rao tin thứ 3 có tự lật sang NMG (FR-160) và phí có đổi theo? | Cao | FR-160, BR-05 |
 | OPEN-31 | Bậc nguồn: admin cầm sổ đỏ mà chủ nhà nhớ nhầm thì ai thắng? (FR-164 khoá cột sau `chu_xac_nhan`) | Trung bình | FR-164, FR-156 |
-| OPEN-32 | Ảnh chủ nhà gửi qua chat (kể cả ảnh sổ) thành fact `hinh_anh` rồi gửi thẳng cho khách — nằm ngoài hàng rào hai bucket | Cao | FR-165, FR-143, FR-129 |
 | OPEN-33 | Webhook Zalo không kiểm chữ ký vì Vault thiếu `ZALO_APP_SECRET`/`ZALO_APP_ID` — ai cũng giả được tin đến | Cao | FR-167, SRS-4.4 |
 | OPEN-34 | Gộp `zalo-webhook` → `chat-reply` thành một lambda? | Trung bình | FR-171, SRS-2 |
 | OPEN-35 | Nhắc lời hứa / hỏi thăm khách im: mẫu câu cố định hay lượt model? | Thấp | FR-133, FR-171 |
@@ -35,7 +34,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-51 | **Token Zalo OA sống 25 tiếng, không ai làm mới** — việc đã viết xong trên nhánh `claude/sua-25-loi` (commit `70a63ab`) nhưng chưa từng vào `main` và chưa từng áp lên DB. Chưa đau vì bot đang đi bridge zca-js, không dùng OA API | Thấp | FR-152, NFR-18, OPEN-46 |
 | OPEN-52 | **Trần lượt đếm theo thứ người gọi tự đặt được** (`external_user_id`) — xoay id là bộ đếm về 0. Bản vá `rate_counters` cũng nằm ở `70a63ab`, chưa merge | Thấp | FR-146, FR-151, SEC-02 |
 
-## Đã chốt / đã đóng (32)
+## Đã chốt / đã đóng (34)
 
 | ID | Kết luận | Liên quan |
 |---|---|---|
@@ -62,7 +61,9 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-30 | ✅ **ĐÃ CHỐT 28/08/2026** — mọi lệnh gọi model bọc try/catch + `ghiLoi` + câu mẫu (chat-reply v40, nudge v14+) | FR-152, FR-161 |
 | OPEN-36 | ✅ **ĐÃ CHỐT 02/09/2026** — lưu hết thông tin chủ chia sẻ, khách hỏi mới khai; liên hệ chỉ mở lúc chốt lịch xem | INS-11, FR-104 |
 | OPEN-37 | 🚫 Đóng 07/09/2026 — không còn hợp hướng: lớp POI/quy hoạch/ngập thuộc nhóm A của OPEN-48; quy hoạch vẫn là câu hỏi lại chủ (DH-02 #3) | FR-28, INS-13, OPEN-40 |
-| OPEN-39 | ✅ **ĐÃ CHỐT 03/09/2026** — thương hiệu Aioinhadat, MỘT trợ lý tên Thái, không nhận kho tên •ai của AOND | OPEN-08, FR-20, DH-01 |
+| OPEN-32 | ✅ **ĐÃ CHỐT 09/09/2026** — phương án (b): ảnh chat kéo về kho rồi phân loại; giấy tờ / không phân loại được → `listing-private`, ảnh nhà → `listing-public`, sổ đọc diện tích đối chiếu (FR-185) | FR-185, FR-165 |
+| OPEN-39 | ✅ **CHỐT LẠI 09/09/2026** (đảo bản 03/09) — thương hiệu Aioinhadat giữ; trợ lý KHÔNG còn một tên Thái: mỗi khách một tên riêng từ kho •ai (T•ai, Kh•ai… 20 tên, viết hoa chữ đầu, không P•ai), gán tất định theo Zalo ID và giữ suốt (FR-181). Bản 03/09 "một tên Thái" chạy 03–09/09 | OPEN-08, FR-181, DH-01 |
+| OPEN-55 | ✅ **ĐÃ CHỐT 09/09/2026** — chủ dự án đọc lại chat Gemini "AI Ơi Nhà Đất" 21–27/06 (share) + chat 07/09 (PDF) rồi chốt 14 dòng chat ↔ hệ thống: (1) kênh Zalo cá nhân qua bridge, chỉ gửi chữ — GIỮ (nút bấm chờ OA); (2) mỗi khách một tên T•ai, Kh•ai… — THEO CHAT → FR-181; (3) loại BĐS trước, vị trí linh hoạt — GIỮ (sếp 07/09); (4) hỏi hướng — THEO CHAT cho chung cư và đất, nhà phố vẫn không → FR-186; (5) hỏi đúng một thông tin — GIỮ; (6) gán nhãn tự động, không nêu phí — GIỮ; (7) khách hỏi thứ thiếu → bot hỏi CHỦ NHÀ trước, 12 giờ không hồi âm mới hỏi CTV — MỚI → FR-173 a; (8) lên kệ khi đủ giá + diện tích + phường hoặc 70 điểm, ảnh 10 điểm, sổ không bắt buộc — GIỮ; (9) hỏi địa chỉ nêu lý do "kiểm tra giá thị trường khu vực" — THEO CHAT (đảo quyết định sáng 09/09 "bỏ định giá"; bot vẫn không đưa con số) → FR-177 h; (10) có CẢ điểm từng tin và điểm người rao — THEO CHAT → FR-183; (11) nhịp hỏi bù 5 phút / 30 phút / 3 câu/ngày / 2 căn/người, KHÔNG luật 7 ngày Zalo — GIỮ; (12) bot tự nêu kiến thức dự án ("Sunrise City có hồ bơi Olympic") — THEO CHAT → FR-114 d; (13) SharePoint/Power Automate/Dialogflow — không nhận, Supabase; (14) domain aioinhadat.vercel.app — GIỮ. Thêm: "bán rồi" → FR-184; ảnh vào kho + phân loại + OCR → FR-185; bộ câu hỏi theo loại + cho thuê → FR-186. Còn treo từ chat (chưa có lệnh, chưa mở OPEN riêng): keep-alive 7 ngày + hỏi 1 thông tin thiếu, người thật cướp quyền/trả lại bot, chia tải CTV theo khu vực/trần 15 ca, phân loại ảnh đã có trong kho, hạng theo điểm người rao (OPEN-26) — chưa có lệnh, không tự làm | FR-181…186, FR-173, FR-177, FR-114 |
 | OPEN-43 | 🚫 Đóng 07/09/2026 — gộp vào OPEN-48: phần còn lại (FR-16/95/28/160/118, `?ref=`) đều nằm trong danh mục bỏ/giữ ở đó | SRS-2/4/5, `10 §10.8` |
 | OPEN-44 | 🚫 Đóng 07/09/2026 — gộp vào OPEN-48: SEO nền đã dựng; TOP-100 keyword chết theo OPEN-06; Search Console là việc vận hành, không phải quyết định | FR-12, NFR-09, OPEN-06 |
 | OPEN-46 | 🚫 Đóng 07/09/2026 — đã giảm nhẹ 05/09, không còn gì để chốt: `soat-migration.mjs` chặn trôi, `schema.sql` là lưới dựng lại; nội dung 41 migration mất vĩnh viễn | NFR-04, `bot/README.md` |

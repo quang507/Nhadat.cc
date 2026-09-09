@@ -4,8 +4,9 @@
 //   laDongY       — chủ nhà gật bản nháp (AGREE_RULES, bản không model)
 // Chạy: bun bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs
 import {
-  chonCauKe, laDongY, laDuRoi, laGap, nhanDienFact, phanLoaiCauTraLoi,
+  chonCanTheoCau, chonCauKe, laDongY, laDuRoi, laGap, laNgungRao, nhanDienFact, phanLoaiCauTraLoi,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { cauHoiMau, KHO_TEN_TRO_LY, tenTroLy, dienTen } from "../supabase/functions/_shared/prompts.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chiTiet = "") => { tong++; if (!dat) { hong++; console.log(`✗ ${ten}\n     → ${chiTiet}`); } else console.log(`✓ ${ten}`); };
@@ -99,6 +100,65 @@ for (const s of ["bán gấp nhà p4 5 tỷ", "cần bán gấp", "bán nhanh tr
 for (const s of ["bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8", "không gấp, từ từ cũng được", "chưa gấp đâu em", "ko gấp", "nhà gấp đôi nhà bên", ""]) {
   ok(`không gấp: "${s}"`, laGap(s) === false);
 }
+
+// ── FR-184 — laNgungRao: chủ nhà báo "bán rồi" (da_chot) / "ngưng bán" (an) ────
+for (const s of ["bán rồi em", "căn đó anh bán được rồi nhé", "đã bán", "có người thuê rồi", "nhà đã cho thuê rồi", "nhận cọc rồi em", "đã nhận cọc", "chốt rồi", "bán xong rồi", "có khách mua rồi", "vừa sang tên xong"]) {
+  ok(`bán rồi: "${s}"`, laNgungRao(s) === "ban_roi", String(laNgungRao(s)));
+}
+for (const s of ["ngưng bán nha em", "không bán nữa", "rút tin giúp anh", "gỡ tin đi em", "thôi không bán nữa, để lại ở", "huỷ ký gửi", "dừng rao nhé"]) {
+  ok(`rút: "${s}"`, laNgungRao(s) === "rut", String(laNgungRao(s)));
+}
+for (const s of ["chưa bán", "vẫn đang bán nha", "bán rồi hả em?", "bán nhà 5 tỷ", "chốt giá 5 tỷ", "ok đăng đi em", "sổ hồng riêng rồi", "hẻm 4m", "", "còn bán em", "bán chưa em?", "đã bàn với vợ, để 6 tỷ"]) {
+  ok(`không phải báo ngưng: "${s}"`, laNgungRao(s) === null, String(laNgungRao(s)));
+}
+
+// ── FR-184 — chonCanTheoCau: nhiều căn, chủ nhà chỉ căn nào ─────────────────
+const CANS = [
+  { id: "a", location_raw: "hẻm 123 Trần Bình Trọng", ward: "Phường 4", code: "BDS-Q5-0001" },
+  { id: "b", location_raw: "99 Nguyễn Trãi", ward: "Phường 3", code: "BDS-Q5-0002" },
+  { id: "c", location_raw: "7 Hồng Bàng", ward: "Phường 12", code: "BDS-Q5-0003" },
+];
+ok("chọn theo số thứ tự '2'", chonCanTheoCau("2", CANS)?.id === "b");
+ok("chọn theo 'căn 3'", chonCanTheoCau("căn 3 nha", CANS)?.id === "c");
+ok("chọn theo 'cái đầu'", chonCanTheoCau("cái đầu tiên", CANS)?.id === "a");
+ok("chọn theo địa chỉ 'trần bình trọng'", chonCanTheoCau("căn trần bình trọng đó em", CANS)?.id === "a");
+ok("chọn theo 'nguyễn trãi'", chonCanTheoCau("nguyễn trãi", CANS)?.id === "b");
+ok("chọn theo phường 'p12'", chonCanTheoCau("căn bên p12", CANS)?.id === "c");
+ok("không rõ → null", chonCanTheoCau("căn kia đó", CANS) === null);
+ok("số ngoài danh sách → null", chonCanTheoCau("9", CANS) === null);
+ok("một căn → chọn luôn", chonCanTheoCau("gì cũng được", [CANS[1]])?.id === "b");
+
+// ── FR-186 — fact mới (cho thuê, đất, biệt thự) trong nhanDienFact ──────────
+for (const [cau, fact, re] of [
+  ["cọc 2 tháng em", "tien_coc", /2 tháng/], ["cọc 1 đóng 3", "tien_coc", /1 tháng/],
+  ["tăng 5% mỗi năm", "truot_gia", /5%/], ["trượt giá 10%", "truot_gia", /10%/],
+  ["không vướng cột điện hố ga gì", "ha_tang"], ["xây tự do em", "xay_dung"], ["phải xây theo mẫu chủ đầu tư", "xay_dung"],
+  ["khu compound an ninh 24/7", "khu_compound"], ["để lại full nội thất", "noi_that"], ["bàn giao nhà trống", "noi_that"],
+]) {
+  const nd = nhanDienFact(cau);
+  ok(`nhận diện "${cau}" → ${fact}`, nd?.question === fact && (!re || re.test(nd.answer)), JSON.stringify(nd));
+}
+ok("chonCauKe: chung cư trả lời tầng → hỏi phòng ngủ",
+  chonCauKe(["tang"], [{ fact_key: "huong", priority: 12, nhom: "chuyen_mon" }, { fact_key: "so_phong_ngu", priority: 11, nhom: "chuyen_mon" }]) === "so_phong_ngu");
+ok("chonCauKe: chung cư trả lời phòng ngủ → hỏi hướng ban công",
+  chonCauKe(["so_phong_ngu"], [{ fact_key: "noi_that", priority: 13, nhom: "chuyen_mon" }, { fact_key: "huong", priority: 12, nhom: "chuyen_mon" }]) === "huong");
+ok("chonCauKe: đất trả lời đường → hỏi hướng",
+  chonCauKe(["do_rong_duong"], [{ fact_key: "ha_tang", priority: 12, nhom: "chuyen_mon" }, { fact_key: "huong", priority: 11, nhom: "chuyen_mon" }]) === "huong");
+ok("chonCauKe: đất trả lời hạ tầng → hỏi xây tự do/theo mẫu",
+  chonCauKe(["ha_tang"], [{ fact_key: "phap_ly", priority: 14, nhom: "chuyen_mon" }, { fact_key: "xay_dung", priority: 13, nhom: "chuyen_mon" }]) === "xay_dung");
+ok("chonCauKe: cho thuê trả lời cọc → hỏi thời hạn thuê",
+  chonCauKe(["tien_coc"], [{ fact_key: "truot_gia", priority: 18, nhom: "chuyen_mon" }, { fact_key: "thoi_han_thue", priority: 17, nhom: "chuyen_mon" }]) === "thoi_han_thue");
+ok("câu mẫu hướng riêng cho chung cư", /ban công/i.test(cauHoiMau("huong", "anh", undefined, "chung_cu")));
+ok("câu mẫu hướng riêng cho đất", /lô đất/i.test(cauHoiMau("huong", "anh", undefined, "dat")));
+ok("câu mẫu hướng chung (nhà phố) không đổi", /quay hướng nào/i.test(cauHoiMau("huong", "anh", undefined, "nha_pho")));
+ok("câu mẫu địa chỉ nêu lý do giá thị trường khu vực (chốt 09/09 chiều)", /giá thị trường khu vực/.test(cauHoiMau("vi_tri", "anh")));
+
+// ── FR-181 — tên trợ lý theo khách: tất định, trong kho, giữ nguyên ─────────
+ok("kho tên có 20 tên, có T•ai và Kh•ai, không có P•ai", KHO_TEN_TRO_LY.length === 20 && KHO_TEN_TRO_LY.includes("T•ai") && KHO_TEN_TRO_LY.includes("Kh•ai") && !KHO_TEN_TRO_LY.includes("P•ai"));
+ok("cùng Zalo ID → cùng tên", tenTroLy("zalo-123") === tenTroLy("zalo-123"));
+ok("tên luôn nằm trong kho", ["a", "b", "c", "zalo-9", "7158321"].every((u) => KHO_TEN_TRO_LY.includes(tenTroLy(u))));
+ok("khác ID có thể khác tên (ít nhất 3 tên trong 40 ID)", new Set(Array.from({ length: 40 }, (_, i) => tenTroLy(`u${i}`))).size >= 3);
+ok("dienTen điền mọi {ten}", dienTen("em là {ten}, {ten} đây", "T•ai") === "em là T•ai, T•ai đây");
 
 console.log(hong ? `\nFR-177: ${hong}/${tong} CA HỎNG` : `\nFR-177: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
