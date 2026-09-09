@@ -75,6 +75,8 @@ flowchart TD
   IN -.->|nhắc tên dự án| DA[match_projects → gắn project_id<br/>khối DỰ ÁN vào ngữ cảnh model]
 ```
 
+**Bài học 09/09 tối (chạy 12 kịch bản thật, TS-KYGUI-34):** trước khi có bước "hỏi `nhanDienFact` TRƯỚC", câu trả lời hay bị ghi lệch một ô — model tự hỏi câu kế trong khi DB còn treo câu cũ, và các nhánh số chỉ hỏi "có số không". Nay: (1) tiền kiểm fact khác họ → lệch + chuyển sang; (2) model bị buộc hỏi đúng câu đang chờ; (3) một câu nhiều fact thì ghi hết.
+
 **Tại sao lệch câu không ghi:** "Ngang 5" khi đang hỏi diện tích → `chuyenSang: mat_tien`,
 ghi đúng chỗ, câu diện tích vẫn treo. "Kêu chị nha" → `xung_ho`, nhớ rồi hỏi lại. Câu có/không
 (`HOI_CO_KHONG`: hẻm thông, ngập, thế chấp…) thì "không", "cụt", "cầm tay" là đáp án thật,

@@ -89,7 +89,7 @@ const TU_KHOA: Record<string, RegExp> = {
   loai_bds: /\b(nha|pho|cap 4|chung cu|can ho|dat|biet thu|phong tro|mat bang|kho|xuong)\b/,
   // Vị trí cụ thể (chủ dự án 09/09/2026: "hỏi vị trí cụ thể thì tốt hơn"):
   // tên đường / hẻm / số nhà / mốc gần — hoặc có số (số nhà, số hẻm).
-  vi_tri: /\b(duong|hem|hxh|so|pho|ngo|kdc|khu|toa|chung cu|cu xa|lo|kp|ap|xa|phuong|quan|gan|doi dien|nga|cho|truong|benh vien|cong vien|du an|block|thap)\b|\d/,
+  vi_tri: /\b(duong|hem|hxh|so|pho|ngo|kdc|khu|toa|chung cu|cu xa|lo|kp|ap|xa|phuong|quan|gan|doi dien|nga|cho|truong|benh vien|cong vien|du an|block|thap)\b/,
   // FR-186 (09/09/2026): bộ câu hỏi riêng cho đất / biệt thự (chat Gemini
   // 21/06: "vướng cột điện, hố ga", "xây tự do hay theo mẫu CĐT", "compound").
   ha_tang: /\b(cot dien|ho ga|tru dien|cong|duong dam|vuong|khong vuong|ko vuong|sach|khong co|ko co|khong|ko|trong|thoang)\b/,
@@ -104,7 +104,41 @@ const CAU_HOI_RE = /\?|^\s*(?:phi|bao nhieu|sao|the nao|nhu the nao|bao gio|khi 
  * Phân loại câu chủ nhà vừa nhắn so với câu hỏi `question` đang treo.
  * `text` là phần còn lại SAU khi tầng trên đã bóc lời sửa (FR-164).
  */
+// Hai khoá cùng "họ": câu trả lời nhận ra khoá này thì vẫn là câu trả lời cho
+// khoá kia (không coi là lệch). "Ngang 5" cho câu diện tích có luật riêng ở dưới.
+const HO_FACT: string[][] = [
+  ["vi_tri", "phuong"],
+  ["dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "tho_cu", "mat_tien"],
+  ["do_rong_hem", "do_rong_duong", "duong_vao"],
+  ["so_huu", "thoi_han_su_dung"],
+  ["hien_trang", "hien_trang_su_dung", "ket_cau"],
+  ["noi_that", "fit_out"],
+  ["tiem_nang", "muc_dich", "nganh_hang_phu_hop"],
+  ["phap_ly", "the_chap"],
+];
+const cungHo = (a: string, b: string) => a === b || HO_FACT.some((h) => h.includes(a) && h.includes(b));
+export const cungHoFact = cungHo;
+
 export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
+  // 09/09/2026 tối (chạy 12 kịch bản trên production): câu trả lời bị ghi LỆCH
+  // MỘT Ô hàng loạt — "Hẻm 4m" vào diện tích, "Đúc 5 tầng" vào số phòng ngủ,
+  // "lên thổ cư 300m2" vào địa chỉ, "cọc 2 tháng" vào diện tích… vì các nhánh
+  // số/từ khoá ở dưới chỉ hỏi "có số không / có từ khoá không", không hỏi "câu
+  // này đang nói về THỨ GÌ". Nay hỏi `nhanDienFact` TRƯỚC: nhận ra rõ một fact
+  // KHÁC họ với câu đang hỏi thì là lệch + chuyển sang, câu hỏi gốc treo lại.
+  {
+    const kd0 = boDau(text.trim());
+    const chu0 = conChu(kd0.replace(XUNG_HO_RE, " "));
+    if (question !== "duyet_tin" && question !== "danh_gia" && question !== "hinh_anh" &&
+        question !== "loai_bds" && chu0.length >= 2 && !CAU_HOI_RE.test(kd0)) {
+      const nd = nhanDienFact(text);
+      if (nd && nd.question !== "bo_sung" && !cungHo(nd.question, question) &&
+          !(HOI_CO_KHONG.has(question) && /^\s*(co|khong|ko|k|chua|roi|da)\b/.test(kd0))) {
+        const xh = batXungHo(text);
+        return { loai: "lech", chuyenSang: nd, ...(xh ? { xungHo: xh } : {}) };
+      }
+    }
+  }
   const kq = phanLoaiTho(question, text);
   // FR-177 e: câu LỆCH mà nhận ra chủ nhà đang nói fact nào thì trỏ sang đó.
   if (kq.loai === "lech" && !kq.chuyenSang) {
@@ -183,9 +217,16 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
     return ketQua("lech");
   }
 
-  // Phường: "5", "phường 5", "p5", "Nguyễn Cư Trinh" đều nhận; "ừ" thì không.
+  // Phường: "5", "phường 5", "p5", "Nguyễn Cư Trinh", "xã Phong Phú" đều nhận; "ừ" thì không.
   if (question === "phuong") {
-    return ketQua(CO_SO.test(kd) || /\bphuong\b|\bp\s*\d/.test(kd) || chu.length >= 3 ? "khop" : "lech");
+    return ketQua(CO_SO.test(kd) || /\bphuong\b|\bp\s*\d|\bxa\b|\bthi tran\b/.test(kd) || chu.length >= 3 ? "khop" : "lech");
+  }
+  // Vị trí: cần dấu hiệu địa chỉ thật (đường / hẻm / số nhà / mốc), KHÔNG chỉ vì
+  // có con số — "lên thổ cư 300m2", "thời hạn đến 2060" từng đi vào địa chỉ.
+  if (question === "vi_tri") {
+    const coDiaChi = /\b(duong|hem|hxh|so nha|dia chi|ngo|kdc|khu|toa|block|thap|chung cu|cu xa|du an|kp|ap|xa|phuong|quan|gan|doi dien|nga|cho|truong|benh vien|cong vien|lo|mat tien|mt|pho)\b/.test(kd) ||
+      /^\s*\d+[a-z]?(?:\/\d+[a-z]?)*\s+[a-z]{2,}/.test(kd);
+    return ketQua(coDiaChi && !/\b(m2|m²|met vuong|tho cu|thoi han|nam \d{4}|ty|trieu)\b/.test(kd) ? "khop" : "lech");
   }
 
   const tk = TU_KHOA[question];
@@ -232,25 +273,67 @@ export const NHAN_HOI_LAI: Record<string, string> = {
 // Đáp án là chuỗi ĐÃ BỎ DẤU cho các trường số (parse_vnd/boc_thong_so phía DB
 // đọc được "ty"/"trieu"), còn trường chữ (pháp lý, hướng, quy hoạch, nội thất)
 // giữ nguyên văn để tầng DB bóc theo từ khoá có dấu.
-type NhanDien = { question: string; answer: string };
+export type NhanDien = { question: string; answer: string };
 const SO = "(\\d+(?:[.,]\\d+)?)";
+// Bỏ dấu mà GIỮ ĐỘ DÀI từng ký tự — chỉ số khớp trên bản này cắt được đúng đoạn
+// trong câu gốc ("18 tỷ" thay vì "18 ty" — bản 09/09 tối ghi giá thành "18 ty").
+const boDauGiuDoDai = (s: string): string =>
+  Array.from(s, (c) => {
+    if (c === "đ" || c === "Đ") return "d";
+    const b = c.normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return (b.length === 1 ? b : c).toLowerCase();
+  }).join("");
+// Một câu chủ nhà nói có thể mang NHIỀU fact ("Đường 12m, hướng Bắc"; "3 tầng,
+// 4 phòng ngủ"): tách theo dấu phẩy / chấm phẩy / "và", nhận từng mảnh, bỏ trùng.
+export function nhanDienNhieuFact(text: string): NhanDien[] {
+  const out: NhanDien[] = [];
+  const them = (nd: NhanDien | null) => { if (nd && !out.some((x) => x.question === nd.question)) out.push(nd); };
+  them(nhanDienFact(text));
+  const manh = text.split(/[,;\n]|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter((s) => s.length >= 2);
+  if (manh.length > 1) for (const s of manh) them(nhanDienFact(s));
+  return out;
+}
 export function nhanDienFact(text: string): NhanDien | null {
   const goc = text.trim();
   const kd = boDau(goc);
+  const kdD = boDauGiuDoDai(goc);
+  const catGoc = (mm: RegExpExecArray) => goc.slice(mm.index, mm.index + mm[0].length).trim();
   let m: RegExpExecArray | null;
   if (/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|shc|giay tay|cam ngan hang|dang the chap)\b/.test(kd)) {
     return { question: "phap_ly", answer: goc };
+  }
+  // 09/09 tối: những thứ CÓ SỐ nhưng không phải giá/diện tích — xét TRƯỚC giá,
+  // kẻo "doanh thu 120 triệu/tháng" đè giá bán, "phí quản lý 15 nghìn/m2" rơi bo_sung.
+  if (/\b(doanh thu|thu ve|dong tien|thu nhap|tien thue thu)\b/.test(kd)) return { question: "doanh_thu", answer: goc };
+  if (/\b(phi quan ly|phi ql|phi dich vu|phi bao tri)\b/.test(kd)) return { question: "phi_quan_ly", answer: goc };
+  if (/\b(phi gui xe|phi giu xe|tien gui xe)\b/.test(kd)) return { question: "phi_gui_xe", answer: goc };
+  if (/\b(san truoc|san sau|san vuon|co san|san rong|san dau xe)\b/.test(kd) && /\d/.test(kd)) return { question: "san_vuon", answer: goc };
+  if (/\b(len tho cu|len tho|chuyen tho cu|chuyen muc dich)\b/.test(kd)) return { question: "len_tho_cu", answer: goc };
+  if ((m = /\b(?:tho cu)\s*(?:duoc|la|het|full)?\s*(\d{1,4}(?:[.,]\d+)?)\s*(m2|%)/.exec(kd)) || (m = /\b(\d{1,4}(?:[.,]\d+)?)\s*(m2|%)\s*tho cu\b/.exec(kd))) {
+    return { question: "tho_cu", answer: `${m[1]}${m[2]}` };
+  }
+  // "đường 12m", "đường trước đất rộng 8m" → độ rộng đường (đất), không phải địa chỉ.
+  if ((m = new RegExp(`\\bduong\\s*(?:truoc dat|truoc nha|noi khu|noi bo)?\\s*(?:rong\\s*)?(?:la\\s*)?${SO}\\s*(?:m|met)\\b`).exec(kd))) {
+    return { question: "do_rong_duong", answer: `đường ${m[1]}m` };
+  }
+  if ((m = /\b(?:xa|thi tran|tt)\.?\s+([a-z][a-z ]{2,30})$/.exec(kd)) && !/\bxa hoi\b/.test(kd)) {
+    return { question: "phuong", answer: goc };
   }
   // Vị trí cụ thể: "đường Trần Bình Trọng", "hẻm 123/45 Nguyễn Trãi", "số 12
   // Lê Lợi", "123/4 An Dương Vương". "hẻm 4m" (độ rộng) không rơi vào đây vì
   // sau số là đơn vị mét, không phải "/" hay tên đường.
   if (/\b(duong|pho)\s+[a-z]{2,}/.test(kd) ||
       /\b(?:hem|hxh)\s*\d+(?:\/\d+)+\b/.test(kd) ||
+      // "hẻm 123 Trần Bình Trọng": số hẻm rồi TÊN ĐƯỜNG (chữ), không phải "hẻm 4m".
+      /\b(?:hem|hxh)\s*\d+[a-z]?\s+(?!m\b|met\b|xe\b|rong\b|thong\b|cut\b)[a-z]{2,}/.test(kd) ||
       /\b(?:so|so nha|dia chi)\s*\d+[a-z]?(?:\/\d+)*\s+[a-z]{2,}/.test(kd) ||
       /^\s*\d+[a-z]?(?:\/\d+[a-z]?)+\s+[a-z]{2,}/.test(kd)) {
     return { question: "vi_tri", answer: goc };
   }
-  if ((m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?${SO}\\s*(?:m|met)?\\b`).exec(kd)) ||
+  // Độ rộng hẻm: có đơn vị mét, hoặc số nhỏ (≤ 30) đứng cuối / trước dấu câu —
+  // "hẻm 123 Trần Bình Trọng" là địa chỉ (đã bắt ở trên), không phải "hẻm 123m".
+  if ((m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?${SO}\\s*(?:m|met)\\b`).exec(kd)) ||
+      (m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?(\\d{1,2}(?:[.,]\\d+)?)\\s*(?=$|[,.;!?]|\\s+(?:xe|o to|oto|thong|cut|nha|em|anh|chi|a\\b))`).exec(kd)) ||
       (m = new RegExp(`${SO}\\s*(?:m|met)\\s*hem\\b`).exec(kd))) {
     return { question: "do_rong_hem", answer: `hẻm ${m[1]}m` };
   }
@@ -269,8 +352,9 @@ export function nhanDienFact(text: string): NhanDien | null {
       (m = new RegExp(`${SO}\\s*x\\s*${SO}`).exec(kd))) {
     return { question: "dien_tich", answer: m[0].replace(/\s+/g, " ") };
   }
-  if ((m = new RegExp(`${SO}\\s*(?:ty|ti|toi|trieu|tr)\\b(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kd))) {
-    return { question: "gia", answer: m[0].trim() };
+  // Giá: khớp trên bản bỏ dấu GIỮ ĐỘ DÀI rồi cắt đúng đoạn gốc ("18 tỷ", "4 tỷ 5").
+  if ((m = new RegExp(`${SO}\\s*(?:ty|ti|toi|trieu|tr)\\b(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kdD))) {
+    return { question: "gia", answer: catGoc(m) };
   }
   // 20260909i: "xây tối đa 5 tầng" là TẦNG CAO CHO PHÉP của lô đất, không phải kết cấu nhà.
   if ((m = /\b(?:xay|cao)\s*(?:toi da|duoc)\s*(\d{1,2})\s*(?:tang|lau|tam)\b/.exec(kd))) return { question: "tang_cao_toi_da", answer: m[1] };

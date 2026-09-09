@@ -85,6 +85,8 @@ const soAnh = (d: Dong) => (d.media?.[0]?.count ?? 0) + (d.listing_media?.[0]?.c
 
 const COT: Cot[] = [
   { key: "stt", ten: "STT", lay: (d) => (d.legacy_sst != null ? String(d.legacy_sst) : ""), sap: (d) => d.legacy_sst ?? 1e9 },
+  // 09/09 tối: ngày vào đứng ĐẦU (mặc định sắp mới nhất trước) — trước đây nằm cuối, tràn khỏi màn hình.
+  { key: "ngay", ten: "Ngày vào", lay: (d) => d.created_at.slice(0, 10), sap: (d) => d.created_at },
   { key: "deal", ten: "Bán / thuê", lay: (d) => (d.deal === "ban" ? "Bán" : "Cho thuê"), sap: (d) => d.deal },
   { key: "vi_tri", ten: "Vị trí", lay: viTri, sap: viTri },
   { key: "dien_tich", ten: "Diện tích", lay: (d) => formatArea(d.area_m2), sap: (d) => d.area_m2 ?? -1 },
@@ -96,7 +98,6 @@ const COT: Cot[] = [
   { key: "loai", ten: "Loại", lay: (d) => TYPE_LABEL[d.property_type ?? ""] ?? "chưa rõ", sap: (d) => d.property_type ?? "" },
   { key: "trang_thai", ten: "Trạng thái", lay: (d) => TRANG_THAI[d.status] ?? d.status, sap: (d) => d.status },
   { key: "anh", ten: "Ảnh", lay: (d) => String(soAnh(d)), sap: soAnh },
-  { key: "ngay", ten: "Ngày vào", lay: (d) => d.created_at.slice(0, 10), sap: (d) => d.created_at },
 ];
 
 const khongDau = (s: string) =>
@@ -407,7 +408,7 @@ export default function Page() {
 
       {/* Bảng dữ liệu Rổ Hàng có Sửa trực tiếp */}
       <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-white">
-        <table className="w-full min-w-[1200px] text-left text-sm">
+        <table className="w-full min-w-[1560px] text-left text-sm">
           <thead className="sticky top-0 bg-slate-50 border-b border-line">
             <tr className="text-xs uppercase tracking-wide text-mute">
               {COT.map((c) => (
@@ -422,7 +423,7 @@ export default function Page() {
                   )}
                 </th>
               ))}
-              <th className="px-3 py-3 font-semibold text-center sticky right-0 bg-slate-50 shadow-l">
+              <th className="px-3 py-3 font-semibold text-center sticky right-0 z-10 bg-slate-50 shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.15)]">
                 Thao tác
               </th>
             </tr>
@@ -515,7 +516,7 @@ export default function Page() {
                   })}
 
                   {/* Cột nút thao tác */}
-                  <td className="whitespace-nowrap px-3 py-3 text-center sticky right-0 bg-white/95-xs">
+                  <td className="whitespace-nowrap px-3 py-3 text-center sticky right-0 z-10 bg-white shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.15)]">
                     <div className="flex items-center justify-center gap-1.5">
                       <button
                         type="button"
