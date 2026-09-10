@@ -1293,8 +1293,14 @@ Deno.serve(async (req) => {
       // Kho CHƯA CÓ dự án đó thì vẫn ghi nhận, kèm tên khách nhắc (20260910h) —
       // chủ dự án 10/09: "người ta chat dự án mà không có trong chỗ mình có cũng
       // ghi nhận được đúng ko". Admin thêm dự án vào kho rồi gật sau.
-      const tenNhac = l?.project_id ? null : (duAnNoi[0]?.name ?? tenDuAnTrongCau(text));
-      if (!l?.project_id && !tenNhac) return;
+      let tenNhac: string | null = null;
+      if (!l?.project_id) {
+        const { data: fDuAn } = await client.from("listing_facts")
+          .select("answer").eq("listing_id", lid).eq("question", "du_an_ten")
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        tenNhac = duAnNoi[0]?.name ?? tenDuAnTrongCau(text) ?? fDuAn?.answer ?? null;
+        if (!tenNhac) return;
+      }
       // Cắt về MỆNH ĐỀ ĐẦU: "phí quản lý 14 nghìn/m2, khu có công viên ven sông"
       // mang hai thông tin, nhưng ô phí quản lý chỉ nên giữ phần phí — admin duyệt
       // đọc một dòng gọn thì gật nhanh, đọc cả câu thì phải tự cắt bằng mắt.
@@ -2648,6 +2654,7 @@ Deno.serve(async (req) => {
             dien_tich: areaM ? `${areaM[1].replace(",", ".")}m2` : null,
             so_phong_ngu: pnM ? Number(pnM[1]) : null,
             gap: gapCol, du_an: duAn?.name ?? null, ma_can: maCanRao,
+            du_an_chua_co: duAn ? null : tenDuAnTrongCau(text),
             co_anh_kem: imageUrl ? true : null,
           },
         });
@@ -2676,6 +2683,9 @@ Deno.serve(async (req) => {
         // FR-177 n (10/09): câu rao DÀI mang 5–10 thông số → bóc HẾT ngay lúc tạo tin
         // (hướng, pháp lý, WC, nội thất, năm xây, hẻm thông, ngập, cách mặt tiền, lý do
         // bán, thương lượng…), không bắt chủ nhà nói lại. Giá/gấp đã vào cột lúc insert.
+        // Tên dự án kho CHƯA CÓ: giữ lại làm fact của tin để những lượt sau còn
+        // biết chủ nhà đang nói về dự án nào (FR-195).
+        const tenLa = duAn ? null : tenDuAnTrongCau(text);
         const daCo = new Set(["gia", "gap", "phuong", "dien_tich", "dien_tich_dat", "so_phong_ngu", "vi_tri", "bo_sung"]);
         const factRao: Array<[string, string]> = nhanDienNhieuFact(text)
           .filter((f) => !daCo.has(f.question))
@@ -2684,6 +2694,7 @@ Deno.serve(async (req) => {
           ["vi_tri", viTriRao && viTriRao.length >= 6 && !/^(hẻm|hem|hxh)\s+\d+\s*(m|mét|met)?$/i.test(viTriRao) ? viTriRao : null],
           ["dien_tich", areaM ? `${areaM[1].replace(",", ".")}m2` : null],
           ["so_phong_ngu", pnM ? pnM[1] : null],
+          ["du_an_ten", tenLa],
           ...factRao,
         ] as Array<[string, string | null]>) {
           if (!v) continue;
