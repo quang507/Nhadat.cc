@@ -1239,6 +1239,24 @@ Deno.serve(async (req) => {
     // đường ra nào phía sau. Để ở đây (trước `traLoiSeller`) vì nhánh người bán
     // có sáu lối thoát khác nhau — chép câu cảm ơn ra từng lối là kiểu bỏ sót
     // đúng một chỗ rồi không ai thấy.
+    // FR-193 b (10/09): quận nói ở LƯỢT SAU cũng phải vào cột. Chủ dự án rao
+    // "bán căn ho ở Hà đô centrosa garden" (không quận) rồi lượt sau nói "quận 10
+    // phường 12" — trước bản này chỉ phường vào cột, còn district giữ nguyên mặc
+    // định "Quận 5", tức kho có một căn hộ Quận 10 nằm trong rổ Quận 5.
+    const capNhatQuan = async (listingId: string | null): Promise<void> => {
+      if (!listingId) return;
+      const q = bocQuan(tKD);
+      if (!q) return;
+      const { data: cu } = await client.from("listings").select("district").eq("id", listingId).maybeSingle();
+      if (!cu || cu.district === q) return;
+      const { error: qErr } = await client.from("listings").update({ district: q }).eq("id", listingId);
+      if (qErr) await ghiLoi(client, "chat-reply cap nhat quan", qErr.message);
+      else {
+        const { error: btErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { quan: q } });
+        if (btErr) await ghiLoi(client, "chat-reply ghi_boc_tach(quan)", btErr.message);
+      }
+    };
+
     let ackSua: string | null = null;
     // FR-185: bong bóng nhận ảnh (loại ảnh, đối chiếu sổ) — đứng trước lời đáp
     // chính, cùng chỗ với lời cảm ơn sửa fact.
@@ -1645,6 +1663,7 @@ Deno.serve(async (req) => {
         suaId = ml?.id ?? null;
       }
       if (suaId) {
+        await capNhatQuan(suaId);
         const NHAN: Record<string, string> = {
           gia: "giá", phuong: "phường",
           so_phong_ngu: "số phòng ngủ", dien_tich: "diện tích",
@@ -2174,6 +2193,7 @@ Deno.serve(async (req) => {
           boQuaCauTreo = true;
         }
       }
+      await capNhatQuan(pendingReq.listing_id);
       if (kq.loai !== "khop" && !boQuaCauTreo) {
         // "Ngang 5" khi đang hỏi diện tích: vẫn là dữ liệu thật — ghi đúng
         // fact (mặt tiền) chứ không vứt, còn câu diện tích thì giữ treo.

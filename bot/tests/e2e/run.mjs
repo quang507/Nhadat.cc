@@ -1262,6 +1262,15 @@ fresh(seedKho);
       !db().t.info_requests.some((q) => q.question === "loai_bds" && q.status === "pending"),
     JSON.stringify({ replies: r.body.replies, loai: db().t.listings[0]?.property_type, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
 
+  // FR-193 b (10/09): quận nói ở LƯỢT SAU cũng phải vào cột — không để căn hộ
+  // Quận 10 nằm trong rổ Quận 5 (mặc định của cột).
+  fresh();
+  r = await send({ external_user_id: "quan-1", text: "Chào bạn tôi cần bán căn ho ở Hà đô centrosa garden" });
+  r = await send({ external_user_id: "quan-1", text: "quận 10 phường 12, 86m2, 6 tỷ 5" });
+  check("N31 lượt sau nói 'quận 10 phường 12' → listings.district = Quận 10 (không giữ mặc định Quận 5), ward = Phường 12",
+    db().t.listings[0]?.district === "Quận 10" && db().t.listings[0]?.ward === "Phường 12",
+    JSON.stringify(db().t.listings.map((l) => [l.code, l.district, l.ward, l.property_type])));
+
   // FR-185: kho hỏng → không nuốt ảnh: fact URL tạm + bot_errors.
   fresh(seedKho);
   globalThis.__storageHong = true;
