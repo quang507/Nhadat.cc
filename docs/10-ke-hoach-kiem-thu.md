@@ -61,7 +61,7 @@ Bảng NFR-01…18 với cách đo nằm ở `docs/07 §6` (nguồn sự thật)
 ## 10.5 Môi trường & công cụ (free-tier)
 
 - Unit: Vitest · E2E web: Playwright · A11y: axe-core · Perf: Lighthouse CI · bot: `bot/tests/e2e` (mock Supabase + mock model, Node/Bun).
-- CI: GitHub Actions free, `.github/workflows/kiem.yml` — mỗi PR chạy 5 job: `web` (tsc + `next build`), `bot` (300 ca e2e = 252 chat-reply + 44 webhook + 4 cổng; 82 ca FR-159/161/164; 199 ca FR-177 tiền định; 4 cảnh tự kiểm TS-SEC — mock Supabase & mock model nên không cần secret), `saoluu` (21 ca `scripts/sao-luu.tu-kiem.mjs`, PostgREST giả), `baomat` (`TS-SEC-AUTO` bắn anon key công khai vào DB thật), `truyvet` (`scripts/soat-truy-vet.sh`). Vercel preview mỗi PR. **Chưa vào CI:** TS-SEC bài phá huỷ (xoá dữ liệu thật nếu RLS hỏng), TS-SEC3 (`bot/tests/vai-tro.sql` — cần quyền SQL, CI chỉ có khoá công khai), TS-LIVE (cần bridge + hai máy), Lighthouse/axe/k6 — xem `docs/11 §11.4`.
+- CI: GitHub Actions free, `.github/workflows/kiem.yml` — mỗi PR chạy 5 job: `web` (tsc + `next build`), `bot` (301 ca e2e = 253 chat-reply + 44 webhook + 4 cổng; 82 ca FR-159/161/164; 199 ca FR-177 tiền định; 4 cảnh tự kiểm TS-SEC — mock Supabase & mock model nên không cần secret), `saoluu` (21 ca `scripts/sao-luu.tu-kiem.mjs`, PostgREST giả), `baomat` (`TS-SEC-AUTO` bắn anon key công khai vào DB thật), `truyvet` (`scripts/soat-truy-vet.sh`). Vercel preview mỗi PR. **Chưa vào CI:** TS-SEC bài phá huỷ (xoá dữ liệu thật nếu RLS hỏng), TS-SEC3 (`bot/tests/vai-tro.sql` — cần quyền SQL, CI chỉ có khoá công khai), TS-LIVE (cần bridge + hai máy), Lighthouse/axe/k6 — xem `docs/11 §11.4`.
 - DB: `nhadat-cc` là môi trường chính, **không** chạy test phá hoại; ca ghi bọc `do … raise exception` để cuộn lại. Zalo: OA thật chế độ ẩn + acc test (OPEN-09).
 - Bí mật chỉ trong biến môi trường / Vault; khoá đã dán vào chat phải rotate.
 
@@ -94,7 +94,7 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
-| `bot/tests/e2e/run.mjs` | 252 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10`, `N1…N30` (09–10/09) | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
+| `bot/tests/e2e/run.mjs` | 253 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10`, `N1…N31` (09–10/09) | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
 | `bot/tests/e2e/webhook.mjs` | 44 | `bun run e2e` (`chay.sh`) | TS-IDEM2; nhãn `CK-1…8c`, `GUI-1…8` | `zalo-webhook`: chữ ký + replay; gửi đúng-một-lần ra Zalo |
 | `bot/tests/e2e/cong-thieu-bi-mat.mjs` | 4 | `bun run e2e` (`chay.sh`) | TS-SEC2 phần cổng | Thiếu `BRIDGE_SECRET` thì cổng ĐÓNG, không mở. Tiến trình RIÊNG vì `napCauHinh` nhớ tạm 60 s ở tầng module |
 | `bot/tests/fr159-bon-vai.mjs` | 65 | `bun run test:bot` | TS-VAI | Bốn vai người nhắn (FR-159, FR-170) |

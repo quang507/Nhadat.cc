@@ -345,7 +345,7 @@ Bản rút gọn nạp tự động cho agent: `.claude/skills/ba-pipeline/SKILL
 **Cổng kiểm — chạy trước mọi commit:**
 
 ```bash
-bun run kiem   # = kieu (tsc) + build + test:bot (252 e2e + FR-159/161/164/176/177 + tự kiểm TS-SEC) + truyvet
+bun run kiem   # = kieu (tsc) + build + test:bot (253 e2e + FR-159/161/164/176/177 + tự kiểm TS-SEC) + truyvet
 bun run test:sec   # TS-SEC thật trên DB thật — cần Internet, nên KHÔNG nằm trong `kiem`
 ```
 
