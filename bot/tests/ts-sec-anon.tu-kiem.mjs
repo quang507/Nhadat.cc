@@ -34,7 +34,10 @@ const NOI_BO = [
   "curated_lists", "ratings_log", "property_events", "public_listings",
 ];
 const RPC_KHOA = ["get_secret", "seller_drip_tick", "ctv_report_tick",
-                  "xuat_schema", "liet_ke_bang", "liet_ke_migration"];
+                  "xuat_schema", "liet_ke_bang", "liet_ke_migration",
+                  // FR-192: mock phải khoá y như DB thật, không thì bộ e2e đo sai
+                  // đúng chỗ đó (bài học `phu` 07/09 ở CLAUDE.md).
+                  "quota_tieu_hao"];
 
 // Hình lỗi thật của PostgREST khi RLS/GRANT chặn.
 const TU_CHOI = { code: "42501", details: null, hint: null, message: "permission denied" };

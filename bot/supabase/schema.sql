@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 09:08 (giờ VN)
+-- Sinh lúc: 2026-09-10 10:42 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -4205,6 +4205,97 @@ end
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.quota_tieu_hao()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_ngay        date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_tran_ngay   integer;
+  v_hom_nay     record;
+  v_gio_limit   integer := 30;   -- cùng mặc định với bump_user_quota
+  v_ngay_limit  integer := 120;
+  v_nguoi       jsonb;
+  v_credit      record;
+  v_tran_nguoi  integer;
+begin
+  if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
+    raise exception 'Khong co quyen quan tri' using errcode = '42501';
+  end if;
+
+  -- (1) Trần lượt model theo ngày. Vault có thể không đặt khoá → mặc định 1000,
+  -- đúng con số `chat-reply` dùng khi `secretOf` trả null.
+  begin
+    v_tran_ngay := nullif(btrim(coalesce(public.get_secret('DAILY_MODEL_CALL_CAP'), '')), '')::integer;
+  exception when others then
+    v_tran_ngay := null;
+  end;
+  v_tran_ngay := coalesce(v_tran_ngay, 1000);
+
+  select coalesce(u.model_calls, 0) as luot,
+         coalesce(u.in_tokens, 0) + coalesce(u.out_tokens, 0)
+           + coalesce(u.cache_write_tokens, 0) + coalesce(u.cache_read_tokens, 0) as tokens,
+         u.capped_at
+    into v_hom_nay
+    from bot_usage u
+   where u.day = v_ngay;
+
+  -- (2) Trần theo người: ai đang đốt nhiều nhất trong 24 giờ, và giờ này bao nhiêu.
+  select coalesce(jsonb_agg(x order by x.trong_24h desc), '[]'::jsonb)
+    into v_nguoi
+    from (
+      select q.zalo_user_id                                              as uid,
+             sum(q.calls)                                                as trong_24h,
+             sum(q.calls) filter (where q.gio = date_trunc('hour', now())) as trong_gio,
+             exists (
+               select 1 from sellers s where s.zalo_user_id = q.zalo_user_id
+               union all
+               select 1 from ctvs c   where c.zalo_user_id = q.zalo_user_id
+               union all
+               select 1 from admins a where a.zalo_user_id = q.zalo_user_id
+             )                                                           as nguoi_quen
+        from chat_quota q
+       where q.gio > now() - interval '24 hours'
+       group by q.zalo_user_id
+       order by 2 desc
+       limit 10
+    ) x;
+
+  select count(*)::int as so_loi, max(e.at) as lan_cuoi
+    into v_credit
+    from bot_errors e
+   where e.at > now() - interval '24 hours'
+     and e.detail ilike '%credit balance is too low%';
+
+  select count(*)::int into v_tran_nguoi
+    from (
+      select q.zalo_user_id, sum(q.calls) as c
+        from chat_quota q
+       where q.gio > now() - interval '24 hours'
+       group by q.zalo_user_id
+      having sum(q.calls) >= v_ngay_limit
+    ) y;
+
+  return jsonb_build_object(
+    'ngay',            v_ngay,
+    'luot_hom_nay',    coalesce(v_hom_nay.luot, 0),
+    'tran_ngay',       v_tran_ngay,
+    'capped_at',       v_hom_nay.capped_at,
+    'token_hom_nay',   coalesce(v_hom_nay.tokens, 0),
+    'tran_gio_nguoi',  v_gio_limit,
+    'tran_ngay_nguoi', v_ngay_limit,
+    'he_so_nguoi_quen', 4,
+    'nguoi_dot_nhieu', coalesce(v_nguoi, '[]'::jsonb),
+    'so_nguoi_cham_tran', coalesce(v_tran_nguoi, 0),
+    'het_credit',      coalesce(v_credit.so_loi, 0) > 0,
+    'credit_loi_24h',  coalesce(v_credit.so_loi, 0),
+    'credit_lan_cuoi', v_credit.lan_cuoi
+  );
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.reminders_email_voice()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -6175,6 +6266,9 @@ grant execute on function public.nudge_tick() to service_role;
 revoke all on function public.parse_vnd(p text) from public, anon, authenticated;
 grant execute on function public.parse_vnd(p text) to authenticated;
 grant execute on function public.parse_vnd(p text) to service_role;
+revoke all on function public.quota_tieu_hao() from public, anon, authenticated;
+grant execute on function public.quota_tieu_hao() to authenticated;
+grant execute on function public.quota_tieu_hao() to service_role;
 revoke all on function public.reminders_email_voice() from public, anon, authenticated;
 grant execute on function public.reminders_email_voice() to service_role;
 revoke all on function public.reminders_giu_trang_thai_ket() from public, anon, authenticated;
