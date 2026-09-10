@@ -78,7 +78,7 @@ const HOI_SO = new Set([
 const TIEN_OK = new Set(["gia", "doanh_thu", "phi_quan_ly", "phi_gui_xe", "gia_dien_nuoc", "tien_coc"]);
 // Câu hỏi CÓ/KHÔNG: "có", "không", "rồi", "chưa" là câu trả lời đủ (không phải ack).
 const HOI_CO_KHONG = new Set([
-  "hem_thong", "ngap_nuoc", "the_chap", "thuong_luong", "can_goc", "thang_may", "pccc", "len_tho_cu",
+  "hem_thong", "ngap_nuoc", "the_chap", "thuong_luong", "can_goc", "thang_may", "pccc", "len_tho_cu", "gap",
   "ranh_gioi", "xu_ly_nuoc_thai", "duong_container", "nguon_nuoc", "hien_trang_su_dung", "so_huu",
 ]);
 
@@ -134,7 +134,10 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
     if (question !== "duyet_tin" && question !== "danh_gia" && question !== "hinh_anh" &&
         question !== "loai_bds" && chu0.length >= 2 && !CAU_HOI_RE.test(kd0)) {
       const nd = nhanDienFact(text);
-      if (nd && nd.question !== "bo_sung" && !cungHo(nd.question, question) &&
+      // Câu có NHIỀU ý mà một ý chính là câu đang hỏi ("hẻm 4m, mà thôi anh cần bán
+      // gấp" khi đang hỏi hẻm) → là câu trả lời KHỚP, các ý còn lại ghi kèm ở tầng trên.
+      const coCauDangHoi = nd && nd.question !== question && nhanDienNhieuFact(text).some((f) => cungHo(f.question, question));
+      if (nd && !coCauDangHoi && nd.question !== "bo_sung" && !cungHo(nd.question, question) &&
           !(HOI_CO_KHONG.has(question) && /^\s*(co|khong|ko|k|chua|roi|da)\b/.test(kd0))) {
         const xh = batXungHo(text);
         return { loai: "lech", chuyenSang: nd, ...(xh ? { xungHo: xh } : {}) };
@@ -293,6 +296,8 @@ const boDauGiuDoDai = (s: string): string =>
 // Fact PHỤ hay đi kèm trong cùng một câu mà không có dấu phẩy ("2 lầu 3 phòng",
 // "3 tầng 4 phòng ngủ 2 wc", "ngang 5 dài 20"): bắt thêm trên cả câu.
 const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
+  // "cần bán gấp 5 tỷ" → câu chính là gấp, giá vẫn phải ghi.
+  ["gia", /\b(\d+(?:[.,]\d+)?)\s*(ty|ti|toi|trieu|tr)\b(?:\s*(\d+(?:[.,]\d+)?))?(?:\s*(ruoi))?/, (m) => `${m[1]} ${m[2] === "toi" ? "tỏi" : m[2] === "ty" || m[2] === "ti" ? "tỷ" : "triệu"}${m[3] ? ` ${m[3]}` : ""}${m[4] ? " rưỡi" : ""}`],
   ["so_phong_ngu", /\b(\d{1,2})\s*(?:phong ngu|pn|phong)\b(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
   ["so_wc", /\b(\d{1,2})\s*(?:wc|toilet|ve sinh)\b/, (m) => m[1]],
   ["huong", /\bhuong\s*((?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?)\b/, (m) => `hướng ${m[1]}`],
@@ -320,6 +325,11 @@ export function nhanDienFact(text: string): NhanDien | null {
   let m: RegExpExecArray | null;
   if (/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|shc|giay tay|cam ngan hang|dang the chap)\b/.test(kd)) {
     return { question: "phap_ly", answer: goc };
+  }
+  // 10/09/2026 (chủ dự án): GẤP bắt ở MỌI lượt — "cần bán gấp", "không gấp, bán được
+  // giá thì thôi", "không vội". Trả nguyên văn; tầng DB (sync_cols) đọc ra true/false.
+  if (laGap(goc) || /\b(khong|ko|k|chua|chang|dau co)\s*(?:can\s*)?(?:gap|voi)\b|\bduoc gia thi thoi\b|\bkhong voi\b|\btu tu\b|\bban duoc gia\b/.test(kd)) {
+    if (!/\bgap\s*(doi|ba|lan|ruoi|\d)/.test(kd)) return { question: "gap", answer: goc };
   }
   // 09/09 tối: những thứ CÓ SỐ nhưng không phải giá/diện tích — xét TRƯỚC giá,
   // kẻo "doanh thu 120 triệu/tháng" đè giá bán, "phí quản lý 15 nghìn/m2" rơi bo_sung.
@@ -479,14 +489,17 @@ export function nhanDienFact(text: string): NhanDien | null {
 // Nhóm đọc từ cột `nhom` của view; view cũ không có cột thì tra bảng dưới.
 export const NHOM_FACT: Record<string, "co_ban" | "chuyen_mon" | "phu"> = {
   loai_bds: "co_ban", phuong: "co_ban", vi_tri: "co_ban", dien_tich: "co_ban", dien_tich_dat: "co_ban",
-  dien_tich_tim_tuong: "co_ban", tho_cu: "co_ban", gia: "co_ban", mat_tien: "co_ban",
+  dien_tich_tim_tuong: "co_ban", tho_cu: "co_ban", gia: "co_ban", gap: "co_ban", mat_tien: "co_ban",
   huong: "phu", quy_hoach: "phu", nam_xay: "phu",
 };
 const LIEN_QUAN: Record<string, string[]> = {
   mat_tien: ["dien_tich_dat", "dien_tich", "dien_tich_tim_tuong", "tho_cu"],
   dien_tich: ["mat_tien", "gia"], dien_tich_dat: ["mat_tien", "tho_cu", "gia"],
   dien_tich_tim_tuong: ["gia"], tho_cu: ["gia"],
-  gia: ["phuong"], phuong: ["vi_tri", "dien_tich_dat", "dien_tich", "dien_tich_tim_tuong"],
+  // 10/09: hỏi GẤP ngay sau giá ("mình cần ra hàng gấp hay được giá thì thôi").
+  // (gap ở nhóm co_ban priority 10 = câu CUỐI của nhóm cơ bản, tức ngay sau giá theo thứ
+  //  tự ưu tiên; không nối gia → gap để địa chỉ/phường còn thiếu vẫn được hỏi trước.)
+  gia: ["phuong"], gap: ["do_rong_hem", "do_rong_duong", "ket_cau"], phuong: ["vi_tri", "dien_tich_dat", "dien_tich", "dien_tich_tim_tuong"],
   vi_tri: ["phuong", "do_rong_hem", "dien_tich_dat", "dien_tich"],
   loai_bds: ["phuong"],
   do_rong_hem: ["ket_cau", "mat_tien"], do_rong_duong: ["huong", "ha_tang", "mat_tien"],
@@ -503,8 +516,12 @@ export type CauThieu = { fact_key: string; priority?: number; nhom?: string | nu
 export function chonCauKe(vuaNoi: string[], conThieu: CauThieu[]): string | undefined {
   if (!conThieu.length) return undefined;
   const nhom = (c: CauThieu) => c.nhom ?? NHOM_FACT[c.fact_key] ?? "chuyen_mon";
-  const dau = conThieu[0];
-  const ungVien = conThieu.filter((c) => nhom(c) === nhom(dau)).map((c) => c.fact_key);
+  // Nhóm trước, priority sau (10/09: `gap` co_ban priority 10 hoà `do_rong_hem`
+  // chuyen_mon 10 — xếp theo priority đơn thuần thì nhóm cơ bản bị chen).
+  const bac: Record<string, number> = { co_ban: 0, chuyen_mon: 1, sau_dang: 2, phu: 3 };
+  const xep = [...conThieu].sort((a, b) => (bac[nhom(a)] ?? 1) - (bac[nhom(b)] ?? 1) || (a.priority ?? 0) - (b.priority ?? 0));
+  const dau = xep[0];
+  const ungVien = xep.filter((c) => nhom(c) === nhom(dau)).map((c) => c.fact_key);
   for (const k of [...vuaNoi].reverse()) {
     for (const lq of LIEN_QUAN[k] ?? []) {
       if (ungVien.includes(lq)) return lq;

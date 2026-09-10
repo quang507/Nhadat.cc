@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-09 23:45 (giờ VN)
+-- Sinh lúc: 2026-09-10 08:50 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -110,7 +110,8 @@ create table if not exists public.conversations (
   needs_human boolean not null default false,
   needs_human_at timestamp with time zone,
   human_touch_at timestamp with time zone,
-  human_escalated_at timestamp with time zone
+  human_escalated_at timestamp with time zone,
+  human_hold boolean not null default false
 );
 
 create table if not exists public.ctv_daily_reports (
@@ -130,7 +131,8 @@ create table if not exists public.ctvs (
   phone text,
   active boolean not null default true,
   created_at timestamp with time zone not null default now(),
-  last_assigned_at timestamp with time zone
+  last_assigned_at timestamp with time zone,
+  khu_vuc text[] not null default '{}'::text[]
 );
 
 create table if not exists public.curated_lists (
@@ -1117,20 +1119,18 @@ CREATE OR REPLACE FUNCTION public.assign_ctv_round_robin()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public', 'pg_temp'
+ SET search_path TO 'public'
 AS $function$
-declare
-  picked uuid;
+declare picked uuid; v_district text;
 begin
   if new.ctv_id is not null then return new; end if;
-  select c.id into picked
-  from public.ctvs c
-  left join public.conversations v
-    on v.ctv_id = c.id and v.last_message_at > now() - interval '30 days'
-  where c.active
-  group by c.id, c.last_assigned_at
-  order by count(v.id), c.last_assigned_at nulls first
-  limit 1;
+  -- khu của khách mua: quận trong hồ sơ (preferences.area) nếu có; người bán: quận tin mới nhất
+  if new.buyer_id is not null then
+    select coalesce(b.preferences->>'district', b.preferences->>'area') into v_district from buyers b where b.id = new.buyer_id;
+  elsif new.seller_id is not null then
+    select l.district into v_district from listings l where l.seller_id = new.seller_id order by l.created_at desc limit 1;
+  end if;
+  picked := public.chon_ctv(v_district);
   if picked is not null then
     new.ctv_id := picked;
     update public.ctvs set last_assigned_at = now() where id = picked;
@@ -2055,6 +2055,27 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.chon_ctv(p_district text)
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  select c.id from public.ctvs c
+   where c.active and (c.zalo_user_id is not null or c.phone is not null)
+     and public.ctv_dang_ganh(c.id) < coalesce(nullif(public.cau_hinh('ctv_tran_ca'), '')::int, 15)
+   order by (case
+               when p_district is not null and exists (
+                 select 1 from unnest(c.khu_vuc) k
+                  where public.bo_dau(p_district) like '%' || public.bo_dau(k) || '%'
+                     or public.bo_dau(k) like '%' || public.bo_dau(p_district) || '%') then 0
+               when cardinality(c.khu_vuc) = 0 then 1
+               else 2 end),
+            public.ctv_dang_ganh(c.id), c.last_assigned_at nulls first, c.created_at
+   limit 1;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.chon_viec_don_chet()
  RETURNS integer
  LANGUAGE sql
@@ -2242,6 +2263,17 @@ begin
   end if;
   return null;
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.ctv_dang_ganh(p_ctv uuid)
+ RETURNS integer
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  select (select count(*) from public.info_requests q where q.ctv_id = p_ctv and q.status = 'pending')::int
+       + (select count(*) from public.conversations c where c.ctv_id = p_ctv and c.needs_human)::int;
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.ctv_report_tick()
@@ -2472,6 +2504,21 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.doc_gap(p_text text)
+ RETURNS boolean
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  select case
+    when p_text is null or btrim(p_text) = '' then null
+    when public.bo_dau(p_text) ~ '\m(khong|ko|k|chua|chang|dau co)\s*(can\s*)?(gap|voi)\M|\mduoc gia thi thoi\M|\mkhong voi\M|\mtu tu\M|\mban duoc gia\M' then false
+    when public.bo_dau(p_text) ~ '\mgap\s*(doi|ba|lan|ruoi|[0-9])' then null
+    when public.bo_dau(p_text) ~ '\mgap\M|\mcan tien\M|\m(ban|di|ra)\s*nhanh\M|\mvoi\M' then true
+    else null end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.email_admin(p_loai text, p_zalo_uid text, p_body text, p_listing_id uuid DEFAULT NULL::uuid)
  RETURNS bigint
  LANGUAGE plpgsql
@@ -2502,7 +2549,7 @@ end $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.ensure_buyer_conversation(p_zalo_user_id text, p_channel text DEFAULT 'zalo_oa'::text)
- RETURNS TABLE(b_id uuid, c_id uuid, b_name text, b_prefs jsonb, c_ctv_id uuid, c_human_touch_at timestamp with time zone)
+ RETURNS TABLE(b_id uuid, c_id uuid, b_name text, b_prefs jsonb, c_ctv_id uuid, c_human_touch_at timestamp with time zone, c_human_hold boolean)
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
@@ -2510,13 +2557,11 @@ AS $function$
 declare v_buyer buyers%rowtype; v_conv conversations%rowtype;
 begin
   perform pg_advisory_xact_lock(hashtext('buyer:' || p_zalo_user_id));
-
   select * into v_buyer from buyers where zalo_user_id = p_zalo_user_id;
   if not found then
     insert into buyers (zalo_user_id) values (p_zalo_user_id) returning * into v_buyer;
   end if;
   update buyers set last_contact_at = now() where id = v_buyer.id;
-
   select * into v_conv from conversations
     where conversations.buyer_id = v_buyer.id
     order by started_at desc limit 1;
@@ -2524,14 +2569,13 @@ begin
     insert into conversations (buyer_id, channel) values (v_buyer.id, p_channel)
       returning * into v_conv;
   end if;
-
   return query select v_buyer.id, v_conv.id, v_buyer.name, v_buyer.preferences,
-                      v_conv.ctv_id, v_conv.human_touch_at;
+                      v_conv.ctv_id, v_conv.human_touch_at, v_conv.human_hold;
 end $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.ensure_seller_conversation(p_seller_id uuid, p_channel text DEFAULT 'zalo_oa'::text)
- RETURNS TABLE(c_id uuid, c_human_touch_at timestamp with time zone, c_ctv_id uuid)
+ RETURNS TABLE(c_id uuid, c_human_touch_at timestamp with time zone, c_ctv_id uuid, c_human_hold boolean)
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
@@ -2539,7 +2583,6 @@ AS $function$
 declare v_conv conversations%rowtype;
 begin
   perform pg_advisory_xact_lock(hashtext('seller:' || p_seller_id::text));
-
   select * into v_conv from conversations
     where conversations.seller_id = p_seller_id
     order by started_at desc limit 1;
@@ -2547,8 +2590,7 @@ begin
     insert into conversations (seller_id, channel) values (p_seller_id, p_channel)
       returning * into v_conv;
   end if;
-
-  return query select v_conv.id, v_conv.human_touch_at, v_conv.ctv_id;
+  return query select v_conv.id, v_conv.human_touch_at, v_conv.ctv_id, v_conv.human_hold;
 end $function$
 ;
 
@@ -2657,6 +2699,21 @@ AS $function$
     set delivery_count = inbound_events.delivery_count + 1,
         last_seen_at   = now()
   returning delivery_count;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.giu_khach(p_conversation_id uuid, p_giu boolean)
+ RETURNS void
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  update public.conversations
+     set human_hold = p_giu,
+         needs_human = case when p_giu then false else needs_human end,
+         human_touch_at = case when p_giu then now() else human_touch_at end
+   where id = p_conversation_id
+     and (coalesce(auth.role(), '') = 'service_role' or public.la_admin());
 $function$
 ;
 
@@ -3261,6 +3318,23 @@ begin
   return null;
 end;
 $function$
+;
+
+CREATE OR REPLACE FUNCTION public.listing_facts_sync_gap()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v boolean;
+begin
+  if new.question <> 'gap' then return null; end if;
+  v := public.doc_gap(new.answer);
+  if v is not null then
+    update public.listings set gap = v where id = new.listing_id and gap is distinct from v;
+  end if;
+  return null;
+end $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.listing_media_chon_bia(p_listing_id uuid)
@@ -3912,6 +3986,18 @@ CREATE OR REPLACE FUNCTION public.nhan_fact(p_key text)
  SET search_path TO 'public'
 AS $function$
   select case p_key
+    when 'gap' then 'cần bán/cho thuê gấp hay không'
+    else public.nhan_fact_cu(p_key) end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.nhan_fact_cu(p_key text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  select case p_key
     when 'gia' then 'giá mong muốn' when 'phuong' then 'phường'
     when 'vi_tri' then 'vị trí cụ thể (đường, số nhà, hẻm)'
     when 'loai_bds' then 'loại bất động sản' when 'phap_ly' then 'pháp lý (sổ hồng, hoàn công)'
@@ -4223,15 +4309,11 @@ CREATE OR REPLACE FUNCTION public.route_info_request()
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare
-  v_seller_zalo text;
-  v_ctv ctvs%rowtype;
+declare v_seller_zalo text; v_district text; v_ctv uuid;
 begin
   if new.assignee is not null then return new; end if;
-
-  select s.zalo_user_id into v_seller_zalo
-  from listings l join sellers s on s.id = l.seller_id
-  where l.id = new.listing_id;
+  select s.zalo_user_id, l.district into v_seller_zalo, v_district
+    from listings l join sellers s on s.id = l.seller_id where l.id = new.listing_id;
   if v_seller_zalo is not null then
     new.assignee := 'seller';
     if new.source = 'buyer_ask' then
@@ -4239,16 +4321,10 @@ begin
     end if;
     return new;
   end if;
-
-  select * into v_ctv from ctvs
-  where active and (zalo_user_id is not null or phone is not null)
-  order by last_assigned_at nulls first, created_at
-  limit 1;
-
-  if found then
-    new.assignee := 'ctv';
-    new.ctv_id := v_ctv.id;
-    update ctvs set last_assigned_at = now() where id = v_ctv.id;
+  v_ctv := public.chon_ctv(v_district);
+  if v_ctv is not null then
+    new.assignee := 'ctv'; new.ctv_id := v_ctv;
+    update ctvs set last_assigned_at = now() where id = v_ctv;
     if new.source = 'buyer_ask' then
       new.sla_due_at := now() + make_interval(mins => public.ctv_sla_phut());
     end if;
@@ -4316,6 +4392,44 @@ begin
      order by l.chu_duyet_at limit 10
   loop
     perform ask_seller_drip(r.id);
+    n := n + 1;
+  end loop;
+  return n;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.seller_keep_alive_tick()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare r record; n int := 0; v_ir uuid;
+begin
+  for r in
+    select l.id, l.code, l.seller_id, s.zalo_user_id
+      from listings l join sellers s on s.id = l.seller_id
+     where l.status = 'dang_ban' and s.zalo_user_id is not null
+       -- chủ nhà im ≥ 6 ngày (tin cuối do chủ nhắn)
+       and coalesce((select max(m.created_at) from messages m join conversations c on c.id = m.conversation_id
+                      where c.seller_id = l.seller_id and m.sender = 'seller'), l.created_at) < now() - interval '6 days'
+       -- chưa keep-alive / hỏi bù trong 6 ngày
+       and not exists (select 1 from info_requests q where q.listing_id = l.id and q.created_at > now() - interval '6 days')
+       and not exists (select 1 from info_requests q where q.listing_id = l.id and q.status = 'pending')
+     order by l.updated_at limit 20
+  loop
+    if exists (select 1 from listing_missing_facts m where m.listing_id = r.id
+                and not exists (select 1 from info_requests q where q.listing_id = r.id and q.question = m.fact_key and q.status = 'expired')) then
+      -- còn thứ để hỏi (chưa bị né) → xin bổ sung 1 lượt 2–3 thông tin (ask-seller gom)
+      perform ask_seller_drip(r.id);
+    else
+      insert into info_requests (listing_id, question, status, source)
+      values (r.id, 'con_ban', 'pending', 'seller_flow') returning id into v_ir;
+      insert into reminders (kind, listing_id, seller_id, due_at, note)
+      values ('escalation', r.id, r.seller_id, now(),
+        'Căn ' || coalesce(nullif((select coalesce(location_raw, ward) from listings where id = r.id), ''), '#' || coalesce(r.code, '?')) ||
+        ' của mình còn bán không ạ? Còn thì anh/chị nhắn "còn" giúp em, có khách hỏi em báo liền.');
+    end if;
     n := n + 1;
   end loop;
   return n;
@@ -5378,7 +5492,7 @@ create or replace view public.listing_missing_facts as
    FROM listings l
      JOIN required_facts rf ON rf.property_type = COALESCE(l.property_type, 'chua_ro'::property_type) AND (rf.deal IS NULL OR rf.deal = l.deal)
      LEFT JOIN listing_facts lf ON lf.listing_id = l.id AND lf.question = rf.fact_key
-  WHERE lf.id IS NULL AND rf.nhom <> 'phu'::text AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'so_wc'::text AND l.bathrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'no_hau'::text AND l.rear_width_m IS NOT NULL OR rf.fact_key = 'cach_mat_tien'::text AND l.distance_to_street_m IS NOT NULL OR rf.fact_key = 'can_goc'::text AND l.corner_lot IS NOT NULL OR rf.fact_key = 'thang_may'::text AND l.has_elevator IS NOT NULL OR rf.fact_key = 'thuong_luong'::text AND l.negotiable IS NOT NULL OR rf.fact_key = 'doanh_thu'::text AND l.rent_income_vnd IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'vi_tri'::text AND (COALESCE(btrim(l.location_raw), ''::text) <> ''::text OR COALESCE(btrim(l.street), ''::text) <> ''::text OR l.project_id IS NOT NULL) OR rf.fact_key = 'hinh_anh'::text AND (EXISTS ( SELECT 1
+  WHERE lf.id IS NULL AND rf.nhom <> 'phu'::text AND NOT (rf.fact_key = 'ket_cau'::text AND l.floors IS NOT NULL OR (rf.fact_key = ANY (ARRAY['do_rong_hem'::text, 'do_rong_duong'::text])) AND (l.alley_width_m IS NOT NULL OR l.access_type = 'mat_tien'::text) OR rf.fact_key = 'phap_ly'::text AND l.legal_status IS NOT NULL OR rf.fact_key = 'huong'::text AND l.direction IS NOT NULL OR rf.fact_key = 'so_phong_ngu'::text AND l.bedrooms IS NOT NULL OR rf.fact_key = 'so_wc'::text AND l.bathrooms IS NOT NULL OR rf.fact_key = 'tang'::text AND l.floor IS NOT NULL OR (rf.fact_key = ANY (ARRAY['dien_tich'::text, 'dien_tich_dat'::text, 'dien_tich_tim_tuong'::text])) AND l.area_m2 IS NOT NULL OR rf.fact_key = 'nam_xay'::text AND l.year_built IS NOT NULL OR rf.fact_key = 'noi_that'::text AND l.furnishing IS NOT NULL OR rf.fact_key = 'mat_tien'::text AND l.frontage_m IS NOT NULL OR rf.fact_key = 'no_hau'::text AND l.rear_width_m IS NOT NULL OR rf.fact_key = 'cach_mat_tien'::text AND l.distance_to_street_m IS NOT NULL OR rf.fact_key = 'can_goc'::text AND l.corner_lot IS NOT NULL OR rf.fact_key = 'thang_may'::text AND l.has_elevator IS NOT NULL OR rf.fact_key = 'thuong_luong'::text AND l.negotiable IS NOT NULL OR rf.fact_key = 'doanh_thu'::text AND l.rent_income_vnd IS NOT NULL OR rf.fact_key = 'quy_hoach'::text AND l.planning_status IS NOT NULL OR rf.fact_key = 'gia'::text AND l.price_vnd IS NOT NULL OR rf.fact_key = 'gap'::text AND l.gap IS NOT NULL OR rf.fact_key = 'phuong'::text AND l.ward IS NOT NULL OR rf.fact_key = 'vi_tri'::text AND (COALESCE(btrim(l.location_raw), ''::text) <> ''::text OR COALESCE(btrim(l.street), ''::text) <> ''::text OR l.project_id IS NOT NULL) OR rf.fact_key = 'hinh_anh'::text AND (EXISTS ( SELECT 1
            FROM listing_media m
           WHERE m.listing_id = l.id)))
   ORDER BY l.id, rf.priority, rf.fact_key;
@@ -5435,6 +5549,8 @@ drop trigger if exists trg_pe_interests on public.interests;
 CREATE TRIGGER trg_pe_interests AFTER INSERT ON public.interests FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_listing_facts_sync_cols on public.listing_facts;
 CREATE TRIGGER trg_listing_facts_sync_cols AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_cols();
+drop trigger if exists trg_listing_facts_sync_gap on public.listing_facts;
+CREATE TRIGGER trg_listing_facts_sync_gap AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_gap();
 drop trigger if exists trg_zz_fact_vao_boc_tach on public.listing_facts;
 CREATE TRIGGER trg_zz_fact_vao_boc_tach AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION trg_fact_vao_boc_tach();
 drop trigger if exists trg_zz_vi_tri_vao_cot on public.listing_facts;
@@ -5852,6 +5968,10 @@ revoke all on function public.che_sdt(p text) from public, anon, authenticated;
 grant execute on function public.che_sdt(p text) to anon;
 grant execute on function public.che_sdt(p text) to authenticated;
 grant execute on function public.che_sdt(p text) to service_role;
+revoke all on function public.chon_ctv(p_district text) from public, anon, authenticated;
+grant execute on function public.chon_ctv(p_district text) to anon;
+grant execute on function public.chon_ctv(p_district text) to authenticated;
+grant execute on function public.chon_ctv(p_district text) to service_role;
 revoke all on function public.chon_viec_don_chet() from public, anon, authenticated;
 grant execute on function public.chon_viec_don_chet() to service_role;
 revoke all on function public.chu_nha_han_gio() from public, anon, authenticated;
@@ -5872,6 +5992,10 @@ revoke all on function public.cong_token(p_in bigint, p_out bigint, p_cache_writ
 grant execute on function public.cong_token(p_in bigint, p_out bigint, p_cache_write bigint, p_cache_read bigint) to service_role;
 revoke all on function public.conversations_email_upset() from public, anon, authenticated;
 grant execute on function public.conversations_email_upset() to service_role;
+revoke all on function public.ctv_dang_ganh(p_ctv uuid) from public, anon, authenticated;
+grant execute on function public.ctv_dang_ganh(p_ctv uuid) to anon;
+grant execute on function public.ctv_dang_ganh(p_ctv uuid) to authenticated;
+grant execute on function public.ctv_dang_ganh(p_ctv uuid) to service_role;
 revoke all on function public.ctv_report_tick() from public, anon, authenticated;
 grant execute on function public.ctv_report_tick() to service_role;
 revoke all on function public.ctv_sla_phut() from public, anon, authenticated;
@@ -5891,6 +6015,10 @@ revoke all on function public.doc_danh_sach(p_token text) from public, anon, aut
 grant execute on function public.doc_danh_sach(p_token text) to anon;
 grant execute on function public.doc_danh_sach(p_token text) to authenticated;
 grant execute on function public.doc_danh_sach(p_token text) to service_role;
+revoke all on function public.doc_gap(p_text text) from public, anon, authenticated;
+grant execute on function public.doc_gap(p_text text) to anon;
+grant execute on function public.doc_gap(p_text text) to authenticated;
+grant execute on function public.doc_gap(p_text text) to service_role;
 revoke all on function public.email_admin(p_loai text, p_zalo_uid text, p_body text, p_listing_id uuid) from public, anon, authenticated;
 grant execute on function public.email_admin(p_loai text, p_zalo_uid text, p_body text, p_listing_id uuid) to service_role;
 revoke all on function public.ensure_buyer_conversation(p_zalo_user_id text, p_channel text) from public, anon, authenticated;
@@ -5909,6 +6037,9 @@ revoke all on function public.ghi_su_kien_bds(p_listing_id uuid, p_type text, p_
 grant execute on function public.ghi_su_kien_bds(p_listing_id uuid, p_type text, p_buyer_id uuid, p_meta jsonb) to service_role;
 revoke all on function public.ghi_su_kien_inbound(p_event_id text, p_zalo_user_id text, p_payload jsonb) from public, anon, authenticated;
 grant execute on function public.ghi_su_kien_inbound(p_event_id text, p_zalo_user_id text, p_payload jsonb) to service_role;
+revoke all on function public.giu_khach(p_conversation_id uuid, p_giu boolean) from public, anon, authenticated;
+grant execute on function public.giu_khach(p_conversation_id uuid, p_giu boolean) to authenticated;
+grant execute on function public.giu_khach(p_conversation_id uuid, p_giu boolean) to service_role;
 revoke all on function public.giu_luot_gui(p_msg_id text, p_han_secs integer) from public, anon, authenticated;
 grant execute on function public.giu_luot_gui(p_msg_id text, p_han_secs integer) to service_role;
 revoke all on function public.guess_property_type(p_text text) from public, anon, authenticated;
@@ -5953,6 +6084,10 @@ grant execute on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_
 grant execute on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 numeric, p_ward text) to service_role;
 revoke all on function public.listing_facts_sync_cols() from public, anon, authenticated;
 grant execute on function public.listing_facts_sync_cols() to service_role;
+revoke all on function public.listing_facts_sync_gap() from public, anon, authenticated;
+grant execute on function public.listing_facts_sync_gap() to anon;
+grant execute on function public.listing_facts_sync_gap() to authenticated;
+grant execute on function public.listing_facts_sync_gap() to service_role;
 revoke all on function public.listing_media_chon_bia(p_listing_id uuid) from public, anon, authenticated;
 grant execute on function public.listing_media_chon_bia(p_listing_id uuid) to service_role;
 revoke all on function public.listing_media_giu_bia() from public, anon, authenticated;
@@ -6023,8 +6158,12 @@ grant execute on function public.nha_luot_gui(p_msg_id text) to service_role;
 revoke all on function public.nha_viec_nhac(p_id uuid, p_worker text) from public, anon, authenticated;
 grant execute on function public.nha_viec_nhac(p_id uuid, p_worker text) to service_role;
 revoke all on function public.nhan_fact(p_key text) from public, anon, authenticated;
+grant execute on function public.nhan_fact(p_key text) to anon;
 grant execute on function public.nhan_fact(p_key text) to authenticated;
 grant execute on function public.nhan_fact(p_key text) to service_role;
+revoke all on function public.nhan_fact_cu(p_key text) from public, anon, authenticated;
+grant execute on function public.nhan_fact_cu(p_key text) to authenticated;
+grant execute on function public.nhan_fact_cu(p_key text) to service_role;
 revoke all on function public.nhan_viec_don_media(p_limit integer) from public, anon, authenticated;
 grant execute on function public.nhan_viec_don_media(p_limit integer) to service_role;
 revoke all on function public.nhan_viec_nhac(p_kinds text[], p_limit integer, p_worker text) from public, anon, authenticated;
@@ -6050,6 +6189,8 @@ revoke all on function public.seller_drip_tick() from public, anon, authenticate
 grant execute on function public.seller_drip_tick() to service_role;
 revoke all on function public.seller_hoi_bu_tick() from public, anon, authenticated;
 grant execute on function public.seller_hoi_bu_tick() to service_role;
+revoke all on function public.seller_keep_alive_tick() from public, anon, authenticated;
+grant execute on function public.seller_keep_alive_tick() to service_role;
 revoke all on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) from public, anon, authenticated;
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to anon;
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to authenticated;
@@ -6116,4 +6257,5 @@ select cron.schedule('media-cleanup-tick', '*/5 * * * *', 'select public.media_c
 select cron.schedule('nudge-tick', '7,37 1-13 * * *', 'select nudge_tick()');
 select cron.schedule('seller-drip-tick', '22,52 1-13 * * *', 'select seller_drip_tick()');
 select cron.schedule('seller-hoi-bu-tick', '*/5 1-13 * * *', 'select seller_hoi_bu_tick()');
+select cron.schedule('seller-keep-alive-tick', '30 2 * * *', 'select public.seller_keep_alive_tick()');
 select cron.schedule('stale-listing-tick', '0 2 * * *', 'select public.stale_listing_tick()');

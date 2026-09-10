@@ -20,6 +20,13 @@ const QUAN_TEN: ReadonlyArray<readonly [RegExp, string]> = [
   [/\bhoc mon\b/, "Huyện Hóc Môn"],
   [/\bcu chi\b/, "Huyện Củ Chi"],
   [/\bcan gio\b/, "Huyện Cần Giờ"],
+  // 10/09/2026: Bà Rịa – Vũng Tàu sáp nhập TP.HCM từ 07/2025; chân dung "căn hộ
+  // nghỉ dưỡng Vũng Tàu" (chat Gemini 21/06 lượt 57–60) phải có địa bàn.
+  [/\bvung tau\b/, "Vũng Tàu"],
+  [/\bba ria\b/, "Bà Rịa"],
+  [/\bphu my\b/, "Phú Mỹ"],
+  [/\blong hai\b/, "Long Hải"],
+  [/\bho tram\b/, "Hồ Tràm"],
   [/\bben luc\b/, "Bến Lức, Long An"],
   [/\bduc hoa\b/, "Đức Hoà, Long An"],
   [/\bcan giuoc\b/, "Cần Giuộc, Long An"],

@@ -886,7 +886,7 @@ fresh(seedKho);
   const prompt = (c) => c?.params?.messages?.[0]?.content ?? "";
   const pend = (q) => db().t.info_requests.some((x) => x.question === q && x.status === "pending");
   const fact = (q) => db().t.listing_facts.find((f) => f.question === q);
-  r = await send({ external_user_id: "h-1", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2" });
+  r = await send({ external_user_id: "h-1", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2, không gấp" });
   const H = db().t.listings[0];
   check("H1 rao đủ cơ bản → tin can_chu_duyet, chưa lên kệ, câu đầu là HẺM (nhóm chuyên môn, ưu tiên 1)",
     H?.can_chu_duyet === true && H?.status === "cho_thong_tin" && pend("do_rong_hem"), JSON.stringify({ H, ir: db().t.info_requests }));
@@ -1029,7 +1029,7 @@ fresh(seedKho);
   check("N5 câu HỎI 'bán rồi hả em?' không phải báo bán → không đổi trạng thái, đi nhánh chăm sóc", !r.body.ngung_rao && db().t.listings.every((l) => l.status !== "da_chot"), JSON.stringify(r.body));
   // Đang duyệt bản nháp mà nói "chốt đi" → GẬT, không phải báo bán.
   fresh();
-  r = await send({ external_user_id: "h-9", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2" });
+  r = await send({ external_user_id: "h-9", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2, không gấp" });
   const H9 = db().t.listings[0];
   for (const t of ["hẻm 4m xe hơi", "3 lầu", "4 phòng ngủ", "sổ hồng riêng hoàn công đủ"]) r = await send({ external_user_id: "h-9", text: t });
   check("N6 chuỗi nhà phố 09/09: hẻm → lầu → phòng → pháp lý → tiềm năng (câu mới FR-186) rồi mới bản nháp", pend("tiem_nang", H9.id), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
@@ -1041,18 +1041,18 @@ fresh(seedKho);
   // FR-186: chung cư hỏi HƯỚNG ban công (câu riêng), nhà phố thì không.
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "z-cc", seller_type: "ccrb", name: null, active_listing_id: null }).data;
-    const l = d.insert("listings", { code: "BDS-Q5-0101", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", location_raw: "Sunrise City", ward: "Phường 4", price_raw: "3 tỷ", price_vnd: 3e9, area_m2: 70, floor: 12, can_chu_duyet: true }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0101", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", gap: false, location_raw: "Sunrise City", ward: "Phường 4", price_raw: "3 tỷ", price_vnd: 3e9, area_m2: 70, floor: 12, can_chu_duyet: true }).data;
     d.insert("info_requests", { listing_id: l.id, question: "so_phong_ngu", status: "pending" });
   });
   r = await send({ external_user_id: "z-cc", text: "2 phòng ngủ" });
   check("N7 chung cư trả lời phòng ngủ → câu kế là HƯỚNG (ban công), câu gợi ý riêng cho chung cư", pend("huong") && createCalls().some((c) => /Ban công căn mình quay hướng nào/.test(c.params.messages[0].content)), JSON.stringify({ ir: db().t.info_requests, p: createCalls().at(-1)?.params.messages[0].content.slice(-300) }));
   fresh();
-  r = await send({ external_user_id: "h-10", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2" });
+  r = await send({ external_user_id: "h-10", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2, không gấp" });
   check("N7b nhà phố: view thiếu KHÔNG có hướng (nhóm phụ)", !db().missingFacts().some((m) => m.fact_key === "huong"), JSON.stringify(db().missingFacts()));
   // FR-186: cho thuê → hỏi cọc / thời hạn / trượt giá sau pháp lý.
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "z-thue", seller_type: "ccrb", name: null, active_listing_id: null }).data;
-    const l = d.insert("listings", { code: "BDS-Q5-0102", seller_id: s.id, deal: "cho_thue", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "12 Trần Hưng Đạo", ward: "Phường 4", price_raw: "15tr/tháng", price_vnd: 15e6, area_m2: 50, floors: 2, bedrooms: 2, alley_width_m: 4, can_chu_duyet: true }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0102", seller_id: s.id, deal: "cho_thue", status: "cho_thong_tin", property_type: "nha_pho", gap: false, location_raw: "12 Trần Hưng Đạo", ward: "Phường 4", price_raw: "15tr/tháng", price_vnd: 15e6, area_m2: 50, floors: 2, bedrooms: 2, alley_width_m: 4, can_chu_duyet: true }).data;
     d.insert("listing_facts", { listing_id: l.id, question: "tiem_nang", answer: "ở", source: "seller_chat" });
     d.insert("listing_facts", { listing_id: l.id, question: "noi_that", answer: "full", source: "seller_chat" });
     d.insert("info_requests", { listing_id: l.id, question: "phap_ly", status: "pending" });
@@ -1065,7 +1065,7 @@ fresh(seedKho);
   // 20260909i: loại mới KHO XƯỞNG — đoán loại từ câu rao, câu hỏi chuyên môn riêng (chiều cao thông thủy).
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "z-kho", seller_type: "nmg", name: null, active_listing_id: null }).data;
-    const l = d.insert("listings", { code: "BDS-Q5-0104", seller_id: s.id, deal: "cho_thue", status: "cho_thong_tin", property_type: "kho_xuong", location_raw: "KCN Tân Tạo", ward: "Tân Tạo", price_raw: "80tr/tháng", price_vnd: 80e6, area_m2: 1000, can_chu_duyet: true }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0104", seller_id: s.id, deal: "cho_thue", status: "cho_thong_tin", property_type: "kho_xuong", gap: false, location_raw: "KCN Tân Tạo", ward: "Tân Tạo", price_raw: "80tr/tháng", price_vnd: 80e6, area_m2: 1000, can_chu_duyet: true }).data;
     d.insert("info_requests", { listing_id: l.id, question: "chieu_cao", status: "pending" });
   });
   r = await send({ external_user_id: "z-kho", text: "xưởng cao thông thủy 9m" });
@@ -1113,6 +1113,34 @@ fresh(seedKho);
   });
   r = await send({ external_user_id: "z-thue-dat", text: "sổ đỏ, đất thuê nhà nước tới 2058" });
   check("N17 'đất thuê nhà nước' là lời người bán → vẫn nhánh bán, ghi phap_ly + thoi_han_su_dung, không hỏi 'muốn mua hay thuê'", r.body.role === "seller" && db().t.listing_facts.some((f) => f.question === "phap_ly") && db().t.listing_facts.some((f) => f.question === "thoi_han_su_dung" || f.question === "hinh_thuc_thue_dat"), JSON.stringify({ role: r.body.role, f: db().t.listing_facts.map((f) => [f.question, f.answer]), replies: r.body.replies }));
+
+  // FR-188 (10/09): GẤP — hỏi ngay sau giá; "không gấp, được giá thì thôi" → gap=false rồi hỏi hẻm; bắt gấp ở mọi lượt.
+  fresh();
+  r = await send({ external_user_id: "g-1", text: "bán nhà hẻm trần bình trọng p4 giá 6 tỷ 50m2" });
+  check("N18 rao có giá, chưa nói gấp → câu ĐẦU là gấp (co_ban, ngay sau giá)", pend("gap"), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
+  r = await send({ external_user_id: "g-1", text: "không gấp, được giá thì thôi" });
+  check("N18b 'không gấp, được giá thì thôi' → listings.gap = false, câu kế là HẺM", db().t.listings[0].gap === false && pend("do_rong_hem"), JSON.stringify({ gap: db().t.listings[0].gap, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  r = await send({ external_user_id: "g-1", text: "hẻm 4m, mà thôi anh cần bán gấp, cần tiền" });
+  check("N18c giữa chừng nói 'cần bán gấp' → gap lật thành true (bắt ở mọi lượt), hẻm vẫn ghi", db().t.listings[0].gap === true && db().t.listing_facts.some((f) => f.question === "do_rong_hem"), JSON.stringify({ gap: db().t.listings[0].gap, f: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
+  // FR-188: người MUA "cần tìm gấp" → cờ gấp trong hồ sơ.
+  fresh(seedKho);
+  r = await send({ external_user_id: "b-gap", text: "tôi cần tìm gấp nhà quận 5 tầm 5 tỷ" });
+  check("N19 người mua 'cần tìm gấp' → buyers.preferences.gap = true", db().t.buyers.some((b) => b.zalo_user_id === "b-gap" && b.preferences?.gap === true), JSON.stringify(db().t.buyers.map((b) => [b.zalo_user_id, b.preferences])));
+  // FR-189: người nội bộ "#mã giữ" → bot im với chủ căn; "#mã trả bot" → bot nói lại.
+  fresh((d) => {
+    seedKho(d);
+    d.insert("admins", { email: "boss@x", zalo_user_id: "z-boss" });
+  });
+  r = await send({ external_user_id: "z-boss", text: "#BDS-Q5-0001 giữ" });
+  check("N20 admin '#mã giữ' → conversations.human_hold = true cho chủ căn", /im với chủ căn/.test(r.body.reply ?? "") && db().t.conversations.some((c) => c.seller_id === db().t.sellers.find((s) => s.zalo_user_id === "z-ccrb").id && c.human_hold === true), JSON.stringify({ body: r.body, c: db().t.conversations }));
+  r = await send({ external_user_id: "z-ccrb", text: "hẻm 4m xe hơi" });
+  check("N20b chủ căn nhắn khi đang bị giữ → bot IM (replies rỗng, human_active)", r.body.replies.length === 0 && r.body.human_active === true, JSON.stringify(r.body));
+  r = await send({ external_user_id: "z-boss", text: "#BDS-Q5-0001 trả bot" });
+  check("N20c '#mã trả bot' → human_hold = false", db().t.conversations.every((c) => !c.human_hold), JSON.stringify(db().t.conversations));
+  // 10/09: người bán quen "Còn căn nữa: …" → TIN THỨ HAI, không phải lời sửa tin cũ.
+  fresh(seedKho);
+  r = await send({ external_user_id: "z-ccrb", text: "Còn căn nữa: 7 Hồng Bàng phường 12 quận 5, 60m2, 9 tỷ, mặt tiền" });
+  check("N21 'Còn căn nữa: 7 Hồng Bàng …' từ người bán quen → tạo tin MỚI (mã mới), phường 12, 9 tỷ", db().t.listings.length === 6 && db().t.listings.some((l) => l.ward === "Phường 12" && /9 tỷ/.test(l.price_raw ?? "") && l.seller_id === db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb").id && l.code === "BDS-Q5-0006"), JSON.stringify(db().t.listings.map((l) => [l.code, l.ward, l.price_raw])));
 
   // FR-185: kho hỏng → không nuốt ảnh: fact URL tạm + bot_errors.
   fresh(seedKho);
