@@ -1385,14 +1385,14 @@ Deno.serve(async (req) => {
       id: string; listing_id: string; question: string; answer?: string | null;
       listings: {
         code: string | null; status?: string | null;
-        location_raw: string | null; ward?: string | null;
+        location_raw: string | null; ward?: string | null; unit_code?: string | null;
         property_type?: string | null; project_id?: string | null; area_m2?: number | null;
       };
     };
     const [{ data: pendings }] = await Promise.all([
       client
         .from("info_requests")
-        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, property_type, project_id, area_m2)")
+        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, unit_code, property_type, project_id, area_m2)")
         .eq("listings.seller_id", sellerRow.id)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
@@ -2398,8 +2398,11 @@ Deno.serve(async (req) => {
       // FR-176: neo mã căn CHỈ khi người này rao nhiều căn (FR-157 c sinh ra
       // cho ca đó). Một căn mà tin nào cũng "#BDS-Q5-0174" là giọng máy.
       // FR-178: neo bằng ĐỊA CHỈ, không đọc mã tin cho khách (mã chỉ ở web/CTV/admin).
+      // 10/09 lần 8: rao theo lô thì neo bằng MÃ CĂN ("Căn A5 nha"), đừng đọc
+      // "Căn Phường 16" — cả lô cùng một phường nên câu đó không chỉ ra căn nào.
       const neo = nhieuCan
-        ? (pendingReq.listings?.location_raw?.split(",")[0]?.trim() ||
+        ? (pendingReq.listings?.unit_code?.trim() ||
+          pendingReq.listings?.location_raw?.split(",")[0]?.trim() ||
           pendingReq.listings?.ward || "")
         : "";
       const phiMotCau = sellerRow.seller_type === "nmg"
@@ -2451,7 +2454,7 @@ Deno.serve(async (req) => {
         // bóng ghi nhận thì vào thẳng câu hỏi.
         const moDau = ackSua ? "" : "Dạ em ghi rồi ạ. ";
         sellerReply = nextKey
-          ? `${moDau}${neo ? `Căn ${neo} nha, ` : ""}${cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type)}`
+          ? `${moDau}${neo ? `Căn ${neo} nha. ` : ""}${cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type)}`
           : thieuDiem.length
           ? `${moDau}Để tin đủ điều kiện đăng, ${cachGoi} cho em hỏi thêm ${thieuDiem[0]} nha?`
           : published
