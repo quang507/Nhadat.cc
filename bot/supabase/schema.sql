@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 19:59 (giờ VN)
+-- Sinh lúc: 2026-09-10 20:10 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -3357,6 +3357,18 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.liet_ke_migration_cong_khai()
+ RETURNS TABLE(version text, name text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'supabase_migrations', 'pg_catalog'
+AS $function$
+  select m.version, m.name
+    from supabase_migrations.schema_migrations m
+   order by m.version;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 numeric, p_ward text)
  RETURNS boolean
  LANGUAGE sql
@@ -6534,6 +6546,10 @@ revoke all on function public.liet_ke_bang() from public, anon, authenticated;
 grant execute on function public.liet_ke_bang() to service_role;
 revoke all on function public.liet_ke_migration() from public, anon, authenticated;
 grant execute on function public.liet_ke_migration() to service_role;
+revoke all on function public.liet_ke_migration_cong_khai() from public, anon, authenticated;
+grant execute on function public.liet_ke_migration_cong_khai() to anon;
+grant execute on function public.liet_ke_migration_cong_khai() to authenticated;
+grant execute on function public.liet_ke_migration_cong_khai() to service_role;
 revoke all on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 numeric, p_ward text) from public, anon, authenticated;
 grant execute on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 numeric, p_ward text) to anon;
 grant execute on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 numeric, p_ward text) to authenticated;
