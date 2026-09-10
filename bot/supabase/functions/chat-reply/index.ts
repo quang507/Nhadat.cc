@@ -1295,8 +1295,12 @@ Deno.serve(async (req) => {
       // ghi nhận được đúng ko". Admin thêm dự án vào kho rồi gật sau.
       const tenNhac = l?.project_id ? null : (duAnNoi[0]?.name ?? tenDuAnTrongCau(text));
       if (!l?.project_id && !tenNhac) return;
+      // Cắt về MỆNH ĐỀ ĐẦU: "phí quản lý 14 nghìn/m2, khu có công viên ven sông"
+      // mang hai thông tin, nhưng ô phí quản lý chỉ nên giữ phần phí — admin duyệt
+      // đọc một dòng gọn thì gật nhanh, đọc cả câu thì phải tự cắt bằng mắt.
+      const gonGon = giaTri.split(/[,;\n]/)[0].trim() || giaTri.trim();
       const { error } = await client.rpc("ghi_fact_du_an", {
-        p_project_id: l?.project_id ?? null, p_khoa: khoa, p_gia_tri: giaTri,
+        p_project_id: l?.project_id ?? null, p_khoa: khoa, p_gia_tri: gonGon,
         p_nguon: "seller_chat", p_listing_id: lid, p_conversation_id: convSId ?? null,
         p_ten_du_an: tenNhac,
       });
