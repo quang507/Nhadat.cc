@@ -1934,7 +1934,7 @@ Deno.serve(async (req) => {
         const p = phan.filter((x): x is string => !!x && String(x).trim().length > 0);
         if (p.length) dong.push(`${icon} ${nhan}: ${p.join(" · ")}`);
       };
-      dong.push(`📋 BẢN NHÁP TIN - điểm đầy đủ ${d.diem}/100`);
+      dong.push(`📋 Em sẽ đăng tin gồm những thông tin và mô tả này cho ${cachGoi} nhé — độ đầy đủ ${d.diem}/100`);
       dong.push(`🏠 ${(LOAI_VI[loai] ?? "Nhà").toUpperCase()} ${thue ? "CHO THUÊ" : "BÁN"}${lx.gap === true ? " - CẦN " + (thue ? "CHO THUÊ" : "BÁN") + " GẤP" : ""}`);
       dong.push(`📍 ${diaChiGon(lx.location_raw, lx.ward, lx.district)}${fact("khu_compound") ? ` · ${fact("khu_compound")}` : ""}`);
       them("📐", "Diện tích", [
@@ -2317,7 +2317,7 @@ Deno.serve(async (req) => {
         // Mỗi ý một dòng (chủ dự án 09/09: "cái nào cần xuống dòng thì xuống dòng").
         const themDiem = dk && !noiDu && (dk.thieu ?? []).length
           ? `\nMuốn thêm điểm thì ${cachGoi} gửi em ${(dk.thieu ?? []).slice(0, 2).join(" và ")}${(dk.so_anh ?? 0) >= 3 ? "" : "; gửi thêm ảnh là điểm tăng ngay"}.` +
-            `\nEm sẽ hỏi thêm mình vài câu trong mấy ngày tới, khi nào ${cachGoi} thấy đủ thì nói em nha.`
+            `\nCó thể em sẽ hỏi thêm mình một vài câu khi có khách hàng quan tâm nhé ${cachGoi}.`
           : "";
         // FR-183 (09/09/2026): ĐIỂM NGƯỜI RAO — trung bình điểm các tin đang rao
         // × hệ số quy mô (NMG). Chỉ nhắc khi rao từ 2 căn (một căn thì điểm người

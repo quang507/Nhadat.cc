@@ -912,13 +912,13 @@ fresh(seedKho);
   r = await send({ external_user_id: "h-1", text: "ở hoặc làm văn phòng đều được" });
   const nhap = r.body.replies.join("\n");
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
-    r.body.ban_nhap === true && r.body.diem >= 70 && /BẢN NHÁP TIN/.test(nhap) && /5 tỷ 8/.test(nhap) &&
-      /nhắn Zalo cho em/.test(nhap) && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /BẢN NHÁP/.test(prompt(c))) &&
+    r.body.ban_nhap === true && r.body.diem >= 70 && /Em sẽ đăng tin gồm/.test(nhap) && /5 tỷ 8/.test(nhap) &&
+      /nhắn Zalo cho em/.test(nhap) && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em sẽ đăng tin gồm/.test(prompt(c))) &&
       pend("duyet_tin") && H.status === "cho_thong_tin",
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "à giá 6 tỷ nha" });
   check("H6 chủ sửa giá lúc đang duyệt → ghi giá mới, GỬI LẠI bản nháp với giá mới, câu duyệt vẫn treo",
-    r.body.sua_nhap === true && H.price_raw && /6 tỷ/.test(H.price_raw) && r.body.replies.some((x) => /6 tỷ/.test(x) && /BẢN NHÁP/.test(x)) && pend("duyet_tin"),
+    r.body.sua_nhap === true && H.price_raw && /6 tỷ/.test(H.price_raw) && r.body.replies.some((x) => /6 tỷ/.test(x) && /Em sẽ đăng tin gồm/.test(x)) && pend("duyet_tin"),
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "phí sao em?" });
   check("H7 hỏi ngược lúc đang duyệt → loại 'hoi', câu duyệt vẫn treo, không đóng dấu",
@@ -928,8 +928,8 @@ fresh(seedKho);
     r.body.duyet === true && !!H.chu_duyet_at && H.status === "dang_ban" && !pend("duyet_tin") && /lên web/.test(r.body.replies[0]),
     JSON.stringify({ body: r.body, H }));
   // FR-177 f (09/09): chúc mừng kèm ĐIỂM + cách thêm điểm; điểm là tiền định (diem_tin).
-  check("H8e chúc mừng kèm điểm X/100 và cách thêm điểm (ảnh), hứa hỏi thêm trong mấy ngày tới",
-    typeof r.body.diem === "number" && new RegExp(`${r.body.diem}/100`).test(r.body.replies[0]) && /Chúc mừng/.test(r.body.replies[0]) && /thêm điểm/.test(r.body.replies[0]) && /ảnh/.test(r.body.replies[0]) && /mấy ngày tới/.test(r.body.replies[0]),
+  check("H8e chúc mừng kèm điểm X/100, cách thêm điểm (ảnh), và hẹn hỏi thêm KHI CÓ KHÁCH quan tâm (10/09)",
+    typeof r.body.diem === "number" && new RegExp(`${r.body.diem}/100`).test(r.body.replies[0]) && /Chúc mừng/.test(r.body.replies[0]) && /thêm điểm/.test(r.body.replies[0]) && /ảnh/.test(r.body.replies[0]) && /khi có khách hàng quan tâm/.test(r.body.replies[0]),
     JSON.stringify(r.body));
   check("H8f sau khi lên kệ, view còn-thiếu vẫn có câu (ảnh, tiềm năng) để cron hỏi bù — chưa có chu_noi_du_at",
     !H.chu_noi_du_at && db().missingFacts().some((m) => m.listing_id === H.id), JSON.stringify(db().missingFacts().filter((m) => m.listing_id === H.id)));
