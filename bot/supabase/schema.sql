@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 21:00 (giờ VN)
+-- Sinh lúc: 2026-09-10 21:08 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -3478,8 +3478,12 @@ begin
   elsif new.question in ('tang', 'ket_cau') then
     v_num := nullif(substring(v_txt, '[0-9]+'), '')::numeric;
     if v_num is not null and v_num between 0 and 80 and not (j ? 'floors') then
-      update listings set floor = v_num::int, specs_source = bac
-       where id = new.listing_id and (floor is null or de);
+      update listings set floors = v_num::int,
+             floors_text = coalesce(floors_text,
+               case when v_num::int <= 1 then 'trệt'
+                    else 'trệt + ' || (v_num::int - 1) || ' lầu' end),
+             specs_source = bac
+       where id = new.listing_id and (floors is null or de);
     end if;
   elsif new.question = 'huong' and not (j ? 'direction') and length(btrim(v_txt)) between 2 and 40 then
     update listings set direction = btrim(v_txt), specs_source = bac

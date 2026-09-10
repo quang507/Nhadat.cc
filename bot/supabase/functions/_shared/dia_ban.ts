@@ -40,9 +40,23 @@ const QUAN_TEN: ReadonlyArray<readonly [RegExp, string]> = [
 // "quận 4", "quan4", "q.4", "Q4" — không nhầm với "P4" (phường) hay "4 tỷ".
 const QUAN_SO = /\bquan\s*\.?\s*(\d{1,2})\b|(?:^|[^a-z0-9])q\.?\s*(\d{1,2})(?![0-9])/;
 
-export function bocQuan(kd: string): string | null {
+// "quán 2 tầng" KHÔNG phải "quận 2". Bắt 10/09/2026 bằng kịch bản hành vi tầng
+// ba: chủ nhà nhắn "nhà mở quán 2 tầng được nha em" → cột quận nhảy từ Quận 10
+// sang Quận 2. Gọi hàm này bằng chuỗi ĐÃ BỎ DẤU nên nó không còn phân biệt được
+// "quán" với "quận" — chữ thật thì phân biệt được, nên nhận thêm bản THÔ.
+//
+// Hai cửa chặn, vì bản thô không phải lúc nào cũng có dấu (dân nhắn Zalo hay gõ
+// trần):
+//   1. bản thô có "quán" ngay trước con số  → không phải quận;
+//   2. sau con số là ĐƠN VỊ ĐẾM (tầng, lầu, phòng, m2, tỷ…) → đó là số lượng.
+const QUAN_TRONG_THO = /qu[áàảãạăâ]n(?=[^\p{L}]{0,3}\d)/iu;
+const SAU_SO_LA_DON_VI = /^\s*(tang|lau|tam|tret|phong|pn|wc|met|m2|m|ty|ti|toi|trieu|tr|nam|nguoi|cai|can|chiec)\b/;
+
+export function bocQuan(kd: string, tho?: string): string | null {
   for (const [re, ten] of QUAN_TEN) if (re.test(kd)) return ten;
+  if (tho && QUAN_TRONG_THO.test(tho)) return null;
   const m = QUAN_SO.exec(kd);
+  if (m && SAU_SO_LA_DON_VI.test(kd.slice(m.index + m[0].length))) return null;
   if (m) {
     const n = parseInt(m[1] ?? m[2] ?? "", 10);
     if (n >= 1 && n <= 12) return `Quận ${n}`;

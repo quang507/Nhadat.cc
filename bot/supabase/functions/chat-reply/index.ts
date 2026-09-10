@@ -1300,7 +1300,9 @@ Deno.serve(async (req) => {
     // định "Quận 5", tức kho có một căn hộ Quận 10 nằm trong rổ Quận 5.
     const capNhatQuan = async (listingId: string | null): Promise<void> => {
       if (!listingId) return;
-      const q = bocQuan(tKD);
+      // Truyền cả bản THÔ: "quán 2 tầng" bỏ dấu thành "quan 2 tang", không có
+      // bản thô thì không tài nào biết đó không phải Quận 2 (tầng ba, 10/09).
+      const q = bocQuan(tKD, text);
       if (!q) return;
       const { data: cu } = await client.from("listings").select("district").eq("id", listingId).maybeSingle();
       if (!cu || cu.district === q) return;
@@ -2708,7 +2710,7 @@ Deno.serve(async (req) => {
       // giá trị mặc định của cột `listings.district` từ thời chỉ làm chợ Quận 5.
       // Cột vẫn NOT NULL nên DB vẫn nhận mặc định, nhưng lời NÓI với khách chỉ được
       // nhắc địa bàn khi ĐỌC ĐƯỢC thật (từ câu rao hoặc từ dự án khớp trong kho).
-      const quanDoc = bocQuan(tKD) ?? duAn?.district ?? null;
+      const quanDoc = bocQuan(tKD, text) ?? duAn?.district ?? null;
       const quanRao = quanDoc ?? "Quận 5";
       const { data: newLst, error: newLstErr } = await client.from("listings").insert({
         code: null, seller_id: sellerRow.id, deal: sDeal, district: quanRao,
