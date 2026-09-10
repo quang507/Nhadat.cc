@@ -2759,6 +2759,34 @@ Deno.serve(async (req) => {
       }
     }
 
+    // FR-183 b (10/09): chủ nhà nói "đủ thông tin rồi" ngoài vòng hỏi — đó là
+    // lời CHỐT, không phải câu chăm sóc chung. Đóng dấu `chu_noi_du_at`, đọc lại
+    // điểm rồi trả lời đúng việc: rao như vậy, điểm bao nhiêu, muốn thêm điểm
+    // thì gửi gì. Trước bản này rơi vào câu mẫu "em kiểm tra rồi báo lại".
+    if (laDuRoi(text)) {
+      const { data: tinChot } = await client.from("listings")
+        .select("id, code, status")
+        .eq("seller_id", sellerRow.id)
+        .in("status", ["dang_ban", "dang_quan_tam", "cho_thong_tin"])
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (tinChot) {
+        const luc = new Date().toISOString();
+        const { error: duErr } = await client.from("listings")
+          .update({ chu_noi_du_at: luc, ...(tinChot.status === "cho_thong_tin" ? { chu_duyet_at: luc } : {}) })
+          .eq("id", tinChot.id);
+        if (duErr) await ghiLoi(client, "chat-reply chu noi du roi", duErr.message);
+        const { data: dk } = await client.rpc("diem_tin", { p_listing_id: tinChot.id });
+        const d = dk as { diem?: number; thieu?: string[] } | null;
+        const thieu = (d?.thieu ?? []).slice(0, 2);
+        return await traLoiSeller([
+          `Dạ vâng, vậy em rao như vậy nhé ${cachGoi}.` +
+          (d?.diem != null ? `\nĐộ đầy đủ tin của mình đang ${d.diem}/100.` : "") +
+          (thieu.length ? `\nKhi nào có ${thieu.join(" và ")} thì ${cachGoi} gửi em, điểm lên ngay và tin được đẩy mạnh hơn.` : "") +
+          `\nCó khách quan tâm là em báo ${cachGoi} liền ạ.`,
+        ], { du_roi: true, diem: d?.diem ?? null });
+      }
+    }
+
     const { data: sellerLst } = await client.from("listings")
       .select("code, location_raw, ward, price_raw")
       .eq("seller_id", sellerRow.id)

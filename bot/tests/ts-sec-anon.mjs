@@ -67,13 +67,27 @@ function khongToiDuoc(what, r) {
 }
 
 // ── Bài dò đường: phải đọc được tin công khai trước đã ──────────────────────
+let khoTrong = false;
 const dau = await goi("listings?select=code&limit=1");
 if (dau.status !== 200 || !Array.isArray(dau.body)) khongToiDuoc("đọc listings", dau);
 if (dau.body.length === 0) {
-  console.log("✗✗ Đọc được listings nhưng RỖNG — hoặc kho trống, hoặc RLS siết quá tay.");
-  process.exit(2);
+  // "listings rỗng" trước đây gộp hai chuyện khác hẳn nhau: KHO TRỐNG (đúng
+  // trạng thái sau khi dọn dữ liệu kiểm thử 10/09) và RLS SIẾT QUÁ TAY (sự cố
+  // thật, đúng hình lỗi làm /moi-gioi trắng 27/08). Cần một tín hiệu ĐỘC LẬP để
+  // tách hai thứ: `projects` cũng là bảng anon được đọc và đang có hơn ngàn
+  // dòng. Ra dòng ở đó nghĩa là đường anon còn thông, chỉ là chưa có tin lên kệ.
+  khoTrong = true;
+  const p = await goi("projects?select=id&limit=1");
+  if (p.status === 200 && Array.isArray(p.body) && p.body.length > 0) {
+    console.log("• kho tin đang TRỐNG (chưa có tin lên kệ) nhưng anon vẫn đọc được projects → đường anon thông, đi tiếp.");
+  } else {
+    console.log("✗✗ listings RỖNG và projects cũng không ra dòng nào — RLS nhiều khả năng");
+    console.log("   siết quá tay. Đây là 'chưa kiểm được', đừng coi là đạt.");
+    process.exit(2);
+  }
+} else {
+  ok(`dò đường: anon đọc được tin công khai (${dau.body.length} dòng mẫu)`);
 }
-ok(`dò đường: anon đọc được tin công khai (${dau.body.length} dòng mẫu)`);
 
 // ── Nhóm 1: bảng nội bộ — anon phải KHÔNG thấy dòng nào ─────────────────────
 for (const bang of [
@@ -145,6 +159,9 @@ for (const ten of [
 {
   const r = await goi("agents_public?select=*");
   if (r.status === 200 && Array.isArray(r.body) && r.body.length > 0) ok(`agents_public: anon đọc được ${r.body.length} NMG`);
+  // Rỗng khi KHO CŨNG TRỐNG là đúng cảnh: không có tin thì cũng chưa có nhà môi
+  // giới nào để khoe. Lỗi 27/08 là cảnh khác hẳn — kho đầy tin mà view vẫn rỗng.
+  else if (r.status === 200 && khoTrong) console.log("• agents_public rỗng, nhưng kho tin cũng trống → đúng cảnh DB mới dọn, không phải siết quá tay.");
   else if (r.status === 200) ko("agents_public: anon đọc ra RỖNG", "đây ĐÚNG lỗi làm /moi-gioi trắng 27/08→04/09");
   else ko("agents_public: anon bị chặn", `siết quá tay — HTTP ${r.status} · ${String(r.tho).slice(0, 150)}`);
 }

@@ -53,7 +53,7 @@ export default function Header() {
               hai cùng xanh nên trang có ba nút Zalo tranh nhau. */}
           <a
             href={zaloLink("header")}
-            className="rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+            className="nut nut-chinh nut-nho"
           >
             Chat Zalo
           </a>

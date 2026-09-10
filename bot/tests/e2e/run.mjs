@@ -1271,6 +1271,18 @@ fresh(seedKho);
     db().t.listings[0]?.district === "Quận 10" && db().t.listings[0]?.ward === "Phường 12",
     JSON.stringify(db().t.listings.map((l) => [l.code, l.district, l.ward, l.property_type])));
 
+  // FR-183 b (10/09): tin đã lên kệ, chủ nhà nhắn "đủ thông tin rồi em" ngoài vòng
+  // hỏi → chốt bằng ĐIỂM, không rơi vào câu chăm sóc chung.
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-du", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    d.insert("listings", { code: "BDS-Q5-0120", seller_id: s.id, deal: "ban", status: "dang_ban", property_type: "nha_pho", location_raw: "45 Trần Bình Trọng", ward: "Phường 2", district: "Quận 5", price_raw: "8 tỷ", price_vnd: 8e9, area_m2: 60, floors: 4, bedrooms: 4, alley_width_m: 5, legal_status: "so_hong_rieng", has_completion: true, can_chu_duyet: true, gap: false });
+  });
+  r = await send({ external_user_id: "z-du", text: "đủ thông tin rồi em" });
+  check("N32 'đủ thông tin rồi em' khi tin đã lên kệ → chốt 'em rao như vậy nhé' + nói ĐIỂM, đóng dấu chu_noi_du_at",
+    r.body.du_roi === true && /rao như vậy/i.test(r.body.replies.join(" ")) && r.body.replies.join(" ").includes("/100") &&
+      db().t.listings[0].chu_noi_du_at != null,
+    JSON.stringify({ body: r.body, l: db().t.listings.map((l) => [l.code, l.chu_noi_du_at]) }));
+
   // FR-185: kho hỏng → không nuốt ảnh: fact URL tạm + bot_errors.
   fresh(seedKho);
   globalThis.__storageHong = true;

@@ -168,13 +168,13 @@ export default async function Home() {
             />
             <button
               type="submit"
-              className="shrink-0 rounded-full bg-brand px-6 py-3 text-center font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+              className="nut nut-chinh"
             >
               Tìm
             </button>
             <a
               href={zaloLink("hero")}
-              className="shrink-0 rounded-full border border-line px-5 py-3 text-center text-sm font-bold text-navy transition hover:border-brand hover:text-brand"
+              className="nut nut-phu"
             >
               Hỏi qua Zalo
             </a>
@@ -360,7 +360,7 @@ export default async function Home() {
             </p>
             <Link
               href="/raoban"
-              className="mt-7 inline-block rounded-full bg-brand px-7 py-3.5 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+              className="nut nut-chinh mt-7"
             >
               Rao bán ngay - miễn phí
             </Link>

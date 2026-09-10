@@ -47,6 +47,43 @@ body {
   @apply text-xs font-bold uppercase tracking-[0.14em];
 }
 
+/* ── NÚT ─────────────────────────────────────────────────────────────────────
+   Chủ dự án 10/09/2026: "bàn làm việc và web cảm giác vẫn quá AI, để các nút
+   hiển thị tốt hơn". Ba thứ làm một cái nút trông như do máy sinh ra:
+     · không có CHIỀU CAO chung — mỗi nút một cỡ chữ, một mức padding;
+     · bấm không thấy gì — không có trạng thái nhấn, không có đổ bóng khi rê;
+     · nút phụ trông như cái thẻ — viền nhạt bằng viền khung, chữ mảnh.
+   Ba lớp dưới sửa đúng ba chỗ đó. Nút CHÍNH có bóng cam rất nhẹ chỉ khi rê
+   (không phải lúc nào cũng bóng — đó mới là chỗ trông giả). Nút PHỤ có nền hơi
+   ngả kem và viền đậm hơn viền khung một nấc, để mắt biết nó bấm được. */
+.nut {
+  @apply inline-flex shrink-0 items-center justify-center gap-2 rounded-full
+         text-sm font-bold leading-none transition-all duration-150
+         focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/45 focus-visible:ring-offset-2
+         disabled:cursor-not-allowed disabled:opacity-55;
+  min-height: 44px; /* chạm được bằng ngón tay — WCAG 2.5.5 */
+  padding-inline: 1.25rem;
+}
+.nut-chinh {
+  @apply bg-brand text-white border border-brand-dark/30
+         hover:bg-brand-dark hover:shadow-[0_6px_16px_-6px_rgba(236,99,36,0.65)]
+         active:translate-y-px active:shadow-none;
+}
+.nut-phu {
+  @apply border border-mute/35 bg-white/95 text-navy
+         hover:border-brand hover:text-brand hover:bg-white
+         active:translate-y-px;
+}
+.nut-nhe {
+  @apply border border-transparent bg-transparent text-navy
+         hover:bg-navy/[0.06] active:translate-y-px;
+}
+.nut-nho {
+  min-height: 36px;
+  padding-inline: 0.9rem;
+  @apply text-[13px];
+}
+
 /* ── Bề mặt do TRÌNH DUYỆT vẽ ────────────────────────────────────────────────
    Bôi đen, thanh cuộn, mũi tên <details>, gạch chân link — mấy thứ này mặc
    định mang màu của trình duyệt, không mang màu của ai cả. Để nguyên là trang
