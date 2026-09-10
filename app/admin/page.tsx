@@ -133,6 +133,7 @@ type KhachCrm = {
   id: string;
   name: string | null;
   zalo_user_id: string | null;
+  phone: string | null;
   preferences: Record<string, unknown> | null;
   notes: string | null;
   last_contact_at: string | null;
@@ -175,7 +176,23 @@ function usePhanTrang<T>(xs: T[]) {
   return { trang: t, soTrang, tong: xs.length, setTrang, mot: xs.slice((t - 1) * MOI_TRANG, t * MOI_TRANG) };
 }
 
-const linkZalo = (uid: string | null) => (uid ? `https://zalo.me/${encodeURIComponent(uid)}` : null);
+// "Mở Zalo" từng trỏ `https://zalo.me/<zalo_user_id>` — bấm vào ra trang trắng
+// "Tài khoản này không tồn tại hoặc không cho phép tìm kiếm" (chủ dự án bắt
+// 10/09). `zalo_user_id` là ID NỘI BỘ của luồng chat (19 chữ số), không phải ID
+// công khai; zalo.me chỉ mở được theo SỐ ĐIỆN THOẠI hoặc ID người dùng tự đặt.
+// `chat.zalo.me/?uid=...` cũng không mở đúng cuộc trò chuyện — đã thử, nó bỏ
+// qua tham số. Nên: có SĐT thì mở đúng người; không có thì mở Zalo Web để người
+// trực tự tìm, và nói thẳng trên nút là nó chỉ mở Zalo chứ không mở đúng khách.
+const soDienThoaiZalo = (phone: string | null) => {
+  const so = (phone ?? "").replace(/\D/g, "");
+  if (/^84\d{9}$/.test(so)) return `0${so.slice(2)}`;
+  return /^0\d{9}$/.test(so) ? so : null;
+};
+const linkZalo = (uid: string | null, phone: string | null = null) => {
+  const so = soDienThoaiZalo(phone);
+  if (so) return `https://zalo.me/${so}`;
+  return uid ? "https://chat.zalo.me/" : null;
+};
 
 // Khung CRM (09/09/2026): tab đi theo URL ?tab=todo|crm|stats|ops để thanh
 // trên (AdminShell) và các link chia sẻ được. useSearchParams cần Suspense.
@@ -311,7 +328,7 @@ function BanLamViec() {
         .eq("status", "pending").in("kind", ["escalation", "report"])
         .order("created_at", { ascending: false }).limit(30),
       supabase.from("sellers")
-        .select("id, name, seller_type, created_at, zalo_user_id, active_listing_id, listings:active_listing_id(id, code, legacy_code, location_raw, price_raw, status)")
+        .select("id, name, seller_type, created_at, zalo_user_id, phone, active_listing_id, listings:active_listing_id(id, code, legacy_code, location_raw, price_raw, status)")
         .order("created_at", { ascending: false }).limit(100),
       supabase
         .from("seller_ranks")
@@ -347,7 +364,7 @@ function BanLamViec() {
         .eq("bucket", "listing-private").order("created_at", { ascending: false }).limit(100),
       supabase
         .from("buyers")
-        .select("id, name, zalo_user_id, preferences, notes, last_contact_at, created_at")
+        .select("id, name, zalo_user_id, phone, preferences, notes, last_contact_at, created_at")
         .order("created_at", { ascending: false }).limit(100),
       supabase
         .from("interests")
@@ -397,6 +414,7 @@ function BanLamViec() {
       name: string | null;
       seller_type: string;
       zalo_user_id: string | null;
+      phone: string | null;
       created_at: string;
       listings?: {
         id: string;
@@ -411,6 +429,7 @@ function BanLamViec() {
       id: string;
       name: string | null;
       zalo_user_id: string | null;
+      phone: string | null;
       preferences: Record<string, unknown> | null;
       notes: string | null;
       last_contact_at: string | null;
@@ -453,6 +472,7 @@ function BanLamViec() {
         id: b.id,
         name: b.name || s?.name || null,
         zalo_user_id: b.zalo_user_id,
+        phone: b.phone ?? s?.phone ?? null,
         preferences: b.preferences,
         notes: b.notes,
         last_contact_at: b.last_contact_at,
@@ -474,6 +494,7 @@ function BanLamViec() {
         id: s.id,
         name: s.name,
         zalo_user_id: s.zalo_user_id,
+        phone: s.phone ?? null,
         preferences: null,
         notes: null,
         last_contact_at: null,
@@ -976,14 +997,17 @@ function BanLamViec() {
 
                       {/* Top Right Action Buttons */}
                       <div className="flex flex-wrap items-center gap-2">
-                        {linkZalo(k.zalo_user_id) && (
+                        {linkZalo(k.zalo_user_id, k.phone) && (
                           <a
-                            href={linkZalo(k.zalo_user_id)!}
+                            href={linkZalo(k.zalo_user_id, k.phone)!}
                             target="_blank"
                             rel="noreferrer"
+                            title={soDienThoaiZalo(k.phone)
+                              ? `Mở Zalo của ${soDienThoaiZalo(k.phone)}`
+                              : "Chưa có SĐT nên chỉ mở được Zalo Web — tìm khách trong danh sách chat bên đó."}
                             className="rounded-md border border-blue-300 bg-blue-50/60 px-3 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
                           >
-                            Mở Zalo
+                            {soDienThoaiZalo(k.phone) ? "Mở Zalo" : "Mở Zalo Web"}
                           </a>
                         )}
                         <button
@@ -1357,14 +1381,15 @@ function BanLamViec() {
                         <span className="rounded bg-line px-2 py-0.5 text-[11px] font-bold text-navy uppercase">
                           {k.vai}
                         </span>
-                        {linkZalo(k.zalo_user_id) && (
+                        {k.zalo_user_id && (
                           <a
-                            href={linkZalo(k.zalo_user_id)!}
+                            href="https://chat.zalo.me/"
                             target="_blank"
                             rel="noreferrer"
+                            title="Hàng chờ chỉ có ID luồng chat, chưa có SĐT — nút này mở Zalo Web, tìm khách theo tin nhắn cuối bên đó."
                             className="rounded border border-blue-300 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                           >
-                            Mở Zalo
+                            Mở Zalo Web
                           </a>
                         )}
                         <span className="ml-auto text-xs text-mute tabular-nums">
