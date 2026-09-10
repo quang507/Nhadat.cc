@@ -357,6 +357,16 @@ Deno.serve(async (req) => {
       if (who?.zalo_user_id && oaToken && !who.zalo_user_id.startsWith("TEST")) {
         sent = (await sendZalo(oaToken, who.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
       }
+      // CHƯA CÓ OA thì đây KHÔNG phải "đã gửi" (review 10/09, mục C1). Kênh
+      // đang chạy thật là BRIDGE Zalo cá nhân, nó kéo `reminders` còn `pending`;
+      // đánh `sent` ở đây là lời nhắc bốc hơi — khách chốt lịch xem 9h sáng mai
+      // không nhận gì, mà sổ ghi là đã nhắc, và `messages` còn có dòng "bot"
+      // nói câu đó nên đọc lại hội thoại cũng không thấy sai. Khối `escalation`
+      // ngay phía trên xử đúng (để bridge kéo); khối này là chỗ duy nhất quên.
+      if (sent === "none" && who?.zalo_user_id && !who.zalo_user_id.startsWith("TEST")) {
+        out.push({ kind: r.kind, id: r.id, text, sent, cho_bridge: true });
+        continue;
+      }
       if (sent === "zalo_error") {
         // Gửi lỗi → GIỮ pending cho nhịp cron sau thử lại, đừng nuốt mất lời nhắc.
         // FR-166: nhả hợp đồng thuê + hẹn giờ theo luật lùi dần. Không nhả thì

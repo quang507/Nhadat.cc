@@ -658,6 +658,25 @@ export function laNgungRao(text: string): NgungRao | null {
     /\b(?:nhan|lay|da)\s*coc\s*(?:roi|xong)?\b/.test(kd) ||
     /\bban (?:duoc|xong) roi\b/.test(kd);
   if (banRoi) return "ban_roi";
+  // HAI CỬA CHẶN trước khi kết luận "rút tin" — vì kết luận này PHÁ HUỶ: tin
+  // sang `an`, mọi câu hỏi treo thành `expired`, nhắc bị huỷ. Bắt 10/09 bằng
+  // review: `"thôi đăng đi em"` (chủ nhà GIỤC đăng) và `"không đăng ảnh nữa nha
+  // em"` (từ chối gửi ảnh) đều ra `rut` — mồi chỉ cần "thoi|khong" đứng gần
+  // "dang". Đúng luật chính file này tự viết ở đầu: thà hỏi lại một câu thừa
+  // còn hơn đóng một câu hỏi bằng rác — mà ở đây còn nặng hơn: đóng cả tin rao.
+  //
+  //  (1) "đăng/rao ĐI, GIÚP, DÙM, LÊN, CHO" là lời GIỤC, không phải lời rút.
+  //  (2) tân ngữ là ẢNH/HÌNH/VIDEO thì đó là chuyện gửi ảnh, không phải chuyện
+  //      rao tin ("không đăng ảnh nữa", "thôi khỏi gửi hình").
+  //
+  // Chữ "nua" là dấu hiệu CHẤM DỨT ("không đăng NỮA", "ngưng bán NỮA"), nên khi
+  // có nó thì cửa (1) mở ra — không nhầm lời giục được. Cửa (2) chỉ tính khi
+  // ảnh/hình đứng NGAY SAU động từ: "anh" trần còn là cách xưng hô, chặn theo
+  // chữ trần là giết luôn câu rút tin thật ("anh không bán nữa em ơi").
+  const giucDang = !/\bnua\b/.test(kd) &&
+    /\b(?:dang|rao|ban|cho thue)\b[^.]{0,12}\b(?:di|giup|gium|dum|ho|len)\b/.test(kd);
+  const veAnh = /\b(?:dang|gui|up|chup|them|xoa|bo)\s+(?:anh|hinh|video|clip)\b/.test(kd);
+  if (giucDang || veAnh) return null;
   const rut =
     /\b(?:ngung|ngung|dung|thoi|het|khong|ko|k|chua muon)\s*(?:ban|cho thue|rao|dang)\s*(?:nua|nha|em|a|roi)?\b/.test(kd) ||
     /\b(?:rut|go|xoa|huy|bo|dong)\s*(?:tin|bai|dang|ky gui|rao|ho so)\b/.test(kd) ||

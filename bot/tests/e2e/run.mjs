@@ -356,7 +356,7 @@ check("V48-27c model được báo khách xin xem thêm (không hứa đi xin ch
 fresh(seedKho);
 r = await send({ external_user_id: "v48-5", text: "alo được không em, gọi cho anh đi" });
 const b5 = db().t.buyers.find((b) => b.zalo_user_id === "v48-5");
-check("V48-79a người lạ 'alo được không' → KHÔNG hỏi vai, need_human, việc escalation 'VOICE: <uid> muốn gọi điện…', voice_request trong payload", !r.body.hoi_vai && r.body.voice_request === true && db().t.conversations.find((c) => c.buyer_id === b5.id).needs_human === true && db().t.reminders.some((x) => x.kind === "escalation" && x.buyer_id === b5.id && /^VOICE: v48-5 muốn gọi điện/.test(x.note)), JSON.stringify({ body: r.body, rem: db().t.reminders }));
+check("V48-79a người lạ 'alo được không' → KHÔNG hỏi vai, need_human, việc escalation 'VOICE: Zalo …<4 số cuối> muốn gọi điện…' (A4: che uid), voice_request trong payload", !r.body.hoi_vai && r.body.voice_request === true && db().t.conversations.find((c) => c.buyer_id === b5.id).needs_human === true && db().t.reminders.some((x) => x.kind === "escalation" && x.buyer_id === b5.id && /^VOICE: Zalo …48-5 muốn gọi điện/.test(x.note)), JSON.stringify({ body: r.body, rem: db().t.reminders }));
 r = await send({ external_user_id: "v48-5", text: "gọi điện cho anh nha" });
 check("V48-79b lặp trong 24h → không đẻ thêm việc VOICE", db().t.reminders.filter((x) => /^VOICE:/.test(x.note)).length === 1);
 fresh(seedKho);
@@ -366,7 +366,7 @@ r = await send({ external_user_id: "v48-5b", text: "mình nói chuyện trực t
 check("V48-79c model bật voice_request (regex không bắt) → vẫn mở việc VOICE + need_human", db().t.reminders.some((x) => /^VOICE:/.test(x.note)) && r.body.voice_request === true && db().t.conversations.at(-1).needs_human === true);
 globalThis.__model.parse = () => { throw new Error("model chết"); };
 r = await send({ external_user_id: "v48-5c", text: "goi dien cho toi duoc khong" });
-check("V48-79d model hỏng + không dấu → câu mẫu 'nhờ anh/chị phụ trách gọi lại' + việc VOICE", /gọi lại/.test(r.body.reply) && db().t.reminders.some((x) => /^VOICE: v48-5c/.test(x.note)));
+check("V48-79d model hỏng + không dấu → câu mẫu 'nhờ anh/chị phụ trách gọi lại' + việc VOICE", /gọi lại/.test(r.body.reply) && db().t.reminders.some((x) => /^VOICE: Zalo …8-5c/.test(x.note)));
 
 // FR-65 chấm sao sau buổi xem
 fresh(seedKho);

@@ -421,7 +421,28 @@ export default async function Page({
                   Vị trí hiển thị ở mức phường ({listing.ward}) - chấm trên bản đồ không phải địa chỉ căn.
                   Địa chỉ chính xác tụi em chia sẻ khi hẹn xem nhà.
                 </p>
-                <WardMap listing={{ ...(listing as CardRow), lat: null, lng: null } as MapRow} />
+                {/* DỰNG object MỚI, không spread `listing`. `listing` đến từ
+                    `select("*")` — 56 cột, trong đó có `description` NGUYÊN BẢN
+                    (chưa qua sanitizeDescription, còn SĐT chủ nhà), `location_raw`
+                    (có tin bắt đầu bằng "Số 1xx") và `seller_id`. `as CardRow`
+                    chỉ ép KIỂU lúc biên dịch; spread vẫn chép đủ 56 cột, mà
+                    WardMap là client component nên cả object đi vào payload
+                    NHÚNG TRONG HTML — xem view-source là đọc được (review 10/09,
+                    mục A1). Chính đầu file /ban-do đã có chú thích cảnh báo đúng
+                    cái bẫy này; trang tin chi tiết vẫn dính vì spread trông vô
+                    hại. Bản đồ chỉ cần phường: liệt kê tay đúng thứ nó dùng. */}
+                <WardMap
+                  listing={{
+                    id: listing.id, code: listing.code, deal: listing.deal,
+                    district: listing.district, ward: listing.ward, street: null,
+                    location_raw: null, area_m2: listing.area_m2,
+                    price_vnd: listing.price_vnd, price_raw: listing.price_raw,
+                    property_type: listing.property_type, bedrooms: listing.bedrooms,
+                    bathrooms: listing.bathrooms, floors: listing.floors,
+                    access_type: listing.access_type, status: listing.status,
+                    created_at: listing.created_at, lat: null, lng: null,
+                  } as MapRow}
+                />
               </div>
             )}
 

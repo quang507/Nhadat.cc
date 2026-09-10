@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 19:07 (giờ VN)
+-- Sinh lúc: 2026-09-10 19:44 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -597,7 +597,7 @@ do $d$ begin
   alter table public.listings add constraint listings_access_type_check CHECK ((access_type = ANY (ARRAY['mat_tien'::text, 'hem_xe_tai'::text, 'hem_xe_hoi'::text, 'hem_xe_may'::text, 'hem'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
-  alter table public.listings add constraint listings_bedrooms_check CHECK (((bedrooms >= 1) AND (bedrooms <= 20)));
+  alter table public.listings add constraint listings_bedrooms_check CHECK (((bedrooms IS NULL) OR ((bedrooms >= 1) AND (bedrooms <= 60))));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.listings add constraint listings_code_key UNIQUE (code);
@@ -2645,52 +2645,6 @@ begin
 
   return jsonb_build_object('tin', v_tin, 'tin_nhan', v_tin_nhan,
                             'nguoi_ban', v_nguoi, 'khach', v_khach, 'fact_du_an', v_pf);
-end $function$
-;
-
-CREATE OR REPLACE FUNCTION public.duyet_fact_du_an(p_id bigint, p_ok boolean DEFAULT true)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-declare f project_facts%rowtype;
-begin
-  if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
-    raise exception 'Khong co quyen quan tri' using errcode = '42501';
-  end if;
-  select * into f from project_facts where id = p_id;
-  if not found then return jsonb_build_object('ok', false, 'vi', 'khong thay dong'); end if;
-  if f.trang_thai <> 'cho_duyet' then
-    return jsonb_build_object('ok', false, 'vi', 'dong nay da xu ly roi');
-  end if;
-
-  if not p_ok then
-    update project_facts set trang_thai = 'bo', duyet_at = now(),
-           duyet_boi = coalesce((select auth.jwt() ->> 'email'), 'service_role')
-     where id = p_id;
-    return jsonb_build_object('ok', true, 'trang_thai', 'bo');
-  end if;
-
-  if f.khoa in ('tien_ich_gan', 'tien_ich', 'ha_tang', 'khu_compound') then
-    update projects
-       set amenities = (
-             select jsonb_agg(distinct x)
-             from jsonb_array_elements_text(coalesce(amenities, '[]'::jsonb) || to_jsonb(array[f.gia_tri])) x
-           ),
-           updated_at = now()
-     where id = f.project_id;
-  else
-    update projects
-       set specs = coalesce(specs, '{}'::jsonb) || jsonb_build_object(f.khoa, f.gia_tri),
-           updated_at = now()
-     where id = f.project_id;
-  end if;
-
-  update project_facts set trang_thai = 'da_duyet', duyet_at = now(),
-         duyet_boi = coalesce((select auth.jwt() ->> 'email'), 'service_role')
-   where id = p_id;
-  return jsonb_build_object('ok', true, 'trang_thai', 'da_duyet', 'khoa', f.khoa);
 end $function$
 ;
 
@@ -5347,7 +5301,14 @@ begin
   select coalesce(string_agg(
            format(E'create or replace view public.%I%s as\n%s',
                   c.relname,
+                  -- `reloptions` giữ NGUYÊN VĂN chữ người viết: ba view khai `= on`
+                  -- (public_listings, public_media, ro_hang_ban), hai view khai
+                  -- `= true`. Bản cũ chỉ so đúng chuỗi `true` nên bản chụp làm RƠI
+                  -- thuộc tính của ba view kia — dựng lại là chúng chạy bằng quyền
+                  -- chủ sở hữu, ĐỌC XUYÊN RLS (review 10/09, mục B1). Nay nhận cả
+                  -- hai cách viết, và in ra một dạng chuẩn.
                   case when c.reloptions::text[] @> array['security_invoker=true']
+                         or c.reloptions::text[] @> array['security_invoker=on']
                        then ' with (security_invoker = true)' else '' end,
                   pg_get_viewdef(c.oid, true)),
            E'\n\n' order by c.oid), '')
@@ -5464,7 +5425,7 @@ $function$
 ;
 
 -- ══ View ══
-create or replace view public.public_media as
+create or replace view public.public_media with (security_invoker = true) as
  SELECT id,
     listing_id,
     category,
@@ -5472,7 +5433,7 @@ create or replace view public.public_media as
    FROM media m
   WHERE approved;
 
-create or replace view public.public_listings as
+create or replace view public.public_listings with (security_invoker = true) as
  SELECT id,
     code,
     district,
@@ -5809,7 +5770,7 @@ create or replace view public.bot_do_tre as
            FROM admins a
           WHERE a.email = ((( SELECT auth.jwt() AS jwt)) ->> 'email'::text)));
 
-create or replace view public.ro_hang_ban as
+create or replace view public.ro_hang_ban with (security_invoker = true) as
  SELECT code AS ma,
         CASE property_type
             WHEN 'nha_pho'::property_type THEN 'nhà phố'::text
@@ -5985,12 +5946,12 @@ drop trigger if exists trg_listings_bao_tin_moi_khop on public.listings;
 CREATE TRIGGER trg_listings_bao_tin_moi_khop AFTER INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_bao_tin_moi_khop();
 drop trigger if exists trg_listings_chuan_hoa_cot on public.listings;
 CREATE TRIGGER trg_listings_chuan_hoa_cot BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_chuan_hoa_cot();
-drop trigger if exists trg_listings_fill_code on public.listings;
-CREATE TRIGGER trg_listings_fill_code BEFORE INSERT ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_fill_code();
 drop trigger if exists trg_listings_fill_property_type on public.listings;
 CREATE TRIGGER trg_listings_fill_property_type BEFORE INSERT OR UPDATE OF description, location_raw, property_type ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_fill_property_type();
 drop trigger if exists trg_listings_price_vnd on public.listings;
 CREATE TRIGGER trg_listings_price_vnd BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_set_price_vnd();
+drop trigger if exists trg_listings_zz_fill_code on public.listings;
+CREATE TRIGGER trg_listings_zz_fill_code BEFORE INSERT ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_fill_code();
 drop trigger if exists trg_pe_listings on public.listings;
 CREATE TRIGGER trg_pe_listings AFTER UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_y_listings_boc_thong_so on public.listings;
@@ -6109,7 +6070,7 @@ create policy interests_admin_select on public.interests as permissive for SELEC
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
 drop policy if exists anon_read_listing_facts on public.listing_facts;
-create policy anon_read_listing_facts on public.listing_facts as permissive for SELECT to anon, authenticated using (((question <> ALL (ARRAY['hinh_anh'::text, 'dia_chi_chi_tiet'::text])) AND (EXISTS ( SELECT 1
+create policy anon_read_listing_facts on public.listing_facts as permissive for SELECT to anon, authenticated using (((question <> ALL (ARRAY['hinh_anh'::text, 'dia_chi_chi_tiet'::text, 'vi_tri'::text, 'dia_chi'::text, 'so_nha'::text, 'lien_he'::text, 'so_dien_thoai'::text])) AND (EXISTS ( SELECT 1
    FROM listings l
   WHERE ((l.id = listing_facts.listing_id) AND (l.status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text, 'da_chot'::text])))))));
 drop policy if exists listing_media_admin_all on public.listing_media;
@@ -6446,9 +6407,6 @@ grant execute on function public.doc_gap(p_text text) to service_role;
 revoke all on function public.don_du_lieu_thu() from public, anon, authenticated;
 grant execute on function public.don_du_lieu_thu() to authenticated;
 grant execute on function public.don_du_lieu_thu() to service_role;
-revoke all on function public.duyet_fact_du_an(p_id bigint, p_ok boolean) from public, anon, authenticated;
-grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean) to authenticated;
-grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean) to service_role;
 revoke all on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) from public, anon, authenticated;
 grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) to authenticated;
 grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) to service_role;
