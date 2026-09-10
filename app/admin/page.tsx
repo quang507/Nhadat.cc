@@ -70,6 +70,8 @@ type Quota = {
   het_credit: boolean;
   credit_loi_24h: number;
   credit_lan_cuoi: string | null;
+  co_du_phong: boolean;
+  dang_chay_du_phong: boolean;
 };
 
 // FR-195: thông tin DỰ ÁN lượm được trong lúc chat, đang chờ người gật.
@@ -716,14 +718,22 @@ function BanLamViec() {
         <div className="mt-4 rounded-xl border-2 border-brand bg-brand/10 px-4 py-3 text-sm">
           <p className="font-bold text-brand">
             {quota.het_credit
-              ? "Model đang KHÔNG gọi được: tài khoản Anthropic hết số dư."
+              ? quota.co_du_phong
+                // 10/09: băng cũ viết "KHÔNG gọi được" trong khi bot vẫn trả lời
+                // bằng model dự phòng — chủ dự án nhìn màn hình hỏi ngay "có cả
+                // groq rồi mà nhỉ". Băng nói sai trạng thái thì lần sau không ai
+                // tin nó nữa.
+                ? "Model chính hết số dư — bot đang chạy bằng model dự phòng."
+                : "Model đang KHÔNG gọi được: tài khoản Anthropic hết số dư, chưa có đường dự phòng."
               : "Bot đã chạm trần lượt gọi model trong ngày và tạm dừng gọi model."}
           </p>
           <p className="mt-1 text-navy">
             {quota.het_credit
               ? `${quota.credit_loi_24h} lượt bị từ chối trong 24 giờ qua, gần nhất ${new Date(quota.credit_lan_cuoi ?? Date.now()).toLocaleString("vi-VN")}. `
               : `Dấu chạm trần lúc ${new Date(quota.capped_at ?? Date.now()).toLocaleString("vi-VN")}. `}
-            Bot vẫn trả lời khách bằng câu mẫu tiền định nên hội thoại trông như thường — đừng đọc giọng bot để chấm chất lượng lúc này.
+            {quota.co_du_phong
+              ? "Bot vẫn nói chuyện bình thường bằng model dự phòng; chất lượng có thể nhỉnh kém hơn một chút. Nạp tiền cho tài khoản chính là về như cũ."
+              : "Bot vẫn trả lời khách bằng câu mẫu tiền định nên hội thoại trông như thường — đừng đọc giọng bot để chấm chất lượng lúc này."}
           </p>
         </div>
       )}
@@ -1968,6 +1978,9 @@ function TheQuota({ q, tokenTien }: { q: Quota | null; tokenTien: number | null 
           </span>
         </div>
         <p className="mt-1 text-[11px] text-mute">
+          {q.co_du_phong
+            ? `Có đường dự phòng: hết số dư thì bot tự chuyển sang model khác${q.dang_chay_du_phong ? " (đang chạy bằng nó)" : ""}. `
+            : "Chưa có đường dự phòng — hết số dư là bot rơi về câu mẫu. "}
           Anthropic không cho hỏi số dư bằng API, nên đây đọc dấu vết trong sổ lỗi: lượt gọi model bị
           trả 400 vì hết số dư.
           {q.credit_lan_cuoi ? ` Lần cuối ${new Date(q.credit_lan_cuoi).toLocaleString("vi-VN")}.` : ""}

@@ -41,9 +41,13 @@ function ThanhTren() {
       const d1 = new Date(Date.now() - 86400e3).toISOString();
       const [v, l] = await Promise.all([
         supabase.from("reminders").select("id", { count: "exact", head: true }).eq("status", "pending").in("kind", ["escalation", "report"]),
-        supabase.from("bot_errors").select("id", { count: "exact", head: true }).gte("at", d1),
+        // Đếm theo LOẠI lỗi, không đếm từng dòng: một sự cố lặp 80 lần vẫn là MỘT
+        // việc phải xử. Trước bản này chuông đứng "99+" trong khi ô "Cần xử lý"
+        // là 0 — con số không nói được gì thì người ta thôi nhìn nó (10/09).
+        supabase.from("bot_errors").select("source").gte("at", d1).limit(500),
       ]);
-      if (song) setChuong({ viec: v.count ?? 0, loi: l.count ?? 0 });
+      const loai = new Set(((l.data ?? []) as { source: string | null }[]).map((x) => x.source ?? "?"));
+      if (song) setChuong({ viec: v.count ?? 0, loi: loai.size });
     });
     return () => { song = false; };
   }, [pathname]);

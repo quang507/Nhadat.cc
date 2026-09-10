@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 15:09 (giờ VN)
+-- Sinh lúc: 2026-09-10 15:33 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -356,7 +356,7 @@ create table if not exists public.messages (
 
 create table if not exists public.project_facts (
   id bigint not null default nextval('project_facts_id_seq'::regclass),
-  project_id uuid not null,
+  project_id uuid,
   khoa text not null,
   gia_tri text not null,
   nguon text not null default 'seller_chat'::text,
@@ -365,7 +365,8 @@ create table if not exists public.project_facts (
   trang_thai text not null default 'cho_duyet'::text,
   duyet_at timestamp with time zone,
   duyet_boi text,
-  created_at timestamp with time zone not null default now()
+  created_at timestamp with time zone not null default now(),
+  ten_du_an text
 );
 
 create table if not exists public.projects (
@@ -655,6 +656,9 @@ do $d$ begin
   alter table public.messages add constraint messages_zalo_msg_id_key UNIQUE (zalo_msg_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.project_facts add constraint project_facts_co_dich CHECK (((project_id IS NOT NULL) OR (COALESCE(btrim(ten_du_an), ''::text) <> ''::text)));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.project_facts add constraint project_facts_nguon_check CHECK ((nguon = ANY (ARRAY['seller_chat'::text, 'buyer_chat'::text, 'ctv'::text, 'admin'::text, 'crawl'::text, 'llm'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -882,7 +886,7 @@ create index if not exists media_listing_id_idx ON public.media USING btree (lis
 create index if not exists messages_conv_seq_idx ON public.messages USING btree (conversation_id, seq DESC);
 create index if not exists messages_conv_time_idx ON public.messages USING btree (conversation_id, created_at);
 create index if not exists project_facts_cho_duyet_idx ON public.project_facts USING btree (trang_thai, created_at DESC);
-CREATE UNIQUE INDEX project_facts_khong_trung_idx ON public.project_facts USING btree (project_id, khoa, gia_tri) WHERE (trang_thai <> 'bo'::text);
+CREATE UNIQUE INDEX project_facts_khong_trung_idx ON public.project_facts USING btree (COALESCE((project_id)::text, lower(btrim(ten_du_an))), khoa, gia_tri) WHERE (trang_thai <> 'bo'::text);
 create index if not exists projects_priority_idx ON public.projects USING btree (priority, district);
 create index if not exists property_events_at_idx ON public.property_events USING btree (at DESC);
 create index if not exists property_events_buyer_idx ON public.property_events USING btree (buyer_id);
@@ -2564,6 +2568,68 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.don_du_lieu_thu()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_tin int := 0; v_tin_nhan int := 0; v_nguoi int := 0; v_khach int := 0; v_pf int := 0;
+begin
+  create temp table if not exists _nguoi_thu on commit drop as
+    select id from sellers
+     where zalo_user_id ~ '^(thu-|b15-|hoi-|z-|e2e-)';
+  create temp table if not exists _khach_thu on commit drop as
+    select id from buyers
+     where zalo_user_id ~ '^(thu-|b15-|hoi-|z-|e2e-|b-)';
+  create temp table if not exists _tin_thu on commit drop as
+    select id from listings where seller_id in (select id from _nguoi_thu);
+  create temp table if not exists _conv_thu on commit drop as
+    select id from conversations
+     where seller_id in (select id from _nguoi_thu) or buyer_id in (select id from _khach_thu);
+
+  delete from messages       where conversation_id in (select id from _conv_thu);
+  get diagnostics v_tin_nhan = row_count;
+  delete from project_facts  where listing_id in (select id from _tin_thu);
+  get diagnostics v_pf = row_count;
+  delete from listing_facts  where listing_id in (select id from _tin_thu);
+  delete from info_requests  where listing_id in (select id from _tin_thu);
+  delete from listing_media  where listing_id in (select id from _tin_thu);
+  delete from listing_views  where listing_id in (select id from _tin_thu);
+  delete from property_events where listing_id in (select id from _tin_thu);
+  delete from interests      where listing_id in (select id from _tin_thu)
+                                or buyer_id in (select id from _khach_thu);
+  delete from viewings       where listing_id in (select id from _tin_thu)
+                                or buyer_id in (select id from _khach_thu);
+  delete from reminders      where seller_id in (select id from _nguoi_thu)
+                                or buyer_id in (select id from _khach_thu)
+                                or listing_id in (select id from _tin_thu);
+  update sellers set active_listing_id = null where id in (select id from _nguoi_thu);
+  delete from listings       where id in (select id from _tin_thu);
+  get diagnostics v_tin = row_count;
+  delete from conversations  where id in (select id from _conv_thu);
+  delete from chat_quota     where zalo_user_id ~ '^(thu-|b15-|hoi-|z-|e2e-|b-)';
+  delete from buyers         where id in (select id from _khach_thu);
+  get diagnostics v_khach = row_count;
+  delete from sellers        where id in (select id from _nguoi_thu);
+  get diagnostics v_nguoi = row_count;
+
+  --  chỉ có (who, at, last_id) — dấu thời gian ở đó, còn con số thì
+  -- vào  để sáng hôm sau còn đọc được đêm qua dọn những gì.
+  insert into bot_health (who, at) values ('don_thu', now())
+    on conflict (who) do update set at = excluded.at;
+  insert into app_config (key, value) values ('don_thu_lan_cuoi',
+          format('%s: %s tin · %s tin nhắn · %s người bán · %s khách · %s fact dự án',
+                 to_char(now() at time zone 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD HH24:MI'),
+                 v_tin, v_tin_nhan, v_nguoi, v_khach, v_pf))
+    on conflict (key) do update set value = excluded.value;
+
+  return jsonb_build_object('tin', v_tin, 'tin_nhan', v_tin_nhan,
+                            'nguoi_ban', v_nguoi, 'khach', v_khach, 'fact_du_an', v_pf);
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.duyet_fact_du_an(p_id bigint, p_ok boolean DEFAULT true)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -2604,6 +2670,57 @@ begin
   end if;
 
   update project_facts set trang_thai = 'da_duyet', duyet_at = now(),
+         duyet_boi = coalesce((select auth.jwt() ->> 'email'), 'service_role')
+   where id = p_id;
+  return jsonb_build_object('ok', true, 'trang_thai', 'da_duyet', 'khoa', f.khoa);
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.duyet_fact_du_an(p_id bigint, p_ok boolean DEFAULT true, p_project_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare f project_facts%rowtype; v_pid uuid;
+begin
+  if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
+    raise exception 'Khong co quyen quan tri' using errcode = '42501';
+  end if;
+  select * into f from project_facts where id = p_id;
+  if not found then return jsonb_build_object('ok', false, 'vi', 'khong thay dong'); end if;
+  if f.trang_thai <> 'cho_duyet' then
+    return jsonb_build_object('ok', false, 'vi', 'dong nay da xu ly roi');
+  end if;
+
+  if not p_ok then
+    update project_facts set trang_thai = 'bo', duyet_at = now(),
+           duyet_boi = coalesce((select auth.jwt() ->> 'email'), 'service_role')
+     where id = p_id;
+    return jsonb_build_object('ok', true, 'trang_thai', 'bo');
+  end if;
+
+  v_pid := coalesce(f.project_id, p_project_id);
+  if v_pid is null then
+    return jsonb_build_object('ok', false, 'vi',
+      format('dong nay chua gan du an ("%s") — them du an vao kho roi gat lai', coalesce(f.ten_du_an, '?')));
+  end if;
+
+  if f.khoa in ('tien_ich_gan', 'tien_ich', 'ha_tang', 'khu_compound') then
+    update projects
+       set amenities = (
+             select jsonb_agg(distinct x)
+             from jsonb_array_elements_text(coalesce(amenities, '[]'::jsonb) || to_jsonb(array[f.gia_tri])) x
+           ), updated_at = now()
+     where id = v_pid;
+  else
+    update projects
+       set specs = coalesce(specs, '{}'::jsonb) || jsonb_build_object(f.khoa, f.gia_tri),
+           updated_at = now()
+     where id = v_pid;
+  end if;
+
+  update project_facts set trang_thai = 'da_duyet', project_id = v_pid, duyet_at = now(),
          duyet_boi = coalesce((select auth.jwt() ->> 'email'), 'service_role')
    where id = p_id;
   return jsonb_build_object('ok', true, 'trang_thai', 'da_duyet', 'khoa', f.khoa);
@@ -2761,6 +2878,27 @@ begin
 exception when others then
   -- Đây là việc phụ. Hỏng thì thôi, tuyệt đối không làm hỏng lượt trả lời khách.
   return null;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.ghi_fact_du_an(p_project_id uuid, p_khoa text, p_gia_tri text, p_nguon text DEFAULT 'seller_chat'::text, p_listing_id uuid DEFAULT NULL::uuid, p_conversation_id uuid DEFAULT NULL::uuid, p_ten_du_an text DEFAULT NULL::text)
+ RETURNS bigint
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_id bigint;
+begin
+  if coalesce(btrim(p_gia_tri), '') = '' then return null; end if;
+  if p_project_id is null and coalesce(btrim(p_ten_du_an), '') = '' then return null; end if;
+  insert into project_facts (project_id, ten_du_an, khoa, gia_tri, nguon, listing_id, conversation_id)
+  values (p_project_id, nullif(btrim(p_ten_du_an), ''), p_khoa, btrim(p_gia_tri),
+          coalesce(p_nguon, 'seller_chat'), p_listing_id, p_conversation_id)
+  on conflict do nothing
+  returning id into v_id;
+  return v_id;
+exception when others then
+  return null;   -- việc phụ, không được làm hỏng lượt trả lời khách
 end $function$
 ;
 
@@ -4328,83 +4466,69 @@ declare
   v_ngay        date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
   v_tran_ngay   integer;
   v_hom_nay     record;
-  v_gio_limit   integer := 30;   -- cùng mặc định với bump_user_quota
+  v_gio_limit   integer := 30;
   v_ngay_limit  integer := 120;
   v_nguoi       jsonb;
   v_credit      record;
   v_tran_nguoi  integer;
+  v_co_du_phong boolean := false;
+  v_dang_du_phong timestamptz;
 begin
   if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
     raise exception 'Khong co quyen quan tri' using errcode = '42501';
   end if;
 
-  -- (1) Trần lượt model theo ngày. Vault có thể không đặt khoá → mặc định 1000,
-  -- đúng con số `chat-reply` dùng khi `secretOf` trả null.
   begin
     v_tran_ngay := nullif(btrim(coalesce(public.get_secret('DAILY_MODEL_CALL_CAP'), '')), '')::integer;
-  exception when others then
-    v_tran_ngay := null;
-  end;
+  exception when others then v_tran_ngay := null; end;
   v_tran_ngay := coalesce(v_tran_ngay, 1000);
 
-  select coalesce(u.model_calls, 0) as luot,
-         coalesce(u.in_tokens, 0) + coalesce(u.out_tokens, 0)
-           + coalesce(u.cache_write_tokens, 0) + coalesce(u.cache_read_tokens, 0) as tokens,
-         u.capped_at
-    into v_hom_nay
-    from bot_usage u
-   where u.day = v_ngay;
+  begin
+    v_co_du_phong := coalesce(btrim(coalesce(public.get_secret('GROQ_API_KEY'), '')), '') <> '';
+  exception when others then v_co_du_phong := false; end;
 
-  -- (2) Trần theo người: ai đang đốt nhiều nhất trong 24 giờ, và giờ này bao nhiêu.
-  select coalesce(jsonb_agg(x order by x.trong_24h desc), '[]'::jsonb)
-    into v_nguoi
+  select coalesce(u.model_calls, 0) as luot,
+         coalesce(u.in_tokens,0)+coalesce(u.out_tokens,0)+coalesce(u.cache_write_tokens,0)+coalesce(u.cache_read_tokens,0) as tokens,
+         u.capped_at
+    into v_hom_nay from bot_usage u where u.day = v_ngay;
+
+  select coalesce(jsonb_agg(x order by x.trong_24h desc), '[]'::jsonb) into v_nguoi
     from (
-      select q.zalo_user_id                                              as uid,
-             sum(q.calls)                                                as trong_24h,
+      select q.zalo_user_id as uid, sum(q.calls) as trong_24h,
              sum(q.calls) filter (where q.gio = date_trunc('hour', now())) as trong_gio,
              exists (
                select 1 from sellers s where s.zalo_user_id = q.zalo_user_id
-               union all
-               select 1 from ctvs c   where c.zalo_user_id = q.zalo_user_id
-               union all
-               select 1 from admins a where a.zalo_user_id = q.zalo_user_id
-             )                                                           as nguoi_quen
-        from chat_quota q
-       where q.gio > now() - interval '24 hours'
-       group by q.zalo_user_id
-       order by 2 desc
-       limit 10
+               union all select 1 from ctvs c where c.zalo_user_id = q.zalo_user_id
+               union all select 1 from admins a where a.zalo_user_id = q.zalo_user_id
+             ) as nguoi_quen
+        from chat_quota q where q.gio > now() - interval '24 hours'
+       group by q.zalo_user_id order by 2 desc limit 10
     ) x;
 
-  select count(*)::int as so_loi, max(e.at) as lan_cuoi
-    into v_credit
+  select count(*)::int as so_loi, max(e.at) as lan_cuoi into v_credit
     from bot_errors e
    where e.at > now() - interval '24 hours'
      and e.detail ilike '%credit balance is too low%';
 
-  select count(*)::int into v_tran_nguoi
-    from (
-      select q.zalo_user_id, sum(q.calls) as c
-        from chat_quota q
-       where q.gio > now() - interval '24 hours'
-       group by q.zalo_user_id
-      having sum(q.calls) >= v_ngay_limit
-    ) y;
+  select max(e.at) into v_dang_du_phong
+    from bot_errors e
+   where e.at > now() - interval '1 hour' and e.source ilike 'model chinh hong%';
+
+  select count(*)::int into v_tran_nguoi from (
+    select q.zalo_user_id from chat_quota q where q.gio > now() - interval '24 hours'
+     group by q.zalo_user_id having sum(q.calls) >= v_ngay_limit) y;
 
   return jsonb_build_object(
-    'ngay',            v_ngay,
-    'luot_hom_nay',    coalesce(v_hom_nay.luot, 0),
-    'tran_ngay',       v_tran_ngay,
-    'capped_at',       v_hom_nay.capped_at,
-    'token_hom_nay',   coalesce(v_hom_nay.tokens, 0),
-    'tran_gio_nguoi',  v_gio_limit,
-    'tran_ngay_nguoi', v_ngay_limit,
-    'he_so_nguoi_quen', 4,
+    'ngay', v_ngay, 'luot_hom_nay', coalesce(v_hom_nay.luot, 0), 'tran_ngay', v_tran_ngay,
+    'capped_at', v_hom_nay.capped_at, 'token_hom_nay', coalesce(v_hom_nay.tokens, 0),
+    'tran_gio_nguoi', v_gio_limit, 'tran_ngay_nguoi', v_ngay_limit, 'he_so_nguoi_quen', 4,
     'nguoi_dot_nhieu', coalesce(v_nguoi, '[]'::jsonb),
     'so_nguoi_cham_tran', coalesce(v_tran_nguoi, 0),
-    'het_credit',      coalesce(v_credit.so_loi, 0) > 0,
-    'credit_loi_24h',  coalesce(v_credit.so_loi, 0),
-    'credit_lan_cuoi', v_credit.lan_cuoi
+    'het_credit', coalesce(v_credit.so_loi, 0) > 0,
+    'credit_loi_24h', coalesce(v_credit.so_loi, 0),
+    'credit_lan_cuoi', v_credit.lan_cuoi,
+    'co_du_phong', v_co_du_phong,
+    'dang_chay_du_phong', v_dang_du_phong is not null
   );
 end $function$
 ;
@@ -5723,7 +5847,8 @@ create or replace view public.boc_tach_v with (security_invoker = true) as
 create or replace view public.project_facts_cho_duyet as
  SELECT f.id,
     f.project_id,
-    p.name AS du_an,
+    COALESCE(p.name, f.ten_du_an) AS du_an,
+    f.project_id IS NULL AS du_an_chua_co,
     p.district AS quan,
     f.khoa,
     f.gia_tri,
@@ -5731,7 +5856,7 @@ create or replace view public.project_facts_cho_duyet as
     f.created_at,
     l.code AS ma_tin
    FROM project_facts f
-     JOIN projects p ON p.id = f.project_id
+     LEFT JOIN projects p ON p.id = f.project_id
      LEFT JOIN listings l ON l.id = f.listing_id
   WHERE f.trang_thai = 'cho_duyet'::text
   ORDER BY f.created_at DESC;
@@ -6246,9 +6371,15 @@ revoke all on function public.doc_gap(p_text text) from public, anon, authentica
 grant execute on function public.doc_gap(p_text text) to anon;
 grant execute on function public.doc_gap(p_text text) to authenticated;
 grant execute on function public.doc_gap(p_text text) to service_role;
+revoke all on function public.don_du_lieu_thu() from public, anon, authenticated;
+grant execute on function public.don_du_lieu_thu() to authenticated;
+grant execute on function public.don_du_lieu_thu() to service_role;
 revoke all on function public.duyet_fact_du_an(p_id bigint, p_ok boolean) from public, anon, authenticated;
 grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean) to authenticated;
 grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean) to service_role;
+revoke all on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) from public, anon, authenticated;
+grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) to authenticated;
+grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) to service_role;
 revoke all on function public.email_admin(p_loai text, p_zalo_uid text, p_body text, p_listing_id uuid) from public, anon, authenticated;
 grant execute on function public.email_admin(p_loai text, p_zalo_uid text, p_body text, p_listing_id uuid) to service_role;
 revoke all on function public.ensure_buyer_conversation(p_zalo_user_id text, p_channel text) from public, anon, authenticated;
@@ -6263,6 +6394,8 @@ revoke all on function public.ghi_danh_gia(p_buyer_id uuid, p_listing_id uuid, p
 grant execute on function public.ghi_danh_gia(p_buyer_id uuid, p_listing_id uuid, p_stars integer, p_note text) to service_role;
 revoke all on function public.ghi_fact_du_an(p_project_id uuid, p_khoa text, p_gia_tri text, p_nguon text, p_listing_id uuid, p_conversation_id uuid) from public, anon, authenticated;
 grant execute on function public.ghi_fact_du_an(p_project_id uuid, p_khoa text, p_gia_tri text, p_nguon text, p_listing_id uuid, p_conversation_id uuid) to service_role;
+revoke all on function public.ghi_fact_du_an(p_project_id uuid, p_khoa text, p_gia_tri text, p_nguon text, p_listing_id uuid, p_conversation_id uuid, p_ten_du_an text) from public, anon, authenticated;
+grant execute on function public.ghi_fact_du_an(p_project_id uuid, p_khoa text, p_gia_tri text, p_nguon text, p_listing_id uuid, p_conversation_id uuid, p_ten_du_an text) to service_role;
 revoke all on function public.ghi_fact_listing(p_listing_id uuid, p_question text, p_answer text, p_source text) from public, anon, authenticated;
 grant execute on function public.ghi_fact_listing(p_listing_id uuid, p_question text, p_answer text, p_source text) to service_role;
 revoke all on function public.ghi_su_kien_bds(p_listing_id uuid, p_type text, p_buyer_id uuid, p_meta jsonb) from public, anon, authenticated;
@@ -6483,6 +6616,7 @@ select cron.schedule('bot-health-tick', '*/15 * * * *', 'select public.bot_healt
 select cron.schedule('cron-don-so', '15 18 * * *', 'delete from cron.job_run_details where end_time < now() - interval ''7 days''');
 select cron.schedule('ctv-report-tick', '0 10 * * *', 'select public.ctv_report_tick()');
 select cron.schedule('ctv-sla-tick', '*/15 1-13 * * *', 'select public.info_request_sla_tick()');
+select cron.schedule('don-du-lieu-thu', '0 14 * * *', 'select public.don_du_lieu_thu()');
 select cron.schedule('inbound-sweep-tick', '* * * * *', 'select public.inbound_sweep_tick()');
 select cron.schedule('info-timeout-tick', '3 1-13 * * *', 'select public.info_request_timeout_tick()');
 select cron.schedule('listing-interest-decay', '0 20 * * *', 'update public.listings set status = ''dang_ban''

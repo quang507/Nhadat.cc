@@ -199,7 +199,9 @@ export function bocDuPhong(
         // Hết nhịp / quá tải thì xoay model; lỗi khác (sai schema, sai prompt)
         // xoay cũng vô ích — model nào cũng hỏng như nhau.
         if (!/^Groq (429|5\d\d)/.test(String((e as { message?: string })?.message ?? e))) break;
-        await ghiSo?.(`Groq het nhip - xoay model khoi ${m}`, String((e as { message?: string })?.message ?? e).slice(0, 200));
+        // Xoay model là ĐƯỜNG ĐI BÌNH THƯỜNG của lưới dự phòng, không phải sự cố.
+        // Ghi vào sổ lỗi là tự nuôi còi báo động (bài học escalation-feed 08/09).
+        console.log(`Groq het nhip, xoay khoi ${m}`);
       }
     }
     throw cuoi ?? new Error("Groq: không model nào trả lời");

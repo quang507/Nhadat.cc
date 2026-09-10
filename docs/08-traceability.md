@@ -174,6 +174,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-194 | UF-04 | — | `_shared/groq.ts` (`bocDuPhong`, `nenDoiSang`), `_shared/claude.ts` bọc client; Vault `GROQ_API_KEY`/`GROQ_MODEL`. Kiểm: TS-GROQ-01…03 | — |
 | FR-195 | UF-04 | WF-13 | `20260910f`: bảng `project_facts`, `ghi_fact_du_an()`, `duyet_fact_du_an()`, view `project_facts_cho_duyet`; `chat-reply` `chepSangDuAn()`; web thẻ duyệt ở tab Vận hành. Kiểm: e2e N34, TS-DUAN-02 | — |
 | FR-196 | UF-06 | — | `chat-reply` luật số trong hai khối dự án; `scripts/dao-sau-du-an.mjs` (Groq, JSON schema, xoay model). Kiểm: TS-DUAN-03 | — |
+| FR-197 | UF-11 | WF-13 | `20260910i`: `don_du_lieu_thu()` + cron 14:00 UTC; `20260910h`: `quota_tieu_hao` thêm cờ dự phòng, `project_facts.ten_du_an`; web băng cảnh báo + chuông theo loại lỗi. Kiểm: TS-DON-01 | — |
 | FR-187 | UF-10 | WF-ADMIN | `20260909i`: `jsonb_bo_rong(jsonb)`, `boc_tach_nhom(listings)` + `boc_tach_nhom(uuid)`, view `boc_tach_v`, `so.boc_tach`; `components/admin/BocTachNhom.tsx` (`NHAN_NHOM`, `sapNhom`, `useBocTach`, `taiJsonTin`); `app/admin/ro-hang/json/page.tsx` đọc `boc_tach_v`; `app/admin/ro-hang/page.tsx` nút JSON + `DongJson`. Kiểm: TS-KYGUI-33 (DB thật) | — |
 | FR-97 | | — | — | — |
 

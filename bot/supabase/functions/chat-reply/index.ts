@@ -340,6 +340,17 @@ const cauNhan = (t: "ccrb" | "nmg") =>
 // là chuyện của dự án, tin sau của người khác trong cùng dự án cũng cần biết.
 // Chép sang `project_facts` ở trạng thái CHỜ DUYỆT; ghi thẳng vào `projects` là
 // một người nhớ nhầm thì cả kho sai theo (xem 20260910f).
+/**
+ * Tên dự án người ta vừa nhắc, dùng khi KHO CHƯA CÓ dự án đó (FR-195, 10/09).
+ * Chỉ lấy phần sau chữ "dự án / khu / khu đô thị" và cắt ở dấu câu — không đoán
+ * từ cả câu, vì đoán sai thì hàng chờ duyệt đầy rác và admin thôi nhìn nó.
+ */
+function tenDuAnTrongCau(t: string): string | null {
+  const m = /(?:dự án|du an|khu đô thị|khu do thi|khu)\s+([\p{L}\p{N}'’.\- ]{3,45})/iu.exec(t);
+  const ten = m?.[1]?.split(/[,.;\n]/)[0]?.trim() ?? "";
+  return ten.length >= 3 && ten.split(/\s+/).length <= 6 ? ten : null;
+}
+
 const KHOA_DU_AN = new Set([
   "phi_quan_ly", "phi_gui_xe", "tien_ich_gan", "ha_tang", "khu_compound",
   "thang_may", "pccc", "nam_xay", "xay_dung", "mat_do_xd", "tang_cao_toi_da",
@@ -1279,10 +1290,15 @@ Deno.serve(async (req) => {
       const lid = pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null;
       if (!lid) return;
       const { data: l } = await client.from("listings").select("project_id").eq("id", lid).maybeSingle();
-      if (!l?.project_id) return;
+      // Kho CHƯA CÓ dự án đó thì vẫn ghi nhận, kèm tên khách nhắc (20260910h) —
+      // chủ dự án 10/09: "người ta chat dự án mà không có trong chỗ mình có cũng
+      // ghi nhận được đúng ko". Admin thêm dự án vào kho rồi gật sau.
+      const tenNhac = l?.project_id ? null : (duAnNoi[0]?.name ?? tenDuAnTrongCau(text));
+      if (!l?.project_id && !tenNhac) return;
       const { error } = await client.rpc("ghi_fact_du_an", {
-        p_project_id: l.project_id, p_khoa: khoa, p_gia_tri: giaTri,
+        p_project_id: l?.project_id ?? null, p_khoa: khoa, p_gia_tri: giaTri,
         p_nguon: "seller_chat", p_listing_id: lid, p_conversation_id: convSId ?? null,
+        p_ten_du_an: tenNhac,
       });
       if (error) await ghiLoi(client, "chat-reply ghi_fact_du_an", error.message);
     };
