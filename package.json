@@ -11,6 +11,7 @@
     "test:sec": "node bot/tests/ts-sec-anon.mjs",
   "soat:migration": "node scripts/soat-migration.mjs",
   "soat:db": "node scripts/soat-db.mjs",
+  "kich-ban": "bun bot/tests/kich-ban-hanh-vi.mjs",
     "truyvet": "bash scripts/soat-truy-vet.sh",
     "test:saoluu": "node scripts/sao-luu.tu-kiem.mjs",
     "test:phuchoi": "node scripts/soat-phuc-hoi.tu-kiem.mjs",
