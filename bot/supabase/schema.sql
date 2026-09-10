@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 14:20 (giờ VN)
+-- Sinh lúc: 2026-09-10 14:39 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -36,6 +36,7 @@ exception when duplicate_object then null; end $d$;
 -- ══ Sequence ══
 create sequence if not exists public.bot_errors_id_seq;
 create sequence if not exists public.messages_seq_seq;
+create sequence if not exists public.project_facts_id_seq;
 create sequence if not exists public.property_events_id_seq;
 
 -- ══ Bảng ══
@@ -353,6 +354,20 @@ create table if not exists public.messages (
   seq bigint not null
 );
 
+create table if not exists public.project_facts (
+  id bigint not null default nextval('project_facts_id_seq'::regclass),
+  project_id uuid not null,
+  khoa text not null,
+  gia_tri text not null,
+  nguon text not null default 'seller_chat'::text,
+  listing_id uuid,
+  conversation_id uuid,
+  trang_thai text not null default 'cho_duyet'::text,
+  duyet_at timestamp with time zone,
+  duyet_boi text,
+  created_at timestamp with time zone not null default now()
+);
+
 create table if not exists public.projects (
   id uuid not null default gen_random_uuid(),
   name text not null,
@@ -640,6 +655,15 @@ do $d$ begin
   alter table public.messages add constraint messages_zalo_msg_id_key UNIQUE (zalo_msg_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.project_facts add constraint project_facts_nguon_check CHECK ((nguon = ANY (ARRAY['seller_chat'::text, 'buyer_chat'::text, 'ctv'::text, 'admin'::text, 'crawl'::text, 'llm'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.project_facts add constraint project_facts_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.project_facts add constraint project_facts_trang_thai_check CHECK ((trang_thai = ANY (ARRAY['cho_duyet'::text, 'da_duyet'::text, 'bo'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.projects add constraint projects_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -771,6 +795,15 @@ do $d$ begin
   alter table public.messages add constraint messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.project_facts add constraint project_facts_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.project_facts add constraint project_facts_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.project_facts add constraint project_facts_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.property_events add constraint property_events_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES buyers(id) ON DELETE SET NULL;
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -848,6 +881,8 @@ create index if not exists media_cleanup_can_lam_idx ON public.media_cleanup_que
 create index if not exists media_listing_id_idx ON public.media USING btree (listing_id);
 create index if not exists messages_conv_seq_idx ON public.messages USING btree (conversation_id, seq DESC);
 create index if not exists messages_conv_time_idx ON public.messages USING btree (conversation_id, created_at);
+create index if not exists project_facts_cho_duyet_idx ON public.project_facts USING btree (trang_thai, created_at DESC);
+CREATE UNIQUE INDEX project_facts_khong_trung_idx ON public.project_facts USING btree (project_id, khoa, gia_tri) WHERE (trang_thai <> 'bo'::text);
 create index if not exists projects_priority_idx ON public.projects USING btree (priority, district);
 create index if not exists property_events_at_idx ON public.property_events USING btree (at DESC);
 create index if not exists property_events_buyer_idx ON public.property_events USING btree (buyer_id);
@@ -2529,6 +2564,52 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.duyet_fact_du_an(p_id bigint, p_ok boolean DEFAULT true)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare f project_facts%rowtype;
+begin
+  if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
+    raise exception 'Khong co quyen quan tri' using errcode = '42501';
+  end if;
+  select * into f from project_facts where id = p_id;
+  if not found then return jsonb_build_object('ok', false, 'vi', 'khong thay dong'); end if;
+  if f.trang_thai <> 'cho_duyet' then
+    return jsonb_build_object('ok', false, 'vi', 'dong nay da xu ly roi');
+  end if;
+
+  if not p_ok then
+    update project_facts set trang_thai = 'bo', duyet_at = now(),
+           duyet_boi = coalesce((select auth.jwt() ->> 'email'), 'service_role')
+     where id = p_id;
+    return jsonb_build_object('ok', true, 'trang_thai', 'bo');
+  end if;
+
+  if f.khoa in ('tien_ich_gan', 'tien_ich', 'ha_tang', 'khu_compound') then
+    update projects
+       set amenities = (
+             select jsonb_agg(distinct x)
+             from jsonb_array_elements_text(coalesce(amenities, '[]'::jsonb) || to_jsonb(array[f.gia_tri])) x
+           ),
+           updated_at = now()
+     where id = f.project_id;
+  else
+    update projects
+       set specs = coalesce(specs, '{}'::jsonb) || jsonb_build_object(f.khoa, f.gia_tri),
+           updated_at = now()
+     where id = f.project_id;
+  end if;
+
+  update project_facts set trang_thai = 'da_duyet', duyet_at = now(),
+         duyet_boi = coalesce((select auth.jwt() ->> 'email'), 'service_role')
+   where id = p_id;
+  return jsonb_build_object('ok', true, 'trang_thai', 'da_duyet', 'khoa', f.khoa);
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.email_admin(p_loai text, p_zalo_uid text, p_body text, p_listing_id uuid DEFAULT NULL::uuid)
  RETURNS bigint
  LANGUAGE plpgsql
@@ -2660,6 +2741,26 @@ begin
                        rating_count = coalesce(rating_count, 0) + 1
      where id = v_seller;
   end if;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.ghi_fact_du_an(p_project_id uuid, p_khoa text, p_gia_tri text, p_nguon text DEFAULT 'seller_chat'::text, p_listing_id uuid DEFAULT NULL::uuid, p_conversation_id uuid DEFAULT NULL::uuid)
+ RETURNS bigint
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_id bigint;
+begin
+  if p_project_id is null or coalesce(btrim(p_gia_tri), '') = '' then return null; end if;
+  insert into project_facts (project_id, khoa, gia_tri, nguon, listing_id, conversation_id)
+  values (p_project_id, p_khoa, btrim(p_gia_tri), coalesce(p_nguon, 'seller_chat'), p_listing_id, p_conversation_id)
+  on conflict do nothing
+  returning id into v_id;
+  return v_id;
+exception when others then
+  -- Đây là việc phụ. Hỏng thì thôi, tuyệt đối không làm hỏng lượt trả lời khách.
+  return null;
 end $function$
 ;
 
@@ -5613,6 +5714,22 @@ create or replace view public.boc_tach_v with (security_invoker = true) as
     boc_tach_nhom(l.*) AS nhom
    FROM listings l;
 
+create or replace view public.project_facts_cho_duyet as
+ SELECT f.id,
+    f.project_id,
+    p.name AS du_an,
+    p.district AS quan,
+    f.khoa,
+    f.gia_tri,
+    f.nguon,
+    f.created_at,
+    l.code AS ma_tin
+   FROM project_facts f
+     JOIN projects p ON p.id = f.project_id
+     LEFT JOIN listings l ON l.id = f.listing_id
+  WHERE f.trang_thai = 'cho_duyet'::text
+  ORDER BY f.created_at DESC;
+
 -- ══ Trigger ══
 drop trigger if exists trg_bot_errors_het_tien on public.bot_errors;
 CREATE TRIGGER trg_bot_errors_het_tien AFTER INSERT ON public.bot_errors FOR EACH ROW EXECUTE FUNCTION bat_het_tien_api();
@@ -5727,6 +5844,7 @@ alter table public.mau_cau enable row level security;
 alter table public.media enable row level security;
 alter table public.media_cleanup_queue enable row level security;
 alter table public.messages enable row level security;
+alter table public.project_facts enable row level security;
 alter table public.projects enable row level security;
 alter table public.property_events enable row level security;
 alter table public.ratings_log enable row level security;
@@ -5838,6 +5956,8 @@ drop policy if exists messages_admin_read on public.messages;
 create policy messages_admin_read on public.messages as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists project_facts_admin_read on public.project_facts;
+create policy project_facts_admin_read on public.project_facts as permissive for SELECT to authenticated using (la_admin());
 drop policy if exists anon_read_projects on public.projects;
 create policy anon_read_projects on public.projects as permissive for SELECT to anon, authenticated using (true);
 drop policy if exists property_events_admin_read on public.property_events;
@@ -5910,6 +6030,8 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.me
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.messages to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.project_facts to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.project_facts_cho_duyet to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.projects to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.property_events to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.public_listings to service_role;
@@ -5981,6 +6103,8 @@ grant SELECT on public.hoi_thoai_thong_ke to service_role;
 grant SELECT on public.khach_can_nguoi_that to authenticated;
 grant SELECT on public.khach_can_nguoi_that to service_role;
 grant SELECT on public.listing_media to anon;
+grant SELECT on public.project_facts to authenticated;
+grant SELECT on public.project_facts_cho_duyet to authenticated;
 grant SELECT on public.ro_hang_ban to authenticated;
 grant SELECT on public.seller_ranks to anon;
 grant SELECT on public.seller_ranks to authenticated;
@@ -6116,6 +6240,9 @@ revoke all on function public.doc_gap(p_text text) from public, anon, authentica
 grant execute on function public.doc_gap(p_text text) to anon;
 grant execute on function public.doc_gap(p_text text) to authenticated;
 grant execute on function public.doc_gap(p_text text) to service_role;
+revoke all on function public.duyet_fact_du_an(p_id bigint, p_ok boolean) from public, anon, authenticated;
+grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean) to authenticated;
+grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean) to service_role;
 revoke all on function public.email_admin(p_loai text, p_zalo_uid text, p_body text, p_listing_id uuid) from public, anon, authenticated;
 grant execute on function public.email_admin(p_loai text, p_zalo_uid text, p_body text, p_listing_id uuid) to service_role;
 revoke all on function public.ensure_buyer_conversation(p_zalo_user_id text, p_channel text) from public, anon, authenticated;
@@ -6128,6 +6255,8 @@ revoke all on function public.ghi_boc_tach(p_listing_id uuid, p jsonb) from publ
 grant execute on function public.ghi_boc_tach(p_listing_id uuid, p jsonb) to service_role;
 revoke all on function public.ghi_danh_gia(p_buyer_id uuid, p_listing_id uuid, p_stars integer, p_note text) from public, anon, authenticated;
 grant execute on function public.ghi_danh_gia(p_buyer_id uuid, p_listing_id uuid, p_stars integer, p_note text) to service_role;
+revoke all on function public.ghi_fact_du_an(p_project_id uuid, p_khoa text, p_gia_tri text, p_nguon text, p_listing_id uuid, p_conversation_id uuid) from public, anon, authenticated;
+grant execute on function public.ghi_fact_du_an(p_project_id uuid, p_khoa text, p_gia_tri text, p_nguon text, p_listing_id uuid, p_conversation_id uuid) to service_role;
 revoke all on function public.ghi_fact_listing(p_listing_id uuid, p_question text, p_answer text, p_source text) from public, anon, authenticated;
 grant execute on function public.ghi_fact_listing(p_listing_id uuid, p_question text, p_answer text, p_source text) to service_role;
 revoke all on function public.ghi_su_kien_bds(p_listing_id uuid, p_type text, p_buyer_id uuid, p_meta jsonb) from public, anon, authenticated;

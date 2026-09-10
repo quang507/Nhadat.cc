@@ -61,7 +61,7 @@ Bảng NFR-01…18 với cách đo nằm ở `docs/07 §6` (nguồn sự thật)
 ## 10.5 Môi trường & công cụ (free-tier)
 
 - Unit: Vitest · E2E web: Playwright · A11y: axe-core · Perf: Lighthouse CI · bot: `bot/tests/e2e` (mock Supabase + mock model, Node/Bun).
-- CI: GitHub Actions free, `.github/workflows/kiem.yml` — mỗi PR chạy 5 job: `web` (tsc + `next build`), `bot` (303 ca e2e = 255 chat-reply + 44 webhook + 4 cổng; 82 ca FR-159/161/164; 199 ca FR-177 tiền định; 4 cảnh tự kiểm TS-SEC — mock Supabase & mock model nên không cần secret), `saoluu` (21 ca `scripts/sao-luu.tu-kiem.mjs`, PostgREST giả), `baomat` (`TS-SEC-AUTO` bắn anon key công khai vào DB thật), `truyvet` (`scripts/soat-truy-vet.sh`). Vercel preview mỗi PR. **Chưa vào CI:** TS-SEC bài phá huỷ (xoá dữ liệu thật nếu RLS hỏng), TS-SEC3 (`bot/tests/vai-tro.sql` — cần quyền SQL, CI chỉ có khoá công khai), TS-LIVE (cần bridge + hai máy), Lighthouse/axe/k6 — xem `docs/11 §11.4`.
+- CI: GitHub Actions free, `.github/workflows/kiem.yml` — mỗi PR chạy 5 job: `web` (tsc + `next build`), `bot` (304 ca e2e = 256 chat-reply + 44 webhook + 4 cổng; 82 ca FR-159/161/164; 199 ca FR-177 tiền định; 4 cảnh tự kiểm TS-SEC — mock Supabase & mock model nên không cần secret), `saoluu` (21 ca `scripts/sao-luu.tu-kiem.mjs`, PostgREST giả), `baomat` (`TS-SEC-AUTO` bắn anon key công khai vào DB thật), `truyvet` (`scripts/soat-truy-vet.sh`). Vercel preview mỗi PR. **Chưa vào CI:** TS-SEC bài phá huỷ (xoá dữ liệu thật nếu RLS hỏng), TS-SEC3 (`bot/tests/vai-tro.sql` — cần quyền SQL, CI chỉ có khoá công khai), TS-LIVE (cần bridge + hai máy), Lighthouse/axe/k6 — xem `docs/11 §11.4`.
 - DB: `nhadat-cc` là môi trường chính, **không** chạy test phá hoại; ca ghi bọc `do … raise exception` để cuộn lại. Zalo: OA thật chế độ ẩn + acc test (OPEN-09).
 - Bí mật chỉ trong biến môi trường / Vault; khoá đã dán vào chat phải rotate.
 
@@ -94,7 +94,7 @@ thì "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
 | Bộ | Ca | Trong lệnh | Nhóm ca / ID | Kiểm cái gì |
 |---|---|---|---|---|
-| `bot/tests/e2e/run.mjs` | 255 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10`, `N1…N33` (09–10/09) | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
+| `bot/tests/e2e/run.mjs` | 256 | `bun run e2e` (`chay.sh`) | TS-E2E, TS-TOIUU; nhãn `CỔNG-1…5`, `SEC-*`, `ĐUA-1…4`, `TRÙNG-1…10`, `N1…N34` (09–10/09) | Luồng `chat-reply` thật; cổng vào; tranh chấp ghi đồng thời; chống trùng lượt vào |
 | `bot/tests/e2e/webhook.mjs` | 44 | `bun run e2e` (`chay.sh`) | TS-IDEM2; nhãn `CK-1…8c`, `GUI-1…8` | `zalo-webhook`: chữ ký + replay; gửi đúng-một-lần ra Zalo |
 | `bot/tests/e2e/cong-thieu-bi-mat.mjs` | 4 | `bun run e2e` (`chay.sh`) | TS-SEC2 phần cổng | Thiếu `BRIDGE_SECRET` thì cổng ĐÓNG, không mở. Tiến trình RIÊNG vì `napCauHinh` nhớ tạm 60 s ở tầng module |
 | `bot/tests/fr159-bon-vai.mjs` | 65 | `bun run test:bot` | TS-VAI | Bốn vai người nhắn (FR-159, FR-170) |
@@ -846,6 +846,7 @@ văn model sinh ra (không kiểm tự động được — đọc `so.hoi_thoai
 | TS-QUOTA-03 | FR-192 nội dung: gọi bằng email admin thật | JSON có `luot_hom_nay`, `tran_ngay` (đọc Vault, mặc định 1000), `token_hom_nay`, `nguoi_dot_nhieu` (≤10 người, kèm cờ người quen), `het_credit` + `credit_loi_24h` + `credit_lan_cuoi`; KHÔNG có bí mật nào khác | ✅ 10/09 DB thật: 246 lượt/1000, 886.639 chữ-máy, het_credit=true (48 lượt bị từ chối, lần cuối 03:16 UTC) |
 | TS-LOAI-01 | FR-193 trên DB thật: `guess_property_type` với 14 câu người thật gõ, gồm câu chủ dự án nhắn 10/09 ("Chào bạn tôi cần bán căn ho ở Hà đô centrosa garden"), câu không dấu ("ban can ho 2pn quan 7"), viết tắt ("Bán CC Sunrise City") | 14/14 đúng loại | ✅ 10/09 DB thật |
 | TS-DUAN-01 | FR-193 c/d trên DB thật sau khi nạp 1.643 dự án: `match_projects` với 7 câu khách hay nói, có dấu và không dấu, tên đủ và tên rút gọn | mỗi câu ra đúng dự án và đúng quận | ✅ 10/09: Hà Đô Centrosa → Quận 10 (cả "ha do centrosa garden" không dấu), Vinhomes Grand Park → Quận 9, Cát Tường Phú Sinh → Đức Hoà, Sunrise City → Quận 7, Masteri Thảo Điền → Quận 2, The Win City → Đức Hoà |
+| TS-DUAN-02 | FR-195 vòng đầy đủ trên DB thật: `ghi_fact_du_an()` một dòng phí quản lý cho Centrosa → hiện ở `project_facts_cho_duyet` → gọi `duyet_fact_du_an(id, true)` bằng email admin | dòng vào trạng thái cho_duyet; sau khi gật thì `projects.specs.phi_quan_ly` có giá trị và dòng chuyển da_duyet | ✅ 10/09 DB thật (đã dọn dòng thử sau khi đo) |
 | TS-GROQ-01 | FR-194: gọi Groq bằng đúng khuôn prompt người bán (câu hỏi bắt buộc "sổ hồng riêng chưa, hoàn công chưa") trên 3 model | model giữ đúng câu hỏi cuối, giọng tự nhiên, dưới 30 từ | ✅ 10/09: qwen3.8-27b đạt (465 ms), gpt-oss-120b đạt (1.3 s), gpt-oss-20b TRẢ RỖNG — không dùng |
 | TS-GROQ-02 | FR-194: đầu ra có khuôn (`response_format json_schema`) cho hồ sơ người mua | JSON đúng schema, đọc được | ✅ 10/09 (đúng khuôn; chất lượng bóc kém hơn model chính — đã có lưới regex `regexProfileFallback`) |
 | TS-GROQ-03 | FR-194: lượt có ẢNH khi đang chạy dự phòng | ném lỗi → tầng gọi cất ảnh vào bucket RIÊNG TƯ (FR-185), KHÔNG bịa nhãn ảnh | ⏳ chờ ảnh thật qua Zalo |
