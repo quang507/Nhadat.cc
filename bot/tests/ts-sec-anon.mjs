@@ -183,6 +183,11 @@ for (const bang of ["projects", "listing_facts", "listing_photos_v"]) {
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) {
   console.log("TS-SEC HỎNG — coi là sự cố bảo mật, đừng merge.");
-  process.exit(1);
+  // `process.exitCode` chứ KHÔNG `process.exit()`: trên Windows, cắt tiến trình
+  // khi còn socket keep-alive của mấy chục lượt dò làm libuv nổ assertion, bun
+  // trả 0xC0000409 thay vì 1 — bài tự kiểm đọc mã thoát liền báo "TỰ KIỂM
+  // HỎNG" trong lúc bộ probe vẫn chấm đúng. Để script tự hết là hết.
+  process.exitCode = 1;
+} else {
+  console.log("TẤT CẢ CA TS-SEC ĐẠT");
 }
-console.log("TẤT CẢ CA TS-SEC ĐẠT");

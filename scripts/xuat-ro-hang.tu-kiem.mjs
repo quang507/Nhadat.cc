@@ -191,8 +191,11 @@ await canh(
 {
   const dich = mkdtempSync(path.join(tmpdir(), "rohang-"));
   rac.push(dich);
-  const env = { ...process.env };
-  delete env.SUPABASE_SERVICE_ROLE_KEY;
+  // ĐẶT RỖNG chứ không `delete`: script tự nạp `scripts/.env`, mà máy người làm
+  // thì có file đó — xoá biến khỏi env là nó nạp lại khoá THẬT rồi xuất rổ hàng
+  // thật ra thư mục tạm, ca kiểm thành vô nghĩa (bắt 10/09: ca này "thoát 0" và
+  // in ra 6 tin). Khoá rỗng thì nhánh nạp bỏ qua (tên biến đã có trong env).
+  const env = { ...process.env, SUPABASE_SERVICE_ROLE_KEY: "" };
   const r = spawnSync("node", [SCRIPT, dich], { encoding: "utf8", env });
   const out = (r.stdout ?? "") + (r.stderr ?? "");
   r.status === 1 && out.includes("SUPABASE_SERVICE_ROLE_KEY")

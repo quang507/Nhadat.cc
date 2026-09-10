@@ -77,9 +77,23 @@ const duong_dich = argv.find((a, i) =>
   !a.startsWith("--") && argv[i - 1] !== "--anh"
 );
 
+// `process.exit()` ở đây làm node trên Windows nổ
+// `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`: socket keep-alive của
+// lượt fetch vừa xong còn trong tay libuv, cắt tiến trình là chết kiểu 0xC0000409
+// (mã thoát 3221226505) thay vì 1. Script vẫn in đúng lý do hỏng, nhưng ai đọc MÃ
+// THOÁT — bài tự kiểm, CI, cron — thì thấy một kiểu hỏng khác hẳn. Nay ném lỗi
+// riêng, bẫy ở `uncaughtException`, để tiến trình tự hết với exitCode = 1.
+class LoiDung extends Error {
+  constructor(msg) { super(msg); this.name = "LoiDung"; }
+}
+process.on("uncaughtException", (e) => {
+  if (e?.name !== "LoiDung") console.error(e);
+  process.exitCode = 1;
+});
+
 function chet(msg) {
   console.error(`\n\x1b[31m${msg}\x1b[0m`);
-  process.exit(1);
+  throw new LoiDung(msg);
 }
 
 if (!KHOA) {
