@@ -17,6 +17,7 @@ export const AnhSchema = z.object({
   loai: z.enum(LOAI_ANH).describe(
     "mat_tien = mặt ngoài / mặt tiền nhà, cửa, ban công nhìn từ ngoài; trong_nha = phòng khách, bếp, phòng ngủ, WC, cầu thang; hem = hẻm/đường trước nhà; giay_to = sổ hồng, sổ đỏ, giấy chứng nhận, hợp đồng mua bán, CCCD, giấy tờ có chữ in; ban_ve = bản vẽ, sơ đồ, mặt bằng, quy hoạch; khac = không rõ hoặc không thuộc loại nào",
   ),
+  khen: z.string().nullable().describe("MỘT điểm mạnh THẬT nhìn thấy trong ảnh để khen chủ nhà (dưới 12 từ, ví dụ 'mặt tiền sáng, hẻm rộng xe hơi vào thoải mái'); null nếu không có gì đáng khen hoặc là giấy tờ. Không bịa."),
   mo_ta: z.string().describe("Một câu dưới 15 từ tả điều THẤY được; đoán thì mở bằng 'hình như'. Không suy diễn vật liệu/pháp lý."),
   giay_to: z.object({
     loai_giay: z.string().nullable().describe("'sổ hồng' / 'sổ đỏ' / 'hợp đồng mua bán' / 'giấy tờ khác'"),

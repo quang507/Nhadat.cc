@@ -248,6 +248,8 @@ export const FACT_LABELS: Record<string, string> = {
   truot_gia: "trượt giá thuê mỗi năm",
   // FR-184: chủ nhà nhiều căn báo ngưng rao — hỏi căn nào.
   ngung_rao_can_nao: "chủ nhà chỉ căn muốn ngưng rao",
+  // FR-188 (10/09/2026): cần ra hàng gấp hay được giá thì thôi — hỏi ngay sau giá.
+  gap: "cần bán/cho thuê gấp hay không",
   // 20260909i (FR-186 mở rộng, chat Gemini 21/06 lượt 38 + 65–67, chat 07/09): nhóm
   // sau_dang (hỏi bù sau khi lên kệ) + 4 loại mới toa_nha / dat_nong_nghiep / dat_kinh_doanh / kho_xuong.
   so_wc: "số WC", cach_mat_tien: "cách mặt tiền đường bao xa", hem_thong: "hẻm thông hay cụt, quay đầu xe được không",
@@ -294,6 +296,7 @@ export const CAU_HOI_MAU: Record<string, string> = {
   truot_gia: "Giá thuê mỗi năm mình tăng khoảng mấy phần trăm {ac}?",
   tiem_nang: "Nhà mình hợp để ở hay kinh doanh ngành gì {ac}?",
   ngung_rao_can_nao: "{Ac} muốn ngưng rao căn nào ạ? Nhắn số thứ tự hoặc địa chỉ giúp em.",
+  gap: "Mình cần ra hàng gấp hay được giá thì thôi {ac}?",
   danh_gia: "{Ac} thấy em nói chuyện có giống người thật không, có làm mất thời gian {ac} không ạ?\nNếu chấm cách em chăm sóc thì {ac} cho em mấy điểm trên 10 ạ?",
   gia: "{Ac} muốn thu về tầm bao nhiêu ạ?",
   dien_tich: "Diện tích trên sổ bao nhiêu, ngang dài thế nào {ac}?",

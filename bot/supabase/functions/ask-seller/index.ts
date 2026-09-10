@@ -73,6 +73,11 @@ Deno.serve(async (req) => {
     .from("info_requests")
     .select("question, status")
     .eq("listing_id", listing_id);
+  // FR-186 o (chat Gemini 21/06 lượt 1 "không hỏi lần thứ hai", chủ dự án 10/09):
+  // câu chủ nhà đã NÉ (info_request expired) thì vòng hỏi bù KHÔNG hỏi lại.
+  const daNeKeys = new Set(
+    (daHoi ?? []).filter((r) => r.status === "expired").map((r) => r.question),
+  );
   const pendingKeys = new Set(
     (daHoi ?? []).filter((r) => r.status === "pending").map((r) => r.question),
   );
@@ -97,7 +102,7 @@ Deno.serve(async (req) => {
     (QUAN_TRONG.includes(f.fact_key) ? 0 : 10) +
     (f.nhom === "co_ban" ? 0 : f.nhom === "chuyen_mon" ? 1 : f.nhom === "sau_dang" ? 2 : 3);
   const candidates = (missing ?? [])
-    .filter((f) => !pendingKeys.has(f.fact_key))
+    .filter((f) => !pendingKeys.has(f.fact_key) && !daNeKeys.has(f.fact_key))
     .sort((a, b) => bac(a) - bac(b) || (a.priority ?? 0) - (b.priority ?? 0));
   const toAsk = candidates.slice(0, 3);
 

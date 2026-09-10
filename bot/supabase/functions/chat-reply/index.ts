@@ -854,11 +854,28 @@ Deno.serve(async (req) => {
     if (vai) {
       const maTin = noiBo[1].toUpperCase();
       const traLoi = noiBo[2].trim();
-      const { data: lst } = await client.from("listings").select("id")
+      const { data: lst } = await client.from("listings").select("id, seller_id")
         .or(`code.ilike.${maTin},legacy_code.ilike.${maTin}`).limit(1).maybeSingle();
       if (!lst) {
         const khong = `Em không thấy tin #${maTin} trong kho ạ, anh/chị xem lại mã giúp em.`;
         return await hoanTat({ reply: khong, replies: [khong], noi_bo: vai });
+      }
+      // FR-189 (chat Gemini 21/06 lượt 33, chủ dự án 10/09/2026): NGƯỜI THẬT CƯỚP
+      // QUYỀN / TRẢ LẠI BOT bằng lệnh — "#mã giữ" → bot im với chủ căn đó tới khi
+      // "#mã trả bot". Cột `conversations.human_hold`; nhãn ở /admin/tin-nhan.
+      const lenhGiu = /^(giu|giữ|giu khach|giữ khách|cuop|cướp|takeover|take over)\s*$/i.test(traLoi);
+      const lenhTra = /^(tra|trả|tra bot|trả bot|tha|thả|release|tra lai|trả lại)\s*$/i.test(traLoi);
+      if ((lenhGiu || lenhTra) && lst.seller_id) {
+        // Chủ căn chưa có hội thoại (mở hồ sơ bằng form admin) thì tạo trước rồi giữ.
+        await client.rpc("ensure_seller_conversation", { p_seller_id: lst.seller_id, p_channel: channel });
+        const { error: gErr } = await client.from("conversations")
+          .update({ human_hold: lenhGiu, ...(lenhGiu ? { needs_human: false, human_touch_at: new Date().toISOString() } : {}) })
+          .eq("seller_id", lst.seller_id);
+        if (gErr) await ghiLoi(client, "chat-reply human_hold", gErr.message);
+        const rep = lenhGiu
+          ? `Em im với chủ căn #${maTin} rồi ạ, anh/chị nói chuyện trực tiếp nha. Xong thì nhắn "#${maTin} trả bot" để em tiếp tục.`
+          : `Em tiếp tục chăm chủ căn #${maTin} rồi ạ.`;
+        return await hoanTat({ reply: rep, replies: [rep], noi_bo: vai, human_hold: lenhGiu });
       }
       // Câu khách hỏi CŨ NHẤT đang chờ của căn này là câu được trả lời; không
       // có câu nào thì vẫn ghi làm fact bổ sung (CTV đi hỏi rồi, đừng bỏ).
@@ -1007,9 +1024,15 @@ Deno.serve(async (req) => {
   // hoặc người bán quen nói "còn căn nữa" — "tôi có căn nhà ở phường 4" một
   // mình vẫn mập mờ (FR-159: người mua kể hoàn cảnh), giữ nguyên đường hỏi vai.
   const moiGioiCoHang = khop(
-    /(môi giới|\bsale\b|bên sàn|sàn bđs|bên em có|còn (?:một |1 )?căn (?:nữa|khác)|thêm (?:một |1 )?căn)[^.!?]{0,60}?(có|còn)?\s*(một |1 )?(căn|nhà|đất|lô|mặt bằng|chung cư|kho|xưởng|toà|tòa)/i,
-    /(moi gioi|\bsale\b|ben san|san bds|ben em co|con (?:mot |1 )?can (?:nua|khac)|them (?:mot |1 )?can)[^.!?]{0,60}?(co|con)?\s*(mot |1 )?(can|nha|dat|\blo\b|mat bang|chung cu|kho|xuong|\btoa\b)/,
-  );
+    /(môi giới|\bsale\b|bên sàn|sàn bđs|bên em có)[^.!?]{0,60}?(có|còn)?\s*(một |1 )?(căn|nhà|đất|lô|mặt bằng|chung cư|kho|xưởng|toà|tòa)/i,
+    /(moi gioi|\bsale\b|ben san|san bds|ben em co)[^.!?]{0,60}?(co|con)?\s*(mot |1 )?(can|nha|dat|\blo\b|mat bang|chung cu|kho|xuong|\btoa\b)/,
+  ) ||
+    // "Còn căn nữa: 7 Hồng Bàng …" / "thêm căn …" — người bán quen rao căn thứ hai
+    // (10/09: lần 4 kịch bản thật câu này bị hiểu là lời SỬA phường của căn cũ).
+    khop(
+      /^\s*(còn|thêm|có thêm)\s*(một |1 )?(căn|lô|nhà|miếng)\s*(nữa|khác|thứ \d)?\s*[:,.-]?/i,
+      /^\s*(con|them|co them)\s*(mot |1 )?(can|lo|nha|mieng)\s*(nua|khac|thu \d)?\s*[:,.-]?/,
+    );
   const wantsSell =
     (khop(/\b(bán|rao)\b|cho thu[êe]/i, /\b(ban|rao)\b|cho thue/) && coLoaiBDS &&
       (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang))) ||
@@ -1144,7 +1167,7 @@ Deno.serve(async (req) => {
         p_channel: channel,
       }).single();
     const convSRow = convS as
-      { c_id?: string; c_human_touch_at?: string | null } | null;
+      { c_id?: string; c_human_touch_at?: string | null; c_human_hold?: boolean | null } | null;
     const convSId = convSRow?.c_id ?? null;
     // Hàm thiếu / mất quyền / DB nghẽn mà đi tiếp thì bot vẫn trả lời trong khi
     // KHÔNG ghi được dòng nào: dedup 23505 tắt (Zalo gửi lại là bóc fact hai
@@ -1193,8 +1216,10 @@ Deno.serve(async (req) => {
     // dữ liệu căn đó đứng hình. Nên cổng chỉ khoá ĐƯỜNG RA (traLoiSeller) và
     // khoá lượt gọi model, không khoá đường ghi.
     const nguoiThatDangCham = convSRow?.c_human_touch_at;
-    const humanActive = !!nguoiThatDangCham &&
-      Date.now() - Date.parse(nguoiThatDangCham) < 30 * 60e3;
+    // FR-189 (10/09/2026): người thật GIỮ khách ("#mã giữ") → bot im vô thời hạn
+    // tới khi "trả bot"; ngoài ra vẫn nhường sân 30 phút sau tin gõ tay (FR-141).
+    const humanActive = convSRow?.c_human_hold === true || (!!nguoiThatDangCham &&
+      Date.now() - Date.parse(nguoiThatDangCham) < 30 * 60e3);
 
     // MỌI đường ra của nhánh này phải đi qua đây — trả lời của bot cũng là một
     // dòng trong sổ. Thêm `return jsonResponse(...)` trần ở nhánh seller là
@@ -1705,7 +1730,12 @@ Deno.serve(async (req) => {
       } else if (kq) {
         const nhan = LOAI_ANH_VI[kq.loai];
         const moTa = kq.mo_ta?.trim() ? `, ${kq.mo_ta.trim().replace(/\.$/, "").toLowerCase()}` : "";
-        ackAnh.push(`Em nhận được ảnh${nhan ? ` ${nhan}` : ""} rồi ạ${moTa}. Ảnh này giúp khách hình dung căn nhà nhanh hơn nhiều.`);
+        // 10/09 (chủ dự án): ảnh đã được model ĐỌC trước khi cất kho → khen bằng
+        // điểm mạnh THẬT nhìn thấy (`khen`), không khen suông.
+        const khen = (kq as { khen?: string | null }).khen?.trim()?.replace(/\.$/, "");
+        ackAnh.push(khen
+          ? `Em nhận được ảnh${nhan ? ` ${nhan}` : ""} rồi ạ. ${khen.charAt(0).toUpperCase() + khen.slice(1)}, khách lướt qua là để ý liền.`
+          : `Em nhận được ảnh${nhan ? ` ${nhan}` : ""} rồi ạ${moTa}. Ảnh này giúp khách hình dung căn nhà nhanh hơn nhiều.`);
       } else {
         ackAnh.push("Dạ em nhận được ảnh rồi ạ, em bổ sung vào tin ngay.");
       }
@@ -2628,6 +2658,7 @@ Deno.serve(async (req) => {
   const convRow = {
     ctv_id: (bc.c_ctv_id as string | null | undefined) ?? null,
     human_touch_at: (bc.c_human_touch_at as string | null | undefined) ?? null,
+    human_hold: (bc.c_human_hold as boolean | null | undefined) === true,
   };
 
   // Dedupe theo msg_id (retry không tạo tin đôi)
@@ -2657,9 +2688,9 @@ Deno.serve(async (req) => {
 
   // FR-141: người thật nhắn tay trong 30 phút gần đây → bot im, chỉ ghi log
   // tin khách; người thật ngừng đủ lâu thì bot tự tiếp chuyện lại.
-  if (convRow.human_touch_at &&
-      Date.now() - Date.parse(convRow.human_touch_at) < 30 * 60e3) {
-    return await hoanTat({ reply: null, replies: [], human_active: true });
+  if (convRow.human_hold || (convRow.human_touch_at &&
+      Date.now() - Date.parse(convRow.human_touch_at) < 30 * 60e3)) {
+    return await hoanTat({ reply: null, replies: [], human_active: true, human_hold: convRow.human_hold });
   }
 
   // MỘT lượt đọc `messages` cho bốn việc từng là bốn truy vấn nối đuôi
@@ -2798,6 +2829,8 @@ Deno.serve(async (req) => {
     .eq("deal", dealCol(prefs.deal))
     .in("status", ["dang_ban", "dang_quan_tam"]) // FR-139: chỉ gợi ý tin đang lên kệ
     .not("price_raw", "is", null).neq("price_raw", "")
+    // FR-188 (10/09): căn chủ CẦN BÁN GẤP lên đầu khi ghép khách, rồi mới tới mới nhất.
+    .order("gap", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false }).limit(6);
   const wardNum = typeof prefs.area === "string" ? soPhuong(boDau(prefs.area)) : null;
   // Khớp ĐÚNG số phường (ilike không wildcard = so khớp nguyên chuỗi,
@@ -3192,6 +3225,10 @@ Deno.serve(async (req) => {
   // Riêng notes (hoàn cảnh) là TÍCH LUỸ — nối thêm, đừng ghi đè mất "mẹ già ở
   // cùng" chỉ vì hôm nay khách nói "ưu tiên gần chợ".
   const delta: Record<string, unknown> = {};
+  // FR-188 (10/09/2026): khách MUA nói "cần tìm gấp / mua gấp" → cờ gấp trong hồ
+  // sơ (tiền định, laGap); "không gấp, từ từ" → false. CTV và ghép căn đọc cờ này.
+  if (laGap(text)) delta.gap = true;
+  else if (/\b(khong|ko|k|chua)\s*(?:can\s*)?(?:gap|voi)\b|\btu tu\b|\bkhong voi\b/.test(tKD)) delta.gap = false;
   for (const [k, v] of Object.entries(out.profile)) {
     if (v === null || v === "" || k === "name") continue;
     if (k === "notes" && typeof prefs.notes === "string" && prefs.notes) {

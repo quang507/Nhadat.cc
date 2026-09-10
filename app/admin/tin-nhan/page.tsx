@@ -12,7 +12,7 @@ import { IconChat, IconRefresh, IconTrash } from "@/components/icons";
 
 type HoiThoai = {
   id: string; channel: string | null; seller_id: string | null; buyer_id: string | null;
-  last_message_at: string | null; needs_human: boolean | null; human_touch_at: string | null;
+  last_message_at: string | null; needs_human: boolean | null; human_touch_at: string | null; human_hold?: boolean | null;
   sellers: { name: string | null; zalo_user_id: string | null } | null;
   buyers: { name: string | null; zalo_user_id: string | null } | null;
 };
@@ -55,7 +55,7 @@ export default function Page() {
   const napHoiThoai = async () => {
     const { data, error } = await supabase
       .from("conversations")
-      .select("id, channel, seller_id, buyer_id, last_message_at, needs_human, human_touch_at, sellers!conversations_seller_id_fkey(name, zalo_user_id), buyers!conversations_buyer_id_fkey(name, zalo_user_id)")
+      .select("id, channel, seller_id, buyer_id, last_message_at, needs_human, human_touch_at, human_hold, sellers!conversations_seller_id_fkey(name, zalo_user_id), buyers!conversations_buyer_id_fkey(name, zalo_user_id)")
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(200);
     if (error) setLoi(error.message);
@@ -73,7 +73,7 @@ export default function Page() {
         const id = new URLSearchParams(location.search).get("hoi_thoai");
         if (id) {
           const { data } = await supabase.from("conversations")
-            .select("id, channel, seller_id, buyer_id, last_message_at, needs_human, human_touch_at, sellers!conversations_seller_id_fkey(name, zalo_user_id), buyers!conversations_buyer_id_fkey(name, zalo_user_id)")
+            .select("id, channel, seller_id, buyer_id, last_message_at, needs_human, human_touch_at, human_hold, sellers!conversations_seller_id_fkey(name, zalo_user_id), buyers!conversations_buyer_id_fkey(name, zalo_user_id)")
             .eq("id", id).maybeSingle();
           if (data) moHoiThoai(data as unknown as HoiThoai);
         }
@@ -125,6 +125,15 @@ export default function Page() {
     if (error) { setLoi(error.message); return; }
     setChon({ ...chon, needs_human: false });
     setThongBao(`Đã đánh dấu "${ten(chon)}" là đã xử lý.`);
+    await napHoiThoai();
+  };
+  // FR-189: người thật GIỮ khách (bot im vô thời hạn) / TRẢ bot — RPC giu_khach (admin).
+  const giuKhach = async (giu: boolean) => {
+    if (!chon) return;
+    const { error } = await supabase.rpc("giu_khach", { p_conversation_id: chon.id, p_giu: giu });
+    if (error) { setLoi(error.message); return; }
+    setChon({ ...chon, human_hold: giu, needs_human: giu ? false : chon.needs_human });
+    setThongBao(giu ? `Đang giữ "${ten(chon)}": bot im tới khi bấm "Trả bot".` : `Đã trả "${ten(chon)}" cho bot.`);
     await napHoiThoai();
   };
   const luu = async (t: Tin) => {
@@ -202,7 +211,8 @@ export default function Page() {
                   <div className="flex flex-wrap gap-1 pl-10">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${h.seller_id ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}>{h.seller_id ? "bán" : "mua"}</span>
                     {h.needs_human && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">cần người thật</span>}
-                    {h.human_touch_at && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-mute">người thật đã vào</span>}
+                    {h.human_hold && <span className="rounded bg-navy px-1.5 py-0.5 text-[10px] font-bold text-white">người thật giữ</span>}
+                    {h.human_touch_at && !h.human_hold && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-mute">người thật đã vào</span>}
                     {n > 0 && <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">{n} mẫu</span>}
                   </div>
                 </button>
@@ -228,6 +238,9 @@ export default function Page() {
               <div className="flex items-center gap-2">
                 <span className="mr-1 text-xs text-mute tabular-nums">{tin.length} lượt</span>
                 {chon.needs_human && <Btn onClick={daXuLy} className="py-1.5 text-xs">Đã xử lý</Btn>}
+                {chon.human_hold
+                  ? <Btn onClick={() => giuKhach(false)} className="py-1.5 text-xs" title="Bot đang im — bấm để bot chăm tiếp">Trả bot</Btn>
+                  : <Btn onClick={() => giuKhach(true)} className="py-1.5 text-xs" title="Bot im vô thời hạn, người thật nói chuyện">Giữ khách</Btn>}
                 <Btn variant="danger" onClick={xoaKhach} className="py-1.5 text-xs" title="Xoá vĩnh viễn khách này cùng tin, ảnh, hội thoại"><IconTrash className="h-3.5 w-3.5" /> Xoá khách</Btn>
               </div>
             </div>

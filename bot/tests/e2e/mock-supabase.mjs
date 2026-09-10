@@ -64,7 +64,7 @@ export class FakeDB {
       // để cron hỏi bù. Mock lọc là mock nói dối đúng chỗ tính năng này đo.
       const have = new Set(this.t.listing_facts.filter((f) => f.listing_id === l.id).map((f) => f.question));
       if (l.location_raw || l.street || l.project_id) have.add("vi_tri"); // 20260909m
-      if (l.price_raw) have.add("gia"); if (l.area_m2) { have.add("dien_tich"); have.add("dien_tich_dat"); have.add("dien_tich_tim_tuong"); } if (l.ward) have.add("phuong");
+      if (l.price_raw) have.add("gia"); if (l.gap != null) have.add("gap"); if (l.area_m2) { have.add("dien_tich"); have.add("dien_tich_dat"); have.add("dien_tich_tim_tuong"); } if (l.ward) have.add("phuong");
       if (l.property_type && l.property_type !== "chua_ro") have.add("loai_bds"); if (l.bedrooms) have.add("so_phong_ngu");
       if (l.alley_width_m || l.access_type === "mat_tien") { have.add("do_rong_hem"); have.add("do_rong_duong"); } if (l.floors) have.add("ket_cau");
       if (l.legal_status) have.add("phap_ly"); if (l.direction) have.add("huong"); if (l.floor) have.add("tang");
@@ -72,7 +72,7 @@ export class FakeDB {
       // Ảnh trong kho (listing_media) = đã có ảnh, như view thật (FR-185).
       if (this.t.listing_media.some((m) => m.listing_id === l.id)) have.add("hinh_anh");
       const loai = REQ[l.property_type ?? "chua_ro"] ? (l.property_type ?? "chua_ro") : "chua_ro";
-      for (const [k, priority, nhom, deal] of REQ[loai]) {
+      for (const [k, priority, nhom, deal] of [...REQ[loai], ...(loai === "chua_ro" ? [] : [["gap", 10, "co_ban", null]])]) {
         if (deal && deal !== (l.deal ?? "ban")) continue;
         if (!have.has(k)) out.push({ listing_id: l.id, fact_key: k, priority, nhom });
       }
@@ -493,7 +493,7 @@ class RpcCall {
         if (!b) b = db.insert("buyers", { zalo_user_id: a.p_zalo_user_id, name: null, preferences: {} }).data;
         let c = db.t.conversations.filter((x) => x.buyer_id === b.id).sort((x, y) => (x.started_at < y.started_at ? 1 : -1))[0];
         if (!c) c = db.insert("conversations", { buyer_id: b.id, channel: a.p_channel, started_at: now(), human_touch_at: null, ctv_id: null }).data;
-        return { data: { b_id: b.id, b_name: b.name, b_prefs: b.preferences, c_id: c.id, c_ctv_id: c.ctv_id ?? null, c_human_touch_at: c.human_touch_at ?? null }, error: null };
+        return { data: { b_id: b.id, b_name: b.name, b_prefs: b.preferences, c_id: c.id, c_ctv_id: c.ctv_id ?? null, c_human_touch_at: c.human_touch_at ?? null, c_human_hold: c.human_hold === true }, error: null };
       }
       case "tao_followup": {
         // 20260902d: một nhắc follow-up còn hiệu lực mỗi khách mỗi 24h
@@ -506,7 +506,7 @@ class RpcCall {
       case "ensure_seller_conversation": {
         let c = db.t.conversations.find((x) => x.seller_id === a.p_seller_id);
         if (!c) c = db.insert("conversations", { seller_id: a.p_seller_id, channel: a.p_channel, started_at: now(), human_touch_at: null }).data;
-        return { data: { c_id: c.id, c_human_touch_at: c.human_touch_at }, error: null };
+        return { data: { c_id: c.id, c_human_touch_at: c.human_touch_at, c_human_hold: c.human_hold === true }, error: null };
       }
       case "mo_ho_so_nguoi_ban": {
         let s = db.t.sellers.find((x) => x.zalo_user_id === a.p_zalo_user_id);
@@ -524,6 +524,10 @@ class RpcCall {
         if (a.p_question === "vi_tri" && !l.location_raw) l.location_raw = String(a.p_answer).trim();
         if (a.p_question === "gia") { l.price_raw = a.p_answer; l.price_vnd = parseVnd(a.p_answer); }
         if (a.p_question === "phuong") l.ward = a.p_answer;
+        if (a.p_question === "gap") {
+          const kd = String(a.p_answer).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+          l.gap = /\b(khong|ko|k|chua|chang)\s*(can\s*)?(gap|voi)\b|duoc gia thi thoi|khong voi|tu tu/.test(kd) ? false : /\bgap\b|can tien|\bvoi\b/.test(kd) ? true : l.gap;
+        }
         if (a.p_question === "dien_tich" || a.p_question === "dien_tich_dat") {
           const m = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(a.p_answer);
           l.area_m2 = m ? parseFloat(m[1].replace(",", ".")) * parseFloat(m[2].replace(",", ".")) : parseFloat(String(a.p_answer).replace(",", "."));
