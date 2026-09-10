@@ -13,14 +13,40 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 // Chủ dự án 10/09/2026 (còn ~15 đô số dư): "hạ bot xuống haiku 4.5 đi".
 export const MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-haiku-4-5-20251001";
 
-/** Bọc client để mọi lượt gọi đi qua `locThamSo`. Giữ nguyên hai hàm đang dùng. */
-function bocLocThamSo(c: Anthropic): Anthropic {
+/**
+ * DẤU SỐNG của model chính (FR-192 b). Băng đỏ "hết số dư" ở /admin trước đây
+ * chỉ đọc dấu vết CHẾT — dòng lỗi "credit balance is too low" trong 24 giờ —
+ * nên chủ dự án nạp tiền xong, model gọi lại được, mà băng vẫn đỏ tới hôm sau
+ * ("nãy giờ tao thấy vẫn còn 15 đô chứ hết đâu", 10/09/2026). Cần một thứ nói
+ * "BÂY GIỜ nó vẫn chạy", và thứ đó chỉ có ở đây: lượt gọi vừa TRẢ VỀ.
+ *
+ * Tiết chế 2 phút một lần cho mỗi isolate — dấu này để người nhìn màn hình, độ
+ * phân giải phút là quá đủ; đóng mỗi lượt là thêm một RPC vào mọi tin nhắn.
+ */
+const NHIP_DAU_MS = 120_000;
+let dauLuc = 0;
+
+function bocLocThamSo(c: Anthropic, db: SupabaseClient): Anthropic {
+  const dongDau = () => {
+    const gio = Date.now();
+    if (gio - dauLuc < NHIP_DAU_MS) return;
+    dauLuc = gio;
+    // Không await: dấu hỏng thì thôi, tuyệt đối không giữ chân câu trả lời khách.
+    db.rpc("beat", { p_who: "model_chinh" }).then(
+      () => {},
+      () => {},
+    );
+  };
+  // deno-lint-ignore no-explicit-any
+  const xong = <T,>(p: Promise<T>): Promise<T> => p.then((r) => { dongDau(); return r; });
   return {
     messages: {
       // deno-lint-ignore no-explicit-any
-      create: (p: any) => c.messages.create(locThamSo(p, MODEL)),
+      create: (p: any) => xong(c.messages.create(locThamSo(p, MODEL))),
       // deno-lint-ignore no-explicit-any
-      parse: (p: any) => (c.messages as unknown as { parse: (x: unknown) => unknown }).parse(locThamSo(p, MODEL)),
+      parse: (p: any) => xong(
+        (c.messages as unknown as { parse: (x: unknown) => Promise<unknown> }).parse(locThamSo(p, MODEL)),
+      ),
     },
   } as unknown as Anthropic;
 }
@@ -87,7 +113,7 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   const groqKey = await secretOf(db, "GROQ_API_KEY");
   const groqModel = (await secretOf(db, "GROQ_MODEL")) ?? "qwen/qwen3.8-27b";
   if (!apiKey && !groqKey) throw new Error("Không tìm thấy ANTHROPIC_API_KEY lẫn GROQ_API_KEY (env lẫn Vault)");
-  const chinh = apiKey ? bocLocThamSo(new Anthropic({ apiKey })) : null;
+  const chinh = apiKey ? bocLocThamSo(new Anthropic({ apiKey }), db) : null;
   if (!groqKey) return chinh!;
   const ghiSo = async (nguon: string, chiTiet: string) => {
     try {

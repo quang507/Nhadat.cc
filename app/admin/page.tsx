@@ -70,6 +70,8 @@ type Quota = {
   het_credit: boolean;
   credit_loi_24h: number;
   credit_lan_cuoi: string | null;
+  // Lúc model CHÍNH trả lời được lần gần nhất (bot_health 'model_chinh').
+  model_song_luc: string | null;
   co_du_phong: boolean;
   dang_chay_du_phong: boolean;
 };
@@ -2003,8 +2005,16 @@ function TheQuota({ q, tokenTien }: { q: Quota | null; tokenTien: number | null 
       <div className="rounded-xl border border-line p-3 bg-slate-50/50">
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
           <span className="font-semibold text-navy">Số dư tài khoản model</span>
+          {/* Ba trạng thái, không phải hai: đang hết; đã hết RỒI GỌI LẠI ĐƯỢC
+              (nạp tiền xong — chủ dự án 10/09: "vẫn còn 15 đô chứ hết đâu");
+              và chưa hề bị từ chối lần nào. Gộp hai cái sau thành "chưa thấy
+              lượt nào bị từ chối" là nói dối theo chiều ngược lại. */}
           <span className={`text-xs font-bold ${q.het_credit ? "text-brand" : "text-emerald-700"}`}>
-            {q.het_credit ? `HẾT SỐ DƯ — ${q.credit_loi_24h} lượt bị từ chối / 24h` : "chưa thấy lượt nào bị từ chối"}
+            {q.het_credit
+              ? `HẾT SỐ DƯ — ${q.credit_loi_24h} lượt bị từ chối / 24h`
+              : q.credit_loi_24h > 0
+              ? `gọi lại được${q.model_song_luc ? ` lúc ${new Date(q.model_song_luc).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : ""} — ${q.credit_loi_24h} lượt bị từ chối trước đó / 24h`
+              : "chưa thấy lượt nào bị từ chối"}
           </span>
         </div>
         <p className="mt-1 text-[11px] text-mute">

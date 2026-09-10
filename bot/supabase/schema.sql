@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 17:06 (giờ VN)
+-- Sinh lúc: 2026-09-10 17:30 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -4499,6 +4499,7 @@ declare
   v_credit      record;
   v_tran_nguoi  integer;
   v_co_du_phong boolean := false;
+  v_song           timestamptz;
   v_dang_du_phong timestamptz;
 begin
   if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
@@ -4532,6 +4533,12 @@ begin
        group by q.zalo_user_id order by 2 desc limit 10
     ) x;
 
+  -- Dấu SỐNG của model chính: `_shared/claude.ts` đóng khi một lượt gọi model
+  -- chính TRẢ VỀ (tiết chế 2 phút/lượt). Cố ý không dùng bot_usage/cong_token:
+  -- đường dự phòng Groq cũng ghi token qua đó, nên một lượt Groq thành công sẽ
+  -- xoá oan cờ hết số dư của Anthropic — nói ngược lại sự thật.
+  select h.at into v_song from bot_health h where h.who = 'model_chinh';
+
   select count(*)::int as so_loi, max(e.at) as lan_cuoi into v_credit
     from bot_errors e
    where e.at > now() - interval '24 hours'
@@ -4551,11 +4558,17 @@ begin
     'tran_gio_nguoi', v_gio_limit, 'tran_ngay_nguoi', v_ngay_limit, 'he_so_nguoi_quen', 4,
     'nguoi_dot_nhieu', coalesce(v_nguoi, '[]'::jsonb),
     'so_nguoi_cham_tran', coalesce(v_tran_nguoi, 0),
-    'het_credit', coalesce(v_credit.so_loi, 0) > 0,
+    -- CÒN hết số dư chỉ khi: có lỗi trong 24h VÀ chưa có lượt gọi model chính
+    -- nào thành công SAU lỗi cuối. Dòng lỗi CŨ không phải bằng chứng rằng BÂY
+    -- GIỜ vẫn hỏng.
+    'het_credit', coalesce(v_credit.so_loi, 0) > 0
+                    and (v_song is null or v_song <= v_credit.lan_cuoi),
+    'model_song_luc', v_song,
     'credit_loi_24h', coalesce(v_credit.so_loi, 0),
     'credit_lan_cuoi', v_credit.lan_cuoi,
     'co_du_phong', v_co_du_phong,
     'dang_chay_du_phong', v_dang_du_phong is not null
+                            and (v_song is null or v_song <= v_dang_du_phong)
   );
 end $function$
 ;
