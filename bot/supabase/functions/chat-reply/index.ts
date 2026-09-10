@@ -1485,17 +1485,18 @@ Deno.serve(async (req) => {
         ? client.rpc("match_projects", { p_text: text }).then((r) => ((r.data ?? []) as DuAnKho[]).slice(0, 1))
         : Promise.resolve([] as DuAnKho[]),
       pendingReq?.listings?.project_id
-        ? client.from("projects").select("id, name, developer, district, location_raw, amenities, description, status_text")
+        ? client.from("projects").select("id, name, developer, district, location_raw, amenities, description, status_text, specs")
           .eq("id", pendingReq.listings.project_id).maybeSingle().then((r) => (r.data ? [r.data as DuAnKho] : []))
         : Promise.resolve([] as DuAnKho[]),
     ]);
     const duAnBiet = [...duAnNoi, ...duAnCanHoi.filter((d) => !duAnNoi.some((x) => x.id === d.id))].slice(0, 2);
     if (duAnBiet.length) {
       const dong = duAnBiet.map((p) => {
-        const tienIch = Array.isArray(p.amenities) ? (p.amenities as string[]).slice(0, 6).join(", ") : "";
-        return `• ${p.name}${p.developer ? ` - CĐT ${p.developer}` : ""}${p.location_raw || p.district ? ` · ${p.location_raw ?? p.district}` : ""}${tienIch ? ` · tiện ích: ${tienIch}` : ""}${p.status_text ? ` · ${p.status_text}` : ""}${p.description ? ` · ${String(p.description).slice(0, 200)}` : ""}`;
+        const tienIch = Array.isArray(p.amenities) ? (p.amenities as string[]).slice(0, 12).join(", ") : "";
+        const ts = (p as { specs?: Record<string, unknown> | null }).specs;
+        return `• ${p.name}${p.developer ? ` - CĐT ${p.developer}` : ""}${p.location_raw || p.district ? ` · ${p.location_raw ?? p.district}` : ""}${ts ? ` · thông số: ${JSON.stringify(ts)}` : ""}${tienIch ? ` · tiện ích: ${tienIch}` : ""}${p.status_text ? ` · ${p.status_text}` : ""}${p.description ? ` · ${String(p.description).slice(0, 400)}` : ""}`;
       }).join("\n");
-      boiCanh += `DỰ ÁN (kiến thức ĐÃ XÁC THỰC trong kho - khen bằng đúng MỘT tiện ích/đặc điểm ở đây khi hợp mạch, KHÔNG bịa tiện ích khác):\n${dong}\n\n`;
+      boiCanh += `DỰ ÁN (kiến thức ĐÃ XÁC THỰC trong kho - khen bằng đúng MỘT tiện ích/đặc điểm ở đây khi hợp mạch, KHÔNG bịa tiện ích khác. ${"MỌI CON SỐ về dự án (diện tích từng loại căn, số căn, số tầng, giá, phí, năm bàn giao) CHỈ được lấy nguyên văn từ khối này. Không có ở đây thì nói thẳng 'con số đó em xác nhận lại rồi báo anh/chị' — TUYỆT ĐỐI không lấy từ trí nhớ của mình, kể cả khi thấy quen. "}):\n${dong}\n\n`;
       // Căn đang hỏi chưa gắn dự án mà chủ nhà vừa nhắc đúng tên → gắn luôn.
       if (duAnNoi[0] && pendingReq && !pendingReq.listings?.project_id && !wantsSell) {
         const { error: gdErr } = await client.from("listings").update({ project_id: duAnNoi[0].id })
@@ -3374,7 +3375,7 @@ Deno.serve(async (req) => {
               canDuAnBlock
             : "") +
           (duanBlock
-            ? "\n\nDỰ ÁN KHÁCH VỪA NHẮC TỚI (kiến thức chung ĐÃ XÁC THỰC - dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao - KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'):\n" +
+            ? "\n\nDỰ ÁN KHÁCH VỪA NHẮC TỚI (kiến thức chung ĐÃ XÁC THỰC - dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao - KHÔNG cần 'hỏi lại chủ nhà'. " + "MỌI CON SỐ về dự án (diện tích từng loại căn, số căn, số tầng, giá, phí, năm bàn giao) CHỈ được lấy nguyên văn từ khối này. Không có ở đây thì nói thẳng 'con số đó em xác nhận lại rồi báo anh/chị' — TUYỆT ĐỐI không lấy từ trí nhớ của mình, kể cả khi thấy quen. " + "GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'):\n" +
               duanBlock
             : ""),
       }],
