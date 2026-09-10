@@ -32,7 +32,7 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { bocQuan } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
-  batXungHo, chonCanTheoCau, chonCauKe, cungHoFact, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
+  batXungHo, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
   nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, type KetQuaKhop, type NgungRao,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // FR-185: ảnh chủ nhà gửi → phân loại (model) + cất vào kho (Storage + listing_media).
@@ -1649,6 +1649,22 @@ Deno.serve(async (req) => {
           gia: "giá", phuong: "phường",
           so_phong_ngu: "số phòng ngủ", dien_tich: "diện tích",
         };
+        // 10/09 lần 7: "1 trệt 2 lầu, 3 phòng ngủ" (tin CHƯA có phòng ngủ) mà bot
+        // báo "em cập nhật lại rồi" — nghe như chủ nhà vừa nói sai cái gì. Đọc
+        // giá trị CŨ trước khi ghi: có rồi mới là sửa, trống thì chỉ là ghi thêm.
+        const { data: truoc } = await client.from("listings")
+          .select("price_raw, ward, bedrooms, area_m2").eq("id", suaId).maybeSingle();
+        const daCoTruoc = (k: string) =>
+          k === "gia"
+            ? !!truoc?.price_raw
+            : k === "phuong"
+            ? !!truoc?.ward
+            : k === "so_phong_ngu"
+            ? truoc?.bedrooms != null
+            : k === "dien_tich"
+            ? truoc?.area_m2 != null
+            : true;
+        const laSuaThat = suaThat.some(([k]) => daCoTruoc(k));
         const daGhi: string[] = [];
         for (const [k, v] of suaThat) {
           const { error: fErr } = await client.rpc("ghi_fact_listing", {
@@ -1665,8 +1681,9 @@ Deno.serve(async (req) => {
           }
         }
         if (daGhi.length) {
-          const cau =
-            `Dạ em cập nhật lại rồi ạ: ${daGhi.join(", ")}. Cảm ơn anh/chị đã báo em nha!`;
+          const cau = laSuaThat
+            ? `Dạ em cập nhật lại rồi ạ: ${daGhi.join(", ")}. Cảm ơn anh/chị đã báo em nha!`
+            : `Dạ em ghi rồi ạ: ${daGhi.join(", ")}.`;
           // FR-177 c: đang chờ duyệt bản nháp thì lời sửa KHÔNG dừng ở đây —
           // xuống khối duyet_tin để gửi lại bản nháp với số mới.
           // 09/09 tối: đang có câu hỏi treo mà chỉ sửa ("6 phòng ngủ" khi em đang
@@ -1881,7 +1898,15 @@ Deno.serve(async (req) => {
       // KHÔNG đoán tiềm năng thay chủ nhà.
       const fact = (k: string) => (facts ?? []).find((f) => f.question === k)?.answer ?? null;
       // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành "thuê tối thiểu thuê tối thiểu 3 năm".
-      const nhan = (n: string, v: string | null, sep = " ") => v ? (boDau(v).includes(boDau(n).replace(/:$/, "")) ? v : `${n}${sep}${v}`) : null;
+      // Nhãn KHÔNG dán lên câu trả lời đã chứa chữ của nhãn. Lần 7 (10/09) bản nháp
+      // hiện "🏢 Phí: phí QL phí quản lý 20 nghìn/m2": chỗ đó ghép nhãn bằng template
+      // chứ không qua đây, và phép so cũ (includes nguyên nhãn) cũng không thấy
+      // "phí QL" nằm trong "phí quản lý". Nay so theo TỪNG CHỮ của nhãn.
+      const coChu = (v: string, n: string) =>
+        boDau(n).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 2)
+          .some((w) => new RegExp(`\\b${w}`).test(boDau(v)));
+      const nhan = (n: string, v: string | null, sep = " ") => v ? (coChu(v, n) ? v : `${n}${sep}${v}`) : null;
+      const hau = (v: string | null, n: string) => v ? (coChu(v, n) ? v : `${v} ${n}`) : null;
       const lx = l as SpecRow & { floor?: number | null; rear_width_m?: number | null; furnishing?: string | null; negotiable?: boolean | null; gap?: boolean | null; bedrooms?: number | null; property_type?: string | null; deal?: string | null; price_raw?: string | null; area_m2?: number | null; location_raw?: string | null; ward?: string | null; district?: string | null };
       const loai = lx.property_type ?? "";
       const thue = lx.deal === "cho_thue";
@@ -1897,22 +1922,22 @@ Deno.serve(async (req) => {
         lx.area_m2 ? `${lx.area_m2}m²` : (fact("dien_tich") ?? fact("dien_tich_dat") ?? fact("dien_tich_tim_tuong")),
         lx.frontage_m && lx.length_m ? `ngang ${lx.frontage_m}m x dài ${lx.length_m}m` : (lx.frontage_m ? `ngang ${lx.frontage_m}m` : fact("mat_tien") ? `ngang ${fact("mat_tien")}` : null),
         lx.rear_width_m ? `nở hậu ${lx.rear_width_m}m` : fact("no_hau") ? `nở hậu ${fact("no_hau")}` : null,
-        fact("tho_cu") ? `thổ cư ${fact("tho_cu")}` : null,
+        nhan("thổ cư", fact("tho_cu")),
         fact("hinh_dang"),
       ]);
       them("🏗", "Kết cấu", [
         lx.floors_text ?? (lx.floors ? `${lx.floors} tầng` : fact("ket_cau")),
-        lx.floor ? `tầng ${lx.floor}` : fact("tang") ? `tầng ${fact("tang")}` : null,
-        lx.bedrooms ? `${lx.bedrooms} phòng ngủ` : fact("so_phong_ngu") ? `${fact("so_phong_ngu")} phòng ngủ` : null,
-        lx.bathrooms ? `${lx.bathrooms} WC` : fact("so_wc") ? `${fact("so_wc")} WC` : null,
+        lx.floor ? `tầng ${lx.floor}` : nhan("tầng", fact("tang")),
+        lx.bedrooms ? `${lx.bedrooms} phòng ngủ` : hau(fact("so_phong_ngu"), "phòng ngủ"),
+        lx.bathrooms ? `${lx.bathrooms} WC` : hau(fact("so_wc"), "WC"),
         nhan("thang máy:", fact("thang_may")),
-        fact("san_vuon") ? `sân vườn: ${fact("san_vuon")}` : null,
-        fact("hien_trang"), fact("nam_xay") ? `xây ${fact("nam_xay")}` : null,
+        nhan("sân vườn:", fact("san_vuon")),
+        fact("hien_trang"), nhan("xây", fact("nam_xay")),
         nhan("căn góc:", fact("can_goc")), nhan("view:", fact("view")),
       ]);
       them("🛣", "Đường vào", [
         lx.access_type ? `${thongSoNgan({ access_type: lx.access_type, alley_width_m: lx.alley_width_m } as SpecRow).replace(/^ · /, "")}` : (fact("do_rong_hem") ?? fact("do_rong_duong") ?? fact("duong_vao")),
-        fact("cach_mat_tien") ? `cách mặt tiền ${fact("cach_mat_tien")}` : null,
+        nhan("cách mặt tiền", fact("cach_mat_tien")),
         fact("hem_thong"), nhan("ngập nước:", fact("ngap_nuoc")),
         fact("ha_tang"), nhan("container:", fact("duong_container")),
       ]);
@@ -1925,25 +1950,25 @@ Deno.serve(async (req) => {
       ]);
       if (loai === "toa_nha" || loai === "kho_xuong") {
         them("🏢", loai === "toa_nha" ? "Khai thác" : "Kho xưởng", [
-          fact("so_phong") ? `${fact("so_phong")} phòng` : null, fact("ty_le_lap_day") ? `lấp đầy ${fact("ty_le_lap_day")}` : null,
+          hau(fact("so_phong"), "phòng"), nhan("lấp đầy", fact("ty_le_lap_day")),
           fact("doanh_thu"), nhan("PCCC:", fact("pccc")),
-          fact("chieu_cao") ? `cao ${fact("chieu_cao")}` : null, fact("tai_trong_san") ? `tải trọng ${fact("tai_trong_san")}` : null,
-          fact("tram_bien_ap") ? `điện ${fact("tram_bien_ap")}` : null, nhan("nước thải:", fact("xu_ly_nuoc_thai")),
+          nhan("cao", fact("chieu_cao")), nhan("tải trọng", fact("tai_trong_san")),
+          nhan("điện", fact("tram_bien_ap")), nhan("nước thải:", fact("xu_ly_nuoc_thai")),
         ]);
       }
       if (loai === "dat_nong_nghiep" || loai === "dat_kinh_doanh") {
-        them("🌱", "Đất", [nhan("nước:", fact("nguon_nuoc")), nhan("ranh:", fact("ranh_gioi")), fact("mat_do_xd") ? `mật độ XD ${fact("mat_do_xd")}` : null, fact("tang_cao_toi_da") ? `xây tối đa ${fact("tang_cao_toi_da")} tầng` : null]);
+        them("🌱", "Đất", [nhan("nước:", fact("nguon_nuoc")), nhan("ranh:", fact("ranh_gioi")), nhan("mật độ XD", fact("mat_do_xd")), fact("tang_cao_toi_da") ? `xây tối đa ${hau(fact("tang_cao_toi_da"), "tầng")}` : null]);
       }
       them("🛋", "Nội thất", [lx.furnishing ?? fact("noi_that"), nhan("hiện:", fact("hien_trang_su_dung"))]);
       if (thue) {
         them("📝", "Điều kiện thuê", [
           fact("tien_coc"), nhan("thuê tối thiểu", fact("thoi_han_thue")),
           nhan("tăng", fact("truot_gia")), nhan("sửa chữa miễn phí", fact("fit_out")),
-          fact("phi_quan_ly") ? `phí QL ${fact("phi_quan_ly")}` : null, fact("phi_gui_xe") ? `gửi xe ${fact("phi_gui_xe")}` : null,
-          fact("gia_dien_nuoc") ? `điện nước ${fact("gia_dien_nuoc")}` : null, fact("gio_giac"),
+          nhan("phí QL", fact("phi_quan_ly")), nhan("gửi xe", fact("phi_gui_xe")),
+          nhan("điện nước", fact("gia_dien_nuoc")), fact("gio_giac"),
         ]);
       } else {
-        them("🏢", "Phí", [fact("phi_quan_ly") ? `phí QL ${fact("phi_quan_ly")}` : null, fact("phi_gui_xe") ? `gửi xe ${fact("phi_gui_xe")}` : null]);
+        them("🏢", "Phí", [nhan("phí QL", fact("phi_quan_ly")), nhan("gửi xe", fact("phi_gui_xe"))]);
       }
       them("🏫", "Tiện ích gần", [fact("tien_ich_gan")]);
       // Tiềm năng CHỈ khi chủ nhà nói (không bịa thay họ).
@@ -2121,6 +2146,15 @@ Deno.serve(async (req) => {
         kdDang.split(/\s+/).length <= 6 &&
         (laDuRoi(dapAn) || /\b(dang|len tin|len ke|post)\b/.test(kdDang) ||
           (laDongY(dapAn) && /\b(ok|oke|okie|duoc|dc|chot|dong y|xong)\b/.test(kdDang)));
+      // FR-188 b (10/09): câu MỀM (gấp, lý do bán, thương lượng, tiềm năng) chỉ hỏi
+      // MỘT lần — chủ dự án: "không hỏi lần thứ hai". Luật né-2-lần bên dưới đếm fact
+      // ghi được sau khi mở câu, nên lần 7 đại diện CĐT bị hỏi "cần bán gấp không" ba
+      // lượt liền (mỗi lượt chỉ ghi được một fact). Vòng hỏi bù hôm sau vẫn hỏi lại.
+      if (!boQuaCauTreo && kq.loai !== "khop" && HOI_MOT_LAN.has(pendingReq.question)) {
+        const { error: mlErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
+        if (mlErr) await ghiLoi(client, "chat-reply cau mem hoi mot lan", mlErr.message);
+        boQuaCauTreo = true;
+      }
       if (chuMuonDang) {
         // Chỉ bỏ câu treo khi tin ĐỦ điểm để gửi nháp; chưa đủ thì câu treo giữ nguyên
         // và nói rõ còn thiếu gì (xử ở dưới, sau khi đọc trạng thái tin).
@@ -2372,8 +2406,12 @@ Deno.serve(async (req) => {
         ? "phí chỉ thu khi giao dịch thành công, 0,5% giá chốt"
         : "phí chỉ thu khi giao dịch thành công, 1% giá chốt";
 
+      // Bong bóng ghi nhận đã gửi trước tin này → đừng cảm ơn/ghi nhận lần nữa.
+      const daAck = ackSua
+        ? `Bong bóng NGAY TRƯỚC tin này đã ghi nhận số liệu rồi ("${ackSua.slice(0, 60)}…") — KHÔNG cảm ơn, KHÔNG ghi nhận lại, vào thẳng câu hỏi. `
+        : "";
       const prompt = nextKey
-        ? `${boiCanh}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n` +
+        ? `${boiCanh}${daAck}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n` +
           `Viết MỘT tin dưới 30 từ như người thật nhắn Zalo: nhắc lại chi tiết vừa nghe kèm MỘT câu khích lệ có nghĩa gắn với khách mua (chỉ khi có gì đáng nói thật, không khen suông) - rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
           `CÂU HỎI CUỐI TIN BẮT BUỘC là ý này: "${cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type)}" — được diễn đạt lại cho hợp mạch nhưng KHÔNG đổi sang hỏi thứ khác, kể cả khi em thấy chủ nhà đã nói rồi hay em muốn hỏi thứ tiếp theo (hệ thống ghi câu trả lời theo đúng câu này; hỏi lệch là ghi sai ô). ` +
           (nhieuCan
@@ -2408,10 +2446,14 @@ Deno.serve(async (req) => {
       }
       if (!sellerReply) {
         // FR-178: câu mẫu cũng phải là câu người nói, không đọc tên trường.
+        // 10/09 lần 7: bong bóng trước đã nói "Dạ em ghi rồi ạ: …" mà bong bóng
+        // này mở đầu y hệt — hai câu ghi nhận liền nhau đọc như máy. Đã có bong
+        // bóng ghi nhận thì vào thẳng câu hỏi.
+        const moDau = ackSua ? "" : "Dạ em ghi rồi ạ. ";
         sellerReply = nextKey
-          ? `Dạ em ghi rồi ạ. ${neo ? `Căn ${neo} nha, ` : ""}${cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type)}`
+          ? `${moDau}${neo ? `Căn ${neo} nha, ` : ""}${cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type)}`
           : thieuDiem.length
-          ? `Dạ em ghi rồi ạ. Để tin đủ điều kiện đăng, ${cachGoi} cho em hỏi thêm ${thieuDiem[0]} nha?`
+          ? `${moDau}Để tin đủ điều kiện đăng, ${cachGoi} cho em hỏi thêm ${thieuDiem[0]} nha?`
           : published
           ? `Dạ em cảm ơn ${cachGoi}! Tin ${neo ? `căn ${neo} ` : "nhà mình "}đã đủ thông tin và lên web rồi ạ, có khách quan tâm là em báo liền.`
           : `Dạ em cảm ơn ${cachGoi}, tin rao giờ đã đầy đủ thông tin. Có khách quan tâm là em báo ${cachGoi} ngay ạ.`;
@@ -2531,13 +2573,21 @@ Deno.serve(async (req) => {
         // Vị trí cụ thể đã nói trong câu rao ("hẻm trần bình trọng", "đường
         // Nguyễn Trãi", "123/4 An Dương Vương") → fact vi_tri ngay, khỏi hỏi
         // lại thứ chủ nhà vừa nói (FR-144). Giữ nguyên chữ có dấu của người gõ.
-        const viTriM =
-          /(?:^|\s)((?:đường|duong|hẻm|hem|hxh|phố|pho)\s+(?:[\p{L}]+\s?){1,5}?|\d+[a-zA-Z]?(?:\/\d+[a-zA-Z]?)+\s+(?:[\p{L}]+\s?){1,5}?)(?=\s*(?:p\.?\s*\d|phường|phuong|quận|quan|q\.?\s*\d|giá|gia|\d|,|$))/iu
-            .exec(text);
-        const viTriTho = viTriM?.[1]?.trim().replace(/\s+$/, "") ?? null;
-        // "hẻm thông không ngập", "hẻm xe hơi", "phố trong dự án" KHÔNG phải địa chỉ (10/09 lần 6).
-        const viTriRao = viTriTho && !/^(hẻm|hem|hxh)\s+(thông|thong|cụt|cut|xe|rộng|rong|nhỏ|nho|lớn|lon)\b/i.test(viTriTho) &&
-            !/^(phố|pho)\s+(trong|thương|thuong|cổ|co)\b/i.test(viTriTho)
+        // 10/09 lần 7: hai hình địa chỉ THẬT bị bỏ sót, nên bot hỏi lại địa chỉ
+        // vòng vòng dù chủ nhà đã nói ngay câu đầu — "hẻm 100 Nguyễn Trãi" (có số
+        // nhà sau chữ hẻm) và "7 Hồng Bàng phường 12" (số nhà trần, không có chữ
+        // hẻm/đường). Mẫu 1 nay cho phép số nhà; mẫu 2 bắt số nhà trần nhưng CHỈ
+        // khi ngay sau là phường/quận, để "5 tỷ" hay "40m2" không thành địa chỉ.
+        const viTriTho = [
+          /(?:^|\s)((?:đường|duong|hẻm|hem|hxh|phố|pho)\s+(?:\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+)?(?:[\p{L}]+\s?){1,5}?|\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)+\s+(?:[\p{L}]+\s?){1,5}?)(?=\s*(?:p\.?\s*\d|phường|phuong|quận|quan|q\.?\s*\d|giá|gia|\d|,|$))/iu,
+          /(?:^|\s)(\d{1,5}[a-zA-Z]?\s+(?:[\p{L}]+\s?){1,4}?)(?=\s*(?:p\.?\s*\d|phường|phuong|quận|quan|q\.?\s*\d)\b)/iu,
+        ].map((re) => re.exec(text)?.[1]?.trim().replace(/\s+$/, "") ?? null)
+          .find((v) => !!v && v.length >= 6) ?? null;
+        // "hẻm thông không ngập", "hẻm 3m xe máy", "đường 12m vào được container",
+        // "phố trong dự án" là MÔ TẢ đường, không phải địa chỉ (10/09 lần 6 + 7):
+        // chữ ngay sau hẻm/đường (bỏ qua bề rộng) mà là từ mô tả thì bỏ.
+        const viTriRao = viTriTho &&
+            !/^(?:hẻm|hem|hxh|đường|duong|phố|pho)\s+(?:\d{1,3}\s*(?:m|met|mét)?\s+)?(?:thông|thong|cụt|cut|xe|rộng|rong|nhỏ|nho|lớn|lon|bê|be|nhựa|nhua|đất|dat|vào|vao|ra|trong|thương|thuong|cổ|co|trước|truoc|sau|nội|noi)\b/i.test(viTriTho)
           ? viTriTho : null;
         // FR-177 n (10/09): câu rao DÀI mang 5–10 thông số → bóc HẾT ngay lúc tạo tin
         // (hướng, pháp lý, WC, nội thất, năm xây, hẻm thông, ngập, cách mặt tiền, lý do

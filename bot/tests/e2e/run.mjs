@@ -1167,6 +1167,69 @@ fresh(seedKho);
   r = await send({ external_user_id: "dt-1", text: "Anh đầu tư mua nhà cũ sửa lại bán, giờ có căn hẻm 45 Trần Phú phường 4 quận 5 vừa sửa xong, 4x14, 5 tỷ 9" });
   check("N24 nhà đầu tư 'mua nhà cũ sửa lại bán, có căn … 5 tỷ 9' → nhánh bán, tạo tin 5 tỷ 9 (không rơi nhánh mua vì chữ 'mua')", r.body.role === "seller" && db().t.listings.length === 1 && /5 tỷ 9/.test(db().t.listings[0].price_raw ?? "") && db().t.buyers.length === 0, JSON.stringify({ role: r.body.role, l: db().t.listings.map((l) => l.price_raw), b: db().t.buyers.length }));
 
+  // 10/09 lần 7: câu MỀM (gấp) chỉ hỏi MỘT lần — chủ nhà trả lời thứ khác là thôi,
+  // không hỏi lại lần hai (trước bản này đại diện CĐT bị hỏi gấp 3 lượt liền).
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-gap1", seller_type: "nmg", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0108", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "20 Hải Thượng Lãn Ông", ward: "Phường 10", price_raw: "12 tỷ", price_vnd: 12e9, area_m2: 70, can_chu_duyet: true }).data;
+    d.insert("info_requests", { listing_id: l.id, question: "gap", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-gap1", text: "nhà 3 lầu 4 phòng ngủ em nha" });
+  check("N25 đang treo câu GẤP mà chủ nói chuyện khác → câu gấp hết hạn ngay (hỏi một lần), fact kết cấu vẫn ghi, không hỏi lại gấp",
+    db().t.info_requests.some((q) => q.question === "gap" && q.status === "expired") && !pend("gap") &&
+      db().t.listing_facts.some((f) => f.question === "ket_cau"),
+    JSON.stringify({ ir: db().t.info_requests.map((q) => [q.question, q.status]), f: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
+
+  // 10/09 lần 7: bản nháp KHÔNG lặp chữ của nhãn ("Phí: phí QL phí quản lý 20 nghìn/m2").
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-nhan", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0109", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", gap: false, location_raw: "Sunrise City", ward: "Phường 4", price_raw: "3 tỷ 9", price_vnd: 3.9e9, area_m2: 70, floor: 12, legal_status: "so_hong_rieng", can_chu_duyet: true }).data;
+    for (const [q, a] of [["phi_quan_ly", "phí quản lý 20 nghìn/m2"], ["phi_gui_xe", "gửi xe 1tr2/tháng"],
+      ["tho_cu", "thổ cư 80m2"], ["cach_mat_tien", "cách mặt tiền 30m"], ["nam_xay", "nhà mới xây 2022"],
+      ["so_phong_ngu", "2 phòng ngủ"], ["so_wc", "2 WC"], ["hinh_anh", "https://x/1.jpg"]]) {
+      d.insert("listing_facts", { listing_id: l.id, question: q, answer: a, source: "seller_chat" });
+    }
+    d.insert("info_requests", { listing_id: l.id, question: "tiem_nang", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-nhan", text: "đăng đi em" });
+  {
+    const nh = r.body.replies.join(String.fromCharCode(10));
+    check("N26 bản nháp không lặp nhãn: 'phí quản lý' một lần, không 'thổ cư thổ cư', không 'cách mặt tiền cách mặt tiền', không '2 phòng ngủ phòng ngủ'",
+      r.body.ban_nhap === true && !/phí QL phí quản lý/.test(nh) && !/thổ cư thổ cư/.test(nh) &&
+        !/cách mặt tiền cách mặt tiền/.test(nh) && !/phòng ngủ phòng ngủ/.test(nh) && !/WC WC/.test(nh) &&
+        !/xây nhà mới xây/.test(nh) && nh.includes("phí quản lý 20 nghìn/m2"),
+      nh);
+  }
+
+  // 10/09 lần 7: địa chỉ CÓ SỐ NHÀ phải vào tin ngay, khỏi hỏi lại ("hẻm 100 Nguyễn
+  // Trãi", "7 Hồng Bàng"); mô tả đường ("hẻm 3m xe máy") thì KHÔNG phải địa chỉ.
+  for (const [uid, cau, mong] of [
+    ["vt-1", "Em là môi giới, có căn nhà hẻm 100 Nguyễn Trãi phường 3 quận 5, 40m2, 5 tỷ", "hẻm 100 Nguyễn Trãi"],
+    ["vt-2", "Còn căn nữa: 7 Hồng Bàng phường 12 quận 5, 60m2, 9 tỷ, mặt tiền", "7 Hồng Bàng"],
+    ["vt-3", "bán nhà hẻm 3m xe máy p4 q5 50m2 4 tỷ", null],
+  ]) {
+    fresh();
+    r = await send({ external_user_id: uid, text: cau });
+    const L = db().t.listings[0];
+    const vt = db().t.listing_facts.find((f) => f.question === "vi_tri")?.answer ?? null;
+    check(`N27 "${cau.slice(0, 42)}…" → vi_tri ${mong ?? "KHÔNG nhận (là mô tả đường)"}`,
+      vt === mong && (L?.location_raw ?? null) === mong &&
+        (mong ? !db().t.info_requests.some((q) => q.question === "vi_tri" && q.status === "pending") : true),
+      JSON.stringify({ vt, loc: L?.location_raw, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  }
+
+  // 10/09 lần 7: trường CÒN TRỐNG thì là "em ghi rồi", không phải "em cập nhật lại".
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-ghi", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0110", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "30 Hồng Bàng", ward: "Phường 12", price_raw: "7 tỷ", price_vnd: 7e9, area_m2: 50, can_chu_duyet: true }).data;
+    d.insert("info_requests", { listing_id: l.id, question: "do_rong_hem", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-ghi", text: "1 trệt 2 lầu, 3 phòng ngủ" });
+  check("N28 tin chưa có phòng ngủ → bong bóng nói 'em ghi rồi', KHÔNG nói 'cập nhật lại'; bong bóng kế không ghi nhận lần hai",
+    r.body.replies.some((x) => /em ghi rồi ạ: /i.test(x)) && !r.body.replies.some((x) => /cập nhật lại/i.test(x)) &&
+      r.body.replies.filter((x) => /em ghi rồi/i.test(x)).length === 1,
+    JSON.stringify(r.body.replies));
+
   // FR-185: kho hỏng → không nuốt ảnh: fact URL tạm + bot_errors.
   fresh(seedKho);
   globalThis.__storageHong = true;

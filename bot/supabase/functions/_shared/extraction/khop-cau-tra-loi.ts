@@ -247,6 +247,14 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   return ketQua(chu.length >= 3 ? "khop" : "lech");
 }
 
+/**
+ * FR-188 b: câu MỀM — hỏi trong chat ĐÚNG MỘT lần. Chủ nhà trả lời thứ khác thì
+ * thôi, không hỏi lại lần hai (chủ dự án 10/09). Vòng hỏi bù (ask-seller) vẫn có
+ * thể nhắc lại hôm sau, đó là một lượt/ngày gom 2–3 câu nên không làm khách mệt.
+ * Câu CỨNG (giá, địa chỉ, diện tích, pháp lý…) giữ luật né-2-lần.
+ */
+export const HOI_MOT_LAN = new Set(["gap", "ly_do_ban", "thuong_luong", "tiem_nang", "muc_dich"]);
+
 /** Nhãn tiếng Việt ngắn để hỏi lại, KHÔNG lặp nguyên văn câu hỏi trước. */
 export const NHAN_HOI_LAI: Record<string, string> = {
   phap_ly: "giấy tờ nhà mình là sổ hồng riêng hay chung, đã hoàn công chưa",
@@ -502,14 +510,19 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(mat do xay dung|mat do xd)\b/.test(kd)) return { question: "mat_do_xd", answer: goc };
   if (/\b(vuong vuc|bop hau|thop hau|meo|hinh dang)\b/.test(kd)) return { question: "hinh_dang", answer: goc };
   if (new RegExp(`\\bfit.?out\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:ngay|thang|tuan)`).test(kd) || new RegExp(`\\b(?:mien phi|free)\\s*${SO}\\s*(?:ngay|thang|tuan)\\s*(?:sua|sua chua|setup|lam noi that)`).test(kd)) return { question: "fit_out", answer: goc };
-  if (/\b(showroom|van phong cong ty|lam xuong|truong hoc|benh vien|nha hang)\b/.test(kd) && /\b(hop|phu hop|lam|mo)\b/.test(kd)) return { question: "muc_dich", answer: goc };
+  // 10/09 lần 7: "Anh đầu tư mua nhà cũ sửa lại bán, giờ có căn…" là chủ nhà KỂ VỀ
+  // MÌNH (nghề của họ), không phải tiềm năng của căn — trước bản này nó vào bản nháp
+  // thành "💡 Phù hợp: Anh đầu tư mua nhà cũ sửa lại bán". Câu mở bằng đại từ + nghề
+  // thì hai luật cuối (muc_dich, tiem_nang) bỏ qua.
+  const keVeMinh = /^(?:anh|chi|em|toi|minh|ba|chu|ong|co)\b[^,.]{0,20}\b(?:dau tu|chuyen|lam nghe|moi gioi|mua ban|buon|co nghe)\b/.test(kd);
+  if (/\b(showroom|van phong cong ty|lam xuong|truong hoc|benh vien|nha hang)\b/.test(kd) && /\b(hop|phu hop|lam|mo)\b/.test(kd) && !keVeMinh) return { question: "muc_dich", answer: goc };
   // FR-186: đất — hạ tầng (cột điện, hố ga), xây tự do / theo mẫu; biệt thự — compound.
   if (/\b(cot dien|ho ga|tru dien|duong dam)\b/.test(kd)) return { question: "ha_tang", answer: goc };
   if (/\b(xay tu do|theo mau|mau chu dau tu|mau cdt|xay theo)\b/.test(kd)) return { question: "xay_dung", answer: goc };
   if (/\b(compound|biet lap|khu an ninh|bao ve 24)\b/.test(kd)) return { question: "khu_compound", answer: goc };
   if (/\b(quy hoach|lo gioi|giai toa)\b/.test(kd)) return { question: "quy_hoach", answer: goc };
   if (/\b(noi that|ban giao|nha trong|full nt)\b/.test(kd)) return { question: "noi_that", answer: goc };
-  if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd)) {
+  if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd) && !keVeMinh) {
     return { question: "tiem_nang", answer: goc };
   }
   return null;

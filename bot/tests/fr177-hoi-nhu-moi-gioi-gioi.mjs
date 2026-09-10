@@ -33,6 +33,10 @@ const ND = [
   ["hướng đông nam", "huong"],
   ["không dính quy hoạch", "quy_hoach"],
   ["để ở hay kinh doanh đều được", "tiem_nang"],
+  // 10/09 lần 7: chủ nhà KỂ VỀ MÌNH, không phải tiềm năng của căn.
+  ["Anh đầu tư mua nhà cũ sửa lại bán", null],
+  ["Chị chuyên mua bán đất nền khu này", null],
+  ["Em làm nghề môi giới nhà phố", null],
   ["16m nha", null],           // số trần, không nhãn → bo_sung
   ["nhà nở hậu chút", null],
   ["ok", null],
