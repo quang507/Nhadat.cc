@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 10:54 (giờ VN)
+-- Sinh lúc: 2026-09-10 11:29 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -3634,9 +3634,28 @@ CREATE OR REPLACE FUNCTION public.match_projects(p_text text)
  STABLE
  SET search_path TO 'public', 'pg_temp'
 AS $function$
-  select * from projects
-  where length(name) >= 4 and position(lower(name) in lower(p_text)) > 0
-  order by priority asc, name limit 2;
+  with t as (
+    select
+      ' ' || btrim(regexp_replace(public.bo_dau(coalesce(p_text, '')), '[^a-z0-9]+', ' ', 'g')) || ' ' as tu,
+      regexp_replace(public.bo_dau(coalesce(p_text, '')), '[^a-z0-9]+', '', 'g')                       as lien
+  )
+  select p.*
+  from projects p, t
+  where length(p.name) >= 4
+    and (
+      position(' ' || btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')) || ' ' in t.tu) > 0
+      or (
+        length(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', '', 'g')) >= 6
+        and position(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', '', 'g') in t.lien) > 0
+      )
+      or (
+        p.slug is not null
+        and length(regexp_replace(p.slug, '[^a-z0-9]+', '', 'g')) >= 6
+        and position(regexp_replace(p.slug, '[^a-z0-9]+', '', 'g') in t.lien) > 0
+      )
+    )
+  order by p.priority asc nulls last, p.name
+  limit 2;
 $function$
 ;
 
