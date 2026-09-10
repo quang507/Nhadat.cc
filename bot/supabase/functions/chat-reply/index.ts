@@ -345,12 +345,25 @@ const cauNhan = (t: "ccrb" | "nmg") =>
  * Chỉ lấy phần sau chữ "dự án / khu / khu đô thị" và cắt ở dấu câu — không đoán
  * từ cả câu, vì đoán sai thì hàng chờ duyệt đầy rác và admin thôi nhìn nó.
  */
+// Chữ mở đầu một MIÊU TẢ, không bao giờ mở đầu TÊN dự án. Bắt 10/09: câu "phí
+// quản lý 14 nghìn/m2, khu có công viên ven sông" vào hàng chờ duyệt với tên dự
+// án là "có công viên ven sông" — mồi dính chữ "khu" trần. Nay "khu" một mình
+// không còn là mồi, và dù có khớp thì mấy chữ dưới đây cũng chặn lại.
+const KHONG_PHAI_TEN = new Set([
+  "có", "co", "gần", "gan", "này", "nay", "đó", "do", "đấy", "day", "kia",
+  "bên", "ben", "là", "la", "thì", "thi", "cũng", "cung", "rất", "rat",
+  "nhiều", "nhieu", "được", "duoc", "vẫn", "van", "đang", "dang", "sẽ", "se",
+  "ở", "o", "trong", "ngoài", "ngoai", "nội", "noi", "toàn", "toan",
+]);
+
 function tenDuAnTrongCau(t: string): string | null {
-  const m = /(?:dự án|du an|khu đô thị|khu do thi|khu)\s+([\p{L}\p{N}'’.\- ]{3,45})/iu.exec(t);
+  const m = /(?:dự án|du an|khu đô thị|khu do thi|khu dân cư|khu dan cu)\s+([\p{L}\p{N}'’.\- ]{3,45})/iu.exec(t);
   // Cắt luôn phần địa bàn dính đuôi: "Lam Sơn Riverside quận 4" → "Lam Sơn Riverside".
   const ten = (m?.[1]?.split(/[,.;\n]/)[0] ?? "")
     .replace(/\s+(quận|quan|phường|phuong|huyện|huyen|thành phố|tp)\b.*$/iu, "")
     .trim();
+  const dauTien = ten.split(/\s+/)[0]?.toLowerCase() ?? "";
+  if (KHONG_PHAI_TEN.has(dauTien)) return null;
   return ten.length >= 3 && ten.split(/\s+/).length <= 6 ? ten : null;
 }
 
@@ -1301,7 +1314,10 @@ Deno.serve(async (req) => {
         const { data: fDuAn } = await client.from("listing_facts")
           .select("answer").eq("listing_id", lid).eq("question", "du_an_ten")
           .order("created_at", { ascending: false }).limit(1).maybeSingle();
-        tenNhac = duAnNoi[0]?.name ?? tenDuAnTrongCau(text) ?? fDuAn?.answer ?? null;
+        // Tên ĐÃ NHỚ của chính tin này đứng TRƯỚC tên đoán từ câu vừa nhắn: câu
+        // đang nói về phí, tiện ích thì chữ sau "dự án/khu" trong đó phần nhiều
+        // là miêu tả, còn tên nhớ từ câu rao là tên chủ nhà tự gõ ra.
+        tenNhac = duAnNoi[0]?.name ?? fDuAn?.answer ?? tenDuAnTrongCau(text) ?? null;
         if (!tenNhac) return;
       }
       // Cắt về MỆNH ĐỀ ĐẦU: "phí quản lý 14 nghìn/m2, khu có công viên ven sông"
