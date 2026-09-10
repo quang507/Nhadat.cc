@@ -99,6 +99,11 @@ async function goiGroq(
     messages,
     max_completion_tokens: p.max_tokens ?? 1024,
     temperature: 0.6,
+    // Model suy luận (qwen3.x) mặc định TRẢ KÈM đoạn nghĩ. Bắt tại trận 10/09:
+    // một lượt trả về nguyên "<think> Here's a thinking process: 1. Analyze User
+    // Input..." và bong bóng đó đi thẳng tới chủ nhà trên Zalo. Xin ẩn ở đây,
+    // và vẫn cắt lại ở dưới — tham số này không phải model nào cũng nhận.
+    reasoning_format: "hidden",
   };
   if (schema) {
     than.response_format = {
@@ -116,7 +121,15 @@ async function goiGroq(
     choices?: Array<{ message?: { content?: string } }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
-  const txt = j.choices?.[0]?.message?.content?.trim() ?? "";
+  // Lưới thứ hai: cắt mọi khối nghĩ còn sót, kể cả khối chưa đóng thẻ (bị cắt
+  // giữa chừng vì hết max_completion_tokens). Khách KHÔNG bao giờ được đọc nó.
+  const tho = j.choices?.[0]?.message?.content ?? "";
+  const txt = tho
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*$/i, "")
+    .replace(/^\s*(?:Here's a thinking process|Thinking process)[\s\S]*?(?:\n\n|$)/i, "")
+    .trim();
+  if (!txt) throw new Error(`Groq 502 model ${model} trả rỗng sau khi cắt khối nghĩ`);
   const kq: KetQua = {
     content: [{ type: "text", text: txt }],
     stop_reason: "end_turn",
