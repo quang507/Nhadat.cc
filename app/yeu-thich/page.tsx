@@ -45,7 +45,7 @@ export default function Page() {
           </p>
           <a
             href={zaloLink("fav-empty")}
-            className="mt-5 inline-block rounded-full bg-zalo px-6 py-2.5 font-semibold text-white transition hover:opacity-90 active:scale-[0.98]"
+            className="mt-5 inline-block rounded-md bg-zalo px-6 py-2.5 font-semibold text-white transition hover:opacity-90 active:scale-[0.98]"
           >
             Hoặc nhắn Zalo để tụi em tìm giùm
           </a>

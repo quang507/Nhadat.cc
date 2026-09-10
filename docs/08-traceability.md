@@ -71,7 +71,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-64 | UF-08 | — | `bao_tin_moi_khop()` + trigger trên `listings` (`20260904d`), `reminders.kind = match`, `nudge` gửi mẫu cố định; tiêu chí = `buyers.preferences` | AC-06; TS-MATCH-01…05, 09 |
 | FR-70, FR-72, FR-73 | — | WF-12 | SRS-3.2 `property_events` + trigger từ 7 bảng nguồn, view `bds_hot` (FR-73), `hoi_thoai_phien` (FR-72), `bot_do_tre` (`20260904f`); thẻ `/admin` | AC-09; TS-WEB2-W06; TS-GIUCHAN-01, 04, 05 |
 | FR-71 | — | WF-12 | SRS-3.11 (04/09/2026): view `hoi_thoai_thong_ke` + policy `conversations/messages_admin_read`; thẻ "Thống kê hội thoại · 30 ngày" + CSV ở `app/admin/page.tsx` | AC-09 · TS-ADM2-07, TS-ADM2-12 |
-| FR-74, FR-75 | — | WF-13 | SRS-3.11 (04/09/2026): policy `buyers_admin_read`; ô "Tìm khách" + link `zalo.me/<uid>` (best-effort) ở `app/admin/page.tsx`, không chọn `phone` | AC-09 · TS-ADM2-03, TS-ADM2-11 |
+| FR-74, FR-75 | — | WF-13 | SRS-3.11 (04/09/2026): policy `buyers_admin_read`; ô "Tìm khách" ở `app/admin/page.tsx`, không chọn `buyers.phone`; nút "Mở Zalo" (10/09) chỉ trỏ `zalo.me/<sđt>` khi có SĐT phía NGƯỜI BÁN (FR-175), khách B không có SĐT thì mở Zalo Web — `zalo_user_id` là ID nội bộ luồng chat, `zalo.me/<uid>` ra trang lỗi | AC-09 · TS-ADM2-03, TS-ADM2-11 |
 | FR-76 | UF-05, UF-11 | WF-12 | SRS-3.6; SRS-3.11 (04/09/2026): policy `info_requests_admin_read`, `ctvs_admin_read`; thẻ "Câu hỏi đang chờ" ở `app/admin/page.tsx` | AC-09 · TS-ADM2-01, TS-ADM2-05, TS-ADM2-11 |
 | FR-77 | UF-11 | WF-14 | SRS-5.4; SRS-3.11 (04/09/2026): view `khach_can_nguoi_that` (cờ `needs_human` làm proxy); thẻ "Khách cần người thật" | AC-10 · TS-ADM2-06 |
 | FR-78 | UF-06, UF-11 | WF-14 | SRS-3.7; SRS-3.11 (04/09/2026): policy `viewings_admin_read`; thẻ "Lịch xem nhà" ở `app/admin/page.tsx` | AC-10 · TS-ADM2-02, TS-ADM2-11 |
@@ -176,6 +176,9 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-196 | UF-06 | — | `chat-reply` luật số trong hai khối dự án; `scripts/dao-sau-du-an.mjs` (Groq, JSON schema, xoay model). Kiểm: TS-DUAN-03 | — |
 | FR-197 | UF-11 | WF-13 | `20260910i`: `don_du_lieu_thu()` + cron 14:00 UTC; `20260910h`: `quota_tieu_hao` thêm cờ dự phòng, `project_facts.ten_du_an`; web băng cảnh báo + chuông theo loại lỗi. Kiểm: TS-DON-01 | — |
 | FR-198 | UF-04 | — | `_shared/claude.ts` `MODEL` đọc secret `ANTHROPIC_MODEL` (mặc định Haiku 4.5); `_shared/tham-so-model.ts` lọc `output_config.effort` theo tên model; `bot/tests/tham-so-model.mjs` trong `test:bot`. Kiểm: TS-MODEL-01 | — |
+| FR-199 | UF-04 | — | `_shared/extraction/vet-du-an-loc.ts` (van + dọn, tiền định) · `_shared/ai/boc-du-an.ts` (gọi model, JSON schema) · `chat-reply` `vetDuAnBangModel()` nối ở đường ra `traLoiSeller`; ghi qua `ghi_fact_du_an` với `nguon='llm'`. Kiểm: TS-VET-01 | — |
+| FR-200 | UF-11 | WF-13 | `20260910k`: `doc_bot_prompts()` + `sua_bot_prompt()` + cột `bot_prompts.sua_boi`; web `/admin/prompt` so với `_shared/prompts.ts`. Kiểm: TS-PROMPT-01 | — |
+| FR-201 | UF-11 | WF-13 | `/admin/ro-hang`: `luuSua(duyet)` đặt `status='dang_ban'` kèm xác nhận + danh sách ô thiếu; dropdown ngoài bảng khoá mục *đang bán*. Kiểm: TS-DUYET-01 | — |
 | FR-187 | UF-10 | WF-ADMIN | `20260909i`: `jsonb_bo_rong(jsonb)`, `boc_tach_nhom(listings)` + `boc_tach_nhom(uuid)`, view `boc_tach_v`, `so.boc_tach`; `components/admin/BocTachNhom.tsx` (`NHAN_NHOM`, `sapNhom`, `useBocTach`, `taiJsonTin`); `app/admin/ro-hang/json/page.tsx` đọc `boc_tach_v`; `app/admin/ro-hang/page.tsx` nút JSON + `DongJson`. Kiểm: TS-KYGUI-33 (DB thật) | — |
 | FR-97 | | — | — | — |
 

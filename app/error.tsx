@@ -16,13 +16,13 @@ export default function Error({ reset }: { error: Error; reset: () => void }) {
       <div className="mt-7 flex flex-wrap justify-center gap-3">
         <button
           onClick={reset}
-          className="rounded-full bg-brand px-6 py-3 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+          className="rounded-md bg-brand px-6 py-3 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
         >
           Thử lại
         </button>
         <a
           href={zaloLink("loi-trang")}
-          className="rounded-full border border-line bg-white px-6 py-3 font-bold transition hover:border-brand hover:text-brand"
+          className="rounded-md border border-line bg-white px-6 py-3 font-bold transition hover:border-brand hover:text-brand"
         >
           Hỏi thẳng qua Zalo
         </a>

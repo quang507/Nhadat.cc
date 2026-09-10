@@ -364,7 +364,11 @@ function BanLamViec() {
         .eq("bucket", "listing-private").order("created_at", { ascending: false }).limit(100),
       supabase
         .from("buyers")
-        .select("id, name, zalo_user_id, phone, preferences, notes, last_contact_at, created_at")
+        // NFR-07 / FR-74 / SRS-3.11: KHÔNG chọn `buyers.phone`. Số của người mua
+        // chỉ có khi B tự đưa ở bước chốt lịch xem, và cam kết với B là web
+        // không đọc nó — nút "Mở Zalo" bên dưới chỉ dùng SĐT phía NGƯỜI BÁN
+        // (FR-175, quyết định chủ dự án 07/09), khách B thì mở Zalo Web.
+        .select("id, name, zalo_user_id, preferences, notes, last_contact_at, created_at")
         .order("created_at", { ascending: false }).limit(100),
       supabase
         .from("interests")
@@ -429,7 +433,6 @@ function BanLamViec() {
       id: string;
       name: string | null;
       zalo_user_id: string | null;
-      phone: string | null;
       preferences: Record<string, unknown> | null;
       notes: string | null;
       last_contact_at: string | null;
@@ -472,7 +475,7 @@ function BanLamViec() {
         id: b.id,
         name: b.name || s?.name || null,
         zalo_user_id: b.zalo_user_id,
-        phone: b.phone ?? s?.phone ?? null,
+        phone: s?.phone ?? null,
         preferences: b.preferences,
         notes: b.notes,
         last_contact_at: b.last_contact_at,
@@ -881,7 +884,7 @@ function BanLamViec() {
               <button
                 type="button"
                 onClick={() => setCrmFilterRole("all")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                className={`rounded-md px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "all" ? "bg-navy text-white" : "bg-line/60 text-navy hover:bg-line"
                 }`}
               >
@@ -890,7 +893,7 @@ function BanLamViec() {
               <button
                 type="button"
                 onClick={() => setCrmFilterRole("dual")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                className={`rounded-md px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "dual"
                     ? "bg-emerald-700 text-white"
                     : "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
@@ -901,7 +904,7 @@ function BanLamViec() {
               <button
                 type="button"
                 onClick={() => setCrmFilterRole("buyer")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                className={`rounded-md px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "buyer"
                     ? "bg-blue-700 text-white"
                     : "bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100"
@@ -912,7 +915,7 @@ function BanLamViec() {
               <button
                 type="button"
                 onClick={() => setCrmFilterRole("seller")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                className={`rounded-md px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "seller"
                     ? "bg-amber-700 text-white"
                     : "bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100"
@@ -958,6 +961,8 @@ function BanLamViec() {
                 const isSellerOnly = !!k.seller && !k.preferences;
                 const isEditing = suaNhuCauId === k.id;
                 const isAssigning = dangGanBds === k.id;
+                const soZalo = soDienThoaiZalo(k.phone);
+                const hrefZalo = linkZalo(k.zalo_user_id, k.phone);
 
                 return (
                   <article
@@ -997,17 +1002,17 @@ function BanLamViec() {
 
                       {/* Top Right Action Buttons */}
                       <div className="flex flex-wrap items-center gap-2">
-                        {linkZalo(k.zalo_user_id, k.phone) && (
+                        {hrefZalo && (
                           <a
-                            href={linkZalo(k.zalo_user_id, k.phone)!}
+                            href={hrefZalo}
                             target="_blank"
                             rel="noreferrer"
-                            title={soDienThoaiZalo(k.phone)
-                              ? `Mở Zalo của ${soDienThoaiZalo(k.phone)}`
+                            title={soZalo
+                              ? `Mở Zalo của ${soZalo}`
                               : "Chưa có SĐT nên chỉ mở được Zalo Web — tìm khách trong danh sách chat bên đó."}
                             className="rounded-md border border-blue-300 bg-blue-50/60 px-3 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
                           >
-                            {soDienThoaiZalo(k.phone) ? "Mở Zalo" : "Mở Zalo Web"}
+                            {soZalo ? "Mở Zalo" : "Mở Zalo Web"}
                           </a>
                         )}
                         <button
@@ -1281,7 +1286,7 @@ function BanLamViec() {
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-lg font-bold tracking-tight text-navy">Tin chờ duyệt</h2>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
+                <span className={`rounded-md px-2.5 py-0.5 text-xs font-bold tabular-nums ${
                   pending.length > 0 ? "bg-brand text-white" : "bg-line text-mute"
                 }`}>
                   {pending.length}
@@ -1360,7 +1365,7 @@ function BanLamViec() {
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-lg font-bold tracking-tight text-navy">Khách cần người thật</h2>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
+                <span className={`rounded-md px-2.5 py-0.5 text-xs font-bold tabular-nums ${
                   khachCan.length > 0 ? "bg-brand text-white" : "bg-line text-mute"
                 }`}>
                   {khachCan.length}
@@ -1843,7 +1848,7 @@ function Muc({ ten, phu, dem, children }: {
         <h3 className="text-base font-bold tracking-tight text-navy">{ten}</h3>
         {dem !== undefined && (
           <span
-            className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
+            className={`rounded-md px-2.5 py-0.5 text-xs font-bold tabular-nums ${
               co ? "bg-brand text-white" : "bg-line text-mute"
             }`}
           >
@@ -2104,7 +2109,7 @@ function BridgeBadge({ at }: { at: string | null }) {
   const song = phut <= 15;
   return (
     <span
-      className={`rounded-full px-3 py-1 text-xs font-bold ${
+      className={`rounded-md px-3 py-1 text-xs font-bold ${
         song ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-brand text-white"
       }`}
     >

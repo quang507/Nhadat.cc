@@ -122,7 +122,7 @@ export default async function Home() {
                 <Link
                   key={t.slug}
                   href={`/${t.slug}`}
-                  className="rounded-full border border-white/20 px-4 py-1.5 text-white/85 transition hover:border-brand hover:bg-brand hover:text-white"
+                  className="rounded-md border border-white/20 px-4 py-1.5 text-white/85 transition hover:border-brand hover:bg-brand hover:text-white"
                 >
                   {t.keyword}
                 </Link>
@@ -270,7 +270,7 @@ export default async function Home() {
           </div>
           <Link
             href="/mua-ban"
-            className="shrink-0 rounded-full border border-line bg-white px-5 py-2.5 text-sm font-bold transition hover:border-brand hover:text-brand"
+            className="shrink-0 rounded-md border border-line bg-white px-5 py-2.5 text-sm font-bold transition hover:border-brand hover:text-brand"
           >
             Xem tất cả
           </Link>
@@ -294,7 +294,7 @@ export default async function Home() {
             </div>
             <Link
               href="/cho-thue"
-              className="shrink-0 rounded-full border border-line bg-white px-5 py-2.5 text-sm font-bold transition hover:border-brand hover:text-brand"
+              className="shrink-0 rounded-md border border-line bg-white px-5 py-2.5 text-sm font-bold transition hover:border-brand hover:text-brand"
             >
               Xem tất cả
             </Link>
@@ -335,7 +335,7 @@ export default async function Home() {
               <Link
                 key={w}
                 href={`/mua-ban?phuong=${encodeURIComponent(w)}`}
-                className="rounded-full border border-line px-3.5 py-1.5 text-sm transition hover:border-brand hover:text-brand"
+                className="rounded-md border border-line px-3.5 py-1.5 text-sm transition hover:border-brand hover:text-brand"
               >
                 {w}
               </Link>

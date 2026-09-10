@@ -39,7 +39,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
           Link danh sách chỉ sống 30 ngày. Nhắn Zalo một câu, tụi em lọc lại danh sách mới đúng nhu cầu hiện tại của anh chị.
         </p>
         <a href={zaloLink("ds:het-han")}
-          className="mt-6 inline-block rounded-full bg-brand px-6 py-3 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">
+          className="mt-6 inline-block rounded-md bg-brand px-6 py-3 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">
           Xin danh sách mới qua Zalo
         </a>
       </div>
@@ -70,7 +70,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
             <p className="mt-1 text-sm text-mute">Không ưng căn nào cũng nói giùm tụi em một câu - để lọc đợt sau sát hơn.</p>
           </div>
           <a href={zaloLink(`ds:${token.slice(0, 8)}`)}
-            className="shrink-0 rounded-full bg-brand px-6 py-3 text-center font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">
+            className="shrink-0 rounded-md bg-brand px-6 py-3 text-center font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">
             Chat Zalo
           </a>
         </div>

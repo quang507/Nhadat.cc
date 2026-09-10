@@ -94,7 +94,7 @@ export default async function Page() {
 
       <a
         href={zaloLink("thongke")}
-        className="mt-8 inline-block rounded-full bg-zalo px-6 py-3 font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
+        className="mt-8 inline-block rounded-md bg-zalo px-6 py-3 font-bold text-white transition hover:opacity-90 active:scale-[0.98]"
       >
         Hỏi giá thật khu anh chị đang nhắm
       </a>

@@ -96,7 +96,7 @@ export default function Page() {
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <h1 className="text-2xl font-extrabold">Chưa đăng nhập</h1>
         <p className="mt-2 text-mute">Trang này dành cho nhà môi giới trong mạng lưới.</p>
-        <Link href="/dang-nhap" className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white">
+        <Link href="/dang-nhap" className="mt-5 inline-block rounded-md bg-brand px-6 py-2.5 font-bold text-white">
           Đăng nhập bằng email
         </Link>
       </div>
@@ -147,7 +147,7 @@ export default function Page() {
         </div>
         {msg && <p className="mt-3 text-sm font-medium text-navy">{msg}</p>}
         <button type="submit"
-          className="mt-4 rounded-full bg-brand px-6 py-2.5 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">
+          className="mt-4 rounded-md bg-brand px-6 py-2.5 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]">
           Đăng tin
         </button>
       </form>
@@ -167,7 +167,7 @@ export default function Page() {
               <button
                 type="button"
                 onClick={() => setUpCho((c) => (c === l.id ? null : l.id))}
-                className="shrink-0 rounded-full border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand"
+                className="shrink-0 rounded-md border border-line px-3 py-1 text-xs font-semibold transition hover:border-brand hover:text-brand"
               >
                 {upCho === l.id ? "Đóng" : "Thêm ảnh"}
               </button>

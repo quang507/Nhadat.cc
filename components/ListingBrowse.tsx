@@ -187,7 +187,7 @@ export default async function ListingBrowse({
     return qs ? `${basePath}?${qs}` : basePath;
   };
   const chip = (active: boolean) =>
-    `rounded-full border px-3.5 py-1.5 text-sm transition ${
+    `rounded-md border px-3.5 py-1.5 text-sm transition ${
       active
         ? "border-brand bg-brand font-semibold text-white"
         : "border-line bg-white hover:border-brand hover:text-brand"
@@ -327,13 +327,13 @@ export default async function ListingBrowse({
       {totalPages > 1 && (
         <div className="mt-8 flex items-center justify-center gap-2 text-sm">
           {page > 1 && (
-            <Link href={withParam({ trang: String(page - 1) })} className="rounded-full border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
+            <Link href={withParam({ trang: String(page - 1) })} className="rounded-md border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
               Trước
             </Link>
           )}
           <span className="px-3 text-mute tabular-nums">Trang {page}/{totalPages}</span>
           {page < totalPages && (
-            <Link href={withParam({ trang: String(page + 1) })} className="rounded-full border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
+            <Link href={withParam({ trang: String(page + 1) })} className="rounded-md border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
               Sau -
             </Link>
           )}

@@ -125,7 +125,7 @@ export default async function Page({ params }: { params: Promise<{ tag: string }
             </p>
             <a
               href={zaloLink(`tag:${t.slug}`)}
-              className="mt-5 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white transition hover:bg-brand-dark"
+              className="mt-5 inline-block rounded-md bg-brand px-6 py-2.5 font-bold text-white transition hover:bg-brand-dark"
             >
               Hỏi Zalo về {t.keyword.toLowerCase()}
             </a>
@@ -148,7 +148,7 @@ export default async function Page({ params }: { params: Promise<{ tag: string }
               <Link
                 key={o.slug}
                 href={`/${o.slug}`}
-                className="rounded-full border border-line bg-white px-3.5 py-1.5 transition hover:border-brand hover:text-brand"
+                className="rounded-md border border-line bg-white px-3.5 py-1.5 transition hover:border-brand hover:text-brand"
               >
                 {o.keyword}
               </Link>

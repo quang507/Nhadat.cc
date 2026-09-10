@@ -305,7 +305,7 @@ export default async function Page({
                 nằm dưới tấm ảnh to này - người lướt nhanh chỉ thấy ảnh. Dán
                 nhãn ngay TRÊN ảnh mới thật sự là nói. */}
             {photos.length === 0 && (
-              <span className="absolute bottom-3 right-4 rounded-full bg-navy/80 px-3 py-1.5 text-xs font-semibold text-white">
+              <span className="absolute bottom-3 right-4 rounded-md bg-navy/80 px-3 py-1.5 text-xs font-semibold text-white">
                 Ảnh minh hoạ - chưa có ảnh thật của căn này
               </span>
             )}
@@ -357,7 +357,7 @@ export default async function Page({
               </div>
             )}
             {listing.status === "dang_quan_tam" && (
-              <div className="mb-6 inline-block rounded-full bg-brand/10 px-4 py-1.5 text-sm font-bold text-brand">
+              <div className="mb-6 inline-block rounded-md bg-brand/10 px-4 py-1.5 text-sm font-bold text-brand">
                 Đang được nhiều khách quan tâm
               </div>
             )}
