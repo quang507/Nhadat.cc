@@ -144,6 +144,8 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   `DOC-TRUOC.md`; bản sao lưu thật nằm riêng ở `sao-luu-day-du/`.
   `xuat-tin-hoi-dap.mjs` (10/09 sáng) đã bị nó thay, dùng bản mới.
 
+**Prompt bot có HAI BẢN, DB đè code.** Bản trong git là bot/supabase/functions/_shared/prompts.ts (có PR, có review); bản sửa tay là bảng bot_prompts trong Supabase Table Editor — sửa ở đó bot đổi giọng trong vòng 60 giây, KHÔNG cần deploy, và nó ĐÈ bản trong code. Vì đè nên hai bên trôi xa nhau mà không ai thấy: 10/09 cau_hoi_mau trong DB cũ hơn code, bot chạy bộ câu hỏi cũ suốt. Nay bun run prompt so md5 hai bên và in khoá nào lệch; --day đẩy code lên DB, --keo in bản DB ra để dán ngược vào code rồi mở PR. Chạy nó sau mỗi lần sửa prompt ở một trong hai nơi.
+
 **Migration ghi THAY ĐỔI, `schema.sql` mới dựng lại được** (soát lại 07/09/2026).
 Câu cũ ở đây nói "migration là nguồn sự thật của schema" — sai. Số đo 07/09: DB
 đã áp **114** migration, `main` có **72** file, tức **41 migration áp thẳng qua
