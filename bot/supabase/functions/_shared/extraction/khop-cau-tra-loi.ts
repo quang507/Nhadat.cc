@@ -452,7 +452,10 @@ export function nhanDienFact(text: string): NhanDien | null {
   // bản nháp in "🏗 Kết cấu: toa S3.02 tang 15 · tầng 15 · 2 phòng ngủ").
   // Chỉ nhận khi sau chữ toà/tháp/block là một MÃ (có số hoặc một chữ cái đơn) —
   // "toà nhà văn phòng" hay "block đất" thì không phải mã toà.
-  if ((m = /\b(?:toa|thap|block|khoi)\s+([a-z]?\d[a-z0-9.\-]{0,6}|[a-z]\d?)(?=\s|$|,)/.exec(kd)) &&
+  // Số sau chữ toà/block mà đi kèm ĐƠN VỊ ĐẾM thì là số lượng, không phải mã toà:
+  // "toà 20 phòng cho thuê" là hai mươi phòng — CI bắt được 10/09. Còn "toà S3.02
+  // tầng 15" thì chữ "tầng" đứng sau mã là bình thường, vẫn nhận.
+  if ((m = /\b(?:toa|thap|block|khoi)\s+([a-z]?\d[a-z0-9.\-]{0,6}|[a-z]\d?)(?!\s*(?:phong|can|nen|m2|ty|ti|trieu|tr|nha|xuong))(?=\s|$|,)/.exec(kd)) &&
       !/\b(toa nha|van phong|cong ty|nha xuong)\b/.test(kd)) {
     return { question: "toa_thap", answer: m[1].toUpperCase() };
   }
