@@ -2532,7 +2532,13 @@ Deno.serve(async (req) => {
       const gapCol: boolean | null = laGap(text)
         ? true
         : /\b(khong|ko|k|chua|dau co|chang)\s*(?:can\s*)?gap\b/.test(tKD) ? false : null;
-      const quanRao = bocQuan(tKD) ?? duAn?.district ?? "Quận 5";
+      // FR-193 (10/09, chủ dự án nhắn thật): "bán căn ho ở Hà đô centrosa garden"
+      // → bot đáp "Em ghi nhận: bán · Quận 5". Không ai nói Quận 5 cả; "Quận 5" là
+      // giá trị mặc định của cột `listings.district` từ thời chỉ làm chợ Quận 5.
+      // Cột vẫn NOT NULL nên DB vẫn nhận mặc định, nhưng lời NÓI với khách chỉ được
+      // nhắc địa bàn khi ĐỌC ĐƯỢC thật (từ câu rao hoặc từ dự án khớp trong kho).
+      const quanDoc = bocQuan(tKD) ?? duAn?.district ?? null;
+      const quanRao = quanDoc ?? "Quận 5";
       const { data: newLst, error: newLstErr } = await client.from("listings").insert({
         code: null, seller_id: sellerRow.id, deal: sDeal, district: quanRao,
         ward: wardNo ? `Phường ${wardNo}` : (duAn?.ward ?? null),
@@ -2674,14 +2680,20 @@ Deno.serve(async (req) => {
         const ghiNhan = [
           `${sDeal === "cho_thue" ? "cho thuê" : "bán"}${loaiRao ? ` ${loaiRao}` : ""}`,
           viTriRao && viTriRao.length >= 6 ? viTriRao : null,
-          [wardNo ? `Phường ${wardNo}` : null, quanRao].filter(Boolean).join(", ") || null,
+          [wardNo ? `Phường ${wardNo}` : null, quanDoc].filter(Boolean).join(", ") || null,
           areaM ? `${areaM[1].replace(",", ".")}m2` : null,
           pnM ? `${pnM[1]} phòng ngủ` : null,
           priceM?.[1]?.trim() ? `giá ${priceM[1].trim()}` : null,
           gapCol === true ? "cần gấp" : gapCol === false ? "không gấp" : null,
           duAn?.name ? `dự án ${duAn.name}${maCanRao ? ` căn ${maCanRao}` : ""}` : null,
         ].filter((x): x is string => !!x);
-        const bongGhiNhan = `📝 Em ghi nhận: ${ghiNhan.join(" · ")}.\nSai chỗ nào ${cachGoi} nhắn lại giúp em nha.`;
+        // Khách mở lời bằng câu chào thì chào lại rồi mới ghi nhận — bong bóng này
+        // là tiền định (đi TRƯỚC câu của model), nên nếu nó vào thẳng "Em ghi nhận"
+        // thì cả đoạn mở đầu đọc như máy, kể cả lúc model còn sống.
+        const khachChao = /^\s*(dạ\s*)?(xin\s*)?(chào|chao|hi|hello|alo|a lô|hế lô)\b/i.test(text);
+        const bongGhiNhan =
+          (khachChao ? `Dạ em chào ${cachGoi} ạ!\n` : "") +
+          `📝 Em ghi nhận: ${ghiNhan.join(" · ")}.\nSai chỗ nào ${cachGoi} nhắn lại giúp em nha.`;
         return await traLoiSeller([bongGhiNhan, raoReply], { listing_code: newLst.code, ghi_nhan: ghiNhan });
       }
     }

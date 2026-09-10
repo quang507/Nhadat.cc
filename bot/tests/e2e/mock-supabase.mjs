@@ -173,12 +173,16 @@ export class FakeDB {
       if (r.price_raw && r.price_vnd == null) r.price_vnd = parseVnd(r.price_raw);
       // trg_listings_fill_property_type (FR-150): đoán loại từ câu rao.
       if ((r.property_type ?? "chua_ro") === "chua_ro" && r.description) {
-        const d = String(r.description).toLowerCase();
-        r.property_type = /kho bãi|kho xưởng|nhà xưởng|kho xuong|nha xuong/.test(d) ? "kho_xuong"
-          : /nông nghiệp|đất vườn|đất lúa|nong nghiep|dat vuon/.test(d) ? "dat_nong_nghiep"
-          : /skc|tmd|thương mại dịch vụ|sản xuất kinh doanh/.test(d) ? "dat_kinh_doanh"
-          : /căn hộ dịch vụ|chdv|khách sạn|toà nhà|tòa nhà|khach san|toa nha/.test(d) ? "toa_nha"
-          : /chung cư|chung cu|căn hộ|can ho/.test(d) ? "chung_cu" : /\bđất\b|\bdat\b|lô đất/.test(d) ? "dat" : /nhà|nha\b/.test(d) ? "nha_pho" : "chua_ro";
+        // 20260910b: luôn so trên chuỗi ĐÃ BỎ DẤU — người thật gõ lẫn có dấu /
+        // thiếu dấu trong cùng câu ("bán căn ho ở Hà đô centrosa").
+        const d = boDauMock(String(r.description));
+        r.property_type = /kho bai|kho xuong|nha xuong/.test(d) ? "kho_xuong"
+          : /nong nghiep|dat vuon|dat lua/.test(d) ? "dat_nong_nghiep"
+          : /skc|tmd|thuong mai dich vu|san xuat kinh doanh/.test(d) ? "dat_kinh_doanh"
+          : /can ho dich vu|chdv|khach san|toa nha/.test(d) ? "toa_nha"
+          : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(d) ? "chung_cu"
+          : /\bdat\b|lo dat|dat nen/.test(d) ? "dat"
+          : /\bnha\b|nha pho|\bnp\b|tret|\blau\b|hem|mat tien/.test(d) ? "nha_pho" : "chua_ro";
       }
       // (Không chạy quyết định lên kệ lúc chèn: seed cố ý dựng tin "chưa đăng"
       //  có đủ giá/diện tích/phường để kiểm SEC — V4.1/V4.7.)
@@ -187,6 +191,10 @@ export class FakeDB {
     return { data: r };
   }
 }
+// Bỏ dấu — bản mock của public.bo_dau() trong DB.
+export const boDauMock = (s) =>
+  String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+
 // đủ cho "5 tỷ 8", "5,5 tỷ", "800 triệu"
 export function parseVnd(s) {
   const t = String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
@@ -565,7 +573,7 @@ class RpcCall {
         l.boc_tach = { ...(l.boc_tach ?? {}), ...sach, _cap_nhat: now() };
         return { data: null, error: null };
       }
-      case "guess_property_type_answer": { const t = String(a.p_text).toLowerCase(); return { data: /kho|xưởng|xuong/.test(t) ? "kho_xuong" : /nông nghiệp|nong nghiep|đất vườn/.test(t) ? "dat_nong_nghiep" : /skc|tmd|thương mại/.test(t) ? "dat_kinh_doanh" : /dịch vụ|dich vu|khách sạn|toà nhà|tòa nhà/.test(t) ? "toa_nha" : /nhà phố|nha pho/.test(t) ? "nha_pho" : /chung cư|chung cu/.test(t) ? "chung_cu" : null, error: null }; }
+      case "guess_property_type_answer": { const t = boDauMock(String(a.p_text)); return { data: /kho|xuong/.test(t) ? "kho_xuong" : /nong nghiep|dat vuon/.test(t) ? "dat_nong_nghiep" : /skc|tmd|thuong mai/.test(t) ? "dat_kinh_doanh" : /dich vu|khach san|toa nha/.test(t) ? "toa_nha" : /nha pho|\bnp\b/.test(t) ? "nha_pho" : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(t) ? "chung_cu" : null, error: null }; }
       case "mark_listing_interest": {
         // v48 / 20260904f (FR-108): overload có p_buyer_id ghi thêm `interests`
         // (PK buyer_id+listing_id — chèn trùng thì bỏ qua).
