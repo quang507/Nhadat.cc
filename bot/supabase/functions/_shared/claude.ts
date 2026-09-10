@@ -4,6 +4,7 @@
 // bị chép 5 bản, `sendZalo()` 2 bản, và text escalation trùng byte giữa `nudge`
 // với `escalation-feed` (sửa một nơi quên nơi kia là lệch giọng bot ngay).
 import Anthropic from "npm:@anthropic-ai/sdk";
+import { bocDuPhong } from "./groq.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export const MODEL = "claude-opus-5";
@@ -64,8 +65,20 @@ export async function bangNhau(a: string, b: string): Promise<boolean> {
 
 export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   const apiKey = await secretOf(db, "ANTHROPIC_API_KEY");
-  if (!apiKey) throw new Error("Không tìm thấy ANTHROPIC_API_KEY (env lẫn Vault)");
-  return new Anthropic({ apiKey });
+  // FR-194: khoá dự phòng Groq. Có khoá thì BỌC client chính lại — mọi chỗ gọi
+  // (10 chỗ, cả create lẫn parse) tự có lưới mà không phải sửa chỗ nào. Không có
+  // khoá Groq thì trả đúng client cũ, đường đi y như trước.
+  const groqKey = await secretOf(db, "GROQ_API_KEY");
+  const groqModel = (await secretOf(db, "GROQ_MODEL")) ?? "qwen/qwen3.8-27b";
+  if (!apiKey && !groqKey) throw new Error("Không tìm thấy ANTHROPIC_API_KEY lẫn GROQ_API_KEY (env lẫn Vault)");
+  const chinh = apiKey ? new Anthropic({ apiKey }) : null;
+  if (!groqKey) return chinh!;
+  const ghiSo = async (nguon: string, chiTiet: string) => {
+    try {
+      await db.rpc("log_loi", { p_source: nguon, p_detail: chiTiet, p_code: null });
+    } catch { /* đồng hồ hỏng thì thôi, đừng làm hỏng lượt trả lời khách */ }
+  };
+  return bocDuPhong(chinh, groqKey, groqModel, ghiSo) as unknown as Anthropic;
 }
 
 /**
