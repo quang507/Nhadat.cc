@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 19:44 (giờ VN)
+-- Sinh lúc: 2026-09-10 19:59 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -38,6 +38,7 @@ create sequence if not exists public.bot_errors_id_seq;
 create sequence if not exists public.messages_seq_seq;
 create sequence if not exists public.project_facts_id_seq;
 create sequence if not exists public.property_events_id_seq;
+create sequence if not exists public.required_facts_id_seq;
 
 -- ══ Bảng ══
 create table if not exists public.admins (
@@ -443,7 +444,8 @@ create table if not exists public.required_facts (
   fact_key text not null,
   priority integer not null default 1,
   nhom text not null default 'chuyen_mon'::text,
-  deal listing_deal
+  deal listing_deal,
+  id bigint not null
 );
 
 create table if not exists public.sellers (
@@ -697,6 +699,9 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.required_facts add constraint required_facts_nhom_check CHECK ((nhom = ANY (ARRAY['co_ban'::text, 'chuyen_mon'::text, 'phu'::text, 'sau_dang'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.required_facts add constraint required_facts_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.sellers add constraint sellers_auth_user_id_key UNIQUE (auth_user_id);
@@ -3038,7 +3043,8 @@ begin
   update reminders set status = 'cancelled'
    where kind = 'escalation' and status = 'pending'
      and listing_id = new.listing_id
-     and note like '%' || v_nhan || '%';
+     -- So CHUỖI THẬT, không phải khuôn LIKE (soát 10/09 mục E4).
+     and position(v_nhan in note) > 0;
   return null;
 end $function$
 ;
@@ -3457,7 +3463,7 @@ begin
          and (property_type is distinct from v_pt or property_type_source is distinct from bac);
     end if;
 
-  elsif new.question = 'tang' then
+  elsif new.question in ('tang', 'ket_cau') then
     v_num := nullif(substring(v_txt, '[0-9]+'), '')::numeric;
     if v_num is not null and v_num between 0 and 80 and not (j ? 'floors') then
       update listings set floor = v_num::int, specs_source = bac
@@ -4321,6 +4327,7 @@ declare
   v_hoi    text;
   v_dia_chi text;
   v_goi    text;
+  v_gom    int;
 begin
   if coalesce(new.question, '') in ('xac_nhan_lich', 'con_ban') then return new; end if;
 
@@ -4329,34 +4336,62 @@ begin
   v_hoi := coalesce(new.question, 'thông tin');
 
   if new.assignee = 'admin' then
-    insert into reminders (kind, listing_id, due_at, note)
-    values ('escalation', new.listing_id, now(),
-      '❓ Khách hỏi căn #' || coalesce(v_code, '?') || ': "' || v_hoi
-      || '" — không có CTV nào đang hoạt động. Admin hỏi chủ rồi nhắn bot "#'
-      || coalesce(v_code, '?') || ': câu trả lời".');
+    -- Gom vào việc admin còn chờ của cùng căn (nếu có).
+    with g as (
+      update reminders set note = note || ' · khách hỏi thêm: "' || v_hoi || '"'
+       where kind = 'escalation' and status = 'pending' and listing_id = new.listing_id
+         and seller_id is null and ctv_id is null
+         and created_at > now() - interval '15 minutes'
+      returning 1
+    ) select count(*) into v_gom from g;
+    if v_gom = 0 then
+      insert into reminders (kind, listing_id, due_at, note)
+      values ('escalation', new.listing_id, now(),
+        '❓ Khách hỏi căn #' || coalesce(v_code, '?') || ': "' || v_hoi
+        || '" — không có CTV nào đang hoạt động. Admin hỏi chủ rồi nhắn bot "#'
+        || coalesce(v_code, '?') || ': câu trả lời".');
+    end if;
 
   elsif new.assignee = 'ctv' then
-    if new.source = 'buyer_ask' then
-      insert into reminders (kind, listing_id, ctv_id, due_at, note)
-      values ('escalation', new.listing_id, new.ctv_id, now(),
-        'khách hỏi #' || coalesce(v_code, '?') || ': "' || v_hoi
-        || '". Anh/chị hỏi chủ rồi nhắn lại em theo mẫu "#' || coalesce(v_code, '?')
-        || ': câu trả lời" trong ' || public.ctv_sla_phut() || ' phút nha, em báo khách liền.');
-    else
-      insert into reminders (kind, listing_id, ctv_id, due_at, note)
-      values ('escalation', new.listing_id, new.ctv_id, now(),
-        'khách hỏi #' || coalesce(v_code, '?') || ' · cần: ' || public.nhan_fact(v_hoi)
-        || ' · tin không có chính chủ trên hệ thống → giao ctv');
+    with g as (
+      update reminders set note = note || ' · khách hỏi thêm: "' || v_hoi || '"'
+       where kind = 'escalation' and status = 'pending' and listing_id = new.listing_id
+         and ctv_id is not distinct from new.ctv_id
+         and created_at > now() - interval '15 minutes'
+      returning 1
+    ) select count(*) into v_gom from g;
+    if v_gom = 0 then
+      if new.source = 'buyer_ask' then
+        insert into reminders (kind, listing_id, ctv_id, due_at, note)
+        values ('escalation', new.listing_id, new.ctv_id, now(),
+          'khách hỏi #' || coalesce(v_code, '?') || ': "' || v_hoi
+          || '". Anh/chị hỏi chủ rồi nhắn lại em theo mẫu "#' || coalesce(v_code, '?')
+          || ': câu trả lời" trong ' || public.ctv_sla_phut() || ' phút nha, em báo khách liền.');
+      else
+        insert into reminders (kind, listing_id, ctv_id, due_at, note)
+        values ('escalation', new.listing_id, new.ctv_id, now(),
+          'khách hỏi #' || coalesce(v_code, '?') || ' · cần: ' || public.nhan_fact(v_hoi)
+          || ' · tin không có chính chủ trên hệ thống → giao ctv');
+      end if;
     end if;
 
   elsif new.assignee = 'seller' and v_seller is not null
         and coalesce(new.source, '') = 'buyer_ask' then
     select coalesce(xung_ho, 'anh/chị') into v_goi from sellers where id = v_seller;
-    insert into reminders (kind, listing_id, seller_id, due_at, note)
-    values ('escalation', new.listing_id, v_seller, now(),
-      '💬 ' || initcap(left(v_goi, 1)) || substr(v_goi, 2) || ' ơi, có khách đang hỏi căn ' || v_dia_chi
-      || ': "' || v_hoi || '". ' || initcap(left(v_goi, 1)) || substr(v_goi, 2)
-      || ' trả lời giúp em ở đây để em báo khách liền nha.');
+    with g as (
+      update reminders set note = note || ' Khách hỏi thêm: "' || v_hoi || '".'
+       where kind = 'escalation' and status = 'pending' and listing_id = new.listing_id
+         and seller_id = v_seller
+         and created_at > now() - interval '15 minutes'
+      returning 1
+    ) select count(*) into v_gom from g;
+    if v_gom = 0 then
+      insert into reminders (kind, listing_id, seller_id, due_at, note)
+      values ('escalation', new.listing_id, v_seller, now(),
+        '💬 ' || initcap(left(v_goi, 1)) || substr(v_goi, 2) || ' ơi, có khách đang hỏi căn ' || v_dia_chi
+        || ': "' || v_hoi || '". ' || initcap(left(v_goi, 1)) || substr(v_goi, 2)
+        || ' trả lời giúp em ở đây để em báo khách liền nha.');
+    end if;
   end if;
   return new;
 end $function$
@@ -4586,6 +4621,30 @@ begin
     end;
   end if;
   return null;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.required_facts_khong_trung()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if exists (
+    select 1 from required_facts r
+     where r.property_type = new.property_type
+       and r.fact_key = new.fact_key
+       and (r.deal is null) <> (new.deal is null)
+       and r.id is distinct from new.id
+  ) then
+    raise exception
+      'required_facts: (%, %) da co ban % — them ban % nua la bot hoi hai lan',
+      new.property_type, new.fact_key,
+      case when new.deal is null then 'rieng theo deal' else 'chung (deal null)' end,
+      case when new.deal is null then 'chung' else 'rieng' end
+      using errcode = '23505';
+  end if;
+  return new;
 end $function$
 ;
 
@@ -5974,6 +6033,8 @@ drop trigger if exists trg_reminders_hen_hoi_cam_nhan on public.reminders;
 CREATE TRIGGER trg_reminders_hen_hoi_cam_nhan AFTER UPDATE OF status ON public.reminders FOR EACH ROW EXECUTE FUNCTION reminders_hen_hoi_cam_nhan();
 drop trigger if exists trg_reminders_trang_thai on public.reminders;
 CREATE TRIGGER trg_reminders_trang_thai BEFORE UPDATE ON public.reminders FOR EACH ROW EXECUTE FUNCTION reminders_giu_trang_thai_ket();
+drop trigger if exists trg_required_facts_khong_trung on public.required_facts;
+CREATE TRIGGER trg_required_facts_khong_trung BEFORE INSERT OR UPDATE OF property_type, fact_key, deal ON public.required_facts FOR EACH ROW EXECUTE FUNCTION required_facts_khong_trung();
 drop trigger if exists trg_pe_viewings on public.viewings;
 CREATE TRIGGER trg_pe_viewings AFTER INSERT ON public.viewings FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_viewings_bao_ctv_va_email on public.viewings;
@@ -6579,6 +6640,10 @@ revoke all on function public.reminders_giu_trang_thai_ket() from public, anon, 
 grant execute on function public.reminders_giu_trang_thai_ket() to service_role;
 revoke all on function public.reminders_hen_hoi_cam_nhan() from public, anon, authenticated;
 grant execute on function public.reminders_hen_hoi_cam_nhan() to service_role;
+revoke all on function public.required_facts_khong_trung() from public, anon, authenticated;
+grant execute on function public.required_facts_khong_trung() to anon;
+grant execute on function public.required_facts_khong_trung() to authenticated;
+grant execute on function public.required_facts_khong_trung() to service_role;
 revoke all on function public.reset_nguoi_test(p_zalo text) from public, anon, authenticated;
 grant execute on function public.reset_nguoi_test(p_zalo text) to service_role;
 revoke all on function public.route_info_request() from public, anon, authenticated;
