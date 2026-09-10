@@ -19,7 +19,7 @@
 //   Đặt khoá MỘT LẦN vào scripts/.env (file này tự đọc, đã gitignore):
 //       SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
 //   rồi:
-//       node scripts/sao-luu.mjs                # ghi ra ../nhadat-backup/<ngày>/
+//       node scripts/sao-luu.mjs                # ghi ra ../nhadat-backup/sao-luu-day-du/<ngày-giờ>/
 //       node scripts/sao-luu.mjs /duong/dan/khac
 //   PHẢI có chữ `node` ở đầu. Gõ mỗi `sao-luu.mjs` thì Windows mở Notepad.
 //
@@ -53,9 +53,9 @@
 // tới đó). Nên lần chạy đầu trên máy chủ dự án hãy đối chiếu số dòng nó in ra
 // với số dòng trong Dashboard, ít nhất cho `listings` và `messages`.
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readdir, rm } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Nạp scripts/.env — cùng lý do với bridge: `set SUPABASE_SERVICE_ROLE_KEY=...`
@@ -254,9 +254,15 @@ async function keoSchema(dich) {
   console.log(`  schema.sql          ${String(ddl.length).padStart(6)} ký tự → cả ${trongRepo}`);
 }
 
+// Đích mặc định nằm TRONG `nhadat-backup/sao-luu-day-du/`, không nằm ngay gốc
+// (đổi 10/09/2026). Chủ dự án mở OneDrive: "tao thấy hơi nhiều file" — gốc
+// `nhadat-backup` là chỗ SẾP MỞ RA ĐỌC (DOC-TRUOC.md, du-an.json, tin/), mà mỗi
+// lượt chạy sao lưu lại đổ thêm một thư mục 35 file cạnh đó. Sáu lượt trong một
+// ngày là sáu thư mục trông y hệt nhau, và thứ đáng đọc chìm nghỉm giữa chúng.
+// Nay ruột máy nằm gọn một chỗ, gốc chỉ còn thứ người đọc.
+const KHO_SAO_LUU = join(process.cwd(), "..", "nhadat-backup", "sao-luu-day-du");
 const dich = resolve(process.argv[2]
-  ?? join(process.cwd(), "..", "nhadat-backup",
-          new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")));
+  ?? join(KHO_SAO_LUU, new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")));
 
 // Bản sao chứa SĐT thật của khách và người bán; repo này đang PUBLIC. Mặc định
 // đã trỏ ra ngoài repo, nhưng mặc định chỉ bảo vệ người không gõ tham số. Một
@@ -339,3 +345,43 @@ if (soTay.hong.length) {
 }
 console.log("Xong. Cất thư mục này ra ổ khác / cloud riêng — đừng để một chỗ với DB.");
 console.log("`bot/supabase/schema.sql` vừa được cập nhật — nhớ commit nếu nó đổi.");
+
+// ── DỌN BẢN CŨ ───────────────────────────────────────────────────────────────
+// Giữ MỘT bản mỗi ngày, tối đa 7 ngày. Vì sao phải tự dọn: 10/09 chạy sáu lượt
+// trong một ngày là sáu thư mục 5 MB gần y hệt nhau trên OneDrive — vừa nặng
+// cho máy đồng bộ, vừa làm người mở ra không biết bản nào là bản đáng đọc.
+//
+// Ba luật để việc dọn không bao giờ ăn mất lưới an toàn:
+//   1. CHỈ dọn khi chuyến này `day_du` — chuyến hụt thì không được phép đụng vào
+//      bản cũ, vì lúc đó bản cũ là thứ duy nhất còn dùng được.
+//   2. Chỉ đụng thư mục ĐÚNG KHUÔN NGÀY-GIỜ do chính script này sinh ra.
+//   3. Bản MỚI NHẤT của mỗi ngày được giữ; bản `hong` chỉ xoá khi ngày đó đã có
+//      một bản `day_du` khác.
+// Đặt sau khi manifest đã ghi xong, và nuốt mọi lỗi: dọn dẹp hỏng thì thôi,
+// không được biến một chuyến sao lưu THÀNH CÔNG thành chuyến báo lỗi.
+const GIU_NGAY = 7;
+const KHUON_TEN = /^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$/;
+try {
+  const kho = dirname(dich);
+  const ten = (await readdir(kho, { withFileTypes: true }))
+    .filter((d) => d.isDirectory() && KHUON_TEN.test(d.name))
+    .map((d) => d.name)
+    .sort()
+    .reverse(); // mới nhất trước
+  const giu = new Set([basename(dich)]);
+  const ngayDaGiu = new Set();
+  for (const t of ten) {
+    const ngay = t.slice(0, 10);
+    if (ngayDaGiu.size >= GIU_NGAY && !ngayDaGiu.has(ngay)) continue;
+    if (ngayDaGiu.has(ngay)) continue;
+    ngayDaGiu.add(ngay);
+    giu.add(t);
+  }
+  const bo = ten.filter((t) => !giu.has(t));
+  for (const t of bo) await rm(join(kho, t), { recursive: true, force: true });
+  if (bo.length) {
+    console.log(`Dọn ${bo.length} bản cũ (giữ 1 bản/ngày, ${GIU_NGAY} ngày gần nhất): ${bo.join(", ")}`);
+  }
+} catch (e) {
+  console.error(`Dọn bản cũ không xong (bản sao lưu vẫn ĐỦ): ${e.message}`);
+}

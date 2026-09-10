@@ -131,6 +131,18 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   trong khi bảng thật có 1005 dòng: file ảnh còn nguyên trong Storage mà không
   gì nói tấm nào của tin nào, đúng kịch bản OPEN-47. Đổi dữ liệu lớn thì sao lưu
   lại, và đọc `manifest.json` xác nhận SỐ DÒNG chứ đừng nhìn thư mục thấy đủ file.
+  **Chỗ cất và nhịp dọn (10/09/2026).** Đích mặc định nay là
+  `003-Content/nhadat-backup/sao-luu-day-du/<ngày-giờ>/`, KHÔNG còn đổ thẳng ra
+  gốc `nhadat-backup/` — gốc là chỗ sếp mở ra đọc (`DOC-TRUOC.md`, `du-an.json`,
+  `tin/`), mỗi lượt chạy đổ thêm một thư mục 35 file cạnh đó thì thứ đáng đọc
+  chìm nghỉm (chủ dự án: "tao thấy hơi nhiều file"). Chạy xong script tự dọn,
+  giữ MỘT bản mỗi ngày trong 7 ngày gần nhất, và chỉ dọn khi chuyến đó `day_du`
+  — chuyến hụt thì bản cũ là thứ duy nhất còn dùng được, không được đụng vào.
+  Đo 10/09 sau khi dọn: 230 file · 32,5 MB → 71 file · 8,0 MB.
+  Nhịp chạy: Task Scheduler **trên máy Quang Lê Bá Duy** gọi
+  `003-Content/nhadat-sao-luu.cmd` lúc **09:00 và 15:00** mỗi ngày (log ở
+  `nhadat-sao-luu.log`). Máy đó tắt là lượt đó KHÔNG chạy và không ai được báo —
+  10/09 lượt 15:00 hụt đúng vì vậy. Máy này chưa có tác vụ nào.
   `soat-migration.mjs` so DB ↔ repo. `phuc-hoi.mjs` + `soat-phuc-hoi.mjs` nạp
   bản sao vào một DB RỖNG rồi chấm đạt/không (quy trình ở `docs/12`).
   `xuat-ro-hang.mjs` xuất rổ hàng ra thứ NGƯỜI đọc được — mỗi tin một thư mục
