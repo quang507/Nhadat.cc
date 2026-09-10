@@ -155,6 +155,12 @@ export function bocDuPhong(
   modelGroq: string,
   ghiSo?: (nguon: string, chiTiet: string) => Promise<void>,
 ): CoMessages {
+  // Bậc miễn phí Groq chặn nhịp THEO TỪNG MODEL. Đo 10/09: lượt đầu qua được,
+  // lượt hai dính "Rate limit reached for model qwen/qwen3.8-27b" và rơi tiếp về
+  // câu mẫu — tức là có lưới mà vẫn thủng. Nên GROQ_MODEL nhận DANH SÁCH ngăn
+  // bằng dấu phẩy: hết nhịp model này thì xoay sang model kế, mỗi model một hạn
+  // mức riêng. Hết cả danh sách mới chịu thua.
+  const dsModel = modelGroq.split(",").map((m) => m.trim()).filter(Boolean);
   const chay = async (ten: "create" | "parse", p: ThamSo): Promise<unknown> => {
     if (chinh) {
       try {
@@ -162,13 +168,25 @@ export function bocDuPhong(
       } catch (e) {
         if (!nenDoiSang(e)) throw e;
         await ghiSo?.(
-          `model chinh hong - doi sang Groq ${modelGroq}`,
+          `model chinh hong - doi sang Groq ${dsModel[0]}`,
           String((e as { message?: string })?.message ?? e).slice(0, 300),
         );
       }
     }
     const schema = ten === "parse" ? bocSchema(p.output_config?.format) : null;
-    return await goiGroq(khoaGroq, modelGroq, p, schema);
+    let cuoi: unknown = null;
+    for (const m of dsModel) {
+      try {
+        return await goiGroq(khoaGroq, m, p, schema);
+      } catch (e) {
+        cuoi = e;
+        // Hết nhịp / quá tải thì xoay model; lỗi khác (sai schema, sai prompt)
+        // xoay cũng vô ích — model nào cũng hỏng như nhau.
+        if (!/^Groq (429|5\d\d)/.test(String((e as { message?: string })?.message ?? e))) break;
+        await ghiSo?.(`Groq het nhip - xoay model khoi ${m}`, String((e as { message?: string })?.message ?? e).slice(0, 200));
+      }
+    }
+    throw cuoi ?? new Error("Groq: không model nào trả lời");
   };
   return {
     messages: {
