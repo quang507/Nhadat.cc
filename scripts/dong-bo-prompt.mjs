@@ -52,6 +52,7 @@ const TU_CODE = {
   rate_ctv_rubric: P.RATE_CTV_RUBRIC,
   loi_chao: P.LOI_CHAO,
   cau_hoi_mau: P.CAU_HOI_MAU_TEXT,
+  cau_tien_dinh: P.CAU_TIEN_DINH_TEXT,
 };
 
 const r = await fetch(`${URL_DB}/rest/v1/bot_prompts?select=key,content`, { headers: H });

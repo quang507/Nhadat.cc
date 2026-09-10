@@ -23,7 +23,7 @@ import {
   BUYER_PROFILE_FIELDS,
   FACT_LABELS,
   HUMAN_CHAT_RULES,
-  SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau as cauHoiMauGoc, docCauHoiMau, LOI_CHAO,
+  SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau as cauHoiMauGoc, docCauHoiMau, docCauTienDinh, dienCau, LOI_CHAO,
   SLANG_NOTES,
   TONE_RULES,
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
@@ -821,6 +821,10 @@ Deno.serve(async (req) => {
   const TONE = dienTen(P.tone_rules ?? TONE_RULES, tenBot);
   // 09/09/2026: câu hỏi mẫu + lời chào khách mới đọc từ bot_prompts (đè lên code).
   const { bang: BANG_CAU, loi: loiCauMau } = docCauHoiMau(P.cau_hoi_mau);
+  // FR-138 b (10/09): chữ TIỀN ĐỊNH cũng sửa được ở Dashboard — chủ dự án:
+  // "chuyển mấy câu đó vào bot_prompts luôn đi để tao còn kiểm soát".
+  const { bang: CAU_TD, loi: loiCauTD } = docCauTienDinh(P.cau_tien_dinh);
+  if (loiCauTD) await ghiLoi(client, "bot_prompts.cau_tien_dinh hỏng JSON", loiCauTD);
   if (loiCauMau) await ghiLoi(client, "chat-reply bot_prompts.cau_hoi_mau JSON", loiCauMau);
   // FR-186: câu riêng theo loại BĐS ("huong@chung_cu") — truyền `loai` khi biết.
   const cauHoiMau = (k: string, ac: string, loai?: string | null) => cauHoiMauGoc(k, ac, BANG_CAU, loai);
@@ -1326,6 +1330,9 @@ Deno.serve(async (req) => {
     const goiNguoi = sellerRow.xung_ho ?? null;
     const cachGoi = goiNguoi ?? "anh/chị";
     const CachGoi = goiNguoi ? goiNguoi.charAt(0).toUpperCase() + goiNguoi.slice(1) : "Anh/chị";
+    // Điền ô cho câu tiền định (FR-138 b). Ô thiếu dữ liệu → câu rỗng, tầng gọi bỏ.
+    const cauTD = (khoa: string, o: Record<string, string | number | null | undefined> = {}) =>
+      dienCau(CAU_TD[khoa] ?? "", { ac: cachGoi, Ac: CachGoi, web: "AI Ơi Nhà Đất", ...o });
     const [{ data: lichSuS }, { data: tinCuaNguoi }] = await Promise.all([
       client.from("messages").select("sender, body, seq")
         .eq("conversation_id", convSId).order("seq", { ascending: false }).limit(9),
@@ -1934,7 +1941,7 @@ Deno.serve(async (req) => {
         const p = phan.filter((x): x is string => !!x && String(x).trim().length > 0);
         if (p.length) dong.push(`${icon} ${nhan}: ${p.join(" · ")}`);
       };
-      dong.push(`📋 Em sẽ đăng tin gồm những thông tin và mô tả này cho ${cachGoi} nhé — độ đầy đủ ${d.diem}/100`);
+      dong.push(cauTD("nhap_tieu_de", { diem: d.diem }));
       dong.push(`🏠 ${(LOAI_VI[loai] ?? "Nhà").toUpperCase()} ${thue ? "CHO THUÊ" : "BÁN"}${lx.gap === true ? " - CẦN " + (thue ? "CHO THUÊ" : "BÁN") + " GẤP" : ""}`);
       dong.push(`📍 ${diaChiGon(lx.location_raw, lx.ward, lx.district)}${fact("khu_compound") ? ` · ${fact("khu_compound")}` : ""}`);
       them("📐", "Diện tích", [
@@ -2001,14 +2008,12 @@ Deno.serve(async (req) => {
       const soAnhTin = d.so_anh ?? 0;
       if (soAnhTin) dong.push(`📷 ${soAnhTin} ảnh`);
       // FR-178: không đọc mã tin cho khách — mã chỉ ở web, CTV, admin.
-      dong.push(`👉 Khách quan tâm nhắn Zalo cho em để hẹn xem nhà`);
+      dong.push(cauTD("nhap_goi_hanh_dong"));
       // 20260909a: diem_tin tự nối "ảnh sổ, mặt tiền, hẻm" vào thieu[] khi chưa có
       // ảnh (ảnh nay là 10 điểm, FR-177 f) — không nối thêm ở đây nữa.
       const thieu = d.thieu ?? [];
-      if (thieu.length) dong.push(`Thêm ${thieu.slice(0, 2).join(" và ")} là tin mạnh hơn nữa ạ.`);
-      dong.push(lai
-        ? `Em sửa lại rồi, ${cachGoi} xem vậy được chưa ạ?`
-        : `${CachGoi} xem vậy được chưa? Được thì em đăng liền và rao tích cực cho mình ạ.`);
+      if (thieu.length) dong.push(cauTD("nhap_goi_y", { thieu: thieu.slice(0, 2).join(" và ") }));
+      dong.push(lai ? cauTD("nhap_sua_xong") : cauTD("nhap_hoi_duyet"));
       // 23505 = câu duyệt đã mở từ lượt trước (gửi lại bản nháp) — không phải sự cố.
       const { error: irErr } = await client.from("info_requests").insert({
         listing_id: listingId, question: "duyet_tin", status: "pending",
@@ -2316,8 +2321,9 @@ Deno.serve(async (req) => {
         const len = !!lstOk && lstOk.status !== "cho_thong_tin";
         // Mỗi ý một dòng (chủ dự án 09/09: "cái nào cần xuống dòng thì xuống dòng").
         const themDiem = dk && !noiDu && (dk.thieu ?? []).length
-          ? `\nMuốn thêm điểm thì ${cachGoi} gửi em ${(dk.thieu ?? []).slice(0, 2).join(" và ")}${(dk.so_anh ?? 0) >= 3 ? "" : "; gửi thêm ảnh là điểm tăng ngay"}.` +
-            `\nCó thể em sẽ hỏi thêm mình một vài câu khi có khách hàng quan tâm nhé ${cachGoi}.`
+          ? "\n" + cauTD("dang_xong_them_diem", { thieu: (dk.thieu ?? []).slice(0, 2).join(" và ") }) +
+            ((dk.so_anh ?? 0) >= 3 ? "" : cauTD("dang_xong_them_anh")) + "." +
+            "\n" + cauTD("dang_xong_hen")
           : "";
         // FR-183 (09/09/2026): ĐIỂM NGƯỜI RAO — trung bình điểm các tin đang rao
         // × hệ số quy mô (NMG). Chỉ nhắc khi rao từ 2 căn (một căn thì điểm người
@@ -2332,8 +2338,7 @@ Deno.serve(async (req) => {
           }
         }
         const cau = len
-          ? `Dạ em cảm ơn ${cachGoi}! Chúc mừng ${cachGoi}, tin nhà mình đã lên web AI Ơi Nhà Đất${dk ? ` với điểm đầy đủ ${dk.diem}/100` : ""}.` +
-            `\nEm sẽ rao tích cực, có khách quan tâm là em báo ${cachGoi} liền.${themDiem}${dongNguoiRao}`
+          ? cauTD("dang_xong", { diem: dk?.diem }) + `${themDiem}${dongNguoiRao}`
           : `Dạ em ghi nhận rồi ạ.\nTin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm ${cachGoi} vài thông tin nữa nha.`;
         return await traLoiSeller([cau], {
           duyet: true, listing_status: lstOk?.status ?? null, diem: dk?.diem ?? null, du_roi: noiDu || undefined,
@@ -2712,8 +2717,8 @@ Deno.serve(async (req) => {
         // thì cả đoạn mở đầu đọc như máy, kể cả lúc model còn sống.
         const khachChao = /^\s*(dạ\s*)?(xin\s*)?(chào|chao|hi|hello|alo|a lô|hế lô)\b/i.test(text);
         const bongGhiNhan =
-          (khachChao ? `Dạ em chào ${cachGoi} ạ!\n` : "") +
-          `📝 Em ghi nhận: ${ghiNhan.join(" · ")}.\nSai chỗ nào ${cachGoi} nhắn lại giúp em nha.`;
+          (khachChao ? cauTD("chao_lai") + "\n" : "") +
+          cauTD("ghi_nhan", { ds: ghiNhan.join(" · ") });
         return await traLoiSeller([bongGhiNhan, raoReply], { listing_code: newLst.code, ghi_nhan: ghiNhan });
       }
     }
@@ -2779,10 +2784,12 @@ Deno.serve(async (req) => {
         const d = dk as { diem?: number; thieu?: string[] } | null;
         const thieu = (d?.thieu ?? []).slice(0, 2);
         return await traLoiSeller([
-          `Dạ vâng, vậy em rao như vậy nhé ${cachGoi}.` +
-          (d?.diem != null ? `\nĐộ đầy đủ tin của mình đang ${d.diem}/100.` : "") +
-          (thieu.length ? `\nKhi nào có ${thieu.join(" và ")} thì ${cachGoi} gửi em, điểm lên ngay và tin được đẩy mạnh hơn.` : "") +
-          `\nCó khách quan tâm là em báo ${cachGoi} liền ạ.`,
+          [
+            cauTD("du_roi"),
+            cauTD("du_roi_diem", { diem: d?.diem }),
+            thieu.length ? cauTD("du_roi_them", { thieu: thieu.join(" và ") }) : "",
+            cauTD("du_roi_dong"),
+          ].filter(Boolean).join("\n"),
         ], { du_roi: true, diem: d?.diem ?? null });
       }
     }

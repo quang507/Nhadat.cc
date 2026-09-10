@@ -398,6 +398,66 @@ export function dienTen(text: string, ten: string): string {
 // (md5 khớp — TS-KYGUI-16). Bản DB ĐÈ từng khoá lên bản code; JSON hỏng thì
 // bỏ qua bản DB (không làm bot câm), tầng gọi ghi sổ.
 export const CAU_HOI_MAU_TEXT = JSON.stringify(CAU_HOI_MAU, null, 2);
+/**
+ * CÂU TIỀN ĐỊNH — chữ bot nói mà KHÔNG qua model.
+ *
+ * Chủ dự án 10/09/2026: "chuyển mấy câu đó vào bot_prompts luôn đi để tao còn
+ * kiểm soát". Trước bản này chúng nằm rải trong `chat-reply/index.ts`, muốn đổi
+ * một chữ phải sửa code + mở PR + deploy. Nay chúng là một khoá JSON trong
+ * `bot_prompts` (`cau_tien_dinh`), sửa ở Supabase là bot đổi trong 60 giây.
+ *
+ * Vì sao KHÔNG để model tự viết mấy câu này: chúng mang SỐ (điểm, danh sách thứ
+ * đã bóc được) và mang lời hứa (rao tin, đăng liền). Model viết lại là số sai và
+ * lời hứa trôi. Nên chữ thì người kiểm soát, số thì máy điền.
+ *
+ * Ô điền: {ac} = cách gọi khách (anh/chị hoặc tên), {Ac} = viết hoa đầu câu,
+ * {diem} = điểm đầy đủ, {thieu} = hai thứ còn thiếu, {ds} = danh sách vừa bóc,
+ * {web} = tên web. Ô nào không có dữ liệu thì cả câu chứa nó được bỏ.
+ */
+export const CAU_TIEN_DINH: Record<string, string> = {
+  ghi_nhan: "📝 Em ghi nhận: {ds}.\nSai chỗ nào {ac} nhắn lại giúp em nha.",
+  chao_lai: "Dạ em chào {ac} ạ!",
+  nhap_tieu_de: "📋 Em sẽ đăng tin gồm những thông tin và mô tả này cho {ac} nhé — độ đầy đủ {diem}/100",
+  nhap_goi_y: "Thêm {thieu} là tin mạnh hơn nữa ạ.",
+  nhap_hoi_duyet: "{Ac} xem vậy được chưa? Được thì em đăng liền và rao tích cực cho mình ạ.",
+  nhap_sua_xong: "Em sửa lại rồi, {ac} xem vậy được chưa ạ?",
+  nhap_goi_hanh_dong: "👉 Khách quan tâm nhắn Zalo cho em để hẹn xem nhà",
+  dang_xong: "Dạ em cảm ơn {ac}! Chúc mừng {ac}, tin nhà mình đã lên web {web} với điểm đầy đủ {diem}/100.\nEm sẽ rao tích cực, có khách quan tâm là em báo {ac} liền.",
+  dang_xong_them_diem: "Muốn thêm điểm thì {ac} gửi em {thieu}",
+  dang_xong_them_anh: "; gửi thêm ảnh là điểm tăng ngay",
+  dang_xong_hen: "Có thể em sẽ hỏi thêm mình một vài câu khi có khách hàng quan tâm nhé {ac}.",
+  du_roi: "Dạ vâng, vậy em rao như vậy nhé {ac}.",
+  du_roi_diem: "Độ đầy đủ tin của mình đang {diem}/100.",
+  du_roi_them: "Khi nào có {thieu} thì {ac} gửi em, điểm lên ngay và tin được đẩy mạnh hơn.",
+  du_roi_dong: "Có khách quan tâm là em báo {ac} liền ạ.",
+};
+export const CAU_TIEN_DINH_TEXT = JSON.stringify(CAU_TIEN_DINH, null, 2);
+
+/** Bản DB (`bot_prompts.cau_tien_dinh`) đè lên bản trong code, khoá nào có thì đè khoá đó. */
+export function docCauTienDinh(json: string | null | undefined): { bang: Record<string, string>; loi: string | null } {
+  if (!json) return { bang: CAU_TIEN_DINH, loi: null };
+  try {
+    const o = JSON.parse(json) as Record<string, unknown>;
+    const bang: Record<string, string> = { ...CAU_TIEN_DINH };
+    for (const [k, v] of Object.entries(o)) if (typeof v === "string" && v.trim()) bang[k] = v;
+    return { bang, loi: null };
+  } catch (e) {
+    return { bang: CAU_TIEN_DINH, loi: String(e) };
+  }
+}
+
+/** Điền ô cho một câu tiền định. Ô thiếu dữ liệu → trả chuỗi rỗng để tầng gọi bỏ câu. */
+export function dienCau(mau: string, o: Record<string, string | number | null | undefined>): string {
+  let thieuO = false;
+  const ra = mau.replace(/\{(ac|Ac|diem|thieu|ds|web)\}/g, (_, k: string) => {
+    const v = o[k];
+    if (v == null || v === "") { thieuO = true; return ""; }
+    const s = String(v);
+    return k === "Ac" ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  });
+  return thieuO ? "" : ra;
+}
+
 export function docCauHoiMau(json: string | null | undefined): { bang: Record<string, string>; loi: string | null } {
   if (!json) return { bang: CAU_HOI_MAU, loi: null };
   try {
