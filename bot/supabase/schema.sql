@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 14:39 (giờ VN)
+-- Sinh lúc: 2026-09-10 15:09 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -3771,6 +3771,12 @@ AS $function$
                   generate_series(1, greatest(array_length(w, 1) - 2, 0)) i
          ) z
       ) as cum_khop,
+      -- MỘT từ đặc trưng (≥7 ký tự) là đủ: tiếng Việt đơn âm nên tên đường và
+      -- tên người không dài tới đó, còn tên riêng dự án thì có.
+      (select bool_or(position(' ' || w || ' ' in t.tu) > 0)
+         from unnest(string_to_array(btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')), ' ')) w
+        where length(w) >= 7 and not (w = any(select unnest(bo) from chung))
+      ) as tu_dac_trung,
       (select count(*) from unnest(string_to_array(btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')), ' ')) w
         where length(w) >= 3 and not (w = any(select unnest(bo) from chung))
           and position(' ' || w || ' ' in t.tu) > 0) as so_tu_khop
@@ -3779,7 +3785,7 @@ AS $function$
   )
   select p2.*
   from ung join projects p2 on p2.id = ung.id
-  where ung.tron or ung.cum_khop
+  where ung.tron or ung.cum_khop or ung.tu_dac_trung
   order by ung.tron desc, ung.so_tu_khop desc, length(p2.name), p2.priority nulls last, p2.name
   limit 2;
 $function$

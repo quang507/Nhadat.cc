@@ -153,7 +153,7 @@ for (const p of ds) {
   // Model hay điền bừa hai ô này: `ban_giao` thành TÊN dự án, `so_can` thành
   // tên loại căn. Ô nào không có CHỮ SỐ thì bỏ — thà trống còn hơn sai.
   if (kq.ban_giao && !/[0-9]/.test(kq.ban_giao)) kq.ban_giao = null;
-  for (const c of kq.loai_can ?? []) { if (c.so_can && !/[0-9]/.test(c.so_can)) c.so_can = null; }
+  for (const c of kq.loai_can ?? []) { if (c.so_can && (c.so_can === c.ten || !/[0-9]/.test(c.so_can) || /pn|phong/i.test(c.so_can))) c.so_can = null; }
   const specsMoi = {
     ...(p.specs ?? {}),
     quy_mo: kq.quy_mo ?? undefined,
