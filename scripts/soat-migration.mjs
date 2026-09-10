@@ -38,21 +38,46 @@ if (existsSync(ENV_FILE)) {
 }
 
 const URL_DU_AN = process.env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
-const KHOA = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// HAI ĐƯỜNG ĐỌC, cùng một câu trả lời:
+//   · máy người làm  → service_role + `liet_ke_migration()` (đầy đủ)
+//   · máy CI         → khoá CÔNG KHAI + `liet_ke_migration_cong_khai()` (chỉ
+//     version + name, `20260910o`)
+// Nhét service_role vào CI của một repo ĐANG PUBLIC là mở toang: khoá đó bỏ
+// qua mọi RLS. Một cổng chống trôi schema không đáng đổi bằng cái đó, mà tên
+// migration thì vốn đã nằm công khai trong chính thư mục này.
+const KHOA_CONG_KHAI = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ?? process.env.SUPABASE_ANON_KEY
+  ?? docKhoaCongKhaiTrongRepo();
+// Khoá RỖNG cũng là không có khoá — `??` giữ nguyên chuỗi rỗng rồi đi tiếp
+// bằng một khoá không dùng được, và lỗi hiện ra là 401 khó hiểu ở tận cuối.
+const KHOA_SERVICE = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim() || null;
+const KHOA = KHOA_SERVICE ?? KHOA_CONG_KHAI;
+const HAM = KHOA_SERVICE ? "liet_ke_migration" : "liet_ke_migration_cong_khai";
 if (!KHOA) {
-  console.error("Thiếu SUPABASE_SERVICE_ROLE_KEY (xem hướng dẫn trong sao-luu.mjs).");
+  console.error("Không có khoá nào để đọc danh sách migration (service_role hoặc khoá công khai).");
   process.exit(1);
+}
+
+/** Khoá công khai nằm sẵn trong `lib/supabase.ts` — đúng cái mọi bundle web đã phát hành. */
+function docKhoaCongKhaiTrongRepo() {
+  try {
+    const t = readFileSync(join(HERE, "..", "lib", "supabase.ts"), "utf8");
+    return /(?:sb_publishable_|eyJ)[A-Za-z0-9._-]{20,}/.exec(t)?.[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 const THU_MUC = join(HERE, "..", "bot", "supabase", "migrations");
 
-const r = await fetch(`${URL_DU_AN}/rest/v1/rpc/liet_ke_migration`, {
+const r = await fetch(`${URL_DU_AN}/rest/v1/rpc/${HAM}`, {
   method: "POST",
   headers: { apikey: KHOA, Authorization: `Bearer ${KHOA}`, "Content-Type": "application/json" },
   body: "{}",
 });
 if (!r.ok) {
-  console.error(`rpc/liet_ke_migration: HTTP ${r.status} ${await r.text()}`);
+  console.error(`rpc/${HAM}: HTTP ${r.status} ${await r.text()}`);
   process.exit(1);
 }
 const daAp = await r.json();
@@ -66,10 +91,23 @@ const tenFile = file.map((f) => f.replace(/\.sql$/, ""));
 const khop = (name) =>
   tenFile.some((f) => f === name || f.endsWith(name) || f.includes(name.replace(/^\d+_/, "")));
 
+// Hồ sơ ĐÃ ĐỐI CHIẾU: 11 file viết tay thời 21/08 → 01/09 được áp dưới TÊN
+// KHÁC do MCP tự đặt, so theo tên không bắt cặp được, và nội dung gốc không còn
+// để đối chiếu (OPEN-46). Ghi tên chúng vào một file CÓ NGƯỜI ĐỌC, thay vì để
+// cổng kêu 11 dòng mãi mãi — cảnh báo kêu mãi thì thành tiếng ồn, rồi cái thứ
+// 12 (trôi THẬT) chìm lẫn vào đó. Đúng chuyện xảy ra hôm nay.
+const HO_SO = join(THU_MUC, "DA-DOI-CHIEU.json");
+const hoSo = existsSync(HO_SO) ? JSON.parse(readFileSync(HO_SO, "utf8")) : { file_ap_duoi_ten_khac: [] };
+const daDoiChieu = new Set(hoSo.file_ap_duoi_ten_khac ?? []);
+
 const thieuFile = daAp.filter((m) => !khop(m.name));
-const chuaAp = tenFile.filter(
+const chuaApTho = tenFile.filter(
   (f) => !daAp.some((m) => f === m.name || f.endsWith(m.name) || f.includes(m.name.replace(/^\d+_/, ""))),
 );
+const chuaAp = chuaApTho.filter((f) => !daDoiChieu.has(f));
+// Dòng trong hồ sơ mà file đã biến mất = hồ sơ cũ, phải dọn — không thì nó âm
+// thầm tha thứ cho một file khác trùng tên sau này.
+const hoSoThua = [...daDoiChieu].filter((f) => !tenFile.includes(f));
 
 let loi = 0;
 console.log(`DB đã áp ${daAp.length} migration · repo có ${file.length} file\n`);
@@ -90,7 +128,15 @@ if (chuaAp.length) {
   for (const f of chuaAp) console.log(`    ${f}`);
   console.log("  → Áp bằng `apply_migration` với đúng nội dung file, đừng sửa tay ở dashboard.\n");
 } else {
-  console.log("✓ Mọi file trong repo đều đã áp trên DB\n");
+  const ghi = daDoiChieu.size ? ` (${daDoiChieu.size} file cũ đã ghi trong DA-DOI-CHIEU.json)` : "";
+  console.log(`✓ Mọi file trong repo đều đã áp trên DB${ghi}\n`);
+}
+
+if (hoSoThua.length) {
+  loi = 1;
+  console.log(`✗ ${hoSoThua.length} dòng trong DA-DOI-CHIEU.json trỏ tới file KHÔNG CÒN:`);
+  for (const f of hoSoThua) console.log(`    ${f}`);
+  console.log("  → Xoá dòng đó khỏi hồ sơ. Hồ sơ cũ là chỗ tha thứ nhầm cho file khác.\n");
 }
 
 // Ảnh chụp schema phải mới hơn migration mới nhất, không thì nó tả một DB đã cũ.
@@ -113,4 +159,7 @@ if (!existsSync(SCHEMA)) {
   }
 }
 
-process.exit(loi);
+// `process.exitCode` chứ KHÔNG `process.exit()`: trên Windows, cắt tiến trình
+// khi còn socket của lượt gọi RPC làm libuv nổ assertion, mã thoát ra 127 thay
+// vì 0/1 — cổng đọc mã thoát sẽ thấy HỎNG trong khi mọi phép so đều khớp.
+process.exitCode = loi;

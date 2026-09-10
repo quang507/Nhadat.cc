@@ -155,6 +155,22 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   Cùng lý do đó, `he-thong/theo-ngay/` vẫn giữ ảnh chụp từng ngày dù đã có
   `moi-nhat/`. `sao-luu.mjs` tự dọn: giữ 1 bản/ngày × 7 ngày, và CHỈ dọn khi
   chuyến đó `day_du`.
+  **`soat-migration.mjs` so DB ↔ repo, và từ 10/09 nó là CỔNG CI THỨ 7.** Ngày
+  đó hai lượt soát code đọc `schema.sql` ở hai mốc thời gian khác nhau trong lúc
+  DB đang được vá, rồi kết luận ngược nhau — một bên báo 5 lỗ, một bên báo 5 báo
+  động giả. Không ai sai; cái thiếu là một chỗ NÓI RA rằng repo đang tụt sau DB.
+  Cổng chạy bằng KHOÁ CÔNG KHAI qua `liet_ke_migration_cong_khai()`
+  (`20260910o`, chỉ trả version + name, KHÔNG bao giờ trả nội dung DDL) — nhét
+  service_role vào CI của một repo đang PUBLIC là mở toang, mà tên migration thì
+  vốn đã công khai trong chính thư mục này.
+  Nợ cũ 21/08 → 01/09 (OPEN-46) nay có hồ sơ thay vì kêu mãi: 52 migration áp
+  không file đã có **file dấu vết** (chỉ chú thích, chạy không tạo gì — nội dung
+  gốc mất vĩnh viễn), và 11 file áp dưới tên khác ghi trong
+  `bot/supabase/migrations/DA-DOI-CHIEU.json`. Cảnh báo kêu mãi thì thành tiếng
+  ồn, rồi cái thứ 53 — trôi THẬT — chìm lẫn vào đó. **Thêm dòng vào
+  DA-DOI-CHIEU.json là một quyết định, không phải cách làm cổng xanh.**
+  Dựng lại từ số không vẫn KHÔNG replay được cả thư mục: nạp `schema.sql` trước,
+  rồi áp migration từ `20260902` trở đi.
   `soat-migration.mjs` so DB ↔ repo. `phuc-hoi.mjs` + `soat-phuc-hoi.mjs` nạp
   bản sao vào một DB RỖNG rồi chấm đạt/không (quy trình ở `docs/12`).
   `xuat-ro-hang.mjs` xuất rổ hàng ra thứ NGƯỜI đọc được — mỗi tin một thư mục

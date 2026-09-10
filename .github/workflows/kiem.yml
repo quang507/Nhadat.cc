@@ -147,3 +147,28 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
       - name: Bộ soát phục hồi phải bắt được cả 9 cách hỏng
         run: bun run test:phuchoi
+
+  # ── CỔNG THỨ 7: REPO ↔ DB CÓ CÙNG DANH SÁCH MIGRATION KHÔNG ────────────────
+  # Chủ dự án 10/09/2026: "thêm một cổng CI so danh sách migration trên database
+  # với thư mục trong repo. Cổng này lẽ ra đã chặn được cả năm báo động giả
+  # hôm nay."
+  #
+  # Chuyện xảy ra hôm đó: hai lượt soát code đọc bản chụp `schema.sql` ở hai mốc
+  # thời gian khác nhau trong lúc DB đang được vá, rồi kết luận ngược nhau — một
+  # bên báo 5 lỗ, một bên báo 5 báo động giả. Không ai sai; cái thiếu là một chỗ
+  # NÓI RA rằng repo đang tụt lại sau DB.
+  #
+  # Không cần secret: gọi `liet_ke_migration_cong_khai()` (20260910o) bằng đúng
+  # khoá công khai đã nằm trong mọi bundle web, và hàm đó chỉ trả version + name
+  # — không bao giờ trả nội dung DDL. Nhét service_role vào CI của repo PUBLIC
+  # là mở toang, một cổng chống trôi schema không đáng đổi bằng cái đó.
+  migration:
+    name: Migration — repo và DB cùng một danh sách
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Mọi migration đã áp đều có file, mọi file đều đã áp, ảnh chụp không cũ hơn
+        run: bun run soat:migration
