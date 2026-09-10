@@ -238,7 +238,7 @@ export default async function ListingBrowse({
             </div>
             <a
               href={zaloLink(`search:${q}`)}
-              className="shrink-0 rounded-full bg-brand px-6 py-3 text-center font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+              className="nut nut-chinh"
             >
               Hỏi qua Zalo
             </a>
@@ -317,7 +317,7 @@ export default async function ListingBrowse({
           </p>
           <a
             href={zaloLink(q ? `search:${q}` : `empty:${sp.phuong ?? deal}`)}
-            className="mt-5 inline-block rounded-full bg-brand px-6 py-3 font-bold text-white transition hover:bg-brand-dark active:scale-[0.98]"
+            className="nut nut-chinh mt-5"
           >
             Hỏi qua Zalo
           </a>

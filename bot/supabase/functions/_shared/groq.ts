@@ -97,7 +97,10 @@ async function goiGroq(
   const than: Record<string, unknown> = {
     model,
     messages,
-    max_completion_tokens: p.max_tokens ?? 1024,
+    // Model suy luận tiêu ngân sách chữ cho phần NGHĨ trước khi viết câu trả lời,
+    // nên trần của model chính (512) làm câu nhìn thấy bị cắt giữa chừng — bắt
+    // 10/09: "Hẻm trước nhà rộng m". Cho lượt dự phòng ít nhất 900.
+    max_completion_tokens: Math.max(p.max_tokens ?? 1024, 900),
     temperature: 0.6,
     // Model suy luận (qwen3.x) mặc định TRẢ KÈM đoạn nghĩ. Bắt tại trận 10/09:
     // một lượt trả về nguyên "<think> Here's a thinking process: 1. Analyze User

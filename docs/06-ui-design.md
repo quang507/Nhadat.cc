@@ -375,6 +375,22 @@ Khác AOND: tối đa 1 emoji/tin; bảy quy tắc trên là luật gốc khi ha
 - Mọi ảnh listing có `alt` sinh từ mô tả rút gọn; điều hướng bàn phím đầy đủ.
 - Không dùng riêng màu để truyền trạng thái: "Đã bán" phải có chữ.
 
+## 6.12 Bộ NÚT dùng chung (10/09/2026)
+
+[nguồn: chủ dự án 10/09/2026 — "bàn làm việc và web cảm giác vẫn quá AI, để các nút hiển thị tốt hơn đi"]
+
+Ba dấu hiệu làm một cái nút trông như máy sinh ra, và cách sửa từng cái:
+
+| Dấu hiệu | Sửa |
+|---|---|
+| Mỗi nút một cỡ — chữ, padding, chiều cao đều lệch nhau | Chiều cao CHUNG: web `min-height: 44px` (chạm được bằng ngón tay, WCAG 2.5.5), khu quản trị `min-h-9` cho vùng dữ liệu dày |
+| Bấm không thấy gì xảy ra | `active:translate-y-px` trên mọi nút; nút chính thêm bóng cam rất nhẹ CHỈ khi rê, bỏ bóng khi nhấn |
+| Nút phụ trông như cái thẻ | Viền đậm hơn viền khung một nấc (`border-mute/35`), nền trắng đục, rê thì viền và chữ chuyển sang cam |
+
+Web dùng bốn lớp trong `app/globals.css`: `.nut` (nền chung), `.nut-chinh`, `.nut-phu`, `.nut-nhe`, thêm `.nut-nho` khi cần cỡ nhỏ. Khu `/admin` giữ `components/ui.tsx` với góc bo nhỏ hơn nhưng CÙNG ngôn ngữ trạng thái. Vòng focus dùng `ring-brand/45` có offset, không dùng outline mặc định của trình duyệt.
+
+Nút chính **không bao giờ** có bóng ở trạng thái nghỉ — bóng thường trực là thứ khiến trang trông như bản mẫu dựng sẵn.
+
 ## 6.11 Quan hệ với theme tham chiếu
 
 | Kế thừa từ Veedoo | Loại bỏ |

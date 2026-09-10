@@ -9,14 +9,17 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import Link from "next/link";
 
 type Variant = "primary" | "secondary" | "danger" | "ghost";
+// 10/09/2026: giữ góc bo nhỏ cho khu dữ liệu dày, nhưng thêm đúng những thứ
+// một cái nút thật phải có — chiều cao chung, phản hồi khi nhấn, và nút phụ
+// đậm hơn viền khung một nấc để không bị đọc nhầm thành cái thẻ.
 const BTN: Record<Variant, string> = {
-  primary: "bg-brand text-white hover:bg-brand-dark border border-brand",
-  secondary: "bg-white text-navy border border-line hover:bg-cream/70",
-  danger: "bg-white text-red-700 border border-red-300 hover:bg-red-50",
-  ghost: "bg-transparent text-navy hover:bg-cream/70 border border-transparent",
+  primary: "bg-brand text-white border border-brand-dark/40 hover:bg-brand-dark hover:shadow-[0_5px_14px_-6px_rgba(236,99,36,0.7)] active:translate-y-px active:shadow-none",
+  secondary: "bg-white text-navy border border-mute/35 hover:border-brand hover:text-brand active:translate-y-px",
+  danger: "bg-white text-red-700 border border-red-300 hover:bg-red-50 hover:border-red-400 active:translate-y-px",
+  ghost: "bg-transparent text-navy border border-transparent hover:bg-navy/[0.06] active:translate-y-px",
 };
 const BTN_BASE =
-  "inline-flex items-center justify-center gap-1.5 rounded-md px-3.5 py-2 text-sm font-semibold leading-none transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md px-3.5 text-sm font-semibold leading-none transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/45 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-55";
 
 export function Btn({ variant = "secondary", className = "", ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   return <button type="button" className={`${BTN_BASE} ${BTN[variant]} ${className}`} {...rest} />;
