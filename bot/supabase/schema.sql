@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 15:33 (giờ VN)
+-- Sinh lúc: 2026-09-10 15:40 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -3893,6 +3893,17 @@ AS $function$
                  'apartment','tower','block','phan','du','an','project','eco','new','and',
                  'chung','cu','biet','thu','villa','shophouse']::text[] as bo
   ),
+  -- Từ lõi của TỪNG dự án (bỏ dấu, bỏ từ chung, ≥3 ký tự).
+  tu_du_an as (
+    select p.id, w
+      from projects p,
+           unnest(string_to_array(btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')), ' ')) w
+     where length(w) >= 3 and not (w = any(select unnest(bo) from chung))
+  ),
+  -- Tần suất: từ này có mặt trong bao nhiêu dự án.
+  tan_suat as (
+    select w, count(distinct id) as so_du_an from tu_du_an group by w
+  ),
   ung as (
     select p.id, p.name,
       (position(' ' || btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')) || ' ' in t.tu) > 0
@@ -3909,21 +3920,19 @@ AS $function$
                   generate_series(1, greatest(array_length(w, 1) - 2, 0)) i
          ) z
       ) as cum_khop,
-      -- MỘT từ đặc trưng (≥7 ký tự) là đủ: tiếng Việt đơn âm nên tên đường và
-      -- tên người không dài tới đó, còn tên riêng dự án thì có.
-      (select bool_or(position(' ' || w || ' ' in t.tu) > 0)
-         from unnest(string_to_array(btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')), ' ')) w
-        where length(w) >= 7 and not (w = any(select unnest(bo) from chung))
-      ) as tu_dac_trung,
-      (select count(*) from unnest(string_to_array(btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')), ' ')) w
-        where length(w) >= 3 and not (w = any(select unnest(bo) from chung))
-          and position(' ' || w || ' ' in t.tu) > 0) as so_tu_khop
+      -- MỘT từ vừa dài (≥7) vừa hiếm (≤3 dự án dùng) là đủ.
+      (select bool_or(position(' ' || d.w || ' ' in t.tu) > 0)
+         from tu_du_an d join tan_suat s on s.w = d.w
+        where d.id = p.id and length(d.w) >= 7 and s.so_du_an <= 3
+      ) as tu_hiem,
+      (select count(*) from tu_du_an d
+        where d.id = p.id and position(' ' || d.w || ' ' in t.tu) > 0) as so_tu_khop
     from projects p, t
     where length(p.name) >= 4
   )
   select p2.*
   from ung join projects p2 on p2.id = ung.id
-  where ung.tron or ung.cum_khop or ung.tu_dac_trung
+  where ung.tron or ung.cum_khop or ung.tu_hiem
   order by ung.tron desc, ung.so_tu_khop desc, length(p2.name), p2.priority nulls last, p2.name
   limit 2;
 $function$
