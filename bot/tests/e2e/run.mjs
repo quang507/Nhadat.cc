@@ -1283,6 +1283,17 @@ fresh(seedKho);
       db().t.listings[0].chu_noi_du_at != null,
     JSON.stringify({ body: r.body, l: db().t.listings.map((l) => [l.code, l.chu_noi_du_at]) }));
 
+  // FR-193 e (10/09, lượt bắn 15 tin): toà/tháp là thông tin RIÊNG, không phải kết
+  // cấu; và "cao 9m" trong câu kho xưởng phải được ghi, không hỏi lại.
+  {
+    const { nhanDienFact } = await import("../../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts");
+    const a = nhanDienFact("toa S3.02 tang 15");
+    const b = nhanDienFact("cao 9m, tải trọng 2 tấn, có trạm biến áp 320kva");
+    check("N33 'toa S3.02' → fact toa_thap (không phải ket_cau); 'cao 9m' kèm tải trọng → fact chieu_cao",
+      a?.question === "toa_thap" && a?.answer === "S3.02" && b?.question === "chieu_cao",
+      JSON.stringify({ a, b }));
+  }
+
   // FR-185: kho hỏng → không nuốt ảnh: fact URL tạm + bot_errors.
   fresh(seedKho);
   globalThis.__storageHong = true;

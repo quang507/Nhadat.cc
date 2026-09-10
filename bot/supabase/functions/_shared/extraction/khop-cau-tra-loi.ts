@@ -447,6 +447,18 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = new RegExp(`${SO}\\s*(?:ty|ti|toi|trieu|tr)\\b(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kdD))) {
     return { question: "gia", answer: catGoc(m) };
   }
+  // Toà / tháp / block của chung cư — bắt TRƯỚC luật kết cấu, vì "toa S3.02 tang
+  // 15" có chữ "tang" nên luật kết cấu vơ cả câu (bắt 10/09 ở lượt bắn 15 tin:
+  // bản nháp in "🏗 Kết cấu: toa S3.02 tang 15 · tầng 15 · 2 phòng ngủ").
+  // Chỉ nhận khi sau chữ toà/tháp/block là một MÃ (có số hoặc một chữ cái đơn) —
+  // "toà nhà văn phòng" hay "block đất" thì không phải mã toà.
+  // Số sau chữ toà/block mà đi kèm ĐƠN VỊ ĐẾM thì là số lượng, không phải mã toà:
+  // "toà 20 phòng cho thuê" là hai mươi phòng — CI bắt được 10/09. Còn "toà S3.02
+  // tầng 15" thì chữ "tầng" đứng sau mã là bình thường, vẫn nhận.
+  if ((m = /\b(?:toa|thap|block|khoi)\s+([a-z]?\d[a-z0-9.\-]{0,6}|[a-z]\d?)(?!\s*(?:phong|can|nen|m2|ty|ti|trieu|tr|nha|xuong))(?=\s|$|,)/.exec(kd)) &&
+      !/\b(toa nha|van phong|cong ty|nha xuong)\b/.test(kd)) {
+    return { question: "toa_thap", answer: m[1].toUpperCase() };
+  }
   // 20260909i: "xây tối đa 5 tầng" là TẦNG CAO CHO PHÉP của lô đất, không phải kết cấu nhà.
   if ((m = /\b(?:xay|cao)\s*(?:toi da|duoc)\s*(\d{1,2})\s*(?:tang|lau|tam)\b/.exec(kd))) return { question: "tang_cao_toi_da", answer: m[1] };
   if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:lau|tang|tam)\b/.exec(kd)) || /\btret\b/.test(kd)) {
@@ -495,7 +507,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = /\b(\d{1,3})\s*(?:phong|can)\s*(?:cho thue|dich vu|khach)\b/.exec(kd))) return { question: "so_phong", answer: m[1] };
   if ((m = /\b(?:lap day|kin phong|full phong)\s*(?:khoang|tam)?\s*(\d{1,3})\s*%/.exec(kd)) || (m = /(\d{1,3})\s*%\s*(?:lap day|kin phong)/.exec(kd))) return { question: "ty_le_lap_day", answer: `${m[1]}%` };
   if (/\bdoanh thu\b|\bthu ve\b.*\bthang\b|\bdong tien\b/.test(kd)) return { question: "doanh_thu", answer: goc };
-  if ((m = new RegExp(`\\b(?:cao|thong thuy|chieu cao)\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:m|met)\\b`).exec(kd)) && /\b(xuong|kho|thong thuy|tran)\b/.test(kd)) return { question: "chieu_cao", answer: `${m[1]}m` };
+  if ((m = new RegExp(`\\b(?:cao|thong thuy|chieu cao)\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:m|met)\\b`).exec(kd)) && /\b(xuong|kho|thong thuy|tran|tai trong|bien ap|kva|container|pccc)\b/.test(kd)) return { question: "chieu_cao", answer: `${m[1]}m` };
   if ((m = new RegExp(`\\b(?:tai trong)\\s*(?:san)?\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:tan|t)\\b`).exec(kd))) return { question: "tai_trong_san", answer: `${m[1]} tấn/m2` };
   if ((m = new RegExp(`${SO}\\s*kva\\b`).exec(kd)) || (m = new RegExp(`\\b(?:tram|bien ap|dien)\\s*(?:khoang|tam)?\\s*${SO}\\s*kva`).exec(kd))) return { question: "tram_bien_ap", answer: `${m[1]} kVA` };
   if (/\b(nuoc thai|xu ly nuoc)\b/.test(kd)) return { question: "xu_ly_nuoc_thai", answer: goc };

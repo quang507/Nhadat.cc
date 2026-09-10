@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 12:02 (giờ VN)
+-- Sinh lúc: 2026-09-10 14:20 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -2109,8 +2109,18 @@ declare
   goc bigint := public.parse_vnd(p_text);
   t   text;
   m   text[];
+  cum text;
 begin
   if s = '' then return null; end if;
+
+  t := public.bo_dau(s);
+  m := regexp_match(t, '([0-9][0-9.,]*\s*(?:ty|ti|toi|trieu|tr|cu)\y(?:\s*[0-9]+)?(?:\s*/\s*(?:thang|nam|m2))?)');
+  if m is not null then
+    cum := btrim(substring(s from position(m[1] in t) for length(m[1])));
+    if cum <> '' and public.parse_vnd(cum) is not null then
+      return cum;
+    end if;
+  end if;
 
   loop
     t := public.bo_dau(s);
@@ -3641,20 +3651,25 @@ AS $function$
   ),
   chung as (
     select array['the','khu','can','ho','nha','pho','dat','nen','city','garden','residence',
-                 'apartment','tower','block','phan','khu','du','an','project','eco','new','and']::text[] as bo
+                 'apartment','tower','block','phan','du','an','project','eco','new','and',
+                 'chung','cu','biet','thu','villa','shophouse']::text[] as bo
   ),
   ung as (
-    select p.*,
-      -- khớp TRỌN tên trong câu (bậc 1)
+    select p.id, p.name,
       (position(' ' || btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')) || ' ' in t.tu) > 0
        or (length(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', '', 'g')) >= 6
            and position(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', '', 'g') in t.lien) > 0)
        or (p.slug is not null and length(regexp_replace(p.slug, '[^a-z0-9]+', '', 'g')) >= 6
            and position(regexp_replace(p.slug, '[^a-z0-9]+', '', 'g') in t.lien) > 0)
       ) as tron,
-      -- từ lõi của tên và số từ có mặt trong câu (bậc 2)
-      (select count(*) from unnest(string_to_array(btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')), ' ')) w
-        where length(w) >= 3 and not (w = any(select unnest(bo) from chung))) as so_tu_loi,
+      (select bool_or(position(' ' || cum || ' ' in t.tu) > 0)
+         from (
+           select array_to_string(w[i:i + 2], ' ') as cum
+             from (select (select array_agg(x) from unnest(string_to_array(btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')), ' ')) x
+                            where length(x) >= 3 and not (x = any(select unnest(bo) from chung))) as w) q,
+                  generate_series(1, greatest(array_length(w, 1) - 2, 0)) i
+         ) z
+      ) as cum_khop,
       (select count(*) from unnest(string_to_array(btrim(regexp_replace(public.bo_dau(p.name), '[^a-z0-9]+', ' ', 'g')), ' ')) w
         where length(w) >= 3 and not (w = any(select unnest(bo) from chung))
           and position(' ' || w || ' ' in t.tu) > 0) as so_tu_khop
@@ -3663,9 +3678,8 @@ AS $function$
   )
   select p2.*
   from ung join projects p2 on p2.id = ung.id
-  where ung.tron
-     or (ung.so_tu_loi >= 2 and ung.so_tu_khop >= 2 and ung.so_tu_khop::numeric / ung.so_tu_loi >= 0.6)
-  order by ung.tron desc, ung.so_tu_khop desc, length(ung.name), ung.priority nulls last, ung.name
+  where ung.tron or ung.cum_khop
+  order by ung.tron desc, ung.so_tu_khop desc, length(p2.name), p2.priority nulls last, p2.name
   limit 2;
 $function$
 ;
