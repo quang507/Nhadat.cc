@@ -137,6 +137,12 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   (`tin.md` + `anh/`) kèm `ro-hang.csv` mở thẳng Excel; nó **không phải bản sao
   lưu** (chỉ 3/31 bảng, không giữ UUID/khoá ngoại) và `manifest.json` của nó ghi
   thẳng chữ `KHONG_PHAI_BAN_SAO_LUU`.
+  `thu-du-an.mjs` nạp KHO DỰ ÁN (1.639 dự án HCM/Bình Dương/Long An, nguồn mogi
+  theo lệnh chủ dự án 10/09) — chỉ lấy DỮ KIỆN, mô tả viết lại từ dữ kiện, giữ
+  `source_url`. `xuat-onedrive.mjs` dựng thư mục GỌN cho sếp xem:
+  `du-an.json`, `tin/<mã>/{tin.json,hoi-dap.json,anh/}`, `nguoi-ban.json`,
+  `DOC-TRUOC.md`; bản sao lưu thật nằm riêng ở `sao-luu-day-du/`.
+  `xuat-tin-hoi-dap.mjs` (10/09 sáng) đã bị nó thay, dùng bản mới.
 
 **Migration ghi THAY ĐỔI, `schema.sql` mới dựng lại được** (soát lại 07/09/2026).
 Câu cũ ở đây nói "migration là nguồn sự thật của schema" — sai. Số đo 07/09: DB
