@@ -5,9 +5,25 @@
 // với `escalation-feed` (sửa một nơi quên nơi kia là lệch giọng bot ngay).
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { bocDuPhong } from "./groq.ts";
+import { locThamSo } from "./tham-so-model.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
-export const MODEL = "claude-opus-5";
+// Model chính. Đổi được bằng secret `ANTHROPIC_MODEL` mà KHÔNG cần deploy —
+// hết số dư hay muốn hạ giá thì sửa một dòng trong Vault là xong.
+// Chủ dự án 10/09/2026 (còn ~15 đô số dư): "hạ bot xuống haiku 4.5 đi".
+export const MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-haiku-4-5-20251001";
+
+/** Bọc client để mọi lượt gọi đi qua `locThamSo`. Giữ nguyên hai hàm đang dùng. */
+function bocLocThamSo(c: Anthropic): Anthropic {
+  return {
+    messages: {
+      // deno-lint-ignore no-explicit-any
+      create: (p: any) => c.messages.create(locThamSo(p, MODEL)),
+      // deno-lint-ignore no-explicit-any
+      parse: (p: any) => (c.messages as unknown as { parse: (x: unknown) => unknown }).parse(locThamSo(p, MODEL)),
+    },
+  } as unknown as Anthropic;
+}
 
 export function serviceClient(): SupabaseClient {
   return createClient(
@@ -71,7 +87,7 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   const groqKey = await secretOf(db, "GROQ_API_KEY");
   const groqModel = (await secretOf(db, "GROQ_MODEL")) ?? "qwen/qwen3.8-27b";
   if (!apiKey && !groqKey) throw new Error("Không tìm thấy ANTHROPIC_API_KEY lẫn GROQ_API_KEY (env lẫn Vault)");
-  const chinh = apiKey ? new Anthropic({ apiKey }) : null;
+  const chinh = apiKey ? bocLocThamSo(new Anthropic({ apiKey })) : null;
   if (!groqKey) return chinh!;
   const ghiSo = async (nguon: string, chiTiet: string) => {
     try {
