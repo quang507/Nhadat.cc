@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 20:48 (giờ VN)
+-- Sinh lúc: 2026-09-10 21:00 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -4908,7 +4908,7 @@ begin
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'v'
      -- `agents_public` cố ý là definer (đã khai `security_invoker=false`).
-     and c.relname <> 'agents_public'
+     and not (coalesce(c.reloptions::text[], '{}') @> array['security_invoker=false'])
      and not (coalesce(c.reloptions::text[], '{}') @> array['security_invoker=true'])
      -- CHỈ tính view mà `anon`/`authenticated` ĐỌC ĐƯỢC. Lượt chạy đầu báo 13
      -- view, gần hết là view nội bộ chỉ `service_role` mở được — thiếu
@@ -5337,6 +5337,16 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.url_kho_anh()
+ RETURNS text
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_catalog'
+AS $function$
+  select c.value from app_config c where c.key = 'storage_public_base_url';
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.viec_inbound_bo_roi(p_limit integer DEFAULT 20)
  RETURNS TABLE(event_id text, ly_do text, attempts integer)
  LANGUAGE sql
@@ -5750,22 +5760,6 @@ create or replace view public.media_mo_coi_db as
            FROM storage.objects o
           WHERE o.bucket_id = m.bucket AND o.name = m.storage_path));
 
-create or replace view public.listing_photos_v as
- SELECT l.code,
-    ((((( SELECT c.value
-           FROM app_config c
-          WHERE c.key = 'storage_public_base_url'::text)) || '/'::text) || m.bucket) || '/'::text) || m.storage_path AS url,
-    m.storage_path AS path,
-    m.sort_order,
-    m.is_cover,
-    m.created_at,
-    m.listing_id,
-    m.id AS media_id,
-    l.legacy_code
-   FROM listing_media m
-     JOIN listings l ON l.id = m.listing_id
-  WHERE m.bucket = 'listing-public'::text AND (l.status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text, 'da_chot'::text]));
-
 create or replace view public.job_suc_khoe as
  SELECT 'inbound'::text AS hang_doi,
     inbound_ledger.zalo_msg_id AS job_id,
@@ -6120,7 +6114,7 @@ create or replace view public.boc_tach_v with (security_invoker = true) as
     boc_tach_nhom(l.*) AS nhom
    FROM listings l;
 
-create or replace view public.project_facts_cho_duyet as
+create or replace view public.project_facts_cho_duyet with (security_invoker = true) as
  SELECT f.id,
     f.project_id,
     COALESCE(p.name, f.ten_du_an) AS du_an,
@@ -6136,6 +6130,20 @@ create or replace view public.project_facts_cho_duyet as
      LEFT JOIN listings l ON l.id = f.listing_id
   WHERE f.trang_thai = 'cho_duyet'::text
   ORDER BY f.created_at DESC;
+
+create or replace view public.listing_photos_v with (security_invoker = true) as
+ SELECT l.code,
+    (((url_kho_anh() || '/'::text) || m.bucket) || '/'::text) || m.storage_path AS url,
+    m.storage_path AS path,
+    m.sort_order,
+    m.is_cover,
+    m.created_at,
+    m.listing_id,
+    m.id AS media_id,
+    l.legacy_code
+   FROM listing_media m
+     JOIN listings l ON l.id = m.listing_id
+  WHERE m.bucket = 'listing-public'::text AND (l.status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text, 'da_chot'::text]));
 
 -- ══ Trigger ══
 drop trigger if exists trg_bot_errors_het_tien on public.bot_errors;
@@ -6485,8 +6493,6 @@ grant REFERENCES, SELECT, TRIGGER on public.deals to anon;
 grant REFERENCES, SELECT, TRIGGER on public.info_requests to anon;
 grant REFERENCES, SELECT, TRIGGER on public.interests to anon;
 grant REFERENCES, SELECT, TRIGGER on public.listing_facts to anon;
-grant REFERENCES, SELECT, TRIGGER on public.listing_photos_v to anon;
-grant REFERENCES, SELECT, TRIGGER on public.listing_photos_v to authenticated;
 grant REFERENCES, SELECT, TRIGGER on public.listing_views to anon;
 grant REFERENCES, SELECT, TRIGGER on public.listings to anon;
 grant REFERENCES, SELECT, TRIGGER on public.media to anon;
@@ -6512,6 +6518,8 @@ grant SELECT on public.hoi_thoai_thong_ke to service_role;
 grant SELECT on public.khach_can_nguoi_that to authenticated;
 grant SELECT on public.khach_can_nguoi_that to service_role;
 grant SELECT on public.listing_media to anon;
+grant SELECT on public.listing_photos_v to anon;
+grant SELECT on public.listing_photos_v to authenticated;
 grant SELECT on public.project_facts to authenticated;
 grant SELECT on public.project_facts_cho_duyet to authenticated;
 grant SELECT on public.ro_hang_ban to authenticated;
@@ -6881,6 +6889,10 @@ revoke all on function public.trg_property_event() from public, anon, authentica
 grant execute on function public.trg_property_event() to service_role;
 revoke all on function public.trg_vi_tri_vao_cot() from public, anon, authenticated;
 grant execute on function public.trg_vi_tri_vao_cot() to service_role;
+revoke all on function public.url_kho_anh() from public, anon, authenticated;
+grant execute on function public.url_kho_anh() to anon;
+grant execute on function public.url_kho_anh() to authenticated;
+grant execute on function public.url_kho_anh() to service_role;
 revoke all on function public.viec_inbound_bo_roi(p_limit integer) from public, anon, authenticated;
 grant execute on function public.viec_inbound_bo_roi(p_limit integer) to service_role;
 revoke all on function public.viewings_bao_ctv_va_email() from public, anon, authenticated;
