@@ -19,7 +19,7 @@
 //   Đặt khoá MỘT LẦN vào scripts/.env (file này tự đọc, đã gitignore):
 //       SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
 //   rồi:
-//       node scripts/sao-luu.mjs                # ghi ra ../nhadat-backup/sao-luu-day-du/<ngày-giờ>/
+//       node scripts/sao-luu.mjs                # ghi ra ../nhadat-backup/he-thong/theo-ngay/<ngày-giờ>/
 //       node scripts/sao-luu.mjs /duong/dan/khac
 //   PHẢI có chữ `node` ở đầu. Gõ mỗi `sao-luu.mjs` thì Windows mở Notepad.
 //
@@ -260,7 +260,7 @@ async function keoSchema(dich) {
 // lượt chạy sao lưu lại đổ thêm một thư mục 35 file cạnh đó. Sáu lượt trong một
 // ngày là sáu thư mục trông y hệt nhau, và thứ đáng đọc chìm nghỉm giữa chúng.
 // Nay ruột máy nằm gọn một chỗ, gốc chỉ còn thứ người đọc.
-const KHO_SAO_LUU = join(process.cwd(), "..", "nhadat-backup", "sao-luu-day-du");
+const KHO_SAO_LUU = join(process.cwd(), "..", "nhadat-backup", "he-thong", "theo-ngay");
 const dich = resolve(process.argv[2]
   ?? join(KHO_SAO_LUU, new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")));
 
@@ -360,7 +360,9 @@ console.log("`bot/supabase/schema.sql` vừa được cập nhật — nhớ com
 // Đặt sau khi manifest đã ghi xong, và nuốt mọi lỗi: dọn dẹp hỏng thì thôi,
 // không được biến một chuyến sao lưu THÀNH CÔNG thành chuyến báo lỗi.
 const GIU_NGAY = 7;
-const KHUON_TEN = /^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$/;
+// Nhận cả tên chỉ có NGÀY (`xuat-onedrive.mjs` đặt một ảnh chụp mỗi ngày) lẫn
+// tên ngày-giờ của những lượt chạy tay.
+const KHUON_TEN = /^\d{4}-\d{2}-\d{2}(-\d{2}-\d{2}-\d{2})?$/;
 try {
   const kho = dirname(dich);
   const ten = (await readdir(kho, { withFileTypes: true }))
