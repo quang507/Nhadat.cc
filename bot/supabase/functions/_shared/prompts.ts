@@ -227,6 +227,7 @@ export const FACT_LABELS: Record<string, string> = {
   phi_quan_ly: "phí quản lý hàng tháng",
   so_phong_ngu: "số phòng ngủ",
   noi_that: "tình trạng nội thất",
+  toa_thap: "toà / block",
   tho_cu: "diện tích thổ cư",
   gia_dien_nuoc: "giá điện nước",
   gio_giac: "giờ giấc ra vào",

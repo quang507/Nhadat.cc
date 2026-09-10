@@ -1953,6 +1953,7 @@ Deno.serve(async (req) => {
       ]);
       them("🏗", "Kết cấu", [
         lx.floors_text ?? (lx.floors ? `${lx.floors} tầng` : fact("ket_cau")),
+        nhan("toà", fact("toa_thap")),
         lx.floor ? `tầng ${lx.floor}` : nhan("tầng", fact("tang")),
         lx.bedrooms ? `${lx.bedrooms} phòng ngủ` : hau(fact("so_phong_ngu"), "phòng ngủ"),
         lx.bathrooms ? `${lx.bathrooms} WC` : hau(fact("so_wc"), "WC"),
