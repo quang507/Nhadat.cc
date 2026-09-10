@@ -37,6 +37,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // FR-185: ảnh chủ nhà gửi → phân loại (model) + cất vào kho (Storage + listing_media).
 import { lechDienTich, phanLoaiAnh, type LoaiAnh } from "../_shared/ai/phan-loai-anh.ts";
+import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // FR-161 — RẤT NHIỀU người nhắn Zalo không bỏ dấu, mà mọi cổng regex ở đây
@@ -345,13 +346,38 @@ const cauNhan = (t: "ccrb" | "nmg") =>
  * Chỉ lấy phần sau chữ "dự án / khu / khu đô thị" và cắt ở dấu câu — không đoán
  * từ cả câu, vì đoán sai thì hàng chờ duyệt đầy rác và admin thôi nhìn nó.
  */
+// Chữ mở đầu một MIÊU TẢ, không bao giờ mở đầu TÊN dự án. Bắt 10/09: câu "phí
+// quản lý 14 nghìn/m2, khu có công viên ven sông" vào hàng chờ duyệt với tên dự
+// án là "có công viên ven sông" — mồi dính chữ "khu" trần. Nay "khu" một mình
+// không còn là mồi, và dù có khớp thì mấy chữ dưới đây cũng chặn lại.
+const KHONG_PHAI_TEN = new Set([
+  "có", "co", "gần", "gan", "này", "nay", "đó", "do", "đấy", "day", "kia",
+  "bên", "là", "thì", "thi", "cũng", "cung", "rất", "rat",
+  "nhiều", "nhieu", "được", "duoc", "vẫn", "đang", "dang", "sẽ", "se",
+  "ở", "o", "trong", "ngoài", "ngoai", "nội", "toàn",
+]);
+
+// Bản KHÔNG DẤU của mấy chữ trên lại trùng chữ đầu của tên dự án THẬT: kho
+// 1.639 dự án có LA ASTORIA, La Bonita, La Partenza, La Premier, La Maison De
+// Cần Giờ, Van Phuc Riverside, Bến Cát Center City 2 — xếp thẳng "la"/"ben"/
+// "van" vào danh sách cấm là bỏ sót đúng những cái tên kho CHƯA CÓ, tức đúng
+// việc FR-195 sinh ra để làm. Nên chúng chỉ bị chặn khi chữ KẾ THEO viết
+// thường ("dự án van phòng cho thuê", "dự án bên quận 7"); chữ kế viết hoa là
+// dấu hiệu tên riêng ("dự án La Astoria") thì cho qua. Câu rao gõ toàn chữ
+// thường vẫn bị chặn — thà thiếu một tên còn hơn đổ rác vào hàng chờ duyệt.
+const MO_HO_KHONG_DAU = new Set(["la", "ben", "van", "noi", "toan"]);
+
 function tenDuAnTrongCau(t: string): string | null {
-  const m = /(?:dự án|du an|khu đô thị|khu do thi|khu)\s+([\p{L}\p{N}'’.\- ]{3,45})/iu.exec(t);
+  const m = /(?:dự án|du an|khu đô thị|khu do thi|khu dân cư|khu dan cu)\s+([\p{L}\p{N}'’.\- ]{3,45})/iu.exec(t);
   // Cắt luôn phần địa bàn dính đuôi: "Lam Sơn Riverside quận 4" → "Lam Sơn Riverside".
   const ten = (m?.[1]?.split(/[,.;\n]/)[0] ?? "")
     .replace(/\s+(quận|quan|phường|phuong|huyện|huyen|thành phố|tp)\b.*$/iu, "")
     .trim();
-  return ten.length >= 3 && ten.split(/\s+/).length <= 6 ? ten : null;
+  const tu = ten.split(/\s+/);
+  const dauTien = tu[0]?.toLowerCase() ?? "";
+  if (KHONG_PHAI_TEN.has(dauTien)) return null;
+  if (MO_HO_KHONG_DAU.has(dauTien) && !/^\p{Lu}/u.test(tu[1] ?? "")) return null;
+  return ten.length >= 3 && tu.length <= 6 ? ten : null;
 }
 
 const KHOA_DU_AN = new Set([
@@ -1286,6 +1312,11 @@ Deno.serve(async (req) => {
       }
     };
 
+    // Tầng tiền định đã ghi được fact dự án nào trong lượt này chưa. Lưới vét
+    // bằng model (FR-199) chỉ chạy khi chỗ này còn `false` — hai tầng cùng ghi
+    // là hàng chờ duyệt có hai dòng gần giống nhau cho cùng một câu.
+    let daGhiFactDuAn = false;
+
     // FR-195: chép một fact sang kho dự án nếu tin có gắn dự án và khoá đó là
     // chuyện của cả dự án. Việc phụ: hỏng thì ghi sổ rồi đi tiếp.
     const chepSangDuAn = async (khoa: string, giaTri: string): Promise<void> => {
@@ -1301,7 +1332,10 @@ Deno.serve(async (req) => {
         const { data: fDuAn } = await client.from("listing_facts")
           .select("answer").eq("listing_id", lid).eq("question", "du_an_ten")
           .order("created_at", { ascending: false }).limit(1).maybeSingle();
-        tenNhac = duAnNoi[0]?.name ?? tenDuAnTrongCau(text) ?? fDuAn?.answer ?? null;
+        // Tên ĐÃ NHỚ của chính tin này đứng TRƯỚC tên đoán từ câu vừa nhắn: câu
+        // đang nói về phí, tiện ích thì chữ sau "dự án/khu" trong đó phần nhiều
+        // là miêu tả, còn tên nhớ từ câu rao là tên chủ nhà tự gõ ra.
+        tenNhac = duAnNoi[0]?.name ?? fDuAn?.answer ?? tenDuAnTrongCau(text) ?? null;
         if (!tenNhac) return;
       }
       // Cắt về MỆNH ĐỀ ĐẦU: "phí quản lý 14 nghìn/m2, khu có công viên ven sông"
@@ -1314,6 +1348,52 @@ Deno.serve(async (req) => {
         p_ten_du_an: tenNhac,
       });
       if (error) await ghiLoi(client, "chat-reply ghi_fact_du_an", error.message);
+      else daGhiFactDuAn = true;
+    };
+
+    // FR-199: LƯỚI VÉT bằng model, đứng SAU tầng tiền định.
+    //
+    // Chủ dự án 10/09: "ủa cái nào cũng phải viết hàm như này chứ ko dùng ai tự
+    // bóc tách ra specs rồi viết vào dc hả" → "lắp đi". Được dùng model ở ĐÂY
+    // (mà không được dùng cho giá / diện tích / phường) vì thứ bóc ra chỉ vào
+    // `project_facts` ở trạng thái CHỜ DUYỆT — model bịa thì chết ở hàng chờ,
+    // không chết trong rổ hàng.
+    //
+    // Ba cái van cho khỏi đốt tiền: chỉ chạy khi tầng tiền định KHÔNG ghi được
+    // gì; chỉ khi câu có mùi dự án (`coMuiDuAn`); và chỉ một lượt mỗi tin.
+    let daVetDuAn = false;
+    const vetDuAnBangModel = async (): Promise<void> => {
+      if (daVetDuAn || daGhiFactDuAn || !anthropicS || !coMuiDuAn(text)) return;
+      daVetDuAn = true;
+      const lid = pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null;
+      if (!lid) return;
+      const r = await bocDuAnBangModel(anthropicS as unknown as Parameters<typeof bocDuAnBangModel>[0], MODEL, text);
+      if (!r) return;
+      await doTien(client, r.usage as Parameters<typeof doTien>[1]);
+      const k = donKetQua(r.ket);
+      // Chỉ có TÊN mà không có fact nào thì thôi: tên dự án đã có đường riêng
+      // (`du_an_ten` lúc tạo tin), thêm một dòng trống nghĩa vào hàng chờ duyệt
+      // chỉ làm admin mỏi mắt.
+      if (!k.facts.length) return;
+      const { data: l } = await client.from("listings").select("project_id").eq("id", lid).maybeSingle();
+      let tenNhac: string | null = null;
+      if (!l?.project_id) {
+        const { data: fDuAn } = await client.from("listing_facts")
+          .select("answer").eq("listing_id", lid).eq("question", "du_an_ten")
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        tenNhac = fDuAn?.answer ?? k.ten_du_an ?? null;
+        if (!tenNhac) return;
+      }
+      for (const f of k.facts) {
+        const { error } = await client.rpc("ghi_fact_du_an", {
+          p_project_id: l?.project_id ?? null, p_khoa: f.khoa, p_gia_tri: f.gia_tri,
+          // `nguon = 'llm'` chứ không phải 'seller_chat': admin duyệt phải thấy
+          // dòng này do MÁY đọc ra, để soi kỹ hơn dòng người nói thẳng.
+          p_nguon: "llm", p_listing_id: lid, p_conversation_id: convSId ?? null,
+          p_ten_du_an: tenNhac,
+        });
+        if (error) await ghiLoi(client, "chat-reply ghi_fact_du_an(llm)", error.message);
+      }
     };
 
     let ackSua: string | null = null;
@@ -1334,6 +1414,9 @@ Deno.serve(async (req) => {
       replies: string[],
       extra: Record<string, unknown> = {},
     ) => {
+      // Đường ra DUY NHẤT của nhánh người bán → chỗ nối lưới vét (FR-199). Tới
+      // đây thì mọi nhánh tiền định đã ghi xong, nên `daGhiFactDuAn` đã đúng.
+      await vetDuAnBangModel();
       if (humanActive) {
         // FR-141 — người thật đang cầm cuộc: không gửi, không ghi dòng bot nào.
         return await hoanTat({

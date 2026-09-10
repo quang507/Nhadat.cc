@@ -222,9 +222,28 @@ export default function Page() {
     });
   };
 
-  // Lưu chỉnh sửa vào database
-  const luuSua = async () => {
+  // Lưu chỉnh sửa vào database.
+  //
+  // `duyet = true` là ĐƯỜNG DUY NHẤT đưa một tin lên kệ từ màn này (chủ dự án
+  // 10/09: "nút duyệt cho rao tin thì phải vào 1 tab edit đã chớ"). Lý do không
+  // để duyệt bằng một cú bấm ngoài bảng: rao tin là hành động NGOẢNH RA NGOÀI —
+  // tin lên web công khai, ai cũng đọc được — nên người bấm phải vừa nhìn thấy
+  // đủ giá, diện tích, địa chỉ, mô tả trước mặt. Bấm nhầm một ô trong bảng thì
+  // không có bước nào giữ lại.
+  const luuSua = async (duyet = false) => {
     if (!dangSua) return;
+    if (duyet) {
+      const thieu = [
+        !formSua.price_raw.trim() && "giá",
+        !formSua.area_m2.trim() && "diện tích",
+        !formSua.district.trim() && "quận/huyện",
+        !formSua.description.trim() && "mô tả",
+      ].filter(Boolean) as string[];
+      const hoi = thieu.length
+        ? `Tin còn THIẾU: ${thieu.join(", ")}.\n\nVẫn rao #${dangSua.code} lên web?`
+        : `Rao #${dangSua.code} lên web AI Ơi Nhà Đất? Ai cũng xem được tin này.`;
+      if (!confirm(hoi)) return;
+    }
     setDangLuu(true);
     const numOrNull = (v: string) => {
       const s = v.trim().replace(',', '.');
@@ -241,7 +260,7 @@ export default function Page() {
 
     const updates = {
       deal: formSua.deal,
-      status: formSua.status,
+      status: duyet ? "dang_ban" : formSua.status,
       property_type: formSua.property_type || null,
       price_raw: formSua.price_raw.trim() || null,
       price_vnd: numOrNull(formSua.price_vnd),
@@ -336,7 +355,7 @@ export default function Page() {
     );
   }
 
-  const o = "rounded-full border border-line px-3.5 py-1.5 text-sm outline-none focus:border-brand bg-white";
+  const o = "rounded-md border border-line px-3.5 py-1.5 text-sm outline-none focus:border-brand bg-white";
 
   return (
     <div className="mx-auto max-w-7xl px-4 pb-24 pt-8">
@@ -475,14 +494,23 @@ export default function Page() {
                           <select
                             value={d.status}
                             onChange={(e) => doiTrangThaiNhanh(d.id, e.target.value)}
-                            className={`rounded-full px-2.5 py-1 text-xs font-bold border outline-none cursor-pointer transition ${
+                            className={`rounded-md px-2.5 py-1 text-xs font-bold border outline-none cursor-pointer transition ${
                               MAU_TRANG_THAI[d.status] ?? "bg-slate-100 text-mute border-slate-300"
                             }`}
-                            title="Bấm để đổi nhanh trạng thái"
+                            title={d.status === "dang_ban"
+                              ? "Đổi nhanh trạng thái"
+                              : 'Đổi nhanh trạng thái. Muốn RAO tin thì bấm "Sửa" rồi "Duyệt & rao tin" — rao là đưa ra web, phải nhìn đủ tin trước.'}
                           >
                             {Object.entries(TRANG_THAI).map(([val, label]) => (
-                              <option key={val} value={val} className="bg-white text-navy font-medium">
-                                {label}
+                              <option
+                                key={val}
+                                value={val}
+                                className="bg-white text-navy font-medium"
+                                // Rao tin chỉ đi qua màn Sửa (10/09). Ở đây một cú
+                                // trượt chuột là tin ra web mà chưa ai đọc lại nó.
+                                disabled={val === "dang_ban" && d.status !== "dang_ban"}
+                              >
+                                {label}{val === "dang_ban" && d.status !== "dang_ban" ? " — qua nút Sửa" : ""}
                               </option>
                             ))}
                           </select>
@@ -803,12 +831,28 @@ export default function Page() {
                 </button>
                 <button
                   type="button"
-                  onClick={luuSua}
+                  onClick={() => luuSua(false)}
                   disabled={dangLuu}
-                  className="rounded-md bg-brand px-6 py-2 text-sm font-bold text-white hover:bg-brand-dark transition disabled:opacity-60"
+                  className="rounded-md border border-mute/40 bg-white px-5 py-2 text-sm font-bold text-navy hover:border-brand hover:text-brand transition disabled:opacity-60"
+                  title="Lưu lại, KHÔNG đổi việc tin có đang rao hay không"
                 >
                   {dangLuu ? "Đang lưu…" : "Lưu thay đổi"}
                 </button>
+                {dangSua.status !== "dang_ban" ? (
+                  <button
+                    type="button"
+                    onClick={() => luuSua(true)}
+                    disabled={dangLuu}
+                    className="rounded-md bg-brand px-6 py-2 text-sm font-bold text-white hover:bg-brand-dark transition disabled:opacity-60"
+                    title="Lưu thay đổi RỒI đưa tin lên web (trạng thái → đang bán)"
+                  >
+                    {dangLuu ? "Đang lưu…" : "Duyệt & rao tin"}
+                  </button>
+                ) : (
+                  <span className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800">
+                    Tin đang rao trên web
+                  </span>
+                )}
               </div>
             </div>
           </div>

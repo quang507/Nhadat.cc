@@ -114,7 +114,7 @@ export default function UploadAnh({
       {!gon && (
         <p className="eyebrow text-mute">Ảnh của tin{code ? ` #${code}` : ""}</p>
       )}
-      <label className={`${gon ? "" : "mt-3 "}inline-flex cursor-pointer items-center gap-2 rounded-full border border-line px-4 py-1.5 text-sm font-semibold transition hover:border-brand hover:text-brand ${dangUp ? "opacity-50" : ""}`}>
+      <label className={`${gon ? "" : "mt-3 "}inline-flex cursor-pointer items-center gap-2 rounded-md border border-line px-4 py-1.5 text-sm font-semibold transition hover:border-brand hover:text-brand ${dangUp ? "opacity-50" : ""}`}>
         <input
           ref={input}
           type="file"

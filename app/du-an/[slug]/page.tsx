@@ -156,7 +156,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
           <div className="relative overflow-hidden rounded-king bg-navy/5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={placeholderImg(p.slug)} alt={p.name} className="aspect-[21/9] w-full object-cover" />
-            <span className="absolute bottom-3 right-4 rounded-full bg-navy/80 px-3 py-1.5 text-xs font-semibold text-white">
+            <span className="absolute bottom-3 right-4 rounded-md bg-navy/80 px-3 py-1.5 text-xs font-semibold text-white">
               Ảnh minh hoạ - hình dự án gửi qua Zalo
             </span>
           </div>
@@ -223,7 +223,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
                 <h2 className="text-lg font-extrabold">Tiện ích</h2>
                 <ul className="mt-3 flex flex-wrap gap-2 text-sm">
                   {tienIch.map((t) => (
-                    <li key={t} className="rounded-full border border-line px-3.5 py-1.5">{t}</li>
+                    <li key={t} className="rounded-md border border-line px-3.5 py-1.5">{t}</li>
                   ))}
                 </ul>
               </div>
@@ -263,7 +263,7 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
           ) : (
             <div className="rounded-king border border-line bg-cream p-8 text-center">
               <p className="font-bold">Giỏ hàng cập nhật qua Zalo - nhắn tụi em gửi bảng căn còn bán.</p>
-              <a href={zaloLink(`du-an:${p.slug}:gio`)} className="mt-4 inline-block rounded-full bg-brand px-6 py-2.5 font-bold text-white">
+              <a href={zaloLink(`du-an:${p.slug}:gio`)} className="mt-4 inline-block rounded-md bg-brand px-6 py-2.5 font-bold text-white">
                 Xin bảng giỏ hàng
               </a>
             </div>

@@ -13,13 +13,13 @@ export default function NotFound() {
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <Link
           href="/mua-ban"
-          className="rounded-full border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand active:scale-[0.98]"
+          className="rounded-md border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand active:scale-[0.98]"
         >
           Xem nhà đang bán
         </Link>
         <a
           href={zaloLink("404")}
-          className="rounded-full bg-zalo px-5 py-2.5 font-semibold text-white transition hover:opacity-90 active:scale-[0.98]"
+          className="rounded-md bg-zalo px-5 py-2.5 font-semibold text-white transition hover:opacity-90 active:scale-[0.98]"
         >
           Hỏi qua Zalo
         </a>

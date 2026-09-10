@@ -104,7 +104,7 @@ flowchart LR
     GY[Câu gợi ý = cauHoiMau&#40;câu kế&#41;<br/>model diễn đạt lại, không đổi ý]
     LENH[Lệnh lượt này<br/>r1 chào · r2 khen+hỏi kế · r2b hỏi lại · r3 chăm sóc]
   end
-  SYS --> MODEL[[Claude<br/>_shared/claude.ts<br/>effort low/medium, ≤512 token]]
+  SYS --> MODEL[[Claude Haiku 4.5<br/>_shared/claude.ts · secret ANTHROPIC_MODEL<br/>effort chỉ gửi cho họ Claude 5, ≤512 token]]
   USER --> MODEL
   MODEL --> RE[Một bong bóng <30 từ<br/>không mã tin, không gạch dài, xuống dòng theo ý]
   MODEL -.hỏng.-> FB[Câu mẫu tất định<br/>OPEN-30: vòng drip không đứng chờ model]

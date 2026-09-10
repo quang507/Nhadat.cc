@@ -70,6 +70,8 @@ type Quota = {
   het_credit: boolean;
   credit_loi_24h: number;
   credit_lan_cuoi: string | null;
+  // Lúc model CHÍNH trả lời được lần gần nhất (bot_health 'model_chinh').
+  model_song_luc: string | null;
   co_du_phong: boolean;
   dang_chay_du_phong: boolean;
 };
@@ -133,6 +135,7 @@ type KhachCrm = {
   id: string;
   name: string | null;
   zalo_user_id: string | null;
+  phone: string | null;
   preferences: Record<string, unknown> | null;
   notes: string | null;
   last_contact_at: string | null;
@@ -175,7 +178,23 @@ function usePhanTrang<T>(xs: T[]) {
   return { trang: t, soTrang, tong: xs.length, setTrang, mot: xs.slice((t - 1) * MOI_TRANG, t * MOI_TRANG) };
 }
 
-const linkZalo = (uid: string | null) => (uid ? `https://zalo.me/${encodeURIComponent(uid)}` : null);
+// "Mở Zalo" từng trỏ `https://zalo.me/<zalo_user_id>` — bấm vào ra trang trắng
+// "Tài khoản này không tồn tại hoặc không cho phép tìm kiếm" (chủ dự án bắt
+// 10/09). `zalo_user_id` là ID NỘI BỘ của luồng chat (19 chữ số), không phải ID
+// công khai; zalo.me chỉ mở được theo SỐ ĐIỆN THOẠI hoặc ID người dùng tự đặt.
+// `chat.zalo.me/?uid=...` cũng không mở đúng cuộc trò chuyện — đã thử, nó bỏ
+// qua tham số. Nên: có SĐT thì mở đúng người; không có thì mở Zalo Web để người
+// trực tự tìm, và nói thẳng trên nút là nó chỉ mở Zalo chứ không mở đúng khách.
+const soDienThoaiZalo = (phone: string | null) => {
+  const so = (phone ?? "").replace(/\D/g, "");
+  if (/^84\d{9}$/.test(so)) return `0${so.slice(2)}`;
+  return /^0\d{9}$/.test(so) ? so : null;
+};
+const linkZalo = (uid: string | null, phone: string | null = null) => {
+  const so = soDienThoaiZalo(phone);
+  if (so) return `https://zalo.me/${so}`;
+  return uid ? "https://chat.zalo.me/" : null;
+};
 
 // Khung CRM (09/09/2026): tab đi theo URL ?tab=todo|crm|stats|ops để thanh
 // trên (AdminShell) và các link chia sẻ được. useSearchParams cần Suspense.
@@ -311,7 +330,7 @@ function BanLamViec() {
         .eq("status", "pending").in("kind", ["escalation", "report"])
         .order("created_at", { ascending: false }).limit(30),
       supabase.from("sellers")
-        .select("id, name, seller_type, created_at, zalo_user_id, active_listing_id, listings:active_listing_id(id, code, legacy_code, location_raw, price_raw, status)")
+        .select("id, name, seller_type, created_at, zalo_user_id, phone, active_listing_id, listings:active_listing_id(id, code, legacy_code, location_raw, price_raw, status)")
         .order("created_at", { ascending: false }).limit(100),
       supabase
         .from("seller_ranks")
@@ -347,6 +366,10 @@ function BanLamViec() {
         .eq("bucket", "listing-private").order("created_at", { ascending: false }).limit(100),
       supabase
         .from("buyers")
+        // NFR-07 / FR-74 / SRS-3.11: KHÔNG chọn `buyers.phone`. Số của người mua
+        // chỉ có khi B tự đưa ở bước chốt lịch xem, và cam kết với B là web
+        // không đọc nó — nút "Mở Zalo" bên dưới chỉ dùng SĐT phía NGƯỜI BÁN
+        // (FR-175, quyết định chủ dự án 07/09), khách B thì mở Zalo Web.
         .select("id, name, zalo_user_id, preferences, notes, last_contact_at, created_at")
         .order("created_at", { ascending: false }).limit(100),
       supabase
@@ -397,6 +420,7 @@ function BanLamViec() {
       name: string | null;
       seller_type: string;
       zalo_user_id: string | null;
+      phone: string | null;
       created_at: string;
       listings?: {
         id: string;
@@ -453,6 +477,7 @@ function BanLamViec() {
         id: b.id,
         name: b.name || s?.name || null,
         zalo_user_id: b.zalo_user_id,
+        phone: s?.phone ?? null,
         preferences: b.preferences,
         notes: b.notes,
         last_contact_at: b.last_contact_at,
@@ -474,6 +499,7 @@ function BanLamViec() {
         id: s.id,
         name: s.name,
         zalo_user_id: s.zalo_user_id,
+        phone: s.phone ?? null,
         preferences: null,
         notes: null,
         last_contact_at: null,
@@ -860,7 +886,7 @@ function BanLamViec() {
               <button
                 type="button"
                 onClick={() => setCrmFilterRole("all")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                className={`rounded-md px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "all" ? "bg-navy text-white" : "bg-line/60 text-navy hover:bg-line"
                 }`}
               >
@@ -869,7 +895,7 @@ function BanLamViec() {
               <button
                 type="button"
                 onClick={() => setCrmFilterRole("dual")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                className={`rounded-md px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "dual"
                     ? "bg-emerald-700 text-white"
                     : "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100"
@@ -880,7 +906,7 @@ function BanLamViec() {
               <button
                 type="button"
                 onClick={() => setCrmFilterRole("buyer")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                className={`rounded-md px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "buyer"
                     ? "bg-blue-700 text-white"
                     : "bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100"
@@ -891,7 +917,7 @@ function BanLamViec() {
               <button
                 type="button"
                 onClick={() => setCrmFilterRole("seller")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                className={`rounded-md px-3 py-1 text-xs font-bold transition ${
                   crmFilterRole === "seller"
                     ? "bg-amber-700 text-white"
                     : "bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100"
@@ -937,6 +963,8 @@ function BanLamViec() {
                 const isSellerOnly = !!k.seller && !k.preferences;
                 const isEditing = suaNhuCauId === k.id;
                 const isAssigning = dangGanBds === k.id;
+                const soZalo = soDienThoaiZalo(k.phone);
+                const hrefZalo = linkZalo(k.zalo_user_id, k.phone);
 
                 return (
                   <article
@@ -976,14 +1004,17 @@ function BanLamViec() {
 
                       {/* Top Right Action Buttons */}
                       <div className="flex flex-wrap items-center gap-2">
-                        {linkZalo(k.zalo_user_id) && (
+                        {hrefZalo && (
                           <a
-                            href={linkZalo(k.zalo_user_id)!}
+                            href={hrefZalo}
                             target="_blank"
                             rel="noreferrer"
+                            title={soZalo
+                              ? `Mở Zalo của ${soZalo}`
+                              : "Chưa có SĐT nên chỉ mở được Zalo Web — tìm khách trong danh sách chat bên đó."}
                             className="rounded-md border border-blue-300 bg-blue-50/60 px-3 py-1 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
                           >
-                            Mở Zalo
+                            {soZalo ? "Mở Zalo" : "Mở Zalo Web"}
                           </a>
                         )}
                         <button
@@ -1257,7 +1288,7 @@ function BanLamViec() {
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-lg font-bold tracking-tight text-navy">Tin chờ duyệt</h2>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
+                <span className={`rounded-md px-2.5 py-0.5 text-xs font-bold tabular-nums ${
                   pending.length > 0 ? "bg-brand text-white" : "bg-line text-mute"
                 }`}>
                   {pending.length}
@@ -1336,7 +1367,7 @@ function BanLamViec() {
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-lg font-bold tracking-tight text-navy">Khách cần người thật</h2>
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
+                <span className={`rounded-md px-2.5 py-0.5 text-xs font-bold tabular-nums ${
                   khachCan.length > 0 ? "bg-brand text-white" : "bg-line text-mute"
                 }`}>
                   {khachCan.length}
@@ -1357,14 +1388,15 @@ function BanLamViec() {
                         <span className="rounded bg-line px-2 py-0.5 text-[11px] font-bold text-navy uppercase">
                           {k.vai}
                         </span>
-                        {linkZalo(k.zalo_user_id) && (
+                        {k.zalo_user_id && (
                           <a
-                            href={linkZalo(k.zalo_user_id)!}
+                            href="https://chat.zalo.me/"
                             target="_blank"
                             rel="noreferrer"
+                            title="Hàng chờ chỉ có ID luồng chat, chưa có SĐT — nút này mở Zalo Web, tìm khách theo tin nhắn cuối bên đó."
                             className="rounded border border-blue-300 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                           >
-                            Mở Zalo
+                            Mở Zalo Web
                           </a>
                         )}
                         <span className="ml-auto text-xs text-mute tabular-nums">
@@ -1818,7 +1850,7 @@ function Muc({ ten, phu, dem, children }: {
         <h3 className="text-base font-bold tracking-tight text-navy">{ten}</h3>
         {dem !== undefined && (
           <span
-            className={`rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
+            className={`rounded-md px-2.5 py-0.5 text-xs font-bold tabular-nums ${
               co ? "bg-brand text-white" : "bg-line text-mute"
             }`}
           >
@@ -1973,8 +2005,16 @@ function TheQuota({ q, tokenTien }: { q: Quota | null; tokenTien: number | null 
       <div className="rounded-xl border border-line p-3 bg-slate-50/50">
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
           <span className="font-semibold text-navy">Số dư tài khoản model</span>
+          {/* Ba trạng thái, không phải hai: đang hết; đã hết RỒI GỌI LẠI ĐƯỢC
+              (nạp tiền xong — chủ dự án 10/09: "vẫn còn 15 đô chứ hết đâu");
+              và chưa hề bị từ chối lần nào. Gộp hai cái sau thành "chưa thấy
+              lượt nào bị từ chối" là nói dối theo chiều ngược lại. */}
           <span className={`text-xs font-bold ${q.het_credit ? "text-brand" : "text-emerald-700"}`}>
-            {q.het_credit ? `HẾT SỐ DƯ — ${q.credit_loi_24h} lượt bị từ chối / 24h` : "chưa thấy lượt nào bị từ chối"}
+            {q.het_credit
+              ? `HẾT SỐ DƯ — ${q.credit_loi_24h} lượt bị từ chối / 24h`
+              : q.credit_loi_24h > 0
+              ? `gọi lại được${q.model_song_luc ? ` lúc ${new Date(q.model_song_luc).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : ""} — ${q.credit_loi_24h} lượt bị từ chối trước đó / 24h`
+              : "chưa thấy lượt nào bị từ chối"}
           </span>
         </div>
         <p className="mt-1 text-[11px] text-mute">
@@ -2079,7 +2119,7 @@ function BridgeBadge({ at }: { at: string | null }) {
   const song = phut <= 15;
   return (
     <span
-      className={`rounded-full px-3 py-1 text-xs font-bold ${
+      className={`rounded-md px-3 py-1 text-xs font-bold ${
         song ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-brand text-white"
       }`}
     >

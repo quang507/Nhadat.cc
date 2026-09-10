@@ -56,12 +56,12 @@ export default function ListingCard({
           </p>
         </div>
         <span className="absolute left-3 top-3 flex items-center gap-1.5">
-          <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-bold text-navy">
+          <span className="rounded-md bg-white/95 px-3 py-1 text-xs font-bold text-navy">
             {listing.deal === "cho_thue" ? "Cho thuê" : "Bán"}
           </span>
           {/* FR-172: đường vào là thứ khách Quận 5 hỏi đầu tiên - nói ngay trên thẻ */}
           {listing.access_type && ACCESS_SHORT[listing.access_type] && (
-            <span className="rounded-full bg-navy/80 px-2.5 py-1 text-[11px] font-bold text-white">
+            <span className="rounded-md bg-navy/80 px-2.5 py-1 text-[11px] font-bold text-white">
               {ACCESS_SHORT[listing.access_type]}
             </span>
           )}
@@ -71,7 +71,7 @@ export default function ListingCard({
             nhà dựa trên một tấm hình của căn khác - đúng thứ FR-104 và cả tinh
             thần "trung thực với ảnh" trong kịch bản bot sinh ra để tránh. */}
         {!photo && (
-          <span className="absolute bottom-2.5 right-3 rounded-full bg-navy/75 px-2.5 py-1 text-[11px] font-semibold text-white/95">
+          <span className="absolute bottom-2.5 right-3 rounded-md bg-navy/75 px-2.5 py-1 text-[11px] font-semibold text-white/95">
             Ảnh minh hoạ
           </span>
         )}

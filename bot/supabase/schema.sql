@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 15:40 (giờ VN)
+-- Sinh lúc: 2026-09-10 17:42 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -69,7 +69,8 @@ create table if not exists public.bot_health (
 create table if not exists public.bot_prompts (
   key text not null,
   content text not null,
-  updated_at timestamp with time zone not null default now()
+  updated_at timestamp with time zone not null default now(),
+  sua_boi text
 );
 
 create table if not exists public.bot_usage (
@@ -2523,6 +2524,23 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.doc_bot_prompts()
+ RETURNS TABLE(key text, content text, updated_at timestamp with time zone, sua_boi text)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
+    raise exception 'Khong co quyen quan tri' using errcode = '42501';
+  end if;
+  return query
+    select p.key, p.content, p.updated_at, p.sua_boi
+      from public.bot_prompts p
+     order by p.key;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.doc_danh_sach(p_token text)
  RETURNS jsonb
  LANGUAGE sql
@@ -4481,6 +4499,7 @@ declare
   v_credit      record;
   v_tran_nguoi  integer;
   v_co_du_phong boolean := false;
+  v_song           timestamptz;
   v_dang_du_phong timestamptz;
 begin
   if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
@@ -4514,6 +4533,12 @@ begin
        group by q.zalo_user_id order by 2 desc limit 10
     ) x;
 
+  -- Dấu SỐNG của model chính: `_shared/claude.ts` đóng khi một lượt gọi model
+  -- chính TRẢ VỀ (tiết chế 2 phút/lượt). Cố ý không dùng bot_usage/cong_token:
+  -- đường dự phòng Groq cũng ghi token qua đó, nên một lượt Groq thành công sẽ
+  -- xoá oan cờ hết số dư của Anthropic — nói ngược lại sự thật.
+  select h.at into v_song from bot_health h where h.who = 'model_chinh';
+
   select count(*)::int as so_loi, max(e.at) as lan_cuoi into v_credit
     from bot_errors e
    where e.at > now() - interval '24 hours'
@@ -4533,11 +4558,17 @@ begin
     'tran_gio_nguoi', v_gio_limit, 'tran_ngay_nguoi', v_ngay_limit, 'he_so_nguoi_quen', 4,
     'nguoi_dot_nhieu', coalesce(v_nguoi, '[]'::jsonb),
     'so_nguoi_cham_tran', coalesce(v_tran_nguoi, 0),
-    'het_credit', coalesce(v_credit.so_loi, 0) > 0,
+    -- CÒN hết số dư chỉ khi: có lỗi trong 24h VÀ chưa có lượt gọi model chính
+    -- nào thành công SAU lỗi cuối. Dòng lỗi CŨ không phải bằng chứng rằng BÂY
+    -- GIỜ vẫn hỏng.
+    'het_credit', coalesce(v_credit.so_loi, 0) > 0
+                    and (v_song is null or v_song <= v_credit.lan_cuoi),
+    'model_song_luc', v_song,
     'credit_loi_24h', coalesce(v_credit.so_loi, 0),
     'credit_lan_cuoi', v_credit.lan_cuoi,
     'co_du_phong', v_co_du_phong,
     'dang_chay_du_phong', v_dang_du_phong is not null
+                            and (v_song is null or v_song <= v_dang_du_phong)
   );
 end $function$
 ;
@@ -4830,6 +4861,35 @@ begin
     n := n + 1;
   end loop;
   return n;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.sua_bot_prompt(p_key text, p_content text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_email text;
+begin
+  if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
+    raise exception 'Khong co quyen quan tri' using errcode = '42501';
+  end if;
+  if coalesce(btrim(p_key), '') = '' then
+    raise exception 'Thieu khoa prompt' using errcode = '22023';
+  end if;
+  -- Prompt RỖNG là bot mất luật, không phải "xoá cho gọn". Chặn ở đây vì màn
+  -- hình có thể bị bôi trắng do trượt tay, và hậu quả chỉ lộ ra ở tin nhắn
+  -- khách nhận được — nơi không ai đang nhìn.
+  if coalesce(btrim(p_content), '') = '' then
+    raise exception 'Noi dung prompt khong duoc de trong' using errcode = '22023';
+  end if;
+  v_email := coalesce((select auth.jwt() ->> 'email'), 'service_role');
+  insert into public.bot_prompts (key, content, updated_at, sua_boi)
+  values (btrim(p_key), p_content, now(), v_email)
+  on conflict (key) do update
+    set content = excluded.content, updated_at = now(), sua_boi = excluded.sua_boi;
+  return jsonb_build_object('key', btrim(p_key), 'sua_boi', v_email, 'luc', now());
 end $function$
 ;
 
@@ -6372,6 +6432,9 @@ revoke all on function public.diem_tin(l listings) from public, anon, authentica
 grant execute on function public.diem_tin(l listings) to service_role;
 revoke all on function public.diem_tin(p_listing_id uuid) from public, anon, authenticated;
 grant execute on function public.diem_tin(p_listing_id uuid) to service_role;
+revoke all on function public.doc_bot_prompts() from public, anon, authenticated;
+grant execute on function public.doc_bot_prompts() to authenticated;
+grant execute on function public.doc_bot_prompts() to service_role;
 revoke all on function public.doc_danh_sach(p_token text) from public, anon, authenticated;
 grant execute on function public.doc_danh_sach(p_token text) to anon;
 grant execute on function public.doc_danh_sach(p_token text) to authenticated;
@@ -6574,6 +6637,9 @@ grant execute on function public.seller_rank(p_type seller_type, p_active intege
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to service_role;
 revoke all on function public.stale_listing_tick() from public, anon, authenticated;
 grant execute on function public.stale_listing_tick() to service_role;
+revoke all on function public.sua_bot_prompt(p_key text, p_content text) from public, anon, authenticated;
+grant execute on function public.sua_bot_prompt(p_key text, p_content text) to authenticated;
+grant execute on function public.sua_bot_prompt(p_key text, p_content text) to service_role;
 revoke all on function public.tao_danh_sach(p_listing_codes text[], p_title text, p_buyer_id uuid) from public, anon, authenticated;
 grant execute on function public.tao_danh_sach(p_listing_codes text[], p_title text, p_buyer_id uuid) to authenticated;
 grant execute on function public.tao_danh_sach(p_listing_codes text[], p_title text, p_buyer_id uuid) to service_role;

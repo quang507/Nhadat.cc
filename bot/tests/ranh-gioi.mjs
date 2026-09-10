@@ -50,7 +50,11 @@ const LUAT_BOC_TACH = {
 // Ba RPC được phép ở tầng AI, khai tên tường minh. Muốn thêm thì phải sửa file
 // này — tức là phải có người đọc lại câu hỏi "cái này có phải dữ liệu nghiệp vụ
 // không?" chứ không lặng lẽ trôi vào.
-const RPC_DUOC_PHEP = ["get_secret", "log_loi", "cong_token"];
+// `beat` thêm 10/09/2026 cùng FR-192 b: đóng dấu `bot_health(model_chinh)` khi
+// lượt gọi model chính trả về, để băng "hết số dư" ở /admin biết model đã sống
+// lại thay vì đỏ suốt 24 giờ theo mấy dòng lỗi cũ. Đây là NHỊP TIM vận hành,
+// một dòng một khoá, không phải dữ liệu nghiệp vụ — cùng loại với `log_loi`.
+const RPC_DUOC_PHEP = ["get_secret", "log_loi", "cong_token", "beat"];
 
 const LUAT_AI = {
   ten: "AI không ghi bảng nghiệp vụ",
