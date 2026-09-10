@@ -155,6 +155,23 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   Cùng lý do đó, `he-thong/theo-ngay/` vẫn giữ ảnh chụp từng ngày dù đã có
   `moi-nhat/`. `sao-luu.mjs` tự dọn: giữ 1 bản/ngày × 7 ngày, và CHỈ dọn khi
   chuyến đó `day_du`.
+  **`soat-db.mjs` là CỔNG CI THỨ 8 — soát TRẠNG THÁI DB, không phải danh sách.**
+  Tám phép chỉ đọc, chạy trong DB qua `soat_db_cong_khai()` (`20260910p`), dưới
+  một giây: policy chặn theo tên có phủ hết khoá đang sống · view nào đọc xuyên
+  RLS · hàm nào trùng chữ ký (PostgREST trả `PGRST203`) · bảng nào thiếu khoá
+  chính · `SECURITY DEFINER` thiếu `set search_path` · RLS bật mà không policy
+  trong khi web có quyền · trigger BEFORE sai thứ tự · ai nhận quá 2 tin chủ
+  động một ngày. Cả năm lỗi nặng ngày 10/09 đều KHÔNG nhìn thấy được từ danh
+  sách migration — chúng nằm trong catalog, và đây là chỗ soi.
+  Hàm chỉ trả KẾT LUẬN (mã · mức · số · chi tiết ngắn), Zalo ID che còn 4 số
+  cuối, không có nội dung tin nhắn — nó mở cho `anon` nên chính chỗ đó là chỗ
+  dễ biến một cổng kiểm thành một lỗ rò.
+  Cổng đỏ khi có phát hiện KHÁC bản nền `scripts/soat-db-da-biet.json`. **Thêm
+  dòng vào bản nền là một quyết định kèm lý do, không phải cách làm cổng xanh**
+  — xoá một dòng ở đó nghĩa là tuyên bố đã sửa xong. Lượt chạy đầu 10/09 để lại
+  ba dòng nền: 9 view thiếu `security_invoker` (7 có cổng admin trong WHERE, 2
+  thì không), 3 hàm trùng chữ ký kiểu tập-con, 4 bảng RLS-không-policy cố ý.
+
   **`soat-migration.mjs` so DB ↔ repo, và từ 10/09 nó là CỔNG CI THỨ 7.** Ngày
   đó hai lượt soát code đọc `schema.sql` ở hai mốc thời gian khác nhau trong lúc
   DB đang được vá, rồi kết luận ngược nhau — một bên báo 5 lỗ, một bên báo 5 báo

@@ -172,3 +172,28 @@ jobs:
           bun-version: latest
       - name: Mọi migration đã áp đều có file, mọi file đều đã áp, ảnh chụp không cũ hơn
         run: bun run soat:migration
+
+  # ── CỔNG THỨ 8: TRẠNG THÁI DB CÓ GÌ MỚI KHÔNG ──────────────────────────────
+  # Tầng một (cổng 7) hỏi "repo và DB có cùng DANH SÁCH migration không". Cổng
+  # này hỏi câu khác: DB đang ở TRẠNG THÁI nào — vì cả năm lỗi nặng ngày 10/09
+  # đều KHÔNG nhìn thấy được từ danh sách migration, chúng nằm trong catalog
+  # (policy chặn khoá không tồn tại · view mất security_invoker · hàm hai chữ ký
+  # · bảng mất khoá chính).
+  #
+  # Tám phép soát chạy TRONG DB qua `soat_db_cong_khai()` (20260910p): dưới một
+  # giây, chỉ `select`, không ghi gì, và chỉ trả KẾT LUẬN — Zalo ID che còn 4 số
+  # cuối, không có nội dung tin nhắn. Không cần secret, cùng lý do với cổng 7.
+  #
+  # Cổng đỏ khi có phát hiện KHÁC bản nền `scripts/soat-db-da-biet.json`. Nền có
+  # là vì cổng đỏ ngay từ ngày đầu là cổng sẽ bị bỏ qua — đúng bài học 52 dòng
+  # cảnh báo kêu mãi rồi cái thứ 53 chìm lẫn vào đó.
+  soatdb:
+    name: DB — tám phép soát trạng thái
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Không có phát hiện mới so với bản nền đã biết
+        run: bun run soat:db
