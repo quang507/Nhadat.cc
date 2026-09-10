@@ -585,6 +585,15 @@ class RpcCall {
         return { data: n, error: null };
       }
       case "ghi_danh_gia": { db.insert("ratings", { buyer_id: a.p_buyer_id, listing_id: a.p_listing_id, stars: a.p_stars, note: a.p_note }); return { data: null, error: null }; }
+      // FR-195: kho thông tin dự án lượm từ chat (20260910f).
+      case "ghi_fact_du_an": {
+        const t = db.rows("project_facts");
+        if (!a.p_project_id || !String(a.p_gia_tri ?? "").trim()) return { data: null, error: null };
+        if (t.some((x) => x.project_id === a.p_project_id && x.khoa === a.p_khoa && x.gia_tri === a.p_gia_tri)) return { data: null, error: null };
+        const r = { id: t.length + 1, project_id: a.p_project_id, khoa: a.p_khoa, gia_tri: String(a.p_gia_tri).trim(), nguon: a.p_nguon ?? "seller_chat", listing_id: a.p_listing_id ?? null, conversation_id: a.p_conversation_id ?? null, trang_thai: "cho_duyet", created_at: new Date().toISOString() };
+        t.push(r);
+        return { data: r.id, error: null };
+      }
       case "match_projects": return { data: [], error: null };
       case "nguoi_noi_bo": {
         // 20260903a (FR-173 d): CTV đang hoạt động trước, rồi admin; người lạ → null

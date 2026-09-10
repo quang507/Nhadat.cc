@@ -14,6 +14,7 @@ import { useSearchParams } from "next/navigation";
 import { supabase, type Listing } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription } from "@/lib/format";
 import UploadAnh from "@/components/UploadAnh";
+import { Btn } from "@/components/ui";
 
 // Tin chờ duyệt: chỉ các cột thẻ duyệt cần, không kéo "*".
 type TinCho = Pick<
@@ -69,6 +70,12 @@ type Quota = {
   het_credit: boolean;
   credit_loi_24h: number;
   credit_lan_cuoi: string | null;
+};
+
+// FR-195: thông tin DỰ ÁN lượm được trong lúc chat, đang chờ người gật.
+type FactDuAn = {
+  id: number; project_id: string; du_an: string; quan: string | null;
+  khoa: string; gia_tri: string; nguon: string; created_at: string; ma_tin: string | null;
 };
 
 type Viec = { id: string; kind: string; note: string | null; due_at: string; created_at: string };
@@ -191,6 +198,7 @@ function BanLamViec() {
   const [hang, setHang] = useState<Ng[]>([]);
   const [tien, setTien] = useState<Tien[]>([]);
   const [quota, setQuota] = useState<Quota | null>(null);
+  const [factDuAn, setFactDuAn] = useState<FactDuAn[]>([]);
   const [viec, setViec] = useState<Viec[]>([]);
   const [nguoiBan, setNguoiBan] = useState<NguoiBan[]>([]);
   const [hangCtv, setHangCtv] = useState<HangCtv[]>([]);
@@ -282,7 +290,7 @@ function BanLamViec() {
 
   const load = async () => {
     const d7 = new Date(Date.now() - 7 * 86400e3).toISOString();
-    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt, buyRes, intRes, qtRes] = await Promise.all([
+    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt, buyRes, intRes, qtRes, pfRes] = await Promise.all([
       supabase
         .from("listings")
         .select("id, code, ward, price_vnd, price_raw, area_m2, description, location_raw, created_at")
@@ -344,7 +352,10 @@ function BanLamViec() {
         .select("buyer_id, listing_id, listings(id, code, legacy_code, location_raw, price_raw, status)"),
       // FR-192: chỉ admin gọi được (hàm tự kiểm la_admin); lỗi thì để null, không làm vỡ trang.
       supabase.rpc("quota_tieu_hao"),
+      // FR-195: hàng chờ duyệt thông tin dự án.
+      supabase.from("project_facts_cho_duyet").select("*").limit(50),
     ]);
+    setFactDuAn(pfRes.error ? [] : ((pfRes.data ?? []) as FactDuAn[]));
     setQuota(qtRes.error ? null : ((qtRes.data as Quota | null) ?? null));
     setBdsHot(hot.error ? null : ((hot.data ?? []) as BdsHot[]));
     setDoTre(tre.error ? null : ((tre.data as DoTre | null) ?? null));
@@ -1623,6 +1634,13 @@ function BanLamViec() {
          ═══════════════════════════════════════════════════════════════ */}
       {activeTab === "ops" && (
         <section className="mt-6 space-y-6">
+          {/* FR-195: thông tin dự án chờ duyệt */}
+          {factDuAn.length > 0 && (
+            <div className="rounded-2xl border border-line bg-white p-6">
+              <TheFactDuAn rows={factDuAn} onXong={load} />
+            </div>
+          )}
+
           {/* FR-192: Quota tiêu hao */}
           <div className="rounded-2xl border border-line bg-white p-6">
             <TheQuota q={quota} tokenTien={tien[0] ? tienNgay(tien[0]) : null} />
@@ -1842,6 +1860,54 @@ function PhanTrang({ trang, soTrang, tong, setTrang }: {
         className="rounded-md border border-line px-3.5 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute bg-white">
         Sau -
       </button>
+    </div>
+  );
+}
+
+// FR-195: hàng chờ duyệt thông tin DỰ ÁN nghe được trong lúc chat. Gật thì nhập
+// vào `projects`, bỏ thì đóng dấu bỏ — không có đường nào tự nhập, vì một người
+// nhớ nhầm là cả kho sai theo.
+function TheFactDuAn({ rows, onXong }: { rows: FactDuAn[]; onXong: () => void }) {
+  const [dangChay, setDangChay] = useState<number | null>(null);
+  const bam = async (id: number, ok: boolean) => {
+    setDangChay(id);
+    const { error } = await supabase.rpc("duyet_fact_du_an", { p_id: id, p_ok: ok });
+    setDangChay(null);
+    if (error) alert(`Không xong: ${error.message}`);
+    else onXong();
+  };
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2">
+        <div>
+          <h3 className="font-bold text-navy">Thông tin dự án nghe được trong lúc chat</h3>
+          <p className="mt-0.5 text-xs text-mute">
+            Gật thì nhập vào hồ sơ dự án (tiện ích nối thêm, còn lại vào thông số). Bỏ thì đóng dấu bỏ.
+          </p>
+        </div>
+        <span className="text-xs font-bold text-brand tabular-nums">{rows.length} dòng chờ</span>
+      </div>
+      <ul className="divide-y divide-line text-sm">
+        {rows.map((f) => (
+          <li key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2">
+            <span className="font-semibold text-navy">{f.du_an}</span>
+            {f.quan && <span className="text-xs text-mute">{f.quan}</span>}
+            <span className="rounded bg-cream px-1.5 py-0.5 text-[11px] font-bold text-mute">{f.khoa}</span>
+            <span className="min-w-0 flex-1 truncate text-navy">{f.gia_tri}</span>
+            <span className="text-[11px] text-mute">
+              {f.ma_tin ? `từ tin ${f.ma_tin}` : f.nguon}
+            </span>
+            <span className="flex gap-1.5">
+              <Btn variant="primary" className="nut-nho" disabled={dangChay === f.id} onClick={() => bam(f.id, true)}>
+                Nhập vào dự án
+              </Btn>
+              <Btn variant="ghost" className="nut-nho" disabled={dangChay === f.id} onClick={() => bam(f.id, false)}>
+                Bỏ
+              </Btn>
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

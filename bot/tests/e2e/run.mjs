@@ -1294,6 +1294,21 @@ fresh(seedKho);
       JSON.stringify({ a, b }));
   }
 
+  // FR-195 (10/09): chủ nhà kể chuyện của CẢ DỰ ÁN → chép sang project_facts ở
+  // trạng thái chờ duyệt, KHÔNG ghi thẳng vào projects.
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-pf", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const p = d.insert("projects", { name: "Sunrise City", slug: "sunrise-city", district: "Quận 7", ward: "Phường Tân Hưng", amenities: ["Hồ bơi Olympic"], description: "" }).data;
+    const l = d.insert("listings", { code: "BDS-Q7-0009", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", district: "Quận 7", ward: "Phường Tân Hưng", project_id: p.id, price_raw: "3 tỷ", price_vnd: 3e9, area_m2: 70, can_chu_duyet: true, gap: false }).data;
+    s.active_listing_id = l.id;
+    d.insert("info_requests", { listing_id: l.id, question: "phi_quan_ly", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-pf", text: "phí quản lý 16 nghìn/m2" });
+  check("N34 fact cấp DỰ ÁN (phí quản lý) → vào project_facts chờ duyệt, projects chưa đổi",
+    db().t.project_facts?.some((f) => f.khoa === "phi_quan_ly" && f.trang_thai === "cho_duyet" && /16/.test(f.gia_tri)) === true &&
+      JSON.stringify(db().t.projects[0].amenities) === JSON.stringify(["Hồ bơi Olympic"]),
+    JSON.stringify({ pf: db().t.project_facts, am: db().t.projects[0].amenities }));
+
   // FR-185: kho hỏng → không nuốt ảnh: fact URL tạm + bot_errors.
   fresh(seedKho);
   globalThis.__storageHong = true;

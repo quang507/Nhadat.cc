@@ -172,6 +172,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-192 | UF-11 | WF-13 | `20260910a`: `quota_tieu_hao()` (trần ngày từ Vault, trần theo người từ `chat_quota`, dấu hết số dư từ `bot_errors`); web `app/admin/page.tsx` thẻ Quota tiêu hao + băng cảnh báo. Kiểm: TS-QUOTA-01…03 | — |
 | FR-193 | UF-04 | — | `20260910b`: `guess_property_type`/`_answer` so trên `bo_dau()`; `chat-reply` `quanDoc` (không tự nhận quận) + chào lại. Kiểm: e2e N30, V1.3, TS-LOAI-01 | — |
 | FR-194 | UF-04 | — | `_shared/groq.ts` (`bocDuPhong`, `nenDoiSang`), `_shared/claude.ts` bọc client; Vault `GROQ_API_KEY`/`GROQ_MODEL`. Kiểm: TS-GROQ-01…03 | — |
+| FR-195 | UF-04 | WF-13 | `20260910f`: bảng `project_facts`, `ghi_fact_du_an()`, `duyet_fact_du_an()`, view `project_facts_cho_duyet`; `chat-reply` `chepSangDuAn()`; web thẻ duyệt ở tab Vận hành. Kiểm: e2e N34, TS-DUAN-02 | — |
 | FR-187 | UF-10 | WF-ADMIN | `20260909i`: `jsonb_bo_rong(jsonb)`, `boc_tach_nhom(listings)` + `boc_tach_nhom(uuid)`, view `boc_tach_v`, `so.boc_tach`; `components/admin/BocTachNhom.tsx` (`NHAN_NHOM`, `sapNhom`, `useBocTach`, `taiJsonTin`); `app/admin/ro-hang/json/page.tsx` đọc `boc_tach_v`; `app/admin/ro-hang/page.tsx` nút JSON + `DongJson`. Kiểm: TS-KYGUI-33 (DB thật) | — |
 | FR-97 | | — | — | — |
 

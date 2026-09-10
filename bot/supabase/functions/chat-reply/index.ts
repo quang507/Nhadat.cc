@@ -335,6 +335,17 @@ const cauNhan = (t: "ccrb" | "nmg") =>
     ? "Em ghi nhận anh/chị là môi giới nha. Nếu là chính chủ thì nhắn em một tiếng để em sửa lại."
     : "Em ghi nhận anh/chị là chính chủ nha. Nếu là môi giới thì nhắn em một tiếng để em sửa lại.";
 
+// FR-195: khoá nào nói về CẢ DỰ ÁN chứ không riêng một căn. Chủ nhà kể "toà này
+// phí quản lý 16 nghìn/m2", "khu có hồ bơi tràn bờ", "bàn giao quý 2/2025" — đó
+// là chuyện của dự án, tin sau của người khác trong cùng dự án cũng cần biết.
+// Chép sang `project_facts` ở trạng thái CHỜ DUYỆT; ghi thẳng vào `projects` là
+// một người nhớ nhầm thì cả kho sai theo (xem 20260910f).
+const KHOA_DU_AN = new Set([
+  "phi_quan_ly", "phi_gui_xe", "tien_ich_gan", "ha_tang", "khu_compound",
+  "thang_may", "pccc", "nam_xay", "xay_dung", "mat_do_xd", "tang_cao_toi_da",
+  "so_huu", "thoi_han_su_dung", "gia_dien_nuoc",
+]);
+
 // NHỚ TẠM CẤU HÌNH 60 giây: bí mật cổng, trần lượt model/ngày và bảng
 // `bot_prompts`. Trước bản này ba thứ đó là ba vòng đi về DB ở ĐẦU MỌI TIN
 // (secret → Vault decrypt, prompts → select) cho những giá trị đổi vài lần
@@ -1259,6 +1270,21 @@ Deno.serve(async (req) => {
         const { error: btErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { quan: q } });
         if (btErr) await ghiLoi(client, "chat-reply ghi_boc_tach(quan)", btErr.message);
       }
+    };
+
+    // FR-195: chép một fact sang kho dự án nếu tin có gắn dự án và khoá đó là
+    // chuyện của cả dự án. Việc phụ: hỏng thì ghi sổ rồi đi tiếp.
+    const chepSangDuAn = async (khoa: string, giaTri: string): Promise<void> => {
+      if (!KHOA_DU_AN.has(khoa) || !giaTri?.trim()) return;
+      const lid = pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null;
+      if (!lid) return;
+      const { data: l } = await client.from("listings").select("project_id").eq("id", lid).maybeSingle();
+      if (!l?.project_id) return;
+      const { error } = await client.rpc("ghi_fact_du_an", {
+        p_project_id: l.project_id, p_khoa: khoa, p_gia_tri: giaTri,
+        p_nguon: "seller_chat", p_listing_id: lid, p_conversation_id: convSId ?? null,
+      });
+      if (error) await ghiLoi(client, "chat-reply ghi_fact_du_an", error.message);
     };
 
     let ackSua: string | null = null;
@@ -2281,6 +2307,7 @@ Deno.serve(async (req) => {
           p_source: "seller_chat",
         });
         if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
+        else await chepSangDuAn(pendingReq.question, dapAn);
       }
       // Câu khớp nhưng còn kèm fact khác ("3 lầu, 4 phòng ngủ" khi hỏi kết cấu;
       // "Đường 12m, hướng Bắc" khi hỏi đường) → ghi luôn, đỡ hỏi lại (09/09 tối).
@@ -2292,6 +2319,7 @@ Deno.serve(async (req) => {
             p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat",
           });
           if (ndErr) await ghiLoi(client, "chat-reply ghi_fact_listing(kem)", ndErr.message);
+          else await chepSangDuAn(f.question, f.answer);
         }
       }
       if (!boQuaCauTreo) {
