@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 10:42 (giờ VN)
+-- Sinh lúc: 2026-09-10 10:54 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -2752,39 +2752,23 @@ CREATE OR REPLACE FUNCTION public.guess_property_type(p_text text)
  IMMUTABLE
  SET search_path TO 'public'
 AS $function$
+  with t as (select public.bo_dau(coalesce(p_text, '')) as s)
   select (case
-    when p_text is null or btrim(p_text) = '' then null
-    when lower(p_text) is distinct from public.bo_dau(p_text) then (case
-      when p_text ~* '(kho bãi|kho xưởng|nhà xưởng|nhà kho|\mkho\M|\mxưởng\M)'                          then 'kho_xuong'
-      when p_text ~* '(đất nông nghiệp|đất vườn|đất lúa|đất trồng|đất ruộng|\mcln\M|đất rẫy|đất trang trại)' then 'dat_nong_nghiep'
-      when p_text ~* '(đất skc|đất tmd|thương mại dịch vụ|sản xuất kinh doanh|đất kinh doanh|đất thương mại)' then 'dat_kinh_doanh'
-      when p_text ~* '(căn hộ dịch vụ|\mchdv\M|khách sạn|toà nhà|tòa nhà|\mbuilding\M|nhà nghỉ|dãy phòng cho thuê|toà nhà văn phòng)' then 'toa_nha'
-      when p_text ~* '(phòng trọ|nhà trọ|dãy trọ|khu trọ|phòng cho thuê)' then 'phong_tro'
-      when p_text ~* '(biệt thự|villa)'                                   then 'biet_thu'
-      when p_text ~* 'mặt bằng'                                            then 'mat_bang'
-      when p_text ~* '(chung cư|căn hộ|penthouse|duplex|officetel)'        then 'chung_cu'
-      when p_text ~* '(cấp 4|cấp bốn)'                                     then 'nha_cap4'
-      when p_text ~* '(đất nền|lô đất|nền đất|bán đất|đất thổ cư|đất trống)'
-           and p_text !~* '(trệt|lầu|tầng|phòng ngủ|\mPN\M|\mWC\M)'        then 'dat'
-      when p_text ~* '(nhà|trệt|lầu|tầng|hẻm|mặt tiền|\mHXH\M|\mMT\M)'     then 'nha_pho'
-      else null
-    end)
-    else (case
-      when public.bo_dau(p_text) ~ '(kho bai|kho xuong|nha xuong|nha kho|\mkho\M|\mxuong\M)'                     then 'kho_xuong'
-      when public.bo_dau(p_text) ~ '(dat nong nghiep|dat vuon|dat lua|dat trong|dat ruong|\mcln\M|dat ray|dat trang trai)' then 'dat_nong_nghiep'
-      when public.bo_dau(p_text) ~ '(dat skc|dat tmd|thuong mai dich vu|san xuat kinh doanh|dat kinh doanh|dat thuong mai)' then 'dat_kinh_doanh'
-      when public.bo_dau(p_text) ~ '(can ho dich vu|\mchdv\M|khach san|toa nha|\mbuilding\M|nha nghi|day phong cho thue)' then 'toa_nha'
-      when public.bo_dau(p_text) ~ '(phong tro|nha tro|day tro|khu tro|phong cho thue)' then 'phong_tro'
-      when public.bo_dau(p_text) ~ '(biet thu|villa)'                                   then 'biet_thu'
-      when public.bo_dau(p_text) ~ 'mat bang'                                            then 'mat_bang'
-      when public.bo_dau(p_text) ~ '(chung cu|can ho|penthouse|duplex|officetel)'        then 'chung_cu'
-      when public.bo_dau(p_text) ~ '(cap 4|cap bon)'                                     then 'nha_cap4'
-      when public.bo_dau(p_text) ~ '(dat nen|lo dat|nen dat|ban dat|dat tho cu|dat trong)'
-           and public.bo_dau(p_text) !~ '(tret|lau|tang|phong ngu|\mpn\M|\mwc\M)'        then 'dat'
-      when public.bo_dau(p_text) ~ '(\mnha\M|tret|\mlau\M|tang|\mhem\M|mat tien|\mhxh\M|\mmt\M)' then 'nha_pho'
-      else null
-    end)
-  end)::property_type;
+    when (select btrim(s) from t) = '' then null
+    when (select s from t) ~ '(kho bai|kho xuong|nha xuong|nha kho|\mkho\M|\mxuong\M)'                     then 'kho_xuong'
+    when (select s from t) ~ '(dat nong nghiep|dat vuon|dat lua|dat trong cay|dat ruong|\mcln\M|dat ray|dat trang trai)' then 'dat_nong_nghiep'
+    when (select s from t) ~ '(dat skc|dat tmd|thuong mai dich vu|san xuat kinh doanh|dat kinh doanh|dat thuong mai)' then 'dat_kinh_doanh'
+    when (select s from t) ~ '(can ho dich vu|\mchdv\M|khach san|toa nha|\mbuilding\M|nha nghi|day phong cho thue|toa nha van phong)' then 'toa_nha'
+    when (select s from t) ~ '(phong tro|nha tro|day tro|khu tro|phong cho thue)'   then 'phong_tro'
+    when (select s from t) ~ '(biet thu|villa|\mbt\M)'                              then 'biet_thu'
+    when (select s from t) ~ '(mat bang|\mmb\M)'                                    then 'mat_bang'
+    when (select s from t) ~ '(chung cu|can ho|canho|penthouse|duplex|officetel|\mcc\M|\mch\M)' then 'chung_cu'
+    when (select s from t) ~ '(cap 4|cap bon|c4)'                                   then 'nha_cap4'
+    when (select s from t) ~ '(dat nen|lo dat|nen dat|ban dat|dat tho cu|dat trong|\mdn\M)'
+         and (select s from t) !~ '(tret|lau|tang|phong ngu|\mpn\M|\mwc\M)'         then 'dat'
+    when (select s from t) ~ '(\mnha\M|nha pho|\mnp\M|tret|\mlau\M|tang|\mhem\M|mat tien|\mhxh\M|\mmt\M)' then 'nha_pho'
+    else null
+  end)::property_type
 $function$
 ;
 
@@ -2794,44 +2778,22 @@ CREATE OR REPLACE FUNCTION public.guess_property_type_answer(p_text text)
  IMMUTABLE
  SET search_path TO 'public'
 AS $function$
-  select coalesce(
-    (case
-      when p_text is null or btrim(p_text) = '' then null
-      when btrim(public.cat_truoc_phu_dinh(p_text)) = '' then null
-      when lower(public.cat_truoc_phu_dinh(p_text))
-             is distinct from public.bo_dau(public.cat_truoc_phu_dinh(p_text)) then (case
-        when public.cat_truoc_phu_dinh(p_text) ~* '(kho|xưởng)'                    then 'kho_xuong'
-        when public.cat_truoc_phu_dinh(p_text) ~* '(nông nghiệp|đất vườn|đất lúa|\mcln\M)' then 'dat_nong_nghiep'
-        when public.cat_truoc_phu_dinh(p_text) ~* '(skc|tmd|thương mại|sản xuất)'  then 'dat_kinh_doanh'
-        when public.cat_truoc_phu_dinh(p_text) ~* '(dịch vụ|chdv|khách sạn|toà nhà|tòa nhà)' then 'toa_nha'
-        when public.cat_truoc_phu_dinh(p_text) ~* '\mtrọ\M|phòng cho thuê'      then 'phong_tro'
-        when public.cat_truoc_phu_dinh(p_text) ~* '(biệt thự|villa)'            then 'biet_thu'
-        when public.cat_truoc_phu_dinh(p_text) ~* '(mặt bằng|\mmb\M)'           then 'mat_bang'
-        when public.cat_truoc_phu_dinh(p_text) ~* '(chung cư|căn hộ|penthouse|duplex|officetel|\mcc\M)' then 'chung_cu'
-        when public.cat_truoc_phu_dinh(p_text) ~* '(cấp 4|cấp bốn)'             then 'nha_cap4'
-        when public.cat_truoc_phu_dinh(p_text) ~* '\m(đất|nền|thổ cư)\M'
-             and public.cat_truoc_phu_dinh(p_text) !~* '(trệt|lầu|tầng|phòng ngủ|\mPN\M|\mWC\M)' then 'dat'
-        when public.cat_truoc_phu_dinh(p_text) ~* '\mnhà\M|nhà phố|nhà riêng|nhà hẻm' then 'nha_pho'
-        else null
-      end)
-      else (case
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '(\mkho\M|xuong)'      then 'kho_xuong'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '(nong nghiep|dat vuon|dat lua|\mcln\M)' then 'dat_nong_nghiep'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '(skc|tmd|thuong mai|san xuat)' then 'dat_kinh_doanh'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '(dich vu|chdv|khach san|toa nha)' then 'toa_nha'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '\mtro\M|phong cho thue' then 'phong_tro'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '(biet thu|villa)'       then 'biet_thu'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '(mat bang|\mmb\M)'      then 'mat_bang'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '(chung cu|can ho|penthouse|duplex|officetel|\mcc\M)' then 'chung_cu'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '(cap 4|cap bon)'        then 'nha_cap4'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '\m(dat|nen|tho cu)\M'
-             and public.bo_dau(public.cat_truoc_phu_dinh(p_text)) !~ '(tret|lau|tang|phong ngu|\mpn\M|\mwc\M)' then 'dat'
-        when public.bo_dau(public.cat_truoc_phu_dinh(p_text)) ~ '\mnha\M|nha pho|nha rieng|nha hem' then 'nha_pho'
-        else null
-      end)
-    end)::public.property_type,
-    public.guess_property_type(public.cat_truoc_phu_dinh(p_text))
-  );
+  with t as (select public.bo_dau(coalesce(p_text, '')) as s)
+  select (case
+    when (select btrim(s) from t) = '' then null
+    when (select s from t) ~ '(kho|xuong)'                                          then 'kho_xuong'
+    when (select s from t) ~ '(nong nghiep|dat vuon|dat lua|dat ray|\mcln\M)'        then 'dat_nong_nghiep'
+    when (select s from t) ~ '(skc|tmd|thuong mai|san xuat|kinh doanh)'              then 'dat_kinh_doanh'
+    when (select s from t) ~ '(chdv|dich vu|khach san|toa nha|building|nha nghi)'    then 'toa_nha'
+    when (select s from t) ~ '(tro)'                                                 then 'phong_tro'
+    when (select s from t) ~ '(biet thu|villa|\mbt\M)'                               then 'biet_thu'
+    when (select s from t) ~ '(mat bang|\mmb\M)'                                     then 'mat_bang'
+    when (select s from t) ~ '(chung cu|can ho|canho|penthouse|duplex|officetel|\mcc\M|\mch\M)' then 'chung_cu'
+    when (select s from t) ~ '(cap 4|cap bon|c4)'                                    then 'nha_cap4'
+    when (select s from t) ~ '(\mdat\M|dat nen|lo dat|nen)'                          then 'dat'
+    when (select s from t) ~ '(nha pho|\mnha\M|\mnp\M|pho)'                          then 'nha_pho'
+    else null
+  end)::property_type
 $function$
 ;
 

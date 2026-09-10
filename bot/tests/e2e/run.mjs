@@ -95,7 +95,9 @@ check("V1.3 câu rao → tạo tin nháp đúng giá/phường", L && L.ward ===
 // 09/09/2026 (chủ dự án): "chỉ cần rao và hỏi vị trí cụ thể" — vi_tri vào nhóm cơ
 // bản, nên rao chưa nói đường/hẻm thì câu đầu là VỊ TRÍ, chưa tới hẻm rộng.
 check("V1.3 rao đủ giá+phường+diện tích nhưng chưa nói đường/hẻm → cho_thong_tin (can_chu_duyet), câu đầu là VỊ TRÍ CỤ THỂ", L?.status === "cho_thong_tin" && L?.can_chu_duyet === true && db().t.info_requests.some((q) => q.listing_id === L?.id && q.question === "vi_tri" && q.status === "pending"), JSON.stringify({ L, ir: db().t.info_requests }));
-check("V1.3 bong bóng đầu 'Em ghi nhận' liệt kê đúng thứ bóc được, không có thứ trống, đứng trước lời chào", /^📝 Em ghi nhận: bán( nhà phố)? · Phường 4, Quận 5 · 50m2 · giá 5 tỷ 8\./.test(r.body.replies[0] ?? "") && r.body.replies.length >= 2 && !/gấp|phòng ngủ/.test(r.body.replies[0]), JSON.stringify(r.body.replies));
+// FR-193 (10/09): câu rao KHÔNG nói quận thì bong bóng không được nói "Quận 5" —
+// đó là mặc định của cột, không phải điều khách nói.
+check("V1.3 bong bóng đầu 'Em ghi nhận' liệt kê đúng thứ bóc được, không tự thêm quận, đứng trước lời chào", /^📝 Em ghi nhận: bán( nhà phố)? · Phường 4 · 50m2 · giá 5 tỷ 8\./.test(r.body.replies[0] ?? "") && r.body.replies.length >= 2 && !/gấp|phòng ngủ|Quận 5/.test(r.body.replies[0]), JSON.stringify(r.body.replies));
 check("V1.3 câu hỏi mẫu vi_tri lấy từ bot_prompts.cau_hoi_mau (đè bản code)", createCalls().some((c) => /Nhà mình ở đâu vậy anh\/chị, đường nào số mấy\?/.test(c.params.messages[0].content)), createCalls().at(-1)?.params.messages[0].content.slice(0, 300));
 check("V1.3 boc_tach ghi ngay lúc tạo: loại giao dịch, phường, giá thô, diện tích; không có khoá null", L?.boc_tach?.loai_giao_dich === "ban" && L?.boc_tach?.phuong === "Phường 4" && /5 tỷ 8/.test(L?.boc_tach?.gia_raw ?? "") && L?.boc_tach?.dien_tich === "50m2" && !("gap" in (L?.boc_tach ?? {})) && !("du_an" in (L?.boc_tach ?? {})), JSON.stringify(L?.boc_tach));
 check("V1.3 rao đã nói 50m2 → diện tích được ghi, drip KHÔNG hỏi lại", L?.area_m2 === 50 && !db().t.info_requests.some((q) => q.listing_id === L?.id && q.question === "dien_tich"), JSON.stringify(db().t.info_requests));
@@ -1248,6 +1250,17 @@ fresh(seedKho);
   check("N29 rao theo lô, model chết → câu mẫu neo bằng mã căn ('Căn A5 nha.'), không neo bằng phường, không có dấu phẩy trước câu hỏi",
     r.body.replies.some((x) => /Căn A5 nha. [A-ZĐ]/.test(x)) && !r.body.replies.some((x) => /Căn Phường/.test(x)),
     JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]), l: db().t.listings.map((x) => [x.code, x.unit_code]) }));
+
+  // FR-193 (10/09, chủ dự án nhắn thật vào Zalo OA): "Chào bạn tôi cần bán căn ho ở
+  // Hà đô centrosa garden" → phải (1) chào lại, (2) hiểu "căn ho" = chung cư dù câu
+  // có dấu chỗ khác, (3) KHÔNG khẳng định "Quận 5" vì không ai nói quận.
+  fresh();
+  r = await send({ external_user_id: "chao-1", text: "Chào bạn tôi cần bán căn ho ở Hà đô centrosa garden" });
+  check("N30 'Chào bạn … bán căn ho …' → chào lại, loại = chung cư (chữ thiếu dấu), không tự nhận Quận 5, không hỏi lại loại BĐS",
+    /^Dạ em chào/.test(r.body.replies[0] ?? "") && db().t.listings[0]?.property_type === "chung_cu" &&
+      !/Quận 5/.test(r.body.replies.join(String.fromCharCode(10))) &&
+      !db().t.info_requests.some((q) => q.question === "loai_bds" && q.status === "pending"),
+    JSON.stringify({ replies: r.body.replies, loai: db().t.listings[0]?.property_type, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
 
   // FR-185: kho hỏng → không nuốt ảnh: fact URL tạm + bot_errors.
   fresh(seedKho);
