@@ -1230,6 +1230,25 @@ fresh(seedKho);
       r.body.replies.filter((x) => /em ghi rồi/i.test(x)).length === 1,
     JSON.stringify(r.body.replies));
 
+  // 10/09 lần 8: rao theo lô → neo câu hỏi bằng MÃ CĂN, không phải phường (cả lô cùng phường).
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-lo", seller_type: "nmg", name: null, active_listing_id: null }).data;
+    const p = d.insert("projects", { name: "Ny'ah Phú Định", slug: "nyah-phu-dinh", district: "Quận 8", ward: "Phường 16", amenities: [], description: "" }).data;
+    let dau = null;
+    for (const [ma, gia] of [["A5", "18 tỷ"], ["A7", "18 tỷ 5"]]) {
+      const l = d.insert("listings", { code: `BDS-Q8-00${ma}`, seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", district: "Quận 8", ward: "Phường 16", project_id: p.id, unit_code: ma, price_raw: gia, price_vnd: 18e9, area_m2: 160, frontage_m: 8, length_m: 20, can_chu_duyet: true, gap: false }).data;
+      dau = dau ?? l;
+    }
+    s.active_listing_id = dau.id;
+    d.insert("info_requests", { listing_id: dau.id, question: "phap_ly", status: "pending" });
+  });
+  // Model CHẾT để đo đúng câu mẫu tiền định (đường thật hôm 10/09 khi hết credit API).
+  globalThis.__model.create = () => { throw new Error("model chết"); };
+  r = await send({ external_user_id: "z-lo", text: "sổ hồng riêng từng căn, hoàn công" });
+  check("N29 rao theo lô, model chết → câu mẫu neo bằng mã căn ('Căn A5 nha.'), không neo bằng phường, không có dấu phẩy trước câu hỏi",
+    r.body.replies.some((x) => /Căn A5 nha. [A-ZĐ]/.test(x)) && !r.body.replies.some((x) => /Căn Phường/.test(x)),
+    JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]), l: db().t.listings.map((x) => [x.code, x.unit_code]) }));
+
   // FR-185: kho hỏng → không nuốt ảnh: fact URL tạm + bot_errors.
   fresh(seedKho);
   globalThis.__storageHong = true;
