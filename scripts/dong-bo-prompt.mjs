@@ -70,32 +70,41 @@ for (const k of khoa) {
   console.log(k.padEnd(22), ta.padEnd(10), tb.padEnd(10), trangThai);
 }
 
-if (!lech.length) { console.log("\nHai bên khớp hết."); process.exit(0); }
-console.log(`\n${lech.length} khoá lệch: ${lech.join(", ")}`);
-
-if (!DAY && !KEO) {
-  console.log("Chạy lại với --day (code → DB) hoặc --keo (DB → code) để đồng bộ.");
-  console.log("DB ĐÈ code lúc chạy, nên khoá lệch nghĩa là bot đang dùng bản DB.");
-  process.exit(1);
-}
-
-if (DAY) {
-  const rows = lech.filter((k) => TU_CODE[k] != null).map((k) => ({ key: k, content: TU_CODE[k] }));
-  const w = await fetch(`${URL_DB}/rest/v1/bot_prompts?on_conflict=key`, {
-    method: "POST", headers: { ...H, Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify(rows),
-  });
-  if (!w.ok) { console.error(`Ghi hỏng: HTTP ${w.status} ${(await w.text()).slice(0, 300)}`); process.exit(1); }
-  console.log(`Đã đẩy ${rows.length} khoá từ CODE lên DB. Bot đổi trong vòng 60 giây (nhớ tạm).`);
+// Kết thúc bằng `process.exitCode` chứ không `process.exit()`: trên máy Windows
+// của dự án, `process.exit()` giữa lúc còn socket đang đóng làm libuv ném
+// "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)" và `bun run` đọc ra
+// mã 9 — tức lệnh BÁO HỎNG trong khi nó vừa in "khớp hết". Một mã thoát nói dối
+// còn tệ hơn không có mã thoát.
+if (!lech.length) {
+  console.log("\nHai bên khớp hết.");
 } else {
-  // KÉO: chỉ in ra để người dán vào prompts.ts — ghi đè mã nguồn tự động là
-  // cách nhanh nhất để mất một bản sửa tay mà không ai thấy trong diff.
-  console.log("\nDán các đoạn dưới vào bot/supabase/functions/_shared/prompts.ts rồi mở PR:\n");
-  for (const k of lech) {
-    if (TU_DB[k] == null) continue;
-    console.log(`──── ${k} ────`);
-    console.log(TU_DB[k]);
-    console.log();
+  console.log(`\n${lech.length} khoá lệch: ${lech.join(", ")}`);
+  if (!DAY && !KEO) {
+    console.log("Chạy lại với --day (code → DB) hoặc --keo (DB → code) để đồng bộ.");
+    console.log("DB ĐÈ code lúc chạy, nên khoá lệch nghĩa là bot đang dùng bản DB.");
+    process.exitCode = 1;
+  } else if (DAY) {
+    const rows = lech.filter((k) => TU_CODE[k] != null).map((k) => ({ key: k, content: TU_CODE[k] }));
+    const w = await fetch(`${URL_DB}/rest/v1/bot_prompts?on_conflict=key`, {
+      method: "POST", headers: { ...H, Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(rows),
+    });
+    if (!w.ok) {
+      console.error(`Ghi hỏng: HTTP ${w.status} ${(await w.text()).slice(0, 300)}`);
+      process.exitCode = 1;
+    } else {
+      console.log(`Đã đẩy ${rows.length} khoá từ CODE lên DB. Bot đổi trong vòng 60 giây (nhớ tạm).`);
+    }
+  } else {
+    // KÉO: chỉ IN RA để người dán vào prompts.ts — ghi đè mã nguồn tự động là
+    // cách nhanh nhất để mất một bản sửa tay mà không ai thấy trong diff.
+    console.log("\nDán các đoạn dưới vào bot/supabase/functions/_shared/prompts.ts rồi mở PR:\n");
+    for (const k of lech) {
+      if (TU_DB[k] == null) continue;
+      console.log(`──── ${k} ────`);
+      console.log(TU_DB[k]);
+      console.log();
+    }
+    console.log("Nhớ deploy chat-reply sau khi merge, nếu không code và DB lại lệch.");
   }
-  console.log("Nhớ deploy chat-reply sau khi merge, nếu không code và DB lại lệch.");
 }
