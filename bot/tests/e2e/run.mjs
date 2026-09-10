@@ -1142,6 +1142,31 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "Còn căn nữa: 7 Hồng Bàng phường 12 quận 5, 60m2, 9 tỷ, mặt tiền" });
   check("N21 'Còn căn nữa: 7 Hồng Bàng …' từ người bán quen → tạo tin MỚI (mã mới), phường 12, 9 tỷ", db().t.listings.length === 6 && db().t.listings.some((l) => l.ward === "Phường 12" && /9 tỷ/.test(l.price_raw ?? "") && l.seller_id === db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb").id && l.code === "BDS-Q5-0006"), JSON.stringify(db().t.listings.map((l) => [l.code, l.ward, l.price_raw])));
 
+  // FR-177 n (10/09): câu rao DÀI đủ mọi thứ → bóc hết ngay lúc tạo, gấp vào cột, không hỏi lại thứ đã nói.
+  fresh();
+  r = await send({ external_user_id: "dai-1", text: "Bán nhà hẻm 8m Nguyễn Trãi phường 8 quận 5, 4x16 = 64m2 sổ riêng hoàn công, 1 trệt 3 lầu 4 phòng ngủ 3 wc, hướng Đông, nhà mới xây 2022, full nội thất, giá 9 tỷ 5 còn thương lượng, cần bán gấp vì đi định cư, cách mặt tiền 30m hẻm thông không ngập" });
+  {
+    const L = db().t.listings[0]; const F = new Set(db().t.listing_facts.map((f) => f.question));
+    check("N22 rao dài → ≥10 fact bóc ngay (hướng, pháp lý, WC, nội thất, năm xây, hẻm thông, ngập, cách mặt tiền, lý do bán, thương lượng), gap=true, không hỏi lại thứ đã nói",
+      L?.gap === true && ["huong", "phap_ly", "so_wc", "noi_that", "nam_xay", "hem_thong", "ngap_nuoc", "cach_mat_tien", "ly_do_ban", "thuong_luong"].every((k) => F.has(k)) &&
+        !db().t.info_requests.some((q) => q.status === "pending" && ["huong", "phap_ly", "gap", "so_phong_ngu", "gia"].includes(q.question)),
+      JSON.stringify({ gap: L?.gap, f: [...F], ir: db().t.info_requests.map((q) => q.question) }));
+  }
+  // 10/09 chân dung đại diện CĐT: một tin nhiều căn → mỗi căn một tin riêng, kế thừa dự án/quận.
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-cdt", seller_type: "nmg", name: null, active_listing_id: null }).data;
+    const p = d.insert("projects", { name: "Ny'ah Phú Định", slug: "nyah-phu-dinh", district: "Quận 8", ward: "Phường 16", amenities: [], description: "Khu biệt lập 50 căn" }).data;
+    d.insert("listings", { code: "BDS-Q8-0001", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", district: "Quận 8", ward: "Phường 16", project_id: p.id, price_raw: "18 tỷ", price_vnd: 18e9, can_chu_duyet: true, gap: false });
+  });
+  r = await send({ external_user_id: "z-cdt", text: "căn A5 8x20 giá 18 tỷ, căn A7 8x20 giá 18 tỷ 5, căn B2 góc 10x20 giá 22 tỷ" });
+  check("N23 'căn A5 …, căn A7 …, căn B2 …' → 3 tin mới có unit_code, ngang×dài, giá riêng, cùng dự án Quận 8; hỏi MỘT câu chung cho lô",
+    db().t.listings.filter((l) => l.unit_code).length === 3 && db().t.listings.some((l) => l.unit_code === "B2" && l.frontage_m === 10 && /22 tỷ/.test(l.price_raw)) && db().t.listings.filter((l) => l.unit_code).every((l) => l.district === "Quận 8") && r.body.nhieu_can === 3 && r.body.replies.some((x) => /Em mở 3 tin/.test(x)),
+    JSON.stringify({ body: r.body, l: db().t.listings.map((l) => [l.code, l.unit_code, l.frontage_m, l.price_raw, l.district]) }));
+  // 10/09 chân dung nhà đầu tư: kể "mua nhà cũ sửa lại bán" + có căn + giá → là NGƯỜI BÁN, tạo tin.
+  fresh();
+  r = await send({ external_user_id: "dt-1", text: "Anh đầu tư mua nhà cũ sửa lại bán, giờ có căn hẻm 45 Trần Phú phường 4 quận 5 vừa sửa xong, 4x14, 5 tỷ 9" });
+  check("N24 nhà đầu tư 'mua nhà cũ sửa lại bán, có căn … 5 tỷ 9' → nhánh bán, tạo tin 5 tỷ 9 (không rơi nhánh mua vì chữ 'mua')", r.body.role === "seller" && db().t.listings.length === 1 && /5 tỷ 9/.test(db().t.listings[0].price_raw ?? "") && db().t.buyers.length === 0, JSON.stringify({ role: r.body.role, l: db().t.listings.map((l) => l.price_raw), b: db().t.buyers.length }));
+
   // FR-185: kho hỏng → không nuốt ảnh: fact URL tạm + bot_errors.
   fresh(seedKho);
   globalThis.__storageHong = true;

@@ -100,7 +100,9 @@ const TU_KHOA: Record<string, RegExp> = {
 };
 
 // Câu hỏi ngược của chủ nhà: có dấu hỏi hoặc mở đầu bằng từ để hỏi.
-const CAU_HOI_RE = /\?|^\s*(?:phi|bao nhieu|sao|the nao|nhu the nao|bao gio|khi nao|em la|ben em|co phai|lam sao|toi co|toi phai|minh phai|co can)\b/;
+// "phí quản lý 20 nghìn/m2" KHÔNG phải câu hỏi (10/09: từng bị coi là "hỏi phí") —
+// chỉ "phí sao / phí bao nhiêu / phí bên em" mới là hỏi ngược.
+const CAU_HOI_RE = /\?|^\s*(?:phi (?:ben em|sao|bao nhieu|the nao|nhu the nao|gi|nhu nao|la)|bao nhieu|sao|the nao|nhu the nao|bao gio|khi nao|em la|ben em|co phai|lam sao|toi co|toi phai|minh phai|co can)\b/;
 
 /**
  * Phân loại câu chủ nhà vừa nhắn so với câu hỏi `question` đang treo.
@@ -301,9 +303,36 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   ["so_phong_ngu", /\b(\d{1,2})\s*(?:phong ngu|pn|phong)\b(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
   ["so_wc", /\b(\d{1,2})\s*(?:wc|toilet|ve sinh)\b/, (m) => m[1]],
   ["huong", /\bhuong\s*((?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?)\b/, (m) => `hướng ${m[1]}`],
-  ["mat_tien", /\b(?:ngang|mat tien|mt)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
+  ["mat_tien", /(?<!cach\s)(?<!cach\s\s)\b(?:ngang|mat tien|mt)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
   ["no_hau", /\bno hau\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
+  // Câu rao dài (FR-177 n): các ý đời thường đi kèm không có dấu phẩy.
+  ["cach_mat_tien", /\bcach\s*(?:mat tien|duong lon|duong chinh|mt)\s*(?:khoang|tam)?\s*(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
+  ["hem_thong", /\bhem\s*(thong|cut)\b/, (m) => `hẻm ${m[1] === "cut" ? "cụt" : "thông"}`],
+  ["ngap_nuoc", /\b((?:khong|ko|k)\s*(?:bi\s*)?ngap|ngap nuoc|hay ngap|bi ngap)\b/, (m) => /khong|ko|k\s/.test(m[1]) ? "không ngập" : "có ngập"],
+  ["ly_do_ban", /\b(dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san|tra no|ve que|doi cong tac|mua cho khac)\b/, (m) => m[1]],
+  ["nam_xay", /\b(?:xay|hoan cong|xd)\s*(?:nam\s*|tu\s*|moi\s*)?((?:19|20)\d{2})\b/, (m) => m[1]],
+  ["thuong_luong", /\b(con thuong luong|co thuong luong|thuong luong duoc|\btl\b|fix|gia cung|khong bot)\b/, (m) => m[1]],
 ];
+// Nhiều căn trong MỘT tin ("căn A5 8x20 giá 18 tỷ, căn A7 8x20 giá 18 tỷ 5, căn B2 góc
+// 10x20 giá 22 tỷ") — đại diện chủ đầu tư / môi giới rao theo lô (chân dung 3, 10/09).
+export type CanTrongTin = { ma: string; ngang?: string; dai?: string; gia?: string; goc: string };
+export function nhanDienNhieuCan(text: string): CanTrongTin[] {
+  const out: CanTrongTin[] = [];
+  for (const goc of text.split(/[,;\n]|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter(Boolean)) {
+    const kd = boDau(goc);
+    const mMa = /\b(?:can|lo|shop|nen)\s*(?:so\s*)?([a-z]{1,3}[\s.\-]?\d{1,3}(?:[.\-]\d{1,3})?[a-z]?|\d{1,3}[a-z])\b/.exec(kd);
+    if (!mMa) continue;
+    const mKt = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(kd);
+    const mGia = /(\d+(?:[.,]\d+)?)\s*(ty|ti|toi|trieu|tr)\b(?:\s*(\d+(?:[.,]\d+)?))?(?:\s*(ruoi))?/.exec(kd);
+    out.push({
+      ma: mMa[1].replace(/[\s.]/g, "").toUpperCase(),
+      ngang: mKt?.[1], dai: mKt?.[2],
+      gia: mGia ? `${mGia[1]} ${mGia[2] === "toi" ? "tỏi" : /^t[iy]$/.test(mGia[2]) ? "tỷ" : "triệu"}${mGia[3] ? ` ${mGia[3]}` : ""}${mGia[4] ? " rưỡi" : ""}` : undefined,
+      goc,
+    });
+  }
+  return out.length >= 2 ? out : [];
+}
 export function nhanDienNhieuFact(text: string): NhanDien[] {
   const out: NhanDien[] = [];
   const them = (nd: NhanDien | null) => { if (nd && !out.some((x) => x.question === nd.question)) out.push(nd); };
@@ -379,6 +408,10 @@ export function nhanDienFact(text: string): NhanDien | null {
       /\b(?:so|so nha|dia chi)\s*\d+[a-z]?(?:\/\d+)*\s+[a-z]{2,}/.test(kd) ||
       /^\s*\d+[a-z]?(?:\/\d+[a-z]?)+\s+[a-z]{2,}/.test(kd)) {
     return { question: "vi_tri", answer: goc };
+  }
+  // "cách mặt tiền 30m" xét TRƯỚC độ rộng hẻm (kẻo "30m hẻm thông" thành hẻm 30m).
+  if ((m = new RegExp(`\\bcach\\s*(?:mat tien|duong lon|duong chinh|mt)\\s*(?:khoang|tam|chung)?\\s*${SO}\\s*(?:m|met)?\\b`).exec(kd))) {
+    return { question: "cach_mat_tien", answer: `${m[1]}m` };
   }
   // Độ rộng hẻm: có đơn vị mét, hoặc số nhỏ (≤ 30) đứng cuối / trước dấu câu —
   // "hẻm 123 Trần Bình Trọng" là địa chỉ (đã bắt ở trên), không phải "hẻm 123m".
