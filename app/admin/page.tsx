@@ -54,6 +54,23 @@ const tienNgay = (t: Tien) =>
     t.cache_write_tokens * GIA_VAO * HE_SO_NAP +
     t.cache_read_tokens * GIA_VAO * HE_SO_DOC) / 1_000_000;
 
+// FR-192: quota tiêu hao — RPC `quota_tieu_hao()` gom bốn cái trần về một chỗ.
+type Quota = {
+  ngay: string;
+  luot_hom_nay: number;
+  tran_ngay: number;
+  capped_at: string | null;
+  token_hom_nay: number;
+  tran_gio_nguoi: number;
+  tran_ngay_nguoi: number;
+  he_so_nguoi_quen: number;
+  nguoi_dot_nhieu: { uid: string; trong_24h: number; trong_gio: number | null; nguoi_quen: boolean }[];
+  so_nguoi_cham_tran: number;
+  het_credit: boolean;
+  credit_loi_24h: number;
+  credit_lan_cuoi: string | null;
+};
+
 type Viec = { id: string; kind: string; note: string | null; due_at: string; created_at: string };
 type NguoiBan = {
   id: string; name: string | null; seller_type: string; created_at: string; zalo_user_id: string | null;
@@ -173,6 +190,7 @@ function BanLamViec() {
   }>();
   const [hang, setHang] = useState<Ng[]>([]);
   const [tien, setTien] = useState<Tien[]>([]);
+  const [quota, setQuota] = useState<Quota | null>(null);
   const [viec, setViec] = useState<Viec[]>([]);
   const [nguoiBan, setNguoiBan] = useState<NguoiBan[]>([]);
   const [hangCtv, setHangCtv] = useState<HangCtv[]>([]);
@@ -264,7 +282,7 @@ function BanLamViec() {
 
   const load = async () => {
     const d7 = new Date(Date.now() - 7 * 86400e3).toISOString();
-    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt, buyRes, intRes] = await Promise.all([
+    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt, buyRes, intRes, qtRes] = await Promise.all([
       supabase
         .from("listings")
         .select("id, code, ward, price_vnd, price_raw, area_m2, description, location_raw, created_at")
@@ -324,7 +342,10 @@ function BanLamViec() {
       supabase
         .from("interests")
         .select("buyer_id, listing_id, listings(id, code, legacy_code, location_raw, price_raw, status)"),
+      // FR-192: chỉ admin gọi được (hàm tự kiểm la_admin); lỗi thì để null, không làm vỡ trang.
+      supabase.rpc("quota_tieu_hao"),
     ]);
+    setQuota(qtRes.error ? null : ((qtRes.data as Quota | null) ?? null));
     setBdsHot(hot.error ? null : ((hot.data ?? []) as BdsHot[]));
     setDoTre(tre.error ? null : ((tre.data as DoTre | null) ?? null));
     setGiayTo((gt.data ?? []) as unknown as GiayTo[]);
@@ -332,6 +353,7 @@ function BanLamViec() {
       ...(hot.error ? { bds_hot: hot.error.message } : {}),
       ...(tre.error ? { bot_do_tre: tre.error.message } : {}),
       ...(gt.error ? { giay_to: gt.error.message } : {}),
+      ...(qtRes.error ? { quota: qtRes.error.message } : {}),
     });
 
     setPending((pend.data ?? []) as TinCho[]);
@@ -674,6 +696,24 @@ function BanLamViec() {
       {loi.length > 0 && (
         <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 px-4 py-2.5 text-sm text-brand">
           Không đọc được: {loi.join(" · ")}
+        </div>
+      )}
+
+      {/* FR-192: model chết vì hết số dư / chạm trần thì bot VẪN trả lời bằng câu
+          mẫu tiền định — nhìn hội thoại không thấy khác, nên phải kêu ở đây. */}
+      {quota && (quota.het_credit || quota.capped_at) && (
+        <div className="mt-4 rounded-xl border-2 border-brand bg-brand/10 px-4 py-3 text-sm">
+          <p className="font-bold text-brand">
+            {quota.het_credit
+              ? "Model đang KHÔNG gọi được: tài khoản Anthropic hết số dư."
+              : "Bot đã chạm trần lượt gọi model trong ngày và tạm dừng gọi model."}
+          </p>
+          <p className="mt-1 text-navy">
+            {quota.het_credit
+              ? `${quota.credit_loi_24h} lượt bị từ chối trong 24 giờ qua, gần nhất ${new Date(quota.credit_lan_cuoi ?? Date.now()).toLocaleString("vi-VN")}. `
+              : `Dấu chạm trần lúc ${new Date(quota.capped_at ?? Date.now()).toLocaleString("vi-VN")}. `}
+            Bot vẫn trả lời khách bằng câu mẫu tiền định nên hội thoại trông như thường — đừng đọc giọng bot để chấm chất lượng lúc này.
+          </p>
         </div>
       )}
 
@@ -1583,6 +1623,11 @@ function BanLamViec() {
          ═══════════════════════════════════════════════════════════════ */}
       {activeTab === "ops" && (
         <section className="mt-6 space-y-6">
+          {/* FR-192: Quota tiêu hao */}
+          <div className="rounded-2xl border border-line bg-white p-6">
+            <TheQuota q={quota} tokenTien={tien[0] ? tienNgay(tien[0]) : null} />
+          </div>
+
           {/* Tình trạng Bot AI */}
           <div className="rounded-2xl border border-line bg-white p-6 space-y-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
@@ -1797,6 +1842,107 @@ function PhanTrang({ trang, soTrang, tong, setTrang }: {
         className="rounded-md border border-line px-3.5 py-1 font-semibold transition hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-line disabled:hover:text-mute bg-white">
         Sau -
       </button>
+    </div>
+  );
+}
+
+// FR-192: bốn cái trần trong một thẻ. Chưa đọc được thì nói thẳng, đừng hiện 0 —
+// "0" và "không biết" là hai chuyện khác nhau lúc đang chữa cháy.
+function TheQuota({ q, tokenTien }: { q: Quota | null; tokenTien: number | null }) {
+  if (!q) {
+    return (
+      <div className="space-y-2">
+        <h3 className="font-bold text-navy">Quota tiêu hao</h3>
+        <p className="text-xs text-mute">
+          Chưa đọc được. Hàm <code>quota_tieu_hao()</code> chỉ trả lời cho email có trong bảng <code>admins</code>.
+        </p>
+      </div>
+    );
+  }
+  const pt = q.tran_ngay > 0 ? Math.min(100, Math.round((q.luot_hom_nay / q.tran_ngay) * 100)) : 0;
+  const mauThanh = pt >= 90 ? "bg-brand" : pt >= 60 ? "bg-amber-500" : "bg-emerald-500";
+  const tranNguoiQuen = q.tran_ngay_nguoi * q.he_so_nguoi_quen;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2">
+        <div>
+          <h3 className="font-bold text-navy">Quota tiêu hao</h3>
+          <p className="text-xs text-mute mt-0.5">
+            Ngày {new Date(q.ngay).toLocaleDateString("vi-VN")} (giờ VN) · bốn cái trần của hệ thống
+          </p>
+        </div>
+        <span className="text-xs text-mute tabular-nums">
+          {q.token_hom_nay.toLocaleString("vi-VN")} chữ-máy hôm nay
+          {tokenTien !== null ? ` · ~${tokenTien.toFixed(2)}` : ""}
+        </span>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-baseline justify-between gap-2 text-sm">
+          <span className="font-semibold text-navy">Lượt gọi model hôm nay</span>
+          <span className="tabular-nums font-bold text-navy">
+            {q.luot_hom_nay.toLocaleString("vi-VN")} / {q.tran_ngay.toLocaleString("vi-VN")} ({pt}%)
+          </span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-line">
+          <div className={`h-full ${mauThanh}`} style={{ width: `${Math.max(pt, 1)}%` }} />
+        </div>
+        <p className="text-[11px] text-mute">
+          Chạm trần là bot NGỪNG gọi model tới hết ngày (chỉ còn câu mẫu). Sửa trần bằng secret{" "}
+          <code>DAILY_MODEL_CALL_CAP</code> trong Vault.
+          {q.capped_at ? ` Đã chạm trần lúc ${new Date(q.capped_at).toLocaleString("vi-VN")}.` : ""}
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-line p-3 bg-slate-50/50">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+          <span className="font-semibold text-navy">Số dư tài khoản model</span>
+          <span className={`text-xs font-bold ${q.het_credit ? "text-brand" : "text-emerald-700"}`}>
+            {q.het_credit ? `HẾT SỐ DƯ — ${q.credit_loi_24h} lượt bị từ chối / 24h` : "chưa thấy lượt nào bị từ chối"}
+          </span>
+        </div>
+        <p className="mt-1 text-[11px] text-mute">
+          Anthropic không cho hỏi số dư bằng API, nên đây đọc dấu vết trong sổ lỗi: lượt gọi model bị
+          trả 400 vì hết số dư.
+          {q.credit_lan_cuoi ? ` Lần cuối ${new Date(q.credit_lan_cuoi).toLocaleString("vi-VN")}.` : ""}
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+          <span className="font-semibold text-navy">Người nhắn nhiều nhất (24 giờ)</span>
+          <span className="text-xs text-mute tabular-nums">
+            trần {q.tran_gio_nguoi}/giờ · {q.tran_ngay_nguoi}/ngày · người quen ×{q.he_so_nguoi_quen} ({tranNguoiQuen}/ngày)
+          </span>
+        </div>
+        {q.nguoi_dot_nhieu.length === 0 ? (
+          <p className="text-xs text-mute">Chưa có ai nhắn trong 24 giờ qua.</p>
+        ) : (
+          <ul className="divide-y divide-line text-xs">
+            {q.nguoi_dot_nhieu.map((n) => {
+              const tran = n.nguoi_quen ? tranNguoiQuen : q.tran_ngay_nguoi;
+              const sat = n.trong_24h >= tran * 0.8;
+              return (
+                <li key={n.uid} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                  <span className="font-mono text-[11px] text-navy truncate max-w-[45%]">{n.uid}</span>
+                  <span className="text-[11px] text-mute">{n.nguoi_quen ? "người quen" : "người lạ"}</span>
+                  <span className={`tabular-nums font-bold ${sat ? "text-brand" : "text-navy"}`}>
+                    {n.trong_24h}/{tran} ngày
+                  </span>
+                  <span className="tabular-nums text-mute text-[11px] w-24 text-right">
+                    {n.trong_gio ?? 0}/{n.nguoi_quen ? q.tran_gio_nguoi * q.he_so_nguoi_quen : q.tran_gio_nguoi} giờ này
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {q.so_nguoi_cham_tran > 0 && (
+          <p className="text-[11px] font-bold text-brand">
+            {q.so_nguoi_cham_tran} người đã vượt trần ngày — bot im với họ tới khi cửa sổ 24 giờ trượt qua.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

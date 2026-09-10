@@ -169,6 +169,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-189 | UF-10, UF-04 | — | `20260909n`: `conversations.human_hold`, `ensure_seller/buyer_conversation` +`c_human_hold`, RPC `giu_khach`; `chat-reply` lệnh "#mã giữ / trả bot", `humanActive`/buyer gate đọc `human_hold`; `app/admin/tin-nhan` nhãn + nút. Kiểm: e2e N20/N20b/N20c | — |
 | FR-190 | UF-11 | — | `20260909n`: `ctvs.khu_vuc`, `app_config.ctv_tran_ca`, `ctv_dang_ganh()`, `chon_ctv()`, `route_info_request`, `assign_ctv_round_robin`. Kiểm: TS-KYGUI-35 (DB thật) | — |
 | FR-191 | UF-10 | — | `20260909n`: `seller_keep_alive_tick()` + cron `seller-keep-alive-tick` 02:30 UTC; `ask-seller` lọc `expired` (FR-186 o). Kiểm: TS-KYGUI-35 | — |
+| FR-192 | UF-11 | WF-13 | `20260910a`: `quota_tieu_hao()` (trần ngày từ Vault, trần theo người từ `chat_quota`, dấu hết số dư từ `bot_errors`); web `app/admin/page.tsx` thẻ Quota tiêu hao + băng cảnh báo. Kiểm: TS-QUOTA-01…03 | — |
 | FR-187 | UF-10 | WF-ADMIN | `20260909i`: `jsonb_bo_rong(jsonb)`, `boc_tach_nhom(listings)` + `boc_tach_nhom(uuid)`, view `boc_tach_v`, `so.boc_tach`; `components/admin/BocTachNhom.tsx` (`NHAN_NHOM`, `sapNhom`, `useBocTach`, `taiJsonTin`); `app/admin/ro-hang/json/page.tsx` đọc `boc_tach_v`; `app/admin/ro-hang/page.tsx` nút JSON + `DongJson`. Kiểm: TS-KYGUI-33 (DB thật) | — |
 | FR-97 | | — | — | — |
 
