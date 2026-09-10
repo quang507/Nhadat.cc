@@ -3638,9 +3638,16 @@ Deno.serve(async (req) => {
     // từ chối, CTV không được báo về một giao dịch đã chốt.
     // Nên đẩy nguyên hai điều kiện lọc đó xuống `mo_viec_can_nguoi_that`
     // (20260905h) — khoá tư vấn theo từng khách, luật giữ nguyên từng chữ.
+    // Zalo ID che còn 4 số cuối, và tin cuối đi qua `locLienHe` — y như hai chỗ
+    // khác trong file này (1204, 1515). Bản cũ ghi NGUYÊN Zalo ID và nguyên văn
+    // câu khách vào `note`, mà `note` chảy thẳng ra `escalation-feed` rồi ra
+    // email [VOICE]; đúng ngữ cảnh này (khách xin gọi điện) câu đó thường chứa
+    // số điện thoại của chính họ (review 10/09, mục A4).
+    const uidChe = `Zalo …${externalUserId.slice(-4)}`;
+    const tinCuoi = locLienHe(text.slice(0, 120), true);
     const note = muonGoi
-      ? `VOICE: ${externalUserId} muốn gọi điện${buyer.name ? ` (${buyer.name})` : ""}. Tin cuối: "${text.slice(0, 120)}". Anh/chị gọi lại giúp em`
-      : `🙋 khách cần người thật${buyer.name ? ` (${buyer.name})` : ""}. Tin cuối: "${text.slice(0, 120)}"`;
+      ? `VOICE: ${uidChe} muốn gọi điện${buyer.name ? ` (${buyer.name})` : ""}. Tin cuối: "${tinCuoi}". Anh/chị gọi lại giúp em`
+      : `🙋 khách cần người thật${buyer.name ? ` (${buyer.name})` : ""}. Tin cuối: "${tinCuoi}"`;
     const [, { error: nhErr }] = await Promise.all([
       client.from("conversations")
         .update({ needs_human: true, needs_human_at: new Date().toISOString() })
