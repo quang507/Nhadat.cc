@@ -347,7 +347,10 @@ const cauNhan = (t: "ccrb" | "nmg") =>
  */
 function tenDuAnTrongCau(t: string): string | null {
   const m = /(?:dự án|du an|khu đô thị|khu do thi|khu)\s+([\p{L}\p{N}'’.\- ]{3,45})/iu.exec(t);
-  const ten = m?.[1]?.split(/[,.;\n]/)[0]?.trim() ?? "";
+  // Cắt luôn phần địa bàn dính đuôi: "Lam Sơn Riverside quận 4" → "Lam Sơn Riverside".
+  const ten = (m?.[1]?.split(/[,.;\n]/)[0] ?? "")
+    .replace(/\s+(quận|quan|phường|phuong|huyện|huyen|thành phố|tp)\b.*$/iu, "")
+    .trim();
   return ten.length >= 3 && ten.split(/\s+/).length <= 6 ? ten : null;
 }
 
@@ -2267,6 +2270,10 @@ Deno.serve(async (req) => {
               p_answer: f.answer, p_source: "seller_chat",
             });
             if (csErr) await ghiLoi(client, "chat-reply ghi_fact_listing(chuyen sang)", csErr.message);
+            // FR-195: nhánh TRẢ LỜI LỆCH cũng phải chép sang kho dự án. Bắt 10/09:
+            // chủ nhà đang được hỏi phường mà kể phí quản lý — fact vào tin đúng,
+            // nhưng hàng chờ duyệt trống vì chỗ này chưa nối dây.
+            else await chepSangDuAn(f.question, f.answer);
           }
         } else if (kq.loai === "lech" && pendingReq.question !== "duyet_tin") {
           // FR-177 e: không nhận ra fact nào thì VẪN ghi nguyên văn (`bo_sung`)
