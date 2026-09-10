@@ -131,18 +131,30 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   trong khi bảng thật có 1005 dòng: file ảnh còn nguyên trong Storage mà không
   gì nói tấm nào của tin nào, đúng kịch bản OPEN-47. Đổi dữ liệu lớn thì sao lưu
   lại, và đọc `manifest.json` xác nhận SỐ DÒNG chứ đừng nhìn thư mục thấy đủ file.
-  **Chỗ cất và nhịp dọn (10/09/2026).** Đích mặc định nay là
-  `003-Content/nhadat-backup/sao-luu-day-du/<ngày-giờ>/`, KHÔNG còn đổ thẳng ra
-  gốc `nhadat-backup/` — gốc là chỗ sếp mở ra đọc (`DOC-TRUOC.md`, `du-an.json`,
-  `tin/`), mỗi lượt chạy đổ thêm một thư mục 35 file cạnh đó thì thứ đáng đọc
-  chìm nghỉm (chủ dự án: "tao thấy hơi nhiều file"). Chạy xong script tự dọn,
-  giữ MỘT bản mỗi ngày trong 7 ngày gần nhất, và chỉ dọn khi chuyến đó `day_du`
-  — chuyến hụt thì bản cũ là thứ duy nhất còn dùng được, không được đụng vào.
-  Đo 10/09 sau khi dọn: 230 file · 32,5 MB → 71 file · 8,0 MB.
-  Nhịp chạy: Task Scheduler **trên máy Quang Lê Bá Duy** gọi
-  `003-Content/nhadat-sao-luu.cmd` lúc **09:00 và 15:00** mỗi ngày (log ở
-  `nhadat-sao-luu.log`). Máy đó tắt là lượt đó KHÔNG chạy và không ai được báo —
-  10/09 lượt 15:00 hụt đúng vì vậy. Máy này chưa có tác vụ nào.
+  **Chỗ cất, hình dạng và nhịp chạy (10/09/2026 chiều).** Kho nằm ở
+  `003-Content/nhadat-backup/`, chia theo VIỆC chứ không theo kiểu dữ liệu (chủ
+  dự án: "chia cho các mục rổ hàng, người bán, người mua, dự án đi"):
+  `ro-hang/<MÃ TIN>/{tin.json,hoi-dap.json,anh/}` + `ro-hang.json` mục lục ·
+  `nguoi-ban/` (có SĐT) · `nguoi-mua/` (**không bao giờ có SĐT** — NFR-07) ·
+  `du-an/` + `theo-tinh/` · `he-thong/` (bản sao 33 bảng: `moi-nhat/` +
+  `theo-ngay/<ngày>/` giữ 7 ngày) · `kich-ban-chat/` · `DOC-TRUOC.md`.
+  `scripts/xuat-onedrive.mjs` dựng bốn thư mục đầu; `--day-du` chạy thêm
+  `sao-luu.mjs` vào `he-thong/`.
+  **Nhịp: 10 phút một lần**, Task Scheduler *trên máy này* ("Nhadat - dong bo
+  OneDrive" → `003-Content/nhadat-dong-bo.cmd`, log `nhadat-dong-bo.log` cắt còn
+  500 dòng mỗi lượt); phần `he-thong/` chỉ chạy ở lượt đầu mỗi giờ. Tác vụ cũ
+  09:00 & 15:00 trên máy Quang Lê Bá Duy (`nhadat-sao-luu.cmd`) vẫn còn, nay đổ
+  vào `he-thong/theo-ngay/`.
+  **Ba luật khiến nhịp 10 phút không thành gánh nặng — sửa script thì đừng phá:**
+  (1) CHỈ GHI KHI NỘI DUNG ĐỔI (`ghiNeuKhac`) — ghi đè cả kho mỗi 10 phút là
+  ~1,1 GB đẩy lên OneDrive mỗi ngày cho dữ liệu gần như đứng yên; lượt chạy
+  không đổi gì phải in `0 file ghi mới`. (2) Ảnh đã tải thì không tải lại.
+  (3) **Không xoá theo kho**: tin biến mất dưới DB thì thư mục ở đây chuyển sang
+  `ro-hang/_da-xoa/`, vì kho đồng bộ 10 phút một lần sẽ nhân bản một lượt
+  `delete` nhỡ tay trong vòng mười phút — và bản sao thành bản sao của tai nạn.
+  Cùng lý do đó, `he-thong/theo-ngay/` vẫn giữ ảnh chụp từng ngày dù đã có
+  `moi-nhat/`. `sao-luu.mjs` tự dọn: giữ 1 bản/ngày × 7 ngày, và CHỈ dọn khi
+  chuyến đó `day_du`.
   `soat-migration.mjs` so DB ↔ repo. `phuc-hoi.mjs` + `soat-phuc-hoi.mjs` nạp
   bản sao vào một DB RỖNG rồi chấm đạt/không (quy trình ở `docs/12`).
   `xuat-ro-hang.mjs` xuất rổ hàng ra thứ NGƯỜI đọc được — mỗi tin một thư mục
@@ -151,9 +163,8 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   thẳng chữ `KHONG_PHAI_BAN_SAO_LUU`.
   `thu-du-an.mjs` nạp KHO DỰ ÁN (1.639 dự án HCM/Bình Dương/Long An, nguồn mogi
   theo lệnh chủ dự án 10/09) — chỉ lấy DỮ KIỆN, mô tả viết lại từ dữ kiện, giữ
-  `source_url`. `xuat-onedrive.mjs` dựng thư mục GỌN cho sếp xem:
-  `du-an.json`, `tin/<mã>/{tin.json,hoi-dap.json,anh/}`, `nguoi-ban.json`,
-  `DOC-TRUOC.md`; bản sao lưu thật nằm riêng ở `sao-luu-day-du/`.
+  `source_url`. `xuat-onedrive.mjs` dựng kho GỌN cho sếp xem
+  (hình dạng và nhịp chạy ở khối "Chỗ cất" bên trên).
   `xuat-tin-hoi-dap.mjs` (10/09 sáng) đã bị nó thay, dùng bản mới.
 
 **Prompt bot có HAI BẢN, DB đè code.** Bản trong git là bot/supabase/functions/_shared/prompts.ts (có PR, có review); bản sửa tay là bảng bot_prompts trong Supabase Table Editor — sửa ở đó bot đổi giọng trong vòng 60 giây, KHÔNG cần deploy, và nó ĐÈ bản trong code. Vì đè nên hai bên trôi xa nhau mà không ai thấy: 10/09 cau_hoi_mau trong DB cũ hơn code, bot chạy bộ câu hỏi cũ suốt. Nay bun run prompt so md5 hai bên và in khoá nào lệch; --day đẩy code lên DB, --keo in bản DB ra để dán ngược vào code rồi mở PR. Chạy nó sau mỗi lần sửa prompt ở một trong hai nơi.
