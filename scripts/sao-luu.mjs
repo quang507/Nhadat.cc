@@ -106,7 +106,7 @@ if (!KHOA) {
 // bên dưới hỏi DB mỗi lần chạy, thiếu một bảng là DỪNG. Bỏ sót không còn im.
 const BANG = [
   // (`ratings` đã bị xoá theo OPEN-23 ngày 27/08/2026.)
-  "admins", "app_config", "bot_errors", "bot_health", "bot_prompts",
+  "admins", "app_config", "bot_errors", "bot_health", "bot_prompts", "bridge_dang_nhap",
   "bot_usage", "buyers", "chat_quota", "conversations", "ctv_daily_reports",
   "ctvs", "curated_lists", "deals", "inbound_events", "inbound_ledger",
   "info_requests", "interests", "listing_facts", "listing_media",

@@ -136,7 +136,7 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   dự án: "chia cho các mục rổ hàng, người bán, người mua, dự án đi"):
   `ro-hang/<MÃ TIN>/{tin.json,hoi-dap.json,anh/}` + `ro-hang.json` mục lục ·
   `nguoi-ban/` (có SĐT) · `nguoi-mua/` (**không bao giờ có SĐT** — NFR-07) ·
-  `du-an/` + `theo-tinh/` · `he-thong/` (bản sao 33 bảng: `moi-nhat/` +
+  `du-an/` + `theo-tinh/` · `he-thong/` (bản sao 34 bảng: `moi-nhat/` +
   `theo-ngay/<ngày>/` giữ 7 ngày) · `kich-ban-chat/` · `DOC-TRUOC.md`.
   `scripts/xuat-onedrive.mjs` dựng bốn thư mục đầu; `--day-du` chạy thêm
   `sao-luu.mjs` vào `he-thong/`.

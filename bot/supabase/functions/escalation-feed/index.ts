@@ -4,9 +4,14 @@
 // gửi → ack lại. FR-149: kéo cả kind `report` (báo cáo CTV 17h) về Zalo admin.
 // POST { action: "pull" } → { items: [{id, note, text, name, zalo_user_id, phone}] }
 // POST { action: "ack", id } → { ok: true }
+// FR-202 (11/09): pull trả thêm lời nhắc nudge ĐÃ SOẠN SẴN (`noi_dung_gui`) cho
+// người mua hoặc chủ nhà — chưa có OA thì đường ra duy nhất là acc clone.
+// FR-203 (11/09): POST { action: "qr", trang_thai, qr_png? } — bridge báo trạng
+// thái đăng nhập + ảnh QR để /admin hiện ra quét; pull trả `quet_lai` khi admin
+// bấm "Đăng nhập lại".
 // Bảo vệ thêm (tuỳ chọn): đặt secret BRIDGE_SECRET trong Vault thì mọi request
 // phải kèm header x-bridge-secret khớp; chưa đặt thì chỉ cần anon key như cũ.
-import { escalationText, jsonResponse, serviceClient } from "../_shared/claude.ts";
+import { escalationText, ghiLoi, jsonResponse, serviceClient } from "../_shared/claude.ts";
 import { congBiMat } from "../_shared/gate.ts";
 
 const KINDS = ["escalation", "report"];
@@ -43,6 +48,30 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true });
   }
 
+  // FR-203: bridge báo trạng thái đăng nhập acc clone (+ ảnh QR khi chờ quét).
+  // Ảnh QR nhạy — quét bằng acc nào thì acc đó thành acc bot — nên chỉ nhận
+  // đúng một data URL PNG, và mọi trạng thái khác `cho_quet` đều XOÁ ảnh.
+  if (action === "qr") {
+    const TT = ["dang_nhap", "cho_quet", "da_quet", "het_han", "tu_choi"];
+    const tt = String(body.trang_thai ?? "");
+    if (!TT.includes(tt)) return jsonResponse({ error: "trang_thai sai" }, 400);
+    const anh = typeof body.qr_png === "string" ? body.qr_png : "";
+    const qr = tt === "cho_quet" && anh.length <= 200_000 &&
+        /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(anh)
+      ? anh
+      : null;
+    const { error: qErr } = await client.from("bridge_dang_nhap").update({
+      trang_thai: tt,
+      qr_png: qr,
+      // Bridge đã vào luồng QR hoặc đã đăng nhập xong = yêu cầu quét lại đã làm.
+      ...(tt === "cho_quet" || tt === "dang_nhap" ? { yeu_cau_quet_lai: false } : {}),
+      ghi_chu: body.ghi_chu ? String(body.ghi_chu).slice(0, 200) : null,
+      cap_nhat: new Date().toISOString(),
+    }).eq("id", 1);
+    if (qErr) await ghiLoi(client, "escalation-feed qr", qErr.message);
+    return jsonResponse({ ok: !qErr });
+  }
+
   if (action === "ack") {
     const id = String(body.id ?? "");
     if (!id) return jsonResponse({ error: "id bắt buộc" }, 400);
@@ -53,14 +82,16 @@ Deno.serve(async (req) => {
     const learned = body.zalo_user_id ? String(body.zalo_user_id).trim().slice(0, 128) : "";
     if (learned) {
       const { data: r } = await client.from("reminders")
-        .select("seller_id, ctv_id").eq("id", id).maybeSingle();
+        .select("seller_id, ctv_id, buyer_id").eq("id", id).maybeSingle();
       if (r?.seller_id) {
         await client.from("sellers").update({ zalo_user_id: learned })
           .eq("id", r.seller_id).is("zalo_user_id", null);
       } else if (r?.ctv_id) {
         await client.from("ctvs").update({ zalo_user_id: learned })
           .eq("id", r.ctv_id).is("zalo_user_id", null);
-      } else {
+      } else if (!r?.buyer_id) {
+        // (Lời nhắc NGƯỜI MUA — FR-202 — vốn có sẵn uid, không có gì để học, và
+        //  cũng không phải việc của admin nên không rơi xuống nhánh này.)
         // SEC-03 — BỎ nhánh tự học Zalo ID của admin.
         // Bản trước: `client.from("admins").update({zalo_user_id: learned})
         //             .is("zalo_user_id", null)` — KHÔNG có mệnh đề khoá nào.
@@ -88,9 +119,32 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Dòng nudge soạn sẵn (`noi_dung_gui`, 20260911b) cũng ack ở đây. Ghi tin
+    // vào hội thoại ĐÚNG LÚC NÀY — sau khi bridge báo đã gửi — chứ không phải
+    // lúc nudge soạn: ghi lúc soạn là `so.hoi_thoai` hiện một câu bot "đã nói"
+    // mà khách chưa từng nhận (đúng cái lỗi C1 đã sửa ở nhánh OA).
+    const { data: rr } = await client.from("reminders")
+      .select("kind, noi_dung_gui, buyer_id, seller_id").eq("id", id).maybeSingle();
+    if (rr?.noi_dung_gui && !KINDS.includes(rr.kind)) {
+      // Cùng cách chọn hội thoại với nudge (nhánh OA): cuộc mới nhất của đúng
+      // người đó. Chủ nhà chưa từng có cuộc nào thì thôi — không đẻ cuộc rỗng.
+      const cot = rr.buyer_id ? "buyer_id" : "seller_id";
+      const ai = rr.buyer_id ?? rr.seller_id;
+      const { data: cv } = ai
+        ? await client.from("conversations").select("id").eq(cot, ai)
+          .order("started_at", { ascending: false }).limit(1).maybeSingle()
+        : { data: null };
+      if (cv?.id) {
+        const { error: mErr } = await client.from("messages")
+          .insert({ conversation_id: cv.id, sender: "bot", body: rr.noi_dung_gui });
+        if (mErr) await ghiLoi(client, "escalation-feed ghi tin nhac", mErr.message);
+      }
+    }
+
     await client.from("reminders")
       .update({ status: "sent", sent_at: new Date().toISOString() })
-      .eq("id", id).in("kind", KINDS);
+      .eq("id", id)
+      .or(`kind.in.(${KINDS.join(",")}),noi_dung_gui.not.is.null`);
     return jsonResponse({ ok: true, learned_zalo_id: !!learned });
   }
 
@@ -100,6 +154,16 @@ Deno.serve(async (req) => {
     .from("reminders")
     .select("id, kind, note, ctv_id, seller_id, ctvs(name, zalo_user_id, phone), sellers(name, zalo_user_id, phone)")
     .eq("status", "pending").in("kind", KINDS)
+    .lte("due_at", new Date().toISOString())
+    .limit(10);
+  // Lời nhắc nudge đã SOẠN SẴN (lịch xem, lời hứa, báo lại câu trả lời…) mà
+  // chưa có OA để gửi — chủ dự án 11/09: "dùng zalo clone gửi cho id zalo".
+  // Người nhận là người mua HOẶC chủ nhà, nên phải tra cả `buyers`. KHÔNG bao
+  // giờ trả SĐT người mua (NFR-07): chưa có Zalo ID thì nudge đã không cất tin.
+  const { data: soanSan } = await client
+    .from("reminders")
+    .select("id, kind, note, noi_dung_gui, buyer_id, seller_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id, phone)")
+    .eq("status", "pending").not("noi_dung_gui", "is", null)
     .lte("due_at", new Date().toISOString())
     .limit(10);
   // Đích admin chỉ cần khi có việc — 99% lượt kéo là rỗng, đọc `admins` ở đó
@@ -131,5 +195,22 @@ Deno.serve(async (req) => {
       phone: uid ? null : sdt,
     };
   });
-  return jsonResponse({ items });
+  for (const r of soanSan ?? []) {
+    const mua = r.buyers as Target;
+    const ban = r.sellers as Target;
+    const uid = mua?.zalo_user_id ?? ban?.zalo_user_id ?? null;
+    // Người mua: KHÔNG BAO GIỜ trả SĐT (NFR-07) — họ tới bằng Zalo nên luôn có
+    // uid. Chủ nhà: như SEC-07 ở trên, chỉ trả SĐT khi chưa biết uid.
+    const phone = mua ? null : uid ? null : ban?.phone ?? null;
+    if (!uid && !phone) continue;
+    items.push({
+      id: r.id, note: r.note, text: String(r.noi_dung_gui),
+      name: mua?.name ?? ban?.name ?? "khách", zalo_user_id: uid, phone,
+    });
+  }
+
+  // FR-203: admin bấm "Đăng nhập lại" ở /admin → bridge bỏ phiên, vào luồng QR.
+  const { data: dn } = await client.from("bridge_dang_nhap")
+    .select("yeu_cau_quet_lai").eq("id", 1).maybeSingle();
+  return jsonResponse({ items, quet_lai: !!dn?.yeu_cau_quet_lai });
 });

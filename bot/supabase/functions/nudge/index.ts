@@ -254,10 +254,52 @@ Deno.serve(async (req) => {
   // ---- 1. Reminder tới hạn: lời hứa / nhắc lịch xem / follow-up căn (FR-32) /
   //         tin mới khớp (FR-64) / cảm nhận sau xem (FR-56) / căn đã chốt
   //         (FR-108) / xin sao (FR-65) ----
+  // FR-202 d: nhắc CHỦ NHÀ trước buổi xem — người mở cửa là họ, mà trước đây
+  // chỉ khách được nhắc. Một dòng `reminders` riêng, đích `seller_id`, tin mẫu
+  // cố định (không gọi model) cất sẵn trong `noi_dung_gui`; bridge Zalo clone
+  // kéo qua escalation-feed như mọi lời nhắc lúc chưa có OA.
+  // `viewing_id` để TRỐNG có chủ ý: chỉ mục `reminders_mot_nhac_moi_buoi_xem_idx`
+  // cho mỗi buổi xem đúng MỘT nhắc pending (của khách), và trigger hỏi cảm nhận
+  // (FR-56) chỉ chạy khi có `buyer_id` — dòng của chủ nhà không được đẻ ra câu
+  // "xem rồi thấy sao ạ" gửi nhầm cho chủ.
+  type ChuNha = { name?: string | null; zalo_user_id?: string | null; phone?: string | null } | null;
+  type VwChu = {
+    time_text?: string | null;
+    status?: string | null;
+    listings?: { id?: string; code?: string | null; seller_id?: string | null; sellers?: ChuNha } | null;
+  } | null;
+  const nhacChuNha = async (r: { note: string | null; viewings: unknown }) => {
+    const vw = r.viewings as VwChu;
+    const l = vw?.listings;
+    const chu = l?.sellers;
+    if (!vw || !l?.id || !l.seller_id || !chu) return;
+    if (vw.status === "cancelled" || vw.status === "done") return;
+    // Không Zalo ID lẫn SĐT thì bridge không có đường nào tới — đừng đẻ dòng treo.
+    if (!chu.zalo_user_id && !chu.phone) return;
+    if (chu.zalo_user_id?.startsWith("TEST")) return;
+    const note = `chủ nhà: ${r.note ?? `lịch xem #${l.code ?? ""}`}`;
+    // Lượt thử lại của nhắc khách (báo hỏng, lùi dần) chạy lại đúng chỗ này.
+    const { count } = await client.from("reminders")
+      .select("id", { count: "exact", head: true })
+      .eq("kind", "viewing").eq("seller_id", l.seller_id).eq("note", note)
+      .neq("status", "cancelled");
+    if ((count ?? 0) > 0) return;
+    const goi = chu.name ? `Anh/chị ${chu.name}` : "Anh/chị";
+    const gio = vw.time_text ?? "";
+    const text = `${goi} ơi, em là ${tenTroLy(chu.zalo_user_id ?? l.seller_id)} nè. ` +
+      `Em nhắc anh/chị: có khách hẹn xem căn ${l.code ? `#${l.code}` : "của mình"}${gio ? ` lúc ${gio}` : ""}. ` +
+      `Anh/chị sắp xếp mở cửa giúp em nha, đổi giờ thì nhắn em liền ạ 🏠`;
+    const { error } = await client.from("reminders").insert({
+      kind: "viewing", seller_id: l.seller_id, listing_id: l.id,
+      due_at: new Date().toISOString(), note, noi_dung_gui: text,
+    });
+    if (error) await ghiLoi(client, "nudge nhac chu nha", error.message);
+  };
+
   const DUE_KINDS = ["promise", "viewing", "followup", "match", "feedback", "sold", "rating"];
   const dueClaimRes = dry_run
     ? await client.from("reminders").select("id")
-      .eq("status", "pending").in("kind", DUE_KINDS)
+      .eq("status", "pending").in("kind", DUE_KINDS).is("noi_dung_gui", null)
       .lte("due_at", new Date().toISOString()).limit(5)
     : await client.rpc("nhan_viec_nhac", {
       p_kinds: DUE_KINDS, p_limit: 5, p_worker: workerId,
@@ -270,7 +312,7 @@ Deno.serve(async (req) => {
   // (match/feedback/followup) và `viewings → listings` (viewing).
   const { data: due } = dueIds.length
     ? await client.from("reminders")
-      .select("id, kind, note, buyer_id, seller_id, listing_id, viewing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id), listings(code, lat, lng), viewings(listings(code, lat, lng))")
+      .select("id, kind, note, buyer_id, seller_id, listing_id, viewing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id), listings(code, lat, lng), viewings(time_text, status, listings(id, code, lat, lng, seller_id, sellers(name, zalo_user_id, phone)))")
       .in("id", dueIds)
     : { data: [] as never[] };
 
@@ -352,19 +394,37 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (!dry_run && r.kind === "viewing" && r.buyer_id) await nhacChuNha(r);
+
     let sent = "none";
     if (!dry_run) {
       if (who?.zalo_user_id && oaToken && !who.zalo_user_id.startsWith("TEST")) {
         sent = (await sendZalo(oaToken, who.zalo_user_id, text)) ? "zalo_oa" : "zalo_error";
       }
-      // CHƯA CÓ OA thì đây KHÔNG phải "đã gửi" (review 10/09, mục C1). Kênh
-      // đang chạy thật là BRIDGE Zalo cá nhân, nó kéo `reminders` còn `pending`;
-      // đánh `sent` ở đây là lời nhắc bốc hơi — khách chốt lịch xem 9h sáng mai
-      // không nhận gì, mà sổ ghi là đã nhắc, và `messages` còn có dòng "bot"
-      // nói câu đó nên đọc lại hội thoại cũng không thấy sai. Khối `escalation`
-      // ngay phía trên xử đúng (để bridge kéo); khối này là chỗ duy nhất quên.
+      // CHƯA CÓ OA → GỬI QUA ZALO CLONE (chủ dự án 11/09: "có zalo clone rồi mà,
+      // dùng zalo clone gửi cho id zalo"). Cất tin đã soạn vào `noi_dung_gui`,
+      // nhả hợp đồng thuê, GIỮ `pending`; `escalation-feed` đưa nó cho bridge,
+      // bridge gửi bằng acc clone tới đúng Zalo ID rồi ack → lúc đó mới `sent`.
+      //
+      // Hai bản trước đều sai theo hai kiểu khác nhau:
+      //   · đánh `sent` ngay dù không gửi đi đâu (review 10/09, mục C1);
+      //   · bản vá C1 "để pending cho bridge kéo" — nhưng bridge chỉ kéo cửa
+      //     escalation-feed, mà cửa đó KHÔNG có loại này, nên không ai kéo; còn
+      //     `nhan_viec_nhac` nhận lại sau 5 phút và model soạn lại mãi mãi.
+      // `nhan_viec_nhac` nay bỏ qua dòng đã có `noi_dung_gui` (20260911b).
       if (sent === "none" && who?.zalo_user_id && !who.zalo_user_id.startsWith("TEST")) {
-        out.push({ kind: r.kind, id: r.id, text, sent, cho_bridge: true });
+        const { error: cbErr } = await client.from("reminders")
+          .update({ noi_dung_gui: text, locked_at: null, locked_by: null })
+          .eq("id", r.id);
+        if (cbErr) await ghiLoi(client, "nudge cat tin cho bridge", cbErr.message);
+        out.push({ kind: r.kind, id: r.id, text, sent: "cho_bridge" });
+        continue;
+      }
+      // Không OA mà cũng không biết Zalo ID người nhận → không có đường nào
+      // tới nơi. Báo hỏng (lùi dần, quá 5 lượt thành `dead`) thay vì đánh `sent`.
+      if (sent === "none" && !who?.zalo_user_id) {
+        await baoHongNhac(r.id, "chưa có OA và người nhận chưa có zalo_user_id");
+        out.push({ kind: r.kind, id: r.id, text, sent, retry: true });
         continue;
       }
       if (sent === "zalo_error") {
