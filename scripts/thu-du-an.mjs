@@ -237,7 +237,9 @@ const rows = tatCa.map((d) => ({
   priority: 50,
 }));
 
-const ra = join(HERE, "..", "..", "nhadat-backup", `du-an-${new Date().toISOString().slice(0, 10)}.json`);
+// 11/09/2026: bỏ sao lưu → không còn thư mục nhadat-backup. Bản chụp dự án
+// crawl được ghi ra thư mục tạm của máy — chỉ để soi lại, không phải sao lưu.
+const ra = join(process.env.TMPDIR ?? process.env.TEMP ?? "/tmp", `du-an-${new Date().toISOString().slice(0, 10)}.json`);
 mkdirSync(dirname(ra), { recursive: true });
 writeFileSync(ra, JSON.stringify(rows, null, 1));
 console.log(`\n${rows.length} dự án → ${ra}`);

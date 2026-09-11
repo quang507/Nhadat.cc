@@ -31,10 +31,10 @@ nvidia-smi   # phải thấy RTX 4060 — driver Windows đã có CUDA cho WSL
 ```bash
 # mỗi lần train (repo nằm ở OneDrive, WSL đọc qua /mnt/c/…)
 cd "/mnt/c/Users/quang/OneDrive - Nha Dat Co Ltd/Team Mktg - CAG mktg/003-Content/Aioinhadat"
-node scripts/xuat-mau-cau.mjs            # → nhadat-backup/mau-cau/mau-cau.sharegpt.jsonl
+node scripts/xuat-mau-cau.mjs            # → train/out/mau-cau/mau-cau.sharegpt.jsonl
 source ~/unsloth/bin/activate
 python train/unsloth_qwen.py \
-  --data nhadat-backup/mau-cau/mau-cau.sharegpt.jsonl \
+  --data train/out/mau-cau/mau-cau.sharegpt.jsonl \
   --model unsloth/Qwen2.5-3B-Instruct-bnb-4bit \
   --out train/out/qwen25-3b-thai
 ```
@@ -44,7 +44,8 @@ Ra gì: `train/out/<tên>/lora/` (adapter, vài chục MB), `…/gguf/` (Q4_K_M,
 ngữ cảnh trong tập kiểm (10 % giữ lại, không train). Đọc `thu.txt` là câu trả
 lời cho "giọng có ra không".
 
-`train/out/` và `nhadat-backup/` đều gitignore: mẫu chứa chat thật.
+`train/out/` gitignore: mẫu chứa chat thật (trước 11/09/2026 mẫu nằm ở
+`nhadat-backup/`, thư mục đó bỏ cùng sao lưu).
 
 ## Gemini Flash tuning
 
