@@ -251,9 +251,12 @@ lệch bản thật ở chỗ nào thì bộ e2e đo sai ở chỗ đó.
 cũ đi — `20260907h` merge hôm trước mà `schema.sql` không hề có `diem_tin`,
 `can_chu_duyet`. Đúng hình lỗi OPEN-46 nhưng thiếu NGƯỢC (repo thiếu so với DB),
 nên `soat-migration.mjs` không thấy. Phép soát hàm ↔ `schema.sql` trong
-`soat-truy-vet.sh` đã **bỏ cùng sao lưu 11/09/2026** — từ đây không cổng nào
-kêu khi nó tụt. Trước 11/09 file được ghi mỗi lần chạy `sao-luu.mjs`; nay sinh
-lại bằng tay, cần khoá service_role (lệnh này chưa chạy thử lần nào):
+`soat-truy-vet.sh` (cổng CI "Tài liệu — truy vết ID") **vẫn giữ** sau khi bỏ
+sao lưu 11/09/2026 — không còn script sinh lại nên nó là lưới duy nhất. Migration
+tạo HÀM MỚI thì thêm tay vào `schema.sql`: chạy trên DB
+`select pg_get_functiondef('public.<hàm>'::regprocedure)` rồi dán vào đúng chỗ,
+kèm trigger nếu có (PR #104 làm vậy cho `listings_doi_ma_theo_quan_loai`). Sinh
+lại cả file thì cần khoá service_role (lệnh dưới chưa chạy thử lần nào):
 
 ```bash
 curl -s -X POST "https://tbcdpupiarkuxtntmosl.supabase.co/rest/v1/rpc/xuat_schema" \

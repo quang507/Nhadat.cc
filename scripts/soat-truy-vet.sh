@@ -175,6 +175,34 @@ fi
 
 # Bỏ cùng sao lưu 11/09/2026: soát bảng migration ↔ BANG (sao-luu.mjs) và hàm migration ↔ schema.sql.
 
+# ── schema.sql có theo kịp migration không? ─────────────────────────────────
+# 11/09/2026: sao lưu đã bỏ, nên KHÔNG còn script sinh lại schema.sql — càng
+# phải giữ phép soát này, vì schema.sql là bản duy nhất để dựng lại từ số không.
+# (Phép soát bảng ↔ BANG của sao-luu.mjs thì bỏ cùng sao lưu.) Bắt 08/09/2026:
+# `20260907h` merge mà schema.sql không có `diem_tin` — repo tụt sau DB.
+# Chỉ soi tên HÀM; hàm migration sau đã `drop function` thì bỏ qua.
+ham_mig=$(grep -rhoiE 'create or replace function +(public\.)?[a-z_][a-z0-9_]*' \
+  bot/supabase/migrations/*.sql 2>/dev/null \
+  | sed -E 's/.*[[:space:]]//; s/^public\.//' | grep -vx 'public' | sort -u)
+ham_bo=$(grep -rhoiE 'drop function +(if exists +)?(public\.)?[a-z_][a-z0-9_]*' \
+  bot/supabase/migrations/*.sql 2>/dev/null \
+  | sed -E 's/.*[[:space:]]//; s/^public\.//' | grep -vx 'public' | sort -u)
+thieu_ham=""
+for f in $ham_mig; do
+  grep -qxF "$f" <<<"$ham_bo" && continue
+  grep -qi "FUNCTION public\.$f(" bot/supabase/schema.sql || thieu_ham+="$f "
+done
+if [[ -n "$thieu_ham" ]]; then
+  canh "Hàm có trong migration nhưng KHÔNG có trong schema.sql: $thieu_ham"
+  printf '   → thêm tay định nghĩa vào bot/supabase/schema.sql: chạy trên DB `select pg_get_functiondef('''public.<hàm>'''::regprocedure)` rồi dán vào (kèm trigger nếu có).
+'
+  printf '   → không còn script sinh lại schema.sql (sao lưu đã bỏ 11/09/2026).
+'
+else
+  printf '[32m✓[0m schema.sql có đủ hàm mà migration sinh ra
+'
+fi
+
 printf '\n── Số đếm hiện tại ──\n'
 printf '%s BR · %s FR · %s NFR · %s UF · %s WF · %s OPEN · %s INS\n' \
   "$n_br" "$n_fr" "$n_nfr" "$n_uf" "$n_wf" "$n_open" "$n_ins"
