@@ -40,6 +40,11 @@ import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/hu
 import { TIEN_KD, TIEN_CD, TIEN_T_KEP, giaTheoM2, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../_shared/extraction/so-chu.ts";
 import { thayLienHe } from "../_shared/extraction/luat-lien-he.ts";
+// 11/09/2026: khách mua muốn ở GẦN đâu — model hiểu nghĩa (boc-gan), regex dự
+// phòng (tien-ich), mốc + khoảng cách do SQL tính (tim-moc → tin_gan_moc).
+import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/extraction/tien-ich.ts";
+import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
+import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
   batXungHo, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
@@ -3388,12 +3393,48 @@ Deno.serve(async (req) => {
   // bot được dặn "chưa gợi ý căn", nên nạp kho là ~250 chữ-máy không nhớ tạm +
   // một truy vấn thừa mỗi lượt đầu (FR-171 i). Khách nhắc mã căn thì vẫn nạp,
   // để gợi căn tương tự khi căn đó đã chốt/đã gỡ.
-  const minimumMet = prefs.area != null && prefs.budget != null;
+  // 11/09/2026: khách muốn ở GẦN một nơi — câu mới đè điều kiện cũ, không nhắc
+  // thì dùng điều kiện đã lưu trong hồ sơ. Điều kiện này cũng là "khu vực":
+  // "gần chợ Bình Tây, tầm 5 tỷ" là đủ để lọc kho.
+  //
+  // Hiểu NGHĨA trước (người dùng 11/09: "không phải là gần bệnh viện 1 câu mà nó
+  // phải hiểu nghĩa"): câu có mùi vị trí thì một lượt model đọc ý — "tiện đi
+  // khám bệnh", "chỗ làm ở Landmark 81", "quanh Ehome 3". Model trả lời được thì
+  // tin model: nó phân biệt được "căn đó gần chợ không?" là câu HỎI, không phải
+  // điều kiện tìm. Model hỏng thì regex. Toạ độ và số mét vẫn do SQL tính.
+  let ganMoi: GanTienIch | null = null;
+  let boGan = false;
+  if (coMuiViTri(text)) {
+    let daHoiModelGan = false;
+    try {
+      const ai = await napModel(client);
+      const r = await bocGanBangModel(
+        ai as unknown as Parameters<typeof bocGanBangModel>[0], MODEL, text,
+        typeof prefs.gan_tien_ich === "string" ? prefs.gan_tien_ich : null,
+      );
+      if (r) {
+        await doTien(client, r.usage as Parameters<typeof doTien>[1]);
+        if (r.ket) {
+          daHoiModelGan = true;
+          boGan = r.ket.bo_dieu_kien;
+          ganMoi = thanhGan(r.ket);
+        }
+      }
+    } catch (e) {
+      await ghiLoi(client, "chat-reply bocGanBangModel", e);
+    }
+    if (!daHoiModelGan) ganMoi = docGanTienIch(text);
+  }
+  const gan: GanTienIch | null = boGan && !ganMoi ? null : ganMoi ??
+    (prefs.gan_tien_ich_loc && typeof prefs.gan_tien_ich_loc === "object"
+      ? prefs.gan_tien_ich_loc as GanTienIch
+      : null);
+  const minimumMet = (prefs.area != null || gan != null) && prefs.budget != null;
   // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN, cận trên giá (SRS-5.2)
   // Cột dùng chung cho mọi dòng "căn" đưa vào prompt (KHO, căn khách nhắc, căn
   // tương tự, căn trong dự án): thông số FR-172 + dự án/tình trạng căn FR-116.
   const CAN_COLS =
-    `code, ward, district, deal, location_raw, price_raw, price_vnd, area_m2, bedrooms, property_type, ${SPEC_COLS}, project_id, unit_code, unit_status, last_confirmed_at, projects(name)`;
+    `code, ward, district, deal, location_raw, price_raw, price_vnd, area_m2, bedrooms, property_type, ${SPEC_COLS}, project_id, unit_code, unit_status, last_confirmed_at, tien_ich_gan, projects(name)`;
   let khoQ = client
     .from("listings")
     .select(CAN_COLS) // FR-172 + FR-116
@@ -3411,6 +3452,24 @@ Deno.serve(async (req) => {
   const budgetR = budgetRangeVnd(prefs.budget);
   if (budgetR?.max) khoQ = khoQ.lte("price_vnd", budgetR.max);
   if (budgetR?.min) khoQ = khoQ.gte("price_vnd", budgetR.min);
+  // 11/09: lọc theo khoảng cách thật (`timTinGanMoc` → `tin_gan_moc`, migration
+  // 20260911g): mốc là tiện ích OSM, dự án có toạ độ, hoặc địa danh tra được.
+  // RPC hỏng thì bỏ điều kiện này và ghi sổ — đừng để kho trống vì lỗi phía
+  // mình. Không định vị được nơi khách nói thì cũng không lọc, bot hỏi lại.
+  let ganKq: TinGan[] | null = null;
+  let khongThayMoc = false;
+  if (gan && minimumMet) {
+    const kq = await timTinGanMoc(client as unknown as Parameters<typeof timTinGanMoc>[0], gan, dealCol(prefs.deal));
+    if (kq.loi) {
+      await ghiLoi(client, "chat-reply tin_gan_moc", kq.loi);
+    } else if (kq.khongThayMoc) {
+      khongThayMoc = true;
+    } else {
+      ganKq = kq.tin;
+      khoQ = khoQ.in("code", ganKq.length ? ganKq.map((g) => g.code) : ["-"]);
+    }
+  }
+  const ganTheoMa = new Map((ganKq ?? []).map((g) => [g.code, g]));
 
   // FR-65 (v48): khách chấm sao → chỉ khi vừa được hỏi cảm nhận (nhắc
   // `feedback` đã `sent` trong 48 giờ) mới là đánh giá buổi xem; tra căn từ
@@ -3482,9 +3541,18 @@ Deno.serve(async (req) => {
     code: string; ward?: string | null; district?: string | null; deal?: string | null;
     location_raw?: string | null; price_raw?: string | null; price_vnd?: number | null;
     area_m2?: number | null; bedrooms?: number | null; property_type?: string | null;
+    tien_ich_gan?: Array<{ loai: string; ten: string; m: number }> | null;
+  };
+  // 11/09: khoảng cách là đường chim bay từ CON ĐƯỜNG của căn (toạ độ không tới
+  // số nhà) — làm tròn để model không đọc ra con số giả chính xác.
+  const lamTronM = (m: number) =>
+    m >= 1000 ? `${String(Math.round(m / 100) / 10).replace(".", ",")} km` : `${Math.max(50, Math.round(m / 50) * 50)} m`;
+  const ganTxt = (l: CanRow) => {
+    const g = ganTheoMa.get(l.code);
+    return g ? ` · cách ${g.moc} khoảng ${lamTronM(g.khoang_cach_m)}` : "";
   };
   const dongKho = (l: CanRow) =>
-    `#${l.code} · ${locLienHe(l.location_raw ?? "")} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l)}${duAnNgan(l)}`;
+    `#${l.code} · ${locLienHe(l.location_raw ?? "")} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l)}${duAnNgan(l)}${ganTxt(l)}`;
   const kho = ((listings ?? []) as CanRow[]).map(dongKho).join("\n");
 
   // Khối "căn khách đang nhắc" (FR-29): đủ chi tiết + facts đã xác minh + trạng
@@ -3520,7 +3588,11 @@ Deno.serve(async (req) => {
         .filter((f) => f.question !== "hinh_anh")
         .map((f) => `${f.question}: ${locLienHe(f.answer, true)}`).join("; ").slice(0, 300);
       const nPhotos = photosOf(l).length;
-      return `${dongKho(l)}${l.status ? ` · trạng thái: ${STATUS_VI[l.status] ?? l.status}` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}${nPhotos ? ` · CÓ ${nPhotos} HÌNH SẴN (khách xin hình thì điền send_photos, hệ thống tự đính kèm tối đa 4 tấm/lượt và tự hỏi xem thêm - ĐỪNG hứa đi hỏi chủ nhà)` : " · chưa có hình sẵn"}`;
+      // 11/09: tiện ích gần nhất mỗi loại (geocode-listings nạp từ OSM) — khách
+      // hỏi "gần chợ không" thì trả lời được, kèm chữ "khoảng".
+      const quanh = (l.tien_ich_gan ?? []).slice(0, 4)
+        .map((x) => `${x.ten} ~${lamTronM(x.m)}`).join("; ");
+      return `${dongKho(l)}${l.status ? ` · trạng thái: ${STATUS_VI[l.status] ?? l.status}` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}${quanh ? ` · quanh căn (đường chim bay, ước tính): ${quanh}` : ""}${nPhotos ? ` · CÓ ${nPhotos} HÌNH SẴN (khách xin hình thì điền send_photos, hệ thống tự đính kèm tối đa 4 tấm/lượt và tự hỏi xem thêm - ĐỪNG hứa đi hỏi chủ nhà)` : " · chưa có hình sẵn"}`;
     }).join("\n");
 
   // Khối DỰ ÁN (FR-113…115/FR-132): kiến thức chung đã xác thực, bot trả lời
@@ -3633,9 +3705,14 @@ Deno.serve(async (req) => {
     botMsgs.slice(-2).every((m) => m.body.trimEnd().endsWith("?"));
 
   // Hồ sơ ĐÃ BIẾT / CÒN THIẾU theo thứ tự ưu tiên UF-04
-  const known = BUYER_PROFILE_FIELDS
-    .filter(([k]) => prefs[k] != null && prefs[k] !== "")
-    .map(([k, label]) => `- ${label}: ${prefs[k]}`).join("\n");
+  const known = [
+    ...BUYER_PROFILE_FIELDS
+      .filter(([k]) => prefs[k] != null && prefs[k] !== "")
+      .map(([k, label]) => `- ${label}: ${prefs[k]}`),
+    // 11/09: "gần tiện ích" KHÔNG nằm trong danh sách hỏi (đừng hỏi khách nào
+    // cũng "cần gần gì không") — chỉ nhắc khi khách đã tự nói.
+    ...(gan ? [`- muốn ở gần: ${nhanGan(gan)}`] : []),
+  ].join("\n");
   const missing = BUYER_PROFILE_FIELDS
     .filter(([k]) => prefs[k] == null || prefs[k] === "")
     .map(([, label]) => `- ${label}`).join("\n");
@@ -3708,6 +3785,14 @@ Deno.serve(async (req) => {
             : "(chưa lọc - chưa đủ khu vực + giá để lọc, đừng nói kho trống)")) +
           (giaTB
             ? `\n(${giaTB} - ước tính từ kho bên em, dùng để so khi khách hỏi "giá vậy ok không": nói rẻ/mắc hơn mặt bằng khoảng bao nhiêu %, KHÔNG gọi là thẩm định)`
+            : "") +
+          (gan && ganKq
+            ? `\n(Đã lọc theo ý khách muốn ở gần ${nhanGan(gan)}. Khoảng cách là đường chim bay tính từ con đường của căn, ước tính - nói "khoảng", KHÔNG hứa chính xác, KHÔNG nói số nhà.${
+              ganKq.length ? "" : " Không có căn nào đã định vị trong bán kính này - nói thật, gợi ý nới bán kính hoặc khu khác."
+            })`
+            : "") +
+          (gan && khongThayMoc
+            ? `\n(Khách muốn ở gần ${nhanGan(gan)} nhưng bên em CHƯA định vị được nơi đó - hỏi lại khách nơi đó ở đường nào / quận nào, KHÔNG đoán vị trí.)`
             : "") +
           (askedBlock
             ? "\n\nCĂN KHÁCH ĐANG NHẮC TỚI (khách vào từ web hoặc gõ mã - chào ĐÚNG căn này, trả lời thẳng vào nó; mục 'đã xác minh từ chủ nhà' được nói chắc, còn lại vẫn 'để em hỏi lại'):\n" +
@@ -3810,6 +3895,16 @@ Deno.serve(async (req) => {
     } else {
       delta[k] = v;
     }
+  }
+  // 11/09: điều kiện gần tiện ích (regex, tien-ich.ts) — lưu cả nhãn đọc được
+  // lẫn bản có cấu trúc để lượt sau lọc kho mà không cần khách nói lại.
+  if (ganMoi) {
+    delta.gan_tien_ich = nhanGan(ganMoi);
+    delta.gan_tien_ich_loc = ganMoi;
+  } else if (boGan) {
+    // "thôi khỏi cần gần trường nữa" — gỡ hẳn, lượt sau không lọc theo nó.
+    delta.gan_tien_ich = null;
+    delta.gan_tien_ich_loc = null;
   }
   // FR-181: tên trợ lý của khách mua nằm trong hồ sơ (`preferences.ten_tro_ly`),
   // ghi một lần, đi chung RPC gộp hồ sơ — không thêm vòng DB nào.

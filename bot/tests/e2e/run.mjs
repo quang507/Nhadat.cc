@@ -20,6 +20,8 @@ globalThis.fetch = async (url) => {
 // mặc định ảnh mặt tiền, đặt `globalThis.__anh` để dựng cảnh sổ hồng / không rõ.
 const ANH = (o = {}) => ({ loai: "mat_tien", mo_ta: "hình như mặt tiền nhà 2 tầng", giay_to: null, ...o });
 const laLuotAnh = (p) => (p?.system ?? []).some((s) => /PHÂN LOẠI ẢNH CHỦ NHÀ GỬI/.test(s.text ?? ""));
+// 11/09: lượt model đọc "khách muốn ở gần đâu" (_shared/ai/boc-gan.ts) — không phải lượt trả lời.
+const laLuotGan = (p) => (p?.system ?? []).some((s) => /có muốn nhà ở GẦN/.test(s.text ?? ""));
 // FR-180: napCauHinh nhớ tạm 60 s ở tầng module → đặt mẫu chuẩn TRƯỚC lượt gọi đầu.
 globalThis.__mauCau = {
   // 20260909h (FR-181): mau_cau_fewshot ghi "→ Trợ lý:" thay "→ Thái:" — tên bot nay theo từng khách.
@@ -54,7 +56,7 @@ const db = () => globalThis.__db;
 // ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
 function fresh(seed) { globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; globalThis.__anh = undefined; globalThis.__anhTaiDuoc = true; globalThis.__storageHong = false; seed?.(globalThis.__db); }
 // Lượt gọi model chỉ tính NHÁNH MUA (parse hồ sơ), không tính lượt phân loại ảnh (FR-185).
-const parseMua = () => globalThis.__calls.filter((c) => c.kind === "parse" && !laLuotAnh(c.params));
+const parseMua = () => globalThis.__calls.filter((c) => c.kind === "parse" && !laLuotAnh(c.params) && !laLuotGan(c.params));
 function seedKho(d) {
   const sC = d.insert("sellers", { zalo_user_id: "z-ccrb", seller_type: "ccrb", name: "Chị D.", active_listing_id: null }).data;
   const sU = d.insert("sellers", { zalo_user_id: "z-unknown", seller_type: "unknown", name: null, active_listing_id: null }).data;
@@ -1532,6 +1534,86 @@ fresh(seedKho);
   const Lq5b = db().t.listings.find((l) => l.id === LL[0]?.id);
   check("T42-20 chủ nhà xác nhận ĐÚNG Quận 5 → giữ cột, bỏ dấu mặc định", Lq5b?.district === "Quận 5" && Lq5b?.boc_tach?.quan_mac_dinh === false, JSON.stringify(Lq5b));
   globalThis.__cauHinh = { test_reset_hello: "1" };
+}
+
+// ── 11/09: TÌM NHÀ GẦN MỐC — model hiểu NGHĨA, SQL đo khoảng cách ─────────────
+// Người dùng: "tìm nhà gần bệnh viện cách 1 km" → rồi "không phải là gần bệnh
+// viện 1 câu mà nó phải hiểu nghĩa". Lượt model `boc-gan` đọc ý, `tin_gan_moc`
+// (giả ở đây) trả căn + mốc + mét, KHO chỉ còn căn gần.
+{
+  const GAN = (o = {}) => ({ muon_gan: true, loai: "benh_vien", ten: null, cap_truong: null, ban_kinh_m: null, bo_dieu_kien: false, ...o });
+  const hoSo = (id) => db().t.buyers.find((b) => b.zalo_user_id === id)?.preferences ?? {};
+  let goiMoc = [];
+  const mocGia = (tin = [{ listing_id: "x", code: "BDS-Q5-0004", moc: "Bệnh viện Triều An", khoang_cach_m: 620 }]) => ({
+    tin_gan_moc: (_d, a) => { goiMoc.push(a); return { data: tin, error: null }; },
+    co_moc: () => ({ data: true, error: null }),
+  });
+  const vaoHoSo = async (id) => {
+    globalThis.__model.parse = (p) => laLuotGan(p) ? GAN() : OUT({ profile: { ...OUT().profile, deal: "ban", budget: "tầm 7 tỷ" } });
+    await send({ external_user_id: id, text: "mua nhà tầm 7 tỷ" });
+  };
+
+  fresh(seedKho); goiMoc = []; globalThis.__rpc = mocGia();
+  await vaoHoSo("gan-1");
+  globalThis.__model.parse = (p) => laLuotGan(p) ? GAN() : OUT();
+  r = await send({ external_user_id: "gan-1", text: "chỗ nào tiện đi khám bệnh không em" });
+  const stG1 = sysText(parseCalls().pop());
+  check("GAN-01 câu nói vòng 'tiện đi khám bệnh' → model đọc ra bệnh viện, tìm trong ~1 km, đúng deal",
+    goiMoc.length === 1 && goiMoc[0].p_loai === "benh_vien" && goiMoc[0].p_ban_kinh_m === 1000 && goiMoc[0].p_deal === "ban", JSON.stringify(goiMoc));
+  check("GAN-02 KHO chỉ còn căn gần, dòng căn kèm 'cách <mốc> khoảng 600 m' (làm tròn), có lời dặn 'nói khoảng'",
+    /BDS-Q5-0004[^\n]*cách Bệnh viện Triều An khoảng 600 m/.test(stG1) && !/BDS-Q5-0001/.test(stG1) && /Đã lọc theo ý khách muốn ở gần bệnh viện, trong ~1 km/.test(stG1),
+    stG1.slice(0, 900));
+  check("GAN-03 hồ sơ lưu điều kiện (nhãn + bản có cấu trúc) để lượt sau lọc tiếp",
+    hoSo("gan-1").gan_tien_ich === "bệnh viện, trong ~1 km" && hoSo("gan-1").gan_tien_ich_loc?.loai === "benh_vien", JSON.stringify(hoSo("gan-1")));
+  globalThis.__model.parse = () => OUT();
+  goiMoc = [];
+  const soGoiTruoc = globalThis.__calls.length;
+  r = await send({ external_user_id: "gan-1", text: "có căn nào 2 phòng ngủ không" });
+  check("GAN-04 lượt sau không nhắc lại vẫn lọc theo điều kiện đã lưu (không gọi thêm model đọc vị trí)",
+    goiMoc.length === 1 && !globalThis.__calls.slice(soGoiTruoc).some((c) => laLuotGan(c.params)), JSON.stringify(goiMoc));
+
+  // Câu HỎI về một căn ("căn đó gần chợ không") không phải điều kiện tìm — regex
+  // sẽ bắt nhầm "gần chợ", model thì không. Model trả lời được → tin model.
+  fresh(seedKho); goiMoc = []; globalThis.__rpc = mocGia();
+  await vaoHoSo("gan-2");
+  globalThis.__model.parse = (p) => laLuotGan(p) ? GAN({ muon_gan: false, loai: null }) : OUT();
+  r = await send({ external_user_id: "gan-2", text: "căn BDS-Q5-0004 gần chợ không em" });
+  check("GAN-05 hỏi 'căn đó gần chợ không' → KHÔNG thành bộ lọc, hồ sơ không ghi điều kiện",
+    goiMoc.length === 0 && !hoSo("gan-2").gan_tien_ich, JSON.stringify({ goiMoc, p: hoSo("gan-2") }));
+
+  // Model hỏng → regex dự phòng vẫn bắt "gần bệnh viện 2km".
+  fresh(seedKho); goiMoc = []; globalThis.__rpc = mocGia();
+  await vaoHoSo("gan-3");
+  globalThis.__model.parse = (p) => { if (laLuotGan(p)) throw new Error("model chết"); return OUT(); };
+  r = await send({ external_user_id: "gan-3", text: "tìm căn gần bệnh viện trong vòng 2km" });
+  check("GAN-06 model đọc vị trí hỏng → regex: bệnh viện, 2000 m", goiMoc[0]?.p_loai === "benh_vien" && goiMoc[0]?.p_ban_kinh_m === 2000, JSON.stringify(goiMoc));
+  // Gỡ điều kiện.
+  globalThis.__model.parse = (p) => laLuotGan(p) ? GAN({ muon_gan: false, loai: null, bo_dieu_kien: true }) : OUT();
+  goiMoc = [];
+  r = await send({ external_user_id: "gan-3", text: "thôi khỏi cần gần bệnh viện nữa em" });
+  check("GAN-07 'thôi khỏi cần gần bệnh viện' → gỡ khỏi hồ sơ, không lọc nữa",
+    goiMoc.length === 0 && hoSo("gan-3").gan_tien_ich == null && hoSo("gan-3").gan_tien_ich_loc == null, JSON.stringify({ goiMoc, p: hoSo("gan-3") }));
+
+  // RPC hỏng → bỏ lọc (kho vẫn đủ căn), không để khách thấy kho trống vì lỗi phía mình.
+  fresh(seedKho); goiMoc = [];
+  globalThis.__rpc = { tin_gan_moc: (_d, a) => { goiMoc.push(a); return { data: null, error: { message: "timeout" } }; } };
+  await vaoHoSo("gan-4");
+  globalThis.__model.parse = (p) => laLuotGan(p) ? GAN({ loai: "du_an", ten: "Ehome 3" }) : OUT();
+  r = await send({ external_user_id: "gan-4", text: "có nhà nào quanh Ehome 3 không" });
+  const stG4 = sysText(parseCalls().pop());
+  check("GAN-08 tin_gan_moc hỏng → KHO không lọc (còn BDS-Q5-0001), không có dòng 'Đã lọc'",
+    goiMoc.length === 1 && goiMoc[0].p_loai === "du_an" && goiMoc[0].p_ten_re === "ehome 3" && /BDS-Q5-0001/.test(stG4) && !/Đã lọc theo ý khách/.test(stG4),
+    JSON.stringify({ goiMoc, st: stG4.slice(0, 400) }));
+
+  // Mốc có trong kho nhưng không căn nào đủ gần → nói thật, gợi ý nới bán kính.
+  fresh(seedKho); goiMoc = []; globalThis.__rpc = mocGia([]);
+  await vaoHoSo("gan-5");
+  globalThis.__model.parse = (p) => laLuotGan(p) ? GAN({ loai: "sieu_thi", ten: "Aeon Bình Tân", ban_kinh_m: 500 }) : OUT();
+  r = await send({ external_user_id: "gan-5", text: "muốn đi bộ ra Aeon Bình Tân được" });
+  const stG5 = sysText(parseCalls().pop());
+  check("GAN-09 không căn nào trong 500 m quanh Aeon Bình Tân → KHO trống + dặn nói thật, gợi ý nới bán kính",
+    goiMoc[0]?.p_ten_re === "aeon binh tan" && goiMoc[0]?.p_ban_kinh_m === 500 && !/BDS-Q5-000[145]/.test(stG5) && /Không có căn nào đã định vị trong bán kính này/.test(stG5),
+    JSON.stringify({ goiMoc, st: stG5.slice(0, 500) }));
 }
 
 // ── kết ──
