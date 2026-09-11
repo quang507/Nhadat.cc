@@ -5,7 +5,7 @@ globalThis.__calls = []; globalThis.__db = new FakeDB();
 // 09/09/2026: câu hỏi mẫu + lời chào sửa được ở Dashboard — seed bot_prompts trước lượt đầu
 // (napCauHinh nhớ tạm 60 s, đọc một lần cho cả run). vi_tri đổi câu để chứng minh bản DB đè bản code.
 // 11/09 (42 ca): câu hỏi địa chỉ LẦN ĐẦU dùng khoá riêng `vi_tri@lan_dau` — đè cả hai để V1.3 vẫn đo đúng "bản DB đè bản code".
-const seedBotPrompts = (d) => { d.insert("bot_prompts", { key: "cau_hoi_mau", content: JSON.stringify({ vi_tri: "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@lan_dau": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?" }) });
+const seedBotPrompts = (d) => { d.insert("bot_prompts", { key: "cau_hoi_mau", content: JSON.stringify({ vi_tri: "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@lan_dau": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@chua_quan": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?" }) });
 globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị đang muốn mua, thuê hay đang có nhà cần bán/cho thuê ạ?\nBên em có anh Thu phụ trách khu vực Sài Gòn, sẽ theo anh/chị tới khi bán được, cho thuê được hay mua được nhà nha." }); };
 seedBotPrompts(globalThis.__db);
 // FR-185: ảnh chủ nhà gửi được TẢI VỀ kho — mock fetch trả vài byte JPEG cho host Zalo,
@@ -1513,6 +1513,25 @@ fresh(seedKho);
   check("T42-17 trả lời câu phường bằng cả địa chỉ → fact phường là 'Phường 6', vị trí 'Đường hồ ngọc lãm …'",
     f42.some((f) => f.question === "phuong" && f.answer === "Phường 6") && f42.some((f) => f.question === "vi_tri" && /^Đường hồ ngọc lãm/.test(f.answer ?? "")),
     JSON.stringify(f42));
+
+  // 11/09 chiều (Zalo thật): "sao cái nào cũng ghi Q5 hết vậy" — câu rao không nói quận.
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "day_du" };
+  ({ rr, LL } = await raoMoi("t42-q5", "bán nhà hẻm 12 Hồ Ngọc Lãm 50m2 3 tỷ"));
+  const r1q = createCalls().map((c) => (c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : "").join("\n")).find((s) => /Chủ nhà vừa nhắn rao/.test(s)) ?? "";
+  check("T42-18 rao KHÔNG nói quận → boc_tach đánh dấu quận mặc định, câu hỏi đầu hỏi KÈM quận, 💾 nói 'chưa rõ quận', 📝 không tự nhận Quận 5",
+    LL[0]?.boc_tach?.quan_mac_dinh === true && !("quan" in (LL[0]?.boc_tach ?? {})) && /phường mấy, quận nào/.test(r1q) &&
+      /Quận 5 \(chưa rõ quận\)/.test(rr.body.replies.at(-1) ?? "") && !/Quận 5/.test(rr.body.replies[0] ?? ""),
+    JSON.stringify({ bt: LL[0]?.boc_tach, rep: rr.body.replies, r1q: r1q.slice(0, 400) }));
+  r = await send({ external_user_id: "t42-q5", text: "quận 8 phường 6 em" });
+  const Lq5 = db().t.listings.find((l) => l.id === LL[0]?.id);
+  check("T42-19 lượt sau nói 'quận 8' → cột Quận 8, bỏ dấu mặc định, 💾 hết 'chưa rõ quận'",
+    Lq5?.district === "Quận 8" && Lq5?.boc_tach?.quan_mac_dinh === false && !/chưa rõ quận/.test(r.body.replies.at(-1) ?? ""),
+    JSON.stringify({ L: Lq5, rep: r.body.replies }));
+  ({ rr, LL } = await raoMoi("t42-q5b", "bán nhà hẻm 12 Nguyễn Trãi 50m2 3 tỷ"));
+  r = await send({ external_user_id: "t42-q5b", text: "quận 5 phường 3 nha" });
+  const Lq5b = db().t.listings.find((l) => l.id === LL[0]?.id);
+  check("T42-20 chủ nhà xác nhận ĐÚNG Quận 5 → giữ cột, bỏ dấu mặc định", Lq5b?.district === "Quận 5" && Lq5b?.boc_tach?.quan_mac_dinh === false, JSON.stringify(Lq5b));
+  globalThis.__cauHinh = { test_reset_hello: "1" };
 }
 
 // ── kết ──

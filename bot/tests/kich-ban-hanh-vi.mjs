@@ -356,6 +356,21 @@ const KICH_BAN = [
       return [q === "Quận 11,Quận 5" && ls.every((l) => !l.unit_code), JSON.stringify(ls)];
     },
   },
+  {
+    so: 23,
+    ten: 'Rao không nói quận, lượt sau "quận 8 phường 6" — MÃ tin đổi theo Quận 8 (migration 20260911f)',
+    async chay() {
+      const uid = "thu-hv-23";
+      await nhan(uid, "bán nhà hẻm 12 Hồ Ngọc Lãm 50m2 3 tỷ");
+      const truoc = await tinCua(uid);
+      await nhan(uid, "quận 8 phường 6 em");
+      const sau = await tinCua(uid);
+      return [
+        sau?.district === "Quận 8" && /^BDS-NP-Q8-\d+$/.test(sau?.code ?? ""),
+        `mã ${truoc?.code} → ${sau?.code} · quận ${truoc?.district} → ${sau?.district}`,
+      ];
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -297,6 +297,10 @@ export const CAU_HOI_MAU: Record<string, string> = {
   vi_tri: "Nhà mình ở đường nào, số mấy hay hẻm nào {ac}?",
   // Lần ĐẦU hỏi địa chỉ (câu hỏi đầu sau khi tạo tin): giữ lý do sếp chốt 09/09.
   "vi_tri@lan_dau": "{Ac} cho em xin địa chỉ nhà (đường, hẻm) để em kiểm tra giá khu vực nha?",
+  // Câu rao chưa nói quận (11/09/2026): hỏi kèm quận, tin khỏi nằm ở Quận 5 mặc định.
+  "vi_tri@chua_quan": "{Ac} cho em xin địa chỉ nhà (đường, phường, quận) để em kiểm tra giá khu vực nha?",
+  // Đã có đường/hẻm nhưng chưa có phường lẫn quận: hỏi đúng hai thứ đó, không bắt đọc lại địa chỉ.
+  "phuong@chua_quan": "Nhà mình thuộc phường mấy, quận nào {ac}?",
   "vi_tri@chung_cu": "Căn hộ mình thuộc dự án nào, toà nào {ac}?",
   "vi_tri@dat": "Lô đất mình ở đường nào, khu nào {ac}?",
   "huong@chung_cu": "Ban công căn mình quay hướng nào {ac}?",

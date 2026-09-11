@@ -1349,12 +1349,21 @@ Deno.serve(async (req) => {
       // bản thô thì không tài nào biết đó không phải Quận 2 (tầng ba, 10/09).
       const q = bocQuan(tKD, text);
       if (!q) return;
-      const { data: cu } = await client.from("listings").select("district").eq("id", listingId).maybeSingle();
-      if (!cu || cu.district === q) return;
+      const { data: cu } = await client.from("listings").select("district, boc_tach").eq("id", listingId).maybeSingle();
+      if (!cu) return;
+      if (cu.district === q) {
+        // Chủ nhà xác nhận đúng quận đang ghi (vd "quận 5" khi cột đang mặc định Quận 5):
+        // không đổi cột, chỉ bỏ dấu "mặc định" (11/09/2026).
+        if ((cu.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true) {
+          const { error: bt0 } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { quan: q, quan_mac_dinh: false } });
+          if (bt0) await ghiLoi(client, "chat-reply ghi_boc_tach(quan xac nhan)", bt0.message);
+        }
+        return;
+      }
       const { error: qErr } = await client.from("listings").update({ district: q }).eq("id", listingId);
       if (qErr) await ghiLoi(client, "chat-reply cap nhat quan", qErr.message);
       else {
-        const { error: btErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { quan: q } });
+        const { error: btErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { quan: q, quan_mac_dinh: false } });
         if (btErr) await ghiLoi(client, "chat-reply ghi_boc_tach(quan)", btErr.message);
       }
     };
@@ -2933,7 +2942,10 @@ Deno.serve(async (req) => {
         const { error: btErr } = await client.rpc("ghi_boc_tach", {
           p_listing_id: newLst.id,
           p: {
-            nguon: "cau_rao", loai_giao_dich: sDeal, quan: quanRao,
+            // 11/09/2026 (Zalo thật): "sao cái nào cũng ghi Q5" — quận không đọc được thì
+            // cột vẫn nhận mặc định Quận 5 (NOT NULL), nhưng boc_tach nói rõ đó là MẶC
+            // ĐỊNH; bong bóng 💾 in "(chưa rõ quận)" và câu hỏi đầu hỏi thêm quận.
+            nguon: "cau_rao", loai_giao_dich: sDeal, quan: quanDoc, ...(quanDoc ? {} : { quan_mac_dinh: true }),
             phuong: wardNo ? `Phường ${wardNo}` : null,
             gia_raw: priceM?.[1]?.trim() ?? null, ...(giaM2 ? { gia_m2: giaM2 } : {}),
             dien_tich: areaM ? `${areaM[1].replace(",", ".")}m2` : null,
@@ -3015,8 +3027,12 @@ Deno.serve(async (req) => {
         // địa chỉ ĐẦU (câu mẫu `vi_tri@lan_dau`); các lần hỏi lại dùng câu ngắn —
         // khuôn 25 từ kèm lý do từng lặp nguyên văn 22/52 câu bot.
         const loaiMoi = (newLst as { property_type?: string | null }).property_type;
+        // 11/09/2026 (Zalo thật): câu rao không nói quận → hỏi địa chỉ KÈM quận, để
+        // tin không nằm lại Quận 5 mặc định (mã tin đi theo quận: migration 20260911f).
         const cauHoiDau = firstKey
-          ? (firstKey === "vi_tri" && loaiMoi !== "chung_cu" && loaiMoi !== "dat"
+          ? (!quanDoc && (firstKey === "vi_tri" || firstKey === "phuong")
+            ? cauHoiMau(firstKey === "phuong" ? "phuong@chua_quan" : "vi_tri@chua_quan", cachGoi, loaiMoi)
+            : firstKey === "vi_tri" && loaiMoi !== "chung_cu" && loaiMoi !== "dat"
             ? cauHoiMau("vi_tri@lan_dau", cachGoi, loaiMoi)
             : cauHoiMau(firstKey, cachGoi, loaiMoi))
           : null;
