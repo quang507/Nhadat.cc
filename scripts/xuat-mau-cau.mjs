@@ -6,8 +6,9 @@
 // Chạy:  node scripts/xuat-mau-cau.mjs [thư-mục-đích]
 // Cần SUPABASE_SERVICE_ROLE_KEY trong scripts/.env — bảng
 // mau_cau chỉ admin/service_role đọc được.
-// Đích mặc định: nhadat-backup/mau-cau/ (đã gitignore — ngữ cảnh là chat THẬT,
-// có tên khách, có thể có SĐT; KHÔNG commit).
+// Đích mặc định: train/out/mau-cau/ (đã gitignore — ngữ cảnh là chat THẬT,
+// có tên khách, có thể có SĐT; KHÔNG commit). Trước 11/09/2026 là
+// nhadat-backup/mau-cau/ — thư mục đó bỏ cùng sao lưu.
 //
 // Ra hai file:
 //   mau-cau.sharegpt.jsonl — {"conversations":[{from:system|human|gpt, value}]}
@@ -36,7 +37,7 @@ const URL_DU_AN = process.env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supa
 const KHOA = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!KHOA) { console.error("Thiếu SUPABASE_SERVICE_ROLE_KEY (scripts/.env)."); process.exit(1); }
 const MUC_TIEU = 300;
-const DICH = resolve(process.argv[2] ?? join(HERE, "..", "nhadat-backup", "mau-cau"));
+const DICH = resolve(process.argv[2] ?? join(HERE, "..", "train", "out", "mau-cau"));
 
 const H = { apikey: KHOA, Authorization: `Bearer ${KHOA}`, "Content-Type": "application/json" };
 async function keo(duong) {

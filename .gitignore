@@ -38,11 +38,6 @@ bot/bridge-zca/.env
 scripts/.env
 !scripts/.env.example
 
-# Bản sao lưu DB (SĐT thật) nằm NGOÀI repo: ../nhadat-backup (003-Content
-hadat-backup, chủ dự án chốt 09/09/2026).
-# Dòng này chỉ chặn lỡ tay tạo thư mục cùng tên trong repo — repo đang PUBLIC.
-nhadat-backup/
-
 # Dữ liệu crawl & Design artifacts (để nhẹ repo, tránh tràn RAM VPS)
 radanhadat-scrape/
 design/

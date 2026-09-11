@@ -1,6 +1,6 @@
 -- Ảnh chụp schema `public` + `storage` của project nhadat-cc.
 -- SINH TỰ ĐỘNG bởi public.xuat_schema() — ĐỪNG SỬA TAY.
--- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
+-- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
 -- Sinh lúc: 2026-09-11 09:00 (giờ VN)
@@ -3384,19 +3384,6 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.liet_ke_bang()
- RETURNS text[]
- LANGUAGE sql
- SECURITY DEFINER
- SET search_path TO 'pg_catalog', 'public'
-AS $function$
-  select coalesce(array_agg(c.relname order by c.relname), '{}')
-  from pg_class c
-  join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
-  where c.relkind = 'r';
-$function$
-;
-
 CREATE OR REPLACE FUNCTION public.liet_ke_migration()
  RETURNS TABLE(version text, name text)
  LANGUAGE sql
@@ -5711,7 +5698,7 @@ begin
 
   o := '-- Ảnh chụp schema `public` + `storage` của project nhadat-cc.' || E'\n'
     || '-- SINH TỰ ĐỘNG bởi public.xuat_schema() — ĐỪNG SỬA TAY.' || E'\n'
-    || '-- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).' || E'\n'
+    || '-- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).' || E'\n'
     || '-- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:' || E'\n'
     || '-- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.' || E'\n'
     || '-- Sinh lúc: '
@@ -7022,8 +7009,6 @@ grant execute on function public.la_admin() to authenticated;
 grant execute on function public.la_admin() to service_role;
 revoke all on function public.lan_thu_ke(p_attempts integer) from public, anon, authenticated;
 grant execute on function public.lan_thu_ke(p_attempts integer) to service_role;
-revoke all on function public.liet_ke_bang() from public, anon, authenticated;
-grant execute on function public.liet_ke_bang() to service_role;
 revoke all on function public.liet_ke_migration() from public, anon, authenticated;
 grant execute on function public.liet_ke_migration() to service_role;
 revoke all on function public.liet_ke_migration_cong_khai() from public, anon, authenticated;

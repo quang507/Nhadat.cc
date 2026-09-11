@@ -125,6 +125,9 @@ vì ai đó đã chạy `git` bằng **root** một lần, để lại file thu�
 
 ## 8. Sao lưu — đã bỏ (11/09/2026)
 
-Chủ dự án bỏ toàn bộ sao lưu; `scripts/sao-luu.mjs` không còn trong repo. Nếu
-VPS còn cron `sao-luu.mjs` thì xoá dòng đó bằng `crontab -e` (user `nhadat`),
-và xoá luôn `/home/nhadat/.nhadat-backup.env` (file đó giữ khoá service_role).
+Chủ dự án bỏ toàn bộ sao lưu; `scripts/sao-luu.mjs` không còn trong repo.
+Soát trên VPS 11/09/2026: crontab của `root` và `nhadat` đều trống,
+`/etc/cron.d` không có dòng nào của nhadat, không có systemd timer,
+`/home/nhadat/.nhadat-backup.env` không tồn tại. Chỉ còn file `sao-luu.mjs`
+nằm trong các bản checkout cũ (`/opt/nhadat`, `/root/work/…`) — không gì gọi
+tới. Sau này thấy lại cron `sao-luu.mjs` thì xoá bằng `crontab -e`.

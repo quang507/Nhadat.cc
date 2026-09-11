@@ -123,9 +123,12 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   CI job `saoluu`/`phuchoi` và `docs/12`. Lịch Windows "Nhadat - dong bo
   OneDrive" đã xoá. **Supabase gói Free không tự sao lưu — mất dữ liệu là
   không lấy lại được.** Chủ dự án biết và chấp nhận (OPEN-25).
-  Máy nào còn tác vụ gọi `sao-luu.mjs` thì xoá tác vụ đó: lịch
-  `nhadat-sao-luu.cmd` trên máy Quang Lê Bá Duy, cron trên VPS
-  (`bot/bridge-zca/VPS.md §8`). Cần bản cũ thì lấy trong git:
+  Soát 11/09/2026: VPS không còn cron / timer / file khoá sao lưu nào
+  (`bot/bridge-zca/VPS.md §8`); máy văn phòng không còn lịch Windows nào. Còn
+  lại DUY NHẤT lịch `nhadat-sao-luu.cmd` trên máy Quang Lê Bá Duy — phải xoá
+  tay trên máy đó. Thư mục `nhadat-backup/` đã xoá: script nào cần chỗ ghi
+  thì ghi vào `train/out/` (gitignore) hoặc thư mục tạm. `liet_ke_bang()`
+  (chỉ sao lưu dùng) xoá ở `20260911h`. Cần bản cũ thì lấy trong git:
   `git log --diff-filter=D -- scripts/sao-luu.mjs`.
   **Tầng bốn — chống tái phát (11/09/2026).** Ba việc, mỗi việc một cổng:
   (1) **Kiểm kiểu cho bot** — `tsconfig.json` loại hẳn `bot` nên 3.900 dòng
@@ -264,10 +267,10 @@ curl -s -X POST "https://tbcdpupiarkuxtntmosl.supabase.co/rest/v1/rpc/xuat_schem
   -H "Content-Type: application/json" -d '{}' | jq -r . > bot/supabase/schema.sql
 ```
 
-**Dòng "Sinh lại: node scripts/sao-luu.mjs" ở đầu `schema.sql` đã LỖI THỜI** —
-đừng làm theo. Chữ đó nằm trong chính hàm `xuat_schema()` trên DB, nên sinh lại
-vẫn ra đúng câu đó. Không sửa migration cũ; muốn đổi thì viết migration mới cho
-`xuat_schema()`.
+Dòng "Sinh lại" ở đầu `schema.sql` từng trỏ tới `scripts/sao-luu.mjs` (đã
+xoá). Migration `20260911h` sửa chữ đó ngay trong hàm `xuat_schema()` trên DB,
+nên sinh lại giờ ra đúng câu "gọi rpc xuat_schema()". Không sửa migration cũ;
+muốn đổi gì trong `xuat_schema()` thì viết migration mới.
 
 **Đừng tin `cron.job_run_details.status`** (NFR-18). `net.http_post()` trả về
 ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge function trả

@@ -111,7 +111,7 @@ for (const bang of [
 }
 for (const ten of [
   "get_secret", "seller_drip_tick", "ctv_report_tick",
-  "xuat_schema", "liet_ke_bang", "liet_ke_migration",
+  "xuat_schema", "liet_ke_migration", // liet_ke_bang: xoá ở 20260911h cùng sao lưu
   "quota_tieu_hao", // FR-192: cửa đọc quota chỉ cho admin
 ]) {
   const r = await goi(`rpc/${ten}`, {
