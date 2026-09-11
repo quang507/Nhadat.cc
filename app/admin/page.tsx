@@ -749,7 +749,8 @@ function BanLamViec() {
     : !bridgeSong
     ? health.beat ? "Bridge im quá 15 phút" : "Bridge chưa từng gõ cửa"
     : zaloChet && zaloDn
-    ? `Zalo clone: ${(NHAN_DANG_NHAP[zaloDn.trang_thai] ?? zaloDn.trang_thai).toLowerCase()}`
+    // Giữ nguyên hoa/thường của nhãn: hạ hết thành chữ thường là ra "mã qr".
+    ? `Zalo clone: ${NHAN_DANG_NHAP[zaloDn.trang_thai] ?? zaloDn.trang_thai}`
     : quota?.het_credit && !quota.co_du_phong
     ? "Model không gọi được (hết số dư)"
     : null;
