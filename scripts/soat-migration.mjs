@@ -13,7 +13,7 @@
 //
 // ============================== CÁCH DÙNG ==============================
 //     node scripts/soat-migration.mjs
-// Cần SUPABASE_SERVICE_ROLE_KEY (đọc từ scripts/.env như sao-luu.mjs) vì bảng
+// Cần SUPABASE_SERVICE_ROLE_KEY (đọc từ scripts/.env) vì bảng
 // supabase_migrations nằm ngoài schema public, PostgREST không phơi ra —
 // phải qua RPC `liet_ke_migration()` (migration 20260905c), chỉ service_role.
 //
@@ -117,7 +117,7 @@ if (thieuFile.length) {
   console.log(`✗ ${thieuFile.length} migration ĐÃ ÁP nhưng KHÔNG có file trong repo:`);
   for (const m of thieuFile) console.log(`    ${m.version}  ${m.name}`);
   console.log("  → Không dựng lại được từ repo. Lưới an toàn là bot/supabase/schema.sql");
-  console.log("    (sinh bởi `node scripts/sao-luu.mjs`). Migration MỚI vẫn phải có file.\n");
+  console.log("    (sinh từ RPC `xuat_schema()`, lệnh ở CLAUDE.md §6). Migration MỚI vẫn phải có file.\n");
 } else {
   console.log("✓ Mọi migration đã áp đều có file trong repo\n");
 }
@@ -144,7 +144,7 @@ const SCHEMA = join(HERE, "..", "bot", "supabase", "schema.sql");
 if (!existsSync(SCHEMA)) {
   loi = 1;
   console.log("✗ Chưa có bot/supabase/schema.sql — repo một mình KHÔNG dựng lại được DB.");
-  console.log("  → chạy `node scripts/sao-luu.mjs` rồi commit file đó.\n");
+  console.log("  → sinh bằng RPC `xuat_schema()` (lệnh ở CLAUDE.md §6) rồi commit file đó.\n");
 } else {
   const tSchema = (await stat(SCHEMA)).mtimeMs;
   const moiNhat = Math.max(
@@ -153,7 +153,7 @@ if (!existsSync(SCHEMA)) {
   if (tSchema < moiNhat) {
     loi = 1;
     console.log("✗ bot/supabase/schema.sql cũ hơn migration mới nhất — ảnh chụp đã lỗi thời.");
-    console.log("  → chạy lại `node scripts/sao-luu.mjs` rồi commit.\n");
+    console.log("  → sinh lại bằng RPC `xuat_schema()` (lệnh ở CLAUDE.md §6) rồi commit.\n");
   } else {
     console.log("✓ Ảnh chụp schema mới hơn migration mới nhất\n");
   }

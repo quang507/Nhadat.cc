@@ -147,7 +147,7 @@ fi
 # ── 6. Khoá service_role không được nằm trong file của repo ─────────────────
 # CLAUDE.md §6: khoá đó bỏ qua mọi RLS. JWT Supabase bắt đầu bằng `eyJ` và dài;
 # publishable key thì được phép (nó vốn công khai). Đòi ≥30 ký tự base64 sau
-# `eyJ` để chỗ hướng dẫn viết tắt `eyJhbG...` trong scripts/sao-luu.mjs không
+# `eyJ` để chỗ hướng dẫn viết tắt `eyJhbG...` trong scripts/*.mjs không
 # bị báo oan — một khoá thật dài hơn thế nhiều.
 # Chỉ soi file GIT ĐANG TRACK: `scripts/.env` và `bot/bridge-zca/.env` giữ khoá
 # thật THEO THIẾT KẾ và đã gitignore — quét cả working tree thì máy chủ dự án
@@ -173,70 +173,7 @@ else
   xanh "Tài nguyên tĩnh: không phụ thuộc raw.githubusercontent"
 fi
 
-# ── 8. Bảng mới trong migration phải có trong danh sách sao lưu ─────────────
-# `sao-luu.mjs` có `kiemDuBang()` hỏi DB mỗi lần chạy, nhưng nó chỉ kêu lúc
-# CHẠY SAO LƯU — tức đêm hôm, trên máy chủ dự án, trước mặt không ai. Suốt
-# 27/08 → 05/09 tám bảng chưa từng được sao lưu vì không có gì kêu sớm hơn thế
-# (OPEN-47), và `chat_quota` lặp lại đúng vết đó ngày 05/09.
-# Lưới này kêu ở PR, nơi có người đang nhìn.
-#
-# Chỉ soi bảng SINH RA TỪ MIGRATION CÒN TRONG REPO — 44 migration 21/08 → 27/08
-# đã mất vĩnh viễn (OPEN-46) nên phần lớn bảng lõi không có `create table` ở
-# đâu cả. Vì vậy đây là phép so MỘT CHIỀU: có trong migration mà thiếu trong
-# BANG là hỏng; ngược lại thì không kết luận gì.
-#
-# `grep -vx public` bỏ một khớp giả CÓ THẬT: `20260905a` chứa chuỗi sinh mã
-# `format(E'create table if not exists public.%I …')` bên trong `xuat_schema()`.
-# `%I` không phải tên bảng nên regex tụt về khớp chính chữ "public". Lọc ở đây
-# thay vì thắt regex, vì mọi migration đều viết `public.<tên>` và nới lỏng chỗ
-# này là cách chắc chắn để bỏ sót một bảng viết không có tiền tố schema.
-bang_mig=$(grep -rhoiE 'create table +(if not exists +)?(public\.)?[a-z_][a-z0-9_]*' \
-  bot/supabase/migrations/*.sql 2>/dev/null \
-  | sed -E 's/.*[[:space:]]//; s/^public\.//' | grep -vx 'public' | sort -u)
-khai=$(sed -n '/^const BANG = \[/,/^\];/p' scripts/sao-luu.mjs)
-thieu_bang=""
-for t in $bang_mig; do
-  grep -q "\"$t\"" <<<"$khai" || thieu_bang+="$t "
-done
-if [[ -n "$thieu_bang" ]]; then
-  canh "Bảng có migration nhưng KHÔNG có trong BANG của sao-luu.mjs: $thieu_bang"
-  printf '   → thêm vào mảng BANG trong scripts/sao-luu.mjs.\n'
-  printf '   → bảng không nằm trong BANG là bảng chưa từng được sao lưu lần nào.\n'
-else
-  printf '\033[32m✓\033[0m Sao lưu: mọi bảng sinh từ migration đều có trong BANG\n'
-fi
-
-# ── schema.sql có theo kịp migration không? ─────────────────────────────────
-# `schema.sql` là lưới an toàn DUY NHẤT để dựng lại từ số không (CLAUDE.md §6),
-# nhưng nó do `xuat_schema()` sinh ra khi CHẠY `scripts/sao-luu.mjs` — ai áp
-# migration qua MCP rồi quên chạy sao lưu là nó lặng lẽ tụt lại. Bắt 08/09/2026:
-# `20260907h` merge hôm trước mà `schema.sql` không hề có `diem_tin`,
-# `can_chu_duyet` — đúng hình lỗi đẻ ra OPEN-46, chỉ khác là lần này thiếu
-# NGƯỢC (repo thiếu so với DB) chứ không phải DB thiếu so với repo.
-#
-# Chỉ soi tên HÀM: tên bảng đã có khối trên lo, còn cột thì nhiều migration
-# thêm bằng `add column if not exists` khó tách chắc chắn.
-ham_mig=$(grep -rhoiE 'create or replace function +(public\.)?[a-z_][a-z0-9_]*' \
-  bot/supabase/migrations/*.sql 2>/dev/null \
-  | sed -E 's/.*[[:space:]]//; s/^public\.//' | grep -vx 'public' | sort -u)
-# Hàm sinh ra rồi bị migration SAU gỡ đi thì không còn phải có trong schema.sql
-# (`listing_facts_touch_status`: tạo 20260826, gỡ 20260904b — dương tính giả đầu
-#  tiên mà phép kiểm này bắt được, 08/09/2026).
-ham_bo=$(grep -rhoiE 'drop function +(if exists +)?(public\.)?[a-z_][a-z0-9_]*' \
-  bot/supabase/migrations/*.sql 2>/dev/null \
-  | sed -E 's/.*[[:space:]]//; s/^public\.//' | grep -vx 'public' | sort -u)
-thieu_ham=""
-for f in $ham_mig; do
-  grep -qxF "$f" <<<"$ham_bo" && continue
-  grep -qi "FUNCTION public\.$f(" bot/supabase/schema.sql || thieu_ham+="$f "
-done
-if [[ -n "$thieu_ham" ]]; then
-  canh "Hàm có trong migration nhưng KHÔNG có trong schema.sql: $thieu_ham"
-  printf '   → chạy `node scripts/sao-luu.mjs` (cần SUPABASE_SERVICE_ROLE_KEY) để sinh lại schema.sql.\n'
-  printf '   → schema.sql cũ là dựng lại từ số không sẽ thiếu đúng mấy hàm đó.\n'
-else
-  printf '\033[32m✓\033[0m schema.sql có đủ hàm mà migration sinh ra\n'
-fi
+# Bỏ cùng sao lưu 11/09/2026: soát bảng migration ↔ BANG (sao-luu.mjs) và hàm migration ↔ schema.sql.
 
 printf '\n── Số đếm hiện tại ──\n'
 printf '%s BR · %s FR · %s NFR · %s UF · %s WF · %s OPEN · %s INS\n' \

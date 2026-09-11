@@ -25,7 +25,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-38 | Ảnh tin: thumbnail và watermark trên bậc Free | Thấp | FR-165, NFR-16 |
 | OPEN-41 | Nhà cung cấp model: giữ Claude trên Supabase hay theo AOND §VII (Gemini rồi chạy local)? | Thấp | SRS-2, FR-138, DH-06 |
 | OPEN-42 | Ngưỡng CTV: hạn trả lời 120 phút, hạng Vàng ≥90% / Bạc ≥70% — đều [giả định BA] | Trung bình | FR-173, FR-137, DH-03 |
-| OPEN-47 | Tám bảng chưa từng được sao lưu — đã vá; còn treo: bucket `masterdb-raw` chưa có file, Storage `listing-public` chưa nằm trong bản sao nào | Cao | FR-165, OPEN-25 |
+| OPEN-47 | Tám bảng chưa từng được sao lưu — đã vá; còn treo: bucket `masterdb-raw` chưa có file, Storage `listing-public` chưa nằm trong bản sao nào · **11/09/2026: sao lưu bỏ hẳn (OPEN-25)** — phần "bảng thiếu trong bản sao" hết đối tượng | Cao | FR-165, OPEN-25 |
 | OPEN-50 | **Ngưỡng điểm để tin được rao, và tin cũ có bị đo lại không** (FR-177 d, 07/09): (a) ngưỡng **70/100** là *[giả định BA]* — kịch bản Gemini của sếp chỉ nói "càng đủ điểm càng cao và được rao", không nêu con số. Cao quá thì chính chủ hụt vài điểm bị chặn rao; thấp quá thì cổng vô nghĩa. (b) Hiện chỉ tin **tạo từ chat** (`can_chu_duyet`) chịu cổng điểm + phải chủ gật; **173 tin nhập Excel/admin giữ luật cũ** (giá + diện tích + phường) — 38/164 tin đang rao có điểm < 70, nếu áp cổng cho cả chúng thì rổ hàng tụt ngay 23%. Phương án: (1) giữ nguyên — cổng chỉ cho hàng mới từ chat, hàng cũ để yên, dọn dần bằng vòng hỏi; (2) hạ ngưỡng xuống 60 rồi áp cho tất cả; (3) áp cho tất cả ở ngưỡng 70, chấp nhận 38 tin tụt về `cho_thong_tin` cho tới khi bổ sung. **Khuyến nghị BA: (1)** — sao Bắc Đẩu là lịch xem nhà, chặn hàng đang chạy không đổi lại được gì. | Trung bình | FR-177, FR-155, OPEN-26, DH-03 |
 | OPEN-54 | **Ngưỡng "giọng có ra không" và đường chạy thật sau fine-tune** (FR-180, 09/09/2026): chủ dự án chốt lộ trình (300 mẫu → Qwen2.5-3B/7B Unsloth trên 4060 → Gemini Flash tuning hoặc VPS GPU) nhưng chưa chốt (a) ngưỡng ưng bằng số — đề xuất sếp chấm mù 20 câu kiểm, ≥ 14/20 chọn bản mới; (b) chạy thật bằng Gemini Flash tuning (rẻ, không tự vận hành, model đóng) hay VPS GPU chạy Qwen (giữ model mở, ~1–2 triệu/tháng, phải tự trực); (c) mẫu chứa chat thật có tên/SĐT — có che trước khi đưa lên Gemini không. **Khuyến nghị BA**: (a) 14/20; (b) Gemini Flash trước, VPS GPU khi có > 1.000 mẫu và cần ghi giọng riêng; (c) che SĐT bằng `che_sdt()` lúc xuất, giữ tên. | Trung bình | FR-180, OPEN-42 |
 | OPEN-53 | **Ảnh đếm tấm, chưa kiểm ảnh có thật là căn đó** (FR-177 f, 09/09/2026): chủ dự án chốt "có 3 ảnh thì tính đủ, ảnh nào cũng được" — 3 tấm bất kỳ là 10/10 điểm ảnh. Chủ nhà gửi 3 ảnh mạng / ảnh căn khác vẫn được điểm tối đa; web hiện ảnh đó cho khách. Phương án: (1) giữ nguyên, CTV khảo sát (FR-177 a bước cuối) là lưới; (2) chỉ tính ảnh sau khi admin duyệt (FR-105, đã cố ý chưa làm); (3) model chấm "ảnh có phải nhà/sổ/hẻm không" trước khi tính điểm. **Khuyến nghị BA: (1)** cho tới khi có khách thật bị lừa ảnh. | Thấp | FR-177, FR-105 |
@@ -54,7 +54,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-20 | ✅ **ĐÃ CHỐT 27/08/2026** — LÀM hạng người rao (FR-155), nhưng bằng công thức khác AOND; ngưỡng treo ở OPEN-26 | FR-155, OPEN-26 |
 | OPEN-22 | ✅ **ĐÃ CHỐT 27/08/2026** — dữ liệu chia theo dòng; người nhận theo `zalo_user_id`, vai xét từng lượt theo nội dung (FR-157 d) | FR-157 |
 | OPEN-23 | ✅ **ĐÃ CHỐT 27/08/2026** — xoá `rate-ctv` + bảng `ratings`; FR-102 `[deprecated → FR-137]` | FR-137 |
-| OPEN-25 | ✅ **ĐÃ CHỐT 27/08/2026** — ở lại Free, điều kiện: chạy `sao-luu.mjs` định kỳ + giám sát bridge; xem lại khi có giao dịch thật đầu tiên | NFR-16, FR-152 |
+| OPEN-25 | ✅ **ĐÃ CHỐT 27/08/2026** — ở lại Free, điều kiện: chạy `sao-luu.mjs` định kỳ + giám sát bridge; xem lại khi có giao dịch thật đầu tiên · **11/09/2026: chủ dự án bỏ sao lưu, chấp nhận rủi ro** [nguồn: chủ dự án 11/09/2026 — "giờ không cần backup ở trên OneDrive nữa, bỏ hết file backup và câu lệnh backup đi, chơi đơn giản"; chọn "Bỏ hết sạch"]. Gỡ `sao-luu.mjs`, `phuc-hoi.mjs`, `soat-phuc-hoi.mjs`, `xuat-onedrive.mjs`. Supabase gói Free không tự sao lưu — mất dữ liệu là không lấy lại được | NFR-16, FR-152 |
 | OPEN-29 | ✅ **ĐÃ CHỐT 27/08/2026** — bỏ dấu trước khi khớp mọi regex cổng (FR-161) | FR-161 |
 | OPEN-30 | ✅ **ĐÃ CHỐT 28/08/2026** — mọi lệnh gọi model bọc try/catch + `ghiLoi` + câu mẫu (chat-reply v40, nudge v14+) | FR-152, FR-161 |
 | OPEN-36 | ✅ **ĐÃ CHỐT 02/09/2026** — lưu hết thông tin chủ chia sẻ, khách hỏi mới khai; liên hệ chỉ mở lúc chốt lịch xem | INS-11, FR-104 |
@@ -195,6 +195,8 @@ liệu (FR-173). Thang riêng cho CTV, khác FR-155.
 cùng lúc. **Chờ**: chủ dự án.
 
 ### OPEN-47 · Tám bảng chưa từng được sao lưu
+**11/09/2026: sao lưu đã bỏ hẳn (OPEN-25)** — `sao-luu.mjs` gỡ khỏi repo. Các đoạn
+dưới là lịch sử; chỉ còn ý nghĩa ở phần ảnh gốc (`masterdb-raw`).
 **Vấn đề** (soát 05/09/2026): `scripts/sao-luu.mjs` liệt kê tay 22 bảng, DB có 30. Tám
 bảng chưa từng vào bản sao nào: `app_config`, `curated_lists`, `inbound_events`,
 `inbound_ledger`, `listing_media`, `media_cleanup_queue`, `property_events`,
@@ -314,7 +316,7 @@ ngay". Dựng lại thì phải cấp FR mới và viết migration mới theo s
 
 **Một chi tiết dễ mất**: Zalo **XOAY** refresh_token — mỗi lần đổi là cái cũ chết ngay. Nên
 bảng giữ nó là bản duy nhất còn dùng được; mất là phải vào Zalo Developers cấp tay từ đầu,
-và nó phải nằm trong mảng `BANG` của `scripts/sao-luu.mjs`.
+và từ 11/09/2026 không còn sao lưu (OPEN-25), nên mất DB là mất luôn token này.
 
 **Phương án**: (a) để treo tới khi thật sự dùng OA API; (b) dựng lại ngay thành FR mới.
 **Khuyến nghị BA**: (a) — dựng một đường làm mới token cho một API không ai gọi là code

@@ -3,8 +3,7 @@
 // (`tin.md` + ảnh), kèm `ro-hang.csv` mở thẳng bằng Excel.
 //
 // ====================== VÌ SAO CÓ CÁI NÀY, VÀ NÓ KHÔNG PHẢI CÁI GÌ ======================
-// `sao-luu.mjs` ghi ra JSON theo bảng — an toàn để PHỤC HỒI, không phải để ĐỌC.
-// Muốn xem "rổ hàng đang có gì" thì mở 31 file JSON là việc không ai làm.
+// Muốn xem "rổ hàng đang có gì" mà mở bảng `listings` 56 cột là việc không ai làm.
 //
 // Script này lấp đúng chỗ đó. Nhưng nói rõ ngay để không ai nhầm:
 //
@@ -16,10 +15,11 @@
 // phát lại toàn bộ tin cũ cho khách. Và markdown không giữ UUID, khoá ngoại,
 // `status`, `*_source` — đọc lại được, DỰNG LẠI KHÔNG ĐƯỢC.
 //
-// Muốn có bản sao thật: `node scripts/sao-luu.mjs`. Hai việc khác nhau, làm cả hai.
+// Dự án KHÔNG còn sao lưu DB (chủ dự án bỏ 11/09/2026) — thư mục này không thay
+// được bản sao.
 //
 // ============================== CÁCH DÙNG ==============================
-//   Khoá đặt MỘT LẦN vào scripts/.env (dùng chung với sao-luu.mjs, đã gitignore):
+//   Khoá đặt MỘT LẦN vào scripts/.env (đã gitignore):
 //       SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
 //   rồi:
 //       node scripts/xuat-ro-hang.mjs                      → ../nhadat-ro-hang/<ngày>/
@@ -35,7 +35,7 @@
 //
 // THƯ MỤC ĐÍCH NẰM NGOÀI REPO, và script TỪ CHỐI ghi vào trong repo: `tin.md`
 // mang mô tả nguyên văn (có SĐT thật) và `location_raw` (địa chỉ nhà dân),
-// còn repo này đang PUBLIC. Cùng lý do, cùng cách chặn với `sao-luu.mjs`.
+// còn repo này đang PUBLIC.
 //
 // ĐỂ LÊN Ổ CHUNG CÔNG TY (OneDrive/Google Drive) THÌ NHỚ: thư mục này có SĐT
 // và địa chỉ khách. Đặt ở thư mục HẠN CHẾ QUYỀN, không phải "Shared with
@@ -48,7 +48,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));
 
-// Nạp scripts/.env — y hệt sao-luu.mjs: `set KEY=...` trong cmd chỉ sống đúng
+// Nạp scripts/.env: `set KEY=...` trong cmd chỉ sống đúng
 // cửa sổ đó, bắt gõ lại mỗi lần thì sớm muộn cũng quên.
 const ENV_FILE = join(HERE, ".env");
 if (existsSync(ENV_FILE)) {
@@ -123,7 +123,7 @@ if (dich === GOC_REPO || dich.startsWith(GOC_REPO + sep)) {
 // ── Đọc dữ liệu ─────────────────────────────────────────────────────────────
 const TRANG = 1000;
 
-// Cùng luật với sao-luu.mjs: hỏi DB số dòng THẬT bằng `count=exact` rồi đối
+// Luật: hỏi DB số dòng THẬT bằng `count=exact` rồi đối
 // chiếu. Một trang rỗng sớm (proxy cắt, db_max_rows, timeout) mà không đối
 // chiếu thì cho ra thư mục THIẾU TIN nhìn y hệt thư mục đủ.
 async function keo(ten, chon = "*", loc = "") {
@@ -302,7 +302,7 @@ function vietTinMd(l, anh, facts) {
 
   out.push("---");
   out.push(`_Xuất ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC từ Supabase. ` +
-    `Bản ĐỌC, không phải bản sao lưu — xem \`scripts/sao-luu.mjs\`._`);
+    `Bản ĐỌC, không phải bản sao lưu._`);
   return out.join("\n");
 }
 
@@ -344,7 +344,7 @@ const soTay = {
   xuat_luc: new Date().toISOString(),
   nguon: URL_DU_AN,
   KHONG_PHAI_BAN_SAO_LUU: "Chỉ 3/31 bảng (listings, media, listing_facts). " +
-    "Không dựng lại được DB từ thư mục này. Bản sao thật: scripts/sao-luu.mjs",
+    "Không dựng lại được DB từ thư mục này. Dự án không còn sao lưu DB (bỏ 11/09/2026).",
   chi_ban, co_chep_anh: !!goc_anh, so_tin: 0, so_anh_chep: 0, so_anh_thieu: 0,
   trang_thai: "chua_xong",
 };
@@ -452,7 +452,7 @@ try {
     "idempotency, giao dịch, hồ sơ khách. Markdown không giữ UUID/khoá ngoại,",
     "nên **đọc lại được nhưng dựng lại DB thì không**.",
     "",
-    "Bản sao thật: `node scripts/sao-luu.mjs` — chạy riêng, làm cả hai.",
+    "Dự án không còn sao lưu DB (bỏ 11/09/2026) — thư mục này không thay được bản sao.",
     "",
     "## Riêng tư",
     "",
@@ -470,7 +470,7 @@ try {
   if (goc_anh) console.log(`  ảnh: chép ${soTay.so_anh_chep}, không tìm thấy ${soTay.so_anh_thieu}`);
   else console.log(`  ảnh: ${media.length} đường dẫn được liệt kê, CHƯA chép (thêm --anh "<đường dẫn masterDB>")`);
   console.log(`\n\x1b[32mXONG\x1b[0m — mở ${join(dich, "README.md")}`);
-  console.log("Nhắc: đây KHÔNG phải bản sao lưu. Bản sao thật: node scripts/sao-luu.mjs");
+  console.log("Nhắc: đây KHÔNG phải bản sao lưu.");
 } catch (e) {
   soTay.trang_thai = "hong";
   soTay.loi = String(e?.message ?? e);

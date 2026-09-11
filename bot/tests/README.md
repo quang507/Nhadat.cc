@@ -6,14 +6,14 @@
 "máy xanh, máy tao đỏ" và không ai biết bên nào đúng.
 
 ```bash
-bun run kiem       # cổng trước mọi commit — gồm 6 bộ offline dưới đây
+bun run kiem       # cổng trước mọi commit — gồm 5 bộ offline dưới đây
 bun run test:sec   # TS-SEC thật, DB thật — KHÔNG nằm trong `kiem`, cần Internet
 ```
 
-`bun run kiem` = `kieu` (tsc) → `build` (next) → `test:bot` → `test:saoluu` →
-`truyvet`.
+`bun run kiem` = `kieu` (tsc) → `kieu:bot` (deno) → `build` (next) → `test:bot`
+→ `test:rohang` → `test:masterdb` → `truyvet`.
 
-## Sáu bộ chạy offline (315 ca, không cần mạng, không đụng DB thật)
+## Năm bộ chạy offline (294 ca, không cần mạng, không đụng DB thật)
 
 | Bộ | Ca | Lệnh | Giữ bất biến nào |
 |---|---|---|---|
@@ -24,7 +24,6 @@ bun run test:sec   # TS-SEC thật, DB thật — KHÔNG nằm trong `kiem`, c�
 | `fr161-go-lan-dau.mjs` | 9 | `bun run test:bot` | Câu gõ LẪN dấu vẫn nhận ra là câu rao / câu hỏi mua |
 | `fr164-loi-sua-va-cau-hoi-treo.mjs` | 8 | `bun run test:bot` | Câu vừa sửa một trường vừa trả lời câu hỏi treo thì ghi CẢ HAI |
 | `ts-sec-anon.tu-kiem.mjs` | 4 cảnh | `bun run test:bot` | Bộ TS-SEC phân biệt "DB từ chối" với "không tới được" |
-| `scripts/sao-luu.tu-kiem.mjs` | 21 | `bun run test:saoluu` | Sao lưu phân biệt "đủ" với "trông như đủ" |
 
 Hỏng thì thoát với mã khác 0.
 

@@ -123,14 +123,8 @@ vì ai đó đã chạy `git` bằng **root** một lần, để lại file thu�
 `.git/`. Sửa: `sudo chown -R nhadat:nhadat /opt/nhadat` rồi pull lại bằng
 `nhadat`. Từ đây trở đi đừng chạy `git` trong `/opt/nhadat` bằng root.
 
-## 8. Sao lưu (OPEN-25) — cùng VPS
+## 8. Sao lưu — đã bỏ (11/09/2026)
 
-Supabase Free không có backup. Đặt cron chạy `scripts/sao-luu.mjs` mỗi đêm,
-khoá `SUPABASE_SERVICE_ROLE_KEY` để trong `/home/nhadat/.nhadat-backup.env`
-(chmod 600), thư mục đích ngoài repo:
-
-```
-0 20 * * * . /home/nhadat/.nhadat-backup.env && cd /opt/nhadat && node scripts/sao-luu.mjs /home/nhadat/backup >> /home/nhadat/backup.log 2>&1
-```
-
-(20:00 UTC = 03:00 VN.)
+Chủ dự án bỏ toàn bộ sao lưu; `scripts/sao-luu.mjs` không còn trong repo. Nếu
+VPS còn cron `sao-luu.mjs` thì xoá dòng đó bằng `crontab -e` (user `nhadat`),
+và xoá luôn `/home/nhadat/.nhadat-backup.env` (file đó giữ khoá service_role).
