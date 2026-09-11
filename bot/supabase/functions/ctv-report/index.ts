@@ -21,6 +21,7 @@ import {
   serviceClient,
 } from "../_shared/claude.ts";
 import { congBiMat } from "../_shared/gate.ts";
+import { boBaoLai } from "../_shared/bao_lai.ts"; // 11/09: bỏ bong bóng 💾 khỏi hội thoại đem chấm
 import { RATE_CTV_RUBRIC } from "../_shared/prompts.ts";
 
 const Score = z.object({
@@ -123,7 +124,12 @@ Deno.serve(async (req) => {
       const { data: msgs } = await client.from("messages")
         .select("sender, body").eq("conversation_id", c.id)
         .order("created_at", { ascending: false }).limit(20);
+      // Bong bóng 💾 (bảng số liệu báo lại cho người bán, 11/09/2026) không phải
+      // lời thoại — để lọt vào đây thì rubric "tối đa 1 emoji / không markdown"
+      // chấm nó là bot sai giọng, kéo điểm CTV xuống oan. Bỏ trước khi chấm.
       const convo = (msgs ?? []).reverse()
+        .map((m) => ({ ...m, body: boBaoLai(m.body) }))
+        .filter((m) => m.body)
         .map((m) => `${VAI_NHAN[m.sender] ?? String(m.sender).toUpperCase()}: ${m.body}`)
         .join("\n");
       if (!convo) continue;

@@ -263,9 +263,9 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
 v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
-check("TOIUU-07 người bán trả lời câu chờ ≤ 20 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại)", v.n <= 20 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 21 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó)", v.n <= 21 && v.r.body.role === "seller", `${v.n}`);
 v = await vong({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi" });
-check("TOIUU-07b lượt sau của cùng người bán ≤ 18 (không còn update tên trợ lý)", v.n <= 18, `${v.n}`);
+check("TOIUU-07b lượt sau của cùng người bán ≤ 19 (không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu)", v.n <= 19, `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
 check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
 fresh();
@@ -1356,6 +1356,76 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-da", text: "căn hộ chung cư Sunrise City tầng 12" });
   check("N12 chủ nhắc 'Sunrise City' (có trong kho) → ngữ cảnh model có khối DỰ ÁN với tiện ích 'Hồ bơi Olympic'; tin được gắn project_id", createCalls().some((c) => /DỰ ÁN \(kiến thức ĐÃ XÁC THỰC/.test(c.params.messages[0].content) && /Hồ bơi Olympic/.test(c.params.messages[0].content)) && db().t.listings[0].project_id === db().t.projects[0].id, JSON.stringify({ p: createCalls().at(-1)?.params.messages[0].content.slice(0, 400), l: db().t.listings[0] }));
   delete globalThis.__rpc.match_projects;
+}
+
+// ── 11/09: BÁO LẠI THỨ ĐÃ LƯU (app_config.bao_lai_da_luu) ─────────────────────
+// Chủ dự án: "chat một câu là nhắn đã thu thập được gì trong Supabase". Bong bóng
+// 💾 phải ĐỌC LẠI từ DB — nên các ca dưới chỉnh cột bằng tay (như trigger đọc
+// lệch) rồi kiểm bot nói đúng cột, không nói theo chữ khách.
+{
+  // Chưa có dòng cấu hình = tắt.
+  delete globalThis.__cauHinh;
+  fresh(seedKho);
+  db().insert("info_requests", { listing_id: db().t.listings[1].id, question: "phap_ly", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
+  check("BLDL-01 chưa bật công tắc → không có bong bóng 💾", r.body.role === "seller" && r.body.replies.length > 0 && !r.body.replies.some((x) => /💾/.test(x)), JSON.stringify(r.body.replies));
+
+  // day_du: cột diện tích bị "đọc lệch" thành 6 trong khi chủ nhà gõ "6x11".
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "day_du" };
+  fresh(seedKho);
+  let LB = db().t.listings[1]; // BDS-Q5-0002 · 99 Nguyễn Trãi · Phường 3 · 7 tỷ · cho_thong_tin
+  db().t.sellers[0].active_listing_id = LB.id;
+  LB.area_m2 = 6;
+  LB.can_chu_duyet = true; // chưa chủ duyệt → không tự lên kệ, lượt sau còn hỏi qua model
+  db().insert("listing_facts", { listing_id: LB.id, question: "dien_tich", answer: "6x11", source: "seller_chat" });
+  db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
+  let bl = r.body.replies.at(-1) ?? "";
+  check("BLDL-02 day_du → bong bóng CUỐI là 💾, đứng riêng", /^💾 Đã lưu/.test(bl) && r.body.replies.length >= 2, JSON.stringify(r.body.replies));
+  const nhanTT = ({ cho_thong_tin: "chưa đăng", dang_ban: "đang rao", dang_quan_tam: "đang rao" })[LB.status];
+  check("BLDL-03 💾 nói ĐÚNG cột trong DB (6m², không phải 66), kèm địa chỉ/phường/giá và trạng thái ĐANG nằm trong DB", /· 6m²/.test(bl) && !/66m²/.test(bl) && /99 Nguyễn Trãi/.test(bl) && /Phường 3/.test(bl) && /giá 7 tỷ/.test(bl) && !!nhanTT && bl.includes(`BDS-Q5-0002 (${nhanTT})`), `${LB.status} | ${bl}`);
+  check("BLDL-03b 💾 đọc SAU khi ghi: pháp lý chủ vừa trả lời trong CHÍNH lượt này đã có mặt", /sổ hồng riêng/.test(bl), bl);
+  check("BLDL-04 day_du kèm câu trả lời gốc — '6x11' đứng cạnh 6m² để soi chỗ đọc lệch", /\nCâu trả lời gốc:.*"6x11"/.test(bl), bl);
+  check("BLDL-05 💾 vào sổ tin như mọi câu bot", db().t.messages.some((m) => m.sender === "bot" && /^💾/.test(m.body ?? "")));
+  // Lượt sau là câu RAO THÊM CĂN — nhánh này chắc chắn gửi lịch sử (khối NGỮ
+  // CẢNH) cho model. Phải thấy câu bot lượt trước (lịch sử có thật, phép kiểm
+  // không rỗng) mà KHÔNG thấy 💾 (đã lọc).
+  const loiLuot1 = Array.from(r.body.replies[0] ?? "").slice(0, 18).join("");
+  const nTruoc = createCalls().length;
+  r = await send({ external_user_id: "z-ccrb", text: "còn một căn nữa, bán nhà Phường 5 giá 6 tỷ 60m2" });
+  const moi = createCalls().slice(nTruoc);
+  const vao = (c) => (c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : JSON.stringify(m.content)).join("\n") + JSON.stringify(c.params.system ?? "");
+  check("BLDL-06 lượt sau: model CÓ nhận lịch sử (câu lượt trước) nhưng KHÔNG thấy 💾", loiLuot1.length > 5 && moi.some((c) => /NGỮ CẢNH/.test(vao(c)) && vao(c).includes(loiLuot1)) && !moi.some((c) => vao(c).includes("💾")), JSON.stringify({ loiLuot1, n: moi.length, dau: moi.map((c) => vao(c).slice(0, 500)) }));
+  check("BLDL-06b day_du → lượt nào cũng báo; tin VỪA RAO (Phường 5) là tin được báo", /^💾 Đã lưu tin/.test(r.body.replies.at(-1) ?? "") && /Phường 5/.test(r.body.replies.at(-1) ?? ""), JSON.stringify(r.body.replies));
+
+  // giá có chữ mà không ra số → báo thẳng, đó là tin web lọc giá sẽ không thấy.
+  fresh(seedKho);
+  LB = db().t.listings[1]; db().t.sellers[0].active_listing_id = LB.id;
+  LB.price_raw = "5 tới 6"; LB.price_vnd = null;
+  db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
+  check("BLDL-07 giá không đọc ra số → 💾 nói rõ '(chưa đọc ra số)'", /giá "5 tới 6" \(chưa đọc ra số\)/.test(r.body.replies.at(-1) ?? ""), JSON.stringify(r.body.replies));
+
+  // thay_doi: gắn cuối bong bóng cuối, không mã tin, chỉ báo khi DB đổi.
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
+  fresh(seedKho);
+  LB = db().t.listings[1]; db().t.sellers[0].active_listing_id = LB.id;
+  db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
+  bl = r.body.replies.at(-1) ?? "";
+  check("BLDL-08 thay_doi → 💾 gắn CUỐI bong bóng cuối, không bong bóng riêng, không mã tin", /\n💾 Đã lưu: /.test(bl) && !r.body.replies.some((x) => /^💾/.test(x)) && !/BDS-Q5/.test(bl), JSON.stringify(r.body.replies));
+  r = await send({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi em" });
+  check("BLDL-09 thay_doi + DB không đổi → không báo lại", r.body.replies.length > 0 && !r.body.replies.some((x) => /💾/.test(x)), JSON.stringify(r.body.replies));
+  LB.area_m2 = 66;
+  r = await send({ external_user_id: "z-ccrb", text: "dạ em" });
+  check("BLDL-10 thay_doi + DB vừa đổi (66m²) → báo lại", /💾 Đã lưu: .*66m²/.test(r.body.replies.at(-1) ?? ""), JSON.stringify(r.body.replies));
+
+  // Người MUA không bao giờ nhận bảng 💾.
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "day_du" };
+  fresh(seedKho);
+  r = await send({ external_user_id: "mua-bldl", text: "tìm nhà quận 5 tầm 6 tỷ" });
+  check("BLDL-11 nhánh người MUA không có 💾 dù công tắc bật", r.body.role !== "seller" && !JSON.stringify(r.body).includes("💾"), JSON.stringify(r.body).slice(0, 400));
+  delete globalThis.__cauHinh;
 }
 
 // ── kết ──
