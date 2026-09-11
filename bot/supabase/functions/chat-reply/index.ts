@@ -53,6 +53,8 @@ import {
 // FR-185: ảnh chủ nhà gửi → phân loại (model) + cất vào kho (Storage + listing_media).
 import { lechDienTich, phanLoaiAnh, type LoaiAnh } from "../_shared/ai/phan-loai-anh.ts";
 import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.ts";
+import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
+import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // FR-161 — RẤT NHIỀU người nhắn Zalo không bỏ dấu, mà mọi cổng regex ở đây
@@ -1146,13 +1148,46 @@ Deno.serve(async (req) => {
   const coChuGia = /\bgia\s*:?\s*\d/.test(tKD);
   const raoKhongChuBan = coLoaiBDS && coGiaRo && !coDauHieuMua &&
     (soChiTietCan >= 3 || (coChuGia && soChiTietCan >= 2));
-  const wantsSell =
+  const wantsSellLuat =
     (khop(/\b(bán|rao)\b|cho thu[êe]|sang nhượng|nhượng lại|sang lại/i, /\b(ban|rao)\b|cho thue|sang nhuong|nhuong lai|sang lai/) && coLoaiBDS &&
       (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang))) ||
     (moiGioiCoHang && coChiTiet && !khop(/\b(tìm|cần mua|muốn mua|thuê)\b/i, /\b(tim|can mua|muon mua)\b/)) ||
     coHangCoGia || raoKhongChuBan;
+  // ─── FR-205 (11/09/2026): LUẬT KHÔNG KẾT LUẬN ĐƯỢC THÌ HỎI MODEL ─────────────
+  // Chủ dự án: "có thể dùng AI vào các chỗ quá cứng trong code không" → "gật".
+  // Luật trên chỉ bắt KIỂU câu đã gặp: lượt bắn 42 câu có 6 câu rao không chữ
+  // "bán" rơi về câu chào khuôn; PR #104 vá luật cho đúng 6 câu đó, câu thứ bảy
+  // nói khác đi ("gia đình cần tiền nên để lại căn…") lại rơi. Nên: luật KHÔNG ra
+  // bán cũng không ra mua + người lạ + câu có mùi nhà đất → một lượt model trả
+  // `ban | mua | chua_ro` kèm cụm chữ làm bằng; `donVai` đòi cụm đó có nguyên
+  // trong câu, bịa cớ thì coi như chưa rõ. Model hỏng / chưa rõ → hỏi vai như cũ.
+  // Model chỉ CHỌN ĐƯỜNG; giá / diện tích / quận vẫn do luật tiền định bóc.
+  let vaiModel: VaiModel | null = null;
+  const hoSoMuaSom = (bCu?.preferences ?? null) as Record<string, unknown> | null;
+  if (nenHoiModelVai({
+    coHoSoBan: !!sellerRow,
+    raoTheoLuat: wantsSellLuat,
+    muaTheoLuat: hoiMuaTho,
+    daCoHoSoMua: BUYER_PROFILE_FIELDS.some(([k]) => hoSoMuaSom?.[k] != null && hoSoMuaSom?.[k] !== ""),
+    coAnh: !!imageUrl,
+    nhacMaCan: new RegExp(CODE_RE.source).test(textOrTag),
+    doiGoi: VOICE_RE_KD.test(tKD),
+    text,
+  })) {
+    try {
+      const ai = await napModel(client);
+      const r = await phanVaiBangModel(ai as unknown as Parameters<typeof phanVaiBangModel>[0], MODEL, text);
+      if (r) {
+        await doTien(client, r.usage as Parameters<typeof doTien>[1]);
+        vaiModel = donVai(r.ket, text);
+      }
+    } catch (e) {
+      await ghiLoi(client, "chat-reply phan vai (model)", e);
+    }
+  }
+  const wantsSell = wantsSellLuat || vaiModel === "ban";
   // Câu rao thì KHÔNG phải ý định mua, dù có chữ "mua" kể chuyện ("mua nhà cũ sửa lại bán").
-  const hoiMua = hoiMuaTho && !wantsSell;
+  const hoiMua = (hoiMuaTho || vaiModel === "mua") && !wantsSell;
   // Phường trong câu rao, bắt trên bản bỏ dấu — chỉ lấy CON SỐ nên bỏ dấu
   // không mất gì. Tự kiểm 02/09 (bơm câu rao qua handler thật): "bán nhà P4
   // giá 5 tỷ 8 50m2" tạo tin với phường RỖNG — bản cũ chỉ hiểu "phường 4",
