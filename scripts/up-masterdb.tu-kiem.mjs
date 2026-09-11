@@ -218,7 +218,7 @@ console.log("TỰ KIỂM up-masterdb.mjs — Storage giả, không chạm bucket
   await chay([src], { SUPABASE_URL: `http://127.0.0.1:${cong}`, SUPABASE_SERVICE_ROLE_KEY: "gia" });
   const s = soTayCua(src);
   ok("sổ tay: có chữ KHONG_PHAI_BAN_SAO_DU_LIEU",
-     typeof s?.KHONG_PHAI_BAN_SAO_DU_LIEU === "string" && /sao-luu\.mjs/.test(s.KHONG_PHAI_BAN_SAO_DU_LIEU));
+     typeof s?.KHONG_PHAI_BAN_SAO_DU_LIEU === "string" && /KHÔNG chứa bảng nào của Postgres/.test(s.KHONG_PHAI_BAN_SAO_DU_LIEU));
   sv.close();
 }
 

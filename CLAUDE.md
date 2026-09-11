@@ -117,50 +117,16 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   dòng thành công. Vá ở CẢ HAI tầng (`20260907a`: `CHECK sort_order 0..9999`;
   script: chỉ nhận số ≤4 chữ số) — vì `1700000000` vừa khít `int4` nên kiểu dữ
   liệu một mình không bắt được.
-  `sao-luu.mjs` kéo cả **31 bảng** về JSON, ghi `manifest.json` (bảng · số dòng
-  · file · trạng thái) và gọi `xuat_schema()` ghi
-  `bot/supabase/schema.sql` — **bậc Supabase Free không có backup tự động**,
-  đây là bản sao duy nhất đang tồn tại (OPEN-25). **Bản sao ĐẦU TIÊN đã có
-  07/09/2026**: 31/31 bảng, `trang_thai: "day_du"`, nằm trên OneDrive công ty ở
-  thư mục hạn chế quyền — trước hôm đó script chưa từng chạy lần nào. Cần
-  `SUPABASE_SERVICE_ROLE_KEY` (đặt trong `scripts/.env`, đã gitignore); khoá đó
-  bỏ qua mọi RLS nên tuyệt đối không ghi vào file được track, và thư mục đích
-  mặc định nằm NGOÀI repo vì bản sao chứa SĐT thật.
-  **Sao lưu phải chạy SAU khi dữ liệu đổi, không phải trước.** Bản 07/09 chạy
-  lúc 09:29, `up-anh.mjs` chạy sau — nên `listing_media.json` trong đó chỉ 1 KB
-  trong khi bảng thật có 1005 dòng: file ảnh còn nguyên trong Storage mà không
-  gì nói tấm nào của tin nào, đúng kịch bản OPEN-47. Đổi dữ liệu lớn thì sao lưu
-  lại, và đọc `manifest.json` xác nhận SỐ DÒNG chứ đừng nhìn thư mục thấy đủ file.
-  **Chỗ cất, hình dạng và nhịp chạy (10/09/2026 chiều).** Kho nằm ở
-  `003-Content/nhadat-backup/`, chia theo VIỆC chứ không theo kiểu dữ liệu (chủ
-  dự án: "chia cho các mục rổ hàng, người bán, người mua, dự án đi"):
-  `ro-hang/<MÃ TIN>/{tin.json,hoi-dap.json,anh/}` + `ro-hang.json` mục lục ·
-  `nguoi-ban/` (có SĐT) · `nguoi-mua/` (**không bao giờ có SĐT** — NFR-07) ·
-  `du-an/` + `theo-tinh/` · `he-thong/` (bản sao 34 bảng: `moi-nhat/` +
-  `theo-ngay/<ngày>/` giữ 7 ngày) · `kich-ban-chat/` · `DOC-TRUOC.md`.
-  `scripts/xuat-onedrive.mjs` dựng bốn thư mục đầu; `--day-du` chạy thêm
-  `sao-luu.mjs` vào `he-thong/`.
-  **Nhịp: 10 phút một lần**, Task Scheduler *trên máy này* ("Nhadat - dong bo
-  OneDrive" → `003-Content/nhadat-dong-bo.cmd`, log `nhadat-dong-bo.log` cắt còn
-  500 dòng mỗi lượt); phần `he-thong/` chỉ chạy ở lượt đầu mỗi giờ. Một lượt thường mất ~3 giây.
-  **File `.cmd` phải ASCII thuần + xuống dòng CRLF** (bắt 11/09): bản 10/09 có
-  chú thích tiếng Việt UTF-8, xuống dòng LF và `chcp 65001` ở đầu — cmd.exe đọc
-  lệch byte, CHẠY NHẦM từng mảnh chú thích (`'-hang' is not recognized…`) và
-  nuốt mất dòng lệnh thật (lượt 9:00 mất dòng ghi mốc giờ). Tác vụ chạy ẨN qua
-  `conhost.exe --headless cmd.exe /c …`: trước đó mỗi 10 phút bật một cửa sổ,
-  và người đóng cửa sổ là lượt đó chết giữa chừng (mã `0xC000013A`). Tác vụ cũ
-  09:00 & 15:00 trên máy Quang Lê Bá Duy (`nhadat-sao-luu.cmd`) vẫn còn, nay đổ
-  vào `he-thong/theo-ngay/`.
-  **Ba luật khiến nhịp 10 phút không thành gánh nặng — sửa script thì đừng phá:**
-  (1) CHỈ GHI KHI NỘI DUNG ĐỔI (`ghiNeuKhac`) — ghi đè cả kho mỗi 10 phút là
-  ~1,1 GB đẩy lên OneDrive mỗi ngày cho dữ liệu gần như đứng yên; lượt chạy
-  không đổi gì phải in `0 file ghi mới`. (2) Ảnh đã tải thì không tải lại.
-  (3) **Không xoá theo kho**: tin biến mất dưới DB thì thư mục ở đây chuyển sang
-  `ro-hang/_da-xoa/`, vì kho đồng bộ 10 phút một lần sẽ nhân bản một lượt
-  `delete` nhỡ tay trong vòng mười phút — và bản sao thành bản sao của tai nạn.
-  Cùng lý do đó, `he-thong/theo-ngay/` vẫn giữ ảnh chụp từng ngày dù đã có
-  `moi-nhat/`. `sao-luu.mjs` tự dọn: giữ 1 bản/ngày × 7 ngày, và CHỈ dọn khi
-  chuyến đó `day_du`.
+  **Không còn sao lưu** (chủ dự án bỏ 11/09/2026: "không cần backup ở trên
+  OneDrive nữa… chơi đơn giản", chọn "bỏ hết sạch"). Đã gỡ `sao-luu.mjs`,
+  `phuc-hoi.mjs`, `soat-phuc-hoi.mjs`, `xuat-onedrive.mjs`, hai bài tự kiểm,
+  CI job `saoluu`/`phuchoi` và `docs/12`. Lịch Windows "Nhadat - dong bo
+  OneDrive" đã xoá. **Supabase gói Free không tự sao lưu — mất dữ liệu là
+  không lấy lại được.** Chủ dự án biết và chấp nhận (OPEN-25).
+  Máy nào còn tác vụ gọi `sao-luu.mjs` thì xoá tác vụ đó: lịch
+  `nhadat-sao-luu.cmd` trên máy Quang Lê Bá Duy, cron trên VPS
+  (`bot/bridge-zca/VPS.md §8`). Cần bản cũ thì lấy trong git:
+  `git log --diff-filter=D -- scripts/sao-luu.mjs`.
   **Tầng bốn — chống tái phát (11/09/2026).** Ba việc, mỗi việc một cổng:
   (1) **Kiểm kiểu cho bot** — `tsconfig.json` loại hẳn `bot` nên 3.900 dòng
   `chat-reply` chưa từng qua kiểm kiểu. `bun run kieu:bot` (nằm trong `kiem`, cổng CI
@@ -214,17 +180,13 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   DA-DOI-CHIEU.json là một quyết định, không phải cách làm cổng xanh.**
   Dựng lại từ số không vẫn KHÔNG replay được cả thư mục: nạp `schema.sql` trước,
   rồi áp migration từ `20260902` trở đi.
-  `soat-migration.mjs` so DB ↔ repo. `phuc-hoi.mjs` + `soat-phuc-hoi.mjs` nạp
-  bản sao vào một DB RỖNG rồi chấm đạt/không (quy trình ở `docs/12`).
   `xuat-ro-hang.mjs` xuất rổ hàng ra thứ NGƯỜI đọc được — mỗi tin một thư mục
   (`tin.md` + `anh/`) kèm `ro-hang.csv` mở thẳng Excel; nó **không phải bản sao
   lưu** (chỉ 3/31 bảng, không giữ UUID/khoá ngoại) và `manifest.json` của nó ghi
   thẳng chữ `KHONG_PHAI_BAN_SAO_LUU`.
   `thu-du-an.mjs` nạp KHO DỰ ÁN (1.639 dự án HCM/Bình Dương/Long An, nguồn mogi
   theo lệnh chủ dự án 10/09) — chỉ lấy DỮ KIỆN, mô tả viết lại từ dữ kiện, giữ
-  `source_url`. `xuat-onedrive.mjs` dựng kho GỌN cho sếp xem
-  (hình dạng và nhịp chạy ở khối "Chỗ cất" bên trên).
-  `xuat-tin-hoi-dap.mjs` (10/09 sáng) đã bị nó thay, dùng bản mới.
+  `source_url`.
 
 **Prompt bot có HAI BẢN, DB đè code.** Bản trong git là bot/supabase/functions/_shared/prompts.ts (có PR, có review); bản sửa tay là bảng bot_prompts trong Supabase Table Editor — sửa ở đó bot đổi giọng trong vòng 60 giây, KHÔNG cần deploy, và nó ĐÈ bản trong code. Vì đè nên hai bên trôi xa nhau mà không ai thấy: 10/09 cau_hoi_mau trong DB cũ hơn code, bot chạy bộ câu hỏi cũ suốt. Nay bun run prompt so md5 hai bên và in khoá nào lệch; --day đẩy code lên DB, --keo in bản DB ra để dán ngược vào code rồi mở PR. Chạy nó sau mỗi lần sửa prompt ở một trong hai nơi.
 
@@ -237,34 +199,14 @@ vĩnh viễn (OPEN-46). Không ai thấy suốt hai tuần vì không có gì đ
 bên. Nay: thay đổi schema vẫn BẮT BUỘC đi qua một file trong
 `bot/supabase/migrations/`, `soat-migration.mjs` chặn trôi thêm, và
 `bot/supabase/schema.sql` là lưới an toàn để dựng lại từ số không (quy trình
-đầy đủ ở `bot/README.md §Phục hồi từ số không`).
+đầy đủ ở `bot/README.md §Dựng lại từ số không` — chỉ ra DB rỗng, vì không
+còn sao lưu dữ liệu).
 
 **Vết đó suýt lặp lại 07/09.** `20260907a_sort_order_la_so_thu_tu` áp lên
 production xong, file thì nằm trên một nhánh đã đẩy lên remote **mà không ai mở
 PR** — đúng hình lỗi đẻ ra OPEN-46, chỉ khác là bắt được sau vài giờ chứ không
 phải hai tuần (nay là PR #35). **Áp migration xong mà chưa mở PR cho file của nó
 thì việc chưa xong.** Đẩy nhánh lên không phải là đưa file về repo.
-
-**Danh sách bảng trong `sao-luu.mjs` phải đủ.** Nó liệt kê tay là cố ý (đọc là
-thấy), nhưng suốt 27/08 → 05/09 nó thiếu 8 bảng — trong đó `listing_media`, bản
-đồ ảnh ↔ tin (FR-165): mất nó thì file trong Storage còn nguyên mà không ai
-biết ảnh của tin nào (OPEN-47). Nay `liet_ke_bang()` bắt script hỏi DB mỗi lần
-chạy, thiếu bảng là DỪNG. Thêm bảng mới thì thêm vào mảng `BANG`.
-
-Vết đó lặp lại ngay hôm sau: `chat_quota` (migration `20260905d`) sinh ra mà
-không ai thêm vào `BANG`. `liet_ke_bang()` có bắt — nhưng chỉ bắt lúc CHẠY sao
-lưu, tức đêm hôm trên máy chủ, trước mặt không ai. Nay `soat-truy-vet.sh` so
-`create table` trong migration với `BANG` và kêu **ở PR**.
-
-**Sao lưu phải phân biệt "đủ" với "trông như đủ".** Ba luật, tất cả có ca kiểm
-trong `scripts/sao-luu.tu-kiem.mjs` (PostgREST giả, không chạm DB thật):
-`Prefer: count=exact` để đối chiếu số dòng kéo về với số DB tự báo — lệch là
-hỏng, vì một file JSON ngắn không kêu ca gì; `manifest.json` ghi ra ĐĨA với
-`trang_thai` (`day_du`/`thieu`/`hong`) — thư mục thiếu ba bảng trông y hệt thư
-mục đủ nếu không có gì nói ra; và mọi đường hỏng đều thoát khác 0. Thứ KHÔNG
-nằm trong bản sao (`storage.objects`, `auth.users`, `vault.secrets`) được liệt
-kê tường minh trong manifest — "không thấy" và "cố ý bỏ" nhìn giống hệt nhau
-lúc đang chữa cháy.
 
 **`bun run build` có thể im lặng bỏ sót lớp Tailwind MỚI** (bắt 07/09/2026 lúc
 dựng lại `/admin`). Lượt build đầu sau khi sửa giao diện sinh ra CSS **thiếu
@@ -305,11 +247,27 @@ Nay `listing_missing_facts` bỏ hẳn `nhom = 'phu'`, và mock e2e bỏ theo �
 lệch bản thật ở chỗ nào thì bộ e2e đo sai ở chỗ đó.
 
 **`schema.sql` tụt lại sau migration mà không ai biết** (cùng ngày). Nó do
-`xuat_schema()` sinh ra khi CHẠY `scripts/sao-luu.mjs`; áp migration qua MCP rồi
-quên chạy sao lưu là nó lặng lẽ cũ đi — `20260907h` merge hôm trước mà
-`schema.sql` không hề có `diem_tin`, `can_chu_duyet`. Đúng hình lỗi OPEN-46 nhưng
-thiếu NGƯỢC (repo thiếu so với DB), nên `soat-migration.mjs` không thấy. Nay
-`soat-truy-vet.sh` so tên hàm trong migration với `schema.sql` và kêu ở PR.
+`xuat_schema()` sinh ra; áp migration qua MCP rồi quên sinh lại là nó lặng lẽ
+cũ đi — `20260907h` merge hôm trước mà `schema.sql` không hề có `diem_tin`,
+`can_chu_duyet`. Đúng hình lỗi OPEN-46 nhưng thiếu NGƯỢC (repo thiếu so với DB),
+nên `soat-migration.mjs` không thấy. Phép soát hàm ↔ `schema.sql` trong
+`soat-truy-vet.sh` (cổng CI "Tài liệu — truy vết ID") **vẫn giữ** sau khi bỏ
+sao lưu 11/09/2026 — không còn script sinh lại nên nó là lưới duy nhất. Migration
+tạo HÀM MỚI thì thêm tay vào `schema.sql`: chạy trên DB
+`select pg_get_functiondef('public.<hàm>'::regprocedure)` rồi dán vào đúng chỗ,
+kèm trigger nếu có (PR #104 làm vậy cho `listings_doi_ma_theo_quan_loai`). Sinh
+lại cả file thì cần khoá service_role (lệnh dưới chưa chạy thử lần nào):
+
+```bash
+curl -s -X POST "https://tbcdpupiarkuxtntmosl.supabase.co/rest/v1/rpc/xuat_schema" \
+  -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" -d '{}' | jq -r . > bot/supabase/schema.sql
+```
+
+**Dòng "Sinh lại: node scripts/sao-luu.mjs" ở đầu `schema.sql` đã LỖI THỜI** —
+đừng làm theo. Chữ đó nằm trong chính hàm `xuat_schema()` trên DB, nên sinh lại
+vẫn ra đúng câu đó. Không sửa migration cũ; muốn đổi thì viết migration mới cho
+`xuat_schema()`.
 
 **Đừng tin `cron.job_run_details.status`** (NFR-18). `net.http_post()` trả về
 ngay khi xếp hàng nên cron luôn báo `succeeded`, kể cả lúc edge function trả

@@ -4,7 +4,7 @@
 // trên 4060, ưng thì Gemini Flash tuning hoặc VPS GPU").
 //
 // Chạy:  node scripts/xuat-mau-cau.mjs [thư-mục-đích]
-// Cần SUPABASE_SERVICE_ROLE_KEY trong scripts/.env (như sao-luu.mjs) — bảng
+// Cần SUPABASE_SERVICE_ROLE_KEY trong scripts/.env — bảng
 // mau_cau chỉ admin/service_role đọc được.
 // Đích mặc định: nhadat-backup/mau-cau/ (đã gitignore — ngữ cảnh là chat THẬT,
 // có tên khách, có thể có SĐT; KHÔNG commit).

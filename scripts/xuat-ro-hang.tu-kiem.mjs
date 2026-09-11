@@ -131,7 +131,7 @@ const { dich: d1 } = await canh(
   mf.trang_thai === "day_du" && mf.so_tin === 2
     ? ok("manifest ghi trang_thai=day_du, so_tin=2")
     : no(`manifest sai: ${JSON.stringify(mf).slice(0, 160)}`);
-  String(mf.KHONG_PHAI_BAN_SAO_LUU ?? "").includes("sao-luu.mjs")
+  String(mf.KHONG_PHAI_BAN_SAO_LUU ?? "").includes("Không dựng lại được DB")
     ? ok("manifest nói rõ ĐÂY KHÔNG PHẢI bản sao lưu")
     : no("manifest không cảnh báo — người ta sẽ tưởng đây là backup");
 }

@@ -47,7 +47,7 @@ Từ 24/08/2026 code nằm **trong chính repo này** (trước đó ở thư m�
 | `bot/supabase/migrations/` | Bản sao tham chiếu của migration đã áp (áp thật qua MCP) |
 | `bot/bridge-zca/` | Bridge Zalo acc clone — chạy trên máy chủ dự án, không deploy |
 | `bot/tests/` | Test hồi quy chạy tay bằng Node (`docs/10 §TS-HQ`) |
-| `scripts/` | Script vận hành chạy tay: up ảnh, sao lưu DB |
+| `scripts/` | Script vận hành chạy tay: up ảnh, xuất rổ hàng, soát DB |
 
 Chi tiết bot: [`bot/README.md`](bot/README.md). Quy ước và ranh giới bảo mật:
 [`CLAUDE.md`](CLAUDE.md).

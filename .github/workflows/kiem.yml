@@ -54,7 +54,7 @@ jobs:
       # `test:bot` kéo theo cả `ranh-gioi.mjs` — kiểm tĩnh ranh giới bóc tách ⟂
       # AI (mã tiền định không được chạm model/DB; tầng AI không được ghi bảng
       # nghiệp vụ). Để chung job cố ý: danh sách required status checks ở
-      # docs/11 §11.5 giữ nguyên 6 tên, thêm check mới là phải sửa branch
+      # docs/11 §11.5 giữ nguyên 5 tên, thêm check mới là phải sửa branch
       # protection bằng tay và người ta sẽ quên.
       - name: e2e + hồi quy FR-159/161/164 + ranh giới bóc tách ⟂ AI
         run: bun run test:bot
@@ -93,60 +93,25 @@ jobs:
       - name: Không có ID gãy, số đếm khớp README, không rò PII
         run: bun run truyvet
 
-  # Sao lưu là loại mã chỉ được kiểm đúng một lần trong đời — hôm mất dữ liệu.
-  # Job này bơm năm cách hỏng đã biết (bảng mới chưa khai, một bảng lỗi, DB trả
-  # thiếu dòng, không đọc được số dòng, xuất schema hụt) vào một PostgREST giả
-  # rồi soi mã thoát + manifest. Không chạm DB thật, không cần khoá.
-  saoluu:
-    name: Sao lưu — tự kiểm trên PostgREST giả
+  # Hai bài tự kiểm cho script GHI FILE, chạy trên máy chủ giả trong bộ nhớ —
+  # không chạm DB thật, không chạm bucket thật, không cần khoá.
+  rohang:
+    name: Rổ hàng + masterDB — tự kiểm trên máy chủ giả
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Script phân biệt được 'đủ' với 'trông như đủ'
-        run: bun run test:saoluu
-      # Cùng job, không thêm check mới: danh sách required status checks ở
-      # docs/11 §11.5 giữ nguyên 6 tên. Bản xuất rổ hàng cũng ghi file ra đĩa
-      # và cũng có thể lỡ ghi vào repo (SĐT thật → repo public), nên cùng loại
-      # rủi ro, cùng chỗ canh.
+      # Bản xuất rổ hàng ghi file ra đĩa và có thể lỡ ghi vào repo (SĐT thật →
+      # repo public).
       - name: Bản xuất rổ hàng không ghi vào repo, không nuốt dòng thiếu
         run: bun run test:rohang
-      # Cùng job, cùng lý do: `up-masterdb.mjs` đẩy bản gốc lên bucket, và cái
-      # phải chứng minh không phải "đẩy được" mà là "biết khi nào mình đẩy hụt"
-      # — bucket trả 200 mà không cất thì vòng lặp vẫn báo xong.
+      # `up-masterdb.mjs` đẩy bản gốc lên bucket, và cái phải chứng minh không
+      # phải "đẩy được" mà là "biết khi nào mình đẩy hụt" — bucket trả 200 mà
+      # không cất thì vòng lặp vẫn báo xong.
       - name: Đẩy masterDB biết khi nào mình đẩy hụt
         run: bun run test:masterdb
-
-  # Một bản sao chưa từng phục hồi thử KHÔNG PHẢI là bản sao. Job này chạy diễn
-  # tập thật: dựng schema, nạp một bản sao giả, rồi bơm 9 cách hỏng đã biết vào
-  # và soi mã thoát — chứng minh bộ soát phân biệt được "phục hồi được" với
-  # "trông như phục hồi được". Dùng Postgres thật trong service container, không
-  # chạm production, không cần khoá nào.
-  phuchoi:
-    name: Phục hồi — diễn tập trên Postgres thật
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd pg_isready --health-interval 5s
-          --health-timeout 5s --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      # `psql` là client, không phải server — cần riêng, service container ở
-      # trên chỉ cho cái server.
-      - name: Cài psql
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-      - name: Bộ soát phục hồi phải bắt được cả 9 cách hỏng
-        run: bun run test:phuchoi
 
   # ── CỔNG THỨ 7: REPO ↔ DB CÓ CÙNG DANH SÁCH MIGRATION KHÔNG ────────────────
   # Chủ dự án 10/09/2026: "thêm một cổng CI so danh sách migration trên database

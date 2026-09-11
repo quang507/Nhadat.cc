@@ -143,7 +143,7 @@ Chưa: bridge **im từ 27/08** (VPS chưa bật), 0 chủ nhà/CTV có Zalo uid
 | 2b · Địa bàn | Đợt 1 xong 03/09 (không ghi cứng Quận 5, copy nói Sài Gòn + Long An). Đợt 2 khi OPEN-27 nửa sau chốt: bảng `wards` một nguồn, SEO theo khu mới, mở cụm kề Q5 cũ + một huyện Long An có hàng thật | FR-174 |
 | 3 · Dữ liệu | 7 hạng mục theo `01 §1.5c` (sự kiện tin, khớp tin–hồ sơ, giá khu vực…) | INS-13 |
 | 4 · AOND còn thiếu | Màn hình nhãn + nút cướp quyền; thông số cho thuê/đất/công nghiệp đã làm (FR-186, OPEN-40 chốt 09/09); thưởng quy mô nếu OPEN-26 chốt | FR-135/141/172 |
-| 5 · Vận hành | Sao lưu định kỳ; lên Pro ngay khi có giao dịch thật đầu tiên | NFR-16, OPEN-25 |
+| 5 · Vận hành | Không sao lưu (chủ dự án bỏ 11/09/2026, chấp nhận rủi ro); lên Pro ngay khi có giao dịch thật đầu tiên | NFR-16, OPEN-25 |
 
 Ngoài 90 ngày: thoại, Messenger/Telegram, app, công nghiệp, đổi domain.
 
@@ -154,7 +154,7 @@ Ngoài 90 ngày: thoại, Messenger/Telegram, app, công nghiệp, đổi domain
 | 1 | **CTV + chủ nhà trả lời kịp** khi khách hỏi (FR-173) | <30% câu trả lời trong 48h; admin phải đỡ >50% | 2 tuần liền | 20 tin chủ thật; hỏi đúng câu khách hỏi |
 | 2 | **Khách chịu chat bot** không cần người thật ngay (INS-04) | Hội thoại → lịch xem <2%; cờ cần người >30% | Cờ >30% | Widget Zalo trên 20 trang tin nhiều view; đọc 50 hội thoại |
 | 3 | **Hạng làm người ta chăm hơn** (AOND §IV) | Hạng lên/xuống không đổi tỷ lệ trả lời | Không lệch sau 30 ngày | Nói hạng qua Zalo cho 3 NMG + 2 CTV, chưa cần UI |
-| 4 | **Free-tier chịu tới giao dịch đầu** (NFR-16) | Mất dữ liệu; Vercel đình chỉ | Một sự cố | Sao lưu hằng ngày, thử khôi phục một lần |
+| 4 | **Free-tier chịu tới giao dịch đầu** (NFR-16) | Mất dữ liệu; Vercel đình chỉ | Một sự cố | Không còn — chủ dự án bỏ sao lưu 11/09/2026, chấp nhận mất dữ liệu là không lấy lại được |
 | 5 | **Mở Sài Gòn + Long An không loãng kho** (FR-174 vs INS-08) | >50% phường/huyện mở có <5 tin sau 60 ngày | — | Mở cụm phường kề Q5 cũ trước; Long An theo một huyện có nguồn hàng thật |
 
 Đứng vững: không thu SĐT; phí chỉ khi chốt. Đã đổi: một tên bot Thái → mỗi khách một tên (FR-181, 09/09). Chưa đánh giá

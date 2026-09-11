@@ -21,7 +21,7 @@
 // kia thôi làm mắt xích duy nhất.
 //
 // ══════════════ CÁCH DÙNG ══════════════
-//   Khoá đặt MỘT LẦN vào scripts/.env (dùng chung sao-luu.mjs, đã gitignore):
+//   Khoá đặt MỘT LẦN vào scripts/.env (đã gitignore):
 //       SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
 //   rồi:
 //       node scripts/up-masterdb.mjs "D:\masterDB" --dry   ← xem trước, KHÔNG đẩy
@@ -35,8 +35,7 @@
 //
 // KẾT THÚC PHẢI ĐỐI CHIẾU: đếm file dưới đĩa so với đếm file trên bucket, lệch
 // một cái là thoát khác 0. Không có bước này thì "đẩy xong" chỉ là "vòng lặp
-// chạy hết", mà một thư mục hụt trông y hệt một thư mục đủ — đúng bài học của
-// sao-luu.mjs.
+// chạy hết", mà một thư mục hụt trông y hệt một thư mục đủ.
 
 import { readdirSync, statSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, relative, sep, resolve, dirname, extname } from "node:path";
@@ -45,7 +44,7 @@ import { fileURLToPath } from "node:url";
 const HERE = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));
 const GOC_REPO = resolve(HERE, "..");
 
-// Nạp scripts/.env — y hệt sao-luu.mjs.
+// Nạp scripts/.env.
 const ENV_FILE = join(HERE, ".env");
 if (existsSync(ENV_FILE)) {
   for (const line of readFileSync(ENV_FILE, "utf8").split(/\r?\n/)) {
@@ -159,7 +158,7 @@ const soTay = {
   trang_thai: "dang_chay",
   KHONG_PHAI_BAN_SAO_DU_LIEU:
     "Đây là bản gốc FILE của masterDB. Nó KHÔNG chứa bảng nào của Postgres — " +
-    "muốn sao lưu dữ liệu thì chạy scripts/sao-luu.mjs. Hai việc khác nhau, làm cả hai.",
+    "dự án không còn sao lưu DB (bỏ 11/09/2026).",
   qua_tran: qua.map((f) => ({ duong: f.duong, byte: f.cd })),
   da_len: 0, bo_qua_da_co: 0, hong: [],
 };
@@ -281,4 +280,4 @@ if (qua.length) {
 }
 
 console.log(`\n✓ ĐỦ — ${canCo.length} file khớp cả tên lẫn kích thước giữa đĩa và bucket ${BUCKET}.`);
-console.log("  Nhắc: đây là bản gốc FILE. Dữ liệu Postgres vẫn phải chạy scripts/sao-luu.mjs.");
+console.log("  Nhắc: đây là bản gốc FILE, không có bảng Postgres nào.");

@@ -147,19 +147,19 @@ hàng nên cron luôn báo `succeeded` kể cả khi function trả 500. Kết q
 - **Còi báo ngoài bridge**: `canh_bao_ngoai()` → ntfy.sh topic trong
   `app_config.ntfy_topic`; `bot_health_tick` kêu 1 tin/giờ khi bridge im. Đây là
   đường báo động DUY NHẤT không vòng lại qua bridge (FR-152 e).
-- **Sao lưu**: `scripts/sao-luu.mjs` (bậc Free không có backup tự động —
-  OPEN-25). Cần `SUPABASE_SERVICE_ROLE_KEY` trong biến môi trường, đích ghi
-  NGOÀI repo vì bản sao chứa SĐT thật. Mỗi lần chạy nó kéo **30 bảng** + gọi
-  `xuat_schema()` ghi `bot/supabase/schema.sql`; thiếu bảng nào chưa khai là nó
-  DỪNG (mã thoát ≠ 0) chứ không bỏ sót im lặng.
+- **Sao lưu**: KHÔNG CÒN — chủ dự án bỏ 11/09/2026. Supabase gói Free không
+  tự sao lưu — mất dữ liệu là không lấy lại được (OPEN-25).
+  `bot/supabase/schema.sql` chỉ là ảnh chụp DDL, không có dòng dữ liệu nào;
+  lệnh sinh lại ở `CLAUDE.md §6`.
 - **Soát trôi schema**: `node scripts/soat-migration.mjs` — so migration đã áp
   trên DB với file trong repo, và kiểm ảnh chụp schema còn mới. Chạy sau mỗi
   lần áp migration bằng MCP.
 
-### Phục hồi từ số không
+### Dựng lại từ số không
 
-Thứ tự này chưa diễn tập thật (chưa có project thứ hai để thử) — nhưng từng
-mảnh đã có và kiểm được. Cái KHÔNG có mới đáng sợ, nên ghi ra đây trước.
+Không còn sao lưu (chủ dự án bỏ 11/09/2026): làm theo đây ra một DB đúng cấu
+trúc nhưng RỖNG — tin, người bán, hội thoại đều mất. Thứ tự này chưa diễn tập
+thật (chưa có project thứ hai để thử).
 
 1. Tạo project Supabase mới, ghi lại URL + khoá.
 2. **Schema**: chạy `bot/supabase/schema.sql` trong SQL Editor. File này là ảnh
@@ -175,14 +175,12 @@ mảnh đã có và kiểm được. Cái KHÔNG có mới đáng sợ, nên ghi
    schema `so` (hai view nhìn như Excel) nằm NGOÀI vùng `xuat_schema()` quét
    nên không có trong `schema.sql`. Bỏ qua cũng không mất dữ liệu — chỉ là view.
 3. **Bí mật**: chép tay vào Vault — `ANTHROPIC_API_KEY`, `BRIDGE_SECRET`.
-   Không có trong bản sao lưu nào, cố ý.
-4. **Dữ liệu**: đổ 30 file JSON của bản sao lưu theo thứ tự khoá ngoại —
-   `admins`/`app_config`/`bot_prompts`/`required_facts` trước, rồi `projects`,
-   `sellers`, `ctvs`, `buyers`, `listings`, cuối cùng là các bảng con
-   (`listing_facts`, `listing_media`, `messages`, `reminders`…).
-5. **Storage**: hiện CHƯA có lối sao lưu file (OPEN-47). Nếu bucket còn thì giữ
-   nguyên; nếu mất thì chạy lại `scripts/up-anh.mjs` từ `masterDB/` — được vì
-   `listing_media` đã có trong bản sao nên biết ảnh nào của tin nào.
+   Không có trong `schema.sql`, cố ý.
+4. **Dữ liệu**: không còn bản sao nào để nạp. Cấu hình (`admins`,
+   `app_config`, `bot_prompts`, `required_facts`…) phải nhập lại tay; tin,
+   người bán, người mua, hội thoại thì mất hẳn.
+5. **Storage**: không sao lưu. Bucket còn thì giữ nguyên; mất là mất
+   (`masterDB/` cũng đã xoá 09/09, `up-anh.mjs` không còn nguồn).
 6. **Edge function**: deploy lại 9 function từ `bot/supabase/functions/` theo
    mục Deploy ở trên (bundle → deploy → kéo ngược → so byte).
 7. **Kiểm**: `bun run test:sec` phải xanh, `/admin` phải lên số, `/moi-gioi`
