@@ -60,14 +60,23 @@ Deno.serve(async (req) => {
         /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(anh)
       ? anh
       : null;
+    // XẾP THEO GIỜ SỰ KIỆN ở bridge (`luc`), không theo giờ request tới đây. Hai
+    // lệnh gửi sát nhau có thể tới ngược thứ tự: 11/09 09:27 lệnh "het_han" gửi
+    // trước mà tới sau mã QR mới, và xoá mất ảnh — /admin trống QR 100 giây.
+    // Lệnh cũ hơn trạng thái đang lưu thì bỏ qua. Bridge bản cũ không gửi `luc`
+    // (hoặc đồng hồ lệch quá 5 phút) thì dùng giờ server như trước.
+    const lucMs = Date.parse(String(body.luc ?? ""));
+    const luc = Number.isFinite(lucMs) && Math.abs(lucMs - Date.now()) < 5 * 60_000
+      ? new Date(lucMs).toISOString()
+      : new Date().toISOString();
     const { error: qErr } = await client.from("bridge_dang_nhap").update({
       trang_thai: tt,
       qr_png: qr,
       // Bridge đã vào luồng QR hoặc đã đăng nhập xong = yêu cầu quét lại đã làm.
       ...(tt === "cho_quet" || tt === "dang_nhap" ? { yeu_cau_quet_lai: false } : {}),
       ghi_chu: body.ghi_chu ? String(body.ghi_chu).slice(0, 200) : null,
-      cap_nhat: new Date().toISOString(),
-    }).eq("id", 1);
+      cap_nhat: luc,
+    }).eq("id", 1).lte("cap_nhat", luc);
     if (qErr) await ghiLoi(client, "escalation-feed qr", qErr.message);
     return jsonResponse({ ok: !qErr });
   }
