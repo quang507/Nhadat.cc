@@ -227,6 +227,135 @@ const KICH_BAN = [
       return [t?.status === "an", `trạng thái=${t?.status}`];
     },
   },
+  // ── 11/09/2026: LƯỢT BẮN 42 CA — mỗi ca một lỗi bong bóng 💾 lòi ra trên DB thật.
+  // Sửa ở PR "bóc tách 42 ca" (TS) + migration 20260911e (SQL).
+  {
+    so: 11,
+    ten: 'Giá lóng "9t5" — price_vnd phải 9,5 tỷ (bản trước: trống)',
+    async chay() {
+      const uid = "thu-hv-11";
+      await nhan(uid, "bán nhà hxh Nguyễn Trãi p3 q5, 4x16, 1 trệt 2 lầu, shr, 9t5");
+      const t = await tinCua(uid);
+      return [t?.price_vnd === 9500000000, `price_vnd=${t?.price_vnd} raw="${t?.price_raw}"`];
+    },
+  },
+  {
+    so: 12,
+    ten: '"4 tỷ rưỡi" — price_vnd 4,5 tỷ (bản trước: chuan_hoa_gia_raw gọt còn 4 tỷ)',
+    async chay() {
+      const uid = "thu-hv-12";
+      await nhan(uid, "bán nhà q11 phường 6 40m2 4 tỷ rưỡi");
+      const t = await tinCua(uid);
+      return [t?.price_vnd === 4500000000, `price_vnd=${t?.price_vnd} raw="${t?.price_raw}"`];
+    },
+  },
+  {
+    so: 13,
+    ten: '"75 triệu/m2, 50m2" — giá CẢ CĂN 3,75 tỷ, không phải 75 triệu',
+    async chay() {
+      const uid = "thu-hv-13";
+      await nhan(uid, "bán nhà quận 5 giá 75 triệu/m2, diện tích 50m2");
+      const t = await tinCua(uid);
+      return [t?.price_vnd === 3750000000, `price_vnd=${t?.price_vnd} raw="${t?.price_raw}"`];
+    },
+  },
+  {
+    so: 14,
+    ten: 'Cho thuê "3tr5 một tháng" — price_vnd 3,5 triệu (bản trước: trống)',
+    async chay() {
+      const uid = "thu-hv-14";
+      await nhan(uid, "cho thuê phòng trọ q10 có gác, 20m2, 3tr5 một tháng");
+      const t = await tinCua(uid);
+      return [t?.price_vnd === 3500000, `price_vnd=${t?.price_vnd} raw="${t?.price_raw}"`];
+    },
+  },
+  {
+    so: 15,
+    ten: '"sang nhượng căn hộ" không có chữ "bán" — vẫn phải MỞ tin, loại chung cư',
+    async chay() {
+      const uid = "thu-hv-15";
+      await nhan(uid, "Cần sang nhượng căn hộ The Sun Avenue quận 2 3pn 96m2, HĐMB, giá 5 tỷ");
+      const t = await tinCua(uid);
+      return [t?.property_type === "chung_cu", `tin=${t?.code} loại=${t?.property_type}`];
+    },
+  },
+  {
+    so: 16,
+    ten: '"bán căn 2PN Sunrise City Q7 tầng 15" — chung cư, KHÔNG có số tầng nhà',
+    async chay() {
+      const uid = "thu-hv-16";
+      await nhan(uid, "bán căn 2PN Sunrise City Q7 tầng 15 view sông 76m2 4ty3, sổ hồng");
+      const t = await tinCua(uid);
+      return [t?.property_type === "chung_cu" && t?.floors == null, `loại=${t?.property_type} floors=${t?.floors}`];
+    },
+  },
+  {
+    so: 17,
+    ten: 'Người MUA "có căn nào q5 tầm 5 tỷ không em" — KHÔNG được mở tin rao',
+    async chay() {
+      const uid = "thu-hv-17";
+      await nhan(uid, "có căn nào q5 tầm 5 tỷ không em");
+      const t = await tinCua(uid);
+      return [!t, `tin=${t?.code} floors=${t?.floors}`];
+    },
+  },
+  {
+    so: 18,
+    ten: 'Nhà Hà Nội — KHÔNG mở tin (bản trước: tin Quận 5)',
+    async chay() {
+      const uid = "thu-hv-18";
+      await nhan(uid, "bán nhà ở Hà Nội quận Cầu Giấy 50m2 9 tỷ");
+      const t = await tinCua(uid);
+      return [!t, `tin=${t?.code} quận=${t?.district}`];
+    },
+  },
+  {
+    so: 19,
+    ten: '"phường 9 chứ không phải phường 4" — ward phải là Phường 9',
+    async chay() {
+      const uid = "thu-hv-19";
+      await nhan(uid, "bán nhà p4 q5 60m2 7 tỷ");
+      await nhan(uid, "sai rồi em, phường 9 chứ không phải phường 4");
+      const t = await tinCua(uid);
+      return [t?.ward === "Phường 9", `ward=${t?.ward}`];
+    },
+  },
+  {
+    so: 20,
+    ten: '"hỏi gì hỏi lắm vậy em, anh bận" — KHÔNG thành tên phường',
+    async chay() {
+      const uid = "thu-hv-20";
+      await nhan(uid, "bán nhà q3 70m2 12 tỷ");
+      await nhan(uid, "hỏi gì hỏi lắm vậy em, anh bận");
+      const t = await tinCua(uid);
+      return [t?.ward == null, `ward=${t?.ward}`];
+    },
+  },
+  {
+    so: 21,
+    ten: 'Câu nói bằng giọng "quận năm phường hai … năm mươi mét vuông … bốn tỷ rưỡi"',
+    async chay() {
+      const uid = "thu-hv-21";
+      await nhan(uid, "bán nhà quận năm phường hai diện tích năm mươi mét vuông giá bốn tỷ rưỡi");
+      const t = await tinCua(uid);
+      return [
+        t?.ward === "Phường 2" && Number(t?.area_m2) === 50 && t?.price_vnd === 4500000000,
+        `ward=${t?.ward} dt=${t?.area_m2} price_vnd=${t?.price_vnd}`,
+      ];
+    },
+  },
+  {
+    so: 22,
+    ten: '"anh có 2 căn: 1 căn q5 …, 1 căn q11 …" — HAI tin, đúng hai quận',
+    async chay() {
+      const uid = "thu-hv-22";
+      await nhan(uid, "anh có 2 căn: 1 căn q5 50m2 6 tỷ, 1 căn q11 40m2 4 tỷ");
+      const s = await rest(`sellers?select=id&zalo_user_id=eq.${uid}`);
+      const ls = s.length ? await rest(`listings?select=district,unit_code&seller_id=eq.${s[0].id}&order=district`) : [];
+      const q = ls.map((l) => l.district).sort().join(",");
+      return [q === "Quận 11,Quận 5" && ls.every((l) => !l.unit_code), JSON.stringify(ls)];
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

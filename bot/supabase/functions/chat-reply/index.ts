@@ -34,15 +34,16 @@ import {
   boBaoLai, COT_BAO_LAI, docCheDo, layBaoLai, tomTatDaLuu,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
-import { bocQuan } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao
+import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
 // bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
-import { TIEN_KD, TIEN_CD, laDonViTy } from "../_shared/extraction/luat-tien.ts";
+import { TIEN_KD, TIEN_CD, TIEN_T_KEP, giaTheoM2, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
+import { soChuThanhSo } from "../_shared/extraction/so-chu.ts";
 import { thayLienHe } from "../_shared/extraction/luat-lien-he.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
   batXungHo, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
-  nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, type KetQuaKhop, type NgungRao,
+  nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // FR-185: ảnh chủ nhà gửi → phân loại (model) + cất vào kho (Storage + listing_media).
 import { lechDienTich, phanLoaiAnh, type LoaiAnh } from "../_shared/ai/phan-loai-anh.ts";
@@ -331,7 +332,7 @@ const XEM_THEM_RE_KD = /xem them|them (hinh|anh|tam)|con (hinh|anh|tam) (nao )?(
 const GIONG_RE_KD = /giong (giong )?(vay|nay|kieu nay|nhu vay|the nay)|tuong tu|na na|kieu (vay|nay|do)|nhu (vay|nay|the)|can (nao )?khac (giong|tuong tu)/;
 // Khách đòi gọi điện / voice (FR-79). "sđt tôi 0909…" (khách CHO số ở bước
 // chốt lịch) không khớp — chỉ khớp khi khách xin SỐ CỦA BÊN EM hay đòi gọi.
-const VOICE_RE_KD = /goi dien|goi (cho|lai) (em|anh|chi|toi|minh|tui)|\balo\b|\bvoice\b|\bcall\b|goi zalo|goi video|noi chuyen (dien thoai|qua dien thoai)|dien thoai cho (em|anh|chi|toi)|so (dien thoai|dt) (cua )?(em|be|ben em|ben minh|shop)/;
+const VOICE_RE_KD = /goi dien|goi (cho|lai) (em|anh|chi|toi|minh|tui)|\balo\b(?=[^.!?]*\b(?:duoc|dc|khong|ko|goi|nghe|may)\b)|\bvoice\b|\bcall\b|goi zalo|goi video|noi chuyen (dien thoai|qua dien thoai)|dien thoai cho (em|anh|chi|toi)|so (dien thoai|dt) (cua )?(em|be|ben em|ben minh|shop)/;
 // Khách chấm sao sau buổi xem (FR-65): "4 sao", "3/5", "chấm 4", "5 điểm".
 const SAO_RE_KD = /(?:^|[^\d])([1-5])\s*(?:sao\b|\/\s*5\b|diem\b)|cham\s*(?:cho\s*)?(?:em\s*)?([1-5])\b/;
 // "Hiện thông báo cho người ta" (02/09): vừa gán nhãn thì nói thẳng cho họ
@@ -555,7 +556,11 @@ Deno.serve(async (req) => {
   // `khop` thử CẢ HAI rồi lấy hợp: bộ không dấu chạy trên `tKD` (đã bỏ dấu)
   // nên phủ luôn câu gõ đủ dấu, bộ có dấu giữ cụm chỉ đúng khi có dấu. Chỉ nới
   // thêm, không bỏ mất khớp nào. Model vẫn nhận `text` gốc.
-  const tKD = boDau(text);
+  // 11/09/2026 (42 ca): câu gõ bằng giọng nói đọc số bằng chữ ("quận năm, năm
+  // mươi mét vuông, bốn tỷ rưỡi") → đổi sang chữ số TRƯỚC khi dò. Chỉ dùng để DÒ
+  // và BÓC; câu lưu vào sổ và câu đưa model vẫn là `text` gốc.
+  const textBoc = soChuThanhSo(text);
+  const tKD = boDau(textBoc);
   const khop = (coDau: RegExp, khongDau: RegExp) =>
     coDau.test(text) || khongDau.test(tKD);
 
@@ -1064,12 +1069,12 @@ Deno.serve(async (req) => {
   );
   const coYDinhRao =
     khop(
-      /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe])/i,
-      /(muon|can|dang|nho|ky gui)\s+(ban|cho thue)\b/,
+      /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe]|sang nhượng|nhượng lại|sang lại)/i,
+      /(muon|can|dang|nho|ky gui)\s+(ban|cho thue|sang nhuong|nhuong lai|sang lai)\b/,
     ) ||
     khop(
-      /(bán|rao|cho thu[êe])\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i,
-      /(ban|rao|cho thue)\s+(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|can)\b/,
+      /(bán|rao|cho thu[êe]|sang nhượng|nhượng lại|sang lại)\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i,
+      /(ban|rao|cho thue|sang nhuong|nhuong lai|sang lai)\s+(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|can)\b/,
     );
   // Chỉ chặn câu hỏi tình trạng khi câu KHÔNG kèm chi tiết thật nào.
   const laCauHoiTinhTrang = khop(
@@ -1101,16 +1106,46 @@ Deno.serve(async (req) => {
   // 10/09 lần 6 (chân dung nhà đầu tư): "Anh đầu tư mua nhà cũ sửa lại bán, giờ có căn
   // hẻm 45 Trần Phú …, 4x14, 5 tỷ 9" — có hàng + có GIÁ/M² là câu rao, dù không có
   // chữ "bán" đứng trước loại và dù có chữ "mua" (kể chuyện) trong câu.
+  // 11/09/2026 (42 ca): "có căn nào q5 tầm 5 tỷ không em" là NGƯỜI MUA hỏi kho —
+  // bản trước mở thành tin rao (loại chưa rõ, 5 tầng). "căn nào", dấu hỏi, lời
+  // ngân sách ("tầm/khoảng/dưới … tỷ"), "… không em?" cuối câu, "cần nhà …" là
+  // dấu hiệu MUA. Chỉ chặn các cổng NỚI (không cần chữ "bán"), không đụng cổng gốc.
+  const coDauHieuMua = /\?/.test(text) || khop(
+    /\b(tìm|cần mua|muốn mua|đang mua|hỏi mua|cần thuê|muốn thuê|ngân sách)\b|\b(căn|nhà|lô|đất|phòng)\s+nào\b|\b(tầm|khoảng|dưới)\s+\d|\bkhông\s+(em|ạ|anh|chị|bạn)\s*$|^\s*cần\s+(một\s+|1\s+)?(nhà|căn|lô|đất|phòng|mặt bằng)\b/i,
+    /\b(tim|can mua|muon mua|dang mua|hoi mua|can thue|muon thue|ngan sach)\b|\b(can|nha|lo|dat|phong)\s+nao\b|\b(tam|khoang|duoi)\s+\d|\b(khong|ko|k)\s+(em|a|anh|chi|ban)\s*$|^\s*can\s+(mot\s+|1\s+)?(nha|can|lo|dat|phong|mat bang)\b/,
+  );
+  // "anh có 2 căn: …" là rao nhiều căn — cho phép con số đứng trước "căn".
   const coHangCoGia = khop(
-    /\b(có|còn|đang có)\s*(một |1 )?(căn|nhà|lô|miếng|mảnh)\b/i,
-    /\b(co|con|dang co)\s*(mot |1 )?(can|nha|lo|mieng|manh)\b/,
-  ) && khop(/\d\s*(tỷ|tỉ|tỏi|triệu|tr)\b|\d+\s*m2/i, /\d\s*(ty|ti|toi|trieu|tr)\b|\d+\s*m2/) &&
-    !khop(/\b(tìm|cần mua|muốn mua|đang mua|hỏi mua|cần thuê|muốn thuê)\b/i, /\b(tim|can mua|muon mua|dang mua|hoi mua|can thue|muon thue)\b/);
+    /\b(có|còn|đang có)\s*(một |1 |\d{1,2} )?(căn|nhà|lô|miếng|mảnh)\b(?!\s+nào)/i,
+    /\b(co|con|dang co)\s*(mot |1 |\d{1,2} )?(can|nha|lo|mieng|manh)\b(?!\s+nao)/,
+  ) && khop(/\d\s*(tỷ|tỉ|tỏi|triệu|tr)\b|\d+\s*m2/i, /\d\s*(ty|ti|toi|trieu|tr)\b|\d+\s*m2/) && !coDauHieuMua;
+  // 11/09/2026 (42 ca): câu rao THẬT không có chữ "bán" rơi về lời chào khuôn
+  // "đang muốn mua, thuê hay bán": "Nhà mặt tiền Hùng Vương Q5, DT 5x20, 5 tầng,
+  // giá 32 tỏi", "Nhà cấp 4 Bình Chánh 5x25 thổ cư 100% 1ty9", "căn hộ Hà Đô
+  // Centrosa quận 10 1PN+1 giá 4,1 tỷ bao sang tên", câu kể dài "… hẻm 5m, 4x15,
+  // quận 5, giá 10 tỷ". Người rao LIỆT KÊ hàng; người mua HỎI. Nên: loại BĐS + giá
+  // + chi tiết của CĂN (≥ 3, hoặc ≥ 2 khi có chữ "giá") + không dấu hiệu mua.
+  const coGiaRo = khop(
+    new RegExp(`[\\d][\\d.,]*\\s*(?:${TIEN_CD})(?![a-zA-ZÀ-ỹ])|${TIEN_T_KEP}`, "i"),
+    new RegExp(`[\\d][\\d.,]*\\s*(?:${TIEN_KD})(?![a-z])|${TIEN_T_KEP}`),
+  );
+  const soChiTietCan = [
+    /\d+(?:[.,]\d+)?\s*m2|\d+(?:[.,]\d+)?\s*x\s*\d+/.test(tKD),
+    !!bocQuan(tKD, text) || !!vungNgoai(tKD),
+    /\b(?:phuong|p)\.?\s*\d{1,2}\b/.test(tKD),
+    /\bhem\b|\bhxh\b|mat tien/.test(tKD),
+    /\d\s*(?:lau|tang|tam)\b|\btret\b/.test(tKD),
+    /\d\s*(?:pn|phong ngu)\b/.test(tKD),
+    /\btho cu\b|\bso hong\b|\bso rieng\b|\bshr\b|\bhdmb\b|\bsang ten\b/.test(tKD),
+  ].filter(Boolean).length;
+  const coChuGia = /\bgia\s*:?\s*\d/.test(tKD);
+  const raoKhongChuBan = coLoaiBDS && coGiaRo && !coDauHieuMua &&
+    (soChiTietCan >= 3 || (coChuGia && soChiTietCan >= 2));
   const wantsSell =
-    (khop(/\b(bán|rao)\b|cho thu[êe]/i, /\b(ban|rao)\b|cho thue/) && coLoaiBDS &&
+    (khop(/\b(bán|rao)\b|cho thu[êe]|sang nhượng|nhượng lại|sang lại/i, /\b(ban|rao)\b|cho thue|sang nhuong|nhuong lai|sang lai/) && coLoaiBDS &&
       (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang))) ||
     (moiGioiCoHang && coChiTiet && !khop(/\b(tìm|cần mua|muốn mua|thuê)\b/i, /\b(tim|can mua|muon mua)\b/)) ||
-    coHangCoGia;
+    coHangCoGia || raoKhongChuBan;
   // Câu rao thì KHÔNG phải ý định mua, dù có chữ "mua" kể chuyện ("mua nhà cũ sửa lại bán").
   const hoiMua = hoiMuaTho && !wantsSell;
   // Phường trong câu rao, bắt trên bản bỏ dấu — chỉ lấy CON SỐ nên bỏ dấu
@@ -1525,7 +1560,10 @@ Deno.serve(async (req) => {
     // và "kêu chị nha" sống đúng một lượt rồi câu sau lại "anh". Sếp đọc log
     // 07/09/2026: "con AI nhắn không tự nhiên". Nay: 8 tin gần nhất + cách gọi
     // đã dặn (`sellers.xung_ho`, migration 20260907d) đi vào MỌI lượt.
-    const xungHoMoi = batXungHo(text);
+    // 11/09/2026 (42 ca): khách TỰ XƯNG ("anh bận", "e oi a can ban nha", "chị Lan
+    // đây em") cũng là lời dặn — chưa biết gọi sao thì nhận luôn, lời dặn tường
+    // minh ("kêu chị nha") vẫn thắng và vẫn đổi được cách gọi cũ.
+    const xungHoMoi = batXungHo(text) ?? (sellerRow.xung_ho ? null : tuXungTuCau(text));
     if (xungHoMoi && xungHoMoi !== sellerRow.xung_ho) {
       const { error: xhErr } = await client.from("sellers")
         .update({ xung_ho: xungHoMoi }).eq("id", sellerRow.id);
@@ -1764,21 +1802,25 @@ Deno.serve(async (req) => {
       let dau: { id: string; property_type: string | null } | null = null;
       for (const c of nhieuCanTrongTin) {
         // Không mở trùng mã căn cho cùng người bán.
-        const { data: trung } = await client.from("listings").select("id")
-          .eq("seller_id", sellerRow.id).ilike("unit_code", c.ma).in("status", ["cho_thong_tin", "dang_ban"]).limit(1).maybeSingle();
-        if (trung) continue;
+        if (c.ma) {
+          const { data: trung } = await client.from("listings").select("id")
+            .eq("seller_id", sellerRow.id).ilike("unit_code", c.ma).in("status", ["cho_thong_tin", "dang_ban"]).limit(1).maybeSingle();
+          if (trung) continue;
+        }
         const { data: moi, error: moiErr } = await client.from("listings").insert({
           code: null, seller_id: sellerRow.id, deal: goc?.deal ?? "ban",
-          district: goc?.district ?? "Quận 5", ward: goc?.ward ?? null,
-          location_raw: goc?.location_raw ?? null, street: goc?.street ?? null,
+          // 11/09: căn nói rõ quận riêng ("1 căn q11 …") thì không kế thừa địa chỉ căn cũ.
+          district: c.quan ?? goc?.district ?? "Quận 5", ward: c.quan ? null : goc?.ward ?? null,
+          location_raw: c.quan ? null : goc?.location_raw ?? null, street: c.quan ? null : goc?.street ?? null,
           description: c.goc, price_raw: c.gia ?? null,
           property_type: goc?.property_type ?? "chua_ro", status: "cho_thong_tin",
-          can_chu_duyet: true, unit_code: c.ma,
+          can_chu_duyet: true, unit_code: c.ma ?? null,
+          ...(c.dt ? { area_m2: Number(c.dt.replace(",", ".")) } : {}),
           ...(c.ngang && c.dai ? { frontage_m: Number(c.ngang.replace(",", ".")), length_m: Number(c.dai.replace(",", ".")) } : {}),
-          ...(goc?.project_id ? { project_id: goc.project_id, unit_status: "con_ban", last_confirmed_at: new Date().toISOString() } : {}),
+          ...(goc?.project_id && !c.quan ? { project_id: goc.project_id, unit_status: "con_ban", last_confirmed_at: new Date().toISOString() } : {}),
         }).select("id, code, property_type").single();
         if (moiErr || !moi) { await ghiLoi(client, "chat-reply mo tin nhieu can", moiErr?.message ?? "insert null"); continue; }
-        daMo.push(`${c.ma}${c.gia ? ` ${c.gia}` : ""}`);
+        daMo.push(`${c.ma ?? c.quan ?? `căn ${daMo.length + 1}`}${c.dt ? ` ${c.dt}m2` : ""}${c.gia ? ` ${c.gia}` : ""}`);
         dau = dau ?? { id: moi.id, property_type: moi.property_type };
       }
       if (daMo.length) {
@@ -1825,25 +1867,41 @@ Deno.serve(async (req) => {
       suaFacts.push([key, lay(m)]);
       nhipSua.push([m.index, m.index + m[0].length]);
     };
+    // 11/09/2026 (42 ca): "sai rồi em, phường 9 chứ không phải phường 4" → bản
+    // trước ghi Phường 4 (vế SAI) vào ô phường, rác vào vị trí, rồi báo "đã cập
+    // nhật Phường 9". Che vế phủ định trước khi bắt lời sửa (cùng độ dài nên chỉ
+    // số vẫn đúng trên `text`); câu là lời sửa thì bóc luôn vế đó khỏi phần còn lại.
+    const textSua = cheoPhuDinh(text);
+    const nhipPhuDinh = vungPhuDinh(text);
     if (!wantsSell) {
       const mGia = new RegExp(
         `gi[áa]\\s*[^0-9]{0,12}?([\\d][\\d.,]*\\s*(?:${TIEN_CD})(?![a-zA-ZÀ-ỹ])[^,.;\\n]*)`,
         "i",
-      ).exec(text);
+      ).exec(textSua);
       // Đuôi `[^,.;\n]*` giữ phần CÓ NGHĨA đi sau đơn vị ("6 tỷ 8", "5 tỷ
       // thương lượng"), nhưng cũng vơ luôn tiểu từ cuối câu ("6.8 tỷ nha em").
       // KHÔNG cắt ở đây: chuỗi này là bằng chứng thô, còn `price_raw` do
       // `chuan_hoa_gia_raw()` ở tầng DB gọt — một luật, một chỗ, và mọi cửa ghi
       // (form admin, câu trả lời drip) đều đi qua nó chứ không riêng cửa này.
       batSua(mGia, "gia", (m) => m[1].trim());
-      batSua(/(?:phường|phuong)\s*\.?\s*(\d{1,2})\b/i.exec(text), "phuong",
+      batSua(/(?:phường|phuong)\s*\.?\s*(\d{1,2})\b/i.exec(textSua), "phuong",
         (m) => `Phường ${m[1]}`);
-      batSua(/(\d{1,2})\s*(?:phòng ngủ|phong ngu|\bpn\b)/i.exec(text), "so_phong_ngu",
+      batSua(/(\d{1,2})\s*(?:phòng ngủ|phong ngu|\bpn\b)/i.exec(textSua), "so_phong_ngu",
         (m) => m[1]);
       batSua(
-        /(?:diện tích|dien tich|\bdt\b)\s*[^0-9]{0,8}?(\d{1,4}(?:[.,]\d+)?)\s*m2?/i.exec(text),
+        /(?:diện tích|dien tich|\bdt\b)\s*[^0-9]{0,8}?(\d{1,4}(?:[.,]\d+)?)\s*m2?/i.exec(textSua),
         "dien_tich", (m) => `${m[1]}m2`);
+      // 11/09/2026 (Zalo thật, dự án ehome 3): "Bạn phải ghi dự án chung cư ehome 3
+      // chứ ở hồ ngọc lãm" — chủ nhà nói RÕ loại khi sửa mà bản trước bỏ qua: tin vẫn
+      // "nhà phố", bot hỏi "diện tích đất, ngang dài" cho một căn hộ. Chỉ bắt khi câu
+      // có dấu hiệu SỬA/DẶN; vế sau "không phải" đã bị che trong `textSua`.
+      if (/\b(?:phai ghi|ghi lai|ghi la|sua lai|sua thanh|chu khong phai|khong phai|nham|la can ho|la chung cu)\b/.test(boDau(text))) {
+        batSua(
+          /(chung cư|chung cu|căn hộ|can ho|nhà phố|nha pho|nhà cấp 4|nha cap 4|đất nền|dat nen|biệt thự|biet thu|mặt bằng|mat bang|phòng trọ|phong tro|kho xưởng|kho xuong)/i.exec(textSua),
+          "loai_bds", (m) => m[1]);
+      }
     }
+    if (suaFacts.length) nhipSua.push(...nhipPhuDinh);
     // Trường nào đang là câu hỏi chờ thì để đường drip xử — tránh vừa ghi lời
     // sửa vừa bỏ lửng câu hỏi đang treo.
     const suaThat = suaFacts.filter(([k]) =>
@@ -1862,7 +1920,7 @@ Deno.serve(async (req) => {
     // sách chỉ cần bản không dấu.
     const conChu = boDau(conLai)
       .replace(
-        /\b(a|u|o|da|vang|em|anh|chi|nha|nhe|nhen|ha|hen|ok|oke|roi|thi|ma|voi|va|do|luon)\b/gi,
+        /\b(a|u|o|da|vang|em|anh|chi|nha|nhe|nhen|ha|hen|ok|oke|roi|thi|ma|voi|va|do|luon|sai|nham|lon|xin loi|sorry|chu|la)\b/gi,
         "",
       )
       .replace(/[^a-z0-9]+/gi, "");
@@ -1890,13 +1948,13 @@ Deno.serve(async (req) => {
         await capNhatQuan(suaId);
         const NHAN: Record<string, string> = {
           gia: "giá", phuong: "phường",
-          so_phong_ngu: "số phòng ngủ", dien_tich: "diện tích",
+          so_phong_ngu: "số phòng ngủ", dien_tich: "diện tích", loai_bds: "loại",
         };
         // 10/09 lần 7: "1 trệt 2 lầu, 3 phòng ngủ" (tin CHƯA có phòng ngủ) mà bot
         // báo "em cập nhật lại rồi" — nghe như chủ nhà vừa nói sai cái gì. Đọc
         // giá trị CŨ trước khi ghi: có rồi mới là sửa, trống thì chỉ là ghi thêm.
         const { data: truoc } = await client.from("listings")
-          .select("price_raw, ward, bedrooms, area_m2").eq("id", suaId).maybeSingle();
+          .select("price_raw, ward, bedrooms, area_m2, property_type").eq("id", suaId).maybeSingle();
         const daCoTruoc = (k: string) =>
           k === "gia"
             ? !!truoc?.price_raw
@@ -1906,6 +1964,8 @@ Deno.serve(async (req) => {
             ? truoc?.bedrooms != null
             : k === "dien_tich"
             ? truoc?.area_m2 != null
+            : k === "loai_bds"
+            ? !!truoc?.property_type && truoc.property_type !== "chua_ro"
             : true;
         const laSuaThat = suaThat.some(([k]) => daCoTruoc(k));
         const daGhi: string[] = [];
@@ -1925,8 +1985,8 @@ Deno.serve(async (req) => {
         }
         if (daGhi.length) {
           const cau = laSuaThat
-            ? `Dạ em cập nhật lại rồi ạ: ${daGhi.join(", ")}. Cảm ơn anh/chị đã báo em nha!`
-            : `Dạ em ghi rồi ạ: ${daGhi.join(", ")}.`;
+            ? `Dạ em sửa lại ${daGhi.join(", ")} rồi ạ.`
+            : `Dạ em ghi ${daGhi.join(", ")} rồi ạ.`;
           // FR-177 c: đang chờ duyệt bản nháp thì lời sửa KHÔNG dừng ở đây —
           // xuống khối duyet_tin để gửi lại bản nháp với số mới.
           // 09/09 tối: đang có câu hỏi treo mà chỉ sửa ("6 phòng ngủ" khi em đang
@@ -2272,7 +2332,18 @@ Deno.serve(async (req) => {
       // Câu có kèm lời sửa thì phần ĐÃ BÓC mới là câu trả lời. Giữ nguyên cả
       // câu là nhét "giá 6.8 tỷ" vào fact pháp lý — bằng chứng sai chỗ còn tệ
       // hơn thiếu bằng chứng, vì nó trông như chủ nhà đã xác nhận.
-      const dapAn = ackSua ? conLai : text;
+      const dapAn = ackSua
+        ? conLai
+        : nhipPhuDinh.length && suaFacts.length ? cheoPhuDinh(text).replace(/\s+/g, " ").trim() : text;
+      // 11/09/2026 (42 ca): câu CHỈ là lời sửa ("sai rồi em, phường 9 chứ không phải
+      // phường 4") → phần còn lại "sai rồi em" không phải câu trả lời; bản trước đem
+      // nó đi phân loại và nó thành ĐỊA CHỈ. Nhận lời sửa rồi hỏi lại câu đang treo
+      // trong CÙNG một bong bóng.
+      if (ackSua && conChu.length < 2 && pendingReq.question !== "duyet_tin" && !humanActive) {
+        const cauSua = `${ackSua} ${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type)}`;
+        ackSua = null;
+        return await traLoiSeller([cauSua], { sua_fact: true, reask: pendingReq.question });
+      }
       // FR-177 g: chủ nhà nói "đủ rồi / vậy thôi / đừng hỏi nữa" giữa vòng hỏi
       // (không phải lúc duyệt bản nháp — ở đó "đủ rồi" là GẬT, xử ở dưới) →
       // đóng dấu chu_noi_du_at, đóng mọi câu đang treo của căn, KHÔNG hỏi nữa.
@@ -2418,6 +2489,30 @@ Deno.serve(async (req) => {
       }
       await capNhatQuan(pendingReq.listing_id);
       if (kq.loai !== "khop" && !boQuaCauTreo) {
+        // 11/09/2026 (42 ca): bận / để hỏi vợ / hỏi hoài → dừng THẬT: không ghi,
+        // không hỏi, câu vẫn treo cho vòng hỏi bù sau. Câu tiền định, không model —
+        // đường model bị dặn "câu hỏi cuối tin BẮT BUỘC" nên cứ hỏi tiếp (38 từ).
+        if (kq.loai === "hoan" && !humanActive) {
+          const goi = goiNguoi ?? kq.xungHo ?? "mình";
+          const phien = /bận|mệt|hỏi (?:gì )?(?:hoài|lắm|nhiều|mãi)/i.test(text);
+          const cauHoan = phien
+            ? `Dạ em xin lỗi, em hỏi dồn quá. Lúc nào ${goi} rảnh nhắn em là em làm tiếp liền nha.`
+            : `Dạ ${goi} cứ thong thả nha. Có gì ${goi} nhắn em là em làm tiếp liền.`;
+          return await traLoiSeller([cauHoan], { hoan: true, loai_cau: "hoan" });
+        }
+        // 11/09/2026 (42 ca): một con số trần kèm mét ("4m") khi đang hỏi ĐỊA CHỈ /
+        // PHƯỜNG — không biết là hẻm hay ngang. Bản trước ghi "4m" vào thông tin bổ
+        // sung rồi model báo "em ghi nhận hẻm 4m rồi" (không cột nào mang giá trị
+        // đó). Hỏi lại cho rõ; không ghi, không đoán. Câu khác (hướng, pháp lý…) giữ
+        // đường hỏi lại cũ — "16m nha" khi hỏi hướng vẫn là câu lệch (e2e G3).
+        const soTran = /^\s*(\d{1,3}(?:[.,]\d+)?)\s*(?:m|mét|met)\s*(?:nha|nhe|nhé|ạ|a|em)?\s*[.!]?\s*$/i.exec(text);
+        if (kq.loai === "lech" && !kq.chuyenSang && soTran && !humanActive &&
+            (pendingReq.question === "vi_tri" || pendingReq.question === "phuong")) {
+          return await traLoiSeller(
+            [`${soTran[1]}m là hẻm trước nhà hay ngang mặt tiền vậy ${goiNguoi ?? "ạ"}?`],
+            { reask: pendingReq.question, loai_cau: "so_tran" },
+          );
+        }
         // "Ngang 5" khi đang hỏi diện tích: vẫn là dữ liệu thật — ghi đúng
         // fact (mặt tiền) chứ không vứt, còn câu diện tích thì giữ treo.
         if (kq.chuyenSang) {
@@ -2495,10 +2590,14 @@ Deno.serve(async (req) => {
       // Câu hỏi treo bị bỏ qua (né 2 lần / chủ gật): KHÔNG ghi câu này vào ô đang
       // hỏi — chỉ ghi fact nhận ra được (nếu có), rồi đi tiếp như vừa trả lời xong.
       if (!boQuaCauTreo) {
+        // 11/09/2026 (Zalo thật, ehome 3): câu trả lời địa chỉ kèm lời dặn ("Bạn phải
+        // ghi dự án … chứ ở hồ ngọc lãm") từng vào NGUYÊN câu làm vị trí → location_raw
+        // và street thành rác. Chỉ giữ cụm địa chỉ; câu phường có số thì "Phường N".
+        const dapAnGhi = catDapAn(pendingReq.question, dapAn);
         const { error: factErr } = await client.rpc("ghi_fact_listing", {
           p_listing_id: pendingReq.listing_id,
           p_question: pendingReq.question,
-          p_answer: dapAn,
+          p_answer: dapAnGhi,
           p_source: "seller_chat",
         });
         if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
@@ -2750,14 +2849,23 @@ Deno.serve(async (req) => {
       // `chuan_hoa_gia_raw` phía DB chỉ gọt tiểu từ, không gọt "50m2". Dừng
       // TRƯỚC một cụm số+m2.
       const DUOI_GIA = "(?:(?!\\s*\\d+(?:[.,]\\d+)?\\s*m2)[^,.;\\n])*";
+      // 11/09/2026 (42 ca): bắt thêm lóng "9t5"/"4t2" (TIEN_T_KEP), đọc trên
+      // `textBoc` (số đọc bằng chữ đã thành chữ số).
       const priceM =
-        new RegExp(`([\\d][\\d.,]*\\s*(?:${TIEN_CD})${DUOI_GIA})`, "i").exec(text);
+        new RegExp(`((?:[\\d][\\d.,]*\\s*(?:${TIEN_CD})|${TIEN_T_KEP})${DUOI_GIA})`, "i").exec(textBoc);
       // Diện tích + số phòng ngủ có sẵn trong câu rao thì ghi luôn qua cửa fact
       // (FR-164) sau khi tạo tin — không thì vòng nhỏ giọt hỏi lại đúng cái chủ
       // nhà vừa nói ("nhà 50m2" rồi bot hỏi "diện tích bao nhiêu ạ?"), kiểu mất
       // mặt FR-144 sinh ra để tránh. Giá/phường vào cột ngay lúc insert như cũ.
       const areaM = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(tKD);
       const pnM = /(\d{1,2})\s*(?:phong ngu|\bpn\b)/.exec(tKD);
+      // 11/09/2026 (42 ca): "giá 75 triệu/m2, diện tích 50m2" → căn lên web giá 75
+      // triệu. parse_vnd nay trả NULL cho giá mỗi m²; có diện tích thì ghi giá CẢ
+      // CĂN (75 triệu × 50m2) và nói rõ trong bong bóng ghi nhận là em đã nhân.
+      const giaM2 = giaTheoM2(priceM?.[1]);
+      const dtSo = areaM ? Number(areaM[1].replace(",", ".")) : null;
+      const giaGhi = giaM2 && dtSo ? vndThanhChu(giaM2 * dtSo) : priceM?.[1]?.trim() ?? null;
+      const giaNoi = giaM2 && dtSo ? `${priceM![1].trim()} (≈ ${giaGhi} cho ${dtSo}m2)` : giaGhi;
       // FR-158: mã do trigger `trg_listings_fill_code` cấp, nối tiếp đúng dãy
       // BDS-Q5-#### mà admin và web đang dùng. Đưa `code: null` xuống là cố ý —
       // bộ đúc mã `CCRB-<base36>` cũ ở đây là dãy thứ hai không ai cần, lại
@@ -2786,12 +2894,21 @@ Deno.serve(async (req) => {
       // giá trị mặc định của cột `listings.district` từ thời chỉ làm chợ Quận 5.
       // Cột vẫn NOT NULL nên DB vẫn nhận mặc định, nhưng lời NÓI với khách chỉ được
       // nhắc địa bàn khi ĐỌC ĐƯỢC thật (từ câu rao hoặc từ dự án khớp trong kho).
-      const quanDoc = bocQuan(tKD, text) ?? duAn?.district ?? null;
+      // 11/09/2026 (42 ca): "bán nhà ở Hà Nội quận Cầu Giấy" từng thành tin QUẬN 5.
+      // Vùng xa → nói thật là chưa nhận, không mở tin. Vùng lân cận → quận ghi đúng
+      // tên tỉnh.
+      const vung = bocQuan(tKD, text) || duAn?.district ? null : vungNgoai(tKD);
+      if (vung?.xa) {
+        return await traLoiSeller([
+          `Dạ bên em hiện chỉ nhận nhà ở Sài Gòn và Long An thôi ạ, em xin lỗi chưa hỗ trợ được căn ở ${vung.ten}.`,
+        ], { ngoai_dia_ban: vung.ten });
+      }
+      const quanDoc = bocQuan(tKD, text) ?? duAn?.district ?? vung?.ten ?? null;
       const quanRao = quanDoc ?? "Quận 5";
       const { data: newLst, error: newLstErr } = await client.from("listings").insert({
         code: null, seller_id: sellerRow.id, deal: sDeal, district: quanRao,
         ward: wardNo ? `Phường ${wardNo}` : (duAn?.ward ?? null),
-        description: text, price_raw: priceM?.[1]?.trim() ?? null,
+        description: text, price_raw: giaGhi,
         property_type: "chua_ro", status: "cho_thong_tin",
         gap: gapCol,
         // FR-177 d: tin từ chat chỉ lên kệ khi đủ điểm VÀ chủ nhà gật bản nháp.
@@ -2818,7 +2935,7 @@ Deno.serve(async (req) => {
           p: {
             nguon: "cau_rao", loai_giao_dich: sDeal, quan: quanRao,
             phuong: wardNo ? `Phường ${wardNo}` : null,
-            gia_raw: priceM?.[1]?.trim() ?? null,
+            gia_raw: priceM?.[1]?.trim() ?? null, ...(giaM2 ? { gia_m2: giaM2 } : {}),
             dien_tich: areaM ? `${areaM[1].replace(",", ".")}m2` : null,
             so_phong_ngu: pnM ? Number(pnM[1]) : null,
             gap: gapCol, du_an: duAn?.name ?? null, ma_can: maCanRao,
@@ -2894,6 +3011,15 @@ Deno.serve(async (req) => {
         }
         // OPEN-30: tin rao ĐÃ tạo xong (mã đã cấp) — model chỉ soạn lời chào.
         // Model hỏng thì chào bằng câu mẫu, kèm luôn câu hỏi đầu nếu có.
+        // 11/09/2026 (42 ca): lý do "để em kiểm tra giá khu vực" chỉ nói ở lần hỏi
+        // địa chỉ ĐẦU (câu mẫu `vi_tri@lan_dau`); các lần hỏi lại dùng câu ngắn —
+        // khuôn 25 từ kèm lý do từng lặp nguyên văn 22/52 câu bot.
+        const loaiMoi = (newLst as { property_type?: string | null }).property_type;
+        const cauHoiDau = firstKey
+          ? (firstKey === "vi_tri" && loaiMoi !== "chung_cu" && loaiMoi !== "dat"
+            ? cauHoiMau("vi_tri@lan_dau", cachGoi, loaiMoi)
+            : cauHoiMau(firstKey, cachGoi, loaiMoi))
+          : null;
         let raoReply: string | null = null;
         if (anthropicS) {
           try {
@@ -2907,7 +3033,7 @@ Deno.serve(async (req) => {
                   `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ` +
                   `Viết MỘT tin dưới 30 từ như người thật: nhận câu rao (nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi - KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
                   (firstKey
-                    ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey} (câu gợi ý: "${cauHoiMau(firstKey, cachGoi, (newLst as { property_type?: string | null }).property_type)}"). Không cần nêu lý do, KHÔNG nhắc phí, KHÔNG nhắc mã tin. Không hỏi gì khác.`
+                    ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey} (câu gợi ý: "${cauHoiDau}"). Không thêm lý do nào ngoài câu gợi ý, KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá. Không hỏi gì khác.`
                     : ` và báo sẽ đăng lên web ngay.`),
               }],
             });
@@ -2919,7 +3045,7 @@ Deno.serve(async (req) => {
         }
         if (!raoReply) {
           raoReply = `Dạ em nhận tin rao rồi ạ.` +
-            (firstKey ? ` ${cauHoiMau(firstKey, cachGoi, (newLst as { property_type?: string | null }).property_type)}` : ` Em sẽ đăng lên web ngay ạ.`);
+            (cauHoiDau ? ` ${cauHoiDau}` : ` Em sẽ đăng lên web ngay ạ.`);
         }
         // Chủ dự án 09/09/2026: "đã bóc tách được cái gì, viết gửi lại cho khách
         // luôn" — bong bóng TIỀN ĐỊNH liệt kê những gì vừa ghi (không liệt kê
@@ -2937,7 +3063,7 @@ Deno.serve(async (req) => {
           [wardNo ? `Phường ${wardNo}` : null, quanDoc].filter(Boolean).join(", ") || null,
           areaM ? `${areaM[1].replace(",", ".")}m2` : null,
           pnM ? `${pnM[1]} phòng ngủ` : null,
-          priceM?.[1]?.trim() ? `giá ${priceM[1].trim()}` : null,
+          giaNoi ? `giá ${giaNoi}` : null,
           gapCol === true ? "cần gấp" : gapCol === false ? "không gấp" : null,
           duAn?.name ? `dự án ${duAn.name}${maCanRao ? ` căn ${maCanRao}` : ""}` : null,
         ].filter((x): x is string => !!x);

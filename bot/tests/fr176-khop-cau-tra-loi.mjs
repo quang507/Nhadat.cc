@@ -38,6 +38,15 @@ const CA = [
   ["nam_xay", "5 tỷ", "lech"],
   ["gia", "5 tỷ 8", "khop"],
   ["gia", "5 tỏi rưỡi", "khop"],
+  // 11/09/2026, lượt bắn 42 ca: câu xin dừng không phải câu trả lời; tên phường
+  // bằng chữ phải ngắn và không có từ nói chuyện; số trần "4m" không đoán.
+  ["phuong", "hỏi gì hỏi lắm vậy em, anh bận", "hoan"],
+  ["vi_tri", "để anh hỏi vợ đã em", "hoan"],
+  ["gap", "để anh bàn với vợ", "hoan"],
+  ["phuong", "Nguyễn Cư Trinh", "khop"],
+  ["phuong", "Bàn Cờ", "khop"],
+  ["phuong", "phường 5 nha, anh bận", "khop"],
+  ["vi_tri", "4m", "lech"],
   ["gia", "5 tỷ được không?", "hoi"],
   ["gia", "80m2", "lech"],
   ["quy_hoach", "không dính gì", "khop"],

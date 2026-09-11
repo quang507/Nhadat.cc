@@ -26,6 +26,7 @@ export type LoaiCau =
   | "xung_ho"   // dặn cách gọi ("kêu chị nha") → nhớ, KHÔNG ghi fact, hỏi lại
   | "ack"       // tiểu từ / ừ / ok / để coi → không ghi, hỏi lại nhẹ
   | "hoi"       // chủ nhà HỎI ngược ("phí sao em?") → trả lời rồi hỏi lại
+  | "hoan"      // bận / để hỏi vợ / hỏi hoài → KHÔNG ghi, KHÔNG hỏi thêm, câu vẫn treo
   | "lech";     // có nội dung nhưng không khớp câu hỏi → không ghi, hỏi rõ
 
 export type KetQuaKhop = {
@@ -60,12 +61,87 @@ export function batXungHo(text: string): "anh" | "chị" | null {
   return "anh";
 }
 
+// ── Khách TỰ XƯNG (11/09/2026, lượt bắn 42 ca) ───────────────────────────────
+// 34/52 câu bot viết "anh/chị" dù khách đã tự xưng: "anh bận", "để anh hỏi vợ",
+// "e oi a can ban nha", "chị Lan đây em". Người thật nghe một lần là gọi đúng.
+// Lời DẶN tường minh ("kêu chị nha", `batXungHo`) vẫn thắng; hàm này chỉ dùng
+// khi chưa biết gọi sao.
+const TU_XUNG: RegExp[] = [
+  /^\s*(?:e|em)\s*(?:oi)?\s*[,.]?\s*(a|anh|c|chi)\s+(?:can|muon|co|dang|ban|hoi|nho|gui)\b/,
+  /^\s*(anh|chi)\s+[a-z]+\s+(?:day|nay)\b/,
+  /^\s*(anh|chi|a|c)\s+(?:can|muon|co|dang|khong|ko|chua|hoi|tinh|de|o|moi|vua|gui|ban|nho|thay|nghi|cung)\b/,
+  /\b(?:nha|can|so|dat|lo|sdt|so dien thoai|so dt|vo|chong)\s+(?:cua\s+)?(anh|chi)\b(?!\s+(?:ay|nay|kia|hang xom))/,
+  /\bde\s+(anh|chi)\s+(?:hoi|tinh|coi|xem|nghi|ban|suy nghi)\b/,
+  /\b(anh|chi)\s+(?:ban|dang ban|met|khong ranh|chua ranh|dang lai xe|dang hop)\b/,
+];
+export function tuXungTuCau(text: string): "anh" | "chị" | null {
+  const kd = boDau(text.trim());
+  for (const re of TU_XUNG) {
+    const m = re.exec(kd);
+    if (m) return m[1] === "chi" || m[1] === "c" ? "chị" : "anh";
+  }
+  return null;
+}
+
+// ── Bận / hoãn / khó chịu (11/09/2026, lượt bắn 42 ca) ──────────────────────
+// "hỏi gì hỏi lắm vậy em, anh bận" từng được ghi vào ô PHƯỜNG; "để anh hỏi vợ
+// đã em" vào thông tin bổ sung, rồi bot hỏi tiếp đúng câu cũ (38 từ). Đây không
+// phải câu trả lời mà là lời xin dừng: không ghi gì, không hỏi thêm, câu hỏi
+// vẫn treo cho lượt sau. "bận" chỉ phân biệt được với "bán" khi còn dấu.
+const HOAN_CD = /(?<![\p{L}])(?:bận|mệt)(?![\p{L}])|hỏi (?:gì )?(?:hoài|lắm|nhiều|mãi)/iu;
+const HOAN_KD =
+  /\b(?:de (?:anh|chi|em|toi|tui|minh|a|c) (?:hoi|tinh|suy nghi|coi lai|xem lai|nghi|ban bac)|(?:hoi|ban|noi)\s+(?:y\s+|voi\s+|lai\s+)?(?:vo|chong|ba|me|con|gia dinh|anh em)|tinh sau|de sau|luc khac|khi khac|noi sau|bua khac|hom khac|chua ranh|khong ranh|ko ranh|dang lai xe|dang hop|hoi hoai|hoi (?:lai )?sau|thoi de do)\b/;
+export function laHoanLai(text: string): boolean {
+  const goc = text.trim();
+  if (!goc || /\d/.test(goc)) return false; // có số là có dữ liệu — xét như câu trả lời
+  return HOAN_CD.test(goc) || HOAN_KD.test(boDau(goc));
+}
+
+// ── Phủ định trong lời sửa (11/09/2026, lượt bắn 42 ca) ───────────────────────
+// "sai rồi em, phường 9 chứ không phải phường 4" → ô phường vẫn Phường 4, vị
+// trí thành "sai rồi em, chứ không phải phường 4", mà bot báo "đã cập nhật
+// Phường 9". Vế sau "không phải" là cái SAI — không được bóc ra làm dữ liệu.
+// Che bằng khoảng trắng CÙNG ĐỘ DÀI để chỉ số khớp trên câu gốc vẫn đúng.
+const PHU_DINH =
+  /(?:,\s*)?(?:(?:chứ|chu)\s+)?(?:không|khong|ko|chẳng|chang)\s+(?:phải|phai)(?:\s+(?:là|la))?\s+[^,.;!?\n]*?(?=\s+(?:mà|ma)\s|[,.;!?\n]|$)/giu;
+export function vungPhuDinh(text: string): Array<[number, number]> {
+  return Array.from(text.matchAll(PHU_DINH), (m) => [m.index!, m.index! + m[0].length] as [number, number])
+    .filter(([i, j]) => j > i);
+}
+export function cheoPhuDinh(text: string): string {
+  return text.replace(PHU_DINH, (s) => " ".repeat(s.length));
+}
+
+// ── Câu trả lời kèm LỜI DẶN (11/09/2026, Zalo thật, dự án ehome 3) ────────────
+// Đang hỏi địa chỉ, chủ nhà nhắn "Bạn phải ghi dự án chung cư ehome 3 chứ ở hồ
+// ngọc lãm" → cả câu vào ô vị trí, rồi thành location_raw và street. Câu có lời
+// dặn/sửa thì chỉ giữ CỤM địa chỉ ("hồ ngọc lãm"). Câu trả lời phường có số thì
+// ghi gọn "Phường N" thay vì cả câu "Đường hồ ngọc lãm quận 8 phường 6".
+const LENH_DAN = /\b(?:ban phai|em phai|phai ghi|ghi lai|ghi giup|ghi la|sua lai|sua thanh|chu khong phai|khong phai|nham roi|sai roi)\b/;
+export function bocCumDiaChi(text: string): string | null {
+  const t = text.trim();
+  const m = /(?:^|[\s,])(?:ở|tại)\s+([^,.;!?\n]{3,80})$/iu.exec(t) ??
+    /(?:^|[\s,])((?:đường|duong|hẻm|hem|hxh|phố|số nhà)\s+[^,.;!?\n]{2,80})/iu.exec(t);
+  return m ? m[1].trim() : null;
+}
+export function catDapAn(question: string, dapAn: string): string {
+  if (question === "vi_tri" && LENH_DAN.test(boDau(dapAn))) return bocCumDiaChi(dapAn) ?? dapAn;
+  if (question === "phuong") {
+    const m = /(?:phường|phuong|(?<![\p{L}])p)\s*\.?\s*(\d{1,2})(?!\d)/iu.exec(dapAn);
+    if (m) return `Phường ${Number(m[1])}`;
+  }
+  return dapAn;
+}
+
 // ── Tiểu từ / ack ────────────────────────────────────────────────────────────
 const TIEU_TU =
   /\b(a|u|o|oi|da|vang|em|anh|chi|nha|nhe|nhen|ha|hen|ok|oke|okie|roi|thi|ma|voi|va|do|luon|de|coi|xem|chut|lat|nua|tam|di|ne|ne|ok|uh|uk|um|hmm|hm|yes|yep)\b/g;
 const conChu = (kd: string) => kd.replace(TIEU_TU, "").replace(/[^a-z0-9]+/g, "");
 
 const CO_SO = /\d/;
+// Từ nói chuyện (còn dấu) — không có trong tên phường/xã nào ("Bàn Cờ" là "bàn",
+// không phải "bận").
+const TU_NOI_CHUYEN = /(?<![\p{L}])(?:hỏi|gì|sao|vậy|lắm|bận|biết|không|chưa|rồi|để|đang|ơi|thôi|tính|nghĩ|vợ|chồng|mệt|hả)(?![\p{L}])/iu;
 const SO_CHU = /\b(mot|hai|ba|bon|nam|sau|bay|tam|chin|muoi|ruoi)\b/;
 
 // Câu hỏi cần MỘT CON SỐ mới là trả lời.
@@ -129,6 +205,13 @@ const cungHo = (a: string, b: string) => a === b || HO_FACT.some((h) => h.includ
 export const cungHoFact = cungHo;
 
 export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
+  // 11/09/2026: bận / hoãn đứng TRƯỚC mọi luật khác — câu này không mang dữ liệu
+  // nào (có số thì `laHoanLai` đã trả false), mà luật phường cũ nhận bất kỳ câu
+  // ≥ 3 chữ. Duyệt tin và chấm điểm có đường riêng, không đụng.
+  if (question !== "duyet_tin" && question !== "danh_gia" && laHoanLai(text)) {
+    const xh = batXungHo(text) ?? tuXungTuCau(text);
+    return { loai: "hoan", ...(xh ? { xungHo: xh } : {}) };
+  }
   // 09/09/2026 tối (chạy 12 kịch bản trên production): câu trả lời bị ghi LỆCH
   // MỘT Ô hàng loạt — "Hẻm 4m" vào diện tích, "Đúc 5 tầng" vào số phòng ngủ,
   // "lên thổ cư 300m2" vào địa chỉ, "cọc 2 tháng" vào diện tích… vì các nhánh
@@ -231,8 +314,14 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   }
 
   // Phường: "5", "phường 5", "p5", "Nguyễn Cư Trinh", "xã Phong Phú" đều nhận; "ừ" thì không.
+  // 11/09/2026 (42 ca): "chu.length >= 3" một mình nhận CẢ câu than phiền làm tên
+  // phường. Tên phường bằng chữ ngắn (≤ 4 tiếng) và không có từ nói chuyện.
   if (question === "phuong") {
-    return ketQua(CO_SO.test(kd) || /\bphuong\b|\bp\s*\d|\bxa\b|\bthi tran\b/.test(kd) || chu.length >= 3 ? "khop" : "lech");
+    const soTieng = kd.split(/\s+/).filter(Boolean).length;
+    const tenChu = chu.length >= 3 && soTieng <= 4 && !TU_NOI_CHUYEN.test(text);
+    // Chữ "phường/xã" phải đi với một cái TÊN: "không biết phường nào" không phải tên phường.
+    const coNhan = /\bp\s*\d|\b(?:phuong|xa|thi tran)\s+(?!nao\b|may\b|gi\b|do\b|nay\b)[a-z]/.test(kd);
+    return ketQua(CO_SO.test(kd) || coNhan || tenChu ? "khop" : "lech");
   }
   // Vị trí: cần dấu hiệu địa chỉ thật (đường / hẻm / số nhà / mốc), KHÔNG chỉ vì
   // có con số — "lên thổ cư 300m2", "thời hạn đến 2060" từng đi vào địa chỉ.
@@ -328,18 +417,25 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
 ];
 // Nhiều căn trong MỘT tin ("căn A5 8x20 giá 18 tỷ, căn A7 8x20 giá 18 tỷ 5, căn B2 góc
 // 10x20 giá 22 tỷ") — đại diện chủ đầu tư / môi giới rao theo lô (chân dung 3, 10/09).
-export type CanTrongTin = { ma: string; ngang?: string; dai?: string; gia?: string; goc: string };
+// 11/09/2026 (42 ca): "anh có 2 căn: 1 căn q5 50m2 6 tỷ, 1 căn q11 40m2 4 tỷ" —
+// "q5" đứng sau chữ "căn" là QUẬN, không phải mã căn; bản trước ghi unit_code
+// "Q5" và quận mặc định. Nay tách `quan`, và giữ diện tích m² nếu có.
+export type CanTrongTin = { ma?: string; quan?: string; ngang?: string; dai?: string; dt?: string; gia?: string; goc: string };
 export function nhanDienNhieuCan(text: string): CanTrongTin[] {
   const out: CanTrongTin[] = [];
   for (const goc of text.split(/[,;\n]|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter(Boolean)) {
     const kd = boDau(goc);
     const mMa = /\b(?:can|lo|shop|nen)\s*(?:so\s*)?([a-z]{1,3}[\s.\-]?\d{1,3}(?:[.\-]\d{1,3})?[a-z]?|\d{1,3}[a-z])\b/.exec(kd);
     if (!mMa) continue;
+    const laQuan = /^q\s*\.?\s*\d{1,2}$/.test(mMa[1]);
     const mKt = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(kd);
+    const mDt = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(kd);
     const mGia = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`).exec(kd);
     out.push({
-      ma: mMa[1].replace(/[\s.]/g, "").toUpperCase(),
-      ngang: mKt?.[1], dai: mKt?.[2],
+      ...(laQuan
+        ? { quan: `Quận ${Number(mMa[1].replace(/\D/g, ""))}` }
+        : { ma: mMa[1].replace(/[\s.]/g, "").toUpperCase() }),
+      ngang: mKt?.[1], dai: mKt?.[2], dt: mDt?.[1],
       gia: mGia ? `${mGia[1]} ${mGia[2] === "toi" ? "tỏi" : /^t[iy]$/.test(mGia[2]) ? "tỷ" : "triệu"}${mGia[3] ? ` ${mGia[3]}` : ""}${mGia[4] ? " rưỡi" : ""}` : undefined,
       goc,
     });
@@ -349,9 +445,12 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
 export function nhanDienNhieuFact(text: string): NhanDien[] {
   const out: NhanDien[] = [];
   const them = (nd: NhanDien | null) => { if (nd && !out.some((x) => x.question === nd.question)) out.push(nd); };
-  them(nhanDienFact(text));
+  // 11/09/2026 (42 ca): xét từng MẢNH trước cả câu. Bản trước lấy nhanDienFact(cả
+  // câu) trước, nên câu rao "bán nhà …, 4x16, 1 trệt 2 lầu, shr, 9t5" ghi fact pháp
+  // lý là NGUYÊN câu rao (5/42 tin). Mảnh "shr" mới là câu trả lời pháp lý.
   const manh = text.split(/[,;\n]|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter((s) => s.length >= 2);
   if (manh.length > 1) for (const s of manh) them(nhanDienFact(s));
+  them(nhanDienFact(text));
   const kd = boDau(text);
   for (const [q, re, lay] of FACT_PHU) {
     const m = re.exec(kd);

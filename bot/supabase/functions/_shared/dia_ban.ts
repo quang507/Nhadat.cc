@@ -52,6 +52,42 @@ const QUAN_SO = /\bquan\s*\.?\s*(\d{1,2})\b|(?:^|[^a-z0-9])q\.?\s*(\d{1,2})(?![0
 const QUAN_TRONG_THO = /qu[áàảãạăâ]n(?=[^\p{L}]{0,3}\d)/iu;
 const SAU_SO_LA_DON_VI = /^\s*(tang|lau|tam|tret|phong|pn|wc|met|m2|m|ty|ti|toi|trieu|tr|nam|nguoi|cai|can|chiec)\b/;
 
+// 11/09/2026 (lượt bắn 42 ca): "bán nhà ở Hà Nội quận Cầu Giấy 50m2 9 tỷ" →
+// `bocQuan` trả null → chat-reply mặc định "Quận 5" → căn Hà Nội vào rổ Quận 5
+// với mã BDS-NP-Q5-…. Nay nhận ra hai loại địa bàn mà `bocQuan` không biết:
+//   · XA (ngoài hẳn vùng phục vụ): bot nói thật là chưa nhận, KHÔNG mở tin.
+//   · LÂN CẬN: vẫn nhận, nhưng quận ghi đúng tên tỉnh, không bao giờ là Quận 5.
+// Chuỗi vào ĐÃ BỎ DẤU. Chỉ gọi khi `bocQuan` đã trả null.
+const VUNG_XA: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bha noi\b|\b(?:cau giay|dong da|ba dinh|hoan kiem|hai ba trung|thanh xuan|long bien|tay ho|tu liem|ha dong)\b/, "Hà Nội"],
+  [/\bhai phong\b/, "Hải Phòng"],
+  [/\bda nang\b|\bhoi an\b/, "Đà Nẵng"],
+  [/\bthua thien hue\b|\btp hue\b|\bthanh pho hue\b/, "Huế"],
+  [/\bnha trang\b|\bkhanh hoa\b|\bcam ranh\b/, "Khánh Hoà"],
+  [/\bda lat\b|\blam dong\b|\bbao loc\b/, "Lâm Đồng"],
+  [/\bcan tho\b/, "Cần Thơ"],
+  [/\bquang ninh\b|\bha long\b/, "Quảng Ninh"],
+  [/\bphu quoc\b|\bkien giang\b|\brach gia\b/, "Kiên Giang"],
+  [/\bquy nhon\b|\bbinh dinh\b/, "Bình Định"],
+  [/\bphan thiet\b|\bbinh thuan\b|\bmui ne\b/, "Bình Thuận"],
+  [/\bbuon ma thuot\b|\bdak lak\b/, "Đắk Lắk"],
+  [/\bnghe an\b|\bthanh hoa\b|\bquang nam\b|\bquang ngai\b/, "miền Trung / miền Bắc"],
+];
+const VUNG_LAN_CAN: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bbinh duong\b|\bthu dau mot\b|\bdi an\b|\bthuan an\b|\bben cat\b/, "Bình Dương"],
+  [/\bdong nai\b|\bbien hoa\b|\bnhon trach\b|\blong thanh\b/, "Đồng Nai"],
+  [/\btay ninh\b/, "Tây Ninh"],
+  [/\btien giang\b|\bmy tho\b/, "Tiền Giang"],
+  [/\bben tre\b/, "Bến Tre"],
+];
+
+/** Tên vùng ngoài danh sách `bocQuan` mà câu nhắc tới; `xa` = ngoài vùng phục vụ. */
+export function vungNgoai(kd: string): { ten: string; xa: boolean } | null {
+  for (const [re, ten] of VUNG_XA) if (re.test(kd)) return { ten, xa: true };
+  for (const [re, ten] of VUNG_LAN_CAN) if (re.test(kd)) return { ten, xa: false };
+  return null;
+}
+
 export function bocQuan(kd: string, tho?: string): string | null {
   for (const [re, ten] of QUAN_TEN) if (re.test(kd)) return ten;
   if (tho && QUAN_TRONG_THO.test(tho)) return null;
