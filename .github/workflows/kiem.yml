@@ -197,3 +197,44 @@ jobs:
           bun-version: latest
       - name: Không có phát hiện mới so với bản nền đã biết
         run: bun run soat:db
+
+  # ── CỔNG THỨ 9: KIỂM KIỂU CHO BOT ─────────────────────────────────────────
+  # `tsconfig.json` loại hẳn thư mục `bot` nên 3.900 dòng `chat-reply` và tám
+  # function kia CHƯA TỪNG qua kiểm kiểu. Bật lần đầu 11/09: 15 lỗi — tất cả là
+  # kiểu KHAI SAI so với dữ liệu thật (RPC trả `r_dead` mà kiểu không có, select
+  # có `created_at` mà kiểu không có…). Lần này chưa cái nào thành lỗi chạy,
+  # nhưng một kiểu nói dối là chỗ lỗi chạy kế tiếp sẽ nấp.
+  #
+  # Dùng `deno check` vì function viết cho Deno (specifier `npm:`, global `Deno`)
+  # — tsc của web không đọc được chúng. `--node-modules-dir=auto` để Deno tự kéo
+  # gói npm mà không cần thêm deno.json vào thư mục function (thêm vào đó là đổi
+  # luôn cách Supabase CLI đóng gói lúc deploy).
+  kieubot:
+    name: Bot — kiểm kiểu (deno check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Chín edge function không có lỗi kiểu nào
+        working-directory: bot/supabase/functions
+        run: deno check --node-modules-dir=auto */index.ts
+
+  # ── CỔNG THỨ 10: LUẬT TIỀN TS ↔ SQL RA CÙNG MỘT SỐ ──────────────────────────
+  # Luật tiền phía TS gom về `_shared/extraction/luat-tien.ts` (tầng bốn 11/09),
+  # nhưng SQL `parse_vnd` không import được TypeScript — nó sẽ luôn là bản riêng.
+  # "Một nguồn" cho hai ngôn ngữ nghĩa là một BẢNG CA (`bot/tests/luat/tien.json`)
+  # mà cả hai bản phải trả lời như nhau. Lệch là đỏ, dòng đỏ nói bản nào lệch.
+  # Phía SQL gọi `doi_chieu_tien_cong_khai()` (20260911a, hàm thuần, không đọc
+  # bảng nào) bằng khoá công khai — không cần secret.
+  doichieutien:
+    name: Luật tiền — TS và SQL cùng một bảng ca
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: docTien (TS) và parse_vnd (SQL) ra cùng một số trên mọi ca
+        run: bun run doi-chieu:tien

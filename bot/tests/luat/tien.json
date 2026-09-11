@@ -1,0 +1,26 @@
+{
+  "_doc": "BẢNG CA CHUNG cho luật tiền (tầng bốn, 11/09/2026). Hai bản chạy trên bảng này và PHẢI ra cùng một số: TS `docTien` (bot/supabase/functions/_shared/extraction/luat-tien.ts) và SQL `parse_vnd`. SQL không import được TS nên đây là cách duy nhất để hai bản không trôi xa nhau. Thêm ca = thêm vào đây, không thêm vào từng test riêng.",
+  "ca": [
+    { "cau": "5 tỷ 8",            "mong": 5800000000, "vi_sao": "một chữ số sau tỷ là phần mười" },
+    { "cau": "3 tỷ 200",          "mong": 3200000000, "vi_sao": "ba chữ số sau tỷ là triệu" },
+    { "cau": "8 ty 250",          "mong": 8250000000, "vi_sao": "không dấu, vẫn là phần triệu" },
+    { "cau": "4tỷ2",              "mong": 4200000000, "vi_sao": "dính liền không cách" },
+    { "cau": "giá 3 tỷ 4",        "mong": 3400000000, "vi_sao": "có chữ giá đứng trước" },
+    { "cau": "12 tỷ",             "mong": 12000000000 },
+    { "cau": "1,5 tỷ",            "mong": 1500000000, "vi_sao": "dấu phẩy thập phân" },
+    { "cau": "3 tỷ rưỡi",         "mong": 3500000000 },
+    { "cau": "3 ty ruoi",         "mong": 3500000000, "vi_sao": "rưỡi không dấu" },
+    { "cau": "2 tỏi 5",           "mong": 2500000000, "vi_sao": "tỏi CÓ DẤU luôn là tỷ (mục D6 review 10/09)" },
+    { "cau": "5t5",               "mong": 5500000000, "vi_sao": "lóng: t kẹp giữa hai số (mục D7)" },
+    { "cau": "7t",                "mong": 7000000000, "vi_sao": "lóng: t đứng cuối, không phải 7 tầng" },
+    { "cau": "850 triệu",         "mong": 850000000 },
+    { "cau": "15 tr",             "mong": 15000000 },
+    { "cau": "3 củ",              "mong": 3000000,    "vi_sao": "củ = triệu" },
+    { "cau": "5 tỷ 50m2",         "mong": 5000000000, "vi_sao": "50 là diện tích, KHÔNG phải phần lẻ" },
+    { "cau": "1 trệt 2 lầu",      "mong": null,       "vi_sao": "trệt không phải triệu — chữ có dấu là CHỮ" },
+    { "cau": "60 m2",             "mong": null },
+    { "cau": "hẻm 5m",            "mong": null },
+    { "cau": "nhà 3 tầng",        "mong": null },
+    { "cau": "",                  "mong": null }
+  ]
+}

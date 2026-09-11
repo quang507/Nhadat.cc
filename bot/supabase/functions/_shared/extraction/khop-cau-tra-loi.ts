@@ -16,6 +16,11 @@
 // Luật chung: thà HỎI LẠI một câu thừa còn hơn ĐÓNG một câu hỏi bằng rác —
 // câu hỏi đóng sai không bao giờ tự lộ, câu hỏi thừa thì chủ nhà thấy ngay.
 
+// Luật tiền MỘT NGUỒN (tầng bốn, 11/09): trước đây file này chép tay
+// `(ty|ti|toi|trieu|tr)` ở năm chỗ, không chỗ nào biết "toi" + số là TỚI —
+// nên "5 tới 6 tỷ" ghi giá "5 tới 6" (mục D1 review 10/09).
+import { TIEN_KD, CO_TIEN_KD } from "./luat-tien.ts";
+
 export type LoaiCau =
   | "khop"      // đúng là câu trả lời cho câu đang hỏi → ghi fact, đóng câu hỏi
   | "xung_ho"   // dặn cách gọi ("kêu chị nha") → nhớ, KHÔNG ghi fact, hỏi lại
@@ -215,7 +220,7 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
     if (CO_SO.test(kd) || SO_CHU.test(kd)) {
       // Số đi kèm đơn vị của trường KHÁC thì lệch: hỏi năm xây mà nhận "5 tỷ".
       // Trường TIỀN (giá, doanh thu, phí, cọc, điện nước) thì đơn vị tiền là đúng.
-      if (!TIEN_OK.has(question) && /\b(ty|ti|trieu|tr)\b/.test(kd)) return ketQua("lech");
+      if (!TIEN_OK.has(question) && CO_TIEN_KD.test(kd)) return ketQua("lech");
       // "80m2": không có ranh giới từ giữa "80" và "m2", nên đừng dùng \b trước m2.
       if (question === "gia" && /(m2|m²|met vuong|\btang\b|\blau\b|\btam\b|\bngang\b|\brong\b|\bdai\b|\bsau\b|\bhem\b|\bmat tien\b)/.test(kd) && !/\b(ty|ti|toi|trieu|tr|k)\b/.test(kd)) return ketQua("lech");
       return ketQua("khop");
@@ -307,7 +312,7 @@ const boDauGiuDoDai = (s: string): string =>
 // "3 tầng 4 phòng ngủ 2 wc", "ngang 5 dài 20"): bắt thêm trên cả câu.
 const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // "cần bán gấp 5 tỷ" → câu chính là gấp, giá vẫn phải ghi.
-  ["gia", /\b(\d+(?:[.,]\d+)?)\s*(ty|ti|toi|trieu|tr)\b(?:\s*(\d+(?:[.,]\d+)?))?(?:\s*(ruoi))?/, (m) => `${m[1]} ${m[2] === "toi" ? "tỏi" : m[2] === "ty" || m[2] === "ti" ? "tỷ" : "triệu"}${m[3] ? ` ${m[3]}` : ""}${m[4] ? " rưỡi" : ""}`],
+  ["gia", new RegExp(`\\b(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`), (m) => `${m[1]} ${m[2] === "toi" ? "tỏi" : m[2] === "ty" || m[2] === "ti" ? "tỷ" : "triệu"}${m[3] ? ` ${m[3]}` : ""}${m[4] ? " rưỡi" : ""}`],
   ["so_phong_ngu", /\b(\d{1,2})\s*(?:phong ngu|pn|phong)\b(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
   ["so_wc", /\b(\d{1,2})\s*(?:wc|toilet|ve sinh)\b/, (m) => m[1]],
   ["huong", /\bhuong\s*((?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?)\b/, (m) => `hướng ${m[1]}`],
@@ -331,7 +336,7 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
     const mMa = /\b(?:can|lo|shop|nen)\s*(?:so\s*)?([a-z]{1,3}[\s.\-]?\d{1,3}(?:[.\-]\d{1,3})?[a-z]?|\d{1,3}[a-z])\b/.exec(kd);
     if (!mMa) continue;
     const mKt = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(kd);
-    const mGia = /(\d+(?:[.,]\d+)?)\s*(ty|ti|toi|trieu|tr)\b(?:\s*(\d+(?:[.,]\d+)?))?(?:\s*(ruoi))?/.exec(kd);
+    const mGia = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`).exec(kd);
     out.push({
       ma: mMa[1].replace(/[\s.]/g, "").toUpperCase(),
       ngang: mKt?.[1], dai: mKt?.[2],
@@ -444,7 +449,7 @@ export function nhanDienFact(text: string): NhanDien | null {
     return { question: "dien_tich", answer: m[0].replace(/\s+/g, " ") };
   }
   // Giá: khớp trên bản bỏ dấu GIỮ ĐỘ DÀI rồi cắt đúng đoạn gốc ("18 tỷ", "4 tỷ 5").
-  if ((m = new RegExp(`${SO}\\s*(?:ty|ti|toi|trieu|tr)\\b(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kdD))) {
+  if ((m = new RegExp(`${SO}\\s*(?:${TIEN_KD})(?![a-z])(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kdD))) {
     return { question: "gia", answer: catGoc(m) };
   }
   // Toà / tháp / block của chung cư — bắt TRƯỚC luật kết cấu, vì "toa S3.02 tang
@@ -494,7 +499,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   }
   if (/\b(hem thong|hem cut|quay dau|thong ra|khong thong|ko thong)\b/.test(kd)) return { question: "hem_thong", answer: goc };
   if (/\b(dang the chap|the chap|cam ngan hang|so cam tay|cam tay|trong ngan hang|ket sat)\b/.test(kd)) return { question: "the_chap", answer: goc };
-  if (/\b(thuong luong|\btl\b|bot chut|fix|cung duoc|con bot|gia net|gia chot)\b/.test(kd) && !/\d\s*(ty|ti|trieu|tr)\b/.test(kd)) {
+  if (/\b(thuong luong|\btl\b|bot chut|fix|cung duoc|con bot|gia net|gia chot)\b/.test(kd) && !CO_TIEN_KD.test(kd)) {
     return { question: "thuong_luong", answer: goc };
   }
   if (/\b(dang o|dang cho thue|de trong|nha trong|con o|dang thue)\b/.test(kd) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
@@ -689,7 +694,10 @@ export function laNgungRao(text: string): NgungRao | null {
 // thứ 2", "số 1") hoặc ĐỊA CHỈ (chữ ≥ 4 ký tự trong location_raw / số phường
 // khớp câu). Không rõ → null, tầng trên hỏi lại.
 export type CanChon = { id: string; location_raw?: string | null; ward?: string | null; code?: string | null };
-export function chonCanTheoCau(text: string, cans: CanChon[]): CanChon | null {
+// Generic: trả về ĐÚNG kiểu người gọi đưa vào. Bản cũ trả `CanChon` hẹp nên
+// chat-reply đọc `chon.deal` ra TS2339 dù lúc chạy trường đó có thật (bật kiểm
+// kiểu bot 11/09).
+export function chonCanTheoCau<T extends CanChon>(text: string, cans: T[]): T | null {
   if (!cans.length) return null;
   const kd = boDau(text).replace(/[^a-z0-9\s/]/g, " ").replace(/\s+/g, " ").trim();
   if (!kd) return null;
@@ -702,7 +710,7 @@ export function chonCanTheoCau(text: string, cans: CanChon[]): CanChon | null {
   }
   if (/\b(dau|dau tien|thu nhat|1st)\b/.test(kd)) return cans[0];
   if (/\b(cuoi|sau cung|con lai)\b/.test(kd)) return cans[cans.length - 1];
-  let tot: CanChon | null = null, diemTot = 0;
+  let tot: T | null = null, diemTot = 0;
   for (const c of cans) {
     const tu = boDau(c.location_raw ?? "").replace(/[^a-z0-9\s/]/g, " ").split(/\s+/).filter((w) => w.length >= 4 || /^\d+(\/\d+)*$/.test(w) && w.length >= 2);
     let d = tu.filter((w) => kd.includes(w)).length;

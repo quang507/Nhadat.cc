@@ -13,6 +13,7 @@
 // "chỉ tin đang lên kệ". Giá không ép vào ô chip cố định (duoi-5/5-8/…) mà đi
 // thành `gmin`/`gmax` (VND) — "8 tỉ" là 6,8–9,2 tỉ, không phải "5–8 tỷ".
 import { tagBySlug } from "@/lib/tags";
+import { TIEN_KD } from "@/bot/supabase/functions/_shared/extraction/luat-tien";
 
 const TY = 1_000_000_000;
 const TR = 1_000_000;
@@ -131,12 +132,22 @@ type GiaKQ = { min?: number; max?: number; approx?: number; conf: number; thue?:
 // Giá. Đơn vị: ty|ti|toi → 1e9; tr|trieu|cu → 1e6; "/thang" → dấu hiệu thuê.
 // `tr(?![a-z])` để "tret" (trệt) không thành "triệu" — bẫy SRS-3.8 đã ăn ba lần.
 // KHÔNG nhận "m"/"k" làm đơn vị: "60 m2" mà đọc thành 60 triệu là sai cả câu.
-const DV = "(ty|ti|toi|tr|trieu|cu)";
+// Đơn vị tiền MỘT NGUỒN (tầng bốn, 11/09): `luat-tien.ts` — dùng chung với bot
+// và bộ bóc tách. Bản cũ ở đây có "toi" TRẦN (luôn là tỷ), trong khi nhánh khoảng
+// giá ngay dưới lại coi "toi" là TỚI: cùng một chữ, hai nghĩa, trong một file.
+const DV = `(${TIEN_KD})`;
 const SO = "(\\d+(?:[.,]\\d+)?)";
 function donVi(u: string): number {
   return u === "ty" || u === "ti" || u === "toi" ? TY : TR;
 }
 function bocGia(t: string, goc?: string): GiaKQ | null {
+  if (goc) {
+    let i = goc.toLowerCase().indexOf("tỏi");
+    while (i >= 0) {
+      t = t.slice(0, i) + "ty " + t.slice(i + 3);
+      i = goc.toLowerCase().indexOf("tỏi", i + 3);
+    }
+  }
   // `raw` cắt từ bản gốc (có dấu) theo cùng chỉ số, bỏ ký tự ngăn cách đứng đầu.
   const rawCua = (m: RegExpExecArray) =>
     (goc ?? t).slice(m.index + m[1].length, m.index + m[0].length).replace(/^[^\p{L}\p{N}]+/u, "").trim();
@@ -220,7 +231,7 @@ export function parseQuery(qRaw: string): ParsedQuery {
   }
 
   // Giá
-  const g = bocGia(t);
+  const g = bocGia(t, q);
   if (g) {
     if (g.min) f.priceMin = Math.round(g.min);
     if (g.max) f.priceMax = Math.round(g.max);
