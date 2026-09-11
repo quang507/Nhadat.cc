@@ -3749,6 +3749,27 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.listings_doi_ma_theo_quan_loai()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_moi text;
+begin
+  if new.status = 'cho_thong_tin' and new.chu_duyet_at is null
+     and (new.district is distinct from old.district or new.property_type is distinct from old.property_type)
+     and new.code ~ '^BDS-[A-Z0-9]+-[A-Z0-9]+-[0-9]+$' then
+    v_moi := public.next_listing_code(new.property_type::text, new.district, null);
+    if regexp_replace(v_moi, '[0-9]+$', '') <> regexp_replace(new.code, '[0-9]+$', '') then
+      new.code := v_moi;
+    end if;
+  end if;
+  return new;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.listings_fill_code()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -6266,6 +6287,8 @@ drop trigger if exists trg_listings_fill_property_type on public.listings;
 CREATE TRIGGER trg_listings_fill_property_type BEFORE INSERT OR UPDATE OF description, location_raw, property_type ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_fill_property_type();
 drop trigger if exists trg_listings_price_vnd on public.listings;
 CREATE TRIGGER trg_listings_price_vnd BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_set_price_vnd();
+drop trigger if exists trg_listings_zz_doi_ma on public.listings;
+CREATE TRIGGER trg_listings_zz_doi_ma BEFORE UPDATE OF district, property_type ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_doi_ma_theo_quan_loai();
 drop trigger if exists trg_listings_zz_fill_code on public.listings;
 CREATE TRIGGER trg_listings_zz_fill_code BEFORE INSERT ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_fill_code();
 drop trigger if exists trg_pe_listings on public.listings;
