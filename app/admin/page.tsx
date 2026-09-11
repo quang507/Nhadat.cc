@@ -220,6 +220,7 @@ function BanLamViec() {
   const [tien, setTien] = useState<Tien[]>([]);
   const [quota, setQuota] = useState<Quota | null>(null);
   const [factDuAn, setFactDuAn] = useState<FactDuAn[]>([]);
+  const [zaloDn, setZaloDn] = useState<DangNhapZalo | null>(null);
   const [viec, setViec] = useState<Viec[]>([]);
   const [nguoiBan, setNguoiBan] = useState<NguoiBan[]>([]);
   const [hangCtv, setHangCtv] = useState<HangCtv[]>([]);
@@ -309,7 +310,35 @@ function BanLamViec() {
   const ptThongKe = usePhanTrang(thongKe);
   const ptCrm = usePhanTrang(filteredCrm);
 
+  // FR-203: trạng thái đăng nhập acc Zalo clone + ảnh QR (bridge đẩy lên).
+  // Tách khỏi `load()` để lúc chờ quét chỉ đọc lại đúng một dòng này.
+  const taiDangNhap = async () => {
+    const { data } = await supabase.from("bridge_dang_nhap")
+      .select("trang_thai, qr_png, yeu_cau_quet_lai, ghi_chu, cap_nhat").eq("id", 1).maybeSingle();
+    setZaloDn((data as DangNhapZalo | null) ?? null);
+  };
+  // Đang chờ quét thì đọc lại mỗi 4 giây: mã QR đổi mỗi ~100 giây, và quét
+  // xong phải thấy "đã đăng nhập" ngay chứ không phải tự bấm tải lại trang.
+  const theoDoiDn = role === "admin" && !!zaloDn &&
+    (zaloDn.trang_thai !== "dang_nhap" || zaloDn.yeu_cau_quet_lai);
+  useEffect(() => {
+    if (!theoDoiDn) return;
+    const t = setInterval(() => void taiDangNhap(), 4000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theoDoiDn]);
+  const dangNhapLaiZalo = async () => {
+    if (!confirm(
+      "Đăng nhập lại acc Zalo clone?\n\nBridge sẽ bỏ phiên hiện tại (trong ≤ 5 phút) rồi hiện mã QR mới ở đây để quét. " +
+      "Trong lúc chờ quét, bot KHÔNG nhận và gửi được tin Zalo.",
+    )) return;
+    const { error } = await supabase.rpc("yeu_cau_quet_lai_zalo");
+    if (error) { alert(`Không gửi được yêu cầu: ${error.message}`); return; }
+    await taiDangNhap();
+  };
+
   const load = async () => {
+    void taiDangNhap();
     const d7 = new Date(Date.now() - 7 * 86400e3).toISOString();
     const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt, buyRes, intRes, qtRes, pfRes] = await Promise.all([
       supabase
@@ -1688,6 +1717,11 @@ function BanLamViec() {
             <TheQuota q={quota} tokenTien={tien[0] ? tienNgay(tien[0]) : null} />
           </div>
 
+          {/* FR-203: đăng nhập Zalo clone — quét QR ngay trên CRM */}
+          <div className="rounded-2xl border border-line bg-white p-6">
+            <TheZaloClone dn={zaloDn} onDangNhapLai={dangNhapLaiZalo} />
+          </div>
+
           {/* Tình trạng Bot AI */}
           <div className="rounded-2xl border border-line bg-white p-6 space-y-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
@@ -2103,6 +2137,92 @@ function TheTien({ rows }: { rows: Tien[] }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+type DangNhapZalo = {
+  trang_thai: string;
+  qr_png: string | null;
+  yeu_cau_quet_lai: boolean;
+  ghi_chu: string | null;
+  cap_nhat: string;
+};
+
+const NHAN_DANG_NHAP: Record<string, string> = {
+  dang_nhap: "Đã đăng nhập",
+  cho_quet: "Chờ quét mã QR",
+  da_quet: "Đã quét, chờ xác nhận",
+  het_han: "Phiên hết hạn",
+  tu_choi: "Điện thoại từ chối",
+  chua_ro: "Chưa có tín hiệu",
+};
+
+// FR-203: ô đăng nhập acc Zalo clone. Ảnh QR là thứ nhạy (quét bằng acc nào
+// thì acc đó thành acc bot) — bảng chỉ admin đọc được, và trang này chỉ hiện
+// mã còn hạn.
+function TheZaloClone({ dn, onDangNhapLai }: { dn: DangNhapZalo | null; onDangNhapLai: () => void }) {
+  const giay = dn ? Math.round((Date.now() - new Date(dn.cap_nhat).getTime()) / 1000) : null;
+  // zca-js cho mỗi mã sống 100 giây rồi sinh mã mới. Ảnh cũ hơn thế nghĩa là
+  // bridge đã thôi đẩy (chết giữa chừng) — đừng cho quét một mã đã chết.
+  const qrConHan = dn?.trang_thai === "cho_quet" && !!dn.qr_png && giay != null && giay < 110;
+  const tot = dn?.trang_thai === "dang_nhap" && !dn.yeu_cau_quet_lai;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-navy">Zalo clone</h2>
+          <p className="text-xs text-mute mt-0.5">
+            Acc Zalo cá nhân bot dùng để nhắn khách và chủ nhà khi chưa có OA. Phiên hết hạn thì quét lại mã QR ngay ở đây.
+          </p>
+        </div>
+        <span
+          className={`rounded-md px-3 py-1 text-xs font-bold ${
+            tot ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-brand text-white"
+          }`}
+        >
+          {dn ? (NHAN_DANG_NHAP[dn.trang_thai] ?? dn.trang_thai) : "Không đọc được"}
+        </span>
+      </div>
+
+      {qrConHan ? (
+        <div className="flex flex-wrap items-start gap-6">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={dn!.qr_png!}
+            alt="Mã QR đăng nhập Zalo clone"
+            className="h-56 w-56 border border-line bg-white p-2"
+          />
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-navy">
+            <li>Mở Zalo trên điện thoại đang đăng nhập <b>acc clone</b> (đừng dùng acc chính).</li>
+            <li>Bấm biểu tượng QR ở thanh tìm kiếm, quét mã bên cạnh.</li>
+            <li>Bấm xác nhận đăng nhập trên điện thoại.</li>
+            <li className="text-mute">Mã tự đổi mỗi ~100 giây, trang này tự cập nhật.</li>
+          </ol>
+        </div>
+      ) : dn?.trang_thai === "cho_quet" ? (
+        <p className="text-sm text-brand">
+          Mã QR gần nhất đã quá hạn ({giay} giây trước) mà bridge chưa đẩy mã mới — bridge trên VPS có thể đã dừng.
+        </p>
+      ) : dn?.trang_thai === "het_han" || dn?.yeu_cau_quet_lai ? (
+        <p className="text-sm text-mute">Bridge đang khởi động lại để sinh mã QR mới, chờ chút là mã hiện ở đây.</p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-mute">
+        <span>
+          {dn
+            ? `Cập nhật ${new Date(dn.cap_nhat).toLocaleString("vi-VN")}${dn.ghi_chu ? ` · ${dn.ghi_chu}` : ""}`
+            : "Chưa đọc được trạng thái đăng nhập"}
+        </span>
+        <button
+          type="button"
+          onClick={onDangNhapLai}
+          disabled={!dn || dn.yeu_cau_quet_lai || dn.trang_thai === "cho_quet"}
+          className="rounded-md border border-line px-3 py-1.5 font-bold text-navy hover:border-brand disabled:opacity-50"
+        >
+          {dn?.yeu_cau_quet_lai ? "Đã yêu cầu, chờ bridge…" : "Đăng nhập lại"}
+        </button>
+      </div>
     </div>
   );
 }

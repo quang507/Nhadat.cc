@@ -179,6 +179,8 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-199 | UF-04 | — | `_shared/extraction/vet-du-an-loc.ts` (van + dọn, tiền định) · `_shared/ai/boc-du-an.ts` (gọi model, JSON schema) · `chat-reply` `vetDuAnBangModel()` nối ở đường ra `traLoiSeller`; ghi qua `ghi_fact_du_an` với `nguon='llm'`. Kiểm: TS-VET-01 | — |
 | FR-200 | UF-11 | WF-13 | `20260910k`: `doc_bot_prompts()` + `sua_bot_prompt()` + cột `bot_prompts.sua_boi`; web `/admin/prompt` so với `_shared/prompts.ts`. Kiểm: TS-PROMPT-01 | — |
 | FR-201 | UF-11 | WF-13 | `/admin/ro-hang`: `luuSua(duyet)` đặt `status='dang_ban'` kèm xác nhận + danh sách ô thiếu; dropdown ngoài bảng khoá mục *đang bán*. Kiểm: TS-DUYET-01 | — |
+| FR-202 | UF-06 | — | `nudge` cất tin vào `reminders.noi_dung_gui`, `nhan_viec_nhac` bỏ qua dòng đó (`20260911b`); `nhacChuNha()` đặt dòng nhắc chủ nhà; `escalation-feed` pull trả thêm dòng soạn sẵn (buyers/sellers), ack ghi tin vào hội thoại. Kiểm: TS-NHAC-CLONE-01 | — |
+| FR-203 | UF-11 | — | bảng `bridge_dang_nhap` + `yeu_cau_quet_lai_zalo()` (`20260911b`); `escalation-feed` action `qr` + cờ `quet_lai`; bridge `baoDangNhap()`/`phienChet()`/`actions.retry()`; `/admin` ô `TheZaloClone`. Kiểm: TS-QR-01 | — |
 | FR-187 | UF-10 | WF-ADMIN | `20260909i`: `jsonb_bo_rong(jsonb)`, `boc_tach_nhom(listings)` + `boc_tach_nhom(uuid)`, view `boc_tach_v`, `so.boc_tach`; `components/admin/BocTachNhom.tsx` (`NHAN_NHOM`, `sapNhom`, `useBocTach`, `taiJsonTin`); `app/admin/ro-hang/json/page.tsx` đọc `boc_tach_v`; `app/admin/ro-hang/page.tsx` nút JSON + `DongJson`. Kiểm: TS-KYGUI-33 (DB thật) | — |
 | FR-97 | | — | — | — |
 

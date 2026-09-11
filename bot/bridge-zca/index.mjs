@@ -8,6 +8,9 @@
 // callback rồi PHÁT TẠM qua http ở một đường dẫn ngẫu nhiên; mở link đó trên
 // điện thoại/trình duyệt → Zalo app (acc clone) → quét. Cookie lưu
 // ./zalo-session.json, lần sau khỏi quét lại.
+// Từ 11/09 (FR-203): ảnh QR còn hiện ngay trên /admin, và phiên chết (lỗi
+// `zpw_sek`) thì bridge tự cất phiên sang bên + thoát để systemd dựng lại vào
+// luồng QR — khỏi ssh vào VPS.
 import * as zca from "zca-js";
 import fs from "node:fs";
 import http from "node:http";
@@ -75,6 +78,27 @@ if (!process.env.BRIDGE_SECRET) {
   );
 }
 
+// FR-203: báo trạng thái đăng nhập acc clone (kèm ảnh QR khi chờ quét) lên
+// /admin qua escalation-feed. Đặt TRƯỚC khối đăng nhập vì callback QR chạy
+// ngay trong lúc đăng nhập — các hằng khai báo phía dưới lúc đó chưa tồn tại.
+// KHÔNG BAO GIỜ ném: mất mạng thì vẫn còn link http tạm + qr.png như cũ.
+const FEED_URL_DN =
+  "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/escalation-feed";
+async function baoDangNhap(trang_thai, qr_png = null, ghi_chu = null) {
+  try {
+    await fetch(FEED_URL_DN, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ANON_KEY}`,
+        "Content-Type": "application/json",
+        ...(process.env.BRIDGE_SECRET ? { "x-bridge-secret": process.env.BRIDGE_SECRET } : {}),
+      },
+      body: JSON.stringify({ action: "qr", trang_thai, qr_png, ghi_chu }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch { /* còn đường http tạm + qr.png */ }
+}
+
 // Bám theo thư mục của script, không theo cwd: chạy từ gốc repo cũng phải tìm
 // ra đúng session cũ, đừng bắt quét QR lại vô cớ.
 const SESSION_FILE = path.join(HERE, "zalo-session.json");
@@ -116,6 +140,8 @@ if (!api) {
     if (type === (EV.QRCodeGenerated ?? 0) && ev?.data?.image) {
       qrPng = Buffer.from(String(ev.data.image).replace(/^data:image\/png;base64,/, ""), "base64");
       try { fs.writeFileSync(QR_FILE, qrPng); } catch { /* đĩa chỉ đọc thì còn đường http */ }
+      // FR-203: đẩy ảnh lên /admin — quét ngay trên CRM.
+      void baoDangNhap("cho_quet", `data:image/png;base64,${qrPng.toString("base64")}`);
       if (!qrServer) {
         qrServer = http.createServer((req, res) => {
           if (req.url === `/qr-${token}.png` && qrPng) {
@@ -139,10 +165,19 @@ if (!api) {
       );
     } else if (type === (EV.QRCodeScanned ?? 2)) {
       console.log("Đã quét — xác nhận đăng nhập trên điện thoại.");
+      void baoDangNhap("da_quet");
     } else if (type === (EV.QRCodeExpired ?? 1)) {
-      console.log("QR hết hạn, đang sinh mã mới…");
+      // zca-js 2.x KHÔNG tự sinh mã mới khi mình có callback: nó chỉ gọi
+      // callback kèm `actions.retry`. Bản trước in "đang sinh mã mới" rồi đứng
+      // im mãi — ai mở link sau 100 giây là gặp mã chết (đọc
+      // dist/apis/loginQR.js bản 2.1.2 trên VPS, 11/09).
+      console.log("QR hết hạn, sinh mã mới…");
+      void baoDangNhap("het_han", null, "mã QR hết hạn, đang sinh mã mới");
+      ev?.actions?.retry?.();
     } else if (type === (EV.QRCodeDeclined ?? 3)) {
-      console.log("Điện thoại từ chối đăng nhập — chạy lại để lấy QR mới.");
+      console.log("Điện thoại từ chối đăng nhập — sinh QR mới.");
+      void baoDangNhap("tu_choi");
+      ev?.actions?.retry?.();
     }
   });
   dongQr();
@@ -150,6 +185,7 @@ if (!api) {
     fs.writeFileSync(SESSION_FILE, JSON.stringify(api.getContext?.() ?? {}));
   } catch { /* zca-js đổi API thì bỏ qua, chỉ mất tính năng nhớ session */ }
 }
+await baoDangNhap("dang_nhap");
 console.log("Bridge sẵn sàng — nhắn thử vào acc clone từ một acc khác.");
 
 const brainHeaders = {
@@ -179,8 +215,7 @@ const errDetail = (e) => {
     .filter(Boolean).join(" · ");
 };
 
-const FEED_URL =
-  "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/escalation-feed";
+const FEED_URL = FEED_URL_DN;
 const feedHeaders = brainHeaders; // brainHeaders đã kèm x-bridge-secret
 
 // FR-152: đẩy lỗi lên sổ chung `bot_errors` (xem ở /admin). console.error chỉ
@@ -197,6 +232,25 @@ async function ghiLoi(source, detail) {
     });
   } catch { /* mất mạng thì thôi, đừng làm hỏng thêm luồng đang lỗi */ }
 }
+
+// FR-203: PHIÊN ZALO CHẾT — cookie `zpw_sek` hết hiệu lực (Zalo đá phiên khi
+// acc đăng nhập nơi khác, hoặc để lâu). Bản trước cứ thế gửi: mỗi phút một
+// dòng lỗi cho từng việc, từ chiều 10/09 tới sáng 11/09, mà không có gì nói
+// ra "phải quét QR lại". Nay: cất phiên chết sang bên, báo /admin, thoát —
+// systemd (Restart=always) dựng lại, không còn phiên thì vào luồng QR và ảnh
+// QR hiện trên /admin. Cất sang bên chứ không xoá: còn soi được; lượt QR sau
+// ghi file phiên mới.
+let dangThoat = false;
+async function phienChet(lyDo) {
+  if (dangThoat) return;
+  dangThoat = true;
+  console.log(`Phiên Zalo chết (${lyDo}) — bỏ phiên, khởi động lại để quét QR.`);
+  try { fs.renameSync(SESSION_FILE, path.join(HERE, "zalo-session.het-han.json")); } catch { /* không có file */ }
+  await baoDangNhap("het_han", null, String(lyDo).slice(0, 200));
+  await ghiLoi("phien zalo", `phiên chết: ${lyDo} — quét QR lại ở /admin`);
+  process.exit(1);
+}
+const laPhienChet = (e) => /zpw_sek/i.test(errDetail(e));
 
 // Mạng nhà/VPS rớt vài giây là chuyện thường: hết giờ thì thử lại 1 lần trước
 // khi kêu lỗi, để một cú nghẽn không làm mất luôn lượt trả lời khách.
@@ -366,6 +420,7 @@ api.listener.on("message", async (message) => {
       message.data?.msgId ? String(message.data.msgId) : undefined,
     );
   } catch (e) {
+    if (laPhienChet(e)) return await phienChet(errDetail(e));
     await ghiLoi("xử lý tin", errDetail(e));
   }
 });
@@ -432,8 +487,10 @@ async function pumpEscalations() {
   if (dangKeoViec) return;
   dangKeoViec = true;
   try {
-    const { items, error } = await postJson(FEED_URL, feedHeaders, { action: "pull" });
+    const { items, error, quet_lai } = await postJson(FEED_URL, feedHeaders, { action: "pull" });
     if (error) return await ghiLoi("escalation-feed", error);
+    // FR-203: admin bấm "Đăng nhập lại" ở /admin.
+    if (quet_lai) return await phienChet("admin yêu cầu đăng nhập lại từ /admin");
     nhipKeo = items?.length ? NHIP_NHANH : Math.min(nhipKeo * 2, NHIP_TRAN);
     for (const it of items ?? []) {
       try {
@@ -464,6 +521,7 @@ async function pumpEscalations() {
         });
         console.log(`🔔 đã nhắn ${it.name}: ${String(it.note).slice(0, 70)}…`);
       } catch (e) {
+        if (laPhienChet(e)) return await phienChet(errDetail(e));
         await ghiLoi("escalation", `${it.id}: ${errDetail(e)}`); // giữ pending, vòng sau thử lại
       }
     }
@@ -482,6 +540,15 @@ async function vongKeo() {
   await pumpEscalations();
   setTimeout(vongKeo, nhipKeo);
 }
+// Kiểm phiên NGAY lúc khởi động (FR-203): `login(session)` qua được KHÔNG có
+// nghĩa là gửi được — 10/09 nó qua, rồi mọi lượt gửi đều "zpw_sek bị thiếu".
+// Lỗi khác (mạng, zca-js đổi tên hàm) thì bỏ qua: đừng bắt quét QR lại vô cớ.
+try {
+  await api.fetchAccountInfo?.();
+} catch (e) {
+  if (laPhienChet(e)) await phienChet(errDetail(e));
+}
+
 vongKeo();
 
 api.listener.start();

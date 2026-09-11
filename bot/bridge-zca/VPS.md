@@ -54,6 +54,10 @@ và sổ lỗi ghi "bridge secret sai".
 
 ## 3. Quét QR lần đầu (bắt buộc làm tay — điện thoại)
 
+**Từ 11/09 (FR-203): mở `/admin` → ô *Zalo clone* — mã QR hiện ngay đó**, tự đổi
+khi hết hạn, quét xong ô chuyển *Đã đăng nhập*. Không cần ssh. Cách dưới đây
+giữ làm đường dự phòng khi web hoặc mạng tới Supabase có chuyện.
+
 zca-js **không in QR ra terminal** (nó ghi `qr.png` — tài liệu trước 08/09 nói
 sai). Bridge nhận ảnh QR qua callback và phát tạm qua http ở một đường dẫn có
 token ngẫu nhiên; đăng nhập xong là đóng.
@@ -66,7 +70,9 @@ journalctl -u nhadat-bridge -n 30 --no-pager      # tìm dòng "▶ QUÉT QR"
 Mở Zalo trên điện thoại **bằng acc clone** (không dùng acc chính — zca-js là API
 không chính thức, Zalo có thể khoá), biểu tượng QR ở thanh tìm kiếm → quét ảnh
 đó. Log hiện "Bridge sẵn sàng" là session đã lưu vào `zalo-session.json`, service
-tự chạy tiếp. QR hết hạn thì zca-js sinh mã mới ở cùng link — tải lại trang.
+tự chạy tiếp. QR hết hạn (100 giây) thì bridge gọi `actions.retry()` sinh mã mới
+ở cùng link — tải lại trang. (Trước 11/09 bridge chỉ in chữ "đang sinh mã mới"
+rồi đứng im: zca-js 2.x có callback thì KHÔNG tự sinh lại.)
 Không mở được link → mở cổng 8787 ở Firewall của nhà cung cấp, hoặc
 `scp root@<ip>:/opt/nhadat/bot/bridge-zca/qr.png .` rồi mở file. Đổi cổng bằng
 `QR_PORT` trong `.env`. Chạy tay không qua service (`node index.mjs`) cũng in
@@ -85,7 +91,11 @@ Kiểm từ phía DB (Supabase SQL editor): `select * from bot_health where who 
 
 ## 5. Khi session Zalo hết hạn
 
-Log hiện "Session cũ hết hạn — quét QR lại" rồi dòng "▶ QUÉT QR" với link mới.
+Từ 11/09 bridge TỰ nhận ra: lỗi `zpw_sek` (lúc khởi động, lúc gửi, lúc kéo
+việc) → cất phiên sang `zalo-session.het-han.json`, thoát, systemd dựng lại vào
+luồng QR, và mã QR hiện trên `/admin`. Muốn đổi acc hay ép quét lại thì bấm
+*Đăng nhập lại* ở ô đó (bridge nhận ở lượt kéo việc kế tiếp, ≤ 5 phút).
+Log vẫn hiện "Session cũ hết hạn — quét QR lại" rồi dòng "▶ QUÉT QR" với link mới.
 Làm lại mục 3, không cần dừng service. Cảnh báo "bridge-zca đang im" sẽ tới
 điện thoại qua ntfy (mục 6) sau 15 phút.
 

@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-11 08:33 (giờ VN)
+-- Sinh lúc: 2026-09-11 09:00 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -82,6 +82,15 @@ create table if not exists public.bot_usage (
   out_tokens bigint not null default 0,
   cache_write_tokens bigint not null default 0,
   cache_read_tokens bigint not null default 0
+);
+
+create table if not exists public.bridge_dang_nhap (
+  id smallint not null default 1,
+  trang_thai text not null default 'chua_ro'::text,
+  qr_png text,
+  yeu_cau_quet_lai boolean not null default false,
+  ghi_chu text,
+  cap_nhat timestamp with time zone not null default now()
 );
 
 create table if not exists public.buyers (
@@ -436,7 +445,8 @@ create table if not exists public.reminders (
   locked_by text,
   attempts integer not null default 0,
   next_retry_at timestamp with time zone,
-  last_error text
+  last_error text,
+  noi_dung_gui text
 );
 
 create table if not exists public.required_facts (
@@ -498,6 +508,18 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.bot_usage add constraint bot_usage_pkey PRIMARY KEY (day);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.bridge_dang_nhap add constraint bridge_dang_nhap_id_check CHECK ((id = 1));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.bridge_dang_nhap add constraint bridge_dang_nhap_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.bridge_dang_nhap add constraint bridge_dang_nhap_qr_png_check CHECK (((qr_png IS NULL) OR ((qr_png ~~ 'data:image/png;base64,%'::text) AND (length(qr_png) <= 200000))));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.bridge_dang_nhap add constraint bridge_dang_nhap_trang_thai_check CHECK ((trang_thai = ANY (ARRAY['chua_ro'::text, 'dang_nhap'::text, 'cho_quet'::text, 'da_quet'::text, 'het_han'::text, 'tu_choi'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.buyers add constraint buyers_auth_user_id_key UNIQUE (auth_user_id);
@@ -4340,6 +4362,9 @@ AS $function$
       where status='pending' and kind = any(p_kinds) and due_at <= now()
         and (locked_at is null or locked_at < now() - interval '5 minutes')
         and coalesce(next_retry_at, '-infinity'::timestamptz) <= now()
+        -- Đã soạn sẵn chờ bridge Zalo clone gửi thì KHÔNG nhận lại: nhận lại
+        -- là gọi model soạn cùng một tin mỗi 5 phút, mãi mãi (11/09).
+        and noi_dung_gui is null
       order by due_at limit p_limit for update skip locked)
   returning r.*;
 $function$
@@ -5698,6 +5723,25 @@ end
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.yeu_cau_quet_lai_zalo()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
+    raise exception 'Khong co quyen quan tri' using errcode = '42501';
+  end if;
+  update public.bridge_dang_nhap
+     set yeu_cau_quet_lai = true,
+         ghi_chu = 'yêu cầu đăng nhập lại từ /admin (' ||
+                   coalesce((select auth.jwt()) ->> 'email', 'service_role') || ')',
+         cap_nhat = now()
+   where id = 1;
+end $function$
+;
+
 -- ══ View ══
 create or replace view public.public_media with (security_invoker = true) as
  SELECT id,
@@ -6260,6 +6304,7 @@ alter table public.bot_errors enable row level security;
 alter table public.bot_health enable row level security;
 alter table public.bot_prompts enable row level security;
 alter table public.bot_usage enable row level security;
+alter table public.bridge_dang_nhap enable row level security;
 alter table public.buyers enable row level security;
 alter table public.chat_quota enable row level security;
 alter table public.conversations enable row level security;
@@ -6303,6 +6348,8 @@ drop policy if exists bot_usage_admin_read on public.bot_usage;
 create policy bot_usage_admin_read on public.bot_usage as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists bridge_dang_nhap_admin_read on public.bridge_dang_nhap;
+create policy bridge_dang_nhap_admin_read on public.bridge_dang_nhap as permissive for SELECT to authenticated using (la_admin());
 drop policy if exists buyers_admin_read on public.buyers;
 create policy buyers_admin_read on public.buyers as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
@@ -6437,6 +6484,7 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bo
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bot_health to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bot_prompts to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bot_usage to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bridge_dang_nhap to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.buyers to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.chat_quota to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.conversations to service_role;
@@ -6529,6 +6577,7 @@ grant SELECT on public.bot_do_tre to service_role;
 grant SELECT on public.bot_errors to authenticated;
 grant SELECT on public.bot_health to authenticated;
 grant SELECT on public.bot_usage to authenticated;
+grant SELECT on public.bridge_dang_nhap to authenticated;
 grant SELECT on public.hoi_thoai_phien to authenticated;
 grant SELECT on public.hoi_thoai_phien to service_role;
 grant SELECT on public.hoi_thoai_thong_ke to authenticated;
@@ -6921,6 +6970,9 @@ revoke all on function public.viewings_bao_ctv_va_email() from public, anon, aut
 grant execute on function public.viewings_bao_ctv_va_email() to service_role;
 revoke all on function public.xuat_schema() from public, anon, authenticated;
 grant execute on function public.xuat_schema() to service_role;
+revoke all on function public.yeu_cau_quet_lai_zalo() from public, anon, authenticated;
+grant execute on function public.yeu_cau_quet_lai_zalo() to authenticated;
+grant execute on function public.yeu_cau_quet_lai_zalo() to service_role;
 
 -- ══ Storage bucket ══
 insert into storage.buckets (id, name, public) values ('listing-photos', 'listing-photos', 'f') on conflict (id) do nothing;
