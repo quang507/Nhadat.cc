@@ -136,6 +136,52 @@ export function trongVung(lat: number, lng: number, ngoaiTp = false): boolean {
 }
 export const laTinhNgoai = (district: string | null) => TINH_NGOAI_RE.test(boDau(district ?? ""));
 
+// ─── Khoá vùng tìm quanh QUẬN CŨ (11/09/2026) ────────────────────────────────
+// Lượt chạy thật đầu tiên: "hẻm 102 Trần Bình Trọng, Phường 1, Quận 5" ra
+// 10.8125, 106.6882 — một đường Trần Bình Trọng KHÁC, cách Quận 5 ~7 km. Nấc
+// "bỏ quận" (cần vì OSM TP.HCM không còn ranh giới quận) khớp đường trùng tên ở
+// quận khác. Quận không còn trên OSM nhưng vẫn là thông tin tốt: tâm ~ + bán
+// kính của quận/huyện cũ → Nominatim chỉ tìm trong hộp đó (`viewbox` +
+// `bounded=1`), và điểm trả về ngoài bán kính thì loại — thà không ghim còn hơn
+// ghim nhầm quận rồi trả lời "gần bệnh viện" theo nó.
+const TAM_QUAN: Record<string, [number, number, number]> = {
+  "1": [10.7757, 106.7004, 4], "3": [10.7830, 106.6860, 4], "4": [10.7578, 106.7013, 4],
+  "5": [10.7540, 106.6634, 4], "6": [10.7480, 106.6352, 4], "7": [10.7340, 106.7218, 6],
+  "8": [10.7240, 106.6286, 6], "10": [10.7746, 106.6679, 4], "11": [10.7629, 106.6505, 4],
+  "12": [10.8672, 106.6413, 7], "2": [10.7872, 106.7498, 7], "9": [10.8428, 106.8287, 10],
+  "binh thanh": [10.8106, 106.7091, 5], "phu nhuan": [10.7992, 106.6803, 4],
+  "tan binh": [10.8015, 106.6527, 5], "tan phu": [10.7918, 106.6278, 5],
+  "go vap": [10.8387, 106.6653, 5], "binh tan": [10.7652, 106.6039, 7],
+  "thu duc": [10.8494, 106.7537, 12], "nha be": [10.6951, 106.7048, 10],
+  "binh chanh": [10.6874, 106.5938, 15], "hoc mon": [10.8894, 106.5947, 12],
+  "cu chi": [10.9733, 106.4933, 22], "can gio": [10.4113, 106.9547, 25],
+};
+
+export type VungQuan = { lat: number; lng: number; r_km: number };
+
+/** "Quận 5", "Q.5", "Quận 9 (TP. Thủ Đức)", "Huyện Bình Chánh" → tâm + bán kính; không biết → null. */
+export function vungQuan(district: string | null): VungQuan | null {
+  if (!district) return null;
+  const k = boDau(district).toLowerCase()
+    .replace(/\([^)]*\)/g, " ").replace(/[.,]/g, " ")
+    .replace(/\b(thanh pho|tp|quan|huyen|thi xa|q)\b/g, " ")
+    .replace(/\s+/g, " ").trim().replace(/^0+(\d)/, "$1");
+  const v = TAM_QUAN[k];
+  return v ? { lat: v[0], lng: v[1], r_km: v[2] } : null;
+}
+
+/** Điểm có nằm trong bán kính quận không. */
+export const trongVungQuan = (lat: number, lng: number, v: VungQuan): boolean =>
+  khoangCachM(lat, lng, v.lat, v.lng) <= v.r_km * 1000;
+
+/** Hộp `viewbox` cho Nominatim: "trái,trên,phải,dưới" (kinh, vĩ). */
+export function viewboxQuan(v: VungQuan): string {
+  const dLat = v.r_km / 111.32;
+  const dLng = v.r_km / (111.32 * Math.cos(v.lat * Math.PI / 180));
+  const f = (x: number) => x.toFixed(4);
+  return `${f(v.lng - dLng)},${f(v.lat + dLat)},${f(v.lng + dLng)},${f(v.lat - dLat)}`;
+}
+
 // ─── Tiện ích quanh tin (Overpass) ───────────────────────────────────────────
 
 /** Nạp điểm trong bán kính này quanh mỗi tin; khách hỏi xa hơn thì kẹp lại. */

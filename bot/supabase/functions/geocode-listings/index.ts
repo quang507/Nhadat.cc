@@ -19,15 +19,19 @@ import { serviceClient } from "../_shared/claude.ts";
 import { congBiMat } from "../_shared/gate.ts";
 import {
   cauOverpass, type DiemOsm, docDiemOsm, ganNhatMoiLoai, laTinhNgoai, queriesDuAn, queriesFor, trongVung,
+  trongVungQuan, viewboxQuan, type VungQuan, vungQuan,
 } from "../_shared/geocode.ts";
 
 const UA = "nhadatcc-geocoder/1.0 (admin.buyerside@nhadat.cc)";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Máy chủ chính hay "too busy" (đo 11/09 từ máy văn phòng); gọi từ hạ tầng
 // Supabase thì chạy. Có máy phụ để một lần bận không làm trễ cả lượt.
+// Lượt chạy thật đầu tiên (11/09) cả hai máy đều hỏng: máy chính trả 406 (gọi
+// từ DB thì 504 "too busy"), máy phụ quá 35 s. Thêm máy thứ ba.
 const OVERPASS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
 const CHAN_THOI_GIAN_MS = 110_000; // dưới wall-clock 150s; chạy lại là tiếp
 
@@ -68,8 +72,11 @@ Deno.serve(async (req) => {
   let lanNominatim = 0;
   const t0 = Date.now();
 
-  const traNominatim = async (q: string): Promise<[number, number] | null> => {
-    if (cache.has(q)) return cache.get(q)!;
+  // `vung`: quận cũ của tin → chỉ tìm trong hộp quanh quận đó (xem vungQuan).
+  const traNominatim = async (q: string, vung: VungQuan | null = null): Promise<[number, number] | null> => {
+    const hop = vung ? `&viewbox=${viewboxQuan(vung)}&bounded=1` : "";
+    const khoa = `${q}|${hop}`;
+    if (cache.has(khoa)) return cache.get(khoa)!;
     const cho = 1100 - (Date.now() - lanNominatim);
     if (cho > 0) await sleep(cho);
     lanNominatim = Date.now();
@@ -77,7 +84,7 @@ Deno.serve(async (req) => {
     let point: [number, number] | null = null;
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=vn&q=${encodeURIComponent(q)}`,
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=vn${hop}&q=${encodeURIComponent(q)}`,
         { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20_000) },
       );
       const js = await res.json();
@@ -90,7 +97,9 @@ Deno.serve(async (req) => {
     } catch (e) {
       await ghiLoi(`nominatim ${q} → ${loiChu(e)}`);
     }
-    cache.set(q, point);
+    // Hộp chỉ là gợi ý cho Nominatim; kiểm lại bằng khoảng cách tới tâm quận.
+    if (point && vung && !trongVungQuan(point[0], point[1], vung)) point = null;
+    cache.set(khoa, point);
     return point;
   };
 
@@ -98,8 +107,16 @@ Deno.serve(async (req) => {
     const q = cauOverpass(lat, lng);
     for (const base of OVERPASS) {
       try {
-        const res = await fetch(`${base}?data=${encodeURIComponent(q)}`, {
-          headers: { "User-Agent": UA }, signal: AbortSignal.timeout(35_000),
+        // POST dạng form, như tài liệu Overpass khuyên (GET dài dễ bị chặn).
+        const res = await fetch(base, {
+          method: "POST",
+          headers: {
+            "User-Agent": UA,
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: `data=${encodeURIComponent(q)}`,
+          signal: AbortSignal.timeout(35_000),
         });
         if (!res.ok) {
           await ghiLoi(`overpass ${base} → HTTP ${res.status}`);
@@ -127,9 +144,10 @@ Deno.serve(async (req) => {
         mucMoi = "du_an";
       } else {
         const ngoai = laTinhNgoai(row.district);
+        const vung = row.quan_mac_dinh ? null : vungQuan(row.district);
         for (const c of queriesFor(row)) {
           if (Date.now() - t0 > CHAN_THOI_GIAN_MS) break;
-          const p = await traNominatim(c.q);
+          const p = await traNominatim(c.q, vung);
           if (p && trongVung(p[0], p[1], ngoai)) {
             point = p;
             mucMoi = c.muc;
@@ -177,8 +195,11 @@ Deno.serve(async (req) => {
     }
     if (!diem) {
       poiFail++;
-      // geocode_at = lúc này → 12 giờ sau tick mới thử lại, không dội Overpass.
-      await db.from("listings").update({ geocode_at: luc }).eq("id", row.id);
+      // Overpass công cộng hay quá tải (đo 11/09: 504 "too busy", 406) — lỗi
+      // phía họ, không phải địa chỉ khó tra. Lùi geocode_at 11 giờ để tick thử
+      // lại sau ~1 giờ, thay vì 12 giờ như một địa chỉ tra hỏng.
+      await db.from("listings")
+        .update({ geocode_at: new Date(Date.now() - 11 * 3600e3).toISOString() }).eq("id", row.id);
       continue;
     }
     await db.from("listings")
@@ -195,10 +216,11 @@ Deno.serve(async (req) => {
     for (const p of (das ?? []) as Array<{ id: string; name: string | null; location_raw: string | null; ward: string | null; district: string | null }>) {
       if (Date.now() - t0 > CHAN_THOI_GIAN_MS) break;
       const ngoai = laTinhNgoai(p.district);
+      const vung = vungQuan(p.district);
       let point: [number, number] | null = null;
       for (const c of queriesDuAn(p)) {
         if (Date.now() - t0 > CHAN_THOI_GIAN_MS) break;
-        const pt = await traNominatim(c.q);
+        const pt = await traNominatim(c.q, vung);
         if (pt && trongVung(pt[0], pt[1], ngoai)) {
           point = pt;
           break;
