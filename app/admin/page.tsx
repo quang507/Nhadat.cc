@@ -739,6 +739,20 @@ function BanLamViec() {
   const buyerCount = danhSachCrm.filter((k) => !k.seller && !!k.preferences).length;
   const sellerCount = danhSachCrm.filter((k) => !!k.seller && !k.preferences).length;
   const bridgeSong = health?.beat ? Math.round((now - new Date(health.beat).getTime()) / 60000) <= 15 : false;
+  // FR-203 f: "Đang trực" nghĩa là bot NHẬN VÀ GỬI được tin — không chỉ là bridge
+  // còn gõ cửa. Bridge đang chờ quét QR vẫn gõ cửa đều (mỗi lần đẩy mã QR lên là
+  // một nhịp tim), nên thẻ nhìn nhịp tim một mình đã báo "Đang trực" xanh đúng
+  // lúc Zalo clone chết (11/09 — chủ dự án chụp màn hình hỏi lại).
+  const zaloChet = !!zaloDn && (zaloDn.trang_thai !== "dang_nhap" || zaloDn.yeu_cau_quet_lai);
+  const botLoi = !health
+    ? null
+    : !bridgeSong
+    ? health.beat ? "Bridge im quá 15 phút" : "Bridge chưa từng gõ cửa"
+    : zaloChet && zaloDn
+    ? `Zalo clone: ${(NHAN_DANG_NHAP[zaloDn.trang_thai] ?? zaloDn.trang_thai).toLowerCase()}`
+    : quota?.het_credit && !quota.co_du_phong
+    ? "Model không gọi được (hết số dư)"
+    : null;
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-24 pt-8">
@@ -790,6 +804,15 @@ function BanLamViec() {
               ? "Bot vẫn nói chuyện bình thường bằng model dự phòng; chất lượng có thể nhỉnh kém hơn một chút. Nạp tiền cho tài khoản chính là về như cũ."
               : "Bot vẫn trả lời khách bằng câu mẫu tiền định nên hội thoại trông như thường — đừng đọc giọng bot để chấm chất lượng lúc này."}
           </p>
+        </div>
+      )}
+
+      {/* FR-203 f: Zalo clone chết thì ô mã QR lên NGAY ĐẦU TRANG, ở mọi tab — lúc
+          này bot không nhận, không gửi được tin Zalo nào, không được để nó nằm
+          khuất dưới đáy tab Vận hành. */}
+      {zaloChet && (
+        <div className="mt-4 rounded-2xl border-2 border-brand bg-white p-6">
+          <TheZaloClone dn={zaloDn} onDangNhapLai={dangNhapLaiZalo} />
         </div>
       )}
 
@@ -868,21 +891,23 @@ function BanLamViec() {
         <button
           type="button"
           onClick={() => { setActiveTab("ops"); history.replaceState(null, "", "/admin?tab=ops"); }}
-          className={`text-left rounded-2xl p-4 border transition-all ${
-            activeTab === "ops"
-              ? "border-brand bg-brand/5 shadow ring-2 ring-brand/20"
-              : "border-line bg-white hover:border-brand/40 hover:"
+          className={`text-left rounded-2xl p-4 transition-all ${
+            botLoi
+              ? "border-2 border-brand bg-brand/5"
+              : activeTab === "ops"
+              ? "border border-brand bg-brand/5 shadow ring-2 ring-brand/20"
+              : "border border-line bg-white hover:border-brand/40 hover:"
           }`}
         >
           <div className="text-xs font-semibold text-mute flex items-center justify-between">
             <span>Trợ lý AI Bot</span>
-            <span className={`inline-block w-2.5 h-2.5 rounded-full ${bridgeSong ? "bg-emerald-500" : "bg-brand"}`} />
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${botLoi || !health ? "bg-brand" : "bg-emerald-500"}`} />
           </div>
-          <div className="mt-2 text-xl font-bold tracking-tight text-navy">
-            {bridgeSong ? "Đang trực" : "Cần kiểm tra"}
+          <div className={`mt-2 text-xl font-bold tracking-tight ${botLoi ? "text-brand" : "text-navy"}`}>
+            {!health ? "Đang đọc…" : botLoi ? "Đang lỗi" : "Đang trực"}
           </div>
-          <div className="mt-1 text-xs text-mute truncate">
-            p50: {Math.round((doTre?.p50_giay ?? 0) * 1000)}ms · {health?.errs.length ?? 0} lỗi
+          <div className={`mt-1 text-xs truncate ${botLoi ? "font-bold text-brand" : "text-mute"}`}>
+            {botLoi ?? `p50: ${Math.round((doTre?.p50_giay ?? 0) * 1000)}ms · ${health?.errs.length ?? 0} lỗi`}
           </div>
         </button>
       </div>
@@ -1717,10 +1742,13 @@ function BanLamViec() {
             <TheQuota q={quota} tokenTien={tien[0] ? tienNgay(tien[0]) : null} />
           </div>
 
-          {/* FR-203: đăng nhập Zalo clone — quét QR ngay trên CRM */}
-          <div className="rounded-2xl border border-line bg-white p-6">
-            <TheZaloClone dn={zaloDn} onDangNhapLai={dangNhapLaiZalo} />
-          </div>
+          {/* FR-203: đăng nhập Zalo clone — quét QR ngay trên CRM. Đang lỗi thì ô
+              này đã nằm ở đầu trang (mọi tab), đừng hiện hai lần. */}
+          {!zaloChet && (
+            <div className="rounded-2xl border border-line bg-white p-6">
+              <TheZaloClone dn={zaloDn} onDangNhapLai={dangNhapLaiZalo} />
+            </div>
+          )}
 
           {/* Tình trạng Bot AI */}
           <div className="rounded-2xl border border-line bg-white p-6 space-y-4">

@@ -28,7 +28,7 @@ function ThanhTren() {
   const router = useRouter();
   const tab = sp.get("tab");
   const [email, setEmail] = useState<string | null>(null);
-  const [chuong, setChuong] = useState<{ viec: number; loi: number } | null>(null);
+  const [chuong, setChuong] = useState<{ viec: number; loi: number; zaloLoi: boolean } | null>(null);
   const [q, setQ] = useState("");
   const [moMenu, setMoMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -39,15 +39,20 @@ function ThanhTren() {
       if (!song || !user) return;
       setEmail(user.email ?? null);
       const d1 = new Date(Date.now() - 86400e3).toISOString();
-      const [v, l] = await Promise.all([
+      const [v, l, z] = await Promise.all([
         supabase.from("reminders").select("id", { count: "exact", head: true }).eq("status", "pending").in("kind", ["escalation", "report"]),
         // Đếm theo LOẠI lỗi, không đếm từng dòng: một sự cố lặp 80 lần vẫn là MỘT
         // việc phải xử. Trước bản này chuông đứng "99+" trong khi ô "Cần xử lý"
         // là 0 — con số không nói được gì thì người ta thôi nhìn nó (10/09).
         supabase.from("bot_errors").select("source").gte("at", d1).limit(500),
+        // FR-203 f: Zalo clone chưa đăng nhập = bot không nhận, không gửi được tin
+        // Zalo nào → chấm đỏ trên tab Vận hành, thấy được từ MỌI trang /admin/*.
+        supabase.from("bridge_dang_nhap").select("trang_thai, yeu_cau_quet_lai").eq("id", 1).maybeSingle(),
       ]);
       const loai = new Set(((l.data ?? []) as { source: string | null }[]).map((x) => x.source ?? "?"));
-      if (song) setChuong({ viec: v.count ?? 0, loi: loai.size });
+      const dn = z.data as { trang_thai: string; yeu_cau_quet_lai: boolean } | null;
+      const zaloLoi = !!dn && (dn.trang_thai !== "dang_nhap" || dn.yeu_cau_quet_lai);
+      if (song) setChuong({ viec: v.count ?? 0, loi: loai.size, zaloLoi });
     });
     return () => { song = false; };
   }, [pathname]);
@@ -81,16 +86,21 @@ function ThanhTren() {
         <nav aria-label="Phân hệ" className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
           {TABS.map((t) => {
             const on = t.khop(pathname, tab);
+            // FR-203 f: Zalo clone chưa đăng nhập → tab Vận hành mang chấm đỏ.
+            const loiTab = t.href === "/admin?tab=ops" && !!chuong?.zaloLoi;
             return (
               <Link
                 key={t.href}
                 href={t.href}
-                title={t.title ?? t.label}
+                title={loiTab ? "Zalo clone chưa đăng nhập, bot không nhận/gửi được tin Zalo. Vào quét mã QR" : t.title ?? t.label}
                 aria-current={on ? "page" : undefined}
-                className={`flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition ${on ? "bg-white text-navy" : "text-white/85 hover:bg-white/10 hover:text-white"}`}
+                className={`relative flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition ${on ? "bg-white text-navy" : "text-white/85 hover:bg-white/10 hover:text-white"}`}
               >
                 <t.Icon className="h-4 w-4" />
-                <span className={on ? "" : "hidden xl:inline"}>{t.label}</span>
+                <span className={on || loiTab ? "" : "hidden xl:inline"}>{t.label}</span>
+                {loiTab && (
+                  <span aria-label="đang lỗi" className="inline-block h-2 w-2 rounded-full bg-brand ring-2 ring-navy" />
+                )}
               </Link>
             );
           })}
