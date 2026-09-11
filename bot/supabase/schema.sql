@@ -277,6 +277,10 @@ create table if not exists public.listings (
   property_type property_type default 'chua_ro'::property_type,
   lat numeric,
   lng numeric,
+  toa_do_muc text CHECK (((toa_do_muc IS NULL) OR (toa_do_muc = ANY (ARRAY['duong'::text, 'phuong'::text, 'du_an'::text, 'tay'::text])))),
+  geocode_at timestamp with time zone,
+  tien_ich_gan jsonb,
+  tien_ich_at timestamp with time zone,
   bedrooms integer,
   last_interest_at timestamp with time zone,
   property_type_source text not null default 'suy_doan'::text,
@@ -380,6 +384,17 @@ create table if not exists public.project_facts (
   ten_du_an text
 );
 
+-- 20260911g (FR-204): điểm OSM quanh các tin + địa danh chat-reply đã tra.
+create table if not exists public.tien_ich (
+  osm_id text not null PRIMARY KEY,
+  loai text not null CHECK ((loai = ANY (ARRAY['benh_vien'::text, 'truong_hoc'::text, 'cho'::text, 'sieu_thi'::text, 'cong_vien'::text, 'dia_diem'::text]))),
+  ten text not null,
+  ten_kd text not null,
+  lat double precision not null,
+  lng double precision not null,
+  cap_nhat_at timestamp with time zone not null default now()
+);
+
 create table if not exists public.projects (
   id uuid not null default gen_random_uuid(),
   name text not null,
@@ -390,6 +405,7 @@ create table if not exists public.projects (
   location_raw text,
   lat numeric,
   lng numeric,
+  geocode_at timestamp with time zone,
   legal_status text,
   amenities jsonb,
   floor_plans jsonb,
@@ -3749,6 +3765,191 @@ end;
 $function$
 ;
 
+-- ── 20260911g (FR-204): toạ độ tin + tiện ích + tìm tin gần mốc ────────────
+CREATE OR REPLACE FUNCTION public.khoang_cach_m(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision)
+ RETURNS double precision
+ LANGUAGE sql
+ IMMUTABLE PARALLEL SAFE
+ SET search_path TO 'public'
+AS $function$
+  select 6371000 * 2 * asin(least(1, sqrt(
+    power(sin(radians(p_lat2 - p_lat1) / 2), 2)
+    + cos(radians(p_lat1)) * cos(radians(p_lat2)) * power(sin(radians(p_lng2 - p_lng1) / 2), 2))))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.kd_ten(p text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE PARALLEL SAFE
+ SET search_path TO 'public'
+AS $function$
+  select btrim(regexp_replace(
+    regexp_replace(lower(public.bo_dau(coalesce(p, ''))), '[^a-z0-9 ]+', '', 'g'),
+    '\s+', ' ', 'g'))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.moc_khop(p_loai text, p_ten_re text DEFAULT NULL::text)
+ RETURNS TABLE(ten text, lat double precision, lng double precision)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  with a as (
+    select coalesce(p_loai, 'dia_diem') as loai,
+           case when coalesce(p_ten_re, '') = '' then null
+                else '(^| )(' || p_ten_re || ')( |$)' end as re
+  )
+  select t.ten, t.lat, t.lng
+  from tien_ich t, a
+  where (a.loai not in ('benh_vien', 'truong_hoc', 'cho', 'sieu_thi', 'cong_vien') or t.loai = a.loai)
+    and case when a.re is null then a.loai in ('benh_vien', 'truong_hoc', 'cho', 'sieu_thi', 'cong_vien')
+             else t.ten_kd ~ a.re end
+  union all
+  select pr.name, pr.lat::double precision, pr.lng::double precision
+  from projects pr, a
+  where a.re is not null and a.loai in ('du_an', 'dia_diem')
+    and pr.lat is not null and pr.lng is not null
+    and public.kd_ten(pr.name) ~ a.re
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.co_moc(p_loai text, p_ten_re text DEFAULT NULL::text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  select exists (select 1 from public.moc_khop(p_loai, p_ten_re))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tin_gan_moc(p_loai text, p_ten_re text DEFAULT NULL::text, p_lat double precision DEFAULT NULL::double precision, p_lng double precision DEFAULT NULL::double precision, p_ten text DEFAULT NULL::text, p_ban_kinh_m integer DEFAULT 1000, p_deal text DEFAULT NULL::text)
+ RETURNS TABLE(listing_id uuid, code text, moc text, khoang_cach_m integer)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  with r as (select least(3000, greatest(100, coalesce(p_ban_kinh_m, 1000)))::double precision as m),
+  moc as (
+    select mk.ten, mk.lat, mk.lng from public.moc_khop(p_loai, p_ten_re) mk
+    union all
+    select coalesce(nullif(btrim(p_ten), ''), 'địa điểm khách nói'), p_lat, p_lng
+    where p_lat is not null and p_lng is not null
+  ),
+  l as (
+    select li.id, li.code, li.lat::double precision as lat, li.lng::double precision as lng
+    from listings li
+    where li.lat is not null and li.lng is not null
+      and li.toa_do_muc in ('duong', 'du_an', 'tay')
+      and li.status in ('dang_ban', 'dang_quan_tam')
+      and (p_deal is null or li.deal::text = p_deal)
+  ),
+  cap as (
+    select l.id, l.code, moc.ten, public.khoang_cach_m(l.lat, l.lng, moc.lat, moc.lng) as d
+    from l cross join r
+    join moc
+      on moc.lat between l.lat - r.m / 111320.0 and l.lat + r.m / 111320.0
+     and moc.lng between l.lng - r.m / (111320.0 * cos(radians(l.lat)))
+                     and l.lng + r.m / (111320.0 * cos(radians(l.lat)))
+  )
+  select distinct on (cap.id) cap.id, cap.code, cap.ten, round(cap.d)::integer
+  from cap cross join r
+  where cap.d <= r.m
+  order by cap.id, cap.d
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.listings_xoa_toa_do_khi_doi_dia_chi()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if (new.location_raw is distinct from old.location_raw
+      or new.street    is distinct from old.street
+      or new.ward      is distinct from old.ward
+      or new.district  is distinct from old.district
+      or new.project_id is distinct from old.project_id)
+     and new.lat is not distinct from old.lat
+     and new.lng is not distinct from old.lng
+     and coalesce(old.toa_do_muc, '') <> 'tay' then
+    new.lat          := null;
+    new.lng          := null;
+    new.toa_do_muc   := null;
+    new.geocode_at   := null;
+    new.tien_ich_gan := null;
+    new.tien_ich_at  := null;
+  end if;
+  return new;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.tin_can_geocode(p_limit integer DEFAULT 40)
+ RETURNS TABLE(id uuid, location_raw text, street text, ward text, district text, quan_mac_dinh boolean, lat double precision, lng double precision, toa_do_muc text, du_an_lat double precision, du_an_lng double precision)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  select l.id, l.location_raw, l.street, l.ward, l.district,
+         coalesce((l.boc_tach ->> 'quan_mac_dinh')::boolean, false),
+         l.lat::double precision, l.lng::double precision, l.toa_do_muc,
+         p.lat::double precision, p.lng::double precision
+  from listings l
+  left join projects p on p.id = l.project_id
+  where (
+          (l.lat is null and (coalesce(btrim(l.location_raw), '') <> ''
+                              or coalesce(btrim(l.street), '') <> ''
+                              or coalesce(btrim(l.ward), '') <> ''
+                              or p.lat is not null))
+          or (l.lat is not null and l.tien_ich_at is null)
+        )
+    and (l.geocode_at is null or l.geocode_at < now() - interval '12 hours')
+  order by l.geocode_at nulls first, l.created_at desc
+  limit greatest(1, least(coalesce(p_limit, 40), 200))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.du_an_can_geocode(p_limit integer DEFAULT 30)
+ RETURNS TABLE(id uuid, name text, location_raw text, ward text, district text)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  select p.id, p.name, p.location_raw, p.ward, p.district
+  from projects p
+  where p.lat is null
+    and (p.geocode_at is null or p.geocode_at < now() - interval '7 days')
+  order by exists (select 1 from listings l where l.project_id = p.id) desc,
+           p.is_partner desc nulls last,
+           p.geocode_at nulls first
+  limit greatest(1, least(coalesce(p_limit, 30), 200))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.geocode_tick()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+begin
+  if not exists (select 1 from public.tin_can_geocode(1))
+     and not exists (select 1 from public.du_an_can_geocode(1)) then
+    return;
+  end if;
+  perform net.http_post(
+    url := public.cau_hinh('functions_base_url') || '/geocode-listings',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer sb_publishable_zmJBmEgFPn3bBKx_1ve6Pg_dXdo4haX',
+      'x-bridge-secret', public.get_secret('BRIDGE_SECRET')),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 150000);
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.listings_doi_ma_theo_quan_loai()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -6291,6 +6492,8 @@ drop trigger if exists trg_listings_zz_doi_ma on public.listings;
 CREATE TRIGGER trg_listings_zz_doi_ma BEFORE UPDATE OF district, property_type ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_doi_ma_theo_quan_loai();
 drop trigger if exists trg_listings_zz_fill_code on public.listings;
 CREATE TRIGGER trg_listings_zz_fill_code BEFORE INSERT ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_fill_code();
+drop trigger if exists trg_listings_zz_toa_do on public.listings;
+CREATE TRIGGER trg_listings_zz_toa_do BEFORE UPDATE OF location_raw, street, ward, district, project_id ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_xoa_toa_do_khi_doi_dia_chi();
 drop trigger if exists trg_pe_listings on public.listings;
 CREATE TRIGGER trg_pe_listings AFTER UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_y_listings_boc_thong_so on public.listings;
@@ -7030,3 +7233,29 @@ select cron.schedule('seller-drip-tick', '22,52 1-13 * * *', 'select seller_drip
 select cron.schedule('seller-hoi-bu-tick', '*/5 1-13 * * *', 'select seller_hoi_bu_tick()');
 select cron.schedule('seller-keep-alive-tick', '30 2 * * *', 'select public.seller_keep_alive_tick()');
 select cron.schedule('stale-listing-tick', '0 2 * * *', 'select public.stale_listing_tick()');
+select cron.schedule('geocode-tick', '*/10 * * * *', 'select public.geocode_tick()');
+
+-- ── 20260911g (FR-204): tien_ich — chỉ khoá dịch vụ ghi, admin đọc; quyền các hàm mới ──
+create index if not exists tien_ich_loai_lat_lng_idx on public.tien_ich (loai, lat, lng);
+alter table public.tien_ich enable row level security;
+revoke all on public.tien_ich from public, anon, authenticated;
+grant select on public.tien_ich to authenticated;
+grant all on public.tien_ich to service_role;
+drop policy if exists tien_ich_admin_read on public.tien_ich;
+create policy tien_ich_admin_read on public.tien_ich for select to authenticated using (public.la_admin());
+revoke execute on function public.khoang_cach_m(double precision, double precision, double precision, double precision) from public, anon;
+grant execute on function public.khoang_cach_m(double precision, double precision, double precision, double precision) to authenticated, service_role;
+revoke execute on function public.kd_ten(text) from public, anon;
+grant execute on function public.kd_ten(text) to authenticated, service_role;
+revoke execute on function public.moc_khop(text, text) from public, anon, authenticated;
+grant execute on function public.moc_khop(text, text) to service_role;
+revoke execute on function public.co_moc(text, text) from public, anon, authenticated;
+grant execute on function public.co_moc(text, text) to service_role;
+revoke execute on function public.tin_gan_moc(text, text, double precision, double precision, text, integer, text) from public, anon, authenticated;
+grant execute on function public.tin_gan_moc(text, text, double precision, double precision, text, integer, text) to service_role;
+revoke execute on function public.tin_can_geocode(integer) from public, anon, authenticated;
+grant execute on function public.tin_can_geocode(integer) to service_role;
+revoke execute on function public.du_an_can_geocode(integer) from public, anon, authenticated;
+grant execute on function public.du_an_can_geocode(integer) to service_role;
+revoke execute on function public.geocode_tick() from public, anon, authenticated;
+revoke execute on function public.listings_xoa_toa_do_khi_doi_dia_chi() from public, anon, authenticated;
