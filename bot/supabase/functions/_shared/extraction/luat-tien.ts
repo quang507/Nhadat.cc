@@ -29,7 +29,7 @@ export const TIEN_KD = "ty|ti|toi(?!\\s*\\d)|trieu|tr(?![a-z])|cu";
  * Đơn vị tiền trên chuỗi CÒN DẤU. "tỏi" có dấu thì luôn là tỷ — người gõ đủ dấu
  * đã tự phân biệt "tỏi" với "tới" giùm mình, khỏi đoán theo con số đứng sau.
  */
-export const TIEN_CD = "tỷ|tỉ|tỏi|triệu|ty|ti|toi(?!\\s*\\d)|trieu|tr(?![a-zA-ZÀ-ỹ])|cu";
+export const TIEN_CD = "tỷ|tỉ|tỏi|triệu|ty|ti|toi(?!\\s*\\d)|trieu|tr(?![a-zA-ZÀ-ỹ])|củ|cu";
 
 /** Đơn vị vừa khớp là họ tỷ (1e9) hay họ triệu (1e6). */
 export function laDonViTy(u: string): boolean {
@@ -38,6 +38,40 @@ export function laDonViTy(u: string): boolean {
 
 /** Câu (ĐÃ BỎ DẤU) có nhắc một lượng tiền không — số + đơn vị. */
 export const CO_TIEN_KD = new RegExp(`\\d\\s*(?:${TIEN_KD})(?![a-z])`);
+
+/**
+ * Lóng "t" KẸP giữa hai số: "9t5" = 9,5 tỷ, "4t2" = 4,2 tỷ (lượt bắn 42 ca
+ * 11/09/2026: hai câu này rơi giá vì cửa bắt giá chỉ biết `TIEN_CD`). Chỉ nhận
+ * khi sau số thứ hai KHÔNG có chữ/số — "1t2l" là 1 trệt 2 lầu, không phải tiền.
+ * Dùng được cho cả chuỗi còn dấu lẫn đã bỏ dấu.
+ */
+export const TIEN_T_KEP = "\\d+(?:[.,]\\d+)?\\s*t\\s*\\d{1,3}(?![a-zA-ZÀ-ỹ0-9])";
+
+/**
+ * Giá MỖI m² ("75 triệu/m2", "120tr một m2", "80 triệu mỗi mét"). Cả hai bản
+ * luật tiền trả null cho chuỗi này: 75 triệu/m2 mà đọc thành 75 triệu thì căn
+ * 50m2 lên web giá 75 triệu (lượt bắn 42 ca 11/09/2026). Muốn ra giá cả căn thì
+ * tầng trên nhân với diện tích (`giaTheoM2`).
+ */
+export const GIA_THEO_M2 =
+  /(?:tỷ|tỉ|tỏi|triệu|trieu|tr|củ|cu|ty|ti)\s*(?:\/|mỗi|moi|một|mot|1)\s*(?:m2|m²|mét|met|m(?![\p{L}\p{N}]))/u;
+
+/** "75 triệu/m2" → 75_000_000 (giá một m²); null nếu chuỗi không phải giá mỗi m². */
+export function giaTheoM2(p: string | null | undefined): number | null {
+  if (!p) return null;
+  const t = p.toLowerCase();
+  const m = GIA_THEO_M2.exec(t);
+  if (!m) return null;
+  return docTien(t.slice(0, m.index + m[0].length).replace(/\s*(?:\/|mỗi|moi|một|mot|1)\s*(?:m2|m²|mét|met|m)$/u, ""));
+}
+
+/** 3_750_000_000 → "3 tỷ 750 triệu"; 850_000_000 → "850 triệu". Đọc lại bằng `docTien` ra đúng số. */
+export function vndThanhChu(v: number): string {
+  const ty = Math.floor(v / 1e9);
+  const trieu = Math.round((v - ty * 1e9) / 1e6);
+  if (!ty) return `${trieu} triệu`;
+  return trieu ? `${ty} tỷ ${trieu} triệu` : `${ty} tỷ`;
+}
 
 /**
  * Đọc MỘT con số tiền từ một câu — cùng luật với SQL `parse_vnd` (phiên dịch
@@ -52,10 +86,14 @@ export const CO_TIEN_KD = new RegExp(`\\d\\s*(?:${TIEN_KD})(?![a-z])`);
 export function docTien(p: string | null | undefined): number | null {
   if (!p || !p.trim()) return null;
   let t = p.toLowerCase();
+  // Giá MỖI m² không phải giá cả căn (xem `GIA_THEO_M2`).
+  if (GIA_THEO_M2.test(t)) return null;
   const ruoi = /rưỡi|rươi|ruoi/.test(t);
   t = t.replace(/tỏi|tỷ|tỉ|tị|tỹ/g, " _ty ");
   t = t.replace(/triệu|trieu|củ/g, " _trieu ");
   t = t.replace(/([0-9])\s*ty\s*([0-9])/g, "$1 _ty $2");
+  // "3tr5" = 3,5 triệu (lượt bắn 42 ca 11/09: phòng trọ "3tr5 một tháng" rơi giá).
+  t = t.replace(/([0-9])\s*tr\s*([0-9])/g, "$1 _trieu $2");
   t = t.replace(/([0-9])\s*t\s*([0-9])/g, "$1 _ty $2");
   t = t.replace(/([0-9])\s*ty(?![\p{L}\p{N}_])/gu, "$1 _ty ");
   t = t.replace(/([0-9])\s*tr(?![\p{L}\p{N}_])/gu, "$1 _trieu ");
@@ -72,6 +110,13 @@ export function docTien(p: string | null | undefined): number | null {
     let v = parseFloat(m[1].replace(",", ".")) * 1e9;
     if (ruoi) v += 5e8;
     return Math.round(v);
+  }
+  // Phần lẻ sau triệu: "3 triệu 5" = 3,5 triệu · "3 triệu 500" = 3,5 triệu. Số
+  // đứng sau mà là số LƯỢNG ("cọc 3 triệu 2 tháng", "15 triệu 2 phòng ngủ", "80
+  // triệu 100m2") thì không phải phần lẻ.
+  m = /([0-9]+)\s*_trieu\s*([0-9]{1,3})(?![0-9.,]|\s*(?:m2|m²|mét|met|m(?![\p{L}])|phòng|phong|pn|lầu|lau|tầng|tang|tấm|tam|wc|tháng|thang|năm|nam|người|nguoi|căn|can))/u.exec(t);
+  if (m) {
+    return Number(m[1]) * 1e6 + (m[2].length === 1 ? Number(m[2]) * 1e5 : Number(m[2]) * 1e3);
   }
   m = /([0-9]+[.,]?[0-9]*)\s*_trieu/.exec(t);
   if (m) {

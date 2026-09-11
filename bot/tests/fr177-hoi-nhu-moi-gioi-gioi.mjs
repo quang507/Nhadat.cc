@@ -167,7 +167,11 @@ ok("chonCauKe: cho thuê trả lời cọc → hỏi thời hạn thuê",
 ok("câu mẫu hướng riêng cho chung cư", /ban công/i.test(cauHoiMau("huong", "anh", undefined, "chung_cu")));
 ok("câu mẫu hướng riêng cho đất", /lô đất/i.test(cauHoiMau("huong", "anh", undefined, "dat")));
 ok("câu mẫu hướng chung (nhà phố) không đổi", /quay hướng nào/i.test(cauHoiMau("huong", "anh", undefined, "nha_pho")));
-ok("câu mẫu địa chỉ nêu lý do giá thị trường khu vực (chốt 09/09 chiều)", /giá thị trường khu vực/.test(cauHoiMau("vi_tri", "anh")));
+// 09/09 chiều sếp chốt: hỏi địa chỉ kèm lý do "kiểm tra giá". 11/09 (lượt bắn 42 ca):
+// khuôn 25 từ kèm lý do lặp nguyên văn 22/52 câu bot → lý do chỉ ở lần hỏi ĐẦU
+// (`vi_tri@lan_dau`), các lần hỏi lại ngắn, không lý do.
+ok("câu mẫu địa chỉ lần ĐẦU nêu lý do kiểm tra giá khu vực", /kiểm tra giá khu vực/.test(cauHoiMau("vi_tri@lan_dau", "anh")));
+ok("câu mẫu địa chỉ hỏi LẠI: không lý do, dưới 12 từ", !/kiểm tra giá|giá thị trường/.test(cauHoiMau("vi_tri", "anh")) && cauHoiMau("vi_tri", "anh").split(/\s+/).length <= 12, cauHoiMau("vi_tri", "anh"));
 
 // ── FR-181 — tên trợ lý theo khách: tất định, trong kho, giữ nguyên ─────────
 ok("kho tên có 20 tên, có T•ai và Kh•ai, không có P•ai", KHO_TEN_TRO_LY.length === 20 && KHO_TEN_TRO_LY.includes("T•ai") && KHO_TEN_TRO_LY.includes("Kh•ai") && !KHO_TEN_TRO_LY.includes("P•ai"));

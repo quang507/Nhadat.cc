@@ -21,6 +21,23 @@
     { "cau": "60 m2",             "mong": null },
     { "cau": "hẻm 5m",            "mong": null },
     { "cau": "nhà 3 tầng",        "mong": null },
-    { "cau": "",                  "mong": null }
+    { "cau": "",                  "mong": null },
+    { "cau": "9t5",               "mong": 9500000000, "vi_sao": "lượt bắn 42 ca 11/09: câu rao 'shr, 9t5' rơi giá" },
+    { "cau": "4t2 nhe",           "mong": 4200000000, "vi_sao": "t kẹp giữa, tiểu từ đứng sau" },
+    { "cau": "1ty9",              "mong": 1900000000 },
+    { "cau": "4 tỷ rưỡi",         "mong": 4500000000, "vi_sao": "42 ca: DB lưu 4 tỷ vì chuan_hoa_gia_raw gọt mất 'rưỡi'" },
+    { "cau": "4 tỷ 800 triệu",    "mong": 4800000000 },
+    { "cau": "3tr5",              "mong": 3500000,    "vi_sao": "tr kẹp giữa hai số = 3,5 triệu (42 ca: phòng trọ 3tr5)" },
+    { "cau": "3tr5 một tháng",    "mong": 3500000,    "vi_sao": "'một tháng' sau phần lẻ không chặn phần lẻ" },
+    { "cau": "3 triệu 5",         "mong": 3500000 },
+    { "cau": "3 triệu 500",       "mong": 3500000 },
+    { "cau": "cọc 3 triệu 2 tháng", "mong": 3000000,  "vi_sao": "'2 tháng' là số tháng, không phải phần lẻ" },
+    { "cau": "15 triệu 2 phòng ngủ", "mong": 15000000, "vi_sao": "'2 phòng' là số phòng" },
+    { "cau": "25tr/tháng",        "mong": 25000000 },
+    { "cau": "80 triệu/tháng",    "mong": 80000000 },
+    { "cau": "75 triệu/m2",       "mong": null,       "vi_sao": "giá MỖI m² — 42 ca: căn 50m2 từng lên giá 75 triệu" },
+    { "cau": "75tr/m2",           "mong": null },
+    { "cau": "120 triệu một m2",  "mong": null },
+    { "cau": "5 tỷ 1 mặt tiền",   "mong": 5000000000, "vi_sao": "'1 mặt tiền' không phải phần lẻ, cũng không phải giá mỗi m²" }
   ]
 }

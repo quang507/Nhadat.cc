@@ -28,7 +28,7 @@ export type CheDoBaoLai = "tat" | "thay_doi" | "day_du";
 export const DAU_BAO_LAI = "💾";
 
 export const COT_BAO_LAI =
-  `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, ${SPEC_COLS}`;
+  `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, ${SPEC_COLS}`;
 
 export type DongBaoLai = SpecRow & {
   id?: string;
@@ -43,6 +43,8 @@ export type DongBaoLai = SpecRow & {
   price_raw?: string | null;
   price_vnd?: number | string | null;
   bedrooms?: number | null;
+  /** JSON bóc tách; `quan_mac_dinh: true` = quận chưa ai nói, cột đang giữ mặc định. */
+  boc_tach?: Record<string, unknown> | null;
 };
 
 export type FactBaoLai = { question: string; answer: string | null; created_at?: string | null };
@@ -108,7 +110,10 @@ export function tomTatDaLuu(
 
   const p: string[] = [];
   p.push(`${LOAI[l.property_type ?? ""] ?? "BĐS"} ${l.deal === "cho_thue" ? "cho thuê" : "bán"}`);
-  const dc = gonDiaChi(l.location_raw, l.ward, l.district);
+  // 11/09/2026 (Zalo thật): "sao cái nào cũng ghi Q5" — Quận 5 mà là MẶC ĐỊNH (chưa
+  // ai nói quận) thì nói thẳng ra, đừng để người đọc tưởng hệ thống đọc được Quận 5.
+  const quanMacDinh = l.district === "Quận 5" && l.boc_tach?.quan_mac_dinh === true;
+  const dc = gonDiaChi(l.location_raw, l.ward, quanMacDinh ? "Quận 5 (chưa rõ quận)" : l.district);
   if (dc) p.push(dc);
   if (l.area_m2 !== null && l.area_m2 !== undefined && l.area_m2 !== "") p.push(`${so(l.area_m2)}m²`);
   const ts = thongSoNgan(l).replace(/^ · /, "");
