@@ -9,6 +9,7 @@
 import { coMuiViTri, docGanTienIch, kdTen, nhanGan } from "../supabase/functions/_shared/extraction/tien-ich.ts";
 import {
   cauOverpass, docDiemOsm, ganNhatMoiLoai, khoangCachM, queriesDuAn, queriesFor, tenDuong, trongVung,
+  trongVungQuan, viewboxQuan, vungQuan,
 } from "../supabase/functions/_shared/geocode.ts";
 
 let dat = 0, hong = 0;
@@ -108,6 +109,20 @@ dung("dự án: sau tên là địa chỉ", da.some((c) => c.q === "Vành Đai 3
 dung("dự án: giữ số nhà (địa chỉ dự án công khai)",
   queriesDuAn({ name: "Landmark 81", location_raw: "208 Nguyễn Hữu Cảnh, Phường 22, Quận Bình Thạnh, TPHCM", ward: null, district: "Quận Bình Thạnh" })
     .some((c) => c.q === "208 Nguyễn Hữu Cảnh, Thành phố Hồ Chí Minh"));
+
+// Khoá vùng quanh quận cũ — bắt từ lượt chạy thật 11/09: "Trần Bình Trọng, Q5"
+// ra một đường cùng tên cách ~7 km.
+const v5 = vungQuan("Quận 5");
+dung("vungQuan: Quận 5 → tâm + bán kính 4 km", v5 && Math.abs(v5.lat - 10.754) < 0.01 && v5.r_km === 4, JSON.stringify(v5));
+dung("vungQuan: 'Q.5', 'Quận 9 (TP. Thủ Đức)', 'Huyện Bình Chánh', 'Quận Bình Thạnh' đều nhận",
+  vungQuan("Q.5")?.r_km === 4 && vungQuan("Quận 9 (TP. Thủ Đức)")?.r_km === 10 && !!vungQuan("Huyện Bình Chánh") && !!vungQuan("Quận Bình Thạnh"));
+dung("vungQuan: tỉnh ngoài / chưa rõ → null (không khoá vùng)", vungQuan("Bến Lức, Long An") === null && vungQuan(null) === null);
+dung("11/09 thật: điểm 'Trần Bình Trọng' 10.8125,106.6882 (đường khác, ~7 km) → LOẠI cho Quận 5", !trongVungQuan(10.8125, 106.6882, v5));
+dung("… điểm Trần Bình Trọng thật ở Quận 5 → nhận", trongVungQuan(10.7585, 106.6806, v5));
+dung("11/09 thật: Hồ Ngọc Lãm 10.7229,106.6107 vẫn nhận cho Quận 8", trongVungQuan(10.7229, 106.6107, vungQuan("Quận 8")));
+const hop = viewboxQuan(v5).split(",").map(Number);
+dung("viewboxQuan: hộp trái,trên,phải,dưới bao tâm quận",
+  hop[0] < v5.lng && hop[2] > v5.lng && hop[1] > v5.lat && hop[3] < v5.lat, viewboxQuan(v5));
 
 dung("trongVung: Hồ Ngọc Lãm", trongVung(10.7229, 106.6107));
 dung("trongVung: Hà Nội bị chặn (trùng tên đường)", !trongVung(21.03, 105.85));
