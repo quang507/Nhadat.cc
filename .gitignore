@@ -59,3 +59,6 @@ train/out/
 # vercel link kéo env về đây (chứa khoá) — chỉ ở gốc; .env.example trong scripts/ và bot/ vẫn được track
 /.env.local
 /.env*.local
+
+# deno check (kiem:bot, 11/09) tu sinh lockfile — khong theo doi: CI chay deno check moi lan, khoa phien ban nam o specifier npm:.
+deno.lock

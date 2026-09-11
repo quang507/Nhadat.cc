@@ -3,7 +3,7 @@
 -- Sinh lại: node scripts/sao-luu.mjs (ghi đè file này).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-10 21:08 (giờ VN)
+-- Sinh lúc: 2026-09-11 08:33 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -2589,6 +2589,20 @@ AS $function$
     when public.bo_dau(p_text) ~ '\mgap\M|\mcan tien\M|\m(ban|di|ra)\s*nhanh\M|\mvoi\M' then true
     else null end;
 $function$
+;
+
+CREATE OR REPLACE FUNCTION public.doi_chieu_tien_cong_khai(p_cau text[])
+ RETURNS TABLE(cau text, vnd bigint)
+ LANGUAGE plpgsql
+ IMMUTABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_catalog'
+AS $function$
+begin
+  if coalesce(array_length(p_cau, 1), 0) > 200 then
+    raise exception 'Toi da 200 cau moi luot' using errcode = '22023';
+  end if;
+  return query select c, public.parse_vnd(c) from unnest(p_cau) as c;
+end $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.don_du_lieu_thu()
@@ -6664,6 +6678,10 @@ revoke all on function public.doc_gap(p_text text) from public, anon, authentica
 grant execute on function public.doc_gap(p_text text) to anon;
 grant execute on function public.doc_gap(p_text text) to authenticated;
 grant execute on function public.doc_gap(p_text text) to service_role;
+revoke all on function public.doi_chieu_tien_cong_khai(p_cau text[]) from public, anon, authenticated;
+grant execute on function public.doi_chieu_tien_cong_khai(p_cau text[]) to anon;
+grant execute on function public.doi_chieu_tien_cong_khai(p_cau text[]) to authenticated;
+grant execute on function public.doi_chieu_tien_cong_khai(p_cau text[]) to service_role;
 revoke all on function public.don_du_lieu_thu() from public, anon, authenticated;
 grant execute on function public.don_du_lieu_thu() to authenticated;
 grant execute on function public.don_du_lieu_thu() to service_role;

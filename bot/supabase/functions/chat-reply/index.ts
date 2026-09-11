@@ -30,6 +30,10 @@ import {
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { bocQuan } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao
+// Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
+// bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
+import { TIEN_KD, TIEN_CD, laDonViTy } from "../_shared/extraction/luat-tien.ts";
+import { thayLienHe } from "../_shared/extraction/luat-lien-he.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
   batXungHo, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
@@ -62,8 +66,7 @@ const boDau = (s: string): string =>
 // tắt của triệu, nhưng \b sau "tr" khớp luôn "TRệt" (dấu tiếng Việt không phải
 // \w) — từng làm price_raw thành "1 trệt 2 lầu"; lookahead chặn mọi chữ cái
 // (kể cả có dấu) đứng sau. Sửa luật tiền là sửa ở đây, không đi tìm năm chỗ.
-const TIEN_KD = "ty|ti|toi(?!\\s*\\d)|trieu|tr(?![a-z])|cu";
-const TIEN_CD = "tỷ|tỉ|tỏi|triệu|ty|ti|toi(?!\\s*\\d)|trieu|tr(?![a-zA-ZÀ-ỹ])|cu";
+// (Hai hằng TIEN_KD / TIEN_CD nay nhập từ `_shared/extraction/luat-tien.ts`.)
 // SỐ PHƯỜNG trong một chuỗi ĐÃ BỎ DẤU: "phường 4", "phuong4", "p.4", "P4". Chỉ
 // lấy con số nên bỏ dấu không mất gì. Dùng cho câu rao, hồ sơ khách và so
 // "căn khác phường" ở nhánh bán.
@@ -157,7 +160,7 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
     "g",
   );
   const doc = (m: RegExpMatchArray): number => {
-    const laTy = /^(ty|ti|toi)$/.test(m[2]);
+    const laTy = laDonViTy(m[2]);
     let v = num(m[1]) * (laTy ? 1e9 : 1e6);
     if (laTy && Number.isInteger(num(m[1]))) {
       if (m[3]) v += 0.5e9;
@@ -176,7 +179,7 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
     `(\\d+(?:[.,]\\d+)?)\\s*(?:-|–|~|den|toi|hoac|hay|\\s)\\s*(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])`,
   ).exec(bd);
   if (chung) {
-    const u = /^(ty|ti|toi)$/.test(chung[3]) ? 1e9 : 1e6;
+    const u = laDonViTy(chung[3]) ? 1e9 : 1e6;
     const a = num(chung[1]) * u, b = num(chung[2]) * u;
     if (Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a) {
       return { min: Math.round(a * 0.95), max: Math.round(b * 1.1) };
@@ -271,13 +274,13 @@ const STATUS_VI: Record<string, string> = {
 };
 const PHOTO_URL_RE = /https?:\/\/\S+/g;
 
-// ─── FR-105 (v48): LỌC LIÊN HỆ PHÍA BOT. Luật CHÉP từ `lib/format.ts
-// sanitizeDescription` của web (FR-104) — Deno không import được module Next;
-// sửa regex một bên thì sửa bên kia. Áp cho mọi chuỗi mô tả/fact đưa vào KHO
-// gửi model và mọi bong bóng gửi NGƯỜI MUA. KHÔNG áp cho nhánh người bán /
+// ─── FR-105 (v48): LỌC LIÊN HỆ PHÍA BOT. Áp cho mọi chuỗi mô tả/fact đưa vào
+// KHO gửi model và mọi bong bóng gửi NGƯỜI MUA. KHÔNG áp cho nhánh người bán /
 // CTV / admin — họ cần thấy số để làm việc.
-const PHONE_RE = /(\+?84|0)[\s.\-]?(\d[\s.\-]?){8,10}/g;
-const SOCIAL_RE = /\b(zalo|z@lo|fb|facebook|viber|telegram)\b\s*:?\s*[\w.@/]*/gi;
+// Luật SĐT/mạng xã hội nay là MỘT NGUỒN với web (`luat-lien-he.ts`, tầng bốn
+// 11/09). Bản cũ chép tay từ `lib/format.ts` kèm lời dặn "sửa regex một bên
+// thì sửa bên kia" — đồng bộ bằng trí nhớ. Chiều ngược lại import được: web
+// nhập thẳng file đó qua `@/bot/...`.
 // Số nhà trước tên đường trong MÔ TẢ/FACT: "số 12 Trần Hưng Đạo", "572/12
 // Nguyễn Trãi", "12 đường Nguyễn Trãi". Chỉ áp khi `soNha=true` (mô tả/fact)
 // — `location_raw` của tin và câu chốt lịch xem UF-06 giữ nguyên [giả định BA,
@@ -285,7 +288,7 @@ const SOCIAL_RE = /\b(zalo|z@lo|fb|facebook|viber|telegram)\b\s*:?\s*[\w.@/]*/gi
 const SO_NHA_RE =
   /(?<![\p{L}\d.,/])(?:số\s*\d{1,4}[a-z]?(?:\/\d{1,4}[a-z]?)*|\d{1,4}[a-z]?(?:\/\d{1,4}[a-z]?)+|\d{1,4}[a-z]?(?=\s+(?:đường|hẻm)\s))(?=[\s,.;]|$)/giu;
 function locLienHe(s: string, soNha = false): string {
-  let t = s.replace(PHONE_RE, " [liên hệ qua Zalo] ").replace(SOCIAL_RE, " [liên hệ qua Zalo] ");
+  let t = thayLienHe(s, " [liên hệ qua Zalo] ");
   if (soNha) t = t.replace(SO_NHA_RE, "");
   return t.replace(/[ \t]{2,}/g, " ").trim();
 }
@@ -743,9 +746,11 @@ Deno.serve(async (req) => {
   if (msgId) {
     const { data: so, error: soErr } = await client
       .rpc("claim_inbound", { p_msg_id: msgId }).single();
+    // Kiểu phải khớp RETURNS TABLE của `claim_inbound` — thiếu `r_dead` thì
+    // `deno check` kêu TS2339 ở nhánh "đã chết 8 lượt" (bật kiểm kiểu 11/09).
     const soRow = so as {
       r_state?: string; r_reply?: Record<string, unknown> | null; r_attempts?: number;
-      r_sent_at?: string | null;
+      r_sent_at?: string | null; r_dead?: boolean;
     } | null;
     if (soErr || !soRow?.r_state) {
       await ghiLoi(client, "chat-reply claim_inbound",
@@ -1548,6 +1553,7 @@ Deno.serve(async (req) => {
     // bên dưới khỏi hỏi lại.
     type PendRow = {
       id: string; listing_id: string; question: string; answer?: string | null;
+      created_at?: string | null;
       listings: {
         code: string | null; status?: string | null;
         location_raw: string | null; ward?: string | null; unit_code?: string | null;
@@ -1904,7 +1910,7 @@ Deno.serve(async (req) => {
       let kq: Awaited<ReturnType<typeof phanLoaiAnh>>["kq"] = null;
       if (anthropicS) {
         try {
-          const r = await phanLoaiAnh(anthropicS, MODEL, imageUrl, boiCanhAnh);
+          const r = await phanLoaiAnh(anthropicS as unknown as Parameters<typeof phanLoaiAnh>[0], MODEL, imageUrl, boiCanhAnh);
           kq = r.kq;
           await doTien(client, r.usage as Parameters<typeof doTien>[1]);
         } catch (e) {
@@ -2998,15 +3004,20 @@ Deno.serve(async (req) => {
     const detail = bcErr?.message ?? "ensure_buyer_conversation";
     return await baoHong({ error: detail }, 500, detail);
   }
-  const buyer = { id: bc.b_id as string, name: bc.b_name as string | null };
-  const convId = bc.c_id as string;
-  const prefs: Record<string, unknown> = (bc.b_prefs as Record<string, unknown>) ?? {};
+  // Kiểu khớp RETURNS TABLE của `ensure_buyer_conversation` (schema.sql).
+  const bcRow = bc as unknown as {
+    b_id: string; b_name: string | null; c_id: string; b_prefs: Record<string, unknown> | null;
+    c_ctv_id: string | null; c_human_touch_at: string | null; c_human_hold: boolean | null;
+  };
+  const buyer = { id: bcRow.b_id, name: bcRow.b_name };
+  const convId = bcRow.c_id;
+  const prefs: Record<string, unknown> = bcRow.b_prefs ?? {};
   // Hai cột của hội thoại mà cổng nhường sân (FR-141) và các việc báo CTV cần
   // — RPC trả luôn từ 20260902d, khỏi SELECT `conversations` lần nữa (FR-171 h).
   const convRow = {
-    ctv_id: (bc.c_ctv_id as string | null | undefined) ?? null,
-    human_touch_at: (bc.c_human_touch_at as string | null | undefined) ?? null,
-    human_hold: (bc.c_human_hold as boolean | null | undefined) === true,
+    ctv_id: bcRow.c_ctv_id ?? null,
+    human_touch_at: bcRow.c_human_touch_at ?? null,
+    human_hold: bcRow.c_human_hold === true,
   };
 
   // Dedupe theo msg_id (retry không tạo tin đôi)
@@ -3418,8 +3429,7 @@ Deno.serve(async (req) => {
     .map(([, label]) => `- ${label}`).join("\n");
   // (`minimumMet` tính ở trên, trước khi quyết định có lọc kho không.)
 
-  let out:
-    | {
+  type LuotMua = {
       profile: Record<string, unknown>; replies: string[];
       promise?: { when: string; what: string } | null;
       viewing?: { listing_code: string | null; when: string; phone: string | null } | null;
@@ -3428,8 +3438,10 @@ Deno.serve(async (req) => {
       send_photos?: string | null;
       need_human?: boolean;
       voice_request?: boolean;
-    }
-    | null = null;
+  };
+  // Tên kiểu riêng: `as typeof out` ở dưới bị TS thu hẹp thành `null` theo luồng
+  // (out vừa gán null), nên ép kiểu thành "chuyển sang null" — lỗi TS2352.
+  let out: LuotMua | null = null;
   // FR-27 (v48): "xem thêm" hình — offset nhớ ở `buyers.preferences.photo_offset`
   // = {code, n} (rẻ nhất: đi chung RPC `merge_buyer_prefs` đã có ở hậu kỳ,
   // không thêm cột, không tra `messages`). Có nghĩa CHỈ khi lượt trước còn dư.
@@ -3535,7 +3547,7 @@ Deno.serve(async (req) => {
       }],
     });
     if (resp.stop_reason !== "refusal" && resp.parsed_output) {
-      out = resp.parsed_output as typeof out;
+      out = resp.parsed_output as LuotMua;
     }
     // Đo SAU khi đã cầm chắc câu trả lời trong tay: lượt buyer là lượt đắt nhất
     // (khối tĩnh ~5.800 chữ-máy), nên đây là con số quan trọng nhất của đồng hồ.

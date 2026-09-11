@@ -120,7 +120,11 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
       await db.rpc("log_loi", { p_source: nguon, p_detail: chiTiet, p_code: null });
     } catch { /* đồng hồ hỏng thì thôi, đừng làm hỏng lượt trả lời khách */ }
   };
-  return bocDuPhong(chinh, groqKey, groqModel, ghiSo) as unknown as Anthropic;
+  // `bocDuPhong` chỉ cần hai hàm `messages.create/parse` — client thật khớp về
+  // cấu trúc nhưng kiểu SDK rộng hơn nhiều, nên ép qua `unknown` ở MỘT chỗ này.
+  return bocDuPhong(
+    chinh as unknown as Parameters<typeof bocDuPhong>[0], groqKey, groqModel, ghiSo,
+  ) as unknown as Anthropic;
 }
 
 /**

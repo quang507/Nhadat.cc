@@ -1,0 +1,103 @@
+{
+  "_doc": "BẢNG CÂU KHÔNG ĐƯỢC KÍCH HOẠT cho mọi luật tìm-chuỗi mà khi khớp thì ĐỔI DỮ LIỆU (tầng bốn, 11/09/2026). Mỗi luật: `hau_qua` (khớp nhầm thì mất gì), `phai_kich` (câu PHẢI khớp — để không vá quá tay), `khong_duoc_kich` (câu TUYỆT ĐỐI không được khớp — tối thiểu 8). Câu nào từng cắn người thật thì ghi ngày trong ngoặc. Thêm luật phá dữ liệu mới vào chat-reply = thêm một mục ở đây, nếu không `luat-pha-du-lieu.mjs` đỏ.",
+  "toi_thieu_khong_duoc_kich": 8,
+  "luat": {
+    "laNgungRao": {
+      "hau_qua": "tin sang `an` (hoặc `da_chot`), mọi câu hỏi treo `expired`, nhắc bị huỷ, bot đáp 'em đã ngưng rao'",
+      "phai_kich": [
+        ["anh không bán nữa em ơi", "rut"],
+        ["thôi không bán nữa", "rut"],
+        ["ngưng bán nha em", "rut"],
+        ["rút tin giúp anh", "rut"],
+        ["gỡ tin xuống em", "rut"],
+        ["bán rồi em ơi", "ban_roi"],
+        ["đã có người cọc rồi", "ban_roi"]
+      ],
+      "khong_duoc_kich": [
+        "thôi đăng đi em (10/09 — lời GIỤC đăng)",
+        "không đăng ảnh nữa nha em (10/09 — chuyện ẢNH)",
+        "đăng giúp anh đi em",
+        "thôi em đăng giúp anh đi",
+        "thôi khỏi gửi hình nha",
+        "bán rồi hả em?",
+        "chưa bán em ơi",
+        "vẫn đang bán nha",
+        "bán nhà 5 tỷ",
+        "chốt giá 5 tỷ nha",
+        "em ơi còn bán không",
+        "đang cho thuê 20 triệu"
+      ]
+    },
+    "bocQuan": {
+      "hau_qua": "ghi đè cột `listings.district` — tin nhảy sang quận khác, lọc theo quận trên web không còn thấy",
+      "phai_kich": [
+        ["nhà ở quận 2 nha em", "Quận 2"],
+        ["bán nhà quận 10, 4x15", "Quận 10"],
+        ["q7 nha em", "Quận 7"],
+        ["căn hộ Q.4 giá 3 tỷ", "Quận 4"],
+        ["nhà ở bình thạnh", "Quận Bình Thạnh"]
+      ],
+      "khong_duoc_kich": [
+        "nhà mở quán 2 tầng được nha em (10/09 — tầng ba bắt)",
+        "bán quán 1 trệt 2 lầu",
+        "nha mo quan 2 tang",
+        "quán 3 phòng lạnh",
+        "2 tầng 3 phòng ngủ",
+        "hẻm 5m, 4x15",
+        "giá 5 tỷ 2",
+        "nhà có 2 wc"
+      ]
+    },
+    "laDuRoi": {
+      "hau_qua": "đóng dấu `chu_noi_du_at`, đóng câu hỏi treo — tin có thể được đẩy lên kệ khi chủ nhà CHƯA nói xong",
+      "phai_kich": [
+        ["đủ rồi em", true],
+        ["vậy đủ rồi đăng đi", true]
+      ],
+      "khong_duoc_kich": [
+        "chưa đủ đâu em",
+        "đủ 3 lầu",
+        "đủ 4 phòng ngủ",
+        "còn thiếu sổ",
+        "bổ sung thêm cái này",
+        "còn nữa em ơi",
+        "thêm cái sân thượng",
+        "thiếu hình"
+      ]
+    },
+    "laDongY": {
+      "hau_qua": "câu hỏi đang treo bị đóng như thể chủ nhà đã gật — thông tin cần hỏi thì không hỏi nữa",
+      "phai_kich": [
+        ["ok em", true],
+        ["được em", true]
+      ],
+      "khong_duoc_kich": [
+        "không ok",
+        "chưa được",
+        "ok nhưng sửa giá",
+        "sai rồi em",
+        "ok đổi lại phường 4",
+        "không phải",
+        "nhầm rồi",
+        "ok thêm cái hình"
+      ]
+    },
+    "laGap": {
+      "hau_qua": "gắn cờ `gap` cho tin — hiện nhãn 'gấp' trên web và đổi cách bot chào khách",
+      "phai_kich": [
+        ["bán gấp vì cần tiền", true],
+        ["cần bán gấp", true]
+      ],
+      "khong_duoc_kich": [
+        "không gấp",
+        "không cần gấp đâu",
+        "chẳng gấp gì",
+        "gấp đôi diện tích",
+        "gấp 3 lần căn kia",
+        "gấp rưỡi",
+        "chưa gấp em",
+        "đâu có gấp"
+      ]
+    }
+  }
+}

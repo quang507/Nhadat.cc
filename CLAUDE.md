@@ -155,6 +155,26 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   Cùng lý do đó, `he-thong/theo-ngay/` vẫn giữ ảnh chụp từng ngày dù đã có
   `moi-nhat/`. `sao-luu.mjs` tự dọn: giữ 1 bản/ngày × 7 ngày, và CHỈ dọn khi
   chuyến đó `day_du`.
+  **Tầng bốn — chống tái phát (11/09/2026).** Ba việc, mỗi việc một cổng:
+  (1) **Kiểm kiểu cho bot** — `tsconfig.json` loại hẳn `bot` nên 3.900 dòng
+  `chat-reply` chưa từng qua kiểm kiểu. `bun run kieu:bot` (nằm trong `kiem`, cổng CI
+  thứ 9) chạy `deno check --node-modules-dir=auto` — cờ đó thay cho một `deno.json`,
+  vì thêm deno.json vào thư mục function là đổi luôn cách Supabase CLI đóng gói.
+  Lần bật đầu: 15 lỗi, tất cả là kiểu khai sai so với dữ liệu thật.
+  (2) **Luật MỘT NGUỒN** — luật tiền ở `_shared/extraction/luat-tien.ts`, luật che
+  liên hệ ở `_shared/extraction/luat-lien-he.ts`; bot, bộ bóc tách VÀ web (`lib/`,
+  qua đường `@/bot/...`) cùng nhập từ đó. Trước đó luật tiền có năm bản chép tay
+  lệch nhau đúng ở chỗ đã cắn người thật ("5 tới 6 tỷ", "2 tỏi 5"). SQL `parse_vnd` không
+  import được TS nên nó phải trả lời CÙNG MỘT BẢNG CA (`bot/tests/luat/tien.json`) —
+  `bun run doi-chieu:tien` (cổng CI thứ 10) đỏ khi hai bản lệch. **Sửa luật tiền là
+  sửa ở luat-tien.ts + parse_vnd + thêm ca vào tien.json, không đi tìm năm chỗ.**
+  Lượt gom bắt được một lỗi có sẵn từ 02/09: che SĐT bằng hai lượt `replace` nối
+  nhau làm LỒNG NHÃN (nhãn có chữ "Zalo", luật mạng xã hội khớp chữ đó) — nay một
+  lượt, không bao giờ quét lại chữ vừa chèn.
+  (3) **Luật phá dữ liệu phải có bảng câu KHÔNG được kích** — `bot/tests/luat/khong-duoc-kich.json`:
+  mỗi luật tìm-chuỗi mà khớp là ghi đè dữ liệu có `phai_kich` (để không vá quá tay) và
+  ≥ 8 `khong_duoc_kich`. `luat-pha-du-lieu.mjs` còn đếm chỗ ghi đè trong chat-reply:
+  **thêm một chỗ ghi đè mới mà không thêm luật vào bảng là đỏ.**
   **`soat-db.mjs` là CỔNG CI THỨ 8 — soát TRẠNG THÁI DB, không phải danh sách.**
   Tám phép chỉ đọc, chạy trong DB qua `soat_db_cong_khai()` (`20260910p`), dưới
   một giây: policy chặn theo tên có phủ hết khoá đang sống · view nào đọc xuyên

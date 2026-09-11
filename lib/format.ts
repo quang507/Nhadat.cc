@@ -1,15 +1,14 @@
 import { hashSeed } from "@/lib/geo";
+// Luật che liên hệ MỘT NGUỒN cho web và bot (tầng bốn, 11/09). Trước đây file
+// này và `chat-reply locLienHe` giữ hai bản regex chép tay, đồng bộ bằng lời
+// hứa "sửa một bên thì sửa bên kia" trong chú thích.
+import { thayLienHe } from "@/bot/supabase/functions/_shared/extraction/luat-lien-he";
 
 // FR-104 (bản 02/09, OPEN-36): web không bao giờ lộ SĐT/Zalo trong mô tả gốc —
 // liên hệ chỉ mở ở bước chốt lịch xem, qua bot.
-const PHONE_RE = /(\+?84|0)[\s.\-]?(\d[\s.\-]?){8,10}/g;
-const SOCIAL_RE = /\b(zalo|z@lo|fb|facebook|viber|telegram)\b\s*:?\s*[\w.@/]*/gi;
-
 export function sanitizeDescription(text: string | null): string {
   if (!text) return "";
-  return text
-    .replace(PHONE_RE, " [liên hệ qua Zalo AI Ơi Nhà Đất] ")
-    .replace(SOCIAL_RE, " [liên hệ qua Zalo AI Ơi Nhà Đất] ")
+  return thayLienHe(text, " [liên hệ qua Zalo AI Ơi Nhà Đất] ")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
 }
