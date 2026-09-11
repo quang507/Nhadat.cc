@@ -142,7 +142,13 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   `sao-luu.mjs` vào `he-thong/`.
   **Nhịp: 10 phút một lần**, Task Scheduler *trên máy này* ("Nhadat - dong bo
   OneDrive" → `003-Content/nhadat-dong-bo.cmd`, log `nhadat-dong-bo.log` cắt còn
-  500 dòng mỗi lượt); phần `he-thong/` chỉ chạy ở lượt đầu mỗi giờ. Tác vụ cũ
+  500 dòng mỗi lượt); phần `he-thong/` chỉ chạy ở lượt đầu mỗi giờ. Một lượt thường mất ~3 giây.
+  **File `.cmd` phải ASCII thuần + xuống dòng CRLF** (bắt 11/09): bản 10/09 có
+  chú thích tiếng Việt UTF-8, xuống dòng LF và `chcp 65001` ở đầu — cmd.exe đọc
+  lệch byte, CHẠY NHẦM từng mảnh chú thích (`'-hang' is not recognized…`) và
+  nuốt mất dòng lệnh thật (lượt 9:00 mất dòng ghi mốc giờ). Tác vụ chạy ẨN qua
+  `conhost.exe --headless cmd.exe /c …`: trước đó mỗi 10 phút bật một cửa sổ,
+  và người đóng cửa sổ là lượt đó chết giữa chừng (mã `0xC000013A`). Tác vụ cũ
   09:00 & 15:00 trên máy Quang Lê Bá Duy (`nhadat-sao-luu.cmd`) vẫn còn, nay đổ
   vào `he-thong/theo-ngay/`.
   **Ba luật khiến nhịp 10 phút không thành gánh nặng — sửa script thì đừng phá:**
