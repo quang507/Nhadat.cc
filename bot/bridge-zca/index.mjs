@@ -85,6 +85,9 @@ if (!process.env.BRIDGE_SECRET) {
 const FEED_URL_DN =
   "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/escalation-feed";
 async function baoDangNhap(trang_thai, qr_png = null, ghi_chu = null) {
+  // Giờ SỰ KIỆN, chụp trước khi gửi: server xếp các lệnh theo giờ này chứ không
+  // theo giờ request tới — hai lệnh gửi sát nhau có thể tới ngược thứ tự.
+  const luc = new Date().toISOString();
   try {
     await fetch(FEED_URL_DN, {
       method: "POST",
@@ -93,7 +96,7 @@ async function baoDangNhap(trang_thai, qr_png = null, ghi_chu = null) {
         "Content-Type": "application/json",
         ...(process.env.BRIDGE_SECRET ? { "x-bridge-secret": process.env.BRIDGE_SECRET } : {}),
       },
-      body: JSON.stringify({ action: "qr", trang_thai, qr_png, ghi_chu }),
+      body: JSON.stringify({ action: "qr", trang_thai, qr_png, ghi_chu, luc }),
       signal: AbortSignal.timeout(10_000),
     });
   } catch { /* còn đường http tạm + qr.png */ }
@@ -161,7 +164,7 @@ if (!api) {
         `  1. Mở trên điện thoại hoặc trình duyệt:  http://${ipMay()}:${QR_PORT}/qr-${token}.png\n` +
         `     (không mở được thì mở cổng ${QR_PORT} ở Firewall của nhà cung cấp, hoặc tải ${QR_FILE} về máy)\n` +
         `  2. Zalo app → biểu tượng QR ở thanh tìm kiếm → quét ảnh đó.\n` +
-        `  QR hết hạn thì zca-js tự sinh mã mới ở cùng link — tải lại trang.`,
+        `  QR hết hạn thì bridge sinh mã mới ở cùng link — tải lại trang (hoặc xem ở /admin).`,
       );
     } else if (type === (EV.QRCodeScanned ?? 2)) {
       console.log("Đã quét — xác nhận đăng nhập trên điện thoại.");
@@ -172,12 +175,14 @@ if (!api) {
       // im mãi — ai mở link sau 100 giây là gặp mã chết (đọc
       // dist/apis/loginQR.js bản 2.1.2 trên VPS, 11/09).
       console.log("QR hết hạn, sinh mã mới…");
-      void baoDangNhap("het_han", null, "mã QR hết hạn, đang sinh mã mới");
-      ev?.actions?.retry?.();
+      // BÁO XONG rồi mới sinh mã mới. Bắn song song thì hai lệnh chạy đua: 11/09
+      // 09:27 mã mới lên DB lúc :26.7, rồi lệnh "het_han" (gửi TRƯỚC, tới SAU)
+      // lúc :27.9 xoá mất ảnh — /admin trống QR suốt 100 giây tới lượt sau.
+      void baoDangNhap("het_han", null, "mã QR hết hạn, đang sinh mã mới")
+        .finally(() => ev?.actions?.retry?.());
     } else if (type === (EV.QRCodeDeclined ?? 3)) {
       console.log("Điện thoại từ chối đăng nhập — sinh QR mới.");
-      void baoDangNhap("tu_choi");
-      ev?.actions?.retry?.();
+      void baoDangNhap("tu_choi").finally(() => ev?.actions?.retry?.());
     }
   });
   dongQr();
