@@ -442,7 +442,7 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   nhap_hoi_duyet: "{Ac} xem vậy được chưa? Được thì em đăng liền và rao tích cực cho mình ạ.",
   nhap_sua_xong: "Em sửa lại rồi, {ac} xem vậy được chưa ạ?",
   nhap_goi_hanh_dong: "👉 Khách quan tâm nhắn Zalo cho em để hẹn xem nhà",
-  dang_xong: "Dạ em cảm ơn {ac}! Chúc mừng {ac}, tin nhà mình đã lên web {web} với điểm đầy đủ {diem}/100.\nEm sẽ rao tích cực, có khách quan tâm là em báo {ac} liền.",
+  dang_xong: "Dạ em cảm ơn {ac}! Chúc mừng {ac}, tin nhà mình đã được ghi nhận {web} với điểm đầy đủ {diem}/100.\nEm sẽ rao tích cực, có khách quan tâm là em báo {ac} liền.",
   dang_xong_them_diem: "Muốn thêm điểm thì {ac} gửi em {thieu}",
   dang_xong_them_anh: "; gửi thêm ảnh là điểm tăng ngay",
   dang_xong_hen: "Có thể em sẽ hỏi thêm mình một vài câu khi có khách hàng quan tâm nhé {ac}.",

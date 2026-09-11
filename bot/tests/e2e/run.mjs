@@ -22,6 +22,8 @@ const ANH = (o = {}) => ({ loai: "mat_tien", mo_ta: "hình như mặt tiền nh�
 const laLuotAnh = (p) => (p?.system ?? []).some((s) => /PHÂN LOẠI ẢNH CHỦ NHÀ GỬI/.test(s.text ?? ""));
 // 11/09: lượt model đọc "khách muốn ở gần đâu" (_shared/ai/boc-gan.ts) — không phải lượt trả lời.
 const laLuotGan = (p) => (p?.system ?? []).some((s) => /có muốn nhà ở GẦN/.test(s.text ?? ""));
+// FR-205: lượt model PHÂN VAI người lạ (_shared/ai/phan-vai.ts) — không phải lượt trả lời.
+const laLuotVai = (p) => (p?.system ?? []).some((s) => /PHÂN VAI TIN NHẮN ĐẦU TIÊN/.test(s.text ?? ""));
 // FR-180: napCauHinh nhớ tạm 60 s ở tầng module → đặt mẫu chuẩn TRƯỚC lượt gọi đầu.
 globalThis.__mauCau = {
   // 20260909h (FR-181): mau_cau_fewshot ghi "→ Trợ lý:" thay "→ Thái:" — tên bot nay theo từng khách.
@@ -56,7 +58,7 @@ const db = () => globalThis.__db;
 // ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
 function fresh(seed) { globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; globalThis.__anh = undefined; globalThis.__anhTaiDuoc = true; globalThis.__storageHong = false; seed?.(globalThis.__db); }
 // Lượt gọi model chỉ tính NHÁNH MUA (parse hồ sơ), không tính lượt phân loại ảnh (FR-185).
-const parseMua = () => globalThis.__calls.filter((c) => c.kind === "parse" && !laLuotAnh(c.params) && !laLuotGan(c.params));
+const parseMua = () => globalThis.__calls.filter((c) => c.kind === "parse" && !laLuotAnh(c.params) && !laLuotGan(c.params) && !laLuotVai(c.params));
 function seedKho(d) {
   const sC = d.insert("sellers", { zalo_user_id: "z-ccrb", seller_type: "ccrb", name: "Chị D.", active_listing_id: null }).data;
   const sU = d.insert("sellers", { zalo_user_id: "z-unknown", seller_type: "unknown", name: null, active_listing_id: null }).data;
@@ -927,8 +929,10 @@ fresh(seedKho);
   check("H7 hỏi ngược lúc đang duyệt → loại 'hoi', câu duyệt vẫn treo, không đóng dấu",
     r.body.loai_cau === "hoi" && pend("duyet_tin") && !H.chu_duyet_at, JSON.stringify(r.body));
   r = await send({ external_user_id: "h-1", text: "ok đăng đi em" });
-  check("H8 chủ GẬT → chu_duyet_at, tin lên kệ (dang_ban), câu duyệt đóng, bong bóng báo đã lên web",
-    r.body.duyet === true && !!H.chu_duyet_at && H.status === "dang_ban" && !pend("duyet_tin") && /lên web/.test(r.body.replies[0]),
+  // 11/09: câu `dang_xong` nói "đã được ghi nhận" (bản sửa tay trong bot_prompts,
+  // kéo về code ở PR FR-205) — nhận cả cách nói cũ lẫn mới.
+  check("H8 chủ GẬT → chu_duyet_at, tin lên kệ (dang_ban), câu duyệt đóng, bong bóng báo đã ghi nhận",
+    r.body.duyet === true && !!H.chu_duyet_at && H.status === "dang_ban" && !pend("duyet_tin") && /được ghi nhận|lên web/.test(r.body.replies[0]),
     JSON.stringify({ body: r.body, H }));
   // FR-177 f (09/09): chúc mừng kèm ĐIỂM + cách thêm điểm; điểm là tiền định (diem_tin).
   check("H8e chúc mừng kèm điểm X/100, cách thêm điểm (ảnh), và hẹn hỏi thêm KHI CÓ KHÁCH quan tâm (10/09)",
@@ -1614,6 +1618,49 @@ fresh(seedKho);
   check("GAN-09 không căn nào trong 500 m quanh Aeon Bình Tân → KHO trống + dặn nói thật, gợi ý nới bán kính",
     goiMoc[0]?.p_ten_re === "aeon binh tan" && goiMoc[0]?.p_ban_kinh_m === 500 && !/BDS-Q5-000[145]/.test(stG5) && /Không có căn nào đã định vị trong bán kính này/.test(stG5),
     JSON.stringify({ goiMoc, st: stG5.slice(0, 500) }));
+}
+
+// ── 11/09: FR-205 — PHÂN VAI BẰNG MODEL khi luật không kết luận được ─────────
+{
+  globalThis.__cauHinh = { test_reset_hello: "1" }; // 💾 tắt: đo đúng đường đi
+  const VAI = (o = {}) => ({ vai: "chua_ro", bang_chung: "", ...o });
+  const luotVai = () => globalThis.__calls.filter((c) => c.kind === "parse" && laLuotVai(c.params));
+  const macDinh = (vai) => (p) => laLuotVai(p) ? vai : laLuotAnh(p) ? ANH() : OUT();
+  const CAU_BAN = "Gia đình cần tiền nên để lại căn nhà 4x16 hẻm xe hơi Trần Hưng Đạo q5, sổ hồng riêng";
+  const CAU_MUA = "nhà 4x16 hẻm xe hơi quận 5 tầm 6 tỷ, mẹ già nên cần gần bệnh viện";
+  const CAU_MO = "cho em hỏi về căn nhà ở hẻm Trần Hưng Đạo";
+
+  fresh(); globalThis.__model.parse = macDinh(VAI({ vai: "ban", bang_chung: "để lại căn nhà 4x16" }));
+  r = await send({ external_user_id: "vai-1", text: CAU_BAN });
+  check("VAI-01 rao KHÔNG chữ 'bán', luật bỏ sót → model 'ban' → mở hồ sơ bán, đi nhánh bán, không chào khuôn",
+    luotVai().length === 1 && !r.body.hoi_vai && db().t.sellers.length === 1 && r.body.role === "seller",
+    JSON.stringify({ b: r.body, s: db().t.sellers.length, l: db().t.listings.length, v: luotVai().length }));
+
+  fresh(); globalThis.__model.parse = macDinh(VAI({ vai: "mua", bang_chung: "cần gần bệnh viện" }));
+  r = await send({ external_user_id: "vai-2", text: CAU_MUA });
+  check("VAI-02 người mua kể nhu cầu, không có chữ 'tìm/mua' → model 'mua' → thẳng hàng mua, không chào khuôn, không mở hồ sơ bán",
+    luotVai().length === 1 && !r.body.hoi_vai && db().t.sellers.length === 0 && parseMua().length === 1,
+    JSON.stringify({ b: r.body, v: luotVai().length, m: parseMua().length }));
+
+  fresh(); globalThis.__model.parse = macDinh(VAI());
+  r = await send({ external_user_id: "vai-3", text: CAU_MO });
+  check("VAI-03 model 'chua_ro' → hỏi vai như cũ", luotVai().length === 1 && r.body.hoi_vai === true && db().t.sellers.length === 0, JSON.stringify(r.body));
+
+  fresh(); globalThis.__model.parse = macDinh(VAI({ vai: "ban", bang_chung: "chủ cần bán gấp" }));
+  r = await send({ external_user_id: "vai-4", text: CAU_MO });
+  check("VAI-04 model 'ban' mà cụm làm bằng KHÔNG có trong câu → không tin: hỏi vai, không mở hồ sơ bán",
+    r.body.hoi_vai === true && db().t.sellers.length === 0, JSON.stringify(r.body));
+
+  fresh(); globalThis.__model.parse = (p) => { if (laLuotVai(p)) throw new Error("model chết"); return OUT(); };
+  r = await send({ external_user_id: "vai-5", text: CAU_BAN });
+  check("VAI-05 model phân vai hỏng → như cũ: 200, hỏi vai, không mở hồ sơ bán", r.status === 200 && r.body.hoi_vai === true && db().t.sellers.length === 0, JSON.stringify(r.body));
+
+  fresh(); globalThis.__model.parse = macDinh(VAI({ vai: "ban", bang_chung: "chào em" }));
+  await send({ external_user_id: "vai-6a", text: "chào em" });
+  await send({ external_user_id: "vai-6b", text: "bán nhà q5 giá 5 tỷ" });
+  await send({ external_user_id: "vai-6c", text: "tìm nhà quận 5 tầm 5 tỷ" });
+  check("VAI-06 câu chào / câu luật đã rõ bán / câu luật đã rõ mua → KHÔNG tốn lượt model phân vai", luotVai().length === 0, String(luotVai().length));
+  delete globalThis.__cauHinh;
 }
 
 // ── kết ──
