@@ -29,6 +29,11 @@ import {
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
+// 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
+import {
+  boBaoLai, COT_BAO_LAI, docCheDo, layBaoLai, tomTatDaLuu,
+  type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
+} from "../_shared/bao_lai.ts";
 import { bocQuan } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao
 // Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
 // bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
@@ -1417,6 +1422,61 @@ Deno.serve(async (req) => {
     void cauNhan;
     let thongBaoNhan: string | null = null;
     void nhanVuaGan;
+    // 11/09/2026 (giai đoạn test): đọc LẠI dòng tin từ DB sau khi mọi nhánh đã
+    // ghi, để người bán thấy đúng cái hệ thống đang giữ — không phải chữ họ gõ.
+    // Tắt (mặc định) thì chỉ tốn đúng MỘT lượt rpc đọc công tắc rồi dừng.
+    // Hỏng ở đâu cũng không chặn lời đáp: ghi sổ lỗi rồi coi như tắt.
+    const baoLaiDaLuu = async (
+      extra: Record<string, unknown>,
+    ): Promise<{ bong: string | null; cheDo: CheDoBaoLai }> => {
+      try {
+        const { data: cd, error: cdErr } = await client.rpc("cau_hinh", { p_key: "bao_lai_da_luu" });
+        if (cdErr) await ghiLoi(client, "chat-reply cau_hinh(bao_lai_da_luu)", cdErr.message);
+        const cheDo = docCheDo(cd);
+        if (cheDo === "tat") return { bong: null, cheDo };
+        // Tin nào: mã vừa tạo trong lượt này > active_listing_id đọc LẠI (trigger
+        // đổi nó ngay khi mở câu chờ mới, bản `sellerRow` đầu lượt đã cũ) > tin mới nhất.
+        const ma = typeof extra.listing_code === "string" && extra.listing_code ? extra.listing_code : null;
+        let lid: string | null = null;
+        if (!ma) {
+          const { data: sNow, error: sErr } = await client.from("sellers")
+            .select("active_listing_id").eq("id", sellerRow.id).maybeSingle();
+          if (sErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(sellers)", sErr.message);
+          lid = (sNow as { active_listing_id?: string | null } | null)?.active_listing_id ?? null;
+        }
+        const coTin = () => client.from("listings").select(COT_BAO_LAI).eq("seller_id", sellerRow.id);
+        const { data: lRow, error: lErr } = await (
+          ma ? coTin().eq("code", ma).limit(1).maybeSingle()
+            : lid ? coTin().eq("id", lid).limit(1).maybeSingle()
+            : coTin().order("created_at", { ascending: false }).limit(1).maybeSingle()
+        );
+        if (lErr) {
+          await ghiLoi(client, "chat-reply bao_lai_da_luu(listings)", lErr.message);
+          return { bong: null, cheDo };
+        }
+        const dong = (lRow ?? null) as DongBaoLai | null;
+        let facts: FactBaoLai[] = [];
+        if (dong?.id && cheDo === "day_du") {
+          const { data: fs, error: fErr } = await client.from("listing_facts")
+            .select("question, answer, created_at").eq("listing_id", dong.id)
+            .order("created_at", { ascending: false }).limit(40);
+          if (fErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(facts)", fErr.message);
+          facts = (fs ?? []) as FactBaoLai[];
+        }
+        const bong = tomTatDaLuu(dong, facts, FACT_LABELS, cheDo);
+        if (!bong || cheDo !== "thay_doi") return { bong, cheDo };
+        // thay_doi: y hệt lần báo gần nhất thì im, khỏi lặp một bảng số mỗi lượt.
+        const { data: cu, error: cuErr } = await client.from("messages").select("body")
+          .eq("conversation_id", convSId).eq("sender", "bot")
+          .order("seq", { ascending: false }).limit(12);
+        if (cuErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(messages)", cuErr.message);
+        const truoc = ((cu ?? []) as Array<{ body: string | null }>).map((m) => layBaoLai(m.body)).find(Boolean) ?? null;
+        return { bong: truoc === bong ? null : bong, cheDo };
+      } catch (e) {
+        await ghiLoi(client, "chat-reply bao_lai_da_luu", e);
+        return { bong: null, cheDo: "tat" };
+      }
+    };
     const traLoiSeller = async (
       replies: string[],
       extra: Record<string, unknown> = {},
@@ -1435,6 +1495,14 @@ Deno.serve(async (req) => {
       ackSua = null;
       ackAnh = [];
       thongBaoNhan = null;
+      // 11/09/2026: bong bóng 💾 — chỉ khi lượt này có lời đáp (bot đang cố ý im
+      // thì không phá sự im lặng bằng một bảng số). day_du: bong bóng riêng ở
+      // cuối; thay_doi: gắn vào cuối bong bóng cuối, không đẻ thêm bong bóng.
+      if (sach.length) {
+        const bl = await baoLaiDaLuu(extra);
+        if (bl.bong && bl.cheDo === "day_du") sach.push(bl.bong);
+        else if (bl.bong) sach[sach.length - 1] = `${sach[sach.length - 1]}\n${bl.bong}`;
+      }
       // MỘT câu INSERT cho cả loạt bong bóng (FR-171 h): `seq` là identity nên
       // vẫn tăng theo thứ tự mảng trong một INSERT.
       if (sach.length) {
@@ -1492,7 +1560,9 @@ Deno.serve(async (req) => {
     const lichSuRows = ((lichSuS ?? []) as Array<{ sender: string; body: string | null; seq: number }>)
       .slice().reverse();
     if (lichSuRows.length && lichSuRows[lichSuRows.length - 1].sender === "seller") lichSuRows.pop();
-    const lichSuText = lichSuRows.filter((m) => m.body)
+    // Bong bóng 💾 (báo lại thứ đã lưu) là bảng số liệu cho người bán, không
+    // phải lời em nói — bỏ khỏi lịch sử, không thì model bắt chước in bảng.
+    const lichSuText = lichSuRows.map((m) => ({ ...m, body: boBaoLai(m.body) })).filter((m) => m.body)
       .map((m) =>
         `${m.sender === "seller" ? "CHỦ NHÀ" : m.sender === "human" ? "EM (người thật bên mình nhắn tay)" : "EM"}: ${
           (m.body ?? "").slice(0, 300)

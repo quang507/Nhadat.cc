@@ -17,6 +17,13 @@ type HoiThoai = {
   buyers: { name: string | null; zalo_user_id: string | null } | null;
 };
 type Tin = { id: string; sender: string; body: string; seq: number; created_at: string };
+// Bong bóng 💾 (bảng số liệu báo lại cho người bán, 11/09/2026) không phải lời
+// thoại: không cho lưu làm mẫu câu, và cắt đuôi "\n💾…" gắn cuối câu bot (chế độ
+// thay_doi) trước khi điền vào ô sửa. Cùng luật với boBaoLai trong
+// bot/supabase/functions/_shared/bao_lai.ts; DB có CHECK chặn lần cuối (20260911c).
+const DAU_BAO_LAI = "💾";
+const laBaoLai = (s: string) => s.startsWith(DAU_BAO_LAI);
+const boBaoLai = (s: string) => s.split(`\n${DAU_BAO_LAI}`)[0];
 type Mau = { id: string; message_id: string | null; conversation_id: string | null; cau_chuan: string; dung_lam: string };
 
 const AI_VI: Record<string, string> = {
@@ -142,7 +149,7 @@ export default function Page() {
     const { data: nguCanh } = await supabase.rpc("ngu_canh_tin", { p_message_id: t.id });
     const { error } = await supabase.from("mau_cau").upsert({
       message_id: t.id, conversation_id: chon.id, phia: chon.seller_id ? "ban" : "mua",
-      ngu_canh: nguCanh ?? [], cau_bot: t.body, cau_chuan: nhap.trim(), dung_lam: "ca_hai", nguoi_sua: email,
+      ngu_canh: nguCanh ?? [], cau_bot: boBaoLai(t.body), cau_chuan: nhap.trim(), dung_lam: "ca_hai", nguoi_sua: email,
     }, { onConflict: "message_id" });
     setDangLuu(false);
     if (error) { setLoi(error.message); return; }
@@ -256,9 +263,9 @@ export default function Page() {
                         <span className="font-bold">{AI_VI[t.sender] ?? t.sender}</span><span className="tabular-nums">{luc(t.created_at)}</span>
                       </div>
                       <div className="mt-0.5 whitespace-pre-wrap text-sm">{t.body}</div>
-                      {bot && !sua && (
+                      {bot && !sua && !laBaoLai(t.body) && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
-                          <button type="button" onClick={() => { setDangSua(t.id); setNhap(co?.cau_chuan ?? t.body); }} className="font-bold text-brand hover:underline">{co ? "Sửa lại câu chuẩn" : "Sửa thành câu chuẩn"}</button>
+                          <button type="button" onClick={() => { setDangSua(t.id); setNhap(co?.cau_chuan ?? boBaoLai(t.body)); }} className="font-bold text-brand hover:underline">{co ? "Sửa lại câu chuẩn" : "Sửa thành câu chuẩn"}</button>
                           {co && <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-emerald-200">đã có mẫu</span>}
                         </div>
                       )}
