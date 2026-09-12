@@ -917,13 +917,13 @@ fresh(seedKho);
   r = await send({ external_user_id: "h-1", text: "ở hoặc làm văn phòng đều được" });
   const nhap = r.body.replies.join("\n");
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
-    r.body.ban_nhap === true && r.body.diem >= 70 && /Em sẽ đăng tin gồm/.test(nhap) && /5 tỷ 8/.test(nhap) &&
-      /nhắn Zalo cho em/.test(nhap) && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em sẽ đăng tin gồm/.test(prompt(c))) &&
+    r.body.ban_nhap === true && r.body.diem >= 70 && /Em đăng tin như vầy/.test(nhap) && /5 tỷ 8/.test(nhap) &&
+      /nhắn Zalo cho em/.test(nhap) && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em đăng tin như vầy/.test(prompt(c))) &&
       pend("duyet_tin") && H.status === "cho_thong_tin",
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "à giá 6 tỷ nha" });
   check("H6 chủ sửa giá lúc đang duyệt → ghi giá mới, GỬI LẠI bản nháp với giá mới, câu duyệt vẫn treo",
-    r.body.sua_nhap === true && H.price_raw && /6 tỷ/.test(H.price_raw) && r.body.replies.some((x) => /6 tỷ/.test(x) && /Em sẽ đăng tin gồm/.test(x)) && pend("duyet_tin"),
+    r.body.sua_nhap === true && H.price_raw && /6 tỷ/.test(H.price_raw) && r.body.replies.some((x) => /6 tỷ/.test(x) && /Em đăng tin như vầy/.test(x)) && pend("duyet_tin"),
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "phí sao em?" });
   check("H7 hỏi ngược lúc đang duyệt → loại 'hoi', câu duyệt vẫn treo, không đóng dấu",

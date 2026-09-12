@@ -437,9 +437,10 @@ export const CAU_HOI_MAU_TEXT = JSON.stringify(CAU_HOI_MAU, null, 2);
 export const CAU_TIEN_DINH: Record<string, string> = {
   ghi_nhan: "📝 Em ghi nhận: {ds}.\nSai chỗ nào {ac} nhắn lại giúp em nha.",
   chao_lai: "Dạ em chào {ac} ạ!",
-  nhap_tieu_de: "📋 Em sẽ đăng tin gồm những thông tin và mô tả này cho {ac} nhé — độ đầy đủ {diem}/100",
-  nhap_goi_y: "Thêm {thieu} là tin mạnh hơn nữa ạ.",
-  nhap_hoi_duyet: "{Ac} xem vậy được chưa? Được thì em đăng liền và rao tích cực cho mình ạ.",
+  nhap_tieu_de: "📋 Em đăng tin như vầy nha {ac}:",
+  nhap_goi_y: "Độ đầy đủ {diem}/100 — thêm {thieu} là tin mạnh hơn nữa ạ.",
+  nhap_diem: "Độ đầy đủ {diem}/100.",
+  nhap_hoi_duyet: "{Ac} xem ổn chưa ạ? Ổn thì em đăng liền và rao tích cực cho mình.",
   nhap_sua_xong: "Em sửa lại rồi, {ac} xem vậy được chưa ạ?",
   nhap_goi_hanh_dong: "👉 Khách quan tâm nhắn Zalo cho em để hẹn xem nhà",
   dang_xong: "Dạ em cảm ơn {ac}! Chúc mừng {ac}, tin nhà mình đã được ghi nhận {web} với điểm đầy đủ {diem}/100.\nEm sẽ rao tích cực, có khách quan tâm là em báo {ac} liền.",

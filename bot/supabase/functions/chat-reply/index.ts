@@ -29,6 +29,7 @@ import {
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
+import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
   boBaoLai, COT_BAO_LAI, docCheDo, layBaoLai, tomTatDaLuu,
@@ -1584,7 +1585,11 @@ Deno.serve(async (req) => {
       // cuối; thay_doi: gắn vào cuối bong bóng cuối, không đẻ thêm bong bóng.
       if (sach.length) {
         const bl = await baoLaiDaLuu(extra);
-        if (bl.bong && bl.cheDo === "day_du") sach.push(bl.bong);
+        // Lượt gửi BẢN NHÁP: thứ đã ghi vào DB đi RIÊNG một tin, đứng TRƯỚC bản
+        // nháp — chủ dự án 12/09/2026: "mấy cái bóc tách đã ghi vào supabase
+        // thật thì đưa ra trong 1 tin trước đó sau đó đưa em đăng tin như này".
+        if (bl.bong && extra.ban_nhap === true) sach.unshift(bl.bong);
+        else if (bl.bong && bl.cheDo === "day_du") sach.push(bl.bong);
         else if (bl.bong) sach[sach.length - 1] = `${sach[sach.length - 1]}\n${bl.bong}`;
       }
       // MỘT câu INSERT cho cả loạt bong bóng (FR-171 h): `seq` là identity nên
@@ -2187,23 +2192,6 @@ Deno.serve(async (req) => {
     // tầng trên hỏi tiếp. Mở câu chờ `duyet_tin` để lượt sau biết chủ nhà đang
     // trả lời bản nháp chứ không phải một câu hỏi thông số.
     type DiemTin = { diem: number; chi_tiet: Record<string, number>; thieu: string[]; co_anh: boolean; so_anh?: number };
-    const LOAI_VI: Record<string, string> = {
-      nha_pho: "Nhà phố", nha_cap4: "Nhà cấp 4", chung_cu: "Căn hộ", dat: "Đất",
-      biet_thu: "Biệt thự", phong_tro: "Phòng trọ", mat_bang: "Mặt bằng",
-      toa_nha: "Toà nhà / CHDV", dat_nong_nghiep: "Đất nông nghiệp", dat_kinh_doanh: "Đất kinh doanh", kho_xuong: "Kho xưởng",
-    };
-    // Địa chỉ trong bản nháp: bỏ mảnh trùng ("…, quận 5, Phường 2, Quận 5") và
-    // dấu phẩy kép do trigger bóc phường để lại ("Trần Bình Trọng, , quận 5").
-    const diaChiGon = (...manh: Array<string | null | undefined>): string => {
-      const ra: string[] = [];
-      for (const m of manh) {
-        for (const p of (m ?? "").split(",")) {
-          const s = p.trim();
-          if (s && !ra.some((x) => boDau(x) === boDau(s))) ra.push(s);
-        }
-      }
-      return ra.join(", ");
-    };
     const goiYTiemNang = (l: SpecRow & { property_type?: string | null; bedrooms?: number | null }): string | null => {
       if (l.property_type === "chung_cu") return "ở gia đình hoặc cho thuê";
       if (l.property_type === "mat_bang") return "kinh doanh, mở shop, văn phòng";
@@ -2248,105 +2236,25 @@ Deno.serve(async (req) => {
       // như MỘT TIN RAO THẬT, nhưng không bịa". Mọi dòng dưới đây đều từ cột hoặc
       // fact chủ nhà đã nói (fact mới nhất mỗi khoá); không có thì không có dòng,
       // KHÔNG đoán tiềm năng thay chủ nhà.
-      const fact = (k: string) => (facts ?? []).find((f) => f.question === k)?.answer ?? null;
-      // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành "thuê tối thiểu thuê tối thiểu 3 năm".
-      // Nhãn KHÔNG dán lên câu trả lời đã chứa chữ của nhãn. Lần 7 (10/09) bản nháp
-      // hiện "🏢 Phí: phí QL phí quản lý 20 nghìn/m2": chỗ đó ghép nhãn bằng template
-      // chứ không qua đây, và phép so cũ (includes nguyên nhãn) cũng không thấy
-      // "phí QL" nằm trong "phí quản lý". Nay so theo TỪNG CHỮ của nhãn.
-      const coChu = (v: string, n: string) =>
-        boDau(n).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 2)
-          .some((w) => new RegExp(`\\b${w}`).test(boDau(v)));
-      const nhan = (n: string, v: string | null, sep = " ") => v ? (coChu(v, n) ? v : `${n}${sep}${v}`) : null;
-      const hau = (v: string | null, n: string) => v ? (coChu(v, n) ? v : `${v} ${n}`) : null;
-      const lx = l as SpecRow & { floor?: number | null; rear_width_m?: number | null; furnishing?: string | null; negotiable?: boolean | null; gap?: boolean | null; bedrooms?: number | null; property_type?: string | null; deal?: string | null; price_raw?: string | null; area_m2?: number | null; location_raw?: string | null; ward?: string | null; district?: string | null };
-      const loai = lx.property_type ?? "";
-      const thue = lx.deal === "cho_thue";
-      const dong: string[] = [];
-      const them = (icon: string, nhan: string, phan: Array<string | null | undefined | false>) => {
-        const p = phan.filter((x): x is string => !!x && String(x).trim().length > 0);
-        if (p.length) dong.push(`${icon} ${nhan}: ${p.join(" · ")}`);
-      };
-      dong.push(cauTD("nhap_tieu_de", { diem: d.diem }));
-      dong.push(`🏠 ${(LOAI_VI[loai] ?? "Nhà").toUpperCase()} ${thue ? "CHO THUÊ" : "BÁN"}${lx.gap === true ? " - CẦN " + (thue ? "CHO THUÊ" : "BÁN") + " GẤP" : ""}`);
-      dong.push(`📍 ${diaChiGon(lx.location_raw, lx.ward, lx.district)}${fact("khu_compound") ? ` · ${fact("khu_compound")}` : ""}`);
-      them("📐", "Diện tích", [
-        lx.area_m2 ? `${lx.area_m2}m²` : (fact("dien_tich") ?? fact("dien_tich_dat") ?? fact("dien_tich_tim_tuong")),
-        lx.frontage_m && lx.length_m ? `ngang ${lx.frontage_m}m x dài ${lx.length_m}m` : (lx.frontage_m ? `ngang ${lx.frontage_m}m` : fact("mat_tien") ? `ngang ${fact("mat_tien")}` : null),
-        lx.rear_width_m ? `nở hậu ${lx.rear_width_m}m` : fact("no_hau") ? `nở hậu ${fact("no_hau")}` : null,
-        nhan("thổ cư", fact("tho_cu")),
-        fact("hinh_dang"),
-      ]);
-      them("🏗", "Kết cấu", [
-        lx.floors_text ?? (lx.floors ? `${lx.floors} tầng` : fact("ket_cau")),
-        nhan("toà", fact("toa_thap")),
-        lx.floor ? `tầng ${lx.floor}` : nhan("tầng", fact("tang")),
-        lx.bedrooms ? `${lx.bedrooms} phòng ngủ` : hau(fact("so_phong_ngu"), "phòng ngủ"),
-        lx.bathrooms ? `${lx.bathrooms} WC` : hau(fact("so_wc"), "WC"),
-        nhan("thang máy:", fact("thang_may")),
-        nhan("sân vườn:", fact("san_vuon")),
-        fact("hien_trang"), nhan("xây", fact("nam_xay")),
-        nhan("căn góc:", fact("can_goc")), nhan("view:", fact("view")),
-      ]);
-      them("🛣", "Đường vào", [
-        lx.access_type ? `${thongSoNgan({ access_type: lx.access_type, alley_width_m: lx.alley_width_m } as SpecRow).replace(/^ · /, "")}` : (fact("do_rong_hem") ?? fact("do_rong_duong") ?? fact("duong_vao")),
-        nhan("cách mặt tiền", fact("cach_mat_tien")),
-        fact("hem_thong"), nhan("ngập nước:", fact("ngap_nuoc")),
-        fact("ha_tang"), nhan("container:", fact("duong_container")),
-      ]);
-      them("🧭", "Hướng", [lx.direction ?? fact("huong")]);
-      them("📜", "Pháp lý", [
-        lx.legal_status ? thongSoNgan({ legal_status: lx.legal_status, has_completion: lx.has_completion } as SpecRow).replace(/^ · /, "") : fact("phap_ly"),
-        nhan("quy hoạch:", fact("quy_hoach")),
-        nhan("sổ:", fact("the_chap")),
-        fact("xay_dung"), fact("so_huu"), fact("thoi_han_su_dung"), fact("hinh_thuc_thue_dat"), fact("len_tho_cu"),
-      ]);
-      if (loai === "toa_nha" || loai === "kho_xuong") {
-        them("🏢", loai === "toa_nha" ? "Khai thác" : "Kho xưởng", [
-          hau(fact("so_phong"), "phòng"), nhan("lấp đầy", fact("ty_le_lap_day")),
-          fact("doanh_thu"), nhan("PCCC:", fact("pccc")),
-          nhan("cao", fact("chieu_cao")), nhan("tải trọng", fact("tai_trong_san")),
-          nhan("điện", fact("tram_bien_ap")), nhan("nước thải:", fact("xu_ly_nuoc_thai")),
-        ]);
-      }
-      if (loai === "dat_nong_nghiep" || loai === "dat_kinh_doanh") {
-        them("🌱", "Đất", [nhan("nước:", fact("nguon_nuoc")), nhan("ranh:", fact("ranh_gioi")), nhan("mật độ XD", fact("mat_do_xd")), fact("tang_cao_toi_da") ? `xây tối đa ${hau(fact("tang_cao_toi_da"), "tầng")}` : null]);
-      }
-      them("🛋", "Nội thất", [lx.furnishing ?? fact("noi_that"), nhan("hiện:", fact("hien_trang_su_dung"))]);
-      if (thue) {
-        them("📝", "Điều kiện thuê", [
-          fact("tien_coc"), nhan("thuê tối thiểu", fact("thoi_han_thue")),
-          nhan("tăng", fact("truot_gia")), nhan("sửa chữa miễn phí", fact("fit_out")),
-          nhan("phí QL", fact("phi_quan_ly")), nhan("gửi xe", fact("phi_gui_xe")),
-          nhan("điện nước", fact("gia_dien_nuoc")), fact("gio_giac"),
-        ]);
-      } else {
-        them("🏢", "Phí", [nhan("phí QL", fact("phi_quan_ly")), nhan("gửi xe", fact("phi_gui_xe"))]);
-      }
-      them("🏫", "Tiện ích gần", [fact("tien_ich_gan")]);
-      // Tiềm năng CHỈ khi chủ nhà nói (không bịa thay họ).
-      them("💡", "Phù hợp", [fact("tiem_nang") ?? fact("muc_dich") ?? fact("nganh_hang_phu_hop")]);
-      if (lx.price_raw) {
-        const giaDaNoi = /thuong luong|\btl\b|con bot|fix|co dinh/.test(boDau(lx.price_raw));
-        const tl = giaDaNoi ? "" : lx.negotiable === true || /thuong luong|\btl\b|con bot|fix/.test(boDau(fact("thuong_luong") ?? ""))
-          ? " (còn thương lượng)" : lx.negotiable === false ? " (giá cố định)" : "";
-        dong.push(`💰 Giá: ${lx.price_raw}${thue && !/thang/.test(boDau(lx.price_raw)) ? "/tháng" : ""}${tl}${fact("ly_do_ban") ? ` · lý do: ${fact("ly_do_ban")}` : ""}`);
-      }
-      const soAnhTin = d.so_anh ?? 0;
-      if (soAnhTin) dong.push(`📷 ${soAnhTin} ảnh`);
-      // FR-178: không đọc mã tin cho khách — mã chỉ ở web, CTV, admin.
-      dong.push(cauTD("nhap_goi_hanh_dong"));
-      // 20260909a: diem_tin tự nối "ảnh sổ, mặt tiền, hẻm" vào thieu[] khi chưa có
-      // ảnh (ảnh nay là 10 điểm, FR-177 f) — không nối thêm ở đây nữa.
-      const thieu = d.thieu ?? [];
-      if (thieu.length) dong.push(cauTD("nhap_goi_y", { thieu: thieu.slice(0, 2).join(" và ") }));
-      dong.push(lai ? cauTD("nhap_sua_xong") : cauTD("nhap_hoi_duyet"));
+      // 12/09/2026: bản nháp dựng ở `_shared/tin-nhap.ts` — viết như TIN RAO
+      // THẬT theo mẫu tin lẻ mogi.vn (tiêu đề gộp · địa chỉ · GIÁ · thông số),
+      // và tách ra để `scripts/xem-tin-nhap.mjs` dựng thử trên dữ liệu thật mà
+      // không phải deploy, `bot/tests/tin-nhap-rao.mjs` kiểm offline.
+      const tin = soanTinNhap({
+        l: l as TinNhapRow,
+        facts: (facts ?? []) as FactNhap[],
+        diem: d.diem,
+        thieu: d.thieu ?? [],
+        soAnh: d.so_anh ?? 0,
+        lai,
+        cauTD,
+      });
       // 23505 = câu duyệt đã mở từ lượt trước (gửi lại bản nháp) — không phải sự cố.
       const { error: irErr } = await client.from("info_requests").insert({
         listing_id: listingId, question: "duyet_tin", status: "pending",
       });
       if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo duyet_tin", irErr.message);
-      return await traLoiSeller([dong.join("\n")], { ...extra, ban_nhap: true, diem: d.diem });
+      return await traLoiSeller([tin], { ...extra, ban_nhap: true, diem: d.diem });
     };
     // Tự kiểm 02/09: chủ nhà đang bị hỏi dở (pendingReq) mà nhắn RAO THÊM CĂN
     // KHÁC → bản cũ ghi cả câu rao làm CÂU TRẢ LỜI cho câu hỏi đang treo, vì
