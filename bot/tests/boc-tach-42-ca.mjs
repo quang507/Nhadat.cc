@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { docTien, giaTheoM2, vndThanhChu } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../supabase/functions/_shared/extraction/so-chu.ts";
 import {
-  cheoPhuDinh, laHoanLai, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tuXungTuCau, vungPhuDinh,
+  bocViTriRao, cheoPhuDinh, laHoanLai, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tuXungTuCau, vungPhuDinh,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { vungNgoai } from "../supabase/functions/_shared/dia_ban.ts";
 
@@ -144,6 +144,22 @@ for (const [vao, mong] of [
     ["gia", "5 tỷ 2", "5 tỷ 2"],
   ]) ok(`catDapAn [${q}] "${vao}"`, catDapAn(q, vao) === mong, catDapAn(q, vao));
 }
+
+// ── 12/09/2026 — VỊ TRÍ TRONG CÂU RAO (lượt bắn 20 tin thật: 7/7 tin mất địa chỉ,
+// bot hỏi đường vòng vòng, bản nháp không bao giờ bung vì thiếu vị trí) ─────────
+for (const [vao, mong] of [
+  ["anh cần bán căn nhà hẻm xe hơi 5m Nguyễn Trãi phường 3 quận 5, 60m2, giá 7 tỷ 2", "hẻm xe hơi 5m Nguyễn Trãi"],
+  ["gia đình cần tiền nên để lại căn nhà 4x16 hẻm xe hơi Trần Hưng Đạo quận 5, sổ hồng riêng", "hẻm xe hơi Trần Hưng Đạo"],
+  ["em ơi nhà anh ở hẻm 102 Trần Bình Trọng phường 1 quận 5, bán 5 tỷ 3", "hẻm 102 Trần Bình Trọng"],
+  ["bán nhà hxh Nguyễn Trãi p3 q5, 4x16, 1 trệt 2 lầu, shr, 9t5", "hxh Nguyễn Trãi"],
+  ["Đường hồ ngọc lãm quận 8 phường 6", "Đường hồ ngọc lãm"],
+  ["nhà mặt tiền đường An Dương Vương quận 5, 5x20", "đường An Dương Vương"],
+  ["còn căn nữa: 7 Hồng Bàng phường 12, 80m2", "7 Hồng Bàng"],
+  ["hẻm xe hơi 4m, 1 trệt 3 lầu, sổ hồng riêng, 4 phòng ngủ", null],
+  ["bán đất nền Bến Lức Long An 5x20 đường nhựa 7m sổ riêng 850tr", null],
+  ["nhà hẻm thông không ngập, 50m2", null],
+  ["bán nhà q6 phường 2 40m2 3 tỷ 9", null],
+]) ok("bocViTriRao " + JSON.stringify(vao.slice(0, 44)), bocViTriRao(vao) === mong, JSON.stringify(bocViTriRao(vao)));
 
 console.log(hong ? `\nBÓC TÁCH 42 CA: ${hong}/${tong} CA HỎNG` : `\nBÓC TÁCH 42 CA: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
