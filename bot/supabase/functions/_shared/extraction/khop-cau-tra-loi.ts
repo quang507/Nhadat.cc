@@ -124,6 +124,72 @@ export function bocCumDiaChi(text: string): string | null {
     /(?:^|[\s,])((?:đường|duong|hẻm|hem|hxh|phố|số nhà)\s+[^,.;!?\n]{2,80})/iu.exec(t);
   return m ? m[1].trim() : null;
 }
+// Chữ TẢ CON ĐƯỜNG (không phải tên đường): "hẻm xe hơi 4m", "đường nhựa 7m",
+// "hẻm thông", "hẻm bê tông". Tên đường là chữ KHÔNG nằm trong bảng này.
+const TU_TA_DUONG = new Set([
+  "xe", "hoi", "may", "tai", "thong", "cut", "rong", "nho", "lon", "be", "tong",
+  "nhua", "dat", "vao", "ra", "trong", "thuong", "co", "truoc", "sau", "noi",
+  "met", "m", "mo", "cua", "nha", "ban", "ngang", "dai", "cho",
+]);
+
+// Chữ mở đầu THỨ KHÁC — gặp là hết tên đường: giấy tờ, giá, kết cấu, hành chính.
+// "đường nhựa 7m sổ riêng 850tr" dừng ở "sổ", không nuốt cả câu.
+//
+// Bảng này CỐ Ý NGẮN và chỉ chứa chữ KHÔNG BAO GIỜ mở đầu tên đường Sài Gòn.
+// Bản nháp đầu có "an", "cống", "điện", "nam", "cô" — tức là giết luôn An Dương
+// Vương, Cống Quỳnh, Điện Biên Phủ, Nam Kỳ Khởi Nghĩa, Cô Giang. Thà giữ dư một
+// hai chữ rác trong địa chỉ còn hơn mất tên đường thật.
+const TU_DUNG = new Set([
+  "so", "giay", "gia", "ban", "mua", "thue", "huong", "full", "that", "tret",
+  "lau", "tang", "phong", "ngu", "wc", "toilet", "tho", "hoan", "gap", "luong",
+  "tich", "phuong", "quan", "huyen", "khong", "ngap", "xay",
+  // KHÔNG có "duong"/"hem" ở đây: bỏ dấu thì "Dương" (An Dương Vương, Dương Bá
+  // Trạc) trùng "đường" — thêm vào là cắt cụt tên đường thật.
+  "ty", "ti", "trieu", "m2", "shr", "hdmb",
+]);
+
+/**
+ * VỊ TRÍ trong CÂU RAO: "hẻm xe hơi 5m Nguyễn Trãi p3 q5" → "hẻm xe hơi 5m Nguyễn Trãi".
+ *
+ * 12/09/2026 (bắn 20 tin thật): bản trước loại NGUYÊN cụm khi chữ ngay sau
+ * "hẻm/đường" là chữ tả đường ("xe", "nhựa", "rộng") — ý đúng là để "hẻm xe hơi
+ * 4m" không thành tên đường, nhưng nó vứt luôn TÊN ĐƯỜNG đứng sau, nên 7/7 tin
+ * của lượt bắn có `location_raw` rỗng và bot hỏi địa chỉ vòng vòng.
+ *
+ * Nay: cắt mệnh đề địa chỉ tới trước phường/quận/giá/dấu phẩy, rồi hỏi một câu
+ * duy nhất — sau mấy chữ tả đường, CÓ tên riêng nào không? Có thì giữ cả cụm
+ * (bề rộng hẻm là thứ đáng giữ trong địa chỉ), không có thì trả null.
+ */
+export function bocViTriRao(text: string): string | null {
+  const t = (text ?? "").trim();
+  // Mệnh đề bắt đầu từ chữ hẻm/đường tới dấu ngắt câu gần nhất.
+  const menh = /(?:^|[\s,(])((?:đường|duong|hẻm|hem|hxh|phố|pho|ngõ|ngo)\s+[^,.;!?\n]{2,70})/iu
+    .exec(t)?.[1]?.trim() ?? null;
+  if (menh) {
+    const tu = menh.split(/\s+/);
+    const dau = tu[0];
+    let i = 1;
+    // Chữ TẢ đường và bề rộng/số nhà đứng trước tên: "xe hơi 5m", "102".
+    const truoc: string[] = [];
+    while (i < tu.length && (TU_TA_DUONG.has(boDau(tu[i])) || /^\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)*(?:m|met|mét)?$/i.test(tu[i]))) {
+      truoc.push(tu[i]);
+      i++;
+    }
+    // Rồi tới TÊN đường: chữ thuần, tối đa 4 chữ, gặp chữ của thứ khác thì dừng.
+    const ten: string[] = [];
+    while (i < tu.length && ten.length < 4 && /^[\p{L}]{2,}$/u.test(tu[i]) && !TU_DUNG.has(boDau(tu[i]))) {
+      ten.push(tu[i]);
+      i++;
+    }
+    return ten.length ? [dau, ...truoc, ...ten].join(" ") : null;
+  }
+  // Số nhà trần: "7 Hồng Bàng phường 12", "123/4 An Dương Vương q5" — chỉ nhận
+  // khi ngay sau là phường/quận, để "5 tỷ" hay "40m2" không thành địa chỉ.
+  const so = /(?:^|[\s,])(\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+(?:[\p{L}]+\s?){1,4}?)(?=\s*(?:p\.?\s*\d|phường|phuong|quận|quan|q\.?\s*\d)\b)/iu
+    .exec(t)?.[1]?.trim() ?? null;
+  return so && so.length >= 6 ? so : null;
+}
+
 export function catDapAn(question: string, dapAn: string): string {
   if (question === "vi_tri" && LENH_DAN.test(boDau(dapAn))) return bocCumDiaChi(dapAn) ?? dapAn;
   if (question === "phuong") {

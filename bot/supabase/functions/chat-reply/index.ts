@@ -48,7 +48,7 @@ import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
-  batXungHo, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
+  batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
   nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // FR-185: ảnh chủ nhà gửi → phân loại (model) + cất vào kho (Storage + listing_media).
@@ -2914,17 +2914,11 @@ Deno.serve(async (req) => {
         // nhà sau chữ hẻm) và "7 Hồng Bàng phường 12" (số nhà trần, không có chữ
         // hẻm/đường). Mẫu 1 nay cho phép số nhà; mẫu 2 bắt số nhà trần nhưng CHỈ
         // khi ngay sau là phường/quận, để "5 tỷ" hay "40m2" không thành địa chỉ.
-        const viTriTho = [
-          /(?:^|\s)((?:đường|duong|hẻm|hem|hxh|phố|pho)\s+(?:\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+)?(?:[\p{L}]+\s?){1,5}?|\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)+\s+(?:[\p{L}]+\s?){1,5}?)(?=\s*(?:p\.?\s*\d|phường|phuong|quận|quan|q\.?\s*\d|giá|gia|\d|,|$))/iu,
-          /(?:^|\s)(\d{1,5}[a-zA-Z]?\s+(?:[\p{L}]+\s?){1,4}?)(?=\s*(?:p\.?\s*\d|phường|phuong|quận|quan|q\.?\s*\d)\b)/iu,
-        ].map((re) => re.exec(text)?.[1]?.trim().replace(/\s+$/, "") ?? null)
-          .find((v) => !!v && v.length >= 6) ?? null;
-        // "hẻm thông không ngập", "hẻm 3m xe máy", "đường 12m vào được container",
-        // "phố trong dự án" là MÔ TẢ đường, không phải địa chỉ (10/09 lần 6 + 7):
-        // chữ ngay sau hẻm/đường (bỏ qua bề rộng) mà là từ mô tả thì bỏ.
-        const viTriRao = viTriTho &&
-            !/^(?:hẻm|hem|hxh|đường|duong|phố|pho)\s+(?:\d{1,3}\s*(?:m|met|mét)?\s+)?(?:thông|thong|cụt|cut|xe|rộng|rong|nhỏ|nho|lớn|lon|bê|be|nhựa|nhua|đất|dat|vào|vao|ra|trong|thương|thuong|cổ|co|trước|truoc|sau|nội|noi)\b/i.test(viTriTho)
-          ? viTriTho : null;
+        // 12/09/2026 (bắn 20 tin thật): luật bóc vị trí chuyển sang
+        // `bocViTriRao` — bản cũ vứt nguyên cụm khi sau "hẻm/đường" là chữ tả
+        // đường, nên "hẻm xe hơi 5m NGUYỄN TRÃI" mất sạch và 7/7 tin của lượt
+        // bắn không có địa chỉ, bot hỏi vòng vòng, bản nháp không bao giờ bung.
+        const viTriRao = bocViTriRao(text);
         // FR-177 n (10/09): câu rao DÀI mang 5–10 thông số → bóc HẾT ngay lúc tạo tin
         // (hướng, pháp lý, WC, nội thất, năm xây, hẻm thông, ngập, cách mặt tiền, lý do
         // bán, thương lượng…), không bắt chủ nhà nói lại. Giá/gấp đã vào cột lúc insert.
