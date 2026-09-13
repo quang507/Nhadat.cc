@@ -998,16 +998,41 @@ fresh(seedKho);
   fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "có khách nào hỏi chưa em" });
   const sC = db().t.sellers.find((s) => s.zalo_user_id === "z-ccrb");
-  check("N1 người bán lượt đầu → sellers.ten_tro_ly = tên băm từ Zalo ID; system prompt nhánh bán 'Bạn là \"<tên>\"', không 'Thái', không '{ten}'",
-    sC?.ten_tro_ly === tenTroLy("z-ccrb") && createCalls().some((c) => c.params.system[0].text.includes(`Bạn là "${tenTroLy("z-ccrb")}"`)) && !createCalls().some((c) => /Thái|\{ten\}/.test(c.params.system[0].text)),
-    JSON.stringify({ ten: sC?.ten_tro_ly, sys: createCalls().at(-1)?.params.system[0].text.slice(0, 120) }));
+  // 14/09/2026: khối system NHỚ TẠM không mang tên riêng (mọi khách chung một bản nhớ
+  // tạm); tên thật đi ở khối thứ hai, không nhớ tạm.
+  check("N1 người bán lượt đầu → sellers.ten_tro_ly = tên băm từ Zalo ID; khối nhớ tạm dùng «tên em», khối sau nói đúng tên; không 'Thái', không '{ten}'",
+    sC?.ten_tro_ly === tenTroLy("z-ccrb") &&
+      createCalls().some((c) => c.params.system[0].text.includes('Bạn là "«tên em»"') && !!c.params.system[0].cache_control &&
+        (c.params.system[1]?.text ?? "").includes(`"${tenTroLy("z-ccrb")}"`) && !c.params.system[1]?.cache_control) &&
+      !createCalls().some((c) => /Thái|\{ten\}/.test(c.params.system.map((x) => x.text).join("\n"))),
+    JSON.stringify({ ten: sC?.ten_tro_ly, sys: createCalls().at(-1)?.params.system.map((x) => x.text.slice(0, 120)) }));
   r = await send({ external_user_id: "z-ccrb", text: "ok em" });
   check("N1b lượt sau KHÔNG update ten_tro_ly nữa (đã có)", db().log.filter((l) => l.table === "sellers" && l.op === "update" && l.payload?.ten_tro_ly).length === 1);
   // FR-181: khách mua → preferences.ten_tro_ly qua merge_buyer_prefs (không thêm vòng DB).
   fresh();
   await send({ external_user_id: "m-1", text: "chào em" });
   r = await send({ external_user_id: "m-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
-  check("N2 khách mua → buyers.preferences.ten_tro_ly = tên băm; system prompt mua xưng đúng tên", db().t.buyers[0]?.preferences?.ten_tro_ly === tenTroLy("m-1") && parseCalls().some((c) => c.params.system[0].text.includes(`Bạn là "${tenTroLy("m-1")}"`)), JSON.stringify(db().t.buyers[0]?.preferences));
+  check("N2 khách mua → buyers.preferences.ten_tro_ly = tên băm; khối sau (không nhớ tạm) nói đúng tên, khối nhớ tạm dùng «tên em»",
+    db().t.buyers[0]?.preferences?.ten_tro_ly === tenTroLy("m-1") &&
+      parseCalls().some((c) => c.params.system[0].text.includes('Bạn là "«tên em»"') && c.params.system[1].text.includes(`"${tenTroLy("m-1")}"`)),
+    JSON.stringify(db().t.buyers[0]?.preferences));
+  {
+    // Hai khách KHÁC tên trợ lý → khối system nhớ tạm phải GIỐNG HỆT (không thì mỗi khách một ô nhớ tạm, không bao giờ trúng).
+    const n0 = parseCalls().length;
+    await send({ external_user_id: "m-khac-ten-9", text: "tìm nhà quận 5 tầm 6 tỷ" });
+    const moi = parseCalls().slice(n0)[0];
+    const cu = parseCalls().find((c) => c.params.system[1].text.includes(`"${tenTroLy("m-1")}"`));
+    globalThis.__model.parse = () => OUT({ replies: ["Dạ em là «tên em» bên AI Ơi Nhà Đất ạ."] });
+    const rTen = await send({ external_user_id: "m-khac-ten-9", text: "em tên gì" });
+    check("NHOTAM-02 model chép nguyên «tên em» → khách nhận tên thật",
+      rTen.body.replies.some((x) => x.includes(`em là ${tenTroLy("m-khac-ten-9")} bên`)) && !JSON.stringify(rTen.body.replies).includes("«tên em»"),
+      JSON.stringify(rTen.body.replies));
+    globalThis.__model.parse = () => OUT();
+    check("NHOTAM-01 hai khách khác tên trợ lý → khối system nhớ tạm giống hệt từng chữ",
+      tenTroLy("m-khac-ten-9") !== tenTroLy("m-1") && !!moi && !!cu && moi.params.system[0].text === cu.params.system[0].text &&
+        moi.params.system[1].text.includes(`"${tenTroLy("m-khac-ten-9")}"`),
+      JSON.stringify({ t1: tenTroLy("m-1"), t2: tenTroLy("m-khac-ten-9"), giong: moi?.params.system[0].text === cu?.params.system[0].text }));
+  }
 
   // FR-184: một căn đang rao, chủ báo "bán rồi" → da_chot, câu treo đóng, nhắc huỷ, boc_tach.ket_thuc, không gọi model.
   fresh(seedKho);
