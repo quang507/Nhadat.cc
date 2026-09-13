@@ -284,6 +284,27 @@ const BuyerTurn = z.object({
 // Isolate của edge function sống qua nhiều request, nên hằng, schema đã biên
 // dịch và các thứ nhớ tạm dưới đây chỉ tốn công ở request đầu.
 const BUYER_FORMAT = zodOutputFormat(BuyerTurn);
+// 14/09/2026 (đo thật cùng câu lệnh, Haiku 4.5, nhớ tạm đã trúng): gọi CÓ khuôn JSON
+// `output_config.format` mất 4,1–5,4 s cho ~140 token ra; KHÔNG khuôn, dặn JSON bằng
+// lời mất 1,8–3,5 s và 8/8 lượt ra JSON hợp lệ đúng từng trường. Giải mã có ràng
+// buộc chậm gấp đôi. Nhánh mua nay đưa JSON Schema vào khối system NHỚ TẠM (đọc lại
+// 1/10 giá), tự đọc + kiểm bằng zod; hỏng thì rơi về đường dự phòng như model chết.
+// Khuôn vẫn đi kèm dưới tên `_khuon_du_phong` cho riêng lưới Groq (FR-194).
+const BUYER_SCHEMA_TXT = JSON.stringify(z.toJSONSchema(BuyerTurn));
+const DAU_RA_JSON =
+  "ĐẦU RA: trả về DUY NHẤT một object JSON (không markdown, không chữ nào ngoài JSON) đúng JSON Schema sau — " +
+  "mô tả từng trường nằm trong \"description\":\n" + BUYER_SCHEMA_TXT;
+/** Đọc lượt người mua từ chữ model trả: cắt từ "{" đầu tới "}" cuối, kiểm bằng zod. */
+function docLuotMuaTuChu(chu: string): z.infer<typeof BuyerTurn> | null {
+  const dau = chu.indexOf("{"), cuoi = chu.lastIndexOf("}");
+  if (dau < 0 || cuoi <= dau) return null;
+  try {
+    const kq = BuyerTurn.safeParse(JSON.parse(chu.slice(dau, cuoi + 1)));
+    return kq.success ? kq.data : null;
+  } catch {
+    return null;
+  }
+}
 // Khối "căn khách đang nhắc" (FR-29): trạng thái nói bằng lời cho model.
 const STATUS_VI: Record<string, string> = {
   cho_thong_tin: "đang chờ bổ sung thông tin, chưa lên kệ",
@@ -3772,7 +3793,8 @@ ${kem}` : tomTat, cheDo };
       max_tokens: 1024,
       // effort low: nhanh hơn rõ rệt, few-shot + luật đã gánh chất lượng (nudge
       // chạy low được chấm 4.5-4.7/5); cần sâu hơn thì nâng lại "medium"
-      output_config: { effort: "low", format: BUYER_FORMAT },
+      output_config: { effort: "low" },
+      _khuon_du_phong: BUYER_FORMAT,
       // Tách 2 khối theo GIÁ, không theo chủ đề: mọi thứ giống hệt nhau cho mọi
       // khách nằm trước điểm nhớ tạm (đọc lại chỉ tốn 1/10 giá); mọi thứ đổi
       // theo hồ sơ từng khách nằm sau (phải trả đủ giá dù có cache hay không).
@@ -3799,6 +3821,7 @@ ${kem}` : tomTat, cheDo };
         type: "text",
         text: TONE + "\n\n" + HUMAN + "\n\n" + FEES + "\n\n" + SLANG + "\n\n" + AGREE + "\n\n" + FEWSHOT +
           "\n\nBất biến: tối đa 3 listing một tin; không khẳng định còn/hết hay pháp lý khi chưa xác minh - nói 'để em hỏi lại chủ nhà'; tin chủ động kết thúc bằng MỘT câu hỏi. Chỉ dùng listing trong KHO ở khối sau, không bịa." +
+          "\n\n" + DAU_RA_JSON +
           (duanNhaMinh
             ? "\n\nDỰ ÁN NHÀ MÌNH ĐANG PHÂN PHỐI TRỰC TIẾP (kiến thức chung ĐÃ XÁC THỰC - trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao - KHÔNG cần 'hỏi lại chủ nhà'. GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'. Khách hợp nhu cầu (nhà phố xây mới, khu biệt lập an ninh, ~43-92m2, quanh Q5/Q6/Q8) thì chủ động giới thiệu MỘT lần như một lựa chọn; khách không quan tâm thì thôi, đừng lặp lại):\n" +
               duanNhaMinh
@@ -3881,8 +3904,11 @@ ${kem}` : tomTat, cheDo };
     moc.mua_tok_vao = resp.usage?.input_tokens ?? -1;
     moc.mua_tok_nho_doc = resp.usage?.cache_read_input_tokens ?? -1;
     moc.mua_tok_nho_ghi = resp.usage?.cache_creation_input_tokens ?? -1;
-    if (resp.stop_reason !== "refusal" && resp.parsed_output) {
-      out = resp.parsed_output as LuotMua;
+    if (resp.stop_reason !== "refusal") {
+      // Lưới Groq vẫn trả `parsed_output` (nó dùng khuôn dự phòng); Anthropic trả chữ.
+      const chu = (resp.content ?? []).map((b: { type: string; text?: string }) => b.type === "text" ? b.text ?? "" : "").join("");
+      out = (resp.parsed_output as LuotMua | null) ?? (docLuotMuaTuChu(chu) as LuotMua | null);
+      if (!out) await ghiLoi(client, "chat-reply model JSON hong", `stop=${resp.stop_reason} · ${chu.slice(0, 200)}`);
     }
     // Đo SAU khi đã cầm chắc câu trả lời trong tay: lượt buyer là lượt đắt nhất
     // (khối tĩnh ~5.800 chữ-máy), nên đây là con số quan trọng nhất của đồng hồ.

@@ -189,7 +189,7 @@ export function bocDuPhong(
         );
       }
     }
-    const schema = ten === "parse" ? bocSchema(p.output_config?.format) : null;
+    const schema = ten === "parse" ? bocSchema(p.output_config?.format ?? p._khuon_du_phong) : null;
     let cuoi: unknown = null;
     for (const m of dsModel) {
       try {

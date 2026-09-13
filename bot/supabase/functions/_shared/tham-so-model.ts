@@ -22,6 +22,13 @@ export const CO_EFFORT = /(opus|sonnet|fable)-5/i;
  * `output_config` rỗng sau khi bỏ thì bỏ luôn cả khoá, đừng gửi object trống.
  */
 export function locThamSo<T extends Record<string, unknown>>(p: T, modelMacDinh = ""): T {
+  // 14/09/2026: `_khuon_du_phong` là khuôn JSON CHỈ cho lưới Groq (nhánh mua bỏ
+  // structured output ở Anthropic vì chậm gấp đôi) — SDK Anthropic không biết trường
+  // này, gửi đi là 400. Gỡ ở đây vì mọi lượt gọi Anthropic đều đi qua hàm này.
+  if ("_khuon_du_phong" in p) {
+    const { _khuon_du_phong: _bo, ...khongKhuon } = p as Record<string, unknown>;
+    p = khongKhuon as T;
+  }
   const oc = p.output_config as { effort?: string; format?: unknown } | undefined;
   if (!oc?.effort) return p;
   if (CO_EFFORT.test(String(p.model ?? modelMacDinh))) return p;
