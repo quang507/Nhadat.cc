@@ -73,6 +73,11 @@ const TU_XUNG: RegExp[] = [
   /\b(?:nha|can|so|dat|lo|sdt|so dien thoai|so dt|vo|chong)\s+(?:cua\s+)?(anh|chi)\b(?!\s+(?:ay|nay|kia|hang xom))/,
   /\bde\s+(anh|chi)\s+(?:hoi|tinh|coi|xem|nghi|ban|suy nghi)\b/,
   /\b(anh|chi)\s+(?:ban|dang ban|met|khong ranh|chua ranh|dang lai xe|dang hop)\b/,
+  // 13/09/2026 (bàn giao 11/09 lỗi a): tự xưng GIỮA câu, sau lời chào hay dấu
+  // phẩy — "chào em, anh cần bán nhà", "dạ em, chị gửi ảnh nha". Các mẫu trên
+  // neo đầu câu nên trượt. Chỉ nhận chữ đủ "anh/chi" ở đây — "a"/"c" giữa câu
+  // quá dễ là tiểu từ "à".
+  /(?:[,.;!?]|\b(?:chao|da|vang|alo|ok|oke|ua|thi)\s+em(?:\s+oi)?)\s*(anh|chi)\s+(?:can|muon|co|dang|tinh|dinh|hoi|gui|ban|nho|o|moi|vua|de|thay|nghi)\b/,
 ];
 export function tuXungTuCau(text: string): "anh" | "chị" | null {
   const kd = boDau(text.trim());

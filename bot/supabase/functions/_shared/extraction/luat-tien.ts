@@ -65,6 +65,19 @@ export function giaTheoM2(p: string | null | undefined): number | null {
   return docTien(t.slice(0, m.index + m[0].length).replace(/\s*(?:\/|mỗi|moi|một|mot|1)\s*(?:m2|m²|mét|met|m)$/u, ""));
 }
 
+/**
+ * Giá THUÊ nói kèm kỳ hạn: "18 triệu một tháng" (tầng trên đã đổi "một" → "1")
+ * → "18 triệu/tháng". Trước bản này bot đọc lại "giá 18 triệu 1 tháng" và cột
+ * ghi "18 triệu 1" (13/09/2026). Chỉ họ triệu — "1 tỷ 1 năm" để nguyên. Cùng ý
+ * với SQL `chuan_hoa_gia_raw` (20260913a).
+ */
+export function gonGiaKyHan(p: string): string {
+  return p.replace(
+    /((?:triệu|trieu|tr|củ|cu)(?![\p{L}])(?:\s*\d{1,3}(?!\d))?)\s*(?:\/|(?<![\p{L}\d])(?:1|một|mot|mỗi|moi)(?![\p{L}\d]))\s*(tháng|thang|năm|nam)(?![\p{L}])/iu,
+    (_m, dau: string, ky: string) => `${dau}/${/^th/i.test(ky) ? "tháng" : "năm"}`,
+  );
+}
+
 /** 3_750_000_000 → "3 tỷ 750 triệu"; 850_000_000 → "850 triệu". Đọc lại bằng `docTien` ra đúng số. */
 export function vndThanhChu(v: number): string {
   const ty = Math.floor(v / 1e9);

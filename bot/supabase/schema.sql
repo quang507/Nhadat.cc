@@ -1617,9 +1617,15 @@ CREATE OR REPLACE FUNCTION public.boc_ten_duong(p text)
  IMMUTABLE
  SET search_path TO 'public'
 AS $function$
-  select nullif(btrim(regexp_replace(regexp_replace(seg,
-           '^(?:hẻm|hem|hxh)\s*[\d/]+\s*', '', 'i'),
-           '^(?:đường|duong|phố|pho|đ\.|đ )\s*', '', 'i')), '')
+  select nullif(btrim(
+           regexp_replace(
+             regexp_replace(
+               regexp_replace(seg,
+                 '^(?:hẻm|hem|hxh|ngõ|ngo|kiệt|kiet)(?:\s+|(?=\d))(?:(?:xe\s*hơi|xe\s*hoi|xe\s*tải|xe\s*tai|xe\s*máy|xe\s*may|ba\s*gác|ba\s*gac|thông|thong|cụt|cut|nhựa|nhua|bê\s*tông|be\s*tong|rộng|rong|lớn|lon|nhỏ|nho|xh)(?![[:alpha:]])\s*|[0-9]+(?:[.,][0-9]+)?\s*m(?![[:alpha:]])\s*|[0-9]+[a-z]?(?:/[0-9]+[a-z]?)*(?![[:alpha:]0-9])\s*)*',
+                 '', 'i'),
+               '^(?:đường|duong|phố|pho|đ\.|đ )\s*', '', 'i'),
+             '^(?:(?:nhựa|nhua|bê\s*tông|be\s*tong|rộng|rong|lớn|lon|nhỏ|nho)(?![[:alpha:]])\s*|[0-9]+(?:[.,][0-9]+)?\s*m(?![[:alpha:]])\s*)+',
+             '', 'i')), '')
   from (
     select s as seg
     from unnest(string_to_array(coalesce(p, ''), ',')) with ordinality as t(s, i)
@@ -2197,9 +2203,14 @@ begin
   if s = '' then return null; end if;
 
   t := public.bo_dau(s);
-  m := regexp_match(t, '([0-9][0-9.,]*\s*(?:ty|ti|toi|trieu|tr|cu)\y(?:\s*[0-9]+)?(?:\s*/\s*(?:thang|nam|m2))?)');
+  m := regexp_match(t, '([0-9][0-9.,]*\s*(?:ty|ti|toi|trieu|tr|cu)\y(?:\s*[0-9]+(?![0-9])(?!\s*(?:thang|nam)\y))?(?:\s*ruoi)?)(?:\s*(?:/|mot|moi|1)\s*(thang|nam|m2)\y)?');
   if m is not null then
     cum := btrim(substring(s from position(m[1] in t) for length(m[1])));
+    if m[2] is not null then
+      cum := cum || '/' || case m[2] when 'thang' then 'tháng' when 'nam' then 'năm' else 'm2' end;
+      -- "1 tỷ 1 năm" đọc được thành 1,1 tỷ: gắn kỳ hạn làm lệch số thì bỏ, đi đường cũ.
+      if public.parse_vnd(cum) is distinct from goc then cum := ''; end if;
+    end if;
     if cum <> '' and public.parse_vnd(cum) is not null then
       return cum;
     end if;
@@ -3514,9 +3525,17 @@ begin
          and (property_type is distinct from v_pt or property_type_source is distinct from bac);
     end if;
 
+  -- 13/09/2026: căn hộ "tầng 15" là TẦNG CĂN NẰM (cột `floor`, `boc_thong_so` +
+  -- `ap_thong_so` đã ghi đúng), không phải nhà 15 tầng. Bản trước ghi luôn
+  -- `floors` = 15 và bản nháp in "trệt + 14 lầu" cho một căn hộ Sunrise City.
   elsif new.question in ('tang', 'ket_cau') then
     v_num := nullif(substring(v_txt, '[0-9]+'), '')::numeric;
-    if v_num is not null and v_num between 0 and 80 and not (j ? 'floors') then
+    if l.property_type = 'chung_cu' then
+      if new.question = 'tang' and v_num is not null and v_num between 0 and 80 and not (j ? 'floor') then
+        update listings set floor = v_num::int, specs_source = bac
+         where id = new.listing_id and (floor is null or de);
+      end if;
+    elsif v_num is not null and v_num between 0 and 80 and not (j ? 'floors') and not (j ? 'floor') then
       update listings set floors = v_num::int,
              floors_text = coalesce(floors_text,
                case when v_num::int <= 1 then 'trệt'

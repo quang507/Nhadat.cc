@@ -1663,6 +1663,40 @@ fresh(seedKho);
   delete globalThis.__cauHinh;
 }
 
+// ── 13/09: VAN SAU LỜI MODEL (lượt bắn 20 tin thật 12/09) — kho trống không hứa
+// có hàng, khách mua tự xưng thì gọi đúng, ghi chú hoàn cảnh không lặp ────────
+{
+  const userText = (c) => c.params.messages[0].content.map((x) => x.text ?? "").join("");
+  fresh();
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ có em. Anh tìm để ở hay đầu tư kinh doanh ạ?"] });
+  r = await send({ external_user_id: "kho-1", text: "có căn nào quận 10 tầm 5 tỷ không em" });
+  check("KHO-01 kho trống, model đáp 'Dạ có em.' → bỏ câu hứa, nói lọc kho/chưa có, câu hỏi còn nguyên",
+    !r.body.replies.some((t) => /Dạ có em/.test(t)) && r.body.replies.some((t) => /(lọc kho|chưa có căn)/.test(t) && /để ở hay đầu tư/.test(t)),
+    JSON.stringify(r.body.replies));
+  check("KHO-01b chưa biết nam/nữ → câu lệnh dặn gọi 'anh/chị', không tự đoán",
+    /CÁCH GỌI KHÁCH: chưa biết nam hay nữ/.test(userText(parseCalls().pop())), userText(parseCalls().pop()).slice(0, 200));
+
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, area: "quận 5", budget: "tầm 7 tỷ", notes: "mẹ già ở cùng" }, replies: ["Dạ chị cần mấy phòng ngủ ạ?"] });
+  r = await send({ external_user_id: "kho-2", text: "chị đang tìm mua nhà quận 5 tầm 7 tỷ, nhà có mẹ già" });
+  const hs2 = () => db().t.buyers.find((b) => b.zalo_user_id === "kho-2")?.preferences ?? {};
+  check("XH-MUA-01 'chị đang tìm mua' → hồ sơ xung_ho = chị", hs2().xung_ho === "chị", JSON.stringify(hs2()));
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, notes: "mẹ già ở cùng; muốn gần bệnh viện" }, replies: ["Dạ được chị. Em đang có vài căn 3 phòng, hẻm xe hơi tầm 7 tỷ. Để em xem xem căn nào phù hợp nhất với chị nhé."] });
+  r = await send({ external_user_id: "kho-2", text: "3 phòng ngủ em, hẻm xe hơi, gần bệnh viện" });
+  check("XH-MUA-02 lượt sau câu lệnh mang 'CÁCH GỌI KHÁCH: \"chị\"'", /CÁCH GỌI KHÁCH: "chị"/.test(userText(parseCalls().pop())), userText(parseCalls().pop()).slice(0, 200));
+  check("KHO-02 đủ khu vực + giá mà kho trống, model 'em đang có vài căn…' → 'chưa có căn nào khớp', giữ 'Dạ được chị.'",
+    r.body.replies.length === 1 && /^Dạ được chị\. Hiện bên em chưa có căn nào khớp/.test(r.body.replies[0]) && !/vài căn|căn nào phù hợp/.test(r.body.replies[0]),
+    JSON.stringify(r.body.replies));
+  check("NOTES-01 model trả lại cả ghi chú cũ → hồ sơ không lặp 'mẹ già ở cùng'",
+    hs2().notes === "mẹ già ở cùng; muốn gần bệnh viện", JSON.stringify(hs2().notes));
+
+  fresh(seedKho);
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "phường 4", budget: "tầm 5 tỷ 8" } });
+  await send({ external_user_id: "kho-3", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ 8" });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ có căn #BDS-Q5-0001 hợp anh nè"] });
+  r = await send({ external_user_id: "kho-3", text: "có căn nào không em" });
+  check("KHO-03 kho CÓ căn → van không đụng lời model", r.body.replies.some((t) => /BDS-Q5-0001/.test(t)) && !r.body.replies.some((t) => /chưa có căn|lọc kho/.test(t)), JSON.stringify(r.body.replies));
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }
