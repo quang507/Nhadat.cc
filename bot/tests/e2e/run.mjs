@@ -1804,6 +1804,20 @@ fresh(seedKho);
   delete globalThis.__model.parseChu;
 }
 
+// ── 14/09: lượt đầu khách nói đủ khu vực + giá → câu lệnh NGỪNG dò hồ sơ ngay lượt đó ─
+{
+  const vaoMua = (c) => (c.params.messages ?? []).map((m) => (Array.isArray(m.content) ? m.content.map((x) => x.text ?? "").join("") : m.content)).join("\n");
+  fresh(seedKho);
+  await send({ external_user_id: "du-tc-1", text: "tìm nhà quận 5 tầm 6 tỷ" });
+  const u1 = vaoMua(parseCalls().at(-1));
+  check("DUTIEUCHI-01 lượt đầu 'tìm nhà quận 5 tầm 6 tỷ' (hồ sơ còn trống) → câu lệnh 'CHƯA BIẾT … không hỏi chủ động', không 'CÒN THIẾU'",
+    /CHƯA BIẾT \(chỉ NHẶT/.test(u1) && !/CÒN THIẾU \(hỏi theo thứ tự/.test(u1) && /NGỪNG hỏi hồ sơ/.test(u1), u1.slice(0, 400));
+  fresh(seedKho);
+  await send({ external_user_id: "du-tc-2", text: "tìm nhà quận 5 cho gia đình" });
+  const u2 = vaoMua(parseCalls().at(-1));
+  check("DUTIEUCHI-02 chưa nói giá → vẫn 'CÒN THIẾU' (được hỏi khoảng giá)", /CÒN THIẾU \(hỏi theo thứ tự/.test(u2), u2.slice(0, 400));
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

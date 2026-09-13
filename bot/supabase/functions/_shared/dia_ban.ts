@@ -92,7 +92,13 @@ export function bocQuan(kd: string, tho?: string): string | null {
   for (const [re, ten] of QUAN_TEN) if (re.test(kd)) return ten;
   if (tho && QUAN_TRONG_THO.test(tho)) return null;
   const m = QUAN_SO.exec(kd);
-  if (m && SAU_SO_LA_DON_VI.test(kd.slice(m.index + m[0].length))) return null;
+  // 14/09/2026 (bắn 16 hội thoại mua): luật đơn vị chạy trên chuỗi BỎ DẤU, nên "tầm"
+  // ≡ "tấm", "cần" ≡ "căn" — "tìm nhà quận 5 tầm 6 tỷ", "minh can mua nha q8 tam 4 ty"
+  // ra null (tin rao "quận 5 tầm 7 tỷ" cũng rơi về quận mặc định). Luật này sinh ra để
+  // chặn "quán 2 tầng" không dấu; câu gốc CHẮC là quận ("quận" có dấu, hoặc viết tắt
+  // q5 / Q.5) thì không cần nó.
+  const chacLaQuan = !!tho && /qu[ậâ]n(?=[^\p{L}]{0,3}\d)|(?:^|[^\p{L}\d])q\.?\s*\d/iu.test(tho);
+  if (m && !chacLaQuan && SAU_SO_LA_DON_VI.test(kd.slice(m.index + m[0].length))) return null;
   if (m) {
     const n = parseInt(m[1] ?? m[2] ?? "", 10);
     if (n >= 1 && n <= 12) return `Quận ${n}`;
