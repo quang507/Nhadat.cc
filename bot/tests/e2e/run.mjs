@@ -1617,6 +1617,16 @@ fresh(seedKho);
   check("GAN-07 'thôi khỏi cần gần bệnh viện' → gỡ khỏi hồ sơ, không lọc nữa",
     goiMoc.length === 0 && hoSo("gan-3").gan_tien_ich == null && hoSo("gan-3").gan_tien_ich_loc == null, JSON.stringify({ goiMoc, p: hoSo("gan-3") }));
 
+  // 14/09/2026: hồ sơ CHƯA có giá → lượt đọc "gần đâu" chạy song song với model
+  // chính (không chặn trước) — vẫn phải có đủ hai lượt và hồ sơ vẫn lưu điều kiện.
+  fresh(seedKho); goiMoc = []; globalThis.__rpc = mocGia();
+  globalThis.__model.parse = (p) => laLuotGan(p) ? GAN() : OUT();
+  r = await send({ external_user_id: "gan-song-song", text: "tìm nhà gần bệnh viện cho mẹ em" });
+  check("GAN-SONGSONG hồ sơ chưa có giá: đọc 'gần đâu' song song, hồ sơ vẫn lưu điều kiện, không lọc kho theo mốc lượt này",
+    parseCalls().length >= 1 && globalThis.__calls.some((c) => c.kind === "parse" && laLuotGan(c.params)) &&
+      /bệnh viện/.test(hoSo("gan-song-song").gan_tien_ich ?? "") && hoSo("gan-song-song").gan_tien_ich_loc?.loai === "benh_vien" && goiMoc.length === 0,
+    JSON.stringify({ p: hoSo("gan-song-song"), goiMoc }));
+
   // RPC hỏng → bỏ lọc (kho vẫn đủ căn), không để khách thấy kho trống vì lỗi phía mình.
   fresh(seedKho); goiMoc = [];
   globalThis.__rpc = { tin_gan_moc: (_d, a) => { goiMoc.push(a); return { data: null, error: { message: "timeout" } }; } };
