@@ -4,11 +4,12 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHuaCoHang, laNhanLaNguoi } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHuaCoHang, laNhanLaNguoi } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
+import { kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuMua } from "../supabase/functions/_shared/bao_lai.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => {
@@ -152,6 +153,38 @@ for (const [vao, mong] of [
   });
   ok("💡 không còn đuôi 'em'", /💡 Phù hợp: để ở hoặc cho thuê đều được\n/.test(tin), tin.split("\n").find((d) => d.startsWith("💡")) ?? "(không có dòng 💡)");
   ok("hiện trạng không còn 'luôn nha anh'", !/luôn nha anh/.test(tin), tin);
+}
+
+// ── 14/09 FR-207: 💾 đã báo thì bỏ ghi nhận lần hai; tóm tắt nói đủ dự án/tầng/nội thất ─
+{
+  const ra = boCauGhiNhan([
+    "Dạ em ghi số phòng ngủ 4 rồi ạ.",
+    "Hẻm xe hơi thì thanh khoản cao quá. Dạ em ghi 1 trệt 3 lầu, 4 phòng, sổ hồng riêng rồi. Nhà mình ở đường nào vậy ạ?",
+  ]);
+  ok("bỏ bong bóng chỉ có câu ghi nhận; bỏ câu ghi nhận giữa bong bóng, giữ khen + câu hỏi",
+    ra.length === 1 && ra[0] === "Hẻm xe hơi thì thanh khoản cao quá. Nhà mình ở đường nào vậy ạ?", JSON.stringify(ra));
+  const ra2 = boCauGhiNhan(["Dạ em ghi 9 tỷ 5, 1 trệt 2 lầu, 4 phòng ngủ rồi ạ. Nhà mình ở phường nào vậy?"]);
+  ok("câu đầu 'Dạ em ghi …' bị bỏ → câu còn lại mở bằng 'Dạ'", ra2[0] === "Dạ nhà mình ở phường nào vậy?", JSON.stringify(ra2));
+  const giu = ["📋 Em đăng tin như vầy nha anh:\nBán nhà…", "💾 Vừa lưu: giá: \"6 tỷ 5\"", "Dạ em ghi nhận rồi ạ.", "Sổ riêng thì khách chốt nhanh lắm anh."];
+  ok("không đụng bản nháp, 💾, ghi nhận trơ trọi, câu khen", JSON.stringify(boCauGhiNhan(giu)) === JSON.stringify(giu), JSON.stringify(boCauGhiNhan(giu)));
+}
+{
+  const nhan = { tang: "tầng", view: "view", ly_do_ban: "lý do bán", dien_tich: "diện tích", tho_cu: "diện tích thổ cư" };
+  const kem = kemLuotTao([
+    { question: "view", answer: "view sông" }, { question: "tang", answer: "15" }, { question: "dien_tich", answer: "76m2" },
+  ], nhan);
+  ok("lượt tạo tin: 'Kèm' chỉ fact tóm tắt cột chưa nói (view), không lặp tầng/diện tích", kem === 'Kèm: view: "view sông"', String(kem));
+  ok("lượt tạo tin: không còn fact nào ngoài tóm tắt → không có dòng Kèm", kemLuotTao([{ question: "dien_tich", answer: "60m2" }], nhan) === null);
+  const tt = tomTatDaLuu({ property_type: "chung_cu", deal: "cho_thue", ward: "Phường Tân Hưng", district: "Quận 7", area_m2: 76,
+    bedrooms: 2, price_raw: "18 triệu/tháng", price_vnd: 18e6, floor: 15, furnishing: "full", projects: { name: "Sunrise City" } }, [], {}, "thay_doi");
+  ok("tóm tắt căn hộ nói dự án ĐÃ GẮN, tầng căn, nội thất (bắn thật 14/09: thiếu cả ba)",
+    /dự án Sunrise City/.test(tt) && /tầng 15/.test(tt) && /nội thất đầy đủ/.test(tt) && !/trệt/.test(tt), tt);
+  ok("tomTatTrongCau đọc lại tóm tắt từ 💾 lượt tạo lẫn 📦 lượt sau",
+    tomTatTrongCau("💾 Đã lưu: Nhà phố bán · 60m²\nSai chỗ nào…") === "Nhà phố bán · 60m²" &&
+    tomTatTrongCau('💾 Vừa lưu: hướng: "đông nam"\n📦 Tin giờ: Nhà phố bán · hướng Đông Nam') === "Nhà phố bán · hướng Đông Nam");
+  const mua = vuaLuuMua({ area: "Quận 5" }, { area: "Quận 5", budget: "7 tỷ", deal: "ban", ten_tro_ly: "H•ai", xung_ho: "chị", gan_tien_ich_loc: { m: 1000 } },
+    [["deal", "mua hay thuê"], ["area", "khu vực muốn tìm (phường nào)"], ["budget", "khoảng giá"]]);
+  ok("người mua: chỉ khoá ĐỔI, không khoá nội bộ, deal 'ban' đọc là 'mua'", mua === "💾 Đã lưu nhu cầu: mua hay thuê: mua · khoảng giá: 7 tỷ", String(mua));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

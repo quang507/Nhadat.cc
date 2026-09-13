@@ -138,6 +138,33 @@ export function gopGhiChu(cu: string | null | undefined, moi: string | null | un
  * nói rõ ghi gì thì phải giữ bong bóng đó.
  */
 export function laCauGhiNhan(tin: string): boolean {
+  return laCauGhiNhanMot(tin);
+}
+
+/**
+ * Bỏ các câu ghi nhận CÓ nội dung ("Dạ em ghi 9 tỷ 5, 4 phòng ngủ rồi ạ.") khỏi các
+ * bong bóng — dùng khi bong bóng 💾 đã báo đúng thứ đã lưu (FR-207). Không đụng bản
+ * nháp (📋), 💾, 📝. Câu đầu bị bỏ mà câu đầu cũ mở bằng "Dạ" thì câu còn lại mở
+ * bằng "Dạ" để khỏi cụt lủn. Bong bóng rỗng thì bỏ.
+ */
+export function boCauGhiNhan(replies: string[]): string[] {
+  const ra: string[] = [];
+  for (const r of replies) {
+    if (/^(📋|💾|📝)/u.test(r)) { ra.push(r); continue; }
+    const cau = tachCau(r);
+    const giu = cau.filter((c) => !laCauGhiNhanMot(c));
+    if (giu.length === cau.length) { ra.push(r); continue; }
+    if (!giu.length) continue;
+    let dau = giu[0];
+    if (giu[0] !== cau[0] && /^dạ\s/iu.test(cau[0]) && !/^dạ\s/iu.test(dau)) {
+      dau = `Dạ ${dau.charAt(0).toLocaleLowerCase("vi")}${dau.slice(1)}`;
+    }
+    ra.push([dau, ...giu.slice(1)].join(" "));
+  }
+  return ra;
+}
+
+function laCauGhiNhanMot(tin: string): boolean {
   const dau = boDau(tachCau(tin.trim())[0] ?? "");
   const m = /^(?:da|vang)?[\s,]*(?:em\s+)?(?:da\s+)?(?:ghi|sua|cap nhat|chinh)(?:\s+(?:lai|nhan|ro|chuan))?\b/.exec(dau);
   if (!m) return false;
