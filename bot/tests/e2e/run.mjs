@@ -1782,6 +1782,28 @@ fresh(seedKho);
   delete globalThis.__cauHinh;
 }
 
+// ── 14/09: nhánh mua KHÔNG còn structured output (chậm gấp đôi) — đọc JSON từ chữ ──
+{
+  fresh(seedKho);
+  const jsonDu = JSON.stringify({ ...OUT({ replies: ["Dạ chị cần mấy phòng ngủ ạ?"] }), profile: { ...OUT().profile, area: "quận 5", budget: "tầm 7 tỷ" }, voice_request: false });
+  globalThis.__model.parseChu = () => "Đây là JSON:\n" + jsonDu + "\n";
+  r = await send({ external_user_id: "json-chu-1", text: "tìm nhà quận 5 tầm 7 tỷ" });
+  const cMua = parseCalls().at(-1);
+  check("JSONCHU-01 model trả CHỮ có JSON (kèm chữ thừa) → đọc đúng câu trả lời và hồ sơ",
+    r.body.replies.some((x) => x === "Dạ chị cần mấy phòng ngủ ạ?") && db().t.buyers.find((b) => b.zalo_user_id === "json-chu-1")?.preferences?.budget === "tầm 7 tỷ",
+    JSON.stringify({ rep: r.body.replies, p: db().t.buyers.find((b) => b.zalo_user_id === "json-chu-1")?.preferences }));
+  check("JSONCHU-02 lượt gọi tới Anthropic không có output_config.format, không lọt _khuon_du_phong (lớp lọc gỡ); khối nhớ tạm có ĐẦU RA + JSON Schema",
+    !cMua.params.output_config?.format && /ĐẦU RA: trả về DUY NHẤT một object JSON/.test(cMua.params.system[0].text) && /"voice_request"/.test(cMua.params.system[0].text) && !("_khuon_du_phong" in cMua.params),
+    JSON.stringify({ oc: cMua.params.output_config, co: !!cMua.params._khuon_du_phong }));
+  fresh(seedKho);
+  globalThis.__model.parseChu = () => "{ hỏng mất rồi";
+  r = await send({ external_user_id: "json-chu-2", text: "tìm nhà quận 5 tầm 7 tỷ" });
+  check("JSONCHU-03 chữ không phải JSON hợp lệ → rơi về đường dự phòng (vẫn trả lời) + ghi sổ 'chat-reply model JSON hong'",
+    r.status === 200 && r.body.replies.length > 0 && db().t.bot_errors.some((e) => /model JSON hong/.test(e.source ?? "")),
+    JSON.stringify({ rep: r.body.replies, err: (db().t.bot_errors ?? []).map((e) => e.source) }));
+  delete globalThis.__model.parseChu;
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

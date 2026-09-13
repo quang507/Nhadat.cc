@@ -22,6 +22,10 @@ export default class Anthropic {
       },
       parse: async (params) => {
         globalThis.__calls.push({ kind: "parse", params });
+        // 14/09/2026: nhánh mua bỏ structured output — model thật trả CHỮ JSON, không
+        // có parsed_output. `__model.parseChu` giả lập đúng đường đó.
+        const chu = globalThis.__model?.parseChu?.(params);
+        if (typeof chu === "string") return { stop_reason: "end_turn", parsed_output: null, content: [{ type: "text", text: chu }], usage: usage() };
         const out = globalThis.__model?.parse?.(params) ?? null;
         return { stop_reason: "end_turn", parsed_output: out, content: [], usage: usage() };
       },
