@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-13 23:39 (giờ VN)
+-- Sinh lúc: 2026-09-14 00:57 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -663,7 +663,7 @@ do $d$ begin
   alter table public.listings add constraint listings_status_check CHECK ((status = ANY (ARRAY['cho_thong_tin'::text, 'dang_ban'::text, 'dang_quan_tam'::text, 'da_chot'::text, 'an'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
-  alter table public.listings add constraint listings_toa_do_muc_check CHECK (((toa_do_muc IS NULL) OR (toa_do_muc = ANY (ARRAY['duong'::text, 'phuong'::text, 'du_an'::text, 'tay'::text]))));
+  alter table public.listings add constraint listings_toa_do_muc_check CHECK (((toa_do_muc IS NULL) OR (toa_do_muc = ANY (ARRAY['duong'::text, 'phuong'::text, 'quan'::text, 'du_an'::text, 'tay'::text]))));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.listings add constraint listings_ward_source_check CHECK ((ward_source = ANY (ARRAY['suy_doan'::text, 'chu_xac_nhan'::text, 'admin'::text])));
@@ -5452,7 +5452,10 @@ AS $function$
           (l.lat is null and (coalesce(btrim(l.location_raw), '') <> ''
                               or coalesce(btrim(l.street), '') <> ''
                               or coalesce(btrim(l.ward), '') <> ''
-                              or p.lat is not null))
+                              or p.lat is not null
+                              -- 14/09/2026: chỉ có quận/huyện THẬT (không phải mặc định)
+                              or (coalesce(btrim(l.district), '') <> ''
+                                  and not coalesce((l.boc_tach ->> 'quan_mac_dinh')::boolean, false))))
           or (l.lat is not null and l.tien_ich_at is null)
         )
     and (l.geocode_at is null or l.geocode_at < now() - interval '12 hours')

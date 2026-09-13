@@ -181,8 +181,8 @@ Deno.serve(async (req) => {
     }
 
     // ── Bước 2: tiện ích quanh tin ──
-    // Tâm phường không đủ để đo "cách 1 km" — đánh dấu đã xét, không nạp.
-    if (muc === "phuong") {
+    // Tâm phường / tâm quận-huyện không đủ để đo "cách 1 km" — đánh dấu đã xét, không nạp.
+    if (muc === "phuong" || muc === "quan") {
       await db.from("listings").update({ tien_ich_gan: null, tien_ich_at: luc }).eq("id", row.id);
       continue;
     }

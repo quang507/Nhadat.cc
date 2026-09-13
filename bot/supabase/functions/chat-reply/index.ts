@@ -909,8 +909,12 @@ Deno.serve(async (req) => {
   // FR-186: câu riêng theo loại BĐS ("huong@chung_cu") — truyền `loai` khi biết.
   // 13/09/2026: tin ở HUYỆN / thị xã / tỉnh lân cận thì hỏi XÃ, ở MỌI lượt — bản
   // trước chỉ đổi ở câu hỏi đầu, lượt sau vẫn "Nhà mình ở phường nào" cho đất Củ Chi.
-  const cauHoiMau = (k: string, ac: string, loai?: string | null, quan?: string | null) =>
-    cauHoiMauGoc(k === "phuong" && laNgoaiDoThi(quan) ? "phuong@huyen" : k, ac, BANG_CAU, loai);
+  // 14/09/2026: câu "gấp" của tin CHO THUÊ khác tin bán — truyền `deal` khi biết.
+  const cauHoiMau = (k: string, ac: string, loai?: string | null, quan?: string | null, deal?: string | null) =>
+    cauHoiMauGoc(
+      k === "phuong" && laNgoaiDoThi(quan) ? "phuong@huyen" : k === "gap" && deal === "cho_thue" ? "gap@cho_thue" : k,
+      ac, BANG_CAU, loai,
+    );
   const LOI_CHAO_DB = dienTen((P.loi_chao ?? LOI_CHAO).trim(), tenBot);
   const HUMAN = P.human_chat_rules ?? HUMAN_CHAT_RULES;
   const FEES = P.fee_rules ?? FEE_RULES;
@@ -1764,13 +1768,13 @@ ${kem}` : tomTat, cheDo };
         code: string | null; status?: string | null;
         location_raw: string | null; ward?: string | null; unit_code?: string | null;
         property_type?: string | null; project_id?: string | null; area_m2?: number | null;
-        district?: string | null;
+        district?: string | null; deal?: string | null;
       };
     };
     const [{ data: pendings }] = await Promise.all([
       client
         .from("info_requests")
-        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, district, unit_code, property_type, project_id, area_m2)")
+        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, district, deal, unit_code, property_type, project_id, area_m2)")
         .eq("listings.seller_id", sellerRow.id)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
@@ -2342,7 +2346,7 @@ ${kem}` : tomTat, cheDo };
       // nó đi phân loại và nó thành ĐỊA CHỈ. Nhận lời sửa rồi hỏi lại câu đang treo
       // trong CÙNG một bong bóng.
       if (ackSua && conChu.length < 2 && pendingReq.question !== "duyet_tin" && !humanActive) {
-        const cauSua = `${ackSua} ${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district)}`;
+        const cauSua = `${ackSua} ${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`;
         ackSua = null;
         return await traLoiSeller([cauSua], { sua_fact: true, reask: pendingReq.question });
       }
@@ -2711,7 +2715,7 @@ ${kem}` : tomTat, cheDo };
         // Chưa đủ điểm: giữ câu treo, nói còn thiếu gì rồi hỏi lại câu đó.
         const thieuVan = nhap.slice(0, 2).join(" và ");
         return await traLoiSeller(
-          [`Dạ em đăng liền cho ${cachGoi}, chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.\n${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district)}`],
+          [`Dạ em đăng liền cho ${cachGoi}, chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.\n${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`],
           { chu_muon_dang: true, thieu: nhap, reask: pendingReq.question },
         );
       }
@@ -2769,7 +2773,7 @@ ${kem}` : tomTat, cheDo };
       const prompt = nextKey
         ? `${boiCanh}${daAck}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n` +
           `Viết MỘT tin dưới 30 từ như người thật nhắn Zalo: nhắc lại chi tiết vừa nghe kèm MỘT câu khích lệ có nghĩa gắn với khách mua (chỉ khi có gì đáng nói thật, không khen suông) - rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
-          `CÂU HỎI CUỐI TIN BẮT BUỘC là ý này: "${cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district)}" — được diễn đạt lại cho hợp mạch nhưng KHÔNG đổi sang hỏi thứ khác, kể cả khi em thấy chủ nhà đã nói rồi hay em muốn hỏi thứ tiếp theo (hệ thống ghi câu trả lời theo đúng câu này; hỏi lệch là ghi sai ô). ` +
+          `CÂU HỎI CUỐI TIN BẮT BUỘC là ý này: "${cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}" — được diễn đạt lại cho hợp mạch nhưng KHÔNG đổi sang hỏi thứ khác, kể cả khi em thấy chủ nhà đã nói rồi hay em muốn hỏi thứ tiếp theo (hệ thống ghi câu trả lời theo đúng câu này; hỏi lệch là ghi sai ô). ` +
           (nhieuCan
             ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
             : `Người này chỉ có một căn: KHÔNG nhắc mã tin. `) +
@@ -2807,7 +2811,7 @@ ${kem}` : tomTat, cheDo };
         // bóng ghi nhận thì vào thẳng câu hỏi.
         const moDau = ackSua ? "" : "Dạ em ghi rồi ạ. ";
         sellerReply = nextKey
-          ? `${moDau}${neo ? `Căn ${neo} nha. ` : ""}${cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district)}`
+          ? `${moDau}${neo ? `Căn ${neo} nha. ` : ""}${cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`
           : thieuDiem.length
           ? `${moDau}Để tin đủ điều kiện đăng, ${cachGoi} cho em hỏi thêm ${thieuDiem[0]} nha?`
           : published
@@ -3028,7 +3032,7 @@ ${kem}` : tomTat, cheDo };
             ? cauHoiMau(firstKey === "phuong" ? "phuong@chua_quan" : "vi_tri@chua_quan", cachGoi, loaiMoi)
             : firstKey === "vi_tri" && loaiMoi !== "chung_cu" && loaiMoi !== "dat"
             ? cauHoiMau("vi_tri@lan_dau", cachGoi, loaiMoi)
-            : cauHoiMau(firstKey, cachGoi, loaiMoi))
+            : cauHoiMau(firstKey, cachGoi, loaiMoi, quanDoc, sDeal))
           : null;
         let raoReply: string | null = null;
         if (anthropicS) {
@@ -3099,7 +3103,7 @@ ${kem}` : tomTat, cheDo };
     const factRoi = wantsSell ? [] : nhanDienNhieuFact(text).filter((f) => f.question !== "bo_sung");
     if (factRoi.length) {
       const { data: canNeo } = await client.from("listings")
-        .select("id, code, status, can_chu_duyet, chu_duyet_at, property_type")
+        .select("id, code, status, can_chu_duyet, chu_duyet_at, property_type, district, deal")
         .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban"])
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (canNeo) {
@@ -3120,7 +3124,7 @@ ${kem}` : tomTat, cheDo };
           if (keRoi && keRoi !== "hinh_anh") {
             const { error: irRoi } = await client.from("info_requests").insert({ listing_id: canNeo.id, question: keRoi, status: "pending" });
             if (irRoi && irRoi.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(roi)", irRoi.message);
-            return await traLoiSeller([`Dạ em ghi ${daGhi} rồi ạ.\n${cauHoiMau(keRoi, cachGoi, canNeo.property_type)}`], { saved_fact: factRoi.map((f) => f.question), asked: keRoi });
+            return await traLoiSeller([`Dạ em ghi ${daGhi} rồi ạ.\n${cauHoiMau(keRoi, cachGoi, canNeo.property_type, canNeo.district, canNeo.deal)}`], { saved_fact: factRoi.map((f) => f.question), asked: keRoi });
           }
           const nhapRoi = await guiBanNhap(canNeo.id, { saved_fact: factRoi.map((f) => f.question) });
           if (!Array.isArray(nhapRoi)) return nhapRoi;

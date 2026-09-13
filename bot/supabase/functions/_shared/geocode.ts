@@ -12,8 +12,13 @@ export type TinCanToaDo = {
   quan_mac_dinh: boolean;
 };
 
-/** duong = tâm một đoạn đường (đủ cho "cách 1 km"); phuong = tâm phường (không đủ). */
-export type MucToaDo = "duong" | "phuong";
+/**
+ * duong = tâm một đoạn đường (đủ cho "cách 1 km"); phuong = tâm phường (không đủ);
+ * quan = tâm quận/huyện (14/09/2026: tin CHỈ nói huyện, vd "bán đất Củ Chi" — trước
+ * đó không vào hàng tra, nằm không toạ độ mãi). Hai mức sau không dùng cho tìm gần
+ * mốc (`tin_gan_moc` chỉ nhận duong/du_an/tay) và không nạp tiện ích.
+ */
+export type MucToaDo = "duong" | "phuong" | "quan";
 export type CauTra = { q: string; muc: MucToaDo };
 
 const boDau = (s: string): string =>
@@ -86,6 +91,13 @@ export function queriesFor(l: TinCanToaDo): CauTra[] {
   if (phuong) {
     them([phuong, quan, tp], "phuong");
     them([boDau(phuong), boDau(quan), tpKd], "phuong");
+  }
+  // Chỉ có quận/huyện (không đường, không phường): tâm quận/huyện. Có đường/phường mà
+  // tra hỏng thì KHÔNG lùi về tâm quận — tin sẽ đứng ở mức thô đó mãi, lượt sau không
+  // tra lại mức tốt hơn.
+  if (!duong && !phuong && quan) {
+    them([quan, tp], "quan");
+    them([boDau(quan), tpKd], "quan");
   }
   return out;
 }

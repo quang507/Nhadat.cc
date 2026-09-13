@@ -97,6 +97,12 @@ const soChung = queriesFor({ location_raw: "Đường số 7", street: null, war
 dung("'Đường số 7' trùng khắp nơi → luôn kèm phường", soChung.filter((c) => c.muc === "duong").every((c) => /An Lac|An Lạc/.test(c.q)), JSON.stringify(soChung));
 const chiPhuong = queriesFor({ location_raw: null, street: null, ward: "Phường 4", district: "Quận 5", quan_mac_dinh: false });
 dung("chỉ có phường → mức 'phuong' (không dùng đo 1 km)", chiPhuong.length > 0 && chiPhuong.every((c) => c.muc === "phuong"), JSON.stringify(chiPhuong));
+// 14/09/2026 (bắn thật): "bán đất Củ Chi" chỉ có huyện — trước không có câu tra nào.
+const chiHuyen = queriesFor({ location_raw: null, street: null, ward: null, district: "Huyện Củ Chi", quan_mac_dinh: false });
+dung("chỉ có huyện → câu tra tâm huyện, mức 'quan'", chiHuyen.length > 0 && chiHuyen.every((c) => c.muc === "quan") && chiHuyen[0].q === "Huyện Củ Chi, Thành phố Hồ Chí Minh", JSON.stringify(chiHuyen));
+dung("chỉ có quận MẶC ĐỊNH (chưa ai nói) → không tra gì", queriesFor({ location_raw: null, street: null, ward: null, district: "Quận 5", quan_mac_dinh: true }).length === 0);
+dung("có phường thì KHÔNG lùi về tâm quận", chiPhuong.every((c) => c.muc !== "quan"), JSON.stringify(chiPhuong));
+dung("có đường thì KHÔNG lùi về tâm quận", ehome.every((c) => c.muc !== "quan"), JSON.stringify(ehome));
 dung("street (cột đã bóc) thắng location_raw", queriesFor({ location_raw: "nhà đẹp gần chợ", street: "Hồ Ngọc Lãm", ward: null, district: null, quan_mac_dinh: false })[0]?.q === "Hồ Ngọc Lãm, Thành phố Hồ Chí Minh");
 
 const da = queriesDuAn({
