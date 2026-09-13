@@ -320,6 +320,9 @@ export const CAU_HOI_MAU: Record<string, string> = {
   tiem_nang: "Nhà mình hợp để ở hay kinh doanh ngành gì {ac}?",
   ngung_rao_can_nao: "{Ac} muốn ngưng rao căn nào ạ? Nhắn số thứ tự hoặc địa chỉ giúp em.",
   gap: "Mình cần ra hàng gấp hay được giá thì thôi {ac}?",
+  // 14/09/2026: tin CHO THUÊ mà hỏi "ra hàng gấp hay được giá" là hỏi câu của tin bán
+  // (bắn thật: căn hộ Sunrise City cho thuê 18 triệu/tháng).
+  "gap@cho_thue": "Mình cần cho thuê gấp hay chờ được khách hợp ý {ac}?",
   danh_gia: "{Ac} thấy em nói chuyện có giống người thật không, có làm mất thời gian {ac} không ạ?\nNếu chấm cách em chăm sóc thì {ac} cho em mấy điểm trên 10 ạ?",
   gia: "{Ac} muốn thu về tầm bao nhiêu ạ?",
   dien_tich: "Diện tích trên sổ bao nhiêu, ngang dài thế nào {ac}?",

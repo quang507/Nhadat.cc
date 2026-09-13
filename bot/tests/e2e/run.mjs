@@ -1723,6 +1723,30 @@ fresh(seedKho);
     JSON.stringify(r.body.replies));
 }
 
+// ── 14/09: tin CHO THUÊ hỏi câu gấp của tin thuê, không phải "ra hàng gấp hay được giá" ─
+{
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+  const thue = (d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-gapthue", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-CH-Q7-0009", seller_id: s.id, deal: "cho_thue", status: "cho_thong_tin", property_type: "chung_cu", location_raw: "Sunrise City", ward: "Phường Tân Hưng", district: "Quận 7", price_raw: "18 triệu/tháng", price_vnd: 18e6, area_m2: 76, can_chu_duyet: true }).data;
+    d.insert("info_requests", { listing_id: l.id, question: "gap", status: "pending" });
+    return l;
+  };
+  fresh(thue);
+  globalThis.__model.parse = () => { throw new Error("model chết"); };
+  globalThis.__model.create = () => { throw new Error("model chết"); };
+  r = await send({ external_user_id: "z-gapthue", text: "ok em" });
+  const tatCa = JSON.stringify(r.body.replies);
+  check("GAPTHUE-01 tin cho thuê đang treo câu gấp, hỏi lại → câu của tin THUÊ, không 'ra hàng gấp hay được giá'",
+    /cho thuê gấp hay chờ được khách/.test(tatCa) && !/ra hàng gấp/.test(tatCa), tatCa);
+  fresh((d) => { const l = thue(d); l.deal = "ban"; });
+  globalThis.__model.parse = () => { throw new Error("model chết"); };
+  globalThis.__model.create = () => { throw new Error("model chết"); };
+  r = await send({ external_user_id: "z-gapthue", text: "ok em" });
+  check("GAPTHUE-02 tin BÁN vẫn câu cũ 'ra hàng gấp hay được giá'", /ra hàng gấp/.test(JSON.stringify(r.body.replies)), JSON.stringify(r.body.replies));
+  delete globalThis.__cauHinh;
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }
