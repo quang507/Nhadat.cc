@@ -1695,6 +1695,13 @@ fresh(seedKho);
   globalThis.__model.parse = () => OUT({ replies: ["Dạ có căn #BDS-Q5-0001 hợp anh nè"] });
   r = await send({ external_user_id: "kho-3", text: "có căn nào không em" });
   check("KHO-03 kho CÓ căn → van không đụng lời model", r.body.replies.some((t) => /BDS-Q5-0001/.test(t)) && !r.body.replies.some((t) => /chưa có căn|lọc kho/.test(t)), JSON.stringify(r.body.replies));
+  // 13/09 lượt bắn thứ hai: "em là người hay máy vậy" → model nhận là người thật.
+  fresh();
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ em là M•ai bên AI Ơi Nhà Đất ạ. Em là người thật, không phải máy đâu anh/chị. Mình đang tìm mua hay thuê nhà ạ?"] });
+  r = await send({ external_user_id: "nguoi-1", text: "tôi muốn tìm nhà, mà em là người hay máy vậy" });
+  check("NGUOI-01 model nhận là người thật → câu đó bị thay bằng 'trợ lý AI', giữ câu hỏi quay lại việc",
+    !r.body.replies.some((t) => /người thật, không phải máy/.test(t)) && r.body.replies.some((t) => /trợ lý AI/.test(t) && /tìm mua hay thuê/.test(t)),
+    JSON.stringify(r.body.replies));
 }
 
 // ── kết ──

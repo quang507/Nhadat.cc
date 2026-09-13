@@ -161,5 +161,35 @@ for (const [vao, mong] of [
   ["bán nhà q6 phường 2 40m2 3 tỷ 9", null],
 ]) ok("bocViTriRao " + JSON.stringify(vao.slice(0, 44)), bocViTriRao(vao) === mong, JSON.stringify(bocViTriRao(vao)));
 
+// ── 13/09/2026 — LƯỢT BẮN 20 TIN THỨ HAI: luật trả NGUYÊN câu làm đáp án ─────
+// Soi DB sau lượt bắn: độ rộng hẻm = cả câu rao, nội thất = "gia đình cần tiền nên
+// để lại căn nhà…", tiềm năng = "cho thuê căn hộ Sunrise City quận 7", pháp lý =
+// "ngang 5 dài 20, đường nhựa 7m, sổ riêng", lý do bán "can tien" mất dấu.
+{
+  const F = (t) => Object.fromEntries(nhanDienNhieuFact(t).map((f) => [f.question, f.answer]));
+  const a = F("anh cần bán căn nhà hẻm xe hơi 5m Nguyễn Trãi phường 3 quận 5, 60m2, ngang 4 dài 15, 1 trệt 2 lầu, 3 phòng ngủ 2 wc, sổ hồng riêng hoàn công, giá 7 tỷ 2 thương lượng");
+  ok("câu rao đủ: độ rộng hẻm là 'hẻm xe hơi 5m', không phải cả câu", a.do_rong_hem === "hẻm xe hơi 5m", JSON.stringify(a));
+  ok("câu rao đủ: pháp lý là mảnh 'sổ hồng riêng hoàn công'", a.phap_ly === "sổ hồng riêng hoàn công", a.phap_ly);
+  const b = F("nhà hướng đông nam, để ở hoặc cho thuê đều được em");
+  ok("hướng cắt 'hướng đông nam' (không kèm 'nhà')", b.huong === "hướng đông nam", JSON.stringify(b));
+  const c = F("cho thuê căn hộ Sunrise City quận 7, 76m2, 2 phòng ngủ, tầng 15 view sông, full nội thất, 18 triệu một tháng");
+  ok("căn hộ thuê: KHÔNG có tiềm năng = 'cho thuê căn hộ Sunrise City…'", !("tiem_nang" in c), JSON.stringify(c));
+  ok("căn hộ thuê: tầng 15, nội thất 'full nội thất', view 'view sông'", c.tang === "15" && c.noi_that === "full nội thất" && c.view === "view sông", JSON.stringify(c));
+  const d = F("gia đình cần tiền nên để lại căn nhà 4x16 hẻm xe hơi Trần Hưng Đạo quận 5, sổ hồng riêng");
+  ok("'để lại căn nhà' là BÁN — không thành nội thất", !("noi_that" in d), JSON.stringify(d));
+  ok("lý do bán giữ dấu 'cần tiền'", d.ly_do_ban === "cần tiền", d.ly_do_ban);
+  const e = F("ngang 5 dài 20, đường nhựa 7m, sổ riêng");
+  ok("đất: pháp lý 'sổ riêng', đường vào 'đường nhựa 7m' (không phải cả câu)", e.phap_ly === "sổ riêng" && e.duong_vao === "đường nhựa 7m", JSON.stringify(e));
+  const g = phanLoaiCauTraLoi("phuong", "ngang 5 dài 20, đường nhựa 7m, sổ riêng");
+  ok("đang hỏi xã mà trả lời thông số → lệch, chuyển sang pháp lý 'sổ riêng' (không cả câu)", g.loai === "lech" && g.chuyenSang?.answer === "sổ riêng", JSON.stringify(g));
+  // KHÔNG được làm hỏng
+  const h = F("để lại máy lạnh, tủ lạnh");
+  ok("'để lại máy lạnh, tủ lạnh' vẫn là nội thất", h.noi_that != null, JSON.stringify(h));
+  const i = F("nhà hợp để ở hoặc cho thuê");
+  ok("'nhà hợp để ở hoặc cho thuê' vẫn là tiềm năng", i.tiem_nang != null, JSON.stringify(i));
+  const j = F("sổ hồng riêng");
+  ok("câu một mảnh 'sổ hồng riêng' → pháp lý nguyên câu", j.phap_ly === "sổ hồng riêng", JSON.stringify(j));
+}
+
 console.log(hong ? `\nBÓC TÁCH 42 CA: ${hong}/${tong} CA HỎNG` : `\nBÓC TÁCH 42 CA: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
