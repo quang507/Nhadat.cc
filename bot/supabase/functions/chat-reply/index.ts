@@ -3826,6 +3826,10 @@ ${kem}` : tomTat, cheDo };
           (minimumMet
             ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) - NGỪNG hỏi hồ sơ, chuyển sang gợi ý căn khớp và để khách dẫn chuyện.\n"
             : "CHƯA đủ tiêu chí tối thiểu (khu vực + giá) - chưa gợi ý căn trừ khi khách hỏi thẳng một căn.\n") +
+          // 14/09/2026 (bắn thật, FR-207): khách thấy "💾 Đã lưu nhu cầu: … để ở" rồi câu
+          // ngay sau lại "chị muốn ở hay kinh doanh?" — model tự điền `purpose` từ "nhà có
+          // mẹ già" rồi vẫn hỏi theo danh sách CÒN THIẾU (đọc từ hồ sơ ĐẦU lượt).
+          "Trường nào em ĐIỀN vào profile ở CHÍNH lượt này (kể cả suy ra từ lời khách) là ĐÃ BIẾT - KHÔNG hỏi lại trường đó trong replies; khách sẽ thấy ngay dòng báo đã lưu.\n" +
           (interrogated
             ? "Hai tin trước em đều đã đặt câu hỏi - lượt này ĐƯA GIÁ TRỊ trước (gợi ý/thông tin), hỏi thật nhẹ hoặc không hỏi.\n"
             : "") +
