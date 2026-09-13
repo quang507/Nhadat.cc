@@ -107,10 +107,14 @@ export function docTien(p: string | null | undefined): number | null {
   t = t.replace(/([0-9])\s*ty\s*([0-9])/g, "$1 _ty $2");
   // "3tr5" = 3,5 triệu (lượt bắn 42 ca 11/09: phòng trọ "3tr5 một tháng" rơi giá).
   t = t.replace(/([0-9])\s*tr\s*([0-9])/g, "$1 _trieu $2");
-  t = t.replace(/([0-9])\s*t\s*([0-9])/g, "$1 _ty $2");
+  // 13/09/2026 (review code): "1t2l" / "1t 2l" là 1 trệt 2 lầu — `TIEN_T_KEP` ở
+  // trên đã chặn, còn hàm này thì không, đọc ra 1,2 tỷ. Số sau "t" mà dính chữ,
+  // hoặc "t" trơ trọi mà sau là "<số> l/lầu" thì không phải tiền. SQL `parse_vnd`
+  // cùng luật (20260913b), ca ở `bot/tests/luat/tien.json`.
+  t = t.replace(/([0-9])\s*t\s*([0-9]{1,3})(?![\p{L}\p{N}])/gu, "$1 _ty $2");
   t = t.replace(/([0-9])\s*ty(?![\p{L}\p{N}_])/gu, "$1 _ty ");
   t = t.replace(/([0-9])\s*tr(?![\p{L}\p{N}_])/gu, "$1 _trieu ");
-  t = t.replace(/([0-9])\s*t(?![\p{L}\p{N}_])/gu, "$1 _ty ");
+  t = t.replace(/([0-9])\s*t(?![\p{L}\p{N}_])(?!\s*[0-9]+\s*(?:l|lầu|lau)(?![\p{L}]))/gu, "$1 _ty ");
 
   // Phần lẻ sau đơn vị: "5 tỷ 5" = 5,5 tỷ · "3 tỷ 200" = 3,2 tỷ. Không nuốt
   // "5 tỷ 50m2" (diện tích) — cấm chữ số lẫn "m" đứng ngay sau.

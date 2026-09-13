@@ -33,6 +33,34 @@ la("facebook kèm tên", gon(thayLienHe("fb: nha.dat.q5", NHAN_BOT)), gon(NHAN_B
 la("KHÔNG đụng giá tiền: '5 tỷ 2'", thayLienHe("giá 5 tỷ 2", NHAN_BOT), "giá 5 tỷ 2");
 la("KHÔNG đụng diện tích: '4x15, 60m2'", thayLienHe("4x15, 60m2", NHAN_BOT), "4x15, 60m2");
 la("KHÔNG đụng số nhà ngắn: 'hẻm 572/12'", thayLienHe("hẻm 572/12", NHAN_BOT), "hẻm 572/12");
+// ── 13/09/2026 (review code): chữ sau "Zalo" bị nuốt, số tiền dài bị che ──────
+const L = gon(NHAN_BOT);
+for (const [cau, mong] of [
+  ["Chat Zalo trao đổi thêm", `Chat ${L} trao đổi thêm`],
+  ["Liên hệ Zalo nhé anh", `Liên hệ ${L} nhé anh`],
+  ["Đã gửi qua Zalo rồi ạ", `Đã gửi qua ${L} rồi ạ`],
+  ["Em nhắn Zalo cho mình nha", `Em nhắn ${L} cho mình nha`],
+  ["nhắn zalo cho minh nha", `nhắn ${L} cho minh nha`],
+  ["Diện tích 100m2, giá 10.000.000.000", "Diện tích 100m2, giá 10.000.000.000"],
+  ["giá 1000000000 đ", "giá 1000000000 đ"],
+  ["giá 84.000.000.000", "giá 84.000.000.000"],
+  ["doanh thu 1.200.000.000/năm", "doanh thu 1.200.000.000/năm"],
+  ["mã số thuế 0312345678901", "mã số thuế 0312345678901"],
+]) la(`KHÔNG làm hỏng: ${JSON.stringify(cau)}`, gon(thayLienHe(cau, NHAN_BOT)), mong);
+// VẪN phải che — vá ranh giới mà để lọt SĐT là tệ hơn lỗi cũ.
+for (const [cau, mong] of [
+  ["zalo 0903123456", L],
+  ["Zalo: nhadat.q5", L],
+  ["zalo:0903.123.456 anh Tuấn", `${L} anh Tuấn`],
+  ["fb nha.dat.q5 nha", `${L} nha`],
+  ["facebook.com/nhadatq5", L],
+  ["lh:0903123456", `lh: ${L}`],
+  ["gọi 090.312.3456 nhé", `gọi ${L} nhé`],
+  ["sdt 84903123456", `sdt ${L}`],
+  ["bàn 028 3855 1234", `bàn ${L}`],
+  ["giá 5 tỷ, lh 0903123456", `giá 5 tỷ, lh ${L}`],
+]) la(`VẪN che: ${JSON.stringify(cau)}`, gon(thayLienHe(cau, NHAN_BOT)), mong);
+
 la("coSdt gọi hai lần liền trên cùng câu vẫn true (không kẹt lastIndex)",
   [coSdt("0903123456"), coSdt("0903123456")].join(","), "true,true");
 
