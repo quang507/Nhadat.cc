@@ -190,6 +190,8 @@ for (const [vao, mong] of [
 // ── 14/09 bắn lại kịch bản 7 (người mua) ──────────────────────────────────────
 ok("kho: 'Chị xem những căn này có hợp không ạ?' là nói như đã gửi căn", laHuaCoHang("Chị xem những căn này có hợp không ạ?"));
 ok("kho: 'Chị thấy căn này thế nào ạ?' (một căn khách đang hỏi) không dính mẫu 'những căn này'", !laHuaCoHang("Chị thấy căn này thế nào ạ?"));
+ok("kho: 'Dạ chị, em tìm cho mấy căn 3PN hẻm xe hơi…' (chữ 'cho' chen giữa) là hứa có căn", laHuaCoHang("Dạ chị, em tìm cho mấy căn 3PN hẻm xe hơi quanh bệnh viện Chợ Rẫy trong tầm 7 tỷ."));
+ok("kho: 'em tìm cho chị vài căn' vẫn bắt; 'em tìm cho chị nha' không có căn nào thì không", laHuaCoHang("Em tìm cho chị vài căn nha.") && !laHuaCoHang("Em tìm cho chị nha."));
 ok("ghi nhận: 'Dạ chị, em ghi lại: mua nhà Quận 5…' là ghi nhận có nội dung", laCauGhiNhan("Dạ chị, em ghi lại: mua nhà Quận 5 tầm 7 tỷ, gần bệnh viện cho mẹ. Chị cần mấy phòng ngủ ạ?"));
 {
   const ra = boCauGhiNhan(["Dạ chị, em ghi lại: mua nhà Quận 5 tầm 7 tỷ, gần bệnh viện cho mẹ. Chị cần mấy phòng ngủ và nhà hẻm hay mặt tiền thì tìm dễ hơn ạ?"]);
