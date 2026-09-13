@@ -32,7 +32,7 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
-  boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, DAU_TIN_GIO, docCheDo, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua,
+  boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, DAU_TIN_GIO, docCheDo, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -57,7 +57,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
-import { chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -1567,7 +1567,12 @@ Deno.serve(async (req) => {
         }
         const tomTat = tomTatDaLuu(dong, [], FACT_LABELS, "thay_doi");
         // Lượt TẠO tin: cả dòng tin là thứ vừa lưu → tóm tắt cột (đọc từ DB).
-        if (ma) return { bong: tomTat, cheDo };
+        if (ma) {
+          // Fact lượt tạo mà tóm tắt cột chưa nói (view, lý do bán, thổ cư…) — vẫn là thứ ĐÃ lưu.
+          const kem = kemLuotTao(factLuot, FACT_LABELS);
+          return { bong: tomTat && kem ? `${tomTat}
+${kem}` : tomTat, cheDo };
+        }
         const vua = vuaLuuBan(factLuot, FACT_LABELS);
         // Tin khách không lưu được gì ("anh bận", "ok em") → không nhắn thêm.
         if (!vua) return { bong: null, cheDo };
@@ -1604,7 +1609,8 @@ Deno.serve(async (req) => {
       // chủ nhà đọc hai lần "Dạ em sửa lại…" liền nhau (lượt bắn 12/09).
       if (ackSua && replies.length && laCauGhiNhan(replies[0])) ackSua = null;
       replies = chanNhanLaNguoi(replies, goiNguoi ?? "mình");
-      const sach = [...(ackSua ? [ackSua] : []), ...ackAnh, ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
+      const ackDau = ackSua;
+      let sach = [...(ackSua ? [ackSua] : []), ...ackAnh, ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
         .map((r) => r.trim()).filter(Boolean);
       ackSua = null;
       ackAnh = [];
@@ -1616,7 +1622,13 @@ Deno.serve(async (req) => {
       if (sach.length) {
         const bl = await baoLaiDaLuu(extra);
         if (bl.bong) {
-          if (sach[0].startsWith("📝 Em ghi nhận")) {
+          // 14/09/2026 (bắn thật): 💾 đã nói lưu gì, nên "Dạ em ghi số phòng ngủ 4 rồi ạ"
+          // (bong bóng code) và "Dạ em ghi 1 trệt 3 lầu… rồi" (model) là ghi nhận lần hai,
+          // lần ba. Bỏ bong bóng ghi nhận của code và câu ghi nhận CÓ nội dung của model.
+          if (ackDau) sach = sach.filter((x) => x !== ackDau.trim());
+          sach = boCauGhiNhan(sach);
+          if (!sach.length) sach = [bl.bong];
+          else if (sach[0].startsWith("📝 Em ghi nhận")) {
             const duoi = sach[0].split("\n").slice(1).join(" ").trim();
             sach[0] = duoi ? `${bl.bong}\n${duoi}` : bl.bong;
           } else {

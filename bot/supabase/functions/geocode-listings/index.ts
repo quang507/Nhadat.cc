@@ -34,6 +34,12 @@ const OVERPASS = [
   "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
 const CHAN_THOI_GIAN_MS = 110_000; // dưới wall-clock 150s; chạy lại là tiếp
+// 14/09/2026: chặn 110 s chỉ xét GIỮA hai tin — một tin vào bước tiện ích lúc 100 s
+// rồi thử ba máy Overpass × 35 s là 205 s, quá trần 150 s, cả lượt thành "Gateway
+// Timeout" (lượt 22:10 và 00:20 ngày 13–14/09; 7 tin rao mới nằm 20 phút không toạ
+// độ). Nay mọi lượt gọi ngoài chỉ được chờ tới hết ngân sách, và bước tiện ích
+// không bắt đầu khi còn dưới 20 s — tin đã có toạ độ, tick sau nạp tiếp.
+const TIEN_ICH_TOI_THIEU_MS = 20_000;
 
 type Viec = {
   id: string; location_raw: string | null; street: string | null; ward: string | null;
@@ -85,7 +91,7 @@ Deno.serve(async (req) => {
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=vn${hop}&q=${encodeURIComponent(q)}`,
-        { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20_000) },
+        { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(Math.min(20_000, Math.max(1_000, CHAN_THOI_GIAN_MS - (Date.now() - t0)))) },
       );
       const js = await res.json();
       const r = js?.[0];
@@ -103,9 +109,12 @@ Deno.serve(async (req) => {
     return point;
   };
 
-  const napOverpass = async (lat: number, lng: number): Promise<DiemOsm[] | null> => {
+  const conLai = () => CHAN_THOI_GIAN_MS - (Date.now() - t0);
+  /** null = cả ba máy hỏng; "het_gio" = hết ngân sách giữa chừng (không phải lỗi phía họ). */
+  const napOverpass = async (lat: number, lng: number): Promise<DiemOsm[] | null | "het_gio"> => {
     const q = cauOverpass(lat, lng);
     for (const base of OVERPASS) {
+      if (conLai() < 5_000) return "het_gio";
       try {
         // POST dạng form, như tài liệu Overpass khuyên (GET dài dễ bị chặn).
         const res = await fetch(base, {
@@ -116,7 +125,7 @@ Deno.serve(async (req) => {
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: `data=${encodeURIComponent(q)}`,
-          signal: AbortSignal.timeout(35_000),
+          signal: AbortSignal.timeout(Math.min(35_000, Math.max(1_000, conLai()))),
         });
         if (!res.ok) {
           await ghiLoi(`overpass ${base} → HTTP ${res.status}`);
@@ -177,11 +186,16 @@ Deno.serve(async (req) => {
       await db.from("listings").update({ tien_ich_gan: null, tien_ich_at: luc }).eq("id", row.id);
       continue;
     }
+    // Còn ít thời gian thì để bước tiện ích cho tick sau (tin_can_geocode nhặt lại
+    // tin có toạ độ mà chưa có tien_ich_at) — đừng mở một lượt Overpass sẽ bị cắt.
+    if (conLai() < TIEN_ICH_TOI_THIEU_MS) break;
     // Các tin cùng đoạn đường (~100 m) dùng chung một lượt Overpass.
     const khoa = `${lat.toFixed(3)},${lng.toFixed(3)}`;
     let diem = osmCache.get(khoa);
     if (diem === undefined) {
-      diem = await napOverpass(lat, lng);
+      const nap = await napOverpass(lat, lng);
+      if (nap === "het_gio") break;
+      diem = nap;
       osmCache.set(khoa, diem);
       if (diem?.length) {
         for (let i = 0; i < diem.length; i += 500) {

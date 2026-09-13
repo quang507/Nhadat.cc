@@ -28,7 +28,7 @@ export type CheDoBaoLai = "tat" | "thay_doi" | "day_du";
 export const DAU_BAO_LAI = "💾";
 
 export const COT_BAO_LAI =
-  `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, ${SPEC_COLS}`;
+  `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, projects(name), ${SPEC_COLS}`;
 
 export type DongBaoLai = SpecRow & {
   id?: string;
@@ -45,6 +45,11 @@ export type DongBaoLai = SpecRow & {
   bedrooms?: number | null;
   /** JSON bóc tách; `quan_mac_dinh: true` = quận chưa ai nói, cột đang giữ mặc định. */
   boc_tach?: Record<string, unknown> | null;
+  /** Tầng căn hộ nằm (chung cư) — khác `floors` (số tầng nhà). */
+  floor?: number | null;
+  furnishing?: string | null;
+  /** Dự án tin đã GẮN (project_id → projects.name), không phải tên đoán từ chữ. */
+  projects?: { name?: string | null } | null;
 };
 
 export type FactBaoLai = { question: string; answer: string | null; created_at?: string | null };
@@ -115,9 +120,14 @@ export function tomTatDaLuu(
   const quanMacDinh = l.district === "Quận 5" && l.boc_tach?.quan_mac_dinh === true;
   const dc = gonDiaChi(l.location_raw, l.ward, quanMacDinh ? "Quận 5 (chưa rõ quận)" : l.district);
   if (dc) p.push(dc);
+  // 14/09/2026 (bắn thật): căn hộ Sunrise City đã gắn project_id, tầng 15, full nội
+  // thất nằm trong DB mà 💾 không nói — tóm tắt chỉ biết cột nhà phố.
+  if (l.projects?.name) p.push(`dự án ${l.projects.name}`);
   if (l.area_m2 !== null && l.area_m2 !== undefined && l.area_m2 !== "") p.push(`${so(l.area_m2)}m²`);
   const ts = thongSoNgan(l).replace(/^ · /, "");
   if (ts) p.push(ts);
+  if (l.floor != null) p.push(`tầng ${l.floor}`);
+  if (l.furnishing) p.push(`nội thất ${({ full: "đầy đủ", co_ban: "cơ bản", khong: "không (nhà trống)" } as Record<string, string>)[l.furnishing] ?? l.furnishing}`);
   if (l.bedrooms) p.push(`${l.bedrooms} phòng ngủ`);
   // Có chữ giá mà không ra số = parse_vnd không đọc được → web lọc giá sẽ không thấy tin.
   if (l.price_raw) p.push(l.price_vnd ? `giá ${l.price_raw}` : `giá "${l.price_raw}" (chưa đọc ra số)`);
@@ -166,6 +176,19 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
     return `${ten}: "${v.length > 50 ? v.slice(0, 49) + "…" : v}"`;
   });
   return `${DAU_BAO_LAI} Vừa lưu: ${ds.join(" · ")}`;
+}
+
+// Fact mà tóm tắt CỘT đã nói (qua cột tương ứng) — lượt tạo tin chỉ kèm phần còn lại.
+const DA_CO_TRONG_TOM_TAT = new Set([
+  "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "gia", "phuong", "vi_tri", "so_phong_ngu", "ket_cau",
+  "do_rong_hem", "phap_ly", "so_wc", "mat_tien", "huong", "loai_bds", "tang", "noi_that", "gap",
+]);
+
+/** Lượt TẠO tin: "Kèm: view: "view sông" · lý do bán: "cần tiền"" — fact lượt này tóm tắt cột chưa nói. */
+export function kemLuotTao(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
+  const con = facts.filter((f) => !DA_CO_TRONG_TOM_TAT.has(f.question));
+  const v = vuaLuuBan(con, nhan);
+  return v ? v.replace(`${DAU_BAO_LAI} Vừa lưu: `, "Kèm: ") : null;
 }
 
 // Khoá hồ sơ người mua là việc NỘI BỘ của bot — không báo.
