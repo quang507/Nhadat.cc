@@ -524,6 +524,11 @@ function anhHopLe(url: string | null): string | null {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
+  // 14/09/2026: đồng hồ theo chặng — lượt đầu người mua chậm 10–12 s mà không ai biết
+  // chậm ở đâu. Mốc (ms từ đầu lượt) đi kèm payload `_ms` và log; không đổi hành vi.
+  const t0Luot = Date.now();
+  const moc: Record<string, number> = {};
+  const danhDau = (k: string) => { moc[k] = Date.now() - t0Luot; };
   // SEC-06 — chặn body khổng lồ TRƯỚC khi parse. Trần model đếm LƯỢT, nhưng
   // tiền tính theo TOKEN: một request kèm `text` 500 KB là ~125.000 token đầu
   // vào cho đúng một "lượt", nên trần 1000 lượt/ngày không giữ được ví. Cầu
@@ -594,6 +599,7 @@ Deno.serve(async (req) => {
   // FR-171 h: bí mật cổng + trần lượt + bot_prompts đi chung một lượt nạp,
   // nhớ tạm 60 giây ở tầng module (xem `napCauHinh`).
   const { gate, cap: dailyCap, P, mauBan, mauMua } = await napCauHinh(client);
+  danhDau("cau_hinh");
   const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const auth = req.headers.get("authorization") ?? "";
   // SEC-11: so hằng thời gian cả hai đường (service key và bí mật cổng).
@@ -816,6 +822,9 @@ Deno.serve(async (req) => {
   // giờ kẹt ở processing oan (kẹt thật — function chết — thì claim_inbound tự
   // reclaim sau 150s). Ghi sổ hụt không được chặn đường trả lời: chỉ ghiLoi.
   const hoanTatGoc = async (payload: Record<string, unknown>, code = 200) => {
+    moc.tong = Date.now() - t0Luot;
+    payload = { ...payload, _ms: { ...moc } };
+    console.log("chat-reply _ms", JSON.stringify(moc));
     if (coSo) {
       const { error: soErr2 } = await client.from("inbound_ledger").update({
         status: "completed", reply: payload, updated_at: new Date().toISOString(),
@@ -3205,6 +3214,7 @@ ${kem}` : tomTat, cheDo };
   // Nhớ người trò chuyện (FR-21/26) + hồ sơ nhu cầu (FR-130).
   // Get-or-create buyer + conversation qua RPC advisory-lock (FR-131 —
   // 3 tin gõ vụn đến đồng thời không được tạo trùng buyer/conversation).
+  danhDau("mua_vao");
   const { data: bc, error: bcErr } = await client
     .rpc("ensure_buyer_conversation", {
       p_zalo_user_id: externalUserId,
@@ -3378,6 +3388,7 @@ ${kem}` : tomTat, cheDo };
     delete prefs.hoi_vai;
   }
 
+  danhDau("mua_truoc_boc_gan");
   // Buyer quay lại nhắn → hủy nhắc-lời-hứa + follow-up đang chờ (FR-133/FR-32)
   await client.from("reminders").update({ status: "cancelled" })
     .eq("buyer_id", buyer.id).in("kind", ["promise", "followup"]).eq("status", "pending");
@@ -3418,6 +3429,7 @@ ${kem}` : tomTat, cheDo };
     }
     if (!daHoiModelGan) ganMoi = docGanTienIch(text);
   }
+  danhDau("mua_sau_boc_gan");
   const gan: GanTienIch | null = boGan && !ganMoi ? null : ganMoi ??
     (prefs.gan_tien_ich_loc && typeof prefs.gan_tien_ich_loc === "object"
       ? prefs.gan_tien_ich_loc as GanTienIch
@@ -3739,6 +3751,7 @@ ${kem}` : tomTat, cheDo };
   const offsetCu = (prefs.photo_offset ?? null) as { code?: string; n?: number } | null;
   const xemThemHinh = !!offsetCu?.code && XEM_THEM_RE_KD.test(tKD);
   try {
+    danhDau("mua_truoc_model");
     // Dựng client TRONG try: thiếu key/hỏng model đều rơi về fallback regex bên
     // dưới thay vì 500 — không đổ lỗi cho khách (giữ đúng ý đồ fallback cũ).
     const anthropic = await napModel(client);
@@ -3865,6 +3878,7 @@ ${kem}` : tomTat, cheDo };
     await ghiLoi(client, "chat-reply model", e);
   }
 
+  danhDau("mua_sau_model");
   // Fallback quy tắc: model hỏng ≠ khách nói không rõ — đừng đổ lỗi cho khách,
   // vẫn bóc được ngân sách/hẻm bằng regex và hỏi tiếp tiêu chí thiếu kế tiếp.
   if (!out) {
@@ -3951,6 +3965,7 @@ ${kem}` : tomTat, cheDo };
   // FR-105: mọi bong bóng gửi NGƯỜI MUA qua bộ lọc liên hệ — model được dặn
   // không đưa số, nhưng dặn không phải là chặn.
   const replies = out.replies.map((r) => locLienHe(r.trim())).filter(Boolean);
+  danhDau("mua_truoc_hau_ky");
   // FR-32: mã trong câu trả lời, không có thì lấy mã khách vừa nhắc (bot hay
   // gọi căn bằng tên đường thay vì lặp lại mã)
   const repliedCodes = [...replies.join("\n").matchAll(CODE_RE)]
