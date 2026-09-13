@@ -26,6 +26,8 @@ const HUA_CO_HANG: RegExp[] = [
   /^(?:da|vang|u|ok|oke)?[\s,]*co(?:\s+(?:em|a|chi|anh|anh\/chi|nha|nhe|luon|lien|san|nhieu|lam))*\s*[.!…]*$/,
   // 13/09: "Dạ em tìm vài căn hẻm xe hơi… cho chị xem nha" — hứa gửi căn chưa có.
   /\b(?:tim|gui|loc|chon|lua|kiem)\s+(?:(?:ra|duoc|san)\s+)?(?:vai|mot vai|mot so|may|\d+)\s+can\b/,
+  // 14/09: "Chị xem những căn này có hợp không ạ?" khi chưa gửi căn nào.
+  /\b(?:nhung|may|cac|mot so)\s+can\s+(?:nay|do|tren|ben duoi|sau day|em vua gui)\b/,
   // "em đang có vài căn…", "bên em hiện có 3 căn", "em có nhà mặt tiền…"
   /\b(?:em|ben em|minh|kho)\s+(?:(?:dang|hien|van|cung|con|da|san)\s+)*co\s+(?:san\s+)?(?:(?:vai|mot vai|mot so|nhieu|may|mot|hai|ba|bon|nam|\d+)\s+)?(?:can|lo|nen|mau|nha|lua chon|san pham)\b/,
   // "có vài căn đúng ý chị", "có 2 lựa chọn"
@@ -166,7 +168,8 @@ export function boCauGhiNhan(replies: string[]): string[] {
 
 function laCauGhiNhanMot(tin: string): boolean {
   const dau = boDau(tachCau(tin.trim())[0] ?? "");
-  const m = /^(?:da|vang)?[\s,]*(?:em\s+)?(?:da\s+)?(?:ghi|sua|cap nhat|chinh)(?:\s+(?:lai|nhan|ro|chuan))?\b/.exec(dau);
+  // 14/09: "Dạ chị, em ghi lại: …" — cho phép đại từ gọi khách chen giữa "Dạ" và "em".
+  const m = /^(?:da|vang)?[\s,]*(?:(?:anh\/chi|anh|chi|minh)[\s,]+)?(?:em\s+)?(?:da\s+)?(?:ghi|sua|cap nhat|chinh)(?:\s+(?:lai|nhan|ro|chuan))?\b/.exec(dau);
   if (!m) return false;
   const conLai = dau.slice(m[0].length)
     .replace(/\b(?:roi|xong|duoc|het|luon|vao|tin|cho|lai|a|nha|nhe|anh|chi|em|minh|ha|nghe)\b/g, "")

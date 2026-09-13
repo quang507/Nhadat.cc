@@ -187,5 +187,14 @@ for (const [vao, mong] of [
   ok("người mua: chỉ khoá ĐỔI, không khoá nội bộ, deal 'ban' đọc là 'mua'", mua === "💾 Đã lưu nhu cầu: mua hay thuê: mua · khoảng giá: 7 tỷ", String(mua));
 }
 
+// ── 14/09 bắn lại kịch bản 7 (người mua) ──────────────────────────────────────
+ok("kho: 'Chị xem những căn này có hợp không ạ?' là nói như đã gửi căn", laHuaCoHang("Chị xem những căn này có hợp không ạ?"));
+ok("kho: 'Chị thấy căn này thế nào ạ?' (một căn khách đang hỏi) không dính mẫu 'những căn này'", !laHuaCoHang("Chị thấy căn này thế nào ạ?"));
+ok("ghi nhận: 'Dạ chị, em ghi lại: mua nhà Quận 5…' là ghi nhận có nội dung", laCauGhiNhan("Dạ chị, em ghi lại: mua nhà Quận 5 tầm 7 tỷ, gần bệnh viện cho mẹ. Chị cần mấy phòng ngủ ạ?"));
+{
+  const ra = boCauGhiNhan(["Dạ chị, em ghi lại: mua nhà Quận 5 tầm 7 tỷ, gần bệnh viện cho mẹ. Chị cần mấy phòng ngủ và nhà hẻm hay mặt tiền thì tìm dễ hơn ạ?"]);
+  ok("người mua: bỏ câu ghi nhận lần hai, câu hỏi còn lại mở bằng 'Dạ'", ra[0] === "Dạ chị cần mấy phòng ngủ và nhà hẻm hay mặt tiền thì tìm dễ hơn ạ?", JSON.stringify(ra));
+}
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
