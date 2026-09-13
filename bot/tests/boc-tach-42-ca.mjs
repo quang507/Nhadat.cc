@@ -180,6 +180,7 @@ for (const [vao, mong] of [
   ok("lý do bán giữ dấu 'cần tiền'", d.ly_do_ban === "cần tiền", d.ly_do_ban);
   const e = F("ngang 5 dài 20, đường nhựa 7m, sổ riêng");
   ok("đất: pháp lý 'sổ riêng', đường vào 'đường nhựa 7m' (không phải cả câu)", e.phap_ly === "sổ riêng" && e.duong_vao === "đường nhựa 7m", JSON.stringify(e));
+  ok("đất: 'ngang 5 dài 20' giữ CẢ hai chiều (trước chỉ '5m', mất dài 20)", e.mat_tien === "ngang 5m dài 20m", JSON.stringify(e));
   const g = phanLoaiCauTraLoi("phuong", "ngang 5 dài 20, đường nhựa 7m, sổ riêng");
   ok("đang hỏi xã mà trả lời thông số → lệch, chuyển sang pháp lý 'sổ riêng' (không cả câu)", g.loai === "lech" && g.chuyenSang?.answer === "sổ riêng", JSON.stringify(g));
   // KHÔNG được làm hỏng
