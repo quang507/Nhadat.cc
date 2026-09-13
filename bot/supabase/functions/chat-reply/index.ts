@@ -3408,27 +3408,31 @@ ${kem}` : tomTat, cheDo };
   // điều kiện tìm. Model hỏng thì regex. Toạ độ và số mét vẫn do SQL tính.
   let ganMoi: GanTienIch | null = null;
   let boGan = false;
-  if (coMuiViTri(text)) {
-    let daHoiModelGan = false;
-    try {
-      const ai = await napModel(client);
-      const r = await bocGanBangModel(
-        ai as unknown as Parameters<typeof bocGanBangModel>[0], MODEL, text,
-        typeof prefs.gan_tien_ich === "string" ? prefs.gan_tien_ich : null,
-      );
-      if (r) {
-        await doTien(client, r.usage as Parameters<typeof doTien>[1]);
-        if (r.ket) {
-          daHoiModelGan = true;
-          boGan = r.ket.bo_dieu_kien;
-          ganMoi = thanhGan(r.ket);
+  const hoiGan = coMuiViTri(text)
+    ? (async (): Promise<{ ganMoi: GanTienIch | null; boGan: boolean }> => {
+      try {
+        const ai = await napModel(client);
+        const r = await bocGanBangModel(
+          ai as unknown as Parameters<typeof bocGanBangModel>[0], MODEL, text,
+          typeof prefs.gan_tien_ich === "string" ? prefs.gan_tien_ich : null,
+        );
+        if (r) {
+          await doTien(client, r.usage as Parameters<typeof doTien>[1]);
+          if (r.ket) return { ganMoi: thanhGan(r.ket), boGan: r.ket.bo_dieu_kien };
         }
+      } catch (e) {
+        await ghiLoi(client, "chat-reply bocGanBangModel", e);
       }
-    } catch (e) {
-      await ghiLoi(client, "chat-reply bocGanBangModel", e);
-    }
-    if (!daHoiModelGan) ganMoi = docGanTienIch(text);
-  }
+      return { ganMoi: docGanTienIch(text), boGan: false };
+    })()
+    : null;
+  // 14/09/2026 (đo thật): lượt model đọc "gần đâu" chạy TRƯỚC model chính và chặn
+  // 2,7–3,1 s. Kết quả của nó chỉ đổi được lượt NÀY khi hồ sơ đã có giá (lúc đó
+  // "gần X" + giá = đủ tiêu chí → lọc kho theo khoảng cách). Hồ sơ chưa có giá —
+  // lượt đầu điển hình — thì chạy SONG SONG với model chính, lấy kết quả sau để
+  // ghi hồ sơ; lượt sau lọc kho theo điều kiện đã lưu như cũ.
+  const ganTruocModel = prefs.budget != null;
+  if (hoiGan && ganTruocModel) ({ ganMoi, boGan } = await hoiGan);
   danhDau("mua_sau_boc_gan");
   const gan: GanTienIch | null = boGan && !ganMoi ? null : ganMoi ??
     (prefs.gan_tien_ich_loc && typeof prefs.gan_tien_ich_loc === "object"
@@ -3865,6 +3869,10 @@ ${kem}` : tomTat, cheDo };
         ],
       }],
     });
+    moc.mua_tok_ra = resp.usage?.output_tokens ?? -1;
+    moc.mua_tok_vao = resp.usage?.input_tokens ?? -1;
+    moc.mua_tok_nho_doc = resp.usage?.cache_read_input_tokens ?? -1;
+    moc.mua_tok_nho_ghi = resp.usage?.cache_creation_input_tokens ?? -1;
     if (resp.stop_reason !== "refusal" && resp.parsed_output) {
       out = resp.parsed_output as LuotMua;
     }
@@ -3878,6 +3886,7 @@ ${kem}` : tomTat, cheDo };
     await ghiLoi(client, "chat-reply model", e);
   }
 
+  if (hoiGan && !ganTruocModel) ({ ganMoi, boGan } = await hoiGan);
   danhDau("mua_sau_model");
   // Fallback quy tắc: model hỏng ≠ khách nói không rõ — đừng đổ lỗi cho khách,
   // vẫn bóc được ngân sách/hẻm bằng regex và hỏi tiếp tiêu chí thiếu kế tiếp.
