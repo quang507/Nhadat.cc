@@ -57,7 +57,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
-import { boCauGhiNhan, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, locHoSoMua, suaTuXungMua } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -242,15 +242,15 @@ const BuyerTurn = z.object({
   profile: z.object({
     name: z.string().nullable().describe("Tên khách nếu khách vừa xưng tên"),
     deal: z.enum(["ban", "thue"]).nullable().describe("ban = khách muốn MUA, thue = muốn THUÊ"),
-    area: z.string().nullable().describe("Khu vực khách tìm, nguyên văn kiểu nói"),
-    budget: z.string().nullable().describe("Khoảng giá, nguyên văn kiểu nói ('tầm 5 tỷ')"),
-    purpose: z.string().nullable().describe("Để ở / kinh doanh / đầu tư"),
-    property_type: z.string().nullable(),
+    area: z.string().nullable().describe("Khu vực khách muốn TÌM (quận/phường/đường), nguyên văn kiểu nói; nơi muốn ở GẦN (bệnh viện, trường) KHÔNG ghi vào đây"),
+    budget: z.string().nullable().describe("Khoảng giá, nguyên văn kiểu nói ('tầm 5 tỷ'); khách nói mơ hồ ('rẻ thôi') thì null"),
+    purpose: z.string().nullable().describe("CHỈ khi khách NÓI THẲNG: để ở / đầu tư / kinh doanh / cho thuê lại. KHÔNG suy ra từ hoàn cảnh, loại nhà hay chữ 'gấp'"),
+    property_type: z.string().nullable().describe("Loại nhà khách nói: nhà hẻm / nhà mặt tiền / căn hộ / đất / phòng trọ…"),
     bedrooms: z.number().nullable(),
     alley: z.string().nullable().describe("Hẻm xe hơi / mặt tiền / không quan trọng"),
-    timeline: z.string().nullable(),
-    notes: z.string().nullable().describe("Chi tiết đáng nhớ khác khách kể (trường học, cha mẹ già ở cùng…)"),
-  }).describe("CHỈ ghi điều khách NÓI RÕ trong hội thoại. Không suy diễn. Chưa biết để null."),
+    timeline: z.string().nullable().describe("Mốc CẦN DỌN VÀO / CHỐT MUA ('trong tháng này', 'trước Tết'). Giờ đi XEM NHÀ không phải timeline (đó là viewing)"),
+    notes: z.string().nullable().describe("Hoàn cảnh SỐNG đáng nhớ: người ở cùng, con học trường nào, sức khoẻ, thú nuôi, số người ở. KHÔNG chép lại câu khách, KHÔNG ghi thái độ/cảm xúc hay câu khách đang hỏi"),
+  }).describe("CHỈ ghi điều khách NÓI RÕ trong câu vừa nhắn hoặc hội thoại. Không suy diễn. Chưa biết để null — null KHÔNG xoá thứ đã biết."),
   replies: z.array(z.string()).min(1).max(2)
     .describe("1-2 bong bóng tin nhắn gửi khách, theo đúng nhịp nhắn giống người"),
   promise: z.object({
@@ -1088,6 +1088,13 @@ Deno.serve(async (req) => {
       khop(
         /(có|còn)\s*căn nào|tư vấn (mua|thu[êe])/i,
         /(co|con)\s*can nao|tu van (mua|thue)/,
+      ) ||
+      // 14/09/2026 (bắn thật): "mua để cho thuê lại, khu nào quận 5 dòng tiền tốt",
+      // "mua qua bên em có mất phí gì không" rơi về hỏi vai. "mua lại" KHÔNG nhận —
+      // "anh mua lại căn này 3 năm trước, giờ bán" là chủ nhà kể chuyện.
+      khop(
+        /(?:^|[\s,.])mua\s+(để|qua|bên|về ở|trả góp)\b|\bkhi\s+mua\b|\bmua\s+nhà\s+bên\s+em\b/i,
+        /(?:^|[\s,.])mua\s+(de|qua|ben|ve o|tra gop)\b|\bkhi\s+mua\b|\bmua\s+nha\s+ben\s+em\b/,
       ) ||
       khop(
         /(cho|xin|muốn|được|đi|qua|tới|hẹn|đặt lịch)\s*(em|anh|chị|tôi|mình)?\s*(xem|coi)\s*(nhà|căn)/i,
@@ -3974,7 +3981,12 @@ ${kem}` : tomTat, cheDo };
   // sơ (tiền định, laGap); "không gấp, từ từ" → false. CTV và ghép căn đọc cờ này.
   if (laGap(text)) delta.gap = true;
   else if (/\b(khong|ko|k|chua)\s*(?:can\s*)?(?:gap|voi)\b|\btu tu\b|\bkhong voi\b/.test(tKD)) delta.gap = false;
-  for (const [k, v] of Object.entries(out.profile)) {
+  // 14/09/2026 (bắn 16 hội thoại mua): mục đích / thời hạn / hoàn cảnh hay bị điền
+  // bịa — chỉ giữ khi câu khách vừa nhắn có căn cứ (`locHoSoMua`). Trường bị gỡ thì
+  // KHÔNG ghi (null = không đụng giá trị cũ), nên thứ đã biết từ trước vẫn còn.
+  const hoSoLoc = locHoSoMua(out.profile, text);
+  if (hoSoLoc.bo.length) console.log("chat-reply: gỡ trường hồ sơ không căn cứ", hoSoLoc.bo.join(","));
+  for (const [k, v] of Object.entries(hoSoLoc.profile)) {
     if (v === null || v === "" || k === "name") continue;
     if (k === "notes" && typeof prefs.notes === "string" && prefs.notes) {
       // Gộp theo TỪNG Ý: model hay trả lại cả ghi chú cũ lẫn mới, so nguyên chuỗi
@@ -4007,7 +4019,7 @@ ${kem}` : tomTat, cheDo };
   // đã vào sổ từ đầu lượt, nên loạt bong bóng bot chèn ở đây luôn đứng sau.
   // FR-105: mọi bong bóng gửi NGƯỜI MUA qua bộ lọc liên hệ — model được dặn
   // không đưa số, nhưng dặn không phải là chặn.
-  const replies = out.replies.map((r) => locLienHe(r.split(TEN_GIU_CHO).join(tenBot).trim())).filter(Boolean);
+  const replies = out.replies.map((r) => locLienHe(suaTuXungMua(r.split(TEN_GIU_CHO).join(tenBot)).trim())).filter(Boolean);
   danhDau("mua_truoc_hau_ky");
   // FR-32: mã trong câu trả lời, không có thì lấy mã khách vừa nhắc (bot hay
   // gọi căn bằng tên đường thay vì lặp lại mã)
