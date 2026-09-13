@@ -4712,16 +4712,22 @@ declare
 begin
   if p is null or btrim(p) = '' then return null; end if;
   t := lower(p);
+  -- Gia MOI m2 khong phai gia ca can (luat-tien.ts GIA_THEO_M2).
+  if t ~ '(tỷ|tỉ|tỏi|triệu|trieu|tr|củ|cu|ty|ti)\s*(/|mỗi|moi|một|mot|1)\s*(m2|m²|mét|met|m\M)' then
+    return null;
+  end if;
   ruoi := t ~ 'rưỡi|rươi|ruoi';
 
   t := regexp_replace(t, 'tỏi|tỷ|tỉ|tị|tỹ', ' _ty ', 'g');
   t := regexp_replace(t, 'triệu|trieu|củ',  ' _trieu ', 'g');
 
   t := regexp_replace(t, '([0-9])\s*ty\s*([0-9])', '\1 _ty \2', 'g');
-  t := regexp_replace(t, '([0-9])\s*t\s*([0-9])',  '\1 _ty \2', 'g');
+  t := regexp_replace(t, '([0-9])\s*tr\s*([0-9])', '\1 _trieu \2', 'g');
+  -- 13/09/2026: "1t2l" / "1t 2l" la 1 tret 2 lau, khong phai 1,2 ty (luat-tien.ts).
+  t := regexp_replace(t, '([0-9])\s*t\s*([0-9]{1,3})(?![0-9[:alpha:]])', '\1 _ty \2', 'g');
   t := regexp_replace(t, '([0-9])\s*ty\M',         '\1 _ty ',   'g');
   t := regexp_replace(t, '([0-9])\s*tr\M',         '\1 _trieu ', 'g');
-  t := regexp_replace(t, '([0-9])\s*t\M',          '\1 _ty ',   'g');
+  t := regexp_replace(t, '([0-9])\s*t\M(?!\s*[0-9]+\s*(l|lầu|lau)\M)', '\1 _ty ', 'g');
 
   -- Phan le sau don vi: "5 ty 5" = 5,5 ty | "3 ty 200" = 3,2 ty.
   -- Chan hai kieu bat nham: "5 ty 50m2" (dien tich) va viec cat bot chu so
@@ -4739,6 +4745,16 @@ begin
     v := replace(m[1], ',', '.')::numeric * 1e9;
     if ruoi then v := v + 5e8; end if;
     return v::bigint;
+  end if;
+
+  -- Phan le sau trieu: "3 trieu 5" = 3,5 trieu | "3 trieu 500" = 3,5 trieu.
+  -- So dung sau ma la so LUONG (thang, phong, m2...) thi khong phai phan le.
+  m := regexp_match(t, '([0-9]+)\s*_trieu\s*([0-9]{1,3})(?![0-9.,]|\s*(m2|m²|mét|met|m\M|phòng|phong|pn|lầu|lau|tầng|tang|tấm|tam|wc|tháng|thang|năm|nam|người|nguoi|căn|can))');
+  if m is not null then
+    return (m[1]::numeric * 1e6
+            + case when length(m[2]) = 1
+                   then m[2]::numeric * 1e5
+                   else m[2]::numeric * 1e3 end)::bigint;
   end if;
 
   m := regexp_match(t, '([0-9]+[.,]?[0-9]*)\s*_trieu');

@@ -11,10 +11,33 @@
 // hai trên cùng một câu có SĐT trả `false`. Lỗi đó không kêu, chỉ thỉnh thoảng
 // để lọt một số điện thoại.
 
-/** SĐT Việt Nam: +84 / 84 / 0 đầu, 9–11 chữ số, chấp nhận dấu cách · chấm · gạch giữa. */
-export const SDT_NGUON = "(\\+?84|0)[\\s.\\-]?(\\d[\\s.\\-]?){8,10}";
-/** Kênh liên hệ ngoài: Zalo, Facebook, Viber, Telegram kèm tên/ID đi sau. */
-export const MANG_XA_HOI_NGUON = "\\b(zalo|z@lo|fb|facebook|viber|telegram)\\b\\s*:?\\s*[\\w.@/]*";
+/**
+ * SĐT Việt Nam: +84 / 84 / 0 đầu, thêm 8–10 chữ số, chấp nhận dấu cách · chấm ·
+ * gạch giữa.
+ *
+ * 13/09/2026 (review code): bản cũ không có RANH GIỚI — đầu "0" bám vào chữ số 0
+ * nằm giữa một con số rồi đi xuyên dấu chấm phân cách, nên "giá 10.000.000.000"
+ * thành "giá 1[liên hệ qua Zalo…]" trên web. Nay:
+ *   · trước đầu số không được là chữ số / dấu chấm / phẩy (không bắt giữa số);
+ *   · sau số cuối không được là chữ số (13 chữ số liền không phải SĐT);
+ *   · cả cụm mà viết kiểu TIỀN — nhóm 1–3 số rồi ≥ 2 nhóm ".000" ("84.000.000.000")
+ *     — thì không phải SĐT. "0903.123.456" nhóm đầu 4 số nên vẫn là SĐT.
+ */
+export const SDT_NGUON =
+  "(?<![\\d.,])(?!\\d{1,3}(?:\\.\\d{3}){2,}(?![\\d]))(?:\\+?84|0)(?:[\\s.\\-]?\\d){8,10}(?![\\d])";
+/**
+ * Kênh liên hệ ngoài: Zalo, Facebook, Viber, Telegram kèm ID đi sau.
+ *
+ * 13/09/2026 (review code): bản cũ nuốt `[\w.@/]*` sau chữ "zalo" bất kể là gì —
+ * `\w` của JS chỉ có ASCII nên nó ăn phần đầu KHÔNG DẤU của từ tiếng Việt kế tiếp:
+ * "Chat Zalo trao đổi thêm" → "Chat [L] đổi thêm", "Liên hệ Zalo nhé" → "[L]é".
+ * Nay chỉ nuốt phần đuôi khi nó là ID thật: đứng sau dấu hai chấm ("zalo: abc"),
+ * hoặc có chữ số / @ / / / _ ("zalo 0903…", "fb nha.dat.q5", "facebook.com/x");
+ * và không bao giờ cắt ngang một từ (không có chữ cái nào dính ngay sau).
+ */
+export const MANG_XA_HOI_NGUON =
+  "\\b(?:zalo|z@lo|fb|facebook|viber|telegram)\\b" +
+  "(?:\\s*:\\s*[\\w.@/]+(?![A-Za-zÀ-ỹ])|\\s*(?=[\\w.@/]*[\\d@/_])[\\w.@/]+(?![A-Za-zÀ-ỹ]))?";
 
 /**
  * Thay mọi SĐT và kênh liên hệ trong `s` bằng `nhan`. Không giữ trạng thái giữa
