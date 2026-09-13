@@ -141,6 +141,77 @@ export function tomTatDaLuu(
   return `${dau}\nCâu trả lời gốc: ${tho.join(" · ")}`;
 }
 
+// ── 14/09/2026: báo NGAY SAU tin khách, đúng thứ TIN ĐÓ vừa lưu ────────────
+// Chủ dự án: "nhắn tin lại cho khách liền sau tin nhắn đó đã bóc tách (thật vào
+// db) gì luôn". Bản trước chỉ in TÓM TẮT CỘT của tin, gắn vào CUỐI bong bóng cuối
+// và chỉ khi cột đổi — nên cọc / thời hạn thuê / phí quản lý (chỉ nằm ở fact)
+// không bao giờ hiện, câu "à nhầm, 6 tỷ 5" chìm sau câu hỏi, và người mua không
+// được báo gì. Nay tầng trên đọc lại DB: fact có `created_at` ≥ giờ ghi tin khách
+// (cùng đồng hồ DB), hồ sơ người mua đọc lại sau khi gộp; hàm dưới chỉ dựng chữ.
+
+/** Dòng in TÓM TẮT tin trong bong bóng các lượt sau (khi tin đổi so với lần báo trước). */
+export const DAU_TIN_GIO = "📦 Tin giờ:";
+
+/** "💾 Vừa lưu: giá: "6 tỷ 5" · phường: "Phường 9"" — fact lượt này (mới nhất trước), null khi không có. */
+export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
+  const moiNhat = new Map<string, string>();
+  for (const f of facts) {
+    const a = (f.answer ?? "").replace(/\s+/g, " ").trim();
+    if (!a || BO_QUA.has(f.question) || moiNhat.has(f.question)) continue;
+    moiNhat.set(f.question, a);
+  }
+  if (!moiNhat.size) return null;
+  const ds = [...moiNhat].reverse().slice(0, 12).map(([k, v]) => {
+    const ten = (nhan[k] ?? NHAN_THEM[k] ?? k.replace(/_/g, " ")).replace(/\s*\(.*\)\s*$/, "");
+    return `${ten}: "${v.length > 50 ? v.slice(0, 49) + "…" : v}"`;
+  });
+  return `${DAU_BAO_LAI} Vừa lưu: ${ds.join(" · ")}`;
+}
+
+// Khoá hồ sơ người mua là việc NỘI BỘ của bot — không báo.
+const MUA_NOI_BO = new Set(["ten_tro_ly", "xung_ho", "photo_offset", "hoi_vai", "gan_tien_ich_loc"]);
+const MUA_NHAN_THEM: Record<string, string> = {
+  gan_tien_ich: "muốn ở gần", notes: "hoàn cảnh", gap: "cần gấp", name: "tên",
+};
+
+/**
+ * "💾 Đã lưu nhu cầu: khu vực: Quận 5 · khoảng giá: 7 tỷ" — các khoá hồ sơ ĐỔI
+ * giữa `truoc` (đầu lượt) và `sau` (đọc lại DB sau khi gộp). Không đổi gì → null.
+ */
+export function vuaLuuMua(
+  truoc: Record<string, unknown> | null | undefined,
+  sau: Record<string, unknown> | null | undefined,
+  truong: Array<[string, string]>,
+): string | null {
+  if (!sau) return null;
+  const nhanTruong = Object.fromEntries(truong.map(([k, v]) => [k, v.replace(/\s*\(.*\)\s*$/, "")]));
+  const giaTri = (k: string, v: unknown): string => {
+    if (k === "deal") return v === "thue" ? "thuê" : v === "ban" ? "mua" : String(v);
+    if (typeof v === "boolean") return v ? "có" : "không";
+    return String(v).replace(/\s+/g, " ").trim();
+  };
+  const ds: string[] = [];
+  const thuTu = [...truong.map(([k]) => k), ...Object.keys(sau).filter((k) => !truong.some(([t]) => t === k))];
+  for (const k of thuTu) {
+    if (MUA_NOI_BO.has(k)) continue;
+    const v = sau[k];
+    if (v == null || v === "" || (typeof v === "object")) continue;
+    if (JSON.stringify(truoc?.[k] ?? null) === JSON.stringify(v)) continue;
+    const ten = nhanTruong[k] ?? MUA_NHAN_THEM[k];
+    if (!ten) continue;
+    const s = giaTri(k, v);
+    ds.push(`${ten}: ${s.length > 60 ? s.slice(0, 59) + "…" : s}`);
+  }
+  return ds.length ? `${DAU_BAO_LAI} Đã lưu nhu cầu: ${ds.join(" · ")}` : null;
+}
+
+/** Tóm tắt tin (không dấu mở) nằm trong một câu bot có 💾, để so "tin có đổi không". */
+export function tomTatTrongCau(body: string | null | undefined): string | null {
+  if (!body) return null;
+  const m = [...body.matchAll(new RegExp(`(?:${DAU_BAO_LAI} Đã lưu(?: tin [^:(]*)?(?: \\([^)]*\\))?:|${DAU_TIN_GIO}) ([^\\n]*)`, "gu"))];
+  return m.length ? m[m.length - 1][1].trim() : null;
+}
+
 /** Phần 💾 trong một câu bot đã lưu (bong bóng riêng hoặc dòng gắn cuối), không có thì null. */
 export function layBaoLai(body: string | null | undefined): string | null {
   if (!body) return null;

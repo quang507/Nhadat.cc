@@ -257,10 +257,10 @@ console.log(`   [đo] người lạ hỏi vai: ${v.n} truy vấn`);
 check("TOIUU-01 người lạ hỏi vai ≤ 12 truy vấn (v43: 18; +1 trần cá nhân SEC-05), 0 model", v.n <= 12 && parseCalls().length === 0, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
 console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
-check("TOIUU-02 người mua lượt đầu ≤ 19 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu)", v.n <= 19, `${v.n}`);
+check("TOIUU-02 người mua lượt đầu ≤ 20 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 💾)", v.n <= 20, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
 console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
-check("TOIUU-03 người mua có hồ sơ ≤ 17 truy vấn (v43: 24; +1 trần cá nhân SEC-05)", v.n <= 17, `${v.n}`);
+check("TOIUU-03 người mua có hồ sơ ≤ 18 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 💾)", v.n <= 18, `${v.n}`);
 check("TOIUU-04 follow-up FR-32 đi qua RPC tao_followup, không đếm/tra/chèn tay", db().log.some((l) => l.rpc === "tao_followup") && db().t.reminders.some((x) => x.kind === "followup"));
 check("TOIUU-05 bot_prompts chỉ đọc MỘT lần cho cả ba lượt (nhớ tạm 60 s)", db().log.filter((l) => l.table === "bot_prompts").length <= 1, String(db().log.filter((l) => l.table === "bot_prompts").length));
 check("TOIUU-06 loạt bong bóng bot vào sổ bằng MỘT câu INSERT mảng", db().log.some((l) => l.table === "messages" && l.op === "insert" && Array.isArray(l.payload)));
@@ -1388,23 +1388,27 @@ fresh(seedKho);
   db().insert("listing_facts", { listing_id: LB.id, question: "dien_tich", answer: "6x11", source: "seller_chat" });
   db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
   r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
-  let bl = r.body.replies.at(-1) ?? "";
-  check("BLDL-02 day_du → bong bóng CUỐI là 💾, đứng riêng", /^💾 Đã lưu/.test(bl) && r.body.replies.length >= 2, JSON.stringify(r.body.replies));
-  const nhanTT = ({ cho_thong_tin: "chưa đăng", dang_ban: "đang rao", dang_quan_tam: "đang rao" })[LB.status];
-  check("BLDL-03 💾 nói ĐÚNG cột trong DB (6m², không phải 66), kèm địa chỉ/phường/giá và trạng thái ĐANG nằm trong DB", /· 6m²/.test(bl) && !/66m²/.test(bl) && /99 Nguyễn Trãi/.test(bl) && /Phường 3/.test(bl) && /giá 7 tỷ/.test(bl) && !!nhanTT && bl.includes(`BDS-Q5-0002 (${nhanTT})`), `${LB.status} | ${bl}`);
-  check("BLDL-03b 💾 đọc SAU khi ghi: pháp lý chủ vừa trả lời trong CHÍNH lượt này đã có mặt", /sổ hồng riêng/.test(bl), bl);
-  check("BLDL-04 day_du kèm câu trả lời gốc — '6x11' đứng cạnh 6m² để soi chỗ đọc lệch", /\nCâu trả lời gốc:.*"6x11"/.test(bl), bl);
+  // 14/09/2026 — chủ dự án: "nhắn tin lại cho khách LIỀN SAU tin nhắn đó đã bóc
+  // tách (thật vào db) gì". 💾 là bong bóng ĐẦU TIÊN, nói fact CỦA LƯỢT NÀY đọc từ
+  // DB, kèm "📦 Tin giờ" (tóm tắt cột) khi tin đổi so với lần báo trước.
+  let bl = r.body.replies[0] ?? "";
+  check("BLDL-02 day_du → bong bóng ĐẦU là 💾, đứng riêng", /^💾 Vừa lưu/.test(bl) && r.body.replies.length >= 2 && !r.body.replies.slice(1).some((x) => /💾/.test(x)), JSON.stringify(r.body.replies));
+  check("BLDL-03 📦 Tin giờ nói ĐÚNG cột trong DB (6m², không phải 66), kèm địa chỉ/phường/giá", /📦 Tin giờ: .*· 6m²/.test(bl) && !/66m²/.test(bl) && /99 Nguyễn Trãi/.test(bl) && /Phường 3/.test(bl) && /giá 7 tỷ/.test(bl), `${LB.status} | ${bl}`);
+  check("BLDL-03b 💾 đọc SAU khi ghi: pháp lý chủ vừa trả lời trong CHÍNH lượt này có mặt, nguyên văn đã lưu", /Vừa lưu: .*pháp lý: "sổ hồng riêng em"/.test(bl), bl);
+  check("BLDL-04 'Vừa lưu' chỉ có fact CỦA LƯỢT NÀY — không kèm '6x11' đã lưu lượt trước", !/6x11/.test(bl), bl);
   check("BLDL-05 💾 vào sổ tin như mọi câu bot", db().t.messages.some((m) => m.sender === "bot" && /^💾/.test(m.body ?? "")));
   // Lượt sau là câu RAO THÊM CĂN — nhánh này chắc chắn gửi lịch sử (khối NGỮ
   // CẢNH) cho model. Phải thấy câu bot lượt trước (lịch sử có thật, phép kiểm
   // không rỗng) mà KHÔNG thấy 💾 (đã lọc).
-  const loiLuot1 = Array.from(r.body.replies[0] ?? "").slice(0, 18).join("");
+  const loiLuot1 = Array.from(r.body.replies.find((x) => !x.startsWith("💾")) ?? "").slice(0, 18).join("");
   const nTruoc = createCalls().length;
   r = await send({ external_user_id: "z-ccrb", text: "còn một căn nữa, bán nhà Phường 5 giá 6 tỷ 60m2" });
   const moi = createCalls().slice(nTruoc);
   const vao = (c) => (c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : JSON.stringify(m.content)).join("\n") + JSON.stringify(c.params.system ?? "");
   check("BLDL-06 lượt sau: model CÓ nhận lịch sử (câu lượt trước) nhưng KHÔNG thấy 💾", loiLuot1.length > 5 && moi.some((c) => /NGỮ CẢNH/.test(vao(c)) && vao(c).includes(loiLuot1)) && !moi.some((c) => vao(c).includes("💾")), JSON.stringify({ loiLuot1, n: moi.length, dau: moi.map((c) => vao(c).slice(0, 500)) }));
-  check("BLDL-06b day_du → lượt nào cũng báo; tin VỪA RAO (Phường 5) là tin được báo", /^💾 Đã lưu tin/.test(r.body.replies.at(-1) ?? "") && /Phường 5/.test(r.body.replies.at(-1) ?? ""), JSON.stringify(r.body.replies));
+  check("BLDL-06b lượt TẠO tin → 💾 đầu tiên là tóm tắt tin VỪA RAO (Phường 5), bỏ 📝 trùng nhưng giữ câu 'Sai chỗ nào…'",
+    /^💾 Đã lưu: /.test(r.body.replies[0] ?? "") && /Phường 5/.test(r.body.replies[0] ?? "") && /Sai chỗ nào/.test(r.body.replies[0] ?? "") && !r.body.replies.some((x) => /^📝 Em ghi nhận/.test(x)),
+    JSON.stringify(r.body.replies));
 
   // giá có chữ mà không ra số → báo thẳng, đó là tin web lọc giá sẽ không thấy.
   fresh(seedKho);
@@ -1412,27 +1416,42 @@ fresh(seedKho);
   LB.price_raw = "5 tới 6"; LB.price_vnd = null;
   db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
   r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
-  check("BLDL-07 giá không đọc ra số → 💾 nói rõ '(chưa đọc ra số)'", /giá "5 tới 6" \(chưa đọc ra số\)/.test(r.body.replies.at(-1) ?? ""), JSON.stringify(r.body.replies));
+  check("BLDL-07 giá không đọc ra số → 💾 nói rõ '(chưa đọc ra số)'", /giá "5 tới 6" \(chưa đọc ra số\)/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
 
-  // thay_doi: gắn cuối bong bóng cuối, không mã tin, chỉ báo khi DB đổi.
+  // thay_doi: 💾 đầu tiên, không mã tin; 📦 Tin giờ chỉ khi tin đổi; lượt không lưu gì thì im.
   globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
   fresh(seedKho);
   LB = db().t.listings[1]; db().t.sellers[0].active_listing_id = LB.id;
   db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
   r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
-  bl = r.body.replies.at(-1) ?? "";
-  check("BLDL-08 thay_doi → 💾 gắn CUỐI bong bóng cuối, không bong bóng riêng, không mã tin", /\n💾 Đã lưu: /.test(bl) && !r.body.replies.some((x) => /^💾/.test(x)) && !/BDS-Q5/.test(bl), JSON.stringify(r.body.replies));
-  r = await send({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi em" });
-  check("BLDL-09 thay_doi + DB không đổi → không báo lại", r.body.replies.length > 0 && !r.body.replies.some((x) => /💾/.test(x)), JSON.stringify(r.body.replies));
-  LB.area_m2 = 66;
+  bl = r.body.replies[0] ?? "";
+  check("BLDL-08 thay_doi → 💾 là bong bóng ĐẦU, riêng, lần đầu kèm 📦 Tin giờ, không mã tin", /^💾 Vừa lưu: /.test(bl) && /\n📦 Tin giờ: /.test(bl) && !/BDS-Q5/.test(bl), JSON.stringify(r.body.replies));
   r = await send({ external_user_id: "z-ccrb", text: "dạ em" });
-  check("BLDL-10 thay_doi + DB vừa đổi (66m²) → báo lại", /💾 Đã lưu: .*66m²/.test(r.body.replies.at(-1) ?? ""), JSON.stringify(r.body.replies));
+  check("BLDL-09 tin khách không lưu được gì → KHÔNG nhắn 💾", r.body.replies.length > 0 && !r.body.replies.some((x) => /💾/.test(x)), JSON.stringify(r.body.replies));
+  LB.area_m2 = 66;
+  r = await send({ external_user_id: "z-ccrb", text: "nhà hướng đông nam em" });
+  check("BLDL-10 thay_doi + lượt này lưu fact + tin đã đổi (66m²) → 💾 kèm 📦 Tin giờ mới", /^💾 Vừa lưu: .*hướng/.test(r.body.replies[0] ?? "") && /📦 Tin giờ: .*66m²/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
+  r = await send({ external_user_id: "z-ccrb", text: "nhà hướng đông nam nha em" });
+  check("BLDL-10b lưu lại mà tin KHÔNG đổi so với lần báo trước → 💾 không kèm 📦 Tin giờ", /^💾 Vừa lưu: /.test(r.body.replies[0] ?? "") ? !/📦 Tin giờ/.test(r.body.replies[0]) : !r.body.replies.some((x) => /💾/.test(x)), JSON.stringify(r.body.replies));
 
-  // Người MUA không bao giờ nhận bảng 💾.
-  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "day_du" };
+  // Người MUA: 14/09 cũng được báo hồ sơ vừa lưu (đọc lại buyers.preferences).
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
   fresh(seedKho);
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "quận 5", budget: "tầm 6 tỷ" }, replies: ["Dạ chị cần mấy phòng ngủ ạ?"] });
   r = await send({ external_user_id: "mua-bldl", text: "tìm nhà quận 5 tầm 6 tỷ" });
-  check("BLDL-11 nhánh người MUA không có 💾 dù công tắc bật", r.body.role !== "seller" && !JSON.stringify(r.body).includes("💾"), JSON.stringify(r.body).slice(0, 400));
+  check("BLDL-11 người MUA, công tắc bật → 💾 'Đã lưu nhu cầu' là bong bóng ĐẦU, đúng khoá vừa lưu, không khoá nội bộ",
+    /^💾 Đã lưu nhu cầu: .*khu vực.*quận 5.*khoảng giá: tầm 6 tỷ/.test(r.body.replies[0] ?? "") && !/tên trợ lý|ten_tro_ly|•ai/.test(r.body.replies[0] ?? "") && r.body.replies.length === 2,
+    JSON.stringify(r.body.replies));
+  const hsMua = db().t.buyers.find((b) => b.zalo_user_id === "mua-bldl")?.preferences ?? {};
+  check("BLDL-11b 💾 người mua nói đúng thứ ĐÃ vào DB (hồ sơ có area + budget)", hsMua.area === "quận 5" && hsMua.budget === "tầm 6 tỷ", JSON.stringify(hsMua));
+  const nLich = parseCalls().length;
+  r = await send({ external_user_id: "mua-bldl", text: "3 phòng em" });
+  const lichSuMua = JSON.stringify(parseCalls().slice(nLich).map((c) => c.params.messages));
+  check("BLDL-11c lượt sau model người mua KHÔNG thấy 💾 trong lịch sử", !lichSuMua.includes("💾"), lichSuMua.slice(0, 300));
+  delete globalThis.__cauHinh;
+  fresh(seedKho);
+  r = await send({ external_user_id: "mua-bldl2", text: "tìm nhà quận 5 tầm 6 tỷ" });
+  check("BLDL-11d người MUA, công tắc tắt → không 💾", !JSON.stringify(r.body).includes("💾"), JSON.stringify(r.body).slice(0, 300));
   delete globalThis.__cauHinh;
 }
 
@@ -1526,7 +1545,7 @@ fresh(seedKho);
   const r1q = createCalls().map((c) => (c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : "").join("\n")).find((s) => /Chủ nhà vừa nhắn rao/.test(s)) ?? "";
   check("T42-18 rao KHÔNG nói quận → boc_tach đánh dấu quận mặc định, câu hỏi đầu hỏi KÈM quận, 💾 nói 'chưa rõ quận', 📝 không tự nhận Quận 5",
     LL[0]?.boc_tach?.quan_mac_dinh === true && !("quan" in (LL[0]?.boc_tach ?? {})) && /phường mấy, quận nào/.test(r1q) &&
-      /Quận 5 \(chưa rõ quận\)/.test(rr.body.replies.at(-1) ?? "") && !/Quận 5/.test(rr.body.replies[0] ?? ""),
+      /^💾 Đã lưu: .*Quận 5 \(chưa rõ quận\)/.test(rr.body.replies[0] ?? "") && !rr.body.replies.slice(1).some((x) => /Quận 5/.test(x)),
     JSON.stringify({ bt: LL[0]?.boc_tach, rep: rr.body.replies, r1q: r1q.slice(0, 400) }));
   r = await send({ external_user_id: "t42-q5", text: "quận 8 phường 6 em" });
   const Lq5 = db().t.listings.find((l) => l.id === LL[0]?.id);
