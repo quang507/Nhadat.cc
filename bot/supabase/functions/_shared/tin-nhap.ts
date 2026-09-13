@@ -157,7 +157,11 @@ export function soanTinNhap(t: ThamSoNhap): string {
   const thue = l.deal === "cho_thue";
   const dong: string[] = [];
   const them = (icon: string, ten: string, phan: Array<string | null | undefined | false>) => {
-    const p = phan.filter((x): x is string => !!x && String(x).trim().length > 0);
+    // Chủ nhà nhắn "để ở hoặc cho thuê đều được em" → tin rao không được in
+    // "Phù hợp: … đều được em" (lượt bắn 12/09). Bỏ tiểu từ chat ở đuôi.
+    const p = phan.filter((x): x is string => !!x && String(x).trim().length > 0)
+      .map((x) => String(x).replace(/(?:[\s,]+(?:em|anh|chị|nha|nhé|nhe|nhen|ạ|luôn|đó|á|nghen|thôi))+\s*[.!]*$/iu, "").trim())
+      .filter(Boolean);
     if (p.length) dong.push(`${icon} ${ten}: ${p.join(" · ")}`);
   };
 

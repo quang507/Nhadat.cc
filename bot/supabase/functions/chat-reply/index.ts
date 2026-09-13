@@ -38,7 +38,7 @@ import {
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
 // bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
-import { TIEN_KD, TIEN_CD, TIEN_T_KEP, giaTheoM2, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
+import { TIEN_KD, TIEN_CD, TIEN_T_KEP, giaTheoM2, gonGiaKyHan, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../_shared/extraction/so-chu.ts";
 import { thayLienHe } from "../_shared/extraction/luat-lien-he.ts";
 // 11/09/2026: khách mua muốn ở GẦN đâu — model hiểu nghĩa (boc-gan), regex dự
@@ -56,6 +56,8 @@ import { lechDienTich, phanLoaiAnh, type LoaiAnh } from "../_shared/ai/phan-loai
 import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.ts";
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
+// 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
+import { chanHuaCoHang, gopGhiChu, laCauGhiNhan, laHoiCoHang } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // FR-161 — RẤT NHIỀU người nhắn Zalo không bỏ dấu, mà mọi cổng regex ở đây
@@ -1575,6 +1577,10 @@ Deno.serve(async (req) => {
           reply: null, replies: [], role: "seller", human_active: true, ...extra,
         });
       }
+      // Model đã tự mở bằng lời ghi nhận (thường ĐỦ hơn bong bóng code: "sửa lại
+      // 6 tỷ 5 và Phường 9" so với "sửa lại Phường 9") → bỏ bong bóng code, kẻo
+      // chủ nhà đọc hai lần "Dạ em sửa lại…" liền nhau (lượt bắn 12/09).
+      if (ackSua && replies.length && laCauGhiNhan(replies[0])) ackSua = null;
       const sach = [...(ackSua ? [ackSua] : []), ...ackAnh, ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
         .map((r) => r.trim()).filter(Boolean);
       ackSua = null;
@@ -2821,7 +2827,7 @@ Deno.serve(async (req) => {
       // CĂN (75 triệu × 50m2) và nói rõ trong bong bóng ghi nhận là em đã nhân.
       const giaM2 = giaTheoM2(priceM?.[1]);
       const dtSo = areaM ? Number(areaM[1].replace(",", ".")) : null;
-      const giaGhi = giaM2 && dtSo ? vndThanhChu(giaM2 * dtSo) : priceM?.[1]?.trim() ?? null;
+      const giaGhi = giaM2 && dtSo ? vndThanhChu(giaM2 * dtSo) : priceM?.[1] ? gonGiaKyHan(priceM[1].trim()) : null;
       const giaNoi = giaM2 && dtSo ? `${priceM![1].trim()} (≈ ${giaGhi} cho ${dtSo}m2)` : giaGhi;
       // FR-158: mã do trigger `trg_listings_fill_code` cấp, nối tiếp đúng dãy
       // BDS-Q5-#### mà admin và web đang dùng. Đưa `code: null` xuống là cố ý —
@@ -3371,6 +3377,12 @@ Deno.serve(async (req) => {
       ? prefs.gan_tien_ich_loc as GanTienIch
       : null);
   const minimumMet = (prefs.area != null || gan != null) && prefs.budget != null;
+  // 13/09/2026: cách gọi KHÁCH MUA. Nhánh người bán có `sellers.xung_ho` từ 07/09,
+  // nhánh mua thì không — model tự đoán: "có căn nào quận 10 tầm 5 tỷ không em"
+  // → "Anh tìm để ở…". Lời dặn ("kêu chị nha") thắng; khách tự xưng ("chị đang
+  // tìm mua") thì nhận khi chưa biết. Lưu trong hồ sơ, không thêm cột.
+  const xhMuaMoi = batXungHo(text) ?? (prefs.xung_ho ? null : tuXungTuCau(text));
+  const goiMua = (xhMuaMoi ?? prefs.xung_ho ?? null) as "anh" | "chị" | null;
   // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN, cận trên giá (SRS-5.2)
   // Cột dùng chung cho mọi dòng "căn" đưa vào prompt (KHO, căn khách nhắc, căn
   // tương tự, căn trong dự án): thông số FR-172 + dự án/tình trạng căn FR-116.
@@ -3759,6 +3771,9 @@ Deno.serve(async (req) => {
             ? [{ type: "image" as const, source: { type: "url" as const, url: imageUrl } }]
             : []),
           { type: "text" as const, text:
+          (goiMua
+            ? `CÁCH GỌI KHÁCH: "${goiMua}" - khách đã tự xưng/dặn, giữ nguyên mọi tin, không dùng "anh/chị".\n`
+            : `CÁCH GỌI KHÁCH: chưa biết nam hay nữ - gọi "anh/chị", KHÔNG tự đoán "anh" hay "chị".\n`) +
           `HỒ SƠ ĐÃ BIẾT về khách${buyer.name ? ` (tên: ${buyer.name})` : ""}:\n${known || "(chưa biết gì)"}\n\n` +
           (minimumMet
             ? `CHƯA BIẾT (chỉ NHẶT khi khách tự kể hoặc khi khách chê căn vừa gửi, TUYỆT ĐỐI không hỏi chủ động - đủ khu vực + giá là ngừng dò hồ sơ):\n${missing || "(đã đủ)"}\n\n`
@@ -3816,6 +3831,24 @@ Deno.serve(async (req) => {
   }
   // FR-79 (v48): khách đòi gọi điện — theo cờ model HOẶC regex (model quên thì
   // vẫn mở việc VOICE). Cần người thật là hệ quả bắt buộc.
+  // 13/09/2026: model KHÔNG có căn nào trong tay (kho trống/chưa lọc, không căn
+  // khách nhắc, không căn tương tự, không căn dự án) mà vẫn "Dạ có em" / "em đang
+  // có vài căn…" → bỏ câu đó, nói thật. Câu lệnh đã dặn "không bịa" mà vẫn lọt
+  // ở lượt bắn 12/09 (2/2 khách mua), nên chặn bằng code.
+  if (!kho && !askedBlock && !tuongTuBlock && !canDuAn.length) {
+    const ac = goiMua ?? "anh/chị";
+    const chan = chanHuaCoHang(
+      out.replies,
+      minimumMet || mentioned.length
+        ? `hiện bên em chưa có căn nào khớp đúng nhu cầu này ạ. Em ghi lại rồi, có căn mới hợp là em báo ${ac} liền nha.`
+        : `em lọc kho theo đúng nhu cầu của ${ac} rồi báo lại liền nha.`,
+      laHoiCoHang(text),
+    );
+    if (chan.daChan) {
+      out.replies = chan.replies;
+      console.log("chat-reply: chặn câu hứa có hàng khi kho trống");
+    }
+  }
   const muonGoi = !!out.voice_request || VOICE_RE_KD.test(tKD);
   if (muonGoi) out.need_human = true;
 
@@ -3830,9 +3863,10 @@ Deno.serve(async (req) => {
   for (const [k, v] of Object.entries(out.profile)) {
     if (v === null || v === "" || k === "name") continue;
     if (k === "notes" && typeof prefs.notes === "string" && prefs.notes) {
-      if (!prefs.notes.includes(String(v))) {
-        delta.notes = `${prefs.notes}; ${v}`.slice(-500);
-      }
+      // Gộp theo TỪNG Ý: model hay trả lại cả ghi chú cũ lẫn mới, so nguyên chuỗi
+      // thì nối thêm cả đoạn cũ → "mẹ già ở cùng; mẹ già ở cùng; …" (13/09).
+      const gop = gopGhiChu(prefs.notes, String(v));
+      if (gop) delta.notes = gop;
     } else {
       delta[k] = v;
     }
@@ -3850,6 +3884,7 @@ Deno.serve(async (req) => {
   // FR-181: tên trợ lý của khách mua nằm trong hồ sơ (`preferences.ten_tro_ly`),
   // ghi một lần, đi chung RPC gộp hồ sơ — không thêm vòng DB nào.
   if (!prefs.ten_tro_ly) delta.ten_tro_ly = tenBot;
+  if (xhMuaMoi && xhMuaMoi !== prefs.xung_ho) delta.xung_ho = xhMuaMoi;
   // ─── HẬU KỲ: mọi việc ghi sổ sau khi đã có câu trả lời trong tay chạy SONG
   // SONG (FR-171 h). Trước bản này chúng nối đuôi nhau: ~8-12 vòng đi về DB
   // thành ~8-12 lần thời gian mạng, trong khi chẳng việc nào cần kết quả của
