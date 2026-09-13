@@ -4313,7 +4313,11 @@ ${kem}` : tomTat, cheDo };
         if (bSauErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(buyers)", bSauErr.message);
         const bong = vuaLuuMua(prefs, (bSau as { preferences?: Record<string, unknown> } | null)?.preferences, BUYER_PROFILE_FIELDS);
         // Qua bộ lọc liên hệ như mọi bong bóng gửi người mua (FR-105) — ghi chú hoàn cảnh do model viết.
-        if (bong) replies.unshift(locLienHe(bong));
+        if (bong) {
+          // 💾 đã báo lưu gì → "Dạ chị, em ghi lại: mua nhà Quận 5 tầm 7 tỷ…" là ghi nhận lần hai.
+          const conLai = boCauGhiNhan(replies);
+          replies.splice(0, replies.length, locLienHe(bong), ...conLai);
+        }
       }
     } catch (e) {
       await ghiLoi(client, "chat-reply bao_lai_da_luu(mua)", e);
