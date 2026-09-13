@@ -803,7 +803,11 @@ export function laGap(text: string): boolean {
   if (!kd) return false;
   if (/\b(khong|ko|k|chua|dau co|chang)\s*(?:can\s*)?gap\b/.test(kd)) return false;
   if (/\bgap\s*(doi|ba|lan|ruoi|\d)/.test(kd)) return false; // "gấp đôi", "gấp 3" là so sánh
-  return /\b(ban|thue|thanh ly|can|ra|di)\s*(?:nha\s*|dat\s*)?gap\b|\bgap\s*(lam|qua|nha|nhe|em|a)?\b|\bcan tien\b|\b(ban|di|ra)\s*nhanh\b/.test(kd);
+  // 12/09/2026 (bắn 20 tin): "gia đình cần tiền nên để lại căn nhà…" bị gắn cờ
+  // CẦN BÁN GẤP rồi in thẳng lên tin rao. Cần tiền là LÝ DO bán, không phải hạn
+  // chót — chỉ tính gấp khi cùng câu có chữ bán/ra hàng/thanh lý/nhanh.
+  if (/\bcan tien\b/.test(kd) && /\bcan tien\b[^.]{0,40}\b(ban|ra hang|thanh ly|nhanh|gap)\b/.test(kd)) return true;
+  return /\b(ban|thue|thanh ly|can|ra|di)\s*(?:nha\s*|dat\s*)?gap\b|\bgap\s*(lam|qua|nha|nhe|em|a)?\b|\b(ban|di|ra)\s*nhanh\b/.test(kd);
 }
 
 // ── "Bán rồi / ngưng rao" — FR-184 (chat Gemini 21/06, chủ dự án chốt 09/09/2026) ──

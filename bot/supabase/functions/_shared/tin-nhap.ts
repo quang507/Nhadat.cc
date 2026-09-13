@@ -273,10 +273,15 @@ export function soanTinNhap(t: ThamSoNhap): string {
   dong.push(cauTD("nhap_goi_hanh_dong"));
   // Điểm đầy đủ đi CUỐI, chung một dòng với lời gợi ý — để trên câu mở thì tin
   // rao mở đầu bằng một con số nội bộ, không giống tin rao.
+  // Gamification (chủ dự án 12/09: "để kích thích người ta đưa nhiều thông tin
+  // để điểm bds cao hơn"): còn ĐÚNG một hai thứ thì nói thẳng thêm vào là đủ
+  // 100/100 — thấy được đích thì người ta gửi nốt; thiếu dài thì nói chung.
   dong.push(
-    thieu.length
-      ? cauTD("nhap_goi_y", { diem, thieu: thieu.slice(0, 2).join(" và ") })
-      : cauTD("nhap_diem", { diem }),
+    !thieu.length
+      ? cauTD("nhap_diem", { diem })
+      : thieu.length <= 2
+      ? cauTD("nhap_goi_y_tron", { diem, thieu: thieu.join(" và ") })
+      : cauTD("nhap_goi_y", { diem, thieu: thieu.slice(0, 2).join(" và ") }),
   );
   dong.push(lai ? cauTD("nhap_sua_xong") : cauTD("nhap_hoi_duyet"));
   return dong.join("\n");
