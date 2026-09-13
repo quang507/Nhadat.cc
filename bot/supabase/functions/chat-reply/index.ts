@@ -907,7 +907,14 @@ Deno.serve(async (req) => {
   // FR-181 (09/09/2026 chiều): MỖI KHÁCH MỘT TÊN TRỢ LÝ, gán tất định theo Zalo
   // ID và giữ suốt (T•ai, Kh•ai, M•ai…). Prompt/lời chào viết "{ten}", điền ở đây.
   const tenBot = tenTroLy(externalUserId);
-  const TONE = dienTen(P.tone_rules ?? TONE_RULES, tenBot);
+  // 14/09/2026 (đo thật): khối system được NHỚ TẠM mà lại chứa tên trợ lý riêng của
+  // từng khách (20 tên •ai) → mỗi khách một bản, lượt nào cũng `cache_read 0`,
+  // `cache_write 16.058` token: model đọc lại 16 nghìn token mỗi lượt (chậm) và trả
+  // tiền GHI nhớ tạm (2 lần giá) mà không bao giờ được đọc lại. Khối nhớ tạm nay
+  // dùng chữ giữ chỗ chung; tên thật đi ở phần KHÔNG nhớ tạm (`DONG_TEN`).
+  const TEN_GIU_CHO = "«tên em»";
+  const DONG_TEN = `TÊN EM trong cuộc trò chuyện này là "${tenBot}" — chỗ nào ở trên ghi ${TEN_GIU_CHO} thì là tên này; không đổi, không xưng tên khác.`;
+  const TONE = dienTen(P.tone_rules ?? TONE_RULES, TEN_GIU_CHO);
   // 09/09/2026: câu hỏi mẫu + lời chào khách mới đọc từ bot_prompts (đè lên code).
   const { bang: BANG_CAU, loi: loiCauMau } = docCauHoiMau(P.cau_hoi_mau);
   // FR-138 b (10/09): chữ TIỀN ĐỊNH cũng sửa được ở Dashboard — chủ dự án:
@@ -938,7 +945,7 @@ Deno.serve(async (req) => {
   // nhánh vốn thưa lượt, gần như luôn trượt và mỗi lần trượt trả 1,25 giá.
   // 170 chữ-máy FEES thừa ở r1/r2 rẻ hơn hẳn một ô nhớ tạm riêng.
   // FR-178: few-shot người bán (giọng AI Ơi Nhà Đất + kịch bản sếp) đi cùng luật.
-  const SELLER_FEW = dienTen(P.seller_fewshot ?? SELLER_FEWSHOT, tenBot) + (mauBan ? "\n\n" + MAU_CHUAN_TD + "\n" + mauBan : "");
+  const SELLER_FEW = dienTen(P.seller_fewshot ?? SELLER_FEWSHOT, TEN_GIU_CHO) + (mauBan ? "\n\n" + MAU_CHUAN_TD + "\n" + mauBan : "");
   const SELLER_SYSTEM = TONE + "\n\n" + SELLER_SCRIPT + "\n\n" + SELLER_FEW + "\n\n" + FEES;
 
   // ─── FR-173 d: NGƯỜI NỘI BỘ (CTV/admin) nhắn "#mã tin: câu trả lời" ──────────
@@ -1624,7 +1631,8 @@ ${kem}` : tomTat, cheDo };
       replies = chanNhanLaNguoi(replies, goiNguoi ?? "mình");
       const ackDau = ackSua;
       let sach = [...(ackSua ? [ackSua] : []), ...ackAnh, ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
-        .map((r) => r.trim()).filter(Boolean);
+        // Model lỡ chép nguyên chữ giữ chỗ của khối nhớ tạm → thay bằng tên thật.
+        .map((r) => r.split(TEN_GIU_CHO).join(tenBot).trim()).filter(Boolean);
       ackSua = null;
       ackAnh = [];
       thongBaoNhan = null;
@@ -2586,7 +2594,7 @@ ${kem}` : tomTat, cheDo };
             const r2b = await anthropicS.messages.create({
               model: MODEL, max_tokens: 400,
               output_config: { effort: "medium" },
-              system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }],
+              system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }, { type: "text", text: DONG_TEN }],
               messages: [{ role: "user", content: promptLai }],
             });
             hoiLai = r2b.content.find((b) => b.type === "text")?.text?.trim() ?? null;
@@ -2804,7 +2812,7 @@ ${kem}` : tomTat, cheDo };
             // FR-176: có lịch sử để đọc thì cho model đọc — "low" là đủ khi
             // câu lệnh cụt, giờ nó phải tránh lặp khuôn của 8 tin trước.
             output_config: { effort: "medium" },
-            system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }],
+            system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }, { type: "text", text: DONG_TEN }],
             messages: [{ role: "user", content: prompt }],
           });
           sellerReply = r2.content.find((b) => b.type === "text")?.text?.trim() ?? null;
@@ -3049,7 +3057,7 @@ ${kem}` : tomTat, cheDo };
             const r1 = await anthropicS.messages.create({
               model: MODEL, max_tokens: 512,
               output_config: { effort: "low" },
-              system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }],
+              system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }, { type: "text", text: DONG_TEN }],
               messages: [{
                 role: "user",
                 content:
@@ -3186,7 +3194,7 @@ ${kem}` : tomTat, cheDo };
         const r3 = await anthropicS.messages.create({
           model: MODEL, max_tokens: 512,
           output_config: { effort: "low" },
-          system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }],
+          system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }, { type: "text", text: DONG_TEN }],
           messages: [{
             role: "user",
             content:
@@ -3798,7 +3806,7 @@ ${kem}` : tomTat, cheDo };
         cache_control: { type: "ephemeral", ttl: "1h" },
       }, {
         type: "text",
-        text: "KHO HIỆN CÓ:\n" +
+        text: DONG_TEN + "\n\nKHO HIỆN CÓ:\n" +
           (kho || (minimumMet || mentioned.length
             ? "(trống)"
             : "(chưa lọc - chưa đủ khu vực + giá để lọc, đừng nói kho trống)")) +
@@ -3973,7 +3981,7 @@ ${kem}` : tomTat, cheDo };
   // đã vào sổ từ đầu lượt, nên loạt bong bóng bot chèn ở đây luôn đứng sau.
   // FR-105: mọi bong bóng gửi NGƯỜI MUA qua bộ lọc liên hệ — model được dặn
   // không đưa số, nhưng dặn không phải là chặn.
-  const replies = out.replies.map((r) => locLienHe(r.trim())).filter(Boolean);
+  const replies = out.replies.map((r) => locLienHe(r.split(TEN_GIU_CHO).join(tenBot).trim())).filter(Boolean);
   danhDau("mua_truoc_hau_ky");
   // FR-32: mã trong câu trả lời, không có thì lấy mã khách vừa nhắc (bot hay
   // gọi căn bằng tên đường thay vì lặp lại mã)
