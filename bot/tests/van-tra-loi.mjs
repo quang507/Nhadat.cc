@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauGhiNhan, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHuaCoHang, laNhanLaNguoi } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -197,6 +197,31 @@ ok("ghi nhận: 'Dạ chị, em ghi lại: mua nhà Quận 5…' là ghi nhận 
   const ra = boCauGhiNhan(["Dạ chị, em ghi lại: mua nhà Quận 5 tầm 7 tỷ, gần bệnh viện cho mẹ. Chị cần mấy phòng ngủ và nhà hẻm hay mặt tiền thì tìm dễ hơn ạ?"]);
   ok("người mua: bỏ câu ghi nhận lần hai, câu hỏi còn lại mở bằng 'Dạ'", ra[0] === "Dạ chị cần mấy phòng ngủ và nhà hẻm hay mặt tiền thì tìm dễ hơn ạ?", JSON.stringify(ra));
 }
+
+// ── 14/09 bắn 16 hội thoại người mua: hồ sơ bịa, "chúng mình", hứa có nhiều ────
+{
+  const P0 = { name: null, deal: null, area: null, budget: null, purpose: null, property_type: null, bedrooms: null, alley: null, timeline: null, notes: null };
+  const a = locHoSoMua({ ...P0, area: "Bình Thạnh", purpose: "để ở", timeline: "trong tháng này" }, "cần mua gấp trong tháng này, quận bình thạnh tầm 8 tỷ, nhà mặt tiền");
+  ok("hồ sơ: 'gấp, mặt tiền' không nói mục đích → gỡ 'để ở'; giữ timeline 'trong tháng này'", a.profile.purpose === null && a.profile.timeline === "trong tháng này" && a.bo.join() === "purpose", JSON.stringify(a));
+  const b = locHoSoMua({ ...P0, timeline: "chiều thứ 7" }, "cuối tuần anh đi xem nhà được không, anh rảnh chiều thứ 7");
+  ok("hồ sơ: giờ đi XEM NHÀ không phải timeline → gỡ", b.profile.timeline === null, JSON.stringify(b));
+  const c = locHoSoMua({ ...P0, notes: "Khách muốn xem danh sách căn ngay, chưa hỏi chi tiết" }, "hỏi hoài vậy, có căn nào thì gửi đi");
+  ok("hồ sơ: ghi chú là thái độ của khách → gỡ", c.profile.notes === null, JSON.stringify(c));
+  const d = locHoSoMua({ ...P0, notes: "anh có 2 tỷ, vay thêm được không để mua nhà 4 tỷ" }, "anh có 2 tỷ, vay thêm được không để mua nhà 4 tỷ quận 6");
+  ok("hồ sơ: ghi chú chép gần nguyên câu khách → gỡ", d.profile.notes === null, JSON.stringify(d));
+  // KHÔNG được gỡ
+  const e = locHoSoMua({ ...P0, purpose: "để ở", notes: "có mẹ già ở cùng, cần gần bệnh viện" }, "chị tìm mua nhà quận 5 để ở, nhà có mẹ già nên muốn gần bệnh viện");
+  ok("hồ sơ: khách NÓI 'để ở' + hoàn cảnh thật → giữ cả hai", e.profile.purpose === "để ở" && e.profile.notes === "có mẹ già ở cùng, cần gần bệnh viện", JSON.stringify(e));
+  const f = locHoSoMua({ ...P0, purpose: "cho thuê lại" }, "mua để cho thuê lại, khu nào quận 5 dòng tiền tốt em");
+  ok("hồ sơ: 'mua để cho thuê lại' → giữ mục đích", f.profile.purpose === "cho thuê lại", JSON.stringify(f));
+  const g = locHoSoMua({ ...P0, timeline: "trước Tết", notes: "4 người ở" }, "dọn vào trước tết em, nhà 4 người");
+  ok("hồ sơ: 'dọn vào trước tết' giữ timeline; '4 người ở' (ngắn) giữ ghi chú", g.profile.timeline === "trước Tết" && g.profile.notes === "4 người ở", JSON.stringify(g));
+}
+ok("xưng hô: 'căn hộ có ban công chúng mình có nhiều' → 'bên em'", suaTuXungMua("Dạ căn hộ có ban công chúng mình có nhiều.") === "Dạ căn hộ có ban công bên em có nhiều.", suaTuXungMua("Dạ căn hộ có ban công chúng mình có nhiều."));
+ok("xưng hô: đầu câu 'Chúng mình…' → 'Bên em…'; 'nhà mình' (gọi khách) giữ nguyên", suaTuXungMua("Chúng mình báo lại liền. Nhà mình ở đâu ạ?") === "Bên em báo lại liền. Nhà mình ở đâu ạ?", suaTuXungMua("Chúng mình báo lại liền. Nhà mình ở đâu ạ?"));
+ok("kho: 'căn hộ có ban công chúng mình có nhiều' là hứa", laHuaCoHang("Dạ căn hộ có ban công chúng mình có nhiều."));
+ok("kho: 'Em tìm căn khớp 4 người ở quanh trường … rồi' là hứa", laHuaCoHang("Em tìm căn khớp 4 người ở quanh trường tiểu học Quận 3 tầm 6 tỷ rồi."));
+ok("kho: 'bên em có nhiều khách hỏi khu này' không phải hứa có hàng", !laHuaCoHang("Bên em có nhiều khách hỏi khu này lắm."));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
