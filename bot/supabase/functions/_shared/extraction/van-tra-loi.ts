@@ -22,7 +22,10 @@ const boDau = (s: string): string =>
 // tầng trên quyết định lúc nào gọi.
 const HUA_CO_HANG: RegExp[] = [
   // "Dạ có em." / "Có ạ!" / "Dạ có chị nha" — cả câu chỉ là chữ "có".
-  /^(?:da|vang|u|ok|oke)?[\s,]*co(?:\s+(?:em|a|chi|anh|nha|nhe|luon|lien|san|nhieu|lam))*\s*[.!…]*$/,
+  // 13/09: "Dạ có anh/chị!" lọt vì dấu "/" — cho phép.
+  /^(?:da|vang|u|ok|oke)?[\s,]*co(?:\s+(?:em|a|chi|anh|anh\/chi|nha|nhe|luon|lien|san|nhieu|lam))*\s*[.!…]*$/,
+  // 13/09: "Dạ em tìm vài căn hẻm xe hơi… cho chị xem nha" — hứa gửi căn chưa có.
+  /\b(?:tim|gui|loc|chon|lua|kiem)\s+(?:(?:ra|duoc|san)\s+)?(?:vai|mot vai|mot so|may|\d+)\s+can\b/,
   // "em đang có vài căn…", "bên em hiện có 3 căn", "em có nhà mặt tiền…"
   /\b(?:em|ben em|minh|kho)\s+(?:(?:dang|hien|van|cung|con|da|san)\s+)*co\s+(?:san\s+)?(?:(?:vai|mot vai|mot so|nhieu|may|mot|hai|ba|bon|nam|\d+)\s+)?(?:can|lo|nen|mau|nha|lua chon|san pham)\b/,
   // "có vài căn đúng ý chị", "có 2 lựa chọn"
@@ -69,6 +72,38 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
     if (moi) ra.push(moi);
   }
   return daChan ? { replies: ra, daChan } : { replies, daChan };
+}
+
+// ── Không nhận là người thật (13/09/2026) ──────────────────────────────────
+// Lượt bắn 13/09: khách "em là người hay máy vậy" → model "Em là người thật,
+// không phải máy đâu anh/chị." Câu lệnh dặn "không thuyết minh về AI" và model
+// hiểu thành "chối là AI". Nói dối về bản chất trợ lý là không được, dù khách
+// thích giọng người thật tới đâu. Câu nào nhận là người / chối là máy thì thay
+// bằng câu thật; phần còn lại (câu hỏi quay lại việc) giữ nguyên.
+const NHAN_LA_NGUOI: RegExp[] = [
+  /\b(?:em|minh|toi|tui)\s+(?:la\s+|dung la\s+)?(?:mot\s+)?(?:nguoi\s+that|con nguoi|nguoi\s+binh thuong)\b/,
+  /\b(?:khong|ko|chang|dau)\s+(?:phai\s+)?(?:la\s+)?(?:may|bot|robot|chatbot|ai|tri tue nhan tao)\b(?!\s*(?:lanh|giat|bom|nuoc|phat|in|tinh|cung|ca\b|nay|kia|khac|biet|lam))/,
+];
+export function laNhanLaNguoi(cau: string): boolean {
+  const kd = boDau(cau);
+  return NHAN_LA_NGUOI.some((re) => re.test(kd));
+}
+export function chanNhanLaNguoi(replies: string[], ac: string): string[] {
+  let daThay = false;
+  const ra: string[] = [];
+  for (const r of replies) {
+    const giu: string[] = [];
+    for (const c of tachCau(r)) {
+      if (!laNhanLaNguoi(c)) { giu.push(c); continue; }
+      if (!daThay) {
+        giu.push(`Em là trợ lý AI bên AI Ơi Nhà Đất, việc gì cần người thật thì có anh/chị phụ trách khu vực theo sát ${ac} ạ.`);
+        daThay = true;
+      }
+    }
+    const moi = giu.join(" ").trim();
+    if (moi) ra.push(moi);
+  }
+  return daThay ? ra : replies;
 }
 
 /**

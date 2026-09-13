@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { chanHuaCoHang, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHuaCoHang } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHuaCoHang, laNhanLaNguoi } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -62,6 +62,31 @@ for (const [cau, mong] of [
     JSON.stringify(b.replies));
   const c = chanHuaCoHang(["Dạ chị cần mấy phòng ngủ ạ?"], loi);
   ok("không vi phạm → trả nguyên mảng", !c.daChan && c.replies[0] === "Dạ chị cần mấy phòng ngủ ạ?", JSON.stringify(c));
+}
+
+// ── 13/09 lượt bắn thứ hai: hai kẽ van kho + nhận là người thật ─────────────
+ok("kho: 'Dạ có anh/chị!' (dấu gạch chéo) vẫn là hứa", laHuaCoHang("Dạ có anh/chị!"));
+ok("kho: 'Dạ em tìm vài căn hẻm xe hơi… cho chị xem nha' là hứa", laHuaCoHang("Dạ em tìm vài căn hẻm xe hơi 3 phòng gần bệnh viện quanh tầm 7 tỷ cho chị xem nha."));
+ok("kho: 'Em gửi 2 căn này chị xem nha' — CÓ căn thì tầng trên không gọi van; câu vẫn nhận là hứa", laHuaCoHang("Em gửi 2 căn này chị xem nha."));
+for (const [cau, mong] of [
+  ["Em là người thật, không phải máy đâu anh/chị.", true],
+  ["Dạ em là người thật ạ.", true],
+  ["Em không phải bot đâu chị.", true],
+  ["Mình là con người bình thường thôi anh.", true],
+  // KHÔNG được chặn
+  ["Dạ em là M•ai bên AI Ơi Nhà Đất ạ.", false],
+  ["Bên em có anh Thu là người thật phụ trách khu vực.", false],
+  ["Không phải ai cũng mua được giá này đâu chị.", false],
+  ["Nhà không phải máy lạnh âm trần đâu anh.", false],
+  ["Em là trợ lý AI bên AI Ơi Nhà Đất ạ.", false],
+]) ok(`laNhanLaNguoi "${cau}"`, laNhanLaNguoi(cau) === mong, String(laNhanLaNguoi(cau)));
+{
+  const ra = chanNhanLaNguoi(["Dạ em là M•ai bên AI Ơi Nhà Đất ạ. Em là người thật, không phải máy đâu anh/chị. Bây giờ mình đang tìm mua hay thuê nhà ạ?"], "mình");
+  ok("thay câu nhận là người bằng câu thật, giữ lời chào và câu hỏi quay lại việc",
+    ra.length === 1 && /^Dạ em là M•ai bên AI Ơi Nhà Đất ạ\. Em là trợ lý AI bên AI Ơi Nhà Đất.*theo sát mình ạ\. Bây giờ mình đang tìm mua/.test(ra[0]) && !/người thật, không phải máy/.test(ra[0]),
+    JSON.stringify(ra));
+  const y = ["Dạ chị cần mấy phòng ngủ ạ?"];
+  ok("không vi phạm → trả nguyên mảng", chanNhanLaNguoi(y, "chị") === y);
 }
 
 // ── Ghi chú người mua không lặp ─────────────────────────────────────────────

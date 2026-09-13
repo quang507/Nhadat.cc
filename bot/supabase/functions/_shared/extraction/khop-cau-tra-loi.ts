@@ -483,6 +483,8 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   ["hem_thong", /\bhem\s*(thong|cut)\b/, (m) => `hẻm ${m[1] === "cut" ? "cụt" : "thông"}`],
   ["ngap_nuoc", /\b((?:khong|ko|k)\s*(?:bi\s*)?ngap|ngap nuoc|hay ngap|bi ngap)\b/, (m) => /khong|ko|k\s/.test(m[1]) ? "không ngập" : "có ngập"],
   ["ly_do_ban", /\b(dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san|tra no|ve que|doi cong tac|mua cho khac)\b/, (m) => m[1]],
+  // 13/09/2026: "tầng 15 view sông" — mảnh đó ra `tang`, view rơi mất. Cắt từ chữ gốc.
+  ["view", /\bview\s+[a-z0-9]+(?:\s+(?:song|ho|bien|thanh pho|cong vien|kenh|landmark|q1|quan 1|\d+))?/, (m) => m[0]],
   ["nam_xay", /\b(?:xay|hoan cong|xd)\s*(?:nam\s*|tu\s*|moi\s*)?((?:19|20)\d{2})\b/, (m) => m[1]],
   ["thuong_luong", /\b(con thuong luong|co thuong luong|thuong luong duoc|\btl\b|fix|gia cung|khong bot)\b/, (m) => m[1]],
 ];
@@ -521,9 +523,22 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
   // lý là NGUYÊN câu rao (5/42 tin). Mảnh "shr" mới là câu trả lời pháp lý.
   const manh = text.split(/[,;\n]|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter((s) => s.length >= 2);
   if (manh.length > 1) for (const s of manh) them(nhanDienFact(s));
-  them(nhanDienFact(text));
+  // 13/09/2026 (lượt bắn thật): câu nhiều mảnh mà lượt CẢ CÂU trả về nguyên câu
+  // làm đáp án thì đó là rác — "anh cần bán căn nhà hẻm xe hơi 5m Nguyễn Trãi…"
+  // thành fact độ rộng hẻm, "ngang 5 dài 20, đường nhựa 7m, sổ riêng" thành pháp
+  // lý. Các mảnh đã được xét riêng ở trên; cả câu chỉ còn được góp đáp án ĐÃ CẮT.
+  const caCau = nhanDienFact(text);
+  if (manh.length <= 1 || (caCau && caCau.answer !== text.trim())) them(caCau);
   const kd = boDau(text);
+  const kdD = boDauGiuDoDai(text);
   for (const [q, re, lay] of FACT_PHU) {
+    // Lý do bán giữ DẤU ("cần tiền", không phải "can tien"): khớp trên bản bỏ dấu
+    // giữ độ dài rồi cắt đúng đoạn chữ gốc.
+    if (q === "ly_do_ban" || q === "view") {
+      const mm = re.exec(kdD);
+      if (mm) them({ question: q, answer: text.slice(mm.index, mm.index + mm[0].length).trim() });
+      continue;
+    }
     const m = re.exec(kd);
     if (m) them({ question: q, answer: lay(m) });
   }
@@ -534,9 +549,18 @@ export function nhanDienFact(text: string): NhanDien | null {
   const kd = boDau(goc);
   const kdD = boDauGiuDoDai(goc);
   const catGoc = (mm: RegExpExecArray) => goc.slice(mm.index, mm.index + mm[0].length).trim();
+  // 13/09/2026 (lượt bắn thật): luật trả NGUYÊN câu làm đáp án thì câu nhiều mảnh
+  // mang rác vào ô — "ngang 5 dài 20, đường nhựa 7m, sổ riêng" thành pháp lý. Chỉ
+  // lấy MẢNH (giữa hai dấu phẩy) có chứa từ khoá; câu một mảnh thì như cũ.
+  const manhKhop = (re: RegExp): string => {
+    const ps = goc.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
+    if (ps.length < 2) return goc;
+    return ps.find((x) => re.test(boDau(x))) ?? goc;
+  };
   let m: RegExpExecArray | null;
-  if (/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|shc|giay tay|cam ngan hang|dang the chap)\b/.test(kd)) {
-    return { question: "phap_ly", answer: goc };
+  const PHAP_LY_RE = /\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|shc|giay tay|cam ngan hang|dang the chap)\b/;
+  if (PHAP_LY_RE.test(kd)) {
+    return { question: "phap_ly", answer: manhKhop(PHAP_LY_RE) };
   }
   // 10/09/2026 (chủ dự án): GẤP bắt ở MỌI lượt — "cần bán gấp", "không gấp, bán được
   // giá thì thôi", "không vội". Trả nguyên văn; tầng DB (sync_cols) đọc ra true/false.
@@ -568,19 +592,25 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(thue toi thieu|toi thieu \d+ (?:nam|thang)|hop dong \d+ (?:nam|thang)|thoi han thue|ky \d+ nam|thue \d+ nam)\b/.test(kd)) {
     return { question: "thoi_han_thue", answer: goc };
   }
-  if ((/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8) ||
+  // 13/09/2026: "cho thuê căn hộ Sunrise City quận 7" là VIỆC RAO (deal + loại
+  // BĐS), không phải tiềm năng — bản trước ghi nó vào ô "Phù hợp".
+  const laViecRao = /\b(?:ban|cho thue|sang|sang nhuong|de lai)\s+(?:lai\s+)?(?:gap\s+)?(?:can ho|can|nha|dat|lo|phong|mat bang|chung cu|kho|xuong|shophouse|biet thu|nen|mieng)\b/.test(kd);
+  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8) ||
       (/\b(o hoac|hoac lam|deu duoc|lam can ho dich vu|lam chdv|hop (?:de )?(?:o|kinh doanh|cho thue|lam))\b/.test(kd) && kd.split(/\s+/).length <= 14 &&
         !/\b(showroom|lam xuong|van phong cong ty|nha hang|benh vien|truong hoc|lam kho)\b/.test(kd))) {
     return { question: "tiem_nang", answer: goc };
   }
   // Nội thất: "để lại máy lạnh, bếp", "full nội thất", "nhà trống".
-  if (/\b(de lai|full noi that|noi that (?:co ban|day du|full)|may lanh|tu lanh|giuong|bep|ban giao (?:tho|trong|nha trong)|nha trong)\b/.test(kd) && !/\b(mat tien|m2|ty|trieu)\b/.test(kd)) {
-    return { question: "noi_that", answer: goc };
+  // 13/09/2026: "để lại căn nhà 4x16…" là BÁN, không phải để lại nội thất.
+  const NOI_THAT_RE = /\b(de lai(?!\s+(?:lai\s+)?(?:can|nha|lo|dat|nen|mieng|mat bang|cho|gia|so|phong))|full noi that|noi that (?:co ban|day du|full)|may lanh|tu lanh|giuong|bep|ban giao (?:tho|trong|nha trong)|nha trong)\b/;
+  if (NOI_THAT_RE.test(kd) && !/\b(mat tien|m2|ty|trieu)\b/.test(kd)) {
+    return { question: "noi_that", answer: manhKhop(NOI_THAT_RE) };
   }
   // "phường Tân Hưng" (tên chữ, câu ngắn) — phường số bắt ở dưới.
   if (/^\s*(?:phuong|p\.)\s+[a-z][a-z ]{2,25}\s*$/.test(kd) && !/\d/.test(kd)) return { question: "phuong", answer: goc };
   // Đường VÀO đất/xưởng: chất liệu, xe tải — không phải địa chỉ.
-  if (/\b(duong (?:be tong|nhua|dat|dal|cap phoi)|xe tai (?:vao|vo|chay)|duong vao)\b/.test(kd)) return { question: "duong_vao", answer: goc };
+  const DUONG_VAO_RE = /\b(duong (?:be tong|nhua|dat|dal|cap phoi)|xe tai (?:vao|vo|chay)|duong vao)\b/;
+  if (DUONG_VAO_RE.test(kd)) return { question: "duong_vao", answer: manhKhop(DUONG_VAO_RE) };
   // Vị trí cụ thể: "đường Trần Bình Trọng", "hẻm 123/45 Nguyễn Trãi", "số 12
   // Lê Lợi", "123/4 An Dương Vương". "hẻm 4m" (độ rộng) không rơi vào đây vì
   // sau số là đơn vị mét, không phải "/" hay tên đường.
@@ -603,8 +633,10 @@ export function nhanDienFact(text: string): NhanDien | null {
       (m = new RegExp(`${SO}\\s*(?:m|met)\\s*hem\\b`).exec(kd))) {
     return { question: "do_rong_hem", answer: `hẻm ${m[1]}m` };
   }
-  if (/\b(hem xe hoi|hem oto|hem o to|xe hoi (?:vao|toi|tới) (?:duoc|tan|toi)|hem xe tai)\b/.test(kd)) {
-    return { question: "do_rong_hem", answer: goc };
+  if ((m = /\b(hem xe hoi|hem oto|hem o to|xe hoi (?:vao|toi|tới) (?:duoc|tan|toi)|hem xe tai)\b(?:\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:m|met)\b)?/.exec(kdD))) {
+    // 13/09/2026: cắt đúng cụm ("hẻm xe hơi 5m"), không lấy cả câu rao làm đáp án
+    // — trigger đọc số ĐẦU TIÊN trong đáp án, câu "hẻm 102 … hẻm xe hơi" là ra 102.
+    return { question: "do_rong_hem", answer: catGoc(m) };
   }
   // 20260909i: "cách mặt tiền 50m" là KHOẢNG CÁCH, không phải chiều ngang.
   if ((m = new RegExp(`\\bcach\\s*(?:mat tien|duong lon|duong chinh|mt)\\s*(?:khoang|tam|chung)?\\s*${SO}\\s*(?:m|met)?\\b`).exec(kd))) {
@@ -648,7 +680,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = /\b(?:xay|hoan cong|xd)\s*(?:nam\s*|tu\s*)?((?:19|20)\d{2})\b/.exec(kd))) {
     return { question: "nam_xay", answer: m[1] };
   }
-  if (/\bhuong\s*(dong|tay|nam|bac)\b/.test(kd)) return { question: "huong", answer: goc };
+  if ((m = /\bhuong\s*(?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?\b/.exec(kdD))) return { question: "huong", answer: catGoc(m) };
   // FR-186: cho thuê — "cọc 2 tháng", "cọc 1 đóng 3"; "tăng 5%/năm", "trượt giá 10%".
   if ((m = /\bcoc\s*(\d{1,2})\s*(?:thang|th)?\b/.exec(kd)) || (m = /\b(\d{1,2})\s*thang\s*(?:tien\s*)?coc\b/.exec(kd))) {
     return { question: "tien_coc", answer: `cọc ${m[1]} tháng` };
@@ -673,7 +705,8 @@ export function nhanDienFact(text: string): NhanDien | null {
     return { question: "thuong_luong", answer: goc };
   }
   if (/\b(dang o|dang cho thue|de trong|nha trong|con o|dang thue)\b/.test(kd) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
-  if (/\b(ly do|dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san)\b/.test(kd)) return { question: "ly_do_ban", answer: goc };
+  const LY_DO_RE = /\b(ly do|dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san)\b/;
+  if (LY_DO_RE.test(kd)) return { question: "ly_do_ban", answer: manhKhop(LY_DO_RE) };
   if (/\b(truong hoc|truong tieu hoc|cong chung|phong gym|gym|gan cho\b|cho gan\b|sieu thi|benh vien gan)\b/.test(kd)) return { question: "tien_ich_gan", answer: goc };
   if (/\b(can goc|lo goc)\b/.test(kd)) return { question: "can_goc", answer: goc };
   if (/\bthang may\b/.test(kd)) return { question: "thang_may", answer: goc };
@@ -709,7 +742,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(compound|biet lap|khu an ninh|bao ve 24)\b/.test(kd)) return { question: "khu_compound", answer: goc };
   if (/\b(quy hoach|lo gioi|giai toa)\b/.test(kd)) return { question: "quy_hoach", answer: goc };
   if (/\b(noi that|ban giao|nha trong|full nt)\b/.test(kd)) return { question: "noi_that", answer: goc };
-  if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd) && !keVeMinh) {
+  if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd) && !keVeMinh && !laViecRao) {
     return { question: "tiem_nang", answer: goc };
   }
   return null;
