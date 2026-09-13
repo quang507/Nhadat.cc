@@ -2516,8 +2516,11 @@ Deno.serve(async (req) => {
         if (humanActive) {
           return await traLoiSeller([], { reask: pendingReq.question, loai_cau: kq.loai });
         }
-        const nhanDangHoi = FACT_LABELS[pendingReq.question] ?? pendingReq.question;
-        const nhanHoiLai = NHAN_HOI_LAI[pendingReq.question] ?? nhanDangHoi;
+        // 13/09/2026 (bắn thật): đất Củ Chi câu đầu hỏi xã, câu hỏi LẠI vẫn "phường
+        // nào" — nhãn ở đây đọc thẳng bảng chung, không biết tin ở huyện.
+        const xaThayPhuong = pendingReq.question === "phuong" && laNgoaiDoThi(pendingReq.listings?.district);
+        const nhanDangHoi = xaThayPhuong ? "xã" : FACT_LABELS[pendingReq.question] ?? pendingReq.question;
+        const nhanHoiLai = xaThayPhuong ? "chỗ mình thuộc xã nào" : NHAN_HOI_LAI[pendingReq.question] ?? nhanDangHoi;
         const viSao = kq.loai === "xung_ho"
           ? `Chủ nhà dặn gọi họ là "${kq.xungHo}": nhận bằng một câu thật ngắn, từ nay gọi đúng vậy.`
           : kq.loai === "hoi"

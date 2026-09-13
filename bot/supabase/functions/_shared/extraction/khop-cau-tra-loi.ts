@@ -476,7 +476,10 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   ["so_phong_ngu", /\b(\d{1,2})\s*(?:phong ngu|pn|phong)\b(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
   ["so_wc", /\b(\d{1,2})\s*(?:wc|toilet|ve sinh)\b/, (m) => m[1]],
   ["huong", /\bhuong\s*((?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?)\b/, (m) => `hướng ${m[1]}`],
-  ["mat_tien", /(?<!cach\s)(?<!cach\s\s)\b(?:ngang|mat tien|mt)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
+  // 13/09/2026: "ngang 5 dài 20" giữ CẢ hai chiều — đáp án "5m" làm mất chiều dài
+  // (SQL `boc_thong_so` đọc được "ngang 5m dài 20m" ra frontage + length).
+  ["mat_tien", /(?<!cach\s)(?<!cach\s\s)\b(?:ngang|mat tien|mt)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b(?:\s*(?:x|dai|sau)\s*(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b)?/,
+    (m) => m[2] ? `ngang ${m[1]}m dài ${m[2]}m` : `${m[1]}m`],
   ["no_hau", /\bno hau\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
   // Câu rao dài (FR-177 n): các ý đời thường đi kèm không có dấu phẩy.
   ["cach_mat_tien", /\bcach\s*(?:mat tien|duong lon|duong chinh|mt)\s*(?:khoang|tam)?\s*(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
