@@ -301,6 +301,9 @@ export const CAU_HOI_MAU: Record<string, string> = {
   "vi_tri@chua_quan": "{Ac} cho em xin địa chỉ nhà (đường, phường, quận) để em kiểm tra giá khu vực nha?",
   // Đã có đường/hẻm nhưng chưa có phường lẫn quận: hỏi đúng hai thứ đó, không bắt đọc lại địa chỉ.
   "phuong@chua_quan": "Nhà mình thuộc phường mấy, quận nào {ac}?",
+  // 12/09/2026 (bắn 20 tin): đất ở Huyện Củ Chi mà bot hỏi "thuộc phường mấy" —
+  // huyện thì đơn vị dưới là XÃ, hỏi phường là lộ ngay ra máy đọc mẫu câu.
+  "phuong@huyen": "Nhà mình thuộc xã nào vậy {ac}?",
   "vi_tri@chung_cu": "Căn hộ mình thuộc dự án nào, toà nào {ac}?",
   "vi_tri@dat": "Lô đất mình ở đường nào, khu nào {ac}?",
   "huong@chung_cu": "Ban công căn mình quay hướng nào {ac}?",
@@ -439,6 +442,7 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   chao_lai: "Dạ em chào {ac} ạ!",
   nhap_tieu_de: "📋 Em đăng tin như vầy nha {ac}:",
   nhap_goi_y: "Độ đầy đủ {diem}/100 — thêm {thieu} là tin mạnh hơn nữa ạ.",
+  nhap_goi_y_tron: "Độ đầy đủ {diem}/100 — thêm {thieu} là tin đủ 100/100 luôn ạ.",
   nhap_diem: "Độ đầy đủ {diem}/100.",
   nhap_hoi_duyet: "{Ac} xem ổn chưa ạ? Ổn thì em đăng liền và rao tích cực cho mình.",
   nhap_sua_xong: "Em sửa lại rồi, {ac} xem vậy được chưa ạ?",

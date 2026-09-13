@@ -2972,7 +2972,11 @@ Deno.serve(async (req) => {
         // 11/09/2026 (Zalo thật): câu rao không nói quận → hỏi địa chỉ KÈM quận, để
         // tin không nằm lại Quận 5 mặc định (mã tin đi theo quận: migration 20260911f).
         const cauHoiDau = firstKey
-          ? (!quanDoc && (firstKey === "vi_tri" || firstKey === "phuong")
+          // 12/09/2026: tin ở HUYỆN / thị xã / tỉnh lân cận thì đơn vị dưới là XÃ —
+          // hỏi "thuộc phường mấy" cho đất Củ Chi là lộ ra máy đọc mẫu câu.
+          ? (firstKey === "phuong" && !!quanDoc && /^(huyện|thị xã|tỉnh)\s|long an|bình dương|đồng nai|tây ninh/i.test(quanDoc)
+            ? cauHoiMau("phuong@huyen", cachGoi, loaiMoi)
+            : !quanDoc && (firstKey === "vi_tri" || firstKey === "phuong")
             ? cauHoiMau(firstKey === "phuong" ? "phuong@chua_quan" : "vi_tri@chua_quan", cachGoi, loaiMoi)
             : firstKey === "vi_tri" && loaiMoi !== "chung_cu" && loaiMoi !== "dat"
             ? cauHoiMau("vi_tri@lan_dau", cachGoi, loaiMoi)
