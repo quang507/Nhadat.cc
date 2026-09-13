@@ -168,7 +168,10 @@ thật (chưa có project thứ hai để thử).
    chồng view có thể phải chạy lại lượt hai — file dùng `create or replace` và
    `if not exists` nên chạy lại được, không cần dọn.
    *Không dùng thư mục `migrations/` để dựng lại: 44 migration đầu không còn
-   file (OPEN-46). Migration là để ghi THAY ĐỔI, `schema.sql` mới là để dựng.*
+   file (OPEN-46), và soát 13/09/2026 thấy 34 hàm trên DB có thân khác file
+   migration cuối cùng của chúng. Migration là để ghi THAY ĐỔI, `schema.sql` mới
+   là để dựng — cổng CI thứ 7 so md5 từng thân hàm `schema.sql` ↔ DB nên file này
+   không tụt lại được nữa; đỏ thì `node scripts/sinh-schema.mjs` rồi commit.*
    Xong thì chạy thêm `migrations/20260907c_schema_so_doc_nhu_excel.sql`,
    `migrations/20260907f_so_ro_hang_doc_mot_dong.sql` rồi
    `migrations/20260907g_so_hoi_thoai_doc_lai_log_chat.sql`:

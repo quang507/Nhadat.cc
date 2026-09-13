@@ -20,7 +20,8 @@
 // Thoát 0 = khớp. Thoát 1 = có trôi. Chạy nó ở cổng 3 (trước deploy) và sau
 // mỗi lần áp migration bằng MCP.
 
-import { readdir, stat } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -139,23 +140,64 @@ if (hoSoThua.length) {
   console.log("  → Xoá dòng đó khỏi hồ sơ. Hồ sơ cũ là chỗ tha thứ nhầm cho file khác.\n");
 }
 
-// Ảnh chụp schema phải mới hơn migration mới nhất, không thì nó tả một DB đã cũ.
+// Ảnh chụp schema phải khớp DB TỪNG THÂN HÀM, không thì DB dựng lại từ số không
+// (Supabase Free, không có sao lưu) mang lại luật đã sửa.
+//
+// Bản trước (tới 13/09/2026) so MTIME: schema.sql mới hơn migration mới nhất là
+// xanh. Review code 13/09 chỉ ra hai lỗ: sau `git clone` — đúng việc CI làm — mọi
+// file cùng mtime nên nhánh đỏ không bao giờ chạy; và lúc đó schema.sql đang mang
+// `parse_vnd` bản TRƯỚC vá 42 ca. Nay so NỘI DUNG: md5 thân từng hàm trên DB
+// (`ham_md5_cong_khai()`, 20260913c — chỉ tên + md5, mở cho anon) với thân hàm
+// trong schema.sql. So với DB chứ không so với file migration: soát 13/09 thấy 34
+// hàm có thân trong DB KHÁC file migration cuối cùng định nghĩa chúng (bản áp qua
+// MCP không giống file — OPEN-46); DB là bản thật.
 const SCHEMA = join(HERE, "..", "bot", "supabase", "schema.sql");
 if (!existsSync(SCHEMA)) {
   loi = 1;
   console.log("✗ Chưa có bot/supabase/schema.sql — repo một mình KHÔNG dựng lại được DB.");
   console.log("  → sinh bằng RPC `xuat_schema()` (lệnh ở CLAUDE.md §6) rồi commit file đó.\n");
 } else {
-  const tSchema = (await stat(SCHEMA)).mtimeMs;
-  const moiNhat = Math.max(
-    ...(await Promise.all(file.map(async (f) => (await stat(join(THU_MUC, f))).mtimeMs))),
-  );
-  if (tSchema < moiNhat) {
+  const sql = readFileSync(SCHEMA, "utf8").replace(/\r/g, "");
+  // Thân hàm = đúng chuỗi giữa hai dấu `$tag$` mà pg_get_functiondef in ra (= prosrc).
+  const trongFile = new Map();
+  const re = /CREATE OR REPLACE FUNCTION public\.([a-z_][a-z0-9_]*)\(/g;
+  let m;
+  while ((m = re.exec(sql))) {
+    const mo = /\bAS (\$[a-z_]*\$)/.exec(sql.slice(m.index));
+    if (!mo) continue;
+    const dau = m.index + mo.index + mo[0].length;
+    const cuoi = sql.indexOf(mo[1], dau);
+    if (cuoi < 0) continue;
+    const md5 = createHash("md5").update(sql.slice(dau, cuoi), "utf8").digest("hex");
+    trongFile.set(m[1], [...(trongFile.get(m[1]) ?? []), md5].sort());
+    re.lastIndex = cuoi;
+  }
+  const rh = await fetch(`${URL_DU_AN}/rest/v1/rpc/ham_md5_cong_khai`, {
+    method: "POST",
+    headers: { apikey: KHOA_CONG_KHAI ?? KHOA, Authorization: `Bearer ${KHOA_CONG_KHAI ?? KHOA}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!rh.ok) {
     loi = 1;
-    console.log("✗ bot/supabase/schema.sql cũ hơn migration mới nhất — ảnh chụp đã lỗi thời.");
-    console.log("  → sinh lại bằng RPC `xuat_schema()` (lệnh ở CLAUDE.md §6) rồi commit.\n");
+    console.log(`✗ rpc/ham_md5_cong_khai: HTTP ${rh.status} — CHƯA kiểm được schema.sql ↔ DB (không phải "đạt").\n`);
   } else {
-    console.log("✓ Ảnh chụp schema mới hơn migration mới nhất\n");
+    const trongDb = new Map();
+    for (const { ten, md5 } of await rh.json()) trongDb.set(ten, [...(trongDb.get(ten) ?? []), md5].sort());
+    const lech = [], thieuFile = [], thuaFile = [];
+    for (const [ten, ds] of trongDb) {
+      if (!trongFile.has(ten)) thieuFile.push(ten);
+      else if (trongFile.get(ten).join() !== ds.join()) lech.push(ten);
+    }
+    for (const ten of trongFile.keys()) if (!trongDb.has(ten)) thuaFile.push(ten);
+    if (lech.length || thieuFile.length || thuaFile.length) {
+      loi = 1;
+      if (lech.length) console.log(`✗ ${lech.length} hàm trong schema.sql KHÁC thân trên DB: ${lech.join(", ")}`);
+      if (thieuFile.length) console.log(`✗ ${thieuFile.length} hàm có trên DB mà schema.sql KHÔNG có: ${thieuFile.join(", ")}`);
+      if (thuaFile.length) console.log(`✗ ${thuaFile.length} hàm trong schema.sql mà DB KHÔNG còn: ${thuaFile.join(", ")}`);
+      console.log("  → sinh lại bằng RPC `xuat_schema()` (lệnh ở CLAUDE.md §6) rồi commit.\n");
+    } else {
+      console.log(`✓ schema.sql khớp DB từng thân hàm (${trongDb.size} hàm)\n`);
+    }
   }
 }
 

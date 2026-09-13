@@ -181,8 +181,11 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   `bot/supabase/migrations/DA-DOI-CHIEU.json`. Cảnh báo kêu mãi thì thành tiếng
   ồn, rồi cái thứ 53 — trôi THẬT — chìm lẫn vào đó. **Thêm dòng vào
   DA-DOI-CHIEU.json là một quyết định, không phải cách làm cổng xanh.**
-  Dựng lại từ số không vẫn KHÔNG replay được cả thư mục: nạp `schema.sql` trước,
-  rồi áp migration từ `20260902` trở đi.
+  Dựng lại từ số không: chỉ nạp `schema.sql` (+ ba file schema `so`) theo
+  `bot/README.md §Dựng lại từ số không` — KHÔNG replay thư mục migration. Câu cũ ở
+  đây ("nạp schema.sql rồi áp migration từ 20260902") lệch với README; soát 13/09
+  còn thấy 34 hàm trên DB có thân KHÁC file migration cuối cùng định nghĩa chúng
+  (bản áp qua MCP không giống file), nên replay là dựng ra hàm cũ.
   `xuat-ro-hang.mjs` xuất rổ hàng ra thứ NGƯỜI đọc được — mỗi tin một thư mục
   (`tin.md` + `anh/`) kèm `ro-hang.csv` mở thẳng Excel; nó **không phải bản sao
   lưu** (chỉ 3/31 bảng, không giữ UUID/khoá ngoại) và `manifest.json` của nó ghi
@@ -253,13 +256,18 @@ lệch bản thật ở chỗ nào thì bộ e2e đo sai ở chỗ đó.
 `xuat_schema()` sinh ra; áp migration qua MCP rồi quên sinh lại là nó lặng lẽ
 cũ đi — `20260907h` merge hôm trước mà `schema.sql` không hề có `diem_tin`,
 `can_chu_duyet`. Đúng hình lỗi OPEN-46 nhưng thiếu NGƯỢC (repo thiếu so với DB),
-nên `soat-migration.mjs` không thấy. Phép soát hàm ↔ `schema.sql` trong
-`soat-truy-vet.sh` (cổng CI "Tài liệu — truy vết ID") **vẫn giữ** sau khi bỏ
-sao lưu 11/09/2026 — không còn script sinh lại nên nó là lưới duy nhất. Migration
-tạo HÀM MỚI thì thêm tay vào `schema.sql`: chạy trên DB
-`select pg_get_functiondef('public.<hàm>'::regprocedure)` rồi dán vào đúng chỗ,
-kèm trigger nếu có (PR #104 làm vậy cho `listings_doi_ma_theo_quan_loai`). Sinh
-lại cả file thì cần khoá service_role (lệnh dưới chưa chạy thử lần nào):
+nên `soat-migration.mjs` không thấy.
+
+**Hai lưới cũ đều thủng, nay so NỘI DUNG** (review code 13/09/2026). `soat-truy-vet.sh`
+chỉ soi TÊN hàm (`create or replace` đè hàm đã có thì luôn xanh), `soat-migration.mjs`
+so MTIME (sau `git clone` mọi file cùng mtime, nhánh đỏ không bao giờ chạy) — trong
+lúc `schema.sql` mang `parse_vnd` bản TRƯỚC vá 42 ca. Nay cổng CI thứ 7 so **md5 từng
+thân hàm** `schema.sql` ↔ DB qua `ham_md5_cong_khai()` (`20260913c`, chỉ tên + md5, mở
+cho anon vì thân hàm đã công khai trong chính file này). So với DB chứ không so với
+file migration — DB là bản thật (34 hàm lệch file, xem trên). **Cổng đỏ vì schema.sql
+thì sinh lại, đừng sửa tay:** `node scripts/sinh-schema.mjs` (đọc service_role từ
+`scripts/.env`, gọi `xuat_schema()`, từ chối ghi nếu thấy chuỗi giống khoá bí mật;
+chạy thật lần đầu 13/09/2026). Lệnh curl tương đương:
 
 ```bash
 curl -s -X POST "https://tbcdpupiarkuxtntmosl.supabase.co/rest/v1/rpc/xuat_schema" \
