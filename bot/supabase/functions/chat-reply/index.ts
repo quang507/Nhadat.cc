@@ -57,7 +57,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
-import { boCauGhiNhan, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, locHoSoMua, suaTuXungMua } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, locHoSoMua, suaTuXungMua } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -3978,6 +3978,15 @@ ${kem}` : tomTat, cheDo };
   // không phải máy đâu" (lượt bắn 13/09). Nói dối khách về bản chất trợ lý là
   // thứ không được phép lọt, dù câu lệnh dặn gì — chặn bằng code.
   out.replies = chanNhanLaNguoi(out.replies, goiMua ?? "mình");
+  // 14/09/2026 (bắn 16 hội thoại lần 3): câu dặn "đủ khu + giá thì ngừng dò" và "không hỏi
+  // người thuê về mục đích" vẫn lọt 2/16 — bỏ câu hỏi "để ở hay đầu tư" bằng code.
+  if (duTieuChiDeNgungDo || prefs.deal === "thue" || out.profile?.deal === "thue") {
+    const bo = boHoiMucDich(out.replies);
+    if (bo.daBo) {
+      out.replies = bo.replies;
+      console.log("chat-reply: bỏ câu dò mục đích (đủ tiêu chí / khách thuê)");
+    }
+  }
   const muonGoi = !!out.voice_request || VOICE_RE_KD.test(tKD);
   if (muonGoi) out.need_human = true;
 

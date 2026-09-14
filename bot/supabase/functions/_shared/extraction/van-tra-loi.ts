@@ -151,8 +151,38 @@ export function locHoSoMua(profile: Record<string, unknown>, text: string): { pr
 // ── Bot tự xưng "chúng mình" (14/09) — luật giọng: em xưng "em", bên công ty là "bên em";
 // "mình" chỉ để GỌI khách. "căn hộ có ban công chúng mình có nhiều" đọc như khách với bot
 // là một phe.
+// Kèm: model gõ dính "Emghi nhận…" (lượt bắn 14/09 lần 3) — tách lại khi "em" dính đúng
+// một động từ bot hay dùng; không có từ tiếng Việt nào mở bằng "emghi"/"emtìm".
 export function suaTuXungMua(s: string): string {
-  return s.replace(/(^|[\s,.!?])(C|c)húng (mình|tôi|tớ)(?![\p{L}])/gu, (_m, dau, c) => `${dau}${c === "C" ? "Bên" : "bên"} em`);
+  return s
+    .replace(/(^|[\s,.!?])(C|c)húng (mình|tôi|tớ)(?![\p{L}])/gu, (_m, dau, c) => `${dau}${c === "C" ? "Bên" : "bên"} em`)
+    .replace(/(^|[^\p{L}])([Ee]m)(ghi|tìm|lọc|gửi|báo|xem|hiểu|cập|kiểm|sẽ|đã|đang)(?![\p{L}])/gu, "$1$2 $3");
+}
+
+// ── Dò mục đích khi không cần (14/09/2026, bắn 16 hội thoại lần 3) ─────────
+// Câu dặn đã ghi "đủ khu vực + giá thì ngừng dò" và "không hỏi người THUÊ về mục đích",
+// lượt bắn vẫn còn: thuê căn hộ Q7 15 triệu → "mình cần căn hộ để ở hay để cho thuê lại
+// vậy ạ?"; "anh có 2 tỷ… mua nhà 4 tỷ quận 6" → "hẻm hay mặt tiền, để ở hay đầu tư ạ?".
+// Chỉ bỏ CÂU HỎI kiểu "để ở hay đầu tư"; câu khác giữ nguyên. Người gọi quyết khi nào áp.
+const HOI_MUC_DICH_RE =
+  /\b(?:de o|o that|o gia dinh|tu o)\b.{0,40}\bhay\b.{0,40}\b(?:dau tu|kinh doanh|cho thue lai|cho thue|buon ban)\b|\b(?:dau tu|kinh doanh|cho thue lai)\b.{0,40}\bhay\b.{0,40}\b(?:de o|tu o)\b|\bmuc dich\b/;
+export function laHoiMucDich(cau: string): boolean {
+  return cau.includes("?") && HOI_MUC_DICH_RE.test(boDau(cau));
+}
+export function boHoiMucDich(replies: string[]): { replies: string[]; daBo: boolean } {
+  let daBo = false;
+  const ra: string[] = [];
+  for (const r of replies) {
+    if (/^(📋|💾|📝)/u.test(r)) { ra.push(r); continue; }
+    const cau = tachCau(r);
+    const giu = cau.filter((c) => !laHoiMucDich(c));
+    if (giu.length !== cau.length) daBo = true;
+    const moi = giu.join(" ").trim();
+    if (moi) ra.push(moi);
+  }
+  // Bỏ hết thì thà giữ nguyên còn hơn gửi khách một lượt im lặng.
+  if (!daBo || !ra.length) return { replies, daBo: false };
+  return { replies: ra, daBo };
 }
 
 /**
@@ -160,22 +190,31 @@ export function suaTuXungMua(s: string): string {
  * trong ý cũ thì bỏ; ý mới bao trùm ý cũ thì thay. Trả null khi không có gì mới.
  */
 export function gopGhiChu(cu: string | null | undefined, moi: string | null | undefined, tran = 500): string | null {
-  const tach = (s: string | null | undefined) =>
-    String(s ?? "").split(/[;\n]+/).map((x) => x.trim().replace(/[.。]+$/, "")).filter(Boolean);
+  const tach = (s: string | null | undefined, re: RegExp) =>
+    String(s ?? "").split(re).map((x) => x.trim().replace(/[.。]+$/, "")).filter(Boolean);
   const khoa = (s: string) => boDau(s).replace(/[^a-z0-9]+/g, " ").trim();
-  const y = tach(cu);
+  const y = tach(cu, /[;\n]+/);
   let doi = false;
-  for (const m of tach(moi)) {
+  const timY = (m: string) => {
     const km = khoa(m);
-    if (!km) continue;
-    const i = y.findIndex((x) => {
+    return y.findIndex((x) => {
       const kx = khoa(x);
       // Ý quá ngắn ("gần chợ") mà so "nằm trong" thì nuốt nhầm ý khác — so bằng.
       if (kx.length < 8 || km.length < 8) return kx === km;
       return kx.includes(km) || km.includes(kx);
     });
-    if (i < 0) { y.push(m); doi = true; }
-    else if (khoa(m).length > khoa(y[i]).length) { y[i] = m; doi = true; }
+  };
+  for (const ca of tach(moi, /[;\n]+/)) {
+    // Cả cụm không dính ý cũ nào thì mới tách tiếp ở dấu phẩy (14/09 lần 3): cũ "cần gần
+    // trường tiểu học Quận 3", mới "4 người ở cùng, cần gần trường tiểu học" — so nguyên
+    // cụm thì lưu thành "…Quận 3; 4 người ở cùng, cần gần trường tiểu học".
+    const manh = timY(ca) < 0 && /,\s+/.test(ca) ? tach(ca, /,\s+/) : [ca];
+    for (const m of manh) {
+      if (!khoa(m)) continue;
+      const i = timY(m);
+      if (i < 0) { y.push(m); doi = true; }
+      else if (khoa(m).length > khoa(y[i]).length) { y[i] = m; doi = true; }
+    }
   }
   if (!doi) return null;
   return y.join("; ").slice(-tran);
