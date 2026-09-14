@@ -35,6 +35,8 @@ import {
   boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, DAU_TIN_GIO, docCheDo, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
+import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
+import { coMuiDuLieuRao, type DeXuat, type DongDb, kiemDeXuat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, ngangNhanDai, phuongTenCauRao } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
@@ -1517,6 +1519,44 @@ Deno.serve(async (req) => {
     // Ba cái van cho khỏi đốt tiền: chỉ chạy khi tầng tiền định KHÔNG ghi được
     // gì; chỉ khi câu có mùi dự án (`coMuiDuAn`); và chỉ một lượt mỗi tin.
     let daVetDuAn = false;
+    // FR-208: lượt AI bóc tách chạy bóng (khởi động sau khi biết câu đang hỏi).
+    let bongAi: Promise<{ truong: DeXuat[]; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null } | null> | null = null;
+    const ghiBongBocTach = async (extra: Record<string, unknown>): Promise<void> => {
+      if (!bongAi) return;
+      const kq = await bongAi;
+      bongAi = null;
+      if (!kq) return;
+      try {
+        await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
+        // Tin nào: như 💾 — mã vừa tạo lượt này > active_listing_id đọc lại.
+        const ma = typeof extra.listing_code === "string" && extra.listing_code ? extra.listing_code : null;
+        const { data: sNow } = await client.from("sellers").select("active_listing_id").eq("id", sellerRow.id).maybeSingle();
+        const lid = (sNow as { active_listing_id?: string | null } | null)?.active_listing_id ?? null;
+        const chon = client.from("listings")
+          .select("id, deal, property_type, price_vnd, price_per_m2_vnd, area_m2, frontage_m, length_m, rear_width_m, alley_width_m, distance_to_street_m, bedrooms, bathrooms, floors, floor, district, ward, street, unit_code, direction, legal_status, gap, negotiable, rent_income_vnd, projects(name)")
+          .eq("seller_id", sellerRow.id);
+        const { data: dong, error: dErr } = await (ma ? chon.eq("code", ma) : lid ? chon.eq("id", lid) : chon.order("created_at", { ascending: false }))
+          .limit(1).maybeSingle();
+        if (dErr) await ghiLoi(client, "chat-reply boc_tach_bong(listings)", dErr.message);
+        const d = (dong ?? null) as (DongDb & { id: string }) | null;
+        const facts: Record<string, string> = {};
+        if (d) {
+          const { data: fs } = await client.from("listing_facts").select("question, answer")
+            .eq("listing_id", d.id).order("created_at", { ascending: true }).limit(80);
+          for (const f of (fs ?? []) as Array<{ question: string; answer: string | null }>) if (f.answer) facts[f.question] = f.answer;
+        }
+        const { dat, bo } = kiemDeXuat(kq.truong, text);
+        const { error: bErr } = await client.from("boc_tach_bong").insert({
+          seller_id: sellerRow.id, listing_id: d?.id ?? null,
+          tin: thayLienHe(text, "[liên hệ]").slice(0, 2000), cau_dang_hoi: kq.cauDangHoi, model: MODEL, ms: kq.ms,
+          so_can: (kq.ket as { so_can?: number } | null)?.so_can ?? null,
+          de_xuat: kq.truong, dat, bo, so_sanh: soSanhVoiDb(dat, d, facts),
+        });
+        if (bErr) await ghiLoi(client, "chat-reply boc_tach_bong(ghi)", bErr.message);
+      } catch (e) {
+        await ghiLoi(client, "chat-reply boc_tach_bong", e);
+      }
+    };
     const vetDuAnBangModel = async (): Promise<void> => {
       if (daVetDuAn || daGhiFactDuAn || !anthropicS || !coMuiDuAn(text)) return;
       daVetDuAn = true;
@@ -1696,6 +1736,12 @@ ${kem}` : tomTat, cheDo };
         // Không chặn đường trả lời chủ nhà, nhưng phải vào bot_errors (FR-152).
         if (botErr) await ghiLoi(client, "chat-reply messages bot(seller)", botErr.message);
       }
+      // FR-208: ghi sổ bóng SAU khi mọi luật đã ghi DB — chạy nền nếu runtime cho phép
+      // (khách không phải chờ lượt model bóng), không thì chờ ngay tại đây.
+      const viecBong = ghiBongBocTach(extra);
+      const nen = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+      if (nen?.waitUntil) nen.waitUntil(viecBong);
+      else await viecBong;
       return await hoanTat({
         reply: sach.join("\n") || null, replies: sach, role: "seller", ...extra,
       });
@@ -1835,6 +1881,24 @@ ${kem}` : tomTat, cheDo };
         ? ds.find((p) => p.listing_id === sellerRow.active_listing_id)
         : null) ??
       ds[0] ?? null;
+
+    // FR-208 (14/09/2026): AI bóc tách CHẠY BÓNG, song song với toàn bộ luật bên dưới. Chỉ
+    // khởi động ở đây (cần biết câu bot đang hỏi); kết quả kiểm + so với DB ghi ở đường ra
+    // `traLoiSeller`, sau khi đã trả lời khách. Công tắc `app_config.boc_tach_ai`.
+    if (anthropicS && coMuiDuLieuRao(text)) {
+      const tBong = Date.now();
+      const ai = anthropicS;
+      bongAi = (async () => {
+        const { data: cd, error: cdErr } = await client.rpc("cau_hinh", { p_key: "boc_tach_ai" });
+        if (cdErr) await ghiLoi(client, "chat-reply cau_hinh(boc_tach_ai)", cdErr.message);
+        if (String(cd ?? "tat").trim() !== "bong") return null;
+        const r = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, text, pendingReq?.question ?? null);
+        return { ...r, ms: Date.now() - tBong, cauDangHoi: pendingReq?.question ?? null };
+      })().catch(async (e) => {
+        await ghiLoi(client, "chat-reply boc_tach_ai(bong)", e);
+        return null;
+      });
+    }
 
     // Seller hứa "chiều gửi ảnh…" → đặt hẹn nhắc (SAU khi huỷ nhắc cũ ở trên,
     // kẻo lệnh huỷ chạy sau lại huỷ luôn nhắc vừa đặt)

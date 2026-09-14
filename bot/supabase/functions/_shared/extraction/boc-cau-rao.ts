@@ -33,9 +33,9 @@ export function dealCauRao(kd: string): "ban" | "cho_thue" {
 }
 
 // Tiền KHÔNG phải giá rao: cọc, phí sang, hoa hồng, lương, doanh thu.
-const TRUOC_KHONG_PHAI_GIA = /(?:coc|dat coc|phi sang|tien sang|hoa hong|phi moi gioi|luong|doanh thu|thu nhap|tra truoc|vay|no)(?:\s+\d{1,2}\s*(?:thang|th))?\s*[^\d,;]{0,12}$/;
+export const TRUOC_KHONG_PHAI_GIA = /(?:coc|dat coc|phi sang|tien sang|hoa hong|phi moi gioi|luong|doanh thu|thu nhap|tra truoc|vay|no)(?:\s+\d{1,2}\s*(?:thang|th))?\s*[^\d,;]{0,12}$/;
 const TRUOC_LA_GIA = /(?:gia|tong|chot|ban|con|chi|muon ban)\s*(?:ban|chot|chao|mong muon|tong|thue|cho thue)?\s*:?\s*$/;
-const TRUOC_LA_THUE = /(?:dang|hien|hien dang|hop dong)\s+(?:cho\s+)?thue\s*(?:duoc|voi gia|gia|:)?\s*$/;
+export const TRUOC_LA_THUE = /(?:dang|hien|hien dang|hop dong)\s+(?:cho\s+)?thue\s*(?:duoc|voi gia|gia|:)?\s*$/;
 
 /**
  * Chọn đoạn GIÁ trong câu rao (còn dấu, số bằng chữ đã đổi ra chữ số). Trả đúng đoạn

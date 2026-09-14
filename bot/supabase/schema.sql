@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-14 16:25 (giờ VN)
+-- Sinh lúc: 2026-09-14 16:57 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -34,6 +34,7 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 
 -- ══ Sequence ══
+create sequence if not exists public.boc_tach_bong_id_seq;
 create sequence if not exists public.bot_errors_id_seq;
 create sequence if not exists public.messages_seq_seq;
 create sequence if not exists public.project_facts_id_seq;
@@ -51,6 +52,22 @@ create table if not exists public.app_config (
   key text not null,
   value text not null,
   ghi_chu text
+);
+
+create table if not exists public.boc_tach_bong (
+  id bigint not null,
+  created_at timestamp with time zone not null default now(),
+  seller_id uuid,
+  listing_id uuid,
+  tin text not null,
+  cau_dang_hoi text,
+  model text,
+  ms integer,
+  so_can integer,
+  de_xuat jsonb not null default '[]'::jsonb,
+  dat jsonb not null default '[]'::jsonb,
+  bo jsonb not null default '[]'::jsonb,
+  so_sanh jsonb not null default '{}'::jsonb
 );
 
 create table if not exists public.bot_errors (
@@ -513,6 +530,9 @@ do $d$ begin
   alter table public.app_config add constraint app_config_pkey PRIMARY KEY (key);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.boc_tach_bong add constraint boc_tach_bong_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.bot_errors add constraint bot_errors_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -782,6 +802,12 @@ exception when duplicate_object then null; end $d$;
 
 -- ══ Khoá ngoại ══
 do $d$ begin
+  alter table public.boc_tach_bong add constraint boc_tach_bong_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.boc_tach_bong add constraint boc_tach_bong_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES sellers(id) ON DELETE CASCADE;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.buyers add constraint buyers_auth_user_id_fkey FOREIGN KEY (auth_user_id) REFERENCES auth.users(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -903,6 +929,8 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 
 -- ══ Index ══
+create index if not exists boc_tach_bong_created_at_idx ON public.boc_tach_bong USING btree (created_at DESC);
+create index if not exists boc_tach_bong_seller_idx ON public.boc_tach_bong USING btree (seller_id);
 create index if not exists bot_errors_at_idx ON public.bot_errors USING btree (at DESC);
 create index if not exists bot_errors_source_at_idx ON public.bot_errors USING btree (source, at DESC);
 create index if not exists chat_quota_gio_idx ON public.chat_quota USING btree (gio);
@@ -6580,6 +6608,7 @@ CREATE TRIGGER trg_viewings_bao_ctv_va_email AFTER INSERT ON public.viewings FOR
 -- ══ Bật RLS ══
 alter table public.admins enable row level security;
 alter table public.app_config enable row level security;
+alter table public.boc_tach_bong enable row level security;
 alter table public.bot_errors enable row level security;
 alter table public.bot_health enable row level security;
 alter table public.bot_prompts enable row level security;
@@ -6762,6 +6791,7 @@ create policy viewings_admin_read on public.viewings as permissive for SELECT to
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.admins to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.agents_public to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.app_config to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.boc_tach_bong to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.boc_tach_v to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bot_errors to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bot_health to service_role;
