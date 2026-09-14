@@ -110,9 +110,21 @@ Deno.serve(async (req) => {
   };
 
   const conLai = () => CHAN_THOI_GIAN_MS - (Date.now() - t0);
+  // 14/09/2026: mỗi máy Overpass hỏng từng là MỘT dòng bot_errors — sổ lỗi 14/09 có 4–5 dòng
+  // mỗi tick 10 phút ("overpass-api.de → HTTP 406", "private.coffee → Signal timed out"),
+  // và bot_health_tick đếm sổ đó để bắn 🩺 cho admin mỗi giờ. Máy công cộng quá tải là
+  // chuyện thường (đo cùng một request từ máy văn phòng: lúc 504 sau 10 s, lúc 200 sau 1,5 s)
+  // và việc chuyển máy / tick sau thử lại là ĐƯỜNG ĐI ĐÚNG THIẾT KẾ (CLAUDE.md §6). Nay chỉ
+  // console.log từng máy; sổ lỗi nhận MỘT dòng tổng khi cả lượt không nạp được tin nào.
+  const loiMay = new Map<string, number>();
   /** null = cả ba máy hỏng; "het_gio" = hết ngân sách giữa chừng (không phải lỗi phía họ). */
   const napOverpass = async (lat: number, lng: number): Promise<DiemOsm[] | null | "het_gio"> => {
     const q = cauOverpass(lat, lng);
+    const hong = (base: string, ly_do: string) => {
+      const khoa = `${new URL(base).host} → ${ly_do}`;
+      loiMay.set(khoa, (loiMay.get(khoa) ?? 0) + 1);
+      console.log(`geocode-listings: overpass ${khoa} — thử máy kế`);
+    };
     for (const base of OVERPASS) {
       if (conLai() < 5_000) return "het_gio";
       try {
@@ -128,12 +140,12 @@ Deno.serve(async (req) => {
           signal: AbortSignal.timeout(Math.min(35_000, Math.max(1_000, conLai()))),
         });
         if (!res.ok) {
-          await ghiLoi(`overpass ${base} → HTTP ${res.status}`);
+          hong(base, `HTTP ${res.status}`);
           continue;
         }
         return docDiemOsm(await res.json());
       } catch (e) {
-        await ghiLoi(`overpass ${base} → ${loiChu(e)}`);
+        hong(base, loiChu(e));
       }
     }
     return null;
@@ -221,6 +233,12 @@ Deno.serve(async (req) => {
       .eq("id", row.id);
     poi++;
   }
+  // Sự cố thật = cả lượt có tin cần nạp tiện ích mà KHÔNG tin nào nạp được (mọi máy hỏng).
+  // Một dòng tổng, không phải một dòng mỗi máy mỗi tin.
+  if (poiFail > 0 && poi === 0) {
+    await ghiLoi(`overpass: ${poiFail} tin không nạp được tiện ích, mọi máy hỏng — ${
+      [...loiMay].map(([k, n]) => `${k}${n > 1 ? ` ×${n}` : ""}`).join("; ")}`);
+  }
 
   // ── Bước 3: toạ độ DỰ ÁN (mốc "gần Ehome 3"), chỉ bằng thời gian còn dư ──
   let duAn = 0, duAnHong = 0;
@@ -253,5 +271,6 @@ Deno.serve(async (req) => {
   return json({
     updated, failed, api_calls: calls, tien_ich_nap: poi, tien_ich_hong: poiFail,
     du_an: duAn, du_an_hong: duAnHong, con_viec: (con ?? []).length,
+    overpass_hong: Object.fromEntries(loiMay),
   });
 });
