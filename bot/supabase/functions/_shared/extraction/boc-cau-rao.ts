@@ -32,8 +32,9 @@ export function dealCauRao(kd: string): "ban" | "cho_thue" {
   return "cho_thue";
 }
 
-// Tiền KHÔNG phải giá rao: cọc, phí sang, hoa hồng, lương, doanh thu.
-export const TRUOC_KHONG_PHAI_GIA = /(?:coc|dat coc|phi sang|tien sang|hoa hong|phi moi gioi|luong|doanh thu|thu nhap|tra truoc|vay|no)(?:\s+\d{1,2}\s*(?:thang|th))?\s*[^\d,;]{0,12}$/;
+// Tiền KHÔNG phải giá rao: cọc, phí sang, hoa hồng, lương, doanh thu. 14/09 (đo bóng): có ranh giới
+// từ — bản trước khớp "no" trong "nói" và "luong" trong "thương lượng", bỏ mất giá thật.
+export const TRUOC_KHONG_PHAI_GIA = /\b(?:coc|dat coc|phi sang|tien sang|hoa hong|phi moi gioi|(?<!thuong )luong|doanh thu|thu nhap|tra truoc|vay)\b(?:\s+\d{1,2}\s*(?:thang|th))?\s*[^\d,;]{0,12}$/;
 const TRUOC_LA_GIA = /(?:gia|tong|chot|ban|con|chi|muon ban)\s*(?:ban|chot|chao|mong muon|tong|thue|cho thue)?\s*:?\s*$/;
 export const TRUOC_LA_THUE = /(?:dang|hien|hien dang|hop dong)\s+(?:cho\s+)?thue\s*(?:duoc|voi gia|gia|:)?\s*$/;
 

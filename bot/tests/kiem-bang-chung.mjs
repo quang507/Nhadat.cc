@@ -67,6 +67,35 @@ dat("sửa lời: 'đất trống'", "à anh nói lại, là đất trống chư
 dat("sửa lời: giá mới 10 tỷ 5", "à anh nói lại, là đất trống chưa xây nha em, giá 10 tỷ 5 thôi", "gia", "10 tỷ 5", "giá 10 tỷ 5");
 dat("trích dẫn khác hoa/thường + dấu vẫn khớp", MT, "duong", "Châu Văn Liêm", "DUONG CHAU VAN LIEM");
 
+// ── lượt đo bóng thật 14/09 (33 lượt, 203 đề xuất): các ca LỌT mà sai + các ca bị bỏ oan ──
+const MBT = "sang nhượng mặt bằng quán cà phê Quận 1 đường Nguyễn Trãi, 8x20, thuê 60 triệu/tháng, phí sang 350 triệu";
+bo("thật: 'sang nhượng mặt bằng' → ban", MBT, "loai_giao_dich", "ban", "sang nhượng mặt bằng", "trich_dan_khong_noi_ban");
+bo("thật: giá 350 triệu, trích 'phí sang 350 triệu' (chữ phí nằm TRONG cụm)", MBT, "gia", "350 triệu", "phí sang 350 triệu", "ngu_canh_coc_phi_hoa_hong");
+bo("thật: thu nhập thuê 60 triệu ở tin sang nhượng mặt bằng", MBT, "thu_nhap_thue", "60 triệu/tháng", "thuê 60 triệu/tháng", "khong_phai_thu_nhap_thue");
+dat("thật: 'sang nhượng mặt bằng' → cho_thue", MBT, "loai_giao_dich", "cho_thue", "sang nhượng mặt bằng");
+bo("thật: số tầng 3 cho '1 trệt 1 lửng 3 lầu' (đếm lầu, quên trệt)", MT, "so_tang", "3", "1 trệt 1 lửng 3 lầu sân thượng", "so_tang_khong_khop_trich_dan");
+bo("thật: số tầng 2 cho 'trệt 2 lầu st'", "e bán nhà hxh Nguyễn Kiệm Phú Nhuận 4x15 trệt 2 lầu st 3pn, giá 8 tỏi 3", "so_tang", "2", "trệt 2 lầu st", "so_tang_khong_khop_trich_dan");
+dat("thật: số tầng 3 cho 'trệt 2 lầu st'", "e bán nhà hxh Nguyễn Kiệm Phú Nhuận 4x15 trệt 2 lầu st 3pn, giá 8 tỏi 3", "so_tang", "3", "trệt 2 lầu st");
+const B3 = "cho thuê căn hộ Sunrise City quận 7, 76m2, 2 phòng ngủ, tầng 15 view sông, full nội thất, 18 triệu một tháng";
+bo("thật: hướng = 'view sông'", B3, "huong", "view sông", "view sông", "gia_tri_khong_dung_loai_truong");
+bo("thật: pháp lý = 'thổ cư hết'", "bán đất Củ Chi 100m2 thổ cư hết, 900tr, cần bán gấp", "phap_ly", "thổ cư hết", "thổ cư hết", "gia_tri_khong_dung_loai_truong");
+bo("thật: kết cấu = 'xây tự do'", "bán lô đất nền KDC Trung Sơn Bình Chánh, 5x20, giá 95 triệu/m2, đường 12m, sổ riêng xây tự do", "ket_cau", "xây tự do", "sổ riêng xây tự do", "gia_tri_khong_dung_loai_truong");
+bo("thật: dự án = 'Thảo Điền' (tên khu)", "biệt thự Thảo Điền quận 2, đất 300m2, xây 1 hầm 3 lầu, giá 95 tỷ", "du_an", "Thảo Điền", "biệt thự Thảo Điền", "khong_co_dau_hieu_du_an");
+bo("thật: lý do bán = 'gấp'", "🏡 CHÍNH CHỦ BÁN GẤP NHÀ QUẬN 3", "ly_do_ban", "gấp", "BÁN GẤP", "gia_tri_khong_dung_loai_truong");
+dat("thật: dự án 'Trung Sơn' trích 'KDC Trung Sơn'", "bán lô đất nền KDC Trung Sơn Bình Chánh, 5x20", "du_an", "Trung Sơn", "KDC Trung Sơn");
+dat("thật: dự án 'Vinhomes Grand Park'", "bán căn hộ Vinhomes Grand Park Thủ Đức, căn S1.02", "du_an", "Vinhomes Grand Park", "căn hộ Vinhomes Grand Park");
+dat("thật: hướng 'Đông Nam'", "hướng ban công Đông Nam, sổ hồng", "huong", "Đông Nam", "hướng ban công Đông Nam");
+// bị bỏ OAN ở lượt đo (model đúng, bộ kiểm đọc không ra)
+dat("oan: giá số trần '5.2' cho '5 tỷ 2'", "bán nhà quận 10 phường 12, 48m2, giá 5 tỷ 2", "gia", "5.2", "5 tỷ 2");
+dat("oan: giá '3150' cho 'giá 3 tỷ 150'", "căn S1.02 tầng 12, 69m2, giá 3 tỷ 150 bao thuế phí", "gia", "3150", "giá 3 tỷ 150");
+dat("oan: giá '900' cho '900tr'", "bán đất Củ Chi 100m2 thổ cư hết, 900tr, cần bán gấp", "gia", "900", "900tr");
+dat("oan: giá '8.3' cho '8 tỏi 3'", "e bán nhà hxh Nguyễn Kiệm 4x15, giá 8 tỏi 3", "gia", "8.3", "8 tỏi 3");
+dat("oan: giá/m² '95' cho '95 triệu/m2'", "lô 5x20, giá 95 triệu/m2, đường 12m", "gia_m2", "95", "95 triệu/m2");
+dat("oan: quận '5' cho 'quận 5'", MT, "quan", "5", "quận 5");
+dat("oan: quận '11' cho 'q11'", "bán nhà q11", "quan", "11", "q11");
+dat("oan: cọc '2 tháng'", "cọc 2 tháng, thuê tối thiểu 1 năm", "tien_coc", "2 tháng", "cọc 2 tháng");
+bo("oan không phải oan: giá '6' cho '6 tỷ' mà ghi nhầm '60'", "bán nhà quận 5 phường 7, 50m2, 6 tỷ", "gia", "60", "6 tỷ", "tien_khong_khop_trich_dan");
+
 // ── loạt nhiều trường: tách đúng đạt / bỏ ──
 {
   const k = kiemDeXuat([

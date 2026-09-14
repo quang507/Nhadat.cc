@@ -79,6 +79,30 @@ function soTangTrong(cum: string): number[] {
   return ra;
 }
 
+/**
+ * Tiền trong giá trị khớp tiền trong cụm. Model hay ghi SỐ TRẦN ("5.2" cho "5 tỷ 2", "3150"
+ * cho "3 tỷ 150", "95" cho "95 triệu/m2") — số trần nhận khi nhân đúng một đơn vị (tỷ,
+ * triệu, nghìn) ra đúng số trong cụm.
+ */
+function tienKhop(v: string, b: number, a0: number | null = null): boolean {
+  const a = a0 ?? docTien(v);
+  if (a != null) return gan(a, b);
+  const tran = /^\s*(\d+(?:[.,]\d+)?)\s*$/.exec(v);
+  if (!tran) return false;
+  const n = Number(tran[1].replace(",", "."));
+  return [1e9, 1e6, 1e3].some((u) => gan(n * u, b));
+}
+
+// Hình dạng tối thiểu của vài trường chữ (bản bỏ dấu của giá trị).
+const HINH_TRUONG_CHU: Record<string, RegExp> = {
+  huong: /\b(dong|tay|nam|bac)\b/,
+  phap_ly: /\b(so|hong|do|hoan cong|vi bang|hdmb|hop dong|giay tay|shr|shc|cong chung|chung|rieng|sang ten|the chap)\b/,
+  ket_cau: /\d|\b(tret|lau|tang|tam|lung|ham|mai|san thuong|cap 4|btct|be tong|khung|gac)\b/,
+  ly_do_ban: /^(?!(?:can\s+)?(?:ban\s+)?gap\s*$).{3,}/,
+};
+// Cụm nói tới dự án: chữ chỉ loại khu, hoặc thương hiệu hay gặp. "Thảo Điền" (tên khu) không có.
+const DAU_HIEU_DU_AN = /\b(du an|kdc|khu dan cu|khu do thi|kdt|chung cu|can ho|toa|block|thap)\b|residence|city|park|tower|plaza|garden|home|green|sky|river|central|vinhomes|masteri|sunrise|saigon|sai gon|lake|land|view|pearl|star|gold|diamond|ruby|centre|center/;
+
 /** Một đề xuất đã qua lớp 1: kiểm lớp 2–3. Trả lý do bỏ, null là đạt. */
 function kiemGiaTri(d: DeXuat, tin: string, viTri: number): string | null {
   const v = d.gia_tri.trim();
@@ -87,28 +111,45 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number): string | null {
   if (!v) return "gia_tri_rong";
   switch (d.khoa) {
     case "gia": case "tien_coc": case "thu_nhap_thue": {
-      const a = docTien(v), b = docTien(cum);
-      if (a == null || b == null) return "khong_doc_duoc_tien";
-      if (!gan(a, b)) return "tien_khong_khop_trich_dan";
+      const kdTin = chuanSo(tin);
+      // "cọc 2 tháng" — tiền cọc tính bằng THÁNG, không phải số tiền.
+      if (d.khoa === "tien_coc" && /\bthang\b/.test(chuanSo(v))) {
+        const n = chuanSo(v).match(/\d+/)?.[0];
+        return n && /\bcoc\b/.test(kd) && new RegExp(`\\b${n}\\s*thang\\b`).test(kd) ? null : "coc_thang_khong_khop_trich_dan";
+      }
+      const b = docTien(cum);
+      if (b == null) return "khong_doc_duoc_tien";
+      if (!tienKhop(v, b)) return docTien(v) == null && !/^\d+(?:[.,]\d+)?$/.test(v) ? "khong_doc_duoc_tien" : "tien_khong_khop_trich_dan";
       if (d.khoa === "gia") {
-        const kdTin = chuanSo(tin);
+        // Lượt đo bóng 14/09: trích "phí sang 350 triệu" lọt vì chữ "phí sang" nằm TRONG cụm.
+        if (/\b(coc|dat coc|phi sang|tien sang|hoa hong|phi moi gioi|(?<!thuong )luong|doanh thu)\b/.test(kd)) return "ngu_canh_coc_phi_hoa_hong";
         const truoc = kdTin.slice(Math.max(0, viTri - 30), viTri);
         if (TRUOC_KHONG_PHAI_GIA.test(truoc)) return "ngu_canh_coc_phi_hoa_hong";
         const sau = kdTin.slice(viTri + chuanSo(cum).length, viTri + chuanSo(cum).length + 12);
         const moiThang = /\b(thang|th)\b/.test(kd) || /^\s*(?:\/|mot|1|moi)?\s*(?:thang|th)\b/.test(sau);
         if (dealCauRao(kdTin) === "ban" && (TRUOC_LA_THUE.test(truoc) || moiThang)) return "tien_thue_khong_phai_gia_ban";
       }
+      // Thu nhập thuê chỉ có ở căn BÁN đang cho thuê; "sang nhượng mặt bằng, thuê 60 triệu" là giá thuê.
+      if (d.khoa === "thu_nhap_thue") {
+        const truoc = kdTin.slice(Math.max(0, viTri - 30), viTri);
+        if (dealCauRao(kdTin) !== "ban" || !(/\b(dang|hien|hop dong)\b/.test(kd) || TRUOC_LA_THUE.test(truoc) || /\b(dang|hien|hop dong)\s+(cho\s+)?thue\b/.test(truoc))) {
+          return "khong_phai_thu_nhap_thue";
+        }
+      }
       return null;
     }
     case "gia_m2": {
-      const a = giaTheoM2(v) ?? docTien(v), b = giaTheoM2(cum);
-      if (a == null || b == null) return "khong_doc_duoc_gia_m2";
-      return gan(a, b) ? null : "tien_khong_khop_trich_dan";
+      const b = giaTheoM2(cum);
+      if (b == null) return "khong_doc_duoc_gia_m2";
+      return tienKhop(v, b, giaTheoM2(v)) ? null : "tien_khong_khop_trich_dan";
     }
     case "so_tang": {
       const n = Number(chuanSo(v).match(/\d+/)?.[0]);
       if (!Number.isFinite(n)) return "khong_phai_so";
-      return soTangTrong(cum).some((x) => x === n) || soTrong(cum, false).includes(n) ? null : "so_khong_co_trong_trich_dan";
+      // Lượt đo bóng 14/09: model đưa "3" cho "1 trệt 1 lửng 3 lầu" (đếm lầu, quên trệt) và
+      // cụm có số 3 nên lọt. Cụm nói trệt / lầu / tấm thì chỉ nhận số tầng TÍNH RA từ cụm.
+      if (/\b(tret|lau|tam|tang)\b/.test(kd)) return soTangTrong(cum).includes(n) ? null : "so_tang_khong_khop_trich_dan";
+      return soTrong(cum, false).includes(n) ? null : "so_khong_co_trong_trich_dan";
     }
     case "dien_tich": case "ngang": case "dai": case "no_hau": case "do_rong_hem": case "do_rong_duong":
     case "cach_mat_tien": case "so_phong_ngu": case "so_wc": case "tang": {
@@ -118,8 +159,16 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number): string | null {
       return soTrong(cum, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05)) ? null : "so_khong_co_trong_trich_dan";
     }
     case "loai_giao_dich": {
-      if (v === "ban") return /\b(ban|de lai|sang nhuong|nhuong lai|thanh ly)\b/.test(kd) ? null : "trich_dan_khong_noi_ban";
-      if (v === "cho_thue" || v === "thue") return /\b(cho thue|thue|cho muon|sang mat bang)\b/.test(kd) ? null : "trich_dan_khong_noi_thue";
+      // "sang nhượng MẶT BẰNG" là thuê (lượt đo bóng 14/09 model nói "ban" và lọt); "sang
+      // nhượng" chỉ là bán khi đi với căn hộ / nhà / đất.
+      if (v === "ban") {
+        const coBan = /\b(ban|de lai|thanh ly)\b|\b(?:sang nhuong|nhuong lai)\s+(?:lai\s+)?(?:can ho|can|nha|dat|lo|nen|biet thu)\b/.test(kd);
+        return coBan && dealCauRao(kd) === "ban" ? null : "trich_dan_khong_noi_ban";
+      }
+      if (v === "cho_thue" || v === "thue") {
+        return /\b(cho thue|thue|cho muon)\b|\bsang\s+(?:nhuong\s+|lai\s+)?(?:mat bang|mb|quan|shop|kiot)\b/.test(kd) && !/\b(dang|hien)\s+(cho\s+)?thue\b/.test(kd)
+          ? null : "trich_dan_khong_noi_thue";
+      }
       return "gia_tri_ngoai_danh_sach";
     }
     case "loai_bds": {
@@ -129,7 +178,9 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number): string | null {
     }
     case "quan": {
       const doc = bocQuan(chuanSo(cum), cum) ?? vungNgoai(chuanSo(cum))?.ten ?? null;
-      const muon = bocQuan(chuanSo(v), v) ?? v;
+      // Model hay ghi "5" / "Q5" thay vì "Quận 5" — cùng một ý.
+      const vv = /^\s*(?:q\.?\s*)?\d{1,2}\s*$/i.test(v) ? `Quận ${Number(v.replace(/\D/g, ""))}` : v;
+      const muon = bocQuan(chuanSo(vv), vv) ?? vv;
       return doc && chuanSo(doc) === chuanSo(muon) ? null : "quan_khong_khop_trich_dan";
     }
     case "phuong": {
@@ -155,7 +206,13 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number): string | null {
       // Trường chữ: giá trị phải NẰM TRONG cụm trích (model không được "diễn đạt lại").
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
       const cv = chuanSo(v);
-      return cv.length >= 2 && kd.includes(cv) ? null : "gia_tri_khong_nam_trong_trich_dan";
+      if (!(cv.length >= 2 && kd.includes(cv))) return "gia_tri_khong_nam_trong_trich_dan";
+      // Lượt đo bóng 14/09: chữ có thật trong cụm nhưng SAI Ô — "view sông" vào hướng, "thổ cư
+      // hết" vào pháp lý, "xây tự do" vào kết cấu, "Thảo Điền" (khu) vào dự án, "gấp" vào lý do bán.
+      const hinh = HINH_TRUONG_CHU[d.khoa];
+      if (hinh && !hinh.test(cv)) return "gia_tri_khong_dung_loai_truong";
+      if (d.khoa === "du_an" && !DAU_HIEU_DU_AN.test(kd)) return "khong_co_dau_hieu_du_an";
+      return null;
     }
   }
 }
