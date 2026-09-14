@@ -99,6 +99,8 @@ const HINH_TRUONG_CHU: Record<string, RegExp> = {
   phap_ly: /\b(so|hong|do|hoan cong|vi bang|hdmb|hop dong|giay tay|shr|shc|cong chung|chung|rieng|sang ten|the chap)\b/,
   ket_cau: /\d|\b(tret|lau|tang|tam|lung|ham|mai|san thuong|cap 4|btct|be tong|khung|gac)\b/,
   ly_do_ban: /^(?!(?:can\s+)?(?:ban\s+)?gap\s*$).{3,}/,
+  // Đo bóng lần 2: "để ở hoặc cho thuê đều được" vào ô nội thất.
+  noi_that: /\b(noi that|nt|full|may lanh|dieu hoa|tu lanh|giuong|tu ao|bep|sofa|rem|may giat|nong lanh|trong|co ban|day du|cao cap|ban giao|de lai)\b/,
 };
 // Cụm nói tới dự án: chữ chỉ loại khu, hoặc thương hiệu hay gặp. "Thảo Điền" (tên khu) không có.
 const DAU_HIEU_DU_AN = /\b(du an|kdc|khu dan cu|khu do thi|kdt|chung cu|can ho|toa|block|thap)\b|residence|city|park|tower|plaza|garden|home|green|sky|river|central|vinhomes|masteri|sunrise|saigon|sai gon|lake|land|view|pearl|star|gold|diamond|ruby|centre|center/;
@@ -117,6 +119,8 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number): string | null {
         const n = chuanSo(v).match(/\d+/)?.[0];
         return n && /\bcoc\b/.test(kd) && new RegExp(`\\b${n}\\s*thang\\b`).test(kd) ? null : "coc_thang_khong_khop_trich_dan";
       }
+      // Đo bóng lần 2: "phí sang 350 triệu" thành tiền cọc — cọc phải có chữ cọc trong cụm.
+      if (d.khoa === "tien_coc" && !/\b(coc|dat coc|ky quy)\b/.test(kd)) return "trich_dan_khong_noi_coc";
       const b = docTien(cum);
       if (b == null) return "khong_doc_duoc_tien";
       if (!tienKhop(v, b)) return docTien(v) == null && !/^\d+(?:[.,]\d+)?$/.test(v) ? "khong_doc_duoc_tien" : "tien_khong_khop_trich_dan";
@@ -285,7 +289,7 @@ export function soSanhVoiDb(dat: DeXuat[], dong: DongDb | null, facts: Record<st
       db = dong?.price_per_m2_vnd; const a = giaTheoM2(v) ?? docTien(v);
       if (db != null && a != null) khop = gan(a, Number(db), 0.03);
     } else if (COT_SO[k]) {
-      db = dong?.[COT_SO[k]]; const m = chuanSo(v).match(/\d+(?:\.\d+)?/);
+      db = dong?.[COT_SO[k]]; const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
       if (db != null && m) khop = gan(Number(m[0]), Number(db), 0.01, k === "dien_tich" ? 0.6 : 0.05);
     } else if (k === "loai_giao_dich") {
       db = dong?.deal; if (db) khop = (v === "thue" ? "cho_thue" : v) === db;
