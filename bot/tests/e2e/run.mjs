@@ -1722,10 +1722,10 @@ fresh(seedKho);
 {
   const userText = (c) => c.params.messages[0].content.map((x) => x.text ?? "").join("");
   fresh();
-  globalThis.__model.parse = () => OUT({ replies: ["Dạ có em. Anh tìm để ở hay đầu tư kinh doanh ạ?"] });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ có em. Anh cần mấy phòng ngủ ạ?"] });
   r = await send({ external_user_id: "kho-1", text: "có căn nào quận 10 tầm 5 tỷ không em" });
   check("KHO-01 kho trống, model đáp 'Dạ có em.' → bỏ câu hứa, nói lọc kho/chưa có, câu hỏi còn nguyên",
-    !r.body.replies.some((t) => /Dạ có em/.test(t)) && r.body.replies.some((t) => /(lọc kho|chưa có căn)/.test(t) && /để ở hay đầu tư/.test(t)),
+    !r.body.replies.some((t) => /Dạ có em/.test(t)) && r.body.replies.some((t) => /(lọc kho|chưa có căn)/.test(t) && /mấy phòng ngủ/.test(t)),
     JSON.stringify(r.body.replies));
   check("KHO-01b chưa biết nam/nữ → câu lệnh dặn gọi 'anh/chị', không tự đoán",
     /CÁCH GỌI KHÁCH: chưa biết nam hay nữ/.test(userText(parseCalls().pop())), userText(parseCalls().pop()).slice(0, 200));
@@ -1816,6 +1816,28 @@ fresh(seedKho);
   await send({ external_user_id: "du-tc-2", text: "tìm nhà quận 5 cho gia đình" });
   const u2 = vaoMua(parseCalls().at(-1));
   check("DUTIEUCHI-02 chưa nói giá → vẫn 'CÒN THIẾU' (được hỏi khoảng giá)", /CÒN THIẾU \(hỏi theo thứ tự/.test(u2), u2.slice(0, 400));
+}
+
+// ── 14/09 bắn lần 3: model vẫn dò "để ở hay đầu tư" dù câu dặn cấm → bỏ câu đó bằng code ──
+{
+  fresh(seedKho);
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "Quận 6", budget: "4 tỷ" },
+    replies: ["Dạ em tìm căn tầm 4 tỷ ở Quận 6 cho anh nhé. Anh tìm nhà hẻm hay mặt tiền, để ở hay đầu tư ạ?"] });
+  let r1 = await send({ external_user_id: "md-1", text: "anh có 2 tỷ, vay thêm được không để mua nhà 4 tỷ quận 6" });
+  check("MUCDICH-01 đủ khu + giá → câu 'để ở hay đầu tư ạ?' bị bỏ, câu trước giữ",
+    !r1.body.replies.some((t) => /để ở hay đầu tư/.test(t)) && r1.body.replies.some((t) => /tầm 4 tỷ ở Quận 6/.test(t)), JSON.stringify(r1.body.replies));
+  fresh(seedKho);
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "thue" },
+    replies: ["Dạ em lọc căn hộ cho mình nha.", "Mình cần căn hộ để ở hay để cho thuê lại vậy ạ?"] });
+  r1 = await send({ external_user_id: "md-2", text: "tìm thuê căn hộ 2 phòng ngủ" });
+  check("MUCDICH-02 khách THUÊ (chưa đủ tiêu chí) → vẫn bỏ câu dò mục đích",
+    !r1.body.replies.some((t) => /để ở hay/.test(t)), JSON.stringify(r1.body.replies));
+  fresh(seedKho);
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban" },
+    replies: ["Dạ mình tìm ở khu nào, tầm giá bao nhiêu, để ở hay đầu tư ạ?"] });
+  r1 = await send({ external_user_id: "md-3", text: "mua qua bên em có mất phí gì không" });
+  check("MUCDICH-03 người MUA chưa nói khu/giá → câu hỏi giữ nguyên (được dò)",
+    r1.body.replies.some((t) => /để ở hay đầu tư/.test(t)), JSON.stringify(r1.body.replies));
 }
 
 // ── kết ──

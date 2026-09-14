@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauGhiNhan, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -227,6 +227,24 @@ ok("kho: 'để em gửi căn cho mình xem luôn ạ' là hứa", laHuaCoHang("
 ok("kho: 'em ghi nhận lịch chiều thứ 7 cho mình' là nhận hẹn khi chưa có căn", laHuaCoHang("Dạ được, em ghi nhận lịch chiều thứ 7 cho mình ạ."));
 ok("kho: 'có căn mới em gửi mình liền' không phải hứa", !laHuaCoHang("Có căn mới hợp là em gửi mình liền nha."));
 ok("kho: 'mình rảnh lịch nào để em sắp xếp khi có căn' không bắt (không có giờ cụ thể)", !laHuaCoHang("Khi có căn khớp em sắp xếp lịch cho mình nha."));
+
+// bắn lần 3 (14/09)
+ok("dò mục đích: thuê căn hộ → 'để ở hay để cho thuê lại vậy ạ?' là câu dò", laHoiMucDich("Trong khi chờ, mình cần căn hộ để ở hay để cho thuê lại vậy ạ?"));
+ok("dò mục đích: 'hẻm hay mặt tiền, để ở hay đầu tư ạ?' là câu dò", laHoiMucDich("Anh tìm nhà hẻm hay mặt tiền, để ở hay đầu tư ạ?"));
+ok("dò mục đích: câu kể 'mua để ở hay đầu tư đều được' (không hỏi) không bắt", !laHoiMucDich("Mua để ở hay đầu tư thì khu này đều hợp ạ."));
+ok("dò mục đích: 'hẻm xe hơi hay mặt tiền ạ?' không bắt", !laHoiMucDich("Chị thích hẻm xe hơi hay mặt tiền ạ?"));
+{
+  const b = boHoiMucDich(["💾 Đã lưu nhu cầu: mua", "Dạ em lọc Quận 6 tầm 4 tỷ cho anh nhé. Anh tìm nhà hẻm hay mặt tiền, để ở hay đầu tư ạ?"]);
+  ok("dò mục đích: bỏ đúng câu hỏi, giữ 💾 và câu trước", b.daBo && b.replies.length === 2 && b.replies[1] === "Dạ em lọc Quận 6 tầm 4 tỷ cho anh nhé.", JSON.stringify(b));
+  const c = boHoiMucDich(["Mình tìm để ở hay đầu tư ạ?"]);
+  ok("dò mục đích: bỏ hết thì giữ nguyên (không gửi lượt im)", !c.daBo && c.replies.length === 1, JSON.stringify(c));
+}
+ok("gõ dính: 'Emghi nhận…' → 'Em ghi nhận…'", suaTuXungMua("Emghi nhận nhu cầu của mình ạ.") === "Em ghi nhận nhu cầu của mình ạ.", suaTuXungMua("Emghi nhận nhu cầu của mình ạ."));
+ok("gõ dính: 'Emmy', 'em gái' giữ nguyên", suaTuXungMua("Emmy và em gái") === "Emmy và em gái", suaTuXungMua("Emmy và em gái"));
+ok("gõ dính + 💾: câu 'Emghi nhận nhu cầu…, sắp lọc…' bị bỏ", boCauGhiNhan(["Dạ được.", suaTuXungMua("Emghi nhận nhu cầu của mình, sắp lọc được căn phù hợp liền ạ.")]).length === 1);
+ok("gộp: '4 người ở cùng, cần gần trường tiểu học' vào 'cần gần trường tiểu học Quận 3' không lặp",
+  gopGhiChu("cần gần trường tiểu học Quận 3", "4 người ở cùng, cần gần trường tiểu học") === "cần gần trường tiểu học Quận 3; 4 người ở cùng",
+  String(gopGhiChu("cần gần trường tiểu học Quận 3", "4 người ở cùng, cần gần trường tiểu học")));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
