@@ -135,7 +135,11 @@ const TU_TA_DUONG = new Set([
   "xe", "hoi", "may", "tai", "thong", "cut", "rong", "nho", "lon", "be", "tong",
   "nhua", "dat", "vao", "ra", "trong", "thuong", "co", "truoc", "sau", "noi",
   "met", "m", "mo", "cua", "nha", "ban", "ngang", "dai", "cho",
+  // 14/09/2026: "hẻm ba gác đường Phạm Thế Hiển" → "ba gác" từng bị đọc là TÊN đường.
+  "ba", "gac",
 ]);
+// Tên quận/huyện đứng ngay sau tên đường ("hxh Nguyễn Kiệm Phú Nhuận") — gặp là hết tên đường.
+const QUAN_SAU_TEN = /^(?:phu nhuan|tan binh|binh thanh|go vap|tan phu|binh tan|thu duc|nha be|binh chanh|hoc mon|cu chi|can gio)$/;
 
 // Chữ mở đầu THỨ KHÁC — gặp là hết tên đường: giấy tờ, giá, kết cấu, hành chính.
 // "đường nhựa 7m sổ riêng 850tr" dừng ở "sổ", không nuốt cả câu.
@@ -167,22 +171,37 @@ const TU_DUNG = new Set([
  */
 export function bocViTriRao(text: string): string | null {
   const t = (text ?? "").trim();
-  // Mệnh đề bắt đầu từ chữ hẻm/đường tới dấu ngắt câu gần nhất.
-  const menh = /(?:^|[\s,(])((?:đường|duong|hẻm|hem|hxh|phố|pho|ngõ|ngo)\s+[^,.;!?\n]{2,70})/iu
-    .exec(t)?.[1]?.trim() ?? null;
+  // Mệnh đề bắt đầu từ chữ hẻm/đường tới dấu ngắt câu gần nhất. 14/09/2026: "nhà phố" /
+  // "mặt phố" là LOẠI nhà, không phải "phố <tên>" — bỏ qua, tìm chữ mở đầu kế tiếp.
+  let menh: string | null = null;
+  const reMenh = /(?:^|[\s,(])((?:đường|duong|hẻm|hem|hxh|phố|pho|ngõ|ngo)\s+[^,.;!?\n]{2,70})/giu;
+  for (let mm = reMenh.exec(t); mm; mm = reMenh.exec(t)) {
+    const truoc = boDau(t.slice(Math.max(0, mm.index - 6), mm.index + 1));
+    if (/^(?:pho|phố)\s/iu.test(mm[1]) && /\b(?:nha|mat)\s*$/.test(truoc)) {
+      // Mệnh đề "phố Tân Bình đường Cộng Hòa" đã nuốt tới dấu phẩy — tìm lại ngay sau chữ "phố".
+      reMenh.lastIndex = mm.index + mm[0].length - mm[1].length + 3;
+      continue;
+    }
+    menh = mm[1].trim();
+    break;
+  }
   if (menh) {
     const tu = menh.split(/\s+/);
     const dau = tu[0];
     let i = 1;
-    // Chữ TẢ đường và bề rộng/số nhà đứng trước tên: "xe hơi 5m", "102".
+    // Chữ TẢ đường và bề rộng/số nhà đứng trước tên: "xe hơi 5m", "102". 14/09/2026: cả
+    // chữ "đường"/"phố" CÓ DẤU nằm giữa ("hẻm ba gác đường Phạm Thế Hiển") — bỏ dấu thì
+    // "đường" trùng "Dương" (An Dương Vương), nên chỉ nhận bản có dấu.
     const truoc: string[] = [];
-    while (i < tu.length && (TU_TA_DUONG.has(boDau(tu[i])) || /^\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)*(?:m|met|mét)?$/i.test(tu[i]))) {
+    while (i < tu.length && (TU_TA_DUONG.has(boDau(tu[i])) || /^(?:đường|phố)$/iu.test(tu[i]) ||
+      /^\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)*(?:m|met|mét)?$/i.test(tu[i]))) {
       truoc.push(tu[i]);
       i++;
     }
     // Rồi tới TÊN đường: chữ thuần, tối đa 4 chữ, gặp chữ của thứ khác thì dừng.
     const ten: string[] = [];
-    while (i < tu.length && ten.length < 4 && /^[\p{L}]{2,}$/u.test(tu[i]) && !TU_DUNG.has(boDau(tu[i]))) {
+    while (i < tu.length && ten.length < 4 && /^[\p{L}]{2,}$/u.test(tu[i]) && !TU_DUNG.has(boDau(tu[i])) &&
+      !(ten.length && QUAN_SAU_TEN.test(boDau(`${tu[i]} ${tu[i + 1] ?? ""}`).trim()))) {
       ten.push(tu[i]);
       i++;
     }
@@ -249,6 +268,9 @@ const TU_KHOA: Record<string, RegExp> = {
   ha_tang: /\b(cot dien|ho ga|tru dien|cong|duong dam|vuong|khong vuong|ko vuong|sach|khong co|ko co|khong|ko|trong|thoang)\b/,
   xay_dung: /\b(tu do|theo mau|mau|chu dau tu|cdt|quy hoach|xay|tang|lau|khong|ko|duoc)\b/,
   khu_compound: /\b(compound|biet lap|an ninh|bao ve|khu|cong|rieng|khong|ko|mo|tu do|ben ngoai|dan cu)\b/,
+  // 14/09/2026: đang hỏi "gấp không", chủ nhà nhắn "à anh nói lại, là đất trống chưa xây"
+  // → cả câu vào ô gấp. Câu trả lời gấp phải nói về NHỊP bán.
+  gap: /\b(gap|voi|tu tu|thong tha|can tien|duoc gia|cho duoc|ban nhanh|ban som|som|lien|ngay|khong can|khong|ko|chua|co)\b(?!\s+xay)/,
 };
 
 // Câu hỏi ngược của chủ nhà: có dấu hỏi hoặc mở đầu bằng từ để hỏi.
@@ -520,7 +542,13 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
 }
 export function nhanDienNhieuFact(text: string): NhanDien[] {
   const out: NhanDien[] = [];
-  const them = (nd: NhanDien | null) => { if (nd && !out.some((x) => x.question === nd.question)) out.push(nd); };
+  // 14/09/2026: tin rao kiểu Facebook ("🏢 Kết cấu: 3 tấm", "📜 Sổ hồng riêng") — đáp án bỏ
+  // biểu tượng và nhãn "Kết cấu:" ở đầu mảnh.
+  const gon = (a: string) => a.replace(/^[\p{Extended_Pictographic}️‍\s•\-*]+/u, "")
+    .replace(/^(?:kết cấu|pháp lý|giá|diện tích|dt|địa chỉ|vị trí|hướng|nội thất)\s*:\s*/iu, "").trim() || a;
+  const them = (nd: NhanDien | null) => {
+    if (nd && !out.some((x) => x.question === nd.question)) out.push({ ...nd, answer: gon(nd.answer) });
+  };
   // 11/09/2026 (42 ca): xét từng MẢNH trước cả câu. Bản trước lấy nhanDienFact(cả
   // câu) trước, nên câu rao "bán nhà …, 4x16, 1 trệt 2 lầu, shr, 9t5" ghi fact pháp
   // lý là NGUYÊN câu rao (5/42 tin). Mảnh "shr" mới là câu trả lời pháp lý.
@@ -587,6 +615,11 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = /\b(?:xa|thi tran|tt)\.?\s+([a-z][a-z ]{2,30})$/.exec(kd)) && !/\bxa hoi\b/.test(kd)) {
     return { question: "phuong", answer: goc };
   }
+  // 14/09/2026: "à anh nói lại, là đất trống chưa xây nha em" — đổi LOẠI BĐS giữa chừng.
+  if (/\b(?:la|thanh|chuyen sang|doi sang)\s+dat\s*(?:trong|nen|tho cu)?\b|\bdat trong\b(?![^,.;]*\bnha\b)|\bchua xay\b/.test(kd) &&
+      !/\b(?:cho xay|xay duoc|duoc xay|len tho)\b/.test(kd)) {
+    return { question: "loai_bds", answer: /\bdat nen\b/.test(kd) ? "đất nền" : "đất trống" };
+  }
   // "tầng 12" (chung cư), "thuê tối thiểu 1 năm", "hợp để ở / kinh doanh được" — 09/09 tối lần 2 rơi bo_sung.
   if ((m = /\b(?:tang|lau)\s*(?:thu\s*)?(\d{1,2})\b(?!\s*(?:lau|tang|tam|phong|m\b|met|x|%|(?:moi|mot|1)?\s*nam))/.exec(kd)) &&
       !/\b\d+\s*(?:lau|tang|tam)\b/.test(kd) && !/\btang\s*(?:gia|them|len)\b|\d\s*%/.test(kd)) {
@@ -629,9 +662,14 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = new RegExp(`\\bcach\\s*(?:mat tien|duong lon|duong chinh|mt)\\s*(?:khoang|tam|chung)?\\s*${SO}\\s*(?:m|met)?\\b`).exec(kd))) {
     return { question: "cach_mat_tien", answer: `${m[1]}m` };
   }
+  // 14/09/2026 (bắn 14 tin bán): "hẻm rộng tầm 2m5 thôi em" không vào ô nào, bot hỏi lại
+  // đúng câu hẻm rộng mấy mét. "2m5" = 2,5 m ("5m2" vẫn là diện tích — số sau m khác 2).
+  if ((m = /\b(?:hem|hem truoc nha)\s*(?:rong\s*)?(?:la\s*|tam\s*|khoang\s*|chung\s*|co\s*|chi\s*)?(\d{1,2})\s*m\s*([013-9])(?!\d)/.exec(kd))) {
+    return { question: "do_rong_hem", answer: `hẻm ${m[1]}.${m[2]}m` };
+  }
   // Độ rộng hẻm: có đơn vị mét, hoặc số nhỏ (≤ 30) đứng cuối / trước dấu câu —
   // "hẻm 123 Trần Bình Trọng" là địa chỉ (đã bắt ở trên), không phải "hẻm 123m".
-  if ((m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?${SO}\\s*(?:m|met)\\b`).exec(kd)) ||
+  if ((m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*|tam\\s*|khoang\\s*|chung\\s*|co\\s*|chi\\s*)?${SO}\\s*(?:m|met)\\b`).exec(kd)) ||
       (m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?(\\d{1,2}(?:[.,]\\d+)?)\\s*(?=$|[,.;!?]|\\s+(?:xe|o to|oto|thong|cut|nha|em|anh|chi|a\\b))`).exec(kd)) ||
       (m = new RegExp(`${SO}\\s*(?:m|met)\\s*hem\\b`).exec(kd))) {
     return { question: "do_rong_hem", answer: `hẻm ${m[1]}m` };

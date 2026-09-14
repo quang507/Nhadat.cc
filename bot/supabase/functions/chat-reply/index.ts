@@ -35,6 +35,7 @@ import {
   boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, DAU_TIN_GIO, docCheDo, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, ngangNhanDai, phuongTenCauRao } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
 // bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
@@ -2893,7 +2894,10 @@ ${kem}` : tomTat, cheDo };
       // để đoán mới nằm lại 'chua_ro' và bị hỏi ở vòng drip.
       // Cùng một mẫu với cổng wantsSell ở trên — lệch một chữ là câu rao lọt
       // cổng "cho thue" nhưng bị ghi thành tin BÁN.
-      const sDeal = dealCol(/cho thue/.test(tKD) ? "thue" : "ban");
+      // 14/09/2026 (bắn 14 tin bán): "bán nhà mặt tiền…, đang cho thuê 45 triệu/tháng, giá
+      // 32 tỷ" từng thành tin CHO THUÊ giá 45 triệu — chữ "cho thuê" ở đâu cũng lật deal.
+      // `dealCauRao`: thu nhập thuê của căn bán không lật; "sang nhượng mặt bằng" là thuê.
+      const sDeal = dealCauRao(tKD);
       // (wardNo — số phường trong câu rao — tính ở trên, trước nhánh bán.)
       // price_raw cắt từ text GỐC (giữ nguyên chữ người gõ); đơn vị tiền lấy từ
       // TIEN_CD (đủ cả dạng có dấu lẫn không dấu — "giá 5 ti" gõ lẫn vẫn khớp).
@@ -2905,19 +2909,25 @@ ${kem}` : tomTat, cheDo };
       const DUOI_GIA = "(?:(?!\\s*\\d+(?:[.,]\\d+)?\\s*m2)[^,.;\\n])*";
       // 11/09/2026 (42 ca): bắt thêm lóng "9t5"/"4t2" (TIEN_T_KEP), đọc trên
       // `textBoc` (số đọc bằng chữ đã thành chữ số).
-      const priceM =
-        new RegExp(`((?:[\\d][\\d.,]*\\s*(?:${TIEN_CD})|${TIEN_T_KEP})${DUOI_GIA})`, "i").exec(textBoc);
+      // 14/09/2026: con số tiền ĐẦU TIÊN từng là giá — "đang cho thuê 45 triệu…, giá 32 tỷ"
+      // ra 45 triệu, "thuê 60 triệu/tháng, phí sang 350 triệu" suýt ra 350 triệu. `chonGiaRao`
+      // bỏ cọc / phí / hoa hồng / tiền thuê đang thu, ưu tiên số sau chữ "giá / tổng".
+      const giaDoan = chonGiaRao(textBoc, sDeal, DUOI_GIA);
+      const priceM = giaDoan ? [giaDoan, giaDoan] : null;
       // Diện tích + số phòng ngủ có sẵn trong câu rao thì ghi luôn qua cửa fact
       // (FR-164) sau khi tạo tin — không thì vòng nhỏ giọt hỏi lại đúng cái chủ
       // nhà vừa nói ("nhà 50m2" rồi bot hỏi "diện tích bao nhiêu ạ?"), kiểu mất
       // mặt FR-144 sinh ra để tránh. Giá/phường vào cột ngay lúc insert như cũ.
-      const areaM = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(tKD);
+      // 14/09/2026: "diện tích 62,5m²" từng không ra diện tích (chỉ biết "m2").
+      const dtRao = dienTichCauRao(tKD);
+      const areaM = dtRao != null ? [String(dtRao), String(dtRao)] : null;
       const pnM = /(\d{1,2})\s*(?:phong ngu|\bpn\b)/.exec(tKD);
       // 11/09/2026 (42 ca): "giá 75 triệu/m2, diện tích 50m2" → căn lên web giá 75
       // triệu. parse_vnd nay trả NULL cho giá mỗi m²; có diện tích thì ghi giá CẢ
       // CĂN (75 triệu × 50m2) và nói rõ trong bong bóng ghi nhận là em đã nhân.
       const giaM2 = giaTheoM2(priceM?.[1]);
-      const dtSo = areaM ? Number(areaM[1].replace(",", ".")) : null;
+      // "5x20, giá 95 triệu/m2": không có chữ m2 nhưng ngang × dài vẫn nhân được (14/09).
+      const dtSo = dtRao ?? (giaM2 ? ngangNhanDai(tKD) : null);
       const giaGhi = giaM2 && dtSo ? vndThanhChu(giaM2 * dtSo) : priceM?.[1] ? gonGiaKyHan(priceM[1].trim()) : null;
       const giaNoi = giaM2 && dtSo ? `${priceM![1].trim()} (≈ ${giaGhi} cho ${dtSo}m2)` : giaGhi;
       // FR-158: mã do trigger `trg_listings_fill_code` cấp, nối tiếp đúng dãy
@@ -2936,7 +2946,13 @@ ${kem}` : tomTat, cheDo };
       if (duAnRaoErr) await ghiLoi(client, "chat-reply match_projects(rao)", duAnRaoErr.message);
       // Dự án trong kho có quận/phường riêng (Ny'ah Phú Định ở Quận 8) — câu rao
       // không nói quận thì lấy của dự án, đừng mặc định Quận 5 (10/09 lần 6).
-      const duAn = ((duAnRao ?? []) as Array<{ id: string; name?: string; district?: string | null; ward?: string | null }>)[0] ?? null;
+      const duAnKhop = ((duAnRao ?? []) as Array<{ id: string; name?: string; district?: string | null; ward?: string | null }>)[0] ?? null;
+      // 14/09/2026: "nhà phố quận 7 đường Huỳnh Tấn Phát" khớp dự án "Căn Hộ Cao Cấp Huỳnh Tấn
+      // Phát" chỉ vì trùng tên đường — tin nhận luôn phường của dự án. Trùng tên đường mà câu
+      // không nhắc dự án / chung cư / căn hộ thì không phải dự án.
+      const duAn = duAnKhop && !duAnLaTenDuong(duAnKhop.name, text) ? duAnKhop : null;
+      // Phường tên chữ ("phường Hiệp Bình Chánh") khi câu không có phường số (14/09).
+      const phuongRao = wardNo ? `Phường ${wardNo}` : phuongTenCauRao(text);
       const maCanRao = duAn ? (MA_CAN_RE.exec(text)?.[1]?.toUpperCase() ?? null) : null;
       // Tình trạng GẤP (chủ dự án 09/09/2026 — cần cột riêng): nói gấp → true,
       // nói rõ "không gấp" → false, không nhắc → null (chưa rõ, không ép).
@@ -2961,7 +2977,7 @@ ${kem}` : tomTat, cheDo };
       const quanRao = quanDoc ?? "Quận 5";
       const { data: newLst, error: newLstErr } = await client.from("listings").insert({
         code: null, seller_id: sellerRow.id, deal: sDeal, district: quanRao,
-        ward: wardNo ? `Phường ${wardNo}` : (duAn?.ward ?? null),
+        ward: phuongRao ?? duAn?.ward ?? null,
         description: text, price_raw: giaGhi,
         property_type: "chua_ro", status: "cho_thong_tin",
         gap: gapCol,
@@ -2991,7 +3007,7 @@ ${kem}` : tomTat, cheDo };
             // cột vẫn nhận mặc định Quận 5 (NOT NULL), nhưng boc_tach nói rõ đó là MẶC
             // ĐỊNH; bong bóng 💾 in "(chưa rõ quận)" và câu hỏi đầu hỏi thêm quận.
             nguon: "cau_rao", loai_giao_dich: sDeal, quan: quanDoc, ...(quanDoc ? {} : { quan_mac_dinh: true }),
-            phuong: wardNo ? `Phường ${wardNo}` : null,
+            phuong: phuongRao,
             gia_raw: priceM?.[1]?.trim() ?? null, ...(giaM2 ? { gia_m2: giaM2 } : {}),
             dien_tich: areaM ? `${areaM[1].replace(",", ".")}m2` : null,
             so_phong_ngu: pnM ? Number(pnM[1]) : null,
@@ -3050,7 +3066,7 @@ ${kem}` : tomTat, cheDo };
         // tích, diện tích → hỏi giá…), trong nhóm cơ bản.
         const { data: firstFacts } = await client.from("listing_missing_facts")
           .select("fact_key, nhom").eq("listing_id", newLst.id).order("priority").limit(8);
-        const vuaRao = [wardNo ? "phuong" : "", areaM ? "dien_tich" : "", priceM ? "gia" : ""].filter(Boolean);
+        const vuaRao = [phuongRao ? "phuong" : "", areaM ? "dien_tich" : "", priceM ? "gia" : ""].filter(Boolean);
         const firstKey = chonCauKe(vuaRao, (firstFacts ?? []).filter((f) => f.nhom !== "sau_dang")) ?? null;
         if (firstKey) {
           const { error: ir1Err } = await client.from("info_requests").insert({
@@ -3119,7 +3135,7 @@ ${kem}` : tomTat, cheDo };
         const ghiNhan = [
           `${sDeal === "cho_thue" ? "cho thuê" : "bán"}${loaiRao ? ` ${loaiRao}` : ""}`,
           viTriRao && viTriRao.length >= 6 ? viTriRao : null,
-          [wardNo ? `Phường ${wardNo}` : null, quanDoc].filter(Boolean).join(", ") || null,
+          [phuongRao, quanDoc].filter(Boolean).join(", ") || null,
           areaM ? `${areaM[1].replace(",", ".")}m2` : null,
           pnM ? `${pnM[1]} phòng ngủ` : null,
           giaNoi ? `giá ${giaNoi}` : null,

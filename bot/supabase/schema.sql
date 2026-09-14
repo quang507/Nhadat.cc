@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-14 00:57 (giờ VN)
+-- Sinh lúc: 2026-09-14 16:12 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -1630,13 +1630,17 @@ CREATE OR REPLACE FUNCTION public.boc_ten_duong(p text)
  SET search_path TO 'public'
 AS $function$
   select nullif(btrim(
-           regexp_replace(
+           -- 14/09/2026 (bắn 14 tin bán): "đường Lạc Long Quân p5", "hxh Nguyễn Kiệm Phú Nhuận" —
+           -- phường/quận viết liền sau tên đường (không dấu phẩy) từng dính vào cột street.
+           regexp_replace(regexp_replace(
              regexp_replace(
                regexp_replace(seg,
                  '^(?:hẻm|hem|hxh|ngõ|ngo|kiệt|kiet)(?:\s+|(?=\d))(?:(?:xe\s*hơi|xe\s*hoi|xe\s*tải|xe\s*tai|xe\s*máy|xe\s*may|ba\s*gác|ba\s*gac|thông|thong|cụt|cut|nhựa|nhua|bê\s*tông|be\s*tong|rộng|rong|lớn|lon|nhỏ|nho|xh)(?![[:alpha:]])\s*|[0-9]+(?:[.,][0-9]+)?\s*m(?![[:alpha:]])\s*|[0-9]+[a-z]?(?:/[0-9]+[a-z]?)*(?![[:alpha:]0-9])\s*)*',
                  '', 'i'),
                '^(?:đường|duong|phố|pho|đ\.|đ )\s*', '', 'i'),
              '^(?:(?:nhựa|nhua|bê\s*tông|be\s*tong|rộng|rong|lớn|lon|nhỏ|nho)(?![[:alpha:]])\s*|[0-9]+(?:[.,][0-9]+)?\s*m(?![[:alpha:]])\s*)+',
+             '', 'i'),
+             '\s+(?:(?:phường|phuong|p\.?)\s*\d{1,2}|(?:quận|quan|q\.?)\s*\d{1,2}|phú nhuận|phu nhuan|tân bình|tan binh|bình thạnh|binh thanh|gò vấp|go vap|tân phú|tan phu|bình tân|binh tan|thủ đức|thu duc|nhà bè|nha be|bình chánh|binh chanh|hóc môn|hoc mon|củ chi|cu chi)(?![[:alpha:]]).*$',
              '', 'i')), '')
   from (
     select s as seg
@@ -1769,7 +1773,7 @@ begin
   end if;
   if j->>'access_type' is null then
     if k ~ '(hem xe tai|\mhxt\M|xe tai)' then j := j || jsonb_build_object('access_type', 'hem_xe_tai');
-    elsif k ~ '(hem xe hoi|\mhxh\M|hem o ?to|hem xe con|xe hoi|o ?to (vo|vao|dau|toi|do)|hem 7 cho|xe 7 cho)' then j := j || jsonb_build_object('access_type', 'hem_xe_hoi');
+    elsif k ~ '(hem xe hoi|\mhxh\M|hem o ?to|hem xe con|xe hoi(?! (?:vo |vao |ngu |de |dau )?trong nha)|o ?to (vo|vao|dau|toi|do)|hem 7 cho|xe 7 cho)' then j := j || jsonb_build_object('access_type', 'hem_xe_hoi');
     elsif k ~ '(hem xe may|hem nho|hem ba gac|hem 3 gac|hem xe 3 banh|xe may)' then j := j || jsonb_build_object('access_type', 'hem_xe_may');
     elsif k ~ '\mhem\M' then j := j || jsonb_build_object('access_type', 'hem');
     end if;
@@ -1799,7 +1803,7 @@ begin
   end if;
 
   if k ~ 'thang may' then j := j || jsonb_build_object('has_elevator', true); end if;
-  if k ~ '(xe hoi (vo|vao|ngu|de) (trong )?nha|o ?to (vo|vao|ngu|dau) (trong |tan )?nha|dau (o ?to|xe hoi|xe oto) trong nha|san dau (o ?to|xe hoi)|\mgarage\M|ga ?ra ?ge|\mgara\M|xe hoi ngu trong nha|(o ?to|xe hoi) (vo|vao|toi) tan (cua|nha))' then
+  if k ~ '(xe hoi (vo|vao|ngu|de) (trong )?nha|o ?to (vo|vao|ngu|dau) (trong |tan )?nha|dau (o ?to|xe hoi|xe oto) trong nha|san dau (o ?to|xe hoi)|\mgarage\M|ga ?ra ?ge|\mgara\M|xe hoi ngu trong nha|(o ?to|xe hoi) (vo|vao|toi) tan (cua|nha)|\d+ (xe hoi|o ?to|xe oto) (vo |vao |ngu |de |dau )?trong nha)' then
     j := j || jsonb_build_object('car_in_house', true);
   end if;
   if k ~ '(can goc|lo goc|nha goc|2 mat tien|hai mat tien|2 mat hem|hai mat hem|goc 2 mat|2 mat thoang)' then j := j || jsonb_build_object('corner_lot', true); end if;
@@ -3669,6 +3673,23 @@ begin
                                           when public.bo_dau(v_txt) ~ '(co ban)' then 'co_ban' end, specs_source = bac
      where id = new.listing_id and (furnishing is null or de)
        and public.bo_dau(v_txt) ~ '(full|day du|cao cap|khong|trong|ko|co ban)';
+  -- 14/09/2026 (bắn 14 tin bán): "cách mặt tiền 50m" vào fact nhưng cột distance_to_street_m
+  -- vẫn trống — boc_thong_so chỉ đọc số khi câu CÓ chữ "cách mặt tiền", đáp án đã cắt là "50m".
+  elsif new.question = 'cach_mat_tien' and not (j ? 'distance_to_street_m') then
+    v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
+    if v_num is not null and v_num between 1 and 2000 then
+      update listings set distance_to_street_m = v_num, specs_source = bac
+       where id = new.listing_id and (distance_to_street_m is null or de);
+    end if;
+  -- "đường Lạc Long Quân p5": địa chỉ kèm phường số — phường trống thì ghi luôn, khỏi hỏi lại
+  -- "nhà mình phường mấy" (lượt bắn đó hỏi 3 lần).
+  elsif new.question = 'vi_tri' and l.ward is null
+        and public.bo_dau(v_txt) ~ '(?:phuong|\mp)\s*\.?\s*[0-9]{1,2}\M' then
+    v_ward := public.chuan_hoa_phuong(substring(public.bo_dau(v_txt) from '(?:phuong|\mp)\s*\.?\s*[0-9]{1,2}'));
+    if v_ward is not null then
+      update listings set ward = v_ward, ward_source = bac
+       where id = new.listing_id and ward is null;
+    end if;
   elsif new.question = 'mat_tien' and not (j ? 'frontage_m') then
     v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
     if v_num is not null and v_num between 1.5 and 40 then
