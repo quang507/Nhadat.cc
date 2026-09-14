@@ -96,6 +96,16 @@ dat("oan: quận '11' cho 'q11'", "bán nhà q11", "quan", "11", "q11");
 dat("oan: cọc '2 tháng'", "cọc 2 tháng, thuê tối thiểu 1 năm", "tien_coc", "2 tháng", "cọc 2 tháng");
 bo("oan không phải oan: giá '6' cho '6 tỷ' mà ghi nhầm '60'", "bán nhà quận 5 phường 7, 50m2, 6 tỷ", "gia", "60", "6 tỷ", "tien_khong_khop_trich_dan");
 
+// ── lượt đo bóng lần 2 (33 lượt, 196 đề xuất, 186 đạt): 2 ca còn lọt ──
+bo("lần 2: tiền cọc = 'phí sang 350 triệu'", MBT, "tien_coc", "350 triệu", "phí sang 350 triệu", "trich_dan_khong_noi_coc");
+bo("lần 2: nội thất = 'để ở hoặc cho thuê đều được'", "nhà hướng đông nam, để ở hoặc cho thuê đều được em", "noi_that", "để ở hoặc cho thuê đều được", "để ở hoặc cho thuê đều được", "gia_tri_khong_dung_loai_truong");
+dat("lần 2: cọc 60 triệu", "cho thuê nhà 20 triệu/tháng, cọc 60 triệu", "tien_coc", "60 triệu", "cọc 60 triệu");
+dat("lần 2: nội thất full", "căn hộ 2pn full nội thất, 18 triệu", "noi_that", "full nội thất", "full nội thất");
+{
+  const s = soSanhVoiDb([{ khoa: "do_rong_hem", gia_tri: "2m5", trich_dan: "hẻm rộng tầm 2m5" }], { alley_width_m: 2.5 }, {});
+  ok("lần 2: so DB 'hẻm 2m5' với 2.5 → trùng (không phải lệch)", s.trung.includes("do_rong_hem"), JSON.stringify(s));
+}
+
 // ── loạt nhiều trường: tách đúng đạt / bỏ ──
 {
   const k = kiemDeXuat([
