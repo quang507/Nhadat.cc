@@ -222,6 +222,19 @@ export default function Page() {
     });
   };
 
+  // 14/09/2026: thẻ CRM trên /admin mở thẳng màn sửa bằng ?sua=<mã tin> (trước đó mã tin
+  // trỏ ra trang công khai — tin chưa lên kệ thì 404). Chạy một lần khi rổ tải xong.
+  const [daMoTuLink, setDaMoTuLink] = useState(false);
+  useEffect(() => {
+    if (daMoTuLink || !rows.length) return;
+    setDaMoTuLink(true);
+    let ma: string | null = null;
+    try { ma = new URLSearchParams(location.search).get("sua"); } catch { /* SSR */ }
+    const d = ma ? rows.find((r) => r.code === ma) : undefined;
+    if (d) { setQ(ma ?? ""); moSua(d); }
+    else if (ma) setLoi(`Không tìm thấy tin ${ma} trong rổ hàng.`);
+  }, [rows, daMoTuLink]);
+
   // Lưu chỉnh sửa vào database.
   //
   // `duyet = true` là ĐƯỜNG DUY NHẤT đưa một tin lên kệ từ màn này (chủ dự án
