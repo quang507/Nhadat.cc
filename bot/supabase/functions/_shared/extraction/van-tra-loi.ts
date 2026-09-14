@@ -31,10 +31,6 @@ const HUA_CO_HANG: RegExp[] = [
   // "Em tìm căn khớp 4 người ở quanh trường … rồi".
   /\b(?:ben em|chung minh|chung em|em|minh)\s+(?:dang\s+|van\s+)?co\s+(?:rat\s+)?nhieu\b(?!\s+(?:khach|nguoi))/,
   /\bem\s+(?:da\s+)?(?:tim|kiem|loc)\s+(?:duoc\s+|ra\s+)?(?:can|nha)\b[^.?!]*\broi\b/,
-  // 14/09 (bắn lại sau siết): "để em gửi căn cho mình xem luôn ạ" khi kho trống.
-  /\b(?:de\s+)?em\s+gui\s+(?:ngay\s+|luon\s+|lien\s+)?(?:can|nha|vai can|may can)\b/,
-  // "Dạ được, em ghi nhận lịch chiều thứ 7 cho mình ạ" — nhận hẹn xem khi chưa có căn nào.
-  /\b(?:ghi nhan|chot|sap xep|len|dat)\s+(?:lich|gio)\s+(?:xem|chieu|sang|toi|trua|mai|thu|cuoi tuan|\d)/,
   // 14/09: "Chị xem những căn này có hợp không ạ?" khi chưa gửi căn nào.
   /\b(?:nhung|may|cac|mot so)\s+can\s+(?:nay|do|tren|ben duoi|sau day|em vua gui)\b/,
   // "em đang có vài căn…", "bên em hiện có 3 căn", "em có nhà mặt tiền…"
@@ -53,9 +49,30 @@ export function laHoiCoHang(text: string): boolean {
   return /\b(?:co|con)\s+(?:(?:can|nha|lo|nen|mau|cai|dat)(?:\s+(?:nao|gi))?|(?:vai|may)\s+can)\b.*?(?:\b(?:khong|ko|k|hong|hem|chua)\b|\?|\bnao\b)/.test(kd);
 }
 
+// 14/09/2026 (review code) — HAI luật thêm hôm nay nói về việc SẮP LÀM (gửi căn, xếp
+// lịch xem), không phải về việc đang có hàng. Chúng chỉ sai khi nói CHẮC NỊCH; đặt sau
+// một mệnh đề điều kiện thì chính là câu bot NÊN nói lúc kho trống:
+//   "Khi nào có căn hợp em gửi ngay nha."            ← đúng, mà bản trước XOÁ mất
+//   "Có căn nào khớp là em sắp xếp lịch xem nha."    ← đúng, mà bản trước XOÁ mất
+// Nên tách khỏi HUA_CO_HANG và miễn khi câu có dấu điều kiện. Miễn NÀY KHÔNG áp cho
+// HUA_CO_HANG: "nếu chị muốn thì bên em đang có vài căn" vẫn là bịa hàng.
+const HUA_SAP_LAM: RegExp[] = [
+  // "để em gửi căn cho mình xem luôn ạ" khi kho trống. Nhánh danh từ KHÔNG nhận "nha"
+  // trơ trọi: bỏ dấu thì tiểu từ cuối câu "nha" (= nhé) trùng hệt "nhà", nên
+  // "em gửi ngay nha" / "em gửi liền nha chị" bị bắt oan. Muốn tính là "nhà" thì phải
+  // có phần đi sau của một danh từ thật.
+  /\b(?:de\s+)?em\s+gui\s+(?:ngay\s+|luon\s+|lien\s+)?(?:can\b|vai can\b|may can\b|nha\s+(?:cho|mat tien|hem|nay|do)\b)/,
+  // "Dạ được, em ghi nhận lịch chiều thứ 7 cho mình ạ" — nhận hẹn xem khi chưa có căn nào.
+  /\b(?:ghi nhan|chot|sap xep|len|dat)\s+(?:lich|gio)\s+(?:xem|chieu|sang|toi|trua|mai|thu|cuoi tuan|\d)/,
+];
+// Dấu ĐIỀU KIỆN "khi có căn": câu hứa việc sẽ làm KHI có hàng, không khẳng định đang có.
+const DIEU_KIEN_CO_CAN =
+  /\b(?:khi|neu|luc nao|hom nao|bao gio|chung nao)\b[^.?!]*\bco\s+(?:can|nha|hang)\b|\bco\s+(?:can|nha|hang)\s+(?:nao|moi|gi|hop|khop|phu hop)\b/;
+
 export function laHuaCoHang(cau: string, hoiHang = true): boolean {
   const kd = boDau(cau.trim());
-  return HUA_CO_HANG.some((re, i) => (i > 0 || hoiHang) && re.test(kd));
+  if (HUA_CO_HANG.some((re, i) => (i > 0 || hoiHang) && re.test(kd))) return true;
+  return !DIEU_KIEN_CO_CAN.test(kd) && HUA_SAP_LAM.some((re) => re.test(kd));
 }
 
 const tachCau = (s: string): string[] => s.split(/(?<=[.!?…])\s+/).filter((c) => c.trim());
