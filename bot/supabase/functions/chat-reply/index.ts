@@ -2975,7 +2975,7 @@ ${kem}` : tomTat, cheDo };
       }
       const quanDoc = bocQuan(tKD, text) ?? duAn?.district ?? vung?.ten ?? null;
       const quanRao = quanDoc ?? "Quận 5";
-      const { data: newLst, error: newLstErr } = await client.from("listings").insert({
+      const dongTin = {
         code: null, seller_id: sellerRow.id, deal: sDeal, district: quanRao,
         ward: phuongRao ?? duAn?.ward ?? null,
         description: text, price_raw: giaGhi,
@@ -2989,7 +2989,19 @@ ${kem}` : tomTat, cheDo };
             last_confirmed_at: new Date().toISOString(),
           }
           : {}),
-      }).select("id, code, property_type").single();
+      };
+      let { data: newLst, error: newLstErr } = await client.from("listings").insert(dongTin)
+        .select("id, code, property_type").single();
+      // 14/09/2026 (bắn lại 14 tin bán): căn S1.02 Vinhomes Grand Park đã có trong kho (lượt
+      // trước) → `listings_project_unit_uniq` chặn → tin MẤT, chủ nhà nhận câu chào khuôn như
+      // chưa từng rao. Hai người rao cùng một căn là chuyện thường (chủ + môi giới, hai môi
+      // giới) — vẫn tạo tin, bỏ mã căn trùng, ghi lại trong boc_tach để admin gộp.
+      let maCanTrung: string | null = null;
+      if (newLstErr?.code === "23505" && /listings_project_unit_uniq/.test(newLstErr.message) && dongTin.unit_code) {
+        maCanTrung = dongTin.unit_code;
+        ({ data: newLst, error: newLstErr } = await client.from("listings").insert({ ...dongTin, unit_code: null })
+          .select("id, code, property_type").single());
+      }
       // Tạo tin hỏng mà đi tiếp là NUỐT MẤT CÂU RAO: chủ nhà nhận một câu chăm
       // sóc chung chung ở nhánh dưới, tưởng đã rao xong, còn kho thì không có
       // gì. Vào sổ rồi mới đi tiếp (FR-152).
@@ -3011,7 +3023,7 @@ ${kem}` : tomTat, cheDo };
             gia_raw: priceM?.[1]?.trim() ?? null, ...(giaM2 ? { gia_m2: giaM2 } : {}),
             dien_tich: areaM ? `${areaM[1].replace(",", ".")}m2` : null,
             so_phong_ngu: pnM ? Number(pnM[1]) : null,
-            gap: gapCol, du_an: duAn?.name ?? null, ma_can: maCanRao,
+            gap: gapCol, du_an: duAn?.name ?? null, ma_can: maCanRao, ...(maCanTrung ? { ma_can_trung_tin_khac: maCanTrung } : {}),
             du_an_chua_co: duAn ? null : tenDuAnTrongCau(text),
             co_anh_kem: imageUrl ? true : null,
           },

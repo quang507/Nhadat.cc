@@ -406,9 +406,9 @@ check("V48-116b mã căn không có trong kho → nói thật, không bịa", /c
 r = await send({ external_user_id: "v48-7", text: "#BDS-Q5-0010 còn không" });
 st = sysText(parseCalls().pop());
 check("V48-116c căn khách nhắc thuộc dự án → dòng mang dự án + 'còn bán' + chủ xác nhận 0 ngày trước", /căn A12-06 · tình trạng căn: còn bán · chủ xác nhận 0 ngày trước/.test(st.slice(st.indexOf("CĂN KHÁCH"))));
-r = await send({ external_user_id: "v48-8", text: "bán căn A12-05 dự án Ny'ah giá 6 tỷ 60m2" });
+r = await send({ external_user_id: "v48-8", text: "bán căn A12-07 dự án Ny'ah giá 6 tỷ 60m2" });
 const L9 = db().t.listings.at(-1);
-check("V48-114 câu rao có tên dự án → tin gắn project_id + unit_code A12-05, unit_status con_ban, last_confirmed_at", r.body.role === "seller" && L9.project_id === pj.id && L9.unit_code === "A12-05" && L9.unit_status === "con_ban" && !!L9.last_confirmed_at, JSON.stringify(L9));
+check("V48-114 câu rao có tên dự án → tin gắn project_id + unit_code A12-07 (14/09: A12-05 đã có tin — mock nay mô phỏng listings_project_unit_uniq), unit_status con_ban, last_confirmed_at", r.body.role === "seller" && L9.project_id === pj.id && L9.unit_code === "A12-07" && L9.unit_status === "con_ban" && !!L9.last_confirmed_at, JSON.stringify(L9));
 fresh(seedKho); r = await send({ external_user_id: "v48-8b", text: "bán nhà P4 giá 5 tỷ 8 50m2" });
 check("V48-114b câu rao không có dự án → hàng lẻ như cũ (project_id/unit_status null)", db().t.listings.at(-1).project_id == null && db().t.listings.at(-1).unit_status == null);
 
@@ -1838,6 +1838,22 @@ fresh(seedKho);
   r1 = await send({ external_user_id: "md-3", text: "mua qua bên em có mất phí gì không" });
   check("MUCDICH-03 người MUA chưa nói khu/giá → câu hỏi giữ nguyên (được dò)",
     r1.body.replies.some((t) => /để ở hay đầu tư/.test(t)), JSON.stringify(r1.body.replies));
+}
+
+// ── 14/09 bắn lại 14 tin bán: rao TRÙNG căn đã có (project_id + unit_code) → tin mất trắng ──
+{
+  fresh((d) => {
+    const pj = d.insert("projects", { name: "Vinhomes Grand Park", developer: "Vinhomes", district: "TP Thủ Đức" }).data;
+    const s0 = d.insert("sellers", { zalo_user_id: "z-cu", seller_type: "nmg", name: "Sale B", active_listing_id: null }).data;
+    d.insert("listings", { code: "BDS-CH-THUDUC-0001", seller_id: s0.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", project_id: pj.id, unit_code: "S1.02", price_raw: "3 tỷ 1", price_vnd: 3.1e9, can_chu_duyet: true });
+  });
+  globalThis.__rpc.match_projects = (_d, a) => ({ data: /vinhomes/i.test(a.p_text) ? db().t.projects : [], error: null });
+  r = await send({ external_user_id: "trung-can", text: "bán căn hộ Vinhomes Grand Park Thủ Đức, căn S1.02 tầng 12, 69m2 2pn 2wc, sổ hồng, giá 3 tỷ 150" });
+  const moi = db().t.listings.filter((l) => l.code !== "BDS-CH-THUDUC-0001");
+  check("TRUNGCAN-01 căn S1.02 đã có tin khác → vẫn TẠO tin mới (bỏ mã căn trùng), không rơi câu chào khuôn",
+    moi.length === 1 && moi[0].unit_code == null && moi[0].project_id === db().t.projects[0].id && !db().t.bot_errors.some((e) => e.source === "chat-reply tao tin rao"),
+    JSON.stringify({ moi, loi: db().t.bot_errors, rep: r.body.replies }));
+  delete globalThis.__rpc.match_projects;
 }
 
 // ── kết ──

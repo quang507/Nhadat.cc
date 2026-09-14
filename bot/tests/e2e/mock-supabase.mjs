@@ -167,6 +167,11 @@ export class FakeDB {
         this.t.deals.some((x) => x.listing_id === r.listing_id && x.buyer_id === r.buyer_id)) {
       return trung("deals_listing_buyer_key");
     }
+    // listings_project_unit_uniq (project_id, unit_code) — bắn lại 14/09: hai lượt rao cùng căn S1.02.
+    if (table === "listings" && r.project_id && r.unit_code &&
+        this.t.listings.some((x) => x.project_id === r.project_id && x.unit_code === r.unit_code)) {
+      return trung("duplicate key value violates unique constraint \"listings_project_unit_uniq\"");
+    }
     if (table === "listings") {
       r.code = r.code ?? `BDS-Q5-${String(this.t.listings.length + 1).padStart(4, "0")}`;
       r.status = r.status ?? "cho_thong_tin";
