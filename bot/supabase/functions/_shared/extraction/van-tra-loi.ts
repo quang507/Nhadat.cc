@@ -39,6 +39,8 @@ const HUA_CO_HANG: RegExp[] = [
   /\b(?:nhung|may|cac|mot so)\s+can\s+(?:nay|do|tren|ben duoi|sau day|em vua gui)\b/,
   // "em đang có vài căn…", "bên em hiện có 3 căn", "em có nhà mặt tiền…"
   /\b(?:em|ben em|minh|kho)\s+(?:(?:dang|hien|van|cung|con|da|san)\s+)*co\s+(?:san\s+)?(?:(?:vai|mot vai|mot so|nhieu|may|mot|hai|ba|bon|nam|\d+)\s+)?(?:can|lo|nen|mau|nha|lua chon|san pham)\b/,
+  // 14/09 lần 4: "Hiện kho em còn vài căn ở khu đó" — chữ "còn" thay "có". "còn căn nào" (hỏi) không bắt.
+  /\b(?:kho|ben em|em)(?:\s+em)?\s+(?:(?:dang|hien|van|cung)\s+)*con\s+(?:(?:vai|mot vai|mot so|nhieu|may|it|\d+)\s+(?:can|lo|nen|nha)|can\s+(?:ho|mat tien|hem|pho|\d))\b(?!\s+nao)/,
   // "có vài căn đúng ý chị", "có 2 lựa chọn"
   /\bco\s+(?:(?:vai|mot vai|mot so|nhieu|may|hai|ba|\d+)\s+)(?:can|lo|nen|lua chon)\b/,
   // "để em xem căn nào phù hợp nhất" — nói như đang cầm sẵn danh sách.
@@ -156,7 +158,13 @@ export function locHoSoMua(profile: Record<string, unknown>, text: string): { pr
 export function suaTuXungMua(s: string): string {
   return s
     .replace(/(^|[\s,.!?])(C|c)húng (mình|tôi|tớ)(?![\p{L}])/gu, (_m, dau, c) => `${dau}${c === "C" ? "Bên" : "bên"} em`)
-    .replace(/(^|[^\p{L}])([Ee]m)(ghi|tìm|lọc|gửi|báo|xem|hiểu|cập|kiểm|sẽ|đã|đang)(?![\p{L}])/gu, "$1$2 $3");
+    .replace(/(^|[^\p{L}])([Ee]m)(ghi|tìm|lọc|gửi|báo|xem|hiểu|cập|kiểm|sẽ|đã|đang)(?![\p{L}])/gu, "$1$2 $3")
+    // Lần 4: "…thì bạn cũng bị ảnh hưởng" — bot gọi khách "mình"/anh/chị, không "bạn". Chỉ
+    // thay khi "bạn" làm chủ ngữ (sau là động từ / hết câu); "bạn bè", "người bạn" giữ.
+    .replace(
+      /(^|[\s,.!?])(?<!(?:người|các|những|một|với|cho|của|hai|ba) )([Bb])ạn(?=\s+(?:cũng|sẽ|nên|có|cần|muốn|đang|phải|được|chỉ|không|là|hãy|thấy|đã|vẫn|tìm|mua|thuê|xem|hỏi)(?![\p{L}])|\s*[,.!?]|$)/gu,
+      (_m, dau, b) => `${dau}${b === "B" ? "Mình" : "mình"}`,
+    );
 }
 
 // ── Dò mục đích khi không cần (14/09/2026, bắn 16 hội thoại lần 3) ─────────
@@ -164,8 +172,9 @@ export function suaTuXungMua(s: string): string {
 // lượt bắn vẫn còn: thuê căn hộ Q7 15 triệu → "mình cần căn hộ để ở hay để cho thuê lại
 // vậy ạ?"; "anh có 2 tỷ… mua nhà 4 tỷ quận 6" → "hẻm hay mặt tiền, để ở hay đầu tư ạ?".
 // Chỉ bỏ CÂU HỎI kiểu "để ở hay đầu tư"; câu khác giữ nguyên. Người gọi quyết khi nào áp.
+// Lần 4: model đổi chữ — "Mình ở hoặc đầu tư ạ?", "Mình đang tìm mua hay để ở nhà Quận 5 vậy?".
 const HOI_MUC_DICH_RE =
-  /\b(?:de o|o that|o gia dinh|tu o)\b.{0,40}\bhay\b.{0,40}\b(?:dau tu|kinh doanh|cho thue lai|cho thue|buon ban)\b|\b(?:dau tu|kinh doanh|cho thue lai)\b.{0,40}\bhay\b.{0,40}\b(?:de o|tu o)\b|\bmuc dich\b/;
+  /\b(?:de o|o that|o gia dinh|tu o|o)\b.{0,40}\b(?:hay|hoac)\b.{0,40}\b(?:dau tu|kinh doanh|cho thue lai|cho thue|buon ban)\b|\b(?:dau tu|kinh doanh|cho thue lai|mua|thue)\b.{0,40}\b(?:hay|hoac)\b.{0,20}\b(?:de o|tu o)\b|\bmuc dich\b/;
 export function laHoiMucDich(cau: string): boolean {
   return cau.includes("?") && HOI_MUC_DICH_RE.test(boDau(cau));
 }
@@ -192,7 +201,9 @@ export function boHoiMucDich(replies: string[]): { replies: string[]; daBo: bool
 export function gopGhiChu(cu: string | null | undefined, moi: string | null | undefined, tran = 500): string | null {
   const tach = (s: string | null | undefined, re: RegExp) =>
     String(s ?? "").split(re).map((x) => x.trim().replace(/[.。]+$/, "")).filter(Boolean);
-  const khoa = (s: string) => boDau(s).replace(/[^a-z0-9]+/g, " ").trim();
+  // Lần 4: "cần gần bệnh viện" ≡ "muốn gần bệnh viện" — bỏ động từ mong muốn khi so.
+  const khoa = (s: string) =>
+    boDau(s).replace(/[^a-z0-9]+/g, " ").replace(/\b(?:can|muon|thich|uu tien|mong)\b/g, " ").replace(/\s+/g, " ").trim();
   const y = tach(cu, /[;\n]+/);
   let doi = false;
   const timY = (m: string) => {

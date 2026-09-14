@@ -246,5 +246,19 @@ ok("gộp: '4 người ở cùng, cần gần trường tiểu học' vào 'cầ
   gopGhiChu("cần gần trường tiểu học Quận 3", "4 người ở cùng, cần gần trường tiểu học") === "cần gần trường tiểu học Quận 3; 4 người ở cùng",
   String(gopGhiChu("cần gần trường tiểu học Quận 3", "4 người ở cùng, cần gần trường tiểu học")));
 
+// bắn lần 4 (14/09)
+ok("dò mục đích: 'Mình ở hoặc đầu tư ạ?' là câu dò", laHoiMucDich("Mình ở hoặc đầu tư ạ?"));
+ok("dò mục đích: 'Mình đang tìm mua hay để ở nhà Quận 5 vậy?' là câu dò", laHoiMucDich("Mình đang tìm mua hay để ở nhà Quận 5 vậy?"));
+ok("dò mục đích: 'Mình muốn ở khu nào, tầm giá bao nhiêu ạ?' không bắt", !laHoiMucDich("Mình muốn ở khu nào, tầm giá bao nhiêu ạ?"));
+ok("dò mục đích: 'Mình tìm mua hay thuê ạ?' không bắt", !laHoiMucDich("Mình tìm mua hay thuê ạ?"));
+ok("kho: 'Hiện kho em còn vài căn ở khu đó' là hứa", laHuaCoHang("Hiện kho em còn vài căn ở khu đó, em lọc rồi báo lại mình ngay nha."));
+ok("kho: 'bên em còn căn nào khác không' không bắt", !laHuaCoHang("Mình hỏi giúp em bên em còn căn nào khác không ạ?"));
+ok("kho: 'em còn cần biết thêm khu vực' không bắt", !laHuaCoHang("Em còn cần biết thêm khu vực mình muốn ạ."));
+ok("xưng hô: 'thì bạn cũng bị ảnh hưởng' → 'mình'", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng.") === "Nếu người khác bán phần của họ thì mình cũng bị ảnh hưởng.", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng."));
+ok("xưng hô: 'bạn bè', 'người bạn có nhà' giữ nguyên", suaTuXungMua("Nhà gần bạn bè, người bạn có nhà ở đó.") === "Nhà gần bạn bè, người bạn có nhà ở đó.", suaTuXungMua("Nhà gần bạn bè, người bạn có nhà ở đó."));
+ok("gộp: 'muốn gần bệnh viện' vào 'có mẹ già ở cùng, cần gần bệnh viện' → null",
+  gopGhiChu("có mẹ già ở cùng, cần gần bệnh viện", "muốn gần bệnh viện") === null,
+  String(gopGhiChu("có mẹ già ở cùng, cần gần bệnh viện", "muốn gần bệnh viện")));
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
