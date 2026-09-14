@@ -3483,6 +3483,14 @@ ${kem}` : tomTat, cheDo };
   const duTieuChiDeNgungDo = minimumMet ||
     ((prefs.area != null || gan != null || !!bocQuan(tKD, text) || /\b(?:phuong|p)\s*\d{1,2}\b/.test(tKD)) &&
       (prefs.budget != null || docTien(text) != null));
+  // 14/09/2026 (review code): kho ĐÃ được lọc hay CHƯA là một sự thật, ba chỗ phải nói
+  // cùng một câu — cổng truy vấn kho, dòng "KHO HIỆN CÓ" trong câu lệnh, và lời thật của
+  // van `chanHuaCoHang`. Trước đó cả ba chép tay `minimumMet || mentioned.length`; khi
+  // `duTieuChiDeNgungDo` thay `minimumMet` ở dòng dặn "ngừng dò hồ sơ" mà ba chỗ kia giữ
+  // nguyên thì lượt đầu "tìm nhà quận 5 tầm 6 tỷ" ra hai câu ngược nhau trong CÙNG một
+  // prompt: "KHO trống thì nói thật em lọc rồi báo" đứng cạnh "(chưa lọc … đừng nói kho
+  // trống)". Một tên, một nguồn — đổi cổng lọc kho là đổi cả ba.
+  const khoDaLoc = minimumMet || nhacMaCan;
   // 13/09/2026: cách gọi KHÁCH MUA. Nhánh người bán có `sellers.xung_ho` từ 07/09,
   // nhánh mua thì không — model tự đoán: "có căn nào quận 10 tầm 5 tỷ không em"
   // → "Anh tìm để ở…". Lời dặn ("kêu chị nha") thắng; khách tự xưng ("chị đang
@@ -3539,7 +3547,7 @@ ${kem}` : tomTat, cheDo };
     { data: listings }, { data: partnerProj }, { data: matchedProj }, { data: askedListings },
     { data: askedPhotos }, giaTB, { data: nhacFeedback },
   ] = await Promise.all([
-    minimumMet || mentioned.length ? khoQ : Promise.resolve({ data: [] as never[] }),
+    khoDaLoc ? khoQ : Promise.resolve({ data: [] as never[] }),
     // FR-132: dự án nhà mình phân phối trực tiếp — luôn đứng đầu khối dự án
     client.from("projects")
       .select("name, developer, district, ward, location_raw, legal_status, status_text, amenities, specs, unit_types")
@@ -3845,8 +3853,13 @@ ${kem}` : tomTat, cheDo };
       }, {
         type: "text",
         text: DONG_TEN + "\n\nKHO HIỆN CÓ:\n" +
-          (kho || (minimumMet || mentioned.length
+          (kho || (khoDaLoc
             ? "(trống)"
+            : duTieuChiDeNgungDo
+            // 14/09 (review code): khách vừa nói đủ khu vực + giá ở CHÍNH lượt này, nhưng
+            // kho lọc theo hồ sơ ĐÃ LƯU nên lượt này chưa có gì để đưa. Nói rõ lý do, đừng
+            // để model hiểu là kho rỗng.
+            ? "(chưa lọc - khách vừa nói đủ khu vực + giá, nhưng kho lọc theo hồ sơ ĐÃ LƯU nên lượt này chưa lọc kịp: nói thật là em lọc rồi báo lại liền, đừng nói kho trống, đừng nêu căn nào)"
             : "(chưa lọc - chưa đủ khu vực + giá để lọc, đừng nói kho trống)")) +
           (giaTB
             ? `\n(${giaTB} - ước tính từ kho bên em, dùng để so khi khách hỏi "giá vậy ok không": nói rẻ/mắc hơn mặt bằng khoảng bao nhiêu %, KHÔNG gọi là thẩm định)`
@@ -3891,7 +3904,11 @@ ${kem}` : tomTat, cheDo };
             ? `CHƯA BIẾT (chỉ NHẶT khi khách tự kể hoặc khi khách chê căn vừa gửi, TUYỆT ĐỐI không hỏi chủ động - đủ khu vực + giá là ngừng dò hồ sơ):\n${missing || "(đã đủ)"}\n\n`
             : `CÒN THIẾU (hỏi theo thứ tự ưu tiên; gộp 2-3 ý vào MỘT câu hỏi liền mạch cũng được, đừng thành bảng hỏi):\n${missing || "(đã đủ)"}\n\n`) +
           (duTieuChiDeNgungDo
-            ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) - NGỪNG hỏi hồ sơ, chuyển sang gợi ý căn khớp (KHO trống thì nói thật em lọc rồi báo) và để khách dẫn chuyện.\n"
+            ? khoDaLoc
+              ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) - NGỪNG hỏi hồ sơ, chuyển sang gợi ý căn khớp (KHO trống thì nói thật em lọc rồi báo) và để khách dẫn chuyện.\n"
+              // Khách vừa nói đủ ở CHÍNH lượt này nên kho chưa lọc kịp (xem khối KHO): ngừng
+              // dò hồ sơ, nhưng KHÔNG được gợi ý căn - không có căn nào trong tay.
+              : "Đã đủ tiêu chí tối thiểu (khu vực + giá) - NGỪNG hỏi hồ sơ. Kho lượt này CHƯA lọc kịp nên KHÔNG nêu căn nào và KHÔNG nói kho trống: nói thật là em lọc theo đúng nhu cầu rồi báo lại liền, và để khách dẫn chuyện.\n"
             : "CHƯA đủ tiêu chí tối thiểu (khu vực + giá) - chưa gợi ý căn trừ khi khách hỏi thẳng một căn.\n") +
           // 14/09/2026 (bắn thật, FR-207): khách thấy "💾 Đã lưu nhu cầu: … để ở" rồi câu
           // ngay sau lại "chị muốn ở hay kinh doanh?" — model tự điền `purpose` từ "nhà có
@@ -3964,7 +3981,7 @@ ${kem}` : tomTat, cheDo };
     const ac = goiMua ?? "mình";
     const chan = chanHuaCoHang(
       out.replies,
-      minimumMet || mentioned.length
+      khoDaLoc
         ? `hiện bên em chưa có căn nào khớp đúng nhu cầu này ạ. Em ghi lại rồi, có căn mới hợp là em báo ${ac} liền nha.`
         : `em lọc kho theo đúng nhu cầu của ${ac} rồi báo lại liền nha.`,
       laHoiCoHang(text),

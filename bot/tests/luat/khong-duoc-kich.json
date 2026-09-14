@@ -38,7 +38,12 @@
         ["nhà ở bình thạnh", "Quận Bình Thạnh"],
         ["tìm nhà quận 5 tầm 6 tỷ (14/09 — 'tầm' bỏ dấu thành 'tấm')", "Quận 5"],
         ["minh can mua nha q8 tam 4 ty hem xe hoi", "Quận 8"],
-        ["bán nhà quận 5 cần bán gấp", "Quận 5"]
+        ["bán nhà quận 5 cần bán gấp", "Quận 5"],
+        ["minh can mua nha quan 5 tam 6 ty (14/09 — gõ trần đủ chữ, không dấu)", "Quận 5"],
+        ["quan 10 tam 7 ty hem xe hoi", "Quận 10"],
+        ["ban nha quan 5 can ban gap", "Quận 5"],
+        ["nha quan 7 can 3 phong ngu", "Quận 7"],
+        ["quan 5 can ho 50m2 gia 3 ty", "Quận 5"]
       ],
       "khong_duoc_kich": [
         "nhà mở quán 2 tầng được nha em (10/09 — tầng ba bắt)",
@@ -50,7 +55,10 @@
         "giá 5 tỷ 2",
         "nhà có 2 wc",
         "mo quan 2 tam lau nha em",
-        "quán 2 tấm cho thuê"
+        "quán 2 tấm cho thuê",
+        "nha mo quan 2 tam cho thue (14/09 — 'tấm' gõ trần, sau nó là chữ nên vẫn là đơn vị đếm)",
+        "sang quan 2 tang mat tien",
+        "cho thue quan 3 phong may lanh"
       ]
     },
     "laDuRoi": {

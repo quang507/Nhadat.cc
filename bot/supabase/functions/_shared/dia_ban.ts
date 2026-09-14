@@ -49,8 +49,23 @@ const QUAN_SO = /\bquan\s*\.?\s*(\d{1,2})\b|(?:^|[^a-z0-9])q\.?\s*(\d{1,2})(?![0
 // trần):
 //   1. bản thô có "quán" ngay trước con số  → không phải quận;
 //   2. sau con số là ĐƠN VỊ ĐẾM (tầng, lầu, phòng, m2, tỷ…) → đó là số lượng.
+//
+// 14/09/2026 (review code, tiếp lượt bắn 16 hội thoại mua): danh sách đơn vị ở cửa 2
+// được viết một mạch "tầng, lầu, phòng, m2…" mà không ca kiểm nào đòi từng chữ, nên nó
+// nhặt luôn hai chữ mà BỎ DẤU thì đụng một chữ khác hẳn — và chữ kia lại rất hay đứng
+// ngay sau số quận THẬT. Cửa 2 chỉ chạy trên câu đã có "quan"/"q" + số, tức câu vốn đã
+// giống lời nói về quận, nên mỗi chữ nhặt dư là một câu rơi về quận mặc định:
+//   · `can` = "căn" (đơn vị đếm) NHƯNG cũng là "cần" — "quận 5 cần bán gấp", "quận 7 cần
+//     3 phòng ngủ", "quận 5 căn hộ 50m2" đều mất quận. Mà "quán 5 căn" thì không ai nói:
+//     chữ này không bảo vệ câu nào cả, bỏ hẳn. (Bản có dấu vẫn được cửa 1 chặn.)
+//   · `tam` = "tấm" (sàn) NHƯNG cũng là "tầm" (khoảng) — "quận 5 tầm 6 tỷ". "tấm" đếm sàn
+//     thì sau nó là chữ hoặc hết câu ("2 tấm", "2 tấm lầu"); "tầm" thì sau nó là SỐ
+//     ("tầm 6 tỷ"). Giữ chữ này, nhưng chỉ tính là đơn vị khi sau nó không phải con số.
+// PR #129 mở cửa 2 cho câu CÓ DẤU / viết tắt (`chacLaQuan`); đây là phần còn lại: câu gõ
+// trần đủ chữ "quan 5 tam 6 ty" vẫn rơi, mà theo FR-161 đó mới là kiểu gõ phổ biến.
 const QUAN_TRONG_THO = /qu[áàảãạăâ]n(?=[^\p{L}]{0,3}\d)/iu;
-const SAU_SO_LA_DON_VI = /^\s*(tang|lau|tam|tret|phong|pn|wc|met|m2|m|ty|ti|toi|trieu|tr|nam|nguoi|cai|can|chiec)\b/;
+const SAU_SO_LA_DON_VI =
+  /^\s*(?:(?:tang|lau|tret|phong|pn|wc|met|m2|m|ty|ti|toi|trieu|tr|nam|nguoi|cai|chiec)\b|tam\b(?!\s*\d))/;
 
 // 11/09/2026 (lượt bắn 42 ca): "bán nhà ở Hà Nội quận Cầu Giấy 50m2 9 tỷ" →
 // `bocQuan` trả null → chat-reply mặc định "Quận 5" → căn Hà Nội vào rổ Quận 5

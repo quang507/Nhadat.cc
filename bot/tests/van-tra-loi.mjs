@@ -227,6 +227,19 @@ ok("kho: 'để em gửi căn cho mình xem luôn ạ' là hứa", laHuaCoHang("
 ok("kho: 'em ghi nhận lịch chiều thứ 7 cho mình' là nhận hẹn khi chưa có căn", laHuaCoHang("Dạ được, em ghi nhận lịch chiều thứ 7 cho mình ạ."));
 ok("kho: 'có căn mới em gửi mình liền' không phải hứa", !laHuaCoHang("Có căn mới hợp là em gửi mình liền nha."));
 ok("kho: 'mình rảnh lịch nào để em sắp xếp khi có căn' không bắt (không có giờ cụ thể)", !laHuaCoHang("Khi có căn khớp em sắp xếp lịch cho mình nha."));
+// 14/09 review code: hai luật trên bắt oan đúng câu bot NÊN nói lúc kho trống — tiểu từ
+// cuối câu "nha" (= nhé) bỏ dấu trùng "nhà", và câu đặt sau mệnh đề điều kiện thì không
+// phải lời hứa suông. Miễn trừ điều kiện chỉ áp cho hai luật "sắp làm", không áp cho
+// luật đếm hàng (ca cuối).
+ok("kho: 'khi nào có căn hợp em gửi ngay nha' KHÔNG bắt (điều kiện + tiểu từ 'nha')", !laHuaCoHang("Khi nào có căn hợp em gửi ngay nha."));
+ok("kho: 'có căn mới em gửi liền nha' KHÔNG bắt", !laHuaCoHang("Có căn mới em gửi liền nha."));
+ok("kho: 'có căn nào khớp là em gửi ngay nha chị' KHÔNG bắt", !laHuaCoHang("Dạ có căn nào khớp là em gửi ngay nha chị."));
+ok("kho: 'rảnh hôm nào để em sắp xếp lịch xem khi có căn' KHÔNG bắt (có giờ nhưng có điều kiện)", !laHuaCoHang("Mình rảnh hôm nào để em sắp xếp lịch xem khi có căn ạ?"));
+ok("kho: 'có căn nào phù hợp em chốt lịch xem giúp mình' KHÔNG bắt", !laHuaCoHang("Có căn nào phù hợp em chốt lịch xem với chủ nhà giúp mình nha."));
+ok("kho: 'em gửi liền nha chị' KHÔNG bắt ('nha' là tiểu từ, không phải nhà)", !laHuaCoHang("Em gửi liền nha chị."));
+ok("kho: 'em gửi nhà cho mình xem nha' VẪN bắt ('nhà' là danh từ thật)", laHuaCoHang("Em gửi nhà cho mình xem nha."));
+ok("kho: 'em chốt lịch xem sáng mai với chủ nhà' VẪN bắt (không có điều kiện)", laHuaCoHang("Em chốt lịch xem sáng mai với chủ nhà nha."));
+ok("kho: 'nếu chị muốn thì bên em đang có vài căn' VẪN bắt — miễn trừ điều kiện không cứu lời đếm hàng", laHuaCoHang("Nếu chị muốn thì bên em đang có vài căn 3 phòng ngủ."));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
