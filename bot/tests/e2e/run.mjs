@@ -1809,13 +1809,34 @@ fresh(seedKho);
   const vaoMua = (c) => (c.params.messages ?? []).map((m) => (Array.isArray(m.content) ? m.content.map((x) => x.text ?? "").join("") : m.content)).join("\n");
   fresh(seedKho);
   await send({ external_user_id: "du-tc-1", text: "tìm nhà quận 5 tầm 6 tỷ" });
-  const u1 = vaoMua(parseCalls().at(-1));
+  // Cả prompt: khối system (có "KHO HIỆN CÓ") lẫn khối user — hai bên phải nói cùng một
+  // câu về tình trạng kho (review code 14/09).
+  const caPrompt = (c) =>
+    (Array.isArray(c.params.system) ? c.params.system.map((b) => b.text ?? "").join("\n") : String(c.params.system ?? "")) +
+    "\n" + vaoMua(c);
+  const c1 = parseCalls().at(-1);
+  const u1 = vaoMua(c1);
   check("DUTIEUCHI-01 lượt đầu 'tìm nhà quận 5 tầm 6 tỷ' (hồ sơ còn trống) → câu lệnh 'CHƯA BIẾT … không hỏi chủ động', không 'CÒN THIẾU'",
     /CHƯA BIẾT \(chỉ NHẶT/.test(u1) && !/CÒN THIẾU \(hỏi theo thứ tự/.test(u1) && /NGỪNG hỏi hồ sơ/.test(u1), u1.slice(0, 400));
+  // Kho lọc theo hồ sơ ĐÃ LƯU nên lượt này chưa lọc kịp: dòng "ngừng dò hồ sơ" KHÔNG được
+  // bảo model "gợi ý căn khớp" / "KHO trống", vì khối KHO cùng lượt nói "chưa lọc - đừng
+  // nói kho trống". Trước bản vá 14/09 hai câu đó đứng ngược nhau trong cùng một prompt.
+  const p1 = caPrompt(c1);
+  check("DUTIEUCHI-01b kho CHƯA lọc → khối KHO và dòng 'ngừng dò hồ sơ' không mâu thuẫn (không 'KHO trống', không 'gợi ý căn khớp')",
+    /KHO HIỆN CÓ:\n\(chưa lọc/.test(p1) && /KHÔNG nêu căn nào và KHÔNG nói kho trống/.test(p1) &&
+      !/KHO trống thì nói thật/.test(p1) && !/chuyển sang gợi ý căn khớp/.test(p1),
+    p1.slice(-900));
   fresh(seedKho);
   await send({ external_user_id: "du-tc-2", text: "tìm nhà quận 5 cho gia đình" });
   const u2 = vaoMua(parseCalls().at(-1));
   check("DUTIEUCHI-02 chưa nói giá → vẫn 'CÒN THIẾU' (được hỏi khoảng giá)", /CÒN THIẾU \(hỏi theo thứ tự/.test(u2), u2.slice(0, 400));
+  // Đối chứng: hồ sơ ĐÃ có khu vực + giá từ lượt trước → kho lọc thật, câu lệnh quay lại
+  // bản "gợi ý căn khớp (KHO trống thì nói thật…)" như cũ.
+  fresh((d) => { seedKho(d); d.insert("buyers", { zalo_user_id: "du-tc-3", preferences: { area: "phường 4", budget: "tầm 6 tỷ", deal: "ban" } }); });
+  await send({ external_user_id: "du-tc-3", text: "còn căn nào khác không em" });
+  const p3 = caPrompt(parseCalls().at(-1));
+  check("DUTIEUCHI-03 hồ sơ đã đủ từ lượt trước → kho lọc thật, giữ nguyên 'chuyển sang gợi ý căn khớp', không có câu 'chưa lọc kịp'",
+    /chuyển sang gợi ý căn khớp/.test(p3) && !/chưa lọc kịp/.test(p3) && !/KHO HIỆN CÓ:\n\(chưa lọc/.test(p3), p3.slice(-900));
 }
 
 // ── kết ──
