@@ -222,6 +222,11 @@ ok("xưng hô: đầu câu 'Chúng mình…' → 'Bên em…'; 'nhà mình' (g�
 ok("kho: 'căn hộ có ban công chúng mình có nhiều' là hứa", laHuaCoHang("Dạ căn hộ có ban công chúng mình có nhiều."));
 ok("kho: 'Em tìm căn khớp 4 người ở quanh trường … rồi' là hứa", laHuaCoHang("Em tìm căn khớp 4 người ở quanh trường tiểu học Quận 3 tầm 6 tỷ rồi."));
 ok("kho: 'bên em có nhiều khách hỏi khu này' không phải hứa có hàng", !laHuaCoHang("Bên em có nhiều khách hỏi khu này lắm."));
+// bắn lại sau siết
+ok("kho: 'để em gửi căn cho mình xem luôn ạ' là hứa", laHuaCoHang("Dạ em hiểu, để em gửi căn cho mình xem luôn ạ."));
+ok("kho: 'em ghi nhận lịch chiều thứ 7 cho mình' là nhận hẹn khi chưa có căn", laHuaCoHang("Dạ được, em ghi nhận lịch chiều thứ 7 cho mình ạ."));
+ok("kho: 'có căn mới em gửi mình liền' không phải hứa", !laHuaCoHang("Có căn mới hợp là em gửi mình liền nha."));
+ok("kho: 'mình rảnh lịch nào để em sắp xếp khi có căn' không bắt (không có giờ cụ thể)", !laHuaCoHang("Khi có căn khớp em sắp xếp lịch cho mình nha."));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

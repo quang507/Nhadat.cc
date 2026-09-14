@@ -38,7 +38,7 @@ import {
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
 // bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
-import { TIEN_KD, TIEN_CD, TIEN_T_KEP, giaTheoM2, gonGiaKyHan, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
+import { TIEN_KD, TIEN_CD, TIEN_T_KEP, docTien, giaTheoM2, gonGiaKyHan, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../_shared/extraction/so-chu.ts";
 import { thayLienHe } from "../_shared/extraction/luat-lien-he.ts";
 // 11/09/2026: khách mua muốn ở GẦN đâu — model hiểu nghĩa (boc-gan), regex dự
@@ -3475,6 +3475,14 @@ ${kem}` : tomTat, cheDo };
       ? prefs.gan_tien_ich_loc as GanTienIch
       : null);
   const minimumMet = (prefs.area != null || gan != null) && prefs.budget != null;
+  // 14/09/2026 (bắn 16 hội thoại mua): "tìm nhà quận 5 tầm 6 tỷ" → bot vẫn dò "để ở hay
+  // đầu tư?" (5/9 hội thoại). `minimumMet` đọc hồ sơ ĐẦU lượt — lúc đó còn trống — nên câu
+  // lệnh bảo model "CÒN THIẾU, hỏi theo thứ tự" dù khách vừa nói đủ khu vực + giá. Câu
+  // dặn ngừng dò hồ sơ đọc thêm chính câu khách (luật tiền + bóc quận, tiền định). Kho
+  // vẫn lọc theo hồ sơ đã lưu như cũ.
+  const duTieuChiDeNgungDo = minimumMet ||
+    ((prefs.area != null || gan != null || !!bocQuan(tKD, text) || /\b(?:phuong|p)\s*\d{1,2}\b/.test(tKD)) &&
+      (prefs.budget != null || docTien(text) != null));
   // 13/09/2026: cách gọi KHÁCH MUA. Nhánh người bán có `sellers.xung_ho` từ 07/09,
   // nhánh mua thì không — model tự đoán: "có căn nào quận 10 tầm 5 tỷ không em"
   // → "Anh tìm để ở…". Lời dặn ("kêu chị nha") thắng; khách tự xưng ("chị đang
@@ -3879,11 +3887,11 @@ ${kem}` : tomTat, cheDo };
             ? `CÁCH GỌI KHÁCH: "${goiMua}" - khách đã tự xưng/dặn, giữ nguyên mọi tin, không dùng "anh/chị".\n`
             : `CÁCH GỌI KHÁCH: chưa biết nam hay nữ - KHÔNG tự đoán "anh" hay "chị"; gọi "mình" hoặc bỏ đại từ.\n`) +
           `HỒ SƠ ĐÃ BIẾT về khách${buyer.name ? ` (tên: ${buyer.name})` : ""}:\n${known || "(chưa biết gì)"}\n\n` +
-          (minimumMet
+          (duTieuChiDeNgungDo
             ? `CHƯA BIẾT (chỉ NHẶT khi khách tự kể hoặc khi khách chê căn vừa gửi, TUYỆT ĐỐI không hỏi chủ động - đủ khu vực + giá là ngừng dò hồ sơ):\n${missing || "(đã đủ)"}\n\n`
             : `CÒN THIẾU (hỏi theo thứ tự ưu tiên; gộp 2-3 ý vào MỘT câu hỏi liền mạch cũng được, đừng thành bảng hỏi):\n${missing || "(đã đủ)"}\n\n`) +
-          (minimumMet
-            ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) - NGỪNG hỏi hồ sơ, chuyển sang gợi ý căn khớp và để khách dẫn chuyện.\n"
+          (duTieuChiDeNgungDo
+            ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) - NGỪNG hỏi hồ sơ, chuyển sang gợi ý căn khớp (KHO trống thì nói thật em lọc rồi báo) và để khách dẫn chuyện.\n"
             : "CHƯA đủ tiêu chí tối thiểu (khu vực + giá) - chưa gợi ý căn trừ khi khách hỏi thẳng một căn.\n") +
           // 14/09/2026 (bắn thật, FR-207): khách thấy "💾 Đã lưu nhu cầu: … để ở" rồi câu
           // ngay sau lại "chị muốn ở hay kinh doanh?" — model tự điền `purpose` từ "nhà có

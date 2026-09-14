@@ -35,7 +35,10 @@
         ["bán nhà quận 10, 4x15", "Quận 10"],
         ["q7 nha em", "Quận 7"],
         ["căn hộ Q.4 giá 3 tỷ", "Quận 4"],
-        ["nhà ở bình thạnh", "Quận Bình Thạnh"]
+        ["nhà ở bình thạnh", "Quận Bình Thạnh"],
+        ["tìm nhà quận 5 tầm 6 tỷ (14/09 — 'tầm' bỏ dấu thành 'tấm')", "Quận 5"],
+        ["minh can mua nha q8 tam 4 ty hem xe hoi", "Quận 8"],
+        ["bán nhà quận 5 cần bán gấp", "Quận 5"]
       ],
       "khong_duoc_kich": [
         "nhà mở quán 2 tầng được nha em (10/09 — tầng ba bắt)",
@@ -45,7 +48,9 @@
         "2 tầng 3 phòng ngủ",
         "hẻm 5m, 4x15",
         "giá 5 tỷ 2",
-        "nhà có 2 wc"
+        "nhà có 2 wc",
+        "mo quan 2 tam lau nha em",
+        "quán 2 tấm cho thuê"
       ]
     },
     "laDuRoi": {
