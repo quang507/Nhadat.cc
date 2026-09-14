@@ -33,14 +33,17 @@ LUẬT CỨNG (code kiểm từng trường, sai là bị bỏ):
 6. Tin rao nhiều căn → điền "can" cho từng trường.
 
 KHOÁ:
-- loai_giao_dich: "ban" | "cho_thue"
-- loai_bds: chung_cu | nha_pho | nha_cap4 | dat | biet_thu | phong_tro | mat_bang | toa_nha | dat_nong_nghiep | dat_kinh_doanh | kho_xuong
-- gia (giá bán, hoặc giá thuê/tháng nếu cho thuê), gia_m2 (giá mỗi m²), tien_coc, thu_nhap_thue
-- dien_tich (m²), ngang, dai, no_hau (m), do_rong_hem, do_rong_duong, cach_mat_tien (m)
-- so_phong_ngu, so_wc, so_tang (tổng số tầng của nhà), tang (căn hộ nằm tầng mấy)
-- quan, phuong, duong, du_an, ma_can
-- phap_ly, huong, noi_that, ly_do_ban, ket_cau, thoi_han_thue, phi_quan_ly, view, hien_trang (chữ: giá trị là cụm ngắn NẰM TRONG trích dẫn)
-- gap, thuong_luong: "co" | "khong"
+- loai_giao_dich: "ban" | "cho_thue". "Sang nhượng mặt bằng / quán" là cho_thue; "sang nhượng căn hộ / nhà" là ban. Tin không nói bán hay thuê thì KHÔNG đưa.
+- loai_bds: chung_cu | nha_pho | nha_cap4 | dat | biet_thu | phong_tro | mat_bang | toa_nha | dat_nong_nghiep | dat_kinh_doanh | kho_xuong. "Đất nền KDC" là dat.
+- gia (giá bán; tin cho thuê thì giá thuê), gia_m2, tien_coc, thu_nhap_thue (CHỈ tiền thuê căn BÁN đang thu). Giá trị tiền LUÔN kèm đơn vị như khách viết: "5 tỷ 2", "3 tỷ 150", "900 triệu", "95 triệu/m2" — không viết số trần "5.2".
+- dien_tich (m²), ngang, dai, no_hau (m), do_rong_hem, do_rong_duong, cach_mat_tien (m): chỉ con số. "Hẻm xe hơi", "hẻm ba gác" KHÔNG phải độ rộng.
+- so_phong_ngu, so_wc; so_tang = TỔNG số tầng tính CẢ TRỆT, không tính lửng/sân thượng ("1 trệt 2 lầu" = 3, "trệt 3 lầu" = 4, "3 tấm" = 3); tang = căn hộ nằm tầng mấy.
+- quan: ghi đủ "Quận 5", "Quận Phú Nhuận", "Huyện Bình Chánh", "TP Thủ Đức". phuong, duong, ma_can.
+- du_an: tên dự án / khu dân cư / chung cư. Tên phường, tên khu vực (Thảo Điền, An Phú) KHÔNG phải dự án.
+- huong: chỉ phương (Đông, Tây Nam…); "view sông" là view.
+- phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công). "Thổ cư" không phải pháp lý.
+- noi_that, ly_do_ban (lý do CẦN bán, không phải "gấp"), ket_cau (trệt/lầu/lửng/hầm), thoi_han_thue, phi_quan_ly, view, hien_trang: chữ — giá trị là cụm ngắn NẰM TRONG trích dẫn.
+- gap, thuong_luong: "co" | "khong". Hoa hồng môi giới KHÔNG phải thương lượng.
 Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [].`;
 
 type ClientModel = {

@@ -33,6 +33,9 @@ for (const [c, mong] of [
   ["bán nhà quận 5 phường 7, 50m2, 6 tỷ", "6 tỷ"],
   ["bán nhà q8, hoa hồng 50 triệu, giá 4 tỷ 2", "4 tỷ 2"],
   ["bán đất thổ cư Nhà Bè 120m2, 45tr/m2 tổng 5 tỷ 4, đã có người cọc 200tr nhưng bể cọc", "45tr/m2 tổng 5 tỷ 4"],
+  ["anh nói giá 5 tỷ nha em, nhà 4x15", "5 tỷ nha em"] /* đuôi tiểu từ do chuan_hoa_gia_raw gọt; trước 14/09 ra null vì "nói" khớp "no" (nợ) */,
+  ["giá 8 tỷ thương lượng, cọc giữ chỗ 100 triệu", "8 tỷ thương lượng"],
+  ["thương lượng 7 tỷ 5", "7 tỷ 5"],
 ]) ok(`giá: '${c.slice(0, 55)}…' → ${mong}`, gia(c) === mong, String(gia(c)));
 
 // ── diện tích, giá mỗi m² ──
