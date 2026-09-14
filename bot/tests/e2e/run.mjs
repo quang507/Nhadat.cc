@@ -268,9 +268,9 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
 v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
-check("TOIUU-07 người bán trả lời câu chờ ≤ 21 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó)", v.n <= 21 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 22 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu)", v.n <= 22 && v.r.body.role === "seller", `${v.n}`);
 v = await vong({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi" });
-check("TOIUU-07b lượt sau của cùng người bán ≤ 19 (không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu)", v.n <= 19, `${v.n}`);
+check("TOIUU-07b lượt sau của cùng người bán ≤ 20 (không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song)", v.n <= 20, `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
 check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
 fresh();
@@ -1854,6 +1854,53 @@ fresh(seedKho);
     moi.length === 1 && moi[0].unit_code == null && moi[0].project_id === db().t.projects[0].id && !db().t.bot_errors.some((e) => e.source === "chat-reply tao tin rao"),
     JSON.stringify({ moi, loi: db().t.bot_errors, rep: r.body.replies }));
   delete globalThis.__rpc.match_projects;
+}
+
+// ── FR-208: AI bóc tách tin người bán CHẠY BÓNG (TS-AIBOC-02) ──
+{
+  const laLuotBocRao = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const RAO_MT = "bán nhà mặt tiền đường Châu Văn Liêm phường 14 quận 5, ngang 4.2m dài 18m, đang cho thuê 45 triệu/tháng, giá 32 tỷ còn thương lượng";
+  const DE_XUAT = {
+    so_can: 1,
+    truong: [
+      { khoa: "gia", gia_tri: "32 tỷ", trich_dan: "giá 32 tỷ", can: null },
+      { khoa: "gia", gia_tri: "45 triệu", trich_dan: "45 triệu/tháng", can: null },
+      { khoa: "quan", gia_tri: "Quận 5", trich_dan: "quận 5", can: null },
+      { khoa: "huong", gia_tri: "Đông Nam", trich_dan: "hướng Đông Nam", can: null },
+    ],
+  };
+  const macDinh = globalThis.__model?.parse;
+
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "bong" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? DE_XUAT : OUT();
+  r = await send({ external_user_id: "aiboc-1", text: RAO_MT });
+  const tinAi = db().t.listings.at(-1);
+  const bong = db().rows("boc_tach_bong");
+  check("AIBOC-01 bật 'bong': một dòng boc_tach_bong — 2 đạt (giá 32 tỷ, quận 5), 2 bỏ (tiền thuê làm giá, hướng bịa), so với DB: giá + quận trung",
+    bong.length === 1 && bong[0].dat.length === 2 && bong[0].bo.map((b) => b.ly_do).sort().join() === "tien_thue_khong_phai_gia_ban,trich_dan_khong_co_trong_tin" &&
+      bong[0].so_sanh.trung.includes("gia") && bong[0].so_sanh.trung.includes("quan") && bong[0].listing_id === tinAi.id,
+    JSON.stringify({ bong, tin: tinAi }));
+  check("AIBOC-01b chạy bóng KHÔNG đổi tin rao: giá vẫn do luật (32 tỷ), không cột nào mang 'Đông Nam'; khách vẫn nhận lời đáp",
+    tinAi.price_vnd === 32e9 && !JSON.stringify(tinAi).includes("Đông Nam") && r.body.replies.length > 0, JSON.stringify(tinAi));
+
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "tat" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? DE_XUAT : OUT();
+  r = await send({ external_user_id: "aiboc-2", text: RAO_MT });
+  check("AIBOC-02 công tắc 'tat' → không gọi model bóc, không dòng bóng",
+    !globalThis.__calls.some((c) => laLuotBocRao(c.params)) && db().rows("boc_tach_bong").length === 0);
+
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "bong" };
+  globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) throw new Error("model bóc chết"); return OUT(); };
+  r = await send({ external_user_id: "aiboc-3", text: RAO_MT });
+  check("AIBOC-03 model bóc ném lỗi → tin vẫn tạo, khách vẫn được trả lời, lỗi vào sổ",
+    db().t.listings.at(-1)?.price_vnd === 32e9 && r.body.replies.length > 0 && db().t.bot_errors.some((e) => e.source === "chat-reply boc_tach_ai(bong)"),
+    JSON.stringify({ loi: db().t.bot_errors, rep: r.body.replies }));
+
+  globalThis.__cauHinh = undefined;
+  if (macDinh) globalThis.__model.parse = macDinh;
 }
 
 // ── kết ──
