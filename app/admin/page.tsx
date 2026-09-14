@@ -12,7 +12,7 @@ import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase, type Listing } from "@/lib/supabase";
-import { formatArea, formatPrice, sanitizeDescription } from "@/lib/format";
+import { formatArea, formatPrice, sanitizeDescription, TYPE_LABEL } from "@/lib/format";
 import UploadAnh from "@/components/UploadAnh";
 import { Btn } from "@/components/ui";
 
@@ -131,8 +131,24 @@ const COT_THONG_KE: (keyof ThongKe)[] = [
   "tin_bot", "tin_nguoi_that", "khach_moi", "co_nguoi_that",
 ];
 // FR-74 & CRM: Hồ sơ khách hàng hai vai (Vừa mua vừa bán · Gắn BĐS quan tâm)
+type TinCrm = {
+  id: string;
+  code: string | null;
+  legacy_code: string | null;
+  location_raw: string | null;
+  price_raw: string | null;
+  status: string | null;
+  property_type: string | null;
+  area_m2: number | null;
+  district: string | null;
+  ward: string | null;
+};
 type KhachCrm = {
   id: string;
+  // 14/09/2026: `id` là id NGƯỜI MUA nếu có dòng buyers, không thì là id NGƯỜI BÁN. Trước
+  // đó thẻ chỉ-người-bán vẫn hiện "Sửa nhu cầu" / "Gắn BĐS quan tâm" và gọi RPC người mua
+  // bằng id người bán — bấm là hỏng. Cờ này quyết nút nào được hiện.
+  la_nguoi_mua: boolean;
   name: string | null;
   zalo_user_id: string | null;
   phone: string | null;
@@ -143,14 +159,7 @@ type KhachCrm = {
   seller?: {
     id: string;
     seller_type: string;
-    active_listing?: {
-      id: string;
-      code: string | null;
-      legacy_code: string | null;
-      location_raw: string | null;
-      price_raw: string | null;
-      status: string | null;
-    } | null;
+    active_listing?: TinCrm | null;
   } | null;
   interests?: {
     listing_id: string;
@@ -159,6 +168,9 @@ type KhachCrm = {
     price_raw: string | null;
     location_raw: string | null;
   }[];
+};
+const TRANG_THAI_TIN: Record<string, string> = {
+  cho_thong_tin: "chờ thông tin", dang_ban: "đang bán", dang_quan_tam: "đang quan tâm", da_chot: "đã chốt", an: "ẩn",
 };
 const TRANG_THAI_HOI: Record<string, string> = { pending: "đang chờ", answered: "đã trả lời" };
 const TRANG_THAI_XEM: Record<string, string> = {
@@ -239,6 +251,8 @@ function BanLamViec() {
   const [dangLuuBds, setDangLuuBds] = useState(false);
   const [suaNhuCauId, setSuaNhuCauId] = useState<string | null>(null);
   const [formNhuCau, setFormNhuCau] = useState({
+    name: "",
+    seller_type: "ccrb",
     area: "",
     property_type: "",
     deal: "ban",
@@ -359,7 +373,7 @@ function BanLamViec() {
         .eq("status", "pending").in("kind", ["escalation", "report"])
         .order("created_at", { ascending: false }).limit(30),
       supabase.from("sellers")
-        .select("id, name, seller_type, created_at, zalo_user_id, phone, active_listing_id, listings:active_listing_id(id, code, legacy_code, location_raw, price_raw, status)")
+        .select("id, name, seller_type, created_at, zalo_user_id, phone, active_listing_id, listings:active_listing_id(id, code, legacy_code, location_raw, price_raw, status, property_type, area_m2, district, ward)")
         .order("created_at", { ascending: false }).limit(100),
       supabase
         .from("seller_ranks")
@@ -451,14 +465,7 @@ function BanLamViec() {
       zalo_user_id: string | null;
       phone: string | null;
       created_at: string;
-      listings?: {
-        id: string;
-        code: string | null;
-        legacy_code: string | null;
-        location_raw: string | null;
-        price_raw: string | null;
-        status: string | null;
-      } | null;
+      listings?: TinCrm | null;
     };
     type RawBuyer = {
       id: string;
@@ -504,6 +511,7 @@ function BanLamViec() {
 
       crmItems.push({
         id: b.id,
+        la_nguoi_mua: true,
         name: b.name || s?.name || null,
         zalo_user_id: b.zalo_user_id,
         phone: s?.phone ?? null,
@@ -526,6 +534,7 @@ function BanLamViec() {
       if (s.zalo_user_id && seenZalo.has(s.zalo_user_id)) continue;
       crmItems.push({
         id: s.id,
+        la_nguoi_mua: false,
         name: s.name,
         zalo_user_id: s.zalo_user_id,
         phone: s.phone ?? null,
@@ -625,6 +634,8 @@ function BanLamViec() {
     const p = k.preferences ?? {};
     setSuaNhuCauId(k.id);
     setFormNhuCau({
+      name: k.name ?? "",
+      seller_type: k.seller?.seller_type === "nmg" ? "nmg" : "ccrb",
       area: String(p.area ?? ""),
       property_type: String(p.property_type ?? ""),
       deal: String(p.deal ?? "ban"),
@@ -635,26 +646,43 @@ function BanLamViec() {
   };
 
   // CRM: Lưu cập nhật nhu cầu khách
-  const luuSuaNhuCau = async (buyerId: string) => {
-    const newPrefs: Record<string, unknown> = {};
-    if (formNhuCau.area.trim()) newPrefs.area = formNhuCau.area.trim();
-    if (formNhuCau.property_type.trim()) newPrefs.property_type = formNhuCau.property_type.trim();
-    if (formNhuCau.deal.trim()) newPrefs.deal = formNhuCau.deal.trim();
-    if (formNhuCau.bedrooms.trim()) newPrefs.bedrooms = Number(formNhuCau.bedrooms.trim()) || null;
-    if (formNhuCau.budget.trim()) newPrefs.budget = formNhuCau.budget.trim();
-    if (formNhuCau.notes.trim()) newPrefs.notes = formNhuCau.notes.trim();
-
-    const { data, error } = await supabase.rpc("admin_cap_nhat_khach", {
-      p_buyer_id: buyerId,
-      p_preferences: newPrefs,
-      p_notes: formNhuCau.notes.trim() || null,
-    });
-    if (error || (data && !data.ok)) {
-      alert(error?.message || "Lỗi lưu nhu cầu khách");
-    } else {
-      setSuaNhuCauId(null);
-      load();
+  const luuSuaNhuCau = async (k: KhachCrm) => {
+    const ten = formNhuCau.name.trim() || null;
+    // Người bán (tên + vai) — bảng sellers, admin sửa thẳng được qua RLS (như doiNhan).
+    if (k.seller) {
+      const { error } = await supabase.from("sellers")
+        .update({ name: ten, seller_type: formNhuCau.seller_type }).eq("id", k.seller.id);
+      if (error) return alert(`Lỗi lưu người bán: ${error.message}`);
     }
+    if (k.la_nguoi_mua) {
+      // 14/09/2026: RPC GHI ĐÈ cả cục preferences. Bản cũ gửi mỗi 6 ô trong form, nên một
+      // lần bấm "Lưu" xoá sạch thứ bot đã lưu mà form không hiện: tên trợ lý (FR-181), cách
+      // gọi khách, điều kiện gần tiện ích, cờ gấp, mục đích, thời hạn. Nay trộn lên hồ sơ cũ;
+      // ô để trống thì GỠ đúng trường đó.
+      const o = (v: string) => v.trim() || null;
+      const prefs: Record<string, unknown> = {
+        ...(k.preferences ?? {}),
+        area: o(formNhuCau.area),
+        property_type: o(formNhuCau.property_type),
+        deal: o(formNhuCau.deal),
+        bedrooms: formNhuCau.bedrooms.trim() ? Number(formNhuCau.bedrooms.trim()) || null : null,
+        budget: o(formNhuCau.budget),
+        notes: o(formNhuCau.notes),
+      };
+      for (const [x, v] of Object.entries(prefs)) if (v === null) delete prefs[x];
+      const { data, error } = await supabase.rpc("admin_cap_nhat_khach", {
+        p_buyer_id: k.id,
+        p_preferences: prefs,
+        p_notes: o(formNhuCau.notes),
+      });
+      if (error || (data && !data.ok)) return alert(error?.message || "Lỗi lưu nhu cầu khách");
+      if (ten !== (k.name ?? null)) {
+        const { error: e2 } = await supabase.from("buyers").update({ name: ten }).eq("id", k.id);
+        if (e2) return alert(`Lỗi lưu tên khách: ${e2.message}`);
+      }
+    }
+    setSuaNhuCauId(null);
+    load();
   };
 
   const taoDs = async (e: FormEvent) => {
@@ -1077,7 +1105,7 @@ function BanLamViec() {
                           onClick={() => (isEditing ? setSuaNhuCauId(null) : moSuaNhuCau(k))}
                           className="rounded-md border border-line px-3.5 py-1 text-xs font-bold text-navy transition hover:border-brand hover:text-brand bg-white"
                         >
-                          {isEditing ? "Đóng sửa" : "Sửa nhu cầu"}
+                          {isEditing ? "Đóng sửa" : k.la_nguoi_mua ? "Sửa hồ sơ" : "Sửa người bán"}
                         </button>
                       </div>
                     </div>
@@ -1085,40 +1113,40 @@ function BanLamViec() {
                     {/* Card Content Grid */}
                     <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
                       {/* Box 1: Căn đang rao bán */}
-                      {k.seller?.active_listing ? (
-                        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-amber-900 flex items-center gap-1">
-                              Căn đang rao bán:
-                            </span>
-                            <span className="rounded bg-white/90 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                              {k.seller.active_listing.status}
-                            </span>
-                          </div>
-                          <div>
-                            <Link
-                              href={`/nha-dat/${encodeURIComponent(k.seller.active_listing.code ?? "")}`}
-                              target="_blank"
-                              className="font-bold text-brand hover:underline text-sm"
-                            >
-                              #{k.seller.active_listing.code}
-                            </Link>
-                            {k.seller.active_listing.legacy_code && (
-                              <span className="text-mute ml-1">({k.seller.active_listing.legacy_code})</span>
-                            )}
-                          </div>
-                          {k.seller.active_listing.location_raw && (
-                            <div className="text-navy font-medium">
-                              {k.seller.active_listing.location_raw}
+                      {k.seller?.active_listing ? (() => {
+                        const tin = k.seller.active_listing;
+                        // 14/09/2026: mã tin từng trỏ ra /nha-dat/<mã> — tin chưa lên kệ thì trang
+                        // công khai 404, bấm vào "không làm gì". Cả khung nay mở màn Sửa của rổ hàng.
+                        const thongSo = [
+                          tin.property_type ? TYPE_LABEL[tin.property_type] ?? tin.property_type : null,
+                          tin.area_m2 ? formatArea(tin.area_m2) : null,
+                          [tin.ward ? `P.${tin.ward}` : null, tin.district].filter(Boolean).join(", ") || null,
+                        ].filter(Boolean).join(" · ");
+                        return (
+                          <Link
+                            href={`/admin/ro-hang?sua=${encodeURIComponent(tin.code ?? "")}`}
+                            title="Mở màn sửa tin này"
+                            className="group block rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs space-y-1.5 transition hover:border-brand hover:bg-amber-50"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-amber-900">Căn đang rao bán:</span>
+                              <span className="rounded bg-white/90 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                                {TRANG_THAI_TIN[tin.status ?? ""] ?? tin.status}
+                              </span>
                             </div>
-                          )}
-                          {k.seller.active_listing.price_raw && (
-                            <div className="font-bold text-navy">
-                              Giá: {k.seller.active_listing.price_raw}
+                            <div className="flex flex-wrap items-baseline gap-x-2">
+                              <span className="font-bold text-brand text-sm group-hover:underline">#{tin.code}</span>
+                              {tin.legacy_code && <span className="text-mute">({tin.legacy_code})</span>}
                             </div>
-                          )}
-                        </div>
-                      ) : (
+                            {thongSo && <div className="text-navy font-medium">{thongSo}</div>}
+                            {tin.location_raw && <div className="text-mute">{tin.location_raw}</div>}
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-navy">{tin.price_raw ? `Giá: ${tin.price_raw}` : "Chưa có giá"}</span>
+                              <span className="font-bold text-brand">Sửa tin →</span>
+                            </div>
+                          </Link>
+                        );
+                      })() : (
                         <div className="rounded-xl border border-dashed border-line p-3 text-xs text-mute flex items-center justify-center italic">
                           Chưa có BĐS rao bán
                         </div>
@@ -1170,9 +1198,38 @@ function BanLamViec() {
                     {isEditing && (
                       <div className="mt-3.5 rounded-xl border border-brand/40 bg-brand/[0.02] p-4 text-xs space-y-3">
                         <div className="font-bold text-sm text-navy flex items-center justify-between">
-                          <span>Chỉnh sửa hồ sơ nhu cầu khách hàng:</span>
-                          <span className="text-mute font-normal">Cập nhật lưu trực tiếp vào database</span>
+                          <span>{k.la_nguoi_mua ? "Sửa hồ sơ khách" : "Sửa người bán"}</span>
+                          <span className="text-mute font-normal">
+                            {k.la_nguoi_mua ? "Ô để trống là gỡ trường đó; tên trợ lý, cách xưng hô bot đã lưu giữ nguyên" : "Muốn sửa căn thì bấm khung tin ở trên"}
+                          </span>
                         </div>
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div>
+                            <label htmlFor={`ten-${k.id}`} className="block font-semibold mb-1 text-mute">Tên khách</label>
+                            <input
+                              id={`ten-${k.id}`}
+                              value={formNhuCau.name}
+                              onChange={(e) => setFormNhuCau({ ...formNhuCau, name: e.target.value })}
+                              placeholder="Vd: chị Ngọc"
+                              className="w-full rounded border border-line p-1.5"
+                            />
+                          </div>
+                          {k.seller && (
+                            <div>
+                              <label htmlFor={`vai-${k.id}`} className="block font-semibold mb-1 text-mute">Vai người bán</label>
+                              <select
+                                id={`vai-${k.id}`}
+                                value={formNhuCau.seller_type}
+                                onChange={(e) => setFormNhuCau({ ...formNhuCau, seller_type: e.target.value })}
+                                className="w-full rounded border border-line p-1.5 bg-white font-semibold"
+                              >
+                                <option value="ccrb">Chính chủ</option>
+                                <option value="nmg">Môi giới</option>
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                        {k.la_nguoi_mua && (
                         <div className="grid gap-3 sm:grid-cols-3">
                           <div>
                             <label className="block font-semibold mb-1 text-mute">Nhu cầu giao dịch</label>
@@ -1232,6 +1289,7 @@ function BanLamViec() {
                             />
                           </div>
                         </div>
+                        )}
                         <div className="flex justify-end gap-2 pt-1 border-t border-line/60">
                           <button
                             type="button"
@@ -1242,16 +1300,17 @@ function BanLamViec() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => luuSuaNhuCau(k.id)}
+                            onClick={() => luuSuaNhuCau(k)}
                             className="rounded bg-brand px-5 py-1.5 text-xs font-bold text-white hover:bg-brand-dark transition"
                           >
-                            Lưu nhu cầu
+                            Lưu
                           </button>
                         </div>
                       </div>
                     )}
 
-                    {/* Interested Properties Section */}
+                    {/* BĐS quan tâm — chỉ khách có dòng buyers mới gắn được (RPC nhận buyer_id) */}
+                    {k.la_nguoi_mua && (
                     <div className="mt-3.5 pt-3 border-t border-line/60 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold text-navy">BĐS đang quan tâm:</span>
                       {k.interests && k.interests.length > 0 ? (
@@ -1324,6 +1383,7 @@ function BanLamViec() {
                         </button>
                       )}
                     </div>
+                    )}
                   </article>
                 );
               })}
