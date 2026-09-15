@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { docTien, giaTheoM2, vndThanhChu } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../supabase/functions/_shared/extraction/so-chu.ts";
 import {
-  bocViTriRao, catDapAn, cheoPhuDinh, laHoanLai, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, laCauHoiTron, tuXungTuCau, vungPhuDinh,
+  bocViTriRao, catDapAn, cheoPhuDinh, laHoanLai, nhanDienFact, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, laCauHoiTron, tuXungTuCau, vungPhuDinh,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { vungNgoai } from "../supabase/functions/_shared/dia_ban.ts";
 
@@ -217,6 +217,10 @@ for (const [vao, mong] of [
   ["hẻm 5m Cách Mạng Tháng 8, 4x14 nở hậu 5m", "hẻm 5m Cách Mạng Tháng 8"],
   ["nhà hẻm 12 đường 3 Tháng 2 quận 10, 4x14", "hẻm 12 đường 3 Tháng 2"],
   ["đường Cách Mạng Tháng Tám quận 3, 5x20", "đường Cách Mạng Tháng Tám"],
+  // 15/09/2026 (bắn thật N1): "mặt tiền X" là địa chỉ.
+  ["căn 2 mặt tiền Nguyễn Chí Thanh 5x20 giá 25 tỷ", "mặt tiền Nguyễn Chí Thanh"],
+  ["mt Nguyễn Chí Thanh 5x20", "mt Nguyễn Chí Thanh"],
+  ["nhà mặt tiền 4m hẻm 5m Trần Bình Trọng", "hẻm 5m Trần Bình Trọng"],
 ]) ok("bocViTriRao " + JSON.stringify(vao.slice(0, 44)), bocViTriRao(vao) === mong, JSON.stringify(bocViTriRao(vao)));
 
 // ── 13/09/2026 — LƯỢT BẮN 20 TIN THỨ HAI: luật trả NGUYÊN câu làm đáp án ─────
@@ -264,7 +268,8 @@ for (const vao of ["đang cho thuê 20 triệu, bán 32 tỷ", "hợp để ở 
 // 15/09/2026 (bắn thật A2/A3): đáp án giá / m² cắt gọn, không ghi nguyên mệnh đề.
 for (const [q, vao, mong] of [
   ["gia", "giá thì mình muốn tầm 4 tỷ 2", "tầm 4 tỷ 2"],
-  ["gia", "ok vợ mình chốt 4 tỷ nha, sổ hồng có rồi", "4 tỷ nha"],
+  ["gia", "ok vợ mình chốt 4 tỷ nha, sổ hồng có rồi", "4 tỷ"],
+  ["gia", "à giá 7tr thôi em, bớt cho người ở lâu dài", "7tr"],
   ["gia", "4 tỷ 2", "4 tỷ 2"],
   ["gia", "bán 5 tỷ thương lượng", "5 tỷ thương lượng"],
   ["gia", "khoảng 9t5", "khoảng 9t5"],
@@ -295,6 +300,15 @@ for (const [vao, mong] of [
   ["nhà không ngập", false],
   ["4 tỷ 2", false],
 ]) ok("laCauHoiTron " + JSON.stringify(vao), laCauHoiTron(vao) === mong, String(laCauHoiTron(vao)));
+
+// 15/09/2026 (bắn thật N2/H2): fact theo số thứ tự căn; căn thứ tự không giá/kích thước không phải rao thêm;
+// "bớt cho người ở lâu dài" là thương lượng, không phải thời hạn sử dụng.
+ok("tachTheoCan 2 nhóm", JSON.stringify(tachTheoCan("căn 2 sổ hồng riêng, có thương lượng. căn 1 đúc 3 tấm")) === JSON.stringify([{ thu: 2, manh: "sổ hồng riêng, có thương lượng" }, { thu: 1, manh: "đúc 3 tấm" }]), JSON.stringify(tachTheoCan("căn 2 sổ hồng riêng, có thương lượng. căn 1 đúc 3 tấm")));
+ok("tachTheoCan '2 căn' / 'căn 2 pn' không phải thứ tự", tachTheoCan("có 2 căn, căn 2 pn giá 3 tỷ").length === 0, JSON.stringify(tachTheoCan("có 2 căn, căn 2 pn giá 3 tỷ")));
+ok("nhanDienNhieuCan: căn thứ tự chỉ mang fact → không rao thêm", nhanDienNhieuCan("căn 2 sổ hồng riêng, có thương lượng. căn 1 đúc 3 tấm").length === 0, JSON.stringify(nhanDienNhieuCan("căn 2 sổ hồng riêng, có thương lượng. căn 1 đúc 3 tấm")));
+ok("nhanDienNhieuCan: căn thứ tự có giá vẫn là rao nhiều căn", nhanDienNhieuCan("căn 1 hẻm 7m Hồng Bàng 4x18 giá 12 tỷ, căn 2 mặt tiền Nguyễn Chí Thanh 5x20 giá 25 tỷ").length === 2);
+ok("'bớt cho người ở lâu dài' → thuong_luong", nhanDienNhieuFact("à giá 7tr thôi em, bớt cho người ở lâu dài").some((f) => f.question === "thuong_luong") && !nhanDienNhieuFact("à giá 7tr thôi em, bớt cho người ở lâu dài").some((f) => /thoi_han|so_huu/.test(f.question)), JSON.stringify(nhanDienNhieuFact("à giá 7tr thôi em, bớt cho người ở lâu dài")));
+ok("'căn hộ sở hữu lâu dài' vẫn là so_huu", nhanDienFact("căn hộ sở hữu lâu dài")?.question === "so_huu", JSON.stringify(nhanDienFact("căn hộ sở hữu lâu dài")));
 
 console.log(hong ? `\nBÓC TÁCH 42 CA: ${hong}/${tong} CA HỎNG` : `\nBÓC TÁCH 42 CA: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

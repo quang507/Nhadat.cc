@@ -1208,6 +1208,21 @@ fresh(seedKho);
   check("N23 'căn A5 …, căn A7 …, căn B2 …' → 3 tin mới có unit_code, ngang×dài, giá riêng, cùng dự án Quận 8; hỏi MỘT câu chung cho lô",
     db().t.listings.filter((l) => l.unit_code).length === 3 && db().t.listings.some((l) => l.unit_code === "B2" && l.frontage_m === 10 && /22 tỷ/.test(l.price_raw)) && db().t.listings.filter((l) => l.unit_code).every((l) => l.district === "Quận 8") && r.body.nhieu_can === 3 && r.body.replies.some((x) => /Em mở 3 tin/.test(x)),
     JSON.stringify({ body: r.body, l: db().t.listings.map((l) => [l.code, l.unit_code, l.frontage_m, l.price_raw, l.district]) }));
+  // 15/09/2026 (bắn thật N2): "căn 2 …, căn 1 …" chỉ mang FACT → không mở tin, ghi đúng căn theo thứ tự mở.
+  {
+    const soTinTruoc = db().t.listings.length;
+    const theoThuTu = [...db().t.listings].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    r = await send({ external_user_id: "z-cdt", text: "căn 2 sổ hồng riêng, có thương lượng. căn 1 đúc 3 tấm" });
+    const factCua = (l) => db().t.listing_facts.filter((f) => f.listing_id === l.id).map((f) => f.question);
+    check("N23b fact theo số thứ tự căn → không mở tin mới, căn 2 nhận phap_ly + thuong_luong, căn 1 nhận ket_cau",
+      db().t.listings.length === soTinTruoc && !r.body.nhieu_can && factCua(theoThuTu[1]).includes("phap_ly") && factCua(theoThuTu[1]).includes("thuong_luong") && factCua(theoThuTu[0]).includes("ket_cau") && r.body.fact_theo_can >= 3,
+      JSON.stringify({ body: r.body, so: [soTinTruoc, db().t.listings.length], f: db().t.listing_facts.map((f) => [f.listing_id.slice(0, 4), f.question, f.answer]), tt: theoThuTu.map((l) => l.id.slice(0, 4)) }));
+  }
+  // 15/09/2026 (bắn thật P1): câu rao kèm "bên em là bot hả?" → trả lời thật trước câu hỏi đầu.
+  fresh();
+  r = await send({ external_user_id: "la-bot", text: "tôi muốn bán căn nhà ở phường 2 quận 5, mà bên em là bot hả?" });
+  check("RAO-HOI-01 câu rao kèm hỏi 'bot hả' → tạo tin + bong bóng nói thật là trợ lý AI",
+    db().t.listings.length === 1 && r.body.replies.some((x) => /trợ lý AI/.test(x)), JSON.stringify(r.body.replies));
   // 10/09 chân dung nhà đầu tư: kể "mua nhà cũ sửa lại bán" + có căn + giá → là NGƯỜI BÁN, tạo tin.
   fresh();
   r = await send({ external_user_id: "dt-1", text: "Anh đầu tư mua nhà cũ sửa lại bán, giờ có căn hẻm 45 Trần Phú phường 4 quận 5 vừa sửa xong, 4x14, 5 tỷ 9" });
