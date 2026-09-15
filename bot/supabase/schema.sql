@@ -5210,6 +5210,16 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.so_nmg_cong_khai()
+ RETURNS integer
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_catalog'
+AS $function$
+  select count(*)::int from public.sellers where seller_type = 'nmg';
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.soat_db_cong_khai()
  RETURNS TABLE(ma text, muc text, so integer, chi_tiet text)
  LANGUAGE plpgsql
@@ -7317,6 +7327,10 @@ revoke all on function public.seller_rank(p_type seller_type, p_active integer, 
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to anon;
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to authenticated;
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to service_role;
+revoke all on function public.so_nmg_cong_khai() from public, anon, authenticated;
+grant execute on function public.so_nmg_cong_khai() to anon;
+grant execute on function public.so_nmg_cong_khai() to authenticated;
+grant execute on function public.so_nmg_cong_khai() to service_role;
 revoke all on function public.soat_db_cong_khai() from public, anon, authenticated;
 grant execute on function public.soat_db_cong_khai() to anon;
 grant execute on function public.soat_db_cong_khai() to authenticated;
