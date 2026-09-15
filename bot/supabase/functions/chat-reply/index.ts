@@ -2675,7 +2675,7 @@ ${kem}` : tomTat, cheDo };
       // của chủ nhà được trả lời TRƯỚC câu kế (không nuốt, không ghi cả câu vào ô).
       // 15/09/2026 (bắn thật A5): cả tin là MỘT câu hỏi ("bên bạn có cần mình gửi hình
       // không hay sao") → là hỏi ngược, KHÔNG phải "thông tin bổ sung" để ghi vào tin.
-      const hoiNguoc = kq.hoiNguoc ?? (kq.loai === "lech" && !kq.chuyenSang && laCauHoiTron(dapAn) ? dapAn : null);
+      const hoiNguoc = kq.hoiNguoc ?? ((kq.loai === "hoi" || (kq.loai === "lech" && !kq.chuyenSang && laCauHoiTron(dapAn))) ? dapAn : null);
       if (kq.dapAn) dapAn = kq.dapAn;
       const hoiNguocPrompt = hoiNguoc
         ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}". TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; hỏi về cách làm việc (gửi ảnh, phí, đăng tin) thì trả lời theo hướng dẫn hệ thống; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá. Rồi mới hỏi tiếp. `
@@ -3097,7 +3097,7 @@ ${kem}` : tomTat, cheDo };
         }
       }
       return await traLoiSeller(xinDiemCuoi ? [sellerReply, xinDiemCuoi] : [sellerReply], {
-        saved_fact: pendingReq.question, ...(xinDiemCuoi ? { xin_danh_gia: true } : {}), ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}),
+        saved_fact: boQuaCauTreo ? null : pendingReq.question, ...(xinDiemCuoi ? { xin_danh_gia: true } : {}), ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}),
       });
     }
     // FR-144: chính chủ nhắn CÂU RAO MỚI → tạo tin nháp cho_thong_tin ngay + mở
