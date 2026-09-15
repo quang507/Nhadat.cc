@@ -2108,7 +2108,7 @@ ${kem}` : tomTat, cheDo };
       const cans = (dsCan ?? []) as Array<{ id: string; code: string | null; property_type: string | null; district: string | null; deal: string | null }>;
       if (cans.length >= 2) {
         const daGhi: string[] = [];
-        let traLoiTreo = false;
+        const daDong = new Set<string>();
         for (const g of nhomCan) {
           const l = cans[g.thu - 1];
           if (!l) continue;
@@ -2118,25 +2118,35 @@ ${kem}` : tomTat, cheDo };
             const { error: fcErr } = await client.rpc("ghi_fact_listing", { p_listing_id: l.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat" });
             if (fcErr) { await ghiLoi(client, "chat-reply ghi_fact_listing(theo can)", fcErr.message); continue; }
             daGhi.push(`căn ${g.thu} ${(FACT_LABELS[f.question] ?? f.question).replace(/\s*\(.*\)\s*$/, "")}: ${f.answer}`);
-            if (pendingReq && pendingReq.listing_id === l.id && cungHoFact(f.question, pendingReq.question)) traLoiTreo = true;
+            // Mọi câu treo của CĂN ĐÓ cùng họ với fact vừa ghi thì đóng (không chỉ câu đang chọn).
+            for (const q of ds) {
+              if (q.listing_id === l.id && !daDong.has(q.id) && cungHoFact(f.question, q.question)) {
+                await client.from("info_requests").update({ status: "answered", answer: g.manh, answered_at: new Date().toISOString() }).eq("id", q.id);
+                daDong.add(q.id);
+              }
+            }
           }
         }
         if (daGhi.length) {
           let cauKe = "";
-          if (pendingReq && traLoiTreo) {
-            await client.from("info_requests").update({ status: "answered", answer: text, answered_at: new Date().toISOString() }).eq("id", pendingReq.id);
+          // Câu treo còn lại: ưu tiên căn đang nói (pendingReq), rồi tới căn khác.
+          const conTreo = ds.filter((q) => !daDong.has(q.id));
+          const keTreo = (pendingReq && !daDong.has(pendingReq.id) ? pendingReq : null) ?? conTreo[0] ?? null;
+          if (keTreo) {
+            cauKe = cauHoiMau(keTreo.question, cachGoi, keTreo.listings?.property_type, keTreo.listings?.district, keTreo.listings?.deal);
+          } else {
+            const canKe = pendingReq?.listing_id ?? cans[0].id;
             const { data: thieu } = await client.from("listing_missing_facts").select("fact_key, priority, nhom")
-              .eq("listing_id", pendingReq.listing_id).order("priority").limit(8);
-            const ke = chonCauKe([pendingReq.question], ((thieu ?? []) as Array<{ fact_key: string; priority: number; nhom: string | null }>).filter((f) => f.nhom !== "sau_dang"));
+              .eq("listing_id", canKe).order("priority").limit(8);
+            const ke = chonCauKe([...(pendingReq ? [pendingReq.question] : [])], ((thieu ?? []) as Array<{ fact_key: string; priority: number; nhom: string | null }>).filter((f) => f.nhom !== "sau_dang"));
             if (ke) {
-              const { error: irErr } = await client.from("info_requests").insert({ listing_id: pendingReq.listing_id, question: ke, status: "pending" });
+              const { error: irErr } = await client.from("info_requests").insert({ listing_id: canKe, question: ke, status: "pending" });
               if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(theo can)", irErr.message);
-              cauKe = cauHoiMau(ke, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal);
+              const lKe = cans.find((c) => c.id === canKe);
+              cauKe = cauHoiMau(ke, cachGoi, lKe?.property_type, lKe?.district, lKe?.deal);
             }
-          } else if (pendingReq) {
-            cauKe = cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal);
           }
-          return await traLoiSeller([`Dạ em ghi ${daGhi.join(" · ")} rồi ạ.${cauKe ? ` ${cauKe}` : ""}`], { fact_theo_can: daGhi.length });
+          return await traLoiSeller([`Dạ em ghi ${daGhi.join(" · ")} rồi ạ.${cauKe ? ` ${cauKe}` : ""}`], { fact_theo_can: daGhi.length, dong_cau_treo: daDong.size });
         }
       }
     }
@@ -2174,7 +2184,7 @@ ${kem}` : tomTat, cheDo };
           const { error: vtcErr } = await client.rpc("ghi_fact_listing", { p_listing_id: moi.id, p_question: "vi_tri", p_answer: vtCan, p_source: "seller_chat" });
           if (vtcErr) await ghiLoi(client, "chat-reply ghi_fact_listing(vi_tri nhieu can)", vtcErr.message);
         }
-        daMo.push(`${c.ma ?? (c.thu ? `căn ${c.thu}` : null) ?? c.quan ?? `căn ${daMo.length + 1}`}${c.dt ? ` ${c.dt}m2` : ""}${c.gia ? ` ${c.gia}` : ""}`);
+        daMo.push(`${c.ma ?? vtCan ?? (c.thu ? `căn ${c.thu}` : null) ?? c.quan ?? `căn ${daMo.length + 1}`}${c.dt ? ` ${c.dt}m2` : ""}${c.gia ? ` ${c.gia}` : ""}`);
         dau = dau ?? { id: moi.id, property_type: moi.property_type };
       }
       if (daMo.length) {
