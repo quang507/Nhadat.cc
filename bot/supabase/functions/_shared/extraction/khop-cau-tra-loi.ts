@@ -697,7 +697,8 @@ export function nhanDienFact(text: string): NhanDien | null {
   }
   // 10/09/2026 (chủ dự án): GẤP bắt ở MỌI lượt — "cần bán gấp", "không gấp, bán được
   // giá thì thôi", "không vội". Trả nguyên văn; tầng DB (sync_cols) đọc ra true/false.
-  if (laGap(goc) || /\b(khong|ko|k|chua|chang|dau co)\s*(?:can\s*)?(?:gap|voi)\b|\bduoc gia thi thoi\b|\bkhong voi\b|\btu tu\b|\bban duoc gia\b/.test(kd)) {
+  // 15/09/2026 (Zalo thật): "Được giá, căn tôi sở hữu…" — "được giá" đứng một mình cũng là nhịp bán.
+  if (laGap(goc) || /\b(khong|ko|k|chua|chang|dau co)\s*(?:can\s*)?(?:gap|voi)\b|\bduoc gia\b|\bkhong voi\b|\btu tu\b|\bban duoc gia\b/.test(kd)) {
     if (!/\bgap\s*(doi|ba|lan|ruoi|\d)/.test(kd)) return { question: "gap", answer: goc };
   }
   // 09/09 tối: những thứ CÓ SỐ nhưng không phải giá/diện tích — xét TRƯỚC giá,

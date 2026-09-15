@@ -119,6 +119,9 @@ for (const [q, vao, mong] of [
   const k2 = phanLoaiCauTraLoi("gap", t2);
   ok("hỏi gấp + hỏi ngược không dấu '?' → khớp + hoiNguoc", k2.loai === "khop" && k2.hoiNguoc === "bạn có thông tin thêm về căn này không", JSON.stringify(k2));
   ok("catDapAn gấp → 'Được giá'", catDapAn("gap", t2) === "Được giá", catDapAn("gap", t2));
+  const k2b = phanLoaiCauTraLoi("dien_tich_dat", t2);
+  ok("cùng câu đó khi đang hỏi DIỆN TÍCH → lệch sang gấp (không rơi bo_sung), vẫn tách hỏi ngược",
+    k2b.loai === "lech" && k2b.chuyenSang?.question === "gap" && !!k2b.hoiNguoc, JSON.stringify(k2b));
   const k3 = phanLoaiCauTraLoi("dien_tich_dat", "Căn số 14 ở ny’ah phú định");
   ok("'Căn số 14 ở …' trả lời diện tích → LỆCH sang vi_tri, không thành 14m²", k3.loai === "lech" && k3.chuyenSang?.question === "vi_tri", JSON.stringify(k3));
   const k4 = phanLoaiCauTraLoi("so_phong_ngu", "4 phòng ngủ, mà khu này có trường học gần không em");

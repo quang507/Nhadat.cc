@@ -2799,8 +2799,8 @@ ${kem}` : tomTat, cheDo };
           ? `Chủ nhà chưa gật bản nháp, cũng chưa nói sửa gì rõ.`
           : `Câu đó KHÔNG trả lời được câu em hỏi - có thể chủ nhà hiểu nhầm, hoặc đang nói một thông số khác. Em đã ghi chú lại nguyên văn (không mất), nhắc lại ngắn gọn để xác nhận rồi hỏi lại.`;
         const promptLai =
-          `${boiCanh}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${text}". ${viSao}\n` +
-          `Viết MỘT tin ngắn (15–35 từ) như người thật: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
+          `${boiCanh}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${text}". ${viSao}\n${hoiNguocPrompt}` +
+          `Viết MỘT tin ngắn (${hoiNguoc ? "25–50" : "15–35"} từ) như người thật: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
           `CÂU HỎI CUỐI TIN BẮT BUỘC vẫn là "${nhanDangHoi}" — KHÔNG chuyển sang hỏi thứ khác dù em thấy hợp mạch hơn (hệ thống đang chờ đúng câu này). ` +
           `Không hỏi gì khác, không xin lỗi dài, KHÔNG nhắc mã tin${nhieuCan ? " (nhiều căn thì gọi bằng địa chỉ)" : ""}.`;
         let hoiLai: string | null = null;
@@ -2819,13 +2819,13 @@ ${kem}` : tomTat, cheDo };
           }
         }
         if (!hoiLai) {
-          hoiLai = (kq.loai === "xung_ho"
+          hoiLai = (hoiNguoc ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (kq.loai === "xung_ho"
             ? `Dạ em nhớ rồi, em gọi ${kq.xungHo} nha. `
             : kq.chuyenSang
             ? `Em ghi "${kq.chuyenSang.answer}" rồi ạ. `
             : "") + `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`;
         }
-        return await traLoiSeller([hoiLai], { reask: pendingReq.question, loai_cau: kq.loai });
+        return await traLoiSeller([hoiLai], { reask: pendingReq.question, loai_cau: kq.loai, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) });
       }
 
       // Câu hỏi treo bị bỏ qua (né 2 lần / chủ gật): KHÔNG ghi câu này vào ô đang
