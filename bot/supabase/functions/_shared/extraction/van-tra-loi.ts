@@ -296,11 +296,34 @@ export function motCauHoi(replies: string[]): string[] {
  * Chuyện gửi ảnh là luật của mình (FR-185: gửi vào chat là vào kho), nên trả lời tiền
  * định, không trông vào model. Không nhận ra thì null → model tự trả lời như cũ.
  */
-export function dapHoiNguocTienDinh(hoi: string, ac: string): string | null {
+export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null): string | null {
   const kd = boDau(hoi);
-  if (/\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
-    return `Dạ ${ac} gửi ảnh thẳng vào đây là em cất vào tin luôn ạ.`;
+  const ra: string[] = [];
+  // "bên em là bot hả?" / "người thật hay máy?" — nói thật, một câu (TONE).
+  if (/\b(bot|may|robot|ai|tu dong|nguoi that|nguoi hay may)\b/.test(kd) && /\b(la|phai|hay|ha|khong|ko|a|dung)\b/.test(kd) && !/\b(may lanh|may giat|may nuoc|may bom)\b/.test(kd)) {
+    ra.push("Dạ em là trợ lý AI bên AI Ơi Nhà Đất, việc cần người thật thì có anh chị phụ trách theo sát mình ạ.");
   }
-  return null;
+  // "phí sao?" — theo luật phí, hệ thống biết nhãn chính chủ / môi giới.
+  if (phi && /\b(phi|hoa hong|hoa hong|phan tram|bao nhieu %|mat tien gi|ton gi|tinh sao)\b/.test(kd) && !/\bphi quan ly\b/.test(kd)) {
+    ra.push(`Dạ ${phi} ạ.`);
+  }
+  if (/\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
+    ra.push(`Dạ ${ac} gửi ảnh thẳng vào đây là em cất vào tin luôn ạ.`);
+  }
+  return ra.length ? ra.join(" ") : null;
+}
+
+/**
+ * Model TRẢ LỜI CÂU LỆNH thay vì trả lời khách (15/09/2026, bắn thật P2 — Groq): "Em hiểu
+ * rồi ạ. Em là Kh•ai… Khi chủ nhà hỏi ngược, em trả lời câu đó TRƯỚC… Sẵn sàng nhận hội
+ * thoại." Tin gửi chủ nhà không bao giờ nói về "chủ nhà" ở ngôi thứ ba hay nhắc số từ.
+ */
+export function laLoiMeta(text: string): boolean {
+  const t = (text ?? "").trim();
+  if (!t) return false;
+  const kd = boDau(t);
+  if (/\b(san sang nhan|em hieu roi a|cau hoi cuoi (?:tin )?(?:la|bat buoc)|\d+\s*[–-]\s*\d+ tu\b|khuon cau|theo luat phi|huong dan he thong|cau lenh|hoi thoai\b.*\bcho chu nha|ngoi thu|system prompt)\b/.test(kd)) return true;
+  // Nói về "chủ nhà"/"khách" ở ngôi thứ ba kèm động từ chỉ đạo → đang đọc lại lời dặn.
+  return /\b(chu nha|khach)\b/.test(kd) && /\b(hoi nguoc|tra loi truoc|mot tin duy nhat|viet mot tin|khong lap)\b/.test(kd);
 }
 

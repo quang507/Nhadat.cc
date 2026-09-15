@@ -198,9 +198,15 @@ export function bocViTriRao(text: string): string | null {
   // Mệnh đề bắt đầu từ chữ hẻm/đường tới dấu ngắt câu gần nhất. 14/09/2026: "nhà phố" /
   // "mặt phố" là LOẠI nhà, không phải "phố <tên>" — bỏ qua, tìm chữ mở đầu kế tiếp.
   let menh: string | null = null;
-  const reMenh = /(?:^|[\s,(])((?:đường|duong|hẻm|hem|hxh|phố|pho|ngõ|ngo)\s+[^,.;!?\n]{2,70})/giu;
+  // 15/09/2026 (bắn thật N1): "mặt tiền Nguyễn Chí Thanh" cũng là địa chỉ.
+  const reMenh = /(?:^|[\s,(])((?:đường|duong|hẻm|hem|hxh|phố|pho|ngõ|ngo|mặt tiền|mat tien|mt)\s+[^,.;!?\n]{2,70})/giu;
   for (let mm = reMenh.exec(t); mm; mm = reMenh.exec(t)) {
     const truoc = boDau(t.slice(Math.max(0, mm.index - 6), mm.index + 1));
+    // "mặt tiền 4m" là CHIỀU NGANG, không phải địa chỉ — tìm tiếp sau chữ "mặt tiền".
+    if (/^(?:mặt tiền|mat tien|mt)\s+\d/iu.test(mm[1])) {
+      reMenh.lastIndex = mm.index + mm[0].length - mm[1].length + 2;
+      continue;
+    }
     if (/^(?:pho|phố)\s/iu.test(mm[1]) && /\b(?:nha|mat)\s*$/.test(truoc)) {
       // Mệnh đề "phố Tân Bình đường Cộng Hòa" đã nuốt tới dấu phẩy — tìm lại ngay sau chữ "phố".
       reMenh.lastIndex = mm.index + mm[0].length - mm[1].length + 3;
@@ -211,8 +217,11 @@ export function bocViTriRao(text: string): string | null {
   }
   if (menh) {
     const tu = menh.split(/\s+/);
-    const dau = tu[0];
-    let i = 1;
+    const haiChu = /^(?:mặt tiền|mat tien)\s/iu.test(menh);
+    // "mặt tiền đường An Dương Vương" → mệnh đề địa chỉ bắt đầu từ "đường".
+    const dauSau = haiChu && /^(?:đường|duong|hẻm|hem|hxh|phố|pho|ngõ|ngo)$/iu.test(tu[2] ?? "");
+    const dau = dauSau ? tu[2] : haiChu ? `${tu[0]} ${tu[1]}` : tu[0];
+    let i = dauSau ? 3 : haiChu ? 2 : 1;
     // Chữ TẢ đường và bề rộng/số nhà đứng trước tên: "xe hơi 5m", "102". 14/09/2026: cả
     // chữ "đường"/"phố" CÓ DẤU nằm giữa ("hẻm ba gác đường Phạm Thế Hiển") — bỏ dấu thì
     // "đường" trùng "Dương" (An Dương Vương), nên chỉ nhận bản có dấu.
@@ -263,7 +272,8 @@ export function catDapAn(question: string, dapAn: string): string {
     const kdD = boDauGiuDoDai(goc);
     const m = new RegExp(`(?:\\b(?:tam|khoang|co|tren|duoi|tu)\\s+)?[\\d][\\d.,]*\\s*(?:${TIEN_KD})(?![a-z])|(?:\\b(?:tam|khoang)\\s+)?${TIEN_T_KEP}`).exec(kdD);
     if (m && m.index > 0) {
-      const manh = goc.slice(m.index).split(/[,;\n]/)[0].trim();
+      const manh = goc.slice(m.index).split(/[,;\n]/)[0].trim()
+        .replace(/(?:\s+(?:thôi|nha|nhé|nhe|nhen|ạ|á|em|anh|chị|luôn|rồi|nè|đó|đấy|ơi))+\s*$/iu, "");
       if (manh && manh.length < goc.length) return manh;
     }
   }
@@ -669,6 +679,9 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
       const mDt = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(kd);
       const mGia = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`).exec(kd);
       const q = /\b(?:quan|q)\s*\.?\s*(\d{1,2})\b/.exec(kd);
+      // 15/09/2026 (bắn thật N2): "căn 2 sổ hồng riêng, căn 1 đúc 3 tấm" là FACT cho căn đã
+      // mở, không phải rao thêm — căn thứ tự không giá, không kích thước thì không tính.
+      if (!mKt && !mDt && !mGia) continue;
       out.push({
         thu: Number(mThu[1]), ...(q ? { quan: `Quận ${Number(q[1])}` } : {}),
         ngang: mKt?.[1], dai: mKt?.[2], dt: mDt?.[1],
@@ -691,6 +704,22 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
     });
   }
   return out.length >= 2 ? out : [];
+}
+/**
+ * Tin nói về NHIỀU CĂN đã mở, theo số thứ tự: "căn 2 sổ hồng riêng, có thương lượng. căn 1
+ * đúc 3 tấm" → [{thu: 2, manh: "sổ hồng riêng, có thương lượng."}, {thu: 1, manh: "đúc 3 tấm"}].
+ * Số ngay sau "căn" mà kèm đơn vị (2 pn, 2 x 10, 2 tấm) thì không phải thứ tự. (15/09/2026)
+ */
+export function tachTheoCan(text: string): Array<{ thu: number; manh: string }> {
+  const out: Array<{ thu: number; manh: string }> = [];
+  const re = /(?:^|[\s,;.])(?:căn|can|lô|lo)\s+(?:số\s+|so\s+|thứ\s+|thu\s+)?(\d{1,2})(?![\d])(?!\s*(?:x\s*\d|m2|m\b|tỷ|ty|tỉ|ti|tỏi|toi|triệu|trieu|tr\b|pn|phòng|phong|lầu|lau|tầng|tang|tấm|tam|mét|met|wc))/giu;
+  const moc: Array<{ thu: number; bat: number; het: number }> = [];
+  for (let m = re.exec(text); m; m = re.exec(text)) moc.push({ thu: Number(m[1]), bat: m.index, het: m.index + m[0].length });
+  for (let i = 0; i < moc.length; i++) {
+    const manh = text.slice(moc[i].het, i + 1 < moc.length ? moc[i + 1].bat : undefined).replace(/^[\s:,.-]+|[\s,.]+$/g, "");
+    if (manh.length >= 2) out.push({ thu: moc[i].thu, manh });
+  }
+  return out;
 }
 export function nhanDienNhieuFact(text: string): NhanDien[] {
   const out: NhanDien[] = [];
@@ -905,7 +934,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   }
   if (/\b(hem thong|hem cut|quay dau|thong ra|khong thong|ko thong)\b/.test(kd)) return { question: "hem_thong", answer: goc };
   if (/\b(dang the chap|the chap|cam ngan hang|so cam tay|cam tay|trong ngan hang|ket sat)\b/.test(kd)) return { question: "the_chap", answer: goc };
-  if (/\b(thuong luong|\btl\b|bot chut|fix|cung duoc|con bot|gia net|gia chot)\b/.test(kd) && !CO_TIEN_KD.test(kd)) {
+  if (/\b(thuong luong|\btl\b|bot chut|fix|cung duoc|con bot|gia net|gia chot|(?:bot|giam)\s+(?:cho|xiu|it|them|chut)|(?:bot|giam)\s+(?:cho\s+)?nguoi\s+(?:o|thue)(?:\s+lau dai)?)\b/.test(kd) && !CO_TIEN_KD.test(kd)) {
     return { question: "thuong_luong", answer: goc };
   }
   if (/\b(dang o|dang cho thue|de trong|nha trong|con o|dang thue)\b/.test(kd) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
@@ -930,7 +959,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   // "đất thuê nhà nước TỚI 2058" có mốc năm → thời hạn sử dụng; không có năm → hình thức thuê đất.
   if (/\b(toi|den|het|thoi han)\s*(?:nam\s*)?20\d\d\b/.test(kd) && /\b(thue|so huu|su dung|thoi han)\b/.test(kd)) return { question: "thoi_han_su_dung", answer: goc };
   if (/\b(tra (?:tien )?(?:thue dat )?(?:mot lan|hang nam|tung nam)|thue dat (?:hang nam|mot lan|nha nuoc)|dat thue)\b/.test(kd)) return { question: "hinh_thuc_thue_dat", answer: goc };
-  if (/\b(lau dai|so huu lau dai|den nam 20\d\d|thoi han su dung|50 nam)\b/.test(kd)) return { question: /\b(can ho|chung cu)\b/.test(kd) ? "so_huu" : "thoi_han_su_dung", answer: goc };
+  if (/\b(lau dai|so huu lau dai|den nam 20\d\d|thoi han su dung|50 nam)\b/.test(kd) && !/\b(bot|giam|nguoi o|khach o|o lau dai)\b/.test(kd)) return { question: /\b(can ho|chung cu)\b/.test(kd) ? "so_huu" : "thoi_han_su_dung", answer: goc };
   if (/\b(mat do xay dung|mat do xd)\b/.test(kd)) return { question: "mat_do_xd", answer: goc };
   if (/\b(vuong vuc|bop hau|thop hau|meo|hinh dang)\b/.test(kd)) return { question: "hinh_dang", answer: goc };
   if (new RegExp(`\\bfit.?out\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:ngay|thang|tuan)`).test(kd) || new RegExp(`\\b(?:mien phi|free)\\s*${SO}\\s*(?:ngay|thang|tuan)\\s*(?:sua|sua chua|setup|lam noi that)`).test(kd)) return { question: "fit_out", answer: goc };
