@@ -77,15 +77,67 @@ function gopNoiDung(content: TinNhan["content"]): string {
   return content.map((k) => k.text ?? "").filter(Boolean).join("\n");
 }
 
+/**
+ * Groq strict KHÔNG hiểu `$ref`. Bắt tại trận 15/09/2026 (lượt thật đầu tiên sau khi
+ * đảo Groq lên trước): `zodOutputFormat()` biến `z.number().int().nullable()` (trường
+ * `can` của boc-rao) thành `anyOf: [{$ref: "#/$defs/__schema0"}, {type: null}]`, Groq
+ * trả 400 "anyOf branches must be disambiguated" — nó không nhìn xuyên `$ref` để biết
+ * nhánh kia là integer. Thăm dò cùng ngày: giải `$ref` thành `anyOf: [{type:
+ * integer}, {type: null}]` thì 200. Nên trước khi gửi, chép thân định nghĩa vào chỗ
+ * tham chiếu rồi bỏ `$defs`. Khoá cạnh `$ref` (description…) giữ nguyên.
+ * Có chặn sâu 30 tầng: schema đệ quy (zod recursive) thì thà gửi nguyên còn hơn treo.
+ *
+ * Cùng lượt: `zodOutputFormat()` GỠ `enum` ra khỏi schema và nhét vào description
+ * dạng `{enum: ["ban","mua"]}` (Anthropic ràng buộc theo cách khác). Groq strict thì
+ * HIỂU `enum`, và không có nó model tự bịa giá trị — thăm dò 15/09: `loai` trả
+ * "GIAO_DICH_DIEM_DEN_DIEM_KHUE" trong khi danh sách chỉ có hai chữ; `safeParse` ở
+ * nơi gọi gạt đi là mất cả lượt bóc. Nên đọc lại mảng đó và trả về đúng chỗ `enum`.
+ * Đọc hụt (SDK đổi khuôn chữ) thì để nguyên — mất ràng buộc, không mất lượt.
+ */
+export function giaiThamChieu(schema: unknown): unknown {
+  const goc = schema as Record<string, unknown> | null;
+  if (!goc || typeof goc !== "object") return schema;
+  const defs = (goc.$defs ?? {}) as Record<string, unknown>;
+  const phucHoiEnum = (o: Record<string, unknown>): Record<string, unknown> => {
+    if ("enum" in o || typeof o.description !== "string") return o;
+    const m = /^(?:([\s\S]*?)\n\n)?\{enum: (\[[\s\S]*\])\}$/.exec(o.description);
+    if (!m) return o;
+    try {
+      const ds = JSON.parse(m[2]);
+      if (!Array.isArray(ds) || ds.length === 0) return o;
+      const { description: _bo, ...conLai } = o;
+      return m[1] ? { ...conLai, description: m[1], enum: ds } : { ...conLai, enum: ds };
+    } catch {
+      return o;
+    }
+  };
+  const di = (n: unknown, sau: number): unknown => {
+    if (sau > 30) return n;
+    if (Array.isArray(n)) return n.map((x) => di(x, sau + 1));
+    if (!n || typeof n !== "object") return n;
+    const o = n as Record<string, unknown>;
+    if (typeof o.$ref === "string") {
+      const ten = o.$ref.replace(/^#\/\$defs\//, "");
+      const { $ref: _bo, ...conLai } = o;
+      const than = (defs[ten] ?? {}) as Record<string, unknown>;
+      return di({ ...than, ...conLai }, sau + 1);
+    }
+    const r: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(phucHoiEnum(o))) if (k !== "$defs") r[k] = di(v, sau + 1);
+    return r;
+  };
+  return di(goc, 0);
+}
+
 /** Lấy JSON Schema ra khỏi `output_config.format` do `zodOutputFormat()` dựng. */
 function bocSchema(format: unknown): { name: string; schema: unknown } | null {
   const f = format as Record<string, unknown> | null;
   if (!f) return null;
   const trong = (f.json_schema ?? f.schema ?? null) as Record<string, unknown> | null;
   if (trong && typeof trong === "object" && "schema" in trong) {
-    return { name: String(trong.name ?? "ket_qua"), schema: trong.schema };
+    return { name: String(trong.name ?? "ket_qua"), schema: giaiThamChieu(trong.schema) };
   }
-  if (trong) return { name: String(f.name ?? "ket_qua"), schema: trong };
+  if (trong) return { name: String(f.name ?? "ket_qua"), schema: giaiThamChieu(trong) };
   return null;
 }
 
