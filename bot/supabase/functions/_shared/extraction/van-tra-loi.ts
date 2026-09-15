@@ -273,3 +273,20 @@ function laCauGhiNhanMot(tin: string): boolean {
     .replace(/[^a-z0-9]/g, "");
   return conLai.length >= 3;
 }
+
+/**
+ * FR-177 (kịch bản sếp: "hỏi đúng MỘT thông tin"). 15/09/2026 (bắn thật): model vẫn
+ * thỉnh thoảng hỏi hai câu một lượt ("…tầng mấy ạ? Có sổ hồng chưa ạ?"). Giữ tới hết
+ * CÂU HỎI ĐẦU TIÊN, bỏ mọi câu đứng sau nó; bong bóng 📋/💾/📝 không đụng. Chỉ dùng
+ * cho phía BÁN — phía mua được phép gộp 2–3 ý (HUMAN_CHAT_RULES).
+ */
+export function motCauHoi(replies: string[]): string[] {
+  return replies.map((r) => {
+    if (/^(📋|💾|📝)/u.test(r)) return r;
+    const cau = tachCau(r);
+    const i = cau.findIndex((c) => /\?\s*$/.test(c));
+    if (i < 0 || i === cau.length - 1) return r;
+    return cau.slice(0, i + 1).join(" ");
+  });
+}
+
