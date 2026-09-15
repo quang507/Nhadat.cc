@@ -312,9 +312,9 @@ phải chỉ xanh trên máy**. Mỗi dòng độc lập, 1–3 phút. Cần Zal
 
 | Zalo giả | Vai | Đã gõ | Tin / hồ sơ tạo ra | Đang chờ câu |
 |---|---|---|---|---|
-| `mau-chu-nha` | chủ nhà bán | "anh có căn nhà hẻm 7m Trần Bình Trọng phường 1 quận 5 muốn bán, 4x16, 1 trệt 2 lầu, sổ hồng riêng, giá 11 tỷ 5" → "à quên, nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm. mà giá khu này giờ bao nhiêu 1m2 em?" | `BDS-NP-Q5-0015` (64m², trệt + 2 lầu, hẻm xe tải 7m, SHR, 11,5 tỷ) | số phòng ngủ |
+| `mau-chu-nha` | chủ nhà bán | "anh có căn nhà hẻm 7m Trần Bình Trọng phường 1 quận 5 muốn bán, 4x16, 1 trệt 2 lầu, sổ hồng riêng, giá 11 tỷ 5" → "à quên, nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm. mà giá khu này giờ bao nhiêu 1m2 em?" → "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng tới cuối năm nha" | `BDS-NP-Q5-0015` (64m², trệt + 2 lầu, hẻm xe tải 7m, SHR, 3PN, đang cho thuê 25 triệu/tháng, 11,5 tỷ) | tiềm năng sử dụng |
 | `mau-khach-mua` | khách mua | "chị tìm nhà hẻm xe hơi quận 5 tầm 8-9 tỷ cho gia đình ở, 3 phòng ngủ" → "có căn nào ở hẻm Trần Bình Trọng không em" | hồ sơ: mua · Q5 · 8-9 tỷ · để ở · nhà hẻm · 3PN · HXH | kho chưa có tin đang rao → "em lọc rồi báo" |
-| `mau-moi-gioi` | môi giới 2 căn | "em là môi giới, có 2 căn: căn 1 hẻm 6m An Dương Vương q5 5x18 giá 14 tỷ, căn 2 mặt tiền Hùng Vương q5 4x20 giá 30 tỷ" → "căn 1 sổ hồng riêng hoàn công đủ, căn 2 đang cho thuê 80 triệu/tháng" | `BDS-NP-Q5-0013` (An Dương Vương, 90m², 14 tỷ), `BDS-NP-Q5-0014` (Hùng Vương, 80m², 30 tỷ) | phường |
+| `mau-moi-gioi` | môi giới 2 căn | "em là môi giới, có 2 căn: căn 1 hẻm 6m An Dương Vương q5 5x18 giá 14 tỷ, căn 2 mặt tiền Hùng Vương q5 4x20 giá 30 tỷ" → "căn 1 sổ hồng riêng hoàn công đủ, căn 2 đang cho thuê 80 triệu/tháng" | `BDS-NP-Q5-0013` (An Dương Vương, 90m², SHR hoàn công, 14 tỷ), `BDS-NP-Q5-0014` (Hùng Vương, 80m², đang cho thuê 80 triệu/tháng, 30 tỷ) | phường (căn Hùng Vương) |
 | `mau-cho-thue` | chủ nhà cho thuê | "cho thuê căn hộ Sunrise City q7, 76m2 2pn full nội thất, 18 triệu/tháng cọc 2 tháng" → "tầng 15 view hồ bơi, bên em có cần mình gửi hình không" | `BDS-CH-Q7-0001` (Tân Hưng Q7, dự án Sunrise City, 76m², tầng 15, 18 triệu/tháng) | hướng ban công |
 
 Xem lại hội thoại máy đã bắn ở Table Editor → schema `so` → `so.hoi_thoai` (lọc theo
