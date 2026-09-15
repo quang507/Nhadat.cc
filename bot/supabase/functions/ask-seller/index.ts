@@ -48,11 +48,20 @@ Deno.serve(async (req) => {
   const { data: listing, error: lErr } = await db
     .from("listings")
     .select(
-      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, sellers(name, seller_type, zalo_user_id, ten_tro_ly)",
+      // 15/09/2026: PHẢI chỉ tên khoá ngoại. `listings ↔ sellers` có HAI quan hệ
+      // (listings.seller_id và sellers.active_listing_id) nên `sellers(...)` trần
+      // làm PostgREST trả 300 PGRST201 — và nhánh dưới từng gộp mọi lỗi select
+      // thành "listing không tồn tại" (404): hỏi bù CHẾT IM từ 09/09 tới 15/09,
+      // 313 lượt, sổ lỗi ghi sai nguyên nhân nên không ai truy.
+      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, sellers!listings_seller_id_fkey(name, seller_type, zalo_user_id, ten_tro_ly)",
     )
     .eq("id", listing_id)
-    .single();
-  if (lErr || !listing) return jsonResponse({ error: "listing không tồn tại" }, 404);
+    .maybeSingle();
+  if (lErr) {
+    await ghiLoi(db, "ask-seller doc listing", lErr.message);
+    return jsonResponse({ error: `không đọc được listing: ${lErr.message}` }, 500);
+  }
+  if (!listing) return jsonResponse({ error: "listing không tồn tại" }, 404);
   if (!listing.property_type) {
     return jsonResponse({
       error: "listing chưa có property_type - chưa xác định được checklist required_facts",

@@ -4499,9 +4499,13 @@ ${kem}` : tomTat, cheDo };
     if (!out.agreed_deal) return;
     const dealCode = maTinSach(out.agreed_deal.listing_code ?? mentioned[0] ?? repliedCode);
     if (!dealCode) return;
-    const { data: dl } = await client.from("listings")
-      .select("id, price_vnd, seller_id, sellers(seller_type)")
+    // 15/09/2026: `sellers(...)` trần trên `listings` là PGRST201 (hai quan hệ, xem
+    // ask-seller) — bản trước không đọc `error` nên khách "ok chốt" mà kèo KHÔNG
+    // bao giờ vào `deals`, im lặng.
+    const { data: dl, error: dlErr } = await client.from("listings")
+      .select("id, price_vnd, seller_id, sellers!listings_seller_id_fkey(seller_type)")
       .or(`code.ilike.${dealCode},legacy_code.ilike.${dealCode}`).limit(1).maybeSingle();
+    if (dlErr) await ghiLoi(client, "chat-reply chot keo doc listing", dlErr.message);
     if (!dl) return;
     const { count: dupDeal } = await client.from("deals")
       .select("id", { count: "exact", head: true })
