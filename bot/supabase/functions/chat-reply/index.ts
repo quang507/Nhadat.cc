@@ -37,7 +37,7 @@ import {
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { coMuiDuLieuRao, type DeXuat, type DongDb, kiemDeXuat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
-import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, ngangNhanDai, phuongTenCauRao } from "../_shared/extraction/boc-cau-rao.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
 import { cauXacNhanPhuong, chuanTenDuong, docPhuongNominatim, duongTraDuoc, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
@@ -3119,7 +3119,8 @@ ${kem}` : tomTat, cheDo };
       // từng vơ luôn diện tích đứng sau ("5 tỷ 8 50m2" → price_raw dính "50m2");
       // `chuan_hoa_gia_raw` phía DB chỉ gọt tiểu từ, không gọt "50m2". Dừng
       // TRƯỚC một cụm số+m2.
-      const DUOI_GIA = "(?:(?!\\s*\\d+(?:[.,]\\d+)?\\s*m2)[^,.;\\n])*";
+      // (`DUOI_GIA` nay ở boc-cau-rao.ts — một nguồn với bài kiểm; 15/09 thêm dừng
+      // trước chữ của thứ khác: "6ty2 shr thanh khoan…" chỉ còn "6ty2".)
       // 11/09/2026 (42 ca): bắt thêm lóng "9t5"/"4t2" (TIEN_T_KEP), đọc trên
       // `textBoc` (số đọc bằng chữ đã thành chữ số).
       // 14/09/2026: con số tiền ĐẦU TIÊN từng là giá — "đang cho thuê 45 triệu…, giá 32 tỷ"

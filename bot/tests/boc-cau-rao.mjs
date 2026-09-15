@@ -3,15 +3,23 @@
 //
 // Phần SQL của cùng lượt bắn (fact "cách mặt tiền" vào cột, "p5" dính tên đường, xe hơi
 // trong nhà) ở migration 20260914b.
-import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, ngangNhanDai, phuongTenCauRao } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
 import { bocViTriRao, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
 const kd = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
-// Cùng đuôi giá với chat-reply (dừng trước một cụm số + m2).
-const DUOI = "(?:(?!\\s*\\d+(?:[.,]\\d+)?\\s*m2)[^,.;\\n])*";
-const gia = (c) => chonGiaRao(c, dealCauRao(kd(c)), DUOI);
+// Cùng đuôi giá với chat-reply — một nguồn `DUOI_GIA` (15/09).
+const gia = (c) => chonGiaRao(c, dealCauRao(kd(c)), DUOI_GIA);
+// 15/09/2026 (bắn thật B1): đuôi giá dừng trước chữ của thứ khác.
+for (const [c, mong] of [
+  ["co lo dat 5x18 thu duc phuong hiep binh chanh gia 6ty2 shr thanh khoan nhanh ko ban", "6ty2"],
+  ["bán nhà q5 giá 5 tỷ thương lượng", "5 tỷ thương lượng"],
+  ["bán nhà q5 5 tỷ 8 50m2", "5 tỷ 8"],
+  ["nhà mặt tiền giá 32 tỷ sổ hồng riêng, 5x20", "32 tỷ"],
+  ["bán đất 2 tỷ 3 hẻm xe hơi", "2 tỷ 3"],
+  ["cho thuê 25 triệu/tháng full nội thất", "25 triệu/tháng"],
+]) ok("đuôi giá " + JSON.stringify(c.slice(0, 40)) + " → " + mong, gia(c)?.trim() === mong, JSON.stringify(gia(c)));
 
 // ── bán hay cho thuê ──
 for (const [c, mong] of [
