@@ -66,6 +66,8 @@ for (const [c, mong] of [
   ["bán nhà 123/4 An Dương Vương p8 q5", "123/4 An Dương Vương"],
   ["nhà phố đường An Dương Vương q5", "đường An Dương Vương"],
   ["Hẻm 6m Lê Văn Sỹ, P.13, Q.3", "Hẻm 6m Lê Văn Sỹ"],
+  // 15/09/2026 (Zalo thật): "mới làm lại" là lời tả, không phải tên đường.
+  ["căn hộ 5 tầng có sổ hồng riêng, đường Lê Văn Việt mới làm lại rất rộng, số nhà tôi là số449", "đường Lê Văn Việt"],
 ]) ok(`vị trí: '${c.slice(0, 50)}' → ${mong}`, bocViTriRao(c) === mong, String(bocViTriRao(c)));
 
 // ── câu bổ sung sau khi tạo tin ──
