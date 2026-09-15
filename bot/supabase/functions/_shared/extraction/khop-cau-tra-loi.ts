@@ -152,6 +152,10 @@ const TU_DUNG = new Set([
   "so", "giay", "gia", "ban", "mua", "thue", "huong", "full", "that", "tret",
   "lau", "tang", "phong", "ngu", "wc", "toilet", "tho", "hoan", "gap", "luong",
   "tich", "phuong", "quan", "huyen", "khong", "ngap", "xay",
+  // 15/09/2026 (Zalo thật): "đường Lê Văn Việt mới làm lại rất rộng" → tên đường
+  // "Lê Văn Việt mới" (trần 4 chữ vô tình cắt đúng trước "làm"), geocode tra
+  // "Lê Văn Việt mới" ra rỗng. "Mới" không mở đầu tên đường Sài Gòn nào.
+  "moi",
   // KHÔNG có "duong"/"hem" ở đây: bỏ dấu thì "Dương" (An Dương Vương, Dương Bá
   // Trạc) trùng "đường" — thêm vào là cắt cụt tên đường thật.
   "ty", "ti", "trieu", "m2", "shr", "hdmb",
