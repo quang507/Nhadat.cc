@@ -2053,6 +2053,13 @@ fresh(seedKho);
   check("HN-5 cả tin là câu hỏi → KHÔNG ghi bo_sung, body có hoi_nguoc = câu đó, câu tầng vẫn treo",
     !db().t.listing_facts.some((f) => f.question === "bo_sung") && r.body.hoi_nguoc === "bên bạn có cần mình gửi hình không hay sao" && pend("tang"),
     JSON.stringify({ body: r.body, f: db().t.listing_facts, ir: db().t.info_requests }));
+  // 15/09 (bắn thật E4): câu treo loại CÓ/KHÔNG (gấp) — chữ "không" trong câu hỏi không được thành đáp án.
+  treoLai(L, "gap");
+  r = await send({ external_user_id: "hn-1", text: "bên bạn có cần mình gửi hình không hay sao" });
+  check("HN-6 câu hỏi trọn khi đang hỏi GẤP → không ghi ô gấp, là hỏi ngược",
+    !db().t.listing_facts.some((f) => f.question === "gap" && /gửi hình/.test(f.answer)) && r.body.saved_fact !== "gap" &&
+      r.body.hoi_nguoc === "bên bạn có cần mình gửi hình không hay sao",
+    JSON.stringify({ body: r.body, f: db().t.listing_facts }));
 }
 
 // ── kết ──

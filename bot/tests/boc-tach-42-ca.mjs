@@ -280,6 +280,13 @@ for (const [vao, mong] of [
   ["ông xã tôi nói bán 5 tỷ", "chị"],
   ["vợ chồng mình đang tính bán", null],
 ]) ok("tuXungTuCau vợ/chồng " + JSON.stringify(vao), tuXungTuCau(vao) === mong, String(tuXungTuCau(vao)));
+// 15/09 (bắn thật E4): câu hỏi trọn khi câu treo là loại CÓ/KHÔNG (gấp) → lệch, không khớp.
+for (const q of ["gap", "thang_may", "tang", "gia", "phap_ly"])
+  ok(`phanLoai(${q}) câu hỏi trọn → không khớp`, phanLoaiCauTraLoi(q, "bên bạn có cần mình gửi hình không hay sao").loai !== "khop", JSON.stringify(phanLoaiCauTraLoi(q, "bên bạn có cần mình gửi hình không hay sao")));
+ok("laCauHoiTron 'không dính gì' → false", laCauHoiTron("không dính gì") === false);
+ok("laCauHoiTron 'phí bên em sao?' → true", laCauHoiTron("phí bên em sao?") === true);
+ok("phanLoai(gap) 'không gấp' vẫn khớp", phanLoaiCauTraLoi("gap", "không gấp, được giá thì bán").loai === "khop", JSON.stringify(phanLoaiCauTraLoi("gap", "không gấp, được giá thì bán")));
+ok("phanLoai(thang_may) 'có' vẫn khớp", phanLoaiCauTraLoi("thang_may", "có").loai === "khop", JSON.stringify(phanLoaiCauTraLoi("thang_may", "có")));
 for (const [vao, mong] of [
   ["bên bạn có cần mình gửi hình không hay sao", true],
   ["phí bên bạn tính sao?", true],

@@ -403,7 +403,10 @@ export function laCauHoiTron(text: string): boolean {
   if (!goc || nhanDienFact(goc)) return false;
   if (/\?/.test(goc)) return true;
   const kd = boDau(goc).replace(/[?.!]+$/, "").trim();
-  return kd.split(/\s+/).length >= 3 && DAU_HOI_RE.test(kd) && DUOI_HOI_RE.test(kd);
+  // Không dấu hỏi thì cần thêm CHỦ NGỮ/TỪ HỎI rõ ("bên bạn có…", "bao nhiêu", "thế nào"):
+  // "không dính gì" (trả lời quy hoạch) có "gì" ở cuối nhưng không phải câu hỏi.
+  const coTuHoi = /\b(?:ban|ben|em|anh|chi|minh)\s+(?:co|biet|tinh|nhan|can|thay)\b|\b(?:bao nhieu|the nao|nhu the nao|khi nao|bao gio|o dau|co phai|duoc khong|dc khong|hay sao|ha em|khong em|khong a|khong ban)\b/;
+  return kd.split(/\s+/).length >= 3 && DAU_HOI_RE.test(kd) && DUOI_HOI_RE.test(kd) && coTuHoi.test(kd);
 }
 
 export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
@@ -465,7 +468,10 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   // Dặn xưng hô mà ngoài ra không còn nội dung → nhớ, hỏi lại.
   if (xungHo && chu.length < 3) return { loai: "xung_ho", xungHo };
   // Câu hỏi có/không (20260909i): "có", "không", "rồi", "chưa", "cụt", "thông"… là đáp án thật.
-  if (HOI_CO_KHONG.has(question) &&
+  // 15/09/2026 (bắn thật E4): "bên bạn có cần mình gửi hình không hay sao" khi đang hỏi
+  // GẤP — chữ "không" làm cả câu hỏi thành đáp án. Câu hỏi trọn (`laCauHoiTron`) đi tiếp
+  // xuống nhánh hỏi ngược bên dưới.
+  if (HOI_CO_KHONG.has(question) && !laCauHoiTron(text) &&
       /^\s*(co|khong|ko|k|chua|roi|da|cut|thong|ngap|kho|cam tay|the chap|ngan hang|dang o|cho thue|trong|lau dai|50 nam|tl|thuong luong|cung duoc|de o)\b/.test(kd)) {
     return { loai: "khop", ...(xungHo ? { xungHo } : {}) };
   }
@@ -476,6 +482,9 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   if (CAU_HOI_RE.test(kd) && !(HOI_SO.has(question) && /^\s*[\d.,]+\s*(m2|m|ty|ti|tr|trieu|tang|lau|tam|pn)?\s*\?\s*$/.test(kd))) {
     return { loai: "hoi", ...(xungHo ? { xungHo } : {}) };
   }
+  // 15/09/2026 (bắn thật E4): câu hỏi trọn không có dấu "?" ("bên bạn có cần mình gửi
+  // hình không hay sao") — CAU_HOI_RE bỏ lỡ, rồi từ khoá "không" khớp ô gấp.
+  if (laCauHoiTron(text)) return { loai: "hoi", ...(xungHo ? { xungHo } : {}) };
 
   const ketQua = (loai: LoaiCau, them: Partial<KetQuaKhop> = {}): KetQuaKhop =>
     ({ loai, ...(xungHo ? { xungHo } : {}), ...them });
