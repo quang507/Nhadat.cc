@@ -214,10 +214,10 @@ Tập không phá huỷ của TS-SEC, bắn khoá **công khai** `sb_publishable
 | TS-SEC-AUTO-02 | anon đọc `public_listings` | bị từ chối — view không lọc trạng thái | ⏭ CI |
 | TS-SEC-AUTO-03 | anon gọi 6 RPC nội bộ (`get_secret`, `seller_drip_tick`, `ctv_report_tick`, `xuat_schema`, `liet_ke_bang`, `liet_ke_migration`) | bị từ chối cả 6 | ⏭ CI |
 | TS-SEC-AUTO-04 | anon `insert listings` · `update bot_prompts` | bị từ chối; nếu lọt thì tự dọn và báo P0 | ⏭ CI |
-| TS-SEC-AUTO-05 | anon đọc `agents_public` | ra ≥1 NMG — bắt đúng lỗi làm `/moi-gioi` trắng 27/08→04/09 | ⏭ CI |
+| TS-SEC-AUTO-05 | anon đọc `agents_public`, đối chiếu `rpc/so_nmg_cong_khai` (20260915c, chỉ trả số NMG) | ra ≥1 NMG; rỗng mà số NMG = 0 là đúng cảnh (sau xoá hàng loạt 15/09); rỗng mà số NMG > 0 mới là lỗi làm `/moi-gioi` trắng 27/08→04/09 | ✅ 15/09: CI đỏ 6 lượt (run 302–314) vì DB hết NMG sau FR-210 mà bài kiểm không có tín hiệu độc lập → thêm hàm đếm, tự kiểm thêm cảnh `khong-nmg` (5/5) |
 | TS-SEC-AUTO-06 | anon đọc `projects`, `listing_facts`, `listing_photos_v` | HTTP 200 — bắt lỗi siết quá tay | ⏭ CI |
 | TS-SEC-AUTO-07 | anon lọc `status=cho_thong_tin` | 0 dòng — tin nháp không lọt ra ngoài | ⏭ CI |
-| TS-SEC-AUTO-08 | **tự kiểm bộ trên** bằng PostgREST giả, 4 cảnh (khoẻ / RLS thủng / proxy chặn / siết quá tay) | thoát đúng 0 / 1 / 2 / 1 | ✅ 05/09 (4/4, chạy offline) |
+| TS-SEC-AUTO-08 | **tự kiểm bộ trên** bằng PostgREST giả, 5 cảnh (khoẻ / RLS thủng / proxy chặn / siết quá tay / không có NMG) | thoát đúng 0 / 1 / 2 / 1 / 0 | ✅ 05/09 (4/4, chạy offline) · 15/09 5/5 |
 
 ### TS-LIVE — thông tuyến thật qua Zalo (chạy khi bật bridge)
 Điều kiện: `node bot/bridge-zca/index.mjs` chạy, không còn `pumpEscalations: fetch failed`. Chạy trên project thật nên sau mỗi vòng xoá `listings` `CCRB-*`, `sellers`/`ctvs` test, `reminders` liên quan.
