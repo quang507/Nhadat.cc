@@ -290,3 +290,17 @@ export function motCauHoi(replies: string[]): string[] {
   });
 }
 
+/**
+ * Câu hỏi ngược có ĐÁP ÁN CỦA HỆ THỐNG (15/09/2026, bắn thật F2): "bên bạn có cần mình
+ * gửi hình không hay sao" — model được dặn trả lời trước mà vẫn bỏ qua, chỉ hỏi phường.
+ * Chuyện gửi ảnh là luật của mình (FR-185: gửi vào chat là vào kho), nên trả lời tiền
+ * định, không trông vào model. Không nhận ra thì null → model tự trả lời như cũ.
+ */
+export function dapHoiNguocTienDinh(hoi: string, ac: string): string | null {
+  const kd = boDau(hoi);
+  if (/\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
+    return `Dạ ${ac} gửi ảnh thẳng vào đây là em cất vào tin luôn ạ.`;
+  }
+  return null;
+}
+

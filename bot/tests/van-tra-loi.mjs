@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -269,6 +269,16 @@ for (const [vao, mong] of [
   ["Dạ em ghi nhận rồi ạ.", "Dạ em ghi nhận rồi ạ."],
   ["💾 Vừa lưu: giá: \"4 tỷ\"", "💾 Vừa lưu: giá: \"4 tỷ\""],
 ]) ok("motCauHoi " + JSON.stringify(vao.slice(0, 40)), motCauHoi([vao])[0] === mong, JSON.stringify(motCauHoi([vao])));
+
+// 15/09/2026 (bắn thật F2): câu hỏi về ảnh có đáp án hệ thống.
+for (const [vao, mong] of [
+  ["bên bạn có cần mình gửi hình không hay sao", true],
+  ["có cần chụp ảnh sổ không em", true],
+  ["phí bên bạn tính sao", false],
+  ["giá ảnh hưởng gì không", false],
+  ["bạn có biết xung quanh khu này có tiện ích gì không", false],
+]) ok("dapHoiNguocTienDinh " + JSON.stringify(vao), (dapHoiNguocTienDinh(vao, "anh") !== null) === mong, String(dapHoiNguocTienDinh(vao, "anh")));
+ok("dapHoiNguocTienDinh gọi đúng cách xưng hô", dapHoiNguocTienDinh("có cần gửi hình không", "chị") === "Dạ chị gửi ảnh thẳng vào đây là em cất vào tin luôn ạ.");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

@@ -2058,7 +2058,7 @@ fresh(seedKho);
   r = await send({ external_user_id: "hn-1", text: "bên bạn có cần mình gửi hình không hay sao" });
   check("HN-6 câu hỏi trọn khi đang hỏi GẤP → không ghi ô gấp, là hỏi ngược",
     !db().t.listing_facts.some((f) => f.question === "gap" && /gửi hình/.test(f.answer)) && r.body.saved_fact !== "gap" &&
-      r.body.hoi_nguoc === "bên bạn có cần mình gửi hình không hay sao",
+      r.body.hoi_nguoc === "bên bạn có cần mình gửi hình không hay sao" && /gửi ảnh thẳng vào đây/.test(r.body.replies[0] ?? ""),
     JSON.stringify({ body: r.body, f: db().t.listing_facts }));
 }
 
