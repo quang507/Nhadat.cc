@@ -20,6 +20,7 @@
 // `(ty|ti|toi|trieu|tr)` ở năm chỗ, không chỗ nào biết "toi" + số là TỚI —
 // nên "5 tới 6 tỷ" ghi giá "5 tới 6" (mục D1 review 10/09).
 import { TIEN_KD, CO_TIEN_KD, TIEN_T_KEP } from "./luat-tien.ts";
+import { TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 
 export type LoaiCau =
   | "khop"      // đúng là câu trả lời cho câu đang hỏi → ghi fact, đóng câu hỏi
@@ -386,7 +387,7 @@ export const cungHoFact = cungHo;
 // có thông tin / cho hỏi / mà bạn…"): mảnh HỎI = có "?" hoặc (có từ để hỏi VÀ kết bằng
 // tiểu từ hỏi, ≥ 3 chữ). Mảnh còn lại là câu trả lời. Chỉ dùng khi CÓ CẢ HAI phần —
 // câu thuần hỏi ("phí sao em?") và "5 tỷ được không?" vẫn đi luật cũ.
-const RANH_MANH_RE = /[,;\n]|\s+(?=(?:mà|nhưng|với lại|còn|ma|nhung|voi lai|con)\s+(?:bạn|em|bên|anh|chị|mình|bot|ban|ben|chi|minh)\b)|\s+(?=(?:bạn|em|bên em|bên mình|ban|ben em|ben minh)\s+(?:có\s+(?:biết|thông tin|nắm|thể)|biết|tư vấn|cho hỏi|co\s+(?:biet|thong tin|nam|the)|biet|tu van|cho hoi)\b)/iu;
+const RANH_MANH_RE = /[,;\n]|\.\s+(?=\S)|\s+(?=(?:mà|nhưng|với lại|còn|ma|nhung|voi lai|con)\s+(?:bạn|em|bên|anh|chị|mình|bot|ban|ben|chi|minh)\b)|\s+(?=(?:bạn|em|bên em|bên mình|ban|ben em|ben minh)\s+(?:có\s+(?:biết|thông tin|nắm|thể)|biết|tư vấn|cho hỏi|co\s+(?:biet|thong tin|nam|the)|biet|tu van|cho hoi)\b)/iu;
 const DAU_HOI_RE = /\b(?:co (?:biet|thong tin|the|nam)|biet|thong tin|tu van|cho hoi|hoi|gi|nao|bao nhieu|sao|the nao|nhu the nao|duoc khong|dc khong|bao gio|khi nao|o dau|co phai)\b|\bco\b(?=.*\b(?:khong|ko|k|chua)\b)/;
 const DUOI_HOI_RE = /\b(?:khong|ko|k|chua|gi|nao|nhi|nhe|a|vay|ha|the|sao|bao nhieu|dau)(?:\s+(?:em|anh|chi|ban|a|nha|nhe|nhi|vay|ha|ne|ạ))*\s*\?*\s*$/;
 export function tachCauHoiNguoc(text: string): { traLoi: string; hoi: string | null } {
@@ -752,6 +753,9 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
       continue;
     }
     const m = re.exec(kd);
+    // 15/09/2026 (bắn thật A2/C2): "nhà đang cho thuê 25 triệu/tháng" của tin BÁN là thu nhập
+    // thuê, không phải giá mong muốn — luật hiện trạng (đang cho thuê) lo.
+    if (m && q === "gia" && TRUOC_LA_THUE.test(kd.slice(Math.max(0, m.index - 30), m.index))) continue;
     if (m) them({ question: q, answer: lay(m) });
   }
   return out;
@@ -884,7 +888,9 @@ export function nhanDienFact(text: string): NhanDien | null {
     return { question: "dien_tich", answer: m[0].replace(/\s+/g, " ") };
   }
   // Giá: khớp trên bản bỏ dấu GIỮ ĐỘ DÀI rồi cắt đúng đoạn gốc ("18 tỷ", "4 tỷ 5").
-  if ((m = new RegExp(`${SO}\\s*(?:${TIEN_KD})(?![a-z])(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kdD))) {
+  if ((m = new RegExp(`${SO}\\s*(?:${TIEN_KD})(?![a-z])(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kdD)) &&
+      // 15/09/2026 (bắn thật A2): "đang cho thuê 25 triệu/tháng" là thu nhập thuê, không phải giá.
+      !TRUOC_LA_THUE.test(kd.slice(Math.max(0, m.index - 30), m.index))) {
     return { question: "gia", answer: catGoc(m) };
   }
   // Toà / tháp / block của chung cư — bắt TRƯỚC luật kết cấu, vì "toa S3.02 tang

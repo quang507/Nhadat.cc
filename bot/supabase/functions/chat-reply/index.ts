@@ -2100,7 +2100,9 @@ ${kem}` : tomTat, cheDo };
     // hồng riêng, có thương lượng. căn 1 đúc 3 tấm". Trước đây câu này mở thêm 2 tin RỖNG.
     // Nay: mỗi mảnh "căn N …" ghi fact vào căn thứ N (theo thứ tự mở); mảnh nào trả lời
     // đúng câu đang treo của căn đó thì đóng câu và hỏi câu kế; còn lại nhắc lại câu treo.
-    const nhomCan = !wantsSell && nhieuCanTrongTin.length < 2 ? tachTheoCan(text) : [];
+    // (Không chặn theo `wantsSell`: "căn 2 đang cho thuê 80 triệu/tháng" có chữ "cho thuê" + tiền
+    // nên cổng rao khớp, nhưng đây vẫn là fact cho căn đã mở — bắn thật C2 15/09.)
+    const nhomCan = nhieuCanTrongTin.length < 2 ? tachTheoCan(text) : [];
     if (nhomCan.length) {
       const { data: dsCan } = await client.from("listings").select("id, code, property_type, district, deal")
         .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"])
