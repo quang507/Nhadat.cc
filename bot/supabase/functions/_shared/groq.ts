@@ -11,10 +11,12 @@
 // (`messages.create`, `messages.parse`) rồi dịch sang `POST /openai/v1/chat/
 // completions`, dịch cả `usage` về đúng bốn ô mà `doTien` ghi sổ.
 //
-// KHÔNG thay model chính. Chỉ chen vào khi lượt gọi chính HỎNG vì hết tiền / quá
-// nhịp / quá tải — đúng những mã lỗi liệt kê ở `nenDoiSang()`. Lỗi khác (sai
-// prompt, sai schema) vẫn ném lên như cũ, vì đổi model không chữa được chúng và
-// nuốt lỗi ở đây là giấu một chỗ hỏng.
+// THỨ TỰ do secret `MODEL_TRUOC` quyết (FR-194 b, 15/09/2026). Mặc định `groq`:
+// Groq trả lời trước, chạm trần / hỏng thì Claude ngay trong cùng lượt. Đặt
+// `claude` là về đường cũ: Claude trước, chỉ chen Groq khi lượt chính HỎNG vì
+// hết tiền / quá nhịp / quá tải — đúng những mã lỗi liệt kê ở `nenDoiSang()`;
+// lỗi khác (sai prompt, sai schema) vẫn ném lên như cũ, vì đổi model không
+// chữa được chúng và nuốt lỗi ở đây là giấu một chỗ hỏng.
 //
 // GIỚI HẠN đã biết, đừng quên khi đọc kết quả:
 //   · Groq KHÔNG có bộ nhớ tạm prompt → `cache_control` bị bỏ qua, hai ô
@@ -161,15 +163,36 @@ type CoMessages = {
   };
 };
 
+/** Thứ tự gọi: model nào trả lời TRƯỚC (FR-194 b). */
+export type ThuTuModel = "claude" | "groq";
+
+/** Lượt có ảnh / tài liệu thì Groq mù — phải đi Claude, bất kể thứ tự. */
+function coAnh(p: ThamSo): boolean {
+  return p.messages.some((m) =>
+    Array.isArray(m.content) && m.content.some((k) => k.type === "image" || k.type === "document")
+  );
+}
+
+const loiCua = (e: unknown) => String((e as { message?: string })?.message ?? e);
+
 /**
  * Bọc client chính bằng đường dự phòng Groq. `chinh` = null nghĩa là không có
  * khoá Anthropic — đi thẳng Groq.
+ *
+ * `thuTu` (FR-194 b, 15/09/2026 — chủ dự án: "dùng con groq trả lời trước nếu
+ * bị chặn trần thì fall back về claude api liền luôn"):
+ *   · `"groq"`  — Groq trả lời trước (rẻ, nhanh); hết nhịp cả danh sách model
+ *     hay hỏng kiểu gì thì gọi Claude NGAY trong cùng lượt. Lượt có ảnh đi thẳng
+ *     Claude vì Groq không nhìn được. Groq chạm trần là ĐƯỜNG ĐI BÌNH THƯỜNG của
+ *     bậc miễn phí, nên chỉ `console.log`, không vào sổ lỗi (bài học 08/09).
+ *   · `"claude"` — đường cũ: Claude trước, chỉ sang Groq khi `nenDoiSang()`.
  */
 export function bocDuPhong(
   chinh: CoMessages | null,
   khoaGroq: string,
   modelGroq: string,
   ghiSo?: (nguon: string, chiTiet: string) => Promise<void>,
+  thuTu: ThuTuModel = "claude",
 ): CoMessages {
   // Bậc miễn phí Groq chặn nhịp THEO TỪNG MODEL. Đo 10/09: lượt đầu qua được,
   // lượt hai dính "Rate limit reached for model qwen/qwen3.8-27b" và rơi tiếp về
@@ -177,18 +200,7 @@ export function bocDuPhong(
   // bằng dấu phẩy: hết nhịp model này thì xoay sang model kế, mỗi model một hạn
   // mức riêng. Hết cả danh sách mới chịu thua.
   const dsModel = modelGroq.split(",").map((m) => m.trim()).filter(Boolean);
-  const chay = async (ten: "create" | "parse", p: ThamSo): Promise<unknown> => {
-    if (chinh) {
-      try {
-        return await chinh.messages[ten](p);
-      } catch (e) {
-        if (!nenDoiSang(e)) throw e;
-        await ghiSo?.(
-          `model chinh hong - doi sang Groq ${dsModel[0]}`,
-          String((e as { message?: string })?.message ?? e).slice(0, 300),
-        );
-      }
-    }
+  const thuGroq = async (ten: "create" | "parse", p: ThamSo): Promise<KetQua> => {
     const schema = ten === "parse" ? bocSchema(p.output_config?.format ?? p._khuon_du_phong) : null;
     let cuoi: unknown = null;
     for (const m of dsModel) {
@@ -198,13 +210,38 @@ export function bocDuPhong(
         cuoi = e;
         // Hết nhịp / quá tải thì xoay model; lỗi khác (sai schema, sai prompt)
         // xoay cũng vô ích — model nào cũng hỏng như nhau.
-        if (!/^Groq (429|5\d\d)/.test(String((e as { message?: string })?.message ?? e))) break;
+        if (!/^Groq (429|5\d\d)/.test(loiCua(e))) break;
         // Xoay model là ĐƯỜNG ĐI BÌNH THƯỜNG của lưới dự phòng, không phải sự cố.
         // Ghi vào sổ lỗi là tự nuôi còi báo động (bài học escalation-feed 08/09).
         console.log(`Groq het nhip, xoay khoi ${m}`);
       }
     }
     throw cuoi ?? new Error("Groq: không model nào trả lời");
+  };
+  const chay = async (ten: "create" | "parse", p: ThamSo): Promise<unknown> => {
+    if (thuTu === "groq" && chinh) {
+      if (coAnh(p)) return await chinh.messages[ten](p);
+      try {
+        return await thuGroq(ten, p);
+      } catch (e) {
+        // Chặn trần / hỏng ở Groq → Claude liền, cùng lượt. Claude mà cũng hỏng
+        // thì ném lên như cũ — tầng gọi đã có sẵn nhánh câu mẫu.
+        console.log(`Groq chan tran/hong (${loiCua(e).slice(0, 120)}), doi sang model chinh`);
+        return await chinh.messages[ten](p);
+      }
+    }
+    if (chinh) {
+      try {
+        return await chinh.messages[ten](p);
+      } catch (e) {
+        if (!nenDoiSang(e)) throw e;
+        await ghiSo?.(
+          `model chinh hong - doi sang Groq ${dsModel[0]}`,
+          loiCua(e).slice(0, 300),
+        );
+      }
+    }
+    return await thuGroq(ten, p);
   };
   return {
     messages: {

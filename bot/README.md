@@ -132,7 +132,9 @@ hàng nên cron luôn báo `succeeded` kể cả khi function trả 500. Kết q
   Editor là bot đổi trong vòng một phút (nhớ tạm 60 s). Nội dung phải khớp
   `_shared/prompts.ts` — đổi một bên thì đồng bộ bên kia bằng script, đừng gõ tay.
 - **Secret trong Vault** (đọc qua RPC `get_secret`, chỉ `service_role`):
-  `ANTHROPIC_API_KEY`, `BRIDGE_SECRET`. Chưa có: `ZALO_OA_TOKEN`,
+  `ANTHROPIC_API_KEY`, `BRIDGE_SECRET`, `GROQ_API_KEY`, `GROQ_MODEL` (danh sách
+  ngăn phẩy, FR-194), `MODEL_TRUOC` (`groq` mặc định — Groq trả lời trước, chạm
+  trần thì Claude liền; `claude` là Claude trước, FR-194 b). Chưa có: `ZALO_OA_TOKEN`,
   `ZALO_APP_SECRET`/`ZALO_APP_ID` (OPEN-33), `ZALO_ADMIN_ZALO_ID`,
   `NTFY_TOKEN` (cần cho email FR-81), `DAILY_MODEL_CALL_CAP` (mặc định 1000).
 - **`app_config`** (khoá/giá trị, không phải secret): `ntfy_topic`, `admin_email`,
