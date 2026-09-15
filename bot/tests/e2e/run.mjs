@@ -134,6 +134,11 @@ check("V1.7 câu hỏi tình trạng từ người lạ → hỏi vai (không b�
 r = await send({ external_user_id: "la-4", text: "tôi có căn nhà ở Q10, giờ tìm Q5" });
 check("V1.8 trả lời kể hoàn cảnh + tìm nhà → ở hàng mua, xoá cờ, không mở hồ sơ bán", db().t.sellers.length === 0 && parseCalls().length === 1 && !db().t.buyers[0].preferences.hoi_vai, JSON.stringify(db().t.buyers[0].preferences));
 fresh();
+// 15/09/2026 (bắn thật D1): "chào BẠN … tìm nhà … tầm 5 tỷ" — bỏ dấu ra "ban" nên
+// cổng rao khớp, người mua bị mở hồ sơ bán + tạo tin "Nhà phố bán · Quận 10 · 5 tỷ".
+r = await send({ external_user_id: "la-5b", text: "chào bạn mình tìm nhà cho ba mẹ ở gần bệnh viện, tầm 5 tỷ đổ lại, q10 hoặc q5 gì cũng đc" });
+check("V1.8b 'chào bạn … tìm nhà … 5 tỷ' là NGƯỜI MUA — không mở hồ sơ bán, không tạo tin", db().t.sellers.length === 0 && db().t.listings.length === 0 && r.body.role !== "seller", JSON.stringify({ body: r.body, s: db().t.sellers, l: db().t.listings }));
+fresh();
 r = await send({ external_user_id: "la-5", text: "chào em" });
 r = await send({ external_user_id: "la-5", text: "muốn hỏi thông tin thôi" });
 check("V1.9 trả lời 'muốn hỏi thông tin' → hàng mua, cờ xoá, model được gọi", parseCalls().length === 1 && db().t.buyers[0].preferences.hoi_vai == null && db().t.sellers.length === 0);
@@ -1980,6 +1985,30 @@ fresh(seedKho);
       db().t.listing_facts.some((f) => f.question === "vi_tri" && f.answer === "hẻm 12 Lê Văn Việt") && !tin().ward &&
       tin().boc_tach?.phuong_goi_y?.duong === "Lê Văn Việt" && pendPh() && nomi().length === 1,
     JSON.stringify({ irDau, ir: db().t.info_requests.map((q) => [q.question, q.status]), bt: tin().boc_tach, ward: tin().ward, f: nomi(), rep: rp.body.replies }));
+  // 15/09/2026 (bắn thật C3): địa chỉ trả lời câu phường KÈM kích thước / nở hậu → fact
+  // đi kèm phải ghi luôn (bản trước chỉ ghi vi_tri, "4x14" và "nở hậu 5m" rơi mất);
+  // tên đường "Cách Mạng Tháng 8" giữ số cuối.
+  fresh(seedWards); globalThis.__nominatim = undefined;
+  await send({ external_user_id: "ph-7c", text: "bán nhà quận 10 4 tỷ" });
+  rp = await send({ external_user_id: "ph-7c", text: "hẻm 5m Cách Mạng Tháng 8, 4x14 nở hậu 5m" });
+  check("PH-08c địa chỉ + '4x14 nở hậu 5m' trả lời câu phường → vi_tri 'hẻm 5m Cách Mạng Tháng 8', dien_tich + no_hau ghi kèm, câu phường vẫn treo",
+    db().t.listing_facts.some((f) => f.question === "vi_tri" && f.answer === "hẻm 5m Cách Mạng Tháng 8") &&
+      db().t.listing_facts.some((f) => f.question === "dien_tich" && f.answer === "4x14") &&
+      db().t.listing_facts.some((f) => f.question === "no_hau") && pendPh(),
+    JSON.stringify({ f: db().t.listing_facts, ir: db().t.info_requests.map((q) => [q.question, q.status]), rep: rp.body.replies }));
+  // 15/09/2026 (bắn thật C4): "à mà nhà này cho thuê chứ ko bán, 25 triệu" khi đang hỏi
+  // phường → đổi loại giao dịch (fact `loai_giao_dich`, trigger 20260915d lật deal), giá
+  // 25 triệu vào tin THUÊ; không ghi "tiềm năng"; không bị hiểu là rút tin.
+  fresh(seedWards); globalThis.__nominatim = undefined;
+  await send({ external_user_id: "ph-7d", text: "bán nhà quận 10 4 tỷ" });
+  rp = await send({ external_user_id: "ph-7d", text: "à mà nhà này cho thuê chứ ko bán, 25 triệu" });
+  check("DEAL-01 'cho thuê chứ ko bán, 25 triệu' → deal cho_thue, giá 25 triệu, fact loai_giao_dich, KHÔNG tiem_nang, tin không bị ẩn",
+    tin().deal === "cho_thue" && tin().price_vnd === 25e6 && db().t.listing_facts.some((f) => f.question === "loai_giao_dich" && f.answer === "cho_thue") &&
+      !db().t.listing_facts.some((f) => f.question === "tiem_nang") && tin().status !== "an" && !rp.body.ngung_rao,
+    JSON.stringify({ l: { deal: tin().deal, price_vnd: tin().price_vnd, status: tin().status }, f: db().t.listing_facts, rep: rp.body.replies }));
+  fresh(seedWards); globalThis.__nominatim = LVV;
+  rp = await send({ external_user_id: "ph-7", text: "bán nhà 50m2 4 tỷ" });
+  rp = await send({ external_user_id: "ph-7", text: "hẻm 12 Lê Văn Việt" });
   rp = await send({ external_user_id: "ph-7", text: "ừ" });
   check("PH-08b 'ừ' → ward Phường Tăng Nhơn Phú, district Quận 9, câu phường answered",
     tin().ward === "Phường Tăng Nhơn Phú" && tin().district === "Quận 9" && !pendPh() && db().t.info_requests.some((x) => x.question === "phuong" && x.status === "answered"),
@@ -2018,6 +2047,12 @@ fresh(seedKho);
   r = await send({ external_user_id: "hn-1", text: "Được giá, căn tôi sở hữu nhưng chưa vào xem bạn có thông tin thêm về căn này không" });
   check("HN-4 gấp ghi 'Được giá' (không cả câu), câu hỏi ngược tách ra",
     fact("gap")?.answer === "Được giá" && /thông tin thêm/.test(r.body.hoi_nguoc ?? ""), JSON.stringify({ body: r.body, f: db().t.listing_facts }));
+  // 15/09/2026 (bắn thật A5): cả tin là MỘT câu hỏi → không ghi "thông tin bổ sung", là hỏi ngược.
+  treoLai(L, "tang");
+  r = await send({ external_user_id: "hn-1", text: "bên bạn có cần mình gửi hình không hay sao" });
+  check("HN-5 cả tin là câu hỏi → KHÔNG ghi bo_sung, body có hoi_nguoc = câu đó, câu tầng vẫn treo",
+    !db().t.listing_facts.some((f) => f.question === "bo_sung") && r.body.hoi_nguoc === "bên bạn có cần mình gửi hình không hay sao" && pend("tang"),
+    JSON.stringify({ body: r.body, f: db().t.listing_facts, ir: db().t.info_requests }));
 }
 
 // ── kết ──

@@ -80,6 +80,11 @@ const BO_QUA = new Set(["hinh_anh", "duyet_tin", "danh_gia", "xac_nhan_lich", "c
 // thì đổi "_" thành khoảng trắng, còn hơn in mã.
 const NHAN_THEM: Record<string, string> = {
   du_an_ten: "tên dự án",
+  loai_giao_dich: "loại giao dịch",
+};
+// Đáp án là giá trị enum (`listings.deal`) — in cho người đọc.
+const CHU_DAP_AN: Record<string, Record<string, string>> = {
+  loai_giao_dich: { ban: "bán", cho_thue: "cho thuê" },
 };
 
 const boDau = (s: string): string =>
@@ -173,7 +178,8 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
   if (!moiNhat.size) return null;
   const ds = [...moiNhat].reverse().slice(0, 12).map(([k, v]) => {
     const ten = (nhan[k] ?? NHAN_THEM[k] ?? k.replace(/_/g, " ")).replace(/\s*\(.*\)\s*$/, "");
-    return `${ten}: "${v.length > 50 ? v.slice(0, 49) + "…" : v}"`;
+    const chu = CHU_DAP_AN[k]?.[v] ?? v;
+    return `${ten}: "${chu.length > 50 ? chu.slice(0, 49) + "…" : chu}"`;
   });
   return `${DAU_BAO_LAI} Vừa lưu: ${ds.join(" · ")}`;
 }

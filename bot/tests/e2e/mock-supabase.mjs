@@ -539,6 +539,12 @@ class RpcCall {
         if (a.p_question === "vi_tri" && !l.location_raw) l.location_raw = String(a.p_answer).trim();
         if (a.p_question === "gia") { l.price_raw = a.p_answer; l.price_vnd = parseVnd(a.p_answer); }
         if (a.p_question === "phuong") l.ward = a.p_answer;
+        // 20260915d listing_facts_sync_deal: đổi loại giao dịch, tính lại giá từ fact giá gần nhất.
+        if (a.p_question === "loai_giao_dich" && (a.p_answer === "ban" || a.p_answer === "cho_thue")) {
+          l.deal = a.p_answer;
+          const g = db.t.listing_facts.filter((f) => f.listing_id === l.id && f.question === "gia").pop();
+          if (g) { l.price_raw = g.answer; l.price_vnd = parseVnd(g.answer); }
+        }
         if (a.p_question === "gap") {
           const kd = String(a.p_answer).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
           l.gap = /\b(khong|ko|k|chua|chang)\s*(can\s*)?(gap|voi)\b|duoc gia thi thoi|khong voi|tu tu/.test(kd) ? false : /\bgap\b|can tien|\bvoi\b/.test(kd) ? true : l.gap;

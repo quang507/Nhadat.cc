@@ -224,6 +224,12 @@ export function bocViTriRao(text: string): string | null {
       ten.push(tu[i]);
       i++;
     }
+    // 15/09/2026 (bắn thật C3): "Cách Mạng Tháng 8", "3 Tháng 2" — tên đường KẾT
+    // THÚC bằng con số sau chữ "tháng"; bản trước cắt mất số ("Cách Mạng Tháng").
+    if (ten.length && boDau(ten[ten.length - 1]) === "thang" && i < tu.length && /^\d{1,2}$/.test(tu[i])) {
+      ten.push(tu[i]);
+      i++;
+    }
     return ten.length ? [dau, ...truoc, ...ten].join(" ") : null;
   }
   // Số nhà trần: "7 Hồng Bàng phường 12", "123/4 An Dương Vương q5" — chỉ nhận
@@ -363,6 +369,19 @@ export function tachCauHoiNguoc(text: string): { traLoi: string; hoi: string | n
   const hoi = manh.filter(laHoi), traLoi = manh.filter((m) => !laHoi(m));
   if (!hoi.length || !traLoi.length) return { traLoi: goc, hoi: null };
   return { traLoi: traLoi.join(", "), hoi: hoi.join(" ") };
+}
+
+/**
+ * Cả tin là MỘT CÂU HỎI ("bên bạn có cần mình gửi hình không hay sao") và không
+ * mang fact nào → không phải dữ liệu để ghi, là câu hỏi ngược cần trả lời.
+ * 15/09/2026 (bắn thật A5): bản trước ghi nguyên câu hỏi vào ô "thông tin bổ sung".
+ */
+export function laCauHoiTron(text: string): boolean {
+  const goc = (text ?? "").trim();
+  if (!goc || nhanDienFact(goc)) return false;
+  if (/\?/.test(goc)) return true;
+  const kd = boDau(goc).replace(/[?.!]+$/, "").trim();
+  return kd.split(/\s+/).length >= 3 && DAU_HOI_RE.test(kd) && DUOI_HOI_RE.test(kd);
 }
 
 export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
@@ -677,6 +696,10 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
   }
   return out;
 }
+// Đổi loại giao dịch (15/09/2026): "cho thuê chứ không bán", "không bán, cho thuê",
+// "đổi sang cho thuê" → thuê; "bán chứ không cho thuê", "chuyển qua bán" → bán.
+const DOI_SANG_THUE_RE = /\bcho thue\b[^,.]{0,6}\bchu\s+(?:khong|ko|k|hong)\s+(?:phai\s+)?ban\b|\b(?:khong|ko|k)\s+ban\b[^,.]{0,12}\bcho thue\b|\bcho thue\b[^,.]{0,12}\b(?:khong|ko|k)\s+ban\b|\b(?:doi|chuyen)\s+(?:sang|qua|thanh)\s+cho thue\b/;
+const DOI_SANG_BAN_RE = /\bban\b[^,.]{0,6}\bchu\s+(?:khong|ko|k|hong)\s+(?:phai\s+)?cho thue\b|\b(?:khong|ko|k)\s+cho thue\b[^,.]{0,12}\bban\b|\b(?:doi|chuyen)\s+(?:sang|qua|thanh)\s+ban\b/;
 export function nhanDienFact(text: string): NhanDien | null {
   const goc = text.trim();
   const kd = boDau(goc);
@@ -731,6 +754,12 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(thue toi thieu|toi thieu \d+ (?:nam|thang)|hop dong \d+ (?:nam|thang)|thoi han thue|ky \d+ nam|thue \d+ nam)\b/.test(kd)) {
     return { question: "thoi_han_thue", answer: goc };
   }
+  // 15/09/2026 (bắn thật C4): "à mà nhà này cho thuê chứ ko bán, 25 triệu" là ĐỔI LOẠI
+  // GIAO DỊCH — bản trước ghi vào ô "tiềm năng", tin vẫn là tin BÁN và 25 triệu bị
+  // trigger giá gạt (dưới sàn giá bán). Đáp án là giá trị enum `listings.deal`;
+  // trigger `listing_facts_sync_deal` (20260915d) lật cột và tính lại giá.
+  if (DOI_SANG_THUE_RE.test(kd)) return { question: "loai_giao_dich", answer: "cho_thue" };
+  if (DOI_SANG_BAN_RE.test(kd)) return { question: "loai_giao_dich", answer: "ban" };
   // 13/09/2026: "cho thuê căn hộ Sunrise City quận 7" là VIỆC RAO (deal + loại
   // BĐS), không phải tiềm năng — bản trước ghi nó vào ô "Phù hợp".
   const laViecRao = /\b(?:ban|cho thue|sang|sang nhuong|de lai)\s+(?:lai\s+)?(?:gap\s+)?(?:can ho|can|nha|dat|lo|phong|mat bang|chung cu|kho|xuong|shophouse|biet thu|nen|mieng)\b/.test(kd);
@@ -1005,8 +1034,13 @@ export function laNgungRao(text: string): NgungRao | null {
   if (!kd) return null;
   // Phủ định / còn bán / câu hỏi tình trạng → không phải lời báo ngưng.
   if (/\b(chua|van con|van dang|con ban|con cho thue|chua ai|chua co ai|chua chot|dang ban|dang cho thue|sao roi|the nao|ha|ha em|hong|khong a)\b/.test(kd)) return null;
+  // "cho thuê CHỨ không bán" / "bán chứ không cho thuê" là đổi loại giao dịch (15/09), không phải rút tin.
+  if (/\bchu\s+(?:khong|ko|k|hong)\s+(?:phai\s+)?(?:ban|cho thue)\b/.test(kd)) return null;
   // "chốt giá 5 tỷ", "bán 5 tỷ rồi" — có số + đơn vị tiền là dữ liệu, không phải báo bán.
-  if (/\d\s*(ty|ti|toi|trieu|tr|m2)\b/.test(kd)) return null;
+  // 15/09: "gia 6ty2 shr … ko ban" — đơn vị dính số ("6ty2") không có biên từ
+  // sau "ty" nên cửa này hụt, câu rao không dấu bị hiểu thành RÚT TIN. Đơn vị
+  // kết thúc ở chỗ hết chữ cái là đủ, không đòi biên từ.
+  if (/\d\s*(ty|ti|toi|trieu|tr|m2)(?![a-z])/.test(kd)) return null;
   const banRoi =
     /\b(?:da|vua)\s*(?:ban|cho thue|chot|nhan coc|giao dich|co nguoi (?:mua|thue)|sang ten|xong)\b/.test(kd) ||
     /\b(?:ban|cho thue|chot|giao dich|sang ten)\s*(?:duoc|xong|het|nha|dat|can|no)?\s*(?:roi|xong roi|r)\b/.test(kd) ||
