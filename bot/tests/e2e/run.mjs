@@ -1993,6 +1993,33 @@ fresh(seedKho);
     JSON.stringify({ ward: tin().ward, ir: db().t.info_requests.map((q) => [q.question, q.status]), rep: rp.body.replies }));
 }
 
+// ── 15/09/2026: vừa trả lời vừa HỎI NGƯỢC; số nhà không phải diện tích (Zalo thật Ny'ah Phú Định) ──
+{
+  fresh();
+  const prompt = (c) => c?.params?.messages?.[0]?.content ?? "";
+  const fact = (q) => db().t.listing_facts.find((f) => f.question === q);
+  const pend = (q) => db().t.info_requests.some((x) => x.question === q && x.status === "pending");
+  const treoLai = (L, q) => { db().t.info_requests.forEach((x) => { if (x.listing_id === L.id) x.status = "expired"; }); db().insert("info_requests", { listing_id: L.id, question: q, status: "pending" }); };
+  r = await send({ external_user_id: "hn-1", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2" });
+  const L = db().t.listings[0];
+  treoLai(L, "ket_cau");
+  r = await send({ external_user_id: "hn-1", text: "Nhà 5 tầng, có thang máy thì phải, bạn có biết xung quanh khu này có tiện ích gì không" });
+  check("HN-1 vừa trả lời vừa hỏi ngược → kết cấu ghi 'Nhà 5 tầng' (không cả câu), thang máy ghi kèm, câu kết cấu đóng, body có hoi_nguoc",
+    fact("ket_cau")?.answer === "Nhà 5 tầng" && !!fact("thang_may") && !pend("ket_cau") && r.body.hoi_nguoc === "bạn có biết xung quanh khu này có tiện ích gì không",
+    JSON.stringify({ body: r.body, f: db().t.listing_facts, ir: db().t.info_requests }));
+  check("HN-2 câu lệnh model: TRẢ LỜI câu hỏi ngược TRƯỚC, không bịa tiện ích",
+    /HỎI NGƯỢC/.test(prompt(createCalls().at(-1))) && /KHÔNG bịa/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
+  treoLai(L, "dien_tich_dat");
+  r = await send({ external_user_id: "hn-1", text: "Căn số 14 ở ny’ah phú định" });
+  check("HN-3 số nhà trả lời câu diện tích → KHÔNG ghi diện tích, ghi vi_tri, câu diện tích vẫn treo, loại 'lech'",
+    !fact("dien_tich_dat") && db().t.listing_facts.some((f) => f.question === "vi_tri" && /Căn số 14/.test(f.answer)) && pend("dien_tich_dat") && r.body.loai_cau === "lech",
+    JSON.stringify({ body: r.body, f: db().t.listing_facts, ir: db().t.info_requests }));
+  treoLai(L, "gap");
+  r = await send({ external_user_id: "hn-1", text: "Được giá, căn tôi sở hữu nhưng chưa vào xem bạn có thông tin thêm về căn này không" });
+  check("HN-4 gấp ghi 'Được giá' (không cả câu), câu hỏi ngược tách ra",
+    fact("gap")?.answer === "Được giá" && /thông tin thêm/.test(r.body.hoi_nguoc ?? ""), JSON.stringify({ body: r.body, f: db().t.listing_facts }));
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }
