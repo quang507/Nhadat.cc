@@ -88,8 +88,17 @@ export function vungNgoai(kd: string): { ten: string; xa: boolean } | null {
   return null;
 }
 
+// 15/09/2026 (bắn thử 07:13 UTC): phường MỚI 2025 mang TÊN QUẬN CŨ — Tân Phú, Phú
+// Nhuận, Tân Bình, Bình Thạnh, Gò Vấp, Thủ Đức… Chủ nhà rao "quận 7" rồi trả lời
+// "phường Tân Phú" → `bocQuan` ra Quận Tân Phú → cột quận bị đè, tin Quận 7 nằm
+// trong rổ Tân Phú. Chữ đứng ngay sau "phường / p. / xã / x." là TÊN PHƯỜNG, không
+// phải quận: xoá cụm đó (tối đa hai chữ, không lấy số — "phường 12 quận 10" giữ
+// nguyên) trước khi soi tên quận. Câu có "quận tân phú" riêng thì vẫn khớp.
+const CUM_TEN_PHUONG = /(?:^|[^a-z])(?:phuong|xa|p|x)\.?\s+(?!\d)[a-z]+(?:\s+(?!(?:quan|q|huyen|h|tp|thanh)\b)[a-z]+)?/g;
+
 export function bocQuan(kd: string, tho?: string): string | null {
-  for (const [re, ten] of QUAN_TEN) if (re.test(kd)) return ten;
+  const kdSach = kd.replace(CUM_TEN_PHUONG, " ");
+  for (const [re, ten] of QUAN_TEN) if (re.test(kdSach)) return ten;
   if (tho && QUAN_TRONG_THO.test(tho)) return null;
   const m = QUAN_SO.exec(kd);
   // 14/09/2026 (bắn 16 hội thoại mua): luật đơn vị chạy trên chuỗi BỎ DẤU, nên "tầm"
