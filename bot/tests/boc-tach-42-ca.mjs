@@ -116,6 +116,14 @@ for (const [q, vao, mong] of [
     JSON.stringify(nc));
   const lo = nhanDienNhieuCan("căn A5 8x20 giá 18 tỷ, căn A7 8x20 giá 18 tỷ 5");
   ok("mã căn thật (A5, A7) vẫn là mã căn", lo.length === 2 && lo[0].ma === "A5" && lo[1].ma === "A7" && !lo[0].quan, JSON.stringify(lo));
+  // 15/09/2026 (bắn thử): "căn 1 … căn 2 …" là số thứ tự — hai căn, không unit_code.
+  const tt = nhanDienNhieuCan("em có 2 căn: căn 1 hẻm 3m nguyễn trãi q5 4x12 giá 5 tỷ, căn 2 mặt tiền trần phú q5 4x20 giá 18 tỷ");
+  ok("'căn 1 …, căn 2 …' → 2 căn theo thứ tự, không mã, giữ quận/kích thước/giá",
+    tt.length === 2 && tt[0].thu === 1 && tt[1].thu === 2 && !tt[0].ma && !tt[1].ma &&
+      tt[0].quan === "Quận 5" && tt[0].ngang === "4" && tt[0].dai === "12" && tt[0].gia === "5 tỷ" && tt[1].dai === "20" && tt[1].gia === "18 tỷ",
+    JSON.stringify(tt));
+  ok("'căn 2 phòng ngủ 65m2 quận 7 giá 3 tỷ 1' KHÔNG phải nhiều căn", nhanDienNhieuCan("bán căn hộ 2 phòng ngủ 65m2 quận 7, căn 2pn view sông, giá 3 tỷ 1").length === 0);
+  ok("'còn căn 2 mặt tiền …' một mình → chưa đủ 2 căn (đường 'còn căn <số>' lo)", nhanDienNhieuCan("còn căn 2 mặt tiền trần phú 4x20 giá 18 tỷ thì sao em").length === 0);
 }
 
 // ── Vùng ngoài địa bàn ──────────────────────────────────────────────────────
@@ -159,6 +167,9 @@ for (const [vao, mong] of [
   ["bán đất nền Bến Lức Long An 5x20 đường nhựa 7m sổ riêng 850tr", null],
   ["nhà hẻm thông không ngập, 50m2", null],
   ["bán nhà q6 phường 2 40m2 3 tỷ 9", null],
+  // 15/09/2026 (bắn thử kho xưởng): "đường xe container" là tả đường, không phải tên đường.
+  ["bán kho xưởng 1000m2 xã Tân Kiên bình chánh, đường xe container, giá 45 tỷ, sổ hồng", null],
+  ["kho xưởng đường xe container Nguyễn Văn Linh, 2000m2", "đường xe container Nguyễn Văn Linh"],
 ]) ok("bocViTriRao " + JSON.stringify(vao.slice(0, 44)), bocViTriRao(vao) === mong, JSON.stringify(bocViTriRao(vao)));
 
 // ── 13/09/2026 — LƯỢT BẮN 20 TIN THỨ HAI: luật trả NGUYÊN câu làm đáp án ─────

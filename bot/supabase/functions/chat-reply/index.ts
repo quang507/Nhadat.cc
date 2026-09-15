@@ -1528,9 +1528,13 @@ Deno.serve(async (req) => {
       let quan = goiY?.quan ?? null;
       let tenChuan: string | null = goiY ? goiY.phuong : null;
       if (!goiY) {
-        const ten = (tachTienToPhuong(dapAnPhuong)?.ten ?? dapAnPhuong).trim();
+        const tach = tachTienToPhuong(dapAnPhuong);
+        const ten = (tach?.ten ?? dapAnPhuong).trim();
         const w = ten.length >= 2 && ten.length <= 50 ? await timWard(ten) : null;
         if (w) { tenChuan = w.ten_day_du; quan = bt.quan_mac_dinh === true ? w.quan_cu : null; }
+        // 15/09/2026: không có trong `wards` (xã cũ như "Tân Kiên") thì vẫn ghi tên ĐÃ
+        // CẮT chữ đệm và tiền tố viết hoa ("Xã Tân Kiên"), không phải "xã Tân Kiên đó em".
+        else if (tach) tenChuan = tach.ten_day_du;
       }
       if (quan && bt.quan_mac_dinh === true) {
         const { error: qErr } = await client.from("listings").update({ district: quan }).eq("id", listingId);
@@ -2108,7 +2112,7 @@ ${kem}` : tomTat, cheDo };
           ...(goc?.project_id && !c.quan ? { project_id: goc.project_id, unit_status: "con_ban", last_confirmed_at: new Date().toISOString() } : {}),
         }).select("id, code, property_type").single();
         if (moiErr || !moi) { await ghiLoi(client, "chat-reply mo tin nhieu can", moiErr?.message ?? "insert null"); continue; }
-        daMo.push(`${c.ma ?? c.quan ?? `căn ${daMo.length + 1}`}${c.dt ? ` ${c.dt}m2` : ""}${c.gia ? ` ${c.gia}` : ""}`);
+        daMo.push(`${c.ma ?? (c.thu ? `căn ${c.thu}` : null) ?? c.quan ?? `căn ${daMo.length + 1}`}${c.dt ? ` ${c.dt}m2` : ""}${c.gia ? ` ${c.gia}` : ""}`);
         dau = dau ?? { id: moi.id, property_type: moi.property_type };
       }
       if (daMo.length) {
@@ -2497,9 +2501,11 @@ ${kem}` : tomTat, cheDo };
     // căn đang hỏi) thì đi tạo tin. "bán 5 tỷ nhà này" trả lời câu hỏi giá thì
     // không có dấu hiệu đó → vẫn là câu trả lời, không đẻ tin trùng.
     const raoMoiKhiDangHoi = !!pendingReq && wantsSell && (
+      // 15/09/2026: "còn căn 2 mặt tiền trần phú 4x20 giá 18 tỷ thì sao em" — "còn căn <số>"
+      // cũng là căn KHÁC (bản trước hiểu là sửa căn 1). Số kèm đơn vị (căn 2 pn) thì không.
       khop(
-        /\b(thêm|nữa|căn khác|căn thứ|còn (một|1) căn|lô khác)\b/i,
-        /\b(them|nua|can khac|can thu|con (mot|1) can|lo khac)\b/,
+        /\b(thêm|nữa|căn khác|căn thứ|còn (một|1) căn|lô khác|còn (?:căn|lô) (?:số )?\d{1,2}\b(?!\s*(?:pn|phòng|x\s*\d|m2|tỷ|triệu|lầu|tầng|tấm)))\b/i,
+        /\b(them|nua|can khac|can thu|con (mot|1) can|lo khac|con (?:can|lo) (?:so )?\d{1,2}\b(?!\s*(?:pn|phong|x\s*\d|m2|ty|trieu|lau|tang|tam)))\b/,
       ) ||
       (!!wardNo && !!pendingReq.listings?.ward &&
         `Phường ${wardNo}` !== pendingReq.listings.ward)

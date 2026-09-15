@@ -57,7 +57,11 @@ export function tachTienToPhuong(s: string | null | undefined): PhuongNominatim 
   if (!m) return null;
   const tt = boDau(m[1]).toLowerCase();
   const loai = tt === "phuong" ? "phuong" : tt === "xa" ? "xa" : "dac_khu";
-  const ten = m[2].replace(/\s+/g, " ").trim();
+  // 15/09/2026 (bắn thử 07:21 UTC): "xã Tân Kiên đó em" → cột phường ghi nguyên "xã Tân
+  // Kiên đó em". Chữ đệm cuối câu (đó/nha/ạ/em/anh/chị…) không phải tên — cắt đi.
+  const ten = m[2].replace(/\s+/g, " ").trim()
+  // Chỉ chữ đệm CÓ DẤU hoặc không thể là tên: "chi"/"a"/"do" không dấu thì để yên ("Xã Củ Chi").
+    .replace(/(?:\s+(?:đó|đấy|đây|nha|nhé|nhe|nhen|hen|ạ|á|em|anh|chị|ơi|luôn|rồi|nè|đúng không|phải không))+$/iu, "");
   // Tên phường mới là CHỮ ("Tăng Nhơn Phú"); có số ("8 quận 5") là phường cũ đánh số → đường chuan_hoa_phuong.
   if (!/[\p{L}]{2}/u.test(ten) || /\d/.test(ten)) return null;
   const tienTo = loai === "phuong" ? "Phường" : loai === "xa" ? "Xã" : "Đặc khu";
