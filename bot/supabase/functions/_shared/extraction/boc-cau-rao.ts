@@ -44,8 +44,17 @@ export const TRUOC_LA_THUE = /(?:dang|hien|hien dang|hop dong)\s+(?:cho\s+)?thue
  * BÁN thì bỏ tiền thuê đang thu ("đang cho thuê 45 triệu"); còn lại ưu tiên số đứng sau
  * chữ "giá / tổng / chốt", không có thì số đầu tiên.
  */
-export function chonGiaRao(text: string, deal: "ban" | "cho_thue", duoi: string): string | null {
-  const re = new RegExp(`((?:[\\d][\\d.,]*\\s*(?:${TIEN_CD})|${TIEN_T_KEP})${duoi})`, "gi");
+/**
+ * Đuôi của cụm giá trong câu rao: giữ phần lẻ ("5 tỷ 8", "5 tỷ thương lượng") nhưng
+ * dừng TRƯỚC một cụm số+m2 và trước chữ của thứ KHÁC (pháp lý, hẻm, thanh khoản…).
+ * 15/09/2026 (bắn thật B1): "gia 6ty2 shr thanh khoan nhanh ko ban" → price_raw mang
+ * nguyên đuôi rác lên web. Một nguồn cho chat-reply và bài kiểm.
+ */
+export const DUOI_GIA =
+  "(?:(?!\\s*\\d+(?:[.,]\\d+)?\\s*m2)(?!\\s+(?:shr|shc|sổ|so\\b|thổ|tho\\b|hẻm|hem\\b|hxh|mặt tiền|mat tien|thanh khoản|thanh khoan|pháp lý|phap ly|dt\\b|diện tích|dien tich|ngang|dài|dai\\b|hướng|huong\\b|full|nội thất|noi that|\\d+\\s*x\\s*\\d+)(?![\\p{L}]))[^,.;\\n])*";
+
+export function chonGiaRao(text: string, deal: "ban" | "cho_thue", duoi: string = DUOI_GIA): string | null {
+  const re = new RegExp(`((?:[\\d][\\d.,]*\\s*(?:${TIEN_CD})|${TIEN_T_KEP})${duoi})`, "giu");
   const kd = boDau(text);
   const ung: Array<{ s: string; uuTien: boolean }> = [];
   for (const m of text.matchAll(re)) {
