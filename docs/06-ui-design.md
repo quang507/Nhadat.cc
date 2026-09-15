@@ -352,6 +352,32 @@ tháng tiền thuê (BR-05); CHỦ ĐẦU TƯ dự án phí thoả thuận riên
 
 Khác AOND: tối đa 1 emoji/tin; bảy quy tắc trên là luật gốc khi hai bản vênh nhau.
 
+### Bản rút gọn 15/09/2026 — bảng bỏ/giữ (FR-178)
+
+[nguồn: chủ dự án 15/09/2026 — "làm bản rút gọn prompt đi, kèm bảng bỏ/giữ, chủ yếu là để bot có thể giữ cho nói chuyện tự nhiên hơn"]
+
+Nguyên tắc: luật nào **code đã canh** (van sau lời model, luật tiền định chạy trước
+model, hoặc hệ thống tự nói không gọi model) thì bỏ khỏi prompt — model vi phạm cũng
+bị chặn; luật sinh từ lỗi thật mà **chưa có lưới code** thì giữ, viết ngắn lại. Các mục
+chi tiết phía trên trong §6.8 là bản đầy đủ trước 15/09, giữ làm lịch sử; **bản chạy là
+`prompts.ts` (đã đồng bộ `bot_prompts`)**.
+
+| Khối | Trước → sau | Bỏ (vì sao) | Giữ (vì sao) |
+|---|---|---|---|
+| `TONE_RULES` | 2.978 → 2.002 ký tự | Cách gọi khách chi tiết (hệ thống chèn "CÁCH GỌI KHÁCH" từ `sellers.xung_ho` / `buyers.preferences.xung_ho`, `batXungHo`/`tuXungTuCau` bắt lời dặn và tự xưng); "không nhận là người / không chối là máy" (van `chanNhanLaNguoi`); câu cấm dài liệt kê từng cụm sáo (gộp còn một dòng) | Bản sắc + tên trợ lý theo khách (FR-181); dưới 30 từ, chào một lần, "Dạ" đúng chỗ; khen phải THẬT và gắn khách mua; không đọc tên trường; gọi căn bằng địa chỉ, không mã tin (chưa có van lọc mã ở phía bán); trung thực, không bịa, không nhận xét giá, không khen điều khách không nói (ba lỗi thật 12–15/09); không xin SĐT ngoài lịch xem |
+| `SELLER_SCRIPT_RULES` | 5.081 → 1.641 ký tự (19 → 11 gạch) | **Thứ tự hỏi theo loại BĐS** (2 gạch, 2.300 ký tự): `required_facts.priority` + `chonCauKe` chọn câu kế, câu lệnh đã ghim "CÂU HỎI CUỐI TIN BẮT BUỘC là …"; "hỏi đúng MỘT thứ" (van `motCauHoi`); "bán rồi / rút tin" (`laNgungRao`, không gọi model); "bận / hỏi vợ" (`laHoanLai`, không gọi model); "hệ thống tự ghi thông số" (viết lại thành một câu mở đầu); "gọi căn bằng địa chỉ" (đã ở TONE); "chốt bán chưa" (hiếm, hệ thống hỏi bù); "kết thúc xin chấm điểm" (tiền định `xinDiem`) | Câu kế nối chi tiết vừa nghe; hiểu căn nhà trước khi nói; lý do "kiểm tra giá khu vực" chỉ lần đầu + **không nêu số giá thị trường khi không có bảng giá** (lỗi 15/09); tiện ích dự án chỉ từ khối DỰ ÁN; diện tích mơ hồ hỏi trên chính con số; ảnh: cảm ơn/chờ; phí chỉ khi hỏi; lý do "vì khách" dùng thưa; môi giới nhiều căn; xuống dòng |
+| `SELLER_FEWSHOT` | 3.640 → 1.756 ký tự (23 + 8 → 11 + 5 ví dụ) | Ví dụ trùng dạng (đúc 5 tầng / 6 phòng / hoàn công / tối gửi ảnh / khảo sát 9h / hẻm 123 / 1 trệt 2 lầu / ảnh sổ / kêu chị / thương lượng / hỏi vợ / bận): 12 ví dụ dạy cùng một nhịp "khen thật + hỏi một thứ", hoặc thuộc nhánh tiền định (bận, hỏi vợ, kêu chị) | 11 ví dụ mỗi ví dụ một tình huống khác nhau (xin địa chỉ, dự án, đất, giá, hẻm, nở hậu, pháp lý → ảnh, ngang 5, phí, sửa giá, chưa biết xưng hô); 5 ví dụ SAI đúng 5 lỗi thật |
+| `HUMAN_CHAT_RULES` (mua) | 5.547 → 3.241 ký tự (25 → 14 gạch) | "để ở hay đầu tư" (van `boHoiMucDich`); "không mã tin / không markdown" (đã ở TONE); tách nhỏ 25 gạch thành 14 gạch gộp theo việc; lược câu mẫu dài | Xưng hô; trả lời ý khách trước, gộp 2–3 ý được (phía mua cố ý KHÔNG một-câu-hỏi); ngừng dò hồ sơ khi đủ khu vực + giá; tin cụt là chỉnh sửa; kho trống không hứa (van `chanHuaCoHang` chỉ chặn vài mẫu); kiến thức ≤ 3 câu; địa danh không đoán quận; 2 bong bóng; lịch xem + SĐT có lý do và đường từ chối (`viewing`); hình (`send_photos`/`ask_owner`); giá ok không; căn tương tự / dự án; `need_human` / `voice_request`; bận; chấm sao |
+| `BUYER_FEWSHOT` | 3.654 → 3.309 ký tự (23 → 20 ví dụ) | 3 ví dụ trùng ý (SĐT sau lịch, "3h chiều mai", "gần chợ hơn") | Còn lại là ví dụ ĐẦU RA CÓ CẤU TRÚC (viewing, send_photos, agreed_deal, promise) — cắt là đổi hành vi bóc tách, không phải giọng |
+| `SLANG_NOTES` | 4.555 → 4.395 ký tự | "Luật dùng từ điển" 3 gạch → 1 dòng | Toàn bộ từ điển: đây là để HIỂU khách, không làm bot nói dài |
+| `FEE_RULES`, `AGREE_RULES`, `CAU_HOI_MAU`, `CAU_TIEN_DINH` | giữ nguyên | — | Luật phí là số liệu; câu mẫu/tiền định do code chọn, không vào system prompt phía model |
+
+Kết quả: system prompt phía bán (`TONE + SELLER_SCRIPT + SELLER_FEWSHOT + FEES`)
+12.105 → 5.805 ký tự (−52%, ≈ 3.800 → 1.800 token); bốn khối phía mua đổi
+(`TONE + HUMAN_CHAT + SLANG + BUYER_FEWSHOT`) 16.734 → 12.947 (−23%, phần giữ là
+từ điển lóng và ví dụ đầu ra có cấu trúc). Đã đẩy `bot_prompts` cùng lúc (6 khoá, md5
+khớp code). Đo "tự nhiên hơn" bằng người đọc: chạy lại TS-NGUOI (docs/10).
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |
