@@ -3786,6 +3786,43 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.listing_facts_sync_deal()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_deal public.listing_deal;
+  v_gia  text;
+  v_vnd  bigint;
+  v_raw  text;
+begin
+  if new.question <> 'loai_giao_dich' then return null; end if;
+  v_deal := case when public.bo_dau(coalesce(new.answer, '')) ~ 'thue' then 'cho_thue' else 'ban' end;
+  update public.listings set deal = v_deal
+   where id = new.listing_id and deal is distinct from v_deal;
+  -- Fact giá gần nhất của tin: áp lại theo sàn/trần của loại mới (cùng ngưỡng với
+  -- `listing_facts_sync_cols`). Không có fact giá thì thôi.
+  select answer into v_gia from public.listing_facts
+   where listing_id = new.listing_id and question = 'gia' and id <> new.id
+   order by created_at desc limit 1;
+  if v_gia is not null then
+    v_vnd := public.parse_vnd(v_gia);
+    if v_vnd is not null and (
+         (v_deal = 'cho_thue' and v_vnd between 1000000 and 10000000000)
+      or (v_deal = 'ban' and v_vnd between 100000000 and 1000000000000)
+    ) then
+      v_raw := public.chuan_hoa_gia_raw(v_gia);
+      update public.listings set price_raw = v_raw
+       where id = new.listing_id and price_raw is distinct from v_raw;
+    end if;
+  end if;
+  return null;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.listing_facts_sync_gap()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -6611,6 +6648,8 @@ CREATE TRIGGER trg_pe_interests AFTER INSERT ON public.interests FOR EACH ROW EX
 drop trigger if exists trg_listing_facts_sync_cols on public.listing_facts;
 CREATE TRIGGER trg_listing_facts_sync_cols AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_cols();
 drop trigger if exists trg_listing_facts_sync_gap on public.listing_facts;
+drop trigger if exists trg_listing_facts_sync_deal on public.listing_facts;
+CREATE TRIGGER trg_listing_facts_sync_deal AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_deal();
 CREATE TRIGGER trg_listing_facts_sync_gap AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_gap();
 drop trigger if exists trg_zz_fact_vao_boc_tach on public.listing_facts;
 CREATE TRIGGER trg_zz_fact_vao_boc_tach AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION trg_fact_vao_boc_tach();

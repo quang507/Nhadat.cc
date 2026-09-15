@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { docTien, giaTheoM2, vndThanhChu } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../supabase/functions/_shared/extraction/so-chu.ts";
 import {
-  bocViTriRao, catDapAn, cheoPhuDinh, laHoanLai, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tuXungTuCau, vungPhuDinh,
+  bocViTriRao, catDapAn, cheoPhuDinh, laHoanLai, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, laCauHoiTron, tuXungTuCau, vungPhuDinh,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { vungNgoai } from "../supabase/functions/_shared/dia_ban.ts";
 
@@ -213,6 +213,10 @@ for (const [vao, mong] of [
   ["bán nhà 4x15 hẻm 5m Lê Đức Thọ gò vấp giá 6 tỷ", "hẻm 5m Lê Đức Thọ"],
   ["bán đất hẻm 6m Lê Đức Thọ thổ cư 100%, 5x20, giá 5 tỷ", "hẻm 6m Lê Đức Thọ"],
   ["đường Nguyễn Văn Thọ thổ cư full, 100m2", "đường Nguyễn Văn Thọ"],
+  // 15/09/2026 (bắn thật C3): tên đường kết thúc bằng số sau chữ "tháng" — bản trước cắt mất số.
+  ["hẻm 5m Cách Mạng Tháng 8, 4x14 nở hậu 5m", "hẻm 5m Cách Mạng Tháng 8"],
+  ["nhà hẻm 12 đường 3 Tháng 2 quận 10, 4x14", "hẻm 12 đường 3 Tháng 2"],
+  ["đường Cách Mạng Tháng Tám quận 3, 5x20", "đường Cách Mạng Tháng Tám"],
 ]) ok("bocViTriRao " + JSON.stringify(vao.slice(0, 44)), bocViTriRao(vao) === mong, JSON.stringify(bocViTriRao(vao)));
 
 // ── 13/09/2026 — LƯỢT BẮN 20 TIN THỨ HAI: luật trả NGUYÊN câu làm đáp án ─────
@@ -245,6 +249,26 @@ for (const [vao, mong] of [
   const j = F("sổ hồng riêng");
   ok("câu một mảnh 'sổ hồng riêng' → pháp lý nguyên câu", j.phap_ly === "sổ hồng riêng", JSON.stringify(j));
 }
+
+// 15/09/2026 (bắn thật C4, A5): đổi loại giao dịch là fact `loai_giao_dich` (không phải
+// tiềm năng); cả tin là câu hỏi thì không phải dữ liệu.
+for (const [vao, mong] of [
+  ["à mà nhà này cho thuê chứ ko bán, 25 triệu", "cho_thue"],
+  ["cho thuê chứ không bán em ơi", "cho_thue"],
+  ["không bán nữa, chuyển sang cho thuê", "cho_thue"],
+  ["bán chứ không cho thuê nữa em", "ban"],
+  ["đổi qua bán luôn em", "ban"],
+]) ok("loai_giao_dich " + JSON.stringify(vao), nhanDienNhieuFact(vao).find((f) => f.question === "loai_giao_dich")?.answer === mong && !nhanDienNhieuFact(vao).some((f) => f.question === "tiem_nang"), JSON.stringify(nhanDienNhieuFact(vao)));
+for (const vao of ["đang cho thuê 20 triệu, bán 32 tỷ", "hợp để ở hoặc cho thuê", "cho thuê căn hộ Sunrise City quận 7"])
+  ok("KHÔNG đổi loại " + JSON.stringify(vao), !nhanDienNhieuFact(vao).some((f) => f.question === "loai_giao_dich"), JSON.stringify(nhanDienNhieuFact(vao)));
+for (const [vao, mong] of [
+  ["bên bạn có cần mình gửi hình không hay sao", true],
+  ["phí bên bạn tính sao?", true],
+  ["hẻm 5m xe hơi vô thoải mái", false],
+  ["có sổ hồng riêng, không nợ ngân hàng", false],
+  ["nhà không ngập", false],
+  ["4 tỷ 2", false],
+]) ok("laCauHoiTron " + JSON.stringify(vao), laCauHoiTron(vao) === mong, String(laCauHoiTron(vao)));
 
 console.log(hong ? `\nBÓC TÁCH 42 CA: ${hong}/${tong} CA HỎNG` : `\nBÓC TÁCH 42 CA: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

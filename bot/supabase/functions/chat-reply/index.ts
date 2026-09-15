@@ -56,7 +56,7 @@ import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
-  batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
+  batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laCauHoiTron, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
   nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // FR-185: ảnh chủ nhà gửi → phân loại (model) + cất vào kho (Storage + listing_media).
@@ -1214,8 +1214,15 @@ Deno.serve(async (req) => {
   const coChuGia = /\bgia\s*:?\s*\d/.test(tKD);
   const raoKhongChuBan = coLoaiBDS && coGiaRo && !coDauHieuMua &&
     (soChiTietCan >= 3 || (coChuGia && soChiTietCan >= 2));
+  // 15/09/2026 (bắn thật D1): "chào BẠN mình tìm nhà cho ba mẹ… tầm 5 tỷ" — bỏ dấu
+  // thành "chao ban" và \bban\b khớp → người MUA bị mở hồ sơ bán + tạo tin rao.
+  // Chữ CÓ DẤU mà không phải "bán"/"rao" (bạn, bàn, bản, bận, rào…) thì che trước
+  // khi bỏ dấu; câu gõ không dấu thì "ban" vẫn mập mờ như cũ, không siết thêm.
+  const tKDBan = boDau(text.replace(/\b(bạn|bàn|bản|bận|bẩn|bắn|rào|rảo|rão)\b/gi, "_"));
+  const coChuBan = /\b(bán|rao)\b|cho thu[êe]|sang nhượng|nhượng lại|sang lại/i.test(text) ||
+    /\b(ban|rao)\b|cho thue|sang nhuong|nhuong lai|sang lai/.test(tKDBan);
   const wantsSellLuat =
-    (khop(/\b(bán|rao)\b|cho thu[êe]|sang nhượng|nhượng lại|sang lại/i, /\b(ban|rao)\b|cho thue|sang nhuong|nhuong lai|sang lai/) && coLoaiBDS &&
+    (coChuBan && coLoaiBDS &&
       (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang))) ||
     (moiGioiCoHang && coChiTiet && !khop(/\b(tìm|cần mua|muốn mua|thuê)\b/i, /\b(tim|can mua|muon mua)\b/)) ||
     coHangCoGia || raoKhongChuBan;
@@ -2641,6 +2648,17 @@ ${kem}` : tomTat, cheDo };
               p_listing_id: pendingReq.listing_id, p_question: "vi_tri", p_answer: viTri, p_source: "seller_chat",
             });
             if (vtErr) await ghiLoi(client, "chat-reply ghi_fact_listing(vi_tri thay phuong)", vtErr.message);
+            // 15/09/2026 (bắn thật C3): "hẻm 5m Cách Mạng Tháng 8, 4x14 nở hậu 5m" trả lời
+            // câu phường → chỉ vi_tri được ghi, "4x14" và "nở hậu 5m" rơi mất. Fact khác
+            // đi kèm ghi luôn như nhánh khớp ở dưới; vi_tri/phường đã có đường riêng.
+            for (const f of nhanDienNhieuFact(dapAn)) {
+              if (f.question === "vi_tri" || f.question === "phuong" || f.question === "bo_sung") continue;
+              const { error: kErr } = await client.rpc("ghi_fact_listing", {
+                p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat",
+              });
+              if (kErr) await ghiLoi(client, "chat-reply ghi_fact_listing(kem vi_tri)", kErr.message);
+              else await chepSangDuAn(f.question, f.answer);
+            }
             const cauGoiY = await cauHoiPhuongGoiY(pendingReq.listing_id, tenDuong(viTri), cachGoi);
             const quanMacDinh = (btRow?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
             const cauPhuong = cauGoiY ?? cauHoiMau(quanMacDinh ? "phuong@chua_quan" : "phuong", cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district);
@@ -2655,10 +2673,12 @@ ${kem}` : tomTat, cheDo };
         : kqDuyet ?? phanLoaiCauTraLoi(pendingReq.question, dapAn);
       // 15/09/2026 (Zalo thật): vừa trả lời vừa HỎI NGƯỢC → ghi PHẦN trả lời, câu hỏi
       // của chủ nhà được trả lời TRƯỚC câu kế (không nuốt, không ghi cả câu vào ô).
-      const hoiNguoc = kq.hoiNguoc ?? null;
+      // 15/09/2026 (bắn thật A5): cả tin là MỘT câu hỏi ("bên bạn có cần mình gửi hình
+      // không hay sao") → là hỏi ngược, KHÔNG phải "thông tin bổ sung" để ghi vào tin.
+      const hoiNguoc = kq.hoiNguoc ?? (kq.loai === "lech" && !kq.chuyenSang && laCauHoiTron(dapAn) ? dapAn : null);
       if (kq.dapAn) dapAn = kq.dapAn;
       const hoiNguocPrompt = hoiNguoc
-        ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}". TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá. Rồi mới hỏi tiếp. `
+        ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}". TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; hỏi về cách làm việc (gửi ảnh, phí, đăng tin) thì trả lời theo hướng dẫn hệ thống; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá. Rồi mới hỏi tiếp. `
         : "";
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
       // ơn ngắn, KHÔNG hỏi lại điểm, không gọi model. Câu hỏi ngược/ừ thì đường
@@ -2769,10 +2789,11 @@ ${kem}` : tomTat, cheDo };
             // nhưng hàng chờ duyệt trống vì chỗ này chưa nối dây.
             else await chepSangDuAn(f.question, f.answer);
           }
-        } else if (kq.loai === "lech" && pendingReq.question !== "duyet_tin") {
+        } else if (kq.loai === "lech" && pendingReq.question !== "duyet_tin" && hoiNguoc !== dapAn) {
           // FR-177 e: không nhận ra fact nào thì VẪN ghi nguyên văn (`bo_sung`)
           // — chủ dự án 07/09: "hỏi một đường trả lời một nẻo thì vẫn phải ghi
-          // nhận câu trả lời của khách". Câu hỏi gốc vẫn treo.
+          // nhận câu trả lời của khách". Câu hỏi gốc vẫn treo. Cả tin là câu hỏi
+          // (`hoiNguoc === dapAn`) thì không ghi — đó là câu để TRẢ LỜI.
           const { error: bsErr } = await client.rpc("ghi_fact_listing", {
             p_listing_id: pendingReq.listing_id, p_question: "bo_sung",
             p_answer: dapAn, p_source: "seller_chat",
