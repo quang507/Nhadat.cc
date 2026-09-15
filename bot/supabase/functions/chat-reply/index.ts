@@ -65,7 +65,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
-import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -2677,8 +2677,13 @@ ${kem}` : tomTat, cheDo };
       // không hay sao") → là hỏi ngược, KHÔNG phải "thông tin bổ sung" để ghi vào tin.
       const hoiNguoc = kq.hoiNguoc ?? ((kq.loai === "hoi" || (kq.loai === "lech" && !kq.chuyenSang && laCauHoiTron(dapAn))) ? dapAn : null);
       if (kq.dapAn) dapAn = kq.dapAn;
+      // 15/09/2026 (bắn thật F2): câu hỏi về ẢNH có đáp án của hệ thống → bong bóng tiền
+      // định đứng trước, model chỉ hỏi tiếp (model từng bỏ qua lời dặn trả lời trước).
+      const hoiNguocDap = hoiNguoc ? dapHoiNguocTienDinh(hoiNguoc, cachGoi) : null;
       const hoiNguocPrompt = hoiNguoc
-        ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}". TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; hỏi về cách làm việc (gửi ảnh, phí, đăng tin) thì trả lời theo hướng dẫn hệ thống; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá. Rồi mới hỏi tiếp. `
+        ? hoiNguocDap
+          ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}" — hệ thống ĐÃ trả lời câu đó ở bong bóng trước ("${hoiNguocDap}"); em KHÔNG trả lời lại, không nhắc lại chuyện ảnh, chỉ ghi nhận rồi hỏi tiếp. `
+          : `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}". TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; hỏi về cách làm việc (gửi ảnh, phí, đăng tin) thì trả lời theo hướng dẫn hệ thống; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá. Rồi mới hỏi tiếp. `
         : "";
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
       // ơn ngắn, KHÔNG hỏi lại điểm, không gọi model. Câu hỏi ngược/ừ thì đường
@@ -2841,13 +2846,13 @@ ${kem}` : tomTat, cheDo };
           }
         }
         if (!hoiLai) {
-          hoiLai = (hoiNguoc ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (kq.loai === "xung_ho"
+          hoiLai = (hoiNguoc && !hoiNguocDap ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (kq.loai === "xung_ho"
             ? `Dạ em nhớ rồi, em gọi ${kq.xungHo} nha. `
             : kq.chuyenSang
             ? `Em ghi "${kq.chuyenSang.answer}" rồi ạ. `
             : "") + `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`;
         }
-        return await traLoiSeller([hoiLai], { reask: pendingReq.question, loai_cau: kq.loai, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) });
+        return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), hoiLai], { reask: pendingReq.question, loai_cau: kq.loai, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) });
       }
 
       // Câu hỏi treo bị bỏ qua (né 2 lần / chủ gật): KHÔNG ghi câu này vào ô đang
@@ -3072,7 +3077,7 @@ ${kem}` : tomTat, cheDo };
         // 10/09 lần 7: bong bóng trước đã nói "Dạ em ghi rồi ạ: …" mà bong bóng
         // này mở đầu y hệt — hai câu ghi nhận liền nhau đọc như máy. Đã có bong
         // bóng ghi nhận thì vào thẳng câu hỏi.
-        const moDau = (hoiNguoc ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (ackSua ? "" : "Dạ em ghi rồi ạ. ");
+        const moDau = (hoiNguoc && !hoiNguocDap ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (ackSua ? "" : "Dạ em ghi rồi ạ. ");
         sellerReply = nextKey
           ? `${moDau}${neo ? `Căn ${neo} nha. ` : ""}${cauKe}`
           : thieuDiem.length
@@ -3096,7 +3101,7 @@ ${kem}` : tomTat, cheDo };
           await ghiLoi(client, "chat-reply mo cau hoi tiep", irErr.message);
         }
       }
-      return await traLoiSeller(xinDiemCuoi ? [sellerReply, xinDiemCuoi] : [sellerReply], {
+      return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), sellerReply, ...(xinDiemCuoi ? [xinDiemCuoi] : [])], {
         saved_fact: boQuaCauTreo ? null : pendingReq.question, ...(xinDiemCuoi ? { xin_danh_gia: true } : {}), ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}),
       });
     }
