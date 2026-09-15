@@ -318,5 +318,10 @@ for (const vao of ["à quên, nhà đang cho thuê 25 triệu/tháng, khách thu
 ok("giá thuê của tin THUÊ vẫn là giá", nhanDienNhieuFact("cho thuê 18 triệu/tháng cọc 2 tháng").some((f) => f.question === "gia"), JSON.stringify(nhanDienNhieuFact("cho thuê 18 triệu/tháng cọc 2 tháng")));
 ok("tachCauHoiNguoc tách sau dấu chấm", tachCauHoiNguoc("nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm. mà giá khu này giờ bao nhiêu 1m2 em?").hoi === "mà giá khu này giờ bao nhiêu 1m2 em?", JSON.stringify(tachCauHoiNguoc("nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm. mà giá khu này giờ bao nhiêu 1m2 em?")));
 
+// 15/09/2026 (bắn thật A3): câu nhiều ý có ý đang hỏi + tiền của ý khác → KHỚP, không "bổ sung".
+ok("phanLoai(so_phong_ngu) '3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng' → khop", phanLoaiCauTraLoi("so_phong_ngu", "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng tới cuối năm nha").loai === "khop", JSON.stringify(phanLoaiCauTraLoi("so_phong_ngu", "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng tới cuối năm nha")));
+ok("catDapAn(so_phong_ngu) lấy đúng số phòng, không dính tiền thuê", catDapAn("so_phong_ngu", "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng tới cuối năm nha") === "3", catDapAn("so_phong_ngu", "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng tới cuối năm nha"));
+ok("phanLoai(dien_tich) '5 tỷ' vẫn lệch", phanLoaiCauTraLoi("dien_tich", "5 tỷ").loai !== "khop", JSON.stringify(phanLoaiCauTraLoi("dien_tich", "5 tỷ")));
+
 console.log(hong ? `\nBÓC TÁCH 42 CA: ${hong}/${tong} CA HỎNG` : `\nBÓC TÁCH 42 CA: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

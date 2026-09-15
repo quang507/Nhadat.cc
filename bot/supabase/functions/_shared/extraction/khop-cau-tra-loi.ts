@@ -288,7 +288,7 @@ export function catDapAn(question: string, dapAn: string): string {
     const m = /\b(?:(?:khong|ko|k|chua)\s+(?:can\s+)?(?:gap|voi)|can\s+(?:ban\s+)?gap|ban\s+gap|(?:duoc|dc)\s+gia(?:\s+thi\s+thoi)?|tu tu|thong tha|can tien|ban nhanh|ban som|gap|khong voi|ko voi)\b/.exec(kdD);
     if (m) return goc.slice(m.index, m.index + m[0].length).trim();
   }
-  const manh = goc.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
+  const manh = goc.split(/[,;\n]|\.\s+(?=\S)/).map((x) => x.trim()).filter(Boolean);
   if (manh.length > 1 && question !== "vi_tri" && question !== "bo_sung") {
     const nd = nhanDienNhieuFact(goc).find((f) => cungHo(f.question, question));
     const khop = (nd?.answer && nd.answer.length < goc.length ? nd.answer : null) ??
@@ -451,11 +451,20 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
       const nd = nhanDienFact(text);
       // Câu có NHIỀU ý mà một ý chính là câu đang hỏi ("hẻm 4m, mà thôi anh cần bán
       // gấp" khi đang hỏi hẻm) → là câu trả lời KHỚP, các ý còn lại ghi kèm ở tầng trên.
-      const coCauDangHoi = nd && nd.question !== question && nhanDienNhieuFact(text).some((f) => cungHo(f.question, question));
+      const nhieuY = nhanDienNhieuFact(text);
+      const coCauDangHoi = nd && nd.question !== question && nhieuY.some((f) => cungHo(f.question, question));
       if (nd && !coCauDangHoi && nd.question !== "bo_sung" && !cungHo(nd.question, question) &&
           !(HOI_CO_KHONG.has(question) && /^\s*(co|khong|ko|k|chua|roi|da)\b/.test(kd0))) {
         const xh = batXungHo(text);
         return { loai: "lech", chuyenSang: nd, ...(xh ? { xungHo: xh } : {}) };
+      }
+      // 15/09/2026 (bắn thật A3): "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng" khi đang
+      // hỏi số phòng ngủ — có TIỀN trong câu nên luật "tiền ở câu không phải tiền" bên dưới
+      // xếp LỆCH, cả câu vào "bổ sung" rồi hỏi lại phòng ngủ dù cột đã có 3. Câu nhiều ý mà
+      // một ý là câu đang hỏi thì KHỚP; `catDapAn` lấy mảnh đó, ý còn lại ghi kèm ở tầng trên.
+      if (question !== "phuong" && question !== "vi_tri" && nhieuY.length >= 2 && nhieuY.some((f) => cungHo(f.question, question))) {
+        const xh = batXungHo(text);
+        return { loai: "khop", ...(xh ? { xungHo: xh } : {}) };
       }
     }
   }
@@ -734,7 +743,8 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
   // 11/09/2026 (42 ca): xét từng MẢNH trước cả câu. Bản trước lấy nhanDienFact(cả
   // câu) trước, nên câu rao "bán nhà …, 4x16, 1 trệt 2 lầu, shr, 9t5" ghi fact pháp
   // lý là NGUYÊN câu rao (5/42 tin). Mảnh "shr" mới là câu trả lời pháp lý.
-  const manh = text.split(/[,;\n]|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter((s) => s.length >= 2);
+  // 15/09/2026 (bắn thật A3): "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng" — dấu chấm + khoảng trắng cũng là ranh mảnh.
+  const manh = text.split(/[,;\n]|\.\s+(?=\S)|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter((s) => s.length >= 2);
   if (manh.length > 1) for (const s of manh) them(nhanDienFact(s));
   // 13/09/2026 (lượt bắn thật): câu nhiều mảnh mà lượt CẢ CÂU trả về nguyên câu
   // làm đáp án thì đó là rác — "anh cần bán căn nhà hẻm xe hơi 5m Nguyễn Trãi…"
@@ -773,7 +783,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   // mang rác vào ô — "ngang 5 dài 20, đường nhựa 7m, sổ riêng" thành pháp lý. Chỉ
   // lấy MẢNH (giữa hai dấu phẩy) có chứa từ khoá; câu một mảnh thì như cũ.
   const manhKhop = (re: RegExp): string => {
-    const ps = goc.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
+    const ps = goc.split(/[,;\n]|\.\s+(?=\S)/).map((x) => x.trim()).filter(Boolean);
     if (ps.length < 2) return goc;
     return ps.find((x) => re.test(boDau(x))) ?? goc;
   };
