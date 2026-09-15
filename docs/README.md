@@ -54,7 +54,7 @@ flowchart LR
 
 | Tầng | Độ đầy đủ | Chặn bởi |
 |---|---|---|
-| 00 Định hướng | 95% — tên đã chốt (Aioinhadat; trợ lý mỗi khách một tên •ai từ 09/09), địa bàn đã chốt nửa đầu (Sài Gòn phường mới + Long An); chờ phạm vi loại BĐS, nhà cung cấp model, ngưỡng CTV, địa bàn nửa sau (tên hiển thị, bảng `wards`); 07/09 thêm: bớt kế thừa nhadat.cc (OPEN-48); hỏi người bán đã chốt theo kịch bản Gemini → FR-177 | OPEN-40, OPEN-41, OPEN-42, OPEN-27, OPEN-48 |
+| 00 Định hướng | 95% — tên đã chốt (Aioinhadat; trợ lý mỗi khách một tên •ai từ 09/09), địa bàn đã chốt nửa đầu (Sài Gòn phường mới + Long An); chờ phạm vi loại BĐS, nhà cung cấp model, ngưỡng CTV; địa bàn nửa sau chốt 15/09 (lưu tên phường mới, bảng `wards`, FR-209); 07/09 thêm: bớt kế thừa nhadat.cc (OPEN-48); hỏi người bán đã chốt theo kịch bản Gemini → FR-177 | OPEN-40, OPEN-41, OPEN-42, OPEN-27, OPEN-48 |
 | 01 Research | 85% — thiếu số liệu thị trường sơ cấp | OPEN-01 |
 | 02 Requirements | 90% | OPEN-02, OPEN-05 |
 | 03 User Flow | 90% | OPEN-04 |

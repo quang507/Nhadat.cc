@@ -306,6 +306,8 @@ export const CAU_HOI_MAU: Record<string, string> = {
   "vi_tri@chua_quan": "{Ac} cho em xin địa chỉ nhà (đường, phường, quận) để em kiểm tra giá khu vực nha?",
   // Đã có đường/hẻm nhưng chưa có phường lẫn quận: hỏi đúng hai thứ đó, không bắt đọc lại địa chỉ.
   "phuong@chua_quan": "Nhà mình thuộc phường mấy, quận nào {ac}?",
+  // FR-209 (15/09): tra được phường mới từ tên đường → HỎI XÁC NHẬN, chưa ghi.
+  "phuong@goi_y": "Em tra thấy đường {duong} thuộc {phuong} ({quan} cũ), đúng không {ac}?",
   // 12/09/2026 (bắn 20 tin): đất ở Huyện Củ Chi mà bot hỏi "thuộc phường mấy" —
   // huyện thì đơn vị dưới là XÃ, hỏi phường là lộ ngay ra máy đọc mẫu câu.
   "phuong@huyen": "Chỗ mình thuộc xã nào vậy {ac}?",

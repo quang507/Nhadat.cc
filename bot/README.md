@@ -167,6 +167,9 @@ thật (chưa có project thứ hai để thử).
    quyền, bucket, cron). Thứ tự trong file là bảng → hàm → view → trigger; view
    chồng view có thể phải chạy lại lượt hai — file dùng `create or replace` và
    `if not exists` nên chạy lại được, không cần dọn.
+   *`xuat_schema()` KHÔNG xuất DỮ LIỆU: bảng `wards` (168 phường mới ↔ quận cũ,
+   FR-209) dựng xong phải chạy thêm `migrations/20260915a_wards_phuong_moi.sql`
+   (có `on conflict` nên chạy lại được).*
    *Không dùng thư mục `migrations/` để dựng lại: 44 migration đầu không còn
    file (OPEN-46), và soát 13/09/2026 thấy 34 hàm trên DB có thân khác file
    migration cuối cùng của chúng. Migration là để ghi THAY ĐỔI, `schema.sql` mới

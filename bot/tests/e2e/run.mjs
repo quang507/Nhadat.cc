@@ -13,6 +13,13 @@ seedBotPrompts(globalThis.__db);
 globalThis.__anhTaiDuoc = true;
 globalThis.fetch = async (url) => {
   globalThis.__fetches = [...(globalThis.__fetches ?? []), String(url)];
+  // FR-209: Nominatim giả — đặt `globalThis.__nominatim` = JSON là "tra được"; mặc định 404
+  // (chat-reply phải coi đó là đường đi bình thường: hỏi như cũ, không vào sổ lỗi).
+  if (/nominatim\.openstreetmap\.org/.test(String(url))) {
+    return globalThis.__nominatim
+      ? new Response(JSON.stringify(globalThis.__nominatim), { status: 200, headers: { "content-type": "application/json" } })
+      : new Response("", { status: 404 });
+  }
   if (!globalThis.__anhTaiDuoc || !/zdn\.vn|zadn\.vn/.test(String(url))) return new Response("", { status: 404 });
   return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
 };
@@ -56,7 +63,7 @@ async function send(body, hdr = {}) {
 const db = () => globalThis.__db;
 // `__treTruyVan` phải được xoá ở đây: quên là độ trễ của ca "đua" rỉ sang mọi
 // ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
-function fresh(seed) { globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; globalThis.__anh = undefined; globalThis.__anhTaiDuoc = true; globalThis.__storageHong = false; seed?.(globalThis.__db); }
+function fresh(seed) { globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__nominatim = undefined; globalThis.__fetches = []; globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; globalThis.__anh = undefined; globalThis.__anhTaiDuoc = true; globalThis.__storageHong = false; seed?.(globalThis.__db); }
 // Lượt gọi model chỉ tính NHÁNH MUA (parse hồ sơ), không tính lượt phân loại ảnh (FR-185).
 const parseMua = () => globalThis.__calls.filter((c) => c.kind === "parse" && !laLuotAnh(c.params) && !laLuotGan(c.params) && !laLuotVai(c.params));
 function seedKho(d) {
@@ -1901,6 +1908,89 @@ fresh(seedKho);
 
   globalThis.__cauHinh = undefined;
   if (macDinh) globalThis.__model.parse = macDinh;
+}
+
+// ── FR-209 (15/09/2026): tra PHƯỜNG MỚI từ tên đường — Nominatim → bảng `wards`, HỎI XÁC NHẬN, gật mới ghi ──
+{
+  // JSON rút gọn từ câu trả lời THẬT của Nominatim cho "Lê Văn Việt, Thành phố Hồ Chí Minh" (15/09/2026).
+  const LVV = [{ addresstype: "road", name: "Lê Văn Việt", address: { road: "Lê Văn Việt", suburb: "Phường Tăng Nhơn Phú", city: "Thành phố Hồ Chí Minh" } }];
+  const seedWards = (d) => {
+    d.insert("wards", { ten: "Tăng Nhơn Phú", ten_day_du: "Phường Tăng Nhơn Phú", quan_cu: "Quận 9", loai: "phuong" });
+    d.insert("wards", { ten: "Long Trường", ten_day_du: "Phường Long Trường", quan_cu: "Quận 9", loai: "phuong" });
+  };
+  const pendPh = () => db().t.info_requests.some((x) => x.question === "phuong" && x.status === "pending");
+  const tin = () => db().t.listings.at(-1);
+  const nomi = () => (globalThis.__fetches ?? []).filter((u) => /nominatim/.test(u));
+  const modelThay = (chu) => globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes(chu));
+
+  fresh(seedWards); globalThis.__nominatim = LVV;
+  let rp = await send({ external_user_id: "ph-1", text: "bán căn hộ 5 tầng sổ hồng riêng, đường Lê Văn Việt, 60m2, 5 tỷ" });
+  check("PH-01 rao có đường, không quận → câu hỏi đầu là XÁC NHẬN 'Phường Tăng Nhơn Phú (Quận 9 cũ)'; chưa ghi ward/quận; gợi ý ở boc_tach; câu phường treo",
+    rp.body.role === "seller" && modelThay("Phường Tăng Nhơn Phú (Quận 9 cũ), đúng không") && !tin().ward && tin().district === "Quận 5" &&
+      tin().boc_tach?.phuong_goi_y?.phuong === "Phường Tăng Nhơn Phú" && tin().boc_tach?.phuong_goi_y?.quan === "Quận 9" && pendPh(),
+    JSON.stringify({ rep: rp.body.replies, l: tin(), ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  check("PH-01b gọi Nominatim đúng MỘT lần, bằng TÊN ĐƯỜNG (không số nhà), ghim countrycodes=vn",
+    nomi().length === 1 && /countrycodes=vn/.test(nomi()[0]) && /q=L%C3%AA%20V%C4%83n%20Vi%E1%BB%87t%2C/.test(nomi()[0]), JSON.stringify(nomi()));
+  rp = await send({ external_user_id: "ph-1", text: "đúng rồi em" });
+  check("PH-02 chủ GẬT → ward = Phường Tăng Nhơn Phú, district = Quận 9, quan_mac_dinh=false, gợi ý xoá, câu phường answered, bot hỏi câu kế",
+    tin().ward === "Phường Tăng Nhơn Phú" && tin().district === "Quận 9" && tin().boc_tach?.quan_mac_dinh === false && tin().boc_tach?.phuong_goi_y === false &&
+      !pendPh() && db().t.info_requests.some((x) => x.question === "phuong" && x.status === "answered") && rp.body.replies.length > 0,
+    JSON.stringify({ l: tin(), ir: db().t.info_requests.map((q) => [q.question, q.status]), rep: rp.body.replies }));
+
+  // Không gật, tự nói phường số + quận → đường cũ (capNhatQuan), gợi ý bỏ.
+  fresh(seedWards); globalThis.__nominatim = LVV;
+  await send({ external_user_id: "ph-2", text: "bán nhà đường Lê Văn Việt 50m2 4 tỷ" });
+  rp = await send({ external_user_id: "ph-2", text: "phường 8 quận 5 em" });
+  check("PH-03 không gật, nói 'phường 8 quận 5' → ward Phường 8, district Quận 5 hết mặc định, gợi ý xoá",
+    tin().ward === "Phường 8" && tin().district === "Quận 5" && tin().boc_tach?.quan_mac_dinh === false && tin().boc_tach?.phuong_goi_y === false,
+    JSON.stringify({ l: tin(), rep: rp.body.replies }));
+
+  // Tự nói TÊN phường mới KHÁC gợi ý → tra `wards` lấy quận, ghi tên chuẩn.
+  fresh(seedWards); globalThis.__nominatim = LVV;
+  await send({ external_user_id: "ph-3", text: "bán nhà đường Lê Văn Việt 50m2 4 tỷ" });
+  rp = await send({ external_user_id: "ph-3", text: "không, phường long trường" });
+  check("PH-04 chủ nói tên phường MỚI khác ('phường long trường') → ward 'Phường Long Trường' (chữ chuẩn từ wards), district Quận 9",
+    tin().ward === "Phường Long Trường" && tin().district === "Quận 9" && tin().boc_tach?.phuong_goi_y === false,
+    JSON.stringify({ l: tin(), rep: rp.body.replies }));
+
+  // Nominatim hỏng → hỏi như cũ, không gợi ý, KHÔNG vào sổ lỗi (đường đi bình thường).
+  fresh(seedWards); globalThis.__nominatim = undefined;
+  rp = await send({ external_user_id: "ph-4", text: "bán nhà đường Lê Văn Việt 50m2 4 tỷ" });
+  check("PH-05 Nominatim 404 → hỏi 'phường mấy, quận nào' như cũ, không gợi ý, không bot_errors",
+    modelThay("phường mấy, quận nào") && !tin().boc_tach?.phuong_goi_y && pendPh() && db().t.bot_errors.length === 0,
+    JSON.stringify({ l: tin(), loi: db().t.bot_errors, rep: rp.body.replies }));
+
+  // Tra được phường nhưng bảng `wards` KHÔNG có (phường mới chưa nạp) → hỏi như cũ.
+  fresh(); globalThis.__nominatim = LVV;
+  rp = await send({ external_user_id: "ph-5", text: "bán nhà đường Lê Văn Việt 50m2 4 tỷ" });
+  check("PH-06 wards trống → không gợi ý, hỏi như cũ", !tin().boc_tach?.phuong_goi_y && pendPh() && modelThay("phường mấy, quận nào"), JSON.stringify({ l: tin(), rep: rp.body.replies }));
+
+  // Câu rao đã NÓI quận → không tra (không tốn lượt Nominatim), hỏi phường như cũ.
+  fresh(seedWards); globalThis.__nominatim = LVV;
+  rp = await send({ external_user_id: "ph-6", text: "bán nhà đường Lê Văn Việt quận 9, 50m2 4 tỷ" });
+  check("PH-07 câu rao có quận → KHÔNG gọi Nominatim, không gợi ý", nomi().length === 0 && !tin().boc_tach?.phuong_goi_y && tin().district === "Quận 9", JSON.stringify({ l: tin(), f: nomi() }));
+
+  // Địa chỉ nói ở LƯỢT SAU (câu đầu hỏi địa chỉ) → câu kế là phường có gợi ý.
+  fresh(seedWards); globalThis.__nominatim = LVV;
+  rp = await send({ external_user_id: "ph-7", text: "bán nhà 50m2 4 tỷ" });
+  const irDau = db().t.info_requests.map((q) => [q.question, q.status]);
+  rp = await send({ external_user_id: "ph-7", text: "hẻm 12 Lê Văn Việt" });
+  check("PH-08 bot hỏi phường, chủ trả lời bằng ĐỊA CHỈ → ghi vi_tri (không ghi vào phường), tra đường rồi hỏi xác nhận, câu phường vẫn treo",
+    irDau.some(([q]) => q === "phuong") && /Phường Tăng Nhơn Phú \(Quận 9 cũ\), đúng không/.test(rp.body.replies.join(" ")) &&
+      db().t.listing_facts.some((f) => f.question === "vi_tri" && f.answer === "hẻm 12 Lê Văn Việt") && !tin().ward &&
+      tin().boc_tach?.phuong_goi_y?.duong === "Lê Văn Việt" && pendPh() && nomi().length === 1,
+    JSON.stringify({ irDau, ir: db().t.info_requests.map((q) => [q.question, q.status]), bt: tin().boc_tach, ward: tin().ward, f: nomi(), rep: rp.body.replies }));
+  rp = await send({ external_user_id: "ph-7", text: "ừ" });
+  check("PH-08b 'ừ' → ward Phường Tăng Nhơn Phú, district Quận 9, câu phường answered",
+    tin().ward === "Phường Tăng Nhơn Phú" && tin().district === "Quận 9" && !pendPh() && db().t.info_requests.some((x) => x.question === "phuong" && x.status === "answered"),
+    JSON.stringify({ l: tin(), ir: db().t.info_requests.map((q) => [q.question, q.status]), rep: rp.body.replies }));
+  // Trả lời địa chỉ mà Nominatim hỏng → vẫn ghi vi_tri, hỏi lại phường (không nuốt địa chỉ vào cột phường).
+  fresh(seedWards); globalThis.__nominatim = undefined;
+  await send({ external_user_id: "ph-8", text: "bán nhà 50m2 4 tỷ" });
+  rp = await send({ external_user_id: "ph-8", text: "hẻm 12 Lê Văn Việt" });
+  check("PH-09 trả lời địa chỉ, Nominatim hỏng → vi_tri ghi, ward vẫn trống, hỏi lại 'phường mấy, quận nào'",
+    db().t.listing_facts.some((f) => f.question === "vi_tri") && !tin().ward && pendPh() && /phường mấy, quận nào/.test(rp.body.replies.join(" ")),
+    JSON.stringify({ ward: tin().ward, ir: db().t.info_requests.map((q) => [q.question, q.status]), rep: rp.body.replies }));
 }
 
 // ── kết ──
