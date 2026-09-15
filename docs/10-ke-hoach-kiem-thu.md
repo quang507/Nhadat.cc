@@ -118,6 +118,7 @@ khi hàm đã đổi.
 |---|---|---|---|---|
 | `bot/tests/ts-sec-anon.mjs` | TS-SEC-AUTO | **Internet tới `*.supabase.co`** + DB production đang chạy. KHÔNG cần secret: bắn bằng khoá publishable công khai | `bun run test:sec` — có trong CI (job `baomat`), **cố ý không nằm trong `kiem`** | Thoát 0 = đạt · 1 = có cửa mở · **2 = CHƯA KIỂM ĐƯỢC** (proxy chặn, DB ngủ). Thoát 2 KHÔNG phải "đạt" |
 | `bot/tests/vai-tro.sql` | **TS-SEC3** | **Quyền SQL trên DB thật.** CI không chạy được vì CI chỉ có khoá công khai | Dashboard → SQL Editor → dán cả file → Run; hoặc MCP `execute_sql` | Kết bằng `raise exception 'KQ: …'` nên mọi dòng chèn TỰ CUỘN LẠI, không để rác trên production. Mọi mục phải `OK`; một chữ `HONG` là một cửa mở. **Chạy 06/09/2026 qua MCP `execute_sql`: 41/41 OK**, xác minh rollback bằng đếm dòng `VAITRO*` = 0 |
+| người thật, ba điện thoại | **TS-NGUOI** | Bridge `bridge-zca` sống, 8h–20h VN, `test_reset_hello='1'` trong buổi, ba Zalo (A chủ nhà, B khách, C admin/CTV) | Theo bảng TS-NGUOI-01…20 ở dưới; ghi lỗi 5 dòng vào nhóm | Cột "Kết quả" của TS-NGUOI; DB do BA đối chiếu theo giờ |
 
 ### TS-SEC3 — ma trận quyền theo VAI DB (5 vai × 41 khẳng định)
 `ts-sec-anon.mjs` chỉ bắn được vai `anon` vì nó đi qua PostgREST bằng khoá công
@@ -232,6 +233,73 @@ Tập không phá huỷ của TS-SEC, bắn khoá **công khai** `sb_publishable
 | TS-LIVE-08 | trả lời câu diện tích | fact lưu; đủ giá + DT + phường → tin nhảy `dang_ban`, bot báo "đã lên web" | ⏭ |
 | TS-LIVE-09 | tin không đoán được loại, trả `hông biết nữa` | hỏi lại kèm lựa chọn, không ghi fact `loai_bds` | ⏭ |
 | TS-LIVE-10 | người thật gõ tay từ acc clone | bot im 30 phút (FR-141), hạ `needs_human`, huỷ escalation chờ | ⏭ |
+
+### TS-NGUOI — kịch bản NGƯỜI THẬT test qua Zalo (15/09/2026)
+
+Viết sau đợt máy bắn 36 tin ngày 15/09 (TS-VAN-05, TS-GROQ-04…06, TS-NHUNG-01/02). Máy
+đã kiểm được bóc tách, trạng thái DB, thứ tự model. Người thật kiểm **đúng những
+thứ máy không với tới**: giọng có giống người trong nghề không, ảnh và sổ đi có
+đúng đường không, Zalo thật có nhận có gửi không, người thật chen vào bot có
+nhường không, và cái gì xảy ra SAU vài giờ (hỏi bù, nhắc lịch). Kiểm theo **cảm
+nhận và hậu quả**, không cần đọc DB — DB có người khác soi theo giờ ghi trong
+báo lỗi. [nguồn: chủ dự án 15/09/2026 — "kịch bản cho người thật test nên là ntn"]
+
+**Ba vai, ba điện thoại, ~45 phút cho phần trong ngày + 5 phút ngày hôm sau:**
+A = chủ nhà (Zalo cá nhân bất kỳ), B = khách mua (Zalo khác), C = admin kiêm CTV
+(Zalo đã gắn `admins.zalo_user_id` / `ctvs.zalo_user_id`, mở sẵn `/admin`).
+Thứ tự BẮT BUỘC: A rao → C duyệt → B mới có hàng để hỏi (kho hiện 0 tin đang rao).
+
+**C chuẩn bị (5 phút):**
+1. `/admin` không băng đỏ; sức khoẻ `bridge-zca` mới trong 2 phút (bridge chết thì
+   mọi bài dưới vô nghĩa — TS-LIVE-01).
+2. Chạy trong **8h–20h giờ VN**: mọi cron (hỏi bù, drip, nhắc, SLA CTV) chỉ chạy
+   1–13 UTC. Ngoài giờ đó bot vẫn trả lời nhưng phần "sau vài giờ" không xảy ra.
+3. `app_config.test_reset_hello = '1'` để A/B gõ **hello** là được làm khách mới
+   (20260909b). **Tắt về '0' sau buổi test** — khách thật gõ hello mà mất tin là sự cố.
+4. Người thật là Zalo thật, KHÔNG có tiền tố `thu-` nên cron `don_du_lieu_thu` 21:00
+   không dọn: xong buổi thì `/admin` → CRM → **Xoá hàng loạt** (gõ `XOA HET`, FR-210)
+   hoặc xoá từng số bằng `admin_xoa_khach`.
+
+**Cách ghi lỗi (mọi vai):** một tin vào nhóm, 5 dòng: vai (A/B/C) · giờ · mình gõ gì ·
+bot nói gì (chụp màn hình) · mình mong gì. Không giải thích thêm, không sửa lại
+câu cho "đúng hơn" — câu gõ tự nhiên chính là dữ liệu.
+
+**Điều KHÔNG phải lỗi, đừng báo:** bot im sau khi C gõ tay vào chat (nhường sân 30
+phút, FR-141); bot trả lời chậm 5–10 giây khi nhiều người nhắn cùng lúc (Groq
+bậc miễn phí chạm trần, tự chuyển Claude — FR-194); hai bong bóng liền nhau (một
+"💾 Đã lưu…", một câu hỏi); câu "Em tra thấy đường này thuộc phường X, đúng không
+ạ?" (bot đang HỎI, chưa ghi — FR-209).
+
+| ID | Vai | Làm gì (gõ tự nhiên, không cần đúng chính tả) | Nhìn thấy gì thì ĐẠT | Dấu hiệu HỎNG → báo |
+|---|---|---|---|---|
+| TS-NGUOI-01 | A | Rao MỘT căn có thật của mình (hoặc bịa hợp lý), một câu, kiểu Zalo: `ban nha hem 4m nguyen trai q5 4x15 1 tret 2 lau 8ty5` | Bong bóng "Đã lưu" tóm đúng ≥ 5 trường mình vừa nói; sau đó ĐÚNG MỘT câu hỏi, và là thứ mình chưa nói | Hỏi lại điều đã nói · hỏi 2 câu một lượt · bịa trường mình không nói · mã tin lọt vào câu (FR-178) |
+| TS-NGUOI-02 | A | Rao căn có TÊN ĐƯỜNG mà không nói quận/phường (vd `mặt tiền Lê Văn Việt`) | Bot tra ra phường + quận cũ và HỎI xác nhận; gật `đúng rồi` → tin ghi đúng phường/quận; nói `không, phường X` → theo mình | Tự ghi quận mà không hỏi · quận nhảy sang quận khác khi mình chỉ nói phường (bắt 15/09, đã vá) |
+| TS-NGUOI-03 | A | Trả lời LỆCH ba lần: hỏi phường thì trả lời địa chỉ; `để anh hỏi vợ đã`; `sao em hỏi nhiều vậy` | Địa chỉ được ghi và hỏi lại phường ngắn gọn; "hỏi vợ" → bot dừng, không ghi; "hỏi nhiều" → xin lỗi, dừng hỏi | Ghi "để anh hỏi vợ" thành một trường · hỏi tiếp như không có gì |
+| TS-NGUOI-04 | A | Sửa lời: `à nhầm, 9 tỷ 2 nha` rồi `phường 12 chứ không phải 8` | Bot nói rõ đã sửa, tóm tắt tin mới; C thấy cột đổi trên `/admin` | Ghi giá mới thành ghi chú · tin cũ giữ giá cũ |
+| TS-NGUOI-05 | A | Gửi 2 ảnh mặt tiền + 1 ảnh SỔ (dùng sổ MẪU, che tên) — có thể gửi kèm chữ hoặc gửi trần | Bot khen ĐÚNG thứ có trong ảnh (không khen chung chung); ảnh sổ: bot đọc diện tích và đối chiếu, KHÔNG nhắc tên người; C soi tin: ảnh sổ nằm kho riêng, không hiện web | Khen bịa · sổ lên web · bot đọc tên/CCCD trong sổ ra chat |
+| TS-NGUOI-06 | A | Gõ tiếng lóng và số điện thoại: `gia 2 toi 5, hem xe hoi, 1t2l, lien he 09xxxxxxxx` | Giá 2,5 tỷ · hẻm xe hơi · 1 trệt 2 lầu; SĐT bị che trên web và trong tóm tắt bot | SĐT hiện nguyên trên web · "2 tỏi 5" thành 2 tỷ hoặc 25 tỷ |
+| TS-NGUOI-07 | A | Rao thêm căn: `còn căn nữa: mặt tiền Trần Phú 4x20 18 tỷ` rồi `em có 2 căn: căn 1 …, căn 2 …` | Mỗi câu mở TIN MỚI, căn cũ giữ nguyên số; bot gọi căn bằng địa chỉ, không đọc mã | Căn cũ bị đổi giá/kích thước theo căn mới (bắt 15/09, đã vá) |
+| TS-NGUOI-08 | A | `thôi đăng đi em` khi còn thiếu vài thứ; sau đó `bán rồi em ơi` | Đủ tối thiểu → bản nháp tin để duyệt + nói còn thiếu gì; "bán rồi" → tin đóng, bot chúc mừng, không hỏi thêm | Hỏi tiếp sau "bán rồi" · nháp thiếu giá vẫn lên |
+| TS-NGUOI-09 | C | `/admin` → Tin chờ duyệt: thấy tin của A, bấm duyệt | Tin lên `dang_ban`, mở được link tin trên web nhadat.cc, ảnh mặt tiền hiện, ảnh sổ KHÔNG hiện, SĐT che | Duyệt xong web không có · ảnh vỡ · mô tả lộ SĐT |
+| TS-NGUOI-10 | B | Hỏi mơ hồ: `co can nao tam 8 ty q5 ko em` | Bot ghi nhu cầu, gợi ý đúng căn A vừa đăng (địa chỉ + giá), KHÔNG xổ căn lệch ngân sách, KHÔNG đọc mã tin | Gợi ý căn 3 tỷ cho khách 8 tỷ · trả lời chung chung không có căn |
+| TS-NGUOI-11 | B | Hỏi chi tiết căn đó: `hẻm mấy mét, sổ riêng chưa` rồi hỏi thứ A CHƯA nói: `nhà có bị ngập không` | Hai câu đầu đúng dữ liệu A đã nói; câu chưa có → "để em hỏi chủ nhà"; **A nhận được câu hỏi trên Zalo** (FR-173: về chủ nhà trước); A trả lời → B được báo lại | Bot bịa "không ngập" · A không nhận gì · B không được báo lại |
+| TS-NGUOI-12 | B | `gửi anh xem hình` | Nhận ảnh mặt tiền của A; KHÔNG nhận ảnh sổ | Nhận ảnh sổ · "để em hỏi chủ" trong khi tin có ảnh |
+| TS-NGUOI-13 | B | Hẹn xem: `chiều mai 3h anh qua xem được không` | Bot chốt giờ, báo A (hoặc CTV); C thấy lịch hẹn ở `/admin`; **ngày mai** trước giờ hẹn có tin nhắc, có link bản đồ nếu tin có toạ độ | Không ai nhận lịch · nhắc sai giờ · link bản đồ bịa khi tin không có toạ độ |
+| TS-NGUOI-14 | B | `cho anh gặp người thật đi` | C (CTV) nhận tin trên Zalo trong ≤ 1 phút với nội dung khách hỏi; C gõ tay vào chat B → bot im (30 phút); C gõ `bot làm tiếp đi` hoặc hết 30 phút → bot tiếp | C không nhận gì · bot chen vào lúc C đang nói |
+| TS-NGUOI-15 | B | `ok anh chốt căn này` (hoặc 👍 / ❤️) | Bot xác nhận, C/CTV nhận tin 🤝 "khách đồng ý chốt"; tin sang `da_chot` trên `/admin` | Không ai nhận 🤝 (chỗ này CHẾT IM tới 15/09 — FR-142, đã vá, cần người xác nhận thật) |
+| TS-NGUOI-16 | B | Gõ `hello` rồi hỏi kiểu khác: `tìm thuê căn hộ 1pn gần đại học tôn đức thắng dưới 8 triệu` | Được đón như khách mới; bot ghi thuê · 1PN · gần trường · ngân sách; nếu kho không có thì nói thật "chưa có căn khớp, em ghi lại" | Bot bịa vị trí trường (15/09 Claude nói ĐH Tôn Đức Thắng ở Quận 1 — trường ở Quận 7; chưa vá, cần bằng chứng thêm) · hỏi hai câu một lượt |
+| TS-NGUOI-17 | C | Mở `/admin` → Tin nhắn: đọc lại hai hội thoại A và B từ đầu | Đọc trôi như người thật nói; không câu tiếng Anh, không thẻ `<think>`, không xưng "tôi là AI" trừ khi bị hỏi; tên trợ lý nhất quán | Câu lạ giọng / lọt tiếng Anh / thẻ nghĩ (dấu hiệu model dự phòng Groq) — ghi giờ để soi model nào |
+| TS-NGUOI-18 | A | **NGÀY HÔM SAU**, 8h–20h: không nhắn gì | Bot tự nhắn MỘT lần gom 2–3 câu còn thiếu, không hỏi lại thứ mình đã né; trả lời → cột đổi | Không có tin (hỏi bù chết im 09→15/09, đã vá — đây là bằng chứng sống đầu tiên) · hỏi lại thứ đã né · hỏi lắt nhắt nhiều lần |
+| TS-NGUOI-19 | A | **NGÀY HÔM SAU**: nhắn `em ơi tin anh sao rồi` | Bot nói đúng trạng thái (đang rao / chờ duyệt / thiếu gì), không hỏi lại từ đầu | Chào như khách mới · không nhớ tin |
+| TS-NGUOI-20 | C | Cuối buổi: `/admin` → Sức khoẻ và sổ lỗi | 0 lỗi mới trong 2 giờ test; băng "đang chạy dự phòng" tắt | Có dòng lỗi → chụp nguyên dòng, kèm giờ |
+
+Sau buổi: C dọn (bước 4 chuẩn bị), tắt `test_reset_hello`, và gửi tôi danh sách
+lỗi kèm giờ — tôi đối chiếu `so.hoi_thoai`, `bot_errors`, log edge function theo
+từng giờ đó và trả lời từng dòng ở bảng này (cột "Kết quả").
+
+| ID | Kết quả mới nhất |
+|---|---|
+| TS-NGUOI-01…20 | ⏳ chưa chạy — kịch bản viết 15/09 sau deploy #131 |
 
 ### TS-RENT — hồi quy luồng CHO THUÊ (chạy sau MỌI lần sửa `chat-reply`)
 Hai lỗi SRS-3.8a từng làm luồng thuê chết im lặng (bot vẫn trả lời tử tế). Dọn sau khi chạy: xoá `listings` `CCRB-*` vừa sinh.

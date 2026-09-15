@@ -108,7 +108,7 @@ của người đẩy commit**. Nay chia lại cho sòng phẳng.
 | RLS / GRANT — ma trận 5 vai (TS-SEC3) | người, SQL Editor | `bot/tests/vai-tro.sql` | có, tay |
 | RLS / GRANT — bài phá huỷ (xoá thật nếu RLS hỏng) | người, SQL Editor | `docs/10 §10.7` | có, tay |
 | Migration đã áp ↔ file trong repo, ảnh chụp schema còn mới | máy, chạy tay | `scripts/soat-migration.mjs` | có, tay |
-| Thông tuyến Zalo thật (TS-LIVE) | người, hai điện thoại | `docs/10 §10.7` | có, tay |
+| Thông tuyến Zalo thật (TS-LIVE); kịch bản người thật ba vai (TS-NGUOI, 15/09) | người, hai–ba điện thoại | `docs/10 §10.7` | có, tay |
 | Tone giọng, a11y, Lighthouse, tải | người | `docs/10 §10.3–10.4` | chưa |
 | Lint | **không có** — repo chưa cài eslint/biome/prettier | — | không |
 
