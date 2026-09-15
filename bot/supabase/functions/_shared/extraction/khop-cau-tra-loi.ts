@@ -19,7 +19,7 @@
 // Luật tiền MỘT NGUỒN (tầng bốn, 11/09): trước đây file này chép tay
 // `(ty|ti|toi|trieu|tr)` ở năm chỗ, không chỗ nào biết "toi" + số là TỚI —
 // nên "5 tới 6 tỷ" ghi giá "5 tới 6" (mục D1 review 10/09).
-import { TIEN_KD, CO_TIEN_KD } from "./luat-tien.ts";
+import { TIEN_KD, CO_TIEN_KD, TIEN_T_KEP } from "./luat-tien.ts";
 
 export type LoaiCau =
   | "khop"      // đúng là câu trả lời cho câu đang hỏi → ghi fact, đóng câu hỏi
@@ -92,6 +92,12 @@ export function tuXungTuCau(text: string): "anh" | "chị" | null {
   for (const re of TU_XUNG) {
     const m = re.exec(kd);
     if (m) return m[1] === "chi" || m[1] === "c" ? "chị" : "anh";
+  }
+  // 15/09/2026 (bắn thật A3/A5): "để mình hỏi vợ đã", "ok vợ mình chốt 4 tỷ" → người
+  // nói là chồng, gọi "anh"; bot từng đổi sang "chị" ở lượt sau. "vợ chồng mình" thì thôi.
+  if (!/\bvo chong\b/.test(kd)) {
+    if (/\b(?:vo|ba xa)\s+(?:cua\s+)?(?:minh|toi|tui|em|t)\b|\bhoi\s+(?:y\s+)?(?:vo|ba xa)\b/.test(kd)) return "anh";
+    if (/\b(?:chong|ong xa)\s+(?:cua\s+)?(?:minh|toi|tui|em|t)\b|\bhoi\s+(?:y\s+)?(?:chong|ong xa)\b/.test(kd)) return "chị";
   }
   return null;
 }
@@ -249,6 +255,22 @@ export function catDapAn(question: string, dapAn: string): string {
   if (question === "phuong") {
     const m = /(?:phường|phuong|(?<![\p{L}])p)\s*\.?\s*(\d{1,2})(?!\d)/iu.exec(goc);
     if (m) return `Phường ${Number(m[1])}`;
+  }
+  // 15/09/2026 (bắn thật A2/A3): "giá thì mình muốn tầm 4 tỷ 2" ghi nguyên mệnh đề vào
+  // ô giá, "70m2 2pn" vào ô tim tường. Cột đúng (parse_vnd, trigger) nhưng fact là rác:
+  // giá lấy từ chữ "tầm/khoảng" hoặc con số tới hết mảnh; m² lấy đúng cụm số+m2.
+  if (question === "gia" || question === "phi_quan_ly" || question === "tien_coc") {
+    const kdD = boDauGiuDoDai(goc);
+    const m = new RegExp(`(?:\\b(?:tam|khoang|co|tren|duoi|tu)\\s+)?[\\d][\\d.,]*\\s*(?:${TIEN_KD})(?![a-z])|(?:\\b(?:tam|khoang)\\s+)?${TIEN_T_KEP}`).exec(kdD);
+    if (m && m.index > 0) {
+      const manh = goc.slice(m.index).split(/[,;\n]/)[0].trim();
+      if (manh && manh.length < goc.length) return manh;
+    }
+  }
+  if (question === "dien_tich_tim_tuong" || question === "dien_tich" || question === "dien_tich_dat" || question === "tho_cu") {
+    const kdD = boDauGiuDoDai(goc);
+    const m = /\d+(?:[.,]\d+)?\s*(?:m2|m²|met vuong)(?![a-z0-9])/.exec(kdD);
+    if (m && m[0].trim().length < goc.trim().length && !/\d\s*x\s*\d/.test(kdD)) return goc.slice(m.index, m.index + m[0].length).trim();
   }
   if (question === "gap") {
     const kdD = boDauGiuDoDai(goc);

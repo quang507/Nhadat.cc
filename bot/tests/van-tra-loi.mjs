@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -259,6 +259,16 @@ ok("xưng hô: 'bạn bè', 'người bạn có nhà' giữ nguyên", suaTuXungM
 ok("gộp: 'muốn gần bệnh viện' vào 'có mẹ già ở cùng, cần gần bệnh viện' → null",
   gopGhiChu("có mẹ già ở cùng, cần gần bệnh viện", "muốn gần bệnh viện") === null,
   String(gopGhiChu("có mẹ già ở cùng, cần gần bệnh viện", "muốn gần bệnh viện")));
+
+// 15/09/2026 FR-177: một lượt một câu hỏi (phía bán) — cắt câu hỏi thứ hai của model.
+for (const [vao, mong] of [
+  ["Hẻm 5m ô tô tới cửa thì khách chuộng lắm anh. Nhà mình mấy lầu ạ? Có sổ hồng riêng chưa ạ?", "Hẻm 5m ô tô tới cửa thì khách chuộng lắm anh. Nhà mình mấy lầu ạ?"],
+  ["Nhà mình mấy lầu ạ?", "Nhà mình mấy lầu ạ?"],
+  ["Nhà mình mấy lầu ạ? Để em ghi vào tin.", "Nhà mình mấy lầu ạ?"],
+  ["Anh/chị cần ra hàng gấp hay ưu tiên đạt giá mong muốn?", "Anh/chị cần ra hàng gấp hay ưu tiên đạt giá mong muốn?"],
+  ["Dạ em ghi nhận rồi ạ.", "Dạ em ghi nhận rồi ạ."],
+  ["💾 Vừa lưu: giá: \"4 tỷ\"", "💾 Vừa lưu: giá: \"4 tỷ\""],
+]) ok("motCauHoi " + JSON.stringify(vao.slice(0, 40)), motCauHoi([vao])[0] === mong, JSON.stringify(motCauHoi([vao])));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

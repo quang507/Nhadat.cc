@@ -87,6 +87,25 @@ export function ngangNhanDai(kd: string): number | null {
  * Hiệp Bình Chánh". Chỉ nhận chữ VIẾT HOA đầu (tên riêng), tối đa 4 tiếng, dừng ở
  * TP / quận / dấu câu. Phường số thì chat-reply đã có `soPhuong`.
  */
+/**
+ * Phường tên chữ trong câu rao KHÔNG DẤU (15/09/2026, bắn thật B1: "thu duc phuong hiep
+ * binh chanh gia 6ty2"): trả tên bỏ dấu ("hiep binh chanh") để chat-reply tra bảng `wards`
+ * (so bỏ dấu với tên phường 2025 và các phường cũ gộp vào). Không tra được thì KHÔNG ghi —
+ * chữ không dấu vào cột phường là rác. Chỉ chạy khi câu không có dấu.
+ */
+export function phuongTenKhongDau(kd: string): string | null {
+  const m = /(?:^|[\s,(])(?:phuong|p\.)\s+([a-z]+(?:\s+[a-z]+){0,3})/.exec(kd);
+  if (!m) return null;
+  const tu = m[1].split(/\s+/);
+  let dung = tu.findIndex((w) => /^(?:tp|thanh|quan|q|huyen|thi|tinh|gia|dt|shr|shc|so|tho|hem|hxh|duong|mat|dien|ngang|dai|ban|cho|can|nha|dat|lo|nao|may|gi)$/.test(w));
+  // Tên quận/huyện hai chữ đứng ngay sau tên phường ("p. an lac binh tan").
+  const QUAN_KD = /^(?:binh tan|tan binh|go vap|thu duc|phu nhuan|binh thanh|tan phu|nha be|binh chanh|hoc mon|cu chi|can gio)$/;
+  // Tên phường ít nhất hai chữ nên chỉ xét từ chữ thứ ba ("hiep binh chanh" giữ nguyên).
+  for (let i = 2; i < tu.length - 1; i++) if (QUAN_KD.test(`${tu[i]} ${tu[i + 1]}`) && (dung < 0 || i < dung)) { dung = i; break; }
+  const ten = (dung >= 0 ? tu.slice(0, dung) : tu).join(" ");
+  return ten.length >= 3 ? ten : null;
+}
+
 export function phuongTenCauRao(text: string): string | null {
   const m = /(?:^|[\s,(])(?:[Pp]hường|PHƯỜNG|[Pp]\.)\s+(\p{Lu}\p{Ll}*(?![\p{L}])(?:\s+\p{Lu}\p{Ll}*(?![\p{L}])){0,3})/u.exec(text);
   if (!m) return null;

@@ -261,6 +261,25 @@ for (const [vao, mong] of [
 ]) ok("loai_giao_dich " + JSON.stringify(vao), nhanDienNhieuFact(vao).find((f) => f.question === "loai_giao_dich")?.answer === mong && !nhanDienNhieuFact(vao).some((f) => f.question === "tiem_nang"), JSON.stringify(nhanDienNhieuFact(vao)));
 for (const vao of ["đang cho thuê 20 triệu, bán 32 tỷ", "hợp để ở hoặc cho thuê", "cho thuê căn hộ Sunrise City quận 7"])
   ok("KHÔNG đổi loại " + JSON.stringify(vao), !nhanDienNhieuFact(vao).some((f) => f.question === "loai_giao_dich"), JSON.stringify(nhanDienNhieuFact(vao)));
+// 15/09/2026 (bắn thật A2/A3): đáp án giá / m² cắt gọn, không ghi nguyên mệnh đề.
+for (const [q, vao, mong] of [
+  ["gia", "giá thì mình muốn tầm 4 tỷ 2", "tầm 4 tỷ 2"],
+  ["gia", "ok vợ mình chốt 4 tỷ nha, sổ hồng có rồi", "4 tỷ nha"],
+  ["gia", "4 tỷ 2", "4 tỷ 2"],
+  ["gia", "bán 5 tỷ thương lượng", "5 tỷ thương lượng"],
+  ["gia", "khoảng 9t5", "khoảng 9t5"],
+  ["dien_tich_tim_tuong", "70m2 2pn", "70m2"],
+  ["dien_tich", "tầm 62,5m2 anh ơi", "62,5m2"],
+  ["dien_tich", "4x14 nở hậu 5m", "4x14 nở hậu 5m"],
+]) ok(`catDapAn(${q}) ${JSON.stringify(vao)} → ${mong}`, catDapAn(q, vao) === mong, JSON.stringify(catDapAn(q, vao)));
+for (const [vao, mong] of [
+  ["giá thì mình muốn tầm 4 tỷ 2, để mình hỏi vợ đã nhé", "anh"],
+  ["ok vợ mình chốt 4 tỷ nha", "anh"],
+  ["để tôi hỏi ý bà xã", "anh"],
+  ["chồng mình đi công tác, để chị hỏi lại", "chị"],
+  ["ông xã tôi nói bán 5 tỷ", "chị"],
+  ["vợ chồng mình đang tính bán", null],
+]) ok("tuXungTuCau vợ/chồng " + JSON.stringify(vao), tuXungTuCau(vao) === mong, String(tuXungTuCau(vao)));
 for (const [vao, mong] of [
   ["bên bạn có cần mình gửi hình không hay sao", true],
   ["phí bên bạn tính sao?", true],

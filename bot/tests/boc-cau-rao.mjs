@@ -3,7 +3,7 @@
 //
 // Phần SQL của cùng lượt bắn (fact "cách mặt tiền" vào cột, "p5" dính tên đường, xe hơi
 // trong nhà) ở migration 20260914b.
-import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
 import { bocViTriRao, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 let hong = 0, tong = 0;
@@ -58,6 +58,14 @@ ok("phường: 'phường Hiệp Bình Chánh TP Thủ Đức' → Phường Hi�
 ok("phường: 'Phường Bến Nghé Quận 1' → Phường Bến Nghé", phuongTenCauRao("bán nhà Phường Bến Nghé Quận 1") === "Phường Bến Nghé");
 ok("phường: 'phường nào cũng được' (chữ thường) → null", phuongTenCauRao("ở phường nào cũng được") === null);
 ok("phường: 'phường 7' (số) → null (soPhuong lo)", phuongTenCauRao("bán nhà phường 7") === null);
+// 15/09/2026 (bắn thật B1): phường tên chữ KHÔNG DẤU → tên bỏ dấu để tra `wards`.
+for (const [c, mong] of [
+  ["co lo dat 5x18 thu duc phuong hiep binh chanh gia 6ty2 shr", "hiep binh chanh"],
+  ["ban nha phuong tan hung quan 7 50m2", "tan hung"],
+  ["ban nha phuong 7 quan 8", null],
+  ["o phuong nao cung duoc", null],
+  ["ban nha p. an lac binh tan", "an lac"],
+]) ok("phường không dấu " + JSON.stringify(c.slice(0, 40)), phuongTenKhongDau(c) === mong, String(phuongTenKhongDau(c)));
 
 // ── dự án trùng tên đường ──
 ok("dự án: 'đường Huỳnh Tấn Phát' không phải 'Căn Hộ Cao Cấp Huỳnh Tấn Phát'", duAnLaTenDuong("Căn Hộ Cao Cấp Huỳnh Tấn Phát", "bán nhà phố quận 7 đường Huỳnh Tấn Phát 5x20 giá 11 tỷ"));

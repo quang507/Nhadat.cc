@@ -37,7 +37,7 @@ import {
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { coMuiDuLieuRao, type DeXuat, type DongDb, kiemDeXuat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
-import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao } from "../_shared/extraction/boc-cau-rao.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
 import { cauXacNhanPhuong, chuanTenDuong, docPhuongNominatim, duongTraDuoc, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
@@ -65,7 +65,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
-import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, locHoSoMua, suaTuXungMua } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -2834,6 +2834,7 @@ ${kem}` : tomTat, cheDo };
               messages: [{ role: "user", content: promptLai }],
             });
             hoiLai = r2b.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+            if (hoiLai) hoiLai = motCauHoi([hoiLai])[0];
             await doTien(client, r2b.usage);
           } catch (e) {
             await ghiLoi(client, "chat-reply model r2b(hoi lai)", e);
@@ -3058,6 +3059,9 @@ ${kem}` : tomTat, cheDo };
             messages: [{ role: "user", content: prompt }],
           });
           sellerReply = r2.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+          // FR-177: một lượt một câu hỏi — cắt câu hỏi thứ hai của model (15/09/2026).
+          // Chỉ áp cho lời MODEL: câu tiền định (xin chấm điểm, liệt kê căn) có chủ ý.
+          if (sellerReply) sellerReply = motCauHoi([sellerReply])[0];
           await doTien(client, r2.usage);
         } catch (e) {
           await ghiLoi(client, "chat-reply model r2(seller)", e);
@@ -3166,7 +3170,20 @@ ${kem}` : tomTat, cheDo };
       // không nhắc dự án / chung cư / căn hộ thì không phải dự án.
       const duAn = duAnKhop && !duAnLaTenDuong(duAnKhop.name, text) ? duAnKhop : null;
       // Phường tên chữ ("phường Hiệp Bình Chánh") khi câu không có phường số (14/09).
-      const phuongRao = wardNo ? `Phường ${wardNo}` : phuongTenCauRao(text);
+      let phuongRao = wardNo ? `Phường ${wardNo}` : phuongTenCauRao(text);
+      // 15/09/2026 (bắn thật B1): câu rao KHÔNG DẤU "phuong hiep binh chanh" — tra bảng
+      // `wards` bằng so bỏ dấu (tên 2025 hoặc phường cũ trong `don_vi_cu`); không khớp
+      // thì để trống và hỏi như cũ, không ghi chữ không dấu vào cột phường.
+      if (!phuongRao && !/[À-ỹ]/.test(text)) {
+        const tenKD = phuongTenKhongDau(tKD);
+        if (tenKD) {
+          const { data: dsPhuong, error: wErr } = await client.from("wards").select("ten, ten_day_du, don_vi_cu").limit(400);
+          if (wErr) await ghiLoi(client, "chat-reply wards(khong dau)", wErr.message);
+          const khop = ((dsPhuong ?? []) as Array<{ ten: string; ten_day_du: string | null; don_vi_cu: string | null }>)
+            .find((w) => boDau(w.ten) === tenKD || boDau(w.don_vi_cu ?? "").includes(`phuong ${tenKD}`));
+          if (khop) phuongRao = khop.ten_day_du ?? `Phường ${khop.ten}`;
+        }
+      }
       const maCanRao = duAn ? (MA_CAN_RE.exec(text)?.[1]?.toUpperCase() ?? null) : null;
       // Tình trạng GẤP (chủ dự án 09/09/2026 — cần cột riêng): nói gấp → true,
       // nói rõ "không gấp" → false, không nhắc → null (chưa rõ, không ép).
