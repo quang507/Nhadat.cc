@@ -137,6 +137,8 @@ const TU_TA_DUONG = new Set([
   "met", "m", "mo", "cua", "nha", "ban", "ngang", "dai", "cho",
   // 14/09/2026: "hẻm ba gác đường Phạm Thế Hiển" → "ba gác" từng bị đọc là TÊN đường.
   "ba", "gac",
+  // 15/09/2026 (bắn thử kho xưởng): "đường xe container" → street "xe container".
+  "container", "cont", "tai",
 ]);
 // Tên quận/huyện đứng ngay sau tên đường ("hxh Nguyễn Kiệm Phú Nhuận") — gặp là hết tên đường.
 const QUAN_SAU_TEN = /^(?:phu nhuan|tan binh|binh thanh|go vap|tan phu|binh tan|thu duc|nha be|binh chanh|hoc mon|cu chi|can gio)$/;
@@ -522,21 +524,40 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
 // 11/09/2026 (42 ca): "anh có 2 căn: 1 căn q5 50m2 6 tỷ, 1 căn q11 40m2 4 tỷ" —
 // "q5" đứng sau chữ "căn" là QUẬN, không phải mã căn; bản trước ghi unit_code
 // "Q5" và quận mặc định. Nay tách `quan`, và giữ diện tích m² nếu có.
-export type CanTrongTin = { ma?: string; quan?: string; ngang?: string; dai?: string; dt?: string; gia?: string; goc: string };
+// 15/09/2026 (bắn thử 07:19 UTC): "em có 2 căn: căn 1 hẻm 3m nguyễn trãi q5 4x12 giá 5 tỷ,
+// căn 2 mặt tiền trần phú q5 4x20 giá 18 tỷ" — "căn 1 / căn 2 / căn thứ 2" là SỐ THỨ TỰ,
+// không phải mã căn, bản trước không nhận → chỉ mở căn 1, còn câu nối "còn căn 2 …" bị
+// hiểu là SỬA căn 1 (căn 1 mang luôn 4x20 và 18 tỷ). Nay nhận thứ tự (`thu`), không ghi
+// unit_code. Số ngay sau "căn" mà kèm đơn vị (2 pn, 2 tầng, 2 x 10) thì không phải thứ tự.
+export type CanTrongTin = { ma?: string; thu?: number; quan?: string; ngang?: string; dai?: string; dt?: string; gia?: string; goc: string };
 export function nhanDienNhieuCan(text: string): CanTrongTin[] {
   const out: CanTrongTin[] = [];
   for (const goc of text.split(/[,;\n]|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter(Boolean)) {
     const kd = boDau(goc);
     const mMa = /\b(?:can|lo|shop|nen)\s*(?:so\s*)?([a-z]{1,3}[\s.\-]?\d{1,3}(?:[.\-]\d{1,3})?[a-z]?|\d{1,3}[a-z])\b/.exec(kd);
-    if (!mMa) continue;
-    const laQuan = /^q\s*\.?\s*\d{1,2}$/.test(mMa[1]);
+    const mThu = mMa ? null : /(?:^|[^\d])\b(?:can|lo)\s+(?:so\s+|thu\s+)?(\d{1,2})\b(?!\s*(?:x\s*\d|m2|m\b|ty|ti|toi|trieu|tr\b|pn|phong|lau|tang|tam|met|wc))/.exec(kd);
+    if (!mMa && !mThu) continue;
+    if (mThu) {
+      const mKt = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(kd);
+      const mDt = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(kd);
+      const mGia = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`).exec(kd);
+      const q = /\b(?:quan|q)\s*\.?\s*(\d{1,2})\b/.exec(kd);
+      out.push({
+        thu: Number(mThu[1]), ...(q ? { quan: `Quận ${Number(q[1])}` } : {}),
+        ngang: mKt?.[1], dai: mKt?.[2], dt: mDt?.[1],
+        gia: mGia ? `${mGia[1]} ${mGia[2] === "toi" ? "tỏi" : /^t[iy]$/.test(mGia[2]) ? "tỷ" : "triệu"}${mGia[3] ? ` ${mGia[3]}` : ""}${mGia[4] ? " rưỡi" : ""}` : undefined,
+        goc,
+      });
+      continue;
+    }
+    const laQuan = /^q\s*\.?\s*\d{1,2}$/.test(mMa![1]);
     const mKt = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(kd);
     const mDt = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(kd);
     const mGia = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`).exec(kd);
     out.push({
       ...(laQuan
-        ? { quan: `Quận ${Number(mMa[1].replace(/\D/g, ""))}` }
-        : { ma: mMa[1].replace(/[\s.]/g, "").toUpperCase() }),
+        ? { quan: `Quận ${Number(mMa![1].replace(/\D/g, ""))}` }
+        : { ma: mMa![1].replace(/[\s.]/g, "").toUpperCase() }),
       ngang: mKt?.[1], dai: mKt?.[2], dt: mDt?.[1],
       gia: mGia ? `${mGia[1]} ${mGia[2] === "toi" ? "tỏi" : /^t[iy]$/.test(mGia[2]) ? "tỷ" : "triệu"}${mGia[3] ? ` ${mGia[3]}` : ""}${mGia[4] ? " rưỡi" : ""}` : undefined,
       goc,
