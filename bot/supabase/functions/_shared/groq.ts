@@ -260,9 +260,12 @@ export function bocDuPhong(
         return await goiGroq(khoaGroq, m, p, schema);
       } catch (e) {
         cuoi = e;
-        // Hết nhịp / quá tải thì xoay model; lỗi khác (sai schema, sai prompt)
-        // xoay cũng vô ích — model nào cũng hỏng như nhau.
-        if (!/^Groq (429|5\d\d)/.test(loiCua(e))) break;
+        // Hết nhịp / quá tải / QUÁ CỠ thì xoay model; lỗi khác (sai schema, sai
+        // prompt) xoay cũng vô ích — model nào cũng hỏng như nhau. 413 thêm 15/09:
+        // bậc miễn phí Groq trần chữ-mỗi-phút THEO MODEL, prompt người mua ~14k chữ
+        // bị qwen trả "Request too large" trong khi gpt-oss-120b còn nhận được —
+        // đi thẳng Claude ở đó là bỏ phí model kế trong danh sách.
+        if (!/^Groq (413|429|5\d\d)/.test(loiCua(e))) break;
         // Xoay model là ĐƯỜNG ĐI BÌNH THƯỜNG của lưới dự phòng, không phải sự cố.
         // Ghi vào sổ lỗi là tự nuôi còi báo động (bài học escalation-feed 08/09).
         console.log(`Groq het nhip, xoay khoi ${m}`);

@@ -80,6 +80,12 @@ const chu = (r) => r?.content?.[0]?.text;
   la("groq trước: Groq 5xx cả danh sách → Claude parse", [r?.parsed_output, goiGroq, goiClaude], [{ a: 1 }, ["m1", "m2"], ["parse"]]);
 }
 {
+  reset(); kichBan = { m1: 413 };
+  const c = bocDuPhong(claude, "k", DS, ghiSo, "groq");
+  const r = await c.messages.create(P);
+  la("groq trước: m1 413 quá cỡ → xoay m2 (trần chữ theo model), chưa đụng Claude", [chu(r), goiGroq, goiClaude], ["groq:m2", ["m1", "m2"], []]);
+}
+{
   reset(); kichBan = { m1: 400 };
   const c = bocDuPhong(claude, "k", DS, ghiSo, "groq");
   const r = await c.messages.create(P);
