@@ -170,6 +170,10 @@ for (const [vao, mong] of [
   // 15/09/2026 (bắn thử kho xưởng): "đường xe container" là tả đường, không phải tên đường.
   ["bán kho xưởng 1000m2 xã Tân Kiên bình chánh, đường xe container, giá 45 tỷ, sổ hồng", null],
   ["kho xưởng đường xe container Nguyễn Văn Linh, 2000m2", "đường xe container Nguyễn Văn Linh"],
+  // 15/09/2026 (bắn thử): "Thọ" bị "tho" (thổ cư) cắt cụt.
+  ["bán nhà 4x15 hẻm 5m Lê Đức Thọ gò vấp giá 6 tỷ", "hẻm 5m Lê Đức Thọ"],
+  ["bán đất hẻm 6m Lê Đức Thọ thổ cư 100%, 5x20, giá 5 tỷ", "hẻm 6m Lê Đức Thọ"],
+  ["đường Nguyễn Văn Thọ thổ cư full, 100m2", "đường Nguyễn Văn Thọ"],
 ]) ok("bocViTriRao " + JSON.stringify(vao.slice(0, 44)), bocViTriRao(vao) === mong, JSON.stringify(bocViTriRao(vao)));
 
 // ── 13/09/2026 — LƯỢT BẮN 20 TIN THỨ HAI: luật trả NGUYÊN câu làm đáp án ─────

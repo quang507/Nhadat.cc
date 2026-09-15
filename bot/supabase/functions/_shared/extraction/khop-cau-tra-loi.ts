@@ -142,6 +142,10 @@ const TU_TA_DUONG = new Set([
 ]);
 // Tên quận/huyện đứng ngay sau tên đường ("hxh Nguyễn Kiệm Phú Nhuận") — gặp là hết tên đường.
 const QUAN_SAU_TEN = /^(?:phu nhuan|tan binh|binh thanh|go vap|tan phu|binh tan|thu duc|nha be|binh chanh|hoc mon|cu chi|can gio)$/;
+// 15/09/2026 (bắn thử): "hẻm 5m Lê Đức Thọ gò vấp" → tên đường "Lê Đức" — "tho" nằm
+// trong TU_DUNG (vì "thổ cư") nên cắt cụt Lê Đức Thọ. Chữ ĐA NGHĨA chỉ dừng khi đi
+// thành CỤM hai chữ của thứ khác: "thổ cư", "thổ đất".
+const DUNG_HAI_CHU = /^(?:tho cu|tho dat)$/;
 
 // Chữ mở đầu THỨ KHÁC — gặp là hết tên đường: giấy tờ, giá, kết cấu, hành chính.
 // "đường nhựa 7m sổ riêng 850tr" dừng ở "sổ", không nuốt cả câu.
@@ -152,7 +156,7 @@ const QUAN_SAU_TEN = /^(?:phu nhuan|tan binh|binh thanh|go vap|tan phu|binh tan|
 // hai chữ rác trong địa chỉ còn hơn mất tên đường thật.
 const TU_DUNG = new Set([
   "so", "giay", "gia", "ban", "mua", "thue", "huong", "full", "that", "tret",
-  "lau", "tang", "phong", "ngu", "wc", "toilet", "tho", "hoan", "gap", "luong",
+  "lau", "tang", "phong", "ngu", "wc", "toilet", "hoan", "gap", "luong",
   "tich", "phuong", "quan", "huyen", "khong", "ngap", "xay",
   // 15/09/2026 (Zalo thật): "đường Lê Văn Việt mới làm lại rất rộng" → tên đường
   // "Lê Văn Việt mới" (trần 4 chữ vô tình cắt đúng trước "làm"), geocode tra
@@ -207,6 +211,7 @@ export function bocViTriRao(text: string): string | null {
     // Rồi tới TÊN đường: chữ thuần, tối đa 4 chữ, gặp chữ của thứ khác thì dừng.
     const ten: string[] = [];
     while (i < tu.length && ten.length < 4 && /^[\p{L}]{2,}$/u.test(tu[i]) && !TU_DUNG.has(boDau(tu[i])) &&
+      !DUNG_HAI_CHU.test(boDau(`${tu[i]} ${tu[i + 1] ?? ""}`).trim()) &&
       !(ten.length && QUAN_SAU_TEN.test(boDau(`${tu[i]} ${tu[i + 1] ?? ""}`).trim()))) {
       ten.push(tu[i]);
       i++;

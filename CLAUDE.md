@@ -311,6 +311,17 @@ trong bridge dùng `ghiLoi("tên chỗ", detail)`; phía web thì `instrumentati
 đã bắt sẵn mọi lỗi server chưa bắt. Thêm `catch` mà quên nối là thêm một chỗ
 hỏng im lặng.
 
+**Nhúng `listings ↔ sellers` PHẢI chỉ tên khoá ngoại** (bắt 15/09/2026). Từ
+`20260827h` bảng `sellers` có `active_listing_id → listings`, nên giữa hai bảng
+có HAI quan hệ và PostgREST từ chối `sellers(...)` trần trên select đi từ
+`listings` bằng 300 PGRST201. Ba chỗ dính mà không chỗ nào đọc `error`: hỏi bù
+(`ask-seller`) chết im 6 ngày với 313 dòng sổ lỗi ghi SAI nguyên nhân ("listing
+không tồn tại"), chốt kèo không vào `deals`, nhắc đến hạn rơi rỗng. Viết
+`sellers!listings_seller_id_fkey(...)`; `bun bot/tests/nhung-mo-ho.mjs` (trong
+`test:bot`) soi mã nguồn chặn tái phát — mock e2e KHÔNG mô phỏng PGRST201 nên
+e2e xanh không chứng minh được gì ở đây. Và một `catch`/`maybeSingle` không đọc
+`error` là một chỗ hỏng im: 313 lần còi kêu "1 lỗi" mà không ai truy.
+
 **Bốn bucket Storage, đừng lẫn** (`masterdb-raw` thêm 07/09, `20260907b`):
 
 | Bucket | Chứa gì | Ai vào được |

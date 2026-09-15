@@ -327,11 +327,15 @@ Deno.serve(async (req) => {
   // FR-54/56: nhắc `viewing` (chat-reply tạo) chỉ có `viewing_id`, tin nằm ở
   // `viewings.listing_id` — kéo toạ độ + mã qua hai đường: `listings` thẳng
   // (match/feedback/followup) và `viewings → listings` (viewing).
-  const { data: due } = dueIds.length
+  // 15/09/2026: nhúng lồng `listings(... sellers(...))` PHẢI chỉ tên khoá ngoại —
+  // `listings ↔ sellers` có hai quan hệ nên PostgREST trả PGRST201, và bản trước
+  // không đọc `error`: cả lượt nhắc rơi im. Xem ask-seller cùng ngày.
+  const { data: due, error: docDueErr } = dueIds.length
     ? await client.from("reminders")
-      .select("id, kind, note, buyer_id, seller_id, listing_id, viewing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id), listings(code, lat, lng), viewings(time_text, status, listings(id, code, lat, lng, seller_id, sellers(name, zalo_user_id, phone)))")
+      .select("id, kind, note, buyer_id, seller_id, listing_id, viewing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id), listings(code, lat, lng), viewings(time_text, status, listings(id, code, lat, lng, seller_id, sellers!listings_seller_id_fkey(name, zalo_user_id, phone)))")
       .in("id", dueIds)
-    : { data: [] as never[] };
+    : { data: [] as never[], error: null };
+  if (docDueErr) await ghiLoi(client, "nudge doc nhac den han", docDueErr.message);
 
   type TinToaDo = { code?: string | null; lat?: number | null; lng?: number | null } | null;
   for (const r of due ?? []) {

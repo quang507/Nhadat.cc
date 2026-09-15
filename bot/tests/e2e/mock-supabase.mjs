@@ -217,8 +217,10 @@ function parseSelect(sel) {
   for (const ch of sel) { if (ch === "(") depth++; if (ch === ")") depth--; if (ch === "," && depth === 0) { items.push(cur.trim()); cur = ""; } else cur += ch; }
   if (cur.trim()) items.push(cur.trim());
   return items.map((it) => {
-    const m = /^([a-z_]+)(!inner)?\((.*)\)$/.exec(it);
-    return m ? { embed: m[1], inner: !!m[2], cols: m[3].split(",").map((s) => s.trim()) } : { col: it };
+    // 15/09/2026: nhận cả gợi ý khoá ngoại `sellers!listings_seller_id_fkey(...)` —
+    // PostgREST thật ĐÒI nó khi hai bảng có hai quan hệ (PGRST201); mock chỉ bỏ qua.
+    const m = /^([a-z_]+)(?:!(inner|[a-z_]+))?\((.*)\)$/.exec(it);
+    return m ? { embed: m[1], inner: m[2] === "inner", cols: m[3].split(",").map((s) => s.trim()) } : { col: it };
   });
 }
 
