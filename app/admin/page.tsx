@@ -341,6 +341,26 @@ function BanLamViec() {
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theoDoiDn]);
+  // FR-210 (15/09/2026): xoá HÀNG LOẠT khách + rổ hàng để test lại từ đầu. Hai lớp chặn
+  // bấm nhầm: hộp xác nhận nói rõ hậu quả, rồi phải GÕ đúng "XOA HET" — RPC cũng đòi
+  // đúng chữ đó, nên gọi nhầm từ code cũng không xoá được. Không hoàn tác được (OPEN-25).
+  const xoaHetKhachVaRoHang = async () => {
+    const go = prompt(
+      "XOÁ HÀNG LOẠT: mọi khách mua, người bán, tin rao, ảnh, hội thoại, câu hỏi, lịch hẹn, giao dịch.\n" +
+      "GIỮ: kho dự án, phường, CTV, admin, cấu hình, prompt, mẫu câu chuẩn, sổ lỗi.\n" +
+      "Supabase Free KHÔNG có sao lưu — không hoàn tác được.\n\nGõ đúng chữ XOA HET để xoá:",
+    );
+    if (go === null) return;
+    if (go.trim() !== "XOA HET") { alert("Chưa xoá: phải gõ đúng chữ XOA HET."); return; }
+    const { data, error } = await supabase.rpc("admin_xoa_het_khach_va_ro_hang", { p_xac_nhan: "XOA HET" });
+    if (error) { alert(`Không xoá được: ${error.message}`); return; }
+    const d = (data ?? {}) as Record<string, number>;
+    alert(
+      `Đã xoá: ${d.sellers ?? 0} người bán · ${d.buyers ?? 0} khách mua · ${d.listings ?? 0} tin · ` +
+      `${d.messages ?? 0} tin nhắn · ${d.conversations ?? 0} hội thoại · ${d.reminders ?? 0} việc nhắc.`,
+    );
+    await load();
+  };
   const dangNhapLaiZalo = async () => {
     if (!confirm(
       "Đăng nhập lại acc Zalo clone?\n\nBridge sẽ bỏ phiên hiện tại (trong ≤ 5 phút) rồi hiện mã QR mới ở đây để quét. " +
@@ -958,9 +978,20 @@ function BanLamViec() {
                   Quản lý hồ sơ khách mua/thuê, người bán, khách hai vai (vừa mua vừa bán), nhu cầu tìm kiếm và BĐS quan tâm
                 </p>
               </div>
-              <span className="text-xs font-semibold text-mute">
-                Hiển thị {filteredCrm.length} / {danhSachCrm.length} hồ sơ
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-mute">
+                  Hiển thị {filteredCrm.length} / {danhSachCrm.length} hồ sơ
+                </span>
+                {/* FR-210: xoá hàng loạt để test lại — chỉ admin, phải gõ XOA HET */}
+                <button
+                  type="button"
+                  onClick={() => void xoaHetKhachVaRoHang()}
+                  className="rounded-md border border-red-300 bg-red-50 px-3 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
+                  title="Xoá mọi khách, người bán và tin rao để test lại từ đầu. Không hoàn tác được."
+                >
+                  Xoá hàng loạt
+                </button>
+              </div>
             </div>
 
             {/* Role Filter Chips */}
