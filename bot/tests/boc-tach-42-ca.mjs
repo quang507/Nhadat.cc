@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { docTien, giaTheoM2, vndThanhChu } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../supabase/functions/_shared/extraction/so-chu.ts";
 import {
-  bocViTriRao, cheoPhuDinh, laHoanLai, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tuXungTuCau, vungPhuDinh,
+  bocViTriRao, catDapAn, cheoPhuDinh, laHoanLai, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tuXungTuCau, vungPhuDinh,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { vungNgoai } from "../supabase/functions/_shared/dia_ban.ts";
 
@@ -105,6 +105,42 @@ for (const [q, vao, mong] of [
   const f = nhanDienNhieuFact("bán nhà hxh Nguyễn Trãi p3 q5, 4x16, 1 trệt 2 lầu, shr, 9t5");
   const pl = f.find((x) => x.question === "phap_ly")?.answer;
   ok("fact pháp lý là mảnh 'shr', không phải NGUYÊN câu rao", pl === "shr", JSON.stringify(f));
+}
+
+// ── 15/09/2026 — VỪA TRẢ LỜI VỪA HỎI NGƯỢC; số nhà không phải diện tích (Zalo thật, Ny'ah Phú Định:
+// "Căn số 14 ở ny'ah phú định" thành 14m², hai câu hỏi của chủ nhà bị nuốt, ô gấp/kết cấu ghi cả câu) ──
+{
+  const t1 = "Nhà 5 tầng, có thang máy thì phải, bạn có biết xung quanh khu này có tiện ích gì không";
+  const k1 = phanLoaiCauTraLoi("ket_cau", t1);
+  ok("hỏi kết cấu + hỏi ngược → khớp, dapAn = phần trả lời, hoiNguoc = câu hỏi",
+    k1.loai === "khop" && k1.dapAn === "Nhà 5 tầng, có thang máy thì phải" && k1.hoiNguoc === "bạn có biết xung quanh khu này có tiện ích gì không", JSON.stringify(k1));
+  ok("catDapAn kết cấu → 'Nhà 5 tầng' (không cả câu)", catDapAn("ket_cau", t1) === "Nhà 5 tầng", catDapAn("ket_cau", t1));
+  const t2 = "Được giá, căn tôi sở hữu nhưng chưa vào xem bạn có thông tin thêm về căn này không";
+  const k2 = phanLoaiCauTraLoi("gap", t2);
+  ok("hỏi gấp + hỏi ngược không dấu '?' → khớp + hoiNguoc", k2.loai === "khop" && k2.hoiNguoc === "bạn có thông tin thêm về căn này không", JSON.stringify(k2));
+  ok("catDapAn gấp → 'Được giá'", catDapAn("gap", t2) === "Được giá", catDapAn("gap", t2));
+  const k3 = phanLoaiCauTraLoi("dien_tich_dat", "Căn số 14 ở ny’ah phú định");
+  ok("'Căn số 14 ở …' trả lời diện tích → LỆCH sang vi_tri, không thành 14m²", k3.loai === "lech" && k3.chuyenSang?.question === "vi_tri", JSON.stringify(k3));
+  const k4 = phanLoaiCauTraLoi("so_phong_ngu", "4 phòng ngủ, mà khu này có trường học gần không em");
+  ok("'4 phòng ngủ, mà khu này có trường học gần không em' → khớp 4 PN + hỏi ngược", k4.loai === "khop" && k4.dapAn === "4 phòng ngủ" && /trường học/.test(k4.hoiNguoc ?? ""), JSON.stringify(k4));
+  const k5 = phanLoaiCauTraLoi("phap_ly", "sổ hồng riêng rồi, bên em lấy phí sao");
+  ok("'sổ hồng riêng rồi, bên em lấy phí sao' → khớp pháp lý + hỏi phí", k5.loai === "khop" && k5.dapAn === "sổ hồng riêng rồi" && k5.hoiNguoc === "bên em lấy phí sao", JSON.stringify(k5));
+  // KHÔNG được tách nhầm:
+  for (const [q, t] of [
+    ["gap", "không gấp, bán được giá thì thôi"],
+    ["hem_thong", "hẻm 4m, không có gì vướng"],
+    ["nam_xay", "không biết nữa"],
+    ["phap_ly", "chưa có sổ, đang làm"],
+    ["gia", "5 tỷ được không?"],
+    ["dien_tich_dat", "5x16"],
+    ["dien_tich", "80m2 nha em"],
+    ["ket_cau", "1 trệt 2 lầu, 3 phòng ngủ"],
+  ]) {
+    const k = phanLoaiCauTraLoi(q, t);
+    ok(`không tách hỏi ngược: [${q}] "${t}"`, !k.hoiNguoc, JSON.stringify(k));
+  }
+  ok("tachCauHoiNguoc: câu thuần hỏi 'phí bên em sao?' → không tách (để luật cũ)", tachCauHoiNguoc("phí bên em sao?").hoi === null);
+  ok("tachCauHoiNguoc: 'ok, bên em có nhận ký gửi không' → trả lời 'ok' + hỏi", tachCauHoiNguoc("ok, bên em có nhận ký gửi không").hoi === "bên em có nhận ký gửi không");
 }
 
 // ── Nhiều căn ───────────────────────────────────────────────────────────────

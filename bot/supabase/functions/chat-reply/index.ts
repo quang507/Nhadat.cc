@@ -2653,6 +2653,13 @@ ${kem}` : tomTat, cheDo };
       const kq: KetQuaKhop = pendingReq.question === "loai_bds"
         ? { loai: "khop" }
         : kqDuyet ?? phanLoaiCauTraLoi(pendingReq.question, dapAn);
+      // 15/09/2026 (Zalo thật): vừa trả lời vừa HỎI NGƯỢC → ghi PHẦN trả lời, câu hỏi
+      // của chủ nhà được trả lời TRƯỚC câu kế (không nuốt, không ghi cả câu vào ô).
+      const hoiNguoc = kq.hoiNguoc ?? null;
+      if (kq.dapAn) dapAn = kq.dapAn;
+      const hoiNguocPrompt = hoiNguoc
+        ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}". TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá. Rồi mới hỏi tiếp. `
+        : "";
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
       // ơn ngắn, KHÔNG hỏi lại điểm, không gọi model. Câu hỏi ngược/ừ thì đường
       // hỏi lại chung ở dưới lo.
@@ -3002,19 +3009,19 @@ ${kem}` : tomTat, cheDo };
         ? `Bong bóng NGAY TRƯỚC tin này đã ghi nhận số liệu rồi ("${ackSua.slice(0, 60)}…") — KHÔNG cảm ơn, KHÔNG ghi nhận lại, vào thẳng câu hỏi. `
         : "";
       const prompt = nextKey
-        ? `${boiCanh}${daAck}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n` +
-          `Viết MỘT tin dưới 30 từ như người thật nhắn Zalo: nhắc lại chi tiết vừa nghe kèm MỘT câu khích lệ có nghĩa gắn với khách mua (chỉ khi có gì đáng nói thật, không khen suông) - rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
+        ? `${boiCanh}${daAck}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n${hoiNguocPrompt}` +
+          `Viết MỘT tin dưới ${hoiNguoc ? 50 : 30} từ như người thật nhắn Zalo: nhắc lại chi tiết vừa nghe kèm MỘT câu khích lệ có nghĩa gắn với khách mua (chỉ khi có gì đáng nói thật, không khen suông) - rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
           `CÂU HỎI CUỐI TIN BẮT BUỘC là ý này: "${cauKe}" — được diễn đạt lại cho hợp mạch nhưng KHÔNG đổi sang hỏi thứ khác, kể cả khi em thấy chủ nhà đã nói rồi hay em muốn hỏi thứ tiếp theo (hệ thống ghi câu trả lời theo đúng câu này; hỏi lệch là ghi sai ô). ` +
           (nhieuCan
             ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
             : `Người này chỉ có một căn: KHÔNG nhắc mã tin. `) +
           `Lý do "vì khách hỏi" chỉ dùng nếu 3 tin gần nhất của em trong lịch sử chưa dùng. Không hỏi gì khác.`
         : published
-        ? `${boiCanh}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
+        ? `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
           `Viết MỘT tin dưới 30 từ: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
         : thieuDiem.length
-        ? `${boiCanh}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu: ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn (20–40 từ): ghi nhận, rồi hỏi ĐÚNG MỘT thứ trong danh sách thiếu đó. Không hỏi gì khác.`
-        : `${boiCanh}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
+        ? `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu: ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn (20–40 từ): ghi nhận, rồi hỏi ĐÚNG MỘT thứ trong danh sách thiếu đó. Không hỏi gì khác.`
+        : `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
       // OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định — vòng drip không
       // đứng lại chờ model sống. Câu mẫu CÓ hỏi thật (kèm neo căn) nên mở
       // info_request bên dưới vẫn đúng luật "không mở khi chưa hỏi được".
@@ -3040,7 +3047,7 @@ ${kem}` : tomTat, cheDo };
         // 10/09 lần 7: bong bóng trước đã nói "Dạ em ghi rồi ạ: …" mà bong bóng
         // này mở đầu y hệt — hai câu ghi nhận liền nhau đọc như máy. Đã có bong
         // bóng ghi nhận thì vào thẳng câu hỏi.
-        const moDau = ackSua ? "" : "Dạ em ghi rồi ạ. ";
+        const moDau = (hoiNguoc ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (ackSua ? "" : "Dạ em ghi rồi ạ. ");
         sellerReply = nextKey
           ? `${moDau}${neo ? `Căn ${neo} nha. ` : ""}${cauKe}`
           : thieuDiem.length
@@ -3065,7 +3072,7 @@ ${kem}` : tomTat, cheDo };
         }
       }
       return await traLoiSeller(xinDiemCuoi ? [sellerReply, xinDiemCuoi] : [sellerReply], {
-        saved_fact: pendingReq.question, ...(xinDiemCuoi ? { xin_danh_gia: true } : {}),
+        saved_fact: pendingReq.question, ...(xinDiemCuoi ? { xin_danh_gia: true } : {}), ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}),
       });
     }
     // FR-144: chính chủ nhắn CÂU RAO MỚI → tạo tin nháp cho_thong_tin ngay + mở

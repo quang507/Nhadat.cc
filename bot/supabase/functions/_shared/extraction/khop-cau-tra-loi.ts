@@ -39,6 +39,14 @@ export type KetQuaKhop = {
    * fact nào thì tầng trên ghi nguyên văn vào fact `bo_sung`.
    */
   chuyenSang?: { question: string; answer: string };
+  /**
+   * 15/09/2026 (Zalo thật): câu vừa TRẢ LỜI vừa HỎI NGƯỢC ("Nhà 5 tầng, có thang máy
+   * thì phải, bạn có biết xung quanh khu này có tiện ích gì không") → phần hỏi tách ra
+   * đây để tầng trên trả lời TRƯỚC câu kế; phần trả lời ở `dapAn` (ghi fact bằng nó,
+   * không ghi cả câu).
+   */
+  hoiNguoc?: string;
+  dapAn?: string;
 };
 
 const boDau = (s: string): string =>
@@ -226,12 +234,35 @@ export function bocViTriRao(text: string): string | null {
 }
 
 export function catDapAn(question: string, dapAn: string): string {
-  if (question === "vi_tri" && LENH_DAN.test(boDau(dapAn))) return bocCumDiaChi(dapAn) ?? dapAn;
+  // 15/09/2026: bỏ phần hỏi ngược trước khi cắt; đáp án chữ chỉ giữ MẢNH nói về đúng
+  // câu đang hỏi — "Nhà 5 tầng, có thang máy thì phải, bạn có biết…" → kết cấu "Nhà 5
+  // tầng"; "Được giá, căn tôi sở hữu nhưng chưa vào xem…" → gấp "Được giá".
+  const tach = tachCauHoiNguoc(dapAn);
+  const goc = tach.hoi && tach.traLoi ? tach.traLoi : dapAn;
+  if (question === "vi_tri" && LENH_DAN.test(boDau(goc))) return bocCumDiaChi(goc) ?? goc;
   if (question === "phuong") {
-    const m = /(?:phường|phuong|(?<![\p{L}])p)\s*\.?\s*(\d{1,2})(?!\d)/iu.exec(dapAn);
+    const m = /(?:phường|phuong|(?<![\p{L}])p)\s*\.?\s*(\d{1,2})(?!\d)/iu.exec(goc);
     if (m) return `Phường ${Number(m[1])}`;
   }
-  return dapAn;
+  if (question === "gap") {
+    const kdD = boDauGiuDoDai(goc);
+    const m = /\b(?:(?:khong|ko|k|chua)\s+(?:can\s+)?(?:gap|voi)|can\s+(?:ban\s+)?gap|ban\s+gap|(?:duoc|dc)\s+gia(?:\s+thi\s+thoi)?|tu tu|thong tha|can tien|ban nhanh|ban som|gap|khong voi|ko voi)\b/.exec(kdD);
+    if (m) return goc.slice(m.index, m.index + m[0].length).trim();
+  }
+  const manh = goc.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean);
+  if (manh.length > 1 && question !== "vi_tri" && question !== "bo_sung") {
+    const nd = nhanDienNhieuFact(goc).find((f) => cungHo(f.question, question));
+    const khop = (nd?.answer && nd.answer.length < goc.length ? nd.answer : null) ??
+      manh.find((x) => { const f = nhanDienFact(x); return !!f && cungHo(f.question, question); }) ?? null;
+    if (khop) {
+      // Mảnh mang SĐT ("sổ hồng riêng, gọi tôi 0703 123 456") giữ lại — nhánh người bán
+      // không lọc số, CTV cần nó để gọi (V48-105d).
+      const SDT_RE = /(?:\+?84|0)(?:[\s.]?\d){8,10}\b/;
+      const giu = manh.filter((x) => x !== khop && !khop.includes(x) && SDT_RE.test(x));
+      return [khop, ...giu].join(", ");
+    }
+  }
+  return goc;
 }
 
 // ── Tiểu từ / ack ────────────────────────────────────────────────────────────
@@ -308,6 +339,32 @@ const HO_FACT: string[][] = [
 const cungHo = (a: string, b: string) => a === b || HO_FACT.some((h) => h.includes(a) && h.includes(b));
 export const cungHoFact = cungHo;
 
+// 15/09/2026 (Zalo thật, Ny'ah Phú Định): chủ nhà vừa trả lời vừa hỏi ngược trong MỘT
+// câu — "Nhà 5 tầng, có thang máy thì phải, bạn có biết xung quanh khu này có tiện ích
+// gì không", "Được giá, căn tôi sở hữu nhưng chưa vào xem bạn có thông tin thêm về căn
+// này không". Không dấu "?", không mở đầu bằng từ để hỏi, nên CAU_HOI_RE không thấy:
+// cả câu vào ô kết cấu / ô gấp, còn câu hỏi của chủ nhà thì bot lờ đi và hỏi tiếp —
+// chủ dự án: "nó ngu quá". Tách ở ranh MẢNH (dấu phẩy, hoặc trước "bạn có biết / bạn
+// có thông tin / cho hỏi / mà bạn…"): mảnh HỎI = có "?" hoặc (có từ để hỏi VÀ kết bằng
+// tiểu từ hỏi, ≥ 3 chữ). Mảnh còn lại là câu trả lời. Chỉ dùng khi CÓ CẢ HAI phần —
+// câu thuần hỏi ("phí sao em?") và "5 tỷ được không?" vẫn đi luật cũ.
+const RANH_MANH_RE = /[,;\n]|\s+(?=(?:mà|nhưng|với lại|còn|ma|nhung|voi lai|con)\s+(?:bạn|em|bên|anh|chị|mình|bot|ban|ben|chi|minh)\b)|\s+(?=(?:bạn|em|bên em|bên mình|ban|ben em|ben minh)\s+(?:có\s+(?:biết|thông tin|nắm|thể)|biết|tư vấn|cho hỏi|co\s+(?:biet|thong tin|nam|the)|biet|tu van|cho hoi)\b)/iu;
+const DAU_HOI_RE = /\b(?:co (?:biet|thong tin|the|nam)|biet|thong tin|tu van|cho hoi|hoi|gi|nao|bao nhieu|sao|the nao|nhu the nao|duoc khong|dc khong|bao gio|khi nao|o dau|co phai)\b|\bco\b(?=.*\b(?:khong|ko|k|chua)\b)/;
+const DUOI_HOI_RE = /\b(?:khong|ko|k|chua|gi|nao|nhi|nhe|a|vay|ha|the|sao|bao nhieu|dau)(?:\s+(?:em|anh|chi|ban|a|nha|nhe|nhi|vay|ha|ne|ạ))*\s*\?*\s*$/;
+export function tachCauHoiNguoc(text: string): { traLoi: string; hoi: string | null } {
+  const goc = (text ?? "").trim();
+  const manh = goc.split(RANH_MANH_RE).map((x) => x.trim()).filter(Boolean);
+  if (manh.length < 2) return { traLoi: goc, hoi: null };
+  const laHoi = (m: string): boolean => {
+    if (/\?/.test(m)) return true;
+    const kd = boDau(m).replace(/[?.!]+$/, "").trim();
+    return kd.split(/\s+/).length >= 3 && DAU_HOI_RE.test(kd) && DUOI_HOI_RE.test(kd);
+  };
+  const hoi = manh.filter(laHoi), traLoi = manh.filter((m) => !laHoi(m));
+  if (!hoi.length || !traLoi.length) return { traLoi: goc, hoi: null };
+  return { traLoi: traLoi.join(", "), hoi: hoi.join(" ") };
+}
+
 export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
   // 11/09/2026: bận / hoãn đứng TRƯỚC mọi luật khác — câu này không mang dữ liệu
   // nào (có số thì `laHoanLai` đã trả false), mà luật phường cũ nhận bất kỳ câu
@@ -315,6 +372,15 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
   if (question !== "duyet_tin" && question !== "danh_gia" && laHoanLai(text)) {
     const xh = batXungHo(text) ?? tuXungTuCau(text);
     return { loai: "hoan", ...(xh ? { xungHo: xh } : {}) };
+  }
+  // 15/09/2026: vừa trả lời vừa hỏi ngược → phần trả lời đi tiếp các luật dưới, phần
+  // hỏi trả về `hoiNguoc` để tầng trên trả lời TRƯỚC câu kế (không nuốt câu hỏi).
+  if (question !== "duyet_tin" && question !== "danh_gia") {
+    const { traLoi, hoi } = tachCauHoiNguoc(text);
+    if (hoi && traLoi && traLoi !== text.trim()) {
+      const kqTL = phanLoaiCauTraLoi(question, traLoi);
+      return { ...kqTL, hoiNguoc: hoi, dapAn: traLoi };
+    }
   }
   // 09/09/2026 tối (chạy 12 kịch bản trên production): câu trả lời bị ghi LỆCH
   // MỘT Ô hàng loạt — "Hẻm 4m" vào diện tích, "Đúc 5 tầng" vào số phòng ngủ,
@@ -390,6 +456,12 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
     }
     if (ngang && !coDien && !/\b(dai|sau)\b/.test(kd)) {
       return ketQua("lech", { chuyenSang: { question: "mat_tien", answer: `${ngang[1]}m` } });
+    }
+    // 15/09/2026 (Zalo thật): "Căn số 14 ở Ny'ah Phú Định" trả lời câu diện tích →
+    // "14" thành 14m² trong cột. Số đứng sau căn số / số nhà / lô / hẻm là ĐỊNH DANH,
+    // không phải diện tích: coi là vị trí, câu diện tích vẫn treo.
+    if (!coDien && /\b(?:can so|so nha|so|lo|hem|can)\s*\d/.test(kd)) {
+      return ketQua("lech", { chuyenSang: { question: "vi_tri", answer: text.trim() } });
     }
     if (coDien || (CO_SO.test(kd) && !/\b(ngang|rong|dai|sau|tang|lau|tam|phong|pn|ty|ti|trieu|tr)\b/.test(kd))) {
       return ketQua("khop");
