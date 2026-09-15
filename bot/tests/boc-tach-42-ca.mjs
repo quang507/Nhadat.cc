@@ -310,5 +310,13 @@ ok("nhanDienNhieuCan: căn thứ tự có giá vẫn là rao nhiều căn", nhan
 ok("'bớt cho người ở lâu dài' → thuong_luong", nhanDienNhieuFact("à giá 7tr thôi em, bớt cho người ở lâu dài").some((f) => f.question === "thuong_luong") && !nhanDienNhieuFact("à giá 7tr thôi em, bớt cho người ở lâu dài").some((f) => /thoi_han|so_huu/.test(f.question)), JSON.stringify(nhanDienNhieuFact("à giá 7tr thôi em, bớt cho người ở lâu dài")));
 ok("'căn hộ sở hữu lâu dài' vẫn là so_huu", nhanDienFact("căn hộ sở hữu lâu dài")?.question === "so_huu", JSON.stringify(nhanDienFact("căn hộ sở hữu lâu dài")));
 
+// 15/09/2026 (bắn thật A2/C2): thu nhập thuê của tin BÁN không phải giá mong muốn.
+for (const vao of ["à quên, nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm", "căn 2 đang cho thuê 80 triệu/tháng"]) {
+  const ds = nhanDienNhieuFact(vao);
+  ok("thu nhập thuê không thành giá " + JSON.stringify(vao.slice(0, 40)), !ds.some((f) => f.question === "gia") && ds.some((f) => f.question === "hien_trang_su_dung"), JSON.stringify(ds));
+}
+ok("giá thuê của tin THUÊ vẫn là giá", nhanDienNhieuFact("cho thuê 18 triệu/tháng cọc 2 tháng").some((f) => f.question === "gia"), JSON.stringify(nhanDienNhieuFact("cho thuê 18 triệu/tháng cọc 2 tháng")));
+ok("tachCauHoiNguoc tách sau dấu chấm", tachCauHoiNguoc("nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm. mà giá khu này giờ bao nhiêu 1m2 em?").hoi === "mà giá khu này giờ bao nhiêu 1m2 em?", JSON.stringify(tachCauHoiNguoc("nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm. mà giá khu này giờ bao nhiêu 1m2 em?")));
+
 console.log(hong ? `\nBÓC TÁCH 42 CA: ${hong}/${tong} CA HỎNG` : `\nBÓC TÁCH 42 CA: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

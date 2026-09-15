@@ -1217,6 +1217,11 @@ fresh(seedKho);
     check("N23b fact theo số thứ tự căn → không mở tin mới, căn 2 nhận phap_ly + thuong_luong, căn 1 nhận ket_cau",
       db().t.listings.length === soTinTruoc && !r.body.nhieu_can && factCua(theoThuTu[1]).includes("phap_ly") && factCua(theoThuTu[1]).includes("thuong_luong") && factCua(theoThuTu[0]).includes("ket_cau") && r.body.fact_theo_can >= 3,
       JSON.stringify({ body: r.body, so: [soTinTruoc, db().t.listings.length], f: db().t.listing_facts.map((f) => [f.listing_id.slice(0, 4), f.question, f.answer]), tt: theoThuTu.map((l) => l.id.slice(0, 4)) }));
+    // 15/09 (bắn thật C2): "căn 2 đang cho thuê 80 triệu/tháng" có "cho thuê" + tiền (cổng rao khớp) vẫn là fact theo căn, không phải giá.
+    r = await send({ external_user_id: "z-cdt", text: "căn 1 sổ hồng riêng hoàn công đủ, căn 2 đang cho thuê 80 triệu/tháng" });
+    check("N23c 'căn 2 đang cho thuê 80 triệu/tháng' → hiện trạng vào căn 2, KHÔNG có fact giá 80 triệu, không mở tin",
+      db().t.listings.length === soTinTruoc && factCua(theoThuTu[1]).includes("hien_trang_su_dung") && !db().t.listing_facts.some((f) => f.question === "gia" && /80/.test(f.answer)) && r.body.fact_theo_can >= 2,
+      JSON.stringify({ body: r.body, f: db().t.listing_facts.map((f) => [f.listing_id.slice(0, 4), f.question, f.answer]) }));
   }
   // 15/09/2026 (bắn thật P1): câu rao kèm "bên em là bot hả?" → trả lời thật trước câu hỏi đầu.
   fresh();
