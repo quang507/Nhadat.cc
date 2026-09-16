@@ -448,7 +448,7 @@ export const cungHoFact = cungHo;
 // tiểu từ hỏi, ≥ 3 chữ). Mảnh còn lại là câu trả lời. Chỉ dùng khi CÓ CẢ HAI phần —
 // câu thuần hỏi ("phí sao em?") và "5 tỷ được không?" vẫn đi luật cũ.
 const RANH_MANH_RE = /[,;\n]|\.\s+(?=\S)|\s+(?=(?:mà|nhưng|với lại|còn|ma|nhung|voi lai|con)\s+(?:bạn|em|bên|anh|chị|mình|bot|ban|ben|chi|minh)\b)|\s+(?=(?:bạn|em|bên em|bên mình|ban|ben em|ben minh)\s+(?:có\s+(?:biết|thông tin|nắm|thể)|biết|tư vấn|cho hỏi|co\s+(?:biet|thong tin|nam|the)|biet|tu van|cho hoi)\b)/iu;
-const DAU_HOI_RE = /\b(?:co (?:biet|thong tin|the|nam)|biet|thong tin|tu van|cho hoi|hoi|gi|nao|bao nhieu|sao|the nao|nhu the nao|duoc khong|dc khong|bao gio|khi nao|o dau|co phai)\b|\bco\b(?=.*\b(?:khong|ko|k|chua)\b)/;
+const DAU_HOI_RE = /\b(?:co (?:biet|thong tin|the|nam)|biet|thong tin|tu van|cho hoi|hoi|gi|nao|bao nhieu|sao|the nao|nhu the nao|duoc khong|dc khong|bao gio|khi nao|o dau|co phai|la (?:bot|may|nguoi)|hay (?:bot|may|nguoi))\b|\bco\b(?=.*\b(?:khong|ko|k|chua)\b)/;
 const DUOI_HOI_RE = /\b(?:khong|ko|k|chua|gi|nao|nhi|nhe|a|vay|ha|the|sao|bao nhieu|dau)(?:\s+(?:em|anh|chi|ban|a|nha|nhe|nhi|vay|ha|ne|ạ))*\s*\?*\s*$/;
 export function tachCauHoiNguoc(text: string): { traLoi: string; hoi: string | null } {
   const goc = (text ?? "").trim();
@@ -476,7 +476,9 @@ export function laCauHoiTron(text: string): boolean {
   const kd = boDau(goc).replace(/[?.!]+$/, "").trim();
   // Không dấu hỏi thì cần thêm CHỦ NGỮ/TỪ HỎI rõ ("bên bạn có…", "bao nhiêu", "thế nào"):
   // "không dính gì" (trả lời quy hoạch) có "gì" ở cuối nhưng không phải câu hỏi.
-  const coTuHoi = /\b(?:ban|ben|em|anh|chi|minh)\s+(?:co|biet|tinh|nhan|can|thay)\b|\b(?:bao nhieu|the nao|nhu the nao|khi nao|bao gio|o dau|co phai|duoc khong|dc khong|hay sao|ha em|khong em|khong a|khong ban)\b/;
+  // 16/09/2026 (bắn thật mau-co-thue): "à mà cháu là bot hay người vậy" — bot xưng cháu nên khách
+  // hỏi "cháu là…"; câu hỏi về bản chất bot (là bot / máy / người thật) luôn là câu hỏi.
+  const coTuHoi = /\b(?:ban|ben|em|anh|chi|minh|chau)\s+(?:co|biet|tinh|nhan|can|thay|la)\b|\b(?:bao nhieu|the nao|nhu the nao|khi nao|bao gio|o dau|co phai|duoc khong|dc khong|hay sao|ha em|ha chau|khong em|khong chau|khong a|khong ban|la bot|la may|la nguoi|hay nguoi|hay may|hay bot)\b/;
   return kd.split(/\s+/).length >= 3 && DAU_HOI_RE.test(kd) && DUOI_HOI_RE.test(kd) && coTuHoi.test(kd);
 }
 
@@ -919,8 +921,10 @@ export function nhanDienFact(text: string): NhanDien | null {
       !/\b\d+\s*(?:lau|tang|tam)\b/.test(kd) && !/\btang\s*(?:gia|them|len)\b|\d\s*%/.test(kd)) {
     return { question: "tang", answer: m[1] };
   }
-  if (/\b(thue toi thieu|toi thieu \d+ (?:nam|thang)|hop dong \d+ (?:nam|thang)|thoi han thue|ky \d+ nam|thue \d+ nam)\b/.test(kd)) {
-    return { question: "thoi_han_thue", answer: goc };
+  // 16/09/2026 (bắn thật mau-co-thue): "cọc 2 tháng, ở tối thiểu 1 năm" → ô thời hạn ghi cả câu; chỉ lấy mảnh.
+  const THOI_HAN_RE = /\b(thue toi thieu|toi thieu \d+ (?:nam|thang)|hop dong \d+ (?:nam|thang)|thoi han thue|ky \d+ nam|thue \d+ nam)\b/;
+  if (THOI_HAN_RE.test(kd)) {
+    return { question: "thoi_han_thue", answer: manhKhop(THOI_HAN_RE) };
   }
   // 15/09/2026 (bắn thật C4): "à mà nhà này cho thuê chứ ko bán, 25 triệu" là ĐỔI LOẠI
   // GIAO DỊCH — bản trước ghi vào ô "tiềm năng", tin vẫn là tin BÁN và 25 triệu bị
@@ -930,7 +934,10 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (DOI_SANG_BAN_RE.test(kd)) return { question: "loai_giao_dich", answer: "ban" };
   // 13/09/2026: "cho thuê căn hộ Sunrise City quận 7" là VIỆC RAO (deal + loại
   // BĐS), không phải tiềm năng — bản trước ghi nó vào ô "Phù hợp".
-  const laViecRao = /\b(?:ban|cho thue|sang|sang nhuong|de lai)\s+(?:lai\s+)?(?:gap\s+)?(?:can ho|can|nha|dat|lo|phong|mat bang|chung cu|kho|xuong|shophouse|biet thu|nen|mieng)\b/.test(kd);
+  // 16/09/2026 (bắn thật mau-co-thue): "cô có căn chung cư ở q7 muốn cho thuê" → ô tiềm năng.
+  // "muốn/cần/đang + bán/cho thuê" là VIỆC rao, dù không có vật sau chữ đó.
+  const laViecRao = /\b(?:ban|cho thue|sang|sang nhuong|de lai)\s+(?:lai\s+)?(?:gap\s+)?(?:can ho|can|nha|dat|lo|phong|mat bang|chung cu|kho|xuong|shophouse|biet thu|nen|mieng)\b/.test(kd) ||
+    /\b(?:muon|can|dang|nho|ky gui|giao)\s+(?:giao\s+|gui\s+)?(?:ban|cho thue|sang nhuong)\b/.test(kd);
   // 16/09/2026 (Zalo thật): "nhà ở từ năm 2019 rồi" là HIỆN TRẠNG (đang ở, từ khi nào), không
   // phải tiềm năng sử dụng.
   const O_TU_NAM_RE = /\b(?:nha\s+)?(?:o|xay|xay dung|su dung|dang o)\s+(?:tu|hoi|nam)\s+(?:nam\s+)?((?:19|20)\d{2})\b/;
