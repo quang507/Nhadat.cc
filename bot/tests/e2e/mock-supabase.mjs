@@ -50,9 +50,10 @@ export class FakeDB {
       dat_kinh_doanh: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("thoi_han_su_dung", 10), CM("hinh_thuc_thue_dat", 11), CM("muc_dich", 12), CM("do_rong_duong", 13), CM("phap_ly", 14), CM("hinh_anh", 19)],
       kho_xuong: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("chieu_cao", 10), CM("tai_trong_san", 11), CM("tram_bien_ap", 12), CM("xu_ly_nuoc_thai", 13), CM("duong_container", 14), CM("phap_ly", 15), CM("thoi_han_su_dung", 16), CM("tien_coc", 17, "cho_thue"), CM("thoi_han_thue", 18, "cho_thue"), CM("hinh_anh", 19)],
       chua_ro: [CB("loai_bds", 1), CB("vi_tri", 2), CB("phuong", 3), CB("gia", 9)],
-      nha_pho: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("ket_cau", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("tiem_nang", 14), ...THUE_NHA, CM("hinh_anh", 19), ...SAU_NHA],
-      nha_cap4: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("hien_trang", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("tiem_nang", 14), CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
-      chung_cu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_tim_tuong", 6), CB("gia", 9), CM("tang", 10), CM("so_phong_ngu", 11), CM("huong", 12), CM("noi_that", 13), CM("phap_ly", 14), CM("phi_quan_ly", 15), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
+      // 20260916c: tiềm năng → hỏi bù sau đăng (39); chung cư hỏi nội thất (12) trước hướng (13).
+      nha_pho: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("ket_cau", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), ...THUE_NHA, CM("hinh_anh", 19), ...SAU_NHA, SD("tiem_nang", 39)],
+      nha_cap4: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("hien_trang", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19), SD("tiem_nang", 39)],
+      chung_cu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_tim_tuong", 6), CB("gia", 9), CM("tang", 10), CM("so_phong_ngu", 11), CM("noi_that", 12), CM("huong", 13), CM("phap_ly", 14), CM("phi_quan_ly", 15), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
       dat: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("tho_cu", 8), CB("gia", 9), CM("do_rong_duong", 10), CM("huong", 11), CM("ha_tang", 12), CM("xay_dung", 13), CM("phap_ly", 14), CM("hinh_anh", 19)],
       biet_thu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("ket_cau", 10), CM("so_phong_ngu", 11), CM("san_vuon", 12), CM("do_rong_hem", 13), CM("khu_compound", 14), CM("phap_ly", 15), CM("noi_that", 16, "cho_thue"), CM("tien_coc", 17, "cho_thue"), CM("thoi_han_thue", 18, "cho_thue"), CM("hinh_anh", 19)],
       phong_tro: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("noi_that", 10), CM("gia_dien_nuoc", 11), CM("gio_giac", 12), CM("tien_coc", 13), CM("hinh_anh", 19)],
@@ -72,7 +73,9 @@ export class FakeDB {
       // Ảnh trong kho (listing_media) = đã có ảnh, như view thật (FR-185).
       if (this.t.listing_media.some((m) => m.listing_id === l.id)) have.add("hinh_anh");
       const loai = REQ[l.property_type ?? "chua_ro"] ? (l.property_type ?? "chua_ro") : "chua_ro";
-      for (const [k, priority, nhom, deal] of [...REQ[loai], ...(loai === "chua_ro" ? [] : [["gap", 10, "co_ban", null]])]) {
+      // 20260916c: gấp là chuyên môn, sau câu chuyên môn cuối (trước ảnh), tối đa 18.
+      const maxCM = Math.max(17, ...REQ[loai].filter((r) => r[2] === "chuyen_mon" && !r[3] && !["hinh_anh", "tiem_nang", "gap"].includes(r[0])).map((r) => r[1]));
+      for (const [k, priority, nhom, deal] of [...REQ[loai], ...(loai === "chua_ro" ? [] : [["gap", Math.min(18, maxCM + 1), "chuyen_mon", null]])]) {
         if (deal && deal !== (l.deal ?? "ban")) continue;
         if (!have.has(k)) out.push({ listing_id: l.id, fact_key: k, priority, nhom });
       }
