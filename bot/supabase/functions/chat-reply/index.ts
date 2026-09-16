@@ -2147,13 +2147,15 @@ ${kem}` : tomTat, cheDo };
       const cans = (dangRao ?? []) as CanRao[];
       const tenCan = (c: CanRao) =>
         [c.location_raw, c.ward].filter(Boolean).join(", ") || (c.code ? `mã ${c.code}` : "căn chưa rõ địa chỉ");
+      // "căn Căn số 14 ở…" (bắn thật mau-chu-q8): địa chỉ đã mở đầu bằng "căn" thì không thêm chữ "căn".
+      const canTen = (c: CanRao) => { const t = tenCan(c); return /^căn\b/i.test(t) ? t : `căn ${t}`; };
       if (cans.length) {
         if (dangHoiCanCuMoi && laCanDo && !laCanKhac) {
           // Cùng căn → tiếp tục câu đang treo của căn đó (không ghi gì từ câu này).
           const cauKe = pendingReq
             ? cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)
             : `Có gì thêm về căn này ${cachGoi} cứ nhắn em nha.`;
-          return await traLoiSeller([`Dạ, vậy em tiếp tục với căn ${tenCan(cans[0])} nha. ${cauKe}`], { can_cu_hay_moi: "can_cu" });
+          return await traLoiSeller([`Dạ, vậy em tiếp tục với ${canTen(cans[0])} nha. ${cauKe}`], { can_cu_hay_moi: "can_cu" });
         }
         if (dangHoiCanCuMoi && laCanKhac) {
           // Căn khác nhưng chưa có chi tiết → xin chi tiết; câu này mang dấu `dangXinCanMoi`.
@@ -2165,7 +2167,7 @@ ${kem}` : tomTat, cheDo };
         // Câu rao suông (lần đầu, hoặc lặp lại mà chưa trả lời căn đó/căn khác) → hỏi.
         if (raoSuong && !(dangHoiCanCuMoi && (laCanDo || laCanKhac))) {
           const ds = cans.length === 1
-            ? `trước đó ${cachGoi} có căn ${tenCan(cans[0])}${cans[0].price_raw ? ` giá ${cans[0].price_raw}` : ""}`
+            ? `trước đó ${cachGoi} có ${canTen(cans[0])}${cans[0].price_raw ? ` giá ${cans[0].price_raw}` : ""}`
             : `trước đó ${cachGoi} đang rao ${cans.length} căn: ${cans.map(tenCan).join(" · ")}`;
           return await traLoiSeller(
             [`Dạ ${cachGoi}, ${ds}. Căn ${cachGoi} vừa nhắc là căn đó hay căn khác ạ? Căn khác thì ${cachGoi} cho em xin địa chỉ, diện tích và giá nha.`],
@@ -3032,7 +3034,31 @@ ${kem}` : tomTat, cheDo };
           p_source: "seller_chat",
         });
         if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
-        else await chepSangDuAn(pendingReq.question, dapAn);
+        else {
+          await chepSangDuAn(pendingReq.question, dapAn);
+          // 16/09/2026 (bắn thật mau-chu-q8): "Căn số 14 ở Ny'ah Phú Định" trả lời câu VỊ TRÍ — tên dự
+          // án trong kho chỉ được khớp lúc RAO, nên tin nằm "Quận 5 (chưa rõ quận)" dù dự án ở Quận 8.
+          // Nay khớp cả ở đây; quận/phường lấy của dự án khi tin còn mặc định / trống.
+          if (pendingReq.question === "vi_tri" && !pendingReq.listings?.project_id) {
+            const { data: dsDA, error: daErr } = await client.rpc("match_projects", { p_text: dapAn });
+            if (daErr) await ghiLoi(client, "chat-reply match_projects(vi_tri)", daErr.message);
+            const da = ((dsDA ?? []) as Array<{ id: string; name?: string; district?: string | null; ward?: string | null }>)[0] ?? null;
+            if (da && !duAnLaTenDuong(da.name, dapAn)) {
+              const { data: cu } = await client.from("listings").select("district, ward, boc_tach").eq("id", pendingReq.listing_id).maybeSingle();
+              const macDinh = !cu?.district || (cu?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
+              const { error: gErr } = await client.from("listings").update({
+                project_id: da.id,
+                ...(macDinh && da.district ? { district: da.district } : {}),
+                ...(!cu?.ward && da.ward ? { ward: da.ward } : {}),
+              }).eq("id", pendingReq.listing_id).is("project_id", null);
+              if (gErr) await ghiLoi(client, "chat-reply gan du an(vi_tri)", gErr.message);
+              else if (macDinh && da.district) {
+                const { error: btErr } = await client.rpc("ghi_boc_tach", { p_listing_id: pendingReq.listing_id, p: { quan: da.district, quan_mac_dinh: false } });
+                if (btErr) await ghiLoi(client, "chat-reply ghi_boc_tach(quan du an)", btErr.message);
+              }
+            }
+          }
+        }
       }
       // Câu khớp nhưng còn kèm fact khác ("3 lầu, 4 phòng ngủ" khi hỏi kết cấu;
       // "Đường 12m, hướng Bắc" khi hỏi đường) → ghi luôn, đỡ hỏi lại (09/09 tối).

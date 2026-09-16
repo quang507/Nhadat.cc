@@ -357,6 +357,10 @@ for (const [vao, mong] of [
   ok("phanLoai(vi_tri) câu đó → khớp", phanLoaiCauTraLoi("vi_tri", c).loai === "khop", JSON.stringify(phanLoaiCauTraLoi("vi_tri", c)));
   for (const q of ["gia", "ket_cau", "so_phong_ngu"]) ok(`phanLoai(${q}) 'Căn số 14…' → lệch sang vi_tri`, phanLoaiCauTraLoi(q, c).loai === "lech" && phanLoaiCauTraLoi(q, c).chuyenSang?.question === "vi_tri", JSON.stringify(phanLoaiCauTraLoi(q, c)));
   ok("phanLoai(gia) '5 tỷ' vẫn khớp", phanLoaiCauTraLoi("gia", "5 tỷ").loai === "khop");
+  // 16/09 (bắn thật mau-chu-q8): "quận 8" còn lại sau khi lời sửa bóc "phường 16" → không phải giá.
+  for (const t of ["quận 8", "q8", "phường 16 quận 8", "p16"]) ok(`phanLoai(gia) "${t}" → không khớp giá`, phanLoaiCauTraLoi("gia", t).loai !== "khop", JSON.stringify(phanLoaiCauTraLoi("gia", t)));
+  ok("phanLoai(so_phong_ngu) 'quận 8' → ack", phanLoaiCauTraLoi("so_phong_ngu", "quận 8").loai === "ack");
+  ok("phanLoai(gia) '8' vẫn khớp (số trần)", phanLoaiCauTraLoi("gia", "8").loai === "khop");
   ok("phanLoai(ket_cau) '3 tấm' vẫn khớp", phanLoaiCauTraLoi("ket_cau", "3 tấm").loai === "khop");
 }
 
