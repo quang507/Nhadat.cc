@@ -609,6 +609,13 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   }
 
   if (HOI_SO.has(question)) {
+    // 16/09/2026 (bắn thật mau-chu-q8): "phường 16 quận 8" khi đang hỏi GIÁ — lời sửa FR-164 bóc
+    // "phường 16" đi, còn "quận 8" rơi vào ô giá. Số của quận/phường không phải đáp án số;
+    // câu chỉ còn quận/phường thì là ack (quận đã có `capNhatQuan` lo), câu hỏi vẫn treo.
+    const kdKhongDiaGioi = kd.replace(/\b(?:quan|q|phuong|p)\s*\.?\s*\d{1,2}\b/g, " ");
+    if (kdKhongDiaGioi !== kd && !CO_SO.test(kdKhongDiaGioi) && conChu(kdKhongDiaGioi.replace(/\b(?:quan|phuong)\b/g, "")).length < 2) {
+      return { loai: "ack" };
+    }
     // 16/09/2026 (Zalo thật): "Căn số 14 ở Ny'ah Phú Định" khi đang hỏi GIÁ / kết cấu —
     // số sau "căn số / số nhà / lô" là định danh, không phải đáp án số. Cùng luật với
     // nhánh diện tích ở trên: coi là vị trí, câu đang hỏi vẫn treo.

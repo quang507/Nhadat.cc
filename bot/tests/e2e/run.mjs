@@ -2142,7 +2142,7 @@ fresh(seedKho);
   r = await send({ external_user_id: "chu-1", text: "chú có căn nhà cần bán" });
   r = await send({ external_user_id: "chu-1", text: "căn đó" });
   check("CHU-7 'căn đó' → tiếp tục căn cũ, không mở tin, không ghi fact",
-    db().t.listings.length === 2 && /tiếp tục với căn/.test(rep()) && !db().t.listing_facts.some((f) => /^căn đó$/i.test(f.answer)), JSON.stringify(r.body.replies));
+    db().t.listings.length === 2 && /tiếp tục với (căn|Căn số 14)/.test(rep()) && !db().t.listing_facts.some((f) => /^căn đó$/i.test(f.answer)), JSON.stringify(r.body.replies));
   // Diện tích SÀN của nhà nhiều tầng không phải diện tích đất; "nhà trong hẻm" không phải "nhà trống".
   fresh();
   r = await send({ external_user_id: "chu-2", text: "bán nhà phú định q8 giá 6 tỷ" });
