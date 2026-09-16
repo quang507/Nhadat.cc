@@ -3049,7 +3049,8 @@ ${kem}` : tomTat, cheDo };
               const { error: gErr } = await client.from("listings").update({
                 project_id: da.id,
                 ...(macDinh && da.district ? { district: da.district } : {}),
-                ...(!cu?.ward && da.ward ? { ward: da.ward } : {}),
+                // Phường của dự án chỉ khi quận cũng lấy của dự án — tin đã nói rõ quận khác thì không lai.
+                ...(macDinh && !cu?.ward && da.ward ? { ward: da.ward } : {}),
               }).eq("id", pendingReq.listing_id).is("project_id", null);
               if (gErr) await ghiLoi(client, "chat-reply gan du an(vi_tri)", gErr.message);
               else if (macDinh && da.district) {
