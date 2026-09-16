@@ -360,6 +360,12 @@ for (const [vao, mong] of [
   // 16/09 (bắn thật mau-chu-q8): "quận 8" còn lại sau khi lời sửa bóc "phường 16" → không phải giá.
   for (const t of ["quận 8", "q8", "phường 16 quận 8", "p16"]) ok(`phanLoai(gia) "${t}" → không khớp giá`, phanLoaiCauTraLoi("gia", t).loai !== "khop", JSON.stringify(phanLoaiCauTraLoi("gia", t)));
   ok("phanLoai(so_phong_ngu) 'quận 8' → ack", phanLoaiCauTraLoi("so_phong_ngu", "quận 8").loai === "ack");
+  // 16/09 (bắn thật mau-co-thue): câu rao "muốn cho thuê" không phải tiềm năng; "cháu là bot hay
+  // người" là câu hỏi; thời hạn thuê chỉ lấy mảnh.
+  ok("'cô có căn chung cư ở q7 muốn cho thuê' KHÔNG phải tiềm năng", nhanDienFact("cô có căn chung cư ở q7 muốn cho thuê")?.question !== "tiem_nang", JSON.stringify(nhanDienFact("cô có căn chung cư ở q7 muốn cho thuê")));
+  ok("'hợp để ở hoặc cho thuê' vẫn là tiềm năng", nhanDienFact("hợp để ở hoặc cho thuê")?.question === "tiem_nang", JSON.stringify(nhanDienFact("hợp để ở hoặc cho thuê")));
+  ok("laCauHoiTron 'à mà cháu là bot hay người vậy'", laCauHoiTron("à mà cháu là bot hay người vậy") && phanLoaiCauTraLoi("phuong", "à mà cháu là bot hay người vậy").loai === "hoi", JSON.stringify(phanLoaiCauTraLoi("phuong", "à mà cháu là bot hay người vậy")));
+  ok("'cọc 2 tháng, ở tối thiểu 1 năm' → thời hạn chỉ mảnh", nhanDienNhieuFact("cọc 2 tháng, ở tối thiểu 1 năm").find((f) => f.question === "thoi_han_thue")?.answer === "ở tối thiểu 1 năm", JSON.stringify(nhanDienNhieuFact("cọc 2 tháng, ở tối thiểu 1 năm")));
   ok("phanLoai(gia) '8' vẫn khớp (số trần)", phanLoaiCauTraLoi("gia", "8").loai === "khop");
   ok("phanLoai(ket_cau) '3 tấm' vẫn khớp", phanLoaiCauTraLoi("ket_cau", "3 tấm").loai === "khop");
 }
