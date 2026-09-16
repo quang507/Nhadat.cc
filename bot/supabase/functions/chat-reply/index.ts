@@ -2904,7 +2904,10 @@ ${kem}` : tomTat, cheDo };
           .neq("question", pendingReq.question)
           .gt("created_at", pendingReq.created_at ?? new Date(0).toISOString());
         const gat = kq.loai === "ack" && laDongY(dapAn);
-        if ((kq.chuyenSang && (daNe ?? 0) >= 2) || gat) {
+        // 16/09/2026 (chủ dự án, sau khi câu phường bị hỏi 4 lượt liền ở mau-co-thue): một câu
+        // hỏi TỐI ĐA 2 LẦN trong chat — hỏi, khách nói thứ khác, hỏi lại một lần, vẫn thứ khác
+        // thì thôi, để vòng hỏi bù (ask-seller) hỏi hôm sau. Trước là né 2 lần (hỏi 3 lượt).
+        if ((kq.chuyenSang && (daNe ?? 0) >= 1) || gat) {
           const { error: neErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
           if (neErr) await ghiLoi(client, "chat-reply bo qua cau treo", neErr.message);
           boQuaCauTreo = true;

@@ -925,7 +925,8 @@ fresh(seedKho);
     JSON.stringify({ body: r.body, f: db().t.listing_facts }));
   r = await send({ external_user_id: "h-1", text: "3 lầu 4 phòng ngủ" });
   // FR-186 (09/09 chiều): nhà phố hỏi thêm TIỀM NĂNG (để ở hay kinh doanh ngành gì) trước khi gửi nháp — chuỗi 07/09 của sếp + chat 21/06.
-  check("H4b trả lời kết cấu → câu kế là TIỀM NĂNG (hợp để ở hay kinh doanh), chưa gửi nháp", r.body.saved_fact === "ket_cau" && pend("tiem_nang") && !r.body.ban_nhap, JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  // 20260916c: tiềm năng dời sang hỏi bù sau đăng — chat KHÔNG hỏi nữa.
+  check("H4b trả lời kết cấu → không hỏi TIỀM NĂNG trong chat (20260916c: hỏi bù sau đăng)", r.body.saved_fact === "ket_cau" && !pend("tiem_nang"), JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   r = await send({ external_user_id: "h-1", text: "ở hoặc làm văn phòng đều được" });
   const nhap = r.body.replies.join("\n");
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
@@ -1078,9 +1079,10 @@ fresh(seedKho);
   r = await send({ external_user_id: "h-9", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2, không gấp" });
   const H9 = db().t.listings[0];
   for (const t of ["hẻm 4m xe hơi", "3 lầu", "4 phòng ngủ", "sổ hồng riêng hoàn công đủ"]) r = await send({ external_user_id: "h-9", text: t });
-  check("N6 chuỗi nhà phố 09/09: hẻm → lầu → phòng → pháp lý → tiềm năng (câu mới FR-186) rồi mới bản nháp", pend("tiem_nang", H9.id), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
+  // 20260916c: tiềm năng không còn trong chat → sau pháp lý (gấp đã nói lúc rao) là bản nháp ngay.
+  check("N6 chuỗi nhà phố: hẻm → lầu → phòng → pháp lý → bản nháp (tiềm năng để hỏi bù, 20260916c)", pend("duyet_tin", H9.id) && !pend("tiem_nang", H9.id), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
   r = await send({ external_user_id: "h-9", text: "ở hoặc làm văn phòng đều được" });
-  check("N6b trả lời tiềm năng → bản nháp (điểm ≥70), mở duyet_tin", r.body.ban_nhap === true && pend("duyet_tin", H9.id), JSON.stringify(r.body));
+  check("N6b nói tiềm năng lúc đang duyệt → ghi fact, gửi lại bản nháp, duyet_tin vẫn treo", db().t.listing_facts.some((f) => f.listing_id === H9.id && f.question === "tiem_nang") && pend("duyet_tin", H9.id), JSON.stringify(r.body));
   r = await send({ external_user_id: "h-9", text: "chốt đi em" });
   check("N6c 'chốt đi' lúc duyệt = GẬT (không phải báo bán rồi) → lên kệ", r.body.duyet === true && H9.status === "dang_ban" && !r.body.ngung_rao, JSON.stringify(r.body));
 
@@ -1163,7 +1165,8 @@ fresh(seedKho);
   // FR-188 (10/09): GẤP — hỏi ngay sau giá; "không gấp, được giá thì thôi" → gap=false rồi hỏi hẻm; bắt gấp ở mọi lượt.
   fresh();
   r = await send({ external_user_id: "g-1", text: "bán nhà hẻm trần bình trọng p4 giá 6 tỷ 50m2" });
-  check("N18 rao có giá, chưa nói gấp → câu ĐẦU là gấp (co_ban, ngay sau giá)", pend("gap"), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
+  // 20260916c: gấp lùi sau pháp lý — câu đầu là HẺM, gấp vẫn bắt ở mọi lượt.
+  check("N18 rao có giá, chưa nói gấp → câu ĐẦU là hẻm (gấp lùi sau pháp lý, 20260916c)", pend("do_rong_hem") && !pend("gap"), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
   r = await send({ external_user_id: "g-1", text: "không gấp, được giá thì thôi" });
   check("N18b 'không gấp, được giá thì thôi' → listings.gap = false, câu kế là HẺM", db().t.listings[0].gap === false && pend("do_rong_hem"), JSON.stringify({ gap: db().t.listings[0].gap, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   r = await send({ external_user_id: "g-1", text: "hẻm 4m, mà thôi anh cần bán gấp, cần tiền" });
