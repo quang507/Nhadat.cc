@@ -191,6 +191,7 @@ export const FACT_LABELS: Record<string, string> = {
   dien_tich_dat: "diện tích đất",
   dien_tich: "diện tích",
   dien_tich_tim_tuong: "diện tích tim tường",
+  dien_tich_san: "diện tích sàn (cộng các tầng, không phải đất)",
   ket_cau: "kết cấu (số tầng, phòng)",
   do_rong_hem: "độ rộng hẻm trước nhà",
   do_rong_duong: "độ rộng đường trước đất",

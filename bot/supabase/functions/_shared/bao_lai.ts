@@ -81,6 +81,7 @@ const BO_QUA = new Set(["hinh_anh", "duyet_tin", "danh_gia", "xac_nhan_lich", "c
 const NHAN_THEM: Record<string, string> = {
   du_an_ten: "tên dự án",
   loai_giao_dich: "loại giao dịch",
+  dien_tich_san: "diện tích sàn", // 16/09/2026: bong bóng 💾 từng in "dien tich san"
 };
 // Đáp án là giá trị enum (`listings.deal`) — in cho người đọc.
 const CHU_DAP_AN: Record<string, Record<string, string>> = {

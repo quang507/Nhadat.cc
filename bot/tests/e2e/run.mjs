@@ -2108,6 +2108,26 @@ fresh(seedKho);
   r = await send({ external_user_id: "chu-1", text: "chú có căn nhà cần bán" });
   check("CHU-6 rao suông khi có 2 căn → liệt kê 2 căn, hỏi căn đó hay căn khác", /đang rao 2 căn/.test(rep()) && /là căn đó hay căn khác/.test(rep()), JSON.stringify(r.body.replies));
   r = await send({ external_user_id: "chu-1", text: "căn đó" });
+  // Bắn thật sau deploy #145: câu trả lời có "cần bán gấp" + số đo KHÔNG phải rao suông.
+  {
+    const L1 = db().t.listings[0];
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: L1.id, question: "dien_tich_dat", status: "pending" });
+    r = await send({ external_user_id: "chu-1", text: "ngang 5m còn dọc 16m cần bán gấp" });
+    const fL1 = (q) => db().t.listing_facts.find((f) => f.listing_id === L1.id && f.question === q);
+    check("CHU-7b 'ngang 5m còn dọc 16m cần bán gấp' khi đang hỏi đất → KHÔNG hỏi căn đó/căn khác; đất 'ngang 5m dài 16m', gấp 'cần bán gấp', mặt tiền 'ngang 5m dài 16m'",
+      !/căn đó hay căn khác/.test(rep()) && fL1("dien_tich_dat")?.answer === "ngang 5m dài 16m" && fL1("gap")?.answer === "cần bán gấp" && fL1("mat_tien")?.answer === "ngang 5m dài 16m",
+      JSON.stringify({ rep: r.body.replies, f: db().t.listing_facts.filter((f) => f.listing_id === L1.id) }));
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: L1.id, question: "gap", status: "pending" });
+    r = await send({ external_user_id: "chu-1", text: "cần bán gấp" });
+    check("CHU-7c 'cần bán gấp' trần khi đang hỏi gấp → là đáp án, không hỏi căn đó/căn khác",
+      !/căn đó hay căn khác/.test(rep()) && r.body.saved_fact === "gap", JSON.stringify({ rep: r.body.replies, body: r.body }));
+    r = await send({ external_user_id: "chu-1", text: "chú có căn nhà cần bán gấp" });
+    check("CHU-7d 'chú có căn nhà cần bán gấp' (không chi tiết) → vẫn hỏi căn đó hay căn khác", /căn đó hay căn khác/.test(rep()), JSON.stringify(r.body.replies));
+  }
+  r = await send({ external_user_id: "chu-1", text: "chú có căn nhà cần bán" });
+  r = await send({ external_user_id: "chu-1", text: "căn đó" });
   check("CHU-7 'căn đó' → tiếp tục căn cũ, không mở tin, không ghi fact",
     db().t.listings.length === 2 && /tiếp tục với căn/.test(rep()) && !db().t.listing_facts.some((f) => /^căn đó$/i.test(f.answer)), JSON.stringify(r.body.replies));
   // Diện tích SÀN của nhà nhiều tầng không phải diện tích đất; "nhà trong hẻm" không phải "nhà trống".
