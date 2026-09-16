@@ -20,7 +20,7 @@
 // `(ty|ti|toi|trieu|tr)` ở năm chỗ, không chỗ nào biết "toi" + số là TỚI —
 // nên "5 tới 6 tỷ" ghi giá "5 tới 6" (mục D1 review 10/09).
 import { TIEN_KD, CO_TIEN_KD, TIEN_T_KEP } from "./luat-tien.ts";
-import { TRUOC_LA_THUE } from "./boc-cau-rao.ts";
+import { TRUOC_LA_SAN, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 
 export type LoaiCau =
   | "khop"      // đúng là câu trả lời cho câu đang hỏi → ghi fact, đóng câu hỏi
@@ -30,10 +30,27 @@ export type LoaiCau =
   | "hoan"      // bận / để hỏi vợ / hỏi hoài → KHÔNG ghi, KHÔNG hỏi thêm, câu vẫn treo
   | "lech";     // có nội dung nhưng không khớp câu hỏi → không ghi, hỏi rõ
 
+/**
+ * Cách gọi khách (FR-176). 16/09/2026 (Zalo thật): khách nhắn "Chào cháu chú có căn
+ * nhà này cần giao bán" mà bot đáp "Dạ em…" — xưng "chú" là NAM LỚN TUỔI, bot phải
+ * gọi "chú" và tự xưng "cháu". Ba từ mới: chú / cô / bác (bác không rõ nam hay nữ).
+ */
+export type XungHo = "anh" | "chị" | "chú" | "cô" | "bác";
+export const XUNG_HO_LON_TUOI: ReadonlySet<string> = new Set(["chú", "cô", "bác"]);
+/** Bot tự xưng gì khi gọi khách là `xh`: em ↔ anh/chị, cháu ↔ chú/cô/bác. */
+export const tuXungBot = (xh: string | null | undefined): "em" | "cháu" =>
+  xh && XUNG_HO_LON_TUOI.has(xh) ? "cháu" : "em";
+/** Giới tính + nhóm tuổi suy từ cách gọi (ghi `sellers.gioi_tinh`, `sellers.nhom_tuoi`). */
+export function suyTuXungHo(xh: XungHo): { gioi_tinh: "nam" | "nu" | null; nhom_tuoi: "tre" | "lon_tuoi" } {
+  const nam = xh === "anh" || xh === "chú";
+  const nu = xh === "chị" || xh === "cô";
+  return { gioi_tinh: nam ? "nam" : nu ? "nu" : null, nhom_tuoi: XUNG_HO_LON_TUOI.has(xh) ? "lon_tuoi" : "tre" };
+}
+
 export type KetQuaKhop = {
   loai: LoaiCau;
   /** Cách xưng hô chủ nhà dặn, chỉ có khi loai = "xung_ho". */
-  xungHo?: "anh" | "chị";
+  xungHo?: XungHo;
   /**
    * Câu không khớp câu đang hỏi nhưng khớp RÕ một fact khác → ghi vào đó
    * (FR-177 e: hỏi một đường, trả lời một nẻo thì VẪN ghi). Không nhận ra
@@ -61,13 +78,14 @@ const boDau = (s: string): string =>
 const XUNG_HO_RE =
   /\b(?:keu|goi|xung|dung (?:keu|goi))\s*(?:la\s*|toi la\s*|minh la\s*)?(anh|chi|co|chu|bac)\b|\b(?:toi|minh|tui|em)\s*la\s*(anh|chi)\b(?!\s*(?:chu|chinh|cua))|\b(anh|chi)\s*(?:chu|ma|nha|nhe)\s*(?:khong phai|ko phai|k phai)\s*(?:anh|chi)\b|^\s*(chi|anh)\s*(?:nha|nhe|nhen|day|a)?\s*[.!]?\s*$|^\s*(chi|anh)\s*(?:nha|nhe|nhen|oi)\s*[,.;!]/;
 
-export function batXungHo(text: string): "anh" | "chị" | null {
+const DOI_XUNG_HO: Record<string, XungHo> = { anh: "anh", chi: "chị", co: "cô", chu: "chú", bac: "bác" };
+export function batXungHo(text: string): XungHo | null {
   const kd = boDau(text);
   const m = XUNG_HO_RE.exec(kd);
   if (!m) return null;
   const tu = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5];
-  if (tu === "chi" || tu === "co" || tu === "bac") return tu === "bac" ? "anh" : "chị";
-  return "anh";
+  // 16/09/2026: "kêu cô/chú/bác" từng bị ép về anh/chị (cột chỉ có hai giá trị).
+  return DOI_XUNG_HO[tu] ?? "anh";
 }
 
 // ── Khách TỰ XƯNG (11/09/2026, lượt bắn 42 ca) ───────────────────────────────
@@ -88,7 +106,23 @@ const TU_XUNG: RegExp[] = [
   // quá dễ là tiểu từ "à".
   /(?:[,.;!?]|\b(?:chao|da|vang|alo|ok|oke|ua|thi)\s+em(?:\s+oi)?)\s*(anh|chi)\s+(?:can|muon|co|dang|tinh|dinh|hoi|gui|ban|nho|o|moi|vua|de|thay|nghi)\b/,
 ];
-export function tuXungTuCau(text: string): "anh" | "chị" | null {
+// 16/09/2026 (Zalo thật): "Chào cháu chú có căn nhà này cần giao bán" — khách tự xưng
+// CHÚ / CÔ / BÁC. Chỉ bắt trên chữ CÒN DẤU: bỏ dấu thì "cô" trùng "có", "chú" trùng
+// "chủ" ("chủ cần bán" là môi giới nói về chủ nhà), "bác" trùng "bạc". "cô giáo",
+// "bác sĩ", "chú ấy / cô này" là người thứ ba, không phải người đang nhắn.
+const TU_XUNG_LON: RegExp[] = [
+  // `\b` chỉ biết chữ ASCII ("có" + khoảng trắng không phải ranh từ) → dùng (?<![\p{L}]) / (?![\p{L}\d]).
+  /(?:^|[,.;!?]\s*|(?<![\p{L}])chào\s+(?:cháu|con|em)\s*,?\s*|(?<![\p{L}])(?:dạ|vâng|alo|ok|ừ|thì)\s+(?:cháu|em)(?:\s+ơi)?\s*,?\s*)(chú|cô|bác)\s+(?:có|cần|muốn|đang|bán|hỏi|nhờ|gửi|tính|định|ở|mới|vừa|để|thấy|nghĩ|đây|không|chưa|rao)(?![\p{L}\d])/u,
+  /(?<![\p{L}])(?:nhà|căn|sổ|đất|lô|sđt|số điện thoại|số đt|vợ|chồng)\s+(?:của\s+)?(chú|cô|bác)(?![\p{L}\d])(?!\s+(?:ấy|này|kia|đó|hàng xóm|giáo|sĩ))/u,
+  /(?<![\p{L}])để\s+(chú|cô|bác)\s+(?:hỏi|tính|coi|xem|nghĩ|bàn|suy nghĩ)(?![\p{L}\d])/u,
+  /(?<![\p{L}])(chú|cô|bác)\s+(?:bận|đang bận|mệt|không rảnh|chưa rảnh)(?![\p{L}\d])/u,
+];
+export function tuXungTuCau(text: string): XungHo | null {
+  const cd = text.trim().toLowerCase();
+  for (const re of TU_XUNG_LON) {
+    const m = re.exec(cd);
+    if (m) return m[1] as XungHo;
+  }
   const kd = boDau(text.trim());
   for (const re of TU_XUNG) {
     const m = re.exec(kd);
@@ -285,8 +319,15 @@ export function catDapAn(question: string, dapAn: string): string {
   }
   if (question === "gap") {
     const kdD = boDauGiuDoDai(goc);
-    const m = /\b(?:(?:khong|ko|k|chua)\s+(?:can\s+)?(?:gap|voi)|can\s+(?:ban\s+)?gap|ban\s+gap|(?:duoc|dc)\s+gia(?:\s+thi\s+thoi)?|tu tu|thong tha|can tien|ban nhanh|ban som|gap|khong voi|ko voi)\b/.exec(kdD);
+    const m = GAP_CAT_RE.exec(kdD);
     if (m) return goc.slice(m.index, m.index + m[0].length).trim();
+  }
+  // 16/09/2026 (Zalo thật, ảnh chủ dự án): "ngang 5m còn dọc 16m cần bán gấp" trả lời câu
+  // diện tích đất → ô đất ghi NGUYÊN câu. Có ngang + dài thì đáp án là "ngang 5m dài 16m"
+  // (SQL `boc_thong_so` đọc được hai chiều rồi nhân).
+  if (/^dien_tich/.test(question) || question === "tho_cu") {
+    const nd = ngangDai(boDau(goc));
+    if (nd) return nd;
   }
   const manh = goc.split(/[,;\n]|\.\s+(?=\S)/).map((x) => x.trim()).filter(Boolean);
   if (manh.length > 1 && question !== "vi_tri" && question !== "bo_sung") {
@@ -302,6 +343,17 @@ export function catDapAn(question: string, dapAn: string): string {
     }
   }
   return goc;
+}
+
+// Mảnh "gấp" cắt khỏi câu dài — dùng ở cả `catDapAn` lẫn `nhanDienFact` (16/09/2026:
+// "ngang 5m còn dọc 16m cần bán gấp" từng ghi nguyên câu vào ô gấp).
+const GAP_CAT_RE = /\b(?:(?:khong|ko|k|chua)\s+(?:can\s+)?(?:gap|voi)|can\s+(?:ban\s+)?gap|ban\s+gap|(?:duoc|dc)\s+gia(?:\s+thi\s+thoi)?|tu tu|thong tha|can tien|ban nhanh|ban som|gap|khong voi|ko voi)\b/;
+// "ngang 5m còn dọc 16m", "ngang 5 dài 20", "5x16" → "ngang 5m dài 16m"; không có thì null.
+const NGANG_DAI_RE = /\b(?:ngang|mat tien|mt|rong)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b(?:\s*,?\s*(?:con\s+|va\s+)?(?:x|dai|sau|doc)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b)/;
+export function ngangDai(kd: string): string | null {
+  // "5x16" giữ nguyên dạng (DB đọc được, câu "4x14 nở hậu 5m" còn giữ nở hậu) — chỉ đổi dạng chữ.
+  const m = NGANG_DAI_RE.exec(kd);
+  return m ? `ngang ${m[1]}m dài ${m[2]}m` : null;
 }
 
 // ── Tiểu từ / ack ────────────────────────────────────────────────────────────
@@ -546,6 +598,13 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   }
 
   if (HOI_SO.has(question)) {
+    // 16/09/2026 (Zalo thật): "Căn số 14 ở Ny'ah Phú Định" khi đang hỏi GIÁ / kết cấu —
+    // số sau "căn số / số nhà / lô" là định danh, không phải đáp án số. Cùng luật với
+    // nhánh diện tích ở trên: coi là vị trí, câu đang hỏi vẫn treo.
+    if (/\b(?:can so|so nha|lo so|can|lo)\s*\d+[a-z]?\b/.test(kd) && (kd.match(/\d+/g) ?? []).length === 1 &&
+        !/\d+[a-z]?\s*(?:m2|m²|m\b|met|ty|ti|toi|trieu|tr\b|tang|lau|tam|pn|phong|wc|nam|thang|%)/.test(kd)) {
+      return ketQua("lech", { chuyenSang: { question: "vi_tri", answer: text.trim() } });
+    }
     if (CO_SO.test(kd) || SO_CHU.test(kd)) {
       // Số đi kèm đơn vị của trường KHÁC thì lệch: hỏi năm xây mà nhận "5 tỷ".
       // Trường TIỀN (giá, doanh thu, phí, cọc, điện nước) thì đơn vị tiền là đúng.
@@ -573,6 +632,7 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   // có con số — "lên thổ cư 300m2", "thời hạn đến 2060" từng đi vào địa chỉ.
   if (question === "vi_tri") {
     const coDiaChi = /\b(duong|hem|hxh|so nha|dia chi|ngo|kdc|khu|toa|block|thap|chung cu|cu xa|du an|kp|ap|xa|phuong|quan|gan|doi dien|nga|cho|truong|benh vien|cong vien|lo|mat tien|mt|pho)\b/.test(kd) ||
+      /\b(?:can|lo|nen|shop)\s*(?:so\s*)?\d+[a-z]?(?:[.\-\/]\d+)?\s+(?:o|tai|trong|thuoc|cua)\s+[a-z]{2,}/.test(kd) ||
       /^\s*\d+[a-z]?(?:\/\d+[a-z]?)*\s+[a-z]{2,}/.test(kd);
     // "đường bê tông 5m xe tải vào được", "đường 12m" là ĐƯỜNG VÀO, không phải địa chỉ.
     const laMoTaDuong = /\b(be tong|nhua|dat do|duong dat|xe tai|container|\d+\s*(?:m|met)\b)/.test(kd) && !/\b(so nha|hem \d|so \d|\/)/.test(kd);
@@ -645,6 +705,12 @@ const boDauGiuDoDai = (s: string): string =>
 // 4 phòng ngủ"): tách theo dấu phẩy / chấm phẩy / "và", nhận từng mảnh, bỏ trùng.
 // Fact PHỤ hay đi kèm trong cùng một câu mà không có dấu phẩy ("2 lầu 3 phòng",
 // "3 tầng 4 phòng ngủ 2 wc", "ngang 5 dài 20"): bắt thêm trên cả câu.
+// Diện tích SÀN / sử dụng / xây dựng (16/09/2026): "dtsd 120m2", "diện tích sàn 240m2";
+// "tổng diện tích 240m2" / "diện tích tổng 240m2" chỉ là sàn khi câu có tầng/tấm/lầu
+// (lookbehind dài — V8/Deno hỗ trợ) và không phải "tổng diện tích đất".
+const DIEN_TICH_SAN_RE = new RegExp(
+  `(?:(?:${TRUOC_LA_SAN.source})|(?<=\\b(?:tam|tang|lau|tret)\\b.*)\\b(?:tong\\s+(?:dien tich|dt)|(?:dien tich|dt)\\s+tong)(?!\\s+dat\\b))\\s*(?:la\\s*|khoang\\s*|tam\\s*)?(\\d{1,5}(?:[.,]\\d+)?)\\s*(?:m2|m²|met vuong|mv)\\b`,
+);
 const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // "cần bán gấp 5 tỷ" → câu chính là gấp, giá vẫn phải ghi.
   ["gia", new RegExp(`\\b(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`), (m) => `${m[1]} ${m[2] === "toi" ? "tỏi" : m[2] === "ty" || m[2] === "ti" ? "tỷ" : "triệu"}${m[3] ? ` ${m[3]}` : ""}${m[4] ? " rưỡi" : ""}`],
@@ -653,7 +719,8 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   ["huong", /\bhuong\s*((?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?)\b/, (m) => `hướng ${m[1]}`],
   // 13/09/2026: "ngang 5 dài 20" giữ CẢ hai chiều — đáp án "5m" làm mất chiều dài
   // (SQL `boc_thong_so` đọc được "ngang 5m dài 20m" ra frontage + length).
-  ["mat_tien", /(?<!cach\s)(?<!cach\s\s)\b(?:ngang|mat tien|mt)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b(?:\s*(?:x|dai|sau)\s*(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b)?/,
+  // 16/09/2026: "ngang 5m CÒN DỌC 16m" — "dọc" là dài, chữ "còn" chen giữa.
+  ["mat_tien", /(?<!cach\s)(?<!cach\s\s)\b(?:ngang|mat tien|mt)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b(?:\s*,?\s*(?:con\s+|va\s+)?(?:x|dai|sau|doc)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b)?/,
     (m) => m[2] ? `ngang ${m[1]}m dài ${m[2]}m` : `${m[1]}m`],
   ["no_hau", /\bno hau\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
   // Câu rao dài (FR-177 n): các ý đời thường đi kèm không có dấu phẩy.
@@ -663,8 +730,12 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   ["ly_do_ban", /\b(dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san|tra no|ve que|doi cong tac|mua cho khac)\b/, (m) => m[1]],
   // 13/09/2026: "tầng 15 view sông" — mảnh đó ra `tang`, view rơi mất. Cắt từ chữ gốc.
   ["view", /\bview\s+[a-z0-9]+(?:\s+(?:song|ho|bien|thanh pho|cong vien|kenh|landmark|q1|quan 1|\d+))?/, (m) => m[0]],
-  ["nam_xay", /\b(?:xay|hoan cong|xd)\s*(?:nam\s*|tu\s*|moi\s*)?((?:19|20)\d{2})\b/, (m) => m[1]],
+  ["nam_xay", /\b(?:xay|hoan cong|xd)\s*(?:tu\s*|moi\s*|hoi\s*)?(?:nam\s*)?((?:19|20)\d{2})\b/, (m) => m[1]],
   ["thuong_luong", /\b(con thuong luong|co thuong luong|thuong luong duoc|\btl\b|fix|gia cung|khong bot)\b/, (m) => m[1]],
+  // 16/09/2026 (Zalo thật): "nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm diện tích tổng
+  // 240m2" — một mảnh, câu chính là hẻm; "4 tấm" và sàn 240m2 rơi mất.
+  ["ket_cau", /(?<!\b(?:toa|thap|block|xay|cao|toi da|xay toi da|tang)\s*)\b((?:\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:tam|tang|lau)(?:\s*(?:lung|st|san thuong))?|tret\s*(?:\+|va)?\s*\d\s*(?:lau|lung))\b(?!\s*(?:cao|toi da))/, (m) => m[1]],
+  ["dien_tich_san", DIEN_TICH_SAN_RE, (m) => `${m[1]}m2`],
 ];
 // Nhiều căn trong MỘT tin ("căn A5 8x20 giá 18 tỷ, căn A7 8x20 giá 18 tỷ 5, căn B2 góc
 // 10x20 giá 22 tỷ") — đại diện chủ đầu tư / môi giới rao theo lô (chân dung 3, 10/09).
@@ -796,7 +867,12 @@ export function nhanDienFact(text: string): NhanDien | null {
   // giá thì thôi", "không vội". Trả nguyên văn; tầng DB (sync_cols) đọc ra true/false.
   // 15/09/2026 (Zalo thật): "Được giá, căn tôi sở hữu…" — "được giá" đứng một mình cũng là nhịp bán.
   if (laGap(goc) || /\b(khong|ko|k|chua|chang|dau co)\s*(?:can\s*)?(?:gap|voi)\b|\bduoc gia\b|\bkhong voi\b|\btu tu\b|\bban duoc gia\b/.test(kd)) {
-    if (!/\bgap\s*(doi|ba|lan|ruoi|\d)/.test(kd)) return { question: "gap", answer: goc };
+    // "gấp đôi / gấp 3 lần" là bội số; "cần bán gấp 5 tỷ" thì "5 tỷ" là giá, gấp vẫn là gấp.
+    if (!/\bgap\s*(doi|ba|lan|ruoi|\d+(?:[.,]\d+)?\s*(?:lan|x\b))/.test(kd)) {
+      // 16/09/2026: câu dài ("ngang 5m còn dọc 16m cần bán gấp") chỉ giữ mảnh gấp.
+      const mg = GAP_CAT_RE.exec(kdD);
+      return { question: "gap", answer: mg ? catGoc(mg) : goc };
+    }
   }
   // 09/09 tối: những thứ CÓ SỐ nhưng không phải giá/diện tích — xét TRƯỚC giá,
   // kẻo "doanh thu 120 triệu/tháng" đè giá bán, "phí quản lý 15 nghìn/m2" rơi bo_sung.
@@ -837,6 +913,10 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 13/09/2026: "cho thuê căn hộ Sunrise City quận 7" là VIỆC RAO (deal + loại
   // BĐS), không phải tiềm năng — bản trước ghi nó vào ô "Phù hợp".
   const laViecRao = /\b(?:ban|cho thue|sang|sang nhuong|de lai)\s+(?:lai\s+)?(?:gap\s+)?(?:can ho|can|nha|dat|lo|phong|mat bang|chung cu|kho|xuong|shophouse|biet thu|nen|mieng)\b/.test(kd);
+  // 16/09/2026 (Zalo thật): "nhà ở từ năm 2019 rồi" là HIỆN TRẠNG (đang ở, từ khi nào), không
+  // phải tiềm năng sử dụng.
+  const O_TU_NAM_RE = /\b(?:nha\s+)?(?:o|xay|xay dung|su dung|dang o)\s+(?:tu|hoi|nam)\s+(?:nam\s+)?((?:19|20)\d{2})\b/;
+  if ((m = O_TU_NAM_RE.exec(kd))) return { question: "hien_trang", answer: manhKhop(O_TU_NAM_RE) };
   if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8) ||
       (/\b(o hoac|hoac lam|deu duoc|lam can ho dich vu|lam chdv|hop (?:de )?(?:o|kinh doanh|cho thue|lam))\b/.test(kd) && kd.split(/\s+/).length <= 14 &&
         !/\b(showroom|lam xuong|van phong cong ty|nha hang|benh vien|truong hoc|lam kho)\b/.test(kd))) {
@@ -844,7 +924,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   }
   // Nội thất: "để lại máy lạnh, bếp", "full nội thất", "nhà trống".
   // 13/09/2026: "để lại căn nhà 4x16…" là BÁN, không phải để lại nội thất.
-  const NOI_THAT_RE = /\b(de lai(?!\s+(?:lai\s+)?(?:can|nha|lo|dat|nen|mieng|mat bang|cho|gia|so|phong))|full noi that|noi that (?:co ban|day du|full)|may lanh|tu lanh|giuong|bep|ban giao (?:tho|trong|nha trong)|nha trong)\b/;
+  const NOI_THAT_RE = /\b(de lai(?!\s+(?:lai\s+)?(?:can|nha|lo|dat|nen|mieng|mat bang|cho|gia|so|phong))|full noi that|noi that (?:co ban|day du|full)|may lanh|tu lanh|giuong|bep|ban giao (?:tho|trong|nha trong)|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo)))\b/;
   if (NOI_THAT_RE.test(kd) && !/\b(mat tien|m2|ty|trieu)\b/.test(kd)) {
     return { question: "noi_that", answer: manhKhop(NOI_THAT_RE) };
   }
@@ -856,10 +936,13 @@ export function nhanDienFact(text: string): NhanDien | null {
   // Vị trí cụ thể: "đường Trần Bình Trọng", "hẻm 123/45 Nguyễn Trãi", "số 12
   // Lê Lợi", "123/4 An Dương Vương". "hẻm 4m" (độ rộng) không rơi vào đây vì
   // sau số là đơn vị mét, không phải "/" hay tên đường.
+  // 16/09/2026 (Zalo thật): "Căn số 14 ở Ny'ah Phú Định" — số căn + "ở/tại/trong" + tên
+  // dự án / khu là VỊ TRÍ; bản trước không nhận, "14" thành diện tích đất.
   if (/\b(duong|pho)\s+[a-z]{2,}/.test(kd) ||
+      /\b(?:can|lo|nen|shop)\s*(?:so\s*)?\d+[a-z]?(?:[.\-\/]\d+)?\s+(?:o|tai|trong|thuoc|cua)\s+[a-z]{2,}/.test(kd) ||
       /\b(?:hem|hxh)\s*\d+(?:\/\d+)+\b/.test(kd) ||
       // "hẻm 123 Trần Bình Trọng": số hẻm rồi TÊN ĐƯỜNG (chữ), không phải "hẻm 4m".
-      /\b(?:hem|hxh)\s*\d+[a-z]?\s+(?!m\b|met\b|xe\b|rong\b|thong\b|cut\b)[a-z]{2,}/.test(kd) ||
+      /\b(?:hem|hxh)\s*\d+[a-z]?\s+(?!m\b|met\b|xe\b|rong\b|thong\b|cut\b|xec\b|sec\b|set\b|xet\b|lan\b|doi\b)[a-z]{2,}/.test(kd) ||
       /\b(?:so|so nha|dia chi)\s*\d+[a-z]?(?:\/\d+)*\s+[a-z]{2,}/.test(kd) ||
       /^\s*\d+[a-z]?(?:\/\d+[a-z]?)+\s+[a-z]{2,}/.test(kd)) {
     return { question: "vi_tri", answer: goc };
@@ -876,7 +959,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   // Độ rộng hẻm: có đơn vị mét, hoặc số nhỏ (≤ 30) đứng cuối / trước dấu câu —
   // "hẻm 123 Trần Bình Trọng" là địa chỉ (đã bắt ở trên), không phải "hẻm 123m".
   if ((m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*|tam\\s*|khoang\\s*|chung\\s*|co\\s*|chi\\s*)?${SO}\\s*(?:m|met)\\b`).exec(kd)) ||
-      (m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?(\\d{1,2}(?:[.,]\\d+)?)\\s*(?=$|[,.;!?]|\\s+(?:xe|o to|oto|thong|cut|nha|em|anh|chi|a\\b))`).exec(kd)) ||
+      (m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?(\\d{1,2}(?:[.,]\\d+)?)\\s*(?=$|[,.;!?]|\\s+(?:xe\\b|o to|oto|thong|cut|nha|em|anh|chi|a\\b))`).exec(kd)) ||
       (m = new RegExp(`${SO}\\s*(?:m|met)\\s*hem\\b`).exec(kd))) {
     return { question: "do_rong_hem", answer: `hẻm ${m[1]}m` };
   }
@@ -890,8 +973,15 @@ export function nhanDienFact(text: string): NhanDien | null {
     return { question: "cach_mat_tien", answer: `${m[1]}m` };
   }
   if ((m = new RegExp(`\\b(?:ngang|rong|mat tien|mt)\\s*(?:la\\s*)?${SO}\\s*(?:m|met)?\\b`).exec(kd)) &&
-      !/\b(dai|sau)\b/.test(kd)) {
+      !/\b(dai|sau|doc)\b/.test(kd)) {
     return { question: "mat_tien", answer: `${m[1]}m` };
+  }
+  // 16/09/2026 (Zalo thật): "nhà 4 tấm diện tích tổng 240m2" — 240 là SÀN (cộng các
+  // tầng), không phải đất; bản trước ghi area_m2 = 240. Diện tích sàn / sử dụng / xây
+  // dựng là fact riêng `dien_tich_san`, DB không đổ vào cột đất. "tổng diện tích" chỉ
+  // là sàn khi câu có tầng/tấm/lầu và không nói "đất".
+  if ((m = DIEN_TICH_SAN_RE.exec(kd))) {
+    return { question: "dien_tich_san", answer: `${m[1]}m2` };
   }
   if ((m = new RegExp(`${SO}\\s*(?:m2|m²|met vuong|mv)\\b`).exec(kd)) ||
       (m = new RegExp(`${SO}\\s*x\\s*${SO}`).exec(kd))) {

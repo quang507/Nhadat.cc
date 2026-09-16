@@ -493,7 +493,9 @@ create table if not exists public.sellers (
   auth_user_id uuid,
   active_listing_id uuid,
   xung_ho text,
-  ten_tro_ly text
+  ten_tro_ly text,
+  gioi_tinh text,
+  nhom_tuoi text
 );
 
 create table if not exists public.tien_ich (
@@ -776,7 +778,9 @@ do $d$ begin
   alter table public.sellers add constraint sellers_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
-  alter table public.sellers add constraint sellers_xung_ho_check CHECK (((xung_ho IS NULL) OR (xung_ho = ANY (ARRAY['anh'::text, 'chị'::text]))));
+  alter table public.sellers add constraint sellers_xung_ho_check CHECK (((xung_ho IS NULL) OR (xung_ho = ANY (ARRAY['anh'::text, 'chị'::text, 'chú'::text, 'cô'::text, 'bác'::text]))));
+  alter table public.sellers add constraint sellers_gioi_tinh_check CHECK (((gioi_tinh IS NULL) OR (gioi_tinh = ANY (ARRAY['nam'::text, 'nu'::text]))));
+  alter table public.sellers add constraint sellers_nhom_tuoi_check CHECK (((nhom_tuoi IS NULL) OR (nhom_tuoi = ANY (ARRAY['tre'::text, 'lon_tuoi'::text]))));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.sellers add constraint sellers_zalo_user_id_key UNIQUE (zalo_user_id);

@@ -50,6 +50,11 @@ for (const [c, mong] of [
 ok("diện tích: '62,5m²' → 62.5", dienTichCauRao(kd("diện tích 62,5m², 1 trệt 1 lầu")) === 62.5);
 ok("diện tích: '70m2' → 70", dienTichCauRao(kd("DT: 5x14 (70m2)")) === 70);
 ok("diện tích: '5x20' không phải m² → null", dienTichCauRao(kd("lô 5x20, đường 12m")) === null);
+// 16/09/2026 (Zalo thật): sàn không phải đất.
+ok("diện tích: 'nhà 4 tấm diện tích tổng 240m2' → null (sàn)", dienTichCauRao(kd("nhà 4 tấm diện tích tổng 240m2 giá 6 tỷ")) === null);
+ok("diện tích: 'diện tích sàn 240m2, đất 60m2' → 60", dienTichCauRao(kd("diện tích sàn 240m2, đất 60m2")) === 60);
+ok("diện tích: 'tổng diện tích 500m2' (không tầng) → 500", dienTichCauRao(kd("bán lô đất tổng diện tích 500m2")) === 500);
+ok("diện tích: 'dtsd 120m2' → null", dienTichCauRao(kd("căn hộ dtsd 120m2 3pn")) === null);
 ok("ngang × dài: '5x20' → 100 (để nhân giá/m²)", ngangNhanDai(kd("lô đất 5x20, giá 95 triệu/m2")) === 100);
 ok("ngang × dài: '4.2m x 18m' → 75.6", ngangNhanDai(kd("ngang 4.2m x 18m")) === 75.6);
 

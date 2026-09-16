@@ -69,9 +69,29 @@ export function chonGiaRao(text: string, deal: "ban" | "cho_thue", duoi: string 
 }
 
 /** Diện tích trong câu rao (đã bỏ dấu): "62,5m²", "70m2" → số; không có thì null. */
+/**
+ * Chữ đứng TRƯỚC một số m² cho biết đó là SÀN / sử dụng / xây dựng, không phải đất
+ * (16/09/2026, Zalo thật: "nhà 4 tấm diện tích tổng 240m2" từng thành area_m2 = 240).
+ * Dùng chung với `nhanDienFact` (fact `dien_tich_san`).
+ */
+export const TRUOC_LA_SAN =
+  /\b(?:(?:dien tich|dt)\s*(?:san|su dung|sd|xay dung|xd)|dtsd|dtxd|san\s*(?:xay dung|su dung)?|tong\s*(?:dien tich|dt)\s*(?:san|su dung|sd|xay dung|xd))\b/;
+
+// Chữ sàn phải đứng NGAY trước số ("diện tích sàn 240m2, đất 60m2": 60 vẫn là đất).
+const SAN_NGAY_TRUOC = new RegExp(`(?:${TRUOC_LA_SAN.source})\\s*(?:la\\s*|khoang\\s*|tam\\s*)?$`);
 export function dienTichCauRao(kd: string): number | null {
-  const m = /(\d{1,5}(?:[.,]\d+)?)\s*m(?:2|²)(?![\d])/.exec(kd);
-  return m ? Number(m[1].replace(",", ".")) : null;
+  const re = /(\d{1,5}(?:[.,]\d+)?)\s*m(?:2|²)(?![\d])/g;
+  const coTang = /\b(?:tam|tang|lau|tret)\b/.test(kd);
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(kd))) {
+    const truoc = kd.slice(Math.max(0, m.index - 30), m.index);
+    // "diện tích sàn 240m2" / "dtsd 120m2" — không phải diện tích đất (bỏ qua, xét số m² kế).
+    if (SAN_NGAY_TRUOC.test(truoc)) continue;
+    // "nhà 4 tấm diện tích tổng 240m2" — tổng của nhà nhiều tầng là sàn; "tổng dt đất" thì không.
+    if (coTang && /\b(?:tong\s+(?:dien tich|dt)|(?:dien tich|dt)\s+tong)\s*(?:la\s*|khoang\s*|tam\s*)?$/.test(truoc) && !/\bdat\s*$/.test(truoc)) continue;
+    return Number(m[1].replace(",", "."));
+  }
+  return null;
 }
 
 /** "5x20", "4.2m x 18m" → ngang × dài (m²); null nếu không có. Chỉ để NHÂN giá/m². */
