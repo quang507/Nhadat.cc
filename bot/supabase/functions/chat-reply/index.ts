@@ -2133,8 +2133,11 @@ ${kem}` : tomTat, cheDo };
       /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b|kho|xưởng|to[àa] nhà|khách sạn|villa|shophouse|lô\b)/i,
       /(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|\bkho\b|xuong|toa nha|khach san|villa|shophouse)/,
     );
-    const raoSuong = coYDinhRao && coLoaiRo && !coChiTiet && !/\d/.test(text) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
-      nhanDienNhieuFact(text).every((f) => f.question === "gap");
+    // Zalo thật 16/09 13:36: "cô có căn nhà này Ở QUẬN 5 cần giao bán gấp" — số của quận/phường
+    // không phải chi tiết căn; câu này từng đổi QUẬN của tin cũ (capNhatQuan) thay vì hỏi căn nào.
+    const textKhongSoQuan = text.replace(/(?:quận|quan|phường|phuong|\bq|\bp)\s*\.?\s*\d{1,2}\b/gi, "");
+    const raoSuong = coYDinhRao && coLoaiRo && !coChiTiet && !/\d/.test(textKhongSoQuan) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
+      nhanDienNhieuFact(text).every((f) => f.question === "gap" || f.question === "phuong");
     if (!sellerMoi && (raoSuong || (dangHoiCanCuMoi && (laCanDo || laCanKhac)))) {
       type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; price_raw: string | null };
       const { data: dangRao, error: drErr } = await client.from("listings").select("id, code, location_raw, ward, price_raw")

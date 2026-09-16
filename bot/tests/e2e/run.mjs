@@ -2123,6 +2123,19 @@ fresh(seedKho);
     r = await send({ external_user_id: "chu-1", text: "cần bán gấp" });
     check("CHU-7c 'cần bán gấp' trần khi đang hỏi gấp → là đáp án, không hỏi căn đó/căn khác",
       !/căn đó hay căn khác/.test(rep()) && r.body.saved_fact === "gap", JSON.stringify({ rep: r.body.replies, body: r.body }));
+    // Zalo thật 13:36: "Hello" khi đang chờ ảnh → không ghi bổ sung; "cô có căn nhà này ở quận 5 cần
+    // giao bán gấp" → hỏi căn đó/căn khác, KHÔNG đổi quận tin cũ.
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: L1.id, question: "hinh_anh", status: "pending" });
+    // "Hello" trong e2e kích test_reset_hello (mock = 1, production = 0) nên dùng lời chào khác.
+    r = await send({ external_user_id: "chu-1", text: "Alo em ơi" });
+    check("CHU-7e lời chào suông 'Alo em ơi' khi đang chờ ảnh → không ghi bo_sung, không saved_fact",
+      !db().t.listing_facts.some((f) => f.question === "bo_sung" && /alo/i.test(f.answer)) && !r.body.saved_fact, JSON.stringify({ body: r.body, f: db().t.listing_facts.filter((f) => f.question === "bo_sung") }));
+    const quanTruoc = L1.district;
+    r = await send({ external_user_id: "chu-1", text: "Chào cháu cô có căn nhà này ở quận 5 cần giao bán gấp" });
+    check("CHU-7f 'cô có căn nhà này ở quận 5 cần giao bán gấp' → hỏi căn đó hay căn khác; quận tin cũ giữ nguyên; không ghi gấp",
+      /căn đó hay căn khác/.test(rep()) && db().t.listings[0].district === quanTruoc && !db().t.listing_facts.some((f) => f.listing_id === L1.id && f.question === "gap" && f.answer === "bán gấp"),
+      JSON.stringify({ rep: r.body.replies, d: db().t.listings[0].district, quanTruoc }));
     r = await send({ external_user_id: "chu-1", text: "chú có căn nhà cần bán gấp" });
     check("CHU-7d 'chú có căn nhà cần bán gấp' (không chi tiết) → vẫn hỏi căn đó hay căn khác", /căn đó hay căn khác/.test(rep()), JSON.stringify(r.body.replies));
   }

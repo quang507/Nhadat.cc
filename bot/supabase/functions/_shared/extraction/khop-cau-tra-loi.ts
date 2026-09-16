@@ -362,6 +362,9 @@ export function ngangDai(kd: string): string | null {
 }
 
 // ── Tiểu từ / ack ────────────────────────────────────────────────────────────
+// Lời chào không mang dữ liệu (bỏ dấu): "hello", "chào em", "alo em ơi", "hi bạn".
+export const CHAO_SUONG_RE =
+  /^\s*(?:hello|helo|hi|hey|alo|a lo|chao|xin chao|chao buoi (?:sang|trua|chieu|toi))\s*(?:em|chau|ban|shop|ad|admin|bot|a|c|anh|chi|ai oi|ai)?\s*(?:oi|nhe|nha|a)?\s*[!.~]*\s*$/;
 const TIEU_TU =
   /\b(a|u|o|oi|da|vang|em|anh|chi|nha|nhe|nhen|ha|hen|ok|oke|okie|roi|thi|ma|voi|va|do|luon|de|coi|xem|chut|lat|nua|tam|di|ne|ne|ok|uh|uk|um|hmm|hm|yes|yep)\b/g;
 const conChu = (kd: string) => kd.replace(TIEU_TU, "").replace(/[^a-z0-9]+/g, "");
@@ -553,6 +556,9 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
     return { loai: "khop", ...(xungHo ? { xungHo } : {}) };
   }
   if (chu.length < 2 && !CO_SO.test(kd)) return { loai: "ack" };
+  // 16/09/2026 (Zalo thật 13:36): "Hello" khi đang chờ ảnh → ghi "thông tin bổ sung: Hello".
+  // Lời chào suông là ack, không phải dữ liệu.
+  if (CHAO_SUONG_RE.test(kd)) return { loai: "ack" };
 
   // Chủ nhà hỏi ngược. Có số kèm dấu hỏi ("5 tỷ được không?") vẫn là câu hỏi
   // — bot phải trả lời chứ không lặng lẽ ghi "5 tỷ được không?" làm đáp án.
