@@ -37,7 +37,7 @@ import {
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { coMuiDuLieuRao, type DeXuat, type DongDb, kiemDeXuat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
-import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../_shared/extraction/boc-cau-rao.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
 import { cauXacNhanPhuong, chuanTenDuong, docPhuongNominatim, duongTraDuoc, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
@@ -61,6 +61,12 @@ import {
   suyTuXungHo, tuXungBot, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { doiTuXung } from "../_shared/extraction/van-tra-loi.ts";
+// Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
+const LOAI_DAP_AN: Record<string, string> = {
+  nha_pho: "nhà phố", nha_cap4: "nhà cấp 4", chung_cu: "căn hộ chung cư", dat: "đất", biet_thu: "biệt thự",
+  phong_tro: "phòng trọ", mat_bang: "mặt bằng", toa_nha: "toà nhà", dat_nong_nghiep: "đất nông nghiệp",
+  dat_kinh_doanh: "đất kinh doanh", kho_xuong: "kho xưởng",
+};
 // FR-185: ảnh chủ nhà gửi → phân loại (model) + cất vào kho (Storage + listing_media).
 import { lechDienTich, phanLoaiAnh, type LoaiAnh } from "../_shared/ai/phan-loai-anh.ts";
 import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.ts";
@@ -2316,9 +2322,15 @@ ${kem}` : tomTat, cheDo };
         (m) => `Phường ${m[1]}`);
       batSua(/(\d{1,2})\s*(?:phòng ngủ|phong ngu|\bpn\b)/i.exec(textSua), "so_phong_ngu",
         (m) => m[1]);
-      batSua(
-        /(?:diện tích|dien tich|\bdt\b)\s*[^0-9]{0,8}?(\d{1,4}(?:[.,]\d+)?)\s*m2?/i.exec(textSua),
-        "dien_tich", (m) => `${m[1]}m2`);
+      // 16/09/2026 (bắn thật sau deploy #144): "nhà 4 tấm diện tích TỔNG 240m2" là SÀN — lời sửa
+      // từng đè area_m2 = 240 và nuốt luôn fact `dien_tich_san`. Sàn/sử dụng/tổng-của-nhà-có-tầng
+      // không phải lời sửa diện tích đất (cùng luật `dienTichCauRao`).
+      const mDtSua = /(?:diện tích|dien tich|\bdt\b)\s*[^0-9]{0,8}?(\d{1,4}(?:[.,]\d+)?)\s*m2?/i.exec(textSua);
+      const dtLaSan = !!mDtSua && (
+        TRUOC_LA_SAN.test(boDau(mDtSua[0])) ||
+        (/\btong\b/.test(boDau(mDtSua[0])) && !/\bdat\b/.test(boDau(mDtSua[0])) && /\b(?:tam|tang|lau|tret)\b/.test(tKD))
+      );
+      batSua(dtLaSan ? null : mDtSua, "dien_tich", (m) => `${m[1]}m2`);
       // 11/09/2026 (Zalo thật, dự án ehome 3): "Bạn phải ghi dự án chung cư ehome 3
       // chứ ở hồ ngọc lãm" — chủ nhà nói RÕ loại khi sửa mà bản trước bỏ qua: tin vẫn
       // "nhà phố", bot hỏi "diện tích đất, ngang dài" cho một căn hộ. Chỉ bắt khi câu
@@ -2703,8 +2715,13 @@ ${kem}` : tomTat, cheDo };
         const xinDiem = await xinChamDiem(pendingReq.listing_id);
         return await traLoiSeller(xinDiem ? [cauDu, xinDiem] : [cauDu], { du_roi: true, diem: diemDu ?? null, xin_danh_gia: !!xinDiem });
       }
+      let loaiDapAn: string | null = null;
       if (pendingReq.question === "loai_bds") {
         const { data: pt } = await client.rpc("guess_property_type_answer", { p_text: dapAn });
+        // 16/09/2026 (bắn thật): "Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm" → ô loại BĐS ghi
+        // NGUYÊN câu (rồi DB đọc "nhà trong" ra nhà trống). Đáp án ô loại là TÊN LOẠI đọc ra.
+        // Chỉ thay đáp án GHI vào ô loại; `dapAn` giữ nguyên để nhặt fact kèm (hẻm, tầng, sàn).
+        if (pt && LOAI_DAP_AN[String(pt)]) loaiDapAn = LOAI_DAP_AN[String(pt)];
         if (!pt) {
           // Không đọc ra loại → HỎI LẠI, giữ nguyên câu hỏi pending. TUYỆT ĐỐI
           // không ghi fact `loai_bds`: ghi xong là listing_missing_facts hết
@@ -2994,7 +3011,7 @@ ${kem}` : tomTat, cheDo };
         // 11/09/2026 (Zalo thật, ehome 3): câu trả lời địa chỉ kèm lời dặn ("Bạn phải
         // ghi dự án … chứ ở hồ ngọc lãm") từng vào NGUYÊN câu làm vị trí → location_raw
         // và street thành rác. Chỉ giữ cụm địa chỉ; câu phường có số thì "Phường N".
-        const dapAnGhi = catDapAn(pendingReq.question, dapAn);
+        const dapAnGhi = loaiDapAn ?? catDapAn(pendingReq.question, dapAn);
         const { error: factErr } = await client.rpc("ghi_fact_listing", {
           p_listing_id: pendingReq.listing_id,
           p_question: pendingReq.question,
