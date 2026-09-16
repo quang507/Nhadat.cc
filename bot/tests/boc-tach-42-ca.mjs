@@ -344,6 +344,8 @@ for (const [vao, mong] of [
   ok("phanLoai(dien_tich_dat) câu đó → lệch (không đóng câu đất)", phanLoaiCauTraLoi("dien_tich_dat", c).loai === "lech", JSON.stringify(phanLoaiCauTraLoi("dien_tich_dat", c)));
   ok("kết cấu fact kèm giữ dấu: '4 tấm'", ds.find((f) => f.question === "ket_cau")?.answer === "4 tấm", JSON.stringify(ds));
   ok("bocViTriRao 'Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ' → 'Căn số 14 ở Ny'ah Phú Định'", bocViTriRao("Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ") === "Căn số 14 ở Ny'ah Phú Định", String(bocViTriRao("Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ")));
+  for (const t of ["Hello", "chào em", "alo em ơi", "hi"]) ok(`lời chào suông "${t}" → ack`, phanLoaiCauTraLoi("hinh_anh", t).loai === "ack", JSON.stringify(phanLoaiCauTraLoi("hinh_anh", t)));
+  ok("'Hello, nhà 3 tầng' không phải ack", phanLoaiCauTraLoi("hinh_anh", "Hello, nhà 3 tầng").loai !== "ack");
   ok("'nhà trống' vẫn là nội thất", nhanDienFact("nhà trống")?.question === "noi_that", JSON.stringify(nhanDienFact("nhà trống")));
   ok("'dtsd 120m2' → sàn", nhanDienFact("dtsd 120m2")?.question === "dien_tich_san", JSON.stringify(nhanDienFact("dtsd 120m2")));
   ok("'tổng diện tích đất 500m2' → diện tích (đất), không phải sàn", nhanDienFact("lô 2 tấm, tổng diện tích đất 500m2")?.question === "dien_tich", JSON.stringify(nhanDienFact("lô 2 tấm, tổng diện tích đất 500m2")));
