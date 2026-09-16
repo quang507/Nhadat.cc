@@ -2125,7 +2125,16 @@ ${kem}` : tomTat, cheDo };
       /\bcan do|can cu|cung can|van can|dung roi|dung can\b/.test(tKD);
     // Xác nhận "căn khác" (hoặc đang được xin chi tiết căn mới và câu này có chi tiết) → mở tin mới.
     const raoCanMoiXacNhan = (dangHoiCanCuMoi && laCanKhac && !laCanDo) || (dangXinCanMoi && coChiTiet);
-    const raoSuong = coYDinhRao && !coChiTiet && !laCauHoiTinhTrang && !raoCanMoiXacNhan;
+    // Bắn thật sau deploy #145: "ngang 5m còn dọc 16m cần bán gấp" (trả lời câu diện tích) bị
+    // coi là rao suông vì có "cần bán". Suông = có ý rao + có chữ loại BĐS, KHÔNG số, không fact
+    // nào ngoài gấp ("chú có căn nhà cần bán gấp" vẫn là suông; "cần bán gấp" trần thì không).
+    // `coLoaiBDS` bỏ dấu nhận "cần" (can) như "căn" — ở đây đòi chữ loại RÕ: "căn"/"lô" chỉ khi còn dấu.
+    const coLoaiRo = khop(
+      /(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn\b|kho|xưởng|to[àa] nhà|khách sạn|villa|shophouse|lô\b)/i,
+      /(nha|can ho|chung cu|dat|mat bang|phong tro|biet thu|\bkho\b|xuong|toa nha|khach san|villa|shophouse)/,
+    );
+    const raoSuong = coYDinhRao && coLoaiRo && !coChiTiet && !/\d/.test(text) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
+      nhanDienNhieuFact(text).every((f) => f.question === "gap");
     if (!sellerMoi && (raoSuong || (dangHoiCanCuMoi && (laCanDo || laCanKhac)))) {
       type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; price_raw: string | null };
       const { data: dangRao, error: drErr } = await client.from("listings").select("id, code, location_raw, ward, price_raw")
@@ -2150,7 +2159,8 @@ ${kem}` : tomTat, cheDo };
             { can_cu_hay_moi: "can_khac" },
           );
         }
-        if (raoSuong && !dangHoiCanCuMoi) {
+        // Câu rao suông (lần đầu, hoặc lặp lại mà chưa trả lời căn đó/căn khác) → hỏi.
+        if (raoSuong && !(dangHoiCanCuMoi && (laCanDo || laCanKhac))) {
           const ds = cans.length === 1
             ? `trước đó ${cachGoi} có căn ${tenCan(cans[0])}${cans[0].price_raw ? ` giá ${cans[0].price_raw}` : ""}`
             : `trước đó ${cachGoi} đang rao ${cans.length} căn: ${cans.map(tenCan).join(" · ")}`;
