@@ -58,7 +58,9 @@ import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laCauHoiTron, laDongY, laDuRoi, laGap, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
   nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
+  suyTuXungHo, tuXungBot, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { doiTuXung } from "../_shared/extraction/van-tra-loi.ts";
 // FR-185: ảnh chủ nhà gửi → phân loại (model) + cất vào kho (Storage + listing_media).
 import { lechDienTich, phanLoaiAnh, type LoaiAnh } from "../_shared/ai/phan-loai-anh.ts";
 import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.ts";
@@ -1044,7 +1046,7 @@ Deno.serve(async (req) => {
   type SellerRow = {
     id: string; name: string | null; active_listing_id: string | null;
     seller_type?: string | null;
-    xung_ho?: "anh" | "chị" | null; // FR-176: chủ nhà dặn gọi anh hay chị
+    xung_ho?: XungHo | null; // FR-176: chủ nhà dặn gọi anh/chị/chú/cô/bác (16/09: thêm ba từ lớn tuổi)
     ten_tro_ly?: string | null;      // FR-181: tên trợ lý riêng (CRM đọc cột này)
   };
   const [{ data: sellerCu }, { data: bCu }] = await Promise.all([
@@ -1142,8 +1144,10 @@ Deno.serve(async (req) => {
   );
   const coYDinhRao =
     khop(
-      /(muốn|cần|đang|nhờ|ký gửi)\s+(bán|cho thu[êe]|sang nhượng|nhượng lại|sang lại)/i,
-      /(muon|can|dang|nho|ky gui)\s+(ban|cho thue|sang nhuong|nhuong lai|sang lai)\b/,
+      // 16/09/2026 (Zalo thật): "chú có căn nhà này cần GIAO bán" — chữ "giao/gửi/nhờ" chen
+      // giữa làm luật cũ trượt, câu rao rơi vào câu đang hỏi của tin cũ.
+      /(muốn|cần|đang|nhờ|ký gửi)\s+(?:giao\s+|gửi\s+|nhờ\s+)?(bán|cho thu[êe]|sang nhượng|nhượng lại|sang lại)|\b(giao|gửi|ký gửi)\s+bán\b/i,
+      /(muon|can|dang|nho|ky gui)\s+(?:giao\s+|gui\s+|nho\s+)?(ban|cho thue|sang nhuong|nhuong lai|sang lai)\b|\b(giao|gui|ky gui)\s+ban\b/,
     ) ||
     khop(
       /(bán|rao|cho thu[êe]|sang nhượng|nhượng lại|sang lại)\s+(nhà|căn hộ|chung cư|đất|mặt bằng|phòng trọ|biệt thự|căn)/i,
@@ -1788,6 +1792,8 @@ ${kem}` : tomTat, cheDo };
       let sach = [...(ackSua ? [ackSua] : []), ...ackAnh, ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
         // Model lỡ chép nguyên chữ giữ chỗ của khối nhớ tạm → thay bằng tên thật.
         .map((r) => r.split(TEN_GIU_CHO).join(tenBot).trim()).filter(Boolean);
+      // 16/09/2026: khách là chú/cô/bác → mọi "em" (câu tiền định lẫn model) thành "cháu".
+      sach = doiTuXung(sach, sellerRow.xung_ho ?? null);
       ackSua = null;
       ackAnh = [];
       thongBaoNhan = null;
@@ -1843,10 +1849,12 @@ ${kem}` : tomTat, cheDo };
     // 11/09/2026 (42 ca): khách TỰ XƯNG ("anh bận", "e oi a can ban nha", "chị Lan
     // đây em") cũng là lời dặn — chưa biết gọi sao thì nhận luôn, lời dặn tường
     // minh ("kêu chị nha") vẫn thắng và vẫn đổi được cách gọi cũ.
+    // 16/09/2026 (Zalo thật): "Chào cháu chú có căn nhà…" → gọi "chú", tự xưng "cháu", và
+    // ghi luôn giới tính + nhóm tuổi suy từ cách gọi (`sellers.gioi_tinh/nhom_tuoi`, 20260916a).
     const xungHoMoi = batXungHo(text) ?? (sellerRow.xung_ho ? null : tuXungTuCau(text));
     if (xungHoMoi && xungHoMoi !== sellerRow.xung_ho) {
       const { error: xhErr } = await client.from("sellers")
-        .update({ xung_ho: xungHoMoi }).eq("id", sellerRow.id);
+        .update({ xung_ho: xungHoMoi, ...suyTuXungHo(xungHoMoi) }).eq("id", sellerRow.id);
       if (xhErr) await ghiLoi(client, "chat-reply sellers.xung_ho", xhErr.message);
       else sellerRow.xung_ho = xungHoMoi;
     }
@@ -1860,6 +1868,8 @@ ${kem}` : tomTat, cheDo };
     }
     const goiNguoi = sellerRow.xung_ho ?? null;
     const cachGoi = goiNguoi ?? "anh/chị";
+    // Bot tự xưng "cháu" với chú/cô/bác (mọi câu tiền định viết "em" → đổi ở đường ra `sach`).
+    const tuXung = tuXungBot(goiNguoi);
     // Câu phí tiền định cho hỏi ngược (FEE_RULES, theo nhãn) — 15/09/2026.
     const phiCauSeller = sellerRow.seller_type === "nmg"
       ? "phí bên em chỉ thu khi giao dịch thành công, 0,5% giá chốt"
@@ -1894,7 +1904,7 @@ ${kem}` : tomTat, cheDo };
       `NGỮ CẢNH (đọc kỹ trước khi viết):\n` +
       `- Gọi chủ nhà là "${cachGoi}"${
         goiNguoi ? ` - chủ nhà đã dặn, tuyệt đối không đổi, không dùng "anh/chị"` : ` (chưa biết nam hay nữ - KHÔNG tự đoán "anh" hay "chị"; gọi "mình" hoặc bỏ đại từ)`
-      }.\n` +
+      }${tuXung === "cháu" ? `; tự xưng "cháu" (chủ nhà lớn tuổi), KHÔNG xưng "em"` : ""}.\n` +
       `- Lịch sử gần nhất, tin mới ở cuối. KHÔNG lặp lại khuôn câu, lời khen, hay lý do "khách hay hỏi" đã dùng trong đó; tin trước của em mở bằng "Dạ" thì tin này đừng mở bằng "Dạ"; viết như người thật nhắn tay, mỗi tin một giọng:\n` +
       `${lichSuText || "(chưa có tin nào trước đó)"}\n\n`;
 
@@ -2095,6 +2105,56 @@ ${kem}` : tomTat, cheDo };
     // NHIỀU CĂN "căn A5 8x20 giá 18 tỷ, căn A7 …, căn B2 góc 10x20 giá 22 tỷ" → mỗi
     // căn một tin riêng (mã căn, ngang×dài, giá), kế thừa dự án/quận/phường/loại
     // của căn đang nói. Trước đây câu này bị FR-164 hiểu là "sửa giá" của tin cũ.
+    // ─── 16/09/2026 (Zalo thật): chủ nhà ĐÃ có tin đang rao nhắn "Chào cháu chú có căn nhà
+    // này cần giao bán" — câu rao KHÔNG chi tiết. Bản trước coi nó là câu trả lời cho câu
+    // đang hỏi của tin cũ (ghi "Chào cháu…" vào bổ sung), rồi mọi dữ kiện sau đó gộp vào
+    // tin cũ — hai căn thành một. Nay hỏi thẳng: căn đó hay căn khác? Câu hỏi mang DẤU
+    // (`DAU_CAN_CU_MOI`) để lượt sau đọc lịch sử biết mình đang hỏi gì, không cần cột mới.
+    const botCuoi = [...lichSuRows].reverse().find((m) => m.sender !== "seller")?.body ?? "";
+    const dangHoiCanCuMoi = /là căn đó hay căn khác/i.test(botCuoi);
+    const dangXinCanMoi = /(?:địa chỉ|diện tích|giá) (?:của |cho )?căn (?:khác|mới)/i.test(botCuoi);
+    const laCanKhac = /căn khác|căn mới|nhà khác|cái khác|khác ạ|khác em|khác cháu|^\s*khác\b|căn nữa|căn thứ/i.test(text) ||
+      /\bcan khac|can moi|nha khac|^\s*khac\b/.test(tKD);
+    const laCanDo = /căn đó|căn cũ|cùng căn|vẫn căn|căn này|căn đang rao|đúng rồi|đúng căn|là nó|vẫn là|căn hồi/i.test(text) ||
+      /\bcan do|can cu|cung can|van can|dung roi|dung can\b/.test(tKD);
+    // Xác nhận "căn khác" (hoặc đang được xin chi tiết căn mới và câu này có chi tiết) → mở tin mới.
+    const raoCanMoiXacNhan = (dangHoiCanCuMoi && laCanKhac && !laCanDo) || (dangXinCanMoi && coChiTiet);
+    const raoSuong = coYDinhRao && !coChiTiet && !laCauHoiTinhTrang && !raoCanMoiXacNhan;
+    if (!sellerMoi && (raoSuong || (dangHoiCanCuMoi && (laCanDo || laCanKhac)))) {
+      type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; price_raw: string | null };
+      const { data: dangRao, error: drErr } = await client.from("listings").select("id, code, location_raw, ward, price_raw")
+        .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"])
+        .order("created_at", { ascending: false }).limit(5);
+      if (drErr) await ghiLoi(client, "chat-reply listings(can cu hay moi)", drErr.message);
+      const cans = (dangRao ?? []) as CanRao[];
+      const tenCan = (c: CanRao) =>
+        [c.location_raw, c.ward].filter(Boolean).join(", ") || (c.code ? `mã ${c.code}` : "căn chưa rõ địa chỉ");
+      if (cans.length) {
+        if (dangHoiCanCuMoi && laCanDo && !laCanKhac) {
+          // Cùng căn → tiếp tục câu đang treo của căn đó (không ghi gì từ câu này).
+          const cauKe = pendingReq
+            ? cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)
+            : `Có gì thêm về căn này ${cachGoi} cứ nhắn em nha.`;
+          return await traLoiSeller([`Dạ, vậy em tiếp tục với căn ${tenCan(cans[0])} nha. ${cauKe}`], { can_cu_hay_moi: "can_cu" });
+        }
+        if (dangHoiCanCuMoi && laCanKhac) {
+          // Căn khác nhưng chưa có chi tiết → xin chi tiết; câu này mang dấu `dangXinCanMoi`.
+          return await traLoiSeller(
+            [`Dạ, ${cachGoi} cho em xin địa chỉ, diện tích và giá của căn khác nha, em mở tin riêng cho căn đó.`],
+            { can_cu_hay_moi: "can_khac" },
+          );
+        }
+        if (raoSuong && !dangHoiCanCuMoi) {
+          const ds = cans.length === 1
+            ? `trước đó ${cachGoi} có căn ${tenCan(cans[0])}${cans[0].price_raw ? ` giá ${cans[0].price_raw}` : ""}`
+            : `trước đó ${cachGoi} đang rao ${cans.length} căn: ${cans.map(tenCan).join(" · ")}`;
+          return await traLoiSeller(
+            [`Dạ ${cachGoi}, ${ds}. Căn ${cachGoi} vừa nhắc là căn đó hay căn khác ạ? Căn khác thì ${cachGoi} cho em xin địa chỉ, diện tích và giá nha.`],
+            { can_cu_hay_moi: "hoi" },
+          );
+        }
+      }
+    }
     const nhieuCanTrongTin = nhanDienNhieuCan(text);
     // ─── 15/09/2026 (bắn thật N2): người rao nhiều căn nói FACT theo số thứ tự — "căn 2 sổ
     // hồng riêng, có thương lượng. căn 1 đúc 3 tấm". Trước đây câu này mở thêm 2 tin RỖNG.
@@ -2239,7 +2299,9 @@ ${kem}` : tomTat, cheDo };
     // số vẫn đúng trên `text`); câu là lời sửa thì bóc luôn vế đó khỏi phần còn lại.
     const textSua = cheoPhuDinh(text);
     const nhipPhuDinh = vungPhuDinh(text);
-    if (!wantsSell) {
+    // 16/09/2026: chi tiết căn MỚI sau câu "căn đó hay căn khác" (không có chữ "bán") cũng là
+    // câu rao, không phải lời sửa tin cũ — e2e CHU-5 từng đè giá tin cũ 6 tỷ → 7 tỷ.
+    if (!wantsSell && !raoCanMoiXacNhan) {
       const mGia = new RegExp(
         `gi[áa]\\s*[^0-9]{0,12}?([\\d][\\d.,]*\\s*(?:${TIEN_CD})(?![a-zA-ZÀ-ỹ])[^,.;\\n]*)`,
         "i",
@@ -2574,7 +2636,10 @@ ${kem}` : tomTat, cheDo };
     // thật KÈM dấu hiệu "căn khác" (thêm/nữa/căn khác, hoặc phường KHÁC phường
     // căn đang hỏi) thì đi tạo tin. "bán 5 tỷ nhà này" trả lời câu hỏi giá thì
     // không có dấu hiệu đó → vẫn là câu trả lời, không đẻ tin trùng.
-    const raoMoiKhiDangHoi = !!pendingReq && wantsSell && (
+    // 16/09/2026: đã xác nhận "căn khác" ở câu hỏi căn-cũ-hay-mới thì là rao MỚI dù không có
+    // chữ thêm/nữa; câu có chi tiết lúc đang được xin chi tiết căn mới cũng vậy.
+    const raoMoiKhiDangHoi = !!pendingReq && (wantsSell || raoCanMoiXacNhan) && (
+      raoCanMoiXacNhan ||
       // 15/09/2026: "còn căn 2 mặt tiền trần phú 4x20 giá 18 tỷ thì sao em" — "còn căn <số>"
       // cũng là căn KHÁC (bản trước hiểu là sửa căn 1). Số kèm đơn vị (căn 2 pn) thì không.
       khop(
@@ -3181,7 +3246,7 @@ ${kem}` : tomTat, cheDo };
     // nghỉ; khách quan tâm hỏi thêm thì FR-140 mở lại vòng hỏi.
     // (Cổng `wantsSell` tính ở trên — FR-164 cần nó sớm để bộ bắt-lời-sửa không
     //  nuốt mất câu rao mới.)
-    if (wantsSell) {
+    if (wantsSell || (dangXinCanMoi && coChiTiet)) {
       // Loại BĐS KHÔNG hỏi: trigger trg_listings_fill_property_type đọc chính
       // câu rao (description) mà điền (FR-150). Chỉ tin nào câu chữ không đủ
       // để đoán mới nằm lại 'chua_ro' và bị hỏi ở vòng drip.
@@ -3840,7 +3905,7 @@ ${kem}` : tomTat, cheDo };
   // → "Anh tìm để ở…". Lời dặn ("kêu chị nha") thắng; khách tự xưng ("chị đang
   // tìm mua") thì nhận khi chưa biết. Lưu trong hồ sơ, không thêm cột.
   const xhMuaMoi = batXungHo(text) ?? (prefs.xung_ho ? null : tuXungTuCau(text));
-  const goiMua = (xhMuaMoi ?? prefs.xung_ho ?? null) as "anh" | "chị" | null;
+  const goiMua = (xhMuaMoi ?? prefs.xung_ho ?? null) as XungHo | null;
   // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN, cận trên giá (SRS-5.2)
   // Cột dùng chung cho mọi dòng "căn" đưa vào prompt (KHO, căn khách nhắc, căn
   // tương tự, căn trong dự án): thông số FR-172 + dự án/tình trạng căn FR-116.
@@ -4330,6 +4395,8 @@ ${kem}` : tomTat, cheDo };
   // không phải máy đâu" (lượt bắn 13/09). Nói dối khách về bản chất trợ lý là
   // thứ không được phép lọt, dù câu lệnh dặn gì — chặn bằng code.
   out.replies = chanNhanLaNguoi(out.replies, goiMua ?? "mình");
+  // 16/09/2026: khách mua là chú/cô/bác → bot tự xưng "cháu" (cùng luật nhánh bán).
+  out.replies = doiTuXung(out.replies, goiMua);
   // 15/09/2026 (bắn thật K2): "phòng riêng hay share…? Ngoài ra, có cần toilet riêng, điều hòa
   // không?" — HUMAN_CHAT_RULES cho gộp ý vào MỘT câu hỏi, không phải hai câu hỏi.
   out.replies = motCauHoi(out.replies);

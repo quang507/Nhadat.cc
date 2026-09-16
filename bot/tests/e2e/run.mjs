@@ -2082,6 +2082,52 @@ fresh(seedKho);
     JSON.stringify({ body: r.body, f: db().t.listing_facts }));
 }
 
+// ── 16/09/2026 (Zalo thật, ảnh chụp chủ dự án): khách xưng CHÚ; người đã có tin nhắn câu rao SUÔNG; diện tích SÀN ──
+{
+  fresh();
+  const S = () => db().t.sellers.find((s) => s.zalo_user_id === "chu-1");
+  const EM = /(?<![\p{L}])em(?![\p{L}])/iu;
+  const rep = () => r.body.replies.join(" ");
+  r = await send({ external_user_id: "chu-1", text: "Chào cháu chú có căn nhà hẻm 5m Phú Định phường 16 quận 8 cần bán, 4x15, giá 6 tỷ" });
+  check("CHU-1 tự xưng 'chú' → sellers.xung_ho = chú, gioi_tinh nam, nhom_tuoi lon_tuoi",
+    S()?.xung_ho === "chú" && S()?.gioi_tinh === "nam" && S()?.nhom_tuoi === "lon_tuoi", JSON.stringify(S()));
+  check("CHU-2 bot tự xưng 'cháu', không còn 'em' trong mọi bong bóng",
+    r.body.replies.length > 0 && r.body.replies.every((x) => !EM.test(x)) && /cháu/.test(rep()), JSON.stringify(r.body.replies));
+  r = await send({ external_user_id: "chu-1", text: "Chào cháu chú có căn nhà này cần giao bán" });
+  check("CHU-3 người đã có tin nhắn câu rao SUÔNG → hỏi 'căn đó hay căn khác', KHÔNG ghi fact rác, không mở tin",
+    /là căn đó hay căn khác/.test(rep()) && db().t.listings.length === 1 && !db().t.listing_facts.some((f) => /Chào cháu/.test(f.answer)) && !EM.test(rep()),
+    JSON.stringify({ rep: r.body.replies, f: db().t.listing_facts }));
+  r = await send({ external_user_id: "chu-1", text: "căn khác" });
+  check("CHU-4 'căn khác' → xin địa chỉ, diện tích, giá của căn khác; vẫn 1 tin",
+    /địa chỉ/.test(rep()) && /căn khác/.test(rep()) && db().t.listings.length === 1, JSON.stringify(r.body.replies));
+  r = await send({ external_user_id: "chu-1", text: "Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ" });
+  check("CHU-5 chi tiết căn mới (không chữ 'bán') → mở tin THỨ HAI; tin cũ giữ 6 tỷ",
+    db().t.listings.length === 2 && /6 tỷ/.test(db().t.listings[0].price_raw ?? "") && /7 tỷ/.test(db().t.listings[1].price_raw ?? ""),
+    JSON.stringify(db().t.listings.map((l) => [l.code, l.price_raw, l.area_m2, l.location_raw])));
+  r = await send({ external_user_id: "chu-1", text: "chú có căn nhà cần bán" });
+  check("CHU-6 rao suông khi có 2 căn → liệt kê 2 căn, hỏi căn đó hay căn khác", /đang rao 2 căn/.test(rep()) && /là căn đó hay căn khác/.test(rep()), JSON.stringify(r.body.replies));
+  r = await send({ external_user_id: "chu-1", text: "căn đó" });
+  check("CHU-7 'căn đó' → tiếp tục căn cũ, không mở tin, không ghi fact",
+    db().t.listings.length === 2 && /tiếp tục với căn/.test(rep()) && !db().t.listing_facts.some((f) => /^căn đó$/i.test(f.answer)), JSON.stringify(r.body.replies));
+  // Diện tích SÀN của nhà nhiều tầng không phải diện tích đất; "nhà trong hẻm" không phải "nhà trống".
+  fresh();
+  r = await send({ external_user_id: "chu-2", text: "bán nhà phú định q8 giá 6 tỷ" });
+  const L2 = db().t.listings[0];
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L2.id) x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L2.id, question: "dien_tich_dat", status: "pending" });
+  r = await send({ external_user_id: "chu-2", text: "Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm diện tích tổng 240m2" });
+  const f2 = (q) => db().t.listing_facts.find((f) => f.question === q);
+  check("CHU-8 'nhà trong hẻm… nhà 4 tấm diện tích tổng 240m2' → KHÔNG nội thất, KHÔNG diện tích đất; ghi hẻm 5m + 4 tấm + sàn 240m2, câu diện tích đất vẫn treo",
+    !f2("noi_that") && !f2("dien_tich_dat") && !f2("dien_tich") && f2("do_rong_hem") && /4 tam|4 tấm/.test(f2("ket_cau")?.answer ?? "") && f2("dien_tich_san")?.answer === "240m2" &&
+      db().t.info_requests.some((x) => x.question === "dien_tich_dat" && x.status === "pending") && db().t.listings[0].area_m2 !== 240,
+    JSON.stringify({ f: db().t.listing_facts, L: db().t.listings[0], ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  fresh();
+  r = await send({ external_user_id: "chu-3", text: "bán nhà 4 tấm hẻm 5m phú định q8 diện tích tổng 240m2 giá 6 tỷ" });
+  check("CHU-9 câu rao 'nhà 4 tấm diện tích tổng 240m2' → area_m2 trống, fact dien_tich_san 240m2",
+    db().t.listings[0]?.area_m2 == null && db().t.listing_facts.some((f) => f.question === "dien_tich_san" && f.answer === "240m2"),
+    JSON.stringify({ L: db().t.listings[0], f: db().t.listing_facts }));
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

@@ -327,3 +327,18 @@ export function laLoiMeta(text: string): boolean {
   return /\b(chu nha|khach)\b/.test(kd) && /\b(hoi nguoc|tra loi truoc|mot tin duy nhat|viet mot tin|khong lap)\b/.test(kd);
 }
 
+
+// ── Tự xưng theo khách (16/09/2026, Zalo thật) ───────────────────────────────
+// Khách xưng "chú" ("Chào cháu chú có căn nhà này cần giao bán") mà bot đáp "Dạ em…".
+// Mọi câu tiền định lẫn câu model đều viết "em"; đổi ở MỘT chỗ trên đường ra thay
+// vì sửa hơn 60 chuỗi. Chỉ đổi chữ "em" đứng riêng (không đụng "em gái", "kem",
+// "xem"); "tụi em / bên em" → "tụi cháu / bên cháu" là đúng ý. Khách anh/chị → giữ nguyên.
+const EM_RIENG = /(?<![\p{L}])(em|Em|EM)(?![\p{L}])/gu;
+export function doiTuXung(replies: string[], xungHo: string | null | undefined): string[] {
+  if (!xungHo || !["chú", "cô", "bác"].includes(xungHo)) return replies;
+  return replies.map((r) =>
+    r.replace(EM_RIENG, (_m, w: string) => w === "EM" ? "CHÁU" : w === "Em" ? "Cháu" : "cháu")
+      // "em gái / em trai" là người thứ ba — trả lại.
+      .replace(/cháu (gái|trai|bé|út)\b/g, "em $1")
+  );
+}

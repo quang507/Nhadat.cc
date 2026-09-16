@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -292,6 +292,15 @@ for (const [vao, mong] of [
   ["Hẻm 5m xe hơi tới cửa là khách chuộng lắm anh. Mình cần ra hàng gấp hay được giá thì thôi?", false],
   ["Dạ em ghi nhận rồi ạ.", false],
 ]) ok("laLoiMeta " + JSON.stringify(vao.slice(0, 50)), laLoiMeta(vao) === mong, String(laLoiMeta(vao)));
+
+// 16/09/2026: khách chú/cô/bác → bot tự xưng "cháu"; anh/chị giữ "em"; không đụng "em gái", "xem".
+for (const [xh, vao, mong] of [
+  ["chú", "Dạ em ghi nhận rồi ạ. Em hỏi thêm chú một chút nha.", "Dạ cháu ghi nhận rồi ạ. Cháu hỏi thêm chú một chút nha."],
+  ["cô", "Bên em có anh Thu phụ trách, tụi em sẽ xem kỹ.", "Bên cháu có anh Thu phụ trách, tụi cháu sẽ xem kỹ."],
+  ["bác", "em gái em cũng ở đó, EM NHA", "em gái cháu cũng ở đó, CHÁU NHA"],
+  ["anh", "Dạ em ghi nhận rồi ạ.", "Dạ em ghi nhận rồi ạ."],
+  [null, "Dạ em ghi nhận rồi ạ.", "Dạ em ghi nhận rồi ạ."],
+]) ok(`doiTuXung(${xh}) ${JSON.stringify(vao.slice(0, 30))}`, doiTuXung([vao], xh)[0] === mong, JSON.stringify(doiTuXung([vao], xh)));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

@@ -323,5 +323,38 @@ ok("phanLoai(so_phong_ngu) '3 phòng ngủ em. nhà đang cho thuê 25 triệu/t
 ok("catDapAn(so_phong_ngu) lấy đúng số phòng, không dính tiền thuê", catDapAn("so_phong_ngu", "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng tới cuối năm nha") === "3", catDapAn("so_phong_ngu", "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng tới cuối năm nha"));
 ok("phanLoai(dien_tich) '5 tỷ' vẫn lệch", phanLoaiCauTraLoi("dien_tich", "5 tỷ").loai !== "khop", JSON.stringify(phanLoaiCauTraLoi("dien_tich", "5 tỷ")));
 
+// 16/09/2026 (Zalo thật, ảnh chụp chủ dự án): khách xưng chú/cô/bác; "nhà trong hẻm" không phải
+// "nhà trống"; "diện tích tổng 240m2" của nhà 4 tấm là SÀN; "Căn số 14 ở Ny'ah" là vị trí.
+for (const [vao, mong] of [
+  ["Chào cháu chú có căn nhà này cần giao bán", "chú"],
+  ["cô cần bán căn nhà ở quận 8 nha con", "cô"],
+  ["nhà của bác ở hẻm 5m, để bác hỏi con bác đã", "bác"],
+  ["dạ cháu, chú đang có căn ở phú định", "chú"],
+  ["chủ cần bán gấp, 5 tỷ", null],          // "chủ" là chủ nhà (môi giới nói), không phải "chú"
+  ["có căn nhà cần bán ở q5", null],         // "có" không phải "cô"
+  ["cô giáo của con bán nhà", null],         // người thứ ba
+  ["chu can ban nha o q8", null],            // không dấu: "chu" mập mờ (chủ/chú) → không đoán
+]) ok(`tuXungTuCau lớn tuổi "${vao}"`, tuXungTuCau(vao) === mong, String(tuXungTuCau(vao)));
+{
+  const c = "Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm diện tích tổng 240m2";
+  const ds = nhanDienNhieuFact(c);
+  ok("'nhà trong hẻm…' KHÔNG phải nội thất", !ds.some((f) => f.question === "noi_that") && nhanDienFact(c)?.question === "do_rong_hem", JSON.stringify(ds));
+  ok("'nhà 4 tấm diện tích tổng 240m2' → sàn 240m2 + kết cấu 4 tấm, không diện tích đất",
+    ds.some((f) => f.question === "dien_tich_san" && f.answer === "240m2") && ds.some((f) => f.question === "ket_cau" && /4 tam/.test(f.answer)) && !ds.some((f) => /^dien_tich$|dien_tich_dat/.test(f.question)), JSON.stringify(ds));
+  ok("phanLoai(dien_tich_dat) câu đó → lệch (không đóng câu đất)", phanLoaiCauTraLoi("dien_tich_dat", c).loai === "lech", JSON.stringify(phanLoaiCauTraLoi("dien_tich_dat", c)));
+  ok("'nhà trống' vẫn là nội thất", nhanDienFact("nhà trống")?.question === "noi_that", JSON.stringify(nhanDienFact("nhà trống")));
+  ok("'dtsd 120m2' → sàn", nhanDienFact("dtsd 120m2")?.question === "dien_tich_san", JSON.stringify(nhanDienFact("dtsd 120m2")));
+  ok("'tổng diện tích đất 500m2' → diện tích (đất), không phải sàn", nhanDienFact("lô 2 tấm, tổng diện tích đất 500m2")?.question === "dien_tich", JSON.stringify(nhanDienFact("lô 2 tấm, tổng diện tích đất 500m2")));
+  ok("'tổng diện tích 500m2' không có tầng → diện tích", nhanDienFact("tổng diện tích 500m2")?.question === "dien_tich", JSON.stringify(nhanDienFact("tổng diện tích 500m2")));
+}
+{
+  const c = "Căn số 14 ở ny’ah phú định";
+  ok("nhanDienFact 'Căn số 14 ở ny’ah phú định' → vi_tri", nhanDienFact(c)?.question === "vi_tri", JSON.stringify(nhanDienFact(c)));
+  ok("phanLoai(vi_tri) câu đó → khớp", phanLoaiCauTraLoi("vi_tri", c).loai === "khop", JSON.stringify(phanLoaiCauTraLoi("vi_tri", c)));
+  for (const q of ["gia", "ket_cau", "so_phong_ngu"]) ok(`phanLoai(${q}) 'Căn số 14…' → lệch sang vi_tri`, phanLoaiCauTraLoi(q, c).loai === "lech" && phanLoaiCauTraLoi(q, c).chuyenSang?.question === "vi_tri", JSON.stringify(phanLoaiCauTraLoi(q, c)));
+  ok("phanLoai(gia) '5 tỷ' vẫn khớp", phanLoaiCauTraLoi("gia", "5 tỷ").loai === "khop");
+  ok("phanLoai(ket_cau) '3 tấm' vẫn khớp", phanLoaiCauTraLoi("ket_cau", "3 tấm").loai === "khop");
+}
+
 console.log(hong ? `\nBÓC TÁCH 42 CA: ${hong}/${tong} CA HỎNG` : `\nBÓC TÁCH 42 CA: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
