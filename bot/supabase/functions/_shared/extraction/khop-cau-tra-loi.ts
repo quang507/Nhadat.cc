@@ -282,6 +282,11 @@ export function bocViTriRao(text: string): string | null {
     }
     return ten.length ? [dau, ...truoc, ...ten].join(" ") : null;
   }
+  // 16/09/2026 (bắn thật): "Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ" — số căn + ở/tại/trong
+  // + tên khu/dự án là địa chỉ của căn (tin mới mở từng trống `location_raw`).
+  const can = /(?:^|[\s,])((?:căn|can|lô|lo|nền|nen|shop)\s*(?:số|so)?\s*\d{1,4}[a-zA-Z]?(?:[.\-\/]\d{1,4})?\s+(?:ở|o|tại|tai|trong|thuộc|thuoc)\s+[^,.;!?\n]{3,60})/iu
+    .exec(t)?.[1]?.trim() ?? null;
+  if (can && !/\d\s*(?:m2|m²|tỷ|ty|triệu|trieu)\b/iu.test(can)) return can;
   // Số nhà trần: "7 Hồng Bàng phường 12", "123/4 An Dương Vương q5" — chỉ nhận
   // khi ngay sau là phường/quận, để "5 tỷ" hay "40m2" không thành địa chỉ.
   const so = /(?:^|[\s,])(\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+(?:[\p{L}]+\s?){1,4}?)(?=\s*(?:p\.?\s*\d|phường|phuong|quận|quan|q\.?\s*\d)\b)/iu
@@ -828,7 +833,7 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
   for (const [q, re, lay] of FACT_PHU) {
     // Lý do bán giữ DẤU ("cần tiền", không phải "can tien"): khớp trên bản bỏ dấu
     // giữ độ dài rồi cắt đúng đoạn chữ gốc.
-    if (q === "ly_do_ban" || q === "view") {
+    if (q === "ly_do_ban" || q === "view" || q === "ket_cau") {
       const mm = re.exec(kdD);
       if (mm) them({ question: q, answer: text.slice(mm.index, mm.index + mm[0].length).trim() });
       continue;

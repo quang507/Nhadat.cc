@@ -2101,8 +2101,9 @@ fresh(seedKho);
   check("CHU-4 'căn khác' → xin địa chỉ, diện tích, giá của căn khác; vẫn 1 tin",
     /địa chỉ/.test(rep()) && /căn khác/.test(rep()) && db().t.listings.length === 1, JSON.stringify(r.body.replies));
   r = await send({ external_user_id: "chu-1", text: "Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ" });
-  check("CHU-5 chi tiết căn mới (không chữ 'bán') → mở tin THỨ HAI; tin cũ giữ 6 tỷ",
-    db().t.listings.length === 2 && /6 tỷ/.test(db().t.listings[0].price_raw ?? "") && /7 tỷ/.test(db().t.listings[1].price_raw ?? ""),
+  check("CHU-5 chi tiết căn mới (không chữ 'bán') → mở tin THỨ HAI có địa chỉ 'Căn số 14 ở Ny'ah Phú Định'; tin cũ giữ 6 tỷ",
+    db().t.listings.length === 2 && /6 tỷ/.test(db().t.listings[0].price_raw ?? "") && /7 tỷ/.test(db().t.listings[1].price_raw ?? "") &&
+      /Căn số 14/.test(db().t.listings[1].location_raw ?? ""),
     JSON.stringify(db().t.listings.map((l) => [l.code, l.price_raw, l.area_m2, l.location_raw])));
   r = await send({ external_user_id: "chu-1", text: "chú có căn nhà cần bán" });
   check("CHU-6 rao suông khi có 2 căn → liệt kê 2 căn, hỏi căn đó hay căn khác", /đang rao 2 căn/.test(rep()) && /là căn đó hay căn khác/.test(rep()), JSON.stringify(r.body.replies));
@@ -2121,6 +2122,19 @@ fresh(seedKho);
     !f2("noi_that") && !f2("dien_tich_dat") && !f2("dien_tich") && f2("do_rong_hem") && /4 tam|4 tấm/.test(f2("ket_cau")?.answer ?? "") && f2("dien_tich_san")?.answer === "240m2" &&
       db().t.info_requests.some((x) => x.question === "dien_tich_dat" && x.status === "pending") && db().t.listings[0].area_m2 !== 240,
     JSON.stringify({ f: db().t.listing_facts, L: db().t.listings[0], ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  // Bắn thật sau deploy #144: câu treo là LOẠI BĐS → lời sửa FR-164 nuốt "diện tích tổng 240m2"
+  // (area_m2 = 240, mất fact sàn), ô loại ghi nguyên câu.
+  fresh();
+  r = await send({ external_user_id: "chu-2b", text: "bán nhà phú định q8 giá 6 tỷ" });
+  const L2b = db().t.listings[0];
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L2b.id) x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L2b.id, question: "loai_bds", status: "pending" });
+  r = await send({ external_user_id: "chu-2b", text: "Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm diện tích tổng 240m2" });
+  const f2b = (q) => db().t.listing_facts.find((f) => f.question === q);
+  check("CHU-8b câu đó khi đang hỏi LOẠI → không sửa diện tích, ô loại ghi tên loại (không nguyên câu), có sàn 240m2 + kết cấu '4 tấm' có dấu",
+    !f2b("dien_tich") && db().t.listings[0].area_m2 !== 240 && f2b("dien_tich_san")?.answer === "240m2" && f2b("ket_cau")?.answer === "4 tấm" &&
+      (!f2b("loai_bds") || f2b("loai_bds").answer.length < 30),
+    JSON.stringify({ f: db().t.listing_facts, L: db().t.listings[0], rep: r.body.replies }));
   fresh();
   r = await send({ external_user_id: "chu-3", text: "bán nhà 4 tấm hẻm 5m phú định q8 diện tích tổng 240m2 giá 6 tỷ" });
   check("CHU-9 câu rao 'nhà 4 tấm diện tích tổng 240m2' → area_m2 trống, fact dien_tich_san 240m2",

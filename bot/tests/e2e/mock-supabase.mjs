@@ -586,7 +586,7 @@ class RpcCall {
         l.boc_tach = { ...(l.boc_tach ?? {}), ...sach, _cap_nhat: now() };
         return { data: null, error: null };
       }
-      case "guess_property_type_answer": { const t = boDauMock(String(a.p_text)); return { data: /kho|xuong/.test(t) ? "kho_xuong" : /nong nghiep|dat vuon/.test(t) ? "dat_nong_nghiep" : /skc|tmd|thuong mai/.test(t) ? "dat_kinh_doanh" : /dich vu|khach san|toa nha/.test(t) ? "toa_nha" : /nha pho|\bnp\b/.test(t) ? "nha_pho" : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(t) ? "chung_cu" : null, error: null }; }
+      case "guess_property_type_answer": { const t = boDauMock(String(a.p_text)); return { data: /kho|xuong/.test(t) ? "kho_xuong" : /nong nghiep|dat vuon/.test(t) ? "dat_nong_nghiep" : /skc|tmd|thuong mai/.test(t) ? "dat_kinh_doanh" : /dich vu|khach san|toa nha/.test(t) ? "toa_nha" : /nha pho|\bnp\b/.test(t) ? "nha_pho" : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(t) ? "chung_cu" : /\bnha\b/.test(t) && t.split(/\s+/).length >= 4 ? "nha_pho" : null, error: null }; }
       case "mark_listing_interest": {
         // v48 / 20260904f (FR-108): overload có p_buyer_id ghi thêm `interests`
         // (PK buyer_id+listing_id — chèn trùng thì bỏ qua).

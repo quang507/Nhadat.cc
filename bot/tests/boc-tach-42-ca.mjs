@@ -340,8 +340,10 @@ for (const [vao, mong] of [
   const ds = nhanDienNhieuFact(c);
   ok("'nhà trong hẻm…' KHÔNG phải nội thất", !ds.some((f) => f.question === "noi_that") && nhanDienFact(c)?.question === "do_rong_hem", JSON.stringify(ds));
   ok("'nhà 4 tấm diện tích tổng 240m2' → sàn 240m2 + kết cấu 4 tấm, không diện tích đất",
-    ds.some((f) => f.question === "dien_tich_san" && f.answer === "240m2") && ds.some((f) => f.question === "ket_cau" && /4 tam/.test(f.answer)) && !ds.some((f) => /^dien_tich$|dien_tich_dat/.test(f.question)), JSON.stringify(ds));
+    ds.some((f) => f.question === "dien_tich_san" && f.answer === "240m2") && ds.some((f) => f.question === "ket_cau" && /4 t[aấ]m/.test(f.answer)) && !ds.some((f) => /^dien_tich$|dien_tich_dat/.test(f.question)), JSON.stringify(ds));
   ok("phanLoai(dien_tich_dat) câu đó → lệch (không đóng câu đất)", phanLoaiCauTraLoi("dien_tich_dat", c).loai === "lech", JSON.stringify(phanLoaiCauTraLoi("dien_tich_dat", c)));
+  ok("kết cấu fact kèm giữ dấu: '4 tấm'", ds.find((f) => f.question === "ket_cau")?.answer === "4 tấm", JSON.stringify(ds));
+  ok("bocViTriRao 'Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ' → 'Căn số 14 ở Ny'ah Phú Định'", bocViTriRao("Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ") === "Căn số 14 ở Ny'ah Phú Định", String(bocViTriRao("Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ")));
   ok("'nhà trống' vẫn là nội thất", nhanDienFact("nhà trống")?.question === "noi_that", JSON.stringify(nhanDienFact("nhà trống")));
   ok("'dtsd 120m2' → sàn", nhanDienFact("dtsd 120m2")?.question === "dien_tich_san", JSON.stringify(nhanDienFact("dtsd 120m2")));
   ok("'tổng diện tích đất 500m2' → diện tích (đất), không phải sàn", nhanDienFact("lô 2 tấm, tổng diện tích đất 500m2")?.question === "dien_tich", JSON.stringify(nhanDienFact("lô 2 tấm, tổng diện tích đất 500m2")));
