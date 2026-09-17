@@ -324,3 +324,115 @@ export function soSanhVoiDb(dat: DeXuat[], dong: DongDb | null, facts: Record<st
   }
   return kq;
 }
+
+// ── FR-208 bước 2 (17/09/2026): AI GHI CÓ KIỂM ─────────────────────────────────
+// Chủ dự án 17/09: "lúc ghi có cái AI chuyển đổi câu trả lời thành chuẩn dữ liệu không" →
+// "làm đi". Model bóc JSON theo đúng trường; ba lớp kiểm bằng chứng ở trên; rồi hàm này
+// chọn thứ ĐƯỢC GHI: chỉ trường luật tiền định KHÔNG ghi (tin còn trống cột lẫn fact —
+// `ai_them` của `soSanhVoiDb`), giá trị đọc ra được thành số/khoảng hợp lệ, và khoá có
+// chỗ ghi tường minh trong `listing_facts` (trigger DB đưa vào cột). Không đè: `lech`
+// (luật và AI khác nhau) không ghi.
+export type DeGhi = { question: string; answer: string; khoa: string };
+
+/** khoá AI → khoá fact (`required_facts.fact_key`). Không có trong bảng = không ghi. */
+const KHOA_GHI: Record<string, string> = {
+  gia: "gia", dien_tich: "dien_tich", so_phong_ngu: "so_phong_ngu", so_wc: "so_wc", so_tang: "ket_cau",
+  ket_cau: "ket_cau", tang: "tang", huong: "huong", phap_ly: "phap_ly", noi_that: "noi_that",
+  ly_do_ban: "ly_do_ban", thoi_han_thue: "thoi_han_thue", phi_quan_ly: "phi_quan_ly", view: "view",
+  hien_trang: "hien_trang", do_rong_hem: "do_rong_hem", do_rong_duong: "do_rong_duong",
+  cach_mat_tien: "cach_mat_tien", tien_coc: "tien_coc", phuong: "phuong", gap: "gap", thuong_luong: "thuong_luong",
+};
+/** Khoảng hợp lệ cho trường số (đơn vị của cột). Ngoài khoảng = không ghi, kèm lý do. */
+const KHOANG: Record<string, [number, number]> = {
+  dien_tich: [5, 100000], so_phong_ngu: [1, 50], so_wc: [1, 50], so_tang: [1, 80], tang: [1, 80],
+  do_rong_hem: [0.5, 60], do_rong_duong: [0.5, 60], cach_mat_tien: [1, 3000],
+};
+const soCua = (v: string): number | null => {
+  const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
+  return m ? Number(m[0]) : null;
+};
+const hoaDau = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * Từ đề xuất ĐẠT + kết quả so DB → danh sách fact được ghi (nguồn `ai_kiem`).
+ * `dong` là dòng tin sau khi luật đã ghi; `facts` là fact hiện có của tin.
+ */
+export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, facts: Record<string, string>): { ghi: DeGhi[]; bo: Bo[] } {
+  const ghi: DeGhi[] = [];
+  const bo: Bo[] = [];
+  const them = new Set(soSanh.ai_them.map((x) => x.khoa));
+  const daGhi = new Set<string>();
+  const co = (k: string) => facts[k] != null && facts[k] !== "";
+  for (const d of dat) {
+    if (d.can != null && d.can > 1) continue;
+    if (!them.has(d.khoa)) continue; // luật đã ghi (trùng hay lệch) → AI không đụng
+    const question = KHOA_GHI[d.khoa];
+    if (!question) { bo.push({ ...d, ly_do: "khoa_khong_co_cho_ghi" }); continue; }
+    if (daGhi.has(question) || co(question)) { bo.push({ ...d, ly_do: "fact_da_co" }); continue; }
+    const v = d.gia_tri.trim();
+    const kd = chuanSo(d.trich_dan);
+    let answer: string | null = null;
+    switch (d.khoa) {
+      case "gia": {
+        const t = docTien(v) ?? docTien(d.trich_dan);
+        const thue = dong?.deal === "cho_thue";
+        if (t == null) { bo.push({ ...d, ly_do: "khong_doc_duoc_tien" }); continue; }
+        if (thue ? (t < 1e6 || t > 1e10) : (t < 1e8 || t > 1e12)) { bo.push({ ...d, ly_do: "gia_ngoai_khoang" }); continue; }
+        answer = v;
+        break;
+      }
+      case "tien_coc": {
+        if (/\bthang\b/.test(chuanSo(v))) { answer = v; break; }
+        const t = docTien(v);
+        if (t == null || t < 1e5 || t > 1e11) { bo.push({ ...d, ly_do: "khong_doc_duoc_tien" }); continue; }
+        answer = v;
+        break;
+      }
+      case "dien_tich": {
+        // Sàn / sử dụng / tổng-của-nhà-có-tầng / tim tường KHÔNG phải diện tích đất — luật tiền
+        // định cố ý để trống `area_m2` (16/09: "diện tích tổng 240m2" của nhà 4 tấm).
+        if (/\b(san|su dung|tong|xay dung|tim tuong)\b/.test(kd) || co("dien_tich_san") || co("dien_tich_dat") || co("dien_tich_tim_tuong")) {
+          bo.push({ ...d, ly_do: "dien_tich_khong_phai_dat" }); continue;
+        }
+        const n = soCua(v);
+        if (n == null || n < KHOANG.dien_tich[0] || n > KHOANG.dien_tich[1]) { bo.push({ ...d, ly_do: "so_ngoai_khoang" }); continue; }
+        answer = `${n}m2`;
+        break;
+      }
+      case "so_phong_ngu": case "so_wc": case "tang": case "do_rong_hem": case "do_rong_duong": case "cach_mat_tien": {
+        const n = soCua(v);
+        const [a, b] = KHOANG[d.khoa];
+        if (n == null || n < a || n > b) { bo.push({ ...d, ly_do: "so_ngoai_khoang" }); continue; }
+        answer = d.khoa === "do_rong_hem" || d.khoa === "do_rong_duong" || d.khoa === "cach_mat_tien" ? `${n}m` : String(n);
+        break;
+      }
+      case "so_tang": {
+        const n = soCua(v);
+        if (n == null || n < 1 || n > 80) { bo.push({ ...d, ly_do: "so_ngoai_khoang" }); continue; }
+        answer = `${n} tầng`;
+        break;
+      }
+      case "phuong": {
+        const so = chuanSo(v).match(/\d{1,2}/)?.[0];
+        if (so) { if (Number(so) < 1 || Number(so) > 30) { bo.push({ ...d, ly_do: "so_ngoai_khoang" }); continue; } answer = `Phường ${Number(so)}`; break; }
+        const ten = v.replace(/^(phường|phuong|xã|xa|thị trấn|thi tran|p\.?)\s+/i, "").trim();
+        if (ten.length < 3 || ten.length > 40) { bo.push({ ...d, ly_do: "gia_tri_ngoai_khoang" }); continue; }
+        answer = `Phường ${hoaDau(ten)}`;
+        break;
+      }
+      case "gap": case "thuong_luong": {
+        // Ghi CỤM khách nói (như luật tiền định), trigger DB đọc có/không từ đó.
+        answer = d.trich_dan.trim();
+        break;
+      }
+      default: {
+        if (v.length < 2 || v.length > 120) { bo.push({ ...d, ly_do: "gia_tri_ngoai_khoang" }); continue; }
+        answer = v;
+      }
+    }
+    if (!answer) continue;
+    daGhi.add(question);
+    ghi.push({ question, answer, khoa: d.khoa });
+  }
+  return { ghi, bo };
+}

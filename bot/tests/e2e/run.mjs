@@ -1935,6 +1935,44 @@ fresh(seedKho);
     db().t.listings.at(-1)?.price_vnd === 32e9 && r.body.replies.length > 0 && db().t.bot_errors.some((e) => e.source === "chat-reply boc_tach_ai(bong)"),
     JSON.stringify({ loi: db().t.bot_errors, rep: r.body.replies }));
 
+  // FR-208 bước 2 (17/09/2026): chế độ `ghi` — AI GHI CÓ KIỂM (TS-AIBOC-04).
+  // Hai ý luật tiền định KHÔNG bắt (đo bằng nhanDienNhieuFact 17/09): hướng không có chữ "hướng", hiện trạng "mới sơn sửa".
+  const RAO_GHI = `${RAO_MT}, mặt nhà quay về phía Đông Nam, nhà mới sơn sửa lại`;
+  const DE_XUAT_GHI = {
+    so_can: 1,
+    truong: [
+      { khoa: "gia", gia_tri: "32 tỷ", trich_dan: "giá 32 tỷ", can: null },
+      { khoa: "huong", gia_tri: "Đông Nam", trich_dan: "quay về phía Đông Nam", can: null },
+      { khoa: "hien_trang", gia_tri: "mới sơn sửa lại", trich_dan: "nhà mới sơn sửa lại", can: null },
+      { khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "sổ hồng riêng", can: null },
+    ],
+  };
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ghi", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? DE_XUAT_GHI : OUT();
+  r = await send({ external_user_id: "aiboc-4", text: RAO_GHI });
+  const tinGhi = db().t.listings.at(-1);
+  const factAi = db().t.listing_facts.filter((f) => f.listing_id === tinGhi.id && f.source === "ai_kiem");
+  const bongGhi = db().rows("boc_tach_bong");
+  check("AIBOC-04 bật 'ghi': hướng + hiện trạng (luật không bắt, tin trống) vào listing_facts nguồn ai_kiem; giá (luật đã ghi) không đụng; pháp lý bịa KHÔNG ghi",
+    factAi.map((f) => `${f.question}=${f.answer}`).sort().join("|") === "hien_trang=mới sơn sửa lại|huong=Đông Nam" && tinGhi.price_vnd === 32e9 &&
+      bongGhi.length === 1 && bongGhi[0].da_ghi?.che_do === "ghi" && bongGhi[0].da_ghi.ghi.length === 2 &&
+      bongGhi[0].so_sanh.trung.includes("gia") && bongGhi[0].bo.some((b) => b.khoa === "phap_ly"),
+    JSON.stringify({ factAi, tin: tinGhi, bong: bongGhi }));
+  const dongAi = r.body.replies.find((x) => x.startsWith("🤖"));
+  const viTriBao = r.body.replies.findIndex((x) => x.startsWith("💾"));
+  check("AIBOC-04b khách thấy dòng 🤖 'AI đọc thêm (đã kiểm)' nêu đúng trường, đứng NGAY SAU 💾; 💾 không lặp lại hướng",
+    !!dongAi && /hướng: "Đông Nam"/.test(dongAi) && /hiện trạng nhà: "mới sơn sửa lại"/.test(dongAi) && !/pháp lý|giá/.test(dongAi) &&
+      viTriBao >= 0 && r.body.replies[viTriBao + 1] === dongAi && !/Đông Nam/.test(r.body.replies[viTriBao]),
+    JSON.stringify(r.body.replies));
+
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ghi", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? DE_XUAT_GHI : OUT();
+  r = await send({ external_user_id: "aiboc-5", text: "ok em" });
+  check("AIBOC-05 'ghi' nhưng tin không có mùi dữ liệu → không gọi model bóc, không ghi gì",
+    !globalThis.__calls.some((c) => laLuotBocRao(c.params)) && db().t.listing_facts.every((f) => f.source !== "ai_kiem"));
+
   globalThis.__cauHinh = undefined;
   if (macDinh) globalThis.__model.parse = macDinh;
 }
