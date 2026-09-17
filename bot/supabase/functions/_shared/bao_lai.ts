@@ -52,7 +52,12 @@ export type DongBaoLai = SpecRow & {
   projects?: { name?: string | null } | null;
 };
 
-export type FactBaoLai = { question: string; answer: string | null; created_at?: string | null };
+export type FactBaoLai = { question: string; answer: string | null; created_at?: string | null; source?: string | null };
+
+/** Nguồn fact do AI đọc ra (FR-208 bước 2) — 💾 không gộp, in dòng 🤖 riêng để chủ nhà biết máy đọc. */
+export const NGUON_AI = "ai_kiem";
+/** Dấu mở dòng "AI đọc thêm". Như 💾: là bảng số liệu, bỏ khỏi lịch sử đưa model. */
+export const DAU_AI_DOC = "🤖";
 
 /** Giá trị lạ, rỗng, NULL → tắt. Thà im còn hơn bật nhầm cho khách thật. */
 export function docCheDo(v: unknown): CheDoBaoLai {
@@ -186,6 +191,12 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
   return `${DAU_BAO_LAI} Vừa lưu: ${ds.join(" · ")}`;
 }
 
+/** "🤖 AI đọc thêm (đã kiểm): hướng: "Đông Nam" · pháp lý: "sổ hồng riêng"" — fact nguồn `ai_kiem` lượt này. */
+export function aiDocThem(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
+  const v = vuaLuuBan(facts.filter((f) => f.source === NGUON_AI), nhan);
+  return v ? v.replace(`${DAU_BAO_LAI} Vừa lưu: `, `${DAU_AI_DOC} AI đọc thêm (đã kiểm): `) : null;
+}
+
 // Fact mà tóm tắt CỘT đã nói (qua cột tương ứng) — lượt tạo tin chỉ kèm phần còn lại.
 const DA_CO_TRONG_TOM_TAT = new Set([
   "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "gia", "phuong", "vi_tri", "so_phong_ngu", "ket_cau",
@@ -254,7 +265,9 @@ export function layBaoLai(body: string | null | undefined): string | null {
 /** Câu bot sau khi bỏ phần 💾 — lịch sử gửi model không được thấy bảng báo lại. */
 export function boBaoLai(body: string | null | undefined): string | null {
   if (!body) return body ?? null;
-  if (body.startsWith(DAU_BAO_LAI)) return "";
+  if (body.startsWith(DAU_BAO_LAI) || body.startsWith(DAU_AI_DOC)) return "";
   const i = body.indexOf(`\n${DAU_BAO_LAI}`);
-  return i >= 0 ? body.slice(0, i) : body;
+  const j = body.indexOf(`\n${DAU_AI_DOC}`);
+  const cat = [i, j].filter((x) => x >= 0);
+  return cat.length ? body.slice(0, Math.min(...cat)) : body;
 }

@@ -67,7 +67,8 @@ create table if not exists public.boc_tach_bong (
   de_xuat jsonb not null default '[]'::jsonb,
   dat jsonb not null default '[]'::jsonb,
   bo jsonb not null default '[]'::jsonb,
-  so_sanh jsonb not null default '{}'::jsonb
+  so_sanh jsonb not null default '{}'::jsonb,
+  da_ghi jsonb not null default '{}'::jsonb
 );
 
 create table if not exists public.bot_errors (

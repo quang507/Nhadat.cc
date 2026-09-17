@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { coMuiDuLieuRao, kiemDeXuat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { chonDeGhi, coMuiDuLieuRao, kiemDeXuat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -144,6 +144,37 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("so DB: fact có sẵn chứa giá trị → trung", s2.trung.includes("ly_do_ban"), JSON.stringify(s2));
   const s3 = soSanhVoiDb([{ khoa: "gia", gia_tri: "25 tỷ", trich_dan: "25 tỷ", can: 2 }], { price_vnd: 3.6e9 }, {});
   ok("so DB: trường của căn thứ 2 không đem so với tin căn 1", !s3.lech.length && !s3.trung.length && !s3.ai_them.length, JSON.stringify(s3));
+}
+
+// ── FR-208 bước 2 (17/09/2026): chonDeGhi — AI GHI CÓ KIỂM, chỉ trường luật không ghi, trong khoảng hợp lệ ──
+{
+  const dx = (khoa, gia_tri, trich_dan, can = null) => ({ khoa, gia_tri, trich_dan, can });
+  const chon = (dat, dong, facts = {}) => chonDeGhi(dat, soSanhVoiDb(dat, dong, facts), dong, facts);
+  const lyDo = (r, khoa) => r.bo.find((b) => b.khoa === khoa)?.ly_do;
+
+  const r1 = chon([dx("gia", "32 tỷ", "giá 32 tỷ"), dx("huong", "Đông Nam", "hướng Đông Nam"), dx("dien_tich", "240", "diện tích tổng 240m2")],
+    { price_vnd: 32e9, direction: null, area_m2: null, deal: "ban" });
+  ok("ghi: giá luật đã ghi (trùng) → AI không đụng; hướng trống → ghi 'huong'; 'diện tích tổng' không phải đất → bỏ",
+    r1.ghi.map((g) => `${g.question}=${g.answer}`).join() === "huong=Đông Nam" && lyDo(r1, "dien_tich") === "dien_tich_khong_phai_dat", JSON.stringify(r1));
+  const r2 = chon([dx("gia", "30 tỷ", "giá 30 tỷ")], { price_vnd: 32e9, deal: "ban" });
+  ok("ghi: luật và AI LỆCH giá → không ghi, không đè", r2.ghi.length === 0 && r2.bo.length === 0, JSON.stringify(r2));
+  const r3 = chon([dx("so_phong_ngu", "3", "3 phòng ngủ"), dx("so_wc", "70", "70 wc"), dx("so_tang", "4", "trệt 3 lầu"), dx("do_rong_hem", "5", "hẻm 5m"), dx("phuong", "14", "phường 14"), dx("gap", "co", "cần bán gấp")],
+    { bedrooms: null, bathrooms: null, floors: null, alley_width_m: null, ward: null, gap: null });
+  ok("ghi: số trong khoảng → ghi đúng dạng (3 · '4 tầng' vào ket_cau · '5m' · 'Phường 14' · cụm gấp); 70 wc ngoài khoảng → bỏ",
+    r3.ghi.map((g) => `${g.question}=${g.answer}`).join("|") === "so_phong_ngu=3|ket_cau=4 tầng|do_rong_hem=5m|phuong=Phường 14|gap=cần bán gấp" && lyDo(r3, "so_wc") === "so_ngoai_khoang", JSON.stringify(r3));
+  const r4 = chon([dx("quan", "Quận 5", "quận 5"), dx("duong", "Châu Văn Liêm", "đường Châu Văn Liêm"), dx("ma_can", "S1.02", "căn S1.02")], { district: null, street: null, unit_code: null });
+  ok("ghi: quận / đường / mã căn không có chỗ ghi fact → bỏ khoa_khong_co_cho_ghi", r4.ghi.length === 0 && r4.bo.every((b) => b.ly_do === "khoa_khong_co_cho_ghi") && r4.bo.length === 3, JSON.stringify(r4));
+  const r5 = chon([dx("so_tang", "4", "trệt 3 lầu"), dx("ket_cau", "trệt 3 lầu", "trệt 3 lầu")], { floors: null });
+  ok("ghi: hai khoá cùng đổ về ket_cau → ghi một, cái sau fact_da_co", r5.ghi.length === 1 && lyDo(r5, "ket_cau") === "fact_da_co", JSON.stringify(r5));
+  const r6 = chon([dx("huong", "Tây", "hướng Tây", 2)], { direction: null });
+  ok("ghi: trường căn thứ 2 → không ghi vào tin căn 1", r6.ghi.length === 0 && r6.bo.length === 0, JSON.stringify(r6));
+  const r7 = chon([dx("gia", "32 tỷ", "giá 32 tỷ")], { price_vnd: null, deal: "cho_thue" });
+  ok("ghi: giá thuê 32 tỷ ngoài khoảng thuê → bỏ gia_ngoai_khoang", r7.ghi.length === 0 && lyDo(r7, "gia") === "gia_ngoai_khoang", JSON.stringify(r7));
+  const r8 = chon([dx("gia", "45 triệu", "45 triệu/tháng"), dx("tien_coc", "2 tháng", "cọc 2 tháng"), dx("dien_tich", "62,5", "62,5m²")], { price_vnd: null, deal: "cho_thue", area_m2: null });
+  ok("ghi: giá thuê trong khoảng, cọc theo tháng, diện tích '62,5' → '62.5m2'",
+    r8.ghi.map((g) => `${g.question}=${g.answer}`).join("|") === "gia=45 triệu|tien_coc=2 tháng|dien_tich=62.5m2", JSON.stringify(r8));
+  const r9 = chon([dx("dien_tich", "80", "80m2")], { area_m2: null }, { dien_tich_san: "240m2" });
+  ok("ghi: tin đã có fact sàn → AI không ghi diện tích đất (luật cố ý để trống)", r9.ghi.length === 0 && lyDo(r9, "dien_tich") === "dien_tich_khong_phai_dat", JSON.stringify(r9));
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

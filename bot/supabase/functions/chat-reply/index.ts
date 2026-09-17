@@ -32,11 +32,11 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
-  boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, DAU_TIN_GIO, docCheDo, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua,
+  aiDocThem, boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, DAU_TIN_GIO, docCheDo, kemLuotTao, NGUON_AI, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
-import { coMuiDuLieuRao, type DeXuat, type DongDb, kiemDeXuat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { chonDeGhi, coMuiDuLieuRao, type DeXuat, type DongDb, kiemDeXuat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
@@ -1619,12 +1619,18 @@ Deno.serve(async (req) => {
     // gì; chỉ khi câu có mùi dự án (`coMuiDuAn`); và chỉ một lượt mỗi tin.
     let daVetDuAn = false;
     // FR-208: lượt AI bóc tách chạy bóng (khởi động sau khi biết câu đang hỏi).
-    let bongAi: Promise<{ truong: DeXuat[]; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null } | null> | null = null;
-    const ghiBongBocTach = async (extra: Record<string, unknown>): Promise<void> => {
-      if (!bongAi) return;
+    let bongAi: Promise<{ truong: DeXuat[]; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
+    // Công tắc `app_config.boc_tach_ai` đọc MỘT lần, tách khỏi lượt model để đường ra biết
+    // phải chờ (chế độ `ghi`) hay chạy nền (chế độ `bong`) mà không đợi model xong.
+    let cheDoBocAi: Promise<string> | null = null;
+    // FR-208 bước 2 (17/09/2026): chế độ `ghi` — trường AI đọc ra, qua kiểm bằng chứng +
+    // kiểm khoảng (`chonDeGhi`), mà luật tiền định KHÔNG ghi và tin còn trống → ghi fact
+    // nguồn `ai_kiem`, trả dòng 🤖 để gắn sau 💾. Chế độ `bong` chỉ ghi sổ đo, trả null.
+    const ghiBongBocTach = async (extra: Record<string, unknown>): Promise<string | null> => {
+      if (!bongAi) return null;
       const kq = await bongAi;
       bongAi = null;
-      if (!kq) return;
+      if (!kq) return null;
       try {
         await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
         // Tin nào: như 💾 — mã vừa tạo lượt này > active_listing_id đọc lại.
@@ -1645,15 +1651,35 @@ Deno.serve(async (req) => {
           for (const f of (fs ?? []) as Array<{ question: string; answer: string | null }>) if (f.answer) facts[f.question] = f.answer;
         }
         const { dat, bo } = kiemDeXuat(kq.truong, text);
+        const soCan = (kq.ket as { so_can?: number } | null)?.so_can ?? null;
+        const soSanh = soSanhVoiDb(dat, d, facts);
+        // Chế độ `ghi`: chỉ khi tin xác định được và tin rao MỘT căn (nhiều căn: DB chỉ có một tin để so).
+        const daGhi: Array<{ question: string; answer: string; khoa: string }> = [];
+        let boGhi: unknown[] = [];
+        if (kq.cheDo === "ghi" && d && (soCan ?? 0) <= 1) {
+          const chon = chonDeGhi(dat, soSanh, d, facts);
+          boGhi = chon.bo;
+          for (const g of chon.ghi) {
+            const { error: gErr } = await client.rpc("ghi_fact_listing", {
+              p_listing_id: d.id, p_question: g.question, p_answer: g.answer, p_source: NGUON_AI,
+            });
+            if (gErr) await ghiLoi(client, `chat-reply ghi_fact_listing(ai_kiem ${g.question})`, gErr.message);
+            else daGhi.push(g);
+          }
+        }
         const { error: bErr } = await client.from("boc_tach_bong").insert({
           seller_id: sellerRow.id, listing_id: d?.id ?? null,
           tin: thayLienHe(text, "[liên hệ]").slice(0, 2000), cau_dang_hoi: kq.cauDangHoi, model: MODEL, ms: kq.ms,
-          so_can: (kq.ket as { so_can?: number } | null)?.so_can ?? null,
-          de_xuat: kq.truong, dat, bo, so_sanh: soSanhVoiDb(dat, d, facts),
+          so_can: soCan,
+          de_xuat: kq.truong, dat, bo, so_sanh: soSanh, da_ghi: { che_do: kq.cheDo, ghi: daGhi, bo: boGhi },
         });
         if (bErr) await ghiLoi(client, "chat-reply boc_tach_bong(ghi)", bErr.message);
+        return daGhi.length
+          ? aiDocThem(daGhi.map((g) => ({ question: g.question, answer: g.answer, source: NGUON_AI })), FACT_LABELS)
+          : null;
       } catch (e) {
         await ghiLoi(client, "chat-reply boc_tach_bong", e);
+        return null;
       }
     };
     const vetDuAnBangModel = async (): Promise<void> => {
@@ -1747,11 +1773,12 @@ Deno.serve(async (req) => {
         let factLuot: FactBaoLai[] = [];
         if (moc) {
           const { data: fs, error: fErr } = await client.from("listing_facts")
-            .select("question, answer, created_at, listings!inner(seller_id)")
+            .select("question, answer, created_at, source, listings!inner(seller_id)")
             .eq("listings.seller_id", sellerRow.id).gte("created_at", moc)
             .order("created_at", { ascending: false }).limit(40);
           if (fErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(facts)", fErr.message);
-          factLuot = (fs ?? []) as FactBaoLai[];
+          // Fact AI đọc (FR-208 bước 2) có dòng 🤖 riêng — 💾 chỉ nói thứ LUẬT ghi.
+          factLuot = ((fs ?? []) as FactBaoLai[]).filter((f) => f.source !== NGUON_AI);
         }
         const tomTat = tomTatDaLuu(dong, [], FACT_LABELS, "thay_doi");
         // Lượt TẠO tin: cả dòng tin là thứ vừa lưu → tóm tắt cột (đọc từ DB).
@@ -1810,6 +1837,10 @@ ${kem}` : tomTat, cheDo };
       // tách (thật vào db) gì luôn". Bong bóng 💾 luôn là tin ĐẦU TIÊN của lượt. Lượt
       // tạo tin thì "📝 Em ghi nhận" (ghép từ chữ khách gõ) trùng với 💾 (đọc DB) —
       // bỏ 📝, giữ câu "Sai chỗ nào … nhắn lại giúp em nha" nối sau 💾.
+      // FR-208 bước 2: chế độ `ghi` phải CHỜ lượt AI (đã chạy song song từ đầu nhánh) để ghi
+      // fact rồi báo ngay trong lượt này — "đã lưu thì phải ghi rõ lưu vào trường nào" (17/09).
+      const cheDoAi = cheDoBocAi ? await cheDoBocAi : "tat";
+      const dongAi = cheDoAi === "ghi" ? await ghiBongBocTach(extra) : null;
       if (sach.length) {
         const bl = await baoLaiDaLuu(extra);
         if (bl.bong) {
@@ -1826,6 +1857,12 @@ ${kem}` : tomTat, cheDo };
             sach.unshift(bl.bong);
           }
         }
+        // Dòng 🤖 đứng NGAY SAU 💾 (bong bóng riêng), không có 💾 thì đứng đầu.
+        if (dongAi) {
+          const i = sach.findIndex((x) => x.startsWith(DAU_BAO_LAI));
+          if (i >= 0) sach.splice(i + 1, 0, dongAi);
+          else sach.unshift(dongAi);
+        }
       }
       // MỘT câu INSERT cho cả loạt bong bóng (FR-171 h): `seq` là identity nên
       // vẫn tăng theo thứ tự mảng trong một INSERT.
@@ -1839,10 +1876,12 @@ ${kem}` : tomTat, cheDo };
       }
       // FR-208: ghi sổ bóng SAU khi mọi luật đã ghi DB — chạy nền nếu runtime cho phép
       // (khách không phải chờ lượt model bóng), không thì chờ ngay tại đây.
-      const viecBong = ghiBongBocTach(extra);
-      const nen = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
-      if (nen?.waitUntil) nen.waitUntil(viecBong);
-      else await viecBong;
+      if (cheDoAi !== "ghi") {
+        const viecBong = ghiBongBocTach(extra);
+        const nen = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+        if (nen?.waitUntil) nen.waitUntil(viecBong);
+        else await viecBong;
+      }
       return await hoanTat({
         reply: sach.join("\n") || null, replies: sach, role: "seller", ...extra,
       });
@@ -1999,12 +2038,16 @@ ${kem}` : tomTat, cheDo };
     if (anthropicS && coMuiDuLieuRao(text)) {
       const tBong = Date.now();
       const ai = anthropicS;
-      bongAi = (async () => {
+      cheDoBocAi = (async () => {
         const { data: cd, error: cdErr } = await client.rpc("cau_hinh", { p_key: "boc_tach_ai" });
         if (cdErr) await ghiLoi(client, "chat-reply cau_hinh(boc_tach_ai)", cdErr.message);
-        if (String(cd ?? "tat").trim() !== "bong") return null;
+        return String(cd ?? "tat").trim();
+      })().catch(() => "tat");
+      bongAi = (async () => {
+        const cheDo = await cheDoBocAi!;
+        if (cheDo !== "bong" && cheDo !== "ghi") return null;
         const r = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, text, pendingReq?.question ?? null);
-        return { ...r, ms: Date.now() - tBong, cauDangHoi: pendingReq?.question ?? null };
+        return { ...r, ms: Date.now() - tBong, cauDangHoi: pendingReq?.question ?? null, cheDo };
       })().catch(async (e) => {
         await ghiLoi(client, "chat-reply boc_tach_ai(bong)", e);
         return null;
