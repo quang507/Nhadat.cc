@@ -308,7 +308,10 @@ phải chỉ xanh trên máy**. Mỗi dòng độc lập, 1–3 phút. Cần Zal
 `/admin` → CRM, hoặc báo tôi bật `1` trong buổi.
 
 **Dữ liệu mẫu đã bắn sẵn, KHÔNG bị cron dọn** (tiền tố `mau-`, không nằm trong
-`don_du_lieu_thu`; muốn xoá thì `/admin` → CRM → xoá từng số):
+`don_du_lieu_thu`; muốn xoá thì `/admin` → CRM → xoá từng số). **17/09/2026: đã XOÁ
+HẾT theo lệnh chủ dự án** ("xóa hết hội thoại và rổ hàng cũ đi") bằng
+`admin_xoa_het_khach_va_ro_hang('XOA HET')` — 11 tin, 8 người bán, 4 người mua, 12 hội
+thoại, 163 tin nhắn. Bảng dưới chỉ còn là lịch sử; mọi số Zalo giờ là khách mới:
 
 | Zalo giả | Vai | Đã gõ | Tin / hồ sơ tạo ra | Đang chờ câu |
 |---|---|---|---|---|
