@@ -1523,9 +1523,10 @@ Deno.serve(async (req) => {
     };
     /** Tin đang ở quận MẶC ĐỊNH và có tên đường → tra, cất gợi ý, trả câu hỏi xác nhận (null = hỏi như cũ). */
     const cauHoiPhuongGoiY = async (listingId: string, duongBiet: string | null, cachGoiNguoi: string): Promise<string | null> => {
-      const { data: l } = await client.from("listings").select("street, location_raw, boc_tach").eq("id", listingId).maybeSingle();
+      const { data: l } = await client.from("listings").select("district, street, location_raw, boc_tach").eq("id", listingId).maybeSingle();
       if (!l) return null;
-      if ((l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true) return null;
+      // 20260917a: quận trống (không còn mặc định) cũng là "chưa rõ quận" → tra gợi ý từ tên đường.
+      if (l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true) return null;
       const duong = (duongBiet ?? "").trim() || (l.street ?? "").trim() || tenDuong(l.location_raw ?? "");
       const goiY = await traPhuongTuDuong(duong);
       if (!goiY) return null;
@@ -1539,8 +1540,10 @@ Deno.serve(async (req) => {
      * Long Trường") khi tra được, để fact ghi đúng chữ chứ không phải "phường long trường".
      */
     const capNhatQuanTuPhuong = async (listingId: string, goiY: GoiYPhuong | null, dapAnPhuong: string): Promise<string | null> => {
-      const { data: cu } = await client.from("listings").select("boc_tach").eq("id", listingId).maybeSingle();
+      const { data: cu } = await client.from("listings").select("district, boc_tach").eq("id", listingId).maybeSingle();
       const bt = (cu?.boc_tach ?? {}) as { quan_mac_dinh?: unknown; phuong_goi_y?: unknown };
+      // 20260917a: quận trống (không còn mặc định Quận 5) cũng là "chưa rõ" như cờ cũ.
+      const chuaQuan = !cu?.district || bt.quan_mac_dinh === true;
       const p: Record<string, unknown> = bt.phuong_goi_y ? { phuong_goi_y: false } : {};
       let quan = goiY?.quan ?? null;
       let tenChuan: string | null = goiY ? goiY.phuong : null;
@@ -1548,12 +1551,12 @@ Deno.serve(async (req) => {
         const tach = tachTienToPhuong(dapAnPhuong);
         const ten = (tach?.ten ?? dapAnPhuong).trim();
         const w = ten.length >= 2 && ten.length <= 50 ? await timWard(ten) : null;
-        if (w) { tenChuan = w.ten_day_du; quan = bt.quan_mac_dinh === true ? w.quan_cu : null; }
+        if (w) { tenChuan = w.ten_day_du; quan = chuaQuan ? w.quan_cu : null; }
         // 15/09/2026: không có trong `wards` (xã cũ như "Tân Kiên") thì vẫn ghi tên ĐÃ
         // CẮT chữ đệm và tiền tố viết hoa ("Xã Tân Kiên"), không phải "xã Tân Kiên đó em".
         else if (tach) tenChuan = tach.ten_day_du;
       }
-      if (quan && bt.quan_mac_dinh === true) {
+      if (quan && chuaQuan) {
         const { error: qErr } = await client.from("listings").update({ district: quan }).eq("id", listingId);
         if (qErr) await ghiLoi(client, "chat-reply cap nhat quan tu phuong", qErr.message);
         else { p.quan = quan; p.quan_mac_dinh = false; }
@@ -1857,7 +1860,9 @@ ${kem}` : tomTat, cheDo };
     // minh ("kêu chị nha") vẫn thắng và vẫn đổi được cách gọi cũ.
     // 16/09/2026 (Zalo thật): "Chào cháu chú có căn nhà…" → gọi "chú", tự xưng "cháu", và
     // ghi luôn giới tính + nhóm tuổi suy từ cách gọi (`sellers.gioi_tinh/nhom_tuoi`, 20260916a).
-    const xungHoMoi = batXungHo(text) ?? (sellerRow.xung_ho ? null : tuXungTuCau(text));
+    // 17/09/2026 (Zalo thật): khách đổi "chú" → "cô" giữa chừng mà bot vẫn gọi "chú" — cách tự
+    // xưng MỚI NHẤT thắng, không chỉ nhận lần đầu.
+    const xungHoMoi = batXungHo(text) ?? tuXungTuCau(text);
     if (xungHoMoi && xungHoMoi !== sellerRow.xung_ho) {
       const { error: xhErr } = await client.from("sellers")
         .update({ xung_ho: xungHoMoi, ...suyTuXungHo(xungHoMoi) }).eq("id", sellerRow.id);
@@ -2250,7 +2255,7 @@ ${kem}` : tomTat, cheDo };
         const { data: moi, error: moiErr } = await client.from("listings").insert({
           code: null, seller_id: sellerRow.id, deal: goc?.deal ?? "ban",
           // 11/09: căn nói rõ quận riêng ("1 căn q11 …") thì không kế thừa địa chỉ căn cũ.
-          district: c.quan ?? goc?.district ?? "Quận 5", ward: c.quan ? null : goc?.ward ?? null,
+          district: c.quan ?? goc?.district ?? null, ward: c.quan ? null : goc?.ward ?? null,
           location_raw: c.quan ? null : goc?.location_raw ?? null, street: c.quan ? null : goc?.street ?? null,
           description: c.goc, price_raw: c.gia ?? null,
           property_type: goc?.property_type ?? "chua_ro", status: "cho_thong_tin",
@@ -2805,7 +2810,10 @@ ${kem}` : tomTat, cheDo };
         // → đó là vị trí, không phải phường (bản trước ghi nguyên địa chỉ vào cột phường).
         // Ghi vi_tri, tra phường từ tên đường rồi hỏi xác nhận; câu phường vẫn treo.
         const coPhuongSo = /(?:phường|phuong|(?<![\p{L}])p)\s*\.?\s*\d{1,2}(?!\d)/iu.test(dapAn);
-        if (!nhanGoiYPhuong && !kqDuyet && !humanActive && !coPhuongSo && !tachTienToPhuong(dapAn)) {
+        // 17/09/2026 (Zalo thật): "Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m…" trả lời câu phường
+        // từng ĐÈ địa chỉ "Căn số 14 ở Ny'ah Phú Định" đã có. Địa chỉ đã có thì không ghi
+        // lại từ câu lệch; muốn sửa địa chỉ thì nói rõ (FR-164).
+        if (!nhanGoiYPhuong && !kqDuyet && !humanActive && !coPhuongSo && !tachTienToPhuong(dapAn) && !pendingReq.listings?.location_raw) {
           const viTri = bocViTriRao(dapAn);
           if (viTri) {
             const { error: vtErr } = await client.rpc("ghi_fact_listing", {
@@ -2824,7 +2832,7 @@ ${kem}` : tomTat, cheDo };
               else await chepSangDuAn(f.question, f.answer);
             }
             const cauGoiY = await cauHoiPhuongGoiY(pendingReq.listing_id, tenDuong(viTri), cachGoi);
-            const quanMacDinh = (btRow?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
+            const quanMacDinh = (btRow?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true || !pendingReq.listings?.district;
             const cauPhuong = cauGoiY ?? cauHoiMau(quanMacDinh ? "phuong@chua_quan" : "phuong", cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district);
             return await traLoiSeller([`Dạ em ghi địa chỉ ${viTri} rồi ạ. ${cauPhuong}`], {
               saved_fact: "vi_tri", reask: "phuong", loai_cau: cauGoiY ? "goi_y_phuong" : "hoi_lai",
@@ -3416,7 +3424,9 @@ ${kem}` : tomTat, cheDo };
         ], { ngoai_dia_ban: vung.ten });
       }
       const quanDoc = bocQuan(tKD, text) ?? duAn?.district ?? vung?.ten ?? null;
-      const quanRao = quanDoc ?? "Quận 5";
+      // 17/09/2026 (chủ dự án: "chỗ nào cứ mặc định quận 5 xóa sạch đi", 20260917a): chưa rõ
+      // quận thì ĐỂ TRỐNG — bot hỏi "phường mấy, quận nào", hoặc suy từ phường / dự án.
+      const quanRao: string | null = quanDoc ?? null;
       const dongTin = {
         code: null, seller_id: sellerRow.id, deal: sDeal, district: quanRao,
         ward: phuongRao ?? duAn?.ward ?? null,
@@ -3974,7 +3984,7 @@ ${kem}` : tomTat, cheDo };
   // nhánh mua thì không — model tự đoán: "có căn nào quận 10 tầm 5 tỷ không em"
   // → "Anh tìm để ở…". Lời dặn ("kêu chị nha") thắng; khách tự xưng ("chị đang
   // tìm mua") thì nhận khi chưa biết. Lưu trong hồ sơ, không thêm cột.
-  const xhMuaMoi = batXungHo(text) ?? (prefs.xung_ho ? null : tuXungTuCau(text));
+  const xhMuaMoi = batXungHo(text) ?? tuXungTuCau(text);
   const goiMua = (xhMuaMoi ?? prefs.xung_ho ?? null) as XungHo | null;
   // Kho lọc theo hồ sơ: mua/thuê, phường (nếu bắt được), số PN, cận trên giá (SRS-5.2)
   // Cột dùng chung cho mọi dòng "căn" đưa vào prompt (KHO, căn khách nhắc, căn

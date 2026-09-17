@@ -272,7 +272,7 @@ create table if not exists public.listings (
   legacy_sst integer,
   seller_id uuid,
   deal listing_deal not null default 'ban'::listing_deal,
-  district text not null default 'Quận 5'::text,
+  district text,
   ward text,
   location_raw text,
   area_m2 numeric,
@@ -1081,7 +1081,7 @@ begin
     null,
     v_seller,
     coalesce(nullif(p->>'deal', ''), 'ban')::listing_deal,
-    coalesce(nullif(btrim(p->>'district'), ''), 'Quận 5'),
+    nullif(btrim(p->>'district'), ''),
     nullif(btrim(p->>'ward'), ''),
     case when nullif(btrim(p->>'ward'), '') is not null then 'admin' else 'suy_doan' end,
     nullif(btrim(p->>'location_raw'), ''),
@@ -4515,7 +4515,8 @@ begin
     else 'NP'
   end;
 
-  v_loc := public.bo_dau(coalesce(p_district, p_province, 'Q5'));
+  -- 20260917a: chưa rõ quận → 'XX', không còn ép về Q5.
+  v_loc := public.bo_dau(coalesce(p_district, p_province, ''));
   v_loc := upper(regexp_replace(v_loc, '[^a-zA-Z0-9]', '', 'g'));
 
   v_so := (regexp_match(v_loc, '^(?:QUAN|Q)?([0-9]{1,2})$'))[1];
@@ -4533,7 +4534,7 @@ begin
   elsif v_loc ~ 'LONGAN' then v_loc := 'LONGAN';
   end if;
 
-  if v_loc is null or v_loc = '' then v_loc := 'Q5'; end if;
+  if v_loc is null or v_loc = '' then v_loc := 'XX'; end if;
 
   v_prefix := 'BDS-' || v_type || '-' || v_loc || '-';
 

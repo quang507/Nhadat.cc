@@ -123,8 +123,9 @@ export function tomTatDaLuu(
   p.push(`${LOAI[l.property_type ?? ""] ?? "BĐS"} ${l.deal === "cho_thue" ? "cho thuê" : "bán"}`);
   // 11/09/2026 (Zalo thật): "sao cái nào cũng ghi Q5" — Quận 5 mà là MẶC ĐỊNH (chưa
   // ai nói quận) thì nói thẳng ra, đừng để người đọc tưởng hệ thống đọc được Quận 5.
-  const quanMacDinh = l.district === "Quận 5" && l.boc_tach?.quan_mac_dinh === true;
-  const dc = gonDiaChi(l.location_raw, l.ward, quanMacDinh ? "Quận 5 (chưa rõ quận)" : l.district);
+  // 20260917a: không còn mặc định Quận 5 — quận trống thì in "(chưa rõ quận)"; cờ cũ giữ để đọc tin cũ.
+  const quanMacDinh = !l.district || (l.district === "Quận 5" && l.boc_tach?.quan_mac_dinh === true);
+  const dc = gonDiaChi(l.location_raw, l.ward, quanMacDinh ? (l.district ? `${l.district} (chưa rõ quận)` : "(chưa rõ quận)") : l.district);
   if (dc) p.push(dc);
   // 14/09/2026 (bắn thật): căn hộ Sunrise City đã gắn project_id, tầng 15, full nội
   // thất nằm trong DB mà 💾 không nói — tóm tắt chỉ biết cột nhà phố.

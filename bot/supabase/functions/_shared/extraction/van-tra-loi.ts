@@ -94,7 +94,8 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
 // thích giọng người thật tới đâu. Câu nào nhận là người / chối là máy thì thay
 // bằng câu thật; phần còn lại (câu hỏi quay lại việc) giữ nguyên.
 const NHAN_LA_NGUOI: RegExp[] = [
-  /\b(?:em|minh|toi|tui)\s+(?:la\s+|dung la\s+)?(?:mot\s+)?(?:nguoi\s+that|con nguoi|nguoi\s+binh thuong)\b/,
+  // 17/09/2026 (Zalo thật): "cháu là người hỗ trợ" — bot xưng cháu và nhận là người "hỗ trợ / tư vấn".
+  /\b(?:em|minh|toi|tui|chau)\s+(?:la\s+|dung la\s+)?(?:mot\s+)?(?:nguoi\s+(?:that|ho tro|tu van|phu trach|ban hang)|con nguoi|nguoi\s+binh thuong|nhan vien)\b/,
   /\b(?:khong|ko|chang|dau)\s+(?:phai\s+)?(?:la\s+)?(?:may|bot|robot|chatbot|ai|tri tue nhan tao)\b(?!\s*(?:lanh|giat|bom|nuoc|phat|in|tinh|cung|ca\b|nay|kia|khac|biet|lam))/,
 ];
 export function laNhanLaNguoi(cau: string): boolean {
