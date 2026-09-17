@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { chonDeGhi, coMuiDuLieuRao, kiemDeXuat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { chonDeGhi, coMuiDuLieuRao, giaTriChoCauTreo, kiemDeXuat, kiemKienThuc, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -175,6 +175,22 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
     r8.ghi.map((g) => `${g.question}=${g.answer}`).join("|") === "gia=45 triệu|tien_coc=2 tháng|dien_tich=62.5m2", JSON.stringify(r8));
   const r9 = chon([dx("dien_tich", "80", "80m2")], { area_m2: null }, { dien_tich_san: "240m2" });
   ok("ghi: tin đã có fact sàn → AI không ghi diện tích đất (luật cố ý để trống)", r9.ghi.length === 0 && lyDo(r9, "dien_tich") === "dien_tich_khong_phai_dat", JSON.stringify(r9));
+}
+
+// ── 17/09/2026: AI đọc trước cho câu treo + kiến thức thêm ──
+{
+  const dx = (khoa, gia_tri, trich_dan, can = null) => ({ khoa, gia_tri, trich_dan, can });
+  dat("pháp lý CHUẨN HOÁ: 'sổ hồng riêng' từ trích 'shr' (cùng mã)", "shr, nhà ở từ 2019 rồi", "phap_ly", "sổ hồng riêng", "shr");
+  bo("pháp lý bịa mã khác: 'sổ hồng chung' từ trích 'shr'", "shr, nhà ở từ 2019 rồi", "phap_ly", "sổ hồng chung", "shr", "gia_tri_khong_nam_trong_trich_dan");
+  dat("nội thất chuẩn hoá: 'full nội thất' từ 'full nt'", "full nt, 2 máy lạnh", "noi_that", "full nội thất", "full nt");
+  ok("câu treo pháp lý: AI 'sổ hồng riêng' → giá trị cho luật ghi", giaTriChoCauTreo([dx("phap_ly", "sổ hồng riêng", "shr")], "phap_ly", {}) === "sổ hồng riêng");
+  ok("câu treo diện tích đất: AI dien_tich '62,5' → '62.5m2'", giaTriChoCauTreo([dx("dien_tich", "62,5", "62,5m²")], "dien_tich_dat", { area_m2: null }) === "62.5m2");
+  ok("câu treo giá: AI không có khoá đó → null", giaTriChoCauTreo([dx("huong", "Đông", "hướng Đông")], "gia", {}) === null);
+  ok("câu treo số WC: AI '70' ngoài khoảng → null", giaTriChoCauTreo([dx("so_wc", "70", "70 wc")], "so_wc", {}) === null);
+  const tin = "shr, nhà ở từ 2019 rồi, gần chợ Bình Tây, khu an ninh, gần chợ bình tây";
+  const kt = kiemKienThuc(["gần chợ Bình Tây", "khu an ninh", "gần chợ bình tây", "có hồ bơi", "nhà ở từ 2019 rồi"], tin, [dx("hien_trang", "nhà ở từ 2019 rồi", "nhà ở từ 2019 rồi")]);
+  ok("kiến thức: nguyên văn giữ, trùng bỏ, bịa ('có hồ bơi') bỏ, trùng trích dẫn đã có khoá bỏ", kt.join("|") === "gần chợ Bình Tây|khu an ninh", JSON.stringify(kt));
+  ok("kiến thức: tối đa 3", kiemKienThuc(["a1 b", "c2 d", "e3 f", "g4 h"], "a1 b c2 d e3 f g4 h", []).length === 3);
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

@@ -210,7 +210,16 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number): string | null {
       // Trường chữ: giá trị phải NẰM TRONG cụm trích (model không được "diễn đạt lại").
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
       const cv = chuanSo(v);
-      if (!(cv.length >= 2 && kd.includes(cv))) return "gia_tri_khong_nam_trong_trich_dan";
+      if (!(cv.length >= 2 && kd.includes(cv))) {
+        // 17/09/2026 (chủ dự án: "AI đọc trước, trả kiến thức cho luật lưu"): pháp lý / nội thất
+        // được CHUẨN HOÁ ("shr" → "sổ hồng riêng", "full nt" → "full nội thất") khi cả giá trị
+        // lẫn cụm trích đọc ra CÙNG MỘT MÃ — vẫn không được bịa mã khác.
+        const chuan = d.khoa === "phap_ly" ? (phapLyMa(v) != null && phapLyMa(v) === phapLyMa(cum))
+          : d.khoa === "noi_that" ? (noiThatMa(v) != null && noiThatMa(v) === noiThatMa(cum))
+          : false;
+        if (!chuan) return "gia_tri_khong_nam_trong_trich_dan";
+        return null;
+      }
       // Lượt đo bóng 14/09: chữ có thật trong cụm nhưng SAI Ô — "view sông" vào hướng, "thổ cư
       // hết" vào pháp lý, "xây tự do" vào kết cấu, "Thảo Điền" (khu) vào dự án, "gấp" vào lý do bán.
       const hinh = HINH_TRUONG_CHU[d.khoa];
@@ -266,6 +275,10 @@ const phapLyMa = (v: string) => {
   const t = chuanSo(v);
   return /rieng|shr/.test(t) ? "so_hong_rieng" : /chung|shc|dong so huu/.test(t) ? "so_hong_chung"
     : /hdmb|hop dong mua ban/.test(t) ? "hdmb" : /vi bang|giay tay/.test(t) ? "giay_tay" : /so/.test(t) ? "so_hong" : null;
+};
+const noiThatMa = (v: string) => {
+  const t = chuanSo(v);
+  return /\b(full|day du|cao cap)\b/.test(t) ? "full" : /\b(co ban)\b/.test(t) ? "co_ban" : /\b(khong|trong|ko)\b/.test(t) ? "khong" : null;
 };
 const chuaNhau = (a: string, b: string) => { const x = chuanSo(a), y = chuanSo(b); return !!x && !!y && (x.includes(y) || y.includes(x)); };
 
@@ -335,7 +348,7 @@ export function soSanhVoiDb(dat: DeXuat[], dong: DongDb | null, facts: Record<st
 export type DeGhi = { question: string; answer: string; khoa: string };
 
 /** khoá AI → khoá fact (`required_facts.fact_key`). Không có trong bảng = không ghi. */
-const KHOA_GHI: Record<string, string> = {
+export const KHOA_GHI: Record<string, string> = {
   gia: "gia", dien_tich: "dien_tich", so_phong_ngu: "so_phong_ngu", so_wc: "so_wc", so_tang: "ket_cau",
   ket_cau: "ket_cau", tang: "tang", huong: "huong", phap_ly: "phap_ly", noi_that: "noi_that",
   ly_do_ban: "ly_do_ban", thoi_han_thue: "thoi_han_thue", phi_quan_ly: "phi_quan_ly", view: "view",
@@ -435,4 +448,42 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
     ghi.push({ question, answer, khoa: d.khoa });
   }
   return { ghi, bo };
+}
+
+/** Câu bot đang hỏi → khoá AI trả lời được cho câu đó (ngoài `KHOA_GHI` đảo ngược). */
+const AI_CHO_CAU: Record<string, string[]> = {
+  dien_tich_dat: ["dien_tich"], dien_tich_tim_tuong: ["dien_tich"], mat_tien: ["ngang"],
+};
+
+/**
+ * AI ĐỌC TRƯỚC, luật lưu (17/09/2026): giá trị AI (đã qua kiểm bằng chứng) cho ĐÚNG câu bot
+ * đang hỏi, qua thêm kiểm khoảng của `chonDeGhi`. null = AI không có / không đạt.
+ */
+export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | null): string | null {
+  const khoaAi = new Set([...(AI_CHO_CAU[cauHoi] ?? []), ...Object.entries(KHOA_GHI).filter(([, q]) => q === cauHoi).map(([k]) => k)]);
+  const loc = dat.filter((d) => khoaAi.has(d.khoa) && !(d.can != null && d.can > 1));
+  if (!loc.length) return null;
+  const { ghi } = chonDeGhi(loc, { trung: [], lech: [], ai_them: loc.map((d) => ({ khoa: d.khoa, ai: d.gia_tri })) }, dong, {});
+  return ghi[0]?.answer ?? null;
+}
+
+/**
+ * Kiến thức thêm (17/09/2026): cụm model nêu phải NGUYÊN VĂN trong tin, ngắn, không trùng ý đã có
+ * khoá (không nằm trong trích dẫn nào của `dat`), tối đa 3.
+ */
+export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[]): string[] {
+  const kdTin = chuanSo(tin);
+  const daCo = dat.map((d) => chuanSo(d.trich_dan));
+  const ra: string[] = [];
+  for (const k of kienThuc ?? []) {
+    const v = String(k ?? "").replace(/\s+/g, " ").trim().replace(/[.!?,;]+$/, "");
+    const kd = chuanSo(v);
+    if (kd.length < 3 || v.length > 80) continue;
+    if (!kdTin.includes(kd)) continue;
+    if (daCo.some((t) => t.includes(kd) || kd.includes(t))) continue;
+    if (ra.some((r) => chuanSo(r) === kd)) continue;
+    ra.push(v);
+    if (ra.length >= 3) break;
+  }
+  return ra;
 }

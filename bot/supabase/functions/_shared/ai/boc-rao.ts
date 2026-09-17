@@ -17,6 +17,8 @@ const TruongBoc = z.object({
 const DeXuatRao = z.object({
   so_can: z.number().int().describe("Số căn / lô KHÁC NHAU chủ nhà rao trong tin này. Không rao căn nào (chỉ bổ sung, trả lời) thì 0."),
   truong: z.array(TruongBoc),
+  // 17/09/2026 (chủ dự án): "AI có thể thêm trường kiến thức… các trường khách nói bổ sung sẽ ghi vào mô tả".
+  kien_thuc: z.array(z.string()).describe("Ý KHÁC chủ nhà nói về căn nhà mà không thuộc khoá nào ở trên (gần chợ, khu an ninh, mới sơn sửa, có gác…): mỗi ý một cụm ngắn COPY NGUYÊN VĂN từ tin (≤ 12 chữ). Không có thì []."),
 });
 export type DeXuatRaoLLM = z.infer<typeof DeXuatRao>;
 const FORMAT_RAO = zodOutputFormat(DeXuatRao);
@@ -44,7 +46,8 @@ KHOÁ:
 - phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công). "Thổ cư" không phải pháp lý.
 - noi_that, ly_do_ban (lý do CẦN bán, không phải "gấp"), ket_cau (trệt/lầu/lửng/hầm), thoi_han_thue, phi_quan_ly, view, hien_trang: chữ — giá trị là cụm ngắn NẰM TRONG trích dẫn.
 - gap, thuong_luong: "co" | "khong". Hoa hồng môi giới KHÔNG phải thương lượng.
-Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [].`;
+- kien_thuc: ý khác về CĂN NHÀ không có khoá (tiện ích gần, an ninh, tình trạng, đồ để lại, lịch sử…) — cụm ngắn nguyên văn; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
+Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [], kien_thuc = [].`;
 
 type ClientModel = {
   messages: {
@@ -62,7 +65,7 @@ export async function bocRaoBangModel(
   model: string,
   text: string,
   cauDangHoi: string | null = null,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; usage: unknown }> {
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
     max_tokens: 900,
@@ -77,6 +80,7 @@ export async function bocRaoBangModel(
   return {
     ket: ket.success ? ket.data : null,
     truong: ket.success ? ket.data.truong.map((t) => ({ ...t })) : [],
+    kienThuc: ket.success ? ket.data.kien_thuc.filter((k) => typeof k === "string") : [],
     usage: r.usage,
   };
 }
