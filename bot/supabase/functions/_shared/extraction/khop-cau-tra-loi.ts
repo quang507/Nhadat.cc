@@ -204,6 +204,8 @@ const DUNG_HAI_CHU = /^(?:tho cu|tho dat)$/;
 // Vương, Cống Quỳnh, Điện Biên Phủ, Nam Kỳ Khởi Nghĩa, Cô Giang. Thà giữ dư một
 // hai chữ rác trong địa chỉ còn hơn mất tên đường thật.
 const TU_DUNG = new Set([
+  // 17/09/2026: "hẻm 2 xẹc nhưng hẻm rộng" từng thành địa chỉ — "xẹc" là bậc hẻm, "nhưng/mà" là nối câu.
+  "xec", "sec", "set", "xet", "nhung", "ma",
   "so", "giay", "gia", "ban", "mua", "thue", "huong", "full", "that", "tret",
   "lau", "tang", "phong", "ngu", "wc", "toilet", "hoan", "gap", "luong",
   "tich", "phuong", "quan", "huyen", "khong", "ngap", "xay",
@@ -449,7 +451,8 @@ export const cungHoFact = cungHo;
 // câu thuần hỏi ("phí sao em?") và "5 tỷ được không?" vẫn đi luật cũ.
 const RANH_MANH_RE = /[,;\n]|\.\s+(?=\S)|\s+(?=(?:mà|nhưng|với lại|còn|ma|nhung|voi lai|con)\s+(?:bạn|em|bên|anh|chị|mình|bot|ban|ben|chi|minh)\b)|\s+(?=(?:bạn|em|bên em|bên mình|ban|ben em|ben minh)\s+(?:có\s+(?:biết|thông tin|nắm|thể)|biết|tư vấn|cho hỏi|co\s+(?:biet|thong tin|nam|the)|biet|tu van|cho hoi)\b)/iu;
 const DAU_HOI_RE = /\b(?:co (?:biet|thong tin|the|nam)|biet|thong tin|tu van|cho hoi|hoi|gi|nao|bao nhieu|sao|the nao|nhu the nao|duoc khong|dc khong|bao gio|khi nao|o dau|co phai|la (?:bot|may|nguoi)|hay (?:bot|may|nguoi))\b|\bco\b(?=.*\b(?:khong|ko|k|chua)\b)/;
-const DUOI_HOI_RE = /\b(?:khong|ko|k|chua|gi|nao|nhi|nhe|a|vay|ha|the|sao|bao nhieu|dau)(?:\s+(?:em|anh|chi|ban|a|nha|nhe|nhi|vay|ha|ne|ạ))*\s*\?*\s*$/;
+// 17/09/2026 (Zalo thật): "…bot hay người vậy\tTr" — đuôi rác ≤ 3 ký tự sau tiểu từ hỏi (gõ lỡ) không làm mất câu hỏi.
+const DUOI_HOI_RE = /\b(?:khong|ko|k|chua|gi|nao|nhi|nhe|a|vay|ha|the|sao|bao nhieu|dau)(?:\s+(?:em|anh|chi|ban|chau|a|nha|nhe|nhi|vay|ha|ne|ạ))*(?:\s+\S{1,3})?\s*\?*\s*$/;
 export function tachCauHoiNguoc(text: string): { traLoi: string; hoi: string | null } {
   const goc = (text ?? "").trim();
   const manh = goc.split(RANH_MANH_RE).map((x) => x.trim()).filter(Boolean);
@@ -646,7 +649,12 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
     const tenChu = chu.length >= 3 && soTieng <= 4 && !TU_NOI_CHUYEN.test(text);
     // Chữ "phường/xã" phải đi với một cái TÊN: "không biết phường nào" không phải tên phường.
     const coNhan = /\bp\s*\d|\b(?:phuong|xa|thi tran)\s+(?!nao\b|may\b|gi\b|do\b|nay\b)[a-z]/.test(kd);
-    return ketQua(CO_SO.test(kd) || coNhan || tenChu ? "khop" : "lech");
+    // 17/09/2026 (Zalo thật): "ngang 5m còn dọc 18m" → cột PHƯỜNG. Số chỉ là phường khi là
+    // số phường TRẦN (1–2 chữ số, có thể kèm "phường/p", "quận N"), không kèm đơn vị đo.
+    const coPhuongSo = /\b(?:phuong|p)\s*\.?\s*\d{1,2}\b/.test(kd);
+    const soTran = /^\s*\d{1,2}\s*(?:,?\s*(?:quan|q\.?)\s*\d{1,2})?\s*(?:nha|nhe|a|em|chau)?\s*$/.test(kd);
+    const coDonVi = /\d\s*(?:m2|m²|m\b|met|ty|ti|trieu|tr\b|x\s*\d|lau|tang|tam|pn)/.test(kd);
+    return ketQua(coPhuongSo || soTran || ((coNhan || tenChu) && !coDonVi) ? "khop" : "lech");
   }
   // Vị trí: cần dấu hiệu địa chỉ thật (đường / hẻm / số nhà / mốc), KHÔNG chỉ vì
   // có con số — "lên thổ cư 300m2", "thời hạn đến 2060" từng đi vào địa chỉ.
@@ -879,7 +887,8 @@ export function nhanDienFact(text: string): NhanDien | null {
     return ps.find((x) => re.test(boDau(x))) ?? goc;
   };
   let m: RegExpExecArray | null;
-  const PHAP_LY_RE = /\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|shc|giay tay|cam ngan hang|dang the chap)\b/;
+  // 17/09/2026: "srh" là gõ lỡ của "shr" (Zalo thật) — nhận luôn.
+  const PHAP_LY_RE = /\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay|cam ngan hang|dang the chap)\b/;
   if (PHAP_LY_RE.test(kd)) {
     return { question: "phap_ly", answer: manhKhop(PHAP_LY_RE) };
   }
@@ -996,6 +1005,12 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 20260909i: "cách mặt tiền 50m" là KHOẢNG CÁCH, không phải chiều ngang.
   if ((m = new RegExp(`\\bcach\\s*(?:mat tien|duong lon|duong chinh|mt)\\s*(?:khoang|tam|chung)?\\s*${SO}\\s*(?:m|met)?\\b`).exec(kd))) {
     return { question: "cach_mat_tien", answer: `${m[1]}m` };
+  }
+  // 17/09/2026 (Zalo thật): "ngang 5m còn dọc 18m" — có cả hai chiều là DIỆN TÍCH (DB nhân ra
+  // m²), không phải câu vô danh rơi vào ô phường.
+  {
+    const nd = ngangDai(kd);
+    if (nd) return { question: "dien_tich", answer: nd };
   }
   if ((m = new RegExp(`\\b(?:ngang|rong|mat tien|mt)\\s*(?:la\\s*)?${SO}\\s*(?:m|met)?\\b`).exec(kd)) &&
       !/\b(dai|sau|doc)\b/.test(kd)) {

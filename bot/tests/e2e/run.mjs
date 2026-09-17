@@ -306,7 +306,8 @@ check("CTV-04 người LẠ mở đầu bằng mã tin → đi nhánh mua như t
 fresh(); r = await send({ external_user_id: "la-db1", text: "bán nhà Bến Lức Long An 2 tỷ 80m2" });
 check("DIABAN-01 rao ở Long An → district 'Bến Lức, Long An'", db().t.listings[0]?.district === "Bến Lức, Long An", JSON.stringify(db().t.listings[0]));
 fresh(); r = await send({ external_user_id: "la-db2", text: "bán nhà P4 giá 5 tỷ 8 50m2" });
-check("DIABAN-02 chỉ nói phường → mặc định cụm khởi điểm Quận 5", db().t.listings[0]?.district === "Quận 5" && db().t.listings[0]?.ward === "Phường 4", JSON.stringify(db().t.listings[0]));
+// 20260917a: KHÔNG còn mặc định Quận 5 — chỉ nói phường thì quận để trống, bot hỏi thêm quận.
+check("DIABAN-02 chỉ nói phường → quận ĐỂ TRỐNG (20260917a bỏ mặc định Quận 5), ward Phường 4", db().t.listings[0]?.district == null && db().t.listings[0]?.ward === "Phường 4", JSON.stringify(db().t.listings[0]));
 fresh(); r = await send({ external_user_id: "la-db3", text: "bán nhà Tân Bình hẻm 6m 6 tỷ 60m2" });
 check("DIABAN-03 tên quận trong câu rao → 'Quận Tân Bình'", db().t.listings[0]?.district === "Quận Tân Bình", JSON.stringify(db().t.listings[0]));
 
@@ -1605,7 +1606,7 @@ fresh(seedKho);
   const r1q = createCalls().map((c) => (c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : "").join("\n")).find((s) => /Chủ nhà vừa nhắn rao/.test(s)) ?? "";
   check("T42-18 rao KHÔNG nói quận → boc_tach đánh dấu quận mặc định, câu hỏi đầu hỏi KÈM quận, 💾 nói 'chưa rõ quận', 📝 không tự nhận Quận 5",
     LL[0]?.boc_tach?.quan_mac_dinh === true && !("quan" in (LL[0]?.boc_tach ?? {})) && /phường mấy, quận nào/.test(r1q) &&
-      /^💾 Đã lưu: .*Quận 5 \(chưa rõ quận\)/.test(rr.body.replies[0] ?? "") && !rr.body.replies.slice(1).some((x) => /Quận 5/.test(x)),
+      /^💾 Đã lưu: .*\(chưa rõ quận\)/.test(rr.body.replies[0] ?? "") && LL[0]?.district == null && !rr.body.replies.some((x) => /Quận 5/.test(x)),
     JSON.stringify({ bt: LL[0]?.boc_tach, rep: rr.body.replies, r1q: r1q.slice(0, 400) }));
   r = await send({ external_user_id: "t42-q5", text: "quận 8 phường 6 em" });
   const Lq5 = db().t.listings.find((l) => l.id === LL[0]?.id);
@@ -1954,7 +1955,7 @@ fresh(seedKho);
   fresh(seedWards); globalThis.__nominatim = LVV;
   let rp = await send({ external_user_id: "ph-1", text: "bán căn hộ 5 tầng sổ hồng riêng, đường Lê Văn Việt, 60m2, 5 tỷ" });
   check("PH-01 rao có đường, không quận → câu hỏi đầu là XÁC NHẬN 'Phường Tăng Nhơn Phú (Quận 9 cũ)'; chưa ghi ward/quận; gợi ý ở boc_tach; câu phường treo",
-    rp.body.role === "seller" && modelThay("Phường Tăng Nhơn Phú (Quận 9 cũ), đúng không") && !tin().ward && tin().district === "Quận 5" &&
+    rp.body.role === "seller" && modelThay("Phường Tăng Nhơn Phú (Quận 9 cũ), đúng không") && !tin().ward && tin().district == null &&
       tin().boc_tach?.phuong_goi_y?.phuong === "Phường Tăng Nhơn Phú" && tin().boc_tach?.phuong_goi_y?.quan === "Quận 9" && pendPh(),
     JSON.stringify({ rep: rp.body.replies, l: tin(), ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   check("PH-01b gọi Nominatim đúng MỘT lần, bằng TÊN ĐƯỜNG (không số nhà), ghim countrycodes=vn",

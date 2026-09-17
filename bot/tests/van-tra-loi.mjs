@@ -293,6 +293,8 @@ for (const [vao, mong] of [
   ["Dạ em ghi nhận rồi ạ.", false],
 ]) ok("laLoiMeta " + JSON.stringify(vao.slice(0, 50)), laLoiMeta(vao) === mong, String(laLoiMeta(vao)));
 
+// 17/09/2026 (Zalo thật): "cháu là người hỗ trợ" là nhận mình là người → thay bằng câu thật.
+ok("chanNhanLaNguoi 'cháu là người hỗ trợ'", /trợ lý AI/.test(chanNhanLaNguoi(["Cháu ghi nhận chú hỏi, cháu là người hỗ trợ. Chú gửi ảnh nha?"], "chú")[0]) && !/người hỗ trợ/.test(chanNhanLaNguoi(["cháu là người hỗ trợ."], "chú")[0]), JSON.stringify(chanNhanLaNguoi(["Cháu ghi nhận chú hỏi, cháu là người hỗ trợ. Chú gửi ảnh nha?"], "chú")));
 // 16/09/2026: khách chú/cô/bác → bot tự xưng "cháu"; anh/chị giữ "em"; không đụng "em gái", "xem".
 for (const [xh, vao, mong] of [
   ["chú", "Dạ em ghi nhận rồi ạ. Em hỏi thêm chú một chút nha.", "Dạ cháu ghi nhận rồi ạ. Cháu hỏi thêm chú một chút nha."],

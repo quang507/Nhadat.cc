@@ -75,7 +75,7 @@ export default function Page() {
         code,
         seller_id: sellerId,
         deal: "ban",
-        district: quan.trim() || "Quận 5",
+        district: quan.trim() || null,
         ward,
         description: rao.trim(),
         price_raw: priceRaw.trim() || null,

@@ -108,7 +108,7 @@ export async function generateMetadata({
   const { code } = await params;
   const listing = await getListing(decodeURIComponent(code));
   if (!listing) return { title: "Không tìm thấy tin" };
-  const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
+  const loc = [listing.ward, listing.district].filter(Boolean).join(", ");
   const title = `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} nhà đất ${loc} - ${formatPrice(listing.price_vnd, listing.price_raw)} · #${listing.code}`;
   const description = sanitizeDescription(listing.description).slice(0, 155);
   // Canonical theo MÃ THẬT của tin, không theo tham số URL: tin mở được bằng
@@ -142,7 +142,7 @@ function jsonLd(listing: Listing, photos: string[], desc: string) {
     "@type": "RealEstateListing",
     "@id": url,
     url,
-    name: `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} ${TYPE_LABEL[listing.property_type ?? ""] ?? "nhà đất"} ${[listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ")}`,
+    name: `${listing.deal === "cho_thue" ? "Cho thuê" : "Bán"} ${TYPE_LABEL[listing.property_type ?? ""] ?? "nhà đất"} ${[listing.ward, listing.district].filter(Boolean).join(", ")}`,
     description: desc.slice(0, 500),
     identifier: listing.code,
     datePosted: listing.created_at,
@@ -151,7 +151,7 @@ function jsonLd(listing: Listing, photos: string[], desc: string) {
       "@type": "PostalAddress",
       streetAddress: listing.street ?? undefined,
       addressLocality: listing.ward ?? undefined,
-      addressRegion: listing.district ?? "Quận 5",
+      addressRegion: listing.district ?? undefined,
       addressCountry: "VN",
     },
   };
@@ -208,7 +208,7 @@ export default async function Page({
   const related = (relatedRes.data ?? []) as CardRow[];
   const relCovers = await coverByCode(related.map((l) => l.code));
 
-  const loc = [listing.ward, listing.district ?? "Quận 5"].filter(Boolean).join(", ");
+  const loc = [listing.ward, listing.district].filter(Boolean).join(", ");
   const desc = sanitizeDescription(listing.description);
   // FR-104: H1 lấy TÊN ĐƯỜNG đã bóc số nhà (`street`, boc_ten_duong), không lấy
   // đoạn đầu `location_raw` — 11/164 tin có đoạn đầu là "Số 1xx" / "Hẻm xx/".

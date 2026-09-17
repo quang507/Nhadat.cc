@@ -365,6 +365,14 @@ for (const [vao, mong] of [
   ok("'cô có căn chung cư ở q7 muốn cho thuê' KHÔNG phải tiềm năng", nhanDienFact("cô có căn chung cư ở q7 muốn cho thuê")?.question !== "tiem_nang", JSON.stringify(nhanDienFact("cô có căn chung cư ở q7 muốn cho thuê")));
   ok("'hợp để ở hoặc cho thuê' vẫn là tiềm năng", nhanDienFact("hợp để ở hoặc cho thuê")?.question === "tiem_nang", JSON.stringify(nhanDienFact("hợp để ở hoặc cho thuê")));
   ok("laCauHoiTron 'à mà cháu là bot hay người vậy'", laCauHoiTron("à mà cháu là bot hay người vậy") && phanLoaiCauTraLoi("phuong", "à mà cháu là bot hay người vậy").loai === "hoi", JSON.stringify(phanLoaiCauTraLoi("phuong", "à mà cháu là bot hay người vậy")));
+  // 17/09 (Zalo thật, chủ dự án): số đo không phải phường; ngang+dọc là diện tích; "hẻm 2 xẹc" không phải địa chỉ;
+  // "…bot hay người vậy Tr" vẫn là câu hỏi; "srh" là shr.
+  ok("phanLoai(phuong) 'ngang 5m còn dọc 18m' → lệch sang diện tích", phanLoaiCauTraLoi("phuong", "ngang 5m còn dọc 18m").chuyenSang?.question === "dien_tich", JSON.stringify(phanLoaiCauTraLoi("phuong", "ngang 5m còn dọc 18m")));
+  for (const [t, mong] of [["5", "khop"], ["phường 5", "khop"], ["p5 q8", "khop"], ["Phường 16 quận 8", "khop"], ["phường 5 nha, anh bận", "khop"], ["Tân Hưng", "khop"], ["5m", "lech"], ["50m2", "lech"]]) ok(`phanLoai(phuong) "${t}" → ${mong}`, phanLoaiCauTraLoi("phuong", t).loai === mong, JSON.stringify(phanLoaiCauTraLoi("phuong", t)));
+  ok("nhanDienFact 'ngang 5m còn dọc 18m' → dien_tich 'ngang 5m dài 18m'", nhanDienFact("ngang 5m còn dọc 18m")?.answer === "ngang 5m dài 18m" && nhanDienFact("ngang 5m còn dọc 18m")?.question === "dien_tich", JSON.stringify(nhanDienFact("ngang 5m còn dọc 18m")));
+  ok("bocViTriRao 'Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m…' → null", bocViTriRao("Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm") === null, String(bocViTriRao("Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm")));
+  ok("laCauHoiTron 'à mà cháu là bot hay người vậy\\tTr' (đuôi rác)", laCauHoiTron("à mà cháu là bot hay người vậy\tTr"));
+  ok("'srh' → pháp lý", nhanDienFact("srh")?.question === "phap_ly");
   ok("'cọc 2 tháng, ở tối thiểu 1 năm' → thời hạn chỉ mảnh", nhanDienNhieuFact("cọc 2 tháng, ở tối thiểu 1 năm").find((f) => f.question === "thoi_han_thue")?.answer === "ở tối thiểu 1 năm", JSON.stringify(nhanDienNhieuFact("cọc 2 tháng, ở tối thiểu 1 năm")));
   ok("phanLoai(gia) '8' vẫn khớp (số trần)", phanLoaiCauTraLoi("gia", "8").loai === "khop");
   ok("phanLoai(ket_cau) '3 tấm' vẫn khớp", phanLoaiCauTraLoi("ket_cau", "3 tấm").loai === "khop");
