@@ -1897,7 +1897,7 @@ fresh(seedKho);
   const laLuotBocRao = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
   const RAO_MT = "bán nhà mặt tiền đường Châu Văn Liêm phường 14 quận 5, ngang 4.2m dài 18m, đang cho thuê 45 triệu/tháng, giá 32 tỷ còn thương lượng";
   const DE_XUAT = {
-    so_can: 1,
+    so_can: 1, kien_thuc: [],
     truong: [
       { khoa: "gia", gia_tri: "32 tỷ", trich_dan: "giá 32 tỷ", can: null },
       { khoa: "gia", gia_tri: "45 triệu", trich_dan: "45 triệu/tháng", can: null },
@@ -1939,7 +1939,7 @@ fresh(seedKho);
   // Hai ý luật tiền định KHÔNG bắt (đo bằng nhanDienNhieuFact 17/09): hướng không có chữ "hướng", hiện trạng "mới sơn sửa".
   const RAO_GHI = `${RAO_MT}, mặt nhà quay về phía Đông Nam, nhà mới sơn sửa lại`;
   const DE_XUAT_GHI = {
-    so_can: 1,
+    so_can: 1, kien_thuc: [],
     truong: [
       { khoa: "gia", gia_tri: "32 tỷ", trich_dan: "giá 32 tỷ", can: null },
       { khoa: "huong", gia_tri: "Đông Nam", trich_dan: "quay về phía Đông Nam", can: null },
@@ -1972,6 +1972,36 @@ fresh(seedKho);
   r = await send({ external_user_id: "aiboc-5", text: "ok em" });
   check("AIBOC-05 'ghi' nhưng tin không có mùi dữ liệu → không gọi model bóc, không ghi gì",
     !globalThis.__calls.some((c) => laLuotBocRao(c.params)) && db().t.listing_facts.every((f) => f.source !== "ai_kiem"));
+
+  // 17/09/2026 (chủ dự án): AI ĐỌC TRƯỚC, trả kiến thức cho luật lưu; kiến thức thêm vào mô tả.
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ghi", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+  r = await send({ external_user_id: "aiboc-6", text: RAO_MT });
+  const L6 = db().t.listings.at(-1);
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L6.id, question: "phap_ly", status: "pending" });
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: ["gần chợ Bình Tây", "khu này yên tĩnh lắm"], truong: [
+        { khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "shr", can: null },
+        { khoa: "hien_trang", gia_tri: "nhà ở từ 2019 rồi", trich_dan: "nhà ở từ 2019 rồi", can: null },
+        { khoa: "view", gia_tri: "view sông", trich_dan: "view sông", can: null },
+      ] }
+    : OUT();
+  r = await send({ external_user_id: "aiboc-6", text: "shr, nhà ở từ 2019 rồi, gần chợ Bình Tây, khu này yên tĩnh lắm" });
+  const f6 = (q) => db().t.listing_facts.filter((f) => f.listing_id === L6.id && f.question === q);
+  check("AIBOC-06 AI đọc trước cho câu treo: 'shr, nhà ở từ 2019 rồi' khi hỏi PHÁP LÝ → luật ghi 'sổ hồng riêng' (AI chuẩn hoá, nguồn seller_chat); hiện trạng ghi một lần (luật bắt kèm, AI không ghi đè); 'view sông' bịa (không có trong tin) KHÔNG ghi",
+    f6("phap_ly").length === 1 && f6("phap_ly")[0].answer === "sổ hồng riêng" && f6("phap_ly")[0].source === "seller_chat" &&
+      f6("hien_trang").length === 1 && f6("view").length === 0 &&
+      db().t.info_requests.some((x) => x.listing_id === L6.id && x.question === "phap_ly" && x.status === "answered"),
+    JSON.stringify({ pl: f6("phap_ly").map((f) => [f.answer, f.source]), ht: f6("hien_trang").map((f) => [f.answer, f.source]), v: f6("view").length, ir: db().t.info_requests.filter((q) => q.listing_id === L6.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
+  check("AIBOC-07 kiến thức thêm: 'khu này yên tĩnh lắm' (luật không có ô) → fact bo_sung nguồn ai_kiem, dòng 🤖 nêu 'thông tin bổ sung'; 'gần chợ Bình Tây' luật đã ghi ô tiện ích → AI không ghi bổ sung lần hai",
+    f6("bo_sung").length === 1 && f6("bo_sung")[0].answer === "khu này yên tĩnh lắm" && f6("bo_sung")[0].source === "ai_kiem" &&
+      f6("tien_ich_gan").length === 1 &&
+      r.body.replies.some((x) => x.startsWith("🤖") && /thông tin bổ sung: "khu này yên tĩnh lắm"/.test(x) && !/gần chợ/.test(x)),
+    JSON.stringify({ f: f6("bo_sung"), rep: r.body.replies }));
+  r = await send({ external_user_id: "aiboc-6", text: "shr, nhà ở từ 2019 rồi, gần chợ Bình Tây, khu này yên tĩnh lắm" });
+  check("AIBOC-07b nhắn lại y chang → không ghi bo_sung trùng", f6("bo_sung").length === 1, JSON.stringify(f6("bo_sung")));
 
   globalThis.__cauHinh = undefined;
   if (macDinh) globalThis.__model.parse = macDinh;
