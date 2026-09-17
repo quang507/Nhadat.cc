@@ -2215,6 +2215,30 @@ fresh(seedKho);
   check("CHU-9 câu rao 'nhà 4 tấm diện tích tổng 240m2' → area_m2 trống, fact dien_tich_san 240m2",
     db().t.listings[0]?.area_m2 == null && db().t.listing_facts.some((f) => f.question === "dien_tich_san" && f.answer === "240m2"),
     JSON.stringify({ L: db().t.listings[0], f: db().t.listing_facts }));
+
+  // 17/09/2026 (Zalo thật 16:42): đang hỏi PHƯỜNG căn "hẻm 4m Nguyễn Trãi" mà chủ nhà nhắn rao căn ở
+  // ĐƯỜNG KHÁC kèm chi tiết → bản trước ghi nguyên câu làm vị trí tin cũ (street = "Chào cháu").
+  fresh();
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
+  r = await send({ external_user_id: "chu-4", text: "Chào cháu, chú có căn nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ 5" });
+  const L4 = db().t.listings[0];
+  const blChu4 = r.body.replies.find((x) => x.startsWith("💾")) ?? "";
+  check("BLDL-12 lượt mở hồ sơ + xưng 'chú' → 💾 kèm dòng '👤 Hồ sơ: Zalo \"…\" · cách gọi: \"chú\"' (Zalo che còn 4 ký tự cuối)",
+    /^💾 Đã lưu: /.test(blChu4) && /\n👤 Hồ sơ: Zalo: "…hu-4" · cách gọi: "chú"/.test(blChu4) && !/chu-4"/.test(blChu4), blChu4);
+  check("PH-08 câu hỏi đầu là phường, tin đã có địa chỉ + quận → hỏi ngắn nhắc địa chỉ: 'Hẻm 4m Nguyễn Trãi đó phường mấy chú nhỉ?'",
+    globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("Hẻm 4m Nguyễn Trãi đó phường mấy chú nhỉ?")) && db().t.info_requests.some((x) => x.listing_id === L4.id && x.question === "phuong" && x.status === "pending"),
+    JSON.stringify({ ir: db().t.info_requests.map((q) => [q.question, q.status]), calls: globalThis.__calls.map((c) => JSON.stringify(c.params ?? c).slice(0, 300)) }));
+  r = await send({ external_user_id: "chu-4", text: "Chào cháu, cô có căn nhà hẻm 4m Trần Hưng Đạo quận 5, 50m2, giá 5 tỷ 8, mặt nhà quay về phía Đông, nhà mới sơn sửa lại" });
+  const L4b = db().t.listings.find((l) => l.id !== L4.id);
+  check("CHU-10 đang hỏi phường căn Nguyễn Trãi, rao căn hẻm 4m TRẦN HƯNG ĐẠO có chi tiết → tin MỚI (địa chỉ 'hẻm 4m Trần Hưng Đạo', 50m2, 5 tỷ 8); tin cũ giữ nguyên",
+    db().t.listings.length === 2 && L4b?.location_raw === "hẻm 4m Trần Hưng Đạo" && L4b?.area_m2 === 50 && L4b?.price_vnd === 5.8e9 &&
+      db().t.listings.find((l) => l.id === L4.id)?.location_raw === "hẻm 4m Nguyễn Trãi" && db().t.listings.find((l) => l.id === L4.id)?.price_vnd === 6.5e9 &&
+      !db().t.listing_facts.some((f) => /^Chào cháu/.test(f.answer ?? "")),
+    JSON.stringify({ L: db().t.listings, f: db().t.listing_facts, rep: r.body.replies }));
+  check("CHU-10b đổi 'chú' → 'cô' cùng lượt: 💾 nêu cách gọi mới, không nêu Zalo (hồ sơ đã mở từ trước)",
+    (r.body.replies.find((x) => x.startsWith("💾")) ?? "").includes('👤 Hồ sơ: cách gọi: "cô"') && !/Zalo/.test(r.body.replies.find((x) => x.startsWith("💾")) ?? ""),
+    JSON.stringify(r.body.replies));
+  globalThis.__cauHinh = undefined;
 }
 
 // ── kết ──

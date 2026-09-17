@@ -259,7 +259,9 @@ export const CAU_HOI_MAU: Record<string, string> = {
   // 11/09/2026 (lượt bắn 42 ca): khuôn 25 từ kèm lý do lặp nguyên văn 22/52 câu bot.
   // Lý do nay chỉ nói ở lần hỏi ĐẦU (SELLER_SCRIPT_RULES); câu mẫu — dùng cho mọi
   // lần hỏi lại và lúc model hỏng — ngắn, không lý do.
-  phuong: "Nhà mình thuộc phường mấy {ac}?",
+  // 17/09/2026 (chủ dự án, ảnh Zalo): hỏi phường phải ngắn, tự nhiên — "phường mấy cô nhỉ?";
+  // đã có địa chỉ thì nhắc lại địa chỉ đó (`cauPhuongNgan`), không "xin thêm phường cụ thể để kiểm tra giá".
+  phuong: "Nhà mình phường mấy {ac} nhỉ?",
   vi_tri: "Nhà mình ở đường nào, số mấy hay hẻm nào {ac}?",
   // Lần ĐẦU hỏi địa chỉ (câu hỏi đầu sau khi tạo tin): giữ lý do sếp chốt 09/09.
   "vi_tri@lan_dau": "{Ac} cho em xin địa chỉ nhà (đường, hẻm) để em kiểm tra giá khu vực nha?",
@@ -353,6 +355,13 @@ export const CAU_HOI_MAU: Record<string, string> = {
   xu_ly_nuoc_thai: "Xưởng có hệ thống xử lý nước thải chưa {ac}?",
   duong_container: "Xe container 40 feet vào tận xưởng được không {ac}?",
 };
+/** Câu hỏi phường khi tin ĐÃ có địa chỉ: "Hẻm 4m Trần Hưng Đạo đó phường mấy cô nhỉ?" (17/09/2026). */
+export function cauPhuongNgan(diaChi: string | null | undefined, cachGoi: string): string {
+  const dc = (diaChi ?? "").split(",")[0].replace(/\s+/g, " ").trim();
+  if (!dc || dc.length > 60) return `Nhà mình phường mấy ${cachGoi} nhỉ?`;
+  return `${dc.charAt(0).toUpperCase()}${dc.slice(1)} đó phường mấy ${cachGoi} nhỉ?`;
+}
+
 export function cauHoiMau(
   key: string, cachGoi: string, bang: Record<string, string> = CAU_HOI_MAU, loai?: string | null,
 ): string {

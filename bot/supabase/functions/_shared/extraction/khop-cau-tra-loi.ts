@@ -599,7 +599,7 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
     // "14" thành 14m² trong cột. Số đứng sau căn số / số nhà / lô / hẻm là ĐỊNH DANH,
     // không phải diện tích: coi là vị trí, câu diện tích vẫn treo.
     if (!coDien && /\b(?:can so|so nha|so|lo|hem|can)\s*\d/.test(kd)) {
-      return ketQua("lech", { chuyenSang: { question: "vi_tri", answer: text.trim() } });
+      return ketQua("lech", { chuyenSang: { question: "vi_tri", answer: bocViTriRao(text) ?? text.trim() } });
     }
     if (coDien || (CO_SO.test(kd) && !/\b(ngang|rong|dai|sau|tang|lau|tam|phong|pn|ty|ti|trieu|tr)\b/.test(kd))) {
       return ketQua("khop");
@@ -626,7 +626,7 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
     // nhánh diện tích ở trên: coi là vị trí, câu đang hỏi vẫn treo.
     if (/\b(?:can so|so nha|lo so|can|lo)\s*\d+[a-z]?\b/.test(kd) && (kd.match(/\d+/g) ?? []).length === 1 &&
         !/\d+[a-z]?\s*(?:m2|m²|m\b|met|ty|ti|toi|trieu|tr\b|tang|lau|tam|pn|phong|wc|nam|thang|%)/.test(kd)) {
-      return ketQua("lech", { chuyenSang: { question: "vi_tri", answer: text.trim() } });
+      return ketQua("lech", { chuyenSang: { question: "vi_tri", answer: bocViTriRao(text) ?? text.trim() } });
     }
     if (CO_SO.test(kd) || SO_CHU.test(kd)) {
       // Số đi kèm đơn vị của trường KHÁC thì lệch: hỏi năm xây mà nhận "5 tỷ".
@@ -979,7 +979,11 @@ export function nhanDienFact(text: string): NhanDien | null {
       /\b(?:hem|hxh)\s*\d+[a-z]?\s+(?!m\b|met\b|xe\b|rong\b|thong\b|cut\b|xec\b|sec\b|set\b|xet\b|lan\b|doi\b)[a-z]{2,}/.test(kd) ||
       /\b(?:so|so nha|dia chi)\s*\d+[a-z]?(?:\/\d+)*\s+[a-z]{2,}/.test(kd) ||
       /^\s*\d+[a-z]?(?:\/\d+[a-z]?)+\s+[a-z]{2,}/.test(kd)) {
-    return { question: "vi_tri", answer: goc };
+    // 17/09/2026 (Zalo thật): "Chào cháu, cô có căn nhà hẻm 4m Trần Hưng Đạo quận 5, 50m2, giá 5 tỷ 8…"
+    // từng vào NGUYÊN CÂU làm vị trí (location_raw = cả câu, street = "Chào cháu"). Câu dài /
+    // có dấu phẩy thì chỉ lấy mệnh đề địa chỉ (`bocViTriRao`), không lấy cả câu.
+    const dai = goc.length > 40 || /[,;]/.test(goc);
+    return { question: "vi_tri", answer: dai ? (bocViTriRao(goc) ?? goc) : goc };
   }
   // "cách mặt tiền 30m" xét TRƯỚC độ rộng hẻm (kẻo "30m hẻm thông" thành hẻm 30m).
   if ((m = new RegExp(`\\bcach\\s*(?:mat tien|duong lon|duong chinh|mt)\\s*(?:khoang|tam|chung)?\\s*${SO}\\s*(?:m|met)?\\b`).exec(kd))) {
