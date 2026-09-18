@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-14 16:57 (giờ VN)
+-- Sinh lúc: 2026-09-18 09:01 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists pg_cron with schema pg_catalog;
@@ -525,6 +525,22 @@ create table if not exists public.viewings (
   source text default 'bot'::text
 );
 
+create table if not exists public.wards (
+  ten text not null,
+  loai text not null,
+  ten_day_du text not null,
+  quan_cu text not null,
+  don_vi_2025 text[] not null,
+  tinh_cu text not null,
+  don_vi_cu text,
+  lat numeric(9,6),
+  lng numeric(9,6),
+  ma_hanh_chinh text,
+  nguon text not null,
+  ghi_chu text,
+  created_at timestamp with time zone not null default now()
+);
+
 -- ══ Ràng buộc (PK / UNIQUE / CHECK) ══
 do $d$ begin
   alter table public.admins add constraint admins_pkey PRIMARY KEY (email);
@@ -773,6 +789,12 @@ do $d$ begin
   alter table public.sellers add constraint sellers_auth_user_id_key UNIQUE (auth_user_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.sellers add constraint sellers_gioi_tinh_check CHECK (((gioi_tinh IS NULL) OR (gioi_tinh = ANY (ARRAY['nam'::text, 'nu'::text]))));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.sellers add constraint sellers_nhom_tuoi_check CHECK (((nhom_tuoi IS NULL) OR (nhom_tuoi = ANY (ARRAY['tre'::text, 'lon_tuoi'::text]))));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.sellers add constraint sellers_phone_key UNIQUE (phone);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -780,8 +802,6 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.sellers add constraint sellers_xung_ho_check CHECK (((xung_ho IS NULL) OR (xung_ho = ANY (ARRAY['anh'::text, 'chị'::text, 'chú'::text, 'cô'::text, 'bác'::text]))));
-  alter table public.sellers add constraint sellers_gioi_tinh_check CHECK (((gioi_tinh IS NULL) OR (gioi_tinh = ANY (ARRAY['nam'::text, 'nu'::text]))));
-  alter table public.sellers add constraint sellers_nhom_tuoi_check CHECK (((nhom_tuoi IS NULL) OR (nhom_tuoi = ANY (ARRAY['tre'::text, 'lon_tuoi'::text]))));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.sellers add constraint sellers_zalo_user_id_key UNIQUE (zalo_user_id);
@@ -803,6 +823,15 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.viewings add constraint viewings_status_check CHECK ((status = ANY (ARRAY['proposed'::text, 'pending'::text, 'confirmed'::text, 'done'::text, 'cancelled'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.wards add constraint wards_loai_check CHECK ((loai = ANY (ARRAY['phuong'::text, 'xa'::text, 'dac_khu'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.wards add constraint wards_pkey PRIMARY KEY (ten);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.wards add constraint wards_tinh_cu_check CHECK ((tinh_cu = ANY (ARRAY['TP.HCM'::text, 'Bình Dương'::text, 'Bà Rịa – Vũng Tàu'::text])));
 exception when duplicate_object then null; end $d$;
 
 -- ══ Khoá ngoại ══
@@ -6654,9 +6683,9 @@ drop trigger if exists trg_pe_interests on public.interests;
 CREATE TRIGGER trg_pe_interests AFTER INSERT ON public.interests FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_listing_facts_sync_cols on public.listing_facts;
 CREATE TRIGGER trg_listing_facts_sync_cols AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_cols();
-drop trigger if exists trg_listing_facts_sync_gap on public.listing_facts;
 drop trigger if exists trg_listing_facts_sync_deal on public.listing_facts;
 CREATE TRIGGER trg_listing_facts_sync_deal AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_deal();
+drop trigger if exists trg_listing_facts_sync_gap on public.listing_facts;
 CREATE TRIGGER trg_listing_facts_sync_gap AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_gap();
 drop trigger if exists trg_zz_fact_vao_boc_tach on public.listing_facts;
 CREATE TRIGGER trg_zz_fact_vao_boc_tach AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION trg_fact_vao_boc_tach();
@@ -6752,6 +6781,7 @@ alter table public.required_facts enable row level security;
 alter table public.sellers enable row level security;
 alter table public.tien_ich enable row level security;
 alter table public.viewings enable row level security;
+alter table public.wards enable row level security;
 
 -- ══ Policy ══
 drop policy if exists admins_self_read on public.admins;
@@ -6950,6 +6980,7 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.se
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.sellers to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.tien_ich to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.viewings to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.wards to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, UPDATE on public.admins to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, UPDATE on public.buyers to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, UPDATE on public.conversations to authenticated;
@@ -7031,6 +7062,9 @@ grant execute on function public.admin_gan_bds_quan_tam(p_buyer_id uuid, p_code 
 revoke all on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) from public, anon, authenticated;
 grant execute on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) to authenticated;
 grant execute on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) to service_role;
+revoke all on function public.admin_xoa_het_khach_va_ro_hang(p_xac_nhan text) from public, anon, authenticated;
+grant execute on function public.admin_xoa_het_khach_va_ro_hang(p_xac_nhan text) to authenticated;
+grant execute on function public.admin_xoa_het_khach_va_ro_hang(p_xac_nhan text) to service_role;
 revoke all on function public.admin_xoa_khach(p_zalo text) from public, anon, authenticated;
 grant execute on function public.admin_xoa_khach(p_zalo text) to authenticated;
 grant execute on function public.admin_xoa_khach(p_zalo text) to service_role;
@@ -7249,6 +7283,10 @@ grant execute on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_
 grant execute on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 numeric, p_ward text) to service_role;
 revoke all on function public.listing_facts_sync_cols() from public, anon, authenticated;
 grant execute on function public.listing_facts_sync_cols() to service_role;
+revoke all on function public.listing_facts_sync_deal() from public, anon, authenticated;
+grant execute on function public.listing_facts_sync_deal() to anon;
+grant execute on function public.listing_facts_sync_deal() to authenticated;
+grant execute on function public.listing_facts_sync_deal() to service_role;
 revoke all on function public.listing_facts_sync_gap() from public, anon, authenticated;
 grant execute on function public.listing_facts_sync_gap() to anon;
 grant execute on function public.listing_facts_sync_gap() to authenticated;
