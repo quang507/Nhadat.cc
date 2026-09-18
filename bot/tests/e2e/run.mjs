@@ -97,7 +97,7 @@ check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.
 r = await send({ external_user_id: "la-1", text: "tôi có căn nhà ở phường 4" });
 check("V1.2 trả lời có nhà → mở hồ sơ bán, nhãn chính chủ", db().t.sellers.length === 1 && db().t.sellers[0].seller_type === "ccrb" && r.body.role === "seller", JSON.stringify(r.body));
 check("V1.2 người đó KHÔNG được báo nhãn, KHÔNG kèm biểu phí (chủ dự án 09/09 tối: gán im lặng)", !r.body.replies.some((x) => /ghi nhận anh.chị là (chính chủ|môi giới)/i.test(x)) && !r.body.replies.some((x) => /1%|0,5%/.test(x)), JSON.stringify(r.body.replies));
-check("V1.2 ADMIN nhận việc: hồ sơ mở từ chat, nhãn chính chủ", db().t.reminders.some((x) => x.kind === "escalation" && /🆕/.test(x.note) && /CHÍNH CHỦ/.test(x.note) && !x.seller_id), JSON.stringify(db().t.reminders));
+check("V1.2 ADMIN KHÔNG còn nhận tin 🆕 'hồ sơ mở từ chat' (chủ dự án 18/09: xoá thông báo cho admin)", !db().t.reminders.some((x) => /🆕/.test(x.note ?? "")), JSON.stringify(db().t.reminders));
 check("V1.2 chưa tạo tin (chưa có chi tiết), model được báo là người bán MỚI", db().t.listings.length === 0 && createCalls().some((c) => /VỪA cho biết/.test(c.params.messages[0].content)));
 r = await send({ external_user_id: "la-1", text: "bán nhà P4 giá 5 tỷ 8 50m2" });
 const L = db().t.listings[0];
@@ -126,7 +126,7 @@ r = await send({ external_user_id: "la-2", text: "tôi muốn bán nhà q5 giá 
 check("V1.5 câu rao đầy đủ ngay tin đầu → không hỏi vai, mở hồ sơ + tạo tin", !r.body.hoi_vai && db().t.sellers.length === 1 && db().t.listings.length === 1 && db().t.sellers[0].seller_type === "ccrb", JSON.stringify(r.body));
 fresh();
 r = await send({ external_user_id: "la-3", text: "em là sale, có căn q5 cần bán 6 tỷ" });
-check("V1.6 người đó KHÔNG được báo nhãn môi giới, không phí (09/09 tối); admin vẫn nhận việc MÔI GIỚI", !r.body.replies.some((x) => /ghi nhận anh.chị là môi giới/i.test(x)) && !r.body.replies.some((x) => /0,5%/.test(x)) && db().t.reminders.some((x) => /🆕/.test(x.note) && /MÔI GIỚI/.test(x.note)), JSON.stringify(r.body.replies));
+check("V1.6 người đó KHÔNG được báo nhãn môi giới, không phí (09/09 tối); admin cũng không còn tin 🆕 (18/09)", !r.body.replies.some((x) => /ghi nhận anh.chị là môi giới/i.test(x)) && !r.body.replies.some((x) => /0,5%/.test(x)) && !db().t.reminders.some((x) => /🆕/.test(x.note ?? "")), JSON.stringify(r.body.replies));
 check("V1.6 tự xưng sale → nhãn môi giới", db().t.sellers[0]?.seller_type === "nmg" && db().t.listings.length === 1, JSON.stringify(db().t.sellers));
 fresh();
 r = await send({ external_user_id: "la-4", text: "nhà mình bán chưa em?" });
@@ -915,7 +915,7 @@ fresh(seedKho);
   r = await send({ external_user_id: "h-1", text: "hẻm 4m xe hơi vào tận nhà" });
   check("H2 trả lời hẻm → ghi fact, câu kế LIÊN QUAN: kết cấu (không nhảy sang pháp lý)",
     fact("do_rong_hem") && pend("ket_cau") && !pend("phap_ly"), JSON.stringify(db().t.info_requests));
-  check("H2 câu lệnh model có KHÍCH LỆ gắn khách mua", /khích lệ có nghĩa gắn với khách mua/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
+  check("H2 câu lệnh model: chưa khen gần đây → CHỈ khen khi thật đáng nói (18/09: lâu lâu mới khen)", /CHỈ khi có gì thật đáng nói với khách mua/.test(prompt(createCalls().at(-1))) && !/KHÔNG khen, KHÔNG nhận xét/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
   r = await send({ external_user_id: "h-1", text: "sổ hồng riêng rồi em" });
   check("H3 hỏi kết cấu, trả lời pháp lý → VẪN GHI phap_ly, câu kết cấu vẫn treo, hỏi lại",
     fact("phap_ly")?.answer === "sổ hồng riêng rồi em" && !fact("ket_cau") && pend("ket_cau") && r.body.reask === "ket_cau",
@@ -2269,6 +2269,41 @@ fresh(seedKho);
     (r.body.replies.find((x) => x.startsWith("💾")) ?? "").includes('👤 Hồ sơ: cách gọi: "cô"') && !/Zalo/.test(r.body.replies.find((x) => x.startsWith("💾")) ?? ""),
     JSON.stringify(r.body.replies));
   globalThis.__cauHinh = undefined;
+}
+
+// ── 18/09/2026: "tắt cái mỗi câu trả lời đều khen đi, lâu lâu thì khen thôi"; bỏ tin 🆕 cho admin ──
+{
+  fresh();
+  const macDinhCreate = globalThis.__model?.create;
+  r = await send({ external_user_id: "khen-1", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ 5" });
+  check("ADMIN-01 mở hồ sơ từ chat → KHÔNG còn tin 🆕 'Hồ sơ người bán MỞ TỪ CHAT' trong hàng escalation",
+    !db().t.reminders.some((x) => /🆕 Hồ sơ người bán/.test(x.note ?? "")), JSON.stringify(db().t.reminders.map((x) => x.note)));
+  const conv = db().t.conversations.find((c) => c.seller_id === db().t.sellers[0].id) ?? db().t.conversations[0];
+  // Hai tin bot gần nhất có câu khen → lượt kế phải dặn KHÔNG khen và lọc câu khen lọt.
+  db().insert("messages", { conversation_id: conv.id, sender: "bot", body: "Hẻm xe hơi 4m là khách chuộng lắm anh. Nhà mình phường mấy anh nhỉ?" });
+  db().insert("messages", { conversation_id: conv.id, sender: "bot", body: "Sổ hồng riêng là chốt nhanh lắm. Nhà mấy tầng anh?" });
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "ket_cau", status: "pending" });
+  globalThis.__model.create = () => "Dạ nhà 3 lầu, sổ riêng là khách chốt nhanh lắm anh. Tổng cộng bao nhiêu phòng ngủ anh?";
+  r = await send({ external_user_id: "khen-1", text: "trệt 2 lầu" });
+  const cauBot = r.body.replies.find((x) => !x.startsWith("💾") && !x.startsWith("🤖")) ?? "";
+  check("KHEN-01 3 tin bot gần nhất đã khen → prompt dặn 'KHÔNG khen'; câu khen model lọt bị lọc, câu hỏi giữ",
+    globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) &&
+      !/chốt nhanh/.test(cauBot) && /bao nhiêu phòng ngủ/.test(cauBot),
+    JSON.stringify({ rep: r.body.replies }));
+  // Không khen gần đây → được phép khen một câu (không lọc).
+  fresh();
+  r = await send({ external_user_id: "khen-2", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ 5" });
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "ket_cau", status: "pending" });
+  globalThis.__calls.length = 0;
+  globalThis.__model.create = () => "Dạ nhà 3 lầu là khách chốt nhanh lắm anh. Tổng cộng bao nhiêu phòng ngủ anh?";
+  r = await send({ external_user_id: "khen-2", text: "trệt 2 lầu" });
+  const cauBot2 = r.body.replies.find((x) => !x.startsWith("💾") && !x.startsWith("🤖")) ?? "";
+  check("KHEN-02 chưa khen gần đây → prompt cho phép MỘT câu khi đáng, không lọc câu model",
+    !globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) && /chốt nhanh/.test(cauBot2),
+    JSON.stringify({ rep: r.body.replies }));
+  globalThis.__model.create = macDinhCreate;
 }
 
 // ── kết ──

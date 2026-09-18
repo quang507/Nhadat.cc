@@ -60,7 +60,7 @@ import {
   nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { doiTuXung } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauKhen, doiTuXung, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban"]);
@@ -1366,18 +1366,9 @@ Deno.serve(async (req) => {
       sellerMoi = !sellerRow;
       sellerRow = moi as SellerRow;
       nhanVuaGan = sellerRow.seller_type === "nmg" ? "nmg" : "ccrb";
-      // Báo ADMIN (quyết định 02/09 "hiện thông báo cho admin"): một việc trong
-      // hàng escalation — bridge/OA chuyển tới Zalo admin, và trang /admin đọc
-      // thẳng bảng nên thấy ngay cả khi bridge chết. KHÔNG đặt `seller_id`:
-      // cột đó nghĩa là "đích là chính chủ" (escalationText) — đặt vào là gửi
-      // thông báo nội bộ cho chính người bán.
-      const { error: nhErr } = await client.from("reminders").insert({
-        kind: "escalation", due_at: new Date().toISOString(),
-        note: `🆕 Hồ sơ người bán ${sellerMoi ? "MỞ TỪ CHAT" : "tạo tay, nay gán nhãn từ chat"} - nhãn ${
-          nhanVuaGan === "nmg" ? "MÔI GIỚI (phí 0,5%)" : "CHÍNH CHỦ (phí 1%)"
-        }${sellerRow.name ? ` · ${sellerRow.name}` : ""} · Zalo …${externalUserId.slice(-4)}. Bot đã báo họ nhãn và mức phí. Sai thì đổi ở /admin.`,
-      });
-      if (nhErr) await ghiLoi(client, "chat-reply bao admin nhan", nhErr.message);
+      // 18/09/2026 (chủ dự án: "xóa cái thông báo cho admin đi"): bỏ tin 🆕 "Hồ sơ người bán MỞ TỪ
+      // CHAT…" từng đẩy vào hàng escalation (quyết định 02/09). Hồ sơ mới vẫn thấy ở /admin và 💾
+      // của chính khách (dòng 👤 Hồ sơ); chữ "Bot đã báo họ nhãn và mức phí" cũng đã sai từ 09/09.
     }
   }
 
@@ -1978,6 +1969,9 @@ Deno.serve(async (req) => {
     if (lichSuRows.length && lichSuRows[lichSuRows.length - 1].sender === "seller") lichSuRows.pop();
     // Bong bóng 💾 (báo lại thứ đã lưu) là bảng số liệu cho người bán, không
     // phải lời em nói — bỏ khỏi lịch sử, không thì model bắt chước in bảng.
+    // 18/09/2026 (chủ dự án: "tắt cái mỗi câu trả lời đều khen đi, lâu lâu thì khen thôi"): 3 tin gần
+    // nhất của bot đã có câu khen → lượt này dặn model KHÔNG khen, và lọc tiền định câu khen lọt.
+    const khenGanDay = vuaKhen(lichSuRows.filter((m) => m.sender !== "seller").map((m) => boBaoLai(m.body)));
     const lichSuText = lichSuRows.map((m) => ({ ...m, body: boBaoLai(m.body) })).filter((m) => m.body)
       .map((m) =>
         `${m.sender === "seller" ? "CHỦ NHÀ" : m.sender === "human" ? "EM (người thật bên mình nhắn tay)" : "EM"}: ${
@@ -3343,7 +3337,11 @@ Deno.serve(async (req) => {
         : "";
       const prompt = nextKey
         ? `${boiCanh}${daAck}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n${hoiNguocPrompt}` +
-          `Viết MỘT tin dưới ${hoiNguoc ? 50 : 30} từ như người thật nhắn Zalo: nhắc lại chi tiết vừa nghe kèm MỘT câu khích lệ có nghĩa gắn với khách mua (chỉ khi có gì đáng nói thật, không khen suông) - rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
+          `Viết MỘT tin dưới ${hoiNguoc ? 50 : 30} từ như người thật nhắn Zalo: ${
+            khenGanDay
+              ? "KHÔNG khen, KHÔNG nhận xét căn nhà (mấy tin gần đây em đã khen rồi — lâu lâu mới khen một lần): ghi nhận ngắn một vế hoặc bỏ luôn phần ghi nhận, "
+              : "nhắc lại chi tiết vừa nghe; CHỈ khi có gì thật đáng nói với khách mua thì thêm MỘT câu, còn không thì thôi — "
+          }rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
           `CÂU HỎI CUỐI TIN chép NGUYÊN VĂN câu này: "${cauKe}" — không thêm lý do, không đổi chữ, KHÔNG đổi sang hỏi thứ khác, kể cả khi em thấy chủ nhà đã nói rồi hay em muốn hỏi thứ tiếp theo (hệ thống ghi câu trả lời theo đúng câu này; hỏi lệch là ghi sai ô). ` +
           (nhieuCan
             ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
@@ -3373,6 +3371,7 @@ Deno.serve(async (req) => {
           // 15/09/2026 (bắn thật P2): model trả lời CÂU LỆNH ("Em hiểu rồi ạ… Sẵn sàng nhận
           // hội thoại") → bỏ, dùng câu tiền định.
           if (sellerReply && laLoiMeta(sellerReply)) { console.log("chat-reply: r2 tra loi cau lenh, bo"); sellerReply = null; }
+          if (sellerReply && khenGanDay) sellerReply = boCauKhen(sellerReply);
           // FR-177: một lượt một câu hỏi — cắt câu hỏi thứ hai của model (15/09/2026).
           // Chỉ áp cho lời MODEL: câu tiền định (xin chấm điểm, liệt kê căn) có chủ ý.
           if (sellerReply) sellerReply = motCauHoi([sellerReply])[0];
@@ -3689,7 +3688,7 @@ Deno.serve(async (req) => {
                 role: "user",
                 content:
                   `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ${hoiRaoPrompt}` +
-                  `Viết MỘT tin dưới 30 từ như người thật: nhận câu rao (nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi - KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
+                  `Viết MỘT tin dưới 30 từ như người thật: nhận câu rao (${khenGanDay ? "KHÔNG khen, không nhận xét — mấy tin gần đây em đã khen rồi" : "nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi"}). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi - KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
                   (firstKey
                     ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey} bằng ĐÚNG NGUYÊN VĂN câu này: "${cauHoiDau}". Không thêm lý do, không đổi chữ, KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá. Không hỏi gì khác.`
                     : ` và báo sẽ đăng lên web ngay.`),

@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -303,6 +303,15 @@ for (const [xh, vao, mong] of [
   ["anh", "Dạ em ghi nhận rồi ạ.", "Dạ em ghi nhận rồi ạ."],
   [null, "Dạ em ghi nhận rồi ạ.", "Dạ em ghi nhận rồi ạ."],
 ]) ok(`doiTuXung(${xh}) ${JSON.stringify(vao.slice(0, 30))}`, doiTuXung([vao], xh)[0] === mong, JSON.stringify(doiTuXung([vao], xh)));
+
+// ── 18/09/2026: "lâu lâu thì khen thôi" — vuaKhen đọc 3 tin bot gần nhất, boCauKhen bỏ câu khen giữ câu hỏi ──
+ok("vuaKhen: 3 tin gần nhất có 'rất sáng sủa' → true", vuaKhen(["Dạ em ghi nhận.", "Nhà mới sơn sửa lại trông rất sáng sủa. Phường mấy cô?", "Dạ cô."]) === true);
+ok("vuaKhen: chỉ tin thứ 4 trở về trước khen → false", vuaKhen(["Hẻm xe hơi là khách chuộng lắm.", "Dạ.", "Phường mấy?", "Sổ riêng chưa?"]) === false);
+ok("vuaKhen: 'tiện ích gần' không phải khen", vuaKhen(["💾 Vừa lưu: tiện ích gần: \"gần chợ\""]) === false);
+ok("boCauKhen: bỏ câu khen, giữ câu hỏi", boCauKhen("Dạ nhà 2 lầu, sổ hồng riêng là khách chốt nhanh lắm cô. Tổng cộng bao nhiêu phòng ngủ cô?") === "Tổng cộng bao nhiêu phòng ngủ cô?", boCauKhen("Dạ nhà 2 lầu, sổ hồng riêng là khách chốt nhanh lắm cô. Tổng cộng bao nhiêu phòng ngủ cô?"));
+ok("boCauKhen: hai dòng, dòng khen bỏ, dòng hỏi giữ", boCauKhen("3 phòng ngủ, toilet riêng từng tầng là rất tiện cho gia đình cô.\nMình cần ra hàng gấp hay được giá thì thôi cô?") === "Mình cần ra hàng gấp hay được giá thì thôi cô?");
+ok("boCauKhen: không có câu khen → giữ nguyên", boCauKhen("Dạ cháu sửa lại giá 6 tỷ rồi ạ. Mình cần ra hàng gấp hay được giá thì thôi cô?") === "Dạ cháu sửa lại giá 6 tỷ rồi ạ. Mình cần ra hàng gấp hay được giá thì thôi cô?");
+ok("boCauKhen: cả tin là một câu khen kèm dấu hỏi → giữ (không để trống)", boCauKhen("Nhà đẹp vậy chắc hút khách lắm, sổ riêng chưa cô?") === "Nhà đẹp vậy chắc hút khách lắm, sổ riêng chưa cô?");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
