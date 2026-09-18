@@ -9,6 +9,13 @@ const la = (cau, mong) => ok(`${JSON.stringify(cau)} → ${mong.join(",") || "�
 // PHẢI kích
 la("khu này yên tĩnh lắm", ["yen_tinh"]);
 la("gần chợ Bình Tây, nhà mới sơn sửa lại", ["gan_cho", "moi_sua"]);
+// 18/09 bắn 10 tin thật (mau-x-01…10): dấu phẩy là ranh giới; "tiện xây mới" không phải nhà mới;
+// "thang máy" trần khi liệt kê tiện nghi; "phù hợp quán ăn" là kinh doanh được.
+la("khu yên tĩnh gần chợ, xe hơi vào tận nhà", ["yen_tinh", "gan_cho", "xe_hoi_vao_nha"]);
+la("nhà cũ tiện xây mới, không ngập", ["khong_ngap"]);
+la("sân vườn hồ bơi thang máy", ["thang_may", "san_vuon", "ho_boi"]);
+la("chưa có thang máy, nhà mới xây", ["moi_sua"]);
+la("mặt bằng phù hợp quán ăn", ["kinh_doanh"]);
 la("xe hơi vào tận nhà, có gara", ["xe_hoi_vao_nha"]);
 la("XE HOI VAO NHA duoc", ["xe_hoi_vao_nha"]);
 la("căn góc 2 mặt tiền view sông full nội thất", ["noi_that_full", "view_song", "can_goc"]);
