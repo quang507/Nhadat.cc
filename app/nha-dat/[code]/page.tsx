@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { cache } from "react";
+import { tenNhan } from "@/bot/supabase/functions/_shared/extraction/nhan";
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -446,6 +447,14 @@ export default async function Page({
               </div>
             )}
 
+            {/* FR-211: nhãn tìm kiếm — khoá từ điển đóng, tên đọc được qua tenNhan. */}
+            {((listing as { nhan?: string[] | null }).nhan?.length ?? 0) > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {((listing as { nhan?: string[] | null }).nhan ?? []).map((k) => (
+                  <span key={k} className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-mute shadow-[0_2px_14px_rgba(13,37,61,0.06)]">🏷 {tenNhan([k])}</span>
+                ))}
+              </div>
+            )}
             {facts.length > 0 && (
               <div className="mt-5 rounded-king bg-white p-6 shadow-[0_2px_14px_rgba(13,37,61,0.06)]">
                 <h2 className="text-lg font-extrabold">Đã xác minh với chủ nhà</h2>

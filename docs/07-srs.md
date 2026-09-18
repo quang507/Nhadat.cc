@@ -238,6 +238,7 @@ price_raw:text  price_vnd:bigint  price_per_m2_vnd:bigint(generated)  rent_incom
 description:text  source:text!=import_excel  source_url,cc_link:text
 property_type_source,price_source,ward_source:text!=suy_doan  specs_source:text
 last_confirmed_at,last_interest_at:timestamptz  created_at,updated_at:timestamptz!
+nhan:text[]!='{}' (FR-211, chỉ mục GIN, khoá theo từ điển `_shared/extraction/nhan.ts`; ghi qua RPC `them_nhan_tin`)
 ```
 - CHECK `status ∈ {cho_thong_tin, dang_ban, dang_quan_tam, da_chot, an}` (FR-139); `access_type ∈ {mat_tien, hem_xe_tai, hem_xe_hoi, hem_xe_may, hem}`;
   `legal_status ∈ {so_hong_rieng, so_hong_chung, so_hong, hdmb, giay_tay}`; `furnishing ∈ {full, co_ban, khong}`; `bedrooms 1..20`;

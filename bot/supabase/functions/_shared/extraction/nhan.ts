@@ -1,0 +1,81 @@
+// nhan.ts — NHÃN TÌM KIẾM của một tin (FR-211, 18/09/2026).
+//
+// Chủ dự án 18/09: "làm cái gắn nhãn để tìm được luôn đi". Ý khách nói mà không có ô
+// ("khu này yên tĩnh lắm", "gần chợ Bình Tây", "xe hơi vào tận nhà") từ 18/09 sáng chỉ nằm
+// trong ô bổ sung — hiện được, không lọc được. Nay mỗi ý đó thành MỘT NHÃN trong từ điển
+// đóng dưới đây, ghi vào `listings.nhan text[]`, lọc bằng `contains` ở web lẫn bot mua.
+//
+// Luật: từ điển ĐÓNG (thêm nhãn = sửa file này, có test), mỗi nhãn có bộ chữ khớp trên bản
+// BỎ DẤU; câu phủ định ("không ngập", "không yên tĩnh") xử ở từng nhãn. Tầng bóc tách: không
+// model, không RPC (`bot/tests/ranh-gioi.mjs`). Web (`lib/parse-query.ts`) nhập cùng file này
+// qua đường `@/bot/...` — MỘT NGUỒN (CLAUDE.md §6 luật một nguồn).
+
+const boDau = (s: string): string =>
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+
+export type Nhan = {
+  /** Tên hiện cho người đọc. */
+  ten: string;
+  /** Khớp trên bản bỏ dấu, chữ thường. */
+  khop: RegExp;
+  /** Cụm phủ định đứng trước (≤ 12 ký tự) làm nhãn KHÔNG kích: "không yên tĩnh". */
+  phuDinh?: boolean;
+  /** Nhãn đối nghịch được kích khi phủ định (vd "không ngập" → khong_ngap, "ngập" → ngap). */
+};
+
+/** Từ điển nhãn — khoá là giá trị ghi vào `listings.nhan`. */
+export const TU_DIEN_NHAN: Record<string, Nhan> = {
+  yen_tinh: { ten: "yên tĩnh", khop: /\b(?:yen tinh|khong on|it xe|vang xe|khu yen|tinh lang)\b/, phuDinh: true },
+  an_ninh: { ten: "an ninh", khop: /\b(?:an ninh|bao ve 24|co bao ve|camera|khu biet lap|compound|khu dan cu khep kin)\b/, phuDinh: true },
+  dan_tri_cao: { ten: "dân trí cao", khop: /\b(?:dan tri cao|dan tri|khu tri thuc|hang xom hien)\b/ },
+  // "chỗ" bỏ dấu cũng là "cho" ("gần chỗ làm"), và "Chợ Rẫy" là tên bệnh viện — loại hai kiểu đó.
+  gan_cho: { ten: "gần chợ", khop: /\b(?:gan|sat|canh|ke|ke ben|doi dien) cho(?! (?:lam|o|toi|nay|do|kia|nao|ngoi|dau|de|xe|ban|ray|quan))\b/ },
+  gan_truong: { ten: "gần trường học", khop: /\b(?:gan truong|sat truong|canh truong|ke truong|gan dai hoc|gan mam non)\b/ },
+  gan_benh_vien: { ten: "gần bệnh viện", khop: /\b(?:gan benh vien|sat benh vien|canh benh vien|gan bv\b|gan phong kham)\b/ },
+  gan_sieu_thi: { ten: "gần siêu thị", khop: /\b(?:gan sieu thi|sat sieu thi|gan coop|gan coopmart|gan bach hoa xanh|gan winmart|gan vinmart|gan tttm|gan trung tam thuong mai)\b/ },
+  gan_cong_vien: { ten: "gần công viên", khop: /\b(?:gan cong vien|sat cong vien|canh cong vien|doi dien cong vien)\b/ },
+  gan_metro: { ten: "gần metro", khop: /\b(?:gan metro|gan ga metro|gan ga tau|canh metro)\b/ },
+  gan_trung_tam: { ten: "gần trung tâm", khop: /\b(?:gan trung tam|sat trung tam|ngay trung tam|trung tam quan|gan quan 1|gan q1\b)\b/ },
+  moi_sua: { ten: "mới sửa / mới xây", khop: /\b(?:moi son|moi sua|moi xay|nha moi|vua sua|vua xay|sua lai moi|xay moi)\b/ },
+  hem_thong: { ten: "hẻm thông", khop: /\b(?:hem thong|thong ra|hai dau hem|2 dau hem)\b/ },
+  hem_cut: { ten: "hẻm cụt", khop: /\b(?:hem cut|cuoi hem)\b/ },
+  khong_ngap: { ten: "không ngập", khop: /\b(?:khong ngap|ko ngap|chua bao gio ngap|khong bi ngap|khong dong nuoc|cao rao)\b/ },
+  xe_hoi_vao_nha: { ten: "xe hơi vào nhà", khop: /\b(?:xe hoi vao (?:tan |trong )?nha|o to vao (?:tan |trong )?nha|oto vao (?:tan |trong )?nha|dau xe trong nha|gara|ga ra|garage|de xe hoi trong nha)\b/ },
+  thang_may: { ten: "có thang máy", khop: /\b(?:co thang may|thang may rieng|lap thang may)\b/, phuDinh: true },
+  san_thuong: { ten: "sân thượng", khop: /\b(?:san thuong)\b/ },
+  san_vuon: { ten: "sân vườn", khop: /\b(?:san vuon|co san|vuon rong|dat vuon rong|san truoc|san sau)\b/ },
+  gac_lung: { ten: "có gác lửng", khop: /\b(?:gac lung|co gac|lung)\b/ },
+  noi_that_full: { ten: "full nội thất", khop: /\b(?:full noi that|full nt|day du noi that|noi that day du|de lai het noi that|noi that cao cap)\b/ },
+  kinh_doanh: { ten: "kinh doanh được", khop: /\b(?:kinh doanh|buon ban|mo shop|mo quan|mo tiem|lam van phong|van phong duoc|cho thue kinh doanh|tien buon ban)\b/ },
+  dong_tien: { ten: "đang cho thuê, có dòng tiền", khop: /\b(?:dang cho thue|dong tien|thu nhap thue|co khach thue|dang khai thac)\b/ },
+  view_song: { ten: "view sông", khop: /\b(?:view song|nhin ra song|huong song|ven song|bo song|view kenh)\b/ },
+  view_cong_vien: { ten: "view công viên", khop: /\b(?:view cong vien|nhin ra cong vien|view ho\b|view cay xanh)\b/ },
+  can_goc: { ten: "căn góc / 2 mặt tiền", khop: /\b(?:can goc|lo goc|2 mat tien|hai mat tien|goc 2 mat|nha goc)\b/ },
+  ho_boi: { ten: "có hồ bơi", khop: /\b(?:ho boi|be boi)\b/ },
+  nha_hoan_cong: { ten: "đã hoàn công", khop: /\b(?:da hoan cong|hoan cong day du|hoan cong du)\b/ },
+  tho_cu_100: { ten: "thổ cư 100%", khop: /\b(?:tho cu 100|full tho cu|100% tho cu|tho cu het|tho cu toan bo)\b/ },
+};
+
+export const NHAN_HOP_LE: ReadonlySet<string> = new Set(Object.keys(TU_DIEN_NHAN));
+
+/** Cụm phủ định đứng ngay trước chỗ khớp: "không yên tĩnh", "chưa có thang máy", "ko an ninh". */
+const PHU_DINH = /(?:^|[\s,.;:(])(?:khong|ko|k|chua|chang|hoi|thieu|it)\s+(?:co\s+|duoc\s+)?$/;
+
+/** Nhãn nhận ra trong một câu (thứ tự theo từ điển, không trùng). */
+export function ganNhan(text: string | null | undefined): string[] {
+  const kd = boDau(text ?? "").replace(/[^a-z0-9%\s]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return [];
+  const ra: string[] = [];
+  for (const [khoa, n] of Object.entries(TU_DIEN_NHAN)) {
+    const m = n.khop.exec(kd);
+    if (!m) continue;
+    if (n.phuDinh && PHU_DINH.test(kd.slice(Math.max(0, m.index - 14), m.index))) continue;
+    ra.push(khoa);
+  }
+  return ra;
+}
+
+/** Tên đọc được của một danh sách nhãn: ["yen_tinh","gan_cho"] → "yên tĩnh · gần chợ". */
+export function tenNhan(nhan: readonly string[] | null | undefined): string {
+  return (nhan ?? []).map((k) => TU_DIEN_NHAN[k]?.ten ?? k.replace(/_/g, " ")).join(" · ");
+}

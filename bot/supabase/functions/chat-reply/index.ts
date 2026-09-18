@@ -61,6 +61,7 @@ import {
   suyTuXungHo, tuXungBot, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauKhen, doiTuXung, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
+import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban"]);
@@ -1752,6 +1753,43 @@ Deno.serve(async (req) => {
     // 17/09/2026 (chủ dự án): 💾 phải nói cả HỒ SƠ vừa lưu — Zalo ID (che, 4 số cuối) lượt mở hồ sơ,
     // cách gọi ("cô") lượt vừa ghi. Gán ở khối xưng hô bên dưới, đọc ở đây.
     let xungHoVuaGhi: string | null = null;
+    // FR-211 (18/09/2026, chủ dự án: "làm cái gắn nhãn để tìm được luôn đi"): ý khách nói trong tin
+    // này khớp từ điển nhãn đóng (`ganNhan`, tiền định) → gộp vào `listings.nhan` (RPC them_nhan_tin,
+    // không trùng) và ghi fact `nhan` để 💾 báo "nhãn tìm kiếm: …". Chạy ở đường ra, sau khi mọi luật
+    // đã ghi, nên tin MỚI tạo trong lượt cũng được gắn (mã ở extra.listing_code).
+    const ganNhanChoTin = async (extra: Record<string, unknown>): Promise<void> => {
+      const nhanCau = ganNhan(text);
+      if (!nhanCau.length) return;
+      try {
+        const ma = typeof extra.listing_code === "string" && extra.listing_code ? extra.listing_code : null;
+        let lid: string | null = null;
+        if (ma) {
+          const { data: lm } = await client.from("listings").select("id").eq("code", ma).eq("seller_id", sellerRow.id).maybeSingle();
+          lid = (lm as { id?: string } | null)?.id ?? null;
+        }
+        // Tin đang chăm (active_listing_id, trigger đặt khi mở câu hỏi) > tin mới nhất của người này.
+        // KHÔNG đọc `pendingReq` ở đây: closure này chạy cả ở các nhánh trả lời TRƯỚC khi nó được khai báo.
+        if (!lid) lid = sellerRow.active_listing_id ?? null;
+        if (!lid) {
+          const { data: ml } = await client.from("listings").select("id").eq("seller_id", sellerRow.id)
+            .order("created_at", { ascending: false }).limit(1).maybeSingle();
+          lid = (ml as { id?: string } | null)?.id ?? null;
+        }
+        if (!lid) return;
+        const { data: cu } = await client.from("listings").select("nhan").eq("id", lid).maybeSingle();
+        const daCo = new Set(((cu as { nhan?: string[] | null } | null)?.nhan) ?? []);
+        const them = nhanCau.filter((n) => !daCo.has(n));
+        if (!them.length) return;
+        const { error: nErr } = await client.rpc("them_nhan_tin", { p_listing_id: lid, p_nhan: them });
+        if (nErr) { await ghiLoi(client, "chat-reply them_nhan_tin", nErr.message); return; }
+        const { error: fErr } = await client.rpc("ghi_fact_listing", {
+          p_listing_id: lid, p_question: "nhan", p_answer: tenNhan(them), p_source: "seller_chat",
+        });
+        if (fErr) await ghiLoi(client, "chat-reply ghi_fact_listing(nhan)", fErr.message);
+      } catch (e) {
+        await ghiLoi(client, "chat-reply gan nhan", e);
+      }
+    };
     const baoLaiDaLuu = async (
       extra: Record<string, unknown>,
     ): Promise<{ bong: string | null; cheDo: CheDoBaoLai }> => {
@@ -1866,6 +1904,7 @@ Deno.serve(async (req) => {
       // fact rồi báo ngay trong lượt này — "đã lưu thì phải ghi rõ lưu vào trường nào" (17/09).
       const cheDoAi = cheDoBocAi ? await cheDoBocAi : "tat";
       const dongAi = cheDoAi === "ghi" ? await ghiBongBocTach(extra) : null;
+      await ganNhanChoTin(extra);
       if (sach.length) {
         const bl = await baoLaiDaLuu(extra);
         if (bl.bong) {
@@ -3009,6 +3048,9 @@ Deno.serve(async (req) => {
           .select("id", { count: "exact", head: true })
           .eq("listing_id", pendingReq.listing_id)
           .neq("question", pendingReq.question)
+          // FR-211: fact `nhan` do ganNhanChoTin ghi ở ĐƯỜNG RA của lượt trước (sau khi câu chờ
+          // đã mở) — không phải khách né câu hỏi, đếm vào là hết hạn câu ngay lượt sau (e2e H3).
+          .neq("question", "nhan")
           .gt("created_at", pendingReq.created_at ?? new Date(0).toISOString());
         const gat = kq.loai === "ack" && laDongY(dapAn);
         // 16/09/2026 (chủ dự án, sau khi câu phường bị hỏi 4 lượt liền ở mau-co-thue): một câu
@@ -3869,6 +3911,10 @@ Deno.serve(async (req) => {
   const buyer = { id: bcRow.b_id, name: bcRow.b_name };
   const convId = bcRow.c_id;
   const prefs: Record<string, unknown> = bcRow.b_prefs ?? {};
+  // FR-211 (18/09/2026): khách MUA nói ý có nhãn ("yên tĩnh", "gần chợ", "xe hơi vào nhà") → nhớ vào hồ
+  // sơ (`preferences.nhan`) và lọc kho bằng contains — cùng từ điển với phía bán (`ganNhan`).
+  const nhanMuon = ganNhan(text);
+  const nhanLoc = [...new Set([...(Array.isArray(prefs.nhan) ? (prefs.nhan as string[]) : []), ...nhanMuon])];
   // Hai cột của hội thoại mà cổng nhường sân (FR-141) và các việc báo CTV cần
   // — RPC trả luôn từ 20260902d, khỏi SELECT `conversations` lần nữa (FR-171 h).
   const convRow = {
@@ -4109,6 +4155,7 @@ Deno.serve(async (req) => {
   // không phân biệt hoa thường) — '%1%' cũ khiến P1 dính cả P10-P16
   if (wardNum) khoQ = khoQ.ilike("ward", `Phường ${wardNum}`);
   if (typeof prefs.bedrooms === "number") khoQ = khoQ.gte("bedrooms", prefs.bedrooms);
+  if (nhanLoc.length) khoQ = khoQ.contains("nhan", nhanLoc);
   const budgetR = budgetRangeVnd(prefs.budget);
   if (budgetR?.max) khoQ = khoQ.lte("price_vnd", budgetR.max);
   if (budgetR?.min) khoQ = khoQ.gte("price_vnd", budgetR.min);
@@ -4634,6 +4681,7 @@ Deno.serve(async (req) => {
   // ghi một lần, đi chung RPC gộp hồ sơ — không thêm vòng DB nào.
   if (!prefs.ten_tro_ly) delta.ten_tro_ly = tenBot;
   if (xhMuaMoi && xhMuaMoi !== prefs.xung_ho) delta.xung_ho = xhMuaMoi;
+  if (nhanMuon.length) delta.nhan = nhanLoc;
   // ─── HẬU KỲ: mọi việc ghi sổ sau khi đã có câu trả lời trong tay chạy SONG
   // SONG (FR-171 h). Trước bản này chúng nối đuôi nhau: ~8-12 vòng đi về DB
   // thành ~8-12 lần thời gian mạng, trong khi chẳng việc nào cần kết quả của
