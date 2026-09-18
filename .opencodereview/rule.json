@@ -1,0 +1,36 @@
+{
+  "exclude": [
+    "**/bun.lock",
+    "public/**",
+    "**/*.png",
+    "**/*.jpg",
+    "**/*.svg"
+  ],
+  "rules": [
+    {
+      "path": "{bot/supabase/functions/_shared/extraction/**,lib/parse-query.ts,bot/supabase/functions/_shared/dia_ban.ts,bot/supabase/functions/_shared/tin-nhap.ts}",
+      "merge_system_rule": true,
+      "rule": "TẦNG BÓC TÁCH TIẾNG VIỆT — soi từng regex mới/sửa theo đúng các hình lỗi ĐÃ CẮN dự án này:\n\n1. GREEDY NUỐT CHỮ KẾ TIẾP. `[\\w.@/]*`, `[a-z]*`, `.*` đứng cuối một mẫu sẽ ăn phần đầu ASCII của từ tiếng Việt ngay sau (JS `\\w` không có chữ có dấu). Hỏi: mẫu này gặp 'Zalo mình nhé' thì nuốt mất chữ gì?\n2. THIẾU BIÊN TRÁI/PHẢI. Mẫu bắt số điện thoại / mã / số tiền phải có `(?<![\\d\\p{L}])` và `(?![\\d\\p{L}])`. Không có là nó bám vào giữa một con số dài ('10.000.000.000') hoặc giữa một từ.\n3. KHỚP CHUỖI CON TRONG TÊN DÀI HƠN. `\\bphu my\\b` khớp trong 'Phú Mỹ Hưng'. Mọi bảng tên địa danh/dự án phải hỏi: tên này có nằm trong một tên dài hơn có thật không?\n4. THỨ TỰ BẢNG QUYẾT ĐỊNH KẾT QUẢ. Vòng lặp `for … return` lấy khớp ĐẦU TIÊN: tên riêng thắng số, mục trên thắng mục dưới. Câu có cả hai dấu hiệu ('Phú Mỹ Hưng quận 7') ra kết quả nào?\n5. `\\b` VỚI CHỮ CÓ DẤU LÀ SAI (SRS-3.8). Dùng `(?<![\\p{L}\\p{N}])` … `(?![\\p{L}\\p{N}])`.\n6. WHITELIST `new Set([...])` dùng với `.every()` — mọi từ phải nằm trong bảng. Liệt kê 10 câu người Việt hay nói mà bảng này BỎ SÓT, và nói rõ hậu quả khi sót.\n7. HÀM TRẢ NGUYÊN CÂU LÀM ĐÁP ÁN (`answer: goc`) trong khi tầng dưới chỉ lấy con số đầu tiên — số nhà sẽ thành bề rộng/diện tích.\n8. Chú thích nói mẫu có chốt chặn (ví dụ 'không nhận 1t2l') thì kiểm ĐÚNG hàm đó có chốt chưa; chốt nằm ở hằng số khác không tính.\n\nMỗi phát hiện phải kèm MỘT chuỗi đầu vào cụ thể và kết quả sai nó tạo ra."
+    },
+    {
+      "path": "bot/supabase/functions/**/*.ts",
+      "merge_system_rule": true,
+      "rule": "EDGE FUNCTION — luật riêng của dự án:\n\n1. FAIL-OPEN IM LẶNG. `const { data } = await client.rpc(...)` bỏ mất `error`: RPC hỏng thì `data` là null, mọi phép so `=== false` thành false và CỔNG MỞ. Áp cho mọi cổng quota/quyền/trần tiền. Bắt buộc: đọc `error`, ghi sổ, và quyết định đóng hay mở PHẢI tường minh.\n2. MỌI `catch` MỚI PHẢI NỐI SỔ (FR-152 d): trong edge function dùng `ghiLoi(client, 'tên chỗ', e)`. `console.error` một mình là mất (log bậc Free giữ 1 ngày).\n3. NGƯỢC LẠI: đường đi ĐÚNG THIẾT KẾ không được `log_loi` — sổ lỗi là đầu vào của còi, ghi nhầm là đẻ vòng tự nuôi.\n4. SĐT / Zalo ID / tên thật không được vào sổ lỗi, message, hay chuỗi trả về cho người mua.\n5. `net.http_post` và mọi lời gọi xếp-hàng KHÔNG chứng minh là đã tới nơi (NFR-18). Thấy code đóng dấu thành công ngay sau khi gọi thì báo.\n6. Đọc-rồi-ghi trên bảng hàng đợi mà không giành việc nguyên tử (`for update skip locked` / RPC claim) là gửi trùng cho khách.\n7. Nhớ tạm (cache tầng module) một giá trị ĐỌC HỤT sẽ nhân một sự cố thoáng qua thành một khoảng chết dài bằng TTL."
+    },
+    {
+      "path": "{bot/supabase/migrations/**/*.sql,bot/supabase/schema.sql}",
+      "merge_system_rule": true,
+      "rule": "SQL / POSTGRES — luật riêng của dự án (KHÔNG có rule doc sẵn cho .sql, đây là bản tự viết):\n\n1. `grant execute … to anon`: anon key là CÔNG KHAI (nằm trong bundle web và trong repo public). Hàm này cho người lạ làm gì? Ghi được bảng nào? Có van chống spam chưa? Có đẻ ra cảnh báo gửi admin không?\n2. `security definer` phải có `set search_path`.\n3. View mới ở project này MẶC ĐỊNH LỘ (`alter default privileges` cấp sẵn cho anon/authenticated): phải `revoke all … from anon, authenticated` TRƯỚC rồi mới grant.\n4. `create or replace function` đè lên hàm ĐÃ CÓ: `bot/supabase/schema.sql` có được cập nhật trong CÙNG commit không? Cổng CI chỉ soi TÊN hàm, không soi thân hàm, nên lệch ở đây không ai thấy, mà `schema.sql` là bản duy nhất dựng lại DB.\n5. Bảng/cột mới phải có `comment on` trong cùng migration.\n6. Luật tiền sửa ở `parse_vnd` thì phải sửa kèm `_shared/extraction/luat-tien.ts` và thêm ca vào `bot/tests/luat/tien.json` — ba chỗ, không phải một.\n7. Hàm lấy `substring(v_txt, '[0-9]+…')` trên chuỗi tự do: con số đầu tiên có chắc là con số cần lấy không?"
+    },
+    {
+      "path": "{scripts/soat-*.mjs,scripts/soat-truy-vet.sh,.github/workflows/*.yml}",
+      "merge_system_rule": true,
+      "rule": "CỔNG KIỂM — thứ phải soi là 'cổng này có THỂ đỏ không', không phải 'cổng này có chạy không':\n\n1. So sánh dựa trên `mtime` / thời gian file là VÔ HIỆU trong CI: `git clone` đặt mọi file cùng một dấu thời gian. Phép so nội dung (băm, diff) mới có nghĩa.\n2. Phép soát chỉ kiểm TÊN (hàm, bảng, khoá) sẽ không thấy THÂN bị đổi.\n3. Cổng nuốt lỗi: coi HTTP ≥ 400 là 'đã chặn', coi mã thoát khác 0 là 'đạt', hoặc `|| true`. Phải phân biệt 'chưa kiểm được' với 'đạt'.\n4. Thêm dòng vào bản nền (`soat-db-da-biet.json`, `DA-DOI-CHIEU.json`) là một QUYẾT ĐỊNH kèm lý do, không phải cách làm cổng xanh.\n5. Thêm job CI mới: `docs/11 §11.5` đang cố định 5 required status check, thêm tên mới phải sửa branch protection bằng tay."
+    },
+    {
+      "path": "{app/**,components/**,lib/**}",
+      "merge_system_rule": true,
+      "rule": "WEB (Next 15 App Router) — luật riêng của dự án:\n\n1. Mô tả tin lên web PHẢI qua `sanitizeDescription()` (FR-104). Kiểm luôn hàm đó có ăn nhầm chữ/số hợp lệ không.\n2. Route động có tham số đường dẫn PHẢI có `generateStaticParams()`, không thì `revalidate` là chữ chết và mỗi lượt xem là một lambda (NFR-17). Route đọc `searchParams` thì bọc truy vấn trong `unstable_cache`.\n3. Truy vấn Supabase: cột chọn lọc thay cho `select(\"*\")` ở lưới thẻ; mọi truy vấn danh sách phải có `.limit()`.\n4. Chữ người dùng gõ đi vào `.or()` / `.ilike()` của PostgREST phải được làm sạch `,()%*\"\\` — trong `.or()` dấu phẩy là NGỮ PHÁP.\n5. Không trỏ tài nguyên tĩnh tới `raw.githubusercontent.com`.\n6. Khoá service_role không bao giờ xuất hiện phía web.\n7. Trang tìm kiếm: nếu bộ lọc bóc được ít hơn thứ người dùng gõ (mất tên đường, tự thêm quận), TIÊU ĐỀ và URL phải nói cùng một điều (FR-08)."
+    }
+  ]
+}
