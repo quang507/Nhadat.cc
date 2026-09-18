@@ -110,7 +110,7 @@ Khối: `cột:kiểu`, `!` = NOT NULL, `=` = default, `→` = FK. PK `uuid` tr�
 `seller_type(ccrb, nmg, unknown)`, `request_status(pending, answered, expired)`, `msg_sender(buyer, seller, bot, ctv, system, human)`,
 `unit_status(con_ban, giu_cho, da_coc, da_ban)`.
 
-### SRS-3.0 · Bản đồ 32 bảng và đường bóc tách
+### SRS-3.0 · Bản đồ 37 bảng và đường bóc tách
 
 `[nguồn: pg_class + pg_description, DB 06/09/2026]`
 
@@ -119,16 +119,16 @@ này là bản đồ đó. Nó KHÔNG đẻ nguồn sự thật thứ hai: chú 
 trong chính DB (`comment on table/column`, migration `20260906b`), hiện ra ngay
 dưới tên bảng trong Supabase Table Editor. Đây là bản in ra giấy của thứ đó.
 
-**Năm nhóm, đủ 32 bảng** (`wards` thêm 15/09/2026, FR-209). Tiền tố `[NHÓM]` nằm ngay đầu chú thích mỗi bảng, nên
+**Năm nhóm, đủ 37 bảng** (soát lại 18/09/2026 theo `obj_description` thật trên DB — bản trước ghi 32, thiếu `project_facts` `tien_ich` `mau_cau` `boc_tach_bong` `bridge_dang_nhap` và xếp `required_facts` sai nhóm). Tiền tố `[NHÓM]` nằm ngay đầu chú thích mỗi bảng, nên
 Table Editor vẫn xếp A→Z mà mắt vẫn gom được theo việc.
 
 | Nhóm | Bảng |
 |---|---|
-| `[RỔ HÀNG]` (9) | `listings` `media` `listing_media` `listing_facts` `required_facts` `media_cleanup_queue` `projects` `listing_views` `wards` |
+| `[RỔ HÀNG]` (10) | `listings` `media` `listing_media` `listing_facts` `media_cleanup_queue` `projects` `project_facts` (FR-195) `listing_views` `wards` (FR-209) `tien_ich` (FR-204, chú thích `20260918a`) |
 | `[NGƯỜI & HỘI THOẠI]` (10) | `buyers` `sellers` `conversations` `messages` `interests` `info_requests` `viewings` `deals` `reminders` `ratings_log` |
-| `[BOT & HÀNG ĐỢI]` (7) | `inbound_events` `inbound_ledger` `bot_errors` `bot_health` `bot_usage` `chat_quota` `bot_prompts` |
+| `[BOT & HÀNG ĐỢI]` (10) | `inbound_events` `inbound_ledger` `bot_errors` `bot_health` `bot_usage` `chat_quota` `bot_prompts` `required_facts` `mau_cau` (FR-180) `boc_tach_bong` (FR-208) |
 | `[CTV]` (2) | `ctvs` `ctv_daily_reports` |
-| `[HỆ THỐNG]` (4) | `admins` `app_config` `curated_lists` `property_events` |
+| `[HỆ THỐNG]` (5) | `admins` `app_config` `curated_lists` `property_events` `bridge_dang_nhap` (FR-201, `20260911b`) |
 
 **Quan hệ chính** — chỉ khoá ngoại thật, không vẽ luồng chạy:
 
@@ -208,7 +208,7 @@ ra tỷ, nhãn tiếng Việt, cột `canh_bao` chỉ đích danh trường nào
 `security_invoker = on`, `anon` bị revoke.
 
 **Nhìn như Excel:** schema `so` (`20260907c`) tách riêng khỏi `public` để Table
-Editor / Schema Visualizer không lẫn 32 bảng + 17 view ruột bot. Hai view:
+Editor / Schema Visualizer không lẫn 37 bảng + 19 view ruột bot (đếm trên DB 18/09/2026). Hai view:
 `so.ro_hang` — 9 cột đầu đúng thứ tự sheet Excel gốc Q5 (trong `masterDB/`) (stt · bán
 hay thuê · vị trí · diện tích · giá · mô tả · SĐT · người bán), cột thêm xếp
 sau, cả bán lẫn cho thuê; `so.nguoi_ban` — mỗi người bán một dòng, đếm tin;
