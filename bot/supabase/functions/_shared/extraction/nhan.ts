@@ -36,17 +36,18 @@ export const TU_DIEN_NHAN: Record<string, Nhan> = {
   gan_cong_vien: { ten: "gần công viên", khop: /\b(?:gan cong vien|sat cong vien|canh cong vien|doi dien cong vien)\b/ },
   gan_metro: { ten: "gần metro", khop: /\b(?:gan metro|gan ga metro|gan ga tau|canh metro)\b/ },
   gan_trung_tam: { ten: "gần trung tâm", khop: /\b(?:gan trung tam|sat trung tam|ngay trung tam|trung tam quan|gan quan 1|gan q1\b)\b/ },
-  moi_sua: { ten: "mới sửa / mới xây", khop: /\b(?:moi son|moi sua|moi xay|nha moi|vua sua|vua xay|sua lai moi|xay moi)\b/ },
+  // "nhà cũ TIỆN xây mới" / "để xây mới" là lời mời xây lại, không phải nhà mới (bắn thật 18/09).
+  moi_sua: { ten: "mới sửa / mới xây", khop: /(?<!\b(?:tien|de|phu hop|thich hop|co the|can|nen|muon)\s)\b(?:moi son|moi sua|moi xay|nha moi|vua sua|vua xay|sua lai moi|xay moi)\b/ },
   hem_thong: { ten: "hẻm thông", khop: /\b(?:hem thong|thong ra|hai dau hem|2 dau hem)\b/ },
   hem_cut: { ten: "hẻm cụt", khop: /\b(?:hem cut|cuoi hem)\b/ },
   khong_ngap: { ten: "không ngập", khop: /\b(?:khong ngap|ko ngap|chua bao gio ngap|khong bi ngap|khong dong nuoc|cao rao)\b/ },
   xe_hoi_vao_nha: { ten: "xe hơi vào nhà", khop: /\b(?:xe hoi vao (?:tan |trong )?nha|o to vao (?:tan |trong )?nha|oto vao (?:tan |trong )?nha|dau xe trong nha|gara|ga ra|garage|de xe hoi trong nha)\b/ },
-  thang_may: { ten: "có thang máy", khop: /\b(?:co thang may|thang may rieng|lap thang may)\b/, phuDinh: true },
+  thang_may: { ten: "có thang máy", khop: /\b(?:co thang may|thang may rieng|lap thang may|thang may)\b/, phuDinh: true },
   san_thuong: { ten: "sân thượng", khop: /\b(?:san thuong)\b/ },
   san_vuon: { ten: "sân vườn", khop: /\b(?:san vuon|co san|vuon rong|dat vuon rong|san truoc|san sau)\b/ },
   gac_lung: { ten: "có gác lửng", khop: /\b(?:gac lung|co gac|lung)\b/ },
   noi_that_full: { ten: "full nội thất", khop: /\b(?:full noi that|full nt|day du noi that|noi that day du|de lai het noi that|noi that cao cap)\b/ },
-  kinh_doanh: { ten: "kinh doanh được", khop: /\b(?:kinh doanh|buon ban|mo shop|mo quan|mo tiem|lam van phong|van phong duoc|cho thue kinh doanh|tien buon ban)\b/ },
+  kinh_doanh: { ten: "kinh doanh được", khop: /\b(?:kinh doanh|buon ban|mo shop|mo quan|mo tiem|lam van phong|van phong duoc|cho thue kinh doanh|tien buon ban|quan an|phu hop (?:mo )?quan)\b/ },
   dong_tien: { ten: "đang cho thuê, có dòng tiền", khop: /\b(?:dang cho thue|dong tien|thu nhap thue|co khach thue|dang khai thac)\b/ },
   view_song: { ten: "view sông", khop: /\b(?:view song|nhin ra song|huong song|ven song|bo song|view kenh)\b/ },
   view_cong_vien: { ten: "view công viên", khop: /\b(?:view cong vien|nhin ra cong vien|view ho\b|view cay xanh)\b/ },
@@ -63,7 +64,9 @@ const PHU_DINH = /(?:^|[\s,.;:(])(?:khong|ko|k|chua|chang|hoi|thieu|it)\s+(?:co\
 
 /** Nhãn nhận ra trong một câu (thứ tự theo từ điển, không trùng). */
 export function ganNhan(text: string | null | undefined): string[] {
-  const kd = boDau(text ?? "").replace(/[^a-z0-9%\s]+/g, " ").replace(/\s+/g, " ").trim();
+  // 18/09 (bắn 10 tin thật): dấu phẩy phải CÒN là ranh giới — "gần chợ, xe hơi vào" từng thành
+  // "gan cho xe hoi" và lookahead "chợ xe" của gan_cho chặn mất nhãn. Dấu câu → " , ".
+  const kd = boDau(text ?? "").replace(/[,.;:!?()\/]+/g, " , ").replace(/[^a-z0-9%,\s]+/g, " ").replace(/\s+/g, " ").trim();
   if (!kd) return [];
   const ra: string[] = [];
   for (const [khoa, n] of Object.entries(TU_DIEN_NHAN)) {
