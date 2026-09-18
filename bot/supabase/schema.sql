@@ -337,7 +337,8 @@ END,
   toa_do_muc text,
   geocode_at timestamp with time zone,
   tien_ich_gan jsonb,
-  tien_ich_at timestamp with time zone
+  tien_ich_at timestamp with time zone,
+  nhan text[] not null default '{}'::text[]
 );
 
 create table if not exists public.mau_cau (
@@ -994,6 +995,7 @@ create index if not exists listing_views_listing_id_idx ON public.listing_views 
 create index if not exists listings_access_idx ON public.listings USING btree (deal, status, access_type);
 create index if not exists listings_district_status_idx ON public.listings USING btree (district, status);
 create index if not exists listings_floors_idx ON public.listings USING btree (deal, status, floors);
+create index if not exists listings_nhan_gin_idx ON public.listings USING gin (nhan);
 create index if not exists listings_project_idx ON public.listings USING btree (project_id) WHERE (project_id IS NOT NULL);
 CREATE UNIQUE INDEX listings_project_unit_uniq ON public.listings USING btree (project_id, unit_code) WHERE ((project_id IS NOT NULL) AND (unit_code IS NOT NULL));
 create index if not exists listings_seller_id_idx ON public.listings USING btree (seller_id);
@@ -5609,6 +5611,31 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.them_nhan_tin(p_listing_id uuid, p_nhan text[])
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_cu  text[];
+  v_moi text[] := '{}'::text[];
+  n     text;
+begin
+  if p_listing_id is null or p_nhan is null then return 0; end if;
+  select nhan into v_cu from public.listings where id = p_listing_id;
+  if v_cu is null then return 0; end if;
+  foreach n in array p_nhan loop
+    if n is not null and btrim(n) <> '' and not (n = any(v_cu)) and not (n = any(v_moi)) then
+      v_moi := v_moi || n;
+    end if;
+  end loop;
+  if array_length(v_moi, 1) is null then return 0; end if;
+  update public.listings set nhan = v_cu || v_moi where id = p_listing_id;
+  return array_length(v_moi, 1);
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.thu_muc_dau_uuid(p_name text)
  RETURNS uuid
  LANGUAGE sql
@@ -7429,6 +7456,8 @@ grant execute on function public.tao_danh_sach(p_listing_codes text[], p_title t
 grant execute on function public.tao_danh_sach(p_listing_codes text[], p_title text, p_buyer_id uuid) to service_role;
 revoke all on function public.tao_followup(p_buyer_id uuid, p_code text) from public, anon, authenticated;
 grant execute on function public.tao_followup(p_buyer_id uuid, p_code text) to service_role;
+revoke all on function public.them_nhan_tin(p_listing_id uuid, p_nhan text[]) from public, anon, authenticated;
+grant execute on function public.them_nhan_tin(p_listing_id uuid, p_nhan text[]) to service_role;
 revoke all on function public.thu_muc_dau_uuid(p_name text) from public, anon, authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to service_role;

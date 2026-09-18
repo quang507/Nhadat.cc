@@ -14,6 +14,7 @@
 // thành `gmin`/`gmax` (VND) — "8 tỉ" là 6,8–9,2 tỉ, không phải "5–8 tỷ".
 import { tagBySlug } from "@/lib/tags";
 import { TIEN_KD } from "@/bot/supabase/functions/_shared/extraction/luat-tien";
+import { ganNhan, tenNhan } from "@/bot/supabase/functions/_shared/extraction/nhan";
 
 const TY = 1_000_000_000;
 const TR = 1_000_000;
@@ -35,6 +36,8 @@ export type SearchFilters = {
   areaMax?: number;
   street?: string;
   landmark?: string;
+  /** FR-211: nhãn tìm kiếm (khoá từ điển `nhan.ts`), lọc `contains` trên `listings.nhan`. */
+  tags?: string[];
 };
 
 export type Confidence = Partial<Record<keyof SearchFilters, number>>;
@@ -204,6 +207,8 @@ export function parseQuery(qRaw: string): ParsedQuery {
   const t = boDauGiuViTri(q);
   const f: SearchFilters = {};
   const c: Confidence = {};
+  // FR-211: nhãn tìm kiếm trong câu hỏi ("yên tĩnh", "gần chợ"…) — cùng từ điển với bot.
+  { const tags = ganNhan(q); if (tags.length) { f.tags = tags; c.tags = 0.8; } }
 
   // Giao dịch. "thue" → thuê; "mua"/"ban" → bán. Cả hai → thuê thắng ("cần
   // thuê" rõ ý hơn "bán" vốn hay đứng trong "cho thuê hoặc bán").
@@ -273,7 +278,7 @@ export function parseQuery(qRaw: string): ParsedQuery {
   // thì chưa đủ để tự tin dựng bộ lọc — "cho em hỏi giá nhà ở đây" phải đi
   // sang hộp Zalo chứ không đổ ra cả kho.
   const manh = !!(f.deal || f.ward || f.district || f.priceMin || f.priceMax || f.access
-    || f.bedrooms || f.street || f.landmark || f.areaMin || f.areaMax);
+    || f.bedrooms || f.street || f.landmark || f.areaMin || f.areaMax || f.tags?.length);
   const empty = !manh;
   const deal = f.deal ?? "ban";
   const thue = deal === "cho_thue";
@@ -284,6 +289,7 @@ export function parseQuery(qRaw: string): ParsedQuery {
   else if (f.access === "hxh") parts.push("hẻm xe hơi");
   else if (f.access === "hem") parts.push("trong hẻm");
   if (f.bedrooms) parts.push(`${f.bedrooms}+ phòng ngủ`);
+  if (f.tags?.length) parts.push(tenNhan(f.tags));
   if (f.areaMin || f.areaMax) {
     parts.push(f.areaMin && f.areaMax ? `${f.areaMin}–${f.areaMax} m²` : f.areaMax ? `dưới ${f.areaMax} m²` : `trên ${f.areaMin} m²`);
   }
@@ -298,7 +304,7 @@ export function parseQuery(qRaw: string): ParsedQuery {
   let url = "";
   if (!empty && loaiTag) {
     const dungQ5 = !f.district || f.district === "Quận 5";
-    const thua = !!(f.street || f.landmark || f.areaMin || f.areaMax || f.priceMin || f.priceApprox);
+    const thua = !!(f.street || f.landmark || f.areaMin || f.areaMax || f.priceMin || f.priceApprox || f.tags?.length);
     let attr = "";
     let attrDung = true;
     if (f.access === "hxh") attr = "hem-xe-hoi";
@@ -332,6 +338,7 @@ export function parseQuery(qRaw: string): ParsedQuery {
     if (f.types?.length && !empty) p.set("loai", f.types.join(","));
     if (f.street) p.set("duong", f.street);
     if (f.landmark) p.set("moc", f.landmark);
+    if (f.tags?.length) p.set("nhan", f.tags.join(","));
     if (q) p.set("q", q);
     const qs = p.toString();
     url = `${thue ? "/cho-thue" : "/mua-ban"}${qs ? `?${qs}` : ""}`;

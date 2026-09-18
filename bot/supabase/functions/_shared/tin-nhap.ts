@@ -20,9 +20,10 @@
 // THẬT mà không phải deploy; (b) kiểm bằng bun trong `bot/tests/tin-nhap-rao.mjs`.
 
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
+import { tenNhan } from "./extraction/nhan.ts";
 
 export const COT_TIN_NHAP =
-  `code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, ${SPEC_COLS}`;
+  `code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, nhan, ${SPEC_COLS}`;
 
 export type TinNhapRow = SpecRow & {
   code?: string | null;
@@ -39,6 +40,8 @@ export type TinNhapRow = SpecRow & {
   furnishing?: string | null;
   floor?: number | null;
   rear_width_m?: number | null;
+  /** FR-211: nhãn tìm kiếm (khoá từ điển `extraction/nhan.ts`). */
+  nhan?: string[] | null;
 };
 
 export type FactNhap = { question: string; answer: string | null };
@@ -278,6 +281,8 @@ export function soanTinNhap(t: ThamSoNhap): string {
     them("🏢", "Phí", [nhan("phí QL", fact("phi_quan_ly")), nhan("gửi xe", fact("phi_gui_xe"))]);
   }
   them("🏫", "Tiện ích gần", [fact("tien_ich_gan")]);
+  // FR-211: nhãn tìm kiếm — khách mua lọc được ("yên tĩnh", "gần chợ"…).
+  them("🏷", "Nhãn", [l.nhan?.length ? tenNhan(l.nhan) : null]);
   // Tiềm năng CHỈ khi chủ nhà nói (không bịa thay họ).
   them("💡", "Phù hợp", [fact("tiem_nang") ?? fact("muc_dich") ?? fact("nganh_hang_phu_hop")]);
   if (soAnh) dong.push(`📷 ${soAnh} ảnh`);

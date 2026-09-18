@@ -215,6 +215,7 @@ export const FACT_LABELS: Record<string, string> = {
   hinh_anh: "vài tấm ảnh (sổ, mặt tiền nhà, hẻm)",
   tiem_nang: "tiềm năng sử dụng (để ở, cho thuê hay kinh doanh)",
   bo_sung: "thông tin bổ sung",
+  nhan: "nhãn tìm kiếm", // FR-211
   duyet_tin: "chủ nhà duyệt bản nháp tin",
   danh_gia: "chủ nhà chấm điểm cách em chăm sóc",
   // FR-186 (09/09/2026): bộ câu hỏi riêng cho đất / biệt thự / cho thuê.

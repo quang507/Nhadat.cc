@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
+import { NHAN_HOP_LE } from "@/bot/supabase/functions/_shared/extraction/nhan";
 import ListingCard from "@/components/ListingCard";
 import { coverByCode } from "@/lib/photos";
 import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase";
@@ -59,6 +60,8 @@ type Params = {
   // tự do (VND, m²), quận/huyện, loại, tên đường, mốc, và câu gốc `q`.
   q?: string; gmin?: string; gmax?: string; dtmin?: string; dtmax?: string;
   quan?: string; loai?: string; duong?: string; moc?: string;
+  /** FR-211: nhãn tìm kiếm, "yen_tinh,gan_cho". */
+  nhan?: string;
 };
 
 // Cột enum có thật — chỉ nhận giá trị trong bảng này, không cho gõ tuỳ ý.
@@ -81,6 +84,7 @@ type Truy = {
   pn: number | null;
   vao?: string[]; tang?: number; pl?: string[];
   quan?: string; loai?: string[]; duong?: string; moc?: string;
+  nhan?: string[];
   xep: string;
   page: number;
 };
@@ -109,6 +113,7 @@ const layTin = unstable_cache(
     // Không bọc %: "%Quận 1%" khớp cả Quận 10/11/12. Giá trị đã chuẩn "Quận N".
     if (t.quan) q = q.ilike("district", t.quan);
     if (t.loai?.length) q = q.in("property_type", t.loai);
+    if (t.nhan?.length) q = q.contains("nhan", t.nhan); // FR-211
     if (t.duong) q = q.ilike("street", `%${t.duong}%`);
     if (t.moc) q = q.or(`description.ilike.%${t.moc}%,location_raw.ilike.%${t.moc}%`);
     q =
@@ -149,6 +154,7 @@ export default async function ListingBrowse({
   const gmin = soDuong(sp.gmin), gmax = soDuong(sp.gmax);
   const dtmin = soDuong(sp.dtmin), dtmax = soDuong(sp.dtmax);
   const loai = (sp.loai ?? "").split(",").map((x) => x.trim()).filter((x) => LOAI_HOP_LE.has(x));
+  const nhan = (sp.nhan ?? "").split(",").map((x) => x.trim()).filter((x) => NHAN_HOP_LE.has(x));
   const q = (sp.q ?? "").slice(0, 300).trim();
   // Diễn giải lại câu hỏi bằng CÙNG bộ luật đã sinh URL — không lệch nhau.
   const dienGiai = q ? parseQuery(q) : null;
@@ -161,6 +167,7 @@ export default async function ListingBrowse({
     vao: vao?.types, tang, pl: pl?.statuses,
     quan: sachIlike(sp.quan) || undefined,
     loai: loai.length ? loai : undefined,
+    nhan: nhan.length ? nhan : undefined,
     duong: sachIlike(sp.duong) || undefined,
     moc: sachIlike(sp.moc) || undefined,
     xep: xep.key,

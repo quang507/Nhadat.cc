@@ -236,6 +236,7 @@ class Builder {
   eq(c, v) { return this._f("eq", c, v); } neq(c, v) { return this._f("neq", c, v); } in(c, v) { return this._f("in", c, v); }
   gte(c, v) { return this._f("gte", c, v); } lte(c, v) { return this._f("lte", c, v); } gt(c, v) { return this._f("gt", c, v); } lt(c, v) { return this._f("lt", c, v); }
   not(c, op, v) { return this._f("not_" + op, c, v); } ilike(c, v) { return this._f("ilike", c, v); }
+  contains(c, v) { return this._f("contains", c, v); }
   // `.is(col, null)` của PostgREST — SEC-13 dùng nó để chỉ đụng dòng CHƯA chốt
   // gửi. Thiếu ở mock thì bộ e2e đo một hành vi khác với bản chạy thật.
   is(c, v) { return this._f("is", c, v); }
@@ -267,6 +268,7 @@ class Builder {
       case "is": return f.val === null ? v == null : v === f.val;
       case "or": return f.val.some((sub) => Builder.test(sub, row));
       case "not_is": return f.val === null ? v != null : v !== f.val;
+      case "contains": return Array.isArray(v) && (f.val ?? []).every((x) => v.includes(x));
       case "ilike": { const p = "^" + String(f.val).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*") + "$"; return new RegExp(p, "i").test(String(v ?? "")); }
     }
     return true;
@@ -581,6 +583,11 @@ class RpcCall {
         const n = ls.length;
         const heSo = s.seller_type === "nmg" ? 1 + 0.06 * Math.min(n, 10) + 0.04 * Math.max(Math.min(n, 30) - 10, 0) + 0.015 * Math.max(n - 30, 0) : 1;
         return { data: { diem: Math.min(100, Math.round(tb * heSo)), diem_tb: Math.round(tb * 10) / 10, so_tin: n, he_so: heSo }, error: null };
+      }
+      case "them_nhan_tin": { // FR-211
+        const l = db.t.listings.find((x) => x.id === a.p_listing_id); if (!l) return { data: 0, error: null };
+        const cu = l.nhan ?? []; const moi = (a.p_nhan ?? []).filter((n) => n && !cu.includes(n));
+        l.nhan = [...cu, ...moi]; return { data: moi.length, error: null };
       }
       case "ghi_boc_tach": {
         // 20260909a: gộp, bỏ null, đóng dấu _cap_nhat

@@ -146,6 +146,9 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   Lượt gom bắt được một lỗi có sẵn từ 02/09: che SĐT bằng hai lượt `replace` nối
   nhau làm LỒNG NHÃN (nhãn có chữ "Zalo", luật mạng xã hội khớp chữ đó) — nay một
   lượt, không bao giờ quét lại chữ vừa chèn.
+  Từ 18/09 thêm **từ điển nhãn tìm kiếm** `_shared/extraction/nhan.ts` (FR-211): bot gắn,
+  web lọc, cùng một file — thêm nhãn là thêm khoá ở đó + ca trong `bot/tests/nhan.mjs`, KHÔNG
+  ghi tay vào `listings.nhan`. `listings` nay 67 cột (số "56 cột" cũ ở đây đã lệch từ lâu).
   (3) **Luật phá dữ liệu phải có bảng câu KHÔNG được kích** — `bot/tests/luat/khong-duoc-kich.json`:
   mỗi luật tìm-chuỗi mà khớp là ghi đè dữ liệu có `phai_kich` (để không vá quá tay) và
   ≥ 8 `khong_duoc_kich`. `luat-pha-du-lieu.mjs` còn đếm chỗ ghi đè trong chat-reply:
@@ -367,7 +370,7 @@ xếp A→Z mà mắt vẫn gom được theo việc. Thêm bảng hay cột m�
 Bản in ra giấy (sơ đồ quan hệ + đường bóc tách) ở `docs/07-srs.md §SRS-3.0`;
 đừng mở `docs/architecture/` song song với `07-srs.md`, hai nguồn sự thật là
 đúng cái bẫy đã đẻ ra OPEN-46. Mở rổ hàng bằng mắt người thì dùng view
-`ro_hang_ban` chứ đừng mở `listings` 56 cột — hoặc chọn schema **`so`** trong
+`ro_hang_ban` chứ đừng mở `listings` 67 cột — hoặc chọn schema **`so`** trong
 Table Editor (`20260907c`): ba view `so.ro_hang` (9 cột đầu đúng thứ tự
 sheet Excel gốc Q5 trong `masterDB/`), `so.nguoi_ban` và `so.hoi_thoai` (log chat đọc
 được, `20260907g` — muốn xem lại bot nói gì với khách thì mở đây, đừng mở `messages`

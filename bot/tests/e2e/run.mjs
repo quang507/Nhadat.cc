@@ -282,7 +282,7 @@ v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em"
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
 check("TOIUU-07 người bán trả lời câu chờ ≤ 22 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu)", v.n <= 22 && v.r.body.role === "seller", `${v.n}`);
 v = await vong({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi" });
-check("TOIUU-07b lượt sau của cùng người bán ≤ 20 (không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song)", v.n <= 20, `${v.n}`);
+check("TOIUU-07b lượt sau của cùng người bán ≤ 24 (không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song; +4 18/09 FR-211: câu 'hoàn công đủ rồi' có NHÃN → tìm tin, đọc nhan, gộp, ghi fact — chỉ khi câu có nhãn)", v.n <= 24, `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
 check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
 fresh();
@@ -2304,6 +2304,35 @@ fresh(seedKho);
     !globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) && /chốt nhanh/.test(cauBot2),
     JSON.stringify({ rep: r.body.replies }));
   globalThis.__model.create = macDinhCreate;
+}
+
+// ── FR-211 (18/09/2026): NHÃN TÌM KIẾM — gắn từ câu rao / câu trả lời, lọc ở bot mua ──
+{
+  fresh();
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
+  r = await send({ external_user_id: "nhan-1", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ 5, khu yên tĩnh, gần chợ" });
+  const LN = db().t.listings[0];
+  check("NHAN-01 câu rao có 'khu yên tĩnh, gần chợ' → listings.nhan = [yen_tinh, gan_cho]; fact nhan; 💾 báo 'nhãn tìm kiếm'",
+    JSON.stringify(LN.nhan) === JSON.stringify(["yen_tinh", "gan_cho"]) &&
+      db().t.listing_facts.some((f) => f.listing_id === LN.id && f.question === "nhan" && f.answer === "yên tĩnh · gần chợ") &&
+      r.body.replies.some((x) => x.startsWith("💾") && /nhãn tìm kiếm: "yên tĩnh · gần chợ"/.test(x)),
+    JSON.stringify({ nhan: LN.nhan, rep: r.body.replies }));
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: LN.id, question: "ket_cau", status: "pending" });
+  r = await send({ external_user_id: "nhan-1", text: "trệt 2 lầu, xe hơi vào tận nhà, gần chợ luôn" });
+  check("NHAN-02 câu trả lời thêm 'xe hơi vào tận nhà' → thêm nhãn mới, 'gần chợ' không trùng; fact nhan chỉ ghi nhãn MỚI",
+    JSON.stringify(LN.nhan) === JSON.stringify(["yen_tinh", "gan_cho", "xe_hoi_vao_nha"]) &&
+      db().t.listing_facts.filter((f) => f.listing_id === LN.id && f.question === "nhan").at(-1)?.answer === "xe hơi vào nhà",
+    JSON.stringify({ nhan: LN.nhan, f: db().t.listing_facts.filter((f) => f.question === "nhan") }));
+  r = await send({ external_user_id: "nhan-1", text: "3 phòng ngủ" });
+  check("NHAN-03 câu không có ý nhãn → không ghi thêm fact nhan", db().t.listing_facts.filter((f) => f.listing_id === LN.id && f.question === "nhan").length === 2);
+  globalThis.__cauHinh = undefined;
+
+  // Khách MUA: nhãn vào hồ sơ và lọc kho bằng contains.
+  fresh(seedKho);
+  r = await send({ external_user_id: "nhan-mua", text: "tìm nhà quận 5 tầm 6 tỷ, khu yên tĩnh" });
+  const hsN = db().t.buyers.find((b) => b.zalo_user_id === "nhan-mua")?.preferences ?? {};
+  check("NHAN-04 khách mua nói 'khu yên tĩnh' → preferences.nhan = [yen_tinh]", JSON.stringify(hsN.nhan) === JSON.stringify(["yen_tinh"]), JSON.stringify(hsN));
 }
 
 // ── kết ──
