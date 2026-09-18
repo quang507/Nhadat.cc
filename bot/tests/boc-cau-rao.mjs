@@ -1,0 +1,118 @@
+// boc-cau-rao.mjs — lượt bắn 14 tin RAO BÁN thật 14/09/2026, phần tiền định.
+// Không mạng, không DB, không model.   bun bot/tests/boc-cau-rao.mjs
+//
+// Phần SQL của cùng lượt bắn (fact "cách mặt tiền" vào cột, "p5" dính tên đường, xe hơi
+// trong nhà) ở migration 20260914b.
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
+import { bocViTriRao, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+
+let hong = 0, tong = 0;
+const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
+const kd = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+// Cùng đuôi giá với chat-reply — một nguồn `DUOI_GIA` (15/09).
+const gia = (c) => chonGiaRao(c, dealCauRao(kd(c)), DUOI_GIA);
+// 15/09/2026 (bắn thật B1): đuôi giá dừng trước chữ của thứ khác.
+for (const [c, mong] of [
+  ["co lo dat 5x18 thu duc phuong hiep binh chanh gia 6ty2 shr thanh khoan nhanh ko ban", "6ty2"],
+  ["bán nhà q5 giá 5 tỷ thương lượng", "5 tỷ thương lượng"],
+  ["bán nhà q5 5 tỷ 8 50m2", "5 tỷ 8"],
+  ["nhà mặt tiền giá 32 tỷ sổ hồng riêng, 5x20", "32 tỷ"],
+  ["bán đất 2 tỷ 3 hẻm xe hơi", "2 tỷ 3"],
+  ["cho thuê 25 triệu/tháng full nội thất", "25 triệu/tháng"],
+]) ok("đuôi giá " + JSON.stringify(c.slice(0, 40)) + " → " + mong, gia(c)?.trim() === mong, JSON.stringify(gia(c)));
+
+// ── bán hay cho thuê ──
+for (const [c, mong] of [
+  ["bán nhà mặt tiền đường Châu Văn Liêm phường 14 quận 5, ngang 4.2m dài 18m, đang cho thuê 45 triệu/tháng, giá 32 tỷ còn thương lượng", "ban"],
+  ["sang nhượng mặt bằng quán cà phê Quận 1 đường Nguyễn Trãi, 8x20, thuê 60 triệu/tháng, phí sang 350 triệu", "cho_thue"],
+  ["Cần sang nhượng căn hộ The Sun Avenue quận 2 3pn 96m2, HĐMB, giá 5 tỷ", "ban"],
+  ["cho thuê căn hộ Sunrise City quận 7, 76m2, 18 triệu một tháng", "cho_thue"],
+  ["cho thuê nhà nguyên căn, bán cũng được nếu giá tốt", "cho_thue"],
+  ["bán nhà có hợp đồng thuê 20 triệu, giá 9 tỷ", "ban"],
+  ["gia đình cần tiền nên để lại căn nhà 4x16 hẻm xe hơi Trần Hưng Đạo", "ban"],
+  ["bán đất Củ Chi 100m2 thổ cư, 900tr", "ban"],
+]) ok(`deal: '${c.slice(0, 60)}…' → ${mong}`, dealCauRao(kd(c)) === mong, dealCauRao(kd(c)));
+
+// ── giá ──
+for (const [c, mong] of [
+  ["bán nhà mặt tiền Châu Văn Liêm, đang cho thuê 45 triệu/tháng, giá 32 tỷ còn thương lượng", "32 tỷ còn thương lượng"],
+  ["sang nhượng mặt bằng Quận 1, 8x20, thuê 60 triệu/tháng, phí sang 350 triệu", "60 triệu/tháng"],
+  ["cho thuê nhà nguyên căn, cọc 2 tháng 30 triệu, giá thuê 15 triệu", "15 triệu"],
+  ["bán nhà quận 5 phường 7, 50m2, 6 tỷ", "6 tỷ"],
+  ["bán nhà q8, hoa hồng 50 triệu, giá 4 tỷ 2", "4 tỷ 2"],
+  ["bán đất thổ cư Nhà Bè 120m2, 45tr/m2 tổng 5 tỷ 4, đã có người cọc 200tr nhưng bể cọc", "45tr/m2 tổng 5 tỷ 4"],
+  ["anh nói giá 5 tỷ nha em, nhà 4x15", "5 tỷ nha em"] /* đuôi tiểu từ do chuan_hoa_gia_raw gọt; trước 14/09 ra null vì "nói" khớp "no" (nợ) */,
+  ["giá 8 tỷ thương lượng, cọc giữ chỗ 100 triệu", "8 tỷ thương lượng"],
+  ["thương lượng 7 tỷ 5", "7 tỷ 5"],
+]) ok(`giá: '${c.slice(0, 55)}…' → ${mong}`, gia(c) === mong, String(gia(c)));
+
+// ── diện tích, giá mỗi m² ──
+ok("diện tích: '62,5m²' → 62.5", dienTichCauRao(kd("diện tích 62,5m², 1 trệt 1 lầu")) === 62.5);
+ok("diện tích: '70m2' → 70", dienTichCauRao(kd("DT: 5x14 (70m2)")) === 70);
+ok("diện tích: '5x20' không phải m² → null", dienTichCauRao(kd("lô 5x20, đường 12m")) === null);
+// 16/09/2026 (Zalo thật): sàn không phải đất.
+ok("diện tích: 'nhà 4 tấm diện tích tổng 240m2' → null (sàn)", dienTichCauRao(kd("nhà 4 tấm diện tích tổng 240m2 giá 6 tỷ")) === null);
+ok("diện tích: 'diện tích sàn 240m2, đất 60m2' → 60", dienTichCauRao(kd("diện tích sàn 240m2, đất 60m2")) === 60);
+ok("diện tích: 'tổng diện tích 500m2' (không tầng) → 500", dienTichCauRao(kd("bán lô đất tổng diện tích 500m2")) === 500);
+ok("diện tích: 'dtsd 120m2' → null", dienTichCauRao(kd("căn hộ dtsd 120m2 3pn")) === null);
+ok("ngang × dài: '5x20' → 100 (để nhân giá/m²)", ngangNhanDai(kd("lô đất 5x20, giá 95 triệu/m2")) === 100);
+ok("ngang × dài: '4.2m x 18m' → 75.6", ngangNhanDai(kd("ngang 4.2m x 18m")) === 75.6);
+
+// ── phường tên chữ ──
+ok("phường: 'phường Hiệp Bình Chánh TP Thủ Đức' → Phường Hiệp Bình Chánh", phuongTenCauRao("cần bán nhà phường Hiệp Bình Chánh TP Thủ Đức, 62m2") === "Phường Hiệp Bình Chánh", String(phuongTenCauRao("cần bán nhà phường Hiệp Bình Chánh TP Thủ Đức, 62m2")));
+ok("phường: 'Phường Bến Nghé Quận 1' → Phường Bến Nghé", phuongTenCauRao("bán nhà Phường Bến Nghé Quận 1") === "Phường Bến Nghé");
+ok("phường: 'phường nào cũng được' (chữ thường) → null", phuongTenCauRao("ở phường nào cũng được") === null);
+ok("phường: 'phường 7' (số) → null (soPhuong lo)", phuongTenCauRao("bán nhà phường 7") === null);
+// 15/09/2026 (bắn thật B1): phường tên chữ KHÔNG DẤU → tên bỏ dấu để tra `wards`.
+for (const [c, mong] of [
+  ["co lo dat 5x18 thu duc phuong hiep binh chanh gia 6ty2 shr", "hiep binh chanh"],
+  ["ban nha phuong tan hung quan 7 50m2", "tan hung"],
+  ["ban nha phuong 7 quan 8", null],
+  ["o phuong nao cung duoc", null],
+  ["ban nha p. an lac binh tan", "an lac"],
+]) ok("phường không dấu " + JSON.stringify(c.slice(0, 40)), phuongTenKhongDau(c) === mong, String(phuongTenKhongDau(c)));
+
+// ── dự án trùng tên đường ──
+ok("dự án: 'đường Huỳnh Tấn Phát' không phải 'Căn Hộ Cao Cấp Huỳnh Tấn Phát'", duAnLaTenDuong("Căn Hộ Cao Cấp Huỳnh Tấn Phát", "bán nhà phố quận 7 đường Huỳnh Tấn Phát 5x20 giá 11 tỷ"));
+ok("dự án: câu nói 'căn hộ Vinhomes Grand Park' → giữ dự án", !duAnLaTenDuong("The Beverly - Vinhomes Grand Park", "bán căn hộ Vinhomes Grand Park Thủ Đức"));
+ok("dự án: 'chung cư Huỳnh Tấn Phát' (có chữ chung cư) → giữ", !duAnLaTenDuong("Căn Hộ Cao Cấp Huỳnh Tấn Phát", "bán căn chung cư Huỳnh Tấn Phát quận 7"));
+ok("dự án: tên dự án không trùng đường nào → giữ", !duAnLaTenDuong("Sunrise City", "bán nhà hẻm Nguyễn Hữu Thọ quận 7 gần Sunrise City"));
+
+// ── vị trí trong câu rao ──
+for (const [c, mong] of [
+  ["nhà cấp 4 hẻm ba gác đường Phạm Thế Hiển p6 q8, 3.5x12", "hẻm ba gác đường Phạm Thế Hiển"],
+  ["em bên môi giới ạ, có căn nhà phố Tân Bình đường Cộng Hòa p4, 4x20", "đường Cộng Hòa"],
+  ["e bán nhà hxh Nguyễn Kiệm Phú Nhuận 4x15 trệt 2 lầu", "hxh Nguyễn Kiệm"],
+  ["anh cần bán căn nhà hẻm xe hơi 5m Nguyễn Trãi phường 3 quận 5", "hẻm xe hơi 5m Nguyễn Trãi"],
+  ["bán nhà 123/4 An Dương Vương p8 q5", "123/4 An Dương Vương"],
+  ["nhà phố đường An Dương Vương q5", "đường An Dương Vương"],
+  ["Hẻm 6m Lê Văn Sỹ, P.13, Q.3", "Hẻm 6m Lê Văn Sỹ"],
+  // 15/09/2026 (Zalo thật): "mới làm lại" là lời tả, không phải tên đường.
+  ["căn hộ 5 tầng có sổ hồng riêng, đường Lê Văn Việt mới làm lại rất rộng, số nhà tôi là số449", "đường Lê Văn Việt"],
+]) ok(`vị trí: '${c.slice(0, 50)}' → ${mong}`, bocViTriRao(c) === mong, String(bocViTriRao(c)));
+
+// ── câu bổ sung sau khi tạo tin ──
+{
+  const f = nhanDienNhieuFact("hẻm rộng tầm 2m5 thôi em, cách mặt tiền 50m");
+  const hem = f.find((x) => x.question === "do_rong_hem");
+  ok("bổ sung: 'hẻm rộng tầm 2m5' → do_rong_hem 'hẻm 2.5m' (kèm cách mặt tiền 50m)", hem?.answer === "hẻm 2.5m" && f.some((x) => x.question === "cach_mat_tien"), JSON.stringify(f));
+}
+ok("bổ sung: '5m2' KHÔNG thành hẻm 5.2m", nhanDienFact("hẻm 5m2")?.answer !== "hẻm 5.2m", JSON.stringify(nhanDienFact("hẻm 5m2")));
+ok("bổ sung: 'hẻm khoảng 4m' → hẻm 4m", nhanDienFact("hẻm khoảng 4m")?.answer === "hẻm 4m", JSON.stringify(nhanDienFact("hẻm khoảng 4m")));
+{
+  const t = "à anh nói lại, là đất trống chưa xây nha em";
+  const k = phanLoaiCauTraLoi("gap", t);
+  ok("gấp: đang hỏi gấp, 'là đất trống chưa xây' → lệch sang loại BĐS (không ghi vào ô gấp)", k.loai === "lech" && k.chuyenSang?.question === "loai_bds", JSON.stringify(k));
+  ok("gấp: 'không gấp em' vẫn là câu trả lời gấp", phanLoaiCauTraLoi("gap", "không gấp em, bán được giá thì thôi").loai === "khop");
+  ok("gấp: 'cần tiền nên bán nhanh' → khớp", phanLoaiCauTraLoi("gap", "cần tiền nên muốn bán nhanh").loai === "khop");
+}
+ok("loại: 'đất trống chưa xây' → loai_bds đất trống", nhanDienFact("là đất trống chưa xây nha")?.question === "loai_bds");
+ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDienFact("đất được xây 5 tầng")?.question !== "loai_bds", JSON.stringify(nhanDienFact("đất được xây 5 tầng")));
+{
+  const f = nhanDienNhieuFact("🏡 CHÍNH CHỦ BÁN GẤP NHÀ QUẬN 3\n🏢 Kết cấu: 3 tấm, 4PN 3WC\n📜 Sổ hồng riêng, hoàn công đủ");
+  const pl = f.find((x) => x.question === "phap_ly");
+  ok("rao Facebook: đáp án bỏ biểu tượng + nhãn ('📜 Sổ hồng riêng' → 'Sổ hồng riêng')", pl?.answer === "Sổ hồng riêng", JSON.stringify(f));
+}
+
+console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);
+process.exit(hong ? 1 : 0);

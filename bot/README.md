@@ -132,7 +132,9 @@ hàng nên cron luôn báo `succeeded` kể cả khi function trả 500. Kết q
   Editor là bot đổi trong vòng một phút (nhớ tạm 60 s). Nội dung phải khớp
   `_shared/prompts.ts` — đổi một bên thì đồng bộ bên kia bằng script, đừng gõ tay.
 - **Secret trong Vault** (đọc qua RPC `get_secret`, chỉ `service_role`):
-  `ANTHROPIC_API_KEY`, `BRIDGE_SECRET`. Chưa có: `ZALO_OA_TOKEN`,
+  `ANTHROPIC_API_KEY`, `BRIDGE_SECRET`, `GROQ_API_KEY`, `GROQ_MODEL` (danh sách
+  ngăn phẩy, FR-194), `MODEL_TRUOC` (`groq` mặc định — Groq trả lời trước, chạm
+  trần thì Claude liền; `claude` là Claude trước, FR-194 b). Chưa có: `ZALO_OA_TOKEN`,
   `ZALO_APP_SECRET`/`ZALO_APP_ID` (OPEN-33), `ZALO_ADMIN_ZALO_ID`,
   `NTFY_TOKEN` (cần cho email FR-81), `DAILY_MODEL_CALL_CAP` (mặc định 1000).
 - **`app_config`** (khoá/giá trị, không phải secret): `ntfy_topic`, `admin_email`,
@@ -167,8 +169,14 @@ thật (chưa có project thứ hai để thử).
    quyền, bucket, cron). Thứ tự trong file là bảng → hàm → view → trigger; view
    chồng view có thể phải chạy lại lượt hai — file dùng `create or replace` và
    `if not exists` nên chạy lại được, không cần dọn.
+   *`xuat_schema()` KHÔNG xuất DỮ LIỆU: bảng `wards` (168 phường mới ↔ quận cũ,
+   FR-209) dựng xong phải chạy thêm `migrations/20260915a_wards_phuong_moi.sql`
+   (có `on conflict` nên chạy lại được).*
    *Không dùng thư mục `migrations/` để dựng lại: 44 migration đầu không còn
-   file (OPEN-46). Migration là để ghi THAY ĐỔI, `schema.sql` mới là để dựng.*
+   file (OPEN-46), và soát 13/09/2026 thấy 34 hàm trên DB có thân khác file
+   migration cuối cùng của chúng. Migration là để ghi THAY ĐỔI, `schema.sql` mới
+   là để dựng — cổng CI thứ 7 so md5 từng thân hàm `schema.sql` ↔ DB nên file này
+   không tụt lại được nữa; đỏ thì `node scripts/sinh-schema.mjs` rồi commit.*
    Xong thì chạy thêm `migrations/20260907c_schema_so_doc_nhu_excel.sql`,
    `migrations/20260907f_so_ro_hang_doc_mot_dong.sql` rồi
    `migrations/20260907g_so_hoi_thoai_doc_lai_log_chat.sql`:

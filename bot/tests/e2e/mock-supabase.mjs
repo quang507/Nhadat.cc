@@ -50,9 +50,10 @@ export class FakeDB {
       dat_kinh_doanh: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("thoi_han_su_dung", 10), CM("hinh_thuc_thue_dat", 11), CM("muc_dich", 12), CM("do_rong_duong", 13), CM("phap_ly", 14), CM("hinh_anh", 19)],
       kho_xuong: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("chieu_cao", 10), CM("tai_trong_san", 11), CM("tram_bien_ap", 12), CM("xu_ly_nuoc_thai", 13), CM("duong_container", 14), CM("phap_ly", 15), CM("thoi_han_su_dung", 16), CM("tien_coc", 17, "cho_thue"), CM("thoi_han_thue", 18, "cho_thue"), CM("hinh_anh", 19)],
       chua_ro: [CB("loai_bds", 1), CB("vi_tri", 2), CB("phuong", 3), CB("gia", 9)],
-      nha_pho: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("ket_cau", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("tiem_nang", 14), ...THUE_NHA, CM("hinh_anh", 19), ...SAU_NHA],
-      nha_cap4: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("hien_trang", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("tiem_nang", 14), CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
-      chung_cu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_tim_tuong", 6), CB("gia", 9), CM("tang", 10), CM("so_phong_ngu", 11), CM("huong", 12), CM("noi_that", 13), CM("phap_ly", 14), CM("phi_quan_ly", 15), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
+      // 20260916c: tiềm năng → hỏi bù sau đăng (39); chung cư hỏi nội thất (12) trước hướng (13).
+      nha_pho: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("ket_cau", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), ...THUE_NHA, CM("hinh_anh", 19), ...SAU_NHA, SD("tiem_nang", 39)],
+      nha_cap4: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("hien_trang", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19), SD("tiem_nang", 39)],
+      chung_cu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_tim_tuong", 6), CB("gia", 9), CM("tang", 10), CM("so_phong_ngu", 11), CM("noi_that", 12), CM("huong", 13), CM("phap_ly", 14), CM("phi_quan_ly", 15), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
       dat: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("tho_cu", 8), CB("gia", 9), CM("do_rong_duong", 10), CM("huong", 11), CM("ha_tang", 12), CM("xay_dung", 13), CM("phap_ly", 14), CM("hinh_anh", 19)],
       biet_thu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("ket_cau", 10), CM("so_phong_ngu", 11), CM("san_vuon", 12), CM("do_rong_hem", 13), CM("khu_compound", 14), CM("phap_ly", 15), CM("noi_that", 16, "cho_thue"), CM("tien_coc", 17, "cho_thue"), CM("thoi_han_thue", 18, "cho_thue"), CM("hinh_anh", 19)],
       phong_tro: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("noi_that", 10), CM("gia_dien_nuoc", 11), CM("gio_giac", 12), CM("tien_coc", 13), CM("hinh_anh", 19)],
@@ -72,7 +73,9 @@ export class FakeDB {
       // Ảnh trong kho (listing_media) = đã có ảnh, như view thật (FR-185).
       if (this.t.listing_media.some((m) => m.listing_id === l.id)) have.add("hinh_anh");
       const loai = REQ[l.property_type ?? "chua_ro"] ? (l.property_type ?? "chua_ro") : "chua_ro";
-      for (const [k, priority, nhom, deal] of [...REQ[loai], ...(loai === "chua_ro" ? [] : [["gap", 10, "co_ban", null]])]) {
+      // 20260916c: gấp là chuyên môn, sau câu chuyên môn cuối (trước ảnh), tối đa 18.
+      const maxCM = Math.max(17, ...REQ[loai].filter((r) => r[2] === "chuyen_mon" && !r[3] && !["hinh_anh", "tiem_nang", "gap"].includes(r[0])).map((r) => r[1]));
+      for (const [k, priority, nhom, deal] of [...REQ[loai], ...(loai === "chua_ro" ? [] : [["gap", Math.min(18, maxCM + 1), "chuyen_mon", null]])]) {
         if (deal && deal !== (l.deal ?? "ban")) continue;
         if (!have.has(k)) out.push({ listing_id: l.id, fact_key: k, priority, nhom });
       }
@@ -167,6 +170,11 @@ export class FakeDB {
         this.t.deals.some((x) => x.listing_id === r.listing_id && x.buyer_id === r.buyer_id)) {
       return trung("deals_listing_buyer_key");
     }
+    // listings_project_unit_uniq (project_id, unit_code) — bắn lại 14/09: hai lượt rao cùng căn S1.02.
+    if (table === "listings" && r.project_id && r.unit_code &&
+        this.t.listings.some((x) => x.project_id === r.project_id && x.unit_code === r.unit_code)) {
+      return trung("duplicate key value violates unique constraint \"listings_project_unit_uniq\"");
+    }
     if (table === "listings") {
       r.code = r.code ?? `BDS-Q5-${String(this.t.listings.length + 1).padStart(4, "0")}`;
       r.status = r.status ?? "cho_thong_tin";
@@ -212,8 +220,10 @@ function parseSelect(sel) {
   for (const ch of sel) { if (ch === "(") depth++; if (ch === ")") depth--; if (ch === "," && depth === 0) { items.push(cur.trim()); cur = ""; } else cur += ch; }
   if (cur.trim()) items.push(cur.trim());
   return items.map((it) => {
-    const m = /^([a-z_]+)(!inner)?\((.*)\)$/.exec(it);
-    return m ? { embed: m[1], inner: !!m[2], cols: m[3].split(",").map((s) => s.trim()) } : { col: it };
+    // 15/09/2026: nhận cả gợi ý khoá ngoại `sellers!listings_seller_id_fkey(...)` —
+    // PostgREST thật ĐÒI nó khi hai bảng có hai quan hệ (PGRST201); mock chỉ bỏ qua.
+    const m = /^([a-z_]+)(?:!(inner|[a-z_]+))?\((.*)\)$/.exec(it);
+    return m ? { embed: m[1], inner: m[2] === "inner", cols: m[3].split(",").map((s) => s.trim()) } : { col: it };
   });
 }
 
@@ -532,6 +542,12 @@ class RpcCall {
         if (a.p_question === "vi_tri" && !l.location_raw) l.location_raw = String(a.p_answer).trim();
         if (a.p_question === "gia") { l.price_raw = a.p_answer; l.price_vnd = parseVnd(a.p_answer); }
         if (a.p_question === "phuong") l.ward = a.p_answer;
+        // 20260915d listing_facts_sync_deal: đổi loại giao dịch, tính lại giá từ fact giá gần nhất.
+        if (a.p_question === "loai_giao_dich" && (a.p_answer === "ban" || a.p_answer === "cho_thue")) {
+          l.deal = a.p_answer;
+          const g = db.t.listing_facts.filter((f) => f.listing_id === l.id && f.question === "gia").pop();
+          if (g) { l.price_raw = g.answer; l.price_vnd = parseVnd(g.answer); }
+        }
         if (a.p_question === "gap") {
           const kd = String(a.p_answer).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
           l.gap = /\b(khong|ko|k|chua|chang)\s*(can\s*)?(gap|voi)\b|duoc gia thi thoi|khong voi|tu tu/.test(kd) ? false : /\bgap\b|can tien|\bvoi\b/.test(kd) ? true : l.gap;
@@ -573,7 +589,7 @@ class RpcCall {
         l.boc_tach = { ...(l.boc_tach ?? {}), ...sach, _cap_nhat: now() };
         return { data: null, error: null };
       }
-      case "guess_property_type_answer": { const t = boDauMock(String(a.p_text)); return { data: /kho|xuong/.test(t) ? "kho_xuong" : /nong nghiep|dat vuon/.test(t) ? "dat_nong_nghiep" : /skc|tmd|thuong mai/.test(t) ? "dat_kinh_doanh" : /dich vu|khach san|toa nha/.test(t) ? "toa_nha" : /nha pho|\bnp\b/.test(t) ? "nha_pho" : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(t) ? "chung_cu" : null, error: null }; }
+      case "guess_property_type_answer": { const t = boDauMock(String(a.p_text)); return { data: /kho|xuong/.test(t) ? "kho_xuong" : /nong nghiep|dat vuon/.test(t) ? "dat_nong_nghiep" : /skc|tmd|thuong mai/.test(t) ? "dat_kinh_doanh" : /dich vu|khach san|toa nha/.test(t) ? "toa_nha" : /nha pho|\bnp\b/.test(t) ? "nha_pho" : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(t) ? "chung_cu" : /\bnha\b/.test(t) && t.split(/\s+/).length >= 4 ? "nha_pho" : null, error: null }; }
       case "mark_listing_interest": {
         // v48 / 20260904f (FR-108): overload có p_buyer_id ghi thêm `interests`
         // (PK buyer_id+listing_id — chèn trùng thì bỏ qua).

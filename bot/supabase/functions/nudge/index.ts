@@ -169,13 +169,30 @@ Deno.serve(async (req) => {
     if (c.human_touch_at && Date.parse(c.human_touch_at as string) >= Date.parse(c.needs_human_at as string)) continue;
     const who = (c.buyers as { name?: string | null } | null)?.name;
     if (!dry_run) {
-      await client.from("reminders").insert({
+      // 13/09/2026 (review code): bản trước ĐỌC `human_escalated_at IS NULL` rồi
+      // chèn nhắc rồi mới lật cờ — hai lượt chạy chồng nhau cùng thấy null và cùng
+      // chèn, admin nhận hai tin ⚠️. Đúng hình lỗi khối nhắc bên dưới đã vá bằng
+      // `nhan_viec_nhac`. Nay GIÀNH TRƯỚC: lật cờ có điều kiện IS NULL (một câu
+      // UPDATE, Postgres tự khoá dòng) — lượt nào lật được mới chèn.
+      const { data: giu, error: giuErr } = await client.from("conversations")
+        .update({ human_escalated_at: new Date().toISOString() })
+        .eq("id", c.id).is("human_escalated_at", null).select("id");
+      if (giuErr) {
+        await ghiLoi(client, "nudge giành leo thang", giuErr.message);
+        continue;
+      }
+      if (!giu?.length) continue; // lượt khác đã giành
+      const { error: insErr } = await client.from("reminders").insert({
         kind: "escalation", buyer_id: c.buyer_id, ctv_id: null,
         due_at: new Date().toISOString(),
         note: `⚠️ khách${who ? ` ${who}` : ""} cần người thật đã 30 phút mà CTV chưa vào. Anh/chị xử giúp`,
       });
-      await client.from("conversations")
-        .update({ human_escalated_at: new Date().toISOString() }).eq("id", c.id);
+      if (insErr) {
+        // Chèn hỏng thì trả cờ về, kẻo cờ đã lật mà không ai được báo — lượt sau thử lại.
+        await ghiLoi(client, "nudge chèn nhắc leo thang", insErr.message);
+        await client.from("conversations").update({ human_escalated_at: null }).eq("id", c.id);
+        continue;
+      }
     }
     out.push({ kind: "escalate_admin", conversation: c.id });
   }
@@ -310,11 +327,15 @@ Deno.serve(async (req) => {
   // FR-54/56: nhắc `viewing` (chat-reply tạo) chỉ có `viewing_id`, tin nằm ở
   // `viewings.listing_id` — kéo toạ độ + mã qua hai đường: `listings` thẳng
   // (match/feedback/followup) và `viewings → listings` (viewing).
-  const { data: due } = dueIds.length
+  // 15/09/2026: nhúng lồng `listings(... sellers(...))` PHẢI chỉ tên khoá ngoại —
+  // `listings ↔ sellers` có hai quan hệ nên PostgREST trả PGRST201, và bản trước
+  // không đọc `error`: cả lượt nhắc rơi im. Xem ask-seller cùng ngày.
+  const { data: due, error: docDueErr } = dueIds.length
     ? await client.from("reminders")
-      .select("id, kind, note, buyer_id, seller_id, listing_id, viewing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id), listings(code, lat, lng), viewings(time_text, status, listings(id, code, lat, lng, seller_id, sellers(name, zalo_user_id, phone)))")
+      .select("id, kind, note, buyer_id, seller_id, listing_id, viewing_id, buyers(name, zalo_user_id), sellers(name, zalo_user_id), listings(code, lat, lng), viewings(time_text, status, listings(id, code, lat, lng, seller_id, sellers!listings_seller_id_fkey(name, zalo_user_id, phone)))")
       .in("id", dueIds)
-    : { data: [] as never[] };
+    : { data: [] as never[], error: null };
+  if (docDueErr) await ghiLoi(client, "nudge doc nhac den han", docDueErr.message);
 
   type TinToaDo = { code?: string | null; lat?: number | null; lng?: number | null } | null;
   for (const r of due ?? []) {

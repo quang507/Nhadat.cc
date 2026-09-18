@@ -115,6 +115,9 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   if (!apiKey && !groqKey) throw new Error("Không tìm thấy ANTHROPIC_API_KEY lẫn GROQ_API_KEY (env lẫn Vault)");
   const chinh = apiKey ? bocLocThamSo(new Anthropic({ apiKey }), db) : null;
   if (!groqKey) return chinh!;
+  // FR-194 b: ai trả lời TRƯỚC. Chủ dự án 15/09/2026: Groq trước, chặn trần thì
+  // Claude liền. Đổi lại bằng secret `MODEL_TRUOC=claude`, không cần deploy.
+  const thuTu = (await secretOf(db, "MODEL_TRUOC"))?.trim().toLowerCase() === "claude" ? "claude" : "groq";
   const ghiSo = async (nguon: string, chiTiet: string) => {
     try {
       await db.rpc("log_loi", { p_source: nguon, p_detail: chiTiet, p_code: null });
@@ -123,7 +126,7 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   // `bocDuPhong` chỉ cần hai hàm `messages.create/parse` — client thật khớp về
   // cấu trúc nhưng kiểu SDK rộng hơn nhiều, nên ép qua `unknown` ở MỘT chỗ này.
   return bocDuPhong(
-    chinh as unknown as Parameters<typeof bocDuPhong>[0], groqKey, groqModel, ghiSo,
+    chinh as unknown as Parameters<typeof bocDuPhong>[0], groqKey, groqModel, ghiSo, thuTu,
   ) as unknown as Anthropic;
 }
 

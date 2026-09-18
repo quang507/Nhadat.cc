@@ -28,6 +28,10 @@ const hoiMua = (text) => {
       /(co|con)\s*can nao|tu van (mua|thue)/,
     ) ||
     khop(
+      /(?:^|[\s,.])mua\s+(để|qua|bên|về ở|trả góp)\b|\bkhi\s+mua\b|\bmua\s+nhà\s+bên\s+em\b/i,
+      /(?:^|[\s,.])mua\s+(de|qua|ben|ve o|tra gop)\b|\bkhi\s+mua\b|\bmua\s+nha\s+ben\s+em\b/,
+    ) ||
+    khop(
       /(cho|xin|muốn|được|đi|qua|tới|hẹn|đặt lịch)\s*(em|anh|chị|tôi|mình)?\s*(xem|coi)\s*(nhà|căn)/i,
       /(cho|xin|muon|duoc|di|qua|toi|hen|dat lich)\s*(em|anh|chi|toi|minh)?\s*(xem|coi)\s*(nha|can)/,
     )) &&
@@ -154,6 +158,13 @@ const CA = [
   ["mua: muốn thuê nhà",            () => hoiMua("muốn thuê nhà 2pn"), true],
   ["mua: tìm nhà trần",             () => hoiMua("tìm nhà q5 tầm 5 tỷ"), true],
   ["mua: kiếm căn hộ",              () => hoiMua("kiếm căn hộ gần chợ rẫy"), true],
+  // 14/09/2026 (bắn thật: hai câu này bị hỏi "mua hay bán")
+  ["mua: mua để cho thuê lại",      () => hoiMua("mua để cho thuê lại, khu nào quận 5 dòng tiền tốt em"), true],
+  ["mua: mua qua bên em mất phí",   () => hoiMua("mua qua bên em có mất phí gì không"), true],
+  ["mua: khi mua có cần cọc",       () => hoiMua("khi mua thì cọc bao nhiêu em"), true],
+  ["mua: mua de o (không dấu)",     () => hoiMua("mua de o thoi em"), true],
+  ["bán: mua lại 3 năm trước",      () => hoiMua("anh mua lại căn này 3 năm trước, giờ muốn bán"), false],
+  ["bán: người mua hỏi chưa",       () => hoiMua("có người mua hỏi căn của tôi chưa em"), false],
   // (1) NGƯỜI LẠ — tự nhận có BĐS → mở hồ sơ bán
   ["lạ: câu rao đầy đủ",            () => moHoSoBan("tôi muốn bán nhà q5 giá 5 tỷ"), true],
   ["lạ: câu rao không dấu",         () => moHoSoBan("ban nha quan 5 gia 5 ty"), true],

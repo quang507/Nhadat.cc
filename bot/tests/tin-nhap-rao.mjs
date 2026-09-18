@@ -26,6 +26,10 @@ const NHA_PHO = {
     { question: "tiem_nang", answer: "ở hoặc cho thuê" },
     { question: "tien_ich_gan", answer: "gần chợ An Đông, trường Hùng Vương" },
     { question: "hien_trang", answer: "nhà mới sửa 2024" },
+    // 17/09/2026: kiến thức thêm (AI đọc / chủ nhà nói lệch câu hỏi) → dòng "📝 Thêm", cũ trước, không lặp.
+    { question: "bo_sung", answer: "gần chợ bình tây" },
+    { question: "bo_sung", answer: "gần chợ Bình Tây" },
+    { question: "bo_sung", answer: "khu an ninh" },
   ],
   diem: 82, thieu: ["vài tấm ảnh (nhà, sổ, hẻm — ảnh nào cũng được)"], soAnh: 0,
 };
@@ -96,6 +100,7 @@ la("dòng 1 câu mở (KHÔNG kèm điểm), dòng 2 TIÊU ĐỀ, dòng 3 địa
   /^📋 Em đăng tin như vầy nha anh:$/.test(dongNha[0]) && dongNha[1] === tdNha && /^📍 Hẻm 5m Nguyễn Trãi/.test(dongNha[2]) && /^💰 /.test(dongNha[3]),
   dongNha.slice(0, 4).join(" | "));
 la("giá có '(còn thương lượng)' khi cột negotiable = true", /^💰 7 tỷ 2 \(còn thương lượng\)$/.test(dongNha[3]), dongNha[3]);
+la("kiến thức thêm: dòng '📝 Thêm' gom mọi fact bo_sung, cũ trước, không lặp (17/09)", dongNha.some((d) => d === "📝 Thêm: khu an ninh · gần chợ Bình Tây"), dongNha.join(" | "));
 la("có đủ khối thông số: diện tích, kết cấu, đường vào, hướng, pháp lý",
   /📐 Diện tích: 60m² · ngang 4m x dài 15m/.test(nha) && /🏗 Kết cấu: trệt \+ 2 lầu · 3 phòng ngủ · 2 WC/.test(nha) &&
   /🛣 Đường vào: hẻm xe hơi 5m/.test(nha) && /🧭 Hướng: Đông Nam/.test(nha) && /📜 Pháp lý: sổ hồng riêng, hoàn công/.test(nha), nha);

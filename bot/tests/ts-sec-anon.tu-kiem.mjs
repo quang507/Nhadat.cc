@@ -58,6 +58,9 @@ function dungServer(canh) {
 
       if (bang.startsWith("rpc/")) {
         const ten = bang.slice(4);
+        // 15/09: số NMG — cảnh "khong-nmg" trả 0 (view rỗng là đúng), cảnh siết quá tay trả 3
+        // (có NMG mà view rỗng → phải hỏng).
+        if (ten === "so_nmg_cong_khai") return json(200, canh === "khong-nmg" ? 0 : 3);
         return RPC_KHOA.includes(ten) ? json(403, TU_CHOI) : json(200, {});
       }
       if (req.method === "POST" || req.method === "PATCH" || req.method === "DELETE") {
@@ -69,7 +72,7 @@ function dungServer(canh) {
       }
       if (bang === "agents_public") {
         // Cảnh 4: view trả rỗng — đúng kiểu hỏng của 27/08.
-        return json(200, canh === "siet-qua-tay" ? [] : [{ id: 1 }, { id: 2 }, { id: 3 }]);
+        return json(200, canh === "siet-qua-tay" || canh === "khong-nmg" ? [] : [{ id: 1 }, { id: 2 }, { id: 3 }]);
       }
       if (["projects", "listing_facts", "listing_photos_v"].includes(bang)) return json(200, []);
       if (NOI_BO.includes(bang)) {
@@ -101,7 +104,8 @@ const CANH = [
   ["khoe",         0, "DB khoẻ, RLS đúng → phải ĐẠT"],
   ["rls-thung",    1, "bảng nội bộ ra dòng → phải HỎNG"],
   ["proxy",        2, "403 chữ trần từ proxy → phải báo KHÔNG TỚI ĐƯỢC, không phải đạt"],
-  ["siet-qua-tay", 1, "agents_public rỗng → phải HỎNG (lỗi /moi-gioi)"],
+  ["siet-qua-tay", 1, "agents_public rỗng mà DB có 3 NMG → phải HỎNG (lỗi /moi-gioi)"],
+  ["khong-nmg",    0, "agents_public rỗng và DB có 0 NMG (sau xoá hàng loạt) → phải ĐẠT"],
 ];
 
 let hong = 0;

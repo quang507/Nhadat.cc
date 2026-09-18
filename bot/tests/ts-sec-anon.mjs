@@ -158,11 +158,18 @@ for (const ten of [
 // bộ kiểm bảo mật chỉ kiểm chiều "chặn" sẽ báo xanh rờn khi web chết sạch.
 {
   const r = await goi("agents_public?select=*");
+  // 15/09/2026: tín hiệu ĐỘC LẬP — `so_nmg_cong_khai()` (20260915c) trả SỐ nhà môi giới,
+  // mở cho anon. Sau lệnh xoá hàng loạt (FR-210) DB không còn NMG nào, view rỗng là
+  // đúng cảnh dù kho có tin của tài khoản thử (CCRB); bản trước coi đó là siết quá tay
+  // và CI đỏ 6 lượt liền. Rỗng mà số NMG > 0 mới là lỗi 27/08.
+  const nmg = await goi("rpc/so_nmg_cong_khai", { method: "POST", than: {} });
+  const soNmg = nmg.status === 200 && typeof nmg.body === "number" ? nmg.body : null;
   if (r.status === 200 && Array.isArray(r.body) && r.body.length > 0) ok(`agents_public: anon đọc được ${r.body.length} NMG`);
+  else if (r.status === 200 && soNmg === 0) console.log("• agents_public rỗng và DB có 0 NMG (so_nmg_cong_khai) → đúng cảnh, không phải siết quá tay.");
   // Rỗng khi KHO CŨNG TRỐNG là đúng cảnh: không có tin thì cũng chưa có nhà môi
   // giới nào để khoe. Lỗi 27/08 là cảnh khác hẳn — kho đầy tin mà view vẫn rỗng.
   else if (r.status === 200 && khoTrong) console.log("• agents_public rỗng, nhưng kho tin cũng trống → đúng cảnh DB mới dọn, không phải siết quá tay.");
-  else if (r.status === 200) ko("agents_public: anon đọc ra RỖNG", "đây ĐÚNG lỗi làm /moi-gioi trắng 27/08→04/09");
+  else if (r.status === 200) ko("agents_public: anon đọc ra RỖNG", `đây ĐÚNG lỗi làm /moi-gioi trắng 27/08→04/09 (DB có ${soNmg ?? "?"} NMG)`);
   else ko("agents_public: anon bị chặn", `siết quá tay — HTTP ${r.status} · ${String(r.tho).slice(0, 150)}`);
 }
 for (const bang of ["projects", "listing_facts", "listing_photos_v"]) {

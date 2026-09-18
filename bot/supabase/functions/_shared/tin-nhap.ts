@@ -157,7 +157,11 @@ export function soanTinNhap(t: ThamSoNhap): string {
   const thue = l.deal === "cho_thue";
   const dong: string[] = [];
   const them = (icon: string, ten: string, phan: Array<string | null | undefined | false>) => {
-    const p = phan.filter((x): x is string => !!x && String(x).trim().length > 0);
+    // Chủ nhà nhắn "để ở hoặc cho thuê đều được em" → tin rao không được in
+    // "Phù hợp: … đều được em" (lượt bắn 12/09). Bỏ tiểu từ chat ở đuôi.
+    const p = phan.filter((x): x is string => !!x && String(x).trim().length > 0)
+      .map((x) => String(x).replace(/(?:[\s,]+(?:em|anh|chị|nha|nhé|nhe|nhen|ạ|luôn|đó|á|nghen|thôi))+\s*[.!]*$/iu, "").trim())
+      .filter(Boolean);
     if (p.length) dong.push(`${icon} ${ten}: ${p.join(" · ")}`);
   };
 
@@ -251,6 +255,14 @@ export function soanTinNhap(t: ThamSoNhap): string {
     ]);
   }
   them("🛋", "Nội thất", [l.furnishing ?? fact("noi_that"), nhan("hiện:", fact("hien_trang_su_dung"))]);
+  // 17/09/2026 (chủ dự án): "các trường mà khách nói bổ sung sẽ ghi vào mô tả" — mọi fact
+  // `bo_sung` (AI đọc thêm hay chủ nhà nói lệch câu hỏi) vào một dòng, cũ trước, không lặp.
+  const boSung: string[] = [];
+  for (const f of [...facts].reverse()) {
+    const a = (f.question === "bo_sung" ? f.answer : null)?.replace(/\s+/g, " ").trim();
+    if (a && !boSung.some((x) => boDau(x) === boDau(a))) boSung.push(a);
+  }
+  them("📝", "Thêm", boSung);
   if (thue) {
     them("📝", "Điều kiện thuê", [
       fact("tien_coc"),

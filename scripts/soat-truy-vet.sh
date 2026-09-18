@@ -180,7 +180,8 @@ fi
 # phải giữ phép soát này, vì schema.sql là bản duy nhất để dựng lại từ số không.
 # (Phép soát bảng ↔ BANG của sao-luu.mjs thì bỏ cùng sao lưu.) Bắt 08/09/2026:
 # `20260907h` merge mà schema.sql không có `diem_tin` — repo tụt sau DB.
-# Chỉ soi tên HÀM; hàm migration sau đã `drop function` thì bỏ qua.
+# Chỉ soi tên HÀM; hàm migration sau đã `drop function` thì bỏ qua. Phép so NỘI DUNG
+# (md5 từng thân hàm schema.sql ↔ DB) nằm ở soat-migration.mjs — cổng CI thứ 7 (13/09/2026).
 ham_mig=$(grep -rhoiE 'create or replace function +(public\.)?[a-z_][a-z0-9_]*' \
   bot/supabase/migrations/*.sql 2>/dev/null \
   | sed -E 's/.*[[:space:]]//; s/^public\.//' | grep -vx 'public' | sort -u)

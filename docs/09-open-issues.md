@@ -16,7 +16,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-21 | Vai người rao 5 loại (CĐT/sàn/NMG/lướt sóng/chủ nhà) + phí riêng cho CĐT — mở rộng nhị phân CCRB/NMG? | Trung bình | BR-05, OPEN-28 |
 | OPEN-24 | `pg_net` mở cho `anon` (mồi SSRF), REVOKE từ vai `postgres` là no-op — gác cửa cấu hình + ticket Supabase? | Cao | NFR-06, SRS-3.9 |
 | OPEN-26 | 🟡 **CHỐT MỘT PHẦN 27/08** — hạng ẩn khỏi web, chỉ hiện `/admin`; ngưỡng Đồng/Bạc/Vàng và quyền lợi mỗi hạng vẫn [giả định BA] | Trung bình | FR-155, OPEN-20 |
-| OPEN-27 | 🟡 **CHỐT MỘT PHẦN 03/09** — địa bàn = Sài Gòn phường mới + Long An, khởi điểm Quận 5 cũ (FR-174 đợt 1); còn: tên hiển thị, lưu DB, mã tin, thứ tự mở | Cao | FR-118, FR-174, BR-01 |
+| OPEN-27 | ✅ **CHỐT 15/09** — nửa đầu 03/09: địa bàn = Sài Gòn phường mới + Long An, khởi điểm Quận 5 cũ (FR-174 đợt 1); nửa sau 15/09: DB lưu TÊN PHƯỜNG MỚI (`wards`, FR-209), quận/mã tin giữ tên cũ; còn thứ tự mở | Cao | FR-118, FR-174, BR-01 |
 | OPEN-28 | 🟡 **CHỐT MỘT PHẦN 02/09** — nhãn CCRB/NMG gán lúc mở hồ sơ từ chat; còn: chính chủ rao tin thứ 3 có tự lật sang NMG (FR-160) và phí có đổi theo? | Cao | FR-160, BR-05 |
 | OPEN-31 | Bậc nguồn: admin cầm sổ đỏ mà chủ nhà nhớ nhầm thì ai thắng? (FR-164 khoá cột sau `chu_xac_nhan`) | Trung bình | FR-164, FR-156 |
 | OPEN-33 | Webhook Zalo không kiểm chữ ký vì Vault thiếu `ZALO_APP_SECRET`/`ZALO_APP_ID` — ai cũng giả được tin đến | Cao | FR-167, SRS-4.4 |
@@ -117,7 +117,13 @@ phường, 16 phường ở form admin, từ điển lóng, 15 toạ độ `lib/
 tên cũ hay mới, bên nào là bản dịch (bảng `wards` — FR-118); (c) mã tin `BDS-Q5-####` giữ làm ID vô
 nghĩa hay đổi; (d) thứ tự mở cụm/huyện; (e) "các phường mới" là địa bàn hay tên hiển thị.
 **Khuyến nghị BA**: hiện cả hai tên; bảng `wards` một nguồn (mã, tên mới/cũ, quận cũ, tỉnh, toạ độ);
-giữ mã tin; mở Long An theo MỘT huyện có hàng thật → FR-174 đợt 2. **Chờ**: chủ dự án chốt (a)…(e).
+giữ mã tin; mở Long An theo MỘT huyện có hàng thật → FR-174 đợt 2.
+**✅ Chốt nửa sau 15/09/2026** (chủ dự án, sau lượt Zalo thật "sao nó cứ mặc định là quận 5"): "lấy nguồn công
+khai đi, bot hỏi xác nhận trước khi ghi, chốt OPEN-27 nửa sau vậy lấy tên mới cho nó dùng được Nominatim"
+→ (b) DB lưu TÊN MỚI ở `listings.ward`, `wards` (`20260915a`) là bảng dịch mới ↔ quận cũ; (a) "tên cũ" = quận
+trước sáp nhập, phường TP Thủ Đức lấy quận trước 2021 (Quận 2/9/Thủ Đức) vì dân vẫn gọi vậy; (c) mã tin
+giữ, đi theo quận cũ; (e) "các phường mới" là địa bàn LẪN tên lưu. Còn treo: (d) thứ tự mở cụm/huyện Long
+An. Việc: FR-209.
 
 ### OPEN-28 · Phí có đi theo phân loại tự động của FR-160 không?
 **Vấn đề**: FR-160 định "≥3 tin rao bán = môi giới", nhưng `seller_type` đồng thời là căn cứ phí

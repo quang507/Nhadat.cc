@@ -181,8 +181,11 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   `bot/supabase/migrations/DA-DOI-CHIEU.json`. Cảnh báo kêu mãi thì thành tiếng
   ồn, rồi cái thứ 53 — trôi THẬT — chìm lẫn vào đó. **Thêm dòng vào
   DA-DOI-CHIEU.json là một quyết định, không phải cách làm cổng xanh.**
-  Dựng lại từ số không vẫn KHÔNG replay được cả thư mục: nạp `schema.sql` trước,
-  rồi áp migration từ `20260902` trở đi.
+  Dựng lại từ số không: chỉ nạp `schema.sql` (+ ba file schema `so`) theo
+  `bot/README.md §Dựng lại từ số không` — KHÔNG replay thư mục migration. Câu cũ ở
+  đây ("nạp schema.sql rồi áp migration từ 20260902") lệch với README; soát 13/09
+  còn thấy 34 hàm trên DB có thân KHÁC file migration cuối cùng định nghĩa chúng
+  (bản áp qua MCP không giống file), nên replay là dựng ra hàm cũ.
   `xuat-ro-hang.mjs` xuất rổ hàng ra thứ NGƯỜI đọc được — mỗi tin một thư mục
   (`tin.md` + `anh/`) kèm `ro-hang.csv` mở thẳng Excel; nó **không phải bản sao
   lưu** (chỉ 3/31 bảng, không giữ UUID/khoá ngoại) và `manifest.json` của nó ghi
@@ -253,13 +256,18 @@ lệch bản thật ở chỗ nào thì bộ e2e đo sai ở chỗ đó.
 `xuat_schema()` sinh ra; áp migration qua MCP rồi quên sinh lại là nó lặng lẽ
 cũ đi — `20260907h` merge hôm trước mà `schema.sql` không hề có `diem_tin`,
 `can_chu_duyet`. Đúng hình lỗi OPEN-46 nhưng thiếu NGƯỢC (repo thiếu so với DB),
-nên `soat-migration.mjs` không thấy. Phép soát hàm ↔ `schema.sql` trong
-`soat-truy-vet.sh` (cổng CI "Tài liệu — truy vết ID") **vẫn giữ** sau khi bỏ
-sao lưu 11/09/2026 — không còn script sinh lại nên nó là lưới duy nhất. Migration
-tạo HÀM MỚI thì thêm tay vào `schema.sql`: chạy trên DB
-`select pg_get_functiondef('public.<hàm>'::regprocedure)` rồi dán vào đúng chỗ,
-kèm trigger nếu có (PR #104 làm vậy cho `listings_doi_ma_theo_quan_loai`). Sinh
-lại cả file thì cần khoá service_role (lệnh dưới chưa chạy thử lần nào):
+nên `soat-migration.mjs` không thấy.
+
+**Hai lưới cũ đều thủng, nay so NỘI DUNG** (review code 13/09/2026). `soat-truy-vet.sh`
+chỉ soi TÊN hàm (`create or replace` đè hàm đã có thì luôn xanh), `soat-migration.mjs`
+so MTIME (sau `git clone` mọi file cùng mtime, nhánh đỏ không bao giờ chạy) — trong
+lúc `schema.sql` mang `parse_vnd` bản TRƯỚC vá 42 ca. Nay cổng CI thứ 7 so **md5 từng
+thân hàm** `schema.sql` ↔ DB qua `ham_md5_cong_khai()` (`20260913c`, chỉ tên + md5, mở
+cho anon vì thân hàm đã công khai trong chính file này). So với DB chứ không so với
+file migration — DB là bản thật (34 hàm lệch file, xem trên). **Cổng đỏ vì schema.sql
+thì sinh lại, đừng sửa tay:** `node scripts/sinh-schema.mjs` (đọc service_role từ
+`scripts/.env`, gọi `xuat_schema()`, từ chối ghi nếu thấy chuỗi giống khoá bí mật;
+chạy thật lần đầu 13/09/2026). Lệnh curl tương đương:
 
 ```bash
 curl -s -X POST "https://tbcdpupiarkuxtntmosl.supabase.co/rest/v1/rpc/xuat_schema" \
@@ -303,6 +311,17 @@ trong bridge dùng `ghiLoi("tên chỗ", detail)`; phía web thì `instrumentati
 đã bắt sẵn mọi lỗi server chưa bắt. Thêm `catch` mà quên nối là thêm một chỗ
 hỏng im lặng.
 
+**Nhúng `listings ↔ sellers` PHẢI chỉ tên khoá ngoại** (bắt 15/09/2026). Từ
+`20260827h` bảng `sellers` có `active_listing_id → listings`, nên giữa hai bảng
+có HAI quan hệ và PostgREST từ chối `sellers(...)` trần trên select đi từ
+`listings` bằng 300 PGRST201. Ba chỗ dính mà không chỗ nào đọc `error`: hỏi bù
+(`ask-seller`) chết im 6 ngày với 313 dòng sổ lỗi ghi SAI nguyên nhân ("listing
+không tồn tại"), chốt kèo không vào `deals`, nhắc đến hạn rơi rỗng. Viết
+`sellers!listings_seller_id_fkey(...)`; `bun bot/tests/nhung-mo-ho.mjs` (trong
+`test:bot`) soi mã nguồn chặn tái phát — mock e2e KHÔNG mô phỏng PGRST201 nên
+e2e xanh không chứng minh được gì ở đây. Và một `catch`/`maybeSingle` không đọc
+`error` là một chỗ hỏng im: 313 lần còi kêu "1 lỗi" mà không ai truy.
+
 **Bốn bucket Storage, đừng lẫn** (`masterdb-raw` thêm 07/09, `20260907b`):
 
 | Bucket | Chứa gì | Ai vào được |
@@ -340,8 +359,8 @@ nào chưa đẩy `masterDB/` lên thì lưới an toàn vẫn y như cũ.
 khoá `listings_seller_id_fkey` là `NO ACTION` nên có xoá cũng bị chặn. Mốc sao Bắc
 Đẩu nay đếm từ số 0 thật (`docs/10 §10.9`), không còn lẫn lượt thử của nhóm làm.
 
-**Chú thích bảng nằm TRONG DB, không nằm trong docs** (`20260906b`). 31/31 bảng
-và 17/17 view đã có `comment on`, cộng 69 chú thích cột; tiền tố `[RỔ HÀNG]`
+**Chú thích bảng nằm TRONG DB, không nằm trong docs** (`20260906b`). 37/37 bảng (soát 18/09: `tien_ich` từng thiếu, vá `20260918a`)
+và 19/19 view (public, soát 18/09) đã có `comment on`, cộng 69 chú thích cột; tiền tố `[RỔ HÀNG]`
 `[NGƯỜI & HỘI THOẠI]` `[BOT & HÀNG ĐỢI]` `[CTV]` `[HỆ THỐNG]` để Table Editor
 xếp A→Z mà mắt vẫn gom được theo việc. Thêm bảng hay cột mới thì **thêm
 `comment on` trong cùng migration** — chú thích ở chỗ khác là chú thích sẽ lệch.

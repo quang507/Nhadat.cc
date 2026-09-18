@@ -48,6 +48,17 @@ la("thiếu model trong tham số: theo model mặc định (opus → giữ)",
   locThamSo(p) === p ? ok("không có effort: giữ nguyên object, không chép thừa") : ko("không có effort", "bị chép lại");
 }
 
+// 14/09/2026: `_khuon_du_phong` (khuôn JSON chỉ cho lưới Groq) không bao giờ được tới SDK Anthropic.
+{
+  const p = { model: "claude-haiku-4-5-20251001", messages: [], output_config: { effort: "low" }, _khuon_du_phong: { type: "json_schema" } };
+  const ra = locThamSo(p);
+  !("_khuon_du_phong" in ra) && !ra.output_config ? ok("gỡ _khuon_du_phong + effort (Haiku) trước khi gửi Anthropic")
+    : ko("gỡ _khuon_du_phong", JSON.stringify(ra));
+  const p2 = { model: "claude-sonnet-5", messages: [], _khuon_du_phong: { type: "json_schema" } };
+  !("_khuon_du_phong" in locThamSo(p2)) ? ok("gỡ _khuon_du_phong cả khi không có effort")
+    : ko("gỡ _khuon_du_phong (không effort)", JSON.stringify(locThamSo(p2)));
+}
+
 // Nhận diện model: đừng để "claude-5-haiku" mai kia lọt nhầm.
 [["claude-opus-5", true], ["claude-sonnet-5", true], ["claude-fable-5-1", true],
  ["claude-haiku-4-5-20251001", false], ["qwen/qwen3.8-27b", false], ["", false],

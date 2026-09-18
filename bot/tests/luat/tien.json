@@ -38,6 +38,10 @@
     { "cau": "75 triệu/m2",       "mong": null,       "vi_sao": "giá MỖI m² — 42 ca: căn 50m2 từng lên giá 75 triệu" },
     { "cau": "75tr/m2",           "mong": null },
     { "cau": "120 triệu một m2",  "mong": null },
-    { "cau": "5 tỷ 1 mặt tiền",   "mong": 5000000000, "vi_sao": "'1 mặt tiền' không phải phần lẻ, cũng không phải giá mỗi m²" }
+    { "cau": "5 tỷ 1 mặt tiền",   "mong": 5000000000, "vi_sao": "'1 mặt tiền' không phải phần lẻ, cũng không phải giá mỗi m²" },
+    { "cau": "nhà 1t2l",          "mong": null,       "vi_sao": "13/09 review: 1 trệt 2 lầu, không phải 1,2 tỷ" },
+    { "cau": "1t3l",              "mong": null,       "vi_sao": "t kẹp giữa mà số sau dính chữ l — kết cấu" },
+    { "cau": "nhà 1t 2l",         "mong": null,       "vi_sao": "t trơ trọi rồi '<số> l' — vẫn là trệt/lầu" },
+    { "cau": "nhà 1t2l giá 5 tỷ", "mong": 5000000000, "vi_sao": "kết cấu viết tắt đứng trước giá thật" }
   ]
 }
