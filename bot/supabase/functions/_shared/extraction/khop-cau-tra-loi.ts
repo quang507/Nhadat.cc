@@ -659,7 +659,19 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   // Vị trí: cần dấu hiệu địa chỉ thật (đường / hẻm / số nhà / mốc), KHÔNG chỉ vì
   // có con số — "lên thổ cư 300m2", "thời hạn đến 2060" từng đi vào địa chỉ.
   if (question === "vi_tri") {
+    // 18/09/2026 (review code): câu VỪA tả đường VỪA có tên đường — "hxh 6m Hùng
+    // Vương q5", "hẻm xe hơi 5m Nguyễn Trãi" — bị `laMoTaDuong` đánh rớt vì nó nổ
+    // với BẤT KỲ "<số>m" nào, mà bảng miễn trừ chỉ có "hem <số>"/"so <số>"/"/". Nên
+    // "hẻm 4m đường Trần Bình Trọng" thì khớp còn "hxh 6m Hùng Vương" thì lệch —
+    // lệch nhau chỉ vì viết "hxh" thay vì "hẻm", đúng lối khách Quận 5 hay viết.
+    // `bocViTriRao` là chỗ DUY NHẤT biết phân biệt "có tên đường" với "chỉ tả
+    // đường" (nó trả null cho "hẻm xe hơi 4m"), nên hỏi nó thay vì đắp thêm một
+    // mẫu thứ hai rồi hai mẫu trôi khỏi nhau.
+    if (bocViTriRao(text.trim())) return ketQua("khop");
     const coDiaChi = /\b(duong|hem|hxh|so nha|dia chi|ngo|kdc|khu|toa|block|thap|chung cu|cu xa|du an|kp|ap|xa|phuong|quan|gan|doi dien|nga|cho|truong|benh vien|cong vien|lo|mat tien|mt|pho)\b/.test(kd) ||
+      // "số 123 Hồng Bàng": số nhà TRẦN sau chữ "số", không kèm phường/quận. Bảng
+      // trên chỉ có cụm "so nha", còn nhánh `^\d` đòi câu MỞ ĐẦU bằng chữ số.
+      /\bso\s*\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)*\s+[a-z]{2,}/.test(kd) ||
       /\b(?:can|lo|nen|shop)\s*(?:so\s*)?\d+[a-z]?(?:[.\-\/]\d+)?\s+(?:o|tai|trong|thuoc|cua)\s+[a-z]{2,}/.test(kd) ||
       /^\s*\d+[a-z]?(?:\/\d+[a-z]?)*\s+[a-z]{2,}/.test(kd);
     // "đường bê tông 5m xe tải vào được", "đường 12m" là ĐƯỜNG VÀO, không phải địa chỉ.
@@ -754,6 +766,13 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // Câu rao dài (FR-177 n): các ý đời thường đi kèm không có dấu phẩy.
   ["cach_mat_tien", /\bcach\s*(?:mat tien|duong lon|duong chinh|mt)\s*(?:khoang|tam)?\s*(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
   ["hem_thong", /\bhem\s*(thong|cut)\b/, (m) => `hẻm ${m[1] === "cut" ? "cụt" : "thông"}`],
+  // 18/09/2026 (review code): mảnh "hẻm xe hơi 5m Nguyễn Trãi" mang HAI dữ kiện —
+  // bề rộng hẻm VÀ tên đường. `nhanDienFact` nay trả ĐỊA CHỈ cho mảnh đó (trước
+  // bản này nó nuốt luôn câu trả lời địa chỉ), nên bề rộng phải được nhặt lại ở
+  // đây, không thì câu rao đủ mất mất 5m. `them()` chỉ thêm khi ô còn trống nên
+  // mảnh "hẻm 4m" đi đường chính vẫn thắng. "60m2" không dính: sau "m" là chữ số
+  // nên không có ranh giới từ.
+  ["do_rong_hem", /\b(?:hem|hxh)\b[^,.;\n]{0,24}?\b(\d{1,2}(?:[.,]\d+)?)\s*m\b/, (m) => `hẻm ${m[1]}m`],
   ["ngap_nuoc", /\b((?:khong|ko|k)\s*(?:bi\s*)?ngap|ngap nuoc|hay ngap|bi ngap)\b/, (m) => /khong|ko|k\s/.test(m[1]) ? "không ngập" : "có ngập"],
   ["ly_do_ban", /\b(dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san|tra no|ve que|doi cong tac|mua cho khac)\b/, (m) => m[1]],
   // 13/09/2026: "tầng 15 view sông" — mảnh đó ra `tang`, view rơi mất. Cắt từ chữ gốc.
@@ -856,7 +875,9 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
   for (const [q, re, lay] of FACT_PHU) {
     // Lý do bán giữ DẤU ("cần tiền", không phải "can tien"): khớp trên bản bỏ dấu
     // giữ độ dài rồi cắt đúng đoạn chữ gốc.
-    if (q === "ly_do_ban" || q === "view" || q === "ket_cau") {
+    // `do_rong_hem` cũng cắt từ câu GỐC: giữ nguyên cụm "hẻm xe hơi 5m" thay vì
+    // dựng lại thành "hẻm 5m" — chữ "xe hơi" là dữ kiện thật của tin.
+    if (q === "ly_do_ban" || q === "view" || q === "ket_cau" || q === "do_rong_hem") {
       const mm = re.exec(kdD);
       if (mm) them({ question: q, answer: text.slice(mm.index, mm.index + mm[0].length).trim() });
       continue;
@@ -1000,6 +1021,16 @@ export function nhanDienFact(text: string): NhanDien | null {
       (m = new RegExp(`\\b(?:hem|hem rong|hem truoc nha)\\s*(?:rong\\s*)?(?:la\\s*)?(\\d{1,2}(?:[.,]\\d+)?)\\s*(?=$|[,.;!?]|\\s+(?:xe\\b|o to|oto|thong|cut|nha|em|anh|chi|a\\b))`).exec(kd)) ||
       (m = new RegExp(`${SO}\\s*(?:m|met)\\s*hem\\b`).exec(kd))) {
     return { question: "do_rong_hem", answer: `hẻm ${m[1]}m` };
+  }
+  // 18/09/2026 (review code): "hẻm xe hơi 12 Trần Bình Trọng" là ĐỊA CHỈ chứ không
+  // phải bề rộng hẻm — nhánh dưới chỉ biết cụm tả đường nên nó nuốt luôn câu trả
+  // lời địa chỉ, để ô vị trí trống và câu hỏi treo lại (bot hỏi địa chỉ vòng vòng).
+  // `bocViTriRao` phân biệt được: có TÊN đường đi sau thì trả cụm, chỉ tả đường
+  // ("hẻm xe hơi 4m", "hẻm xe hơi thông") thì trả null — nên nó đứng gác ngay
+  // trước, không đụng vào các nhánh bề rộng ở trên ("hẻm 4m" vẫn là bề rộng).
+  if (/\b(?:hem|hxh)\b/.test(kd)) {
+    const viTri = bocViTriRao(goc);
+    if (viTri) return { question: "vi_tri", answer: viTri };
   }
   if ((m = /\b(hem xe hoi|hem oto|hem o to|xe hoi (?:vao|toi|tới) (?:duoc|tan|toi)|hem xe tai)\b(?:\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:m|met)\b)?/.exec(kdD))) {
     // 13/09/2026: cắt đúng cụm ("hẻm xe hơi 5m"), không lấy cả câu rao làm đáp án
@@ -1182,8 +1213,17 @@ export function chonCauKe(vuaNoi: string[], conThieu: CauThieu[]): string | unde
 // ── FR-177 c: chủ nhà GẬT bản nháp? (AGREE_RULES, bản tiền định) ─────────────
 // Gật = câu chỉ gồm từ đồng ý + tiểu từ, không có từ phủ định/sửa; hoặc emoji
 // vui, like, tim. "ok nhưng sửa giá" là KHÔNG gật — sửa đi trước.
-const TU_GAT = new Set(["da","vang","ok","oke","okie","okay","u","uh","um","duoc","dc","chuan","dung","dong","y","chot","len","dang","vay","tot","hay","dep","on","nhat","tri","xin","cam","on","yes","yep"]);
-const TU_DEM = new Set(["nha","nhe","nhen","em","e","a","roi","do","day","luon","di","thoi","ha","rat","qua","lam","cu","the","nhu","tin","vay","cho","chi","anh","minh","toi","ne","het","cai","nay","ma"]);
+// 18/09/2026 (review code): bảng này quyết định tin CÓ LÊN KỆ KHÔNG (FR-177 d), mà
+// `laDongY` đòi MỌI chữ trong câu phải nằm trong một trong hai bảng — sót một chữ
+// là cả câu gật thành không-gật. Khi đó `chat-reply` rơi xuống nhánh "chủ nhà sửa
+// bản nháp": ghi lời gật thành fact `bo_sung`, GỬI LẠI nguyên bản nháp, câu duyệt
+// treo nguyên. Chủ nhà gật, nhận lại bản nháp, gật tiếp — vòng không lối ra.
+// Bắn 25 câu gật tự nhiên: sót 7. Bảy chữ thêm ở đây là bảy chữ đó.
+// "duyet" đáng kể nhất: chính là chữ trong tên câu hỏi (`duyet_tin`).
+// KHÔNG thêm "dat" (đụng "đất" — "đất đẹp" sẽ thành lời duyệt) và không thêm "roi"
+// (tiểu từ quá thường; "rồi đó" vẫn cố ý không tính là gật).
+const TU_GAT = new Set(["da","vang","ok","oke","okie","okay","u","uh","um","duoc","dc","chuan","dung","dong","y","chot","len","dang","vay","tot","hay","dep","on","nhat","tri","xin","cam","on","yes","yep","duyet","gat","xong","ngon","ung","thich"]);
+const TU_DEM = new Set(["nha","nhe","nhen","em","e","a","roi","do","day","luon","di","thoi","ha","rat","qua","lam","cu","the","nhu","tin","vay","cho","chi","anh","minh","toi","ne","het","cai","nay","ma","giup","thay"]);
 const EMOJI_VUI = /(👍|❤️|❤|😍|🥰|😊|🙂|👌|🔥|💯|\[sticker|\[khach tha tim|\[thả tim|\[like)/;
 export function laDongY(text: string): boolean {
   const goc = text.trim();
