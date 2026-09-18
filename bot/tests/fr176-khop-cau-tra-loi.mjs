@@ -47,6 +47,23 @@ const CA = [
   ["phuong", "Bàn Cờ", "khop"],
   ["phuong", "phường 5 nha, anh bận", "khop"],
   ["vi_tri", "4m", "lech"],
+  // 18/09/2026 (review code): hỏi ĐỊA CHỈ, chủ nhà đáp bằng địa chỉ THẬT mà câu
+  // vừa tả đường vừa nêu tên đường — trước bản này bị ghi vào ô ĐỘ RỘNG HẺM, ô vị
+  // trí để trống, câu hỏi treo lại nên bot hỏi địa chỉ vòng vòng. "hxh 6m Hùng
+  // Vương" và "hẻm 4m đường Trần Bình Trọng" từng ra hai kết quả khác nhau chỉ vì
+  // một bên viết "hxh" còn một bên viết "hẻm".
+  ["vi_tri", "hẻm xe hơi 12 Trần Bình Trọng", "khop"],
+  ["vi_tri", "hẻm xe hơi 5m Nguyễn Trãi p3 q5", "khop"],
+  ["vi_tri", "hxh 6m Hùng Vương q5", "khop"],
+  ["vi_tri", "hẻm xe tải 8m Hồng Bàng", "khop"],
+  ["vi_tri", "hẻm xe hơi Nguyễn Chí Thanh", "khop"],
+  ["vi_tri", "hẻm 4m đường Trần Bình Trọng", "khop"],
+  ["vi_tri", "số 123 Hồng Bàng", "khop"],
+  // Mặt kia của cùng một luật: KHÔNG có tên đường thì vẫn là bề rộng hẻm, không
+  // được vì bản vá trên mà nuốt luôn câu trả lời bề rộng.
+  ["do_rong_hem", "hẻm xe hơi 4m", "khop"],
+  ["do_rong_hem", "hẻm 4m", "khop"],
+  ["dien_tich", "hẻm xe hơi 4m", "lech", (k) => k.chuyenSang?.question === "do_rong_hem"],
   ["gia", "5 tỷ được không?", "hoi"],
   ["gia", "80m2", "lech"],
   ["quy_hoach", "không dính gì", "khop"],

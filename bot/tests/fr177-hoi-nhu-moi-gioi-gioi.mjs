@@ -82,10 +82,20 @@ ok("view cũ không có cột nhom → tra bảng NHOM_FACT", chonCauKe(["mat_ti
 ok("hết câu → undefined", chonCauKe(["gia"], []) === undefined);
 
 // ── laDongY ──────────────────────────────────────────────────────────────────
-for (const s of ["ok", "ok em", "được đó", "đăng đi", "ừ", "vậy đi", "chốt", "👍", "❤️", "[sticker cảm xúc]", "ok nha em, đăng luôn", "Được rồi đăng đi em", "dạ được", "oke"]) {
+// 18/09/2026 (review code): bảng TU_GAT/TU_DEM quyết định tin CÓ LÊN KỆ KHÔNG
+// (FR-177 d), mà `laDongY` đòi MỌI chữ phải nằm trong bảng — sót một chữ là câu
+// gật thành không-gật, chat-reply rơi xuống nhánh "chủ nhà sửa bản nháp": ghi lời
+// gật thành fact `bo_sung` rồi GỬI LẠI bản nháp, câu duyệt treo nguyên. Bắn 25
+// câu gật tự nhiên hồi đó sót 7; bảy ca đầu dưới đây là bảy câu đó.
+for (const s of ["ok", "ok em", "được đó", "đăng đi", "ừ", "vậy đi", "chốt", "👍", "❤️", "[sticker cảm xúc]", "ok nha em, đăng luôn", "Được rồi đăng đi em", "dạ được", "oke",
+  "duyệt đi", "duyệt", "anh duyệt", "ok anh duyệt", "gật", "đăng giúp anh nha", "ok, đăng giúp anh",
+  "xong rồi", "ngon", "anh thấy ổn", "cho đăng đi"]) {
   ok(`gật: "${s}"`, laDongY(s) === true);
 }
-for (const s of ["không, sửa giá lại", "sai rồi", "5 tỷ", "ok nhưng sửa giá", "chưa được", "thêm cái hẻm vào", "phí sao em?", "để coi", ""]) {
+// Nới bảng gật thì phải giữ chặt mặt kia: "đất" bỏ dấu là "dat" nên KHÔNG được
+// thêm nó vào TU_GAT, không thì "đất đẹp" thành lời duyệt tin.
+for (const s of ["không, sửa giá lại", "sai rồi", "5 tỷ", "ok nhưng sửa giá", "chưa được", "thêm cái hẻm vào", "phí sao em?", "để coi", "",
+  "đất đẹp", "bán đất", "không duyệt", "đăng giúp anh chưa?", "sửa lại giá"]) {
   ok(`không gật: "${s}"`, laDongY(s) === false);
 }
 
