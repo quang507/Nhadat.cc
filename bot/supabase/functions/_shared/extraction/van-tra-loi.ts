@@ -343,3 +343,24 @@ export function doiTuXung(replies: string[], xungHo: string | null | undefined):
       .replace(/cháu (gái|trai|bé|út)\b/g, "em $1")
   );
 }
+
+// ── 18/09/2026 (chủ dự án: "tắt cái mỗi câu trả lời đều khen đi, lâu lâu thì khen thôi") ──
+/** Câu có dáng lời KHEN / nhận xét căn nhà (tiền định, so trên chữ có dấu lẫn không dấu). */
+export const KHEN_RE =
+  /\b(?:rất|lắm|tiện(?! ích)|ổn định|sáng sủa|đẹp|thích|chốt nhanh|hợp lý|thuận tiện|hút khách|dễ bán|chuộng|được giá|tốt|mạnh|ngon|lý tưởng|đáng giá|khách (?:hỏi|tìm|ưa)|rat|lam|sang sua|dep|chot nhanh|hop ly|thuan tien|hut khach|de ban|chuong|ly tuong)\b/iu;
+
+/** Ba tin gần nhất của bot có câu khen chưa — có thì lượt này KHÔNG khen nữa ("lâu lâu"). */
+export function vuaKhen(botGanDay: Array<string | null | undefined>): boolean {
+  return botGanDay.slice(-3).some((b) => KHEN_RE.test(b ?? ""));
+}
+
+/**
+ * Bỏ câu KHEN khỏi tin bot, giữ câu hỏi và câu ghi nhận. Tách theo dấu chấm / xuống dòng;
+ * câu có "?" hoặc không có dáng khen thì giữ. Bỏ hết mà không còn gì thì trả nguyên văn.
+ */
+export function boCauKhen(reply: string): string {
+  const cau = reply.split(/(?<=[.!])\s+|\n+/).map((c) => c.trim()).filter(Boolean);
+  const giu = cau.filter((c) => c.includes("?") || !KHEN_RE.test(c));
+  if (!giu.length || giu.length === cau.length) return reply;
+  return giu.join(" ").replace(/^\s*[,;]\s*/, "").trim();
+}
