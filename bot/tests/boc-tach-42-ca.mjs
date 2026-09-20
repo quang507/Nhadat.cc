@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { docTien, giaTheoM2, vndThanhChu } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../supabase/functions/_shared/extraction/so-chu.ts";
 import {
-  bocViTriRao, catDapAn, cheoPhuDinh, laHoanLai, nhanDienFact, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, laCauHoiTron, tuXungTuCau, vungPhuDinh,
+  bocViTriRao, catDapAn, cheoPhuDinh, gonLoiSua, laHoanLai, nhanDienFact, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, laCauHoiTron, tuXungTuCau, vungPhuDinh,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { vungNgoai } from "../supabase/functions/_shared/dia_ban.ts";
 
@@ -290,6 +290,25 @@ for (const q of ["gap", "thang_may", "tang", "gia", "phap_ly"])
   ok(`phanLoai(${q}) câu hỏi trọn → không khớp`, phanLoaiCauTraLoi(q, "bên bạn có cần mình gửi hình không hay sao").loai !== "khop", JSON.stringify(phanLoaiCauTraLoi(q, "bên bạn có cần mình gửi hình không hay sao")));
 ok("laCauHoiTron 'không dính gì' → false", laCauHoiTron("không dính gì") === false);
 ok("laCauHoiTron 'phí bên em sao?' → true", laCauHoiTron("phí bên em sao?") === true);
+// 20/09/2026 (bắn thật mau-y-A, môi giới gõ không dấu): câu hỏi phí không dấu từng vào ô bổ sung.
+ok("laCauHoiTron 'phi ben minh sao, co bat ky doc quyen ko' → true", laCauHoiTron("phi ben minh sao, co bat ky doc quyen ko") === true);
+ok("laCauHoiTron 'ben em co bat ky doc quyen ko' → true", laCauHoiTron("ben em co bat ky doc quyen ko") === true);
+ok("laCauHoiTron 'so hong rieng hoan cong du' → false", laCauHoiTron("so hong rieng hoan cong du") === false);
+// 20/09/2026 (bắn thật mau-y-B): "phường 17 nhé, đường Phan Văn Trị" — sau khi bóc lời sửa phường, đáp án
+// vị trí còn "nhé, đường Phan Văn Trị" → street = "nhé".
+ok("catDapAn vi_tri bỏ tiểu từ đầu: 'nhé, đường Phan Văn Trị' → 'đường Phan Văn Trị'", catDapAn("vi_tri", "nhé, đường Phan Văn Trị") === "đường Phan Văn Trị", catDapAn("vi_tri", "nhé, đường Phan Văn Trị"));
+ok("catDapAn vi_tri giữ nguyên câu sạch", catDapAn("vi_tri", "hẻm 4m Nguyễn Trãi") === "hẻm 4m Nguyễn Trãi");
+// 20/09/2026 (bắn thật mau-y-D): lời sửa kích thước.
+{
+  const s1 = gonLoiSua("à sửa lại, dài 16 chứ không phải 15");
+  ok("gonLoiSua: là lời sửa, dài 16, không ngang", s1.laSua && s1.dai === "16" && s1.ngang === null, JSON.stringify(s1));
+  const s2 = gonLoiSua("sửa lại ngang 5 dài 20 nhé");
+  ok("gonLoiSua: ngang 5 dài 20", s2.laSua && s2.ngang === "5" && s2.dai === "20", JSON.stringify(s2));
+  const s3 = gonLoiSua("nhà nở hậu chút");
+  ok("gonLoiSua: câu thường không phải lời sửa", !s3.laSua && s3.con === "nhà nở hậu chút", JSON.stringify(s3));
+  const s4 = gonLoiSua("sai rồi em, hướng Tây Nam chứ không phải Đông Nam");
+  ok("gonLoiSua: bỏ vỏ, còn 'hướng Tây Nam'", s4.laSua && /^hướng Tây Nam$/i.test(s4.con), JSON.stringify(s4));
+}
 ok("phanLoai(gap) 'không gấp' vẫn khớp", phanLoaiCauTraLoi("gap", "không gấp, được giá thì bán").loai === "khop", JSON.stringify(phanLoaiCauTraLoi("gap", "không gấp, được giá thì bán")));
 ok("phanLoai(thang_may) 'có' vẫn khớp", phanLoaiCauTraLoi("thang_may", "có").loai === "khop", JSON.stringify(phanLoaiCauTraLoi("thang_may", "có")));
 for (const [vao, mong] of [

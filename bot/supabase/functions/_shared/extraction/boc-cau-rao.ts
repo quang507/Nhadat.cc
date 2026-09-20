@@ -96,7 +96,10 @@ export function dienTichCauRao(kd: string): number | null {
 
 /** "5x20", "4.2m x 18m" → ngang × dài (m²); null nếu không có. Chỉ để NHÂN giá/m². */
 export function ngangNhanDai(kd: string): number | null {
-  const m = /(\d{1,2}(?:[.,]\d+)?)\s*m?\s*x\s*(\d{1,3}(?:[.,]\d+)?)\s*m?(?![\d²])/.exec(kd);
+  // 20/09/2026 (bắn thật mau-y-D): "ngang 4 dài 15, giá 250 triệu/m2" — không có "x" nên không
+  // nhân được, tin mang giá "250 triệu/m2" mà price_vnd trống. Nhận cả dạng chữ ngang/dài.
+  const m = /(\d{1,2}(?:[.,]\d+)?)\s*m?\s*x\s*(\d{1,3}(?:[.,]\d+)?)\s*m?(?![\d²])/.exec(kd) ??
+    /\b(?:ngang|rong|mat tien|mt)\s*(?:la\s*)?(\d{1,2}(?:[.,]\d+)?)\s*(?:m|met)?\s*,?\s*(?:con\s+|va\s+)?(?:dai|sau|doc)\s*(?:la\s*)?(\d{1,3}(?:[.,]\d+)?)\s*(?:m|met)?(?![\d²])/.exec(kd);
   if (!m) return null;
   const a = Number(m[1].replace(",", ".")), b = Number(m[2].replace(",", "."));
   return a >= 1.5 && a <= 40 && b >= 3 && b <= 150 ? Math.round(a * b * 10) / 10 : null;

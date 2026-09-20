@@ -46,6 +46,7 @@ Hiểu theo NGHĨA, không cần đúng chữ "gần". Ví dụ:
 - "nhà nào quanh Ehome 3" → du_an "Ehome 3"
 - "gần Aeon Bình Tân" → sieu_thi "Aeon Bình Tân"
 - "gần bv Chợ Rẫy tầm 2km" → benh_vien "Chợ Rẫy", 2000
+- "khu yên tĩnh gần chợ xe hơi vào được nhà" → cho, ten null ("xe hơi vào được nhà" tả căn nhà, không phải tên chợ)
 Loại: benh_vien (bệnh viện, trạm y tế), truong_hoc, cho, sieu_thi (siêu thị, trung tâm thương mại, Coopmart, Aeon, Bách Hóa Xanh…), cong_vien, du_an (khu căn hộ / khu đô thị có tên), dia_diem (nơi có tên khác: toà nhà văn phòng, công ty, sân bay, bến xe, nhà thờ, chùa…).
 Bán kính: khách nói số thì đổi ra mét (1km = 1000, 2 cây số = 2000, 5 phút đi bộ ≈ 400, 10 phút chạy xe ≈ 3000). "sát / kế bên / đối diện" ≈ 300. "đi bộ được" ≈ 600. Chỉ nói "gần" thì null.
 KHÔNG phải điều kiện vị trí (muon_gan = false):
@@ -66,7 +67,7 @@ const CAP_RE: Record<NonNullable<GanBocLLM["cap_truong"]>, string> = {
 /** Kết quả model → điều kiện lọc. Không đủ để lọc (dự án/địa danh mà không tên) → null. */
 export function thanhGan(k: GanBocLLM): GanTienIch | null {
   if (!k.muon_gan || !k.loai) return null;
-  const ten = k.ten?.trim() || null;
+  const ten = lamSachTenMoc(k.loai, k.ten);
   if ((k.loai === "du_an" || k.loai === "dia_diem") && !ten) return null;
   const tenKd = ten ? kdTen(ten) : "";
   const ten_re = tenKd
@@ -74,6 +75,23 @@ export function thanhGan(k: GanBocLLM): GanTienIch | null {
     : k.loai === "truong_hoc" && k.cap_truong ? CAP_RE[k.cap_truong] : null;
   const m = Math.min(BAN_KINH_TOI_DA_M, Math.max(100, Math.round(k.ban_kinh_m ?? BAN_KINH_GAN_M)));
   return { loai: k.loai, ten, ten_re, m };
+}
+
+// Chữ chỉ LOẠI đứng đầu tên ("chợ Bình Tây" → "Bình Tây") và tên mốc là chữ tả CĂN NHÀ chứ không
+// phải nơi chốn. 20/09/2026 (bắn thật mau-y-C): "gần chợ xe hơi vào được nhà" → model trả tên
+// "chợ xe hơi" → hồ sơ in "chợ chợ xe hơi, trong ~600 m".
+const TU_LOAI_DAU = /^(?:cho|sieu thi|benh vien|bv|truong|truong hoc|cong vien|du an|khu)\s+/;
+const KHONG_PHAI_TEN = /\b(?:xe hoi|o to|oto|vao (?:duoc|tan|toi|trong)|vao nha|gara|hem|phong ngu|pn|ty|trieu|m2)\b/;
+export function lamSachTenMoc(loai: GanBocLLM["loai"], tenTho: string | null | undefined): string | null {
+  let ten = (tenTho ?? "").trim();
+  if (!ten) return null;
+  if (loai !== "du_an" && loai !== "dia_diem") {
+    const kd = kdTen(ten);
+    const m = TU_LOAI_DAU.exec(kd);
+    if (m) ten = ten.slice(m[0].length).trim();
+    if (!ten || KHONG_PHAI_TEN.test(kdTen(ten))) return null;
+  }
+  return ten || null;
 }
 
 type ClientModel = {

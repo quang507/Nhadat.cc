@@ -560,8 +560,11 @@ class RpcCall {
           if (m) l.frontage_m = parseFloat(m[1].replace(",", "."));
         }
         if (a.p_question === "so_phong_ngu") l.bedrooms = parseInt(a.p_answer, 10);
+        // 20260920a: fact `nhan` là tên nhãn, không đi qua đồng bộ cột.
+        if (a.p_question === "nhan") return { data: null, error: null };
         // listing_facts_sync_cols + boc_thong_so (rút gọn): đủ để điểm FR-177 đo được.
-        if (a.p_question === "mat_tien") l.frontage_m = parseFloat(String(a.p_answer).replace(",", "."));
+        // 20/09/2026: đáp án mặt tiền dạng "ngang 4m dài 16m" (boc_thong_so thật đọc hai chiều) — mock từng parseFloat cả câu → NaN.
+        if (a.p_question === "mat_tien") { const mt = /(?:ngang|mat tien|mặt tiền|mt)?\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (mt) l.frontage_m = parseFloat(mt[1].replace(",", ".")); const dm = /(?:dài|dai|dọc|doc|x)\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (dm) l.length_m = parseFloat(dm[1].replace(",", ".")); }
         if (a.p_question === "do_rong_hem") { const m = /(\d+(?:[.,]\d+)?)/.exec(a.p_answer); if (m) l.alley_width_m = parseFloat(m[1].replace(",", ".")); if (/xe hơi|xe hoi/i.test(a.p_answer)) l.access_type = l.access_type ?? "hem_xe_hoi"; }
         if (a.p_question === "ket_cau") { const m = /(\d+)\s*(?:lầu|lau|tầng|tang|tấm|tam)/i.exec(a.p_answer); if (m) l.floors = parseInt(m[1], 10) + (/lầu|lau/i.test(a.p_answer) ? 1 : 0); const pn = /(\d+)\s*(?:phòng ngủ|phong ngu|pn)/i.exec(a.p_answer); if (pn) l.bedrooms = parseInt(pn[1], 10); }
         if (a.p_question === "phap_ly" && /sổ hồng riêng|so hong rieng|shr/i.test(a.p_answer)) l.legal_status = "so_hong_rieng";

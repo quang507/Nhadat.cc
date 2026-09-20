@@ -3675,6 +3675,8 @@ declare
   l       listings%rowtype;
   de      boolean;
 begin
+  -- 20260920a (FR-211): nhãn tìm kiếm là TÊN NHÃN, không phải câu tả căn — không đọc thông số từ nó.
+  if new.question = 'nhan' then return null; end if;
   select * into l from listings where id = new.listing_id;
   if not found then return null; end if;
   -- Cụm thông số (FR-172): được đè khi bậc của fact ≥ bậc cụm đang giữ.

@@ -45,6 +45,11 @@ const HUA_CO_HANG: RegExp[] = [
   /\bco\s+(?:(?:vai|mot vai|mot so|nhieu|may|hai|ba|\d+)\s+)(?:can|lo|nen|lua chon)\b/,
   // "để em xem căn nào phù hợp nhất" — nói như đang cầm sẵn danh sách.
   /\b(?:xem|chon|loc)\s+(?:xem\s+)?(?:trong\s+)?(?:may\s+)?can\s+nao\s+(?:phu hop|hop|ok|dep|ung)/,
+  // 20/09/2026 (bắn thật mau-y-C): "để em kiểm tra hẻm 4m Nguyễn Trãi rồi báo liền", "Em kiểm tra kho
+  // rồi báo mình liền", "Đang kiểm tra … sắp báo mình liền" — hai lượt né thay vì nói thẳng chưa có.
+  /\b(?:de\s+)?em\s+(?:kiem tra|check|xem|tim|loc|ra soat|doi chieu)\b[^.?!]*\b(?:roi|se|sap)?\s*bao\s+(?:lai\s+)?(?:anh\/chi|anh|chi|minh|em|chau|lien|ngay|sau|som)\b/,
+  /\b(?:dang|sap|se)\s+(?:kiem tra|tim|loc|ra soat)\b[^.?!]*\b(?:sap|se|roi)\s+bao\b/,
+  /\bkiem tra kho\b/,
 ];
 
 // Khách đang HỎI có hàng không ("có căn nào quận 10 không em", "còn nhà nào
