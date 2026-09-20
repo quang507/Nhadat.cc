@@ -39,6 +39,16 @@ for (const [cau, mong] of [
 
 ok("'Dạ có ạ.' trả lời câu KHÔNG hỏi hàng → không chặn", !laHuaCoHang("Dạ có ạ.", false));
 ok("'em đang có vài căn' vẫn chặn dù khách không hỏi hàng", laHuaCoHang("Em đang có vài căn 3 phòng.", false));
+// 20/09/2026 (bắn thật mau-y-C): hai lượt né "để em kiểm tra … rồi báo" khi kho trống.
+for (const cau of [
+  "Dạ mình để em kiểm tra hẻm 4m Nguyễn Trãi rồi báo liền ạ.",
+  "Em kiểm tra kho rồi báo mình liền ạ.",
+  "Đang kiểm tra hẻm 4m Nguyễn Trãi và mở rộng khu vực gần đó, sắp báo mình liền.",
+]) ok(`né kho trống: "${cau}" bị chặn`, laHuaCoHang(cau, false));
+ok("câu trả lời thật không bị chặn: 'Dạ hiện bên em chưa có căn nào khớp…'", !laHuaCoHang("Dạ hiện bên em chưa có căn nào khớp đúng nhu cầu này ạ.", false));
+ok("câu hỏi nhu cầu không bị chặn", !laHuaCoHang("Anh muốn ở khu nào để em lọc cho gần?", false));
+// 20/09/2026 (bắn thật mau-y-A): hỏi phí KHÔNG DẤU vẫn có đáp án tiền định.
+ok("dapHoiNguocTienDinh phí không dấu", /1%/.test(dapHoiNguocTienDinh("phi ben minh sao, co bat ky doc quyen ko", "anh", "phí chỉ thu khi giao dịch thành công, 1% giá chốt") ?? ""));
 for (const [cau, mong] of [
   ["có căn nào quận 10 tầm 5 tỷ không em", true],
   ["còn nhà nào tầm 7 tỷ hông em", true],

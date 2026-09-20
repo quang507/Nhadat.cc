@@ -57,6 +57,11 @@ ok("diện tích: 'tổng diện tích 500m2' (không tầng) → 500", dienTich
 ok("diện tích: 'dtsd 120m2' → null", dienTichCauRao(kd("căn hộ dtsd 120m2 3pn")) === null);
 ok("ngang × dài: '5x20' → 100 (để nhân giá/m²)", ngangNhanDai(kd("lô đất 5x20, giá 95 triệu/m2")) === 100);
 ok("ngang × dài: '4.2m x 18m' → 75.6", ngangNhanDai(kd("ngang 4.2m x 18m")) === 75.6);
+// 20/09/2026 (bắn thật mau-y-D): "ngang 4 dài 15, giá 250 triệu/m2" không có "x" → phải nhân được.
+ok("ngang × dài: 'ngang 4 dài 15' → 60", ngangNhanDai(kd("mặt tiền Nguyễn Chí Thanh quận 5, ngang 4 dài 15, giá 250 triệu/m2")) === 60);
+ok("ngang × dài: 'ngang 5m, dài 20m' → 100", ngangNhanDai(kd("đất ngang 5m, dài 20m thổ cư")) === 100);
+ok("ngang × dài: 'ngang 5m còn dọc 16m' → 80", ngangNhanDai(kd("ngang 5m còn dọc 16m")) === 80);
+ok("ngang × dài: chỉ 'ngang 5m' → null", ngangNhanDai(kd("ngang 5m hẻm 4m")) === null);
 
 // ── phường tên chữ ──
 ok("phường: 'phường Hiệp Bình Chánh TP Thủ Đức' → Phường Hiệp Bình Chánh", phuongTenCauRao("cần bán nhà phường Hiệp Bình Chánh TP Thủ Đức, 62m2") === "Phường Hiệp Bình Chánh", String(phuongTenCauRao("cần bán nhà phường Hiệp Bình Chánh TP Thủ Đức, 62m2")));

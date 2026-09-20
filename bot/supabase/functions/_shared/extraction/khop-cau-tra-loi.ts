@@ -172,6 +172,23 @@ export function cheoPhuDinh(text: string): string {
 // dặn/sửa thì chỉ giữ CỤM địa chỉ ("hồ ngọc lãm"). Câu trả lời phường có số thì
 // ghi gọn "Phường N" thay vì cả câu "Đường hồ ngọc lãm quận 8 phường 6".
 const LENH_DAN = /\b(?:ban phai|em phai|phai ghi|ghi lai|ghi giup|ghi la|sua lai|sua thanh|chu khong phai|khong phai|nham roi|sai roi)\b/;
+/**
+ * Câu là LỜI SỬA ("à sửa lại, dài 16 chứ không phải 15") → bỏ vế phủ định và chữ lệnh, còn lại
+ * phần dữ liệu; đọc ngang/dài nếu có. 20/09/2026 (bắn thật mau-y-D): nguyên câu từng vào ô bổ
+ * sung và in ra bản nháp "📝 Thêm: à sửa lại, dài 16 chứ không phải 15" dù cột dài đã đổi.
+ */
+export function gonLoiSua(text: string): { laSua: boolean; con: string; ngang: string | null; dai: string | null } {
+  const kd = boDau(text);
+  const laSua = LENH_DAN.test(kd) || /^\s*(?:a|à|ờ|ừ)\s*,?\s*(?:sua|sửa|nham|nhầm|sai)\b/iu.test(text);
+  const con = cheoPhuDinh(text)
+    .replace(/\b(?:bạn phải|em phải|phải ghi|ghi lại|ghi giúp|ghi là|sửa lại|sửa thành|chứ không phải|không phải|nhầm rồi|sai rồi|ban phai|em phai|phai ghi|ghi lai|ghi giup|ghi la|sua lai|sua thanh|chu khong phai|khong phai|nham roi|sai roi)\b/giu, " ")
+    .replace(/\s+/g, " ").replace(TIEU_TU_DAU, "").replace(/^[\s,.;:–-]+|[\s,.;:–-]+$/g, "").trim();
+  const kdCon = boDau(con);
+  const dai = /\b(?:dai|sau|doc)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?(?![\d])/.exec(kdCon)?.[1] ?? null;
+  const ngang = /\b(?:ngang|mat tien|mt|rong)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?(?![\d])/.exec(kdCon)?.[1] ?? null;
+  return { laSua, con, ngang, dai };
+}
+
 export function bocCumDiaChi(text: string): string | null {
   const t = text.trim();
   const m = /(?:^|[\s,])(?:ở|tại)\s+([^,.;!?\n]{3,80})$/iu.exec(t) ??
@@ -303,6 +320,12 @@ export function catDapAn(question: string, dapAn: string): string {
   const tach = tachCauHoiNguoc(dapAn);
   const goc = tach.hoi && tach.traLoi ? tach.traLoi : dapAn;
   if (question === "vi_tri" && LENH_DAN.test(boDau(goc))) return bocCumDiaChi(goc) ?? goc;
+  // 20/09/2026 (bắn thật mau-y-B): "phường 17 nhé, đường Phan Văn Trị" — lời sửa phường bị bóc, còn
+  // "nhé, đường Phan Văn Trị" thành location_raw và street = "nhé". Tiểu từ đứng đầu mệnh đề bỏ đi.
+  if (question === "vi_tri") {
+    const sach = goc.replace(TIEU_TU_DAU, "").trim();
+    if (sach && sach !== goc) return sach;
+  }
   if (question === "phuong") {
     const m = /(?:phường|phuong|(?<![\p{L}])p)\s*\.?\s*(\d{1,2})(?!\d)/iu.exec(goc);
     if (m) return `Phường ${Number(m[1])}`;
@@ -351,6 +374,9 @@ export function catDapAn(question: string, dapAn: string): string {
   }
   return goc;
 }
+
+// Tiểu từ / ừ hử đứng ĐẦU mệnh đề, thường sót lại sau khi bóc lời sửa ("nhé, đường Phan Văn Trị").
+export const TIEU_TU_DAU = /^(?:\s*(?:nhé|nhe|nha|nhen|hen|ạ|à|a|ừ|u|ờ|dạ|da|vâng|vang|rồi|roi|thì|thi|mà|ma|ok|oke|okie|em|anh|chị|chi)(?![\p{L}])[\s,.;:–-]*)+/iu;
 
 // Mảnh "gấp" cắt khỏi câu dài — dùng ở cả `catDapAn` lẫn `nhanDienFact` (16/09/2026:
 // "ngang 5m còn dọc 16m cần bán gấp" từng ghi nguyên câu vào ô gấp).
@@ -481,7 +507,9 @@ export function laCauHoiTron(text: string): boolean {
   // "không dính gì" (trả lời quy hoạch) có "gì" ở cuối nhưng không phải câu hỏi.
   // 16/09/2026 (bắn thật mau-co-thue): "à mà cháu là bot hay người vậy" — bot xưng cháu nên khách
   // hỏi "cháu là…"; câu hỏi về bản chất bot (là bot / máy / người thật) luôn là câu hỏi.
-  const coTuHoi = /\b(?:ban|ben|em|anh|chi|minh|chau)\s+(?:co|biet|tinh|nhan|can|thay|la)\b|\b(?:bao nhieu|the nao|nhu the nao|khi nao|bao gio|o dau|co phai|duoc khong|dc khong|hay sao|ha em|ha chau|khong em|khong chau|khong a|khong ban|la bot|la may|la nguoi|hay nguoi|hay may|hay bot)\b/;
+  // 20/09/2026 (bắn thật mau-y-A, môi giới gõ không dấu): "phi ben minh sao, co bat ky doc quyen ko"
+  // từng vào ô bổ sung — "bên mình / của em" + "sao", "có bắt/tính/lấy … không" cũng là chủ ngữ hỏi.
+  const coTuHoi = /\b(?:ban|ben|em|anh|chi|minh|chau)\s+(?:co|biet|tinh|nhan|can|thay|la)\b|\b(?:ben|cua)\s+(?:minh|em|ban|anh|chi|cac ban)\b|\bco\s+(?:bat|tinh|lay|thu|doi|yeu cau)\b|\b(?:phi|hoa hong)\b[^.?!]*\b(?:sao|bao nhieu|the nao|nhieu)\b|\b(?:bao nhieu|the nao|nhu the nao|khi nao|bao gio|o dau|co phai|duoc khong|dc khong|hay sao|ha em|ha chau|khong em|khong chau|khong a|khong ban|la bot|la may|la nguoi|hay nguoi|hay may|hay bot)\b/;
   return kd.split(/\s+/).length >= 3 && DAU_HOI_RE.test(kd) && DUOI_HOI_RE.test(kd) && coTuHoi.test(kd);
 }
 
