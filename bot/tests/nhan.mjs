@@ -16,6 +16,10 @@ la("nhà cũ tiện xây mới, không ngập", ["khong_ngap"]);
 la("sân vườn hồ bơi thang máy", ["thang_may", "san_vuon", "ho_boi"]);
 la("chưa có thang máy, nhà mới xây", ["moi_sua"]);
 la("mặt bằng phù hợp quán ăn", ["kinh_doanh"]);
+// 20/09 (4 kịch bản mới, mau-y-*): "ngõ" miền Bắc, "xe hơi vào được nhà" của khách mua.
+la("ngõ 3 mét, ngõ thông không ngập, gần trường cấp 1", ["gan_truong", "hem_thong", "khong_ngap"]);
+la("khu yên tĩnh gần chợ xe hơi vào được nhà", ["yen_tinh", "gan_cho", "xe_hoi_vao_nha"]);
+la("ô tô vào tới nhà", ["xe_hoi_vao_nha"]);
 la("xe hơi vào tận nhà, có gara", ["xe_hoi_vao_nha"]);
 la("XE HOI VAO NHA duoc", ["xe_hoi_vao_nha"]);
 la("căn góc 2 mặt tiền view sông full nội thất", ["noi_that_full", "view_song", "can_goc"]);

@@ -29,7 +29,7 @@ export const TU_DIEN_NHAN: Record<string, Nhan> = {
   an_ninh: { ten: "an ninh", khop: /\b(?:an ninh|bao ve 24|co bao ve|camera|khu biet lap|compound|khu dan cu khep kin)\b/, phuDinh: true },
   dan_tri_cao: { ten: "dân trí cao", khop: /\b(?:dan tri cao|dan tri|khu tri thuc|hang xom hien)\b/ },
   // "chỗ" bỏ dấu cũng là "cho" ("gần chỗ làm"), và "Chợ Rẫy" là tên bệnh viện — loại hai kiểu đó.
-  gan_cho: { ten: "gần chợ", khop: /\b(?:gan|sat|canh|ke|ke ben|doi dien) cho(?! (?:lam|o|toi|nay|do|kia|nao|ngoi|dau|de|xe|ban|ray|quan))\b/ },
+  gan_cho: { ten: "gần chợ", khop: /\b(?:gan|sat|canh|ke|ke ben|doi dien) cho(?! (?:lam|o|toi|nay|do|kia|nao|ngoi|dau|de|xe(?! hoi vao)|ban|ray|quan))\b/ },
   gan_truong: { ten: "gần trường học", khop: /\b(?:gan truong|sat truong|canh truong|ke truong|gan dai hoc|gan mam non)\b/ },
   gan_benh_vien: { ten: "gần bệnh viện", khop: /\b(?:gan benh vien|sat benh vien|canh benh vien|gan bv\b|gan phong kham)\b/ },
   gan_sieu_thi: { ten: "gần siêu thị", khop: /\b(?:gan sieu thi|sat sieu thi|gan coop|gan coopmart|gan bach hoa xanh|gan winmart|gan vinmart|gan tttm|gan trung tam thuong mai)\b/ },
@@ -38,10 +38,12 @@ export const TU_DIEN_NHAN: Record<string, Nhan> = {
   gan_trung_tam: { ten: "gần trung tâm", khop: /\b(?:gan trung tam|sat trung tam|ngay trung tam|trung tam quan|gan quan 1|gan q1\b)\b/ },
   // "nhà cũ TIỆN xây mới" / "để xây mới" là lời mời xây lại, không phải nhà mới (bắn thật 18/09).
   moi_sua: { ten: "mới sửa / mới xây", khop: /(?<!\b(?:tien|de|phu hop|thich hop|co the|can|nen|muon)\s)\b(?:moi son|moi sua|moi xay|nha moi|vua sua|vua xay|sua lai moi|xay moi)\b/ },
-  hem_thong: { ten: "hẻm thông", khop: /\b(?:hem thong|thong ra|hai dau hem|2 dau hem)\b/ },
+  // 20/09 (bắn 4 kịch bản mới): miền Bắc nói "ngõ" — "ngõ thông không ngập".
+  hem_thong: { ten: "hẻm thông", khop: /\b(?:hem thong|ngo thong|thong ra|hai dau hem|2 dau hem|hai dau ngo)\b/ },
   hem_cut: { ten: "hẻm cụt", khop: /\b(?:hem cut|cuoi hem)\b/ },
   khong_ngap: { ten: "không ngập", khop: /\b(?:khong ngap|ko ngap|chua bao gio ngap|khong bi ngap|khong dong nuoc|cao rao)\b/ },
-  xe_hoi_vao_nha: { ten: "xe hơi vào nhà", khop: /\b(?:xe hoi vao (?:tan |trong )?nha|o to vao (?:tan |trong )?nha|oto vao (?:tan |trong )?nha|dau xe trong nha|gara|ga ra|garage|de xe hoi trong nha)\b/ },
+  // 20/09: khách mua nói "xe hơi vào ĐƯỢC nhà" — cho phép "duoc/toi/tan/trong" giữa "vao" và "nha".
+  xe_hoi_vao_nha: { ten: "xe hơi vào nhà", khop: /\b(?:(?:xe hoi|o to|oto) vao (?:duoc |toi |tan |trong |tan trong )?nha|dau xe trong nha|gara|ga ra|garage|de xe hoi trong nha)\b/ },
   thang_may: { ten: "có thang máy", khop: /\b(?:co thang may|thang may rieng|lap thang may|thang may)\b/, phuDinh: true },
   san_thuong: { ten: "sân thượng", khop: /\b(?:san thuong)\b/ },
   san_vuon: { ten: "sân vườn", khop: /\b(?:san vuon|co san|vuon rong|dat vuon rong|san truoc|san sau)\b/ },
