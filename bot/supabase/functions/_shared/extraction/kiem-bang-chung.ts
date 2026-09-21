@@ -96,6 +96,9 @@ function tienKhop(v: string, b: number, a0: number | null = null): boolean {
 // Hình dạng tối thiểu của vài trường chữ (bản bỏ dấu của giá trị).
 const HINH_TRUONG_CHU: Record<string, RegExp> = {
   huong: /\b(dong|tay|nam|bac)\b/,
+  // 21/09/2026 (bắn thật mau-v-03 chế độ chinh): "hẻm xe hơi" → hiện trạng "xe hơi" lọt vì chữ có
+  // thật trong cụm. Hiện trạng phải có chữ tả TÌNH TRẠNG căn nhà.
+  hien_trang: /\b(trong|moi|cu|nha o|dang o|o tu|o lien|vao o|don vao|dang cho thue|dang thue|xuong cap|son|sua|hoan thien|tho|bo trong|dang kinh doanh|dang su dung|nha nat|dot nat|xay|dep|sach|nguyen ban|da su dung|chua o|con tot|ban giao|hien trang|cho thue|kinh doanh)\b/,
   phap_ly: /\b(so|hong|do|hoan cong|vi bang|hdmb|hop dong|giay tay|shr|shc|cong chung|chung|rieng|sang ten|the chap)\b/,
   ket_cau: /\d|\b(tret|lau|tang|tam|lung|ham|mai|san thuong|cap 4|btct|be tong|khung|gac)\b/,
   ly_do_ban: /^(?!(?:can\s+)?(?:ban\s+)?gap\s*$).{3,}/,
@@ -527,10 +530,15 @@ export type AiChinh = {
  */
 export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   const mot = dat.filter((d) => !(d.can != null && d.can > 1));
-  const { ghi, bo: boTho } = chonDeGhi(mot, { trung: [], lech: [], ai_them: mot.map((d) => ({ khoa: d.khoa, ai: d.gia_tri })) }, dong, {});
+  const lay = (k: string) => mot.find((d) => d.khoa === k)?.gia_tri.trim() ?? null;
+  const lgd = chuanSo(lay("loai_giao_dich") ?? "").replace(/\s+/g, "_");
+  const loaiGiaoDich = lgd === "ban" || lgd === "cho_thue" ? lgd : null;
+  // Khoảng giá của `chonDeGhi` tuỳ bán / thuê: lúc TẠO TIN chưa có dòng DB → lấy loại giao dịch
+  // AI vừa đọc (bắn thật 21/09 mau-v-06: "2tr8/tháng" phòng trọ bị coi là giá bán ngoài khoảng).
+  const dongSo: DongDb | null = dong?.deal ? dong : { ...(dong ?? {}), deal: loaiGiaoDich };
+  const { ghi, bo: boTho } = chonDeGhi(mot, { trung: [], lech: [], ai_them: mot.map((d) => ({ khoa: d.khoa, ai: d.gia_tri })) }, dongSo, {});
   const daCo = new Set(ghi.map((g) => g.question));
   const bo: Bo[] = [];
-  const lay = (k: string) => mot.find((d) => d.khoa === k)?.gia_tri.trim() ?? null;
   const them = (question: string, answer: string | null, khoa: string) => {
     if (!answer || daCo.has(question)) return;
     daCo.add(question);
@@ -547,8 +555,6 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   if (duong && duong.length >= 4 && duong.length <= 80) them("vi_tri", duong, "duong");
   const duAn = lay("du_an");
   if (duAn && duAn.length >= 3 && duAn.length <= 80) them("du_an_ten", duAn, "du_an");
-  const lgd = chuanSo(lay("loai_giao_dich") ?? "");
-  const loaiGiaoDich = lgd === "ban" || lgd === "cho_thue" ? lgd : null;
   if (loaiGiaoDich) them("loai_giao_dich", loaiGiaoDich, "loai_giao_dich");
   const lb = chuanSo(lay("loai_bds") ?? "").replace(/\s+/g, "_");
   const loaiBds = lb in LOAI_BDS ? lb : null;
@@ -583,6 +589,7 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
  * Kiến thức thêm (17/09/2026): cụm model nêu phải NGUYÊN VĂN trong tin, ngắn, không trùng ý đã có
  * khoá (không nằm trong trích dẫn nào của `dat`), tối đa 3.
  */
+const LOI_NOI_CHUYEN = /\b(de\s+(?:em|anh|chi|minh|toi|tui)\b|roi\s+(?:bao|gui|nhan)|bao\s+lai|gui\s+sau|chut\s+nua|lat\s+nua|hoi\s+lai|se\s+(?:gui|bao|nhan)|em\s+(?:coi|xem|kiem|check)|coi\s+lai|xem\s+lai|cam on|xin loi|nha\s*$|nhe\s*$)\b/;
 export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[]): string[] {
   const kdTin = chuanSo(tin);
   const daCo = dat.map((d) => chuanSo(d.trich_dan));
@@ -592,6 +599,9 @@ export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[]): st
     const kd = chuanSo(v);
     if (kd.length < 3 || v.length > 80) continue;
     if (!kdTin.includes(kd)) continue;
+    // 21/09/2026 (bắn thật mau-v-03): "để em coi lại sổ rồi báo" là LỜI HỨA / lời nói chuyện của chủ
+    // nhà, không phải điều gì về căn nhà — không vào mô tả.
+    if (LOI_NOI_CHUYEN.test(kd)) continue;
     if (daCo.some((t) => t.includes(kd) || kd.includes(t))) continue;
     if (ra.some((r) => chuanSo(r) === kd)) continue;
     ra.push(v);
