@@ -34,7 +34,7 @@ export const KHOA_KHAC = ["gia_m2", "loai_giao_dich", "loai_bds", "quan", "phuon
 export const MOI_KHOA = [...KHOA_TIEN, ...KHOA_SO, ...KHOA_CHU, ...KHOA_KHAC] as const;
 export type Khoa = typeof MOI_KHOA[number];
 
-export type DeXuat = { khoa: string; gia_tri: string; trich_dan: string; can?: number | null };
+export type DeXuat = { khoa: string; gia_tri: string; trich_dan: string; can?: number | null; /** cụm thật trong tin (bỏ dấu) khi trích dẫn chỉ khớp MỜ */ trich_dan_sua?: string };
 export type Bo = DeXuat & { ly_do: string };
 
 const LOAI_BDS: Record<string, RegExp> = {
@@ -109,10 +109,10 @@ const HINH_TRUONG_CHU: Record<string, RegExp> = {
 const DAU_HIEU_DU_AN = /\b(du an|kdc|khu dan cu|khu do thi|kdt|chung cu|can ho|toa|block|thap)\b|residence|city|park|tower|plaza|garden|home|green|sky|river|central|vinhomes|masteri|sunrise|saigon|sai gon|lake|land|view|pearl|star|gold|diamond|ruby|centre|center/;
 
 /** Một đề xuất đã qua lớp 1: kiểm lớp 2–3. Trả lý do bỏ, null là đạt. */
-function kiemGiaTri(d: DeXuat, tin: string, viTri: number): string | null {
+function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): string | null {
   const v = d.gia_tri.trim();
   const cum = d.trich_dan;
-  const kd = chuanSo(cum);
+  const kd = kdCumSua ?? chuanSo(cum);
   if (!v) return "gia_tri_rong";
   switch (d.khoa) {
     case "gia": case "tien_coc": case "thu_nhap_thue": {
@@ -132,14 +132,15 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number): string | null {
         if (/\b(coc|dat coc|phi sang|tien sang|hoa hong|phi moi gioi|(?<!thuong )luong|doanh thu)\b/.test(kd)) return "ngu_canh_coc_phi_hoa_hong";
         const truoc = kdTin.slice(Math.max(0, viTri - 30), viTri);
         if (TRUOC_KHONG_PHAI_GIA.test(truoc)) return "ngu_canh_coc_phi_hoa_hong";
-        const sau = kdTin.slice(viTri + chuanSo(cum).length, viTri + chuanSo(cum).length + 12);
+        const sau = kdTin.slice(viTri + kd.length, viTri + kd.length + 12);
         const moiThang = /\b(thang|th)\b/.test(kd) || /^\s*(?:\/|mot|1|moi)?\s*(?:thang|th)\b/.test(sau);
         if (dealCauRao(kdTin) === "ban" && (TRUOC_LA_THUE.test(truoc) || moiThang)) return "tien_thue_khong_phai_gia_ban";
       }
       // Thu nhập thuê chỉ có ở căn BÁN đang cho thuê; "sang nhượng mặt bằng, thuê 60 triệu" là giá thuê.
       if (d.khoa === "thu_nhap_thue") {
         const truoc = kdTin.slice(Math.max(0, viTri - 30), viTri);
-        if (dealCauRao(kdTin) !== "ban" || !(/\b(dang|hien|hop dong)\b/.test(kd) || TRUOC_LA_THUE.test(truoc) || /\b(dang|hien|hop dong)\s+(cho\s+)?thue\b/.test(truoc))) {
+        // 21/09/2026 (bắn thật mau-v-08): "thu nhập 180 triệu/tháng" của toà CHDV bán là dòng tiền thuê.
+        if (dealCauRao(kdTin) !== "ban" || !(/\b(dang|hien|hop dong|thu nhap|doanh thu|dong tien)\b/.test(kd) || TRUOC_LA_THUE.test(truoc) || /\b(dang|hien|hop dong)\s+(cho\s+)?thue\b/.test(truoc))) {
           return "khong_phai_thu_nhap_thue";
         }
       }
@@ -241,13 +242,63 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
   for (const d of deXuat ?? []) {
     if (!d || typeof d.khoa !== "string" || typeof d.gia_tri !== "string" || typeof d.trich_dan !== "string") continue;
     const kdCum = chuanSo(d.trich_dan);
-    const viTri = kdCum.length >= 2 ? kdTin.indexOf(kdCum) : -1;
+    let viTri = kdCum.length >= 2 ? kdTin.indexOf(kdCum) : -1;
+    let kdDung: string | undefined;
+    // 21/09/2026 (FR-208 g, học từ instructor CitationMixin): trích dẫn lệch ≤ 3 ký tự so với tin
+    // (model gõ sai một chữ) thì KHỚP MỜ rồi dùng cụm thật để kiểm tiếp — chữ số phải y hệt, nên
+    // "4x15" không bao giờ khớp mờ vào "4x16".
+    if (viTri < 0) {
+      const mo = timMo(kdTin, kdCum);
+      if (mo) { viTri = mo.viTri; kdDung = mo.cum; }
+    }
     if (viTri < 0) { bo.push({ ...d, ly_do: "trich_dan_khong_co_trong_tin" }); continue; }
-    const ly = kiemGiaTri(d, tin, viTri);
+    const ly = kiemGiaTri(d, tin, viTri, kdDung);
     if (ly) bo.push({ ...d, ly_do: ly });
-    else dat.push(d);
+    else dat.push(kdDung ? { ...d, trich_dan_sua: kdDung } : d);
   }
   return { dat, bo };
+}
+
+/** Khoảng cách Levenshtein có trần: vượt `toiDa` thì trả toiDa + 1 sớm. */
+function khoangCach(a: string, b: string, toiDa: number): number {
+  if (Math.abs(a.length - b.length) > toiDa) return toiDa + 1;
+  let truoc = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const hang = [i];
+    let nhoNhat = i;
+    for (let j = 1; j <= b.length; j++) {
+      const c = a[i - 1] === b[j - 1] ? 0 : 1;
+      const v = Math.min(truoc[j] + 1, hang[j - 1] + 1, truoc[j - 1] + c);
+      hang.push(v);
+      if (v < nhoNhat) nhoNhat = v;
+    }
+    if (nhoNhat > toiDa) return toiDa + 1;
+    truoc = hang;
+  }
+  return truoc[b.length];
+}
+
+/**
+ * Tìm cụm trong tin (cả hai đã `chuanSo`) gần `kdCum` nhất, lệch ≤ min(3, ⌊dài/6⌋) ký tự, bắt đầu và
+ * kết thúc ở ranh giới từ, CÙNG dãy chữ số. Cụm ngắn (< 10 ký tự) không khớp mờ — quá dễ nhầm.
+ */
+function timMo(kdTin: string, kdCum: string): { viTri: number; cum: string } | null {
+  if (kdCum.length < 10) return null;
+  const toiDa = Math.min(3, Math.floor(kdCum.length / 6));
+  const soCum = kdCum.replace(/\D+/g, "");
+  let tot: { viTri: number; cum: string; d: number } | null = null;
+  for (let dai = kdCum.length - toiDa; dai <= kdCum.length + toiDa; dai++) {
+    if (dai < 1) continue;
+    for (let i = 0; i + dai <= kdTin.length; i++) {
+      if (i > 0 && kdTin[i - 1] !== " ") continue;
+      if (i + dai < kdTin.length && kdTin[i + dai] !== " ") continue;
+      const w = kdTin.slice(i, i + dai);
+      if (w.replace(/\D+/g, "") !== soCum) continue;
+      const d = khoangCach(w, kdCum, toiDa);
+      if (d <= toiDa && (!tot || d < tot.d)) tot = { viTri: i, cum: w, d };
+    }
+  }
+  return tot;
 }
 
 /** Tin có mùi DỮ LIỆU không (đáng một lượt model bóng) — "ok em", "dạ" thì không. */

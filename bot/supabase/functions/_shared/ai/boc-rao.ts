@@ -7,6 +7,7 @@
 import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import { MOI_KHOA, type DeXuat } from "../extraction/kiem-bang-chung.ts";
+import { viDuThanhChu } from "./vi-du-boc-rao.ts";
 
 const TruongBoc = z.object({
   khoa: z.enum(MOI_KHOA),
@@ -47,7 +48,12 @@ KHOÁ:
 - noi_that, ly_do_ban (lý do CẦN bán, không phải "gấp"), ket_cau (trệt/lầu/lửng/hầm), thoi_han_thue, phi_quan_ly, view, hien_trang: chữ — giá trị là cụm ngắn NẰM TRONG trích dẫn.
 - gap, thuong_luong: "co" | "khong". Hoa hồng môi giới KHÔNG phải thương lượng.
 - kien_thuc: ý khác về CĂN NHÀ không có khoá (tiện ích gần, an ninh, tình trạng, đồ để lại, lịch sử…) — cụm ngắn nguyên văn; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
-Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [], kien_thuc = [].`;
+Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [], kien_thuc = [].
+- "Hẻm xe hơi / xe tải / ba gác" không có số mét → KHÔNG phải do_rong_hem, KHÔNG phải hien_trang. "bớt / giảm N", "bao phí" là mức giảm, không phải gia. Số có "m2" là dien_tich, không phải dai. Lời hứa ("để em xem lại rồi báo"), lời chào, câu hỏi → không vào kien_thuc.
+
+VÍ DỤ MẪU (đáp án đúng — chỉ học CÁCH bóc, giá trị phải lấy từ tin của khách, không lấy từ ví dụ):
+
+` + viDuThanhChu();
 
 type ClientModel = {
   messages: {
