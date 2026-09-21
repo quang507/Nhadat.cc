@@ -3706,8 +3706,17 @@ Deno.serve(async (req) => {
       if (bongAi && cheDoBocAi && (await cheDoBocAi) === "chinh") {
         const kqAi = await bongAi;
         if (kqAi?.ket && ((kqAi.ket as { so_can?: number }).so_can ?? 1) <= 1) {
-          const datAi = kiemDeXuat(kqAi.truong, text).dat;
+          const kdAi = kiemDeXuat(kqAi.truong, text);
+          const datAi = kdAi.dat;
           aiRao = { ...docAiChinh(datAi, { deal: dealCauRao(tKD) }), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], text, datAi) };
+          // FR-212 (bắn thật 21/09): khách gõ "pham the hier" → AI đọc "Phạm Thế Hiển" (sửa chính tả) → kiểm
+          // bằng chứng BỎ vì đổi chữ cái (FR-208 h) → tin không có địa chỉ, không ai hỏi. Nhưng TRÍCH DẪN
+          // của đề xuất đó chính là địa chỉ khách gõ, đã kiểm là nằm trong câu: lấy trích dẫn làm địa chỉ,
+          // phần sửa để từ điển `duong` lo (khớp gần thì HỎI, không tự đổi chữ).
+          if (!aiRao.duong) {
+            const td = kdAi.bo.find((b) => b.khoa === "duong" && b.ly_do === "gia_tri_khong_nam_trong_trich_dan")?.trich_dan?.trim();
+            if (td && td.length >= 4 && td.length <= 80 && /[\p{L}]{2}/u.test(td)) aiRao.duong = td;
+          }
         }
       }
       const sDeal = aiRao?.loaiGiaoDich ?? dealCauRao(tKD);
