@@ -229,6 +229,16 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const d6 = docAiChinh([dx("gia", "2tr8", "2tr8/thang"), dx("loai_giao_dich", "cho_thue", "cho thue")], null);
   ok("docAiChinh: thuê 2tr8 đạt khoảng giá THUÊ nhờ loai_giao_dich AI đọc; 'cho_thue' chuẩn hoá đúng", d6.gia === "2tr8" && d6.loaiGiaoDich === "cho_thue" && d6.ghi.some((g) => g.question === "loai_giao_dich" && g.answer === "cho_thue"), JSON.stringify(d6));
   ok("docAiChinh: thuê 2tr8 mà AI không nói loại, dong.deal = cho_thue (luật đỡ) → vẫn đạt", docAiChinh([dx("gia", "2tr8", "2tr8/thang")], { deal: "cho_thue" }).gia === "2tr8");
+  // FR-208 (g): KHỚP MỜ trích dẫn ≤ 3 ký tự, chữ số phải y hệt, cụm ≥ 10 ký tự.
+  const kMo = kiemDeXuat([dx("duong", "Châu Văn Liêm", "đường Châu Văn Liên")], MT);
+  ok("khớp mờ: trích 'đường Châu Văn Liên' (lệch 1 chữ) → đạt, ghi lại cụm thật", kMo.dat.length === 1 && kMo.dat[0].trich_dan_sua === "duong chau van liem", JSON.stringify(kMo));
+  bo("khớp mờ KHÔNG đổi chữ số: 'dài 16m' khi tin là 'dài 18m'", MT, "dai", "16", "ngang 4.2m dài 16m", "trich_dan_khong_co_trong_tin");
+  bo("khớp mờ tối đa 3 ký tự: lệch 4 → bỏ", MT, "duong", "Châu Văn Liêm", "đường Chou Vin Liun", "trich_dan_khong_co_trong_tin");
+  bo("khớp mờ không áp cho cụm ngắn (< 10 ký tự)", "sổ hồng riêng, hẻm 5m", "phap_ly", "sổ hồng", "sô hùng", "trich_dan_khong_co_trong_tin");
+  ok("khớp mờ vẫn qua kiểm lớp 2: 'giá 30 tỷ' trích 'giá 32 tỷ còn thương lượng' lệch chữ → tiền không khớp vẫn bỏ",
+    kiemDeXuat([dx("gia", "30 tỷ", "giá 32 tỷ còn thương lương")], MT).bo[0]?.ly_do === "tien_khong_khop_trich_dan");
+  dat("thu nhập thuê của toà nhà BÁN: 'thu nhập 180 triệu/tháng'", "Bán toà CHDV Phú Nhuận 6x22, thu nhập 180 triệu/tháng, giá 45 tỷ", "thu_nhap_thue", "180 triệu", "thu nhập 180 triệu/tháng");
+  bo("thu nhập thuê KHÔNG áp cho tin cho thuê: 'thuê 60 triệu/tháng' của mặt bằng", MB, "thu_nhap_thue", "60 triệu", "thuê 60 triệu/tháng", "khong_phai_thu_nhap_thue");
   ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien, KHÔNG có tien_ich_gan / nam_xay / the_chap (luật vẫn đỡ)",
     ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds"].every((k) => KHOA_FACT_AI_BIET.has(k)) && ["tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => !KHOA_FACT_AI_BIET.has(k)));
 }
