@@ -13,6 +13,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | DH-05 | Sao Bắc Đẩu: lịch xem nhà chốt mỗi tuần; đầu vào I1–I5; OMTM = câu khách hỏi được trả lời đúng hạn | FR-57 / SRS-5.3 (viewing), FR-139 (`dang_ban`), UF-04, FR-173 (`sla_due_at`, `ctv_ranks`) / FR-140 c, BR-07 / FR-63, FR-155 / view `nmg_hoat_dong` (`20260904e`) |
 | DH-06 | Lộ trình 90 ngày: chốt hướng → đo I3 qua CTV → mở địa bàn (FR-174 đợt 1 xong, đợt 2 chờ) → 7 hạng mục dữ liệu → phần AOND còn thiếu → vận hành | OPEN-21/26/28/40/41/42, OPEN-27 nửa sau; FR-173, FR-174; `01 §1.5c`; FR-135/141 (takeover UI ⏳); NFR-16 / OPEN-25 |
 | DH-07 | Cho tới khi §0.8 chốt, đi theo khuyến nghị BA và ghi `[giả định BA]` | OPEN-40, OPEN-41, OPEN-42, OPEN-27 nửa sau |
+| DH-08 | Đánh giá 21/09/2026 theo khung Design Thinking: năm cột có gì / thiếu gì, khả năng thành công, ba việc kế tiếp (đo trên DB thật, không từ code) | `00 §0.9`; INS-02/03/04/06/11/12, `01 §1.2`/§1.5/§1.7, §0.5–§0.7, RSK-02/RSK-04, FR-145, FR-173, FR-208, FR-212, `10 §10.8`, TS-DUONG/TS-BLDL/TS-HOIBU |
 
 ## 8.1 Business Requirement → Functional Requirement
 

@@ -203,3 +203,37 @@ tự đọc. Còn treo: ngưỡng điểm để tin được rao (**OPEN-50**), 
 
 *Truy vết:* DH-01…DH-07 → `08-traceability.md §8.0`. (Bản Figma và `design/` đã xoá
 08/09/2026 — OPEN-45 đóng; không còn bản trực quan riêng.)
+
+## 0.9 Đánh giá 21/09/2026 theo khung Design Thinking
+
+**DH-08.** Chủ dự án 21/09/2026 yêu cầu trả lời năm cột *Empathy → Define → Ideate →
+Prototype → Test* cho dự án này và đánh giá khả năng thành công [nguồn: chủ dự án
+21/09/2026, ảnh khung năm cột + "đánh giá khả năng thành công"]. Số liệu đo trực tiếp
+trên DB production ngày 21/09/2026 11:50 UTC (đếm `listings`, `sellers`, `buyers`,
+`viewings`, `deals`, `projects`, `duong`), không đọc từ code.
+
+| Cột | Đã có | Bằng chứng | Còn thiếu |
+|---|---|---|---|
+| **Empathy** — hiểu ai, hiểu gì | Chân dung B (6–13 tỷ, "xem 3 căn → xin ảnh → hỏi 1 căn → im"), S chính chủ ngại form, NMG 10 tin / 5%; vấn đề lõi: tin luôn thiếu và không ai trả lời khách; Zalo cắt sau 7 ngày mà chu kỳ mua 3–4 năm; ba đối thủ đều listing-first, lộ SĐT | `01 §1.2`, INS-02/03/04/06, `01 §1.5` | Chân dung B dựa trên 24 hội thoại **giả định** 2024, chưa phỏng vấn người thật; chưa có số thị trường Quận 5 (`01 §1.7`) |
+| **Define** — vấn đề, mục tiêu | Câu chuyện lõi "hỏi căn này có ai trả lời không" → vòng nối CTV (FR-173); persona P1–P4; sao Bắc Đẩu = lịch xem chốt/tuần, OMTM quý = câu khách hỏi trả lời đúng hạn | §0.5, `02 §2.2`, FR-173 | — (cột chắc nhất) |
+| **Ideate** — lật giả định | Không form, không app, không SĐT, tin thiếu là tính năng, mỗi khách một tên bot, quận cũ là ngôn ngữ thị trường | INS-05/11/12, FR-181, §0.4 ô KHÔNG làm | Năm giả định chịu lực §0.7 chưa cái nào có số; giả định 4 đã đổ một lần |
+| **Prototype** — giải pháp tối thiểu | Web SEO + kho tin cấu trúc, bot hai mặt qua bridge, bóc tách AI có kiểm bằng chứng (FR-208), từ điển đường 7.114 dòng (FR-212), 1.639 dự án, hỏi bù, CTV chia đơn, sổ lỗi + còi, 439 ca e2e, 10 cổng CI | `07`, `10 §10.8`, `bot/tests/e2e` | Đã vượt mức "mock test" về máy — nhưng là **phòng thí nghiệm sạch**: 21/09 DB có **0 tin, 0 người bán, 1 người mua** (chủ dự án), 0 lịch xem, 0 giao dịch; rổ hàng 173 tin cũ đã xoá theo lệnh 09/09 |
+| **Test** — kiểm chứng | Máy chạy đúng luật, không sập, không lộ SĐT, giọng bớt máy (TS-DUONG, TS-BLDL, TS-HOIBU 21/09) | `10` | **Chưa quay được vòng nào với người thật**: giả định 1, 2, 3, 5 chưa có bằng chứng; mũi tên Test → Ideate chưa chạy |
+
+**Đánh giá khả năng thành công** *[nhận định BA, không có số để tính xác suất]*:
+
+- Điểm mạnh thật: luận điểm rõ và khác biệt thật so với batdongsan / mogi / alonhadat
+  (INS-04/11), chi phí vận hành gần không (NFR-16), mọi mắt xích đều đo được (§0.5).
+- Điểm yếu chí tử: dự án đi hết Prototype mà **chưa quay lại Empathy với người thật
+  lần nào** — đang tối ưu giọng bot trước khi biết chủ nhà có trả lời CTV hay không.
+- Rủi ro lớn nhất không nằm ở code: **RSK-04** (không hàng thì chat rỗng). Kho tin
+  hôm nay bằng 0 theo quyết định chủ dự án; rủi ro thứ hai là **RSK-02** (kênh duy nhất
+  là Zalo cá nhân qua bridge, chưa có OA — FR-145).
+
+**Việc kế tiếp theo đánh giá này** (khớp §0.6 đợt 2, không mở việc mới):
+
+1. Dừng chỉnh giọng; đưa **20 tin có chủ thật** vào vòng CTV, đo 2 tuần tỷ lệ câu
+   khách hỏi được trả lời trong 48 giờ (giả định 1, ngưỡng dừng <30%).
+2. Kéo **10 người mua thật** qua widget Zalo trên trang tin (FR-145), đọc nguyên văn
+   hội thoại, đếm cờ "cần người thật" (giả định 2, ngưỡng >30%).
+3. Vượt ngưỡng dừng ở 1 hoặc 2 → sửa **mô hình** (§0.7), không sửa prompt.
