@@ -2142,6 +2142,81 @@ fresh(seedKho);
   if (macDinh) globalThis.__model.parse = macDinh;
 }
 
+// ── FR-212 (21/09/2026): TỪ ĐIỂN TÊN ĐƯỜNG `duong` — không dấu → có dấu ngay; sai 1–2 ký tự → HỎI xác nhận; không có → giữ nguyên ──
+{
+  const seedDuong = (d) => {
+    d.insert("duong", { ten: "Phạm Thế Hiển", tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: "Phường Phú Định", quan_cu: "Quận 8", nguon: "test" });
+    d.insert("duong", { ten: "Phạm Thế Hiển", tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: "Phường Chánh Hưng", quan_cu: "Quận 8", nguon: "test" });
+    d.insert("duong", { ten: "Lê Văn Việt", tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: "Phường Tăng Nhơn Phú", quan_cu: "Quận 9", nguon: "test" });
+  };
+  const tin = () => db().t.listings.at(-1);
+  const rpcDuong = () => db().log.filter((x) => x.rpc === "tim_duong");
+  const modelThay = (chu) => globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes(chu));
+  const pend = () => db().t.info_requests.filter((x) => x.status === "pending").map((x) => x.question);
+
+  // Không dấu, khớp ĐÚNG → ghi có dấu ngay, không hỏi, không gợi ý.
+  fresh(seedDuong);
+  let rp = await send({ external_user_id: "duong-1", text: "bán nhà hẻm 4m pham the hien quận 8, 60m2, 5 tỷ" });
+  check("DUONG-01 'pham the hien' khớp đúng từ điển → location_raw 'hẻm 4m Phạm Thế Hiển', không gợi ý, tra 1 lần bằng tên đường trần",
+    rp.body.role === "seller" && tin().location_raw === "hẻm 4m Phạm Thế Hiển" && !tin().boc_tach?.duong_goi_y &&
+      rpcDuong().length === 1 && rpcDuong()[0].args.p_ten === "pham the hien" && rpcDuong()[0].args.p_quan === "Quận 8",
+    JSON.stringify({ l: tin(), rpc: rpcDuong(), rep: rp.body.replies }));
+
+  // Sai 1 ký tự → câu hỏi đầu là XÁC NHẬN tên đường; gợi ý cất; địa chỉ vẫn chữ khách gõ.
+  fresh(seedDuong);
+  rp = await send({ external_user_id: "duong-2", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
+  check("DUONG-02 'pham the hier' khớp gần → hỏi 'Đường mình là Phạm Thế Hiển phải không', gợi ý ở boc_tach.duong_goi_y, địa chỉ chưa sửa",
+    modelThay("Đường mình là Phạm Thế Hiển phải không") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" &&
+      tin().boc_tach?.duong_goi_y?.vi_tri === "hẻm 4m Phạm Thế Hiển" && /pham the hier/.test(tin().location_raw ?? "") && pend().length > 0,
+    JSON.stringify({ l: tin(), pend: pend(), rep: rp.body.replies }));
+  const cauTreo = pend()[0];
+  rp = await send({ external_user_id: "duong-2", text: "đúng rồi em" });
+  check("DUONG-03 gật → location_raw 'hẻm 4m Phạm Thế Hiển', gợi ý xoá, bot 'Dạ em sửa lại Phạm Thế Hiển' rồi hỏi lại câu đang treo",
+    tin().location_raw === "hẻm 4m Phạm Thế Hiển" && tin().boc_tach?.duong_goi_y === false &&
+      rp.body.replies.some((r) => /sửa lại Phạm Thế Hiển/.test(r) && /\?/.test(r)) && pend().includes(cauTreo),
+    JSON.stringify({ l: tin(), pend: pend(), rep: rp.body.replies }));
+
+  // Không gật, trả lời câu treo → gợi ý bỏ, câu trả lời đi đường thường.
+  fresh(seedDuong);
+  await send({ external_user_id: "duong-3", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
+  rp = await send({ external_user_id: "duong-3", text: "5 tỷ 2" });
+  check("DUONG-04 không gật, nói '5 tỷ 2' → gợi ý xoá, địa chỉ giữ chữ khách gõ, giá vẫn ghi",
+    tin().boc_tach?.duong_goi_y === false && /pham the hier/.test(tin().location_raw ?? "") && tin().price_vnd > 0,
+    JSON.stringify({ l: tin(), rep: rp.body.replies }));
+
+  // Từ điển trống → giữ nguyên, không hỏi, không sổ lỗi (đường đi bình thường).
+  fresh();
+  rp = await send({ external_user_id: "duong-4", text: "bán nhà hẻm 4m pham the hien quận 8, 60m2, 5 tỷ" });
+  check("DUONG-05 từ điển trống → giữ 'pham the hien', không gợi ý, không bot_errors",
+    /pham the hien/.test(tin().location_raw ?? "") && !tin().boc_tach?.duong_goi_y && db().t.bot_errors.length === 0,
+    JSON.stringify({ l: tin(), loi: db().t.bot_errors }));
+
+  // Trả lời câu ĐỊA CHỈ đang treo bằng chữ không dấu → sửa dấu theo từ điển.
+  fresh(seedDuong);
+  await send({ external_user_id: "duong-5", text: "bán nhà quận 9, 60m2, 5 tỷ" });
+  const cauDangHoi = pend()[0]; // vi_tri hay phuong tuỳ chonCauKe — cả hai nhánh đều phải đối chiếu từ điển
+  rp = await send({ external_user_id: "duong-5", text: "hẻm 12 le van viet" });
+  check("DUONG-06 trả lời địa chỉ không dấu khi bot đang hỏi vị trí/phường → location_raw 'hẻm 12 Lê Văn Việt'",
+    ["vi_tri", "phuong"].includes(cauDangHoi) && tin().location_raw === "hẻm 12 Lê Văn Việt",
+    JSON.stringify({ cauDangHoi, l: tin(), rep: rp.body.replies }));
+  // Và đúng nhánh GHI CÂU TRẢ LỜI (câu vị trí đang treo): mở thẳng câu vi_tri rồi trả lời không dấu.
+  fresh(seedDuong);
+  await send({ external_user_id: "duong-5b", text: "bán nhà quận 9, 60m2, 5 tỷ" });
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tin().id, question: "vi_tri", status: "pending" });
+  rp = await send({ external_user_id: "duong-5b", text: "hẻm 12 le van viet" });
+  check("DUONG-06b câu vi_tri treo, trả lời không dấu → location_raw 'hẻm 12 Lê Văn Việt', câu vi_tri answered",
+    tin().location_raw === "hẻm 12 Lê Văn Việt" && db().t.info_requests.some((x) => x.question === "vi_tri" && x.status === "answered"),
+    JSON.stringify({ l: tin(), ir: db().t.info_requests.map((q) => [q.question, q.status]), rep: rp.body.replies }));
+
+  // RPC hỏng → SỰ CỐ vào sổ, nhưng địa chỉ vẫn ghi như cũ (từ điển là lớp phụ).
+  fresh(seedDuong); globalThis.__rpc.tim_duong = () => ({ data: null, error: { message: "boom" } });
+  rp = await send({ external_user_id: "duong-6", text: "bán nhà hẻm 4m pham the hien quận 8, 60m2, 5 tỷ" });
+  check("DUONG-07 RPC tim_duong hỏng → 1 dòng bot_errors, địa chỉ vẫn ghi chữ khách gõ",
+    db().t.bot_errors.some((e) => /tim_duong/.test(JSON.stringify(e))) && /pham the hien/.test(tin().location_raw ?? ""),
+    JSON.stringify({ l: tin(), loi: db().t.bot_errors }));
+}
+
 // ── FR-209 (15/09/2026): tra PHƯỜNG MỚI từ tên đường — Nominatim → bảng `wards`, HỎI XÁC NHẬN, gật mới ghi ──
 {
   // JSON rút gọn từ câu trả lời THẬT của Nominatim cho "Lê Văn Việt, Thành phố Hồ Chí Minh" (15/09/2026).

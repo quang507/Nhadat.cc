@@ -195,8 +195,7 @@ for f in $ham_mig; do
 done
 if [[ -n "$thieu_ham" ]]; then
   canh "Hàm có trong migration nhưng KHÔNG có trong schema.sql: $thieu_ham"
-  printf '   → thêm tay định nghĩa vào bot/supabase/schema.sql: chạy trên DB `select pg_get_functiondef('''public.<hàm>'''::regprocedure)` rồi dán vào (kèm trigger nếu có).
-'
+  printf '   → thêm tay định nghĩa vào bot/supabase/schema.sql: chạy trên DB pg_get_functiondef(<hàm>::regprocedure) rồi dán vào (kèm trigger nếu có).\n'
   printf '   → không còn script sinh lại schema.sql (sao lưu đã bỏ 11/09/2026).
 '
 else

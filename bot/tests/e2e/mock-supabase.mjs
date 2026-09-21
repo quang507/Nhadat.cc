@@ -359,6 +359,24 @@ class RpcCall {
         return globalThis.__vault ? globalThis.__vault(a.secret_name) : { data: null, error: null };
       // 20260909b — công tắc test: mặc định BẬT trong e2e (như DB test hiện tại).
       // FR-180: mẫu câu chuẩn cho prompt — e2e đặt globalThis.__mauCau = { ban, mua }.
+      // FR-212 (20260921b): từ điển tên đường — chép ngữ nghĩa `tim_duong`: khớp đúng / gần
+      // (Levenshtein ≤ p_toi_da) trên chữ bỏ dấu, gom quận/phường/tỉnh theo tên, tối đa 8 dòng.
+      case "tim_duong": {
+        const bd = (x) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+        const lev = (x, y) => { const m = x.length, n = y.length; let prev = Array.from({ length: n + 1 }, (_, j) => j); for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1)); prev = cur; } return prev[n]; };
+        const k = bd(String(a.p_ten ?? "").trim().replace(/\s+/g, " ")); const toiDa = a.p_toi_da ?? 2;
+        if (k.length < 4) return { data: [], error: null };
+        const gom = new Map();
+        for (const d of db.t.duong ?? []) {
+          const kc = lev(bd(d.ten), k); if (kc > toiDa) continue;
+          const g = gom.get(d.ten) ?? { ten: d.ten, khoang_cach: kc, quan_cu: new Set(), phuong: new Set(), tinh: new Set() };
+          g.khoang_cach = Math.min(g.khoang_cach, kc); if (d.quan_cu) g.quan_cu.add(d.quan_cu); if (d.phuong) g.phuong.add(d.phuong); g.tinh.add(d.tinh ?? "TP.HCM");
+          gom.set(d.ten, g);
+        }
+        const rows = [...gom.values()].map((g) => ({ ten: g.ten, khoang_cach: g.khoang_cach, quan_cu: [...g.quan_cu], phuong: [...g.phuong], tinh: [...g.tinh] }))
+          .sort((x, y) => x.khoang_cach - y.khoang_cach || ((a.p_quan && y.quan_cu.includes(a.p_quan)) - (a.p_quan && x.quan_cu.includes(a.p_quan))) || x.ten.localeCompare(y.ten)).slice(0, 8);
+        return { data: rows, error: null };
+      }
       case "mau_cau_fewshot":
         return { data: (globalThis.__mauCau ?? {})[a.p_phia] ?? "", error: null };
       case "cau_hinh":
@@ -541,7 +559,8 @@ class RpcCall {
         db.insert("listing_facts", { listing_id: l.id, question: a.p_question, answer: a.p_answer, source: a.p_source });
         // 20260909a: trg_zz_fact_vao_boc_tach + trg_zz_vi_tri_vao_cot
         l.boc_tach = { ...(l.boc_tach ?? {}), [a.p_question]: a.p_answer, _cap_nhat: now() };
-        if (a.p_question === "vi_tri" && !l.location_raw) l.location_raw = String(a.p_answer).trim();
+        // trg_vi_tri_vao_cot (schema.sql): ghi đè location_raw trừ khi đã có fact vi_tri nguồn admin/ctv (bậc cao hơn).
+        if (a.p_question === "vi_tri" && String(a.p_answer).trim() && !db.t.listing_facts.some((f) => f.listing_id === l.id && f.question === "vi_tri" && /^(admin|ctv)/i.test(String(f.source ?? "")) && f.answer !== a.p_answer)) l.location_raw = String(a.p_answer).trim();
         if (a.p_question === "gia") { l.price_raw = a.p_answer; l.price_vnd = parseVnd(a.p_answer); }
         if (a.p_question === "phuong") l.ward = a.p_answer;
         // 20260915d listing_facts_sync_deal: đổi loại giao dịch, tính lại giá từ fact giá gần nhất.
