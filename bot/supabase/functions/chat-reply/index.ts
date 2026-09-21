@@ -4351,7 +4351,8 @@ Deno.serve(async (req) => {
     }
     if (tinTruoc <= 1) {
       // 09/09/2026: lời chào ở bot_prompts.loi_chao (có chị Thu), code chỉ là dự phòng.
-      const cauHoiVai = LOI_CHAO_DB;
+      // 21/09/2026 (Zalo thật, chủ dự án): tin đầu chưa biết nam/nữ → "anh/chị" gạch chéo → "anh chị".
+      const cauHoiVai = boGachCheo(LOI_CHAO_DB);
       const { error: hvErr } = await client.from("messages").insert({
         conversation_id: convId, sender: "bot", body: cauHoiVai,
       });
