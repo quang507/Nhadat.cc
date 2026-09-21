@@ -1451,11 +1451,12 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
   // 14/09/2026 — chủ dự án: "nhắn tin lại cho khách LIỀN SAU tin nhắn đó đã bóc
   // tách (thật vào db) gì". 🤖 là bong bóng ĐẦU TIÊN, nói fact CỦA LƯỢT NÀY đọc từ
-  // DB, kèm "📦 Tin giờ" (tóm tắt cột) khi tin đổi so với lần báo trước.
+  // DB. 21/09/2026 (chủ dự án): các lượt sau in Y NHƯ lượt tạo tin — một dòng "🤖 Đã lưu:" là toàn bộ tin
+  // trong DB + "Kèm:" cho fact ngoài cột; không còn dòng "📦 Tin giờ" hay dòng fact riêng.
   let bl = r.body.replies[0] ?? "";
   check("BLDL-02 day_du → bong bóng ĐẦU là 🤖, đứng riêng", /^🤖 Đã lưu/.test(bl) && r.body.replies.length >= 2 && !r.body.replies.slice(1).some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
-  check("BLDL-03 📦 Tin giờ nói ĐÚNG cột trong DB (6m², không phải 66), kèm địa chỉ/phường/giá", /📦 Tin giờ: .*· 6m²/.test(bl) && !/66m²/.test(bl) && /99 Nguyễn Trãi/.test(bl) && /Phường 3/.test(bl) && /giá 7 tỷ/.test(bl), `${LB.status} | ${bl}`);
-  check("BLDL-03b 🤖 đọc SAU khi ghi: pháp lý chủ vừa trả lời trong CHÍNH lượt này có mặt, nguyên văn đã lưu", /Đã lưu: .*pháp lý: "sổ hồng riêng em"/.test(bl), bl);
+  check("BLDL-03 dòng 🤖 Đã lưu nói ĐÚNG cột trong DB (6m², không phải 66), kèm địa chỉ/phường/giá, KHÔNG còn 📦 Tin giờ", /^🤖 Đã lưu: .*· 6m²/.test(bl) && !/66m²/.test(bl) && /99 Nguyễn Trãi/.test(bl) && /Phường 3/.test(bl) && /giá 7 tỷ/.test(bl) && !/📦 Tin giờ/.test(bl), `${LB.status} | ${bl}`);
+  check("BLDL-03b 🤖 đọc SAU khi ghi: pháp lý chủ vừa trả lời trong CHÍNH lượt này có mặt trong tóm tắt", /^🤖 Đã lưu: .*sổ hồng riêng/.test(bl), bl);
   check("BLDL-04 'Đã lưu' chỉ có fact CỦA LƯỢT NÀY — không kèm '6x11' đã lưu lượt trước", !/6x11/.test(bl), bl);
   check("BLDL-05 🤖 vào sổ tin như mọi câu bot", db().t.messages.some((m) => m.sender === "bot" && /^🤖/.test(m.body ?? "")));
   // Lượt sau là câu RAO THÊM CĂN — nhánh này chắc chắn gửi lịch sử (khối NGỮ
@@ -1479,21 +1480,21 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
   check("BLDL-07 giá không đọc ra số → 🤖 nói rõ '(chưa đọc ra số)'", /giá "5 tới 6" \(chưa đọc ra số\)/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
 
-  // thay_doi: 🤖 đầu tiên, không mã tin; 📦 Tin giờ chỉ khi tin đổi; lượt không lưu gì thì im.
+  // thay_doi: 🤖 đầu tiên, không mã tin, một dòng đầy đủ; lượt không lưu gì thì im.
   globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
   fresh(seedKho);
   LB = db().t.listings[1]; db().t.sellers[0].active_listing_id = LB.id;
   db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
   r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
   bl = r.body.replies[0] ?? "";
-  check("BLDL-08 thay_doi → 🤖 là bong bóng ĐẦU, riêng, lần đầu kèm 📦 Tin giờ, không mã tin", /^🤖 Đã lưu: /.test(bl) && /\n📦 Tin giờ: /.test(bl) && !/BDS-Q5/.test(bl), JSON.stringify(r.body.replies));
+  check("BLDL-08 thay_doi → 🤖 là bong bóng ĐẦU, riêng, một dòng đầy đủ (địa chỉ + giá), không 📦, không mã tin", /^🤖 Đã lưu: .*99 Nguyễn Trãi.*giá 7 tỷ/.test(bl) && !/📦 Tin giờ/.test(bl) && !/BDS-Q5/.test(bl), JSON.stringify(r.body.replies));
   r = await send({ external_user_id: "z-ccrb", text: "dạ em" });
   check("BLDL-09 tin khách không lưu được gì → KHÔNG nhắn 🤖", r.body.replies.length > 0 && !r.body.replies.some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
   LB.area_m2 = 66;
   r = await send({ external_user_id: "z-ccrb", text: "nhà hướng đông nam em" });
-  check("BLDL-10 thay_doi + lượt này lưu fact + tin đã đổi (66m²) → 🤖 kèm 📦 Tin giờ mới", /^🤖 Đã lưu: .*hướng/.test(r.body.replies[0] ?? "") && /📦 Tin giờ: .*66m²/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
+  check("BLDL-10 thay_doi + lượt này lưu fact + tin đã đổi (66m²) → dòng 🤖 Đã lưu in tin MỚI (66m²) và hướng, không 📦", /^🤖 Đã lưu: .*66m²/.test(r.body.replies[0] ?? "") && /hướng/i.test(r.body.replies[0] ?? "") && !/📦 Tin giờ/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
   r = await send({ external_user_id: "z-ccrb", text: "nhà hướng đông nam nha em" });
-  check("BLDL-10b lưu lại mà tin KHÔNG đổi so với lần báo trước → 🤖 không kèm 📦 Tin giờ", /^🤖 Đã lưu: /.test(r.body.replies[0] ?? "") ? !/📦 Tin giờ/.test(r.body.replies[0]) : !r.body.replies.some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
+  check("BLDL-10b lưu lại mà tin KHÔNG đổi → nếu có 🤖 thì vẫn là MỘT dòng đầy đủ (66m²), không 📦", /^🤖 Đã lưu: /.test(r.body.replies[0] ?? "") ? (/66m²/.test(r.body.replies[0]) && !/📦 Tin giờ/.test(r.body.replies[0])) : !r.body.replies.some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
 
   // Người MUA: 14/09 cũng được báo hồ sơ vừa lưu (đọc lại buyers.preferences).
   globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
