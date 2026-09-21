@@ -208,8 +208,10 @@ const DA_CO_TRONG_TOM_TAT = new Set([
 
 /** Lượt TẠO tin: "Kèm: view: "view sông" · lý do bán: "cần tiền"" — fact lượt này tóm tắt cột chưa nói. */
 export function kemLuotTao(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
-  // 21/09/2026 (gộp 🤖 vào 💾): fact AI đọc luôn được nêu ở "Kèm" — chủ nhà phải thấy để sửa nếu máy đọc sai.
-  const con = facts.filter((f) => f.source === NGUON_AI || !DA_CO_TRONG_TOM_TAT.has(f.question));
+  // 21/09/2026 (gộp 🤖 vào 💾): fact AI đọc từng luôn được nêu ở "Kèm" để chủ nhà thấy mà sửa. Từ tối 21/09
+  // (bắn thật kiem-tbt) dòng 🤖 đã là toàn bộ cột, nên fact AI có cột ("3 phòng ngủ") in lại ở Kèm là
+  // nói hai lần; chỉ còn nêu fact mà tóm tắt cột không nói, bất kể nguồn.
+  const con = facts.filter((f) => !DA_CO_TRONG_TOM_TAT.has(f.question));
   const v = vuaLuuBan(con, nhan);
   return v ? v.replace(`${DAU_BAO_LAI} Đã lưu: `, "Kèm: ") : null;
 }

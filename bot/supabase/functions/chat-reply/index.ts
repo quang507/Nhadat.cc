@@ -1974,10 +1974,13 @@ Deno.serve(async (req) => {
           // 20/09/2026 (bắn thật mau-y-B): lượt đầu "Chào em, chị có…" → lời chào + "📝 Em ghi nhận" nằm
           // CHUNG một bong bóng ("Dạ em chào chị ạ!\n📝 Em ghi nhận: …"), startsWith không thấy → khách
           // đọc hai lần. Tìm dòng 📝 ở bất kỳ bong bóng nào: bỏ dòng đó, "Sai chỗ nào…" nối sau 💾.
-          const iGN = sach.findIndex((x) => x.split("\n").some((d) => d.startsWith("📝 Em ghi nhận")));
+          // 21/09/2026 (bắn thật kiem-cc, chú lớn tuổi): `doiTuXung` chạy TRƯỚC đoạn này nên dòng đã thành
+          // "📝 Cháu ghi nhận" → startsWith("📝 Em…") không thấy → chú đọc hai lần. So theo dấu 📝 + "ghi nhận".
+          const laDongGN = (d: string) => /^📝 \S+ ghi nhận/u.test(d);
+          const iGN = sach.findIndex((x) => x.split("\n").some(laDongGN));
           if (iGN >= 0) {
             const dong = sach[iGN].split("\n");
-            const j = dong.findIndex((d) => d.startsWith("📝 Em ghi nhận"));
+            const j = dong.findIndex(laDongGN);
             const duoi = dong.slice(j + 1).join(" ").trim();
             const truoc = dong.slice(0, j).join("\n").trim();
             if (truoc) sach.splice(iGN, 1, truoc); else sach.splice(iGN, 1);

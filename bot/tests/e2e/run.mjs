@@ -1471,6 +1471,14 @@ fresh(seedKho);
   check("BLDL-06b lượt TẠO tin → 🤖 đầu tiên là tóm tắt tin VỪA RAO (Phường 5), bỏ 📝 trùng nhưng giữ câu 'Sai chỗ nào…'",
     /^🤖 Đã lưu: /.test(r.body.replies[0] ?? "") && /Phường 5/.test(r.body.replies[0] ?? "") && /Sai chỗ nào/.test(r.body.replies[0] ?? "") && !r.body.replies.some((x) => /^📝 Em ghi nhận/.test(x)),
     JSON.stringify(r.body.replies));
+  // 21/09/2026 (bắn thật kiem-cc): chủ nhà là "chú" → doiTuXung đổi "📝 Em ghi nhận" thành "📝 Cháu ghi nhận"
+  // TRƯỚC đoạn bỏ 📝 → khách đọc hai lần. Bỏ 📝 phải nhận cả hai cách xưng.
+  db().t.sellers[0].xung_ho = "chú";
+  r = await send({ external_user_id: "z-ccrb", text: "chú còn một căn nữa, bán nhà Phường 6 giá 5 tỷ 50m2" });
+  check("BLDL-06c chủ nhà là CHÚ → lượt tạo tin vẫn bỏ 📝 (đã thành 'Cháu ghi nhận'), 🤖 đầu, xưng cháu",
+    /^🤖 Đã lưu: /.test(r.body.replies[0] ?? "") && !r.body.replies.some((x) => /📝 \S+ ghi nhận/u.test(x)) && r.body.replies.some((x) => /cháu/i.test(x)),
+    JSON.stringify(r.body.replies));
+  db().t.sellers[0].xung_ho = null;
 
   // giá có chữ mà không ra số → báo thẳng, đó là tin web lọc giá sẽ không thấy.
   fresh(seedKho);
@@ -1961,8 +1969,9 @@ fresh(seedKho);
       bongGhi[0].so_sanh.trung.includes("gia") && bongGhi[0].bo.some((b) => b.khoa === "phap_ly"),
     JSON.stringify({ factAi, tin: tinGhi, bong: bongGhi }));
   const bongAi4 = r.body.replies.filter((x) => x.startsWith("🤖"));
-  check("AIBOC-04b (21/09 gộp) khách thấy MỘT bong bóng '🤖 Đã lưu' nêu cả hướng + hiện trạng AI đọc lẫn thứ luật ghi; không dòng 'AI đọc thêm' riêng; pháp lý bịa không có",
-    bongAi4.length === 1 && /^🤖 Đã lưu/.test(bongAi4[0]) && /hướng: "Đông Nam"/.test(bongAi4[0]) && /hiện trạng nhà: "mới sơn sửa lại"/.test(bongAi4[0]) &&
+  // 21/09 tối (kiem-tbt): hướng AI đọc đã vào cột → hiện "hướng Đông Nam" ở dòng chính, KHÔNG lặp ở Kèm.
+  check("AIBOC-04b (21/09 gộp) khách thấy MỘT bong bóng '🤖 Đã lưu' nêu cả hướng (cột) + hiện trạng AI đọc (Kèm) lẫn thứ luật ghi; không dòng 'AI đọc thêm' riêng; pháp lý bịa không có",
+    bongAi4.length === 1 && /^🤖 Đã lưu/.test(bongAi4[0]) && /hướng Đông Nam/.test(bongAi4[0]) && /hiện trạng nhà: "mới sơn sửa lại"/.test(bongAi4[0]) &&
       !/pháp lý/.test(bongAi4[0]) && !r.body.replies.some((x) => /AI đọc thêm/.test(x)),
     JSON.stringify(r.body.replies));
 
