@@ -188,7 +188,7 @@ export function boHoiMucDich(replies: string[]): { replies: string[]; daBo: bool
   let daBo = false;
   const ra: string[] = [];
   for (const r of replies) {
-    if (/^(📋|💾|📝)/u.test(r)) { ra.push(r); continue; }
+    if (/^(📋|💾|🤖|📝)/u.test(r)) { ra.push(r); continue; }
     const cau = tachCau(r);
     const giu = cau.filter((c) => !laHoiMucDich(c));
     if (giu.length !== cau.length) daBo = true;
@@ -255,7 +255,7 @@ export function laCauGhiNhan(tin: string): boolean {
 export function boCauGhiNhan(replies: string[]): string[] {
   const ra: string[] = [];
   for (const r of replies) {
-    if (/^(📋|💾|📝)/u.test(r)) { ra.push(r); continue; }
+    if (/^(📋|💾|🤖|📝)/u.test(r)) { ra.push(r); continue; }
     const cau = tachCau(r);
     const giu = cau.filter((c) => !laCauGhiNhanMot(c));
     if (giu.length === cau.length) { ra.push(r); continue; }
@@ -288,7 +288,7 @@ function laCauGhiNhanMot(tin: string): boolean {
  */
 export function motCauHoi(replies: string[]): string[] {
   return replies.map((r) => {
-    if (/^(📋|💾|📝)/u.test(r)) return r;
+    if (/^(📋|💾|🤖|📝)/u.test(r)) return r;
     const cau = tachCau(r);
     const i = cau.findIndex((c) => /\?\s*$/.test(c));
     if (i < 0 || i === cau.length - 1) return r;

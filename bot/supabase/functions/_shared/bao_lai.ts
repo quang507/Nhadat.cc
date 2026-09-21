@@ -24,8 +24,10 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
 
 export type CheDoBaoLai = "tat" | "thay_doi" | "day_du";
 
-/** Dấu mở bong bóng báo lại. Cố ý khác 📋 (tiêu đề bản nháp) và 📝 (ghi nhận lúc rao). */
-export const DAU_BAO_LAI = "💾";
+/** Dấu mở bong bóng báo lại. Cố ý khác 📋 (tiêu đề bản nháp) và 📝 (ghi nhận lúc rao).
+ *  21/09/2026 (chủ dự án): 💾 "Vừa lưu / Đã lưu" và 🤖 "AI đọc thêm" GỘP thành MỘT bong bóng "🤖 Đã lưu";
+ *  fact AI đọc (nguồn ai_kiem) nằm chung danh sách, không tách dòng. */
+export const DAU_BAO_LAI = "🤖";
 
 export const COT_BAO_LAI =
   `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, projects(name), ${SPEC_COLS}`;
@@ -54,9 +56,9 @@ export type DongBaoLai = SpecRow & {
 
 export type FactBaoLai = { question: string; answer: string | null; created_at?: string | null; source?: string | null };
 
-/** Nguồn fact do AI đọc ra (FR-208 bước 2) — 💾 không gộp, in dòng 🤖 riêng để chủ nhà biết máy đọc. */
+/** Nguồn fact do AI đọc ra (FR-208 bước 2). Từ 21/09/2026 gộp chung vào bong bóng "🤖 Đã lưu". */
 export const NGUON_AI = "ai_kiem";
-/** Dấu mở dòng "AI đọc thêm". Như 💾: là bảng số liệu, bỏ khỏi lịch sử đưa model. */
+/** Dấu cũ của dòng "AI đọc thêm" (nay trùng DAU_BAO_LAI — một bong bóng). */
 export const DAU_AI_DOC = "🤖";
 
 /** Giá trị lạ, rỗng, NULL → tắt. Thà im còn hơn bật nhầm cho khách thật. */
@@ -174,7 +176,7 @@ export function tomTatDaLuu(
 /** Dòng in TÓM TẮT tin trong bong bóng các lượt sau (khi tin đổi so với lần báo trước). */
 export const DAU_TIN_GIO = "📦 Tin giờ:";
 
-/** "💾 Vừa lưu: giá: "6 tỷ 5" · phường: "Phường 9"" — fact lượt này (mới nhất trước), null khi không có. */
+/** "🤖 Đã lưu: giá: "6 tỷ 5" · phường: "Phường 9"" — fact lượt này (mới nhất trước), null khi không có. */
 export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
   const moiNhat = new Map<string, string>();
   for (const f of facts) {
@@ -188,13 +190,13 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
     const chu = CHU_DAP_AN[k]?.[v] ?? v;
     return `${ten}: "${chu.length > 50 ? chu.slice(0, 49) + "…" : chu}"`;
   });
-  return `${DAU_BAO_LAI} Vừa lưu: ${ds.join(" · ")}`;
+  return `${DAU_BAO_LAI} Đã lưu: ${ds.join(" · ")}`;
 }
 
 /** "🤖 AI đọc thêm (đã kiểm): hướng: "Đông Nam" · pháp lý: "sổ hồng riêng"" — fact nguồn `ai_kiem` lượt này. */
 export function aiDocThem(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
   const v = vuaLuuBan(facts.filter((f) => f.source === NGUON_AI), nhan);
-  return v ? v.replace(`${DAU_BAO_LAI} Vừa lưu: `, `${DAU_AI_DOC} AI đọc thêm (đã kiểm): `) : null;
+  return v ? v.replace(`${DAU_BAO_LAI} Đã lưu: `, `${DAU_AI_DOC} AI đọc thêm (đã kiểm): `) : null;
 }
 
 // Fact mà tóm tắt CỘT đã nói (qua cột tương ứng) — lượt tạo tin chỉ kèm phần còn lại.
@@ -205,9 +207,10 @@ const DA_CO_TRONG_TOM_TAT = new Set([
 
 /** Lượt TẠO tin: "Kèm: view: "view sông" · lý do bán: "cần tiền"" — fact lượt này tóm tắt cột chưa nói. */
 export function kemLuotTao(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
-  const con = facts.filter((f) => !DA_CO_TRONG_TOM_TAT.has(f.question));
+  // 21/09/2026 (gộp 🤖 vào 💾): fact AI đọc luôn được nêu ở "Kèm" — chủ nhà phải thấy để sửa nếu máy đọc sai.
+  const con = facts.filter((f) => f.source === NGUON_AI || !DA_CO_TRONG_TOM_TAT.has(f.question));
   const v = vuaLuuBan(con, nhan);
-  return v ? v.replace(`${DAU_BAO_LAI} Vừa lưu: `, "Kèm: ") : null;
+  return v ? v.replace(`${DAU_BAO_LAI} Đã lưu: `, "Kèm: ") : null;
 }
 
 // Khoá hồ sơ người mua là việc NỘI BỘ của bot — không báo.
