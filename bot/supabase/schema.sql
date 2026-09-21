@@ -3,9 +3,10 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-18 09:01 (giờ VN)
+-- Sinh lúc: 2026-09-21 16:46 (giờ VN)
 
 -- ══ Extension ══
+create extension if not exists fuzzystrmatch with schema extensions;
 create extension if not exists pg_cron with schema pg_catalog;
 create extension if not exists pg_net with schema public;
 create extension if not exists pg_stat_statements with schema extensions;
@@ -184,6 +185,18 @@ create table if not exists public.deals (
   closed_at timestamp with time zone,
   created_at timestamp with time zone not null default now(),
   ctv_id uuid
+);
+
+create table if not exists public.duong (
+  id uuid not null default gen_random_uuid(),
+  ten text not null,
+  ten_khong_dau text default bo_dau(ten),
+  tinh text not null,
+  tinh_cu text,
+  phuong text not null default ''::text,
+  quan_cu text,
+  nguon text not null,
+  created_at timestamp with time zone not null default now()
 );
 
 create table if not exists public.inbound_events (
@@ -622,6 +635,21 @@ do $d$ begin
   alter table public.deals add constraint deals_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.duong add constraint duong_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.duong add constraint duong_ten_check CHECK (((length(ten) >= 2) AND (length(ten) <= 80)));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.duong add constraint duong_ten_tinh_phuong_key UNIQUE (ten, tinh, phuong);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.duong add constraint duong_tinh_check CHECK ((tinh = ANY (ARRAY['TP.HCM'::text, 'Tây Ninh'::text, 'Đồng Nai'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.duong add constraint duong_tinh_cu_check CHECK ((tinh_cu = ANY (ARRAY['TP.HCM'::text, 'Bình Dương'::text, 'Bà Rịa – Vũng Tàu'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.inbound_events add constraint inbound_events_pkey PRIMARY KEY (event_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -978,6 +1006,7 @@ create index if not exists curated_lists_buyer_idx ON public.curated_lists USING
 create index if not exists deals_buyer_id_idx ON public.deals USING btree (buyer_id);
 create index if not exists deals_ctv_id_idx ON public.deals USING btree (ctv_id);
 create index if not exists deals_listing_id_idx ON public.deals USING btree (listing_id);
+create index if not exists duong_ten_khong_dau_idx ON public.duong USING btree (ten_khong_dau);
 create index if not exists idx_conversations_seller ON public.conversations USING btree (seller_id, started_at DESC);
 create index if not exists idx_listings_price_vnd ON public.listings USING btree (deal, price_vnd);
 create index if not exists inbound_events_first_seen_idx ON public.inbound_events USING btree (first_seen_at);
@@ -5651,6 +5680,36 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.tim_duong(p_ten text, p_quan text DEFAULT NULL::text, p_toi_da integer DEFAULT 2)
+ RETURNS TABLE(ten text, khoang_cach integer, quan_cu text[], phuong text[], tinh text[])
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'extensions'
+AS $function$
+  with q as (
+    select public.bo_dau(regexp_replace(btrim(coalesce(p_ten, '')), '\s+', ' ', 'g')) as k
+  ), c as (
+    select d.ten, d.quan_cu, d.phuong, d.tinh,
+           levenshtein_less_equal(d.ten_khong_dau, q.k, greatest(coalesce(p_toi_da, 0), 0)) as kc
+      from public.duong d, q
+     where length(q.k) between 4 and 200
+       and abs(length(d.ten_khong_dau) - length(q.k)) <= greatest(coalesce(p_toi_da, 0), 0)
+  )
+  select c.ten,
+         min(c.kc)::integer,
+         array_remove(array_agg(distinct c.quan_cu), null),
+         array_remove(array_agg(distinct c.phuong), ''),
+         array_agg(distinct c.tinh)
+    from c
+   where c.kc <= greatest(coalesce(p_toi_da, 0), 0)
+   group by c.ten
+   order by min(c.kc),
+            (p_quan is not null and p_quan = any(array_remove(array_agg(distinct c.quan_cu), null))) desc,
+            c.ten
+   limit 8;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.tin_can_geocode(p_limit integer DEFAULT 40)
  RETURNS TABLE(id uuid, location_raw text, street text, ward text, district text, quan_mac_dinh boolean, lat double precision, lng double precision, toa_do_muc text, du_an_lat double precision, du_an_lng double precision)
  LANGUAGE sql
@@ -6789,6 +6848,7 @@ alter table public.ctv_daily_reports enable row level security;
 alter table public.ctvs enable row level security;
 alter table public.curated_lists enable row level security;
 alter table public.deals enable row level security;
+alter table public.duong enable row level security;
 alter table public.inbound_events enable row level security;
 alter table public.inbound_ledger enable row level security;
 alter table public.info_requests enable row level security;
@@ -6976,6 +7036,7 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.ct
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.ctvs to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.curated_lists to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.deals to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.duong to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.inbound_events to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.inbound_ledger to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.info_requests to service_role;
@@ -7463,6 +7524,8 @@ grant execute on function public.them_nhan_tin(p_listing_id uuid, p_nhan text[])
 revoke all on function public.thu_muc_dau_uuid(p_name text) from public, anon, authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to service_role;
+revoke all on function public.tim_duong(p_ten text, p_quan text, p_toi_da integer) from public, anon, authenticated;
+grant execute on function public.tim_duong(p_ten text, p_quan text, p_toi_da integer) to service_role;
 revoke all on function public.tin_can_geocode(p_limit integer) from public, anon, authenticated;
 grant execute on function public.tin_can_geocode(p_limit integer) to service_role;
 revoke all on function public.tin_cua_toi(p_listing uuid) from public, anon, authenticated;
