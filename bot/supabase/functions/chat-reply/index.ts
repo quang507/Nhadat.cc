@@ -2947,13 +2947,22 @@ Deno.serve(async (req) => {
           const goiY = gD as GoiYDuong;
           const { error: xErr } = await client.rpc("ghi_boc_tach", { p_listing_id: pendingReq.listing_id, p: { duong_goi_y: false } });
           if (xErr) await ghiLoi(client, "chat-reply ghi_boc_tach(xoa duong goi y)", xErr.message);
-          if (laDongY(dapAn) && !humanActive && pendingReq.question !== "duyet_tin") {
+          // Bắn thật 21/09 (mau-tdt2): "đúng rồi em, phường 2 quận 5" — gật ở VẾ ĐẦU kèm thông tin: gật vẫn
+          // là gật (sửa đường), phần còn lại đi đường thường như một câu trả lời.
+          const veDauD = dapAn.split(/[,;.!?]|\s+(?:mà|ma|nhưng|nhung|và|va|với|voi)\s+/u)[0]?.trim() ?? "";
+          const gatCa = laDongY(dapAn);
+          const gatDau = !gatCa && veDauD.length > 0 && veDauD !== dapAn.trim() && laDongY(veDauD);
+          if ((gatCa || gatDau) && !humanActive && pendingReq.question !== "duyet_tin") {
             const { error: vErr } = await client.rpc("ghi_fact_listing", {
               p_listing_id: pendingReq.listing_id, p_question: "vi_tri", p_answer: goiY.vi_tri, p_source: "seller_chat",
             });
             if (vErr) await ghiLoi(client, "chat-reply ghi_fact_listing(vi_tri sua duong)", vErr.message);
-            const cauKeDuong = cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, goiY.vi_tri);
-            return await traLoiSeller([`Dạ em sửa lại ${goiY.ten} rồi ạ. ${cauKeDuong}`], { sua_duong: goiY.ten, reask: pendingReq.question, loai_cau: "sua_duong" });
+            if (gatCa) {
+              const cauKeDuong = cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, goiY.vi_tri);
+              return await traLoiSeller([`Dạ em sửa lại ${goiY.ten} rồi ạ. ${cauKeDuong}`], { sua_duong: goiY.ten, reask: pendingReq.question, loai_cau: "sua_duong" });
+            }
+            // Cắt vế gật, phần còn lại là câu trả lời (bong bóng 🤖 của lượt đã báo "vị trí cụ thể" đổi).
+            dapAn = dapAn.slice(dapAn.indexOf(veDauD) + veDauD.length).replace(/^[\s,;.!?]+/u, "").replace(/^(?:mà|ma|nhưng|nhung|và|va|với|voi)\s+/iu, "").trim() || dapAn;
           }
         }
       }

@@ -2256,9 +2256,9 @@ fresh(seedKho);
   check("DUONG-10 chế độ 'chinh', AI đọc 'Trần Đình Trọng' → vẫn qua từ điển: gợi ý Trần Bình Trọng, hỏi xác nhận; địa chỉ tạm vẫn là chữ chưa sửa",
     tin().boc_tach?.duong_goi_y?.ten === "Trần Bình Trọng" && modelThay("Dạ em hiểu là đường Trần Bình Trọng đúng không") && /đình trọng/i.test(tin().location_raw ?? "") && !/Bình Trọng/.test(tin().location_raw ?? ""),
     JSON.stringify({ l: tin(), rep: rp.body.replies }));
-  rp = await send({ external_user_id: "duong-9", text: "đúng rồi" });
-  check("DUONG-11 gật → địa chỉ mang 'Trần Bình Trọng' (không còn 'đình trọng'), gợi ý xoá",
-    /Trần Bình Trọng/.test(tin().location_raw ?? "") && !/đình trọng/i.test(tin().location_raw ?? "") && tin().boc_tach?.duong_goi_y === false,
+  rp = await send({ external_user_id: "duong-9", text: "đúng rồi em, 3 phòng ngủ" });
+  check("DUONG-11 gật KÈM thông tin ('đúng rồi em, 3 phòng ngủ') → địa chỉ mang 'Trần Bình Trọng', gợi ý xoá, 3 phòng ngủ vẫn ghi",
+    /Trần Bình Trọng/.test(tin().location_raw ?? "") && !/đình trọng/i.test(tin().location_raw ?? "") && tin().boc_tach?.duong_goi_y === false && tin().bedrooms === 3,
     JSON.stringify({ l: tin(), rep: rp.body.replies }));
   globalThis.__cauHinh = undefined;
 
