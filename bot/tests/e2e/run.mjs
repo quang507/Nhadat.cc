@@ -2209,6 +2209,23 @@ fresh(seedKho);
     tin().location_raw === "hẻm 12 Lê Văn Việt" && db().t.info_requests.some((x) => x.question === "vi_tri" && x.status === "answered"),
     JSON.stringify({ l: tin(), ir: db().t.info_requests.map((q) => [q.question, q.status]), rep: rp.body.replies }));
 
+  // Bắn thật 21/09 (chế độ `chinh`): AI đọc "pham the hier" thành "Phạm Thế Hiển" (sửa chính tả) → kiểm bằng chứng
+  // bỏ vì đổi chữ cái → tin KHÔNG có địa chỉ, không ai hỏi. Nay lấy TRÍCH DẪN làm địa chỉ → từ điển hỏi xác nhận.
+  fresh(seedDuong);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 1, kien_thuc: [], truong: [
+        { khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "bán nhà", can: null },
+        { khoa: "duong", gia_tri: "Phạm Thế Hiển", trich_dan: "pham the hier", can: null },
+        { khoa: "quan", gia_tri: "Quận 8", trich_dan: "quận 8", can: null },
+        { khoa: "dien_tich", gia_tri: "60", trich_dan: "60m2", can: null },
+      ] } : OUT();
+  rp = await send({ external_user_id: "duong-7", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
+  check("DUONG-08 chế độ 'chinh': AI sửa 'pham the hier' → 'Phạm Thế Hiển' bị kiểm bằng chứng bỏ → lấy trích dẫn làm địa chỉ, từ điển hỏi xác nhận, gợi ý cất",
+    /pham the hier/.test(tin().location_raw ?? "") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" && modelThay("Đường mình là Phạm Thế Hiển phải không"),
+    JSON.stringify({ l: tin(), rep: rp.body.replies }));
+  globalThis.__cauHinh = undefined;
+
   // RPC hỏng → SỰ CỐ vào sổ, nhưng địa chỉ vẫn ghi như cũ (từ điển là lớp phụ).
   fresh(seedDuong); globalThis.__rpc.tim_duong = () => ({ data: null, error: { message: "boom" } });
   rp = await send({ external_user_id: "duong-6", text: "bán nhà hẻm 4m pham the hien quận 8, 60m2, 5 tỷ" });
