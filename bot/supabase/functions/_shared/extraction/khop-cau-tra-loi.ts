@@ -1214,7 +1214,9 @@ export function chonCauKe(vuaNoi: string[], conThieu: CauThieu[]): string | unde
 // Gật = câu chỉ gồm từ đồng ý + tiểu từ, không có từ phủ định/sửa; hoặc emoji
 // vui, like, tim. "ok nhưng sửa giá" là KHÔNG gật — sửa đi trước.
 const TU_GAT = new Set(["da","vang","ok","oke","okie","okay","u","uh","um","duoc","dc","chuan","dung","dong","y","chot","len","dang","vay","tot","hay","dep","on","nhat","tri","xin","cam","on","yes","yep"]);
-const TU_DEM = new Set(["nha","nhe","nhen","em","e","a","roi","do","day","luon","di","thoi","ha","rat","qua","lam","cu","the","nhu","tin","vay","cho","chi","anh","minh","toi","ne","het","cai","nay","ma"]);
+// 21/09/2026 (bắn thật kiem-cc2, chủ nhà là chú): "ok đăng đi cháu" KHÔNG gật vì bộ đệm chỉ có anh/chị/em —
+// lời gật thành "thông tin bổ sung" và bản nháp gửi lại. Thêm cách xưng lớn tuổi (FR-176): cháu, chú, cô, bác, con.
+const TU_DEM = new Set(["nha","nhe","nhen","em","e","a","roi","do","day","luon","di","thoi","ha","rat","qua","lam","cu","the","nhu","tin","vay","cho","chi","anh","minh","toi","ne","het","cai","nay","ma","chau","chu","co","bac","con"]);
 const EMOJI_VUI = /(👍|❤️|❤|😍|🥰|😊|🙂|👌|🔥|💯|\[sticker|\[khach tha tim|\[thả tim|\[like)/;
 export function laDongY(text: string): boolean {
   const goc = text.trim();

@@ -2313,6 +2313,18 @@ fresh(seedKho);
   check("NHAP-03 'ok đăng đi, mà giá 9 tỷ 8 nha em' → giá 9 tỷ 8 ghi (lời sửa), rồi gật → duyệt; không vào bo_sung",
     /9 tỷ 8/.test(tin().price_raw ?? "") && !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)),
     JSON.stringify({ l: { price_raw: tin().price_raw, chu_duyet_at: tin().chu_duyet_at }, rep: rp.body.replies }));
+  // 21/09/2026 tối (bắn thật kiem-cc2): chủ nhà là CHÚ gật "ok đăng đi cháu" → từng KHÔNG gật (bộ đệm `laDongY`
+  // thiếu cháu/chú/cô/bác), lời gật thành "📝 Thêm: ok đăng đi cháu" và nháp gửi lại. Nay gật như "ok đăng đi em".
+  fresh();
+  await send({ external_user_id: "nhap-3", text: "chào cháu, chú bán nhà hẻm 6m Trần Bình Trọng phường 2 quận 5, 4x15, trệt 2 lầu, 3 phòng ngủ, giá 9 tỷ 5" });
+  tin().alley_width_m = 6; tin().area_m2 = 60; tin().frontage_m = 4;
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tin().id, question: "phap_ly", status: "pending" });
+  await send({ external_user_id: "nhap-3", text: "sổ hồng riêng rồi cháu, chú đứng tên" });
+  rp = await send({ external_user_id: "nhap-3", text: "ok đăng đi cháu" });
+  check("NHAP-04 chủ nhà là CHÚ: 'ok đăng đi cháu' lúc duyệt → gật (chu_duyet_at), không vào bo_sung, không gửi lại nháp, xưng cháu",
+    !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)) && !rp.body.replies.some((r) => /đăng tin như vầy|sửa lại rồi/i.test(r)) && !rp.body.replies.some((r) => /(?<![\p{L}])em(?![\p{L}])/iu.test(r)),
+    JSON.stringify({ l: { chu_duyet_at: tin().chu_duyet_at, xung_ho: db().t.sellers[0]?.xung_ho }, facts: db().t.listing_facts.map((f) => [f.question, f.answer]), rep: rp.body.replies }));
 }
 
 // ── 21/09/2026 (chủ dự án "làm cả 4"): emoji trần, lời nói với bot, chào hai lần, "anh/chị" gạch chéo ──
