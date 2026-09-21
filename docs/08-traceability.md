@@ -14,6 +14,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | DH-06 | Lộ trình 90 ngày: chốt hướng → đo I3 qua CTV → mở địa bàn (FR-174 đợt 1 xong, đợt 2 chờ) → 7 hạng mục dữ liệu → phần AOND còn thiếu → vận hành | OPEN-21/26/28/40/41/42, OPEN-27 nửa sau; FR-173, FR-174; `01 §1.5c`; FR-135/141 (takeover UI ⏳); NFR-16 / OPEN-25 |
 | DH-07 | Cho tới khi §0.8 chốt, đi theo khuyến nghị BA và ghi `[giả định BA]` | OPEN-40, OPEN-41, OPEN-42, OPEN-27 nửa sau |
 | DH-08 | Đánh giá 21/09/2026 theo khung Design Thinking: năm cột có gì / thiếu gì, khả năng thành công, ba việc kế tiếp (đo trên DB thật, không từ code) | `00 §0.9`; INS-02/03/04/06/11/12, `01 §1.2`/§1.5/§1.7, §0.5–§0.7, RSK-02/RSK-04, FR-145, FR-173, FR-208, FR-212, `10 §10.8`, TS-DUONG/TS-BLDL/TS-HOIBU |
+| DH-09 | Lean Canvas 12 ô (21/09/2026): vấn đề, giải pháp hiện có, giải pháp, giá trị độc nhất, khái niệm, lợi thế khó sao chép, phân khúc, khách đầu tiên, chỉ số, kênh, chi phí, nguồn thu — cùng nội dung §0.4, lệch thì §0.4 thắng | `00 §0.10`; INS-01/02/04/05/06/09/11/13, `01 §1.2`–§1.5/§1.7, `02 §2.2`, BR-02/04/05/08/09, FR-57/103/104/144/145/155/156/171/173/174/177/208, RSK-02/06, NFR-14/16, OPEN-01/25, §0.5, §0.9 |
 
 ## 8.1 Business Requirement → Functional Requirement
 
