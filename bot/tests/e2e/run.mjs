@@ -2085,6 +2085,49 @@ fresh(seedKho);
       db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "phuong" && x.status === "pending"),
     JSON.stringify({ fMoi, ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
 
+  // 21/09/2026 (Zalo thật): câu treo VỊ TRÍ — AI đọc tên đường (phục hồi dấu) thắng luật `catDapAn` (từng ghi cả câu).
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L8.id && x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L8.id, question: "vi_tri", status: "pending" });
+  L8.location_raw = null; L8.street = null; L8.ward = null;
+  const soFact14 = db().t.listing_facts.filter((f) => f.listing_id === L8.id).length;
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: [], truong: [
+        { khoa: "duong", gia_tri: "Phạm Thế Hiển", trich_dan: "Pham The Hien", can: null },
+        { khoa: "do_rong_hem", gia_tri: "4", trich_dan: "hem 4m", can: null },
+        { khoa: "phuong", gia_tri: "4", trich_dan: "P.4", can: null },
+      ] } : OUT();
+  r = await send({ external_user_id: "aiboc-8", text: "nhà của anh ở hem 4m Pham The Hien, P.4 📐" });
+  const f14 = db().t.listing_facts.filter((f) => f.listing_id === L8.id).slice(soFact14);
+  check("AIBOC-14 'chinh' câu treo VỊ TRÍ, khách gõ cả câu không dấu: vi_tri = 'Phạm Thế Hiển' (AI, có dấu), location_raw theo; hẻm 4m + phường 4 đi ô riêng (ai_kiem); câu vị trí answered; không fact nào mang cả câu",
+    f14.some((f) => f.question === "vi_tri" && f.answer === "Phạm Thế Hiển") && L8.location_raw === "Phạm Thế Hiển" &&
+      f14.some((f) => f.question === "do_rong_hem" && f.answer === "4m" && f.source === "ai_kiem") && f14.some((f) => f.question === "phuong" && f.answer === "Phường 4") &&
+      !f14.some((f) => /nhà của anh/.test(f.answer)) && db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "vi_tri" && x.status === "answered"),
+    JSON.stringify({ f14, loc: L8.location_raw, ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
+
+  // AI không đọc ra đường → luật đỡ như cũ (không hạ khớp thành lệch cho câu vị trí).
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L8.id && x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L8.id, question: "vi_tri", status: "pending" });
+  const soFact15 = db().t.listing_facts.filter((f) => f.listing_id === L8.id).length;
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+  r = await send({ external_user_id: "aiboc-8", text: "123/4 An Dương Vương" });
+  const f15 = db().t.listing_facts.filter((f) => f.listing_id === L8.id).slice(soFact15);
+  check("AIBOC-15 'chinh' câu treo VỊ TRÍ, AI trả rỗng → luật đỡ: vi_tri = '123/4 An Dương Vương' (seller_chat), câu answered",
+    f15.some((f) => f.question === "vi_tri" && f.answer === "123/4 An Dương Vương" && f.source === "seller_chat") &&
+      db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "vi_tri" && x.status === "answered"),
+    JSON.stringify({ f15, ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
+
+  // Câu treo LOẠI BĐS: AI đọc loại trước, RPC đoán loại chỉ đỡ khi AI trống.
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L8.id && x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L8.id, question: "loai_bds", status: "pending" });
+  L8.property_type = "chua_ro";
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: [], truong: [{ khoa: "loai_bds", gia_tri: "dat", trich_dan: "lô đất", can: null }] } : OUT();
+  r = await send({ external_user_id: "aiboc-8", text: "em có 1 lô đất 5x20 trong khu dân cư" });
+  check("AIBOC-16 'chinh' câu treo LOẠI BĐS: mock RPC đoán loại trả null, AI đọc 'dat' → ô loại = 'đất', câu answered, không hỏi lại",
+    db().t.listing_facts.some((f) => f.listing_id === L8.id && f.question === "loai_bds" && f.answer === "đất") &&
+      db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "loai_bds" && x.status === "answered") && r.body.reask !== "loai_bds",
+    JSON.stringify({ f: db().t.listing_facts.filter((f) => f.listing_id === L8.id && f.question === "loai_bds"), rep: r.body.replies, reask: r.body.reask }));
+
   // Model bóc CHẾT ở chế độ chinh → toàn bộ đường luật y như cũ (fallback), lỗi vào sổ.
   fresh(seedKho);
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };

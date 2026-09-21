@@ -66,6 +66,9 @@ import { gonLoiSua, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.t
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban"]);
+// 21/09/2026 (Zalo thật): ở chế độ `chinh`, câu VỊ TRÍ / PHƯỜNG vẫn để AI đọc trước — AI có tên đường /
+// số phường sạch thì lấy; AI trống thì luật đỡ như cũ (không hạ "khớp" thành "lệch" như các khoá khác).
+const CAU_AI_DOC_TRUOC_LUAT_DO = new Set(["vi_tri", "phuong"]);
 const LOAI_DAP_AN: Record<string, string> = {
   nha_pho: "nhà phố", nha_cap4: "nhà cấp 4", chung_cu: "căn hộ chung cư", dat: "đất", biet_thu: "biệt thự",
   phong_tro: "phòng trọ", mat_bang: "mặt bằng", toa_nha: "toà nhà", dat_nong_nghiep: "đất nông nghiệp",
@@ -2910,7 +2913,17 @@ Deno.serve(async (req) => {
       }
       let loaiDapAn: string | null = null;
       if (pendingReq.question === "loai_bds") {
-        const { data: pt } = await client.rpc("guess_property_type_answer", { p_text: dapAn });
+        // 21/09/2026 (chủ dự án: "các trường khác cũng vậy, để AI nhận diện nó thuộc trường nào"): chế độ
+        // `chinh` — AI đọc loại BĐS trước (qua kiểm bằng chứng), RPC đoán loại chỉ đỡ khi AI trống.
+        let pt: string | null = null;
+        if (bongAi && cheDoBocAi && (await cheDoBocAi) === "chinh") {
+          const kqAi = await bongAi;
+          if (kqAi?.ket) pt = docAiChinh(kiemDeXuat(kqAi.truong, text).dat, null).loaiBds;
+        }
+        if (!pt) {
+          const { data: ptLuat } = await client.rpc("guess_property_type_answer", { p_text: dapAn });
+          pt = ptLuat ? String(ptLuat) : null;
+        }
         // 16/09/2026 (bắn thật): "Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm" → ô loại BĐS ghi
         // NGUYÊN câu (rồi DB đọc "nhà trong" ra nhà trống). Đáp án ô loại là TÊN LOẠI đọc ra.
         // Chỉ thay đáp án GHI vào ô loại; `dapAn` giữ nguyên để nhặt fact kèm (hẻm, tầng, sàn).
@@ -3057,7 +3070,7 @@ Deno.serve(async (req) => {
       // Câu có đường riêng (`CAU_KHONG_LAY_AI`: phường, vị trí, ảnh…): AI không quyết GIÁ TRỊ câu treo,
       // nhưng ở chế độ `chinh` vẫn quyết FACT KÈM (bắn thật 21/09 mau-v-03: trả lời câu phường bằng
       // "ngang 5 dài 20, hẻm xe hơi" → luật ghi độ rộng hẻm = "hẻm xe hơi").
-      const layChoCauTreo = !CAU_KHONG_LAY_AI.has(pendingReq.question);
+      const layChoCauTreo = !CAU_KHONG_LAY_AI.has(pendingReq.question) || (cheDoAiTreo === "chinh" && CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question));
       if (!suaKtDaGhi && bongAi && !kqDuyet && ((cheDoAiTreo === "ghi" && layChoCauTreo) || cheDoAiTreo === "chinh")) {
         const kqAi = await bongAi;
         const dongTreo = (pendingReq.listings ?? null) as unknown as DongDb | null;
@@ -3079,7 +3092,7 @@ Deno.serve(async (req) => {
           const hoiKem = kq.hoiNguoc ?? (kq.loai === "hoi" ? dapAn : undefined);
           kq = { loai: "khop", ...(hoiKem ? { hoiNguoc: hoiKem } : {}) };
           loaiDapAn = dapAnAi;
-        } else if (aiChinh && layChoCauTreo && kq.loai === "khop" && KHOA_FACT_AI_BIET.has(pendingReq.question)) {
+        } else if (aiChinh && layChoCauTreo && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question) && kq.loai === "khop" && KHOA_FACT_AI_BIET.has(pendingReq.question)) {
           kq = { loai: "lech" };
         }
         if (aiChinh && kq.loai === "lech") {

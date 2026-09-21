@@ -108,6 +108,16 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     kien_thuc: ["24 phòng full khách"],
     luu_y: "Toà nhà BÁN có dòng tiền: \"thu nhập N/tháng\" là thu_nhap_thue. Hẻm có số mét mới là do_rong_hem.",
   },
+  {
+    cau_dang_hoi: "vi_tri",
+    tin: "nhà của anh ở hem 4m pham the hien, p4 q8 nha",
+    so_can: 0,
+    truong: [
+      t("duong", "Phạm Thế Hiển", "pham the hien"), t("do_rong_hem", "4", "hem 4m"), t("phuong", "4", "p4"), t("quan", "Quận 8", "q8"),
+    ],
+    kien_thuc: [],
+    luu_y: "Khách gõ không dấu → tên đường viết lại CÓ DẤU đúng tên thật, trích dẫn vẫn nguyên văn không dấu. Câu trả lời địa chỉ: chỉ tên đường vào duong, hẻm và phường đi ô riêng, không ghi cả câu.",
+  },
 ];
 
 /** Bản chữ để dán vào system prompt (sau LUAT, cùng khối cache). */
