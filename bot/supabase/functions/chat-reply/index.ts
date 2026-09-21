@@ -1702,12 +1702,15 @@ Deno.serve(async (req) => {
             else kienThucGhi.push(kt);
           }
         }
-        const { error: bErr } = await client.from("boc_tach_bong").insert({
+        // 21/09/2026 (bắn thật mau-v-03): jsonb Postgres từ chối "\u0000" trong chuỗi model trả về
+        // ("unsupported Unicode escape sequence") → mất một dòng sổ đo. Lọc trước khi ghi.
+        const sachJson = <T>(x: T): T => JSON.parse(JSON.stringify(x).replace(/\\u0000/g, "")) as T;
+        const { error: bErr } = await client.from("boc_tach_bong").insert(sachJson({
           seller_id: sellerRow.id, listing_id: d?.id ?? null,
           tin: thayLienHe(text, "[liên hệ]").slice(0, 2000), cau_dang_hoi: kq.cauDangHoi, model: MODEL, ms: kq.ms,
           so_can: soCan,
           de_xuat: kq.truong, dat, bo, so_sanh: soSanh, da_ghi: { che_do: kq.cheDo, ghi: daGhi, bo: boGhi, kien_thuc: kienThucGhi },
-        });
+        }));
         if (bErr) await ghiLoi(client, "chat-reply boc_tach_bong(ghi)", bErr.message);
         const dongGhi = [
           ...daGhi.map((g) => ({ question: g.question, answer: g.answer, source: NGUON_AI })),
@@ -3051,11 +3054,15 @@ Deno.serve(async (req) => {
       // Model hỏng / trả rỗng → `aiChinh` null → toàn bộ đường luật y như cũ.
       let aiChinh: (AiChinh & { kienThuc: string[] }) | null = null;
       const cheDoAiTreo = bongAi && cheDoBocAi ? await cheDoBocAi : "tat";
-      if (!suaKtDaGhi && bongAi && !CAU_KHONG_LAY_AI.has(pendingReq.question) && !kqDuyet && (cheDoAiTreo === "ghi" || cheDoAiTreo === "chinh")) {
+      // Câu có đường riêng (`CAU_KHONG_LAY_AI`: phường, vị trí, ảnh…): AI không quyết GIÁ TRỊ câu treo,
+      // nhưng ở chế độ `chinh` vẫn quyết FACT KÈM (bắn thật 21/09 mau-v-03: trả lời câu phường bằng
+      // "ngang 5 dài 20, hẻm xe hơi" → luật ghi độ rộng hẻm = "hẻm xe hơi").
+      const layChoCauTreo = !CAU_KHONG_LAY_AI.has(pendingReq.question);
+      if (!suaKtDaGhi && bongAi && !kqDuyet && ((cheDoAiTreo === "ghi" && layChoCauTreo) || cheDoAiTreo === "chinh")) {
         const kqAi = await bongAi;
         const dongTreo = (pendingReq.listings ?? null) as unknown as DongDb | null;
         const datAi = kqAi ? kiemDeXuat(kqAi.truong, text).dat : [];
-        const dapAnAi = kqAi ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
+        const dapAnAi = kqAi && layChoCauTreo ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
         if (cheDoAiTreo === "chinh" && kqAi?.ket) {
           aiChinh = { ...docAiChinh(datAi, dongTreo), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], text, datAi) };
         }
@@ -3072,16 +3079,17 @@ Deno.serve(async (req) => {
           const hoiKem = kq.hoiNguoc ?? (kq.loai === "hoi" ? dapAn : undefined);
           kq = { loai: "khop", ...(hoiKem ? { hoiNguoc: hoiKem } : {}) };
           loaiDapAn = dapAnAi;
-        } else if (aiChinh && kq.loai === "khop" && KHOA_FACT_AI_BIET.has(pendingReq.question)) {
+        } else if (aiChinh && layChoCauTreo && kq.loai === "khop" && KHOA_FACT_AI_BIET.has(pendingReq.question)) {
           kq = { loai: "lech" };
         }
         if (aiChinh && kq.loai === "lech") {
           // Luật nhận "một nẻo" ra khoá X mà AI không thấy X → thay bằng fact AI đọc được (nếu có);
           // không có gì thì bỏ `chuyenSang` để rơi về ghi nguyên văn (`bo_sung`), câu vẫn treo.
           const kem = aiChinh.ghi.filter((g) => g.question !== pendingReq.question);
+          // Giữ NGUYÊN tham chiếu phần tử của `aiChinh.ghi` để chỗ ghi biết nguồn là ai_kiem.
           if (kq.chuyenSang && !kem.some((f) => f.question === kq.chuyenSang!.question)) {
-            kq = { ...kq, chuyenSang: kem[0] ? { question: kem[0].question, answer: kem[0].answer } : undefined };
-          } else if (!kq.chuyenSang && kem[0]) kq = { ...kq, chuyenSang: { question: kem[0].question, answer: kem[0].answer } };
+            kq = { ...kq, chuyenSang: kem[0] };
+          } else if (!kq.chuyenSang && kem[0]) kq = { ...kq, chuyenSang: kem[0] };
         }
       }
       /** Fact KÈM trong câu trả lời: chế độ `chinh` (AI đã chạy) → AI quyết, luật chỉ đỡ khoá AI không biết. */
@@ -3628,7 +3636,7 @@ Deno.serve(async (req) => {
         const kqAi = await bongAi;
         if (kqAi?.ket && ((kqAi.ket as { so_can?: number }).so_can ?? 1) <= 1) {
           const datAi = kiemDeXuat(kqAi.truong, text).dat;
-          aiRao = { ...docAiChinh(datAi, null), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], text, datAi) };
+          aiRao = { ...docAiChinh(datAi, { deal: dealCauRao(tKD) }), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], text, datAi) };
         }
       }
       const sDeal = aiRao?.loaiGiaoDich ?? dealCauRao(tKD);

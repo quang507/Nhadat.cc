@@ -220,6 +220,15 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
     ghiB.dien_tich === "80m2" && ghiB.mat_tien === "ngang 4m dài 20m" && b.dienTich === 80 && b.quan === null && b.loaiBds === null, JSON.stringify(b));
   const c = docAiChinh([], null);
   ok("docAiChinh: AI không nói gì → ghi rỗng, mọi cột null (nơi gọi rơi về luật)", c.ghi.length === 0 && c.gia === null && c.quan === null && c.loaiBds === null && c.gap === null);
+  bo("hiện trạng 'xe hơi' từ 'hẻm xe hơi' (không tả tình trạng nhà)", "ngang 5 dài 20 nha, hẻm xe hơi", "hien_trang", "xe hơi", "hẻm xe hơi", "gia_tri_khong_dung_loai_truong");
+  dat("hiện trạng 'trống' từ 'nhà đang trống'", "phường 7, nhà đang trống dọn vô ở liền", "hien_trang", "trống", "nhà đang trống");
+  dat("hiện trạng 'mới sơn sửa lại'", "nhà mới sơn sửa lại", "hien_trang", "mới sơn sửa lại", "nhà mới sơn sửa lại");
+  ok("kiến thức: lời hứa / lời nói chuyện ('để em coi lại sổ rồi báo', 'cảm ơn em') KHÔNG vào mô tả; 'gần chợ' vẫn vào",
+    kiemKienThuc(["để em coi lại sổ rồi báo", "cảm ơn em nha", "gần chợ Bình Chánh"], "ngang 5 dài 20, để em coi lại sổ rồi báo, cảm ơn em nha, gần chợ Bình Chánh", []).join("|") === "gần chợ Bình Chánh");
+  // Tạo tin: khoảng giá theo loại giao dịch AI đọc (bắn thật mau-v-06: "2tr8/tháng" phòng trọ).
+  const d6 = docAiChinh([dx("gia", "2tr8", "2tr8/thang"), dx("loai_giao_dich", "cho_thue", "cho thue")], null);
+  ok("docAiChinh: thuê 2tr8 đạt khoảng giá THUÊ nhờ loai_giao_dich AI đọc; 'cho_thue' chuẩn hoá đúng", d6.gia === "2tr8" && d6.loaiGiaoDich === "cho_thue" && d6.ghi.some((g) => g.question === "loai_giao_dich" && g.answer === "cho_thue"), JSON.stringify(d6));
+  ok("docAiChinh: thuê 2tr8 mà AI không nói loại, dong.deal = cho_thue (luật đỡ) → vẫn đạt", docAiChinh([dx("gia", "2tr8", "2tr8/thang")], { deal: "cho_thue" }).gia === "2tr8");
   ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien, KHÔNG có tien_ich_gan / nam_xay / the_chap (luật vẫn đỡ)",
     ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds"].every((k) => KHOA_FACT_AI_BIET.has(k)) && ["tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => !KHOA_FACT_AI_BIET.has(k)));
 }

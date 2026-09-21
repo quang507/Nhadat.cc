@@ -2067,6 +2067,24 @@ fresh(seedKho);
       db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "ket_cau" && x.status === "answered"),
     JSON.stringify({ kc: f8("ket_cau"), wc: f8("so_wc"), h: f8("huong"), ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]) }));
 
+  // Câu treo PHƯỒNG (đường riêng — AI không quyết câu treo) nhưng fact KÈM vẫn do AI: bắn thật 21/09 mau-v-03.
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L8.id && x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L8.id, question: "phuong", status: "pending" });
+  const soFactTruoc = db().t.listing_facts.filter((f) => f.listing_id === L8.id).length;
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: ["để em coi lại sổ rồi báo"], truong: [
+        { khoa: "ngang", gia_tri: "5", trich_dan: "ngang 5", can: null },
+        { khoa: "dai", gia_tri: "20", trich_dan: "dài 20", can: null },
+        { khoa: "hien_trang", gia_tri: "xe hơi", trich_dan: "hẻm xe hơi", can: null },
+      ] } : OUT();
+  r = await send({ external_user_id: "aiboc-8", text: "ngang 5 dài 20 nha, hẻm xe hơi, để em coi lại sổ rồi báo" });
+  const fMoi = db().t.listing_facts.filter((f) => f.listing_id === L8.id).slice(soFactTruoc);
+  check("AIBOC-13 'chinh' câu treo phường, trả lời số đo: AI quyết fact kèm → dien_tich '5x20' (nguồn ai_kiem); KHÔNG có độ rộng hẻm 'hẻm xe hơi' (luật), KHÔNG hiện trạng 'xe hơi' (kiểm hình dạng), KHÔNG bo_sung lời hứa; câu phường vẫn treo",
+    fMoi.some((f) => f.question === "dien_tich" && f.answer === "5x20" && f.source === "ai_kiem") &&
+      !fMoi.some((f) => f.question === "do_rong_hem") && !fMoi.some((f) => f.question === "hien_trang") && !fMoi.some((f) => f.question === "bo_sung") &&
+      db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "phuong" && x.status === "pending"),
+    JSON.stringify({ fMoi, ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
+
   // Model bóc CHẾT ở chế độ chinh → toàn bộ đường luật y như cũ (fallback), lỗi vào sổ.
   fresh(seedKho);
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
