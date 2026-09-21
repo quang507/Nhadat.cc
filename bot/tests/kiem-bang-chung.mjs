@@ -239,6 +239,9 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
     kiemDeXuat([dx("gia", "30 tỷ", "giá 32 tỷ còn thương lương")], MT).bo[0]?.ly_do === "tien_khong_khop_trich_dan");
   dat("thu nhập thuê của toà nhà BÁN: 'thu nhập 180 triệu/tháng'", "Bán toà CHDV Phú Nhuận 6x22, thu nhập 180 triệu/tháng, giá 45 tỷ", "thu_nhap_thue", "180 triệu", "thu nhập 180 triệu/tháng");
   bo("thu nhập thuê KHÔNG áp cho tin cho thuê: 'thuê 60 triệu/tháng' của mặt bằng", MB, "thu_nhap_thue", "60 triệu", "thuê 60 triệu/tháng", "khong_phai_thu_nhap_thue");
+  const dTN = docAiChinh([dx("thu_nhap_thue", "120 triệu", "thu nhập 120 triệu/tháng"), dx("loai_giao_dich", "ban", "Bán toà")], null);
+  ok("docAiChinh: thu_nhap_thue → fact doanh_thu '120 triệu'; tiền không đọc được thì bỏ", dTN.ghi.some((g) => g.question === "doanh_thu" && g.answer === "120 triệu") &&
+    docAiChinh([dx("thu_nhap_thue", "nhiều", "thu nhập nhiều")], null).bo.some((b) => b.khoa === "thu_nhap_thue" && b.ly_do === "khong_doc_duoc_tien"), JSON.stringify(dTN));
   ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien, KHÔNG có tien_ich_gan / nam_xay / the_chap (luật vẫn đỡ)",
     ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds"].every((k) => KHOA_FACT_AI_BIET.has(k)) && ["tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => !KHOA_FACT_AI_BIET.has(k)));
 }

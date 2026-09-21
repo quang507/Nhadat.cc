@@ -408,6 +408,9 @@ export const KHOA_GHI: Record<string, string> = {
   ly_do_ban: "ly_do_ban", thoi_han_thue: "thoi_han_thue", phi_quan_ly: "phi_quan_ly", view: "view",
   hien_trang: "hien_trang", do_rong_hem: "do_rong_hem", do_rong_duong: "do_rong_duong",
   cach_mat_tien: "cach_mat_tien", tien_coc: "tien_coc", phuong: "phuong", gap: "gap", thuong_luong: "thuong_luong",
+  // 21/09/2026 (bắn lại mau-u-03): AI đọc đúng "thu nhập 120 triệu/tháng" nhưng không có chỗ ghi →
+  // vào fact `doanh_thu` (ô luật vẫn dùng cho toà nhà / CHDV; `diem_tin` đếm ô này).
+  thu_nhap_thue: "doanh_thu",
 };
 /** Khoảng hợp lệ cho trường số (đơn vị của cột). Ngoài khoảng = không ghi, kèm lý do. */
 const KHOANG: Record<string, [number, number]> = {
@@ -445,6 +448,12 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
         const thue = dong?.deal === "cho_thue";
         if (t == null) { bo.push({ ...d, ly_do: "khong_doc_duoc_tien" }); continue; }
         if (thue ? (t < 1e6 || t > 1e10) : (t < 1e8 || t > 1e12)) { bo.push({ ...d, ly_do: "gia_ngoai_khoang" }); continue; }
+        answer = v;
+        break;
+      }
+      case "thu_nhap_thue": {
+        const t = docTien(v) ?? docTien(d.trich_dan);
+        if (t == null || t < 1e6 || t > 1e10) { bo.push({ ...d, ly_do: "khong_doc_duoc_tien" }); continue; }
         answer = v;
         break;
       }
