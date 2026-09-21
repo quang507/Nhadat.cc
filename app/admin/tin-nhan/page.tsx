@@ -17,11 +17,11 @@ type HoiThoai = {
   buyers: { name: string | null; zalo_user_id: string | null } | null;
 };
 type Tin = { id: string; sender: string; body: string; seq: number; created_at: string };
-// Bong bóng 💾 (bảng số liệu báo lại cho người bán, 11/09/2026) không phải lời
-// thoại: không cho lưu làm mẫu câu, và cắt đuôi "\n💾…" gắn cuối câu bot (chế độ
+// Bong bóng 🤖 (bảng số liệu báo lại cho người bán, 11/09/2026) không phải lời
+// thoại: không cho lưu làm mẫu câu, và cắt đuôi "\n🤖…" gắn cuối câu bot (chế độ
 // thay_doi) trước khi điền vào ô sửa. Cùng luật với boBaoLai trong
 // bot/supabase/functions/_shared/bao_lai.ts; DB có CHECK chặn lần cuối (20260911c).
-const DAU_BAO_LAI = "💾";
+const DAU_BAO_LAI = "🤖";
 const laBaoLai = (s: string) => s.startsWith(DAU_BAO_LAI);
 const boBaoLai = (s: string) => s.split(`\n${DAU_BAO_LAI}`)[0];
 type Mau = { id: string; message_id: string | null; conversation_id: string | null; cau_chuan: string; dung_lam: string };

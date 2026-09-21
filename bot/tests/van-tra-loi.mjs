@@ -165,7 +165,7 @@ for (const [vao, mong] of [
   ok("hiện trạng không còn 'luôn nha anh'", !/luôn nha anh/.test(tin), tin);
 }
 
-// ── 14/09 FR-207: 💾 đã báo thì bỏ ghi nhận lần hai; tóm tắt nói đủ dự án/tầng/nội thất ─
+// ── 14/09 FR-207: 🤖 đã báo thì bỏ ghi nhận lần hai; tóm tắt nói đủ dự án/tầng/nội thất ─
 {
   const ra = boCauGhiNhan([
     "Dạ em ghi số phòng ngủ 4 rồi ạ.",
@@ -175,8 +175,8 @@ for (const [vao, mong] of [
     ra.length === 1 && ra[0] === "Hẻm xe hơi thì thanh khoản cao quá. Nhà mình ở đường nào vậy ạ?", JSON.stringify(ra));
   const ra2 = boCauGhiNhan(["Dạ em ghi 9 tỷ 5, 1 trệt 2 lầu, 4 phòng ngủ rồi ạ. Nhà mình ở phường nào vậy?"]);
   ok("câu đầu 'Dạ em ghi …' bị bỏ → câu còn lại mở bằng 'Dạ'", ra2[0] === "Dạ nhà mình ở phường nào vậy?", JSON.stringify(ra2));
-  const giu = ["📋 Em đăng tin như vầy nha anh:\nBán nhà…", "💾 Vừa lưu: giá: \"6 tỷ 5\"", "Dạ em ghi nhận rồi ạ.", "Sổ riêng thì khách chốt nhanh lắm anh."];
-  ok("không đụng bản nháp, 💾, ghi nhận trơ trọi, câu khen", JSON.stringify(boCauGhiNhan(giu)) === JSON.stringify(giu), JSON.stringify(boCauGhiNhan(giu)));
+  const giu = ["📋 Em đăng tin như vầy nha anh:\nBán nhà…", "🤖 Đã lưu: giá: \"6 tỷ 5\"", "Dạ em ghi nhận rồi ạ.", "Sổ riêng thì khách chốt nhanh lắm anh."];
+  ok("không đụng bản nháp, 🤖, ghi nhận trơ trọi, câu khen", JSON.stringify(boCauGhiNhan(giu)) === JSON.stringify(giu), JSON.stringify(boCauGhiNhan(giu)));
 }
 {
   const nhan = { tang: "tầng", view: "view", ly_do_ban: "lý do bán", dien_tich: "diện tích", tho_cu: "diện tích thổ cư" };
@@ -189,12 +189,12 @@ for (const [vao, mong] of [
     bedrooms: 2, price_raw: "18 triệu/tháng", price_vnd: 18e6, floor: 15, furnishing: "full", projects: { name: "Sunrise City" } }, [], {}, "thay_doi");
   ok("tóm tắt căn hộ nói dự án ĐÃ GẮN, tầng căn, nội thất (bắn thật 14/09: thiếu cả ba)",
     /dự án Sunrise City/.test(tt) && /tầng 15/.test(tt) && /nội thất đầy đủ/.test(tt) && !/trệt/.test(tt), tt);
-  ok("tomTatTrongCau đọc lại tóm tắt từ 💾 lượt tạo lẫn 📦 lượt sau",
-    tomTatTrongCau("💾 Đã lưu: Nhà phố bán · 60m²\nSai chỗ nào…") === "Nhà phố bán · 60m²" &&
-    tomTatTrongCau('💾 Vừa lưu: hướng: "đông nam"\n📦 Tin giờ: Nhà phố bán · hướng Đông Nam') === "Nhà phố bán · hướng Đông Nam");
+  ok("tomTatTrongCau đọc lại tóm tắt từ 🤖 lượt tạo lẫn 📦 lượt sau",
+    tomTatTrongCau("🤖 Đã lưu: Nhà phố bán · 60m²\nSai chỗ nào…") === "Nhà phố bán · 60m²" &&
+    tomTatTrongCau('🤖 Đã lưu: hướng: "đông nam"\n📦 Tin giờ: Nhà phố bán · hướng Đông Nam') === "Nhà phố bán · hướng Đông Nam");
   const mua = vuaLuuMua({ area: "Quận 5" }, { area: "Quận 5", budget: "7 tỷ", deal: "ban", ten_tro_ly: "H•ai", xung_ho: "chị", gan_tien_ich_loc: { m: 1000 } },
     [["deal", "mua hay thuê"], ["area", "khu vực muốn tìm (phường nào)"], ["budget", "khoảng giá"]]);
-  ok("người mua: chỉ khoá ĐỔI, không khoá nội bộ, deal 'ban' đọc là 'mua'", mua === "💾 Đã lưu nhu cầu: mua hay thuê: mua · khoảng giá: 7 tỷ", String(mua));
+  ok("người mua: chỉ khoá ĐỔI, không khoá nội bộ, deal 'ban' đọc là 'mua'", mua === "🤖 Đã lưu nhu cầu: mua hay thuê: mua · khoảng giá: 7 tỷ", String(mua));
 }
 
 // ── 14/09 bắn lại kịch bản 7 (người mua) ──────────────────────────────────────
@@ -244,14 +244,14 @@ ok("dò mục đích: 'hẻm hay mặt tiền, để ở hay đầu tư ạ?' l�
 ok("dò mục đích: câu kể 'mua để ở hay đầu tư đều được' (không hỏi) không bắt", !laHoiMucDich("Mua để ở hay đầu tư thì khu này đều hợp ạ."));
 ok("dò mục đích: 'hẻm xe hơi hay mặt tiền ạ?' không bắt", !laHoiMucDich("Chị thích hẻm xe hơi hay mặt tiền ạ?"));
 {
-  const b = boHoiMucDich(["💾 Đã lưu nhu cầu: mua", "Dạ em lọc Quận 6 tầm 4 tỷ cho anh nhé. Anh tìm nhà hẻm hay mặt tiền, để ở hay đầu tư ạ?"]);
-  ok("dò mục đích: bỏ đúng câu hỏi, giữ 💾 và câu trước", b.daBo && b.replies.length === 2 && b.replies[1] === "Dạ em lọc Quận 6 tầm 4 tỷ cho anh nhé.", JSON.stringify(b));
+  const b = boHoiMucDich(["🤖 Đã lưu nhu cầu: mua", "Dạ em lọc Quận 6 tầm 4 tỷ cho anh nhé. Anh tìm nhà hẻm hay mặt tiền, để ở hay đầu tư ạ?"]);
+  ok("dò mục đích: bỏ đúng câu hỏi, giữ 🤖 và câu trước", b.daBo && b.replies.length === 2 && b.replies[1] === "Dạ em lọc Quận 6 tầm 4 tỷ cho anh nhé.", JSON.stringify(b));
   const c = boHoiMucDich(["Mình tìm để ở hay đầu tư ạ?"]);
   ok("dò mục đích: bỏ hết thì giữ nguyên (không gửi lượt im)", !c.daBo && c.replies.length === 1, JSON.stringify(c));
 }
 ok("gõ dính: 'Emghi nhận…' → 'Em ghi nhận…'", suaTuXungMua("Emghi nhận nhu cầu của mình ạ.") === "Em ghi nhận nhu cầu của mình ạ.", suaTuXungMua("Emghi nhận nhu cầu của mình ạ."));
 ok("gõ dính: 'Emmy', 'em gái' giữ nguyên", suaTuXungMua("Emmy và em gái") === "Emmy và em gái", suaTuXungMua("Emmy và em gái"));
-ok("gõ dính + 💾: câu 'Emghi nhận nhu cầu…, sắp lọc…' bị bỏ", boCauGhiNhan(["Dạ được.", suaTuXungMua("Emghi nhận nhu cầu của mình, sắp lọc được căn phù hợp liền ạ.")]).length === 1);
+ok("gõ dính + 🤖: câu 'Emghi nhận nhu cầu…, sắp lọc…' bị bỏ", boCauGhiNhan(["Dạ được.", suaTuXungMua("Emghi nhận nhu cầu của mình, sắp lọc được căn phù hợp liền ạ.")]).length === 1);
 ok("gộp: '4 người ở cùng, cần gần trường tiểu học' vào 'cần gần trường tiểu học Quận 3' không lặp",
   gopGhiChu("cần gần trường tiểu học Quận 3", "4 người ở cùng, cần gần trường tiểu học") === "cần gần trường tiểu học Quận 3; 4 người ở cùng",
   String(gopGhiChu("cần gần trường tiểu học Quận 3", "4 người ở cùng, cần gần trường tiểu học")));
@@ -277,7 +277,7 @@ for (const [vao, mong] of [
   ["Nhà mình mấy lầu ạ? Để em ghi vào tin.", "Nhà mình mấy lầu ạ?"],
   ["Anh/chị cần ra hàng gấp hay ưu tiên đạt giá mong muốn?", "Anh/chị cần ra hàng gấp hay ưu tiên đạt giá mong muốn?"],
   ["Dạ em ghi nhận rồi ạ.", "Dạ em ghi nhận rồi ạ."],
-  ["💾 Vừa lưu: giá: \"4 tỷ\"", "💾 Vừa lưu: giá: \"4 tỷ\""],
+  ["🤖 Đã lưu: giá: \"4 tỷ\"", "🤖 Đã lưu: giá: \"4 tỷ\""],
 ]) ok("motCauHoi " + JSON.stringify(vao.slice(0, 40)), motCauHoi([vao])[0] === mong, JSON.stringify(motCauHoi([vao])));
 
 // 15/09/2026 (bắn thật F2): câu hỏi về ảnh có đáp án hệ thống.
@@ -317,7 +317,7 @@ for (const [xh, vao, mong] of [
 // ── 18/09/2026: "lâu lâu thì khen thôi" — vuaKhen đọc 3 tin bot gần nhất, boCauKhen bỏ câu khen giữ câu hỏi ──
 ok("vuaKhen: 3 tin gần nhất có 'rất sáng sủa' → true", vuaKhen(["Dạ em ghi nhận.", "Nhà mới sơn sửa lại trông rất sáng sủa. Phường mấy cô?", "Dạ cô."]) === true);
 ok("vuaKhen: chỉ tin thứ 4 trở về trước khen → false", vuaKhen(["Hẻm xe hơi là khách chuộng lắm.", "Dạ.", "Phường mấy?", "Sổ riêng chưa?"]) === false);
-ok("vuaKhen: 'tiện ích gần' không phải khen", vuaKhen(["💾 Vừa lưu: tiện ích gần: \"gần chợ\""]) === false);
+ok("vuaKhen: 'tiện ích gần' không phải khen", vuaKhen(["🤖 Đã lưu: tiện ích gần: \"gần chợ\""]) === false);
 ok("boCauKhen: bỏ câu khen, giữ câu hỏi", boCauKhen("Dạ nhà 2 lầu, sổ hồng riêng là khách chốt nhanh lắm cô. Tổng cộng bao nhiêu phòng ngủ cô?") === "Tổng cộng bao nhiêu phòng ngủ cô?", boCauKhen("Dạ nhà 2 lầu, sổ hồng riêng là khách chốt nhanh lắm cô. Tổng cộng bao nhiêu phòng ngủ cô?"));
 ok("boCauKhen: hai dòng, dòng khen bỏ, dòng hỏi giữ", boCauKhen("3 phòng ngủ, toilet riêng từng tầng là rất tiện cho gia đình cô.\nMình cần ra hàng gấp hay được giá thì thôi cô?") === "Mình cần ra hàng gấp hay được giá thì thôi cô?");
 ok("boCauKhen: không có câu khen → giữ nguyên", boCauKhen("Dạ cháu sửa lại giá 6 tỷ rồi ạ. Mình cần ra hàng gấp hay được giá thì thôi cô?") === "Dạ cháu sửa lại giá 6 tỷ rồi ạ. Mình cần ra hàng gấp hay được giá thì thôi cô?");

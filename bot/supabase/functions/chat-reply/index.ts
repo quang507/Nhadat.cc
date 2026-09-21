@@ -1867,8 +1867,8 @@ Deno.serve(async (req) => {
             .eq("listings.seller_id", sellerRow.id).gte("created_at", moc)
             .order("created_at", { ascending: false }).limit(40);
           if (fErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(facts)", fErr.message);
-          // Fact AI đọc (FR-208 bước 2) có dòng 🤖 riêng — 💾 chỉ nói thứ LUẬT ghi.
-          factLuot = ((fs ?? []) as FactBaoLai[]).filter((f) => f.source !== NGUON_AI);
+          // 21/09/2026 (chủ dự án): fact AI đọc (ai_kiem) nằm CHUNG bong bóng "🤖 Đã lưu", không tách dòng.
+          factLuot = (fs ?? []) as FactBaoLai[];
         }
         const tomTat = tomTatDaLuu(dong, [], FACT_LABELS, "thay_doi");
         const hoSo = [
@@ -1885,11 +1885,11 @@ Deno.serve(async (req) => {
         const vuaGoc = vuaLuuBan(factLuot, FACT_LABELS);
         const vua = vuaGoc
           ? (dongHoSo ? `${vuaGoc}\n${dongHoSo}` : vuaGoc)
-          : dongHoSo ? `${DAU_BAO_LAI} Vừa lưu: ${hoSo}` : null;
+          : dongHoSo ? `${DAU_BAO_LAI} Đã lưu: ${hoSo}` : null;
         // Tin khách không lưu được gì ("anh bận", "ok em") → không nhắn thêm.
         if (!vua) return { bong: null, cheDo };
         // Kèm dòng "📦 Tin giờ" khi tóm tắt tin KHÁC lần báo gần nhất (day_du: luôn kèm).
-        const ttGon = tomTat?.replace(/^💾 Đã lưu: /, "") ?? null;
+        const ttGon = tomTat?.replace(new RegExp(`^${DAU_BAO_LAI} Đã lưu: `, "u"), "") ?? null;
         if (!ttGon) return { bong: vua, cheDo };
         if (cheDo === "day_du") return { bong: `${vua}\n${DAU_TIN_GIO} ${ttGon}`, cheDo };
         const { data: cu, error: cuErr } = await client.from("messages").select("body")
@@ -1937,7 +1937,8 @@ Deno.serve(async (req) => {
       // FR-208 bước 2: chế độ `ghi` phải CHỜ lượt AI (đã chạy song song từ đầu nhánh) để ghi
       // fact rồi báo ngay trong lượt này — "đã lưu thì phải ghi rõ lưu vào trường nào" (17/09).
       const cheDoAi = cheDoBocAi ? await cheDoBocAi : "tat";
-      const dongAi = cheDoAi === "ghi" || cheDoAi === "chinh" ? await ghiBongBocTach(extra) : null;
+      // 21/09/2026: ghi fact AI TRƯỚC khi 💾 đọc lại DB — dòng 🤖 riêng đã bỏ, fact AI hiện chung trong "🤖 Đã lưu".
+      if (cheDoAi === "ghi" || cheDoAi === "chinh") await ghiBongBocTach(extra);
       await ganNhanChoTin(extra);
       if (sach.length) {
         const bl = await baoLaiDaLuu(extra);
@@ -1960,12 +1961,6 @@ Deno.serve(async (req) => {
             sach.unshift(duoi ? `${bl.bong}\n${duoi}` : bl.bong);
           } else if (!sach.length) sach = [bl.bong];
           else sach.unshift(bl.bong);
-        }
-        // Dòng 🤖 đứng NGAY SAU 💾 (bong bóng riêng), không có 💾 thì đứng đầu.
-        if (dongAi) {
-          const i = sach.findIndex((x) => x.startsWith(DAU_BAO_LAI));
-          if (i >= 0) sach.splice(i + 1, 0, dongAi);
-          else sach.unshift(dongAi);
         }
       }
       // MỘT câu INSERT cho cả loạt bong bóng (FR-171 h): `seq` là identity nên
@@ -2388,7 +2383,7 @@ Deno.serve(async (req) => {
           }
           // 💾 chung chỉ đọc MỘT tin (căn đang chăm) nên in pháp lý của căn 1 dưới tin căn 2 — bong bóng
           // tiền định ở đây đã nói rõ từng căn, tắt 💾 cho lượt này (20/09/2026).
-          return await traLoiSeller([`💾 Đã lưu: ${daGhi.join(" · ")}.${cauKe ? `\n${cauKe}` : ""}`], { fact_theo_can: daGhi.length, dong_cau_treo: daDong.size, bao_lai_tat: true });
+          return await traLoiSeller([`${DAU_BAO_LAI} Đã lưu: ${daGhi.join(" · ")}.${cauKe ? `\n${cauKe}` : ""}`], { fact_theo_can: daGhi.length, dong_cau_treo: daDong.size, bao_lai_tat: true });
         }
       }
     }
