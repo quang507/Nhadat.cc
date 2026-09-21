@@ -18,6 +18,7 @@ import {
 } from "../_shared/claude.ts";
 import { congBiMat } from "../_shared/gate.ts";
 import { dienTen, FACT_LABELS, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
+import { boGachCheo, doiTuXung } from "../_shared/extraction/van-tra-loi.ts";
 
 const OutSchema = z.object({
   message: z.string().describe("Tin nhắn Zalo gửi người bán, tiếng Việt"),
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
       // làm PostgREST trả 300 PGRST201 — và nhánh dưới từng gộp mọi lỗi select
       // thành "listing không tồn tại" (404): hỏi bù CHẾT IM từ 09/09 tới 15/09,
       // 313 lượt, sổ lỗi ghi sai nguyên nhân nên không ai truy.
-      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, sellers!listings_seller_id_fkey(name, seller_type, zalo_user_id, ten_tro_ly)",
+      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, sellers!listings_seller_id_fkey(name, seller_type, zalo_user_id, ten_tro_ly, xung_ho)",
     )
     .eq("id", listing_id)
     .maybeSingle();
@@ -101,6 +102,26 @@ Deno.serve(async (req) => {
       note: "drip: đang có câu chờ trả lời - không hỏi chồng",
     });
   }
+  // 21/09/2026 (bắn thật `kiem-bl-2109`): tin rao qua chat tạo listing lúc :04.001 → trigger
+  // `listing_insert_drip` gọi hàm này NGAY, trong khi chat-reply còn đang xử lý (7,7 s) và chỉ
+  // mở câu chờ của nó ở :04–:06. Cổng `pendingKeys` ở trên đọc TRƯỚC mốc đó nên rỗng → hàm này
+  // hỏi chồng 3 câu ("Dạ cảm ơn anh/chị… mấy lầu? sổ? ảnh?") 2 giây sau câu hỏi đường của
+  // chat-reply — đúng cái FR-144 (e) cấm. Chủ nhà vừa nhắn trong 10 phút = hội thoại đang sống,
+  // chat-reply là người hỏi; nhịp drip (trigger lẫn cron) đứng ngoài.
+  if (drip && listing.seller_id) {
+    const { data: mCuoi, error: mErr } = await db.from("messages")
+      .select("created_at, conversations!messages_conversation_id_fkey!inner(seller_id)")
+      .eq("conversations.seller_id", listing.seller_id).eq("sender", "seller")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (mErr) await ghiLoi(db, "ask-seller tin chu nha gan nhat", mErr.message);
+    const luc = (mCuoi as { created_at?: string | null } | null)?.created_at ?? null;
+    if (luc && Date.now() - new Date(luc).getTime() < 10 * 60_000) {
+      return jsonResponse({
+        message: null, asked: [], skipped_pending: [...pendingKeys],
+        note: "drip: chủ nhà vừa nhắn trong 10 phút - chat-reply đang hỏi, không hỏi chồng",
+      });
+    }
+  }
 
   // Chủ dự án 09/09/2026 tối: hỏi bù là MỘT LẦN gom 2–3 thông tin còn thiếu,
   // ưu tiên thứ quan trọng (giá, diện tích, pháp lý, vị trí) hoặc ẢNH + SỔ —
@@ -130,7 +151,7 @@ Deno.serve(async (req) => {
     .map((f) => `- ${f.fact_key}: ${FACT_LABELS[f.fact_key] ?? f.fact_key}`)
     .join("\n");
   const seller = listing.sellers as
-    | { name?: string; seller_type?: string; zalo_user_id?: string | null; ten_tro_ly?: string | null }
+    | { name?: string; seller_type?: string; zalo_user_id?: string | null; ten_tro_ly?: string | null; xung_ho?: string | null }
     | null;
   // FR-181: cùng một tên trợ lý với chat-reply — cột `ten_tro_ly` nếu đã có,
   // không thì băm từ Zalo ID (cùng hàm, cùng kết quả).
@@ -163,7 +184,11 @@ Deno.serve(async (req) => {
       role: "user",
       content:
         `${instruction}\n` +
-        `Người bán: ${seller?.name ?? "chưa rõ tên (gọi anh/chị)"} - loại: ${
+        // 21/09/2026: "chưa rõ tên (gọi anh/chị)" từng dạy model viết "anh/chị" gạch chéo — nay đưa
+        // cách gọi đã dặn (`sellers.xung_ho`, FR-176); chưa biết thì gọi "mình", không gạch chéo.
+        `Người bán: ${seller?.name ?? "chưa rõ tên"} - cách gọi: ${
+          seller?.xung_ho ? `"${seller.xung_ho}"` : `chưa biết nam/nữ → gọi "mình", KHÔNG viết "anh/chị"`
+        } - loại: ${
           seller?.seller_type === "nmg" ? "nhà môi giới (hỏi gọn, chuyên nghiệp)" : "chính chủ (giọng gần gũi)"
         }\n` +
         `Tin rao: #${listing.code ?? listing.id} - ${listing.location_raw ?? ""} ${listing.ward ?? ""} ${listing.district ?? ""}, giá ${listing.price_raw ?? "?"}\n` +
@@ -176,6 +201,8 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Không sinh được tin nhắn", stop_reason: resp.stop_reason }, 502);
   }
   const out = resp.parsed_output;
+  // Lưới trên đường ra như chat-reply: bỏ "anh/chị" gạch chéo, tự xưng "cháu" với chú/cô/bác.
+  out.message = doiTuXung([boGachCheo(out.message)], seller?.xung_ho)[0];
   let sent_via: string = "none";
   // Khai ngoài khối `dry_run` vì câu trả lời cuối hàm đọc nó: `asked` phải là
   // những câu THẬT SỰ được mở, không phải những câu định mở.
