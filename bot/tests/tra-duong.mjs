@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // tra-duong.mjs — FR-212: từ điển tên đường, phần THUẦN (chọn kết quả tra, thay tên, câu hỏi).
 // Ứng viên ở đây là dạng `tim_duong()` trả về: { ten, khoang_cach, quan_cu[], phuong[], tinh[] }.
-import { cauXacNhanDuong, chonDuong, theTenDuong } from "../supabase/functions/_shared/extraction/tra-duong.ts";
+import { catTenDuong, cauXacNhanDuong, chonDuong, theTenDuong } from "../supabase/functions/_shared/extraction/tra-duong.ts";
 
 let dat = 0, hong = 0;
 const ok = (ten, dk, chi = "") => { if (dk) dat++; else { hong++; console.log(`✗ ${ten}${chi ? `\n    ${chi}` : ""}`); } };
@@ -52,9 +52,19 @@ ok("thay không phân biệt hoa thường/dấu", theTenDuong("123 Pham The Hi�
 ok("không thấy → giữ nguyên", theTenDuong("hẻm 12 Lê Văn Việt", "nguyen trai", "Nguyễn Trãi") === "hẻm 12 Lê Văn Việt");
 ok("goc rỗng → giữ nguyên", theTenDuong("hẻm 12 Lê Văn Việt", "", "X") === "hẻm 12 Lê Văn Việt");
 
+// ── cắt tên đường trần từ cụm địa chỉ dài (bắn thật 21/09 mau-tdt) ──
+ok("'ở đường trần đình trọng quận 5' → 'trần đình trọng'", catTenDuong("ở đường trần đình trọng quận 5") === "trần đình trọng", catTenDuong("ở đường trần đình trọng quận 5"));
+ok("'tran binh trong phuong 2 q5' → 'tran binh trong'", catTenDuong("tran binh trong phuong 2 q5") === "tran binh trong");
+ok("'Lê Văn Việt, gần chợ' → 'Lê Văn Việt'", catTenDuong("Lê Văn Việt, gần chợ") === "Lê Văn Việt");
+ok("'Phạm Thế Hiển p4' → 'Phạm Thế Hiển'", catTenDuong("Phạm Thế Hiển p4") === "Phạm Thế Hiển");
+ok("'Cách Mạng Tháng 8' giữ nguyên (không cắt ở số)", catTenDuong("Cách Mạng Tháng 8") === "Cách Mạng Tháng 8");
+ok("'tại đường số 7' → 'đường số 7' (duongTraDuoc sẽ loại)", catTenDuong("tại đường số 7") === "đường số 7", catTenDuong("tại đường số 7"));
+ok("'Nguyễn Trãi hẻm 4m' → 'Nguyễn Trãi'", catTenDuong("Nguyễn Trãi hẻm 4m") === "Nguyễn Trãi");
+ok("'Xa lộ Hà Nội' giữ ('xa' đứng đầu là tên, không phải xã)", catTenDuong("Xa lộ Hà Nội") === "Xa lộ Hà Nội", catTenDuong("Xa lộ Hà Nội"));
+
 // ── câu hỏi xác nhận ──
-const cau = cauXacNhanDuong("Đường mình là {ten} phải không {ac}? Em thấy {ac} gõ \"{goc}\".", "anh", "pham the hier", "Phạm Thế Hiển");
-ok("điền mẫu", cau === 'Đường mình là Phạm Thế Hiển phải không anh? Em thấy anh gõ "pham the hier".', cau);
+const cau = cauXacNhanDuong("Dạ em hiểu là đường {ten} đúng không {ac}?", "anh", "pham the hier", "Phạm Thế Hiển");
+ok("điền mẫu (không nhắc chữ khách gõ sai — chủ dự án 21/09: 'tinh tế vào')", cau === "Dạ em hiểu là đường Phạm Thế Hiển đúng không anh?", cau);
 ok("câu xác nhận < 30 từ", cau.split(/\s+/).length < 30);
 
 console.log(`\ntra-duong: ${dat} đạt, ${hong} hỏng`);

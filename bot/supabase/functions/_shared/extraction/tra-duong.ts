@@ -51,6 +51,19 @@ export function chonDuong(goc: string, ungVien: UngVienDuong[] | null | undefine
 }
 
 /**
+ * Cắt TÊN ĐƯỜNG trần từ cụm địa chỉ đã qua tenDuong()/chuanTenDuong(): bỏ "ở/tại (đường)" đứng đầu, dừng
+ * trước phường/quận/hẻm/xã/dấu phẩy. "ở đường trần đình trọng quận 5" → "trần đình trọng". Bắn thật 21/09
+ * (mau-tdt): câu trả lời địa chỉ dài đi nguyên cụm vào tim_duong nên không khớp gì.
+ */
+export function catTenDuong(cum: string): string {
+  let s = (cum ?? "").normalize("NFC").replace(/\s+/g, " ").trim();
+  s = s.replace(/^(?:nằm ở|nam o|ở|o|tại|tai)\s+/iu, "").replace(/^(?:đường|duong|đ\.)\s+(?!(?:số|so)?\s*\d)/iu, "");
+  const m = /[,;.(]|(?<![\p{L}])(?:phường|phuong|quận|quan|hẻm|hem|hxh|xã|xa(?!\s+l[oộ])|gần|gan|khu|p\.?\s*\d|q\.?\s*\d)(?![\p{L}])/iu.exec(s);
+  if (m) s = s.slice(0, m.index);
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
  * Thay tên đường trong địa chỉ khách gõ: "hem 4m pham the hien p4" + ("pham the hien" →
  * "Phạm Thế Hiển") = "hem 4m Phạm Thế Hiển p4". So bỏ dấu, không phân biệt hoa thường;
  * không thấy thì trả nguyên địa chỉ.

@@ -181,4 +181,12 @@ ok("khác ID có thể khác tên (ít nhất 3 tên trong 40 ID)", new Set(Arra
 ok("dienTen điền mọi {ten}", dienTen("em là {ten}, {ten} đây", "T•ai") === "em là T•ai, T•ai đây");
 
 console.log(hong ? `\nFR-177: ${hong}/${tong} CA HỎNG` : `\nFR-177: ${tong}/${tong} CA ĐẠT`);
+// 21/09/2026 (bắn thật mau-tdt): "nhà ở đường trần đình trọng quận 5" là ĐỊA CHỈ, từng thành tiềm năng "nhà ở"
+// rồi lên bản nháp "💡 Phù hợp: nhà ở đường…". "ở" + đường/hẻm/số/phường/quận/khu/gần → không phải cách dùng.
+ok("'nhà ở đường trần đình trọng quận 5' → vi_tri, không phải tiem_nang", nhanDienFact("nhà ở đường trần đình trọng quận 5")?.question === "vi_tri", JSON.stringify(nhanDienFact("nhà ở đường trần đình trọng quận 5")));
+ok("'ở hẻm 12 lê văn việt' → vi_tri", nhanDienFact("ở hẻm 12 lê văn việt")?.question === "vi_tri");
+ok("'nhà ở gia đình' vẫn là tiem_nang", nhanDienFact("nhà ở gia đình")?.question === "tiem_nang");
+ok("'nhà ở hoặc kinh doanh đều được' vẫn là tiem_nang", nhanDienFact("nhà ở hoặc kinh doanh đều được")?.question === "tiem_nang");
+ok("'để ở' vẫn là tiem_nang", nhanDienFact("để ở")?.question === "tiem_nang");
+
 process.exit(hong ? 1 : 0);

@@ -20,6 +20,15 @@ const t = (khoa: string, gia_tri: string, trich_dan: string): DeXuat => ({ khoa,
 
 export const VI_DU_BOC_RAO: ViDuBocRao[] = [
   {
+    // Bắn thật 21/09 (mau-tdt): câu chào có tên đường lẫn trong câu → model trả RỖNG, tin không có địa chỉ.
+    cau_dang_hoi: null,
+    tin: "chào em, anh có căn nhà ở trần đình trọng muốn bán, em tư vấn giúp anh",
+    so_can: 1,
+    truong: [t("loai_giao_dich", "ban", "muốn bán"), t("loai_bds", "nha_pho", "căn nhà"), t("duong", "Trần Đình Trọng", "trần đình trọng")],
+    kien_thuc: [],
+    luu_y: "Câu chào vẫn có dữ liệu. Tên đường KHÔNG đổi chữ cái dù nghi gõ sai (Đình ≠ Bình) — hệ thống hỏi lại.",
+  },
+  {
     cau_dang_hoi: null,
     tin: "Bán nhà mặt tiền đường Châu Văn Liêm phường 14 quận 5, ngang 4.2m dài 18m, 1 trệt 3 lầu, đang cho thuê 45 triệu/tháng, giá 32 tỷ còn thương lượng",
     so_can: 1,
