@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -322,6 +322,18 @@ ok("boCauKhen: bỏ câu khen, giữ câu hỏi", boCauKhen("Dạ nhà 2 lầu, 
 ok("boCauKhen: hai dòng, dòng khen bỏ, dòng hỏi giữ", boCauKhen("3 phòng ngủ, toilet riêng từng tầng là rất tiện cho gia đình cô.\nMình cần ra hàng gấp hay được giá thì thôi cô?") === "Mình cần ra hàng gấp hay được giá thì thôi cô?");
 ok("boCauKhen: không có câu khen → giữ nguyên", boCauKhen("Dạ cháu sửa lại giá 6 tỷ rồi ạ. Mình cần ra hàng gấp hay được giá thì thôi cô?") === "Dạ cháu sửa lại giá 6 tỷ rồi ạ. Mình cần ra hàng gấp hay được giá thì thôi cô?");
 ok("boCauKhen: cả tin là một câu khen kèm dấu hỏi → giữ (không để trống)", boCauKhen("Nhà đẹp vậy chắc hút khách lắm, sổ riêng chưa cô?") === "Nhà đẹp vậy chắc hút khách lắm, sổ riêng chưa cô?");
+
+// ── 21/09/2026 ("làm cả 4"): lời nói với bot, xin xoá dữ liệu, bỏ gạch chéo ──
+for (const t of ["xóa sạch data của anh đi để anh test lại", "cái dòng phù hợp đọc kỳ quá", "bản nháp dài quá em", "reset lại giúp anh", "em là bot hả, hệ thống gì kỳ vậy"])
+  ok(`laNoiVoiBot: "${t}"`, laNoiVoiBot(t) === true);
+for (const t of ["hẻm 4m xe hơi vào", "sổ hồng riêng hoàn công", "5 tỷ 2", "phường 2 quận 5", "để anh hỏi vợ rồi báo", "nhà ở đường trần đình trọng"])
+  ok(`không phải lời nói với bot: "${t}"`, laNoiVoiBot(t) === false);
+ok("laXinXoaDuLieu: 'xóa sạch data của anh đi'", laXinXoaDuLieu("xóa sạch data của anh đi") === true);
+ok("laXinXoaDuLieu: 'xóa hết dữ liệu của anh đi'", laXinXoaDuLieu("xóa hết dữ liệu của anh đi") === true);
+ok("không phải xin xoá: 'xóa cái hẻm 4m đi, hẻm 5m'", laXinXoaDuLieu("xóa cái hẻm 4m đi, hẻm 5m") === false);
+ok("boGachCheo: 'Sai chỗ nào anh/chị nhắn lại' → 'anh chị'", boGachCheo("Sai chỗ nào anh/chị nhắn lại giúp em nha.") === "Sai chỗ nào anh chị nhắn lại giúp em nha.");
+ok("boGachCheo: đầu câu 'Anh/chị cho em' → 'Anh chị cho em'", boGachCheo("Anh/chị cho em xin địa chỉ") === "Anh chị cho em xin địa chỉ");
+ok("boGachCheo: không đụng 'anh chị phụ trách'", boGachCheo("có anh chị phụ trách theo sát") === "có anh chị phụ trách theo sát");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

@@ -82,7 +82,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
-import { boCauGhiNhan, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -1954,6 +1954,9 @@ Deno.serve(async (req) => {
         .map((r) => r.split(TEN_GIU_CHO).join(tenBot).trim()).filter(Boolean);
       // 16/09/2026: khách là chú/cô/bác → mọi "em" (câu tiền định lẫn model) thành "cháu".
       sach = doiTuXung(sach, sellerRow.xung_ho ?? null);
+      // 21/09/2026 (chủ dự án "làm cả 4"): chưa biết cách gọi → "anh/chị" gạch chéo là chữ máy; người bán
+      // hàng thật nói "anh chị". Áp cho mọi bong bóng (tiền định lẫn model) ở một chỗ.
+      if (!goiNguoi) sach = sach.map(boGachCheo);
       ackSua = null;
       ackAnh = [];
       thongBaoNhan = null;
@@ -3020,6 +3023,14 @@ Deno.serve(async (req) => {
           !nhanDienFact(dapAn.slice(dapAn.indexOf(veDau) + veDau.length));
         if (!chiSua && (laDongY(dapAn) || laDuRoi(dapAn) || gatVeDau)) {
           kqDuyet = { loai: "khop" };
+        } else if (!chiSua && laNoiVoiBot(dapAn) && !nhanDienFact(dapAn)) {
+          // 21/09/2026 (bắn thật): "xóa sạch data của anh đi để anh test lại" / "cái dòng phù hợp đọc kỳ quá" lúc
+          // duyệt → từng vào `bo_sung` rồi gửi lại nháp kèm "Em sửa lại rồi". Lời nói với bot không phải dữ liệu
+          // căn nhà: không ghi, không gửi lại nháp, nói thật điều bot không tự làm được; câu duyệt vẫn treo.
+          const cauMeta = laXinXoaDuLieu(dapAn)
+            ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
+            : "Dạ em nghe rồi ạ.";
+          return await traLoiSeller([`${cauMeta} Bản nháp ở trên ${cachGoi} thấy được thì nhắn "ok" là em đăng liền ạ.`], { reask: "duyet_tin", loai_cau: "meta" });
         } else if (!chiSua && khop(PROMISE_RE, PROMISE_RE_KD)) {
           // 09/09 tối: "tối đi làm về chụp hình gửi em" lúc đang chờ duyệt là LỜI
           // HỨA (nhắc đã đặt ở trên), không phải lời sửa — đừng gửi lại bản nháp,
@@ -3183,7 +3194,11 @@ Deno.serve(async (req) => {
       if (kq.dapAn) dapAn = kq.dapAn;
       // 15/09/2026 (bắn thật F2): câu hỏi về ẢNH có đáp án của hệ thống → bong bóng tiền
       // định đứng trước, model chỉ hỏi tiếp (model từng bỏ qua lời dặn trả lời trước).
-      const hoiNguocDap = hoiNguoc ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, phiCauSeller) : null;
+      const hoiNguocDap = hoiNguoc
+        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, phiCauSeller)
+        : laXinXoaDuLieu(dapAn) && !nhanDienFact(dapAn)
+        ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
+        : null;
       const hoiNguocPrompt = hoiNguoc
         ? hoiNguocDap
           ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}" — hệ thống ĐÃ trả lời câu đó ở bong bóng trước ("${hoiNguocDap}"); em KHÔNG trả lời lại, không nhắc lại chuyện ảnh, chỉ ghi nhận rồi hỏi tiếp. `
@@ -3330,6 +3345,10 @@ Deno.serve(async (req) => {
           let ghiBoSung: string | null = dapAn;
           if (suaKtDaGhi) ghiBoSung = null;
           else if (sua.laSua) ghiBoSung = sua.con.length >= 2 ? sua.con : null;
+          // 21/09/2026 ("làm cả 4"): tin CHỈ có emoji/dấu ("😂😂", "👍👍") không phải thông tin căn nhà; lời nói
+          // với bot ("xóa hết dữ liệu của anh đi", "cái câu này đọc kỳ") cũng không — không ghi `bo_sung`.
+          else if (!/[\p{L}\p{N}]/u.test(dapAn)) ghiBoSung = null;
+          else if (laNoiVoiBot(dapAn) && !nhanDienFact(dapAn)) ghiBoSung = null;
           // Chế độ `chinh`: AI đã đọc ra kiến thức từ câu này → đường ra ghi `bo_sung` nguồn ai_kiem
           // (`ghiBongBocTach`), không ghi nguyên văn lần hai. AI không đọc ra gì → nguyên văn như cũ.
           else if (aiChinh && aiChinh.kienThuc.length) ghiBoSung = null;
@@ -4046,8 +4065,11 @@ Deno.serve(async (req) => {
         // là tiền định (đi TRƯỚC câu của model), nên nếu nó vào thẳng "Em ghi nhận"
         // thì cả đoạn mở đầu đọc như máy, kể cả lúc model còn sống.
         const khachChao = /^\s*(dạ\s*)?(xin\s*)?(chào|chao|hi|hello|alo|a lô|hế lô)\b/i.test(text);
+        // 21/09/2026 (bắn thật mau-tdt): "Dạ em chào anh ạ!" (tiền định) + "Chào anh, em R•ai bên…" (model) là
+        // chào HAI LẦN. Câu của model ĐÃ có lời chào thì thôi chào tiền định; model không chào / hỏng thì chào.
+        const modelDaChao = /(?<![\p{L}])(chào|xin chào|hello)(?![\p{L}])/iu.test(raoReply ?? "");
         const bongGhiNhan =
-          (khachChao ? cauTD("chao_lai") + "\n" : "") +
+          (khachChao && !modelDaChao ? cauTD("chao_lai") + "\n" : "") +
           cauTD("ghi_nhan", { ds: ghiNhan.join(" · ") });
         return await traLoiSeller([bongGhiNhan, raoReply], { listing_code: newLst.code, ghi_nhan: ghiNhan });
       }
