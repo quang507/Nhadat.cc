@@ -203,6 +203,9 @@ thêm van code `chanNhanLaNguoi` — `bot/supabase/functions/_shared/extraction/
 | Xin đánh giá | Hỏi cảm nhận 4 giờ sau buổi xem, khách chấm sao ngay trong chat (FR-56/65) — không gửi link |
 | Người lạ tự nhận có BĐS | Mở hồ sơ bán ngay trong Zalo, nói thẳng nhãn + mức phí (FR-159) — ⛔ bản cũ "mời chị đến trang web rao bán" đã bỏ |
 
+### Ví dụ mẫu gom từ lời chủ dự án (21/09/2026)
+[nguồn: chủ dự án 21/09/2026 — "cóp nhặt lại các ý t sửa rồi cho vào"; tra `bot_prompts` không có vết sửa sau 17/09, `mau_cau` có 2 dòng 10/09, nên gom từ chỗ đã ghi]. `SELLER_FEWSHOT` (code + `bot_prompts.seller_fewshot`) thêm 9 ví dụ đúng + 2 ví dụ sai, mỗi dòng một nguồn: (1) mẫu câu 10/09 #2 — rao từ "chị" thì chào lại rồi mời thêm thông tin; (2) 10/09 00:20 — khách đưa nhiều thông tin một lần, bot ghi đủ rồi hỏi nhỏ nhẹ MỘT thứ; (3) 18/09 — không câu nào cũng khen; (4) 21/09 — gõ không dấu thì bot ghi lại có dấu; (5) 21/09 TS-AIBOC-07 — "bớt 50 triệu" là mức giảm, hỏi lại giá rao; (6) 21/09 — lời hứa "coi lại sổ rồi báo" thì chờ, không hỏi dồn; (7) 09/09 "anh có Thu ở khu vực Sài Gòn" + 21/09 model nói bừa "Dạ có" — điều không nắm thì hỏi anh Thu rồi báo lại; (8) mẫu câu 10/09 #1 — xong việc chào ấm, hẹn khi có khách hỏi. Ví dụ sai thêm: "Dạ có, bên em hỗ trợ ký hợp đồng phân phối", "Tuyệt vời, cảm ơn anh đã giảm 50 triệu!".
+
 ### Nhánh người bán — câu sau bám câu trước (FR-176, 07/09/2026)
 [nguồn: sếp qua chủ dự án 07/09/2026 — "con AI nhắn không tự nhiên"; log lượt rao #BDS-Q5-0174]
 
