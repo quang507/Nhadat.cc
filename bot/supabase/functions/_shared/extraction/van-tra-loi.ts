@@ -369,3 +369,31 @@ export function boCauKhen(reply: string): string {
   if (!giu.length || giu.length === cau.length) return reply;
   return giu.join(" ").replace(/^\s*[,;]\s*/, "").trim();
 }
+
+// ── Lời nói VỚI BOT, không phải dữ liệu căn nhà (21/09/2026, chủ dự án "làm cả 4") ──
+// Bắn thật: "xóa sạch data của anh đi để anh test lại" lúc duyệt → nguyên câu vào `bo_sung` rồi gửi
+// lại nháp; "ok em đăng đi, mà cái dòng phù hợp đọc kỳ quá" (vế sau) cũng vậy. Câu nói về hệ thống /
+// dữ liệu / bản nháp / cách bot hỏi là lời nói với bot: không ghi vào tin, không gửi lại nháp.
+export function laNoiVoiBot(text: string): boolean {
+  const kd = boDau((text ?? "").trim());
+  if (!kd) return false;
+  if (/\b(data|du lieu|reset|test|he thong|con bot|bot|may (?:hoi|tra loi)|system)\b/.test(kd)) return true;
+  // Nhận xét về câu/dòng/bản nháp/tin nhắn của bot: "cái dòng phù hợp đọc kỳ quá", "bản nháp dài quá".
+  return /\b(dong|cau hoi|cau nay|ban nhap|tin nhan|noi dung|chu nay)\b/.test(kd) &&
+    /\b(ky qua|ky vay|doc ky|kho hieu|dai qua|ngan qua|lap lai|sai chinh ta|xau|khong hay|thua)\b/.test(kd);
+}
+
+/** Khách xin XOÁ/RESET dữ liệu — bot không tự làm được, phải nói thật. */
+export function laXinXoaDuLieu(text: string): boolean {
+  const kd = boDau((text ?? "").trim());
+  return /\b(xoa|reset|don)\b/.test(kd) && /\b(data|du lieu|tin|ho so|thong tin|sach)\b/.test(kd);
+}
+
+/**
+ * "anh/chị" có gạch chéo là chữ máy (TONE_RULES cấm model, nhưng câu tiền định vẫn dùng khi chưa biết
+ * cách gọi — bắn thật 21/09: "Nhà mình phường mấy anh/chị nhỉ?"). Người bán hàng thật nói "anh chị"
+ * (không gạch) khi chưa biết nam hay nữ. Áp ở đường ra, chỉ khi CHƯA biết cách gọi.
+ */
+export function boGachCheo(s: string): string {
+  return (s ?? "").replace(/anh\/chị/g, "anh chị").replace(/Anh\/chị/g, "Anh chị").replace(/ANH\/CHỊ/g, "ANH CHỊ");
+}

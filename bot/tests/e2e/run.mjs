@@ -1412,7 +1412,7 @@ fresh(seedKho);
   db().insert("listing_facts", { listing_id: L2.id, question: "tiem_nang", answer: "ở", source: "seller_chat" });
   db().insert("info_requests", { listing_id: L2.id, question: "duyet_tin", status: "pending" });
   r = await send({ external_user_id: "z-ccrb", text: "ok đăng đi" });
-  check("N11 người rao nhiều căn gật bản nháp → chúc mừng có 'Điểm người rao của anh/chị hiện X/100 (N căn đang rao)', RPC diem_nguoi_ban",
+  check("N11 người rao nhiều căn gật bản nháp → chúc mừng có 'Điểm người rao của anh chị hiện X/100 (N căn đang rao)', RPC diem_nguoi_ban",
     r.body.duyet === true && /Điểm người rao/.test(r.body.replies[0]) && /căn đang rao/.test(r.body.replies[0]) && db().log.some((l) => l.rpc === "diem_nguoi_ban"), JSON.stringify(r.body));
   // FR-114 mở rộng: chủ nhà nhắc dự án trong kho → khối DỰ ÁN vào ngữ cảnh model.
   fresh((d) => {
@@ -2303,6 +2303,59 @@ fresh(seedKho);
   check("NHAP-03 'ok đăng đi, mà giá 9 tỷ 8 nha em' → giá 9 tỷ 8 ghi (lời sửa), rồi gật → duyệt; không vào bo_sung",
     /9 tỷ 8/.test(tin().price_raw ?? "") && !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)),
     JSON.stringify({ l: { price_raw: tin().price_raw, chu_duyet_at: tin().chu_duyet_at }, rep: rp.body.replies }));
+}
+
+// ── 21/09/2026 (chủ dự án "làm cả 4"): emoji trần, lời nói với bot, chào hai lần, "anh/chị" gạch chéo ──
+{
+  const tin = () => db().t.listings.at(-1);
+  const pendQ = () => db().t.info_requests.filter((x) => x.status === "pending").map((x) => x.question);
+  const boSung = () => db().t.listing_facts.filter((f) => f.question === "bo_sung").map((f) => f.answer);
+  const moCau = (q) => { db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; }); db().insert("info_requests", { listing_id: tin().id, question: q, status: "pending" }); };
+
+  // (1) Tin chỉ có emoji khi đang hỏi giá → không bo_sung, câu giá vẫn treo.
+  fresh(); await send({ external_user_id: "bon-1", text: "bán nhà hẻm 4m Trần Bình Trọng quận 5, 60m2" });
+  moCau("gia");
+  let rp = await send({ external_user_id: "bon-1", text: "😂😂" });
+  check("BON-01 tin chỉ có emoji khi đang hỏi giá → không có fact bo_sung, câu giá vẫn treo", boSung().length === 0 && pendQ().includes("gia"), JSON.stringify({ bs: boSung(), pend: pendQ(), rep: rp.body.replies }));
+
+  // (2) Lời nói với bot lúc duyệt: không bo_sung, không gửi lại nháp, nói thật, câu duyệt treo.
+  fresh(); await send({ external_user_id: "bon-2", text: "bán nhà hẻm 6m Trần Bình Trọng phường 2 quận 5, 4x15, trệt 2 lầu, 3 phòng ngủ, giá 9 tỷ 5" });
+  tin().alley_width_m = 6; tin().area_m2 = 60; tin().frontage_m = 4;
+  moCau("phap_ly");
+  rp = await send({ external_user_id: "bon-2", text: "sổ hồng riêng, hoàn công đủ" });
+  check("BON-02 (tiền đề) đủ điểm → bản nháp gửi, câu duyệt treo", rp.body.replies.some((r) => /Em đăng tin như vầy/.test(r)) && pendQ().includes("duyet_tin"), JSON.stringify({ pend: pendQ(), rep: rp.body.replies }));
+  rp = await send({ external_user_id: "bon-2", text: "xóa sạch data của anh đi để anh test lại" });
+  check("BON-02a 'xóa sạch data của anh đi để anh test lại' lúc duyệt → không bo_sung, không gửi lại nháp, nói thật 'không tự làm được', câu duyệt vẫn treo",
+    boSung().length === 0 && !rp.body.replies.some((r) => /Em đăng tin như vầy|Em sửa lại rồi/.test(r)) && rp.body.replies.some((r) => /không tự làm được/.test(r)) && pendQ().includes("duyet_tin"),
+    JSON.stringify({ bs: boSung(), pend: pendQ(), rep: rp.body.replies }));
+  rp = await send({ external_user_id: "bon-2", text: "cái dòng phù hợp đọc kỳ quá em" });
+  check("BON-02b nhận xét bản nháp lúc duyệt → không bo_sung, không gửi lại nháp, 'Dạ em nghe rồi', câu duyệt treo",
+    boSung().length === 0 && !rp.body.replies.some((r) => /Em đăng tin như vầy/.test(r)) && rp.body.replies.some((r) => /nghe rồi/.test(r)) && pendQ().includes("duyet_tin"),
+    JSON.stringify({ bs: boSung(), pend: pendQ(), rep: rp.body.replies }));
+  rp = await send({ external_user_id: "bon-2", text: "ok" });
+  check("BON-02c rồi gật 'ok' → duyệt", !!tin().chu_duyet_at, JSON.stringify({ rep: rp.body.replies }));
+
+  // (2c) Xin xoá dữ liệu khi đang hỏi giá → không bo_sung, bong bóng nói thật, câu giá treo.
+  fresh(); await send({ external_user_id: "bon-3", text: "bán nhà hẻm 4m Trần Bình Trọng quận 5, 60m2" });
+  moCau("gia");
+  rp = await send({ external_user_id: "bon-3", text: "xóa hết dữ liệu của anh đi" });
+  check("BON-03 xin xoá dữ liệu khi đang hỏi giá → không bo_sung, có bong bóng 'không tự làm được', câu giá vẫn treo",
+    boSung().length === 0 && rp.body.replies.some((r) => /không tự làm được/.test(r)) && pendQ().includes("gia"),
+    JSON.stringify({ bs: boSung(), pend: pendQ(), rep: rp.body.replies }));
+
+  // (3) Khách chào, model sống → không chào tiền định riêng (model đã chào); model hỏng → chào tiền định.
+  fresh(); globalThis.__model.create = () => "Chào chị, em M•ai bên AI Ơi Nhà Đất ạ. Chị cho em xin địa chỉ nhà nha?";
+  rp = await send({ external_user_id: "bon-4", text: "chào em, chị có căn nhà ở q10 muốn bán" });
+  check("BON-04 khách chào, câu model ĐÃ có lời chào → KHÔNG thêm bong bóng 'Dạ em chào chị ạ!' (chào một lần)",
+    rp.body.role === "seller" && !rp.body.replies.some((r) => /Dạ em chào chị ạ!/.test(r)) && rp.body.replies.some((r) => /Chào chị, em M•ai/.test(r)), JSON.stringify({ rep: rp.body.replies }));
+  fresh(); rp = await send({ external_user_id: "bon-4b", text: "chào em, chị có căn nhà ở q10 muốn bán" });
+  check("BON-04b khách chào, câu model KHÔNG chào → vẫn có lời chào tiền định", rp.body.replies.some((r) => /Dạ em chào chị ạ!/.test(r)), JSON.stringify({ rep: rp.body.replies }));
+
+  // (4) Chưa biết cách gọi → không bong bóng nào còn "anh/chị" gạch chéo.
+  fresh(); rp = await send({ external_user_id: "bon-5", text: "bán nhà hẻm 4m Trần Bình Trọng quận 5, 60m2, 5 tỷ" });
+  check("BON-05 chưa biết cách gọi → không bong bóng nào chứa 'anh/chị', có 'anh chị'", !rp.body.replies.some((r) => /anh\/chị/i.test(r)) && rp.body.replies.some((r) => /anh chị/i.test(r)), JSON.stringify({ rep: rp.body.replies }));
+  fresh(); rp = await send({ external_user_id: "bon-6", text: "chào em, anh có căn nhà hẻm 4m Trần Bình Trọng quận 5, 60m2, 5 tỷ" });
+  check("BON-06 đã biết 'anh' → vẫn 'anh', không đổi", rp.body.replies.some((r) => /Sai chỗ nào anh nhắn/.test(r)), JSON.stringify({ rep: rp.body.replies }));
 }
 
 // ── FR-209 (15/09/2026): tra PHƯỜNG MỚI từ tên đường — Nominatim → bảng `wards`, HỎI XÁC NHẬN, gật mới ghi ──
