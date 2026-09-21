@@ -587,6 +587,8 @@ class RpcCall {
         if (a.p_question === "do_rong_hem") { const m = /(\d+(?:[.,]\d+)?)/.exec(a.p_answer); if (m) l.alley_width_m = parseFloat(m[1].replace(",", ".")); if (/xe hơi|xe hoi/i.test(a.p_answer)) l.access_type = l.access_type ?? "hem_xe_hoi"; }
         if (a.p_question === "ket_cau") { const m = /(\d+)\s*(?:lầu|lau|tầng|tang|tấm|tam)/i.exec(a.p_answer); if (m) l.floors = parseInt(m[1], 10) + (/lầu|lau/i.test(a.p_answer) ? 1 : 0); const pn = /(\d+)\s*(?:phòng ngủ|phong ngu|pn)/i.exec(a.p_answer); if (pn) l.bedrooms = parseInt(pn[1], 10); }
         if (a.p_question === "phap_ly" && /sổ hồng riêng|so hong rieng|shr/i.test(a.p_answer)) l.legal_status = "so_hong_rieng";
+        // 21/09/2026: trigger thật ghi `direction` từ fact `huong` (2–40 ký tự, khi cột trống) — 🤖 Đã lưu đọc cột này.
+        if (a.p_question === "huong" && l.direction == null) { const h = String(a.p_answer ?? "").trim(); if (h.length >= 2 && h.length <= 40) l.direction = h; }
         db.quyetDinhDangTin(l);
         return { data: null, error: null };
       }

@@ -173,7 +173,8 @@ export function tomTatDaLuu(
 // được báo gì. Nay tầng trên đọc lại DB: fact có `created_at` ≥ giờ ghi tin khách
 // (cùng đồng hồ DB), hồ sơ người mua đọc lại sau khi gộp; hàm dưới chỉ dựng chữ.
 
-/** Dòng in TÓM TẮT tin trong bong bóng các lượt sau (khi tin đổi so với lần báo trước). */
+/** Dấu cũ của dòng "📦 Tin giờ" (tóm tắt tin ở các lượt sau). 21/09/2026 (chủ dự án): bỏ — lượt sau in một
+ *  dòng "🤖 Đã lưu:" đầy đủ y như lượt tạo tin. Giữ hằng để `tomTatTrongCau` còn đọc được câu bot cũ trong sổ. */
 export const DAU_TIN_GIO = "📦 Tin giờ:";
 
 /** "🤖 Đã lưu: giá: "6 tỷ 5" · phường: "Phường 9"" — fact lượt này (mới nhất trước), null khi không có. */

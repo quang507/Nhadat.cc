@@ -32,7 +32,7 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
-  aiDocThem, boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, DAU_TIN_GIO, docCheDo, kemLuotTao, NGUON_AI, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua,
+  aiDocThem, boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, kemLuotTao, NGUON_AI, tomTatDaLuu, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
@@ -1909,22 +1909,15 @@ Deno.serve(async (req) => {
           const kem = kemLuotTao(factLuot, FACT_LABELS);
           return { bong: [tomTat, dongHoSo, kem].filter(Boolean).join("\n") || null, cheDo };
         }
-        const vuaGoc = vuaLuuBan(factLuot, FACT_LABELS);
-        const vua = vuaGoc
-          ? (dongHoSo ? `${vuaGoc}\n${dongHoSo}` : vuaGoc)
-          : dongHoSo ? `${DAU_BAO_LAI} Đã lưu: ${hoSo}` : null;
         // Tin khách không lưu được gì ("anh bận", "ok em") → không nhắn thêm.
-        if (!vua) return { bong: null, cheDo };
-        // Kèm dòng "📦 Tin giờ" khi tóm tắt tin KHÁC lần báo gần nhất (day_du: luôn kèm).
-        const ttGon = tomTat?.replace(new RegExp(`^${DAU_BAO_LAI} Đã lưu: `, "u"), "") ?? null;
-        if (!ttGon) return { bong: vua, cheDo };
-        if (cheDo === "day_du") return { bong: `${vua}\n${DAU_TIN_GIO} ${ttGon}`, cheDo };
-        const { data: cu, error: cuErr } = await client.from("messages").select("body")
-          .eq("conversation_id", convSId).eq("sender", "bot")
-          .order("seq", { ascending: false }).limit(20);
-        if (cuErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(messages)", cuErr.message);
-        const truoc = ((cu ?? []) as Array<{ body: string | null }>).map((m) => tomTatTrongCau(m.body)).find(Boolean) ?? null;
-        return { bong: truoc === ttGon ? vua : `${vua}\n${DAU_TIN_GIO} ${ttGon}`, cheDo };
+        if (!vuaLuuBan(factLuot, FACT_LABELS) && !dongHoSo) return { bong: null, cheDo };
+        // 21/09/2026 (Zalo thật, chủ dự án: "sửa lại cái Tin giờ và Đã lưu đi, còn lại Đã lưu và lưu các
+        // cái gì đầy đủ là được"): các lượt SAU cũng in y như lượt tạo tin — MỘT dòng "🤖 Đã lưu:" là toàn
+        // bộ tin đang nằm trong DB, dòng "Kèm:" cho fact lượt này mà tóm tắt cột không nói. Bỏ hẳn dòng
+        // "📦 Tin giờ" và dòng fact riêng (hai dòng nói cùng một thứ), bỏ luôn lượt đọc 20 câu bot cũ để so.
+        if (!tomTat) return { bong: dongHoSo ? `${DAU_BAO_LAI} Đã lưu: ${hoSo}` : null, cheDo };
+        const kem = kemLuotTao(factLuot, FACT_LABELS);
+        return { bong: [tomTat, dongHoSo, kem].filter(Boolean).join("\n"), cheDo };
       } catch (e) {
         await ghiLoi(client, "chat-reply bao_lai_da_luu", e);
         return { bong: null, cheDo: "tat" };
