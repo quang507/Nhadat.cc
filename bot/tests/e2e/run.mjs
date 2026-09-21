@@ -2003,6 +2003,81 @@ fresh(seedKho);
   r = await send({ external_user_id: "aiboc-6", text: "shr, nhà ở từ 2019 rồi, gần chợ Bình Tây, khu này yên tĩnh lắm" });
   check("AIBOC-07b nhắn lại y chang → không ghi bo_sung trùng", f6("bo_sung").length === 1, JSON.stringify(f6("bo_sung")));
 
+  // ── 21/09/2026 chế độ `chinh` — ĐẢO TẦNG: AI đọc là đường chính có kiểm bằng chứng, luật đỡ (TS-AIBOC-06) ──
+  // Câu rao mang đúng hai bẫy của TS-VAN-11: "giá 1 tỷ 8 căn 2 phòng ngủ" (đuôi giá rác) và "bàn giao quý 2 năm sau" (luật từng lấy làm tên đường).
+  const R8 = "bán căn hộ 2 phòng ngủ đường Nguyễn Lương Bằng quận 7, giá 1 tỷ 8 căn 2 phòng ngủ, bàn giao quý 2 năm sau";
+  const DX8 = { so_can: 1, kien_thuc: ["bàn giao quý 2 năm sau"], truong: [
+    { khoa: "loai_giao_dich", gia_tri: "ban", trich_dan: "bán căn hộ", can: null },
+    { khoa: "loai_bds", gia_tri: "chung_cu", trich_dan: "căn hộ", can: null },
+    { khoa: "so_phong_ngu", gia_tri: "2", trich_dan: "2 phòng ngủ", can: null },
+    { khoa: "duong", gia_tri: "Nguyễn Lương Bằng", trich_dan: "đường Nguyễn Lương Bằng", can: null },
+    { khoa: "quan", gia_tri: "Quận 7", trich_dan: "quận 7", can: null },
+    { khoa: "gia", gia_tri: "1 tỷ 8", trich_dan: "giá 1 tỷ 8", can: null },
+  ] };
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? DX8 : OUT();
+  r = await send({ external_user_id: "aiboc-8", text: R8 });
+  const L8 = db().t.listings.at(-1);
+  const f8 = (q) => db().t.listing_facts.filter((f) => f.listing_id === L8.id && f.question === q);
+  const bong8 = db().rows("boc_tach_bong");
+  check("AIBOC-08 'chinh' câu rao: giá 1 tỷ 8 (AI, không đuôi rác), loại căn hộ, Quận 7, 2 PN vào tin; địa chỉ = 'Nguyễn Lương Bằng' (không có 'quý 2 năm sau' ở bất kỳ cột/fact nào)",
+    L8.price_vnd === 18e8 && L8.property_type === "chung_cu" && L8.district === "Quận 7" && f8("so_phong_ngu")[0]?.answer === "2" &&
+      L8.location_raw === "Nguyễn Lương Bằng" && !/quý 2/.test(`${L8.location_raw}|${L8.street ?? ""}|${L8.ward ?? ""}|${L8.price_raw}`) &&
+      !db().t.listing_facts.some((f) => f.listing_id === L8.id && f.question !== "bo_sung" && /quý 2/.test(f.answer)),
+    JSON.stringify({ L8, f: db().t.listing_facts.filter((f) => f.listing_id === L8.id) }));
+  check("AIBOC-08b 'bàn giao quý 2 năm sau' → kiến thức → bo_sung nguồn ai_kiem; sổ đo che_do = chinh; nguồn boc_tach 'cau_rao+ai_chinh'; khách có lời đáp",
+    f8("bo_sung").length === 1 && f8("bo_sung")[0].answer === "bàn giao quý 2 năm sau" && f8("bo_sung")[0].source === "ai_kiem" &&
+      bong8.length === 1 && bong8[0].da_ghi?.che_do === "chinh" && L8.boc_tach?.nguon === "cau_rao+ai_chinh" && r.body.replies.length > 0,
+    JSON.stringify({ bs: f8("bo_sung"), bong: bong8, bt: L8.boc_tach, rep: r.body.replies }));
+
+  // Câu treo GIÁ, chủ nhà: "khách chốt nhanh anh bớt 50 triệu" — luật từng ghi giá = 50 triệu (TS-VAN-11 lỗi 1).
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L8.id && x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L8.id, question: "gia", status: "pending" });
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: ["khách chốt nhanh anh bớt 50 triệu"], truong: [] } : OUT();
+  r = await send({ external_user_id: "aiboc-8", text: "khách chốt nhanh anh bớt 50 triệu" });
+  check("AIBOC-09 'chinh' câu treo giá, AI không thấy giá → KHÔNG ghi giá '50 triệu'; câu thành kiến thức → bo_sung MỘT lần nguồn ai_kiem (luật không ghi nguyên văn lần hai); câu giá vẫn treo, bot hỏi lại",
+    f8("gia").length === 0 && L8.price_vnd === 18e8 && f8("bo_sung").filter((f) => /50 triệu/.test(f.answer)).length === 1 && f8("bo_sung").find((f) => /50 triệu/.test(f.answer)).source === "ai_kiem" &&
+      db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "gia" && x.status === "pending") && r.body.reask === "gia",
+    JSON.stringify({ gia: f8("gia"), bs: f8("bo_sung"), ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]), rep: r.body.replies, extra: r.body.reask }));
+
+  // Câu treo PHÁP LÝ, chủ nhà hỏi "có làm hợp đồng phân phối không" — luật từng ghi pháp lý (TS-VAN-11 lỗi 4).
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L8.id && x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L8.id, question: "phap_ly", status: "pending" });
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+  r = await send({ external_user_id: "aiboc-8", text: "bên em có làm hợp đồng phân phối không" });
+  check("AIBOC-10 'chinh' câu treo pháp lý, AI trả rỗng → không ghi pháp lý; câu vẫn treo",
+    f8("phap_ly").length === 0 && db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "phap_ly" && x.status === "pending"),
+    JSON.stringify({ pl: f8("phap_ly"), ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
+
+  // Câu treo KẾT CẤU, trả lời kèm hai fact khác: AI quyết cả câu treo lẫn fact kèm.
+  db().t.info_requests.forEach((x) => { if (x.listing_id === L8.id && x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L8.id, question: "ket_cau", status: "pending" });
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: [], truong: [
+        { khoa: "ket_cau", gia_tri: "1 trệt 2 lầu", trich_dan: "1 trệt 2 lầu", can: null },
+        { khoa: "so_wc", gia_tri: "3", trich_dan: "3 wc", can: null },
+        { khoa: "huong", gia_tri: "Đông", trich_dan: "hướng đông", can: null },
+      ] } : OUT();
+  r = await send({ external_user_id: "aiboc-8", text: "1 trệt 2 lầu, 3 wc, hướng đông" });
+  check("AIBOC-11 'chinh' câu treo kết cấu: AI '1 trệt 2 lầu' ghi ô kết cấu (nguồn seller_chat), câu answered; WC + hướng kèm ghi nguồn ai_kiem, mỗi ô một lần",
+    f8("ket_cau").length === 1 && f8("ket_cau")[0].answer === "1 trệt 2 lầu" && f8("ket_cau")[0].source === "seller_chat" &&
+      f8("so_wc").length === 1 && f8("so_wc")[0].source === "ai_kiem" && f8("huong").length === 1 && f8("huong")[0].answer === "Đông" &&
+      db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "ket_cau" && x.status === "answered"),
+    JSON.stringify({ kc: f8("ket_cau"), wc: f8("so_wc"), h: f8("huong"), ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]) }));
+
+  // Model bóc CHẾT ở chế độ chinh → toàn bộ đường luật y như cũ (fallback), lỗi vào sổ.
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+  globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) throw new Error("model bóc chết"); return OUT(); };
+  r = await send({ external_user_id: "aiboc-12", text: "bán nhà hẻm 4m Trần Hưng Đạo quận 5, 4x15, giá 6 tỷ" });
+  const L12 = db().t.listings.at(-1);
+  check("AIBOC-12 'chinh' model bóc chết → luật đỡ: giá 6 tỷ, Quận 5, địa chỉ có 'Trần Hưng Đạo', khách được trả lời, lỗi vào sổ",
+    L12?.price_vnd === 6e9 && L12.district === "Quận 5" && /Trần Hưng Đạo/.test(L12.location_raw ?? "") && r.body.replies.length > 0 &&
+      db().t.bot_errors.some((e) => e.source === "chat-reply boc_tach_ai(bong)"),
+    JSON.stringify({ L12, loi: db().t.bot_errors, rep: r.body.replies }));
+
   globalThis.__cauHinh = undefined;
   if (macDinh) globalThis.__model.parse = macDinh;
 }
