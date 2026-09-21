@@ -515,7 +515,7 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
 
 /** Câu bot đang hỏi → khoá AI trả lời được cho câu đó (ngoài `KHOA_GHI` đảo ngược). */
 const AI_CHO_CAU: Record<string, string[]> = {
-  dien_tich_dat: ["dien_tich"], dien_tich_tim_tuong: ["dien_tich"], mat_tien: ["ngang"],
+  dien_tich_dat: ["dien_tich"], dien_tich_tim_tuong: ["dien_tich"], mat_tien: ["ngang"], vi_tri: ["duong"],
 };
 
 /**
@@ -529,6 +529,13 @@ export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | n
   // mặt tiền → "ngang Am dài Bm" (DB đọc hai chiều), diện tích chưa nói mà có ngang×dài → "AxB".
   const kt = kichThuoc(mot);
   if (cauHoi === "mat_tien") return kt.ngang != null ? (kt.dai != null ? `ngang ${kt.ngang}m dài ${kt.dai}m` : `${kt.ngang}m`) : null;
+  // 21/09/2026 (Zalo thật, chủ dự án: "ai không biết được tên đường hả"): câu VỊ TRÍ lấy `duong` AI đọc
+  // (đã phục hồi dấu theo luật prompt) — luật `catDapAn` từng ghi cả câu "nhà của anh ở hem 4m Pham
+  // The Hien, P.4" làm địa chỉ. Hẻm / phường đi ô riêng, không ghép vào.
+  if (cauHoi === "vi_tri") {
+    const d = mot.find((x) => x.khoa === "duong")?.gia_tri.trim() ?? "";
+    return d.length >= 4 && d.length <= 80 ? d : null;
+  }
   const khoaAi = new Set([...(AI_CHO_CAU[cauHoi] ?? []), ...Object.entries(KHOA_GHI).filter(([, q]) => q === cauHoi).map(([k]) => k)]);
   const loc = mot.filter((d) => khoaAi.has(d.khoa));
   if (!loc.length) {

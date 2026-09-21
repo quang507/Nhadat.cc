@@ -242,6 +242,13 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const dTN = docAiChinh([dx("thu_nhap_thue", "120 triệu", "thu nhập 120 triệu/tháng"), dx("loai_giao_dich", "ban", "Bán toà")], null);
   ok("docAiChinh: thu_nhap_thue → fact doanh_thu '120 triệu'; tiền không đọc được thì bỏ", dTN.ghi.some((g) => g.question === "doanh_thu" && g.answer === "120 triệu") &&
     docAiChinh([dx("thu_nhap_thue", "nhiều", "thu nhập nhiều")], null).bo.some((b) => b.khoa === "thu_nhap_thue" && b.ly_do === "khong_doc_duoc_tien"), JSON.stringify(dTN));
+  // 21/09/2026 (Zalo thật): câu VỊ TRÍ lấy `duong` của AI, đã phục hồi dấu.
+  const kDau = kiemDeXuat([dx("duong", "Phạm Thế Hiển", "pham the hien"), dx("quan", "Quận 8", "q8"), dx("phuong", "4", "p4")], "nhà của anh ở hem 4m pham the hien, p4 q8 nha");
+  ok("phục hồi dấu: 'Phạm Thế Hiển' từ trích 'pham the hien' đạt (chữ cái y hệt, chỉ thêm dấu); 'Quận 8' từ 'q8', phường 4 từ 'p4' đạt", kDau.dat.length === 3 && kDau.bo.length === 0, JSON.stringify(kDau.bo));
+  bo("phục hồi dấu KHÔNG được đổi chữ cái: 'Phạm Thế Hiếu' từ 'pham the hien'", "hem 4m pham the hien", "duong", "Phạm Thế Hiếu", "pham the hien", "gia_tri_khong_nam_trong_trich_dan");
+  ok("giới hạn đã biết: dấu SAI trên cùng chữ cái ('Phạm Thế Hiền') lớp kiểm không phân biệt được — chấp nhận, hại chỉ ở dấu", kiemDeXuat([dx("duong", "Phạm Thế Hiền", "pham the hien")], "hem 4m pham the hien").dat.length === 1);
+  ok("câu treo VỊ TRÍ: AI duong → 'Phạm Thế Hiển' (không ghép hẻm / phường)", giaTriChoCauTreo(kDau.dat, "vi_tri", {}) === "Phạm Thế Hiển");
+  ok("câu treo VỊ TRÍ: AI không có duong → null (luật đỡ)", giaTriChoCauTreo([dx("do_rong_hem", "4", "hem 4m")], "vi_tri", {}) === null);
   ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien, KHÔNG có tien_ich_gan / nam_xay / the_chap (luật vẫn đỡ)",
     ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds"].every((k) => KHOA_FACT_AI_BIET.has(k)) && ["tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => !KHOA_FACT_AI_BIET.has(k)));
 }
