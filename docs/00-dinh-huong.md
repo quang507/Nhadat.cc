@@ -237,3 +237,30 @@ trên DB production ngày 21/09/2026 11:50 UTC (đếm `listings`, `sellers`, `b
 2. Kéo **10 người mua thật** qua widget Zalo trên trang tin (FR-145), đọc nguyên văn
    hội thoại, đếm cờ "cần người thật" (giả định 2, ngưỡng >30%).
 3. Vượt ngưỡng dừng ở 1 hoặc 2 → sửa **mô hình** (§0.7), không sửa prompt.
+
+## 0.10 Lean Canvas (21/09/2026)
+
+**DH-09.** Chủ dự án 21/09/2026 yêu cầu điền Lean Canvas 12 ô cho dự án [nguồn: chủ dự án
+21/09/2026, ảnh mẫu Lean Canvas]. Khác §0.4 (canvas chiến lược 9 ô, nhìn từ tầm nhìn xuống),
+Lean Canvas nhìn từ vấn đề khách hàng lên; hai bảng phải cùng một nội dung, lệch chỗ nào thì
+§0.4 thắng. Mọi ô đều trích từ `01`, `02` và số đo DB 21/09 (§0.9); chỗ nào chưa có bằng chứng
+thật thì ghi *[giả định]*.
+
+| Ô | Nội dung | Neo |
+|---|---|---|
+| **Vấn đề** (1–3) | 1. Người mua hỏi một căn ("còn không, hẻm mấy mét, sổ chưa") và **không ai trả lời**, vì tin trên sàn luôn thiếu và người đăng không rảnh. 2. Người mua để lại SĐT là bị **40 cuộc gọi trong 3 ngày** từ môi giới lạ. 3. Chính chủ **ngại điền form** nhiều trường, đăng một lần rồi bỏ; tin cũ "còn bán" mãi trên sàn | INS-04, INS-05, INS-06, RSK-06, `01 §1.2` |
+| **Giải pháp hiện có** | batdongsan / mogi / alonhadat: listing-first, lộ SĐT ngay trên tin, môi giới trả phí đăng, form nhiều bước + duyệt tay, không có khái niệm chính chủ; Zalo group / Facebook group môi giới: nhanh nhưng không cấu trúc, không lưu | `01 §1.5`, INS-13 |
+| **Giải pháp** | 1. **Vòng nối CTV** (FR-173): bot không biết → CTV hỏi chủ trong 120' → câu trả lời vào kho, lần sau không hỏi lại. 2. **Bot là trung gian toàn phần** (INS-11): khách chat qua Zalo, không SĐT, liên hệ chỉ mở lúc chốt lịch xem. 3. **Rao một câu** qua Zalo, AI bóc tách + hỏi bù một thông tin/lần (FR-144, FR-177, FR-208); "còn bán không" hỏi định kỳ (FR-103) | FR-173, FR-104, FR-144, FR-208 |
+| **Giá trị độc nhất** | **"Hỏi là có người trả lời, không phải để lại số."** Người mua được trả lời thật cho từng căn, ẩn danh, kết nối sống 3–4 năm; người bán rao một lần là xong | INS-01/02/04/09, DH-02 |
+| **Khái niệm một dòng** | *Môi giới thường trực đứng sau mọi môi giới khác*: "Grab cho hỏi-đáp nhà đất" — người hỏi và người biết được nối bằng một bot giữ sổ *[giả định BA về cách nói]* | DH-01, OKRs eo2024 |
+| **Lợi thế khó sao chép** | Kho **hỏi-đáp đã xác minh theo từng căn** (mỗi câu khách hỏi thành một fact có nguồn, ngày, người trả lời); kết nối Zalo nhiều năm với người mua ở giữa chu kỳ; mạng NMG chịu luật 10 tin / 5% chốt. **Hôm nay lợi thế này bằng 0** vì kho fact thật chưa có (§0.9) — nó là thứ phải tích luỹ, không mua được, và đó chính là lý do nó khó sao chép | INS-02, INS-06, BR-02, §0.4 ô "Khó sao chép" |
+| **Phân khúc khách hàng** | Trả tiền: **CCRB** (chính chủ 1–2 căn, 1%) và **NMG** (10–30 căn, 0,5%) ở Sài Gòn (phường mới) + Long An, khởi điểm cụm Quận 5 cũ. Người dùng không trả tiền: **người mua ở** (P1, 6–13 tỷ) và **đầu tư** (P2, 21–30 tỷ) | `02 §2.2`, BR-05, FR-174 |
+| **Khách hàng đầu tiên** | NMG đang rao 10+ căn cùng một cụm phường, hay bị khách hỏi lại cùng một câu, chịu trả lời drip trong 7 ngày (view `nmg_hoat_dong`); chính chủ Quận 5 cũ đã có sẵn Zalo, ngại đăng sàn. Người mua: đang xem 3–5 căn cùng khu, ghét bị gọi, chấp nhận chat với bot nếu được trả lời thật *[giả định — chưa phỏng vấn]* | FR-155, INS-04, `01 §1.7` |
+| **Chỉ số chính** | Sao Bắc Đẩu: **lịch xem nhà chốt / tuần** (`reminders.kind='viewing'`). Đầu vào: I1 tin đủ thông tin lên sàn / tuần · I2 hội thoại mua đủ khu + tầm giá · **I3 câu khách hỏi được trả lời đúng hạn (OMTM)** · I4 kết nối Zalo sống sau 30 ngày · I5 NMG hoạt động. **21/09/2026: tất cả bằng 0** | §0.5, FR-57, FR-173 |
+| **Kênh** | Vào (người mua): SEO 100 tag + trang tin (BR-08), traffic mua từ batdongsan (20tr/tháng theo kế hoạch 2024), widget Zalo trên trang tin (FR-145). Ra (người bán): mạng NMG qua CTV, admin đăng tin hộ (FR-156), Zalo cá nhân qua bridge (OA chưa có — FR-145). **Hôm nay chỉ một kênh sống là Zalo cá nhân qua bridge** | BR-08, BR-09, FR-145, FR-156, RSK-02 |
+| **Cơ cấu chi phí** | Cố định gần 0: Supabase Free, Vercel Free, một VPS chạy bridge *(chi phí VPS chưa ghi trong docs)*, không sao lưu (OPEN-25). Biến đổi: token model theo lượt chat (đồng hồ tiền FR-171, chuông hết tiền), CTV 0,5% mỗi giao dịch chốt, 1,5 CTV × 7tr/tháng theo kế hoạch 2024, traffic 20tr/tháng nếu bật. Kế hoạch 2024 tổng 800tr/6 tháng (390tr build thuê vendor) — **đã không đi theo**: code tự làm trong repo từ 24/08/2026 | `01 §1.4`, NFR-14/16, FR-171 |
+| **Nguồn thu** | 100% từ phía bán, chỉ thu khi chốt: CCRB **1%** giá trị giao dịch (0,5% trả CTV), NMG **0,5%**, cho thuê **3/4 tháng tiền thuê**. Người mua 0đ. OKR 2024 "1 giao dịch / 2 ngày, TB 10 tỷ" ≈ 6,7 tỷ / 6 tháng — BA đã cảnh báo cần chuyển đổi ~5% từ chat (OPEN-01). **21/09/2026: doanh thu 0, giao dịch 0** | `01 §1.3`, BR-04, BR-05, OPEN-01 |
+
+Ô yếu nhất theo thứ tự: **Khách hàng đầu tiên** (chưa gặp ai thật) → **Kênh** (một kênh, mượn
+tài khoản cá nhân) → **Lợi thế khó sao chép** (đang là lời hứa, chưa là tài sản). Ba ô này
+đúng là ba việc §0.9 đề nghị làm trước.
