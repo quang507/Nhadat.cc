@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { chonDeGhi, coMuiDuLieuRao, giaTriChoCauTreo, kiemDeXuat, kiemKienThuc, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { chonDeGhi, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -191,6 +191,37 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const kt = kiemKienThuc(["gần chợ Bình Tây", "khu an ninh", "gần chợ bình tây", "có hồ bơi", "nhà ở từ 2019 rồi"], tin, [dx("hien_trang", "nhà ở từ 2019 rồi", "nhà ở từ 2019 rồi")]);
   ok("kiến thức: nguyên văn giữ, trùng bỏ, bịa ('có hồ bơi') bỏ, trùng trích dẫn đã có khoá bỏ", kt.join("|") === "gần chợ Bình Tây|khu an ninh", JSON.stringify(kt));
   ok("kiến thức: tối đa 3", kiemKienThuc(["a1 b", "c2 d", "e3 f", "g4 h"], "a1 b c2 d e3 f g4 h", []).length === 3);
+}
+
+// ── 21/09/2026 chế độ `chinh` — AI là đường chính: `docAiChinh` + câu treo mặt tiền / diện tích từ ngang×dài ──
+{
+  const dx = (khoa, gia_tri, trich_dan, can = null) => ({ khoa, gia_tri, trich_dan, can });
+  ok("câu treo MẶT TIỀN: AI ngang 4 + dài 16 → 'ngang 4m dài 16m'", giaTriChoCauTreo([dx("ngang", "4", "ngang 4"), dx("dai", "16", "dài 16")], "mat_tien", {}) === "ngang 4m dài 16m");
+  ok("câu treo MẶT TIỀN: chỉ ngang → '4.5m'", giaTriChoCauTreo([dx("ngang", "4.5", "ngang 4.5")], "mat_tien", {}) === "4.5m");
+  ok("câu treo DIỆN TÍCH ĐẤT chưa có m², có ngang×dài → '5x20'", giaTriChoCauTreo([dx("ngang", "5", "5x20"), dx("dai", "20", "5x20")], "dien_tich_dat", {}) === "5x20");
+  ok("câu treo diện tích: có dien_tich thì ưu tiên dien_tich", giaTriChoCauTreo([dx("dien_tich", "100", "100m2"), dx("ngang", "5", "5x20"), dx("dai", "20", "5x20")], "dien_tich", {}) === "100m2");
+  const a = docAiChinh([
+    dx("gia", "1 tỷ 8", "giá 1 tỷ 8"), dx("loai_bds", "chung_cu", "căn hộ"), dx("loai_giao_dich", "ban", "bán"),
+    dx("quan", "quận 7", "quận 7"), dx("duong", "Nguyễn Lương Bằng", "đường Nguyễn Lương Bằng"), dx("du_an", "Sunrise City", "Sunrise City"),
+    dx("so_phong_ngu", "2", "2 phòng ngủ"), dx("ngang", "5", "5x20"), dx("dai", "20", "5x20"), dx("gap", "co", "cần bán gấp"), dx("ma_can", "a12-05", "căn a12-05"),
+    dx("no_hau", "6", "nở hậu 6m"),
+  ], null);
+  const ghi = Object.fromEntries(a.ghi.map((g) => [g.question, g.answer]));
+  ok("docAiChinh: fact ghép đủ — dien_tich '5x20' (ngang×dài, chưa có m²), vi_tri, du_an_ten, loai_giao_dich, loai_bds, gia, so_phong_ngu, gap (cụm khách nói)",
+    ghi.dien_tich === "5x20" && ghi.vi_tri === "Nguyễn Lương Bằng" && ghi.du_an_ten === "Sunrise City" && ghi.loai_giao_dich === "ban" && ghi.loai_bds === "chung_cu" &&
+      ghi.gia === "1 tỷ 8" && ghi.so_phong_ngu === "2" && ghi.gap === "cần bán gấp" && !("mat_tien" in ghi), JSON.stringify(a));
+  ok("docAiChinh: cột lõi — quận chuẩn hoá 'Quận 7', loại, giao dịch, giá, 2 PN, ngang/dài, gấp true, mã căn A12-05, dienTich null (đã là AxB)",
+    a.quan === "Quận 7" && a.loaiBds === "chung_cu" && a.loaiGiaoDich === "ban" && a.gia === "1 tỷ 8" && a.soPhongNgu === 2 && a.ngang === 5 && a.dai === 20 &&
+      a.gap === true && a.maCan === "A12-05" && a.dienTich === null && a.duong === "Nguyễn Lương Bằng" && a.duAn === "Sunrise City", JSON.stringify(a));
+  ok("docAiChinh: nở hậu chưa có ô → nằm trong `bo` (khoa_khong_co_cho_ghi), không mất dấu", a.bo.some((b) => b.khoa === "no_hau" && b.ly_do === "khoa_khong_co_cho_ghi"), JSON.stringify(a.bo));
+  const b = docAiChinh([dx("dien_tich", "80", "80m2"), dx("ngang", "4", "ngang 4m"), dx("dai", "20", "dài 20m"), dx("quan", "Quận Ba Đình", "quận Ba Đình"), dx("loai_bds", "nha_mat_tien", "nhà mặt tiền")], null);
+  const ghiB = Object.fromEntries(b.ghi.map((g) => [g.question, g.answer]));
+  ok("docAiChinh: có m² lẫn ngang×dài → dien_tich '80m2' + mat_tien 'ngang 4m dài 20m'; dienTich 80; quận lạ → null; loại ngoài danh sách → null",
+    ghiB.dien_tich === "80m2" && ghiB.mat_tien === "ngang 4m dài 20m" && b.dienTich === 80 && b.quan === null && b.loaiBds === null, JSON.stringify(b));
+  const c = docAiChinh([], null);
+  ok("docAiChinh: AI không nói gì → ghi rỗng, mọi cột null (nơi gọi rơi về luật)", c.ghi.length === 0 && c.gia === null && c.quan === null && c.loaiBds === null && c.gap === null);
+  ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien, KHÔNG có tien_ich_gan / nam_xay / the_chap (luật vẫn đỡ)",
+    ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds"].every((k) => KHOA_FACT_AI_BIET.has(k)) && ["tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => !KHOA_FACT_AI_BIET.has(k)));
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

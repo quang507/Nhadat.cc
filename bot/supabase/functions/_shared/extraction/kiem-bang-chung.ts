@@ -460,11 +460,123 @@ const AI_CHO_CAU: Record<string, string[]> = {
  * đang hỏi, qua thêm kiểm khoảng của `chonDeGhi`. null = AI không có / không đạt.
  */
 export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | null): string | null {
+  const mot = dat.filter((d) => !(d.can != null && d.can > 1));
+  // 21/09/2026 (chế độ `chinh`): ngang / dài KHÔNG có ô fact riêng (`KHOA_GHI`), nên câu MẶT TIỀN
+  // ("ngang 4 dài 16") và câu DIỆN TÍCH trả lời bằng "5x20" từng trả null. Nay ghép như luật:
+  // mặt tiền → "ngang Am dài Bm" (DB đọc hai chiều), diện tích chưa nói mà có ngang×dài → "AxB".
+  const kt = kichThuoc(mot);
+  if (cauHoi === "mat_tien") return kt.ngang != null ? (kt.dai != null ? `ngang ${kt.ngang}m dài ${kt.dai}m` : `${kt.ngang}m`) : null;
   const khoaAi = new Set([...(AI_CHO_CAU[cauHoi] ?? []), ...Object.entries(KHOA_GHI).filter(([, q]) => q === cauHoi).map(([k]) => k)]);
-  const loc = dat.filter((d) => khoaAi.has(d.khoa) && !(d.can != null && d.can > 1));
-  if (!loc.length) return null;
+  const loc = mot.filter((d) => khoaAi.has(d.khoa));
+  if (!loc.length) {
+    if (/^dien_tich(_dat)?$/.test(cauHoi) && kt.ngang != null && kt.dai != null) return `${kt.ngang}x${kt.dai}`;
+    return null;
+  }
   const { ghi } = chonDeGhi(loc, { trung: [], lech: [], ai_them: loc.map((d) => ({ khoa: d.khoa, ai: d.gia_tri })) }, dong, {});
   return ghi[0]?.answer ?? null;
+}
+
+/** Ngang / dài / nở hậu (m) trong đề xuất đạt của MỘT căn, qua kiểm khoảng 1–200 m. */
+function kichThuoc(mot: DeXuat[]): { ngang: number | null; dai: number | null; noHau: number | null } {
+  const lay = (k: string) => {
+    const d = mot.find((x) => x.khoa === k);
+    const n = d ? soCua(d.gia_tri) : null;
+    return n != null && n >= 1 && n <= 200 ? n : null;
+  };
+  return { ngang: lay("ngang"), dai: lay("dai"), noHau: lay("no_hau") };
+}
+
+// ── Chế độ `chinh` (21/09/2026, chủ dự án: "đảo tầng: AI đọc là đường chính có kiểm bằng chứng") ──
+/**
+ * Khoá fact mà AI CÓ THỂ nói ra (qua `KHOA_GHI` hoặc ghép ở `docAiChinh`). Khi AI đã chạy xong
+ * và qua kiểm, luật tiền định KHÔNG ghi các khoá này nữa — luật chỉ còn đỡ các khoá AI không có
+ * chỗ nói (tiện ích gần, năm xây, hẻm thông, ngập, thế chấp…). Đây là chỗ chặn "bớt 50 triệu" →
+ * giá, "hợp đồng phân phối" → pháp lý, "quý 2 năm sau" → địa chỉ (TS-VAN-11).
+ */
+export const KHOA_FACT_AI_BIET: ReadonlySet<string> = new Set([
+  ...Object.values(KHOA_GHI), "mat_tien", "vi_tri", "du_an_ten", "loai_giao_dich", "loai_bds", "dien_tich_dat",
+]);
+
+
+export type AiChinh = {
+  /** Fact ghi được (đã chuẩn hoá + kiểm khoảng), kể cả ghép ngang×dài, đường → vi_tri, dự án → du_an_ten. */
+  ghi: DeGhi[];
+  bo: Bo[];
+  // Giá trị CỘT LÕI cho lúc tạo tin; null = AI không nói / không đạt → luật đỡ.
+  loaiGiaoDich: "ban" | "cho_thue" | null;
+  loaiBds: string | null;
+  gia: string | null;
+  giaM2Raw: string | null;
+  dienTich: number | null;
+  ngang: number | null;
+  dai: number | null;
+  soPhongNgu: number | null;
+  /** Quận đã chuẩn hoá qua `bocQuan` ("Quận 7", "Quận Bình Thạnh"); AI nói quận lạ → null. */
+  quan: string | null;
+  phuong: string | null;
+  duong: string | null;
+  duAn: string | null;
+  maCan: string | null;
+  gap: boolean | null;
+};
+
+/**
+ * AI là đường chính: từ đề xuất ĐẠT kiểm bằng chứng của MỘT căn → mọi fact ghi được và giá trị cột
+ * lõi. KHÔNG so với DB (AI thắng luật ở lượt này; `ghi_fact_listing` chỉ ghi thêm, trigger lấy bản
+ * mới nhất). Không có gì → mọi ô null, `ghi` rỗng — nơi gọi rơi về luật.
+ */
+export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
+  const mot = dat.filter((d) => !(d.can != null && d.can > 1));
+  const { ghi, bo: boTho } = chonDeGhi(mot, { trung: [], lech: [], ai_them: mot.map((d) => ({ khoa: d.khoa, ai: d.gia_tri })) }, dong, {});
+  const daCo = new Set(ghi.map((g) => g.question));
+  const bo: Bo[] = [];
+  const lay = (k: string) => mot.find((d) => d.khoa === k)?.gia_tri.trim() ?? null;
+  const them = (question: string, answer: string | null, khoa: string) => {
+    if (!answer || daCo.has(question)) return;
+    daCo.add(question);
+    ghi.push({ question, answer, khoa });
+  };
+  const kt = kichThuoc(mot);
+  // Ngang × dài: có cả hai và chưa có diện tích → "AxB" (trigger nhân ra m² + ghi hai chiều);
+  // chỉ ngang → mặt tiền. Nở hậu chưa có ô, để trong `bo` cho sổ đo.
+  if (kt.ngang != null && kt.dai != null) {
+    if (!daCo.has("dien_tich")) them("dien_tich", `${kt.ngang}x${kt.dai}`, "ngang");
+    else them("mat_tien", `ngang ${kt.ngang}m dài ${kt.dai}m`, "ngang");
+  } else if (kt.ngang != null) them("mat_tien", `${kt.ngang}m`, "ngang");
+  const duong = lay("duong");
+  if (duong && duong.length >= 4 && duong.length <= 80) them("vi_tri", duong, "duong");
+  const duAn = lay("du_an");
+  if (duAn && duAn.length >= 3 && duAn.length <= 80) them("du_an_ten", duAn, "du_an");
+  const lgd = chuanSo(lay("loai_giao_dich") ?? "");
+  const loaiGiaoDich = lgd === "ban" || lgd === "cho_thue" ? lgd : null;
+  if (loaiGiaoDich) them("loai_giao_dich", loaiGiaoDich, "loai_giao_dich");
+  const lb = chuanSo(lay("loai_bds") ?? "").replace(/\s+/g, "_");
+  const loaiBds = lb in LOAI_BDS ? lb : null;
+  if (loaiBds) them("loai_bds", loaiBds, "loai_bds");
+  for (const b of boTho) {
+    if (b.ly_do === "khoa_khong_co_cho_ghi" && ["ngang", "dai", "duong", "du_an", "loai_giao_dich", "loai_bds"].includes(b.khoa) &&
+      ghi.some((g) => g.khoa === b.khoa)) continue;
+    bo.push(b);
+  }
+  const giaTri = (q: string) => ghi.find((g) => g.question === q)?.answer ?? null;
+  const soGhi = (q: string) => { const v = giaTri(q); return v == null ? null : soCua(v); };
+  const gapV = chuanSo(lay("gap") ?? "");
+  const maCan = lay("ma_can");
+  return {
+    ghi, bo,
+    loaiGiaoDich, loaiBds,
+    gia: giaTri("gia"),
+    giaM2Raw: lay("gia_m2"),
+    dienTich: daCo.has("dien_tich") && !/x/.test(giaTri("dien_tich") ?? "") ? soGhi("dien_tich") : null,
+    ngang: kt.ngang, dai: kt.dai,
+    soPhongNgu: soGhi("so_phong_ngu"),
+    quan: (() => { const q = lay("quan"); return q ? bocQuan(chuanSo(q), q) : null; })(),
+    phuong: giaTri("phuong"),
+    duong: giaTri("vi_tri"),
+    duAn: giaTri("du_an_ten"),
+    maCan: maCan && /^[A-Za-z0-9][A-Za-z0-9.\-\/]{1,15}$/.test(maCan) ? maCan.toUpperCase() : null,
+    gap: gapV === "co" ? true : gapV === "khong" ? false : null,
+  };
 }
 
 /**
