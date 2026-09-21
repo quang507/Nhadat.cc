@@ -2165,8 +2165,8 @@ fresh(seedKho);
   // Sai 1 ký tự → câu hỏi đầu là XÁC NHẬN tên đường; gợi ý cất; địa chỉ vẫn chữ khách gõ.
   fresh(seedDuong);
   rp = await send({ external_user_id: "duong-2", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
-  check("DUONG-02 'pham the hier' khớp gần → hỏi 'Đường mình là Phạm Thế Hiển phải không', gợi ý ở boc_tach.duong_goi_y, địa chỉ chưa sửa",
-    modelThay("Đường mình là Phạm Thế Hiển phải không") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" &&
+  check("DUONG-02 'pham the hier' khớp gần → hỏi 'Dạ em hiểu là đường Phạm Thế Hiển đúng không', gợi ý ở boc_tach.duong_goi_y, địa chỉ chưa sửa",
+    modelThay("Dạ em hiểu là đường Phạm Thế Hiển đúng không") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" &&
       tin().boc_tach?.duong_goi_y?.vi_tri === "hẻm 4m Phạm Thế Hiển" && /pham the hier/.test(tin().location_raw ?? "") && pend().length > 0,
     JSON.stringify({ l: tin(), pend: pend(), rep: rp.body.replies }));
   const cauTreo = pend()[0];
@@ -2222,7 +2222,43 @@ fresh(seedKho);
       ] } : OUT();
   rp = await send({ external_user_id: "duong-7", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
   check("DUONG-08 chế độ 'chinh': AI sửa 'pham the hier' → 'Phạm Thế Hiển' bị kiểm bằng chứng bỏ → lấy trích dẫn làm địa chỉ, từ điển hỏi xác nhận, gợi ý cất",
-    /pham the hier/.test(tin().location_raw ?? "") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" && modelThay("Đường mình là Phạm Thế Hiển phải không"),
+    /pham the hier/.test(tin().location_raw ?? "") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" && modelThay("Dạ em hiểu là đường Phạm Thế Hiển đúng không"),
+    JSON.stringify({ l: tin(), rep: rp.body.replies }));
+  globalThis.__cauHinh = undefined;
+
+  // Bắn thật 21/09 (mau-tdt, chế độ luật): rao không địa chỉ, trả lời câu vị trí bằng CÂU DÀI "nhà ở đường trần
+  // đình trọng phường 2 quận 5, hẻm 6m…" → cụm đi nguyên vào tim_duong, không khớp gì. Nay cắt tên đường trần.
+  const seedTBT = (d) => {
+    d.insert("duong", { ten: "Trần Bình Trọng", tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: "Phường Chợ Quán", quan_cu: "Quận 5", nguon: "test" });
+    d.insert("duong", { ten: "Trịnh Đình Trọng", tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: "Phường Bảy Hiền", quan_cu: "Quận Tân Bình", nguon: "test" });
+  };
+  fresh(seedTBT);
+  await send({ external_user_id: "duong-8", text: "chào em, anh có căn nhà muốn bán, em tư vấn giúp anh" });
+  rp = await send({ external_user_id: "duong-8", text: "nhà ở đường trần đình trọng phường 2 quận 5, hẻm 6m xe hơi vào tận nhà" });
+  check("DUONG-09 câu địa chỉ dài → tra bằng tên trần 'trần đình trọng', khớp gần Trần Bình Trọng (1 ký tự) → hỏi 'Dạ em hiểu là đường Trần Bình Trọng đúng không', gợi ý cất",
+    rpcDuong().some((x) => x.args.p_ten === "trần đình trọng") && tin().boc_tach?.duong_goi_y?.ten === "Trần Bình Trọng" && modelThay("Dạ em hiểu là đường Trần Bình Trọng đúng không"),
+    JSON.stringify({ rpc: rpcDuong().map((x) => x.args), l: tin(), rep: rp.body.replies }));
+
+  // Cùng kịch bản ở chế độ `chinh`: AI đọc "Trần Đình Trọng" (giá trị AI đi vào `loaiDapAn`) — bắn thật 21/09 tin
+  // ghi thẳng, không ai hỏi. Nay hook từ điển chạy cả với giá trị AI.
+  fresh(seedTBT);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+  await send({ external_user_id: "duong-9", text: "chào em, anh có căn nhà muốn bán, em tư vấn giúp anh" });
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: [], truong: [
+        { khoa: "duong", gia_tri: "Trần Đình Trọng", trich_dan: "đường trần đình trọng", can: null },
+        { khoa: "phuong", gia_tri: "2", trich_dan: "phường 2", can: null },
+        { khoa: "quan", gia_tri: "Quận 5", trich_dan: "quận 5", can: null },
+        { khoa: "do_rong_hem", gia_tri: "6", trich_dan: "hẻm 6m", can: null },
+      ] } : OUT();
+  rp = await send({ external_user_id: "duong-9", text: "nhà ở đường trần đình trọng phường 2 quận 5, hẻm 6m xe hơi vào tận nhà" });
+  check("DUONG-10 chế độ 'chinh', AI đọc 'Trần Đình Trọng' → vẫn qua từ điển: gợi ý Trần Bình Trọng, hỏi xác nhận; địa chỉ tạm vẫn là chữ chưa sửa",
+    tin().boc_tach?.duong_goi_y?.ten === "Trần Bình Trọng" && modelThay("Dạ em hiểu là đường Trần Bình Trọng đúng không") && /đình trọng/i.test(tin().location_raw ?? "") && !/Bình Trọng/.test(tin().location_raw ?? ""),
+    JSON.stringify({ l: tin(), rep: rp.body.replies }));
+  rp = await send({ external_user_id: "duong-9", text: "đúng rồi" });
+  check("DUONG-11 gật → địa chỉ mang 'Trần Bình Trọng' (không còn 'đình trọng'), gợi ý xoá",
+    /Trần Bình Trọng/.test(tin().location_raw ?? "") && !/đình trọng/i.test(tin().location_raw ?? "") && tin().boc_tach?.duong_goi_y === false,
     JSON.stringify({ l: tin(), rep: rp.body.replies }));
   globalThis.__cauHinh = undefined;
 
@@ -2232,6 +2268,41 @@ fresh(seedKho);
   check("DUONG-07 RPC tim_duong hỏng → 1 dòng bot_errors, địa chỉ vẫn ghi chữ khách gõ",
     db().t.bot_errors.some((e) => /tim_duong/.test(JSON.stringify(e))) && /pham the hien/.test(tin().location_raw ?? ""),
     JSON.stringify({ l: tin(), loi: db().t.bot_errors }));
+}
+
+// ── 21/09/2026 (bắn thật mau-tdt): bản nháp và câu duyệt — không nuốt câu hỏi ngược, gật ở vế đầu vẫn là gật ──
+{
+  const tin = () => db().t.listings.at(-1);
+  const pendQ = () => db().t.info_requests.filter((x) => x.status === "pending").map((x) => x.question);
+  // Tin đủ điểm ngay lúc trả lời pháp lý → bản nháp gửi luôn; câu "mà em là người hay máy vậy?" phải được đáp TRƯỚC bản nháp.
+  fresh();
+  await send({ external_user_id: "nhap-1", text: "bán nhà hẻm 6m Trần Bình Trọng phường 2 quận 5, 4x15, trệt 2 lầu, 3 phòng ngủ, giá 9 tỷ 5" });
+  tin().alley_width_m = 6; tin().area_m2 = 60; tin().frontage_m = 4; // mock không bóc hẻm/4x15 từ câu rao; DB thật có (boc_thong_so) — đủ 70 điểm sau câu pháp lý
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tin().id, question: "phap_ly", status: "pending" });
+  let rp = await send({ external_user_id: "nhap-1", text: "sổ hồng riêng, hoàn công đủ. mà em là người hay máy vậy?" });
+  const iNhap = rp.body.replies.findIndex((r) => /Em đăng tin như vầy/.test(r));
+  const iDap = rp.body.replies.findIndex((r) => /trợ lý AI/.test(r));
+  check("NHAP-01 trả lời pháp lý kèm hỏi 'người hay máy' → có bong bóng 'em là trợ lý AI' ĐỨNG TRƯỚC bản nháp",
+    iNhap >= 0 && iDap >= 0 && iDap < iNhap && pendQ().includes("duyet_tin"),
+    JSON.stringify({ rep: rp.body.replies, pend: pendQ() }));
+  // Gật ở vế đầu + lời bình → là GẬT: tin duyệt, không có "📝 Thêm: ok em đăng đi…", không gửi lại nháp.
+  rp = await send({ external_user_id: "nhap-1", text: "ok em đăng đi, mà cái dòng phù hợp đọc kỳ quá" });
+  check("NHAP-02 'ok em đăng đi, mà cái dòng phù hợp đọc kỳ quá' lúc duyệt → gật (chu_duyet_at), không vào bo_sung, không gửi lại nháp",
+    !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)) && !rp.body.replies.some((r) => /Em đăng tin như vầy|Em sửa lại rồi/.test(r)),
+    JSON.stringify({ l: { chu_duyet_at: tin().chu_duyet_at }, facts: db().t.listing_facts.map((f) => [f.question, f.answer]), rep: rp.body.replies }));
+  // Vế sau có LỜI SỬA ("mà giá 9 tỷ 8") → FR-164 ghi giá mới trước, phần còn lại "ok đăng đi" là gật (FR-177 g:
+  // "đủ rồi, đăng đi" lúc duyệt là GẬT) → tin duyệt với giá MỚI. Không được mất giá mới, không được vào bo_sung.
+  fresh();
+  await send({ external_user_id: "nhap-2", text: "bán nhà hẻm 6m Trần Bình Trọng phường 2 quận 5, 4x15, trệt 2 lầu, 3 phòng ngủ, giá 9 tỷ 5" });
+  tin().alley_width_m = 6; tin().area_m2 = 60; tin().frontage_m = 4;
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tin().id, question: "phap_ly", status: "pending" });
+  await send({ external_user_id: "nhap-2", text: "sổ hồng riêng, hoàn công đủ" });
+  rp = await send({ external_user_id: "nhap-2", text: "ok đăng đi, mà giá 9 tỷ 8 nha em" });
+  check("NHAP-03 'ok đăng đi, mà giá 9 tỷ 8 nha em' → giá 9 tỷ 8 ghi (lời sửa), rồi gật → duyệt; không vào bo_sung",
+    /9 tỷ 8/.test(tin().price_raw ?? "") && !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)),
+    JSON.stringify({ l: { price_raw: tin().price_raw, chu_duyet_at: tin().chu_duyet_at }, rep: rp.body.replies }));
 }
 
 // ── FR-209 (15/09/2026): tra PHƯỜNG MỚI từ tên đường — Nominatim → bảng `wards`, HỎI XÁC NHẬN, gật mới ghi ──

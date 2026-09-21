@@ -979,7 +979,10 @@ export function nhanDienFact(text: string): NhanDien | null {
   // phải tiềm năng sử dụng.
   const O_TU_NAM_RE = /\b(?:nha\s+)?(?:o|xay|xay dung|su dung|dang o)\s+(?:tu|hoi|nam)\s+(?:nam\s+)?((?:19|20)\d{2})\b/;
   if ((m = O_TU_NAM_RE.exec(kd))) return { question: "hien_trang", answer: manhKhop(O_TU_NAM_RE) };
-  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8) ||
+  // 21/09/2026 (bắn thật mau-tdt): "nhà ở đường trần đình trọng quận 5" là ĐỊA CHỈ ("ở" = nằm ở), từng
+  // thành tiềm năng "nhà ở" rồi lên bản nháp "💡 Phù hợp: nhà ở đường…". "ở" theo sau là đường/hẻm/số/
+  // phường/quận/khu/gần… thì không phải cách dùng.
+  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8) ||
       (/\b(o hoac|hoac lam|deu duoc|lam can ho dich vu|lam chdv|hop (?:de )?(?:o|kinh doanh|cho thue|lam))\b/.test(kd) && kd.split(/\s+/).length <= 14 &&
         !/\b(showroom|lam xuong|van phong cong ty|nha hang|benh vien|truong hoc|lam kho)\b/.test(kd))) {
     return { question: "tiem_nang", answer: goc };

@@ -290,7 +290,9 @@ export const CAU_HOI_MAU: Record<string, string> = {
   // FR-209 (15/09): tra được phường mới từ tên đường → HỎI XÁC NHẬN, chưa ghi.
   "phuong@goi_y": "Em tra thấy đường {duong} thuộc {phuong} ({quan} cũ), đúng không {ac}?",
   // FR-212 (21/09): tên đường gõ sai 1–2 ký tự khớp gần MỘT tên trong từ điển `duong` → HỎI trước khi sửa.
-  "duong@goi_y": "Đường mình là {ten} phải không {ac}? Em thấy {ac} gõ \"{goc}\".",
+  // Chủ dự án 21/09: "kiểu con bot phải xác nhận lại với sếp là em hiểu là … đúng ko, tinh tế vào" —
+  // không nhắc chữ khách gõ sai, chỉ hỏi lại cách hiểu. {goc} vẫn có nếu ai muốn dùng ở Dashboard.
+  "duong@goi_y": "Dạ em hiểu là đường {ten} đúng không {ac}?",
   // 12/09/2026 (bắn 20 tin): đất ở Huyện Củ Chi mà bot hỏi "thuộc phường mấy" —
   // huyện thì đơn vị dưới là XÃ, hỏi phường là lộ ngay ra máy đọc mẫu câu.
   "phuong@huyen": "Chỗ mình thuộc xã nào vậy {ac}?",
