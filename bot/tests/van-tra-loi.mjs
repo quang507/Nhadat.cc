@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -334,6 +334,35 @@ ok("không phải xin xoá: 'xóa cái hẻm 4m đi, hẻm 5m'", laXinXoaDuLieu(
 ok("boGachCheo: 'Sai chỗ nào anh/chị nhắn lại' → 'anh chị'", boGachCheo("Sai chỗ nào anh/chị nhắn lại giúp em nha.") === "Sai chỗ nào anh chị nhắn lại giúp em nha.");
 ok("boGachCheo: đầu câu 'Anh/chị cho em' → 'Anh chị cho em'", boGachCheo("Anh/chị cho em xin địa chỉ") === "Anh chị cho em xin địa chỉ");
 ok("boGachCheo: không đụng 'anh chị phụ trách'", boGachCheo("có anh chị phụ trách theo sát") === "có anh chị phụ trách theo sát");
+
+
+// ── 22/09/2026: ba lưới mới theo bộ đo giọng (TS-GIONG-02) ─────────────────────
+{
+  const td = "Dạ em là trợ lý AI bên AI Ơi Nhà Đất, việc cần người thật thì có anh chị phụ trách theo sát mình ạ.";
+  const md = "Em là trợ lý AI bên AI Ơi Nhà Đất, việc gì cần người thật thì có anh chị phụ trách khu vực theo sát anh ạ. Sổ hồng nhà mình riêng chưa anh?";
+  ok("boCauTrung: câu tiền định + model chép lại gần nguyên văn → giữ MỘT, câu hỏi giữ",
+    JSON.stringify(boCauTrung([td, md])) === JSON.stringify([td, "Sổ hồng nhà mình riêng chưa anh?"]), JSON.stringify(boCauTrung([td, md])));
+  ok("boCauTrung: câu ngắn trùng ('Dạ em ghi 3 lầu rồi ạ.') KHÔNG bị bỏ", boCauTrung(["Dạ em ghi 3 lầu rồi ạ.", "Dạ em ghi 3 lầu rồi ạ. Sổ riêng chưa anh?"]).length === 2);
+  const bb = ["📝 Em ghi nhận: Nhà phố bán · Phường 5 · 60m² · giá 6 tỷ.\nSai chỗ nào anh chị nhắn lại giúp em nha."];
+  ok("boCauTrung: không bỏ gì thì trả nguyên mảng (giữ xuống dòng, `===`)", boCauTrung(bb) === bb);
+  ok("boCauTrung: bỏ câu ở dòng 2 vẫn giữ dòng 1 và dấu xuống dòng",
+    boCauTrung([td, `Dạ anh.\n${td}\nSổ riêng chưa anh?`])[1] === "Dạ anh.\nSổ riêng chưa anh?", JSON.stringify(boCauTrung([td, `Dạ anh.\n${td}\nSổ riêng chưa anh?`])));
+  const khen = ["Hẻm 5m ô tô vào tới cửa là khách chuộng lắm anh. Nhà mình xây mấy tầng rồi anh?"];
+  ok("boKhenKhongCanCu: chủ chỉ nói 'hẻm 5m' → bỏ câu 'ô tô vào tới cửa', giữ câu hỏi",
+    JSON.stringify(boKhenKhongCanCu(khen, "anh bán nhà hẻm 5m Trần Bình Trọng p1 q5, 4x15, 7 tỷ 2")) === JSON.stringify(["Nhà mình xây mấy tầng rồi anh?"]));
+  ok("boKhenKhongCanCu: chủ đã nói 'xe hơi vào tận nhà' → giữ nguyên (`===`)", boKhenKhongCanCu(khen, "hẻm 5m xe hơi vào tận nhà") === khen);
+  ok("boKhenKhongCanCu: câu HỎI 'ô tô vào được không anh?' giữ", boKhenKhongCanCu(["Hẻm 5m ô tô vào được không anh?"], "hẻm 5m").length === 1);
+  ok("boKhenKhongCanCu: 'xuyên thoáng' / 'nở hậu' chủ chưa nói → bỏ", boKhenKhongCanCu(["Nhà xuyên thoáng lại nở hậu là hiếm anh."], "nhà 4x15 3 lầu").length === 0);
+  const canHem = { access_type: "hem_xe_hoi", alley_width_m: 6, legal_status: "so_hong_rieng", location_raw: "12 Trần Hưng Đạo" };
+  ok("boMauThuanCan: căn hẻm 6m mà nói 'mặt tiền kinh doanh' → bỏ câu đó, giữ câu hỏi",
+    JSON.stringify(boMauThuanCan(["Dạ căn 12 Trần Hưng Đạo mặt tiền kinh doanh được anh. Anh muốn xem hôm nào?"], canHem)) === JSON.stringify(["Anh muốn xem hôm nào?"]));
+  ok("boMauThuanCan: nói đúng 'hẻm 6m' → giữ nguyên", boMauThuanCan(["Dạ căn 12 Trần Hưng Đạo hẻm 6m, mở quán ăn thì em hỏi lại chủ nhà cho anh nha."], canHem).length === 1);
+  ok("boMauThuanCan: sổ riêng mà nói 'sổ chung' → bỏ; không có căn → không đụng",
+    boMauThuanCan(["Căn này sổ chung anh nhé."], canHem).length === 0 && boMauThuanCan(["Căn này sổ chung anh nhé."], null).length === 1);
+  ok("boCauGhiNhan: giữ lời SỬA THẬT 'Dạ em sửa lại giá 7 tỷ 5 rồi ạ', vẫn bỏ 'Dạ em ghi 3 lầu rồi ạ'",
+    JSON.stringify(boCauGhiNhan(["Dạ em sửa lại giá 7 tỷ 5 rồi ạ.", "Dạ em ghi 3 lầu rồi ạ. Sổ riêng chưa anh?"])) === JSON.stringify(["Dạ em sửa lại giá 7 tỷ 5 rồi ạ.", "Dạ sổ riêng chưa anh?"]),
+    JSON.stringify(boCauGhiNhan(["Dạ em sửa lại giá 7 tỷ 5 rồi ạ.", "Dạ em ghi 3 lầu rồi ạ. Sổ riêng chưa anh?"])));
+}
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

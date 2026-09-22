@@ -55,6 +55,23 @@ export function thayLienHe(s: string, nhan: string): string {
   return s.replace(new RegExp(`(?:${SDT_NGUON})|(?:${MANG_XA_HOI_NGUON})`, "gi"), nhan);
 }
 
+/**
+ * Kênh liên hệ CÓ ID đi kèm — bản chặt của `MANG_XA_HOI_NGUON`: chữ "zalo"/"fb" trần KHÔNG
+ * khớp, phải có ":" + ID hoặc đuôi mang chữ số / @ / /.
+ *
+ * 22/09/2026 (bộ đo giọng M03): bong bóng của CHÍNH BOT "anh chị phụ trách sẽ liên hệ qua
+ * Zalo" đi qua `thayLienHe` thành "liên hệ qua [liên hệ qua Zalo]". Chữ bot nói không phải
+ * chữ khách gửi: bot không có số ai để lộ, chỉ cần che khi model lỡ chép một ID/SĐT từ kho.
+ */
+export const MANG_XA_HOI_CO_ID_NGUON =
+  "\\b(?:zalo|z@lo|fb|facebook|viber|telegram)\\b" +
+  "(?:\\s*:\\s*[\\w.@/]+(?![A-Za-zÀ-ỹ])|\\s*(?=[\\w.@/]*[\\d@/_])[\\w.@/]+(?![A-Za-zÀ-ỹ]))";
+
+/** Như `thayLienHe` nhưng chỉ che kênh mạng xã hội khi CÓ ID — dùng cho câu bot tự nói. */
+export function thayLienHeCoId(s: string, nhan: string): string {
+  return s.replace(new RegExp(`(?:${SDT_NGUON})|(?:${MANG_XA_HOI_CO_ID_NGUON})`, "gi"), nhan);
+}
+
 /** Câu có chứa SĐT không — dựng RegExp mới nên gọi bao nhiêu lần cũng đúng. */
 export function coSdt(s: string): boolean {
   return new RegExp(SDT_NGUON).test(s);

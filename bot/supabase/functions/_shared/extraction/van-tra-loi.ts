@@ -257,7 +257,9 @@ export function boCauGhiNhan(replies: string[]): string[] {
   for (const r of replies) {
     if (/^(📋|💾|🤖|📝)/u.test(r)) { ra.push(r); continue; }
     const cau = tachCau(r);
-    const giu = cau.filter((c) => !laCauGhiNhanMot(c));
+    // 22/09/2026 (bộ đo giọng B04, chủ dự án chốt): "Dạ em sửa lại giá 7 tỷ 5 rồi ạ" là lời XÁC NHẬN
+    // sau câu "à nhầm" của chủ nhà — giữ, dù 🤖 đã in giá mới. Chỉ bỏ lời "ghi/cập nhật" thường.
+    const giu = cau.filter((c) => !laCauGhiNhanMot(c) || laCauSuaLai(c));
     if (giu.length === cau.length) { ra.push(r); continue; }
     if (!giu.length) continue;
     let dau = giu[0];
@@ -267,6 +269,11 @@ export function boCauGhiNhan(replies: string[]): string[] {
     ra.push([dau, ...giu.slice(1)].join(" "));
   }
   return ra;
+}
+
+/** "Dạ em sửa lại …", "Em đổi lại …" — lời xác nhận SỬA (khác lời ghi thường). */
+function laCauSuaLai(tin: string): boolean {
+  return /^(?:da|vang)?[\s,]*(?:(?:anh\/chi|anh|chi|minh)[\s,]+)?(?:em\s+)?(?:da\s+)?(?:sua|doi)\s+lai\b/.test(boDau(tin.trim()));
 }
 
 function laCauGhiNhanMot(tin: string): boolean {
@@ -396,4 +403,101 @@ export function laXinXoaDuLieu(text: string): boolean {
  */
 export function boGachCheo(s: string): string {
   return (s ?? "").replace(/anh\/chị/g, "anh chị").replace(/Anh\/chị/g, "Anh chị").replace(/ANH\/CHỊ/g, "ANH CHỊ");
+}
+
+/**
+ * Lọc CÂU trong từng bong bóng theo một luật, GIỮ NGUYÊN xuống dòng: bong bóng 📝/📋 nhiều dòng
+ * ("📝 Em ghi nhận: …\nSai chỗ nào … nhắn lại") được tách theo dòng rồi theo câu; dòng nào không
+ * mất câu nào thì giữ nguyên chữ gốc. Không bỏ gì thì trả đúng mảng cũ (so `===` được).
+ */
+function locCauTrongBongBong(replies: string[], bo: (cau: string) => boolean): string[] {
+  let daBo = false;
+  const ra: string[] = [];
+  for (const r of replies) {
+    const dongMoi: string[] = [];
+    for (const dong of r.split("\n")) {
+      const cac = tachCau(dong);
+      const giu = cac.filter((c) => !bo(c));
+      if (giu.length === cac.length) { dongMoi.push(dong); continue; }
+      daBo = true;
+      const gop = giu.join(" ").trim();
+      if (gop) dongMoi.push(gop);
+    }
+    const moi = dongMoi.join("\n").trim();
+    if (moi) ra.push(moi);
+  }
+  return daBo ? ra : replies;
+}
+
+/**
+ * Bỏ câu LẶP giữa các bong bóng (22/09/2026, bộ đo giọng B08): câu tiền định "Dạ em là trợ
+ * lý AI…" đứng trước, model đọc lịch sử rồi chép lại gần nguyên văn ở bong bóng sau → chủ
+ * nhà đọc hai lần. Câu ≥ 6 từ (bỏ từ đệm) mà ≥ 80% từ đã nằm trong một câu trước đó thì bỏ;
+ * câu ngắn ("Dạ.", "Anh ơi?") giữ nguyên vì trùng là chuyện thường.
+ */
+export function boCauTrung(replies: string[]): string[] {
+  // Trùng là trùng Ý, không cần trùng chữ: "Dạ em là trợ lý AI bên AI Ơi Nhà Đất, việc cần người
+  // thật thì có anh chị phụ trách theo sát mình ạ" và "Em là trợ lý AI bên AI Ơi Nhà Đất, việc gì
+  // cần người thật thì có anh chị phụ trách khu vực theo sát anh ạ" là một câu nói hai lần.
+  const DEM = new Set(["da", "a", "nha", "nhe", "em", "anh", "chi", "chu", "co", "bac", "minh", "oi", "la", "thi", "gi", "cung", "voi", "va"]);
+  const tuCua = (c: string) => new Set(boDau(c).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t && !DEM.has(t)));
+  const daThay: Set<string>[] = [];
+  return locCauTrongBongBong(replies, (c) => {
+    const tu = tuCua(c);
+    if (tu.size < 6) return false;
+    const trung = daThay.some((cu) => {
+      let chung = 0;
+      for (const t of tu) if (cu.has(t)) chung++;
+      return chung / Math.min(tu.size, cu.size) >= 0.8;
+    });
+    if (!trung) daThay.push(tu);
+    return trung;
+  });
+}
+
+/**
+ * Bỏ câu KHEN KHÔNG CÓ CĂN CỨ (22/09/2026, bộ đo giọng B01/B15/B16): chủ nhà nói "hẻm 5m"
+ * mà bot khẳng định "ô tô vào được", "xuyên thoáng", "nở hậu" khi chủ chưa nói. TONE_RULES
+ * cấm khen điều khách không nói nhưng model vẫn lọt → chặn bằng code. Chỉ áp cho câu MODEL
+ * viết (bản nháp / bảng tiền định đọc từ DB không qua đây). Chỉ bỏ câu KHẲNG ĐỊNH (không có
+ * dấu hỏi) mang từ khoá mà `bangChung` (chữ chủ nhà đã gõ, đã bỏ dấu) không có. Câu hỏi
+ * ("ô tô vào được không anh?") giữ — hỏi là đúng việc.
+ */
+const KHEN_CAN_BANG_CHUNG: Array<[RegExp, RegExp]> = [
+  [/\b(?:o to|oto|xe hoi|xe oto)\b/, /\b(?:o to|oto|xe hoi|xe oto|xe 4 banh|4 banh|hxh)\b/],
+  [/\bxuyen thoang\b/, /\bxuyen thoang\b|\bthoang\b/],
+  [/\bno hau\b/, /\bno hau\b/],
+  [/\bhoan cong\b/, /\bhoan cong\b/],
+  [/\b(?:so hong rieng|so rieng|shr)\b/, /\b(?:so hong rieng|so rieng|shr|so hong)\b/],
+];
+export function boKhenKhongCanCu(replies: string[], bangChung: string): string[] {
+  const bc = boDau(bangChung ?? "");
+  return locCauTrongBongBong(replies, (c) => {
+    if (/\?/.test(c)) return false;
+    const kd = boDau(c);
+    return KHEN_CAN_BANG_CHUNG.some(([khen, chung]) => khen.test(kd) && !chung.test(bc));
+  });
+}
+
+/**
+ * Bỏ câu MÂU THUẪN với căn đang nói (22/09/2026, bộ đo giọng M06): kho ghi "hẻm 6m" mà bot
+ * nói với khách mua "mặt tiền kinh doanh". Chỉ soi hai cặp đối nhau rõ ràng: mặt tiền ↔ hẻm,
+ * sổ riêng ↔ sổ chung. Câu hỏi giữ nguyên. Không có dữ liệu bên nào thì không đụng.
+ */
+export type CanDoiChieu = { access_type?: string | null; alley_width_m?: number | null; legal_status?: string | null; location_raw?: string | null; description?: string | null };
+export function boMauThuanCan(replies: string[], can: CanDoiChieu | null | undefined): string[] {
+  if (!can) return replies;
+  const mo = boDau(`${can.location_raw ?? ""} ${can.description ?? ""}`);
+  const laHem = can.access_type != null ? /^hem/.test(can.access_type) : (can.alley_width_m != null || /\bhem\b/.test(mo)) && !/\bmat tien\b/.test(mo);
+  const laMatTien = can.access_type != null ? can.access_type === "mat_tien" : /\bmat tien\b/.test(mo) && !/\bhem\b/.test(mo);
+  const soRieng = can.legal_status === "so_hong_rieng";
+  const soChung = can.legal_status === "so_hong_chung";
+  return locCauTrongBongBong(replies, (c) => {
+    if (/\?/.test(c)) return false;
+    const kd = boDau(c);
+    return (laHem && /\bmat tien\b/.test(kd) && !/\bhem\b/.test(kd)) ||
+      (laMatTien && /\bhem\b/.test(kd) && !/\bmat tien\b/.test(kd)) ||
+      (soRieng && /\bso (?:hong )?chung\b/.test(kd)) ||
+      (soChung && /\bso (?:hong )?rieng\b|\bshr\b/.test(kd));
+  });
 }

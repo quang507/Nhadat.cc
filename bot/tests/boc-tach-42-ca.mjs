@@ -161,6 +161,12 @@ for (const [q, vao, mong] of [
     tt.length === 2 && tt[0].thu === 1 && tt[1].thu === 2 && !tt[0].ma && !tt[1].ma &&
       tt[0].quan === "Quận 5" && tt[0].ngang === "4" && tt[0].dai === "12" && tt[0].gia === "5 tỷ" && tt[1].dai === "20" && tt[1].gia === "18 tỷ",
     JSON.stringify(tt));
+  // 22/09/2026 (bộ đo giọng B11): "5 tỷ 60m2" — 60 là diện tích, không phải phần lẻ của giá.
+  const b11 = nhanDienNhieuCan("bên anh có 2 căn: căn 1 hẻm 4m Nguyễn Trãi p3 q5 5 tỷ 60m2, căn 2 mặt tiền Hồng Bàng p12 q5 12 tỷ 80m2");
+  ok("'căn 1 … 5 tỷ 60m2, căn 2 … 12 tỷ 80m2' → giá '5 tỷ' / '12 tỷ', dt 60 / 80", b11.length === 2 && b11[0].gia === "5 tỷ" && b11[1].gia === "12 tỷ" && b11[0].dt === "60" && b11[1].dt === "80", JSON.stringify(b11));
+  const b11b = nhanDienNhieuCan("căn 1 5 tỷ 6 60m2, căn 2 7 tỷ rưỡi 80m2");
+  ok("'5 tỷ 6 60m2' vẫn giữ phần lẻ '5 tỷ 6'; '7 tỷ rưỡi' giữ rưỡi", b11b[0]?.gia === "5 tỷ 6" && b11b[1]?.gia === "7 tỷ rưỡi", JSON.stringify(b11b));
+  ok("nhanDienNhieuFact 'cần bán gấp 5 tỷ 60m2' → gia '5 tỷ'", nhanDienNhieuFact("cần bán gấp 5 tỷ 60m2").find((f) => f.question === "gia")?.answer === "5 tỷ");
   ok("'căn 2 phòng ngủ 65m2 quận 7 giá 3 tỷ 1' KHÔNG phải nhiều căn", nhanDienNhieuCan("bán căn hộ 2 phòng ngủ 65m2 quận 7, căn 2pn view sông, giá 3 tỷ 1").length === 0);
   ok("'còn căn 2 mặt tiền …' một mình → chưa đủ 2 căn (đường 'còn căn <số>' lo)", nhanDienNhieuCan("còn căn 2 mặt tiền trần phú 4x20 giá 18 tỷ thì sao em").length === 0);
 }
