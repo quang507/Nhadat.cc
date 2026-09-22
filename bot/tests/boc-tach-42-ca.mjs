@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { docTien, giaTheoM2, vndThanhChu } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../supabase/functions/_shared/extraction/so-chu.ts";
 import {
-  bocViTriRao, catDapAn, cheoPhuDinh, gonLoiSua, laHoanLai, nhanDienFact, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, laCauHoiTron, tuXungTuCau, vungPhuDinh, batXungHo, laChaoChau, CHAO_SUONG_RE,
+  bocViTriRao, catDapAn, cheoPhuDinh, gonLoiSua, laHoanLai, nhanDienFact, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, laCauHoiTron, tuXungTuCau, vungPhuDinh, batXungHo, laChaoChau, CHAO_SUONG_RE, laRaoLai, chonCanTheoCau,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { vungNgoai } from "../supabase/functions/_shared/dia_ban.ts";
 
@@ -341,7 +341,8 @@ ok("'căn hộ sở hữu lâu dài' vẫn là so_huu", nhanDienFact("căn hộ 
 // 15/09/2026 (bắn thật A2/C2): thu nhập thuê của tin BÁN không phải giá mong muốn.
 for (const vao of ["à quên, nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm", "căn 2 đang cho thuê 80 triệu/tháng"]) {
   const ds = nhanDienNhieuFact(vao);
-  ok("thu nhập thuê không thành giá " + JSON.stringify(vao.slice(0, 40)), !ds.some((f) => f.question === "gia") && ds.some((f) => f.question === "hien_trang_su_dung"), JSON.stringify(ds));
+  // 22/09/2026 (kịch bản D): "đang cho thuê 30 triệu/tháng" nay là doanh_thu (dòng tiền → rent_income_vnd), vẫn không phải giá.
+  ok("thu nhập thuê không thành giá " + JSON.stringify(vao.slice(0, 40)), !ds.some((f) => f.question === "gia") && ds.some((f) => f.question === "doanh_thu" || f.question === "hien_trang_su_dung"), JSON.stringify(ds));
 }
 ok("giá thuê của tin THUÊ vẫn là giá", nhanDienNhieuFact("cho thuê 18 triệu/tháng cọc 2 tháng").some((f) => f.question === "gia"), JSON.stringify(nhanDienNhieuFact("cho thuê 18 triệu/tháng cọc 2 tháng")));
 ok("tachCauHoiNguoc tách sau dấu chấm", tachCauHoiNguoc("nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm. mà giá khu này giờ bao nhiêu 1m2 em?").hoi === "mà giá khu này giờ bao nhiêu 1m2 em?", JSON.stringify(tachCauHoiNguoc("nhà đang cho thuê 25 triệu/tháng, khách thuê tới cuối năm. mà giá khu này giờ bao nhiêu 1m2 em?")));
@@ -379,6 +380,23 @@ for (const [vao, mong] of [["cô", "cô"], ["Cô", "cô"], ["chú nha", "chú"],
   ok(`batXungHo trơ "${vao}"`, batXungHo(vao) === mong, String(batXungHo(vao)));
 for (const [vao, mong] of [["chào cháu", true], ["Chào con!", true], ["chào cháu, cô đây", true], ["chào em", false], ["cháu chào cô", false], ["chao chau", false]])
   ok(`laChaoChau "${vao}"`, laChaoChau(vao) === mong);
+// 22/09/2026 kịch bản D/E: nở hậu "4m5", dòng tiền "đang cho thuê 30 triệu/tháng", rao lại, chọn căn theo loại.
+for (const [vao, q, a] of [["nở hậu 4m5", "no_hau", "4.5m"], ["nở hậu 4.5m", "no_hau", "4.5m"], ["nở hậu hơn 5m", "no_hau", "5m"],
+  ["nhà cô đang cho thuê 30 triệu/tháng", "doanh_thu", "30 triệu/tháng"], ["đang cho thuê 15 triệu 1 tháng", "doanh_thu", "15 triệu/tháng"], ["đang cho thuê 12tr5/th", "doanh_thu", "12 triệu 5/tháng"]])
+  ok(`nhanDienFact ${JSON.stringify(vao)} → ${q}=${a}`, nhanDienFact(vao)?.question === q && nhanDienFact(vao)?.answer === a, JSON.stringify(nhanDienFact(vao)));
+ok("nhanDienFact 'đang thế chấp ngân hàng' → the_chap (không phải phap_ly)", nhanDienFact("đang thế chấp ngân hàng")?.question === "the_chap", JSON.stringify(nhanDienFact("đang thế chấp ngân hàng")));
+ok("nhanDienFact 'sổ hồng chung, đang thế chấp' nhiều fact → phap_ly + the_chap", nhanDienNhieuFact("sổ hồng chung với em gái, đang thế chấp ngân hàng").map((f) => f.question).join(",") === "phap_ly,the_chap", JSON.stringify(nhanDienNhieuFact("sổ hồng chung với em gái, đang thế chấp ngân hàng")));
+ok("nhanDienFact 'ngang 4 dài 20, nở hậu 4m5' nhiều fact có no_hau 4.5m", nhanDienNhieuFact("ngang 4 dài 20, nở hậu 4m5").some((f) => f.question === "no_hau" && f.answer === "4.5m"), JSON.stringify(nhanDienNhieuFact("ngang 4 dài 20, nở hậu 4m5")));
+ok("nhanDienFact 'cho thuê 12 triệu/tháng' (câu rao thuê, không 'đang') KHÔNG phải doanh_thu", nhanDienFact("cho thuê 12 triệu/tháng")?.question !== "doanh_thu", JSON.stringify(nhanDienFact("cho thuê 12 triệu/tháng")));
+for (const [vao, mong] of [["mở lại căn 2 chung cư đi, nó chưa bán, đăng căn 2 lên giúp tui", true], ["rao lại căn chung cư Hùng Vương Plaza đi em, căn đó chưa bán", true], ["đăng lại tin đi", true],
+  ["căn đó chưa bán, mở lên lại giúp anh", true], ["bán rồi hả em?", false], ["bán lại giá tốt cho khách", false], ["căn 1 bán rồi nha, còn căn 2 thôi", false], ["3 phòng ngủ", false]])
+  ok(`laRaoLai ${JSON.stringify(vao)} → ${mong}`, laRaoLai(vao) === mong);
+{
+  const cans = [{ id: "a", location_raw: "hẻm 3m Trần Hưng Đạo", property_type: "nha_pho" }, { id: "b", location_raw: null, property_type: "chung_cu" }];
+  ok("chonCanTheoCau 'căn 1 bán rồi nha, còn căn 2 thôi' → căn 1 (số thứ tự đầu)", chonCanTheoCau("căn 1 bán rồi nha, còn căn 2 thôi", cans)?.id === "a");
+  ok("chonCanTheoCau 'rao lại căn chung cư đi' → căn chung cư duy nhất", chonCanTheoCau("rao lại căn chung cư đi", cans)?.id === "b");
+  ok("chonCanTheoCau 'bán rồi' (không chỉ căn) → null", chonCanTheoCau("bán rồi", cans) === null);
+}
 ok("CHAO_SUONG_RE: 'co chao chau' (bỏ dấu) là chào suông → ack, không ghi", CHAO_SUONG_RE.test("co chao chau") && CHAO_SUONG_RE.test("chu chao chau nha") && !CHAO_SUONG_RE.test("co chao chau, co co can nha"));
 {
   const c = "Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm diện tích tổng 240m2";

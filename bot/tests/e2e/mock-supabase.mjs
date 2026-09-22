@@ -588,13 +588,18 @@ class RpcCall {
           l.gap = /\b(khong|ko|k|chua|chang)\s*(can\s*)?(gap|voi)\b|duoc gia thi thoi|khong voi|tu tu/.test(kd) ? false : /\bgap\b|can tien|\bvoi\b/.test(kd) ? true : l.gap;
         }
         if (a.p_question === "dien_tich" || a.p_question === "dien_tich_dat") {
-          const m = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(a.p_answer);
+          // 22/09: boc_thong_so thật đọc cả "ngang 4m dài 20m" — mock từng parseFloat cả câu → NaN.
+          const m = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(a.p_answer) || /(?:ngang|mt)\s*(\d+(?:[.,]\d+)?)\s*m?\s*(?:dài|dai|dọc|doc)\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer));
           l.area_m2 = m ? parseFloat(m[1].replace(",", ".")) * parseFloat(m[2].replace(",", ".")) : parseFloat(String(a.p_answer).replace(",", "."));
           if (m) l.frontage_m = parseFloat(m[1].replace(",", "."));
         }
         if (a.p_question === "so_phong_ngu") l.bedrooms = parseInt(a.p_answer, 10);
         // 20260922c: fact so_wc → cột bathrooms (kịch bản C: "3pn 2wc" từng để bathrooms trống).
         if (a.p_question === "so_wc") { const w = parseInt(a.p_answer, 10); if (w >= 1 && w <= 20) l.bathrooms = w; }
+        // 20260922d: doanh_thu → rent_income_vnd (tin bán).
+        if (a.p_question === "doanh_thu" && l.deal !== "cho_thue") { const v = parseVnd(a.p_answer); if (v != null && v >= 1e6 && v <= 1e10) l.rent_income_vnd = v; }
+        if (a.p_question === "no_hau") { const r = /(\d+(?:\.\d+)?)/.exec(String(a.p_answer)); if (r) l.rear_width_m = parseFloat(r[1]); }
+        if (a.p_question === "tang" && l.property_type === "chung_cu") { const t = parseInt(a.p_answer, 10); if (t >= 0 && t <= 80) l.floor = t; }
         // 20260920a: fact `nhan` là tên nhãn, không đi qua đồng bộ cột.
         if (a.p_question === "nhan") return { data: null, error: null };
         // listing_facts_sync_cols + boc_thong_so (rút gọn): đủ để điểm FR-177 đo được.
@@ -657,7 +662,9 @@ class RpcCall {
         t.push(r);
         return { data: r.id, error: null };
       }
-      case "match_projects": return { data: [], error: null };
+      case "match_projects": { // 22/09: khớp tên dự án trong kho mock (bỏ dấu, chứa tên) — e2e nhiều căn có dự án.
+        const t = boDauMock(String(a.p_text ?? "")); const ds = (db.t.projects ?? []).filter((p) => p.name && t.includes(boDauMock(String(p.name))));
+        return { data: ds.map((p) => ({ id: p.id, name: p.name, developer: p.developer ?? null, district: p.district ?? null, location_raw: p.location_raw ?? null, amenities: p.amenities ?? null, description: p.description ?? null, status_text: p.status_text ?? null })), error: null }; }
       case "nguoi_noi_bo": {
         // 20260903a (FR-173 d): CTV đang hoạt động trước, rồi admin; người lạ → null
         const c = db.t.ctvs.find((x) => x.active !== false && x.zalo_user_id === a.p_zalo);

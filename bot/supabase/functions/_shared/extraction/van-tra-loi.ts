@@ -396,7 +396,18 @@ export function laNoiVoiBot(text: string): boolean {
 /** Khách xin XOÁ/RESET dữ liệu — bot không tự làm được, phải nói thật. */
 export function laXinXoaDuLieu(text: string): boolean {
   const kd = boDau((text ?? "").trim());
-  return /\b(xoa|reset|don)\b/.test(kd) && /\b(data|du lieu|tin|ho so|thong tin|sach)\b/.test(kd);
+  // 22/09/2026 (kịch bản E): "xoá căn 1 khỏi hệ thống của tui" cũng là xin xoá dữ liệu.
+  return /\b(xoa|reset|don|go)\b/.test(kd) && /\b(data|du lieu|tin|ho so|thong tin|sach|he thong|tai khoan|can \d|can nay|can do|can kia)\b/.test(kd);
+}
+
+/**
+ * 22/09/2026 (kịch bản E): môi giới "khách nào hỏi thì cho tui số của họ nha" — bot từng gật "Dạ em hiểu anh chị
+ * tự liên hệ khách rồi". Người mua bên này KHÔNG để lại số (bất biến DH); mọi liên hệ qua bot và CTV.
+ */
+export function laXinSoKhach(text: string): boolean {
+  const kd = boDau((text ?? "").trim());
+  return /\b(?:cho|gui|xin|lay|dua|bao|chuyen)\b[^.?!]{0,25}\b(?:so|sdt|so dien thoai|zalo|lien he|contact|thong tin)\b[^.?!]{0,20}\b(?:khach|ho|nguoi mua|nguoi hoi|nguoi ta|khach hang|ben mua)\b/.test(kd) ||
+    /\b(?:so|sdt|zalo|so dien thoai)\s+(?:cua\s+)?(?:khach|ho|nguoi mua|khach hang|ben mua)\b/.test(kd) && /\b(?:cho|gui|xin|lay|dua|bao|chuyen|de)\b/.test(kd);
 }
 
 /** Ô của tin mà câu "xoá/bỏ … nhầm" đang nhắc tới; nhãn để đọc lên. */
@@ -425,8 +436,12 @@ export function laXinBoTruong(text: string): { truong: string | null; nhan: stri
   if (/\bbo qua\b/.test(kd)) return null;
   const coXoa = /\b(?:xoa|bo|go|huy|xoa bo)\b/.test(kd);
   if (!coXoa) return null;
-  const coNham = /\b(?:nham|sai|lon|du|thua|ghi lon|ghi nham)\b/.test(kd) || /\b(?:xoa|bo|go)\b[^.?!]*\bdi\b\s*[.!]*$/.test(kd);
-  if (!coNham) return null;
+  // 22/09/2026 (kịch bản E): "xoá căn 1 khỏi hệ thống đi" từng bị bắt thành "xin bỏ ô" — luật "xoá … đi" quá rộng.
+  // Nay: có chữ nhầm/sai, HOẶC nêu rõ một ô kèm lời giục (đi/giúp/dùm). Xoá tin/căn/dữ liệu đi đường `laXinXoaDuLieu`.
+  const o0 = O_XIN_BO.find(([, re]) => re.test(kd));
+  const coNham = /\b(?:nham|sai|lon|du|thua|ghi lon|ghi nham)\b/.test(kd);
+  const coGiuc = /\b(?:di|gium|dum|giup|ho)\b/.test(kd);
+  if (!coNham && !(o0 && coGiuc)) return null;
   // "bỏ hẻm 4m, hẻm đúng là 3m5" — có SỐ MỚI kèm thì là lời sửa, đi đường sửa (không phải xin bỏ suông).
   const soMoi = kd.replace(/\b(?:xoa|bo|go|huy)\b[^,;.]*?\b(?:nham|sai|lon|du|thua|di)\b/, "");
   if (/\d/.test(soMoi) && /\b(?:dung la|thuc ra|chu khong|chu ko|thanh|la)\b/.test(soMoi)) return null;

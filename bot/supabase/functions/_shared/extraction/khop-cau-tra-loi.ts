@@ -803,7 +803,8 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // 16/09/2026: "ngang 5m CÒN DỌC 16m" — "dọc" là dài, chữ "còn" chen giữa.
   ["mat_tien", /(?<!cach\s)(?<!cach\s\s)\b(?:ngang|mat tien|mt)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b(?:\s*,?\s*(?:con\s+|va\s+)?(?:x|dai|sau|doc)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b)?/,
     (m) => m[2] ? `ngang ${m[1]}m dài ${m[2]}m` : `${m[1]}m`],
-  ["no_hau", /\bno hau\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
+  // 22/09/2026 (kịch bản D): "nở hậu 4m5" — số dính "m" rồi phần lẻ, như "hẻm 3m5".
+  ["no_hau", /\bno hau\s*(?:la\s*|hon\s*|khoang\s*)?(\d+(?:[.,]\d+)?)\s*(?:m(\d)|m|met)?(?![a-z0-9])/, (m) => `${m[1].replace(",", ".")}${m[2] ? `.${m[2]}` : ""}m`],
   // Câu rao dài (FR-177 n): các ý đời thường đi kèm không có dấu phẩy.
   ["cach_mat_tien", /\bcach\s*(?:mat tien|duong lon|duong chinh|mt)\s*(?:khoang|tam)?\s*(\d+(?:[.,]\d+)?)\s*(?:m|met)?\b/, (m) => `${m[1]}m`],
   ["hem_thong", /\bhem\s*(thong|cut)\b/, (m) => `hẻm ${m[1] === "cut" ? "cụt" : "thông"}`],
@@ -942,6 +943,12 @@ export function nhanDienFact(text: string): NhanDien | null {
   let m: RegExpExecArray | null;
   // 17/09/2026: "srh" là gõ lỡ của "shr" (Zalo thật) — nhận luôn.
   const PHAP_LY_RE = /\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay|cam ngan hang|dang the chap)\b/;
+  // 22/09/2026 (kịch bản D): "đang thế chấp ngân hàng" một mình là TÌNH TRẠNG thế chấp (`the_chap`), không phải loại
+  // giấy tờ; có kèm sổ/hợp đồng thì vẫn là pháp lý (mảnh thế chấp đi riêng qua `nhanDienNhieuFact`).
+  if (/\b(dang the chap|the chap|cam ngan hang|trong ngan hang)\b/.test(kd) &&
+      !/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay)\b/.test(kd)) {
+    return { question: "the_chap", answer: goc };
+  }
   if (PHAP_LY_RE.test(kd)) {
     return { question: "phap_ly", answer: manhKhop(PHAP_LY_RE) };
   }
@@ -1043,6 +1050,12 @@ export function nhanDienFact(text: string): NhanDien | null {
     const dai = goc.length > 40 || /[,;]/.test(goc);
     return { question: "vi_tri", answer: dai ? (bocViTriRao(goc) ?? goc) : goc };
   }
+  // 22/09/2026 (kịch bản D): "nhà cô đang cho thuê 30 triệu/tháng" là DÒNG TIỀN đang thu (doanh_thu →
+  // rent_income_vnd), không phải giá thuê rao, không chỉ là hiện trạng. Xét trước luật giá.
+  if (/\b(?:dang|co)\s+cho thue\b|\bcho thue\s+(?:duoc|lai)\b/.test(kd) &&
+      (m = new RegExp(`${SO}\\s*(trieu|tr)(?![a-z])(?:\\s*(\\d{1,3})(?![\\d])(?!\\s*(?:thang|th\\b)))?\\s*(?:\\/|mot|moi|1|\\s)\\s*(?:thang|th)\\b`).exec(kd))) {
+    return { question: "doanh_thu", answer: `${m[1].replace(",", ".")} triệu${m[3] ? ` ${m[3]}` : ""}/tháng` };
+  }
   // "cách mặt tiền 30m" xét TRƯỚC độ rộng hẻm (kẻo "30m hẻm thông" thành hẻm 30m).
   if ((m = new RegExp(`\\bcach\\s*(?:mat tien|duong lon|duong chinh|mt)\\s*(?:khoang|tam|chung)?\\s*${SO}\\s*(?:m|met)?\\b`).exec(kd))) {
     return { question: "cach_mat_tien", answer: `${m[1]}m` };
@@ -1136,7 +1149,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = new RegExp(`\\bcach\\s*(?:mat tien|duong lon|duong chinh|mt)\\s*(?:khoang|tam|chung)?\\s*${SO}\\s*(?:m|met)?\\b`).exec(kd))) {
     return { question: "cach_mat_tien", answer: `${m[1]}m` };
   }
-  if ((m = new RegExp(`\\bno hau\\s*(?:la\\s*)?${SO}\\s*(?:m|met)?\\b`).exec(kd))) return { question: "no_hau", answer: `${m[1]}m` };
+  if ((m = new RegExp(`\\bno hau\\s*(?:la\\s*|hon\\s*|khoang\\s*)?${SO}\\s*(?:m(\\d)|m|met)?(?![a-z0-9])`).exec(kd))) return { question: "no_hau", answer: `${m[1].replace(",", ".")}${m[2] ? `.${m[2]}` : ""}m` };
   if (/\b(ngap|dong nuoc|khong ngap|ko ngap|kho rao|cao rao)\b/.test(kd) && /\b(mua|nuoc|ngap|cao rao|kho rao)\b/.test(kd)) {
     return { question: "ngap_nuoc", answer: goc };
   }
@@ -1348,7 +1361,7 @@ export function laNgungRao(text: string): NgungRao | null {
 // Nhiều căn đang rao → chủ nhà chỉ căn nào? Nhận SỐ THỨ TỰ ("1", "căn 2", "cái
 // thứ 2", "số 1") hoặc ĐỊA CHỈ (chữ ≥ 4 ký tự trong location_raw / số phường
 // khớp câu). Không rõ → null, tầng trên hỏi lại.
-export type CanChon = { id: string; location_raw?: string | null; ward?: string | null; code?: string | null };
+export type CanChon = { id: string; location_raw?: string | null; ward?: string | null; code?: string | null; property_type?: string | null };
 // Generic: trả về ĐÚNG kiểu người gọi đưa vào. Bản cũ trả `CanChon` hẹp nên
 // chat-reply đọc `chon.deal` ra TS2339 dù lúc chạy trường đó có thật (bật kiểm
 // kiểu bot 11/09).
@@ -1365,6 +1378,12 @@ export function chonCanTheoCau<T extends CanChon>(text: string, cans: T[]): T | 
   }
   if (/\b(dau|dau tien|thu nhat|1st)\b/.test(kd)) return cans[0];
   if (/\b(cuoi|sau cung|con lai)\b/.test(kd)) return cans[cans.length - 1];
+  // 22/09/2026 (kịch bản E): "rao lại căn chung cư đi" — chỉ MỘT căn là chung cư thì là căn đó.
+  const loaiKd = /\b(?:chung cu|can ho|cc)\b/.test(kd) ? "chung_cu" : /\b(?:nha pho|nha hem|nha mat tien)\b/.test(kd) ? "nha_pho" : /\b(?:lo dat|dat)\b/.test(kd) ? "dat" : null;
+  if (loaiKd) {
+    const cung = cans.filter((c) => c.property_type === loaiKd);
+    if (cung.length === 1) return cung[0];
+  }
   let tot: T | null = null, diemTot = 0;
   for (const c of cans) {
     const tu = boDau(c.location_raw ?? "").replace(/[^a-z0-9\s/]/g, " ").split(/\s+/).filter((w) => w.length >= 4 || /^\d+(\/\d+)*$/.test(w) && w.length >= 2);
@@ -1376,4 +1395,17 @@ export function chonCanTheoCau<T extends CanChon>(text: string, cans: T[]): T | 
     else if (d === diemTot && d > 0) tot = null; // hoà → không đoán
   }
   return diemTot > 0 ? tot : null;
+}
+
+// ── "Rao lại / mở lại" — 22/09/2026 (kịch bản E) ─────────────────────────────
+// Bot hứa "muốn rao lại nhắn em một tiếng là em mở lại liền" nhưng chưa có luật nào nhận.
+// "mở lại căn 2", "rao lại căn chung cư đi", "đăng lại tin", "căn đó chưa bán, mở lại giúp".
+// Không phải: câu hỏi; "bán lại giá tốt" (không có mở/rao/đăng/lên).
+export function laRaoLai(text: string): boolean {
+  const goc = (text ?? "").trim();
+  if (!goc || /\?/.test(goc)) return false;
+  const kd = boDau(goc).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return false;
+  return /\b(?:rao|dang|mo|len|treo)\s+(?:tin\s+|can\s+\d\s+|can\s+)?lai\b/.test(kd) ||
+    (/\b(?:chua ban|con ban|van con|chua chot|con nguyen|chua co ai)\b/.test(kd) && /\b(?:rao|dang|mo|len)\b/.test(kd));
 }
