@@ -279,7 +279,9 @@ function laCauSuaLai(tin: string): boolean {
 function laCauGhiNhanMot(tin: string): boolean {
   const dau = boDau(tachCau(tin.trim())[0] ?? "");
   // 14/09: "Dạ chị, em ghi lại: …" — cho phép đại từ gọi khách chen giữa "Dạ" và "em".
-  const m = /^(?:da|vang)?[\s,]*(?:(?:anh\/chi|anh|chi|minh)[\s,]+)?(?:em\s+)?(?:da\s+)?(?:ghi|sua|cap nhat|chinh)(?:\s+(?:lai|nhan|ro|chuan))?\b/.exec(dau);
+  // 22/09/2026 (bắn thật sau deploy #182, nhánh mua): "Dạ em đã lưu nhu cầu: mua nhà Quận 5…" lặp sau 🤖
+  // "Đã lưu nhu cầu" — thêm động từ "lưu" ("lưu ý" không tính: phần còn lại quá ngắn).
+  const m = /^(?:da|vang)?[\s,]*(?:(?:anh\/chi|anh|chi|minh)[\s,]+)?(?:em\s+)?(?:da\s+)?(?:ghi|sua|cap nhat|chinh|luu)(?:\s+(?:lai|nhan|ro|chuan))?\b/.exec(dau);
   if (!m) return false;
   const conLai = dau.slice(m[0].length)
     .replace(/\b(?:roi|xong|duoc|het|luon|vao|tin|cho|lai|a|nha|nhe|anh|chi|em|minh|ha|nghe)\b/g, "")
