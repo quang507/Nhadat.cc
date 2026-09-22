@@ -1782,13 +1782,18 @@ AS $function$
            -- 14/09/2026 (bắn 14 tin bán): "đường Lạc Long Quân p5", "hxh Nguyễn Kiệm Phú Nhuận" —
            -- phường/quận viết liền sau tên đường (không dấu phẩy) từng dính vào cột street.
            -- 15/09/2026 (bắn thật N1): "mặt tiền Nguyễn Chí Thanh" / "mt X" — bỏ chữ mặt tiền.
-           regexp_replace(regexp_replace(
+           regexp_replace(regexp_replace(regexp_replace(
              regexp_replace(
                regexp_replace(seg,
                  '^(?:hẻm|hem|hxh|ngõ|ngo|kiệt|kiet)(?:\s+|(?=\d))(?:(?:xe\s*hơi|xe\s*hoi|xe\s*tải|xe\s*tai|xe\s*máy|xe\s*may|ba\s*gác|ba\s*gac|thông|thong|cụt|cut|nhựa|nhua|bê\s*tông|be\s*tong|rộng|rong|lớn|lon|nhỏ|nho|xh)(?![[:alpha:]])\s*|[0-9]+(?:[.,][0-9]+)?\s*m(?![[:alpha:]])\s*|[0-9]+[a-z]?(?:/[0-9]+[a-z]?)*(?![[:alpha:]0-9])\s*)*',
                  '', 'i'),
                '^(?:đường|duong|phố|pho|đ\.|đ |mặt tiền|mat tien|mt(?![[:alpha:]]))\s*', '', 'i'),
              '^(?:(?:nhựa|nhua|bê\s*tông|be\s*tong|rộng|rong|lớn|lon|nhỏ|nho)(?![[:alpha:]])\s*|[0-9]+(?:[.,][0-9]+)?\s*m(?![[:alpha:]])\s*)+',
+             '', 'i'),
+             -- 22/09/2026 (bắn thật sau deploy #182): số nhà TRẦN đầu chuỗi ("12 Trần Hưng Đạo", "số 7 Hồng Bàng",
+             -- "123/4 An Dương Vương") từng ở lại trong `street` — trước chỉ bỏ số khi đứng sau hẻm/đường.
+             -- Giữ "3 Tháng 2", "30 Tháng 4" (số là một phần tên đường).
+             '^(?:(?:số|so)\s*)?[0-9]+[a-z]?(?:/[0-9]+[a-z]?)*\s+(?!(?:tháng|thang)(?![[:alpha:]]))',
              '', 'i'),
              '\s+(?:(?:phường|phuong|p\.?)\s*\d{1,2}|(?:quận|quan|q\.?)\s*\d{1,2}|phú nhuận|phu nhuan|tân bình|tan binh|bình thạnh|binh thanh|gò vấp|go vap|tân phú|tan phu|bình tân|binh tan|thủ đức|thu duc|nhà bè|nha be|bình chánh|binh chanh|hóc môn|hoc mon|củ chi|cu chi)(?![[:alpha:]]).*$',
              '', 'i')), '')

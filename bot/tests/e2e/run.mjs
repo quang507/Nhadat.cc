@@ -1515,6 +1515,12 @@ fresh(seedKho);
   check("BLDL-11 người MUA, công tắc bật → 🤖 'Đã lưu nhu cầu' là bong bóng ĐẦU, đúng khoá vừa lưu, không khoá nội bộ",
     /^🤖 Đã lưu nhu cầu: .*khu vực.*quận 5.*khoảng giá: tầm 6 tỷ/.test(r.body.replies[0] ?? "") && !/tên trợ lý|ten_tro_ly|•ai/.test(r.body.replies[0] ?? "") && r.body.replies.length === 2,
     JSON.stringify(r.body.replies));
+  // 22/09/2026 (bắn thật): model mở bằng "Dạ em đã lưu nhu cầu: …" sau 🤖 → câu đó bị bỏ, câu hỏi giữ.
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "quận 5", budget: "tầm 6 tỷ", bedrooms: 3 }, replies: ["Dạ em đã lưu nhu cầu: mua nhà Quận 5, tầm 6 tỷ để ở ạ. Mình thích hẻm xe hơi hay mặt tiền ạ?"] });
+  r = await send({ external_user_id: "mua-bldl", text: "3 phòng ngủ, để ở" });
+  check("BLDL-11c model lặp 'Dạ em đã lưu nhu cầu…' sau 🤖 → bỏ câu lặp, còn 🤖 + câu hỏi",
+    /^🤖 Đã lưu nhu cầu/.test(r.body.replies[0] ?? "") && !/đã lưu nhu cầu: mua/.test(r.body.replies.slice(1).join(" ")) && /hẻm xe hơi hay mặt tiền/.test(r.body.replies.join(" ")),
+    JSON.stringify(r.body.replies));
   const hsMua = db().t.buyers.find((b) => b.zalo_user_id === "mua-bldl")?.preferences ?? {};
   check("BLDL-11b 🤖 người mua nói đúng thứ ĐÃ vào DB (hồ sơ có area + budget)", hsMua.area === "quận 5" && hsMua.budget === "tầm 6 tỷ", JSON.stringify(hsMua));
   const nLich = parseCalls().length;

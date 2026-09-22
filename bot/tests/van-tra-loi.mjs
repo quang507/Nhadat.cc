@@ -376,5 +376,11 @@ ok("boGachCheo: không đụng 'anh chị phụ trách'", boGachCheo("có anh ch
   ok("boTenRiengBia: tên có trong LỊCH SỬ (khách nói) → giữ", boTenRiengBia(["gần chợ An Đông đúng ý anh nè."], "khách: tìm nhà gần chợ An Đông").length === 1 && /An Đông/.test(boTenRiengBia(["gần chợ An Đông đúng ý anh nè."], "khách: tìm nhà gần chợ An Đông")[0]));
 }
 
+ok("laCauGhiNhan: 'Dạ em đã lưu nhu cầu: mua nhà Quận 5, tầm 6 tỷ để ở ạ' là câu ghi nhận có nội dung (22/09)", laCauGhiNhan("Dạ em đã lưu nhu cầu: mua nhà Quận 5, tầm 6 tỷ để ở ạ") === true);
+ok("laCauGhiNhan: 'Dạ em lưu ý rồi ạ' KHÔNG tính", laCauGhiNhan("Dạ em lưu ý rồi ạ.") === false);
+ok("boCauGhiNhan: bỏ 'Dạ em đã lưu nhu cầu…', giữ câu hỏi, mở lại bằng 'Dạ'",
+  JSON.stringify(boCauGhiNhan(["Dạ em đã lưu nhu cầu: mua nhà Quận 5, tầm 6 tỷ để ở ạ. Mình thích hẻm xe hơi hay mặt tiền ạ?"])) === JSON.stringify(["Dạ mình thích hẻm xe hơi hay mặt tiền ạ?"]),
+  JSON.stringify(boCauGhiNhan(["Dạ em đã lưu nhu cầu: mua nhà Quận 5, tầm 6 tỷ để ở ạ. Mình thích hẻm xe hơi hay mặt tiền ạ?"])));
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
