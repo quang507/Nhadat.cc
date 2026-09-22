@@ -50,7 +50,7 @@ const UA_NOMINATIM = "nhadatcc-geocoder/1.0 (admin.buyerside@nhadat.cc)";
 // bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
 import { TIEN_KD, TIEN_CD, TIEN_T_KEP, docTien, giaTheoM2, gonGiaKyHan, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../_shared/extraction/so-chu.ts";
-import { thayLienHe } from "../_shared/extraction/luat-lien-he.ts";
+import { thayLienHe, thayLienHeCoId } from "../_shared/extraction/luat-lien-he.ts";
 // 11/09/2026: khách mua muốn ở GẦN đâu — model hiểu nghĩa (boc-gan), regex dự
 // phòng (tien-ich), mốc + khoảng cách do SQL tính (tim-moc → tin_gan_moc).
 import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/extraction/tien-ich.ts";
@@ -82,7 +82,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
-import { boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boCauTrung, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -357,6 +357,13 @@ function locLienHe(s: string, soNha = false): string {
   let t = thayLienHe(s, " [liên hệ qua Zalo] ");
   if (soNha) t = t.replace(SO_NHA_RE, "");
   return t.replace(/[ \t]{2,}/g, " ").trim();
+}
+// 22/09/2026 (bộ đo giọng M03): câu BOT TỰ NÓI với người mua ("anh chị phụ trách sẽ liên hệ
+// qua Zalo") đi qua `locLienHe` thành "liên hệ qua [liên hệ qua Zalo]" — chữ "Zalo" trần là
+// lời bot, không phải kênh liên hệ của ai. Bong bóng bot chỉ che SĐT và kênh CÓ ID (model lỡ
+// chép từ kho); chữ KHÁCH gửi và mô tả/fact vẫn qua `locLienHe` đủ.
+function locLienHeBot(s: string): string {
+  return thayLienHeCoId(s, " [liên hệ qua Zalo] ").replace(/[ \t]{2,}/g, " ").trim();
 }
 
 // ─── FR-114/116 (v48): tin thuộc dự án — mã căn trong câu ("căn A12-05", "mã
@@ -1247,8 +1254,16 @@ Deno.serve(async (req) => {
   const tKDBan = boDau(text.replace(/\b(bạn|bàn|bản|bận|bẩn|bắn|rào|rảo|rão)\b/gi, "_"));
   const coChuBan = /\b(bán|rao)\b|cho thu[êe]|sang nhượng|nhượng lại|sang lại/i.test(text) ||
     /\b(ban|rao)\b|cho thue|sang nhuong|nhuong lai|sang lai/.test(tKDBan);
+  // 22/09/2026 (bộ đo giọng M04): "căn 12 Trần Hưng Đạo phường 4 còn bán không" — khách MUA hỏi
+  // tình trạng một căn. Có "phường" nên `coChiTiet`, có "bán" + "căn" → mở hồ sơ bán rồi hỏi "nhà
+  // mình là nhà phố hay chung cư" (lạc vai). Hỏi còn bán / bán chưa / còn không mà KHÔNG kèm giá
+  // là câu HỎI, không phải câu rao — chặn ở cả nhánh có chi tiết.
+  const hoiConBan = !coGiaRo && khop(
+    /\b(?:còn|đã|hết)\s+bán\s+(?:không|ko|k|chưa|chua)\b|\bbán\s+chưa\b|\bcòn\s+(?:không|ko|k)\s*(?:em|ạ|anh|chị|bạn)?\s*\??\s*$/i,
+    /\b(?:con|da|het)\s+ban\s+(?:khong|ko|k|chua)\b|\bban\s+chua\b|\bcon\s+(?:khong|ko|k)\s*(?:em|a|anh|chi|ban)?\s*\??\s*$/,
+  );
   const wantsSellLuat =
-    (coChuBan && coLoaiBDS &&
+    (coChuBan && coLoaiBDS && !hoiConBan &&
       (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang))) ||
     (moiGioiCoHang && coChiTiet && !khop(/\b(tìm|cần mua|muốn mua|thuê)\b/i, /\b(tim|can mua|muon mua)\b/)) ||
     coHangCoGia || raoKhongChuBan;
@@ -1939,7 +1954,12 @@ Deno.serve(async (req) => {
       // Model đã tự mở bằng lời ghi nhận (thường ĐỦ hơn bong bóng code: "sửa lại
       // 6 tỷ 5 và Phường 9" so với "sửa lại Phường 9") → bỏ bong bóng code, kẻo
       // chủ nhà đọc hai lần "Dạ em sửa lại…" liền nhau (lượt bắn 12/09).
-      if (ackSua && replies.length && laCauGhiNhan(replies[0])) ackSua = null;
+      // 22/09/2026 (bộ đo giọng B04, chủ dự án chốt): lời SỬA THẬT ("Dạ em sửa lại giá 7 tỷ 5 rồi ạ") là
+      // lời xác nhận chủ nhà cần sau câu "à nhầm" — giữ nó, bỏ câu ghi nhận của model thay vì ngược lại.
+      if (ackSua && replies.length && laCauGhiNhan(replies[0])) {
+        if (/^Dạ em sửa lại/.test(ackSua)) replies = boCauGhiNhan(replies);
+        else ackSua = null;
+      }
       replies = chanNhanLaNguoi(replies, goiNguoi ?? "mình");
       const ackDau = ackSua;
       let sach = [...(ackSua ? [ackSua] : []), ...ackAnh, ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
@@ -1950,6 +1970,9 @@ Deno.serve(async (req) => {
       // 21/09/2026 (chủ dự án "làm cả 4"): chưa biết cách gọi → "anh/chị" gạch chéo là chữ máy; người bán
       // hàng thật nói "anh chị". Áp cho mọi bong bóng (tiền định lẫn model) ở một chỗ.
       if (!goiNguoi) sach = sach.map(boGachCheo);
+      // 22/09/2026 (bộ đo giọng B08): câu tiền định "Dạ em là trợ lý AI…" đứng trước, model chép lại gần
+      // nguyên văn ở bong bóng sau → chủ nhà đọc hai lần. Câu ≥ 6 từ trùng nhau chỉ giữ lần đầu.
+      sach = boCauTrung(sach);
       ackSua = null;
       ackAnh = [];
       thongBaoNhan = null;
@@ -1969,7 +1992,10 @@ Deno.serve(async (req) => {
           // 14/09/2026 (bắn thật): 💾 đã nói lưu gì, nên "Dạ em ghi số phòng ngủ 4 rồi ạ"
           // (bong bóng code) và "Dạ em ghi 1 trệt 3 lầu… rồi" (model) là ghi nhận lần hai,
           // lần ba. Bỏ bong bóng ghi nhận của code và câu ghi nhận CÓ nội dung của model.
-          if (ackDau) sach = sach.filter((x) => x !== ackDau.trim());
+          // 22/09/2026 (bộ đo giọng B04, chủ dự án chốt): lời SỬA THẬT ("Dạ em sửa lại giá 7 tỷ 5 rồi ạ")
+          // giữ lại dù 🤖 đã in giá mới — chủ nhà vừa nói "à nhầm" cần một lời xác nhận ngắn; chỉ bỏ lời
+          // "Dạ em ghi … rồi ạ" (ghi thêm) vì 🤖 đã nói đúng điều đó.
+          if (ackDau && !/^Dạ em sửa lại/.test(ackDau)) sach = sach.filter((x) => x !== ackDau.trim());
           sach = boCauGhiNhan(sach);
           // 20/09/2026 (bắn thật mau-y-B): lượt đầu "Chào em, chị có…" → lời chào + "📝 Em ghi nhận" nằm
           // CHUNG một bong bóng ("Dạ em chào chị ạ!\n📝 Em ghi nhận: …"), startsWith không thấy → khách
@@ -2278,8 +2304,14 @@ Deno.serve(async (req) => {
       ]);
       if (upErr) await ghiLoi(client, "chat-reply ngung rao", upErr.message);
       const thue = chon.deal === "cho_thue";
+      // 22/09/2026 (bộ đo giọng B13): "đã báo các khách đang chờ" khi CHƯA có khách nào là câu khuôn bịa —
+      // đếm `interests` của căn, không có thì không nói.
+      const { count: soKhachCho, error: kcErr } = await client.from("interests")
+        .select("listing_id", { count: "exact", head: true }).eq("listing_id", chon.id);
+      if (kcErr) await ghiLoi(client, "chat-reply dem interests(ban roi)", kcErr.message);
+      const baoKhach = (soKhachCho ?? 0) > 0 ? " và báo các khách đang chờ" : "";
       const cau = kieuNgung === "ban_roi"
-        ? `Dạ chúc mừng ${cachGoi} đã ${thue ? "cho thuê được" : "bán được"} căn ${tenCan(chon)}!\nEm đã gỡ tin khỏi kệ và báo các khách đang chờ. Khi nào có căn khác ${cachGoi} cứ nhắn em nha.`
+        ? `Dạ chúc mừng ${cachGoi} đã ${thue ? "cho thuê được" : "bán được"} căn ${tenCan(chon)}!\nEm đã gỡ tin khỏi kệ${baoKhach}. Khi nào có căn khác ${cachGoi} cứ nhắn em nha.`
         : `Dạ em đã ngưng rao căn ${tenCan(chon)} theo ý ${cachGoi} và không hỏi thêm nữa.\nLúc nào muốn rao lại ${cachGoi} nhắn em một tiếng là em mở lại liền.`;
       return await traLoiSeller([cau], { ngung_rao: kieuNgung, can: chon.code ?? chon.id, listing_status: trangThai });
     }
@@ -2455,6 +2487,16 @@ Deno.serve(async (req) => {
           const { error: vtcErr } = await client.rpc("ghi_fact_listing", { p_listing_id: moi.id, p_question: "vi_tri", p_answer: vtCan, p_source: "seller_chat" });
           if (vtcErr) await ghiLoi(client, "chat-reply ghi_fact_listing(vi_tri nhieu can)", vtcErr.message);
         }
+        // 22/09/2026 (bộ đo giọng B11): "căn 1 hẻm 4m …, căn 2 mặt tiền …" — đường vào nói riêng cho từng
+        // căn mà trước chỉ ghi vị trí, rồi câu chung cả lô hỏi lại hẻm. Hẻm phải có đơn vị mét ("hẻm 123
+        // Trần…" là địa chỉ); "mặt tiền" ghi chữ, trigger đọc ra access_type.
+        const kdCan = boDau(c.goc);
+        const mHem = /\bhem\s*(?:rong\s*)?(?:la\s*|tam\s*|khoang\s*)?(\d{1,2}(?:[.,]\d)?)\s*(?:m|met)\b/.exec(kdCan);
+        const duongVao = mHem ? `hẻm ${mHem[1].replace(",", ".")}m` : /\bmat tien\b/.test(kdCan) && !/\bcach\s*mat tien\b/.test(kdCan) ? "mặt tiền" : null;
+        if (duongVao) {
+          const { error: dvErr } = await client.rpc("ghi_fact_listing", { p_listing_id: moi.id, p_question: "do_rong_hem", p_answer: duongVao, p_source: "seller_chat" });
+          if (dvErr) await ghiLoi(client, "chat-reply ghi_fact_listing(do_rong_hem nhieu can)", dvErr.message);
+        }
         daMo.push(`${c.ma ?? vtCan ?? (c.thu ? `căn ${c.thu}` : null) ?? c.quan ?? `căn ${daMo.length + 1}`}${c.dt ? ` ${c.dt}m2` : ""}${c.gia ? ` ${c.gia}` : ""}`);
         dau = dau ?? { id: moi.id, property_type: moi.property_type };
       }
@@ -2621,8 +2663,11 @@ Deno.serve(async (req) => {
           // "phường Phường 3" đọc như máy hỏng.
           else {
             const nhan = NHAN[k] ?? k;
+            // 22/09/2026 (bộ đo giọng B04): "giá 7 tỷ 5 nha em" — tiểu từ cuối câu là bằng chứng thô cho
+            // DB gọt (`chuan_hoa_gia_raw`), nhưng lời xác nhận đọc lên thì bỏ.
+            const hien = v.replace(/(?:\s+(?:nha|nhé|nhe|nghen|em|anh|chị|ạ|ơi|đó|á|nè|hen|ha|nhá|cháu|chú|cô|bác))+\s*$/iu, "");
             daGhi.push(
-              boDau(v).startsWith(boDau(nhan)) ? v : `${nhan} ${v}`,
+              boDau(hien).startsWith(boDau(nhan)) ? hien : `${nhan} ${hien}`,
             );
           }
         }
@@ -3498,10 +3543,12 @@ Deno.serve(async (req) => {
         const dk = (dOk ?? null) as DiemTin | null;
         const len = !!lstOk && lstOk.status !== "cho_thong_tin";
         // Mỗi ý một dòng (chủ dự án 09/09: "cái nào cần xuống dòng thì xuống dòng").
+        // 22/09/2026 (bộ đo giọng B09, chủ dự án chốt): câu chúc mừng 92 từ một bong bóng → rút còn hai câu;
+        // cách thêm điểm tách bong bóng riêng, bỏ câu hẹn "có thể em sẽ hỏi thêm" (câu chúc đã nói có khách
+        // là báo). Khoá `dang_xong_hen` vẫn giữ trong CAU_TIEN_DINH cho bản DB cũ, không dùng ở đây nữa.
         const themDiem = dk && !noiDu && (dk.thieu ?? []).length
-          ? "\n" + cauTD("dang_xong_them_diem", { thieu: (dk.thieu ?? []).slice(0, 2).join(" và ") }) +
-            ((dk.so_anh ?? 0) >= 3 ? "" : cauTD("dang_xong_them_anh")) + "." +
-            "\n" + cauTD("dang_xong_hen")
+          ? cauTD("dang_xong_them_diem", { thieu: (dk.thieu ?? []).slice(0, 2).join(" và ") }) +
+            ((dk.so_anh ?? 0) >= 3 ? "" : cauTD("dang_xong_them_anh")) + "."
           : "";
         // FR-183 (09/09/2026): ĐIỂM NGƯỜI RAO — trung bình điểm các tin đang rao
         // × hệ số quy mô (NMG). Chỉ nhắc khi rao từ 2 căn (một căn thì điểm người
@@ -3516,9 +3563,9 @@ Deno.serve(async (req) => {
           }
         }
         const cau = len
-          ? cauTD("dang_xong", { diem: dk?.diem }) + `${themDiem}${dongNguoiRao}`
+          ? cauTD("dang_xong", { diem: dk?.diem }) + dongNguoiRao
           : `Dạ em ghi nhận rồi ạ.\nTin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm ${cachGoi} vài thông tin nữa nha.`;
-        return await traLoiSeller([cau], {
+        return await traLoiSeller(len && themDiem ? [cau, themDiem] : [cau], {
           duyet: true, listing_status: lstOk?.status ?? null, diem: dk?.diem ?? null, du_roi: noiDu || undefined,
         });
       }
@@ -3669,6 +3716,13 @@ Deno.serve(async (req) => {
           // hội thoại") → bỏ, dùng câu tiền định.
           if (sellerReply && laLoiMeta(sellerReply)) { console.log("chat-reply: r2 tra loi cau lenh, bo"); sellerReply = null; }
           if (sellerReply && khenGanDay) sellerReply = boCauKhen(sellerReply);
+          // 22/09/2026 (bộ đo giọng B01/B15/B16): "ô tô vào được", "xuyên thoáng", "nở hậu" khi chủ nhà CHƯA
+          // nói — TONE_RULES cấm khen điều khách không nói nhưng model vẫn lọt. Chỉ áp cho lời MODEL (bản
+          // nháp / bảng tiền định đọc từ DB có thứ chủ nhà nói ở lượt trước). Bằng chứng = chữ chủ nhà đã gõ
+          // (tin này + lịch sử gần nhất); câu hỏi ("ô tô vào được không anh?") giữ nguyên.
+          if (sellerReply) {
+            sellerReply = boKhenKhongCanCu([sellerReply], [text, ...lichSuRows.filter((m) => m.sender === "seller").map((m) => m.body ?? "")].join(" "))[0] ?? null;
+          }
           // FR-177: một lượt một câu hỏi — cắt câu hỏi thứ hai của model (15/09/2026).
           // Chỉ áp cho lời MODEL: câu tiền định (xin chấm điểm, liệt kê căn) có chủ ý.
           if (sellerReply) sellerReply = motCauHoi([sellerReply])[0];
@@ -4936,6 +4990,23 @@ Deno.serve(async (req) => {
   }
   // 16/09/2026: khách mua là chú/cô/bác → bot tự xưng "cháu" (cùng luật nhánh bán).
   out.replies = doiTuXung(out.replies, goiMua);
+  // 22/09/2026 (bộ đo giọng B08, cùng lưới với nhánh bán): câu ≥ 6 từ lặp giữa hai bong bóng chỉ giữ lần đầu.
+  out.replies = boCauTrung(out.replies);
+  // 22/09/2026 (bộ đo giọng M06): kho ghi căn 12 Trần Hưng Đạo hẻm 6m mà bot nói "mặt tiền kinh doanh".
+  // Căn đang nói = căn khách nhắc mã, hoặc căn trong kho mà địa chỉ xuất hiện trong câu bot / câu khách /
+  // câu bot lượt trước ("căn đó"). Câu khẳng định trái với cột kho (hẻm ↔ mặt tiền, sổ riêng ↔ chung) thì bỏ.
+  {
+    const botTruoc = [...ordered].reverse().find((m) => m.sender === "bot")?.body ?? "";
+    const vanBan = boDau(`${out.replies.join(" ")} ${text} ${botTruoc}`);
+    const ungVien = [...askedArr, ...((listings ?? []) as CanRow[])];
+    const canNoi = ungVien.find((l) => { const dc = boDau(l.location_raw ?? ""); return dc.length >= 5 && vanBan.includes(dc); }) ??
+      (askedArr.length === 1 ? askedArr[0] : null);
+    if (canNoi) {
+      const truoc = out.replies;
+      out.replies = boMauThuanCan(out.replies, canNoi);
+      if (out.replies !== truoc) console.log(`chat-reply: bỏ câu mâu thuẫn với căn ${canNoi.code}`);
+    }
+  }
   // 22/09/2026 (bộ đo giọng, ca M01/M02/M06 chạy model giả): câu dò tiền định "Anh/chị cho em xin thêm…"
   // và mọi câu model ở nhánh MUA chưa đi qua bộ lọc gạch chéo như nhánh bán (1952) → khách mua chưa
   // biết nam/nữ vẫn đọc "anh/chị". Cùng một lưới cho hai nhánh.
@@ -5002,7 +5073,7 @@ Deno.serve(async (req) => {
   // đã vào sổ từ đầu lượt, nên loạt bong bóng bot chèn ở đây luôn đứng sau.
   // FR-105: mọi bong bóng gửi NGƯỜI MUA qua bộ lọc liên hệ — model được dặn
   // không đưa số, nhưng dặn không phải là chặn.
-  const replies = out.replies.map((r) => locLienHe(suaTuXungMua(r.split(TEN_GIU_CHO).join(tenBot)).trim())).filter(Boolean);
+  const replies = out.replies.map((r) => locLienHeBot(suaTuXungMua(r.split(TEN_GIU_CHO).join(tenBot)).trim())).filter(Boolean);
   danhDau("mua_truoc_hau_ky");
   // FR-32: mã trong câu trả lời, không có thì lấy mã khách vừa nhắc (bot hay
   // gọi căn bằng tên đường thay vì lặp lại mã)

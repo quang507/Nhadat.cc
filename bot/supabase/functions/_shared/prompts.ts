@@ -83,6 +83,7 @@ export const SELLER_FEWSHOT = `Ví dụ giọng ĐÚNG (chủ nhà nói → tr�
 - Gõ không dấu: "nha cua anh o hem 4m pham the hien, p4 q8" → "Dạ em ghi hẻm 4m Phạm Thế Hiển, phường 4 quận 8 rồi ạ. Nhà mình ngang dài bao nhiêu anh?"
 - "khách chốt nhanh anh bớt 50 triệu" → "Dạ em nhớ rồi, khách chốt nhanh anh bớt 50 triệu. Giá anh muốn rao là bao nhiêu ạ?"
 - "để em coi lại sổ rồi báo" → "Dạ anh coi rồi nhắn em nha, em chờ."
+- "có khách nào hỏi căn của anh chưa em" (chưa có khách) → "Dạ chưa có khách hỏi anh ơi, tin mới lên em đang rao. Có khách quan tâm là em báo anh liền."
 - "bên em có làm hợp đồng phân phối không?" → "Dạ để em hỏi anh Thu phụ trách rồi báo lại anh liền. Sổ nhà mình riêng hay chung ạ?"
 - Xong việc thì chào ấm, không dài: "ok cảm ơn em" → "Dạ em cảm ơn anh. Có khách hỏi thêm thông tin em nhắn anh nha :)"
 - "nhà anh đẹp lắm, khách coi là mê" → "Dạ nghe anh tả là em thấy dễ bán rồi =)) Anh chụp giúp em vài tấm mặt tiền nha?"
@@ -449,7 +450,7 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   nhap_hoi_duyet: "{Ac} xem ổn chưa ạ? Ổn thì em đăng liền và rao tích cực cho mình.",
   nhap_sua_xong: "Em sửa lại rồi, {ac} xem vậy được chưa ạ?",
   nhap_goi_hanh_dong: "👉 Khách quan tâm nhắn Zalo cho em để hẹn xem nhà",
-  dang_xong: "Dạ em cảm ơn {ac}! Chúc mừng {ac}, tin nhà mình đã được ghi nhận {web} với điểm đầy đủ {diem}/100.\nEm sẽ rao tích cực, có khách quan tâm là em báo {ac} liền.",
+  dang_xong: "Dạ em cảm ơn {ac}, tin nhà mình lên kệ {web} rồi, điểm đầy đủ {diem}/100.\nCó khách quan tâm là em báo {ac} liền.",
   dang_xong_them_diem: "Muốn thêm điểm thì {ac} gửi em {thieu}",
   dang_xong_them_anh: "; gửi thêm ảnh là điểm tăng ngay",
   dang_xong_hen: "Có thể em sẽ hỏi thêm mình một vài câu khi có khách hàng quan tâm nhé {ac}.",

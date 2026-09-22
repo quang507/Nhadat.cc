@@ -767,9 +767,13 @@ const boDauGiuDoDai = (s: string): string =>
 const DIEN_TICH_SAN_RE = new RegExp(
   `(?:(?:${TRUOC_LA_SAN.source})|(?<=\\b(?:tam|tang|lau|tret)\\b.*)\\b(?:tong\\s+(?:dien tich|dt)|(?:dien tich|dt)\\s+tong)(?!\\s+dat\\b))\\s*(?:la\\s*|khoang\\s*|tam\\s*)?(\\d{1,5}(?:[.,]\\d+)?)\\s*(?:m2|m²|met vuong|mv)\\b`,
 );
+// 22/09/2026 (bộ đo giọng B11): "5 tỷ 60m2" / "12 tỷ 80m2" — số đứng sau đơn vị tiền chỉ là
+// phần LẺ của giá ("5 tỷ 6") khi nó KHÔNG mang đơn vị của thứ khác (m2, x, pn, lầu, tầng…) và
+// không phải một số dài hơn (không cắt "60" ra "6"). Dùng chung cho ba chỗ đọc giá dưới đây.
+const KHONG_PHAI_LE_GIA = "(?![\\d.,]*\\d)(?!\\s*(?:m2|m\\b|x\\s*\\d|pn\\b|phong|lau|tang|tam|wc|met|nam\\b|thang))";
 const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // "cần bán gấp 5 tỷ" → câu chính là gấp, giá vẫn phải ghi.
-  ["gia", new RegExp(`\\b(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`), (m) => `${m[1]} ${m[2] === "toi" ? "tỏi" : m[2] === "ty" || m[2] === "ti" ? "tỷ" : "triệu"}${m[3] ? ` ${m[3]}` : ""}${m[4] ? " rưỡi" : ""}`],
+  ["gia", new RegExp(`\\b(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d{1,3}(?:[.,]\\d+)?)${KHONG_PHAI_LE_GIA})?(?:\\s*(ruoi))?`), (m) => `${m[1]} ${m[2] === "toi" ? "tỏi" : m[2] === "ty" || m[2] === "ti" ? "tỷ" : "triệu"}${m[3] ? ` ${m[3]}` : ""}${m[4] ? " rưỡi" : ""}`],
   ["so_phong_ngu", /\b(\d{1,2})\s*(?:phong ngu|pn|phong)\b(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
   ["so_wc", /\b(\d{1,2})\s*(?:wc|toilet|ve sinh)\b/, (m) => m[1]],
   ["huong", /\bhuong\s*((?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?)\b/, (m) => `hướng ${m[1]}`],
@@ -814,7 +818,7 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
     if (mThu) {
       const mKt = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(kd);
       const mDt = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(kd);
-      const mGia = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`).exec(kd);
+      const mGia = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d{1,3}(?:[.,]\\d+)?)${KHONG_PHAI_LE_GIA})?(?:\\s*(ruoi))?`).exec(kd);
       const q = /\b(?:quan|q)\s*\.?\s*(\d{1,2})\b/.exec(kd);
       // 15/09/2026 (bắn thật N2): "căn 2 sổ hồng riêng, căn 1 đúc 3 tấm" là FACT cho căn đã
       // mở, không phải rao thêm — căn thứ tự không giá, không kích thước thì không tính.
@@ -830,7 +834,7 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
     const laQuan = /^q\s*\.?\s*\d{1,2}$/.test(mMa![1]);
     const mKt = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(kd);
     const mDt = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(kd);
-    const mGia = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d+(?:[.,]\\d+)?))?(?:\\s*(ruoi))?`).exec(kd);
+    const mGia = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d{1,3}(?:[.,]\\d+)?)${KHONG_PHAI_LE_GIA})?(?:\\s*(ruoi))?`).exec(kd);
     out.push({
       ...(laQuan
         ? { quan: `Quận ${Number(mMa![1].replace(/\D/g, ""))}` }

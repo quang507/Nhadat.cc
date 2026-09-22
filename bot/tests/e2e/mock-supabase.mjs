@@ -204,6 +204,18 @@ export const boDauMock = (s) =>
   String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
 // đủ cho "5 tỷ 8", "5,5 tỷ", "800 triệu"
+// `chuan_hoa_gia_raw()` (schema.sql): lấy đúng cụm "số + đơn vị (+ lẻ) (+ rưỡi)" (+ "/tháng|/năm|/m2"), bỏ đuôi rác.
+export function chuanHoaGiaRaw(s) {
+  const goc = String(s ?? "").trim();
+  if (!goc) return null;
+  const t = boDauMock(goc);
+  const m = /([0-9][0-9.,]*\s*(?:ty|ti|toi|trieu|tr|cu)\b(?:\s*[0-9]+(?![0-9])(?!\s*(?:thang|nam)\b))?(?:\s*ruoi)?)(?:\s*(?:\/|mot|moi|1)\s*(thang|nam|m2)\b)?/.exec(t);
+  if (!m) return goc;
+  const i = t.indexOf(m[1]);
+  let cum = goc.slice(i, i + m[1].length).trim();
+  if (m[2]) cum += "/" + (m[2] === "thang" ? "tháng" : m[2] === "nam" ? "năm" : "m2");
+  return parseVnd(cum) != null ? cum : goc;
+}
 export function parseVnd(s) {
   const t = String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
   let m = /(\d+)\s*ty\s*(\d)(?!\d)/.exec(t); if (m) return +m[1] * 1e9 + +m[2] * 1e8;
@@ -561,13 +573,15 @@ class RpcCall {
         l.boc_tach = { ...(l.boc_tach ?? {}), [a.p_question]: a.p_answer, _cap_nhat: now() };
         // trg_vi_tri_vao_cot (schema.sql): ghi đè location_raw trừ khi đã có fact vi_tri nguồn admin/ctv (bậc cao hơn).
         if (a.p_question === "vi_tri" && String(a.p_answer).trim() && !db.t.listing_facts.some((f) => f.listing_id === l.id && f.question === "vi_tri" && /^(admin|ctv)/i.test(String(f.source ?? "")) && f.answer !== a.p_answer)) l.location_raw = String(a.p_answer).trim();
-        if (a.p_question === "gia") { l.price_raw = a.p_answer; l.price_vnd = parseVnd(a.p_answer); }
+        // 22/09/2026: DB gọt price_raw qua `chuan_hoa_gia_raw` ("7 tỷ 5 nha em" → "7 tỷ 5"); mock giữ đúng thế
+        // để bộ đo giọng / e2e không thấy một 🤖 mà production không in.
+        if (a.p_question === "gia") { l.price_raw = chuanHoaGiaRaw(a.p_answer); l.price_vnd = parseVnd(a.p_answer); }
         if (a.p_question === "phuong") l.ward = a.p_answer;
         // 20260915d listing_facts_sync_deal: đổi loại giao dịch, tính lại giá từ fact giá gần nhất.
         if (a.p_question === "loai_giao_dich" && (a.p_answer === "ban" || a.p_answer === "cho_thue")) {
           l.deal = a.p_answer;
           const g = db.t.listing_facts.filter((f) => f.listing_id === l.id && f.question === "gia").pop();
-          if (g) { l.price_raw = g.answer; l.price_vnd = parseVnd(g.answer); }
+          if (g) { l.price_raw = chuanHoaGiaRaw(g.answer); l.price_vnd = parseVnd(g.answer); }
         }
         if (a.p_question === "gap") {
           const kd = String(a.p_answer).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
