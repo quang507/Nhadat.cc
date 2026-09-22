@@ -60,7 +60,7 @@ import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laNgungRao, NHAN_HOI_LAI, nhanDienFact,
   nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
-  suyTuXungHo, tuXungBot, type XungHo,
+  suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauKhen, doiTuXung, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
@@ -1077,10 +1077,11 @@ Deno.serve(async (req) => {
     id: string; name: string | null; active_listing_id: string | null;
     seller_type?: string | null;
     xung_ho?: XungHo | null; // FR-176: chủ nhà dặn gọi anh/chị/chú/cô/bác (16/09: thêm ba từ lớn tuổi)
+    nhom_tuoi?: "tre" | "lon_tuoi" | null; // 22/09: "chào cháu" → lớn tuổi dù chưa biết chú hay cô
     ten_tro_ly?: string | null;      // FR-181: tên trợ lý riêng (CRM đọc cột này)
   };
   const [{ data: sellerCu }, { data: bCu }] = await Promise.all([
-    client.from("sellers").select("id, name, active_listing_id, seller_type, xung_ho, ten_tro_ly")
+    client.from("sellers").select("id, name, active_listing_id, seller_type, xung_ho, nhom_tuoi, ten_tro_ly")
       .eq("zalo_user_id", externalUserId).maybeSingle(),
     client.from("buyers").select("preferences")
       .eq("zalo_user_id", externalUserId).maybeSingle(),
@@ -1971,7 +1972,9 @@ Deno.serve(async (req) => {
         // Model lỡ chép nguyên chữ giữ chỗ của khối nhớ tạm → thay bằng tên thật.
         .map((r) => r.split(TEN_GIU_CHO).join(tenBot).trim()).filter(Boolean);
       // 16/09/2026: khách là chú/cô/bác → mọi "em" (câu tiền định lẫn model) thành "cháu".
-      sach = doiTuXung(sach, sellerRow.xung_ho ?? null);
+      sach = doiTuXung(sach, sellerRow.xung_ho ?? null, sellerRow.nhom_tuoi ?? null);
+      // 22/09/2026: người lớn tuổi chưa rõ chú hay cô → không "anh chị", gọi "mình" (câu tiền định lẫn model).
+      if (!goiNguoi && sellerRow.nhom_tuoi === "lon_tuoi") sach = sach.map((r) => r.replace(/anh\/chị|Anh\/chị|anh chị|Anh chị/g, (m) => /^[AĐ]/.test(m) ? "Mình" : "mình"));
       // 21/09/2026 (chủ dự án "làm cả 4"): chưa biết cách gọi → "anh/chị" gạch chéo là chữ máy; người bán
       // hàng thật nói "anh chị". Áp cho mọi bong bóng (tiền định lẫn model) ở một chỗ.
       if (!goiNguoi) sach = sach.map(boGachCheo);
@@ -2064,6 +2067,28 @@ Deno.serve(async (req) => {
       if (xhErr) await ghiLoi(client, "chat-reply sellers.xung_ho", xhErr.message);
       else { sellerRow.xung_ho = xungHoMoi; xungHoVuaGhi = xungHoMoi; }
     }
+    // 22/09/2026 (chủ dự án: "cô chào cháu nó vẫn đáp anh chị"): "chào cháu" mà không xưng chú/cô → biết là
+    // người lớn tuổi, chưa biết chú hay cô: bot xưng cháu, gọi "mình", không "anh chị" (`nhom_tuoi` ghi trước,
+    // `xung_ho` chờ câu có xưng). Hồ sơ bán vừa mở từ hàng mua thì mang cách gọi đã học ở lượt chào sang.
+    if (!xungHoMoi && !sellerRow.xung_ho) {
+      let nhomMoi: "lon_tuoi" | null = laChaoChau(text) ? "lon_tuoi" : null;
+      let xhTuMua: XungHo | null = null;
+      if (sellerMoi) {
+        const { data: bPref } = await client.from("buyers").select("preferences").eq("zalo_user_id", externalUserId).maybeSingle();
+        const p = (bPref?.preferences ?? {}) as { xung_ho?: unknown; nhom_tuoi?: unknown };
+        if (typeof p.xung_ho === "string" && ["anh", "chị", "chú", "cô", "bác"].includes(p.xung_ho)) xhTuMua = p.xung_ho as XungHo;
+        else if (p.nhom_tuoi === "lon_tuoi") nhomMoi = "lon_tuoi";
+      }
+      if (xhTuMua) {
+        const { error: xmErr } = await client.from("sellers").update({ xung_ho: xhTuMua, ...suyTuXungHo(xhTuMua) }).eq("id", sellerRow.id);
+        if (xmErr) await ghiLoi(client, "chat-reply sellers.xung_ho(tu mua)", xmErr.message);
+        else { sellerRow.xung_ho = xhTuMua; sellerRow.nhom_tuoi = suyTuXungHo(xhTuMua).nhom_tuoi; }
+      } else if (nhomMoi && sellerRow.nhom_tuoi !== "lon_tuoi") {
+        const { error: ntErr } = await client.from("sellers").update({ nhom_tuoi: nhomMoi }).eq("id", sellerRow.id);
+        if (ntErr) await ghiLoi(client, "chat-reply sellers.nhom_tuoi", ntErr.message);
+        else sellerRow.nhom_tuoi = nhomMoi;
+      }
+    }
     // FR-181: ghi tên trợ lý vào hồ sơ người bán MỘT lần (lượt đầu) — CRM và
     // `so.nguoi_ban` đọc cột này để biết "T•ai" đang chăm ai.
     if (!sellerRow.ten_tro_ly) {
@@ -2073,14 +2098,15 @@ Deno.serve(async (req) => {
       else sellerRow.ten_tro_ly = tenBot;
     }
     const goiNguoi = sellerRow.xung_ho ?? null;
-    const cachGoi = goiNguoi ?? "anh/chị";
+    const lonTuoiChuaRo = !goiNguoi && sellerRow.nhom_tuoi === "lon_tuoi";
+    const cachGoi = goiNguoi ?? (lonTuoiChuaRo ? "mình" : "anh/chị");
     // Bot tự xưng "cháu" với chú/cô/bác (mọi câu tiền định viết "em" → đổi ở đường ra `sach`).
-    const tuXung = tuXungBot(goiNguoi);
+    const tuXung = lonTuoiChuaRo ? "cháu" : tuXungBot(goiNguoi);
     // Câu phí tiền định cho hỏi ngược (FEE_RULES, theo nhãn) — 15/09/2026.
     const phiCauSeller = sellerRow.seller_type === "nmg"
       ? "phí bên em chỉ thu khi giao dịch thành công, 0,5% giá chốt"
       : "phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt";
-    const CachGoi = goiNguoi ? goiNguoi.charAt(0).toUpperCase() + goiNguoi.slice(1) : "Anh/chị";
+    const CachGoi = goiNguoi ? goiNguoi.charAt(0).toUpperCase() + goiNguoi.slice(1) : lonTuoiChuaRo ? "Mình" : "Anh/chị";
     // Điền ô cho câu tiền định (FR-138 b). Ô thiếu dữ liệu → câu rỗng, tầng gọi bỏ.
     const cauTD = (khoa: string, o: Record<string, string | number | null | undefined> = {}) =>
       dienCau(CAU_TD[khoa] ?? "", { ac: cachGoi, Ac: CachGoi, web: "AI Ơi Nhà Đất", ...o });
@@ -4501,13 +4527,25 @@ Deno.serve(async (req) => {
     if (tinTruoc <= 1) {
       // 09/09/2026: lời chào ở bot_prompts.loi_chao (có chị Thu), code chỉ là dự phòng.
       // 21/09/2026 (Zalo thật, chủ dự án): tin đầu chưa biết nam/nữ → "anh/chị" gạch chéo → "anh chị".
-      const cauHoiVai = boGachCheo(LOI_CHAO_DB);
+      // 22/09/2026 (chủ dự án: "cô chào cháu nó vẫn đáp anh chị"): tin đầu đã xưng chú/cô/bác (hoặc anh/chị)
+      // thì lời chào gọi đúng người và xưng cháu; "chào cháu" chưa rõ chú hay cô → xưng cháu, gọi "mình" và
+      // hỏi luôn "cháu gọi chú hay cô". Cách gọi ghi vào hồ sơ mua để lượt sau (kể cả khi mở hồ sơ bán) còn nhớ.
+      const xhDau = batXungHo(text) ?? tuXungTuCau(text);
+      const chaoChau = !xhDau && laChaoChau(text);
+      const hoaXh = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+      let cauHoiVai = LOI_CHAO_DB;
+      if (xhDau) cauHoiVai = doiTuXung([cauHoiVai.replace(/anh\/chị/g, xhDau).replace(/Anh\/chị/g, hoaXh(xhDau))], xhDau)[0];
+      else if (chaoChau) {
+        cauHoiVai = doiTuXung([cauHoiVai.replace(/chào anh\/chị,?/, "chào ạ,").replace(/anh\/chị/g, "mình").replace(/Anh\/chị/g, "Mình")], null, "lon_tuoi")[0] +
+          "\nCháu gọi chú hay cô cho tiện ạ?";
+      }
+      cauHoiVai = boGachCheo(cauHoiVai);
       const { error: hvErr } = await client.from("messages").insert({
         conversation_id: convId, sender: "bot", body: cauHoiVai,
       });
       if (hvErr) await ghiLoi(client, "chat-reply messages hoi_vai", hvErr.message);
       const { error: pErr } = await client
-        .rpc("merge_buyer_prefs", { p_buyer_id: buyer.id, p_delta: { hoi_vai: tinHieuMoiGioi ? "nmg" : true } });
+        .rpc("merge_buyer_prefs", { p_buyer_id: buyer.id, p_delta: { hoi_vai: tinHieuMoiGioi ? "nmg" : true, ...(xhDau ? { xung_ho: xhDau } : {}), ...(chaoChau ? { nhom_tuoi: "lon_tuoi" } : {}) } });
       if (pErr) await ghiLoi(client, "chat-reply merge_buyer_prefs(hoi_vai)", pErr.message);
       return await hoanTat({
         reply: cauHoiVai, replies: [cauHoiVai], conversation_id: convId, hoi_vai: true,
@@ -4515,6 +4553,19 @@ Deno.serve(async (req) => {
     }
   }
   if (prefs.hoi_vai) {
+    // 22/09/2026: "cô" / "chú nha" trơ trọi là câu trả lời cho "cháu gọi chú hay cô" — ghi cách gọi, hỏi lại
+    // vai (câu này không phải câu trả lời mua/bán), cờ hỏi vai giữ nguyên.
+    const xhTro = batXungHo(text);
+    if (xhTro && boDau(text).trim().split(/\s+/).length <= 3) {
+      const { error: xtErr } = await client.rpc("merge_buyer_prefs", { p_buyer_id: buyer.id, p_delta: { xung_ho: xhTro, ...(XUNG_HO_LON_TUOI.has(xhTro) ? { nhom_tuoi: "lon_tuoi" } : {}) } });
+      if (xtErr) await ghiLoi(client, "chat-reply merge_buyer_prefs(xung_ho tro)", xtErr.message);
+      prefs.xung_ho = xhTro;
+      const Xh = xhTro.charAt(0).toUpperCase() + xhTro.slice(1);
+      const cauVai = doiTuXung([`Dạ ${xhTro}. ${Xh} đang muốn mua, thuê hay đang có nhà cần bán/cho thuê ạ?`], xhTro)[0];
+      const { error: cvErr } = await client.from("messages").insert({ conversation_id: convId, sender: "bot", body: cauVai });
+      if (cvErr) await ghiLoi(client, "chat-reply messages hoi_vai(lai)", cvErr.message);
+      return await hoanTat({ reply: cauVai, replies: [cauVai], conversation_id: convId, hoi_vai: true, xung_ho: xhTro });
+    }
     // Đã hỏi; câu này không tự nhận có BĐS (nửa 1/2 đã xét, không mở hồ sơ bán)
     // → ở lại hàng người mua, xoá cờ để không hỏi lại. Model đọc câu trả lời
     // qua lịch sử hội thoại (câu hỏi vai đã nằm trong `messages`).
@@ -5229,7 +5280,8 @@ Deno.serve(async (req) => {
   // đã vào sổ từ đầu lượt, nên loạt bong bóng bot chèn ở đây luôn đứng sau.
   // FR-105: mọi bong bóng gửi NGƯỜI MUA qua bộ lọc liên hệ — model được dặn
   // không đưa số, nhưng dặn không phải là chặn.
-  const replies = out.replies.map((r) => locLienHeBot(suaTuXungMua(r.split(TEN_GIU_CHO).join(tenBot)).trim())).filter(Boolean);
+  // 22/09/2026: khách mua là chú/cô/bác (hoặc "chào cháu" chưa rõ) → bot xưng cháu, cùng luật nhánh bán.
+  const replies = doiTuXung(out.replies.map((r) => locLienHeBot(suaTuXungMua(r.split(TEN_GIU_CHO).join(tenBot)).trim())).filter(Boolean), goiMua, prefs.nhom_tuoi === "lon_tuoi" ? "lon_tuoi" : null);
   danhDau("mua_truoc_hau_ky");
   // FR-32: mã trong câu trả lời, không có thì lấy mã khách vừa nhắc (bot hay
   // gọi căn bằng tên đường thay vì lặp lại mã)

@@ -3125,6 +3125,65 @@ fresh(seedKho);
   globalThis.__cauHinh = cauHinhCu;
 }
 
+// ── 22/09/2026 (chủ dự án: "người ta chào là cô chào cháu nó vẫn đáp anh chị") — FR-176 (c) lời chào ──
+{
+  const rep = () => r.body.replies.join(" ");
+  const sX = (uid) => { const s = db().t.sellers.find((x) => x.zalo_user_id === uid); return s ? [s.xung_ho ?? null, s.nhom_tuoi ?? null] : null; };
+  const bX = (uid) => { const b = db().t.buyers.find((x) => x.zalo_user_id === uid); return b ? [b.preferences?.xung_ho ?? null, b.preferences?.nhom_tuoi ?? null, b.preferences?.hoi_vai ?? null] : null; };
+  // (1) tin đầu "cô chào cháu" → lời chào gọi cô, xưng cháu, không "anh chị"; hồ sơ mua nhớ "cô".
+  fresh();
+  r = await send({ external_user_id: "gvd-1", text: "cô chào cháu" });
+  check("GVD-01 tin đầu 'cô chào cháu' → 'Dạ cháu chào cô…', hỏi 'Cô đang muốn mua, thuê hay…', không 'anh chị' / 'em'; prefs xung_ho = cô",
+    /^Dạ cháu chào cô/.test(r.body.replies[0] ?? "") && /Cô đang muốn mua/.test(rep()) && !/anh chị|anh\/chị/i.test(rep()) && !/(?<![\p{L}])em(?![\p{L}])/u.test(rep()) && bX("gvd-1")?.[0] === "cô",
+    JSON.stringify({ rep: r.body.replies, b: bX("gvd-1") }));
+  // (2) lượt sau mở hồ sơ bán → cách gọi đi theo: xưng cháu, gọi cô ở bong bóng ghi nhận.
+  r = await send({ external_user_id: "gvd-1", text: "cô có căn nhà muốn bán, hẻm 4m Nguyễn Trãi q5, 60m2" });
+  check("GVD-02 'cô có căn nhà muốn bán…' sau lời chào → hồ sơ bán xung_ho = cô, nhom_tuoi lon_tuoi; 📝 'Cháu ghi nhận', 'cô nhắn lại giúp cháu'",
+    r.body.role === "seller" && JSON.stringify(sX("gvd-1")) === JSON.stringify(["cô", "lon_tuoi"]) && /Cháu ghi nhận/.test(rep()) && /cô nhắn lại giúp cháu/.test(rep()),
+    JSON.stringify({ rep: r.body.replies, s: sX("gvd-1") }));
+  // (3) "chào cháu" trơ → biết lớn tuổi, chưa biết chú/cô: xưng cháu, gọi "mình", hỏi "cháu gọi chú hay cô".
+  fresh();
+  r = await send({ external_user_id: "gvd-3", text: "chào cháu" });
+  check("GVD-03 tin đầu 'chào cháu' → 'Dạ cháu chào ạ…', 'Mình đang muốn mua…', + 'Cháu gọi chú hay cô cho tiện ạ?'; prefs nhom_tuoi lon_tuoi, xung_ho trống",
+    /^Dạ cháu chào ạ/.test(r.body.replies[0] ?? "") && /Mình đang muốn mua/.test(rep()) && /Cháu gọi chú hay cô/.test(rep()) && !/anh chị/i.test(rep()) && JSON.stringify(bX("gvd-3")) === JSON.stringify([null, "lon_tuoi", true]),
+    JSON.stringify({ rep: r.body.replies, b: bX("gvd-3") }));
+  // (4) trả lời "cô" trơ → ghi cách gọi, hỏi lại vai, cờ hỏi vai giữ.
+  r = await send({ external_user_id: "gvd-3", text: "cô" });
+  check("GVD-04 'cô' trơ sau câu 'gọi chú hay cô' → 'Dạ cô. Cô đang muốn mua…', prefs xung_ho = cô, hoi_vai vẫn giữ",
+    /^Dạ cô\. Cô đang muốn mua/.test(r.body.replies[0] ?? "") && bX("gvd-3")?.[0] === "cô" && bX("gvd-3")?.[2] === true,
+    JSON.stringify({ rep: r.body.replies, b: bX("gvd-3") }));
+  // (5) rồi câu rao KHÔNG xưng → hồ sơ bán vẫn mang "cô" từ hồ sơ mua.
+  r = await send({ external_user_id: "gvd-3", text: "bán nhà hẻm 4m Nguyễn Trãi q5, 60m2, 7 tỷ" });
+  check("GVD-05 câu rao không xưng sau 'cô' → sellers.xung_ho = cô (mang từ hồ sơ mua), bong bóng gọi cô xưng cháu",
+    r.body.role === "seller" && sX("gvd-3")?.[0] === "cô" && /cô nhắn lại giúp cháu/.test(rep()), JSON.stringify({ rep: r.body.replies, s: sX("gvd-3") }));
+  // (6) "chào cháu" rồi câu rao ngay, không bao giờ xưng → xưng cháu, gọi "mình", KHÔNG "anh chị".
+  fresh();
+  r = await send({ external_user_id: "gvd-6", text: "chào cháu" });
+  r = await send({ external_user_id: "gvd-6", text: "bán nhà hẻm 4m Nguyễn Trãi q5, 60m2, 7 tỷ" });
+  check("GVD-06 'chào cháu' → câu rao không xưng → sellers.nhom_tuoi lon_tuoi, xung_ho trống; 📝 'Cháu ghi nhận', 'mình nhắn lại giúp cháu', không 'anh chị'",
+    r.body.role === "seller" && JSON.stringify(sX("gvd-6")) === JSON.stringify([null, "lon_tuoi"]) && /Cháu ghi nhận/.test(rep()) && /mình nhắn lại giúp cháu/.test(rep()) && !/anh chị|anh\/chị/i.test(rep()),
+    JSON.stringify({ rep: r.body.replies, s: sX("gvd-6") }));
+  // (7) chủ nhà đã có tin, đang treo câu tầng, nhắn "cô chào cháu" → nhận "cô", không ghi fact, câu tầng treo.
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb"); const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0002"); sC.active_listing_id = tin.id;
+    db().insert("info_requests", { listing_id: tin.id, question: "ket_cau", status: "pending" });
+    const truoc = db().t.listing_facts.filter((f) => f.listing_id === tin.id).length;
+    r = await send({ external_user_id: "z-ccrb", text: "cô chào cháu" });
+    check("GVD-07 chủ nhà có tin nhắn 'cô chào cháu' → xung_ho = cô, không ghi fact, câu tầng vẫn treo, bot xưng cháu",
+      sC.xung_ho === "cô" && db().t.listing_facts.filter((f) => f.listing_id === tin.id).length === truoc &&
+        db().t.info_requests.some((x) => x.listing_id === tin.id && x.question === "ket_cau" && x.status === "pending") && !/(?<![\p{L}])em(?![\p{L}])/u.test(rep()),
+      JSON.stringify({ rep: r.body.replies, xh: sC.xung_ho, facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer]) }));
+  }
+  // (8) khách MUA là chú → bong bóng nhánh mua xưng cháu.
+  fresh();
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ em ghi nhận rồi ạ, chú tìm khu nào ạ?"] });
+  r = await send({ external_user_id: "gvd-8", text: "chú chào cháu, chú muốn mua nhà q5 tầm 5 tỷ" });
+  check("GVD-08 khách mua 'chú chào cháu, chú muốn mua…' → prefs xung_ho chú, bong bóng 'Dạ cháu ghi nhận…' (em → cháu ở nhánh mua)",
+    bX("gvd-8")?.[0] === "chú" && /Dạ cháu ghi nhận/.test(rep()) && !/(?<![\p{L}])em(?![\p{L}])/u.test(rep()), JSON.stringify({ rep: r.body.replies, b: bX("gvd-8") }));
+  globalThis.__model = { parse: () => OUT() };
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { docTien, giaTheoM2, vndThanhChu } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../supabase/functions/_shared/extraction/so-chu.ts";
 import {
-  bocViTriRao, catDapAn, cheoPhuDinh, gonLoiSua, laHoanLai, nhanDienFact, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, laCauHoiTron, tuXungTuCau, vungPhuDinh,
+  bocViTriRao, catDapAn, cheoPhuDinh, gonLoiSua, laHoanLai, nhanDienFact, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, laCauHoiTron, tuXungTuCau, vungPhuDinh, batXungHo, laChaoChau, CHAO_SUONG_RE,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { vungNgoai } from "../supabase/functions/_shared/dia_ban.ts";
 
@@ -363,6 +363,23 @@ for (const [vao, mong] of [
   ["cô giáo của con bán nhà", null],         // người thứ ba
   ["chu can ban nha o q8", null],            // không dấu: "chu" mập mờ (chủ/chú) → không đoán
 ]) ok(`tuXungTuCau lớn tuổi "${vao}"`, tuXungTuCau(vao) === mong, String(tuXungTuCau(vao)));
+// 22/09/2026 (chủ dự án: "người ta chào là cô chào cháu nó vẫn đáp anh chị"): lời CHÀO cũng là tự xưng.
+for (const [vao, mong] of [
+  ["cô chào cháu", "cô"],
+  ["Cô chào cháu", "cô"],
+  ["chú chào cháu nha", "chú"],
+  ["bác chào con", "bác"],
+  ["chào cháu, cô đây", "cô"],
+  ["chào cháu", null],               // chưa biết chú hay cô → laChaoChau lo
+  ["cô giáo chào cháu", null],       // người thứ ba
+  ["co chao chau", null],            // không dấu: "co" mập mờ
+  ["chào em, anh cần bán nhà", "anh"],
+]) ok(`tuXungTuCau lời chào "${vao}"`, tuXungTuCau(vao) === mong, String(tuXungTuCau(vao)));
+for (const [vao, mong] of [["cô", "cô"], ["Cô", "cô"], ["chú nha", "chú"], ["dạ bác", "bác"], ["có", null], ["co", null], ["cô có căn nhà", null], ["chị", "chị"]])
+  ok(`batXungHo trơ "${vao}"`, batXungHo(vao) === mong, String(batXungHo(vao)));
+for (const [vao, mong] of [["chào cháu", true], ["Chào con!", true], ["chào cháu, cô đây", true], ["chào em", false], ["cháu chào cô", false], ["chao chau", false]])
+  ok(`laChaoChau "${vao}"`, laChaoChau(vao) === mong);
+ok("CHAO_SUONG_RE: 'co chao chau' (bỏ dấu) là chào suông → ack, không ghi", CHAO_SUONG_RE.test("co chao chau") && CHAO_SUONG_RE.test("chu chao chau nha") && !CHAO_SUONG_RE.test("co chao chau, co co can nha"));
 {
   const c = "Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm diện tích tổng 240m2";
   const ds = nhanDienNhieuFact(c);
