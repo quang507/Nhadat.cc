@@ -4739,13 +4739,17 @@ Deno.serve(async (req) => {
     (typeof prefs.area === "string" ? bocQuan(boDau(prefs.area), prefs.area) : null);
   const hoiDuAnKhu = /\b(?:du an|chung cu|can ho|cao oc|toa nha|khu dan cu|kdc)\b/.test(tKD);
   let duAnKhuBlock = "";
+  // Kho tin có căn nào thuộc các dự án vừa nạp không — không có thì câu "chưa có căn nào đang rao" là thật.
+  let coCanTrongDuAnKhu = false;
   if (quanKhach && (hoiDuAnKhu || (minimumMet && !(listings ?? []).length))) {
     const { data: dak, error: dakErr } = await client.from("projects")
-      .select("name, developer, district, ward, location_raw, legal_status, status_text, amenities, unit_types")
+      .select("id, name, developer, district, ward, location_raw, legal_status, status_text, amenities, unit_types")
       .eq("district", quanKhach).order("priority").limit(6);
     if (dakErr) await ghiLoi(client, "chat-reply du an trong khu", dakErr.message);
-    const ds = ((dak ?? []) as Proj[]).filter((p) => p.name !== partner?.name && !matched.some((m) => m.name === p.name)).slice(0, 5);
+    const ds = ((dak ?? []) as Array<Proj & { id?: string }>).filter((p) => p.name !== partner?.name && !matched.some((m) => m.name === p.name)).slice(0, 5);
     duAnKhuBlock = ds.map((p) => projLine(p, false)).join("\n");
+    const ids = new Set(ds.map((p) => p.id).filter(Boolean));
+    coCanTrongDuAnKhu = ((listings ?? []) as CanRow[]).some((l) => l.project_id && ids.has(l.project_id));
   }
 
   // ─── FR-31 (v48): CĂN TƯƠNG TỰ khi căn khách hỏi đã chốt/đã gỡ, hoặc khách
@@ -5049,6 +5053,20 @@ Deno.serve(async (req) => {
     const truocTen = out.replies;
     out.replies = boTenRiengBia(out.replies, nguCanhTen);
     if (out.replies !== truocTen) console.log("chat-reply: gọt tên riêng không có trong kho");
+    // FR-114 (e), bắn thật 22/09 sau deploy #184: model kể đúng ba dự án nhưng nói "bên em có vài dự án ĐANG
+    // BÁN" (status_text của dự án) mà quên câu "chưa có căn nào đang rao" đã dặn — khách hiểu là có hàng.
+    // Kho không có căn nào thuộc các dự án đó mà bong bóng nêu tên dự án thì nối một câu nói thật, tiền định, ngay sau nó.
+    if (duAnKhuBlock && !coCanTrongDuAnKhu) {
+      const tenDA = duAnKhuBlock.split("\n").map((d) => boDau(d.replace(/^• /, "").split(" - ")[0].trim())).filter((t) => t.length >= 4);
+      const daNoi = out.replies.join(" ");
+      if (!/chua co (?:can|tin) nao|chua co can/.test(boDau(daNoi))) {
+        const i = out.replies.findIndex((r) => { const kd = boDau(r); return tenDA.some((t) => kd.includes(t)); });
+        if (i >= 0) {
+          out.replies.splice(i + 1, 0, `Hiện bên em chưa có căn nào của các dự án này đang rao, có căn là em báo ${goiMua ?? "mình"} liền ạ.`);
+          console.log("chat-reply: nối câu 'chưa có căn nào đang rao' sau khối dự án trong quận");
+        }
+      }
+    }
   }
   // 22/09/2026 (bộ đo giọng, ca M01/M02/M06 chạy model giả): câu dò tiền định "Anh/chị cho em xin thêm…"
   // và mọi câu model ở nhánh MUA chưa đi qua bộ lọc gạch chéo như nhánh bán (1952) → khách mua chưa

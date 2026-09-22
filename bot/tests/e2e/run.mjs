@@ -2935,14 +2935,16 @@ fresh(seedKho);
     d.insert("projects", { name: "Dragon Riverside City", district: "Quận 5", ward: "Phường 1", location_raw: "628-630 Võ Văn Kiệt, Phường 1, Quận 5", priority: 3 });
     d.insert("projects", { name: "Sunrise City", district: "Quận 7", ward: "Phường Tân Hưng", location_raw: "Nguyễn Hữu Thọ, Quận 7", priority: 2 });
   });
-  globalThis.__model.parse = () => OUT({ replies: ["Dạ anh, Quận 5 có Chung cư Lakai ở Nguyễn Tri Phương và Dragon Riverside City ở Võ Văn Kiệt ạ, hiện bên em chưa có căn nào của hai dự án này đang rao. Ngoài ra còn dự án Sunrise Quận 5 nữa ạ."] });
+  // Model kể đúng tên nhưng nói "đang bán" và QUÊN câu "chưa có căn nào đang rao" (bắn thật 22/09) → code nối câu đó.
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ anh, Quận 5 bên em có vài dự án đang bán như Chung cư Lakai ở Nguyễn Tri Phương và Dragon Riverside City ở Võ Văn Kiệt ạ. Ngoài ra còn dự án Sunrise Quận 5 nữa ạ.", "Anh có khoảng giá nào không ạ?"] });
   r = await send({ external_user_id: "gva-10", text: "quận 5 có dự án gì không em" });
   {
     const prompt = JSON.stringify(globalThis.__calls.filter((c) => c.kind === "parse").map((c) => c.params));
-    check("GVA-10 khách hỏi 'quận 5 có dự án gì' → ngữ cảnh có khối DỰ ÁN TRONG QUẬN 5 với Lakai + Dragon Riverside, KHÔNG có Sunrise City (Q7) trong khối đó; tên bịa 'Sunrise Quận 5' bị gọt, tên thật giữ",
+    check("GVA-10 khách hỏi 'quận 5 có dự án gì' → khối DỰ ÁN TRONG QUẬN 5 với Lakai + Dragon Riverside, KHÔNG có Sunrise City (Q7); tên bịa 'Sunrise Quận 5' bị gọt; kho trống + model quên → nối bong bóng 'chưa có căn nào … đang rao' ngay sau bong bóng kể dự án",
       /DỰ ÁN TRONG QUẬN 5/.test(prompt) && /Chung cư Lakai/.test(prompt) && /Dragon Riverside City/.test(prompt) &&
         !/TRONG QUẬN 5[^]*?Sunrise City/.test(prompt.split("DỰ ÁN KHÁCH VỪA NHẮC")[0]) &&
-        /Lakai/.test(rep()) && /Dragon Riverside City/.test(rep()) && !/Sunrise Quận 5/.test(rep()),
+        /Lakai/.test(rep()) && /Dragon Riverside City/.test(rep()) && !/Sunrise Quận 5/.test(rep()) &&
+        r.body.replies.length === 3 && /^Hiện bên em chưa có căn nào của các dự án này đang rao/.test(r.body.replies[1] ?? "") && /khoảng giá/.test(r.body.replies[2] ?? ""),
       JSON.stringify({ rep: r.body.replies, coKhoi: /DỰ ÁN TRONG QUẬN 5/.test(prompt) }));
   }
   // Không hỏi dự án, kho có tin → không nạp khối (không tốn truy vấn, không đẩy model kể dự án).
