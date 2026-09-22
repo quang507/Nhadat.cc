@@ -82,6 +82,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
+import { dapHoiVeTin, hoiVeTin, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
 import { boCauGhiNhan, boCauTrung, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
@@ -2263,6 +2264,23 @@ Deno.serve(async (req) => {
     // bằng `chonCanTheoCau`: số thứ tự hoặc địa chỉ). "Chốt rồi / ok đăng đi" lúc
     // đang DUYỆT BẢN NHÁP là gật, không phải báo bán — nhường cho khối duyệt.
     const dangChonCanNgung = pendingReq?.question === "ngung_rao_can_nao";
+    // Xin chủ nhà chấm điểm cách chăm sóc — MỘT lần cho mỗi tin. 09/09/2026 đặt ở cuối vòng hỏi
+    // ("đủ rồi" / hết câu); 22/09/2026 (bắn thật, chủ dự án "mục 5 dời đi"): hỏi ngay sau khi vừa
+    // đăng tin đứng sai chỗ về giọng và nuốt câu hỏi kế của chủ nhà — nay chỉ hỏi sau SỰ KIỆN THẬT:
+    // chủ nhà báo BÁN ĐƯỢC (chúc mừng xong mới xin điểm). Mở câu chờ `danh_gia`; đã từng mở thì thôi.
+    const xinChamDiem = async (listingId: string): Promise<string | null> => {
+      const { data: daXin } = await client.from("info_requests").select("id")
+        .eq("listing_id", listingId).eq("question", "danh_gia").limit(1);
+      if (daXin?.length) return null;
+      const { error: irErr } = await client.from("info_requests").insert({
+        listing_id: listingId, question: "danh_gia", status: "pending",
+      });
+      if (irErr) {
+        if (irErr.code !== "23505") await ghiLoi(client, "chat-reply mo danh_gia", irErr.message);
+        return null;
+      }
+      return cauHoiMau("danh_gia", cachGoi);
+    };
     const kieuNgung: NgungRao | null = dangChonCanNgung
       ? ((pendingReq?.answer === "rut" ? "rut" : "ban_roi") as NgungRao)
       : (pendingReq?.question === "duyet_tin" && laDongY(text)) ? null : laNgungRao(text);
@@ -2313,7 +2331,33 @@ Deno.serve(async (req) => {
       const cau = kieuNgung === "ban_roi"
         ? `Dạ chúc mừng ${cachGoi} đã ${thue ? "cho thuê được" : "bán được"} căn ${tenCan(chon)}!\nEm đã gỡ tin khỏi kệ${baoKhach}. Khi nào có căn khác ${cachGoi} cứ nhắn em nha.`
         : `Dạ em đã ngưng rao căn ${tenCan(chon)} theo ý ${cachGoi} và không hỏi thêm nữa.\nLúc nào muốn rao lại ${cachGoi} nhắn em một tiếng là em mở lại liền.`;
-      return await traLoiSeller([cau], { ngung_rao: kieuNgung, can: chon.code ?? chon.id, listing_status: trangThai });
+      const xinDiemBan = kieuNgung === "ban_roi" ? await xinChamDiem(chon.id) : null;
+      return await traLoiSeller(xinDiemBan ? [cau, xinDiemBan] : [cau], { ngung_rao: kieuNgung, can: chon.code ?? chon.id, listing_status: trangThai, xin_danh_gia: !!xinDiemBan || undefined });
+    }
+
+    // ─── 22/09/2026 (bắn thật căn hộ Hùng Vương Plaza): chủ nhà HỎI VỀ CHÍNH TIN CỦA MÌNH — "hồi nãy
+    // anh nói giá bao nhiêu nhỉ" từng được đáp "em kiểm tra rồi báo lại" dù giá nằm trong DB; "có khách
+    // nào hỏi chưa em" bị nuốt làm câu trả lời chấm điểm. Thứ hệ thống đang giữ thì trả lời tiền định
+    // từ DB (giá, diện tích, địa chỉ, tầng, hướng, pháp lý, tình trạng, số khách quan tâm), rồi hỏi lại
+    // câu đang treo nếu có. Nhận diện chặt (`hoiVeTin`): dáng hỏi + không có số kèm đơn vị.
+    {
+      const loaiHoiTin = hoiVeTin(text);
+      const lidHoi = loaiHoiTin ? (pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null) : null;
+      if (loaiHoiTin && lidHoi) {
+        const [{ data: tinHoi, error: thErr }, { count: soQuanTam }, { count: soHoi }] = await Promise.all([
+          client.from("listings").select("code, status, price_raw, area_m2, location_raw, ward, district, floor, direction, legal_status, bedrooms").eq("id", lidHoi).maybeSingle(),
+          client.from("interests").select("listing_id", { count: "exact", head: true }).eq("listing_id", lidHoi),
+          client.from("info_requests").select("id", { count: "exact", head: true }).eq("listing_id", lidHoi).eq("source", "buyer_ask"),
+        ]);
+        if (thErr) await ghiLoi(client, "chat-reply hoi ve tin", thErr.message);
+        if (tinHoi) {
+          const dap = dapHoiVeTin(loaiHoiTin, tinHoi as TinTom, { quan_tam: soQuanTam ?? 0, hoi: soHoi ?? 0 }, cachGoi);
+          const hoiLaiTreo = pendingReq && !["danh_gia", "duyet_tin", "hinh_anh"].includes(pendingReq.question)
+            ? cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)
+            : null;
+          return await traLoiSeller(hoiLaiTreo ? [dap, hoiLaiTreo] : [dap], { hoi_ve_tin: loaiHoiTin });
+        }
+      }
     }
 
     // ─── 10/09 (chân dung đại diện CĐT / môi giới rao theo lô): MỘT tin liệt kê
@@ -2834,22 +2878,6 @@ Deno.serve(async (req) => {
       if ((l.floors ?? 0) >= 3 || (l.bedrooms ?? 0) >= 3) return "ở gia đình đông người hoặc cho thuê CHDV";
       return null;
     };
-    // Xin chủ nhà chấm điểm cách chăm sóc — MỘT lần cho mỗi tin, ở cuối vòng hỏi
-    // (chủ nói đủ rồi, hoặc tin đã đăng và hết thứ để hỏi). Mở câu chờ
-    // `danh_gia`; đã từng mở (kể cả đã trả lời) thì thôi. Trả về câu hỏi hoặc null.
-    const xinChamDiem = async (listingId: string): Promise<string | null> => {
-      const { data: daXin } = await client.from("info_requests").select("id")
-        .eq("listing_id", listingId).eq("question", "danh_gia").limit(1);
-      if (daXin?.length) return null;
-      const { error: irErr } = await client.from("info_requests").insert({
-        listing_id: listingId, question: "danh_gia", status: "pending",
-      });
-      if (irErr) {
-        if (irErr.code !== "23505") await ghiLoi(client, "chat-reply mo danh_gia", irErr.message);
-        return null;
-      }
-      return cauHoiMau("danh_gia", cachGoi);
-    };
     // 21/09/2026 (bắn thật mau-tdt): "sổ hồng riêng, hoàn công đủ. mà em là người hay máy vậy?" → đủ điểm,
     // bản nháp gửi luôn và câu hỏi của chủ nhà bị NUỐT. `truoc` = bong bóng đứng trước bản nháp (đáp án
     // tiền định cho câu hỏi ngược).
@@ -2977,9 +3005,8 @@ Deno.serve(async (req) => {
         const cauDu = `Dạ em hiểu rồi, em rao với thông tin hiện tại nha${
           typeof diemDu === "number" ? ` (tin mình ${diemDu}/100)` : ""
         }.\nLúc nào có thêm ảnh hay thông tin, ${cachGoi} nhắn em là em cập nhật liền ạ.`;
-        // Kết thúc vòng hỏi → xin chủ nhà chấm điểm cách chăm sóc (09/09/2026).
-        const xinDiem = await xinChamDiem(pendingReq.listing_id);
-        return await traLoiSeller(xinDiem ? [cauDu, xinDiem] : [cauDu], { du_roi: true, diem: diemDu ?? null, xin_danh_gia: !!xinDiem });
+        // 22/09/2026: KHÔNG xin chấm điểm ở đây nữa (dời sang lúc chủ nhà báo bán được — xem `xinChamDiem`).
+        return await traLoiSeller([cauDu], { du_roi: true, diem: diemDu ?? null });
       }
       // FR-212: lượt trước bot hỏi "Đường mình là X phải không?" (tên đường gõ sai 1–2 ký tự,
       // gợi ý ở `boc_tach.duong_goi_y`). Gật → ghi địa chỉ đã sửa (fact vi_tri, trigger đồng bộ
@@ -3226,8 +3253,16 @@ Deno.serve(async (req) => {
         }
       }
       /** Fact KÈM trong câu trả lời: chế độ `chinh` (AI đã chạy) → AI quyết, luật chỉ đỡ khoá AI không biết. */
+      // 22/09/2026 (bắn thật căn hộ): "sổ hồng riêng, full nội thất, có thang máy, view sông" — AI xếp "sổ hồng
+      // riêng" vào KIẾN THỨC THÊM (thành bo_sung lúc ra) chứ không phải `phap_ly`, nên câu kế hỏi lại pháp lý.
+      // AI KHÔNG NÓI ≠ AI PHỦ ĐỊNH: khoá AI biết mà AI không trả, và chính chữ đó nằm trong kiến thức thêm
+      // của AI (AI thấy nhưng không xếp ô) thì luật xếp. AI có trả khoá đó thì AI vẫn thắng như FR-208 f.
+      const aiKienThuc = (aiChinh?.kienThuc ?? []).map((k) => boDau(k));
       const factKem = (s: string): Array<{ question: string; answer: string }> => aiChinh
-        ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => !KHOA_FACT_AI_BIET.has(f.question) && f.question !== "bo_sung")]
+        ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => f.question !== "bo_sung" && (
+            !KHOA_FACT_AI_BIET.has(f.question) ||
+            (!aiChinh!.ghi.some((g) => g.question === f.question) &&
+              aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)))))]
         : nhanDienNhieuFact(s);
       // 15/09/2026 (Zalo thật): vừa trả lời vừa HỎI NGƯỢC → ghi PHẦN trả lời, câu hỏi
       // của chủ nhà được trả lời TRƯỚC câu kế (không nuốt, không ghi cả câu vào ô).
@@ -3250,7 +3285,8 @@ Deno.serve(async (req) => {
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
       // ơn ngắn, KHÔNG hỏi lại điểm, không gọi model. Câu hỏi ngược/ừ thì đường
       // hỏi lại chung ở dưới lo.
-      if (pendingReq.question === "danh_gia" && kq.loai === "khop") {
+      // 22/09/2026: câu HỎI ("có khách nào hỏi chưa em") không phải điểm — `hoiVeTin` đã đỡ ở trên, đây chặn nốt.
+      if (pendingReq.question === "danh_gia" && kq.loai === "khop" && !laCauHoiTron(dapAn) && !hoiVeTin(dapAn)) {
         const { error: dgErr } = await client.rpc("ghi_fact_listing", {
           p_listing_id: pendingReq.listing_id, p_question: "danh_gia",
           p_answer: dapAn, p_source: "seller_chat",
@@ -3748,10 +3784,8 @@ Deno.serve(async (req) => {
           : `Dạ em cảm ơn ${cachGoi}, tin rao giờ đã đầy đủ thông tin. Có khách quan tâm là em báo ${cachGoi} ngay ạ.`;
       }
 
-      // Tin đã đăng và KHÔNG còn gì để hỏi → cuối vòng: xin chấm điểm (09/09/2026).
-      const hetCau = published &&
-        (nextFacts ?? []).filter((f) => !pendSet.has(f.fact_key)).length === 0;
-      const xinDiemCuoi = hetCau ? await xinChamDiem(pendingReq.listing_id) : null;
+      // 22/09/2026: hết câu để hỏi thì để yên, không xin chấm điểm ở đây nữa (dời sang lúc báo bán được).
+      const xinDiemCuoi: string | null = null;
       if (nextKey && sellerReply) {
         // 23505 = `ask-seller` (nhịp drip :22/:52) vừa mở đúng câu này. Không
         // phải sự cố — bỏ qua. Mã khác thì vào sổ (FR-152 d).

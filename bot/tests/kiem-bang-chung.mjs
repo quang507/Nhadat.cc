@@ -259,6 +259,8 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("chonViTri: AI sửa chính tả 'Phạm Thế Hiển' ≠ luật 'pham the hier' → tin AI", chonViTri("hem 4m pham the hier", "Phạm Thế Hiển") === "Phạm Thế Hiển");
   ok("chonViTri: 'hem 4m Pham The Hien' không có số nhà → AI có dấu thắng (AIBOC-14)", chonViTri("hem 4m Pham The Hien", "Phạm Thế Hiển") === "Phạm Thế Hiển");
   ok("chonViTri: luật không dấu '123/4 an duong vuong' + AI có dấu → '123/4 An Dương Vương'", chonViTri("hem 5m 123/4 an duong vuong", "An Dương Vương") === "123/4 An Dương Vương");
+  ok("chonViTri: 'Hung Vuong Plaza 126 Hung Vuong' + AI 'Hùng Vương' → '126 Hùng Vương' (lấy lần xuất hiện có số nhà)",
+    chonViTri("Hung Vuong Plaza 126 Hung Vuong", "Hùng Vương") === "126 Hùng Vương", chonViTri("Hung Vuong Plaza 126 Hung Vuong", "Hùng Vương"));
   ok("chonViTri: thiếu một bên → lấy bên còn lại; cả hai rỗng → null", chonViTri(null, "Trần Hưng Đạo") === "Trần Hưng Đạo" && chonViTri("12 Trần Hưng Đạo", null) === "12 Trần Hưng Đạo" && chonViTri("", "") === null);
 }
 

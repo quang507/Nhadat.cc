@@ -100,6 +100,8 @@ const TU_XUNG: RegExp[] = [
   /\b(?:nha|can|so|dat|lo|sdt|so dien thoai|so dt|vo|chong)\s+(?:cua\s+)?(anh|chi)\b(?!\s+(?:ay|nay|kia|hang xom))/,
   /\bde\s+(anh|chi)\s+(?:hoi|tinh|coi|xem|nghi|ban|suy nghi)\b/,
   /\b(anh|chi)\s+(?:ban|dang ban|met|khong ranh|chua ranh|dang lai xe|dang hop)\b/,
+  // 22/09/2026 (bắn thật): "hồi nãy anh nói giá bao nhiêu nhỉ" — tự xưng khi nhắc lại lời mình.
+  /\b(?:hoi nay|luc nay|khi nay|ban nay|nay)\s+(anh|chi)\s+(?:noi|bao|ke|nhan|gui|co noi)\b/,
   // 13/09/2026 (bàn giao 11/09 lỗi a): tự xưng GIỮA câu, sau lời chào hay dấu
   // phẩy — "chào em, anh cần bán nhà", "dạ em, chị gửi ảnh nha". Các mẫu trên
   // neo đầu câu nên trượt. Chỉ nhận chữ đủ "anh/chi" ở đây — "a"/"c" giữa câu
@@ -308,7 +310,9 @@ export function bocViTriRao(text: string): string | null {
   if (can && !/\d\s*(?:m2|m²|tỷ|ty|triệu|trieu)\b/iu.test(can)) return can;
   // Số nhà trần: "7 Hồng Bàng phường 12", "123/4 An Dương Vương q5" — chỉ nhận
   // khi ngay sau là phường/quận, để "5 tỷ" hay "40m2" không thành địa chỉ.
-  const so = /(?:^|[\s,])(\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+(?:[\p{L}]+\s?){1,4}?)(?=\s*(?:p\.?\s*\d|phường|phuong|quận|quan|q\.?\s*\d)\b)/iu
+  // 22/09/2026 (bắn thật căn hộ): "126 Hung Vuong p12" — lookahead cũ `p\d\b` chỉ nhận phường MỘT chữ số
+  // ("p4"), "p12" trượt ở ranh từ sau chữ số đầu → địa chỉ trần trước phường 10–19 không bao giờ được nhận.
+  const so = /(?:^|[\s,])(\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+(?:[\p{L}]+\s?){1,4}?)(?=\s*(?:p\.?\s*\d{1,2}|phường|phuong|quận|quan|q\.?\s*\d{1,2})\b)/iu
     .exec(t)?.[1]?.trim() ?? null;
   return so && so.length >= 6 ? so : null;
 }

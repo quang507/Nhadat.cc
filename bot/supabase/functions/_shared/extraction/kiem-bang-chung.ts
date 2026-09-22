@@ -536,16 +536,18 @@ export function chonViTri(luat: string | null | undefined, ai: string | null | u
   if (!l) return a;
   const gon = (x: string) => boDau(x).replace(/\s+/g, " ").trim();
   const lk = gon(l), ak = gon(a);
-  const i = lk.indexOf(ak);
-  if (i < 0) return a;
-  // Số nhà ngay trước tên đường: "12", "123/4", "số 12", "12a".
-  const truoc = lk.slice(0, i);
-  // Chữ đuôi số nhà là a/b/c…, KHÔNG phải "m" (mét): "hẻm 4m Phạm Thế Hiển" là độ rộng hẻm, không phải số nhà.
-  const m = /(?:^|\s)(?:so\s*)?(\d{1,4}[a-ln-z]?(?:\/\d{1,4}[a-z]?)*)\s*$/.exec(truoc);
-  if (!m) return a;
-  // "hẻm 4 Trần…" (số nhỏ ≤ 12 ngay sau chữ hẻm, không có "/") mập mờ giữa hẻm số 4 và hẻm rộng 4 → tin AI.
-  if (/\bhem\s*(?:rong\s*)?$/.test(truoc.slice(0, m.index + (m[0].length - m[1].length))) && !m[1].includes("/") && Number(m[1]) <= 12) return a;
-  return `${m[1]} ${a}`;
+  // 22/09/2026 (bắn thật căn hộ): "Hung Vuong Plaza 126 Hung Vuong" — tên đường xuất hiện HAI lần, lần đầu là
+  // tên dự án không có số nhà; xét MỌI lần xuất hiện, lấy lần có số nhà ("12", "123/4", "số 12", "12a") đứng ngay trước.
+  for (let i = lk.indexOf(ak); i >= 0; i = lk.indexOf(ak, i + 1)) {
+    const truoc = lk.slice(0, i);
+    // Chữ đuôi số nhà là a/b/c…, KHÔNG phải "m" (mét): "hẻm 4m Phạm Thế Hiển" là độ rộng hẻm, không phải số nhà.
+    const m = /(?:^|\s)(?:so\s*)?(\d{1,4}[a-ln-z]?(?:\/\d{1,4}[a-z]?)*)\s*$/.exec(truoc);
+    if (!m) continue;
+    // "hẻm 4 Trần…" (số nhỏ ≤ 12 ngay sau chữ hẻm, không có "/") mập mờ giữa hẻm số 4 và hẻm rộng 4 → tin AI.
+    if (/\bhem\s*(?:rong\s*)?$/.test(truoc.slice(0, m.index + (m[0].length - m[1].length))) && !m[1].includes("/") && Number(m[1]) <= 12) continue;
+    return `${m[1]} ${a}`;
+  }
+  return a;
 }
 
 export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | null): string | null {
