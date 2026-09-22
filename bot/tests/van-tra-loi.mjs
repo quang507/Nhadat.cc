@@ -4,8 +4,9 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
+import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
+import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
@@ -384,6 +385,29 @@ ok("laCauGhiNhan: 'Dạ em lưu ý rồi ạ' KHÔNG tính", laCauGhiNhan("Dạ 
 ok("boCauGhiNhan: bỏ 'Dạ em đã lưu nhu cầu…', giữ câu hỏi, mở lại bằng 'Dạ'",
   JSON.stringify(boCauGhiNhan(["Dạ em đã lưu nhu cầu: mua nhà Quận 5, tầm 6 tỷ để ở ạ. Mình thích hẻm xe hơi hay mặt tiền ạ?"])) === JSON.stringify(["Dạ mình thích hẻm xe hơi hay mặt tiền ạ?"]),
   JSON.stringify(boCauGhiNhan(["Dạ em đã lưu nhu cầu: mua nhà Quận 5, tầm 6 tỷ để ở ạ. Mình thích hẻm xe hơi hay mặt tiền ạ?"])));
+
+// ── 22/09/2026 kịch bản C (nhà Trần Bình Trọng, nhiều kiểu sai) ──────────────────────────────
+for (const [t, mong] of [
+  ["em xoá cái hẻm 4m ghi nhầm đi", "do_rong_hem"],
+  ["bỏ cái giá 7 tỷ đi em, ghi nhầm", "gia"],
+  ["xoá giúp anh cái hướng đông đi", "huong"],
+  ["xoá cái phường 4 đi", "phuong"],
+  ["bỏ bớt 1 phòng ngủ đi, ghi dư", "so_phong_ngu"],
+  ["cái đó sai rồi, bỏ đi em", null],
+]) ok(`laXinBoTruong: ${JSON.stringify(t)} → ô ${mong}`, laXinBoTruong(t)?.truong === mong && laXinBoTruong(t) !== null, JSON.stringify(laXinBoTruong(t)));
+for (const t of ["bỏ hẻm 4m, hẻm đúng là 3m5", "xóa sạch data của anh đi", "hẻm 4m", "gỡ tin đi em", "3 phòng ngủ", "bỏ qua câu này đi"])
+  ok(`laXinBoTruong KHÔNG kích: ${JSON.stringify(t)}`, laXinBoTruong(t) === null, JSON.stringify(laXinBoTruong(t)));
+ok("nhanDienFact: 'em xoá cái hẻm 4m ghi nhầm đi' KHÔNG phải vi_tri ('4m' không là số hẻm + hậu tố)", nhanDienFact("em xoá cái hẻm 4m ghi nhầm đi")?.question !== "vi_tri", JSON.stringify(nhanDienFact("em xoá cái hẻm 4m ghi nhầm đi")));
+ok("nhanDienFact: 'hẻm 123 Trần Bình Trọng' vẫn là vi_tri", nhanDienFact("hẻm 123 Trần Bình Trọng")?.question === "vi_tri");
+ok("nhanDienFact: 'hẻm 12a Nguyễn Trãi' vẫn là vi_tri (hậu tố chữ khác m)", nhanDienFact("hẻm 12a Nguyễn Trãi")?.question === "vi_tri");
+ok("boCauSuaLaiModel: bỏ 'Phường 2 em sửa lại rồi ạ.' giữ câu hỏi, không đụng 📋",
+  JSON.stringify(boCauSuaLaiModel(["Phường 2 em sửa lại rồi ạ. Nhà mình mấy tầng ạ?", "📋 Em đăng tin"])) === JSON.stringify(["Nhà mình mấy tầng ạ?", "📋 Em đăng tin"]),
+  JSON.stringify(boCauSuaLaiModel(["Phường 2 em sửa lại rồi ạ. Nhà mình mấy tầng ạ?", "📋 Em đăng tin"])));
+ok("boCauSuaLaiModel: câu không có 'sửa lại … rồi' giữ nguyên", boCauSuaLaiModel(["Nhà mình mấy tầng ạ?"])[0] === "Nhà mình mấy tầng ạ?");
+for (const [t, mong] of [["7ty2", "7 tỷ 2"], ["7ti5", "7 tỷ 5"], ["4 ty 3", "4 tỷ 3"], ["3tr5", "3 triệu 5"], ["18tr/thang", "18 triệu/thang"], ["5 toi 6 ty", "5 toi 6 tỷ"], ["7 tỉ 5", "7 tỷ 5"], ["1 tỷ 1 năm", "1 tỷ 1 năm"]])
+  ok(`donViGiaDep: ${JSON.stringify(t)} → ${JSON.stringify(mong)}`, donViGiaDep(t) === mong, JSON.stringify(donViGiaDep(t)));
+for (const [t, mong] of [["7 ti 5", 7500000000], ["7ti5", 7500000000], ["2 ti rưỡi", 2500000000]])
+  ok(`docTien 'ti' không dấu: ${t}`, docTien(t) === mong, String(docTien(t)));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

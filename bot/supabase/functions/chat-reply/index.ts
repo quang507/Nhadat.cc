@@ -48,7 +48,7 @@ import { tenDuong } from "../_shared/geocode.ts";
 const UA_NOMINATIM = "nhadatcc-geocoder/1.0 (admin.buyerside@nhadat.cc)";
 // Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
 // bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
-import { TIEN_KD, TIEN_CD, TIEN_T_KEP, docTien, giaTheoM2, gonGiaKyHan, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
+import { TIEN_KD, TIEN_CD, TIEN_T_KEP, docTien, donViGiaDep, giaTheoM2, gonGiaKyHan, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../_shared/extraction/so-chu.ts";
 import { thayLienHe, thayLienHeCoId } from "../_shared/extraction/luat-lien-he.ts";
 // 11/09/2026: khách mua muốn ở GẦN đâu — model hiểu nghĩa (boc-gan), regex dự
@@ -82,8 +82,8 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
-import { dapHoiVeTin, hoiVeTin, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
-import { boCauGhiNhan, boCauTrung, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
+import { boCauGhiNhan, boCauTrung, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -1961,6 +1961,10 @@ Deno.serve(async (req) => {
         if (/^Dạ em sửa lại/.test(ackSua)) replies = boCauGhiNhan(replies);
         else ackSua = null;
       }
+      // 22/09/2026 (kịch bản C): "Dạ em sửa lại Phường 2 rồi ạ." + model "Phường 2 em sửa lại rồi ạ." — câu
+      // model không mở bằng "Dạ em" nên `laCauGhiNhan` không thấy, và ngắn hơn ngưỡng `boCauTrung`. Đã có lời
+      // sửa tiền định thì mọi câu "sửa lại … rồi" của model là lần hai.
+      if (ackSua && /^Dạ em sửa lại/.test(ackSua)) replies = boCauSuaLaiModel(replies);
       replies = chanNhanLaNguoi(replies, goiNguoi ?? "mình");
       const ackDau = ackSua;
       let sach = [...(ackSua ? [ackSua] : []), ...ackAnh, ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
@@ -2360,6 +2364,44 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ─── 22/09/2026 (kịch bản C, bắn thật): "em xoá cái hẻm 4m ghi nhầm đi" — chủ nhà xin BỎ một thứ đã
+    // ghi. Bản trước đọc thành ĐỊA CHỈ (street = nguyên câu, tin lên web như thế) và "hẻm 4m" trong câu đè
+    // lại hẻm 3.5m vừa sửa. Đây là lời nói với bot, không phải dữ liệu: không ghi gì, đọc lại ô đang giữ và
+    // xin giá trị đúng (bot không tự xoá một ô — xoá xong tin thiếu, hỏi lại là cùng một việc).
+    {
+      const xinBo = laXinBoTruong(text);
+      const lidBo = xinBo ? (pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null) : null;
+      if (xinBo && lidBo) {
+        const { data: tinBo, error: tbErr } = await client.from("listings")
+          .select("alley_width_m, price_raw, ward, area_m2, bedrooms, floors_text, legal_status, direction, location_raw")
+          .eq("id", lidBo).maybeSingle();
+        if (tbErr) await ghiLoi(client, "chat-reply xin bo truong", tbErr.message);
+        const hienTai: Record<string, string | null> = {
+          do_rong_hem: tinBo?.alley_width_m != null ? `hẻm ${tinBo.alley_width_m}m` : null,
+          gia: tinBo?.price_raw ? `giá ${donViGiaDep(tinBo.price_raw)}` : null,
+          phuong: tinBo?.ward ?? null,
+          dien_tich: tinBo?.area_m2 != null ? `diện tích ${tinBo.area_m2}m²` : null,
+          so_phong_ngu: tinBo?.bedrooms != null ? `${tinBo.bedrooms} phòng ngủ` : null,
+          ket_cau: tinBo?.floors_text ?? null,
+          phap_ly: tinBo?.legal_status ? (LEGAL_VI[tinBo.legal_status] ?? tinBo.legal_status) : null,
+          huong: tinBo?.direction ? `hướng ${tinBo.direction}` : null,
+          vi_tri: tinBo?.location_raw ?? null,
+        };
+        const ht = xinBo.truong ? hienTai[xinBo.truong] : null;
+        const dap = !xinBo.truong
+          ? `Dạ chỗ nào ghi nhầm ${cachGoi} nhắn lại giúp em nha, em sửa liền ạ.`
+          : ht
+          ? `Dạ tin mình đang ghi ${ht} ạ, ${cachGoi} nhắn ${xinBo.nhan} đúng là em sửa lại liền.`
+          : `Dạ tin mình chưa ghi ${xinBo.nhan} nào ạ, ${cachGoi} cứ nhắn ${xinBo.nhan} đúng là em ghi.`;
+        const duoi = pendingReq?.question === "duyet_tin"
+          ? `Bản nháp ở trên ${cachGoi} thấy được thì nhắn "ok" là em đăng liền ạ.`
+          : pendingReq && !["danh_gia", "hinh_anh"].includes(pendingReq.question)
+          ? cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)
+          : null;
+        return await traLoiSeller(duoi ? [dap, duoi] : [dap], { xin_bo_truong: xinBo.truong ?? "?", ...(pendingReq ? { reask: pendingReq.question } : {}) });
+      }
+    }
+
     // ─── 10/09 (chân dung đại diện CĐT / môi giới rao theo lô): MỘT tin liệt kê
     // NHIỀU CĂN "căn A5 8x20 giá 18 tỷ, căn A7 …, căn B2 góc 10x20 giá 22 tỷ" → mỗi
     // căn một tin riêng (mã căn, ngang×dài, giá), kế thừa dự án/quận/phường/loại
@@ -2698,7 +2740,12 @@ Deno.serve(async (req) => {
             : true;
         const laSuaThat = suaThat.some(([k]) => daCoTruoc(k));
         const daGhi: string[] = [];
+        // 22/09/2026 (kịch bản C): "gia 7 ti 5 chu ko phai 7 ty 2" — luật tiền không đọc ra "7 ti 5" (đã vá),
+        // nhưng bot vẫn nói "Dạ em sửa lại giá 7 ti 5 rồi ạ" trong khi DB giữ 7ty2 và bản nháp in giá cũ.
+        // Cùng luật với L1 (FR-177 o): giá chưa đọc ra số thì KHÔNG ghi, KHÔNG nói đã sửa — nói thật, xin gõ lại.
+        let giaKhongDoc: string | null = null;
         for (const [k, v] of suaThat) {
+          if (k === "gia" && docTien(v) == null) { giaKhongDoc = v; continue; }
           const { error: fErr } = await client.rpc("ghi_fact_listing", {
             p_listing_id: suaId, p_question: k, p_answer: v, p_source: "seller_chat",
           });
@@ -2710,15 +2757,24 @@ Deno.serve(async (req) => {
             // 22/09/2026 (bộ đo giọng B04): "giá 7 tỷ 5 nha em" — tiểu từ cuối câu là bằng chứng thô cho
             // DB gọt (`chuan_hoa_gia_raw`), nhưng lời xác nhận đọc lên thì bỏ.
             const hien = v.replace(/(?:\s+(?:nha|nhé|nhe|nghen|em|anh|chị|ạ|ơi|đó|á|nè|hen|ha|nhá|cháu|chú|cô|bác))+\s*$/iu, "");
+            // 22/09/2026 (kịch bản C): lời xác nhận đọc đơn vị có dấu ("7 tỷ 5"), DB vẫn giữ chữ khách gõ.
+            const hienDep = k === "gia" ? donViGiaDep(hien) : hien;
             daGhi.push(
-              boDau(hien).startsWith(boDau(nhan)) ? hien : `${nhan} ${hien}`,
+              boDau(hienDep).startsWith(boDau(nhan)) ? hienDep : `${nhan} ${hienDep}`,
             );
           }
         }
+        if (giaKhongDoc && !daGhi.length) {
+          return await traLoiSeller(
+            [`Dạ giá "${giaKhongDoc}" em chưa đọc ra số ạ, ${cachGoi} ghi giúp em kiểu "7 tỷ 5" hay "7,5 tỷ" nha.`],
+            { gia_khong_doc: giaKhongDoc, ...(pendingReq ? { reask: pendingReq.question } : {}) },
+          );
+        }
         if (daGhi.length) {
-          const cau = laSuaThat
+          const cau = (laSuaThat
             ? `Dạ em sửa lại ${daGhi.join(", ")} rồi ạ.`
-            : `Dạ em ghi ${daGhi.join(", ")} rồi ạ.`;
+            : `Dạ em ghi ${daGhi.join(", ")} rồi ạ.`) +
+            (giaKhongDoc ? ` Còn giá "${giaKhongDoc}" em chưa đọc ra số, ${cachGoi} ghi giúp em kiểu "7 tỷ 5" nha.` : "");
           // FR-177 c: đang chờ duyệt bản nháp thì lời sửa KHÔNG dừng ở đây —
           // xuống khối duyet_tin để gửi lại bản nháp với số mới.
           // 09/09 tối: đang có câu hỏi treo mà chỉ sửa ("6 phòng ngủ" khi em đang
@@ -3091,6 +3147,11 @@ Deno.serve(async (req) => {
           !nhanDienFact(dapAn.slice(dapAn.indexOf(veDau) + veDau.length));
         if (!chiSua && (laDongY(dapAn) || laDuRoi(dapAn) || gatVeDau)) {
           kqDuyet = { loai: "khop" };
+        } else if (!chiSua && !/[\p{L}\p{N}]/u.test(dapAn)) {
+          // 22/09/2026 (kịch bản C): "😂😂" lúc chờ duyệt → model từng nói "Em thấy anh chị đồng ý rồi ạ" rồi
+          // hỏi lại. Emoji vui (👍❤️😊) đã là gật ở `laDongY`; emoji khác không phải gật cũng không phải sửa —
+          // câu tiền định, không gọi model, câu duyệt vẫn treo.
+          return await traLoiSeller([`Dạ 😊 Bản nháp ở trên ${cachGoi} thấy được thì nhắn "ok" là em đăng liền, muốn sửa chỗ nào thì nhắn em nha.`], { reask: "duyet_tin", loai_cau: "emoji" });
         } else if (!chiSua && laNoiVoiBot(dapAn) && !nhanDienFact(dapAn)) {
           // 21/09/2026 (bắn thật): "xóa sạch data của anh đi để anh test lại" / "cái dòng phù hợp đọc kỳ quá" lúc
           // duyệt → từng vào `bo_sung` rồi gửi lại nháp kèm "Em sửa lại rồi". Lời nói với bot không phải dữ liệu

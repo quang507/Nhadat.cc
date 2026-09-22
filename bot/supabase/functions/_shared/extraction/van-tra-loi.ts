@@ -398,6 +398,53 @@ export function laXinXoaDuLieu(text: string): boolean {
   return /\b(xoa|reset|don)\b/.test(kd) && /\b(data|du lieu|tin|ho so|thong tin|sach)\b/.test(kd);
 }
 
+/** Ô của tin mà câu "xoá/bỏ … nhầm" đang nhắc tới; nhãn để đọc lên. */
+export const O_XIN_BO: Array<[string, RegExp, string]> = [
+  ["do_rong_hem", /\b(?:hem|hxh|ngo|duong vao)\b/, "hẻm"],
+  ["gia", /\bgia\b/, "giá"],
+  ["phuong", /\bphuong\b|\bp\s*\d{1,2}\b/, "phường"],
+  ["dien_tich", /\bdien tich\b|\bm2\b|\bngang\b|\bdai\b/, "diện tích"],
+  ["so_phong_ngu", /\bphong ngu\b|\bpn\b/, "số phòng ngủ"],
+  ["ket_cau", /\b(?:tang|lau|tret|tam)\b/, "số tầng"],
+  ["phap_ly", /\b(?:so hong|so do|phap ly|hoan cong)\b/, "pháp lý"],
+  ["huong", /\bhuong\b/, "hướng"],
+  ["vi_tri", /\b(?:dia chi|so nha|duong|vi tri)\b/, "địa chỉ"],
+];
+
+/**
+ * 22/09/2026 (kịch bản C, bắn thật): "em xoá cái hẻm 4m ghi nhầm đi" — chủ nhà xin BỎ một thứ đã ghi,
+ * không phải dữ liệu mới. Bản trước đọc thành địa chỉ (street = nguyên câu, tin lên web như thế) và
+ * "hẻm 4m" trong câu đè lại hẻm 3.5m vừa sửa. Nhận: động từ xoá/bỏ/gỡ + (nhầm/sai/lộn/dư) hoặc "xoá … đi",
+ * KHÔNG phải xin xoá cả dữ liệu (`laXinXoaDuLieu`). Trả ô đang nhắc (null = không đoán ra ô).
+ */
+export function laXinBoTruong(text: string): { truong: string | null; nhan: string | null } | null {
+  const kd = boDau((text ?? "").trim());
+  if (!kd || laXinXoaDuLieu(text)) return null;
+  // "bỏ qua câu này đi" là xin BỎ QUA câu hỏi (đường hoãn/FR-177 g), không phải bỏ dữ liệu.
+  if (/\bbo qua\b/.test(kd)) return null;
+  const coXoa = /\b(?:xoa|bo|go|huy|xoa bo)\b/.test(kd);
+  if (!coXoa) return null;
+  const coNham = /\b(?:nham|sai|lon|du|thua|ghi lon|ghi nham)\b/.test(kd) || /\b(?:xoa|bo|go)\b[^.?!]*\bdi\b\s*[.!]*$/.test(kd);
+  if (!coNham) return null;
+  // "bỏ hẻm 4m, hẻm đúng là 3m5" — có SỐ MỚI kèm thì là lời sửa, đi đường sửa (không phải xin bỏ suông).
+  const soMoi = kd.replace(/\b(?:xoa|bo|go|huy)\b[^,;.]*?\b(?:nham|sai|lon|du|thua|di)\b/, "");
+  if (/\d/.test(soMoi) && /\b(?:dung la|thuc ra|chu khong|chu ko|thanh|la)\b/.test(soMoi)) return null;
+  const o = O_XIN_BO.find(([, re]) => re.test(kd));
+  return { truong: o?.[0] ?? null, nhan: o?.[2] ?? null };
+}
+
+/**
+ * 22/09/2026 (kịch bản C): bong bóng code "Dạ em sửa lại Phường 2 rồi ạ." rồi model "Phường 2 em sửa lại
+ * rồi ạ." — câu ngắn dưới ngưỡng `boCauTrung`. Đã có lời sửa tiền định thì bỏ MỌI câu "sửa lại/đổi lại/cập
+ * nhật … rồi" của model, dù nó không mở đầu bằng "Dạ em". Không đụng 📋/💾/🤖/📝.
+ */
+export function boCauSuaLaiModel(replies: string[]): string[] {
+  return locCauTrongBongBong(replies, (c) => {
+    const kd = boDau(c);
+    return /\b(?:sua|doi|cap nhat|chinh)\s+lai\b/.test(kd) && /\b(?:roi|xong)\b/.test(kd) && !/\?/.test(c);
+  });
+}
+
 /**
  * "anh/chị" có gạch chéo là chữ máy (TONE_RULES cấm model, nhưng câu tiền định vẫn dùng khi chưa biết
  * cách gọi — bắn thật 21/09: "Nhà mình phường mấy anh/chị nhỉ?"). Người bán hàng thật nói "anh chị"
