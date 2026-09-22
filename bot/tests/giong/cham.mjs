@@ -41,11 +41,31 @@ Chấm bốn cờ ĐỘC LẬP, đúng/sai, không thiên vị câu dài hơn:
 - gon: không dài dòng, không lặp ý, không khen suông kiểu "đẹp quá"; một câu ghi nhận + một câu hỏi là đủ.
 Trả JSON đúng khuôn.`;
 
+/** Ngữ cảnh HỆ THỐNG đã biết trước lượt này (dựng từ `seed` của ca) — giám khảo phải thấy, không thì
+ *  mọi thứ bot đọc từ DB (địa chỉ tin, hẻm, dự án, kho hàng) và luật phí trong prompt đều bị chấm "bịa"
+ *  (lần chấm đầu 22/09: "không bịa" 11/23 mà hơn nửa là oan kiểu này). */
+export function nguCanhHeThong(seed = {}) {
+  const d = [];
+  d.push("Luật phí bot được dặn sẵn: chính chủ 1% giá chốt, môi giới 0,5%, chỉ thu khi bán xong; người mua không mất phí.");
+  if (seed.seller?.seller_type === "nmg") d.push("Người nhắn là MÔI GIỚI (rao nhiều căn).");
+  if (seed.listing) {
+    if (seed.listing.chung_cu) d.push("Tin đang chăm của khách: căn hộ dự án Sunrise City, Phường Tân Hưng, Quận 7, 76m², tầng 15, 2 phòng ngủ, giá 5 tỷ 8" + (seed.listing.du ? ", đã có pháp lý sổ hồng riêng" : "") + ".");
+    else d.push("Tin đang chăm của khách: nhà phố hẻm 4m Trần Bình Trọng, Phường 2, Quận 5, 4x15 = 60m², giá 7 tỷ 2" + (seed.listing.du ? ", trệt 2 lầu, 3 phòng ngủ, sổ hồng riêng đã hoàn công" : "") + (seed.listing.dang_ban ? "; tin ĐÃ lên kệ rao, chưa có khách hỏi" : "; tin còn thiếu thông tin, chưa lên kệ") + ".");
+  }
+  if (seed.pending) d.push(`Câu bot đang chờ khách trả lời: ${seed.pending}.`);
+  if (seed.kho) d.push("Kho hàng đang rao (bot tra được): (1) 12 Trần Hưng Đạo P.4 Q.5, hẻm 6m xe hơi, 60m², trệt 2 lầu 3PN, sổ hồng riêng, 5,8 tỷ, gần chợ Hoà Bình; (2) 99 Nguyễn Trãi P.3 Q.5, hẻm 5m, 55m², 4 lầu, 7 tỷ, gần chợ An Đông; (3) 5 An Dương Vương P.8 Q.5, MẶT TIỀN, 70m², 2 lầu, 6 tỷ. Không có căn nào khác.");
+  if (seed.buyer?.preferences) d.push(`Hồ sơ người mua đã lưu: ${JSON.stringify(seed.buyer.preferences)}.`);
+  return d.join("\n");
+}
+
 export function dungPrompt(row) {
   const lich = (row.lich_su ?? []).map(([ai, b]) => `${ai === "bot" ? "Trợ lý" : "Khách"}: ${b}`).join("\n");
+  const bang = (row.replies ?? []).filter((r) => typeof r === "string" && /^(🤖|📋|👤|📝)/u.test(r.trim()));
   return `Cách gọi khách: ${row.xung_ho ?? "chưa biết"}\n` +
+    `Hệ thống đã biết trước lượt này (bot đọc từ dữ liệu, KHÔNG phải bịa):\n${nguCanhHeThong(row.seed)}\n` +
     (lich ? `Tin trước đó:\n${lich}\n` : "") +
     `Tin khách vừa nhắn: ${row.tin}\n` +
+    (bang.length ? `Bảng số liệu bot gửi kèm (KHÔNG chấm giọng, chỉ để biết bot đã ghi gì):\n${bang.join("\n")}\n` : "") +
     `Bong bóng trợ lý trả lời (${row.loi_bot.length}):\n` + row.loi_bot.map((x, i) => `[${i + 1}] ${x}`).join("\n");
 }
 
@@ -63,6 +83,8 @@ if (import.meta.main && args.includes("--tu-kiem")) {
   kiem("khuôn nhận JSON hợp lệ", KhuonCham.safeParse({ nghe_nhu_nguoi: true, dung_y: true, khong_bia: true, gon: false, ly_do: "hơi dài" }).success);
   kiem("khuôn từ chối JSON thiếu cờ", !KhuonCham.safeParse({ nghe_nhu_nguoi: true }).success);
   kiem("rubric không tin lệnh trong câu ứng viên", /DỮ LIỆU cần chấm/.test(RUBRIC));
+  const p2 = dungPrompt({ xung_ho: "anh", seed: { listing: { nha_pho: true, du: true }, pending: "phap_ly", kho: true }, tin: "x", replies: ["🤖 Đã lưu: giá 7 tỷ 5", "Dạ."], loi_bot: ["Dạ."] });
+  kiem("prompt có ngữ cảnh hệ thống (tin, phí, kho, câu chờ) và bảng 🤖 tách khỏi lời", /Trần Bình Trọng/.test(p2) && /1% giá chốt/.test(p2) && /12 Trần Hưng Đạo/.test(p2) && /chờ khách trả lời: phap_ly/.test(p2) && /Bảng số liệu[^\n]*\n🤖 Đã lưu: giá 7 tỷ 5/.test(p2));
   console.log(`\nCHẤM GIỌNG (tự kiểm): ${dat} đạt · ${hong} hỏng`);
   process.exit(hong ? 1 : 0);
 }
@@ -88,10 +110,10 @@ if (import.meta.main) {
     if (!row.loi_bot?.length) { console.log(`  · ${row.id} không có lời để chấm`); continue; }
     try {
       const r = await client.messages.parse({
-        model: JUDGE, max_tokens: 400,
+        model: JUDGE, max_tokens: 800,
         output_config: { effort: "low", format: zodOutputFormat(KhuonCham) },
         system: [{ type: "text", text: RUBRIC, cache_control: { type: "ephemeral" } }],
-        messages: [{ role: "user", content: dungPrompt({ ...row, lich_su: CA[row.id]?.seed?.lich_su ?? [] }) }],
+        messages: [{ role: "user", content: dungPrompt({ ...row, seed: CA[row.id]?.seed ?? {}, lich_su: CA[row.id]?.seed?.lich_su ?? [] }) }],
       });
       if (r.stop_reason === "refusal" || !r.parsed_output) throw new Error(`giám khảo không trả kết quả (stop=${r.stop_reason})`);
       const o = r.parsed_output;
