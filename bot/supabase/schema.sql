@@ -3776,6 +3776,14 @@ begin
          and (price_raw is distinct from v_raw or price_source is distinct from bac);
     end if;
 
+  -- 22/09/2026 (bắn lại kịch bản D): "nở hậu 4m5" → fact no_hau "4.5m" nhưng cột trống — boc_thong_so chỉ đọc khi câu có chữ "nở hậu".
+  elsif new.question = 'no_hau' and not (j ? 'rear_width_m') then
+    v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
+    if v_num is not null and v_num between 1.5 and 40 then
+      update listings set rear_width_m = v_num, specs_source = bac
+       where id = new.listing_id and (rear_width_m is null or de);
+    end if;
+
   -- 22/09/2026 (kịch bản D): "đang cho thuê 30 triệu/tháng" → fact doanh_thu; tin BÁN thì đó là dòng tiền đang thu.
   elsif new.question = 'doanh_thu' then
     v_vnd := public.parse_vnd(v_txt);

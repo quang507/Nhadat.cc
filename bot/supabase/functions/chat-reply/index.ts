@@ -3613,11 +3613,18 @@ Deno.serve(async (req) => {
         }
         // "Ngang 5" khi đang hỏi diện tích: vẫn là dữ liệu thật — ghi đúng
         // fact (mặt tiền) chứ không vứt, còn câu diện tích thì giữ treo.
-        if (kq.chuyenSang) {
+        // 22/09/2026 (bắn lại kịch bản D, chế độ `chinh`): đang hỏi GIÁ, chủ nhà nói "đang cho thuê 30 triệu/tháng, đang
+        // thế chấp, nở hậu 4m5" — AI không trả khoá nào → `chuyenSang` trống → cả câu rơi về bo_sung dù luật đọc được
+        // ba fact có bằng chứng rõ (`KHOA_LUAT_DO_KHI_AI_IM` trong `factKem`). Lệch mà AI im thì vẫn hỏi luật.
+        const kemLech = !kq.chuyenSang && aiChinh && kq.loai === "lech"
+          ? factKem(dapAn).filter((f) => f.question !== pendingReq.question && f.question !== "bo_sung")
+          : [];
+        if (kq.chuyenSang || kemLech.length) {
           // Câu lệch mang NHIỀU fact ("Đường 12m, hướng Bắc") thì ghi hết, không
           // chỉ fact đầu (09/09 tối). Fact trùng khoá đang hỏi thì để đường khớp lo.
-          const cacFact = [kq.chuyenSang, ...factKem(dapAn).filter((f) => f.question !== kq.chuyenSang!.question)]
-            .filter((f) => f.question !== pendingReq.question);
+          const cacFact = (kq.chuyenSang
+            ? [kq.chuyenSang, ...factKem(dapAn).filter((f) => f.question !== kq.chuyenSang!.question)]
+            : kemLech).filter((f) => f.question !== pendingReq.question);
           for (const f of cacFact) {
             const { error: csErr } = await client.rpc("ghi_fact_listing", {
               p_listing_id: pendingReq.listing_id, p_question: f.question,
