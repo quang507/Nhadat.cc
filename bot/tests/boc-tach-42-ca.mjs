@@ -161,6 +161,9 @@ for (const [q, vao, mong] of [
     tt.length === 2 && tt[0].thu === 1 && tt[1].thu === 2 && !tt[0].ma && !tt[1].ma &&
       tt[0].quan === "Quận 5" && tt[0].ngang === "4" && tt[0].dai === "12" && tt[0].gia === "5 tỷ" && tt[1].dai === "20" && tt[1].gia === "18 tỷ",
     JSON.stringify(tt));
+  // 22/09/2026 (bắn thật căn hộ): số nhà trần trước phường HAI chữ số ("p12") từng trượt.
+  ok("bocViTriRao 'co can ho Hung Vuong Plaza 126 Hung Vuong p12, tang 15' → '126 Hung Vuong'", bocViTriRao("em la moi gioi ben q5, co can ho Hung Vuong Plaza 126 Hung Vuong p12, tang 15, 2pn 78m2, gia 4 ty 3") === "126 Hung Vuong", JSON.stringify(bocViTriRao("em la moi gioi ben q5, co can ho Hung Vuong Plaza 126 Hung Vuong p12, tang 15, 2pn 78m2, gia 4 ty 3")));
+  ok("bocViTriRao '7 Hồng Bàng phường 12' vẫn nhận; '5 tỷ q5' không thành địa chỉ", bocViTriRao("bán nhà 7 Hồng Bàng phường 12 quận 5") === "7 Hồng Bàng" && bocViTriRao("bán nhà 5 tỷ q5") === null);
   // 22/09/2026 (bộ đo giọng B11): "5 tỷ 60m2" — 60 là diện tích, không phải phần lẻ của giá.
   const b11 = nhanDienNhieuCan("bên anh có 2 căn: căn 1 hẻm 4m Nguyễn Trãi p3 q5 5 tỷ 60m2, căn 2 mặt tiền Hồng Bàng p12 q5 12 tỷ 80m2");
   ok("'căn 1 … 5 tỷ 60m2, căn 2 … 12 tỷ 80m2' → giá '5 tỷ' / '12 tỷ', dt 60 / 80", b11.length === 2 && b11[0].gia === "5 tỷ" && b11[1].gia === "12 tỷ" && b11[0].dt === "60" && b11[1].dt === "80", JSON.stringify(b11));

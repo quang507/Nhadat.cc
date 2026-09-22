@@ -964,8 +964,10 @@ fresh(seedKho);
   check("H10 chủ nói 'đủ rồi' → chu_noi_du_at có, câu treo đóng, bong bóng báo rao với thông tin hiện tại + điểm KHÔNG đổi",
     r.body.du_roi === true && !!H.chu_noi_du_at && !pend("hinh_anh") && db().diemTin(H).diem === diemTruoc && new RegExp(`${diemTruoc}/100`).test(r.body.replies[0]) && !createCalls().some((c) => /đủ rồi em, đừng hỏi nữa/.test(prompt(c))),
     JSON.stringify({ body: r.body, H }));
-  check("H10b kết thúc vòng hỏi → xin chủ nhà chấm điểm cách chăm sóc (giống người thật? mất thời gian? mấy điểm), mở câu chờ danh_gia",
-    r.body.xin_danh_gia === true && r.body.replies.length === 2 && /người thật/.test(r.body.replies[1]) && /mấy điểm/.test(r.body.replies[1]) && pend("danh_gia"), JSON.stringify(r.body));
+  // 22/09/2026 (chủ dự án "mục 5 dời đi"): "đủ rồi" KHÔNG còn xin chấm điểm — câu đó dời sang lúc báo bán được (N3b).
+  check("H10b 'đủ rồi' → một bong bóng, KHÔNG xin chấm điểm, không mở danh_gia (22/09)",
+    !r.body.xin_danh_gia && r.body.replies.length === 1 && !pend("danh_gia"), JSON.stringify(r.body));
+  db().insert("info_requests", { listing_id: H.id, question: "danh_gia", status: "pending" });
   r = await send({ external_user_id: "h-1", text: "giống người thật, 8 điểm nha em" });
   check("H10c chủ chấm '8 điểm' → fact danh_gia + boc_tach, cảm ơn tiền định (không model), không hỏi lại điểm",
     fact("danh_gia")?.answer === "giống người thật, 8 điểm nha em" && H.boc_tach?.danh_gia === "giống người thật, 8 điểm nha em" && /8 điểm/.test(r.body.replies[0]) && !pend("danh_gia") && !createCalls().some((c) => /8 điểm nha em/.test(prompt(c))), JSON.stringify({ body: r.body, f: db().t.listing_facts }));
@@ -1062,6 +1064,9 @@ fresh(seedKho);
     tinN.status === "da_chot" && !pend("hinh_anh", tinN.id) && db().t.reminders.every((x) => x.listing_id !== tinN.id || x.status === "cancelled") && tinN.boc_tach?.ket_thuc === "ban_roi" &&
       r.body.ngung_rao === "ban_roi" && /chúc mừng/i.test(r.body.replies[0]) && /gỡ tin/.test(r.body.replies[0]) && createCalls().length === 0,
     JSON.stringify({ st: tinN.status, body: r.body, rem: db().t.reminders }));
+  check("N3b bán được là SỰ KIỆN THẬT → bong bóng thứ hai xin chấm điểm (người thật? mấy điểm?), mở danh_gia (22/09, dời từ 'đủ rồi')",
+    r.body.xin_danh_gia === true && r.body.replies.length === 2 && /người thật/.test(r.body.replies[1]) && /mấy điểm/.test(r.body.replies[1]) && pend("danh_gia", tinN.id),
+    JSON.stringify(r.body.replies));
   // FR-184: nhiều căn → hỏi căn nào; trả lời số thứ tự → đóng đúng căn; "ngưng bán" → an.
   fresh(seedKho);
   const sCc = db().t.sellers.find((s) => s.zalo_user_id === "z-ccrb");
@@ -2829,6 +2834,10 @@ fresh(seedKho);
 {
   const cauHinhCu = globalThis.__cauHinh;
   const rep = () => r.body.replies.join(" ");
+  // Hai hàm này ở các khối trên là `const` trong khối → không thấy ở đây (GVA-08 từng chạy với mock AI ném
+  // ReferenceError → luật đỡ, xanh "oan"). Khai lại tại chỗ.
+  const laLuotBocRao = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const pend = (q, lid) => db().t.info_requests.some((x) => x.question === q && x.status === "pending" && (!lid || x.listing_id === lid));
   const buyerBiet = (d, uid) => { const b = d.insert("buyers", { zalo_user_id: uid, name: null, preferences: { deal: "mua", area: "Quận 5", budget: "tầm 6 tỷ" } }).data; d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-01T00:00:00Z" }); };
   // (7) M04: khách MUA có hồ sơ hỏi "còn bán không" → KHÔNG mở hồ sơ bán, không tạo tin.
   fresh((d) => { seedKho(d); buyerBiet(d, "gva-1"); });
@@ -2954,6 +2963,64 @@ fresh(seedKho);
     const prompt = JSON.stringify(globalThis.__calls.filter((c) => c.kind === "parse").map((c) => c.params).slice(-1));
     check("GVA-10b câu không nhắc dự án, kho có tin → KHÔNG có khối DỰ ÁN TRONG QUẬN", !/DỰ ÁN TRONG QUẬN 5/.test(prompt), prompt.slice(0, 300));
   }
+  // (2) chủ nhà HỎI VỀ CHÍNH TIN CỦA MÌNH → trả lời tiền định từ DB, hỏi lại câu treo; học xưng hô "anh nói".
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    sC.active_listing_id = tin.id;
+    db().insert("info_requests", { listing_id: tin.id, question: "ket_cau", status: "pending" });
+    r = await send({ external_user_id: "z-ccrb", text: "hồi nãy anh nói giá bao nhiêu nhỉ" });
+    check("GVA-11 'hồi nãy anh nói giá bao nhiêu nhỉ' → 'Dạ giá mình đang rao là 5,8 tỷ ạ' + hỏi lại câu treo; 0 lượt model; xưng hô học được 'anh'",
+      r.body.hoi_ve_tin === "gia" && /giá mình đang rao là 5,8 tỷ/.test(r.body.replies[0] ?? "") && r.body.replies.length === 2 && /tầng|lầu|kết cấu/i.test(r.body.replies[1] ?? "") &&
+        createCalls().length === 0 && sC.xung_ho === "anh" && pend("ket_cau", tin.id),
+      JSON.stringify({ rep: r.body.replies, xh: sC.xung_ho }));
+    // (1) đang treo câu chấm điểm mà chủ hỏi "có khách nào hỏi chưa em" → KHÔNG nuốt làm điểm, trả lời thật.
+    db().t.info_requests.forEach((x) => { if (x.listing_id === tin.id && x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: tin.id, question: "danh_gia", status: "pending" });
+    r = await send({ external_user_id: "z-ccrb", text: "có khách nào hỏi chưa em" });
+    check("GVA-12 đang treo danh_gia, 'có khách nào hỏi chưa em' → 'chưa có khách nào hỏi', KHÔNG ghi fact danh_gia, câu chấm điểm vẫn treo",
+      r.body.hoi_ve_tin === "khach" && /chưa có khách nào hỏi/.test(r.body.replies[0] ?? "") && !db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "danh_gia") && pend("danh_gia", tin.id) && r.body.replies.length === 1,
+      JSON.stringify({ rep: r.body.replies, f: db().t.listing_facts.filter((f) => f.question === "danh_gia") }));
+    db().insert("interests", { buyer_id: db().insert("buyers", { zalo_user_id: "gva-12b", preferences: {} }).data.id, listing_id: tin.id });
+    r = await send({ external_user_id: "z-ccrb", text: "có ai hỏi căn anh chưa" });
+    check("GVA-12b có 1 khách quan tâm → 'đang có 1 khách quan tâm'", /1 khách quan tâm/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
+  }
+  // (4) chế độ `chinh`: AI xếp "sổ hồng riêng" vào KIẾN THỨC THÊM (không trả khoá phap_ly) → luật xếp ô pháp lý, câu kế không hỏi lại pháp lý.
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0002");
+    sC.active_listing_id = tin.id;
+    db().insert("info_requests", { listing_id: tin.id, question: "so_phong_ngu", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p)
+      ? { so_can: 0, kien_thuc: ["sổ hồng riêng", "view sông"], truong: [{ khoa: "so_phong_ngu", gia_tri: "3", trich_dan: "3 phòng ngủ", can: null }] }
+      : OUT();
+    r = await send({ external_user_id: "z-ccrb", text: "3 phòng ngủ, sổ hồng riêng, view sông" });
+    const fPl = db().t.listing_facts.find((f) => f.listing_id === tin.id && f.question === "phap_ly");
+    const pendMoi = db().t.info_requests.filter((x) => x.listing_id === tin.id && x.status === "pending").map((x) => x.question);
+    check("GVA-13 'chinh': AI để 'sổ hồng riêng' ở kiến thức thêm, không trả phap_ly → luật ghi fact phap_ly 'sổ hồng riêng'; câu kế KHÔNG phải pháp lý",
+      !!fPl && /sổ hồng riêng/.test(fPl.answer) && !pendMoi.includes("phap_ly") && !/sổ hồng|pháp lý|hợp đồng mua bán/i.test(r.body.replies.join(" ")),
+      JSON.stringify({ fPl, pendMoi, rep: r.body.replies }));
+  }
+  // (3) chế độ `chinh`: tên đường xuất hiện hai lần ("Hung Vuong Plaza 126 Hung Vuong") → địa chỉ lấy lần có số nhà; (6) 🤖 in "giá 4 tỷ 3" dù khách gõ "4 ty 3".
+  fresh();
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: [], truong: [
+        { khoa: "duong", gia_tri: "Hùng Vương", trich_dan: "126 Hung Vuong", can: null },
+        { khoa: "gia", gia_tri: "4 tỷ 3", trich_dan: "gia 4 ty 3", can: null },
+        { khoa: "quan", gia_tri: "Quận 5", trich_dan: "q5", can: null },
+      ] } : OUT();
+  r = await send({ external_user_id: "gva-14", text: "em la moi gioi ben q5, co can ho Hung Vuong Plaza 126 Hung Vuong p12, tang 15, 2pn 78m2, gia 4 ty 3" });
+  {
+    const L = db().t.listings[0];
+    check("GVA-14 'Hung Vuong Plaza 126 Hung Vuong' + AI 'Hùng Vương' → địa chỉ có SỐ NHÀ '126 Hùng Vương'; 🤖 in 'giá 4 tỷ 3' (đơn vị có dấu) dù DB giữ chữ khách gõ",
+      !!L && /126 Hùng Vương/.test(L.location_raw ?? "") && /giá 4 tỷ 3/.test(r.body.replies[0] ?? "") && !/4 ty 3/.test(r.body.replies[0] ?? ""),
+      JSON.stringify({ loc: L?.location_raw, price: L?.price_raw, rep: r.body.replies }));
+  }
+  globalThis.__cauHinh = cauHinhCu;
   globalThis.__model = { parse: () => OUT() };
 }
 

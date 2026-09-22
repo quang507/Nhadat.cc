@@ -117,6 +117,11 @@ const so = (x: number | string): string => String(Number(x));
  * Một bong bóng mô tả dòng tin ĐANG nằm trong DB, hoặc null khi tắt.
  * `facts` phải xếp MỚI NHẤT trước (lấy câu trả lời mới nhất mỗi khoá).
  */
+/** Đơn vị tiền gõ không dấu → có dấu, chỉ để hiển thị. */
+export function donViGiaDep(s: string): string {
+  return s.replace(/(\d)\s*(?:ty|ti|toi)\b/gi, "$1 tỷ").replace(/(\d)\s*(?:trieu|tr)\b/gi, "$1 triệu").replace(/\btỉ\b/g, "tỷ");
+}
+
 export function tomTatDaLuu(
   l: DongBaoLai | null,
   facts: FactBaoLai[],
@@ -144,7 +149,9 @@ export function tomTatDaLuu(
   if (l.furnishing) p.push(`nội thất ${({ full: "đầy đủ", co_ban: "cơ bản", khong: "không (nhà trống)" } as Record<string, string>)[l.furnishing] ?? l.furnishing}`);
   if (l.bedrooms) p.push(`${l.bedrooms} phòng ngủ`);
   // Có chữ giá mà không ra số = parse_vnd không đọc được → web lọc giá sẽ không thấy tin.
-  if (l.price_raw) p.push(l.price_vnd ? `giá ${l.price_raw}` : `giá "${l.price_raw}" (chưa đọc ra số)`);
+  // 22/09/2026 (bắn thật): khách gõ "4 ty 3" thì 🤖 in "giá 4 ty 3" tới khi sửa — chỉ ĐỌC cho đẹp đơn vị
+  // (ty/ti/toi → tỷ, trieu/tr → triệu), không đụng `price_raw` trong DB.
+  if (l.price_raw) p.push(l.price_vnd ? `giá ${donViGiaDep(l.price_raw)}` : `giá "${l.price_raw}" (chưa đọc ra số)`);
 
   if (cheDo === "thay_doi") return `${DAU_BAO_LAI} Đã lưu: ${p.join(" · ")}`;
 
