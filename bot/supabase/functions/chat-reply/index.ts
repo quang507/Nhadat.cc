@@ -4730,6 +4730,24 @@ Deno.serve(async (req) => {
       : "")
     : "";
 
+  // ─── FR-114 (e) (22/09/2026, Zalo thật): "quận 5 có dự án gì không em" → bot chỉ biết dự án khi
+  // khách GỌI TÊN (`match_projects`) hoặc dự án nhà mình (Quận 8), nên kể Ny'ah Phú Định cho khách
+  // hỏi Quận 5 rồi "chưa có căn nào" — trong khi `projects` có 17 dự án Quận 5 đủ địa chỉ. Nay: khách
+  // hỏi tới dự án / chung cư / căn hộ, hoặc kho tin trống mà đã đủ tiêu chí, thì nạp tối đa 5 dự án
+  // CÙNG QUẬN khách tìm làm kiến thức tham khảo — không phải căn đang bán, model phải nói rõ thế.
+  const quanKhach = bocQuan(tKD, text) ??
+    (typeof prefs.area === "string" ? bocQuan(boDau(prefs.area), prefs.area) : null);
+  const hoiDuAnKhu = /\b(?:du an|chung cu|can ho|cao oc|toa nha|khu dan cu|kdc)\b/.test(tKD);
+  let duAnKhuBlock = "";
+  if (quanKhach && (hoiDuAnKhu || (minimumMet && !(listings ?? []).length))) {
+    const { data: dak, error: dakErr } = await client.from("projects")
+      .select("name, developer, district, ward, location_raw, legal_status, status_text, amenities, unit_types")
+      .eq("district", quanKhach).order("priority").limit(6);
+    if (dakErr) await ghiLoi(client, "chat-reply du an trong khu", dakErr.message);
+    const ds = ((dak ?? []) as Proj[]).filter((p) => p.name !== partner?.name && !matched.some((m) => m.name === p.name)).slice(0, 5);
+    duAnKhuBlock = ds.map((p) => projLine(p, false)).join("\n");
+  }
+
   // ─── FR-31 (v48): CĂN TƯƠNG TỰ khi căn khách hỏi đã chốt/đã gỡ, hoặc khách
   // hỏi "còn căn nào giống giống vầy không". Căn gốc = căn khách nhắc; không
   // có thì căn bot vừa nói tới gần nhất trong lịch sử (một truy vấn tra mã).
@@ -4887,6 +4905,10 @@ Deno.serve(async (req) => {
             ? "\n\nCĂN TRONG DỰ ÁN KHÁCH HỎI (tình trạng từng căn đọc từ đây, KHÔNG đoán; dòng ghi 'QUÁ 7 NGÀY' thì 'để em xác nhận lại chủ' + ask_owner):\n" +
               canDuAnBlock
             : "") +
+          (duAnKhuBlock
+            ? `\n\nDỰ ÁN TRONG ${quanKhach?.toUpperCase() ?? "KHU VỰC"} KHÁCH ĐANG TÌM (kho kiến thức tham khảo, KHÔNG phải căn đang bán - khách hỏi "khu này có dự án gì" thì kể tối đa 3 tên kèm địa chỉ từ đây, đúng tên; nói rõ hiện bên em CHƯA có căn nào của các dự án này đang rao, có căn là báo; TUYỆT ĐỐI không kể dự án ngoài danh sách này):\n` +
+              duAnKhuBlock
+            : "") +
           (duanBlock
             ? "\n\nDỰ ÁN KHÁCH VỪA NHẮC TỚI (kiến thức chung ĐÃ XÁC THỰC - dùng trả lời TRỰC TIẾP câu hỏi tầng dự án: vị trí, chủ đầu tư, pháp lý dự án, tiện ích, mẫu nhà, quy cách bàn giao - KHÔNG cần 'hỏi lại chủ nhà'. " + "MỌI CON SỐ về dự án (diện tích từng loại căn, số căn, số tầng, giá, phí, năm bàn giao) CHỈ được lấy nguyên văn từ khối này. Không có ở đây thì nói thẳng 'con số đó em xác nhận lại rồi báo anh/chị' — TUYỆT ĐỐI không lấy từ trí nhớ của mình, kể cả khi thấy quen. " + "GIÁ từng căn KHÔNG có ở đây: khách hỏi giá thì nói 'để em kiểm tra giá lô đó rồi báo anh/chị liền'):\n" +
               duanBlock
@@ -5023,7 +5045,7 @@ Deno.serve(async (req) => {
     // 22/09/2026 (bắn thật sau deploy #181): "gần chợ Hàng Thịt" khi kho chỉ nói "gần chợ Hoà Bình" — tên
     // riêng sau chợ / trường / bệnh viện… không có trong ngữ cảnh (kho, căn khách nhắc, dự án, lịch sử) thì
     // gọt tên, giữ loại ("gần chợ").
-    const nguCanhTen = [kho, askedBlock, tuongTuBlock, canDuAnBlock, text, ...history.map((m) => m.body ?? "")].map(String).join("\n");
+    const nguCanhTen = [kho, askedBlock, tuongTuBlock, canDuAnBlock, duAnKhuBlock, duanBlock, duanNhaMinh, text, ...history.map((m) => m.body ?? "")].map(String).join("\n");
     const truocTen = out.replies;
     out.replies = boTenRiengBia(out.replies, nguCanhTen);
     if (out.replies !== truocTen) console.log("chat-reply: gọt tên riêng không có trong kho");

@@ -92,7 +92,7 @@ Cập nhật **cùng commit** với bất kỳ thay đổi nào ở `01`…`07` 
 | FR-110 | UF-05 | WF-06 | `info_request_timeout_tick()` + cron `info-timeout-tick` (`20260904f`): 24h `reminded_at`, 48h `expired`, `buyer_ask` quá hạn → `followup` báo khách; SLA CTV 120' là `ctv-sla-tick` (FR-173) | TS-GIUCHAN-01 |
 | FR-112 | UF-07 | — | SRS-3.8 `deals` | — |
 | FR-113 | — | — | SRS-3.10 `projects` | AC-13 |
-| FR-114 | UF-09, UF-10 | WF-09 | SRS-3.10; luồng Zalo (04/09/2026, `chat-reply` v48): câu rao khớp `match_projects` → `project_id` + `unit_code` + `unit_status='con_ban'` + `last_confirmed_at`; `/raoban` web + form admin chưa | AC-13; TS-V48-114/114b |
+| FR-114 | UF-09, UF-10 | WF-09 | SRS-3.10; luồng Zalo (04/09/2026, `chat-reply` v48): câu rao khớp `match_projects` → `project_id` + `unit_code` + `unit_status='con_ban'` + `last_confirmed_at`; `/raoban` web + form admin chưa; (e) 22/09/2026 nhánh mua nạp khối "DỰ ÁN TRONG QUẬN X" từ `projects` theo quận khách tìm (`chat-reply` `duAnKhuBlock`) | AC-13; TS-V48-114/114b; TS-V48-114c (e2e GVA-10/10b) |
 | FR-115, FR-116 | UF-05 | — | SRS-3.10, SRS-5.1 (nhánh tầng dự án / tồn kho căn — FR-116 dựng 04/09/2026 trong `chat-reply` v48: khối CĂN TRONG DỰ ÁN đọc `unit_status`, TTL 7 ngày → "xác nhận lại chủ" + `ask_owner`) | AC-13; TS-V48-116a/b/c |
 | FR-117 | — | — | SRS-3.10; nửa trang (04/09/2026): `app/du-an/[slug]/page.tsx` SSG + `app/sitemap.ts` + link từ trang tin (`Listing.project_id/unit_code`); màn quản lý giỏ hàng chưa | TS-WEB2-W10 |
 | FR-118 | — | — | *chưa đặc tả kỹ thuật — bảng `ward_mapping` sẽ vào SRS-3.x khi chốt nguồn dữ liệu NQ 202/2025/QH15* | — |

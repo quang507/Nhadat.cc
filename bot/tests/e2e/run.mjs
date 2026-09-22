@@ -2926,6 +2926,32 @@ fresh(seedKho);
       /gần chợ Hoà Bình/.test(prompt) && !/Hàng Thịt/.test(rep()) && /gần chợ lắm/.test(rep()) && /xem hôm nào/.test(rep()),
       JSON.stringify({ rep: r.body.replies, coTienIch: /gần chợ Hoà Bình/.test(prompt) }));
   }
+  // FR-114 (e) (22/09/2026, Zalo thật): "quận 5 có dự án gì không em" → nạp dự án CÙNG QUẬN từ kho `projects`
+  // làm kiến thức; không kể dự án quận khác / dự án nhà mình sai quận; tên ngoài kho bị gọt.
+  fresh((d) => {
+    seedKho(d); buyerBiet(d, "gva-10");
+    d.insert("projects", { name: "Ny'ah Phú Định", district: "Quận 8", ward: "Phường 16", is_partner: true, priority: 1, location_raw: "Phú Định, Quận 8" });
+    d.insert("projects", { name: "Chung cư Lakai", district: "Quận 5", ward: "Phường 7", location_raw: "Số 5 Nguyễn Tri Phương, Phường 7, Quận 5", developer: "Lakai", priority: 5 });
+    d.insert("projects", { name: "Dragon Riverside City", district: "Quận 5", ward: "Phường 1", location_raw: "628-630 Võ Văn Kiệt, Phường 1, Quận 5", priority: 3 });
+    d.insert("projects", { name: "Sunrise City", district: "Quận 7", ward: "Phường Tân Hưng", location_raw: "Nguyễn Hữu Thọ, Quận 7", priority: 2 });
+  });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ anh, Quận 5 có Chung cư Lakai ở Nguyễn Tri Phương và Dragon Riverside City ở Võ Văn Kiệt ạ, hiện bên em chưa có căn nào của hai dự án này đang rao. Ngoài ra còn dự án Sunrise Quận 5 nữa ạ."] });
+  r = await send({ external_user_id: "gva-10", text: "quận 5 có dự án gì không em" });
+  {
+    const prompt = JSON.stringify(globalThis.__calls.filter((c) => c.kind === "parse").map((c) => c.params));
+    check("GVA-10 khách hỏi 'quận 5 có dự án gì' → ngữ cảnh có khối DỰ ÁN TRONG QUẬN 5 với Lakai + Dragon Riverside, KHÔNG có Sunrise City (Q7) trong khối đó; tên bịa 'Sunrise Quận 5' bị gọt, tên thật giữ",
+      /DỰ ÁN TRONG QUẬN 5/.test(prompt) && /Chung cư Lakai/.test(prompt) && /Dragon Riverside City/.test(prompt) &&
+        !/TRONG QUẬN 5[^]*?Sunrise City/.test(prompt.split("DỰ ÁN KHÁCH VỪA NHẮC")[0]) &&
+        /Lakai/.test(rep()) && /Dragon Riverside City/.test(rep()) && !/Sunrise Quận 5/.test(rep()),
+      JSON.stringify({ rep: r.body.replies, coKhoi: /DỰ ÁN TRONG QUẬN 5/.test(prompt) }));
+  }
+  // Không hỏi dự án, kho có tin → không nạp khối (không tốn truy vấn, không đẩy model kể dự án).
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ anh cần mấy phòng ngủ ạ?"] });
+  r = await send({ external_user_id: "gva-10", text: "anh tìm nhà hẻm 3 phòng ngủ" });
+  {
+    const prompt = JSON.stringify(globalThis.__calls.filter((c) => c.kind === "parse").map((c) => c.params).slice(-1));
+    check("GVA-10b câu không nhắc dự án, kho có tin → KHÔNG có khối DỰ ÁN TRONG QUẬN", !/DỰ ÁN TRONG QUẬN 5/.test(prompt), prompt.slice(0, 300));
+  }
   globalThis.__model = { parse: () => OUT() };
 }
 
