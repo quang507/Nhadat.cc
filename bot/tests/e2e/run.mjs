@@ -2893,6 +2893,33 @@ fresh(seedKho);
   r = await send({ external_user_id: "gva-7", text: "căn BDS-Q5-0001 mở quán ăn được không" });
   check("GVA-07 căn kho ghi hẻm 6m mà model nói 'mặt tiền kinh doanh' → câu đó bị bỏ, câu hỏi lại chủ nhà giữ",
     !/mặt tiền/.test(rep()) && /hỏi lại chủ nhà/.test(rep()), JSON.stringify(r.body.replies));
+  // (12) chế độ `chinh`: AI trả tên đường trần, luật giữ "hẻm 6m 12 Trần Hưng Đạo" → bản đầy đủ hơn thắng.
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+  fresh();
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: [], truong: [
+        { khoa: "duong", gia_tri: "Trần Hưng Đạo", trich_dan: "12 Trần Hưng Đạo", can: null },
+        { khoa: "gia", gia_tri: "5 tỷ 8", trich_dan: "5 tỷ 8", can: null },
+        { khoa: "quan", gia_tri: "Quận 5", trich_dan: "quận 5", can: null },
+      ] } : OUT();
+  r = await send({ external_user_id: "gva-8", text: "anh bán nhà hẻm 6m 12 Trần Hưng Đạo phường 4 quận 5, 4x12.5, 3 lầu, 5 tỷ 8" });
+  {
+    const L = db().t.listings[0];
+    const vt = db().t.listing_facts.find((f) => f.listing_id === L?.id && f.question === "vi_tri")?.answer;
+    check("GVA-08 'chinh': AI đọc đường 'Trần Hưng Đạo', luật đọc 'hẻm 6m 12 Trần Hưng Đạo' → vị trí giữ SỐ NHÀ 12",
+      !!L && /12 Trần Hưng Đạo/.test(L.location_raw ?? "") && /12 Trần Hưng Đạo/.test(vt ?? ""), JSON.stringify({ loc: L?.location_raw, vt, rep: r.body.replies }));
+  }
+  globalThis.__cauHinh = cauHinhCu;
+  // (11) kho có fact "gần chợ Hoà Bình" → dòng kho mang chữ đó; model bịa "chợ Hàng Thịt" → gọt còn "gần chợ".
+  fresh((d) => { seedKho(d); buyerBiet(d, "gva-9"); const L = d.t.listings.find((l) => l.code === "BDS-Q5-0001"); L.boc_tach = { tien_ich_gan: "gần chợ Hoà Bình" }; L.nhan = ["gan_cho"]; d.insert("listing_facts", { listing_id: L.id, question: "tien_ich_gan", answer: "gần chợ Hoà Bình", source: "seller_chat" }); });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ em có căn 12 Trần Hưng Đạo hẻm 6m, gần chợ Hàng Thịt lắm. Anh muốn xem hôm nào?"] });
+  r = await send({ external_user_id: "gva-9", text: "căn BDS-Q5-0001 có gần chợ không" });
+  {
+    const prompt = JSON.stringify(globalThis.__calls.filter((c) => c.kind === "parse").map((c) => c.params));
+    check("GVA-09 dòng kho / căn khách nhắc mang 'gần chợ Hoà Bình' + nhãn; 'chợ Hàng Thịt' bịa bị gọt còn 'gần chợ'",
+      /gần chợ Hoà Bình/.test(prompt) && !/Hàng Thịt/.test(rep()) && /gần chợ lắm/.test(rep()) && /xem hôm nào/.test(rep()),
+      JSON.stringify({ rep: r.body.replies, coTienIch: /gần chợ Hoà Bình/.test(prompt) }));
+  }
   globalThis.__model = { parse: () => OUT() };
 }
 

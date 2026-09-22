@@ -522,6 +522,32 @@ const AI_CHO_CAU: Record<string, string[]> = {
  * AI ĐỌC TRƯỚC, luật lưu (17/09/2026): giá trị AI (đã qua kiểm bằng chứng) cho ĐÚNG câu bot
  * đang hỏi, qua thêm kiểm khoảng của `chonDeGhi`. null = AI không có / không đạt.
  */
+/**
+ * Chọn VỊ TRÍ giữa bản LUẬT và bản AI (22/09/2026, bắn thật sau deploy #181): AI được dặn trả `duong`
+ * là TÊN ĐƯỜNG trần đã phục hồi dấu ("Trần Hưng Đạo"), luật giữ cả cụm ("hẻm 6m 12 Trần Hưng Đạo").
+ * Chế độ `chinh` lấy AI trước nên SỐ NHÀ "12" rơi khỏi tin. Ghép: số nhà đứng ngay trước tên đường
+ * trong bản luật + tên đường của AI ("12 Trần Hưng Đạo") — giữ được dấu AI phục hồi (21/09: "ai không
+ * biết được tên đường hả") lẫn số nhà luật đọc. Hẻm / phường vẫn đi ô riêng như thiết kế. Luật không
+ * chứa tên AI đọc (AI sửa chính tả) hay không có số nhà → tin AI như cũ.
+ */
+export function chonViTri(luat: string | null | undefined, ai: string | null | undefined): string | null {
+  const l = luat?.trim() || null, a = ai?.trim() || null;
+  if (!a) return l;
+  if (!l) return a;
+  const gon = (x: string) => boDau(x).replace(/\s+/g, " ").trim();
+  const lk = gon(l), ak = gon(a);
+  const i = lk.indexOf(ak);
+  if (i < 0) return a;
+  // Số nhà ngay trước tên đường: "12", "123/4", "số 12", "12a".
+  const truoc = lk.slice(0, i);
+  // Chữ đuôi số nhà là a/b/c…, KHÔNG phải "m" (mét): "hẻm 4m Phạm Thế Hiển" là độ rộng hẻm, không phải số nhà.
+  const m = /(?:^|\s)(?:so\s*)?(\d{1,4}[a-ln-z]?(?:\/\d{1,4}[a-z]?)*)\s*$/.exec(truoc);
+  if (!m) return a;
+  // "hẻm 4 Trần…" (số nhỏ ≤ 12 ngay sau chữ hẻm, không có "/") mập mờ giữa hẻm số 4 và hẻm rộng 4 → tin AI.
+  if (/\bhem\s*(?:rong\s*)?$/.test(truoc.slice(0, m.index + (m[0].length - m[1].length))) && !m[1].includes("/") && Number(m[1]) <= 12) return a;
+  return `${m[1]} ${a}`;
+}
+
 export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | null): string | null {
   const mot = dat.filter((d) => !(d.can != null && d.can > 1));
   // 21/09/2026 (chế độ `chinh`): ngang / dài KHÔNG có ô fact riêng (`KHOA_GHI`), nên câu MẶT TIỀN

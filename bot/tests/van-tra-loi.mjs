@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
@@ -362,6 +362,18 @@ ok("boGachCheo: không đụng 'anh chị phụ trách'", boGachCheo("có anh ch
   ok("boCauGhiNhan: giữ lời SỬA THẬT 'Dạ em sửa lại giá 7 tỷ 5 rồi ạ', vẫn bỏ 'Dạ em ghi 3 lầu rồi ạ'",
     JSON.stringify(boCauGhiNhan(["Dạ em sửa lại giá 7 tỷ 5 rồi ạ.", "Dạ em ghi 3 lầu rồi ạ. Sổ riêng chưa anh?"])) === JSON.stringify(["Dạ em sửa lại giá 7 tỷ 5 rồi ạ.", "Dạ sổ riêng chưa anh?"]),
     JSON.stringify(boCauGhiNhan(["Dạ em sửa lại giá 7 tỷ 5 rồi ạ.", "Dạ em ghi 3 lầu rồi ạ. Sổ riêng chưa anh?"])));
+}
+
+{
+  const nc = "#BDS-Q5-0001 · 12 Trần Hưng Đạo Phường 4 · 5,8 tỷ · 50m2 · gần chợ Hoà Bình · gần chợ";
+  const bia = ["Dạ em có căn 12 Trần Hưng Đạo hẻm 6m, gần chợ Hàng Thịt lắm. Anh muốn xem hôm nào?"];
+  ok("boTenRiengBia: 'chợ Hàng Thịt' không có trong kho → còn 'gần chợ lắm'",
+    boTenRiengBia(bia, nc)[0] === "Dạ em có căn 12 Trần Hưng Đạo hẻm 6m, gần chợ lắm. Anh muốn xem hôm nào?", JSON.stringify(boTenRiengBia(bia, nc)));
+  const that = ["Căn này gần chợ Hoà Bình, đi bộ 3 phút anh."];
+  ok("boTenRiengBia: 'chợ Hoà Bình' có trong kho → giữ nguyên (`===`)", boTenRiengBia(that, nc) === that);
+  ok("boTenRiengBia: 'trường Trần Đại Nghĩa' bịa → 'gần trường'; 'gần chợ' trần không đụng",
+    boTenRiengBia(["Gần trường Trần Đại Nghĩa và gần chợ."], nc)[0] === "Gần trường và gần chợ.", JSON.stringify(boTenRiengBia(["Gần trường Trần Đại Nghĩa và gần chợ."], nc)));
+  ok("boTenRiengBia: tên có trong LỊCH SỬ (khách nói) → giữ", boTenRiengBia(["gần chợ An Đông đúng ý anh nè."], "khách: tìm nhà gần chợ An Đông").length === 1 && /An Đông/.test(boTenRiengBia(["gần chợ An Đông đúng ý anh nè."], "khách: tìm nhà gần chợ An Đông")[0]));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

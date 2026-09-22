@@ -501,3 +501,26 @@ export function boMauThuanCan(replies: string[], can: CanDoiChieu | null | undef
       (soChung && /\bso (?:hong )?rieng\b|\bshr\b/.test(kd));
   });
 }
+
+/**
+ * Gọt TÊN RIÊNG BỊA sau loại tiện ích (22/09/2026, bắn thật sau deploy #181): kho nói "gần chợ Hoà Bình",
+ * khách hỏi "gần chợ không", model đáp "gần chợ Hàng Thịt" — tên do model điền vào chỗ trống. Tên viết hoa
+ * đứng sau chợ / trường / bệnh viện / công viên / siêu thị / chùa / nhà thờ / bến xe mà không nằm trong
+ * `nguCanh` (kho + căn khách nhắc + dự án + lịch sử, đã bỏ dấu) thì bỏ tên, giữ loại: "gần chợ lắm".
+ * Tên có trong ngữ cảnh giữ nguyên. Không bỏ gì thì trả đúng mảng cũ.
+ */
+const LOAI_TIEN_ICH = "chợ|trường|bệnh viện|công viên|siêu thị|chùa|nhà thờ|bến xe|trung tâm thương mại";
+export function boTenRiengBia(replies: string[], nguCanh: string): string[] {
+  const nc = boDau(nguCanh ?? "").replace(/\s+/g, " ");
+  // \p{Lu} chứ không phải [A-ZÀ-Ỹ]: dải À-Ỹ lẫn cả chữ THƯỜNG có dấu (đ, ú…), làm "chợ An Đông đúng" nuốt "đúng".
+  const re = new RegExp(`\\b(${LOAI_TIEN_ICH})\\s+((?:\\p{Lu}[\\p{L}\\d]*(?:[\\s.-](?=[\\p{Lu}\\d]))?){1,4})`, "gu");
+  let daBo = false;
+  const ra = replies.map((r) => r.replace(re, (m, loai: string, ten: string) => {
+    const t = ten.trim().replace(/[.\-]+$/, "");
+    if (!t) return m;
+    if (nc.includes(boDau(t).replace(/\s+/g, " "))) return m;
+    daBo = true;
+    return loai;
+  }).replace(/[ \t]{2,}/g, " ").replace(/\s+([,.!?])/g, "$1"));
+  return daBo ? ra : replies;
+}
