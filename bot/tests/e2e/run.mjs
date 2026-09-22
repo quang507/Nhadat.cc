@@ -3283,6 +3283,21 @@ fresh(seedKho);
       db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "no_hau" && f.answer === "4.5m") && db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "the_chap"),
       JSON.stringify(db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer, f.source])));
   }
+  // (bắn lại D sau deploy #191, chế độ `chinh`): đang hỏi GIÁ, chủ nhà nói dòng tiền + thế chấp + nở hậu, AI im hết →
+  // trước: cả câu về bo_sung; nay luật ghi ba fact có bằng chứng rõ, câu giá vẫn treo.
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb"); const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0002"); sC.active_listing_id = tin.id;
+    tin.price_raw = null; tin.price_vnd = null;
+    db().insert("info_requests", { listing_id: tin.id, question: "gia", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: ["đang thế chấp ngân hàng"], truong: [] } : OUT();
+    r = await send({ external_user_id: "z-ccrb", text: "nhà cô đang cho thuê 30 triệu/tháng, đang thế chấp ngân hàng, nở hậu 4m5 nha cháu" });
+    const fq = db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => f.question);
+    check("GVE-13 'chinh' đang hỏi giá, AI im: 'đang cho thuê 30tr/tháng, đang thế chấp, nở hậu 4m5' → doanh_thu + the_chap + no_hau (rent 30tr, rear 4.5), KHÔNG bo_sung cả câu, câu giá treo",
+      fq.includes("doanh_thu") && fq.includes("the_chap") && fq.includes("no_hau") && tin.rent_income_vnd === 30000000 && tin.rear_width_m === 4.5 &&
+        !db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "bo_sung" && /cho thuê/.test(f.answer)) && pendQ().includes("gia"),
+      JSON.stringify({ facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer, f.source]), rent: tin.rent_income_vnd, rear: tin.rear_width_m, pend: pendQ() }));
+  }
   globalThis.__cauHinh = cauHinhCu;
   globalThis.__model = { parse: () => OUT() };
 }
