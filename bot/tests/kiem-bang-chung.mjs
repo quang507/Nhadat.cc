@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { chonDeGhi, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { chonDeGhi, chonViTri, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -251,6 +251,15 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("câu treo VỊ TRÍ: AI không có duong → null (luật đỡ)", giaTriChoCauTreo([dx("do_rong_hem", "4", "hem 4m")], "vi_tri", {}) === null);
   ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien, KHÔNG có tien_ich_gan / nam_xay / the_chap (luật vẫn đỡ)",
     ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds"].every((k) => KHOA_FACT_AI_BIET.has(k)) && ["tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => !KHOA_FACT_AI_BIET.has(k)));
+}
+
+{
+  ok("chonViTri: luật 'hẻm 6m 12 Trần Hưng Đạo' + AI 'Trần Hưng Đạo' → '12 Trần Hưng Đạo' (số nhà luật + tên AI)",
+    chonViTri("hẻm 6m 12 Trần Hưng Đạo", "Trần Hưng Đạo") === "12 Trần Hưng Đạo", chonViTri("hẻm 6m 12 Trần Hưng Đạo", "Trần Hưng Đạo"));
+  ok("chonViTri: AI sửa chính tả 'Phạm Thế Hiển' ≠ luật 'pham the hier' → tin AI", chonViTri("hem 4m pham the hier", "Phạm Thế Hiển") === "Phạm Thế Hiển");
+  ok("chonViTri: 'hem 4m Pham The Hien' không có số nhà → AI có dấu thắng (AIBOC-14)", chonViTri("hem 4m Pham The Hien", "Phạm Thế Hiển") === "Phạm Thế Hiển");
+  ok("chonViTri: luật không dấu '123/4 an duong vuong' + AI có dấu → '123/4 An Dương Vương'", chonViTri("hem 5m 123/4 an duong vuong", "An Dương Vương") === "123/4 An Dương Vương");
+  ok("chonViTri: thiếu một bên → lấy bên còn lại; cả hai rỗng → null", chonViTri(null, "Trần Hưng Đạo") === "Trần Hưng Đạo" && chonViTri("12 Trần Hưng Đạo", null) === "12 Trần Hưng Đạo" && chonViTri("", "") === null);
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

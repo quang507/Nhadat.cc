@@ -36,7 +36,7 @@ import {
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
-import { type AiChinh, chonDeGhi, coMuiDuLieuRao, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
@@ -82,7 +82,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
-import { boCauGhiNhan, boCauTrung, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boCauTrung, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinXoaDuLieu, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -3193,7 +3193,9 @@ Deno.serve(async (req) => {
         const kqAi = await bongAi;
         const dongTreo = (pendingReq.listings ?? null) as unknown as DongDb | null;
         const datAi = kqAi ? kiemDeXuat(kqAi.truong, text).dat : [];
-        const dapAnAi = kqAi && layChoCauTreo ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
+        const dapAnAi0 = kqAi && layChoCauTreo ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
+        // 22/09/2026: câu treo VỊ TRÍ — bản luật chứa bản AI mà dài hơn (có số nhà / hẻm) thì lấy luật.
+        const dapAnAi = pendingReq.question === "vi_tri" && dapAnAi0 ? chonViTri(bocViTriRao(dapAn), dapAnAi0) : dapAnAi0;
         if (cheDoAiTreo === "chinh" && kqAi?.ket) {
           aiChinh = { ...docAiChinh(datAi, dongTreo), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], text, datAi) };
         }
@@ -3976,7 +3978,9 @@ Deno.serve(async (req) => {
         // `bocViTriRao` — bản cũ vứt nguyên cụm khi sau "hẻm/đường" là chữ tả
         // đường, nên "hẻm xe hơi 5m NGUYỄN TRÃI" mất sạch và 7/7 tin của lượt
         // bắn không có địa chỉ, bot hỏi vòng vòng, bản nháp không bao giờ bung.
-        const viTriTho = aiRao ? aiRao.duong : bocViTriRao(text);
+        // 22/09/2026 (bắn thật sau deploy #181): AI trả tên đường trần "Trần Hưng Đạo", luật trả "hẻm 6m 12
+        // Trần Hưng Đạo" — số nhà rơi vì AI đứng trước. Bản chứa bản kia mà dài hơn thì thắng (`chonViTri`).
+        const viTriTho = aiRao ? chonViTri(bocViTriRao(text), aiRao.duong) : bocViTriRao(text);
         // FR-212: đối chiếu tên đường với từ điển `duong` — không dấu → có dấu ngay; sai 1–2 ký tự → gợi ý, hỏi ở câu đầu.
         const duongRao = viTriTho ? await suaTenDuong(viTriTho, quanDoc) : null;
         const viTriRao = duongRao?.viTri ?? viTriTho;
@@ -4494,7 +4498,7 @@ Deno.serve(async (req) => {
   // Cột dùng chung cho mọi dòng "căn" đưa vào prompt (KHO, căn khách nhắc, căn
   // tương tự, căn trong dự án): thông số FR-172 + dự án/tình trạng căn FR-116.
   const CAN_COLS =
-    `code, ward, district, deal, location_raw, price_raw, price_vnd, area_m2, bedrooms, property_type, ${SPEC_COLS}, project_id, unit_code, unit_status, last_confirmed_at, tien_ich_gan, projects(name)`;
+    `code, ward, district, deal, location_raw, price_raw, price_vnd, area_m2, bedrooms, property_type, ${SPEC_COLS}, project_id, unit_code, unit_status, last_confirmed_at, tien_ich_gan, nhan, boc_tach, projects(name)`;
   let khoQ = client
     .from("listings")
     .select(CAN_COLS) // FR-172 + FR-116
@@ -4606,6 +4610,7 @@ Deno.serve(async (req) => {
     location_raw?: string | null; price_raw?: string | null; price_vnd?: number | null;
     area_m2?: number | null; bedrooms?: number | null; property_type?: string | null;
     tien_ich_gan?: Array<{ loai: string; ten: string; m: number }> | null;
+    nhan?: string[] | null; boc_tach?: Record<string, unknown> | null;
   };
   // 11/09: khoảng cách là đường chim bay từ CON ĐƯỜNG của căn (toạ độ không tới
   // số nhà) — làm tròn để model không đọc ra con số giả chính xác.
@@ -4615,8 +4620,17 @@ Deno.serve(async (req) => {
     const g = ganTheoMa.get(l.code);
     return g ? ` · cách ${g.moc} khoảng ${lamTronM(g.khoang_cach_m)}` : "";
   };
+  // 22/09/2026 (bắn thật sau deploy #181): dòng kho không mang tiện ích chủ nhà nói ("gần chợ Hoà Bình")
+  // lẫn nhãn, khách hỏi "gần chợ không" → model tự đặt tên "chợ Hàng Thịt". Đưa fact tiện ích (qua
+  // `boc_tach`, trigger fact→boc_tach) và nhãn tìm kiếm vào dòng kho để model có chữ thật mà dùng.
+  const tienIchNgan = (l: CanRow) => {
+    const ti = l.boc_tach?.tien_ich_gan;
+    const a = typeof ti === "string" && ti.trim() ? ` · ${locLienHe(ti.trim(), true).slice(0, 80)}` : "";
+    const b = l.nhan?.length ? ` · ${tenNhan(l.nhan)}` : "";
+    return a + b;
+  };
   const dongKho = (l: CanRow) =>
-    `#${l.code} · ${locLienHe(l.location_raw ?? "")} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l)}${duAnNgan(l)}${ganTxt(l)}`;
+    `#${l.code} · ${locLienHe(l.location_raw ?? "")} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l)}${duAnNgan(l)}${ganTxt(l)}${tienIchNgan(l)}`;
   const kho = ((listings ?? []) as CanRow[]).map(dongKho).join("\n");
 
   // Khối "căn khách đang nhắc" (FR-29): đủ chi tiết + facts đã xác minh + trạng
@@ -5006,6 +5020,13 @@ Deno.serve(async (req) => {
       out.replies = boMauThuanCan(out.replies, canNoi);
       if (out.replies !== truoc) console.log(`chat-reply: bỏ câu mâu thuẫn với căn ${canNoi.code}`);
     }
+    // 22/09/2026 (bắn thật sau deploy #181): "gần chợ Hàng Thịt" khi kho chỉ nói "gần chợ Hoà Bình" — tên
+    // riêng sau chợ / trường / bệnh viện… không có trong ngữ cảnh (kho, căn khách nhắc, dự án, lịch sử) thì
+    // gọt tên, giữ loại ("gần chợ").
+    const nguCanhTen = [kho, askedBlock, tuongTuBlock, canDuAnBlock, text, ...history.map((m) => m.body ?? "")].map(String).join("\n");
+    const truocTen = out.replies;
+    out.replies = boTenRiengBia(out.replies, nguCanhTen);
+    if (out.replies !== truocTen) console.log("chat-reply: gọt tên riêng không có trong kho");
   }
   // 22/09/2026 (bộ đo giọng, ca M01/M02/M06 chạy model giả): câu dò tiền định "Anh/chị cho em xin thêm…"
   // và mọi câu model ở nhánh MUA chưa đi qua bộ lọc gạch chéo như nhánh bán (1952) → khách mua chưa
