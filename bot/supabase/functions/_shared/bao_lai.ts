@@ -20,6 +20,7 @@
 // Hàm ở đây THUẦN (không gọi DB) để kiểm được bằng node; phần đọc DB nằm ở
 // `baoLaiDaLuu` trong chat-reply.
 
+import { donViGiaDep } from "./extraction/luat-tien.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
 
 export type CheDoBaoLai = "tat" | "thay_doi" | "day_du";
@@ -117,11 +118,6 @@ const so = (x: number | string): string => String(Number(x));
  * Một bong bóng mô tả dòng tin ĐANG nằm trong DB, hoặc null khi tắt.
  * `facts` phải xếp MỚI NHẤT trước (lấy câu trả lời mới nhất mỗi khoá).
  */
-/** Đơn vị tiền gõ không dấu → có dấu, chỉ để hiển thị. */
-export function donViGiaDep(s: string): string {
-  return s.replace(/(\d)\s*(?:ty|ti|toi)\b/gi, "$1 tỷ").replace(/(\d)\s*(?:trieu|tr)\b/gi, "$1 triệu").replace(/\btỉ\b/g, "tỷ");
-}
-
 export function tomTatDaLuu(
   l: DongBaoLai | null,
   facts: FactBaoLai[],

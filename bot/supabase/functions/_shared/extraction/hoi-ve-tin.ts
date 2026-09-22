@@ -8,6 +8,7 @@
 // và KHÔNG mang con số kèm đơn vị (câu "giá 4 tỷ 3 được không?" là câu TRẢ LỜI kèm hỏi, đi đường cũ).
 
 import { nhanDienFact } from "./khop-cau-tra-loi.ts";
+import { donViGiaDep } from "./luat-tien.ts";
 
 const boDau = (s: string): string =>
   (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
@@ -65,7 +66,7 @@ export function dapHoiVeTin(loai: LoaiHoiTin, tin: TinTom, khach: KhachTom, ac: 
       if (!n && !h) return `Dạ hiện chưa có khách nào hỏi căn này, có khách là em báo ${ac} liền ạ.`;
       return `Dạ căn này đang có ${n || h} khách quan tâm${h ? `, ${h} câu khách hỏi em đã chuyển ${ac}` : ""}; có gì mới em báo ${ac} liền ạ.`;
     }
-    case "gia": return tin.price_raw ? `Dạ giá mình đang rao là ${tin.price_raw} ạ.` : chua("giá");
+    case "gia": return tin.price_raw ? `Dạ giá mình đang rao là ${donViGiaDep(tin.price_raw)} ạ.` : chua("giá");
     case "dien_tich": return tin.area_m2 ? `Dạ tin ghi diện tích ${tin.area_m2}m² ạ.` : chua("diện tích");
     case "dia_chi": {
       const dc = [tin.location_raw, tin.ward, tin.district].filter(Boolean).join(", ");

@@ -29,6 +29,7 @@ for (const [t, mong] of [
 ]) ok(`hoiVeTin: ${JSON.stringify(t)} → ${mong}`, hoiVeTin(t) === mong, String(hoiVeTin(t)));
 
 ok("dapHoiVeTin gia có giá", dapHoiVeTin("gia", { price_raw: "4 tỷ 5" }, { quan_tam: 0, hoi: 0 }, "anh") === "Dạ giá mình đang rao là 4 tỷ 5 ạ.");
+ok("dapHoiVeTin gia gõ 'ty' không dấu → đọc 'tỷ' (bắn thật 22/09)", dapHoiVeTin("gia", { price_raw: "4 ty 3" }, { quan_tam: 0, hoi: 0 }, "anh") === "Dạ giá mình đang rao là 4 tỷ 3 ạ.");
 ok("dapHoiVeTin gia chưa có giá → xin giá", /chưa có giá/.test(dapHoiVeTin("gia", {}, { quan_tam: 0, hoi: 0 }, "chị")));
 ok("dapHoiVeTin khách 0 → chưa có khách", /chưa có khách nào hỏi/.test(dapHoiVeTin("khach", {}, { quan_tam: 0, hoi: 0 }, "anh")));
 ok("dapHoiVeTin khách 2 quan tâm, 1 câu hỏi", /2 khách quan tâm/.test(dapHoiVeTin("khach", {}, { quan_tam: 2, hoi: 1 }, "anh")) && /1 câu/.test(dapHoiVeTin("khach", {}, { quan_tam: 2, hoi: 1 }, "anh")));

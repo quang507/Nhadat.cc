@@ -71,6 +71,14 @@ export function giaTheoM2(p: string | null | undefined): number | null {
  * ghi "18 triệu 1" (13/09/2026). Chỉ họ triệu — "1 tỷ 1 năm" để nguyên. Cùng ý
  * với SQL `chuan_hoa_gia_raw` (20260913a).
  */
+/**
+ * Đơn vị tiền gõ không dấu → có dấu, CHỈ để hiển thị (22/09/2026: 🤖 in "giá 4 ty 3" nguyên chữ khách
+ * gõ; câu trả lời "giá mình đang rao là 4 ty 3"). `price_raw` trong DB giữ nguyên chữ khách.
+ */
+export function donViGiaDep(s: string): string {
+  return s.replace(/(\d)\s*(?:ty|ti|toi)\b/gi, "$1 tỷ").replace(/(\d)\s*(?:trieu|tr)\b/gi, "$1 triệu").replace(/\btỉ\b/g, "tỷ");
+}
+
 export function gonGiaKyHan(p: string): string {
   return p.replace(
     /((?:triệu|trieu|tr|củ|cu)(?![\p{L}])(?:\s*\d{1,3}(?!\d))?)\s*(?:\/|(?<![\p{L}\d])(?:1|một|mot|mỗi|moi)(?![\p{L}\d]))\s*(tháng|thang|năm|nam)(?![\p{L}])/iu,
