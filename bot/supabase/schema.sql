@@ -3726,6 +3726,14 @@ begin
        where id = new.listing_id and (bedrooms is null or de);
     end if;
 
+  -- 22/09/2026 (kịch bản C, bắn thật): "3pn 2wc" → fact `so_wc` có, cột `bathrooms` trống — chưa từng có nhánh.
+  elsif new.question = 'so_wc' then
+    v_num := nullif(substring(v_txt, '[0-9]+'), '')::numeric;
+    if v_num is not null and v_num between 1 and 20 then
+      update listings set bathrooms = v_num::int, specs_source = bac
+       where id = new.listing_id and (bathrooms is null or de);
+    end if;
+
   -- Diện tích đất / diện tích chung. KHÔNG khớp `dien_tich_tim_tuong` (FR-163).
   elsif new.question in ('dien_tich', 'dien_tich_dat') then
     -- "6x11" là NGANG x DÀI, không phải 6 m2. Bản trước lấy SỐ ĐẦU TIÊN nên
@@ -4907,11 +4915,11 @@ begin
   t := regexp_replace(t, 'tỏi|tỷ|tỉ|tị|tỹ', ' _ty ', 'g');
   t := regexp_replace(t, 'triệu|trieu|củ',  ' _trieu ', 'g');
 
-  t := regexp_replace(t, '([0-9])\s*ty\s*([0-9])', '\1 _ty \2', 'g');
+  t := regexp_replace(t, '([0-9])\s*t[yi]\s*([0-9])', '\1 _ty \2', 'g');
   t := regexp_replace(t, '([0-9])\s*tr\s*([0-9])', '\1 _trieu \2', 'g');
   -- 13/09/2026: "1t2l" / "1t 2l" la 1 tret 2 lau, khong phai 1,2 ty (luat-tien.ts).
   t := regexp_replace(t, '([0-9])\s*t\s*([0-9]{1,3})(?![0-9[:alpha:]])', '\1 _ty \2', 'g');
-  t := regexp_replace(t, '([0-9])\s*ty\M',         '\1 _ty ',   'g');
+  t := regexp_replace(t, '([0-9])\s*t[yi]\M',         '\1 _ty ',   'g');
   t := regexp_replace(t, '([0-9])\s*tr\M',         '\1 _trieu ', 'g');
   t := regexp_replace(t, '([0-9])\s*t\M(?!\s*[0-9]+\s*(l|lầu|lau)\M)', '\1 _ty ', 'g');
 

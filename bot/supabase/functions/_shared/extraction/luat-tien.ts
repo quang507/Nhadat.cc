@@ -76,7 +76,15 @@ export function giaTheoM2(p: string | null | undefined): number | null {
  * gõ; câu trả lời "giá mình đang rao là 4 ty 3"). `price_raw` trong DB giữ nguyên chữ khách.
  */
 export function donViGiaDep(s: string): string {
-  return s.replace(/(\d)\s*(?:ty|ti|toi)\b/gi, "$1 tỷ").replace(/(\d)\s*(?:trieu|tr)\b/gi, "$1 triệu").replace(/\btỉ\b/g, "tỷ");
+  // 22/09/2026 (kịch bản C): "7ty2" — đơn vị dính số hai đầu, `\b` không thấy ("7ty2" in nguyên). Không dùng
+  // `\b`: sau đơn vị không được là chữ; số dính ngay sau thì chèn khoảng trắng. "toi" chỉ là tỏi khi sau nó
+  // KHÔNG có số ("5 toi 6 ty" là TỚI — cùng luật `TIEN_KD`).
+  return s
+    .replace(/(\d)\s*(?:ty|ti)(?![\p{L}])\s*(?=\d)/giu, "$1 tỷ ")
+    .replace(/(\d)\s*(?:ty|ti|toi(?!\s*\d))(?![\p{L}\p{N}])/giu, "$1 tỷ")
+    .replace(/(\d)\s*(?:trieu|tr)(?![\p{L}])\s*(?=\d)/giu, "$1 triệu ")
+    .replace(/(\d)\s*(?:trieu|tr)(?![\p{L}\p{N}])/giu, "$1 triệu")
+    .replace(/(?<![\p{L}])tỉ(?![\p{L}])/gu, "tỷ");
 }
 
 export function gonGiaKyHan(p: string): string {
@@ -112,7 +120,9 @@ export function docTien(p: string | null | undefined): number | null {
   const ruoi = /rưỡi|rươi|ruoi/.test(t);
   t = t.replace(/tỏi|tỷ|tỉ|tị|tỹ/g, " _ty ");
   t = t.replace(/triệu|trieu|củ/g, " _trieu ");
-  t = t.replace(/([0-9])\s*ty\s*([0-9])/g, "$1 _ty $2");
+  // 22/09/2026 (kịch bản C, bắn thật): "7 ti 5" — "ti" không dấu là tỷ, y như "ty". Cả TS lẫn SQL
+  // `parse_vnd` cùng thiếu nên cổng đối chiếu không đỏ; ca "7 ti 5" / "7ti5" nay nằm trong `tien.json`.
+  t = t.replace(/([0-9])\s*t[yi]\s*([0-9])/g, "$1 _ty $2");
   // "3tr5" = 3,5 triệu (lượt bắn 42 ca 11/09: phòng trọ "3tr5 một tháng" rơi giá).
   t = t.replace(/([0-9])\s*tr\s*([0-9])/g, "$1 _trieu $2");
   // 13/09/2026 (review code): "1t2l" / "1t 2l" là 1 trệt 2 lầu — `TIEN_T_KEP` ở
@@ -120,7 +130,7 @@ export function docTien(p: string | null | undefined): number | null {
   // hoặc "t" trơ trọi mà sau là "<số> l/lầu" thì không phải tiền. SQL `parse_vnd`
   // cùng luật (20260913b), ca ở `bot/tests/luat/tien.json`.
   t = t.replace(/([0-9])\s*t\s*([0-9]{1,3})(?![\p{L}\p{N}])/gu, "$1 _ty $2");
-  t = t.replace(/([0-9])\s*ty(?![\p{L}\p{N}_])/gu, "$1 _ty ");
+  t = t.replace(/([0-9])\s*t[yi](?![\p{L}\p{N}_])/gu, "$1 _ty ");
   t = t.replace(/([0-9])\s*tr(?![\p{L}\p{N}_])/gu, "$1 _trieu ");
   t = t.replace(/([0-9])\s*t(?![\p{L}\p{N}_])(?!\s*[0-9]+\s*(?:l|lầu|lau)(?![\p{L}]))/gu, "$1 _ty ");
 

@@ -1015,7 +1015,9 @@ export function nhanDienFact(text: string): NhanDien | null {
       /\b(?:can|lo|nen|shop)\s*(?:so\s*)?\d+[a-z]?(?:[.\-\/]\d+)?\s+(?:o|tai|trong|thuoc|cua)\s+[a-z]{2,}/.test(kd) ||
       /\b(?:hem|hxh)\s*\d+(?:\/\d+)+\b/.test(kd) ||
       // "hẻm 123 Trần Bình Trọng": số hẻm rồi TÊN ĐƯỜNG (chữ), không phải "hẻm 4m".
-      /\b(?:hem|hxh)\s*\d+[a-z]?\s+(?!m\b|met\b|xe\b|rong\b|thong\b|cut\b|xec\b|sec\b|set\b|xet\b|lan\b|doi\b)[a-z]{2,}/.test(kd) ||
+      // 22/09/2026 (kịch bản C): "em xoá cái hẻm 4m ghi nhầm đi" — "4m" từng đọc thành số hẻm "4" + hậu tố
+      // "m", chữ "ghi" thành tên đường, cả câu vào địa chỉ. Hậu tố số nhà không được là "m" đứng trơ.
+      /\b(?:hem|hxh)\s*\d+(?:(?!m\b)[a-z])?\s+(?!m\b|met\b|xe\b|rong\b|thong\b|cut\b|xec\b|sec\b|set\b|xet\b|lan\b|doi\b)[a-z]{2,}/.test(kd) ||
       /\b(?:so|so nha|dia chi)\s*\d+[a-z]?(?:\/\d+)*\s+[a-z]{2,}/.test(kd) ||
       /^\s*\d+[a-z]?(?:\/\d+[a-z]?)+\s+[a-z]{2,}/.test(kd)) {
     // 17/09/2026 (Zalo thật): "Chào cháu, cô có căn nhà hẻm 4m Trần Hưng Đạo quận 5, 50m2, giá 5 tỷ 8…"

@@ -3024,6 +3024,107 @@ fresh(seedKho);
   globalThis.__model = { parse: () => OUT() };
 }
 
+// ── 22/09/2026 kịch bản C (bắn thật nhà Trần Bình Trọng, nhiều kiểu sai — 7 lỗi, chủ dự án "vá hết") ──
+{
+  const cauHinhCu = globalThis.__cauHinh;
+  const rep = () => r.body.replies.join(" ");
+  const pend = (q, lid) => db().t.info_requests.some((x) => x.question === q && x.status === "pending" && (!lid || x.listing_id === lid));
+  const soFact = (lid) => db().t.listing_facts.filter((f) => f.listing_id === lid).length;
+  const tinC = () => { const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb"); const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0002"); sC.active_listing_id = tin.id; return tin; };
+  // (1) "gia 7 ti 5 chu ko phai 7 ty" — "ti" không dấu là tỷ; giá đổi thật, lời xác nhận đọc "7 tỷ 5".
+  fresh(seedKho);
+  {
+    const tin = tinC();
+    db().insert("info_requests", { listing_id: tin.id, question: "ket_cau", status: "pending" });
+    r = await send({ external_user_id: "z-ccrb", text: "gia 7 ti 5 chu ko phai 7 ty" });
+    check("GVC-01 'gia 7 ti 5 chu ko phai 7 ty' → price_vnd 7,5 tỷ (DB giữ '7 ti 5'), lời xác nhận 'sửa lại giá 7 tỷ 5', câu tầng vẫn treo",
+      tin.price_vnd === 7500000000 && tin.price_raw === "7 ti 5" && /sửa lại giá 7 tỷ 5/.test(rep()) && pend("ket_cau", tin.id),
+      JSON.stringify({ price: [tin.price_raw, tin.price_vnd], rep: r.body.replies }));
+  }
+  // (2) "em xoá cái hẻm 4m ghi nhầm đi" lúc chờ duyệt — KHÔNG ghi gì (từng thành địa chỉ + đè hẻm), đọc lại ô đang giữ, câu duyệt treo.
+  fresh(seedKho);
+  {
+    const tin = tinC(); tin.alley_width_m = 3.5; tin.status = "cho_thong_tin";
+    db().insert("info_requests", { listing_id: tin.id, question: "duyet_tin", status: "pending" });
+    const truoc = soFact(tin.id);
+    r = await send({ external_user_id: "z-ccrb", text: "em xoá cái hẻm 4m ghi nhầm đi" });
+    check("GVC-02 'em xoá cái hẻm 4m ghi nhầm đi' lúc duyệt → không ghi fact, địa chỉ '99 Nguyễn Trãi' giữ, hẻm 3.5 giữ, đáp 'đang ghi hẻm 3.5m' + nhắc nhắn ok, KHÔNG gửi lại 📋",
+      soFact(tin.id) === truoc && tin.location_raw === "99 Nguyễn Trãi" && tin.alley_width_m === 3.5 && /đang ghi hẻm 3.5m/.test(rep()) && /nhắn "ok"/.test(rep()) &&
+        !r.body.replies.some((x) => x.startsWith("📋")) && pend("duyet_tin", tin.id) && r.body.xin_bo_truong === "do_rong_hem",
+      JSON.stringify({ loc: tin.location_raw, hem: tin.alley_width_m, facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer]), rep: r.body.replies }));
+  }
+  // (2b) cùng câu khi đang treo câu tầng → đáp rồi hỏi lại câu treo; không ghi gì.
+  fresh(seedKho);
+  {
+    const tin = tinC(); tin.alley_width_m = 3.5;
+    db().insert("info_requests", { listing_id: tin.id, question: "ket_cau", status: "pending" });
+    const truoc = soFact(tin.id);
+    r = await send({ external_user_id: "z-ccrb", text: "bỏ cái hẻm 4m ghi nhầm đi em" });
+    check("GVC-02b 'bỏ cái hẻm 4m ghi nhầm đi em' đang treo câu tầng → không ghi fact, hẻm 3.5 giữ, hỏi lại tầng",
+      soFact(tin.id) === truoc && tin.alley_width_m === 3.5 && /đang ghi hẻm 3.5m/.test(rep()) && r.body.replies.length === 2 && /tầng|lầu|tấm/i.test(r.body.replies[1]) && pend("ket_cau", tin.id),
+      JSON.stringify({ hem: tin.alley_width_m, rep: r.body.replies }));
+  }
+  // (3) "3pn 2wc" → fact so_wc vào cột bathrooms (20260922c).
+  fresh(seedKho);
+  {
+    const tin = tinC(); tin.bedrooms = null;
+    db().insert("info_requests", { listing_id: tin.id, question: "so_phong_ngu", status: "pending" });
+    r = await send({ external_user_id: "z-ccrb", text: "3pn 2wc" });
+    check("GVC-03 '3pn 2wc' → bedrooms 3 và bathrooms 2 (fact so_wc từng không vào cột)",
+      tin.bedrooms === 3 && tin.bathrooms === 2,
+      JSON.stringify({ pn: tin.bedrooms, wc: tin.bathrooms, facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer]) }));
+  }
+  // (4) sửa phường: bong bóng code "Dạ em sửa lại Phường 2 rồi ạ." + model "Phường 2 em sửa lại rồi ạ." → chỉ một lời sửa.
+  fresh(seedKho);
+  {
+    const tin = tinC();
+    db().insert("info_requests", { listing_id: tin.id, question: "ket_cau", status: "pending" });
+    globalThis.__model.parse = () => OUT({ replies: ["Phường 2 em sửa lại rồi ạ. Nhà mình mấy tầng ạ?"] });
+    r = await send({ external_user_id: "z-ccrb", text: "à mà phường 2 chứ không phải phường 3" });
+    const soSua = r.body.replies.join("\n").split(/[.!?\n]/).filter((c) => /sửa lại/.test(c)).length;
+    check("GVC-04 sửa phường → đúng MỘT câu 'sửa lại' (model lặp 'Phường 2 em sửa lại rồi ạ' bị bỏ), câu hỏi tầng giữ",
+      tin.ward === "Phường 2" && soSua === 1 && /mấy tầng/.test(rep()), JSON.stringify(r.body.replies));
+    globalThis.__model = { parse: () => OUT() };
+  }
+  // (5) "bán rồi hả em?" là HỎI, không phải báo bán: đáp từ trạng thái, tin vẫn dang_ban, không gọi model.
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb"); const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001"); sC.active_listing_id = tin.id;
+    globalThis.__model.parse = () => OUT({ replies: ["Chủ nhà bán rồi em chưa biết — để em hỏi chủ nhà xác nhận."] });
+    r = await send({ external_user_id: "z-ccrb", text: "bán rồi hả em?" });
+    check("GVC-05 'bán rồi hả em?' → 'Dạ chưa bán ạ, tin mình đang lên kệ…' tiền định; tin vẫn dang_ban, không ngưng rao, không câu model",
+      r.body.hoi_ve_tin === "ban_chua" && /^Dạ chưa bán ạ/.test(r.body.replies[0] ?? "") && tin.status === "dang_ban" && !r.body.ngung_rao && !/hỏi chủ nhà/.test(rep()),
+      JSON.stringify({ st: tin.status, rep: r.body.replies, body: r.body }));
+    globalThis.__model = { parse: () => OUT() };
+  }
+  // (6) 🤖 in "giá 7 tỷ 2" khi khách gõ "7ty2" (đơn vị dính số hai đầu).
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
+  fresh();
+  r = await send({ external_user_id: "gvc-6", text: "ban nha hem 4m 123/4 tran binh trong p2 q5, 4x15 60m2, 7ty2, so hong rieng" });
+  {
+    const L = db().t.listings[0];
+    check("GVC-06 câu rao '7ty2' → DB giữ '7ty2' (7,2 tỷ), 🤖 in 'giá 7 tỷ 2', không in '7ty2'",
+      !!L && L.price_vnd === 7200000000 && r.body.replies.some((x) => x.startsWith("🤖") && /giá 7 tỷ 2/.test(x) && !/7ty2/.test(x)),
+      JSON.stringify({ price: [L?.price_raw, L?.price_vnd], rep: r.body.replies }));
+  }
+  globalThis.__cauHinh = cauHinhCu;
+  // (7) "😂😂" lúc chờ duyệt → câu tiền định, không gọi model, không ghi, câu duyệt treo.
+  fresh(seedKho);
+  {
+    const tin = tinC(); tin.status = "cho_thong_tin";
+    db().insert("info_requests", { listing_id: tin.id, question: "duyet_tin", status: "pending" });
+    const truoc = soFact(tin.id);
+    globalThis.__model.parse = () => OUT({ replies: ["Em thấy anh chị đồng ý rồi ạ. Tin em đăng như vậy được không?"] });
+    r = await send({ external_user_id: "z-ccrb", text: "😂😂" });
+    check("GVC-07 '😂😂' lúc duyệt → 'Dạ 😊 Bản nháp ở trên … nhắn \"ok\"' tiền định; không ghi fact, không 📋, không 'đồng ý rồi', câu duyệt treo, chưa duyệt",
+      r.body.loai_cau === "emoji" && /nhắn "ok"/.test(rep()) && !/đồng ý rồi/.test(rep()) && soFact(tin.id) === truoc && !r.body.replies.some((x) => x.startsWith("📋")) &&
+        pend("duyet_tin", tin.id) && !tin.chu_duyet_at,
+      JSON.stringify({ rep: r.body.replies, body: r.body }));
+    globalThis.__model = { parse: () => OUT() };
+  }
+  globalThis.__cauHinh = cauHinhCu;
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

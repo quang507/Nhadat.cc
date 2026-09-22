@@ -42,6 +42,10 @@
     { "cau": "nhà 1t2l",          "mong": null,       "vi_sao": "13/09 review: 1 trệt 2 lầu, không phải 1,2 tỷ" },
     { "cau": "1t3l",              "mong": null,       "vi_sao": "t kẹp giữa mà số sau dính chữ l — kết cấu" },
     { "cau": "nhà 1t 2l",         "mong": null,       "vi_sao": "t trơ trọi rồi '<số> l' — vẫn là trệt/lầu" },
-    { "cau": "nhà 1t2l giá 5 tỷ", "mong": 5000000000, "vi_sao": "kết cấu viết tắt đứng trước giá thật" }
+    { "cau": "nhà 1t2l giá 5 tỷ", "mong": 5000000000, "vi_sao": "kết cấu viết tắt đứng trước giá thật" },
+    { "cau": "7 ti 5",            "mong": 7500000000, "vi_sao": "22/09 kịch bản C: 'ti' không dấu là tỷ — cả hai bản từng trả null, sửa giá không có hiệu lực" },
+    { "cau": "7ti5",              "mong": 7500000000, "vi_sao": "'ti' dính số hai đầu" },
+    { "cau": "3 ti",              "mong": 3000000000 },
+    { "cau": "2 ti rưỡi",         "mong": 2500000000 }
   ]
 }

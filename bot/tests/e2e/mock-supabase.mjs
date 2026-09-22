@@ -218,7 +218,7 @@ export function chuanHoaGiaRaw(s) {
 }
 export function parseVnd(s) {
   const t = String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
-  let m = /(\d+)\s*ty\s*(\d)(?!\d)/.exec(t); if (m) return +m[1] * 1e9 + +m[2] * 1e8;
+  let m = /(\d+)\s*t[yi]\s*(\d)(?!\d)/.exec(t); if (m) return +m[1] * 1e9 + +m[2] * 1e8; // 22/09: "7 ti 5" — "ti" cũng là tỷ (parse_vnd 20260922c)
   m = /(\d+(?:[.,]\d+)?)\s*(ty|ti)/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e9);
   m = /(\d+(?:[.,]\d+)?)\s*(trieu|tr)/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e6);
   // "7t" = 7 tỷ (20260908a). Sau luật `tr` để "7tr" vẫn là triệu; \b sau `t`
@@ -593,6 +593,8 @@ class RpcCall {
           if (m) l.frontage_m = parseFloat(m[1].replace(",", "."));
         }
         if (a.p_question === "so_phong_ngu") l.bedrooms = parseInt(a.p_answer, 10);
+        // 20260922c: fact so_wc → cột bathrooms (kịch bản C: "3pn 2wc" từng để bathrooms trống).
+        if (a.p_question === "so_wc") { const w = parseInt(a.p_answer, 10); if (w >= 1 && w <= 20) l.bathrooms = w; }
         // 20260920a: fact `nhan` là tên nhãn, không đi qua đồng bộ cột.
         if (a.p_question === "nhan") return { data: null, error: null };
         // listing_facts_sync_cols + boc_thong_so (rút gọn): đủ để điểm FR-177 đo được.

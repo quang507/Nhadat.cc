@@ -26,6 +26,12 @@ for (const [t, mong] of [
   ["căn đó bán rồi em, cảm ơn em nha", null],
   ["Được giá, căn tôi sở hữu nhưng chưa vào xem bạn có thông tin thêm về căn này không", null],
   ["hướng đông nam, mà phí bên em tính sao", null],
+  // 22/09 kịch bản C: hỏi ĐÃ BÁN CHƯA là hỏi về tin — model từng đáp "để em hỏi chủ nhà" với chính chủ nhà.
+  ["bán rồi hả em?", "ban_chua"],
+  ["nhà anh bán được chưa em", "ban_chua"],
+  ["có ai mua chưa em", "ban_chua"],
+  ["bán rồi", null],
+  ["giá bán được chưa em", null],
 ]) ok(`hoiVeTin: ${JSON.stringify(t)} → ${mong}`, hoiVeTin(t) === mong, String(hoiVeTin(t)));
 
 ok("dapHoiVeTin gia có giá", dapHoiVeTin("gia", { price_raw: "4 tỷ 5" }, { quan_tam: 0, hoi: 0 }, "anh") === "Dạ giá mình đang rao là 4 tỷ 5 ạ.");
@@ -35,6 +41,9 @@ ok("dapHoiVeTin khách 0 → chưa có khách", /chưa có khách nào hỏi/.te
 ok("dapHoiVeTin khách 2 quan tâm, 1 câu hỏi", /2 khách quan tâm/.test(dapHoiVeTin("khach", {}, { quan_tam: 2, hoi: 1 }, "anh")) && /1 câu/.test(dapHoiVeTin("khach", {}, { quan_tam: 2, hoi: 1 }, "anh")));
 ok("dapHoiVeTin địa chỉ ghép", dapHoiVeTin("dia_chi", { location_raw: "126 Hùng Vương", ward: "Phường 12", district: "Quận 5" }, { quan_tam: 0, hoi: 0 }, "anh") === "Dạ tin ghi địa chỉ 126 Hùng Vương, Phường 12, Quận 5 ạ.");
 ok("dapHoiVeTin pháp lý có nhãn", /sổ hồng riêng/.test(dapHoiVeTin("phap_ly", { legal_status: "so_hong_rieng" }, { quan_tam: 0, hoi: 0 }, "anh")));
+ok("dapHoiVeTin bán chưa, đang lên kệ, 0 khách → 'chưa bán' + 'có khách chốt là em báo'", /^Dạ chưa bán ạ/.test(dapHoiVeTin("ban_chua", { status: "dang_ban" }, { quan_tam: 0, hoi: 0 }, "anh")) && /báo anh liền/.test(dapHoiVeTin("ban_chua", { status: "dang_ban" }, { quan_tam: 0, hoi: 0 }, "anh")), dapHoiVeTin("ban_chua", { status: "dang_ban" }, { quan_tam: 0, hoi: 0 }, "anh"));
+ok("dapHoiVeTin bán chưa, 2 khách quan tâm → nêu số khách", /2 khách quan tâm/.test(dapHoiVeTin("ban_chua", { status: "dang_ban" }, { quan_tam: 2, hoi: 0 }, "anh")));
+ok("dapHoiVeTin bán chưa, đã chốt → 'đã chốt'", /đã chốt/.test(dapHoiVeTin("ban_chua", { status: "da_chot" }, { quan_tam: 0, hoi: 0 }, "anh")));
 ok("dapHoiVeTin trạng thái đang bán", /lên kệ rồi/.test(dapHoiVeTin("trang_thai", { status: "dang_ban" }, { quan_tam: 0, hoi: 0 }, "anh")));
 
 console.log(hong ? `\nHỎI VỀ TIN: ${hong}/${tong} CA HỎNG` : `\nHỎI VỀ TIN: ${tong}/${tong} CA ĐẠT`);
