@@ -349,8 +349,9 @@ export function laLoiMeta(text: string): boolean {
 // vì sửa hơn 60 chuỗi. Chỉ đổi chữ "em" đứng riêng (không đụng "em gái", "kem",
 // "xem"); "tụi em / bên em" → "tụi cháu / bên cháu" là đúng ý. Khách anh/chị → giữ nguyên.
 const EM_RIENG = /(?<![\p{L}])(em|Em|EM)(?![\p{L}])/gu;
-export function doiTuXung(replies: string[], xungHo: string | null | undefined): string[] {
-  if (!xungHo || !["chú", "cô", "bác"].includes(xungHo)) return replies;
+export function doiTuXung(replies: string[], xungHo: string | null | undefined, nhomTuoi?: string | null): string[] {
+  // 22/09/2026: "chào cháu" chưa rõ chú hay cô (`nhom_tuoi = lon_tuoi`, chưa có `xung_ho`) → vẫn xưng cháu.
+  if (!(xungHo && ["chú", "cô", "bác"].includes(xungHo)) && nhomTuoi !== "lon_tuoi") return replies;
   return replies.map((r) =>
     r.replace(EM_RIENG, (_m, w: string) => w === "EM" ? "CHÁU" : w === "Em" ? "Cháu" : "cháu")
       // "em gái / em trai" là người thứ ba — trả lại.

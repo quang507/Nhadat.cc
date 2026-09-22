@@ -79,7 +79,12 @@ const XUNG_HO_RE =
   /\b(?:keu|goi|xung|dung (?:keu|goi))\s*(?:la\s*|toi la\s*|minh la\s*)?(anh|chi|co|chu|bac)\b|\b(?:toi|minh|tui|em)\s*la\s*(anh|chi)\b(?!\s*(?:chu|chinh|cua))|\b(anh|chi)\s*(?:chu|ma|nha|nhe)\s*(?:khong phai|ko phai|k phai)\s*(?:anh|chi)\b|^\s*(chi|anh)\s*(?:nha|nhe|nhen|day|a)?\s*[.!]?\s*$|^\s*(chi|anh)\s*(?:nha|nhe|nhen|oi)\s*[,.;!]/;
 
 const DOI_XUNG_HO: Record<string, XungHo> = { anh: "anh", chi: "chị", co: "cô", chu: "chú", bac: "bác" };
+const XUNG_HO_LON_TRO = /^\s*(?:dạ\s*)?(chú|cô|bác)\s*(?:nha|nhé|nhen|đây|ạ|nè)?\s*[.!]?\s*$/u;
 export function batXungHo(text: string): XungHo | null {
+  // 22/09/2026: "cô" / "chú nha" trơ trọi (CÒN DẤU — bỏ dấu thì "cô" trùng "có") là câu trả lời cho
+  // "cháu gọi chú hay cô cho tiện ạ?".
+  const mLon = XUNG_HO_LON_TRO.exec(text.trim().toLowerCase());
+  if (mLon) return mLon[1] as XungHo;
   const kd = boDau(text);
   const m = XUNG_HO_RE.exec(kd);
   if (!m) return null;
@@ -113,6 +118,10 @@ const TU_XUNG: RegExp[] = [
 // "chủ" ("chủ cần bán" là môi giới nói về chủ nhà), "bác" trùng "bạc". "cô giáo",
 // "bác sĩ", "chú ấy / cô này" là người thứ ba, không phải người đang nhắn.
 const TU_XUNG_LON: RegExp[] = [
+  // 22/09/2026 (chủ dự án: "người ta chào là cô chào cháu nó vẫn đáp anh chị"): lời CHÀO cũng là tự xưng —
+  // "cô chào cháu", "chú chào cháu nha", "chào cháu, cô đây". Bản trước chỉ bắt chú/cô/bác + động từ có/cần/bán.
+  /(?<![\p{L}])(chú|cô|bác)\s+chào\s+(?:cháu|con|em)(?![\p{L}])/u,
+  /(?<![\p{L}])chào\s+(?:cháu|con)\s*[,.!]?\s*(chú|cô|bác)(?:\s+(?:đây|nè|nha|ạ|ơi))?\s*[,.!]?\s*$/u,
   // `\b` chỉ biết chữ ASCII ("có" + khoảng trắng không phải ranh từ) → dùng (?<![\p{L}]) / (?![\p{L}\d]).
   /(?:^|[,.;!?]\s*|(?<![\p{L}])chào\s+(?:cháu|con|em)\s*,?\s*|(?<![\p{L}])(?:dạ|vâng|alo|ok|ừ|thì)\s+(?:cháu|em)(?:\s+ơi)?\s*,?\s*)(chú|cô|bác)\s+(?:có|cần|muốn|đang|bán|hỏi|nhờ|gửi|tính|định|ở|mới|vừa|để|thấy|nghĩ|đây|không|chưa|rao)(?![\p{L}\d])/u,
   /(?<![\p{L}])(?:nhà|căn|sổ|đất|lô|sđt|số điện thoại|số đt|vợ|chồng)\s+(?:của\s+)?(chú|cô|bác)(?![\p{L}\d])(?!\s+(?:ấy|này|kia|đó|hàng xóm|giáo|sĩ))/u,
@@ -396,7 +405,15 @@ export function ngangDai(kd: string): string | null {
 // ── Tiểu từ / ack ────────────────────────────────────────────────────────────
 // Lời chào không mang dữ liệu (bỏ dấu): "hello", "chào em", "alo em ơi", "hi bạn".
 export const CHAO_SUONG_RE =
-  /^\s*(?:hello|helo|hi|hey|alo|a lo|chao|xin chao|chao buoi (?:sang|trua|chieu|toi))\s*(?:em|chau|ban|shop|ad|admin|bot|a|c|anh|chi|ai oi|ai)?\s*(?:oi|nhe|nha|a)?\s*[!.~]*\s*$/;
+  /^\s*(?:(?:anh|chi|co|chu|bac)\s+)?(?:hello|helo|hi|hey|alo|a lo|chao|xin chao|chao buoi (?:sang|trua|chieu|toi))\s*(?:em|chau|con|ban|shop|ad|admin|bot|a|c|anh|chi|ai oi|ai)?\s*(?:oi|nhe|nha|a)?\s*[!.~]*\s*$/;
+
+/**
+ * 22/09/2026: "chào cháu" / "chào con" mà KHÔNG xưng chú/cô/bác — biết là người lớn tuổi, chưa biết chú hay cô.
+ * Chỉ trên chữ còn dấu ("chao chau" bỏ dấu vẫn đủ rõ, nhưng giữ một luật với `tuXungTuCau`).
+ */
+export function laChaoChau(text: string): boolean {
+  return /(?<![\p{L}])chào\s+(?:cháu|con)(?![\p{L}])/u.test((text ?? "").trim().toLowerCase());
+}
 const TIEU_TU =
   /\b(a|u|o|oi|da|vang|em|anh|chi|nha|nhe|nhen|ha|hen|ok|oke|okie|roi|thi|ma|voi|va|do|luon|de|coi|xem|chut|lat|nua|tam|di|ne|ne|ok|uh|uk|um|hmm|hm|yes|yep)\b/g;
 const conChu = (kd: string) => kd.replace(TIEU_TU, "").replace(/[^a-z0-9]+/g, "");
