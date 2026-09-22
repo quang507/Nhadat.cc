@@ -27,6 +27,25 @@ bun run test:sec   # TS-SEC thật, DB thật — KHÔNG nằm trong `kiem`, c�
 
 Hỏng thì thoát với mã khác 0.
 
+## `giong/` — BỘ ĐO GIỌNG (FR-180 f, trả lời OPEN-54 bằng số)
+
+Đo giọng của câu bot **do model viết**: handler `chat-reply` thật + DB giả (`e2e/mock-supabase.mjs`)
++ **model thật** (`giong/that-anthropic.mjs` bọc SDK thật, ghi usage và model đã phục vụ). 24 ca ở
+`giong/ca.jsonl` (18 bán, 6 mua), mỗi ca là một lượt có hồ sơ / tin / câu treo / lịch sử dựng sẵn từ
+tình huống thật (nguồn ghi trong từng ca). Không đụng DB production, không tốn lượt Zalo.
+
+| Lệnh | Cần gì | Ra gì |
+|---|---|---|
+| `bun run giong:gia` | không (offline) | kiểm DÂY: model giả câu ĐÚNG mẫu phải đạt cao (oracle), câu SAI mẫu phải rớt (null) |
+| `bun run giong` | `ANTHROPIC_API_KEY` (env hoặc `scripts/.env`), ~0,1 đô/lượt 24 ca | `train/out/giong/<mốc>/results.jsonl` + `errors.jsonl` + `tom-tat.json` — TẦNG 1 luật máy |
+| `bun run giong:cham train/out/giong/<mốc>` | khoá như trên, giám khảo `GIONG_JUDGE` (mặc định `claude-opus-5`, ~0,3 đô/24 lượt) | `cham.jsonl` + `tom-tat-cham.json` — TẦNG 2: nghe như người · đúng ý · không bịa · gọn |
+
+Hai bài tự kiểm offline nằm trong `test:bot`: `kiem-giong.mjs --tu-kiem` (luật máy chấm đúng câu
+đúng / rớt đúng luật câu sai) và `cham.mjs --tu-kiem` (khuôn prompt + JSON giám khảo).
+Thoát 2 = **chưa đo được** (thiếu khoá), không phải đạt. Lượt lỗi API / quá giờ / model phục vụ
+lệch vào `errors.jsonl`, KHÔNG tính là rớt. Prompt đo là bản trong CODE — chạy `bun run prompt`
+để chắc `bot_prompts` trên DB khớp trước khi tin số; `mau_cau_fewshot` để rỗng.
+
 ## Hai bộ CẦN MÔI TRƯỜNG THẬT — không chạy được trong sandbox
 
 | Bộ | Cần gì | Chạy sao | Đọc kết quả |

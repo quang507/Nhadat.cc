@@ -2378,6 +2378,13 @@ fresh(seedKho);
   check("BON-05 chưa biết cách gọi → không bong bóng nào chứa 'anh/chị', có 'anh chị'", !rp.body.replies.some((r) => /anh\/chị/i.test(r)) && rp.body.replies.some((r) => /anh chị/i.test(r)), JSON.stringify({ rep: rp.body.replies }));
   fresh(); rp = await send({ external_user_id: "bon-6", text: "chào em, anh có căn nhà hẻm 4m Trần Bình Trọng quận 5, 60m2, 5 tỷ" });
   check("BON-06 đã biết 'anh' → vẫn 'anh', không đổi", rp.body.replies.some((r) => /Sai chỗ nào anh nhắn/.test(r)), JSON.stringify({ rep: rp.body.replies }));
+  // 22/09/2026 (bộ đo giọng `bot/tests/giong`, ca M01/M02/M06): nhánh MUA chưa qua bộ lọc gạch chéo —
+  // model trả JSON hỏng → câu dò tiền định "Anh/chị cho em xin thêm…" đi thẳng ra khách.
+  fresh(seedKho);
+  globalThis.__model.create = () => "không phải json";
+  rp = await send({ external_user_id: "mua-gach-cheo", text: "mình tìm nhà quận 5 tầm 7 tỷ để ở" });
+  check("BON-07 khách MUA chưa biết cách gọi, model hỏng JSON → câu dò tiền định KHÔNG còn 'anh/chị' gạch chéo",
+    rp.body.replies.length > 0 && !rp.body.replies.some((r) => /anh\s*\/\s*chị/i.test(r)), JSON.stringify(rp.body.replies));
 }
 
 // ── FR-209 (15/09/2026): tra PHƯỜNG MỚI từ tên đường — Nominatim → bảng `wards`, HỎI XÁC NHẬN, gật mới ghi ──

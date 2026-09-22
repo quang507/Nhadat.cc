@@ -4936,6 +4936,10 @@ Deno.serve(async (req) => {
   }
   // 16/09/2026: khách mua là chú/cô/bác → bot tự xưng "cháu" (cùng luật nhánh bán).
   out.replies = doiTuXung(out.replies, goiMua);
+  // 22/09/2026 (bộ đo giọng, ca M01/M02/M06 chạy model giả): câu dò tiền định "Anh/chị cho em xin thêm…"
+  // và mọi câu model ở nhánh MUA chưa đi qua bộ lọc gạch chéo như nhánh bán (1952) → khách mua chưa
+  // biết nam/nữ vẫn đọc "anh/chị". Cùng một lưới cho hai nhánh.
+  if (!goiMua) out.replies = out.replies.map(boGachCheo);
   // 15/09/2026 (bắn thật K2): "phòng riêng hay share…? Ngoài ra, có cần toilet riêng, điều hòa
   // không?" — HUMAN_CHAT_RULES cho gộp ý vào MỘT câu hỏi, không phải hai câu hỏi.
   out.replies = motCauHoi(out.replies);
