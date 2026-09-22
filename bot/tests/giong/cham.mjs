@@ -17,8 +17,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+// SDK thật chỉ nạp khi chấm thật (dynamic import) — bài tự kiểm offline không cần nó.
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GOC = join(HERE, "..", "..", "..");
@@ -76,6 +75,8 @@ if (import.meta.main) {
   const apiKey = process.env.ANTHROPIC_API_KEY ?? envF.ANTHROPIC_API_KEY;
   if (!apiKey) { console.error("Thiếu ANTHROPIC_API_KEY (env / scripts/.env). Thoát 2 = chưa chấm được."); process.exit(2); }
   const JUDGE = process.env.GIONG_JUDGE ?? envF.GIONG_JUDGE ?? "claude-opus-5";
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const { zodOutputFormat } = await import("@anthropic-ai/sdk/helpers/zod");
   const client = new Anthropic({ apiKey });
   const rows = readFileSync(join(RA, "results.jsonl"), "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
   // Ngữ cảnh của ca (lịch sử) không nằm trong results → đọc lại từ ca.jsonl.
