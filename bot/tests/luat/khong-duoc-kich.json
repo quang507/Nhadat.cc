@@ -281,6 +281,45 @@
         "ok phường đó xa lắm",
         "50m2 4 tỷ"
       ]
+    },
+    "laRaoLai": {
+      "hau_qua": "22/09/2026 (kịch bản E): tin da_chot/an sang dang_ban hoặc cho_thong_tin — tin đã bán/đã rút lên kệ lại, khách được gợi một căn không còn",
+      "phai_kich": [
+        [
+          "mở lại căn 2 chung cư đi, nó chưa bán, đăng căn 2 lên giúp tui",
+          true
+        ],
+        [
+          "rao lại căn chung cư Hùng Vương Plaza đi em, căn đó chưa bán",
+          true
+        ],
+        [
+          "đăng lại tin đi em",
+          true
+        ],
+        [
+          "căn đó chưa bán, mở lên lại giúp anh",
+          true
+        ],
+        [
+          "cho anh treo lại tin nha",
+          true
+        ]
+      ],
+      "khong_duoc_kich": [
+        "bán rồi hả em?",
+        "bán lại giá tốt cho khách",
+        "căn 1 bán rồi nha, còn căn 2 thôi",
+        "3 phòng ngủ",
+        "chủ mua lại nhà bên cạnh rồi",
+        "để anh coi lại rồi báo em",
+        "nhà mới sơn lại, còn đẹp lắm",
+        "anh gửi lại ảnh nha",
+        "em nhắc lại câu hỏi giúp anh",
+        "khách trả giá lại 5 tỷ",
+        "sửa lại giá 6 tỷ nha em",
+        "hôm qua có người lại xem nhà"
+      ]
     }
   }
 }

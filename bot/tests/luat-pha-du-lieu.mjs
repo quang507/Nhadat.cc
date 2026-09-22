@@ -41,6 +41,8 @@ const catGhiChu = (s) => s.replace(/\s*\([^)]*\)\s*$/, "").trim();
 // Mỗi luật → một hàm "khớp thì ra gì". Trả null/false = không kích hoạt.
 const CHAY = {
   laNgungRao: (c) => E.laNgungRao(c),
+  // 22/09 (kịch bản E): mở lại tin đã gỡ.
+  laRaoLai: (c) => E.laRaoLai(c),
   bocQuan: (c) => bocQuan(boDau(c), c),
   laDuRoi: (c) => E.laDuRoi(c),
   laDongY: (c) => E.laDongY(c),
@@ -90,7 +92,8 @@ const MAU = {
 };
 // "ghi đè quận" 1 → 2 (15/09, FR-209): `capNhatQuanTuPhuong` ghi quận cũ tra từ `wards` sau khi chủ
 // nhà gật gợi ý hoặc tự nói tên phường mới — luật `tachTienToPhuong` có bảng ở trên.
-const NEN = { "đổi trạng thái tin (an/da_chot)": 2, "ghi đè quận": 2, "đóng dấu 'đủ rồi'": 4 };
+// "đổi trạng thái tin" 2 → 3 (22/09, kịch bản E): `laRaoLai` mở lại tin đã gỡ — luật có bảng ở trên.
+const NEN = { "đổi trạng thái tin (an/da_chot)": 3, "ghi đè quận": 2, "đóng dấu 'đủ rồi'": 4 };
 console.log("\n▸ canh cửa — chỗ ghi đè dữ liệu trong chat-reply");
 for (const [ten, re] of Object.entries(MAU)) {
   const so = (src.match(re) ?? []).length;

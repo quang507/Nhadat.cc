@@ -3776,6 +3776,14 @@ begin
          and (price_raw is distinct from v_raw or price_source is distinct from bac);
     end if;
 
+  -- 22/09/2026 (kịch bản D): "đang cho thuê 30 triệu/tháng" → fact doanh_thu; tin BÁN thì đó là dòng tiền đang thu.
+  elsif new.question = 'doanh_thu' then
+    v_vnd := public.parse_vnd(v_txt);
+    if v_vnd is not null and v_vnd between 1000000 and 10000000000 and l.deal is distinct from 'cho_thue' then
+      update listings set rent_income_vnd = v_vnd, specs_source = bac
+       where id = new.listing_id and (rent_income_vnd is null or de);
+    end if;
+
   elsif new.question = 'phuong' then
     v_ward := public.chuan_hoa_phuong(v_txt);
     if v_ward is not null then

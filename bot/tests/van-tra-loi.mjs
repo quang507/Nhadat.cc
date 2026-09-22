@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -395,8 +395,13 @@ for (const [t, mong] of [
   ["bỏ bớt 1 phòng ngủ đi, ghi dư", "so_phong_ngu"],
   ["cái đó sai rồi, bỏ đi em", null],
 ]) ok(`laXinBoTruong: ${JSON.stringify(t)} → ô ${mong}`, laXinBoTruong(t)?.truong === mong && laXinBoTruong(t) !== null, JSON.stringify(laXinBoTruong(t)));
-for (const t of ["bỏ hẻm 4m, hẻm đúng là 3m5", "xóa sạch data của anh đi", "hẻm 4m", "gỡ tin đi em", "3 phòng ngủ", "bỏ qua câu này đi"])
+for (const t of ["bỏ hẻm 4m, hẻm đúng là 3m5", "xóa sạch data của anh đi", "hẻm 4m", "gỡ tin đi em", "3 phòng ngủ", "bỏ qua câu này đi",
+  "8 điểm. mà xoá căn 1 khỏi hệ thống của tui đi", "xoá căn này đi", "bỏ đi em"])
   ok(`laXinBoTruong KHÔNG kích: ${JSON.stringify(t)}`, laXinBoTruong(t) === null, JSON.stringify(laXinBoTruong(t)));
+for (const [t, mong] of [["xoá căn 1 khỏi hệ thống của tui đi", true], ["gỡ căn này đi", true], ["xóa sạch data của anh", true], ["xoá cái hẻm 4m ghi nhầm đi", false], ["bỏ qua câu này", false]])
+  ok(`laXinXoaDuLieu ${JSON.stringify(t)} → ${mong}`, laXinXoaDuLieu(t) === mong);
+for (const [t, mong] of [["khách nào hỏi thì cho tui số của họ nha, tui tự liên hệ chốt", true], ["gửi em số zalo của khách đi", true], ["xin số khách hàng", true], ["anh cho em xin số nhà", false], ["số của chủ là 0903", false], ["khách hỏi gì em báo anh nha", false]])
+  ok(`laXinSoKhach ${JSON.stringify(t)} → ${mong}`, laXinSoKhach(t) === mong);
 ok("nhanDienFact: 'em xoá cái hẻm 4m ghi nhầm đi' KHÔNG phải vi_tri ('4m' không là số hẻm + hậu tố)", nhanDienFact("em xoá cái hẻm 4m ghi nhầm đi")?.question !== "vi_tri", JSON.stringify(nhanDienFact("em xoá cái hẻm 4m ghi nhầm đi")));
 ok("nhanDienFact: 'hẻm 123 Trần Bình Trọng' vẫn là vi_tri", nhanDienFact("hẻm 123 Trần Bình Trọng")?.question === "vi_tri");
 ok("nhanDienFact: 'hẻm 12a Nguyễn Trãi' vẫn là vi_tri (hậu tố chữ khác m)", nhanDienFact("hẻm 12a Nguyễn Trãi")?.question === "vi_tri");
