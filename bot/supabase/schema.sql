@@ -994,6 +994,7 @@ exception when duplicate_object then null; end $d$;
 -- ══ Index ══
 create index if not exists boc_tach_bong_created_at_idx ON public.boc_tach_bong USING btree (created_at DESC);
 create index if not exists boc_tach_bong_seller_idx ON public.boc_tach_bong USING btree (seller_id);
+CREATE INDEX boc_tach_bong_listing_id_idx ON public.boc_tach_bong USING btree (listing_id);
 create index if not exists bot_errors_at_idx ON public.bot_errors USING btree (at DESC);
 create index if not exists bot_errors_source_at_idx ON public.bot_errors USING btree (source, at DESC);
 create index if not exists chat_quota_gio_idx ON public.chat_quota USING btree (gio);
@@ -1029,12 +1030,16 @@ create index if not exists listings_project_idx ON public.listings USING btree (
 CREATE UNIQUE INDEX listings_project_unit_uniq ON public.listings USING btree (project_id, unit_code) WHERE ((project_id IS NOT NULL) AND (unit_code IS NOT NULL));
 create index if not exists listings_seller_id_idx ON public.listings USING btree (seller_id);
 create index if not exists mau_cau_phia_moi_idx ON public.mau_cau USING btree (phia, updated_at DESC) WHERE (dung_lam = ANY (ARRAY['vi_du'::text, 'ca_hai'::text]));
+CREATE INDEX mau_cau_conversation_id_idx ON public.mau_cau USING btree (conversation_id);
 create index if not exists media_cleanup_can_lam_idx ON public.media_cleanup_queue USING btree (trang_thai, created_at) WHERE (trang_thai = ANY (ARRAY['cho'::text, 'dang_lam'::text]));
 create index if not exists media_listing_id_idx ON public.media USING btree (listing_id);
 create index if not exists messages_conv_seq_idx ON public.messages USING btree (conversation_id, seq DESC);
 create index if not exists messages_conv_time_idx ON public.messages USING btree (conversation_id, created_at);
 create index if not exists project_facts_cho_duyet_idx ON public.project_facts USING btree (trang_thai, created_at DESC);
 CREATE UNIQUE INDEX project_facts_khong_trung_idx ON public.project_facts USING btree (COALESCE((project_id)::text, lower(btrim(ten_du_an))), khoa, gia_tri) WHERE (trang_thai <> 'bo'::text);
+CREATE INDEX project_facts_project_id_idx ON public.project_facts USING btree (project_id);
+CREATE INDEX project_facts_listing_id_idx ON public.project_facts USING btree (listing_id);
+CREATE INDEX project_facts_conversation_id_idx ON public.project_facts USING btree (conversation_id);
 create index if not exists projects_priority_idx ON public.projects USING btree (priority, district);
 create index if not exists property_events_at_idx ON public.property_events USING btree (at DESC);
 create index if not exists property_events_buyer_idx ON public.property_events USING btree (buyer_id);
@@ -2844,6 +2849,10 @@ AS $function$
 declare
   v_tin int := 0; v_tin_nhan int := 0; v_nguoi int := 0; v_khach int := 0; v_pf int := 0;
 begin
+  -- 20260922f: hàm xoá dữ liệu, mở cho authenticated — chỉ admin, service_role hoặc cron (postgres) được gọi.
+  if not (public.la_admin() or coalesce(auth.role(), '') = 'service_role' or current_user in ('postgres', 'supabase_admin')) then
+    raise exception 'don_du_lieu_thu: chi admin' using errcode = '42501';
+  end if;
   create temp table if not exists _nguoi_thu on commit drop as
     select id from sellers
      where zalo_user_id ~ '^(thu-|b15-|hoi-|z-|e2e-)';
@@ -3557,6 +3566,7 @@ CREATE OR REPLACE FUNCTION public.jsonb_bo_rong(j jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
  IMMUTABLE
+ SET search_path TO 'public'
 AS $function$
 declare k text; v jsonb; e jsonb; o jsonb;
 begin
@@ -4378,6 +4388,7 @@ $function$
 CREATE OR REPLACE FUNCTION public.mau_cau_cham_moc()
  RETURNS trigger
  LANGUAGE plpgsql
+ SET search_path TO 'public'
 AS $function$
 begin new.updated_at := now(); return new; end $function$
 ;
@@ -4656,6 +4667,8 @@ AS $function$
             from public.messages m
             join public.messages m2 on m2.conversation_id = m.conversation_id and m2.seq < m.seq
            where m.id = p_message_id
+             -- 20260922f: đọc tin nhắn của người khác — chỉ admin / service_role / chính DB.
+             and (public.la_admin() or coalesce(auth.role(), '') = 'service_role' or current_user in ('postgres', 'supabase_admin'))
              and not (m2.sender = 'bot' and coalesce(m2.body, '') like '💾%')
            order by m2.seq desc limit 8) x
 $function$
@@ -6983,7 +6996,7 @@ create policy anon_read_listings on public.listings as permissive for SELECT to 
 drop policy if exists listings_admin_delete on public.listings;
 create policy listings_admin_delete on public.listings as permissive for DELETE to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
-  WHERE (a.email = (auth.jwt() ->> 'email'::text)))));
+  WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
 drop policy if exists listings_admin_read on public.listings;
 create policy listings_admin_read on public.listings as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
