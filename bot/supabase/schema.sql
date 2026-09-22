@@ -1251,30 +1251,32 @@ begin
     raise exception 'phải gõ đúng chữ XOA HET để xác nhận' using errcode = '22023';
   end if;
 
-  delete from messages;                          get diagnostics n = row_count; v := v || jsonb_build_object('messages', n);
-  delete from project_facts;                     get diagnostics n = row_count; v := v || jsonb_build_object('project_facts', n);
-  delete from listing_facts;                     get diagnostics n = row_count; v := v || jsonb_build_object('listing_facts', n);
-  delete from info_requests;                     get diagnostics n = row_count; v := v || jsonb_build_object('info_requests', n);
-  delete from listing_media;                     get diagnostics n = row_count; v := v || jsonb_build_object('listing_media', n);
-  delete from media;                             get diagnostics n = row_count; v := v || jsonb_build_object('media', n);
-  delete from listing_views;                     get diagnostics n = row_count; v := v || jsonb_build_object('listing_views', n);
-  delete from property_events;                   get diagnostics n = row_count; v := v || jsonb_build_object('property_events', n);
-  delete from interests;                         get diagnostics n = row_count; v := v || jsonb_build_object('interests', n);
-  delete from ratings_log;                       get diagnostics n = row_count; v := v || jsonb_build_object('ratings_log', n);
+  -- `where true` ở mọi câu xoá: role `authenticator` nạp `safeupdate`, câu DELETE không WHERE
+  -- bị chặn khi hàm được gọi qua PostgREST (22/09/2026, nút /admin từng đổ lỗi này).
+  delete from messages where true;               get diagnostics n = row_count; v := v || jsonb_build_object('messages', n);
+  delete from project_facts where true;          get diagnostics n = row_count; v := v || jsonb_build_object('project_facts', n);
+  delete from listing_facts where true;          get diagnostics n = row_count; v := v || jsonb_build_object('listing_facts', n);
+  delete from info_requests where true;          get diagnostics n = row_count; v := v || jsonb_build_object('info_requests', n);
+  delete from listing_media where true;          get diagnostics n = row_count; v := v || jsonb_build_object('listing_media', n);
+  delete from media where true;                  get diagnostics n = row_count; v := v || jsonb_build_object('media', n);
+  delete from listing_views where true;          get diagnostics n = row_count; v := v || jsonb_build_object('listing_views', n);
+  delete from property_events where true;        get diagnostics n = row_count; v := v || jsonb_build_object('property_events', n);
+  delete from interests where true;              get diagnostics n = row_count; v := v || jsonb_build_object('interests', n);
+  delete from ratings_log where true;            get diagnostics n = row_count; v := v || jsonb_build_object('ratings_log', n);
   delete from reminders
    where buyer_id is not null or seller_id is not null or listing_id is not null or viewing_id is not null
       or kind in ('promise', 'reengage', 'viewing', 'followup', 'match', 'feedback', 'sold', 'rating');
                                                  get diagnostics n = row_count; v := v || jsonb_build_object('reminders', n);
-  delete from viewings;                          get diagnostics n = row_count; v := v || jsonb_build_object('viewings', n);
-  delete from deals;                             get diagnostics n = row_count; v := v || jsonb_build_object('deals', n);
-  delete from curated_lists;                     get diagnostics n = row_count; v := v || jsonb_build_object('curated_lists', n);
-  delete from boc_tach_bong;                     get diagnostics n = row_count; v := v || jsonb_build_object('boc_tach_bong', n);
+  delete from viewings where true;               get diagnostics n = row_count; v := v || jsonb_build_object('viewings', n);
+  delete from deals where true;                  get diagnostics n = row_count; v := v || jsonb_build_object('deals', n);
+  delete from curated_lists where true;          get diagnostics n = row_count; v := v || jsonb_build_object('curated_lists', n);
+  delete from boc_tach_bong where true;          get diagnostics n = row_count; v := v || jsonb_build_object('boc_tach_bong', n);
   update sellers set active_listing_id = null where active_listing_id is not null;
-  delete from listings;                          get diagnostics n = row_count; v := v || jsonb_build_object('listings', n);
-  delete from conversations;                     get diagnostics n = row_count; v := v || jsonb_build_object('conversations', n);
-  delete from chat_quota;                        get diagnostics n = row_count; v := v || jsonb_build_object('chat_quota', n);
-  delete from buyers;                            get diagnostics n = row_count; v := v || jsonb_build_object('buyers', n);
-  delete from sellers;                           get diagnostics n = row_count; v := v || jsonb_build_object('sellers', n);
+  delete from listings where true;               get diagnostics n = row_count; v := v || jsonb_build_object('listings', n);
+  delete from conversations where true;          get diagnostics n = row_count; v := v || jsonb_build_object('conversations', n);
+  delete from chat_quota where true;             get diagnostics n = row_count; v := v || jsonb_build_object('chat_quota', n);
+  delete from buyers where true;                 get diagnostics n = row_count; v := v || jsonb_build_object('buyers', n);
+  delete from sellers where true;                get diagnostics n = row_count; v := v || jsonb_build_object('sellers', n);
 
   insert into bot_health (who, at) values ('xoa_het', now())
     on conflict (who) do update set at = excluded.at;
