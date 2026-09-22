@@ -511,11 +511,13 @@ export function boMauThuanCan(replies: string[], can: CanDoiChieu | null | undef
  * `nguCanh` (kho + căn khách nhắc + dự án + lịch sử, đã bỏ dấu) thì bỏ tên, giữ loại: "gần chợ lắm".
  * Tên có trong ngữ cảnh giữ nguyên. Không bỏ gì thì trả đúng mảng cũ.
  */
-const LOAI_TIEN_ICH = "chợ|trường|bệnh viện|công viên|siêu thị|chùa|nhà thờ|bến xe|trung tâm thương mại";
+// 22/09/2026 (FR-114 e): thêm dự án / chung cư / cao ốc — bot kể dự án theo quận từ kho, tên ngoài kho là bịa.
+const LOAI_TIEN_ICH = "chợ|trường|bệnh viện|công viên|siêu thị|chùa|nhà thờ|bến xe|trung tâm thương mại|dự án|chung cư|cao ốc|khu dân cư";
 export function boTenRiengBia(replies: string[], nguCanh: string): string[] {
   const nc = boDau(nguCanh ?? "").replace(/\s+/g, " ");
   // \p{Lu} chứ không phải [A-ZÀ-Ỹ]: dải À-Ỹ lẫn cả chữ THƯỜNG có dấu (đ, ú…), làm "chợ An Đông đúng" nuốt "đúng".
-  const re = new RegExp(`\\b(${LOAI_TIEN_ICH})\\s+((?:\\p{Lu}[\\p{L}\\d]*(?:[\\s.-](?=[\\p{Lu}\\d]))?){1,4})`, "gu");
+  // Tên = chữ hoa mở đầu, tới 3 từ nối tiếp (chữ hoa hoặc SỐ: "Sunrise Quận 5", "Tháng 2"); không nuốt dấu cách cuối.
+  const re = new RegExp(`\\b(${LOAI_TIEN_ICH})\\s+(\\p{Lu}[\\p{L}\\d]*(?:[\\s.-](?:\\p{Lu}[\\p{L}\\d]*|\\d+)){0,3})`, "gu");
   let daBo = false;
   const ra = replies.map((r) => r.replace(re, (m, loai: string, ten: string) => {
     const t = ten.trim().replace(/[.\-]+$/, "");

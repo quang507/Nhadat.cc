@@ -373,6 +373,9 @@ ok("boGachCheo: không đụng 'anh chị phụ trách'", boGachCheo("có anh ch
   ok("boTenRiengBia: 'chợ Hoà Bình' có trong kho → giữ nguyên (`===`)", boTenRiengBia(that, nc) === that);
   ok("boTenRiengBia: 'trường Trần Đại Nghĩa' bịa → 'gần trường'; 'gần chợ' trần không đụng",
     boTenRiengBia(["Gần trường Trần Đại Nghĩa và gần chợ."], nc)[0] === "Gần trường và gần chợ.", JSON.stringify(boTenRiengBia(["Gần trường Trần Đại Nghĩa và gần chợ."], nc)));
+  ok("boTenRiengBia: 'dự án Sunrise Quận 5' không có trong kho → 'dự án'; 'Chung cư Lakai' có → giữ (FR-114 e)",
+    boTenRiengBia(["Có Chung cư Lakai và dự án Sunrise Quận 5 nữa ạ."], "• Chung cư Lakai - CĐT Lakai · Số 5 Nguyễn Tri Phương")[0] === "Có Chung cư Lakai và dự án nữa ạ.",
+    JSON.stringify(boTenRiengBia(["Có Chung cư Lakai và dự án Sunrise Quận 5 nữa ạ."], "• Chung cư Lakai - CĐT Lakai · Số 5 Nguyễn Tri Phương")));
   ok("boTenRiengBia: tên có trong LỊCH SỬ (khách nói) → giữ", boTenRiengBia(["gần chợ An Đông đúng ý anh nè."], "khách: tìm nhà gần chợ An Đông").length === 1 && /An Đông/.test(boTenRiengBia(["gần chợ An Đông đúng ý anh nè."], "khách: tìm nhà gần chợ An Đông")[0]));
 }
 
