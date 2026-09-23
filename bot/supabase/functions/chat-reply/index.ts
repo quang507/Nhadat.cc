@@ -5724,11 +5724,20 @@ Deno.serve(async (req) => {
     // chống hỏi trùng: đã có yêu cầu pending của KHÁCH NÀY cho căn này trong 24h thì thôi.
     // 23/09/2026 (bắn lại sau deploy #193): bản cũ chống trùng theo CĂN — khách A hỏi hướng, khách B hỏi giá
     // bớt cùng căn → câu của B bị nuốt, B không bao giờ nhận câu trả lời dù bot đã hứa "em hỏi lại chủ".
-    const { count: aoDup } = await client.from("info_requests")
-      .select("id", { count: "exact", head: true })
+    const { data: aoCu, error: aoCuErr } = await client.from("info_requests")
+      .select("id, question")
       .eq("listing_id", aoLst.id).eq("buyer_id", buyer.id).eq("status", "pending").eq("source", "buyer_ask")
-      .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
-    if ((aoDup ?? 0) === 0) {
+      .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString()).limit(1).maybeSingle();
+    if (aoCuErr) await ghiLoi(client, "chat-reply hoi chu nha(doc cu)", aoCuErr.message);
+    // 23/09/2026 (bắn lại sau deploy #194): cùng khách đã chờ "hướng nhà", nay hỏi thêm "quy hoạch" → bản trên
+    // bỏ câu mới dù bot đã hứa hỏi. Câu CHƯA có trong việc đang chờ thì NỐI vào việc đó (chủ nhà đọc một tin).
+    const aoCau = out.ask_owner.question.trim();
+    if (aoCu && !boDau(String(aoCu.question ?? "")).includes(boDau(aoCau))) {
+      const { error: aoNoiErr } = await client.from("info_requests")
+        .update({ question: `${aoCu.question}; ${aoCau}`.slice(0, 500) }).eq("id", aoCu.id);
+      if (aoNoiErr) await ghiLoi(client, "chat-reply hoi chu nha(noi cau)", aoNoiErr.message);
+    }
+    if (!aoCu && !aoCuErr) {
       // FR-140: câu khách hỏi chủ nhà. Hai khách cùng hỏi một câu về một căn
       // là chuyện thường — 23505 nghĩa là câu đó đang chờ chủ nhà trả lời rồi,
       // trả lời về sẽ tới cả hai khách. Không hỏi chồng.
