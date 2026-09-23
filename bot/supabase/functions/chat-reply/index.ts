@@ -84,7 +84,7 @@ import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
 import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
-import { boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
+import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
 import { boCauGhiNhan, boCauTrung, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
@@ -5425,6 +5425,33 @@ Deno.serve(async (req) => {
       out.replies = chan.replies;
       console.log("chat-reply: chặn câu hứa có hàng khi kho trống");
     }
+    // 23/09/2026 (bắn lại sau deploy #193): kho trống mà model tả "căn này hẻm xe hơi 4m P12, 50m2, 7,9 tỷ" —
+    // căn không tồn tại. Bỏ bong bóng tả căn; còn lại trống thì nói thật.
+    const boBia = boCanBia(out.replies);
+    if (boBia !== out.replies) {
+      out.replies = /chua co (?:can|tin) nao|chua co can/.test(boDau(boBia.join(" ")))
+        ? boBia
+        : [...boBia, `Dạ hiện bên em chưa có căn nào khớp đúng nhu cầu này ạ. Có căn mới hợp là em báo ${ac} liền nha.`];
+      console.log("chat-reply: bỏ căn bịa khi kho trống");
+    }
+  }
+  // 23/09/2026 (bắn lại sau deploy #193): kho CÓ căn khớp (Trần Bình Trọng 8 tỷ 2, khách "dưới 9 tỷ") mà model chỉ
+  // "Dạ em lọc kho cho mình xem" rồi hỏi thêm — khách không thấy căn nào. Không nhắc căn nào trong kho mà có câu
+  // hứa lọc/tìm → thay câu hứa bằng căn đầu kho (tiền định, chỉ chữ có trong kho).
+  if (kho && minimumMet && !mentioned.length) {
+    const dsKho = (listings ?? []) as CanRow[];
+    const vb = boDau(out.replies.join(" "));
+    const daNoiCan = dsKho.some((l) => vb.includes(boDau(l.code)) || (() => { const dc = boDau(l.location_raw ?? ""); return dc.length >= 5 && vb.includes(dc); })());
+    if (!daNoiCan && out.replies.some((r) => laHuaCoHangCau(r, false))) {
+      const l0 = dsKho[0];
+      const moTa = [`${locLienHe(l0.location_raw ?? "").trim()} ${l0.ward ?? ""}`.trim(), l0.price_raw, l0.area_m2 ? `${Number(l0.area_m2)}m2` : null, l0.bedrooms ? `${l0.bedrooms}PN` : null]
+        .filter(Boolean).join(" · ");
+      const chan = chanHuaCoHang(out.replies, `em có căn #${l0.code} · ${moTa}, ${goiMua ?? "mình"} xem thử nha?`, false);
+      if (chan.daChan) {
+        out.replies = chan.replies;
+        console.log(`chat-reply: thay lời hứa lọc kho bằng căn ${l0.code}`);
+      }
+    }
   }
   // 13/09/2026: khách hỏi "em là người hay máy" → model đáp "Em là người thật,
   // không phải máy đâu" (lượt bắn 13/09). Nói dối khách về bản chất trợ lý là
@@ -5465,7 +5492,11 @@ Deno.serve(async (req) => {
     // hướng lẫn quy hoạch. Câu khẳng định dữ kiện KHÔNG có trong dữ liệu (kho, căn khách nhắc, dự án) thì bỏ, nói
     // thật "em chưa có thông tin" và mở việc hỏi chủ cho căn đang nói (model chưa mở thì code mở).
     const acMua = goiMua ?? "mình";
-    const nguCanhDuLieu = [kho, askedBlock, tuongTuBlock, canDuAnBlock, duAnKhuBlock, duanBlock, duanNhaMinh].map(String).join("\n");
+    // Đang nói về MỘT CĂN thì chỉ dữ liệu căn làm chứng (khối dự án đối tác luôn có chữ "quy hoạch 1/500" — bắn lại
+    // sau deploy #193, "không có quy hoạch gì cả" lọt vì thế). Không có căn nào đang nói thì mọi khối.
+    const nguCanhDuLieu = (canNoi
+      ? [kho, askedBlock, tuongTuBlock, canDuAnBlock]
+      : [kho, askedBlock, tuongTuBlock, canDuAnBlock, duAnKhuBlock, duanBlock, duanNhaMinh]).map(String).join("\n");
     const bia = chanBiaDuKien(out.replies, nguCanhDuLieu);
     if (bia.bo.length) {
       out.replies = bia.replies;
@@ -5564,8 +5595,11 @@ Deno.serve(async (req) => {
   if (plMua) {
     const PL_MUA: Record<string, string> = { "so hong rieng": "sổ hồng riêng", shr: "sổ hồng riêng", "so rieng": "sổ hồng riêng", "so hong": "sổ hồng", "so do": "sổ đỏ" };
     delta.phap_ly = PL_MUA[plMua[1]] ?? "pháp lý rõ ràng";
+  }
+  // Ghi chú chỉ nói lại chuyện sổ (model chép lại từ lịch sử ở lượt sau) → bỏ khi hồ sơ đã có pháp lý.
+  {
     const nkd = typeof delta.notes === "string" ? boDau(delta.notes) : "";
-    if (nkd && /\b(?:so|phap ly|shr)\b/.test(nkd) && nkd.split(/\s+/).length <= 6) delete delta.notes;
+    if (nkd && (delta.phap_ly || prefs.phap_ly) && /\b(?:so|phap ly|shr)\b/.test(nkd) && nkd.split(/\s+/).length <= 6) delete delta.notes;
   }
   // 23/09/2026: "em đang tìm mua căn hộ hoặc nhà nhỏ q5" — model bỏ trống loại hình. Câu nói rõ thì ghi.
   if (delta.property_type == null && (prefs.property_type == null || prefs.property_type === "")) {
@@ -5687,10 +5721,12 @@ Deno.serve(async (req) => {
     const { data: aoLst } = await client.from("listings").select("id")
       .or(`code.ilike.${aoCode},legacy_code.ilike.${aoCode}`).limit(1).maybeSingle();
     if (!aoLst) return;
-    // chống hỏi trùng: đã có yêu cầu pending của khách cho căn này trong 24h thì thôi
+    // chống hỏi trùng: đã có yêu cầu pending của KHÁCH NÀY cho căn này trong 24h thì thôi.
+    // 23/09/2026 (bắn lại sau deploy #193): bản cũ chống trùng theo CĂN — khách A hỏi hướng, khách B hỏi giá
+    // bớt cùng căn → câu của B bị nuốt, B không bao giờ nhận câu trả lời dù bot đã hứa "em hỏi lại chủ".
     const { count: aoDup } = await client.from("info_requests")
       .select("id", { count: "exact", head: true })
-      .eq("listing_id", aoLst.id).eq("status", "pending").eq("source", "buyer_ask")
+      .eq("listing_id", aoLst.id).eq("buyer_id", buyer.id).eq("status", "pending").eq("source", "buyer_ask")
       .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
     if ((aoDup ?? 0) === 0) {
       // FR-140: câu khách hỏi chủ nhà. Hai khách cùng hỏi một câu về một căn

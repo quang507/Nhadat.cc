@@ -3413,6 +3413,47 @@ fresh(seedKho);
   check("GVF-16 lượt rao đầu có lời chào → câu chào đứng TRƯỚC dòng 🤖 Đã lưu",
     /^(?:Dạ,?\s+)?(?:em|cháu)\s+chào/i.test(r.body.replies[0] ?? "") && r.body.replies.slice(1).some((x) => x.startsWith("🤖")), JSON.stringify(r.body.replies));
   globalThis.__cauHinh = cauHinhGvf;
+  // (bắn lại sau deploy #193) kho trống mà model tả một căn cụ thể → bỏ bong bóng đó.
+  fresh();
+  globalThis.__model = { parse: () => OUT({ replies: ["Dạ để cháu xem ạ.", "Chú ơi, căn này hẻm xe hơi 4m P12, 50m2, 7,9 tỷ — gần chợ chỉ khoảng 600m, yên tĩnh cho ở. Chú có quan tâm không ạ?"] }) };
+  r = await send({ external_user_id: "gvf-17", text: "Chú muốn mua nhà quận 5, khoảng 7 tới 8 tỷ cháu ơi" });
+  check("GVF-17 kho trống, model tả 'căn này hẻm xe hơi 4m P12, 50m2, 7,9 tỷ' → bỏ bong bóng căn bịa, nói thật chưa có căn",
+    !/7,9 tỷ|P12|50m2/.test(rep()) && /chưa có căn nào khớp/.test(rep()), JSON.stringify(r.body.replies));
+  // kho CÓ căn khớp mà model chỉ hứa "em lọc kho cho mình xem" → thay bằng căn đầu kho.
+  fresh(seedKho);
+  globalThis.__model = { parse: () => OUT({ replies: ["Dạ em lọc kho cho mình xem. Mình cần hẻm xe hơi không ạ?"] }) };
+  r = await send({ external_user_id: "gvf-18", text: "em đang tìm mua nhà phường 4 quận 5 dưới 7 tỷ" });
+  check("GVF-18 kho có #BDS-Q5-0001 mà model chỉ 'em lọc kho cho mình xem' → bong bóng nêu căn #BDS-Q5-0001 (tiền định từ kho), không còn câu hứa",
+    /BDS-Q5-0001/.test(rep()) && /Trần Hưng Đạo/.test(rep()) && !/lọc kho/.test(rep()), JSON.stringify(r.body.replies));
+  // Hai khách hỏi chủ về CÙNG một căn, hai câu khác nhau → mỗi khách một việc hỏi chủ (bản cũ nuốt câu thứ hai).
+  fresh((d) => { seedKho(d); for (const u of ["gvf-19a", "gvf-19b"]) { const b = buyerCo(d, u); quanTam(d, b, "BDS-Q5-0001"); } });
+  globalThis.__model = { parse: () => OUT({ replies: ["Dạ để em hỏi lại chủ nhà rồi báo mình liền."] }) };
+  r = await send({ external_user_id: "gvf-19a", text: "nhà đó hướng gì em?" });
+  r = await send({ external_user_id: "gvf-19b", text: "căn đó giá còn bớt không em?" });
+  {
+    const L = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    const ir = db().t.info_requests.filter((x) => x.source === "buyer_ask" && x.listing_id === L.id);
+    check("GVF-19 hai khách hỏi chủ cùng một căn → HAI việc hỏi chủ (mỗi khách một), không nuốt câu thứ hai",
+      ir.length === 2 && new Set(ir.map((x) => x.buyer_id)).size === 2, JSON.stringify(ir));
+  }
+  // Khối dự án đối tác có chữ "quy hoạch" → vẫn chặn câu "không có quy hoạch" về CĂN đang nói.
+  fresh((d) => { seedKho(d); d.insert("projects", { name: "Ny'ah Phú Định", district: "Quận 8", is_partner: true, priority: 1, status_text: "quy hoạch 1/500 đã duyệt" }); const b = buyerCo(d, "gvf-20"); quanTam(d, b, "BDS-Q5-0001"); });
+  globalThis.__model = { parse: () => OUT({ replies: ["Pháp lý sổ hồng riêng hoàn công, không có quy hoạch gì cả.", "Mình có muốn xem trực tiếp không ạ?"] }) };
+  r = await send({ external_user_id: "gvf-20", text: "nha do co dinh quy hoach gi ko e" });
+  check("GVF-20 khối dự án đối tác có chữ 'quy hoạch' → vẫn bỏ 'không có quy hoạch gì cả' về căn đang nói, nói thật + hỏi chủ",
+    !/không có quy hoạch/.test(rep()) && /chưa có thông tin chắc chắn/.test(rep()), JSON.stringify(r.body.replies));
+  // Mời "xem hình trước nhé?" cho căn 0 ảnh.
+  fresh((d) => { seedKho(d); const b = buyerCo(d, "gvf-21"); quanTam(d, b, "BDS-Q5-0001"); });
+  globalThis.__model = { parse: () => OUT({ replies: ["Dạ hẻm 6m xe hơi vào tận cửa ạ. Anh xem hình trước nhé?"] }) };
+  r = await send({ external_user_id: "gvf-21", text: "hẻm đó rộng bao nhiêu em?" });
+  check("GVF-21 căn 0 ảnh mà model mời 'Anh xem hình trước nhé?' → thay bằng 'chủ nhà chưa gửi hình', giữ câu hẻm",
+    /hẻm 6m/.test(rep()) && /chưa gửi hình/.test(rep()) && !/xem hình trước/.test(rep()), JSON.stringify(r.body.replies));
+  // Lượt sau model chép lại ghi chú "ưu tiên sổ hồng riêng" → không vào hoàn cảnh khi đã có phap_ly.
+  fresh((d) => buyerCo(d, "gvf-22", { phap_ly: "sổ hồng riêng" }));
+  globalThis.__model = { parse: () => OUT({ profile: { ...OUT().profile, notes: "ưu tiên sổ hồng riêng" }, replies: ["Dạ bên em không gửi số chủ nhà qua chat ạ."] }) };
+  r = await send({ external_user_id: "gvf-22", text: "cho em xin số chủ nhà với" });
+  check("GVF-22 hồ sơ đã có phap_ly, model chép lại ghi chú 'ưu tiên sổ hồng riêng' → không ghi vào hoàn cảnh",
+    !db().t.buyers.find((b) => b.zalo_user_id === "gvf-22")?.preferences?.notes, JSON.stringify(db().t.buyers.find((b) => b.zalo_user_id === "gvf-22")?.preferences));
   globalThis.__model = { parse: () => OUT() };
 }
 
