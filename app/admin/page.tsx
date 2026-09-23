@@ -608,16 +608,14 @@ function BanLamViec() {
     if (!error) setNguoiBan((l) => l.map((s) => (s.id === id ? { ...s, seller_type } : s)));
   };
 
-  const setStatus = async (id: string, status: "dang_ban" | "an") => {
-    const { error } = await supabase.from("listings").update({ status }).eq("id", id);
-    if (!error) setPending((p) => p.filter((l) => l.id !== id));
-  };
-
-  const xoaTin = async (id: string, code: string | null) => {
-    if (!confirm(`Xoá tin ${code ? `#${code}` : ""}?`)) return;
-    const { error } = await supabase.from("listings").delete().eq("id", id);
-    if (!error) setPending((p) => p.filter((l) => l.id !== id));
-    else alert(`Lỗi xoá: ${error.message}`);
+  // 14/09/2026 (chủ dự án: "luồng xoá và sửa tin vẫn chưa logic"; soát ISO 9241-110): hàng chờ
+  // duyệt từng có "Duyệt - cho rao" đưa tin lên web MỘT cú bấm và "Xoá tin" xoá cứng. Nay rao chỉ
+  // qua màn Sửa của rổ hàng (nhìn đủ tin rồi mới rao), xoá vĩnh viễn cũng ở đó; ở đây còn "Ẩn".
+  const anTin = async (id: string, code: string | null) => {
+    if (!confirm(`Ẩn tin #${code ?? ""}? Tin rời hàng chờ duyệt, vẫn còn trong rổ hàng.`)) return;
+    const { error } = await supabase.from("listings").update({ status: "an" }).eq("id", id);
+    if (error) alert(`Chưa ẩn được #${code ?? ""}: ${error.message}`);
+    else setPending((p) => p.filter((l) => l.id !== id));
   };
 
   // CRM: Gắn BĐS quan tâm cho khách
@@ -1351,9 +1349,8 @@ function BanLamViec() {
                             className="inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-300 px-3 py-1 text-xs text-navy font-semibold"
                           >
                             <Link
-                              href={`/nha-dat/${encodeURIComponent(it.code ?? "")}`}
-                              target="_blank"
-                              className="font-bold text-brand hover:underline"
+                              href={`/admin/ro-hang?sua=${encodeURIComponent(it.code ?? "")}`}
+                              className="font-bold text-[#b3461a] hover:underline"
                             >
                               #{it.code}
                             </Link>
@@ -1362,7 +1359,8 @@ function BanLamViec() {
                               type="button"
                               onClick={() => xoaBdsQuanTam(k.id, it.listing_id)}
                               title="Gỡ BĐS quan tâm này"
-                              className="ml-1 text-mute hover:text-red-600 font-bold transition"
+                              aria-label={`Gỡ #${it.code ?? ""} khỏi danh sách quan tâm`}
+                              className="ml-1 grid h-6 min-w-6 place-items-center rounded text-mute hover:bg-red-50 hover:text-red-700 font-bold transition"
                             >
                               ×
                             </button>
@@ -1467,23 +1465,18 @@ function BanLamViec() {
                         )}
                       </p>
                       <div className="mt-4 flex flex-wrap items-center gap-2">
-                        <button
-                          onClick={() => setStatus(l.id, "dang_ban")}
-                          className="rounded-md bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-dark"
+                        <Link
+                          href={`/admin/ro-hang?sua=${encodeURIComponent(l.code ?? "")}`}
+                          className="rounded-md bg-[#b3461a] px-5 py-2 text-sm font-bold text-white transition hover:bg-[#9a3c16]"
                         >
-                          Duyệt - cho rao
-                        </button>
+                          Xem &amp; duyệt →
+                        </Link>
                         <button
-                          onClick={() => setStatus(l.id, "an")}
-                          className="rounded-md border border-line px-5 py-2 text-sm font-semibold transition hover:border-brand hover:text-brand bg-white"
+                          type="button"
+                          onClick={() => anTin(l.id, l.code)}
+                          className="rounded-md border border-slate-400 px-5 py-2 text-sm font-semibold text-navy transition hover:border-navy bg-white"
                         >
                           Ẩn tin
-                        </button>
-                        <button
-                          onClick={() => xoaTin(l.id, l.code)}
-                          className="rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 hover:border-red-300 bg-white"
-                        >
-                          Xoá tin
                         </button>
                         <button
                           onClick={() => setUpCho((c) => (c === l.id ? null : l.id))}
@@ -1492,7 +1485,7 @@ function BanLamViec() {
                           {upCho === l.id ? "Đóng ảnh" : "Up ảnh"}
                         </button>
                         <span className="ml-auto text-xs text-mute">
-                          (Duyệt để xem công khai)
+                          (Mở màn sửa để xem đủ tin rồi mới rao)
                         </span>
                       </div>
                       {upCho === l.id && (

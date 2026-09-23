@@ -16,7 +16,9 @@
   --color-zalo: #0068ff;
   --color-cream: #eaf0f5;
   --color-line: #e3e9f0;
-  --color-mute: #667a8e;
+  /* 14/09/2026 (soát WCAG 1.4.3): #667a8e của ảnh Veedoo chỉ đạt 4,43:1 trên trắng, 3,86:1 trên
+     nền cream — chữ xám nhỏ khắp web/admin trượt 4,5:1. Tối một nấc, cùng sắc: 6,09 / 5,30. */
+  --color-mute: #526477;
 
   /* Bo góc Veedoo đi theo CẶP: khung ngoài to, ảnh bên trong nhỏ hơn một nấc.
      Đó là thứ tạo cảm giác "ảnh nằm trong khung" chứ không phải "ảnh bị cắt". */
