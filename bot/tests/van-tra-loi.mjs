@@ -315,6 +315,10 @@ for (const [xh, vao, mong] of [
   ["chú", "Dạ em ghi nhận rồi ạ. Em hỏi thêm chú một chút nha.", "Dạ cháu ghi nhận rồi ạ. Cháu hỏi thêm chú một chút nha."],
   ["cô", "Bên em có anh Thu phụ trách, tụi em sẽ xem kỹ.", "Bên cháu có anh Thu phụ trách, tụi cháu sẽ xem kỹ."],
   ["bác", "em gái em cũng ở đó, EM NHA", "em gái cháu cũng ở đó, CHÁU NHA"],
+  // 23/09/2026: khách xưng ông/bà.
+  ["ông", "Dạ em ghi nhận rồi ạ. Ông gửi ảnh cho em nha.", "Dạ cháu ghi nhận rồi ạ. Ông gửi ảnh cho cháu nha."],
+  ["bà", "Em hỏi thêm bà một chút nha.", "Cháu hỏi thêm bà một chút nha."],
+  ["thím", "Dạ em ghi nhận rồi ạ.", "Dạ cháu ghi nhận rồi ạ."],
   ["anh", "Dạ em ghi nhận rồi ạ.", "Dạ em ghi nhận rồi ạ."],
   [null, "Dạ em ghi nhận rồi ạ.", "Dạ em ghi nhận rồi ạ."],
 ]) ok(`doiTuXung(${xh}) ${JSON.stringify(vao.slice(0, 30))}`, doiTuXung([vao], xh)[0] === mong, JSON.stringify(doiTuXung([vao], xh)));
@@ -440,6 +444,8 @@ ok("chanHuaGuiHinh: thay đúng bong bóng hứa bằng lời thật",
   JSON.stringify(chanHuaGuiHinh(["Dạ em có căn Trần Bình Trọng ạ", "Em gửi hình liền đây :)"], "Căn này chủ nhà chưa gửi hình ạ.")));
 ok("laHuaHoiChu: 'Về giá, để em hỏi lại chủ nhà rồi báo anh liền.'", laHuaHoiChu(["Về giá, để em hỏi lại chủ nhà rồi báo anh liền."]));
 ok("laHuaHoiChu: 'chủ nhà đang ở Q5' KHÔNG", !laHuaHoiChu(["Chủ nhà đang ở Q5 nên xem nhà dễ ạ."]));
+ok("suaBotXungNhamKhach: khách ông, 'Dạ, ông ghi nhận rồi ạ.' → 'Dạ, cháu ghi nhận rồi ạ.'",
+  suaBotXungNhamKhach(["Dạ, ông ghi nhận rồi ạ."], "ông")[0] === "Dạ, cháu ghi nhận rồi ạ.", suaBotXungNhamKhach(["Dạ, ông ghi nhận rồi ạ."], "ông")[0]);
 ok("suaBotXungNhamKhach: khách chú, 'Dạ, chú ghi nhớ rồi ạ.' → 'Dạ, cháu ghi nhớ rồi ạ.'",
   suaBotXungNhamKhach(["Dạ, chú ghi nhớ rồi ạ."], "chú")[0] === "Dạ, cháu ghi nhớ rồi ạ.", suaBotXungNhamKhach(["Dạ, chú ghi nhớ rồi ạ."], "chú")[0]);
 ok("suaBotXungNhamKhach: 'chú xem nhà lúc mấy giờ ạ?' (khách làm) giữ nguyên",

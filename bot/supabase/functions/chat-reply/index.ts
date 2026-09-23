@@ -64,7 +64,7 @@ import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laNgungRao, laRaoLai, NHAN_HOI_LAI, nhanDienFact,
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
-  suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, type XungHo,
+  suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauKhen, doiTuXung, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
@@ -2166,7 +2166,7 @@ Deno.serve(async (req) => {
       if (sellerMoi) {
         const { data: bPref } = await client.from("buyers").select("preferences").eq("zalo_user_id", externalUserId).maybeSingle();
         const p = (bPref?.preferences ?? {}) as { xung_ho?: unknown; nhom_tuoi?: unknown };
-        if (typeof p.xung_ho === "string" && ["anh", "chị", "chú", "cô", "bác"].includes(p.xung_ho)) xhTuMua = p.xung_ho as XungHo;
+        if (typeof p.xung_ho === "string" && XUNG_HO_HOP_LE.has(p.xung_ho)) xhTuMua = p.xung_ho as XungHo;
         else if (p.nhom_tuoi === "lon_tuoi") nhomMoi = "lon_tuoi";
       }
       if (xhTuMua) {
@@ -3140,7 +3140,7 @@ Deno.serve(async (req) => {
             const nhan = NHAN[k] ?? k;
             // 22/09/2026 (bộ đo giọng B04): "giá 7 tỷ 5 nha em" — tiểu từ cuối câu là bằng chứng thô cho
             // DB gọt (`chuan_hoa_gia_raw`), nhưng lời xác nhận đọc lên thì bỏ.
-            const hien = v.replace(/(?:\s+(?:nha|nhé|nhe|nghen|em|anh|chị|ạ|ơi|đó|á|nè|hen|ha|nhá|cháu|chú|cô|bác|thôi|luôn|nghe))+\s*$/iu, "");
+            const hien = v.replace(/(?:\s+(?:nha|nhé|nhe|nghen|em|anh|chị|ạ|ơi|đó|á|nè|hen|ha|nhá|cháu|chú|cô|bác|ông|bà|dì|cậu|mợ|thím|dượng|thôi|luôn|nghe))+\s*$/iu, "");
             // 22/09/2026 (kịch bản C): lời xác nhận đọc đơn vị có dấu ("7 tỷ 5"), DB vẫn giữ chữ khách gõ.
             const hienDep = k === "gia" ? donViGiaDep(hien) : hien;
             daGhi.push(

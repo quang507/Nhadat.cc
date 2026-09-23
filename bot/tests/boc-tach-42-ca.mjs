@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { docTien, giaTheoM2, vndThanhChu } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { soChuThanhSo } from "../supabase/functions/_shared/extraction/so-chu.ts";
 import {
-  bocViTriRao, catDapAn, cheoPhuDinh, gonLoiSua, laHoanLai, nhanDienFact, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, laCauHoiTron, tuXungTuCau, vungPhuDinh, batXungHo, laChaoChau, CHAO_SUONG_RE, laRaoLai, chonCanTheoCau,
+  bocViTriRao, catDapAn, cheoPhuDinh, gonLoiSua, laHoanLai, nhanDienFact, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, laCauHoiTron, tuXungTuCau, vungPhuDinh, batXungHo, laChaoChau, suyTuXungHo, tuXungBot, CHAO_SUONG_RE, laRaoLai, chonCanTheoCau,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { vungNgoai } from "../supabase/functions/_shared/dia_ban.ts";
 
@@ -397,6 +397,43 @@ for (const [vao, mong] of [["mở lại căn 2 chung cư đi, nó chưa bán, đ
   ok("chonCanTheoCau 'rao lại căn chung cư đi' → căn chung cư duy nhất", chonCanTheoCau("rao lại căn chung cư đi", cans)?.id === "b");
   ok("chonCanTheoCau 'bán rồi' (không chỉ căn) → null", chonCanTheoCau("bán rồi", cans) === null);
 }
+// 23/09/2026 (Zalo thật): "chào cháu, ông bán nhà Trần Bình Trọg Q5 7 tỷ" → bot đáp "Dạ cháu chào mình ạ!".
+for (const [vao, mong] of [
+  ["chào cháu, ông bán nhà Trần Bình Trọg Q5 7 tỷ", "ông"],
+  ["chào cháu, bà có căn nhà hẻm ở quận 10", "bà"],
+  ["bà chào cháu", "bà"],
+  ["ông chào con nha", "ông"],
+  ["chào cháu, ông đây", "ông"],
+  ["để ông hỏi con ông đã", "ông"],
+  ["bà bận, mai nói tiếp", "bà"],
+  ["ông bà để lại căn nhà này, cần bán", null],   // người thứ ba
+  ["nhà bà ngoại ở quận 5 cần bán", null],        // sở hữu: không nhận ông/bà
+  ["ông chủ cần bán gấp", null],
+  ["bà con ai cần mua nhà không", null],
+  ["ong ban nha q5", null],                        // không dấu: "ong" mập mờ
+]) ok(`tuXungTuCau ông/bà "${vao}"`, tuXungTuCau(vao) === mong, String(tuXungTuCau(vao)));
+for (const [vao, mong] of [["ông", "ông"], ["dạ bà", "bà"], ["kêu bà nha", "bà"], ["gọi là ông", "ông"], ["gọi ông chủ ra đây", null], ["ba", null], ["3 phòng ngủ, ba toilet", null]])
+  ok(`batXungHo ông/bà "${vao}"`, batXungHo(vao) === mong, String(batXungHo(vao)));
+// Chủ dự án 23/09: "thím dượng chú, cậu…" — họ hàng hay gặp, bot xưng cháu.
+for (const [vao, mong] of [
+  ["dì chào cháu", "dì"],
+  ["chào cháu, cậu có miếng đất ở Củ Chi", "cậu"],
+  ["mợ cần bán căn hộ quận 7", "mợ"],
+  ["dạ cháu, thím đang có căn nhà hẻm", "thím"],
+  ["dượng muốn bán nhà 5 tỷ", "dượng"],
+  ["nhà dì tôi ở quận 5 cần bán", null],   // sở hữu: người thứ ba
+  ["cậu ấy muốn bán nhà", null],
+  ["di ban nha q5", null],                 // không dấu: "di" là "đi"
+]) ok(`tuXungTuCau họ hàng "${vao}"`, tuXungTuCau(vao) === mong, String(tuXungTuCau(vao)));
+for (const [vao, mong] of [["dì", "dì"], ["dạ thím", "thím"], ["kêu dượng nha", "dượng"], ["gọi cậu nha", "cậu"]])
+  ok(`batXungHo họ hàng "${vao}"`, batXungHo(vao) === mong, String(batXungHo(vao)));
+ok("suyTuXungHo cậu/dượng → nam, dì/mợ/thím → nữ, đều lớn tuổi",
+  ["cậu", "dượng"].every((x) => suyTuXungHo(x).gioi_tinh === "nam" && suyTuXungHo(x).nhom_tuoi === "lon_tuoi") &&
+  ["dì", "mợ", "thím"].every((x) => suyTuXungHo(x).gioi_tinh === "nu" && suyTuXungHo(x).nhom_tuoi === "lon_tuoi"));
+ok("suyTuXungHo ông → nam lớn tuổi, bà → nữ lớn tuổi",
+  JSON.stringify(suyTuXungHo("ông")) === JSON.stringify({ gioi_tinh: "nam", nhom_tuoi: "lon_tuoi" }) &&
+  JSON.stringify(suyTuXungHo("bà")) === JSON.stringify({ gioi_tinh: "nu", nhom_tuoi: "lon_tuoi" }));
+ok("tuXungBot ông/bà → cháu", tuXungBot("ông") === "cháu" && tuXungBot("bà") === "cháu");
 ok("CHAO_SUONG_RE: 'co chao chau' (bỏ dấu) là chào suông → ack, không ghi", CHAO_SUONG_RE.test("co chao chau") && CHAO_SUONG_RE.test("chu chao chau nha") && !CHAO_SUONG_RE.test("co chao chau, co co can nha"));
 {
   const c = "Nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm diện tích tổng 240m2";

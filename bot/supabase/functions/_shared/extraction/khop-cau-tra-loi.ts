@@ -34,16 +34,19 @@ export type LoaiCau =
  * Cách gọi khách (FR-176). 16/09/2026 (Zalo thật): khách nhắn "Chào cháu chú có căn
  * nhà này cần giao bán" mà bot đáp "Dạ em…" — xưng "chú" là NAM LỚN TUỔI, bot phải
  * gọi "chú" và tự xưng "cháu". Ba từ mới: chú / cô / bác (bác không rõ nam hay nữ).
+ * 23/09/2026 (Zalo thật): "chào cháu, ông bán nhà Trần Bình Trọng Q5 7 tỷ" mà bot đáp "Dạ cháu chào mình ạ!"
+ * — thêm ông / bà (người già hơn chú cô), cùng họ hàng hay gặp: dì, cậu, mợ, thím, dượng. Tất cả xưng cháu.
  */
-export type XungHo = "anh" | "chị" | "chú" | "cô" | "bác";
-export const XUNG_HO_LON_TUOI: ReadonlySet<string> = new Set(["chú", "cô", "bác"]);
-/** Bot tự xưng gì khi gọi khách là `xh`: em ↔ anh/chị, cháu ↔ chú/cô/bác. */
+export type XungHo = "anh" | "chị" | "chú" | "cô" | "bác" | "ông" | "bà" | "dì" | "cậu" | "mợ" | "thím" | "dượng";
+export const XUNG_HO_LON_TUOI: ReadonlySet<string> = new Set(["chú", "cô", "bác", "ông", "bà", "dì", "cậu", "mợ", "thím", "dượng"]);
+export const XUNG_HO_HOP_LE: ReadonlySet<string> = new Set(["anh", "chị", ...XUNG_HO_LON_TUOI]);
+/** Bot tự xưng gì khi gọi khách là `xh`: em ↔ anh/chị, cháu ↔ chú/cô/bác/ông/bà/dì/cậu/mợ/thím/dượng. */
 export const tuXungBot = (xh: string | null | undefined): "em" | "cháu" =>
   xh && XUNG_HO_LON_TUOI.has(xh) ? "cháu" : "em";
 /** Giới tính + nhóm tuổi suy từ cách gọi (ghi `sellers.gioi_tinh`, `sellers.nhom_tuoi`). */
 export function suyTuXungHo(xh: XungHo): { gioi_tinh: "nam" | "nu" | null; nhom_tuoi: "tre" | "lon_tuoi" } {
-  const nam = xh === "anh" || xh === "chú";
-  const nu = xh === "chị" || xh === "cô";
+  const nam = ["anh", "chú", "ông", "cậu", "dượng"].includes(xh);
+  const nu = ["chị", "cô", "bà", "dì", "mợ", "thím"].includes(xh);
   return { gioi_tinh: nam ? "nam" : nu ? "nu" : null, nhom_tuoi: XUNG_HO_LON_TUOI.has(xh) ? "lon_tuoi" : "tre" };
 }
 
@@ -79,12 +82,18 @@ const XUNG_HO_RE =
   /\b(?:keu|goi|xung|dung (?:keu|goi))\s*(?:la\s*|toi la\s*|minh la\s*)?(anh|chi|co|chu|bac)\b|\b(?:toi|minh|tui|em)\s*la\s*(anh|chi)\b(?!\s*(?:chu|chinh|cua))|\b(anh|chi)\s*(?:chu|ma|nha|nhe)\s*(?:khong phai|ko phai|k phai)\s*(?:anh|chi)\b|^\s*(chi|anh)\s*(?:nha|nhe|nhen|day|a)?\s*[.!]?\s*$|^\s*(chi|anh)\s*(?:nha|nhe|nhen|oi)\s*[,.;!]/;
 
 const DOI_XUNG_HO: Record<string, XungHo> = { anh: "anh", chi: "chị", co: "cô", chu: "chú", bac: "bác" };
-const XUNG_HO_LON_TRO = /^\s*(?:dạ\s*)?(chú|cô|bác)\s*(?:nha|nhé|nhen|đây|ạ|nè)?\s*[.!]?\s*$/u;
+const XUNG_HO_LON_TRO = /^\s*(?:dạ\s*)?(chú|cô|bác|ông|bà|dì|cậu|mợ|thím|dượng)\s*(?:nha|nhé|nhen|đây|ạ|nè)?\s*[.!]?\s*$/u;
+// ông/bà/dì/cậu/mợ/thím/dượng chỉ bắt trên chữ CÒN DẤU: bỏ dấu thì "ba" là số ba / ba = cha, "ong" là "ống",
+// "di" là "đi", "cau" là "câu"; "gọi ông chủ", "kêu bà ngoại" là người thứ ba.
+const GOI_ONG_BA_RE =
+  /(?<![\p{L}])(?:kêu|gọi|xưng)\s+(?:là\s+)?(ông|bà|dì|cậu|mợ|thím|dượng)(?![\p{L}])(?!\s+(?:chủ|ấy|ta|kia|đó|này|bà|ông|ngoại|nội|thợ|cò|môi giới|xe|bảo vệ|hàng xóm))/u;
 export function batXungHo(text: string): XungHo | null {
   // 22/09/2026: "cô" / "chú nha" trơ trọi (CÒN DẤU — bỏ dấu thì "cô" trùng "có") là câu trả lời cho
   // "cháu gọi chú hay cô cho tiện ạ?".
   const mLon = XUNG_HO_LON_TRO.exec(text.trim().toLowerCase());
   if (mLon) return mLon[1] as XungHo;
+  const mOngBa = GOI_ONG_BA_RE.exec(text.toLowerCase());
+  if (mOngBa) return mOngBa[1] as XungHo;
   const kd = boDau(text);
   const m = XUNG_HO_RE.exec(kd);
   if (!m) return null;
@@ -120,13 +129,14 @@ const TU_XUNG: RegExp[] = [
 const TU_XUNG_LON: RegExp[] = [
   // 22/09/2026 (chủ dự án: "người ta chào là cô chào cháu nó vẫn đáp anh chị"): lời CHÀO cũng là tự xưng —
   // "cô chào cháu", "chú chào cháu nha", "chào cháu, cô đây". Bản trước chỉ bắt chú/cô/bác + động từ có/cần/bán.
-  /(?<![\p{L}])(chú|cô|bác)\s+chào\s+(?:cháu|con|em)(?![\p{L}])/u,
-  /(?<![\p{L}])chào\s+(?:cháu|con)\s*[,.!]?\s*(chú|cô|bác)(?:\s+(?:đây|nè|nha|ạ|ơi))?\s*[,.!]?\s*$/u,
+  /(?<![\p{L}])(chú|cô|bác|ông|bà|dì|cậu|mợ|thím|dượng)\s+chào\s+(?:cháu|con|em)(?![\p{L}])/u,
+  /(?<![\p{L}])chào\s+(?:cháu|con)\s*[,.!]?\s*(chú|cô|bác|ông|bà|dì|cậu|mợ|thím|dượng)(?:\s+(?:đây|nè|nha|ạ|ơi))?\s*[,.!]?\s*$/u,
   // `\b` chỉ biết chữ ASCII ("có" + khoảng trắng không phải ranh từ) → dùng (?<![\p{L}]) / (?![\p{L}\d]).
-  /(?:^|[,.;!?]\s*|(?<![\p{L}])chào\s+(?:cháu|con|em)\s*,?\s*|(?<![\p{L}])(?:dạ|vâng|alo|ok|ừ|thì)\s+(?:cháu|em)(?:\s+ơi)?\s*,?\s*)(chú|cô|bác)\s+(?:có|cần|muốn|đang|bán|hỏi|nhờ|gửi|tính|định|ở|mới|vừa|để|thấy|nghĩ|đây|không|chưa|rao)(?![\p{L}\d])/u,
+  /(?:^|[,.;!?]\s*|(?<![\p{L}])chào\s+(?:cháu|con|em)\s*,?\s*|(?<![\p{L}])(?:dạ|vâng|alo|ok|ừ|thì)\s+(?:cháu|em)(?:\s+ơi)?\s*,?\s*)(chú|cô|bác|ông|bà|dì|cậu|mợ|thím|dượng)\s+(?:có|cần|muốn|đang|bán|hỏi|nhờ|gửi|tính|định|ở|mới|vừa|để|thấy|nghĩ|đây|không|chưa|rao)(?![\p{L}\d])/u,
+  // Mẫu sở hữu KHÔNG nhận ông/bà/họ hàng: "nhà ông bà để lại", "nhà bà ngoại", "nhà dì tôi" là người thứ ba.
   /(?<![\p{L}])(?:nhà|căn|sổ|đất|lô|sđt|số điện thoại|số đt|vợ|chồng)\s+(?:của\s+)?(chú|cô|bác)(?![\p{L}\d])(?!\s+(?:ấy|này|kia|đó|hàng xóm|giáo|sĩ))/u,
-  /(?<![\p{L}])để\s+(chú|cô|bác)\s+(?:hỏi|tính|coi|xem|nghĩ|bàn|suy nghĩ)(?![\p{L}\d])/u,
-  /(?<![\p{L}])(chú|cô|bác)\s+(?:bận|đang bận|mệt|không rảnh|chưa rảnh)(?![\p{L}\d])/u,
+  /(?<![\p{L}])để\s+(chú|cô|bác|ông|bà|dì|cậu|mợ|thím|dượng)\s+(?:hỏi|tính|coi|xem|nghĩ|bàn|suy nghĩ)(?![\p{L}\d])/u,
+  /(?<![\p{L}])(chú|cô|bác|ông|bà|dì|cậu|mợ|thím|dượng)\s+(?:bận|đang bận|mệt|không rảnh|chưa rảnh)(?![\p{L}\d])/u,
 ];
 export function tuXungTuCau(text: string): XungHo | null {
   const cd = text.trim().toLowerCase();
@@ -405,7 +415,7 @@ export function ngangDai(kd: string): string | null {
 // ── Tiểu từ / ack ────────────────────────────────────────────────────────────
 // Lời chào không mang dữ liệu (bỏ dấu): "hello", "chào em", "alo em ơi", "hi bạn".
 export const CHAO_SUONG_RE =
-  /^\s*(?:(?:anh|chi|co|chu|bac)\s+)?(?:hello|helo|hi|hey|alo|a lo|chao|xin chao|chao buoi (?:sang|trua|chieu|toi))\s*(?:em|chau|con|ban|shop|ad|admin|bot|a|c|anh|chi|ai oi|ai)?\s*(?:oi|nhe|nha|a)?\s*[!.~]*\s*$/;
+  /^\s*(?:(?:anh|chi|co|chu|bac|ong|ba|di|cau|mo|thim|duong)\s+)?(?:hello|helo|hi|hey|alo|a lo|chao|xin chao|chao buoi (?:sang|trua|chieu|toi))\s*(?:em|chau|con|ban|shop|ad|admin|bot|a|c|anh|chi|ai oi|ai)?\s*(?:oi|nhe|nha|a)?\s*[!.~]*\s*$/;
 
 /**
  * 22/09/2026: "chào cháu" / "chào con" mà KHÔNG xưng chú/cô/bác — biết là người lớn tuổi, chưa biết chú hay cô.
@@ -1323,7 +1333,7 @@ export function chonCauKe(vuaNoi: string[], conThieu: CauThieu[]): string | unde
 const TU_GAT = new Set(["da","vang","ok","oke","okie","okay","u","uh","um","duoc","dc","chuan","dung","dong","y","chot","len","dang","vay","tot","hay","dep","on","nhat","tri","xin","cam","on","yes","yep"]);
 // 21/09/2026 (bắn thật kiem-cc2, chủ nhà là chú): "ok đăng đi cháu" KHÔNG gật vì bộ đệm chỉ có anh/chị/em —
 // lời gật thành "thông tin bổ sung" và bản nháp gửi lại. Thêm cách xưng lớn tuổi (FR-176): cháu, chú, cô, bác, con.
-const TU_DEM = new Set(["nha","nhe","nhen","em","e","a","roi","do","day","luon","di","thoi","ha","rat","qua","lam","cu","the","nhu","tin","vay","cho","chi","anh","minh","toi","ne","het","cai","nay","ma","chau","chu","co","bac","con"]);
+const TU_DEM = new Set(["nha","nhe","nhen","em","e","a","roi","do","day","luon","di","thoi","ha","rat","qua","lam","cu","the","nhu","tin","vay","cho","chi","anh","minh","toi","ne","het","cai","nay","ma","chau","chu","co","bac","con","ong","ba"]);
 const EMOJI_VUI = /(👍|❤️|❤|😍|🥰|😊|🙂|👌|🔥|💯|\[sticker|\[khach tha tim|\[thả tim|\[like)/;
 export function laDongY(text: string): boolean {
   const goc = text.trim();

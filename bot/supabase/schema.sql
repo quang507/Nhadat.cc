@@ -830,7 +830,7 @@ do $d$ begin
   alter table public.sellers add constraint sellers_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
-  alter table public.sellers add constraint sellers_xung_ho_check CHECK (((xung_ho IS NULL) OR (xung_ho = ANY (ARRAY['anh'::text, 'chị'::text, 'chú'::text, 'cô'::text, 'bác'::text]))));
+  alter table public.sellers add constraint sellers_xung_ho_check CHECK (((xung_ho IS NULL) OR (xung_ho = ANY (ARRAY['anh'::text, 'chị'::text, 'chú'::text, 'cô'::text, 'bác'::text, 'ông'::text, 'bà'::text, 'dì'::text, 'cậu'::text, 'mợ'::text, 'thím'::text, 'dượng'::text]))));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.sellers add constraint sellers_zalo_user_id_key UNIQUE (zalo_user_id);
