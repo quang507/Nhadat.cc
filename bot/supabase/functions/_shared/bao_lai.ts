@@ -22,6 +22,7 @@
 
 import { donViGiaDep } from "./extraction/luat-tien.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
+import { tenNhan } from "./extraction/nhan.ts";
 
 export type CheDoBaoLai = "tat" | "thay_doi" | "day_du";
 
@@ -31,7 +32,7 @@ export type CheDoBaoLai = "tat" | "thay_doi" | "day_du";
 export const DAU_BAO_LAI = "🤖";
 
 export const COT_BAO_LAI =
-  `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, projects(name), ${SPEC_COLS}`;
+  `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, nhan, projects(name), ${SPEC_COLS}`;
 
 export type DongBaoLai = SpecRow & {
   id?: string;
@@ -53,6 +54,8 @@ export type DongBaoLai = SpecRow & {
   furnishing?: string | null;
   /** Dự án tin đã GẮN (project_id → projects.name), không phải tên đoán từ chữ. */
   projects?: { name?: string | null } | null;
+  /** Nhãn tìm kiếm của tin (FR-211) — toàn bộ, không chỉ nhãn lượt này. */
+  nhan?: string[] | null;
 };
 
 export type FactBaoLai = { question: string; answer: string | null; created_at?: string | null; source?: string | null };
@@ -86,6 +89,9 @@ const BO_QUA = new Set(["hinh_anh", "duyet_tin", "danh_gia", "xac_nhan_lich", "c
 // Khoá fact có thật trong DB mà FACT_LABELS (prompts.ts) chưa có nhãn — thấy khi
 // chạy thử trên 7 tin thật 11/09: "du_an_ten" hiện nguyên tên khoá. Khoá lạ khác
 // thì đổi "_" thành khoảng trắng, còn hơn in mã.
+// Nhãn in trên 🤖 khác nhãn câu hỏi: FACT_LABELS.view = "view căn hộ" (câu hỏi căn hộ) mà nhà phố cũng có view
+// (bắn thật 23/09: "view căn hộ: công viên" cho nhà phố). Đè trước FACT_LABELS.
+const NHAN_BAO_LAI: Record<string, string> = { view: "view" };
 const NHAN_THEM: Record<string, string> = {
   du_an_ten: "tên dự án",
   loai_giao_dich: "loại giao dịch",
@@ -148,6 +154,9 @@ export function tomTatDaLuu(
   // 22/09/2026 (bắn thật): khách gõ "4 ty 3" thì 🤖 in "giá 4 ty 3" tới khi sửa — chỉ ĐỌC cho đẹp đơn vị
   // (ty/ti/toi → tỷ, trieu/tr → triệu), không đụng `price_raw` trong DB.
   if (l.price_raw) p.push(l.price_vnd ? `giá ${donViGiaDep(l.price_raw)}` : `giá "${l.price_raw}" (chưa đọc ra số)`);
+  // 23/09/2026 (bắn thật FR-215): fact "nhan" chỉ giữ nhãn THÊM ở một lượt — lượt 2 thêm "đã hoàn công" thì 🤖 mất
+  // "view công viên" của lượt 1. In cột `listings.nhan` (đủ mọi nhãn) thay cho fact đó.
+  if (l.nhan?.length) p.push(`nhãn: ${tenNhan(l.nhan)}`);
 
   if (cheDo === "thay_doi") return `${DAU_BAO_LAI} Đã lưu: ${p.join(" · ")}`;
 
@@ -191,7 +200,7 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
   if (!moiNhat.size) return null;
   // 23/09/2026 (chủ dự án: "ghi thật đầy đủ"): trần 12 khoá / 50 ký tự từng cắt mất fact và đuôi câu trả lời.
   const ds = [...moiNhat].reverse().slice(0, 40).map(([k, v]) => {
-    const ten = (nhan[k] ?? NHAN_THEM[k] ?? k.replace(/_/g, " ")).replace(/\s*\(.*\)\s*$/, "");
+    const ten = (NHAN_BAO_LAI[k] ?? nhan[k] ?? NHAN_THEM[k] ?? k.replace(/_/g, " ")).replace(/\s*\(.*\)\s*$/, "");
     const chu = CHU_DAP_AN[k]?.[v] ?? v;
     return `${ten}: "${chu.length > 120 ? chu.slice(0, 119) + "…" : chu}"`;
   });
@@ -208,6 +217,7 @@ export function aiDocThem(facts: FactBaoLai[], nhan: Record<string, string>): st
 const DA_CO_TRONG_TOM_TAT = new Set([
   "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "gia", "phuong", "vi_tri", "so_phong_ngu", "ket_cau",
   "do_rong_hem", "phap_ly", "so_wc", "mat_tien", "huong", "loai_bds", "tang", "noi_that", "gap",
+  "nhan", // tóm tắt cột in cả `listings.nhan`
 ]);
 
 /** Lượt TẠO tin: "Kèm: view: "view sông" · lý do bán: "cần tiền"" — fact lượt này tóm tắt cột chưa nói. */

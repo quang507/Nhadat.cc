@@ -1518,6 +1518,8 @@ fresh(seedKho);
 
   // 23/09/2026 (chủ dự án: "dòng máy '🤖 Đã lưu' phải ghi thật đầy đủ đã lưu những gì"): fact ngoài cột khách
   // nói ở LƯỢT TRƯỚC (view, lý do bán) vẫn phải có trên 🤖 ở lượt sau — trước đây "Kèm:" chỉ in fact của lượt này.
+  LB.nhan = ["view_cong_vien", "nha_hoan_cong"];
+  db().insert("listing_facts", { listing_id: LB.id, question: "nhan", answer: "đã hoàn công", source: "seller_chat" });
   db().insert("listing_facts", { listing_id: LB.id, question: "view", answer: "view sông thoáng", source: "seller_chat" });
   db().insert("listing_facts", { listing_id: LB.id, question: "ly_do_ban", answer: "cần tiền đầu tư chỗ khác, bán gấp trong tháng này", source: "seller_chat" });
   db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
@@ -1526,6 +1528,8 @@ fresh(seedKho);
   bl = r.body.replies[0] ?? "";
   check("BLDL-10c 🤖 lượt sau vẫn in fact ngoài cột của lượt TRƯỚC (view, lý do bán đủ chữ, không cắt 50 ký tự), kèm 3 phòng ngủ",
     /^🤖 Đã lưu: .*3 phòng ngủ/.test(bl) && /view sông thoáng/.test(bl) && /cần tiền đầu tư chỗ khác, bán gấp trong tháng này/.test(bl), JSON.stringify(r.body.replies));
+  check("BLDL-10e 🤖 in ĐỦ nhãn tìm kiếm từ cột listings.nhan (view công viên + đã hoàn công), không in fact 'nhãn tìm kiếm' lượt lẻ; view in nhãn trung tính 'view:' (không 'view căn hộ')",
+    /nhãn: view công viên · đã hoàn công/.test(bl) && !/nhãn tìm kiếm:/.test(bl) && /view: "view sông thoáng"/.test(bl) && !/view căn hộ/.test(bl), bl);
   // 23/09/2026 (chủ dự án: "xóa hoặc sửa luật cứng nhắc đó đi"): câu lệnh gửi model KHÔNG còn ép chép nguyên văn,
   // "ĐÚNG MỘT", "Không hỏi gì khác", "dưới 30 từ" — vẫn nói ý hỏi chính để câu trả lời kế vào đúng ô.
   // Người bán MỚI rao một câu → chắc chắn đi nhánh r1 "nhận câu rao, hỏi thứ đầu tiên còn thiếu".
@@ -2755,10 +2759,11 @@ fresh(seedKho);
   globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
   r = await send({ external_user_id: "nhan-1", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ 5, khu yên tĩnh, gần chợ" });
   const LN = db().t.listings[0];
-  check("NHAN-01 câu rao có 'khu yên tĩnh, gần chợ' → listings.nhan = [yen_tinh, gan_cho]; fact nhan; 🤖 báo 'nhãn tìm kiếm'",
+  // 23/09/2026 (FR-215): 🤖 in nhãn từ cột `listings.nhan` ("nhãn: …", đủ mọi lượt), không in fact "nhãn tìm kiếm" lượt lẻ.
+  check("NHAN-01 câu rao có 'khu yên tĩnh, gần chợ' → listings.nhan = [yen_tinh, gan_cho]; fact nhan; 🤖 báo 'nhãn: yên tĩnh · gần chợ'",
     JSON.stringify(LN.nhan) === JSON.stringify(["yen_tinh", "gan_cho"]) &&
       db().t.listing_facts.some((f) => f.listing_id === LN.id && f.question === "nhan" && f.answer === "yên tĩnh · gần chợ") &&
-      r.body.replies.some((x) => x.startsWith("🤖") && /nhãn tìm kiếm: "yên tĩnh · gần chợ"/.test(x)),
+      r.body.replies.some((x) => x.startsWith("🤖") && /nhãn: yên tĩnh · gần chợ/.test(x)),
     JSON.stringify({ nhan: LN.nhan, rep: r.body.replies }));
   db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
   db().insert("info_requests", { listing_id: LN.id, question: "ket_cau", status: "pending" });
