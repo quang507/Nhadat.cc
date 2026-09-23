@@ -43,6 +43,10 @@ for (const [cau, mong] of [
 ]) ok(`laHuaCoHang "${cau}"`, laHuaCoHang(cau) === mong, String(laHuaCoHang(cau)));
 
 ok("'Dạ có ạ.' trả lời câu KHÔNG hỏi hàng → không chặn", !laHuaCoHang("Dạ có ạ.", false));
+// 23/09/2026 (bắn thật, người thuê Q7, kho trống): hứa lọc căn rồi không gửi gì. Câu HỎI tiêu chí không bắt.
+for (const [cau, mong] of [["Dạ em lọc căn 2PN Quận 7 quanh 15 triệu cho anh nhé :)", true], ["Để em tìm căn hộ 2 phòng ngủ cho chị nha", true],
+  ["Dạ cháu tìm nhà cho chú liền ạ", true], ["Em lọc căn cho anh theo khu vực nào ạ?", false], ["Anh cần căn mấy phòng ngủ ạ?", false]])
+  ok(`laHuaCoHang hứa lọc ${JSON.stringify(cau)} → ${mong}`, laHuaCoHang(cau) === mong, String(laHuaCoHang(cau)));
 ok("'em đang có vài căn' vẫn chặn dù khách không hỏi hàng", laHuaCoHang("Em đang có vài căn 3 phòng.", false));
 // 20/09/2026 (bắn thật mau-y-C): hai lượt né "để em kiểm tra … rồi báo" khi kho trống.
 for (const cau of [

@@ -1985,17 +1985,8 @@ Deno.serve(async (req) => {
           // 21/09/2026 (chủ dự án): fact AI đọc (ai_kiem) nằm CHUNG bong bóng "🤖 Đã lưu", không tách dòng.
           factLuot = (fs ?? []) as FactBaoLai[];
         }
-        // 23/09/2026 (chủ dự án: "dòng máy '🤖 Đã lưu' phải ghi thật đầy đủ đã lưu những gì"): dòng "Kèm:"
-        // từng chỉ in fact CỦA LƯỢT NÀY — view, lý do bán, thổ cư… khách nói ở lượt trước biến mất khỏi 🤖 ở
-        // mọi lượt sau. Nay đọc MỌI fact của tin đang báo (mới nhất mỗi khoá); fact lượt này vẫn quyết có nhắn hay không.
-        let factTin: FactBaoLai[] = factLuot;
-        if (dong?.id) {
-          const { data: ft, error: ftErr } = await client.from("listing_facts")
-            .select("question, answer, created_at, source").eq("listing_id", dong.id)
-            .order("created_at", { ascending: false }).limit(100);
-          if (ftErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(facts tin)", ftErr.message);
-          else factTin = (ft ?? []) as FactBaoLai[];
-        }
+        // 23/09/2026 (chủ dự án: "in các cột chính và thông tin của lượt hiện tại thôi nhưng ko được thiếu cái gì hết"):
+        // 🤖 = tóm tắt CỘT của tin + "Kèm:" mọi fact CỦA LƯỢT NÀY mà cột chưa nói (kemLuotTao đối chiếu với dòng tin).
         const tomTat = tomTatDaLuu(dong, [], FACT_LABELS, "thay_doi");
         const hoSo = [
           sellerMoi ? `Zalo: "…${String(externalUserId).slice(-4)}"` : null,
@@ -2005,7 +1996,7 @@ Deno.serve(async (req) => {
         // Lượt TẠO tin: cả dòng tin là thứ vừa lưu → tóm tắt cột (đọc từ DB).
         if (ma) {
           // Fact mà tóm tắt cột chưa nói (view, lý do bán, thổ cư…) — vẫn là thứ ĐÃ lưu.
-          const kem = kemLuotTao(factTin, FACT_LABELS);
+          const kem = kemLuotTao(factLuot, FACT_LABELS, dong);
           return { bong: [tomTat, dongHoSo, kem].filter(Boolean).join("\n") || null, cheDo };
         }
         // Tin khách không lưu được gì ("anh bận", "ok em") → không nhắn thêm.
@@ -2015,7 +2006,7 @@ Deno.serve(async (req) => {
         // bộ tin đang nằm trong DB, dòng "Kèm:" cho fact lượt này mà tóm tắt cột không nói. Bỏ hẳn dòng
         // "📦 Tin giờ" và dòng fact riêng (hai dòng nói cùng một thứ), bỏ luôn lượt đọc 20 câu bot cũ để so.
         if (!tomTat) return { bong: dongHoSo ? `${DAU_BAO_LAI} Đã lưu: ${hoSo}` : null, cheDo };
-        const kem = kemLuotTao(factTin, FACT_LABELS);
+        const kem = kemLuotTao(factLuot, FACT_LABELS, dong);
         return { bong: [tomTat, dongHoSo, kem].filter(Boolean).join("\n"), cheDo };
       } catch (e) {
         await ghiLoi(client, "chat-reply bao_lai_da_luu", e);
