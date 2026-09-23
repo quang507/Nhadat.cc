@@ -3614,6 +3614,8 @@ fresh(seedKho);
     ls().length === 2 && ls()[0].property_type === "nha_pho" && ls()[0].district === "Quận 5" && Number(ls()[0].area_m2) === 60 && /9 tỷ/.test(ls()[0].price_raw ?? "") &&
       ls()[1].property_type === "chung_cu" && ls()[1].district === "Quận 10" && Number(ls()[1].area_m2) === 75 && /5 tỷ 2/.test(ls()[1].price_raw ?? ""),
     JSON.stringify(ls().map((l) => [l.code, l.property_type, l.district, l.area_m2, l.price_raw])));
+  check("GVI-01b '2PN' của căn hộ KHÔNG ghi sang căn nhà (bắn thật 23/09: nhà Q5 nhận 2 phòng ngủ)",
+    ls().length === 2 && ls()[0].bedrooms == null && ls()[1].bedrooms === 2, JSON.stringify(ls().map((l) => [l.code, l.bedrooms])));
   fresh();
   r = await send({ external_user_id: "gvi-d", text: "em ban 2 nha: nha 1 hem 3m pham the hien q8 3 ty 2, nha 2 mat tien au duong lan q8 12 ty" });
   check("GVI-02 không dấu 'nha 1 …, nha 2 …' → HAI tin nhà phố Q8 (3 tỷ 2 · 12 tỷ), không gắn nhãn '2 mặt tiền'",
