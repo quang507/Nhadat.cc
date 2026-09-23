@@ -189,10 +189,11 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
     moiNhat.set(f.question, a);
   }
   if (!moiNhat.size) return null;
-  const ds = [...moiNhat].reverse().slice(0, 12).map(([k, v]) => {
+  // 23/09/2026 (chủ dự án: "ghi thật đầy đủ"): trần 12 khoá / 50 ký tự từng cắt mất fact và đuôi câu trả lời.
+  const ds = [...moiNhat].reverse().slice(0, 40).map(([k, v]) => {
     const ten = (nhan[k] ?? NHAN_THEM[k] ?? k.replace(/_/g, " ")).replace(/\s*\(.*\)\s*$/, "");
     const chu = CHU_DAP_AN[k]?.[v] ?? v;
-    return `${ten}: "${chu.length > 50 ? chu.slice(0, 49) + "…" : chu}"`;
+    return `${ten}: "${chu.length > 120 ? chu.slice(0, 119) + "…" : chu}"`;
   });
   return `${DAU_BAO_LAI} Đã lưu: ${ds.join(" · ")}`;
 }
