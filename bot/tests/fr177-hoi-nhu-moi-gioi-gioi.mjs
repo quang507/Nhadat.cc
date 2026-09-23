@@ -140,7 +140,7 @@ for (const [cau, fact, re] of [
   ["khu compound an ninh 24/7", "khu_compound"], ["để lại full nội thất", "noi_that"], ["bàn giao nhà trống", "noi_that"],
   // 20260909i — câu hỏi bù sau đăng + 4 loại mới (chat 21/06 lượt 38, 65–67; chat 07/09).
   ["nhà 2 wc em", "so_wc", /^2$/], ["cách mặt tiền 50m", "cach_mat_tien", /50m/], ["nở hậu 1.5m", "no_hau", /1.5m/],
-  ["mưa lớn không ngập", "ngap_nuoc"], ["hẻm cụt, xe quay đầu được", "hem_thong"], ["sổ đang thế chấp ngân hàng", "phap_ly"],
+  ["mưa lớn không ngập", "ngap_nuoc"], ["hẻm cụt, xe quay đầu được", "hem_thong"], ["sổ đang thế chấp ngân hàng", "the_chap"], // 22/09 (#237): thế chấp là TÌNH TRẠNG, cùng họ phap_ly
   ["sổ cầm tay", "the_chap"], ["giá còn thương lượng chút", "thuong_luong"], ["nhà đang cho thuê", "hien_trang_su_dung"],
   ["bán vì đi định cư", "ly_do_ban"], ["gần trường tiểu học", "tien_ich_gan"], ["căn góc 2 mặt thoáng", "can_goc"],
   ["có thang máy", "thang_may"], ["view sông", "view"], ["pccc nghiệm thu rồi", "pccc"], ["toà 20 phòng cho thuê", "so_phong", /^20$/],

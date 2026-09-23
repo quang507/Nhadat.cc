@@ -114,7 +114,7 @@ export default function UploadAnh({
       {!gon && (
         <p className="eyebrow text-mute">Ảnh của tin{code ? ` #${code}` : ""}</p>
       )}
-      <label className={`${gon ? "" : "mt-3 "}inline-flex cursor-pointer items-center gap-2 rounded-md border border-line px-4 py-1.5 text-sm font-semibold transition hover:border-brand hover:text-brand ${dangUp ? "opacity-50" : ""}`}>
+      <label className={`${gon ? "" : "mt-3 "}inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-400 px-4 py-1.5 text-sm font-semibold transition hover:border-brand hover:text-brand focus-within:outline focus-within:outline-2 focus-within:outline-brand ${dangUp ? "opacity-50" : ""}`}>
         <input
           ref={input}
           type="file"
@@ -122,7 +122,8 @@ export default function UploadAnh({
           accept="image/*"
           disabled={dangUp}
           onChange={(e) => chon(e.target.files)}
-          className="hidden"
+          // 14/09/2026 (WCAG 2.1.1): `hidden` bỏ ô khỏi thứ tự Tab — bàn phím không up ảnh được.
+          className="sr-only"
         />
         {dangUp ? `Đang up ${soXong + soLoi + 1}/${hang.length}…` : gon ? "+ Thêm ảnh" : "Chọn ảnh (nhiều tấm được)"}
       </label>
