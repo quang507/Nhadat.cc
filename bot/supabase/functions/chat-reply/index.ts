@@ -60,6 +60,7 @@ import { coSdt, SDT_NGUON, thayLienHe, thayLienHeCoId } from "../_shared/extract
 import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/extraction/tien-ich.ts";
 import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
 import { nhungCauTim, xepTheoNghia } from "../_shared/ai/nhung.ts"; // FR-216
+import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
@@ -997,6 +998,23 @@ Deno.serve(async (req) => {
     }
     return jsonResponse(payload, code);
   };
+
+  // FR-217 (23/09/2026): lệnh TEST "/json" — in thứ bot đã lưu cho chính người nhắn (cột, fact, bóc tách, văn bản
+  // đã nhúng vector). Cùng công tắc chế độ test "hello"; tắt thì "/json" đi như tin thường. Không gọi model,
+  // không tính trần lượt, không ghi vào hội thoại.
+  if (!body.human_note && /^\s*\/json\s*$/i.test(text)) {
+    const { data: congTacJ } = await client.rpc("cau_hinh", { p_key: "test_reset_hello" });
+    if (String(congTacJ ?? "") === "1") {
+      try {
+        const bong = await soanLenhJson(client, externalUserId);
+        return await hoanTat({ reply: bong.join("\n"), replies: bong, lenh_json: true });
+      } catch (e) {
+        await ghiLoi(client, "chat-reply lenh /json", e);
+        const loi = "(TEST /json) Em đọc dữ liệu bị lỗi, đã ghi sổ ạ.";
+        return await hoanTat({ reply: loi, replies: [loi], lenh_json: true });
+      }
+    }
+  }
 
   // ─── CỔNG 2a: trần THEO TỪNG NGƯỜI (SEC-05, migration 20260905d).
   // Trần toàn cục bên dưới chặn được ví nhưng KHÔNG chặn được kẻ phá: gửi 1000
