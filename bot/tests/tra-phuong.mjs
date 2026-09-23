@@ -36,6 +36,8 @@ ok("câu sửa 'không, phường long trường' → ten 'long trường'", tac
 ok("'phường nào vậy' → null (không phải tên)", tachTienToPhuong("phường nào vậy") === null);
 ok("'phường 8, quận 5' → null (tên phải là chữ)", tachTienToPhuong("phường 8, quận 5") === null);
 ok("'xã Tân Kiên đó em' → 'Xã Tân Kiên' (cắt chữ đệm, tiền tố viết hoa)", tachTienToPhuong("xã Tân Kiên đó em")?.ten_day_du === "Xã Tân Kiên", JSON.stringify(tachTienToPhuong("xã Tân Kiên đó em")));
+ok("'xã Long Thượng cháu' → 'Xã Long Thượng' (lời xưng với người lớn tuổi — bắn thật 23/09)", tachTienToPhuong("xã Long Thượng cháu")?.ten_day_du === "Xã Long Thượng", JSON.stringify(tachTienToPhuong("xã Long Thượng cháu")));
+ok("'phường Cô Giang' → giữ nguyên (chữ 'Cô' đứng giữa tên, không phải đệm cuối)", tachTienToPhuong("phường Cô Giang")?.ten_day_du === "Phường Cô Giang");
 ok("'phường Tân Phú nha em ạ' → 'Tân Phú'", tachTienToPhuong("phường Tân Phú nha em ạ")?.ten === "Tân Phú");
 ok("'phường An Phú Đông' giữ nguyên chữ Đông", tachTienToPhuong("phường An Phú Đông")?.ten === "An Phú Đông");
 ok("chuanTenDuong: 'đường Lê Văn Việt' → 'Lê Văn Việt'; 'Đường số 7' giữ nguyên", chuanTenDuong("đường Lê Văn Việt") === "Lê Văn Việt" && chuanTenDuong("Đường số 7") === "Đường số 7");
