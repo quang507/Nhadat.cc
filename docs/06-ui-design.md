@@ -242,8 +242,9 @@ thêm van code `chanNhanLaNguoi` — `bot/supabase/functions/_shared/extraction/
 
 ### Văn phong Aioinhadat (FR-178, 07/09/2026 — xây prompt từ SRD Aioinhadat lên)
 [nguồn: quyết định chủ dự án 25/08/2026 — "copy văn phong aioinhadat nhưng bỏ dấu hiệu AI"; 07/09 tối — "chat tự nhiên như con Aioinhadat, build prompt từ bên đó lên"]
-- **Mỗi tin dưới 30 từ** (SRD §II "quy tắc 30 từ"); khen điểm mạnh THẬT gắn với khách
-  mua rồi hỏi đúng một thứ; không form; ảnh thì "hình như là…" rồi hỏi lại.
+- ~~**Mỗi tin dưới 30 từ** (SRD §II "quy tắc 30 từ")~~ → **tin ngắn như nhắn Zalo, thường
+  1–3 câu** (FR-215, chủ dự án 23/09/2026: bỏ luật cứng); khen điểm mạnh THẬT gắn với khách
+  mua rồi hỏi thứ ưu tiên nhất còn thiếu, cách hỏi hợp loại nhà; không form; ảnh thì "hình như là…" rồi hỏi lại.
 - **Few-shot người bán** (`SELLER_FEWSHOT`, khoá `seller_fewshot`): 16 cặp từ kịch bản
   Gemini lượt 3 + transcript Aioinhadat, 4 mẫu giọng SAI. Đổi giọng thì đổi ở đây.
 - **Câu mẫu là câu người nói** (`CAU_HOI_MAU`): "Nhà mình xây mấy tầng rồi anh?", không
@@ -343,7 +344,7 @@ tháng tiền thuê (BR-05); CHỦ ĐẦU TƯ dự án phí thoả thuận riên
 [nguồn: AOND req + chat examples.docx §I–II, Phần I–II]
 - **Khen một điểm mạnh thật trước, hỏi đúng MỘT thông tin sau**: *"Nhà mình hẻm 123 X
   vị trí trung tâm quá anh ơi! Hẻm trước nhà rộng khoảng mấy mét, ô tô vào lọt không anh?"*
-- **Tin thu thập ~30 từ**; chỉ khi S yêu cầu "xem lại tin/đăng đầy đủ" mới soạn dài.
+- **Tin thu thập ngắn, 1–3 câu** (trước là ~30 từ, nới ở FR-215); chỉ khi S yêu cầu "xem lại tin/đăng đầy đủ" mới soạn dài.
 - **Lý do vì-khách**: *"khách mua đang hỏi…"*, *"để em nhấn mạnh vào bài giới thiệu…"*.
 - **Diện tích mơ hồ**: hỏi lại dựa trên con số đã cho ("50m2 đó là đất hay sàn ạ?").
 - **Trung thực với ảnh**: không suy diễn từ ảnh; đoán thì *"hình như là…"* + xác nhận (RSK-03).

@@ -46,7 +46,8 @@ export function chamGiong(replies, ca = {}) {
   const ca1 = loi.join("\n");
 
   ok("co_loi", loi.length > 0, "không có bong bóng lời nào (chỉ bảng hoặc rỗng)");
-  ok("ngan_30_tu", loi.every((r) => demTu(r) <= 30), `bong bóng dài nhất ${Math.max(0, ...loi.map(demTu))} từ`);
+  // 23/09/2026 (chủ dự án: bỏ luật cứng "dưới 30 từ"): tin ngắn như nhắn Zalo, 1–3 câu → trần 60 từ mỗi bong bóng.
+  ok("ngan_gon", loi.every((r) => demTu(r) <= 60), `bong bóng dài nhất ${Math.max(0, ...loi.map(demTu))} từ`);
   ok("khong_gach_cheo", !GACH_CHEO.test(ca1), `có "anh/chị" gạch chéo`);
   ok("khong_cau_sao", !CAU_SAO.some((c) => ca1.toLowerCase().includes(c)), `câu sáo: ${CAU_SAO.filter((c) => ca1.toLowerCase().includes(c)).join(", ")}`);
   ok("khong_markdown", !MARKDOWN.test(ca1) && !GACH_DAI.test(ca1), "có markdown hoặc gạch dài");
@@ -57,7 +58,7 @@ export function chamGiong(replies, ca = {}) {
   const hoiMoiBong = loi.map((r) => (r.match(/\?/g) ?? []).length);
   ok("khong_hoi_don", hoiMoiBong.every((n) => n <= 1) && hoiMoiBong.reduce((a, b) => a + b, 0) <= 2, `dấu hỏi từng bong bóng: ${hoiMoiBong.join("/")}`);
   // Xưng hô: khách chú/cô/bác → bot xưng cháu, không còn "em" đứng riêng.
-  const lonTuoi = ["chú", "cô", "bác"].includes(ca.xung_ho ?? "");
+  const lonTuoi = ["chú", "cô", "bác", "ông", "bà", "dì", "cậu", "mợ", "thím", "dượng"].includes(ca.xung_ho ?? "");
   ok("xung_ho", lonTuoi ? (CHAU_RIENG.test(ca1) && !EM_RIENG.test(ca1)) : true, "khách lớn tuổi mà bot vẫn xưng em");
   ok("khong_khang_dinh_phap_ly", !/(chắc chắn|đảm bảo|cam kết)\s+(sổ|pháp lý|quy hoạch|hoàn công)/iu.test(ca1), "khẳng định pháp lý chưa xác minh");
   // Luật riêng từng ca.
@@ -83,11 +84,12 @@ if (import.meta.main && process.argv.includes("--tu-kiem")) {
 
   const sai = chamGiong(["Tuyệt vời! Hệ thống đã ghi nhận thông tin của anh/chị. Anh/chị cho em xin kết cấu (số tầng, phòng), pháp lý và giá nha? Mã tin BDS-NP-Q5-0001. Gọi 0903123456 nhé — cảm ơn."], { xung_ho: null });
   kiem("câu sai mẫu rớt", !sai.dat);
-  for (const l of ["ngan_30_tu", "khong_gach_cheo", "khong_cau_sao", "khong_markdown", "khong_ten_truong", "khong_ma_tin", "khong_sdt"]) kiem(`câu sai rớt đúng luật ${l}`, sai.luat[l] === false);
+  for (const l of ["khong_gach_cheo", "khong_cau_sao", "khong_markdown", "khong_ten_truong", "khong_ma_tin", "khong_sdt"]) kiem(`câu sai rớt đúng luật ${l}`, sai.luat[l] === false);
   kiem("câu sai: hai dấu hỏi trong một bong bóng → rớt khong_hoi_don", chamGiong(["Nhà mấy lầu? Sổ riêng chưa? Giá bao nhiêu?"]).luat.khong_hoi_don === false);
   kiem("rỗng / chỉ bảng → rớt co_loi", !chamGiong(["🤖 Đã lưu: x"]).luat.co_loi && !chamGiong([]).luat.co_loi);
   kiem("luật riêng `khong` bắt được", chamGiong(["Dạ em sửa lại rồi ạ."], { khong: ["sửa lại rồi"] }).dat === false);
   kiem("khẳng định pháp lý chưa xác minh → rớt", chamGiong(["Em đảm bảo sổ hồng riêng rồi anh."]).luat.khong_khang_dinh_phap_ly === false);
+  kiem("bong bóng hơn 60 từ → rớt ngan_gon", chamGiong([Array(61).fill("chữ").join(" ") + "."]).luat.ngan_gon === false && chamGiong([Array(45).fill("chữ").join(" ") + "."]).luat.ngan_gon === true);
   kiem("đếm từ", demTu("  Dạ em   ghi rồi ạ. ") === 5);
 
   console.log(`\nKIỂM GIỌNG (luật máy): ${dat} đạt · ${hong} hỏng`);

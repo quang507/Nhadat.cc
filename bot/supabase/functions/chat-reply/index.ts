@@ -1985,6 +1985,17 @@ Deno.serve(async (req) => {
           // 21/09/2026 (chủ dự án): fact AI đọc (ai_kiem) nằm CHUNG bong bóng "🤖 Đã lưu", không tách dòng.
           factLuot = (fs ?? []) as FactBaoLai[];
         }
+        // 23/09/2026 (chủ dự án: "dòng máy '🤖 Đã lưu' phải ghi thật đầy đủ đã lưu những gì"): dòng "Kèm:"
+        // từng chỉ in fact CỦA LƯỢT NÀY — view, lý do bán, thổ cư… khách nói ở lượt trước biến mất khỏi 🤖 ở
+        // mọi lượt sau. Nay đọc MỌI fact của tin đang báo (mới nhất mỗi khoá); fact lượt này vẫn quyết có nhắn hay không.
+        let factTin: FactBaoLai[] = factLuot;
+        if (dong?.id) {
+          const { data: ft, error: ftErr } = await client.from("listing_facts")
+            .select("question, answer, created_at, source").eq("listing_id", dong.id)
+            .order("created_at", { ascending: false }).limit(100);
+          if (ftErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(facts tin)", ftErr.message);
+          else factTin = (ft ?? []) as FactBaoLai[];
+        }
         const tomTat = tomTatDaLuu(dong, [], FACT_LABELS, "thay_doi");
         const hoSo = [
           sellerMoi ? `Zalo: "…${String(externalUserId).slice(-4)}"` : null,
@@ -1993,8 +2004,8 @@ Deno.serve(async (req) => {
         const dongHoSo = hoSo ? `👤 Hồ sơ: ${hoSo}` : null;
         // Lượt TẠO tin: cả dòng tin là thứ vừa lưu → tóm tắt cột (đọc từ DB).
         if (ma) {
-          // Fact lượt tạo mà tóm tắt cột chưa nói (view, lý do bán, thổ cư…) — vẫn là thứ ĐÃ lưu.
-          const kem = kemLuotTao(factLuot, FACT_LABELS);
+          // Fact mà tóm tắt cột chưa nói (view, lý do bán, thổ cư…) — vẫn là thứ ĐÃ lưu.
+          const kem = kemLuotTao(factTin, FACT_LABELS);
           return { bong: [tomTat, dongHoSo, kem].filter(Boolean).join("\n") || null, cheDo };
         }
         // Tin khách không lưu được gì ("anh bận", "ok em") → không nhắn thêm.
@@ -2004,7 +2015,7 @@ Deno.serve(async (req) => {
         // bộ tin đang nằm trong DB, dòng "Kèm:" cho fact lượt này mà tóm tắt cột không nói. Bỏ hẳn dòng
         // "📦 Tin giờ" và dòng fact riêng (hai dòng nói cùng một thứ), bỏ luôn lượt đọc 20 câu bot cũ để so.
         if (!tomTat) return { bong: dongHoSo ? `${DAU_BAO_LAI} Đã lưu: ${hoSo}` : null, cheDo };
-        const kem = kemLuotTao(factLuot, FACT_LABELS);
+        const kem = kemLuotTao(factTin, FACT_LABELS);
         return { bong: [tomTat, dongHoSo, kem].filter(Boolean).join("\n"), cheDo };
       } catch (e) {
         await ghiLoi(client, "chat-reply bao_lai_da_luu", e);
@@ -3959,9 +3970,9 @@ Deno.serve(async (req) => {
           : `Câu đó KHÔNG trả lời được câu em hỏi - có thể chủ nhà hiểu nhầm, hoặc đang nói một thông số khác. Em đã ghi chú lại nguyên văn (không mất), nhắc lại ngắn gọn để xác nhận rồi hỏi lại.`;
         const promptLai =
           `${boiCanh}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${text}". ${viSao}\n${hoiNguocPrompt}` +
-          `Viết MỘT tin ngắn (${hoiNguoc ? "25–50" : "15–35"} từ) như người thật: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
-          `CÂU HỎI CUỐI TIN BẮT BUỘC vẫn là "${nhanDangHoi}" — KHÔNG chuyển sang hỏi thứ khác dù em thấy hợp mạch hơn (hệ thống đang chờ đúng câu này). ` +
-          `Không hỏi gì khác, không xin lỗi dài, KHÔNG nhắc mã tin${nhieuCan ? " (nhiều căn thì gọi bằng địa chỉ)" : ""}.`;
+          `Viết MỘT tin ngắn như người thật nhắn Zalo: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
+          `Ý hỏi chính vẫn là "${nhanDangHoi}" (hệ thống ghi câu trả lời kế vào ô này). ` +
+          `Không xin lỗi dài, KHÔNG nhắc mã tin${nhieuCan ? " (nhiều căn thì gọi bằng địa chỉ)" : ""}.`;
         let hoiLai: string | null = null;
         if (anthropicS) {
           try {
@@ -4232,21 +4243,22 @@ Deno.serve(async (req) => {
         : "";
       const prompt = nextKey
         ? `${boiCanh}${daAck}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n${hoiNguocPrompt}` +
-          `Viết MỘT tin dưới ${hoiNguoc ? 50 : 30} từ như người thật nhắn Zalo: ${
+          `Viết MỘT tin ngắn như người thật nhắn Zalo: ${
             khenGanDay
               ? "KHÔNG khen, KHÔNG nhận xét căn nhà (mấy tin gần đây em đã khen rồi — lâu lâu mới khen một lần): ghi nhận ngắn một vế hoặc bỏ luôn phần ghi nhận, "
               : "nhắc lại chi tiết vừa nghe; CHỈ khi có gì thật đáng nói với khách mua thì thêm MỘT câu, còn không thì thôi — "
-          }rồi hỏi tiếp ĐÚNG MỘT thông tin: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
-          `CÂU HỎI CUỐI TIN chép NGUYÊN VĂN câu này: "${cauKe}" — không thêm lý do, không đổi chữ, KHÔNG đổi sang hỏi thứ khác, kể cả khi em thấy chủ nhà đã nói rồi hay em muốn hỏi thứ tiếp theo (hệ thống ghi câu trả lời theo đúng câu này; hỏi lệch là ghi sai ô). ` +
+          }rồi hỏi tiếp thứ quan trọng nhất còn thiếu: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
+          `Câu gợi ý: "${cauKe}" — nói lại theo cách tự nhiên, hợp với loại nhà này; gộp thêm một ý liền mạch trong CÙNG câu hỏi cũng được, ` +
+          `nhưng ý hỏi chính phải là ${FACT_LABELS[nextKey] ?? nextKey} (hệ thống ghi câu trả lời kế vào ô này; hỏi lệch là ghi sai ô). ` +
           (nhieuCan
             ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
             : `Người này chỉ có một căn: KHÔNG nhắc mã tin. `) +
-          `Lý do "vì khách hỏi" chỉ dùng nếu 3 tin gần nhất của em trong lịch sử chưa dùng. Không hỏi gì khác.`
+          `Lý do "vì khách hỏi" chỉ dùng nếu 3 tin gần nhất của em trong lịch sử chưa dùng.`
         : published
         ? `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
-          `Viết MỘT tin dưới 30 từ: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
+          `Viết MỘT tin ngắn: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
         : thieuDiem.length
-        ? `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu: ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn (20–40 từ): ghi nhận, rồi hỏi ĐÚNG MỘT thứ trong danh sách thiếu đó. Không hỏi gì khác.`
+        ? `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu (theo thứ tự ưu tiên): ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn như người thật: ghi nhận, rồi hỏi thứ đầu danh sách đó theo cách hợp với loại nhà này.`
         : `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
       // OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định — vòng drip không
       // đứng lại chờ model sống. Câu mẫu CÓ hỏi thật (kèm neo căn) nên mở
@@ -4639,9 +4651,9 @@ Deno.serve(async (req) => {
                 role: "user",
                 content:
                   `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ${hoiRaoPrompt}` +
-                  `Viết MỘT tin dưới 30 từ như người thật: nhận câu rao (${khenGanDay ? "KHÔNG khen, không nhận xét — mấy tin gần đây em đã khen rồi" : "nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi"}). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi - KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
+                  `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao (${khenGanDay ? "KHÔNG khen, không nhận xét — mấy tin gần đây em đã khen rồi" : "nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi"}). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi - KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
                   (firstKey
-                    ? `, rồi hỏi ĐÚNG MỘT thông tin: ${FACT_LABELS[firstKey] ?? firstKey} bằng ĐÚNG NGUYÊN VĂN câu này: "${cauHoiDau}". Không thêm lý do, không đổi chữ, KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá. Không hỏi gì khác.`
+                    ? `, rồi hỏi thứ quan trọng nhất còn thiếu: ${FACT_LABELS[firstKey] ?? firstKey}. Câu gợi ý: "${cauHoiDau}" — nói lại theo cách tự nhiên, hợp với loại nhà này; gộp thêm một ý liền mạch trong CÙNG câu hỏi cũng được, nhưng ý hỏi chính phải là ${FACT_LABELS[firstKey] ?? firstKey} (hệ thống ghi câu trả lời kế vào ô này). KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá.`
                     : ` và báo sẽ đăng lên web ngay.`),
               }],
             });

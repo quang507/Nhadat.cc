@@ -1516,6 +1516,29 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "nhà hướng đông nam nha em" });
   check("BLDL-10b lưu lại mà tin KHÔNG đổi → nếu có 🤖 thì vẫn là MỘT dòng đầy đủ (66m²), không 📦", /^🤖 Đã lưu: /.test(r.body.replies[0] ?? "") ? (/66m²/.test(r.body.replies[0]) && !/📦 Tin giờ/.test(r.body.replies[0])) : !r.body.replies.some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
 
+  // 23/09/2026 (chủ dự án: "dòng máy '🤖 Đã lưu' phải ghi thật đầy đủ đã lưu những gì"): fact ngoài cột khách
+  // nói ở LƯỢT TRƯỚC (view, lý do bán) vẫn phải có trên 🤖 ở lượt sau — trước đây "Kèm:" chỉ in fact của lượt này.
+  db().insert("listing_facts", { listing_id: LB.id, question: "view", answer: "view sông thoáng", source: "seller_chat" });
+  db().insert("listing_facts", { listing_id: LB.id, question: "ly_do_ban", answer: "cần tiền đầu tư chỗ khác, bán gấp trong tháng này", source: "seller_chat" });
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: LB.id, question: "so_phong_ngu", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "3 phòng ngủ em" });
+  bl = r.body.replies[0] ?? "";
+  check("BLDL-10c 🤖 lượt sau vẫn in fact ngoài cột của lượt TRƯỚC (view, lý do bán đủ chữ, không cắt 50 ký tự), kèm 3 phòng ngủ",
+    /^🤖 Đã lưu: .*3 phòng ngủ/.test(bl) && /view sông thoáng/.test(bl) && /cần tiền đầu tư chỗ khác, bán gấp trong tháng này/.test(bl), JSON.stringify(r.body.replies));
+  // 23/09/2026 (chủ dự án: "xóa hoặc sửa luật cứng nhắc đó đi"): câu lệnh gửi model KHÔNG còn ép chép nguyên văn,
+  // "ĐÚNG MỘT", "Không hỏi gì khác", "dưới 30 từ" — vẫn nói ý hỏi chính để câu trả lời kế vào đúng ô.
+  // Người bán MỚI rao một câu → chắc chắn đi nhánh r1 "nhận câu rao, hỏi thứ đầu tiên còn thiếu".
+  {
+    const vaoDu = (c) => (c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : JSON.stringify(m.content)).join("\n") + JSON.stringify(c.params.system ?? "");
+    const nTruocR1 = createCalls().length;
+    await send({ external_user_id: "bldl-mem", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ" });
+    const luot = createCalls().slice(nTruocR1).map(vaoDu).join("\n");
+    check("BLDL-10d câu lệnh model không còn luật cứng (NGUYÊN VĂN / ĐÚNG MỘT / Không hỏi gì khác / dưới 30 từ), vẫn có 'ý hỏi chính' + 'hợp với loại nhà'",
+      luot.length > 0 && !/NGUYÊN VĂN|ĐÚNG MỘT|Không hỏi gì khác|dưới 30 từ|dưới 50 từ/.test(luot) && /ý hỏi chính/.test(luot) && /hợp với loại nhà/.test(luot),
+      JSON.stringify({ cung: luot.match(/.{0,80}(?:NGUYÊN VĂN|ĐÚNG MỘT|Không hỏi gì khác|dưới 30 từ|dưới 50 từ).{0,80}/g), n: luot.length }));
+  }
+
   // Người MUA: 14/09 cũng được báo hồ sơ vừa lưu (đọc lại buyers.preferences).
   globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
   fresh(seedKho);
