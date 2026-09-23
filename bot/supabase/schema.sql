@@ -1351,7 +1351,14 @@ begin
     if typ is null then continue; end if;
     if k = 'rent_income_vnd' and coalesce(v_deal, '') <> 'ban' then continue; end if;
     if k = 'floors' then
-      update listings set floors = (j->>'floors')::int, floors_text = j->>'floors_text', specs_source = p_bac
+      -- 20260923g: "3 tầng" (AI gọn lại) không được xoá "trệt + lửng + 2 lầu + sân thượng" đã đọc từ câu rao —
+      -- cùng số tầng mà chữ cũ có lửng / sân thượng / áp mái / hầm còn chữ mới không có thì giữ chữ cũ.
+      update listings set floors = (j->>'floors')::int,
+             floors_text = case
+               when floors = (j->>'floors')::int and coalesce(floors_text, '') ~ '(lửng|sân thượng|áp mái|hầm)'
+                    and coalesce(j->>'floors_text', '') !~ '(lửng|sân thượng|áp mái|hầm)' then floors_text
+               else j->>'floors_text' end,
+             specs_source = p_bac
        where id = p_listing_id and (floors is null or p_de);
     else
       execute format('update listings set %I = ($1)::%s, specs_source = $2 where id = $3 and (%I is null or $4)', k, typ, k)
@@ -3926,7 +3933,13 @@ begin
     end if;
   end if;
 
-  perform public.ap_thong_so(new.listing_id, j, bac, de);
+  -- 20260923g (bắn thật 23/09): fact CHỮ TỰ DO ("bổ sung", tiềm năng, hiện trạng…) chỉ được ĐIỀN ô trống, không đè.
+  -- "có 1 phòng ngủ ngay tầng trệt tiện cho ông bà" từng đè 3 phòng ngủ → 1 và "trệt + 2 lầu" → "trệt".
+  -- Chỉ fact đúng ô thông số (kết cấu, số phòng, diện tích, pháp lý, hẻm, hướng…) mới được sửa giá trị đã có.
+  perform public.ap_thong_so(new.listing_id, j, bac, de and new.question in (
+    'ket_cau', 'so_phong_ngu', 'so_wc', 'so_phong', 'dien_tich', 'dien_tich_dat', 'dien_tich_san', 'dien_tich_tim_tuong',
+    'phap_ly', 'do_rong_hem', 'do_rong_duong', 'mat_tien', 'huong', 'tang', 'no_hau', 'nam_xay', 'chieu_cao', 'tho_cu',
+    'noi_that', 'cach_mat_tien'));
   return null;
 end;
 $function$
@@ -6104,6 +6117,9 @@ AS $function$
         when 'dat_nong_nghiep' then 'đất nông nghiệp' when 'dat_kinh_doanh' then 'đất kinh doanh'
         when 'kho_xuong' then 'kho xưởng' else 'bất động sản' end,
     nullif(concat_ws(', ', l.location_raw, l.street, l.ward, l.district), ''),
+    -- 20260923g: câu rao GỐC của người bán — chi tiết bot không lưu vào ô nào ("sau nhà có đất trống cho chó mèo
+    -- chạy", "phòng nào cũng có cửa sổ") vẫn vào vector. SĐT che bởi che_sdt() bọc ngoài cả đoạn.
+    case when coalesce(btrim(l.description), '') <> '' then 'Người bán tả: ' || left(l.description, 3000) end,
     (select 'Dự án ' || p.name from public.projects p where p.id = l.project_id),
     case when l.area_m2 is not null then 'Diện tích ' || trim_scale(l.area_m2) || ' m2' end,
     case when l.frontage_m is not null and l.length_m is not null
