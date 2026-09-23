@@ -1000,11 +1000,11 @@ Deno.serve(async (req) => {
   };
 
   // FR-217 (23/09/2026): lệnh TEST "/json" — in thứ bot đã lưu cho chính người nhắn (cột, fact, bóc tách, văn bản
-  // đã nhúng vector). Cùng công tắc chế độ test "hello"; tắt thì "/json" đi như tin thường. Không gọi model,
+  // đã nhúng vector). Công tắc riêng `app_config.lenh_json` (bat | tat, 20260923f); tắt thì "/json" đi như tin thường. Không gọi model,
   // không tính trần lượt, không ghi vào hội thoại.
   if (!body.human_note && /^\s*\/json\s*$/i.test(text)) {
-    const { data: congTacJ } = await client.rpc("cau_hinh", { p_key: "test_reset_hello" });
-    if (String(congTacJ ?? "") === "1") {
+    const { data: congTacJ } = await client.rpc("cau_hinh", { p_key: "lenh_json" });
+    if (String(congTacJ ?? "").trim() === "bat") {
       try {
         const bong = await soanLenhJson(client, externalUserId);
         return await hoanTat({ reply: bong.join("\n"), replies: bong, lenh_json: true });
