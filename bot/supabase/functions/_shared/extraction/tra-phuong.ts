@@ -31,13 +31,17 @@ export function duongTraDuoc(duong: string | null | undefined): boolean {
 
 /**
  * URL tra Nominatim cho một tên đường ở TP.HCM. Ghim `countrycodes=vn`, xin
- * `addressdetails=1` để đọc `address.suburb`; `limit=1` — đường dài đi qua nhiều
- * phường thì Nominatim trả đoạn "quan trọng" nhất, câu hỏi xác nhận đỡ cho phần
- * còn lại (chủ nhà gật hay sửa).
+ * `addressdetails=1` để đọc `address.suburb`.
+ *
+ * 23/09/2026 (Zalo chủ dự án): "105 Trần Bình Trọng" → bot "thuộc Phường Vườn Lài (Quận 10 cũ)"
+ * trong khi số 105 ở Chợ Quán (Q5 cũ). Bản trước xin `limit=1`: sau sáp nhập 07/2025 tên
+ * "Trần Bình Trọng" có ở ~7 phường (Q5, Q10, Bình Thạnh, Gò Vấp, Vũng Tàu, Thủ Dầu Một…),
+ * OSM không có số nhà, thứ tự kết quả đổi giữa hai lần gọi — lấy một là bốc thăm. Nay xin
+ * 10 kết quả để BIẾT đường có ở nhiều nơi hay không (`docCacPhuongNominatim`).
  */
 export function urlTraPhuong(duong: string): string {
   const q = `${chuanTenDuong(duong)}, Thành phố Hồ Chí Minh`;
-  return `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&countrycodes=vn&q=${encodeURIComponent(q)}`;
+  return `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=10&countrycodes=vn&q=${encodeURIComponent(q)}`;
 }
 
 // Tiền tố + tên, ở BẤT KỲ đâu trong câu: "không, phường long trường" (câu sửa của chủ
@@ -77,7 +81,11 @@ export function tachTienToPhuong(s: string | null | undefined): PhuongNominatim 
  */
 export function docPhuongNominatim(json: unknown): PhuongNominatim | null {
   if (!Array.isArray(json) || !json.length) return null;
-  const r = json[0] as Record<string, unknown>;
+  return phuongCuaKetQua(json[0]);
+}
+
+function phuongCuaKetQua(r0: unknown): PhuongNominatim | null {
+  const r = (r0 ?? {}) as Record<string, unknown>;
   const addr = (r.address ?? {}) as Record<string, unknown>;
   const tp = boDau(String(addr.city ?? addr.state ?? addr.province ?? "")).toLowerCase();
   if (!/ho chi minh/.test(tp)) return null;
@@ -87,6 +95,31 @@ export function docPhuongNominatim(json: unknown): PhuongNominatim | null {
     if (p) return p;
   }
   return null;
+}
+
+/** MỌI phường khác nhau trong kết quả Nominatim (TP.HCM, bỏ kết quả cấp thành phố), theo thứ tự gặp. */
+export function docCacPhuongNominatim(json: unknown): PhuongNominatim[] {
+  if (!Array.isArray(json)) return [];
+  const ra: PhuongNominatim[] = [];
+  const da = new Set<string>();
+  for (const r of json) {
+    const p = phuongCuaKetQua(r);
+    if (!p) continue;
+    const k = boDau(p.ten_day_du).toLowerCase();
+    if (da.has(k)) continue;
+    da.add(k);
+    ra.push(p);
+  }
+  return ra;
+}
+
+/**
+ * Đường có ở NHIỀU nơi → KHÔNG đoán phường; hỏi thẳng, kể các quận cũ tra được để chủ nhà chọn
+ * ("Đường Trần Bình Trọng có ở nhiều nơi (Quận 5, Quận 10, Bình Thạnh…), nhà mình thuộc phường nào, quận nào vậy anh?").
+ */
+export function cauNhieuNoiPhuong(cachGoi: string, duong: string, quan: string[]): string {
+  const ds = quan.slice(0, 4).join(", ") + (quan.length > 4 ? "…" : "");
+  return `Đường ${duong.trim()} có ở nhiều nơi (${ds}), nhà mình thuộc phường nào, quận nào vậy ${cachGoi}?`;
 }
 
 /** Câu hỏi xác nhận trước khi ghi (chủ dự án 15/09: "bot hỏi xác nhận trước khi ghi"). */

@@ -2459,6 +2459,24 @@ fresh(seedKho);
     modelThay("phường mấy, quận nào") && !tin().boc_tach?.phuong_goi_y && pendPh() && db().t.bot_errors.length === 0,
     JSON.stringify({ l: tin(), loi: db().t.bot_errors, rep: rp.body.replies }));
 
+  // 23/09/2026 (Zalo chủ dự án): "nhà ở trần bình trọng" + "số nhà 105" → bot "thuộc Phường Vườn Lài (Quận 10 cũ)",
+  // số 105 thật ở Chợ Quán (Q5 cũ). Đường có ở NHIỀU phường → không đoán, không cất gợi ý, hỏi kèm các quận.
+  {
+    const TBT = ["Phường Chợ Quán", "Phường Vườn Lài", "Phường Bình Lợi Trung"].map((p) => ({ addresstype: "road", address: { road: "Trần Bình Trọng", suburb: p, city: "Thành phố Hồ Chí Minh" } }));
+    fresh((d) => {
+      d.insert("wards", { ten: "Chợ Quán", ten_day_du: "Phường Chợ Quán", quan_cu: "Quận 5", loai: "phuong" });
+      d.insert("wards", { ten: "Vườn Lài", ten_day_du: "Phường Vườn Lài", quan_cu: "Quận 10", loai: "phuong" });
+      d.insert("wards", { ten: "Bình Lợi Trung", ten_day_du: "Phường Bình Lợi Trung", quan_cu: "Bình Thạnh", loai: "phuong" });
+    });
+    globalThis.__nominatim = TBT;
+    rp = await send({ external_user_id: "ph-tbt", text: "anh bán nhà số 105 đường Trần Bình Trọng giá 9 tỷ" });
+    const tat = JSON.stringify(rp.body.replies) + JSON.stringify(globalThis.__calls.map((c) => c.params ?? c));
+    check("PH-12 đường có ở nhiều phường (Chợ Quán/Q5, Vườn Lài/Q10, Bình Lợi Trung) → KHÔNG khẳng định 'thuộc Phường Vườn Lài', không cất gợi ý, hỏi kèm 'Quận 5, Quận 10, Bình Thạnh', ward/quận trống",
+      !/thuộc Phường Vườn Lài|thuộc Phường Chợ Quán/.test(tat) && /có ở nhiều nơi \(Quận 5, Quận 10, Bình Thạnh\)/.test(tat) &&
+        !tin().boc_tach?.phuong_goi_y && !tin().ward && tin().district == null,
+      JSON.stringify({ rep: rp.body.replies, l: tin() }));
+  }
+
   // Tra được phường nhưng bảng `wards` KHÔNG có (phường mới chưa nạp) → hỏi như cũ.
   fresh(); globalThis.__nominatim = LVV;
   rp = await send({ external_user_id: "ph-5", text: "bán nhà đường Lê Văn Việt 50m2 4 tỷ" });

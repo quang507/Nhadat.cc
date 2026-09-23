@@ -2,7 +2,7 @@
 // tra-phuong.mjs — FR-209: tra phường mới từ tên đường (phần THUẦN, chạy offline).
 // JSON mẫu là câu trả lời THẬT của Nominatim ngày 15/09/2026 cho "Lê Văn Việt,
 // Thành phố Hồ Chí Minh" — sau 07/2025 OSM chỉ còn phường mới, không có quận.
-import { cauXacNhanPhuong, chuanTenDuong, docPhuongNominatim, duongTraDuoc, tachTienToPhuong, urlTraPhuong } from "../supabase/functions/_shared/extraction/tra-phuong.ts";
+import { cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, docCacPhuongNominatim, docPhuongNominatim, duongTraDuoc, tachTienToPhuong, urlTraPhuong } from "../supabase/functions/_shared/extraction/tra-phuong.ts";
 
 let dat = 0, hong = 0;
 const ok = (ten, dk, chi = "") => { if (dk) dat++; else { hong++; console.log(`✗ ${ten}${chi ? `\n    ${chi}` : ""}`); } };
@@ -50,13 +50,26 @@ ok("rỗng / null KHÔNG tra", !duongTraDuoc("") && !duongTraDuoc(null));
 
 // ── URL ──
 const u = urlTraPhuong(" đường Lê Văn Việt ");
-ok("URL ghim countrycodes=vn, addressdetails=1, limit=1, q có 'Thành phố Hồ Chí Minh'",
-  /countrycodes=vn/.test(u) && /addressdetails=1/.test(u) && /limit=1/.test(u) && decodeURIComponent(u).endsWith("q=Lê Văn Việt, Thành phố Hồ Chí Minh"), u);
+ok("URL ghim countrycodes=vn, addressdetails=1, limit=10 (biết đường có ở nhiều nơi), q có 'Thành phố Hồ Chí Minh'",
+  /countrycodes=vn/.test(u) && /addressdetails=1/.test(u) && /limit=10(?!\d)/.test(u) && decodeURIComponent(u).endsWith("q=Lê Văn Việt, Thành phố Hồ Chí Minh"), u);
 
 // ── câu hỏi xác nhận ──
 const cau = cauXacNhanPhuong("Em tra thấy đường {duong} thuộc {phuong} ({quan} cũ), đúng không {ac}?", "anh", "Lê Văn Việt", "Phường Tăng Nhơn Phú", "Quận 9");
 ok("câu xác nhận điền đủ đường/phường/quận/xưng hô", cau === "Em tra thấy đường Lê Văn Việt thuộc Phường Tăng Nhơn Phú (Quận 9 cũ), đúng không anh?", cau);
 ok("câu xác nhận dưới 30 từ", cau.split(/\s+/).length < 30);
+
+// 23/09/2026 (Zalo chủ dự án): "Trần Bình Trọng" — hình rút gọn từ câu trả lời THẬT của Nominatim (limit=8).
+const TBT = ["Phường Bình Lợi Trung", "Phường Chợ Quán", "Phường Vườn Lài", "Phường Chợ Quán", "Phường Hạnh Thông"]
+  .map((p) => ({ addresstype: "road", address: { road: "Trần Bình Trọng", suburb: p, city: "Thành phố Hồ Chí Minh" } }))
+  .concat([{ addresstype: "road", address: { road: "Trần Bình Trọng", city: "Thành phố Hồ Chí Minh" } }]);
+const cacTBT = docCacPhuongNominatim(TBT);
+ok("docCacPhuongNominatim: Trần Bình Trọng → 4 phường KHÁC nhau (bỏ trùng Chợ Quán, bỏ kết quả không phường)",
+  cacTBT.length === 4 && cacTBT.map((p) => p.ten_day_du).join("|") === "Phường Bình Lợi Trung|Phường Chợ Quán|Phường Vườn Lài|Phường Hạnh Thông", JSON.stringify(cacTBT));
+ok("docCacPhuongNominatim: Lê Văn Việt một kết quả → một phường", docCacPhuongNominatim([{ addresstype: "road", address: { suburb: "Phường Tăng Nhơn Phú", city: "Thành phố Hồ Chí Minh" } }]).length === 1);
+ok("docCacPhuongNominatim: rỗng / không phải mảng → []", docCacPhuongNominatim([]).length === 0 && docCacPhuongNominatim(null).length === 0);
+const cauNhieu = cauNhieuNoiPhuong("anh", "Trần Bình Trọng", ["Quận 5", "Quận 10", "Bình Thạnh", "Gò Vấp", "Thủ Dầu Một"]);
+ok("câu nhiều nơi: kể tối đa 4 quận + '…', hỏi phường + quận, không khẳng định phường nào",
+  cauNhieu === "Đường Trần Bình Trọng có ở nhiều nơi (Quận 5, Quận 10, Bình Thạnh, Gò Vấp…), nhà mình thuộc phường nào, quận nào vậy anh?", cauNhieu);
 
 console.log(`TRA PHƯỜNG (FR-209): ${dat}/${dat + hong} CA ĐẠT`);
 if (hong) process.exit(1);
