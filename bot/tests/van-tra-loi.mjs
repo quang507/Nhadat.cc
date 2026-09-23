@@ -6,7 +6,7 @@
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { nhanDienNhieuCan, tachTheoCan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -546,6 +546,29 @@ for (const [cau, mong] of [
   ok("themXinLoi + doiTuXung: khách là chú → 'Dạ cháu xin lỗi chú, cháu hiểu nhầm ạ.'", /^Dạ cháu xin lỗi chú, cháu hiểu nhầm ạ\. Chú bán/.test(r4[0]), JSON.stringify(r4));
   const r5 = themXinLoiKhiHieuNham("hiểu nhầm rồi", ["Dạ.", "Mình cần gì ạ?"], null);
   ok("themXinLoi: chưa biết cách gọi → không 'xin lỗi mình'; bong bóng 'Dạ.' trần thành lời xin lỗi", r5[0] === "Dạ em xin lỗi, em hiểu nhầm ạ." && r5[1] === "Mình cần gì ạ?", JSON.stringify(r5));
+}
+
+// ── 23/09/2026 bắn thật 5 bán + 2 mua: khen sai theo MỆNH ĐỀ, mã tin gửi khách mua ──
+{
+  const r4 = boMenhDeKhenSai(["Hẻm 2m5 ngang 4m thì nhà mình chốn rất được khách tìm. Mình cần bán gấp hay có thể chờ giá thích hợp ạ?"], "Bán nhà hẻm xe máy 2m5 đường Nguyễn Trãi");
+  ok("khen hẻm xe máy 2m5 'rất được khách tìm' → bỏ câu khen, giữ câu hỏi", r4.length === 1 && r4[0] === "Mình cần bán gấp hay có thể chờ giá thích hợp ạ?", JSON.stringify(r4));
+  const r5 = boMenhDeKhenSai(["Hẻm 5m ô tô vào tận nhà là khách sẵn sàng cọc nhanh, anh chị cần bán gấp hay được giá đẹp thì thôi ạ?"], "hẻm 5m, ô tô đậu ngay trước cửa");
+  ok("'ô tô đậu trước cửa' mà bot nói 'ô tô vào tận nhà' → bỏ mệnh đề đó, câu hỏi còn nguyên", r5.length === 1 && r5[0] === "Anh chị cần bán gấp hay được giá đẹp thì thôi ạ?", JSON.stringify(r5));
+  const r5b = boMenhDeKhenSai(["Xe hơi vào tận nhà thì khách chuộng lắm. Mình cần bán gấp không ạ?"], "xe hơi vào tận nhà, có gara");
+  ok("chủ CÓ nói 'xe hơi vào tận nhà' → giữ lời khen", r5b[0].startsWith("Xe hơi vào tận nhà"), JSON.stringify(r5b));
+  const r5c = boMenhDeKhenSai(["Hẻm xe hơi 6m quay đầu thoải mái thì khách chuộng lắm."], "hẻm xe hơi 6m quay đầu thoải mái");
+  ok("hẻm 6m xe hơi có căn cứ → giữ lời khen", r5c.length === 1 && /chuộng/.test(r5c[0]), JSON.stringify(r5c));
+  ok("laKhenSai: 'hẻm 2m' + 'khách chuộng' → sai", laKhenSai("Hẻm 2m khách chuộng lắm", "hẻm 2m"));
+  ok("laKhenSai: 'Mặt tiền kinh doanh khách hay chốt nhanh' khi chủ nói mặt tiền → không sai", !laKhenSai("Mặt tiền An Dương Vương khách hay chốt nhanh lắm", "nhà mặt tiền An Dương Vương"));
+  ok("laKhenSai: câu hỏi 'ô tô vào tận nhà được không?' → không đụng", !laKhenSai("Ô tô vào tận nhà được không ạ?", ""));
+  const m1 = boMaTinKhach(["Dạ em lưu lại rồi. Em có căn #BDS-NP-Q5-0004 · Hùng Vương Phường 4 · 6 tỷ 9 · 56m2 · 3PN, mình xem thử nha?"], {});
+  ok("mã tin + '·' → bỏ mã và dấu, giữ địa chỉ", m1[0] === "Dạ em lưu lại rồi. Em có căn Hùng Vương Phường 4 · 6 tỷ 9 · 56m2 · 3PN, mình xem thử nha?", JSON.stringify(m1));
+  const m2 = boMaTinKhach(["Dạ có căn #BDS-Q5-0001 hợp anh nè"], { "BDS-Q5-0001": "Trần Hưng Đạo" });
+  ok("mã tin trong câu → thay bằng tên đường của căn", m2[0] === "Dạ có căn Trần Hưng Đạo hợp anh nè", JSON.stringify(m2));
+  const m3 = boMaTinKhach(["📝 Em ghi vào tin BDS-Q5-0001: giá 9 tỷ."], {});
+  ok("dòng máy 📝 (đọc từ DB) → không đụng", m3[0] === "📝 Em ghi vào tin BDS-Q5-0001: giá 9 tỷ.", JSON.stringify(m3));
+  const m4 = boMaTinKhach(["Căn BDS-Q5-0001 và căn BDS-Q5-0002 đều hợp anh"], { "BDS-Q5-0001": "Trần Hưng Đạo" });
+  ok("mã không có trong kho → bỏ, không để 'căn căn'", m4[0] === "Căn Trần Hưng Đạo và căn đều hợp anh", JSON.stringify(m4));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

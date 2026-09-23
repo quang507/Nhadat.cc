@@ -1863,7 +1863,10 @@ fresh(seedKho);
   await send({ external_user_id: "kho-3", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ 8" });
   globalThis.__model.parse = () => OUT({ replies: ["Dạ có căn #BDS-Q5-0001 hợp anh nè"] });
   r = await send({ external_user_id: "kho-3", text: "có căn nào không em" });
-  check("KHO-03 kho CÓ căn → van không đụng lời model", r.body.replies.some((t) => /BDS-Q5-0001/.test(t)) && !r.body.replies.some((t) => /chưa có căn|lọc kho/.test(t)), JSON.stringify(r.body.replies));
+  // 23/09/2026 (FR-178 a): mã tin model viết cho khách được thay bằng tên đường của căn; căn vẫn ghi quan tâm.
+  check("KHO-03 kho CÓ căn → van không đụng lời model (chỉ mã tin '#BDS-Q5-0001' thành 'Trần Hưng Đạo'); căn vẫn vào interests",
+    r.body.replies.some((t) => /căn Trần Hưng Đạo hợp anh/.test(t)) && !r.body.replies.some((t) => /BDS-|chưa có căn|lọc kho/.test(t)) &&
+      db().t.interests.some((i) => i.listing_id === db().t.listings.find((l) => l.code === "BDS-Q5-0001")?.id), JSON.stringify(r.body.replies));
   // 13/09 lượt bắn thứ hai: "em là người hay máy vậy" → model nhận là người thật.
   fresh();
   globalThis.__model.parse = () => OUT({ replies: ["Dạ em là M•ai bên AI Ơi Nhà Đất ạ. Em là người thật, không phải máy đâu anh/chị. Mình đang tìm mua hay thuê nhà ạ?"] });
@@ -3547,8 +3550,9 @@ fresh(seedKho);
   fresh(seedKho);
   globalThis.__model = { parse: () => OUT({ replies: ["Dạ em lọc kho cho mình xem. Mình cần hẻm xe hơi không ạ?"] }) };
   r = await send({ external_user_id: "gvf-18", text: "em đang tìm mua nhà phường 4 quận 5 dưới 7 tỷ" });
-  check("GVF-18 kho có #BDS-Q5-0001 mà model chỉ 'em lọc kho cho mình xem' → bong bóng nêu căn #BDS-Q5-0001 (tiền định từ kho), không còn câu hứa",
-    /BDS-Q5-0001/.test(rep()) && /Trần Hưng Đạo/.test(rep()) && !/lọc kho/.test(rep()), JSON.stringify(r.body.replies));
+  // 23/09/2026 (FR-178 a, bắn thật): bong bóng tiền định KHÔNG còn mang mã tin cho khách — nêu căn bằng địa chỉ.
+  check("GVF-18 kho có #BDS-Q5-0001 mà model chỉ 'em lọc kho cho mình xem' → bong bóng nêu căn Trần Hưng Đạo (tiền định từ kho), KHÔNG mã tin, không còn câu hứa",
+    !/BDS-/.test(rep()) && /Trần Hưng Đạo/.test(rep()) && !/lọc kho/.test(rep()), JSON.stringify(r.body.replies));
   // Hai khách hỏi chủ về CÙNG một căn, hai câu khác nhau → mỗi khách một việc hỏi chủ (bản cũ nuốt câu thứ hai).
   fresh((d) => { seedKho(d); for (const u of ["gvf-19a", "gvf-19b"]) { const b = buyerCo(d, u); quanTam(d, b, "BDS-Q5-0001"); } });
   globalThis.__model = { parse: () => OUT({ replies: ["Dạ để em hỏi lại chủ nhà rồi báo mình liền."] }) };
@@ -3861,6 +3865,41 @@ fresh(seedKho);
   r = await send({ external_user_id: "xl-1", text: "hiểu sai rồi em" });
   check("XL-02 model đã xin lỗi → không chèn lần hai", ((r.body.replies ?? []).join(" ").match(/xin lỗi/g) ?? []).length === 1, JSON.stringify(r.body.replies));
   globalThis.__model = { parse: () => OUT() };
+}
+
+// ── 23/09/2026 bắn thật 5 bán + 2 mua: "được giá thì bán em, ok đăng tin đi em" (câu dài) và "ban công hướng Đông nha em" ──
+{
+  const pendQ = (q) => db().t.info_requests.some((x) => x.question === q && x.status === "pending");
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-dang9", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0107", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "9 Hồng Bàng", ward: "Phường 12", price_raw: "8 tỷ", price_vnd: 8e9, area_m2: 60, floors: 3, bedrooms: 3, alley_width_m: 5, legal_status: "so_hong_rieng", can_chu_duyet: true }).data;
+    d.insert("listing_facts", { listing_id: l.id, question: "hinh_anh", answer: "https://x/1.jpg", source: "seller_chat" });
+    d.insert("info_requests", { listing_id: l.id, question: "huong", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-dang9", text: "được giá thì bán em, ok đăng tin đi em" });
+  check("DANG9-01 câu DÀI 'được giá thì bán em, ok đăng tin đi em' khi đang treo câu hướng + tin ≥70 → BẢN NHÁP, không ghi cả câu làm 'thông tin bổ sung'",
+    r.body.ban_nhap === true && !db().t.listing_facts.some((f) => /đăng tin đi/.test(f.answer ?? "")) && pendQ("duyet_tin"),
+    JSON.stringify({ body: r.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]), f: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-dang10", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0108", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "9 Hồng Bàng", ward: "Phường 12", price_raw: "8 tỷ", price_vnd: 8e9, area_m2: 60, can_chu_duyet: true }).data;
+    d.insert("info_requests", { listing_id: l.id, question: "huong", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-dang10", text: "chưa đăng tin đâu em, để anh tính thêm" });
+  check("DANG9-02 'chưa đăng tin đâu em…' (phủ định) → KHÔNG gửi bản nháp", r.body.ban_nhap !== true, JSON.stringify(r.body.replies));
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-bancong", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-CH-Q5-0001", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", ward: "Phường 5", district: "Quận 5", price_raw: "4 tỷ 2", price_vnd: 4.2e9, area_m2: 80, can_chu_duyet: true }).data;
+    s.active_listing_id = l.id;
+    d.insert("info_requests", { listing_id: l.id, question: "huong", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-bancong", text: "ban công hướng Đông nha em" });
+  check("BANCONG-01 căn hộ đang hỏi hướng, 'ban công hướng Đông nha em' → KHÔNG mở tin nhà phố mới ('ban công' ≠ 'bán', 'nha' ≠ 'nhà'); câu hướng được trả lời",
+    db().t.listings.length === 1 && !pendQ("huong"),
+    JSON.stringify({ ls: db().t.listings.map((l) => [l.code, l.property_type]), ir: db().t.info_requests.map((q) => [q.question, q.status]), rep: r.body.replies }));
+  // Đối chứng: câu rao THẬT có dấu "còn căn nhà hẻm … nữa" vẫn mở tin mới như cũ.
+  r = await send({ external_user_id: "z-bancong", text: "à còn căn nhà hẻm 4m Nguyễn Trãi quận 5, 50m2, giá 6 tỷ nữa nha em" });
+  check("BANCONG-02 câu rao thật 'còn căn nhà hẻm … giá 6 tỷ nữa' → vẫn mở tin mới", db().t.listings.length === 2, JSON.stringify(db().t.listings.map((l) => [l.code, l.property_type])));
 }
 
 // ── kết ──

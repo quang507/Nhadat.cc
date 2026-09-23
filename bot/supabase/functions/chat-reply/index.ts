@@ -68,7 +68,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boCauKhen, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauKhen, boMaTinKhach, boMenhDeKhenSai, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { gonLoiSua, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -1351,7 +1351,10 @@ Deno.serve(async (req) => {
   // thành "chao ban" và \bban\b khớp → người MUA bị mở hồ sơ bán + tạo tin rao.
   // Chữ CÓ DẤU mà không phải "bán"/"rao" (bạn, bàn, bản, bận, rào…) thì che trước
   // khi bỏ dấu; câu gõ không dấu thì "ban" vẫn mập mờ như cũ, không siết thêm.
-  const tKDBan = boDau(text.replace(/\b(bạn|bàn|bản|bận|bẩn|bắn|rào|rảo|rão)\b/gi, "_"));
+  // 23/09/2026 (bắn thật, căn hộ): "ban công hướng Đông nha em" — "ban" KHÔNG DẤU của "ban công/ban ngày/ban quản lý"
+  // thành "bán" → cùng chữ "nha" (hạt câu) thành "nhà" → mở nhầm một tin nhà phố mới. Che các cụm đó trước khi dò.
+  const tKDBan = boDau(text.replace(/\b(bạn|bàn|bản|bận|bẩn|bắn|rào|rảo|rão)\b/gi, "_"))
+    .replace(/\bban (?:cong|ngay|dem|dau|quan ly|qlda|giam doc|to chuc|dieu hanh)\b/g, "_");
   const coChuBan = /\b(bán|rao)\b|cho thu[êe]|sang nhượng|nhượng lại|sang lại/i.test(text) ||
     /\b(ban|rao)\b|cho thue|sang nhuong|nhuong lai|sang lai/.test(tKDBan);
   // 22/09/2026 (bộ đo giọng M04): "căn 12 Trần Hưng Đạo phường 4 còn bán không" — khách MUA hỏi
@@ -3434,8 +3437,13 @@ Deno.serve(async (req) => {
     const quanCanCu = pendingReq?.listings?.district ?? null;
     const khacQuan = !!quanRaoMoi && !!quanCanCu && boDau(quanRaoMoi).replace(/,.*$/, "") !== boDau(quanCanCu).replace(/,.*$/, "");
     const nhomLoai = (l: string | null | undefined) => l === "dat" ? "dat" : l === "chung_cu" ? "chung_cu" : l && l !== "chua_ro" ? "nha" : null;
-    const loaiRaoMoi = /\b(?:manh dat|lo dat|dat nen|mieng dat|dat)\b/.test(tKD) && !/\bnha\b/.test(tKD) ? "dat"
-      : /\b(?:can ho|chung cu)\b/.test(tKD) ? "chung_cu" : /\bnha\b/.test(tKD) ? "nha" : null;
+    // 23/09/2026: câu CÓ DẤU thì "nha" (hạt câu: "hướng Đông nha em") không phải "nhà", "dat" không phải "đất" — dò trên chữ
+    // có dấu; câu gõ không dấu mới đoán trên bản bỏ dấu như cũ.
+    const coDauCau = /[À-ỹđĐ]/.test(text);
+    const coNha = coDauCau ? /(?<![\p{L}])nhà(?![\p{L}])/iu.test(text) : /\bnha\b/.test(tKD);
+    const coDat = coDauCau ? /(?<![\p{L}])(?:mảnh đất|lô đất|đất nền|miếng đất|đất)(?![\p{L}])/iu.test(text) : /\b(?:manh dat|lo dat|dat nen|mieng dat|dat)\b/.test(tKD);
+    const loaiRaoMoi = coDat && !coNha ? "dat"
+      : /\b(?:can ho|chung cu)\b/.test(tKD) ? "chung_cu" : coNha ? "nha" : null;
     const khacLoai = !!loaiRaoMoi && !!nhomLoai(pendingReq?.listings?.property_type) && loaiRaoMoi !== nhomLoai(pendingReq?.listings?.property_type);
     // Câu "muốn rao bán 1 mảnh đất ở …" chưa có giá/diện tích nên luật rao (`wantsSell`) chưa nhận; có chữ bán +
     // loại BĐS + khác nơi/khác loại căn đang hỏi thì đó vẫn là căn mới, đi đường tạo tin.
@@ -3843,9 +3851,13 @@ Deno.serve(async (req) => {
       const kdDang = boDau(dapAn).replace(/[^a-z0-9\s]/g, " ").trim();
       const chuMuonDang = pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
         pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh" &&
-        kdDang.split(/\s+/).length <= 6 &&
-        (laDuRoi(dapAn) || /\b(dang|len tin|len ke|post)\b/.test(kdDang) ||
-          (laDongY(dapAn) && /\b(ok|oke|okie|duoc|dc|chot|dong y|xong)\b/.test(kdDang)));
+        (kdDang.split(/\s+/).length <= 6 &&
+          (laDuRoi(dapAn) || /\b(dang|len tin|len ke|post)\b/.test(kdDang) ||
+            (laDongY(dapAn) && /\b(ok|oke|okie|duoc|dc|chot|dong y|xong)\b/.test(kdDang))) ||
+          // 23/09/2026 (bắn thật căn hộ): "được giá thì bán em, ok đăng tin đi em" (9 chữ) — câu dài mà có lời
+          // bảo ĐĂNG rõ ràng thì vẫn là muốn đăng; trước chỉ nhận câu ≤ 6 chữ nên cả câu thành "thông tin bổ sung".
+          (/\b(?:dang tin|dang di|dang len|dang luon|len tin|len ke|post tin)\b/.test(kdDang) &&
+            !/\b(?:chua|khoan|dung|dung vo|khong|ko|dung co)\s+(?:dang|len)\b/.test(kdDang)));
       // FR-188 b (10/09): câu MỀM (gấp, lý do bán, thương lượng, tiềm năng) chỉ hỏi
       // MỘT lần — chủ dự án: "không hỏi lần thứ hai". Luật né-2-lần bên dưới đếm fact
       // ghi được sau khi mở câu, nên lần 7 đại diện CĐT bị hỏi "cần bán gấp không" ba
@@ -4316,6 +4328,7 @@ Deno.serve(async (req) => {
           // (tin này + lịch sử gần nhất); câu hỏi ("ô tô vào được không anh?") giữ nguyên.
           if (sellerReply) {
             sellerReply = boKhenKhongCanCu([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null;
+            if (sellerReply) sellerReply = boMenhDeKhenSai([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null;
           }
           // FR-177: một lượt một câu hỏi — cắt câu hỏi thứ hai của model (15/09/2026).
           // Chỉ áp cho lời MODEL: câu tiền định (xin chấm điểm, liệt kê căn) có chủ ý.
@@ -4691,6 +4704,8 @@ Deno.serve(async (req) => {
             raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ?? null;
             if (raoReply && laLoiMeta(raoReply)) { console.log("chat-reply: r1 tra loi cau lenh, bo"); raoReply = null; }
             if (raoReply) raoReply = motCauHoi([raoReply])[0];
+            // 23/09/2026 (bắn thật): "hẻm 2m5 … rất được khách tìm", "ô tô đậu trước cửa" → "ô tô vào tận nhà".
+            if (raoReply) raoReply = boMenhDeKhenSai([raoReply], text)[0] ?? null;
             await doTien(client, r1.usage);
           } catch (e) {
             await ghiLoi(client, "chat-reply model r1(seller)", e);
@@ -5457,6 +5472,15 @@ Deno.serve(async (req) => {
       const { data: g } = await client.from("listings").select(CAN_COLS)
         .eq("code", maBotNoi).maybeSingle();
       canGoc = (g as CanRow | null) ?? null;
+    } else {
+      // 23/09/2026: bot không còn viết mã cho khách (FR-178 a) → căn vừa gợi là căn khách quan tâm gần nhất (FR-108).
+      const { data: qt, error: qtErr } = await client.from("interests").select("listing_id")
+        .eq("buyer_id", buyer.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (qtErr) await ghiLoi(client, "chat-reply can tuong tu (interests)", qtErr.message);
+      if (qt?.listing_id) {
+        const { data: g } = await client.from("listings").select(CAN_COLS).eq("id", qt.listing_id).maybeSingle();
+        canGoc = (g as CanRow | null) ?? null;
+      }
     }
   }
   let tuongTu: CanRow[] = [];
@@ -5924,6 +5948,16 @@ Deno.serve(async (req) => {
   const repliedCodes = [...replies.join("\n").matchAll(CODE_RE)]
     .map((m) => m[1].toUpperCase());
   const repliedCode = repliedCodes[0] ?? mentioned[0];
+  // 23/09/2026 (bắn thật): model viết "#BDS-NP-Q5-0004 · Hùng Vương …" cho khách mua — FR-178 (a) cấm. Mã đã đọc
+  // ở trên cho quan tâm / theo dõi / ảnh; giờ mới gỡ khỏi chữ gửi khách (thay bằng tên đường của căn nếu có).
+  {
+    const nhanCan: Record<string, string> = {};
+    for (const l of [...((listings ?? []) as CanRow[]), ...((askedListings ?? []) as CanRow[])]) {
+      const ten = tenDuong(l.location_raw ?? "") || l.ward || "";
+      if (l.code && ten) nhanCan[l.code.toUpperCase()] = ten;
+    }
+    replies.splice(0, replies.length, ...boMaTinKhach(replies, nhanCan));
+  }
   let photos: string[] = [];
 
   // Hồ sơ: FR-163 trộn bằng `||` phía DB (merge_buyer_prefs) thay vì ghi đè cả
