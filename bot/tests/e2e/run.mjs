@@ -31,6 +31,8 @@ const laLuotAnh = (p) => (p?.system ?? []).some((s) => /PHÂN LOẠI ẢNH CHỦ
 const laLuotGan = (p) => (p?.system ?? []).some((s) => /có muốn nhà ở GẦN/.test(s.text ?? ""));
 // FR-205: lượt model PHÂN VAI người lạ (_shared/ai/phan-vai.ts) — không phải lượt trả lời.
 const laLuotVai = (p) => (p?.system ?? []).some((s) => /PHÂN VAI TIN NHẮN ĐẦU TIÊN/.test(s.text ?? ""));
+// FR-214 b/d: lượt model "gán mảnh theo căn" — không phải lượt trả lời khách mua.
+const laLuotGanManh = (p) => (p?.system ?? []).some((s) => /GÁN MẢNH TIN NHẮN VÀO ĐÚNG CĂN/.test(s.text ?? ""));
 // FR-180: napCauHinh nhớ tạm 60 s ở tầng module → đặt mẫu chuẩn TRƯỚC lượt gọi đầu.
 globalThis.__mauCau = {
   // 20260909h (FR-181): mau_cau_fewshot ghi "→ Trợ lý:" thay "→ Thái:" — tên bot nay theo từng khách.
@@ -65,7 +67,7 @@ const db = () => globalThis.__db;
 // ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
 function fresh(seed) { globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__nominatim = undefined; globalThis.__fetches = []; globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; globalThis.__anh = undefined; globalThis.__anhTaiDuoc = true; globalThis.__storageHong = false; seed?.(globalThis.__db); }
 // Lượt gọi model chỉ tính NHÁNH MUA (parse hồ sơ), không tính lượt phân loại ảnh (FR-185).
-const parseMua = () => globalThis.__calls.filter((c) => c.kind === "parse" && !laLuotAnh(c.params) && !laLuotGan(c.params) && !laLuotVai(c.params));
+const parseMua = () => globalThis.__calls.filter((c) => c.kind === "parse" && !laLuotAnh(c.params) && !laLuotGan(c.params) && !laLuotVai(c.params) && !laLuotGanManh(c.params));
 function seedKho(d) {
   const sC = d.insert("sellers", { zalo_user_id: "z-ccrb", seller_type: "ccrb", name: "Chị D.", active_listing_id: null }).data;
   const sU = d.insert("sellers", { zalo_user_id: "z-unknown", seller_type: "unknown", name: null, active_listing_id: null }).data;
@@ -3508,6 +3510,72 @@ fresh(seedKho);
     const pc = JSON.stringify(createCalls().slice(-1).map((c) => c.params));
     check("GVG-03 quay lại nhánh bán → lịch sử có câu hỏi mua là lời CHỦ NHÀ (không phải EM)",
       /CHỦ NHÀ: tôi cũng đang muốn mua căn hộ quận 7/.test(pc) && !/EM: tôi cũng đang muốn mua/.test(pc), pc.slice(0, 600));
+  }
+  globalThis.__model = { parse: () => OUT() };
+}
+
+// ── 23/09/2026 FR-214 (b)(d)(e): Zalo chủ dự án — rao nhà Kênh Tân Hóa rồi đất Cần Giuộc, năm tin, bot gộp một ──
+{
+  const rep = () => r.body.replies.join(" ");
+  const uid = "gvh-1";
+  const ds = () => { const s = db().t.sellers.find((x) => x.zalo_user_id === uid); return db().t.listings.filter((l) => l.seller_id === s?.id); };
+  const nha = () => ds().find((l) => l.property_type !== "dat");
+  const dat = () => ds().find((l) => l.property_type === "dat");
+  fresh();
+  globalThis.__model = { parse: () => OUT(), create: () => "Dạ cô cho cháu xin thêm thông tin nha." };
+  r = await send({ external_user_id: uid, text: "Cô cần bán nhà đường kênh Tân Hoá" });
+  {
+    // Dựng đúng cảnh 02:34: bot đã gợi ý phường, câu phường đang treo.
+    const A = ds()[0];
+    A.boc_tach = { ...(A.boc_tach ?? {}), phuong_goi_y: { phuong: "Phường Bình Thới", duong: "Kênh Tân Hóa" } };
+    for (const ir of db().t.info_requests.filter((x) => x.listing_id === A.id && x.status === "pending")) ir.status = "expired";
+    db().insert("info_requests", { listing_id: A.id, question: "phuong", status: "pending" });
+    db().t.sellers.find((x) => x.zalo_user_id === uid).active_listing_id = A.id;
+  }
+  r = await send({ external_user_id: uid, text: "Đúng rồi và 1 muốn rao bán 1 mảnh đất ở xã cần giuộc tỉnh long an ở đường tỉnh lộ 830" });
+  check("GVH-01 đang hỏi phường căn nhà, 'Đúng rồi và … mảnh đất ở Cần Giuộc, Long An' → HAI tin: nhà giữ loại/vị trí + nhận Phường Bình Thới, đất mở riêng Long An",
+    ds().length === 2 && !!nha() && !!dat() && !/Tỉnh lộ|tinh lo/i.test(nha()?.location_raw ?? "") && nha()?.ward === "Phường Bình Thới" && /Long An/.test(dat()?.district ?? ""),
+    JSON.stringify({ ds: ds().map((l) => [l.code, l.property_type, l.location_raw, l.ward, l.district]), rep: r.body.replies }));
+  if (dat() && nha()) {
+  {
+    // Lô đất đang được hỏi giá (cảnh 02:45).
+    const B = dat();
+    for (const ir of db().t.info_requests.filter((x) => x.status === "pending")) ir.status = "expired";
+    db().insert("info_requests", { listing_id: B.id, question: "gia", status: "pending" });
+    db().t.sellers.find((x) => x.zalo_user_id === uid).active_listing_id = B.id;
+  }
+  const soGanManh = () => globalThis.__calls.filter((c) => c.kind === "parse" && laLuotGanManh(c.params)).length;
+  const n0 = soGanManh();
+  globalThis.__model = {
+    parse: (p) => laLuotGanManh(p)
+      ? { manh: [{ trich: "15 tỉ nhé cháu", ma_tin: dat().code }, { trich: "còn nhà ở quận 11 cũ muốn 7 tỉ", ma_tin: nha().code }] }
+      : OUT(),
+    create: () => "Dạ cháu ghi 15 tỷ căn Long An, 7 tỷ căn Quận 11 rồi cô. Lô đất mình hướng nào cô?",
+  };
+  r = await send({ external_user_id: uid, text: "15 tỉ nhé cháu còn nhà ở quận 11 cũ muốn 7 tỉ" });
+  check("GVH-02 '15 tỉ nhé cháu còn nhà ở quận 11 cũ muốn 7 tỉ' → một lượt model đọc lại hội thoại; đất 15 tỷ, NHÀ 7 tỷ; đất KHÔNG thành Quận 11",
+    soGanManh() === n0 + 1 && dat()?.price_vnd === 15e9 && nha()?.price_vnd === 7e9 && /Long An/.test(dat()?.district ?? "") && /7 tỉ/.test(rep()),
+    JSON.stringify({ ds: ds().map((l) => [l.code, l.property_type, l.price_raw, l.price_vnd, l.district]), rep: r.body.replies }));
+  const pmManh = JSON.stringify(globalThis.__calls.filter((c) => c.kind === "parse" && laLuotGanManh(c.params)).at(-1)?.params ?? {});
+  check("GVH-03 lượt gán mảnh được đọc CẢ hội thoại (câu rao nhà Kênh Tân Hoá từ lượt đầu) + danh sách hai mã tin",
+    /CHỦ NHÀ: Cô cần bán nhà đường kênh Tân Hoá/.test(pmManh) && pmManh.includes(nha().code) && pmManh.includes(dat().code), pmManh.slice(0, 500));
+  {
+    for (const ir of db().t.info_requests.filter((x) => x.status === "pending")) ir.status = "expired";
+    db().insert("info_requests", { listing_id: dat().id, question: "tho_cu", status: "pending" });
+  }
+  globalThis.__model = {
+    parse: (p) => laLuotGanManh(p) ? { manh: [{ trich: "Nhà phố mà thổ cư full nhà căn nhà phố mặt tiền 5m 3 phòng ngủ shr", ma_tin: nha().code }] } : OUT(),
+    create: () => "Dạ cháu ghi rồi ạ.",
+  };
+  r = await send({ external_user_id: uid, text: "Nhà phố mà thổ cư full nhà căn nhà phố mặt tiền 5m 3 phòng ngủ shr" });
+  check("GVH-04 'Nhà phố … mặt tiền 5m 3 phòng ngủ shr' khi đang hỏi thổ cư lô đất → vào tin NHÀ (3PN, sổ riêng); lô đất không nhận phòng ngủ/sổ",
+    nha()?.bedrooms === 3 && nha()?.legal_status === "so_hong_rieng" && dat()?.bedrooms == null && dat()?.legal_status == null,
+    JSON.stringify({ ds: ds().map((l) => [l.code, l.bedrooms, l.legal_status, l.frontage_m]) }));
+  // (e) model nói đã ghi một con số không có trong DB → bỏ câu đó.
+  globalThis.__model = { parse: () => OUT(), create: () => "Dạ cháu ghi 9 tỷ cho căn Quận 11 rồi cô. Lô đất mình hướng nào cô?" };
+  r = await send({ external_user_id: uid, text: "hướng đông nam cháu" });
+  check("GVH-05 model 'cháu ghi 9 tỷ cho căn Quận 11' (DB không có giá 9 tỷ nào) → bỏ câu đó, giữ câu hỏi",
+    !/9 tỷ/.test(rep()) && /hướng nào/.test(rep()), JSON.stringify(r.body.replies));
   }
   globalThis.__model = { parse: () => OUT() };
 }
