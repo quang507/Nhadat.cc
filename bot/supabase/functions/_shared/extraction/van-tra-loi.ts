@@ -100,6 +100,27 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
   return daChan ? { replies: ra, daChan } : { replies, daChan };
 }
 
+// ── Hiểu nhầm ý khách thì xin lỗi (23/09/2026, FR-218 b) ──────────────────────
+// Chủ dự án 23/09: "Nếu mà hiểu nhầm ý khách thì phải xin lỗi". Câu lệnh đã dặn; đây là lưới khi model quên:
+// khách nói rõ là bot hiểu / ghi sai mà không bong bóng nào có "xin lỗi" → chèn một câu xin lỗi ngắn trước
+// bong bóng lời đầu tiên (sau các dòng máy 🤖 💾 📝). "sai rồi" trần KHÔNG tính — chủ nhà hay tự sửa số của mình.
+export const HIEU_NHAM_RE =
+  /\b(?:hieu (?:nham|sai|lam|lon|khong dung)|nham y|sai y|(?:khong|ko|k) phai y|(?:khong|ko|k) phai (?:vay|the|nhu vay)(?: dau)?\b|dau co (?:noi|hoi|bao|nhan)|(?:ghi|luu|nghe|doc) (?:nham|sai|lon)|tra loi (?:sai|lac|khong dung|ko dung)|lac de|noi gi vay|y (?:toi|tui|anh|chi|minh|em|chu|co|bac|con) la)\b/;
+export function laKhachBaoHieuNham(cau: string): boolean {
+  return HIEU_NHAM_RE.test(boDau(cau));
+}
+export function themXinLoiKhiHieuNham(khach: string, replies: string[], ac?: string | null): string[] {
+  if (!laKhachBaoHieuNham(khach)) return replies;
+  if (replies.some((r) => /\bxin loi\b/.test(boDau(r)))) return replies;
+  const cau = ac && ac !== "mình" ? `Dạ em xin lỗi ${ac}, em hiểu nhầm ạ.` : "Dạ em xin lỗi, em hiểu nhầm ạ.";
+  const i = replies.findIndex((r) => !/^\s*(?:🤖|💾|📝|👤)/u.test(r));
+  if (i < 0) return [...replies, cau];
+  // Câu mở "Dạ …" của bong bóng đó thành phần sau lời xin lỗi — bỏ "Dạ" lặp.
+  const sau = replies[i].replace(/^\s*Dạ[,!.]?(?:\s+|$)/, "").trim();
+  const ghep = sau ? `${cau} ${sau.charAt(0).toUpperCase()}${sau.slice(1)}` : cau;
+  return [...replies.slice(0, i), ghep, ...replies.slice(i + 1)];
+}
+
 // ── Không nhận là người thật (13/09/2026) ──────────────────────────────────
 // Lượt bắn 13/09: khách "em là người hay máy vậy" → model "Em là người thật,
 // không phải máy đâu anh/chị." Câu lệnh dặn "không thuyết minh về AI" và model

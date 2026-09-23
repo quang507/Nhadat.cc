@@ -6,7 +6,7 @@ globalThis.__calls = []; globalThis.__db = new FakeDB();
 // (napCauHinh nhớ tạm 60 s, đọc một lần cho cả run). vi_tri đổi câu để chứng minh bản DB đè bản code.
 // 11/09 (42 ca): câu hỏi địa chỉ LẦN ĐẦU dùng khoá riêng `vi_tri@lan_dau` — đè cả hai để V1.3 vẫn đo đúng "bản DB đè bản code".
 const seedBotPrompts = (d) => { d.insert("bot_prompts", { key: "cau_hoi_mau", content: JSON.stringify({ vi_tri: "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@lan_dau": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@chua_quan": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?" }) });
-globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị đang muốn mua, thuê hay đang có nhà cần bán/cho thuê ạ?\nBên em có anh Thu phụ trách khu vực Sài Gòn, sẽ theo anh/chị tới khi bán được, cho thuê được hay mua được nhà nha." }); };
+globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị đang muốn mua, thuê hay đang có nhà cần bán/cho thuê ạ?" }); }; // 23/09 FR-218 a: bỏ câu "anh Thu phụ trách khu vực" (khớp bot_prompts.loi_chao)
 seedBotPrompts(globalThis.__db);
 // FR-185: ảnh chủ nhà gửi được TẢI VỀ kho — mock fetch trả vài byte JPEG cho host Zalo,
 // mọi URL khác lỗi (chat-reply không được gọi ra ngoài trong bài kiểm).
@@ -91,11 +91,11 @@ const sysText = (c) => c.params.system[1].text;
 // ── VAI 1: người lạ ─────────────────────────────────────────────────────────
 fresh();
 let r = await send({ external_user_id: "la-1", text: "chào em" });
-check("V1.1 lạ 'chào em' → hỏi vai, không gọi model", r.body.hoi_vai === true && /cần bán\/cho thuê/.test(r.body.reply) && /anh Thu/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
+check("V1.1 lạ 'chào em' → hỏi vai, không gọi model; KHÔNG kèm 'anh Thu phụ trách khu vực' (FR-218 a)", r.body.hoi_vai === true && /cần bán\/cho thuê/.test(r.body.reply) && !/anh Thu|phụ trách/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
 // FR-181 (09/09 chiều): lời chào xưng TÊN TRỢ LÝ RIÊNG của khách này (băm từ Zalo ID), không còn "Thái".
 check("V1.1b lời chào xưng tên trợ lý riêng (T•ai/Kh•ai…), không phải Thái, không còn {ten}", new RegExp(`em là ${tenTroLy("la-1").replace("•", "\\u2022")} bên`).test(r.body.reply) && !/Thái|\{ten\}/.test(r.body.reply), r.body.reply);
 check("V1.1 cờ hoi_vai lưu trên buyer", db().t.buyers[0]?.preferences?.hoi_vai === true);
-check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /anh Thu/.test(m.body)));
+check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /cần bán\/cho thuê/.test(m.body)));
 r = await send({ external_user_id: "la-1", text: "tôi có căn nhà ở phường 4" });
 check("V1.2 trả lời có nhà → mở hồ sơ bán, nhãn chính chủ", db().t.sellers.length === 1 && db().t.sellers[0].seller_type === "ccrb" && r.body.role === "seller", JSON.stringify(r.body));
 check("V1.2 người đó KHÔNG được báo nhãn, KHÔNG kèm biểu phí (chủ dự án 09/09 tối: gán im lặng)", !r.body.replies.some((x) => /ghi nhận anh.chị là (chính chủ|môi giới)/i.test(x)) && !r.body.replies.some((x) => /1%|0,5%/.test(x)), JSON.stringify(r.body.replies));
@@ -3846,6 +3846,21 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "/json" });
   check("JSON-04 lenh_json chưa bật (dù chế độ 'hello' bật) → '/json' không in dữ liệu (đi như tin thường)", r.body.lenh_json !== true && !/TEST \/json/.test((r.body.replies ?? []).join(" ")), JSON.stringify(r.body).slice(0, 300));
   globalThis.__cauHinh = cauHinhCu;
+}
+
+// ── 23/09/2026 FR-218 b: khách nói bot hiểu nhầm → bot xin lỗi (dù model quên) ──
+{
+  fresh(seedKho);
+  r = await send({ external_user_id: "xl-1", text: "anh cần mua nhà quận 5 tầm 6 tỷ" });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ anh cần thuê khu nào trong Quận 5 ạ?"] });
+  r = await send({ external_user_id: "xl-1", text: "không phải vậy em, ý anh là thuê chứ không mua" });
+  const loi = (r.body.replies ?? []).filter((x) => !/^(?:🤖|💾)/u.test(x));
+  check("XL-01 'không phải vậy, ý anh là thuê' + model không xin lỗi → bong bóng lời mở bằng 'Dạ em xin lỗi …, em hiểu nhầm ạ.'",
+    /^Dạ em xin lỗi(?: anh)?, em hiểu nhầm ạ\./.test(loi[0] ?? ""), JSON.stringify(r.body.replies));
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ em xin lỗi anh, em sửa liền ạ. Anh cần thuê tầm bao nhiêu?"] });
+  r = await send({ external_user_id: "xl-1", text: "hiểu sai rồi em" });
+  check("XL-02 model đã xin lỗi → không chèn lần hai", ((r.body.replies ?? []).join(" ").match(/xin lỗi/g) ?? []).length === 1, JSON.stringify(r.body.replies));
+  globalThis.__model = { parse: () => OUT() };
 }
 
 // ── kết ──
