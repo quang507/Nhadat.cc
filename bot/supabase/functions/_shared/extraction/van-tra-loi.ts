@@ -624,7 +624,8 @@ export function chanBiaDuKien(replies: string[], nguCanh: string): { replies: st
 }
 
 /** Câu hứa gửi hình ngay ("Em gửi hình liền đây", "gửi ảnh anh xem nè"). */
-const HUA_GUI_HINH_RE = /\b(?:(?:em|chau|de em|de chau)\s+(?:se\s+)?gui\s+(?:ngay\s+|lien\s+|luon\s+)?(?:hinh|anh)|gui\s+(?:hinh|anh)\s+(?:lien|ngay|luon|ne|nha|lien day|ngay day))\b/;
+// Kèm lời MỜI xem hình ("Anh xem hình trước nhé?") — căn 0 ảnh thì mời cũng là hứa suông (bắn lại sau #193).
+const HUA_GUI_HINH_RE = /\b(?:(?:em|chau|de em|de chau)\s+(?:se\s+)?gui\s+(?:ngay\s+|lien\s+|luon\s+)?(?:hinh|anh)|gui\s+(?:hinh|anh)\s+(?:lien|ngay|luon|ne|nha|lien day|ngay day)|(?:xem|coi)\s+(?:hinh|anh)\s+(?:truoc|khong|ko|nhe|nha|ne|luon|thu)\b[^.!]*\?|(?:muon|co muon)\s+(?:xem|coi)\s+(?:hinh|anh)\b[^.!]*\?)/;
 export function laHuaGuiHinh(cau: string): boolean {
   return HUA_GUI_HINH_RE.test(boDau(cau));
 }
@@ -709,4 +710,26 @@ export function boCauVongLai(replies: string[], text: string): string[] {
     return tu.filter((w) => tuKhach.has(w)).length / tu.length >= 0.8;
   });
   return ra.length ? ra : replies;
+}
+
+/**
+ * Căn BỊA khi kho trống (bắn lại 23/09 sau deploy #193): kho lọc theo "gần chợ An Đông" ra rỗng, model vẫn tả
+ * "căn này hẻm xe hơi 4m P12, 50m2, 7,9 tỷ — gần chợ chỉ khoảng 600m". Tầng trên chỉ gọi khi KHÔNG có căn nào
+ * trong tay model. Câu tả một căn cụ thể = có số tiền cụ thể (7,9 tỷ / 8 tỷ 2) hoặc diện tích (50m2) + chữ căn/nhà/
+ * hẻm/phường, và KHÔNG phải câu nhắc tiêu chí khách ("tầm/khoảng/dưới/lọc/tìm"). Bỏ CẢ BONG BÓNG chứa câu đó
+ * (câu hỏi "Chú có quan tâm không ạ?" đi kèm cũng thành vô nghĩa).
+ */
+export function boCanBia(replies: string[]): string[] {
+  const laCanBia = (c: string): boolean => {
+    // Câu nêu MÃ TIN thật ("#BDS-Q5-0006") là căn lấy từ lượt trước (căn tương tự, căn đã gợi) — không phải bịa.
+    if (/#?\b[A-Z]{2,5}(?:-[A-Z0-9]{1,15}){1,4}\b/.test(c)) return false;
+    const kd = boDau(c);
+    // Câu nhắc TIÊU CHÍ khách: "tầm/khoảng/dưới/trên" đứng NGAY trước số tiền, hoặc lời lọc/tìm/chưa có.
+    if (/\b(?:tam|khoang|duoi|tren|tu)\s+\d+(?:[.,]\d+)?\s*(?:ty|ti|trieu)\b|\b(?:do lai|loc|tim|nhu cau|tieu chi|chua co)\b/.test(kd)) return false;
+    const coGia = /\b\d+(?:[.,]\d+)?\s*(?:ty|ti)(?:\s*\d{1,3})?\b/.test(kd);
+    const coDt = /\b\d{2,4}(?:[.,]\d+)?\s*m2\b/.test(kd);
+    return (coGia || coDt) && /\b(?:can|nha|hem|p\s*\d{1,2}|phuong)\b/.test(kd);
+  };
+  const ra = replies.filter((r) => !tachCau(r).some(laCanBia));
+  return ra.length === replies.length ? replies : ra;
 }
