@@ -5151,12 +5151,13 @@ Deno.serve(async (req) => {
       ? prefs.gan_tien_ich_loc as GanTienIch
       : null);
   const minimumMet = (prefsLoc.area != null || gan != null) && prefsLoc.budget != null;
-  // FR-216: công tắc tìm theo nghĩa — chỉ đọc khi kho được lọc thật (đủ tiêu chí), song song tới lúc dựng truy vấn.
+  // FR-216: tìm theo nghĩa sẵn sàng? (công tắc bật + có khoá + nhung-tick KHÔNG đang tạm dừng vì Gemini từ chối —
+  // 20260923h) — chỉ hỏi khi kho được lọc thật (đủ tiêu chí), song song tới lúc dựng truy vấn.
   const timNghiaP = minimumMet
     ? (async () => {
-      const { data, error } = await client.rpc("cau_hinh", { p_key: "tim_theo_nghia" });
-      if (error) await ghiLoi(client, "chat-reply cau_hinh(tim_theo_nghia)", error.message);
-      return String(data ?? "tat").trim() === "bat";
+      const { data, error } = await client.rpc("tim_nghia_san_sang");
+      if (error) await ghiLoi(client, "chat-reply tim_nghia_san_sang", error.message);
+      return data === true;
     })().catch(() => false)
     : Promise.resolve(false);
   // 14/09/2026 (bắn 16 hội thoại mua): "tìm nhà quận 5 tầm 6 tỷ" → bot vẫn dò "để ở hay

@@ -412,6 +412,13 @@ create table if not exists public.nhung_viec (
   gui_luc timestamp with time zone not null default now()
 );
 
+create table if not exists public.nhung_viec_du_an (
+  project_id uuid not null,
+  request_id bigint not null,
+  md5 text not null,
+  gui_luc timestamp with time zone not null default now()
+);
+
 create table if not exists public.project_facts (
   id bigint not null default nextval('project_facts_id_seq'::regclass),
   project_id uuid,
@@ -456,7 +463,10 @@ create table if not exists public.projects (
   handover text,
   specs jsonb,
   unit_types jsonb,
-  geocode_at timestamp with time zone
+  geocode_at timestamp with time zone,
+  nhung extensions.vector(768),
+  nhung_md5 text,
+  nhung_luc timestamp with time zone
 );
 
 create table if not exists public.property_events (
@@ -784,6 +794,9 @@ do $d$ begin
   alter table public.nhung_viec add constraint nhung_viec_pkey PRIMARY KEY (listing_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.nhung_viec_du_an add constraint nhung_viec_du_an_pkey PRIMARY KEY (project_id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.project_facts add constraint project_facts_co_dich CHECK (((project_id IS NOT NULL) OR (COALESCE(btrim(ten_du_an), ''::text) <> ''::text)));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -960,6 +973,9 @@ do $d$ begin
   alter table public.nhung_viec add constraint nhung_viec_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.nhung_viec_du_an add constraint nhung_viec_du_an_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.project_facts add constraint project_facts_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL;
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1058,6 +1074,7 @@ CREATE UNIQUE INDEX project_facts_khong_trung_idx ON public.project_facts USING 
 CREATE INDEX project_facts_project_id_idx ON public.project_facts USING btree (project_id);
 CREATE INDEX project_facts_listing_id_idx ON public.project_facts USING btree (listing_id);
 CREATE INDEX project_facts_conversation_id_idx ON public.project_facts USING btree (conversation_id);
+create index if not exists projects_nhung_hnsw ON public.projects USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists projects_priority_idx ON public.projects USING btree (priority, district);
 create index if not exists property_events_at_idx ON public.property_events USING btree (at DESC);
 create index if not exists property_events_buyer_idx ON public.property_events USING btree (buyer_id);
@@ -1610,6 +1627,12 @@ declare
   v_noi_dung text;
 begin
   if new.source = 'HET TIEN API' then
+    return null;
+  end if;
+  -- 20260923h: 402 của Gemini embedding (tìm theo nghĩa) không làm bot câm — nhung-tick tự giãn nhịp, không báo nhầm.
+  if new.source = 'nhung-tick'
+     or lower(coalesce(new.detail, '')) like '%ai.studio%'
+     or lower(coalesce(new.detail, '')) like '%generativelanguage%' then
     return null;
   end if;
 
@@ -4885,51 +4908,111 @@ declare
   v_md5 text;
   v_vals jsonb;
   v_gui int := 0;
+  v_tran int;
+  v_loi int;
+  v_dung timestamptz;
+  v_tu_choi boolean := false;
+  v_ma int;
+  v_mau text;
+  v_ok boolean := false;
 begin
-  -- (1) Thu kết quả lượt trước. Chưa có phản hồi thì chờ; quá 10 phút thì bỏ, tick sau gửi lại.
+  -- (1) Thu kết quả lượt trước (tin + dự án). Chưa có phản hồi thì chờ; quá 10 phút thì bỏ, lượt sau gửi lại.
   for v in
-    select nv.listing_id, nv.md5, nv.gui_luc, h.status_code, h.content, h.error_msg
+    select nv.listing_id as id, 'tin' as loai, nv.md5, nv.gui_luc, h.status_code, h.content, h.error_msg
       from public.nhung_viec nv left join net._http_response h on h.id = nv.request_id
+    union all
+    select nd.project_id, 'du_an', nd.md5, nd.gui_luc, h.status_code, h.content, h.error_msg
+      from public.nhung_viec_du_an nd left join net._http_response h on h.id = nd.request_id
   loop
     if v.status_code is null and v.error_msg is null then
       if v.gui_luc < now() - interval '10 minutes' then
-        delete from public.nhung_viec where listing_id = v.listing_id;
+        if v.loai = 'tin' then delete from public.nhung_viec where listing_id = v.id;
+        else delete from public.nhung_viec_du_an where project_id = v.id; end if;
       end if;
       continue;
     end if;
     if v.status_code = 200 then
       v_vals := (v.content::jsonb) -> 'embedding' -> 'values';
       if jsonb_typeof(v_vals) = 'array' and jsonb_array_length(v_vals) = 768 then
-        update public.listings set nhung = (v_vals::text)::extensions.vector, nhung_md5 = v.md5, nhung_luc = now()
-         where id = v.listing_id;
+        if v.loai = 'tin' then
+          update public.listings set nhung = (v_vals::text)::extensions.vector, nhung_md5 = v.md5, nhung_luc = now() where id = v.id;
+        else
+          update public.projects set nhung = (v_vals::text)::extensions.vector, nhung_md5 = v.md5, nhung_luc = now() where id = v.id;
+        end if;
+        v_ok := true;
       else
-        perform public.log_loi('nhung-tick', 'Gemini embed trả khuôn lạ cho tin ' || v.listing_id, null);
+        perform public.log_loi('nhung-tick', 'Gemini embed trả khuôn lạ cho ' || v.loai || ' ' || v.id, null);
       end if;
     else
-      perform public.log_loi('nhung-tick',
-        'Gemini embed ' || coalesce(v.status_code::text, '?') || ' ' || left(coalesce(v.error_msg, v.content, ''), 200),
-        v.status_code);
+      v_tu_choi := true;
+      v_ma := coalesce(v_ma, v.status_code);
+      v_mau := coalesce(v_mau, left(coalesce(v.error_msg, v.content, ''), 200));
     end if;
-    delete from public.nhung_viec where listing_id = v.listing_id;
+    if v.loai = 'tin' then delete from public.nhung_viec where listing_id = v.id;
+    else delete from public.nhung_viec_du_an where project_id = v.id; end if;
   end loop;
 
-  -- (2) Gửi lượt mới: tin còn sống mà văn bản đổi so với lần nhúng trước. Tối đa 20 tin một tick.
+  -- Giãn nhịp: Gemini từ chối → tạm dừng 2, 4, 8 … 60 phút (402 hết tiền: 60 phút ngay); ghi sổ một lần mỗi đợt.
+  v_loi := coalesce(nullif(public.cau_hinh('nhung_lan_loi'), '')::int, 0);
+  if v_tu_choi then
+    v_loi := v_loi + 1;
+    v_dung := now() + make_interval(mins => case when v_ma = 402 then 60 else least(60, (2 ^ least(v_loi, 6))::int) end);
+    update public.app_config set value = v_loi::text where key = 'nhung_lan_loi';
+    update public.app_config set value = to_char(v_dung at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') where key = 'nhung_tam_dung_den';
+    if v_loi = 1 or v_loi % 12 = 0 then
+      perform public.log_loi('nhung-tick',
+        'Gemini embed từ chối HTTP ' || coalesce(v_ma::text, '?') || ' (lần ' || v_loi || ') — tạm dừng tới '
+          || to_char(v_dung at time zone 'Asia/Ho_Chi_Minh', 'HH24:MI DD/MM') || ' giờ VN. ' || coalesce(v_mau, ''),
+        null);
+    end if;
+  elsif v_ok and v_loi > 0 then
+    update public.app_config set value = '0' where key = 'nhung_lan_loi';
+    update public.app_config set value = '' where key = 'nhung_tam_dung_den';
+  end if;
+
+  -- (2) Gửi mẻ mới: tin còn sống đổi văn bản trước, rồi dự án. Một mẻ một lúc; đang tạm dừng thì thôi.
   if coalesce(public.cau_hinh('tim_theo_nghia'), 'tat') <> 'bat' then return; end if;
+  v_dung := nullif(public.cau_hinh('nhung_tam_dung_den'), '')::timestamptz;
+  if v_dung is not null and v_dung > now() then return; end if;
+  if exists (select 1 from public.nhung_viec) or exists (select 1 from public.nhung_viec_du_an) then return; end if;
   v_key := public.get_secret('GEMINI_API_KEY');
   if v_key is null then return; end if;
+  v_tran := greatest(1, least(coalesce(nullif(public.cau_hinh('nhung_moi_tick'), '')::int, 10), 50));
+
   for r in
     select l.id, l.nhung_md5 from public.listings l
      where l.status in ('cho_thong_tin', 'dang_ban', 'dang_quan_tam')
-       and not exists (select 1 from public.nhung_viec nv where nv.listing_id = l.id)
      order by l.updated_at desc nulls last
      limit 300
   loop
-    exit when v_gui >= 20;
+    exit when v_gui >= v_tran;
     v_txt := public.van_ban_nhung(r.id);
     if v_txt is null or length(v_txt) < 10 then continue; end if;
     v_md5 := md5(v_txt);
     if r.nhung_md5 is not distinct from v_md5 then continue; end if;
     insert into public.nhung_viec (listing_id, request_id, md5)
+    values (r.id, net.http_post(
+      url := 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-goog-api-key', v_key),
+      body := jsonb_build_object(
+        'content', jsonb_build_object('parts', jsonb_build_array(jsonb_build_object('text', left(v_txt, 6000)))),
+        'taskType', 'RETRIEVAL_DOCUMENT', 'outputDimensionality', 768),
+      timeout_milliseconds := 20000), v_md5);
+    v_gui := v_gui + 1;
+  end loop;
+
+  for r in
+    select p.id, p.nhung_md5 from public.projects p
+     where p.nhung_md5 is null or p.updated_at > coalesce(p.nhung_luc, '-infinity'::timestamptz)
+     order by p.is_partner desc nulls last, p.priority nulls last, p.updated_at desc nulls last
+     limit 200
+  loop
+    exit when v_gui >= v_tran;
+    v_txt := public.van_ban_du_an(r.id);
+    if v_txt is null or length(v_txt) < 10 then continue; end if;
+    v_md5 := md5(v_txt);
+    if r.nhung_md5 is not distinct from v_md5 then continue; end if;
+    insert into public.nhung_viec_du_an (project_id, request_id, md5)
     values (r.id, net.http_post(
       url := 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent',
       headers := jsonb_build_object('Content-Type', 'application/json', 'x-goog-api-key', v_key),
@@ -5845,6 +5928,20 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.tim_du_an_theo_nghia(p_vec double precision[], p_limit integer DEFAULT 5)
+ RETURNS TABLE(id uuid, name text, do_gan double precision)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+  select p.id, p.name, 1 - (p.nhung <=> (p_vec::extensions.vector(768)))
+    from public.projects p
+   where p.nhung is not null
+   order by p.nhung <=> (p_vec::extensions.vector(768))
+   limit greatest(1, least(coalesce(p_limit, 5), 30));
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.tim_duong(p_ten text, p_quan text DEFAULT NULL::text, p_toi_da integer DEFAULT 2)
  RETURNS TABLE(ten text, khoang_cach integer, quan_cu text[], phuong text[], tinh text[])
  LANGUAGE sql
@@ -5872,6 +5969,18 @@ AS $function$
             (p_quan is not null and p_quan = any(array_remove(array_agg(distinct c.quan_cu), null))) desc,
             c.ten
    limit 8;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tim_nghia_san_sang()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select coalesce(public.cau_hinh('tim_theo_nghia'), 'tat') = 'bat'
+     and coalesce(nullif(public.cau_hinh('nhung_tam_dung_den'), '')::timestamptz, '-infinity'::timestamptz) <= now()
+     and public.get_secret('GEMINI_API_KEY') is not null;
 $function$
 ;
 
@@ -6099,6 +6208,26 @@ CREATE OR REPLACE FUNCTION public.url_kho_anh()
  SET search_path TO 'public', 'pg_catalog'
 AS $function$
   select c.value from app_config c where c.key = 'storage_public_base_url';
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.van_ban_du_an(p_id uuid)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select public.che_sdt(concat_ws('. ',
+    'Dự án ' || p.name,
+    case when p.developer is not null then 'Chủ đầu tư ' || p.developer end,
+    nullif(concat_ws(', ', p.location_raw, p.ward, p.district, p.province), ''),
+    left(p.description, 2000),
+    case when p.status_text is not null then 'Tình trạng: ' || p.status_text end,
+    case when p.specs ->> 'gia_dong' is not null then p.specs ->> 'gia_dong' end,
+    case when p.handover is not null then 'Bàn giao ' || p.handover end,
+    case when p.legal_status is not null then 'Pháp lý ' || p.legal_status end
+  ))
+  from public.projects p where p.id = p_id;
 $function$
 ;
 
@@ -7095,6 +7224,7 @@ alter table public.media enable row level security;
 alter table public.media_cleanup_queue enable row level security;
 alter table public.messages enable row level security;
 alter table public.nhung_viec enable row level security;
+alter table public.nhung_viec_du_an enable row level security;
 alter table public.project_facts enable row level security;
 alter table public.projects enable row level security;
 alter table public.property_events enable row level security;
@@ -7289,6 +7419,7 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.me
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.media_mo_coi_storage to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.messages to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nhung_viec to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nhung_viec_du_an to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.project_facts to service_role;
@@ -7761,8 +7892,12 @@ grant execute on function public.them_nhan_tin(p_listing_id uuid, p_nhan text[])
 revoke all on function public.thu_muc_dau_uuid(p_name text) from public, anon, authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to service_role;
+revoke all on function public.tim_du_an_theo_nghia(p_vec double precision[], p_limit integer) from public, anon, authenticated;
+grant execute on function public.tim_du_an_theo_nghia(p_vec double precision[], p_limit integer) to service_role;
 revoke all on function public.tim_duong(p_ten text, p_quan text, p_toi_da integer) from public, anon, authenticated;
 grant execute on function public.tim_duong(p_ten text, p_quan text, p_toi_da integer) to service_role;
+revoke all on function public.tim_nghia_san_sang() from public, anon, authenticated;
+grant execute on function public.tim_nghia_san_sang() to service_role;
 revoke all on function public.tim_tin_theo_nghia(p_vec double precision[], p_codes text[], p_limit integer) from public, anon, authenticated;
 grant execute on function public.tim_tin_theo_nghia(p_vec double precision[], p_codes text[], p_limit integer) to service_role;
 revoke all on function public.tin_can_geocode(p_limit integer) from public, anon, authenticated;
@@ -7786,6 +7921,8 @@ revoke all on function public.url_kho_anh() from public, anon, authenticated;
 grant execute on function public.url_kho_anh() to anon;
 grant execute on function public.url_kho_anh() to authenticated;
 grant execute on function public.url_kho_anh() to service_role;
+revoke all on function public.van_ban_du_an(p_id uuid) from public, anon, authenticated;
+grant execute on function public.van_ban_du_an(p_id uuid) to service_role;
 revoke all on function public.van_ban_nhung(p_id uuid) from public, anon, authenticated;
 grant execute on function public.van_ban_nhung(p_id uuid) to service_role;
 revoke all on function public.viec_inbound_bo_roi(p_limit integer) from public, anon, authenticated;

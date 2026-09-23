@@ -391,6 +391,9 @@ class RpcCall {
       }
       case "mau_cau_fewshot":
         return { data: (globalThis.__mauCau ?? {})[a.p_phia] ?? "", error: null };
+      // FR-216 g (20260923h): chat-reply hỏi một RPC — mô phỏng bằng công tắc e2e (không mô phỏng tạm dừng / khoá).
+      case "tim_nghia_san_sang":
+        return { data: String((globalThis.__cauHinh ?? {}).tim_theo_nghia ?? "") === "bat", error: null };
       case "cau_hinh":
         return { data: (globalThis.__cauHinh ?? { test_reset_hello: "1" })[a.p_key] ?? null, error: null };
       case "reset_nguoi_test": {
