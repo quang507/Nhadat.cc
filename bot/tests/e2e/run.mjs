@@ -3603,6 +3603,62 @@ fresh(seedKho);
   globalThis.__model = { parse: () => OUT() };
 }
 
+// ── 23/09/2026 FR-214 b: bắn thật 5 người — một tin nói HAI bất động sản, không có "căn 1/căn 2" ──
+{
+  fresh();
+  globalThis.__model = { parse: () => OUT() };
+  const ls = () => db().t.listings;
+  const rep = () => r.body.replies.join(" ");
+  r = await send({ external_user_id: "gvi-a", text: "Chị cần bán 2 căn: căn nhà hẻm 5m Nguyễn Trãi quận 5 60m2 giá 9 tỷ, với 1 căn hộ chung cư Hà Đô quận 10 2PN 75m2 giá 5 tỷ 2" });
+  check("GVI-01 'căn nhà … Q5 9 tỷ, với 1 căn hộ … Q10 5 tỷ 2' → HAI tin: nhà phố Q5 60m2 9 tỷ + căn hộ Q10 75m2 5 tỷ 2 (bản trước gộp một, loại căn hộ)",
+    ls().length === 2 && ls()[0].property_type === "nha_pho" && ls()[0].district === "Quận 5" && Number(ls()[0].area_m2) === 60 && /9 tỷ/.test(ls()[0].price_raw ?? "") &&
+      ls()[1].property_type === "chung_cu" && ls()[1].district === "Quận 10" && Number(ls()[1].area_m2) === 75 && /5 tỷ 2/.test(ls()[1].price_raw ?? ""),
+    JSON.stringify(ls().map((l) => [l.code, l.property_type, l.district, l.area_m2, l.price_raw])));
+  fresh();
+  r = await send({ external_user_id: "gvi-d", text: "em ban 2 nha: nha 1 hem 3m pham the hien q8 3 ty 2, nha 2 mat tien au duong lan q8 12 ty" });
+  check("GVI-02 không dấu 'nha 1 …, nha 2 …' → HAI tin nhà phố Q8 (3 tỷ 2 · 12 tỷ), không gắn nhãn '2 mặt tiền'",
+    ls().length === 2 && ls().every((l) => l.property_type === "nha_pho" && l.district === "Quận 8") && /3 tỷ 2/.test(ls()[0].price_raw ?? "") && /12 tỷ/.test(ls()[1].price_raw ?? "") &&
+      !ls().some((l) => (l.nhan ?? []).includes("can_goc")),
+    JSON.stringify(ls().map((l) => [l.code, l.property_type, l.district, l.price_raw, l.nhan])));
+  fresh();
+  r = await send({ external_user_id: "gvi-e", text: "Chú có 2 lô đất ở Củ Chi muốn bán, lô 1 500m2 giá 3 tỷ, lô 2 1000m2 giá 5 tỷ" });
+  check("GVI-03 '2 lô đất ở Củ Chi, lô 1 …, lô 2 …' → hai tin loại ĐẤT (loại ở đầu câu là của cả lô), không hỏi lại 'nhà phố hay đất'",
+    ls().length === 2 && ls().every((l) => l.property_type === "dat") && !/nhà phố, chung cư hay đất/.test(rep()),
+    JSON.stringify({ ls: ls().map((l) => [l.code, l.property_type, l.district, l.area_m2]), rep: r.body.replies }));
+  // "cả lô" ở câu LOẠI áp cho mọi tin chưa rõ loại.
+  fresh();
+  r = await send({ external_user_id: "gvi-e2", text: "Chú có 2 lô ở Củ Chi muốn bán, lô 1 500m2 giá 3 tỷ, lô 2 1000m2 giá 5 tỷ" });
+  {
+    for (const ir of db().t.info_requests.filter((x) => x.status === "pending")) ir.status = "expired";
+    db().insert("info_requests", { listing_id: ls()[0].id, question: "loai_bds", status: "pending" });
+    db().t.sellers.find((x) => x.zalo_user_id === "gvi-e2").active_listing_id = ls()[0].id;
+  }
+  const loaiTruoc = ls().map((l) => l.property_type);
+  r = await send({ external_user_id: "gvi-e2", text: "cả lô đều là đất thổ cư" });
+  check("GVI-04 đang hỏi loại lô 1, 'cả lô đều là đất thổ cư' → CẢ HAI lô thành đất (bản trước lô 2 nằm 'chưa rõ loại')",
+    ls().length === 2 && ls().every((l) => l.property_type === "dat"), JSON.stringify({ truoc: loaiTruoc, sau: ls().map((l) => [l.code, l.property_type]), rep: r.body, f: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
+  // Mới MỘT tin, câu vừa trả lời căn cũ vừa rao căn mới → AI chia (mảnh đầu = câu treo, mảnh sau = MOI).
+  fresh();
+  r = await send({ external_user_id: "gvi-b", text: "Anh bán nhà mặt tiền Lê Văn Sỹ quận 3 4x18 giá 25 tỷ" });
+  {
+    for (const ir of db().t.info_requests.filter((x) => x.status === "pending")) ir.status = "expired";
+    db().insert("info_requests", { listing_id: ls()[0].id, question: "phuong", status: "pending" });
+    db().t.sellers.find((x) => x.zalo_user_id === "gvi-b").active_listing_id = ls()[0].id;
+  }
+  globalThis.__model = {
+    parse: (p) => laLuotGanManh(p)
+      ? { manh: [{ trich: "phường 9 em.", ma_tin: ls()[0].code }, { trich: "À anh còn miếng đất ở Nhơn Trạch Đồng Nai 100m2 thổ cư muốn 2 tỷ 3 nữa", ma_tin: "MOI" }] }
+      : OUT(),
+    create: () => "Dạ em ghi rồi ạ.",
+  };
+  r = await send({ external_user_id: "gvi-b", text: "phường 9 em. À anh còn miếng đất ở Nhơn Trạch Đồng Nai 100m2 thổ cư muốn 2 tỷ 3 nữa" });
+  const nhaB = ls().find((l) => l.property_type === "nha_pho"), datB = ls().find((l) => l.property_type === "dat");
+  check("GVI-05 mới 1 tin, 'phường 9 em. À anh còn miếng đất ở Nhơn Trạch … 2 tỷ 3 nữa' → Phường 9 về căn nhà Q3; lô đất mở riêng (đất, 2 tỷ 3, không mang Phường 9)",
+    ls().length === 2 && nhaB?.ward === "Phường 9" && !!datB && datB.price_vnd === 2.3e9 && !datB.ward,
+    JSON.stringify({ ls: ls().map((l) => [l.code, l.property_type, l.district, l.ward, l.price_vnd, l.area_m2]), rep: r.body.replies }));
+  globalThis.__model = { parse: () => OUT() };
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

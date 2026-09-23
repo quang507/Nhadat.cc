@@ -584,6 +584,12 @@ class RpcCall {
         // để bộ đo giọng / e2e không thấy một 🤖 mà production không in.
         if (a.p_question === "gia") { l.price_raw = chuanHoaGiaRaw(a.p_answer); l.price_vnd = parseVnd(a.p_answer); }
         if (a.p_question === "phuong") l.ward = a.p_answer;
+        // Trigger loại BĐS (FR-150/164): fact loai_bds đổi cột khi tin còn "chua_ro" (bắn thật 23/09: lô 1 thành đất).
+        if (a.p_question === "loai_bds" && (!l.property_type || l.property_type === "chua_ro")) {
+          const kdL = String(a.p_answer).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+          const ptL = /chung cu|can ho/.test(kdL) ? "chung_cu" : /\bdat\b/.test(kdL) ? "dat" : /\bnha\b/.test(kdL) ? "nha_pho" : null;
+          if (ptL) l.property_type = ptL;
+        }
         // 20260915d listing_facts_sync_deal: đổi loại giao dịch, tính lại giá từ fact giá gần nhất.
         if (a.p_question === "loai_giao_dich" && (a.p_answer === "ban" || a.p_answer === "cho_thue")) {
           l.deal = a.p_answer;
@@ -655,7 +661,7 @@ class RpcCall {
         l.boc_tach = { ...(l.boc_tach ?? {}), ...sach, _cap_nhat: now() };
         return { data: null, error: null };
       }
-      case "guess_property_type_answer": { const t = boDauMock(String(a.p_text)); return { data: /kho|xuong/.test(t) ? "kho_xuong" : /nong nghiep|dat vuon/.test(t) ? "dat_nong_nghiep" : /skc|tmd|thuong mai/.test(t) ? "dat_kinh_doanh" : /dich vu|khach san|toa nha/.test(t) ? "toa_nha" : /nha pho|\bnp\b/.test(t) ? "nha_pho" : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(t) ? "chung_cu" : /\bnha\b/.test(t) && t.split(/\s+/).length >= 4 ? "nha_pho" : null, error: null }; }
+      case "guess_property_type_answer": { const t = boDauMock(String(a.p_text)); return { data: /kho|xuong/.test(t) ? "kho_xuong" : /nong nghiep|dat vuon/.test(t) ? "dat_nong_nghiep" : /skc|tmd|thuong mai/.test(t) ? "dat_kinh_doanh" : /dich vu|khach san|toa nha/.test(t) ? "toa_nha" : /nha pho|\bnp\b/.test(t) ? "nha_pho" : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(t) ? "chung_cu" : /\bnha\b/.test(t) && t.split(/\s+/).length >= 4 ? "nha_pho" : /\bdat\b/.test(t) ? "dat" : null, error: null }; }
       case "mark_listing_interest": {
         // v48 / 20260904f (FR-108): overload có p_buyer_id ghi thêm `interests`
         // (PK buyer_id+listing_id — chèn trùng thì bỏ qua).
