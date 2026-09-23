@@ -573,6 +573,62 @@ export function boKhenKhongCanCu(replies: string[], bangChung: string): string[]
   });
 }
 
+// ── 23/09/2026 (bắn thật 5 tin bán + 2 mua, chủ dự án "sửa hết 5 lỗi đi") ─────────────────────────────
+// Lỗi 4: "Hẻm 2m5 ngang 4m thì nhà mình chốn rất được khách tìm" — khen hẻm XE MÁY (TONE: hẻm 3m là hẻm xe máy,
+// đừng khen). Lỗi 5: chủ nói "ô tô đậu ngay trước cửa" → bot "Hẻm 5m ô tô vào tận nhà là khách sẵn sàng cọc nhanh,
+// … bán gấp hay …?" — câu có "?" nên lưới cũ (bỏ nguyên câu, chừa câu hỏi) không đụng. Ở đây soi theo MỆNH ĐỀ
+// (tách dấu phẩy): mệnh đề không có "?" mà khen sai thì bỏ, phần hỏi giữ.
+const KHEN_KD = /\b(?:rat|lam|chuong|duoc khach|khach (?:tim|chuong|thich|hoi|ua|san sang)|hut khach|de ban|chot nhanh|coc nhanh|ly tuong|tuyet|dep)\b/;
+function hemNhoTrong(kd: string): boolean {
+  if (/\bhem xe may\b/.test(kd)) return true;
+  const m = /\bhem\s*(?:rong\s*)?(\d+(?:[.,]\d+)?)\s*m(?:et)?\s*(\d)?(?!\d)/.exec(kd);
+  if (!m) return false;
+  const rong = Number(m[1].replace(",", ".")) + (m[2] ? Number(m[2]) / 10 : 0);
+  return rong > 0 && rong < 3.5;
+}
+const VAO_NHA_KD = /\b(?:vao tan nha|vao toi nha|vao nha|vao tan cua|vao trong nha|dau trong nha|de xe (?:hoi )?trong nha)\b/;
+const VAO_NHA_CHUNG = /\b(?:vao (?:tan |toi |duoc |trong )?nha|trong nha|gara|ga ra|garage|dau trong nha)\b/;
+/** Mệnh đề khen không có căn cứ (lời MODEL, không phải bảng đọc từ DB). */
+export function laKhenSai(menhDe: string, bangChung: string): boolean {
+  if (/\?/.test(menhDe)) return false;
+  const kd = boDau(menhDe);
+  const bc = boDau(bangChung ?? "");
+  if (VAO_NHA_KD.test(kd) && !VAO_NHA_CHUNG.test(bc)) return true;
+  if (KHEN_KD.test(kd) && (hemNhoTrong(kd) || (/\bhem\b/.test(kd) && hemNhoTrong(bc) && !/\b(?:mat tien|xe hoi|o to|oto)\b/.test(bc)))) return true;
+  return KHEN_CAN_BANG_CHUNG.some(([khen, chung]) => khen.test(kd) && !chung.test(bc));
+}
+export function boMenhDeKhenSai(replies: string[], bangChung: string): string[] {
+  const ra: string[] = [];
+  for (const r of replies) {
+    const dong = r.split("\n").map((d) => tachCau(d).map((c) => {
+      const cacMd = c.split(/,\s+/);
+      if (cacMd.length === 1) return laKhenSai(c, bangChung) ? "" : c;
+      const giu = cacMd.filter((md) => !laKhenSai(md, bangChung));
+      if (giu.length === cacMd.length) return c;
+      const gop = giu.join(", ").trim();
+      return gop ? gop.charAt(0).toUpperCase() + gop.slice(1) : "";
+    }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
+    if (dong) ra.push(dong);
+  }
+  return ra.length ? ra : replies;
+}
+
+// Lỗi 3: bot viết "#BDS-NP-Q5-0004 · Hùng Vương …" cho khách MUA — FR-178 (a) cấm đọc mã tin cho khách, mua lẫn
+// bán. Mã theo sau là dấu "·"/":"/"-" (liệt kê) thì bỏ mã + dấu; mã đứng trong câu thì thay bằng tên đường của
+// căn (kho), không có thì bỏ. Mã vẫn được đọc TRƯỚC khi lọc để ghi quan tâm / hẹn / gửi ảnh (FR-32).
+const MA_TIN_KHACH_RE = /(?:#\s?)?\bBDS-[A-Z0-9]+(?:-[A-Z0-9]+)*-\d{3,5}\b(\s*[·:\-–]\s*)?/gi;
+export function boMaTinKhach(replies: string[], nhanCan: Record<string, string>): string[] {
+  return replies.map((r) => {
+    if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) return r;
+    return r.replace(MA_TIN_KHACH_RE, (m: string, sep: string | undefined) => {
+      if (sep) return "";
+      const ma = m.replace(/^#\s?/, "").replace(/[\s·:\-–]+$/, "").trim().toUpperCase();
+      return nhanCan[ma] ?? "";
+    })
+      .replace(/\bcăn\s+căn\b/gi, "căn").replace(/[ \t]{2,}/g, " ").replace(/\s+([,.?!])/g, "$1").trim();
+  }).filter(Boolean);
+}
+
 /**
  * Bỏ câu MÂU THUẪN với căn đang nói (22/09/2026, bộ đo giọng M06): kho ghi "hẻm 6m" mà bot
  * nói với khách mua "mặt tiền kinh doanh". Chỉ soi hai cặp đối nhau rõ ràng: mặt tiền ↔ hẻm,
