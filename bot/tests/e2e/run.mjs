@@ -3436,6 +3436,15 @@ fresh(seedKho);
     check("GVF-19 hai khách hỏi chủ cùng một căn → HAI việc hỏi chủ (mỗi khách một), không nuốt câu thứ hai",
       ir.length === 2 && new Set(ir.map((x) => x.buyer_id)).size === 2, JSON.stringify(ir));
   }
+  // Cùng khách hỏi thêm câu thứ hai về cùng căn → nối vào việc đang chờ (không bỏ, không tạo dòng thứ hai).
+  globalThis.__model = { parse: () => OUT({ replies: ["Dạ để em hỏi lại chủ nhà rồi báo mình liền."], ask_owner: { listing_code: "BDS-Q5-0001", question: "có dính quy hoạch không" } }) };
+  r = await send({ external_user_id: "gvf-19a", text: "căn đó có dính quy hoạch không em?" });
+  {
+    const L = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    const ir = db().t.info_requests.filter((x) => x.source === "buyer_ask" && x.listing_id === L.id && x.buyer_id === db().t.buyers.find((b) => b.zalo_user_id === "gvf-19a").id);
+    check("GVF-19b cùng khách hỏi thêm 'quy hoạch' khi đang chờ câu khác → NỐI vào việc đang chờ (1 dòng, có cả hai câu)",
+      ir.length === 1 && /quy hoạch/.test(ir[0].question) && ir[0].question.includes(";"), JSON.stringify(ir));
+  }
   // Khối dự án đối tác có chữ "quy hoạch" → vẫn chặn câu "không có quy hoạch" về CĂN đang nói.
   fresh((d) => { seedKho(d); d.insert("projects", { name: "Ny'ah Phú Định", district: "Quận 8", is_partner: true, priority: 1, status_text: "quy hoạch 1/500 đã duyệt" }); const b = buyerCo(d, "gvf-20"); quanTam(d, b, "BDS-Q5-0001"); });
   globalThis.__model = { parse: () => OUT({ replies: ["Pháp lý sổ hồng riêng hoàn công, không có quy hoạch gì cả.", "Mình có muốn xem trực tiếp không ạ?"] }) };
