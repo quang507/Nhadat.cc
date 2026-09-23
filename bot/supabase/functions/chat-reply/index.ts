@@ -2870,7 +2870,9 @@ Deno.serve(async (req) => {
       // 23/09/2026 (bắn thật): "Chú có 2 lô đất ở Củ Chi …, lô 1 500m2 giá 3 tỷ, lô 2 …" — loại nói ở đầu câu là của cả
       // lô; bản trước chỉ đọc chữ "đất" trong mảnh từng lô → hai tin "chưa rõ loại", bot hỏi lại "nhà phố hay đất".
       const loaiDauTin = loaiTuChu(kdDauTin.replace(/\b(?:ban|can ban|muon ban)\b/g, ""));
-      const manhChung = text.split(/[,;\n]/).map((x) => x.trim())
+      // Tách theo LOẠI: mọi chữ sau mốc căn đầu đã thuộc một căn — chỉ phần ĐẦU CÂU là chung (bắn thật 23/09: "2PN"
+      // của căn hộ từng ghi sang căn nhà vì mảnh phẩy "với 1 căn hộ … 2PN …" không nằm nguyên trong goc đã gọt).
+      const manhChung = (nhieuCanTrongTin[0].theoLoai ? dauTin : text).split(/[,;\n]/).map((x) => x.trim())
         .filter((x) => x.length >= 2 && !nhieuCanTrongTin.some((c) => c.goc.includes(x)));
       const factChung = manhChung.length ? nhanDienNhieuFact(manhChung.join(", ")) : [];
       let duAnLo: DuAnKho | null | undefined;
