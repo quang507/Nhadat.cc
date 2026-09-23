@@ -9,6 +9,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { formatArea, formatPrice, sanitizeDescription, TYPE_LABEL } from "@/lib/format";
 import BocTachNhom, { useBocTach } from "@/components/admin/BocTachNhom";
+import SuaTinModal, { TRANG_THAI_TIN } from "@/components/admin/SuaTinModal";
 
 // FR-187: dòng JSON chia nhóm mở dưới một tin (đọc `boc_tach_v` khi bấm, không tải cả rổ).
 function DongJson({ id, ma, cot }: { id: string; ma: string | null; cot: number }) {
@@ -100,6 +101,12 @@ const COT: Cot[] = [
   { key: "anh", ten: "Ảnh", lay: (d) => String(soAnh(d)), sap: soAnh },
 ];
 
+// 14/09/2026 — chủ dự án: "cột loại bị cắt rồi". Bảng rộng hơn màn hình, cột "Thao tác" dính
+// bên phải đè lên các cột CUỐI — mà Loại / Trạng thái lại nằm cuối. Thứ nhận ra tin và việc cần
+// làm đứng đầu; STT / ngày / SĐT / ảnh xuống cuối. CSV vẫn theo thứ tự COT (sheet Excel gốc).
+const THU_TU_HIEN = ["ma", "loai", "trang_thai", "deal", "gia", "dien_tich", "vi_tri", "nguoi_ban", "mo_ta", "sdt", "anh", "ngay", "stt"];
+const COT_HIEN = THU_TU_HIEN.map((k) => COT.find((c) => c.key === k)!).filter(Boolean);
+
 const khongDau = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
@@ -116,42 +123,13 @@ export default function Page() {
   // FR-187: tin đang mở JSON chia nhóm.
   const [moJson, setMoJson] = useState<Set<string>>(new Set());
 
-  // Modal chỉnh sửa trực tiếp
+  // Màn sửa (components/admin/SuaTinModal.tsx) + thông báo sau mỗi thao tác (WCAG 4.1.3).
   const [dangSua, setDangSua] = useState<Dong | null>(null);
-  const [formSua, setFormSua] = useState<{
-    deal: "ban" | "cho_thue";
-    status: string;
-    property_type: string;
-    price_raw: string;
-    price_vnd: string;
-    area_m2: string;
-    frontage_m: string;
-    length_m: string;
-    floors: string;
-    bedrooms: string;
-    location_raw: string;
-    district: string;
-    ward: string;
-    street: string;
-    description: string;
-  }>({
-    deal: "ban",
-    status: "dang_ban",
-    property_type: "nha_pho",
-    price_raw: "",
-    price_vnd: "",
-    area_m2: "",
-    frontage_m: "",
-    length_m: "",
-    floors: "",
-    bedrooms: "",
-    location_raw: "",
-    district: "",
-    ward: "",
-    street: "",
-    description: "",
-  });
-  const [dangLuu, setDangLuu] = useState(false);
+  const [thongBao, setThongBao] = useState<{ chu: string; loi: boolean } | null>(null);
+  const baoTin = (chu: string, loi = false) => {
+    setThongBao({ chu, loi });
+    window.setTimeout(() => setThongBao((x) => (x?.chu === chu ? null : x)), loi ? 9000 : 4000);
+  };
 
   useEffect(() => {
     // Ô tìm trên thanh CRM (AdminShell) đưa ?q= sang đây.
@@ -200,26 +178,14 @@ export default function Page() {
     setSap((s) => ({ key, tang: s.key === key ? !s.tang : false }));
   };
 
-  // Mở modal sửa chi tiết
-  const moSua = (d: Dong) => {
-    setDangSua(d);
-    setFormSua({
-      deal: d.deal || "ban",
-      status: d.status || "dang_ban",
-      property_type: d.property_type || "nha_pho",
-      price_raw: d.price_raw || "",
-      price_vnd: d.price_vnd ? String(d.price_vnd) : "",
-      area_m2: d.area_m2 ? String(d.area_m2) : "",
-      frontage_m: d.frontage_m ? String(d.frontage_m) : "",
-      length_m: d.length_m ? String(d.length_m) : "",
-      floors: d.floors ? String(d.floors) : "",
-      bedrooms: d.bedrooms ? String(d.bedrooms) : "",
-      location_raw: d.location_raw || "",
-      district: d.district || "",
-      ward: d.ward || "",
-      street: d.street || "",
-      description: d.description || "",
-    });
+  const moSua = (d: Dong) => setDangSua(d);
+  const dongSua = () => {
+    setDangSua(null);
+    // Mở từ ?sua=<mã>: đóng thì bỏ tham số và ô tìm, kẻo tải lại trang lại bật modal / chỉ thấy một dòng.
+    try {
+      const u = new URL(location.href);
+      if (u.searchParams.has("sua")) { u.searchParams.delete("sua"); history.replaceState(null, "", u.toString()); setQ(""); }
+    } catch { /* SSR */ }
   };
 
   // 14/09/2026: thẻ CRM trên /admin mở thẳng màn sửa bằng ?sua=<mã tin> (trước đó mã tin
@@ -232,108 +198,24 @@ export default function Page() {
     try { ma = new URLSearchParams(location.search).get("sua"); } catch { /* SSR */ }
     const d = ma ? rows.find((r) => r.code === ma) : undefined;
     if (d) { setQ(ma ?? ""); moSua(d); }
-    else if (ma) setLoi(`Không tìm thấy tin ${ma} trong rổ hàng.`);
+    else if (ma) baoTin(`Không tìm thấy tin ${ma} trong rổ hàng (có thể đã xoá).`, true);
   }, [rows, daMoTuLink]);
 
-  // Lưu chỉnh sửa vào database.
-  //
-  // `duyet = true` là ĐƯỜNG DUY NHẤT đưa một tin lên kệ từ màn này (chủ dự án
-  // 10/09: "nút duyệt cho rao tin thì phải vào 1 tab edit đã chớ"). Lý do không
-  // để duyệt bằng một cú bấm ngoài bảng: rao tin là hành động NGOẢNH RA NGOÀI —
-  // tin lên web công khai, ai cũng đọc được — nên người bấm phải vừa nhìn thấy
-  // đủ giá, diện tích, địa chỉ, mô tả trước mặt. Bấm nhầm một ô trong bảng thì
-  // không có bước nào giữ lại.
-  const luuSua = async (duyet = false) => {
-    if (!dangSua) return;
-    if (duyet) {
-      const thieu = [
-        !formSua.price_raw.trim() && "giá",
-        !formSua.area_m2.trim() && "diện tích",
-        !formSua.district.trim() && "quận/huyện",
-        !formSua.description.trim() && "mô tả",
-      ].filter(Boolean) as string[];
-      const hoi = thieu.length
-        ? `Tin còn THIẾU: ${thieu.join(", ")}.\n\nVẫn rao #${dangSua.code} lên web?`
-        : `Rao #${dangSua.code} lên web AI Ơi Nhà Đất? Ai cũng xem được tin này.`;
-      if (!confirm(hoi)) return;
-    }
-    setDangLuu(true);
-    const numOrNull = (v: string) => {
-      const s = v.trim().replace(',', '.');
-      if (!s) return null;
-      const n = Number(s);
-      return isNaN(n) ? null : n;
-    };
-    const intOrNull = (v: string) => {
-      const s = v.trim();
-      if (!s) return null;
-      const n = parseInt(s, 10);
-      return isNaN(n) ? null : n;
-    };
-
-    const updates = {
-      deal: formSua.deal,
-      status: duyet ? "dang_ban" : formSua.status,
-      property_type: formSua.property_type || null,
-      price_raw: formSua.price_raw.trim() || null,
-      price_vnd: numOrNull(formSua.price_vnd),
-      area_m2: numOrNull(formSua.area_m2),
-      frontage_m: numOrNull(formSua.frontage_m),
-      length_m: numOrNull(formSua.length_m),
-      floors: intOrNull(formSua.floors),
-      bedrooms: intOrNull(formSua.bedrooms),
-      location_raw: formSua.location_raw.trim() || null,
-      district: formSua.district.trim() || null,
-      ward: formSua.ward.trim() || null,
-      street: formSua.street.trim() || null,
-      description: formSua.description.trim() || null,
-      can_chu_duyet: false,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabase.from("listings").update(updates).eq("id", dangSua.id);
-    setDangLuu(false);
-
-    if (error) {
-      alert(`Lỗi lưu thay đổi: ${error.message}`);
-    } else {
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === dangSua.id
-            ? ({ ...r, ...updates } as unknown as Dong)
-            : r
-        )
-      );
-      setDangSua(null);
-    }
-  };
-
-  // Đổi trạng thái nhanh 1-click từ dropdown trên bảng
-  const doiTrangThaiNhanh = async (id: string, newStatus: string) => {
+  // Đổi trạng thái nhanh từ bảng. Rao lên web KHÔNG đi đường này (option bị khoá, phải qua màn
+  // Sửa). Gỡ một tin đang rao khỏi web thì hỏi trước — tin biến khỏi web ngay.
+  const doiTrangThaiNhanh = async (d: Dong, newStatus: string) => {
+    if (d.status === "dang_ban" && newStatus !== "dang_ban" &&
+        !confirm(`Gỡ #${d.code} khỏi web (chuyển sang "${TRANG_THAI_TIN[newStatus] ?? newStatus}")?`)) return;
     const { error } = await supabase.from("listings").update({
       status: newStatus,
       can_chu_duyet: false,
       updated_at: new Date().toISOString(),
-    }).eq("id", id);
-
+    }).eq("id", d.id);
     if (error) {
-      alert(`Lỗi đổi trạng thái: ${error.message}`);
+      baoTin(`Chưa đổi được trạng thái #${d.code}: ${error.message}`, true);
     } else {
-      setRows((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
-      );
-    }
-  };
-
-  // Xoá tin trực tiếp
-  const xoaTin = async (id: string, code: string | null) => {
-    if (!confirm(`Bạn có chắc muốn xoá hoàn toàn tin #${code ?? id}?`)) return;
-    const { error } = await supabase.from("listings").delete().eq("id", id);
-    if (error) {
-      alert(`Lỗi xoá tin: ${error.message}`);
-    } else {
-      setRows((prev) => prev.filter((r) => r.id !== id));
-      if (dangSua?.id === id) setDangSua(null);
+      setRows((prev) => prev.map((r) => (r.id === d.id ? { ...r, status: newStatus } : r)));
+      baoTin(`#${d.code} → ${TRANG_THAI_TIN[newStatus] ?? newStatus}.`);
     }
   };
 
@@ -383,7 +265,7 @@ export default function Page() {
           </div>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-navy">Rổ hàng BĐS (Dạng Excel)</h1>
           <p className="mt-1 text-sm text-mute tabular-nums">
-            {rows.length} tin trong rổ · đang lọc hiển thị {loc.length} · hỗ trợ sửa trực tiếp giá, trạng thái, vị trí & mô tả
+            {rows.length} tin trong rổ · đang lọc hiển thị {loc.length} · bấm mã tin để sửa · rao lên web chỉ qua màn sửa
           </p>
         </div>
         <div className="flex items-center gap-2.5">
@@ -423,14 +305,15 @@ export default function Page() {
           value={q}
           onChange={(e) => { setQ(e.target.value); setTrang(1); }}
           placeholder="Tìm nhanh: mã tin, đường, phường, giá, mô tả, người bán…"
+          aria-label="Tìm trong rổ hàng"
           className={`${o} min-w-0 flex-1 px-4`}
         />
-        <select value={deal} onChange={(e) => { setDeal(e.target.value as typeof deal); setTrang(1); }} className={o}>
+        <select aria-label="Lọc bán hay cho thuê" value={deal} onChange={(e) => { setDeal(e.target.value as typeof deal); setTrang(1); }} className={o}>
           <option value="">Tất cả (Bán + Thuê)</option>
           <option value="ban">Chỉ Bán</option>
           <option value="cho_thue">Chỉ Cho thuê</option>
         </select>
-        <select value={trangThai} onChange={(e) => { setTrangThai(e.target.value); setTrang(1); }} className={o}>
+        <select aria-label="Lọc theo trạng thái" value={trangThai} onChange={(e) => { setTrangThai(e.target.value); setTrang(1); }} className={o}>
           <option value="">Mọi trạng thái</option>
           {Object.entries(TRANG_THAI).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
@@ -440,11 +323,12 @@ export default function Page() {
 
       {/* Bảng dữ liệu Rổ Hàng có Sửa trực tiếp */}
       <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-white">
-        <table className="w-full min-w-[1560px] text-left text-sm">
+        <table className="w-full min-w-[1360px] text-left text-sm">
+          <caption className="sr-only">Rổ hàng — mỗi dòng một tin, cột Mã tin mở màn sửa</caption>
           <thead className="sticky top-0 bg-slate-50 border-b border-line">
             <tr className="text-xs uppercase tracking-wide text-mute">
-              {COT.map((c) => (
-                <th key={c.key} className="px-3 py-3 font-semibold">
+              {COT_HIEN.map((c) => (
+                <th key={c.key} scope="col" aria-sort={sap.key === c.key ? (sap.tang ? "ascending" : "descending") : undefined} className="px-3 py-3 font-semibold">
                   {c.sap ? (
                     <button type="button" onClick={() => bamCot(c.key)} className="hover:text-brand flex items-center gap-1">
                       <span>{c.ten}</span>
@@ -455,21 +339,21 @@ export default function Page() {
                   )}
                 </th>
               ))}
-              <th className="px-3 py-3 font-semibold text-center sticky right-0 z-10 bg-slate-50 shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.15)]">
+              <th scope="col" className="px-3 py-3 font-semibold text-center sticky right-0 z-10 bg-slate-50 shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.15)]">
                 Thao tác
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {mot.map((d) => {
-              const moTaFull = COT[5].lay(d);
+              const moTaFull = COT.find((c) => c.key === "mo_ta")!.lay(d);
               const daMo = mo.has(d.id);
               const daMoJson = moJson.has(d.id);
 
               return (
                 <Fragment key={d.id}>
                 <tr className="align-top hover:bg-slate-50/80 transition">
-                  {COT.map((c) => {
+                  {COT_HIEN.map((c) => {
                     // Cột mô tả
                     if (c.key === "mo_ta") {
                       return (
@@ -486,15 +370,15 @@ export default function Page() {
                       );
                     }
 
-                    // Cột mã tin
+                    // Cột mã tin → mở màn sửa. Trang công khai chỉ có khi tin đang rao (nút "Xem").
                     if (c.key === "ma" && d.code) {
                       return (
                         <td key={c.key} className="whitespace-nowrap px-3 py-3 tabular-nums font-bold">
-                          <Link href={`/nha-dat/${encodeURIComponent(d.code)}`} target="_blank" className="text-brand hover:underline">
+                          <button type="button" onClick={() => moSua(d)} className="text-[#b3461a] hover:underline" title="Mở màn sửa tin này">
                             #{d.code}
-                          </Link>
+                          </button>
                           {d.legacy_code && d.legacy_code !== d.code && (
-                            <span className="text-mute block text-[11px] font-normal">({d.legacy_code})</span>
+                            <span className="block text-[11px] font-normal text-slate-600">({d.legacy_code})</span>
                           )}
                         </td>
                       );
@@ -506,7 +390,8 @@ export default function Page() {
                         <td key={c.key} className="whitespace-nowrap px-3 py-3">
                           <select
                             value={d.status}
-                            onChange={(e) => doiTrangThaiNhanh(d.id, e.target.value)}
+                            onChange={(e) => doiTrangThaiNhanh(d, e.target.value)}
+                            aria-label={`Trạng thái #${d.code}`}
                             className={`rounded-md px-2.5 py-1 text-xs font-bold border outline-none cursor-pointer transition ${
                               MAU_TRANG_THAI[d.status] ?? "bg-slate-100 text-mute border-slate-300"
                             }`}
@@ -562,7 +447,7 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => moSua(d)}
-                        className="rounded-md bg-brand/10 border border-brand/30 px-3 py-1 text-xs font-bold text-brand hover:bg-brand hover:text-white transition"
+                        className="min-h-7 rounded-md border border-[#b3461a]/40 bg-white px-3 py-1 text-xs font-bold text-[#b3461a] transition hover:bg-[#b3461a] hover:text-white"
                         title="Chỉnh sửa thông tin tin này"
                       >
                         Sửa
@@ -570,17 +455,18 @@ export default function Page() {
                       <button
                         type="button"
                         onClick={() => setMoJson((s) => { const n = new Set(s); if (n.has(d.id)) n.delete(d.id); else n.add(d.id); return n; })}
+                        aria-expanded={daMoJson}
                         className={`rounded-md border px-2.5 py-1 text-xs font-semibold transition ${daMoJson ? "border-navy bg-navy text-white" : "border-line text-mute hover:text-navy hover:border-slate-400"}`}
                         title="JSON bóc tách chia nhóm của tin này (FR-187)"
                       >
                         JSON
                       </button>
-                      {d.code && (
+                      {d.code && d.status === "dang_ban" && (
                         <Link
                           href={`/nha-dat/${encodeURIComponent(d.code)}`}
                           target="_blank"
                           className="rounded-md border border-line px-2.5 py-1 text-xs font-semibold text-mute hover:text-navy hover:border-slate-400 transition"
-                          title="Xem trang hiển thị công khai"
+                          title="Xem trang tin trên web (chỉ có khi tin đang rao)"
                         >
                           Xem
                         </Link>
@@ -588,13 +474,13 @@ export default function Page() {
                     </div>
                   </td>
                 </tr>
-                {daMoJson && <DongJson id={d.id} ma={d.code} cot={COT.length + 1} />}
+                {daMoJson && <DongJson id={d.id} ma={d.code} cot={COT_HIEN.length + 1} />}
                 </Fragment>
               );
             })}
             {mot.length === 0 && (
               <tr>
-                <td colSpan={COT.length + 1} className="px-3 py-12 text-center text-mute font-medium">
+                <td colSpan={COT_HIEN.length + 1} className="px-3 py-12 text-center text-mute font-medium">
                   Không có tin nào khớp với bộ lọc tìm kiếm.
                 </td>
               </tr>
@@ -621,256 +507,29 @@ export default function Page() {
             onClick={() => setTrang(t + 1)}
             className="rounded-md border border-line px-4 py-1.5 font-semibold text-navy hover:border-brand hover:text-brand disabled:opacity-40 bg-white"
           >
-            Sau -
+            Sau →
           </button>
         </div>
       )}
 
-      {/* ════ MODAL CHỈNH SỬA TRỰC TIẾP TIN BĐS ════ */}
       {dangSua && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4-xs animate-in fade-in">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl border border-line max-h-[90vh] overflow-y-auto space-y-4">
-            <div className="flex items-center justify-between border-b border-line pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-navy flex items-center gap-2">
-                  <span>Chỉnh sửa BĐS:</span>
-                  <span className="text-brand font-mono">#{dangSua.code}</span>
-                </h3>
-                <p className="text-xs text-mute mt-0.5">
-                  Cập nhật trực tiếp vào cơ sở dữ liệu rổ hàng AI Ơi Nhà Đất
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDangSua(null)}
-                className="text-mute hover:text-navy text-xl font-bold p-1"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3 text-xs">
-              {/* Giao dịch */}
-              <div>
-                <label className="block font-bold text-navy mb-1">Giao dịch</label>
-                <select
-                  value={formSua.deal}
-                  onChange={(e) => setFormSua({ ...formSua, deal: e.target.value as "ban" | "cho_thue" })}
-                  className="w-full rounded-lg border border-line p-2 text-sm font-semibold bg-white"
-                >
-                  <option value="ban">Bán</option>
-                  <option value="cho_thue">Cho thuê</option>
-                </select>
-              </div>
-
-              {/* Trạng thái */}
-              <div>
-                <label className="block font-bold text-navy mb-1">Trạng thái</label>
-                <select
-                  value={formSua.status}
-                  onChange={(e) => setFormSua({ ...formSua, status: e.target.value })}
-                  className="w-full rounded-lg border border-line p-2 text-sm font-semibold bg-white"
-                >
-                  {Object.entries(TRANG_THAI).map(([val, label]) => (
-                    <option key={val} value={val}>{label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Loại BĐS */}
-              <div>
-                <label className="block font-bold text-navy mb-1">Loại BĐS</label>
-                <select
-                  value={formSua.property_type}
-                  onChange={(e) => setFormSua({ ...formSua, property_type: e.target.value })}
-                  className="w-full rounded-lg border border-line p-2 text-sm font-semibold bg-white"
-                >
-                  {/* 20260909i: lấy từ TYPE_LABEL — bản cũ chép tay có `can_ho` không tồn tại trong enum (lưu là lỗi 22P02). */}
-                  <option value="chua_ro">Chưa rõ</option>
-                  {Object.entries(TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3 text-xs border-t border-line/60 pt-3">
-              {/* Giá hiển thị */}
-              <div>
-                <label className="block font-bold text-navy mb-1">Giá hiển thị (chữ)</label>
-                <input
-                  value={formSua.price_raw}
-                  onChange={(e) => setFormSua({ ...formSua, price_raw: e.target.value })}
-                  placeholder="Vd: 7 tỷ, 12 tỷ, 15 tr/th"
-                  className="w-full rounded-lg border border-line p-2 text-sm font-bold text-brand"
-                />
-              </div>
-
-              {/* Giá số VNĐ */}
-              <div>
-                <label className="block font-bold text-navy mb-1">Giá VNĐ (số)</label>
-                <input
-                  type="number"
-                  value={formSua.price_vnd}
-                  onChange={(e) => setFormSua({ ...formSua, price_vnd: e.target.value })}
-                  placeholder="Vd: 7000000000"
-                  className="w-full rounded-lg border border-line p-2 text-sm font-mono"
-                />
-              </div>
-
-              {/* Diện tích */}
-              <div>
-                <label className="block font-bold text-navy mb-1">Diện tích (m²)</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={formSua.area_m2}
-                  onChange={(e) => setFormSua({ ...formSua, area_m2: e.target.value })}
-                  placeholder="Vd: 66 hoặc 72"
-                  className="w-full rounded-lg border border-line p-2 text-sm font-bold"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-4 text-xs border-t border-line/60 pt-3">
-              <div>
-                <label className="block font-bold text-navy mb-1">Ngang (m)</label>
-                <input
-                  value={formSua.frontage_m}
-                  onChange={(e) => setFormSua({ ...formSua, frontage_m: e.target.value })}
-                  placeholder="Vd: 6"
-                  className="w-full rounded-lg border border-line p-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-navy mb-1">Dài (m)</label>
-                <input
-                  value={formSua.length_m}
-                  onChange={(e) => setFormSua({ ...formSua, length_m: e.target.value })}
-                  placeholder="Vd: 11 hoặc 12"
-                  className="w-full rounded-lg border border-line p-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-navy mb-1">Số tầng (tấm)</label>
-                <input
-                  type="number"
-                  value={formSua.floors}
-                  onChange={(e) => setFormSua({ ...formSua, floors: e.target.value })}
-                  placeholder="Vd: 2 hoặc 5"
-                  className="w-full rounded-lg border border-line p-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-navy mb-1">Số phòng ngủ</label>
-                <input
-                  type="number"
-                  value={formSua.bedrooms}
-                  onChange={(e) => setFormSua({ ...formSua, bedrooms: e.target.value })}
-                  placeholder="Vd: 3 hoặc 5"
-                  className="w-full rounded-lg border border-line p-2 text-sm"
-                />
-              </div>
-            </div>
-
-            {/* Vị trí chi tiết */}
-            <div className="space-y-3 border-t border-line/60 pt-3 text-xs">
-              <div>
-                <label className="block font-bold text-navy mb-1">Địa chỉ / Vị trí chi tiết (hiển thị)</label>
-                <input
-                  value={formSua.location_raw}
-                  onChange={(e) => setFormSua({ ...formSua, location_raw: e.target.value })}
-                  placeholder="Vd: Bùi Tư Toàn, Phường An Lạc, Bình Tân"
-                  className="w-full rounded-lg border border-line p-2 text-sm"
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div>
-                  <label className="block font-bold text-navy mb-1">Đường</label>
-                  <input
-                    value={formSua.street}
-                    onChange={(e) => setFormSua({ ...formSua, street: e.target.value })}
-                    placeholder="Vd: Đường Bùi Tư Toàn"
-                    className="w-full rounded-lg border border-line p-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-navy mb-1">Phường / Xã</label>
-                  <input
-                    value={formSua.ward}
-                    onChange={(e) => setFormSua({ ...formSua, ward: e.target.value })}
-                    placeholder="Vd: Phường An Lạc"
-                    className="w-full rounded-lg border border-line p-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-navy mb-1">Quận / Huyện / Tỉnh</label>
-                  <input
-                    value={formSua.district}
-                    onChange={(e) => setFormSua({ ...formSua, district: e.target.value })}
-                    placeholder="Vd: Bình Tân hoặc Quận 5"
-                    className="w-full rounded-lg border border-line p-2 text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Nội dung mô tả */}
-            <div className="border-t border-line/60 pt-3 text-xs">
-              <label className="block font-bold text-navy mb-1">Nội dung mô tả BĐS</label>
-              <textarea
-                rows={4}
-                value={formSua.description}
-                onChange={(e) => setFormSua({ ...formSua, description: e.target.value })}
-                placeholder="Nhập nội dung mô tả tin rao..."
-                className="w-full rounded-lg border border-line p-2 text-sm"
-              />
-            </div>
-
-            {/* Footer Buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-              <button
-                type="button"
-                onClick={() => xoaTin(dangSua.id, dangSua.code)}
-                className="rounded-md border border-red-200 px-4 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 hover:border-red-300 transition"
-              >
-                Xoá tin này
-              </button>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDangSua(null)}
-                  className="rounded-md border border-line px-5 py-2 text-xs font-bold text-mute hover:text-navy transition"
-                >
-                  Huỷ bỏ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => luuSua(false)}
-                  disabled={dangLuu}
-                  className="rounded-md border border-mute/40 bg-white px-5 py-2 text-sm font-bold text-navy hover:border-brand hover:text-brand transition disabled:opacity-60"
-                  title="Lưu lại, KHÔNG đổi việc tin có đang rao hay không"
-                >
-                  {dangLuu ? "Đang lưu…" : "Lưu thay đổi"}
-                </button>
-                {dangSua.status !== "dang_ban" ? (
-                  <button
-                    type="button"
-                    onClick={() => luuSua(true)}
-                    disabled={dangLuu}
-                    className="rounded-md bg-brand px-6 py-2 text-sm font-bold text-white hover:bg-brand-dark transition disabled:opacity-60"
-                    title="Lưu thay đổi RỒI đưa tin lên web (trạng thái → đang bán)"
-                  >
-                    {dangLuu ? "Đang lưu…" : "Duyệt & rao tin"}
-                  </button>
-                ) : (
-                  <span className="rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800">
-                    Tin đang rao trên web
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <SuaTinModal
+          tin={dangSua}
+          onDong={dongSua}
+          onDaLuu={(id, updates) => setRows((prev) => prev.map((r) => (r.id === id ? ({ ...r, ...updates } as Dong) : r)))}
+          onDaXoa={(id) => setRows((prev) => prev.filter((r) => r.id !== id))}
+          baoTin={baoTin}
+        />
       )}
+
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-4">
+        {thongBao && (
+          <p role={thongBao.loi ? "alert" : "status"}
+            className={`pointer-events-auto max-w-xl rounded-md px-4 py-2.5 text-sm font-semibold shadow-lg ${thongBao.loi ? "bg-red-700 text-white" : "bg-navy text-white"}`}>
+            {thongBao.chu}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -7,8 +7,11 @@
 // `sellers(` mà nằm trong ngữ cảnh listings thì phải là `sellers!listings_seller_id_fkey(`.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const GOC = new URL("../../", import.meta.url).pathname;
+// 23/09: .pathname giữ %20 và thêm dấu / đầu — máy Windows có dấu cách trong đường dẫn thì
+// ENOENT (CI Linux không thấy). fileURLToPath giải mã đúng cho cả hai.
+const GOC = fileURLToPath(new URL("../../", import.meta.url));
 const THU_MUC = ["bot/supabase/functions", "app", "lib"];
 const files = [];
 const di = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); if (f === "node_modules" || f.startsWith(".")) continue; if (statSync(p).isDirectory()) di(p); else if (/\.(ts|tsx)$/.test(f)) files.push(p); } };

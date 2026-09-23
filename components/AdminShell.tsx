@@ -97,7 +97,8 @@ function ThanhTren() {
                 className={`relative flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition ${on ? "bg-white text-navy" : "text-white/85 hover:bg-white/10 hover:text-white"}`}
               >
                 <t.Icon className="h-4 w-4" />
-                <span className={on || loiTab ? "" : "hidden xl:inline"}>{t.label}</span>
+                {/* 14/09/2026 (WCAG 4.1.2): `hidden` là display:none — dưới 1280px 6/7 link không có tên đọc được. */}
+                <span className={on || loiTab ? "" : "sr-only xl:not-sr-only"}>{t.label}</span>
                 {loiTab && (
                   <span aria-label="đang lỗi" className="inline-block h-2 w-2 rounded-full bg-brand ring-2 ring-navy" />
                 )}

@@ -293,13 +293,15 @@ export default function Page() {
           >
             {dangGui ? "Đang lưu…" : "Lưu tin"}
           </button>
+          {/* 14/09/2026 (soát Shneiderman #1): thành công từng màu cam, lỗi màu navy — lỗi trông như
+              chữ thường. Tin vừa đăng thường CHƯA lên kệ nên link trang công khai là 404 → mở màn sửa. */}
           {ketQua && (
-            <span className={`text-sm font-semibold ${ketQua.ok ? "text-brand" : "text-navy"}`}>
+            <span role={ketQua.ok ? "status" : "alert"} className={`text-sm font-semibold ${ketQua.ok ? "text-emerald-800" : "text-red-700"}`}>
               {ketQua.text}
               {ketQua.ok && ketQua.code && (
-                <Link href={`/nha-dat/${encodeURIComponent(ketQua.code)}`} target="_blank"
+                <Link href={`/admin/ro-hang?sua=${encodeURIComponent(ketQua.code)}`}
                   className="ml-2 underline">
-                  xem tin -
+                  mở tin để xem &amp; rao →
                 </Link>
               )}
             </span>
