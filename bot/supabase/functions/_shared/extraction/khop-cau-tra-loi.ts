@@ -955,8 +955,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 22/09/2026 (kịch bản D): "đang thế chấp ngân hàng" một mình là TÌNH TRẠNG thế chấp (`the_chap`), không phải loại
   // giấy tờ; có kèm sổ/hợp đồng thì vẫn là pháp lý (mảnh thế chấp đi riêng qua `nhanDienNhieuFact`).
   if (/\b(dang the chap|the chap|cam ngan hang|trong ngan hang)\b/.test(kd) &&
-      // 23/09/2026: "sổ đang thế chấp ngân hàng" — chủ ngữ là SỔ → vẫn là pháp lý (ca FR-177 đỏ từ 22/09).
-      !/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay)\b|\bso\s+(?:(?:dang|da|bi|con|van)\s+)?(?:the chap|cam)\b/.test(kd)) {
+      !/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay)\b/.test(kd)) {
     return { question: "the_chap", answer: goc };
   }
   if (PHAP_LY_RE.test(kd)) {

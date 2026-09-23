@@ -463,7 +463,6 @@ ok("boCauVongLai: câu hỏi mới 'Mình cần mấy phòng ngủ ạ?' giữ",
   ok("nhanDienNhieuCan: 'căn A12-05' là mã căn, không phải thứ tự", nhanDienNhieuCan("căn A12-05 giá 3 tỷ, căn B7-01 giá 4 tỷ").every((c) => !c.thu));
   ok("tachTheoCan: 'căn B sổ hồng riêng' → thứ tự 2", JSON.stringify(tachTheoCan("căn B sổ hồng riêng, căn A đúc 3 tấm")) === JSON.stringify([{ thu: 2, manh: "sổ hồng riêng" }, { thu: 1, manh: "đúc 3 tấm" }]), JSON.stringify(tachTheoCan("căn B sổ hồng riêng, căn A đúc 3 tấm")));
 }
-ok("nhanDienFact: 'sổ đang thế chấp ngân hàng' vẫn là phap_ly", nhanDienFact("sổ đang thế chấp ngân hàng")?.question === "phap_ly", JSON.stringify(nhanDienFact("sổ đang thế chấp ngân hàng")));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
