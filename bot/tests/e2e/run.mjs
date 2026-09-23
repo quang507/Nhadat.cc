@@ -3151,6 +3151,31 @@ fresh(seedKho);
   globalThis.__cauHinh = cauHinhCu;
 }
 
+// ── 23/09/2026 (Zalo thật): "chào cháu, ông bán nhà Trần Bình Trọg Q5 7 tỷ" → bot "Dạ cháu chào mình ạ!", hỏi "…đúng
+// không mình?" — ông/bà chưa có trong danh sách cách gọi (FR-176) ──
+{
+  fresh();
+  const S = (u) => db().t.sellers.find((s) => s.zalo_user_id === u);
+  const EM = /(?<![\p{L}])em(?![\p{L}])/iu;
+  const MINH = /(?<![\p{L}])(?:mình|anh chị|anh\/chị)(?![\p{L}])/iu;
+  r = await send({ external_user_id: "ong-1", text: "chào cháu, ông bán nhà Trần Bình Trọg Q5 7 tỷ" });
+  const repOng = r.body.replies.join(" ");
+  check("XHO-01 'chào cháu, ông bán nhà…' → sellers.xung_ho = ông, nam, lớn tuổi; bot xưng cháu, gọi ông, không 'em' / 'mình' / 'anh chị'",
+    S("ong-1")?.xung_ho === "ông" && S("ong-1")?.gioi_tinh === "nam" && S("ong-1")?.nhom_tuoi === "lon_tuoi" &&
+      r.body.replies.length > 0 && !EM.test(repOng) && !MINH.test(repOng) && /cháu/i.test(repOng),
+    JSON.stringify({ s: S("ong-1"), rep: r.body.replies }));
+  r = await send({ external_user_id: "ba-1", text: "bà chào cháu" });
+  const repBa = r.body.replies.join(" ");
+  check("XHO-02 tin đầu 'bà chào cháu' → 'Dạ cháu chào bà', hỏi 'Bà đang muốn mua…', không 'em' / 'anh chị'",
+    /cháu chào bà/i.test(repBa) && /Bà /.test(repBa) && !EM.test(repBa) && !/anh chị|anh\/chị/i.test(repBa), JSON.stringify(r.body.replies));
+  r = await send({ external_user_id: "thim-1", text: "chào cháu, thím có căn nhà hẻm 4m đường Nguyễn Trãi quận 5 cần bán 6 tỷ" });
+  const repThim = r.body.replies.join(" ");
+  check("XHO-03 'chào cháu, thím có căn nhà…' → xung_ho = thím, nữ, lớn tuổi; bot xưng cháu, không 'em' / 'mình' / 'anh chị'",
+    S("thim-1")?.xung_ho === "thím" && S("thim-1")?.gioi_tinh === "nu" && S("thim-1")?.nhom_tuoi === "lon_tuoi" &&
+      r.body.replies.length > 0 && !EM.test(repThim) && !MINH.test(repThim) && /cháu/i.test(repThim),
+    JSON.stringify({ s: S("thim-1"), rep: r.body.replies }));
+}
+
 // ── 22/09/2026 (chủ dự án: "người ta chào là cô chào cháu nó vẫn đáp anh chị") — FR-176 (c) lời chào ──
 {
   const rep = () => r.body.replies.join(" ");

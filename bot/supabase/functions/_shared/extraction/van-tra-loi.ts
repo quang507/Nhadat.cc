@@ -15,6 +15,8 @@
 //
 // Tầng bóc tách (bot/tests/ranh-gioi.mjs): không model, không RPC.
 
+import { XUNG_HO_LON_TUOI as LON_TUOI } from "./khop-cau-tra-loi.ts";
+
 const boDau = (s: string): string =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
@@ -354,7 +356,7 @@ export function laLoiMeta(text: string): boolean {
 const EM_RIENG = /(?<![\p{L}])(em|Em|EM)(?![\p{L}])/gu;
 export function doiTuXung(replies: string[], xungHo: string | null | undefined, nhomTuoi?: string | null): string[] {
   // 22/09/2026: "chào cháu" chưa rõ chú hay cô (`nhom_tuoi = lon_tuoi`, chưa có `xung_ho`) → vẫn xưng cháu.
-  if (!(xungHo && ["chú", "cô", "bác"].includes(xungHo)) && nhomTuoi !== "lon_tuoi") return replies;
+  if (!(xungHo && LON_TUOI.has(xungHo)) && nhomTuoi !== "lon_tuoi") return replies;
   return replies.map((r) =>
     r.replace(EM_RIENG, (_m, w: string) => w === "EM" ? "CHÁU" : w === "Em" ? "Cháu" : "cháu")
       // "em gái / em trai" là người thứ ba — trả lại.
@@ -654,7 +656,7 @@ export function laHuaHoiChu(replies: string[]): boolean {
  * báo, gửi…) ở đầu câu hoặc sau "Dạ,"/"để". "chú xem nhà" (khách làm) không đụng: "xem" không nằm trong danh sách.
  */
 export function suaBotXungNhamKhach(replies: string[], goi: string | null | undefined): string[] {
-  if (!goi || !["chú", "cô", "bác"].includes(goi)) return replies;
+  if (!goi || !LON_TUOI.has(goi)) return replies;
   const re = new RegExp(
     `(^|[.!?]\\s+|Dạ,?\\s+|[Đđ]ể\\s+)(${goi}|${goi.charAt(0).toUpperCase()}${goi.slice(1)})\\s+(ghi nhớ|ghi nhận|ghi lại|lưu lại|đã lưu|sẽ tìm|tìm kiếm|tìm|lọc|báo lại|báo|gửi|kiểm tra)(?![\\p{L}])`,
     "gu",
