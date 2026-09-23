@@ -3365,6 +3365,15 @@ fresh(seedKho);
       !/hướng Đông|Chưa có quy hoạch/.test(rep()) && /chưa có thông tin chắc chắn/.test(rep()) && ir.length === 1 && ir[0].listing_id === db().t.listings.find((l) => l.code === "BDS-Q5-0001").id,
       JSON.stringify({ rep: r.body.replies, ir }));
   }
+  // Model tự điền ask_owner SAI ("hướng nhà") khi khách hỏi năm xây và bịa "xây năm 2018" → câu hỏi chủ là "năm xây".
+  fresh((d) => { seedKho(d); const b = buyerCo(d, "gvf-1b"); quanTam(d, b, "BDS-Q5-0001"); });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ nhà xây năm 2018 ạ."], ask_owner: { listing_code: "BDS-Q5-0001", question: "hướng nhà (hướng đông/tây/nam/bắc)" } });
+  r = await send({ external_user_id: "gvf-1b", text: "nha do xay nam nao vay e" });
+  {
+    const ir = db().t.info_requests.filter((x) => x.source === "buyer_ask");
+    check("GVF-08b model bịa 'xây năm 2018' + tự điền ask_owner sai 'hướng nhà' → bỏ câu bịa, câu hỏi chủ là 'năm xây'",
+      !/2018/.test(rep()) && ir.length === 1 && ir[0].question === "năm xây", JSON.stringify({ rep: r.body.replies, ir }));
+  }
   // (5b) "để em hỏi lại chủ về giá" mà model không mở ask_owner → code mở.
   fresh((d) => { seedKho(d); const b = buyerCo(d, "gvf-5b"); quanTam(d, b, "BDS-Q5-0001"); });
   globalThis.__model.parse = () => OUT({ replies: ["Dạ hẻm 6m xe hơi vào tận cửa ạ.", "Về giá, để em hỏi lại chủ nhà rồi báo anh liền."] });
