@@ -60,6 +60,11 @@ jobs:
       # protection bằng tay và người ta sẽ quên.
       - name: e2e + hồi quy FR-159/161/164 + ranh giới bóc tách ⟂ AI
         run: bun run test:bot
+      # TS-DO-BOC-01: 110 ca bóc tách, chế độ luật một mình (model giả, miễn phí). Đỏ khi một ca từng
+      # đạt nay rớt hoặc tổng trường đúng giảm so với bot/tests/do-boc/nen.json. Chung job `bot` cố ý
+      # (xem ghi chú trên về required checks).
+      - name: Bộ đo bóc tách — không tụt so với bản nền
+        run: bun run do-boc:nen
 
   baomat:
     name: Bảo mật — hồi quy RLS trên DB thật

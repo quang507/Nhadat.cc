@@ -22,6 +22,8 @@
     "up-masterdb": "node scripts/up-masterdb.mjs",
     "test:masterdb": "node scripts/up-masterdb.tu-kiem.mjs",
     "prompt": "node scripts/dong-bo-prompt.mjs",
+    "do-boc": "bun bot/tests/do-boc/chay.mjs",
+    "do-boc:nen": "bun bot/tests/do-boc/cham.mjs --tu-kiem && bun bot/tests/do-boc/chay.mjs --nen",
     "giong": "bun bot/tests/giong/chay.mjs",
     "giong:gia": "bun bot/tests/giong/chay.mjs --gia && bun bot/tests/giong/chay.mjs --gia=xau",
     "giong:cham": "bun bot/tests/giong/cham.mjs"
