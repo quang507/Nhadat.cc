@@ -4,7 +4,7 @@
 // bị chép 5 bản, `sendZalo()` 2 bản, và text escalation trùng byte giữa `nudge`
 // với `escalation-feed` (sửa một nơi quên nơi kia là lệch giọng bot ngay).
 import Anthropic from "npm:@anthropic-ai/sdk";
-import { bocDuPhong } from "./groq.ts";
+import { bocDuPhong, nguonGemini, nguonGroq } from "./groq.ts";
 import { locThamSo } from "./tham-so-model.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
@@ -107,17 +107,25 @@ export async function bangNhau(a: string, b: string): Promise<boolean> {
 
 export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   const apiKey = await secretOf(db, "ANTHROPIC_API_KEY");
-  // FR-194: khoá dự phòng Groq. Có khoá thì BỌC client chính lại — mọi chỗ gọi
-  // (10 chỗ, cả create lẫn parse) tự có lưới mà không phải sửa chỗ nào. Không có
-  // khoá Groq thì trả đúng client cũ, đường đi y như trước.
+  // FR-194: khoá dự phòng Groq / Gemini. Có khoá thì BỌC client chính lại — mọi chỗ
+  // gọi (10 chỗ, cả create lẫn parse) tự có lưới mà không phải sửa chỗ nào. Không có
+  // khoá dự phòng nào thì trả đúng client cũ, đường đi y như trước.
   const groqKey = await secretOf(db, "GROQ_API_KEY");
   const groqModel = (await secretOf(db, "GROQ_MODEL")) ?? "qwen/qwen3.8-27b";
-  if (!apiKey && !groqKey) throw new Error("Không tìm thấy ANTHROPIC_API_KEY lẫn GROQ_API_KEY (env lẫn Vault)");
+  // FR-194 c (23/09/2026): Gemini, cùng cổng giọng OpenAI với Groq (xem groq.ts).
+  const geminiKey = await secretOf(db, "GEMINI_API_KEY");
+  const geminiModel = (await secretOf(db, "GEMINI_MODEL")) ?? "gemini-3.8-flash";
+  if (!apiKey && !groqKey && !geminiKey) throw new Error("Không tìm thấy ANTHROPIC_API_KEY, GROQ_API_KEY lẫn GEMINI_API_KEY (env lẫn Vault)");
   const chinh = apiKey ? bocLocThamSo(new Anthropic({ apiKey }), db) : null;
-  if (!groqKey) return chinh!;
+  if (!groqKey && !geminiKey) return chinh!;
   // FR-194 b: ai trả lời TRƯỚC. Chủ dự án 15/09/2026: Groq trước, chặn trần thì
-  // Claude liền. Đổi lại bằng secret `MODEL_TRUOC=claude`, không cần deploy.
-  const thuTu = (await secretOf(db, "MODEL_TRUOC"))?.trim().toLowerCase() === "claude" ? "claude" : "groq";
+  // Claude liền. Đổi bằng secret `MODEL_TRUOC`, không cần deploy: `claude` = Claude
+  // trước; `gemini` = Gemini → Groq → Claude; còn lại (`groq`) = Groq → Gemini → Claude.
+  const truoc = (await secretOf(db, "MODEL_TRUOC"))?.trim().toLowerCase();
+  const thuTu = truoc === "claude" ? "claude" : "groq";
+  const gq = groqKey ? [nguonGroq(groqKey, groqModel)] : [];
+  const gm = geminiKey ? [nguonGemini(geminiKey, geminiModel)] : [];
+  const dsNguon = truoc === "gemini" ? [...gm, ...gq] : [...gq, ...gm];
   const ghiSo = async (nguon: string, chiTiet: string) => {
     try {
       await db.rpc("log_loi", { p_source: nguon, p_detail: chiTiet, p_code: null });
@@ -126,7 +134,7 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   // `bocDuPhong` chỉ cần hai hàm `messages.create/parse` — client thật khớp về
   // cấu trúc nhưng kiểu SDK rộng hơn nhiều, nên ép qua `unknown` ở MỘT chỗ này.
   return bocDuPhong(
-    chinh as unknown as Parameters<typeof bocDuPhong>[0], groqKey, groqModel, ghiSo, thuTu,
+    chinh as unknown as Parameters<typeof bocDuPhong>[0], dsNguon, ghiSo, thuTu,
   ) as unknown as Anthropic;
 }
 

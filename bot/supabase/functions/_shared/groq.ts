@@ -26,6 +26,14 @@
 //     Lượt phân loại ảnh / đọc sổ có ảnh sẽ ném lỗi để tầng gọi đi đúng nhánh
 //     "không phân loại được → cất RIÊNG TƯ" như cũ (FR-185), thay vì bịa ra
 //     nhãn ảnh từ chỗ không nhìn thấy gì.
+//
+// GEMINI (23/09/2026, chủ dự án đưa khoá sau khi Anthropic hết số dư lần hai và Groq
+// bậc miễn phí chạm trần ngay với 3 khách): Gemini cũng có cổng nói giọng OpenAI
+// (`/v1beta/openai/chat/completions`, khoá đi `Authorization: Bearer`), nên nó là một
+// NGUỒN nữa trong cùng đường này, không phải một lớp chuyển đổi mới. Thăm dò cùng ngày:
+// `gemini-3.8-flash` nhận `json_schema` strict (cả `anyOf` số nguyên / null, `enum`),
+// nhưng phần NGHĨ ăn chung trần `max_completion_tokens` — trần 900 bị cắt giữa JSON;
+// `reasoning_effort: "low"` thì dừng gọn (thử "minimal" bị 400 "not supported").
 
 type Khoi = { type: string; text?: string; [k: string]: unknown };
 type TinNhan = { role: string; content: string | Khoi[] };
@@ -50,6 +58,13 @@ export type KetQua = {
 };
 
 const URL_GROQ = "https://api.groq.com/openai/v1/chat/completions";
+const URL_GEMINI = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+
+/** Một nguồn nói giọng OpenAI: khoá + danh sách model xoay vòng khi chạm trần. */
+export type NguonOpenAI = { ten: "Groq" | "Gemini"; url: string; khoa: string; models: string[] };
+const dsTu = (models: string) => models.split(",").map((m) => m.trim()).filter(Boolean);
+export const nguonGroq = (khoa: string, models: string): NguonOpenAI => ({ ten: "Groq", url: URL_GROQ, khoa, models: dsTu(models) });
+export const nguonGemini = (khoa: string, models: string): NguonOpenAI => ({ ten: "Gemini", url: URL_GEMINI, khoa, models: dsTu(models) });
 
 /** Lỗi nào thì đáng đổi sang đường dự phòng — hết tiền, quá nhịp, quá tải. */
 export function nenDoiSang(e: unknown): boolean {
@@ -71,7 +86,7 @@ function gopNoiDung(content: TinNhan["content"]): string {
   if (typeof content === "string") return content;
   for (const k of content) {
     if (k.type === "image" || k.type === "document") {
-      throw new Error("Groq dự phòng không nhìn được ảnh — để tầng gọi đi nhánh cất riêng tư");
+      throw new Error("Model dự phòng không nhìn được ảnh — để tầng gọi đi nhánh cất riêng tư");
     }
   }
   return content.map((k) => k.text ?? "").filter(Boolean).join("\n");
@@ -141,8 +156,8 @@ function bocSchema(format: unknown): { name: string; schema: unknown } | null {
   return null;
 }
 
-async function goiGroq(
-  khoa: string, model: string, p: ThamSo, schema: { name: string; schema: unknown } | null,
+async function goiOpenAI(
+  nguon: NguonOpenAI, model: string, p: ThamSo, schema: { name: string; schema: unknown } | null,
 ): Promise<KetQua> {
   const messages = [
     ...(gopHeThong(p.system) ? [{ role: "system", content: gopHeThong(p.system) }] : []),
@@ -156,24 +171,30 @@ async function goiGroq(
     // 10/09: "Hẻm trước nhà rộng m". Cho lượt dự phòng ít nhất 900.
     max_completion_tokens: Math.max(p.max_tokens ?? 1024, 900),
     temperature: 0.6,
+  };
+  if (nguon.ten === "Groq") {
     // Model suy luận (qwen3.x) mặc định TRẢ KÈM đoạn nghĩ. Bắt tại trận 10/09:
     // một lượt trả về nguyên "<think> Here's a thinking process: 1. Analyze User
     // Input..." và bong bóng đó đi thẳng tới chủ nhà trên Zalo. Xin ẩn ở đây,
     // và vẫn cắt lại ở dưới — tham số này không phải model nào cũng nhận.
-    reasoning_format: "hidden",
-  };
+    than.reasoning_format = "hidden";
+  } else {
+    // Gemini: phần nghĩ tính vào trần chữ (xem khối đầu file) — nghĩ ít, trần rộng hơn.
+    than.reasoning_effort = "low";
+    than.max_completion_tokens = Math.max(p.max_tokens ?? 1024, 1500);
+  }
   if (schema) {
     than.response_format = {
       type: "json_schema",
       json_schema: { name: schema.name, schema: schema.schema, strict: true },
     };
   }
-  const r = await fetch(URL_GROQ, {
+  const r = await fetch(nguon.url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${khoa}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${nguon.khoa}`, "Content-Type": "application/json" },
     body: JSON.stringify(than),
   });
-  if (!r.ok) throw new Error(`Groq ${r.status} ${(await r.text()).slice(0, 300)}`);
+  if (!r.ok) throw new Error(`${nguon.ten} ${r.status} ${(await r.text()).slice(0, 300)}`);
   const j = await r.json() as {
     choices?: Array<{ message?: { content?: string } }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
@@ -186,14 +207,14 @@ async function goiGroq(
     .replace(/<think>[\s\S]*$/i, "")
     .replace(/^\s*(?:Here's a thinking process|Thinking process)[\s\S]*?(?:\n\n|$)/i, "")
     .trim();
-  if (!txt) throw new Error(`Groq 502 model ${model} trả rỗng sau khi cắt khối nghĩ`);
+  if (!txt) throw new Error(`${nguon.ten} 502 model ${model} trả rỗng sau khi cắt khối nghĩ`);
   const kq: KetQua = {
     content: [{ type: "text", text: txt }],
     stop_reason: "end_turn",
     usage: {
       input_tokens: j.usage?.prompt_tokens ?? 0,
       output_tokens: j.usage?.completion_tokens ?? 0,
-      // Groq không có bộ nhớ tạm prompt — hai ô này luôn 0, xem khối đầu file.
+      // Nguồn dự phòng không dùng bộ nhớ tạm prompt — hai ô này luôn 0, xem khối đầu file.
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 0,
     },
@@ -216,6 +237,7 @@ type CoMessages = {
 };
 
 /** Thứ tự gọi: model nào trả lời TRƯỚC (FR-194 b). */
+/** "groq" = các nguồn dự phòng (Gemini / Groq, theo thứ tự danh sách) trả lời TRƯỚC; "claude" = Claude trước. */
 export type ThuTuModel = "claude" | "groq";
 
 /** Lượt có ảnh / tài liệu thì Groq mù — phải đi Claude, bất kể thứ tự. */
@@ -241,47 +263,47 @@ const loiCua = (e: unknown) => String((e as { message?: string })?.message ?? e)
  */
 export function bocDuPhong(
   chinh: CoMessages | null,
-  khoaGroq: string,
-  modelGroq: string,
+  dsNguon: NguonOpenAI[],
   ghiSo?: (nguon: string, chiTiet: string) => Promise<void>,
   thuTu: ThuTuModel = "claude",
 ): CoMessages {
   // Bậc miễn phí Groq chặn nhịp THEO TỪNG MODEL. Đo 10/09: lượt đầu qua được,
   // lượt hai dính "Rate limit reached for model qwen/qwen3.8-27b" và rơi tiếp về
-  // câu mẫu — tức là có lưới mà vẫn thủng. Nên GROQ_MODEL nhận DANH SÁCH ngăn
-  // bằng dấu phẩy: hết nhịp model này thì xoay sang model kế, mỗi model một hạn
-  // mức riêng. Hết cả danh sách mới chịu thua.
-  const dsModel = modelGroq.split(",").map((m) => m.trim()).filter(Boolean);
-  const thuGroq = async (ten: "create" | "parse", p: ThamSo): Promise<KetQua> => {
+  // câu mẫu — tức là có lưới mà vẫn thủng. Nên mỗi nguồn nhận DANH SÁCH model
+  // (GROQ_MODEL / GEMINI_MODEL ngăn bằng dấu phẩy): hết nhịp model này thì xoay
+  // sang model kế, mỗi model một hạn mức riêng; hết một nguồn thì sang nguồn kế.
+  const thuDuPhong = async (ten: "create" | "parse", p: ThamSo): Promise<KetQua> => {
     const schema = ten === "parse" ? bocSchema(p.output_config?.format ?? p._khuon_du_phong) : null;
     let cuoi: unknown = null;
-    for (const m of dsModel) {
-      try {
-        return await goiGroq(khoaGroq, m, p, schema);
-      } catch (e) {
-        cuoi = e;
-        // Hết nhịp / quá tải / QUÁ CỠ thì xoay model; lỗi khác (sai schema, sai
-        // prompt) xoay cũng vô ích — model nào cũng hỏng như nhau. 413 thêm 15/09:
-        // bậc miễn phí Groq trần chữ-mỗi-phút THEO MODEL, prompt người mua ~14k chữ
-        // bị qwen trả "Request too large" trong khi gpt-oss-120b còn nhận được —
-        // đi thẳng Claude ở đó là bỏ phí model kế trong danh sách.
-        if (!/^Groq (413|429|5\d\d)/.test(loiCua(e))) break;
-        // Xoay model là ĐƯỜNG ĐI BÌNH THƯỜNG của lưới dự phòng, không phải sự cố.
-        // Ghi vào sổ lỗi là tự nuôi còi báo động (bài học escalation-feed 08/09).
-        console.log(`Groq het nhip, xoay khoi ${m}`);
+    for (const n of dsNguon) {
+      for (const m of n.models) {
+        try {
+          return await goiOpenAI(n, m, p, schema);
+        } catch (e) {
+          cuoi = e;
+          // Hết nhịp / quá tải / QUÁ CỠ thì xoay model; lỗi khác (sai schema, sai
+          // prompt) xoay trong CÙNG nguồn cũng vô ích — model nào cũng hỏng như nhau —
+          // nên bỏ sang nguồn kế. 413 thêm 15/09: bậc miễn phí Groq trần chữ-mỗi-phút
+          // THEO MODEL, prompt người mua ~14k chữ bị qwen trả "Request too large"
+          // trong khi gpt-oss-120b còn nhận được.
+          if (!/^(?:Groq|Gemini) (413|429|5\d\d)/.test(loiCua(e))) break;
+          // Xoay model là ĐƯỜNG ĐI BÌNH THƯỜNG của lưới dự phòng, không phải sự cố.
+          // Ghi vào sổ lỗi là tự nuôi còi báo động (bài học escalation-feed 08/09).
+          console.log(`${n.ten} het nhip, xoay khoi ${m}`);
+        }
       }
     }
-    throw cuoi ?? new Error("Groq: không model nào trả lời");
+    throw cuoi ?? new Error("Dự phòng: không nguồn nào trả lời");
   };
   const chay = async (ten: "create" | "parse", p: ThamSo): Promise<unknown> => {
     if (thuTu === "groq" && chinh) {
       if (coAnh(p)) return await chinh.messages[ten](p);
       try {
-        return await thuGroq(ten, p);
+        return await thuDuPhong(ten, p);
       } catch (e) {
-        // Chặn trần / hỏng ở Groq → Claude liền, cùng lượt. Claude mà cũng hỏng
-        // thì ném lên như cũ — tầng gọi đã có sẵn nhánh câu mẫu.
-        console.log(`Groq chan tran/hong (${loiCua(e).slice(0, 120)}), doi sang model chinh`);
+        // Chặn trần / hỏng ở mọi nguồn dự phòng → Claude liền, cùng lượt. Claude mà cũng
+        // hỏng thì ném lên như cũ — tầng gọi đã có sẵn nhánh câu mẫu.
+        console.log(`Du phong chan tran/hong (${loiCua(e).slice(0, 120)}), doi sang model chinh`);
         return await chinh.messages[ten](p);
       }
     }
@@ -291,12 +313,12 @@ export function bocDuPhong(
       } catch (e) {
         if (!nenDoiSang(e)) throw e;
         await ghiSo?.(
-          `model chinh hong - doi sang Groq ${dsModel[0]}`,
+          `model chinh hong - doi sang ${dsNguon[0]?.ten ?? "?"} ${dsNguon[0]?.models[0] ?? ""}`,
           loiCua(e).slice(0, 300),
         );
       }
     }
-    return await thuGroq(ten, p);
+    return await thuDuPhong(ten, p);
   };
   return {
     messages: {
