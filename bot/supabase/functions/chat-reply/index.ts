@@ -44,7 +44,7 @@ import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, type DeXuat, docAiC
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
-import { cauXacNhanPhuong, chuanTenDuong, docPhuongNominatim, duongTraDuoc, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
+import { cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, docCacPhuongNominatim, duongTraDuoc, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
 // FR-212 (21/09/2026): từ điển tên đường — chọn kết quả `tim_duong`, thay tên trong địa chỉ, câu hỏi xác nhận (thuần).
 import { catTenDuong, cauXacNhanDuong, chonDuong, type GoiYDuong, theTenDuong, type UngVienDuong } from "../_shared/extraction/tra-duong.ts";
 import { tenDuong } from "../_shared/geocode.ts";
@@ -1604,7 +1604,7 @@ Deno.serve(async (req) => {
       if (error) await ghiLoi(client, "chat-reply doc wards", error.message);
       return (data as { ten_day_du: string; quan_cu: string } | null) ?? null;
     };
-    const traPhuongTuDuong = async (duongTho: string): Promise<GoiYPhuong | null> => {
+    const traPhuongTuDuong = async (duongTho: string): Promise<GoiYPhuong | { nhieuNoi: string[]; duong: string } | null> => {
       const duong = chuanTenDuong(duongTho);
       if (!duongTraDuoc(duong)) return null;
       let json: unknown = null;
@@ -1616,10 +1616,19 @@ Deno.serve(async (req) => {
         console.log(`tra phuong: nominatim hỏng cho "${duong}": ${(e as Error)?.message ?? e}`);
         return null;
       }
-      const p = docPhuongNominatim(json);
-      if (!p) return null;
-      const w = await timWard(p.ten);
-      return w ? { phuong: w.ten_day_du, quan: w.quan_cu, duong: duong.trim() } : null;
+      const cac = docCacPhuongNominatim(json);
+      if (!cac.length) return null;
+      if (cac.length === 1) {
+        const w = await timWard(cac[0].ten);
+        return w ? { phuong: w.ten_day_du, quan: w.quan_cu, duong: duong.trim() } : null;
+      }
+      // 23/09/2026: đường có ở nhiều phường (Trần Bình Trọng: Q5, Q10, Bình Thạnh…) → không đoán; kể các quận cũ.
+      const quan: string[] = [];
+      for (const p of cac.slice(0, 6)) {
+        const w = await timWard(p.ten);
+        if (w?.quan_cu && !quan.includes(w.quan_cu)) quan.push(w.quan_cu);
+      }
+      return quan.length ? { nhieuNoi: quan, duong: duong.trim() } : null;
     };
     /** Tin đang ở quận MẶC ĐỊNH và có tên đường → tra, cất gợi ý, trả câu hỏi xác nhận (null = hỏi như cũ). */
     const cauHoiPhuongGoiY = async (listingId: string, duongBiet: string | null, cachGoiNguoi: string): Promise<string | null> => {
@@ -1630,6 +1639,7 @@ Deno.serve(async (req) => {
       const duong = (duongBiet ?? "").trim() || (l.street ?? "").trim() || tenDuong(l.location_raw ?? "");
       const goiY = await traPhuongTuDuong(duong);
       if (!goiY) return null;
+      if ("nhieuNoi" in goiY) return cauNhieuNoiPhuong(cachGoiNguoi, goiY.duong, goiY.nhieuNoi);
       const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY } });
       if (error) { await ghiLoi(client, "chat-reply ghi_boc_tach(phuong goi y)", error.message); return null; }
       return cauXacNhanPhuong(cauHoiMau("phuong@goi_y", cachGoiNguoi), cachGoiNguoi, goiY.duong, goiY.phuong, goiY.quan);
