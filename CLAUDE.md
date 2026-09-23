@@ -427,6 +427,12 @@ bun run kiem   # = kieu (tsc) + build + test:bot (256 e2e + FR-159/161/164/176/1
 bun run test:sec   # TS-SEC thật trên DB thật — cần Internet, nên KHÔNG nằm trong `kiem`
 ```
 
+**Bộ đo bóc tách** (`bot/tests/do-boc/`, TS-DO-BOC-01, 23/09/2026): 110 ca cố định, cho con số "bot ghi đúng bao
+nhiêu phần trăm" thay cho kiểu "5 ca vừa bắn thì qua". `bun run do-boc:nen` (trong job CI `bot`) đỏ khi luật
+một mình TỤT so với `nen.json`. Số production đo bằng cách bắn Zalo thử `do-*` (README của bộ đo) — bắn
+mẻ ≤ 20 người: 110 cùng lúc làm DB Free huỷ `tao tin rao` vì quá giờ và số đo sai. **Thêm ca mới đạt thì cập
+nhật `nen.json` cùng PR; xoá ca khỏi `nen.json` là chấp nhận tụt, phải ghi lý do.**
+
 Bốn job đó chạy trong CI (`.github/workflows/kiem.yml`) mỗi PR, kể cả `test:sec`.
 **Thoát 2 của `test:sec` nghĩa là "chưa kiểm được", không phải "đạt"** — bản đầu
 của nó coi mọi HTTP ≥400 là bị chặn và báo 24/24 xanh trong lúc proxy chặn sạch,

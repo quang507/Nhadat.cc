@@ -81,13 +81,14 @@ if (TU_FILE) {
   }
   // Đóng gói chat-reply như e2e/chay.sh; SDK thật khi --that.
   const SRC = join(GOC, "bot", "supabase", "functions", "chat-reply", "index.ts");
-  const BUNDLE = join(HERE, "chat-reply.do-boc.bundle.mjs");
+  // Bundle đặt cạnh suite e2e: CI chỉ `bun install` trong bot/tests/e2e (zod, SDK) — để ở đây là không tìm thấy gói.
+  const BUNDLE = join(HERE, "..", "e2e", "chat-reply.do-boc.bundle.mjs");
   const b = Bun.spawnSync(["bun", "build", SRC, "--target=node", "--external", "npm:*", "--outfile", BUNDLE]);
   if (b.exitCode !== 0) { console.error(new TextDecoder().decode(b.stderr)); process.exit(1); }
   writeFileSync(BUNDLE, readFileSync(BUNDLE, "utf8")
-    .replaceAll('"npm:@supabase/supabase-js@2"', '"../e2e/mock-supabase.mjs"')
+    .replaceAll('"npm:@supabase/supabase-js@2"', '"./mock-supabase.mjs"')
     .replaceAll('"npm:@anthropic-ai/sdk/helpers/zod"', '"@anthropic-ai/sdk/helpers/zod"')
-    .replaceAll('"npm:@anthropic-ai/sdk"', THAT ? '"../giong/that-anthropic.mjs"' : '"../e2e/mock-anthropic.mjs"')
+    .replaceAll('"npm:@anthropic-ai/sdk"', THAT ? '"../giong/that-anthropic.mjs"' : '"./mock-anthropic.mjs"')
     .replaceAll('"npm:zod@4"', '"zod"'));
 
   // Bootstrap như giong/chay.mjs (cấu hình như production 23/09: AI bóc tách `chinh`).

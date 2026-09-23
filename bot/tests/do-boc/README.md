@@ -50,6 +50,26 @@ from (select zalo_user_id z from sellers where zalo_user_id like 'do-%'
 4. Dọn dữ liệu thử:
    `select public.reset_nguoi_test(z) from (select zalo_user_id z from sellers where zalo_user_id like 'do-%' union select zalo_user_id from buyers where zalo_user_id like 'do-%') u;`
 
+## Kết quả đã đo
+
+| Ngày | Bản bot | Đường | Ca đạt | Trường đúng | Ghi chú |
+|---|---|---|---|---|---|
+| 23/09/2026 | main sau #251 | luật một mình | 52/110 (47%) | 480/572 (84%) | mua 0/15: hồ sơ mua do AI đọc; tắt AI thì trống |
+| 23/09/2026 | main sau #251 | production | 104/110 (94,5%) | 563/572 (98,4%) | 6 ca bắn lại mẻ nhỏ vì quá tải (xem dưới) |
+
+Lần đo production đầu tiên bắn 110 người cùng lúc. DB gói Free bị huỷ vì quá giờ ở `match_projects` 20 lần và ở
+`tao tin rao` 5 lần, nên 5 người nhận câu "Chưa có tin nào được lưu" dù đã nhắn đủ giá. Sáu ca có bằng chứng dính
+tải (C06, S02, S10, X03, X04, R09) được xoá rồi bắn lại mẻ nhỏ, và cả sáu đều qua. Mấy ca rớt vì lý do khác thì
+KHÔNG bắn lại. Điểm yếu này có thật: tạo tin hỏng thì bot không thử lại, mà hỏi lại khách đúng những gì khách vừa nói.
+
+6 ca còn rớt ở production (lỗi thật):
+- T09: giá theo m² (15 triệu/m² × 100m²) bị ghi thành 15 triệu.
+- N06: nhà 2 ở Gò Vấp mang quận Tân Bình của nhà 1.
+- S03: "căn nhà thì 7 tỷ" ghi vào lô đất; lô đất "chưa rõ loại".
+- S06: "còn lô 1000m² ở Củ Chi" có chữ "lô" nhưng không có chữ "đất", nên chưa rõ loại.
+- C05: "giảm còn 7 tỷ 8" không đổi giá.
+- X04: một câu vừa bán căn hộ vừa mua nhà thì mất phần mua.
+
 ## Thêm ca
 
 Thêm một dòng vào `ca.jsonl` với `id` chưa dùng, `nhom`, `luot` (mảng tin nhắn), `ky_vong` và `nguon`.
