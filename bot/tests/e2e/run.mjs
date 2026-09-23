@@ -1243,6 +1243,22 @@ fresh(seedKho);
   r = await send({ external_user_id: "la-bot", text: "tôi muốn bán căn nhà ở phường 2 quận 5, mà bên em là bot hả?" });
   check("RAO-HOI-01 câu rao kèm hỏi 'bot hả' → tạo tin + bong bóng nói thật là trợ lý AI",
     db().t.listings.length === 1 && r.body.replies.some((x) => /trợ lý AI/.test(x)), JSON.stringify(r.body.replies));
+  // 23/09/2026 (bắn thật 10 câu): câu hỏi phí đứng TRƯỚC, ngăn bằng "?" → bot bỏ qua, chỉ hỏi phường.
+  fresh();
+  r = await send({ external_user_id: "hoi-phi", text: "bên em lấy phí bao nhiêu vậy? anh có nhà Lê Hồng Phong muốn gửi bán" });
+  check("RAO-HOI-02 'phí bao nhiêu vậy? anh có nhà … muốn gửi bán' → tạo tin + trả lời phí (chỉ thu khi thành công, 1%)",
+    db().t.listings.length === 1 && r.body.replies.some((x) => /1%/.test(x) && /phí/i.test(x)), JSON.stringify(r.body.replies));
+  // Cùng lượt bắn: hai căn một tin — "hẻm Nguyễn Tri Phương" từng thành "hẻm Nguyễn Tri", căn 2 thành "2 căn hộ Hà Đô".
+  fresh();
+  r = await send({ external_user_id: "hai-can-ten", text: "cô có 2 căn: căn 1 nhà hẻm Nguyễn Tri Phương quận 10 giá 8 tỷ, căn 2 căn hộ Hà Đô quận 10 75m2 giá 5 tỷ" });
+  {
+    const vt = db().t.listings.map((l) => l.location_raw ?? "");
+    const fvt = db().t.listing_facts.filter((f) => f.question === "vi_tri").map((f) => f.answer);
+    check("NC-TEN-01 hai căn một tin → 2 tin; căn 1 địa chỉ 'hẻm Nguyễn Tri Phương' (không cụt 'Nguyễn Tri'); không địa chỉ nào '2 căn hộ …'",
+      db().t.listings.length === 2 && [...vt, ...fvt].some((x) => /hẻm Nguyễn Tri Phương/.test(x)) && ![...vt, ...fvt].some((x) => /Nguyễn Tri$/.test(x) || /^2 căn/.test(x)) &&
+        !r.body.replies.some((x) => /2 căn hộ Hà Đô/.test(x)),
+      JSON.stringify({ vt, fvt, rep: r.body.replies }));
+  }
   // 10/09 chân dung nhà đầu tư: kể "mua nhà cũ sửa lại bán" + có căn + giá → là NGƯỜI BÁN, tạo tin.
   fresh();
   r = await send({ external_user_id: "dt-1", text: "Anh đầu tư mua nhà cũ sửa lại bán, giờ có căn hẻm 45 Trần Phú phường 4 quận 5 vừa sửa xong, 4x14, 5 tỷ 9" });
@@ -1516,20 +1532,29 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "nhà hướng đông nam nha em" });
   check("BLDL-10b lưu lại mà tin KHÔNG đổi → nếu có 🤖 thì vẫn là MỘT dòng đầy đủ (66m²), không 📦", /^🤖 Đã lưu: /.test(r.body.replies[0] ?? "") ? (/66m²/.test(r.body.replies[0]) && !/📦 Tin giờ/.test(r.body.replies[0])) : !r.body.replies.some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
 
-  // 23/09/2026 (chủ dự án: "dòng máy '🤖 Đã lưu' phải ghi thật đầy đủ đã lưu những gì"): fact ngoài cột khách
-  // nói ở LƯỢT TRƯỚC (view, lý do bán) vẫn phải có trên 🤖 ở lượt sau — trước đây "Kèm:" chỉ in fact của lượt này.
+  // 23/09/2026 (chủ dự án, lần 2: "in các cột chính và thông tin của lượt hiện tại thôi nhưng ko được thiếu cái gì hết"):
+  // 🤖 = tóm tắt cột + fact CỦA LƯỢT NÀY mà cột chưa nói. Fact ngoài cột của lượt TRƯỚC không in lại.
   LB.nhan = ["view_cong_vien", "nha_hoan_cong"];
   db().insert("listing_facts", { listing_id: LB.id, question: "nhan", answer: "đã hoàn công", source: "seller_chat" });
-  db().insert("listing_facts", { listing_id: LB.id, question: "view", answer: "view sông thoáng", source: "seller_chat" });
-  db().insert("listing_facts", { listing_id: LB.id, question: "ly_do_ban", answer: "cần tiền đầu tư chỗ khác, bán gấp trong tháng này", source: "seller_chat" });
+  db().insert("listing_facts", { listing_id: LB.id, question: "ly_do_ban", answer: "lượt trước: đổi nhà gần trường cho con", source: "seller_chat" });
   db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
   db().insert("info_requests", { listing_id: LB.id, question: "so_phong_ngu", status: "pending" });
-  r = await send({ external_user_id: "z-ccrb", text: "3 phòng ngủ em" });
+  r = await send({ external_user_id: "z-ccrb", text: "3 phòng ngủ em, nhà nhìn ra view sông thoáng lắm" });
   bl = r.body.replies[0] ?? "";
-  check("BLDL-10c 🤖 lượt sau vẫn in fact ngoài cột của lượt TRƯỚC (view, lý do bán đủ chữ, không cắt 50 ký tự), kèm 3 phòng ngủ",
-    /^🤖 Đã lưu: .*3 phòng ngủ/.test(bl) && /view sông thoáng/.test(bl) && /cần tiền đầu tư chỗ khác, bán gấp trong tháng này/.test(bl), JSON.stringify(r.body.replies));
+  check("BLDL-10c 🤖 = cột chính + fact CỦA LƯỢT NÀY (3 phòng ngủ, view sông); KHÔNG in lại fact ngoài cột của lượt trước (lý do bán)",
+    /^🤖 Đã lưu: .*3 phòng ngủ/.test(bl) && /view sông/.test(bl) && !/đổi nhà gần trường/.test(bl), JSON.stringify(r.body.replies));
   check("BLDL-10e 🤖 in ĐỦ nhãn tìm kiếm từ cột listings.nhan (view công viên + đã hoàn công), không in fact 'nhãn tìm kiếm' lượt lẻ; view in nhãn trung tính 'view:' (không 'view căn hộ')",
-    /nhãn: view công viên · đã hoàn công/.test(bl) && !/nhãn tìm kiếm:/.test(bl) && /view: "view sông thoáng"/.test(bl) && !/view căn hộ/.test(bl), bl);
+    /nhãn: view công viên · đã hoàn công/.test(bl) && !/nhãn tìm kiếm:/.test(bl) && /view: "/.test(bl) && !/view căn hộ/.test(bl), bl);
+  // "ko được thiếu cái gì hết": fact lượt này mà CỘT tương ứng trống (trigger không đọc ra) vẫn phải in ở "Kèm:";
+  // "gấp" không có trong tóm tắt cột nên luôn in.
+  LB.legal_status = null;
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
+  r = await send({ external_user_id: "z-ccrb", text: "vi bằng thôi em, cần bán gấp" });
+  bl = r.body.replies[0] ?? "";
+  check("BLDL-10f fact lượt này có cột mà cột trống (pháp lý 'vi bằng' — trigger không đổi ra legal_status) + 'gấp' → vẫn in ở Kèm, không thiếu",
+    /^🤖 Đã lưu: /.test(bl) && /Kèm: .*vi bằng/.test(bl) && /gấp/.test(bl) && !LB.legal_status, JSON.stringify({ bl, legal: LB.legal_status, f: db().t.listing_facts.filter((f) => f.listing_id === LB.id).slice(-4).map((f) => [f.question, f.answer]) }));
+
   // 23/09/2026 (chủ dự án: "xóa hoặc sửa luật cứng nhắc đó đi"): câu lệnh gửi model KHÔNG còn ép chép nguyên văn,
   // "ĐÚNG MỘT", "Không hỏi gì khác", "dưới 30 từ" — vẫn nói ý hỏi chính để câu trả lời kế vào đúng ô.
   // Người bán MỚI rao một câu → chắc chắn đi nhánh r1 "nhận câu rao, hỏi thứ đầu tiên còn thiếu".
@@ -1914,14 +1939,23 @@ fresh(seedKho);
   globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "Quận 6", budget: "4 tỷ" },
     replies: ["Dạ em tìm căn tầm 4 tỷ ở Quận 6 cho anh nhé. Anh tìm nhà hẻm hay mặt tiền, để ở hay đầu tư ạ?"] });
   let r1 = await send({ external_user_id: "md-1", text: "anh có 2 tỷ, vay thêm được không để mua nhà 4 tỷ quận 6" });
-  check("MUCDICH-01 đủ khu + giá → câu 'để ở hay đầu tư ạ?' bị bỏ, câu trước giữ",
-    !r1.body.replies.some((t) => /để ở hay đầu tư/.test(t)) && r1.body.replies.some((t) => /tầm 4 tỷ ở Quận 6/.test(t)), JSON.stringify(r1.body.replies));
+  // 23/09/2026: "Dạ em tìm căn tầm 4 tỷ ở Quận 6 cho anh nhé" khi kho trống là LỜI HỨA SUÔNG (bắn thật: "em lọc căn 2PN
+  // Quận 7 … cho anh nhé" rồi không gửi gì) → thay bằng câu nói thật; câu dò mục đích vẫn bị bỏ.
+  check("MUCDICH-01 đủ khu + giá → câu 'để ở hay đầu tư ạ?' bị bỏ; câu hứa 'em tìm căn … cho anh' khi kho trống thành câu nói thật",
+    !r1.body.replies.some((t) => /để ở hay đầu tư/.test(t)) && !r1.body.replies.some((t) => /tầm 4 tỷ ở Quận 6 cho anh/.test(t)) && r1.body.replies.some((t) => /chưa có căn nào khớp/.test(t)), JSON.stringify(r1.body.replies));
   fresh(seedKho);
   globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "thue" },
     replies: ["Dạ em lọc căn hộ cho mình nha.", "Mình cần căn hộ để ở hay để cho thuê lại vậy ạ?"] });
   r1 = await send({ external_user_id: "md-2", text: "tìm thuê căn hộ 2 phòng ngủ" });
   check("MUCDICH-02 khách THUÊ (chưa đủ tiêu chí) → vẫn bỏ câu dò mục đích",
     !r1.body.replies.some((t) => /để ở hay/.test(t)), JSON.stringify(r1.body.replies));
+  // 23/09/2026 (bắn thật, người thuê Q7, kho trống): "Dạ em lọc căn 2PN Quận 7 quanh 15 triệu cho anh nhé :)" rồi không gửi gì.
+  fresh(seedKho);
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "thue", area: "Quận 7", budget: "15 triệu", bedrooms: 2 },
+    replies: ["Dạ em lọc căn 2PN Quận 7 quanh 15 triệu cho anh nhé :)"] });
+  r1 = await send({ external_user_id: "hua-loc", text: "anh cần thuê căn hộ 2 phòng ngủ quận 7 tầm 15 triệu, dọn vào tháng sau" });
+  check("HUA-LOC-01 người thuê, kho trống, model hứa 'em lọc căn … cho anh nhé' → bỏ lời hứa, nói thật chưa có căn",
+    !r1.body.replies.some((t) => /lọc căn 2PN/.test(t)) && r1.body.replies.some((t) => /chưa có căn|cho em xin thêm/.test(t)), JSON.stringify(r1.body.replies));
   fresh(seedKho);
   globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban" },
     replies: ["Dạ mình tìm ở khu nào, tầm giá bao nhiêu, để ở hay đầu tư ạ?"] });

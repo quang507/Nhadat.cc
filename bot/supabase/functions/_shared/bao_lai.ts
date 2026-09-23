@@ -213,19 +213,38 @@ export function aiDocThem(facts: FactBaoLai[], nhan: Record<string, string>): st
   return v ? v.replace(`${DAU_BAO_LAI} Đã lưu: `, `${DAU_AI_DOC} AI đọc thêm (đã kiểm): `) : null;
 }
 
-// Fact mà tóm tắt CỘT đã nói (qua cột tương ứng) — lượt tạo tin chỉ kèm phần còn lại.
-const DA_CO_TRONG_TOM_TAT = new Set([
-  "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "gia", "phuong", "vi_tri", "so_phong_ngu", "ket_cau",
-  "do_rong_hem", "phap_ly", "so_wc", "mat_tien", "huong", "loai_bds", "tang", "noi_that", "gap",
-  "nhan", // tóm tắt cột in cả `listings.nhan`
-]);
+// Fact mà tóm tắt CỘT nói THAY — chỉ khi cột đó thật sự có giá trị trên dòng tin (23/09/2026, chủ dự án: "in các cột chính
+// và thông tin của lượt hiện tại thôi nhưng ko được thiếu cái gì hết"). Cột trống (trigger không đọc ra, ví dụ pháp lý
+// gõ lạ) thì fact vẫn in ở "Kèm:"; "gấp" không có trong tóm tắt cột nên luôn in.
+const COT_NOI_THAY: Record<string, (l: DongBaoLai) => boolean> = {
+  dien_tich: (l) => l.area_m2 != null && l.area_m2 !== "",
+  dien_tich_dat: (l) => l.area_m2 != null && l.area_m2 !== "",
+  dien_tich_tim_tuong: (l) => l.area_m2 != null && l.area_m2 !== "",
+  gia: (l) => !!l.price_raw,
+  phuong: (l) => !!l.ward,
+  vi_tri: (l) => !!l.location_raw,
+  so_phong_ngu: (l) => !!l.bedrooms,
+  ket_cau: (l) => !!(l.floors_text || l.floors),
+  do_rong_hem: (l) => !!l.access_type,
+  phap_ly: (l) => !!l.legal_status,
+  so_wc: (l) => !!l.bathrooms,
+  mat_tien: (l) => !!(l.frontage_m && l.length_m),
+  huong: (l) => !!l.direction,
+  loai_bds: (l) => !!l.property_type && l.property_type !== "chua_ro",
+  tang: (l) => l.floor != null,
+  noi_that: (l) => !!l.furnishing,
+  nhan: (l) => !!l.nhan?.length, // tóm tắt cột in cả `listings.nhan`
+};
 
-/** Lượt TẠO tin: "Kèm: view: "view sông" · lý do bán: "cần tiền"" — fact lượt này tóm tắt cột chưa nói. */
-export function kemLuotTao(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
-  // 21/09/2026 (gộp 🤖 vào 💾): fact AI đọc từng luôn được nêu ở "Kèm" để chủ nhà thấy mà sửa. Từ tối 21/09
-  // (bắn thật kiem-tbt) dòng 🤖 đã là toàn bộ cột, nên fact AI có cột ("3 phòng ngủ") in lại ở Kèm là
-  // nói hai lần; chỉ còn nêu fact mà tóm tắt cột không nói, bất kể nguồn.
-  const con = facts.filter((f) => !DA_CO_TRONG_TOM_TAT.has(f.question));
+/** "Kèm: view: "view sông" · lý do bán: "cần tiền"" — fact CỦA LƯỢT NÀY mà dòng cột `l` chưa nói. */
+export function kemLuotTao(facts: FactBaoLai[], nhan: Record<string, string>, l: DongBaoLai | null = null): string | null {
+  // 21/09/2026 (gộp 🤖 vào 💾): chỉ nêu fact mà tóm tắt cột không nói, bất kể nguồn (AI hay luật).
+  const con = facts.filter((f) => {
+    const noiThay = COT_NOI_THAY[f.question];
+    if (!noiThay) return true;
+    // Không có dòng tin để đối chiếu → giữ cách cũ: coi như cột đã nói.
+    return l ? !noiThay(l) : false;
+  });
   const v = vuaLuuBan(con, nhan);
   return v ? v.replace(`${DAU_BAO_LAI} Đã lưu: `, "Kèm: ") : null;
 }

@@ -54,6 +54,9 @@ const HUA_CO_HANG: RegExp[] = [
   // 23/09/2026: "Dạ em tìm kiếm liền ạ", "để em tìm từ từ ạ", "em lọc kho … liền", "để cháu tìm kiếm trong kho".
   /\b(?:de\s+)?(?:em|chau)\s+(?:tim kiem|tim|loc|kiem)\s+(?:(?:lien|ngay|luon|tu tu|trong kho|kho|them)\b|can\s+(?:khop|hop|phu hop))/,
   /\b(?:dang|sap|se)\s+(?:kiem tra|tim|loc|ra soat)\b[^.?!]*\b(?:sap|se|roi)\s+bao\b/,
+  // 23/09/2026 (bắn thật, người thuê Q7, kho trống): "Dạ em lọc căn 2PN Quận 7 quanh 15 triệu cho anh nhé :)" — hứa lọc
+  // mà không gửi căn nào. Câu HỎI ("em lọc căn cho anh theo khu vực nào ạ?") không bắt.
+  /^(?![^?]*\?)[^?]*\b(?:de\s+)?(?:em|chau)\s+(?:se\s+)?(?:tim kiem|tim|loc|kiem|chon)\s+(?:(?:vai|may|mot so)\s+)?(?:can|nha|phong)\b[^.?!]*\bcho\s+(?:anh\/chi|anh|chi|minh|chu|co|bac|ong|ba|di|cau|ban)\b/,
   /\bkiem tra kho\b/,
 ];
 

@@ -257,6 +257,34 @@ const TU_DUNG = new Set([
 ]);
 
 /**
+ * Chữ dừng tên đường, xét CẢ DẤU (bắn thật 23/09: "hẻm Nguyễn Tri Phương quận 10" → "hẻm Nguyễn Tri"; cùng lỗi với
+ * "Lê Hồng Phong", "Lương Nhữ Học", "Huyền Trân Công Chúa"…): bỏ dấu thì tên người trùng chữ dừng. Chữ CÓ DẤU chỉ
+ * dừng khi đúng dạng có dấu của chữ dừng ("phường", "phòng", "lượng"); chữ gõ KHÔNG DẤU giữ cách cũ (dừng), trừ
+ * phuong / huong / phong — ba chữ này dừng khi chữ SAU cho thấy nghĩa ("phuong 5", "huong dong", "phong ngu").
+ */
+const DANG_CO_DAU: Record<string, readonly string[]> = {
+  xec: ["xẹc"], sec: ["sẹc"], set: ["sẹt"], xet: ["xẹt"], nhung: ["nhưng"], ma: ["mà"], so: ["sổ", "số"],
+  giay: ["giấy"], gia: ["giá"], ban: ["bán"], thue: ["thuê"], huong: ["hướng"], that: ["thật"], tret: ["trệt"],
+  lau: ["lầu"], tang: ["tầng"], phong: ["phòng"], ngu: ["ngủ"], hoan: ["hoàn"], gap: ["gấp"], luong: ["lượng"],
+  tich: ["tích"], phuong: ["phường"], quan: ["quận"], huyen: ["huyện"], khong: ["không"], ngap: ["ngập"],
+  xay: ["xây"], moi: ["mới"], ty: ["tỷ", "tỉ"], ti: ["tỉ", "tỷ"], trieu: ["triệu"],
+};
+function laTuDungTen(w: string, sau: string): boolean {
+  const kd = boDau(w);
+  if (!TU_DUNG.has(kd)) return false;
+  const thuong = w.toLowerCase();
+  if (thuong === kd) {
+    const kdSau = boDau(sau);
+    if (kd === "phuong") return /^\d/.test(kdSau);
+    if (kd === "huong") return /^(?:dong|tay|nam|bac)/.test(kdSau);
+    if (kd === "phong") return /^(?:ngu|khach|tam|wc|\d)/.test(kdSau);
+    return true;
+  }
+  const dang = DANG_CO_DAU[kd];
+  return dang ? dang.includes(thuong) : true;
+}
+
+/**
  * VỊ TRÍ trong CÂU RAO: "hẻm xe hơi 5m Nguyễn Trãi p3 q5" → "hẻm xe hơi 5m Nguyễn Trãi".
  *
  * 12/09/2026 (bắn 20 tin thật): bản trước loại NGUYÊN cụm khi chữ ngay sau
@@ -308,7 +336,7 @@ export function bocViTriRao(text: string): string | null {
     }
     // Rồi tới TÊN đường: chữ thuần, tối đa 4 chữ, gặp chữ của thứ khác thì dừng.
     const ten: string[] = [];
-    while (i < tu.length && ten.length < 4 && /^[\p{L}]{2,}$/u.test(tu[i]) && !TU_DUNG.has(boDau(tu[i])) &&
+    while (i < tu.length && ten.length < 4 && /^[\p{L}]{2,}$/u.test(tu[i]) && !laTuDungTen(tu[i], tu[i + 1] ?? "") &&
       !DUNG_HAI_CHU.test(boDau(`${tu[i]} ${tu[i + 1] ?? ""}`).trim()) &&
       !(ten.length && QUAN_SAU_TEN.test(boDau(`${tu[i]} ${tu[i + 1] ?? ""}`).trim()))) {
       ten.push(tu[i]);
@@ -333,6 +361,8 @@ export function bocViTriRao(text: string): string | null {
   // ("p4"), "p12" trượt ở ranh từ sau chữ số đầu → địa chỉ trần trước phường 10–19 không bao giờ được nhận.
   const so = /(?:^|[\s,])(\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+(?:[\p{L}]+\s?){1,4}?)(?=\s*(?:p\.?\s*\d{1,2}|phường|phuong|quận|quan|q\.?\s*\d{1,2})\b)/iu
     .exec(t)?.[1]?.trim() ?? null;
+  // 23/09/2026 (bắn thật): "căn 2 căn hộ Hà Đô quận 10" → "2 căn hộ Hà Đô" — số thứ tự căn + chữ LOẠI nhà không phải số nhà.
+  if (so && /^\d{1,5}[a-zA-Z]?\s+(?:căn|can|nhà|nha|lô|lo|nền|nen|phòng|phong|tầng|tang|lầu|lau|miếng|mieng)(?![\p{L}])/iu.test(so)) return null;
   return so && so.length >= 6 ? so : null;
 }
 
@@ -506,7 +536,9 @@ export const cungHoFact = cungHo;
 // có thông tin / cho hỏi / mà bạn…"): mảnh HỎI = có "?" hoặc (có từ để hỏi VÀ kết bằng
 // tiểu từ hỏi, ≥ 3 chữ). Mảnh còn lại là câu trả lời. Chỉ dùng khi CÓ CẢ HAI phần —
 // câu thuần hỏi ("phí sao em?") và "5 tỷ được không?" vẫn đi luật cũ.
-const RANH_MANH_RE = /[,;\n]|\.\s+(?=\S)|\s+(?=(?:mà|nhưng|với lại|còn|ma|nhung|voi lai|con)\s+(?:bạn|em|bên|anh|chị|mình|bot|ban|ben|chi|minh)\b)|\s+(?=(?:bạn|em|bên em|bên mình|ban|ben em|ben minh)\s+(?:có\s+(?:biết|thông tin|nắm|thể)|biết|tư vấn|cho hỏi|co\s+(?:biet|thong tin|nam|the)|biet|tu van|cho hoi)\b)/iu;
+// 23/09/2026 (bắn thật): "bên em lấy phí bao nhiêu vậy? anh có nhà Lê Hồng Phong muốn gửi bán" — câu hỏi đứng TRƯỚC, ngăn
+// bằng "?" (không phẩy) nên cả tin là một mảnh và câu hỏi phí bị nuốt. Ranh sau "?" (giữ "?" trong mảnh hỏi).
+const RANH_MANH_RE = /[,;\n]|\.\s+(?=\S)|(?<=\?)\s+(?=\S)|\s+(?=(?:mà|nhưng|với lại|còn|ma|nhung|voi lai|con)\s+(?:bạn|em|bên|anh|chị|mình|bot|ban|ben|chi|minh)\b)|\s+(?=(?:bạn|em|bên em|bên mình|ban|ben em|ben minh)\s+(?:có\s+(?:biết|thông tin|nắm|thể)|biết|tư vấn|cho hỏi|co\s+(?:biet|thong tin|nam|the)|biet|tu van|cho hoi)\b)/iu;
 const DAU_HOI_RE = /\b(?:co (?:biet|thong tin|the|nam)|biet|thong tin|tu van|cho hoi|hoi|gi|nao|bao nhieu|sao|the nao|nhu the nao|duoc khong|dc khong|bao gio|khi nao|o dau|co phai|la (?:bot|may|nguoi)|hay (?:bot|may|nguoi))\b|\bco\b(?=.*\b(?:khong|ko|k|chua)\b)/;
 // 17/09/2026 (Zalo thật): "…bot hay người vậy\tTr" — đuôi rác ≤ 3 ký tự sau tiểu từ hỏi (gõ lỡ) không làm mất câu hỏi.
 const DUOI_HOI_RE = /\b(?:khong|ko|k|chua|gi|nao|nhi|nhe|a|vay|ha|the|sao|bao nhieu|dau)(?:\s+(?:em|anh|chi|ban|chau|a|nha|nhe|nhi|vay|ha|ne|ạ))*(?:\s+\S{1,3})?\s*\?*\s*$/;

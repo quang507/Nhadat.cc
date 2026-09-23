@@ -164,6 +164,27 @@ for (const [q, vao, mong] of [
   // 22/09/2026 (bắn thật căn hộ): số nhà trần trước phường HAI chữ số ("p12") từng trượt.
   ok("bocViTriRao 'co can ho Hung Vuong Plaza 126 Hung Vuong p12, tang 15' → '126 Hung Vuong'", bocViTriRao("em la moi gioi ben q5, co can ho Hung Vuong Plaza 126 Hung Vuong p12, tang 15, 2pn 78m2, gia 4 ty 3") === "126 Hung Vuong", JSON.stringify(bocViTriRao("em la moi gioi ben q5, co can ho Hung Vuong Plaza 126 Hung Vuong p12, tang 15, 2pn 78m2, gia 4 ty 3")));
   ok("bocViTriRao '7 Hồng Bàng phường 12' vẫn nhận; '5 tỷ q5' không thành địa chỉ", bocViTriRao("bán nhà 7 Hồng Bàng phường 12 quận 5") === "7 Hồng Bàng" && bocViTriRao("bán nhà 5 tỷ q5") === null);
+  // 23/09/2026 (bắn thật 10 câu): bỏ dấu thì tên người trùng chữ dừng — "Phương"/"phường", "Phong"/"phòng", "Lương"/"lượng",
+  // "Huyền"/"huyện"; "căn 2 căn hộ Hà Đô quận 10" thì số thứ tự căn thành số nhà.
+  for (const [vao, mong] of [
+    ["cô có 2 căn: căn 1 nhà hẻm Nguyễn Tri Phương quận 10 giá 8 tỷ", "hẻm Nguyễn Tri Phương"],
+    ["nhà hẻm Lê Hồng Phong phường 2 quận 10", "hẻm Lê Hồng Phong"],
+    ["hẻm 3m Lương Nhữ Học quận 5", "hẻm 3m Lương Nhữ Học"],
+    ["đường Huyền Trân Công Chúa quận 1", "đường Huyền Trân Công Chúa"],
+    ["ban nha hem nguyen tri phuong quan 10", "hem nguyen tri phuong"],
+    ["hem le hong phong phuong 2 quan 10", "hem le hong phong"],
+    ["hem 5m Nguyen Trai phuong 3 quan 5", "hem 5m Nguyen Trai"],      // không dấu + số phường → vẫn dừng
+    ["hẻm 4m Trần Hưng Đạo hướng đông nam", "hẻm 4m Trần Hưng Đạo"],  // "hướng" có dấu → dừng
+    ["hem tran phu 3 phong ngu", "hem tran phu"],
+    ["hẻm 5m Nguyễn Trãi giá 7 tỷ", "hẻm 5m Nguyễn Trãi"],
+    ["căn 2 căn hộ Hà Đô quận 10 75m2 giá 5 tỷ", null],               // "2 căn hộ" không phải số nhà
+    ["12 Nguyễn Tri Phương phường 5 quận 10", "12 Nguyễn Tri Phương"],
+  ]) ok(`bocViTriRao tên trùng chữ dừng ${JSON.stringify(vao)}`, bocViTriRao(vao) === mong, JSON.stringify(bocViTriRao(vao)));
+  // Câu hỏi đứng TRƯỚC, ngăn bằng "?" (bắn thật: câu hỏi phí bị nuốt).
+  ok("tachCauHoiNguoc: 'bên em lấy phí bao nhiêu vậy? anh có nhà … muốn gửi bán' → tách câu hỏi phí",
+    tachCauHoiNguoc("bên em lấy phí bao nhiêu vậy? anh có nhà Lê Hồng Phong muốn gửi bán").hoi === "bên em lấy phí bao nhiêu vậy?" &&
+      tachCauHoiNguoc("bên em lấy phí bao nhiêu vậy? anh có nhà Lê Hồng Phong muốn gửi bán").traLoi === "anh có nhà Lê Hồng Phong muốn gửi bán",
+    JSON.stringify(tachCauHoiNguoc("bên em lấy phí bao nhiêu vậy? anh có nhà Lê Hồng Phong muốn gửi bán")));
   // 22/09/2026 (bộ đo giọng B11): "5 tỷ 60m2" — 60 là diện tích, không phải phần lẻ của giá.
   const b11 = nhanDienNhieuCan("bên anh có 2 căn: căn 1 hẻm 4m Nguyễn Trãi p3 q5 5 tỷ 60m2, căn 2 mặt tiền Hồng Bàng p12 q5 12 tỷ 80m2");
   ok("'căn 1 … 5 tỷ 60m2, căn 2 … 12 tỷ 80m2' → giá '5 tỷ' / '12 tỷ', dt 60 / 80", b11.length === 2 && b11[0].gia === "5 tỷ" && b11[1].gia === "12 tỷ" && b11[0].dt === "60" && b11[1].dt === "80", JSON.stringify(b11));
