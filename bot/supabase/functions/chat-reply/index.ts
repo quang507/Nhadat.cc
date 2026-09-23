@@ -5502,7 +5502,12 @@ Deno.serve(async (req) => {
       out.replies = bia.replies;
       const muc = bia.bo.join(" với ");
       const maHoi = out.ask_owner?.listing_code ?? canNoi?.code ?? null;
-      if (maHoi && !out.ask_owner?.question) out.ask_owner = { listing_code: maHoi, question: muc };
+      // Câu hỏi chủ PHẢI gồm đúng mục vừa bỏ — bắn lại sau deploy #195: model tự điền ask_owner "hướng nhà (…)"
+      // (chép từ lịch sử) khi khách hỏi năm xây, nên "năm xây" không bao giờ tới chủ nhà.
+      if (maHoi) {
+        const qCu = out.ask_owner?.question?.trim() ?? "";
+        out.ask_owner = { listing_code: maHoi, question: qCu && boDau(qCu).includes(boDau(muc)) ? qCu : muc };
+      }
       if (!laHuaHoiChu(out.replies)) {
         out.replies.push(maHoi
           ? `Dạ ${muc} của căn này em chưa có thông tin chắc chắn, em hỏi lại chủ nhà rồi báo ${acMua} ngay nha.`
