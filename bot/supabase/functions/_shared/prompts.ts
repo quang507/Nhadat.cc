@@ -441,7 +441,8 @@ export const CAU_HOI_MAU_TEXT = JSON.stringify(CAU_HOI_MAU, null, 2);
  * {web} = tên web. Ô nào không có dữ liệu thì cả câu chứa nó được bỏ.
  */
 export const CAU_TIEN_DINH: Record<string, string> = {
-  ghi_nhan: "📝 Em ghi nhận: {ds}.\nSai chỗ nào {ac} nhắn lại giúp em nha.",
+  // 23/09/2026 (chủ dự án, ảnh Zalo): bỏ câu "Sai chỗ nào … nhắn lại giúp em nha" — thừa, lượt nào cũng lặp.
+  ghi_nhan: "📝 Em ghi nhận: {ds}.",
   chao_lai: "Dạ em chào {ac} ạ!",
   nhap_tieu_de: "📋 Em đăng tin như vầy nha {ac}:",
   nhap_goi_y: "Độ đầy đủ {diem}/100 — thêm {thieu} là tin mạnh hơn nữa ạ.",

@@ -2045,7 +2045,7 @@ Deno.serve(async (req) => {
       // 14/09/2026 — chủ dự án: "nhắn tin lại cho khách LIỀN SAU tin nhắn đó đã bóc
       // tách (thật vào db) gì luôn". Bong bóng 💾 luôn là tin ĐẦU TIÊN của lượt. Lượt
       // tạo tin thì "📝 Em ghi nhận" (ghép từ chữ khách gõ) trùng với 💾 (đọc DB) —
-      // bỏ 📝, giữ câu "Sai chỗ nào … nhắn lại giúp em nha" nối sau 💾.
+      // bỏ 📝 (câu "Sai chỗ nào … nhắn lại" đã bỏ hẳn 23/09/2026 — chủ dự án).
       // FR-208 bước 2: chế độ `ghi` phải CHỜ lượt AI (đã chạy song song từ đầu nhánh) để ghi
       // fact rồi báo ngay trong lượt này — "đã lưu thì phải ghi rõ lưu vào trường nào" (17/09).
       const cheDoAi = cheDoBocAi ? await cheDoBocAi : "tat";
@@ -2065,7 +2065,7 @@ Deno.serve(async (req) => {
           sach = boCauGhiNhan(sach);
           // 20/09/2026 (bắn thật mau-y-B): lượt đầu "Chào em, chị có…" → lời chào + "📝 Em ghi nhận" nằm
           // CHUNG một bong bóng ("Dạ em chào chị ạ!\n📝 Em ghi nhận: …"), startsWith không thấy → khách
-          // đọc hai lần. Tìm dòng 📝 ở bất kỳ bong bóng nào: bỏ dòng đó, "Sai chỗ nào…" nối sau 💾.
+          // đọc hai lần. Tìm dòng 📝 ở bất kỳ bong bóng nào: bỏ dòng đó, phần còn lại nối sau 💾.
           // 21/09/2026 (bắn thật kiem-cc, chú lớn tuổi): `doiTuXung` chạy TRƯỚC đoạn này nên dòng đã thành
           // "📝 Cháu ghi nhận" → startsWith("📝 Em…") không thấy → chú đọc hai lần. So theo dấu 📝 + "ghi nhận".
           const laDongGN = (d: string) => /^📝 \S+ ghi nhận/u.test(d);
@@ -2828,7 +2828,7 @@ Deno.serve(async (req) => {
           if (irLo && irLo.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(nhieu can)", irLo.message);
         }
         return await traLoiSeller([
-          `📝 Em mở ${daMo.length} tin riêng: ${daMo.join(" · ")}.\nSai chỗ nào ${cachGoi} nhắn lại giúp em nha.`,
+          `📝 Em mở ${daMo.length} tin riêng: ${daMo.join(" · ")}.`,
           keLo ? `${cauHoiMau(keLo, cachGoi, dau!.property_type)} (giống nhau cả lô thì ${cachGoi} nói "cả lô" giúp em)` : `Cả lô đủ thông tin rồi, em soạn bản nháp gửi ${cachGoi} xem nha.`,
         ], { nhieu_can: daMo.length, asked: keLo ?? null });
       }
