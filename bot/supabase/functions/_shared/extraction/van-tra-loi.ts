@@ -733,3 +733,20 @@ export function boCanBia(replies: string[]): string[] {
   const ra = replies.filter((r) => !tachCau(r).some(laCanBia));
   return ra.length === replies.length ? replies : ra;
 }
+
+/**
+ * FR-214 (e), 23/09/2026 (Zalo chủ dự án): "15 tỉ nhé cháu còn nhà ở quận 11 cũ muốn 7 tỉ" → model đáp "Dạ cháu
+ * ghi 15 tỷ căn Long An, 7 tỷ căn Quận 11 rồi cô" trong khi con số 7 tỷ không được ghi vào đâu. Câu NÓI ĐÃ GHI
+ * (ghi / lưu / cập nhật / sửa) kèm số tiền mà số đó không khớp (±1%) giá nào trong `tienCo` (giá các tin của
+ * người này, đọc lại DB sau khi ghi) thì bỏ. Dòng 🤖/📝/📋 (tiền định) không đụng. Không bỏ gì → mảng cũ.
+ */
+export function boCauGhiTienKhongCo(replies: string[], tienCo: number[], docTienFn: (s: string) => number | null): string[] {
+  const TIEN_RE = /\d+(?:[.,]\d+)?\s*(?:tỷ|tỉ|ty|ti|tỏi|triệu|trieu|tr)(?![\p{L}])(?:\s*\d{1,3}(?![\d.,]|\s*m))?/giu;
+  const ra = locCauTrongBongBong(replies, (c) => {
+    if (/^[🤖📝📋💾]/u.test(c.trim())) return false;
+    if (!/\b(?:ghi|luu|cap nhat|sua)\b/.test(boDau(c))) return false;
+    const so = [...c.matchAll(TIEN_RE)].map((m) => docTienFn(m[0])).filter((v): v is number => v != null && v > 0);
+    return so.length > 0 && so.some((v) => !tienCo.some((t) => Math.abs(t - v) <= t * 0.01));
+  });
+  return ra;
+}

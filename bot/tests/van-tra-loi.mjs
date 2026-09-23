@@ -6,6 +6,8 @@
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiTienKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { nhanDienNhieuCan, tachTheoCan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -470,6 +472,33 @@ ok("boCanBia: nhắc lại tiêu chí 'căn hẻm xe hơi 3 phòng tầm 8 tỷ'
 ok("boCanBia: câu không có số tiền/diện tích → giữ", boCanBia(["Chú cần hẻm xe hơi không ạ?"]).length === 1);
 ok("boCanBia: câu bịa có 'khoảng 600m' (không đứng trước tiền) → vẫn bỏ", boCanBia(["Dạ.", "Căn này hẻm xe hơi 4m P12, 50m2, 7,9 tỷ — gần chợ chỉ khoảng 600m."]).length === 1);
 ok("boCanBia: câu nêu mã tin thật '#BDS-Q5-0006 … 8 tỷ' → giữ", boCanBia(["Dạ có căn #BDS-Q5-0006 nè anh, hẻm xe hơi 8 tỷ"]).length === 1);
+
+// ── FR-214 b/d/e (23/09/2026): gán mảnh theo tin + câu "đã ghi" phải khớp DB ──
+{
+  const ds = [
+    { code: "BDS-Q5-0001", property_type: "nha_pho", district: "Quận 11", street: "Kênh Tân Hoá", location_raw: "đường kênh Tân Hoá" },
+    { code: "BDS-Q5-0002", property_type: "dat", district: "Long An", street: "Tỉnh lộ 830", location_raw: "tỉnh lộ 830" },
+  ];
+  ok("canGanManh: một tin thì không bao giờ hỏi model", !canGanManh("15 tỉ còn nhà muốn 7 tỉ", [ds[0]], "BDS-Q5-0001"));
+  ok("canGanManh: hai số tiền trong một câu → hỏi", canGanManh("15 tỉ nhé cháu còn nhà ở quận 11 cũ muốn 7 tỉ", ds, "BDS-Q5-0002"));
+  ok("canGanManh: 'còn nhà …' → hỏi", canGanManh("còn nhà thì 4 phòng ngủ", ds, "BDS-Q5-0002"));
+  ok("canGanManh: nói loại NHÀ khi đang hỏi lô đất, người đó có tin nhà → hỏi", canGanManh("Nhà phố mà thổ cư full nhà 3 phòng ngủ shr", ds, "BDS-Q5-0002"));
+  ok("canGanManh: nhắc quận của tin KHÁC → hỏi", canGanManh("bên quận 11 thì 60m2", ds, "BDS-Q5-0002"));
+  ok("canGanManh: trả lời thường cho câu đang treo → không hỏi", !canGanManh("15 tỉ nhé cháu", ds, "BDS-Q5-0002"));
+  ok("canGanManh: nhắc quận của CHÍNH tin đang treo → không hỏi", !canGanManh("quận 11 cháu", ds, "BDS-Q5-0001"));
+  const text = "15 tỉ nhé cháu còn nhà ở quận 11 cũ muốn 7 tỉ";
+  const m = donManh({ manh: [{ trich: "15 tỉ nhé cháu", ma_tin: "bds-q5-0002" }, { trich: "còn nhà ở quận 11 cũ muốn 7 tỉ", ma_tin: "BDS-Q5-0001" }] }, text, ds.map((t) => t.code));
+  ok("donManh: giữ mảnh nguyên văn + mã hợp lệ (mã viết thường vẫn nhận)", m.length === 2 && m[0].ma === "BDS-Q5-0002" && m[1].ma === "BDS-Q5-0001", JSON.stringify(m));
+  ok("donManh: mảnh không có trong tin (model chép sai/bịa) → bỏ", donManh({ manh: [{ trich: "nhà 9 tỉ", ma_tin: "BDS-Q5-0001" }] }, text, ds.map((t) => t.code)).length === 0);
+  ok("donManh: mã không thuộc người này → bỏ; MOI/KHONG → giữ", JSON.stringify(donManh({ manh: [{ trich: "15 tỉ", ma_tin: "BDS-Q5-0099" }, { trich: "còn nhà", ma_tin: "MOI" }, { trich: "nhé cháu", ma_tin: "KHONG" }] }, text, ds.map((t) => t.code)).map((x) => x.ma)) === JSON.stringify(["MOI", "KHONG"]));
+  ok("donManh: đầu ra rỗng/null → []", donManh(null, text, []).length === 0 && donManh({ manh: [] }, text, []).length === 0);
+  ok("boCauGhiTienKhongCo: 'cháu ghi 9 tỷ' khi DB chỉ có 15 tỷ và 7 tỷ → bỏ câu đó, giữ câu hỏi",
+    JSON.stringify(boCauGhiTienKhongCo(["Dạ cháu ghi 9 tỷ cho căn Quận 11 rồi cô. Lô đất mình hướng nào cô?"], [15e9, 7e9], docTien)) === JSON.stringify(["Lô đất mình hướng nào cô?"]),
+    JSON.stringify(boCauGhiTienKhongCo(["Dạ cháu ghi 9 tỷ cho căn Quận 11 rồi cô. Lô đất mình hướng nào cô?"], [15e9, 7e9], docTien)));
+  ok("boCauGhiTienKhongCo: số khớp DB → giữ nguyên", boCauGhiTienKhongCo(["Dạ cháu ghi 15 tỷ căn Long An, 7 tỷ căn Quận 11 rồi cô."], [15e9, 7e9], docTien).length === 1);
+  ok("boCauGhiTienKhongCo: bong bóng 💾/📝 (đọc từ DB) không đụng", boCauGhiTienKhongCo(["📝 Cháu ghi vào tin BDS-Q5-0001: giá 9 tỷ."], [], docTien).length === 1);
+  ok("boCauGhiTienKhongCo: câu không nói 'ghi/lưu' → không đụng", boCauGhiTienKhongCo(["Khu này giá tầm 9 tỷ cô ạ."], [7e9], docTien).length === 1);
+}
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
