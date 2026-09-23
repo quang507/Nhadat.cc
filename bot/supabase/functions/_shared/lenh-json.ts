@@ -4,8 +4,8 @@
 // này … hay vector thì phải giải vector ra mới dc". Vector (FR-216) là 768 con số, KHÔNG giải ngược ra chữ được —
 // nên in VĂN BẢN đã đem nhúng (`van_ban_nhung`) + lúc nhúng; đó chính là "nghĩa" mà vector mang.
 //
-// Chỉ đọc, chỉ dữ liệu CỦA người nhắn (theo zalo_user_id), không gọi model. Công tắc: cùng chế độ test "hello"
-// (`app_config.test_reset_hello = 1`) — chạy thật đặt 0 là lệnh tắt, "/json" rơi về hội thoại thường.
+// Chỉ đọc, chỉ dữ liệu CỦA người nhắn (theo zalo_user_id), không gọi model. Công tắc riêng `app_config.lenh_json`
+// (bat | tat, 20260923f) — KHÔNG dùng chung `test_reset_hello`, vì bật cái đó là bật luôn "hello" xoá dữ liệu.
 
 import type { serviceClient } from "./claude.ts";
 
