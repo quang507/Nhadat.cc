@@ -602,7 +602,7 @@ do $d$ begin
   alter table public.chat_quota add constraint chat_quota_pkey PRIMARY KEY (zalo_user_id, gio);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
-  alter table public.conversations add constraint conversations_mot_vai_check CHECK (((buyer_id IS NULL) <> (seller_id IS NULL)));
+  alter table public.conversations add constraint conversations_co_vai_check CHECK (((buyer_id IS NOT NULL) OR (seller_id IS NOT NULL)));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.conversations add constraint conversations_pkey PRIMARY KEY (id);
@@ -3011,19 +3011,26 @@ CREATE OR REPLACE FUNCTION public.ensure_buyer_conversation(p_zalo_user_id text,
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare v_buyer buyers%rowtype; v_conv conversations%rowtype;
+declare v_buyer buyers%rowtype; v_conv conversations%rowtype; v_seller uuid;
 begin
-  perform pg_advisory_xact_lock(hashtext('buyer:' || p_zalo_user_id));
+  -- 20260923b: khoá theo NGƯỜI (Zalo ID), chung với ensure_seller_conversation — một người một hội thoại.
+  perform pg_advisory_xact_lock(hashtext('nguoi:' || p_zalo_user_id));
   select * into v_buyer from buyers where zalo_user_id = p_zalo_user_id;
   if not found then
     insert into buyers (zalo_user_id) values (p_zalo_user_id) returning * into v_buyer;
   end if;
   update buyers set last_contact_at = now() where id = v_buyer.id;
+  select s.id into v_seller from sellers s where s.zalo_user_id = p_zalo_user_id;
   select * into v_conv from conversations
     where conversations.buyer_id = v_buyer.id
     order by started_at desc limit 1;
-  if not found then
-    insert into conversations (buyer_id, channel) values (v_buyer.id, p_channel)
+  if v_conv.id is null and v_seller is not null then
+    update conversations set buyer_id = v_buyer.id
+     where id = (select c.id from conversations c where c.seller_id = v_seller order by c.started_at desc limit 1)
+    returning * into v_conv;
+  end if;
+  if v_conv.id is null then
+    insert into conversations (buyer_id, seller_id, channel) values (v_buyer.id, v_seller, p_channel)
       returning * into v_conv;
   end if;
   return query select v_buyer.id, v_conv.id, v_buyer.name, v_buyer.preferences,
@@ -3037,14 +3044,24 @@ CREATE OR REPLACE FUNCTION public.ensure_seller_conversation(p_seller_id uuid, p
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare v_conv conversations%rowtype;
+declare v_conv conversations%rowtype; v_zalo text; v_buyer uuid;
 begin
-  perform pg_advisory_xact_lock(hashtext('seller:' || p_seller_id::text));
+  -- 20260923b: khoá theo NGƯỜI (Zalo ID), chung với ensure_buyer_conversation — một người một hội thoại.
+  select s.zalo_user_id into v_zalo from sellers s where s.id = p_seller_id;
+  perform pg_advisory_xact_lock(hashtext('nguoi:' || coalesce(v_zalo, p_seller_id::text)));
   select * into v_conv from conversations
     where conversations.seller_id = p_seller_id
     order by started_at desc limit 1;
-  if not found then
-    insert into conversations (seller_id, channel) values (p_seller_id, p_channel)
+  if v_conv.id is null and v_zalo is not null then
+    select b.id into v_buyer from buyers b where b.zalo_user_id = v_zalo;
+    if v_buyer is not null then
+      update conversations set seller_id = p_seller_id
+       where id = (select c.id from conversations c where c.buyer_id = v_buyer order by c.started_at desc limit 1)
+      returning * into v_conv;
+    end if;
+  end if;
+  if v_conv.id is null then
+    insert into conversations (seller_id, buyer_id, channel) values (p_seller_id, v_buyer, p_channel)
       returning * into v_conv;
   end if;
   return query select v_conv.id, v_conv.human_touch_at, v_conv.ctv_id, v_conv.human_hold;

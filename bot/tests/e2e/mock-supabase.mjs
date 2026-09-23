@@ -541,8 +541,11 @@ class RpcCall {
       case "ensure_buyer_conversation": {
         let b = db.t.buyers.find((x) => x.zalo_user_id === a.p_zalo_user_id);
         if (!b) b = db.insert("buyers", { zalo_user_id: a.p_zalo_user_id, name: null, preferences: {} }).data;
+        // 20260923b (FR-214 a): một hội thoại mỗi NGƯỜI — người đã có hội thoại bán thì gắn buyer_id vào đó.
+        const sB = db.t.sellers.find((x) => x.zalo_user_id === a.p_zalo_user_id);
         let c = db.t.conversations.filter((x) => x.buyer_id === b.id).sort((x, y) => (x.started_at < y.started_at ? 1 : -1))[0];
-        if (!c) c = db.insert("conversations", { buyer_id: b.id, channel: a.p_channel, started_at: now(), human_touch_at: null, ctv_id: null }).data;
+        if (!c && sB) { c = db.t.conversations.filter((x) => x.seller_id === sB.id).sort((x, y) => (x.started_at < y.started_at ? 1 : -1))[0]; if (c) c.buyer_id = b.id; }
+        if (!c) c = db.insert("conversations", { buyer_id: b.id, seller_id: sB?.id ?? null, channel: a.p_channel, started_at: now(), human_touch_at: null, ctv_id: null }).data;
         return { data: { b_id: b.id, b_name: b.name, b_prefs: b.preferences, c_id: c.id, c_ctv_id: c.ctv_id ?? null, c_human_touch_at: c.human_touch_at ?? null, c_human_hold: c.human_hold === true }, error: null };
       }
       case "tao_followup": {
@@ -554,8 +557,12 @@ class RpcCall {
         return { data: true, error: null };
       }
       case "ensure_seller_conversation": {
+        // 20260923b (FR-214 a): một hội thoại mỗi NGƯỜI — người đã có hội thoại mua thì gắn seller_id vào đó.
+        const sS = db.t.sellers.find((x) => x.id === a.p_seller_id);
+        const bS = sS ? db.t.buyers.find((x) => x.zalo_user_id === sS.zalo_user_id) : null;
         let c = db.t.conversations.find((x) => x.seller_id === a.p_seller_id);
-        if (!c) c = db.insert("conversations", { seller_id: a.p_seller_id, channel: a.p_channel, started_at: now(), human_touch_at: null }).data;
+        if (!c && bS) { c = db.t.conversations.filter((x) => x.buyer_id === bS.id).sort((x, y) => (x.started_at < y.started_at ? 1 : -1))[0]; if (c) c.seller_id = a.p_seller_id; }
+        if (!c) c = db.insert("conversations", { seller_id: a.p_seller_id, buyer_id: bS?.id ?? null, channel: a.p_channel, started_at: now(), human_touch_at: null }).data;
         return { data: { c_id: c.id, c_human_touch_at: c.human_touch_at, c_human_hold: c.human_hold === true }, error: null };
       }
       case "mo_ho_so_nguoi_ban": {

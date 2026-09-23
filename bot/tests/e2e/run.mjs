@@ -3483,6 +3483,35 @@ fresh(seedKho);
   globalThis.__model = { parse: () => OUT() };
 }
 
+// ── 23/09/2026 FR-214 (chủ dự án: "có 1 chat thôi", một người vừa mua nhiều căn vừa bán nhiều căn) ──
+{
+  const rep = () => r.body.replies.join(" ");
+  fresh();
+  globalThis.__model = { parse: () => OUT(), create: () => "Dạ nhà mình mấy tầng vậy ạ?" };
+  r = await send({ external_user_id: "gvg-1", text: "bán nhà hẻm 4m Nguyễn Trãi q5, 60m2, 7 tỷ" });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ mình cần mấy phòng ngủ ạ?"] });
+  r = await send({ external_user_id: "gvg-1", text: "tôi cũng đang muốn mua căn hộ quận 7 tầm 3 tỷ" });
+  {
+    const s = db().t.sellers.find((x) => x.zalo_user_id === "gvg-1");
+    const b = db().t.buyers.find((x) => x.zalo_user_id === "gvg-1");
+    const convs = db().t.conversations.filter((c) => c.seller_id === s?.id || c.buyer_id === b?.id);
+    const pm = JSON.stringify(parseCalls().slice(-1).map((c) => c.params));
+    check("GVG-01 rao bán rồi hỏi mua → MỘT hội thoại mang cả seller_id lẫn buyer_id, tin cả hai vai chung một chỗ",
+      !!s && !!b && convs.length === 1 && convs[0].seller_id === s.id && convs[0].buyer_id === b.id &&
+        db().t.messages.filter((m) => m.conversation_id === convs[0].id && ["seller", "buyer"].includes(m.sender)).length === 2,
+      JSON.stringify({ convs, msgs: db().t.messages.map((m) => [m.conversation_id === convs[0]?.id, m.sender, m.body.slice(0, 30)]) }));
+    check("GVG-02 nhánh mua thấy câu rao bán cũ là lời KHÁCH (không phải EM)",
+      /KHÁCH: bán nhà hẻm 4m Nguyễn Trãi/.test(pm) && !/EM: bán nhà hẻm 4m Nguyễn Trãi/.test(pm), pm.slice(0, 400));
+  }
+  r = await send({ external_user_id: "gvg-1", text: "nhà tôi 3 tầng" });
+  {
+    const pc = JSON.stringify(createCalls().slice(-1).map((c) => c.params));
+    check("GVG-03 quay lại nhánh bán → lịch sử có câu hỏi mua là lời CHỦ NHÀ (không phải EM)",
+      /CHỦ NHÀ: tôi cũng đang muốn mua căn hộ quận 7/.test(pc) && !/EM: tôi cũng đang muốn mua/.test(pc), pc.slice(0, 600));
+  }
+  globalThis.__model = { parse: () => OUT() };
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

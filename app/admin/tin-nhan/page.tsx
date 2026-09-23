@@ -97,13 +97,15 @@ export default function Page() {
   };
 
   const ten = (h: HoiThoai) => h.sellers?.name ?? h.buyers?.name ?? (h.seller_id ? "Chủ nhà" : "Khách");
+  // FR-214 (20260923b): một hội thoại mỗi người — có thể mang cả vai bán lẫn vai mua.
+  const nhanVai = (h: HoiThoai) => h.seller_id && h.buyer_id ? "bán + mua" : h.seller_id ? "bán" : "mua";
   const soMau = (id: string) => mau.filter((m) => m.conversation_id === id && m.dung_lam !== "bo").length;
   const mauCua = (messageId: string) => mau.find((m) => m.message_id === messageId);
 
   const danhSach = useMemo(() => {
     const k = q.trim().toLowerCase();
     return hoiThoai.filter((h) =>
-      (!locPhia || (locPhia === "ban" ? !!h.seller_id : !h.seller_id)) &&
+      (!locPhia || (locPhia === "ban" ? !!h.seller_id : !!h.buyer_id)) &&
       (!chiCanNguoi || !!h.needs_human) &&
       (!chiChuaMau || soMau(h.id) === 0) &&
       (!k || ten(h).toLowerCase().includes(k) || (h.sellers?.zalo_user_id ?? h.buyers?.zalo_user_id ?? "").includes(k)),
@@ -147,8 +149,11 @@ export default function Page() {
     if (!chon || !nhap.trim()) return;
     setDangLuu(true);
     const { data: nguCanh } = await supabase.rpc("ngu_canh_tin", { p_message_id: t.id });
+    // Hội thoại hai vai: phía của câu bot = vai của tin NGƯỜI gần nhất trước nó.
+    const nguoiTruoc = [...tin].reverse().find((x) => x.seq < t.seq && (x.sender === "seller" || x.sender === "buyer"));
+    const phia = chon.seller_id && chon.buyer_id ? (nguoiTruoc?.sender === "buyer" ? "mua" : "ban") : chon.seller_id ? "ban" : "mua";
     const { error } = await supabase.from("mau_cau").upsert({
-      message_id: t.id, conversation_id: chon.id, phia: chon.seller_id ? "ban" : "mua",
+      message_id: t.id, conversation_id: chon.id, phia,
       ngu_canh: nguCanh ?? [], cau_bot: boBaoLai(t.body), cau_chuan: nhap.trim(), dung_lam: "ca_hai", nguoi_sua: email,
     }, { onConflict: "message_id" });
     setDangLuu(false);
@@ -216,7 +221,7 @@ export default function Page() {
                     <span className="text-[11px] text-mute tabular-nums">{gioNgan(h.last_message_at)}</span>
                   </div>
                   <div className="flex flex-wrap gap-1 pl-10">
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${h.seller_id ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}>{h.seller_id ? "bán" : "mua"}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${h.seller_id ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}>{nhanVai(h)}</span>
                     {h.needs_human && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">cần người thật</span>}
                     {h.human_hold && <span className="rounded bg-navy px-1.5 py-0.5 text-[10px] font-bold text-white">người thật giữ</span>}
                     {h.human_touch_at && !h.human_hold && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-mute">người thật đã vào</span>}
@@ -239,7 +244,7 @@ export default function Page() {
             <div className="flex items-center justify-between border-b border-line bg-white px-4 py-2.5">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-navy">{ten(chon)}</span>
-                <span className="text-xs text-mute">· {chon.seller_id ? "người bán" : "người mua"} · {chon.channel}</span>
+                <span className="text-xs text-mute">· {chon.seller_id && chon.buyer_id ? "vừa bán vừa mua" : chon.seller_id ? "người bán" : "người mua"} · {chon.channel}</span>
                 {chon.needs_human && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">cần người thật</span>}
               </div>
               <div className="flex items-center gap-2">

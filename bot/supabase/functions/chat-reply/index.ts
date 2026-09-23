@@ -146,6 +146,10 @@ function regexProfileFallback(text: string): Record<string, string> {
   return delta;
 }
 
+// 23/09/2026 (FR-214 a, 20260923b): MỘT hội thoại mỗi người — tin người đó gửi lúc ở vai mua (`buyer`) lẫn
+// vai bán (`seller`) nằm chung một dòng `conversations`. Mọi chỗ tách "tin người" với "tin bot" dùng hàm này;
+// so riêng `=== "seller"` / `=== "buyer"` là coi tin người ở vai kia thành lời BOT.
+const laTinNguoi = (s: string | null | undefined): boolean => s === "seller" || s === "buyer";
 // 23/09/2026: câu khách hỏi TIẾP về một căn (không phải câu tìm mới) — hẻm, giá bớt, hướng, quy hoạch, hình,
 // xem nhà, số chủ, "căn đó / nhà này". "anh" trần KHÔNG có ở đây (đại từ), chỉ "hình".
 const HOI_TIEP_VE_CAN_RE = /\?|\b(?:huong|quy hoach|lo gioi|hem|bot|thuong luong|phap ly|so hong|so do|hinh|xem nha|di xem|qua xem|tang|lau|dien tich|mat tien|can do|can nay|can kia|nha do|nha nay|chu nha|so chu|con khong|o dau|bao nhieu|nam xay|noi that|dau xe|gan cho|gan truong)\b/;
@@ -2185,15 +2189,15 @@ Deno.serve(async (req) => {
     // khỏi lịch sử vì câu lệnh dẫn riêng.
     const lichSuRows = ((lichSuS ?? []) as Array<{ sender: string; body: string | null; seq: number }>)
       .slice().reverse();
-    if (lichSuRows.length && lichSuRows[lichSuRows.length - 1].sender === "seller") lichSuRows.pop();
+    if (lichSuRows.length && laTinNguoi(lichSuRows[lichSuRows.length - 1].sender)) lichSuRows.pop();
     // Bong bóng 💾 (báo lại thứ đã lưu) là bảng số liệu cho người bán, không
     // phải lời em nói — bỏ khỏi lịch sử, không thì model bắt chước in bảng.
     // 18/09/2026 (chủ dự án: "tắt cái mỗi câu trả lời đều khen đi, lâu lâu thì khen thôi"): 3 tin gần
     // nhất của bot đã có câu khen → lượt này dặn model KHÔNG khen, và lọc tiền định câu khen lọt.
-    const khenGanDay = vuaKhen(lichSuRows.filter((m) => m.sender !== "seller").map((m) => boBaoLai(m.body)));
+    const khenGanDay = vuaKhen(lichSuRows.filter((m) => !laTinNguoi(m.sender)).map((m) => boBaoLai(m.body)));
     const lichSuText = lichSuRows.map((m) => ({ ...m, body: boBaoLai(m.body) })).filter((m) => m.body)
       .map((m) =>
-        `${m.sender === "seller" ? "CHỦ NHÀ" : m.sender === "human" ? "EM (người thật bên mình nhắn tay)" : "EM"}: ${
+        `${laTinNguoi(m.sender) ? "CHỦ NHÀ" : m.sender === "human" ? "EM (người thật bên mình nhắn tay)" : "EM"}: ${
           (m.body ?? "").slice(0, 300)
         }`)
       .join("\n");
@@ -2594,7 +2598,7 @@ Deno.serve(async (req) => {
     // đang hỏi của tin cũ (ghi "Chào cháu…" vào bổ sung), rồi mọi dữ kiện sau đó gộp vào
     // tin cũ — hai căn thành một. Nay hỏi thẳng: căn đó hay căn khác? Câu hỏi mang DẤU
     // (`DAU_CAN_CU_MOI`) để lượt sau đọc lịch sử biết mình đang hỏi gì, không cần cột mới.
-    const botCuoi = [...lichSuRows].reverse().find((m) => m.sender !== "seller")?.body ?? "";
+    const botCuoi = [...lichSuRows].reverse().find((m) => !laTinNguoi(m.sender))?.body ?? "";
     const dangHoiCanCuMoi = /là căn đó hay căn khác/i.test(botCuoi);
     const dangXinCanMoi = /(?:địa chỉ|diện tích|giá) (?:của |cho )?căn (?:khác|mới)/i.test(botCuoi);
     const laCanKhac = /căn khác|căn mới|nhà khác|cái khác|khác ạ|khác em|khác cháu|^\s*khác\b|căn nữa|căn thứ/i.test(text) ||
@@ -4067,7 +4071,7 @@ Deno.serve(async (req) => {
           // nháp / bảng tiền định đọc từ DB có thứ chủ nhà nói ở lượt trước). Bằng chứng = chữ chủ nhà đã gõ
           // (tin này + lịch sử gần nhất); câu hỏi ("ô tô vào được không anh?") giữ nguyên.
           if (sellerReply) {
-            sellerReply = boKhenKhongCanCu([sellerReply], [text, ...lichSuRows.filter((m) => m.sender === "seller").map((m) => m.body ?? "")].join(" "))[0] ?? null;
+            sellerReply = boKhenKhongCanCu([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null;
           }
           // FR-177: một lượt một câu hỏi — cắt câu hỏi thứ hai của model (15/09/2026).
           // Chỉ áp cho lời MODEL: câu tiền định (xin chấm điểm, liệt kê căn) có chủ ý.
@@ -4677,7 +4681,7 @@ Deno.serve(async (req) => {
   const [{ count: msg24h }, { data: lichSu }] = await Promise.all([
     client.from("messages")
       .select("id", { count: "exact", head: true })
-      .eq("conversation_id", convId).eq("sender", "buyer")
+      .eq("conversation_id", convId).in("sender", ["buyer", "seller"])
       .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString()),
     client.from("messages").select("sender, body, seq")
       .eq("conversation_id", convId).order("seq", { ascending: false }).limit(12),
@@ -4722,7 +4726,7 @@ Deno.serve(async (req) => {
   // Lượt này vẫn xử lý ĐÚNG tin của nó (insMsgSeq), không lấy "tin mới nhất"
   // làm danh tính; câu này chỉ quyết định NHƯỜNG hay không. Tin mới nhất của
   // khách nằm ngay trong 12 tin vừa nạp (nạp SAU khi chèn tin này).
-  const tinKhach = history.filter((m) => m.sender === "buyer");
+  const tinKhach = history.filter((m) => laTinNguoi(m.sender));
   const newest = tinKhach[0] ?? null;
   if (newest && insMsgSeq != null && newest.seq > insMsgSeq) {
     // Completed-rỗng là ĐÚNG cả với sổ: tin này được lượt của tin cuối trả lời
@@ -4758,7 +4762,7 @@ Deno.serve(async (req) => {
     if (history.length >= 12 && tinTruoc <= 1) {
       const { count } = await client.from("messages")
         .select("id", { count: "exact", head: true })
-        .eq("conversation_id", convId).eq("sender", "buyer");
+        .eq("conversation_id", convId).in("sender", ["buyer", "seller"]);
       tinTruoc = count ?? 0;
     }
     if (tinTruoc <= 1) {
@@ -5004,8 +5008,8 @@ Deno.serve(async (req) => {
   const convo = ordered
     .filter((m) => !(m.sender === "bot" && m.body.startsWith(DAU_BAO_LAI)))
     .map((m) =>
-      `${m.sender === "buyer" ? "KHÁCH" : m.sender === "human" ? "EM (người thật bên mình nhắn tay)" : "EM"}: ${
-        m.sender === "buyer" ? m.body.slice(0, 400) : m.body
+      `${laTinNguoi(m.sender) ? "KHÁCH" : m.sender === "human" ? "EM (người thật bên mình nhắn tay)" : "EM"}: ${
+        laTinNguoi(m.sender) ? m.body.slice(0, 400) : m.body
       }`)
     .join("\n");
   // FR-172: kèm thông số có cấu trúc (ngang×dài, kết cấu, WC, đường vào, pháp
