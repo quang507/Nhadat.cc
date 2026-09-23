@@ -59,6 +59,7 @@ import { coSdt, SDT_NGUON, thayLienHe, thayLienHeCoId } from "../_shared/extract
 // phòng (tien-ich), mốc + khoảng cách do SQL tính (tim-moc → tin_gan_moc).
 import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/extraction/tien-ich.ts";
 import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
+import { nhungCauTim, xepTheoNghia } from "../_shared/ai/nhung.ts"; // FR-216
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
@@ -185,11 +186,30 @@ export function hoSoTamTuCau(prefs: Record<string, unknown>, text: string, tKD: 
     const pn = /\b(\d{1,2})\s*(?:phong ngu|pn)\b/.exec(tKD);
     if (pn && Number(pn[1]) >= 1 && Number(pn[1]) <= 10) p.bedrooms = Number(pn[1]);
   }
-  if (p.deal == null) {
-    const d = regexProfileFallback(text).deal;
-    if (d) p.deal = d;
+  if (p.deal == null || p.alley == null || p.alley === "") {
+    const tam = regexProfileFallback(text);
+    if (p.deal == null && tam.deal) p.deal = tam.deal;
+    // "hẻm cách mặt tiền 50m" / "gần mặt tiền" KHÔNG phải đòi nhà mặt tiền — chỉ nhận "nhà/căn/mua mặt tiền".
+    const muonMatTien = /\b(?:nha|can|mua|tim|lo|dat|mb|mat bang) mat tien\b/.test(tKD) && !/\b(?:cach|gan|sat|ra) mat tien\b/.test(tKD);
+    if ((p.alley == null || p.alley === "") && tam.alley && (tam.alley !== "mặt tiền" || muonMatTien)) p.alley = tam.alley;
   }
   return p;
+}
+
+// 23/09/2026 (FR-216 b): hồ sơ mua có `alley` ("hẻm xe hơi" / "mặt tiền") từ lâu mà kho KHÔNG lọc theo nó — bot
+// gợi căn hẻm xe máy cho khách đòi hẻm xe hơi. Trả mệnh đề `.or()` PostgREST cho `access_type`, hoặc null (không
+// lọc: khách không nói, nói "không quan trọng", hay chỉ cần hẻm xe máy). Hẻm xe hơi nhận cả mặt tiền, hẻm xe tải
+// và căn chủ nói "xe hơi vào tận nhà" (`car_in_house`).
+export function locLoaiHem(alley: unknown): string | null {
+  if (typeof alley !== "string" || !alley.trim()) return null;
+  const t = boDau(alley);
+  if (/\b(?:khong|ko|k)\b.*\b(?:quan trong|can|bat buoc)\b|\b(?:sao cung duoc|gi cung duoc|dau cung duoc)\b/.test(t)) return null;
+  // "hẻm xe hơi hoặc mặt tiền" → tập rộng (đã gồm mặt tiền); chỉ "mặt tiền" mới hẹp về mặt tiền.
+  if (/xe hoi|\bhxh\b|o to|\boto\b|xe tai|7 cho|4 cho/.test(t)) {
+    return "access_type.eq.mat_tien,access_type.eq.hem_xe_tai,access_type.eq.hem_xe_hoi,car_in_house.is.true";
+  }
+  if (/mat tien|\bmt\b/.test(t)) return "access_type.eq.mat_tien";
+  return null;
 }
 
 // FR-133: "chiều/mai/tối… em gửi" → hẹn giờ nhắc (giờ VN = UTC+7)
@@ -5096,6 +5116,14 @@ Deno.serve(async (req) => {
       ? prefs.gan_tien_ich_loc as GanTienIch
       : null);
   const minimumMet = (prefsLoc.area != null || gan != null) && prefsLoc.budget != null;
+  // FR-216: công tắc tìm theo nghĩa — chỉ đọc khi kho được lọc thật (đủ tiêu chí), song song tới lúc dựng truy vấn.
+  const timNghiaP = minimumMet
+    ? (async () => {
+      const { data, error } = await client.rpc("cau_hinh", { p_key: "tim_theo_nghia" });
+      if (error) await ghiLoi(client, "chat-reply cau_hinh(tim_theo_nghia)", error.message);
+      return String(data ?? "tat").trim() === "bat";
+    })().catch(() => false)
+    : Promise.resolve(false);
   // 14/09/2026 (bắn 16 hội thoại mua): "tìm nhà quận 5 tầm 6 tỷ" → bot vẫn dò "để ở hay
   // đầu tư?" (5/9 hội thoại). `minimumMet` đọc hồ sơ ĐẦU lượt — lúc đó còn trống — nên câu
   // lệnh bảo model "CÒN THIẾU, hỏi theo thứ tự" dù khách vừa nói đủ khu vực + giá. Câu
@@ -5115,6 +5143,7 @@ Deno.serve(async (req) => {
   // tương tự, căn trong dự án): thông số FR-172 + dự án/tình trạng căn FR-116.
   const CAN_COLS =
     `code, ward, district, deal, location_raw, price_raw, price_vnd, area_m2, bedrooms, property_type, ${SPEC_COLS}, project_id, unit_code, unit_status, last_confirmed_at, tien_ich_gan, nhan, boc_tach, projects(name)`;
+  const timNghia = await timNghiaP;
   let khoQ = client
     .from("listings")
     .select(CAN_COLS) // FR-172 + FR-116
@@ -5123,7 +5152,10 @@ Deno.serve(async (req) => {
     .not("price_raw", "is", null).neq("price_raw", "")
     // FR-188 (10/09): căn chủ CẦN BÁN GẤP lên đầu khi ghép khách, rồi mới tới mới nhất.
     .order("gap", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false }).limit(6);
+    // FR-216: bật tìm theo nghĩa thì lấy rộng 30 căn đã lọc cứng rồi xếp lại theo nghĩa, cắt còn 6.
+    .order("created_at", { ascending: false }).limit(timNghia ? 30 : 6);
+  const hemLoc = locLoaiHem(prefsLoc.alley);
+  if (hemLoc) khoQ = khoQ.or(hemLoc);
   const wardNum = typeof prefsLoc.area === "string" ? soPhuong(boDau(prefsLoc.area)) : null;
   // Khớp ĐÚNG số phường (ilike không wildcard = so khớp nguyên chuỗi,
   // không phân biệt hoa thường) — '%1%' cũ khiến P1 dính cả P10-P16
@@ -5158,7 +5190,7 @@ Deno.serve(async (req) => {
   const saoM = SAO_RE_KD.exec(tKD);
   const saoKhach = saoM ? Number(saoM[1] ?? saoM[2]) : null;
   const [
-    { data: listings }, { data: partnerProj }, { data: matchedProj }, { data: askedListings },
+    { data: khoTho }, { data: partnerProj }, { data: matchedProj }, { data: askedListings },
     { data: askedPhotos }, giaTB, { data: nhacFeedback },
   ] = await Promise.all([
     minimumMet || mentioned.length ? khoQ : Promise.resolve({ data: [] as never[] }),
@@ -5200,6 +5232,25 @@ Deno.serve(async (req) => {
         .order("sent_at", { ascending: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null as { id: string; listing_id: string | null } | null }),
   ]);
+  // FR-216: xếp kho theo NGHĨA câu khách (vector Gemini ↔ `listings.nhung`) TRONG nhóm đã lọc cứng. Hỏng bất
+  // cứ bước nào → giữ thứ tự cũ (gấp trước, mới trước), ghi sổ. Căn chưa có vector xếp sau căn có.
+  let listings = khoTho;
+  if (timNghia && (khoTho ?? []).length > 1) {
+    try {
+      const khoa = await secretOf(client, "GEMINI_API_KEY");
+      if (!khoa) throw new Error("thiếu GEMINI_API_KEY");
+      const cauTim = [text, typeof prefs.alley === "string" ? prefs.alley : null, nhanLoc.length ? tenNhan(nhanLoc) : null]
+        .filter(Boolean).join(". ");
+      const vec = await nhungCauTim(khoa, cauTim);
+      const codes = (khoTho ?? []).map((l) => (l as { code: string }).code);
+      const { data: hang, error: hangErr } = await client.rpc("tim_tin_theo_nghia", { p_vec: vec, p_codes: codes, p_limit: codes.length });
+      if (hangErr) throw new Error(hangErr.message);
+      listings = xepTheoNghia(khoTho ?? [], ((hang ?? []) as Array<{ code: string }>).map((h) => h.code));
+    } catch (e) {
+      await ghiLoi(client, "chat-reply tim_tin_theo_nghia", e);
+    }
+  }
+  listings = (listings ?? []).slice(0, 6);
   const danhGia = saoKhach && nhacFeedback?.listing_id
     ? { listing_id: nhacFeedback.listing_id as string, stars: saoKhach }
     : null;

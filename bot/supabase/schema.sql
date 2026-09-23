@@ -13,6 +13,7 @@ create extension if not exists pg_stat_statements with schema extensions;
 create extension if not exists pgcrypto with schema extensions;
 create extension if not exists supabase_vault with schema vault;
 create extension if not exists "uuid-ossp" with schema extensions;
+create extension if not exists vector with schema extensions;
 
 -- ══ Kiểu enum ══
 do $d$ begin
@@ -351,7 +352,10 @@ END,
   geocode_at timestamp with time zone,
   tien_ich_gan jsonb,
   tien_ich_at timestamp with time zone,
-  nhan text[] not null default '{}'::text[]
+  nhan text[] not null default '{}'::text[],
+  nhung extensions.vector(768),
+  nhung_md5 text,
+  nhung_luc timestamp with time zone
 );
 
 create table if not exists public.mau_cau (
@@ -399,6 +403,13 @@ create table if not exists public.messages (
   zalo_msg_id text,
   created_at timestamp with time zone not null default now(),
   seq bigint not null
+);
+
+create table if not exists public.nhung_viec (
+  listing_id uuid not null,
+  request_id bigint not null,
+  md5 text not null,
+  gui_luc timestamp with time zone not null default now()
 );
 
 create table if not exists public.project_facts (
@@ -770,6 +781,9 @@ do $d$ begin
   alter table public.messages add constraint messages_zalo_msg_id_key UNIQUE (zalo_msg_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.nhung_viec add constraint nhung_viec_pkey PRIMARY KEY (listing_id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.project_facts add constraint project_facts_co_dich CHECK (((project_id IS NOT NULL) OR (COALESCE(btrim(ten_du_an), ''::text) <> ''::text)));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -943,6 +957,9 @@ do $d$ begin
   alter table public.messages add constraint messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.nhung_viec add constraint nhung_viec_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.project_facts add constraint project_facts_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL;
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1026,6 +1043,7 @@ create index if not exists listings_access_idx ON public.listings USING btree (d
 create index if not exists listings_district_status_idx ON public.listings USING btree (district, status);
 create index if not exists listings_floors_idx ON public.listings USING btree (deal, status, floors);
 create index if not exists listings_nhan_gin_idx ON public.listings USING gin (nhan);
+create index if not exists listings_nhung_hnsw ON public.listings USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists listings_project_idx ON public.listings USING btree (project_id) WHERE (project_id IS NOT NULL);
 CREATE UNIQUE INDEX listings_project_unit_uniq ON public.listings USING btree (project_id, unit_code) WHERE ((project_id IS NOT NULL) AND (unit_code IS NOT NULL));
 create index if not exists listings_seller_id_idx ON public.listings USING btree (seller_id);
@@ -4840,6 +4858,77 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.nhung_tick()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+declare
+  v record;
+  r record;
+  v_key text;
+  v_txt text;
+  v_md5 text;
+  v_vals jsonb;
+  v_gui int := 0;
+begin
+  -- (1) Thu kết quả lượt trước. Chưa có phản hồi thì chờ; quá 10 phút thì bỏ, tick sau gửi lại.
+  for v in
+    select nv.listing_id, nv.md5, nv.gui_luc, h.status_code, h.content, h.error_msg
+      from public.nhung_viec nv left join net._http_response h on h.id = nv.request_id
+  loop
+    if v.status_code is null and v.error_msg is null then
+      if v.gui_luc < now() - interval '10 minutes' then
+        delete from public.nhung_viec where listing_id = v.listing_id;
+      end if;
+      continue;
+    end if;
+    if v.status_code = 200 then
+      v_vals := (v.content::jsonb) -> 'embedding' -> 'values';
+      if jsonb_typeof(v_vals) = 'array' and jsonb_array_length(v_vals) = 768 then
+        update public.listings set nhung = (v_vals::text)::extensions.vector, nhung_md5 = v.md5, nhung_luc = now()
+         where id = v.listing_id;
+      else
+        perform public.log_loi('nhung-tick', 'Gemini embed trả khuôn lạ cho tin ' || v.listing_id, null);
+      end if;
+    else
+      perform public.log_loi('nhung-tick',
+        'Gemini embed ' || coalesce(v.status_code::text, '?') || ' ' || left(coalesce(v.error_msg, v.content, ''), 200),
+        v.status_code);
+    end if;
+    delete from public.nhung_viec where listing_id = v.listing_id;
+  end loop;
+
+  -- (2) Gửi lượt mới: tin còn sống mà văn bản đổi so với lần nhúng trước. Tối đa 20 tin một tick.
+  if coalesce(public.cau_hinh('tim_theo_nghia'), 'tat') <> 'bat' then return; end if;
+  v_key := public.get_secret('GEMINI_API_KEY');
+  if v_key is null then return; end if;
+  for r in
+    select l.id, l.nhung_md5 from public.listings l
+     where l.status in ('cho_thong_tin', 'dang_ban', 'dang_quan_tam')
+       and not exists (select 1 from public.nhung_viec nv where nv.listing_id = l.id)
+     order by l.updated_at desc nulls last
+     limit 300
+  loop
+    exit when v_gui >= 20;
+    v_txt := public.van_ban_nhung(r.id);
+    if v_txt is null or length(v_txt) < 10 then continue; end if;
+    v_md5 := md5(v_txt);
+    if r.nhung_md5 is not distinct from v_md5 then continue; end if;
+    insert into public.nhung_viec (listing_id, request_id, md5)
+    values (r.id, net.http_post(
+      url := 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-goog-api-key', v_key),
+      body := jsonb_build_object(
+        'content', jsonb_build_object('parts', jsonb_build_array(jsonb_build_object('text', left(v_txt, 6000)))),
+        'taskType', 'RETRIEVAL_DOCUMENT', 'outputDimensionality', 768),
+      timeout_milliseconds := 20000), v_md5);
+    v_gui := v_gui + 1;
+  end loop;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.notify_info_request_escalation()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -5773,6 +5862,22 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.tim_tin_theo_nghia(p_vec double precision[], p_codes text[] DEFAULT NULL::text[], p_limit integer DEFAULT 10)
+ RETURNS TABLE(code text, do_gan double precision)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
+AS $function$
+  select l.code, 1 - (l.nhung <=> (p_vec::extensions.vector(768)))
+    from public.listings l
+   where l.nhung is not null
+     and l.status in ('dang_ban', 'dang_quan_tam')
+     and (p_codes is null or l.code = any (p_codes))
+   order by l.nhung <=> (p_vec::extensions.vector(768))
+   limit greatest(1, least(coalesce(p_limit, 10), 50));
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.tin_can_geocode(p_limit integer DEFAULT 40)
  RETURNS TABLE(id uuid, location_raw text, street text, ward text, district text, quan_mac_dinh boolean, lat double precision, lng double precision, toa_do_muc text, du_an_lat double precision, du_an_lng double precision)
  LANGUAGE sql
@@ -5981,6 +6086,55 @@ CREATE OR REPLACE FUNCTION public.url_kho_anh()
  SET search_path TO 'public', 'pg_catalog'
 AS $function$
   select c.value from app_config c where c.key = 'storage_public_base_url';
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.van_ban_nhung(p_id uuid)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select public.che_sdt(concat_ws('. ',
+    (case l.deal when 'cho_thue' then 'Cho thuê ' else 'Bán ' end) ||
+      case l.property_type
+        when 'nha_pho' then 'nhà phố' when 'nha_cap4' then 'nhà cấp 4' when 'chung_cu' then 'căn hộ chung cư'
+        when 'dat' then 'đất' when 'biet_thu' then 'biệt thự' when 'phong_tro' then 'phòng trọ'
+        when 'mat_bang' then 'mặt bằng' when 'toa_nha' then 'toà nhà, căn hộ dịch vụ'
+        when 'dat_nong_nghiep' then 'đất nông nghiệp' when 'dat_kinh_doanh' then 'đất kinh doanh'
+        when 'kho_xuong' then 'kho xưởng' else 'bất động sản' end,
+    nullif(concat_ws(', ', l.location_raw, l.street, l.ward, l.district), ''),
+    (select 'Dự án ' || p.name from public.projects p where p.id = l.project_id),
+    case when l.area_m2 is not null then 'Diện tích ' || trim_scale(l.area_m2) || ' m2' end,
+    case when l.frontage_m is not null and l.length_m is not null
+      then 'Ngang ' || trim_scale(l.frontage_m) || ' m, dài ' || trim_scale(l.length_m) || ' m' end,
+    case when l.price_raw is not null then 'Giá ' || l.price_raw end,
+    coalesce(l.floors_text, case when l.floors is not null then l.floors || ' tầng' end),
+    case when l.bedrooms is not null then l.bedrooms || ' phòng ngủ' end,
+    case when l.bathrooms is not null then l.bathrooms || ' WC' end,
+    case l.access_type
+      when 'mat_tien' then 'Mặt tiền đường' when 'hem_xe_tai' then 'Hẻm xe tải'
+      when 'hem_xe_hoi' then 'Hẻm xe hơi' when 'hem_xe_may' then 'Hẻm xe máy' when 'hem' then 'Trong hẻm' end ||
+      case when l.alley_width_m is not null then ' rộng ' || trim_scale(l.alley_width_m) || ' m' else '' end,
+    case l.legal_status
+      when 'so_hong_rieng' then 'Sổ hồng riêng' when 'so_hong_chung' then 'Sổ hồng chung' when 'so_hong' then 'Có sổ'
+      when 'hdmb' then 'Hợp đồng mua bán' when 'giay_tay' then 'Giấy tay' end ||
+      case when l.has_completion then ', đã hoàn công' else '' end,
+    case when l.direction is not null then 'Hướng ' || l.direction end,
+    case when l.floor is not null then 'Tầng ' || l.floor end,
+    case when l.car_in_house then 'Xe hơi vào tận nhà' end,
+    case when l.corner_lot then 'Căn góc' end,
+    case when l.has_elevator then 'Có thang máy' end,
+    case when coalesce(array_length(l.nhan, 1), 0) > 0
+      then 'Đặc điểm: ' || array_to_string(array(select replace(x, '_', ' ') from unnest(l.nhan) x), ', ') end,
+    (select string_agg(replace(f.question, '_', ' ') || ': ' || f.answer, '. ' order by f.question)
+       from (select distinct on (question) question, answer
+               from public.listing_facts
+              where listing_id = l.id and coalesce(answer, '') <> ''
+                and question not in ('hinh_anh', 'duyet_tin', 'danh_gia', 'xac_nhan_lich', 'con_ban', 'nhan')
+              order by question, created_at desc) f)
+  ))
+  from public.listings l where l.id = p_id;
 $function$
 ;
 
@@ -6924,6 +7078,7 @@ alter table public.mau_cau enable row level security;
 alter table public.media enable row level security;
 alter table public.media_cleanup_queue enable row level security;
 alter table public.messages enable row level security;
+alter table public.nhung_viec enable row level security;
 alter table public.project_facts enable row level security;
 alter table public.projects enable row level security;
 alter table public.property_events enable row level security;
@@ -7117,6 +7272,7 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.me
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.media_mo_coi_db to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.media_mo_coi_storage to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.messages to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nhung_viec to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.project_facts to service_role;
@@ -7530,6 +7686,8 @@ revoke all on function public.nhan_viec_don_media(p_limit integer) from public, 
 grant execute on function public.nhan_viec_don_media(p_limit integer) to service_role;
 revoke all on function public.nhan_viec_nhac(p_kinds text[], p_limit integer, p_worker text) from public, anon, authenticated;
 grant execute on function public.nhan_viec_nhac(p_kinds text[], p_limit integer, p_worker text) to service_role;
+revoke all on function public.nhung_tick() from public, anon, authenticated;
+grant execute on function public.nhung_tick() to service_role;
 revoke all on function public.notify_info_request_escalation() from public, anon, authenticated;
 grant execute on function public.notify_info_request_escalation() to service_role;
 revoke all on function public.nudge_tick() from public, anon, authenticated;
@@ -7589,6 +7747,8 @@ grant execute on function public.thu_muc_dau_uuid(p_name text) to authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to service_role;
 revoke all on function public.tim_duong(p_ten text, p_quan text, p_toi_da integer) from public, anon, authenticated;
 grant execute on function public.tim_duong(p_ten text, p_quan text, p_toi_da integer) to service_role;
+revoke all on function public.tim_tin_theo_nghia(p_vec double precision[], p_codes text[], p_limit integer) from public, anon, authenticated;
+grant execute on function public.tim_tin_theo_nghia(p_vec double precision[], p_codes text[], p_limit integer) to service_role;
 revoke all on function public.tin_can_geocode(p_limit integer) from public, anon, authenticated;
 grant execute on function public.tin_can_geocode(p_limit integer) to service_role;
 revoke all on function public.tin_cua_toi(p_listing uuid) from public, anon, authenticated;
@@ -7610,6 +7770,8 @@ revoke all on function public.url_kho_anh() from public, anon, authenticated;
 grant execute on function public.url_kho_anh() to anon;
 grant execute on function public.url_kho_anh() to authenticated;
 grant execute on function public.url_kho_anh() to service_role;
+revoke all on function public.van_ban_nhung(p_id uuid) from public, anon, authenticated;
+grant execute on function public.van_ban_nhung(p_id uuid) to service_role;
 revoke all on function public.viec_inbound_bo_roi(p_limit integer) from public, anon, authenticated;
 grant execute on function public.viec_inbound_bo_roi(p_limit integer) to service_role;
 revoke all on function public.viewings_bao_ctv_va_email() from public, anon, authenticated;
@@ -7649,6 +7811,7 @@ select cron.schedule('listing-interest-decay', '0 20 * * *', 'update public.list
    where status = ''dang_quan_tam'' and last_interest_at < now() - interval ''7 days''');
 select cron.schedule('media-chet-tick', '0 * * * *', 'select public.chon_viec_don_chet()');
 select cron.schedule('media-cleanup-tick', '*/5 * * * *', 'select public.media_cleanup_tick()');
+select cron.schedule('nhung-tick', '*/2 * * * *', 'select public.nhung_tick()');
 select cron.schedule('nudge-tick', '7,37 1-13 * * *', 'select nudge_tick()');
 select cron.schedule('seller-drip-tick', '22,52 1-13 * * *', 'select seller_drip_tick()');
 select cron.schedule('seller-hoi-bu-tick', '*/5 1-13 * * *', 'select seller_hoi_bu_tick()');

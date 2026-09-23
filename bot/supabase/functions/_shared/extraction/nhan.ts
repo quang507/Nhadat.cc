@@ -44,6 +44,9 @@ export const TU_DIEN_NHAN: Record<string, Nhan> = {
   khong_ngap: { ten: "không ngập", khop: /\b(?:khong ngap|ko ngap|chua bao gio ngap|khong bi ngap|khong dong nuoc|cao rao)\b/ },
   // 20/09: khách mua nói "xe hơi vào ĐƯỢC nhà" — cho phép "duoc/toi/tan/trong" giữa "vao" và "nha".
   xe_hoi_vao_nha: { ten: "xe hơi vào nhà", khop: /\b(?:(?:xe hoi|o to|oto) vao (?:duoc |toi |tan |trong |tan trong )?nha|dau xe trong nha|gara|ga ra|garage|de xe hoi trong nha)\b/ },
+  // 23/09/2026 (FR-216): "hẻm xe hơi quay đầu" trước chỉ nằm trong fact, không lọc được. Chỉ xe HƠI/ô tô/xe tải —
+  // "xe máy quay đầu được" không kích; "xe hơi không quay đầu được" không khớp vì chữ "không" chen giữa.
+  xe_hoi_quay_dau: { ten: "xe hơi quay đầu", khop: /\b(?:(?:xe hoi|o to|oto|xe tai|xe \d{1,2} cho|hxh) (?:quay dau|quay xe|de quay dau|vao quay dau|vao va quay dau|vao tan nha quay dau)|quay dau (?:xe hoi|o to|oto|xe tai)|hem quay dau (?:thoai mai|duoc|de dang))\b/, phuDinh: true },
   thang_may: { ten: "có thang máy", khop: /\b(?:co thang may|thang may rieng|lap thang may|thang may)\b/, phuDinh: true },
   san_thuong: { ten: "sân thượng", khop: /\b(?:san thuong)\b/ },
   san_vuon: { ten: "sân vườn", khop: /\b(?:san vuon|co san|vuon rong|dat vuon rong|san truoc|san sau)\b/ },
@@ -62,7 +65,8 @@ export const TU_DIEN_NHAN: Record<string, Nhan> = {
 export const NHAN_HOP_LE: ReadonlySet<string> = new Set(Object.keys(TU_DIEN_NHAN));
 
 /** Cụm phủ định đứng ngay trước chỗ khớp: "không yên tĩnh", "chưa có thang máy", "ko an ninh". */
-const PHU_DINH = /(?:^|[\s,.;:(])(?:khong|ko|k|chua|chang|hoi|thieu|it)\s+(?:co\s+|duoc\s+)?$/;
+// "không có chỗ quay đầu xe hơi" (23/09): "chỗ" chen giữa vẫn là phủ định.
+const PHU_DINH = /(?:^|[\s,.;:(])(?:khong|ko|k|chua|chang|hoi|thieu|it)\s+(?:co\s+|duoc\s+)?(?:cho\s+)?$/;
 
 /** Nhãn nhận ra trong một câu (thứ tự theo từ điển, không trùng). */
 export function ganNhan(text: string | null | undefined): string[] {

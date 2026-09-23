@@ -22,6 +22,13 @@ la("khu yên tĩnh gần chợ xe hơi vào được nhà", ["yen_tinh", "gan_ch
 la("ô tô vào tới nhà", ["xe_hoi_vao_nha"]);
 la("xe hơi vào tận nhà, có gara", ["xe_hoi_vao_nha"]);
 la("XE HOI VAO NHA duoc", ["xe_hoi_vao_nha"]);
+// 23/09 (FR-216): "xe hơi quay đầu" thành nhãn; xe máy / phủ định không kích.
+la("hẻm xe hơi quay đầu thoải mái", ["xe_hoi_quay_dau"]);
+la("ô tô vào tận nhà, quay đầu xe hơi được", ["xe_hoi_vao_nha", "xe_hoi_quay_dau"]);
+la("hẻm 6m xe 7 chỗ quay đầu", ["xe_hoi_quay_dau"]);
+la("hẻm xe máy quay đầu được", []);
+la("xe hơi không quay đầu được", []);
+la("không có chỗ quay đầu xe hơi", []);
 la("căn góc 2 mặt tiền view sông full nội thất", ["noi_that_full", "view_song", "can_goc"]);
 la("không ngập, dân trí cao, đang cho thuê 15 triệu", ["dan_tri_cao", "khong_ngap", "dong_tien"]);
 la("nhà 3 lầu sân thượng có gác lửng", ["san_thuong", "gac_lung"]);
