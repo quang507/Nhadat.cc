@@ -479,7 +479,10 @@ ok("boCanBia: câu nêu mã tin thật '#BDS-Q5-0006 … 8 tỷ' → giữ", boC
     { code: "BDS-Q5-0001", property_type: "nha_pho", district: "Quận 11", street: "Kênh Tân Hoá", location_raw: "đường kênh Tân Hoá" },
     { code: "BDS-Q5-0002", property_type: "dat", district: "Long An", street: "Tỉnh lộ 830", location_raw: "tỉnh lộ 830" },
   ];
-  ok("canGanManh: một tin thì không bao giờ hỏi model", !canGanManh("15 tỉ còn nhà muốn 7 tỉ", [ds[0]], "BDS-Q5-0001"));
+  ok("canGanManh: một tin, câu thường (không 'còn/thêm <loại>') → không hỏi model", !canGanManh("15 tỉ nhé cháu, 2 tầng", [ds[0]], "BDS-Q5-0001"));
+  ok("canGanManh: một tin, trả lời câu treo RỒI 'À anh còn miếng đất …' → hỏi model (bắn thật 23/09)", canGanManh("phường 9 em. À anh còn miếng đất ở Nhơn Trạch 2 tỷ 3 nữa", [ds[0]], "BDS-Q5-0001"));
+  ok("canGanManh: một tin, câu MỞ ĐẦU bằng 'còn nhà …' (không có phần trả lời trước) → không hỏi model", !canGanManh("còn nhà thì 4 phòng ngủ", [ds[0]], "BDS-Q5-0001"));
+  ok("canGanManh: một tin, không có câu treo → không hỏi model", !canGanManh("phường 9 em. À anh còn miếng đất ở Nhơn Trạch", [ds[0]], null));
   ok("canGanManh: hai số tiền trong một câu → hỏi", canGanManh("15 tỉ nhé cháu còn nhà ở quận 11 cũ muốn 7 tỉ", ds, "BDS-Q5-0002"));
   ok("canGanManh: 'còn nhà …' → hỏi", canGanManh("còn nhà thì 4 phòng ngủ", ds, "BDS-Q5-0002"));
   ok("canGanManh: nói loại NHÀ khi đang hỏi lô đất, người đó có tin nhà → hỏi", canGanManh("Nhà phố mà thổ cư full nhà 3 phòng ngủ shr", ds, "BDS-Q5-0002"));

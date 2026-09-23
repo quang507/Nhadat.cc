@@ -34,8 +34,16 @@ export type TinGon = { code: string; property_type?: string | null; district?: s
  * KHÁC tin đang treo. Một tin thì không bao giờ hỏi (không có gì để nhầm).
  */
 export function canGanManh(text: string, dsTin: TinGon[], maTreo: string | null): boolean {
-  if (dsTin.length < 2) return false;
   const kd = boDau(text);
+  // 23/09/2026 (bắn thật): đang hỏi phường căn nhà Q3 mà nhắn "phường 9 em. À anh còn miếng đất ở Nhơn Trạch … 2 tỷ 3
+  // nữa" — mới MỘT tin, nhưng câu vừa trả lời căn cũ vừa rao căn mới; bản trước ghi "Phường 9" cho lô đất Đồng Nai.
+  // Có câu đang treo + phần trước chữ "còn/thêm <loại>" → model chia (mảnh đầu = câu treo, mảnh sau = MOI).
+  const CON_THEM_RE = /(?:^|[.,;!?]\s*|\s)(?:a\s+|ah\s+|u\s+)?(?:(?:anh|chi|em|co|chu|bac|con|chau|minh|tui|toi|cau|di)\s+)?(?:con|them|co them|ngoai ra)\s+(?:(?:mot|1|cai)\s+)?(?:nha|can|dat|manh|lo|mieng|mat bang|kho|phong)\b/;
+  if (dsTin.length === 1 && maTreo) {
+    const m = CON_THEM_RE.exec(kd);
+    return !!m && m.index > 0 && /[a-z0-9]/.test(kd.slice(0, m.index));
+  }
+  if (dsTin.length < 2) return false;
   const soTien = (kd.match(/\d+(?:[.,]\d+)?\s*(?:ty|ti|toi|trieu|tr)(?![a-z])/g) ?? []).length;
   if (soTien >= 2) return true;
   if (/\b(?:con|them|ngoai ra|voi lai)\s+(?:(?:mot|1|cai)\s+)?(?:nha|can|dat|manh|lo|mieng|mat bang|kho|phong)\b/.test(kd)) return true;

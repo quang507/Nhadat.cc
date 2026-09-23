@@ -829,14 +829,71 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
 // không phải mã căn, bản trước không nhận → chỉ mở căn 1, còn câu nối "còn căn 2 …" bị
 // hiểu là SỬA căn 1 (căn 1 mang luôn 4x20 và 18 tỷ). Nay nhận thứ tự (`thu`), không ghi
 // unit_code. Số ngay sau "căn" mà kèm đơn vị (2 pn, 2 tầng, 2 x 10) thì không phải thứ tự.
-export type CanTrongTin = { ma?: string; thu?: number; quan?: string; ngang?: string; dai?: string; dt?: string; gia?: string; goc: string };
+export type CanTrongTin = { ma?: string; thu?: number; quan?: string; ngang?: string; dai?: string; dt?: string; gia?: string; goc: string;
+  /** Loại đọc từ CHÍNH mảnh của căn (căn hộ / nhà / đất) — mảnh không nói thì không có. */
+  loai?: "chung_cu" | "nha_pho" | "dat";
+  /** Mảnh tách theo LOẠI ("căn nhà …, với 1 căn hộ …"), không theo số thứ tự. */
+  theoLoai?: true };
 const CAN_CHU_RE = /(?:^|[^\p{L}])(?:[Cc]ăn|[Cc]an|[Ll]ô|[Ll]o)\s+([A-H])(?![\p{L}\d])/u;
+/** Loại BĐS nói bằng chữ trong một mảnh (không dấu): căn hộ/chung cư > đất > nhà. */
+export function loaiTuChu(kd: string): "chung_cu" | "nha_pho" | "dat" | undefined {
+  if (/\b(?:can ho|chung cu)\b/.test(kd)) return "chung_cu";
+  if (/\b(?:lo dat|manh dat|mieng dat|dat nen|dat tho cu|dat vuon|dat nong nghiep)\b/.test(kd) || /\b(?:lo|manh|mieng)\b[^,.;]*\bdat\b/.test(kd) ||
+    (/\bdat\b/.test(kd) && !/\bdat coc\b/.test(kd) && !/\bnha\b/.test(kd))) return "dat";
+  if (/\bnha\b/.test(kd)) return "nha_pho";
+  return undefined;
+}
+const giaTuKd = (kd: string): string | undefined => {
+  const m = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d{1,3}(?:[.,]\\d+)?)${KHONG_PHAI_LE_GIA})?(?:\\s*(ruoi))?`).exec(kd);
+  return m ? `${m[1]} ${m[2] === "toi" ? "tỏi" : /^t[iy]$/.test(m[2]) ? "tỷ" : "triệu"}${m[3] ? ` ${m[3]}` : ""}${m[4] ? " rưỡi" : ""}` : undefined;
+};
+/**
+ * 23/09/2026 (bắn thật, 5 người): "Chị cần bán 2 căn: căn nhà hẻm 5m Nguyễn Trãi quận 5 60m2 giá 9 tỷ, với 1 căn hộ
+ * chung cư Hà Đô quận 10 2PN 75m2 giá 5 tỷ 2" — không có "căn 1/căn 2" nên bản trước gộp làm MỘT tin (loại căn hộ, 2PN
+ * của căn hộ, giá của căn nhà). Tách theo chữ LOẠI (căn nhà / căn hộ / chung cư / lô đất / đất…) khi câu báo nhiều căn
+ * ("2 căn", "hai nhà", "với 1 căn hộ…"). Mỗi mảnh phải có GIÁ; mảnh chưa có giá ("căn hộ" đứng trước "chung cư …")
+ * gộp vào mảnh kề sau (hoặc trước, nếu là mảnh cuối).
+ */
+function tachTheoLoai(text: string): CanTrongTin[] {
+  const kdAll = boDau(text);
+  const baoNhieu = /\b(?:2|3|4|hai|ba|bon)\s+(?:can|nha|lo|manh|mieng|bds|bat dong san|cai|tai san|noi)\b/.test(kdAll) ||
+    /\b(?:voi|va|con|them)\s+(?:1|mot)\s+(?:can|nha|lo|manh|mieng)\b/.test(kdAll);
+  if (!baoNhieu) return [];
+  const re = /(?:^|[\s,;:.])((?:(?:với|voi|và|va|còn|con|thêm|them)\s+)?(?:(?:1|một|mot)\s+)?(?:căn hộ|can ho|chung cư|chung cu|căn nhà|can nha|nhà|nha|lô đất|lo dat|mảnh đất|manh dat|miếng đất|mieng dat|đất nền|dat nen)(?![\p{L}]))/giu;
+  const moc: number[] = [];
+  for (let m = re.exec(text); m; m = re.exec(text)) moc.push(m.index + m[0].length - m[1].length);
+  if (moc.length < 2) return [];
+  let manh = moc.map((bat, i) => text.slice(bat, moc[i + 1]).replace(/[\s,;:.]+$/u, "").trim()
+    .replace(/^(?:với|voi|và|va|còn|con|thêm|them)\s+(?:(?:1|một|mot)\s+)?/iu, ""));
+  const coGia = (s: string) => !!giaTuKd(boDau(s));
+  const gop: string[] = [];
+  let cho = "";
+  for (const m of manh) {
+    if (coGia(m)) { gop.push(`${cho}${cho ? " " : ""}${m}`); cho = ""; } else cho = `${cho}${cho ? " " : ""}${m}`;
+  }
+  if (cho && gop.length) gop[gop.length - 1] = `${gop[gop.length - 1]} ${cho}`;
+  manh = gop;
+  if (manh.length < 2) return [];
+  return manh.map((goc, i) => {
+    const kd = boDau(goc);
+    const mKt = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(kd);
+    const mDt = /(\d{1,4}(?:[.,]\d+)?)\s*m2/.exec(kd);
+    const q = /\b(?:quan|q)\s*\.?\s*(\d{1,2})\b/.exec(kd);
+    const loai = loaiTuChu(kd);
+    return { thu: i + 1, ...(q ? { quan: `Quận ${Number(q[1])}` } : {}), ngang: mKt?.[1], dai: mKt?.[2], dt: mDt?.[1], gia: giaTuKd(kd), goc, ...(loai ? { loai } : {}), theoLoai: true as const };
+  });
+}
 export function nhanDienNhieuCan(text: string): CanTrongTin[] {
   const out: CanTrongTin[] = [];
+  // 23/09/2026: "em ban 2 nha: nha 1 hem 3m …, nha 2 mat tien …" — "nhà 1/nhà 2" là số thứ tự khi câu có CẢ HAI
+  // ("nhà 2 mặt tiền" đứng một mình là nhà hai mặt tiền, không phải căn thứ hai).
+  const kdToan = boDau(text);
+  const nhaThu = /\bnha\s+1\b/.test(kdToan) && /\bnha\s+2\b/.test(kdToan);
+  const reThu = new RegExp(`(?:^|[^\\d])\\b(?:can|lo${nhaThu ? "|nha" : ""})\\s+(?:so\\s+|thu\\s+)?(\\d{1,2})\\b(?!\\s*(?:x\\s*\\d|m2|m\\b|ty|ti|toi|trieu|tr\\b|pn|phong|lau|tang|tam|met|wc))`);
   for (const goc of text.split(/[,;\n]|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter(Boolean)) {
     const kd = boDau(goc);
     const mMa = /\b(?:can|lo|shop|nen)\s*(?:so\s*)?([a-z]{1,3}[\s.\-]?\d{1,3}(?:[.\-]\d{1,3})?[a-z]?|\d{1,3}[a-z])\b/.exec(kd);
-    const mThuSo = mMa ? null : /(?:^|[^\d])\b(?:can|lo)\s+(?:so\s+|thu\s+)?(\d{1,2})\b(?!\s*(?:x\s*\d|m2|m\b|ty|ti|toi|trieu|tr\b|pn|phong|lau|tang|tam|met|wc))/.exec(kd);
+    const mThuSo = mMa ? null : reThu.exec(kd);
     // 23/09/2026 (bắn thật, môi giới): "căn A 1pn 52m2 giá 4.8 tỷ, căn B 2pn 80m2 giá 7 tỷ 1" — CHỮ IN HOA
     // làm số thứ tự (A=1, B=2…). Chỉ nhận chữ in hoa đứng một mình ("căn A12-05" là mã căn, "căn ạ" không phải).
     const mChu = mMa || mThuSo ? null : CAN_CHU_RE.exec(goc);
@@ -850,8 +907,9 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
       // 15/09/2026 (bắn thật N2): "căn 2 sổ hồng riêng, căn 1 đúc 3 tấm" là FACT cho căn đã
       // mở, không phải rao thêm — căn thứ tự không giá, không kích thước thì không tính.
       if (!mKt && !mDt && !mGia) continue;
+      const loaiThu = loaiTuChu(kd.replace(/\bnha\s+\d\b/, ""));
       out.push({
-        thu: Number(mThu[1]), ...(q ? { quan: `Quận ${Number(q[1])}` } : {}),
+        thu: Number(mThu[1]), ...(q ? { quan: `Quận ${Number(q[1])}` } : {}), ...(nhaThu ? { loai: loaiThu ?? "nha_pho" } : loaiThu ? { loai: loaiThu } : {}),
         ngang: mKt?.[1], dai: mKt?.[2], dt: mDt?.[1],
         gia: mGia ? `${mGia[1]} ${mGia[2] === "toi" ? "tỏi" : /^t[iy]$/.test(mGia[2]) ? "tỷ" : "triệu"}${mGia[3] ? ` ${mGia[3]}` : ""}${mGia[4] ? " rưỡi" : ""}` : undefined,
         goc,
@@ -871,7 +929,7 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
       goc,
     });
   }
-  return out.length >= 2 ? out : [];
+  return out.length >= 2 ? out : tachTheoLoai(text);
 }
 /**
  * Tin nói về NHIỀU CĂN đã mở, theo số thứ tự: "căn 2 sổ hồng riêng, có thương lượng. căn 1

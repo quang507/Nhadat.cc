@@ -63,7 +63,7 @@ import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laNgungRao, laRaoLai, NHAN_HOI_LAI, nhanDienFact,
-  nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
+  loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauKhen, doiTuXung, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
@@ -2363,7 +2363,18 @@ Deno.serve(async (req) => {
                   district: bocQuan(kdM, m.trich) ?? vungNgoai(kdM)?.ten ?? null, description: m.trich,
                 }).select("id, code, status, property_type, district, location_raw, price_raw").single();
                 if (moiErr || !moi) { await ghiLoi(client, "chat-reply gan manh(mo tin)", moiErr?.message ?? "insert null"); continue; }
-                const vt = bocViTriRao(m.trich);
+                let vt = bocViTriRao(m.trich);
+                // Căn hộ ("còn căn hộ Sunrise City quận 7…") → tra kho dự án như đường rao thường (FR-114).
+                if (loaiM === "chung_cu") {
+                  const { data: daM, error: daMErr } = await client.rpc("match_projects", { p_text: m.trich });
+                  if (daMErr) await ghiLoi(client, "chat-reply gan manh(du an)", daMErr.message);
+                  const da = ((daM ?? []) as DuAnKho[])[0];
+                  if (da) {
+                    const { error: daUp } = await client.from("listings").update({ project_id: da.id, unit_status: "con_ban", last_confirmed_at: new Date().toISOString(), ...(da.district && !moi.district ? { district: da.district } : {}) }).eq("id", moi.id);
+                    if (daUp) await ghiLoi(client, "chat-reply gan manh(gan du an)", daUp.message);
+                    if (!vt) vt = da.location_raw ? `${da.name}, ${da.location_raw}` : da.name;
+                  }
+                }
                 if (vt) {
                   const { error: vtErr } = await client.rpc("ghi_fact_listing", { p_listing_id: moi.id, p_question: "vi_tri", p_answer: vt, p_source: "seller_chat" });
                   if (vtErr) await ghiLoi(client, "chat-reply gan manh(vi_tri moi)", vtErr.message);
@@ -2852,8 +2863,13 @@ Deno.serve(async (req) => {
       // 23/09/2026 (bắn thật, môi giới): "đang giữ 2 căn hộ The Everrich Infinity q5: căn A …, căn B …" —
       // loại + dự án nói ở ĐẦU CÂU (trước mốc căn đầu tiên) là của CẢ LÔ; căn B không tự nhắc thì kế thừa.
       // Mảnh không thuộc căn nào ("full nội thất, sổ hồng lâu dài") cũng là của cả lô → ghi cho từng căn.
-      const dauTin = text.split(/(?:căn|can|lô|lo)\s+(?:số\s+|so\s+|thứ\s+|thu\s+)?(?:\d{1,2}(?!\d)|[A-H](?![\p{L}\d]))/u)[0] ?? "";
+      const viTriDau = nhieuCanTrongTin[0].theoLoai ? text.indexOf(nhieuCanTrongTin[0].goc) : -1;
+      const dauTin = viTriDau >= 0 ? text.slice(0, viTriDau)
+        : text.split(/(?:căn|can|lô|lo|nhà|nha)\s+(?:số\s+|so\s+|thứ\s+|thu\s+)?(?:\d{1,2}(?!\d)|[A-H](?![\p{L}\d]))/u)[0] ?? "";
       const kdDauTin = boDau(dauTin);
+      // 23/09/2026 (bắn thật): "Chú có 2 lô đất ở Củ Chi …, lô 1 500m2 giá 3 tỷ, lô 2 …" — loại nói ở đầu câu là của cả
+      // lô; bản trước chỉ đọc chữ "đất" trong mảnh từng lô → hai tin "chưa rõ loại", bot hỏi lại "nhà phố hay đất".
+      const loaiDauTin = loaiTuChu(kdDauTin.replace(/\b(?:ban|can ban|muon ban)\b/g, ""));
       const manhChung = text.split(/[,;\n]/).map((x) => x.trim())
         .filter((x) => x.length >= 2 && !nhieuCanTrongTin.some((c) => c.goc.includes(x)));
       const factChung = manhChung.length ? nhanDienNhieuFact(manhChung.join(", ")) : [];
@@ -2873,7 +2889,7 @@ Deno.serve(async (req) => {
           district: quanCan ?? goc?.district ?? null, ward: keThua ? goc?.ward ?? null : null,
           location_raw: keThua ? goc?.location_raw ?? null : null, street: keThua ? goc?.street ?? null : null,
           description: c.goc, price_raw: c.gia ?? null,
-          property_type: DAT_KD_RE.test(boDau(c.goc)) ? "dat" : goc?.property_type ?? "chua_ro", status: "cho_thong_tin",
+          property_type: c.loai ?? (DAT_KD_RE.test(boDau(c.goc)) ? "dat" : loaiDauTin ?? goc?.property_type ?? "chua_ro"), status: "cho_thong_tin",
           can_chu_duyet: true, unit_code: c.ma ?? null,
           ...(c.dt ? { area_m2: Number(c.dt.replace(",", ".")) } : {}),
           ...(c.ngang && c.dai ? { frontage_m: Number(c.ngang.replace(",", ".")), length_m: Number(c.dai.replace(",", ".")) } : {}),
@@ -2919,6 +2935,10 @@ Deno.serve(async (req) => {
           const { error: vtcErr } = await client.rpc("ghi_fact_listing", { p_listing_id: moi.id, p_question: "vi_tri", p_answer: vtCan, p_source: "seller_chat" });
           if (vtcErr) await ghiLoi(client, "chat-reply ghi_fact_listing(vi_tri nhieu can)", vtcErr.message);
         }
+        // 23/09/2026 (bắn thật): nhãn đọc theo TỪNG căn, bỏ mốc số thứ tự trước — "nha 2 mat tien …" là nhà THỨ HAI mặt
+        // tiền, bản trước đọc cả câu rồi gắn "căn góc / 2 mặt tiền" cho tin mới nhất.
+        await ganNhanChoTin({}, { lid: moi.id, text: c.goc.replace(/(?:căn|can|lô|lo|nhà|nha)\s+(?:số\s+|so\s+|thứ\s+|thu\s+)?(?:\d{1,2}|[A-H])(?![\p{L}\d])/gu, " ") });
+        nhanTheoCanDaGan = true;
         const factCan = nhanDienNhieuFact(c.goc);
         for (const f of [...factCan, ...factChung.filter((g) => !factCan.some((x) => x.question === g.question))]) {
           if (["vi_tri", "gia", "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "do_rong_hem", "mat_tien", "bo_sung", "phuong", "loai_bds", "quan"].includes(f.question)) continue;
@@ -3981,6 +4001,20 @@ Deno.serve(async (req) => {
         });
         if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
         else {
+          // 23/09/2026 (bắn thật): mở 2 lô rồi hỏi loại, "cả lô đều là đất thổ cư" → bản trước chỉ lô đang hỏi thành đất,
+          // lô kia nằm "chưa rõ loại". "Cả lô / đều / cả 2" ở câu LOẠI áp cho mọi tin chưa rõ loại của người đó.
+          if (pendingReq.question === "loai_bds" && loaiDapAn && CA_LO_RE.test(tKD)) {
+            const { data: chuaRo, error: crErr } = await client.from("listings").select("id").eq("seller_id", sellerRow.id)
+              .eq("property_type", "chua_ro").neq("id", pendingReq.listing_id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"]).limit(20);
+            if (crErr) await ghiLoi(client, "chat-reply loai ca lo(doc)", crErr.message);
+            for (const t of (chuaRo ?? []) as Array<{ id: string }>) {
+              const { error: lErr } = await client.rpc("ghi_fact_listing", { p_listing_id: t.id, p_question: "loai_bds", p_answer: loaiDapAn, p_source: "seller_chat" });
+              if (lErr) await ghiLoi(client, "chat-reply loai ca lo", lErr.message);
+              const { error: irLErr } = await client.from("info_requests").update({ status: "answered", answer: dapAn, answered_at: new Date().toISOString() })
+                .eq("listing_id", t.id).eq("question", "loai_bds").eq("status", "pending");
+              if (irLErr) await ghiLoi(client, "chat-reply loai ca lo(dong cau)", irLErr.message);
+            }
+          }
           await chepSangDuAn(pendingReq.question, dapAn);
           // 16/09/2026 (bắn thật mau-chu-q8): "Căn số 14 ở Ny'ah Phú Định" trả lời câu VỊ TRÍ — tên dự
           // án trong kho chỉ được khớp lúc RAO, nên tin nằm "Quận 5 (chưa rõ quận)" dù dự án ở Quận 8.
