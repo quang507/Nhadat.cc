@@ -3574,6 +3574,8 @@ fresh(seedKho);
   check("GVH-04 'Nhà phố … mặt tiền 5m 3 phòng ngủ shr' khi đang hỏi thổ cư lô đất → vào tin NHÀ (3PN, sổ riêng); lô đất không nhận phòng ngủ/sổ",
     nha()?.bedrooms === 3 && nha()?.legal_status === "so_hong_rieng" && dat()?.bedrooms == null && dat()?.legal_status == null,
     JSON.stringify({ ds: ds().map((l) => [l.code, l.bedrooms, l.legal_status, l.frontage_m]) }));
+  check("GVH-04b dòng 📝 in pháp lý đã đọc ('sổ hồng riêng'), không in lại nguyên câu khách gõ (bắn thật 23/09 lượt 5)",
+    /sổ hồng riêng/.test(rep()) && !/pháp lý Nhà phố mà/.test(rep()), JSON.stringify(r.body.replies));
   // (e) model nói đã ghi một con số không có trong DB → bỏ câu đó.
   globalThis.__model = { parse: () => OUT(), create: () => "Dạ cháu ghi 9 tỷ cho căn Quận 11 rồi cô. Lô đất mình hướng nào cô?" };
   r = await send({ external_user_id: uid, text: "hướng đông nam cháu" });

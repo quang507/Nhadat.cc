@@ -2381,7 +2381,15 @@ Deno.serve(async (req) => {
                 if (f.question === "vi_tri" && m.ma === "MOI") continue; // đã ghi ở trên
                 const { error: fErr } = await client.rpc("ghi_fact_listing", { p_listing_id: tin.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat" });
                 if (fErr) { await ghiLoi(client, `chat-reply gan manh(${f.question})`, fErr.message); continue; }
-                nhan.push(`${(FACT_LABELS[f.question] ?? f.question).replace(/\s*\(.*\)\s*$/, "")} ${f.answer}`);
+                // Bắn thật 23/09: fact pháp lý mang nguyên mảnh câu ("Nhà phố mà thổ cư full … shr") — cột đã đọc ra
+                // `so_hong_rieng`, dòng 📝 thì in cột đó ("sổ hồng riêng"), không in lại cả câu khách gõ.
+                let hienThi = f.answer;
+                if (f.question === "phap_ly") {
+                  const { data: lg } = await client.from("listings").select("legal_status").eq("id", tin.id).maybeSingle();
+                  const ma = (lg as { legal_status?: string | null } | null)?.legal_status;
+                  if (ma && LEGAL_VI[ma]) hienThi = LEGAL_VI[ma];
+                }
+                nhan.push(`${(FACT_LABELS[f.question] ?? f.question).replace(/\s*\(.*\)\s*$/, "")} ${hienThi}`);
                 if (pendingReq && tin.id === pendingReq.listing_id && f.question === pendingReq.question) daTraCauTreo = true;
                 const { error: irErr } = await client.from("info_requests").update({ status: "answered", answer: m.trich, answered_at: new Date().toISOString() })
                   .eq("listing_id", tin.id).eq("question", f.question).eq("status", "pending");
