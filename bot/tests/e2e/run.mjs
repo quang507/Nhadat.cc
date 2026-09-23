@@ -3824,6 +3824,29 @@ fresh(seedKho);
   globalThis.__cauHinh = cauHinhCu;
 }
 
+// ── 23/09/2026 FR-217: lệnh TEST "/json" — in thứ bot đã lưu cho chính người nhắn, không gọi model ──
+{
+  fresh(seedKho);
+  const L1 = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+  L1.nhan = ["xe_hoi_quay_dau"]; L1.nhung_luc = "2026-09-23T12:14:00Z";
+  db().insert("listing_facts", { listing_id: L1.id, question: "huong", answer: "Đông Nam", source: "seller_chat" });
+  globalThis.__rpc = { van_ban_nhung: () => ({ data: "Bán nhà phố. 12 Trần Hưng Đạo, Phường 4. Hẻm xe hơi rộng 6 m", error: null }) };
+  const truoc = globalThis.__calls.length;
+  r = await send({ external_user_id: "z-ccrb", text: "/json" });
+  const j = (r.body.replies ?? []).join("\n");
+  check("JSON-01 '/json' (chế độ test bật) → in tin #BDS-Q5-0001: cột (hẻm xe hơi, nhãn), fact huong, văn bản đã nhúng vector; KHÔNG gọi model",
+    r.body.lenh_json === true && /#BDS-Q5-0001/.test(j) && /hem_xe_hoi/.test(j) && /xe_hoi_quay_dau/.test(j) && /Đông Nam/.test(j) &&
+      /đã nhúng lúc 2026-09-23 12:14/.test(j) && /Hẻm xe hơi rộng 6 m/.test(j) && globalThis.__calls.length === truoc,
+    j.slice(0, 800));
+  check("JSON-02 '/json' không lộ tin của người khác (0004 của z-unknown)", !/BDS-Q5-0004/.test(j), j.slice(0, 300));
+  check("JSON-03 bong bóng ≤ 1800 ký tự", (r.body.replies ?? []).every((x) => x.length <= 1800), JSON.stringify((r.body.replies ?? []).map((x) => x.length)));
+  const cauHinhCu = globalThis.__cauHinh;
+  globalThis.__cauHinh = { test_reset_hello: "0" };
+  r = await send({ external_user_id: "z-ccrb", text: "/json" });
+  check("JSON-04 chế độ test TẮT → '/json' không in dữ liệu (đi như tin thường)", r.body.lenh_json !== true && !/TEST \/json/.test((r.body.replies ?? []).join(" ")), JSON.stringify(r.body).slice(0, 300));
+  globalThis.__cauHinh = cauHinhCu;
+}
+
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }
