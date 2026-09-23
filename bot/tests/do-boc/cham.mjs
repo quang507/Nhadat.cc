@@ -27,7 +27,7 @@ export function khoaPhuong(s) {
   if (m) return `p${Number(m[1])}`;
   return k.replace(/^(?:phuong|xa|thi tran)\s+/, "").trim();
 }
-const NHOM_LOAI = { nha_pho: "nha", nha_cap_4: "nha", biet_thu: "nha", nha_tro: "nha", chung_cu: "chung_cu", dat: "dat", dat_nong_nghiep: "dat", dat_kinh_doanh: "dat", mat_bang: "mat_bang", kho_xuong: "kho_xuong", toa_nha: "toa_nha" };
+const NHOM_LOAI = { nha_pho: "nha", nha_cap4: "nha", nha_cap_4: "nha", biet_thu: "nha", nha_tro: "nha", chung_cu: "chung_cu", dat: "dat", dat_nong_nghiep: "dat", dat_kinh_doanh: "dat", mat_bang: "mat_bang", kho_xuong: "kho_xuong", toa_nha: "toa_nha" };
 const nhomLoai = (l) => NHOM_LOAI[l] ?? l ?? null;
 const gan = (a, b, tile = 0.02) => a != null && b != null && Math.abs(Number(a) - Number(b)) <= Math.max(1, Math.abs(Number(b)) * tile);
 
@@ -149,7 +149,7 @@ if (import.meta.main && process.argv.includes("--tu-kiem")) {
   const bia = { tin: [tin({ property_type: "nha_pho", district: "Quận 5", price_vnd: 9e9, bedrooms: 2 }), tin({ property_type: "chung_cu", district: "Quận 10", price_vnd: 5.2e9, bedrooms: 2 })] };
   ok("chamCa: pn phải TRỐNG mà có 2 (fact căn này ghi sang căn kia) → rớt đúng trường", (() => { const r = chamCa(ky, bia); return !r.dat && r.loi.length === 1 && /tin 1\.pn/.test(r.loi[0]); })());
   ok("soTruong: giá lệch 0.5% vẫn khớp, lệch 5% thì không", soTruong("gia", 9e9, tin({ price_vnd: 9.04e9 })) && !soTruong("gia", 9e9, tin({ price_vnd: 9.5e9 })));
-  ok("soTruong: loại cùng nhóm nhà (nhà cấp 4 ~ nhà phố)", soTruong("loai", "nha_pho", tin({ property_type: "nha_cap_4" })));
+  ok("soTruong: loại cùng nhóm nhà (nhà cấp 4 ~ nhà phố)", soTruong("loai", "nha_pho", tin({ property_type: "nha_cap4" })));
   ok("soTruong: phap_ly 'co_so' nhận mọi loại sổ", soTruong("phap_ly", "co_so", tin({ legal_status: "so_hong_rieng" })) && !soTruong("phap_ly", "co_so", tin({ legal_status: null })));
   ok("chamCa: hồ sơ mua — area chứa, budget ±5%, pn", chamCa({ mua: { area: "Quận 5", budget: 6e9, pn: 3 } }, { tin: [], mua: { area: "khu Chợ Lớn Quận 5", budget: "tầm 6 tỷ", bedrooms: 3 } }).dat);
   ok("chamCa: hồ sơ mua thiếu budget → rớt đúng trường", (() => { const r = chamCa({ mua: { area: "Quận 5", budget: 6e9 } }, { tin: [], mua: { area: "Quận 5" } }); return !r.dat && r.loi.length === 1 && /mua\.budget/.test(r.loi[0]); })());
