@@ -68,7 +68,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boCauKhen, doiTuXung, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauKhen, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { gonLoiSua, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -2082,6 +2082,8 @@ Deno.serve(async (req) => {
       let sach = [...(ackSua ? [ackSua] : []), ...ackAnh, ...replies, ...(thongBaoNhan ? [thongBaoNhan] : [])]
         // Model lỡ chép nguyên chữ giữ chỗ của khối nhớ tạm → thay bằng tên thật.
         .map((r) => r.split(TEN_GIU_CHO).join(tenBot).trim()).filter(Boolean);
+      // 23/09/2026 (FR-218 b): khách nói bot hiểu / ghi nhầm mà không câu nào xin lỗi → chèn lời xin lỗi (trước đổi xưng hô).
+      sach = themXinLoiKhiHieuNham(text, sach, goiNguoi);
       // 16/09/2026: khách là chú/cô/bác → mọi "em" (câu tiền định lẫn model) thành "cháu".
       sach = doiTuXung(sach, sellerRow.xung_ho ?? null, sellerRow.nhom_tuoi ?? null);
       // 22/09/2026: người lớn tuổi chưa rõ chú hay cô → không "anh chị", gọi "mình" (câu tiền định lẫn model).
@@ -5743,6 +5745,8 @@ Deno.serve(async (req) => {
       ...out.replies.filter((r) => !/\b(?:so|sdt|so dien thoai|dien thoai)\b[^.?!]*\bchu\b/.test(boDau(r))),
     ];
   }
+  // 23/09/2026 (FR-218 b): khách nói bot hiểu nhầm mà không câu nào xin lỗi → chèn lời xin lỗi (trước đổi xưng hô).
+  out.replies = themXinLoiKhiHieuNham(text, out.replies, goiMua);
   // 23/09/2026: khách là chú mà model tự xưng "chú ghi nhớ rồi ạ" → "cháu ghi nhớ".
   out.replies = suaBotXungNhamKhach(out.replies, goiMua);
   // 16/09/2026: khách mua là chú/cô/bác → bot tự xưng "cháu" (cùng luật nhánh bán).

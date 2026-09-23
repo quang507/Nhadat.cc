@@ -6,7 +6,8 @@
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { boCauGhiTienKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { nhanDienNhieuCan, tachTheoCan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
@@ -511,6 +512,40 @@ ok("boCanBia: câu nêu mã tin thật '#BDS-Q5-0006 … 8 tỷ' → giữ", boC
   ok("boCauGhiTienKhongCo: số khớp DB → giữ nguyên", boCauGhiTienKhongCo(["Dạ cháu ghi 15 tỷ căn Long An, 7 tỷ căn Quận 11 rồi cô."], [15e9, 7e9], docTien).length === 1);
   ok("boCauGhiTienKhongCo: bong bóng 💾/📝 (đọc từ DB) không đụng", boCauGhiTienKhongCo(["📝 Cháu ghi vào tin BDS-Q5-0001: giá 9 tỷ."], [], docTien).length === 1);
   ok("boCauGhiTienKhongCo: câu không nói 'ghi/lưu' → không đụng", boCauGhiTienKhongCo(["Khu này giá tầm 9 tỷ cô ạ."], [7e9], docTien).length === 1);
+}
+
+// ── FR-218 (23/09/2026): lời chào không kèm "anh Thu phụ trách"; hiểu nhầm ý khách thì xin lỗi ──
+ok("LOI_CHAO không còn câu 'phụ trách khu vực' / 'anh Thu'", !/phụ trách|anh Thu/.test(LOI_CHAO) && /mua, thuê hay/.test(LOI_CHAO), LOI_CHAO);
+for (const [cau, mong] of [
+  ["không phải vậy em, ý anh là mua để ở", true],
+  ["em hiểu nhầm rồi, anh cần thuê chứ không mua", true],
+  ["hieu sai r e oi", true],
+  ["anh đâu có nói quận 7", true],
+  ["em ghi nhầm rồi, 7 tỷ 5 chứ", true],
+  ["ko phai the, can ho chu k phai nha pho", true],
+  ["trả lời lạc đề quá", true],
+  ["ý chị là căn góc", true],
+  // KHÔNG được kích
+  ["không phải chính chủ, anh là môi giới", false],
+  ["sai rồi, giá 7 tỷ 5 nha", false],
+  ["nhà không phải hẻm cụt", false],
+  ["quy hoạch không có gì", false],
+  ["tuy anh là môi giới nhưng", false],
+  ["không phải trả phí à em", false],
+  ["cần mua nhà quận 5 tầm 6 tỷ", false],
+  ["nhầm số nhà rồi, số 12 mới đúng", false],
+]) ok(`laKhachBaoHieuNham ${JSON.stringify(cau)} → ${mong}`, laKhachBaoHieuNham(cau) === mong);
+{
+  const r = themXinLoiKhiHieuNham("không phải vậy, ý anh là thuê", ["🤖 Đã lưu nhu cầu: thuê", "Dạ anh cần thuê khu nào ạ?"], "anh");
+  ok("themXinLoi: chèn sau dòng máy 🤖, gộp 'Dạ' đầu bong bóng", r.length === 2 && r[1] === "Dạ em xin lỗi anh, em hiểu nhầm ạ. Anh cần thuê khu nào ạ?", JSON.stringify(r));
+  const r2 = themXinLoiKhiHieuNham("hiểu sai rồi", ["Dạ em xin lỗi, em sửa lại liền ạ."], null);
+  ok("themXinLoi: model đã xin lỗi → giữ nguyên", r2.length === 1 && r2[0] === "Dạ em xin lỗi, em sửa lại liền ạ.", JSON.stringify(r2));
+  const r3 = themXinLoiKhiHieuNham("cần mua nhà quận 5", ["Dạ anh cần tầm giá bao nhiêu ạ?"], "anh");
+  ok("themXinLoi: khách không báo nhầm → không chèn", r3[0] === "Dạ anh cần tầm giá bao nhiêu ạ?", JSON.stringify(r3));
+  const r4 = doiTuXung(themXinLoiKhiHieuNham("ý chú là bán chứ không phải cho thuê", ["Dạ chú bán giá bao nhiêu ạ?"], "chú"), "chú");
+  ok("themXinLoi + doiTuXung: khách là chú → 'Dạ cháu xin lỗi chú, cháu hiểu nhầm ạ.'", /^Dạ cháu xin lỗi chú, cháu hiểu nhầm ạ\. Chú bán/.test(r4[0]), JSON.stringify(r4));
+  const r5 = themXinLoiKhiHieuNham("hiểu nhầm rồi", ["Dạ.", "Mình cần gì ạ?"], null);
+  ok("themXinLoi: chưa biết cách gọi → không 'xin lỗi mình'; bong bóng 'Dạ.' trần thành lời xin lỗi", r5[0] === "Dạ em xin lỗi, em hiểu nhầm ạ." && r5[1] === "Mình cần gì ạ?", JSON.stringify(r5));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
