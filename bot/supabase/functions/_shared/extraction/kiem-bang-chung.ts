@@ -327,6 +327,8 @@ const COT_SO: Record<string, keyof DongDb> = {
 };
 const phapLyMa = (v: string) => {
   const t = chuanSo(v);
+  // 23/09/2026: "chưa có sổ" là KHÔNG có sổ — cùng luật với `boc_thong_so` (20260923a).
+  if (/\b(chua|khong|ko|chang|dang cho|dang lam|chua ra)\s+(co\s+|ra\s+|lam\s+)?(so|shr|shc)\b/.test(t)) return null;
   return /rieng|shr/.test(t) ? "so_hong_rieng" : /chung|shc|dong so huu/.test(t) ? "so_hong_chung"
     : /hdmb|hop dong mua ban/.test(t) ? "hdmb" : /vi bang|giay tay/.test(t) ? "giay_tay" : /so/.test(t) ? "so_hong" : null;
 };

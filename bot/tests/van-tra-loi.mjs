@@ -5,6 +5,8 @@
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { nhanDienNhieuCan, tachTheoCan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -413,6 +415,54 @@ for (const [t, mong] of [["7ty2", "7 tỷ 2"], ["7ti5", "7 tỷ 5"], ["4 ty 3", 
   ok(`donViGiaDep: ${JSON.stringify(t)} → ${JSON.stringify(mong)}`, donViGiaDep(t) === mong, JSON.stringify(donViGiaDep(t)));
 for (const [t, mong] of [["7 ti 5", 7500000000], ["7ti5", 7500000000], ["2 ti rưỡi", 2500000000]])
   ok(`docTien 'ti' không dấu: ${t}`, docTien(t) === mong, String(docTien(t)));
+
+// ── 23/09/2026 (bắn 26 tin kịch bản bán/mua, căn Trần Bình Trọng) ──
+{
+  const KHO = "#BDS-NP-Q5-0001 · Trần Bình Trọng Phường 2 · 8 tỷ 2 · 70m2 · 3PN · 4x17.5m · hẻm xe hơi 4m · sổ hồng riêng";
+  const b = chanBiaDuKien(["Dạ căn này hướng Đông, thoáng và sáng lắm ạ. Chưa có quy hoạch gì, để em xác nhận lại chủ nhà nhé"], KHO);
+  ok("chanBiaDuKien: 'hướng Đông' + 'chưa có quy hoạch' khi kho không có → bỏ, nhãn hướng nhà + quy hoạch",
+    b.bo.includes("hướng nhà") && b.bo.includes("quy hoạch") && !/Đông|quy hoạch/.test(b.replies.join(" ")), JSON.stringify(b));
+  const c = chanBiaDuKien(["Căn này hướng Đông Nam ạ."], KHO + " · hướng Đông Nam");
+  ok("chanBiaDuKien: kho CÓ hướng Đông Nam → giữ nguyên", c.bo.length === 0 && c.replies[0] === "Căn này hướng Đông Nam ạ.", JSON.stringify(c));
+  const d = chanBiaDuKien(["Mình muốn nhà hướng Đông hay hướng Nam ạ?", "Để em hỏi chủ về quy hoạch rồi báo mình nha."], KHO);
+  ok("chanBiaDuKien: câu HỎI hướng và lời hứa hỏi quy hoạch → KHÔNG bỏ", d.bo.length === 0, JSON.stringify(d));
+  const e = chanBiaDuKien(["Nhà xây năm 2018 ạ."], KHO);
+  ok("chanBiaDuKien: 'xây năm 2018' không có trong kho → bỏ (năm xây)", e.bo.includes("năm xây"), JSON.stringify(e));
+  const g = chanBiaDuKien(["Căn này không dính quy hoạch ạ."], KHO + " · quy_hoach: không quy hoạch");
+  ok("chanBiaDuKien: kho có chữ quy hoạch → giữ", g.bo.length === 0, JSON.stringify(g));
+}
+ok("laHuaGuiHinh: 'Em gửi hình liền đây :)'", laHuaGuiHinh("Em gửi hình liền đây :)"));
+ok("laHuaGuiHinh: 'gửi ảnh anh xem nè' KHÔNG ('gửi ảnh anh' không kèm liền/ngay)", !laHuaGuiHinh("Anh gửi ảnh sổ cho em nha"));
+ok("chanHuaGuiHinh: thay đúng bong bóng hứa bằng lời thật",
+  JSON.stringify(chanHuaGuiHinh(["Dạ em có căn Trần Bình Trọng ạ", "Em gửi hình liền đây :)"], "Căn này chủ nhà chưa gửi hình ạ.")) === JSON.stringify(["Dạ em có căn Trần Bình Trọng ạ", "Căn này chủ nhà chưa gửi hình ạ."]),
+  JSON.stringify(chanHuaGuiHinh(["Dạ em có căn Trần Bình Trọng ạ", "Em gửi hình liền đây :)"], "Căn này chủ nhà chưa gửi hình ạ.")));
+ok("laHuaHoiChu: 'Về giá, để em hỏi lại chủ nhà rồi báo anh liền.'", laHuaHoiChu(["Về giá, để em hỏi lại chủ nhà rồi báo anh liền."]));
+ok("laHuaHoiChu: 'chủ nhà đang ở Q5' KHÔNG", !laHuaHoiChu(["Chủ nhà đang ở Q5 nên xem nhà dễ ạ."]));
+ok("suaBotXungNhamKhach: khách chú, 'Dạ, chú ghi nhớ rồi ạ.' → 'Dạ, cháu ghi nhớ rồi ạ.'",
+  suaBotXungNhamKhach(["Dạ, chú ghi nhớ rồi ạ."], "chú")[0] === "Dạ, cháu ghi nhớ rồi ạ.", suaBotXungNhamKhach(["Dạ, chú ghi nhớ rồi ạ."], "chú")[0]);
+ok("suaBotXungNhamKhach: 'chú xem nhà lúc mấy giờ ạ?' (khách làm) giữ nguyên",
+  suaBotXungNhamKhach(["Chú xem nhà lúc mấy giờ ạ?"], "chú")[0] === "Chú xem nhà lúc mấy giờ ạ?");
+ok("suaBotXungNhamKhach: khách không phải chú/cô/bác → không đụng", suaBotXungNhamKhach(["Dạ, chú ghi nhớ rồi ạ."], "anh")[0] === "Dạ, chú ghi nhớ rồi ạ.");
+ok("suaKhenNguocNghia: 'Căn góc view thoáng khó bán lắm cô' → 'khó kiếm lắm'",
+  suaKhenNguocNghia(["Căn góc view thoáng khó bán lắm cô."])[0] === "Căn góc view thoáng khó kiếm lắm cô.", suaKhenNguocNghia(["Căn góc view thoáng khó bán lắm cô."])[0]);
+ok("suaKhenNguocNghia: 'giá cao quá thì khó bán lắm' (không phải ưu điểm) giữ",
+  suaKhenNguocNghia(["Giá cao quá thì khó bán lắm cô."])[0] === "Giá cao quá thì khó bán lắm cô.");
+{
+  const p = boDoanPhuongDiaDanh(["Dạ chú, chợ An Đông là khu P12 Quận 5 phải không ạ?"], "chú muốn mua nhà gần chợ An Đông");
+  ok("boDoanPhuongDiaDanh: 'chợ An Đông là khu P12' không ai nói P12 → bỏ", !!p.bo && p.replies.length === 0, JSON.stringify(p));
+  const q = boDoanPhuongDiaDanh(["Chợ An Đông ở phường 9 cũ đúng không chú?"], "chợ An Đông ở phường 9 cũ, đường An Dương Vương");
+  ok("boDoanPhuongDiaDanh: khách đã nói phường 9 → giữ", !q.bo, JSON.stringify(q));
+}
+ok("boCauVongLai: 'Mai 9h sáng có được không?' vọng lại câu khách → bỏ, giữ câu kia",
+  JSON.stringify(boCauVongLai(["Dạ được ạ.", "Mai 9h sáng có được không?"], "cho em xin số chủ nhà với, mai 9h sáng em qua xem được không")) === JSON.stringify(["Dạ được ạ."]));
+ok("boCauVongLai: câu hỏi mới 'Mình cần mấy phòng ngủ ạ?' giữ",
+  boCauVongLai(["Mình cần mấy phòng ngủ ạ?"], "anh cần nhà quận 5 tầm 8 tỷ").length === 1);
+{
+  const n = nhanDienNhieuCan("Sale bên em đang giữ 2 căn hộ The Everrich Infinity q5: căn A 1pn 52m2 giá 4.8 tỷ, căn B 2pn 80m2 giá 7 tỷ 1, full nội thất");
+  ok("nhanDienNhieuCan: 'căn A …, căn B …' → 2 căn, thứ tự 1 và 2", n.length === 2 && n[0].thu === 1 && n[1].thu === 2 && n[1].gia === "7 tỷ 1", JSON.stringify(n));
+  ok("nhanDienNhieuCan: 'căn A12-05' là mã căn, không phải thứ tự", nhanDienNhieuCan("căn A12-05 giá 3 tỷ, căn B7-01 giá 4 tỷ").every((c) => !c.thu));
+  ok("tachTheoCan: 'căn B sổ hồng riêng' → thứ tự 2", JSON.stringify(tachTheoCan("căn B sổ hồng riêng, căn A đúc 3 tấm")) === JSON.stringify([{ thu: 2, manh: "sổ hồng riêng" }, { thu: 1, manh: "đúc 3 tấm" }]), JSON.stringify(tachTheoCan("căn B sổ hồng riêng, căn A đúc 3 tấm")));
+}
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

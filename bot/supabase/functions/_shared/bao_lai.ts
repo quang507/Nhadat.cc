@@ -223,6 +223,7 @@ export function kemLuotTao(facts: FactBaoLai[], nhan: Record<string, string>): s
 const MUA_NOI_BO = new Set(["ten_tro_ly", "xung_ho", "photo_offset", "hoi_vai", "gan_tien_ich_loc"]);
 const MUA_NHAN_THEM: Record<string, string> = {
   gan_tien_ich: "muốn ở gần", notes: "hoàn cảnh", gap: "cần gấp", name: "tên",
+  phap_ly: "pháp lý mong muốn", // 23/09/2026: "ưu tiên sổ hồng riêng" không còn nằm ở "hoàn cảnh".
 };
 
 /**
