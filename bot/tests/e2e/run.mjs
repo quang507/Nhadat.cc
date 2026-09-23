@@ -272,7 +272,7 @@ check("TOIUU-01 người lạ hỏi vai ≤ 12 truy vấn (v43: 18; +1 trần c�
 v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
 console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
 // 23/09/2026: +1 — câu đầu đủ khu vực + giá nay LỌC KHO ngay (trước chỉ hứa "em lọc kho liền" rồi im).
-check("TOIUU-02 người mua lượt đầu ≤ 21 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu)", v.n <= 21, `${v.n}`);
+check("TOIUU-02 người mua lượt đầu ≤ 22 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc)", v.n <= 22, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
 console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
 check("TOIUU-03 người mua có hồ sơ ≤ 18 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖)", v.n <= 18, `${v.n}`);
@@ -3764,6 +3764,64 @@ fresh(seedKho);
     ls().length === 2 && nhaB?.ward === "Phường 9" && !!datB && datB.price_vnd === 2.3e9 && !datB.ward,
     JSON.stringify({ ls: ls().map((l) => [l.code, l.property_type, l.district, l.ward, l.price_vnd, l.area_m2]), rep: r.body.replies }));
   globalThis.__model = { parse: () => OUT() };
+}
+
+// ── 23/09/2026 FR-216: kho lọc theo LOẠI HẺM (prefs.alley) + xếp theo NGHĨA (RAG, công tắc tim_theo_nghia) ──
+{
+  const seedHem = (d) => {
+    seedKho(d);
+    const s = d.t.sellers[0];
+    d.insert("listings", { code: "BDS-Q5-0006", seller_id: s.id, deal: "ban", status: "dang_ban", location_raw: "8 Trần Bình Trọng", ward: "Phường 1", price_raw: "6 tỷ 2", price_vnd: 6.2e9, area_m2: 45, access_type: "hem_xe_may", alley_width_m: 2 });
+    d.insert("listings", { code: "BDS-Q5-0007", seller_id: s.id, deal: "ban", status: "dang_ban", location_raw: "20 Nguyễn Trãi", ward: "Phường 2", price_raw: "6 tỷ 1", price_vnd: 6.1e9, area_m2: 42, access_type: "mat_tien", nhan: ["xe_hoi_quay_dau"] });
+    d.t.listings.find((l) => l.code === "BDS-Q5-0001").nhan = ["xe_hoi_quay_dau"];
+  };
+  const khoMua = () => (JSON.stringify(parseCalls().slice(-1).map((c) => c.params)).split("KHO HIỆN CÓ")[1] ?? "").slice(0, 1500);
+  const maTrongKho = () => [...khoMua().matchAll(/#(BDS-Q5-\d{4})/g)].map((m) => m[1]).filter((x, i, a) => a.indexOf(x) === i);
+  const cauHinhCu = globalThis.__cauHinh;
+  // (1) khách đòi hẻm xe hơi → kho bỏ căn hẻm xe máy (0006) và căn chưa rõ đường vào (0004).
+  fresh(seedHem);
+  r = await send({ external_user_id: "rag-1", text: "anh cần mua nhà hẻm xe hơi quận 5 tầm 6 tỷ" });
+  check("RAG-01 'hẻm xe hơi … tầm 6 tỷ' → KHO chỉ còn căn hẻm xe hơi/mặt tiền (0001, 0007), KHÔNG căn hẻm xe máy 0006 lẫn căn chưa rõ 0004",
+    maTrongKho().includes("BDS-Q5-0001") && maTrongKho().includes("BDS-Q5-0007") && !maTrongKho().includes("BDS-Q5-0006") && !maTrongKho().includes("BDS-Q5-0004"),
+    JSON.stringify(maTrongKho()));
+  // (2) đối chứng: không nói loại hẻm → căn hẻm xe máy vẫn được gợi.
+  fresh(seedHem);
+  r = await send({ external_user_id: "rag-2", text: "anh cần mua nhà quận 5 tầm 6 tỷ" });
+  check("RAG-02 không nói loại hẻm → KHO còn căn hẻm xe máy 0006 (không lọc thừa)", maTrongKho().includes("BDS-Q5-0006"), JSON.stringify(maTrongKho()));
+  // (2b) "hẻm cách mặt tiền 50m" không phải đòi nhà mặt tiền.
+  fresh(seedHem);
+  r = await send({ external_user_id: "rag-2b", text: "anh cần mua nhà hẻm cách mặt tiền 50m quận 5 tầm 6 tỷ" });
+  check("RAG-02b 'hẻm cách mặt tiền 50m' → KHÔNG lọc về mặt tiền (còn 0006)", maTrongKho().includes("BDS-Q5-0006"), JSON.stringify(maTrongKho()));
+  // (3) công tắc BẬT: vector câu tìm + RPC xếp hạng → 0007 lên đầu dù cũ hơn.
+  fresh(seedHem);
+  globalThis.__cauHinh = { test_reset_hello: "1", tim_theo_nghia: "bat" };
+  const env = globalThis.Deno.env; const getCu = env.get; env.get = (k) => k === "GEMINI_API_KEY" ? "gem-test" : getCu(k);
+  let cauNhung = null;
+  globalThis.__nhung = (t) => { cauNhung = t; return Array.from({ length: 768 }, () => 0.01); };
+  globalThis.__rpc = { tim_tin_theo_nghia: (_d, a) => ({ data: ["BDS-Q5-0007", "BDS-Q5-0001"].filter((c) => a.p_codes.includes(c)).map((code, i) => ({ code, do_gan: 0.8 - i / 10 })), error: null }) };
+  r = await send({ external_user_id: "rag-3", text: "anh cần mua nhà hẻm xe hơi quận 5 tầm 6 tỷ, xe hơi quay đầu được" });
+  const goiXep = db().log.find((x) => x.rpc === "tim_tin_theo_nghia");
+  check("RAG-03 bật tim_theo_nghia → gọi tim_tin_theo_nghia(vector 768, mã đã lọc cứng + nhãn xe_hoi_quay_dau); KHO xếp 0007 trước 0001; câu nhúng mang ý khách",
+    !!goiXep && goiXep.args.p_vec.length === 768 && goiXep.args.p_codes.includes("BDS-Q5-0001") && !goiXep.args.p_codes.includes("BDS-Q5-0006") &&
+      maTrongKho()[0] === "BDS-Q5-0007" && /quay đầu/.test(cauNhung ?? ""),
+    JSON.stringify({ goi: goiXep?.args?.p_codes, kho: maTrongKho(), cauNhung }));
+  // (4) nhúng hỏng → kho giữ thứ tự cũ, ghi sổ, khách vẫn được trả lời.
+  fresh(seedHem);
+  globalThis.__nhung = () => { throw new Error("Gemini embed 503"); };
+  r = await send({ external_user_id: "rag-4", text: "anh cần mua nhà hẻm xe hơi quận 5 tầm 6 tỷ" });
+  check("RAG-04 nhúng hỏng → KHO vẫn đủ 0001 + 0007, sổ lỗi 'chat-reply tim_tin_theo_nghia', có trả lời",
+    maTrongKho().includes("BDS-Q5-0001") && maTrongKho().includes("BDS-Q5-0007") && db().t.bot_errors.some((e) => e.source === "chat-reply tim_tin_theo_nghia") && r.body.replies?.length > 0,
+    JSON.stringify({ kho: maTrongKho(), loi: db().t.bot_errors.map((e) => e.source) }));
+  env.get = getCu;
+  // (5) công tắc TẮT → không nhúng, không gọi RPC xếp hạng.
+  fresh(seedHem);
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+  let daNhung = false;
+  globalThis.__nhung = () => { daNhung = true; return Array.from({ length: 768 }, () => 0); };
+  r = await send({ external_user_id: "rag-5", text: "anh cần mua nhà hẻm xe hơi quận 5 tầm 6 tỷ" });
+  check("RAG-05 tim_theo_nghia tắt → không nhúng, không gọi tim_tin_theo_nghia", !daNhung && !db().log.some((x) => x.rpc === "tim_tin_theo_nghia"));
+  delete globalThis.__nhung;
+  globalThis.__cauHinh = cauHinhCu;
 }
 
 // ── kết ──
