@@ -269,7 +269,8 @@ console.log(`   [đo] người lạ hỏi vai: ${v.n} truy vấn`);
 check("TOIUU-01 người lạ hỏi vai ≤ 12 truy vấn (v43: 18; +1 trần cá nhân SEC-05), 0 model", v.n <= 12 && parseCalls().length === 0, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
 console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
-check("TOIUU-02 người mua lượt đầu ≤ 20 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖)", v.n <= 20, `${v.n}`);
+// 23/09/2026: +1 — câu đầu đủ khu vực + giá nay LỌC KHO ngay (trước chỉ hứa "em lọc kho liền" rồi im).
+check("TOIUU-02 người mua lượt đầu ≤ 21 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu)", v.n <= 21, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
 console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
 check("TOIUU-03 người mua có hồ sơ ≤ 18 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖)", v.n <= 18, `${v.n}`);
@@ -3299,6 +3300,119 @@ fresh(seedKho);
       JSON.stringify({ facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer, f.source]), rent: tin.rent_income_vnd, rear: tin.rear_width_m, pend: pendQ() }));
   }
   globalThis.__cauHinh = cauHinhCu;
+  globalThis.__model = { parse: () => OUT() };
+}
+
+// ── 23/09/2026 bắn 26 tin kịch bản bán/mua (căn Trần Bình Trọng) — 9 lỗi, "vá hết đi, kèm e2e" ──
+{
+  const rep = () => r.body.replies.join(" ");
+  const seedEver = (d) => d.insert("projects", { name: "The EverRich Infinity", district: "Quận 5", ward: "Phường 4", location_raw: "290 An Dương Vương", priority: 50 });
+  const buyerCo = (d, uid, pr = {}) => { const b = d.insert("buyers", { zalo_user_id: uid, name: null, preferences: { deal: "ban", area: "Quận 5", budget: "tầm 6 tỷ", ...pr } }).data; d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-01T00:00:00Z" }); return b; };
+  const quanTam = (d, b, code) => d.insert("interests", { buyer_id: b.id, listing_id: d.t.listings.find((l) => l.code === code).id, created_at: new Date().toISOString() });
+  const promptMua = () => JSON.stringify(parseCalls().slice(-1).map((c) => c.params));
+  // (2) "chưa có sổ" không thành có sổ.
+  fresh();
+  r = await send({ external_user_id: "gvf-2", text: "nhượng lại căn chung cư mini đường Nguyễn Trãi q5, 35m2, 1pn, chưa có sổ, giá 1 tỏi 350" });
+  {
+    const L = db().t.listings[0];
+    check("GVF-01 'chưa có sổ' → legal_status KHÔNG phải so_hong, bong bóng không nói 'có sổ'",
+      !!L && !L.legal_status && !/· có sổ|sổ hồng/.test(rep()), JSON.stringify({ ls: L?.legal_status, rep: r.body.replies, facts: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
+  }
+  // (6) môi giới rao 2 căn "căn A …, căn B …" chung dự án.
+  fresh(seedEver);
+  r = await send({ external_user_id: "gvf-6", text: "Sale bên em đang giữ 2 căn hộ The Everrich Infinity q5: căn A 1pn 52m2 giá 4.8 tỷ, căn B 2pn 80m2 giá 7 tỷ 1, full nội thất, sổ hồng lâu dài" });
+  {
+    const ls = db().t.listings;
+    check("GVF-02 'căn A …, căn B …' → mở 2 tin, CẢ HAI là căn hộ gắn dự án EverRich, Quận 5; căn B 80m2 giá 7 tỷ 1",
+      ls.length === 2 && ls.every((l) => l.property_type === "chung_cu" && !!l.project_id && l.district === "Quận 5") && ls[1].area_m2 === 80 && /7 tỷ 1/.test(ls[1].price_raw ?? ""),
+      JSON.stringify(ls.map((l) => [l.code, l.property_type, !!l.project_id, l.district, l.area_m2, l.price_raw])));
+    check("GVF-03 mảnh chung 'full nội thất' ghi cho CẢ HAI căn",
+      ls.length === 2 && ls.every((l) => db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "noi_that")),
+      JSON.stringify(db().t.listing_facts.map((f) => [f.listing_id === ls[0]?.id ? "A" : "B", f.question, f.answer])));
+  }
+  // (6b) một căn hộ đã rao, "còn căn B … nữa" → kế thừa loại, quận, dự án.
+  fresh(seedEver);
+  r = await send({ external_user_id: "gvf-6b", text: "bán căn hộ The Everrich Infinity quận 5, 1pn 52m2, giá 4.8 tỷ" });
+  r = await send({ external_user_id: "gvf-6b", text: "còn căn B 2pn 80m2 giá 7 tỷ 1 nữa em ơi, em lưu chưa" });
+  {
+    const ls = db().t.listings;
+    const B = ls[1];
+    check("GVF-04 'còn căn B … nữa' → tin mới kế thừa căn hộ + Quận 5 + dự án của tin trước (không '(chưa rõ quận)')",
+      ls.length === 2 && B.property_type === "chung_cu" && B.district === "Quận 5" && B.project_id === ls[0].project_id && !!B.project_id && !/chưa rõ quận/.test(rep()),
+      JSON.stringify({ ls: ls.map((l) => [l.code, l.property_type, l.district, !!l.project_id]), rep: r.body.replies }));
+  }
+  // (4) khách mua đủ khu vực + giá NGAY TIN ĐẦU → kho được lọc ngay lượt này.
+  fresh(seedKho);
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ có căn #BDS-Q5-0001 hợp anh nè"] });
+  r = await send({ external_user_id: "gvf-4", text: "anh cần mua nhà phường 4 quận 5 tầm 6 tỷ, 2 phòng ngủ" });
+  check("GVF-05 tin đầu 'phường 4 quận 5 tầm 6 tỷ, 2 phòng ngủ' → KHO gửi model có căn #BDS-Q5-0001 ngay lượt đầu",
+    /KHO HIỆN CÓ:\\n#BDS-Q5-0001/.test(promptMua()), promptMua().split("KHO HIỆN CÓ")[1]?.slice(0, 200));
+  // (5c) chưa đủ tiêu chí + kho chưa lọc: không hứa "lọc kho rồi báo", xin đúng thứ còn thiếu.
+  fresh();
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ em tìm kiếm liền ạ"] });
+  r = await send({ external_user_id: "gvf-5c", text: "anh cần tìm mua nhà quận 5" });
+  check("GVF-06 chưa có giá, kho chưa lọc, model 'Dạ em tìm kiếm liền ạ' → thay bằng 'cho em xin thêm tầm giá', không hứa lọc kho",
+    /xin thêm tầm giá/.test(rep()) && !/tìm kiếm liền|lọc kho/.test(rep()), JSON.stringify(r.body.replies));
+  // (1) bịa hướng + quy hoạch cho căn vừa giới thiệu (khách hỏi tiếp, KHÔNG nhắc mã).
+  fresh((d) => { seedKho(d); const b = buyerCo(d, "gvf-1"); quanTam(d, b, "BDS-Q5-0001"); });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ căn này hướng Đông, thoáng và sáng lắm ạ. Chưa có quy hoạch gì, để em xác nhận lại chủ nhà rồi báo chính xác cho mình nhé"] });
+  r = await send({ external_user_id: "gvf-1", text: "nha huong gi e, co dinh quy hoach gi ko" });
+  {
+    const ir = db().t.info_requests.filter((x) => x.source === "buyer_ask");
+    check("GVF-07 hỏi tiếp không nhắc mã → căn quan tâm gần nhất vào khối 'căn khách nhắc' (model thấy #BDS-Q5-0001 kèm tình trạng hình)",
+      /BDS-Q5-0001[^"]*(?:chưa có hình sẵn|HÌNH SẴN)/.test(promptMua()), promptMua().slice(0, 300));
+    check("GVF-08 model bịa 'hướng Đông' + 'chưa có quy hoạch' (kho không có) → bỏ, nói 'chưa có thông tin chắc chắn', mở ask_owner cho căn 0001",
+      !/hướng Đông|Chưa có quy hoạch/.test(rep()) && /chưa có thông tin chắc chắn/.test(rep()) && ir.length === 1 && ir[0].listing_id === db().t.listings.find((l) => l.code === "BDS-Q5-0001").id,
+      JSON.stringify({ rep: r.body.replies, ir }));
+  }
+  // (5b) "để em hỏi lại chủ về giá" mà model không mở ask_owner → code mở.
+  fresh((d) => { seedKho(d); const b = buyerCo(d, "gvf-5b"); quanTam(d, b, "BDS-Q5-0001"); });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ hẻm 6m xe hơi vào tận cửa ạ.", "Về giá, để em hỏi lại chủ nhà rồi báo anh liền."] });
+  r = await send({ external_user_id: "gvf-5b", text: "hẻm đó rộng bao nhiêu, xe hơi vào tận cửa không em? giá còn bớt được không?" });
+  check("GVF-09 lời hứa 'hỏi lại chủ nhà' không kèm ask_owner → code mở info_requests buyer_ask cho căn đang nói",
+    db().t.info_requests.some((x) => x.source === "buyer_ask" && x.listing_id === db().t.listings.find((l) => l.code === "BDS-Q5-0001").id),
+    JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests }));
+  // (5a) căn 0 ảnh mà model hứa gửi hình.
+  fresh((d) => { seedKho(d); buyerCo(d, "gvf-5a"); });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ em có căn 12 Trần Hưng Đạo P4, 2 phòng ngủ, 5,8 tỷ ạ", "Em gửi hình liền đây :)"] });
+  r = await send({ external_user_id: "gvf-5a", text: "có căn nào quận 5 tầm 6 tỷ không em" });
+  check("GVF-10 căn không có ảnh mà model 'Em gửi hình liền đây' → thay bằng 'chủ nhà chưa gửi hình', không gửi ảnh",
+    !/gửi hình liền/.test(rep()) && /chưa gửi hình/.test(rep()) && !(r.body.photos ?? []).length, JSON.stringify(r.body));
+  // (7) khách là chú, model tự xưng "chú ghi nhớ".
+  fresh((d) => buyerCo(d, "gvf-7", { xung_ho: "chú", nhom_tuoi: "lon_tuoi" }));
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ, chú ghi nhớ rồi ạ."] });
+  r = await send({ external_user_id: "gvf-7", text: "chú muốn ở gần chợ An Đông cháu nhé" });
+  check("GVF-11 khách là chú, model 'Dạ, chú ghi nhớ rồi ạ' → 'Dạ, cháu ghi nhớ rồi ạ'", /Dạ, cháu ghi nhớ rồi ạ/.test(rep()) && !/chú ghi nhớ/.test(rep()), JSON.stringify(r.body.replies));
+  // (8b) đoán phường của địa danh.
+  fresh((d) => buyerCo(d, "gvf-8", { xung_ho: "chú", nhom_tuoi: "lon_tuoi" }));
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ chú, chợ An Đông là khu P12 Quận 5 phải không ạ?"] });
+  r = await send({ external_user_id: "gvf-8", text: "chú muốn mua nhà cho con gái ở gần chợ An Đông" });
+  check("GVF-12 model đoán 'chợ An Đông là khu P12' (không ai nói P12) → bỏ câu đó", !/P12/.test(rep()) && r.body.replies.length >= 1, JSON.stringify(r.body.replies));
+  // (8c) câu hỏi vọng lại + (8d) 'chưa có SĐT chủ' ngược câu tiền định.
+  fresh((d) => { seedKho(d); const b = buyerCo(d, "gvf-8c"); quanTam(d, b, "BDS-Q5-0001"); });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ em chưa có SĐT chủ, bên em quản lý qua Zalo cho tiện ạ", "Mai 9h sáng có được không?"] });
+  r = await send({ external_user_id: "gvf-8c", text: "cho em xin số chủ nhà với, mai 9h sáng em qua xem được không" });
+  check("GVF-13 xin số chủ + 'mai 9h sáng em qua xem được không' → bỏ 'chưa có SĐT chủ' và câu hỏi vọng lại 'Mai 9h sáng có được không?'",
+    /không gửi số chủ nhà/.test(rep()) && !/SĐT chủ/.test(rep()) && !/Mai 9h sáng có được không/.test(rep()), JSON.stringify(r.body.replies));
+  // (9) hồ sơ mua: pháp lý + loại hình.
+  fresh();
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "Quận 5", budget: "dưới 9 tỷ", notes: "ưu tiên sổ hồng riêng" }, replies: ["Dạ mình cần mấy phòng ngủ ạ?"] });
+  r = await send({ external_user_id: "gvf-9", text: "em đang tìm mua căn hộ hoặc nhà nhỏ q5 dưới 9 tỷ, ưu tiên sổ hồng riêng" });
+  {
+    const p = db().t.buyers.find((b) => b.zalo_user_id === "gvf-9")?.preferences ?? {};
+    check("GVF-14 'ưu tiên sổ hồng riêng' → phap_ly 'sổ hồng riêng' (không vào hoàn cảnh), 'căn hộ hoặc nhà nhỏ' → loại hình 'căn hộ hoặc nhà'",
+      p.phap_ly === "sổ hồng riêng" && !p.notes && p.property_type === "căn hộ hoặc nhà", JSON.stringify(p));
+  }
+  // (8) nhánh bán: khen ngược nghĩa + câu chào đứng sau 🤖.
+  fresh();
+  const cauHinhGvf = globalThis.__cauHinh;
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "day_du" };
+  globalThis.__model = { parse: () => OUT(), create: () => "Căn góc view thoáng khó bán lắm cô. Căn hộ mình ở tầng mấy cô?" };
+  r = await send({ external_user_id: "gvf-8s", text: "Chào cháu, cô muốn bán căn hộ chung cư Ngô Gia Tự quận 10, căn góc 1 phòng ngủ, 50 mét, giá 2 tỷ 1" });
+  check("GVF-15 nhánh bán 'khó bán lắm' sau ưu điểm → 'khó kiếm lắm'", /khó kiếm lắm/.test(rep()) && !/khó bán lắm/.test(rep()), JSON.stringify(r.body.replies));
+  check("GVF-16 lượt rao đầu có lời chào → câu chào đứng TRƯỚC dòng 🤖 Đã lưu",
+    /^(?:Dạ,?\s+)?(?:em|cháu)\s+chào/i.test(r.body.replies[0] ?? "") && r.body.replies.slice(1).some((x) => x.startsWith("🤖")), JSON.stringify(r.body.replies));
+  globalThis.__cauHinh = cauHinhGvf;
   globalThis.__model = { parse: () => OUT() };
 }
 

@@ -84,6 +84,26 @@ const check = (n, ok, d = "") => R.push([n, !!ok, d]);
     co, JSON.stringify(globalThis.__db.t.bot_errors.map((e) => e.source)));
 }
 
+// (5) 23/09/2026 (bắn 6 tin song song): Vault HỤT hai lần liền → 503, sổ ghi rõ lỗi đọc (không gộp với "chưa đặt").
+globalThis.__vault = (ten) => ten === "BRIDGE_SECRET" ? { data: null, error: { message: "timeout giả" } } : { data: null, error: null };
+{
+  const r = await goi({ external_user_id: "la-5", text: "chào em" }, { "x-bridge-secret": "s3" });
+  const loi = globalThis.__db.t.bot_errors.filter((e) => String(e.source).includes("chat-reply CONG DONG")).at(-1);
+  check("VAULT HỤT HAI LẦN → 503, sổ ghi 'hụt hai lần (timeout giả)'",
+    r.status === 503 && /hụt hai lần \(timeout giả\)/.test(String(loi?.detail ?? "")), JSON.stringify({ r, loi }));
+}
+// (6) Lượt NGAY SAU: Vault hụt một lần rồi đọc được → QUA ngay. Bản cũ nhớ `gate = null` 60 s
+// nên mọi tin trong phút đó đều 503 — tin khách thật mất theo.
+{
+  let n = 0;
+  globalThis.__vault = (ten) => ten === "BRIDGE_SECRET"
+    ? (n++ === 0 ? { data: null, error: { message: "chớp mắt" } } : { data: "s3", error: null })
+    : { data: null, error: null };
+  const r = await goi({ external_user_id: "la-6", text: "chào em" }, { "x-bridge-secret": "s3" });
+  check("VAULT HỤT MỘT LẦN → đọc lại ngay, header đúng thì QUA (không nhớ cái hụt 60 s)",
+    r.status === 200 && !r.body.error && n === 2, JSON.stringify({ status: r.status, n, body: JSON.stringify(r.body).slice(0, 200) }));
+}
+
 let hong = 0;
 for (const [n, ok, d] of R) {
   if (!ok) hong++;

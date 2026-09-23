@@ -47,7 +47,10 @@ const HUA_CO_HANG: RegExp[] = [
   /\b(?:xem|chon|loc)\s+(?:xem\s+)?(?:trong\s+)?(?:may\s+)?can\s+nao\s+(?:phu hop|hop|ok|dep|ung)/,
   // 20/09/2026 (bắn thật mau-y-C): "để em kiểm tra hẻm 4m Nguyễn Trãi rồi báo liền", "Em kiểm tra kho
   // rồi báo mình liền", "Đang kiểm tra … sắp báo mình liền" — hai lượt né thay vì nói thẳng chưa có.
-  /\b(?:de\s+)?em\s+(?:kiem tra|check|xem|tim|loc|ra soat|doi chieu)\b[^.?!]*\b(?:roi|se|sap)?\s*bao\s+(?:lai\s+)?(?:anh\/chi|anh|chi|minh|em|chau|lien|ngay|sau|som)\b/,
+  // 23/09/2026 (bắn thật): bot xưng "cháu" với khách lớn tuổi — "để cháu tìm … cháu sẽ báo chú liền".
+  /\b(?:de\s+)?(?:em|chau)\s+(?:kiem tra|check|xem|tim|loc|ra soat|doi chieu)\b[^.?!]*\b(?:roi|se|sap)?\s*bao\s+(?:lai\s+)?(?:anh\/chi|anh|chi|minh|em|chau|chu|co|bac|lien|ngay|sau|som)\b/,
+  // 23/09/2026: "Dạ em tìm kiếm liền ạ", "để em tìm từ từ ạ", "em lọc kho … liền", "để cháu tìm kiếm trong kho".
+  /\b(?:de\s+)?(?:em|chau)\s+(?:tim kiem|tim|loc|kiem)\s+(?:(?:lien|ngay|luon|tu tu|trong kho|kho|them)\b|can\s+(?:khop|hop|phu hop))/,
   /\b(?:dang|sap|se)\s+(?:kiem tra|tim|loc|ra soat)\b[^.?!]*\b(?:sap|se|roi)\s+bao\b/,
   /\bkiem tra kho\b/,
 ];
@@ -590,4 +593,120 @@ export function boTenRiengBia(replies: string[], nguCanh: string): string[] {
     return loai;
   }).replace(/[ \t]{2,}/g, " ").replace(/\s+([,.!?])/g, "$1"));
   return daBo ? ra : replies;
+}
+
+// ── 23/09/2026 (bắn 26 tin kịch bản bán/mua, căn Trần Bình Trọng) ──────────────────────────────
+/**
+ * Dữ kiện BỊA về căn: khách hỏi "nhà hướng gì, có dính quy hoạch không" → model "Dạ căn này hướng Đông, thoáng
+ * và sáng lắm ạ. Chưa có quy hoạch gì…" trong khi kho KHÔNG có hai dữ kiện đó. Câu KHẲNG ĐỊNH hướng / quy hoạch /
+ * lộ giới / năm xây mà `nguCanh` (kho + căn khách nhắc + dự án — dữ liệu, KHÔNG gồm câu bot cũ) không chứa thì
+ * bỏ. Trả nhãn các mục đã bỏ để tầng trên nói thật và mở việc hỏi chủ. Câu hỏi ("?") giữ nguyên.
+ */
+export function chanBiaDuKien(replies: string[], nguCanh: string): { replies: string[]; bo: string[] } {
+  const nc = boDau(nguCanh ?? "").replace(/\s+/g, " ");
+  const bo = new Set<string>();
+  const coQuyHoach = /\b(?:quy hoach|lo gioi)\b/.test(nc);
+  const ra = locCauTrongBongBong(replies, (c) => {
+    if (/\?/.test(c)) return false;
+    const kd = boDau(c);
+    const h = /\bhuong\s+(dong|tay|nam|bac)\b/.exec(kd);
+    if (h && !new RegExp(`\\bhuong\\W{0,3}(?:\\w+\\W{0,3})?${h[1]}\\b`).test(nc)) { bo.add("hướng nhà"); return true; }
+    if (!coQuyHoach && (
+      /\b(?:khong|chua|ko|chang)\s+(?:co\s+|bi\s+|dinh\s+|vuong\s+|nam trong\s+)*(?:quy hoach|lo gioi)\b/.test(kd) ||
+      /\b(?:dinh|bi|vuong|nam trong)\s+(?:quy hoach|lo gioi)\b/.test(kd) ||
+      /\bquy hoach\s+(?:sach|ro rang|on|chuan|khong)\b/.test(kd)
+    )) { bo.add("quy hoạch"); return true; }
+    const nx = /\bxay\s+(?:tu\s+)?(?:nam\s+)?(\d{4})\b/.exec(kd);
+    if (nx && !nc.includes(nx[1])) { bo.add("năm xây"); return true; }
+    return false;
+  });
+  return { replies: bo.size ? ra : replies, bo: [...bo] };
+}
+
+/** Câu hứa gửi hình ngay ("Em gửi hình liền đây", "gửi ảnh anh xem nè"). */
+const HUA_GUI_HINH_RE = /\b(?:(?:em|chau|de em|de chau)\s+(?:se\s+)?gui\s+(?:ngay\s+|lien\s+|luon\s+)?(?:hinh|anh)|gui\s+(?:hinh|anh)\s+(?:lien|ngay|luon|ne|nha|lien day|ngay day))\b/;
+export function laHuaGuiHinh(cau: string): boolean {
+  return HUA_GUI_HINH_RE.test(boDau(cau));
+}
+/**
+ * Căn chưa có tấm hình nào mà bot hứa "em gửi hình liền đây" (bắn thật 23/09: tin 0 ảnh, hai khách nghe hứa).
+ * Câu hứa thay bằng `loiThat` (một lần); không câu nào hứa thì trả đúng mảng cũ.
+ */
+export function chanHuaGuiHinh(replies: string[], loiThat: string): string[] {
+  const ra = locCauTrongBongBong(replies, (c) => laHuaGuiHinh(c));
+  if (ra === replies) return replies;
+  // Lời thật đứng ở chỗ bong bóng đầu tiên có câu hứa.
+  const i = replies.findIndex((r) => tachCau(r).some((c) => laHuaGuiHinh(c)));
+  const out = [...ra];
+  out.splice(Math.min(Math.max(i, 0), out.length), 0, loiThat);
+  return out;
+}
+
+/** Câu hứa đi HỎI CHỦ NHÀ ("để em hỏi lại chủ nhà rồi báo", "em xác nhận lại với chủ"). */
+export function laHuaHoiChu(replies: string[]): boolean {
+  return /\b(?:hoi|xac nhan|check|kiem tra)\s+(?:lai\s+)?(?:voi\s+|ben\s+|y\s+)?chu(?:\s+nha)?\b/.test(boDau(replies.join(" ")));
+}
+
+/**
+ * Bot tự xưng bằng từ gọi KHÁCH (bắn thật 23/09): khách là chú, model đáp "Dạ, chú ghi nhớ rồi ạ" — đúng ra
+ * "cháu ghi nhớ". Chỉ sửa khi chú/cô/bác đứng ngay trước động từ tự thuật của bot (ghi nhớ, ghi nhận, lưu, tìm,
+ * báo, gửi…) ở đầu câu hoặc sau "Dạ,"/"để". "chú xem nhà" (khách làm) không đụng: "xem" không nằm trong danh sách.
+ */
+export function suaBotXungNhamKhach(replies: string[], goi: string | null | undefined): string[] {
+  if (!goi || !["chú", "cô", "bác"].includes(goi)) return replies;
+  const re = new RegExp(
+    `(^|[.!?]\\s+|Dạ,?\\s+|[Đđ]ể\\s+)(${goi}|${goi.charAt(0).toUpperCase()}${goi.slice(1)})\\s+(ghi nhớ|ghi nhận|ghi lại|lưu lại|đã lưu|sẽ tìm|tìm kiếm|tìm|lọc|báo lại|báo|gửi|kiểm tra)(?![\\p{L}])`,
+    "gu",
+  );
+  let doi = false;
+  const ra = replies.map((r) => r.replace(re, (_m, dau: string, _x: string, dong: string) => {
+    doi = true;
+    return `${dau}${dau === "" || /[.!?]\s+$/.test(dau) ? "Cháu" : "cháu"} ${dong}`;
+  }));
+  return doi ? ra : replies;
+}
+
+/**
+ * Lời khen NGƯỢC NGHĨA (bắn thật 23/09, nhánh bán): "Căn góc view thoáng khó bán lắm cô" — ý là hiếm, dễ bán.
+ * "khó bán lắm" đứng sau một ưu điểm trong cùng câu (không phải câu hỏi) → "khó kiếm lắm".
+ */
+export function suaKhenNguocNghia(replies: string[]): string[] {
+  const re = /((?:góc|view|thoáng|đẹp|rộng|mới|sáng|yên tĩnh|hẻm xe hơi|mặt tiền)[^.!?]{0,40}?)khó bán lắm/giu;
+  let doi = false;
+  const ra = replies.map((r) => r.replace(re, (_m, truoc: string) => { doi = true; return `${truoc}khó kiếm lắm`; }));
+  return doi ? ra : replies;
+}
+
+/**
+ * Bot đoán PHƯỜNG của một địa danh (bắn thật 23/09): "Dạ chú, chợ An Đông là khu P12 Quận 5 phải không ạ?" —
+ * không ai nói P12, dữ liệu không có. Câu gắn địa danh với một số phường mà ngữ cảnh không chứa số phường đó
+ * thì bỏ. Trả nhãn địa danh đã bỏ (để tầng trên nói câu ghi nhận thay).
+ */
+export function boDoanPhuongDiaDanh(replies: string[], nguCanh: string): { replies: string[]; bo: string | null } {
+  const nc = boDau(nguCanh ?? "");
+  let bo: string | null = null;
+  const ra = locCauTrongBongBong(replies, (c) => {
+    const kd = boDau(c);
+    const m = /\b(cho|truong|benh vien|cong vien|sieu thi|chua|nha tho|ben xe)\s+([a-z]+(?:\s+[a-z]+){0,3}?)\s+(?:la|o|thuoc|nam o|nam)\s+(?:khu\s+|khu vuc\s+)?(?:p\.?\s*|phuong\s+)(\d{1,2})\b/.exec(kd);
+    if (!m) return false;
+    if (new RegExp(`\\b(?:p\\.?\\s*|phuong\\s+)0?${Number(m[3])}\\b`).test(nc)) return false;
+    bo = `${m[1]} ${m[2]}`;
+    return true;
+  });
+  return bo ? { replies: ra, bo } : { replies, bo: null };
+}
+
+/**
+ * Câu hỏi VỌNG LẠI câu khách (bắn thật 23/09): khách "mai 9h sáng em qua xem được không" → bot hỏi ngược "Mai 9h
+ * sáng có được không?". Câu hỏi ≥ 4 từ mà ≥ 80% từ đã có trong câu khách thì bỏ — chỉ khi còn câu khác để gửi.
+ */
+export function boCauVongLai(replies: string[], text: string): string[] {
+  const tuKhach = new Set(boDau(text).split(/[^a-z0-9]+/).filter(Boolean));
+  const ra = locCauTrongBongBong(replies, (c) => {
+    if (!/\?\s*$/.test(c.trim())) return false;
+    const tu = boDau(c).split(/[^a-z0-9]+/).filter(Boolean).filter((w) => !["da", "a", "nha", "nhe", "vay"].includes(w));
+    if (tu.length < 4) return false;
+    return tu.filter((w) => tuKhach.has(w)).length / tu.length >= 0.8;
+  });
+  return ra.length ? ra : replies;
 }

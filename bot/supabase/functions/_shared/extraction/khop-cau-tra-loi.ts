@@ -830,12 +830,17 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
 // hiểu là SỬA căn 1 (căn 1 mang luôn 4x20 và 18 tỷ). Nay nhận thứ tự (`thu`), không ghi
 // unit_code. Số ngay sau "căn" mà kèm đơn vị (2 pn, 2 tầng, 2 x 10) thì không phải thứ tự.
 export type CanTrongTin = { ma?: string; thu?: number; quan?: string; ngang?: string; dai?: string; dt?: string; gia?: string; goc: string };
+const CAN_CHU_RE = /(?:^|[^\p{L}])(?:[Cc]ăn|[Cc]an|[Ll]ô|[Ll]o)\s+([A-H])(?![\p{L}\d])/u;
 export function nhanDienNhieuCan(text: string): CanTrongTin[] {
   const out: CanTrongTin[] = [];
   for (const goc of text.split(/[,;\n]|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter(Boolean)) {
     const kd = boDau(goc);
     const mMa = /\b(?:can|lo|shop|nen)\s*(?:so\s*)?([a-z]{1,3}[\s.\-]?\d{1,3}(?:[.\-]\d{1,3})?[a-z]?|\d{1,3}[a-z])\b/.exec(kd);
-    const mThu = mMa ? null : /(?:^|[^\d])\b(?:can|lo)\s+(?:so\s+|thu\s+)?(\d{1,2})\b(?!\s*(?:x\s*\d|m2|m\b|ty|ti|toi|trieu|tr\b|pn|phong|lau|tang|tam|met|wc))/.exec(kd);
+    const mThuSo = mMa ? null : /(?:^|[^\d])\b(?:can|lo)\s+(?:so\s+|thu\s+)?(\d{1,2})\b(?!\s*(?:x\s*\d|m2|m\b|ty|ti|toi|trieu|tr\b|pn|phong|lau|tang|tam|met|wc))/.exec(kd);
+    // 23/09/2026 (bắn thật, môi giới): "căn A 1pn 52m2 giá 4.8 tỷ, căn B 2pn 80m2 giá 7 tỷ 1" — CHỮ IN HOA
+    // làm số thứ tự (A=1, B=2…). Chỉ nhận chữ in hoa đứng một mình ("căn A12-05" là mã căn, "căn ạ" không phải).
+    const mChu = mMa || mThuSo ? null : CAN_CHU_RE.exec(goc);
+    const mThu: [string, string] | null = mThuSo ? [mThuSo[0], mThuSo[1]] : mChu ? [mChu[0], String(mChu[1].charCodeAt(0) - 64)] : null;
     if (!mMa && !mThu) continue;
     if (mThu) {
       const mKt = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/.exec(kd);
@@ -878,6 +883,10 @@ export function tachTheoCan(text: string): Array<{ thu: number; manh: string }> 
   const re = /(?:^|[\s,;.])(?:căn|can|lô|lo)\s+(?:số\s+|so\s+|thứ\s+|thu\s+)?(\d{1,2})(?![\d])(?!\s*(?:x\s*\d|m2|m\b|tỷ|ty|tỉ|ti|tỏi|toi|triệu|trieu|tr\b|pn|phòng|phong|lầu|lau|tầng|tang|tấm|tam|mét|met|wc))/giu;
   const moc: Array<{ thu: number; bat: number; het: number }> = [];
   for (let m = re.exec(text); m; m = re.exec(text)) moc.push({ thu: Number(m[1]), bat: m.index, het: m.index + m[0].length });
+  // 23/09/2026: "căn B …" — chữ in hoa làm thứ tự (A=1, B=2…), cùng luật `nhanDienNhieuCan`.
+  const reChu = /(?:^|[\s,;.])(?:[Cc]ăn|[Cc]an|[Ll]ô|[Ll]o)\s+([A-H])(?![\p{L}\d])/gu;
+  for (let m = reChu.exec(text); m; m = reChu.exec(text)) moc.push({ thu: m[1].charCodeAt(0) - 64, bat: m.index, het: m.index + m[0].length });
+  moc.sort((a, b) => a.bat - b.bat);
   for (let i = 0; i < moc.length; i++) {
     const manh = text.slice(moc[i].het, i + 1 < moc.length ? moc[i + 1].bat : undefined).replace(/^[\s:,.-]+|[\s,.]+$/g, "");
     if (manh.length >= 2) out.push({ thu: moc[i].thu, manh });
@@ -946,7 +955,8 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 22/09/2026 (kịch bản D): "đang thế chấp ngân hàng" một mình là TÌNH TRẠNG thế chấp (`the_chap`), không phải loại
   // giấy tờ; có kèm sổ/hợp đồng thì vẫn là pháp lý (mảnh thế chấp đi riêng qua `nhanDienNhieuFact`).
   if (/\b(dang the chap|the chap|cam ngan hang|trong ngan hang)\b/.test(kd) &&
-      !/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay)\b/.test(kd)) {
+      // 23/09/2026: "sổ đang thế chấp ngân hàng" — chủ ngữ là SỔ → vẫn là pháp lý (ca FR-177 đỏ từ 22/09).
+      !/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay)\b|\bso\s+(?:(?:dang|da|bi|con|van)\s+)?(?:the chap|cam)\b/.test(kd)) {
     return { question: "the_chap", answer: goc };
   }
   if (PHAP_LY_RE.test(kd)) {
