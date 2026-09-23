@@ -3527,7 +3527,8 @@ fresh(seedKho);
   {
     // Dựng đúng cảnh 02:34: bot đã gợi ý phường, câu phường đang treo.
     const A = ds()[0];
-    A.boc_tach = { ...(A.boc_tach ?? {}), phuong_goi_y: { phuong: "Phường Bình Thới", duong: "Kênh Tân Hóa" } };
+    A.boc_tach = { ...(A.boc_tach ?? {}), phuong_goi_y: { phuong: "Phường Bình Thới", quan: "Quận 11", duong: "Kênh Tân Hóa" } };
+    A.district = null;
     for (const ir of db().t.info_requests.filter((x) => x.listing_id === A.id && x.status === "pending")) ir.status = "expired";
     db().insert("info_requests", { listing_id: A.id, question: "phuong", status: "pending" });
     db().t.sellers.find((x) => x.zalo_user_id === uid).active_listing_id = A.id;
@@ -3536,6 +3537,8 @@ fresh(seedKho);
   check("GVH-01 đang hỏi phường căn nhà, 'Đúng rồi và … mảnh đất ở Cần Giuộc, Long An' → HAI tin: nhà giữ loại/vị trí + nhận Phường Bình Thới, đất mở riêng Long An",
     ds().length === 2 && !!nha() && !!dat() && !/Tỉnh lộ|tinh lo/i.test(nha()?.location_raw ?? "") && nha()?.ward === "Phường Bình Thới" && /Long An/.test(dat()?.district ?? ""),
     JSON.stringify({ ds: ds().map((l) => [l.code, l.property_type, l.location_raw, l.ward, l.district]), rep: r.body.replies }));
+  check("GVH-01b gật phường gợi ý kèm quận ('Phường Bình Thới (Quận 11 cũ)') → căn nhà nhận luôn Quận 11, gợi ý được xoá (bắn thật 23/09: quận để trống)",
+    nha()?.district === "Quận 11" && !nha()?.boc_tach?.phuong_goi_y, JSON.stringify([nha()?.district, nha()?.boc_tach]));
   if (dat() && nha()) {
   {
     // Lô đất đang được hỏi giá (cảnh 02:45).
@@ -3576,6 +3579,24 @@ fresh(seedKho);
   r = await send({ external_user_id: uid, text: "hướng đông nam cháu" });
   check("GVH-05 model 'cháu ghi 9 tỷ cho căn Quận 11' (DB không có giá 9 tỷ nào) → bỏ câu đó, giữ câu hỏi",
     !/9 tỷ/.test(rep()) && /hướng nào/.test(rep()), JSON.stringify(r.body.replies));
+  // Bắn thật 23/09 lượt 4: câu đang treo là DIỆN TÍCH lô đất, mảnh của lô đất lại là GIÁ.
+  {
+    for (const ir of db().t.info_requests.filter((x) => x.status === "pending")) ir.status = "expired";
+    db().insert("info_requests", { listing_id: dat().id, question: "dien_tich", status: "pending" });
+  }
+  globalThis.__model = {
+    parse: (p) => laLuotGanManh(p)
+      ? { manh: [{ trich: "đất 16 tỉ nhé cháu", ma_tin: dat().code }, { trich: "còn nhà muốn 7 tỉ 5", ma_tin: nha().code }] }
+      : OUT(),
+    create: () => "Dạ cháu ghi rồi ạ.",
+  };
+  const bsTruoc = db().t.listing_facts.filter((f) => f.listing_id === dat().id && f.question === "bo_sung").length;
+  r = await send({ external_user_id: uid, text: "đất 16 tỉ nhé cháu còn nhà muốn 7 tỉ 5" });
+  check("GVH-06 đang hỏi DIỆN TÍCH lô đất, mảnh lô đất là '16 tỉ' → GIÁ lô đất 16 tỷ (không vào 'thông tin bổ sung'), nhà 7 tỷ 5, hỏi lại diện tích",
+    dat()?.price_vnd === 16e9 && nha()?.price_vnd === 7.5e9 &&
+      db().t.listing_facts.filter((f) => f.listing_id === dat().id && f.question === "bo_sung").length === bsTruoc &&
+      db().t.info_requests.some((x) => x.listing_id === dat().id && x.question === "dien_tich" && x.status === "pending") && /diện tích|mét vuông|m2|rộng/i.test(rep()),
+    JSON.stringify({ ds: ds().map((l) => [l.code, l.price_vnd]), rep: r.body.replies, bs: db().t.listing_facts.filter((f) => f.question === "bo_sung").map((f) => f.answer) }));
   }
   globalThis.__model = { parse: () => OUT() };
 }

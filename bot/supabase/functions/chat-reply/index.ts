@@ -2327,6 +2327,7 @@ Deno.serve(async (req) => {
     const dsMo = ((tinCuaNguoi ?? []) as TinMo[])
       .filter((t) => !!t.code && ["cho_thong_tin", "dang_ban", "dang_quan_tam"].includes(t.status ?? ""));
     let textTreo: string | null = null;
+    let daTraCauTreo = false; // mảnh ghi theo tin đã trả lời luôn câu đang treo (vd "80m2 giá 15 tỷ" khi đang hỏi diện tích)
     const maTreo = pendingReq?.listings?.code?.toUpperCase() ?? null;
     if (anthropicS && !codeInText && canGanManh(text, dsMo.map((t) => ({ ...t, code: t.code! })), maTreo)) {
       try {
@@ -2344,7 +2345,12 @@ Deno.serve(async (req) => {
         if (r) {
           await doTien(client, r.usage as Parameters<typeof doTien>[1]);
           const manh = donManh(r.ket, text, dsMo.map((t) => t.code!));
-          const laTreo = (m: { ma: string }) => m.ma === "KHONG" || (!!maTreo && m.ma === maTreo);
+          // Bắn thật 23/09: đang hỏi DIỆN TÍCH lô đất, "15 tỉ nhé cháu" model gán đúng lô đất nhưng đó là GIÁ chứ không
+          // phải câu trả lời diện tích → bản trước để nó làm câu trả lời, ra "thông tin bổ sung: 15 tỉ nhé cháu". Mảnh
+          // của căn đang treo mà có SỐ TIỀN rõ trong lúc câu đang treo không phải giá thì ghi như mảnh căn khác.
+          const TIEN_RO = /\d+(?:[.,]\d+)?\s*(?:tỷ|tỉ|ty|ti|tỏi|toi|triệu|trieu|tr)(?![\p{L}])/iu;
+          const laTreo = (m: { ma: string; trich: string }) => m.ma === "KHONG" ||
+            (!!maTreo && m.ma === maTreo && !(pendingReq?.question !== "gia" && TIEN_RO.test(m.trich)));
           if (manh.some((m) => !laTreo(m))) {
             const dongGhi: string[] = [];
             for (const m of manh.filter((x) => !laTreo(x))) {
@@ -2376,6 +2382,7 @@ Deno.serve(async (req) => {
                 const { error: fErr } = await client.rpc("ghi_fact_listing", { p_listing_id: tin.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat" });
                 if (fErr) { await ghiLoi(client, `chat-reply gan manh(${f.question})`, fErr.message); continue; }
                 nhan.push(`${(FACT_LABELS[f.question] ?? f.question).replace(/\s*\(.*\)\s*$/, "")} ${f.answer}`);
+                if (pendingReq && tin.id === pendingReq.listing_id && f.question === pendingReq.question) daTraCauTreo = true;
                 const { error: irErr } = await client.from("info_requests").update({ status: "answered", answer: m.trich, answered_at: new Date().toISOString() })
                   .eq("listing_id", tin.id).eq("question", f.question).eq("status", "pending");
                 if (irErr) await ghiLoi(client, "chat-reply gan manh(dong cau)", irErr.message);
@@ -2394,7 +2401,7 @@ Deno.serve(async (req) => {
       }
     }
     // Mọi mảnh đã đi căn khác, không còn gì trả lời câu đang treo → nhắc lại câu đó (không ghi gì vào căn đang treo).
-    if (textTreo === "" && pendingReq && !humanActive) {
+    if (textTreo === "" && pendingReq && !daTraCauTreo && !humanActive) {
       return await traLoiSeller([cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)], { gan_manh: true });
     }
     if (textTreo === "" && !humanActive) return await traLoiSeller([], { gan_manh: true });
@@ -3375,8 +3382,9 @@ Deno.serve(async (req) => {
         else {
           const { error: irErr } = await client.from("info_requests").update({ status: "answered", answer: g.phuong, answered_at: new Date().toISOString() }).eq("id", pendingReq.id);
           if (irErr) await ghiLoi(client, "chat-reply gat phuong + rao moi(dong cau)", irErr.message);
-          const { error: btErr } = await client.rpc("ghi_boc_tach", { p_listing_id: pendingReq.listing_id, p: { phuong_goi_y: false } });
-          if (btErr) await ghiLoi(client, "chat-reply gat phuong + rao moi(boc_tach)", btErr.message);
+          // Gợi ý mang cả quận ("Phường Bình Thới (Quận 11 cũ)") → ghi quận khi căn chưa có, và xoá gợi ý (bắn thật 23/09:
+          // bản trước chỉ xoá gợi ý, căn nhà nằm "chưa rõ quận").
+          await capNhatQuanTuPhuong(pendingReq.listing_id, typeof (g as { quan?: unknown }).quan === "string" ? g as GoiYPhuong : null, g.phuong);
           const tenCu = pendingReq.listings?.location_raw ? ` căn ${pendingReq.listings.location_raw}` : "";
           ackAnh.push(doiTuXung([`Dạ em ghi ${g.phuong} cho${tenCu} rồi ạ.`], sellerRow.xung_ho ?? null, sellerRow.nhom_tuoi ?? null)[0]);
         }
