@@ -9,7 +9,7 @@ import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiH
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
-import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -691,6 +691,15 @@ for (const [cau, laTiemNang] of [
   ok("'dài 16m' mà chưa có ngang → null", ghepMotChieu("dien_tich_dat", "dài 16m", null, null) === null);
   ok("'5x16' đủ hai chiều → null (đường cũ)", ghepMotChieu("dien_tich_dat", "5x16", "5", null) === null);
   ok("đang hỏi giá thì không ghép", ghepMotChieu("gia", "dài 16m", "5", null) === null);
+  // 24/09/2026 (chủ dự án test Zalo, nhà mặt tiền Trần Đình Xu)
+  const tdx = "Quận 1 8x15m 3 tầng · Góc 2 mặt tiền\nHợp đồng thuê Sacombank đến năm 2031 · 150 triệu/tháng\nGóc hai mặt tiền ngay nút giao Trần Đình Xu – Nguyễn Cư Trinh";
+  ok("địa chỉ KHÔNG đi xuyên dấu xuống dòng ('mặt tiền⏎Hợp đồng' không phải địa chỉ)", !/Hợp đồng/.test(bocViTriRao(tdx) ?? ""), String(bocViTriRao(tdx)));
+  ok("'mặt tiền ngay nút giao Trần Đình Xu' → giữ trọn tên đường", /Trần Đình Xu$/.test(bocViTriRao("Góc hai mặt tiền ngay nút giao Trần Đình Xu – Nguyễn Cư Trinh") ?? ""), String(bocViTriRao("Góc hai mặt tiền ngay nút giao Trần Đình Xu – Nguyễn Cư Trinh")));
+  ok("'đã cho thuê là nhà đã hoàn thiện hết rồi em, đăng rao bán đi' KHÔNG phải báo bán rồi", laNgungRao("đã cho thuê là nhà đã hoàn thiện hết rồi em, đăng rao bán đi") === null, String(laNgungRao("đã cho thuê là nhà đã hoàn thiện hết rồi em, đăng rao bán đi")));
+  ok("'nhà đang cho ngân hàng thuê, hợp đồng tới 2031' KHÔNG phải báo bán rồi", laNgungRao("nhà đã cho ngân hàng thuê, hợp đồng tới 2031") === null, String(laNgungRao("nhà đã cho ngân hàng thuê, hợp đồng tới 2031")));
+  ok("'bán rồi em' vẫn là bán rồi", laNgungRao("bán rồi em") === "ban_roi");
+  ok("'cho thuê được rồi em' vẫn là bán rồi (tin cho thuê)", laNgungRao("cho thuê được rồi em") === "ban_roi");
+  ok("'đã có người cọc rồi' vẫn là bán rồi", laNgungRao("đã có người cọc rồi") === "ban_roi", String(laNgungRao("đã có người cọc rồi")));
   for (const t of ["đã trả lời rồi này", "anh nói rồi mà", "trả lời ở trên rồi em", "gửi rồi đó", "nhắn lúc nãy rồi"]) ok(`'${t}' là câu 'đã trả lời'`, laNoiDaTraLoi(t));
   for (const t of ["4 tầng, 4 phòng ngủ nhé", "nhà trả lời điện thoại suốt", "anh nói chung là nhà đẹp lắm, 4 tầng, hẻm xe hơi, sổ hồng riêng đầy đủ"]) ok(`'${t}' KHÔNG phải câu 'đã trả lời'`, !laNoiDaTraLoi(t));
   const bia = ["137m2 trên sổ, giá 5 tỷ 9 thương lượng 5 tỷ 5, khuôn đất này dễ xây lắm anh. Nhà mình xây mấy tầng rồi ạ?"];

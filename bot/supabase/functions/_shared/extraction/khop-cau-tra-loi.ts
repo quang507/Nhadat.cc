@@ -226,13 +226,16 @@ const TU_TA_DUONG = new Set([
   "ba", "gac",
   // 15/09/2026 (bắn thử kho xưởng): "đường xe container" → street "xe container".
   "container", "cont", "tai",
+  // 24/09/2026 (chủ dự án test Zalo): "mặt tiền ngay nút giao Trần Đình Xu" → tên đường từng thành "ngay nút giao Trần".
+  "ngay", "nut", "giao",
 ]);
 // Tên quận/huyện đứng ngay sau tên đường ("hxh Nguyễn Kiệm Phú Nhuận") — gặp là hết tên đường.
 const QUAN_SAU_TEN = /^(?:phu nhuan|tan binh|binh thanh|go vap|tan phu|binh tan|thu duc|nha be|binh chanh|hoc mon|cu chi|can gio)$/;
 // 15/09/2026 (bắn thử): "hẻm 5m Lê Đức Thọ gò vấp" → tên đường "Lê Đức" — "tho" nằm
 // trong TU_DUNG (vì "thổ cư") nên cắt cụt Lê Đức Thọ. Chữ ĐA NGHĨA chỉ dừng khi đi
 // thành CỤM hai chữ của thứ khác: "thổ cư", "thổ đất".
-const DUNG_HAI_CHU = /^(?:tho cu|tho dat)$/;
+// 24/09/2026: "mặt tiền Hợp đồng thuê…" — "hợp đồng" không mở đầu tên đường nào.
+const DUNG_HAI_CHU = /^(?:tho cu|tho dat|hop dong)$/;
 
 // Chữ mở đầu THỨ KHÁC — gặp là hết tên đường: giấy tờ, giá, kết cấu, hành chính.
 // "đường nhựa 7m sổ riêng 850tr" dừng ở "sổ", không nuốt cả câu.
@@ -302,7 +305,9 @@ export function bocViTriRao(text: string): string | null {
   // "mặt phố" là LOẠI nhà, không phải "phố <tên>" — bỏ qua, tìm chữ mở đầu kế tiếp.
   let menh: string | null = null;
   // 15/09/2026 (bắn thật N1): "mặt tiền Nguyễn Chí Thanh" cũng là địa chỉ.
-  const reMenh = /(?:^|[\s,(])((?:đường|duong|hẻm|hem|hxh|phố|pho|ngõ|ngo|mặt tiền|mat tien|mt)\s+[^,.;!?\n]{2,70})/giu;
+  // 24/09/2026 (chủ dự án test Zalo): "Góc 2 mặt tiền⏎Hợp đồng thuê Sacombank…" — `\s+` sau chữ mở đầu nuốt cả dấu
+  // XUỐNG DÒNG, địa chỉ thành "mặt tiền Hợp đồng" và bot tưởng căn khác, tạo tin thứ hai. Chỉ khoảng trắng cùng dòng.
+  const reMenh = /(?:^|[\s,(])((?:đường|duong|hẻm|hem|hxh|phố|pho|ngõ|ngo|mặt tiền|mat tien|mt)[ \t]+[^,.;!?\n]{2,70})/giu;
   for (let mm = reMenh.exec(t); mm; mm = reMenh.exec(t)) {
     const truoc = boDau(t.slice(Math.max(0, mm.index - 6), mm.index + 1));
     // "mặt tiền 4m" là CHIỀU NGANG, không phải địa chỉ — tìm tiếp sau chữ "mặt tiền".
@@ -1502,6 +1507,15 @@ export function laNgungRao(text: string): NgungRao | null {
   // sau "ty" nên cửa này hụt, câu rao không dấu bị hiểu thành RÚT TIN. Đơn vị
   // kết thúc ở chỗ hết chữ cái là đủ, không đòi biên từ.
   if (/\d\s*(ty|ti|toi|trieu|tr|m2)(?![a-z])/.test(kd)) return null;
+  // 24/09/2026 (chủ dự án test Zalo): "đã cho thuê là nhà đã hoàn thiện hết rồi em, đăng rao bán đi" → bị hiểu "bán rồi",
+  // bot hỏi "mình đã bán căn nào". Lời GIỤC đăng ("đăng / rao bán đi") xét TRƯỚC mọi luật "bán rồi"; và "đã/đang cho thuê"
+  // kèm chuyện hợp đồng / ngân hàng / dòng tiền là NHÀ ĐANG CÓ KHÁCH THUÊ (thông tin tin rao), không phải giao dịch xong.
+  const giucDangTruoc = !/\bnua\b/.test(kd) && /\b(?:dang|rao)\b[^.]{0,12}\b(?:di|giup|gium|dum|ho|len)\b/.test(kd);
+  if (giucDangTruoc) return null;
+  const dangCoKhachThue = /\b(?:da|dang)\s*cho thue\b/.test(kd) &&
+    /\b(?:hop dong|ngan hang|dong tien|thu nhap|khach thue|moi thang|hoan thien|kinh doanh)\b/.test(kd) &&
+    !/\b(?:da ban|ban roi|ban duoc|chot roi|coc roi)\b/.test(kd);
+  if (dangCoKhachThue) return null;
   const banRoi =
     /\b(?:da|vua)\s*(?:ban|cho thue|chot|nhan coc|giao dich|co nguoi (?:mua|thue)|sang ten|xong)\b/.test(kd) ||
     /\b(?:ban|cho thue|chot|giao dich|sang ten)\s*(?:duoc|xong|het|nha|dat|can|no)?\s*(?:roi|xong roi|r)\b/.test(kd) ||

@@ -3220,6 +3220,29 @@ fresh(seedKho);
     globalThis.__model.parse = () => OUT();
     globalThis.__cauHinh = cauHinhCu;
   }
+  // 24/09/2026 (chủ dự án test Zalo, nhà mặt tiền Trần Đình Xu): tin rao dài nhiều dòng KHÔNG đẻ căn thứ hai; "đăng rao bán đi"
+  // (kèm "đã cho thuê") KHÔNG phải báo bán rồi.
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-tdx", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-NP-XX-0901", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "Trần Đình Xu", street: "Trần Đình Xu", can_chu_duyet: true }).data;
+    s.active_listing_id = l.id;
+    d.insert("info_requests", { listing_id: l.id, question: "dien_tich_dat", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-tdx", text: "Quận 1 8x15m 3 tầng · Góc 2 mặt tiền\nHợp đồng thuê Sacombank đến năm 2031 · 150 triệu/tháng\nGóc hai mặt tiền ngay nút giao Trần Đình Xu – Nguyễn Cư Trinh, vị trí nhận diện nổi bật." });
+  {
+    const cua = db().t.listings.filter((l) => l.seller_id === db().t.sellers.find((x) => x.zalo_user_id === "z-tdx")?.id);
+    check("TDX-01 tin rao nhiều dòng nhắc lại 'Trần Đình Xu' → KHÔNG tạo căn thứ hai ('mặt tiền Hợp đồng'), diện tích 8x15 vào căn đang hỏi",
+      cua.length === 1 && Number(cua[0].area_m2) === 120 && !cua.some((l) => /Hợp đồng/.test(l.location_raw ?? "")),
+      JSON.stringify({ n: cua.length, lr: cua.map((l) => l.location_raw), area: cua.map((l) => l.area_m2), rep: r.body.replies }));
+    const tT = cua[0];
+    tT.price_raw = "65 tỷ"; tT.price_vnd = 65e9; tT.bedrooms = 4;
+    db().t.info_requests.forEach((q) => { if (q.listing_id === tT.id && q.status === "pending") q.status = "expired"; });
+    db().insert("info_requests", { listing_id: tT.id, question: "phap_ly", status: "pending" });
+    r = await send({ external_user_id: "z-tdx", text: "đã cho thuê là nhà đã hoàn thiện hết rồi em, đăng rao bán đi" });
+    check("TDX-02 'đã cho thuê là nhà đã hoàn thiện hết rồi em, đăng rao bán đi' → KHÔNG hỏi 'đã bán căn nào', tin không bị đóng",
+      !r.body.replies.some((x) => /đã bán căn nào|bán rồi/.test(x)) && tT.status !== "da_chot" && tT.status !== "an",
+      JSON.stringify({ st: tT.status, rep: r.body.replies }));
+  }
   // 24/09/2026: "đăng đi" mà tin THIẾU PHƯỜNG (chưa lên kệ được) → nói thật còn thiếu phường, mở câu phường; có phường là tự lên kệ.
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "z-dang-p", seller_type: "ccrb", name: null, active_listing_id: null }).data;

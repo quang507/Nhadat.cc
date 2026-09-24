@@ -3467,7 +3467,9 @@ Deno.serve(async (req) => {
     // căn đang hỏi là căn khác.
     const duongMoi = tenDuong(bocViTriRao(text) ?? "");
     const duongCu = tenDuong(pendingReq?.listings?.location_raw ?? "");
-    const khacDuong = !!duongMoi && !!duongCu && boDau(duongMoi) !== boDau(duongCu);
+    // 24/09/2026 (chủ dự án test Zalo): câu có nhắc lại ĐÚNG tên đường căn đang hỏi ("…ngay nút giao Trần Đình Xu") thì
+    // vẫn là căn đó, dù luật bắt được một cụm "đường" khác trước.
+    const khacDuong = !!duongMoi && !!duongCu && boDau(duongMoi) !== boDau(duongCu) && !boDau(text).includes(boDau(duongCu));
     // FR-214 b (23/09/2026, Zalo chủ dự án): đang hỏi phường căn nhà Kênh Tân Hóa (Q11) mà nhắn "Đúng rồi và cô
     // muốn rao bán 1 mảnh đất ở xã Cần Giuộc tỉnh Long An ở đường tỉnh lộ 830" → căn nhà chưa có tên đường chuẩn
     // nên `khacDuong` không bắt, cả câu thành câu trả lời phường, lô đất đè lên căn nhà. Câu rao nhắc QUẬN/TỈNH

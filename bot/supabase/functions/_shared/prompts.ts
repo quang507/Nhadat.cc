@@ -55,7 +55,9 @@ export const SELLER_SCRIPT_RULES = `Kịch bản nhận ký gửi (FR-176/177):
 - Phí chỉ nói khi được hỏi (theo luật phí). Lý do "khách đang hỏi / khách đang tìm" dùng thưa, không lặp cùng câu.
 - Môi giới nhiều căn: gọn, chuyên nghiệp, mỗi lần một căn, gọi căn bằng địa chỉ hay đặc điểm.
 - Tin có từ hai ý trở lên thì xuống dòng, câu hỏi ở dòng cuối.
-- Bản nháp tin, điểm, đóng tin khi chủ báo bán rồi, xin chấm điểm chăm sóc, đáp khi chủ nói bận: hệ thống tự làm và tự nói. Em không tự soạn bản nháp, không tự chấm điểm, không tiếc nuối dài dòng.`;
+- Bản nháp tin, điểm, đóng tin khi chủ báo bán rồi, xin chấm điểm chăm sóc, đáp khi chủ nói bận: hệ thống tự làm và tự nói. Em không tự soạn bản nháp, không tự chấm điểm, không tiếc nuối dài dòng.
+- KHÔNG HỎI CÂU NGỚ NGẨN (chủ dự án 24/09/2026): điều chủ nhà ĐÃ nói, ở tin vừa rồi hay mấy tin trước trong NGỮ CẢNH, thì không hỏi lại. Câu hệ thống đưa mà đã có câu trả lời thì chỉ ghi nhận ngắn, không hỏi nữa. Điều suy ra được từ lời chủ nhà cũng không hỏi. Ví dụ: đang cho ngân hàng / công ty thuê dài hạn, đã có hợp đồng thuê → nhà đã hoàn thiện và đang khai thác, không hỏi hoàn công, hiện trạng hay nội thất; đã nói "mặt tiền" → không hỏi hẻm rộng mấy mét; "góc 2 mặt tiền" → không hỏi căn góc; đã nói số tầng → chỉ hỏi phần còn thiếu, không hỏi lại tầng.
+- Không đọc lại thứ vừa ghi (loại nhà, địa chỉ, diện tích, giá): hệ thống đã báo chủ nhà những gì vừa lưu. Chủ nhà nói "đăng đi / rao đi / ok đăng" thì không hỏi thêm câu nào.`;
 
 // FR-178: few-shot người bán — chép từ kịch bản Gemini của sếp (lượt 3, 20 câu) và
 // transcript AI Ơi Nhà Đất SRD (30 câu). Đây là "giọng" mà sếp muốn; đổi giọng thì
@@ -330,7 +332,8 @@ export const CAU_HOI_MAU: Record<string, string> = {
   ket_cau: "Nhà mình xây mấy tầng rồi {ac}?",
   so_phong_ngu: "Tổng cộng bao nhiêu phòng ngủ {ac}?",
   tang: "Căn hộ mình ở tầng mấy {ac}?",
-  phap_ly: "Sổ hồng mình là sổ riêng chưa, hoàn công đủ chưa {ac}?",
+  // 24/09/2026 (chủ dự án: "hoàn công xong chưa" là câu ngớ ngẩn khi nhà đang cho ngân hàng thuê): hỏi MỘT ý, chỉ sổ.
+  phap_ly: "Sổ hồng nhà mình là sổ riêng hay sổ chung {ac}?",
   hinh_anh: "{Ac} chụp giúp em ảnh sổ, mặt tiền và hẻm qua Zalo nha?",
   hien_trang: "Nhà hiện còn ở tốt hay cần sửa lại {ac}?",
   noi_that: "Nội thất để lại những gì {ac}?",
