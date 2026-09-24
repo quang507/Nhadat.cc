@@ -70,7 +70,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { ghepMotChieu, gonLoiSua, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban"]);
@@ -3710,6 +3710,24 @@ Deno.serve(async (req) => {
           }
         }
       }
+      // 24/09/2026 (chủ dự án test Zalo, trả lời bằng TRÍCH tin cũ: "đã trả lời rồi này"): câu phàn nàn từng thành "thông tin
+      // bổ sung" và bot hỏi lại lần ba. Nay đọc lại ≤ 3 tin gần nhất của chủ nhà, tin nào trả lời được câu đang treo thì
+      // lấy làm câu trả lời; không có thì xin lỗi và hỏi lại MỘT câu, không ghi gì vào tin.
+      let dapAnTuTinTruoc = false;
+      if (laNoiDaTraLoi(dapAn) && !humanActive) {
+        const tinTruoc = lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => boBaoLai(m.body) ?? "")
+          .map((b) => b.replace(/\[ảnh:[^\]]*\]/giu, " ").trim()).filter(Boolean).slice(-3).reverse();
+        const cu = tinTruoc.find((b) => !laNoiDaTraLoi(b) && phanLoaiCauTraLoi(pendingReq.question, b).loai === "khop");
+        if (cu) {
+          dapAn = cu;
+          dapAnTuTinTruoc = true;
+        } else {
+          return await traLoiSeller(
+            [`Dạ em xin lỗi ${cachGoi}, em đọc lại mà chưa thấy ${NHAN_HOI_LAI[pendingReq.question] ?? FACT_LABELS[pendingReq.question] ?? "câu đó"}. ${CachGoi} nhắn lại giúp em một chút nha.`],
+            { reask: pendingReq.question, loai_cau: "da_tra_loi" },
+          );
+        }
+      }
       // 24/09/2026 (chủ dự án test Zalo: "sao nó ko biết và tự nhân 5x16 vậy, nó dài 16 mà đưa vào thông tin bổ sung à"):
       // đang hỏi diện tích, lượt trước đã nói "ngang 5m" → "dài 16m" trần là chiều còn lại, không phải câu lệch.
       {
@@ -3772,6 +3790,21 @@ Deno.serve(async (req) => {
       // cho khoá đang hỏi trong khi luật nói "khớp" → coi là LỆCH ("có làm hợp đồng phân phối không"
       // từng thành pháp lý). Fact kèm do AI quyết (`factKem`): luật chỉ còn đỡ khoá AI không có chỗ nói.
       // Model hỏng / trả rỗng → `aiChinh` null → toàn bộ đường luật y như cũ.
+      // 24/09/2026 (chủ dự án test Zalo): "4x14, trệt 1 lầu" khi hỏi diện tích — AI chỉ trả diện tích, luật đọc được
+      // "trệt 1 lầu" nhưng kết cấu là khoá AI nói → rơi mất, bot hỏi lại "mấy tầng". Kết cấu dạng CHẮC (trệt…, N tầng/
+      // N lầu/N tấm) mà câu không có chữ giả định ("được xây", "xây thêm", "tối đa", "cách … là nhà") thì luật nói thay.
+      const ketCauChac = (f: { question: string; answer: string }, cau: string) => f.question === "ket_cau" &&
+        /^(?:nh[aà]\s+)?(?:h[ầa]m\s*\+?\s*)?(?:tr[ệe]t\b|\d{1,2}\s*(?:t[ầa]ng|l[ầa]u|t[ấa]m)\b)/iu.test(f.answer.trim()) &&
+        !/\b(?:duoc xay|xay duoc|xay them|dinh xay|se xay|toi da|cho phep|quy hoach|cach|ben canh|ke ben|hang xom)\b/.test(boDau(cau));
+      // 24/09/2026 (chủ dự án test Zalo): "ngang 5m daifm shr, hxh quay đầu" — AI bỏ sót "shr", pháp lý là khoá AI nói → rơi.
+      // "shr / sổ hồng riêng / sổ riêng" không mơ hồ; câu không có "chưa / đang làm / chờ / chung" thì luật nói thay.
+      const phapLyChac = (f: { question: string; answer: string }) => f.question === "phap_ly" &&
+        /\b(?:shr|so hong rieng|so rieng)\b/.test(boDau(f.answer)) && !/\b(?:chua|dang lam|cho|khong|ko|chung)\b/.test(boDau(f.answer));
+      // 24/09/2026 (chủ dự án: "sao nó hỏi lại vậy … nếu trường hợp tương tự nó hiểu ko"): "4 tầng, 4 phòng ngủ nhé" khi đang
+      // hỏi kết cấu — AI chỉ trả phòng ngủ, im về kết cấu → luật "AI im = lệch" gạt mất "4 tầng", vào bổ sung, bot hỏi lại.
+      // Luật đọc CHẮC cho đúng câu đang hỏi (kết cấu dạng chắc, "shr") thì AI im không gạt được — cho mọi khoá có luật chắc.
+      const luatChacCauTreo = (q: string, s: string) =>
+        nhanDienNhieuFact(s).some((f) => f.question === q && (ketCauChac(f, s) || phapLyChac(f)));
       let aiChinh: (AiChinh & { kienThuc: string[] }) | null = null;
       const cheDoAiTreo = bongAi && cheDoBocAi ? await cheDoBocAi : "tat";
       // Câu có đường riêng (`CAU_KHONG_LAY_AI`: phường, vị trí, ảnh…): AI không quyết GIÁ TRỊ câu treo,
@@ -3801,7 +3834,8 @@ Deno.serve(async (req) => {
           const hoiKem = kq.hoiNguoc ?? (kq.loai === "hoi" ? dapAn : undefined);
           kq = { loai: "khop", ...(hoiKem ? { hoiNguoc: hoiKem } : {}) };
           loaiDapAn = dapAnAi;
-        } else if (aiChinh && layChoCauTreo && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question) && kq.loai === "khop" && KHOA_FACT_AI_BIET.has(pendingReq.question)) {
+        } else if (aiChinh && layChoCauTreo && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question) && kq.loai === "khop" && KHOA_FACT_AI_BIET.has(pendingReq.question) &&
+          !dapAnTuTinTruoc && !luatChacCauTreo(pendingReq.question, dapAn)) {
           kq = { loai: "lech" };
         }
         if (aiChinh && kq.loai === "lech") {
@@ -3824,16 +3858,6 @@ Deno.serve(async (req) => {
       // không xếp vào kiến thức thêm → rơi. Khoá có BẰNG CHỨNG rõ trong chữ khách (số đo / cụm chữ đặc thù) mà AI
       // im thì luật ghi; AI có trả khoá đó thì AI vẫn thắng.
       const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "thang_may", "dien_tich_san"]);
-      // 24/09/2026 (chủ dự án test Zalo): "4x14, trệt 1 lầu" khi hỏi diện tích — AI chỉ trả diện tích, luật đọc được
-      // "trệt 1 lầu" nhưng kết cấu là khoá AI nói → rơi mất, bot hỏi lại "mấy tầng". Kết cấu dạng CHẮC (trệt…, N tầng/
-      // N lầu/N tấm) mà câu không có chữ giả định ("được xây", "xây thêm", "tối đa", "cách … là nhà") thì luật nói thay.
-      const ketCauChac = (f: { question: string; answer: string }, cau: string) => f.question === "ket_cau" &&
-        /^(?:nh[aà]\s+)?(?:h[ầa]m\s*\+?\s*)?(?:tr[ệe]t\b|\d{1,2}\s*(?:t[ầa]ng|l[ầa]u|t[ấa]m)\b)/iu.test(f.answer.trim()) &&
-        !/\b(?:duoc xay|xay duoc|xay them|dinh xay|se xay|toi da|cho phep|quy hoach|cach|ben canh|ke ben|hang xom)\b/.test(boDau(cau));
-      // 24/09/2026 (chủ dự án test Zalo): "ngang 5m daifm shr, hxh quay đầu" — AI bỏ sót "shr", pháp lý là khoá AI nói → rơi.
-      // "shr / sổ hồng riêng / sổ riêng" không mơ hồ; câu không có "chưa / đang làm / chờ / chung" thì luật nói thay.
-      const phapLyChac = (f: { question: string; answer: string }) => f.question === "phap_ly" &&
-        /\b(?:shr|so hong rieng|so rieng)\b/.test(boDau(f.answer)) && !/\b(?:chua|dang lam|cho|khong|ko|chung)\b/.test(boDau(f.answer));
       const factKem = (s: string): Array<{ question: string; answer: string }> => aiChinh
         ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => f.question !== "bo_sung" && (
             !KHOA_FACT_AI_BIET.has(f.question) ||

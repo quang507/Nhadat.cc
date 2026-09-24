@@ -45,6 +45,13 @@ la("nhà ở từ 2019 rồi", []);
 la("Dạ em ghi nhận rồi ạ", []);
 la("gần chỗ làm của con", []);
 // Từ điển: mọi khoá là snake_case, có tên, regex không rỗng; tenNhan
+// 24/09/2026 (chủ dự án test Zalo): "không có tầng lửng" từng thành "có gác lửng" — phủ định có chữ chen giữa, mọi nhãn.
+la("không có tầng lửng,", []);
+la("chưa có sân thượng", []);
+la("ko có gác lửng nha em", []);
+la("không có thang máy", []);
+la("có gác lửng, không ngập", ["khong_ngap", "gac_lung"]);
+la("không ngập, có gác lửng", ["khong_ngap", "gac_lung"]);
 ok("mọi khoá snake_case + có tên", Object.entries(TU_DIEN_NHAN).every(([k, n]) => /^[a-z0-9_]+$/.test(k) && n.ten.length >= 3 && n.khop instanceof RegExp));
 ok("NHAN_HOP_LE khớp từ điển", NHAN_HOP_LE.size === Object.keys(TU_DIEN_NHAN).length && NHAN_HOP_LE.has("yen_tinh"));
 ok("tenNhan: khoá lạ in thẳng", tenNhan(["yen_tinh", "la_lam"]) === "yên tĩnh · la lam", tenNhan(["yen_tinh", "la_lam"]));

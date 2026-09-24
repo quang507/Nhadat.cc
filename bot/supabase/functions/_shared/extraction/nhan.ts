@@ -68,6 +68,11 @@ export const NHAN_HOP_LE: ReadonlySet<string> = new Set(Object.keys(TU_DIEN_NHAN
 // "không có chỗ quay đầu xe hơi" (23/09): "chỗ" chen giữa vẫn là phủ định.
 const PHU_DINH = /(?:^|[\s,.;:(])(?:khong|ko|k|chua|chang|hoi|thieu|it)\s+(?:co\s+|duoc\s+)?(?:cho\s+)?$/;
 
+// 24/09/2026 (chủ dự án test Zalo): "không có tầng lửng" → nhãn "có gác lửng" — PHU_DINH chỉ bật cho vài nhãn và không cho
+// chữ chen giữa ("không có TẦNG lửng", "chưa có SÂN thượng"). Phủ định chắc (không / ko / chưa / chẳng) đứng trước, cách tối
+// đa 2 chữ, không qua dấu phẩy → không gắn, cho MỌI nhãn.
+const PHU_DINH_CHUNG = /(?:^|\s)(?:khong|ko|k|chua|chang)\s+(?:co\s+|duoc\s+|phai\s+|lam\s+)?(?:[a-z0-9%]+\s+){0,2}$/;
+
 /** Nhãn nhận ra trong một câu (thứ tự theo từ điển, không trùng). */
 export function ganNhan(text: string | null | undefined): string[] {
   // 18/09 (bắn 10 tin thật): dấu phẩy phải CÒN là ranh giới — "gần chợ, xe hơi vào" từng thành
@@ -79,6 +84,7 @@ export function ganNhan(text: string | null | undefined): string[] {
     const m = n.khop.exec(kd);
     if (!m) continue;
     if (n.phuDinh && PHU_DINH.test(kd.slice(Math.max(0, m.index - 14), m.index))) continue;
+    if (PHU_DINH_CHUNG.test(kd.slice(Math.max(0, m.index - 30), m.index))) continue;
     ra.push(khoa);
   }
   return ra;

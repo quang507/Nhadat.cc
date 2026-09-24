@@ -458,6 +458,16 @@ export function ngangDai(kd: string): string | null {
 }
 
 /**
+ * 24/09/2026 (chủ dự án test Zalo: trích tin cũ + "đã trả lời rồi này"): chủ nhà nói MÌNH ĐÃ TRẢ LỜI — không phải dữ liệu.
+ * Chỉ câu ngắn (≤ 8 chữ) mà ý chính là "đã trả lời / nói / nhắn / gửi rồi".
+ */
+export function laNoiDaTraLoi(text: string): boolean {
+  const kd = boDau(text ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd || kd.split(" ").length > 8) return false;
+  return /\b(?:tra loi|noi|nhan|gui|ghi|bao)\s+(?:roi|o tren|luc nay|hoi nay|nay gio)\b/.test(kd);
+}
+
+/**
  * 24/09/2026 (chủ dự án test Zalo: "137/28 nghĩa là đường số 59 hẻm 137 và nhà số 28"): mảnh ĐẦU của câu chỉ là số nhà
  * có gạch chéo ("137/28 nhé em, cần bán gấp…") → trả { soNha, conLai }. Không có gạch chéo thì null ("5 tỷ", "4m"
  * không phải số nhà).

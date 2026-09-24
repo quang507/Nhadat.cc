@@ -3182,6 +3182,38 @@ fresh(seedKho);
     check("GOVAP-05 'chinh': AI bỏ sót 'shr' → luật ghi pháp lý 'sổ hồng riêng'",
       tin4.legal_status === "so_hong_rieng" && db().t.listing_facts.some((f) => f.listing_id === tin4.id && f.question === "phap_ly" && f.answer === "sổ hồng riêng"),
       JSON.stringify({ pl: tin4.legal_status, f: db().t.listing_facts.filter((f) => f.listing_id === tin4.id).map((f) => [f.question, f.answer]), rep: r.body.replies }));
+    // 24/09/2026 (chủ dự án: "sao nó hỏi lại vậy … nếu trường hợp tương tự nó hiểu ko").
+    fresh(seedKho);
+    {
+      const s7 = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+      const t7 = db().t.listings.find((l) => l.code === "BDS-Q5-0002");
+      s7.active_listing_id = t7.id;
+      t7.floors = null; t7.floors_text = null; t7.bedrooms = null;
+      db().insert("info_requests", { listing_id: t7.id, question: "ket_cau", status: "pending" });
+      globalThis.__model.parse = (p) => laLuotBocRao(p)
+        ? { so_can: 0, kien_thuc: ["4 tầng"], truong: [] }
+        : OUT();
+      r = await send({ external_user_id: "z-ccrb", text: "4 tầng, 4 phòng ngủ nhé" });
+      check("HOILAI-01 'chinh': AI không trả trường nào (như production 11:02), im về kết cấu → luật chắc '4 tầng' vẫn là câu trả lời (4 tầng, 4 PN), không vào bổ sung, câu kết cấu đóng",
+        t7.floors === 4 && t7.bedrooms === 4 && !pend("ket_cau", t7.id) &&
+          !db().t.listing_facts.some((f) => f.listing_id === t7.id && f.question === "bo_sung" && /4 tầng/.test(f.answer)),
+        JSON.stringify({ fl: t7.floors, bd: t7.bedrooms, f: db().t.listing_facts.filter((f) => f.listing_id === t7.id).map((f) => [f.question, f.answer]), rep: r.body.replies }));
+      // Giả lập lượt trước bot KHÔNG bắt được (bản cũ): xoá kết cấu, mở lại câu treo → chủ nói "đã trả lời rồi này".
+      t7.floors = null; t7.floors_text = null;
+      db().t.listing_facts = db().t.listing_facts.filter((f) => !(f.listing_id === t7.id && f.question === "ket_cau"));
+      db().insert("info_requests", { listing_id: t7.id, question: "ket_cau", status: "pending" });
+      globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+      r = await send({ external_user_id: "z-ccrb", text: "đã trả lời rồi này" });
+      check("HOILAI-02 'đã trả lời rồi này' → đọc lại tin trước '4 tầng, 4 phòng ngủ nhé' → kết cấu 4 tầng, KHÔNG ghi câu phàn nàn vào bổ sung",
+        t7.floors === 4 && !pend("ket_cau", t7.id) &&
+          !db().t.listing_facts.some((f) => f.listing_id === t7.id && /đã trả lời/.test(f.answer)),
+        JSON.stringify({ fl: t7.floors, f: db().t.listing_facts.filter((f) => f.listing_id === t7.id).map((f) => [f.question, f.answer]), rep: r.body.replies }));
+      db().insert("info_requests", { listing_id: t7.id, question: "huong", status: "pending" });
+      r = await send({ external_user_id: "z-ccrb", text: "nói rồi mà" });
+      check("HOILAI-03 'nói rồi mà' khi tin trước không trả lời câu hướng → xin lỗi, hỏi lại MỘT câu, không ghi gì",
+        /xin lỗi/.test(r.body.replies.join(" ")) && pend("huong", t7.id) && !db().t.listing_facts.some((f) => f.listing_id === t7.id && /nói rồi/.test(f.answer)),
+        JSON.stringify(r.body.replies));
+    }
     globalThis.__model.parse = () => OUT();
     globalThis.__cauHinh = cauHinhCu;
   }
