@@ -9,7 +9,7 @@ import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiH
 import { boCauGhiTienKhongCo, boCauM2KhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
-import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -691,6 +691,8 @@ for (const [cau, laTiemNang] of [
   ok("'dài 16m' mà chưa có ngang → null", ghepMotChieu("dien_tich_dat", "dài 16m", null, null) === null);
   ok("'5x16' đủ hai chiều → null (đường cũ)", ghepMotChieu("dien_tich_dat", "5x16", "5", null) === null);
   ok("đang hỏi giá thì không ghép", ghepMotChieu("gia", "dài 16m", "5", null) === null);
+  for (const t of ["đã trả lời rồi này", "anh nói rồi mà", "trả lời ở trên rồi em", "gửi rồi đó", "nhắn lúc nãy rồi"]) ok(`'${t}' là câu 'đã trả lời'`, laNoiDaTraLoi(t));
+  for (const t of ["4 tầng, 4 phòng ngủ nhé", "nhà trả lời điện thoại suốt", "anh nói chung là nhà đẹp lắm, 4 tầng, hẻm xe hơi, sổ hồng riêng đầy đủ"]) ok(`'${t}' KHÔNG phải câu 'đã trả lời'`, !laNoiDaTraLoi(t));
   const bia = ["137m2 trên sổ, giá 5 tỷ 9 thương lượng 5 tỷ 5, khuôn đất này dễ xây lắm anh. Nhà mình xây mấy tầng rồi ạ?"];
   const ra = boCauM2KhongCo(bia, [], "137/28 nhé em, cần bán gấp giá 5 tỏi 9");
   ok("model nói '137m2' mà DB không có, khách không gõ → bỏ câu đó, giữ câu hỏi", ra.length === 1 && !/137m2/.test(ra[0]) && /xây mấy tầng/.test(ra[0]), JSON.stringify(ra));
