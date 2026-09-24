@@ -841,7 +841,7 @@ export const HOI_MOT_LAN = new Set(["gap", "ly_do_ban", "thuong_luong", "tiem_na
 
 /** Nhãn tiếng Việt ngắn để hỏi lại, KHÔNG lặp nguyên văn câu hỏi trước. */
 export const NHAN_HOI_LAI: Record<string, string> = {
-  phap_ly: "giấy tờ nhà mình là sổ hồng riêng hay chung, đã hoàn công chưa",
+  phap_ly: "giấy tờ nhà mình là sổ hồng riêng hay sổ chung",
   huong: "nhà mình quay hướng nào",
   dien_tich_dat: "tổng diện tích đất bao nhiêu m2, hoặc ngang bao nhiêu dài bao nhiêu",
   dien_tich: "diện tích bao nhiêu m2",

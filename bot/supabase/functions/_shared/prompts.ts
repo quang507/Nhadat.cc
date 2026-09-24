@@ -56,7 +56,7 @@ export const SELLER_SCRIPT_RULES = `Kịch bản nhận ký gửi (FR-176/177):
 - Môi giới nhiều căn: gọn, chuyên nghiệp, mỗi lần một căn, gọi căn bằng địa chỉ hay đặc điểm.
 - Tin có từ hai ý trở lên thì xuống dòng, câu hỏi ở dòng cuối.
 - Bản nháp tin, điểm, đóng tin khi chủ báo bán rồi, xin chấm điểm chăm sóc, đáp khi chủ nói bận: hệ thống tự làm và tự nói. Em không tự soạn bản nháp, không tự chấm điểm, không tiếc nuối dài dòng.
-- KHÔNG HỎI CÂU NGỚ NGẨN (chủ dự án 24/09/2026): điều chủ nhà ĐÃ nói, ở tin vừa rồi hay mấy tin trước trong NGỮ CẢNH, thì không hỏi lại. Câu hệ thống đưa mà đã có câu trả lời thì chỉ ghi nhận ngắn, không hỏi nữa. Điều suy ra được từ lời chủ nhà cũng không hỏi. Ví dụ: đang cho ngân hàng / công ty thuê dài hạn, đã có hợp đồng thuê → nhà đã hoàn thiện và đang khai thác, không hỏi hoàn công, hiện trạng hay nội thất; đã nói "mặt tiền" → không hỏi hẻm rộng mấy mét; "góc 2 mặt tiền" → không hỏi căn góc; đã nói số tầng → chỉ hỏi phần còn thiếu, không hỏi lại tầng.
+- KHÔNG HỎI CÂU NGỚ NGẨN (chủ dự án 24/09/2026): điều chủ nhà ĐÃ nói, ở tin vừa rồi hay mấy tin trước trong NGỮ CẢNH, thì không hỏi lại. Câu hệ thống đưa mà đã có câu trả lời thì chỉ ghi nhận ngắn, không hỏi nữa. Điều suy ra được từ lời chủ nhà cũng không hỏi. KHÔNG BAO GIỜ tự hỏi chuyện hoàn công (chủ nhà tự nói thì ghi nhận). Ví dụ: đang cho ngân hàng / công ty thuê dài hạn, đã có hợp đồng thuê → nhà đã hoàn thiện và đang khai thác, không hỏi hiện trạng hay nội thất; đã nói "mặt tiền" → không hỏi hẻm rộng mấy mét; "góc 2 mặt tiền" → không hỏi căn góc; đã nói số tầng → chỉ hỏi phần còn thiếu, không hỏi lại tầng.
 - Không đọc lại thứ vừa ghi (loại nhà, địa chỉ, diện tích, giá): hệ thống đã báo chủ nhà những gì vừa lưu. Chủ nhà nói "đăng đi / rao đi / ok đăng" thì không hỏi thêm câu nào.`;
 
 // FR-178: few-shot người bán — chép từ kịch bản Gemini của sếp (lượt 3, 20 câu) và
@@ -207,7 +207,7 @@ export const FACT_LABELS: Record<string, string> = {
   phuong: "phường (địa chỉ nhà)",
   vi_tri: "vị trí cụ thể (đường, số nhà hoặc hẻm)",
   loai_bds: "loại bất động sản (nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng)",
-  phap_ly: "pháp lý (sổ hồng/sổ đỏ, hoàn công)",
+  phap_ly: "pháp lý (sổ riêng hay sổ chung)",
   dien_tich_dat: "diện tích đất",
   dien_tich: "diện tích",
   dien_tich_tim_tuong: "diện tích tim tường",
@@ -307,7 +307,7 @@ export const CAU_HOI_MAU: Record<string, string> = {
   "huong@dat": "Lô đất mình hướng nào {ac}?",
   "phap_ly@chung_cu": "Căn hộ đã ra sổ hồng chưa hay còn hợp đồng mua bán {ac}?",
   "phap_ly@dat": "Đất mình sổ riêng chính chủ hay đất dự án chờ sổ {ac}?",
-  "phap_ly@biet_thu": "Sổ hồng mình đã hoàn công đủ phần xây chưa {ac}?",
+  "phap_ly@biet_thu": "Biệt thự mình đã có sổ hồng riêng chưa {ac}?",
   "noi_that@chung_cu": "Bàn giao nhà trống hay để lại nội thất gì {ac}?",
   ha_tang: "Lô đất có vướng cột điện, hố ga hay đường đâm gì không {ac}?",
   xay_dung: "Đất mình được xây tự do hay phải theo mẫu chủ đầu tư {ac}?",
