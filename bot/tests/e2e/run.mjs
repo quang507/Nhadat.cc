@@ -3293,6 +3293,24 @@ fresh(seedKho);
       pend("tien_do_so", l.id) && !pend("hoan_cong", l.id),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
+  // FR-223 (bắn thật production 24/09, rn-test-c): chế độ AI `chinh`, AI IM về "chưa có sổ em, đang chờ ra sổ" → luật
+  // "AI im = lệch" từng gạt câu vào BỔ SUNG, câu pháp lý treo mãi, nhánh "chưa sổ → bao giờ ra sổ" không chạy.
+  {
+    const cauHinhCu = globalThis.__cauHinh, parseCu = globalThis.__model.parse;
+    globalThis.__cauHinh = { ...(cauHinhCu ?? {}), boc_tach_ai: "chinh" };
+    // Model làm đúng lời prompt "viết lại sạch, bỏ từ đệm" → giá trị không còn chữ "em" nên KHÔNG nằm nguyên trong cụm
+    // trích → kiểm bằng chứng loại → coi như AI im (đúng hình production).
+    globalThis.__model.parse = () => ({ so_can: 0, kien_thuc: [], truong: [{ khoa: "phap_ly", gia_tri: "chưa có sổ, đang chờ ra sổ", trich_dan: "chưa có sổ em, đang chờ ra sổ", can: null }] });
+    rnSeed("z-rn5", "BDS-Q5-0935");
+    r = await send({ external_user_id: "z-rn5", text: "chưa có sổ em, đang chờ ra sổ" });
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0935");
+    const fs5 = db().t.listing_facts.filter((x) => x.listing_id === l.id).map((x) => [x.question, x.answer]);
+    check("RENHANH-05 'chinh' + AI im: 'chưa có sổ em, đang chờ ra sổ' → vào ô PHÁP LÝ (giữ chữ khách, không thành sổ hồng), không vào bổ sung, câu kế hỏi tiến độ sổ",
+      fs5.some(([q, a]) => q === "phap_ly" && /chưa có sổ/.test(a)) && !fs5.some(([q]) => q === "bo_sung") && l.legal_status !== "so_hong_rieng" &&
+        !pend("phap_ly", l.id) && pend("tien_do_so", l.id),
+      JSON.stringify({ fs5, legal: l.legal_status, rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+    globalThis.__cauHinh = cauHinhCu; globalThis.__model.parse = parseCu;
+  }
   // 24/09/2026 (chủ dự án: "ảnh ko liên quan thì nhận xét luôn bảo à anh có gửi nhầm ảnh ko"): không cất vào tin.
   fresh(seedKho);
   {

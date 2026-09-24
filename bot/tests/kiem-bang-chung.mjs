@@ -277,5 +277,17 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("câu treo diện tích: AI chỉ 'dài 16', tin CHƯA có ngang → null", giaTriChoCauTreo([dx("dai", "16", "dài 16m")], "dien_tich_dat", { frontage_m: null }) === null);
 }
 
+{
+  // FR-223 (bắn thật 24/09): model viết lại SẠCH theo prompt (bỏ từ đệm "em") → vẫn là bằng chứng hợp lệ.
+  const t = "chưa có sổ em, đang chờ ra sổ";
+  const r1 = kiemDeXuat([{ khoa: "phap_ly", gia_tri: "chưa có sổ, đang chờ ra sổ", trich_dan: t, can: null }], t);
+  ok("pháp lý bỏ từ đệm 'em' khỏi giá trị → vẫn ĐẠT", r1.dat.length === 1, JSON.stringify(r1));
+  const r2 = kiemDeXuat([{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: t, can: null }], t);
+  ok("bỏ từ đệm KHÔNG mở đường bịa: 'sổ hồng riêng' từ 'chưa có sổ em…' → vẫn LOẠI", r2.dat.length === 0, JSON.stringify(r2));
+  const t3 = "nội thất để lại hết nha anh";
+  const r3 = kiemDeXuat([{ khoa: "noi_that", gia_tri: "để lại hết", trich_dan: t3, can: null }], t3);
+  ok("nội thất 'để lại hết nha anh' → 'để lại hết' ĐẠT", r3.dat.length === 1, JSON.stringify(r3));
+}
+
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

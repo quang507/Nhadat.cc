@@ -216,7 +216,11 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       // Trường chữ: giá trị phải NẰM TRONG cụm trích (model không được "diễn đạt lại").
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
       const cv = chuanSo(v);
-      if (!(cv.length >= 2 && kd.includes(cv))) {
+      // FR-223 (bắn thật 24/09, rn-test-c): prompt dặn model VIẾT LẠI SẠCH, bỏ từ đệm ("chưa có sổ em, đang chờ ra sổ" →
+      // "chưa có sổ, đang chờ ra sổ") mà luật này đòi giá trị nằm NGUYÊN trong cụm trích → loại, AI coi như im, câu trả lời
+      // rơi vào bổ sung. Bỏ từ đệm / xưng hô ở CẢ HAI bên rồi so; không thêm chữ nào nên vẫn không bịa được.
+      const boDem = (x: string) => x.replace(/\b(?:em|anh|chi|a|nha|nhe|nhen|oi|ha|nghen)\b/g, " ").replace(/\s+/g, " ").trim();
+      if (!(cv.length >= 2 && (kd.includes(cv) || (boDem(cv).length >= 2 && boDem(kd).includes(boDem(cv)))))) {
         // 17/09/2026 (chủ dự án: "AI đọc trước, trả kiến thức cho luật lưu"): pháp lý / nội thất
         // được CHUẨN HOÁ ("shr" → "sổ hồng riêng", "full nt" → "full nội thất") khi cả giá trị
         // lẫn cụm trích đọc ra CÙNG MỘT MÃ — vẫn không được bịa mã khác.
