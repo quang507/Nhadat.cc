@@ -105,9 +105,17 @@ la("có đủ khối thông số: diện tích, kết cấu, đường vào, hư
   /📐 Diện tích: 60m² · ngang 4m x dài 15m/.test(nha) && /🏗 Kết cấu: trệt \+ 2 lầu · 3 phòng ngủ · 2 WC/.test(nha) &&
   /🛣 Đường vào: hẻm xe hơi 5m/.test(nha) && /🧭 Hướng: Đông Nam/.test(nha) && /📜 Pháp lý: sổ hồng riêng, hoàn công/.test(nha), nha);
 la("kết bằng lời mời liên hệ rồi câu hỏi duyệt",
-  /👉 /.test(dongNha.at(-3) ?? "") && /^Độ đầy đủ 82\/100 — thêm /.test(dongNha.at(-2) ?? "") && /ổn chưa|được chưa/.test(dongNha.at(-1) ?? ""),
+  /👉 /.test(dongNha.at(-3) ?? "") && /^Độ đầy đủ 82\/100, thêm /.test(dongNha.at(-2) ?? "") && /ổn chưa|được chưa/.test(dongNha.at(-1) ?? ""),
   dongNha.slice(-3).join(" | "));
 la("KHÔNG đọc mã tin cho khách (FR-178)", !nha.includes("BDS-"), nha);
+// FR-221 c (24/09/2026): chủ nói "đăng đi" và tin đã lên kệ → tiêu đề "lên kệ … rồi", KHÔNG còn câu hỏi duyệt.
+{
+  const daDang = soanTinNhap({ ...NHA_PHO, lai: false, cauTD, daDang: true }).split("\n");
+  // (Gạch dài trong danh sách "thiếu" của DB được `boGachDai` lọc ở chỗ gửi đi — van-tra-loi.mjs kiểm.)
+  la("tin ĐÃ ĐĂNG: tiêu đề 'lên kệ … rồi nha', không câu hỏi duyệt",
+    /lên kệ .* rồi nha anh:$/.test(daDang[0]) && !daDang.some((d) => /ổn chưa|được chưa/.test(d)),
+    daDang[0] + " | " + daDang.at(-1));
+}
 la("không có dòng rỗng thừa", !/\n\s*\n/.test(nha));
 
 const thue = dung(CAN_HO_THUE);

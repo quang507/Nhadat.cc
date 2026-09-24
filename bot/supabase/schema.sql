@@ -707,7 +707,7 @@ do $d$ begin
   alter table public.listing_media add constraint listing_media_giay_to_phai_rieng CHECK (((media_type <> ALL (ARRAY['so_do'::text, 'giay_to'::text])) OR (bucket = 'listing-private'::text)));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
-  alter table public.listing_media add constraint listing_media_media_type_check CHECK ((media_type = ANY (ARRAY['mat_tien'::text, 'trong_nha'::text, 'hem'::text, 'so_do'::text, 'giay_to'::text, 'khac'::text])));
+  alter table public.listing_media add constraint listing_media_media_type_check CHECK ((media_type = ANY (ARRAY['mat_tien'::text, 'trong_nha'::text, 'phong_ngu'::text, 'bep'::text, 'wc'::text, 'san_thuong'::text, 'view'::text, 'hem'::text, 'so_do'::text, 'giay_to'::text, 'khac'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.listing_media add constraint listing_media_path_key UNIQUE (bucket, storage_path);

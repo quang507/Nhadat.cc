@@ -89,7 +89,7 @@ import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
 import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
-import { boCauGhiTienKhongCo, boCauM2KhongCo, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
 import { boCauGhiNhan, boCauTrung, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
@@ -2091,6 +2091,7 @@ Deno.serve(async (req) => {
       // 22/09/2026 (bộ đo giọng B08): câu tiền định "Dạ em là trợ lý AI…" đứng trước, model chép lại gần
       // nguyên văn ở bong bóng sau → chủ nhà đọc hai lần. Câu ≥ 6 từ trùng nhau chỉ giữ lần đầu.
       sach = boCauTrung(sach);
+      sach = sach.map(boGachDai);
       // 23/09/2026 (bắn 26 tin): "Căn góc view thoáng khó bán lắm cô" — khen mà nói ngược nghĩa.
       sach = suaKhenNguocNghia(sach);
       ackSua = null;
@@ -3238,13 +3239,16 @@ Deno.serve(async (req) => {
     // Zalo tạm + ghi sổ lỗi, để tấm ảnh không mất hẳn. Neo căn theo thứ tự FR-157;
     // tin rao MỚI (wantsSell) thì căn chưa tồn tại — gọi sau khi tạo, ở dưới.
     const LOAI_ANH_VI: Record<LoaiAnh, string> = {
-      mat_tien: "mặt tiền", trong_nha: "trong nhà", hem: "hẻm", giay_to: "giấy tờ", ban_ve: "bản vẽ", khac: "",
+      mat_tien: "mặt tiền", trong_nha: "trong nhà", phong_ngu: "phòng ngủ", bep: "bếp", wc: "nhà vệ sinh",
+      san_thuong: "sân thượng", view: "view", hem: "hẻm", giay_to: "giấy tờ", ban_ve: "bản vẽ", khong_lien_quan: "", khac: "",
     };
     const LOAI_MEDIA: Record<LoaiAnh, LoaiMedia> = {
-      mat_tien: "mat_tien", trong_nha: "trong_nha", hem: "hem", giay_to: "giay_to", ban_ve: "khac", khac: "khac",
+      mat_tien: "mat_tien", trong_nha: "trong_nha", phong_ngu: "phong_ngu", bep: "bep", wc: "wc", san_thuong: "san_thuong",
+      view: "view", hem: "hem", giay_to: "giay_to", ban_ve: "khac", khong_lien_quan: "khac", khac: "khac",
     };
-    const nhanAnh = async (listingId: string | null): Promise<void> => {
-      if (!imageUrl) return;
+    /** Trả `true` khi ảnh KHÔNG liên quan tới nhà (đã hỏi "gửi nhầm ảnh không", không cất vào tin). */
+    const nhanAnh = async (listingId: string | null): Promise<boolean> => {
+      if (!imageUrl) return false;
       let id = listingId;
       if (!id) {
         // Tin MỚI NHẤT còn đang rao — tin đã gỡ / đã chốt không nhận ảnh mới.
@@ -3253,7 +3257,7 @@ Deno.serve(async (req) => {
           .order("created_at", { ascending: false }).limit(1).maybeSingle();
         id = ml?.id ?? null;
       }
-      if (!id) return;
+      if (!id) return false;
       const { data: l } = await client.from("listings")
         .select("location_raw, ward, area_m2, property_type").eq("id", id).maybeSingle();
       const boiCanhAnh = [l?.property_type, l?.location_raw, l?.ward, l?.area_m2 ? `${l.area_m2}m2` : null]
@@ -3267,6 +3271,12 @@ Deno.serve(async (req) => {
         } catch (e) {
           await ghiLoi(client, "chat-reply phan loai anh", e);
         }
+      }
+      // 24/09/2026 (chủ dự án: "ảnh ko liên quan thì nhận xét luôn bảo à anh có gửi nhầm ảnh ko"): không cất vào tin.
+      if (kq?.loai === "khong_lien_quan") {
+        const moTaNham = kq.mo_ta?.trim().replace(/\.$/, "").replace(/^hình như (?:là )?/iu, "");
+        ackAnh.push(`Dạ ảnh này ${moTaNham ? `hình như là ${moTaNham.charAt(0).toLowerCase()}${moTaNham.slice(1)}, ` : ""}em thấy không phải ảnh nhà. ${cachGoi.charAt(0).toUpperCase()}${cachGoi.slice(1)} có gửi nhầm ảnh không ạ?`);
+        return true;
       }
       const loai: LoaiMedia = kq ? LOAI_MEDIA[kq.loai] : "khac";
       const tai = await taiAnh(imageUrl);
@@ -3340,12 +3350,13 @@ Deno.serve(async (req) => {
       } else {
         ackAnh.push("Dạ em nhận được ảnh rồi ạ, em bổ sung vào tin ngay.");
       }
+      return false;
     };
     // Seller gửi ẢNH không kèm chữ → nhận ảnh rồi dừng; TUYỆT ĐỐI không coi chuỗi
     // rỗng là "câu trả lời" cho câu hỏi đang chờ (từng làm mất fact pháp lý).
     if (!text && imageUrl) {
-      await nhanAnh(pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null);
-      return await traLoiSeller([`Cảm ơn ${cachGoi} nhiều!`], { anh: true });
+      const nham = await nhanAnh(pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null);
+      return await traLoiSeller(nham ? [] : [`Cảm ơn ${cachGoi} nhiều!`], { anh: true, ...(nham ? { anh_nham: true } : {}) });
     }
     // Soát 01/09 (vai người bán): ảnh KÈM CHÚ THÍCH từng rơi mất — chữ là câu
     // trả lời, ảnh vẫn phải vào kho. Neo căn theo thứ tự FR-157.
@@ -3371,7 +3382,7 @@ Deno.serve(async (req) => {
     // bản nháp gửi luôn và câu hỏi của chủ nhà bị NUỐT. `truoc` = bong bóng đứng trước bản nháp (đáp án
     // tiền định cho câu hỏi ngược).
     const guiBanNhap = async (
-      listingId: string, extra: Record<string, unknown>, lai = false, truoc: string[] = [],
+      listingId: string, extra: Record<string, unknown>, lai = false, truoc: string[] = [], dangLuon = false,
     ): Promise<Awaited<ReturnType<typeof traLoiSeller>> | string[]> => {
       const [{ data: l }, { data: dt, error: dErr }, { data: facts }] = await Promise.all([
         client.from("listings")
@@ -3402,6 +3413,30 @@ Deno.serve(async (req) => {
       // THẬT theo mẫu tin lẻ mogi.vn (tiêu đề gộp · địa chỉ · GIÁ · thông số),
       // và tách ra để `scripts/xem-tin-nhap.mjs` dựng thử trên dữ liệu thật mà
       // không phải deploy, `bot/tests/tin-nhap-rao.mjs` kiểm offline.
+      // 24/09/2026 (chủ dự án: "nếu khách nói kiểu đăng đi thì ko hỏi nữa đưa tin luôn"): chủ đã nói "đăng đi" và tin đủ
+      // điểm → đóng dấu duyệt NGAY (trigger đưa lên kệ), gửi tin đã đăng, không hỏi "ổn chưa". Chưa lên kệ được (thiếu
+      // phường / diện tích — `listing_du_dang_tin`) thì nói thật còn thiếu gì; dấu duyệt giữ lại, có đủ là tự lên kệ.
+      if (dangLuon) {
+        const { error: dlErr } = await client.from("listings").update({ chu_duyet_at: new Date().toISOString() }).eq("id", listingId);
+        if (dlErr) await ghiLoi(client, "chat-reply dang luon", dlErr.message);
+        const { data: sau } = await client.from("listings").select("status, ward, area_m2").eq("id", listingId).maybeSingle();
+        const { error: dtErr } = await client.from("info_requests").update({ status: "answered", answer: "đăng đi", answered_at: new Date().toISOString() })
+          .eq("listing_id", listingId).eq("question", "duyet_tin").eq("status", "pending");
+        if (dtErr) await ghiLoi(client, "chat-reply dang luon(dong duyet)", dtErr.message);
+        if (sau && sau.status !== "cho_thong_tin") {
+          const tinDang = soanTinNhap({
+            l: l as TinNhapRow, facts: (facts ?? []) as FactNhap[], diem: d.diem, thieu: d.thieu ?? [],
+            soAnh: d.so_anh ?? 0, lai: false, cauTD, daDang: true,
+          });
+          return await traLoiSeller([...truoc, tinDang, cauTD("dang_luon_cuoi")], { ...extra, duyet: true, dang_luon: true, diem: d.diem, listing_status: sau.status });
+        }
+        const thieuDang = [!sau?.ward ? "phường" : null, sau?.area_m2 == null ? "diện tích" : null].filter(Boolean).join(" và ") || "vài thông tin";
+        if (sau && !sau.ward) {
+          const { error: pErr } = await client.from("info_requests").insert({ listing_id: listingId, question: "phuong", status: "pending" });
+          if (pErr && pErr.code !== "23505") await ghiLoi(client, "chat-reply dang luon(mo phuong)", pErr.message);
+        }
+        return await traLoiSeller([...truoc, cauTD("dang_luon_thieu", { thieu: thieuDang })], { ...extra, dang_luon: true, thieu_dang: thieuDang });
+      }
       const tin = soanTinNhap({
         l: l as TinNhapRow,
         facts: (facts ?? []) as FactNhap[],
@@ -4290,7 +4325,7 @@ Deno.serve(async (req) => {
       // rồi hỏi tiếp — không ghi "đăng đi" thành câu trả lời, không hỏi lại câu cũ.
       let dauDangThieu: string | null = null;
       if (chuMuonDang && !published && lstNow?.can_chu_duyet && !lstNow.chu_duyet_at) {
-        const nhap = await guiBanNhap(pendingReq.listing_id, { saved_fact: null, chu_muon_dang: true });
+        const nhap = await guiBanNhap(pendingReq.listing_id, { saved_fact: null, chu_muon_dang: true }, false, [], true);
         if (!Array.isArray(nhap)) {
           // Nháp đã gửi → câu thông số đang treo thôi, câu duyệt thay chỗ.
           await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
@@ -6092,7 +6127,7 @@ Deno.serve(async (req) => {
       const ten = tenDuong(l.location_raw ?? "") || l.ward || "";
       if (l.code && ten) nhanCan[l.code.toUpperCase()] = ten;
     }
-    replies.splice(0, replies.length, ...boMaTinKhach(replies, nhanCan));
+    replies.splice(0, replies.length, ...boMaTinKhach(replies, nhanCan).map(boGachDai));
   }
   let photos: string[] = [];
 
