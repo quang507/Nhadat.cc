@@ -541,6 +541,10 @@ export function boCauTrung(replies: string[]): string[] {
   const tuCua = (c: string) => new Set(boDau(c).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t && !DEM.has(t)));
   const daThay: Set<string>[] = [];
   return locCauTrongBongBong(replies, (c) => {
+    // 24/09/2026 (tin thật 152 Trần Đình Xu): dòng "📍 địa chỉ" của bản nháp trùng ≥ 80% chữ với dòng TIÊU ĐỀ ngay
+    // trên nên bị bỏ — bản nháp mất địa chỉ. Dòng mở bằng biểu tượng (📍💰📐… bản nháp, 🤖 bóc tách) là dữ liệu
+    // tiền định, không phải câu nói lặp: không bỏ, không dùng để so.
+    if (/^\s*\p{Extended_Pictographic}/u.test(c)) return false;
     const tu = tuCua(c);
     if (tu.size < 6) return false;
     const trung = daThay.some((cu) => {

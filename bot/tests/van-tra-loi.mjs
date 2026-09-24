@@ -356,6 +356,11 @@ ok("boGachCheo: không đụng 'anh chị phụ trách'", boGachCheo("có anh ch
   const md = "Em là trợ lý AI bên AI Ơi Nhà Đất, việc gì cần người thật thì có anh chị phụ trách khu vực theo sát anh ạ. Sổ hồng nhà mình riêng chưa anh?";
   ok("boCauTrung: câu tiền định + model chép lại gần nguyên văn → giữ MỘT, câu hỏi giữ",
     JSON.stringify(boCauTrung([td, md])) === JSON.stringify([td, "Sổ hồng nhà mình riêng chưa anh?"]), JSON.stringify(boCauTrung([td, md])));
+  {
+    // 24/09/2026 (tin thật 152 Trần Đình Xu): dòng 📍 địa chỉ trùng chữ với tiêu đề bản nháp — trước bị bỏ.
+    const nhap = "📋 Em đăng tin như vầy nha anh:\nBán nhà 152 Trần Đình Xu Phường Cầu Ông Lãnh Q.1, 120m², trệt + 4 lầu, 4PN, SHR, giá 65 tỉ\n📍 152 Trần Đình Xu, Phường Cầu Ông Lãnh, Quận 1\n💰 65 tỉ";
+    ok("boCauTrung: dòng 📍 địa chỉ của bản nháp KHÔNG bị bỏ dù trùng chữ với tiêu đề", /📍 152 Trần Đình Xu/.test(boCauTrung([nhap]).join("\n")), JSON.stringify(boCauTrung([nhap])));
+  }
   ok("boCauTrung: câu ngắn trùng ('Dạ em ghi 3 lầu rồi ạ.') KHÔNG bị bỏ", boCauTrung(["Dạ em ghi 3 lầu rồi ạ.", "Dạ em ghi 3 lầu rồi ạ. Sổ riêng chưa anh?"]).length === 2);
   const bb = ["📝 Em ghi nhận: Nhà phố bán · Phường 5 · 60m² · giá 6 tỷ.\nSai chỗ nào anh chị nhắn lại giúp em nha."];
   ok("boCauTrung: không bỏ gì thì trả nguyên mảng (giữ xuống dòng, `===`)", boCauTrung(bb) === bb);

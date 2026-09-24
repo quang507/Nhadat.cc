@@ -21,9 +21,10 @@
 
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
 import { tenNhan } from "./extraction/nhan.ts";
+import { vndThanhChu } from "./extraction/luat-tien.ts";
 
 export const COT_TIN_NHAP =
-  `code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, nhan, ${SPEC_COLS}`;
+  `code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, nhan, rent_income_vnd, ${SPEC_COLS}`;
 
 export type TinNhapRow = SpecRow & {
   code?: string | null;
@@ -42,6 +43,8 @@ export type TinNhapRow = SpecRow & {
   rear_width_m?: number | null;
   /** FR-211: nhãn tìm kiếm (khoá từ điển `extraction/nhan.ts`). */
   nhan?: string[] | null;
+  /** Tin BÁN đang cho thuê: tiền thuê mỗi tháng (trigger đọc từ fact `doanh_thu`). */
+  rent_income_vnd?: number | string | null;
 };
 
 export type FactNhap = { question: string; answer: string | null };
@@ -239,11 +242,17 @@ export function soanTinNhap(t: ThamSoNhap): string {
     fact("hinh_thuc_thue_dat"),
     fact("len_tho_cu"),
   ]);
+  // 24/09/2026 (chủ dự án: "Tiền thuê ghi vào"): tin BÁN đang cho thuê in tiền thuê mỗi tháng (cột đã đọc ra số,
+  // không in nguyên câu chat) + hạn hợp đồng. Toà nhà / kho xưởng in trong khối khai thác bên dưới.
+  const tienThue = Number(l.rent_income_vnd ?? 0) > 0 ? `${vndThanhChu(Number(l.rent_income_vnd))}/tháng` : null;
+  if (!thue && loai !== "toa_nha" && loai !== "kho_xuong") {
+    them("💵", "Đang cho thuê", [tienThue, nhan("hợp đồng", fact("han_hop_dong_thue"))]);
+  }
   if (loai === "toa_nha" || loai === "kho_xuong") {
     them("🏢", loai === "toa_nha" ? "Khai thác" : "Kho xưởng", [
       hau(fact("so_phong"), "phòng"),
       nhan("lấp đầy", fact("ty_le_lap_day")),
-      fact("doanh_thu"),
+      tienThue ? `thu ${tienThue}` : fact("doanh_thu"),
       nhan("PCCC:", fact("pccc")),
       nhan("cao", fact("chieu_cao")),
       nhan("tải trọng", fact("tai_trong_san")),

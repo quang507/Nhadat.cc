@@ -125,6 +125,15 @@ la("KHÔNG đọc mã tin cho khách (FR-178)", !nha.includes("BDS-"), nha);
     daDang[0] + " | " + daDang.at(-1));
 }
 la("không có dòng rỗng thừa", !/\n\s*\n/.test(nha));
+// 24/09/2026 (chủ dự án: "Tiền thuê ghi vào"): tin BÁN đang cho thuê in tiền thuê (số đã đọc từ cột, không in câu chat) + hạn hợp đồng.
+{
+  const t = soanTinNhap({ ...NHA_PHO, l: { ...NHA_PHO.l, rent_income_vnd: 4e8 }, facts: [...NHA_PHO.facts, { question: "doanh_thu", answer: "Cái này bí mật nhé khoảng 400 triệu" }, { question: "han_hop_dong_thue", answer: "tới năm 2030 em" }], lai: false, cauTD });
+  la("tin bán đang cho thuê: '💵 Đang cho thuê: 400 triệu/tháng · hợp đồng tới năm 2030', không in câu chat",
+    /^💵 Đang cho thuê: 400 triệu\/tháng · hợp đồng tới năm 2030$/m.test(t) && !/bí mật/.test(t), t);
+  la("tin chưa có tiền thuê: không có dòng 💵", !/💵/.test(nha));
+  const toa = soanTinNhap({ ...NHA_PHO, l: { ...NHA_PHO.l, property_type: "toa_nha", rent_income_vnd: 12e7 }, lai: false, cauTD });
+  la("toà nhà: tiền thuê vào khối Khai thác ('thu 120 triệu/tháng'), không có dòng 💵 riêng", /🏢 Khai thác: .*thu 120 triệu\/tháng/.test(toa) && !/💵/.test(toa), toa);
+}
 
 const thue = dung(CAN_HO_THUE);
 la("cho thuê: giá kèm '/tháng', có khối điều kiện thuê, có ảnh",
