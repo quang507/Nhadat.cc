@@ -919,7 +919,7 @@ fresh(seedKho);
   r = await send({ external_user_id: "h-1", text: "3 lầu" });
   check("H2 trả lời kết cấu → ghi fact, câu kế LIÊN QUAN: phòng ngủ (không nhảy sang pháp lý)",
     fact("ket_cau") && pend("so_phong_ngu") && !pend("phap_ly"), JSON.stringify(db().t.info_requests));
-  check("H2 câu lệnh model: chưa khen gần đây → CHỈ khen khi thật đáng nói (18/09: lâu lâu mới khen)", /CHỈ khi có gì thật đáng nói với khách mua/.test(prompt(createCalls().at(-1))) && !/KHÔNG khen, KHÔNG nhận xét/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
+  check("H2 câu lệnh model: chưa khen gần đây → CHỈ khen khi thật đáng nói (18/09: lâu lâu mới khen), không đọc lại số (24/09)", /CHỈ khi chủ nhà vừa nói điều thật đáng nói với khách mua/.test(prompt(createCalls().at(-1))) && /KHÔNG đọc lại số liệu/.test(prompt(createCalls().at(-1))) && !/gộp thêm một ý/.test(prompt(createCalls().at(-1))) && !/KHÔNG khen, KHÔNG nhận xét/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
   r = await send({ external_user_id: "h-1", text: "sổ hồng riêng rồi em" });
   check("H3 hỏi phòng ngủ, trả lời pháp lý → VẪN GHI phap_ly, câu phòng ngủ vẫn treo, hỏi lại",
     fact("phap_ly")?.answer === "sổ hồng riêng rồi em" && !fact("so_phong_ngu") && pend("so_phong_ngu") && r.body.reask === "so_phong_ngu",

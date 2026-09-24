@@ -119,5 +119,16 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   ok("rao Facebook: đáp án bỏ biểu tượng + nhãn ('📜 Sổ hồng riêng' → 'Sổ hồng riêng')", pl?.answer === "Sổ hồng riêng", JSON.stringify(f));
 }
 
+{
+  // 24/09/2026 (xuất prompt lượt Trần Đình Xu): "và" giữa hai số không phải ranh mảnh; "tầng 1 và 2" không phải căn hộ tầng 1.
+  const f = nhanDienNhieuFact("4 phòng ngủ em, còn tầng 1 và 2 là để kinh doanh");
+  ok("'tầng 1 và 2 là để kinh doanh' → không cắt ra '2 là để kinh doanh'", !f.some((x) => /^2 là/.test(x.answer)), JSON.stringify(f));
+  ok("'tầng 1 và 2' của nhà phố không thành tang=1", !f.some((x) => x.question === "tang"), JSON.stringify(f));
+  ok("vẫn đọc 4 phòng ngủ", f.some((x) => x.question === "so_phong_ngu" && x.answer === "4"), JSON.stringify(f));
+  const g = nhanDienNhieuFact("3 phòng ngủ và 2 wc");
+  ok("'3 phòng ngủ và 2 wc' vẫn tách hai mảnh", g.some((x) => x.question === "so_wc" && x.answer === "2"), JSON.stringify(g));
+  ok("'căn hộ tầng 12' vẫn là tang", nhanDienFact("căn hộ tầng 12 em")?.question === "tang");
+}
+
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
