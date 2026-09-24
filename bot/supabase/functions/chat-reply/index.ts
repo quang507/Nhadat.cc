@@ -3853,11 +3853,17 @@ Deno.serve(async (req) => {
       // "shr / sổ hồng riêng / sổ riêng" không mơ hồ; câu không có "chưa / đang làm / chờ / chung" thì luật nói thay.
       const phapLyChac = (f: { question: string; answer: string }) => f.question === "phap_ly" &&
         /\b(?:shr|so hong rieng|so rieng)\b/.test(boDau(f.answer)) && !/\b(?:chua|dang lam|cho|khong|ko|chung)\b/.test(boDau(f.answer));
+      // FR-223 (bắn thật 24/09, rn-test-c): "chưa có sổ em, đang chờ ra sổ" khi đang hỏi pháp lý — AI im, luật "AI im = lệch"
+      // gạt vào bổ sung, câu pháp lý treo mãi và nhánh "chưa sổ → hỏi bao giờ ra sổ" không chạy. Cụm CHƯA SỔ rõ ràng là câu trả
+      // lời pháp lý chắc (giữ nguyên chữ khách, KHÔNG đổi thành "sổ hồng riêng" — F2).
+      const phapLyChuaSo = (f: { question: string; answer: string }) => f.question === "phap_ly" &&
+        /\b(?:chua co so|chua ra so|cho so|cho ra so|dang lam so|hdmb|hop dong mua ban|vi bang|giay tay)\b/.test(boDau(f.answer));
       // 24/09/2026 (chủ dự án: "sao nó hỏi lại vậy … nếu trường hợp tương tự nó hiểu ko"): "4 tầng, 4 phòng ngủ nhé" khi đang
       // hỏi kết cấu — AI chỉ trả phòng ngủ, im về kết cấu → luật "AI im = lệch" gạt mất "4 tầng", vào bổ sung, bot hỏi lại.
       // Luật đọc CHẮC cho đúng câu đang hỏi (kết cấu dạng chắc, "shr") thì AI im không gạt được — cho mọi khoá có luật chắc.
       const luatChacCauTreo = (q: string, s: string) =>
-        nhanDienNhieuFact(s).some((f) => f.question === q && (ketCauChac(f, s) || phapLyChac(f)));
+        nhanDienNhieuFact(s).some((f) => f.question === q && (ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f))) ||
+        (q === "phap_ly" && phapLyChuaSo({ question: q, answer: s }));
       let aiChinh: (AiChinh & { kienThuc: string[] }) | null = null;
       const cheDoAiTreo = bongAi && cheDoBocAi ? await cheDoBocAi : "tat";
       // Câu có đường riêng (`CAU_KHONG_LAY_AI`: phường, vị trí, ảnh…): AI không quyết GIÁ TRỊ câu treo,
@@ -3916,7 +3922,7 @@ Deno.serve(async (req) => {
             !KHOA_FACT_AI_BIET.has(f.question) ||
             (!aiChinh!.ghi.some((g) => g.question === f.question) &&
               (aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)) ||
-                KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f)))))
+                KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f)))))
             .map((f) => phapLyChac(f) ? { question: "phap_ly", answer: "sổ hồng riêng" } : f)]
         : nhanDienNhieuFact(s);
       // 15/09/2026 (Zalo thật): vừa trả lời vừa HỎI NGƯỢC → ghi PHẦN trả lời, câu hỏi
