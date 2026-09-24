@@ -626,8 +626,19 @@ for (const [cau, mong] of [
     t1 === '🤖 Bóc tách được: loại: "Nhà phố bán" · địa chỉ: "hẻm 4m Nguyễn Trãi, Phường 2, Quận 5" · diện tích: "56m²" · phòng ngủ: "2" · giá: "5 tới 6 (chưa đọc ra số)"', String(t1));
   const t2 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 12 Hồ Ngọc Lãm", district: null, area_m2: 50, price_raw: "3 tỷ", price_vnd: 3e9 });
   ok("bocTachTaoTin: chưa rõ quận → nói '(chưa rõ quận)', không bịa Quận 5", /địa chỉ: "hẻm 12 Hồ Ngọc Lãm \(chưa rõ quận\)"/.test(t2 ?? "") && !/Quận 5/.test(t2 ?? ""), String(t2));
+  const t0 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: null, ward: null, district: null });
+  ok("bocTachTaoTin: chưa có địa chỉ → KHÔNG in 'địa chỉ: \"(chưa rõ)…\"'", t0 === '🤖 Bóc tách được: loại: "Nhà phố bán"', String(t0));
   const t3 = vuaLuuBan([{ question: "so_phong_ngu", answer: "3" }, { question: "ket_cau", answer: "4 tầng" }], { ket_cau: "kết cấu", so_phong_ngu: "số phòng ngủ" });
   ok("vuaLuuBan: lượt sau → 'Bóc tách được' + đúng các fact lượt đó", t3 === '🤖 Bóc tách được: kết cấu: "4 tầng" · số phòng ngủ: "3"', String(t3));
+}
+
+// ── 24/09/2026: "ở Nguyễn Trãi quận 5" là ĐỊA CHỈ, không phải tiềm năng "để ở" ──
+for (const [cau, laTiemNang] of [
+  ["ở Nguyễn Trãi quận 5", false], ["ở nguyễn trãi q5", false], ["nhà ở Trần Hưng Đạo", false], ["ở phường 2", false],
+  ["để ở", true], ["ở", true], ["ở gia đình", true], ["hợp để ở hoặc cho thuê", true], ["kinh doanh", true],
+]) {
+  const r = nhanDienFact(cau);
+  ok(`tiềm năng: ${JSON.stringify(cau)} → ${laTiemNang ? "tiem_nang" : "không phải tiem_nang"}`, (r?.question === "tiem_nang") === laTiemNang, JSON.stringify(r));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

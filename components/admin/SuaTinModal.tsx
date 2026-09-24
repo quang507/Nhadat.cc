@@ -26,6 +26,7 @@ export type TinSua = {
   frontage_m?: string | number | null;
   length_m?: string | number | null;
   floors?: number | null;
+  floors_text?: string | null;
   bedrooms?: number | null;
   location_raw: string | null;
   district: string | null;
@@ -44,16 +45,30 @@ export const TRANG_THAI_TIN: Record<string, string> = {
 
 type Form = {
   deal: "ban" | "cho_thue"; status: string; property_type: string; price_raw: string; area_m2: string;
-  frontage_m: string; length_m: string; floors: string; bedrooms: string; location_raw: string;
+  frontage_m: string; length_m: string; floors_text: string; bedrooms: string; location_raw: string;
   district: string; ward: string; street: string; description: string;
 };
 const sang = (v: unknown) => (v == null ? "" : String(v));
 const tuTin = (d: TinSua): Form => ({
   deal: d.deal || "ban", status: d.status || "cho_thong_tin", property_type: d.property_type || "chua_ro",
   price_raw: sang(d.price_raw), area_m2: sang(d.area_m2), frontage_m: sang(d.frontage_m), length_m: sang(d.length_m),
-  floors: sang(d.floors), bedrooms: sang(d.bedrooms), location_raw: sang(d.location_raw), district: sang(d.district),
+  floors_text: sang(d.floors_text ?? (d.floors ? `${d.floors} tầng` : "")), bedrooms: sang(d.bedrooms), location_raw: sang(d.location_raw), district: sang(d.district),
   ward: sang(d.ward), street: sang(d.street), description: sang(d.description),
 });
+
+// 24/09/2026 (chủ dự án: "trong này ko ghi là số tầng nữa sếp tao ko thích ghi thế"): ô "Số tầng" thành ô chữ
+// KẾT CẤU ("trệt + lửng + 2 lầu + sân thượng") — lửng, sân thượng, hầm không có chỗ trong một con số. Cột `floors`
+// (số tầng = trệt + lầu, web lọc theo nó) suy ra từ chữ; đọc không ra thì giữ số cũ, không xoá.
+export function soTangTuKetCau(chu: string): number | null {
+  const k = chu.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+  const lau = /(\d{1,2})\s*lau\b/.exec(k);
+  if (lau) return Number(lau[1]) + 1;
+  const tang = /(\d{1,2})\s*tang\b/.exec(k);
+  if (tang) return Number(tang[1]);
+  if (/\blau\b/.test(k)) return 2;
+  if (/\btret\b|cap 4|\bc4\b/.test(k)) return 1;
+  return null;
+}
 
 // Ô số: trống = không có; có chữ thì phải đọc được, không thì báo (không lặng lẽ lưu thành trống).
 const docSo = (v: string, nguyen: boolean): { gt: number | null; loi: string | null } => {
@@ -101,7 +116,7 @@ export default function SuaTinModal({
 
   const so = {
     area_m2: docSo(f.area_m2, false), frontage_m: docSo(f.frontage_m, false), length_m: docSo(f.length_m, false),
-    floors: docSo(f.floors, true), bedrooms: docSo(f.bedrooms, true),
+    bedrooms: docSo(f.bedrooms, true),
   };
   const coLoiSo = Object.values(so).some((x) => x.loi);
   const giaDoc = f.price_raw.trim() ? docTien(f.price_raw) : null;
@@ -127,7 +142,9 @@ export default function SuaTinModal({
       deal: f.deal, status, property_type: f.property_type || null,
       price_raw: f.price_raw.trim() || null,
       area_m2: so.area_m2.gt, frontage_m: so.frontage_m.gt, length_m: so.length_m.gt,
-      floors: so.floors.gt, bedrooms: so.bedrooms.gt,
+      floors_text: f.floors_text.trim() || null,
+      floors: f.floors_text.trim() ? soTangTuKetCau(f.floors_text) ?? tin.floors ?? null : null,
+      bedrooms: so.bedrooms.gt,
       location_raw: f.location_raw.trim() || null, district: f.district.trim() || null,
       ward: f.ward.trim() || null, street: f.street.trim() || null, description: f.description.trim() || null,
       can_chu_duyet: false, updated_at: new Date().toISOString(),
@@ -241,11 +258,15 @@ export default function SuaTinModal({
           {oSo("area_m2", "Diện tích (m²)", "Ví dụ: 62,5")}
         </div>
 
-        <div className="grid gap-4 border-t border-line/60 pt-3 sm:grid-cols-4">
+        <div className="grid gap-4 border-t border-line/60 pt-3 sm:grid-cols-3">
           {oSo("frontage_m", "Ngang (m)", "4,2")}
           {oSo("length_m", "Dài (m)", "18")}
-          {oSo("floors", "Số tầng (tính cả trệt)", "4")}
           {oSo("bedrooms", "Phòng ngủ", "3")}
+          <div className="sm:col-span-3">
+            <label htmlFor={id("ketcau")} className={nhan}>Kết cấu</label>
+            <input id={id("ketcau")} value={f.floors_text} onChange={(e) => setF({ ...f, floors_text: e.target.value })}
+              placeholder="Ví dụ: trệt + lửng + 2 lầu + sân thượng" className={o} />
+          </div>
         </div>
 
         <div className="space-y-3 border-t border-line/60 pt-3">

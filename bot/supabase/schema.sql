@@ -6250,13 +6250,9 @@ AS $function$
     -- chạy", "phòng nào cũng có cửa sổ") vẫn vào vector. SĐT che bởi che_sdt() bọc ngoài cả đoạn.
     case when coalesce(btrim(l.description), '') <> '' then 'Người bán tả: ' || left(l.description, 3000) end,
     (select 'Dự án ' || p.name from public.projects p where p.id = l.project_id),
-    case when l.area_m2 is not null then 'Diện tích ' || trim_scale(l.area_m2) || ' m2' end,
-    case when l.frontage_m is not null and l.length_m is not null
-      then 'Ngang ' || trim_scale(l.frontage_m) || ' m, dài ' || trim_scale(l.length_m) || ' m' end,
-    case when l.price_raw is not null then 'Giá ' || l.price_raw end,
-    coalesce(l.floors_text, case when l.floors is not null then l.floors || ' tầng' end),
-    case when l.bedrooms is not null then l.bedrooms || ' phòng ngủ' end,
-    case when l.bathrooms is not null then l.bathrooms || ' WC' end,
+    -- 20260924b: bỏ diện tích / ngang dài / giá / phòng ngủ / WC — đã LỌC CỨNG bằng cột, và lặp lại 2–3 lần (câu rao +
+    -- cột + fact) làm các căn cùng khoảng giá, cùng kiểu nhà giống nhau tới 0,99; chi tiết riêng từng căn mới là nghĩa.
+    l.floors_text,
     case l.access_type
       when 'mat_tien' then 'Mặt tiền đường' when 'hem_xe_tai' then 'Hẻm xe tải'
       when 'hem_xe_hoi' then 'Hẻm xe hơi' when 'hem_xe_may' then 'Hẻm xe máy' when 'hem' then 'Trong hẻm' end ||
@@ -6272,12 +6268,17 @@ AS $function$
     case when l.has_elevator then 'Có thang máy' end,
     case when coalesce(array_length(l.nhan, 1), 0) > 0
       then 'Đặc điểm: ' || array_to_string(array(select replace(x, '_', ' ') from unnest(l.nhan) x), ', ') end,
-    (select string_agg(replace(f.question, '_', ' ') || ': ' || f.answer, '. ' order by f.question)
-       from (select distinct on (question) question, answer
+    -- 20260924b: fact CHỮ TỰ DO — MỌI câu trả lời (bản trước lấy câu mới nhất mỗi khoá: "sân thượng" đè mất
+    -- "có 1 phòng ngủ ngay tầng trệt" cùng khoá bo_sung); khoá thông số đã có cột thì bỏ (lặp).
+    (select string_agg(replace(f.question, '_', ' ') || ': ' || f.answer, '. ' order by f.question, f.dau)
+       from (select question, answer, min(created_at) as dau
                from public.listing_facts
-              where listing_id = l.id and coalesce(answer, '') <> ''
-                and question not in ('hinh_anh', 'duyet_tin', 'danh_gia', 'xac_nhan_lich', 'con_ban', 'nhan')
-              order by question, created_at desc) f)
+              where listing_id = l.id and coalesce(btrim(answer), '') <> ''
+                and question not in ('hinh_anh', 'duyet_tin', 'danh_gia', 'xac_nhan_lich', 'con_ban', 'nhan',
+                  'vi_tri', 'phuong', 'quan', 'dien_tich', 'dien_tich_dat', 'dien_tich_san', 'dien_tich_tim_tuong',
+                  'gia', 'gia_raw', 'so_phong_ngu', 'so_wc', 'so_phong', 'ket_cau', 'do_rong_hem', 'do_rong_duong',
+                  'phap_ly', 'mat_tien', 'huong', 'tang', 'loai_giao_dich', 'loai_bds')
+              group by question, answer) f)
   ))
   from public.listings l where l.id = p_id;
 $function$

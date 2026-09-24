@@ -3785,12 +3785,18 @@ Deno.serve(async (req) => {
       // không xếp vào kiến thức thêm → rơi. Khoá có BẰNG CHỨNG rõ trong chữ khách (số đo / cụm chữ đặc thù) mà AI
       // im thì luật ghi; AI có trả khoá đó thì AI vẫn thắng.
       const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "thang_may", "dien_tich_san"]);
+      // 24/09/2026 (chủ dự án test Zalo): "4x14, trệt 1 lầu" khi hỏi diện tích — AI chỉ trả diện tích, luật đọc được
+      // "trệt 1 lầu" nhưng kết cấu là khoá AI nói → rơi mất, bot hỏi lại "mấy tầng". Kết cấu dạng CHẮC (trệt…, N tầng/
+      // N lầu/N tấm) mà câu không có chữ giả định ("được xây", "xây thêm", "tối đa", "cách … là nhà") thì luật nói thay.
+      const ketCauChac = (f: { question: string; answer: string }, cau: string) => f.question === "ket_cau" &&
+        /^(?:nh[aà]\s+)?(?:h[ầa]m\s*\+?\s*)?(?:tr[ệe]t\b|\d{1,2}\s*(?:t[ầa]ng|l[ầa]u|t[ấa]m)\b)/iu.test(f.answer.trim()) &&
+        !/\b(?:duoc xay|xay duoc|xay them|dinh xay|se xay|toi da|cho phep|quy hoach|cach|ben canh|ke ben|hang xom)\b/.test(boDau(cau));
       const factKem = (s: string): Array<{ question: string; answer: string }> => aiChinh
         ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => f.question !== "bo_sung" && (
             !KHOA_FACT_AI_BIET.has(f.question) ||
             (!aiChinh!.ghi.some((g) => g.question === f.question) &&
               (aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)) ||
-                KHOA_LUAT_DO_KHI_AI_IM.has(f.question)))))]
+                KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s)))))]
         : nhanDienNhieuFact(s);
       // 15/09/2026 (Zalo thật): vừa trả lời vừa HỎI NGƯỢC → ghi PHẦN trả lời, câu hỏi
       // của chủ nhà được trả lời TRƯỚC câu kế (không nuốt, không ghi cả câu vào ô).
@@ -3872,7 +3878,14 @@ Deno.serve(async (req) => {
         if (mlErr) await ghiLoi(client, "chat-reply cau mem hoi mot lan", mlErr.message);
         boQuaCauTreo = true;
       }
-      if (chuMuonDang) {
+      // 24/09/2026 (chủ dự án test Zalo): "6 tỷ 3 đăng đi" khi đang hỏi GIÁ — câu vừa TRẢ LỜI vừa bảo đăng. Bản
+      // trước coi cả câu là "muốn đăng", bỏ qua câu treo → giá không đóng câu hỏi, bot nói "chỉ cần thêm…" rồi HỎI
+      // LẠI GIÁ. Bỏ vỏ "đăng đi" mà phần còn lại khớp câu đang hỏi → ghi như câu trả lời, đóng câu, hỏi câu KẾ.
+      const dapAnBoDang = dapAn.replace(/[\s,.]*(?:(?:ok|oke|okie|được|dc|rồi|thì)\s+)*(?:đăng|dang|lên|len|post)\s*(?:tin|đi|di|luôn|luon|kệ|ke|lên|len)?(?:\s+(?:đi|di|luôn|luon|em|e|nha|nhé|nhe|ạ|a|giúp|giùm|anh|chị|chi))*\s*[.!]*\s*$/iu, "").trim();
+      const traLoiKemDang = chuMuonDang && dapAnBoDang.length >= 2 && dapAnBoDang !== dapAn.trim() &&
+        phanLoaiCauTraLoi(pendingReq.question, dapAnBoDang).loai === "khop";
+      if (traLoiKemDang) dapAn = dapAnBoDang;
+      if (chuMuonDang && !traLoiKemDang) {
         // Chỉ bỏ câu treo khi tin ĐỦ điểm để gửi nháp; chưa đủ thì câu treo giữ nguyên
         // và nói rõ còn thiếu gì (xử ở dưới, sau khi đọc trạng thái tin).
         boQuaCauTreo = true;
@@ -4194,6 +4207,7 @@ Deno.serve(async (req) => {
       // Chủ nói "đăng đi / ok / được" giữa vòng hỏi (09/09 tối lần 2): đủ 70 điểm
       // thì gửi BẢN NHÁP ngay (bỏ câu đang treo), dưới 70 thì nói rõ còn thiếu gì
       // rồi hỏi tiếp — không ghi "đăng đi" thành câu trả lời, không hỏi lại câu cũ.
+      let dauDangThieu: string | null = null;
       if (chuMuonDang && !published && lstNow?.can_chu_duyet && !lstNow.chu_duyet_at) {
         const nhap = await guiBanNhap(pendingReq.listing_id, { saved_fact: null, chu_muon_dang: true });
         if (!Array.isArray(nhap)) {
@@ -4203,12 +4217,14 @@ Deno.serve(async (req) => {
         }
         // Chưa đủ điểm: giữ câu treo, nói còn thiếu gì rồi hỏi lại câu đó.
         const thieuVan = nhap.slice(0, 2).join(" và ");
-        return await traLoiSeller(
+        // Câu vừa trả lời xong (traLoiKemDang) → không hỏi lại nó; báo còn thiếu gì rồi đi tiếp câu KẾ ở dưới.
+        if (traLoiKemDang) dauDangThieu = `Dạ em đăng liền cho ${cachGoi}, chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.`;
+        else return await traLoiSeller(
           [`Dạ em đăng liền cho ${cachGoi}, chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.\n${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`],
           { chu_muon_dang: true, thieu: nhap, reask: pendingReq.question },
         );
       }
-      if (chuMuonDang) {
+      if (chuMuonDang && !traLoiKemDang) {
         // Tin đã lên kệ / không tự chốt: "ok" chỉ là ừ — thôi câu treo, đi tiếp.
         await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
       }
@@ -4356,7 +4372,8 @@ Deno.serve(async (req) => {
           await ghiLoi(client, "chat-reply mo cau hoi tiep", irErr.message);
         }
       }
-      return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), sellerReply, ...(xinDiemCuoi ? [xinDiemCuoi] : [])], {
+      return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), ...(dauDangThieu ? [dauDangThieu] : []), sellerReply, ...(xinDiemCuoi ? [xinDiemCuoi] : [])], {
+        ...(dauDangThieu ? { chu_muon_dang: true } : {}),
         saved_fact: boQuaCauTreo ? null : pendingReq.question, ...(xinDiemCuoi ? { xin_danh_gia: true } : {}), ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}),
       });
     }

@@ -192,7 +192,7 @@ export function bocTachTaoTin(l: DongBaoLai | null): string | null {
   p.push(["loại", `${LOAI[l.property_type ?? ""] ?? "BĐS"} ${l.deal === "cho_thue" ? "cho thuê" : "bán"}`]);
   const quanMacDinh = !l.district || (l.district === "Quận 5" && l.boc_tach?.quan_mac_dinh === true);
   const dc = gonDiaChi(l.location_raw, l.ward, quanMacDinh ? null : l.district);
-  p.push(["địa chỉ", `${dc || "(chưa rõ)"}${quanMacDinh ? " (chưa rõ quận)" : ""}`]);
+  if (dc) p.push(["địa chỉ", `${dc}${quanMacDinh ? " (chưa rõ quận)" : ""}`]);
   if (l.projects?.name) p.push(["dự án", l.projects.name]);
   if (l.area_m2 !== null && l.area_m2 !== undefined && l.area_m2 !== "") p.push(["diện tích", `${so(l.area_m2)}m²`]);
   const ts = thongSoNgan(l).replace(/^ · /, "");
