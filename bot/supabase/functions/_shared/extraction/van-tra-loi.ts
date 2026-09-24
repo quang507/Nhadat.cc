@@ -933,7 +933,8 @@ export function boDacDiemKhongCo(replies: string[], cans: CanDuLieu[]): { replie
 }
 
 /**
- * 24/09/2026 (chủ dự án: "hoàn công xong chưa cứ hỏi lung tung vậy ko dc"): bot KHÔNG tự hỏi chuyện hoàn công.
+ * 24/09/2026 (chủ dự án: "hoàn công xong chưa cứ hỏi lung tung vậy ko dc"): model KHÔNG tự hỏi chuyện hoàn công;
+ * chỉ hỏi khi bảng rẽ nhánh (FR-223, extraction/re-nhanh.ts) chọn câu `hoan_cong` — lúc đó truyền `choPhep`.
  * Chủ nhà tự nói thì ghi nhận (bóc tách vẫn đọc), nhưng câu HỎI về hoàn công trong lời bot thì bỏ: cắt mệnh đề
  * có "hoàn công" khỏi câu hỏi ("Sổ riêng hay sổ chung, đã hoàn công chưa anh?" → "Sổ riêng hay sổ chung anh?"),
  * câu hỏi chỉ có một ý hoàn công thì bỏ cả câu. Câu khẳng định (không "?") và bong bóng code (🤖 💾 📝 📋) không đụng.
@@ -962,7 +963,9 @@ function catHoanCongTrongCau(cau: string): string | null {
   // Chỉ còn mẩu từ đệm ("Dạ?") thì không còn câu hỏi nào.
   return boDau(ra).replace(/[^a-z0-9 ]/g, " ").trim().split(/\s+/).length < 3 ? null : ra;
 }
-export function boHoiHoanCong(replies: string[]): string[] {
+export function boHoiHoanCong(replies: string[], choPhep = false): string[] {
+  // FR-223: hệ thống vừa chọn câu nhánh `hoan_cong` (sổ riêng, chưa nhắc hoàn công) → câu đó ĐƯỢC hỏi.
+  if (choPhep) return replies;
   let doi = false;
   const ra: string[] = [];
   for (const r of replies) {

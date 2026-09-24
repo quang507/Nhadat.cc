@@ -544,6 +544,7 @@ const TIEN_OK = new Set(["gia", "doanh_thu", "phi_quan_ly", "phi_gui_xe", "gia_d
 const HOI_CO_KHONG = new Set([
   "hem_thong", "ngap_nuoc", "the_chap", "thuong_luong", "can_goc", "thang_may", "pccc", "len_tho_cu", "gap",
   "ranh_gioi", "xu_ly_nuoc_thai", "duong_container", "nguon_nuoc", "hien_trang_su_dung", "so_huu", "tang_phu",
+  "hoan_cong", "ban_giao", // FR-223
 ]);
 
 // Từ khoá tối thiểu cho các câu hỏi CHỮ. Không có từ nào trong đây thì coi là
@@ -583,11 +584,11 @@ const HO_FACT: string[][] = [
   ["vi_tri", "phuong"],
   ["dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "tho_cu", "mat_tien"],
   ["do_rong_hem", "do_rong_duong", "duong_vao"],
-  ["so_huu", "thoi_han_su_dung"],
-  ["hien_trang", "hien_trang_su_dung", "ket_cau", "tang_phu"],
+  ["so_huu", "thoi_han_su_dung", "han_hop_dong_thue"],
+  ["hien_trang", "hien_trang_su_dung", "ket_cau", "tang_phu", "han_hop_dong_thue"],
   ["noi_that", "fit_out"],
   ["tiem_nang", "muc_dich", "nganh_hang_phu_hop"],
-  ["phap_ly", "the_chap"],
+  ["phap_ly", "the_chap", "hoan_cong", "tien_do_so", "ban_giao", "dong_so_huu"],
 ];
 const cungHo = (a: string, b: string) => a === b || HO_FACT.some((h) => h.includes(a) && h.includes(b));
 export const cungHoFact = cungHo;
@@ -842,6 +843,7 @@ export const HOI_MOT_LAN = new Set(["gap", "ly_do_ban", "thuong_luong", "tiem_na
 /** Nhãn tiếng Việt ngắn để hỏi lại, KHÔNG lặp nguyên văn câu hỏi trước. */
 export const NHAN_HOI_LAI: Record<string, string> = {
   phap_ly: "giấy tờ nhà mình là sổ hồng riêng hay sổ chung",
+  hoan_cong: "sổ nhà mình đã hoàn công chưa",
   huong: "nhà mình quay hướng nào",
   dien_tich_dat: "tổng diện tích đất bao nhiêu m2, hoặc ngang bao nhiêu dài bao nhiêu",
   dien_tich: "diện tích bao nhiêu m2",
@@ -1397,7 +1399,7 @@ export const NHOM_FACT: Record<string, "co_ban" | "chuyen_mon" | "phu"> = {
 const LIEN_QUAN: Record<string, string[]> = {
   mat_tien: ["dien_tich_dat", "dien_tich", "dien_tich_tim_tuong", "tho_cu"],
   dien_tich: ["mat_tien", "gia"], dien_tich_dat: ["mat_tien", "tho_cu", "gia"],
-  dien_tich_tim_tuong: ["gia"], tho_cu: ["gia"],
+  dien_tich_tim_tuong: ["gia"], tho_cu: ["len_tho_cu", "gia"],
   // 10/09: hỏi GẤP ngay sau giá ("mình cần ra hàng gấp hay được giá thì thôi").
   // (gap ở nhóm co_ban priority 10 = câu CUỐI của nhóm cơ bản, tức ngay sau giá theo thứ
   //  tự ưu tiên; không nối gia → gap để địa chỉ/phường còn thiếu vẫn được hỏi trước.)
@@ -1410,7 +1412,9 @@ const LIEN_QUAN: Record<string, string[]> = {
   huong: ["noi_that", "ha_tang", "phap_ly"], noi_that: ["phap_ly", "tien_coc"],
   ha_tang: ["xay_dung", "phap_ly"], xay_dung: ["phap_ly"],
   san_vuon: ["khu_compound", "do_rong_hem"], khu_compound: ["phap_ly"],
-  phap_ly: ["tien_coc", "tiem_nang", "hinh_anh"], tiem_nang: ["hinh_anh"],
+  // FR-223: câu nhánh pháp lý (chỉ có trong danh sách khi re-nhanh.ts thêm vào) đi NGAY sau câu pháp lý.
+  phap_ly: ["hoan_cong", "tien_do_so", "ban_giao", "dong_so_huu", "tien_coc", "tiem_nang", "hinh_anh"], tiem_nang: ["hinh_anh"],
+  hoan_cong: ["hinh_anh"], tien_do_so: ["ban_giao", "hinh_anh"], dong_so_huu: ["hinh_anh"],
   tien_coc: ["thoi_han_thue"], thoi_han_thue: ["truot_gia"], truot_gia: ["hinh_anh"],
   hinh_anh: [],
 };

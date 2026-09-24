@@ -56,7 +56,7 @@ export const SELLER_SCRIPT_RULES = `Kịch bản nhận ký gửi (FR-176/177):
 - Môi giới nhiều căn: gọn, chuyên nghiệp, mỗi lần một căn, gọi căn bằng địa chỉ hay đặc điểm.
 - Tin có từ hai ý trở lên thì xuống dòng, câu hỏi ở dòng cuối.
 - Bản nháp tin, điểm, đóng tin khi chủ báo bán rồi, xin chấm điểm chăm sóc, đáp khi chủ nói bận: hệ thống tự làm và tự nói. Em không tự soạn bản nháp, không tự chấm điểm, không tiếc nuối dài dòng.
-- KHÔNG HỎI CÂU NGỚ NGẨN (chủ dự án 24/09/2026): điều chủ nhà ĐÃ nói, ở tin vừa rồi hay mấy tin trước trong NGỮ CẢNH, thì không hỏi lại. Câu hệ thống đưa mà đã có câu trả lời thì chỉ ghi nhận ngắn, không hỏi nữa. Điều cùng nghĩa với lời chủ nhà cũng không hỏi: đã nói "mặt tiền" → không hỏi hẻm rộng mấy mét; "góc 2 mặt tiền" → không hỏi căn góc; đã nói số tầng → không hỏi lại tầng. KHÔNG BAO GIỜ tự hỏi chuyện hoàn công (chủ nhà tự nói thì ghi nhận). Đang cho thuê / đang kinh doanh = nhà đã xây xong, hoàn thiện, đang khai thác (chủ dự án 24/09/2026): không hỏi hiện trạng hay nội thất. Nhưng đó không phải pháp lý: sổ vẫn hỏi như thường, không tự nói nhà đã hoàn công.
+- KHÔNG HỎI CÂU NGỚ NGẨN (chủ dự án 24/09/2026): điều chủ nhà ĐÃ nói, ở tin vừa rồi hay mấy tin trước trong NGỮ CẢNH, thì không hỏi lại. Câu hệ thống đưa mà đã có câu trả lời thì chỉ ghi nhận ngắn, không hỏi nữa. Điều cùng nghĩa với lời chủ nhà cũng không hỏi: đã nói "mặt tiền" → không hỏi hẻm rộng mấy mét; "góc 2 mặt tiền" → không hỏi căn góc; đã nói số tầng → không hỏi lại tầng. Chỉ hỏi hoàn công khi đó chính là câu hệ thống đưa (chủ nhà tự nói thì ghi nhận). Đang cho thuê / đang kinh doanh = nhà đã xây xong, hoàn thiện, đang khai thác (chủ dự án 24/09/2026): không hỏi hiện trạng hay nội thất. Nhưng đó không phải pháp lý: sổ vẫn hỏi như thường, không tự nói nhà đã hoàn công.
 - Không đọc lại thứ vừa ghi (loại nhà, địa chỉ, diện tích, giá): hệ thống đã báo chủ nhà những gì vừa lưu. Chủ nhà nói "đăng đi / rao đi / ok đăng" thì không hỏi thêm câu nào.`;
 
 // FR-178: few-shot người bán — chép từ kịch bản Gemini của sếp (lượt 3, 20 câu) và
@@ -88,7 +88,7 @@ export const SELLER_FEWSHOT = `Ví dụ giọng ĐÚNG (chủ nhà nói [câu h�
 - "nhà anh đẹp lắm, khách coi là mê" [ảnh] → "Dạ nghe anh tả là em thấy dễ bán rồi =)) Anh chụp giúp em vài tấm mặt tiền nha?"
 Ví dụ giọng SAI (tránh):
 - "Dạ em ghi 18 tỷ, hẻm 4m, 60m2 rồi ạ." — đọc lại thứ hệ thống đã báo.
-- "Sổ riêng hay chung, đã hoàn công chưa anh?" — gắn thêm ý vào câu hỏi, tự hỏi hoàn công.
+- "Sổ riêng hay chung, đã hoàn công chưa anh?" — gắn thêm ý vào câu hỏi hệ thống đưa.
 - "Đang cho ngân hàng thuê thì chắc hoàn công đủ rồi anh nhỉ." — suy ra điều chủ nhà chưa nói.
 - "Ngang lớn lại nở hậu, khuôn đất này trung tâm hiếm người bán." — thêm đánh giá chủ nhà không nói.
 - "Dạ có, bên em hỗ trợ ký hợp đồng phân phối." — khẳng định điều em không nắm.
@@ -252,7 +252,7 @@ export const FACT_LABELS: Record<string, string> = {
   // sau_dang (hỏi bù sau khi lên kệ) + 4 loại mới toa_nha / dat_nong_nghiep / dat_kinh_doanh / kho_xuong.
   so_wc: "số WC", cach_mat_tien: "cách mặt tiền đường bao xa", hem_thong: "hẻm thông hay cụt, quay đầu xe được không",
   ngap_nuoc: "có ngập nước mùa mưa không", hien_trang_su_dung: "đang ở, cho thuê hay để trống",
-  the_chap: "sổ cầm tay hay đang thế chấp ngân hàng", tien_ich_gan: "tiện ích gần (trường, công chứng, chợ, gym)",
+  the_chap: "sổ cầm tay hay đang thế chấp ngân hàng", hoan_cong: "hoàn công", tien_do_so: "giấy tờ hiện có và tiến độ ra sổ", ban_giao: "đã nhận bàn giao chưa", dong_so_huu: "đồng sở hữu (sổ chung với ai, các bên đồng ý bán chưa)", han_hop_dong_thue: "hợp đồng thuê còn tới khi nào", tien_ich_gan: "tiện ích gần (trường, công chứng, chợ, gym)",
   ly_do_ban: "lý do bán", thuong_luong: "giá còn thương lượng không", fit_out: "thời gian sửa chữa miễn phí (fit-out)",
   view: "view căn hộ", can_goc: "có phải căn góc không", phi_gui_xe: "phí gửi xe", so_huu: "sở hữu lâu dài hay 50 năm",
   hinh_dang: "hình dáng đất (vuông vức, nở hậu, bóp hậu)", mat_do_xd: "mật độ xây dựng cho phép", tang_cao_toi_da: "được xây tối đa mấy tầng",
@@ -353,6 +353,12 @@ export const CAU_HOI_MAU: Record<string, string> = {
   ngap_nuoc: "Khu mình mùa mưa lớn có bị ngập hay đọng nước không {ac}?",
   hien_trang_su_dung: "Nhà hiện mình đang ở, đang cho thuê hay để trống {ac}?",
   the_chap: "Sổ nhà mình đang cầm tay hay đang thế chấp ngân hàng {ac}?",
+  // FR-223 (24/09/2026): câu NHÁNH — chỉ hỏi khi câu trả lời trước dẫn tới (extraction/re-nhanh.ts).
+  hoan_cong: "Sổ nhà mình đã hoàn công phần xây dựng chưa {ac}?",
+  tien_do_so: "Giấy tờ nhà mình hiện có là gì, dự kiến bao giờ ra sổ {ac}?",
+  ban_giao: "Căn mình đã nhận bàn giao chưa {ac}?",
+  dong_so_huu: "Sổ đứng tên chung với ai, các bên đã đồng ý bán chưa {ac}?",
+  han_hop_dong_thue: "Hợp đồng thuê hiện còn tới khi nào {ac}?",
   tien_ich_gan: "Quanh nhà mình có trường học, công chứng hay chợ nào gần không {ac}?",
   ly_do_ban: "{Ac} bán căn này vì lý do gì để em tư vấn khách cho đúng ạ?",
   thuong_luong: "Giá mình còn thương lượng được không {ac}?",
