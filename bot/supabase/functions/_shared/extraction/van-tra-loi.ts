@@ -832,3 +832,24 @@ export function boCauGhiTienKhongCo(replies: string[], tienCo: number[], docTien
   });
   return ra;
 }
+
+/**
+ * FR-218 b (24/09/2026, chủ dự án test vai mua): khách nói đủ quận + giá ngay tin đầu, kho đã lọc ra căn, mà model
+ * vẫn hỏi dò ("ba mẹ ở cùng hay phòng riêng?", "ưu tiên hẻm xe hơi hay mặt tiền?") thay vì đưa căn — lời dặn
+ * trong prompt lọt ngẫu nhiên (bắn lại đúng câu đó thì lần sau nó đưa căn). Chặn bằng code: `coNhacCan` soi xem
+ * chữ có nhắc căn nào trong kho (mã hoặc tên đường) chưa; chưa thì nơi gọi thay câu hỏi dò bằng `bongBongGoiYCan`.
+ */
+export type CanGoiY = { code: string; ten: string; dong: string };
+export function coNhacCan(chu: string[], cans: CanGoiY[]): boolean {
+  const kd = boDau(chu.filter((r) => !/^\s*(?:🤖|💾|📝|📋)/u.test(r)).join("\n"));
+  return cans.some((c) => kd.includes(c.code.toLowerCase()) || (c.ten.length >= 4 && kd.includes(boDau(c.ten))));
+}
+/** Bóng bóng đưa tối đa `n` căn, KHÔNG mã tin (FR-178 a), chỉ thông số có thật trong dòng. */
+export function bongBongGoiYCan(cans: CanGoiY[], ac: string, n = 2): string {
+  const ds = cans.slice(0, n).map((c) => `- ${c.dong}`).join("\n");
+  return `Dạ bên em đang có ${cans.length >= 2 && n >= 2 ? "mấy căn" : "căn"} hợp với ${ac} nè:\n${ds}\n${ac[0].toUpperCase()}${ac.slice(1)} thấy căn nào hợp để em gửi thêm hình và chi tiết ạ?`;
+}
+/** Bỏ bong bóng CHỈ là câu hỏi dò ngắn (kết thúc "?", ≤ 25 từ); bong bóng báo lưu và câu có nội dung giữ nguyên. */
+export function boCauHoiDo(replies: string[]): string[] {
+  return replies.filter((r) => /^\s*(?:🤖|💾|📝|📋)/u.test(r) || !(/\?\s*$/.test(r.trim()) && r.trim().split(/\s+/).length <= 25));
+}
