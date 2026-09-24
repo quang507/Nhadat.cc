@@ -18,6 +18,8 @@ r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("hien_trang", "đang cho t
 ok("'đang cho thuê 30 triệu/tháng' → không hỏi lại tiền thuê", !keys(r).includes("doanh_thu"), JSON.stringify(r));
 r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("kien_thuc", "hợp đồng thuê Sacombank đến năm 2031")] });
 ok("đã nói 'đến năm 2031' → KHÔNG hỏi hạn hợp đồng", !keys(r).includes("han_hop_dong_thue"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("_mo_ta", "bán nhà mặt tiền Nguyễn Trãi, đang cho ngân hàng thuê, giá 25 tỷ"), f("phap_ly", "sổ hồng riêng")] });
+ok("câu RAO gốc 'đang cho ngân hàng thuê' (không có fact) → nhánh đang cho thuê, KHÔNG hỏi hoàn công (bắn thật 24/09)", !keys(r).includes("hoan_cong") && r.bo.has("hoan_cong") && keys(r).includes("han_hop_dong_thue"), JSON.stringify({ ...r, bo: [...r.bo] }));
 r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [], rent_income_vnd: 150000000 });
 ok("cột thu nhập thuê có số → coi là đang cho thuê", r.bo.has("hien_trang"), JSON.stringify({ ...r, bo: [...r.bo] }));
 r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "chưa có sổ, hợp đồng mua bán")] });
