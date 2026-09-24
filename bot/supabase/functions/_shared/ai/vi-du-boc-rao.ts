@@ -26,7 +26,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     so_can: 1,
     truong: [t("loai_giao_dich", "ban", "muốn bán"), t("loai_bds", "nha_pho", "căn nhà"), t("duong", "Trần Đình Trọng", "trần đình trọng")],
     kien_thuc: [],
-    luu_y: "Câu chào vẫn có dữ liệu. Tên đường KHÔNG đổi chữ cái dù nghi gõ sai (Đình ≠ Bình) — hệ thống hỏi lại.",
+    luu_y: "Câu chào vẫn có dữ liệu. Tên đường KHÔNG đổi chữ cái dù nghi gõ sai — hệ thống hỏi lại.",
   },
   {
     cau_dang_hoi: null,
@@ -39,7 +39,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("thu_nhap_thue", "45 triệu", "đang cho thuê 45 triệu/tháng"), t("gia", "32 tỷ", "giá 32 tỷ"), t("thuong_luong", "co", "còn thương lượng"),
     ],
     kien_thuc: [],
-    luu_y: "Tin BÁN đang cho thuê: 45 triệu/tháng là thu_nhap_thue, không phải gia. so_tang đếm cả trệt: 1 trệt 3 lầu = 4.",
+    luu_y: "Tin BÁN đang cho thuê: 45 triệu/tháng là thu_nhap_thue, không phải gia. 1 trệt 3 lầu = 4 tầng.",
   },
   {
     cau_dang_hoi: null,
@@ -50,10 +50,11 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("do_rong_hem", "5", "Hẻm 5m"), t("duong", "Phạm Văn Chí", "Phạm Văn Chí"), t("phuong", "7", "P.7"),
       t("ngang", "4.2", "4.2 x 12"), t("dai", "12", "4.2 x 12"), t("no_hau", "4.5", "nở hậu 4.5"),
       t("so_tang", "3", "Trệt lửng 2 lầu"), t("so_phong_ngu", "3", "3PN"), t("so_wc", "3", "3WC"),
-      t("phap_ly", "SHR, hoàn công", "SHR, hoàn công"), t("gia", "6.9 tỷ", "6.9 tỷ"), t("thuong_luong", "co", "TL"),
+      t("phap_ly", "SHR, hoàn công 2021", "SHR, hoàn công 2021"), t("gia", "6.9 tỷ", "6.9 tỷ"), t("thuong_luong", "co", "TL"),
     ],
-    kien_thuc: ["hoàn công 2021"],
-    luu_y: "Tin kiểu Facebook: bỏ biểu tượng, mỗi mảnh một trường. Lửng không tính vào so_tang.",
+    // 24/09/2026 (AI khác soát prompt): bản trước đưa "hoàn công 2021" vào kien_thuc trong khi phap_ly đã có — tự phạm luật "không lặp ý đã có khoá".
+    kien_thuc: [],
+    luu_y: "Tin Facebook: bỏ biểu tượng, mỗi mảnh một trường. Lửng không tính so_tang.",
   },
   {
     cau_dang_hoi: "noi_that",
@@ -61,7 +62,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     so_can: 0,
     truong: [],
     kien_thuc: [],
-    luu_y: "\"bớt / giảm N\" là MỨC GIẢM, không phải gia và không có chữ thương lượng → không trường nào. Câu nói chuyện → kien_thuc rỗng.",
+    luu_y: "\"bớt / giảm N\" là MỨC GIẢM, không phải gia, không phải thương lượng → không trường nào.",
   },
   {
     cau_dang_hoi: "phuong",
@@ -69,7 +70,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     so_can: 0,
     truong: [t("ngang", "5", "ngang 5"), t("dai", "20", "dài 20")],
     kien_thuc: [],
-    luu_y: "\"hẻm xe hơi\" KHÔNG phải do_rong_hem (không có số) và KHÔNG phải hien_trang. \"để em coi lại sổ rồi báo\" là lời hứa, không phải kien_thuc.",
+    luu_y: "\"hẻm xe hơi\" không số mét → không phải do_rong_hem, không phải hien_trang. Lời hứa không vào kien_thuc.",
   },
   {
     cau_dang_hoi: null,
@@ -80,7 +81,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("quan", "Huyện Củ Chi", "Củ Chi"), t("duong", "Nguyễn Thị Rành", "đường Nguyễn Thị Rành"), t("gia", "1 tỷ 2", "giá 1 tỷ 2"), t("gap", "co", "gấp"),
     ],
     kien_thuc: ["có 300m2 thổ"],
-    luu_y: "\"2000m2\" là dien_tich, KHÔNG phải dai. Xã ở huyện: chưa có ô, để bot hỏi.",
+    luu_y: "\"2000m2\" là dien_tich, không phải dai. Xã: chưa có ô.",
   },
   {
     cau_dang_hoi: null,
@@ -92,7 +93,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("phap_ly", "sổ hồng riêng hoàn công đủ", "sổ hồng riêng hoàn công đủ"),
     ],
     kien_thuc: ["hồ bơi sân vườn"],
-    luu_y: "\"Thảo Điền\" là tên KHU, không phải du_an. Tin không nói bán hay thuê → không đưa loai_giao_dich. Lời chào không vào kien_thuc.",
+    luu_y: "\"Thảo Điền\" là tên KHU, không phải du_an. Không nói bán hay thuê → không loai_giao_dich.",
   },
   {
     cau_dang_hoi: null,
@@ -103,7 +104,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("dien_tich", "25", "25m2"), t("gia", "2tr8", "2tr8/thang"), t("tien_coc", "1 tháng", "coc 1 thang"),
     ],
     kien_thuc: ["gan dh spkt", "co gac may lanh", "gio giac tu do"],
-    luu_y: "Tin không dấu vẫn bóc như thường. Trường số chỉ ghi SỐ: dien_tich \"25\", không \"25m2\". Cọc tính bằng tháng thì gia_tri \"1 tháng\".",
+    luu_y: "Trường số chỉ ghi SỐ (\"25\", không \"25m2\"). Cọc: \"1 tháng\".",
   },
   {
     cau_dang_hoi: null,
@@ -115,7 +116,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("thu_nhap_thue", "180 triệu", "thu nhập 180 triệu/tháng"), t("gia", "45 tỷ", "giá 45 tỷ"), t("do_rong_hem", "8", "hẻm xe hơi 8m thông"),
     ],
     kien_thuc: ["24 phòng full khách"],
-    luu_y: "Toà nhà BÁN có dòng tiền: \"thu nhập N/tháng\" là thu_nhap_thue. Hẻm có số mét mới là do_rong_hem.",
+    luu_y: "Toà nhà BÁN: \"thu nhập N/tháng\" là thu_nhap_thue. Hẻm có số mét mới là do_rong_hem.",
   },
   {
     cau_dang_hoi: "vi_tri",
@@ -125,8 +126,19 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("duong", "Phạm Thế Hiển", "pham the hien"), t("do_rong_hem", "4", "hem 4m"), t("phuong", "4", "p4"), t("quan", "Quận 8", "q8"),
     ],
     kien_thuc: [],
-    luu_y: "Khách gõ không dấu → tên đường viết lại CÓ DẤU đúng tên thật, trích dẫn vẫn nguyên văn không dấu. Câu trả lời địa chỉ: chỉ tên đường vào duong, hẻm và phường đi ô riêng, không ghi cả câu.",
+    luu_y: "Không dấu → tên đường viết lại CÓ DẤU, trích dẫn giữ nguyên văn. Chỉ tên đường vào duong; hẻm, phường đi ô riêng.",
   },
+  // 24/09/2026 (chủ dự án chuyển nhận xét của AI khác sau khi đọc prompt xuất ra, lượt Trần Đình Xu): ý không có khoá
+  // chép NGUYÊN VĂN, không đặt nhãn diễn giải (luật thoi_han_thue chỉ cho tin cho thuê nằm ở LUAT, boc-rao.ts).
+  {
+    cau_dang_hoi: "so_phong_ngu",
+    tin: "4 phòng ngủ em, còn tầng 1 và 2 là để kinh doanh",
+    so_can: 0,
+    truong: [t("so_phong_ngu", "4", "4 phòng ngủ")],
+    kien_thuc: ["tầng 1 và 2 là để kinh doanh"],
+    luu_y: "Ý không có khoá → CHÉP NGUYÊN VĂN vào kien_thuc, không đặt nhãn (\"tiềm năng kinh doanh\"). \"tầng 1 và 2\" không phải tang.",
+  },
+
 ];
 
 /** Bản chữ để dán vào system prompt (sau LUAT, cùng khối cache). */

@@ -4416,10 +4416,12 @@ Deno.serve(async (req) => {
           `Viết MỘT tin ngắn như người thật nhắn Zalo: ${
             khenGanDay
               ? "KHÔNG khen, KHÔNG nhận xét căn nhà (mấy tin gần đây em đã khen rồi — lâu lâu mới khen một lần): ghi nhận ngắn một vế hoặc bỏ luôn phần ghi nhận, "
-              : "nhắc lại chi tiết vừa nghe; CHỈ khi có gì thật đáng nói với khách mua thì thêm MỘT câu, còn không thì thôi — "
+              : "ghi nhận ngắn, KHÔNG đọc lại số liệu hay địa chỉ vừa nghe (hệ thống đã báo); CHỈ khi chủ nhà vừa nói điều thật đáng nói với khách mua thì thêm MỘT vế về đúng điều đó, còn không thì thôi — "
           }rồi hỏi tiếp thứ quan trọng nhất còn thiếu: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
-          `Câu gợi ý: "${cauKe}" — nói lại theo cách tự nhiên, hợp với loại nhà này; gộp thêm một ý liền mạch trong CÙNG câu hỏi cũng được, ` +
-          `nhưng ý hỏi chính phải là ${FACT_LABELS[nextKey] ?? nextKey} (hệ thống ghi câu trả lời kế vào ô này; hỏi lệch là ghi sai ô). ` +
+          // 24/09/2026 (chủ dự án chuyển nhận xét của AI khác): bỏ "gộp thêm một ý … cũng được" — chính khe đó cho model gắn
+          // "đã hoàn công chưa" vào câu hỏi sổ. Code chọn HỎI GÌ, model chỉ chọn CÁCH NÓI.
+          `Câu gợi ý: "${cauKe}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${FACT_LABELS[nextKey] ?? nextKey}, ` +
+          `đừng gắn thêm ý khác vào câu hỏi (hệ thống ghi câu trả lời kế vào ô này; hỏi lệch là ghi sai ô). ` +
           (nhieuCan
             ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
             : `Người này chỉ có một căn: KHÔNG nhắc mã tin. `) +
@@ -4826,7 +4828,7 @@ Deno.serve(async (req) => {
                   `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ${hoiRaoPrompt}` +
                   `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao (${khenGanDay ? "KHÔNG khen, không nhận xét — mấy tin gần đây em đã khen rồi" : "nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi"}). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi - KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
                   (firstKey
-                    ? `, rồi hỏi thứ quan trọng nhất còn thiếu: ${FACT_LABELS[firstKey] ?? firstKey}. Câu gợi ý: "${cauHoiDau}" — nói lại theo cách tự nhiên, hợp với loại nhà này; gộp thêm một ý liền mạch trong CÙNG câu hỏi cũng được, nhưng ý hỏi chính phải là ${FACT_LABELS[firstKey] ?? firstKey} (hệ thống ghi câu trả lời kế vào ô này). KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá.`
+                    ? `, rồi hỏi thứ quan trọng nhất còn thiếu: ${FACT_LABELS[firstKey] ?? firstKey}. Câu gợi ý: "${cauHoiDau}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${FACT_LABELS[firstKey] ?? firstKey}, đừng gắn thêm ý khác vào câu hỏi (hệ thống ghi câu trả lời kế vào ô này). KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá.`
                     : ` và báo sẽ đăng lên web ngay.`),
               }],
             });

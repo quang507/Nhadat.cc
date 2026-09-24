@@ -1071,7 +1071,9 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
   // câu) trước, nên câu rao "bán nhà …, 4x16, 1 trệt 2 lầu, shr, 9t5" ghi fact pháp
   // lý là NGUYÊN câu rao (5/42 tin). Mảnh "shr" mới là câu trả lời pháp lý.
   // 15/09/2026 (bắn thật A3): "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng" — dấu chấm + khoảng trắng cũng là ranh mảnh.
-  const manh = text.split(/[,;\n]|\.\s+(?=\S)|\s+va\s+|\s+và\s+/i).map((s) => s.trim()).filter((s) => s.length >= 2);
+  // 24/09/2026 (xuất prompt, lượt Trần Đình Xu): "còn tầng 1 và 2 là để kinh doanh" bị cắt ở "và" thành
+  // tiềm năng "2 là để kinh doanh". "và" giữa hai SỐ ("tầng 1 và 2", "lầu 2 và 3") không phải ranh mảnh.
+  const manh = text.split(/[,;\n]|\.\s+(?=\S)|(?<!\d)\s+(?:va|và)\s+|(?<=\d)\s+(?:va|và)\s+(?!\d)/i).map((s) => s.trim()).filter((s) => s.length >= 2);
   if (manh.length > 1) for (const s of manh) them(nhanDienFact(s));
   // 13/09/2026 (lượt bắn thật): câu nhiều mảnh mà lượt CẢ CÂU trả về nguyên câu
   // làm đáp án thì đó là rác — "anh cần bán căn nhà hẻm xe hơi 5m Nguyễn Trãi…"
@@ -1161,7 +1163,9 @@ export function nhanDienFact(text: string): NhanDien | null {
   }
   // "tầng 12" (chung cư), "thuê tối thiểu 1 năm", "hợp để ở / kinh doanh được" — 09/09 tối lần 2 rơi bo_sung.
   if ((m = /\b(?:tang|lau)\s*(?:thu\s*)?(\d{1,2})\b(?!\s*(?:lau|tang|tam|phong|m\b|met|x|%|(?:moi|mot|1)?\s*nam))/.exec(kd)) &&
-      !/\b\d+\s*(?:lau|tang|tam)\b/.test(kd) && !/\btang\s*(?:gia|them|len)\b|\d\s*%/.test(kd)) {
+      !/\b\d+\s*(?:lau|tang|tam)\b/.test(kd) && !/\btang\s*(?:gia|them|len)\b|\d\s*%/.test(kd) &&
+      // 24/09/2026: "tầng 1 và 2 là để kinh doanh" kể các TẦNG của nhà phố, không phải căn hộ nằm tầng mấy.
+      !/\b(?:tang|lau)\s*\d{1,2}\s*(?:va|den|toi|-|,)\s*\d/.test(kd)) {
     return { question: "tang", answer: m[1] };
   }
   // 16/09/2026 (bắn thật mau-co-thue): "cọc 2 tháng, ở tối thiểu 1 năm" → ô thời hạn ghi cả câu; chỉ lấy mảnh.
