@@ -10,7 +10,7 @@ import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts
 
 const cachGoi = "anh";
 const cauTD = (khoa, o = {}) =>
-  dienCau(CAU_TIEN_DINH[khoa] ?? "", { ...o, ac: cachGoi, Ac: "Anh", web: "aioinhadat.vercel.app" });
+  dienCau(CAU_TIEN_DINH[khoa] ?? "", { ...o, ac: cachGoi, Ac: "Anh", web: "aioinhadat.vercel.app", ten: "R•ai" });
 
 const NHA_PHO = {
   l: {
@@ -104,16 +104,24 @@ la("kiến thức thêm: dòng '📝 Thêm' gom mọi fact bo_sung, cũ trước
 la("có đủ khối thông số: diện tích, kết cấu, đường vào, hướng, pháp lý",
   /📐 Diện tích: 60m² · ngang 4m x dài 15m/.test(nha) && /🏗 Kết cấu: trệt \+ 2 lầu · 3 phòng ngủ · 2 WC/.test(nha) &&
   /🛣 Đường vào: hẻm xe hơi 5m/.test(nha) && /🧭 Hướng: Đông Nam/.test(nha) && /📜 Pháp lý: sổ hồng riêng, hoàn công/.test(nha), nha);
-la("kết bằng lời mời liên hệ rồi câu hỏi duyệt",
-  /👉 /.test(dongNha.at(-3) ?? "") && /^Độ đầy đủ 82\/100, thêm /.test(dongNha.at(-2) ?? "") && /ổn chưa|được chưa/.test(dongNha.at(-1) ?? ""),
+// 24/09/2026 (chủ dự án): bỏ "Khách quan tâm nhắn Zalo cho em để hẹn xem nhà" — lời hứa báo lại người rao, có tên
+// trợ lý, đứng SAU CÙNG.
+la("kết bằng điểm, câu hỏi duyệt, rồi SAU CÙNG '👉 … R•ai báo lại anh …'",
+  /^Độ đầy đủ 82\/100, thêm /.test(dongNha.at(-3) ?? "") && /ổn chưa|được chưa/.test(dongNha.at(-2) ?? "") &&
+  /^👉 Có khách quan tâm là R•ai báo lại anh liền ạ\.$/.test(dongNha.at(-1) ?? "") && !/hẹn xem nhà/.test(nha),
   dongNha.slice(-3).join(" | "));
+la("thiếu tên trợ lý thì BỎ câu 👉, không in '{ten}' hay dòng rỗng",
+  (() => { const t = soanTinNhap({ ...NHA_PHO, lai: false, cauTD: (k, o = {}) => dienCau(CAU_TIEN_DINH[k] ?? "", { ...o, ac: "anh", Ac: "Anh" }) });
+    return !/👉|\{ten\}/.test(t) && !/\n\s*\n/.test(t); })());
 la("KHÔNG đọc mã tin cho khách (FR-178)", !nha.includes("BDS-"), nha);
 // FR-221 c (24/09/2026): chủ nói "đăng đi" và tin đã lên kệ → tiêu đề "lên kệ … rồi", KHÔNG còn câu hỏi duyệt.
 {
   const daDang = soanTinNhap({ ...NHA_PHO, lai: false, cauTD, daDang: true }).split("\n");
   // (Gạch dài trong danh sách "thiếu" của DB được `boGachDai` lọc ở chỗ gửi đi — van-tra-loi.mjs kiểm.)
   la("tin ĐÃ ĐĂNG: tiêu đề 'lên kệ … rồi nha', không câu hỏi duyệt",
-    /lên kệ .* rồi nha anh:$/.test(daDang[0]) && !daDang.some((d) => /ổn chưa|được chưa/.test(d)),
+    /lên kệ .* rồi nha anh:$/.test(daDang[0]) && !daDang.some((d) => /ổn chưa|được chưa/.test(d)) &&
+    // câu `dang_luon_cuoi` gửi ngay sau đã hứa báo lại — không lặp 👉 trong tin.
+    !daDang.some((d) => /^👉/.test(d)),
     daDang[0] + " | " + daDang.at(-1));
 }
 la("không có dòng rỗng thừa", !/\n\s*\n/.test(nha));
