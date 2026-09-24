@@ -3285,6 +3285,14 @@ fresh(seedKho);
       !pend("hoan_cong", l.id) && !r.body.replies.some((x) => /hoàn công/.test(x)),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
+  rnSeed("z-rn8", "BDS-Q5-0938", { description: "bán nhà mặt tiền Nguyễn Trãi phường 3 quận 5, 4x20, trệt 3 lầu, 4 phòng ngủ, đang cho ngân hàng thuê, giá 25 tỷ" });
+  r = await send({ external_user_id: "z-rn8", text: "sổ hồng riêng em" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0938");
+    check("RENHANH-08 'đang cho ngân hàng thuê' chỉ có trong câu rao gốc (không fact) → 'sổ hồng riêng' KHÔNG hỏi hoàn công, hỏi hạn hợp đồng thuê (bắn thật 24/09 rn-test-f)",
+      !pend("hoan_cong", l.id) && pend("han_hop_dong_thue", l.id),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
   rnSeed("z-rn3", "BDS-Q5-0933");
   r = await send({ external_user_id: "z-rn3", text: "chưa có sổ em, đang chờ ra sổ" });
   {
