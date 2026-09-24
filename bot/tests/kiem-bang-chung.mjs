@@ -264,5 +264,18 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("chonViTri: thiếu một bên → lấy bên còn lại; cả hai rỗng → null", chonViTri(null, "Trần Hưng Đạo") === "Trần Hưng Đạo" && chonViTri("12 Trần Hưng Đạo", null) === "12 Trần Hưng Đạo" && chonViTri("", "") === null);
 }
 
+// ── 24/09/2026 (chủ dự án test Zalo): số nhà "137/28" không phải số đo; "dài 16m" ghép ngang đã có trong tin ──
+{
+  const dx = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan });
+  const T = "137/28 nhé em, cần bán gấp giá 5 tỏi 9 thương lượng 5 tỏi 5 là bán được";
+  bo("số nhà 137/28 đọc thành diện tích 137m2", T, "dien_tich", "137", "137/28", "so_khong_co_trong_trich_dan");
+  bo("số nhà 137/28 đọc thành ngang 28", T, "ngang", "28", "137/28", "so_khong_co_trong_trich_dan");
+  dat("diện tích thật vẫn đạt khi câu có cả số nhà", "137/28 đường số 59, 80m2", "dien_tich", "80", "80m2");
+  ok("câu treo diện tích: AI chỉ 'dài 16', tin có ngang 5 → '5x16'", giaTriChoCauTreo([dx("dai", "16", "dài 16m")], "dien_tich_dat", { frontage_m: 5 }) === "5x16", String(giaTriChoCauTreo([dx("dai", "16", "dài 16m")], "dien_tich_dat", { frontage_m: 5 })));
+  ok("câu treo diện tích: AI chỉ 'dài 16', ngang trong tin là chuỗi '5' → '5x16'", giaTriChoCauTreo([dx("dai", "16", "dài 16m")], "dien_tich", { frontage_m: "5" }) === "5x16");
+  ok("câu treo diện tích: AI chỉ 'ngang 5' (tin có dài) → null, không tự nhân", giaTriChoCauTreo([dx("ngang", "5", "ngang 5m")], "dien_tich", { length_m: 16 }) === null);
+  ok("câu treo diện tích: AI chỉ 'dài 16', tin CHƯA có ngang → null", giaTriChoCauTreo([dx("dai", "16", "dài 16m")], "dien_tich_dat", { frontage_m: null }) === null);
+}
+
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

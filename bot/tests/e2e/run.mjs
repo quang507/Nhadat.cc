@@ -3106,6 +3106,63 @@ fresh(seedKho);
     check("TANGPHU-03 kết cấu đã có lửng → view không còn thiếu tang_phu",
       !db().missingFacts().some((m) => m.listing_id === tin.id && m.fact_key === "tang_phu"), "");
   }
+  // 24/09/2026 (chủ dự án test Zalo, người bán Gò Vấp): "đường số 59", "dài 16m" ghép ngang đã có, số nhà "137/28" không thành m².
+  {
+    const cauHinhCu = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1" };
+    fresh(seedKho);
+    r = await send({ external_user_id: "gv-01", text: "Anh cần bán nhà ở đường số 59 Gò vấp," });
+    const tGv = db().t.listings.find((l) => l.seller_id === db().t.sellers.find((x) => x.zalo_user_id === "gv-01")?.id);
+    check("GOVAP-01 rao 'đường số 59 Gò vấp' → địa chỉ 'đường số 59', quận Gò Vấp",
+      /đường số 59/i.test(tGv?.location_raw ?? "") && /Gò Vấp/.test(tGv?.district ?? ""), JSON.stringify({ lr: tGv?.location_raw, q: tGv?.district, rep: r.body.replies }));
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0003");
+    sC.active_listing_id = tin.id;
+    tin.area_m2 = null; tin.frontage_m = 5; tin.length_m = null;
+    db().insert("info_requests", { listing_id: tin.id, question: "dien_tich_dat", status: "pending" });
+    r = await send({ external_user_id: "z-ccrb", text: "dài 16m" });
+    check("GOVAP-02 đang hỏi diện tích, tin có ngang 5 → 'dài 16m' thành 80 m², KHÔNG vào bổ sung",
+      Number(tin.area_m2) === 80 && !db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "bo_sung" && /16/.test(f.answer)) && !pend("dien_tich_dat", tin.id),
+      JSON.stringify({ area: tin.area_m2, f: db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer]), rep: r.body.replies }));
+    const tin2 = db().t.listings.find((l) => l.code === "BDS-Q5-0002");
+    sC.active_listing_id = tin2.id;
+    tin2.area_m2 = null; tin2.frontage_m = null; tin2.location_raw = "đường số 59"; tin2.price_raw = null; tin2.price_vnd = null;
+    db().insert("info_requests", { listing_id: tin2.id, question: "dien_tich_dat", status: "pending" });
+    r = await send({ external_user_id: "z-ccrb", text: "137/28 nhé em, cần bán gấp giá 5 tỏi 9 thương lượng 5 tỏi 5 là bán được" });
+    check("GOVAP-03 '137/28 nhé em, cần bán gấp…' khi đang hỏi diện tích → địa chỉ '137/28 đường số 59', diện tích KHÔNG thành 137",
+      tin2.location_raw === "137/28 đường số 59" && Number(tin2.area_m2 ?? 0) !== 137 && tin2.gap === true,
+      JSON.stringify({ lr: tin2.location_raw, area: tin2.area_m2, gap: tin2.gap, rep: r.body.replies }));
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+    fresh(seedKho);
+    const sC3 = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin3 = db().t.listings.find((l) => l.code === "BDS-Q5-0003");
+    sC3.active_listing_id = tin3.id;
+    tin3.area_m2 = null; tin3.frontage_m = 5; tin3.length_m = null;
+    db().insert("info_requests", { listing_id: tin3.id, question: "dien_tich_dat", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p)
+      ? { so_can: 0, kien_thuc: [], truong: [{ khoa: "dai", gia_tri: "16", trich_dan: "dài 16m", can: null }] }
+      : OUT();
+    r = await send({ external_user_id: "z-ccrb", text: "dài 16m" });
+    check("GOVAP-04 'chinh': AI chỉ đọc 'dài 16', tin có ngang 5 → 80 m², câu diện tích không còn treo",
+      Number(tin3.area_m2) === 80 && !pend("dien_tich_dat", tin3.id),
+      JSON.stringify({ area: tin3.area_m2, f: db().t.listing_facts.filter((f) => f.listing_id === tin3.id).map((f) => [f.question, f.answer]), rep: r.body.replies }));
+    fresh(seedKho);
+    const sC4 = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin4 = db().t.listings.find((l) => l.code === "BDS-Q5-0003");
+    sC4.active_listing_id = tin4.id;
+    tin4.legal_status = null;
+    db().insert("info_requests", { listing_id: tin4.id, question: "dien_tich_dat", status: "pending" });
+    tin4.area_m2 = null;
+    globalThis.__model.parse = (p) => laLuotBocRao(p)
+      ? { so_can: 0, kien_thuc: [], truong: [{ khoa: "ngang", gia_tri: "5", trich_dan: "ngang 5m", can: null }] }
+      : OUT();
+    r = await send({ external_user_id: "z-ccrb", text: "ngang 5m daifm shr, hxh quay đầu" });
+    check("GOVAP-05 'chinh': AI bỏ sót 'shr' → luật ghi pháp lý 'sổ hồng riêng'",
+      tin4.legal_status === "so_hong_rieng" && db().t.listing_facts.some((f) => f.listing_id === tin4.id && f.question === "phap_ly" && f.answer === "sổ hồng riêng"),
+      JSON.stringify({ pl: tin4.legal_status, f: db().t.listing_facts.filter((f) => f.listing_id === tin4.id).map((f) => [f.question, f.answer]), rep: r.body.replies }));
+    globalThis.__model.parse = () => OUT();
+    globalThis.__cauHinh = cauHinhCu;
+  }
   // (4) chế độ `chinh`: AI xếp "sổ hồng riêng" vào KIẾN THỨC THÊM (không trả khoá phap_ly) → luật xếp ô pháp lý, câu kế không hỏi lại pháp lý.
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
   fresh(seedKho);

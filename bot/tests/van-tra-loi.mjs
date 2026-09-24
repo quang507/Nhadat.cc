@@ -9,7 +9,7 @@ import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiH
 import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
-import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -671,6 +671,26 @@ for (const [cau, laTiemNang] of [
   ];
   for (const [kc, t, dap, mong] of ca) ok(`tầng phụ "${dap}" trên "${kc ?? t + " tầng"}" → ${mong}`, themTangPhu(kc, t, dap) === mong, String(themTangPhu(kc, t, dap)));
   for (const dap of ["có sân thượng", "không có", "sân thượng thì có", "ko"]) ok(`"${dap}" là câu trả lời KHỚP cho tang_phu`, phanLoaiCauTraLoi("tang_phu", dap).loai === "khop", phanLoaiCauTraLoi("tang_phu", dap).loai);
+}
+
+// ── 24/09/2026 (chủ dự án test Zalo, người bán Gò Vấp) ──
+{
+  ok("'đường số 59 Gò vấp' → vị trí 'đường số 59'", bocViTriRao("Anh cần bán nhà ở đường số 59 Gò vấp,") === "đường số 59", String(bocViTriRao("Anh cần bán nhà ở đường số 59 Gò vấp,")));
+  ok("'đường Số 7 phường An Lạc' → 'đường Số 7'", bocViTriRao("bán nhà đường Số 7 phường An Lạc") === "đường Số 7", String(bocViTriRao("bán nhà đường Số 7 phường An Lạc")));
+  ok("'hẻm 5m Lê Đức Thọ' không đổi", bocViTriRao("hẻm 5m Lê Đức Thọ gò vấp") === "hẻm 5m Lê Đức Thọ", String(bocViTriRao("hẻm 5m Lê Đức Thọ gò vấp")));
+  const T = "137/28 nhé em, cần bán gấp giá 5 tỏi 9 thương lượng 5 tỏi 5 là bán được";
+  ok("câu vị trí '137/28 nhé em, cần bán gấp…' → '137/28'", catDapAn("vi_tri", T) === "137/28", catDapAn("vi_tri", T));
+  ok("câu vị trí '137/28 Nguyễn Trãi, phường 3' giữ nguyên", catDapAn("vi_tri", "137/28 Nguyễn Trãi, phường 3") === "137/28 Nguyễn Trãi, phường 3", catDapAn("vi_tri", "137/28 Nguyễn Trãi, phường 3"));
+  const sn = soNhaDau(T);
+  ok("số nhà đầu câu: '137/28' + phần còn lại", sn?.soNha === "137/28" && /^cần bán gấp/.test(sn?.conLai ?? ""), JSON.stringify(sn));
+  ok("'số nhà 12/3A' → '12/3A'", soNhaDau("số nhà 12/3A nha")?.soNha === "12/3A");
+  ok("'5 tỷ 9, thương lượng' không phải số nhà", soNhaDau("5 tỷ 9, thương lượng") === null);
+  ok("'4m, hẻm xe hơi' không phải số nhà", soNhaDau("4m, hẻm xe hơi") === null);
+  ok("'dài 16m' + ngang 5 đã có → 'ngang 5m dài 16m'", ghepMotChieu("dien_tich_dat", "dài 16m", "5", null) === "ngang 5m dài 16m", String(ghepMotChieu("dien_tich_dat", "dài 16m", "5", null)));
+  ok("'Ngang 5' trần → null (đi đường cũ: ghi mặt tiền, câu diện tích treo)", ghepMotChieu("dien_tich", "Ngang 5", null, 18) === null);
+  ok("'dài 16m' mà chưa có ngang → null", ghepMotChieu("dien_tich_dat", "dài 16m", null, null) === null);
+  ok("'5x16' đủ hai chiều → null (đường cũ)", ghepMotChieu("dien_tich_dat", "5x16", "5", null) === null);
+  ok("đang hỏi giá thì không ghép", ghepMotChieu("gia", "dài 16m", "5", null) === null);
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
