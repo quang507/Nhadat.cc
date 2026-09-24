@@ -6,7 +6,7 @@
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -712,6 +712,15 @@ for (const [cau, laTiemNang] of [
   ok("gạch đầu dòng → '- '", boGachDai("— căn 1\n— căn 2") === "- căn 1\n- căn 2", JSON.stringify(boGachDai("— căn 1\n— căn 2")));
   ok("gạch cuối câu không để lại ', .'", boGachDai("Dạ em ghi rồi —.") === "Dạ em ghi rồi.", boGachDai("Dạ em ghi rồi —."));
   ok("bong bóng 🤖 không đụng", boCauM2KhongCo(["🤖 Bóc tách được: diện tích: \"137m2\""], [], "")[0].startsWith("🤖"));
+  // 24/09/2026 (chủ dự án: "hoàn công xong chưa cứ hỏi lung tung vậy ko dc"): bot không tự hỏi hoàn công.
+  const hc = (x) => boHoiHoanCong([x]);
+  ok("'sổ riêng hay chung, đã hoàn công chưa anh?' → bỏ vế hoàn công, giữ 'anh?'", hc("Sổ hồng nhà mình là sổ riêng hay sổ chung, đã hoàn công chưa anh?")[0] === "Sổ hồng nhà mình là sổ riêng hay sổ chung anh?", JSON.stringify(hc("Sổ hồng nhà mình là sổ riêng hay sổ chung, đã hoàn công chưa anh?")));
+  ok("câu hỏi chỉ một ý hoàn công → bỏ cả câu, giữ câu ghi nhận", JSON.stringify(hc("Dạ em ghi 4 phòng ngủ rồi.\nNhà mình đã hoàn công xong chưa anh?")) === JSON.stringify(["Dạ em ghi 4 phòng ngủ rồi."]), JSON.stringify(hc("Dạ em ghi 4 phòng ngủ rồi.\nNhà mình đã hoàn công xong chưa anh?")));
+  ok("hai câu hỏi: bỏ câu hoàn công, giữ câu kia", JSON.stringify(hc("Nhà đã hoàn công chưa ạ? Anh muốn bán gấp không?")) === JSON.stringify(["Anh muốn bán gấp không?"]));
+  ok("'Hoàn công năm nào anh?' → bỏ hết", hc("Hoàn công năm nào anh?").length === 0);
+  ok("câu KHẲNG ĐỊNH nhắc hoàn công (chủ đã nói) → giữ", hc("Sổ hồng riêng, hoàn công đủ thì khách yên tâm lắm. Anh muốn rao giá bao nhiêu ạ?")[0] === "Sổ hồng riêng, hoàn công đủ thì khách yên tâm lắm. Anh muốn rao giá bao nhiêu ạ?");
+  ok("bong bóng 💾 đọc DB có 'hoàn công' → không đụng", hc("💾 Đã lưu: sổ hồng riêng, hoàn công?")[0] === "💾 Đã lưu: sổ hồng riêng, hoàn công?");
+  ok("không nhắc hoàn công → trả nguyên mảng", (() => { const a = ["Sổ riêng hay sổ chung anh?"]; return boHoiHoanCong(a) === a; })());
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

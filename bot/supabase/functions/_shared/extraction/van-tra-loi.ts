@@ -931,3 +931,50 @@ export function boDacDiemKhongCo(replies: string[], cans: CanDuLieu[]): { replie
   });
   return { replies: ra, bo };
 }
+
+/**
+ * 24/09/2026 (chủ dự án: "hoàn công xong chưa cứ hỏi lung tung vậy ko dc"): bot KHÔNG tự hỏi chuyện hoàn công.
+ * Chủ nhà tự nói thì ghi nhận (bóc tách vẫn đọc), nhưng câu HỎI về hoàn công trong lời bot thì bỏ: cắt mệnh đề
+ * có "hoàn công" khỏi câu hỏi ("Sổ riêng hay sổ chung, đã hoàn công chưa anh?" → "Sổ riêng hay sổ chung anh?"),
+ * câu hỏi chỉ có một ý hoàn công thì bỏ cả câu. Câu khẳng định (không "?") và bong bóng code (🤖 💾 📝 📋) không đụng.
+ */
+const HOAN_CONG_KD = /\bhoan cong\b/;
+const DUOI_GOI = /(\s+(?:(?:anh|chị|chú|cô|bác|ông|bà|em|mình|ạ|nha|nhé|nhỉ|vậy|ha)\s*)+)?([?!.…]*)\s*$/iu;
+function catHoanCongTrongCau(cau: string): string | null {
+  if (!/\?/.test(cau) || !HOAN_CONG_KD.test(boDau(cau))) return cau;
+  const doan = cau.split(/(,\s*|\s+(?:và|với|lẫn|hay là|hoặc)\s+)/u);
+  const giu: string[] = [];
+  let duoi = "";
+  for (let i = 0; i < doan.length; i += 2) {
+    const d = doan[i];
+    if (HOAN_CONG_KD.test(boDau(d))) {
+      if (i === doan.length - 1) duoi = (DUOI_GOI.exec(d)?.[1] ?? "").trimEnd();
+      continue;
+    }
+    if (giu.length) giu.push(doan[i - 1]);
+    giu.push(d);
+  }
+  if (!giu.length) return null;
+  let ra = giu.join("").replace(/[,\s]+$/u, "");
+  if (!duoi && !/\?\s*$/.test(ra)) ra = ra.replace(/[.!…]+$/u, "");
+  if (duoi && !new RegExp(`${duoi.trim()}\\s*$`, "iu").test(ra)) ra += duoi;
+  if (!/\?\s*$/.test(ra)) ra += "?";
+  // Chỉ còn mẩu từ đệm ("Dạ?") thì không còn câu hỏi nào.
+  return boDau(ra).replace(/[^a-z0-9 ]/g, " ").trim().split(/\s+/).length < 3 ? null : ra;
+}
+export function boHoiHoanCong(replies: string[]): string[] {
+  let doi = false;
+  const ra: string[] = [];
+  for (const r of replies) {
+    if (/^\s*(?:🤖|💾|📝|📋)/u.test(r) || !HOAN_CONG_KD.test(boDau(r))) { ra.push(r); continue; }
+    const dong = r.split("\n").map((l) => {
+      const cac = tachCau(l);
+      const moi = cac.map(catHoanCongTrongCau).filter((c): c is string => !!c);
+      if (moi.length !== cac.length || moi.some((c, i) => c !== cac[i])) doi = true;
+      return moi.join(" ").trim();
+    }).filter((l) => l);
+    const moi = dong.join("\n").trim();
+    if (moi) ra.push(moi);
+  }
+  return doi ? ra : replies;
+}
