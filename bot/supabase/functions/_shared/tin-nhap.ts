@@ -142,7 +142,9 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): st
   const ketCau = l.floors_text ?? (l.floors ? `${l.floors} tầng` : null);
   if (ketCau) cum.push(ketCau);
   if (l.bedrooms) cum.push(`${l.bedrooms}PN`);
-  const pl = PHAP_LY_TIEU_DE[l.legal_status ?? ""] ?? null;
+  // 24/09/2026 (bắn 10 tin): cột chỉ có "giay_tay" cho cả vi bằng — khách nói "vi bằng" thì in đúng chữ khách.
+  const viBang = l.legal_status === "giay_tay" && /\bvi bang\b/.test(boDau(fact("phap_ly") ?? ""));
+  const pl = viBang ? "vi bằng" : PHAP_LY_TIEU_DE[l.legal_status ?? ""] ?? null;
   if (pl) cum.push(pl);
   if (l.gap === true) cum.push(thue ? "cần cho thuê gấp" : "cần bán gấp");
   if (l.price_raw) cum.push(`giá ${l.price_raw}${thue && !/thang/.test(boDau(l.price_raw)) ? "/tháng" : ""}`);
@@ -231,7 +233,9 @@ export function soanTinNhap(t: ThamSoNhap): string {
   ]);
   them("🧭", "Hướng", [l.direction ?? fact("huong")]);
   them("📜", "Pháp lý", [
-    l.legal_status
+    l.legal_status === "giay_tay" && /\bvi bang\b/.test(boDau(fact("phap_ly") ?? ""))
+      ? "vi bằng"
+      : l.legal_status
       ? thongSoNgan({ legal_status: l.legal_status, has_completion: l.has_completion } as SpecRow).replace(/^ · /, "")
       : fact("phap_ly"),
     nhan("quy hoạch:", fact("quy_hoach")),

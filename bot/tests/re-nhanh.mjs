@@ -15,6 +15,11 @@ r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng ri
 ok("sổ riêng + đang cho thuê → KHÔNG hỏi hoàn công, bỏ hiện trạng + nội thất", !keys(r).includes("hoan_cong") && r.bo.has("hien_trang") && r.bo.has("noi_that"), JSON.stringify({ ...r, bo: [...r.bo] }));
 // 24/09/2026 (chủ dự án, tin 152 Trần Đình Xu): đang cho thuê / kinh doanh LÀ tiềm năng sử dụng — không hỏi lại.
 ok("đang cho thuê → bỏ câu tiềm năng sử dụng", r.bo.has("tiem_nang"), JSON.stringify([...r.bo]));
+// 24/09/2026 (bắn 10 tin): toà nhà CHDV "đang thu 250 triệu/tháng" — cho thuê từng phòng, không hỏi hạn hợp đồng thuê.
+r = reNhanh({ loai: "toa_nha", deal: "ban", rent_income_vnd: 25e7, facts: [f("doanh_thu", "250 triệu"), f("phap_ly", "sổ hồng riêng")] }, ["phap_ly"]);
+ok("toà nhà CHDV có thu nhập, không nói cho ai thuê → KHÔNG hỏi hạn hợp đồng", !keys(r).includes("han_hop_dong_thue"), JSON.stringify(r.them));
+r = reNhanh({ loai: "toa_nha", deal: "ban", facts: [f("hien_trang", "đang cho ngân hàng thuê nguyên toà"), f("phap_ly", "sổ hồng riêng")] }, ["phap_ly"]);
+ok("toà nhà đang cho ngân hàng thuê → vẫn hỏi hạn hợp đồng", keys(r).includes("han_hop_dong_thue"), JSON.stringify(r.them));
 r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("bo_sung", "tầng 1 và 2 để kinh doanh đang cho techcombank thuê")] });
 ok("'tầng 1 và 2 để kinh doanh đang cho techcombank thuê' → nhánh đang cho thuê, bỏ tiềm năng", r.bo.has("tiem_nang"), JSON.stringify([...r.bo]));
 ok("đang cho thuê chưa nói hạn hợp đồng, chưa nói tiền thuê → hỏi hạn hợp đồng rồi tiền thuê", keys(r).join() === "han_hop_dong_thue,doanh_thu", JSON.stringify(r));

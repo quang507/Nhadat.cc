@@ -151,5 +151,24 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   for (const r of ["ko có lửng", "tầng 1 và 2 để kinh doanh đang cho techcombank thuê", "sổ đỏ", "gần chợ Bình Tây", "khu an ninh"]) ok(`KHÔNG rác: ${JSON.stringify(r)}`, !laBoSungRac(r));
 }
 
+// 24/09/2026 — bắn 10 tin bán đủ loại trên production (ID giả bn10-*).
+{
+  const ph = (t) => phuongTenCauRao(t);
+  ok("rao 'xã Phước Vĩnh An huyện Củ Chi' → Xã Phước Vĩnh An", ph("Bán đất vườn 2000m2 xã Phước Vĩnh An huyện Củ Chi") === "Xã Phước Vĩnh An", ph("Bán đất vườn 2000m2 xã Phước Vĩnh An huyện Củ Chi"));
+  ok("rao 'xã Tân Kiên Bình Chánh' → Xã Tân Kiên (cắt tên huyện dính liền)", ph("Bán kho xưởng 1500m2 xã Tân Kiên Bình Chánh, cao 10m") === "Xã Tân Kiên", ph("Bán kho xưởng 1500m2 xã Tân Kiên Bình Chánh, cao 10m"));
+  ok("rao 'thị trấn Nhà Bè' → Thị trấn Nhà Bè", ph("Bán nhà hẻm 4m Huỳnh Tấn Phát thị trấn Nhà Bè, 4x12") === "Thị trấn Nhà Bè");
+  ok("'phường Bến Thành' giữ nguyên (không cắt 'Thành')", ph("nhà phường Bến Thành") === "Phường Bến Thành", ph("nhà phường Bến Thành"));
+  ok("'Phường Hiệp Bình Chánh' không bị cắt thành 'Hiệp'", ph("Phường Hiệp Bình Chánh TP Thủ Đức") === "Phường Hiệp Bình Chánh", ph("Phường Hiệp Bình Chánh TP Thủ Đức"));
+  const nn = (t) => nhanDienNhieuFact(t);
+  const bt = nn("Bán biệt thự sân vườn Thảo Điền quận 2, đất 300m2, 1 hầm 1 trệt 2 lầu, có hồ bơi");
+  ok("'biệt thự sân vườn … quận 2' → KHÔNG ghi cả câu vào ô sân vườn", !bt.some((f) => f.question === "san_vuon"), JSON.stringify(bt));
+  ok("'sân trước 20m2' vẫn là sân vườn", nn("sân trước 20m2").some((f) => f.question === "san_vuon" && f.answer === "sân trước 20m2"));
+  ok("'cao 10m như anh nói rồi' → chiều cao 10m", nn("cao 10m như anh nói rồi").some((f) => f.question === "chieu_cao" && f.answer === "10m"));
+  const chdv = nn("Bán tòa nhà CHDV 20 phòng hẻm 8m Cộng Hòa, 8x20, lấp đầy 100%");
+  ok("'toà nhà CHDV 20 phòng' → số phòng 20, KHÔNG phải 20 phòng ngủ", chdv.some((f) => f.question === "so_phong" && f.answer === "20") && !chdv.some((f) => f.question === "so_phong_ngu"), JSON.stringify(chdv));
+  ok("'2 lầu 3 phòng' (nhà ở) vẫn là 3 phòng ngủ", nn("2 lầu 3 phòng 2 wc").some((f) => f.question === "so_phong_ngu" && f.answer === "3"));
+  ok("'vẫn bán nha em, không phải cho thuê' → loại giao dịch BÁN", nhanDienFact("vẫn bán nha em, không phải cho thuê")?.answer === "ban");
+}
+
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
