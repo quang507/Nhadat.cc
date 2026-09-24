@@ -4265,6 +4265,44 @@ fresh(seedKho);
   });
   r = await send({ external_user_id: "z-dang10", text: "chưa đăng tin đâu em, để anh tính thêm" });
   check("DANG9-02 'chưa đăng tin đâu em…' (phủ định) → KHÔNG gửi bản nháp", r.body.ban_nhap !== true, JSON.stringify(r.body.replies));
+  // 24/09/2026 (chủ dự án test Zalo, tin 152 Trần Đình Xu): "…cần thông tin gì nữa không nếu không thì đăng bài đi" khi đang treo
+  // câu hạn hợp đồng thuê → là lệnh ĐĂNG, không phải câu trả lời (trước: ghi cả câu vào ô hợp đồng, hỏi tiếp 3 câu).
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-dang12", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0110", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "9 Hồng Bàng", ward: "Phường 12", price_raw: "8 tỷ", price_vnd: 8e9, area_m2: 60, floors: 3, bedrooms: 3, alley_width_m: 5, legal_status: "so_hong_rieng", rent_income_vnd: 4e8, can_chu_duyet: true }).data;
+    d.insert("listing_facts", { listing_id: l.id, question: "hinh_anh", answer: "https://x/1.jpg", source: "seller_chat" });
+    d.insert("info_requests", { listing_id: l.id, question: "han_hop_dong_thue", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-dang12", text: "Uhm em cần thông tin gì nữa không nếu không thì đăng bài đi" });
+  check("DANG9-03 '…nếu không thì đăng bài đi' khi treo câu hạn hợp đồng → LÊN KỆ, không ghi câu đó vào ô nào",
+    r.body.dang_luon === true && !db().t.listing_facts.some((f) => /đăng bài/.test(f.answer ?? "")),
+    JSON.stringify({ body: r.body.replies, f: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
+  // Cùng buổi: "Hợp đồng 10 năm cho thuê 4 năm rồi đó" khi hỏi hạn hợp đồng → ô hạn hợp đồng, KHÔNG đè pháp lý;
+  // hỏi phường, đáp "Quận 1 em ơi" → không thành "📝 Thêm".
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-hdt1", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0111", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "152 Trần Đình Xu", district: "Quận 1", price_raw: "65 tỷ", price_vnd: 65e9, area_m2: 120, floors: 5, bedrooms: 4, legal_status: "so_hong_rieng", rent_income_vnd: 4e8, can_chu_duyet: true }).data;
+    s.active_listing_id = l.id;
+    d.insert("listing_facts", { listing_id: l.id, question: "phap_ly", answer: "sổ hồng riêng", source: "seller_chat" });
+    d.insert("info_requests", { listing_id: l.id, question: "han_hop_dong_thue", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-hdt1", text: "Hợp đồng 10 năm cho thuê 4 năm rồi đó" });
+  {
+    const fs = db().t.listing_facts;
+    check("HDT-01 'Hợp đồng 10 năm cho thuê 4 năm rồi đó' → ô hạn hợp đồng thuê, pháp lý vẫn 'sổ hồng riêng', không ghi 'thuê tối thiểu'",
+      fs.some((f) => f.question === "han_hop_dong_thue" && /10 năm/.test(f.answer ?? "")) && !fs.some((f) => f.question === "phap_ly" && /hợp đồng/i.test(f.answer ?? "")) &&
+        !fs.some((f) => f.question === "thoi_han_thue"),
+      JSON.stringify(fs.map((f) => [f.question, f.answer])));
+  }
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-hdt2", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0112", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "152 Trần Đình Xu", district: "Quận 1", price_raw: "65 tỷ", price_vnd: 65e9, area_m2: 120, can_chu_duyet: true }).data;
+    s.active_listing_id = l.id;
+    d.insert("info_requests", { listing_id: l.id, question: "phuong", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-hdt2", text: "Quận 1 em ơi" });
+  check("HDT-02 hỏi phường, đáp 'Quận 1 em ơi' → KHÔNG ghi vào 📝 Thêm (bo_sung)",
+    !db().t.listing_facts.some((f) => f.question === "bo_sung"), JSON.stringify(db().t.listing_facts.map((f) => [f.question, f.answer])));
   // 24/09/2026 (chủ dự án test Zalo): "6 tỷ 3 đăng đi" khi đang hỏi GIÁ, tin chưa đủ điểm → ghi giá, ĐÓNG câu giá, báo còn
   // thiếu gì rồi hỏi câu KẾ — trước: coi cả câu là "muốn đăng", câu giá vẫn treo, bot hỏi lại "rao giá bao nhiêu".
   fresh((d) => {

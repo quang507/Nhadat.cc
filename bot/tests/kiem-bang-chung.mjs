@@ -156,6 +156,11 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
     { price_vnd: 32e9, direction: null, area_m2: null, deal: "ban" });
   ok("ghi: giá luật đã ghi (trùng) → AI không đụng; hướng trống → ghi 'huong'; 'diện tích tổng' không phải đất → bỏ",
     r1.ghi.map((g) => `${g.question}=${g.answer}`).join() === "huong=Đông Nam" && lyDo(r1, "dien_tich") === "dien_tich_khong_phai_dat", JSON.stringify(r1));
+  // 24/09/2026 (chủ dự án test Zalo): "thời hạn thuê tối thiểu" chỉ cho tin CHO THUÊ — tin bán đang cho thuê thì không ghi.
+  const rTh = chon([dx("thoi_han_thue", "4 năm", "cho thuê 4 năm rồi")], { deal: "ban" });
+  ok("tin BÁN: AI đọc 'thời hạn thuê 4 năm' → KHÔNG ghi", rTh.ghi.length === 0 && lyDo(rTh, "thoi_han_thue") === "thoi_han_thue_chi_cho_tin_thue", JSON.stringify(rTh));
+  const rTh2 = chon([dx("thoi_han_thue", "1 năm", "thuê tối thiểu 1 năm")], { deal: "cho_thue" });
+  ok("tin CHO THUÊ: 'thuê tối thiểu 1 năm' vẫn ghi", rTh2.ghi.some((g) => g.question === "thoi_han_thue"), JSON.stringify(rTh2));
   const r2 = chon([dx("gia", "30 tỷ", "giá 30 tỷ")], { price_vnd: 32e9, deal: "ban" });
   ok("ghi: luật và AI LỆCH giá → không ghi, không đè", r2.ghi.length === 0 && r2.bo.length === 0, JSON.stringify(r2));
   const r3 = chon([dx("so_phong_ngu", "3", "3 phòng ngủ"), dx("so_wc", "70", "70 wc"), dx("so_tang", "4", "trệt 3 lầu"), dx("do_rong_hem", "5", "hẻm 5m"), dx("phuong", "14", "phường 14"), dx("gap", "co", "cần bán gấp")],
@@ -287,6 +292,16 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const t3 = "nội thất để lại hết nha anh";
   const r3 = kiemDeXuat([{ khoa: "noi_that", gia_tri: "để lại hết", trich_dan: t3, can: null }], t3);
   ok("nội thất 'để lại hết nha anh' → 'để lại hết' ĐẠT", r3.dat.length === 1, JSON.stringify(r3));
+}
+
+// 24/09/2026 (chủ dự án test Zalo): "Hợp đồng 10 năm cho thuê 4 năm rồi đó" — AI xếp vào pháp lý, lọt vì "hợp đồng" có trong hình pháp lý.
+{
+  const tin = "Hợp đồng 10 năm cho thuê 4 năm rồi đó";
+  const r = kiemDeXuat([{ khoa: "phap_ly", gia_tri: tin, trich_dan: tin }], tin);
+  ok("pháp lý = hợp đồng THUÊ → bỏ (phap_ly_la_hop_dong_thue)", r.dat.length === 0 && r.bo[0]?.ly_do === "phap_ly_la_hop_dong_thue", JSON.stringify(r));
+  const t2 = "sổ hồng riêng, đang cho thuê";
+  const r2 = kiemDeXuat([{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "sổ hồng riêng" }], t2);
+  ok("pháp lý 'sổ hồng riêng' (câu có chữ thuê) vẫn ĐẠT", r2.dat.length === 1, JSON.stringify(r2));
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

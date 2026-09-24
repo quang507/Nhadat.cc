@@ -234,6 +234,10 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       // hết" vào pháp lý, "xây tự do" vào kết cấu, "Thảo Điền" (khu) vào dự án, "gấp" vào lý do bán.
       const hinh = HINH_TRUONG_CHU[d.khoa];
       if (hinh && !hinh.test(cv)) return "gia_tri_khong_dung_loai_truong";
+      // 24/09/2026 (chủ dự án test Zalo): "Hợp đồng 10 năm cho thuê 4 năm rồi đó" thành pháp lý — chữ "hợp đồng" ở đây
+      // là HỢP ĐỒNG THUÊ, không phải giấy tờ nhà. Pháp lý nói về thuê mà không có chữ giấy tờ nào → sai ô.
+      if (d.khoa === "phap_ly" && /\bthue\b/.test(cv) &&
+        !/\b(so|shr|shc|hdmb|mua ban|vi bang|giay tay|cong chung|sang ten|the chap|hoan cong)\b/.test(cv)) return "phap_ly_la_hop_dong_thue";
       if (d.khoa === "du_an" && !DAU_HIEU_DU_AN.test(kd)) return "khong_co_dau_hieu_du_an";
       return null;
     }
@@ -450,6 +454,9 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
     const v = d.gia_tri.trim();
     const kd = chuanSo(d.trich_dan);
     let answer: string | null = null;
+    // 24/09/2026: "thời hạn thuê tối thiểu" là điều kiện của tin CHO THUÊ; tin BÁN đang có người thuê thì đó là hợp đồng
+    // đang chạy (câu hỏi nhánh `han_hop_dong_thue`) — model từng ghi "4 năm" từ "hợp đồng 10 năm cho thuê 4 năm rồi".
+    if (d.khoa === "thoi_han_thue" && dong?.deal && dong.deal !== "cho_thue") { bo.push({ ...d, ly_do: "thoi_han_thue_chi_cho_tin_thue" }); continue; }
     switch (d.khoa) {
       case "gia": {
         const t = docTien(v) ?? docTien(d.trich_dan);

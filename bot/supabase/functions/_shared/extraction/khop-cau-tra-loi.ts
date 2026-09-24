@@ -236,6 +236,20 @@ const QUAN_SAU_TEN = /^(?:phu nhuan|tan binh|binh thanh|go vap|tan phu|binh tan|
 // thành CỤM hai chữ của thứ khác: "thổ cư", "thổ đất".
 // 24/09/2026: "mặt tiền Hợp đồng thuê…" — "hợp đồng" không mở đầu tên đường nào.
 const DUNG_HAI_CHU = /^(?:tho cu|tho dat|hop dong)$/;
+/** "hợp đồng" nói về HỢP ĐỒNG THUÊ đang chạy (không phải giấy tờ nhà). */
+const HOP_DONG_THUE_RE = /\bhop dong\s+(?:thue\s+)?\d+\s*(?:nam|thang)\b|\bhop dong\b[^,.;]{0,40}\b(?:thue|het han|con \d+ (?:nam|thang)|(?:den|toi)\s*(?:nam\s*)?20\d\d)\b|\b(?:cho|khach|dang|ngan hang)\b[^,.;]{0,30}\bthue\b[^,.;]{0,20}\bhop dong\b|\b(?:het han|con)\s+hop dong\b/;
+
+/**
+ * Mảnh RÁC không đáng vào "📝 Thêm" (24/09/2026, tin thật 152 Trần Đình Xu: "Quận 1 em ơi", "mới"):
+ * bỏ từ đệm / xưng hô / "ơi" mà còn dưới 2 chữ, hoặc chỉ còn tên một đơn vị hành chính (quận / phường / xã…).
+ */
+export function laBoSungRac(s: string | null | undefined): boolean {
+  const kd = boDau(s ?? "").replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\b(?:em|e|anh|a|chi|c|oi|nha|nhe|nhen|nghen|a|ah|ha|nhi|luon|vay|thoi|roi|ok|oke|uh|uhm|um|da|vang)\b/g, " ")
+    .replace(/\s+/g, " ").trim();
+  if (!kd || kd.split(" ").length < 2) return true;
+  return /^(?:o\s+|tai\s+|thuoc\s+)?(?:quan|q|huyen|phuong|p|xa|thi tran|tp|thanh pho)\s*[a-z0-9 ]{0,24}$/.test(kd) && kd.split(" ").length <= 5;
+}
 
 // Chữ mở đầu THỨ KHÁC — gặp là hết tên đường: giấy tờ, giá, kết cấu, hành chính.
 // "đường nhựa 7m sổ riêng 850tr" dừng ở "sổ", không nuốt cả câu.
@@ -587,6 +601,8 @@ const HO_FACT: string[][] = [
   ["so_huu", "thoi_han_su_dung", "han_hop_dong_thue"],
   ["hien_trang", "hien_trang_su_dung", "ket_cau", "tang_phu", "han_hop_dong_thue"],
   ["noi_that", "fit_out"],
+  // Tin cho thuê hỏi "thuê tối thiểu", khách đáp "hợp đồng 1 năm" (luật đọc ra hạn hợp đồng) → vẫn là câu trả lời.
+  ["thoi_han_thue", "han_hop_dong_thue"],
   ["tiem_nang", "muc_dich", "nganh_hang_phu_hop"],
   ["phap_ly", "the_chap", "hoan_cong", "giay_to_hien_co", "du_kien_ra_so", "ban_giao", "dong_so_huu_voi", "dong_y_ban"],
 ];
@@ -1129,6 +1145,12 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(dang the chap|the chap|cam ngan hang|trong ngan hang)\b/.test(kd) &&
       !/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay)\b/.test(kd)) {
     return { question: "the_chap", answer: goc };
+  }
+  // 24/09/2026 (chủ dự án test Zalo, tin đang cho Techcombank thuê): "Hợp đồng 10 năm cho thuê 4 năm rồi đó" là HỢP ĐỒNG
+  // THUÊ đang chạy, không phải giấy tờ nhà — bản trước ghi đè ô pháp lý. Chữ "hợp đồng" đi với thuê / hạn / còn N năm và
+  // không kèm giấy tờ (sổ, HĐMB, công chứng…) → hạn hợp đồng thuê.
+  if (HOP_DONG_THUE_RE.test(kd) && !/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hdmb|mua ban|cong chung|shr|shc|giay tay|sang ten)\b/.test(kd)) {
+    return { question: "han_hop_dong_thue", answer: goc };
   }
   if (PHAP_LY_RE.test(kd)) {
     return { question: "phap_ly", answer: manhKhop(PHAP_LY_RE) };

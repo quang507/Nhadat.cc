@@ -4,7 +4,7 @@
 // Phần SQL của cùng lượt bắn (fact "cách mặt tiền" vào cột, "p5" dính tên đường, xe hơi
 // trong nhà) ở migration 20260914b.
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
-import { bocViTriRao, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { bocViTriRao, laBoSungRac, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -135,6 +135,20 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   ok("hỏi doanh_thu, đáp '150 triệu một tháng em' → khớp (không chuyển sang gia)", phanLoaiCauTraLoi("doanh_thu", "150 triệu một tháng em").loai === "khop", JSON.stringify(phanLoaiCauTraLoi("doanh_thu", "150 triệu một tháng em")));
   ok("hỏi tien_coc, đáp '2 tháng tiền nhà, tầm 30 triệu' → không lệch sang gia", phanLoaiCauTraLoi("tien_coc", "30 triệu em").chuyenSang?.question !== "gia", JSON.stringify(phanLoaiCauTraLoi("tien_coc", "30 triệu em")));
   ok("hỏi GIÁ vẫn nhận tiền như cũ", phanLoaiCauTraLoi("gia", "25 tỷ em").loai === "khop");
+}
+
+// 24/09/2026 (chủ dự án test Zalo, tin 152 Trần Đình Xu): hợp đồng THUÊ không phải pháp lý; mảnh rác không vào "📝 Thêm".
+{
+  const q = (s) => nhanDienFact(s)?.question;
+  ok("'Hợp đồng 10 năm cho thuê 4 năm rồi đó' → han_hop_dong_thue (không phải pháp lý)", q("Hợp đồng 10 năm cho thuê 4 năm rồi đó") === "han_hop_dong_thue", q("Hợp đồng 10 năm cho thuê 4 năm rồi đó"));
+  ok("'hợp đồng 10 năm' → han_hop_dong_thue", q("hợp đồng 10 năm") === "han_hop_dong_thue");
+  ok("'còn hợp đồng 6 năm' → han_hop_dong_thue", q("còn hợp đồng 6 năm") === "han_hop_dong_thue");
+  ok("'hợp đồng mua bán công chứng' vẫn là pháp lý", q("hợp đồng mua bán công chứng") === "phap_ly");
+  ok("'HĐMB' vẫn là pháp lý", q("HĐMB") === "phap_ly");
+  ok("hỏi 'thuê tối thiểu', đáp 'hợp đồng 1 năm' → khớp", phanLoaiCauTraLoi("thoi_han_thue", "hợp đồng 1 năm").loai === "khop");
+  ok("hỏi hạn hợp đồng, đáp 'Hợp đồng 10 năm cho thuê 4 năm rồi đó' → khớp", phanLoaiCauTraLoi("han_hop_dong_thue", "Hợp đồng 10 năm cho thuê 4 năm rồi đó").loai === "khop");
+  for (const r of ["Quận 1 em ơi", "mới", "phường 2 nha", "ok em"]) ok(`rác bổ sung: ${JSON.stringify(r)}`, laBoSungRac(r));
+  for (const r of ["ko có lửng", "tầng 1 và 2 để kinh doanh đang cho techcombank thuê", "sổ đỏ", "gần chợ Bình Tây", "khu an ninh"]) ok(`KHÔNG rác: ${JSON.stringify(r)}`, !laBoSungRac(r));
 }
 
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);

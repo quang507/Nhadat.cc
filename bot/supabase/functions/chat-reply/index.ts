@@ -70,7 +70,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { ghepMotChieu, gonLoiSua, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, laBoSungRac, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 // Câu hỏi mà câu trả lời LÀ một số tiền nhưng không phải giá bán (FR-223): số tiền kèm theo không được ghi thành `gia`.
@@ -1857,7 +1857,8 @@ Deno.serve(async (req) => {
           // năm sau" bị coi là đã có. Chỉ so với fact ≥ 4 ký tự.
           const daCoTrongFact = (kt: string) => Object.values(facts).some((a) => a.trim().length >= 4 && (boDau(a).includes(boDau(kt)) || boDau(kt).includes(boDau(a))));
           for (const kt of kiemKienThuc(kq.kienThuc ?? [], text, dat)) {
-            if (daCoBoSung.has(boDau(kt)) || daCoTrongFact(kt)) continue;
+            // 24/09/2026 (tin thật: "mới", "Quận 1 em ơi" vào "📝 Thêm"): mảnh rác không ghi.
+            if (daCoBoSung.has(boDau(kt)) || daCoTrongFact(kt) || laBoSungRac(kt)) continue;
             const { error: kErr } = await client.rpc("ghi_fact_listing", {
               p_listing_id: d.id, p_question: "bo_sung", p_answer: kt, p_source: NGUON_AI,
             });
@@ -3405,7 +3406,7 @@ Deno.serve(async (req) => {
     ): Promise<Awaited<ReturnType<typeof traLoiSeller>> | string[]> => {
       const [{ data: l }, { data: dt, error: dErr }, { data: facts }] = await Promise.all([
         client.from("listings")
-          .select(`code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, ${SPEC_COLS}`)
+          .select(`code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, rent_income_vnd, ${SPEC_COLS}`)
           .eq("id", listingId).maybeSingle(),
         client.rpc("diem_tin", { p_listing_id: listingId }),
         client.from("listing_facts").select("question, answer, created_at")
@@ -3986,7 +3987,9 @@ Deno.serve(async (req) => {
             (laDongY(dapAn) && /\b(ok|oke|okie|duoc|dc|chot|dong y|xong)\b/.test(kdDang))) ||
           // 23/09/2026 (bắn thật căn hộ): "được giá thì bán em, ok đăng tin đi em" (9 chữ) — câu dài mà có lời
           // bảo ĐĂNG rõ ràng thì vẫn là muốn đăng; trước chỉ nhận câu ≤ 6 chữ nên cả câu thành "thông tin bổ sung".
-          (/\b(?:dang tin|dang di|dang len|dang luon|len tin|len ke|post tin)\b/.test(kdDang) &&
+          // 24/09/2026 (chủ dự án test Zalo): "…cần thông tin gì nữa không nếu không thì đăng bài đi" — "đăng bài" không
+          // có trong danh sách nên cả câu thành câu trả lời hạn hợp đồng thuê, bot hỏi tiếp 3 câu.
+          (/\b(?:dang tin|dang di|dang len|dang luon|dang bai|len tin|len ke|post tin|post bai|up tin|up bai)\b/.test(kdDang) &&
             !/\b(?:chua|khoan|dung|dung vo|khong|ko|dung co)\s+(?:dang|len)\b/.test(kdDang)));
       // FR-188 b (10/09): câu MỀM (gấp, lý do bán, thương lượng, tiềm năng) chỉ hỏi
       // MỘT lần — chủ dự án: "không hỏi lần thứ hai". Luật né-2-lần bên dưới đếm fact
@@ -4014,8 +4017,10 @@ Deno.serve(async (req) => {
       // 24/09/2026 (chủ dự án test Zalo): "6 tỷ 3 đăng đi" khi đang hỏi GIÁ — câu vừa TRẢ LỜI vừa bảo đăng. Bản
       // trước coi cả câu là "muốn đăng", bỏ qua câu treo → giá không đóng câu hỏi, bot nói "chỉ cần thêm…" rồi HỎI
       // LẠI GIÁ. Bỏ vỏ "đăng đi" mà phần còn lại khớp câu đang hỏi → ghi như câu trả lời, đóng câu, hỏi câu KẾ.
-      const dapAnBoDang = dapAn.replace(/[\s,.]*(?:(?:ok|oke|okie|được|dc|rồi|thì)\s+)*(?:đăng|dang|lên|len|post)\s*(?:tin|đi|di|luôn|luon|kệ|ke|lên|len)?(?:\s+(?:đi|di|luôn|luon|em|e|nha|nhé|nhe|ạ|a|giúp|giùm|anh|chị|chi))*\s*[.!]*\s*$/iu, "").trim();
-      const traLoiKemDang = chuMuonDang && dapAnBoDang.length >= 2 && dapAnBoDang !== dapAn.trim() &&
+      const dapAnBoDang = dapAn.replace(/[\s,.]*(?:(?:ok|oke|okie|được|dc|rồi|thì)\s+)*(?:đăng|dang|lên|len|post|up)\s*(?:tin|bài|bai|đi|di|luôn|luon|kệ|ke|lên|len)?(?:\s+(?:đi|di|luôn|luon|em|e|nha|nhé|nhe|ạ|a|giúp|giùm|anh|chị|chi))*\s*[.!]*\s*$/iu, "").trim();
+      // Phần còn lại là câu hỏi / điều kiện ("cần thông tin gì nữa không, nếu không thì") → không phải câu trả lời.
+      const conLaHoi = /\?|\b(?:can|con)\s+(?:them\s+)?(?:thong tin\s+)?gi\s+nua\b|\b(?:neu\s+)?(?:khong|ko|k)\s+thi\s*$/.test(boDau(dapAnBoDang));
+      const traLoiKemDang = chuMuonDang && dapAnBoDang.length >= 2 && dapAnBoDang !== dapAn.trim() && !conLaHoi &&
         phanLoaiCauTraLoi(pendingReq.question, dapAnBoDang).loai === "khop";
       if (traLoiKemDang) dapAn = dapAnBoDang;
       if (chuMuonDang && !traLoiKemDang) {
@@ -4120,6 +4125,8 @@ Deno.serve(async (req) => {
           // câu có SĐT thì không bao giờ vào bo_sung (§5 — bo_sung ra tin, tin ra web).
           else if (/\b(?:tui|toi|minh|em|e|anh|chi)\s+la\s+(?:sale|moi gioi|mg|chu|chinh chu|ccrb|nmg)\b|\b(?:ko|khong|k)\s+phai\s+(?:chu|chinh chu)\b/.test(boDau(dapAn)) && !nhanDienFact(dapAn)) ghiBoSung = null;
           else if (coSdt(dapAn)) ghiBoSung = null;
+          // 24/09/2026 (tin thật: hỏi phường, khách đáp "Quận 1 em ơi"): còn < 2 chữ hoặc chỉ là tên quận / phường → rác.
+          else if (laBoSungRac(dapAn)) ghiBoSung = null;
           // Chế độ `chinh`: AI đã đọc ra kiến thức từ câu này → đường ra ghi `bo_sung` nguồn ai_kiem
           // (`ghiBongBocTach`), không ghi nguyên văn lần hai. AI không đọc ra gì → nguyên văn như cũ.
           else if (aiChinh && aiChinh.kienThuc.length) ghiBoSung = null;
