@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
@@ -361,6 +361,9 @@ ok("boGachCheo: không đụng 'anh chị phụ trách'", boGachCheo("có anh ch
     const nhap = "📋 Em đăng tin như vầy nha anh:\nBán nhà 152 Trần Đình Xu Phường Cầu Ông Lãnh Q.1, 120m², trệt + 4 lầu, 4PN, SHR, giá 65 tỉ\n📍 152 Trần Đình Xu, Phường Cầu Ông Lãnh, Quận 1\n💰 65 tỉ";
     ok("boCauTrung: dòng 📍 địa chỉ của bản nháp KHÔNG bị bỏ dù trùng chữ với tiêu đề", /📍 152 Trần Đình Xu/.test(boCauTrung([nhap]).join("\n")), JSON.stringify(boCauTrung([nhap])));
   }
+  // 24/09/2026 (bắn 10 tin): chưa biết anh hay chị mà câu mở bằng "Anh cần bán gấp…".
+  ok("boDoanGioiDauCau: 'Anh cần bán gấp…' → 'Anh chị cần bán gấp…'", boDoanGioiDauCau("Hẻm xe hơi tới cửa. Anh cần bán gấp hay chờ được giá thôi?") === "Hẻm xe hơi tới cửa. Anh chị cần bán gấp hay chờ được giá thôi?", boDoanGioiDauCau("Hẻm xe hơi tới cửa. Anh cần bán gấp hay chờ được giá thôi?"));
+  ok("boDoanGioiDauCau: 'Anh chị xem…', 'Anh Thu…' giữ nguyên", boDoanGioiDauCau("Anh chị xem ổn chưa ạ? Anh Thu phụ trách.") === "Anh chị xem ổn chưa ạ? Anh Thu phụ trách.");
   ok("boCauTrung: câu ngắn trùng ('Dạ em ghi 3 lầu rồi ạ.') KHÔNG bị bỏ", boCauTrung(["Dạ em ghi 3 lầu rồi ạ.", "Dạ em ghi 3 lầu rồi ạ. Sổ riêng chưa anh?"]).length === 2);
   const bb = ["📝 Em ghi nhận: Nhà phố bán · Phường 5 · 60m² · giá 6 tỷ.\nSai chỗ nào anh chị nhắn lại giúp em nha."];
   ok("boCauTrung: không bỏ gì thì trả nguyên mảng (giữ xuống dòng, `===`)", boCauTrung(bb) === bb);

@@ -12,7 +12,7 @@
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
 import { docTien, giaTheoM2 } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
-import { laGap } from "./khop-cau-tra-loi.ts";
+import { DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, laGap } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 
 const boDau = (s: string): string =>
@@ -166,7 +166,10 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
       if (!m) return "khong_phai_so";
       const n = Number(m[0]);
-      return soTrong(cum, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05)) ? null : "so_khong_co_trong_trich_dan";
+      // 24/09/2026 (bắn 10 tin): "toà nhà CHDV 20 phòng" / "20 phòng như em nói đó" thành 20 PHÒNG NGỦ — phòng cho thuê
+      // không phải phòng ngủ. Phòng ngủ phải có chữ ngủ / PN trong cụm trích.
+      if (!soTrong(cum, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05))) return "so_khong_co_trong_trich_dan";
+      return d.khoa === "so_phong_ngu" && !/\b(ngu|pn|phong ngu)\b|\d\s*pn\b/.test(kd) ? "khong_noi_phong_ngu" : null;
     }
     case "loai_giao_dich": {
       // "sang nhượng MẶT BẰNG" là thuê (lượt đo bóng 14/09 model nói "ban" và lọt); "sang
@@ -508,7 +511,11 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
         if (so) { if (Number(so) < 1 || Number(so) > 30) { bo.push({ ...d, ly_do: "so_ngoai_khoang" }); continue; } answer = `Phường ${Number(so)}`; break; }
         const ten = v.replace(/^(phường|phuong|xã|xa|thị trấn|thi tran|p\.?)\s+/i, "").trim();
         if (ten.length < 3 || ten.length > 40) { bo.push({ ...d, ly_do: "gia_tri_ngoai_khoang" }); continue; }
-        answer = `Phường ${hoaDau(ten)}`;
+        // 24/09/2026 (bắn 10 tin, Củ Chi / Bình Chánh): "xã Phước Vĩnh An" từng ghi thành "Phường Phước Vĩnh An" — giữ
+        // đúng cấp hành chính khách nói (xã / thị trấn).
+        const cap = /\b(?:thi tran|tt)\b/.test(kd) || /^(?:thị trấn|thi tran)\b/i.test(v) ? "Thị trấn"
+          : /\bxa\b/.test(kd) || /^(?:xã|xa)\b/i.test(v) ? "Xã" : "Phường";
+        answer = `${cap} ${hoaDau(ten)}`;
         break;
       }
       case "gap": case "thuong_luong": {
@@ -672,7 +679,13 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   if (duong && duong.length >= 4 && duong.length <= 80) them("vi_tri", duong, "duong");
   const duAn = lay("du_an");
   if (duAn && duAn.length >= 3 && duAn.length <= 80) them("du_an_ten", duAn, "du_an");
-  if (loaiGiaoDich) them("loai_giao_dich", loaiGiaoDich, "loai_giao_dich");
+  // 24/09/2026 (bắn 10 tin, toà nhà CHDV đang BÁN): "cho thuê từng phòng, không có hợp đồng tổng" — model đọc ra
+  // loại giao dịch "cho_thue", ghi fact, trigger lật tin BÁN thành tin CHO THUÊ. Tin đã có loại giao dịch thì chỉ đổi
+  // khi chủ nói rõ ĐỔI ("cho thuê chứ không bán", "đổi sang bán", "vẫn bán, không phải cho thuê").
+  const cumLgd = chuanSo(mot.find((d) => d.khoa === "loai_giao_dich")?.trich_dan ?? "");
+  const doiLgd = !loaiGiaoDich || !dong?.deal || dong.deal === loaiGiaoDich ||
+    (loaiGiaoDich === "cho_thue" ? DOI_SANG_THUE_RE : DOI_SANG_BAN_RE).test(cumLgd);
+  if (loaiGiaoDich && doiLgd) them("loai_giao_dich", loaiGiaoDich, "loai_giao_dich");
   const lb = chuanSo(lay("loai_bds") ?? "").replace(/\s+/g, "_");
   const loaiBds = lb in LOAI_BDS ? lb : null;
   if (loaiBds) them("loai_bds", loaiBds, "loai_bds");

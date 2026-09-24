@@ -304,5 +304,18 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("pháp lý 'sổ hồng riêng' (câu có chữ thuê) vẫn ĐẠT", r2.dat.length === 1, JSON.stringify(r2));
 }
 
+// 24/09/2026 — bắn 10 tin bán đủ loại trên production (ID giả bn10-*).
+{
+  const ghiCua = (d, dong) => docAiChinh(d, dong).ghi.map((g) => `${g.question}=${g.answer}`).join();
+  ok("toà nhà ĐANG BÁN: 'cho thuê từng phòng' → AI KHÔNG lật loại giao dịch", ghiCua([{ khoa: "loai_giao_dich", gia_tri: "cho_thue", trich_dan: "cho thuê từng phòng" }], { deal: "ban" }) === "");
+  ok("'cho thuê chứ không bán' → vẫn đổi được sang cho thuê", ghiCua([{ khoa: "loai_giao_dich", gia_tri: "cho_thue", trich_dan: "cho thuê chứ không bán" }], { deal: "ban" }) === "loai_giao_dich=cho_thue");
+  ok("tạo tin (chưa có loại giao dịch) → AI đọc 'cho thuê' vẫn ghi", ghiCua([{ khoa: "loai_giao_dich", gia_tri: "cho_thue", trich_dan: "cho thuê căn hộ" }], null) === "loai_giao_dich=cho_thue");
+  const pn = (v, c) => kiemDeXuat([{ khoa: "so_phong_ngu", gia_tri: v, trich_dan: c }], c).bo[0]?.ly_do ?? null;
+  ok("'20 phòng như em nói đó' → KHÔNG phải phòng ngủ", pn("20", "20 phòng như em nói đó") === "khong_noi_phong_ngu");
+  ok("'3PN' / '5 phòng ngủ' vẫn là phòng ngủ", pn("3", "3PN 3WC") === null && pn("5", "5 phòng ngủ") === null);
+  ok("'xã Phước Vĩnh An' → 'Xã Phước Vĩnh An' (không thành Phường)", ghiCua([{ khoa: "phuong", gia_tri: "Phường Phước Vĩnh An", trich_dan: "xã Phước Vĩnh An" }], { deal: "ban" }) === "phuong=Xã Phước Vĩnh An");
+  ok("'thị trấn Nhà Bè' → 'Thị trấn Nhà Bè'", ghiCua([{ khoa: "phuong", gia_tri: "thị trấn Nhà Bè", trich_dan: "thị trấn Nhà Bè" }], { deal: "ban" }) === "phuong=Thị trấn Nhà Bè");
+}
+
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

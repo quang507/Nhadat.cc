@@ -109,7 +109,11 @@ export const RE_NHANH: Luat[] = [
     khi: ({ deal, tatCa, c }) => deal !== "cho_thue" && (DANG_CHO_THUE.test(tatCa) || Number(c.rent_income_vnd ?? 0) > 0),
     sau: ["phap_ly", "hien_trang", "doanh_thu", "kien_thuc", "bo_sung", "tiem_nang"],
     them: [
-      { fact_key: "han_hop_dong_thue", priority: 16.4, nhom: "co_ban", daBiet: co(CO_HAN_HD) },
+      // 24/09/2026 (bắn 10 tin): toà nhà CHDV / nhà trọ "đang thu 250 triệu/tháng" là cho thuê TỪNG PHÒNG — không có một
+      // hợp đồng thuê chung để hỏi hạn. Chỉ hỏi khi chữ khách nói rõ đang cho (một bên) thuê.
+      { fact_key: "han_hop_dong_thue", priority: 16.4, nhom: "co_ban",
+        daBiet: (x) => CO_HAN_HD.test(x.tatCa) || /\b(?:tung phong|nhieu phong|khong co hop dong tong)\b/.test(x.tatCa) ||
+          (["toa_nha", "phong_tro"].includes(x.loai) && !DANG_CHO_THUE.test(x.tatCa)) },
       { fact_key: "doanh_thu", priority: 16.5, nhom: "co_ban", daBiet: (x) => Number(x.c.rent_income_vnd ?? 0) > 0 || THUE_CO_SO.test(x.tatCa) },
     ],
     // 24/09/2026 (chủ dự án: "đã bảo nhà cho thuê 400tr tháng rồi còn [đòi] thêm tiềm năng sử dụng"): đang cho

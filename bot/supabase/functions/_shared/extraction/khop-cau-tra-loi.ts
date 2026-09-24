@@ -923,7 +923,9 @@ const KHONG_PHAI_LE_GIA = "(?![\\d.,]*\\d)(?!\\s*(?:m2|m\\b|x\\s*\\d|pn\\b|phong
 const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // "cần bán gấp 5 tỷ" → câu chính là gấp, giá vẫn phải ghi.
   ["gia", new RegExp(`\\b(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d{1,3}(?:[.,]\\d+)?)${KHONG_PHAI_LE_GIA})?(?:\\s*(ruoi))?`), (m) => `${m[1]} ${m[2] === "toi" ? "tỏi" : m[2] === "ty" || m[2] === "ti" ? "tỷ" : "triệu"}${m[3] ? ` ${m[3]}` : ""}${m[4] ? " rưỡi" : ""}`],
-  ["so_phong_ngu", /\b(\d{1,2})\s*(?:phong ngu|pn|phong)\b(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
+  // 24/09/2026 (bắn 10 tin): "toà nhà CHDV 20 phòng" — phòng cho thuê, không phải phòng ngủ.
+  ["so_phong_ngu", /(?<!\b(?:chdv|dich vu|toa nha|nha tro|day tro|phong tro)\b[^,.;]{0,12})\b(\d{1,2})\s*(?:phong ngu|pn|phong)\b(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
+  ["so_phong", /\b(?:chdv|can ho dich vu|toa nha|nha tro|day tro)\b[^,.;]{0,12}?\b(\d{1,3})\s*phong\b(?!\s*(?:ngu|wc|tam|ve sinh))/, (m) => m[1]],
   ["so_wc", /\b(\d{1,2})\s*(?:wc|toilet|ve sinh)\b/, (m) => m[1]],
   ["huong", /\bhuong\s*((?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?)\b/, (m) => `hướng ${m[1]}`],
   // 13/09/2026: "ngang 5 dài 20" giữ CẢ hai chiều — đáp án "5m" làm mất chiều dài
@@ -1122,8 +1124,9 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
 }
 // Đổi loại giao dịch (15/09/2026): "cho thuê chứ không bán", "không bán, cho thuê",
 // "đổi sang cho thuê" → thuê; "bán chứ không cho thuê", "chuyển qua bán" → bán.
-const DOI_SANG_THUE_RE = /\bcho thue\b[^,.]{0,6}\bchu\s+(?:khong|ko|k|hong)\s+(?:phai\s+)?ban\b|\b(?:khong|ko|k)\s+ban\b[^,.]{0,12}\bcho thue\b|\bcho thue\b[^,.]{0,12}\b(?:khong|ko|k)\s+ban\b|\b(?:doi|chuyen)\s+(?:sang|qua|thanh)\s+cho thue\b/;
-const DOI_SANG_BAN_RE = /\bban\b[^,.]{0,6}\bchu\s+(?:khong|ko|k|hong)\s+(?:phai\s+)?cho thue\b|\b(?:khong|ko|k)\s+cho thue\b[^,.]{0,12}\bban\b|\b(?:doi|chuyen)\s+(?:sang|qua|thanh)\s+ban\b/;
+export const DOI_SANG_THUE_RE = /\bcho thue\b[^,.]{0,6}\bchu\s+(?:khong|ko|k|hong)\s+(?:phai\s+)?ban\b|\b(?:khong|ko|k)\s+ban\b[^,.]{0,12}\bcho thue\b|\bcho thue\b[^,.]{0,12}\b(?:khong|ko|k)\s+ban\b|\b(?:doi|chuyen)\s+(?:sang|qua|thanh)\s+cho thue\b/;
+// 24/09/2026 (bắn 10 tin, CHDV): "vẫn bán nha em, không phải cho thuê" — chủ khẳng định lại là BÁN.
+export const DOI_SANG_BAN_RE = /\b(?:van|la|dang)\s+ban\b[^.]{0,20}\b(?:khong|ko|k|hong)\s+(?:phai\s+)?(?:la\s+)?cho thue\b|\bban\b[^,.]{0,6}\bchu\s+(?:khong|ko|k|hong)\s+(?:phai\s+)?cho thue\b|\b(?:khong|ko|k)\s+cho thue\b[^,.]{0,12}\bban\b|\b(?:doi|chuyen)\s+(?:sang|qua|thanh)\s+ban\b/;
 export function nhanDienFact(text: string): NhanDien | null {
   const goc = text.trim();
   const kd = boDau(goc);
@@ -1171,7 +1174,14 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(doanh thu|thu ve|dong tien|thu nhap|tien thue thu)\b/.test(kd)) return { question: "doanh_thu", answer: goc };
   if (/\b(phi quan ly|phi ql|phi dich vu|phi bao tri)\b/.test(kd)) return { question: "phi_quan_ly", answer: goc };
   if (/\b(phi gui xe|phi giu xe|tien gui xe)\b/.test(kd)) return { question: "phi_gui_xe", answer: goc };
-  if (/\b(san truoc|san sau|san vuon|co san|san rong|san dau xe)\b/.test(kd) && /\d/.test(kd)) return { question: "san_vuon", answer: goc };
+  // 24/09/2026 (bắn 10 tin, biệt thự): "Bán biệt thự sân vườn Thảo Điền quận 2, …" → số của "quận 2" làm cả câu thành
+  // ô sân vườn. Chỉ lấy MẢNH có chữ sân, và mảnh đó phải có số đo (không tính số quận / phường).
+  if (/\b(san truoc|san sau|san vuon|co san|san rong|san dau xe)\b/.test(kd)) {
+    const SAN_RE = /\b(san truoc|san sau|san vuon|co san|san rong|san dau xe)\b/;
+    const mk = manhKhop(SAN_RE);
+    const kdMk = boDau(mk).replace(/\b(?:quan|q|phuong|p|huyen)\.?\s*\d+/g, " ");
+    if (SAN_RE.test(boDau(mk)) && /\d/.test(kdMk)) return { question: "san_vuon", answer: mk };
+  }
   if (/\b(len tho cu|len tho|chuyen tho cu|chuyen muc dich)\b/.test(kd)) return { question: "len_tho_cu", answer: goc };
   if ((m = /\b(?:tho cu)\s*(?:duoc|la|het|full)?\s*(\d{1,4}(?:[.,]\d+)?)\s*(m2|%)/.exec(kd)) || (m = /\b(\d{1,4}(?:[.,]\d+)?)\s*(m2|%)\s*tho cu\b/.exec(kd))) {
     return { question: "tho_cu", answer: `${m[1]}${m[2]}` };
@@ -1376,9 +1386,14 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\bview\b/.test(kd)) return { question: "view", answer: goc };
   if (/\b(pccc|phong chay)\b/.test(kd)) return { question: "pccc", answer: goc };
   if ((m = /\b(\d{1,3})\s*(?:phong|can)\s*(?:cho thue|dich vu|khach)\b/.exec(kd))) return { question: "so_phong", answer: m[1] };
+  // 24/09/2026 (bắn 10 tin): "toà nhà CHDV 20 phòng" — số phòng cho thuê (không phải phòng ngủ), bot từng hỏi lại.
+  if ((m = /\b(?:chdv|can ho dich vu|toa nha|nha tro|day tro)\b[^,.;]{0,12}?\b(\d{1,3})\s*phong\b(?!\s*(?:ngu|wc|tam|ve sinh))/.exec(kd))) return { question: "so_phong", answer: m[1] };
   if ((m = /\b(?:lap day|kin phong|full phong)\s*(?:khoang|tam)?\s*(\d{1,3})\s*%/.exec(kd)) || (m = /(\d{1,3})\s*%\s*(?:lap day|kin phong)/.exec(kd))) return { question: "ty_le_lap_day", answer: `${m[1]}%` };
   if (/\bdoanh thu\b|\bthu ve\b.*\bthang\b|\bdong tien\b/.test(kd)) return { question: "doanh_thu", answer: goc };
-  if ((m = new RegExp(`\\b(?:cao|thong thuy|chieu cao)\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:m|met)\\b`).exec(kd)) && /\b(xuong|kho|thong thuy|tran|tai trong|bien ap|kva|container|pccc)\b/.test(kd)) return { question: "chieu_cao", answer: `${m[1]}m` };
+  if ((m = new RegExp(`\\b(?:cao|thong thuy|chieu cao)\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:m|met)\\b`).exec(kd)) &&
+    // 24/09/2026 (bắn 10 tin, kho xưởng): mảnh "cao 10m" tách khỏi câu rao (hay "cao 10m như anh nói rồi") không còn chữ
+    // kho / xưởng đi kèm → rơi vào "📝 Thêm", bot hỏi lại thông thủy. Mảnh MỞ ĐẦU bằng "cao / chiều cao" thì nhận luôn.
+    (/\b(xuong|kho|thong thuy|tran|tai trong|bien ap|kva|container|pccc)\b/.test(kd) || /^(?:chieu\s+)?cao\s*\d/.test(kd.trim()))) return { question: "chieu_cao", answer: `${m[1]}m` };
   if ((m = new RegExp(`\\b(?:tai trong)\\s*(?:san)?\\s*(?:khoang|tam)?\\s*${SO}\\s*(?:tan|t)\\b`).exec(kd))) return { question: "tai_trong_san", answer: `${m[1]} tấn/m2` };
   if ((m = new RegExp(`${SO}\\s*kva\\b`).exec(kd)) || (m = new RegExp(`\\b(?:tram|bien ap|dien)\\s*(?:khoang|tam)?\\s*${SO}\\s*kva`).exec(kd))) return { question: "tram_bien_ap", answer: `${m[1]} kVA` };
   if (/\b(nuoc thai|xu ly nuoc)\b/.test(kd)) return { question: "xu_ly_nuoc_thai", answer: goc };

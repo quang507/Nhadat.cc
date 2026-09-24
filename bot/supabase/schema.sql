@@ -3828,7 +3828,7 @@ begin
     else
       v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
     end if;
-    if v_num is not null and v_num > 5 and v_num < 5000 then
+    if v_num is not null and v_num > 5 and (v_num < 5000 or (l.property_type in ('dat', 'dat_nong_nghiep', 'dat_kinh_doanh', 'kho_xuong', 'toa_nha') and v_num < 1000000)) then
       update listings set area_m2 = v_num, specs_source = bac
        where id = new.listing_id and (area_m2 is null or de)
          and area_m2 is distinct from v_num;
@@ -3838,7 +3838,7 @@ begin
   elsif new.question = 'dien_tich_tim_tuong' then
     if l.property_type = 'chung_cu' then
       v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
-      if v_num is not null and v_num > 5 and v_num < 5000 then
+      if v_num is not null and v_num > 5 and (v_num < 5000 or (l.property_type in ('dat', 'dat_nong_nghiep', 'dat_kinh_doanh', 'kho_xuong', 'toa_nha') and v_num < 1000000)) then
         update listings set area_m2 = v_num, specs_source = bac
          where id = new.listing_id and (area_m2 is null or de)
            and area_m2 is distinct from v_num;

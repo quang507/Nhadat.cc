@@ -533,6 +533,14 @@ function locCauTrongBongBong(replies: string[], bo: (cau: string) => boolean): s
  * nhà đọc hai lần. Câu ≥ 6 từ (bỏ từ đệm) mà ≥ 80% từ đã nằm trong một câu trước đó thì bỏ;
  * câu ngắn ("Dạ.", "Anh ơi?") giữ nguyên vì trùng là chuyện thường.
  */
+/**
+ * Chưa biết khách là anh hay chị mà câu MỞ bằng "Anh …" / "Chị …" (24/09/2026, bắn 10 tin: "Anh cần bán gấp hay chờ được
+ * giá thôi?") → "Anh chị …". Chữ "anh" / "chị" cuối câu đã có luật riêng ở chat-reply; "Anh chị" đủ cặp không đụng.
+ */
+export function boDoanGioiDauCau(s: string): string {
+  return s.replace(/(^|[.!?…]\s+|\n)(Anh|Chị)(?=\s+(?!(?:chị|anh|em)(?![\p{L}]))\p{Ll})/gu, "$1Anh chị");
+}
+
 export function boCauTrung(replies: string[]): string[] {
   // Trùng là trùng Ý, không cần trùng chữ: "Dạ em là trợ lý AI bên AI Ơi Nhà Đất, việc cần người
   // thật thì có anh chị phụ trách theo sát mình ạ" và "Em là trợ lý AI bên AI Ơi Nhà Đất, việc gì

@@ -10,6 +10,7 @@
 //   · "phường Hiệp Bình Chánh" → không có phường (chỉ biết phường SỐ);
 //   · "nhà phố quận 7 đường Huỳnh Tấn Phát" → gắn dự án "Căn Hộ Cao Cấp Huỳnh Tấn Phát".
 import { TIEN_CD, TIEN_T_KEP } from "./luat-tien.ts";
+import { bocQuan } from "../dia_ban.ts";
 
 const boDau = (s: string): string =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
@@ -130,12 +131,24 @@ export function phuongTenKhongDau(kd: string): string | null {
 }
 
 export function phuongTenCauRao(text: string): string | null {
-  const m = /(?:^|[\s,(])(?:[Pp]hường|PHƯỜNG|[Pp]\.)\s+(\p{Lu}\p{Ll}*(?![\p{L}])(?:\s+\p{Lu}\p{Ll}*(?![\p{L}])){0,3})/u.exec(text);
+  // 24/09/2026 (bắn 10 tin): "xã Phước Vĩnh An huyện Củ Chi", "thị trấn Nhà Bè" — câu rao ngoại thành nói XÃ / THỊ TRẤN,
+  // bản trước chỉ nhận "phường" nên bot hỏi lại "ở xã nào" dù khách đã nói.
+  const m = /(?:^|[\s,(])([Pp]hường|PHƯỜNG|[Pp]\.|[Xx]ã|XÃ|[Tt]hị\s+trấn|THỊ\s+TRẤN)\s+(\p{Lu}\p{Ll}*(?![\p{L}])(?:\s+\p{Lu}\p{Ll}*(?![\p{L}])){0,4})/u.exec(text);
   if (!m) return null;
-  const tu = m[1].split(/\s+/);
-  const dung = tu.findIndex((w) => /^(TP|Tp|Thành|Quận|Q|Huyện|Thị|Tỉnh)$/u.test(w));
+  const tu = m[2].split(/\s+/);
+  // "Thành" chỉ là chữ dừng khi là "Thành phố" — "phường Bến Thành" là tên phường.
+  let dung = tu.findIndex((w, i) => /^(TP|Tp|Quận|Q|Huyện|Thị|Tỉnh)$/u.test(w) || (w === "Thành" && /^[Pp]hố$/u.test(tu[i + 1] ?? "")));
+  // Tên quận / huyện dính liền không có chữ "huyện" ("xã Tân Kiên Bình Chánh") → cắt phần đuôi là tên quận / huyện.
+  if (dung < 0) {
+    for (let k = 2; k < tu.length; k++) {
+      const duoi = boDau(tu.slice(k).join(" "));
+      const q = bocQuan(`quan ${duoi}`, `quận ${tu.slice(k).join(" ")}`);
+      if (q && boDau(q).replace(/^(?:quan|huyen|tp|thanh pho|thi xa)\s+/, "") === duoi) { dung = k; break; }
+    }
+  }
   const ten = (dung >= 0 ? tu.slice(0, dung) : tu).join(" ");
-  return ten.length >= 3 ? `Phường ${ten}` : null;
+  const cap = /^x/i.test(m[1]) ? "Xã" : /^t/i.test(m[1]) ? "Thị trấn" : "Phường";
+  return ten.length >= 3 ? `${cap} ${ten}` : null;
 }
 
 const CHU_CHUNG_DU_AN = /^(?:(?:khu\s+)?can ho|chung cu|cao cap|khu dan cu|kdc|du an|toa nha|khu do thi|kdt|the|so|nha pho|biet thu|shophouse)\s+/;

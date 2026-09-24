@@ -131,6 +131,9 @@ la("không có dòng rỗng thừa", !/\n\s*\n/.test(nha));
   la("tin bán đang cho thuê: '💵 Đang cho thuê: 400 triệu/tháng · hợp đồng tới năm 2030', không in câu chat",
     /^💵 Đang cho thuê: 400 triệu\/tháng · hợp đồng tới năm 2030$/m.test(t) && !/bí mật/.test(t), t);
   la("tin chưa có tiền thuê: không có dòng 💵", !/💵/.test(nha));
+  // 24/09/2026 (bắn 10 tin): khách nói "vi bằng", cột lưu giay_tay → in "vi bằng", không in "giấy tay".
+  const vb = soanTinNhap({ ...NHA_PHO, l: { ...NHA_PHO.l, legal_status: "giay_tay" }, facts: [{ question: "phap_ly", answer: "vi bằng" }], lai: false, cauTD });
+  la("vi bằng: tiêu đề + dòng pháp lý in 'vi bằng'", /, vi bằng, giá/.test(vb) && /📜 Pháp lý: vi bằng/.test(vb) && !/giấy tay/.test(vb), vb);
   const toa = soanTinNhap({ ...NHA_PHO, l: { ...NHA_PHO.l, property_type: "toa_nha", rent_income_vnd: 12e7 }, lai: false, cauTD });
   la("toà nhà: tiền thuê vào khối Khai thác ('thu 120 triệu/tháng'), không có dòng 💵 riêng", /🏢 Khai thác: .*thu 120 triệu\/tháng/.test(toa) && !/💵/.test(toa), toa);
 }
