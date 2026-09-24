@@ -283,9 +283,9 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
 v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
-check("TOIUU-07 người bán trả lời câu chờ ≤ 22 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu)", v.n <= 22 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 23 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu; +1 24/09 FR-223: đọc tin + fact (một truy vấn nhúng) để rẽ nhánh câu kế, chỉ khi có luật đụng tới)", v.n <= 23 && v.r.body.role === "seller", `${v.n}`);
 v = await vong({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi" });
-check("TOIUU-07b lượt sau của cùng người bán ≤ 24 (không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song; +4 18/09 FR-211: câu 'hoàn công đủ rồi' có NHÃN → tìm tin, đọc nhan, gộp, ghi fact — chỉ khi câu có nhãn)", v.n <= 24, `${v.n}`);
+check("TOIUU-07b lượt sau của cùng người bán ≤ 25 (không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song; +4 18/09 FR-211: câu 'hoàn công đủ rồi' có NHÃN → tìm tin, đọc nhan, gộp, ghi fact — chỉ khi câu có nhãn; +1 24/09 FR-223: đọc tin + fact để rẽ nhánh)", v.n <= 25, `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
 check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
 fresh();
@@ -3257,6 +3257,41 @@ fresh(seedKho);
       r.body.dang_luon === true && tP.status === "cho_thong_tin" && !!tP.chu_duyet_at && pend("phuong", tP.id) &&
         r.body.replies.some((x) => /thiếu phường/.test(x)) && !r.body.replies.some((x) => /ổn chưa/.test(x)),
       JSON.stringify({ st: tP.status, rep: r.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  }
+  // FR-223 (24/09/2026, chủ dự án: "rẽ nhánh nếu câu hỏi trước trả lời gì thì sau đó sẽ có bộ câu hỏi gì"): câu kế theo NỘI DUNG câu trả lời.
+  const rnSeed = (uid, code, them = {}, facts = []) => fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: uid, seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code, seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "12 Trần Hưng Đạo", district: "Quận 5", ward: "Phường 2", price_raw: "9 tỷ", price_vnd: 9e9, area_m2: 60, floors: 3, bedrooms: 3, alley_width_m: 5, access_type: "hem_xe_hoi", can_chu_duyet: true, ...them }).data;
+    for (const [q, a] of facts) d.insert("listing_facts", { listing_id: l.id, question: q, answer: a, source: "seller_chat" });
+    d.insert("info_requests", { listing_id: l.id, question: "phap_ly", status: "pending" });
+  });
+  rnSeed("z-rn1", "BDS-Q5-0931");
+  r = await send({ external_user_id: "z-rn1", text: "sổ hồng riêng em" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0931");
+    check("RENHANH-01 nhà phố trả lời 'sổ hồng riêng' → câu kế là HOÀN CÔNG (câu nhánh), bot hỏi được câu đó",
+      pend("hoan_cong", l.id) && /hoàn công/.test(createCalls().at(-1)?.params?.messages?.[0]?.content ?? ""),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+    r = await send({ external_user_id: "z-rn1", text: "rồi em" });
+    const fHc = db().t.listing_facts.find((x) => x.listing_id === l.id && x.question === "hoan_cong");
+    check("RENHANH-04 trả lời 'rồi em' cho câu hoàn công → ghi fact hoan_cong, không hỏi lại hoàn công",
+      !!fHc && !pend("hoan_cong", l.id), JSON.stringify({ fHc, rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
+  rnSeed("z-rn2", "BDS-Q5-0932", { rent_income_vnd: 150000000 }, [["hien_trang", "đang cho Sacombank thuê"]]);
+  r = await send({ external_user_id: "z-rn2", text: "sổ hồng riêng em" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0932");
+    check("RENHANH-02 'sổ hồng riêng' mà nhà ĐANG CHO THUÊ → KHÔNG hỏi hoàn công (chủ dự án: đang cho thuê là hoàn thiện rồi)",
+      !pend("hoan_cong", l.id) && !r.body.replies.some((x) => /hoàn công/.test(x)),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
+  rnSeed("z-rn3", "BDS-Q5-0933");
+  r = await send({ external_user_id: "z-rn3", text: "chưa có sổ em, đang chờ ra sổ" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0933");
+    check("RENHANH-03 'chưa có sổ, đang chờ ra sổ' → câu kế hỏi giấy tờ + bao giờ ra sổ, KHÔNG hỏi hoàn công",
+      pend("tien_do_so", l.id) && !pend("hoan_cong", l.id),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
   // 24/09/2026 (chủ dự án: "ảnh ko liên quan thì nhận xét luôn bảo à anh có gửi nhầm ảnh ko"): không cất vào tin.
   fresh(seedKho);

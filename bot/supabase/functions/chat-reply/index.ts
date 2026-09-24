@@ -89,6 +89,7 @@ import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
 import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
+import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
 import { boCauGhiNhan, boCauTrung, boHoiHoanCong, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
@@ -2091,8 +2092,21 @@ Deno.serve(async (req) => {
       // 22/09/2026 (bộ đo giọng B08): câu tiền định "Dạ em là trợ lý AI…" đứng trước, model chép lại gần
       // nguyên văn ở bong bóng sau → chủ nhà đọc hai lần. Câu ≥ 6 từ trùng nhau chỉ giữ lần đầu.
       sach = boCauTrung(sach);
-      // 24/09/2026 (chủ dự án): bot không tự hỏi hoàn công — cắt mệnh đề hỏi hoàn công trong lời bot.
-      sach = boHoiHoanCong(sach);
+      // 24/09/2026 (chủ dự án): model không tự hỏi hoàn công — cắt mệnh đề hỏi hoàn công trong lời bot, TRỪ KHI
+      // bảng rẽ nhánh (FR-223) vừa mở câu `hoan_cong` cho người này (sổ riêng, chưa nhắc hoàn công).
+      if (sach.some((r) => /\?/.test(r) && /\bhoan cong\b/.test(boDau(r)))) {
+        const { data: lsHc, error: lsHcErr } = await client.from("listings").select("id").eq("seller_id", sellerRow.id).limit(30);
+        const idsHc = (lsHc ?? []).map((x: { id: string }) => x.id);
+        let coCauHc = false;
+        if (lsHcErr) await ghiLoi(client, "chat-reply doc tin (hoan cong)", lsHcErr.message);
+        else if (idsHc.length) {
+          const { data: hc, error: hcErr } = await client.from("info_requests").select("id").in("listing_id", idsHc)
+            .eq("question", "hoan_cong").eq("status", "pending").limit(1);
+          if (hcErr) await ghiLoi(client, "chat-reply doc cau hoan cong", hcErr.message);
+          coCauHc = (hc ?? []).length > 0;
+        }
+        sach = boHoiHoanCong(sach, coCauHc);
+      }
       sach = sach.map(boGachDai);
       // 23/09/2026 (bắn 26 tin): "Căn góc view thoáng khó bán lắm cô" — khen mà nói ngược nghĩa.
       sach = suaKhenNguocNghia(sach);
@@ -2896,7 +2910,7 @@ Deno.serve(async (req) => {
             const canKe = pendingReq?.listing_id ?? cans[0].id;
             const { data: thieu } = await client.from("listing_missing_facts").select("fact_key, priority, nhom")
               .eq("listing_id", canKe).order("priority").limit(8);
-            const ke = chonCauKe([...(pendingReq ? [pendingReq.question] : [])], ((thieu ?? []) as Array<{ fact_key: string; priority: number; nhom: string | null }>).filter((f) => f.nhom !== "sau_dang"));
+            const ke = chonCauKe([...(pendingReq ? [pendingReq.question] : [])], (await thieuCoReNhanh(client, canKe, (thieu ?? []) as Array<{ fact_key: string; priority: number; nhom: string | null }>, pendingReq ? [pendingReq.question] : [], text)).filter((f) => f.nhom !== "sau_dang"));
             if (ke) {
               const { error: irErr } = await client.from("info_requests").insert({ listing_id: canKe, question: ke, status: "pending" });
               if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(theo can)", irErr.message);
@@ -3028,7 +3042,7 @@ Deno.serve(async (req) => {
         // kế tiếp áp cho căn đó; các căn còn lại vòng hỏi bù hỏi sau.
         const { data: thieuLo } = await client.from("listing_missing_facts").select("fact_key, priority, nhom")
           .eq("listing_id", dau!.id).order("priority").limit(8);
-        const keLo = chonCauKe(["gia", "dien_tich"], (thieuLo ?? []).filter((f) => f.nhom !== "sau_dang" && !["vi_tri", "phuong", "gap"].includes(f.fact_key)));
+        const keLo = chonCauKe(["gia", "dien_tich"], (await thieuCoReNhanh(client, dau!.id, thieuLo)).filter((f) => f.nhom !== "sau_dang" && !["vi_tri", "phuong", "gap"].includes(f.fact_key)));
         if (keLo) {
           const { error: irLo } = await client.from("info_requests").insert({ listing_id: dau!.id, question: keLo, status: "pending" });
           if (irLo && irLo.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(nhieu can)", irLo.message);
@@ -4322,7 +4336,8 @@ Deno.serve(async (req) => {
         client.from("info_requests").select("question").eq("listing_id", pendingReq.listing_id).eq("status", "expired"),
       ]);
       const hetHanSet = new Set((daHetHan ?? []).map((q) => q.question));
-      const nextFacts = (nextFactsTho ?? []).filter((f) => !hetHanSet.has(f.fact_key));
+      // FR-223: câu nhánh theo câu trả lời (sổ riêng → hoàn công, chưa sổ → bao giờ ra sổ, đang cho thuê → bỏ hiện trạng…).
+      const nextFacts = (await thieuCoReNhanh(client, pendingReq.listing_id, nextFactsTho, [pendingReq.question], text)).filter((f) => !hetHanSet.has(f.fact_key));
       const published = !!lstNow && lstNow.status !== "cho_thong_tin";
       // Chủ nói "đăng đi / ok / được" giữa vòng hỏi (09/09 tối lần 2): đủ 70 điểm
       // thì gửi BẢN NHÁP ngay (bỏ câu đang treo), dưới 70 thì nói rõ còn thiếu gì
@@ -4458,7 +4473,7 @@ Deno.serve(async (req) => {
           if (sellerReply) {
             sellerReply = boKhenKhongCanCu([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null;
             if (sellerReply) sellerReply = boMenhDeKhenSai([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null;
-            if (sellerReply) sellerReply = boHoiHoanCong([sellerReply])[0] ?? null;
+            if (sellerReply) sellerReply = boHoiHoanCong([sellerReply], nextKey === "hoan_cong")[0] ?? null;
           }
           // FR-177: một lượt một câu hỏi — cắt câu hỏi thứ hai của model (15/09/2026).
           // Chỉ áp cho lời MODEL: câu tiền định (xin chấm điểm, liệt kê căn) có chủ ý.
@@ -4771,7 +4786,7 @@ Deno.serve(async (req) => {
         const { data: firstFacts } = await client.from("listing_missing_facts")
           .select("fact_key, nhom").eq("listing_id", newLst.id).order("priority").limit(8);
         const vuaRao = [phuongRao ? "phuong" : "", areaM ? "dien_tich" : "", priceM ? "gia" : ""].filter(Boolean);
-        const firstKey = chonCauKe(vuaRao, (firstFacts ?? []).filter((f) => f.nhom !== "sau_dang")) ?? null;
+        const firstKey = chonCauKe(vuaRao, (await thieuCoReNhanh(client, newLst.id, firstFacts)).filter((f) => f.nhom !== "sau_dang")) ?? null;
         if (firstKey) {
           const { error: ir1Err } = await client.from("info_requests").insert({
             listing_id: newLst.id, question: firstKey, status: "pending",
@@ -4917,7 +4932,7 @@ Deno.serve(async (req) => {
             client.from("info_requests").select("question").eq("listing_id", canNeo.id).eq("status", "expired"),
           ]);
           const hh = new Set((hetHanRoi ?? []).map((q) => q.question));
-          const keRoi = chonCauKe(factRoi.map((f) => f.question), (thieuRoi ?? []).filter((f) => !hh.has(f.fact_key) && f.nhom !== "sau_dang"));
+          const keRoi = chonCauKe(factRoi.map((f) => f.question), (await thieuCoReNhanh(client, canNeo.id, thieuRoi, factRoi.map((f) => f.question), text)).filter((f) => !hh.has(f.fact_key) && f.nhom !== "sau_dang"));
           if (keRoi && keRoi !== "hinh_anh") {
             const { error: irRoi } = await client.from("info_requests").insert({ listing_id: canNeo.id, question: keRoi, status: "pending" });
             if (irRoi && irRoi.code !== "23505") await ghiLoi(client, "chat-reply mo cau ke(roi)", irRoi.message);

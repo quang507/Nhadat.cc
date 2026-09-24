@@ -4,6 +4,7 @@
 // tin và cron nhắc nhịp; nếu seller có zalo_user_id + có ZALO_OA_ACCESS_TOKEN
 // thì gửi thẳng qua OA, không thì câu hỏi nằm ở info_requests cho CTV gửi tay.
 // POST { listing_id, mode?: "batch"|"drip", dry_run?: bool }
+import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
 import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
@@ -69,12 +70,14 @@ Deno.serve(async (req) => {
     }, 422);
   }
 
-  const { data: missing, error: mErr } = await db
+  const { data: missingTho, error: mErr } = await db
     .from("listing_missing_facts")
     .select("fact_key, priority, nhom")
     .eq("listing_id", listing_id)
     .order("priority");
   if (mErr) return jsonResponse({ error: mErr.message }, 500);
+  // FR-223: câu nhánh theo câu trả lời — vòng hỏi bù hỏi cùng bộ câu với chat-reply.
+  const missing = await thieuCoReNhanh(db, listing_id, missingTho);
 
   // Không hỏi lại điều đang chờ trả lời (chống spam — INS-09). Một truy vấn
   // lấy cả hai thứ cần: câu đang chờ (status) và "đã từng hỏi căn này chưa"
