@@ -16,6 +16,8 @@ ok("sổ riêng + đang cho thuê → KHÔNG hỏi hoàn công, bỏ hiện tr�
 ok("đang cho thuê chưa nói hạn hợp đồng, chưa nói tiền thuê → hỏi hạn hợp đồng rồi tiền thuê", keys(r).join() === "han_hop_dong_thue,doanh_thu", JSON.stringify(r));
 r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("hien_trang", "đang cho thuê 30 triệu/tháng")] });
 ok("'đang cho thuê 30 triệu/tháng' → không hỏi lại tiền thuê", !keys(r).includes("doanh_thu"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("_mo_ta", "bán nhà mặt tiền, đang cho ngân hàng thuê, giá 25 tỷ"), f("han_hop_dong_thue", "tới năm 2030 em")] }, ["han_hop_dong_thue"]);
+ok("'cho ngân hàng thuê, giá 25 tỷ' KHÔNG phải tiền thuê → trả lời hạn hợp đồng xong thì hỏi tiền thuê (bắn thật 24/09 rn-test-g)", keys(r).join() === "doanh_thu", JSON.stringify(r));
 r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("kien_thuc", "hợp đồng thuê Sacombank đến năm 2031")] });
 ok("đã nói 'đến năm 2031' → KHÔNG hỏi hạn hợp đồng", !keys(r).includes("han_hop_dong_thue"), JSON.stringify(r));
 r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("_mo_ta", "bán nhà mặt tiền Nguyễn Trãi, đang cho ngân hàng thuê, giá 25 tỷ"), f("phap_ly", "sổ hồng riêng")] });
