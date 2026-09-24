@@ -3289,8 +3289,16 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-rn3", text: "chưa có sổ em, đang chờ ra sổ" });
   {
     const l = db().t.listings.find((x) => x.code === "BDS-Q5-0933");
-    check("RENHANH-03 'chưa có sổ, đang chờ ra sổ' → câu kế hỏi giấy tờ + bao giờ ra sổ, KHÔNG hỏi hoàn công",
-      pend("tien_do_so", l.id) && !pend("hoan_cong", l.id),
+    check("RENHANH-03 'chưa có sổ, đang chờ ra sổ' → câu kế là ý chính đầu của nhánh (giấy tờ đang có), lệnh model có tên nhánh + các ý, KHÔNG hỏi hoàn công",
+      pend("giay_to_hien_co", l.id) && !pend("hoan_cong", l.id) && /chưa có sổ/.test(createCalls().at(-1)?.params?.messages?.[0]?.content ?? "") && /dự kiến bao giờ ra sổ/.test(createCalls().at(-1)?.params?.messages?.[0]?.content ?? ""),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+    r = await send({ external_user_id: "z-rn3", text: "vi bằng em" });
+    check("RENHANH-06 trả lời ý 1 của nhánh chưa sổ ('vi bằng em') → ghi giấy tờ, hỏi tiếp ý 2 (dự kiến bao giờ ra sổ)",
+      db().t.listing_facts.some((x) => x.listing_id === l.id && x.question === "giay_to_hien_co") && pend("du_kien_ra_so", l.id),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+    r = await send({ external_user_id: "z-rn3", text: "cuối năm nay có sổ em" });
+    check("RENHANH-07 trả lời ý 2 → nhánh hết ý, không hỏi lại ý nào của nhánh",
+      db().t.listing_facts.some((x) => x.listing_id === l.id && x.question === "du_kien_ra_so") && !pend("du_kien_ra_so", l.id) && !pend("giay_to_hien_co", l.id),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
   // FR-223 (bắn thật production 24/09, rn-test-c): chế độ AI `chinh`, AI IM về "chưa có sổ em, đang chờ ra sổ" → luật
@@ -3307,7 +3315,7 @@ fresh(seedKho);
     const fs5 = db().t.listing_facts.filter((x) => x.listing_id === l.id).map((x) => [x.question, x.answer]);
     check("RENHANH-05 'chinh' + AI im: 'chưa có sổ em, đang chờ ra sổ' → vào ô PHÁP LÝ (giữ chữ khách, không thành sổ hồng), không vào bổ sung, câu kế hỏi tiến độ sổ",
       fs5.some(([q, a]) => q === "phap_ly" && /chưa có sổ/.test(a)) && !fs5.some(([q]) => q === "bo_sung") && l.legal_status !== "so_hong_rieng" &&
-        !pend("phap_ly", l.id) && pend("tien_do_so", l.id),
+        !pend("phap_ly", l.id) && pend("giay_to_hien_co", l.id),
       JSON.stringify({ fs5, legal: l.legal_status, rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
     globalThis.__cauHinh = cauHinhCu; globalThis.__model.parse = parseCu;
   }

@@ -90,6 +90,7 @@ import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/pha
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
 import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
 import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
+import { nhanhCuaKhoa } from "../_shared/extraction/re-nhanh.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
 import { boCauGhiNhan, boCauTrung, boHoiHoanCong, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
@@ -4425,6 +4426,7 @@ Deno.serve(async (req) => {
       // này bị đọc thành gật.
       const cauDuongKe = goiYDuongKe && nextKey ? await cauHoiDuongGoiY(pendingReq.listing_id, goiYDuongKe, cachGoi) : null;
       const goiYKe = !cauDuongKe && nextKey === "phuong" ? await cauHoiPhuongGoiY(pendingReq.listing_id, null, cachGoi) : null;
+      const nhanhKe = nextKey ? nhanhCuaKhoa(nextKey) : null;
       const cauKe = nextKey
         ? cauDuongKe ?? goiYKe ?? cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)
         : "";
@@ -4441,6 +4443,13 @@ Deno.serve(async (req) => {
           }rồi hỏi tiếp thứ quan trọng nhất còn thiếu: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
           // 24/09/2026 (chủ dự án chuyển nhận xét của AI khác): bỏ "gộp thêm một ý … cũng được" — chính khe đó cho model gắn
           // "đã hoàn công chưa" vào câu hỏi sổ. Code chọn HỎI GÌ, model chỉ chọn CÁCH NÓI.
+          // FR-223 (chủ dự án chọn "lai" 24/09): câu NHÁNH → cho model biết đang hỏi thêm chuyện gì và các ý chính của
+          // nhánh, để câu hỏi nối được với điều chủ nhà vừa nói (code vẫn chọn Ý NÀO hỏi — câu trả lời ghi đúng ô).
+          (nhanhKe
+            ? `Chủ nhà vừa nói tới chuyện "${nhanhKe.ten}" nên em hỏi thêm cho rõ; các ý chính cần thu của chuyện này: ` +
+              `${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}. Lượt này hỏi ý "${FACT_LABELS[nextKey] ?? nextKey}"; ` +
+              `ý nào chủ nhà đã nói trong NGỮ CẢNH thì chỉ ghi nhận, không hỏi lại. `
+            : "") +
           `Câu gợi ý: "${cauKe}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${FACT_LABELS[nextKey] ?? nextKey}, ` +
           `đừng gắn thêm ý khác vào câu hỏi (hệ thống ghi câu trả lời kế vào ô này; hỏi lệch là ghi sai ô). ` +
           (nhieuCan
