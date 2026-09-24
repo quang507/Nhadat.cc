@@ -70,7 +70,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { gonLoiSua, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban"]);
@@ -2324,13 +2324,14 @@ Deno.serve(async (req) => {
         location_raw: string | null; ward?: string | null; unit_code?: string | null;
         property_type?: string | null; project_id?: string | null; area_m2?: number | null;
         district?: string | null; deal?: string | null;
+        frontage_m?: number | string | null; length_m?: number | string | null; // 24/09: ghép "dài 16m" với ngang đã có
         boc_tach?: unknown; // FR-212: đọc `duong_goi_y` không tốn thêm truy vấn
       };
     };
     const [{ data: pendings }] = await Promise.all([
       client
         .from("info_requests")
-        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, district, deal, unit_code, property_type, project_id, area_m2, boc_tach)")
+        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, district, deal, unit_code, property_type, project_id, area_m2, frontage_m, length_m, boc_tach)")
         .eq("listings.seller_id", sellerRow.id)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
@@ -3697,6 +3698,26 @@ Deno.serve(async (req) => {
           }
         }
       }
+      // 24/09/2026 (chủ dự án test Zalo: "sao nó ko biết và tự nhân 5x16 vậy, nó dài 16 mà đưa vào thông tin bổ sung à"):
+      // đang hỏi diện tích, lượt trước đã nói "ngang 5m" → "dài 16m" trần là chiều còn lại, không phải câu lệch.
+      {
+        const ghep = ghepMotChieu(pendingReq.question, dapAn, pendingReq.listings?.frontage_m, pendingReq.listings?.length_m);
+        if (ghep) dapAn = ghep;
+      }
+      // 24/09/2026 (chủ dự án: "137/28 nghĩa là đường số 59 hẻm 137 và nhà số 28"): tin đã có tên đường mà chưa có số,
+      // chủ nhắn số nhà có gạch chéo ở đầu câu → ghép "137/28 Đường số 59" vào địa chỉ; phần còn lại mới là câu trả lời
+      // câu đang treo (bản trước: đang hỏi diện tích, "137/28" thành "137m2").
+      {
+        const sn = pendingReq.question !== "vi_tri" ? soNhaDau(dapAn) : null;
+        const lr = (pendingReq.listings?.location_raw ?? "").trim();
+        if (sn && lr && !/^\d/.test(lr) && !/\d\/\d/.test(lr)) {
+          const { error: snErr } = await client.rpc("ghi_fact_listing", {
+            p_listing_id: pendingReq.listing_id, p_question: "vi_tri", p_answer: `${sn.soNha} ${lr}`, p_source: "seller_chat",
+          });
+          if (snErr) await ghiLoi(client, "chat-reply ghi_fact_listing(so nha)", snErr.message);
+          else if (sn.conLai) dapAn = sn.conLai;
+        }
+      }
       let kq: KetQuaKhop = pendingReq.question === "loai_bds"
         ? { loai: "khop" }
         : kqDuyet ?? phanLoaiCauTraLoi(pendingReq.question, dapAn);
@@ -3791,12 +3812,17 @@ Deno.serve(async (req) => {
       const ketCauChac = (f: { question: string; answer: string }, cau: string) => f.question === "ket_cau" &&
         /^(?:nh[aà]\s+)?(?:h[ầa]m\s*\+?\s*)?(?:tr[ệe]t\b|\d{1,2}\s*(?:t[ầa]ng|l[ầa]u|t[ấa]m)\b)/iu.test(f.answer.trim()) &&
         !/\b(?:duoc xay|xay duoc|xay them|dinh xay|se xay|toi da|cho phep|quy hoach|cach|ben canh|ke ben|hang xom)\b/.test(boDau(cau));
+      // 24/09/2026 (chủ dự án test Zalo): "ngang 5m daifm shr, hxh quay đầu" — AI bỏ sót "shr", pháp lý là khoá AI nói → rơi.
+      // "shr / sổ hồng riêng / sổ riêng" không mơ hồ; câu không có "chưa / đang làm / chờ / chung" thì luật nói thay.
+      const phapLyChac = (f: { question: string; answer: string }) => f.question === "phap_ly" &&
+        /\b(?:shr|so hong rieng|so rieng)\b/.test(boDau(f.answer)) && !/\b(?:chua|dang lam|cho|khong|ko|chung)\b/.test(boDau(f.answer));
       const factKem = (s: string): Array<{ question: string; answer: string }> => aiChinh
         ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => f.question !== "bo_sung" && (
             !KHOA_FACT_AI_BIET.has(f.question) ||
             (!aiChinh!.ghi.some((g) => g.question === f.question) &&
               (aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)) ||
-                KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s)))))]
+                KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f)))))
+            .map((f) => phapLyChac(f) ? { question: "phap_ly", answer: "sổ hồng riêng" } : f)]
         : nhanDienNhieuFact(s);
       // 15/09/2026 (Zalo thật): vừa trả lời vừa HỎI NGƯỢC → ghi PHẦN trả lời, câu hỏi
       // của chủ nhà được trả lời TRƯỚC câu kế (không nuốt, không ghi cả câu vào ô).

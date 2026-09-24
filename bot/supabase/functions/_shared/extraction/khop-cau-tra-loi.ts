@@ -328,6 +328,11 @@ export function bocViTriRao(text: string): string | null {
     // Chữ TẢ đường và bề rộng/số nhà đứng trước tên: "xe hơi 5m", "102". 14/09/2026: cả
     // chữ "đường"/"phố" CÓ DẤU nằm giữa ("hẻm ba gác đường Phạm Thế Hiển") — bỏ dấu thì
     // "đường" trùng "Dương" (An Dương Vương), nên chỉ nhận bản có dấu.
+    // 24/09/2026 (chủ dự án test Zalo): "đường số 59 Gò vấp" — đường ĐÁNH SỐ (Gò Vấp, Bình Tân, Thủ Đức…): "số" là
+    // chữ dừng tên đường ("sổ/số") nên cả địa chỉ rơi. "đường số N" là tên đường trọn vẹn.
+    if (/^(?:đường|duong)$/iu.test(dau) && /^(?:số|so)$/iu.test(tu[i] ?? "") && /^\d{1,3}[a-z]?$/i.test(tu[i + 1] ?? "")) {
+      return [dau, tu[i], tu[i + 1]].join(" ");
+    }
     const truoc: string[] = [];
     while (i < tu.length && (TU_TA_DUONG.has(boDau(tu[i])) || /^(?:đường|phố)$/iu.test(tu[i]) ||
       /^\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)*(?:m|met|mét)?$/i.test(tu[i]))) {
@@ -376,6 +381,16 @@ export function catDapAn(question: string, dapAn: string): string {
   // 20/09/2026 (bắn thật mau-y-B): "phường 17 nhé, đường Phan Văn Trị" — lời sửa phường bị bóc, còn
   // "nhé, đường Phan Văn Trị" thành location_raw và street = "nhé". Tiểu từ đứng đầu mệnh đề bỏ đi.
   if (question === "vi_tri") {
+    // 24/09/2026 (chủ dự án test Zalo): "137/28 nhé em, cần bán gấp giá 5 tỏi 9…" — cả câu thành địa chỉ, street = "nhé
+    // em". Mảnh ĐẦU là số nhà / hẻm và phần sau không nói gì về địa chỉ → chỉ giữ mảnh đầu, bỏ tiểu từ cuối.
+    const manh = goc.split(/[,;\n]/);
+    const dau0 = (manh[0] ?? "").replace(TIEU_TU_DAU, "").trim();
+    const sau0 = boDau(manh.slice(1).join(" "));
+    if (manh.length > 1 && /^\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)*(?:\s|$)/i.test(dau0) &&
+        !/\b(?:duong|hem|hxh|pho|phuong|quan|p\s*\d|q\s*\d|ngo|kdc|khu)\b/.test(sau0)) {
+      const gon = dau0.replace(/(?:\s+(?:nhé|nha|nhe|nghen|em|anh|chị|ạ|ơi|đó|nè|á|luôn|thôi))+\s*$/iu, "").trim();
+      if (gon) return gon;
+    }
     const sach = goc.replace(TIEU_TU_DAU, "").trim();
     if (sach && sach !== goc) return sach;
   }
@@ -440,6 +455,39 @@ export function ngangDai(kd: string): string | null {
   // "5x16" giữ nguyên dạng (DB đọc được, câu "4x14 nở hậu 5m" còn giữ nở hậu) — chỉ đổi dạng chữ.
   const m = NGANG_DAI_RE.exec(kd);
   return m ? `ngang ${m[1]}m dài ${m[2]}m` : null;
+}
+
+/**
+ * 24/09/2026 (chủ dự án test Zalo: "137/28 nghĩa là đường số 59 hẻm 137 và nhà số 28"): mảnh ĐẦU của câu chỉ là số nhà
+ * có gạch chéo ("137/28 nhé em, cần bán gấp…") → trả { soNha, conLai }. Không có gạch chéo thì null ("5 tỷ", "4m"
+ * không phải số nhà).
+ */
+export function soNhaDau(text: string): { soNha: string; conLai: string } | null {
+  const manh = (text ?? "").split(/[,;\n]/);
+  const dau = (manh[0] ?? "").replace(TIEU_TU_DAU, "")
+    .replace(/(?:\s+(?:nhé|nha|nhe|nghen|em|anh|chị|ạ|ơi|đó|nè|á|luôn|thôi))+\s*$/iu, "").trim();
+  const m = /^(?:(?:số nhà|so nha|số|so|nhà|nha)\s+)?(\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)+)$/iu.exec(dau);
+  return m ? { soNha: m[1], conLai: manh.slice(1).join(",").trim() } : null;
+}
+
+/**
+ * 24/09/2026 (chủ dự án test Zalo): đang hỏi DIỆN TÍCH, chủ đã nói "ngang 5m" ở lượt trước, lượt này nói "dài 16m"
+ * → "ngang 5m dài 16m" (DB nhân ra 80 m²). Câu nói MỘT chiều mà chiều kia đã có trong tin thì ghép; câu có đủ hai
+ * chiều, có "x", có m², chỉ nói ngang, hoặc không nói chiều nào → null (đi đường cũ).
+ */
+export function ghepMotChieu(question: string, dapAn: string, ngangCo: number | string | null | undefined, daiCo: number | string | null | undefined): string | null {
+  if (!/^dien_tich(?:_dat)?$/.test(question)) return null;
+  const kd = boDau(dapAn ?? "");
+  if (ngangDai(kd) || /\d\s*(?:m\s*)?x\s*\d|m2|m²|met vuong/.test(kd)) return null;
+  const so = (re: RegExp) => { const m = re.exec(kd); return m ? m[1].replace(",", ".") : null; };
+  const dai = so(/\b(?:dai|sau|doc|chieu dai)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?(?![\d])/);
+  const ngang = so(/\b(?:ngang|mat tien|mt|chieu ngang)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?(?![\d])/);
+  const n = (v: number | string | null | undefined) => { const x = v == null ? NaN : Number(v); return Number.isFinite(x) && x > 0 ? String(x) : null; };
+  // Chỉ chiều "dài" nối vào "ngang" đã có (thứ tự người ta nói: ngang trước, dài sau). "Ngang 5" trần vẫn đi đường cũ
+  // (ghi mặt tiền, câu diện tích treo) — `length_m` cũ trong tin có thể từ lượt khác, không tự nhân.
+  void daiCo;
+  if (dai && !ngang && n(ngangCo)) return `ngang ${n(ngangCo)}m dài ${dai}m`;
+  return null;
 }
 
 // ── Tiểu từ / ack ────────────────────────────────────────────────────────────

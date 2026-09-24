@@ -55,7 +55,9 @@ const laKhong = (v: string) => /^(khong|ko|false|no|0|khong gap|khong thuong luo
 
 /** Mọi con số đọc được trong cụm ("2m5" → 2.5 trừ khi là "m2"; "4x15" góp thêm 60 cho diện tích). */
 function soTrong(cum: string, dienTich: boolean): number[] {
-  let t = chuanSo(cum);
+  // 24/09/2026 (chủ dự án test Zalo): "137/28 nhé em" trả lời câu diện tích → model đưa "137m2", trích "137/28" và
+  // lọt vì cụm có số 137. Số nằm trong dạng SỐ NHÀ / HẺM có gạch chéo ("137/28", "12/3A") không phải số đo.
+  let t = chuanSo(cum).replace(/\b\d+[a-z]?(?:\/\d+[a-z]?)+\b/g, " ");
   if (!dienTich) t = t.replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2 ");
   const so = [...t.matchAll(/\d+(?:\.\d+)?/g)].map((m) => Number(m[0]));
   if (dienTich) {
@@ -569,7 +571,14 @@ export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | n
   const khoaAi = new Set([...(AI_CHO_CAU[cauHoi] ?? []), ...Object.entries(KHOA_GHI).filter(([, q]) => q === cauHoi).map(([k]) => k)]);
   const loc = mot.filter((d) => khoaAi.has(d.khoa));
   if (!loc.length) {
-    if (/^dien_tich(_dat)?$/.test(cauHoi) && kt.ngang != null && kt.dai != null) return `${kt.ngang}x${kt.dai}`;
+    if (/^dien_tich(_dat)?$/.test(cauHoi)) {
+      // 24/09/2026 (chủ dự án test Zalo): "dài 16m" khi tin đã có ngang 5 → 5x16 (chiều kia lấy trong tin).
+      const soDb = (v: unknown) => { const x = v == null ? NaN : Number(v); return Number.isFinite(x) && x > 0 ? x : null; };
+      // Chỉ "dài" nối vào "ngang" đã có — cùng luật `ghepMotChieu` (khop-cau-tra-loi.ts).
+      const ng = kt.ngang ?? (kt.dai != null ? soDb(dong?.frontage_m) : null);
+      const da = kt.dai;
+      if (ng != null && da != null) return `${ng}x${da}`;
+    }
     return null;
   }
   const { ghi } = chonDeGhi(loc, { trung: [], lech: [], ai_them: loc.map((d) => ({ khoa: d.khoa, ai: d.gia_tri })) }, dong, {});
