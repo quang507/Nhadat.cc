@@ -255,6 +255,8 @@ export const FACT_LABELS: Record<string, string> = {
   view: "view căn hộ", can_goc: "có phải căn góc không", phi_gui_xe: "phí gửi xe", so_huu: "sở hữu lâu dài hay 50 năm",
   hinh_dang: "hình dáng đất (vuông vức, nở hậu, bóp hậu)", mat_do_xd: "mật độ xây dựng cho phép", tang_cao_toi_da: "được xây tối đa mấy tầng",
   no_hau: "nở hậu", thang_may: "có thang máy không",
+  // FR-220 (24/09/2026): hỏi bù sau khi lên kệ; câu trả lời chen vào kết cấu chữ.
+  tang_phu: "tầng lửng, sân thượng, tầng hầm",
   so_phong: "tổng số phòng cho thuê", ty_le_lap_day: "tỷ lệ lấp đầy", doanh_thu: "doanh thu mỗi tháng", pccc: "PCCC đã nghiệm thu chưa",
   len_tho_cu: "có lên thổ cư được không", duong_vao: "đường vào (bê tông hay đất, xe tải vào được không)",
   nguon_nuoc: "nguồn nước tưới", ranh_gioi: "ranh giới đã cắm cọc, rào chưa",
@@ -361,6 +363,7 @@ export const CAU_HOI_MAU: Record<string, string> = {
   tang_cao_toi_da: "Lô mình được xây tối đa mấy tầng {ac}?",
   no_hau: "Nhà mình nở hậu bao nhiêu mét {ac}?",
   thang_may: "Nhà mình có thang máy không {ac}?",
+  tang_phu: "Nhà mình có tầng lửng, sân thượng hay tầng hầm không {ac}?",
   so_phong: "Toà mình tổng cộng bao nhiêu phòng cho thuê {ac}?",
   ty_le_lap_day: "Tỷ lệ lấp đầy trung bình tầm bao nhiêu phần trăm {ac}?",
   doanh_thu: "Doanh thu mỗi tháng tầm bao nhiêu {ac}?",

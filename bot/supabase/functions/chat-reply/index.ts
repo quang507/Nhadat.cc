@@ -70,7 +70,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { gonLoiSua, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { gonLoiSua, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban"]);
@@ -4086,6 +4086,17 @@ Deno.serve(async (req) => {
             }
           }
           await chepSangDuAn(pendingReq.question, dapAn);
+          // FR-220: "có lửng với sân thượng" → kết cấu chữ "trệt + lửng + 2 lầu + sân thượng" (bản tin, vector, web
+          // đều đọc floors_text). "không có" chỉ là fact.
+          if (pendingReq.question === "tang_phu") {
+            const { data: kcRow, error: kcErr } = await client.from("listings").select("floors_text, floors").eq("id", pendingReq.listing_id).maybeSingle();
+            if (kcErr) await ghiLoi(client, "chat-reply tang_phu(doc)", kcErr.message);
+            const moi = kcRow ? themTangPhu(kcRow.floors_text as string | null, kcRow.floors as number | null, dapAn) : null;
+            if (moi) {
+              const { error: tpErr } = await client.from("listings").update({ floors_text: moi }).eq("id", pendingReq.listing_id);
+              if (tpErr) await ghiLoi(client, "chat-reply tang_phu(ghi)", tpErr.message);
+            }
+          }
           // 16/09/2026 (bắn thật mau-chu-q8): "Căn số 14 ở Ny'ah Phú Định" trả lời câu VỊ TRÍ — tên dự
           // án trong kho chỉ được khớp lúc RAO, nên tin nằm "Quận 5 (chưa rõ quận)" dù dự án ở Quận 8.
           // Nay khớp cả ở đây; quận/phường lấy của dự án khi tin còn mặc định / trống.
