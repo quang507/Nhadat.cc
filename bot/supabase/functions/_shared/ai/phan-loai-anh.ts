@@ -10,12 +10,14 @@
 import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 
-export const LOAI_ANH = ["mat_tien", "trong_nha", "hem", "giay_to", "ban_ve", "khac"] as const;
+// 24/09/2026 (chủ dự án): thêm phòng ngủ, bếp, WC, sân thượng, view; ảnh KHÔNG LIÊN QUAN tới nhà (người, đồ ăn, meme…)
+// thì bot hỏi "có gửi nhầm ảnh không", không cất vào tin. Ảnh chỉnh sửa / tạo bằng AI vẫn nhận như ảnh thường.
+export const LOAI_ANH = ["mat_tien", "trong_nha", "phong_ngu", "bep", "wc", "san_thuong", "view", "hem", "giay_to", "ban_ve", "khong_lien_quan", "khac"] as const;
 export type LoaiAnh = (typeof LOAI_ANH)[number];
 
 export const AnhSchema = z.object({
   loai: z.enum(LOAI_ANH).describe(
-    "mat_tien = mặt ngoài / mặt tiền nhà, cửa, ban công nhìn từ ngoài; trong_nha = phòng khách, bếp, phòng ngủ, WC, cầu thang; hem = hẻm/đường trước nhà; giay_to = sổ hồng, sổ đỏ, giấy chứng nhận, hợp đồng mua bán, CCCD, giấy tờ có chữ in; ban_ve = bản vẽ, sơ đồ, mặt bằng, quy hoạch; khac = không rõ hoặc không thuộc loại nào",
+    "mat_tien = mặt ngoài / mặt tiền nhà, cửa chính nhìn từ đường; trong_nha = phòng khách, cầu thang, hành lang, không gian chung trong nhà; phong_ngu = phòng ngủ; bep = bếp, phòng ăn; wc = nhà vệ sinh, phòng tắm; san_thuong = sân thượng, ban công, sân vườn, hồ bơi; view = cảnh nhìn ra từ nhà (thành phố, sông, công viên); hem = hẻm/đường trước nhà; khong_lien_quan = ảnh KHÔNG phải nhà đất (người, đồ ăn, xe cộ, meme, ảnh chụp màn hình không liên quan) — ảnh nhà có người đứng trong khung vẫn là ảnh nhà; giay_to = sổ hồng, sổ đỏ, giấy chứng nhận, hợp đồng mua bán, CCCD, giấy tờ có chữ in; ban_ve = bản vẽ, sơ đồ, mặt bằng, quy hoạch; khac = không rõ hoặc không thuộc loại nào",
   ),
   khen: z.string().nullable().describe("MỘT điểm mạnh THẬT nhìn thấy trong ảnh để khen chủ nhà (dưới 12 từ, ví dụ 'mặt tiền sáng, hẻm rộng xe hơi vào thoải mái'); null nếu không có gì đáng khen hoặc là giấy tờ. Không bịa."),
   mo_ta: z.string().describe("Một câu dưới 15 từ tả điều THẤY được; đoán thì mở bằng 'hình như'. Không suy diễn vật liệu/pháp lý."),

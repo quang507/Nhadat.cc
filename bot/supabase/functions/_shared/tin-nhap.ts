@@ -55,6 +55,8 @@ export type ThamSoNhap = {
   soAnh: number;
   /** Gửi lại sau khi sửa theo lời chủ nhà (đổi câu hỏi cuối). */
   lai: boolean;
+  /** 24/09/2026: chủ nói "đăng đi" và tin đã lên kệ — tiêu đề "đã lên kệ", KHÔNG hỏi duyệt lại. */
+  daDang?: boolean;
   cauTD: (khoa: string, o?: Record<string, string | number | null | undefined>) => string;
 };
 
@@ -147,7 +149,7 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): st
 
 /** Bản nháp đầy đủ — một chuỗi, mỗi dòng một ý (giống một tin rao thật). */
 export function soanTinNhap(t: ThamSoNhap): string {
-  const { l, facts, diem, thieu, soAnh, lai, cauTD } = t;
+  const { l, facts, diem, thieu, soAnh, lai, cauTD, daDang } = t;
   const fact = (k: string) => facts.find((f) => f.question === k)?.answer ?? null;
   // Dán nhãn mà không lặp chữ: "thuê tối thiểu 3 năm" đã có nhãn thì không thành
   // "thuê tối thiểu thuê tối thiểu 3 năm". So theo TỪNG CHỮ của nhãn.
@@ -168,7 +170,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
     if (p.length) dong.push(`${icon} ${ten}: ${p.join(" · ")}`);
   };
 
-  dong.push(cauTD("nhap_tieu_de"));
+  dong.push(cauTD(daDang ? "nhap_da_dang" : "nhap_tieu_de"));
   dong.push(tieuDeTin(l, fact));
   // Chủ nhà gõ "hẻm 5m Nguyễn Trãi" thì địa chỉ mở đầu bằng chữ thường — một
   // tin rao thật không bắt đầu bằng chữ thường.
@@ -300,6 +302,6 @@ export function soanTinNhap(t: ThamSoNhap): string {
       ? cauTD("nhap_goi_y_tron", { diem, thieu: thieu.join(" và ") })
       : cauTD("nhap_goi_y", { diem, thieu: thieu.slice(0, 2).join(" và ") }),
   );
-  dong.push(lai ? cauTD("nhap_sua_xong") : cauTD("nhap_hoi_duyet"));
+  if (!daDang) dong.push(lai ? cauTD("nhap_sua_xong") : cauTD("nhap_hoi_duyet"));
   return dong.join("\n");
 }

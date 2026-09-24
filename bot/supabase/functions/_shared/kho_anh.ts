@@ -33,7 +33,7 @@ export async function taiAnh(url: string): Promise<{ bytes: Uint8Array; mime: st
   }
 }
 
-export type LoaiMedia = "mat_tien" | "trong_nha" | "hem" | "so_do" | "giay_to" | "khac";
+export type LoaiMedia = "mat_tien" | "trong_nha" | "phong_ngu" | "bep" | "wc" | "san_thuong" | "view" | "hem" | "so_do" | "giay_to" | "khac";
 const DUOI: Record<string, string> = {
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/gif": "gif",
 };

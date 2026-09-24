@@ -837,6 +837,17 @@ export function boCauGhiTienKhongCo(replies: string[], tienCo: number[], docTien
   return ra;
 }
 
+/**
+ * 24/09/2026 (chủ dự án: "cái dấu này — sửa thành cái dấu khác cho giống người"): gạch dài "—" / "–" là chữ máy, người
+ * nhắn Zalo không gõ. Giữa hai số ("5–6 tỷ") → "-"; đầu dòng → "- "; giữa câu → ", ". Áp cho MỌI bong bóng gửi đi.
+ */
+export function boGachDai(s: string): string {
+  return s.replace(/(\d)\s*[–—]\s*(\d)/g, "$1-$2")
+    .replace(/^[ \t]*[—–][ \t]*/gm, "- ")
+    .replace(/[ \t]*[—–][ \t]*/g, ", ")
+    .replace(/,[ \t]*,/g, ",").replace(/,[ \t]*([.!?])/g, "$1");
+}
+
 /** Có số m² trong câu ("137m2", "80 m²", "60 mét vuông"). */
 export const M2_TRONG_CAU = /\d+(?:[.,]\d+)?\s*(?:m2|m²|mét vuông|met vuong)(?![\p{L}\d])/iu;
 /**

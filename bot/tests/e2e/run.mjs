@@ -1162,8 +1162,11 @@ fresh(seedKho);
     d.insert("info_requests", { listing_id: l.id, question: "tiem_nang", status: "pending" });
   });
   r = await send({ external_user_id: "z-dang", text: "đăng đi em" });
-  check("N16 'đăng đi' khi đang treo câu thông số + tin ≥70 → BẢN NHÁP ngay, câu treo hết hạn, không ghi 'đăng đi' làm fact",
-    r.body.ban_nhap === true && !db().t.listing_facts.some((f) => /đăng đi/.test(f.answer)) && db().t.info_requests.some((q) => q.question === "tiem_nang" && q.status === "expired") && pend("duyet_tin"),
+  // 24/09/2026 (chủ dự án: "nếu khách nói kiểu đăng đi thì ko hỏi nữa đưa tin luôn"): đủ điểm → LÊN KỆ ngay, không hỏi duyệt.
+  check("N16 'đăng đi' khi đang treo câu thông số + tin ≥70 → LÊN KỆ ngay (không hỏi 'ổn chưa', không mở câu duyệt), câu treo hết hạn, không ghi 'đăng đi' làm fact",
+    r.body.dang_luon === true && db().t.listings.find((l) => l.code === "BDS-Q5-0107")?.status === "dang_ban" && !pend("duyet_tin") &&
+      !r.body.replies.some((x) => /ổn chưa|xem vậy được chưa/.test(x)) && r.body.replies.some((x) => /lên kệ/.test(x)) &&
+      !db().t.listing_facts.some((f) => /đăng đi/.test(f.answer)) && db().t.info_requests.some((q) => q.question === "tiem_nang" && q.status === "expired"),
     JSON.stringify({ body: r.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]), f: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
 
   // 09/09 tối lần 4: "đất thuê nhà nước tới 2058" của NGƯỜI BÁN không phải ý định đi thuê.
@@ -1293,7 +1296,7 @@ fresh(seedKho);
   {
     const nh = r.body.replies.join(String.fromCharCode(10));
     check("N26 bản nháp không lặp nhãn: 'phí quản lý' một lần, không 'thổ cư thổ cư', không 'cách mặt tiền cách mặt tiền', không '2 phòng ngủ phòng ngủ'",
-      r.body.ban_nhap === true && !/phí QL phí quản lý/.test(nh) && !/thổ cư thổ cư/.test(nh) &&
+      (r.body.ban_nhap === true || r.body.dang_luon === true) && !/phí QL phí quản lý/.test(nh) && !/thổ cư thổ cư/.test(nh) &&
         !/cách mặt tiền cách mặt tiền/.test(nh) && !/phòng ngủ phòng ngủ/.test(nh) && !/WC WC/.test(nh) &&
         !/xây nhà mới xây/.test(nh) && nh.includes("phí quản lý 20 nghìn/m2"),
       nh);
@@ -3217,6 +3220,41 @@ fresh(seedKho);
     globalThis.__model.parse = () => OUT();
     globalThis.__cauHinh = cauHinhCu;
   }
+  // 24/09/2026: "đăng đi" mà tin THIẾU PHƯỜNG (chưa lên kệ được) → nói thật còn thiếu phường, mở câu phường; có phường là tự lên kệ.
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-dang-p", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-GV-0901", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "137/28 Đường số 59", district: "Quận Gò Vấp", ward: null, price_raw: "5 tỷ 9", price_vnd: 5.9e9, area_m2: 80, floors: 4, bedrooms: 4, alley_width_m: 5, access_type: "hem_xe_hoi", legal_status: "so_hong_rieng", can_chu_duyet: true }).data;
+    d.insert("listing_facts", { listing_id: l.id, question: "hinh_anh", answer: "https://x/1.jpg", source: "seller_chat" });
+    d.insert("info_requests", { listing_id: l.id, question: "phap_ly", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-dang-p", text: "hoàn công rồi, đăng đi" });
+  {
+    const tP = db().t.listings.find((l) => l.code === "BDS-GV-0901");
+    check("DANGLUON-01 'đăng đi' mà tin thiếu phường → không gửi nháp hỏi duyệt, nói thật 'chỉ còn thiếu phường', mở câu phường, đã đóng dấu duyệt",
+      r.body.dang_luon === true && tP.status === "cho_thong_tin" && !!tP.chu_duyet_at && pend("phuong", tP.id) &&
+        r.body.replies.some((x) => /thiếu phường/.test(x)) && !r.body.replies.some((x) => /ổn chưa/.test(x)),
+      JSON.stringify({ st: tP.status, rep: r.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  }
+  // 24/09/2026 (chủ dự án: "ảnh ko liên quan thì nhận xét luôn bảo à anh có gửi nhầm ảnh ko"): không cất vào tin.
+  fresh(seedKho);
+  {
+    const sA = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tA = db().t.listings.find((l) => l.code === "BDS-Q5-0002");
+    sA.active_listing_id = tA.id;
+    globalThis.__anh = { loai: "khong_lien_quan", mo_ta: "hình như là tô phở bò", khen: null, giay_to: null };
+    r = await send({ external_user_id: "z-ccrb", text: "", image_url: "https://photo-stal-22.zdn.vn/pho.jpg" });
+    globalThis.__anh = undefined;
+    check("ANHNHAM-01 ảnh không liên quan (tô phở) → hỏi 'có gửi nhầm ảnh không', KHÔNG cất vào tin, không 'Cảm ơn'",
+      r.body.replies.some((x) => /gửi nhầm ảnh/.test(x) && /tô phở/.test(x)) && !r.body.replies.some((x) => /Cảm ơn/.test(x)) &&
+        !db().t.listing_media.some((m) => m.listing_id === tA.id),
+      JSON.stringify({ rep: r.body.replies, media: db().t.listing_media.length }));
+    globalThis.__anh = { loai: "san_thuong", mo_ta: "hình như là sân thượng có cây xanh", khen: "sân thượng rộng thoáng", giay_to: null };
+    r = await send({ external_user_id: "z-ccrb", text: "", image_url: "https://photo-stal-22.zdn.vn/st.jpg" });
+    globalThis.__anh = undefined;
+    check("ANHNHAM-02 ảnh sân thượng → cất loại 'san_thuong', bot nói 'ảnh sân thượng' (không phải 'mặt tiền')",
+      db().t.listing_media.some((m) => m.listing_id === tA.id && m.media_type === "san_thuong") && r.body.replies.some((x) => /ảnh sân thượng/.test(x)) && !r.body.replies.some((x) => /mặt tiền/.test(x)),
+      JSON.stringify({ rep: r.body.replies, media: db().t.listing_media.map((m) => m.media_type) }));
+  }
   // (4) chế độ `chinh`: AI xếp "sổ hồng riêng" vào KIẾN THỨC THÊM (không trả khoá phap_ly) → luật xếp ô pháp lý, câu kế không hỏi lại pháp lý.
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
   fresh(seedKho);
@@ -4104,8 +4142,8 @@ fresh(seedKho);
     d.insert("info_requests", { listing_id: l.id, question: "huong", status: "pending" });
   });
   r = await send({ external_user_id: "z-dang9", text: "được giá thì bán em, ok đăng tin đi em" });
-  check("DANG9-01 câu DÀI 'được giá thì bán em, ok đăng tin đi em' khi đang treo câu hướng + tin ≥70 → BẢN NHÁP, không ghi cả câu làm 'thông tin bổ sung'",
-    r.body.ban_nhap === true && !db().t.listing_facts.some((f) => /đăng tin đi/.test(f.answer ?? "")) && pendQ("duyet_tin"),
+  check("DANG9-01 câu DÀI 'được giá thì bán em, ok đăng tin đi em' khi đang treo câu hướng + tin ≥70 → LÊN KỆ ngay, không ghi cả câu làm 'thông tin bổ sung'",
+    r.body.dang_luon === true && db().t.listings.find((l) => l.code === "BDS-Q5-0107")?.status === "dang_ban" && !db().t.listing_facts.some((f) => /đăng tin đi/.test(f.answer ?? "")),
     JSON.stringify({ body: r.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]), f: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "z-dang10", seller_type: "ccrb", name: null, active_listing_id: null }).data;
