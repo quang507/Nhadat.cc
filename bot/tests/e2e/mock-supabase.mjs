@@ -38,26 +38,25 @@ export class FakeDB {
     // `required_facts` thật (deal null = mọi giao dịch, "cho_thue" = chỉ tin thuê).
     // Nhóm `phu` KHÔNG có ở đây: view thật lọc (20260908a). Hướng HỎI với chung cư /
     // đất (chuyen_mon), không hỏi với nhà phố / biệt thự (phu) — mock phải y vậy.
-    const CB = (k, p) => [k, p, "co_ban", null];
-    const CM = (k, p, deal = null) => [k, p, "chuyen_mon", deal];
-    const THUE_NHA = [CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("truot_gia", 18, "cho_thue")];
+    const CB = (k, p, deal = null) => [k, p, "co_ban", deal];
     // 20260909i: nhóm sau_dang — hỏi bù SAU khi lên kệ; chat-reply không đợi nhóm này trước bản nháp.
     const SD = (k, p) => [k, p, "sau_dang", null];
     const SAU_NHA = [SD("so_wc", 30), SD("cach_mat_tien", 31), SD("hem_thong", 32), SD("ngap_nuoc", 33), SD("hien_trang_su_dung", 34), SD("the_chap", 35), SD("tien_ich_gan", 36), SD("ly_do_ban", 37), SD("thuong_luong", 38)];
+    // 20260924c (FR-219): MỌI câu trước bản nháp chung nhóm co_ban, thứ tự "chủ nhà dễ trả lời trước": vật lý (2–11) →
+    // tiền (12–15) → pháp lý 16 → phường 17 → gấp 18 → ảnh 19 — chép đúng bảng required_facts thật.
     const REQ = {
-      toa_nha: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("so_phong", 10), CM("ty_le_lap_day", 11), CM("doanh_thu", 12), CM("ket_cau", 13), CM("thang_may", 14), CM("pccc", 15), CM("phap_ly", 16), CM("do_rong_hem", 17), CM("hinh_anh", 19)],
-      dat_nong_nghiep: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("quy_hoach", 10), CM("len_tho_cu", 11), CM("duong_vao", 12), CM("nguon_nuoc", 13), CM("ranh_gioi", 14), CM("phap_ly", 15), CM("hinh_anh", 19)],
-      dat_kinh_doanh: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("thoi_han_su_dung", 10), CM("hinh_thuc_thue_dat", 11), CM("muc_dich", 12), CM("do_rong_duong", 13), CM("phap_ly", 14), CM("hinh_anh", 19)],
-      kho_xuong: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("chieu_cao", 10), CM("tai_trong_san", 11), CM("tram_bien_ap", 12), CM("xu_ly_nuoc_thai", 13), CM("duong_container", 14), CM("phap_ly", 15), CM("thoi_han_su_dung", 16), CM("tien_coc", 17, "cho_thue"), CM("thoi_han_thue", 18, "cho_thue"), CM("hinh_anh", 19)],
-      chua_ro: [CB("loai_bds", 1), CB("vi_tri", 2), CB("phuong", 3), CB("gia", 9)],
-      // 20260916c: tiềm năng → hỏi bù sau đăng (39); chung cư hỏi nội thất (12) trước hướng (13).
-      nha_pho: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("ket_cau", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), ...THUE_NHA, CM("hinh_anh", 19), ...SAU_NHA, SD("tiem_nang", 39)],
-      nha_cap4: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("do_rong_hem", 10), CM("hien_trang", 11), CM("so_phong_ngu", 12), CM("phap_ly", 13), CM("noi_that", 15, "cho_thue"), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19), SD("tiem_nang", 39)],
-      chung_cu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_tim_tuong", 6), CB("gia", 9), CM("tang", 10), CM("so_phong_ngu", 11), CM("noi_that", 12), CM("huong", 13), CM("phap_ly", 14), CM("phi_quan_ly", 15), CM("tien_coc", 16, "cho_thue"), CM("thoi_han_thue", 17, "cho_thue"), CM("hinh_anh", 19)],
-      dat: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("tho_cu", 8), CB("gia", 9), CM("do_rong_duong", 10), CM("huong", 11), CM("ha_tang", 12), CM("xay_dung", 13), CM("phap_ly", 14), CM("hinh_anh", 19)],
-      biet_thu: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich_dat", 5), CB("gia", 9), CM("ket_cau", 10), CM("so_phong_ngu", 11), CM("san_vuon", 12), CM("do_rong_hem", 13), CM("khu_compound", 14), CM("phap_ly", 15), CM("noi_that", 16, "cho_thue"), CM("tien_coc", 17, "cho_thue"), CM("thoi_han_thue", 18, "cho_thue"), CM("hinh_anh", 19)],
-      phong_tro: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("gia", 9), CM("noi_that", 10), CM("gia_dien_nuoc", 11), CM("gio_giac", 12), CM("tien_coc", 13), CM("hinh_anh", 19)],
-      mat_bang: [CB("vi_tri", 2), CB("phuong", 3), CB("dien_tich", 4), CB("mat_tien", 7), CB("gia", 9), CM("nganh_hang_phu_hop", 10), CM("thoi_han_thue", 11), CM("tien_coc", 12), CM("truot_gia", 13), CM("hinh_anh", 19)],
+      toa_nha: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("so_phong", 5), CB("thang_may", 6), CB("do_rong_hem", 7), CB("ty_le_lap_day", 8), CB("doanh_thu", 9), CB("gia", 12), CB("pccc", 15), CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19)],
+      dat_nong_nghiep: [CB("vi_tri", 2), CB("dien_tich", 3), CB("duong_vao", 4), CB("nguon_nuoc", 5), CB("ranh_gioi", 6), CB("gia", 12), CB("quy_hoach", 14), CB("len_tho_cu", 15), CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19)],
+      dat_kinh_doanh: [CB("vi_tri", 2), CB("dien_tich", 3), CB("do_rong_duong", 4), CB("muc_dich", 5), CB("gia", 12), CB("thoi_han_su_dung", 14), CB("hinh_thuc_thue_dat", 15), CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19)],
+      kho_xuong: [CB("vi_tri", 2), CB("dien_tich", 3), CB("chieu_cao", 4), CB("tai_trong_san", 5), CB("duong_container", 6), CB("tram_bien_ap", 7), CB("xu_ly_nuoc_thai", 8), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("thoi_han_su_dung", 15), CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19)],
+      chua_ro: [CB("loai_bds", 1), CB("vi_tri", 2), CB("gia", 12), CB("phuong", 17)],
+      nha_pho: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("so_phong_ngu", 5), CB("noi_that", 6, "cho_thue"), CB("do_rong_hem", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("truot_gia", 15, "cho_thue"), CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19), ...SAU_NHA, SD("tiem_nang", 39)],
+      nha_cap4: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("hien_trang", 4), CB("so_phong_ngu", 5), CB("noi_that", 6, "cho_thue"), CB("do_rong_hem", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19), SD("tiem_nang", 39)],
+      chung_cu: [CB("vi_tri", 2), CB("dien_tich_tim_tuong", 3), CB("so_phong_ngu", 4), CB("tang", 5), CB("huong", 6), CB("noi_that", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("phi_quan_ly", 15), CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19)],
+      dat: [CB("vi_tri", 2), CB("dien_tich", 3), CB("do_rong_duong", 4), CB("huong", 5), CB("ha_tang", 6), CB("tho_cu", 7), CB("gia", 12), CB("xay_dung", 13), CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19)],
+      biet_thu: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("so_phong_ngu", 5), CB("san_vuon", 6), CB("noi_that", 7, "cho_thue"), CB("do_rong_hem", 8), CB("khu_compound", 9), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19)],
+      phong_tro: [CB("vi_tri", 2), CB("dien_tich", 3), CB("noi_that", 4), CB("gio_giac", 5), CB("gia", 12), CB("gia_dien_nuoc", 13), CB("tien_coc", 14), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19)],
+      mat_bang: [CB("vi_tri", 2), CB("dien_tich", 3), CB("mat_tien", 4), CB("nganh_hang_phu_hop", 5), CB("gia", 12), CB("tien_coc", 13), CB("thoi_han_thue", 14), CB("truot_gia", 15), CB("phuong", 17), CB("gap", 18), CB("hinh_anh", 19)],
     };
     const out = [];
     for (const l of this.t.listings) {
@@ -73,9 +72,7 @@ export class FakeDB {
       // Ảnh trong kho (listing_media) = đã có ảnh, như view thật (FR-185).
       if (this.t.listing_media.some((m) => m.listing_id === l.id)) have.add("hinh_anh");
       const loai = REQ[l.property_type ?? "chua_ro"] ? (l.property_type ?? "chua_ro") : "chua_ro";
-      // 20260916c: gấp là chuyên môn, sau câu chuyên môn cuối (trước ảnh), tối đa 18.
-      const maxCM = Math.max(17, ...REQ[loai].filter((r) => r[2] === "chuyen_mon" && !r[3] && !["hinh_anh", "tiem_nang", "gap"].includes(r[0])).map((r) => r[1]));
-      for (const [k, priority, nhom, deal] of [...REQ[loai], ...(loai === "chua_ro" ? [] : [["gap", Math.min(18, maxCM + 1), "chuyen_mon", null]])]) {
+      for (const [k, priority, nhom, deal] of REQ[loai]) {
         if (deal && deal !== (l.deal ?? "ban")) continue;
         if (!have.has(k)) out.push({ listing_id: l.id, fact_key: k, priority, nhom });
       }

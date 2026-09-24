@@ -911,27 +911,28 @@ fresh(seedKho);
   const fact = (q) => db().t.listing_facts.find((f) => f.question === q);
   r = await send({ external_user_id: "h-1", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2, không gấp" });
   const H = db().t.listings[0];
-  check("H1 rao đủ cơ bản → tin can_chu_duyet, chưa lên kệ, câu đầu là HẺM (nhóm chuyên môn, ưu tiên 1)",
-    H?.can_chu_duyet === true && H?.status === "cho_thong_tin" && pend("do_rong_hem"), JSON.stringify({ H, ir: db().t.info_requests }));
+  // 20260924c (FR-219): thứ tự "chủ nhà dễ trả lời trước" — đã có vị trí, diện tích, giá → câu đầu là KẾT CẤU.
+  check("H1 rao đủ vị trí + diện tích + giá → tin can_chu_duyet, chưa lên kệ, câu đầu là KẾT CẤU (FR-219)",
+    H?.can_chu_duyet === true && H?.status === "cho_thong_tin" && pend("ket_cau"), JSON.stringify({ H, ir: db().t.info_requests }));
   check("H1b vị trí cụ thể bóc từ câu rao ('hẻm trần bình trọng') → fact vi_tri + location_raw, KHÔNG hỏi lại vị trí",
     /trần bình trọng/i.test(fact("vi_tri")?.answer ?? "") && /trần bình trọng/i.test(H?.location_raw ?? "") && !pend("vi_tri"), JSON.stringify({ f: db().t.listing_facts, H }));
-  r = await send({ external_user_id: "h-1", text: "hẻm 4m xe hơi vào tận nhà" });
-  check("H2 trả lời hẻm → ghi fact, câu kế LIÊN QUAN: kết cấu (không nhảy sang pháp lý)",
-    fact("do_rong_hem") && pend("ket_cau") && !pend("phap_ly"), JSON.stringify(db().t.info_requests));
+  r = await send({ external_user_id: "h-1", text: "3 lầu" });
+  check("H2 trả lời kết cấu → ghi fact, câu kế LIÊN QUAN: phòng ngủ (không nhảy sang pháp lý)",
+    fact("ket_cau") && pend("so_phong_ngu") && !pend("phap_ly"), JSON.stringify(db().t.info_requests));
   check("H2 câu lệnh model: chưa khen gần đây → CHỈ khen khi thật đáng nói (18/09: lâu lâu mới khen)", /CHỈ khi có gì thật đáng nói với khách mua/.test(prompt(createCalls().at(-1))) && !/KHÔNG khen, KHÔNG nhận xét/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
   r = await send({ external_user_id: "h-1", text: "sổ hồng riêng rồi em" });
-  check("H3 hỏi kết cấu, trả lời pháp lý → VẪN GHI phap_ly, câu kết cấu vẫn treo, hỏi lại",
-    fact("phap_ly")?.answer === "sổ hồng riêng rồi em" && !fact("ket_cau") && pend("ket_cau") && r.body.reask === "ket_cau",
+  check("H3 hỏi phòng ngủ, trả lời pháp lý → VẪN GHI phap_ly, câu phòng ngủ vẫn treo, hỏi lại",
+    fact("phap_ly")?.answer === "sổ hồng riêng rồi em" && !fact("so_phong_ngu") && pend("so_phong_ngu") && r.body.reask === "so_phong_ngu",
     JSON.stringify({ body: r.body, f: db().t.listing_facts }));
   r = await send({ external_user_id: "h-1", text: "nhà nở hậu chút" });
-  check("H4 câu lệch không nhận ra fact nào → ghi nguyên văn vào bo_sung, câu kết cấu vẫn treo",
-    fact("bo_sung")?.answer === "nhà nở hậu chút" && pend("ket_cau") && r.body.loai_cau === "lech",
+  check("H4 câu lệch không nhận ra fact nào → ghi nguyên văn vào bo_sung, câu phòng ngủ vẫn treo",
+    fact("bo_sung")?.answer === "nhà nở hậu chút" && pend("so_phong_ngu") && r.body.loai_cau === "lech",
     JSON.stringify({ body: r.body, f: db().t.listing_facts }));
-  r = await send({ external_user_id: "h-1", text: "3 lầu 4 phòng ngủ" });
+  r = await send({ external_user_id: "h-1", text: "4 phòng ngủ" });
   // FR-186 (09/09 chiều): nhà phố hỏi thêm TIỀM NĂNG (để ở hay kinh doanh ngành gì) trước khi gửi nháp — chuỗi 07/09 của sếp + chat 21/06.
   // 20260916c: tiềm năng dời sang hỏi bù sau đăng — chat KHÔNG hỏi nữa.
-  check("H4b trả lời kết cấu → không hỏi TIỀM NĂNG trong chat (20260916c: hỏi bù sau đăng)", r.body.saved_fact === "ket_cau" && !pend("tiem_nang"), JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
-  r = await send({ external_user_id: "h-1", text: "ở hoặc làm văn phòng đều được" });
+  check("H4b trả lời phòng ngủ → không hỏi TIỀM NĂNG trong chat (20260916c: hỏi bù sau đăng); câu kế là HẺM (FR-219)", r.body.saved_fact === "so_phong_ngu" && !pend("tiem_nang") && pend("do_rong_hem"), JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  r = await send({ external_user_id: "h-1", text: "hẻm 4m xe hơi vào tận nhà" });
   const nhap = r.body.replies.join("\n");
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
     r.body.ban_nhap === true && r.body.diem >= 70 && /Em đăng tin như vầy/.test(nhap) && /5 tỷ 8/.test(nhap) &&
@@ -1131,7 +1132,7 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-kho", text: "xưởng cao thông thủy 9m" });
   check("N13 kho xưởng: 'cao thông thủy 9m' khớp câu chiều cao → ghi fact, hỏi tải trọng sàn", db().t.listing_facts.some((f) => f.question === "chieu_cao") && pend("tai_trong_san"), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
   r = await send({ external_user_id: "z-kho", text: "sàn chịu 2 tấn" });
-  check("N13b tải trọng sàn khớp (câu số) → ghi fact, câu kế là trạm biến áp", db().t.listing_facts.some((f) => f.question === "tai_trong_san") && pend("tram_bien_ap"), JSON.stringify({ f: db().t.listing_facts.map((f) => [f.question, f.answer]), ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  check("N13b tải trọng sàn khớp (câu số) → ghi fact, câu kế là đường container (FR-219: vật lý dễ trước)", db().t.listing_facts.some((f) => f.question === "tai_trong_san") && pend("duong_container"), JSON.stringify({ f: db().t.listing_facts.map((f) => [f.question, f.answer]), ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   // 20260909i: nhóm sau_dang (WC, hẻm thông, thế chấp…) có trong view thiếu nhưng KHÔNG được hỏi trước bản nháp.
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "z-sd", seller_type: "ccrb", name: null, active_listing_id: null }).data;
@@ -1178,9 +1179,9 @@ fresh(seedKho);
   fresh();
   r = await send({ external_user_id: "g-1", text: "bán nhà hẻm trần bình trọng p4 giá 6 tỷ 50m2" });
   // 20260916c: gấp lùi sau pháp lý — câu đầu là HẺM, gấp vẫn bắt ở mọi lượt.
-  check("N18 rao có giá, chưa nói gấp → câu ĐẦU là hẻm (gấp lùi sau pháp lý, 20260916c)", pend("do_rong_hem") && !pend("gap"), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
+  check("N18 rao có giá, chưa nói gấp → câu ĐẦU là kết cấu (FR-219), gấp ở cuối", pend("ket_cau") && !pend("gap"), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
   r = await send({ external_user_id: "g-1", text: "không gấp, được giá thì thôi" });
-  check("N18b 'không gấp, được giá thì thôi' → listings.gap = false, câu kế là HẺM", db().t.listings[0].gap === false && pend("do_rong_hem"), JSON.stringify({ gap: db().t.listings[0].gap, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  check("N18b 'không gấp, được giá thì thôi' → listings.gap = false, câu kết cấu vẫn treo", db().t.listings[0].gap === false && pend("ket_cau"), JSON.stringify({ gap: db().t.listings[0].gap, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   r = await send({ external_user_id: "g-1", text: "hẻm 4m, mà thôi anh cần bán gấp, cần tiền" });
   check("N18c giữa chừng nói 'cần bán gấp' → gap lật thành true (bắt ở mọi lượt), hẻm vẫn ghi", db().t.listings[0].gap === true && db().t.listing_facts.some((f) => f.question === "do_rong_hem"), JSON.stringify({ gap: db().t.listings[0].gap, f: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
   // FR-188: người MUA "cần tìm gấp" → cờ gấp trong hồ sơ.

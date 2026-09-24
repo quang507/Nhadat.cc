@@ -1354,10 +1354,15 @@ export function chonCauKe(vuaNoi: string[], conThieu: CauThieu[]): string | unde
   const bac: Record<string, number> = { co_ban: 0, chuyen_mon: 1, sau_dang: 2, phu: 3 };
   const xep = [...conThieu].sort((a, b) => (bac[nhom(a)] ?? 1) - (bac[nhom(b)] ?? 1) || (a.priority ?? 0) - (b.priority ?? 0));
   const dau = xep[0];
-  const ungVien = xep.filter((c) => nhom(c) === nhom(dau)).map((c) => c.fact_key);
+  const ungVien = xep.filter((c) => nhom(c) === nhom(dau));
+  // FR-219 (24/09/2026, chủ dự án chọn "hỏi theo thứ chủ nhà dễ trả lời … ko fix cứng"): câu liên quan vẫn được
+  // chen lên, nhưng KHÔNG vượt dải — vật lý (<12) → tiền (12–15) → pháp lý (16) → phường, gấp, ảnh (17+). Nghe
+  // "diện tích" thì hỏi mặt tiền / kết cấu được, không kéo GIÁ lên trước kết cấu, phòng ngủ, hẻm.
+  const dai = (p?: number) => p == null ? 0 : p < 12 ? 0 : p < 16 ? 1 : p < 17 ? 2 : 3;
   for (const k of [...vuaNoi].reverse()) {
     for (const lq of LIEN_QUAN[k] ?? []) {
-      if (ungVien.includes(lq)) return lq;
+      const c = ungVien.find((u) => u.fact_key === lq);
+      if (c && dai(c.priority) <= dai(dau.priority)) return lq;
     }
   }
   return dau.fact_key;
