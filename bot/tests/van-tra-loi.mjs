@@ -15,7 +15,7 @@ import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
-import { kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuMua } from "../supabase/functions/_shared/bao_lai.ts";
+import { bocTachTaoTin, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua } from "../supabase/functions/_shared/bao_lai.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => {
@@ -204,7 +204,7 @@ for (const [vao, mong] of [
     tomTatTrongCau('🤖 Đã lưu: hướng: "đông nam"\n📦 Tin giờ: Nhà phố bán · hướng Đông Nam') === "Nhà phố bán · hướng Đông Nam");
   const mua = vuaLuuMua({ area: "Quận 5" }, { area: "Quận 5", budget: "7 tỷ", deal: "ban", ten_tro_ly: "H•ai", xung_ho: "chị", gan_tien_ich_loc: { m: 1000 } },
     [["deal", "mua hay thuê"], ["area", "khu vực muốn tìm (phường nào)"], ["budget", "khoảng giá"]]);
-  ok("người mua: chỉ khoá ĐỔI, không khoá nội bộ, deal 'ban' đọc là 'mua'", mua === "🤖 Đã lưu nhu cầu: mua hay thuê: mua · khoảng giá: 7 tỷ", String(mua));
+  ok("người mua: chỉ khoá ĐỔI, không khoá nội bộ, deal 'ban' đọc là 'mua'", mua === '🤖 Bóc tách được: mua hay thuê: "mua" · khoảng giá: "7 tỷ"', String(mua));
 }
 
 // ── 14/09 bắn lại kịch bản 7 (người mua) ──────────────────────────────────────
@@ -617,6 +617,17 @@ for (const [cau, mong] of [
   ok("hồ sơ mua: alley 'hẻm xe hơi' khi khách không nói gì về đường vào → gỡ", h1.profile.alley === null && h1.bo.includes("alley"), JSON.stringify(h1));
   const h2 = locHoSoMua({ alley: "hẻm xe hơi" }, "cần hẻm ô tô vào được");
   ok("hồ sơ mua: khách nói 'hẻm ô tô' → giữ alley", h2.profile.alley === "hẻm xe hơi", JSON.stringify(h2));
+}
+
+// ── 24/09/2026: 🤖 "Bóc tách được" — chỉ thứ bóc từ tin vừa nhắn, giá trị trong ngoặc kép ──
+{
+  const t1 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 4m Nguyễn Trãi", ward: "Phường 2", district: "Quận 5", area_m2: 56, price_raw: "5 tới 6", price_vnd: null, bedrooms: 2 });
+  ok("bocTachTaoTin: lượt tạo tin in từng cột trong ngoặc kép, giá không ra số nói rõ",
+    t1 === '🤖 Bóc tách được: loại: "Nhà phố bán" · địa chỉ: "hẻm 4m Nguyễn Trãi, Phường 2, Quận 5" · diện tích: "56m²" · phòng ngủ: "2" · giá: "5 tới 6 (chưa đọc ra số)"', String(t1));
+  const t2 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 12 Hồ Ngọc Lãm", district: null, area_m2: 50, price_raw: "3 tỷ", price_vnd: 3e9 });
+  ok("bocTachTaoTin: chưa rõ quận → nói '(chưa rõ quận)', không bịa Quận 5", /địa chỉ: "hẻm 12 Hồ Ngọc Lãm \(chưa rõ quận\)"/.test(t2 ?? "") && !/Quận 5/.test(t2 ?? ""), String(t2));
+  const t3 = vuaLuuBan([{ question: "so_phong_ngu", answer: "3" }, { question: "ket_cau", answer: "4 tầng" }], { ket_cau: "kết cấu", so_phong_ngu: "số phòng ngủ" });
+  ok("vuaLuuBan: lượt sau → 'Bóc tách được' + đúng các fact lượt đó", t3 === '🤖 Bóc tách được: kết cấu: "4 tầng" · số phòng ngủ: "3"', String(t3));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

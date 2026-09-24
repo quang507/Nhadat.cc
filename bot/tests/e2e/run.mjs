@@ -1481,10 +1481,12 @@ fresh(seedKho);
   // DB. 21/09/2026 (chủ dự án): các lượt sau in Y NHƯ lượt tạo tin — một dòng "🤖 Đã lưu:" là toàn bộ tin
   // trong DB + "Kèm:" cho fact ngoài cột; không còn dòng "📦 Tin giờ" hay dòng fact riêng.
   let bl = r.body.replies[0] ?? "";
-  check("BLDL-02 day_du → bong bóng ĐẦU là 🤖, đứng riêng", /^🤖 Đã lưu/.test(bl) && r.body.replies.length >= 2 && !r.body.replies.slice(1).some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
-  check("BLDL-03 dòng 🤖 Đã lưu nói ĐÚNG cột trong DB (6m², không phải 66), kèm địa chỉ/phường/giá, KHÔNG còn 📦 Tin giờ", /^🤖 Đã lưu: .*· 6m²/.test(bl) && !/66m²/.test(bl) && /99 Nguyễn Trãi/.test(bl) && /Phường 3/.test(bl) && /giá 7 tỷ/.test(bl) && !/📦 Tin giờ/.test(bl), `${LB.status} | ${bl}`);
-  check("BLDL-03b 🤖 đọc SAU khi ghi: pháp lý chủ vừa trả lời trong CHÍNH lượt này có mặt trong tóm tắt", /^🤖 Đã lưu: .*sổ hồng riêng/.test(bl), bl);
-  check("BLDL-04 'Đã lưu' chỉ có fact CỦA LƯỢT NÀY — không kèm '6x11' đã lưu lượt trước", !/6x11/.test(bl), bl);
+  check("BLDL-02 day_du → bong bóng ĐẦU là 🤖, đứng riêng", /^🤖 Bóc tách được/.test(bl) && r.body.replies.length >= 2 && !r.body.replies.slice(1).some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
+  // 24/09/2026 (chủ dự án: "đừng đưa đã lưu nữa, mà là đã bóc tách được gì trong tin nhắn đó"): 🤖 chỉ nói thứ bóc
+  // từ CHÍNH tin vừa nhắn, giá trị trong ngoặc kép — không in lại cả tin (địa chỉ, 6m², giá) như bản 21/09.
+  check("BLDL-03 🤖 'Bóc tách được' chỉ nói thứ bóc từ tin NÀY (pháp lý, trong ngoặc kép), KHÔNG in lại cả tin (địa chỉ/6m²/giá), không 📦", /^🤖 Bóc tách được: pháp lý: "sổ hồng riêng em"/.test(bl) && !/Nguyễn Trãi|6m²|giá/.test(bl) && !/📦 Tin giờ/.test(bl), `${LB.status} | ${bl}`);
+  check("BLDL-03b 🤖 đọc SAU khi ghi: pháp lý chủ vừa trả lời trong CHÍNH lượt này có mặt trong tóm tắt", /^🤖 Bóc tách được: .*sổ hồng riêng/.test(bl), bl);
+  check("BLDL-04 'Bóc tách được' chỉ có fact CỦA LƯỢT NÀY — không kèm '6x11' đã lưu lượt trước", !/6x11/.test(bl), bl);
   check("BLDL-05 🤖 vào sổ tin như mọi câu bot", db().t.messages.some((m) => m.sender === "bot" && /^🤖/.test(m.body ?? "")));
   // Lượt sau là câu RAO THÊM CĂN — nhánh này chắc chắn gửi lịch sử (khối NGỮ
   // CẢNH) cho model. Phải thấy câu bot lượt trước (lịch sử có thật, phép kiểm
@@ -1497,14 +1499,14 @@ fresh(seedKho);
   check("BLDL-06 lượt sau: model CÓ nhận lịch sử (câu lượt trước) nhưng KHÔNG thấy 🤖", loiLuot1.length > 5 && moi.some((c) => /NGỮ CẢNH/.test(vao(c)) && vao(c).includes(loiLuot1)) && !moi.some((c) => vao(c).includes("🤖")), JSON.stringify({ loiLuot1, n: moi.length, dau: moi.map((c) => vao(c).slice(0, 500)) }));
   // 23/09/2026 (chủ dự án): câu "Sai chỗ nào … nhắn lại giúp em nha" bỏ hẳn.
   check("BLDL-06b lượt TẠO tin → 🤖 đầu tiên là tóm tắt tin VỪA RAO (Phường 5), bỏ 📝 trùng, KHÔNG còn câu 'Sai chỗ nào…'",
-    /^🤖 Đã lưu: /.test(r.body.replies[0] ?? "") && /Phường 5/.test(r.body.replies[0] ?? "") && !r.body.replies.some((x) => /Sai chỗ nào/.test(x)) && !r.body.replies.some((x) => /^📝 Em ghi nhận/.test(x)),
+    /^🤖 Bóc tách được: loại: "Nhà phố bán"/.test(r.body.replies[0] ?? "") && /Phường 5/.test(r.body.replies[0] ?? "") && !r.body.replies.some((x) => /Sai chỗ nào/.test(x)) && !r.body.replies.some((x) => /^📝 Em ghi nhận/.test(x)),
     JSON.stringify(r.body.replies));
   // 21/09/2026 (bắn thật kiem-cc): chủ nhà là "chú" → doiTuXung đổi "📝 Em ghi nhận" thành "📝 Cháu ghi nhận"
   // TRƯỚC đoạn bỏ 📝 → khách đọc hai lần. Bỏ 📝 phải nhận cả hai cách xưng.
   db().t.sellers[0].xung_ho = "chú";
   r = await send({ external_user_id: "z-ccrb", text: "chú còn một căn nữa, bán nhà Phường 6 giá 5 tỷ 50m2" });
   check("BLDL-06c chủ nhà là CHÚ → lượt tạo tin vẫn bỏ 📝 (đã thành 'Cháu ghi nhận'), 🤖 đầu, xưng cháu",
-    /^🤖 Đã lưu: /.test(r.body.replies[0] ?? "") && !r.body.replies.some((x) => /📝 \S+ ghi nhận/u.test(x)) && r.body.replies.some((x) => /cháu/i.test(x)),
+    /^🤖 Bóc tách được: /.test(r.body.replies[0] ?? "") && !r.body.replies.some((x) => /📝 \S+ ghi nhận/u.test(x)) && r.body.replies.some((x) => /cháu/i.test(x)),
     JSON.stringify(r.body.replies));
   db().t.sellers[0].xung_ho = null;
 
@@ -1514,7 +1516,8 @@ fresh(seedKho);
   LB.price_raw = "5 tới 6"; LB.price_vnd = null;
   db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
   r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
-  check("BLDL-07 giá không đọc ra số → 🤖 nói rõ '(chưa đọc ra số)'", /giá "5 tới 6" \(chưa đọc ra số\)/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
+  // 24/09: lượt sau chỉ báo thứ bóc từ tin đó; "(chưa đọc ra số)" nằm ở lượt tạo tin (bocTachTaoTin, van-tra-loi.mjs).
+  check("BLDL-07 lượt sau: tin 'sổ hồng riêng em' → 🤖 chỉ pháp lý, không in lại giá cũ '5 tới 6'", /^🤖 Bóc tách được: pháp lý/.test(r.body.replies[0] ?? "") && !/5 tới 6/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
 
   // thay_doi: 🤖 đầu tiên, không mã tin, một dòng đầy đủ; lượt không lưu gì thì im.
   globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "thay_doi" };
@@ -1523,14 +1526,14 @@ fresh(seedKho);
   db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
   r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
   bl = r.body.replies[0] ?? "";
-  check("BLDL-08 thay_doi → 🤖 là bong bóng ĐẦU, riêng, một dòng đầy đủ (địa chỉ + giá), không 📦, không mã tin", /^🤖 Đã lưu: .*99 Nguyễn Trãi.*giá 7 tỷ/.test(bl) && !/📦 Tin giờ/.test(bl) && !/BDS-Q5/.test(bl), JSON.stringify(r.body.replies));
+  check("BLDL-08 thay_doi → 🤖 là bong bóng ĐẦU, riêng, chỉ thứ bóc từ tin này (pháp lý), không 📦, không mã tin", /^🤖 Bóc tách được: pháp lý: "sổ hồng riêng em"$/.test(bl) && !/📦 Tin giờ/.test(bl) && !/BDS-Q5/.test(bl), JSON.stringify(r.body.replies));
   r = await send({ external_user_id: "z-ccrb", text: "dạ em" });
-  check("BLDL-09 tin khách không lưu được gì → KHÔNG nhắn 🤖", r.body.replies.length > 0 && !r.body.replies.some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
+  check("BLDL-09 tin khách không bóc được gì → 🤖 'Không bóc tách được gì từ tin này.' (24/09: không bóc được cũng nói ra)", r.body.replies[0] === "🤖 Không bóc tách được gì từ tin này." && r.body.replies.length >= 2, JSON.stringify(r.body.replies));
   LB.area_m2 = 66;
   r = await send({ external_user_id: "z-ccrb", text: "nhà hướng đông nam em" });
-  check("BLDL-10 thay_doi + lượt này lưu fact + tin đã đổi (66m²) → dòng 🤖 Đã lưu in tin MỚI (66m²) và hướng, không 📦", /^🤖 Đã lưu: .*66m²/.test(r.body.replies[0] ?? "") && /hướng/i.test(r.body.replies[0] ?? "") && !/📦 Tin giờ/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
+  check("BLDL-10 lượt này lưu hướng (cột đã đổi 66m² ở chỗ khác) → 🤖 chỉ 'hướng', không in 66m², không 📦", /^🤖 Bóc tách được: hướng: "hướng đông nam"/.test(r.body.replies[0] ?? "") && !/66m²/.test(r.body.replies[0] ?? "") && !/📦 Tin giờ/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
   r = await send({ external_user_id: "z-ccrb", text: "nhà hướng đông nam nha em" });
-  check("BLDL-10b lưu lại mà tin KHÔNG đổi → nếu có 🤖 thì vẫn là MỘT dòng đầy đủ (66m²), không 📦", /^🤖 Đã lưu: /.test(r.body.replies[0] ?? "") ? (/66m²/.test(r.body.replies[0]) && !/📦 Tin giờ/.test(r.body.replies[0])) : !r.body.replies.some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
+  check("BLDL-10b nói lại hướng → 🤖 đầu là MỘT dòng về tin này (hướng hoặc 'không bóc được'), không 📦", /^🤖 (?:Bóc tách được: .*hướng|Không bóc tách được gì)/.test(r.body.replies[0] ?? "") && !/📦 Tin giờ/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
 
   // 23/09/2026 (chủ dự án, lần 2: "in các cột chính và thông tin của lượt hiện tại thôi nhưng ko được thiếu cái gì hết"):
   // 🤖 = tóm tắt cột + fact CỦA LƯỢT NÀY mà cột chưa nói. Fact ngoài cột của lượt TRƯỚC không in lại.
@@ -1542,9 +1545,9 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "3 phòng ngủ em, nhà nhìn ra view sông thoáng lắm" });
   bl = r.body.replies[0] ?? "";
   check("BLDL-10c 🤖 = cột chính + fact CỦA LƯỢT NÀY (3 phòng ngủ, view sông); KHÔNG in lại fact ngoài cột của lượt trước (lý do bán)",
-    /^🤖 Đã lưu: .*3 phòng ngủ/.test(bl) && /view sông/.test(bl) && !/đổi nhà gần trường/.test(bl), JSON.stringify(r.body.replies));
-  check("BLDL-10e 🤖 in ĐỦ nhãn tìm kiếm từ cột listings.nhan (view công viên + đã hoàn công), không in fact 'nhãn tìm kiếm' lượt lẻ; view in nhãn trung tính 'view:' (không 'view căn hộ')",
-    /nhãn: view công viên · đã hoàn công/.test(bl) && !/nhãn tìm kiếm:/.test(bl) && /view: "/.test(bl) && !/view căn hộ/.test(bl), bl);
+    /^🤖 Bóc tách được: .*số phòng ngủ: "3"/.test(bl) && /view sông/.test(bl) && !/đổi nhà gần trường/.test(bl), JSON.stringify(r.body.replies));
+  check("BLDL-10e 🤖 in nhãn BÓC TỪ TIN NÀY (view sông), không in lại nhãn cũ của tin (view công viên, đã hoàn công); view in nhãn trung tính 'view:' (không 'view căn hộ')",
+    /nhãn tìm kiếm: "view sông"/.test(bl) && !/view công viên|đã hoàn công/.test(bl) && /view: "/.test(bl) && !/view căn hộ/.test(bl), bl);
   // "ko được thiếu cái gì hết": fact lượt này mà CỘT tương ứng trống (trigger không đọc ra) vẫn phải in ở "Kèm:";
   // "gấp" không có trong tóm tắt cột nên luôn in.
   LB.legal_status = null;
@@ -1553,7 +1556,7 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "vi bằng thôi em, cần bán gấp" });
   bl = r.body.replies[0] ?? "";
   check("BLDL-10f fact lượt này có cột mà cột trống (pháp lý 'vi bằng' — trigger không đổi ra legal_status) + 'gấp' → vẫn in ở Kèm, không thiếu",
-    /^🤖 Đã lưu: /.test(bl) && /Kèm: .*vi bằng/.test(bl) && /gấp/.test(bl) && !LB.legal_status, JSON.stringify({ bl, legal: LB.legal_status, f: db().t.listing_facts.filter((f) => f.listing_id === LB.id).slice(-4).map((f) => [f.question, f.answer]) }));
+    /^🤖 Bóc tách được: .*pháp lý: "vi bằng thôi em"/.test(bl) && /gấp/.test(bl) && !LB.legal_status, JSON.stringify({ bl, legal: LB.legal_status, f: db().t.listing_facts.filter((f) => f.listing_id === LB.id).slice(-4).map((f) => [f.question, f.answer]) }));
 
   // 23/09/2026 (chủ dự án: "xóa hoặc sửa luật cứng nhắc đó đi"): câu lệnh gửi model KHÔNG còn ép chép nguyên văn,
   // "ĐÚNG MỘT", "Không hỏi gì khác", "dưới 30 từ" — vẫn nói ý hỏi chính để câu trả lời kế vào đúng ô.
@@ -1574,13 +1577,13 @@ fresh(seedKho);
   globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "quận 5", budget: "tầm 6 tỷ" }, replies: ["Dạ chị cần mấy phòng ngủ ạ?"] });
   r = await send({ external_user_id: "mua-bldl", text: "tìm nhà quận 5 tầm 6 tỷ" });
   check("BLDL-11 người MUA, công tắc bật → 🤖 'Đã lưu nhu cầu' là bong bóng ĐẦU, đúng khoá vừa lưu, không khoá nội bộ",
-    /^🤖 Đã lưu nhu cầu: .*khu vực.*quận 5.*khoảng giá: tầm 6 tỷ/.test(r.body.replies[0] ?? "") && !/tên trợ lý|ten_tro_ly|•ai/.test(r.body.replies[0] ?? "") && r.body.replies.length === 2,
+    /^🤖 Bóc tách được: .*khu vực muốn tìm: "quận 5".*khoảng giá: "tầm 6 tỷ"/.test(r.body.replies[0] ?? "") && !/tên trợ lý|ten_tro_ly|•ai/.test(r.body.replies[0] ?? "") && r.body.replies.length === 2,
     JSON.stringify(r.body.replies));
   // 22/09/2026 (bắn thật): model mở bằng "Dạ em đã lưu nhu cầu: …" sau 🤖 → câu đó bị bỏ, câu hỏi giữ.
   globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "quận 5", budget: "tầm 6 tỷ", bedrooms: 3 }, replies: ["Dạ em đã lưu nhu cầu: mua nhà Quận 5, tầm 6 tỷ để ở ạ. Mình thích hẻm xe hơi hay mặt tiền ạ?"] });
   r = await send({ external_user_id: "mua-bldl", text: "3 phòng ngủ, để ở" });
   check("BLDL-11c model lặp 'Dạ em đã lưu nhu cầu…' sau 🤖 → bỏ câu lặp, còn 🤖 + câu hỏi",
-    /^🤖 Đã lưu nhu cầu/.test(r.body.replies[0] ?? "") && !/đã lưu nhu cầu: mua/.test(r.body.replies.slice(1).join(" ")) && /hẻm xe hơi hay mặt tiền/.test(r.body.replies.join(" ")),
+    /^🤖 Bóc tách được/.test(r.body.replies[0] ?? "") && !/đã lưu nhu cầu: mua/.test(r.body.replies.slice(1).join(" ")) && /hẻm xe hơi hay mặt tiền/.test(r.body.replies.join(" ")),
     JSON.stringify(r.body.replies));
   const hsMua = db().t.buyers.find((b) => b.zalo_user_id === "mua-bldl")?.preferences ?? {};
   check("BLDL-11b 🤖 người mua nói đúng thứ ĐÃ vào DB (hồ sơ có area + budget)", hsMua.area === "quận 5" && hsMua.budget === "tầm 6 tỷ", JSON.stringify(hsMua));
@@ -1685,7 +1688,7 @@ fresh(seedKho);
   const r1q = createCalls().map((c) => (c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : "").join("\n")).find((s) => /Chủ nhà vừa nhắn rao/.test(s)) ?? "";
   check("T42-18 rao KHÔNG nói quận → boc_tach đánh dấu quận mặc định, câu hỏi đầu hỏi KÈM quận, 🤖 nói 'chưa rõ quận', 📝 không tự nhận Quận 5",
     LL[0]?.boc_tach?.quan_mac_dinh === true && !("quan" in (LL[0]?.boc_tach ?? {})) && /phường mấy, quận nào/.test(r1q) &&
-      /^🤖 Đã lưu: .*\(chưa rõ quận\)/.test(rr.body.replies[0] ?? "") && LL[0]?.district == null && !rr.body.replies.some((x) => /Quận 5/.test(x)),
+      /^🤖 Bóc tách được: .*\(chưa rõ quận\)/.test(rr.body.replies[0] ?? "") && LL[0]?.district == null && !rr.body.replies.some((x) => /Quận 5/.test(x)),
     JSON.stringify({ bt: LL[0]?.boc_tach, rep: rr.body.replies, r1q: r1q.slice(0, 400) }));
   r = await send({ external_user_id: "t42-q5", text: "quận 8 phường 6 em" });
   const Lq5 = db().t.listings.find((l) => l.id === LL[0]?.id);
@@ -2053,7 +2056,7 @@ fresh(seedKho);
   const bongAi4 = r.body.replies.filter((x) => x.startsWith("🤖"));
   // 21/09 tối (kiem-tbt): hướng AI đọc đã vào cột → hiện "hướng Đông Nam" ở dòng chính, KHÔNG lặp ở Kèm.
   check("AIBOC-04b (21/09 gộp) khách thấy MỘT bong bóng '🤖 Đã lưu' nêu cả hướng (cột) + hiện trạng AI đọc (Kèm) lẫn thứ luật ghi; không dòng 'AI đọc thêm' riêng; pháp lý bịa không có",
-    bongAi4.length === 1 && /^🤖 Đã lưu/.test(bongAi4[0]) && /hướng Đông Nam/.test(bongAi4[0]) && /hiện trạng nhà: "mới sơn sửa lại"/.test(bongAi4[0]) &&
+    bongAi4.length === 1 && /^🤖 Bóc tách được/.test(bongAi4[0]) && /hướng Đông Nam/.test(bongAi4[0]) && /hiện trạng nhà: "mới sơn sửa lại"/.test(bongAi4[0]) &&
       !/pháp lý/.test(bongAi4[0]) && !r.body.replies.some((x) => /AI đọc thêm/.test(x)),
     JSON.stringify(r.body.replies));
 
@@ -2738,7 +2741,7 @@ fresh(seedKho);
   const L4 = db().t.listings[0];
   const blChu4 = r.body.replies.find((x) => x.startsWith("🤖")) ?? "";
   check("BLDL-12 lượt mở hồ sơ + xưng 'chú' → 🤖 kèm dòng '👤 Hồ sơ: Zalo \"…\" · cách gọi: \"chú\"' (Zalo che còn 4 ký tự cuối)",
-    /^🤖 Đã lưu: /.test(blChu4) && /\n👤 Hồ sơ: Zalo: "…hu-4" · cách gọi: "chú"/.test(blChu4) && !/chu-4"/.test(blChu4), blChu4);
+    /^🤖 Bóc tách được: /.test(blChu4) && /\n👤 Hồ sơ: Zalo: "…hu-4" · cách gọi: "chú"/.test(blChu4) && !/chu-4"/.test(blChu4), blChu4);
   check("PH-08 câu hỏi đầu là phường, tin đã có địa chỉ + quận → hỏi ngắn nhắc địa chỉ: 'Hẻm 4m Nguyễn Trãi đó phường mấy chú nhỉ?'",
     globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("Hẻm 4m Nguyễn Trãi đó phường mấy chú nhỉ?")) && db().t.info_requests.some((x) => x.listing_id === L4.id && x.question === "phuong" && x.status === "pending"),
     JSON.stringify({ ir: db().t.info_requests.map((q) => [q.question, q.status]), calls: globalThis.__calls.map((c) => JSON.stringify(c.params ?? c).slice(0, 300)) }));
@@ -2800,7 +2803,7 @@ fresh(seedKho);
   check("NHAN-01 câu rao có 'khu yên tĩnh, gần chợ' → listings.nhan = [yen_tinh, gan_cho]; fact nhan; 🤖 báo 'nhãn: yên tĩnh · gần chợ'",
     JSON.stringify(LN.nhan) === JSON.stringify(["yen_tinh", "gan_cho"]) &&
       db().t.listing_facts.some((f) => f.listing_id === LN.id && f.question === "nhan" && f.answer === "yên tĩnh · gần chợ") &&
-      r.body.replies.some((x) => x.startsWith("🤖") && /nhãn: yên tĩnh · gần chợ/.test(x)),
+      r.body.replies.some((x) => x.startsWith("🤖") && /nhãn: "yên tĩnh · gần chợ"/.test(x)),
     JSON.stringify({ nhan: LN.nhan, rep: r.body.replies }));
   db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
   db().insert("info_requests", { listing_id: LN.id, question: "ket_cau", status: "pending" });
@@ -2839,7 +2842,7 @@ fresh(seedKho);
   db().insert("info_requests", { listing_id: LB.id, question: "gap", status: "pending" });
   r = await send({ external_user_id: "va10-b", text: "tối chị chụp ảnh gửi nhé, giờ đang bận" });
   check("VA10-02 'tối chụp ảnh gửi, giờ đang bận' → hoãn (một câu 'em chờ'), câu gấp vẫn treo, nhắc promise",
-    r.body.hoan === true && r.body.replies.length === 1 && /em chờ/i.test(r.body.replies[0]) && fPend("gap") &&
+    r.body.hoan === true && r.body.replies.filter((x) => !x.startsWith("🤖")).length === 1 && /em chờ/i.test(r.body.replies.filter((x) => !x.startsWith("🤖"))[0] ?? "") && fPend("gap") &&
       db().t.reminders.some((x) => x.kind === "promise" && x.status === "pending"),
     JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   // L3: lời sửa phường kèm địa chỉ → vị trí sạch tiểu từ.
@@ -3108,7 +3111,7 @@ fresh(seedKho);
   {
     const L = db().t.listings[0];
     check("GVA-14 'Hung Vuong Plaza 126 Hung Vuong' + AI 'Hùng Vương' → địa chỉ có SỐ NHÀ '126 Hùng Vương'; 🤖 in 'giá 4 tỷ 3' (đơn vị có dấu) dù DB giữ chữ khách gõ",
-      !!L && /126 Hùng Vương/.test(L.location_raw ?? "") && /giá 4 tỷ 3/.test(r.body.replies[0] ?? "") && !/4 ty 3/.test(r.body.replies[0] ?? ""),
+      !!L && /126 Hùng Vương/.test(L.location_raw ?? "") && /giá: "4 tỷ 3"/.test(r.body.replies[0] ?? "") && !/4 ty 3/.test(r.body.replies[0] ?? ""),
       JSON.stringify({ loc: L?.location_raw, price: L?.price_raw, rep: r.body.replies }));
   }
   globalThis.__cauHinh = cauHinhCu;
@@ -3195,7 +3198,7 @@ fresh(seedKho);
   {
     const L = db().t.listings[0];
     check("GVC-06 câu rao '7ty2' → DB giữ '7ty2' (7,2 tỷ), 🤖 in 'giá 7 tỷ 2', không in '7ty2'",
-      !!L && L.price_vnd === 7200000000 && r.body.replies.some((x) => x.startsWith("🤖") && /giá 7 tỷ 2/.test(x) && !/7ty2/.test(x)),
+      !!L && L.price_vnd === 7200000000 && r.body.replies.some((x) => x.startsWith("🤖") && /giá: "7 tỷ 2"/.test(x) && !/7ty2/.test(x)),
       JSON.stringify({ price: [L?.price_raw, L?.price_vnd], rep: r.body.replies }));
   }
   globalThis.__cauHinh = cauHinhCu;
