@@ -3128,10 +3128,32 @@ fresh(seedKho);
     sC.active_listing_id = tin2.id;
     tin2.area_m2 = null; tin2.frontage_m = null; tin2.location_raw = "đường số 59"; tin2.price_raw = null; tin2.price_vnd = null;
     db().insert("info_requests", { listing_id: tin2.id, question: "dien_tich_dat", status: "pending" });
+    const taoCu3 = globalThis.__model.create;
+    globalThis.__model.create = () => "137m2 trên sổ, giá 5 tỷ 9 thương lượng 5 tỷ 5, khuôn đất này dễ xây lắm anh. Diện tích đất trên sổ bao nhiêu, ngang dài thế nào anh?";
     r = await send({ external_user_id: "z-ccrb", text: "137/28 nhé em, cần bán gấp giá 5 tỏi 9 thương lượng 5 tỏi 5 là bán được" });
+    globalThis.__model.create = taoCu3;
     check("GOVAP-03 '137/28 nhé em, cần bán gấp…' khi đang hỏi diện tích → địa chỉ '137/28 đường số 59', diện tích KHÔNG thành 137",
       tin2.location_raw === "137/28 đường số 59" && Number(tin2.area_m2 ?? 0) !== 137 && tin2.gap === true,
       JSON.stringify({ lr: tin2.location_raw, area: tin2.area_m2, gap: tin2.gap, rep: r.body.replies }));
+    check("GOVAP-03b câu diện tích VẪN treo (fact số nhà ghi trong lượt không tính là né), không bong bóng nào nói 137m2",
+      pend("dien_tich_dat", tin2.id) && !r.body.replies.some((x) => /137\s*m2/.test(x)),
+      JSON.stringify({ ir: db().t.info_requests.filter((q) => q.listing_id === tin2.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
+    // Model tự nói số m² không có trong DB → bỏ câu đó (tin 0001 có 50 m²).
+    fresh(seedKho);
+    {
+      const sC6 = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+      const t6 = db().t.listings.find((l) => l.code === "BDS-Q5-0002");
+      sC6.active_listing_id = t6.id;
+      t6.floors = null;
+      db().insert("info_requests", { listing_id: t6.id, question: "ket_cau", status: "pending" });
+      const taoCu = globalThis.__model.create;
+      globalThis.__model.create = () => "Nhà 137m2 xây 3 tầng là rộng rãi lắm anh. Tổng cộng bao nhiêu phòng ngủ anh?";
+      r = await send({ external_user_id: "z-ccrb", text: "3 tầng em" });
+      globalThis.__model.create = taoCu;
+      check("GOVAP-06 model nói '137m2' (tin có 60 m², khách không gõ) → bỏ câu đó, giữ câu hỏi phòng ngủ",
+        !r.body.replies.some((x) => /137\s*m2/.test(x)) && r.body.replies.some((x) => /phòng ngủ/.test(x)),
+        JSON.stringify(r.body.replies));
+    }
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
     fresh(seedKho);
     const sC3 = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");

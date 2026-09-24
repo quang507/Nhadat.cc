@@ -6,7 +6,7 @@
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiTienKhongCo, boCauM2KhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -691,6 +691,12 @@ for (const [cau, laTiemNang] of [
   ok("'dài 16m' mà chưa có ngang → null", ghepMotChieu("dien_tich_dat", "dài 16m", null, null) === null);
   ok("'5x16' đủ hai chiều → null (đường cũ)", ghepMotChieu("dien_tich_dat", "5x16", "5", null) === null);
   ok("đang hỏi giá thì không ghép", ghepMotChieu("gia", "dài 16m", "5", null) === null);
+  const bia = ["137m2 trên sổ, giá 5 tỷ 9 thương lượng 5 tỷ 5, khuôn đất này dễ xây lắm anh. Nhà mình xây mấy tầng rồi ạ?"];
+  const ra = boCauM2KhongCo(bia, [], "137/28 nhé em, cần bán gấp giá 5 tỏi 9");
+  ok("model nói '137m2' mà DB không có, khách không gõ → bỏ câu đó, giữ câu hỏi", ra.length === 1 && !/137m2/.test(ra[0]) && /xây mấy tầng/.test(ra[0]), JSON.stringify(ra));
+  ok("model nói '80m2' khớp DB → giữ", boCauM2KhongCo(["80m2 vuông vức, dễ bán lắm anh."], [80], "")[0] === "80m2 vuông vức, dễ bán lắm anh.");
+  ok("khách tự gõ 'sàn 200m2' → giữ câu model nhắc 200m2", boCauM2KhongCo(["Sàn 200m2 rộng rãi anh."], [80], "sàn 200m2 nha")[0] === "Sàn 200m2 rộng rãi anh.");
+  ok("bong bóng 🤖 không đụng", boCauM2KhongCo(["🤖 Bóc tách được: diện tích: \"137m2\""], [], "")[0].startsWith("🤖"));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
