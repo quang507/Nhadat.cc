@@ -544,7 +544,7 @@ const TIEN_OK = new Set(["gia", "doanh_thu", "phi_quan_ly", "phi_gui_xe", "gia_d
 const HOI_CO_KHONG = new Set([
   "hem_thong", "ngap_nuoc", "the_chap", "thuong_luong", "can_goc", "thang_may", "pccc", "len_tho_cu", "gap",
   "ranh_gioi", "xu_ly_nuoc_thai", "duong_container", "nguon_nuoc", "hien_trang_su_dung", "so_huu", "tang_phu",
-  "hoan_cong", "ban_giao", // FR-223
+  "hoan_cong", "ban_giao", "dong_y_ban", // FR-223
 ]);
 
 // Từ khoá tối thiểu cho các câu hỏi CHỮ. Không có từ nào trong đây thì coi là
@@ -588,7 +588,7 @@ const HO_FACT: string[][] = [
   ["hien_trang", "hien_trang_su_dung", "ket_cau", "tang_phu", "han_hop_dong_thue"],
   ["noi_that", "fit_out"],
   ["tiem_nang", "muc_dich", "nganh_hang_phu_hop"],
-  ["phap_ly", "the_chap", "hoan_cong", "tien_do_so", "ban_giao", "dong_so_huu"],
+  ["phap_ly", "the_chap", "hoan_cong", "giay_to_hien_co", "du_kien_ra_so", "ban_giao", "dong_so_huu_voi", "dong_y_ban"],
 ];
 const cungHo = (a: string, b: string) => a === b || HO_FACT.some((h) => h.includes(a) && h.includes(b));
 export const cungHoFact = cungHo;
@@ -1413,8 +1413,9 @@ const LIEN_QUAN: Record<string, string[]> = {
   ha_tang: ["xay_dung", "phap_ly"], xay_dung: ["phap_ly"],
   san_vuon: ["khu_compound", "do_rong_hem"], khu_compound: ["phap_ly"],
   // FR-223: câu nhánh pháp lý (chỉ có trong danh sách khi re-nhanh.ts thêm vào) đi NGAY sau câu pháp lý.
-  phap_ly: ["hoan_cong", "tien_do_so", "ban_giao", "dong_so_huu", "tien_coc", "tiem_nang", "hinh_anh"], tiem_nang: ["hinh_anh"],
-  hoan_cong: ["hinh_anh"], tien_do_so: ["ban_giao", "hinh_anh"], dong_so_huu: ["hinh_anh"],
+  phap_ly: ["hoan_cong", "giay_to_hien_co", "du_kien_ra_so", "ban_giao", "dong_so_huu_voi", "dong_y_ban", "tien_coc", "tiem_nang", "hinh_anh"], tiem_nang: ["hinh_anh"],
+  hoan_cong: ["hinh_anh"], giay_to_hien_co: ["du_kien_ra_so", "ban_giao"], du_kien_ra_so: ["ban_giao", "hinh_anh"],
+  dong_so_huu_voi: ["dong_y_ban"], dong_y_ban: ["hinh_anh"],
   tien_coc: ["thoi_han_thue"], thoi_han_thue: ["truot_gia"], truot_gia: ["hinh_anh"],
   hinh_anh: [],
 };
