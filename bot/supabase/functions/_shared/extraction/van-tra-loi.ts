@@ -837,6 +837,24 @@ export function boCauGhiTienKhongCo(replies: string[], tienCo: number[], docTien
   return ra;
 }
 
+/** Có số m² trong câu ("137m2", "80 m²", "60 mét vuông"). */
+export const M2_TRONG_CAU = /\d+(?:[.,]\d+)?\s*(?:m2|m²|mét vuông|met vuong)(?![\p{L}\d])/iu;
+/**
+ * 24/09/2026 (bắn lại người bán Gò Vấp): model viết "137m2 trên sổ, khuôn đất này dễ xây lắm" khi khách chỉ nhắn số
+ * nhà "137/28" — DB không có 137 m². Bỏ CÂU (không phải cả bong bóng) nói số m² không khớp diện tích tin nào của người
+ * này (±1%, tối thiểu 0,5) và cũng không có trong chữ khách vừa gõ ("sàn 200m2" khách tự nói thì giữ).
+ */
+export function boCauM2KhongCo(replies: string[], dienTichCo: number[], khachGo: string): string[] {
+  const re = /(\d+(?:[.,]\d+)?)\s*(?:m2|m²|mét vuông|met vuong)(?![\p{L}\d])/giu;
+  const soCua = (s: string) => [...s.matchAll(re)].map((m) => Number(m[1].replace(",", ".")));
+  const khach = soCua(khachGo ?? "");
+  const co = [...dienTichCo.filter((x) => Number.isFinite(x) && x > 0), ...khach];
+  return locCauTrongBongBong(replies, (c) => {
+    if (/^[🤖📝📋💾]/u.test(c.trim())) return false;
+    return soCua(c).some((v) => !co.some((t) => Math.abs(t - v) <= Math.max(0.5, t * 0.01)));
+  });
+}
+
 /**
  * FR-218 b (24/09/2026, chủ dự án test vai mua): khách nói đủ quận + giá ngay tin đầu, kho đã lọc ra căn, mà model
  * vẫn hỏi dò ("ba mẹ ở cùng hay phòng riêng?", "ưu tiên hẻm xe hơi hay mặt tiền?") thay vì đưa căn — lời dặn

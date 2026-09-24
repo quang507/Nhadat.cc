@@ -89,7 +89,7 @@ import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
 import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
-import { boCauGhiTienKhongCo, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiTienKhongCo, boCauM2KhongCo, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
 import { boCauGhiNhan, boCauTrung, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
@@ -2116,6 +2116,18 @@ Deno.serve(async (req) => {
           if (sach !== truoc) console.log("chat-reply: bỏ câu 'đã ghi' có số tiền không có trong DB");
         }
       }
+      // 24/09/2026 (bắn lại người bán Gò Vấp): khách nhắn "137/28 nhé em…" (số nhà), DB đúng (diện tích trống) mà model
+      // vẫn viết "137m2 trên sổ, khuôn đất này dễ xây lắm". Câu model nói số m² KHÔNG có trong tin của người này và
+      // khách cũng không gõ → bỏ câu đó. Lượt ẢNH (sổ đỏ: "sổ ghi 60m2, tin ghi 50m2") là bong bóng code đọc từ ảnh — không đụng.
+      if (extra.anh !== true && !imageUrl && sach.some((r) => !/^\s*(?:🤖|💾|📝|📋)/u.test(r) && M2_TRONG_CAU.test(r))) {
+        const { data: dtTin, error: dtErr } = await client.from("listings").select("area_m2").eq("seller_id", sellerRow.id).not("area_m2", "is", null).limit(20);
+        if (dtErr) await ghiLoi(client, "chat-reply doi chieu m2", dtErr.message);
+        else {
+          const truoc = sach;
+          sach = boCauM2KhongCo(sach, ((dtTin ?? []) as Array<{ area_m2: number | string }>).map((d) => Number(d.area_m2)), text);
+          if (sach !== truoc) console.log("chat-reply: bỏ câu model nói số m² không có trong DB");
+        }
+      }
       if (sach.length) {
         const bl = await baoLaiDaLuu(extra);
         if (bl.bong) {
@@ -3707,6 +3719,9 @@ Deno.serve(async (req) => {
       // 24/09/2026 (chủ dự án: "137/28 nghĩa là đường số 59 hẻm 137 và nhà số 28"): tin đã có tên đường mà chưa có số,
       // chủ nhắn số nhà có gạch chéo ở đầu câu → ghép "137/28 Đường số 59" vào địa chỉ; phần còn lại mới là câu trả lời
       // câu đang treo (bản trước: đang hỏi diện tích, "137/28" thành "137m2").
+      // Fact số nhà ghép TRONG lượt này không phải "lượt trước chủ né câu hỏi" (đếm `daNe` bên dưới) — từng làm câu diện
+      // tích hết hạn ngay lần hỏi đầu (bắn lại 24/09 k1-ban-gv2). Đánh dấu bằng cờ, không so giờ (giờ edge ≠ giờ DB).
+      let ghiSoNhaLuot = false;
       {
         const sn = pendingReq.question !== "vi_tri" ? soNhaDau(dapAn) : null;
         const lr = (pendingReq.listings?.location_raw ?? "").trim();
@@ -3715,7 +3730,10 @@ Deno.serve(async (req) => {
             p_listing_id: pendingReq.listing_id, p_question: "vi_tri", p_answer: `${sn.soNha} ${lr}`, p_source: "seller_chat",
           });
           if (snErr) await ghiLoi(client, "chat-reply ghi_fact_listing(so nha)", snErr.message);
-          else if (sn.conLai) dapAn = sn.conLai;
+          else {
+            ghiSoNhaLuot = true;
+            if (sn.conLai) dapAn = sn.conLai;
+          }
         }
       }
       let kq: KetQuaKhop = pendingReq.question === "loai_bds"
@@ -3918,7 +3936,7 @@ Deno.serve(async (req) => {
       }
       if (!boQuaCauTreo && kq.loai !== "khop" && pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
           pendingReq.question !== "danh_gia" && (kq.chuyenSang || kq.loai === "ack")) {
-        const { count: daNe } = await client.from("listing_facts")
+        let neQ = client.from("listing_facts")
           .select("id", { count: "exact", head: true })
           .eq("listing_id", pendingReq.listing_id)
           .neq("question", pendingReq.question)
@@ -3926,6 +3944,8 @@ Deno.serve(async (req) => {
           // đã mở) — không phải khách né câu hỏi, đếm vào là hết hạn câu ngay lượt sau (e2e H3).
           .neq("question", "nhan")
           .gt("created_at", pendingReq.created_at ?? new Date(0).toISOString());
+        if (ghiSoNhaLuot) neQ = neQ.neq("question", "vi_tri");
+        const { count: daNe } = await neQ;
         const gat = kq.loai === "ack" && laDongY(dapAn);
         // 16/09/2026 (chủ dự án, sau khi câu phường bị hỏi 4 lượt liền ở mau-co-thue): một câu
         // hỏi TỐI ĐA 2 LẦN trong chat — hỏi, khách nói thứ khác, hỏi lại một lần, vẫn thứ khác
