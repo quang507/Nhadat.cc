@@ -3293,6 +3293,26 @@ fresh(seedKho);
       !pend("hoan_cong", l.id) && pend("han_hop_dong_thue", l.id),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
+  // Bắn thật 24/09 (rn-test-h): hỏi tiền thuê, khách đáp "150 triệu một tháng em" → luật đọc thành GIÁ BÁN, câu rơi bổ sung
+  // (AI tắt thì còn ghi đè giá bán 25 tỷ thành 150 triệu).
+  for (const cheDo of ["tat", "chinh"]) {
+    const cauHinhCu = globalThis.__cauHinh, parseCu = globalThis.__model.parse;
+    globalThis.__cauHinh = { ...(cauHinhCu ?? {}), boc_tach_ai: cheDo };
+    if (cheDo === "chinh") globalThis.__model.parse = () => ({ so_can: 0, kien_thuc: [], truong: [] });
+    fresh((d) => {
+      const s = d.insert("sellers", { zalo_user_id: `z-rn9-${cheDo}`, seller_type: "ccrb", name: null, active_listing_id: null }).data;
+      const l = d.insert("listings", { code: `BDS-Q5-09${cheDo === "tat" ? "39" : "40"}`, seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "Nguyễn Trãi", district: "Quận 5", ward: "Phường 3", price_raw: "25 tỷ", price_vnd: 25e9, area_m2: 80, floors: 4, bedrooms: 4, access_type: "mat_tien", legal_status: "so_hong_rieng", can_chu_duyet: true, description: "bán nhà mặt tiền Nguyễn Trãi, đang cho ngân hàng thuê, giá 25 tỷ" }).data;
+      d.insert("listing_facts", { listing_id: l.id, question: "han_hop_dong_thue", answer: "tới năm 2030", source: "seller_chat" });
+      d.insert("info_requests", { listing_id: l.id, question: "doanh_thu", status: "pending" });
+    });
+    r = await send({ external_user_id: `z-rn9-${cheDo}`, text: "150 triệu một tháng em" });
+    const l = db().t.listings.find((x) => x.code === `BDS-Q5-09${cheDo === "tat" ? "39" : "40"}`);
+    const fs9 = db().t.listing_facts.filter((x) => x.listing_id === l.id).map((x) => [x.question, x.answer]);
+    check(`RENHANH-09 (${cheDo}) hỏi tiền thuê, đáp '150 triệu một tháng em' → vào ô tiền thuê, GIÁ BÁN vẫn 25 tỷ, không vào bổ sung`,
+      fs9.some(([q, a]) => q === "doanh_thu" && /150/.test(a)) && !fs9.some(([q]) => q === "bo_sung" || q === "gia") && Number(l.price_vnd) === 25e9 && !pend("doanh_thu", l.id),
+      JSON.stringify({ fs9, price: l.price_vnd, rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+    globalThis.__cauHinh = cauHinhCu; globalThis.__model.parse = parseCu;
+  }
   rnSeed("z-rn3", "BDS-Q5-0933");
   r = await send({ external_user_id: "z-rn3", text: "chưa có sổ em, đang chờ ra sổ" });
   {
