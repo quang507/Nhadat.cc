@@ -6,7 +6,7 @@
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { nhanDienNhieuCan, tachTheoCan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -587,6 +587,36 @@ for (const [cau, mong] of [
     /Trần Bình Trọng/.test(bb) && /Nguyễn Trãi/.test(bb) && !/Hùng Vương/.test(bb) && !/BDS-/.test(bb) && (bb.match(/\?/g) ?? []).length === 1 && /\nChị thấy căn nào/.test(bb), bb);
   const hd = boCauHoiDo(["🤖 Đã lưu nhu cầu: mua", "Dạ mình có ba mẹ ở cùng hay phòng riêng vậy?", "Quận 5 bên em có Lakai và Dragon Riverside ạ."]);
   ok("boCauHoiDo: bỏ câu hỏi dò ngắn, giữ báo lưu + câu có nội dung", hd.length === 2 && hd[0].startsWith("🤖") && /Lakai/.test(hd[1]), JSON.stringify(hd));
+}
+
+// ── 24/09/2026 FR-218 c: câu khẳng định đặc điểm căn không ghi; alley bịa trong hồ sơ mua ──
+{
+  const cans = [
+    { ten: "Châu Văn Liêm", du_lieu: "Châu Văn Liêm P10 · trệt + 2 lầu · 3PN · chủ tả: phòng nào cũng có cửa sổ đón gió" },
+    { ten: "Hùng Vương", du_lieu: "Hùng Vương P4 · trệt + 2 lầu · chủ tả: phía sau có khoảng đất trống rộng cho chó mèo" },
+    { ten: "Trần Bình Trọng", du_lieu: "Trần Bình Trọng P1 · chủ tả: có 1 phòng ngủ ngay tầng trệt tiện cho ông bà" },
+  ];
+  const d1 = boDacDiemKhongCo(["• Châu Văn Liêm P10 · 6 tỷ 8\n• Hùng Vương P4 · 6 tỷ 7\n\nCả 2 căn đều có phòng ngủ ở tầng trệt cho ba mẹ. Mình xem căn nào trước ạ?"], cans);
+  ok("'Cả 2 căn đều có phòng ngủ ở tầng trệt' cho 2 căn không ghi → thay bằng 'em hỏi lại chủ', giữ danh sách + câu hỏi",
+    d1.bo.length === 1 && !/đều có phòng ngủ/.test(d1.replies[0]) && /hỏi lại chủ/.test(d1.replies[0]) && /Châu Văn Liêm/.test(d1.replies[0]) && /xem căn nào trước ạ\?$/.test(d1.replies[0]), JSON.stringify(d1));
+  const giu = [
+    ["căn CÓ ghi phòng ngủ trệt", "Căn Trần Bình Trọng có 1 phòng ngủ ngay tầng trệt cho ba mẹ nha."],
+    ["'sân sau' khớp 'đất trống phía sau'", "Căn Hùng Vương có sân sau rộng cho cún chạy."],
+    ["câu phủ định", "Căn Châu Văn Liêm không có thang máy ạ."],
+    ["câu hỏi", "Căn Châu Văn Liêm có thang máy không ạ?"],
+    ["dòng máy 🤖", "🤖 Đã lưu nhu cầu: cần phòng ngủ ở tầng trệt"],
+    ["không gắn với căn nào", "Nhà có phòng ngủ ở tầng trệt thì ba mẹ đỡ leo cầu thang lắm."],
+  ];
+  for (const [ten, cau] of giu) {
+    const r = boDacDiemKhongCo([cau], cans);
+    ok(`giữ nguyên: ${ten}`, r.bo.length === 0 && r.replies[0] === cau, JSON.stringify(r));
+  }
+  const d2 = boDacDiemKhongCo(["Căn Châu Văn Liêm có thang máy, sân thượng rộng."], cans);
+  ok("thang máy căn không ghi → thay", d2.bo.includes("thang máy") && !/có thang máy/.test(d2.replies[0]), JSON.stringify(d2));
+  const h1 = locHoSoMua({ alley: "hẻm xe hơi" }, "tìm nhà quận 5 tầm 6 tới 7 tỷ, có phòng ngủ dưới trệt cho ba mẹ già");
+  ok("hồ sơ mua: alley 'hẻm xe hơi' khi khách không nói gì về đường vào → gỡ", h1.profile.alley === null && h1.bo.includes("alley"), JSON.stringify(h1));
+  const h2 = locHoSoMua({ alley: "hẻm xe hơi" }, "cần hẻm ô tô vào được");
+  ok("hồ sơ mua: khách nói 'hẻm ô tô' → giữ alley", h2.profile.alley === "hẻm xe hơi", JSON.stringify(h2));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

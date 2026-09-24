@@ -3879,6 +3879,15 @@ fresh(seedKho);
   r = await send({ external_user_id: "ta-4", text: "căn đó chưa ưng lắm" });
   check("DUACAN-03 đã đưa căn ở lượt trước → lượt sau model hỏi khách chưa ưng gì thì KHÔNG đẩy lại danh sách",
     !/Dạ bên em đang có/.test((r.body.replies ?? []).join("\n")) && /chưa ưng/.test((r.body.replies ?? []).join("\n")), JSON.stringify(r.body.replies));
+  // (5) 24/09 bắn thật sau #266: model khẳng định "đều có phòng ngủ ở tầng trệt" cho căn không ghi → thay câu.
+  fresh(seedTa);
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ căn An Dương Vương P8 6 tỷ có phòng ngủ ở tầng trệt cho ba mẹ luôn. Mình xem thử không ạ?"] });
+  r = await send({ external_user_id: "ta-5", text: "tìm nhà quận 5 tầm 6 tới 7 tỷ, có phòng ngủ dưới trệt cho ba mẹ" });
+  {
+    const rp = (r.body.replies ?? []).join("\n");
+    check("DACDIEM-01 căn An Dương Vương (dữ liệu không ghi) bị nói 'có phòng ngủ ở tầng trệt' → thay bằng 'em hỏi lại chủ', câu hỏi giữ",
+      !/có phòng ngủ ở tầng trệt cho ba mẹ luôn/.test(rp) && /hỏi lại chủ/.test(rp) && /xem thử không ạ\?/.test(rp), rp);
+  }
   globalThis.__model = { parse: () => OUT() };
 }
 
