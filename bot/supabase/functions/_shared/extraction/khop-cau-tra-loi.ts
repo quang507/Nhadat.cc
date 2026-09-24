@@ -1123,7 +1123,11 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 21/09/2026 (bắn thật mau-tdt): "nhà ở đường trần đình trọng quận 5" là ĐỊA CHỈ ("ở" = nằm ở), từng
   // thành tiềm năng "nhà ở" rồi lên bản nháp "💡 Phù hợp: nhà ở đường…". "ở" theo sau là đường/hẻm/số/
   // phường/quận/khu/gần… thì không phải cách dùng.
-  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8) ||
+  // 24/09/2026 (chủ dự án test Zalo): "ở Nguyễn Trãi quận 5" — tên đường KHÔNG có chữ "đường" đứng trước — cũng là
+  // địa chỉ: chữ sau "ở" viết hoa (tên riêng) hoặc câu có quận/phường/huyện thì không phải cách dùng.
+  const oLaDiaChi = /^\s*(?:nhà\s+)?ở\s+\p{Lu}/u.test(goc.trim()) || /\b(?:quan|q|phuong|p)\s*\d{1,2}\b|\b(?:quan|huyen|phuong|xa|tinh)\s+[a-z]/.test(kd);
+  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8 &&
+        !(/^\s*(?:nha\s+)?o\s/.test(kd) && oLaDiaChi)) ||
       (/\b(o hoac|hoac lam|deu duoc|lam can ho dich vu|lam chdv|hop (?:de )?(?:o|kinh doanh|cho thue|lam))\b/.test(kd) && kd.split(/\s+/).length <= 14 &&
         !/\b(showroom|lam xuong|van phong cong ty|nha hang|benh vien|truong hoc|lam kho)\b/.test(kd))) {
     return { question: "tiem_nang", answer: goc };

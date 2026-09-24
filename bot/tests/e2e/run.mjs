@@ -3419,6 +3419,30 @@ fresh(seedKho);
         !db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "bo_sung" && /cho thuê/.test(f.answer)) && pendQ().includes("gia"),
       JSON.stringify({ facts: db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer, f.source]), rent: tin.rent_income_vnd, rear: tin.rear_width_m, pend: pendQ() }));
   }
+  // 24/09/2026 (chủ dự án test Zalo): "4x14, trệt 1 lầu" khi hỏi diện tích, AI chỉ trả diện tích → kết cấu rơi mất.
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb"); const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0002"); sC.active_listing_id = tin.id;
+    db().insert("info_requests", { listing_id: tin.id, question: "dien_tich_dat", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p)
+      ? { so_can: 0, kien_thuc: [], truong: [{ khoa: "dien_tich", gia_tri: "4x14", trich_dan: "4x14", can: null }] }
+      : OUT();
+    r = await send({ external_user_id: "z-ccrb", text: "4x14, trệt 1 lầu" });
+    const kc = db().t.listing_facts.filter((f) => f.listing_id === tin.id && f.question === "ket_cau").map((f) => f.answer);
+    check("KETCAU-01 'chinh': '4x14, trệt 1 lầu' khi hỏi diện tích, AI chỉ trả diện tích → luật vẫn ghi kết cấu 'trệt 1 lầu'",
+      kc.includes("trệt 1 lầu"), JSON.stringify(db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer, f.source])));
+  }
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb"); const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0002"); sC.active_listing_id = tin.id;
+    db().insert("info_requests", { listing_id: tin.id, question: "dien_tich_dat", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p)
+      ? { so_can: 0, kien_thuc: [], truong: [{ khoa: "dien_tich", gia_tri: "4x14", trich_dan: "4x14", can: null }] }
+      : OUT();
+    r = await send({ external_user_id: "z-ccrb", text: "4x14, đất này được xây 5 tầng" });
+    check("KETCAU-02 'chinh': 'được xây 5 tầng' là GIẢ ĐỊNH → luật KHÔNG ghi kết cấu thay AI",
+      !db().t.listing_facts.some((f) => f.listing_id === tin.id && f.question === "ket_cau"), JSON.stringify(db().t.listing_facts.filter((f) => f.listing_id === tin.id).map((f) => [f.question, f.answer])));
+  }
   globalThis.__cauHinh = cauHinhCu;
   globalThis.__model = { parse: () => OUT() };
 }
@@ -3953,6 +3977,23 @@ fresh(seedKho);
   });
   r = await send({ external_user_id: "z-dang10", text: "chưa đăng tin đâu em, để anh tính thêm" });
   check("DANG9-02 'chưa đăng tin đâu em…' (phủ định) → KHÔNG gửi bản nháp", r.body.ban_nhap !== true, JSON.stringify(r.body.replies));
+  // 24/09/2026 (chủ dự án test Zalo): "6 tỷ 3 đăng đi" khi đang hỏi GIÁ, tin chưa đủ điểm → ghi giá, ĐÓNG câu giá, báo còn
+  // thiếu gì rồi hỏi câu KẾ — trước: coi cả câu là "muốn đăng", câu giá vẫn treo, bot hỏi lại "rao giá bao nhiêu".
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "z-dang11", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0109", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", location_raw: "Nguyễn Trãi", ward: "Phường 2", district: "Quận 5", area_m2: 56, can_chu_duyet: true }).data;
+    s.active_listing_id = l.id;
+    d.insert("info_requests", { listing_id: l.id, question: "gia", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-dang11", text: "6 tỷ 3 đăng đi" });
+  {
+    const giaIr = db().t.info_requests.find((q) => q.question === "gia");
+    const rp = (r.body.replies ?? []).filter((x) => !x.startsWith("🤖")).join("\n");
+    check("DANG11-01 '6 tỷ 3 đăng đi' khi hỏi giá, tin chưa đủ điểm → fact giá '6 tỷ 3', câu giá ĐÃ trả lời, báo 'chỉ cần thêm …', KHÔNG hỏi lại giá",
+      db().t.listing_facts.some((f) => f.question === "gia" && f.answer === "6 tỷ 3") && giaIr?.status === "answered" &&
+        /chỉ cần thêm/.test(rp) && !/(?:rao )?giá bao nhiêu|thu về|giá mình muốn/i.test(rp),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]), f: db().t.listing_facts.map((f) => [f.question, f.answer]) }));
+  }
   fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: "z-bancong", seller_type: "ccrb", name: null, active_listing_id: null }).data;
     const l = d.insert("listings", { code: "BDS-CH-Q5-0001", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chung_cu", ward: "Phường 5", district: "Quận 5", price_raw: "4 tỷ 2", price_vnd: 4.2e9, area_m2: 80, can_chu_duyet: true }).data;
