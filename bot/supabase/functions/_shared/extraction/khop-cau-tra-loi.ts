@@ -480,7 +480,7 @@ const TIEN_OK = new Set(["gia", "doanh_thu", "phi_quan_ly", "phi_gui_xe", "gia_d
 // Câu hỏi CÓ/KHÔNG: "có", "không", "rồi", "chưa" là câu trả lời đủ (không phải ack).
 const HOI_CO_KHONG = new Set([
   "hem_thong", "ngap_nuoc", "the_chap", "thuong_luong", "can_goc", "thang_may", "pccc", "len_tho_cu", "gap",
-  "ranh_gioi", "xu_ly_nuoc_thai", "duong_container", "nguon_nuoc", "hien_trang_su_dung", "so_huu",
+  "ranh_gioi", "xu_ly_nuoc_thai", "duong_container", "nguon_nuoc", "hien_trang_su_dung", "so_huu", "tang_phu",
 ]);
 
 // Từ khoá tối thiểu cho các câu hỏi CHỮ. Không có từ nào trong đây thì coi là
@@ -500,6 +500,8 @@ const TU_KHOA: Record<string, RegExp> = {
   khu_compound: /\b(compound|biet lap|an ninh|bao ve|khu|cong|rieng|khong|ko|mo|tu do|ben ngoai|dan cu)\b/,
   // 14/09/2026: đang hỏi "gấp không", chủ nhà nhắn "à anh nói lại, là đất trống chưa xây"
   // → cả câu vào ô gấp. Câu trả lời gấp phải nói về NHỊP bán.
+  // FR-220 (24/09/2026): "nhà có tầng lửng, sân thượng hay tầng hầm không".
+  tang_phu: /\b(lung|gac|san thuong|ham|ap mai|khong|ko|k|co|chua|chi|deu|ca|het)\b/,
   gap: /\b(gap|voi|tu tu|thong tha|can tien|duoc gia|cho duoc|ban nhanh|ban som|som|lien|ngay|khong can|khong|ko|chua|co)\b(?!\s+xay)/,
 };
 
@@ -519,7 +521,7 @@ const HO_FACT: string[][] = [
   ["dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "tho_cu", "mat_tien"],
   ["do_rong_hem", "do_rong_duong", "duong_vao"],
   ["so_huu", "thoi_han_su_dung"],
-  ["hien_trang", "hien_trang_su_dung", "ket_cau"],
+  ["hien_trang", "hien_trang_su_dung", "ket_cau", "tang_phu"],
   ["noi_that", "fit_out"],
   ["tiem_nang", "muc_dich", "nganh_hang_phu_hop"],
   ["phap_ly", "the_chap"],
@@ -1526,4 +1528,50 @@ export function laRaoLai(text: string): boolean {
   if (!kd) return false;
   return /\b(?:rao|dang|mo|len|treo)\s+(?:tin\s+|can\s+\d\s+|can\s+)?lai\b/.test(kd) ||
     (/\b(?:chua ban|con ban|van con|chua chot|con nguyen|chua co ai)\b/.test(kd) && /\b(?:rao|dang|mo|len)\b/.test(kd));
+}
+
+// ── Tầng phụ — FR-220 (24/09/2026) ───────────────────────────────────────────
+// Trả lời câu "nhà có tầng lửng, sân thượng hay tầng hầm không" → chen phần CÓ vào kết cấu chữ
+// (`floors_text`): lửng sau "trệt", hầm đầu, áp mái / sân thượng cuối. Phủ định tính theo từng mảnh
+// (phẩy, "nhưng", "còn"): "không có lửng, có sân thượng" → chỉ sân thượng; "lửng thì có, hầm không" → chỉ lửng.
+// "có" trơn / "không có" / kết cấu còn trống → null (fact vẫn ghi, không đoán).
+const PHU_DINH_TP = /^(?:khong|ko|k|chua|hong|hok)$/;
+const TANG_PHU_RE = /\b(?:gac lung|lung|san thuong|tang ham|ham|ap mai)\b/g;
+export function themTangPhu(floorsText: string | null | undefined, floors: number | null | undefined, answer: string): string | null {
+  const kd = boDau(answer ?? "").replace(/[^a-z0-9,;.\s]/g, " ");
+  if (/\?/.test(answer ?? "")) return null;
+  const co = new Set<string>();
+  for (const manh of kd.split(/[,;.]|\b(?:nhung|con)\b/)) {
+    const tu = manh.trim().split(/\s+/).filter(Boolean);
+    if (!tu.length) continue;
+    const cau = tu.join(" ");
+    const cuoi = tu.filter((t) => !/^(?:a|nha|nhe|em|anh|chi|ha|luon|nua|het|co)$/.test(t));
+    const duoiPhuDinh = cuoi.length > 0 && PHU_DINH_TP.test(cuoi[cuoi.length - 1]);
+    for (const m of cau.matchAll(TANG_PHU_RE)) {
+      const truoc = cau.slice(0, m.index).trim().split(/\s+/).filter(Boolean);
+      // Phủ định đứng TRƯỚC ("không có lửng") — "có" sau phủ định vẫn là phủ định.
+      const iPd = truoc.map((t) => PHU_DINH_TP.test(t)).lastIndexOf(true);
+      const truocPd = iPd >= 0 && !truoc.some((t, i) => i > iPd + 1 && t === "co");
+      if (truocPd || duoiPhuDinh) continue;
+      co.add(m[0] === "gac lung" ? "lung" : m[0] === "tang ham" ? "ham" : m[0]);
+    }
+  }
+  if (!co.size) return null;
+  let kc = (floorsText ?? "").normalize("NFC").trim();
+  if (!kc && floors != null && floors >= 1) kc = floors === 1 ? "trệt" : `trệt + ${floors - 1} lầu`;
+  if (!kc) return null;
+  const kcKd = boDau(kc);
+  let doi = false;
+  if (co.has("lung") && !/\blung\b/.test(kcKd)) {
+    const m = /trệt/iu.exec(kc);
+    if (m) {
+      const sau = kc.slice(m.index + m[0].length).replace(/^\s*\+?\s*/, "");
+      kc = kc.slice(0, m.index + m[0].length) + " + lửng" + (sau ? ` + ${sau}` : "");
+    } else kc += " + lửng";
+    doi = true;
+  }
+  if (co.has("ham") && !/\bham\b/.test(kcKd)) { kc = `hầm + ${kc}`; doi = true; }
+  if (co.has("ap mai") && !/\bap mai\b/.test(kcKd)) { kc += " + áp mái"; doi = true; }
+  if (co.has("san thuong") && !/\bsan thuong\b/.test(kcKd)) { kc += " + sân thượng"; doi = true; }
+  return doi ? kc : null;
 }

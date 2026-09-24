@@ -3081,6 +3081,31 @@ fresh(seedKho);
     r = await send({ external_user_id: "z-ccrb", text: "có ai hỏi căn anh chưa" });
     check("GVA-12b có 1 khách quan tâm → 'đang có 1 khách quan tâm'", /1 khách quan tâm/.test(r.body.replies[0] ?? ""), JSON.stringify(r.body.replies));
   }
+  // FR-220 (24/09/2026): câu hỏi bù "có tầng lửng, sân thượng hay tầng hầm không" → phần CÓ chen vào kết cấu chữ.
+  fresh(seedKho);
+  {
+    const sC = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const tin = db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+    sC.active_listing_id = tin.id;
+    tin.floors = 3; tin.floors_text = "trệt + 2 lầu";
+    db().insert("info_requests", { listing_id: tin.id, question: "tang_phu", status: "pending" });
+    r = await send({ external_user_id: "z-ccrb", text: "có lửng với sân thượng em" });
+    const fTp = db().t.listing_facts.find((f) => f.listing_id === tin.id && f.question === "tang_phu");
+    check("TANGPHU-01 'có lửng với sân thượng' → fact tang_phu + floors_text 'trệt + lửng + 2 lầu + sân thượng'; câu không còn treo",
+      !!fTp && tin.floors_text === "trệt + lửng + 2 lầu + sân thượng" && tin.floors === 3 && !pend("tang_phu", tin.id),
+      JSON.stringify({ fTp, kc: tin.floors_text, rep: r.body.replies }));
+    const tin2 = db().t.listings.find((l) => l.code === "BDS-Q5-0002");
+    sC.active_listing_id = tin2.id;
+    tin2.floors = 4; tin2.floors_text = "trệt + 3 lầu";
+    db().insert("info_requests", { listing_id: tin2.id, question: "tang_phu", status: "pending" });
+    r = await send({ external_user_id: "z-ccrb", text: "không có em" });
+    const fTp2 = db().t.listing_facts.find((f) => f.listing_id === tin2.id && f.question === "tang_phu");
+    check("TANGPHU-02 'không có em' → ghi fact, kết cấu giữ nguyên 'trệt + 3 lầu'",
+      !!fTp2 && tin2.floors_text === "trệt + 3 lầu" && !pend("tang_phu", tin2.id),
+      JSON.stringify({ fTp2, kc: tin2.floors_text, rep: r.body.replies }));
+    check("TANGPHU-03 kết cấu đã có lửng → view không còn thiếu tang_phu",
+      !db().missingFacts().some((m) => m.listing_id === tin.id && m.fact_key === "tang_phu"), "");
+  }
   // (4) chế độ `chinh`: AI xếp "sổ hồng riêng" vào KIẾN THỨC THÊM (không trả khoá phap_ly) → luật xếp ô pháp lý, câu kế không hỏi lại pháp lý.
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
   fresh(seedKho);

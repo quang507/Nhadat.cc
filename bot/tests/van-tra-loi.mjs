@@ -9,7 +9,7 @@ import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiH
 import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
-import { chonCauKe, nhanDienNhieuCan, tachTheoCan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -650,6 +650,27 @@ for (const [cau, laTiemNang] of [
   ok("vừa nói giá → hỏi PHÁP LÝ, không nhảy sang phường", chonCauKe(["gia"], [CB("phap_ly", 16), CB("phuong", 17), CB("gap", 18)]) === "phap_ly");
   ok("vừa nói vị trí → hỏi diện tích, không nhảy sang phường", chonCauKe(["vi_tri"], [CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("phuong", 17)]) === "dien_tich_dat");
   ok("vừa nói hẻm → kết cấu còn thiếu thì hỏi kết cấu (liên quan, cùng dải vật lý)", chonCauKe(["do_rong_hem"], [CB("so_phong_ngu", 5), CB("ket_cau", 4), CB("gia", 12)]) === "ket_cau");
+}
+
+// ── 24/09/2026 FR-220: trả lời "có tầng lửng, sân thượng hay tầng hầm không" → chen vào kết cấu chữ ──
+{
+  const ca = [
+    ["trệt + 2 lầu", 3, "có lửng với sân thượng", "trệt + lửng + 2 lầu + sân thượng"],
+    ["trệt + 2 lầu", 3, "không có lửng, có sân thượng", "trệt + 2 lầu + sân thượng"],
+    ["trệt + 2 lầu", 3, "lửng thì có, hầm không", "trệt + lửng + 2 lầu"],
+    ["trệt + 2 lầu", 3, "không có lửng mà có sân thượng", "trệt + 2 lầu + sân thượng"],
+    ["1 trệt 2 lầu", 3, "có gác lửng", "1 trệt + lửng + 2 lầu"],
+    [null, 4, "có tầng hầm và sân thượng", "hầm + trệt + 3 lầu + sân thượng"],
+    ["4 tầng", 4, "có lửng", "4 tầng + lửng"],
+    ["trệt", 1, "có áp mái", "trệt + áp mái"],
+    ["trệt + 2 lầu", 3, "không có", null],
+    ["trệt + 2 lầu", 3, "có", null],
+    ["trệt + 2 lầu", 3, "có sân thượng không em?", null],
+    [null, null, "có lửng", null],
+    ["trệt + lửng + 2 lầu", 3, "có lửng", null],
+  ];
+  for (const [kc, t, dap, mong] of ca) ok(`tầng phụ "${dap}" trên "${kc ?? t + " tầng"}" → ${mong}`, themTangPhu(kc, t, dap) === mong, String(themTangPhu(kc, t, dap)));
+  for (const dap of ["có sân thượng", "không có", "sân thượng thì có", "ko"]) ok(`"${dap}" là câu trả lời KHỚP cho tang_phu`, phanLoaiCauTraLoi("tang_phu", dap).loai === "khop", phanLoaiCauTraLoi("tang_phu", dap).loai);
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

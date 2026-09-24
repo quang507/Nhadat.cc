@@ -252,7 +252,11 @@ Deno.serve(async (req) => {
       // "sent_via: none", chủ nhà không bao giờ nhận được câu hỏi bù. Nay xếp
       // vào hàng đợi `reminders` kind escalation với seller_id + ghi chú "💬 …":
       // escalation-feed kéo, bridge gửi nguyên văn (tin_nhac.ts), rồi ack.
-      if (!token) {
+      // 24/09/2026: người bán GIẢ của bộ bắn thử (`k1-ban-…`, `do-…`) không có Zalo thật — bridge không gửi được,
+      // nhắc nằm "Việc chờ admin" mãi. UID Zalo thật là dãy số; không phải số thì không xếp hàng (câu hỏi vẫn mở).
+      if (!token && !/^\d{6,}$/.test(seller.zalo_user_id)) {
+        sent_via = "none_uid_thu";
+      } else if (!token) {
         const { error: rErr } = await db.from("reminders").insert({
           kind: "escalation", seller_id: listing.seller_id, listing_id,
           due_at: new Date().toISOString(), note: `💬 ${out.message}`,
