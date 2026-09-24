@@ -68,7 +68,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boCauKhen, boMaTinKhach, boMenhDeKhenSai, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauHoiDo, boCauKhen, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { gonLoiSua, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -5178,7 +5178,7 @@ Deno.serve(async (req) => {
   // Cột dùng chung cho mọi dòng "căn" đưa vào prompt (KHO, căn khách nhắc, căn
   // tương tự, căn trong dự án): thông số FR-172 + dự án/tình trạng căn FR-116.
   const CAN_COLS =
-    `code, ward, district, deal, location_raw, price_raw, price_vnd, area_m2, bedrooms, property_type, ${SPEC_COLS}, project_id, unit_code, unit_status, last_confirmed_at, tien_ich_gan, nhan, boc_tach, projects(name)`;
+    `code, ward, district, deal, location_raw, price_raw, price_vnd, area_m2, bedrooms, property_type, ${SPEC_COLS}, project_id, unit_code, unit_status, last_confirmed_at, tien_ich_gan, nhan, boc_tach, description, projects(name)`;
   const timNghia = await timNghiaP;
   let khoQ = client
     .from("listings")
@@ -5275,7 +5275,10 @@ Deno.serve(async (req) => {
     try {
       const khoa = await secretOf(client, "GEMINI_API_KEY");
       if (!khoa) throw new Error("thiếu GEMINI_API_KEY");
-      const cauTim = [text, typeof prefs.alley === "string" ? prefs.alley : null, nhanLoc.length ? tenNhan(nhanLoc) : null]
+      // 24/09/2026: câu vừa nhắn thường cụt ("phòng cho ba mẹ riêng, có căn nào không") — ghép NHU CẦU ĐÃ LƯU (notes)
+      // để vector mang đủ ý "phòng ngủ trệt, khỏi leo cầu thang" khách nói từ lượt trước.
+      const cauTim = [text, typeof prefs.notes === "string" && prefs.notes.trim() ? prefs.notes.slice(0, 500) : null,
+        typeof prefs.alley === "string" ? prefs.alley : null, nhanLoc.length ? tenNhan(nhanLoc) : null]
         .filter(Boolean).join(". ");
       const vec = await nhungCauTim(khoa, cauTim);
       const codes = (khoTho ?? []).map((l) => (l as { code: string }).code);
@@ -5313,7 +5316,7 @@ Deno.serve(async (req) => {
     location_raw?: string | null; price_raw?: string | null; price_vnd?: number | null;
     area_m2?: number | null; bedrooms?: number | null; property_type?: string | null;
     tien_ich_gan?: Array<{ loai: string; ten: string; m: number }> | null;
-    nhan?: string[] | null; boc_tach?: Record<string, unknown> | null;
+    nhan?: string[] | null; boc_tach?: Record<string, unknown> | null; description?: string | null;
   };
   // 11/09: khoảng cách là đường chim bay từ CON ĐƯỜNG của căn (toạ độ không tới
   // số nhà) — làm tròn để model không đọc ra con số giả chính xác.
@@ -5332,8 +5335,16 @@ Deno.serve(async (req) => {
     const b = l.nhan?.length ? ` · ${tenNhan(l.nhan)}` : "";
     return a + b;
   };
+  // 24/09/2026 (chủ dự án test vai mua): dòng kho chỉ có thông số → model tự bịa "phòng trệt rộng 14m2", "trệt để ba
+  // mẹ" cho căn mà chủ nói trệt là xưởng may. Kèm LỜI CHỦ TẢ (câu rao gốc, che SĐT + số nhà, ~200 chữ) để bot nói
+  // đúng điều người bán nói; luật "không ghi thì hỏi lại chủ" nằm ở đầu khối KHO.
+  const chuTa = (l: CanRow) => {
+    const mt = locLienHe((l.description ?? "").replace(/\s+/g, " "), true);
+    if (mt.length < 20) return "";
+    return ` · chủ tả: "${mt.length > 200 ? mt.slice(0, 199).replace(/\s+\S*$/, "") + "…" : mt}"`;
+  };
   const dongKho = (l: CanRow) =>
-    `#${l.code} · ${locLienHe(l.location_raw ?? "")} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l)}${duAnNgan(l)}${ganTxt(l)}${tienIchNgan(l)}`;
+    `#${l.code} · ${locLienHe(l.location_raw ?? "")} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l)}${duAnNgan(l)}${ganTxt(l)}${tienIchNgan(l)}${chuTa(l)}`;
   const kho = ((listings ?? []) as CanRow[]).map(dongKho).join("\n");
 
   // Khối "căn khách đang nhắc" (FR-29): đủ chi tiết + facts đã xác minh + trạng
@@ -5594,7 +5605,7 @@ Deno.serve(async (req) => {
         cache_control: { type: "ephemeral", ttl: "1h" },
       }, {
         type: "text",
-        text: DONG_TEN + "\n\nKHO HIỆN CÓ:\n" +
+        text: DONG_TEN + "\n\nKHO HIỆN CÓ (mỗi căn chỉ nói điều CÓ trong dòng của nó - thông số hoặc lời 'chủ tả'; điều dòng không ghi như phòng ngủ ở tầng nào, diện tích từng phòng, công năng từng tầng thì nói 'để em hỏi lại chủ', KHÔNG tự suy theo nhu cầu khách):\n" +
           (kho || (minimumMet || mentioned.length
             ? "(trống)"
             : "(chưa lọc - chưa đủ khu vực + giá để lọc, đừng nói kho trống)")) +
@@ -5871,6 +5882,26 @@ Deno.serve(async (req) => {
     if (bo.daBo) {
       out.replies = bo.replies;
       console.log("chat-reply: bỏ câu dò mục đích (đủ tiêu chí / khách thuê)");
+    }
+  }
+  // FR-218 b (24/09/2026): đủ quận + giá, kho có căn, khách chưa từng được đưa căn nào trong kho này, mà model
+  // lượt này CHỈ hỏi dò → bỏ câu hỏi dò, đưa 2 căn đầu (đã xếp theo nghĩa) bằng chữ tiền định.
+  if (duTieuChiDeNgungDo && minimumMet && (listings ?? []).length && !(askedListings ?? []).length && !out.send_photos && !out.viewing && !out.agreed_deal) {
+    const cans: CanGoiY[] = ((listings ?? []) as CanRow[]).map((l) => {
+      const ten = (l.location_raw ? tenDuong(l.location_raw) : "") || l.ward || "";
+      const dong = [
+        [ten, l.ward].filter((x, i, a) => x && a.indexOf(x) === i).join(" "),
+        l.price_raw, l.area_m2 ? `${l.area_m2}m²` : null, l.floors_text, l.bedrooms ? `${l.bedrooms} phòng ngủ` : null,
+      ].filter(Boolean).join(" · ");
+      return { code: l.code, ten, dong };
+    });
+    const daDuaTruoc = coNhacCan(history.filter((m) => m.sender === "bot").map((m) => m.body), cans);
+    // Chỉ khi model KHÔNG nói gì ngoài câu hỏi dò — khách hỏi chuyện khác ("quận 5 có dự án gì") mà model đã trả
+    // lời thì để yên.
+    const chiHoiDo = boCauHoiDo(out.replies.filter((x) => !/^\s*(?:🤖|💾|📝|📋)/u.test(x))).length === 0;
+    if (chiHoiDo && !daDuaTruoc && !coNhacCan(out.replies, cans)) {
+      out.replies = [...boCauHoiDo(out.replies), bongBongGoiYCan(cans, goiMua ?? "mình")];
+      console.log("chat-reply: model chưa đưa căn dù đủ tiêu chí - đưa 2 căn đầu kho");
     }
   }
   const muonGoi = !!out.voice_request || VOICE_RE_KD.test(tKD);

@@ -6,7 +6,7 @@
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauGhiTienKhongCo, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { nhanDienNhieuCan, tachTheoCan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -569,6 +569,24 @@ for (const [cau, mong] of [
   ok("dòng máy 📝 (đọc từ DB) → không đụng", m3[0] === "📝 Em ghi vào tin BDS-Q5-0001: giá 9 tỷ.", JSON.stringify(m3));
   const m4 = boMaTinKhach(["Căn BDS-Q5-0001 và căn BDS-Q5-0002 đều hợp anh"], { "BDS-Q5-0001": "Trần Hưng Đạo" });
   ok("mã không có trong kho → bỏ, không để 'căn căn'", m4[0] === "Căn Trần Hưng Đạo và căn đều hợp anh", JSON.stringify(m4));
+}
+
+// ── 24/09/2026 FR-218 b: đủ quận + giá mà model chỉ hỏi dò → đưa căn ──
+{
+  const cans = [
+    { code: "BDS-NP-Q5-0005", ten: "Trần Bình Trọng", dong: "Trần Bình Trọng Phường 1 · 6 tỷ 5 · 60m² · trệt + lửng + 2 lầu · 3 phòng ngủ" },
+    { code: "BDS-NP-Q5-0003", ten: "Nguyễn Trãi", dong: "Nguyễn Trãi Phường 2 · 6 tỷ 3 · 56m²" },
+    { code: "BDS-NP-Q5-0001", ten: "Hùng Vương", dong: "Hùng Vương Phường 4 · 6 tỷ 7" },
+  ];
+  ok("coNhacCan: nhắc tên đường KHÔNG dấu vẫn tính", coNhacCan(["Dạ căn tran binh trong hợp mình nè"], cans));
+  ok("coNhacCan: nhắc mã tin", coNhacCan(["căn #BDS-NP-Q5-0003 nè"], cans));
+  ok("coNhacCan: chỉ câu hỏi dò → chưa nhắc căn", !coNhacCan(["Dạ mình có ba mẹ ở cùng hay phòng riêng vậy?"], cans));
+  ok("coNhacCan: bong bóng 🤖 báo lưu có tên đường → không tính", !coNhacCan(["🤖 Đã lưu nhu cầu: khu vực muốn tìm: Nguyễn Trãi"], cans));
+  const bb = bongBongGoiYCan(cans, "chị");
+  ok("bongBongGoiYCan: 2 căn đầu, không mã, kết bằng MỘT câu hỏi, viết hoa đầu câu hỏi",
+    /Trần Bình Trọng/.test(bb) && /Nguyễn Trãi/.test(bb) && !/Hùng Vương/.test(bb) && !/BDS-/.test(bb) && (bb.match(/\?/g) ?? []).length === 1 && /\nChị thấy căn nào/.test(bb), bb);
+  const hd = boCauHoiDo(["🤖 Đã lưu nhu cầu: mua", "Dạ mình có ba mẹ ở cùng hay phòng riêng vậy?", "Quận 5 bên em có Lakai và Dragon Riverside ạ."]);
+  ok("boCauHoiDo: bỏ câu hỏi dò ngắn, giữ báo lưu + câu có nội dung", hd.length === 2 && hd[0].startsWith("🤖") && /Lakai/.test(hd[1]), JSON.stringify(hd));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

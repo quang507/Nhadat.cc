@@ -1903,12 +1903,12 @@ fresh(seedKho);
 // ── 14/09: nhánh mua KHÔNG còn structured output (chậm gấp đôi) — đọc JSON từ chữ ──
 {
   fresh(seedKho);
-  const jsonDu = JSON.stringify({ ...OUT({ replies: ["Dạ chị cần mấy phòng ngủ ạ?"] }), profile: { ...OUT().profile, area: "quận 5", budget: "tầm 7 tỷ" }, voice_request: false });
+  const jsonDu = JSON.stringify({ ...OUT({ replies: ["Dạ chị xem thử căn Hải Thượng Lãn Ông 4 tỷ nha"] }), profile: { ...OUT().profile, area: "quận 5", budget: "tầm 7 tỷ" }, voice_request: false });
   globalThis.__model.parseChu = () => "Đây là JSON:\n" + jsonDu + "\n";
   r = await send({ external_user_id: "json-chu-1", text: "tìm nhà quận 5 tầm 7 tỷ" });
   const cMua = parseCalls().at(-1);
   check("JSONCHU-01 model trả CHỮ có JSON (kèm chữ thừa) → đọc đúng câu trả lời và hồ sơ",
-    r.body.replies.some((x) => x === "Dạ chị cần mấy phòng ngủ ạ?") && db().t.buyers.find((b) => b.zalo_user_id === "json-chu-1")?.preferences?.budget === "tầm 7 tỷ",
+    r.body.replies.some((x) => x === "Dạ chị xem thử căn Hải Thượng Lãn Ông 4 tỷ nha") && db().t.buyers.find((b) => b.zalo_user_id === "json-chu-1")?.preferences?.budget === "tầm 7 tỷ",
     JSON.stringify({ rep: r.body.replies, p: db().t.buyers.find((b) => b.zalo_user_id === "json-chu-1")?.preferences }));
   check("JSONCHU-02 lượt gọi tới Anthropic không có output_config.format, không lọt _khuon_du_phong (lớp lọc gỡ); khối nhớ tạm có ĐẦU RA + JSON Schema",
     !cMua.params.output_config?.format && /ĐẦU RA: trả về DUY NHẤT một object JSON/.test(cMua.params.system[0].text) && /"voice_request"/.test(cMua.params.system[0].text) && !("_khuon_du_phong" in cMua.params),
@@ -3464,7 +3464,7 @@ fresh(seedKho);
   globalThis.__model.parse = () => OUT({ replies: ["Dạ có căn #BDS-Q5-0001 hợp anh nè"] });
   r = await send({ external_user_id: "gvf-4", text: "anh cần mua nhà phường 4 quận 5 tầm 6 tỷ, 2 phòng ngủ" });
   check("GVF-05 tin đầu 'phường 4 quận 5 tầm 6 tỷ, 2 phòng ngủ' → KHO gửi model có căn #BDS-Q5-0001 ngay lượt đầu",
-    /KHO HIỆN CÓ:\\n#BDS-Q5-0001/.test(promptMua()), promptMua().split("KHO HIỆN CÓ")[1]?.slice(0, 200));
+    /KHO HIỆN CÓ \(.*?\):\\n#BDS-Q5-0001/.test(promptMua()), promptMua().split("KHO HIỆN CÓ")[1]?.slice(0, 200));
   // (5c) chưa đủ tiêu chí + kho chưa lọc: không hứa "lọc kho rồi báo", xin đúng thứ còn thiếu.
   fresh();
   globalThis.__model.parse = () => OUT({ replies: ["Dạ em tìm kiếm liền ạ"] });
@@ -3824,8 +3824,62 @@ fresh(seedKho);
   globalThis.__nhung = () => { daNhung = true; return Array.from({ length: 768 }, () => 0); };
   r = await send({ external_user_id: "rag-5", text: "anh cần mua nhà hẻm xe hơi quận 5 tầm 6 tỷ" });
   check("RAG-05 tim_theo_nghia tắt → không nhúng, không gọi tim_tin_theo_nghia", !daNhung && !db().log.some((x) => x.rpc === "tim_tin_theo_nghia"));
+  // (6) 24/09: câu vừa nhắn cụt → vector câu tìm ghép thêm NHU CẦU ĐÃ LƯU (notes).
+  fresh((d) => { seedHem(d); d.insert("buyers", { zalo_user_id: "rag-6", preferences: { deal: "mua", area: "Quận 5", budget: "6-7 tỷ", notes: "ba mẹ già ở cùng, cần phòng ngủ dưới trệt để khỏi leo cầu thang" } }); });
+  globalThis.__cauHinh = { test_reset_hello: "1", tim_theo_nghia: "bat" };
+  env.get = (k) => k === "GEMINI_API_KEY" ? "gem-test" : getCu(k);
+  cauNhung = null;
+  globalThis.__nhung = (t) => { cauNhung = t; return Array.from({ length: 768 }, () => 0.01); };
+  globalThis.__rpc = { tim_tin_theo_nghia: (_d, a) => ({ data: a.p_codes.map((code, i) => ({ code, do_gan: 0.8 - i / 10 })), error: null }) };
+  r = await send({ external_user_id: "rag-6", text: "phòng cho ba mẹ riêng em có căn nào ko" });
+  check("RAG-06 câu cụt 'phòng cho ba mẹ riêng…' → câu nhúng mang cả nhu cầu đã lưu 'phòng ngủ dưới trệt … leo cầu thang'",
+    /phòng cho ba mẹ riêng/.test(cauNhung ?? "") && /phòng ngủ dưới trệt/.test(cauNhung ?? "") && /leo cầu thang/.test(cauNhung ?? ""), cauNhung);
+  env.get = getCu;
   delete globalThis.__nhung;
+  globalThis.__rpc = {};
   globalThis.__cauHinh = cauHinhCu;
+}
+
+// ── 24/09/2026 FR-218 b: dòng kho kèm LỜI CHỦ TẢ + luật không tự suy; đủ quận + giá mà model chỉ hỏi dò → đưa căn ──
+{
+  const seedTa = (d) => {
+    seedKho(d);
+    const l = d.t.listings.find((x) => x.code === "BDS-Q5-0001");
+    l.description = "Bán nhà hẻm 6m số 12 Trần Hưng Đạo, trệt 2 lầu, có 1 phòng ngủ ngay tầng trệt cho ông bà lớn tuổi, liên hệ 0903 123 456";
+  };
+  const promptKho = () => (JSON.stringify(parseCalls().slice(-1).map((c) => c.params)).split("KHO HIỆN CÓ")[1] ?? "").slice(0, 2000);
+  fresh(seedTa);
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ có căn Trần Hưng Đạo hợp mình nè"] });
+  r = await send({ external_user_id: "ta-1", text: "tìm nhà phường 4 quận 5 tầm 6 tỷ" });
+  check("KHOTA-01 dòng kho có 'chủ tả: \"…phòng ngủ ngay tầng trệt…\"', SĐT và số nhà bị che; đầu khối KHO dặn không tự suy, 'để em hỏi lại chủ'",
+    /chủ tả: \\"[^"]*phòng ngủ ngay tầng trệt/.test(promptKho()) && !/0903/.test(promptKho()) && !/số 12/.test(promptKho().split("chủ tả")[1] ?? "") &&
+      /KHÔNG tự suy/.test(promptKho()) && /để em hỏi lại chủ/.test(promptKho()),
+    promptKho().slice(0, 900));
+  // (2) model chỉ hỏi dò dù đủ quận + giá → bỏ câu hỏi dò, đưa căn trong kho (không mã tin).
+  fresh(seedTa);
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ mình có ba mẹ ở cùng hay phòng cho ba mẹ riêng vậy?", "Hoặc mình ưu tiên hẻm xe hơi hay mặt tiền được không ạ?"] });
+  r = await send({ external_user_id: "ta-2", text: "tìm nhà quận 5 tầm 6 tới 7 tỷ, có phòng ngủ dưới trệt cho ba mẹ già" });
+  {
+    const rp = (r.body.replies ?? []).join("\n");
+    check("DUACAN-01 đủ quận + giá, model chỉ hỏi dò → bỏ 2 câu hỏi dò, thêm bong bóng đưa căn An Dương Vương/… (không mã #BDS), kết bằng MỘT câu hỏi",
+      /Dạ bên em đang có/.test(rp) && /An Dương Vương|Trần Hưng Đạo/.test(rp) && !/ba mẹ ở cùng hay/.test(rp) && !/hẻm xe hơi hay mặt tiền/.test(rp) && !/BDS-/.test(rp),
+      rp);
+  }
+  // (3) model đã nhắc một căn trong kho → không chen bong bóng tiền định.
+  fresh(seedTa);
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ căn An Dương Vương P8 6 tỷ hợp mình nè, mình xem thử không ạ?"] });
+  r = await send({ external_user_id: "ta-3", text: "tìm nhà quận 5 tầm 6 tới 7 tỷ" });
+  check("DUACAN-02 model đã đưa căn (nhắc tên đường trong kho) → KHÔNG thêm bong bóng 'Dạ bên em đang có'",
+    !/Dạ bên em đang có/.test((r.body.replies ?? []).join("\n")), JSON.stringify(r.body.replies));
+  // (4) căn đã đưa ở lượt trước (lịch sử bot nhắc tên đường) → lượt này model hỏi khách chê gì thì để yên.
+  fresh(seedTa);
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ căn An Dương Vương P8 6 tỷ hợp mình nè"] });
+  await send({ external_user_id: "ta-4", text: "tìm nhà quận 5 tầm 6 tới 7 tỷ" });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ mình chưa ưng căn đó ở điểm nào ạ?"] });
+  r = await send({ external_user_id: "ta-4", text: "căn đó chưa ưng lắm" });
+  check("DUACAN-03 đã đưa căn ở lượt trước → lượt sau model hỏi khách chưa ưng gì thì KHÔNG đẩy lại danh sách",
+    !/Dạ bên em đang có/.test((r.body.replies ?? []).join("\n")) && /chưa ưng/.test((r.body.replies ?? []).join("\n")), JSON.stringify(r.body.replies));
+  globalThis.__model = { parse: () => OUT() };
 }
 
 // ── 23/09/2026 FR-217: lệnh TEST "/json" — in thứ bot đã lưu cho chính người nhắn, không gọi model ──
