@@ -33,7 +33,7 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
-  aiDocThem, boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, kemLuotTao, NGUON_AI, tomTatDaLuu, vuaLuuBan, vuaLuuMua,
+  aiDocThem, BOC_DUOC, bocTachTaoTin, boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, kemLuotTao, KHONG_BOC, NGUON_AI, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
@@ -2026,29 +2026,20 @@ Deno.serve(async (req) => {
           // 21/09/2026 (chủ dự án): fact AI đọc (ai_kiem) nằm CHUNG bong bóng "🤖 Đã lưu", không tách dòng.
           factLuot = (fs ?? []) as FactBaoLai[];
         }
-        // 23/09/2026 (chủ dự án: "in các cột chính và thông tin của lượt hiện tại thôi nhưng ko được thiếu cái gì hết"):
-        // 🤖 = tóm tắt CỘT của tin + "Kèm:" mọi fact CỦA LƯỢT NÀY mà cột chưa nói (kemLuotTao đối chiếu với dòng tin).
-        const tomTat = tomTatDaLuu(dong, [], FACT_LABELS, "thay_doi");
         const hoSo = [
           sellerMoi ? `Zalo: "…${String(externalUserId).slice(-4)}"` : null,
           xungHoVuaGhi ? `cách gọi: "${xungHoVuaGhi}"` : null,
         ].filter(Boolean).join(" · ");
         const dongHoSo = hoSo ? `👤 Hồ sơ: ${hoSo}` : null;
-        // Lượt TẠO tin: cả dòng tin là thứ vừa lưu → tóm tắt cột (đọc từ DB).
+        // 24/09/2026 (chủ dự án: "đừng đưa đã lưu nữa, mà là đã bóc tách được gì trong tin nhắn đó, tin nhắn nào
+        // của khách ko bóc tách được gì thì ghi là ko bóc tách được gì"): 🤖 chỉ nói thứ bóc từ CHÍNH tin vừa nhắn,
+        // giá trị trong ngoặc kép — không in lại cả tin đang nằm trong DB (quyết định 21 + 23/09 thay bằng câu này).
+        // Lượt TẠO tin: cả dòng tin là thứ bóc từ câu rao → từng cột + fact lượt này mà cột chưa nói.
         if (ma) {
-          // Fact mà tóm tắt cột chưa nói (view, lý do bán, thổ cư…) — vẫn là thứ ĐÃ lưu.
           const kem = kemLuotTao(factLuot, FACT_LABELS, dong);
-          return { bong: [tomTat, dongHoSo, kem].filter(Boolean).join("\n") || null, cheDo };
+          return { bong: [bocTachTaoTin(dong), dongHoSo, kem].filter(Boolean).join("\n") || null, cheDo };
         }
-        // Tin khách không lưu được gì ("anh bận", "ok em") → không nhắn thêm.
-        if (!vuaLuuBan(factLuot, FACT_LABELS) && !dongHoSo) return { bong: null, cheDo };
-        // 21/09/2026 (Zalo thật, chủ dự án: "sửa lại cái Tin giờ và Đã lưu đi, còn lại Đã lưu và lưu các
-        // cái gì đầy đủ là được"): các lượt SAU cũng in y như lượt tạo tin — MỘT dòng "🤖 Đã lưu:" là toàn
-        // bộ tin đang nằm trong DB, dòng "Kèm:" cho fact lượt này mà tóm tắt cột không nói. Bỏ hẳn dòng
-        // "📦 Tin giờ" và dòng fact riêng (hai dòng nói cùng một thứ), bỏ luôn lượt đọc 20 câu bot cũ để so.
-        if (!tomTat) return { bong: dongHoSo ? `${DAU_BAO_LAI} Đã lưu: ${hoSo}` : null, cheDo };
-        const kem = kemLuotTao(factLuot, FACT_LABELS, dong);
-        return { bong: [tomTat, dongHoSo, kem].filter(Boolean).join("\n"), cheDo };
+        return { bong: [vuaLuuBan(factLuot, FACT_LABELS) ?? KHONG_BOC, dongHoSo].filter(Boolean).join("\n"), cheDo };
       } catch (e) {
         await ghiLoi(client, "chat-reply bao_lai_da_luu", e);
         return { bong: null, cheDo: "tat" };
@@ -2899,7 +2890,7 @@ Deno.serve(async (req) => {
           }
           // 💾 chung chỉ đọc MỘT tin (căn đang chăm) nên in pháp lý của căn 1 dưới tin căn 2 — bong bóng
           // tiền định ở đây đã nói rõ từng căn, tắt 💾 cho lượt này (20/09/2026).
-          return await traLoiSeller([`${DAU_BAO_LAI} Đã lưu: ${daGhi.join(" · ")}.${cauKe ? `\n${cauKe}` : ""}`], { fact_theo_can: daGhi.length, dong_cau_treo: daDong.size, bao_lai_tat: true });
+          return await traLoiSeller([`${BOC_DUOC} ${daGhi.join(" · ")}.${cauKe ? `\n${cauKe}` : ""}`], { fact_theo_can: daGhi.length, dong_cau_treo: daDong.size, bao_lai_tat: true });
         }
       }
     }
@@ -6393,6 +6384,9 @@ Deno.serve(async (req) => {
           // 💾 đã báo lưu gì → "Dạ chị, em ghi lại: mua nhà Quận 5 tầm 7 tỷ…" là ghi nhận lần hai.
           const conLai = boCauGhiNhan(replies);
           replies.splice(0, replies.length, locLienHe(bong), ...conLai);
+        } else {
+          // 24/09/2026 (chủ dự án): tin không bóc được gì cũng nói ra.
+          replies.unshift(KHONG_BOC);
         }
       }
     } catch (e) {

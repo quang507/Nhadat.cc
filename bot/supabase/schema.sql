@@ -4981,7 +4981,7 @@ begin
 
   for r in
     select l.id, l.nhung_md5 from public.listings l
-     where l.status in ('cho_thong_tin', 'dang_ban', 'dang_quan_tam')
+     where l.status in ('dang_ban', 'dang_quan_tam')
      order by l.updated_at desc nulls last
      limit 300
   loop

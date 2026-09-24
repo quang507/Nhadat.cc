@@ -71,7 +71,7 @@ export async function soanLenhJson(client: Db, zalo: string): Promise<string[]> 
         khoi.push(`BÓC TÁCH (boc_tach): ${s.length > 700 ? s.slice(0, 700) + "…" : s}`);
       }
       khoi.push(
-        `VECTOR (FR-216): ${nhung_luc ? `đã nhúng lúc ${String(nhung_luc).slice(0, 16).replace("T", " ")} UTC` : "chưa nhúng (cron 2 phút, cần tim_theo_nghia = bat)"}` +
+        `VECTOR (FR-216): ${nhung_luc ? `đã nhúng lúc ${String(nhung_luc).slice(0, 16).replace("T", " ")} UTC` : "chưa nhúng (chỉ nhúng khi tin đã lên kệ; cron 2 phút, cần tim_theo_nghia = bat)"}` +
           ` — 768 số, không giải ra chữ được; văn bản đem nhúng:\n` +
           (vbErr ? `(lỗi đọc: ${vbErr.message})` : String(vb ?? "(trống)")),
       );

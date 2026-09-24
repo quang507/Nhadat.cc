@@ -30,6 +30,11 @@ export type CheDoBaoLai = "tat" | "thay_doi" | "day_du";
  *  21/09/2026 (chủ dự án): 💾 "Vừa lưu / Đã lưu" và 🤖 "AI đọc thêm" GỘP thành MỘT bong bóng "🤖 Đã lưu";
  *  fact AI đọc (nguồn ai_kiem) nằm chung danh sách, không tách dòng. */
 export const DAU_BAO_LAI = "🤖";
+/** 24/09/2026 (chủ dự án: "cái đã lưu đừng đưa đã lưu nữa, mà là đã bóc tách được gì trong tin nhắn đó, tin nhắn nào
+ *  của khách ko bóc tách được gì thì ghi là ko bóc tách được gì … phần đã bóc tách được ghi trong dấu \" \""): bong bóng
+ *  🤖 chỉ nói thứ bóc được từ CHÍNH tin khách vừa nhắn, giá trị trong ngoặc kép; không bóc được gì cũng nói ra. */
+export const BOC_DUOC = `${DAU_BAO_LAI} Bóc tách được:`;
+export const KHONG_BOC = `${DAU_BAO_LAI} Không bóc tách được gì từ tin này.`;
 
 export const COT_BAO_LAI =
   `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, nhan, projects(name), ${SPEC_COLS}`;
@@ -177,6 +182,29 @@ export function tomTatDaLuu(
   return `${dau}\nCâu trả lời gốc: ${tho.join(" · ")}`;
 }
 
+/**
+ * Lượt TẠO tin: cả dòng tin là thứ bóc từ câu rao → in từng cột đã có, giá trị trong ngoặc kép (24/09/2026).
+ * `🤖 Bóc tách được: loại: "Nhà phố bán" · địa chỉ: "Nguyễn Trãi, Phường 2, Quận 5" · diện tích: "56m²" …`
+ */
+export function bocTachTaoTin(l: DongBaoLai | null): string | null {
+  if (!l) return null;
+  const p: Array<[string, string]> = [];
+  p.push(["loại", `${LOAI[l.property_type ?? ""] ?? "BĐS"} ${l.deal === "cho_thue" ? "cho thuê" : "bán"}`]);
+  const quanMacDinh = !l.district || (l.district === "Quận 5" && l.boc_tach?.quan_mac_dinh === true);
+  const dc = gonDiaChi(l.location_raw, l.ward, quanMacDinh ? null : l.district);
+  p.push(["địa chỉ", `${dc || "(chưa rõ)"}${quanMacDinh ? " (chưa rõ quận)" : ""}`]);
+  if (l.projects?.name) p.push(["dự án", l.projects.name]);
+  if (l.area_m2 !== null && l.area_m2 !== undefined && l.area_m2 !== "") p.push(["diện tích", `${so(l.area_m2)}m²`]);
+  const ts = thongSoNgan(l).replace(/^ · /, "");
+  if (ts) p.push(["thông số", ts]);
+  if (l.floor != null) p.push(["tầng", String(l.floor)]);
+  if (l.furnishing) p.push(["nội thất", ({ full: "đầy đủ", co_ban: "cơ bản", khong: "không (nhà trống)" } as Record<string, string>)[l.furnishing] ?? l.furnishing]);
+  if (l.bedrooms) p.push(["phòng ngủ", String(l.bedrooms)]);
+  if (l.price_raw) p.push(["giá", l.price_vnd ? donViGiaDep(l.price_raw) : `${l.price_raw} (chưa đọc ra số)`]);
+  if (l.nhan?.length) p.push(["nhãn", tenNhan(l.nhan)]);
+  return `${BOC_DUOC} ${p.map(([k, v]) => `${k}: "${v}"`).join(" · ")}`;
+}
+
 // ── 14/09/2026: báo NGAY SAU tin khách, đúng thứ TIN ĐÓ vừa lưu ────────────
 // Chủ dự án: "nhắn tin lại cho khách liền sau tin nhắn đó đã bóc tách (thật vào
 // db) gì luôn". Bản trước chỉ in TÓM TẮT CỘT của tin, gắn vào CUỐI bong bóng cuối
@@ -189,7 +217,7 @@ export function tomTatDaLuu(
  *  dòng "🤖 Đã lưu:" đầy đủ y như lượt tạo tin. Giữ hằng để `tomTatTrongCau` còn đọc được câu bot cũ trong sổ. */
 export const DAU_TIN_GIO = "📦 Tin giờ:";
 
-/** "🤖 Đã lưu: giá: "6 tỷ 5" · phường: "Phường 9"" — fact lượt này (mới nhất trước), null khi không có. */
+/** "🤖 Bóc tách được: giá: "6 tỷ 5" · phường: "Phường 9"" — fact lượt này (mới nhất trước), null khi không có. */
 export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
   const moiNhat = new Map<string, string>();
   for (const f of facts) {
@@ -204,13 +232,13 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
     const chu = CHU_DAP_AN[k]?.[v] ?? v;
     return `${ten}: "${chu.length > 120 ? chu.slice(0, 119) + "…" : chu}"`;
   });
-  return `${DAU_BAO_LAI} Đã lưu: ${ds.join(" · ")}`;
+  return `${BOC_DUOC} ${ds.join(" · ")}`;
 }
 
 /** "🤖 AI đọc thêm (đã kiểm): hướng: "Đông Nam" · pháp lý: "sổ hồng riêng"" — fact nguồn `ai_kiem` lượt này. */
 export function aiDocThem(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
   const v = vuaLuuBan(facts.filter((f) => f.source === NGUON_AI), nhan);
-  return v ? v.replace(`${DAU_BAO_LAI} Đã lưu: `, `${DAU_AI_DOC} AI đọc thêm (đã kiểm): `) : null;
+  return v ? v.replace(`${BOC_DUOC} `, `${DAU_AI_DOC} AI đọc thêm (đã kiểm): `) : null;
 }
 
 // Fact mà tóm tắt CỘT nói THAY — chỉ khi cột đó thật sự có giá trị trên dòng tin (23/09/2026, chủ dự án: "in các cột chính
@@ -246,7 +274,7 @@ export function kemLuotTao(facts: FactBaoLai[], nhan: Record<string, string>, l:
     return l ? !noiThay(l) : false;
   });
   const v = vuaLuuBan(con, nhan);
-  return v ? v.replace(`${DAU_BAO_LAI} Đã lưu: `, "Kèm: ") : null;
+  return v ? v.replace(`${BOC_DUOC} `, "Kèm: ") : null;
 }
 
 // Khoá hồ sơ người mua là việc NỘI BỘ của bot — không báo.
@@ -257,7 +285,7 @@ const MUA_NHAN_THEM: Record<string, string> = {
 };
 
 /**
- * "💾 Đã lưu nhu cầu: khu vực: Quận 5 · khoảng giá: 7 tỷ" — các khoá hồ sơ ĐỔI
+ * "🤖 Bóc tách được: khu vực muốn tìm: "Quận 5" · khoảng giá: "7 tỷ"" — các khoá hồ sơ ĐỔI
  * giữa `truoc` (đầu lượt) và `sau` (đọc lại DB sau khi gộp). Không đổi gì → null.
  */
 export function vuaLuuMua(
@@ -282,9 +310,9 @@ export function vuaLuuMua(
     const ten = nhanTruong[k] ?? MUA_NHAN_THEM[k];
     if (!ten) continue;
     const s = giaTri(k, v);
-    ds.push(`${ten}: ${s.length > 60 ? s.slice(0, 59) + "…" : s}`);
+    ds.push(`${ten}: "${s.length > 60 ? s.slice(0, 59) + "…" : s}"`);
   }
-  return ds.length ? `${DAU_BAO_LAI} Đã lưu nhu cầu: ${ds.join(" · ")}` : null;
+  return ds.length ? `${BOC_DUOC} ${ds.join(" · ")}` : null;
 }
 
 /** Tóm tắt tin (không dấu mở) nằm trong một câu bot có 💾, để so "tin có đổi không". */
