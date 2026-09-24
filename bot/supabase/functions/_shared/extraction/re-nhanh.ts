@@ -51,7 +51,9 @@ type Luat = {
 };
 
 const co = (re: RegExp) => ({ tatCa }: NgCanhLuat) => re.test(tatCa);
-const THUE_CO_SO = /\b(?:thue|thu|cho thue)\b[^.·]{0,25}\d+(?:[.,]\d+)?\s*(?:trieu|tr|ty)\b|\d+(?:[.,]\d+)?\s*(?:trieu|tr)\b\s*(?:\/|mot|moi)\s*thang/;
+// Tiền thuê ĐÃ nói: "thuê 30 triệu", "30tr/tháng". Không vượt dấu phẩy và chỉ đơn vị triệu — bắn thật 24/09 (rn-test-g):
+// "đang cho ngân hàng thuê, giá 25 tỷ" từng bị đọc thành tiền thuê 25 tỷ nên bot bỏ qua câu hỏi tiền thuê.
+const THUE_CO_SO = /\b(?:thue|cho thue|thu ve|thu)\b[^.·,;]{0,20}?\d+(?:[.,]\d+)?\s*(?:trieu|tr)\b|\d+(?:[.,]\d+)?\s*(?:trieu|tr)\b\s*(?:\/|mot|moi)\s*thang/;
 
 /** Bảng rẽ nhánh. Thứ tự không quan trọng: luật nào khớp thì cộng dồn thêm/bỏ; BỎ thắng THÊM. Nguồn: chủ dự án 24/09/2026
  *  (duyệt bảng nháp + chọn kiểu "lai": code chọn nhánh và ý chính, model hỏi từng ý còn thiếu cho tự nhiên). Danh sách ý
