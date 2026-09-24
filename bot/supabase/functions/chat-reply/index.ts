@@ -68,7 +68,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boCauHoiDo, boCauKhen, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { gonLoiSua, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -5902,6 +5902,21 @@ Deno.serve(async (req) => {
     if (chiHoiDo && !daDuaTruoc && !coNhacCan(out.replies, cans)) {
       out.replies = [...boCauHoiDo(out.replies), bongBongGoiYCan(cans, goiMua ?? "mình")];
       console.log("chat-reply: model chưa đưa căn dù đủ tiêu chí - đưa 2 căn đầu kho");
+    }
+  }
+  // FR-218 c (24/09/2026, bắn thật sau #266): "Cả 2 căn đều có phòng ngủ ở tầng trệt" cho hai căn không ghi điều
+  // đó — lời dặn trong prompt không đủ. Câu khẳng định đặc điểm mà dữ liệu căn không có → "em hỏi lại chủ".
+  {
+    const canDl: CanDuLieu[] = [...((listings ?? []) as CanRow[]), ...((askedListings ?? []) as Array<CanRow & { listing_facts?: Array<{ question: string; answer: string }> | null }>)]
+      .map((l) => ({
+        ten: (l.location_raw ? tenDuong(l.location_raw) : "") || "",
+        du_lieu: [dongKho(l), l.description ?? "", l.floors_text ?? "",
+          ...(("listing_facts" in l && Array.isArray(l.listing_facts)) ? l.listing_facts.map((f) => `${f.question}: ${f.answer}`) : [])].join(" · "),
+      }));
+    const dd = boDacDiemKhongCo(out.replies, canDl);
+    if (dd.bo.length) {
+      out.replies = dd.replies;
+      console.log("chat-reply: bỏ câu khẳng định đặc điểm căn không ghi", dd.bo.join(","));
     }
   }
   const muonGoi = !!out.voice_request || VOICE_RE_KD.test(tKD);

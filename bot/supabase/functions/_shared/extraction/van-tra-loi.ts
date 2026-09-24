@@ -182,6 +182,10 @@ export function locHoSoMua(profile: Record<string, unknown>, text: string): { pr
     // Chép gần nguyên câu khách (≥ 85% chữ nằm sẵn trong câu, và dài) hoặc là lời tả thái độ.
     if ((kn.length >= 6 && trung >= 0.85) || THAI_DO_RE.test(boDau(ra.notes))) xoa("notes");
   }
+  // 24/09/2026 (bắn thật sau #266): "tìm nhà quận 5 tầm 6 tới 7 tỷ, có phòng ngủ dưới trệt…" → model ghi
+  // alley "hẻm xe hơi" dù khách không nói chữ nào về đường vào — và từ FR-216 b alley LỌC CỨNG kho (bỏ căn hẻm
+  // xe máy). Chỉ giữ khi câu khách có nói tới đường vào.
+  if (ra.alley && !/\b(?:hem|hxh|hxm|kiet|ngo|xe hoi|o to|oto|xe tai|xe may|mat tien|mt|mat duong|mat pho|duong truoc|7 cho|4 cho)\b/.test(kd)) xoa("alley");
   return { profile: ra, bo };
 }
 
@@ -852,4 +856,49 @@ export function bongBongGoiYCan(cans: CanGoiY[], ac: string, n = 2): string {
 /** Bỏ bong bóng CHỈ là câu hỏi dò ngắn (kết thúc "?", ≤ 25 từ); bong bóng báo lưu và câu có nội dung giữ nguyên. */
 export function boCauHoiDo(replies: string[]): string[] {
   return replies.filter((r) => /^\s*(?:🤖|💾|📝|📋)/u.test(r) || !(/\?\s*$/.test(r.trim()) && r.trim().split(/\s+/).length <= 25));
+}
+
+/**
+ * FR-218 c (24/09/2026, bắn thật sau #266): dòng kho đã kèm lời chủ tả + lời dặn "không ghi thì hỏi lại chủ", model
+ * vẫn viết "Cả 2 căn đều có phòng ngủ ở tầng trệt cho ba mẹ" cho hai căn không hề ghi điều đó — khách hỏi đúng
+ * thứ đó nên model chiều theo. Lưới bằng code cho các ĐẶC ĐIỂM khách hay đòi: câu khẳng định một đặc điểm và
+ * gắn với căn (tên đường trong câu, hoặc trong cùng bong bóng) mà dữ liệu căn đó không có → thay câu bằng
+ * "…em hỏi lại chủ rồi báo". Câu hỏi và câu phủ định ("không có thang máy") giữ nguyên.
+ */
+export type CanDuLieu = { ten: string; du_lieu: string };
+const DAC_DIEM: Array<{ ten: string; re: RegExp }> = [
+  { ten: "phòng ngủ ở tầng trệt", re: /\bphong ngu (?:o |tai |duoi |ngay )?(?:tang )?tret\b|\btret (?:co |la |lam )?(?:\d |mot )?phong ngu\b|\bphong (?:ngu )?(?:cho |de )?(?:ba me|ong ba|nguoi gia)[^.?!]{0,20}\btret\b/ },
+  { ten: "thang máy", re: /\bthang may\b/ },
+  { ten: "sân thượng", re: /\bsan thuong\b/ },
+  { ten: "sân vườn / sân sau", re: /\bsan (?:vuon|sau|truoc|rong)\b|\bdat trong\b/ },
+  { ten: "chỗ đậu ô tô trong nhà", re: /\b(?:gara|garage|ga ra)\b|\b(?:de|dau|cat) (?:xe hoi|o to|oto) (?:trong|vao) nha\b|\b(?:xe hoi|o to|oto) vao (?:tan |trong )?nha\b/ },
+  { ten: "tầng hầm", re: /\btang ham\b|\bham de xe\b/ },
+];
+const PHU_DINH_DD = /\b(?:khong|ko|chua|chang|khong he)\s+(?:co\s+)?/;
+export function boDacDiemKhongCo(replies: string[], cans: CanDuLieu[]): { replies: string[]; bo: string[] } {
+  const bo: string[] = [];
+  if (!cans.length) return { replies, bo };
+  const duLieu = cans.map((c) => ({ ten: boDau(c.ten), dl: boDau(c.du_lieu) })).filter((c) => c.ten.length >= 4);
+  const ra = replies.map((r) => {
+    if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) return r;
+    const canBong = duLieu.filter((c) => boDau(r).includes(c.ten));
+    const cau = r.split(/(?<=[.!?\n])/);
+    let doi = false;
+    const moi = cau.map((c) => {
+      const kd = boDau(c);
+      if (/\?\s*$/.test(c.trim())) return c;
+      const dd = DAC_DIEM.find((d) => d.re.test(kd));
+      if (!dd) return c;
+      const truoc = kd.slice(0, kd.search(dd.re));
+      if (PHU_DINH_DD.test(truoc.slice(-25))) return c;
+      const canCau = duLieu.filter((x) => kd.includes(x.ten));
+      const ds = canCau.length ? canCau : canBong;
+      if (!ds.length || ds.every((x) => dd.re.test(x.dl))) return c;
+      doi = true;
+      bo.push(dd.ten);
+      return (c.match(/^\s*/)?.[0] ?? "") + `Còn ${dd.ten} thì em hỏi lại chủ từng căn rồi báo mình nha.` + (c.match(/\s*$/)?.[0] ?? "");
+    });
+    return doi ? moi.join("").replace(/(Còn [^.]+ thì em hỏi lại chủ từng căn rồi báo mình nha\.\s*){2,}/g, "$1").replace(/[ \t]{2,}/g, " ").trim() : r;
+  });
+  return { replies: ra, bo };
 }
