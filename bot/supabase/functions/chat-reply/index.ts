@@ -73,6 +73,8 @@ import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { ghepMotChieu, gonLoiSua, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
+// Câu hỏi mà câu trả lời LÀ một số tiền nhưng không phải giá bán (FR-223): số tiền kèm theo không được ghi thành `gia`.
+const CAU_HOI_TIEN = new Set(["doanh_thu", "tien_coc", "phi_quan_ly", "phi_gui_xe", "gia_dien_nuoc"]);
 const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban"]);
 // 21/09/2026 (Zalo thật): ở chế độ `chinh`, câu VỊ TRÍ / PHƯỜNG vẫn để AI đọc trước — AI có tên đường /
 // số phường sạch thì lấy; AI trống thì luật đỡ như cũ (không hạ "khớp" thành "lệch" như các khoá khác).
@@ -3864,7 +3866,10 @@ Deno.serve(async (req) => {
       // Luật đọc CHẮC cho đúng câu đang hỏi (kết cấu dạng chắc, "shr") thì AI im không gạt được — cho mọi khoá có luật chắc.
       const luatChacCauTreo = (q: string, s: string) =>
         nhanDienNhieuFact(s).some((f) => f.question === q && (ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f))) ||
-        (q === "phap_ly" && phapLyChuaSo({ question: q, answer: s }));
+        (q === "phap_ly" && phapLyChuaSo({ question: q, answer: s })) ||
+        // FR-223 (bắn thật 24/09, rn-test-h): hỏi tiền thuê, khách đáp "150 triệu một tháng" — AI xếp vào gia hoặc im → câu rơi
+        // bổ sung. Số tiền đơn vị triệu trả lời câu tiền thuê là chắc.
+        (q === "doanh_thu" && /\d+(?:[.,]\d+)?\s*(?:trieu|tr)\b/.test(boDau(s)));
       let aiChinh: (AiChinh & { kienThuc: string[] }) | null = null;
       const cheDoAiTreo = bongAi && cheDoBocAi ? await cheDoBocAi : "tat";
       // Câu có đường riêng (`CAU_KHONG_LAY_AI`: phường, vị trí, ảnh…): AI không quyết GIÁ TRỊ câu treo,
@@ -4258,6 +4263,9 @@ Deno.serve(async (req) => {
         for (const f of factKem(dapAn)) {
           // Cùng họ vẫn ghi ("phường Tân Hưng" trả lời địa chỉ thì phường cũng có), chỉ bỏ trùng khoá.
           if (!boQuaCauTreo && f.question === pendingReq.question) continue;
+          // FR-223 (bắn thật 24/09, rn-test-h): đang hỏi TIỀN THUÊ / cọc / phí, số tiền trong câu là câu trả lời cho câu đó —
+          // KHÔNG ghi kèm thành GIÁ BÁN ("150 triệu một tháng" từng đè giá 25 tỷ thành 150 triệu).
+          if (f.question === "gia" && pendingReq.question !== "gia" && CAU_HOI_TIEN.has(pendingReq.question)) continue;
           const { error: ndErr } = await client.rpc("ghi_fact_listing", {
             p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer,
             p_source: aiChinh?.ghi.some((g) => g === f) ? NGUON_AI : "seller_chat",

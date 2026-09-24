@@ -675,7 +675,10 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
       // gấp" khi đang hỏi hẻm) → là câu trả lời KHỚP, các ý còn lại ghi kèm ở tầng trên.
       const nhieuY = nhanDienNhieuFact(text);
       const coCauDangHoi = nd && nd.question !== question && nhieuY.some((f) => cungHo(f.question, question));
-      if (nd && !coCauDangHoi && nd.question !== "bo_sung" && !cungHo(nd.question, question) &&
+      // FR-223 (bắn thật 24/09, rn-test-h): đang hỏi TIỀN THUÊ / cọc / phí mà khách trả lời một số tiền ("150 triệu một
+      // tháng em") → luật đọc thành GIÁ BÁN và xếp lệch (AI tắt thì ghi đè giá bán thành 150 triệu). Hỏi tiền mà đáp tiền là khớp.
+      const tienChoCauTien = nd?.question === "gia" && question !== "gia" && TIEN_OK.has(question);
+      if (nd && !coCauDangHoi && !tienChoCauTien && nd.question !== "bo_sung" && !cungHo(nd.question, question) &&
           !(HOI_CO_KHONG.has(question) && /^\s*(co|khong|ko|k|chua|roi|da)\b/.test(kd0))) {
         const xh = batXungHo(text);
         return { loai: "lech", chuyenSang: nd, ...(xh ? { xungHo: xh } : {}) };

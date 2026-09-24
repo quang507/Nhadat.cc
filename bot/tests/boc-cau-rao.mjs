@@ -130,5 +130,12 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   ok("'căn hộ tầng 12' vẫn là tang", nhanDienFact("căn hộ tầng 12 em")?.question === "tang");
 }
 
+{
+  // FR-223 (bắn thật 24/09, rn-test-h): hỏi TIỀN THUÊ mà đáp một số tiền → khớp, KHÔNG lệch sang giá bán.
+  ok("hỏi doanh_thu, đáp '150 triệu một tháng em' → khớp (không chuyển sang gia)", phanLoaiCauTraLoi("doanh_thu", "150 triệu một tháng em").loai === "khop", JSON.stringify(phanLoaiCauTraLoi("doanh_thu", "150 triệu một tháng em")));
+  ok("hỏi tien_coc, đáp '2 tháng tiền nhà, tầm 30 triệu' → không lệch sang gia", phanLoaiCauTraLoi("tien_coc", "30 triệu em").chuyenSang?.question !== "gia", JSON.stringify(phanLoaiCauTraLoi("tien_coc", "30 triệu em")));
+  ok("hỏi GIÁ vẫn nhận tiền như cũ", phanLoaiCauTraLoi("gia", "25 tỷ em").loai === "khop");
+}
+
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
