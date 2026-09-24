@@ -288,8 +288,6 @@ export function soanTinNhap(t: ThamSoNhap): string {
   // Tiềm năng CHỈ khi chủ nhà nói (không bịa thay họ).
   them("💡", "Phù hợp", [fact("tiem_nang") ?? fact("muc_dich") ?? fact("nganh_hang_phu_hop")]);
   if (soAnh) dong.push(`📷 ${soAnh} ảnh`);
-  // FR-178: không đọc mã tin cho khách — mã chỉ ở web, CTV, admin.
-  dong.push(cauTD("nhap_goi_hanh_dong"));
   // Điểm đầy đủ đi CUỐI, chung một dòng với lời gợi ý — để trên câu mở thì tin
   // rao mở đầu bằng một con số nội bộ, không giống tin rao.
   // Gamification (chủ dự án 12/09: "để kích thích người ta đưa nhiều thông tin
@@ -303,5 +301,9 @@ export function soanTinNhap(t: ThamSoNhap): string {
       : cauTD("nhap_goi_y", { diem, thieu: thieu.slice(0, 2).join(" và ") }),
   );
   if (!daDang) dong.push(lai ? cauTD("nhap_sua_xong") : cauTD("nhap_hoi_duyet"));
-  return dong.join("\n");
+  // FR-178: không đọc mã tin cho khách — mã chỉ ở web, CTV, admin.
+  // 24/09/2026 (chủ dự án): lời hứa báo lại người rao đứng SAU CÙNG. Tin đã lên kệ (daDang) thì câu
+  // `dang_luon_cuoi` nói đúng ý đó ngay sau — không lặp.
+  if (!daDang) dong.push(cauTD("nhap_goi_hanh_dong"));
+  return dong.filter(Boolean).join("\n");
 }

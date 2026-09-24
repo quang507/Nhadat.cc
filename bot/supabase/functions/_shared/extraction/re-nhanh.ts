@@ -112,7 +112,9 @@ export const RE_NHANH: Luat[] = [
       { fact_key: "han_hop_dong_thue", priority: 16.4, nhom: "co_ban", daBiet: co(CO_HAN_HD) },
       { fact_key: "doanh_thu", priority: 16.5, nhom: "co_ban", daBiet: (x) => Number(x.c.rent_income_vnd ?? 0) > 0 || THUE_CO_SO.test(x.tatCa) },
     ],
-    bo: ["hien_trang", "noi_that", "hoan_cong"],
+    // 24/09/2026 (chủ dự án: "đã bảo nhà cho thuê 400tr tháng rồi còn [đòi] thêm tiềm năng sử dụng"): đang cho
+    // thuê / kinh doanh LÀ tiềm năng sử dụng, không hỏi lại.
+    bo: ["hien_trang", "noi_that", "hoan_cong", "tiem_nang"],
   },
   {
     id: "nha_nat",

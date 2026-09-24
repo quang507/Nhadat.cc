@@ -2267,7 +2267,7 @@ Deno.serve(async (req) => {
     const CachGoi = goiNguoi ? goiNguoi.charAt(0).toUpperCase() + goiNguoi.slice(1) : lonTuoiChuaRo ? "Mình" : "Anh/chị";
     // Điền ô cho câu tiền định (FR-138 b). Ô thiếu dữ liệu → câu rỗng, tầng gọi bỏ.
     const cauTD = (khoa: string, o: Record<string, string | number | null | undefined> = {}) =>
-      dienCau(CAU_TD[khoa] ?? "", { ac: cachGoi, Ac: CachGoi, web: "AI Ơi Nhà Đất", ...o });
+      dienCau(CAU_TD[khoa] ?? "", { ac: cachGoi, Ac: CachGoi, web: "AI Ơi Nhà Đất", ten: tenBot, ...o });
     const [{ data: lichSuS }, { data: tinCuaNguoi }] = await Promise.all([
       client.from("messages").select("sender, body, seq")
         .eq("conversation_id", convSId).order("seq", { ascending: false }).limit(9),

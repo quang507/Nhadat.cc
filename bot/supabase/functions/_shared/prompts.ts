@@ -456,7 +456,7 @@ export const CAU_HOI_MAU_TEXT = JSON.stringify(CAU_HOI_MAU, null, 2);
  *
  * Ô điền: {ac} = cách gọi khách (anh/chị hoặc tên), {Ac} = viết hoa đầu câu,
  * {diem} = điểm đầy đủ, {thieu} = hai thứ còn thiếu, {ds} = danh sách vừa bóc,
- * {web} = tên web. Ô nào không có dữ liệu thì cả câu chứa nó được bỏ.
+ * {web} = tên web, {ten} = tên trợ lý của khách (FR-181). Ô nào không có dữ liệu thì cả câu chứa nó được bỏ.
  */
 export const CAU_TIEN_DINH: Record<string, string> = {
   // 23/09/2026 (chủ dự án, ảnh Zalo): bỏ câu "Sai chỗ nào … nhắn lại giúp em nha" — thừa, lượt nào cũng lặp.
@@ -468,7 +468,9 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   nhap_diem: "Độ đầy đủ {diem}/100.",
   nhap_hoi_duyet: "{Ac} xem ổn chưa ạ? Ổn thì em đăng liền và rao tích cực cho mình.",
   nhap_sua_xong: "Em sửa lại rồi, {ac} xem vậy được chưa ạ?",
-  nhap_goi_hanh_dong: "👉 Khách quan tâm nhắn Zalo cho em để hẹn xem nhà",
+  // 24/09/2026 (chủ dự án): bỏ "Khách quan tâm nhắn Zalo cho em để hẹn xem nhà" — đổi thành lời hứa với NGƯỜI RAO,
+  // có tên trợ lý ({ten}) và cách gọi người rao, đứng CUỐI tin bản nháp.
+  nhap_goi_hanh_dong: "👉 Có khách quan tâm là {ten} báo lại {ac} liền ạ.",
   // 24/09/2026 (chủ dự án: "nếu khách nói kiểu đăng đi thì ko hỏi nữa đưa tin luôn"): tin lên kệ ngay, không hỏi duyệt.
   nhap_da_dang: "📋 Tin nhà mình lên kệ {web} rồi nha {ac}:",
   dang_luon_cuoi: "Có khách quan tâm là em báo {ac} liền ạ.",
@@ -500,7 +502,7 @@ export function docCauTienDinh(json: string | null | undefined): { bang: Record<
 /** Điền ô cho một câu tiền định. Ô thiếu dữ liệu → trả chuỗi rỗng để tầng gọi bỏ câu. */
 export function dienCau(mau: string, o: Record<string, string | number | null | undefined>): string {
   let thieuO = false;
-  const ra = mau.replace(/\{(ac|Ac|diem|thieu|ds|web)\}/g, (_, k: string) => {
+  const ra = mau.replace(/\{(ac|Ac|diem|thieu|ds|web|ten)\}/g, (_, k: string) => {
     const v = o[k];
     if (v == null || v === "") { thieuO = true; return ""; }
     const s = String(v);

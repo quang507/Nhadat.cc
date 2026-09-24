@@ -936,7 +936,8 @@ fresh(seedKho);
   const nhap = r.body.replies.join("\n");
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
     r.body.ban_nhap === true && r.body.diem >= 70 && /Em đăng tin như vầy/.test(nhap) && /5 tỷ 8/.test(nhap) &&
-      /nhắn Zalo cho em/.test(nhap) && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em đăng tin như vầy/.test(prompt(c))) &&
+      // 24/09/2026 (chủ dự án): câu cuối bản nháp = "👉 Có khách quan tâm là <tên trợ lý> báo lại <cách gọi> liền ạ.", đứng SAU CÙNG.
+      !/nhắn Zalo cho em/.test(nhap) && /\n👉 Có khách quan tâm là \S*•ai báo lại .+ liền ạ\.$/.test(r.body.replies.find((x) => /Em đăng tin như vầy/.test(x)) ?? "") && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em đăng tin như vầy/.test(prompt(c))) &&
       pend("duyet_tin") && H.status === "cho_thong_tin",
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "à giá 6 tỷ nha" });

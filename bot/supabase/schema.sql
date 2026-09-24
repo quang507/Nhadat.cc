@@ -2715,6 +2715,7 @@ declare
   thieu    text[] := '{}';
   mo_ta    text := public.bo_dau(coalesce(l.description, ''));
   la_dat   boolean := l.property_type in ('dat', 'dat_nong_nghiep', 'dat_kinh_doanh');
+  tn_biet  boolean;
 begin
   if l.id is null then return null; end if;
   select coalesce(jsonb_object_agg(x.question, x.answer), '{}'::jsonb) into f
@@ -2779,7 +2780,13 @@ begin
 
   if l.price_vnd is not null then d_gia := 10; else thieu := array_append(thieu, 'giá'); end if;
 
-  if f ? 'tiem_nang' or f ? 'muc_dich' or f ? 'nganh_hang_phu_hop' then d_tn := 10;
+  -- 20260924g: nhà ĐANG cho thuê / kinh doanh thì tiềm năng sử dụng đã rõ — không đòi chủ nói thêm.
+  tn_biet := l.rent_income_vnd is not null or (f ? 'doanh_thu') or (f ? 'han_hop_dong_thue')
+             or exists (select 1 from public.listing_facts x
+                         where x.listing_id = l.id
+                           and public.bo_dau(coalesce(x.answer, '')) ~ '(dang cho thue|dang thue|dang kinh doanh|de kinh doanh|hop dong thue|khach thue|cho [a-z0-9 ]{1,30} thue)')
+             or mo_ta ~ '(dang cho thue|dang thue|dang kinh doanh|hop dong thue|khach thue)';
+  if f ? 'tiem_nang' or f ? 'muc_dich' or f ? 'nganh_hang_phu_hop' or tn_biet then d_tn := 10;
   elsif coalesce(l.floors, 0) >= 3 or coalesce(l.bedrooms, 0) >= 3
      or l.access_type = 'mat_tien' or coalesce(l.alley_width_m, 0) >= 4
      or l.property_type in ('chung_cu', 'mat_bang', 'phong_tro', 'biet_thu', 'toa_nha', 'kho_xuong', 'dat_kinh_doanh') or (f ? 'san_vuon')
