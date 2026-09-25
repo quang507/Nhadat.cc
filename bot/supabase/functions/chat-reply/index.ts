@@ -4009,13 +4009,17 @@ Deno.serve(async (req) => {
       // 22/09/2026 (kịch bản D): "nở hậu 4m5", "đang thế chấp", "cho thuê 30 triệu/tháng" — AI không trả khoá, cũng
       // không xếp vào kiến thức thêm → rơi. Khoá có BẰNG CHỨNG rõ trong chữ khách (số đo / cụm chữ đặc thù) mà AI
       // im thì luật ghi; AI có trả khoá đó thì AI vẫn thắng.
+      // 25/09/2026 (bắn thật lx-22): "hxh, 5x12, trệt 3 lầu" khi hỏi hẻm — AI im về diện tích, luật đọc "5x12" chắc chắn mà bị
+      // gạt (khoá AI biết) → bot hỏi lại diện tích. Kích thước dạng "AxB" không mơ hồ → luật nói thay khi AI im.
+      const kichThuocChac = (f: { question: string; answer: string }) =>
+        (f.question === "dien_tich" || f.question === "dien_tich_dat") && /^\s*\d+(?:[.,]\d+)?\s*m?\s*x\s*\d+(?:[.,]\d+)?\s*m?\s*$/i.test(f.answer);
       const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "thang_may", "dien_tich_san", "do_rong_hem"]);
       const factKem = (s: string): Array<{ question: string; answer: string }> => aiChinh
         ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => f.question !== "bo_sung" && (
             !KHOA_FACT_AI_BIET.has(f.question) ||
             (!aiChinh!.ghi.some((g) => g.question === f.question) &&
               (aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)) ||
-                KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f)))))
+                KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f) || kichThuocChac(f)))))
             .map((f) => phapLyChac(f) ? { question: "phap_ly", answer: "sổ hồng riêng" } : f)]
         : nhanDienNhieuFact(s);
       // 15/09/2026 (Zalo thật): vừa trả lời vừa HỎI NGƯỢC → ghi PHẦN trả lời, câu hỏi

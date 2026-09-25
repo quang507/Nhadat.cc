@@ -2196,6 +2196,8 @@ fresh(seedKho);
     const fT = (q) => db().t.listing_facts.filter((f) => f.listing_id === LT.id && f.question === q);
     const irT = (st) => db().t.info_requests.some((x) => x.listing_id === LT.id && x.question === ca.q && x.status === st);
     const lech = db().t.listing_facts.filter((f) => f.listing_id === LT.id && ["hien_trang_su_dung", "ket_cau", "nam_xay"].includes(f.question) && f.question !== ca.q && f.answer === ca.cau);
+    // Bắn thật lx-22: AI im về diện tích, "5x12" (kích thước chắc) vẫn phải ghi — trước đó bot hỏi lại diện tích.
+    if (ca.ma === "TRALOI-05") check("TRALOI-05b AI im về diện tích, '5x12' trong câu vẫn ghi ô diện tích", db().t.listing_facts.some((f) => f.listing_id === LT.id && f.question === "dien_tich" && /5\s*x\s*12/.test(f.answer)), JSON.stringify(db().t.listing_facts.filter((f) => f.listing_id === LT.id).map((f) => [f.question, f.answer])));
     check(`${ca.ma} hỏi ${ca.q}, khách '${ca.cau}' → ${ca.ghi ? `ghi '${ca.ghi}', câu xong` : "KHÔNG ghi, câu vẫn treo"}; không chuyển nguyên câu sang ô khác`,
       (ca.ghi ? fT(ca.q).length === 1 && fT(ca.q)[0].answer === ca.ghi && irT("answered") && !irT("pending") : fT(ca.q).length === 0 && irT("pending")) && !lech.length,
       JSON.stringify({ f: fT(ca.q), lech, ir: db().t.info_requests.filter((x) => x.listing_id === LT.id).map((x) => [x.question, x.status]), rep: rT.body.replies }));
