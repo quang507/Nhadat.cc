@@ -766,5 +766,11 @@ for (const [cau, laTiemNang] of [
   ok("DD-05 bong bóng 📝 → không đụng", boHuaDaDang(["📝 Đã đăng: 105 Trần Bình Trọng"])[0] === "📝 Đã đăng: 105 Trần Bình Trọng");
 }
 
+// 25/09/2026 (bắn thật lx-13): 🤖 "thông số: … lửng … sân thượng" rồi "nhãn: sân thượng · có gác lửng" — không in lặp.
+{
+  const b = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "105/12 Trần Bình Trọng", ward: "Phường Chợ Quán", district: "Quận 5", floors_text: "trệt + lửng + 2 lầu + sân thượng", frontage_m: 4, length_m: 15, nhan: ["san_thuong", "gac_lung", "yen_tinh"] });
+  ok("NL-01 bocTachTaoTin: nhãn bỏ 'sân thượng' / 'có gác lửng' (thông số đã có), giữ 'yên tĩnh'", /nhãn: "yên tĩnh"/.test(b) && !/nhãn: "[^"]*(?:sân thượng|lửng)/.test(b), b);
+}
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

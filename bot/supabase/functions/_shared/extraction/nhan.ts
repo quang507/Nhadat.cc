@@ -90,6 +90,16 @@ export function ganNhan(text: string | null | undefined): string[] {
   return ra;
 }
 
+/**
+ * Như `tenNhan` nhưng BỎ nhãn mà chữ đã in ở phần trên của cùng bong bóng / bản nháp khớp rồi (25/09/2026, bắn thật
+ * lx-13: thông số "trệt + lửng + 2 lầu + sân thượng" rồi dòng nhãn lại "sân thượng · có gác lửng"). Nhãn vẫn nằm
+ * nguyên trong `listings.nhan` để lọc — chỉ không in lặp.
+ */
+export function tenNhanKhongTrung(nhan: readonly string[] | null | undefined, daIn: string): string {
+  const kd = boDau(daIn ?? "");
+  return tenNhan((nhan ?? []).filter((k) => !TU_DIEN_NHAN[k]?.khop.test(kd)));
+}
+
 /** Tên đọc được của một danh sách nhãn: ["yen_tinh","gan_cho"] → "yên tĩnh · gần chợ". */
 export function tenNhan(nhan: readonly string[] | null | undefined): string {
   return (nhan ?? []).map((k) => TU_DIEN_NHAN[k]?.ten ?? k.replace(/_/g, " ")).join(" · ");

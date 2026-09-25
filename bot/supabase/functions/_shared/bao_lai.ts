@@ -22,7 +22,7 @@
 
 import { donViGiaDep } from "./extraction/luat-tien.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
-import { tenNhan } from "./extraction/nhan.ts";
+import { tenNhanKhongTrung } from "./extraction/nhan.ts";
 
 export type CheDoBaoLai = "tat" | "thay_doi" | "day_du";
 
@@ -161,7 +161,9 @@ export function tomTatDaLuu(
   if (l.price_raw) p.push(l.price_vnd ? `giá ${donViGiaDep(l.price_raw)}` : `giá "${l.price_raw}" (chưa đọc ra số)`);
   // 23/09/2026 (bắn thật FR-215): fact "nhan" chỉ giữ nhãn THÊM ở một lượt — lượt 2 thêm "đã hoàn công" thì 🤖 mất
   // "view công viên" của lượt 1. In cột `listings.nhan` (đủ mọi nhãn) thay cho fact đó.
-  if (l.nhan?.length) p.push(`nhãn: ${tenNhan(l.nhan)}`);
+  // 25/09/2026: nhãn mà thông số phía trước đã nói ("sân thượng", "lửng") không in lặp.
+  const nhanIn = l.nhan?.length ? tenNhanKhongTrung(l.nhan, p.join(" ")) : "";
+  if (nhanIn) p.push(`nhãn: ${nhanIn}`);
 
   if (cheDo === "thay_doi") return `${DAU_BAO_LAI} Đã lưu: ${p.join(" · ")}`;
 
@@ -201,7 +203,9 @@ export function bocTachTaoTin(l: DongBaoLai | null): string | null {
   if (l.furnishing) p.push(["nội thất", ({ full: "đầy đủ", co_ban: "cơ bản", khong: "không (nhà trống)" } as Record<string, string>)[l.furnishing] ?? l.furnishing]);
   if (l.bedrooms) p.push(["phòng ngủ", String(l.bedrooms)]);
   if (l.price_raw) p.push(["giá", l.price_vnd ? donViGiaDep(l.price_raw) : `${l.price_raw} (chưa đọc ra số)`]);
-  if (l.nhan?.length) p.push(["nhãn", tenNhan(l.nhan)]);
+  // 25/09/2026 (bắn thật lx-13): "thông số: … lửng … sân thượng" rồi "nhãn: sân thượng · có gác lửng" — không in lặp.
+  const nhanIn = l.nhan?.length ? tenNhanKhongTrung(l.nhan, p.map(([, v]) => v).join(" ")) : "";
+  if (nhanIn) p.push(["nhãn", nhanIn]);
   return `${BOC_DUOC} ${p.map(([k, v]) => `${k}: "${v}"`).join(" · ")}`;
 }
 

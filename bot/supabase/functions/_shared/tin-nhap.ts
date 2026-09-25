@@ -20,7 +20,7 @@
 // THẬT mà không phải deploy; (b) kiểm bằng bun trong `bot/tests/tin-nhap-rao.mjs`.
 
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
-import { tenNhan } from "./extraction/nhan.ts";
+import { tenNhan, tenNhanKhongTrung } from "./extraction/nhan.ts";
 import { vndThanhChu } from "./extraction/luat-tien.ts";
 import { laBoSungTrung } from "./extraction/khop-cau-tra-loi.ts";
 
@@ -305,7 +305,8 @@ export function soanTinNhap(t: ThamSoNhap): string {
   }
   them("🏫", "Tiện ích gần", [fact("tien_ich_gan")]);
   // FR-211: nhãn tìm kiếm — khách mua lọc được ("yên tĩnh", "gần chợ"…).
-  them("🏷", "Nhãn", [l.nhan?.length ? tenNhan(l.nhan) : null]);
+  // 25/09/2026: nhãn mà các dòng trên đã nói ("sân thượng" trong kết cấu) không in lặp.
+  them("🏷", "Nhãn", [l.nhan?.length ? tenNhanKhongTrung(l.nhan, dong.join("\n")) || null : null]);
   // Tiềm năng CHỈ khi chủ nhà nói (không bịa thay họ).
   them("💡", "Phù hợp", [fact("tiem_nang") ?? fact("muc_dich") ?? fact("nganh_hang_phu_hop")]);
   if (soAnh) dong.push(`📷 ${soAnh} ảnh`);
