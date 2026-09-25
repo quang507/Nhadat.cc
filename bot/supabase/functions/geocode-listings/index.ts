@@ -89,12 +89,11 @@ Deno.serve(async (req) => {
     calls++;
     let point: [number, number] | null = null;
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=vn${hop}&q=${encodeURIComponent(q)}`,
-        { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(Math.min(20_000, Math.max(1_000, CHAN_THOI_GIAN_MS - (Date.now() - t0)))) },
-      );
-      const js = await res.json();
-      const r = js?.[0];
+      // 25/09/2026 (FR-227): gọi thẳng từ edge thì Nominatim trả trang "Access denied" (chặn dải IP Supabase Edge) —
+      // sổ lỗi 24–25/09 toàn "Unexpected token 'A'". Nay nhờ DB gọi qua RPC `tra_nominatim` (20260925f), cùng URL và UA.
+      const { data: js, error } = await db.rpc("tra_nominatim", { p_q: q, p_viewbox: vung ? viewboxQuan(vung) : null });
+      if (error) throw new Error(error.message);
+      const r = Array.isArray(js) ? js[0] : null;
       // Khớp cả thành phố/tỉnh (câu tra quá rộng) = không có điểm: ghim vào
       // tâm TP.HCM rồi đo "cách bệnh viện 1 km" là sai cả chục km.
       if (r && !/^(city|state|province|country|municipality|region)$/.test(String(r.addresstype ?? r.type ?? ""))) {

@@ -292,8 +292,16 @@ export function boCauGhiNhan(replies: string[]): string[] {
     const cau = tachCau(r);
     // 22/09/2026 (bộ đo giọng B04, chủ dự án chốt): "Dạ em sửa lại giá 7 tỷ 5 rồi ạ" là lời XÁC NHẬN
     // sau câu "à nhầm" của chủ nhà — giữ, dù 🤖 đã in giá mới. Chỉ bỏ lời "ghi/cập nhật" thường.
-    const giu = cau.filter((c) => !laCauGhiNhanMot(c) || laCauSuaLai(c));
-    if (giu.length === cau.length) { ra.push(r); continue; }
+    // 25/09/2026 (e2e GOP-01 khi bỏ câu cố định số nhà): "Dạ em ghi địa chỉ rồi ạ, nhà mình thuộc phường nào vậy?" là MỘT
+    // câu — bỏ nguyên câu là mất luôn câu hỏi, khách chỉ còn thấy 🤖. Câu ghi nhận có "?" thì giữ vế cuối (sau dấu phẩy).
+    const giu = cau.flatMap((c) => {
+      if (!laCauGhiNhanMot(c) || laCauSuaLai(c)) return [c];
+      const vi = c.lastIndexOf(", ");
+      if (!/\?\s*$/.test(c) || vi < 0) return [];
+      const hoi = c.slice(vi + 2).trim();
+      return hoi.length >= 4 ? [hoi.charAt(0).toLocaleUpperCase("vi") + hoi.slice(1)] : [];
+    });
+    if (giu.length === cau.length && giu.every((c, i) => c === cau[i])) { ra.push(r); continue; }
     if (!giu.length) continue;
     let dau = giu[0];
     if (giu[0] !== cau[0] && /^dạ\s/iu.test(cau[0]) && !/^dạ\s/iu.test(dau)) {
@@ -617,11 +625,12 @@ export function boKhenKhongCanCu(replies: string[], bangChung: string): string[]
 // (tách dấu phẩy): mệnh đề không có "?" mà khen sai thì bỏ, phần hỏi giữ.
 const KHEN_KD = /\b(?:rat|lam|chuong|duoc khach|khach (?:tim|chuong|thich|hoi|ua|san sang)|hut khach|de ban|chot nhanh|coc nhanh|ly tuong|tuyet|dep)\b/;
 function hemNhoTrong(kd: string): boolean {
-  if (/\bhem xe may\b/.test(kd)) return true;
+  if (/\b(?:hem xe may|hxm)\b/.test(kd)) return true;
   const m = /\bhem\s*(?:rong\s*)?(\d+(?:[.,]\d+)?)\s*m(?:et)?\s*(\d)?(?!\d)/.exec(kd);
   if (!m) return false;
   const rong = Number(m[1].replace(",", ".")) + (m[2] ? Number(m[2]) / 10 : 0);
-  return rong > 0 && rong < 3.5;
+  // Chủ dự án 25/09/2026 (FR-227 b): từ 3m là hẻm xe hơi, khớp ngưỡng `boc_thong_so` / `listing_facts_sync_cols`.
+  return rong > 0 && rong < 3;
 }
 const VAO_NHA_KD = /\b(?:vao tan nha|vao toi nha|vao nha|vao tan cua|vao trong nha|dau trong nha|de xe (?:hoi )?trong nha)\b/;
 const VAO_NHA_CHUNG = /\b(?:vao (?:tan |toi |duoc |trong )?nha|trong nha|gara|ga ra|garage|dau trong nha)\b/;

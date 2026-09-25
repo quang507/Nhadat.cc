@@ -45,12 +45,10 @@ import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, ty
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
-import { cauChonPhuong, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
+import { cauChonPhuong, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, cauTraPhuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, tachTienToPhuong } from "../_shared/extraction/tra-phuong.ts";
 // FR-212 (21/09/2026): từ điển tên đường — chọn kết quả `tim_duong`, thay tên trong địa chỉ, câu hỏi xác nhận (thuần).
 import { catTenDuong, cauXacNhanDuong, chonDuong, type GoiYDuong, theTenDuong, type UngVienDuong } from "../_shared/extraction/tra-duong.ts";
 import { tenDuong } from "../_shared/geocode.ts";
-// FR-209: Nominatim/OSM đòi User-Agent có địa chỉ liên hệ (1 req/s) — cùng chuỗi với geocode-listings.
-const UA_NOMINATIM = "nhadatcc-geocoder/1.0 (admin.buyerside@nhadat.cc)";
 // Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
 // bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
 import { CO_TIEN_KD, TIEN_KD, TIEN_CD, TIEN_T_KEP, docTien, donViGiaDep, giaTheoM2, gonGiaKyHan, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
@@ -1675,9 +1673,10 @@ Deno.serve(async (req) => {
       if (!duongTraDuoc(duong)) return null;
       let json: unknown = null;
       try {
-        const r = await fetch(urlTraPhuong(duong), { headers: { "User-Agent": UA_NOMINATIM }, signal: AbortSignal.timeout(4000) });
-        if (!r.ok) { console.log(`tra phuong: nominatim ${r.status} cho "${duong}"`); return null; }
-        json = await r.json();
+        // 25/09/2026 (FR-227): gọi thẳng từ edge thì Nominatim trả "Access denied" — nhờ DB gọi, cùng câu tra, chờ ≤ 4 s.
+        const { data, error } = await client.rpc("tra_nominatim", { p_q: cauTraPhuong(duong), p_limit: 10, p_chi_tiet: true, p_cho_giay: 4 });
+        if (error) { console.log(`tra phuong: nominatim ${error.message} cho "${duong}"`); return null; }
+        json = data;
       } catch (e) {
         console.log(`tra phuong: nominatim hỏng cho "${duong}": ${(e as Error)?.message ?? e}`);
         return null;
@@ -3862,14 +3861,9 @@ Deno.serve(async (req) => {
             ghiSoNhaLuot = true;
             soNhaGhep = `${sn.soNha} ${lr}`;
             // Tin CHỈ có số nhà ("số 45 nha") → không còn gì để trả lời câu đang hỏi (bản trước: "số 45" thành phường).
+            // Câu đáp để model viết (chủ dự án 25/09: "ko cần khóa câu cố định"), nhưng dặn đúng ý ở `viSao` bên dưới —
+            // lời dặn chung "có thể hiểu nhầm" từng ra "Số 45 là số nhà hả anh, em hiểu nhầm" (bắn thật lx-21).
             dapAn = sn.conLai;
-            // Bắn thật lx-21 (25/09): để model tự nói thì ra "Số 45 là số nhà hả anh, em hiểu nhầm" — câu tiền định, hỏi lại câu treo.
-            if (!dapAn.trim() && !humanActive) {
-              return await traLoiSeller(
-                [`Dạ em ghi địa chỉ ${soNhaGhep} rồi ạ. ${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`],
-                { saved_fact: "vi_tri", reask: pendingReq.question, loai_cau: "so_nha" },
-              );
-            }
           }
         }
       }
@@ -4236,7 +4230,10 @@ Deno.serve(async (req) => {
         const xaThayPhuong = pendingReq.question === "phuong" && laNgoaiDoThi(pendingReq.listings?.district);
         const nhanDangHoi = xaThayPhuong ? "xã" : FACT_LABELS[pendingReq.question] ?? pendingReq.question;
         const nhanHoiLai = xaThayPhuong ? "chỗ mình thuộc xã nào" : NHAN_HOI_LAI[pendingReq.question] ?? nhanDangHoi;
-        const viSao = kq.loai === "xung_ho"
+        const chiSoNha = !!soNhaGhep && !dapAn.trim();
+        const viSao = chiSoNha
+          ? `Chủ nhà bổ sung SỐ NHÀ, em đã ghi địa chỉ "${soNhaGhep}" — không phải hiểu nhầm, không hỏi lại số nhà. Báo ngắn đã ghi địa chỉ rồi hỏi tiếp.`
+          : kq.loai === "xung_ho"
           ? `Chủ nhà dặn gọi họ là "${kq.xungHo}": nhận bằng một câu thật ngắn, từ nay gọi đúng vậy.`
           : kq.loai === "hoi"
           ? `Chủ nhà đang HỎI NGƯỢC: trả lời thẳng câu đó trước (phí thì theo luật phí; điều chưa nắm thì "để em kiểm tra rồi báo lại").`
@@ -4272,6 +4269,8 @@ Deno.serve(async (req) => {
         if (!hoiLai) {
           hoiLai = (hoiNguoc && !hoiNguocDap ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (kq.loai === "xung_ho"
             ? `Dạ em nhớ rồi, em gọi ${kq.xungHo} nha. `
+            : chiSoNha
+            ? `Dạ em ghi địa chỉ ${soNhaGhep} rồi ạ. `
             : kq.chuyenSang
             ? `Em ghi "${kq.chuyenSang.answer}" rồi ạ. `
             : "") + `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`;

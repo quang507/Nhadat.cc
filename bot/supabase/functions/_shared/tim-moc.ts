@@ -9,7 +9,6 @@
 import { type GanTienIch, kdTen, TEN_LOAI } from "./extraction/tien-ich.ts";
 import { trongVung } from "./geocode.ts";
 
-const UA = "nhadatcc-geocoder/1.0 (admin.buyerside@nhadat.cc)";
 const LOAI_OSM = new Set(["benh_vien", "truong_hoc", "cho", "sieu_thi", "cong_vien"]);
 
 export type TinGan = { code: string; moc: string; khoang_cach_m: number };
@@ -24,14 +23,13 @@ const boDau = (s: string): string =>
   s.normalize("NFC").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D");
 
 /** Tra một địa danh trong TP.HCM. Chặn kết quả mức thành phố/tỉnh (câu quá rộng). */
-async function traDiaDanh(cum: string): Promise<{ osm_id: string; ten: string; lat: number; lng: number } | null> {
+// 25/09/2026 (FR-227): gọi thẳng từ edge thì Nominatim trả "Access denied" — nhờ DB gọi qua RPC `tra_nominatim`.
+async function traDiaDanh(db: Db, cum: string): Promise<{ osm_id: string; ten: string; lat: number; lng: number } | null> {
   for (const q of [`${cum}, Thành phố Hồ Chí Minh`, `${boDau(cum)}, Ho Chi Minh City`]) {
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=vn&q=${encodeURIComponent(q)}`,
-        { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(4000) },
-      );
-      const r = (await res.json())?.[0];
+      const { data, error } = await db.rpc("tra_nominatim", { p_q: q, p_cho_giay: 4 });
+      if (error) continue;
+      const r = Array.isArray(data) ? data[0] : null;
       if (!r || /^(city|state|province|country|municipality|region)$/.test(String(r.addresstype ?? r.type ?? ""))) continue;
       const lat = Number(r.lat), lng = Number(r.lon);
       if (!trongVung(lat, lng)) continue;
@@ -67,8 +65,8 @@ export async function timTinGanMoc(
   // đừng đốt Nominatim trên một câu trả lời không chắc.
   const { data: co, error: coErr } = await db.rpc("co_moc", { p_loai: gan.loai, p_ten_re: gan.ten_re });
   if (coErr || co !== false) return { tin };
-  const diem = (LOAI_OSM.has(gan.loai) ? await traDiaDanh(`${TEN_LOAI[gan.loai]} ${gan.ten}`) : null) ??
-    await traDiaDanh(gan.ten);
+  const diem = (LOAI_OSM.has(gan.loai) ? await traDiaDanh(db, `${TEN_LOAI[gan.loai]} ${gan.ten}`) : null) ??
+    await traDiaDanh(db, gan.ten);
   if (!diem) return { tin, khongThayMoc: true };
   // Nhớ cho lần sau: ten_kd gồm cả tên OSM lẫn chữ khách gõ, để `co_moc` lần
   // sau khớp ngay. Đã có điểm OSM đó (osm_id trùng) thì giữ nguyên dòng cũ.
