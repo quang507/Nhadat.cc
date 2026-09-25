@@ -367,6 +367,15 @@ class RpcCall {
       // gộp chúng làm một chính là lỗi SEC-02 cũ.
       case "get_secret":
         return globalThis.__vault ? globalThis.__vault(a.secret_name) : { data: null, error: null };
+      // FR-227 (20260925f/h): Nominatim gọi QUA DB. Ghi URL y như hàm SQL dựng vào `__fetches` để các ca FR-209 vẫn soi
+      // được câu tra; `__nominatim` = JSON là "tra được", mặc định lỗi HTTP 404 như hàm SQL raise.
+      case "tra_nominatim": {
+        const u = "https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=vn" +
+          `&limit=${Math.max(1, Math.min(a.p_limit ?? 1, 10))}` + (a.p_chi_tiet ? "&addressdetails=1" : "") +
+          (a.p_viewbox ? `&viewbox=${a.p_viewbox}&bounded=1` : "") + `&q=${encodeURIComponent(a.p_q ?? "")}`;
+        globalThis.__fetches = [...(globalThis.__fetches ?? []), u];
+        return globalThis.__nominatim ? { data: globalThis.__nominatim, error: null } : { data: null, error: { message: "nominatim HTTP 404: " } };
+      }
       // 20260909b — công tắc test: mặc định BẬT trong e2e (như DB test hiện tại).
       // FR-180: mẫu câu chuẩn cho prompt — e2e đặt globalThis.__mauCau = { ban, mua }.
       // FR-212 (20260921b): từ điển tên đường — chép ngữ nghĩa `tim_duong`: khớp đúng / gần

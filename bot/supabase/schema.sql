@@ -7,6 +7,7 @@
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
+create extension if not exists http with schema extensions;
 create extension if not exists pg_cron with schema pg_catalog;
 create extension if not exists pg_net with schema public;
 create extension if not exists pg_stat_statements with schema extensions;
@@ -1983,15 +1984,15 @@ begin
     if k ~ '(xe hoi|o ?to|xe tai|xe 4 banh)\s*(khong|ko|k|kg|chua)\s*(vo|vao|toi|den|duoc|lot|qua)' or k ~ '(khong|ko|k|kg|chua)\s*(co\s*)?(xe hoi|o ?to|xe tai)\s*(nao\s*)?(vo|vao|toi|duoc)' then j := j || jsonb_build_object('access_type', 'hem_xe_may');
     elsif k ~ '(hem xe tai|\mhxt\M|xe tai)' then j := j || jsonb_build_object('access_type', 'hem_xe_tai');
     elsif k ~ '(hem xe hoi|\mhxh\M|hem o ?to|hem xe con|xe hoi(?! (?:vo |vao |ngu |de |dau )?trong nha)|o ?to (vo|vao|dau|toi|do)|hem 7 cho|xe 7 cho)' then j := j || jsonb_build_object('access_type', 'hem_xe_hoi');
-    elsif k ~ '(hem xe may|hem nho|hem ba gac|hem 3 gac|hem xe 3 banh|xe may)' then j := j || jsonb_build_object('access_type', 'hem_xe_may');
+    elsif k ~ '(\mhxm\M|hem xe may|hem nho|hem ba gac|hem 3 gac|hem xe 3 banh|xe may)' then j := j || jsonb_build_object('access_type', 'hem_xe_may');
     elsif k ~ '\mhem\M' then j := j || jsonb_build_object('access_type', 'hem');
     end if;
   end if;
-  m := regexp_match(k, '(?:hem|hxh|hxt|duong truoc nha|duong)\s*(?:xe hoi|xe tai|xe may|truoc nha|rong|thong)?\s*(?:rong)?\s*(?:hon|gan|:)?\s*(\d+(?:\.\d+)?)\s*m\M');
+  m := regexp_match(k, '(?:hem|hxh|hxt|hxm|duong truoc nha|duong)\s*(?:xe hoi|xe tai|xe may|truoc nha|rong|thong)?\s*(?:rong)?\s*(?:hon|gan|:)?\s*(\d+(?:\.\d+)?)\s*m\M');
   if m is not null and m[1]::numeric between 1 and 40 then
     j := j || jsonb_build_object('alley_width_m', m[1]::numeric);
     if j->>'access_type' = 'hem' then
-      j := j || jsonb_build_object('access_type', case when m[1]::numeric >= 6 then 'hem_xe_tai' when m[1]::numeric >= 3.5 then 'hem_xe_hoi' else 'hem_xe_may' end);
+      j := j || jsonb_build_object('access_type', case when m[1]::numeric >= 6 then 'hem_xe_tai' when m[1]::numeric >= 3 then 'hem_xe_hoi' else 'hem_xe_may' end);
     end if;
   end if;
   m := regexp_match(k, '(?:cach|ra)\s*(?:mat tien|\mmt\M)\s*(?:chi|khoang|tam|hon|gan|duong)?\s*(?:[a-z ]{0,25}?)\s*(\d+(?:\.\d+)?)\s*m\M');
@@ -3925,7 +3926,7 @@ begin
     v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
     if v_num is not null and v_num between 1 and 40 then
       update listings set alley_width_m = v_num,
-             access_type = coalesce(access_type, case when v_num >= 6 then 'hem_xe_tai' when v_num >= 3.5 then 'hem_xe_hoi' else 'hem_xe_may' end),
+             access_type = coalesce(access_type, case when v_num >= 6 then 'hem_xe_tai' when v_num >= 3 then 'hem_xe_hoi' else 'hem_xe_may' end),
              specs_source = bac
        where id = new.listing_id and (alley_width_m is null or de);
     end if;
@@ -6106,6 +6107,28 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.tra_nominatim(p_q text, p_viewbox text DEFAULT NULL::text, p_limit integer DEFAULT 1, p_chi_tiet boolean DEFAULT false, p_cho_giay integer DEFAULT 15)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions'
+AS $function$
+declare res extensions.http_response; u text;
+begin
+  if coalesce(btrim(p_q), '') = '' or length(p_q) > 200 then return null; end if;
+  if p_viewbox is not null and p_viewbox !~ '^[0-9.,-]+$' then raise exception 'viewbox không hợp lệ'; end if;
+  u := 'https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=vn'
+       || '&limit=' || greatest(1, least(coalesce(p_limit, 1), 10))
+       || case when p_chi_tiet then '&addressdetails=1' else '' end
+       || case when p_viewbox is not null then '&viewbox=' || p_viewbox || '&bounded=1' else '' end
+       || '&q=' || extensions.urlencode(p_q);
+  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT', greatest(1, least(coalesce(p_cho_giay, 15), 20))::text);
+  res := extensions.http(('GET', u, array[extensions.http_header('User-Agent', 'nhadatcc-geocoder/1.0 (admin.buyerside@nhadat.cc)')], null, null)::extensions.http_request);
+  if res.status <> 200 then raise exception 'nominatim HTTP %: %', res.status, left(res.content, 120); end if;
+  return res.content::jsonb;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.trg_fact_vao_boc_tach()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -7934,6 +7957,8 @@ grant execute on function public.tin_cua_toi(p_listing uuid) to authenticated;
 grant execute on function public.tin_cua_toi(p_listing uuid) to service_role;
 revoke all on function public.tin_gan_moc(p_loai text, p_ten_re text, p_lat double precision, p_lng double precision, p_ten text, p_ban_kinh_m integer, p_deal text) from public, anon, authenticated;
 grant execute on function public.tin_gan_moc(p_loai text, p_ten_re text, p_lat double precision, p_lng double precision, p_ten text, p_ban_kinh_m integer, p_deal text) to service_role;
+revoke all on function public.tra_nominatim(p_q text, p_viewbox text, p_limit integer, p_chi_tiet boolean, p_cho_giay integer) from public, anon, authenticated;
+grant execute on function public.tra_nominatim(p_q text, p_viewbox text, p_limit integer, p_chi_tiet boolean, p_cho_giay integer) to service_role;
 revoke all on function public.trg_fact_vao_boc_tach() from public, anon, authenticated;
 grant execute on function public.trg_fact_vao_boc_tach() to service_role;
 revoke all on function public.trg_info_request_thong_bao_khach_hoi() from public, anon, authenticated;

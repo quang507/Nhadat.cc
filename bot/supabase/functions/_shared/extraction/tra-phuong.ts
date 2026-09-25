@@ -40,8 +40,12 @@ export function duongTraDuoc(duong: string | null | undefined): boolean {
  * 10 kết quả để BIẾT đường có ở nhiều nơi hay không (`docCacPhuongNominatim`).
  */
 export function urlTraPhuong(duong: string): string {
-  const q = `${chuanTenDuong(duong)}, Thành phố Hồ Chí Minh`;
-  return `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=10&countrycodes=vn&q=${encodeURIComponent(q)}`;
+  return `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=10&countrycodes=vn&q=${encodeURIComponent(cauTraPhuong(duong))}`;
+}
+
+/** Câu tra của `urlTraPhuong` — 25/09/2026 (FR-227): chat-reply gửi câu này qua RPC `tra_nominatim` (IP edge bị chặn). */
+export function cauTraPhuong(duong: string): string {
+  return `${chuanTenDuong(duong)}, Thành phố Hồ Chí Minh`;
 }
 
 // Tiền tố + tên, ở BẤT KỲ đâu trong câu: "không, phường long trường" (câu sửa của chủ

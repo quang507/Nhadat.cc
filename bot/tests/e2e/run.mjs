@@ -2230,13 +2230,18 @@ fresh(seedKho);
     // Luật dự phòng: "số 45 nha" — số nhà ghép vào địa chỉ đang có, không thành phường, không vào bổ sung.
     const L = await dungGop("gop-1");
     globalThis.__model.parse = moiAi([{ khoa: "vi_tri", gia_tri_moi: "45/12 Ngô Y Linh", cach: "gop" }], ["số 45"]);
+    let loiDan = "";
+    globalThis.__model.create = (p) => { loiDan = JSON.stringify(p.messages ?? ""); return "Dạ em ghi địa chỉ rồi ạ, nhà mình thuộc phường nào vậy anh?"; };
     const rG = await send({ external_user_id: "gop-1", text: "số 45 nha" });
+    globalThis.__model.create = undefined;
     const fG = (q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === q);
     check("GOP-01 địa chỉ 'Ngô Y Linh' + 'số 45 nha' → địa chỉ '45 Ngô Y Linh' (bản AI bịa '45/12' bị bỏ), KHÔNG thành phường, KHÔNG bổ sung 'số 45', câu phường vẫn treo",
       L.location_raw === "45 Ngô Y Linh" && !fG("vi_tri").some((f) => /12/.test(f.answer)) && !fG("phuong").length && !fG("bo_sung").some((f) => /45/.test(f.answer)) &&
         db().t.info_requests.some((x) => x.listing_id === L.id && x.question === "phuong" && x.status === "pending") &&
-        // Câu tiền định (không để model nói "em hiểu nhầm" — bắn thật lx-21): chỉ hỏi lại câu phường, 🤖 báo địa chỉ mới.
-        rG.body.replies.some((x) => /phường/.test(x) && !/hiểu nhầm/.test(x)) && rG.body.replies.some((x) => /^🤖.*45 Ngô Y Linh/.test(x)),
+        // Model viết câu (chủ dự án 25/09: "ko cần khóa câu cố định") nhưng được dặn đúng ý: vừa ghi SỐ NHÀ, không phải
+        // "hiểu nhầm" (bắn thật lx-21) — lời dặn chung "KHÔNG trả lời được câu em hỏi" không được gửi. 🤖 báo địa chỉ mới.
+        /SỐ NHÀ/.test(loiDan) && /45 Ngô Y Linh/.test(loiDan) && !/KHÔNG trả lời được/.test(loiDan) &&
+        rG.body.replies.some((x) => /phường/.test(x)) && rG.body.replies.some((x) => /^🤖.*45 Ngô Y Linh/.test(x)),
       JSON.stringify({ lr: L.location_raw, vt: fG("vi_tri"), ph: fG("phuong"), bs: fG("bo_sung"), ir: db().t.info_requests.filter((x) => x.listing_id === L.id).map((x) => [x.question, x.status]), rep: rG.body.replies }));
   }
   {
