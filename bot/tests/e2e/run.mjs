@@ -223,6 +223,41 @@ const last = parseCalls().pop();
 check("V3.3 căn 5,8 tỷ có mặt trong KHO gửi model", /BDS-Q5-0001/.test(sysText(last)));
 check("V3.3 tin CHƯA ĐĂNG và ĐÃ GỠ không lọt vào KHO", !/BDS-Q5-0002|BDS-Q5-0003/.test(sysText(last)));
 check("THONGSO-01 dòng KHO mang thông số có cấu trúc (ngang×dài, kết cấu, WC, hẻm, sổ)", /4x12\.5m · trệt \+ 2 lầu · 3WC · hẻm xe hơi 6m · sổ hồng riêng, hoàn công/.test(sysText(last)), sysText(last).split("\n").find((x) => x.includes("BDS-Q5-0001")));
+
+// ── FR-228 (25/09/2026, chủ dự án gửi bộ 7 câu "nếu có người hỏi tìm mua"; chọn "Mỗi lượt 1 câu, xen giữa") ──
+{
+  const userMua = (c) => c.params.messages[0].content.map((x) => x.text ?? "").join("");
+  fresh(seedKho);
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "phường 4", budget: "tầm 5 tỷ 8" } });
+  await send({ external_user_id: "tv-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ 8" });
+  const u1 = userMua(parseCalls().pop());
+  check("TUVAN-01 đủ khu vực + giá → prompt có CÂU TƯ VẤN KẾ = câu 1 'muốn mình sống ở một khu như thế nào', vẫn gợi ý căn",
+    /CÂU TƯ VẤN KẾ/.test(u1) && /sống ở một khu như thế nào/.test(u1) && /NGỪNG hỏi các trường hồ sơ ở trên/.test(u1), u1.slice(0, 900));
+  // Câu 5 đổi theo người ở cùng: có ông bà → gợi ý chung (không phải câu "2 mẫu" của Ny'ah Phú Định).
+  fresh((d) => { seedKho(d); d.insert("buyers", { zalo_user_id: "tv-2", preferences: { deal: "ban", area: "phường 4", budget: "5 tỷ", khu_song: "yên tĩnh", nguoi_o_cung: "vợ chồng, 2 con và ông bà", noi_lam: "Quận 1", bedrooms: 4, dien_tich_mong_muon: "70m2" } }); });
+  globalThis.__model.parse = () => OUT();
+  await send({ external_user_id: "tv-2", text: "có căn nào hợp không em" });
+  const u2 = userMua(parseCalls().pop());
+  check("TUVAN-02 người ở cùng có ông bà, không hỏi Ny'ah → câu kế là gợi ý thang máy / phòng ngủ dưới trệt, KHÔNG phải 'Bên em có 2 mẫu'",
+    /thang máy hoặc phòng ngủ dưới trệt/.test(u2) && !/Bên em có 2 mẫu/.test(u2), (u2.match(/CÂU TƯ VẤN KẾ[^\n]*/) ?? [""])[0]);
+  // Câu 7: khách cần vay → mở việc cho CTV (💰), bot không tự tư vấn. Khách không nói gì về vay → không mở việc dù model điền.
+  fresh(seedKho);
+  await send({ external_user_id: "tv-3", text: "tìm nhà phường 4 tầm 5 tỷ 8" });
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, can_vay: true } });
+  await send({ external_user_id: "tv-3", text: "anh cần tư vấn vay ngân hàng nữa em" });
+  const bTv3 = db().t.buyers.find((b) => b.zalo_user_id === "tv-3");
+  check("TUVAN-03 khách 'cần tư vấn vay ngân hàng' → hồ sơ can_vay=true, việc escalation '💰 khách cần tư vấn vay ngân hàng' cho CTV",
+    bTv3?.preferences?.can_vay === true && db().t.reminders.some((x) => x.kind === "escalation" && x.buyer_id === bTv3.id && /^💰 khách cần tư vấn vay ngân hàng/.test(x.note ?? "")),
+    JSON.stringify({ p: bTv3?.preferences, rem: db().t.reminders.map((x) => x.note) }));
+  fresh(seedKho);
+  await send({ external_user_id: "tv-4", text: "tìm nhà phường 4 tầm 5 tỷ 8" });
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, can_vay: true } });
+  await send({ external_user_id: "tv-4", text: "ok em" });
+  const bTv4 = db().t.buyers.find((b) => b.zalo_user_id === "tv-4");
+  check("TUVAN-04 model tự điền can_vay khi khách không nói gì về vay → không ghi, không mở việc",
+    bTv4?.preferences?.can_vay == null && !db().t.reminders.some((x) => /vay ngân hàng/.test(x.note ?? "")),
+    JSON.stringify({ p: bTv4?.preferences, rem: db().t.reminders.map((x) => x.note) }));
+}
 globalThis.__model = { parse: () => OUT() };
 globalThis.__rpc = {}; // fallback: model hỏng
 globalThis.__model.parse = () => { throw new Error("model chết"); };
@@ -1961,7 +1996,7 @@ fresh(seedKho);
   await send({ external_user_id: "du-tc-1", text: "tìm nhà quận 5 tầm 6 tỷ" });
   const u1 = vaoMua(parseCalls().at(-1));
   check("DUTIEUCHI-01 lượt đầu 'tìm nhà quận 5 tầm 6 tỷ' (hồ sơ còn trống) → câu lệnh 'CHƯA BIẾT … không hỏi chủ động', không 'CÒN THIẾU'",
-    /CHƯA BIẾT \(chỉ NHẶT/.test(u1) && !/CÒN THIẾU \(hỏi theo thứ tự/.test(u1) && /NGỪNG hỏi hồ sơ/.test(u1), u1.slice(0, 400));
+    /CHƯA BIẾT \(chỉ NHẶT/.test(u1) && !/CÒN THIẾU \(hỏi theo thứ tự/.test(u1) && /NGỪNG hỏi (?:các trường )?hồ sơ/.test(u1), u1.slice(0, 400));
   fresh(seedKho);
   await send({ external_user_id: "du-tc-2", text: "tìm nhà quận 5 cho gia đình" });
   const u2 = vaoMua(parseCalls().at(-1));
