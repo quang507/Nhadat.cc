@@ -585,9 +585,25 @@ const KHEN_CAN_BANG_CHUNG: Array<[RegExp, RegExp]> = [
   [/(?<!ngang\s)\bmat tien\b(?!\s*(?:rong\s*|ngang\s*|la\s*|khoang\s*|tam\s*)?\d)|\bmat (?:pho|duong)\b/, /\b(?:mat tien|mat pho|mat duong|mt|mtkd|2mt)\b/],
   [/\b(?:hem|hxh|hxt|hxm)\b/, /\b(?:hem|hxh|hxt|hxm|kiet|ngo|ngach)\b|\d\s*\/\s*\d/],
 ];
+/**
+ * Model nói một SỐ ĐO mà chủ nhà chưa từng gõ (25/09/2026, chủ dự án test Zalo: khách "nở hậu nhé" → bot "Anh nói nở hậu
+ * 4.5 nhỉ, em ghi rồi" — số 4.5 lấy từ câu ví dụ trong prompt). Số theo sau "nở hậu / hẻm / ngang / dài / rộng" phải có
+ * trong chữ chủ nhà ("4.5" khớp "4.5", "4,5", "4m5"). Câu HỎI cũng tính — "nở hậu 4.5 đúng không anh?" vẫn là bịa.
+ */
+export function laSoDoBia(menhDe: string, bangChung: string): boolean {
+  const kd = boDau(menhDe).replace(/(\d),(\d)/g, "$1.$2");
+  const bc = boDau(bangChung ?? "").replace(/(\d),(\d)/g, "$1.$2").replace(/(\d)\s*m\s*(\d)(?!\d)/g, "$1.$2");
+  const re = /\b(?:no hau|hem(?: rong)?|ngang|dai|rong)\s*(?:la\s*|khoang\s*|tam\s*|chung\s*)?(\d+(?:\.\d+)?)(?:\s*m\s*(\d)(?!\d))?/g;
+  for (const m of kd.matchAll(re)) {
+    const so = m[2] ? `${m[1]}.${m[2]}` : m[1];
+    if (!new RegExp(`(?<![\\d.])${so.replace(".", "\\.")}(?![\\d]|\\.\\d)`).test(bc)) return true;
+  }
+  return false;
+}
 export function boKhenKhongCanCu(replies: string[], bangChung: string): string[] {
   const bc = boDau(bangChung ?? "");
   return locCauTrongBongBong(replies, (c) => {
+    if (laSoDoBia(c, bangChung) && !/\?\s*$/.test(c)) return true;
     if (/\?/.test(c)) return false;
     const kd = boDau(c);
     return KHEN_CAN_BANG_CHUNG.some(([khen, chung]) => khen.test(kd) && !chung.test(bc));
@@ -611,6 +627,7 @@ const VAO_NHA_KD = /\b(?:vao tan nha|vao toi nha|vao nha|vao tan cua|vao trong n
 const VAO_NHA_CHUNG = /\b(?:vao (?:tan |toi |duoc |trong )?nha|trong nha|gara|ga ra|garage|dau trong nha)\b/;
 /** Mệnh đề khen không có căn cứ (lời MODEL, không phải bảng đọc từ DB). */
 export function laKhenSai(menhDe: string, bangChung: string): boolean {
+  if (laSoDoBia(menhDe, bangChung)) return true;
   if (/\?/.test(menhDe)) return false;
   const kd = boDau(menhDe);
   const bc = boDau(bangChung ?? "");

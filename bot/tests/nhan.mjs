@@ -74,5 +74,10 @@ ok("laThuanNhan: tin CHƯA mang nhãn đó → không trùng (giữ thông tin)"
 ok("laThuanNhan: tin đang mang nhãn đó → trùng", laThuanNhan("khu an ninh", ["an_ninh", "yen_tinh"]) === true);
 
 ok("ganNhan: 'ô tô vô tận nhà' (miền Nam: vô = vào) → xe hơi vào nhà", ganNhan("ô tô vô tận nhà").includes("xe_hoi_vao_nha"));
+// 25/09/2026 (bắn thật lx-19): nhà HÀNG XÓM mới xây không phải nhãn của căn đang rao.
+la("hàng xóm mới xây năm 2019 cao hơn nhà em", []);
+la("nhà bên cạnh mới xây lại", []);
+la("nhà mới xây năm ngoái, 4 tấm", ["moi_sua"]);
+
 console.log(hong ? `\nNHÃN: ${hong}/${tong} CA HỎNG` : `\nNHÃN: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

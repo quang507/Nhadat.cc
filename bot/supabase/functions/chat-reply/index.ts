@@ -4402,7 +4402,9 @@ Deno.serve(async (req) => {
       ]);
       const hetHanSet = new Set((daHetHan ?? []).map((q) => q.question));
       // FR-223: câu nhánh theo câu trả lời (sổ riêng → hoàn công, chưa sổ → bao giờ ra sổ, đang cho thuê → bỏ hiện trạng…).
-      const nextFacts = (await thieuCoReNhanh(client, pendingReq.listing_id, nextFactsTho, [pendingReq.question], text)).filter((f) => !hetHanSet.has(f.fact_key));
+      // Chữ chủ nhà vài lượt gần đây: "nở hậu nhé" (chưa có số) ở lượt trước → câu kế hỏi nở hậu bao nhiêu mét (FR-225 a).
+      const chuGanDay = [...lichSuRows.filter((m) => laTinNguoi(m.sender)).slice(-4).map((m) => m.body ?? ""), text].join(" · ");
+      const nextFacts = (await thieuCoReNhanh(client, pendingReq.listing_id, nextFactsTho, [pendingReq.question], text, chuGanDay)).filter((f) => !hetHanSet.has(f.fact_key));
       const published = !!lstNow && lstNow.status !== "cho_thong_tin";
       // Chủ nói "đăng đi / ok / được" giữa vòng hỏi (09/09 tối lần 2): đủ 70 điểm
       // thì gửi BẢN NHÁP ngay (bỏ câu đang treo), dưới 70 thì nói rõ còn thiếu gì

@@ -283,7 +283,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
   for (const f of [...facts].reverse()) {
     const a = (f.question === "bo_sung" ? f.answer : null)?.replace(/\s+/g, " ").trim();
     // 25/09/2026: mảnh chỉ nói lại ô đã có (kết cấu / đường vào / sổ) hoặc trùng nhãn thì không in lại — lọc cả dữ liệu cũ.
-    if (!a || laBoSungTrung(a, { facts: factMap, floors_text: l.floors_text, access_type: l.access_type, alley_width_m: l.alley_width_m, legal_status: l.legal_status, nhan: l.nhan ?? [] })) continue;
+    if (!a || laBoSungTrung(a, { facts: factMap, floors_text: l.floors_text, access_type: l.access_type, alley_width_m: l.alley_width_m, legal_status: l.legal_status, nhan: l.nhan ?? [], rear_width_m: l.rear_width_m })) continue;
     const aKd = boDau(a).replace(/^(?:co|nha co|can co)\s+/, "");
     if (nhanKd.some((n) => n === aKd)) continue;
     if (!boSung.some((x) => boDau(x) === boDau(a))) boSung.push(a);

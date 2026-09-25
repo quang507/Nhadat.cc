@@ -4,7 +4,7 @@
 // Phần SQL của cùng lượt bắn (fact "cách mặt tiền" vào cột, "p5" dính tên đường, xe hơi
 // trong nhà) ở migration 20260914b.
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
-import { bocViTriRao, catDapAn, laBoSungRac, laBoSungTrung, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { bocViTriRao, catDapAn, laBoSungRac, laBoSungTrung, namXayTuongDoi, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -220,6 +220,34 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   ok("HEM 'hxh' → ghi 'hẻm xe hơi'", catDapAn("do_rong_hem", "hxh") === "hẻm xe hơi");
   ok("HEM 'ô tô vô tận nhà' không còn thành tiềm năng", nhanDienFact("ô tô vô tận nhà")?.question === "do_rong_hem", JSON.stringify(nhanDienFact("ô tô vô tận nhà")));
   ok("HEM 'để ở hoặc cho thuê' vẫn là tiềm năng", nhanDienFact("để ở hoặc cho thuê")?.question === "tiem_nang");
+}
+
+// FR-225 (25/09/2026, chủ dự án test Zalo …3057): "sang tên 1 nốt nhạc ko phải tiện ích"; "nhãn mới sửa mới xây ghi lại".
+{
+  const q = (s) => JSON.stringify(nhanDienNhieuFact(s).map((x) => [x.question, x.answer]));
+  ok("FR225 'sang tên công chứng 1 nốt nhạc' KHÔNG phải tiện ích gần", !nhanDienNhieuFact("sang tên công chứng 1 nốt nhạc").some((x) => x.question === "tien_ich_gan"), q("sang tên công chứng 1 nốt nhạc"));
+  ok("FR225 'gần phòng công chứng, trường học' vẫn là tiện ích gần", nhanDienNhieuFact("gần phòng công chứng, trường học").some((x) => x.question === "tien_ich_gan"), q("gần phòng công chứng, trường học"));
+  const nam = new Date(Date.now() + 7 * 3600e3).getUTCFullYear();
+  ok("FR225 'nhà mới xây năm ngoái, 4 tấm' → năm xây = năm ngoái (số) + kết cấu", nhanDienNhieuFact("nhà mới xây năm ngoái, 4 tấm").some((x) => x.question === "nam_xay" && x.answer === String(nam - 1)), q("nhà mới xây năm ngoái, 4 tấm"));
+  ok("FR225 namXayTuongDoi: 'xay nam nay' / 'xay nam kia' / không có → null", namXayTuongDoi("xay nam nay") === String(nam) && namXayTuongDoi("xay nam kia") === String(nam - 2) && namXayTuongDoi("nam ngoai ban") === null);
+  ok("FR225 'hàng xóm mới xây năm 2019' KHÔNG thành năm xây căn này", !nhanDienNhieuFact("hàng xóm mới xây năm 2019 cao hơn nhà em").some((x) => x.question === "nam_xay"), q("hàng xóm mới xây năm 2019 cao hơn nhà em"));
+  ok("FR225 câu năm xây đáp 'năm ngoái' → ô ghi năm số (trigger đọc 4 chữ số)", catDapAn("nam_xay", "năm ngoái") === `${nam - 1} (năm ngoái)`, catDapAn("nam_xay", "năm ngoái"));
+  ok("FR225 câu năm xây đáp '2019' giữ nguyên", catDapAn("nam_xay", "2019") === "2019", catDapAn("nam_xay", "2019"));
+  const ca = [
+    ["nhà mới xây năm ngoái", { nhan: ["moi_sua"] }, true],
+    ["nhà mới xây năm ngoái", { facts: { nam_xay: "2025" } }, true],
+    ["nhà mới xây năm ngoái", {}, false],
+    ["nhà mới xây năm ngoái, thiết kế châu Âu", { nhan: ["moi_sua"] }, false],
+    ["nở hậu nhé", { facts: { no_hau: "6m" } }, true],
+    ["nở hậu nhé", { rear_width_m: 6 }, true],
+    ["nở hậu nhé", {}, false],
+    ["nở hậu, khuôn đất đẹp", { rear_width_m: 6 }, false],
+  ];
+  // Bắn thật lx-19 sau #299: "nhà trong hẻm" (ở TRONG) từng thành hiện trạng "nhà trống"; câu hàng xóm thành hiện trạng.
+  ok("FR225 'nhà trong hẻm, xe hơi chạy vô tới cửa' KHÔNG thành hiện trạng / nội thất 'nhà trống'", !nhanDienNhieuFact("nhà trong hẻm, xe hơi chạy vô tới cửa luôn").some((x) => ["hien_trang_su_dung", "noi_that"].includes(x.question)), q("nhà trong hẻm, xe hơi chạy vô tới cửa luôn"));
+  ok("FR225 'nhà trống, giao ngay' vẫn đọc được", nhanDienNhieuFact("nhà trống, giao ngay").length > 0, q("nhà trống, giao ngay"));
+  ok("FR225 'hàng xóm mới xây năm 2019 …' KHÔNG thành hiện trạng", !nhanDienNhieuFact("hàng xóm mới xây năm 2019 cao hơn nhà em").some((x) => x.question === "hien_trang"), q("hàng xóm mới xây năm 2019 cao hơn nhà em"));
+  for (const [cau, c, mong] of ca) ok(`FR225 TRUNG '${cau}' ${JSON.stringify(c)} → ${mong ? "trùng" : "giữ"}`, laBoSungTrung(cau, c) === mong);
 }
 
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);

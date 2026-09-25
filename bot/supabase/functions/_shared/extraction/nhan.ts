@@ -74,6 +74,7 @@ const PHU_DINH = /(?:^|[\s,.;:(])(?:khong|ko|k|chua|chang|hoi|thieu|it)\s+(?:co\
 const PHU_DINH_CHUNG = /(?:^|\s)(?:khong|ko|k|chua|chang)\s+(?:co\s+|duoc\s+|phai\s+|lam\s+)?(?:[a-z0-9%]+\s+){0,2}$/;
 
 /** Nhãn nhận ra trong một câu (thứ tự theo từ điển, không trùng). */
+const NHA_KHAC = /\b(?:hang xom|nha ben|ben canh|ke ben|doi dien|nha ke)\b/;
 export function ganNhan(text: string | null | undefined): string[] {
   // 18/09 (bắn 10 tin thật): dấu phẩy phải CÒN là ranh giới — "gần chợ, xe hơi vào" từng thành
   // "gan cho xe hoi" và lookahead "chợ xe" của gan_cho chặn mất nhãn. Dấu câu → " , ".
@@ -85,6 +86,8 @@ export function ganNhan(text: string | null | undefined): string[] {
     if (!m) continue;
     if (n.phuDinh && PHU_DINH.test(kd.slice(Math.max(0, m.index - 14), m.index))) continue;
     if (PHU_DINH_CHUNG.test(kd.slice(Math.max(0, m.index - 30), m.index))) continue;
+    // 25/09/2026 (bắn thật lx-19): "hàng xóm mới xây năm 2019" là nhà KHÁC — không gắn "mới xây" cho căn đang rao.
+    if (khoa === "moi_sua" && NHA_KHAC.test(kd.slice(Math.max(0, m.index - 20), m.index))) continue;
     ra.push(khoa);
   }
   return ra;

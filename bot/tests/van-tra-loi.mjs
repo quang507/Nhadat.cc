@@ -5,7 +5,7 @@
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { boHuaDaDang, laHoiLechKhoa, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boHuaDaDang, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
@@ -770,6 +770,17 @@ for (const [cau, laTiemNang] of [
 {
   const b = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "105/12 Trần Bình Trọng", ward: "Phường Chợ Quán", district: "Quận 5", floors_text: "trệt + lửng + 2 lầu + sân thượng", frontage_m: 4, length_m: 15, nhan: ["san_thuong", "gac_lung", "yen_tinh"] });
   ok("NL-01 bocTachTaoTin: nhãn bỏ 'sân thượng' / 'có gác lửng' (thông số đã có), giữ 'yên tĩnh'", /nhãn: "yên tĩnh"/.test(b) && !/nhãn: "[^"]*(?:sân thượng|lửng)/.test(b), b);
+}
+
+// FR-225 a (25/09/2026, chủ dự án test Zalo): khách "nở hậu nhé" → bot "Anh nói nở hậu 4.5 nhỉ, em ghi rồi" (số lấy từ ví dụ prompt).
+{
+  const bc = "5x12 · nở hậu nhé · a bán 4t";
+  ok("SOBIA-01 'nở hậu 4.5' khi khách không nói số → bịa", laSoDoBia("Anh nói nở hậu 4.5 nhỉ", bc));
+  ok("SOBIA-02 'nở hậu 4m5' ↔ khách '4m5' / '4,5' ↔ '4.5' → không bịa", !laSoDoBia("nở hậu 4m5 nha", "nở hậu 4m5") && !laSoDoBia("nở hậu 4,5m", "no hau 4.5"));
+  ok("SOBIA-03 'ngang 5 dài 12' từ '5x12' → không bịa", !laSoDoBia("ngang 5 dài 12", bc));
+  ok("SOBIA-04 'hẻm 3m' khi khách nói 'hẻm 3m5' → bịa", laSoDoBia("hẻm 3m", "hẻm 3m5"));
+  const r = boMenhDeKhenSai(boKhenKhongCanCu(["Anh nói nở hậu 4.5 nhỉ, em ghi rồi. Còn giá bán anh định rao là bao nhiêu?"], bc), bc);
+  ok("SOBIA-05 câu bịa bị bỏ, câu hỏi giá giữ", r.length === 1 && !/4\.5/.test(r[0]) && /giá bán/.test(r[0]), JSON.stringify(r));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

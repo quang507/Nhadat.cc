@@ -16,6 +16,9 @@ export type NgCanhReNhanh = {
   legal_status?: string | null;
   has_completion?: boolean | null;
   rent_income_vnd?: number | string | null;
+  rear_width_m?: number | string | null;
+  /** Chữ chủ nhà gõ vài lượt gần đây (không phải fact) — cho luật `kichTin`. */
+  lichSu?: string;
 };
 export type CauThem = { fact_key: string; priority: number; nhom: string };
 
@@ -29,9 +32,12 @@ const SO_CHUNG = /\b(?:so chung|dong so huu|chung so|dung ten chung|so dung chun
 const DANG_CHO_THUE = /\b(?:dang cho thue|dang thue|dang kinh doanh|hop dong thue|khach thue|cho [a-z0-9 ]{1,30} thue)\b/;
 const CO_HAN_HD = /\b(?:den|toi|het han|het)\s*(?:nam\s*)?(?:20\d\d|\d{1,2}\/20\d\d)\b|\b\d+\s*nam\s*nua\b/;
 const NHA_NAT = /\b(?:nha nat|nha cu nat|dap di xay lai|dap xay lai|mua dat tang nha|dat trong|chua xay)\b/;
+const NO_HAU = /\bno hau\b/;
+const NO_HAU_SO = /\bno hau\s*(?:la\s*|hon\s*|khoang\s*|tam\s*|ra\s*|thanh\s*)?\d/;
+const KHONG_NO_HAU = /\b(?:khong|ko|k|chua)\s*(?:co\s*)?no hau\b/;
 const THO_CU_DU = /\b(?:100|full|toan bo|het|du)\b/;
 
-type NgCanhLuat = { loai: string; deal: string; phap: string; tatCa: string; daHoi: Set<string>; c: NgCanhReNhanh };
+type NgCanhLuat = { loai: string; deal: string; phap: string; tatCa: string; lichSu: string; daHoi: Set<string>; c: NgCanhReNhanh };
 /** Một Ý CHÍNH của nhánh: khoá fact + dấu hiệu chủ nhà ĐÃ nói ý đó (có thì không hỏi). */
 type YChinh = CauThem & { daBiet?: (x: NgCanhLuat) => boolean };
 
@@ -48,6 +54,8 @@ type Luat = {
   /** Các ý chính cần thu của nhánh, theo thứ tự hỏi; ý đã biết (fact có sẵn hoặc `daBiet`) thì bỏ qua. */
   them?: YChinh[];
   bo?: string[];
+  /** Câu THÊM cũng hỏi ngay khi chữ chủ nhà vài lượt gần đây khớp mẫu này (không chờ trả lời câu `sau`). */
+  kichTin?: RegExp;
 };
 
 const co = (re: RegExp) => ({ tatCa }: NgCanhLuat) => re.test(tatCa);
@@ -144,6 +152,16 @@ export const RE_NHANH: Luat[] = [
     bo: ["so_phong_ngu", "so_wc", "noi_that", "tang_phu", "hoan_cong", "hien_trang"],
   },
   {
+    // 25/09/2026 (chủ dự án test Zalo: "5x12" rồi "nở hậu nhé" → bot bịa "nở hậu 4.5"; "nở hậu nhiu cộng vào diện tích nhà luôn").
+    id: "no_hau_chua_so",
+    ten: "nở hậu — bao nhiêu mét",
+    vi: "Chủ nhà nói nở hậu mà chưa nói số mét → hỏi nở hậu bao nhiêu mét (DB cộng vào diện tích, migration 20260925d)",
+    khi: ({ tatCa, lichSu, daHoi, c }) => !daHoi.has("no_hau") && (c.rear_width_m == null || c.rear_width_m === "") &&
+      NO_HAU.test(`${tatCa} · ${lichSu}`) && !NO_HAU_SO.test(`${tatCa} · ${lichSu}`) && !KHONG_NO_HAU.test(`${tatCa} · ${lichSu}`),
+    kichTin: NO_HAU,
+    them: [{ fact_key: "no_hau", priority: 15.4, nhom: "co_ban" }],
+  },
+  {
     id: "tho_cu_mot_phan",
     ten: "đất thổ cư một phần",
     vi: "Đất có thổ cư một phần → hỏi có lên thổ cư được không",
@@ -168,7 +186,8 @@ export function reNhanh(c: NgCanhReNhanh, vuaNoi?: string[]): { them: CauThem[];
   const phap = boDau(c.facts.filter((f) => f.question === "phap_ly" || f.question === "_tin_nay").map((f) => f.answer ?? "").join(" ") +
     " " + (c.legal_status ?? "").replace(/_/g, " "));
   const tatCa = boDau(c.facts.map((f) => f.answer ?? "").join(" · "));
-  const ctx: NgCanhLuat = { loai: c.loai ?? "", deal: c.deal ?? "", phap, tatCa, daHoi, c };
+  const lichSu = boDau(c.lichSu ?? "");
+  const ctx: NgCanhLuat = { loai: c.loai ?? "", deal: c.deal ?? "", phap, tatCa, lichSu, daHoi, c };
   const them = new Map<string, CauThem>();
   const bo = new Set<string>();
   const luat: string[] = [];
@@ -177,7 +196,7 @@ export function reNhanh(c: NgCanhReNhanh, vuaNoi?: string[]): { them: CauThem[];
     luat.push(l.id);
     // Vừa trả lời câu kích HOẶC một ý của chính nhánh này → hỏi tiếp ý còn thiếu kế tiếp (một ý mỗi lượt).
     const kich = [...(l.sau ?? []), ...(l.them ?? []).map((t) => t.fact_key)];
-    const reNgay = vuaNoi === undefined || kich.some((k) => vuaNoi.includes(k));
+    const reNgay = vuaNoi === undefined || kich.some((k) => vuaNoi.includes(k)) || !!l.kichTin?.test(lichSu);
     if (reNgay) {
       for (const t of l.them ?? []) {
         if (daHoi.has(t.fact_key) || them.has(t.fact_key) || t.daBiet?.(ctx)) continue;
@@ -201,8 +220,9 @@ export function apReNhanh<T extends { fact_key: string; priority?: number | null
 }
 
 /** Có cần đọc DB để rẽ nhánh không: câu vừa trả lời kích một luật THÊM, hoặc danh sách có câu mà luật nào đó BỎ. */
-export function canReNhanh(thieu: Array<{ fact_key: string }>, vuaNoi: string[] = []): boolean {
+export function canReNhanh(thieu: Array<{ fact_key: string }>, vuaNoi: string[] = [], lichSu = ""): boolean {
   const coBo = new Set(RE_NHANH.flatMap((l) => l.bo ?? []));
-  return RE_NHANH.some((l) => [...(l.sau ?? []), ...(l.them ?? []).map((t) => t.fact_key)].some((k) => vuaNoi.includes(k))) ||
+  const ls = boDau(lichSu);
+  return RE_NHANH.some((l) => [...(l.sau ?? []), ...(l.them ?? []).map((t) => t.fact_key)].some((k) => vuaNoi.includes(k)) || !!(ls && l.kichTin?.test(ls))) ||
     thieu.some((t) => coBo.has(t.fact_key));
 }

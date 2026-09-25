@@ -4193,6 +4193,17 @@ begin
       new.area_m2 := round((new.frontage_m * new.length_m)::numeric, 1);
     end if;
   end if;
+  -- 20260925d: nở hậu → diện tích hình thang, chỉ khi diện tích đang là ngang × dài do hệ thống nhân.
+  if new.rear_width_m is not null and new.frontage_m is not null and new.length_m is not null
+     and new.rear_width_m > new.frontage_m and new.rear_width_m <= new.frontage_m * 3
+     and new.area_m2 = round((new.frontage_m * new.length_m)::numeric, 1)
+     and not exists (
+       select 1 from public.listing_facts f
+        where f.listing_id = new.id and f.question in ('dien_tich', 'dien_tich_dat')
+          and public.bo_dau(coalesce(f.answer, '')) ~ '\d\s*(m2|m²|met vuong|m vuong)'
+     ) then
+    new.area_m2 := round(((new.frontage_m + new.rear_width_m) / 2 * new.length_m)::numeric, 1);
+  end if;
   if new.location_raw is not null then
     new.location_raw := btrim(regexp_replace(regexp_replace(new.location_raw, '\s*,(\s*,)+', ',', 'g'), '^[\s,]+|[\s,]+$', '', 'g'));
   end if;
