@@ -2761,12 +2761,17 @@ fresh(seedKho);
         !db().t.info_requests.some((q) => q.question === "do_rong_hem" && q.status === "pending") && !tin().ward,
       JSON.stringify({ hoiDiaChi, rep: rp.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
     // Bắn thật lx-29: "quận 5 em" → ward thành "quận 5". Chỉ nói quận → ghi quận, ward trống, hỏi phường theo bảng đường.
-    globalThis.__model.create = () => { throw new Error("model chết"); };
+    // Bắn lại lx-30 sau #308: model viết lại mất tên phường ("Dạ nhà anh thuộc phường nào vậy anh?") và 🤖 báo "Không bóc
+    // tách được gì" dù quận đã ghi. Câu hỏi phường giữ nguyên văn gợi ý; 🤖 báo quận.
+    globalThis.__model.create = () => "Dạ nhà anh thuộc phường nào vậy anh?";
+    const chCu = globalThis.__cauHinh;
+    globalThis.__cauHinh = { ...(chCu ?? {}), bao_lai_da_luu: "thay_doi" };
     rp = await send({ external_user_id: "ph-adv", text: "quận 5 em" });
+    globalThis.__cauHinh = chCu;
     globalThis.__model.create = undefined;
-    check("PH-13b 'quận 5 em' khi hỏi phường/quận → district Quận 5, ward TRỐNG, câu phường treo, hỏi chọn 'Phường Chợ Quán hay Phường An Đông'",
+    check("PH-13b 'quận 5 em' khi hỏi phường/quận → district Quận 5, ward TRỐNG, câu phường treo, hỏi chọn 'Phường Chợ Quán hay Phường An Đông' (dù model bỏ tên phường), 🤖 báo quận",
       tin().district === "Quận 5" && !tin().ward && pendPh() && !db().t.listing_facts.some((f) => f.question === "phuong") &&
-        /Phường Chợ Quán hay Phường An Đông/.test(rp.body.replies.join(" ")),
+        /Phường Chợ Quán hay Phường An Đông/.test(rp.body.replies.join(" ")) && rp.body.replies.some((x) => /^🤖.*quận: "Quận 5"/.test(x)),
       JSON.stringify({ rep: rp.body.replies, l: { w: tin().ward, d: tin().district }, f: db().t.listing_facts.filter((f) => f.question === "phuong") }));
   }
 

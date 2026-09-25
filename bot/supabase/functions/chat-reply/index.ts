@@ -1618,6 +1618,8 @@ Deno.serve(async (req) => {
     // "ca 2 can deu quan 10 nhe" từng bị bỏ qua vì câu chờ là loại BĐS).
     const CA_LO_RE = /\b(?:ca|het)\s+(?:2|3|4|hai|ba|bon|lo|may|cac)\b|\bdeu\b|\bca lo\b/;
     /** Trả về chữ đã ghi ("Quận 10", "Quận 10 cho 2 căn") hay null khi không đổi gì. */
+    // 25/09/2026 (bắn thật lx-30): "quận 5 em" ghi quận vào cột (không qua fact) → 🤖 báo "Không bóc tách được gì".
+    let quanVuaGhi: string | null = null;
     const capNhatQuan = async (listingId: string | null): Promise<string | null> => {
       if (!listingId) return null;
       // Truyền cả bản THÔ: "quán 2 tầng" bỏ dấu thành "quan 2 tang", không có
@@ -1625,6 +1627,7 @@ Deno.serve(async (req) => {
       // FR-214: câu đã chia mảnh theo tin → quận ở mảnh căn KHÁC không phải quận của căn đang hỏi.
       const q = textTreo !== null ? bocQuan(boDau(textTreo), textTreo) : bocQuan(tKD, text);
       if (!q) return null;
+      quanVuaGhi = q;
       const ids: string[] = [listingId];
       if (CA_LO_RE.test(tKD)) {
         const { data: dsLo } = await client.from("listings").select("id, district, boc_tach").eq("seller_id", sellerRow.id)
@@ -2090,7 +2093,12 @@ Deno.serve(async (req) => {
           const kem = kemLuotTao(factLuot, FACT_LABELS, dong);
           return { bong: [bocTachTaoTin(dong), dongHoSo, kem].filter(Boolean).join("\n") || null, cheDo };
         }
-        return { bong: [vuaLuuBan(factLuot, FACT_LABELS) ?? KHONG_BOC, dongHoSo].filter(Boolean).join("\n"), cheDo };
+        const bocLuot = vuaLuuBan(factLuot, FACT_LABELS);
+        const dongQuan = quanVuaGhi ? `quận: "${quanVuaGhi}"` : null;
+        const bocDu = bocLuot
+          ? (dongQuan && !/\bquận:/.test(bocLuot) ? `${bocLuot} · ${dongQuan}` : bocLuot)
+          : dongQuan ? `${BOC_DUOC} ${dongQuan}` : KHONG_BOC;
+        return { bong: [bocDu, dongHoSo].filter(Boolean).join("\n"), cheDo };
       } catch (e) {
         await ghiLoi(client, "chat-reply bao_lai_da_luu", e);
         return { bong: null, cheDo: "tat" };
@@ -4273,6 +4281,9 @@ Deno.serve(async (req) => {
             await ghiLoi(client, "chat-reply model r2b(hoi lai)", e);
           }
         }
+        // Bắn thật lx-30: model được đưa câu gợi ý phường nhưng viết lại mất tên phường ("nhà anh thuộc phường nào vậy
+        // anh?"). Như câu xác nhận ở lượt rao: model lo phần ghi nhận, câu hỏi phường giữ nguyên văn gợi ý.
+        if (hoiLai && chiQuan && goiYSauQuan) hoiLai = `${hoiLai.replace(/[^.!?]*\?\s*$/u, "").trim()} ${goiYSauQuan}`.trim();
         if (!hoiLai) {
           hoiLai = (hoiNguoc && !hoiNguocDap ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (kq.loai === "xung_ho"
             ? `Dạ em nhớ rồi, em gọi ${kq.xungHo} nha. `
