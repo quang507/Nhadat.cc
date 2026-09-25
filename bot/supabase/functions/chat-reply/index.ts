@@ -71,7 +71,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { ghepMotChieu, gonLoiSua, laBoSungRac, laBoSungTrung, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, laBoSungRac, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 // Câu hỏi mà câu trả lời LÀ một số tiền nhưng không phải giá bán (FR-223): số tiền kèm theo không được ghi thành `gia`.
@@ -3895,7 +3895,10 @@ Deno.serve(async (req) => {
         (q === "phap_ly" && phapLyChuaSo({ question: q, answer: s })) ||
         // FR-223 (bắn thật 24/09, rn-test-h): hỏi tiền thuê, khách đáp "150 triệu một tháng" — AI xếp vào gia hoặc im → câu rơi
         // bổ sung. Số tiền đơn vị triệu trả lời câu tiền thuê là chắc.
-        (q === "doanh_thu" && /\d+(?:[.,]\d+)?\s*(?:trieu|tr)\b/.test(boDau(s)));
+        (q === "doanh_thu" && /\d+(?:[.,]\d+)?\s*(?:trieu|tr)\b/.test(boDau(s))) ||
+        // 25/09/2026 (ảnh chat thật): hỏi hẻm, khách đáp "hxh" / "hẻm xe hơi" / "ô tô vô tận nhà" — AI được dặn "không có số
+        // mét thì không phải độ rộng hẻm" nên im, luật gạt vào bổ sung rồi hỏi lại số mét ba lần. Loại đường vào là câu trả lời chắc.
+        ((q === "do_rong_hem" || q === "do_rong_duong") && LOAI_DUONG_VAO_RE.test(boDau(s)));
       let aiChinh: (AiChinh & { kienThuc: string[] }) | null = null;
       const cheDoAiTreo = bongAi && cheDoBocAi ? await cheDoBocAi : "tat";
       // Câu có đường riêng (`CAU_KHONG_LAY_AI`: phường, vị trí, ảnh…): AI không quyết GIÁ TRỊ câu treo,
@@ -3948,7 +3951,7 @@ Deno.serve(async (req) => {
       // 22/09/2026 (kịch bản D): "nở hậu 4m5", "đang thế chấp", "cho thuê 30 triệu/tháng" — AI không trả khoá, cũng
       // không xếp vào kiến thức thêm → rơi. Khoá có BẰNG CHỨNG rõ trong chữ khách (số đo / cụm chữ đặc thù) mà AI
       // im thì luật ghi; AI có trả khoá đó thì AI vẫn thắng.
-      const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "thang_may", "dien_tich_san"]);
+      const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "thang_may", "dien_tich_san", "do_rong_hem"]);
       const factKem = (s: string): Array<{ question: string; answer: string }> => aiChinh
         ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => f.question !== "bo_sung" && (
             !KHOA_FACT_AI_BIET.has(f.question) ||

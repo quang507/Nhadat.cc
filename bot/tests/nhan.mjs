@@ -73,5 +73,6 @@ for (const [cau, mong] of [["khu yên tĩnh", true], ["sát chợ", true], ["kh�
 ok("laThuanNhan: tin CHƯA mang nhãn đó → không trùng (giữ thông tin)", laThuanNhan("khu an ninh", ["yen_tinh"]) === false);
 ok("laThuanNhan: tin đang mang nhãn đó → trùng", laThuanNhan("khu an ninh", ["an_ninh", "yen_tinh"]) === true);
 
+ok("ganNhan: 'ô tô vô tận nhà' (miền Nam: vô = vào) → xe hơi vào nhà", ganNhan("ô tô vô tận nhà").includes("xe_hoi_vao_nha"));
 console.log(hong ? `\nNHÃN: ${hong}/${tong} CA HỎNG` : `\nNHÃN: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

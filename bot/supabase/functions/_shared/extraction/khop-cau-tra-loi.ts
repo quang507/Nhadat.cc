@@ -451,6 +451,11 @@ export function catDapAn(question: string, dapAn: string): string {
   return gon && /[\p{L}\p{N}]/u.test(gon) ? gon : ra;
 }
 function catDapAnGoc(question: string, dapAn: string): string {
+  // 25/09/2026: "hxh" một mình → "hẻm xe hơi" (đọc được ở 🤖 và bản nháp; trigger vẫn đọc ra loại đường vào).
+  if ((question === "do_rong_hem" || question === "do_rong_duong") && /^\s*(?:hxh|hxt|hxm)\s*[.!]*\s*$/i.test(dapAn)) {
+    const t = dapAn.trim().toLowerCase().slice(0, 3);
+    return t === "hxt" ? "hẻm xe tải" : t === "hxm" ? "hẻm xe máy" : "hẻm xe hơi";
+  }
   // 15/09/2026: bỏ phần hỏi ngược trước khi cắt; đáp án chữ chỉ giữ MẢNH nói về đúng
   // câu đang hỏi — "Nhà 5 tầng, có thang máy thì phải, bạn có biết…" → kết cấu "Nhà 5
   // tầng"; "Được giá, căn tôi sở hữu nhưng chưa vào xem…" → gấp "Được giá".
@@ -718,6 +723,13 @@ export function laCauHoiTron(text: string): boolean {
   return kd.split(/\s+/).length >= 3 && DAU_HOI_RE.test(kd) && DUOI_HOI_RE.test(kd) && coTuHoi.test(kd);
 }
 
+/**
+ * Câu nói LOẠI đường vào — "hxh", "hẻm xe hơi", "hẻm ba gác", "ô tô vô tận nhà", "xe hơi không vào được", "mặt tiền" — là câu
+ * trả lời CHẮC cho câu hỏi hẻm, dù không có số mét (25/09/2026, chủ dự án: "hxh nó vẫn ko đọc được, nếu hẻm xe hơi thì hẻm
+ * rộng tầm bao nhiêu trở lên cái này nó phải tự nhận biết được"). Loại → cột `access_type` do trigger `boc_thong_so` đọc;
+ * hẻm xe hơi nghĩa là từ khoảng 3,5m (trigger dùng đúng ngưỡng đó khi chỉ có số mét) nên không hỏi lại số mét.
+ */
+export const LOAI_DUONG_VAO_RE = /\b(?:hxh|hxt|hxm|hem (?:xe hoi|oto|o to|xe tai|xe may|ba gac|3 gac|xe 3 banh|xe con|7 cho)|(?:xe hoi|o to|oto|xe tai|xe 4 banh|xe 7 cho)\s+(?:(?:khong|ko|k|kg|chua)\s+)?(?:vao|vo|toi|den|lot|do|dau|quay dau|ra vao)|(?:khong|ko|k|kg|chua)\s+(?:co\s+)?(?:xe hoi|o to|oto)\s+(?:nao\s+)?(?:vao|vo|toi)|(?<!\b(?:cach|gan|ra|sat|toi)\s)(?:mat tien|mat duong|mat pho))\b/;
 export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
   // 11/09/2026: bận / hoãn đứng TRƯỚC mọi luật khác — câu này không mang dữ liệu
   // nào (có số thì `laHoanLai` đã trả false), mà luật phường cũ nhận bất kỳ câu
@@ -734,6 +746,12 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
       const kqTL = phanLoaiCauTraLoi(question, traLoi);
       return { ...kqTL, hoiNguoc: hoi, dapAn: traLoi };
     }
+  }
+  // 25/09/2026: đang hỏi hẻm mà khách nói loại đường vào ("hxh", "ô tô vô tận nhà") → khớp, trước mọi luật nhận diện khác
+  // ("ô tô vô tận nhà" từng thành tiềm năng vì "o" bỏ dấu giống "ở"; "HXH quay đầu" từng chuyển sang hẻm thông).
+  if ((question === "do_rong_hem" || question === "do_rong_duong") && LOAI_DUONG_VAO_RE.test(boDau(text)) && !CAU_HOI_RE.test(boDau(text))) {
+    const xh = batXungHo(text);
+    return { loai: "khop", ...(xh ? { xungHo: xh } : {}) };
   }
   // 09/09/2026 tối (chạy 12 kịch bản trên production): câu trả lời bị ghi LỆCH
   // MỘT Ô hàng loạt — "Hẻm 4m" vào diện tích, "Đúc 5 tầng" vào số phòng ngủ,
@@ -1292,7 +1310,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 24/09/2026 (chủ dự án test Zalo): "ở Nguyễn Trãi quận 5" — tên đường KHÔNG có chữ "đường" đứng trước — cũng là
   // địa chỉ: chữ sau "ở" viết hoa (tên riêng) hoặc câu có quận/phường/huyện thì không phải cách dùng.
   const oLaDiaChi = /^\s*(?:nhà\s+)?ở\s+\p{Lu}/u.test(goc.trim()) || /\b(?:quan|q|phuong|p)\s*\d{1,2}\b|\b(?:quan|huyen|phuong|xa|tinh)\s+[a-z]/.test(kd);
-  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8 &&
+  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:to\b|duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8 &&
         !(/^\s*(?:nha\s+)?o\s/.test(kd) && oLaDiaChi)) ||
       (/\b(o hoac|hoac lam|deu duoc|lam can ho dich vu|lam chdv|hop (?:de )?(?:o|kinh doanh|cho thue|lam))\b/.test(kd) && kd.split(/\s+/).length <= 14 &&
         !/\b(showroom|lam xuong|van phong cong ty|nha hang|benh vien|truong hoc|lam kho)\b/.test(kd))) {
@@ -1351,7 +1369,8 @@ export function nhanDienFact(text: string): NhanDien | null {
       (m = new RegExp(`${SO}\\s*(?:m|met)\\s*hem\\b`).exec(kd))) {
     return { question: "do_rong_hem", answer: `hẻm ${m[1]}m` };
   }
-  if ((m = /\b(hem xe hoi|hem oto|hem o to|xe hoi (?:vao|toi|tới) (?:duoc|tan|toi)|hem xe tai)\b(?:\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:m|met)\b)?/.exec(kdD))) {
+  // 25/09/2026 (ảnh chat thật): "hxh", "ô tô vô tận nhà", "xe hơi không vào được" cũng là câu về đường vào.
+  if ((m = /\b(hxh|hxt|hxm|hem xe hoi|hem oto|hem o to|hem xe tai|hem xe may|hem ba gac|(?:xe hoi|o to|oto)\s+(?:(?:khong|ko|k|chua)\s+)?(?:vao|vo|toi|tới)(?:\s+(?:tan nha|toi nha|duoc|tan|toi|nha))?)\b(?:\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:m|met)\b)?/.exec(kdD))) {
     // 13/09/2026: cắt đúng cụm ("hẻm xe hơi 5m"), không lấy cả câu rao làm đáp án
     // — trigger đọc số ĐẦU TIÊN trong đáp án, câu "hẻm 102 … hẻm xe hơi" là ra 102.
     return { question: "do_rong_hem", answer: catGoc(m) };
