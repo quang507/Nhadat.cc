@@ -319,6 +319,11 @@ trong bridge dùng `ghiLoi("tên chỗ", detail)`; phía web thì `instrumentati
 đã bắt sẵn mọi lỗi server chưa bắt. Thêm `catch` mà quên nối là thêm một chỗ
 hỏng im lặng.
 
+**`=` trong khối `NOT (…)` của SQL là bẫy NULL** (bắt 25/09/2026). `listing_missing_facts` loại câu đã có dữ liệu
+bằng `NOT (… OR access_type = 'mat_tien' …)`; `access_type` trống → NULL → `NOT NULL` vẫn NULL → WHERE bỏ luôn dòng
+"thiếu hẻm": tin nào chưa có loại đường vào thì câu hẻm KHÔNG BAO GIỜ được hỏi. Mock e2e chạy bằng JS nên xanh suốt.
+So sánh bằng trên cột có thể trống thì dùng `IS NOT DISTINCT FROM`; `bot/tests/null-ba-tri.mjs` soi `schema.sql`.
+
 **Nhúng `listings ↔ sellers` PHẢI chỉ tên khoá ngoại** (bắt 15/09/2026). Từ
 `20260827h` bảng `sellers` có `active_listing_id → listings`, nên giữa hai bảng
 có HAI quan hệ và PostgREST từ chối `sellers(...)` trần trên select đi từ
