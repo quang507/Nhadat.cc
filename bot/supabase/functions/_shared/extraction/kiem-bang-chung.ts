@@ -632,8 +632,10 @@ export function kiemTraLoiCau(tl: TraLoiCau | null | undefined, tin: string): { 
   const kdTin = gon(tin);
   if (!v || v.length > 160 || !td) return { co: true, giaTri: null };
   if (!` ${kdTin} `.includes(` ${td} `) && !timMo(kdTin, td)) return { co: true, giaTri: null };
-  const soTin = new Set(kdTin.match(/\d+/g) ?? []);
-  if ((chuanSo(v).match(/\d+/g) ?? []).some((n) => !soTin.has(n))) return { co: true, giaTri: null };
+  // Số phải nằm trong CỤM TRÍCH, không chỉ đâu đó trong tin (bắn thật lx-21 25/09: "hxh, 5x12, trệt 3 lầu" khi hỏi hẻm →
+  // AI trả "hẻm xe hơi 5 mét", số 5 là chiều ngang).
+  const soTrich = new Set(td.match(/\d+/g) ?? []);
+  if ((chuanSo(v).match(/\d+/g) ?? []).some((n) => !soTrich.has(n))) return { co: true, giaTri: null };
   return { co: true, giaTri: v };
 }
 

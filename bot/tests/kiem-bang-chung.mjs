@@ -327,6 +327,7 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("TRALOI số có trong tin: '5 tỷ 2' từ '5ty2'", tl(true, "5 tỷ 2", "5ty2", "5ty2 thương lượng")?.giaTri === "5 tỷ 2");
   ok("TRALOI '3m5' ↔ '3,5m' cùng số", tl(true, "hẻm 3,5m", "hem 3m5", "hem 3m5 nha")?.giaTri === "hẻm 3,5m");
   ok("TRALOI trích dẫn chỉ là MẢNH của một từ ('co' trong 'cong') → bỏ", tl(true, "có", "co", "nha cong ty")?.giaTri === null);
+  ok("TRALOI BỎ số lấy từ ý khác: hỏi hẻm, 'hxh, 5x12' → 'hẻm xe hơi 5 mét' (5 không nằm trong cụm trích 'hxh')", tl(true, "hẻm xe hơi 5 mét", "hxh", "hxh, 5x12, trệt 3 lầu")?.giaTri === null);
   ok("TRALOI AI nói KHÔNG trả lời → { co: false }", JSON.stringify(tl(false, null, null, "hàng xóm xây năm 2019")) === JSON.stringify({ co: false, giaTri: null }));
   ok("TRALOI AI không nói gì (bản cũ / thiếu ô) → null", kiemTraLoiCau(null, "x") === null && kiemTraLoiCau(undefined, "x") === null);
 }
