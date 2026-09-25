@@ -731,5 +731,20 @@ for (const [cau, laTiemNang] of [
   ok("không nhắc hoàn công → trả nguyên mảng", (() => { const a = ["Sổ riêng hay sổ chung anh?"]; return boHoiHoanCong(a) === a; })());
 }
 
+// 25/09/2026 (bắn thật lx-07): số nhà trần → model tự nói "Nhà mặt tiền …". Chủ chưa nói mặt tiền / hẻm thì bỏ mệnh đề đó.
+{
+  const rao = "Bán nhà 105 Trần Bình Trọng quận 10, 4x15, 1 trệt 2 lầu, 3 phòng ngủ, sổ hồng riêng, giá 12 tỷ";
+  const r = boMenhDeKhenSai(["Nhà mặt tiền Trần Bình Trọng, ngang sâu vừa vặn, dễ bán lắm. Em đang rao, có khách hỏi là báo mình liền nha :)"], rao)[0];
+  ok("MT-01 số nhà trần, bot nói 'Nhà mặt tiền …' → bỏ mệnh đề đó, giữ phần còn lại", !/mặt tiền/i.test(r) && /Ngang sâu vừa vặn/.test(r) && /có khách hỏi/.test(r), r);
+  ok("MT-02 chủ ĐÃ nói 'mặt tiền' → giữ", boMenhDeKhenSai(["Nhà mặt tiền Trần Bình Trọng dễ cho thuê lắm ạ."], "bán nhà mặt tiền 105 Trần Bình Trọng")[0] === "Nhà mặt tiền Trần Bình Trọng dễ cho thuê lắm ạ.");
+  ok("MT-03 chủ nói 'MT' viết tắt → giữ", boMenhDeKhenSai(["Nhà mặt tiền kinh doanh tốt ạ."], "ban nha MT Tran Binh Trong 12 ty")[0] === "Nhà mặt tiền kinh doanh tốt ạ.");
+  ok("MT-04 'mặt tiền 4m' là chiều ngang, không phải vị trí → giữ", boMenhDeKhenSai(["Mặt tiền 4m nở hậu nhẹ là đẹp rồi ạ."], "4x15 no hau")[0] === "Mặt tiền 4m nở hậu nhẹ là đẹp rồi ạ.");
+  ok("MT-05 câu HỎI mặt tiền hay hẻm → giữ", boMenhDeKhenSai(["Nhà mình mặt tiền hay trong hẻm vậy anh?"], rao)[0] === "Nhà mình mặt tiền hay trong hẻm vậy anh?");
+  const h = boMenhDeKhenSai(["Nhà trong hẻm yên tĩnh, ở sướng lắm. Anh cần bán gấp không ạ?"], rao)[0];
+  ok("MT-06 số nhà trần, bot nói 'nhà trong hẻm' → bỏ, giữ câu hỏi", !/hẻm/.test(h) && /bán gấp/.test(h), h);
+  ok("MT-07 số nhà có xuyệt '105/12' → 'trong hẻm' có căn cứ, giữ", boMenhDeKhenSai(["Nhà trong hẻm yên tĩnh lắm ạ."], "bán nhà 105/12 Trần Bình Trọng")[0] === "Nhà trong hẻm yên tĩnh lắm ạ.");
+  ok("MT-08 chủ nói 'HXH' → 'hẻm' có căn cứ, giữ", boMenhDeKhenSai(["Hẻm rộng thoáng ạ."], "nha HXH 6m")[0] === "Hẻm rộng thoáng ạ.");
+}
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

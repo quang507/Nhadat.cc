@@ -338,6 +338,8 @@ export const CAU_HOI_MAU: Record<string, string> = {
   tho_cu: "Trong đó thổ cư được bao nhiêu m2 {ac}?",
   mat_tien: "Ngang mặt tiền mấy mét {ac}?",
   do_rong_hem: "Hẻm trước nhà rộng mấy mét, ô tô vào được không {ac}?",
+  // 25/09/2026: số nhà có dấu xuyệt ("105/12 …") gần như chắc là nhà trong hẻm — hỏi XÁC NHẬN thay vì hỏi trống.
+  "do_rong_hem@so_nha_hem": "Nhà mình nằm trong hẻm đúng không {ac}, hẻm rộng mấy mét, ô tô vào tới cửa không?",
   do_rong_duong: "Đường trước đất rộng mấy mét {ac}?",
   ket_cau: "Nhà mình xây mấy tầng rồi {ac}?",
   so_phong_ngu: "Tổng cộng bao nhiêu phòng ngủ {ac}?",

@@ -579,6 +579,11 @@ const KHEN_CAN_BANG_CHUNG: Array<[RegExp, RegExp]> = [
   [/\bno hau\b/, /\bno hau\b/],
   [/\bhoan cong\b/, /\bhoan cong\b/],
   [/\b(?:so hong rieng|so rieng|shr)\b/, /\b(?:so hong rieng|so rieng|shr|so hong)\b/],
+  // 25/09/2026 (bắn thật lx-07): "Bán nhà 105 Trần Bình Trọng quận 10…" → bot "Nhà mặt tiền Trần Bình Trọng…".
+  // Số nhà trần không nói nhà mặt tiền hay trong hẻm (người rao hay bỏ số hẻm) — chủ chưa nói thì model không được
+  // khẳng định. "mặt tiền 4m" / "ngang mặt tiền" là CHIỀU NGANG, không phải vị trí — để yên.
+  [/(?<!ngang\s)\bmat tien\b(?!\s*(?:rong\s*|ngang\s*|la\s*|khoang\s*|tam\s*)?\d)|\bmat (?:pho|duong)\b/, /\b(?:mat tien|mat pho|mat duong|mt|mtkd|2mt)\b/],
+  [/\b(?:hem|hxh|hxt|hxm)\b/, /\b(?:hem|hxh|hxt|hxm|kiet|ngo|ngach)\b|\d\s*\/\s*\d/],
 ];
 export function boKhenKhongCanCu(replies: string[], bangChung: string): string[] {
   const bc = boDau(bangChung ?? "");
