@@ -254,6 +254,7 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
 ok("FR226 soNhaDau 'số 45 nha' → 45; '137/28 nhé em' → 137/28; '45' trần / '4 tỷ' → null",
   soNhaDau("số 45 nha")?.soNha === "45" && soNhaDau("137/28 nhé em")?.soNha === "137/28" && soNhaDau("45") === null && soNhaDau("4 tỷ") === null,
   JSON.stringify([soNhaDau("số 45 nha"), soNhaDau("137/28 nhé em"), soNhaDau("45"), soNhaDau("4 tỷ")]));
+ok("FR226 câu hẻm 'hxh, 5x12, trệt 3 lầu' → ô hẻm 'hẻm xe hơi' (không 'hxh' trần)", catDapAn("do_rong_hem", "hxh, 5x12, trệt 3 lầu") === "hẻm xe hơi", catDapAn("do_rong_hem", "hxh, 5x12, trệt 3 lầu"));
 
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

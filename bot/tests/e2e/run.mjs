@@ -2171,6 +2171,9 @@ fresh(seedKho);
     // luật: khớp (ghi năm xây của NHÀ HÀNG XÓM)
     { ma: "TRALOI-03", q: "nam_xay", cau: "hàng xóm mới xây năm 2019 cao hơn nhà em",
       tl: { co_tra_loi: false, gia_tri: null, trich_dan: null }, ghi: null },
+    // Bắn thật lx-21 (25/09): AI lấy số của ý khác ("5x12") làm độ rộng hẻm → bỏ; luật đọc "hxh" → "hẻm xe hơi"
+    { ma: "TRALOI-05", q: "do_rong_hem", cau: "hxh, 5x12, trệt 3 lầu",
+      tl: { co_tra_loi: true, gia_tri: "hẻm xe hơi 5 mét", trich_dan: "hxh" }, ghi: "hẻm xe hơi" },
     // AI nói có nhưng BỊA số (không có trong tin) → không lấy chữ AI; luật đọc như cũ
     { ma: "TRALOI-04", q: "gap", cau: "ừ có",
       tl: { co_tra_loi: true, gia_tri: "có, cần bán gấp trong 2 tháng", trich_dan: "ừ có" }, ghi: "ừ có" },
@@ -2229,7 +2232,9 @@ fresh(seedKho);
     const fG = (q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === q);
     check("GOP-01 địa chỉ 'Ngô Y Linh' + 'số 45 nha' → địa chỉ '45 Ngô Y Linh' (bản AI bịa '45/12' bị bỏ), KHÔNG thành phường, KHÔNG bổ sung 'số 45', câu phường vẫn treo",
       L.location_raw === "45 Ngô Y Linh" && !fG("vi_tri").some((f) => /12/.test(f.answer)) && !fG("phuong").length && !fG("bo_sung").some((f) => /45/.test(f.answer)) &&
-        db().t.info_requests.some((x) => x.listing_id === L.id && x.question === "phuong" && x.status === "pending"),
+        db().t.info_requests.some((x) => x.listing_id === L.id && x.question === "phuong" && x.status === "pending") &&
+        // Câu tiền định (không để model nói "em hiểu nhầm" — bắn thật lx-21): chỉ hỏi lại câu phường, 🤖 báo địa chỉ mới.
+        rG.body.replies.some((x) => /phường/.test(x) && !/hiểu nhầm/.test(x)) && rG.body.replies.some((x) => /^🤖.*45 Ngô Y Linh/.test(x)),
       JSON.stringify({ lr: L.location_raw, vt: fG("vi_tri"), ph: fG("phuong"), bs: fG("bo_sung"), ir: db().t.info_requests.filter((x) => x.listing_id === L.id).map((x) => [x.question, x.status]), rep: rG.body.replies }));
   }
   {

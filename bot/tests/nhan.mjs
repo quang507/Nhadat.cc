@@ -78,6 +78,9 @@ ok("ganNhan: 'ô tô vô tận nhà' (miền Nam: vô = vào) → xe hơi vào n
 la("hàng xóm mới xây năm 2019 cao hơn nhà em", []);
 la("nhà bên cạnh mới xây lại", []);
 la("nhà mới xây năm ngoái, 4 tấm", ["moi_sua"]);
+// 25/09/2026 (bắn thật lx-21): "có sân thượng" / "có sẵn" không phải sân vườn.
+la("có sân thượng nữa em", ["san_thuong"]);
+la("nội thất có sẵn", []);
 
 console.log(hong ? `\nNHÃN: ${hong}/${tong} CA HỎNG` : `\nNHÃN: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

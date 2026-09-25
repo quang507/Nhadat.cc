@@ -3863,6 +3863,13 @@ Deno.serve(async (req) => {
             soNhaGhep = `${sn.soNha} ${lr}`;
             // Tin CHỈ có số nhà ("số 45 nha") → không còn gì để trả lời câu đang hỏi (bản trước: "số 45" thành phường).
             dapAn = sn.conLai;
+            // Bắn thật lx-21 (25/09): để model tự nói thì ra "Số 45 là số nhà hả anh, em hiểu nhầm" — câu tiền định, hỏi lại câu treo.
+            if (!dapAn.trim() && !humanActive) {
+              return await traLoiSeller(
+                [`Dạ em ghi địa chỉ ${soNhaGhep} rồi ạ. ${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`],
+                { saved_fact: "vi_tri", reask: pendingReq.question, loai_cau: "so_nha" },
+              );
+            }
           }
         }
       }

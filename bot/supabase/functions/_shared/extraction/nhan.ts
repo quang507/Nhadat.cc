@@ -49,7 +49,8 @@ export const TU_DIEN_NHAN: Record<string, Nhan> = {
   xe_hoi_quay_dau: { ten: "xe hơi quay đầu", khop: /\b(?:(?:xe hoi|o to|oto|xe tai|xe \d{1,2} cho|hxh) (?:quay dau|quay xe|de quay dau|vao quay dau|vao va quay dau|vao tan nha quay dau)|quay dau (?:xe hoi|o to|oto|xe tai)|hem quay dau (?:thoai mai|duoc|de dang))\b/, phuDinh: true },
   thang_may: { ten: "có thang máy", khop: /\b(?:co thang may|thang may rieng|lap thang may|thang may)\b/, phuDinh: true },
   san_thuong: { ten: "sân thượng", khop: /\b(?:san thuong)\b/ },
-  san_vuon: { ten: "sân vườn", khop: /\b(?:san vuon|co san|vuon rong|dat vuon rong|san truoc|san sau)\b/ },
+  // 25/09/2026 (bắn thật lx-21): "có sân thượng" / "có sẵn" bỏ dấu cũng là "co san" — không phải sân vườn.
+  san_vuon: { ten: "sân vườn", khop: /\b(?:san vuon|co san (?:rong|de xe|choi|truoc|sau)|vuon rong|dat vuon rong|san truoc|san sau)\b/ },
   gac_lung: { ten: "có gác lửng", khop: /\b(?:gac lung|co gac|lung)\b/ },
   noi_that_full: { ten: "full nội thất", khop: /\b(?:full noi that|full nt|day du noi that|noi that day du|de lai het noi that|noi that cao cap)\b/ },
   kinh_doanh: { ten: "kinh doanh được", khop: /\b(?:kinh doanh|buon ban|mo shop|mo quan|mo tiem|lam van phong|van phong duoc|cho thue kinh doanh|tien buon ban|quan an|phu hop (?:mo )?quan)\b/ },

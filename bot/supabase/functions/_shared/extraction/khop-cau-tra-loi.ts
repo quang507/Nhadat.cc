@@ -461,6 +461,8 @@ export function bocViTriRao(text: string): string | null {
 const DEM_CUOI_DAP_AN = /(?:[\s,.;!]+(?:em|anh|chị|cô|chú|bác|cháu|ạ|á|nha|nhé|nhe|nhen|nghen|nè|ơi|đó|đấy|nhỉ|hen))+[\s.!,]*$/u;
 export function catDapAn(question: string, dapAn: string): string {
   const ra = catDapAnGoc(question, dapAn);
+  // "hxh, 5x12, trệt 3 lầu" cắt còn "hxh" → chữ đầy đủ như khi khách chỉ gõ "hxh" (bắn thật lx-21).
+  if ((question === "do_rong_hem" || question === "do_rong_duong") && /^\s*(?:hxh|hxt|hxm)\s*$/i.test(ra)) return catDapAnGoc(question, ra.trim());
   const gon = ra.replace(DEM_CUOI_DAP_AN, "").trim();
   return gon && /[\p{L}\p{N}]/u.test(gon) ? gon : ra;
 }
