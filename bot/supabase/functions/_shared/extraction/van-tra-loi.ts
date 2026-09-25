@@ -661,7 +661,9 @@ export function boMenhDeKhenSai(replies: string[], bangChung: string): string[] 
     }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
     if (dong) ra.push(dong);
   }
-  return ra.length ? ra : replies;
+  // 25/09/2026 (bắn lại lx-26 sau #305): lượt đầu model chỉ viết MỘT câu khen ("Hẻm 3m ô tô vào được là khách chuộng
+  // lắm ạ." khi khách nói hxm) — lọc sạch mà trả lại bản gốc là để lọt đúng câu sai. Nơi gọi đã có câu dự phòng khi rỗng.
+  return ra;
 }
 
 // Lỗi 3: bot viết "#BDS-NP-Q5-0004 · Hùng Vương …" cho khách MUA — FR-178 (a) cấm đọc mã tin cho khách, mua lẫn
