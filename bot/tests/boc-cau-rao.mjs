@@ -4,7 +4,7 @@
 // Phần SQL của cùng lượt bắn (fact "cách mặt tiền" vào cột, "p5" dính tên đường, xe hơi
 // trong nhà) ở migration 20260914b.
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
-import { bocViTriRao, laBoSungRac, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { bocViTriRao, catDapAn, laBoSungRac, laBoSungTrung, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -178,6 +178,36 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   ok("'105 Trần Bình Trọng' → KHÔNG suy ra", !laSoNhaHem("105 Trần Bình Trọng, Quận 10"));
   ok("'Đường 3/2 Quận 10' → KHÔNG (tên đường)", !laSoNhaHem("Đường 3/2 Quận 10"));
   ok("rỗng → KHÔNG", !laSoNhaHem(null) && !laSoNhaHem(""));
+}
+
+// 25/09/2026 (chủ dự án "làm sao cho nó bóc thông tin đúng và ko ghi trùng"): mảnh bổ sung chỉ nói lại ô đã có → trùng.
+{
+  const ca = [
+    ["xe hơi không vào được", { facts: { do_rong_hem: "3m" }, access_type: "hem_xe_may", alley_width_m: 3 }, true],
+    ["xe hơi vào tới cửa (ô đang ghi hẻm xe máy) → thông tin mới, giữ", { facts: { do_rong_hem: "3m" }, access_type: "hem_xe_may", alley_width_m: 3 }, false, "xe hơi vào tới cửa"],
+    ["xe hơi vào tới cửa", { facts: { do_rong_hem: "hẻm xe hơi 5m" }, access_type: "hem_xe_hoi" }, true],
+    ["hẻm thông ra chợ", { facts: { do_rong_hem: "4m" }, access_type: "hem_xe_hoi" }, false],
+    ["xe hơi không vào được (chưa có ô hẻm)", {}, false, "xe hơi không vào được"],
+    ["sân thượng", { floors_text: "trệt + lửng + 2 lầu + sân thượng" }, true],
+    ["ko có lửng", { floors_text: "trệt + 4 lầu" }, true],
+    ["có gác lửng (kết cấu chưa có lửng) → mới", { floors_text: "trệt + 2 lầu" }, false, "có gác lửng"],
+    ["có gác lửng", { floors_text: "trệt + lửng + 2 lầu" }, true],
+    ["tầng trệt trần cao 4m thông suốt không vách ngăn", { floors_text: "trệt + 1 lầu" }, false],
+    ["sổ hồng riêng", { legal_status: "so_hong_rieng" }, true],
+    ["sổ hồng riêng chính chủ", { legal_status: "so_hong_rieng" }, false],
+    ["chưa có sổ", { legal_status: "so_hong_rieng" }, false],
+    ["mưa lớn không lo dột", { floors_text: "trệt + 2 lầu" }, false],
+    ["tầng 1 và 2 để kinh doanh đang cho techcombank thuê", { floors_text: "trệt + 4 lầu" }, false],
+  ];
+  for (const [ten, c, mong, cau] of ca) ok(`TRUNG '${ten}' → ${mong ? "trùng" : "giữ"}`, laBoSungTrung(cau ?? ten, c) === mong);
+}
+
+// 25/09/2026 (dữ liệu thật: pháp lý "Shr em"): chữ đệm / xưng hô viết thường ở cuối câu trả lời không vào ô; tên riêng giữ.
+{
+  const ca = [["phap_ly", "Shr em", "Shr"], ["phap_ly", "sổ hồng riêng rồi em", "sổ hồng riêng rồi"], ["do_rong_hem", "hẻm 3m thôi nha", "hẻm 3m thôi"],
+    ["vi_tri", "12 Cô Giang", "12 Cô Giang"], ["vi_tri", "45 Lê Văn Anh", "45 Lê Văn Anh"], ["ket_cau", "1 trệt 4 lầu đó anh", "1 trệt 4 lầu"],
+    ["gap", "em", "em"], ["hoan_cong", "hoàn công rồi", "hoàn công rồi"]];
+  for (const [q, a, m] of ca) ok(`DEM '${a}' (${q}) → '${m}'`, catDapAn(q, a) === m, catDapAn(q, a));
 }
 
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);

@@ -150,6 +150,17 @@ la("tin nghèo thông tin: chỉ có mấy dòng, không bịa dòng nào",
   datNhap.split("\n").length <= 8 && !/🏗|🧭|📜/.test(datNhap), datNhap);
 la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.test(dung(NHA_PHO, true)), dung(NHA_PHO, true).split("\n").at(-1));
 
+// 25/09/2026 (chủ dự án "ko ghi trùng"): 📝 Thêm không in lại điều kết cấu / đường vào / sổ / nhãn đã có — lọc cả dữ liệu cũ.
+{
+  const tin = { ...NHA_PHO, l: { ...NHA_PHO.l, floors_text: "trệt + lửng + 2 lầu + sân thượng", alley_width_m: 3, access_type: "hem_xe_may", nhan: ["san_thuong", "gac_lung"] },
+    facts: [...NHA_PHO.facts, { question: "do_rong_hem", answer: "3m" },
+      { question: "bo_sung", answer: "sân thượng" }, { question: "bo_sung", answer: "xe hơi không vào được" },
+      { question: "bo_sung", answer: "sổ hồng riêng" }, { question: "bo_sung", answer: "trần cao 4m thông suốt" }] };
+  const them = dung(tin).split("\n").find((x) => x.startsWith("📝")) ?? "";
+  la("TRUNG-01 📝 Thêm bỏ 'sân thượng', 'xe hơi không vào được', 'sổ hồng riêng' (ô đã có), giữ 'trần cao 4m thông suốt'",
+    !/sân thượng|xe hơi không vào|sổ hồng riêng/.test(them) && /trần cao 4m thông suốt/.test(them), them);
+}
+
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");

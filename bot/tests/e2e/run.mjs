@@ -1506,7 +1506,8 @@ fresh(seedKho);
   check("BLDL-02 day_du → bong bóng ĐẦU là 🤖, đứng riêng", /^🤖 Bóc tách được/.test(bl) && r.body.replies.length >= 2 && !r.body.replies.slice(1).some((x) => /🤖/.test(x)), JSON.stringify(r.body.replies));
   // 24/09/2026 (chủ dự án: "đừng đưa đã lưu nữa, mà là đã bóc tách được gì trong tin nhắn đó"): 🤖 chỉ nói thứ bóc
   // từ CHÍNH tin vừa nhắn, giá trị trong ngoặc kép — không in lại cả tin (địa chỉ, 6m², giá) như bản 21/09.
-  check("BLDL-03 🤖 'Bóc tách được' chỉ nói thứ bóc từ tin NÀY (pháp lý, trong ngoặc kép), KHÔNG in lại cả tin (địa chỉ/6m²/giá), không 📦", /^🤖 Bóc tách được: pháp lý: "sổ hồng riêng em"/.test(bl) && !/Nguyễn Trãi|6m²|giá/.test(bl) && !/📦 Tin giờ/.test(bl), `${LB.status} | ${bl}`);
+  // 25/09/2026: chữ đệm cuối câu ("… em") không vào ô — giá trị là "sổ hồng riêng".
+  check("BLDL-03 🤖 'Bóc tách được' chỉ nói thứ bóc từ tin NÀY (pháp lý, trong ngoặc kép), KHÔNG in lại cả tin (địa chỉ/6m²/giá), không 📦", /^🤖 Bóc tách được: pháp lý: "sổ hồng riêng"/.test(bl) && !/sổ hồng riêng em/.test(bl) && !/Nguyễn Trãi|6m²|giá/.test(bl) && !/📦 Tin giờ/.test(bl), `${LB.status} | ${bl}`);
   check("BLDL-03b 🤖 đọc SAU khi ghi: pháp lý chủ vừa trả lời trong CHÍNH lượt này có mặt trong tóm tắt", /^🤖 Bóc tách được: .*sổ hồng riêng/.test(bl), bl);
   check("BLDL-04 'Bóc tách được' chỉ có fact CỦA LƯỢT NÀY — không kèm '6x11' đã lưu lượt trước", !/6x11/.test(bl), bl);
   check("BLDL-05 🤖 vào sổ tin như mọi câu bot", db().t.messages.some((m) => m.sender === "bot" && /^🤖/.test(m.body ?? "")));
@@ -1548,7 +1549,7 @@ fresh(seedKho);
   db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
   r = await send({ external_user_id: "z-ccrb", text: "sổ hồng riêng em" });
   bl = r.body.replies[0] ?? "";
-  check("BLDL-08 thay_doi → 🤖 là bong bóng ĐẦU, riêng, chỉ thứ bóc từ tin này (pháp lý), không 📦, không mã tin", /^🤖 Bóc tách được: pháp lý: "sổ hồng riêng em"$/.test(bl) && !/📦 Tin giờ/.test(bl) && !/BDS-Q5/.test(bl), JSON.stringify(r.body.replies));
+  check("BLDL-08 thay_doi → 🤖 là bong bóng ĐẦU, riêng, chỉ thứ bóc từ tin này (pháp lý), không 📦, không mã tin", /^🤖 Bóc tách được: pháp lý: "sổ hồng riêng"$/.test(bl) && !/📦 Tin giờ/.test(bl) && !/BDS-Q5/.test(bl), JSON.stringify(r.body.replies));
   r = await send({ external_user_id: "z-ccrb", text: "dạ em" });
   check("BLDL-09 tin khách không bóc được gì → 🤖 'Không bóc tách được gì từ tin này.' (24/09: không bóc được cũng nói ra)", r.body.replies[0] === "🤖 Không bóc tách được gì từ tin này." && r.body.replies.length >= 2, JSON.stringify(r.body.replies));
   LB.area_m2 = 66;
@@ -1578,7 +1579,7 @@ fresh(seedKho);
   r = await send({ external_user_id: "z-ccrb", text: "vi bằng thôi em, cần bán gấp" });
   bl = r.body.replies[0] ?? "";
   check("BLDL-10f fact lượt này có cột mà cột trống (pháp lý 'vi bằng' — trigger không đổi ra legal_status) + 'gấp' → vẫn in ở Kèm, không thiếu",
-    /^🤖 Bóc tách được: .*pháp lý: "vi bằng thôi em"/.test(bl) && /gấp/.test(bl) && !LB.legal_status, JSON.stringify({ bl, legal: LB.legal_status, f: db().t.listing_facts.filter((f) => f.listing_id === LB.id).slice(-4).map((f) => [f.question, f.answer]) }));
+    /^🤖 Bóc tách được: .*pháp lý: "vi bằng thôi"/.test(bl) && /gấp/.test(bl) && !LB.legal_status, JSON.stringify({ bl, legal: LB.legal_status, f: db().t.listing_facts.filter((f) => f.listing_id === LB.id).slice(-4).map((f) => [f.question, f.answer]) }));
 
   // 23/09/2026 (chủ dự án: "xóa hoặc sửa luật cứng nhắc đó đi"): câu lệnh gửi model KHÔNG còn ép chép nguyên văn,
   // "ĐÚNG MỘT", "Không hỏi gì khác", "dưới 30 từ" — vẫn nói ý hỏi chính để câu trả lời kế vào đúng ô.
@@ -2118,6 +2119,17 @@ fresh(seedKho);
     JSON.stringify({ f: f6("bo_sung"), rep: r.body.replies }));
   r = await send({ external_user_id: "aiboc-6", text: "shr, nhà ở từ 2019 rồi, gần chợ Bình Tây, khu này yên tĩnh lắm" });
   check("AIBOC-07b nhắn lại y chang → không ghi bo_sung trùng", f6("bo_sung").length === 1, JSON.stringify(f6("bo_sung")));
+
+  // 25/09/2026 (chủ dự án "ko ghi trùng"; bắn thật lx-12): hỏi hẻm, đáp "hẻm 3m thôi, xe hơi không vào được" → luật ghi hẻm 3m,
+  // AI trả kiến thức "xe hơi không vào được" — nói lại đúng điều ô hẻm đã giữ → KHÔNG ghi bo_sung.
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L6.id, question: "do_rong_hem", status: "pending" });
+  globalThis.__model.parse = (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: ["xe hơi không vào được", "hẻm yên tĩnh, hàng xóm thân thiện"], truong: [] } : OUT();
+  r = await send({ external_user_id: "aiboc-6", text: "hẻm 3m thôi, xe hơi không vào được, hẻm yên tĩnh, hàng xóm thân thiện" });
+  check("TRUNG-E1 'xe hơi không vào được' khi vừa ghi hẻm 3m → không vào bo_sung; 'hẻm yên tĩnh, hàng xóm thân thiện' (mới) vẫn ghi",
+    f6("do_rong_hem").length === 1 && !f6("bo_sung").some((f) => /xe hơi không vào/.test(f.answer)) && f6("bo_sung").some((f) => /hàng xóm thân thiện/.test(f.answer)),
+    JSON.stringify({ hem: f6("do_rong_hem"), bs: f6("bo_sung").map((f) => f.answer), rep: r.body.replies }));
 
   // ── 21/09/2026 chế độ `chinh` — ĐẢO TẦNG: AI đọc là đường chính có kiểm bằng chứng, luật đỡ (TS-AIBOC-06) ──
   // Câu rao mang đúng hai bẫy của TS-VAN-11: "giá 1 tỷ 8 căn 2 phòng ngủ" (đuôi giá rác) và "bàn giao quý 2 năm sau" (luật từng lấy làm tên đường).
