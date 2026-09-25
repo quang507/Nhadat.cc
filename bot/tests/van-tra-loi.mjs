@@ -579,6 +579,10 @@ for (const [cau, mong] of [
   ok("laKhenSai: 'hẻm 3m' + 'khách chuộng' → không còn là hẻm nhỏ", !laKhenSai("Hẻm 3m khách chuộng lắm", "hẻm 3m"));
   ok("laKhenSai: 'hẻm 2m9' + 'khách chuộng' → sai", laKhenSai("Hẻm 2m9 khách chuộng lắm", "hẻm 2m9"));
   ok("laKhenSai: 'hxm' + 'khách chuộng' → sai", laKhenSai("Hxm này khách chuộng lắm", "hxm 3m"));
+  const r6 = boMenhDeKhenSai(["Hẻm 3m ô tô vào được thì khách chuộng lắm =) Em tra thấy đường Ngô Y Linh thuộc Phường An Lạc, đúng không anh chị?"], "cần bán nhà hxm 3m đường Ngô Y Linh");
+  ok("lx-25: khen 'ô tô vào' dính câu hỏi sau '=)' khi khách nói hxm → bỏ khen, giữ câu hỏi", r6.length === 1 && r6[0] === "Em tra thấy đường Ngô Y Linh thuộc Phường An Lạc, đúng không anh chị?", JSON.stringify(r6));
+  const r7 = boMenhDeKhenSai(["Hẻm xe hơi 5m, khách chuộng lắm. Mình cần bán gấp không ạ?"], "bán nhà hẻm 3m đường Lê Văn Việt");
+  ok("lx-24: vế chính bị cắt, còn 'khách chuộng lắm' → bỏ luôn mẩu cụt", r7.length === 1 && r7[0] === "Mình cần bán gấp không ạ?", JSON.stringify(r7));
   const m1 = boMaTinKhach(["Dạ em lưu lại rồi. Em có căn #BDS-NP-Q5-0004 · Hùng Vương Phường 4 · 6 tỷ 9 · 56m2 · 3PN, mình xem thử nha?"], {});
   ok("mã tin + '·' → bỏ mã và dấu, giữ địa chỉ", m1[0] === "Dạ em lưu lại rồi. Em có căn Hùng Vương Phường 4 · 6 tỷ 9 · 56m2 · 3PN, mình xem thử nha?", JSON.stringify(m1));
   const m2 = boMaTinKhach(["Dạ có căn #BDS-Q5-0001 hợp anh nè"], { "BDS-Q5-0001": "Trần Hưng Đạo" });
