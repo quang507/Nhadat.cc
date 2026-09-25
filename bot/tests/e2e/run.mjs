@@ -2152,6 +2152,46 @@ fresh(seedKho);
       JSON.stringify({ hem: fH("do_rong_hem"), bs: fH("bo_sung"), tn: fH("tiem_nang"), ir: db().t.info_requests.filter((x) => x.listing_id === LH.id).map((x) => [x.question, x.status]), rep: rH.body.replies }));
     if (i === 0) check("HXH-01b 'hxh' ghi thành chữ đọc được 'hẻm xe hơi'", fH("do_rong_hem")[0]?.answer === "hẻm xe hơi", JSON.stringify(fH("do_rong_hem")));
   }
+  // FR-224 (25/09/2026, chủ dự án: "đừng bắt theo từ nữa, bắt theo nguyên cả câu của khách để AI đọc lại"): chế độ `chinh`,
+  // AI đọc NGUYÊN tin và trả lời thẳng câu đang hỏi (`tra_loi`). Bốn câu luật đọc SAI (chạy thử phanLoaiCauTraLoi 25/09).
+  const CA_TRA_LOI = [
+    // luật: lệch → chuyển sang hien_trang_su_dung
+    { ma: "TRALOI-01", q: "do_rong_hem", cau: "nhà trong hẻm, xe hơi chạy vô tới cửa luôn",
+      tl: { co_tra_loi: true, gia_tri: "hẻm xe hơi vào tới cửa", trich_dan: "xe hơi chạy vô tới cửa luôn" }, ghi: "hẻm xe hơi vào tới cửa" },
+    // luật: lệch → chuyển sang ket_cau
+    { ma: "TRALOI-02", q: "thang_may", cau: "nhà 5 tầng có lắp thang máy riêng",
+      tl: { co_tra_loi: true, gia_tri: "có thang máy riêng", trich_dan: "có lắp thang máy riêng" }, ghi: "có thang máy riêng",
+      truong: [{ khoa: "so_tang", gia_tri: "5", trich_dan: "nhà 5 tầng", can: null }] },
+    // luật: khớp (ghi năm xây của NHÀ HÀNG XÓM)
+    { ma: "TRALOI-03", q: "nam_xay", cau: "hàng xóm mới xây năm 2019 cao hơn nhà em",
+      tl: { co_tra_loi: false, gia_tri: null, trich_dan: null }, ghi: null },
+    // AI nói có nhưng BỊA số (không có trong tin) → không lấy chữ AI; luật đọc như cũ
+    { ma: "TRALOI-04", q: "gap", cau: "ừ có",
+      tl: { co_tra_loi: true, gia_tri: "có, cần bán gấp trong 2 tháng", trich_dan: "ừ có" }, ghi: "ừ có" },
+  ];
+  for (const [i, ca] of CA_TRA_LOI.entries()) {
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: `traloi-${i}`, text: RAO_MT });
+    const LT = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LT.id, question: ca.q, status: "pending" });
+    let userMsg = "";
+    globalThis.__model.parse = (p) => {
+      if (!laLuotBocRao(p)) return OUT();
+      userMsg = String(p.messages?.[0]?.content ?? "");
+      return { so_can: 0, kien_thuc: [], truong: ca.truong ?? [], tra_loi: ca.tl };
+    };
+    const rT = await send({ external_user_id: `traloi-${i}`, text: ca.cau });
+    const fT = (q) => db().t.listing_facts.filter((f) => f.listing_id === LT.id && f.question === q);
+    const irT = (st) => db().t.info_requests.some((x) => x.listing_id === LT.id && x.question === ca.q && x.status === st);
+    const lech = db().t.listing_facts.filter((f) => f.listing_id === LT.id && ["hien_trang_su_dung", "ket_cau", "nam_xay"].includes(f.question) && f.question !== ca.q && f.answer === ca.cau);
+    check(`${ca.ma} hỏi ${ca.q}, khách '${ca.cau}' → ${ca.ghi ? `ghi '${ca.ghi}', câu xong` : "KHÔNG ghi, câu vẫn treo"}; không chuyển nguyên câu sang ô khác`,
+      (ca.ghi ? fT(ca.q).length === 1 && fT(ca.q)[0].answer === ca.ghi && irT("answered") && !irT("pending") : fT(ca.q).length === 0 && irT("pending")) && !lech.length,
+      JSON.stringify({ f: fT(ca.q), lech, ir: db().t.info_requests.filter((x) => x.listing_id === LT.id).map((x) => [x.question, x.status]), rep: rT.body.replies }));
+    if (i === 0) check("TRALOI-01b AI nhận cả CHỮ câu bot vừa hỏi (không chỉ khoá trần)", /do_rong_hem — "[^"]{10,}"/.test(userMsg), userMsg.slice(0, 200));
+  }
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ghi", bao_lai_da_luu: "thay_doi" };
 
   // ── 21/09/2026 chế độ `chinh` — ĐẢO TẦNG: AI đọc là đường chính có kiểm bằng chứng, luật đỡ (TS-AIBOC-06) ──

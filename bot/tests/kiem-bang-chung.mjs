@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { chonDeGhi, chonViTri, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { chonDeGhi, chonViTri, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -315,6 +315,20 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("'3PN' / '5 phòng ngủ' vẫn là phòng ngủ", pn("3", "3PN 3WC") === null && pn("5", "5 phòng ngủ") === null);
   ok("'xã Phước Vĩnh An' → 'Xã Phước Vĩnh An' (không thành Phường)", ghiCua([{ khoa: "phuong", gia_tri: "Phường Phước Vĩnh An", trich_dan: "xã Phước Vĩnh An" }], { deal: "ban" }) === "phuong=Xã Phước Vĩnh An");
   ok("'thị trấn Nhà Bè' → 'Thị trấn Nhà Bè'", ghiCua([{ khoa: "phuong", gia_tri: "thị trấn Nhà Bè", trich_dan: "thị trấn Nhà Bè" }], { deal: "ban" }) === "phuong=Thị trấn Nhà Bè");
+}
+
+// FR-224 (25/09/2026): AI trả lời thẳng câu đang hỏi — code chỉ kiểm trích dẫn có thật + mọi con số có trong tin.
+{
+  const tl = (co, v, td, tin) => kiemTraLoiCau({ co_tra_loi: co, gia_tri: v, trich_dan: td }, tin);
+  ok("TRALOI 'hxh.' → 'hẻm xe hơi' (dấu chấm cuối không làm gãy trích dẫn)", tl(true, "hẻm xe hơi", "hxh", "hxh.")?.giaTri === "hẻm xe hơi");
+  ok("TRALOI trích dẫn KHÔNG DẤU khớp tin có dấu", tl(true, "hẻm xe hơi vào tới cửa", "xe hoi chay vo toi cua", "nhà trong hẻm, xe hơi chạy vô tới cửa luôn")?.giaTri === "hẻm xe hơi vào tới cửa");
+  ok("TRALOI BỎ trích dẫn bịa (không có trong tin)", tl(true, "sổ hồng riêng", "sổ hồng riêng", "shr em")?.giaTri === null);
+  ok("TRALOI BỎ số bịa: 'trệt 2 lầu' không được thành '3 tầng'", tl(true, "3 tầng", "trệt 2 lầu", "nhà trệt 2 lầu nha")?.giaTri === null);
+  ok("TRALOI số có trong tin: '5 tỷ 2' từ '5ty2'", tl(true, "5 tỷ 2", "5ty2", "5ty2 thương lượng")?.giaTri === "5 tỷ 2");
+  ok("TRALOI '3m5' ↔ '3,5m' cùng số", tl(true, "hẻm 3,5m", "hem 3m5", "hem 3m5 nha")?.giaTri === "hẻm 3,5m");
+  ok("TRALOI trích dẫn chỉ là MẢNH của một từ ('co' trong 'cong') → bỏ", tl(true, "có", "co", "nha cong ty")?.giaTri === null);
+  ok("TRALOI AI nói KHÔNG trả lời → { co: false }", JSON.stringify(tl(false, null, null, "hàng xóm xây năm 2019")) === JSON.stringify({ co: false, giaTri: null }));
+  ok("TRALOI AI không nói gì (bản cũ / thiếu ô) → null", kiemTraLoiCau(null, "x") === null && kiemTraLoiCau(undefined, "x") === null);
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

@@ -603,6 +603,28 @@ export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | n
   return ghi[0]?.answer ?? null;
 }
 
+/**
+ * FR-224 (25/09/2026, chủ dự án: "bắt theo nguyên cả câu của khách để AI đọc lại"): AI đọc NGUYÊN tin, trả lời thẳng
+ * câu bot đang hỏi (`tra_loi`). Code chỉ kiểm hai điều: trích dẫn có thật trong tin (khớp đúng hoặc mờ như `kiemDeXuat`),
+ * và MỌI con số trong câu trả lời có trong tin (AI không được đổi "trệt 2 lầu" thành "3 tầng"). Không đạt → `giaTri` null
+ * (AI vẫn nói là CÓ trả lời — nơi gọi để luật đọc). null = AI không nói gì về câu đang hỏi.
+ */
+export type TraLoiCau = { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null };
+export function kiemTraLoiCau(tl: TraLoiCau | null | undefined, tin: string): { co: boolean; giaTri: string | null } | null {
+  if (!tl || typeof tl.co_tra_loi !== "boolean") return null;
+  if (!tl.co_tra_loi) return { co: false, giaTri: null };
+  const v = (tl.gia_tri ?? "").trim().replace(/[\s.]+$/, "");
+  // Dấu chấm không nằm giữa hai chữ số ("hxh.") là dấu câu — bỏ, để so theo ranh giới từ.
+  const gon = (x: string) => chuanSo(x).replace(/\.(?!\d)|(?<!\d)\./g, " ").replace(/\s+/g, " ").trim();
+  const td = gon(tl.trich_dan ?? "");
+  const kdTin = gon(tin);
+  if (!v || v.length > 160 || !td) return { co: true, giaTri: null };
+  if (!` ${kdTin} `.includes(` ${td} `) && !timMo(kdTin, td)) return { co: true, giaTri: null };
+  const soTin = new Set(kdTin.match(/\d+/g) ?? []);
+  if ((chuanSo(v).match(/\d+/g) ?? []).some((n) => !soTin.has(n))) return { co: true, giaTri: null };
+  return { co: true, giaTri: v };
+}
+
 /** Ngang / dài / nở hậu (m) trong đề xuất đạt của MỘT căn, qua kiểm khoảng 1–200 m. */
 function kichThuoc(mot: DeXuat[]): { ngang: number | null; dai: number | null; noHau: number | null } {
   const lay = (k: string) => {
