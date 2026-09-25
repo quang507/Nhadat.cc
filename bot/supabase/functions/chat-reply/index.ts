@@ -4526,6 +4526,11 @@ Deno.serve(async (req) => {
           // FR-177: một lượt một câu hỏi — cắt câu hỏi thứ hai của model (15/09/2026).
           // Chỉ áp cho lời MODEL: câu tiền định (xin chấm điểm, liệt kê căn) có chủ ý.
           if (sellerReply) sellerReply = motCauHoi([sellerReply])[0];
+          // 25/09/2026 (bắn thật lx-05): câu xác nhận / chọn phường, xác nhận tên đường do CODE tra ra → thay câu hỏi của
+          // model bằng câu đó NGUYÊN VĂN (model từng nói lại thành "phường nào vậy ạ?", rơi mất lựa chọn).
+          if (sellerReply && (cauDuongKe ?? goiYKe)) {
+            sellerReply = `${sellerReply.replace(/[^.!?]*\?\s*$/u, "").trim()} ${cauDuongKe ?? goiYKe}`.trim();
+          }
           await doTien(client, r2.usage);
         } catch (e) {
           await ghiLoi(client, "chat-reply model r2(seller)", e);
@@ -4858,6 +4863,7 @@ Deno.serve(async (req) => {
         const goiYDau = !cauDuongDau && firstKey === "phuong" && viTriRao && newLst
           ? await cauHoiPhuongGoiY(newLst.id, tenDuong(viTriRao), cachGoi)
           : null;
+        const cauXacNhanDau = cauDuongDau ?? goiYDau;
         const cauHoiDau = cauDuongDau ?? goiYDau ?? (firstKey
           // 12/09/2026: tin ở HUYỆN / thị xã / tỉnh lân cận thì đơn vị dưới là XÃ —
           // hỏi "thuộc phường mấy" cho đất Củ Chi là lộ ra máy đọc mẫu câu.
@@ -4891,7 +4897,12 @@ Deno.serve(async (req) => {
                 content:
                   `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ${hoiRaoPrompt}` +
                   `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao (${khenGanDay ? "KHÔNG khen, không nhận xét — mấy tin gần đây em đã khen rồi" : "nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi"}). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi - KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
-                  (firstKey
+                  (cauXacNhanDau
+                    // 25/09/2026 (bắn thật lx-05): câu gợi ý "thuộc Phường Bến Thành hay Phường Cầu Ông Lãnh" bị model nói lại
+                    // thành "phường nào vậy ạ?" — rơi mất lựa chọn. Câu xác nhận / chọn do CODE tra ra thì gửi NGUYÊN VĂN
+                    // ngay sau; model chỉ nhận câu rao, không hỏi gì.
+                    ? `. KHÔNG hỏi gì (hệ thống tự gửi câu hỏi xác nhận ngay sau). KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá.`
+                    : firstKey
                     ? `, rồi hỏi thứ quan trọng nhất còn thiếu: ${FACT_LABELS[firstKey] ?? firstKey}. Câu gợi ý: "${cauHoiDau}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${FACT_LABELS[firstKey] ?? firstKey}, đừng gắn thêm ý khác vào câu hỏi (hệ thống ghi câu trả lời kế vào ô này). KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá.`
                     : ` và báo sẽ đăng lên web ngay.`),
               }],
@@ -4909,6 +4920,9 @@ Deno.serve(async (req) => {
         if (!raoReply) {
           raoReply = `Dạ em nhận tin rao rồi ạ.` +
             (cauHoiDau ? ` ${cauHoiDau}` : ` Em sẽ đăng lên web ngay ạ.`);
+        } else if (cauXacNhanDau) {
+          // Model đã bị dặn không hỏi; lỡ còn câu hỏi thì cắt, rồi nối câu xác nhận nguyên văn.
+          raoReply = `${raoReply.replace(/[^.!?]*\?\s*$/u, "").trim()} ${cauXacNhanDau}`.trim();
         }
         if (dapRao) raoReply = `${dapRao}\n${raoReply}`;
         // Chủ dự án 09/09/2026: "đã bóc tách được cái gì, viết gửi lại cho khách

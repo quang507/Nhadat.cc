@@ -2266,7 +2266,7 @@ fresh(seedKho);
   fresh(seedDuong);
   rp = await send({ external_user_id: "duong-2", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
   check("DUONG-02 'pham the hier' khớp gần → hỏi 'Dạ em hiểu là đường Phạm Thế Hiển đúng không', gợi ý ở boc_tach.duong_goi_y, địa chỉ chưa sửa",
-    modelThay("Dạ em hiểu là đường Phạm Thế Hiển đúng không") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" &&
+    rp.body.replies.join("\n").includes("Dạ em hiểu là đường Phạm Thế Hiển đúng không") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" &&
       tin().boc_tach?.duong_goi_y?.vi_tri === "hẻm 4m Phạm Thế Hiển" && /pham the hier/.test(tin().location_raw ?? "") && pend().length > 0,
     JSON.stringify({ l: tin(), pend: pend(), rep: rp.body.replies }));
   const cauTreo = pend()[0];
@@ -2322,7 +2322,7 @@ fresh(seedKho);
       ] } : OUT();
   rp = await send({ external_user_id: "duong-7", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
   check("DUONG-08 chế độ 'chinh': AI sửa 'pham the hier' → 'Phạm Thế Hiển' bị kiểm bằng chứng bỏ → lấy trích dẫn làm địa chỉ, từ điển hỏi xác nhận, gợi ý cất",
-    /pham the hier/.test(tin().location_raw ?? "") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" && modelThay("Dạ em hiểu là đường Phạm Thế Hiển đúng không"),
+    /pham the hier/.test(tin().location_raw ?? "") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" && rp.body.replies.join("\n").includes("Dạ em hiểu là đường Phạm Thế Hiển đúng không"),
     JSON.stringify({ l: tin(), rep: rp.body.replies }));
   globalThis.__cauHinh = undefined;
 
@@ -2497,7 +2497,7 @@ fresh(seedKho);
   fresh(seedWards); globalThis.__nominatim = LVV;
   let rp = await send({ external_user_id: "ph-1", text: "bán căn hộ 5 tầng sổ hồng riêng, đường Lê Văn Việt, 60m2, 5 tỷ" });
   check("PH-01 rao có đường, không quận → câu hỏi đầu là XÁC NHẬN 'Phường Tăng Nhơn Phú (Quận 9 cũ)'; chưa ghi ward/quận; gợi ý ở boc_tach; câu phường treo",
-    rp.body.role === "seller" && modelThay("Phường Tăng Nhơn Phú (Quận 9 cũ), đúng không") && !tin().ward && tin().district == null &&
+    rp.body.role === "seller" && rp.body.replies.join("\n").includes("Phường Tăng Nhơn Phú (Quận 9 cũ), đúng không") && !tin().ward && tin().district == null &&
       tin().boc_tach?.phuong_goi_y?.phuong === "Phường Tăng Nhơn Phú" && tin().boc_tach?.phuong_goi_y?.quan === "Quận 9" && pendPh(),
     JSON.stringify({ rep: rp.body.replies, l: tin(), ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   check("PH-01b gọi Nominatim đúng MỘT lần, bằng TÊN ĐƯỜNG (không số nhà), ghim countrycodes=vn",
@@ -2531,6 +2531,7 @@ fresh(seedKho);
     modelThay("phường mấy, quận nào") && !tin().boc_tach?.phuong_goi_y && pendPh() && db().t.bot_errors.length === 0,
     JSON.stringify({ l: tin(), loi: db().t.bot_errors, rep: rp.body.replies }));
 
+  // (Câu xác nhận / chọn do code tra ra được gửi NGUYÊN VĂN — kiểm trên câu trả lời, không trên lệnh gửi model.)
   // 25/09/2026 (chủ dự án: "người ta đưa số nhà và tên đường và quận rồi nhưng mà lại cố hỏi là phường nào"): ĐÃ biết quận
   // → tra bảng `duong` trong quận đó: một phường → hỏi xác nhận; hai phường → hỏi chọn; không có → hỏi như cũ.
   const seedTDX = (d, hai = false) => {
@@ -2543,7 +2544,7 @@ fresh(seedKho);
   fresh((d) => seedTDX(d)); globalThis.__nominatim = undefined;
   rp = await send({ external_user_id: "ph-q1", text: "bán nhà 152 Trần Đình Xu quận 1, 8x15, 1 trệt 4 lầu, 4 phòng ngủ, sổ hồng riêng, giá 65 tỷ" });
   check("PH-Q1a đã có số nhà + đường + QUẬN → không hỏi trống 'phường mấy': hỏi XÁC NHẬN 'Phường Cầu Ông Lãnh (Quận 1 cũ)', gợi ý cất",
-    modelThay("Phường Cầu Ông Lãnh (Quận 1 cũ), đúng không") && tin().boc_tach?.phuong_goi_y?.phuong === "Phường Cầu Ông Lãnh" && pendPh(),
+    rp.body.replies.join("\n").includes("Phường Cầu Ông Lãnh (Quận 1 cũ), đúng không") && tin().boc_tach?.phuong_goi_y?.phuong === "Phường Cầu Ông Lãnh" && pendPh(),
     JSON.stringify({ rep: rp.body.replies, l: tin() }));
   rp = await send({ external_user_id: "ph-q1", text: "đúng rồi em" });
   check("PH-Q1b gật → ward Phường Cầu Ông Lãnh, quận vẫn Quận 1", tin().ward === "Phường Cầu Ông Lãnh" && tin().district === "Quận 1" && !pendPh(),
@@ -2551,7 +2552,7 @@ fresh(seedKho);
   fresh((d) => seedTDX(d, true)); globalThis.__nominatim = undefined;
   rp = await send({ external_user_id: "ph-q2", text: "bán nhà 152 Trần Đình Xu quận 1, 8x15, 1 trệt 4 lầu, 4 phòng ngủ, sổ hồng riêng, giá 65 tỷ" });
   check("PH-Q1c đường có HAI phường trong quận → hỏi chọn 'Phường Cầu Ông Lãnh hay Phường Bến Thành', không cất gợi ý",
-    modelThay("thuộc Phường Cầu Ông Lãnh hay Phường Bến Thành") && !tin().boc_tach?.phuong_goi_y && pendPh(),
+    rp.body.replies.join("\n").includes("thuộc Phường Cầu Ông Lãnh hay Phường Bến Thành") && !tin().boc_tach?.phuong_goi_y && pendPh(),
     JSON.stringify({ rep: rp.body.replies, l: tin() }));
 
   // 23/09/2026 (Zalo chủ dự án): "nhà ở trần bình trọng" + "số nhà 105" → bot "thuộc Phường Vườn Lài (Quận 10 cũ)",
