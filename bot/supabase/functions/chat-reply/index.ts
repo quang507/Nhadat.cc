@@ -49,6 +49,8 @@ import { cauChonPhuong, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, cauT
 // FR-212 (21/09/2026): từ điển tên đường — chọn kết quả `tim_duong`, thay tên trong địa chỉ, câu hỏi xác nhận (thuần).
 import { catTenDuong, cauXacNhanDuong, chonDuong, type GoiYDuong, theTenDuong, type UngVienDuong } from "../_shared/extraction/tra-duong.ts";
 import { tenDuong } from "../_shared/geocode.ts";
+// FR-228 (25/09/2026): bộ câu tư vấn người mua của chủ dự án.
+import { cauTuVanKe, laHoiNyah, NHAN_TU_VAN } from "../_shared/extraction/tu-van-mua.ts";
 // Tầng bốn (11/09): luật tiền và luật che liên hệ MỘT NGUỒN — web, bot và bộ
 // bóc tách cùng nhập từ đây, SQL `parse_vnd` thì đối chiếu trên cùng bảng ca.
 import { CO_TIEN_KD, TIEN_KD, TIEN_CD, TIEN_T_KEP, docTien, donViGiaDep, giaTheoM2, gonGiaKyHan, laDonViTy, vndThanhChu } from "../_shared/extraction/luat-tien.ts";
@@ -367,6 +369,14 @@ const BuyerTurn = z.object({
     alley: z.string().nullable().describe("Hẻm xe hơi / mặt tiền / không quan trọng"),
     timeline: z.string().nullable().describe("Mốc CẦN DỌN VÀO / CHỐT MUA ('trong tháng này', 'trước Tết'). Giờ đi XEM NHÀ không phải timeline (đó là viewing)"),
     notes: z.string().nullable().describe("Hoàn cảnh SỐNG đáng nhớ: người ở cùng, con học trường nào, sức khoẻ, thú nuôi, số người ở. KHÔNG chép lại câu khách, KHÔNG ghi thái độ/cảm xúc hay câu khách đang hỏi"),
+    // FR-228 (25/09/2026): bộ câu tư vấn người mua của chủ dự án — mỗi câu một khoá, chỉ ghi điều khách NÓI RÕ.
+    khu_song: z.string().nullish().describe("Kiểu khu khách muốn SỐNG (yên tĩnh, an ninh, gần chợ, khu dân trí…), nguyên văn ngắn; KHÔNG phải quận/phường"),
+    nguoi_o_cung: z.string().nullish().describe("Nhà gồm những ai ở cùng (vợ chồng, 2 con nhỏ, ông bà…), ngắn gọn"),
+    noi_lam: z.string().nullish().describe("Khu vực khách ĐI LÀM (quận/đường/công ty ở đâu)"),
+    dien_tich_mong_muon: z.string().nullish().describe("Diện tích khách muốn ('tầm 60m2', 'trên 50m2')"),
+    thang_may: z.string().nullish().describe("Ý khách về thang máy: 'cần thang máy' / 'không cần' / 'phòng ngủ dưới trệt'"),
+    nguoi_quyet_dinh: z.string().nullish().describe("Ai cùng quyết định mua ngoài khách (vợ/chồng, bố mẹ…); 'một mình' nếu khách nói tự quyết"),
+    can_vay: z.boolean().nullish().describe("true khi khách nói CẦN tư vấn vay ngân hàng, false khi nói không cần; chưa nói thì null"),
   }).describe("CHỈ ghi điều khách NÓI RÕ trong câu vừa nhắn hoặc hội thoại. Không suy diễn. Chưa biết để null — null KHÔNG xoá thứ đã biết."),
   replies: z.array(z.string()).min(1).max(2)
     .describe("1-2 bong bóng tin nhắn gửi khách, theo đúng nhịp nhắn giống người"),
@@ -5853,6 +5863,8 @@ Deno.serve(async (req) => {
   const botMsgs = ordered.filter((m) => m.sender === "bot");
   const interrogated = botMsgs.length >= 2 &&
     botMsgs.slice(-2).every((m) => m.body.trimEnd().endsWith("?"));
+  // FR-228: câu tư vấn kế (bộ 7 câu của chủ dự án) — câu 5 đổi theo người ở cùng và theo dự án Ny'ah Phú Định.
+  const tuVanKe = cauTuVanKe(prefs, laHoiNyah(matched.map((m) => m.name ?? ""), text));
 
   // Hồ sơ ĐÃ BIẾT / CÒN THIẾU theo thứ tự ưu tiên UF-04
   const known = [
@@ -5983,7 +5995,11 @@ Deno.serve(async (req) => {
             ? `CHƯA BIẾT (chỉ NHẶT khi khách tự kể hoặc khi khách chê căn vừa gửi, TUYỆT ĐỐI không hỏi chủ động - đủ khu vực + giá là ngừng dò hồ sơ):\n${missing || "(đã đủ)"}\n\n`
             : `CÒN THIẾU (hỏi theo thứ tự ưu tiên; gộp 2-3 ý vào MỘT câu hỏi liền mạch cũng được, đừng thành bảng hỏi):\n${missing || "(đã đủ)"}\n\n`) +
           (duTieuChiDeNgungDo
-            ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) - NGỪNG hỏi hồ sơ, chuyển sang gợi ý căn khớp (KHO trống thì nói thật em lọc rồi báo) và để khách dẫn chuyện.\n"
+            ? "Đã đủ tiêu chí tối thiểu (khu vực + giá) - NGỪNG hỏi các trường hồ sơ ở trên, chuyển sang gợi ý căn khớp (KHO trống thì nói thật em lọc rồi báo) và để khách dẫn chuyện.\n" +
+              // FR-228 (chủ dự án 25/09/2026: "Mỗi lượt 1 câu, xen giữa"): bộ câu tư vấn hỏi dần sau khi đủ khu vực + giá.
+              (tuVanKe && !interrogated
+                ? `CÂU TƯ VẤN KẾ (bộ câu tư vấn của bên em - hỏi đúng ý câu này, TỐI ĐA MỘT câu hỏi trong tin, đặt CUỐI tin sau phần trả lời / gợi ý căn; đổi đại từ theo CÁCH GỌI KHÁCH; khách đang hỏi việc khác thì trả lời việc đó trước và để câu này lượt sau): "${tuVanKe.cau}"\n`
+                : "")
             : "CHƯA đủ tiêu chí tối thiểu (khu vực + giá) - chưa gợi ý căn trừ khi khách hỏi thẳng một căn.\n") +
           // 14/09/2026 (bắn thật, FR-207): khách thấy "💾 Đã lưu nhu cầu: … để ở" rồi câu
           // ngay sau lại "chị muốn ở hay kinh doanh?" — model tự điền `purpose` từ "nhà có
@@ -6280,6 +6296,11 @@ Deno.serve(async (req) => {
     const PL_MUA: Record<string, string> = { "so hong rieng": "sổ hồng riêng", shr: "sổ hồng riêng", "so rieng": "sổ hồng riêng", "so hong": "sổ hồng", "so do": "sổ đỏ" };
     delta.phap_ly = PL_MUA[plMua[1]] ?? "pháp lý rõ ràng";
   }
+  // FR-228 d: "cần tư vấn vay" chỉ nhận khi câu khách nói tới vay / ngân hàng, hoặc khách đang trả lời câu hỏi vay của em.
+  if (delta.can_vay != null) {
+    const botHoiVay = /\bvay\b/.test(boDau(botMsgs.at(-1)?.body ?? ""));
+    if (!/\b(?:vay|ngan hang|tra gop|goi vay|ho tro tai chinh)\b/.test(tKD) && !botHoiVay) delete delta.can_vay;
+  }
   // Ghi chú chỉ nói lại chuyện sổ (model chép lại từ lịch sử ở lượt sau) → bỏ khi hồ sơ đã có pháp lý.
   {
     const nkd = typeof delta.notes === "string" ? boDau(delta.notes) : "";
@@ -6390,6 +6411,19 @@ Deno.serve(async (req) => {
       }),
     ]);
     if (nhErr) await ghiLoi(client, "chat-reply escalation(buyer)", nhErr.message);
+  };
+
+  // FR-228 d (chủ dự án 25/09/2026: vay ngân hàng "Ghi nhận, chuyển CTV"): khách vừa nói CẦN tư vấn vay → mở việc cho
+  // CTV / người phụ trách qua cùng đường "cần người thật". Bot không tự tư vấn lãi suất, hạn mức.
+  const viecVay = async () => {
+    if (delta.can_vay !== true || prefs.can_vay === true) return;
+    const { error: vayErr } = await client.rpc("mo_viec_can_nguoi_that", {
+      p_buyer_id: buyer.id,
+      p_ctv_id: convRow.ctv_id ?? null,
+      p_note: `💰 khách cần tư vấn vay ngân hàng${buyer.name ? ` (${buyer.name})` : ""} - Zalo …${externalUserId.slice(-4)}`,
+      p_voice: false,
+    });
+    if (vayErr) await ghiLoi(client, "chat-reply escalation(vay)", vayErr.message);
   };
 
   // FR-65 (v48): chấm sao sau buổi xem → RPC `ghi_danh_gia` (tầng DB, cùng
@@ -6714,7 +6748,7 @@ Deno.serve(async (req) => {
         const { data: bSau, error: bSauErr } = await client.from("buyers")
           .select("preferences").eq("id", buyer.id).maybeSingle();
         if (bSauErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(buyers)", bSauErr.message);
-        const bong = vuaLuuMua(prefs, (bSau as { preferences?: Record<string, unknown> } | null)?.preferences, BUYER_PROFILE_FIELDS);
+        const bong = vuaLuuMua(prefs, (bSau as { preferences?: Record<string, unknown> } | null)?.preferences, [...BUYER_PROFILE_FIELDS, ...Object.entries(NHAN_TU_VAN)]);
         // Qua bộ lọc liên hệ như mọi bong bóng gửi người mua (FR-105) — ghi chú hoàn cảnh do model viết.
         if (bong) {
           // 💾 đã báo lưu gì → "Dạ chị, em ghi lại: mua nhà Quận 5 tầm 7 tỷ…" là ghi nhận lần hai.
@@ -6732,7 +6766,7 @@ Deno.serve(async (req) => {
 
   await Promise.all([
     hoSoDaGhi ? Promise.resolve() : viecHoSo(), viecNguoiThat(), viecHoiChu(), viecLoiHua(), viecLichXem(),
-    viecGhiTraLoi(), viecQuanTam(), viecChot(), viecFollowup(), viecDanhGia(),
+    viecGhiTraLoi(), viecQuanTam(), viecChot(), viecFollowup(), viecDanhGia(), viecVay(),
   ]);
 
   return await hoanTat({
