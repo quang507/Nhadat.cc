@@ -23,6 +23,7 @@ import {
   FEE_RULES,
   BUYER_PROFILE_FIELDS,
   FACT_LABELS,
+  nhanTheoLoai,
   HUMAN_CHAT_RULES,
   SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau as cauHoiMauGoc, cauPhuongNgan, docCauHoiMau, docCauTienDinh, dienCau, LOI_CHAO,
   SLANG_NOTES,
@@ -4456,17 +4457,17 @@ Deno.serve(async (req) => {
             khenGanDay
               ? "KHÔNG khen, KHÔNG nhận xét căn nhà (mấy tin gần đây em đã khen rồi — lâu lâu mới khen một lần): ghi nhận ngắn một vế hoặc bỏ luôn phần ghi nhận, "
               : "ghi nhận ngắn, KHÔNG đọc lại số liệu hay địa chỉ vừa nghe (hệ thống đã báo); CHỈ khi chủ nhà vừa nói điều thật đáng nói với khách mua thì thêm MỘT vế về đúng điều đó, còn không thì thôi — "
-          }rồi hỏi tiếp thứ quan trọng nhất còn thiếu: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
+          }rồi hỏi tiếp thứ quan trọng nhất còn thiếu: ${nhanTheoLoai(nextKey, pendingReq.listings?.property_type)}. ` +
           // 24/09/2026 (chủ dự án chuyển nhận xét của AI khác): bỏ "gộp thêm một ý … cũng được" — chính khe đó cho model gắn
           // "đã hoàn công chưa" vào câu hỏi sổ. Code chọn HỎI GÌ, model chỉ chọn CÁCH NÓI.
           // FR-223 (chủ dự án chọn "lai" 24/09): câu NHÁNH → cho model biết đang hỏi thêm chuyện gì và các ý chính của
           // nhánh, để câu hỏi nối được với điều chủ nhà vừa nói (code vẫn chọn Ý NÀO hỏi — câu trả lời ghi đúng ô).
           (nhanhKe
             ? `Chủ nhà vừa nói tới chuyện "${nhanhKe.ten}" nên em hỏi thêm cho rõ; các ý chính cần thu của chuyện này: ` +
-              `${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}. Lượt này hỏi ý "${FACT_LABELS[nextKey] ?? nextKey}"; ` +
+              `${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}. Lượt này hỏi ý "${nhanTheoLoai(nextKey, pendingReq.listings?.property_type)}"; ` +
               `ý nào chủ nhà đã nói trong NGỮ CẢNH thì chỉ ghi nhận, không hỏi lại. `
             : "") +
-          `Câu gợi ý: "${cauKe}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${FACT_LABELS[nextKey] ?? nextKey}, ` +
+          `Câu gợi ý: "${cauKe}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${nhanTheoLoai(nextKey, pendingReq.listings?.property_type)}, ` +
           `đừng gắn thêm ý khác vào câu hỏi (hệ thống ghi câu trả lời kế vào ô này; hỏi lệch là ghi sai ô). ` +
           (nhieuCan
             ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
