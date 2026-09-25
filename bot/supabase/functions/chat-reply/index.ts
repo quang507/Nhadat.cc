@@ -4437,7 +4437,7 @@ Deno.serve(async (req) => {
       // cuối làm tin tự lên kệ) — nhưng đọc cùng lúc với câu kế tiếp, và danh
       // sách câu còn treo suy ra từ `ds` đã có (FR-171 h: 3 vòng → 1).
       const [{ data: lstNow }, { data: nextFactsTho }, { data: daHetHan }] = await Promise.all([
-        client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at")
+        client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at, district, boc_tach")
           .eq("id", pendingReq.listing_id).maybeSingle(),
         client.from("listing_missing_facts").select("fact_key, priority, nhom")
           .eq("listing_id", pendingReq.listing_id).order("priority").limit(12),
@@ -4487,9 +4487,16 @@ Deno.serve(async (req) => {
       // 20260909i: nhóm `sau_dang` (WC, cách mặt tiền, hẻm thông, ngập, thế chấp, lý do
       // bán…) chỉ hỏi SAU khi tin lên kệ (cron hỏi bù) — trước bản nháp chỉ đợi
       // co_ban + chuyen_mon, kẻo chủ nhà bị hỏi 15 câu mới thấy tin.
+      const conHoi = (nextFacts ?? []).filter((f) => !pendSet.has(f.fact_key) && f.nhom !== "sau_dang");
+      // 25/09/2026 (chủ dự án test Zalo: "an duong vương" → bot hỏi ô tô, "An Dương Vương nó 2 3 chỗ lận"): vừa trả lời
+      // ĐỊA CHỈ mà quận chưa rõ → câu kế là phường/quận (tra OSM: đường ở nhiều nơi thì kể các quận), không để thứ tự
+      // ưu tiên (phường 17) đẩy nó ra sau giá, pháp lý.
+      const quanChuaRo = !lstNow?.district || (lstNow?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
       const nextKey = published
         ? undefined
-        : chonCauKe([pendingReq.question], (nextFacts ?? []).filter((f) => !pendSet.has(f.fact_key) && f.nhom !== "sau_dang"));
+        : pendingReq.question === "vi_tri" && quanChuaRo && conHoi.some((f) => f.fact_key === "phuong")
+        ? "phuong"
+        : chonCauKe([pendingReq.question], conHoi);
       // FR-177 c: hết câu cơ bản + chuyên môn (ảnh xin trong bản nháp) và tin
       // đủ 70 điểm → gửi bản nháp thay vì hỏi tiếp. Dưới 70 thì hỏi tiếp và
       // nói rõ còn thiếu gì.
@@ -4534,7 +4541,7 @@ Deno.serve(async (req) => {
       const goiYKe = !cauDuongKe && nextKey === "phuong" ? await cauHoiPhuongGoiY(pendingReq.listing_id, null, cachGoi) : null;
       const nhanhKe = nextKey ? nhanhCuaKhoa(nextKey) : null;
       const cauKe = nextKey
-        ? cauDuongKe ?? goiYKe ?? cauHoiMau(nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)
+        ? cauDuongKe ?? goiYKe ?? cauHoiMau(nextKey === "phuong" && quanChuaRo ? "phuong@chua_quan" : nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)
         : "";
       // Bong bóng ghi nhận đã gửi trước tin này → đừng cảm ơn/ghi nhận lần nữa.
       const daAck = ackSua
