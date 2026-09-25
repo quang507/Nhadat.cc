@@ -246,6 +246,15 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
     moiNhat.set(f.question, a);
   }
   if (!moiNhat.size) return null;
+  // 25/09/2026 (chủ dự án test Zalo): "5x12" → "diện tích đất: "5x12" · diện tích: "5x12"" — cùng một câu trả lời ghi vào
+  // hai khoá diện tích. Cùng họ diện tích mà cùng giá trị thì in một lần.
+  const daIn = new Set<string>();
+  for (const k of ["dien_tich", "dien_tich_dat", "dien_tich_tim_tuong"]) {
+    const v = moiNhat.get(k);
+    if (v === undefined) continue;
+    if (daIn.has(v)) moiNhat.delete(k);
+    else daIn.add(v);
+  }
   // 23/09/2026 (chủ dự án: "ghi thật đầy đủ"): trần 12 khoá / 50 ký tự từng cắt mất fact và đuôi câu trả lời.
   const ds = [...moiNhat].reverse().slice(0, 40).map(([k, v]) => {
     const ten = (NHAN_BAO_LAI[k] ?? nhan[k] ?? NHAN_THEM[k] ?? k.replace(/_/g, " ")).replace(/\s*\(.*\)\s*$/, "");
