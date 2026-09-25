@@ -23,6 +23,7 @@ import {
   FEE_RULES,
   BUYER_PROFILE_FIELDS,
   FACT_LABELS,
+  nhanTheoLoai,
   HUMAN_CHAT_RULES,
   SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau as cauHoiMauGoc, cauPhuongNgan, docCauHoiMau, docCauTienDinh, dienCau, LOI_CHAO,
   SLANG_NOTES,
@@ -44,7 +45,7 @@ import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, type DeXuat, docAiC
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
-import { cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, docCacPhuongNominatim, duongTraDuoc, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
+import { cauChonPhuong, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
 // FR-212 (21/09/2026): từ điển tên đường — chọn kết quả `tim_duong`, thay tên trong địa chỉ, câu hỏi xác nhận (thuần).
 import { catTenDuong, cauXacNhanDuong, chonDuong, type GoiYDuong, theTenDuong, type UngVienDuong } from "../_shared/extraction/tra-duong.ts";
 import { tenDuong } from "../_shared/geocode.ts";
@@ -1679,9 +1680,25 @@ Deno.serve(async (req) => {
     const cauHoiPhuongGoiY = async (listingId: string, duongBiet: string | null, cachGoiNguoi: string): Promise<string | null> => {
       const { data: l } = await client.from("listings").select("district, street, location_raw, boc_tach").eq("id", listingId).maybeSingle();
       if (!l) return null;
-      // 20260917a: quận trống (không còn mặc định) cũng là "chưa rõ quận" → tra gợi ý từ tên đường.
-      if (l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true) return null;
       const duong = (duongBiet ?? "").trim() || (l.street ?? "").trim() || tenDuong(l.location_raw ?? "");
+      // 25/09/2026 (chủ dự án: "người ta đưa số nhà và tên đường và quận rồi nhưng mà lại cố hỏi là phường nào"): ĐÃ
+      // biết quận → tra bảng `duong` (OSM, phường mới theo quận cũ): một phường → hỏi xác nhận; 2–3 phường → hỏi chọn.
+      // Không tra được (bảng chưa có đường đó) → hỏi như cũ.
+      if (l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true) {
+        const ten = chuanTenDuong(duong);
+        if (!duongTraDuoc(ten)) return null;
+        const { data: dd, error: ddErr } = await client.from("duong").select("phuong, quan_cu").eq("ten_khong_dau", boDau(ten)).limit(40);
+        if (ddErr) { await ghiLoi(client, "chat-reply tra duong theo quan", ddErr.message); return null; }
+        const cac = phuongCuaDuongTrongQuan((dd ?? []) as Array<{ phuong: string | null; quan_cu: string | null }>, l.district);
+        if (cac.length === 1) {
+          const goiY = { phuong: cac[0], quan: l.district, duong: ten };
+          const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY } });
+          if (error) { await ghiLoi(client, "chat-reply ghi_boc_tach(phuong goi y theo quan)", error.message); return null; }
+          return cauXacNhanPhuong(cauHoiMau("phuong@goi_y", cachGoiNguoi), cachGoiNguoi, goiY.duong, goiY.phuong, goiY.quan);
+        }
+        if (cac.length >= 2 && cac.length <= 3) return cauChonPhuong(cachGoiNguoi, ten, cac);
+        return null;
+      }
       const goiY = await traPhuongTuDuong(duong);
       if (!goiY) return null;
       if ("nhieuNoi" in goiY) return cauNhieuNoiPhuong(cachGoiNguoi, goiY.duong, goiY.nhieuNoi);
@@ -4456,17 +4473,17 @@ Deno.serve(async (req) => {
             khenGanDay
               ? "KHÔNG khen, KHÔNG nhận xét căn nhà (mấy tin gần đây em đã khen rồi — lâu lâu mới khen một lần): ghi nhận ngắn một vế hoặc bỏ luôn phần ghi nhận, "
               : "ghi nhận ngắn, KHÔNG đọc lại số liệu hay địa chỉ vừa nghe (hệ thống đã báo); CHỈ khi chủ nhà vừa nói điều thật đáng nói với khách mua thì thêm MỘT vế về đúng điều đó, còn không thì thôi — "
-          }rồi hỏi tiếp thứ quan trọng nhất còn thiếu: ${FACT_LABELS[nextKey] ?? nextKey}. ` +
+          }rồi hỏi tiếp thứ quan trọng nhất còn thiếu: ${nhanTheoLoai(nextKey, pendingReq.listings?.property_type)}. ` +
           // 24/09/2026 (chủ dự án chuyển nhận xét của AI khác): bỏ "gộp thêm một ý … cũng được" — chính khe đó cho model gắn
           // "đã hoàn công chưa" vào câu hỏi sổ. Code chọn HỎI GÌ, model chỉ chọn CÁCH NÓI.
           // FR-223 (chủ dự án chọn "lai" 24/09): câu NHÁNH → cho model biết đang hỏi thêm chuyện gì và các ý chính của
           // nhánh, để câu hỏi nối được với điều chủ nhà vừa nói (code vẫn chọn Ý NÀO hỏi — câu trả lời ghi đúng ô).
           (nhanhKe
             ? `Chủ nhà vừa nói tới chuyện "${nhanhKe.ten}" nên em hỏi thêm cho rõ; các ý chính cần thu của chuyện này: ` +
-              `${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}. Lượt này hỏi ý "${FACT_LABELS[nextKey] ?? nextKey}"; ` +
+              `${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}. Lượt này hỏi ý "${nhanTheoLoai(nextKey, pendingReq.listings?.property_type)}"; ` +
               `ý nào chủ nhà đã nói trong NGỮ CẢNH thì chỉ ghi nhận, không hỏi lại. `
             : "") +
-          `Câu gợi ý: "${cauKe}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${FACT_LABELS[nextKey] ?? nextKey}, ` +
+          `Câu gợi ý: "${cauKe}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${nhanTheoLoai(nextKey, pendingReq.listings?.property_type)}, ` +
           `đừng gắn thêm ý khác vào câu hỏi (hệ thống ghi câu trả lời kế vào ô này; hỏi lệch là ghi sai ô). ` +
           (nhieuCan
             ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
@@ -4837,7 +4854,8 @@ Deno.serve(async (req) => {
         // FR-209: câu rao có tên đường mà không có quận → tra phường mới, hỏi xác nhận.
         // FR-212: tên đường gõ sai 1–2 ký tự → câu hỏi đầu là XÁC NHẬN tên đường (đứng trước gợi ý phường).
         const cauDuongDau = duongRao?.goiY && newLst ? await cauHoiDuongGoiY(newLst.id, duongRao.goiY, cachGoi) : null;
-        const goiYDau = !cauDuongDau && firstKey === "phuong" && !quanDoc && viTriRao && newLst
+        // 25/09/2026: câu rao ĐÃ có quận cũng tra (bảng `duong` trong quận đó) — `cauHoiPhuongGoiY` tự chọn đường tra.
+        const goiYDau = !cauDuongDau && firstKey === "phuong" && viTriRao && newLst
           ? await cauHoiPhuongGoiY(newLst.id, tenDuong(viTriRao), cachGoi)
           : null;
         const cauHoiDau = cauDuongDau ?? goiYDau ?? (firstKey

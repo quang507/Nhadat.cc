@@ -120,6 +120,22 @@ export const RE_NHANH: Luat[] = [
     // thuê / kinh doanh LÀ tiềm năng sử dụng, không hỏi lại.
     bo: ["hien_trang", "noi_that", "hoan_cong", "tiem_nang"],
   },
+  // 25/09/2026 (chủ dự án: "Loại bds khác nhau sẽ có những thứ khác nhau cần làm rõ").
+  {
+    id: "can_ho_da_co_du_an",
+    ten: "căn hộ đã nói dự án",
+    vi: "Căn hộ đã có tên dự án → vị trí đã rõ (dự án + toà), không hỏi đường / số nhà",
+    khi: ({ loai, daHoi }) => loai === "chung_cu" && daHoi.has("du_an_ten"),
+    bo: ["vi_tri"],
+  },
+  {
+    id: "dat_ngoai_du_an",
+    ten: "đất thổ cư ngoài dự án",
+    vi: "Đất không nằm trong dự án / KDC → không hỏi \"xây tự do hay theo mẫu chủ đầu tư\"",
+    khi: ({ loai, tatCa, daHoi }) => loai === "dat" && !daHoi.has("du_an_ten") &&
+      !/\b(?:du an|kdc|khu dan cu|khu do thi|kdt|nen du an|dat nen|chu dau tu|cdt)\b/.test(tatCa),
+    bo: ["xay_dung"],
+  },
   {
     id: "nha_nat",
     ten: "nhà nát / đất trống",

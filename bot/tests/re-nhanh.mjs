@@ -1,7 +1,7 @@
 // re-nhanh.mjs — FR-223: bảng rẽ nhánh câu hỏi theo câu trả lời (extraction/re-nhanh.ts). Chạy: bun bot/tests/re-nhanh.mjs
 import { reNhanh, apReNhanh, RE_NHANH, nhanhCuaKhoa } from "../supabase/functions/_shared/extraction/re-nhanh.ts";
 import { chonCauKe } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
-import { CAU_HOI_MAU, FACT_LABELS } from "../supabase/functions/_shared/prompts.ts";
+import { CAU_HOI_MAU, FACT_LABELS, cauHoiMau, nhanTheoLoai } from "../supabase/functions/_shared/prompts.ts";
 let tong = 0, hong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
 const f = (q, a) => ({ question: q, answer: a });
@@ -15,6 +15,20 @@ r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng ri
 ok("sổ riêng + đang cho thuê → KHÔNG hỏi hoàn công, bỏ hiện trạng + nội thất", !keys(r).includes("hoan_cong") && r.bo.has("hien_trang") && r.bo.has("noi_that"), JSON.stringify({ ...r, bo: [...r.bo] }));
 // 24/09/2026 (chủ dự án, tin 152 Trần Đình Xu): đang cho thuê / kinh doanh LÀ tiềm năng sử dụng — không hỏi lại.
 ok("đang cho thuê → bỏ câu tiềm năng sử dụng", r.bo.has("tiem_nang"), JSON.stringify([...r.bo]));
+// 25/09/2026 (chủ dự án: "Loại bds khác nhau sẽ có những thứ khác nhau cần làm rõ").
+r = reNhanh({ loai: "chung_cu", deal: "ban", facts: [f("du_an_ten", "Sunrise City"), f("toa_thap", "S2")] }, []);
+ok("căn hộ đã nói dự án → KHÔNG hỏi đường / số nhà", r.bo.has("vi_tri"), JSON.stringify([...r.bo]));
+r = reNhanh({ loai: "chung_cu", deal: "ban", facts: [f("tang", "15")] }, []);
+ok("căn hộ chưa nói dự án → vẫn hỏi vị trí", !r.bo.has("vi_tri"));
+r = reNhanh({ loai: "dat", deal: "ban", facts: [f("_mo_ta", "Bán đất thổ cư 100% hẻm xe hơi Nguyễn Duy Trinh")] }, []);
+ok("đất thổ cư trong hẻm → KHÔNG hỏi 'xây tự do hay theo mẫu chủ đầu tư'", r.bo.has("xay_dung"), JSON.stringify([...r.bo]));
+r = reNhanh({ loai: "dat", deal: "ban", facts: [f("_mo_ta", "Bán nền dự án KDC Phú Mỹ")] }, []);
+ok("đất nền dự án → vẫn hỏi xây tự do hay theo mẫu", !r.bo.has("xay_dung"));
+ok("nhãn vị trí theo loại: đất vườn / kho không đòi số nhà, căn hộ hỏi dự án + toà",
+  /không cần số nhà/.test(nhanTheoLoai("vi_tri", "dat_nong_nghiep")) && /không cần số nhà/.test(nhanTheoLoai("vi_tri", "kho_xuong")) &&
+  /dự án/.test(nhanTheoLoai("vi_tri", "chung_cu")) && nhanTheoLoai("vi_tri", "nha_pho") === FACT_LABELS.vi_tri);
+ok("câu hỏi vị trí theo loại: kho xưởng hỏi khu công nghiệp, không hỏi số nhà",
+  /khu công nghiệp/.test(cauHoiMau("vi_tri", "anh", CAU_HOI_MAU, "kho_xuong")) && !/số mấy|số nhà/.test(cauHoiMau("vi_tri", "anh", CAU_HOI_MAU, "kho_xuong")));
 // 24/09/2026 (bắn 10 tin): toà nhà CHDV "đang thu 250 triệu/tháng" — cho thuê từng phòng, không hỏi hạn hợp đồng thuê.
 r = reNhanh({ loai: "toa_nha", deal: "ban", rent_income_vnd: 25e7, facts: [f("doanh_thu", "250 triệu"), f("phap_ly", "sổ hồng riêng")] }, ["phap_ly"]);
 ok("toà nhà CHDV có thu nhập, không nói cho ai thuê → KHÔNG hỏi hạn hợp đồng", !keys(r).includes("han_hop_dong_thue"), JSON.stringify(r.them));

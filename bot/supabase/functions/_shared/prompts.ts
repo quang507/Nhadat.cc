@@ -206,6 +206,13 @@ export const FACT_LABELS: Record<string, string> = {
   gia: "giá mong muốn",
   phuong: "phường (địa chỉ nhà)",
   vi_tri: "vị trí cụ thể (đường, số nhà hoặc hẻm)",
+  // 25/09/2026 (chủ dự án: "Loại bds khác nhau sẽ có những thứ khác nhau cần làm rõ"; bắn 10 tin 24/09: đất vườn, kho xưởng
+  // bị hỏi "đường nào, số nhà"; căn hộ đã nói dự án vẫn bị hỏi số nhà). Nhãn theo loại — `nhanTheoLoai`.
+  "vi_tri@chung_cu": "dự án và toà / block (căn hộ không cần số nhà)",
+  "vi_tri@dat": "đường nào, khu nào (số nhà hoặc hẻm nếu có)",
+  "vi_tri@dat_nong_nghiep": "đường vào, gần mốc nào dễ tìm (đất vườn không cần số nhà)",
+  "vi_tri@dat_kinh_doanh": "đường nào, trong khu công nghiệp / cụm nào (không cần số nhà)",
+  "vi_tri@kho_xuong": "đường nào, trong khu công nghiệp / cụm nào (không cần số nhà)",
   loai_bds: "loại bất động sản (nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng)",
   phap_ly: "pháp lý (sổ riêng hay sổ chung)",
   dien_tich_dat: "diện tích đất",
@@ -302,6 +309,9 @@ export const CAU_HOI_MAU: Record<string, string> = {
   // huyện thì đơn vị dưới là XÃ, hỏi phường là lộ ngay ra máy đọc mẫu câu.
   "phuong@huyen": "Chỗ mình thuộc xã nào vậy {ac}?",
   "vi_tri@chung_cu": "Căn hộ mình thuộc dự án nào, toà nào {ac}?",
+  "vi_tri@dat_nong_nghiep": "Đất mình vào từ đường nào, gần mốc nào dễ tìm {ac}?",
+  "vi_tri@dat_kinh_doanh": "Lô đất mình nằm đường nào, trong khu công nghiệp hay cụm nào {ac}?",
+  "vi_tri@kho_xuong": "Kho xưởng mình nằm đường nào, trong khu công nghiệp hay cụm nào {ac}?",
   "vi_tri@dat": "Lô đất mình ở đường nào, khu nào {ac}?",
   "huong@chung_cu": "Ban công căn mình quay hướng nào {ac}?",
   "huong@dat": "Lô đất mình hướng nào {ac}?",
@@ -401,6 +411,11 @@ export function cauPhuongNgan(diaChi: string | null | undefined, cachGoi: string
   const dc = (diaChi ?? "").split(",")[0].replace(/\s+/g, " ").trim();
   if (!dc || dc.length > 60) return `Nhà mình phường mấy ${cachGoi} nhỉ?`;
   return `${dc.charAt(0).toUpperCase()}${dc.slice(1)} đó phường mấy ${cachGoi} nhỉ?`;
+}
+
+/** Nhãn một ý theo LOẠI BĐS (khoá `ý@loại` trong FACT_LABELS), không có thì nhãn chung. */
+export function nhanTheoLoai(key: string, loai?: string | null): string {
+  return (loai ? FACT_LABELS[`${key}@${loai}`] : undefined) ?? FACT_LABELS[key] ?? key;
 }
 
 export function cauHoiMau(
