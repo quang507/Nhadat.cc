@@ -657,6 +657,10 @@ for (const [cau, mong] of [
     /"Nhà phố bán"/.test(bocTachTaoTin({ property_type: "nha_pho", deal: "ban", description: "bán nhà 4 tấm" }) ?? "") && /"Nhà phố bán"/.test(bocTachTaoTin({ property_type: "nha_pho", deal: "ban", floors: 3 }) ?? ""));
   const t3 = vuaLuuBan([{ question: "so_phong_ngu", answer: "3" }, { question: "ket_cau", answer: "4 tầng" }], { ket_cau: "kết cấu", so_phong_ngu: "số phòng ngủ" });
   ok("vuaLuuBan: lượt sau → 'Bóc tách được' + đúng các fact lượt đó", t3 === '🤖 Bóc tách được: kết cấu: "4 tầng" · số phòng ngủ: "3"', String(t3));
+  const t4 = vuaLuuBan([{ question: "dien_tich", answer: "5x12" }, { question: "dien_tich_dat", answer: "5x12" }], { dien_tich: "diện tích", dien_tich_dat: "diện tích đất" });
+  ok("vuaLuuBan: '5x12' ghi vào hai khoá diện tích → in MỘT lần", (t4?.match(/5x12/g) ?? []).length === 1, String(t4));
+  const t5 = vuaLuuBan([{ question: "dien_tich", answer: "60m2" }, { question: "dien_tich_dat", answer: "80m2" }], { dien_tich: "diện tích", dien_tich_dat: "diện tích đất" });
+  ok("vuaLuuBan: hai khoá diện tích KHÁC giá trị → in đủ cả hai", /60m2/.test(t5 ?? "") && /80m2/.test(t5 ?? ""), String(t5));
 }
 
 // ── 24/09/2026: "ở Nguyễn Trãi quận 5" là ĐỊA CHỈ, không phải tiềm năng "để ở" ──
