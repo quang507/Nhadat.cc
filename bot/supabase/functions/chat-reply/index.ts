@@ -71,7 +71,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { ghepMotChieu, gonLoiSua, laBoSungRac, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, laBoSungRac, laBoSungTrung, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 // Câu hỏi mà câu trả lời LÀ một số tiền nhưng không phải giá bán (FR-223): số tiền kèm theo không được ghi thành `gia`.
@@ -1836,7 +1836,7 @@ Deno.serve(async (req) => {
         const { data: sNow } = await client.from("sellers").select("active_listing_id").eq("id", sellerRow.id).maybeSingle();
         const lid = (sNow as { active_listing_id?: string | null } | null)?.active_listing_id ?? null;
         const chon = client.from("listings")
-          .select("id, deal, property_type, price_vnd, price_per_m2_vnd, area_m2, frontage_m, length_m, rear_width_m, alley_width_m, distance_to_street_m, bedrooms, bathrooms, floors, floor, district, ward, street, unit_code, direction, legal_status, gap, negotiable, rent_income_vnd, projects(name)")
+          .select("id, deal, property_type, price_vnd, price_per_m2_vnd, area_m2, frontage_m, length_m, rear_width_m, alley_width_m, distance_to_street_m, bedrooms, bathrooms, floors, floor, district, ward, street, unit_code, direction, legal_status, gap, negotiable, rent_income_vnd, floors_text, access_type, projects(name)")
           .eq("seller_id", sellerRow.id);
         const { data: dong, error: dErr } = await (ma ? chon.eq("code", ma) : lid ? chon.eq("id", lid) : chon.order("created_at", { ascending: false }))
           .limit(1).maybeSingle();
@@ -1876,7 +1876,11 @@ Deno.serve(async (req) => {
           const daCoTrongFact = (kt: string) => Object.values(facts).some((a) => a.trim().length >= 4 && (boDau(a).includes(boDau(kt)) || boDau(kt).includes(boDau(a))));
           for (const kt of kiemKienThuc(kq.kienThuc ?? [], text, dat)) {
             // 24/09/2026 (tin thật: "mới", "Quận 1 em ơi" vào "📝 Thêm"): mảnh rác không ghi.
-            if (daCoBoSung.has(boDau(kt)) || daCoTrongFact(kt) || laBoSungRac(kt)) continue;
+            // 25/09/2026 (chủ dự án "ko ghi trùng"): mảnh chỉ nói lại điều ô có cấu trúc đã giữ ("xe hơi không vào
+            // được" khi đã ghi hẻm 3m, "sân thượng" khi kết cấu đã có) → không ghi.
+            const dx = d as unknown as { floors_text?: string | null; access_type?: string | null; alley_width_m?: number | null; legal_status?: string | null };
+            const ngCanh = { facts: { ...facts, ...Object.fromEntries(daGhi.map((g) => [g.question, g.answer])) }, floors_text: dx.floors_text, access_type: dx.access_type, alley_width_m: dx.alley_width_m, legal_status: dx.legal_status };
+            if (daCoBoSung.has(boDau(kt)) || daCoTrongFact(kt) || laBoSungRac(kt) || laBoSungTrung(kt, ngCanh)) continue;
             const { error: kErr } = await client.rpc("ghi_fact_listing", {
               p_listing_id: d.id, p_question: "bo_sung", p_answer: kt, p_source: NGUON_AI,
             });

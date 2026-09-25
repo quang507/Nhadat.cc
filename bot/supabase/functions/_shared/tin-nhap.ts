@@ -22,6 +22,7 @@
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
 import { tenNhan } from "./extraction/nhan.ts";
 import { vndThanhChu } from "./extraction/luat-tien.ts";
+import { laBoSungTrung } from "./extraction/khop-cau-tra-loi.ts";
 
 export const COT_TIN_NHAP =
   `code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, nhan, rent_income_vnd, ${SPEC_COLS}`;
@@ -276,9 +277,16 @@ export function soanTinNhap(t: ThamSoNhap): string {
   // 17/09/2026 (chủ dự án): "các trường mà khách nói bổ sung sẽ ghi vào mô tả" — mọi fact
   // `bo_sung` (AI đọc thêm hay chủ nhà nói lệch câu hỏi) vào một dòng, cũ trước, không lặp.
   const boSung: string[] = [];
+  const factMap: Record<string, string> = {};
+  for (const f of facts) if (f.answer && f.question !== "bo_sung") factMap[f.question] = f.answer;
+  const nhanKd = (l.nhan ?? []).map((k) => boDau(tenNhan([k])));
   for (const f of [...facts].reverse()) {
     const a = (f.question === "bo_sung" ? f.answer : null)?.replace(/\s+/g, " ").trim();
-    if (a && !boSung.some((x) => boDau(x) === boDau(a))) boSung.push(a);
+    // 25/09/2026: mảnh chỉ nói lại ô đã có (kết cấu / đường vào / sổ) hoặc trùng nhãn thì không in lại — lọc cả dữ liệu cũ.
+    if (!a || laBoSungTrung(a, { facts: factMap, floors_text: l.floors_text, access_type: l.access_type, alley_width_m: l.alley_width_m, legal_status: l.legal_status })) continue;
+    const aKd = boDau(a).replace(/^(?:co|nha co|can co)\s+/, "");
+    if (nhanKd.some((n) => n === aKd)) continue;
+    if (!boSung.some((x) => boDau(x) === boDau(a))) boSung.push(a);
   }
   them("📝", "Thêm", boSung);
   if (thue) {

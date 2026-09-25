@@ -251,6 +251,53 @@ export function laBoSungRac(s: string | null | undefined): boolean {
   return /^(?:o\s+|tai\s+|thuoc\s+)?(?:quan|q|huyen|phuong|p|xa|thi tran|tp|thanh pho)\s*[a-z0-9 ]{0,24}$/.test(kd) && kd.split(" ").length <= 5;
 }
 
+/**
+ * Mảnh "bổ sung" chỉ NÓI LẠI điều một ô có cấu trúc đã giữ → ghi nữa là trùng (25/09/2026, chủ dự án "làm sao cho
+ * nó bóc thông tin đúng và ko ghi trùng"; dữ liệu thật: "sân thượng" khi kết cấu đã có sân thượng, "ko có lửng" khi
+ * kết cấu đã rõ, "xe hơi không vào được" khi đã ghi hẻm 3m). Chỉ nhận mảnh THUẦN một chủ đề: bỏ chữ chủ đề + chữ đệm
+ * + phủ định mà còn chữ khác ("hẻm thông ra chợ", "trần cao 4m thông suốt") thì giữ — đó là thông tin mới.
+ */
+export type NguCanhBoSung = {
+  facts?: Record<string, string | null | undefined>;
+  floors_text?: string | null; access_type?: string | null; alley_width_m?: number | string | null;
+  legal_status?: string | null;
+};
+const PHU_DINH_BS = /\b(?:khong|ko|k|kg|chua|hong|hok)\b/;
+const DEM_BS = /\b(?:co|la|duoc|dc|roi|thoi|nha|nhe|a|em|anh|chi|minh|nen|cung|va|voi|rat|lam|luon|het|toi|cua|tan|vao|ra|den|nua|1|mot|cai)\b/g;
+function thuanChuDe(kd: string, tuChuDe: RegExp): boolean {
+  if (!tuChuDe.test(kd)) return false;
+  const con = kd.replace(new RegExp(tuChuDe.source, "g"), " ").replace(PHU_DINH_BS, " ").replace(/\b(?:khong|ko|k|kg|chua)\b/g, " ")
+    .replace(DEM_BS, " ").replace(/\b\d+(?:[.,]\d+)?\s*(?:m|met)?\b/g, " ").replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+  return con === "";
+}
+const TU_DUONG_VAO = /\b(?:hem|hxh|hxt|hxm|xe hoi|o to|oto|xe may|xe tai|ba gac|duong vao|rong)\b/;
+const TU_TANG_PHU = /\b(?:gac lung|gac|lung|san thuong|ap mai|tum|tang ham|ham)\b/;
+const TU_SO = /\b(?:so hong rieng|so hong|so do|so rieng|so chung|shr|so)\b/;
+export function laBoSungTrung(s: string | null | undefined, c: NguCanhBoSung): boolean {
+  const kd = boDau(s ?? "").replace(/[^a-z0-9\s.,]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return false;
+  const f = c.facts ?? {};
+  // "sổ hồng" bỏ dấu là "so hong" — "hong" ở đó không phải "hông" (= không).
+  const phuDinh = PHU_DINH_BS.test(kd.replace(/\bso hong\b/g, "so"));
+  if (thuanChuDe(kd, TU_DUONG_VAO)) {
+    const coHem = !!(f.do_rong_hem || f.do_rong_duong || c.access_type || (c.alley_width_m != null && c.alley_width_m !== ""));
+    if (!coHem) return false;
+    // "xe hơi vào tới cửa" mà ô đang ghi hẻm xe máy là thông tin MỚI (trái) — giữ.
+    const xeHoiVao = /\b(?:xe hoi|o to|oto|hxh|xe tai|hxt)\b/.test(kd) && !phuDinh;
+    return !(xeHoiVao && !["hem_xe_hoi", "hem_xe_tai", "mat_tien"].includes(c.access_type ?? "") && !/\b(?:xe hoi|o to|oto)\b/.test(boDau(f.do_rong_hem ?? "")));
+  }
+  if (thuanChuDe(kd, TU_TANG_PHU)) {
+    const ketCau = boDau(`${c.floors_text ?? ""} ${f.ket_cau ?? ""} ${f.tang_phu ?? ""}`);
+    if (!ketCau.trim()) return false;
+    if (phuDinh) return true;                       // "ko có lửng" khi kết cấu đã rõ
+    const tu = kd.match(TU_TANG_PHU)?.[0] ?? "";
+    const goc = tu === "gac" || tu === "gac lung" ? "lung" : tu === "tang ham" ? "ham" : tu;
+    return ketCau.includes(goc);                    // "sân thượng" khi kết cấu đã có sân thượng
+  }
+  if (thuanChuDe(kd, TU_SO) && !phuDinh) return !!(c.legal_status || f.phap_ly);
+  return false;
+}
+
 // Chữ mở đầu THỨ KHÁC — gặp là hết tên đường: giấy tờ, giá, kết cấu, hành chính.
 // "đường nhựa 7m sổ riêng 850tr" dừng ở "sổ", không nuốt cả câu.
 //
@@ -390,7 +437,16 @@ export function bocViTriRao(text: string): string | null {
   return so && so.length >= 6 ? so : null;
 }
 
+// 25/09/2026 (dữ liệu thật: pháp lý "Shr em"; chủ dự án "bóc thông tin đúng"): chữ đệm / xưng hô VIẾT THƯỜNG ở CUỐI
+// câu trả lời không phải dữ liệu. Chỉ viết thường — tên riêng viết hoa ("… Anh", "Cô Giang") không bị cắt; "rồi",
+// "thôi" giữ vì mang nghĩa ("hoàn công rồi").
+const DEM_CUOI_DAP_AN = /(?:[\s,.;!]+(?:em|anh|chị|cô|chú|bác|cháu|ạ|á|nha|nhé|nhe|nhen|nghen|nè|ơi|đó|đấy|nhỉ|hen))+[\s.!,]*$/u;
 export function catDapAn(question: string, dapAn: string): string {
+  const ra = catDapAnGoc(question, dapAn);
+  const gon = ra.replace(DEM_CUOI_DAP_AN, "").trim();
+  return gon && /[\p{L}\p{N}]/u.test(gon) ? gon : ra;
+}
+function catDapAnGoc(question: string, dapAn: string): string {
   // 15/09/2026: bỏ phần hỏi ngược trước khi cắt; đáp án chữ chỉ giữ MẢNH nói về đúng
   // câu đang hỏi — "Nhà 5 tầng, có thang máy thì phải, bạn có biết…" → kết cấu "Nhà 5
   // tầng"; "Được giá, căn tôi sở hữu nhưng chưa vào xem…" → gấp "Được giá".
