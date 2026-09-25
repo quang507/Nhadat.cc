@@ -2531,6 +2531,29 @@ fresh(seedKho);
     modelThay("phường mấy, quận nào") && !tin().boc_tach?.phuong_goi_y && pendPh() && db().t.bot_errors.length === 0,
     JSON.stringify({ l: tin(), loi: db().t.bot_errors, rep: rp.body.replies }));
 
+  // 25/09/2026 (chủ dự án: "người ta đưa số nhà và tên đường và quận rồi nhưng mà lại cố hỏi là phường nào"): ĐÃ biết quận
+  // → tra bảng `duong` trong quận đó: một phường → hỏi xác nhận; hai phường → hỏi chọn; không có → hỏi như cũ.
+  const seedTDX = (d, hai = false) => {
+    seedWards(d);
+    d.insert("wards", { ten: "Cầu Ông Lãnh", ten_day_du: "Phường Cầu Ông Lãnh", quan_cu: "Quận 1", loai: "phuong" });
+    d.insert("duong", { ten: "Trần Đình Xu", ten_khong_dau: "tran dinh xu", tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: "Phường Cầu Ông Lãnh", quan_cu: "Quận 1", nguon: "test" });
+    d.insert("duong", { ten: "Trần Đình Xu", ten_khong_dau: "tran dinh xu", tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: "Phường Rạch Dừa", quan_cu: "Vũng Tàu", nguon: "test" });
+    if (hai) d.insert("duong", { ten: "Trần Đình Xu", ten_khong_dau: "tran dinh xu", tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: "Phường Bến Thành", quan_cu: "Quận 1", nguon: "test" });
+  };
+  fresh((d) => seedTDX(d)); globalThis.__nominatim = undefined;
+  rp = await send({ external_user_id: "ph-q1", text: "bán nhà 152 Trần Đình Xu quận 1, 8x15, 1 trệt 4 lầu, 4 phòng ngủ, sổ hồng riêng, giá 65 tỷ" });
+  check("PH-Q1a đã có số nhà + đường + QUẬN → không hỏi trống 'phường mấy': hỏi XÁC NHẬN 'Phường Cầu Ông Lãnh (Quận 1 cũ)', gợi ý cất",
+    modelThay("Phường Cầu Ông Lãnh (Quận 1 cũ), đúng không") && tin().boc_tach?.phuong_goi_y?.phuong === "Phường Cầu Ông Lãnh" && pendPh(),
+    JSON.stringify({ rep: rp.body.replies, l: tin() }));
+  rp = await send({ external_user_id: "ph-q1", text: "đúng rồi em" });
+  check("PH-Q1b gật → ward Phường Cầu Ông Lãnh, quận vẫn Quận 1", tin().ward === "Phường Cầu Ông Lãnh" && tin().district === "Quận 1" && !pendPh(),
+    JSON.stringify({ l: tin(), rep: rp.body.replies }));
+  fresh((d) => seedTDX(d, true)); globalThis.__nominatim = undefined;
+  rp = await send({ external_user_id: "ph-q2", text: "bán nhà 152 Trần Đình Xu quận 1, 8x15, 1 trệt 4 lầu, 4 phòng ngủ, sổ hồng riêng, giá 65 tỷ" });
+  check("PH-Q1c đường có HAI phường trong quận → hỏi chọn 'Phường Cầu Ông Lãnh hay Phường Bến Thành', không cất gợi ý",
+    modelThay("thuộc Phường Cầu Ông Lãnh hay Phường Bến Thành") && !tin().boc_tach?.phuong_goi_y && pendPh(),
+    JSON.stringify({ rep: rp.body.replies, l: tin() }));
+
   // 23/09/2026 (Zalo chủ dự án): "nhà ở trần bình trọng" + "số nhà 105" → bot "thuộc Phường Vườn Lài (Quận 10 cũ)",
   // số 105 thật ở Chợ Quán (Q5 cũ). Đường có ở NHIỀU phường → không đoán, không cất gợi ý, hỏi kèm các quận.
   {

@@ -45,7 +45,7 @@ import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, type DeXuat, docAiC
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
-import { cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, docCacPhuongNominatim, duongTraDuoc, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
+import { cauChonPhuong, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, tachTienToPhuong, urlTraPhuong } from "../_shared/extraction/tra-phuong.ts";
 // FR-212 (21/09/2026): từ điển tên đường — chọn kết quả `tim_duong`, thay tên trong địa chỉ, câu hỏi xác nhận (thuần).
 import { catTenDuong, cauXacNhanDuong, chonDuong, type GoiYDuong, theTenDuong, type UngVienDuong } from "../_shared/extraction/tra-duong.ts";
 import { tenDuong } from "../_shared/geocode.ts";
@@ -1680,9 +1680,25 @@ Deno.serve(async (req) => {
     const cauHoiPhuongGoiY = async (listingId: string, duongBiet: string | null, cachGoiNguoi: string): Promise<string | null> => {
       const { data: l } = await client.from("listings").select("district, street, location_raw, boc_tach").eq("id", listingId).maybeSingle();
       if (!l) return null;
-      // 20260917a: quận trống (không còn mặc định) cũng là "chưa rõ quận" → tra gợi ý từ tên đường.
-      if (l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true) return null;
       const duong = (duongBiet ?? "").trim() || (l.street ?? "").trim() || tenDuong(l.location_raw ?? "");
+      // 25/09/2026 (chủ dự án: "người ta đưa số nhà và tên đường và quận rồi nhưng mà lại cố hỏi là phường nào"): ĐÃ
+      // biết quận → tra bảng `duong` (OSM, phường mới theo quận cũ): một phường → hỏi xác nhận; 2–3 phường → hỏi chọn.
+      // Không tra được (bảng chưa có đường đó) → hỏi như cũ.
+      if (l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true) {
+        const ten = chuanTenDuong(duong);
+        if (!duongTraDuoc(ten)) return null;
+        const { data: dd, error: ddErr } = await client.from("duong").select("phuong, quan_cu").eq("ten_khong_dau", boDau(ten)).limit(40);
+        if (ddErr) { await ghiLoi(client, "chat-reply tra duong theo quan", ddErr.message); return null; }
+        const cac = phuongCuaDuongTrongQuan((dd ?? []) as Array<{ phuong: string | null; quan_cu: string | null }>, l.district);
+        if (cac.length === 1) {
+          const goiY = { phuong: cac[0], quan: l.district, duong: ten };
+          const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY } });
+          if (error) { await ghiLoi(client, "chat-reply ghi_boc_tach(phuong goi y theo quan)", error.message); return null; }
+          return cauXacNhanPhuong(cauHoiMau("phuong@goi_y", cachGoiNguoi), cachGoiNguoi, goiY.duong, goiY.phuong, goiY.quan);
+        }
+        if (cac.length >= 2 && cac.length <= 3) return cauChonPhuong(cachGoiNguoi, ten, cac);
+        return null;
+      }
       const goiY = await traPhuongTuDuong(duong);
       if (!goiY) return null;
       if ("nhieuNoi" in goiY) return cauNhieuNoiPhuong(cachGoiNguoi, goiY.duong, goiY.nhieuNoi);
@@ -4838,7 +4854,8 @@ Deno.serve(async (req) => {
         // FR-209: câu rao có tên đường mà không có quận → tra phường mới, hỏi xác nhận.
         // FR-212: tên đường gõ sai 1–2 ký tự → câu hỏi đầu là XÁC NHẬN tên đường (đứng trước gợi ý phường).
         const cauDuongDau = duongRao?.goiY && newLst ? await cauHoiDuongGoiY(newLst.id, duongRao.goiY, cachGoi) : null;
-        const goiYDau = !cauDuongDau && firstKey === "phuong" && !quanDoc && viTriRao && newLst
+        // 25/09/2026: câu rao ĐÃ có quận cũng tra (bảng `duong` trong quận đó) — `cauHoiPhuongGoiY` tự chọn đường tra.
+        const goiYDau = !cauDuongDau && firstKey === "phuong" && viTriRao && newLst
           ? await cauHoiPhuongGoiY(newLst.id, tenDuong(viTriRao), cachGoi)
           : null;
         const cauHoiDau = cauDuongDau ?? goiYDau ?? (firstKey

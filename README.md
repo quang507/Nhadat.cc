@@ -19,7 +19,7 @@ tại TP.HCM (Zalo OA + website), khởi điểm thị trường Quận 5.
 | 6 | [UI Design](docs/06-ui-design.md) | Design system + tone giọng chat |
 | 7 | [SRS](docs/07-srs.md) | Kiến trúc, data model, API, 13 tiêu chí nghiệm thu |
 | 8 | [Traceability](docs/08-traceability.md) | Ma trận truy vết BR→FR→UF→WF→SRS→AC |
-| 9 | [Open Issues](docs/09-open-issues.md) | 57 vấn đề — 36 đã chốt hoặc đã đóng (dọn 07/09: 13 mục hướng nhadat.cc 2024 không còn hợp AOND; 09/09 chiều chốt OPEN-32 ảnh vào kho, chốt lại OPEN-39 tên theo khách, OPEN-55 bảng 14 dòng chat Gemini ↔ hệ thống; 09/09 tối chốt OPEN-40 đủ loại BĐS; 10/09 đóng OPEN-45 vì design/ đã xoá), 21 còn chờ chủ dự án (OPEN-56 nguồn dữ liệu dự án 10/09; OPEN-57 mảnh câu xác nhận rơi vào bo_sung 22/09) (OPEN-26/27/28 chốt một phần; OPEN-51/52 dựng lại từ nhánh cũ 08/09; OPEN-53 ảnh đếm tấm, OPEN-54 ngưỡng fine-tune 09/09) |
+| 9 | [Open Issues](docs/09-open-issues.md) | 58 vấn đề — 36 đã chốt hoặc đã đóng (dọn 07/09: 13 mục hướng nhadat.cc 2024 không còn hợp AOND; 09/09 chiều chốt OPEN-32 ảnh vào kho, chốt lại OPEN-39 tên theo khách, OPEN-55 bảng 14 dòng chat Gemini ↔ hệ thống; 09/09 tối chốt OPEN-40 đủ loại BĐS; 10/09 đóng OPEN-45 vì design/ đã xoá), 22 còn chờ chủ dự án (OPEN-56 nguồn dữ liệu dự án 10/09; OPEN-57 mảnh câu xác nhận rơi vào bo_sung 22/09; OPEN-58 tra phường theo số nhà / Google Geocoding 25/09) (OPEN-26/27/28 chốt một phần; OPEN-51/52 dựng lại từ nhánh cũ 08/09; OPEN-53 ảnh đếm tấm, OPEN-54 ngưỡng fine-tune 09/09) |
 | 10 | [Kế hoạch kiểm thử](docs/10-ke-hoach-kiem-thu.md) | 4 tầng kiểm thử, bộ test chạy tay kèm kết quả mới nhất |
 | 11 | [Quy trình BA & tester](docs/11-quy-trinh.md) | Hai vòng làm việc, ba cổng, định nghĩa XONG |
 

@@ -129,3 +129,23 @@ export function cauXacNhanPhuong(mau: string, cachGoi: string, duong: string, te
     .replace(/\{ac\}/g, cachGoi).replace(/\{Ac\}/g, Ac)
     .replace(/\{duong\}/g, duong.trim()).replace(/\{phuong\}/g, tenDayDu).replace(/\{quan\}/g, quanCu);
 }
+
+/**
+ * Đã biết QUẬN (cũ) + tên đường, bảng `duong` cho ra 2–3 phường mới trong quận đó → hỏi CHỌN thay vì hỏi trống
+ * (25/09/2026, chủ dự án: "người ta đưa số nhà và tên đường và quận rồi nhưng mà lại cố hỏi là phường nào").
+ */
+export function cauChonPhuong(cachGoi: string, duong: string, phuong: string[]): string {
+  const ds = phuong.slice(0, 3);
+  const noi = ds.length === 2 ? ds.join(" hay ") : ds.slice(0, -1).join(", ") + " hay " + ds[ds.length - 1];
+  return `Đường ${duong.trim()} đoạn nhà mình thuộc ${noi} vậy ${cachGoi}?`;
+}
+
+/** Phường MỚI (khác nhau, không rỗng) của một tên đường trong một quận cũ — từ các dòng bảng `duong`. */
+export function phuongCuaDuongTrongQuan(dong: Array<{ phuong?: string | null; quan_cu?: string | null }>, quan: string): string[] {
+  const ra: string[] = [];
+  for (const d of dong) {
+    const p = (d.phuong ?? "").trim();
+    if (p && d.quan_cu === quan && !ra.includes(p)) ra.push(p);
+  }
+  return ra;
+}
