@@ -4501,11 +4501,17 @@ Deno.serve(async (req) => {
       // ĐỊA CHỈ mà quận chưa rõ → câu kế là phường/quận (tra OSM: đường ở nhiều nơi thì kể các quận), không để thứ tự
       // ưu tiên (phường 17) đẩy nó ra sau giá, pháp lý.
       const quanChuaRo = !lstNow?.district || (lstNow?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
+      // 25/09/2026 (chủ dự án test Zalo, tin An Dương Vương): trả lời "hoàn công rồi" → câu liên quan là ẢNH (`hoan_cong →
+      // hinh_anh`), mà câu kế là ảnh thì code GỬI NHÁP — bỏ qua phường/quận còn thiếu, nháp ra không có quận. Còn thiếu
+      // phường thì hỏi phường trước (câu gấp vẫn để nháp lo như cũ).
+      const chonKe = chonCauKe([pendingReq.question], conHoi);
       const nextKey = published
         ? undefined
         : pendingReq.question === "vi_tri" && quanChuaRo && conHoi.some((f) => f.fact_key === "phuong")
         ? "phuong"
-        : chonCauKe([pendingReq.question], conHoi);
+        : chonKe === "hinh_anh" && conHoi.some((f) => f.fact_key === "phuong")
+        ? "phuong"
+        : chonKe;
       // FR-177 c: hết câu cơ bản + chuyên môn (ảnh xin trong bản nháp) và tin
       // đủ 70 điểm → gửi bản nháp thay vì hỏi tiếp. Dưới 70 thì hỏi tiếp và
       // nói rõ còn thiếu gì.

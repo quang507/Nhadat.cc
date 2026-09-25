@@ -3520,6 +3520,17 @@ fresh(seedKho);
     check("RENHANH-04 trả lời 'rồi em' cho câu hoàn công → ghi fact hoan_cong, không hỏi lại hoàn công",
       !!fHc && !pend("hoan_cong", l.id), JSON.stringify({ fHc, rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
+  // 25/09/2026 (chủ dự án test Zalo, tin An Dương Vương): "hoàn công rồi" → câu liên quan là ẢNH → code gửi NHÁP, bỏ qua
+  // phường/quận còn thiếu (nháp ra không có quận). Còn câu khác thì chưa được chọn ảnh.
+  rnSeed("z-rn9", "BDS-Q5-0939", { district: null, ward: null, location_raw: "An Dương Vương", boc_tach: { quan_mac_dinh: true } });
+  r = await send({ external_user_id: "z-rn9", text: "sổ hồng riêng em" });
+  r = await send({ external_user_id: "z-rn9", text: "hoàn công rồi" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0939");
+    check("RENHANH-04b tin chưa có phường/quận, trả lời 'hoàn công rồi' → câu kế là PHƯỜNG, không gửi bản nháp",
+      pend("phuong", l.id) && !pend("duyet_tin", l.id) && !r.body.replies.some((x) => /^📋/.test(x)),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
   // FR-225 a (25/09/2026, chủ dự án test Zalo: khách "nở hậu nhé" → bot bịa "nở hậu 4.5"; "nở hậu nhiu cộng vào diện tích"):
   // nói nở hậu mà chưa có số mét → câu kế hỏi nở hậu bao nhiêu mét.
   rnSeed("z-nh1", "BDS-Q5-0941", { has_completion: true, frontage_m: 5, length_m: 12 });
