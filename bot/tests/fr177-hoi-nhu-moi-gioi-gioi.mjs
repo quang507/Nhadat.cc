@@ -93,7 +93,7 @@ for (const s of ["không, sửa giá lại", "sai rồi", "5 tỷ", "ok nhưng s
 for (const s of ["đủ rồi em", "vậy đủ rồi", "thôi đủ rồi, đừng hỏi nữa", "hết rồi em", "không còn gì nữa", "chỉ vậy thôi", "bấy nhiêu thôi em", "đừng hỏi nữa", "thông tin đầy đủ rồi", "vậy thôi nha", "nhiêu đó thôi"]) {
   ok(`đủ rồi: "${s}"`, laDuRoi(s) === true);
 }
-for (const s of ["ok", "đăng đi em", "hẻm 4m", "sổ hồng riêng rồi em", "chưa đủ đâu", "thiếu cái hẻm", "còn nữa", "để em bổ sung thêm", "phí sao em?", "", "rồi", "đủ 3 lầu"]) {
+for (const s of ["ok", "đăng đi em", "hẻm 4m", "sổ hồng riêng rồi em", "chưa đủ đâu", "thiếu cái hẻm", "còn nữa", "để em bổ sung thêm", "phí sao em?", "", "rồi", "đủ 3 lầu", "đồng ý hết rồi", "các bên đồng ý hết rồi em"]) {
   ok(`không phải đủ rồi: "${s}"`, laDuRoi(s) === false);
 }
 

@@ -61,6 +61,18 @@ const CA = [
   ["phuong", "ừ", "ack"],
   ["gia", "10 tỷ rưỡi", "khop"],
   ["gia", "kêu chị nha", "xung_ho"],
+  // FR-229 (25/09/2026): câu pháp lý hỏi trước bản nháp.
+  ["nguoi_dung_ten", "anh", "khop"],
+  ["nguoi_dung_ten", "mẹ em đứng tên", "khop"],
+  ["nguoi_dung_ten", "vợ chồng tôi", "khop"],
+  ["nguoi_dung_ten", "5 tỷ", "lech"],
+  ["tranh_chap", "không", "khop"],
+  ["tranh_chap", "sạch sẽ", "khop"],
+  ["tranh_chap", "hẻm 4m", "lech"],
+  ["dien_tich_khop_so", "khớp", "khop"],
+  ["dien_tich_khop_so", "đúng sổ", "khop"],
+  ["dien_tich_khop_so", "hoàn công đủ rồi", "khop"],
+  ["dien_tich_khop_so", "xây lố 1 chút", "khop"],
 ];
 
 let hong = 0;

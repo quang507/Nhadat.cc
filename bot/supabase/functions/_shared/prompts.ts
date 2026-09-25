@@ -259,7 +259,7 @@ export const FACT_LABELS: Record<string, string> = {
   // sau_dang (hỏi bù sau khi lên kệ) + 4 loại mới toa_nha / dat_nong_nghiep / dat_kinh_doanh / kho_xuong.
   so_wc: "số WC", cach_mat_tien: "cách mặt tiền đường bao xa", hem_thong: "hẻm thông hay cụt, quay đầu xe được không",
   ngap_nuoc: "có ngập nước mùa mưa không", hien_trang_su_dung: "đang ở, cho thuê hay để trống",
-  the_chap: "sổ cầm tay hay đang thế chấp ngân hàng", hoan_cong: "hoàn công", giay_to_hien_co: "giấy tờ nhà hiện có (HĐMB, vi bằng, giấy tay…)", du_kien_ra_so: "dự kiến bao giờ ra sổ", ban_giao: "đã nhận bàn giao chưa", dong_so_huu_voi: "sổ đứng tên chung với ai", dong_y_ban: "các bên đồng sở hữu đồng ý bán chưa", han_hop_dong_thue: "hợp đồng thuê còn tới khi nào", tien_ich_gan: "tiện ích gần (trường, công chứng, chợ, gym)",
+  the_chap: "sổ cầm tay hay đang thế chấp ngân hàng", hoan_cong: "hoàn công", giay_to_hien_co: "giấy tờ nhà hiện có (HĐMB, vi bằng, giấy tay…)", du_kien_ra_so: "dự kiến bao giờ ra sổ", ban_giao: "đã nhận bàn giao chưa", dong_so_huu_voi: "sổ đứng tên chung với ai", dong_y_ban: "các bên đồng sở hữu đồng ý bán chưa", nguoi_dung_ten: "người đứng tên sổ", tranh_chap: "tranh chấp", dien_tich_khop_so: "diện tích xây khớp sổ", han_hop_dong_thue: "hợp đồng thuê còn tới khi nào", tien_ich_gan: "tiện ích gần (trường, công chứng, chợ, gym)",
   ly_do_ban: "lý do bán", thuong_luong: "giá còn thương lượng không", fit_out: "thời gian sửa chữa miễn phí (fit-out)",
   view: "view căn hộ", can_goc: "có phải căn góc không", phi_gui_xe: "phí gửi xe", so_huu: "sở hữu lâu dài hay 50 năm",
   hinh_dang: "hình dáng đất (vuông vức, nở hậu, bóp hậu)", mat_do_xd: "mật độ xây dựng cho phép", tang_cao_toi_da: "được xây tối đa mấy tầng",
@@ -372,6 +372,10 @@ export const CAU_HOI_MAU: Record<string, string> = {
   ban_giao: "Căn mình đã nhận bàn giao chưa {ac}?",
   dong_so_huu_voi: "Sổ nhà mình đứng tên chung với ai {ac}?",
   dong_y_ban: "Các bên đứng tên đã đồng ý bán hết chưa {ac}?",
+  // FR-229 (chủ dự án 25/09/2026, nhóm "Pháp lý (đây là phần quan trọng nhất)"): hỏi trước bản nháp, tin bán.
+  nguoi_dung_ten: "Sổ nhà mình đang đứng tên ai {ac}, có đồng sở hữu như vợ chồng hay anh em thừa kế không?",
+  tranh_chap: "Nhà có đang tranh chấp gì không {ac}?",
+  dien_tich_khop_so: "Diện tích xây dựng thực tế có khớp với sổ không {ac}, đã hoàn công chưa?",
   han_hop_dong_thue: "Hợp đồng thuê hiện còn tới khi nào {ac}?",
   tien_ich_gan: "Quanh nhà mình có trường học, công chứng hay chợ nào gần không {ac}?",
   ly_do_ban: "{Ac} bán căn này vì lý do gì để em tư vấn khách cho đúng ạ?",
