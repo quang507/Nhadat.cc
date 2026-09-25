@@ -41,7 +41,7 @@ import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
 import { LOAI_VI } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
@@ -80,6 +80,9 @@ const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "d
 // 21/09/2026 (Zalo thật): ở chế độ `chinh`, câu VỊ TRÍ / PHƯỜNG vẫn để AI đọc trước — AI có tên đường /
 // số phường sạch thì lấy; AI trống thì luật đỡ như cũ (không hạ "khớp" thành "lệch" như các khoá khác).
 const CAU_AI_DOC_TRUOC_LUAT_DO = new Set(["vi_tri", "phuong"]);
+// FR-224: câu hỏi SỐ CHẶT — giá trị ghi lấy từ ô AI đã chuẩn hoá + kiểm khoảng (`giaTriChoCauTreo`), không lấy câu trả lời
+// chữ của AI ("năm tỷ hai" / "5,2 tỷ" đều phải thành một con số đúng đơn vị). AI vẫn quyết CÓ / KHÔNG trả lời.
+const CAU_SO_CHAT = new Set(["gia", "gia_m2", "tien_coc", "doanh_thu", "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "dien_tich_san", "mat_tien"]);
 const LOAI_DAP_AN: Record<string, string> = {
   nha_pho: "nhà phố", nha_cap4: "nhà cấp 4", chung_cu: "căn hộ chung cư", dat: "đất", biet_thu: "biệt thự",
   phong_tro: "phòng trọ", mat_bang: "mặt bằng", toa_nha: "toà nhà", dat_nong_nghiep: "đất nông nghiệp",
@@ -1817,7 +1820,7 @@ Deno.serve(async (req) => {
     // gì; chỉ khi câu có mùi dự án (`coMuiDuAn`); và chỉ một lượt mỗi tin.
     let daVetDuAn = false;
     // FR-208: lượt AI bóc tách chạy bóng (khởi động sau khi biết câu đang hỏi).
-    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
+    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; traLoi?: { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null } | null; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
     // Công tắc `app_config.boc_tach_ai` đọc MỘT lần, tách khỏi lượt model để đường ra biết
     // phải chờ (chế độ `ghi`) hay chạy nền (chế độ `bong`) mà không đợi model xong.
     let cheDoBocAi: Promise<string> | null = null;
@@ -2548,7 +2551,9 @@ Deno.serve(async (req) => {
         const cheDo = await cheDoBocAi!;
         if (cheDo !== "bong" && cheDo !== "ghi" && cheDo !== "chinh") return null;
         // FR-214 b: đã chia mảnh theo căn → AI bóc tách chỉ đọc phần thuộc căn đang treo.
-        const r = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, textTreo || text, pendingReq?.question ?? null);
+        // FR-224: đưa cả CHỮ câu bot vừa hỏi để AI hiểu câu hỏi theo nghĩa (khoá trần "do_rong_hem" không nói "ô tô vào tới cửa không").
+        const cauChu = pendingReq ? cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal) : null;
+        const r = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, textTreo || text, pendingReq?.question ?? null, cauChu);
         return { ...r, ms: Date.now() - tBong, cauDangHoi: pendingReq?.question ?? null, cheDo };
       })().catch(async (e) => {
         await ghiLoi(client, "chat-reply boc_tach_ai(bong)", e);
@@ -3909,7 +3914,14 @@ Deno.serve(async (req) => {
         const kqAi = await bongAi;
         const dongTreo = (pendingReq.listings ?? null) as unknown as DongDb | null;
         const datAi = kqAi ? kiemDeXuat(kqAi.truong, text).dat : [];
-        const dapAnAi0 = kqAi && layChoCauTreo ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
+        // FR-224 (25/09/2026, chủ dự án: "bắt theo nguyên cả câu của khách để AI đọc lại"): chế độ `chinh`, AI đọc NGUYÊN tin
+        // và trả lời thẳng câu đang hỏi (`tra_loi`, đã kiểm trích dẫn + con số). Câu SỐ CHẶT (tiền, diện tích, kích thước) vẫn
+        // lấy giá trị ô đã chuẩn hoá của AI (`giaTriChoCauTreo`); câu khác lấy nguyên câu trả lời của AI ("hẻm xe hơi vào tận
+        // nhà", "chưa có sổ, đang chờ ra sổ") — DB tự đọc cột từ chữ. Vị trí / phường giữ đường riêng.
+        const traLoiAi = cheDoAiTreo === "chinh" && kqAi?.ket && layChoCauTreo && !dapAnTuTinTruoc && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question)
+          ? kiemTraLoiCau(kqAi.traLoi, text) : null;
+        const oAi = kqAi && layChoCauTreo ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
+        const dapAnAi0 = CAU_SO_CHAT.has(pendingReq.question) ? oAi : (traLoiAi?.giaTri ?? oAi);
         // 22/09/2026: câu treo VỊ TRÍ — bản luật chứa bản AI mà dài hơn (có số nhà / hẻm) thì lấy luật.
         const dapAnAi = pendingReq.question === "vi_tri" && dapAnAi0 ? chonViTri(bocViTriRao(dapAn), dapAnAi0) : dapAnAi0;
         if (cheDoAiTreo === "chinh" && kqAi?.ket) {
@@ -3928,7 +3940,10 @@ Deno.serve(async (req) => {
           const hoiKem = kq.hoiNguoc ?? (kq.loai === "hoi" ? dapAn : undefined);
           kq = { loai: "khop", ...(hoiKem ? { hoiNguoc: hoiKem } : {}) };
           loaiDapAn = dapAnAi;
-        } else if (aiChinh && layChoCauTreo && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question) && kq.loai === "khop" && KHOA_FACT_AI_BIET.has(pendingReq.question) &&
+        } else if (aiChinh && layChoCauTreo && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question) && kq.loai === "khop" &&
+          // FR-224: AI nói thẳng "tin này KHÔNG trả lời câu đang hỏi" → lệch, với MỌI câu (kể cả câu theo loại nhà AI không có ô).
+          // AI nói CÓ mà câu trả lời không qua kiểm → để luật đọc. AI không nói gì (bản cũ) → như trước: chỉ khoá AI có ô.
+          (traLoiAi ? !traLoiAi.co : KHOA_FACT_AI_BIET.has(pendingReq.question)) &&
           !dapAnTuTinTruoc && !luatChacCauTreo(pendingReq.question, dapAn)) {
           kq = { loai: "lech" };
         }
