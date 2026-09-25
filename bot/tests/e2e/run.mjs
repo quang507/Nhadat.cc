@@ -2740,6 +2740,25 @@ fresh(seedKho);
       JSON.stringify({ rep: rp.body.replies, l: tin() }));
   }
 
+  // 25/09/2026 (chủ dự án test Zalo): "a bán nhà" → bot hỏi địa chỉ → "an duong vương" → bot ghi rồi hỏi ô tô, KHÔNG hỏi
+  // quận ("An Dương Vương nó 2 3 chỗ lận"). Vừa trả lời địa chỉ mà quận chưa rõ → câu kế là phường/quận, kể các quận.
+  {
+    const ADV = ["Phường Chợ Quán", "Phường An Lạc", "Phường Bình Phú"].map((p) => ({ addresstype: "road", address: { road: "An Dương Vương", suburb: p, city: "Thành phố Hồ Chí Minh" } }));
+    fresh((d) => {
+      d.insert("wards", { ten: "Chợ Quán", ten_day_du: "Phường Chợ Quán", quan_cu: "Quận 5", loai: "phuong" });
+      d.insert("wards", { ten: "An Lạc", ten_day_du: "Phường An Lạc", quan_cu: "Bình Tân", loai: "phuong" });
+      d.insert("wards", { ten: "Bình Phú", ten_day_du: "Phường Bình Phú", quan_cu: "Quận 6", loai: "phuong" });
+    });
+    globalThis.__nominatim = ADV;
+    await send({ external_user_id: "ph-adv", text: "a bán nhà" });
+    const hoiDiaChi = db().t.info_requests.some((q) => q.question === "vi_tri" && q.status === "pending");
+    rp = await send({ external_user_id: "ph-adv", text: "an duong vương" });
+    check("PH-13 'a bán nhà' → hỏi địa chỉ → 'an duong vương' (quận chưa rõ) → câu kế là phường/quận, kể 'Quận 5, Bình Tân, Quận 6', câu phường treo, không hỏi ô tô",
+      hoiDiaChi && /có ở nhiều nơi \(Quận 5, Bình Tân, Quận 6\)/.test(rp.body.replies.join(" ")) && pendPh() &&
+        !db().t.info_requests.some((q) => q.question === "do_rong_hem" && q.status === "pending") && !tin().ward,
+      JSON.stringify({ hoiDiaChi, rep: rp.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  }
+
   // Tra được phường nhưng bảng `wards` KHÔNG có (phường mới chưa nạp) → hỏi như cũ.
   fresh(); globalThis.__nominatim = LVV;
   rp = await send({ external_user_id: "ph-5", text: "bán nhà đường Lê Văn Việt 50m2 4 tỷ" });
