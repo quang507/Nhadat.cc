@@ -626,6 +626,12 @@ const conChu = (kd: string) => kd.replace(TIEU_TU, "").replace(/[^a-z0-9]+/g, ""
 const CO_SO = /\d/;
 // Từ nói chuyện (còn dấu) — không có trong tên phường/xã nào ("Bàn Cờ" là "bàn",
 // không phải "bận").
+/** Câu CHỈ nói quận/huyện ("quận 5 em", "Q.Bình Tân", "ở quận 10 nha"), không có phường/xã/số phường. */
+export function laChiQuan(text: string): boolean {
+  const kd = boDau(text ?? "").toLowerCase().replace(/[.,!?]+/g, " ").replace(/\s+/g, " ").trim();
+  if (/\b(?:phuong|xa|thi tran|p\s*\d)/.test(kd)) return false;
+  return /^(?:(?:o|thuoc|nha|nha minh|nha o|em|anh|chi)\s+)*(?:quan|q|huyen)\s*(?:\d{1,2}|[a-z]+(?:\s[a-z]+){0,2}?)(?:\s+(?:nha|nhe|nhen|a|em|anh|chi|chau|ne|do|oi|nghen))*$/.test(kd);
+}
 const TU_NOI_CHUYEN = /(?<![\p{L}])(?:hỏi|gì|sao|vậy|lắm|bận|biết|không|chưa|rồi|để|đang|ơi|thôi|tính|nghĩ|vợ|chồng|mệt|hả)(?![\p{L}])/iu;
 const SO_CHU = /\b(mot|hai|ba|bon|nam|sau|bay|tam|chin|muoi|ruoi)\b/;
 
@@ -922,6 +928,9 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   // 11/09/2026 (42 ca): "chu.length >= 3" một mình nhận CẢ câu than phiền làm tên
   // phường. Tên phường bằng chữ ngắn (≤ 4 tiếng) và không có từ nói chuyện.
   if (question === "phuong") {
+    // 25/09/2026 (bắn thật lx-29): hỏi "phường nào, quận nào" → "quận 5 em" thành PHƯỜNG "quận 5". Chỉ nói quận thì chưa
+    // trả lời phường — quận vẫn được ghi (`capNhatQuan`), câu phường hỏi lại.
+    if (laChiQuan(text)) return ketQua("lech");
     const soTieng = kd.split(/\s+/).filter(Boolean).length;
     const tenChu = chu.length >= 3 && soTieng <= 4 && !TU_NOI_CHUYEN.test(text);
     // Chữ "phường/xã" phải đi với một cái TÊN: "không biết phường nào" không phải tên phường.

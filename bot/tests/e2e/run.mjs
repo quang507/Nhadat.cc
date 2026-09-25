@@ -2748,6 +2748,9 @@ fresh(seedKho);
       d.insert("wards", { ten: "Chợ Quán", ten_day_du: "Phường Chợ Quán", quan_cu: "Quận 5", loai: "phuong" });
       d.insert("wards", { ten: "An Lạc", ten_day_du: "Phường An Lạc", quan_cu: "Bình Tân", loai: "phuong" });
       d.insert("wards", { ten: "Bình Phú", ten_day_du: "Phường Bình Phú", quan_cu: "Quận 6", loai: "phuong" });
+      d.insert("duong", { ten: "An Dương Vương", ten_khong_dau: "an duong vuong", phuong: "Phường Chợ Quán", quan_cu: "Quận 5" });
+      d.insert("duong", { ten: "An Dương Vương", ten_khong_dau: "an duong vuong", phuong: "Phường An Đông", quan_cu: "Quận 5" });
+      d.insert("duong", { ten: "An Dương Vương", ten_khong_dau: "an duong vuong", phuong: "Phường An Lạc", quan_cu: "Bình Tân" });
     });
     globalThis.__nominatim = ADV;
     await send({ external_user_id: "ph-adv", text: "a bán nhà" });
@@ -2757,6 +2760,14 @@ fresh(seedKho);
       hoiDiaChi && /có ở nhiều nơi \(Quận 5, Bình Tân, Quận 6\)/.test(rp.body.replies.join(" ")) && pendPh() &&
         !db().t.info_requests.some((q) => q.question === "do_rong_hem" && q.status === "pending") && !tin().ward,
       JSON.stringify({ hoiDiaChi, rep: rp.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+    // Bắn thật lx-29: "quận 5 em" → ward thành "quận 5". Chỉ nói quận → ghi quận, ward trống, hỏi phường theo bảng đường.
+    globalThis.__model.create = () => { throw new Error("model chết"); };
+    rp = await send({ external_user_id: "ph-adv", text: "quận 5 em" });
+    globalThis.__model.create = undefined;
+    check("PH-13b 'quận 5 em' khi hỏi phường/quận → district Quận 5, ward TRỐNG, câu phường treo, hỏi chọn 'Phường Chợ Quán hay Phường An Đông'",
+      tin().district === "Quận 5" && !tin().ward && pendPh() && !db().t.listing_facts.some((f) => f.question === "phuong") &&
+        /Phường Chợ Quán hay Phường An Đông/.test(rp.body.replies.join(" ")),
+      JSON.stringify({ rep: rp.body.replies, l: { w: tin().ward, d: tin().district }, f: db().t.listing_facts.filter((f) => f.question === "phuong") }));
   }
 
   // Tra được phường nhưng bảng `wards` KHÔNG có (phường mới chưa nạp) → hỏi như cũ.
@@ -3508,6 +3519,17 @@ fresh(seedKho);
     const fHc = db().t.listing_facts.find((x) => x.listing_id === l.id && x.question === "hoan_cong");
     check("RENHANH-04 trả lời 'rồi em' cho câu hoàn công → ghi fact hoan_cong, không hỏi lại hoàn công",
       !!fHc && !pend("hoan_cong", l.id), JSON.stringify({ fHc, rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
+  // 25/09/2026 (chủ dự án test Zalo, tin An Dương Vương): "hoàn công rồi" → câu liên quan là ẢNH → code gửi NHÁP, bỏ qua
+  // phường/quận còn thiếu (nháp ra không có quận). Còn câu khác thì chưa được chọn ảnh.
+  rnSeed("z-rn9", "BDS-Q5-0939", { district: null, ward: null, location_raw: "An Dương Vương", boc_tach: { quan_mac_dinh: true } });
+  r = await send({ external_user_id: "z-rn9", text: "sổ hồng riêng em" });
+  r = await send({ external_user_id: "z-rn9", text: "hoàn công rồi" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0939");
+    check("RENHANH-04b tin chưa có phường/quận, trả lời 'hoàn công rồi' → câu kế là PHƯỜNG, không gửi bản nháp",
+      pend("phuong", l.id) && !pend("duyet_tin", l.id) && !r.body.replies.some((x) => /^📋/.test(x)),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
   // FR-225 a (25/09/2026, chủ dự án test Zalo: khách "nở hậu nhé" → bot bịa "nở hậu 4.5"; "nở hậu nhiu cộng vào diện tích"):
   // nói nở hậu mà chưa có số mét → câu kế hỏi nở hậu bao nhiêu mét.

@@ -150,6 +150,13 @@ la("tin nghèo thông tin: chỉ có mấy dòng, không bịa dòng nào",
   datNhap.split("\n").length <= 8 && !/🏗|🧭|📜/.test(datNhap), datNhap);
 la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.test(dung(NHA_PHO, true)), dung(NHA_PHO, true).split("\n").at(-1));
 
+// 25/09/2026 (chủ dự án test Zalo): "sang tên ngay và luôn" in thành "sang tên ngay và" — "và luôn" là thành ngữ.
+{
+  const tin = { ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "bo_sung", answer: "sang tên ngay và luôn" }, { question: "bo_sung", answer: "để ở hay cho thuê đều được luôn em" }] };
+  const them = dung(tin).split("\n").find((x) => x.startsWith("📝")) ?? "";
+  la("VALUON-01 📝 Thêm giữ 'sang tên ngay và luôn', vẫn bỏ tiểu từ đuôi 'luôn em'", /sang tên ngay và luôn/.test(them) && /đều được(?! luôn)/.test(them), them);
+}
+
 // 25/09/2026 (chủ dự án "ko ghi trùng"): 📝 Thêm không in lại điều kết cấu / đường vào / sổ / nhãn đã có — lọc cả dữ liệu cũ.
 {
   const tin = { ...NHA_PHO, l: { ...NHA_PHO.l, floors_text: "trệt + lửng + 2 lầu + sân thượng", alley_width_m: 3, access_type: "hem_xe_may", nhan: ["san_thuong", "gac_lung"] },

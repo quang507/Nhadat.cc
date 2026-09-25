@@ -171,7 +171,8 @@ export function soanTinNhap(t: ThamSoNhap): string {
     // Chủ nhà nhắn "để ở hoặc cho thuê đều được em" → tin rao không được in
     // "Phù hợp: … đều được em" (lượt bắn 12/09). Bỏ tiểu từ chat ở đuôi.
     const p = phan.filter((x): x is string => !!x && String(x).trim().length > 0)
-      .map((x) => String(x).replace(/(?:[\s,]+(?:em|anh|chị|nha|nhé|nhe|nhen|ạ|luôn|đó|á|nghen|thôi))+\s*[.!]*$/iu, "").trim())
+      // 25/09/2026 (chủ dự án test Zalo): "sang tên ngay và luôn" in thành "sang tên ngay và" — "và luôn" là thành ngữ, giữ.
+      .map((x) => String(x).replace(/(?:[\s,]+(?:em|anh|chị|nha|nhé|nhe|nhen|ạ|(?<!\svà\s)luôn|đó|á|nghen|thôi))+\s*[.!]*$/iu, "").trim())
       .filter(Boolean);
     if (p.length) dong.push(`${icon} ${ten}: ${p.join(" · ")}`);
   };

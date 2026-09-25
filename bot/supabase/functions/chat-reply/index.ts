@@ -69,7 +69,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { ghepMotChieu, gonLoiSua, laBoSungRac, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, laBoSungRac, laChiQuan, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 // Câu hỏi mà câu trả lời LÀ một số tiền nhưng không phải giá bán (FR-223): số tiền kèm theo không được ghi thành `gia`.
@@ -4231,7 +4231,14 @@ Deno.serve(async (req) => {
         const nhanDangHoi = xaThayPhuong ? "xã" : FACT_LABELS[pendingReq.question] ?? pendingReq.question;
         const nhanHoiLai = xaThayPhuong ? "chỗ mình thuộc xã nào" : NHAN_HOI_LAI[pendingReq.question] ?? nhanDangHoi;
         const chiSoNha = !!soNhaGhep && !dapAn.trim();
-        const viSao = chiSoNha
+        // 25/09/2026 (bắn thật lx-29): hỏi phường/quận, chủ nói "quận 5 em" → quận đã ghi (`capNhatQuan` ở trên), hỏi
+        // tiếp phường; biết quận rồi thì tra bảng `duong` (một phường → xác nhận, 2–3 phường → hỏi chọn).
+        const chiQuan = pendingReq.question === "phuong" && laChiQuan(dapAn);
+        const goiYSauQuan = chiQuan ? await cauHoiPhuongGoiY(pendingReq.listing_id, null, cachGoi) : null;
+        const viSao = chiQuan
+          ? `Chủ nhà mới nói QUẬN (em đã ghi quận), chưa nói phường — không phải hiểu nhầm, đừng hỏi lại quận. Báo ngắn đã ghi quận rồi hỏi phường` +
+            (goiYSauQuan ? `, đúng ý câu này: "${goiYSauQuan}"` : ".")
+          : chiSoNha
           ? `Chủ nhà bổ sung SỐ NHÀ, em đã ghi địa chỉ "${soNhaGhep}" — không phải hiểu nhầm, không hỏi lại số nhà. Báo ngắn đã ghi địa chỉ rồi hỏi tiếp.`
           : kq.loai === "xung_ho"
           ? `Chủ nhà dặn gọi họ là "${kq.xungHo}": nhận bằng một câu thật ngắn, từ nay gọi đúng vậy.`
@@ -4269,11 +4276,13 @@ Deno.serve(async (req) => {
         if (!hoiLai) {
           hoiLai = (hoiNguoc && !hoiNguocDap ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (kq.loai === "xung_ho"
             ? `Dạ em nhớ rồi, em gọi ${kq.xungHo} nha. `
+            : chiQuan
+            ? `Dạ em ghi quận rồi ạ. `
             : chiSoNha
             ? `Dạ em ghi địa chỉ ${soNhaGhep} rồi ạ. `
             : kq.chuyenSang
             ? `Em ghi "${kq.chuyenSang.answer}" rồi ạ. `
-            : "") + `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`;
+            : "") + (chiQuan && goiYSauQuan ? goiYSauQuan : `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`);
         }
         return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), hoiLai], { reask: pendingReq.question, loai_cau: kq.loai, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) });
       }
@@ -4492,11 +4501,17 @@ Deno.serve(async (req) => {
       // ĐỊA CHỈ mà quận chưa rõ → câu kế là phường/quận (tra OSM: đường ở nhiều nơi thì kể các quận), không để thứ tự
       // ưu tiên (phường 17) đẩy nó ra sau giá, pháp lý.
       const quanChuaRo = !lstNow?.district || (lstNow?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
+      // 25/09/2026 (chủ dự án test Zalo, tin An Dương Vương): trả lời "hoàn công rồi" → câu liên quan là ẢNH (`hoan_cong →
+      // hinh_anh`), mà câu kế là ảnh thì code GỬI NHÁP — bỏ qua phường/quận còn thiếu, nháp ra không có quận. Còn thiếu
+      // phường thì hỏi phường trước (câu gấp vẫn để nháp lo như cũ).
+      const chonKe = chonCauKe([pendingReq.question], conHoi);
       const nextKey = published
         ? undefined
         : pendingReq.question === "vi_tri" && quanChuaRo && conHoi.some((f) => f.fact_key === "phuong")
         ? "phuong"
-        : chonCauKe([pendingReq.question], conHoi);
+        : chonKe === "hinh_anh" && conHoi.some((f) => f.fact_key === "phuong")
+        ? "phuong"
+        : chonKe;
       // FR-177 c: hết câu cơ bản + chuyên môn (ảnh xin trong bản nháp) và tin
       // đủ 70 điểm → gửi bản nháp thay vì hỏi tiếp. Dưới 70 thì hỏi tiếp và
       // nói rõ còn thiếu gì.
