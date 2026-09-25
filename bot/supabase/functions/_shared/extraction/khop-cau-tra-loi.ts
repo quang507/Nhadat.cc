@@ -1325,7 +1325,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 16/09/2026 (Zalo thật): "nhà ở từ năm 2019 rồi" là HIỆN TRẠNG (đang ở, từ khi nào), không
   // phải tiềm năng sử dụng.
   const O_TU_NAM_RE = /\b(?:nha\s+)?(?:o|xay|xay dung|su dung|dang o)\s+(?:tu|hoi|nam)\s+(?:nam\s+)?((?:19|20)\d{2})\b/;
-  if ((m = O_TU_NAM_RE.exec(kd))) return { question: "hien_trang", answer: manhKhop(O_TU_NAM_RE) };
+  if (!NHA_KHAC_RE.test(kd) && (m = O_TU_NAM_RE.exec(kd))) return { question: "hien_trang", answer: manhKhop(O_TU_NAM_RE) };
   // 21/09/2026 (bắn thật mau-tdt): "nhà ở đường trần đình trọng quận 5" là ĐỊA CHỈ ("ở" = nằm ở), từng
   // thành tiềm năng "nhà ở" rồi lên bản nháp "💡 Phù hợp: nhà ở đường…". "ở" theo sau là đường/hẻm/số/
   // phường/quận/khu/gần… thì không phải cách dùng.
@@ -1483,7 +1483,8 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(thuong luong|\btl\b|bot chut|fix|cung duoc|con bot|gia net|gia chot|(?:bot|giam)\s+(?:cho|xiu|it|them|chut)|(?:bot|giam)\s+(?:cho\s+)?nguoi\s+(?:o|thue)(?:\s+lau dai)?)\b/.test(kd) && !CO_TIEN_KD.test(kd)) {
     return { question: "thuong_luong", answer: goc };
   }
-  if (/\b(dang o|dang cho thue|de trong|nha trong|con o|dang thue)\b/.test(kd) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
+  // 25/09/2026 (bắn thật lx-19): "nhà trong hẻm" bỏ dấu là "nha trong hem" — "trong" (ở trong), không phải "trống".
+  if (/\b(dang o|dang cho thue|de trong|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo))|con o|dang thue)\b/.test(kd) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
   const LY_DO_RE = /\b(ly do|dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san)\b/;
   if (LY_DO_RE.test(kd)) return { question: "ly_do_ban", answer: manhKhop(LY_DO_RE) };
   // 25/09/2026 (chủ dự án test Zalo: "sang tên 1 nốt nhạc ko phải tiện ích"): "công chứng" là THỦ TỤC khi đi với sang tên /
@@ -1529,7 +1530,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(xay tu do|theo mau|mau chu dau tu|mau cdt|xay theo)\b/.test(kd)) return { question: "xay_dung", answer: goc };
   if (/\b(compound|biet lap|khu an ninh|bao ve 24)\b/.test(kd)) return { question: "khu_compound", answer: goc };
   if (/\b(quy hoach|lo gioi|giai toa)\b/.test(kd)) return { question: "quy_hoach", answer: goc };
-  if (/\b(noi that|ban giao|nha trong|full nt)\b/.test(kd)) return { question: "noi_that", answer: goc };
+  if (/\b(noi that|ban giao|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo))|full nt)\b/.test(kd)) return { question: "noi_that", answer: goc };
   if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd) && !keVeMinh && !laViecRao) {
     return { question: "tiem_nang", answer: goc };
   }

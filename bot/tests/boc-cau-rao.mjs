@@ -243,6 +243,10 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
     ["nở hậu nhé", {}, false],
     ["nở hậu, khuôn đất đẹp", { rear_width_m: 6 }, false],
   ];
+  // Bắn thật lx-19 sau #299: "nhà trong hẻm" (ở TRONG) từng thành hiện trạng "nhà trống"; câu hàng xóm thành hiện trạng.
+  ok("FR225 'nhà trong hẻm, xe hơi chạy vô tới cửa' KHÔNG thành hiện trạng / nội thất 'nhà trống'", !nhanDienNhieuFact("nhà trong hẻm, xe hơi chạy vô tới cửa luôn").some((x) => ["hien_trang_su_dung", "noi_that"].includes(x.question)), q("nhà trong hẻm, xe hơi chạy vô tới cửa luôn"));
+  ok("FR225 'nhà trống, giao ngay' vẫn đọc được", nhanDienNhieuFact("nhà trống, giao ngay").length > 0, q("nhà trống, giao ngay"));
+  ok("FR225 'hàng xóm mới xây năm 2019 …' KHÔNG thành hiện trạng", !nhanDienNhieuFact("hàng xóm mới xây năm 2019 cao hơn nhà em").some((x) => x.question === "hien_trang"), q("hàng xóm mới xây năm 2019 cao hơn nhà em"));
   for (const [cau, c, mong] of ca) ok(`FR225 TRUNG '${cau}' ${JSON.stringify(c)} → ${mong ? "trùng" : "giữ"}`, laBoSungTrung(cau, c) === mong);
 }
 
