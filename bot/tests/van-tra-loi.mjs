@@ -581,6 +581,8 @@ for (const [cau, mong] of [
   ok("laKhenSai: 'hxm' + 'khách chuộng' → sai", laKhenSai("Hxm này khách chuộng lắm", "hxm 3m"));
   const r6 = boMenhDeKhenSai(["Hẻm 3m ô tô vào được thì khách chuộng lắm =) Em tra thấy đường Ngô Y Linh thuộc Phường An Lạc, đúng không anh chị?"], "cần bán nhà hxm 3m đường Ngô Y Linh");
   ok("lx-25: khen 'ô tô vào' dính câu hỏi sau '=)' khi khách nói hxm → bỏ khen, giữ câu hỏi", r6.length === 1 && r6[0] === "Em tra thấy đường Ngô Y Linh thuộc Phường An Lạc, đúng không anh chị?", JSON.stringify(r6));
+  const r8 = boMenhDeKhenSai(["Hẻm 3m ô tô vào được là khách chuộng lắm ạ."], "cần bán nhà hxm 3m đường Ngô Y Linh Bình Tân 4x15");
+  ok("lx-26: cả tin chỉ là lời khen sai → trả rỗng (nơi gọi dùng câu dự phòng), không trả lại bản gốc", r8.length === 0, JSON.stringify(r8));
   const r7 = boMenhDeKhenSai(["Hẻm xe hơi 5m, khách chuộng lắm. Mình cần bán gấp không ạ?"], "bán nhà hẻm 3m đường Lê Văn Việt");
   ok("lx-24: vế chính bị cắt, còn 'khách chuộng lắm' → bỏ luôn mẩu cụt", r7.length === 1 && r7[0] === "Mình cần bán gấp không ạ?", JSON.stringify(r7));
   const m1 = boMaTinKhach(["Dạ em lưu lại rồi. Em có căn #BDS-NP-Q5-0004 · Hùng Vương Phường 4 · 6 tỷ 9 · 56m2 · 3PN, mình xem thử nha?"], {});
