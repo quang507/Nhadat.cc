@@ -73,7 +73,9 @@ export function laHuaCoHang(cau: string, hoiHang = true): boolean {
   return HUA_CO_HANG.some((re, i) => (i > 0 || hoiHang) && re.test(kd));
 }
 
-const tachCau = (s: string): string[] => s.split(/(?<=[.!?…])\s+/).filter((c) => c.trim());
+// 25/09/2026 (bắn thật lx-25): "Hẻm 3m ô tô vào được thì khách chuộng lắm =) Em tra thấy … đúng không anh chị?" — mặt
+// cười cũng là hết câu; không tách thì cả cụm mang "?" của câu sau và lời khen sai lọt lưới `laKhenSai`.
+const tachCau = (s: string): string[] => s.split(/(?<=[.!?…]|[=:;]\)+|:D|\^\^)\s+/).filter((c) => c.trim());
 
 /**
  * Bỏ các câu hứa có hàng; chèn `loiThat` đúng chỗ câu đầu tiên bị bỏ (để "Dạ được
@@ -653,6 +655,8 @@ export function boMenhDeKhenSai(replies: string[], bangChung: string): string[] 
       const giu = cacMd.filter((md) => !laKhenSai(md, bangChung));
       if (giu.length === cacMd.length) return c;
       const gop = giu.join(", ").trim();
+      // Bắn thật lx-24: vế chính bị cắt, còn trơ "Khách chuộng lắm." — mẩu khen không chủ ngữ thì bỏ luôn.
+      if (/^(?:khach|nguoi mua)(?:\s+\S+){0,4}$/.test(boDau(gop).replace(/[\s.!…=:;()^]+$/, "").trim()) && KHEN_KD.test(boDau(gop))) return "";
       return gop ? gop.charAt(0).toUpperCase() + gop.slice(1) : "";
     }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
     if (dong) ra.push(dong);
