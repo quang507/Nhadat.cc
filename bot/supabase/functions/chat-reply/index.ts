@@ -4082,8 +4082,11 @@ Deno.serve(async (req) => {
       // "ừ / dạ / vâng" trơ trọi chỉ là ừ (ack), KHÔNG phải muốn đăng (lần 3: "ừ"
       // làm hết hạn câu hẻm rồi đòi đăng tin 51 điểm).
       const kdDang = boDau(dapAn).replace(/[^a-z0-9\s]/g, " ").trim();
+      // FR-229 (bắn e2e PL229-E3): câu "các bên đồng ý bán chưa" / "giá còn thương lượng không" — "đồng ý", "được", "ok" là
+      // ĐÁP ÁN, không phải bảo đăng (trước đó "đồng ý hết rồi" bỏ luôn các câu pháp lý còn lại).
       const chuMuonDang = pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
         pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh" &&
+        pendingReq.question !== "dong_y_ban" && pendingReq.question !== "thuong_luong" &&
         (kdDang.split(/\s+/).length <= 6 &&
           (laDuRoi(dapAn) || /\b(dang|len tin|len ke|post)\b/.test(kdDang) ||
             (laDongY(dapAn) && /\b(ok|oke|okie|duoc|dc|chot|dong y|xong)\b/.test(kdDang))) ||
@@ -4961,7 +4964,8 @@ Deno.serve(async (req) => {
         // FR-177 a: câu đầu bám theo điều câu rao vừa nói (phường → hỏi diện
         // tích, diện tích → hỏi giá…), trong nhóm cơ bản.
         const { data: firstFacts } = await client.from("listing_missing_facts")
-          .select("fact_key, nhom").eq("listing_id", newLst.id).order("priority").limit(8);
+          // FR-229: 12 như các chỗ khác — thêm 4 câu pháp lý thì 8 câu đầu không còn tới câu phường (gia → phuong).
+          .select("fact_key, nhom").eq("listing_id", newLst.id).order("priority").limit(12);
         const vuaRao = [phuongRao ? "phuong" : "", areaM ? "dien_tich" : "", priceM ? "gia" : ""].filter(Boolean);
         const firstKey = chonCauKe(vuaRao, (await thieuCoReNhanh(client, newLst.id, firstFacts)).filter((f) => f.nhom !== "sau_dang")) ?? null;
         if (firstKey) {

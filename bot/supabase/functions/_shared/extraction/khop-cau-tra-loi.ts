@@ -653,6 +653,7 @@ const HOI_CO_KHONG = new Set([
   "hem_thong", "ngap_nuoc", "the_chap", "thuong_luong", "can_goc", "thang_may", "pccc", "len_tho_cu", "gap",
   "ranh_gioi", "xu_ly_nuoc_thai", "duong_container", "nguon_nuoc", "hien_trang_su_dung", "so_huu", "tang_phu",
   "hoan_cong", "ban_giao", "dong_y_ban", // FR-223
+  "tranh_chap", "dien_tich_khop_so", // FR-229
 ]);
 
 // Từ khoá tối thiểu cho các câu hỏi CHỮ. Không có từ nào trong đây thì coi là
@@ -698,7 +699,9 @@ const HO_FACT: string[][] = [
   // Tin cho thuê hỏi "thuê tối thiểu", khách đáp "hợp đồng 1 năm" (luật đọc ra hạn hợp đồng) → vẫn là câu trả lời.
   ["thoi_han_thue", "han_hop_dong_thue"],
   ["tiem_nang", "muc_dich", "nganh_hang_phu_hop"],
-  ["phap_ly", "the_chap", "hoan_cong", "giay_to_hien_co", "du_kien_ra_so", "ban_giao", "dong_so_huu_voi", "dong_y_ban"],
+  ["phap_ly", "the_chap", "hoan_cong", "giay_to_hien_co", "du_kien_ra_so", "ban_giao", "dong_so_huu_voi", "dong_y_ban", "nguoi_dung_ten"],
+  // FR-229: hỏi "diện tích xây khớp sổ không, đã hoàn công chưa" mà khách đáp về hoàn công → vẫn là câu trả lời.
+  ["dien_tich_khop_so", "hoan_cong"],
 ];
 const cungHo = (a: string, b: string) => a === b || HO_FACT.some((h) => h.includes(a) && h.includes(b));
 export const cungHoFact = cungHo;
@@ -782,6 +785,12 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
     const xh = batXungHo(text);
     return { loai: "khop", ...(xh ? { xungHo: xh } : {}) };
   }
+  // FR-229: hỏi "diện tích xây khớp sổ không, đã hoàn công chưa" mà khách đáp "hoàn công đủ rồi" — luật nhận diện xếp chữ
+  // "hoàn công" vào câu sổ (phap_ly) và coi là lệch.
+  if (question === "dien_tich_khop_so" && /\b(hoan cong|khop|dung so|lech|xay lo|xay du)\b/.test(boDau(text)) && !CAU_HOI_RE.test(boDau(text))) {
+    const xh = batXungHo(text);
+    return { loai: "khop", ...(xh ? { xungHo: xh } : {}) };
+  }
   // 09/09/2026 tối (chạy 12 kịch bản trên production): câu trả lời bị ghi LỆCH
   // MỘT Ô hàng loạt — "Hẻm 4m" vào diện tích, "Đúc 5 tầng" vào số phòng ngủ,
   // "lên thổ cư 300m2" vào địa chỉ, "cọc 2 tháng" vào diện tích… vì các nhánh
@@ -833,6 +842,12 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   const xungHo = batXungHo(text);
   const chu = conChu(kd.replace(XUNG_HO_RE, " "));
 
+  // FR-229: "sổ đứng tên ai" — câu trả lời hay chỉ là một đại từ / quan hệ ("anh", "mẹ em", "vợ chồng tôi"), mà đại từ
+  // trần bị bóc như lời dặn xưng hô ("anh" → xung_ho) rồi hỏi lại. Đứng TRƯỚC luật xưng hô.
+  if (question === "nguoi_dung_ten" && !laCauHoiTron(text) &&
+      /\b(toi|minh|anh|chi|em|chu|co|bac|ong|ba|me|bo|cha|vo|chong|con|chau|chinh chu|dung ten|ten)\b/.test(kd)) {
+    return { loai: "khop", ...(xungHo ? { xungHo } : {}) };
+  }
   // Dặn xưng hô mà ngoài ra không còn nội dung → nhớ, hỏi lại.
   if (xungHo && chu.length < 3) return { loai: "xung_ho", xungHo };
   // Câu hỏi có/không (20260909i): "có", "không", "rồi", "chưa", "cụt", "thông"… là đáp án thật.
@@ -841,6 +856,11 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   // xuống nhánh hỏi ngược bên dưới.
   if (HOI_CO_KHONG.has(question) && !laCauHoiTron(text) &&
       /^\s*(co|khong|ko|k|chua|roi|da|cut|thong|ngap|kho|cam tay|the chap|ngan hang|dang o|cho thue|trong|lau dai|50 nam|tl|thuong luong|cung duoc|de o)\b/.test(kd)) {
+    return { loai: "khop", ...(xungHo ? { xungHo } : {}) };
+  }
+  // FR-229: "khớp", "đúng sổ", "lệch chút", "sạch" là đáp án đủ cho hai câu có/không mới.
+  if ((question === "dien_tich_khop_so" || question === "tranh_chap") && !laCauHoiTron(text) &&
+      /^\s*(khop|dung|lech|sach|du|thieu|lo|vuot|xay lo|xay du)\b/.test(kd)) {
     return { loai: "khop", ...(xungHo ? { xungHo } : {}) };
   }
   if (chu.length < 2 && !CO_SO.test(kd)) return { loai: "ack" };
@@ -978,6 +998,11 @@ export const NHAN_HOI_LAI: Record<string, string> = {
   dien_tich: "diện tích bao nhiêu m2",
   ket_cau: "nhà mấy tầng, mấy phòng ngủ",
   quy_hoach: "nhà có dính quy hoạch hay lộ giới gì không",
+  // FR-229
+  nguoi_dung_ten: "sổ nhà mình đang đứng tên ai",
+  the_chap: "sổ nhà mình đang cầm tay hay đang thế chấp ngân hàng",
+  tranh_chap: "nhà có đang tranh chấp gì không",
+  dien_tich_khop_so: "diện tích xây thực tế có khớp với sổ không",
   nam_xay: "nhà xây năm nào",
   gia: "giá mình muốn bán bao nhiêu",
   phuong: "nhà mình thuộc phường mấy",
@@ -1542,6 +1567,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(xay tu do|theo mau|mau chu dau tu|mau cdt|xay theo)\b/.test(kd)) return { question: "xay_dung", answer: goc };
   if (/\b(compound|biet lap|khu an ninh|bao ve 24)\b/.test(kd)) return { question: "khu_compound", answer: goc };
   if (/\b(quy hoach|lo gioi|giai toa)\b/.test(kd)) return { question: "quy_hoach", answer: goc };
+  if (/\btranh chap\b/.test(kd)) return { question: "tranh_chap", answer: goc }; // FR-229
   if (/\b(noi that|ban giao|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo))|full nt)\b/.test(kd)) return { question: "noi_that", answer: goc };
   if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd) && !keVeMinh && !laViecRao) {
     return { question: "tiem_nang", answer: goc };
@@ -1579,6 +1605,10 @@ const LIEN_QUAN: Record<string, string[]> = {
   phap_ly: ["hoan_cong", "giay_to_hien_co", "du_kien_ra_so", "ban_giao", "dong_so_huu_voi", "dong_y_ban", "tien_coc", "tiem_nang", "hinh_anh"], tiem_nang: ["hinh_anh"],
   hoan_cong: ["hinh_anh"], giay_to_hien_co: ["du_kien_ra_so", "ban_giao"], du_kien_ra_so: ["ban_giao", "hinh_anh"],
   dong_so_huu_voi: ["dong_y_ban"], dong_y_ban: ["hinh_anh"],
+  // FR-229: câu pháp lý trước nháp. Ảnh (dải 24) chỉ được chọn khi hết câu pháp lý (dải 16–21) — tức câu pháp lý CUỐI dẫn
+  // thẳng tới bản nháp như câu sổ trước đây (gấp để bản nháp lo, phường thiếu thì vẫn hỏi phường trước).
+  nguoi_dung_ten: ["dong_y_ban", "hinh_anh"], the_chap: ["hinh_anh"], quy_hoach: ["hinh_anh"], tranh_chap: ["hinh_anh"],
+  dien_tich_khop_so: ["hinh_anh"],
   tien_coc: ["thoi_han_thue"], thoi_han_thue: ["truot_gia"], truot_gia: ["hinh_anh"],
   hinh_anh: [],
 };
@@ -1593,9 +1623,9 @@ export function chonCauKe(vuaNoi: string[], conThieu: CauThieu[]): string | unde
   const dau = xep[0];
   const ungVien = xep.filter((c) => nhom(c) === nhom(dau));
   // FR-219 (24/09/2026, chủ dự án chọn "hỏi theo thứ chủ nhà dễ trả lời … ko fix cứng"): câu liên quan vẫn được
-  // chen lên, nhưng KHÔNG vượt dải — vật lý (<12) → tiền (12–15) → pháp lý (16) → phường, gấp, ảnh (17+). Nghe
-  // "diện tích" thì hỏi mặt tiền / kết cấu được, không kéo GIÁ lên trước kết cấu, phòng ngủ, hẻm.
-  const dai = (p?: number) => p == null ? 0 : p < 12 ? 0 : p < 16 ? 1 : p < 17 ? 2 : 3;
+  // chen lên, nhưng KHÔNG vượt dải — vật lý (<12) → tiền (12–15) → pháp lý (16–21, FR-229) → phường, gấp, ảnh (22+).
+  // Nghe "diện tích" thì hỏi mặt tiền / kết cấu được, không kéo GIÁ lên trước kết cấu, phòng ngủ, hẻm.
+  const dai = (p?: number) => p == null ? 0 : p < 12 ? 0 : p < 16 ? 1 : p < 22 ? 2 : 3;
   for (const k of [...vuaNoi].reverse()) {
     for (const lq of LIEN_QUAN[k] ?? []) {
       const c = ungVien.find((u) => u.fact_key === lq);
@@ -1639,6 +1669,9 @@ export function laDuRoi(text: string): boolean {
   if (/\b(chua|con nua|thieu|bo sung|them cai|them cho)\b/.test(kd)) return false;
   // "đủ 3 lầu", "đủ 4 phòng" — số đi sau "đủ" là dữ liệu, không phải kết thúc.
   if (/\bdu\s+\d/.test(kd)) return false;
+  // FR-229 (e2e PL229-E3): "đồng ý hết rồi" trả lời câu "các bên đồng ý bán chưa" — "hết rồi" ở đây là mọi người, không
+  // phải "hết thông tin rồi"; nhận là đủ rồi thì bot bỏ luôn các câu pháp lý còn lại.
+  if (/\b(?:dong y|thong nhat|ky)\s+het\b/.test(kd)) return false;
   return DU_ROI_RE.test(kd);
 }
 

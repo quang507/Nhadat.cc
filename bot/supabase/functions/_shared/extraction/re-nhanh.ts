@@ -36,6 +36,9 @@ const NO_HAU = /\bno hau\b/;
 const NO_HAU_SO = /\bno hau\s*(?:la\s*|hon\s*|khoang\s*|tam\s*|ra\s*|thanh\s*)?\d/;
 const KHONG_NO_HAU = /\b(?:khong|ko|k|chua)\s*(?:co\s*)?no hau\b/;
 const THO_CU_DU = /\b(?:100|full|toan bo|het|du)\b/;
+// FR-229: câu "sổ đứng tên ai" nói NHIỀU người đứng tên.
+const NHIEU_NGUOI_DUNG_TEN = /\b(?:vo chong|2 vo chong|hai vo chong|anh em|chi em|ba me|bo me|cha me|ong ba|thua ke|dong so huu|chung|nhieu nguoi|ca nha|gia dinh|may anh em|\d+\s*(?:nguoi|anh em|chi em))\b/;
+const MOT_NGUOI_DUNG_TEN = /\b(?:mot minh|1 minh|mot nguoi|1 nguoi|chi (?:minh )?(?:toi|anh|chi|em|minh)|rieng (?:toi|anh|chi|em|minh)|khong (?:co )?(?:dong so huu|chung))\b/;
 
 type NgCanhLuat = { loai: string; deal: string; phap: string; tatCa: string; lichSu: string; daHoi: Set<string>; c: NgCanhReNhanh };
 /** Một Ý CHÍNH của nhánh: khoá fact + dấu hiệu chủ nhà ĐÃ nói ý đó (có thì không hỏi). */
@@ -88,7 +91,8 @@ export const RE_NHANH: Luat[] = [
       { fact_key: "du_kien_ra_so", priority: 16.3, nhom: "co_ban",
         daBiet: co(/\b(?:ra so|co so|lay so|nhan so)\b[^.·]{0,20}\b(?:thang|nam|cuoi|dau|quy|tuan|sap)\b|\b(?:thang|cuoi nam|dau nam|quy)\b[^.·]{0,15}\b(?:ra so|co so)\b/) },
     ],
-    bo: ["hoan_cong"],
+    // FR-229: chưa có sổ thì không có "người đứng tên sổ", "sổ thế chấp", "diện tích khớp sổ".
+    bo: ["hoan_cong", "nguoi_dung_ten", "the_chap", "dien_tich_khop_so"],
   },
   {
     id: "can_ho_chua_so",
@@ -108,7 +112,28 @@ export const RE_NHANH: Luat[] = [
       { fact_key: "dong_so_huu_voi", priority: 16.2, nhom: "co_ban", daBiet: co(/\b(?:chung|dung ten)\s+(?:voi|cua)\s+\w+/) },
       { fact_key: "dong_y_ban", priority: 16.3, nhom: "co_ban", daBiet: co(/\b(?:dong y ban|thong nhat ban|deu dong y|da dong y|ca nha dong y)\b/) },
     ],
-    bo: ["hoan_cong"],
+    // FR-229: "đứng tên chung với ai" đã hỏi thay câu "sổ đứng tên ai".
+    bo: ["hoan_cong", "nguoi_dung_ten"],
+  },
+  {
+    // FR-229 (chủ dự án 25/09/2026: "Có đồng sở hữu không, ví dụ vợ chồng hay anh em thừa kế? Tất cả những người này có
+    // đồng ý bán không?").
+    id: "nhieu_nguoi_dung_ten",
+    ten: "nhiều người đứng tên sổ",
+    vi: "Sổ đứng tên nhiều người (vợ chồng, anh em, thừa kế…) → hỏi các bên đã đồng ý bán chưa",
+    khi: ({ c }) => {
+      const t = boDau(c.facts.filter((f) => f.question === "nguoi_dung_ten").map((f) => f.answer ?? "").join(" "));
+      return NHIEU_NGUOI_DUNG_TEN.test(t) && !MOT_NGUOI_DUNG_TEN.test(t);
+    },
+    sau: ["nguoi_dung_ten"],
+    them: [{ fact_key: "dong_y_ban", priority: 17.5, nhom: "co_ban", daBiet: co(/\b(?:dong y ban|thong nhat ban|deu dong y|da dong y|ca nha dong y)\b/) }],
+  },
+  {
+    id: "da_noi_hoan_cong",
+    ten: "đã nói hoàn công",
+    vi: "Đã biết hoàn công (câu nhánh FR-223 hay chủ nhà tự nói) → không hỏi \"diện tích xây khớp sổ không, đã hoàn công chưa\"",
+    khi: ({ tatCa, daHoi, c }) => daHoi.has("hoan_cong") || c.has_completion != null || /\bhoan cong\b/.test(tatCa),
+    bo: ["dien_tich_khop_so"],
   },
   {
     id: "dang_cho_thue",
@@ -149,7 +174,7 @@ export const RE_NHANH: Luat[] = [
     ten: "nhà nát / đất trống",
     vi: "Nhà nát / đất trống / đập xây lại → không hỏi phòng ngủ, toilet, nội thất, tầng phụ, hoàn công",
     khi: ({ tatCa }) => NHA_NAT.test(tatCa),
-    bo: ["so_phong_ngu", "so_wc", "noi_that", "tang_phu", "hoan_cong", "hien_trang"],
+    bo: ["so_phong_ngu", "so_wc", "noi_that", "tang_phu", "hoan_cong", "hien_trang", "dien_tich_khop_so"],
   },
   {
     // 25/09/2026 (chủ dự án test Zalo: "5x12" rồi "nở hậu nhé" → bot bịa "nở hậu 4.5"; "nở hậu nhiu cộng vào diện tích nhà luôn").

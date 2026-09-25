@@ -63,6 +63,19 @@ async function send(body, hdr = {}) {
   return { status: res.status, body: await res.json() };
 }
 const db = () => globalThis.__db;
+// FR-229 (20260925i): tin BÁN hỏi các câu pháp lý (đứng tên, thế chấp, quy hoạch, tranh chấp, khớp sổ) sau câu sổ, TRƯỚC
+// bản nháp. Ca đo bản nháp qua chuỗi hỏi đáp thì trả lời hết các câu đó (`quaPhapLy`, trả phản hồi lượt cuối); ca dựng tin
+// bằng tay thì ghi sẵn các fact đó (`coSanPhapLy`) để lượt đang đo vẫn là lượt ra bản nháp.
+const DAP_PHAP_LY = { nguoi_dung_ten: "tên anh", the_chap: "cầm tay", quy_hoach: "không dính", tranh_chap: "không", dien_tich_khop_so: "khớp" };
+async function quaPhapLy(uid, r) {
+  for (let i = 0; i < 6; i++) {
+    const treo = db().t.info_requests.find((q) => q.status === "pending" && DAP_PHAP_LY[q.question]);
+    if (!treo) break;
+    r = await send({ external_user_id: uid, text: DAP_PHAP_LY[treo.question] });
+  }
+  return r;
+}
+const coSanPhapLy = (listingId) => { for (const [question, answer] of Object.entries(DAP_PHAP_LY)) db().insert("listing_facts", { listing_id: listingId, question, answer }); };
 // `__treTruyVan` phải được xoá ở đây: quên là độ trễ của ca "đua" rỉ sang mọi
 // ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
 function fresh(seed) { globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__nominatim = undefined; globalThis.__fetches = []; globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; globalThis.__anh = undefined; globalThis.__anhTaiDuoc = true; globalThis.__storageHong = false; seed?.(globalThis.__db); }
@@ -989,6 +1002,7 @@ fresh(seedKho);
       JSON.stringify({ rep: rHx2.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === lHx?.id).map((q) => [q.question, q.status]), p: pHx.slice(-400) }));
   }
   r = await send({ external_user_id: "h-1", text: "hẻm 4m xe hơi vào tận nhà" });
+  r = await quaPhapLy("h-1", r);
   const nhap = r.body.replies.join("\n");
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
     r.body.ban_nhap === true && r.body.diem >= 70 && /Em đăng tin như vầy/.test(nhap) && /5 tỷ 8/.test(nhap) &&
@@ -1149,6 +1163,7 @@ fresh(seedKho);
   r = await send({ external_user_id: "h-9", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2, không gấp" });
   const H9 = db().t.listings[0];
   for (const t of ["hẻm 4m xe hơi", "3 lầu", "4 phòng ngủ", "sổ hồng riêng hoàn công đủ"]) r = await send({ external_user_id: "h-9", text: t });
+  r = await quaPhapLy("h-9", r);
   // 20260916c: tiềm năng không còn trong chat → sau pháp lý (gấp đã nói lúc rao) là bản nháp ngay.
   check("N6 chuỗi nhà phố: hẻm → lầu → phòng → pháp lý → bản nháp (tiềm năng để hỏi bù, 20260916c)", pend("duyet_tin", H9.id) && !pend("tiem_nang", H9.id), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
   r = await send({ external_user_id: "h-9", text: "ở hoặc làm văn phòng đều được" });
@@ -2580,6 +2595,7 @@ fresh(seedKho);
   fresh();
   await send({ external_user_id: "nhap-1", text: "bán nhà hẻm 6m Trần Bình Trọng phường 2 quận 5, 4x15, trệt 2 lầu, 3 phòng ngủ, giá 9 tỷ 5" });
   tin().alley_width_m = 6; tin().area_m2 = 60; tin().frontage_m = 4; // mock không bóc hẻm/4x15 từ câu rao; DB thật có (boc_thong_so) — đủ 70 điểm sau câu pháp lý
+  coSanPhapLy(tin().id);
   db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
   db().insert("info_requests", { listing_id: tin().id, question: "phap_ly", status: "pending" });
   let rp = await send({ external_user_id: "nhap-1", text: "sổ hồng riêng, hoàn công đủ. mà em là người hay máy vậy?" });
@@ -2635,6 +2651,7 @@ fresh(seedKho);
   // (2) Lời nói với bot lúc duyệt: không bo_sung, không gửi lại nháp, nói thật, câu duyệt treo.
   fresh(); await send({ external_user_id: "bon-2", text: "bán nhà hẻm 6m Trần Bình Trọng phường 2 quận 5, 4x15, trệt 2 lầu, 3 phòng ngủ, giá 9 tỷ 5" });
   tin().alley_width_m = 6; tin().area_m2 = 60; tin().frontage_m = 4;
+  coSanPhapLy(tin().id);
   moCau("phap_ly");
   rp = await send({ external_user_id: "bon-2", text: "sổ hồng riêng, hoàn công đủ" });
   check("BON-02 (tiền đề) đủ điểm → bản nháp gửi, câu duyệt treo", rp.body.replies.some((r) => /Em đăng tin như vầy/.test(r)) && pendQ().includes("duyet_tin"), JSON.stringify({ pend: pendQ(), rep: rp.body.replies }));
@@ -3565,11 +3582,43 @@ fresh(seedKho);
   rnSeed("z-rn9", "BDS-Q5-0939", { district: null, ward: null, location_raw: "An Dương Vương", boc_tach: { quan_mac_dinh: true } });
   r = await send({ external_user_id: "z-rn9", text: "sổ hồng riêng em" });
   r = await send({ external_user_id: "z-rn9", text: "hoàn công rồi" });
+  r = await quaPhapLy("z-rn9", r);
   {
     const l = db().t.listings.find((x) => x.code === "BDS-Q5-0939");
     check("RENHANH-04b tin chưa có phường/quận, trả lời 'hoàn công rồi' → câu kế là PHƯỜNG, không gửi bản nháp",
       pend("phuong", l.id) && !pend("duyet_tin", l.id) && !r.body.replies.some((x) => /^📋/.test(x)),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
+  // FR-229 (25/09/2026, chủ dự án: nhóm "Pháp lý (đây là phần quan trọng nhất)", chọn "Pháp lý hỏi trước nháp"): sau câu sổ
+  // → ai đứng tên (nhiều người → các bên đồng ý bán chưa) → thế chấp → quy hoạch → tranh chấp → khớp sổ → bản nháp.
+  rnSeed("z-pl1", "BDS-Q5-0951");
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0951");
+    const treo = () => db().t.info_requests.filter((q) => q.listing_id === l.id && q.status === "pending").map((q) => q.question);
+    const hoi = () => createCalls().at(-1)?.params?.messages?.[0]?.content ?? "";
+    r = await send({ external_user_id: "z-pl1", text: "sổ hồng riêng em" });
+    r = await send({ external_user_id: "z-pl1", text: "rồi em" }); // hoàn công (câu nhánh FR-223)
+    check("PL229-E1 xong câu sổ + hoàn công → câu kế là 'sổ đứng tên ai' (không phải bản nháp / ảnh)",
+      treo().join() === "nguoi_dung_ten" && /đứng tên/.test(hoi()) && !r.body.replies.some((x) => /Em đăng tin như vầy/.test(x)),
+      JSON.stringify({ treo: treo(), rep: r.body.replies }));
+    r = await send({ external_user_id: "z-pl1", text: "hai vợ chồng anh" });
+    check("PL229-E2 'hai vợ chồng anh' → ghi người đứng tên, câu kế là các bên đồng ý bán chưa",
+      db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "nguoi_dung_ten" && /vợ chồng/.test(f.answer)) && treo().join() === "dong_y_ban",
+      JSON.stringify({ treo: treo(), rep: r.body.replies }));
+    const daHoi = [];
+    for (const t of ["đồng ý hết rồi", "cầm tay", "không dính", "không"]) { daHoi.push(treo().join()); r = await send({ external_user_id: "z-pl1", text: t }); }
+    check("PL229-E3 thứ tự: đồng ý bán → thế chấp → quy hoạch → tranh chấp; đã nói hoàn công nên KHÔNG hỏi khớp sổ; rồi bản nháp",
+      daHoi.join() === "dong_y_ban,the_chap,quy_hoach,tranh_chap" && treo().includes("duyet_tin") && r.body.replies.some((x) => /Em đăng tin như vầy/.test(x)) &&
+        !db().t.info_requests.some((q) => q.listing_id === l.id && q.question === "dien_tich_khop_so"),
+      JSON.stringify({ daHoi, treo: treo(), rep: r.body.replies }));
+  }
+  rnSeed("z-pl2", "BDS-Q5-0952", { deal: "cho_thue" });
+  r = await send({ external_user_id: "z-pl2", text: "sổ hồng riêng em" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0952");
+    check("PL229-E4 tin CHO THUÊ → không hỏi người đứng tên / thế chấp / tranh chấp trước bản nháp",
+      !db().t.info_requests.some((q) => q.listing_id === l.id && ["nguoi_dung_ten", "the_chap", "tranh_chap", "dien_tich_khop_so"].includes(q.question)),
+      JSON.stringify(db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status])));
   }
   // FR-225 a (25/09/2026, chủ dự án test Zalo: khách "nở hậu nhé" → bot bịa "nở hậu 4.5"; "nở hậu nhiu cộng vào diện tích"):
   // nói nở hậu mà chưa có số mét → câu kế hỏi nở hậu bao nhiêu mét.

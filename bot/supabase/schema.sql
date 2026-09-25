@@ -7344,7 +7344,7 @@ create policy interests_admin_select on public.interests as permissive for SELEC
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
 drop policy if exists anon_read_listing_facts on public.listing_facts;
-create policy anon_read_listing_facts on public.listing_facts as permissive for SELECT to anon, authenticated using (((question <> ALL (ARRAY['hinh_anh'::text, 'dia_chi_chi_tiet'::text, 'vi_tri'::text, 'dia_chi'::text, 'so_nha'::text, 'lien_he'::text, 'so_dien_thoai'::text])) AND (EXISTS ( SELECT 1
+create policy anon_read_listing_facts on public.listing_facts as permissive for SELECT to anon, authenticated using (((question <> ALL (ARRAY['hinh_anh'::text, 'dia_chi_chi_tiet'::text, 'vi_tri'::text, 'dia_chi'::text, 'so_nha'::text, 'lien_he'::text, 'so_dien_thoai'::text, 'nguoi_dung_ten'::text, 'dong_so_huu_voi'::text])) AND (EXISTS ( SELECT 1
    FROM listings l
   WHERE ((l.id = listing_facts.listing_id) AND (l.status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text, 'da_chot'::text])))))));
 drop policy if exists listing_media_admin_all on public.listing_media;

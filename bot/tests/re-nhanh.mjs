@@ -103,6 +103,43 @@ r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [], lichSu: "đất vuông v�
 ok("NOHAU-05 'không nở hậu' → không hỏi", !keys(r).includes("no_hau"), JSON.stringify(r));
 ok("NOHAU-06 canReNhanh: chữ gần đây có 'nở hậu' → đọc DB; không có → không", canReNhanh([], ["gia"], "nở hậu nhé") && !canReNhanh([], ["gia"], "a bán 4t"));
 
+// FR-229 (chủ dự án 25/09/2026, nhóm pháp lý): đứng tên nhiều người → hỏi các bên đồng ý bán chưa.
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng"), f("nguoi_dung_ten", "hai vợ chồng anh đứng tên")] }, ["nguoi_dung_ten"]);
+ok("PL229-01 'hai vợ chồng anh đứng tên' → hỏi các bên đồng ý bán chưa", keys(r).includes("dong_y_ban"), JSON.stringify(r.them));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("nguoi_dung_ten", "mấy anh em thừa kế")] }, ["nguoi_dung_ten"]);
+ok("PL229-02 'anh em thừa kế' → hỏi đồng ý bán", keys(r).includes("dong_y_ban"), JSON.stringify(r.them));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("nguoi_dung_ten", "một mình anh đứng tên, không có đồng sở hữu")] }, ["nguoi_dung_ten"]);
+ok("PL229-03 'một mình anh đứng tên, không đồng sở hữu' → KHÔNG hỏi đồng ý bán", !keys(r).includes("dong_y_ban"), JSON.stringify(r.them));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("nguoi_dung_ten", "tên anh")] }, ["nguoi_dung_ten"]);
+ok("PL229-04 'tên anh' → KHÔNG hỏi đồng ý bán", !keys(r).includes("dong_y_ban"), JSON.stringify(r.them));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("nguoi_dung_ten", "vợ chồng anh, cả nhà đồng ý bán rồi")] }, ["nguoi_dung_ten"]);
+ok("PL229-05 đã nói 'đồng ý bán' → KHÔNG hỏi lại", !keys(r).includes("dong_y_ban"), JSON.stringify(r.them));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ chung")] }, ["phap_ly"]);
+ok("PL229-06 'sổ chung' → bỏ câu 'sổ đứng tên ai' (đã hỏi đứng tên chung với ai)", r.bo.has("nguoi_dung_ten") && keys(r).includes("dong_so_huu_voi"), JSON.stringify({ ...r, bo: [...r.bo] }));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "chưa có sổ, hợp đồng mua bán")] }, ["phap_ly"]);
+ok("PL229-07 chưa có sổ → bỏ người đứng tên, thế chấp, khớp sổ", ["nguoi_dung_ten", "the_chap", "dien_tich_khop_so"].every((k) => r.bo.has(k)), JSON.stringify([...r.bo]));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng"), f("hoan_cong", "rồi em")] }, []);
+ok("PL229-08 đã trả lời hoàn công → bỏ câu 'diện tích xây khớp sổ, đã hoàn công chưa'", r.bo.has("dien_tich_khop_so"), JSON.stringify([...r.bo]));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng")] }, []);
+ok("PL229-09 chưa nói hoàn công → vẫn hỏi khớp sổ", !r.bo.has("dien_tich_khop_so"), JSON.stringify([...r.bo]));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("_mo_ta", "bán nhà nát đập xây lại")] }, []);
+ok("PL229-10 nhà nát → không hỏi khớp sổ", r.bo.has("dien_tich_khop_so"));
+// Dải ưu tiên: câu pháp lý (16–21) đi trước phường (22), gấp (23), ảnh (24); câu liên quan không vượt dải.
+const phapLyTruoc = chonCauKe(["phap_ly"], [
+  { fact_key: "nguoi_dung_ten", priority: 17, nhom: "co_ban" }, { fact_key: "tranh_chap", priority: 20, nhom: "co_ban" },
+  { fact_key: "phuong", priority: 22, nhom: "co_ban" }, { fact_key: "hinh_anh", priority: 24, nhom: "co_ban" },
+]);
+ok("PL229-11 vừa trả lời sổ → câu kế là 'sổ đứng tên ai', không nhảy sang ảnh", phapLyTruoc === "nguoi_dung_ten", String(phapLyTruoc));
+// Hết câu pháp lý → câu kế là ẢNH, tức bản nháp như câu sổ trước đây (gấp để nháp lo). Phường còn thiếu thì chat-reply hỏi
+// phường trước khi gửi nháp — đo ở e2e RENHANH-04b.
+ok("PL229-12 hết câu pháp lý → câu kế là ảnh (bản nháp), không hỏi gấp",
+  chonCauKe(["tranh_chap"], [{ fact_key: "gap", priority: 23, nhom: "co_ban" }, { fact_key: "hinh_anh", priority: 24, nhom: "co_ban" }]) === "hinh_anh");
+ok("PL229-12b giữa dải pháp lý → câu pháp lý kế, không nhảy sang ảnh",
+  chonCauKe(["the_chap"], [{ fact_key: "tranh_chap", priority: 20, nhom: "co_ban" }, { fact_key: "hinh_anh", priority: 24, nhom: "co_ban" }]) === "tranh_chap");
+for (const k of ["nguoi_dung_ten", "tranh_chap", "dien_tich_khop_so", "the_chap", "quy_hoach"]) {
+  ok(`PL229-13 câu pháp lý '${k}' có câu mẫu + nhãn`, !!CAU_HOI_MAU[k] && !!FACT_LABELS[k], k);
+}
+
 const moiKhoa = [...new Set(RE_NHANH.flatMap((l) => (l.them ?? []).map((t) => t.fact_key)))];
 for (const k of moiKhoa) ok(`câu nhánh '${k}' có câu mẫu + nhãn`, (!!CAU_HOI_MAU[k] || !!CAU_HOI_MAU[`${k}@nha_pho`]) && !!FACT_LABELS[k], k);
 
