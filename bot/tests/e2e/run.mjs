@@ -932,6 +932,23 @@ fresh(seedKho);
   // FR-186 (09/09 chiều): nhà phố hỏi thêm TIỀM NĂNG (để ở hay kinh doanh ngành gì) trước khi gửi nháp — chuỗi 07/09 của sếp + chat 21/06.
   // 20260916c: tiềm năng dời sang hỏi bù sau đăng — chat KHÔNG hỏi nữa.
   check("H4b trả lời phòng ngủ → không hỏi TIỀM NĂNG trong chat (20260916c: hỏi bù sau đăng); câu kế là HẺM (FR-219)", r.body.saved_fact === "so_phong_ngu" && !pend("tiem_nang") && pend("do_rong_hem"), JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  // 25/09/2026: số nhà có xuyệt ("105/12 …") → câu hẻm là XÁC NHẬN "trong hẻm đúng không", không hỏi trống.
+  {
+    const rHx = await send({ external_user_id: "hx-1", text: "Bán nhà 105/12 Trần Bình Trọng phường 1 quận 5, 4x15, 3 lầu, 4 phòng ngủ, sổ hồng riêng, giá 7 tỷ" });
+    const lHx = db().t.listings.find((l) => /105\/12/.test(l.location_raw ?? ""));
+    const traLoi = { dien_tich_dat: "60m2", dien_tich: "60m2", ket_cau: "3 lầu", so_phong_ngu: "4 phòng ngủ", phap_ly: "sổ hồng riêng", phuong: "phường 1" };
+    let rHx2 = rHx;
+    for (let i = 0; i < 5; i++) {
+      const treo = db().t.info_requests.find((q) => q.listing_id === lHx?.id && q.status === "pending")?.question;
+      if (!treo || treo === "do_rong_hem" || !traLoi[treo]) break;
+      rHx2 = await send({ external_user_id: "hx-1", text: traLoi[treo] });
+    }
+    const pHx = prompt(createCalls().at(-1));
+    const hoiHem = db().t.info_requests.some((q) => q.listing_id === lHx?.id && q.question === "do_rong_hem" && q.status === "pending");
+    check("HX-01 rao '105/12 Trần Bình Trọng' → câu hẻm là xác nhận 'nằm trong hẻm đúng không'",
+      hoiHem && /nằm trong hẻm đúng không/.test(`${pHx}\n${rHx2.body.replies.join("\n")}`),
+      JSON.stringify({ rep: rHx2.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === lHx?.id).map((q) => [q.question, q.status]), p: pHx.slice(-400) }));
+  }
   r = await send({ external_user_id: "h-1", text: "hẻm 4m xe hơi vào tận nhà" });
   const nhap = r.body.replies.join("\n");
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",

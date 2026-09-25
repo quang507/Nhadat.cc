@@ -3,7 +3,7 @@
 //
 // Phần SQL của cùng lượt bắn (fact "cách mặt tiền" vào cột, "p5" dính tên đường, xe hơi
 // trong nhà) ở migration 20260914b.
-import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
 import { bocViTriRao, laBoSungRac, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 let hong = 0, tong = 0;
@@ -168,6 +168,16 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   ok("'toà nhà CHDV 20 phòng' → số phòng 20, KHÔNG phải 20 phòng ngủ", chdv.some((f) => f.question === "so_phong" && f.answer === "20") && !chdv.some((f) => f.question === "so_phong_ngu"), JSON.stringify(chdv));
   ok("'2 lầu 3 phòng' (nhà ở) vẫn là 3 phòng ngủ", nn("2 lầu 3 phòng 2 wc").some((f) => f.question === "so_phong_ngu" && f.answer === "3"));
   ok("'vẫn bán nha em, không phải cho thuê' → loại giao dịch BÁN", nhanDienFact("vẫn bán nha em, không phải cho thuê")?.answer === "ban");
+}
+
+// 25/09/2026: số nhà có xuyệt → nhà trong hẻm (hỏi xác nhận); số trần → không suy ra gì.
+{
+  ok("'105/12 Trần Bình Trọng' → số nhà hẻm", laSoNhaHem("105/12 Trần Bình Trọng"));
+  ok("'hẻm 12/3A Lê Lợi' → số nhà hẻm", laSoNhaHem("hẻm 12/3A Lê Lợi"));
+  ok("'45 / 7 Nguyễn Trãi' (cách quanh xuyệt) → số nhà hẻm", laSoNhaHem("45 / 7 Nguyễn Trãi, Quận 5"));
+  ok("'105 Trần Bình Trọng' → KHÔNG suy ra", !laSoNhaHem("105 Trần Bình Trọng, Quận 10"));
+  ok("'Đường 3/2 Quận 10' → KHÔNG (tên đường)", !laSoNhaHem("Đường 3/2 Quận 10"));
+  ok("rỗng → KHÔNG", !laSoNhaHem(null) && !laSoNhaHem(""));
 }
 
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);

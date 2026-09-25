@@ -167,3 +167,22 @@ export function duAnLaTenDuong(tenDuAn: string | null | undefined, text: string)
   if (loi.length < 5) return false;
   return new RegExp(`\\b(?:duong|hem|hxh|mat tien|mt|pho)\\s+(?:\\d+[a-z]?(?:\\/\\d+)*\\s+)?${loi.replace(/ /g, "\\s+")}\\b`).test(kd);
 }
+
+/**
+ * Số nhà có dấu xuyệt ("105/12 Trần Bình Trọng", "hẻm 12/3A") gần như chắc là nhà trong hẻm — bot hỏi XÁC NHẬN
+ * hẻm thay vì hỏi trống (25/09/2026, chủ dự án: "giờ nó biết nhà nào ở mặt tiền cái nào ở hẻm"). Chỉ số ("105 Trần
+ * Bình Trọng") thì KHÔNG suy ra gì: người rao hay bỏ số hẻm, nên không bao giờ được coi đó là mặt tiền.
+ */
+export function laSoNhaHem(diaChi: string | null | undefined): boolean {
+  const kd = boDau(diaChi ?? "");
+  for (const m of kd.matchAll(/(^|[^\d/])(\d{1,4}[a-z]?)\s*\/\s*(\d{1,4}[a-z]?)(?![\d/])/g)) {
+    const truoc = kd.slice(0, m.index! + m[1].length);
+    // "đường 3/2", "30/4", "2/9" là TÊN ĐƯỜNG theo ngày lễ, không phải số nhà hẻm.
+    if (/\b(?:duong|pho)\s*$/.test(truoc) || DUONG_NGAY_LE.has(`${m[2]}/${m[3]}`)) continue;
+    // "1/2 tỷ", "12/9/2026" không phải địa chỉ.
+    if (/^\s*(?:m2|m²|tr\b|trieu|ty\b|nam\b|\/)/.test(kd.slice(m.index! + m[0].length))) continue;
+    return true;
+  }
+  return false;
+}
+const DUONG_NGAY_LE = new Set(["3/2", "30/4", "2/9", "19/5", "1/5", "26/3", "23/9", "3/10", "19/8", "8/3"]);
