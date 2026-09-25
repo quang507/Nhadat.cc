@@ -95,7 +95,7 @@ import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extract
 import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
 import { nhanhCuaKhoa } from "../_shared/extraction/re-nhanh.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
-import { boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boHuaDaDang, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -4527,6 +4527,14 @@ Deno.serve(async (req) => {
           // FR-177: một lượt một câu hỏi — cắt câu hỏi thứ hai của model (15/09/2026).
           // Chỉ áp cho lời MODEL: câu tiền định (xin chấm điểm, liệt kê căn) có chủ ý.
           if (sellerReply) sellerReply = motCauHoi([sellerReply])[0];
+          // 25/09/2026 (bắn thật lx-09): code mở ô chờ `gap` mà model hỏi "hẻm rộng mấy mét" — câu trả lời kế rơi sai ô.
+          // Câu hỏi model mang chủ đề khoá KHÁC (không mang chủ đề khoá code chọn) → thay bằng câu mẫu của khoá đó.
+          if (sellerReply && nextKey && !(cauDuongKe ?? goiYKe) && laHoiLechKhoa(sellerReply, nextKey)) {
+            console.log(`chat-reply: câu hỏi model lệch khoá ${nextKey}, thay câu mẫu`);
+            sellerReply = thayCauHoiLech(sellerReply, nextKey, `${neo ? `Căn ${neo} nha. ` : ""}${cauKe}`);
+          }
+          // Tin chưa lên kệ mà model nói "đã đăng lên web" → bỏ mệnh đề đó.
+          if (sellerReply && !published) sellerReply = boHuaDaDang([sellerReply])[0] ?? null;
           // 25/09/2026 (bắn thật lx-05): câu xác nhận / chọn phường, xác nhận tên đường do CODE tra ra → thay câu hỏi của
           // model bằng câu đó NGUYÊN VĂN (model từng nói lại thành "phường nào vậy ạ?", rơi mất lựa chọn).
           if (sellerReply && (cauDuongKe ?? goiYKe)) {
@@ -4913,6 +4921,10 @@ Deno.serve(async (req) => {
             if (raoReply) raoReply = motCauHoi([raoReply])[0];
             // 23/09/2026 (bắn thật): "hẻm 2m5 … rất được khách tìm", "ô tô đậu trước cửa" → "ô tô vào tận nhà".
             if (raoReply) raoReply = boMenhDeKhenSai([raoReply], text)[0] ?? null;
+            // 25/09/2026 (bắn thật lx-08): tin vừa tạo luôn `cho_thong_tin` (chờ đủ thông tin + chủ duyệt nháp) mà model
+            // viết "đã đăng lên web rồi" → bỏ mệnh đề đó. Câu hỏi model lệch khoá code chọn → thay bằng câu mẫu.
+            if (raoReply) raoReply = boHuaDaDang([raoReply])[0] ?? null;
+            if (raoReply && !cauXacNhanDau && firstKey && cauHoiDau) raoReply = thayCauHoiLech(raoReply, firstKey, cauHoiDau);
             await doTien(client, r1.usage);
           } catch (e) {
             await ghiLoi(client, "chat-reply model r1(seller)", e);

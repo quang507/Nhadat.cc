@@ -2824,6 +2824,27 @@ fresh(seedKho);
     globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) &&
       !/chốt nhanh/.test(cauBot) && /bao nhiêu phòng ngủ/.test(cauBot),
     JSON.stringify({ rep: r.body.replies }));
+  // 25/09/2026 (bắn thật lx-09): code chọn câu kế mà model hỏi chuyện KHÁC (hẻm) → câu hỏi thay bằng câu mẫu của khoá.
+  {
+    fresh();
+    await send({ external_user_id: "lk-1", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ 5" });
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "ket_cau", status: "pending" });
+    globalThis.__model.create = () => "Dạ vâng ạ. Hẻm nhà mình rộng mấy mét, ô tô vào được không anh chị?";
+    const rLk = await send({ external_user_id: "lk-1", text: "trệt 2 lầu" });
+    const keLk = db().t.info_requests.find((x) => x.status === "pending")?.question;
+    const cauLk = rLk.body.replies.filter((x) => !/^(?:🤖|💾|📝)/u.test(x)).join(" ");
+    check("LK-E1 ô chờ là khoá khác hẻm mà model hỏi hẻm → câu hỏi đổi về đúng khoá, không còn câu hẻm",
+      keLk && keLk !== "do_rong_hem" && !/Hẻm nhà mình rộng/.test(cauLk) && /\?/.test(cauLk), JSON.stringify({ keLk, rep: rLk.body.replies }));
+    // lx-08: tin vừa tạo còn chờ mà model nói "đã đăng lên web rồi" → bỏ.
+    fresh();
+    globalThis.__model.create = () => "Em cảm ơn mình tin nhé, đã đăng lên web AI Ơi Nhà Đất rồi :) Nhà mình xây mấy tầng vậy anh chị?";
+    const rDd = await send({ external_user_id: "dd-1", text: "bán nhà hẻm 4m Nguyễn Trãi phường 2 quận 5, 60m2, giá 6 tỷ 5" });
+    const cauDd = rDd.body.replies.filter((x) => !/^(?:🤖|💾|📝)/u.test(x)).join(" ");
+    check("DD-E1 tin rao vừa tạo (chờ) → bỏ câu 'đã đăng lên web', giữ lời cảm ơn",
+      !/đã đăng/.test(cauDd) && /cảm ơn/.test(cauDd), JSON.stringify(rDd.body.replies));
+    globalThis.__model.create = macDinhCreate;
+  }
   // Không khen gần đây → được phép khen một câu (không lọc).
   fresh();
   r = await send({ external_user_id: "khen-2", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ 5" });
@@ -3607,7 +3628,8 @@ fresh(seedKho);
   // (6) "chào cháu" rồi câu rao ngay, không bao giờ xưng → xưng cháu, gọi "mình", KHÔNG "anh chị".
   fresh();
   r = await send({ external_user_id: "gvd-6", text: "chào cháu" });
-  globalThis.__model.create = () => "Nhà mình mấy tầng vậy anh chị?";
+  // 25/09/2026: câu mock hỏi đúng khoá code chọn (phường) — hỏi "mấy tầng" giờ bị lưới lệch-khoá thay bằng câu mẫu.
+  globalThis.__model.create = () => "Nhà mình ở phường mấy vậy anh chị?";
   r = await send({ external_user_id: "gvd-6", text: "bán nhà hẻm 4m Nguyễn Trãi q5, 60m2, 7 tỷ" });
   globalThis.__model.create = undefined;
   check("GVD-06 'chào cháu' → câu rao không xưng → sellers.nhom_tuoi lon_tuoi, xung_ho trống; 📝 'Cháu ghi nhận', model 'anh chị?' → 'mình', không 'anh chị'",

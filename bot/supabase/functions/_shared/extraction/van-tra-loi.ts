@@ -998,3 +998,66 @@ export function boHoiHoanCong(replies: string[], choPhep = false): string[] {
   }
   return doi ? ra : replies;
 }
+
+// ── 25/09/2026 (bắn thật lx-09, chủ dự án "xét lại các tin mày bắn xem còn lỗi gì ko") ────────────────────────
+// Code chọn câu kế "gấp" và mở ô chờ `gap`, model lại hỏi "hẻm nhà mình rộng mấy mét" — câu trả lời kế rơi sai ô.
+// Code chọn HỎI GÌ, model chỉ chọn CÁCH NÓI: câu hỏi của model mang chủ đề KHÁC khoá code chọn (và không mang chủ
+// đề của khoá đó) thì thay câu hỏi ấy bằng câu mẫu. Khoá không có trong bảng thì không soi (không đoán).
+const HEM_RE = /\b(?:hem|hxh|o to|oto|xe hoi|duong vao)\b/;
+const CHU_DE_KHOA: Record<string, RegExp> = {
+  do_rong_hem: HEM_RE,
+  do_rong_duong: /\b(?:duong|hem|o to|oto|xe hoi|container)\b/,
+  gap: /\b(?:gap|duoc gia|ra hang|can tien)\b/,
+  phap_ly: /\b(?:so hong|so do|so rieng|so chung|phap ly|giay to|co so|ra so|so chua)\b/,
+  ket_cau: /\b(?:tang|lau|tret|ket cau|xay)\b/,
+  so_phong_ngu: /\b(?:phong ngu|pn|phong)\b/,
+  huong: /\bhuong\b/,
+  gia: /\b(?:gia|thu ve|bao nhieu tien|ty|trieu)\b/,
+  dien_tich: /\b(?:dien tich|m2|ngang|dai|rong)\b/,
+  dien_tich_dat: /\b(?:dien tich|m2|ngang|dai|rong|tho cu)\b/,
+  phuong: /\b(?:phuong|xa|thi tran|quan)\b/,
+  hoan_cong: /\bhoan cong\b/,
+  noi_that: /\bnoi that\b/,
+};
+/** Câu hỏi CUỐI của `reply` (câu kết bằng "?"), hoặc null. */
+function cauHoiCuoi(reply: string): string | null {
+  const ds = reply.match(/[^.!?\n]*\?/gu);
+  return ds?.length ? ds[ds.length - 1] : null;
+}
+/** Câu hỏi của model lệch khoá code chọn? true chỉ khi câu hỏi KHÔNG mang chủ đề của khoá mà mang chủ đề khoá khác. */
+export function laHoiLechKhoa(reply: string, khoa: string | null | undefined): boolean {
+  const cua = khoa ? CHU_DE_KHOA[khoa] : undefined;
+  const cau = cauHoiCuoi(reply ?? "");
+  if (!cua || !cau) return false;
+  const kd = boDau(cau);
+  if (cua.test(kd)) return false;
+  return Object.entries(CHU_DE_KHOA).some(([k, re]) => k !== khoa && re.test(kd));
+}
+/** Thay câu hỏi cuối (lệch khoá) bằng `cauMau`, giữ phần ghi nhận phía trước. */
+export function thayCauHoiLech(reply: string, khoa: string | null | undefined, cauMau: string): string {
+  if (!cauMau || !laHoiLechKhoa(reply, khoa)) return reply;
+  const cau = cauHoiCuoi(reply)!;
+  const i = reply.lastIndexOf(cau);
+  return `${reply.slice(0, i).trim()} ${cauMau}`.trim();
+}
+
+// Cùng lượt bắn (lx-08): tin mới tạo, CHƯA lên kệ (chờ đủ thông tin + chủ duyệt bản nháp) mà model viết "đã đăng lên
+// web AI Ơi Nhà Đất rồi". Tin chưa đăng thì bỏ mệnh đề khẳng định đã đăng; câu hỏi và câu phủ định ("chưa đăng") giữ.
+const DA_DANG_RE = /\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke)\b|\blen\s+(?:web|trang|ke)\s+(?:roi|luon|ngay)\b/;
+export function boHuaDaDang(replies: string[]): string[] {
+  const ra: string[] = [];
+  for (const r of replies) {
+    if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) { ra.push(r); continue; }
+    // ":)" / emoji cũng là chỗ ngắt câu trong tin Zalo ("… rồi :) Em tra thấy …").
+    const dong = r.split("\n").map((d) => tachCau(d).flatMap((c) => c.split(/(?<=:\)|:D|=\)|\p{Extended_Pictographic})\s+/u)).map((c) => {
+      const laSai = (md: string) => !/\?/.test(md) && DA_DANG_RE.test(boDau(md)) && !/\bchua\b/.test(boDau(md));
+      const cacMd = c.split(/,\s+/);
+      const giu = cacMd.filter((md) => !laSai(md));
+      if (giu.length === cacMd.length) return c;
+      const gop = giu.join(", ").trim();
+      return gop ? gop.charAt(0).toUpperCase() + gop.slice(1) : "";
+    }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
+    if (dong) ra.push(dong);
+  }
+  return ra.length ? ra : replies;
+}

@@ -5,6 +5,7 @@
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boHuaDaDang, laHoiLechKhoa, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
@@ -744,6 +745,25 @@ for (const [cau, laTiemNang] of [
   ok("MT-06 số nhà trần, bot nói 'nhà trong hẻm' → bỏ, giữ câu hỏi", !/hẻm/.test(h) && /bán gấp/.test(h), h);
   ok("MT-07 số nhà có xuyệt '105/12' → 'trong hẻm' có căn cứ, giữ", boMenhDeKhenSai(["Nhà trong hẻm yên tĩnh lắm ạ."], "bán nhà 105/12 Trần Bình Trọng")[0] === "Nhà trong hẻm yên tĩnh lắm ạ.");
   ok("MT-08 chủ nói 'HXH' → 'hẻm' có căn cứ, giữ", boMenhDeKhenSai(["Hẻm rộng thoáng ạ."], "nha HXH 6m")[0] === "Hẻm rộng thoáng ạ.");
+}
+
+// 25/09/2026 (bắn thật lx-09 / lx-08): câu hỏi model lệch khoá code chọn; "đã đăng lên web" khi tin chưa đăng.
+{
+  const gapMau = "Mình cần ra hàng gấp hay được giá thì thôi anh chị?";
+  ok("LK-01 khoá gap, model hỏi hẻm → lệch", laHoiLechKhoa("Dạ, hẻm nhà mình rộng mấy mét, ô tô vào được không anh chị?", "gap"));
+  ok("LK-02 thay câu hỏi lệch bằng câu mẫu, giữ phần ghi nhận", thayCauHoiLech("Dạ em ghi rồi ạ. Hẻm nhà mình rộng mấy mét anh chị?", "gap", gapMau) === `Dạ em ghi rồi ạ. ${gapMau}`);
+  ok("LK-03 khoá gap, model hỏi 'có cần bán gấp không' → KHÔNG lệch", !laHoiLechKhoa("Dạ vâng. Nhà mình có cần bán gấp không anh?", "gap"));
+  ok("LK-04 khoá ket_cau, model hỏi 'mấy lầu' → KHÔNG lệch", !laHoiLechKhoa("Nhà mình xây mấy lầu rồi chị?", "ket_cau"));
+  ok("LK-05 khoá phuong, câu hỏi không mang chủ đề nào → KHÔNG lệch (không đoán)", !laHoiLechKhoa("Nhà mình thuộc khu nào vậy anh?", "phuong"));
+  ok("LK-06 khoá không có trong bảng → KHÔNG soi", !laHoiLechKhoa("Hẻm rộng mấy mét anh?", "tien_ich"));
+  ok("LK-07 không có câu hỏi → KHÔNG lệch", !laHoiLechKhoa("Dạ em ghi nhận rồi ạ.", "gap"));
+  ok("LK-08 khoá so_phong_ngu, model hỏi sổ → lệch", laHoiLechKhoa("Sổ hồng riêng hay sổ chung vậy anh?", "so_phong_ngu"));
+  const dd = boHuaDaDang(["Em cảm ơn mình tin nhé, đã đăng lên web AI Ơi Nhà Đất rồi :) Em tra thấy đường Trần Bình Trọng thuộc Phường Vườn Lài (Quận 10 cũ), đúng không anh chị?"])[0];
+  ok("DD-01 'đã đăng lên web … rồi' → bỏ mệnh đề, giữ lời cảm ơn và câu hỏi", !/đăng/.test(dd) && /Em cảm ơn mình tin nhé/.test(dd) && /Phường Vườn Lài/.test(dd), dd);
+  ok("DD-02 'tin đã lên web luôn rồi ạ' → bỏ", boHuaDaDang(["Dạ tin đã lên web luôn rồi ạ. Nhà mình mấy tầng anh?"])[0] === "Nhà mình mấy tầng anh?");
+  ok("DD-03 'chưa đăng' (phủ định) → giữ", boHuaDaDang(["Tin chưa đăng đâu ạ, còn thiếu giá."])[0] === "Tin chưa đăng đâu ạ, còn thiếu giá.");
+  ok("DD-04 'em sẽ đăng' (tương lai) → giữ", boHuaDaDang(["Đủ thông tin là em sẽ đăng lên web ngay ạ."])[0] === "Đủ thông tin là em sẽ đăng lên web ngay ạ.");
+  ok("DD-05 bong bóng 📝 → không đụng", boHuaDaDang(["📝 Đã đăng: 105 Trần Bình Trọng"])[0] === "📝 Đã đăng: 105 Trần Bình Trọng");
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
