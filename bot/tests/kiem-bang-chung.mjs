@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { chonDeGhi, chonViTri, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { chonDeGhi, chonViTri, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -329,6 +329,23 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("TRALOI trích dẫn chỉ là MẢNH của một từ ('co' trong 'cong') → bỏ", tl(true, "có", "co", "nha cong ty")?.giaTri === null);
   ok("TRALOI AI nói KHÔNG trả lời → { co: false }", JSON.stringify(tl(false, null, null, "hàng xóm xây năm 2019")) === JSON.stringify({ co: false, giaTri: null }));
   ok("TRALOI AI không nói gì (bản cũ / thiếu ô) → null", kiemTraLoiCau(null, "x") === null && kiemTraLoiCau(undefined, "x") === null);
+}
+
+// FR-226 b (25/09/2026): AI gộp / sửa ô đang ghi — mọi chữ + số của giá trị mới phải có trong giá trị cũ hoặc trong tin.
+{
+  const dg = { vi_tri: "Ngô Y Linh", ket_cau: "trệt + 3 lầu", do_rong_hem: "hẻm xe hơi" };
+  const gop = (k, v, tin) => kiemCapNhat([{ khoa: k, gia_tri_moi: v, cach: "gop" }], tin, dg).map((x) => x.answer).join("|");
+  ok("GOP 'số 45 nha' + 'Ngô Y Linh' → '45 Ngô Y Linh'", gop("vi_tri", "45 Ngô Y Linh", "số 45 nha") === "45 Ngô Y Linh");
+  ok("GOP BỎ số bịa '45/12' (12 không có trong tin)", gop("vi_tri", "45/12 Ngô Y Linh", "số 45 nha") === "");
+  ok("GOP 'có sân thượng nữa em' → 'trệt + 3 lầu + sân thượng'", gop("ket_cau", "trệt + 3 lầu + sân thượng", "có sân thượng nữa em") === "trệt + 3 lầu + sân thượng");
+  ok("GOP BỎ chữ bịa 'thang máy'", gop("ket_cau", "trệt + 3 lầu + sân thượng + thang máy", "có sân thượng nữa em") === "");
+  ok("GOP 'hẻm 6m nha' + 'hẻm xe hơi' → 'hẻm xe hơi 6m' (6m ↔ 6 m)", gop("do_rong_hem", "hẻm xe hơi 6 m", "hẻm 6m nha") === "hẻm xe hơi 6 m");
+  ok("GOP BỎ khi giá trị mới y hệt giá trị cũ", gop("vi_tri", "Ngô Y Linh", "ok em") === "");
+  ok("GOP BỎ khi ô chưa có giá trị đang ghi (không có gì để gộp)", gop("phap_ly", "sổ hồng riêng", "shr") === "");
+  ok("GOP sửa: 'à nhầm, 2 lầu thôi' → 'trệt + 2 lầu'", gop("ket_cau", "trệt + 2 lầu", "à nhầm, 2 lầu thôi") === "trệt + 2 lầu");
+  ok("laTrongCapNhat: kiến thức 'số 45' nằm trong '45 Ngô Y Linh' → trùng; 'gần chợ' → không", laTrongCapNhat("số 45", [{ answer: "45 Ngô Y Linh" }]) && !laTrongCapNhat("gần chợ", [{ answer: "45 Ngô Y Linh" }]));
+  ok("coNoiDungTraLoi: 'hxh', 'có sân thượng nữa em' → có; 'ok em', 'dạ', 'cảm ơn anh' → không",
+    coNoiDungTraLoi("hxh") && coNoiDungTraLoi("có sân thượng nữa em") && !coNoiDungTraLoi("ok em") && !coNoiDungTraLoi("dạ") && !coNoiDungTraLoi("cảm ơn anh"));
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

@@ -37,10 +37,12 @@ export const BOC_DUOC = `${DAU_BAO_LAI} Bóc tách được:`;
 export const KHONG_BOC = `${DAU_BAO_LAI} Không bóc tách được gì từ tin này.`;
 
 export const COT_BAO_LAI =
-  `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, nhan, projects(name), ${SPEC_COLS}`;
+  `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, nhan, description, projects(name), ${SPEC_COLS}`;
 
 export type DongBaoLai = SpecRow & {
   id?: string;
+  /** Câu rao gốc — FR-226 a: có chữ "phố / lầu / hẻm…" mới gọi là nhà phố. */
+  description?: string | null;
   code?: string | null;
   property_type?: string | null;
   deal?: string | null;
@@ -75,6 +77,20 @@ export function docCheDo(v: unknown): CheDoBaoLai {
   const s = String(v ?? "").trim().toLowerCase();
   return s === "day_du" || s === "thay_doi" ? s : "tat";
 }
+
+/**
+ * FR-226 a (25/09/2026, chủ dự án: "Nhà người ta chưa có gì mà nó tự nhận là nhà phố"; chọn "không hỏi, tự suy sau"):
+ * khách chỉ nói "bán nhà" thì tin vẫn thuộc nhóm nhà (`nha_pho` — để không lẫn với đất, hỏi đúng bộ câu của nhà) nhưng
+ * HIỆN là "Nhà". Có dấu hiệu nhà phố (câu rao nói phố / trệt / lầu / tầng / N tấm / hẻm / mặt tiền, hoặc đã có số tầng
+ * ≥ 2, loại đường vào, độ rộng hẻm) mới hiện "Nhà phố". Khách nói "cấp 4" thì DB đổi hẳn sang nhà cấp 4 (20260925e).
+ */
+export function laNhaPhoRo(l: { description?: string | null; location_raw?: string | null; floors?: number | null; floors_text?: string | null; access_type?: string | null; alley_width_m?: number | string | null }): boolean {
+  const kd = boDau(`${l.description ?? ""} ${l.location_raw ?? ""} ${l.floors_text ?? ""}`);
+  return (l.floors ?? 0) >= 2 || !!l.access_type || (l.alley_width_m != null && l.alley_width_m !== "") ||
+    /\b(?:nha pho|np|tret|lau|lung|tang|\d+ ?tam|hem|hxh|mat tien|mt)\b/.test(kd);
+}
+const tenLoai = (l: DongBaoLai): string =>
+  l.property_type === "nha_pho" && !laNhaPhoRo(l) ? "Nhà" : LOAI[l.property_type ?? ""] ?? "BĐS";
 
 const LOAI: Record<string, string> = {
   nha_pho: "Nhà phố", nha_cap4: "Nhà cấp 4", chung_cu: "Căn hộ", dat: "Đất",
@@ -139,7 +155,7 @@ export function tomTatDaLuu(
   if (!l) return `${DAU_BAO_LAI} Chưa có tin nào được lưu.`;
 
   const p: string[] = [];
-  p.push(`${LOAI[l.property_type ?? ""] ?? "BĐS"} ${l.deal === "cho_thue" ? "cho thuê" : "bán"}`);
+  p.push(`${tenLoai(l)} ${l.deal === "cho_thue" ? "cho thuê" : "bán"}`);
   // 11/09/2026 (Zalo thật): "sao cái nào cũng ghi Q5" — Quận 5 mà là MẶC ĐỊNH (chưa
   // ai nói quận) thì nói thẳng ra, đừng để người đọc tưởng hệ thống đọc được Quận 5.
   // 20260917a: không còn mặc định Quận 5 — quận trống thì in "(chưa rõ quận)"; cờ cũ giữ để đọc tin cũ.
@@ -191,7 +207,7 @@ export function tomTatDaLuu(
 export function bocTachTaoTin(l: DongBaoLai | null): string | null {
   if (!l) return null;
   const p: Array<[string, string]> = [];
-  p.push(["loại", `${LOAI[l.property_type ?? ""] ?? "BĐS"} ${l.deal === "cho_thue" ? "cho thuê" : "bán"}`]);
+  p.push(["loại", `${tenLoai(l)} ${l.deal === "cho_thue" ? "cho thuê" : "bán"}`]);
   const quanMacDinh = !l.district || (l.district === "Quận 5" && l.boc_tach?.quan_mac_dinh === true);
   const dc = gonDiaChi(l.location_raw, l.ward, quanMacDinh ? null : l.district);
   if (dc) p.push(["địa chỉ", `${dc}${quanMacDinh ? " (chưa rõ quận)" : ""}`]);

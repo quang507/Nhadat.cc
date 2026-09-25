@@ -636,7 +636,10 @@ for (const [cau, mong] of [
   const t2 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 12 Hồ Ngọc Lãm", district: null, area_m2: 50, price_raw: "3 tỷ", price_vnd: 3e9 });
   ok("bocTachTaoTin: chưa rõ quận → nói '(chưa rõ quận)', không bịa Quận 5", /địa chỉ: "hẻm 12 Hồ Ngọc Lãm \(chưa rõ quận\)"/.test(t2 ?? "") && !/Quận 5/.test(t2 ?? ""), String(t2));
   const t0 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: null, ward: null, district: null });
-  ok("bocTachTaoTin: chưa có địa chỉ → KHÔNG in 'địa chỉ: \"(chưa rõ)…\"'", t0 === '🤖 Bóc tách được: loại: "Nhà phố bán"', String(t0));
+  // FR-226 a (25/09/2026, chủ dự án: "Nhà người ta chưa có gì mà nó tự nhận là nhà phố"): tin nhà chưa có dấu hiệu nhà phố → "Nhà".
+  ok("bocTachTaoTin: chưa có địa chỉ → KHÔNG in 'địa chỉ: \"(chưa rõ)…\"'; chưa có dấu hiệu nhà phố → 'Nhà bán'", t0 === '🤖 Bóc tách được: loại: "Nhà bán"', String(t0));
+  ok("bocTachTaoTin: câu rao 'bán nhà 4 tấm' / cột số tầng 3 → 'Nhà phố bán'",
+    /"Nhà phố bán"/.test(bocTachTaoTin({ property_type: "nha_pho", deal: "ban", description: "bán nhà 4 tấm" }) ?? "") && /"Nhà phố bán"/.test(bocTachTaoTin({ property_type: "nha_pho", deal: "ban", floors: 3 }) ?? ""));
   const t3 = vuaLuuBan([{ question: "so_phong_ngu", answer: "3" }, { question: "ket_cau", answer: "4 tầng" }], { ket_cau: "kết cấu", so_phong_ngu: "số phòng ngủ" });
   ok("vuaLuuBan: lượt sau → 'Bóc tách được' + đúng các fact lượt đó", t3 === '🤖 Bóc tách được: kết cấu: "4 tầng" · số phòng ngủ: "3"', String(t3));
 }
