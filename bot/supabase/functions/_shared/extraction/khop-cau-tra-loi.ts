@@ -261,10 +261,20 @@ export function laBoSungRac(s: string | null | undefined): boolean {
 export type NguCanhBoSung = {
   facts?: Record<string, string | null | undefined>;
   floors_text?: string | null; access_type?: string | null; alley_width_m?: number | string | null;
-  legal_status?: string | null;
+  legal_status?: string | null; year_built?: number | string | null; rear_width_m?: number | string | null;
   /** Nhãn tin đang mang (`listings.nhan`, cộng nhãn gắn từ chính tin vừa nhắn). Không có thì không xét trùng nhãn. */
   nhan?: readonly string[] | null;
 };
+/** Câu nói về nhà KHÁC (hàng xóm, bên cạnh) — năm xây trong đó không phải của căn đang rao. */
+const NHA_KHAC_RE = /\b(?:hang xom|nha ben|ben canh|ke ben|doi dien|nha ke)\b/;
+/** "xây năm ngoái / năm nay / năm kia / năm rồi" → năm số theo giờ VN. null = không có. */
+export function namXayTuongDoi(kd: string, bayGio: Date = new Date()): string | null {
+  const m = /\b(?:xay|hoan cong|xd)\s*(?:xong\s*|moi\s*)?(?:tu\s*|hoi\s*|vao\s*|cuoi\s*|dau\s*)?(nam nay|nam ngoai|nam roi|nam truoc|nam kia)\b/.exec(kd);
+  if (!m) return null;
+  const nam = new Date(bayGio.getTime() + 7 * 3600e3).getUTCFullYear();
+  return String(nam - (m[1] === "nam nay" ? 0 : m[1] === "nam kia" ? 2 : 1));
+}
+const TU_NAM_XAY = /\b(?:moi xay|xay moi|vua xay|moi sua|vua sua|sua lai|xay xong|xay|nha moi|nha|moi|nam nay|nam ngoai|nam roi|nam truoc|nam kia|nam (?:19|20)\d{2}|(?:19|20)\d{2})\b/;
 const PHU_DINH_BS = /\b(?:khong|ko|k|kg|chua|hong|hok)\b/;
 const DEM_BS = /\b(?:co|la|duoc|dc|roi|thoi|nha|nhe|a|em|anh|chi|minh|nen|cung|va|voi|rat|lam|luon|het|toi|cua|tan|vao|ra|den|nua|1|mot|cai)\b/g;
 function thuanChuDe(kd: string, tuChuDe: RegExp): boolean {
@@ -298,6 +308,10 @@ export function laBoSungTrung(s: string | null | undefined, c: NguCanhBoSung): b
     return ketCau.includes(goc);                    // "sân thượng" khi kết cấu đã có sân thượng
   }
   if (thuanChuDe(kd, TU_SO) && !phuDinh) return !!(c.legal_status || f.phap_ly);
+  // "nở hậu nhé" khi đã có số mét nở hậu (25/09/2026, chủ dự án test Zalo).
+  if (thuanChuDe(kd, /\b(?:no hau|nha|dat|lo)\b/) && /\bno hau\b/.test(kd) && !phuDinh) return !!(f.no_hau || (c.rear_width_m != null && c.rear_width_m !== ""));
+  // "nhà mới xây năm ngoái" khi năm xây đã ghi / tin đã mang nhãn mới xây (25/09/2026, chủ dự án test Zalo).
+  if (/\b(?:xay|sua)\b/.test(kd) && thuanChuDe(kd, TU_NAM_XAY) && !phuDinh) return !!(f.nam_xay || c.year_built || c.nhan?.includes("moi_sua"));
   // Mảnh chỉ nói đúng nhãn ("khu yên tĩnh") mà tin ĐANG mang nhãn đó — nhãn đã giữ ý đó.
   return c.nhan ? laThuanNhan(s, c.nhan) : false;
 }
@@ -451,6 +465,12 @@ export function catDapAn(question: string, dapAn: string): string {
   return gon && /[\p{L}\p{N}]/u.test(gon) ? gon : ra;
 }
 function catDapAnGoc(question: string, dapAn: string): string {
+  // 25/09/2026: câu năm xây đáp "năm ngoái" / "xây năm nay" → năm số (trigger chỉ đọc 4 chữ số); giữ chữ khách trong ngoặc.
+  if (question === "nam_xay" && !/(?:19|20)\d{2}/.test(dapAn)) {
+    const kd = boDau(dapAn);
+    const nx = namXayTuongDoi(/\b(?:xay|hoan cong|xd)\b/.test(kd) ? kd : `xay ${kd.replace(/^\W*(?:(?:moi|vua)\s+)?/, "")}`);
+    if (nx) return `${nx} (${dapAn.trim().replace(/[.!\s]+$/, "")})`;
+  }
   // 25/09/2026: "hxh" một mình → "hẻm xe hơi" (đọc được ở 🤖 và bản nháp; trigger vẫn đọc ra loại đường vào).
   if ((question === "do_rong_hem" || question === "do_rong_duong") && /^\s*(?:hxh|hxt|hxm)\s*[.!]*\s*$/i.test(dapAn)) {
     const t = dapAn.trim().toLowerCase().slice(0, 3);
@@ -1021,6 +1041,7 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // 13/09/2026: "tầng 15 view sông" — mảnh đó ra `tang`, view rơi mất. Cắt từ chữ gốc.
   ["view", /\bview\s+[a-z0-9]+(?:\s+(?:song|ho|bien|thanh pho|cong vien|kenh|landmark|q1|quan 1|\d+))?/, (m) => m[0]],
   ["nam_xay", /\b(?:xay|hoan cong|xd)\s*(?:tu\s*|moi\s*|hoi\s*)?(?:nam\s*)?((?:19|20)\d{2})\b/, (m) => m[1]],
+  ["nam_xay", /\b(?:xay|hoan cong|xd)\s*(?:xong\s*|moi\s*)?(?:tu\s*|hoi\s*|vao\s*|cuoi\s*|dau\s*)?(?:nam nay|nam ngoai|nam roi|nam truoc|nam kia)\b/, (m) => namXayTuongDoi(m[0]) ?? ""],
   ["thuong_luong", /\b(con thuong luong|co thuong luong|thuong luong duoc|\btl\b|fix|gia cung|khong bot)\b/, (m) => m[1]],
   // 16/09/2026 (Zalo thật): "nhà trong hẻm 2 xẹc nhưng hẻm rộng 5m nhà 4 tấm diện tích tổng
   // 240m2" — một mảnh, câu chính là hẻm; "4 tấm" và sàn 240m2 rơi mất.
@@ -1185,6 +1206,7 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
   const kd = boDau(text);
   const kdD = boDauGiuDoDai(text);
   for (const [q, re, lay] of FACT_PHU) {
+    if (q === "nam_xay" && NHA_KHAC_RE.test(kd)) continue; // năm xây nhà hàng xóm không phải của căn này
     // Lý do bán giữ DẤU ("cần tiền", không phải "can tien"): khớp trên bản bỏ dấu
     // giữ độ dài rồi cắt đúng đoạn chữ gốc.
     if (q === "ly_do_ban" || q === "view" || q === "ket_cau") {
@@ -1429,8 +1451,13 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = /\b(?:phuong|p)\.?\s*(\d{1,2})\b/.exec(kd))) {
     return { question: "phuong", answer: `Phường ${m[1]}` };
   }
-  if ((m = /\b(?:xay|hoan cong|xd)\s*(?:nam\s*|tu\s*)?((?:19|20)\d{2})\b/.exec(kd))) {
-    return { question: "nam_xay", answer: m[1] };
+  if (!NHA_KHAC_RE.test(kd)) {
+    if ((m = /\b(?:xay|hoan cong|xd)\s*(?:nam\s*|tu\s*)?((?:19|20)\d{2})\b/.exec(kd))) {
+      return { question: "nam_xay", answer: m[1] };
+    }
+    // 25/09/2026 (chủ dự án test Zalo): "nhà mới xây năm ngoái" từng vào bổ sung lẫn nhãn "mới xây" — năm xây đọc được.
+    const nx = namXayTuongDoi(kd);
+    if (nx) return { question: "nam_xay", answer: nx };
   }
   if ((m = /\bhuong\s*(?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?\b/.exec(kdD))) return { question: "huong", answer: catGoc(m) };
   // FR-186: cho thuê — "cọc 2 tháng", "cọc 1 đóng 3"; "tăng 5%/năm", "trượt giá 10%".
@@ -1459,7 +1486,11 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(dang o|dang cho thue|de trong|nha trong|con o|dang thue)\b/.test(kd) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
   const LY_DO_RE = /\b(ly do|dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san)\b/;
   if (LY_DO_RE.test(kd)) return { question: "ly_do_ban", answer: manhKhop(LY_DO_RE) };
-  if (/\b(truong hoc|truong tieu hoc|cong chung|phong gym|gym|gan cho\b|cho gan\b|sieu thi|benh vien gan)\b/.test(kd)) return { question: "tien_ich_gan", answer: goc };
+  // 25/09/2026 (chủ dự án test Zalo: "sang tên 1 nốt nhạc ko phải tiện ích"): "công chứng" là THỦ TỤC khi đi với sang tên /
+  // ký / ra / làm / nhanh — chỉ là tiện ích khi nói phòng / văn phòng công chứng, hoặc gần công chứng.
+  if (/\b(truong hoc|truong tieu hoc|phong gym|gym|gan cho\b|cho gan\b|sieu thi|benh vien gan)\b/.test(kd) ||
+    (/\bcong chung\b/.test(kd) && /\b(?:(?:van )?phong cong chung|(?:gan|canh|sat|ke|doi dien)\b[^,.;]{0,20}\bcong chung)\b/.test(kd) &&
+      !/\b(?:sang ten|ky|ra|lam|thu tuc|not nhac)\b/.test(kd))) return { question: "tien_ich_gan", answer: goc };
   if (/\b(can goc|lo goc)\b/.test(kd)) return { question: "can_goc", answer: goc };
   if (/\bthang may\b/.test(kd)) return { question: "thang_may", answer: goc };
   if (/\bview\b/.test(kd)) return { question: "view", answer: goc };

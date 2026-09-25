@@ -1,5 +1,5 @@
 // re-nhanh.mjs — FR-223: bảng rẽ nhánh câu hỏi theo câu trả lời (extraction/re-nhanh.ts). Chạy: bun bot/tests/re-nhanh.mjs
-import { reNhanh, apReNhanh, RE_NHANH, nhanhCuaKhoa } from "../supabase/functions/_shared/extraction/re-nhanh.ts";
+import { reNhanh, apReNhanh, canReNhanh, RE_NHANH, nhanhCuaKhoa } from "../supabase/functions/_shared/extraction/re-nhanh.ts";
 import { chonCauKe } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { CAU_HOI_MAU, FACT_LABELS, cauHoiMau, nhanTheoLoai } from "../supabase/functions/_shared/prompts.ts";
 let tong = 0, hong = 0;
@@ -90,6 +90,19 @@ ok("apReNhanh bỏ hiện trạng khỏi danh sách khi đang cho thuê", !ds2.s
 
 ok("nhanhCuaKhoa('du_kien_ra_so') → nhánh 'chưa có sổ' với 2 ý", nhanhCuaKhoa("du_kien_ra_so")?.ten === "chưa có sổ" && nhanhCuaKhoa("du_kien_ra_so")?.cacY.length === 2, JSON.stringify(nhanhCuaKhoa("du_kien_ra_so")));
 // Mọi câu nhánh phải có câu mẫu + nhãn (không thì bot đọc tên trường cho khách).
+// FR-225 a (25/09/2026, chủ dự án test Zalo): "nở hậu nhé" (chưa có số) → câu kế hỏi nở hậu bao nhiêu mét.
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("bo_sung", "nở hậu nhé")], lichSu: "5x12 · nở hậu nhé · a bán 4t" }, ["gia"]);
+ok("NOHAU-01 nói 'nở hậu' chưa có số → thêm no_hau ngay lượt kế", keys(r).includes("no_hau"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("no_hau", "6m")], lichSu: "nở hậu nhé" }, ["gia"]);
+ok("NOHAU-02 đã có fact nở hậu → không hỏi", !keys(r).includes("no_hau"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [], rear_width_m: 6, lichSu: "nở hậu nhé" }, ["gia"]);
+ok("NOHAU-03 đã có cột nở hậu → không hỏi", !keys(r).includes("no_hau"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [], lichSu: "4x15 nở hậu 5m" }, ["gia"]);
+ok("NOHAU-04 đã nói số ('nở hậu 5m') → không hỏi", !keys(r).includes("no_hau"), JSON.stringify(r));
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [], lichSu: "đất vuông vức, không nở hậu" }, ["gia"]);
+ok("NOHAU-05 'không nở hậu' → không hỏi", !keys(r).includes("no_hau"), JSON.stringify(r));
+ok("NOHAU-06 canReNhanh: chữ gần đây có 'nở hậu' → đọc DB; không có → không", canReNhanh([], ["gia"], "nở hậu nhé") && !canReNhanh([], ["gia"], "a bán 4t"));
+
 const moiKhoa = [...new Set(RE_NHANH.flatMap((l) => (l.them ?? []).map((t) => t.fact_key)))];
 for (const k of moiKhoa) ok(`câu nhánh '${k}' có câu mẫu + nhãn`, (!!CAU_HOI_MAU[k] || !!CAU_HOI_MAU[`${k}@nha_pho`]) && !!FACT_LABELS[k], k);
 

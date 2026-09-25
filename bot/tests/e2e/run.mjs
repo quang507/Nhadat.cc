@@ -931,7 +931,11 @@ fresh(seedKho);
   r = await send({ external_user_id: "h-1", text: "4 phòng ngủ" });
   // FR-186 (09/09 chiều): nhà phố hỏi thêm TIỀM NĂNG (để ở hay kinh doanh ngành gì) trước khi gửi nháp — chuỗi 07/09 của sếp + chat 21/06.
   // 20260916c: tiềm năng dời sang hỏi bù sau đăng — chat KHÔNG hỏi nữa.
-  check("H4b trả lời phòng ngủ → không hỏi TIỀM NĂNG trong chat (20260916c: hỏi bù sau đăng); câu kế là HẺM (FR-219)", r.body.saved_fact === "so_phong_ngu" && !pend("tiem_nang") && pend("do_rong_hem"), JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  // FR-225 a (25/09/2026, chủ dự án test Zalo: "nở hậu nhiu cộng vào diện tích nhà luôn"): "nhà nở hậu chút" ở H4 chưa có số mét
+  // → câu kế là NỞ HẬU (trước đây bỏ qua, đi thẳng câu hẻm); trả lời xong mới tới hẻm.
+  check("H4b trả lời phòng ngủ → không hỏi TIỀM NĂNG trong chat (20260916c: hỏi bù sau đăng); câu kế là NỞ HẬU bao nhiêu mét (FR-225, H4 nói 'nở hậu chút')", r.body.saved_fact === "so_phong_ngu" && !pend("tiem_nang") && pend("no_hau"), JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  r = await send({ external_user_id: "h-1", text: "nở hậu 5m" });
+  check("H4c 'nở hậu 5m' → ghi fact nở hậu, câu kế là HẺM (FR-219)", /\b5m\b/.test(fact("no_hau")?.answer ?? "") && !pend("no_hau") && pend("do_rong_hem"), JSON.stringify({ body: r.body, f: fact("no_hau"), ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   // 25/09/2026: số nhà có xuyệt ("105/12 …") → câu hẻm là XÁC NHẬN "trong hẻm đúng không", không hỏi trống.
   {
     const rHx = await send({ external_user_id: "hx-1", text: "Bán nhà 105/12 Trần Bình Trọng phường 1 quận 5, 4x15, 3 lầu, 4 phòng ngủ, sổ hồng riêng, giá 7 tỷ" });
@@ -3416,6 +3420,22 @@ fresh(seedKho);
     const fHc = db().t.listing_facts.find((x) => x.listing_id === l.id && x.question === "hoan_cong");
     check("RENHANH-04 trả lời 'rồi em' cho câu hoàn công → ghi fact hoan_cong, không hỏi lại hoàn công",
       !!fHc && !pend("hoan_cong", l.id), JSON.stringify({ fHc, rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
+  // FR-225 a (25/09/2026, chủ dự án test Zalo: khách "nở hậu nhé" → bot bịa "nở hậu 4.5"; "nở hậu nhiu cộng vào diện tích"):
+  // nói nở hậu mà chưa có số mét → câu kế hỏi nở hậu bao nhiêu mét.
+  rnSeed("z-nh1", "BDS-Q5-0941", { has_completion: true, frontage_m: 5, length_m: 12 });
+  r = await send({ external_user_id: "z-nh1", text: "sổ hồng riêng em, nhà nở hậu nha" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0941");
+    check("NOHAU-E1 'nhà nở hậu' chưa có số mét → câu kế là no_hau (hỏi bao nhiêu mét)",
+      pend("no_hau", l.id), JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
+  rnSeed("z-nh2", "BDS-Q5-0942", { has_completion: true, frontage_m: 5, length_m: 12 });
+  r = await send({ external_user_id: "z-nh2", text: "sổ hồng riêng em, nở hậu 6m" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0942");
+    check("NOHAU-E2 'nở hậu 6m' đã có số → không hỏi lại nở hậu",
+      !pend("no_hau", l.id), JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
   rnSeed("z-rn2", "BDS-Q5-0932", { rent_income_vnd: 150000000 }, [["hien_trang", "đang cho Sacombank thuê"]]);
   r = await send({ external_user_id: "z-rn2", text: "sổ hồng riêng em" });
