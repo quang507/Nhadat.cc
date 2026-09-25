@@ -160,6 +160,9 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   la("TRUNG-01 📝 Thêm bỏ 'sân thượng', 'xe hơi không vào được', 'sổ hồng riêng' (ô đã có), giữ 'trần cao 4m thông suốt'",
     !/sân thượng|xe hơi không vào|sổ hồng riêng/.test(them) && /trần cao 4m thông suốt/.test(them), them);
   const nhanDong = dung(tin).split("\n").find((x) => x.startsWith("🏷")) ?? "";
+  const tinNhan = { ...tin, l: { ...tin.l, nhan: ["san_thuong", "gac_lung", "yen_tinh"] }, facts: [...tin.facts, { question: "bo_sung", answer: "khu yên tĩnh" }, { question: "bo_sung", answer: "khu an ninh" }] };
+  const them3 = dung(tinNhan).split("\n").find((x) => x.startsWith("📝")) ?? "";
+  la("TRUNG-03 📝 Thêm bỏ 'khu yên tĩnh' (tin mang nhãn yên tĩnh), giữ 'khu an ninh' (tin chưa có nhãn an ninh)", !/yên tĩnh/.test(them3) && /khu an ninh/.test(them3), them3);
   la("TRUNG-02 🏷 Nhãn không in lặp 'sân thượng' / 'có gác lửng' khi dòng kết cấu đã có", !/sân thượng|lửng/.test(nhanDong), nhanDong || "(không có dòng nhãn)");
 }
 

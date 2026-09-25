@@ -21,6 +21,7 @@
 // nên "5 tới 6 tỷ" ghi giá "5 tới 6" (mục D1 review 10/09).
 import { TIEN_KD, CO_TIEN_KD, TIEN_T_KEP } from "./luat-tien.ts";
 import { TRUOC_LA_SAN, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
+import { laThuanNhan } from "./nhan.ts";
 
 export type LoaiCau =
   | "khop"      // đúng là câu trả lời cho câu đang hỏi → ghi fact, đóng câu hỏi
@@ -261,6 +262,8 @@ export type NguCanhBoSung = {
   facts?: Record<string, string | null | undefined>;
   floors_text?: string | null; access_type?: string | null; alley_width_m?: number | string | null;
   legal_status?: string | null;
+  /** Nhãn tin đang mang (`listings.nhan`, cộng nhãn gắn từ chính tin vừa nhắn). Không có thì không xét trùng nhãn. */
+  nhan?: readonly string[] | null;
 };
 const PHU_DINH_BS = /\b(?:khong|ko|k|kg|chua|hong|hok)\b/;
 const DEM_BS = /\b(?:co|la|duoc|dc|roi|thoi|nha|nhe|a|em|anh|chi|minh|nen|cung|va|voi|rat|lam|luon|het|toi|cua|tan|vao|ra|den|nua|1|mot|cai)\b/g;
@@ -295,7 +298,8 @@ export function laBoSungTrung(s: string | null | undefined, c: NguCanhBoSung): b
     return ketCau.includes(goc);                    // "sân thượng" khi kết cấu đã có sân thượng
   }
   if (thuanChuDe(kd, TU_SO) && !phuDinh) return !!(c.legal_status || f.phap_ly);
-  return false;
+  // Mảnh chỉ nói đúng nhãn ("khu yên tĩnh") mà tin ĐANG mang nhãn đó — nhãn đã giữ ý đó.
+  return c.nhan ? laThuanNhan(s, c.nhan) : false;
 }
 
 // Chữ mở đầu THỨ KHÁC — gặp là hết tên đường: giấy tờ, giá, kết cấu, hành chính.
