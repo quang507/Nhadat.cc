@@ -210,5 +210,17 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   for (const [q, a, m] of ca) ok(`DEM '${a}' (${q}) → '${m}'`, catDapAn(q, a) === m, catDapAn(q, a));
 }
 
+// 25/09/2026 (ảnh chat thật, "hxh nó vẫn ko đọc được"): đang hỏi hẻm, câu nói LOẠI đường vào là khớp (không cần số mét).
+{
+  for (const cau of ["hxh", "HXH", "hẻm xe hơi", "ô tô vô tận nhà", "xe hơi vào tận nhà", "HXH quay đầu", "hẻm ba gác", "xe hơi không vào được", "hẻm xe máy", "mặt tiền", "hẻm 4m"]) {
+    ok(`HEM '${cau}' khi hỏi hẻm → khớp`, phanLoaiCauTraLoi("do_rong_hem", cau).loai === "khop", JSON.stringify(phanLoaiCauTraLoi("do_rong_hem", cau)));
+  }
+  ok("HEM 'cách mặt tiền 30m' khi hỏi hẻm → KHÔNG khớp (khoảng cách, không phải loại đường vào)", phanLoaiCauTraLoi("do_rong_hem", "cách mặt tiền 30m").loai !== "khop");
+  ok("HEM 'đúng rồi' khi hỏi hẻm → KHÔNG khớp", phanLoaiCauTraLoi("do_rong_hem", "đúng rồi").loai !== "khop");
+  ok("HEM 'hxh' → ghi 'hẻm xe hơi'", catDapAn("do_rong_hem", "hxh") === "hẻm xe hơi");
+  ok("HEM 'ô tô vô tận nhà' không còn thành tiềm năng", nhanDienFact("ô tô vô tận nhà")?.question === "do_rong_hem", JSON.stringify(nhanDienFact("ô tô vô tận nhà")));
+  ok("HEM 'để ở hoặc cho thuê' vẫn là tiềm năng", nhanDienFact("để ở hoặc cho thuê")?.question === "tiem_nang");
+}
+
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

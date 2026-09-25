@@ -2132,6 +2132,28 @@ fresh(seedKho);
     f6("do_rong_hem").length === 1 && !f6("bo_sung").some((f) => /xe hơi không vào/.test(f.answer)) && f6("bo_sung").some((f) => /hàng xóm thân thiện/.test(f.answer)),
     JSON.stringify({ hem: f6("do_rong_hem"), bs: f6("bo_sung").map((f) => f.answer), rep: r.body.replies }));
 
+  // 25/09/2026 (ảnh chat thật, chủ dự án "hxh nó vẫn ko đọc được"): đang hỏi HẺM ở chế độ `chinh`, khách đáp "hxh" /
+  // "hẻm xe hơi" / "ô tô vô tận nhà" — AI im hoặc xếp vào kiến thức thêm → trước đây rơi bổ sung / tiềm năng, hỏi lại số mét.
+  for (const [i, cau] of ["hxh", "hẻm xe hơi", "ô tô vô tận nhà"].entries()) {
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: `hxh-${i}`, text: RAO_MT });
+    const LH = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LH.id, question: "do_rong_hem", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [cau], truong: [] } : OUT();
+    const rH = await send({ external_user_id: `hxh-${i}`, text: cau });
+    const fH = (q) => db().t.listing_facts.filter((f) => f.listing_id === LH.id && f.question === q);
+    check(`HXH-0${i + 1} đang hỏi hẻm, đáp '${cau}' (AI im) → ghi ô hẻm, câu hẻm xong, KHÔNG vào bổ sung / tiềm năng, không hỏi lại số mét`,
+      fH("do_rong_hem").length === 1 && !fH("bo_sung").length && !fH("tiem_nang").length &&
+        db().t.info_requests.some((x) => x.listing_id === LH.id && x.question === "do_rong_hem" && x.status === "answered") &&
+        !db().t.info_requests.some((x) => x.listing_id === LH.id && x.question === "do_rong_hem" && x.status === "pending"),
+      JSON.stringify({ hem: fH("do_rong_hem"), bs: fH("bo_sung"), tn: fH("tiem_nang"), ir: db().t.info_requests.filter((x) => x.listing_id === LH.id).map((x) => [x.question, x.status]), rep: rH.body.replies }));
+    if (i === 0) check("HXH-01b 'hxh' ghi thành chữ đọc được 'hẻm xe hơi'", fH("do_rong_hem")[0]?.answer === "hẻm xe hơi", JSON.stringify(fH("do_rong_hem")));
+  }
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ghi", bao_lai_da_luu: "thay_doi" };
+
   // ── 21/09/2026 chế độ `chinh` — ĐẢO TẦNG: AI đọc là đường chính có kiểm bằng chứng, luật đỡ (TS-AIBOC-06) ──
   // Câu rao mang đúng hai bẫy của TS-VAN-11: "giá 1 tỷ 8 căn 2 phòng ngủ" (đuôi giá rác) và "bàn giao quý 2 năm sau" (luật từng lấy làm tên đường).
   const R8 = "bán căn hộ 2 phòng ngủ đường Nguyễn Lương Bằng quận 7, giá 1 tỷ 8 căn 2 phòng ngủ, bàn giao quý 2 năm sau";
@@ -2208,9 +2230,11 @@ fresh(seedKho);
       ] } : OUT();
   r = await send({ external_user_id: "aiboc-8", text: "ngang 5 dài 20 nha, hẻm xe hơi, để em coi lại sổ rồi báo" });
   const fMoi = db().t.listing_facts.filter((f) => f.listing_id === L8.id).slice(soFactTruoc);
-  check("AIBOC-13 'chinh' câu treo phường, trả lời số đo: AI quyết fact kèm → dien_tich '5x20' (nguồn ai_kiem); KHÔNG có độ rộng hẻm 'hẻm xe hơi' (luật), KHÔNG hiện trạng 'xe hơi' (kiểm hình dạng), KHÔNG bo_sung lời hứa; câu phường vẫn treo",
+  // 25/09/2026 (chủ dự án: "nếu hẻm xe hơi thì hẻm rộng tầm bao nhiêu trở lên cái này nó phải tự nhận biết được"): "hẻm xe
+  // hơi" LÀ thông tin hẻm — ghi ô hẻm đúng chữ đó (trigger đọc ra loại đường vào, không bịa số mét). Bản 21/09 cấm điều này.
+  check("AIBOC-13 'chinh' câu treo phường, trả lời số đo: AI quyết fact kèm → dien_tich '5x20' (nguồn ai_kiem); 'hẻm xe hơi' vào ô hẻm đúng chữ (không số mét bịa), KHÔNG hiện trạng 'xe hơi' (kiểm hình dạng), KHÔNG bo_sung lời hứa; câu phường vẫn treo",
     fMoi.some((f) => f.question === "dien_tich" && f.answer === "5x20" && f.source === "ai_kiem") &&
-      !fMoi.some((f) => f.question === "do_rong_hem") && !fMoi.some((f) => f.question === "hien_trang") && !fMoi.some((f) => f.question === "bo_sung") &&
+      fMoi.filter((f) => f.question === "do_rong_hem").every((f) => f.answer === "hẻm xe hơi") && !fMoi.some((f) => f.question === "hien_trang") && !fMoi.some((f) => f.question === "bo_sung") &&
       db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "phuong" && x.status === "pending"),
     JSON.stringify({ fMoi, ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
 

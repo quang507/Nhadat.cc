@@ -43,7 +43,7 @@ export const TU_DIEN_NHAN: Record<string, Nhan> = {
   hem_cut: { ten: "hẻm cụt", khop: /\b(?:hem cut|cuoi hem)\b/ },
   khong_ngap: { ten: "không ngập", khop: /\b(?:khong ngap|ko ngap|chua bao gio ngap|khong bi ngap|khong dong nuoc|cao rao)\b/ },
   // 20/09: khách mua nói "xe hơi vào ĐƯỢC nhà" — cho phép "duoc/toi/tan/trong" giữa "vao" và "nha".
-  xe_hoi_vao_nha: { ten: "xe hơi vào nhà", khop: /\b(?:(?:xe hoi|o to|oto) vao (?:duoc |toi |tan |trong |tan trong )?nha|dau xe trong nha|gara|ga ra|garage|de xe hoi trong nha)\b/ },
+  xe_hoi_vao_nha: { ten: "xe hơi vào nhà", khop: /\b(?:(?:xe hoi|o to|oto) (?:vao|vo) (?:duoc |toi |tan |trong |tan trong )?nha|dau xe trong nha|gara|ga ra|garage|de xe hoi trong nha)\b/ },
   // 23/09/2026 (FR-216): "hẻm xe hơi quay đầu" trước chỉ nằm trong fact, không lọc được. Chỉ xe HƠI/ô tô/xe tải —
   // "xe máy quay đầu được" không kích; "xe hơi không quay đầu được" không khớp vì chữ "không" chen giữa.
   xe_hoi_quay_dau: { ten: "xe hơi quay đầu", khop: /\b(?:(?:xe hoi|o to|oto|xe tai|xe \d{1,2} cho|hxh) (?:quay dau|quay xe|de quay dau|vao quay dau|vao va quay dau|vao tan nha quay dau)|quay dau (?:xe hoi|o to|oto|xe tai)|hem quay dau (?:thoai mai|duoc|de dang))\b/, phuDinh: true },
