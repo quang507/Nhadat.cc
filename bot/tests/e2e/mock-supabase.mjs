@@ -66,7 +66,8 @@ export class FakeDB {
       if (l.location_raw || l.street || l.project_id) have.add("vi_tri"); // 20260909m
       if (l.price_raw) have.add("gia"); if (l.gap != null) have.add("gap"); if (l.area_m2) { have.add("dien_tich"); have.add("dien_tich_dat"); have.add("dien_tich_tim_tuong"); } if (l.ward) have.add("phuong");
       if (l.property_type && l.property_type !== "chua_ro") have.add("loai_bds"); if (l.bedrooms) have.add("so_phong_ngu");
-      if (l.alley_width_m || l.access_type === "mat_tien") { have.add("do_rong_hem"); have.add("do_rong_duong"); } if (l.floors) have.add("ket_cau"); if (/lửng|sân thượng|hầm|áp mái/.test(l.floors_text ?? "")) have.add("tang_phu");
+      // 20260925e: loại đường vào đã rõ (hẻm xe hơi / xe máy / mặt tiền) = câu hẻm đã có câu trả lời.
+      if (l.alley_width_m || l.access_type) { have.add("do_rong_hem"); have.add("do_rong_duong"); } if (l.floors) have.add("ket_cau"); if (/lửng|sân thượng|hầm|áp mái/.test(l.floors_text ?? "")) have.add("tang_phu");
       if (l.legal_status) have.add("phap_ly"); if (l.direction) have.add("huong"); if (l.floor) have.add("tang");
       if (l.planning_status) have.add("quy_hoach"); if (l.year_built) have.add("nam_xay"); if (l.furnishing) have.add("noi_that"); if (l.frontage_m) have.add("mat_tien");
       // Ảnh trong kho (listing_media) = đã có ảnh, như view thật (FR-185).
@@ -85,7 +86,7 @@ export class FakeDB {
     for (const x of this.t.listing_facts.filter((x) => x.listing_id === l.id)) f[x.question] = x.answer;
     const has = (k) => Object.prototype.hasOwnProperty.call(f, k);
     const thieu = [];
-    const coHem = l.alley_width_m != null || l.access_type === "mat_tien" || has("do_rong_hem") || has("do_rong_duong") || ["chung_cu", "phong_tro"].includes(l.property_type);
+    const coHem = l.alley_width_m != null || !!l.access_type || has("do_rong_hem") || has("do_rong_duong") || ["chung_cu", "phong_tro"].includes(l.property_type);
     const viTri = (l.location_raw ? 7 : 0) + (l.ward ? 4 : 0) + (coHem ? 4 : 0);
     if (!coHem) thieu.push("hẻm rộng mấy mét, xe hơi vào được không");
     const coMt = l.frontage_m != null || has("mat_tien") || ["chung_cu", "phong_tro"].includes(l.property_type) || /\d\s*[xX×]\s*\d/.test(f.dien_tich_dat ?? f.dien_tich ?? "");

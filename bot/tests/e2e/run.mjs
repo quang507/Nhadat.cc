@@ -1526,7 +1526,9 @@ fresh(seedKho);
   check("BLDL-06 lượt sau: model CÓ nhận lịch sử (câu lượt trước) nhưng KHÔNG thấy 🤖", loiLuot1.length > 5 && moi.some((c) => /NGỮ CẢNH/.test(vao(c)) && vao(c).includes(loiLuot1)) && !moi.some((c) => vao(c).includes("🤖")), JSON.stringify({ loiLuot1, n: moi.length, dau: moi.map((c) => vao(c).slice(0, 500)) }));
   // 23/09/2026 (chủ dự án): câu "Sai chỗ nào … nhắn lại giúp em nha" bỏ hẳn.
   check("BLDL-06b lượt TẠO tin → 🤖 đầu tiên là tóm tắt tin VỪA RAO (Phường 5), bỏ 📝 trùng, KHÔNG còn câu 'Sai chỗ nào…'",
-    /^🤖 Bóc tách được: loại: "Nhà phố bán"/.test(r.body.replies[0] ?? "") && /Phường 5/.test(r.body.replies[0] ?? "") && !r.body.replies.some((x) => /Sai chỗ nào/.test(x)) && !r.body.replies.some((x) => /^📝 Em ghi nhận/.test(x)),
+    // FR-226 a (25/09/2026, chủ dự án: "Nhà người ta chưa có gì mà nó tự nhận là nhà phố"): "bán nhà Phường 5 …" chưa có dấu
+    // hiệu nhà phố → "Nhà bán".
+    /^🤖 Bóc tách được: loại: "Nhà bán"/.test(r.body.replies[0] ?? "") && /Phường 5/.test(r.body.replies[0] ?? "") && !r.body.replies.some((x) => /Sai chỗ nào/.test(x)) && !r.body.replies.some((x) => /^📝 Em ghi nhận/.test(x)),
     JSON.stringify(r.body.replies));
   // 21/09/2026 (bắn thật kiem-cc): chủ nhà là "chú" → doiTuXung đổi "📝 Em ghi nhận" thành "📝 Cháu ghi nhận"
   // TRƯỚC đoạn bỏ 📝 → khách đọc hai lần. Bỏ 📝 phải nhận cả hai cách xưng.
@@ -2195,6 +2197,61 @@ fresh(seedKho);
       (ca.ghi ? fT(ca.q).length === 1 && fT(ca.q)[0].answer === ca.ghi && irT("answered") && !irT("pending") : fT(ca.q).length === 0 && irT("pending")) && !lech.length,
       JSON.stringify({ f: fT(ca.q), lech, ir: db().t.info_requests.filter((x) => x.listing_id === LT.id).map((x) => [x.question, x.status]), rep: rT.body.replies }));
     if (i === 0) check("TRALOI-01b AI nhận cả CHỮ câu bot vừa hỏi (không chỉ khoá trần)", /do_rong_hem — "[^"]{10,}"/.test(userMsg), userMsg.slice(0, 200));
+  }
+  // FR-226 a (25/09/2026, test Zalo chủ dự án …3057): "anh muốn bán nhà" → bot từng ghi "loại: Nhà phố bán". Nay "Nhà bán".
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+  {
+    const rN = await send({ external_user_id: "nha-tran", text: "anh muốn bán nhà" });
+    check("NHATRAN-01 'anh muốn bán nhà' → 🤖 ghi 'Nhà bán', KHÔNG 'Nhà phố'", rN.body.replies.some((x) => /loại: "Nhà bán"/.test(x)) && !rN.body.replies.some((x) => /Nhà phố/.test(x)), JSON.stringify(rN.body.replies));
+  }
+  // FR-226 b (25/09/2026, chủ dự án: "khách trả lời nhỏ giọt về địa chỉ hoặc các trường khác thì để AI gộp lại hoặc thay thế
+  // hoặc sửa"). Dựng: tin "Ngô Y Linh", kết cấu "trệt + 3 lầu", đang hỏi phường.
+  const dungGop = async (uid) => {
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: uid, text: "bán nhà hẻm Ngô Y Linh Bình Tân 5x12 4 tấm giá 4 tỷ" });
+    const L = db().t.listings.at(-1);
+    L.location_raw = "Ngô Y Linh"; L.floors_text = "trệt + 3 lầu";
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: L.id, question: "phuong", status: "pending" });
+    return L;
+  };
+  const moiAi = (cn, kt = []) => (p) => laLuotBocRao(p)
+    ? { so_can: 0, kien_thuc: kt, truong: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, cap_nhat: cn } : OUT();
+  {
+    // Luật dự phòng: "số 45 nha" — số nhà ghép vào địa chỉ đang có, không thành phường, không vào bổ sung.
+    const L = await dungGop("gop-1");
+    globalThis.__model.parse = moiAi([{ khoa: "vi_tri", gia_tri_moi: "45/12 Ngô Y Linh", cach: "gop" }], ["số 45"]);
+    const rG = await send({ external_user_id: "gop-1", text: "số 45 nha" });
+    const fG = (q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === q);
+    check("GOP-01 địa chỉ 'Ngô Y Linh' + 'số 45 nha' → địa chỉ '45 Ngô Y Linh' (bản AI bịa '45/12' bị bỏ), KHÔNG thành phường, KHÔNG bổ sung 'số 45', câu phường vẫn treo",
+      L.location_raw === "45 Ngô Y Linh" && !fG("vi_tri").some((f) => /12/.test(f.answer)) && !fG("phuong").length && !fG("bo_sung").some((f) => /45/.test(f.answer)) &&
+        db().t.info_requests.some((x) => x.listing_id === L.id && x.question === "phuong" && x.status === "pending"),
+      JSON.stringify({ lr: L.location_raw, vt: fG("vi_tri"), ph: fG("phuong"), bs: fG("bo_sung"), ir: db().t.info_requests.filter((x) => x.listing_id === L.id).map((x) => [x.question, x.status]), rep: rG.body.replies }));
+  }
+  {
+    // AI gộp: kết cấu đang ghi "trệt + 3 lầu", khách "có sân thượng nữa em" → "trệt + 3 lầu + sân thượng".
+    const L = await dungGop("gop-2");
+    let userMsg = "";
+    const goc = moiAi([{ khoa: "ket_cau", gia_tri_moi: "trệt + 3 lầu + sân thượng", cach: "gop" }], ["có sân thượng"]);
+    globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) userMsg = String(p.messages?.[0]?.content ?? ""); return goc(p); };
+    const rG = await send({ external_user_id: "gop-2", text: "có sân thượng nữa em" });
+    const fG = (q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === q);
+    check("GOP-02 kết cấu 'trệt + 3 lầu' + 'có sân thượng nữa em' → AI gộp 'trệt + 3 lầu + sân thượng', không bổ sung lặp, câu phường vẫn treo; AI nhận giá trị đang ghi",
+      fG("ket_cau").some((f) => f.answer === "trệt + 3 lầu + sân thượng") && !fG("bo_sung").some((f) => /sân thượng/.test(f.answer)) &&
+        db().t.info_requests.some((x) => x.listing_id === L.id && x.question === "phuong" && x.status === "pending") && /Thông tin đang ghi[\s\S]*ket_cau: "trệt \+ 3 lầu"/.test(userMsg),
+      JSON.stringify({ kc: fG("ket_cau"), bs: fG("bo_sung"), ir: db().t.info_requests.filter((x) => x.listing_id === L.id).map((x) => [x.question, x.status]), rep: rG.body.replies, userMsg: userMsg.slice(0, 300) }));
+  }
+  {
+    // AI gộp BỊA: thêm "thang máy" khách không nói → bỏ.
+    const L = await dungGop("gop-3");
+    globalThis.__model.parse = moiAi([{ khoa: "ket_cau", gia_tri_moi: "trệt + 3 lầu + sân thượng + thang máy", cach: "gop" }]);
+    await send({ external_user_id: "gop-3", text: "có sân thượng nữa em" });
+    const fG = (q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === q);
+    check("GOP-03 AI gộp BỊA 'thang máy' (khách không nói) → không ghi giá trị đó", !fG("ket_cau").some((f) => /thang máy/.test(f.answer)), JSON.stringify(fG("ket_cau")));
   }
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ghi", bao_lai_da_luu: "thay_doi" };
 

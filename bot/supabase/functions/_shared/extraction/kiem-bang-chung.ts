@@ -322,6 +322,18 @@ export function coMuiDuLieuRao(tin: string): boolean {
     /\b(ban|thue|nha|dat|can ho|chung cu|so|hem|duong|pho|phuong|quan|huyen|xa|huong|lau|tang|tret|gap|tl|thuong luong|noi that|mat tien|du an|phap ly|hoan cong|coc|view|tien)\b/.test(kd);
 }
 
+/**
+ * FR-226 (25/09/2026, chủ dự án: "bắt theo nguyên cả câu của khách để AI đọc lại"): đang có câu chờ trả lời thì MỌI tin có
+ * nội dung đều cho AI đọc — "hxh", "có sân thượng nữa em" từng bị cổng `coMuiDuLieuRao` bỏ qua (không số, không từ khoá).
+ * Chỉ bỏ tin rỗng nghĩa: ok / dạ / vâng / ừ / cảm ơn / chào / emoji.
+ */
+const CHU_RONG = new Set(["ok", "oke", "okie", "okay", "da", "vang", "u", "uh", "um", "uk", "uhm", "a", "e", "em", "anh", "chi", "co", "chu", "bac",
+  "cam", "on", "thanks", "thank", "tks", "chao", "hi", "hello", "nha", "nhe", "nhe", "roi", "duoc", "dc", "vay", "the", "ha", "hi", "hihi", "haha", "ạ"]);
+export function coNoiDungTraLoi(tin: string): boolean {
+  const tu = chuanSo(tin).split(/\s+/).filter(Boolean);
+  return tu.some((t) => !CHU_RONG.has(t));
+}
+
 // ── So với thứ LUẬT đã ghi vào DB sau lượt ─────────────────────────────────────
 export type DongDb = {
   deal?: string | null; property_type?: string | null; price_vnd?: number | null; price_per_m2_vnd?: number | null;
@@ -623,6 +635,41 @@ export function kiemTraLoiCau(tl: TraLoiCau | null | undefined, tin: string): { 
   const soTin = new Set(kdTin.match(/\d+/g) ?? []);
   if ((chuanSo(v).match(/\d+/g) ?? []).some((n) => !soTin.has(n))) return { co: true, giaTri: null };
   return { co: true, giaTri: v };
+}
+
+/**
+ * FR-226 (25/09/2026, chủ dự án: "khách trả lời nhỏ giọt về địa chỉ hoặc các trường khác thì để AI gộp lại hoặc thay thế
+ * hoặc sửa"): AI trả TOÀN BỘ giá trị mới của một ô chữ sau khi gộp mẩu khách vừa nói vào giá trị đang ghi. Code chỉ nhận
+ * khi: ô có giá trị đang ghi, giá trị mới KHÁC giá trị cũ, và MỌI chữ + số của giá trị mới (bỏ dấu) có trong giá trị cũ
+ * hoặc trong tin (cộng vài chữ nối "số", "hẻm", "và") — AI được xếp lại, thêm dấu, bỏ bớt; không được thêm điều khách
+ * không nói. Trả các ô đạt, mỗi khoá một lần.
+ */
+const CHU_NOI_GOP = new Set(["so", "hem", "va", "voi", "nha", "m", "met", "duong"]);
+const tachGop = (x: string) => boDau(x).replace(/(\d),(\d)/g, "$1.$2").replace(/(\d)([a-z])/g, "$1 $2").replace(/([a-z])(\d)/g, "$1 $2")
+  .split(/[^a-z0-9.]+/).map((t) => t.replace(/^\.+|\.+$/g, "")).filter(Boolean);
+export type CapNhatDeXuat = { khoa: string; gia_tri_moi: string; cach?: string };
+export function kiemCapNhat(ds: CapNhatDeXuat[] | null | undefined, tin: string, dangGhi: Record<string, string | null | undefined>): Array<{ question: string; answer: string }> {
+  const ra: Array<{ question: string; answer: string }> = [];
+  for (const c of ds ?? []) {
+    if (!c || typeof c.khoa !== "string" || typeof c.gia_tri_moi !== "string") continue;
+    const cu = (dangGhi[c.khoa] ?? "").trim();
+    const moi = c.gia_tri_moi.trim().replace(/[\s.]+$/, "");
+    if (!cu || !moi || moi.length > 160 || ra.some((r) => r.question === c.khoa)) continue;
+    if (tachGop(moi).join(" ") === tachGop(cu).join(" ")) continue;
+    const coSan = new Set([...tachGop(cu), ...tachGop(tin)]);
+    // "4m5" trong tin = "4.5" trong giá trị mới.
+    for (const m of boDau(tin).matchAll(/(\d+)\s*m\s*(\d)(?!\d)/g)) coSan.add(`${m[1]}.${m[2]}`);
+    if (!tachGop(moi).every((t) => coSan.has(t) || CHU_NOI_GOP.has(t))) continue;
+    ra.push({ question: c.khoa, answer: moi });
+  }
+  return ra;
+}
+/** Mảnh kiến thức AI chỉ nói lại mẩu đã được GỘP vào một ô (FR-226) — "số 45" khi địa chỉ vừa thành "45 Ngô Y Linh". */
+export function laTrongCapNhat(kt: string, cn: Array<{ answer: string }>): boolean {
+  if (!cn.length) return false;
+  const dem = new Set(["so", "nha", "a", "em", "nhe", "anh", "chi", "la", "co", "nua", "them", "luon", "roi", "thi"]);
+  const t = tachGop(kt).filter((x) => !dem.has(x));
+  return t.length > 0 && cn.some((c) => { const v = new Set(tachGop(c.answer)); return t.every((x) => v.has(x)); });
 }
 
 /** Ngang / dài / nở hậu (m) trong đề xuất đạt của MỘT căn, qua kiểm khoảng 1–200 m. */

@@ -22,15 +22,26 @@ const TraLoiCau = z.object({
   gia_tri: z.string().nullable().describe("Câu trả lời VIẾT GỌN, ĐỦ Ý, có dấu, bỏ từ đệm, đúng ý khách, không thêm điều khách không nói. co_tra_loi = false thì null."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN từ tin chứa câu trả lời. co_tra_loi = false thì null."),
 });
+// FR-226 (25/09/2026, chủ dự án: "khách trả lời nhỏ giọt về địa chỉ hoặc các trường khác thì để AI gộp lại hoặc thay thế
+// hoặc sửa"): AI thấy giá trị ĐANG GHI của vài ô chữ, khách nói thêm / sửa một phần → trả TOÀN BỘ giá trị mới. Code kiểm
+// mọi chữ và số của giá trị mới đều có trong giá trị cũ hoặc trong tin (`kiemCapNhat`) — không thêm được điều khách không nói.
+export const KHOA_GOP = ["vi_tri", "ket_cau", "phap_ly", "do_rong_hem", "noi_that"] as const;
+const CapNhat = z.object({
+  khoa: z.enum(KHOA_GOP),
+  gia_tri_moi: z.string().describe("TOÀN BỘ giá trị mới của ô sau khi gộp phần khách vừa nói vào giá trị đang ghi (hoặc sửa phần khách sửa)."),
+  cach: z.enum(["gop", "thay"]).describe("gop = thêm chi tiết vào giá trị đang ghi; thay = khách sửa / thay giá trị đang ghi."),
+});
 const DeXuatRao = z.object({
   so_can: z.number().int().describe("Số căn / lô KHÁC NHAU chủ nhà rao trong tin này. Không rao căn nào (chỉ bổ sung, trả lời) thì 0."),
   truong: z.array(TruongBoc),
   // 17/09/2026 (chủ dự án): "AI có thể thêm trường kiến thức… các trường khách nói bổ sung sẽ ghi vào mô tả".
   kien_thuc: z.array(z.string()).describe("Ý KHÁC chủ nhà nói về căn nhà mà không thuộc khoá nào ở trên (gần chợ, khu an ninh, mới sơn sửa, có gác…): mỗi ý một cụm ngắn COPY NGUYÊN VĂN từ tin (≤ 12 chữ). Không có thì []."),
   tra_loi: TraLoiCau,
+  cap_nhat: z.array(CapNhat).describe("Chỉ khi tin nói thêm / sửa MỘT PHẦN của thông tin ĐANG GHI (danh sách gửi kèm). Không có thì []."),
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish() });
+export type CapNhatLLM = z.infer<typeof CapNhat>;
 export type TraLoiCauLLM = z.infer<typeof TraLoiCau>;
 export type DeXuatRaoLLM = z.infer<typeof DeXuatRaoDoc>;
 const FORMAT_RAO = zodOutputFormat(DeXuatRao);
@@ -69,6 +80,12 @@ TRẢ LỜI CÂU ĐANG HỎI ("tra_loi") — đọc NGUYÊN tin theo NGHĨA, nh�
 - Tin trả lời câu KHÁC, hỏi ngược, hẹn trả lời sau, nói chung chung không có câu trả lời → co_tra_loi = false, gia_tri = null, trich_dan = null. Không có câu đang hỏi → cũng false.
 - gia_tri không thêm điều khách không nói; MỌI con số trong gia_tri phải có trong tin (không đổi "trệt 2 lầu" thành "3 tầng", không đổi đơn vị tiền).
 
+GỘP / SỬA THÔNG TIN ĐANG GHI ("cap_nhat") — khách hay trả lời nhỏ giọt, mỗi lượt một mẩu:
+- Có danh sách "Thông tin đang ghi" gửi kèm, và tin nói thêm chi tiết cho một ô trong đó → cap_nhat: khoa, gia_tri_moi = TOÀN BỘ giá trị sau khi gộp (giữ phần cũ đúng, thêm phần mới), cach "gop". Ví dụ đang ghi vi_tri "Ngô Y Linh", khách "số 45 nha" → "45 Ngô Y Linh"; đang ghi ket_cau "trệt + 3 lầu", khách "có sân thượng nữa" → "trệt + 3 lầu + sân thượng".
+- Tin SỬA một phần ("à nhầm, hẻm 45 chứ không phải 54", "không có sân thượng đâu") → gia_tri_moi là giá trị đã sửa, cach "thay".
+- vi_tri chỉ gồm số nhà / hẻm / tên đường / dự án — KHÔNG ghép phường, quận vào (có ô riêng).
+- Mọi chữ, mọi con số trong gia_tri_moi phải có trong giá trị đang ghi hoặc trong tin (được thêm dấu cho tên riêng). Tin không đụng tới ô nào đang ghi → cap_nhat = []. Không đưa ô mà giá trị mới y hệt giá trị cũ.
+
 VÍ DỤ MẪU (đáp án đúng — chỉ học CÁCH bóc, giá trị phải lấy từ tin của khách, không lấy từ ví dụ):
 
 ` + viDuThanhChu();
@@ -90,15 +107,18 @@ export async function bocRaoBangModel(
   text: string,
   cauDangHoi: string | null = null,
   cauHoiChu: string | null = null,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; usage: unknown }> {
+  /** FR-226: giá trị ĐANG GHI của các ô chữ gộp được (`KHOA_GOP`) — chỉ ô có giá trị. */
+  dangGhi: Partial<Record<typeof KHOA_GOP[number], string>> | null = null,
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; usage: unknown }> {
+  const dg = Object.entries(dangGhi ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `${k}: "${String(v).slice(0, 160)}"`);
   const r = await ai.messages.parse({
     model,
-    max_tokens: 1100,
+    max_tokens: 1300,
     output_config: { effort: "low", format: FORMAT_RAO },
     system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
     messages: [{
       role: "user",
-      content: `${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${text.slice(0, 1200)}"`,
+      content: `${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${text.slice(0, 1200)}"`,
     }],
   });
   const ket = DeXuatRaoDoc.safeParse(r.parsed_output);
@@ -107,6 +127,7 @@ export async function bocRaoBangModel(
     truong: ket.success ? ket.data.truong.map((t) => ({ ...t })) : [],
     kienThuc: ket.success ? ket.data.kien_thuc.filter((k) => typeof k === "string") : [],
     traLoi: ket.success ? ket.data.tra_loi ?? null : null,
+    capNhat: ket.success ? ket.data.cap_nhat ?? [] : [],
     usage: r.usage,
   };
 }

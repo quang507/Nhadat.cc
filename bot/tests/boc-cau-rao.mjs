@@ -4,7 +4,7 @@
 // Phần SQL của cùng lượt bắn (fact "cách mặt tiền" vào cột, "p5" dính tên đường, xe hơi
 // trong nhà) ở migration 20260914b.
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
-import { bocViTriRao, catDapAn, laBoSungRac, laBoSungTrung, namXayTuongDoi, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { bocViTriRao, catDapAn, laBoSungRac, laBoSungTrung, namXayTuongDoi, soNhaDau, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -249,6 +249,11 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   ok("FR225 'hàng xóm mới xây năm 2019 …' KHÔNG thành hiện trạng", !nhanDienNhieuFact("hàng xóm mới xây năm 2019 cao hơn nhà em").some((x) => x.question === "hien_trang"), q("hàng xóm mới xây năm 2019 cao hơn nhà em"));
   for (const [cau, c, mong] of ca) ok(`FR225 TRUNG '${cau}' ${JSON.stringify(c)} → ${mong ? "trùng" : "giữ"}`, laBoSungTrung(cau, c) === mong);
 }
+
+// FR-226 b (25/09/2026): số nhà nhỏ giọt "số 45 nha" ghép vào địa chỉ đang có; số trần không có chữ "số" thì không.
+ok("FR226 soNhaDau 'số 45 nha' → 45; '137/28 nhé em' → 137/28; '45' trần / '4 tỷ' → null",
+  soNhaDau("số 45 nha")?.soNha === "45" && soNhaDau("137/28 nhé em")?.soNha === "137/28" && soNhaDau("45") === null && soNhaDau("4 tỷ") === null,
+  JSON.stringify([soNhaDau("số 45 nha"), soNhaDau("137/28 nhé em"), soNhaDau("45"), soNhaDau("4 tỷ")]));
 
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

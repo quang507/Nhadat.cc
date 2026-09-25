@@ -580,8 +580,9 @@ export function soNhaDau(text: string): { soNha: string; conLai: string } | null
   const manh = (text ?? "").split(/[,;\n]/);
   const dau = (manh[0] ?? "").replace(TIEU_TU_DAU, "")
     .replace(/(?:\s+(?:nhé|nha|nhe|nghen|em|anh|chị|ạ|ơi|đó|nè|á|luôn|thôi))+\s*$/iu, "").trim();
-  const m = /^(?:(?:số nhà|so nha|số|so|nhà|nha)\s+)?(\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)+)$/iu.exec(dau);
-  return m ? { soNha: m[1], conLai: manh.slice(1).join(",").trim() } : null;
+  // 25/09/2026 (FR-226 b, chủ dự án: khách trả lời nhỏ giọt): "số 45 nha" — số trần có chữ "số" đứng trước cũng là số nhà.
+  const m = /^(?:(?:số nhà|so nha|nhà số|nha so|số|so)\s+(\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)*)|(?:(?:số nhà|so nha|số|so|nhà|nha)\s+)?(\d{1,5}[a-z]?(?:\/\d{1,5}[a-z]?)+))$/iu.exec(dau);
+  return m ? { soNha: m[1] ?? m[2], conLai: manh.slice(1).join(",").trim() } : null;
 }
 
 /**
