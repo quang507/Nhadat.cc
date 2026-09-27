@@ -3436,7 +3436,8 @@ fresh(seedKho);
     globalThis.__model.create = () => "Em là trợ lý AI bên AI Ơi Nhà Đất, việc gì cần người thật thì có anh chị phụ trách khu vực theo sát chị ạ. Sổ hồng nhà mình riêng chưa chị?";
     r = await send({ external_user_id: "z-ccrb", text: "mà em là người hay máy vậy?" });
     check("GVA-03 hỏi 'người hay máy' → nói thật 'trợ lý AI' đúng MỘT lần (model chép lại câu tiền định bị bỏ), câu hỏi sổ vẫn còn",
-      (rep().match(/trợ lý AI/g) ?? []).length === 1 && /Sổ hồng nhà mình riêng chưa/.test(rep()),
+      // 27/09 (FR-232): model rút câu sổ còn một vế → thay bằng câu mẫu gộp (sổ + đứng tên + thế chấp).
+      (rep().match(/trợ lý AI/g) ?? []).length === 1 && /Sổ hồng nhà mình.*đứng tên.*thế chấp/.test(rep()),
       JSON.stringify(r.body.replies));
     globalThis.__model.create = undefined;
   }
@@ -3741,7 +3742,8 @@ fresh(seedKho);
     for (const [q, a] of facts) d.insert("listing_facts", { listing_id: l.id, question: q, answer: a, source: "seller_chat" });
     d.insert("info_requests", { listing_id: l.id, question: "phap_ly", status: "pending" });
   });
-  rnSeed("z-rn1", "BDS-Q5-0931");
+  // 27/09 (FR-232): tin BÁN không rẽ nhánh hoàn công trước bản nháp — nhánh này đo trên tin chưa rõ bán / thuê.
+  rnSeed("z-rn1", "BDS-Q5-0931", { deal: null });
   r = await send({ external_user_id: "z-rn1", text: "sổ hồng riêng em" });
   {
     const l = db().t.listings.find((x) => x.code === "BDS-Q5-0931");
@@ -3765,28 +3767,72 @@ fresh(seedKho);
       pend("phuong", l.id) && !pend("duyet_tin", l.id) && !r.body.replies.some((x) => /^📋/.test(x)),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
-  // FR-229 (25/09/2026, chủ dự án: nhóm "Pháp lý (đây là phần quan trọng nhất)", chọn "Pháp lý hỏi trước nháp"): sau câu sổ
-  // → ai đứng tên (nhiều người → các bên đồng ý bán chưa) → thế chấp → quy hoạch → tranh chấp → khớp sổ → bản nháp.
+  // FR-232 (27/09/2026, chủ dự án sau test Zalo: "Tao thấy hỏi hơi nhiều" → "Cả 3"): tin BÁN hỏi pháp lý MỘT câu trước bản
+  // nháp (sổ + ai đứng tên + cầm tay / thế chấp, câu trả lời tách từng ô); quy hoạch / tranh chấp / khớp sổ hỏi bù sau khi
+  // lên tin, "không có gì hết" trả lời cả ba.
+  const PL_TRUOC = ["nguoi_dung_ten", "the_chap", "quy_hoach", "tranh_chap", "dien_tich_khop_so", "hoan_cong"];
   rnSeed("z-pl1", "BDS-Q5-0951");
   {
     const l = db().t.listings.find((x) => x.code === "BDS-Q5-0951");
     const treo = () => db().t.info_requests.filter((q) => q.listing_id === l.id && q.status === "pending").map((q) => q.question);
-    const hoi = () => createCalls().at(-1)?.params?.messages?.[0]?.content ?? "";
-    r = await send({ external_user_id: "z-pl1", text: "sổ hồng riêng em" });
-    r = await send({ external_user_id: "z-pl1", text: "rồi em" }); // hoàn công (câu nhánh FR-223)
-    check("PL229-E1 xong câu sổ + hoàn công → câu kế là 'sổ đứng tên ai' (không phải bản nháp / ảnh)",
-      treo().join() === "nguoi_dung_ten" && /đứng tên/.test(hoi()) && !r.body.replies.some((x) => /Em đăng tin như vầy/.test(x)),
-      JSON.stringify({ treo: treo(), rep: r.body.replies }));
-    r = await send({ external_user_id: "z-pl1", text: "hai vợ chồng anh" });
-    check("PL229-E2 'hai vợ chồng anh' → ghi người đứng tên, câu kế là các bên đồng ý bán chưa",
-      db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "nguoi_dung_ten" && /vợ chồng/.test(f.answer)) && treo().join() === "dong_y_ban",
-      JSON.stringify({ treo: treo(), rep: r.body.replies }));
-    const daHoi = [];
-    for (const t of ["đồng ý hết rồi", "cầm tay", "không dính", "không"]) { daHoi.push(treo().join()); r = await send({ external_user_id: "z-pl1", text: t }); }
-    check("PL229-E3 thứ tự: đồng ý bán → thế chấp → quy hoạch → tranh chấp; đã nói hoàn công nên KHÔNG hỏi khớp sổ; rồi bản nháp",
-      daHoi.join() === "dong_y_ban,the_chap,quy_hoach,tranh_chap" && treo().includes("duyet_tin") && r.body.replies.some((x) => /Em đăng tin như vầy/.test(x)) &&
-        !db().t.info_requests.some((q) => q.listing_id === l.id && q.question === "dien_tich_khop_so"),
-      JSON.stringify({ daHoi, treo: treo(), rep: r.body.replies }));
+    const fL = (q) => db().t.listing_facts.filter((f) => f.listing_id === l.id && f.question === q).map((f) => f.answer);
+    r = await send({ external_user_id: "z-pl1", text: "sổ hồng riêng, anh đứng tên, sổ cầm tay em" });
+    check("PL232-E1 một câu 'sổ hồng riêng, anh đứng tên, sổ cầm tay' → ghi sổ + đứng tên + thế chấp; không hỏi thêm câu pháp lý nào trước bản nháp",
+      fL("phap_ly").length && fL("nguoi_dung_ten").some((a) => /đứng tên/.test(a)) && fL("the_chap").some((a) => /cầm tay/.test(a)) &&
+        !treo().some((q) => PL_TRUOC.includes(q)),
+      JSON.stringify({ pl: fL("phap_ly"), dt: fL("nguoi_dung_ten"), tc: fL("the_chap"), treo: treo(), rep: r.body.replies }));
+  }
+  // Cùng câu, chế độ `chinh` (production): AI đọc câu sổ, im về đứng tên / thế chấp → luật vẫn ghi kèm hai ô đó.
+  rnSeed("z-pl1c", "BDS-Q5-0956");
+  {
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p)
+      ? { so_can: 0, kien_thuc: [], truong: [], tra_loi: { co_tra_loi: true, gia_tri: "sổ hồng riêng", trich_dan: "sổ hồng riêng" } } : OUT();
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0956");
+    r = await send({ external_user_id: "z-pl1c", text: "sổ hồng riêng, anh đứng tên, sổ cầm tay em" });
+    const fL = (q) => db().t.listing_facts.filter((f) => f.listing_id === l.id && f.question === q).map((f) => f.answer);
+    check("PL232-E1c (chinh) AI đọc câu sổ, im về hai ý kia → vẫn ghi đứng tên + thế chấp, sổ ghi 'sổ hồng riêng'",
+      fL("phap_ly").includes("sổ hồng riêng") && fL("nguoi_dung_ten").length === 1 && fL("the_chap").length === 1,
+      JSON.stringify({ pl: fL("phap_ly"), dt: fL("nguoi_dung_ten"), tc: fL("the_chap"), rep: r.body.replies }));
+    globalThis.__cauHinh = cuCH;
+    globalThis.__model.parse = undefined;
+  }
+  rnSeed("z-pl3", "BDS-Q5-0953");
+  r = await send({ external_user_id: "z-pl3", text: "sổ hồng riêng em" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0953");
+    check("PL232-E2 chỉ nói 'sổ hồng riêng' → KHÔNG hỏi đứng tên / thế chấp / quy hoạch / hoàn công trước bản nháp (hỏi bù sau khi lên tin)",
+      !db().t.info_requests.some((q) => q.listing_id === l.id && PL_TRUOC.includes(q.question)),
+      JSON.stringify({ ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
+  }
+  // Bot hỏi câu sổ cho tin bán → câu gộp; model rút còn một vế thì câu mẫu thay vào (`giuVeCauMau`).
+  rnSeed("z-pl4", "BDS-Q5-0954", { price_raw: null, price_vnd: null }, [["gap", "không gấp"]]);
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0954");
+    db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
+    db().insert("info_requests", { listing_id: l.id, question: "gia", status: "pending" });
+    globalThis.__model.create = () => "Dạ 9 tỷ em ghi rồi ạ. Sổ nhà mình riêng hay chung anh?";
+    r = await send({ external_user_id: "z-pl4", text: "9 tỷ em" });
+    globalThis.__model.create = undefined;
+    const cau = r.body.replies.join("\n");
+    check("PL232-E3 câu sổ của tin bán hỏi gộp: sổ riêng/chung + ai đứng tên + cầm tay/thế chấp (model rút một vế → câu mẫu)",
+      db().t.info_requests.some((q) => q.listing_id === l.id && q.status === "pending" && q.question === "phap_ly") &&
+        /sổ riêng hay sổ chung/.test(cau) && /đứng tên/.test(cau) && /thế chấp/.test(cau),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
+  // Sau khi lên tin: hỏi bù gom ba câu (ask-seller mở ba câu treo), khách đáp "không có gì hết" → ghi cả ba, đóng cả ba.
+  rnSeed("z-pl5", "BDS-Q5-0955", { status: "dang_ban" }, [["phap_ly", "sổ hồng riêng"]]);
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0955");
+    db().t.info_requests.forEach((q) => { if (q.listing_id === l.id) q.status = "expired"; });
+    for (const q of ["quy_hoach", "tranh_chap", "dien_tich_khop_so"]) db().insert("info_requests", { listing_id: l.id, question: q, status: "pending" });
+    r = await send({ external_user_id: "z-pl5", text: "không có gì hết em" });
+    const fL = (q) => db().t.listing_facts.filter((f) => f.listing_id === l.id && f.question === q);
+    check("PL232-E4 hỏi bù gộp quy hoạch / tranh chấp / khớp sổ, 'không có gì hết em' → ghi cả ba ô, không còn câu nào treo",
+      ["quy_hoach", "tranh_chap", "dien_tich_khop_so"].every((q) => fL(q).length === 1) &&
+        !db().t.info_requests.some((q) => q.listing_id === l.id && q.status === "pending" && ["quy_hoach", "tranh_chap", "dien_tich_khop_so"].includes(q.question)),
+      JSON.stringify({ f: ["quy_hoach", "tranh_chap", "dien_tich_khop_so"].map((q) => fL(q).map((x) => x.answer)), ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
   }
   rnSeed("z-pl2", "BDS-Q5-0952", { deal: "cho_thue" });
   r = await send({ external_user_id: "z-pl2", text: "sổ hồng riêng em" });

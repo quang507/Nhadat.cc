@@ -318,6 +318,12 @@ export const CAU_HOI_MAU: Record<string, string> = {
   "phap_ly@chung_cu": "Căn hộ đã ra sổ hồng chưa hay còn hợp đồng mua bán {ac}?",
   "phap_ly@dat": "Đất mình sổ riêng chính chủ hay đất dự án chờ sổ {ac}?",
   "phap_ly@biet_thu": "Biệt thự mình đã có sổ hồng riêng chưa {ac}?",
+  // 27/09/2026 (chủ dự án: "hỏi hơi nhiều", chọn gộp + dời): tin BÁN hỏi pháp lý MỘT câu trước bản nháp — sổ + ai đứng tên +
+  // cầm tay / thế chấp (câu trả lời tách thành từng ô). Quy hoạch / tranh chấp / khớp sổ hỏi bù SAU khi lên tin (`sau_dang`).
+  "phap_ly@ban": "Sổ hồng nhà mình là sổ riêng hay sổ chung, {ac} đứng tên hay người nhà đứng tên, sổ đang cầm tay hay thế chấp ạ?",
+  "phap_ly@ban@chung_cu": "Căn hộ đã ra sổ hồng chưa hay còn hợp đồng mua bán, {ac} đứng tên hay người nhà đứng tên, đang cầm tay hay thế chấp ạ?",
+  "phap_ly@ban@dat": "Đất mình sổ riêng chính chủ hay đất dự án chờ sổ, {ac} đứng tên hay người nhà đứng tên, sổ đang cầm tay hay thế chấp ạ?",
+  "phap_ly@ban@biet_thu": "Biệt thự mình đã có sổ hồng riêng chưa, {ac} đứng tên hay người nhà đứng tên, sổ đang cầm tay hay thế chấp ạ?",
   "noi_that@chung_cu": "Bàn giao nhà trống hay để lại nội thất gì {ac}?",
   ha_tang: "Lô đất có vướng cột điện, hố ga hay đường đâm gì không {ac}?",
   xay_dung: "Đất mình được xây tự do hay phải theo mẫu chủ đầu tư {ac}?",
@@ -357,6 +363,11 @@ export const CAU_HOI_MAU: Record<string, string> = {
   san_vuon: "Sân vườn rộng chừng nào {ac}?",
   huong: "Nhà mình quay hướng nào {ac}?",
   quy_hoach: "Nhà có dính quy hoạch hay lộ giới gì không {ac}?",
+  // 27/09/2026: tin BÁN — câu pháp lý thứ hai, hỏi bù sau khi lên tin; "không" là không cho cả ba (quy hoạch, tranh chấp, xây lố).
+  "quy_hoach@ban": "Nhà có dính quy hoạch, lộ giới, tranh chấp hay xây lố so với sổ gì không {ac}, đã hoàn công chưa?",
+  "quy_hoach@ban@dat": "Lô đất có dính quy hoạch, lộ giới hay tranh chấp gì không {ac}?",
+  "quy_hoach@ban@dat_nong_nghiep": "Đất mình có dính quy hoạch hay tranh chấp gì không {ac}?",
+  "quy_hoach@ban@dat_kinh_doanh": "Đất mình có dính quy hoạch, lộ giới hay tranh chấp gì không {ac}?",
   nam_xay: "Nhà xây năm nào {ac}?",
   // 20260909i — câu hỏi bù SAU khi lên kệ (chat 21/06 lượt 65–67, chat 07/09) và 4 loại mới.
   so_wc: "Nhà mình có mấy WC {ac}?",

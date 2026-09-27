@@ -131,8 +131,11 @@ Deno.serve(async (req) => {
   // không phải mỗi nhịp một câu lắt nhắt. Thứ tự: ảnh/sổ/giá/diện tích/vị trí
   // lên đầu, rồi cơ bản → chuyên môn → sau đăng theo priority.
   const QUAN_TRONG = ["hinh_anh", "phap_ly", "gia", "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "vi_tri", "phuong"];
+  // 27/09/2026 (chủ dự án: "hỏi hơi nhiều"): tin bán dời 5 câu pháp lý FR-229 ra sau khi lên tin — hỏi bù chúng TRƯỚC các câu
+  // sau đăng khác; ba câu quy hoạch / tranh chấp / khớp sổ đứng liền nhau để đi chung một tin (câu pháp lý thứ hai).
+  const PHAP_LY_BU = ["quy_hoach", "tranh_chap", "dien_tich_khop_so", "nguoi_dung_ten", "the_chap"];
   const bac = (f: { fact_key: string; nhom?: string | null }) =>
-    (QUAN_TRONG.includes(f.fact_key) ? 0 : 10) +
+    (QUAN_TRONG.includes(f.fact_key) ? 0 : PHAP_LY_BU.includes(f.fact_key) ? 5 + PHAP_LY_BU.indexOf(f.fact_key) / 100 : 10) +
     (f.nhom === "co_ban" ? 0 : f.nhom === "chuyen_mon" ? 1 : f.nhom === "sau_dang" ? 2 : 3);
   const candidates = (missing ?? [])
     .filter((f) => !pendingKeys.has(f.fact_key) && !daNeKeys.has(f.fact_key))

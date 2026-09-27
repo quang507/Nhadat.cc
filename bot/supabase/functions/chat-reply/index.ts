@@ -65,7 +65,7 @@ import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
-  batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laNgungRao, laRaoLai, NHAN_HOI_LAI, nhanDienFact,
+  batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, laRaoLai, NHAN_HOI_LAI, nhanDienFact,
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
@@ -1122,7 +1122,9 @@ Deno.serve(async (req) => {
       ? cauPhuongNgan(diaChi, ac)
       : cauHoiMauGoc(
         k === "phuong" && laNgoaiDoThi(quan) ? "phuong@huyen" : k === "gap" && deal === "cho_thue" ? "gap@cho_thue"
-          : k === "do_rong_hem" && laSoNhaHem(diaChi) ? "do_rong_hem@so_nha_hem" : k,
+          : k === "do_rong_hem" && laSoNhaHem(diaChi) ? "do_rong_hem@so_nha_hem"
+          // 27/09/2026 (chủ dự án: "hỏi hơi nhiều"): tin bán — câu pháp lý gộp (`phap_ly@ban`, `quy_hoach@ban`).
+          : (k === "phap_ly" || k === "quy_hoach") && deal === "ban" ? `${k}@ban` : k,
         ac, BANG_CAU, loai,
       );
   const LOI_CHAO_DB = dienTen((P.loi_chao ?? LOI_CHAO).trim(), tenBot);
@@ -4442,6 +4444,7 @@ Deno.serve(async (req) => {
       }
       // Câu khớp nhưng còn kèm fact khác ("3 lầu, 4 phòng ngủ" khi hỏi kết cấu;
       // "Đường 12m, hướng Bắc" khi hỏi đường) → ghi luôn, đỡ hỏi lại (09/09 tối).
+      const daGhiKem = new Set<string>();
       if (pendingReq.question !== "duyet_tin" && pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh") {
         for (const f of factKem(dapAn)) {
           // Cùng họ vẫn ghi ("phường Tân Hưng" trả lời địa chỉ thì phường cũng có), chỉ bỏ trùng khoá.
@@ -4454,7 +4457,32 @@ Deno.serve(async (req) => {
             p_source: aiChinh?.ghi.some((g) => g === f) ? NGUON_AI : "seller_chat",
           });
           if (ndErr) await ghiLoi(client, "chat-reply ghi_fact_listing(kem)", ndErr.message);
-          else await chepSangDuAn(f.question, f.answer);
+          else {
+            await chepSangDuAn(f.question, f.answer);
+            daGhiKem.add(f.question);
+          }
+        }
+      }
+      // 27/09/2026 (chủ dự án: "hỏi hơi nhiều"): câu pháp lý gộp — "sổ riêng, anh đứng tên, cầm tay" ghi luôn đứng tên + thế
+      // chấp; hỏi bù sau khi lên tin gom quy hoạch / tranh chấp / khớp sổ trong MỘT tin mà "không có gì hết" trả lời cả ba.
+      // Câu treo khác của CĂN NÀY đã có đáp án trong tin này thì đóng, kẻo bot hỏi lại thứ khách vừa nói.
+      if (!boQuaCauTreo) {
+        const BA_PHAP_LY = ["quy_hoach", "tranh_chap", "dien_tich_khop_so"];
+        const khongGiHet = BA_PHAP_LY.includes(pendingReq.question) && laKhongGiHet(dapAn);
+        for (const q of ds) {
+          if (q.id === pendingReq.id || q.listing_id !== pendingReq.listing_id) continue;
+          const theoKhong = khongGiHet && BA_PHAP_LY.includes(q.question) && !daGhiKem.has(q.question);
+          if (!daGhiKem.has(q.question) && !theoKhong) continue;
+          if (theoKhong) {
+            const { error: kgErr } = await client.rpc("ghi_fact_listing", {
+              p_listing_id: pendingReq.listing_id, p_question: q.question, p_answer: dapAn, p_source: "seller_chat",
+            });
+            if (kgErr) { await ghiLoi(client, "chat-reply ghi_fact_listing(khong gi het)", kgErr.message); continue; }
+          }
+          const { error: dErr } = await client.from("info_requests").update({
+            status: "answered", answer: dapAn, answered_at: new Date().toISOString(),
+          }).eq("id", q.id);
+          if (dErr) await ghiLoi(client, "chat-reply dong cau treo cung tin", dErr.message);
         }
       }
       if (!boQuaCauTreo) {
