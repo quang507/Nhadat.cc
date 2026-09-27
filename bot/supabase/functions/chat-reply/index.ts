@@ -4110,6 +4110,7 @@ Deno.serve(async (req) => {
       // ghi từ lúc mở câu) hoặc chủ "ok/được/đăng đi" mà tin đã đủ điểm → THÔI
       // câu đó (expired), đi tiếp câu kế; vòng hỏi bù sẽ hỏi lại sau.
       let boQuaCauTreo = false;
+      let ghiChuLech = false; // FR-233: câu lệch đã ghi chú, không hỏi lại — lời dặn model ở lượt đi tiếp
       // "ok / được / đăng đi" khi đang treo một câu thông số → chủ muốn ĐĂNG.
       // "ừ / dạ / vâng" trơ trọi chỉ là ừ (ack), KHÔNG phải muốn đăng (lần 3: "ừ"
       // làm hết hạn câu hẻm rồi đòi đăng tin 51 điểm).
@@ -4227,6 +4228,7 @@ Deno.serve(async (req) => {
         // 22/09/2026 (bắn lại kịch bản D, chế độ `chinh`): đang hỏi GIÁ, chủ nhà nói "đang cho thuê 30 triệu/tháng, đang
         // thế chấp, nở hậu 4m5" — AI không trả khoá nào → `chuyenSang` trống → cả câu rơi về bo_sung dù luật đọc được
         // ba fact có bằng chứng rõ (`KHOA_LUAT_DO_KHI_AI_IM` trong `factKem`). Lệch mà AI im thì vẫn hỏi luật.
+        let daGhiChuLech = false; // FR-233: câu lệch không vào được ô nào nhưng đã ghi chú nguyên văn / kiến thức AI
         const kemLech = !kq.chuyenSang && aiChinh && kq.loai === "lech"
           ? factKem(dapAn).filter((f) => f.question !== pendingReq.question && f.question !== "bo_sung")
           : [];
@@ -4278,11 +4280,25 @@ Deno.serve(async (req) => {
               p_answer: ghiBoSung, p_source: "seller_chat",
             });
             if (bsErr) await ghiLoi(client, "chat-reply ghi_fact_listing(bo sung)", bsErr.message);
-          }
+            else daGhiChuLech = true;
+          } else if (aiChinh && aiChinh.kienThuc.length) daGhiChuLech = true;
         }
         if (humanActive) {
           return await traLoiSeller([], { reask: pendingReq.question, loai_cau: kq.loai });
         }
+        // FR-233 (chủ dự án 27/09/2026: "mấy cái mày ko ghi được vào db thì để AI nó xét qua … chứ mày cứ hỏi nhiều quá
+        // và ko được tự nhiên"): câu lệch KHÔNG đọc ra ô nào mà đã ghi chú nguyên văn (bo_sung — vào vector của tin, AI đọc
+        // lại khi cần) → KHÔNG hỏi lại câu đó; thôi câu treo, đi tiếp câu kế như vừa trả lời xong. Hỏi ngược, chỉ nói
+        // quận / số nhà, lời sửa… vẫn đường cũ.
+        const khongHoiLai = daGhiChuLech && kq.loai === "lech" && !kq.chuyenSang && !hoiNguoc &&
+          pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
+          !(pendingReq.question === "phuong" && laChiQuan(dapAn)) && !(!!soNhaGhep && !dapAn.trim());
+        if (khongHoiLai) {
+          const { error: klErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
+          if (klErr) await ghiLoi(client, "chat-reply thoi cau lech (ghi chu)", klErr.message);
+          boQuaCauTreo = true;
+          ghiChuLech = true;
+        } else {
         // 13/09/2026 (bắn thật): đất Củ Chi câu đầu hỏi xã, câu hỏi LẠI vẫn "phường
         // nào" — nhãn ở đây đọc thẳng bảng chung, không biết tin ở huyện.
         const xaThayPhuong = pendingReq.question === "phuong" && laNgoaiDoThi(pendingReq.listings?.district);
@@ -4365,6 +4381,7 @@ Deno.serve(async (req) => {
             : "") + (chiQuan && goiYSauQuan ? goiYSauQuan : `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`);
         }
         return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), hoiLai], { reask: pendingReq.question, loai_cau: kq.loai, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) });
+        }
       }
 
       // Câu hỏi treo bị bỏ qua (né 2 lần / chủ gật): KHÔNG ghi câu này vào ô đang
@@ -4445,7 +4462,9 @@ Deno.serve(async (req) => {
       // Câu khớp nhưng còn kèm fact khác ("3 lầu, 4 phòng ngủ" khi hỏi kết cấu;
       // "Đường 12m, hướng Bắc" khi hỏi đường) → ghi luôn, đỡ hỏi lại (09/09 tối).
       const daGhiKem = new Set<string>();
-      if (pendingReq.question !== "duyet_tin" && pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh") {
+      // FR-233: câu lệch đã ghi chú (không có fact kèm — có thì đã đi nhánh ghi fact ở trên) → không ghi kèm gì nữa; nhất là
+      // KHÔNG ghi luật đọc khoá đang hỏi mà AI đã bác (e2e AIBOC-09: "50 triệu" vào ô giá).
+      if (!ghiChuLech && pendingReq.question !== "duyet_tin" && pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh") {
         for (const f of factKem(dapAn)) {
           // Cùng họ vẫn ghi ("phường Tân Hưng" trả lời địa chỉ thì phường cũng có), chỉ bỏ trùng khoá.
           if (!boQuaCauTreo && f.question === pendingReq.question) continue;
@@ -4667,6 +4686,9 @@ Deno.serve(async (req) => {
       // Bong bóng ghi nhận đã gửi trước tin này → đừng cảm ơn/ghi nhận lần nữa.
       const daAck = ackSua
         ? `Bong bóng NGAY TRƯỚC tin này đã ghi nhận số liệu rồi ("${ackSua.slice(0, 60)}…") — KHÔNG cảm ơn, KHÔNG ghi nhận lại, vào thẳng câu hỏi. `
+        : ghiChuLech
+        ? `Câu chủ nhà vừa nhắn chưa khớp câu em hỏi — em đã ghi chú nguyên văn vào tin, KHÔNG hỏi lại câu cũ, KHÔNG nói đã ghi ` +
+          `"${FACT_LABELS[pendingReq.question] ?? pendingReq.question}", KHÔNG bảo chủ nhà hiểu nhầm: ghi nhận nhẹ một vế rồi hỏi tiếp. `
         : "";
       const prompt = nextKey
         ? `${boiCanh}${daAck}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n${hoiNguocPrompt}` +
