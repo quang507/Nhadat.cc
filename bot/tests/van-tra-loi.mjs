@@ -9,6 +9,8 @@ import { boHuaDaDang, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supaba
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
+import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { laGatHoiVai } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
@@ -529,7 +531,7 @@ ok("boCanBia: câu nêu mã tin thật '#BDS-Q5-0006 … 8 tỷ' → giữ", boC
 }
 
 // ── FR-218 (23/09/2026): lời chào không kèm "anh Thu phụ trách"; hiểu nhầm ý khách thì xin lỗi ──
-ok("LOI_CHAO không còn câu 'phụ trách khu vực' / 'anh Thu'", !/phụ trách|anh Thu/.test(LOI_CHAO) && /mua, thuê hay/.test(LOI_CHAO), LOI_CHAO);
+ok("LOI_CHAO không còn câu 'phụ trách khu vực' / 'anh Thu'; 27/09 chỉ nhắc bán: 'cần giao bán bất động sản đúng không ạ'", !/phụ trách|anh Thu/.test(LOI_CHAO) && /cần giao bán bất động sản đúng không ạ\?$/.test(LOI_CHAO) && /\{ten\}/.test(LOI_CHAO), LOI_CHAO);
 for (const [cau, mong] of [
   ["không phải vậy em, ý anh là mua để ở", true],
   ["em hiểu nhầm rồi, anh cần thuê chứ không mua", true],
@@ -804,6 +806,40 @@ for (const [cau, laTiemNang] of [
   ok("SOBIA-04 'hẻm 3m' khi khách nói 'hẻm 3m5' → bịa", laSoDoBia("hẻm 3m", "hẻm 3m5"));
   const r = boMenhDeKhenSai(boKhenKhongCanCu(["Anh nói nở hậu 4.5 nhỉ, em ghi rồi. Còn giá bán anh định rao là bao nhiêu?"], bc), bc);
   ok("SOBIA-05 câu bịa bị bỏ, câu hỏi giá giữ", r.length === 1 && !/4\.5/.test(r[0]) && /giá bán/.test(r[0]), JSON.stringify(r));
+}
+
+// ── 27/09/2026: câu chào mới "anh chị cần giao bán bất động sản đúng không ạ?" — gật trơn là người bán ──
+{
+  for (const t of ["đúng rồi", "Dạ", "ừ em", "vâng đúng rồi anh bán", "có ạ", "ok em", "phải", "đúng rồi cô"]) ok(`CHAO-GAT '${t}' là gật`, laGatHoiVai(t));
+  for (const t of ["đúng rồi anh muốn mua", "không, anh muốn mua", "chào em", "dạ em chào anh", "không phải", "cô", "chú nha", "dạ cô", "ở quận 5"]) ok(`CHAO-GAT '${t}' KHÔNG là gật`, !laGatHoiVai(t));
+  const c = boChaoLai("Dạ em chào anh! Anh muốn rao bán hay cho thuê ạ? Anh cho em xin địa chỉ (đường/phường), diện tích và giá mong muốn nha.");
+  ok("CHAO-LAI bỏ lời chào lần hai + câu 'bán hay cho thuê', giữ câu xin địa chỉ, mở bằng 'Dạ'", /^Dạ, anh cho em xin địa chỉ/.test(c) && !/chào|bán hay cho thuê/.test(c), c);
+  ok("CHAO-LAI tin không chào giữ nguyên", boChaoLai("Dạ anh nhắn giúp em địa chỉ nha.") === "Dạ anh nhắn giúp em địa chỉ nha.");
+}
+
+// ── 27/09/2026: "Em biết Botanic không" → model bịa "Botanic ở Quận 1, dự án Phú Mỹ Hưng" ──
+{
+  const ctx = "Anh bán nhà. Căn chung cư ở Botanic. Em biết Botanic không";
+  const r = boViTriBia(["Em biết Botanic ở Quận 1, dự án Phú Mỹ Hưng, khách gia đình rất ưa nhà ở đó. Căn anh ở phường mấy vậy?"], ctx);
+  ok("VITRI-BIA-01 bỏ câu nêu quận / khu chủ nhà chưa nói, giữ câu hỏi", r.replies[0] === "Căn anh ở phường mấy vậy?" && r.bo.includes("quận 1") && r.bo.includes("phu my hung"), JSON.stringify(r));
+  const r2 = boViTriBia(["Dạ Botanic ở Phú Nhuận thì khách đi làm trung tâm tiện lắm. Căn anh phường mấy ạ?"], `${ctx} À không. Botanic ở Phú Nhuận`);
+  ok("VITRI-BIA-02 quận chủ nhà đã nói → giữ nguyên", !r2.bo.length && /Phú Nhuận/.test(r2.replies[0]), JSON.stringify(r2));
+  const r3 = boViTriBia(["Nhà Quận 5 khách tìm nhiều lắm anh. Hẻm rộng mấy mét anh?"], "bán nhà hẻm Trần Hưng Đạo quận 5");
+  ok("VITRI-BIA-03 'Quận 5' có trong câu rao → giữ", !r3.bo.length, JSON.stringify(r3));
+  ok("VITRI-BIA-04 câu HỎI nêu quận giữ nguyên", !boViTriBia(["Có phải ở Quận 1 không anh?"], ctx).bo.length);
+}
+
+// ── 25–26/09/2026: câu mẫu hai vế bị rút; câu nhận xét lặp y nguyên lượt trước ──
+{
+  const mau = "Sổ nhà mình đang đứng tên ai anh, có đồng sở hữu như vợ chồng hay anh em thừa kế không?";
+  ok("VEMAU-01 'Sổ nhà mình đứng tên ai anh?' mất vế đồng sở hữu → câu mẫu, giữ phần ghi nhận",
+    giuVeCauMau("Dạ em ghi rồi. Sổ nhà mình đứng tên ai anh?", "nguoi_dung_ten", mau) === `Dạ em ghi rồi. ${mau}`);
+  ok("VEMAU-02 câu model còn vế đồng sở hữu → giữ", giuVeCauMau("Sổ đứng tên ai, có đồng sở hữu không anh?", "nguoi_dung_ten", mau) === "Sổ đứng tên ai, có đồng sở hữu không anh?");
+  ok("VEMAU-03 khoá không có vế bắt buộc → giữ", giuVeCauMau("Nhà có tranh chấp gì không anh?", "tranh_chap", "x") === "Nhà có tranh chấp gì không anh?");
+  ok("LAPLAI-01 'Sổ riêng thì bán nhanh hơn.' lặp lượt trước → bỏ, giữ câu hỏi",
+    boCauLapLai("Sổ riêng thì bán nhanh hơn. Sổ nhà mình đứng tên ai anh?", ["Dạ, sổ riêng thì bán nhanh hơn. Nhà mình đã hoàn công chưa anh?"]) === "Sổ nhà mình đứng tên ai anh?");
+  ok("LAPLAI-02 câu duy nhất thì giữ", boCauLapLai("Sổ riêng thì bán nhanh hơn.", ["Sổ riêng thì bán nhanh hơn."]) === "Sổ riêng thì bán nhanh hơn.");
+  ok("LAPLAI-03 ghi nhận ngắn ('Dạ em ghi nhận.') không bị coi là lặp", boCauLapLai("Dạ em ghi nhận. Sổ cầm tay hay thế chấp?", ["Dạ em ghi nhận. Hoàn công chưa?"]) === "Dạ em ghi nhận. Sổ cầm tay hay thế chấp?");
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

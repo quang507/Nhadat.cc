@@ -1093,3 +1093,72 @@ export function boHuaDaDang(replies: string[]): string[] {
   }
   return ra.length ? ra : replies;
 }
+
+// 27/09/2026 (chủ dự án test Zalo): "Chào em" → bot chào + hỏi vai → "Anh bán" → model "Dạ em chào anh! Anh muốn rao bán
+// hay cho thuê ạ? …" — chào LẦN HAI và hỏi lại điều khách vừa nói. Lệnh model đã dặn; đây là lưới tiền định khi model lờ đi:
+// bỏ lời chào đầu tin (giữ "Dạ") và câu hỏi "bán hay cho thuê".
+const CHAO_DAU = /^\s*(?:dạ\s*,?\s*)?(?:em\s+)?(?:xin\s+)?chào\s+(?:anh|chị|chú|cô|bác|mình|anh chị|ông|bà)(?:\s+ạ)?\s*[!,.]*\s*/i;
+const HOI_BAN_HAY_THUE = /[^.!?]*\b(?:rao\s+)?bán\s+hay\s+(?:là\s+)?cho\s+thuê[^.!?]*\?\s*/gi;
+export function boChaoLai(reply: string): string {
+  let s = reply.replace(CHAO_DAU, "").replace(HOI_BAN_HAY_THUE, "").trim();
+  if (!s) return reply;
+  if (!/^dạ(?=[\s,.!]|$)/i.test(s)) s = `Dạ, ${s.charAt(0).toLowerCase()}${s.slice(1)}`;
+  return s;
+}
+
+// 27/09/2026 (chủ dự án test Zalo): "Em biết Botanic không" → model "Em biết Botanic ở Quận 1, dự án Phú Mỹ Hưng…" — kho dự án
+// không có Botanic, chủ nhà chưa nói quận nào; Botanic ở Phú Nhuận. Câu KHẲNG ĐỊNH (không có "?") nêu một quận / khu mà
+// `nguCanh` (chữ chủ nhà + dữ liệu tin, KHÔNG gồm câu bot cũ) không có thì bỏ. Trả tên đã bỏ để tầng trên biết.
+const KHU_HCM = [
+  "phu nhuan", "binh thanh", "tan binh", "tan phu", "go vap", "thu duc", "binh tan", "nha be", "cu chi", "hoc mon", "can gio",
+  "binh chanh", "phu my hung", "thu thiem", "thao dien", "van phuc", "cityland",
+];
+export function boViTriBia(replies: string[], nguCanh: string): { replies: string[]; bo: string[] } {
+  const nc = boDau(nguCanh ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ");
+  const bo = new Set<string>();
+  const coQuanSo = (n: string) => new RegExp(`\\b(?:quan|q)\\s*0?${Number(n)}\\b`).test(nc);
+  const ra = locCauTrongBongBong(replies, (c) => {
+    if (/\?/.test(c)) return false;
+    const kd = boDau(c).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ");
+    let biaCau = false;
+    for (const m of kd.matchAll(/\b(?:quan|q)\s*(\d{1,2})\b/g)) if (!coQuanSo(m[1])) { bo.add(`quận ${m[1]}`); biaCau = true; }
+    for (const k of KHU_HCM) if (new RegExp(`\\b${k}\\b`).test(kd) && !nc.includes(k)) { bo.add(k); biaCau = true; }
+    return biaCau;
+  });
+  return { replies: bo.size ? ra : replies, bo: [...bo] };
+}
+
+// 25/09/2026 (bắn thật lx-34, FR-229): câu mẫu hai vế "Sổ nhà mình đang đứng tên ai, có đồng sở hữu như vợ chồng hay anh em
+// thừa kế không?" — model rút còn "Sổ nhà mình đứng tên ai anh?", mất vế đồng sở hữu (khách đáp "anh" là không biết có đồng
+// sở hữu không). Câu hỏi của model thiếu VẾ BẮT BUỘC của khoá → thay câu hỏi bằng câu mẫu, giữ phần ghi nhận.
+const VE_BAT_BUOC: Record<string, RegExp> = {
+  nguoi_dung_ten: /\b(dong so huu|dung ten chung|so chung|vo chong|anh em|thua ke)\b/,
+  dien_tich_khop_so: /\bhoan cong\b/,
+};
+export function giuVeCauMau(reply: string, khoa: string | null | undefined, cauMau: string): string {
+  const re = khoa ? VE_BAT_BUOC[khoa] : undefined;
+  const cau = cauHoiCuoi(reply);
+  if (!re || !cauMau || !cau || re.test(boDau(cau))) return reply;
+  const i = reply.lastIndexOf(cau);
+  return `${reply.slice(0, i).trim()} ${cauMau}`.trim();
+}
+
+// 25–26/09/2026 (bắn thật lx-34, test Zalo căn Botanic): "Sổ riêng thì bán nhanh hơn." / "Căn 113m2 là diện tích tốt lắm anh."
+// lặp y nguyên ở hai lượt liền nhau. Câu KHÔNG phải câu hỏi mà trùng ≥ 80% chữ (bỏ tiểu từ) với một câu trong mấy tin
+// gần nhất của bot thì bỏ — còn ít nhất một câu thì mới bỏ.
+export function boCauLapLai(reply: string, botGanDay: Array<string | null | undefined>): string {
+  const DEM = new Set(["da", "a", "nha", "nhe", "em", "anh", "chi", "chu", "co", "bac", "minh", "oi", "la", "thi", "gi", "cung", "voi", "va", "lam", "roi"]);
+  const tuCua = (c: string) => new Set(boDau(c).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t && !DEM.has(t)));
+  const cu = botGanDay.flatMap((m) => tachCau(m ?? "")).map(tuCua).filter((t) => t.size >= 3);
+  const ra = locCauTrongBongBong([reply], (c) => {
+    if (/\?/.test(c)) return false;
+    const tu = tuCua(c);
+    if (tu.size < 3) return false;
+    return cu.some((x) => {
+      let chung = 0;
+      for (const t of tu) if (x.has(t)) chung++;
+      return chung / Math.min(tu.size, x.size) >= 0.8;
+    });
+  })[0]?.trim();
+  return ra ? ra : reply;
+}

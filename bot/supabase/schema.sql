@@ -3809,6 +3809,13 @@ begin
      and public.bo_dau(v_txt) !~ '(khong|ko|chua)\s*(phai\s*)?(la\s*)?(nha\s*)?cap' then
     update listings set property_type = 'nha_cap4' where id = new.listing_id and property_type in ('nha_pho', 'chua_ro');
   end if;
+  -- 20260927a: "căn chung cư ở Botanic", "chung cư mà em", "căn hộ tầng 6" → căn hộ (tin nhà phố chưa có số tầng / chưa rõ).
+  if l.property_type in ('nha_pho', 'chua_ro') and l.floors is null
+     and public.bo_dau(v_txt) ~ '(^\s*|\m(can|la|ban|o|dang|co|toi|minh|anh|chi|em|chu|cua)\s+)(chung cu|can ho|cc mini|chung cu mini)\M'
+     and public.bo_dau(v_txt) !~ '(gan|canh|doi dien|sat|ke|ben|view|nhin ra|cach)\s+(cac\s+)?(chung cu|can ho)'
+     and public.bo_dau(v_txt) !~ '(khong|ko|chua)\s*(phai\s*)?(la\s*)?(chung cu|can ho)' then
+    update listings set property_type = 'chung_cu' where id = new.listing_id and property_type in ('nha_pho', 'chua_ro') and floors is null;
+  end if;
 
   if new.question = 'so_phong_ngu' then
     v_num := nullif(substring(v_txt, '[0-9]+'), '')::numeric;
