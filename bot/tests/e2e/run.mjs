@@ -1000,15 +1000,17 @@ fresh(seedKho);
     fact("phap_ly")?.answer === "sổ hồng riêng rồi em" && !fact("so_phong_ngu") && pend("so_phong_ngu") && r.body.reask === "so_phong_ngu",
     JSON.stringify({ body: r.body, f: db().t.listing_facts }));
   r = await send({ external_user_id: "h-1", text: "nhà nở hậu chút" });
-  check("H4 câu lệch không nhận ra fact nào → ghi nguyên văn vào bo_sung, câu phòng ngủ vẫn treo",
-    fact("bo_sung")?.answer === "nhà nở hậu chút" && pend("so_phong_ngu") && r.body.loai_cau === "lech",
+  // FR-233 (chủ dự án 27/09: "mấy cái mày ko ghi được vào db thì để AI nó xét qua … chứ mày cứ hỏi nhiều quá"): câu lệch
+  // không đọc ra ô nào → ghi nguyên văn, KHÔNG hỏi lại câu phòng ngủ, đi tiếp câu kế.
+  check("H4 câu lệch không nhận ra fact nào → ghi nguyên văn vào bo_sung, KHÔNG hỏi lại câu phòng ngủ (FR-233)",
+    fact("bo_sung")?.answer === "nhà nở hậu chút" && !pend("so_phong_ngu") && r.body.reask !== "so_phong_ngu",
     JSON.stringify({ body: r.body, f: db().t.listing_facts }));
   r = await send({ external_user_id: "h-1", text: "4 phòng ngủ" });
   // FR-186 (09/09 chiều): nhà phố hỏi thêm TIỀM NĂNG (để ở hay kinh doanh ngành gì) trước khi gửi nháp — chuỗi 07/09 của sếp + chat 21/06.
   // 20260916c: tiềm năng dời sang hỏi bù sau đăng — chat KHÔNG hỏi nữa.
   // FR-225 a (25/09/2026, chủ dự án test Zalo: "nở hậu nhiu cộng vào diện tích nhà luôn"): "nhà nở hậu chút" ở H4 chưa có số mét
   // → câu kế là NỞ HẬU (trước đây bỏ qua, đi thẳng câu hẻm); trả lời xong mới tới hẻm.
-  check("H4b trả lời phòng ngủ → không hỏi TIỀM NĂNG trong chat (20260916c: hỏi bù sau đăng); câu kế là NỞ HẬU bao nhiêu mét (FR-225, H4 nói 'nở hậu chút')", r.body.saved_fact === "so_phong_ngu" && !pend("tiem_nang") && pend("no_hau"), JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  check("H4b nói phòng ngủ → ghi ô phòng ngủ; không hỏi TIỀM NĂNG trong chat (20260916c: hỏi bù sau đăng); câu treo là NỞ HẬU bao nhiêu mét (FR-225, H4 nói 'nở hậu chút')", !!fact("so_phong_ngu") && !pend("tiem_nang") && pend("no_hau"), JSON.stringify({ body: r.body, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   r = await send({ external_user_id: "h-1", text: "nở hậu 5m" });
   check("H4c 'nở hậu 5m' → ghi fact nở hậu, câu kế là HẺM (FR-219)", /\b5m\b/.test(fact("no_hau")?.answer ?? "") && !pend("no_hau") && pend("do_rong_hem"), JSON.stringify({ body: r.body, f: fact("no_hau"), ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   // 25/09/2026: số nhà có xuyệt ("105/12 …") → câu hẻm là XÁC NHẬN "trong hẻm đúng không", không hỏi trống.
@@ -2424,8 +2426,10 @@ fresh(seedKho);
     const lech = db().t.listing_facts.filter((f) => f.listing_id === LT.id && ["hien_trang_su_dung", "ket_cau", "nam_xay"].includes(f.question) && f.question !== ca.q && f.answer === ca.cau);
     // Bắn thật lx-22: AI im về diện tích, "5x12" (kích thước chắc) vẫn phải ghi — trước đó bot hỏi lại diện tích.
     if (ca.ma === "TRALOI-05") check("TRALOI-05b AI im về diện tích, '5x12' trong câu vẫn ghi ô diện tích", db().t.listing_facts.some((f) => f.listing_id === LT.id && f.question === "dien_tich" && /5\s*x\s*12/.test(f.answer)), JSON.stringify(db().t.listing_facts.filter((f) => f.listing_id === LT.id).map((f) => [f.question, f.answer])));
-    check(`${ca.ma} hỏi ${ca.q}, khách '${ca.cau}' → ${ca.ghi ? `ghi '${ca.ghi}', câu xong` : "KHÔNG ghi, câu vẫn treo"}; không chuyển nguyên câu sang ô khác`,
-      (ca.ghi ? fT(ca.q).length === 1 && fT(ca.q)[0].answer === ca.ghi && irT("answered") && !irT("pending") : fT(ca.q).length === 0 && irT("pending")) && !lech.length,
+    // FR-233 (27/09): câu không ghi được vào ô đang hỏi → ghi chú nguyên văn, KHÔNG hỏi lại (câu treo thôi, không còn pending).
+    check(`${ca.ma} hỏi ${ca.q}, khách '${ca.cau}' → ${ca.ghi ? `ghi '${ca.ghi}', câu xong` : "KHÔNG ghi vào ô đó, ghi chú nguyên văn, không hỏi lại"}; không chuyển nguyên câu sang ô khác`,
+      (ca.ghi ? fT(ca.q).length === 1 && fT(ca.q)[0].answer === ca.ghi && irT("answered") && !irT("pending")
+        : fT(ca.q).length === 0 && !irT("pending") && fT("bo_sung").some((f) => f.answer === ca.cau) && rT.body.reask !== ca.q) && !lech.length,
       JSON.stringify({ f: fT(ca.q), lech, ir: db().t.info_requests.filter((x) => x.listing_id === LT.id).map((x) => [x.question, x.status]), rep: rT.body.replies }));
     if (i === 0) check("TRALOI-01b AI nhận cả CHỮ câu bot vừa hỏi (không chỉ khoá trần)", /do_rong_hem — "[^"]{10,}"/.test(userMsg), userMsg.slice(0, 200));
   }
@@ -2527,9 +2531,10 @@ fresh(seedKho);
   globalThis.__model.parse = (p) => laLuotBocRao(p)
     ? { so_can: 0, kien_thuc: ["khách chốt nhanh anh bớt 50 triệu"], truong: [] } : OUT();
   r = await send({ external_user_id: "aiboc-8", text: "khách chốt nhanh anh bớt 50 triệu" });
-  check("AIBOC-09 'chinh' câu treo giá, AI không thấy giá → KHÔNG ghi giá '50 triệu'; câu thành kiến thức → bo_sung MỘT lần nguồn ai_kiem (luật không ghi nguyên văn lần hai); câu giá vẫn treo, bot hỏi lại",
+  // FR-233 (27/09): câu đã thành ghi chú (kiến thức AI) → không hỏi lại câu giá; đi tiếp. Tin thiếu giá thì bản nháp tự mở lại câu giá.
+  check("AIBOC-09 'chinh' câu treo giá, AI không thấy giá → KHÔNG ghi giá '50 triệu'; câu thành kiến thức → bo_sung MỘT lần nguồn ai_kiem (luật không ghi nguyên văn lần hai); không hỏi lại giá (FR-233)",
     f8("gia").length === 0 && L8.price_vnd === 18e8 && f8("bo_sung").filter((f) => /50 triệu/.test(f.answer)).length === 1 && f8("bo_sung").find((f) => /50 triệu/.test(f.answer)).source === "ai_kiem" &&
-      db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "gia" && x.status === "pending") && r.body.reask === "gia",
+      !db().t.info_requests.some((x) => x.listing_id === L8.id && x.question === "gia" && x.status === "pending") && r.body.reask !== "gia",
     JSON.stringify({ gia: f8("gia"), bs: f8("bo_sung"), ir: db().t.info_requests.filter((q) => q.listing_id === L8.id).map((q) => [q.question, q.status]), rep: r.body.replies, extra: r.body.reask }));
 
   // Câu treo PHÁP LÝ, chủ nhà hỏi "có làm hợp đồng phân phối không" — luật từng ghi pháp lý (TS-VAN-11 lỗi 4).
@@ -3849,6 +3854,19 @@ fresh(seedKho);
       ["quy_hoach", "tranh_chap", "dien_tich_khop_so"].every((q) => fL(q).length === 1) &&
         !db().t.info_requests.some((q) => q.listing_id === l.id && q.status === "pending" && ["quy_hoach", "tranh_chap", "dien_tich_khop_so"].includes(q.question)),
       JSON.stringify({ f: ["quy_hoach", "tranh_chap", "dien_tich_khop_so"].map((q) => fL(q).map((x) => x.answer)), ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]), rep: r.body.replies }));
+  }
+  // FR-233 (chủ dự án 27/09/2026: "mấy cái mày ko ghi được vào db thì để AI nó xét qua … chứ mày cứ hỏi nhiều quá và ko
+  // được tự nhiên"): câu không vào được ô đang hỏi → ghi chú nguyên văn (vào vector của tin), không hỏi lại, đi tiếp câu kế.
+  rnSeed("z-233", "BDS-Q5-0957", {}, [["gap", "không gấp"]]);
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0957");
+    r = await send({ external_user_id: "z-233", text: "nhà này phong thủy tốt lắm, ở ai cũng khá lên" });
+    const lenh = createCalls().at(-1)?.params?.messages?.[0]?.content ?? "";
+    check("FR233-E1 câu không vào ô đang hỏi (sổ) → ghi chú nguyên văn, KHÔNG hỏi lại câu sổ, lời dặn model: đi tiếp, không nói đã ghi / không hỏi lại",
+      db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "bo_sung" && /phong thủy/.test(f.answer)) &&
+        !db().t.info_requests.some((q) => q.listing_id === l.id && q.question === "phap_ly" && q.status === "pending") &&
+        r.body.reask !== "phap_ly" && /KHÔNG hỏi lại câu cũ/.test(lenh),
+      JSON.stringify({ rep: r.body.replies, reask: r.body.reask, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
   rnSeed("z-pl2", "BDS-Q5-0952", { deal: "cho_thue" });
   r = await send({ external_user_id: "z-pl2", text: "sổ hồng riêng em" });
