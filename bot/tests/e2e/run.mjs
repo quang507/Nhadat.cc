@@ -3821,6 +3821,22 @@ fresh(seedKho);
         /sổ riêng hay sổ chung/.test(cau) && /đứng tên/.test(cau) && /thế chấp/.test(cau),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
+  // Bắn thật lx-38: câu hỏi ĐẦU sau câu rao (đường r1) là câu sổ — model rút còn một vế → câu mẫu gộp.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1" };
+    globalThis.__model.create = () => "Hẻm xe hơi tới cửa như vậy khách chuộng lắm. Sổ nhà mình riêng hay chung ạ?";
+    r = await send({ external_user_id: "z-pl6", text: "bán nhà hẻm xe hơi 5m Trần Hưng Đạo phường Cầu Ông Lãnh quận 1, 4x15 60m2, 1 trệt 2 lầu 3 phòng ngủ, giá 9 tỷ, không gấp" });
+    globalThis.__model.create = undefined;
+    globalThis.__cauHinh = cuCH;
+    const l = db().t.listings.at(-1);
+    const cau = r.body.replies.join("\n");
+    check("PL232-E3b câu hỏi đầu sau câu rao là câu sổ → câu gộp (model rút một vế → câu mẫu)",
+      db().t.info_requests.some((q) => q.listing_id === l.id && q.status === "pending" && q.question === "phap_ly") &&
+        /đứng tên/.test(cau) && /thế chấp/.test(cau),
+      JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
+  }
   // Sau khi lên tin: hỏi bù gom ba câu (ask-seller mở ba câu treo), khách đáp "không có gì hết" → ghi cả ba, đóng cả ba.
   rnSeed("z-pl5", "BDS-Q5-0955", { status: "dang_ban" }, [["phap_ly", "sổ hồng riêng"]]);
   {
