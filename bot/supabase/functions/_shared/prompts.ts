@@ -550,7 +550,9 @@ export function docCauHoiMau(json: string | null | undefined): { bang: Record<st
 // lý riêng của khách (FR-181), chat-reply điền bằng `dienTen()`.
 // 23/09/2026 (chủ dự án: "Chào thì chào thôi lại bỏ cái có ai phụ trách khu vực nào đi"): bỏ câu "anh Thu phụ trách
 // khu vực Sài Gòn…" khỏi lời chào (FR-218 a).
-export const LOI_CHAO = `Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị đang muốn mua, thuê hay đang có nhà cần bán/cho thuê ạ?`;
+// 27/09/2026 (chủ dự án): câu chào chỉ nhắc BÁN — "{danh xưng} cần giao bán bất động sản đúng không ạ"; chưa biết
+// anh hay chị thì "anh chị"; tên trợ lý vẫn theo từng khách (FR-181). Khách gật ("đúng rồi", "dạ", "ừ") là người bán.
+export const LOI_CHAO = `Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị cần giao bán bất động sản đúng không ạ?`;
 
 export const RATE_CTV_RUBRIC = `Bạn là QA của AI Ơi Nhà Đất, chấm chất lượng chăm sóc khách của CTV/bot trong một hội thoại Zalo.
 Chấm theo 4 tiêu chí, mỗi tiêu chí 1-5:

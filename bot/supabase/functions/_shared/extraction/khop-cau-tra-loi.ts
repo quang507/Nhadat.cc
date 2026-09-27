@@ -785,6 +785,17 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
     const xh = batXungHo(text);
     return { loai: "khop", ...(xh ? { xungHo: xh } : {}) };
   }
+  // 27/09/2026 (chủ dự án test Zalo): hỏi hoàn công, khách vặn lại câu trước "Làm gì có sổ chung" → bị ghi vào ô hoàn công
+  // ("không có sổ chung"). Câu nói về LOẠI SỔ mà không nhắc hoàn công / xây dựng và không mở bằng có-không → chưa trả lời,
+  // không ghi, hỏi lại.
+  if (question === "hoan_cong") {
+    const kdHc = boDau(text);
+    if (/\b(so chung|so rieng|so hong|so do|shr|shc|dong so huu)\b/.test(kdHc) && !/\b(hoan cong|xay|giay phep|gpxd)\b/.test(kdHc) &&
+        !/^\s*(roi|chua|da|co roi|xong)\b/.test(kdHc)) {
+      const xh = batXungHo(text);
+      return { loai: "ack", ...(xh ? { xungHo: xh } : {}) };
+    }
+  }
   // FR-229: hỏi "diện tích xây khớp sổ không, đã hoàn công chưa" mà khách đáp "hoàn công đủ rồi" — luật nhận diện xếp chữ
   // "hoàn công" vào câu sổ (phap_ly) và coi là lệch.
   if (question === "dien_tich_khop_so" && /\b(hoan cong|khop|dung so|lech|xay lo|xay du)\b/.test(boDau(text)) && !CAU_HOI_RE.test(boDau(text))) {
@@ -1673,6 +1684,24 @@ export function laDuRoi(text: string): boolean {
   // phải "hết thông tin rồi"; nhận là đủ rồi thì bot bỏ luôn các câu pháp lý còn lại.
   if (/\b(?:dong y|thong nhat|ky)\s+het\b/.test(kd)) return false;
   return DU_ROI_RE.test(kd);
+}
+
+// ── Gật câu hỏi vai (27/09/2026, câu chào "anh chị cần giao bán bất động sản đúng không ạ?") ──
+// CẢ câu chỉ gồm lời gật + tiểu từ / xưng hô: "đúng rồi", "dạ", "ừ em", "vâng đúng rồi anh bán". Có chữ nào khác
+// ("không", "mua", "thuê", "chào") thì không phải gật — "đúng rồi anh muốn mua" đi đường cũ.
+// "có" là gật nhưng "cô" (trả lời "cháu gọi chú hay cô") thì không — bỏ dấu cả hai đều là "co", nên xét chữ GỐC.
+const LOI_GAT_VAI = new Set(["da", "vang", "u", "ua", "uh", "um", "o", "dung", "phai", "chuan", "ok", "oke", "okie", "yes", "yep"]);
+const DEM_GAT_VAI = new Set([...LOI_GAT_VAI, "co", "roi", "a", "em", "nha", "nhe", "anh", "chi", "chu", "bac", "luon", "do", "day", "ban", "can",
+  "minh", "toi", "tui", "ne", "the", "vay", "ha", "hen", "nhen", "chau", "con", "ong", "ba"]);
+export function laGatHoiVai(text: string): boolean {
+  const goc = (text ?? "").normalize("NFC").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
+  if (!goc) return false;
+  const w = goc.split(/\s+/);
+  const kd = w.map((x) => boDau(x));
+  if (w.length > 6 || !kd.every((x) => DEM_GAT_VAI.has(x))) return false;
+  // "dạ cô" / "dạ chú" có thể chỉ là trả lời "cháu gọi chú hay cô" (câu chào hỏi cả hai) → cần lời gật RÕ ("đúng", "ừ", "có"…).
+  const xungLonTuoi = w.some((x) => ["cô", "chú", "bác", "ông", "bà"].includes(x));
+  return w.some((x, i) => (LOI_GAT_VAI.has(kd[i]) && !(xungLonTuoi && ["da", "o"].includes(kd[i]))) || x === "có");
 }
 
 // ── "Gấp" — cột listings.gap ──────────────────────────────────────────────────

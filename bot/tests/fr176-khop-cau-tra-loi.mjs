@@ -73,6 +73,12 @@ const CA = [
   ["dien_tich_khop_so", "đúng sổ", "khop"],
   ["dien_tich_khop_so", "hoàn công đủ rồi", "khop"],
   ["dien_tich_khop_so", "xây lố 1 chút", "khop"],
+  // 27/09/2026 (chủ dự án test Zalo): vặn lại câu trước về loại sổ khi đang hỏi hoàn công — không phải câu trả lời.
+  ["hoan_cong", "Làm gì có sổ chung", "ack"],
+  ["hoan_cong", "sổ riêng mà em", "ack"],
+  ["hoan_cong", "rồi em", "khop"],
+  ["hoan_cong", "chưa hoàn công", "khop"],
+  ["hoan_cong", "rồi, sổ riêng hoàn công đủ", "khop"],
 ];
 
 let hong = 0;
