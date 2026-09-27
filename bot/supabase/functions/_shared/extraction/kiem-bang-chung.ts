@@ -265,6 +265,11 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
       if (mo) { viTri = mo.viTri; kdDung = mo.cum; }
     }
     if (viTri < 0) { bo.push({ ...d, ly_do: "trich_dan_khong_co_trong_tin" }); continue; }
+    // 27/09/2026: "Hxm" → AI "hẻm xe hơi" — loại đường vào ngược chữ khách nói rõ.
+    if ((d.khoa === "do_rong_hem" || d.khoa === "do_rong_duong")) {
+      const lt = loaiDuongNoiRo(kdDung ?? kdCum), la = loaiDuongNoiRo(chuanSo(d.gia_tri));
+      if (lt && la && lt !== la) { bo.push({ ...d, ly_do: "loai_duong_nguoc_chu_khach" }); continue; }
+    }
     const ly = kiemGiaTri(d, tin, viTri, kdDung);
     if (ly) bo.push({ ...d, ly_do: ly });
     else dat.push(kdDung ? { ...d, trich_dan_sua: kdDung } : d);
@@ -636,7 +641,22 @@ export function kiemTraLoiCau(tl: TraLoiCau | null | undefined, tin: string): { 
   // AI trả "hẻm xe hơi 5 mét", số 5 là chiều ngang).
   const soTrich = new Set(td.match(/\d+/g) ?? []);
   if ((chuanSo(v).match(/\d+/g) ?? []).some((n) => !soTrich.has(n))) return { co: true, giaTri: null };
+  // 27/09/2026 (chủ dự án test Zalo): hỏi hẻm, khách "Hxm nhé" → AI trả "hẻm xe hơi" (trích "Hxm") và lọt vì lớp kiểm chỉ
+  // soát CHỮ SỐ. Loại đường vào khách nói rõ (hxm / xe máy · hxh / xe hơi / ô tô · hxt / xe tải) mà AI nói loại khác → bỏ.
+  const loaiTin = loaiDuongNoiRo(kdTin);
+  const loaiAi = loaiDuongNoiRo(gon(v));
+  if (loaiTin && loaiTin !== loaiAi && (loaiAi || loaiTin === "mat_tien")) return { co: true, giaTri: null };
   return { co: true, giaTri: v };
+}
+/** Loại đường vào nói RÕ trong chuỗi đã chuẩn hoá: "may" / "hoi" / "tai"; không rõ hoặc nhiều loại → null. */
+function loaiDuongNoiRo(kd: string): "may" | "hoi" | "tai" | "mat_tien" | null {
+  const co = new Set<string>();
+  // 27/09/2026 (test Zalo, đất Cần Đước): "mặt tiền đường 5m e" → AI "5 mét" (mất chữ mặt tiền) → bản nháp "hẻm xe hơi 5m".
+  if (/(?<!\b(?:cach|gan|ra|sat|toi)\s)\b(?:mat tien|mat duong|mat pho)\b/.test(kd)) co.add("mat_tien");
+  if (/\b(?:hxm|xe may|ba gac|xe 3 banh)\b/.test(kd)) co.add("may");
+  if (/\b(?:hxh|xe hoi|o to|oto|xe 4 banh|xe 7 cho|xe con)\b/.test(kd)) co.add("hoi");
+  if (/\b(?:hxt|xe tai|container)\b/.test(kd)) co.add("tai");
+  return co.size === 1 ? [...co][0] as "may" | "hoi" | "tai" | "mat_tien" : null;
 }
 
 /**

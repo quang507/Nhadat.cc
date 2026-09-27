@@ -16,6 +16,7 @@
 // Tầng bóc tách (bot/tests/ranh-gioi.mjs): không model, không RPC.
 
 import { XUNG_HO_LON_TUOI as LON_TUOI } from "./khop-cau-tra-loi.ts";
+import { docTien } from "./luat-tien.ts";
 
 const boDau = (s: string): string =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
@@ -1135,10 +1136,15 @@ const VE_BAT_BUOC: Record<string, RegExp> = {
   nguoi_dung_ten: /\b(dong so huu|dung ten chung|so chung|vo chong|anh em|thua ke)\b/,
   dien_tich_khop_so: /\bhoan cong\b/,
 };
+// 27/09/2026 (test Zalo): "Anh cho em xin tên người đứng tên trên sổ hồng ạ?" — không bao giờ xin HỌ TÊN (tên người thật,
+// CLAUDE.md §5); câu hỏi như vậy thay bằng câu mẫu (hỏi quan hệ).
+const CAM_HOI_TEN = /\b(?:xin|cho em|cho biet)\s+(?:ho\s+)?ten\b|\bho (?:va )?ten\b|\bten (?:cua )?(?:nguoi|chu|day du|tren so)\b/;
 export function giuVeCauMau(reply: string, khoa: string | null | undefined, cauMau: string): string {
   const re = khoa ? VE_BAT_BUOC[khoa] : undefined;
   const cau = cauHoiCuoi(reply);
-  if (!re || !cauMau || !cau || re.test(boDau(cau))) return reply;
+  if (!re || !cauMau || !cau) return reply;
+  const kdCau = boDau(cau);
+  if (re.test(kdCau) && !(khoa === "nguoi_dung_ten" && CAM_HOI_TEN.test(kdCau))) return reply;
   const i = reply.lastIndexOf(cau);
   return `${reply.slice(0, i).trim()} ${cauMau}`.trim();
 }
@@ -1161,4 +1167,32 @@ export function boCauLapLai(reply: string, botGanDay: Array<string | null | unde
     });
   })[0]?.trim();
   return ra ? ra : reply;
+}
+
+// 27/09/2026 (test Zalo): khách "Là bao nhiêu vậy em nhớ không" (đã nói "Giá 8.000.000.000") → model "Em nhớ anh muốn 5 tỷ 2 ạ."
+// Câu KHẲNG ĐỊNH (không "?") mang một số tiền ≥ 100 triệu mà chữ chủ nhà / giá đã ghi không có số đó thì bỏ.
+export function boTienBia(replies: string[], nguCanh: string, giaDaGhi: Array<number | string | null | undefined> = []): { replies: string[]; bo: number[] } {
+  const co = new Set<number>(giaDaGhi.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0));
+  for (const v of cacSoTien(nguCanh ?? "")) co.add(v);
+  const bo: number[] = [];
+  const ra = locCauTrongBongBong(replies, (c) => {
+    if (/\?/.test(c)) return false;
+    const la = cacSoTien(c).filter((v) => v >= 1e8 && !co.has(v));
+    if (!la.length) return false;
+    bo.push(...la);
+    return true;
+  });
+  return { replies: bo.length ? ra : replies, bo };
+}
+/** Mọi cụm tiền trong chuỗi ("400 triệu 1 tháng bán 65 tỉ" → 400 triệu, 65 tỷ), mỗi cụm đọc bằng `docTien`. */
+const CUM_TIEN = /\d+(?:[.,]\d+)?\s*(?:tỷ|tỉ|tỏi|tị|ty|ti|triệu|trieu|tr|củ)(?:\s*\d{1,3}(?![\d.,]|\s*(?:m|tháng|thang|năm|nam|phòng|phong|người|nguoi)))?(?:\s+rưỡi|\s+ruoi)?(?![\p{L}])|(?<![\d.,])[1-9]\d{0,2}(?:[.,]\d{3}){2,}(?![\d])/giu;
+function cacSoTien(s: string): number[] {
+  const ra: number[] = [];
+  for (const m of s.matchAll(CUM_TIEN)) { const v = docTien(m[0]); if (v) ra.push(v); }
+  return ra;
+}
+
+// 27/09/2026 (test Zalo, căn Botanic): tin đã là CĂN HỘ mà bot vẫn "nhà anh ở phường nào" — gọi đúng "căn hộ".
+export function goiCanHo(reply: string): string {
+  return reply.replace(/(?<![\p{L}])([Nn])hà (anh|chị|mình|chú|cô|bác|em)(?![\p{L}])/gu, (_m, n: string, x: string) => `${n === "N" ? "Căn" : "căn"} hộ ${x}`);
 }

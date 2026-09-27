@@ -218,6 +218,14 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   ok("HEM 'cách mặt tiền 30m' khi hỏi hẻm → KHÔNG khớp (khoảng cách, không phải loại đường vào)", phanLoaiCauTraLoi("do_rong_hem", "cách mặt tiền 30m").loai !== "khop");
   ok("HEM 'đúng rồi' khi hỏi hẻm → KHÔNG khớp", phanLoaiCauTraLoi("do_rong_hem", "đúng rồi").loai !== "khop");
   ok("HEM 'hxh' → ghi 'hẻm xe hơi'", catDapAn("do_rong_hem", "hxh") === "hẻm xe hơi");
+  // 27/09/2026 (chủ dự án test Zalo): "Hxm nhé" — kèm tiểu từ vẫn là cụm viết tắt, và là hẻm XE MÁY.
+  ok("HEM 'Hxm nhé' → 'hẻm xe máy'", catDapAn("do_rong_hem", "Hxm nhé") === "hẻm xe máy", catDapAn("do_rong_hem", "Hxm nhé"));
+  ok("HEM 'hxh nha em' → 'hẻm xe hơi'", catDapAn("do_rong_hem", "hxh nha em") === "hẻm xe hơi");
+  // 27/09/2026 (test Zalo): "sổ riêng. chính chủ. ba a dứng tên" — mảnh người đứng tên tách riêng, không mất vào bổ sung.
+  const nd = nhanDienNhieuFact("sổ riêng. chính chủ. ba a dứng tên");
+  ok("DUNGTEN 'sổ riêng. chính chủ. ba a dứng tên' → pháp lý + người đứng tên", nd.some((f) => f.question === "phap_ly") && nd.some((f) => f.question === "nguoi_dung_ten" && /ba a/.test(f.answer)), JSON.stringify(nd));
+  ok("PHUONG 'Ở cầu kho em ơi' → 'cầu kho'", catDapAn("phuong", "Ở cầu kho em ơi") === "cầu kho", catDapAn("phuong", "Ở cầu kho em ơi"));
+  ok("DUNGTEN 'đứng tên chung với vợ' không phải câu người đứng tên (câu sổ chung)", !nhanDienNhieuFact("đứng tên chung với vợ").some((f) => f.question === "nguoi_dung_ten"));
   ok("HEM 'ô tô vô tận nhà' không còn thành tiềm năng", nhanDienFact("ô tô vô tận nhà")?.question === "do_rong_hem", JSON.stringify(nhanDienFact("ô tô vô tận nhà")));
   ok("HEM 'để ở hoặc cho thuê' vẫn là tiềm năng", nhanDienFact("để ở hoặc cho thuê")?.question === "tiem_nang");
 }

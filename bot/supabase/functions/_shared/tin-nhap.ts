@@ -241,12 +241,13 @@ export function soanTinNhap(t: ThamSoNhap): string {
       ? thongSoNgan({ legal_status: l.legal_status, has_completion: l.has_completion } as SpecRow).replace(/^ · /, "")
       : fact("phap_ly"),
     nhan("quy hoạch:", fact("quy_hoach")),
+    // 27/09/2026 (test Zalo, đất Cần Đước): dòng pháp lý in trơn "· tự do · ko có gì hết" — không biết là gì. Gắn nhãn.
     nhan("sổ:", fact("the_chap")),
-    fact("xay_dung"),
+    nhan("xây:", fact("xay_dung")),
     fact("so_huu"),
     fact("thoi_han_su_dung"),
     fact("hinh_thuc_thue_dat"),
-    fact("len_tho_cu"),
+    nhan("lên thổ cư:", fact("len_tho_cu")),
   ]);
   // 24/09/2026 (chủ dự án: "Tiền thuê ghi vào"): tin BÁN đang cho thuê in tiền thuê mỗi tháng (cột đã đọc ra số,
   // không in nguyên câu chat) + hạn hợp đồng. Toà nhà / kho xưởng in trong khối khai thác bên dưới.

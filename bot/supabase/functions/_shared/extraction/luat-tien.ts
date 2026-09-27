@@ -159,5 +159,12 @@ export function docTien(p: string | null | undefined): number | null {
     if (ruoi) v += 5e5;
     return Math.round(v);
   }
+  // 27/09/2026 (chủ dự án test Zalo): "Giá 8.000.000.000" — số ĐỒNG viết đủ, có dấu nhóm nghìn hoặc ≥ 7 chữ số liền. Không
+  // mở bằng 0 (SĐT), không phải số đo ("1.000.000m2"), từ 1 triệu tới 10 nghìn tỷ. SQL `parse_vnd` cùng luật (20260927b).
+  m = /(?<![0-9.,])([1-9][0-9]{0,2}(?:[.,][0-9]{3}){2,}|[1-9][0-9]{6,12})(?![0-9.,]*[0-9])(?!\s*(?:m2|m²|mét|met|m(?![\p{L}])))/u.exec(t);
+  if (m) {
+    const v = Number(m[1].replace(/[.,]/g, ""));
+    if (v >= 1e6 && v <= 1e13) return v;
+  }
   return null;
 }

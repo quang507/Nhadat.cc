@@ -140,6 +140,12 @@ for (const k of ["nguoi_dung_ten", "tranh_chap", "dien_tich_khop_so", "the_chap"
   ok(`PL229-13 câu pháp lý '${k}' có câu mẫu + nhãn`, !!CAU_HOI_MAU[k] && !!FACT_LABELS[k], k);
 }
 
+// 27/09/2026 (test Zalo, đất Cần Đước 425m2): thổ cư "425m2" = cả lô → không hỏi lên thổ cư.
+r = reNhanh({ loai: "dat", deal: "ban", area_m2: 425, facts: [f("tho_cu", "425m2")] }, ["tho_cu"]);
+ok("THOCU-01 thổ cư bằng diện tích → KHÔNG hỏi lên thổ cư", !keys(r).includes("len_tho_cu"), JSON.stringify(r.them));
+r = reNhanh({ loai: "dat", deal: "ban", area_m2: 425, facts: [f("tho_cu", "200m2")] }, ["tho_cu"]);
+ok("THOCU-02 thổ cư một phần → hỏi lên thổ cư", keys(r).includes("len_tho_cu"), JSON.stringify(r.them));
+
 const moiKhoa = [...new Set(RE_NHANH.flatMap((l) => (l.them ?? []).map((t) => t.fact_key)))];
 for (const k of moiKhoa) ok(`câu nhánh '${k}' có câu mẫu + nhãn`, (!!CAU_HOI_MAU[k] || !!CAU_HOI_MAU[`${k}@nha_pho`]) && !!FACT_LABELS[k], k);
 
