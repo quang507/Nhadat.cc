@@ -79,6 +79,22 @@ const CA = [
   ["hoan_cong", "rồi em", "khop"],
   ["hoan_cong", "chưa hoàn công", "khop"],
   ["hoan_cong", "rồi, sổ riêng hoàn công đủ", "khop"],
+  ["do_rong_hem", "Hxm nhé", "khop"],
+  // 27/09/2026 (chủ dự án test Zalo): số tiền viết đủ khi đang hỏi diện tích → lệch sang giá.
+  ["dien_tich_dat", "Giá 8.000.000.000", "lech", (k) => k.chuyenSang?.question === "gia"],
+  ["nguoi_dung_ten", "Anh đứng tên chính nhé", "khop"],
+  ["nguoi_dung_ten", "ba a thôi", "khop"],
+  ["phap_ly", "sổ riêng. chính chủ. ba a dứng tên", "khop"],
+  ["phuong", "Ở cầu kho em ơi", "khop"],
+  ["vi_tri", "ở hẻm 45 Nguyễn Trãi", "khop"],
+  // 27/09/2026 (test Zalo, đất Cần Đước): tên đường / ấp trơn trả lời câu địa chỉ.
+  ["vi_tri", "xoài đôi", "khop"],
+  ["vi_tri", "trần hưng đạo", "khop"],
+  ["vi_tri", "hay quá", "lech"],
+  ["vi_tri", "không biết nữa", "lech"],
+  // 27/09/2026 (test Zalo): số nhà + tên đường khi đang hỏi câu khác → lệch sang địa chỉ (không phải hẻm / giá).
+  ["do_rong_hem", "312 Nguyễn Thuơbgj Hiền", "lech", (k) => k.chuyenSang?.question === "vi_tri"],
+  ["gia", "45 Ngô Y Linh", "lech", (k) => k.chuyenSang?.question === "vi_tri"],
 ];
 
 let hong = 0;

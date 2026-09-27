@@ -5225,6 +5225,13 @@ begin
     return v::bigint;
   end if;
 
+  -- 20260927b: số đồng viết đủ ("8.000.000.000", "8000000000"), không mở bằng 0, không phải số đo; 1 triệu..10 nghìn tỷ.
+  m := regexp_match(t, '(?<![0-9.,])([1-9][0-9]{0,2}(?:[.,][0-9]{3}){2,}|[1-9][0-9]{6,12})(?![0-9.,]*[0-9])(?!\s*(m2|m²|mét|met|m\M))');
+  if m is not null then
+    v := regexp_replace(m[1], '[.,]', '', 'g')::numeric;
+    if v >= 1e6 and v <= 1e13 then return v::bigint; end if;
+  end if;
+
   return null;
 exception when others then
   return null;

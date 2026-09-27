@@ -17,6 +17,8 @@ export type NgCanhReNhanh = {
   has_completion?: boolean | null;
   rent_income_vnd?: number | string | null;
   rear_width_m?: number | string | null;
+  /** 27/09: thổ cư bằng diện tích = đủ thổ cư (không hỏi lên thổ cư). */
+  area_m2?: number | string | null;
   /** Chữ chủ nhà gõ vài lượt gần đây (không phải fact) — cho luật `kichTin`. */
   lichSu?: string;
 };
@@ -190,8 +192,15 @@ export const RE_NHANH: Luat[] = [
     id: "tho_cu_mot_phan",
     ten: "đất thổ cư một phần",
     vi: "Đất có thổ cư một phần → hỏi có lên thổ cư được không",
-    khi: ({ loai, c, daHoi }) => ["dat", "dat_nong_nghiep"].includes(loai) && daHoi.has("tho_cu") &&
-      !THO_CU_DU.test(boDau(c.facts.find((f) => f.question === "tho_cu")?.answer ?? "")),
+    // 27/09/2026 (test Zalo, đất Cần Đước): "425m2" thổ cư trên đất 425m2 là thổ cư ĐỦ — bot vẫn hỏi "lên thổ cư được không".
+    khi: ({ loai, c, daHoi }) => {
+      if (!["dat", "dat_nong_nghiep"].includes(loai) || !daHoi.has("tho_cu")) return false;
+      const tc = boDau(c.facts.find((f) => f.question === "tho_cu")?.answer ?? "");
+      if (THO_CU_DU.test(tc)) return false;
+      const so = /(\d+(?:[.,]\d+)?)\s*(?:m2|m²|met vuong|m\b)?/.exec(tc);
+      const dt = Number(c.area_m2);
+      return !(so && Number.isFinite(dt) && dt > 0 && Number(so[1].replace(",", ".")) >= dt - 0.5);
+    },
     sau: ["tho_cu"],
     them: [{ fact_key: "len_tho_cu", priority: 15.5, nhom: "co_ban" }],
   },

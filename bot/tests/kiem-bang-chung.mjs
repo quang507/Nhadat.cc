@@ -349,5 +349,17 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
     coNoiDungTraLoi("hxh") && coNoiDungTraLoi("có sân thượng nữa em") && !coNoiDungTraLoi("ok em") && !coNoiDungTraLoi("dạ") && !coNoiDungTraLoi("cảm ơn anh"));
 }
 
+// ── 27/09/2026 (chủ dự án test Zalo): hỏi hẻm, "Hxm nhé" → AI "hẻm xe hơi" lọt vì lớp kiểm chỉ soát chữ số ──
+{
+  ok("HXM-01 câu trả lời AI 'hẻm xe hơi' cho 'Hxm nhé' → bỏ (luật đọc lại)", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "hẻm xe hơi", trich_dan: "Hxm" }, "Hxm nhé").giaTri === null);
+  ok("HXM-02 AI 'hẻm xe máy' cho 'Hxm nhé' → nhận", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "hẻm xe máy", trich_dan: "Hxm" }, "Hxm nhé").giaTri === "hẻm xe máy");
+  ok("HXM-03 AI 'hẻm xe hơi' cho 'hxh' → nhận", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "hẻm xe hơi", trich_dan: "hxh" }, "hxh").giaTri === "hẻm xe hơi");
+  const r = kiemDeXuat([{ khoa: "do_rong_hem", gia_tri: "hẻm xe hơi", trich_dan: "hxm" }], "nhà hxm 3m nha em");
+  ok("MATTIEN-01 'mặt tiền đường 5m e' → AI '5 mét' (mất mặt tiền) → bỏ (luật giữ chữ mặt tiền)", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "5 mét", trich_dan: "mặt tiền đường 5m" }, "mặt tiền đường 5m e").giaTri === null);
+  ok("MATTIEN-02 AI giữ 'mặt tiền đường 5m' → nhận", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "mặt tiền đường 5m", trich_dan: "mặt tiền đường 5m" }, "mặt tiền đường 5m e").giaTri === "mặt tiền đường 5m");
+  ok("MATTIEN-03 'cách mặt tiền 30m' không phải nhà mặt tiền → AI '5 mét' vẫn nhận", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "5 mét", trich_dan: "5m" }, "đường 5m, cách mặt tiền 30m").giaTri === "5 mét");
+  ok("HXM-04 đề xuất trường độ rộng hẻm 'hẻm xe hơi' trích 'hxm' → bỏ", !r.dat.length && r.bo[0]?.ly_do === "loai_duong_nguoc_chu_khach", JSON.stringify(r));
+}
+
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

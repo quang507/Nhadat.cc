@@ -69,14 +69,16 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boChaoLai, boViTriBia, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
+import { boChaoLai, boViTriBia, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { ghepMotChieu, gonLoiSua, laBoSungRac, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 // Câu hỏi mà câu trả lời LÀ một số tiền nhưng không phải giá bán (FR-223): số tiền kèm theo không được ghi thành `gia`.
 const CAU_HOI_TIEN = new Set(["doanh_thu", "tien_coc", "phi_quan_ly", "phi_gui_xe", "gia_dien_nuoc"]);
-const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban"]);
+// 27/09/2026 (test Zalo): câu "sổ đứng tên ai" — AI đọc "ba a thôi" (ba anh) thành "ba người", và bác "Anh đứng tên chính nhé"
+// (câu rơi bổ sung, bot xin HỌ TÊN người đứng sổ). Giữ nguyên chữ khách nói.
+const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban", "nguoi_dung_ten"]);
 // 21/09/2026 (Zalo thật): ở chế độ `chinh`, câu VỊ TRÍ / PHƯỜNG vẫn để AI đọc trước — AI có tên đường /
 // số phường sạch thì lấy; AI trống thì luật đỡ như cũ (không hạ "khớp" thành "lệch" như các khoá khác).
 const CAU_AI_DOC_TRUOC_LUAT_DO = new Set(["vi_tri", "phuong"]);
@@ -2430,12 +2432,13 @@ Deno.serve(async (req) => {
         // FR-226: giá trị đang ghi của các ô AI gộp / sửa được (cùng truy vấn nhúng, không thêm lượt DB).
         floors_text?: string | null; legal_status?: string | null; access_type?: string | null;
         alley_width_m?: number | string | null; furnishing?: string | null;
+        price_vnd?: number | string | null; // 27/09: lưới `boTienBia` — giá đã ghi là bằng chứng
       };
     };
     const [{ data: pendings }] = await Promise.all([
       client
         .from("info_requests")
-        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, district, deal, unit_code, property_type, project_id, area_m2, frontage_m, length_m, boc_tach, floors_text, legal_status, access_type, alley_width_m, furnishing)")
+        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, district, deal, unit_code, property_type, project_id, area_m2, frontage_m, length_m, boc_tach, floors_text, legal_status, access_type, alley_width_m, furnishing, price_vnd)")
         .eq("listings.seller_id", sellerRow.id)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
@@ -3846,8 +3849,12 @@ Deno.serve(async (req) => {
       let dapAnTuTinTruoc = false;
       if (laNoiDaTraLoi(dapAn) && !humanActive) {
         const tinTruoc = lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => boBaoLai(m.body) ?? "")
-          .map((b) => b.replace(/\[ảnh:[^\]]*\]/giu, " ").trim()).filter(Boolean).slice(-3).reverse();
-        const cu = tinTruoc.find((b) => !laNoiDaTraLoi(b) && phanLoaiCauTraLoi(pendingReq.question, b).loai === "khop");
+          // 27/09/2026 (test Zalo): "Giá 8.000.000.000" nằm cách "Cái giá hồi nãy đó" năm tin — đọc lại 8 tin.
+          .map((b) => b.replace(/\[ảnh:[^\]]*\]/giu, " ").trim()).filter(Boolean).slice(-8).reverse();
+        // 27/09/2026 (test Zalo): hỏi "lên thổ cư được không", khách "nói ở trên rồi mà" → vơ tin "ko có gì hết" (trả lời câu HẠ
+        // TẦNG) làm đáp án. Câu CÓ / KHÔNG thì tin cũ phải nói đúng chủ đề (luật nhận ra cùng họ), không chỉ "khớp" trơn.
+        const cu = tinTruoc.find((b) => !laNoiDaTraLoi(b) && phanLoaiCauTraLoi(pendingReq.question, b).loai === "khop" &&
+          (!laCauCoKhong(pendingReq.question) || nhanDienNhieuFact(b).some((f) => cungHoFact(f.question, pendingReq.question))));
         if (cu) {
           dapAn = cu;
           dapAnTuTinTruoc = true;
@@ -3942,9 +3949,9 @@ Deno.serve(async (req) => {
       // 24/09/2026 (chủ dự án: "sao nó hỏi lại vậy … nếu trường hợp tương tự nó hiểu ko"): "4 tầng, 4 phòng ngủ nhé" khi đang
       // hỏi kết cấu — AI chỉ trả phòng ngủ, im về kết cấu → luật "AI im = lệch" gạt mất "4 tầng", vào bổ sung, bot hỏi lại.
       // Luật đọc CHẮC cho đúng câu đang hỏi (kết cấu dạng chắc, "shr") thì AI im không gạt được — cho mọi khoá có luật chắc.
-      /** Cả tin chỉ là MỘT số tiền ("8 tỉ", "9 tỷ rưỡi nha em", "giá 12 tỏi") — luật đọc giá là chắc. */
+      /** Cả tin chỉ là MỘT số tiền ("8 tỉ", "9 tỷ rưỡi nha em", "giá 12 tỏi", "Giá 8.000.000.000") — luật đọc giá là chắc. */
       const laTienTron = (f: { question: string }, s: string) => f.question === "gia" &&
-        /^\s*(?:gia\s*)?(?:la\s*)?\d+(?:[.,]\d+)?\s*(?:ty|ti|toi|trieu|tr|cu)(?:\s*\d+|\s+ruoi|\s+mot|\s+hai)?(?:\s+(?:nha|nhe|em|a|thoi|anh|chi|do|nhen|nhe em))*\s*$/
+        /^\s*(?:gia\s*)?(?:la\s*)?(?:\d+(?:[.,]\d+)?\s*(?:ty|ti|toi|trieu|tr|cu)(?:\s*\d+|\s+ruoi|\s+mot|\s+hai)?|[1-9]\d{0,2}(?:[.,]\d{3}){2,}\s*(?:d|dong|vnd)?)(?:\s+(?:nha|nhe|em|a|thoi|anh|chi|do|nhen|nhe em))*\s*$/
           .test(boDau(s).replace(/[^a-z0-9.,\s]/g, " "));
       const luatChacCauTreo = (q: string, s: string) =>
         nhanDienNhieuFact(s).some((f) => f.question === q && (ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f))) ||
@@ -4009,6 +4016,12 @@ Deno.serve(async (req) => {
           !dapAnTuTinTruoc && !luatChacCauTreo(pendingReq.question, dapAn)) {
           kq = { loai: "lech" };
         }
+        // 27/09/2026 (chủ dự án test Zalo): "Ngang có 3 m" rồi "Nhưng dài tới 14 m" khi bot đang hỏi kết cấu — chiều dài trơn
+        // ghép với ngang đã có thành diện tích, không rơi vào bổ sung.
+        if (kq.loai === "lech" && kq.chuyenSang && /^dien_tich/.test(kq.chuyenSang.question)) {
+          const ghepLech = ghepMotChieu("dien_tich", kq.chuyenSang.answer, pendingReq.listings?.frontage_m, null);
+          if (ghepLech) kq = { ...kq, chuyenSang: { question: "dien_tich", answer: ghepLech } };
+        }
         if (aiChinh && kq.loai === "lech") {
           // Luật nhận "một nẻo" ra khoá X mà AI không thấy X → thay bằng fact AI đọc được (nếu có);
           // không có gì thì bỏ `chuyenSang` để rơi về ghi nguyên văn (`bo_sung`), câu vẫn treo.
@@ -4016,7 +4029,10 @@ Deno.serve(async (req) => {
           // Giữ NGUYÊN tham chiếu phần tử của `aiChinh.ghi` để chỗ ghi biết nguồn là ai_kiem.
           // 27/09/2026 (chủ dự án test Zalo, căn Botanic): đang hỏi hẻm, khách nhắn "8 tỉ" — AI im, luật đọc ra giá mà bị gạt
           // (khoá AI biết) → câu vào "bổ sung", bot phải hỏi giá lại. Cả tin CHỈ là một số tiền thì luật chắc, giữ.
-          const giuLuat = !!kq.chuyenSang && laTienTron(kq.chuyenSang, dapAn) && !kem.some((f) => f.question === "gia");
+          const giuLuat = !!kq.chuyenSang && !kem.some((f) => f.question === kq.chuyenSang!.question) &&
+            (laTienTron(kq.chuyenSang, dapAn) || (kq.chuyenSang.question === "dien_tich" && /^ngang \S+m dài \S+m$/.test(kq.chuyenSang.answer)) ||
+              // 27/09/2026 (test Zalo): "312 Nguyễn Thuơbgj Hiền" khi đang hỏi hẻm — số nhà + tên đường là địa chỉ chắc.
+              (kq.chuyenSang.question === "vi_tri" && laSoNhaTenDuong(dapAn)));
           if (!giuLuat && kq.chuyenSang && !kem.some((f) => f.question === kq.chuyenSang!.question)) {
             kq = { ...kq, chuyenSang: kem[0] };
           } else if (!kq.chuyenSang && kem[0]) kq = { ...kq, chuyenSang: kem[0] };
@@ -4094,9 +4110,14 @@ Deno.serve(async (req) => {
       const kdDang = boDau(dapAn).replace(/[^a-z0-9\s]/g, " ").trim();
       // FR-229 (bắn e2e PL229-E3): câu "các bên đồng ý bán chưa" / "giá còn thương lượng không" — "đồng ý", "được", "ok" là
       // ĐÁP ÁN, không phải bảo đăng (trước đó "đồng ý hết rồi" bỏ luôn các câu pháp lý còn lại).
+      // 27/09/2026 (test Zalo): bot hỏi "Ô tô vào được tận nhà không anh?", khách "Ok" → bị hiểu là "đăng đi". Câu bot vừa hỏi là
+      // câu CÓ / KHÔNG thì "ok / được" là câu trả lời, không phải bảo đăng.
+      const cauBotCuoi = boDau(lichSuRows.filter((m) => !laTinNguoi(m.sender)).map((m) => boBaoLai(m.body) ?? "").filter(Boolean).at(-1) ?? "");
+      const botVuaHoiCoKhong = /\b(?:khong|chua)\s*(?:a|anh|chi|chu|co|bac|em|nhi|vay)?\s*[?]\s*$/.test(cauBotCuoi.trim());
       const chuMuonDang = pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
         pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh" &&
         pendingReq.question !== "dong_y_ban" && pendingReq.question !== "thuong_luong" &&
+        !(botVuaHoiCoKhong && !/\b(?:dang|len tin|len ke|post)\b/.test(boDau(dapAn))) &&
         (kdDang.split(/\s+/).length <= 6 &&
           (laDuRoi(dapAn) || /\b(dang|len tin|len ke|post)\b/.test(kdDang) ||
             (laDongY(dapAn) && /\b(ok|oke|okie|duoc|dc|chot|dong y|xong)\b/.test(kdDang))) ||
@@ -4299,12 +4320,24 @@ Deno.serve(async (req) => {
             hoiLai = r2b.content.find((b) => b.type === "text")?.text?.trim() ?? null;
             if (hoiLai && laLoiMeta(hoiLai)) { console.log("chat-reply: r2b tra loi cau lenh, bo"); hoiLai = null; }
             if (hoiLai) hoiLai = motCauHoi([hoiLai])[0];
+            if (hoiLai && pendingReq.listings?.property_type === "chung_cu") hoiLai = goiCanHo(hoiLai);
+            // 27/09/2026 (test Zalo): hỏi lại câu đứng tên thành "cho em xin tên người đứng tên trên sổ" → câu mẫu (hỏi quan hệ).
+            if (hoiLai) hoiLai = giuVeCauMau(hoiLai, pendingReq.question,
+              cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal));
             // 27/09/2026: quận / khu chủ nhà chưa nói là bịa ("Botanic ở Quận 1, dự án Phú Mỹ Hưng") — xem `boViTriBia`.
             if (hoiLai) {
               const vt = boViTriBia([hoiLai], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""),
                 pendingReq.listings?.district ?? ""].join(" "));
               if (vt.bo.length) console.log("chat-reply: r2b bo vi tri bia", vt.bo.join(", "));
               hoiLai = vt.replies[0]?.trim() || null;
+              // 27/09/2026: bỏ câu bịa mà khách đang HỎI chỗ đó ("Em biết Botanic không") → nói thật chưa nắm, không lờ câu hỏi.
+              if (vt.bo.length && hoiNguoc && hoiLai) hoiLai = `Dạ chỗ này em chưa nắm rõ ạ. ${hoiLai}`;
+            }
+            if (hoiLai) {
+              const tb = boTienBia([hoiLai], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join("\n"),
+                [pendingReq.listings?.price_vnd]);
+              if (tb.bo.length) console.log("chat-reply: r2b bo tien bia", tb.bo.join(", "));
+              hoiLai = tb.replies[0]?.trim() || null;
             }
             await doTien(client, r2b.usage);
           } catch (e) {
@@ -4665,6 +4698,14 @@ Deno.serve(async (req) => {
                 lstNow?.district ?? "", pendingReq.listings?.district ?? ""].join(" "));
               if (vt.bo.length) console.log("chat-reply: bo vi tri bia", vt.bo.join(", "));
               sellerReply = vt.replies[0]?.trim() || null;
+              if (vt.bo.length && hoiNguoc && sellerReply) sellerReply = `Dạ chỗ này em chưa nắm rõ ạ. ${sellerReply}`;
+            }
+            // 27/09/2026 (test Zalo): "Em nhớ anh muốn 5 tỷ 2 ạ" — khách đã nói 8 tỷ. Số tiền chủ nhà chưa nói → bỏ câu đó.
+            if (sellerReply) {
+              const tb = boTienBia([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join("\n"),
+                [pendingReq.listings?.price_vnd]);
+              if (tb.bo.length) console.log("chat-reply: bo tien bia", tb.bo.join(", "));
+              sellerReply = tb.replies[0]?.trim() || null;
             }
           }
           // FR-177: một lượt một câu hỏi — cắt câu hỏi thứ hai của model (15/09/2026).
@@ -4680,6 +4721,7 @@ Deno.serve(async (req) => {
           if (sellerReply && nextKey && !(cauDuongKe ?? goiYKe)) sellerReply = giuVeCauMau(sellerReply, nextKey, `${neo ? `Căn ${neo} nha. ` : ""}${cauKe}`);
           // Câu nhận xét lặp y nguyên câu bot vừa nói ở lượt trước ("Sổ riêng thì bán nhanh hơn.") → bỏ.
           if (sellerReply) sellerReply = boCauLapLai(sellerReply, lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-3).map((m) => m.body));
+          if (sellerReply && pendingReq.listings?.property_type === "chung_cu") sellerReply = goiCanHo(sellerReply);
           // Tin chưa lên kệ mà model nói "đã đăng lên web" → bỏ mệnh đề đó.
           if (sellerReply && !published) sellerReply = boHuaDaDang([sellerReply])[0] ?? null;
           // 25/09/2026 (bắn thật lx-05): câu xác nhận / chọn phường, xác nhận tên đường do CODE tra ra → thay câu hỏi của
@@ -5438,6 +5480,17 @@ Deno.serve(async (req) => {
       const { error: cvErr } = await client.from("messages").insert({ conversation_id: convId, sender: "bot", body: cauVai });
       if (cvErr) await ghiLoi(client, "chat-reply messages hoi_vai(lai)", cvErr.message);
       return await hoanTat({ reply: cauVai, replies: [cauVai], conversation_id: convId, hoi_vai: true, xung_ho: xhTro });
+    }
+    // 27/09/2026 (test Zalo): "Hay quá" sau câu chào "… cần giao bán bất động sản đúng không ạ?" → bot sang hỏi "mua hay thuê".
+    // Câu chung chung không trả lời câu vai → hỏi lại câu chào MỘT lần (cờ `hoi_vai_lai`), lần sau mới về hàng người mua.
+    if (laCauChungChung(text) && !prefs.hoi_vai_lai && !imageUrl) {
+      const { error: lErr } = await client.rpc("merge_buyer_prefs", { p_buyer_id: buyer.id, p_delta: { hoi_vai_lai: true } });
+      if (lErr) await ghiLoi(client, "chat-reply merge_buyer_prefs(hoi_vai_lai)", lErr.message);
+      const xhL = typeof prefs.xung_ho === "string" && prefs.xung_ho ? prefs.xung_ho : null;
+      const cauLai = boGachCheo(doiTuXung([`Dạ, ${xhL ?? "anh/chị"} cần giao bán bất động sản đúng không ạ?`], xhL)[0]);
+      const { error: clErr } = await client.from("messages").insert({ conversation_id: convId, sender: "bot", body: cauLai });
+      if (clErr) await ghiLoi(client, "chat-reply messages hoi_vai(chung chung)", clErr.message);
+      return await hoanTat({ reply: cauLai, replies: [cauLai], conversation_id: convId, hoi_vai: true });
     }
     // Đã hỏi; câu này không tự nhận có BĐS (nửa 1/2 đã xét, không mở hồ sơ bán)
     // → ở lại hàng người mua, xoá cờ để không hỏi lại. Model đọc câu trả lời

@@ -19,7 +19,7 @@
 // Luật tiền MỘT NGUỒN (tầng bốn, 11/09): trước đây file này chép tay
 // `(ty|ti|toi|trieu|tr)` ở năm chỗ, không chỗ nào biết "toi" + số là TỚI —
 // nên "5 tới 6 tỷ" ghi giá "5 tới 6" (mục D1 review 10/09).
-import { TIEN_KD, CO_TIEN_KD, TIEN_T_KEP } from "./luat-tien.ts";
+import { TIEN_KD, CO_TIEN_KD, TIEN_T_KEP, docTien } from "./luat-tien.ts";
 import { TRUOC_LA_SAN, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { laThuanNhan } from "./nhan.ts";
 
@@ -474,8 +474,10 @@ function catDapAnGoc(question: string, dapAn: string): string {
     if (nx) return `${nx} (${dapAn.trim().replace(/[.!\s]+$/, "")})`;
   }
   // 25/09/2026: "hxh" một mình → "hẻm xe hơi" (đọc được ở 🤖 và bản nháp; trigger vẫn đọc ra loại đường vào).
-  if ((question === "do_rong_hem" || question === "do_rong_duong") && /^\s*(?:hxh|hxt|hxm)\s*[.!]*\s*$/i.test(dapAn)) {
-    const t = dapAn.trim().toLowerCase().slice(0, 3);
+  // 27/09/2026: kèm tiểu từ ("Hxm nhé", "hxh nha em") vẫn là cụm viết tắt trơn.
+  if ((question === "do_rong_hem" || question === "do_rong_duong") &&
+      /^\s*(?:hxh|hxt|hxm)(?:\s+(?:nhe|nha|nhen|em|a|do|day|luon|anh|chi|ne))*\s*[.!]*\s*$/.test(boDau(dapAn))) {
+    const t = boDau(dapAn).trim().slice(0, 3);
     return t === "hxt" ? "hẻm xe tải" : t === "hxm" ? "hẻm xe máy" : "hẻm xe hơi";
   }
   // 15/09/2026: bỏ phần hỏi ngược trước khi cắt; đáp án chữ chỉ giữ MẢNH nói về đúng
@@ -503,6 +505,9 @@ function catDapAnGoc(question: string, dapAn: string): string {
   if (question === "phuong") {
     const m = /(?:phường|phuong|(?<![\p{L}])p)\s*\.?\s*(\d{1,2})(?!\d)/iu.exec(goc);
     if (m) return `Phường ${Number(m[1])}`;
+    // 27/09/2026 (test Zalo): "Ở cầu kho em ơi" → "cầu kho" (bỏ "ở / tại / thuộc" đầu câu; tiểu từ đuôi bỏ ở dưới).
+    const bo = goc.replace(/^\s*(?:nhà\s+)?(?:ở|o|tại|tai|thuộc|thuoc)\s+(?=\S)/iu, "");
+    if (bo !== goc) return catDapAnGoc(question, bo);
   }
   // 15/09/2026 (bắn thật A2/A3): "giá thì mình muốn tầm 4 tỷ 2" ghi nguyên mệnh đề vào
   // ô giá, "70m2 2pn" vào ô tim tường. Cột đúng (parse_vnd, trigger) nhưng fact là rác:
@@ -570,7 +575,9 @@ export function ngangDai(kd: string): string | null {
 export function laNoiDaTraLoi(text: string): boolean {
   const kd = boDau(text ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   if (!kd || kd.split(" ").length > 8) return false;
-  return /\b(?:tra loi|noi|nhan|gui|ghi|bao)\s+(?:roi|o tren|luc nay|hoi nay|nay gio)\b/.test(kd);
+  // 27/09/2026 (test Zalo): "Cái giá hồi nãy đó" / "giá lúc nãy" / "như hồi nãy" — trỏ về điều đã nói ở tin trước.
+  return /\b(?:tra loi|noi|nhan|gui|ghi|bao)\s+(?:roi|o tren|luc nay|hoi nay|nay gio)\b/.test(kd) ||
+    /\b(?:cai|con so|so|gia|nhu|y nhu|giong)\s+(?:(?:gia|so)\s+)?(?:hoi nay|luc nay|ban nay|o tren|nay gio|luc dau)\b/.test(kd);
 }
 
 /**
@@ -597,7 +604,8 @@ export function ghepMotChieu(question: string, dapAn: string, ngangCo: number | 
   const kd = boDau(dapAn ?? "");
   if (ngangDai(kd) || /\d\s*(?:m\s*)?x\s*\d|m2|m²|met vuong/.test(kd)) return null;
   const so = (re: RegExp) => { const m = re.exec(kd); return m ? m[1].replace(",", ".") : null; };
-  const dai = so(/\b(?:dai|sau|doc|chieu dai)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?(?![\d])/);
+  // 27/09/2026 (test Zalo): "Nhưng dài tới 14 m" — cho phép "tới / khoảng / tầm / có / gần" giữa chữ và số.
+  const dai = so(/\b(?:dai|sau|doc|chieu dai)\s*(?:(?:la|toi|khoang|tam|co|gan|chung)\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?(?![\d])/);
   const ngang = so(/\b(?:ngang|mat tien|mt|chieu ngang)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?(?![\d])/);
   const n = (v: number | string | null | undefined) => { const x = v == null ? NaN : Number(v); return Number.isFinite(x) && x > 0 ? String(x) : null; };
   // Chỉ chiều "dài" nối vào "ngang" đã có (thứ tự người ta nói: ngang trước, dài sau). "Ngang 5" trần vẫn đi đường cũ
@@ -655,6 +663,9 @@ const HOI_CO_KHONG = new Set([
   "hoan_cong", "ban_giao", "dong_y_ban", // FR-223
   "tranh_chap", "dien_tich_khop_so", // FR-229
 ]);
+
+/** Câu hỏi có / không (đáp "có", "không", "rồi" là đủ). */
+export const laCauCoKhong = (q: string): boolean => HOI_CO_KHONG.has(q);
 
 // Từ khoá tối thiểu cho các câu hỏi CHỮ. Không có từ nào trong đây thì coi là
 // lệch: "16m nha" không phải hướng, "kêu chị nha" không phải pháp lý.
@@ -795,6 +806,13 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
       const xh = batXungHo(text);
       return { loai: "ack", ...(xh ? { xungHo: xh } : {}) };
     }
+  }
+  // 27/09/2026 (test Zalo): hỏi phường, khách "Ở cầu kho em ơi" — luật tiềm năng đọc "ở" là "để ở". Đang hỏi phường / địa chỉ
+  // mà câu mở bằng "ở …" (không phải "để ở", "ở gia đình") là câu trả lời VỊ TRÍ.
+  if ((question === "phuong" || question === "vi_tri") && /^\s*(?:nha\s+|can\s+)?o\s+(?!(?:gia dinh|duoc|hoac|cho thue|va)\b)\S/.test(boDau(text)) &&
+      !CAU_HOI_RE.test(boDau(text))) {
+    const xh = batXungHo(text);
+    return { loai: "khop", ...(xh ? { xungHo: xh } : {}) };
   }
   // FR-229: hỏi "diện tích xây khớp sổ không, đã hoàn công chưa" mà khách đáp "hoàn công đủ rồi" — luật nhận diện xếp chữ
   // "hoàn công" vào câu sổ (phap_ly) và coi là lệch.
@@ -981,7 +999,12 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
       /^\s*\d+[a-z]?(?:\/\d+[a-z]?)*\s+[a-z]{2,}/.test(kd);
     // "đường bê tông 5m xe tải vào được", "đường 12m" là ĐƯỜNG VÀO, không phải địa chỉ.
     const laMoTaDuong = /\b(be tong|nhua|dat do|duong dat|xe tai|container|\d+\s*(?:m|met)\b)/.test(kd) && !/\b(so nha|hem \d|so \d|\/)/.test(kd);
-    return ketQua(coDiaChi && !laMoTaDuong && !/\b(m2|m²|met vuong|tho cu|thoi han|nam \d{4}|ty|trieu)\b/.test(kd) ? "khop" : "lech");
+    // 27/09/2026 (test Zalo, đất Cần Đước): hỏi địa chỉ, khách đáp tên đường trơn "xoài đôi" → lệch, bot hỏi lại. Câu 2–4 chữ,
+    // không số, toàn chữ không phải hư từ / lời đáp chung → là TÊN (đường, ấp, khu); từ điển `duong` ở tầng trên đối chiếu tiếp.
+    const w = kd.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean).filter((x) => !/^(?:nha|nhe|a|em|e|oi|do|day|ne)$/.test(x));
+    const HU_TU = /^(?:da|vang|u|uh|ok|oke|khong|ko|chua|roi|co|biet|sao|gi|nao|dau|nha|nhe|em|anh|chi|a|thi|la|ma|di|luon|the|vay|hoi|nua|chac|hinh|nhu|cung|ban|mua|thue|gia|nha|dat|can|tim|hay|qua|dep|tot|tuyet|voi|vui|cam|on|thoi|xong|duoc|ha|nhieu|lam|het|rat|oi)$/;
+    const tenTron = w.length >= 2 && w.length <= 4 && !/\d/.test(kd) && !CAU_HOI_RE.test(kd) && w.every((x) => x.length >= 2 && !HU_TU.test(x));
+    return ketQua((coDiaChi || tenTron) && !laMoTaDuong && !/\b(m2|m²|met vuong|tho cu|thoi han|nam \d{4}|ty|trieu)\b/.test(kd) ? "khop" : "lech");
   }
 
   const tk = TU_KHOA[question];
@@ -1010,7 +1033,7 @@ export const NHAN_HOI_LAI: Record<string, string> = {
   ket_cau: "nhà mấy tầng, mấy phòng ngủ",
   quy_hoach: "nhà có dính quy hoạch hay lộ giới gì không",
   // FR-229
-  nguoi_dung_ten: "sổ nhà mình đang đứng tên ai",
+  nguoi_dung_ten: "sổ do chính mình hay người nhà đứng tên",
   the_chap: "sổ nhà mình đang cầm tay hay đang thế chấp ngân hàng",
   tranh_chap: "nhà có đang tranh chấp gì không",
   dien_tich_khop_so: "diện tích xây thực tế có khớp với sổ không",
@@ -1275,8 +1298,19 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
 export const DOI_SANG_THUE_RE = /\bcho thue\b[^,.]{0,6}\bchu\s+(?:khong|ko|k|hong)\s+(?:phai\s+)?ban\b|\b(?:khong|ko|k)\s+ban\b[^,.]{0,12}\bcho thue\b|\bcho thue\b[^,.]{0,12}\b(?:khong|ko|k)\s+ban\b|\b(?:doi|chuyen)\s+(?:sang|qua|thanh)\s+cho thue\b/;
 // 24/09/2026 (bắn 10 tin, CHDV): "vẫn bán nha em, không phải cho thuê" — chủ khẳng định lại là BÁN.
 export const DOI_SANG_BAN_RE = /\b(?:van|la|dang)\s+ban\b[^.]{0,20}\b(?:khong|ko|k|hong)\s+(?:phai\s+)?(?:la\s+)?cho thue\b|\bban\b[^,.]{0,6}\bchu\s+(?:khong|ko|k|hong)\s+(?:phai\s+)?cho thue\b|\b(?:khong|ko|k)\s+cho thue\b[^,.]{0,12}\bban\b|\b(?:doi|chuyen)\s+(?:sang|qua|thanh)\s+ban\b/;
+/**
+ * 27/09/2026 (test Zalo): "312 Nguyễn Thuơbgj Hiền" (đang hỏi hẻm) / "45 Ngô Y Linh" — SỐ NHÀ rồi TÊN RIÊNG viết hoa, không đơn vị
+ * đo / tiền → là ĐỊA CHỈ (tên gõ sai vẫn là địa chỉ; từ điển `duong` ở tầng trên gợi ý tên đúng).
+ */
+export function laSoNhaTenDuong(text: string): boolean {
+  const t = (text ?? "").trim().replace(/\s+(?:nha|nhé|nhe|nha em|em|ạ|a|đó|do)\s*[.!]*$/iu, "");
+  return /^(?:số\s+)?\d{1,4}[a-zA-Z]?(?:\/\d{1,4}[a-zA-Z]?)*\s+\p{Lu}[\p{L}]*(?:\s+[\p{L}]+){0,4}\s*$/u.test(t) &&
+    !/(?<![\p{L}\d])(?:m|m2|met|mét|tỷ|tỉ|triệu|tr|tầng|lầu|phòng|pn|năm|tháng|tuổi|nhà|căn)(?![\p{L}\d])/iu.test(t);
+}
+
 export function nhanDienFact(text: string): NhanDien | null {
   const goc = text.trim();
+  if (laSoNhaTenDuong(goc)) return { question: "vi_tri", answer: goc.replace(/\s+(?:nha|nhé|nhe|nha em|em|ạ|a|đó|do)\s*[.!]*$/iu, "") };
   const kd = boDau(goc);
   const kdD = boDauGiuDoDai(goc);
   const catGoc = (mm: RegExpExecArray) => goc.slice(mm.index, mm.index + mm[0].length).trim();
@@ -1291,6 +1325,12 @@ export function nhanDienFact(text: string): NhanDien | null {
   let m: RegExpExecArray | null;
   // 17/09/2026: "srh" là gõ lỡ của "shr" (Zalo thật) — nhận luôn.
   const PHAP_LY_RE = /\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay|cam ngan hang|dang the chap)\b/;
+  // 27/09/2026 (test Zalo): "ba a dứng tên", "anh đứng tên chính nhé", "mẹ em đứng tên" — NGƯỜI đứng tên sổ (FR-229), không
+  // phải loại sổ. "đứng tên chung với…" / "đồng sở hữu" thuộc câu sổ chung (FR-223); câu có loại sổ thì mảnh sổ đi riêng.
+  if (/\b(?:dung|dang dung)\s+ten\b/.test(kd) && !/\b(?:chung|dong so huu)\b/.test(kd) &&
+      !PHAP_LY_RE.test(kd) && kd.split(/\s+/).length <= 8) {
+    return { question: "nguoi_dung_ten", answer: goc };
+  }
   // 22/09/2026 (kịch bản D): "đang thế chấp ngân hàng" một mình là TÌNH TRẠNG thế chấp (`the_chap`), không phải loại
   // giấy tờ; có kèm sổ/hợp đồng thì vẫn là pháp lý (mảnh thế chấp đi riêng qua `nhanDienNhieuFact`).
   if (/\b(dang the chap|the chap|cam ngan hang|trong ngan hang)\b/.test(kd) &&
@@ -1459,6 +1499,12 @@ export function nhanDienFact(text: string): NhanDien | null {
       !/\b(dai|sau|doc)\b/.test(kd)) {
     return { question: "mat_tien", answer: `${m[1]}m` };
   }
+  // 27/09/2026 (test Zalo): "Nhưng dài tới 14 m" (ngang đã nói ở lượt trước) — chiều dài trơn là một mảnh DIỆN TÍCH; nơi gọi
+  // ghép với ngang đã có (`ghepMotChieu`). Không có chữ ngang / rộng / mặt tiền trong câu.
+  if ((m = new RegExp(`\\b(?:dai|chieu dai)\\s*(?:(?:la|toi|khoang|tam|co|gan|chung)\\s*)?${SO}\\s*(?:m|met)?(?![\\d.,]*\\s*(?:m2|x))`).exec(kd)) &&
+      !/\b(ngang|rong|mat tien|mt|thue|hop dong|nam)\b/.test(kd)) {
+    return { question: "dien_tich", answer: `dài ${m[1]}m` };
+  }
   // 16/09/2026 (Zalo thật): "nhà 4 tấm diện tích tổng 240m2" — 240 là SÀN (cộng các
   // tầng), không phải đất; bản trước ghi area_m2 = 240. Diện tích sàn / sử dụng / xây
   // dựng là fact riêng `dien_tich_san`, DB không đổ vào cột đất. "tổng diện tích" chỉ
@@ -1474,6 +1520,12 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = new RegExp(`${SO}\\s*(?:${TIEN_KD})(?![a-z])(?:\\s*${SO})?(?:\\s*(?:ruoi|thuong luong|tl))?`).exec(kdD)) &&
       // 15/09/2026 (bắn thật A2): "đang cho thuê 25 triệu/tháng" là thu nhập thuê, không phải giá.
       !TRUOC_LA_THUE.test(kd.slice(Math.max(0, m.index - 30), m.index))) {
+    return { question: "gia", answer: catGoc(m) };
+  }
+  // 27/09/2026 (chủ dự án test Zalo): "Giá 8.000.000.000" — số ĐỒNG viết đủ có dấu nhóm nghìn, từ 100 triệu (dưới đó dễ
+  // là tiền thuê / phí), không đứng sau chữ thuê.
+  if ((m = /(?<![0-9.,])[1-9][0-9]{0,2}(?:[.,][0-9]{3}){2,}(?![0-9.,]*[0-9])/.exec(kdD)) &&
+      (docTien(m[0]) ?? 0) >= 1e8 && !TRUOC_LA_THUE.test(kd.slice(Math.max(0, m.index - 30), m.index))) {
     return { question: "gia", answer: catGoc(m) };
   }
   // Toà / tháp / block của chung cư — bắt TRƯỚC luật kết cấu, vì "toa S3.02 tang
@@ -1702,6 +1754,19 @@ export function laGatHoiVai(text: string): boolean {
   // "dạ cô" / "dạ chú" có thể chỉ là trả lời "cháu gọi chú hay cô" (câu chào hỏi cả hai) → cần lời gật RÕ ("đúng", "ừ", "có"…).
   const xungLonTuoi = w.some((x) => ["cô", "chú", "bác", "ông", "bà"].includes(x));
   return w.some((x, i) => (LOI_GAT_VAI.has(kd[i]) && !(xungLonTuoi && ["da", "o"].includes(kd[i]))) || x === "có");
+}
+
+/**
+ * 27/09/2026 (test Zalo): câu chào hỏi "anh chị cần giao bán bất động sản đúng không ạ?", khách "Hay quá" → bot sang hàng người
+ * mua hỏi "mua hay thuê". Câu CHUNG CHUNG — ≤ 4 chữ, không nói mua / thuê / bán / tìm / nhà đất / nơi chốn, không số, không hỏi —
+ * không trả lời câu vai; hỏi lại một lần.
+ */
+export function laCauChungChung(text: string): boolean {
+  const kd = boDau(text ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return /\p{Extended_Pictographic}/u.test(text ?? ""); // chỉ biểu tượng cảm xúc
+  if (/\d|\?/.test(`${kd}${text}`)) return false;
+  if (kd.split(" ").length > 4) return false;
+  return !/\b(?:mua|thue|ban|tim|kiem|can|nha|dat|can ho|chung cu|phong|mat bang|quan|phuong|duong|hem|gia|ty|trieu|khong|ko|chua|goi|alo)\b/.test(kd);
 }
 
 // ── "Gấp" — cột listings.gap ──────────────────────────────────────────────────

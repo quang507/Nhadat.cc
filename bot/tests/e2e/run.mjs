@@ -188,6 +188,16 @@ for (const [i, gat] of ["đúng rồi em", "dạ", "ừ", "vâng đúng rồi"].
     db().t.sellers.length === 1 && r.body.role === "seller" && !/chào/i.test(cau) && !/bán hay cho thuê/i.test(cau) && /địa chỉ/.test(cau),
     JSON.stringify({ rep: r.body.replies, s: db().t.sellers.length }));
 }
+// 27/09/2026 (test Zalo): "Hay quá" sau câu chào → không sang hỏi "mua hay thuê"; hỏi lại câu chào MỘT lần, lần sau mới về hàng mua.
+fresh(); await send({ external_user_id: "la-hay-qua", text: "Hello" });
+r = await send({ external_user_id: "la-hay-qua", text: "Hay quá" });
+check("V1.19 'Hay quá' sau câu chào → hỏi lại 'cần giao bán bất động sản đúng không ạ', không hỏi mua / thuê, không gọi model",
+  r.body.hoi_vai === true && /cần giao bán bất động sản đúng không ạ\?/.test(r.body.reply) && !/mua|thuê/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
+r = await send({ external_user_id: "la-hay-qua", text: "đúng rồi" });
+check("V1.19b rồi 'đúng rồi' → người bán", db().t.sellers.length === 1 && r.body.role === "seller", JSON.stringify(r.body));
+fresh(); await send({ external_user_id: "la-hay-qua2", text: "Hello" }); await send({ external_user_id: "la-hay-qua2", text: "Hay quá" });
+r = await send({ external_user_id: "la-hay-qua2", text: "ok" });
+check("V1.19c chung chung lần hai → không hỏi lại lần ba (về hàng người mua như cũ)", !/cần giao bán bất động sản đúng không/.test(r.body.reply ?? "") , JSON.stringify(r.body));
 for (const [i, khong] of ["không, anh muốn mua nhà", "đúng rồi anh muốn mua"].entries()) {
   fresh(); await send({ external_user_id: `la-khong-${i}`, text: "chào em" });
   r = await send({ external_user_id: `la-khong-${i}`, text: khong });
@@ -2227,7 +2237,7 @@ fresh(seedKho);
   }
   // 27/09/2026 (chủ dự án test Zalo, căn Botanic): đang hỏi hẻm, khách nhắn "8 tỉ" — AI im, luật đọc ra giá mà bị gạt (khoá AI
   // biết) → câu vào bổ sung, bot hỏi giá lại. Cả tin chỉ là một số tiền → ghi ô giá.
-  for (const [i, cau] of ["8 tỉ", "9 tỷ rưỡi nha em"].entries()) {
+  for (const [i, cau] of ["8 tỉ", "9 tỷ rưỡi nha em", "Giá 8.000.000.000"].entries()) {
     fresh(seedKho);
     const cuCH = globalThis.__cauHinh;
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
@@ -2240,6 +2250,105 @@ fresh(seedKho);
     const fT = (q) => db().t.listing_facts.filter((f) => f.listing_id === LT.id && f.question === q);
     check(`TIEN-TRON-0${i + 1} đang hỏi hẻm, chỉ nhắn '${cau}' (chế độ chinh, AI im) → ghi ô GIÁ, không vào bổ sung`,
       fT("gia").length === 1 && !fT("bo_sung").length, JSON.stringify({ gia: fT("gia"), bs: fT("bo_sung"), rep: rT.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // 27/09/2026 (chủ dự án test Zalo): "Ngang có 3 m" rồi "Nhưng dài tới 14 m" khi bot đang hỏi kết cấu (chế độ chinh, AI im)
+  // → diện tích "ngang 3m dài 14m", không rơi bổ sung.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "dai-tron", text: "bán nhà hẻm Trần Bình Trọng quận 5 giá 8 tỷ" });
+    const LD = db().t.listings.at(-1);
+    LD.frontage_m = 3;
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LD.id, question: "ket_cau", status: "pending" });
+    const rD = await send({ external_user_id: "dai-tron", text: "Nhưng dài tới 14 m" });
+    const fD = (q) => db().t.listing_facts.filter((f) => f.listing_id === LD.id && f.question === q);
+    check("DAI-TRON-01 đã có ngang 3, đang hỏi kết cấu, nhắn 'Nhưng dài tới 14 m' (chinh, AI im) → diện tích 'ngang 3m dài 14m', không bổ sung",
+      fD("dien_tich").some((f) => f.answer === "ngang 3m dài 14m") && !fD("bo_sung").length,
+      JSON.stringify({ dt: fD("dien_tich"), bs: fD("bo_sung"), rep: rD.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // 27/09/2026 (chủ dự án test Zalo): câu "sổ đứng tên ai" — AI nói "không trả lời" cho "Anh đứng tên chính nhé" (rơi bổ sung, bot
+  // xin họ tên), AI đọc "ba a thôi" thành "ba người". Câu này giữ nguyên chữ khách, AI không quyết.
+  for (const [i, [cau, tl]] of [["Anh đứng tên chính nhé", { co_tra_loi: false, gia_tri: null, trich_dan: null }],
+    ["ba a thôi", { co_tra_loi: true, gia_tri: "ba người", trich_dan: "ba a" }]].entries()) {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: `dung-ten-${i}`, text: RAO_MT });
+    const LN = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LN.id, question: "nguoi_dung_ten", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], tra_loi: tl } : OUT();
+    const rN = await send({ external_user_id: `dung-ten-${i}`, text: cau });
+    const fN = (q) => db().t.listing_facts.filter((f) => f.listing_id === LN.id && f.question === q);
+    check(`DUNGTEN-E${i + 1} '${cau}' khi hỏi người đứng tên (chinh) → ghi đúng chữ khách, không bổ sung, không 'ba người'`,
+      fN("nguoi_dung_ten").length === 1 && !/ba người/.test(fN("nguoi_dung_ten")[0].answer) && !fN("bo_sung").length,
+      JSON.stringify({ dt: fN("nguoi_dung_ten"), bs: fN("bo_sung"), rep: rN.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // 27/09/2026 (test Zalo): hỏi giá, khách "Cái giá hồi nãy đó" — giá đã nói năm tin trước ("Giá 8.000.000.000"). Đọc lại tin cũ,
+  // không rơi bổ sung (bot từng tự bịa "Em nhớ anh muốn 5 tỷ 2").
+  {
+    fresh(seedKho);
+    await send({ external_user_id: "gia-hoi-nay", text: "bán nhà hẻm Trần Bình Trọng quận 5, 60m2" });
+    const LG = db().t.listings.at(-1);
+    const conv = db().t.conversations.at(-1);
+    for (const t of ["Giá 8.000.000.000", "Ngang có 3 m", "Nhưng dài tới 14 m", "Chưa xây gì hết em nhà cấp 4", "Ô tô thì vào được"])
+      db().insert("messages", { conversation_id: conv.id, sender: "seller", body: t });
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LG.id, question: "gia", status: "pending" });
+    const rG = await send({ external_user_id: "gia-hoi-nay", text: "Cái giá hồi nãy đó" });
+    const fG = (q) => db().t.listing_facts.filter((f) => f.listing_id === LG.id && f.question === q);
+    check("GIAHN-01 'Cái giá hồi nãy đó' → lấy giá ở tin trước (8.000.000.000), không bổ sung",
+      fG("gia").some((f) => /8\.000\.000\.000/.test(f.answer)) && !fG("bo_sung").length, JSON.stringify({ gia: fG("gia"), bs: fG("bo_sung"), rep: rG.body.replies }));
+  }
+  // 27/09/2026 (test Zalo, đất Cần Đước): hỏi "lên thổ cư được không", khách "nói ở trên ròi mà" → bot vơ "ko có gì hết" (câu trả
+  // lời HẠ TẦNG) làm đáp án. Câu có / không chỉ lấy tin cũ nói đúng chủ đề; không có thì xin lỗi hỏi lại, không ghi gì.
+  {
+    fresh(seedKho);
+    await send({ external_user_id: "noi-tren", text: "bán đất Cần Đước Long An 425m2 giá 6 tỷ" });
+    const LT = db().t.listings.at(-1);
+    const conv = db().t.conversations.at(-1);
+    for (const t of ["ko có gì hết", "425m2"]) db().insert("messages", { conversation_id: conv.id, sender: "seller", body: t });
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LT.id, question: "len_tho_cu", status: "pending" });
+    const rT = await send({ external_user_id: "noi-tren", text: "nói ở trên ròi mà" });
+    check("NOITREN-01 'nói ở trên ròi mà' khi hỏi lên thổ cư → KHÔNG ghi 'ko có gì hết' vào lên thổ cư",
+      !db().t.listing_facts.some((f) => f.listing_id === LT.id && f.question === "len_tho_cu"), JSON.stringify({ f: db().t.listing_facts.filter((f) => f.listing_id === LT.id).map((f) => [f.question, f.answer]), rep: rT.body.replies }));
+  }
+  // 27/09/2026 (test Zalo): bot hỏi "Ô tô vào được tận nhà không anh?" (câu hẻm), khách "Ok" → bị hiểu là "đăng đi".
+  {
+    fresh(seedKho);
+    await send({ external_user_id: "ok-cokhong", text: "bán nhà Trần Bình Trọng quận 5 60m2 giá 8 tỷ" });
+    const LO = db().t.listings.at(-1);
+    const conv = db().t.conversations.at(-1);
+    db().insert("messages", { conversation_id: conv.id, sender: "bot", body: "Ô tô vào được tận nhà không anh?" });
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LO.id, question: "do_rong_hem", status: "pending" });
+    const rO = await send({ external_user_id: "ok-cokhong", text: "Ok" });
+    check("OKCK-01 'Ok' trả lời câu có/không của bot → KHÔNG thành 'đăng đi' (không 'Dạ em đăng liền', không mở duyệt)",
+      !rO.body.replies.some((x) => /đăng liền|Em đăng tin như vầy/.test(x)) && !rO.body.chu_muon_dang, JSON.stringify(rO.body));
+  }
+  // 27/09/2026 (test Zalo): "312 Nguyễn Thuơbgj Hiền" khi đang hỏi hẻm (chinh, AI im) → địa chỉ, không bổ sung.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "so-nha-sai", text: "bán nhà quận Phú Nhuận 60m2 giá 8 tỷ" });
+    const LS = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LS.id, question: "do_rong_hem", status: "pending" });
+    const rS = await send({ external_user_id: "so-nha-sai", text: "312 Nguyễn Thuơbgj Hiền" });
+    const fS = (q) => db().t.listing_facts.filter((f) => f.listing_id === LS.id && f.question === q);
+    check("SONHA-01 '312 Nguyễn Thuơbgj Hiền' khi hỏi hẻm (chinh, AI im) → ghi địa chỉ, không bổ sung, không vào ô hẻm",
+      fS("vi_tri").some((f) => /312/.test(f.answer)) && !fS("bo_sung").length && !fS("do_rong_hem").length,
+      JSON.stringify({ vt: fS("vi_tri"), bs: fS("bo_sung"), hem: fS("do_rong_hem"), rep: rS.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
   // 27/09/2026 (chủ dự án test Zalo): đang hỏi phường, chủ nhà hỏi "Em biết Botanic không" → model bịa "Botanic ở Quận 1, dự án

@@ -17,21 +17,21 @@ export async function thieuCoReNhanh<T extends Thieu>(
   if (!listingId || !canReNhanh(ds, vuaNoi, lichSu)) return ds;
   // MỘT truy vấn: tin + fact nhúng (listing_facts chỉ có một khoá ngoại tới listings).
   const { data: l, error: lErr } = await client.from("listings")
-    .select("property_type, deal, legal_status, has_completion, rent_income_vnd, rear_width_m, description, listing_facts(question, answer)")
+    .select("property_type, deal, legal_status, has_completion, rent_income_vnd, rear_width_m, area_m2, description, listing_facts(question, answer)")
     .eq("id", listingId).maybeSingle();
   if (lErr) {
     await ghiLoi(client, "re-nhanh doc tin", lErr.message);
     return ds;
   }
   if (!l) return ds;
-  const r = l as { property_type: string | null; deal: string | null; legal_status: string | null; has_completion: boolean | null; rent_income_vnd: number | null; rear_width_m: number | null; description: string | null; listing_facts: Array<{ question: string; answer: string | null }> | null };
+  const r = l as { property_type: string | null; deal: string | null; legal_status: string | null; has_completion: boolean | null; rent_income_vnd: number | null; rear_width_m: number | null; area_m2: number | null; description: string | null; listing_facts: Array<{ question: string; answer: string | null }> | null };
   return apReNhanh(ds, {
     loai: r.property_type, deal: r.deal, legal_status: r.legal_status, has_completion: r.has_completion,
     // Tin chủ nhà vừa nhắn cũng là bằng chứng: "sổ hồng riêng, hoàn công đủ" — đáp án pháp lý cắt còn "sổ hồng riêng",
     // chữ "hoàn công đủ" chỉ còn trong câu gốc.
     // Câu RAO gốc (`description`) cũng là bằng chứng: "…, đang cho ngân hàng thuê, giá 25 tỷ" không tách thành fact nào,
     // bảng rẽ nhánh chỉ đọc fact nên không biết nhà đang cho thuê và hỏi hoàn công (bắn thật production 24/09, rn-test-f).
-    rent_income_vnd: r.rent_income_vnd, rear_width_m: r.rear_width_m, lichSu, facts: [...(r.listing_facts ?? []), ...(r.description ? [{ question: "_mo_ta", answer: r.description }] : []),
+    rent_income_vnd: r.rent_income_vnd, rear_width_m: r.rear_width_m, area_m2: r.area_m2, lichSu, facts: [...(r.listing_facts ?? []), ...(r.description ? [{ question: "_mo_ta", answer: r.description }] : []),
       ...(tinNay ? [{ question: "_tin_nay", answer: tinNay }] : [])],
   }, vuaNoi);
 }

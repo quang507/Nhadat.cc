@@ -9,8 +9,8 @@ import { boHuaDaDang, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supaba
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
-import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { laGatHoiVai } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { laGatHoiVai, laCauChungChung } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
@@ -734,8 +734,8 @@ for (const [cau, laTiemNang] of [
   ok("'bán rồi em' vẫn là bán rồi", laNgungRao("bán rồi em") === "ban_roi");
   ok("'cho thuê được rồi em' vẫn là bán rồi (tin cho thuê)", laNgungRao("cho thuê được rồi em") === "ban_roi");
   ok("'đã có người cọc rồi' vẫn là bán rồi", laNgungRao("đã có người cọc rồi") === "ban_roi", String(laNgungRao("đã có người cọc rồi")));
-  for (const t of ["đã trả lời rồi này", "anh nói rồi mà", "trả lời ở trên rồi em", "gửi rồi đó", "nhắn lúc nãy rồi"]) ok(`'${t}' là câu 'đã trả lời'`, laNoiDaTraLoi(t));
-  for (const t of ["4 tầng, 4 phòng ngủ nhé", "nhà trả lời điện thoại suốt", "anh nói chung là nhà đẹp lắm, 4 tầng, hẻm xe hơi, sổ hồng riêng đầy đủ"]) ok(`'${t}' KHÔNG phải câu 'đã trả lời'`, !laNoiDaTraLoi(t));
+  for (const t of ["đã trả lời rồi này", "anh nói rồi mà", "trả lời ở trên rồi em", "gửi rồi đó", "nhắn lúc nãy rồi", "Cái giá hồi nãy đó", "như hồi nãy", "giá lúc nãy em"]) ok(`'${t}' là câu 'đã trả lời'`, laNoiDaTraLoi(t));
+  for (const t of ["4 tầng, 4 phòng ngủ nhé", "nhà trả lời điện thoại suốt", "anh nói chung là nhà đẹp lắm, 4 tầng, hẻm xe hơi, sổ hồng riêng đầy đủ", "giá 8 tỷ", "nhà ở từ năm 2019"]) ok(`'${t}' KHÔNG phải câu 'đã trả lời'`, !laNoiDaTraLoi(t));
   const bia = ["137m2 trên sổ, giá 5 tỷ 9 thương lượng 5 tỷ 5, khuôn đất này dễ xây lắm anh. Nhà mình xây mấy tầng rồi ạ?"];
   const ra = boCauM2KhongCo(bia, [], "137/28 nhé em, cần bán gấp giá 5 tỏi 9");
   ok("model nói '137m2' mà DB không có, khách không gõ → bỏ câu đó, giữ câu hỏi", ra.length === 1 && !/137m2/.test(ra[0]) && /xây mấy tầng/.test(ra[0]), JSON.stringify(ra));
@@ -814,6 +814,8 @@ for (const [cau, laTiemNang] of [
   for (const t of ["đúng rồi anh muốn mua", "không, anh muốn mua", "chào em", "dạ em chào anh", "không phải", "cô", "chú nha", "dạ cô", "ở quận 5"]) ok(`CHAO-GAT '${t}' KHÔNG là gật`, !laGatHoiVai(t));
   const c = boChaoLai("Dạ em chào anh! Anh muốn rao bán hay cho thuê ạ? Anh cho em xin địa chỉ (đường/phường), diện tích và giá mong muốn nha.");
   ok("CHAO-LAI bỏ lời chào lần hai + câu 'bán hay cho thuê', giữ câu xin địa chỉ, mở bằng 'Dạ'", /^Dạ, anh cho em xin địa chỉ/.test(c) && !/chào|bán hay cho thuê/.test(c), c);
+  for (const t of ["Hay quá", "ok", "😀", "tuyệt vời"]) ok(`CHUNG-CHUNG '${t}' là câu chung chung`, laCauChungChung(t));
+  for (const t of ["anh muốn mua nhà", "không", "có căn ở quận 5", "bán đất", "giá bao nhiêu?"]) ok(`CHUNG-CHUNG '${t}' KHÔNG chung chung`, !laCauChungChung(t));
   ok("CHAO-LAI tin không chào giữ nguyên", boChaoLai("Dạ anh nhắn giúp em địa chỉ nha.") === "Dạ anh nhắn giúp em địa chỉ nha.");
 }
 
@@ -836,11 +838,27 @@ for (const [cau, laTiemNang] of [
     giuVeCauMau("Dạ em ghi rồi. Sổ nhà mình đứng tên ai anh?", "nguoi_dung_ten", mau) === `Dạ em ghi rồi. ${mau}`);
   ok("VEMAU-02 câu model còn vế đồng sở hữu → giữ", giuVeCauMau("Sổ đứng tên ai, có đồng sở hữu không anh?", "nguoi_dung_ten", mau) === "Sổ đứng tên ai, có đồng sở hữu không anh?");
   ok("VEMAU-03 khoá không có vế bắt buộc → giữ", giuVeCauMau("Nhà có tranh chấp gì không anh?", "tranh_chap", "x") === "Nhà có tranh chấp gì không anh?");
+  ok("VEMAU-04 bot xin HỌ TÊN người đứng sổ → câu mẫu (hỏi quan hệ)",
+    giuVeCauMau("Em hiểu anh là chủ nhân chính của sổ nhé. Anh cho em xin tên người đứng tên trên sổ hồng ạ?", "nguoi_dung_ten", mau) === `Em hiểu anh là chủ nhân chính của sổ nhé. ${mau}`);
   ok("LAPLAI-01 'Sổ riêng thì bán nhanh hơn.' lặp lượt trước → bỏ, giữ câu hỏi",
     boCauLapLai("Sổ riêng thì bán nhanh hơn. Sổ nhà mình đứng tên ai anh?", ["Dạ, sổ riêng thì bán nhanh hơn. Nhà mình đã hoàn công chưa anh?"]) === "Sổ nhà mình đứng tên ai anh?");
   ok("LAPLAI-02 câu duy nhất thì giữ", boCauLapLai("Sổ riêng thì bán nhanh hơn.", ["Sổ riêng thì bán nhanh hơn."]) === "Sổ riêng thì bán nhanh hơn.");
   ok("LAPLAI-03 ghi nhận ngắn ('Dạ em ghi nhận.') không bị coi là lặp", boCauLapLai("Dạ em ghi nhận. Sổ cầm tay hay thế chấp?", ["Dạ em ghi nhận. Hoàn công chưa?"]) === "Dạ em ghi nhận. Sổ cầm tay hay thế chấp?");
 }
+
+// ── 27/09/2026 (test Zalo): khách đã nói "Giá 8.000.000.000", bot "Em nhớ anh muốn 5 tỷ 2 ạ" ──
+{
+  const ctx = "Anh muốn bán căn nhà ở đặng Văn ngữ\nGiá 8.000.000.000\nNgang có 3 m";
+  const r = boTienBia(["Em nhớ anh muốn 5 tỷ 2 ạ. Anh còn có thể giảm được hay mức này là giá cứng anh?"], ctx);
+  ok("TIENBIA-01 bỏ câu nêu số tiền khách chưa nói, giữ câu hỏi", r.replies[0] === "Anh còn có thể giảm được hay mức này là giá cứng anh?" && r.bo[0] === 5.2e9, JSON.stringify(r));
+  ok("TIENBIA-02 số khách đã nói (8 tỷ = 8.000.000.000) → giữ", !boTienBia(["Dạ anh muốn 8 tỷ ạ. Anh còn giảm được không?"], ctx).bo.length);
+  ok("TIENBIA-03 giá đã ghi trong tin → giữ", !boTienBia(["Dạ giá 9 tỷ em ghi rồi."], "", [9e9]).bo.length);
+  ok("TIENBIA-04 hai số trong một câu khách ('thuê 400 triệu 1 tháng bán 65 tỉ') đều là bằng chứng",
+    !boTienBia(["Cho thuê 400 triệu/tháng mà giá 65 tỷ thì hợp lý."], "đang cho thuê 400 triệu 1 tháng bán 65 tỉ").bo.length);
+}
+
+ok("CANHO-01 tin căn hộ: 'Dạ nhà anh ở phường nào' → 'căn hộ anh'", goiCanHo("Dạ nhà anh ở phường nào vậy anh?") === "Dạ căn hộ anh ở phường nào vậy anh?");
+ok("CANHO-02 'Nhà mình' đầu câu → 'Căn hộ mình'; 'nhà phố' không đổi", goiCanHo("Nhà mình tầng mấy ạ? Khu này nhà phố nhiều.") === "Căn hộ mình tầng mấy ạ? Khu này nhà phố nhiều.");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
