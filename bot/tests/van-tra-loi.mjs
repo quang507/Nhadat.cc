@@ -840,6 +840,14 @@ for (const [cau, laTiemNang] of [
   ok("VEMAU-03 khoá không có vế bắt buộc → giữ", giuVeCauMau("Nhà có tranh chấp gì không anh?", "tranh_chap", "x") === "Nhà có tranh chấp gì không anh?");
   ok("VEMAU-04 bot xin HỌ TÊN người đứng sổ → câu mẫu (hỏi quan hệ)",
     giuVeCauMau("Em hiểu anh là chủ nhân chính của sổ nhé. Anh cho em xin tên người đứng tên trên sổ hồng ạ?", "nguoi_dung_ten", mau) === `Em hiểu anh là chủ nhân chính của sổ nhé. ${mau}`);
+  // 27/09 (FR-232): tin bán hỏi pháp lý một câu gộp — model rút còn "sổ riêng hay chung" là mất hai ô.
+  const mauPL = "Sổ hồng nhà mình là sổ riêng hay sổ chung, anh đứng tên hay người nhà đứng tên, sổ đang cầm tay hay thế chấp ạ?";
+  ok("VEMAU-05 câu sổ gộp bị rút còn một vế → câu mẫu gộp",
+    giuVeCauMau("Dạ em ghi rồi. Sổ nhà mình riêng hay chung anh?", "phap_ly", mauPL) === `Dạ em ghi rồi. ${mauPL}`);
+  ok("VEMAU-06 câu model còn đủ vế đứng tên + thế chấp → giữ",
+    giuVeCauMau("Sổ riêng hay chung, ai đứng tên, đang thế chấp không anh?", "phap_ly", mauPL) === "Sổ riêng hay chung, ai đứng tên, đang thế chấp không anh?");
+  ok("VEMAU-07 câu mẫu MỘT vế (tin cho thuê) → không ép thêm vế",
+    giuVeCauMau("Sổ nhà mình riêng hay chung anh?", "phap_ly", "Sổ hồng nhà mình là sổ riêng hay sổ chung anh?") === "Sổ nhà mình riêng hay chung anh?");
   ok("LAPLAI-01 'Sổ riêng thì bán nhanh hơn.' lặp lượt trước → bỏ, giữ câu hỏi",
     boCauLapLai("Sổ riêng thì bán nhanh hơn. Sổ nhà mình đứng tên ai anh?", ["Dạ, sổ riêng thì bán nhanh hơn. Nhà mình đã hoàn công chưa anh?"]) === "Sổ nhà mình đứng tên ai anh?");
   ok("LAPLAI-02 câu duy nhất thì giữ", boCauLapLai("Sổ riêng thì bán nhanh hơn.", ["Sổ riêng thì bán nhanh hơn."]) === "Sổ riêng thì bán nhanh hơn.");

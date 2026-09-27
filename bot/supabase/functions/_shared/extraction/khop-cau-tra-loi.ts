@@ -666,6 +666,17 @@ const HOI_CO_KHONG = new Set([
 
 /** Câu hỏi có / không (đáp "có", "không", "rồi" là đủ). */
 export const laCauCoKhong = (q: string): boolean => HOI_CO_KHONG.has(q);
+/**
+ * Một câu phủ định chung cho CẢ câu hỏi gộp ("không có gì hết", "ko dính gì", "sạch sẽ hết em") — 27/09/2026, câu pháp lý thứ
+ * hai (quy hoạch + tranh chấp + xây lố). Có "nhưng / trừ" hay chữ số là nói riêng một ý → không tính; "không biết / không rõ"
+ * không phải câu trả lời.
+ */
+export function laKhongGiHet(text: string): boolean {
+  const kd = boDau(text).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd || kd.split(" ").length > 10 || /\d/.test(kd)) return false;
+  if (/\b(?:nhung|tru|ngoai|biet|ro|nho|chac|hoi|de em|de anh|de chi)\b/.test(kd)) return false;
+  return /^(?:da |a )?(?:khong|ko|k|hong|khg|kh|chang|dau co|lam gi co)\b/.test(kd) || /^(?:da |a )?sach(?: se)?\b/.test(kd);
+}
 
 // Từ khoá tối thiểu cho các câu hỏi CHỮ. Không có từ nào trong đây thì coi là
 // lệch: "16m nha" không phải hướng, "kêu chị nha" không phải pháp lý.

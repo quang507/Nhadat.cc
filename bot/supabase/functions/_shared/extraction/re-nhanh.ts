@@ -75,9 +75,11 @@ export const RE_NHANH: Luat[] = [
   {
     id: "so_rieng_hoi_hoan_cong",
     ten: "sổ riêng — hoàn công",
-    vi: "Nhà có xây + sổ hồng/sổ đỏ riêng, chưa nhắc hoàn công, không đang cho thuê → hỏi hoàn công",
+    vi: "Nhà có xây + sổ hồng/sổ đỏ riêng, chưa nhắc hoàn công, không đang cho thuê, không phải tin bán → hỏi hoàn công",
+    // 27/09/2026 (chủ dự án: "hỏi hơi nhiều"): tin BÁN hỏi hoàn công trong câu pháp lý thứ hai, hỏi bù sau khi lên tin
+    // (`quy_hoach@ban` / `dien_tich_khop_so`, nhóm `sau_dang`) — không thêm một lượt trước bản nháp.
     khi: ({ loai, deal, phap, tatCa, c }) =>
-      NHA_CO_XAY.includes(loai) && deal !== "cho_thue" && SO_RIENG.test(phap) && !CHUA_SO.test(phap) && !SO_CHUNG.test(phap) &&
+      NHA_CO_XAY.includes(loai) && deal !== "cho_thue" && deal !== "ban" && SO_RIENG.test(phap) && !CHUA_SO.test(phap) && !SO_CHUNG.test(phap) &&
       !/\bhoan cong\b/.test(tatCa) && c.has_completion == null && !DANG_CHO_THUE.test(tatCa) && !(Number(c.rent_income_vnd ?? 0) > 0),
     sau: ["phap_ly"],
     them: [{ fact_key: "hoan_cong", priority: 16.2, nhom: "co_ban" }],

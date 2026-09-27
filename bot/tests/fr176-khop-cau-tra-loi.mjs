@@ -3,7 +3,7 @@
 //   bun bot/tests/fr176-khop-cau-tra-loi.mjs
 // Mỗi dòng dưới là một câu THẬT hoặc gần thật từ log 07/09/2026. Thêm ca khi
 // bắt được một câu bot ghi sai chỗ ngoài đời — đó là cách file này lớn lên.
-import { batXungHo, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { batXungHo, laKhongGiHet, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 const CA = [
   // [câu hỏi đang treo, câu chủ nhà nhắn, loại mong đợi, kiểm thêm]
@@ -111,5 +111,14 @@ for (const [t, mong] of xh) {
   if (!ok) hong++;
   console.log(`${ok ? "✓" : "✗"} xưng hô "${t}" → ${kq}${ok ? "" : `  MONG ${mong}`}`);
 }
-console.log(hong ? `\nFR-176: ${hong}/${CA.length + xh.length} CA HỎNG` : `\nFR-176: ${CA.length + xh.length}/${CA.length + xh.length} CA ĐẠT`);
+// 27/09 (FR-232): câu phủ định chung cho câu hỏi gộp quy hoạch / tranh chấp / xây lố.
+const kgh = [["không có gì hết em", true], ["ko dính gì", true], ["Dạ không", true], ["sạch sẽ hết em", true], ["làm gì có", true],
+  ["không dính quy hoạch nhưng có tranh chấp", false], ["không biết nữa em", false], ["lộ giới 2m", false], ["có dính quy hoạch", false],
+  ["không rõ lắm", false], ["không, để anh hỏi lại", false]];
+for (const [t, mong] of kgh) {
+  const kq = laKhongGiHet(t);
+  if (kq !== mong) hong++;
+  console.log(`${kq === mong ? "✓" : "✗"} không gì hết "${t}" → ${kq}${kq === mong ? "" : `  MONG ${mong}`}`);
+}
+console.log(hong ? `\nFR-176: ${hong}/${CA.length + xh.length + kgh.length} CA HỎNG` : `\nFR-176: ${CA.length + xh.length + kgh.length}/${CA.length + xh.length + kgh.length} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

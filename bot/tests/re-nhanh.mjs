@@ -7,11 +7,11 @@ const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${da
 const f = (q, a) => ({ question: q, answer: a });
 const keys = (r) => r.them.map((t) => t.fact_key);
 
-let r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng")] });
+let r = reNhanh({ loai: "nha_pho", deal: null, facts: [f("phap_ly", "sổ hồng riêng")] });
 ok("nhà phố + 'sổ hồng riêng' → hỏi hoàn công", keys(r).includes("hoan_cong"), JSON.stringify(r));
-r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng, hoàn công đủ")] });
+r = reNhanh({ loai: "nha_pho", deal: null, facts: [f("phap_ly", "sổ hồng riêng, hoàn công đủ")] });
 ok("đã nói 'hoàn công đủ' → KHÔNG hỏi hoàn công", !keys(r).includes("hoan_cong"), JSON.stringify(r));
-r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng"), f("hien_trang", "đang cho Sacombank thuê")] });
+r = reNhanh({ loai: "nha_pho", deal: null, facts: [f("phap_ly", "sổ hồng riêng"), f("hien_trang", "đang cho Sacombank thuê")] });
 ok("sổ riêng + đang cho thuê → KHÔNG hỏi hoàn công, bỏ hiện trạng + nội thất", !keys(r).includes("hoan_cong") && r.bo.has("hien_trang") && r.bo.has("noi_that"), JSON.stringify({ ...r, bo: [...r.bo] }));
 // 24/09/2026 (chủ dự án, tin 152 Trần Đình Xu): đang cho thuê / kinh doanh LÀ tiềm năng sử dụng — không hỏi lại.
 ok("đang cho thuê → bỏ câu tiềm năng sử dụng", r.bo.has("tiem_nang"), JSON.stringify([...r.bo]));
@@ -69,22 +69,26 @@ r = reNhanh({ loai: "dat", deal: "ban", facts: [f("tho_cu", "full thổ cư")] }
 ok("đất full thổ cư → KHÔNG hỏi lên thổ cư", !keys(r).includes("len_tho_cu"), JSON.stringify(r));
 r = reNhanh({ loai: "nha_pho", deal: "cho_thue", facts: [f("phap_ly", "sổ hồng riêng")] });
 ok("tin CHO THUÊ sổ riêng → KHÔNG hỏi hoàn công", !keys(r).includes("hoan_cong"), JSON.stringify(r));
-r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng"), f("hoan_cong", "rồi em")] });
+r = reNhanh({ loai: "nha_pho", deal: null, facts: [f("phap_ly", "sổ hồng riêng"), f("hoan_cong", "rồi em")] });
 ok("đã trả lời câu hoàn công → không thêm lại", !keys(r).includes("hoan_cong"), JSON.stringify(r));
-r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [], legal_status: "so_hong_rieng" });
+r = reNhanh({ loai: "nha_pho", deal: null, facts: [], legal_status: "so_hong_rieng" });
 ok("cột legal_status 'so_hong_rieng' (bóc từ câu rao) cũng tính là sổ riêng", keys(r).includes("hoan_cong"), JSON.stringify(r));
+// 27/09/2026 (chủ dự án: "hỏi hơi nhiều"): tin BÁN hỏi hoàn công trong câu pháp lý thứ hai, sau khi lên tin — không rẽ nhánh
+// thêm một lượt trước bản nháp. Các ca trên dùng tin chưa rõ bán/thuê (deal null), nơi nhánh này còn chạy.
+r = reNhanh({ loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng")] }, ["phap_ly"]);
+ok("tin BÁN + 'sổ hồng riêng' → KHÔNG rẽ nhánh hoàn công trước bản nháp", !keys(r).includes("hoan_cong"), JSON.stringify(r));
 
 // Chọn câu kế: vừa trả lời pháp lý "sổ hồng riêng" → câu kế là hoàn công, trước phường / ảnh.
 const thieu = [{ fact_key: "phuong", priority: 17, nhom: "co_ban" }, { fact_key: "hinh_anh", priority: 19, nhom: "co_ban" }];
-const ds = apReNhanh(thieu, { loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng")] }, ["phap_ly"]);
+const ds = apReNhanh(thieu, { loai: "nha_pho", deal: null, facts: [f("phap_ly", "sổ hồng riêng")] }, ["phap_ly"]);
 ok("chonCauKe sau 'sổ hồng riêng' → hoan_cong", chonCauKe(["phap_ly"], ds) === "hoan_cong", JSON.stringify(ds));
 const ds5 = apReNhanh([{ fact_key: "phuong", priority: 17, nhom: "co_ban" }], { loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "chưa có sổ"), f("giay_to_hien_co", "vi bằng")] }, ["giay_to_hien_co"]);
 ok("vừa trả lời một ý của nhánh (giấy tờ) → hỏi tiếp ý còn thiếu của nhánh (bao giờ ra sổ)", chonCauKe(["giay_to_hien_co"], ds5) === "du_kien_ra_so", JSON.stringify(ds5));
 const ds2 = apReNhanh([{ fact_key: "hien_trang", priority: 4, nhom: "co_ban" }, { fact_key: "phuong", priority: 17, nhom: "co_ban" }],
   { loai: "nha_cap4", deal: "ban", facts: [f("hien_trang", "đang cho thuê 20 triệu/tháng")] });
-const ds3 = apReNhanh([{ fact_key: "ket_cau", priority: 4, nhom: "co_ban" }], { loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng")] }, ["gia"]);
+const ds3 = apReNhanh([{ fact_key: "ket_cau", priority: 4, nhom: "co_ban" }], { loai: "nha_pho", deal: null, facts: [f("phap_ly", "sổ hồng riêng")] }, ["gia"]);
 ok("câu nhánh CHỈ hỏi ngay sau câu kích (vừa trả lời giá thì không chen hoàn công)", !ds3.some((x) => x.fact_key === "hoan_cong"), JSON.stringify(ds3));
-const ds4 = apReNhanh([{ fact_key: "ket_cau", priority: 4, nhom: "co_ban" }], { loai: "nha_pho", deal: "ban", facts: [f("phap_ly", "sổ hồng riêng")] }, ["phap_ly"]);
+const ds4 = apReNhanh([{ fact_key: "ket_cau", priority: 4, nhom: "co_ban" }], { loai: "nha_pho", deal: null, facts: [f("phap_ly", "sổ hồng riêng")] }, ["phap_ly"]);
 ok("vừa trả lời pháp lý → hoàn công đứng ĐẦU, trước cả câu cơ bản còn thiếu", chonCauKe(["phap_ly"], ds4) === "hoan_cong", JSON.stringify(ds4));
 ok("apReNhanh bỏ hiện trạng khỏi danh sách khi đang cho thuê", !ds2.some((x) => x.fact_key === "hien_trang"), JSON.stringify(ds2));
 

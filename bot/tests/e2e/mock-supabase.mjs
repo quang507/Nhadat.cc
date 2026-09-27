@@ -44,8 +44,10 @@ export class FakeDB {
     const SAU_NHA = [SD("so_wc", 30), SD("cach_mat_tien", 31), SD("hem_thong", 32), SD("ngap_nuoc", 33), SD("hien_trang_su_dung", 34), SD("the_chap", 35, "cho_thue"), SD("tien_ich_gan", 36), SD("ly_do_ban", 37), SD("thuong_luong", 38)];
     // 20260925i (FR-229): tin BÁN hỏi pháp lý trước bản nháp — sổ 16 → đứng tên 17 → thế chấp 18 → quy hoạch 19 → tranh chấp 20
     // → diện tích khớp sổ 21; phường / gấp / ảnh dời ra 22 / 23 / 24.
-    const PL = (quyHoach, khopSo) => [CB("nguoi_dung_ten", 17, "ban"), CB("the_chap", 18, "ban"), ...(quyHoach ? [CB("quy_hoach", 19, "ban")] : []),
-      CB("tranh_chap", 20, "ban"), ...(khopSo ? [CB("dien_tich_khop_so", 21, "ban")] : [])];
+    // 20260927c (FR-232, chủ dự án "hỏi hơi nhiều"): năm câu đó sang nhóm sau_dang — trước bản nháp chỉ còn câu sổ (gộp đứng tên
+    // + thế chấp), còn lại hỏi bù sau khi lên tin.
+    const PL = (quyHoach, khopSo) => [SD("nguoi_dung_ten", 17, "ban"), SD("the_chap", 18, "ban"), ...(quyHoach ? [SD("quy_hoach", 19, "ban")] : []),
+      SD("tranh_chap", 20, "ban"), ...(khopSo ? [SD("dien_tich_khop_so", 21, "ban")] : [])];
     // 20260924c (FR-219): MỌI câu trước bản nháp chung nhóm co_ban, thứ tự "chủ nhà dễ trả lời trước": vật lý (2–11) →
     // tiền (12–15) → pháp lý 16–21 → phường 22 → gấp 23 → ảnh 24 — chép đúng bảng required_facts thật.
     const REQ = {

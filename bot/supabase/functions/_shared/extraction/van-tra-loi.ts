@@ -1135,6 +1135,10 @@ export function boViTriBia(replies: string[], nguCanh: string): { replies: strin
 const VE_BAT_BUOC: Record<string, RegExp> = {
   nguoi_dung_ten: /\b(dong so huu|dung ten chung|so chung|vo chong|anh em|thua ke)\b/,
   dien_tich_khop_so: /\bhoan cong\b/,
+  // 27/09/2026 (chủ dự án: "hỏi hơi nhiều"): tin bán hỏi pháp lý MỘT câu gộp (sổ + ai đứng tên + cầm tay / thế chấp); model
+  // rút còn "sổ riêng hay chung" là mất hai ô. Chỉ áp khi câu mẫu chính nó có đủ vế (tin cho thuê vẫn câu sổ một vế).
+  phap_ly: /^(?=.*\bdung ten\b)(?=.*\b(?:the chap|cam tay)\b)/,
+  quy_hoach: /^(?=.*\bquy hoach\b)(?=.*\btranh chap\b)/,
 };
 // 27/09/2026 (test Zalo): "Anh cho em xin tên người đứng tên trên sổ hồng ạ?" — không bao giờ xin HỌ TÊN (tên người thật,
 // CLAUDE.md §5); câu hỏi như vậy thay bằng câu mẫu (hỏi quan hệ).
@@ -1142,7 +1146,7 @@ const CAM_HOI_TEN = /\b(?:xin|cho em|cho biet)\s+(?:ho\s+)?ten\b|\bho (?:va )?te
 export function giuVeCauMau(reply: string, khoa: string | null | undefined, cauMau: string): string {
   const re = khoa ? VE_BAT_BUOC[khoa] : undefined;
   const cau = cauHoiCuoi(reply);
-  if (!re || !cauMau || !cau) return reply;
+  if (!re || !cauMau || !cau || !re.test(boDau(cauMau))) return reply;
   const kdCau = boDau(cau);
   if (re.test(kdCau) && !(khoa === "nguoi_dung_ten" && CAM_HOI_TEN.test(kdCau))) return reply;
   const i = reply.lastIndexOf(cau);
