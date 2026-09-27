@@ -2351,6 +2351,24 @@ fresh(seedKho);
       JSON.stringify({ vt: fS("vi_tri"), bs: fS("bo_sung"), hem: fS("do_rong_hem"), rep: rS.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // 27/09/2026 (bắn thật lx-36): "Ở cầu kho em ơi" khi hỏi phường (chinh, AI im) → phường ghi đúng nhưng luật tiềm năng còn
+  // ghi kèm "Ở cầu kho em ơi" ("ở" = để ở). Đang hỏi địa chỉ thì "ở …" là NẰM Ở.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "cau-kho", text: "bán nhà quận 1 60m2 giá 8 tỷ" });
+    const LK = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LK.id, question: "phuong", status: "pending" });
+    const rK = await send({ external_user_id: "cau-kho", text: "Ở cầu kho em ơi" });
+    const fK = (q) => db().t.listing_facts.filter((f) => f.listing_id === LK.id && f.question === q);
+    check("CAUKHO-E1 'Ở cầu kho em ơi' khi hỏi phường (chinh, AI im) → ghi phường, KHÔNG ghi kèm tiềm năng",
+      fK("phuong").some((f) => /cầu kho/i.test(f.answer)) && !fK("tiem_nang").length,
+      JSON.stringify({ ph: fK("phuong"), tn: fK("tiem_nang"), rep: rK.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
   // 27/09/2026 (chủ dự án test Zalo): đang hỏi phường, chủ nhà hỏi "Em biết Botanic không" → model bịa "Botanic ở Quận 1, dự án
   // Phú Mỹ Hưng". Câu nêu quận / khu chủ nhà chưa nói và tin không có → bỏ, câu hỏi phường giữ.
   {
