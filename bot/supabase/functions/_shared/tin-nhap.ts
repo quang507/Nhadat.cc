@@ -21,7 +21,7 @@
 
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
 import { tenNhan, tenNhanKhongTrung } from "./extraction/nhan.ts";
-import { vndThanhChu } from "./extraction/luat-tien.ts";
+import { donViGiaDep, vndThanhChu } from "./extraction/luat-tien.ts";
 import { laBoSungTrung } from "./extraction/khop-cau-tra-loi.ts";
 
 export const COT_TIN_NHAP =
@@ -120,6 +120,11 @@ function gonHanhChinh(s: string | null | undefined): string | null {
  * TIÊU ĐỀ kiểu tin lẻ mogi: một dòng, gộp thứ đáng tiền, KẾT bằng giá.
  * Chỉ ghép từ cột + fact; thiếu phần nào thì bỏ phần đó.
  */
+/** Giá in lên tin. 27/09/2026 (bắn thật lx-36): "Giá 8.000.000.000" → bản nháp in nguyên dãy số; nay "8 tỷ" (`donViGiaDep`). */
+export function giaHienThi(l: Pick<TinNhapRow, "price_raw">): string | null {
+  return l.price_raw ? donViGiaDep(l.price_raw) : null;
+}
+
 export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): string {
   const thue = l.deal === "cho_thue";
   // Tách CỤM bằng dấu phẩy, đúng thứ tự người ta đọc một tin rao: chỗ nào →
@@ -148,7 +153,8 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): st
   const pl = viBang ? "vi bằng" : PHAP_LY_TIEU_DE[l.legal_status ?? ""] ?? null;
   if (pl) cum.push(pl);
   if (l.gap === true) cum.push(thue ? "cần cho thuê gấp" : "cần bán gấp");
-  if (l.price_raw) cum.push(`giá ${l.price_raw}${thue && !/thang/.test(boDau(l.price_raw)) ? "/tháng" : ""}`);
+  const gia = giaHienThi(l);
+  if (gia) cum.push(`giá ${gia}${thue && !/thang/.test(boDau(gia)) ? "/tháng" : ""}`);
   const t = cum.join(", ").replace(/\s+/g, " ").trim();
   return t.length <= 120 ? t : t.slice(0, 117).replace(/[\s,]+\S*$/, "") + "…";
 }
@@ -184,8 +190,9 @@ export function soanTinNhap(t: ThamSoNhap): string {
   const dc = diaChiGon(l.location_raw, l.ward, l.district);
   dong.push(`📍 ${dc.charAt(0).toLocaleUpperCase("vi") + dc.slice(1)}${fact("khu_compound") ? ` · ${fact("khu_compound")}` : ""}`);
   // GIÁ đứng ngay dưới địa chỉ như mọi tin rao thật (bản cũ để tận cuối).
-  if (l.price_raw) {
-    const giaDaNoi = /thuong luong|\btl\b|con bot|fix|co dinh/.test(boDau(l.price_raw));
+  const gia = giaHienThi(l);
+  if (gia) {
+    const giaDaNoi = /thuong luong|\btl\b|con bot|fix|co dinh/.test(boDau(gia));
     const tl = giaDaNoi
       ? ""
       : l.negotiable === true || /thuong luong|\btl\b|con bot|fix/.test(boDau(fact("thuong_luong") ?? ""))
@@ -194,7 +201,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
       ? " (giá cố định)"
       : "";
     dong.push(
-      `💰 ${l.price_raw}${thue && !/thang/.test(boDau(l.price_raw)) ? "/tháng" : ""}${tl}${
+      `💰 ${gia}${thue && !/thang/.test(boDau(gia)) ? "/tháng" : ""}${tl}${
         fact("ly_do_ban") ? ` · lý do bán: ${fact("ly_do_ban")}` : ""
       }`,
     );

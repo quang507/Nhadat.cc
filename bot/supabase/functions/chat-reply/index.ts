@@ -4052,14 +4052,18 @@ Deno.serve(async (req) => {
       const kichThuocChac = (f: { question: string; answer: string }) =>
         (f.question === "dien_tich" || f.question === "dien_tich_dat") && /^\s*\d+(?:[.,]\d+)?\s*m?\s*x\s*\d+(?:[.,]\d+)?\s*m?\s*$/i.test(f.answer);
       const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "thang_may", "dien_tich_san", "do_rong_hem"]);
-      const factKem = (s: string): Array<{ question: string; answer: string }> => aiChinh
+      // 27/09/2026 (bắn thật lx-36): "Ở cầu kho em ơi" khi hỏi phường → luật tiềm năng đọc "ở" là ĐỂ Ở và ghi kèm. Đang hỏi
+      // địa chỉ thì "ở …" là NẰM Ở.
+      const oLaNamO = (s: string) => cungHoFact("vi_tri", pendingReq.question) && /^\s*(?:nha\s+)?o\s/.test(boDau(s));
+      const factKem = (s: string): Array<{ question: string; answer: string }> => (aiChinh
         ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => f.question !== "bo_sung" && (
             !KHOA_FACT_AI_BIET.has(f.question) ||
             (!aiChinh!.ghi.some((g) => g.question === f.question) &&
               (aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)) ||
                 KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f) || kichThuocChac(f)))))
             .map((f) => phapLyChac(f) ? { question: "phap_ly", answer: "sổ hồng riêng" } : f)]
-        : nhanDienNhieuFact(s);
+        : nhanDienNhieuFact(s)
+      ).filter((f) => !(oLaNamO(s) && f.question === "tiem_nang"));
       // 15/09/2026 (Zalo thật): vừa trả lời vừa HỎI NGƯỢC → ghi PHẦN trả lời, câu hỏi
       // của chủ nhà được trả lời TRƯỚC câu kế (không nuốt, không ghi cả câu vào ô).
       // 15/09/2026 (bắn thật A5): cả tin là MỘT câu hỏi ("bên bạn có cần mình gửi hình

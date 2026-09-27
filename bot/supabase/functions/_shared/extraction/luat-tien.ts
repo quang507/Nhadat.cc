@@ -76,6 +76,11 @@ export function giaTheoM2(p: string | null | undefined): number | null {
  * gõ; câu trả lời "giá mình đang rao là 4 ty 3"). `price_raw` trong DB giữ nguyên chữ khách.
  */
 export function donViGiaDep(s: string): string {
+  // 27/09/2026 (bắn thật lx-36): "8.000.000.000" in nguyên dãy số → "8 tỷ". Chỉ số chẵn triệu (vndThanhChu làm tròn triệu).
+  if (/^\s*(?:[1-9]\d{0,2}(?:[.,]\d{3}){2,}|[1-9]\d{6,12})\s*(?:đ|d|vnd|đồng|dong)?\s*$/iu.test(s)) {
+    const v = docTien(s);
+    if (v != null && v % 1e6 === 0) return vndThanhChu(v);
+  }
   // 22/09/2026 (kịch bản C): "7ty2" — đơn vị dính số hai đầu, `\b` không thấy ("7ty2" in nguyên). Không dùng
   // `\b`: sau đơn vị không được là chữ; số dính ngay sau thì chèn khoảng trắng. "toi" chỉ là tỏi khi sau nó
   // KHÔNG có số ("5 toi 6 ty" là TỚI — cùng luật `TIEN_KD`).

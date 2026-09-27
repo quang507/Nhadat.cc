@@ -92,7 +92,12 @@ la("tiêu đề cho thuê: mở bằng 'Cho thuê căn hộ', giá kèm '/tháng
 
 const tdDat = tieuDeTin(DAT.l, fact(DAT));
 la("tin thiếu đường/kết cấu vẫn ra tiêu đề gọn, có 'cần bán gấp'",
-  /^Bán đất Huyện Củ Chi, 100m², cần bán gấp, giá 900tr$/.test(tdDat), tdDat);
+  /^Bán đất Huyện Củ Chi, 100m², cần bán gấp, giá 900 triệu$/.test(tdDat), tdDat);
+// 27/09/2026 (bắn thật lx-36): "Giá 8.000.000.000" → bản nháp in nguyên dãy số. Nay in bằng chữ khi chẵn triệu.
+const tdDaySo = tieuDeTin({ ...DAT.l, price_raw: "8.000.000.000" }, fact(DAT));
+la("giá dãy số '8.000.000.000' → tiêu đề 'giá 8 tỷ'", /giá 8 tỷ$/.test(tdDaySo), tdDaySo);
+const tdLe = tieuDeTin({ ...DAT.l, price_raw: "8.500.000" }, fact(DAT));
+la("giá dãy số lẻ triệu '8.500.000' giữ nguyên (không làm tròn thành 9 triệu)", /giá 8\.500\.000$/.test(tdLe), tdLe);
 
 const nha = dung(NHA_PHO);
 const dongNha = nha.split("\n");
