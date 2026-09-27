@@ -5147,6 +5147,9 @@ Deno.serve(async (req) => {
             // viết "đã đăng lên web rồi" → bỏ mệnh đề đó. Câu hỏi model lệch khoá code chọn → thay bằng câu mẫu.
             if (raoReply) raoReply = boHuaDaDang([raoReply])[0] ?? null;
             if (raoReply && !cauXacNhanDau && firstKey && cauHoiDau) raoReply = thayCauHoiLech(raoReply, firstKey, cauHoiDau);
+            // 27/09/2026 (bắn thật lx-38, FR-232): câu hỏi ĐẦU sau câu rao là câu sổ gộp mà model rút còn "Sổ nhà mình riêng
+            // hay chung ạ?" (lời dặn "đừng gắn thêm ý khác") → mất hai ô đứng tên / thế chấp. Thiếu vế bắt buộc → câu mẫu.
+            if (raoReply && !cauXacNhanDau && firstKey && cauHoiDau) raoReply = giuVeCauMau(raoReply, firstKey, cauHoiDau);
             await doTien(client, r1.usage);
           } catch (e) {
             await ghiLoi(client, "chat-reply model r1(seller)", e);
