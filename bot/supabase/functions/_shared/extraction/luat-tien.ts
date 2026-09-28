@@ -120,7 +120,17 @@ export const SO_CHU: ReadonlyArray<readonly [string, string]> = [
 ];
 const DON_VI_CHU = "(?=\\s*(?:tỷ|tỏi|tỉ|ty|triệu|trieu|củ|trăm|tram)(?![\\p{L}]))";
 
+// Lọc trước (20260928g): vòng đổi dưới đây tốn ~100 lượt regex; `parse_vnd` bị gọi trong hàm quét nhiều dòng nên chạy vòng cho
+// MỌI câu làm DB Free quá giờ (bắn lại 28/09). Chỉ chạy khi câu có chữ số đứng sát đơn vị tiền, hoặc sau "tỷ", hoặc "<số> trăm".
+const CHU_SO_RE = "(?:một|mốt|mot|hai|ba|bốn|bon|tư|năm|nam|lăm|sáu|sau|bảy|bẩy|bay|tám|tam|chín|chin|mười|muoi|mươi)";
+const CO_SO_CHU = [
+  new RegExp(`${CHU_SO_RE}\\s*(?:tỷ|tỏi|tỉ|ty|triệu|trieu|củ|trăm|tram)(?![\\p{L}])`, "u"),
+  new RegExp(`(?:tỷ|tỏi|tỉ)\\s+${CHU_SO_RE}(?!\\s*[\\p{L}\\p{N}])`, "u"),
+  /[0-9]\s*(?:trăm|tram)(?![\p{L}])/u,
+];
+
 export function soChuThanhSo(t: string): string {
+  if (!CO_SO_CHU.some((re) => re.test(t))) return t;
   for (const [w, d] of SO_CHU) {
     t = t.replace(new RegExp(`(?<![\\p{L}\\p{N}])(?:mười|muoi)\\s+${w}${DON_VI_CHU}`, "gu"), `1${d}`);
     t = t.replace(new RegExp(`(?<![\\p{L}\\p{N}])${w}\\s+(?:mươi|muoi)(?![\\p{L}])`, "gu"), `${d}0`);
