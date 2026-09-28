@@ -41,6 +41,15 @@ on:
 env:
   PROJECT_REF: tbcdpupiarkuxtntmosl
 
+# Chỉ MỘT lượt deploy chạy tại một thời điểm, cho mọi function (28/09/2026). Hôm đó chat-reply và
+# ask-seller deploy song song: bước "Chứng minh nó tới nơi" của chat-reply báo v262 → v263, nhưng vài
+# phút sau Supabase vẫn ghi v262 và production chạy code cũ suốt một lượt test. Lượt sau xếp hàng chờ
+# lượt trước xong, không huỷ lượt đang chạy. Lưu ý của GitHub: nhóm chỉ giữ MỘT lượt chờ — bấm ba lượt
+# liền thì lượt chờ cũ bị thay bằng lượt mới nhất (bị huỷ, không mất im: tab Actions ghi "cancelled").
+concurrency:
+  group: deploy-bot
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy ${{ inputs.ham }}
@@ -132,4 +141,13 @@ jobs:
           if [ "$jwt" != "${{ steps.truoc.outputs.verify_jwt }}" ]; then
             echo "::error::verify_jwt đã đổi (${{ steps.truoc.outputs.verify_jwt }} → $jwt) — sai, phải giữ nguyên."; loi=1
           fi
-          exit $loi
+          [ "$loi" = "0" ] || exit $loi
+          # 28/09/2026: đọc ngay sau deploy thấy v263, vài phút sau Supabase lại ghi v262 — con số đọc một lần
+          # chưa phải bằng chứng. Đọc lại sau 30 giây: version và mã bản build phải giữ nguyên.
+          sleep 30
+          curl -sS -H "Authorization: Bearer $TOKEN" "$api" > /tmp/sau2.json
+          ver2=$(jq -r '.version' /tmp/sau2.json)
+          if [ "$ver2" != "$ver" ] || [ "$(jq -r '.ezbr_sha256' /tmp/sau2.json)" != "$(jq -r '.ezbr_sha256' /tmp/sau.json)" ]; then
+            echo "::error::30 giây sau bản đang chạy đã đổi (v$ver → v$ver2) — deploy không giữ được, chạy lại."; exit 1
+          fi
+          echo "Sau 30s: v$ver2 — giữ nguyên."

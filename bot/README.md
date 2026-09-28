@@ -49,6 +49,14 @@ lệch với DB). Đặt sai cờ này là bot câm: `chat-reply` đang `false`,
 `verify_jwt` phải GIỮ NGUYÊN — "đã gọi lệnh deploy" không phải bằng chứng đã
 deploy, cùng cái bẫy NFR-18.
 
+**Mỗi lúc chỉ MỘT lượt deploy** (`concurrency: deploy-bot`, 28/09/2026). Hôm đó
+`chat-reply` và `ask-seller` deploy song song: bước kiểm báo v262 → v263, vài
+phút sau Supabase vẫn ghi v262 và production chạy code cũ suốt một lượt test.
+Nay lượt sau xếp hàng chờ lượt trước xong, và bước kiểm đọc lại lần hai sau 30
+giây — version / mã bản build phải giữ nguyên. GitHub chỉ giữ MỘT lượt chờ trong
+nhóm: bấm ba lượt liền thì lượt chờ cũ bị huỷ (tab Actions ghi "cancelled"),
+nên deploy nhiều hàm thì bấm lần lượt, đợi lượt trước xong.
+
 Chạy tay trên máy có CLI thì tương đương:
 
 ```bash
