@@ -249,6 +249,9 @@ export function laBoSungRac(s: string | null | undefined): boolean {
     .replace(/\b(?:em|e|anh|a|chi|c|oi|nha|nhe|nhen|nghen|a|ah|ha|nhi|luon|vay|thoi|roi|ok|oke|uh|uhm|um|da|vang)\b/g, " ")
     .replace(/\s+/g, " ").trim();
   if (!kd || kd.split(" ").length < 2) return true;
+  // FR-239 m (phát lại test 28/09): "Cần đước, long an á e" (trả lời câu địa chỉ) → ô quận "Cần Đước, Long An" VÀ ghi chú
+  // nguyên văn. Mảnh ngắn chỉ gồm huyện + tỉnh lân cận là địa bàn, không phải thông tin thêm.
+  if (kd.split(" ").length <= 6 && /^(?:o\s+|tai\s+|thuoc\s+)?(?:[a-z]+\s+){0,3}(?:long an|binh duong|dong nai|tay ninh|ba ria vung tau|vung tau|tien giang|ben tre|hcm|tp hcm|sai gon|ho chi minh)$/.test(kd)) return true;
   return /^(?:o\s+|tai\s+|thuoc\s+)?(?:quan|q|huyen|phuong|p|xa|thi tran|tp|thanh pho)\s*[a-z0-9 ]{0,24}$/.test(kd) && kd.split(" ").length <= 5;
 }
 
@@ -312,6 +315,9 @@ export function laBoSungTrung(s: string | null | undefined, c: NguCanhBoSung): b
   if (thuanChuDe(kd, /\b(?:no hau|nha|dat|lo)\b/) && /\bno hau\b/.test(kd) && !phuDinh) return !!(f.no_hau || (c.rear_width_m != null && c.rear_width_m !== ""));
   // "nhà mới xây năm ngoái" khi năm xây đã ghi / tin đã mang nhãn mới xây (25/09/2026, chủ dự án test Zalo).
   if (/\b(?:xay|sua)\b/.test(kd) && thuanChuDe(kd, TU_NAM_XAY) && !phuDinh) return !!(f.nam_xay || c.year_built || c.nhan?.includes("moi_sua"));
+  // FR-239 m (phát lại test 28/09): "diện tích 425m2 thổ cư" → ô thổ cư 425m2 VÀ ghi chú "thổ cư". Mảnh chỉ có chữ "thổ cư"
+  // (± full / 100% / toàn bộ) mà ô thổ cư đã có → trùng.
+  if (/^(?:full |toan bo |het |100 )?tho cu(?: 100| het| toan bo| full)?$/.test(kd.replace(/%/g, "").trim()) && !phuDinh) return !!f.tho_cu;
   // Mảnh chỉ nói đúng nhãn ("khu yên tĩnh") mà tin ĐANG mang nhãn đó — nhãn đã giữ ý đó.
   return c.nhan ? laThuanNhan(s, c.nhan) : false;
 }
@@ -1405,7 +1411,10 @@ export function nhanDienFact(text: string): NhanDien | null {
     return { question: "phuong", answer: goc };
   }
   // 14/09/2026: "à anh nói lại, là đất trống chưa xây nha em" — đổi LOẠI BĐS giữa chừng.
-  if (/\b(?:la|thanh|chuyen sang|doi sang)\s+dat\s*(?:trong|nen|tho cu)?\b|\bdat trong\b(?![^,.;]*\bnha\b)|\bchua xay\b/.test(kd) &&
+  // FR-239 b (phát lại test 27/09): "Chưa xây gì hết em nhà cấp 4" (chưa xây thêm, nhà cấp 4 có sẵn) → tin nhà bị đổi thành
+  // ĐẤT. "chưa xây" chỉ là đất trống khi câu không nói có nhà.
+  if ((/\b(?:la|thanh|chuyen sang|doi sang)\s+dat\s*(?:trong|nen|tho cu)?\b|\bdat trong\b(?![^,.;]*\bnha\b)/.test(kd) ||
+       (/\bchua xay\b/.test(kd) && !/\bnha\b/.test(kd))) &&
       !/\b(?:cho xay|xay duoc|duoc xay|len tho)\b/.test(kd)) {
     return { question: "loai_bds", answer: /\bdat nen\b/.test(kd) ? "đất nền" : "đất trống" };
   }

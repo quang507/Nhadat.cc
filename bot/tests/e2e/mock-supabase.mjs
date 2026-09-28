@@ -2,6 +2,21 @@
 import { randomUUID } from "node:crypto";
 
 const singular = (t) => t.replace(/s$/, "");
+// Bản JS của `chuan_hoa_phuong` (20260928d, không tra bảng wards): phường số → "Phường N"; tên chữ gõ thường ngắn → viết hoa.
+const boDauM = (x) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+function chuanHoaPhuong(t) {
+  const v = String(t ?? "").trim(); if (!v) return null;
+  const m = /(?:phuong|p)\s*\.?\s*([0-9]{1,2})/.exec(boDauM(v));
+  if (m && +m[1] >= 1 && +m[1] <= 25) return `Phường ${+m[1]}`;
+  if (/^[0-9]{1,2}$/.test(v) && +v >= 1 && +v <= 25) return `Phường ${+v}`;
+  const kd = boDauM(v);
+  const ten = v.replace(/^(?:phường|xã|thị trấn)\s+/iu, "");
+  if (ten === ten.toLowerCase() && /^(?:(?:phuong|xa|thi tran)\s+)?[a-z]+(?:\s[a-z]+){0,3}$/.test(kd) && !/\b(?:em|anh|chi|nha|nhe|a|oi|o|do|day|nhen|luon)\b/.test(kd)) {
+    const hoa = v.toLowerCase().replace(/(^|\s)(\p{L})/gu, (_, s1, c) => s1 + c.toUpperCase());
+    return /^(?:phuong|xa|thi tran)\s/.test(kd) ? hoa : `Phường ${hoa}`;
+  }
+  return v.length >= 2 && v.length <= 50 ? v : null;
+}
 // Mốc thời gian phải DUY NHẤT, như Postgres. `toISOString()` chỉ có mili giây,
 // mà ba câu hỏi chờ mở liên tiếp rơi trọn trong một mili giây là chuyện thường —
 // khi đó `order("created_at", { ascending: false })` HOÀ, `Array.sort` ổn định
@@ -52,14 +67,14 @@ export class FakeDB {
     // tiền (12–15) → pháp lý 16–21 → phường 22 → gấp 23 → ảnh 24 — chép đúng bảng required_facts thật.
     const REQ = {
       toa_nha: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("so_phong", 5), CB("thang_may", 6), CB("do_rong_hem", 7), CB("ty_le_lap_day", 8), CB("doanh_thu", 9), CB("gia", 12), CB("pccc", 15), CB("phap_ly", 16), ...PL(true, true), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24), SD("tang_phu", 30)],
-      dat_nong_nghiep: [CB("vi_tri", 2), CB("dien_tich", 3), CB("duong_vao", 4), CB("nguon_nuoc", 5), CB("ranh_gioi", 6), CB("gia", 12), CB("quy_hoach", 14), CB("len_tho_cu", 15), CB("phap_ly", 16), ...PL(false, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
-      dat_kinh_doanh: [CB("vi_tri", 2), CB("dien_tich", 3), CB("do_rong_duong", 4), CB("muc_dich", 5), CB("gia", 12), CB("thoi_han_su_dung", 14), CB("hinh_thuc_thue_dat", 15), CB("phap_ly", 16), ...PL(true, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
+      dat_nong_nghiep: [CB("vi_tri", 2), CB("dien_tich", 3), CB("gia", 4), CB("duong_vao", 5), CB("nguon_nuoc", 6), CB("ranh_gioi", 7), CB("quy_hoach", 14), CB("len_tho_cu", 15), CB("phap_ly", 16), ...PL(false, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
+      dat_kinh_doanh: [CB("vi_tri", 2), CB("dien_tich", 3), CB("gia", 4), CB("do_rong_duong", 5), CB("muc_dich", 6), CB("thoi_han_su_dung", 14), CB("hinh_thuc_thue_dat", 15), CB("phap_ly", 16), ...PL(true, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
       kho_xuong: [CB("vi_tri", 2), CB("dien_tich", 3), CB("chieu_cao", 4), CB("tai_trong_san", 5), CB("duong_container", 6), CB("tram_bien_ap", 7), CB("xu_ly_nuoc_thai", 8), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("thoi_han_su_dung", 15), CB("phap_ly", 16), ...PL(true, true), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
       chua_ro: [CB("loai_bds", 1), CB("vi_tri", 2), CB("gia", 12), CB("phuong", 22)],
       nha_pho: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("so_phong_ngu", 5), CB("noi_that", 6, "cho_thue"), CB("do_rong_hem", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("truot_gia", 15, "cho_thue"), CB("phap_ly", 16), ...PL(true, true), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24), ...SAU_NHA, SD("tang_phu", 30), SD("tiem_nang", 39)],
       nha_cap4: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("hien_trang", 4), CB("so_phong_ngu", 5), CB("noi_that", 6, "cho_thue"), CB("do_rong_hem", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("phap_ly", 16), ...PL(true, true), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24), SD("tang_phu", 30), SD("tiem_nang", 39)],
       chung_cu: [CB("vi_tri", 2), CB("dien_tich_tim_tuong", 3), CB("so_phong_ngu", 4), CB("tang", 5), CB("huong", 6), CB("noi_that", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("phi_quan_ly", 15), CB("phap_ly", 16), ...PL(false, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
-      dat: [CB("vi_tri", 2), CB("dien_tich", 3), CB("do_rong_duong", 4), CB("huong", 5), CB("ha_tang", 6), CB("tho_cu", 7), CB("gia", 12), CB("xay_dung", 13), CB("phap_ly", 16), ...PL(true, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
+      dat: [CB("vi_tri", 2), CB("dien_tich", 3), CB("gia", 4), CB("do_rong_duong", 5), CB("huong", 6), CB("ha_tang", 7), CB("tho_cu", 8), CB("xay_dung", 13), CB("phap_ly", 16), ...PL(true, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
       biet_thu: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("so_phong_ngu", 5), CB("san_vuon", 6), CB("noi_that", 7, "cho_thue"), CB("do_rong_hem", 8), CB("khu_compound", 9), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("phap_ly", 16), ...PL(true, true), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24), SD("tang_phu", 30)],
       phong_tro: [CB("vi_tri", 2), CB("dien_tich", 3), CB("noi_that", 4), CB("gio_giac", 5), CB("gia", 12), CB("gia_dien_nuoc", 13), CB("tien_coc", 14), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
       mat_bang: [CB("vi_tri", 2), CB("dien_tich", 3), CB("mat_tien", 4), CB("nganh_hang_phu_hop", 5), CB("gia", 12), CB("tien_coc", 13), CB("thoi_han_thue", 14), CB("truot_gia", 15), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
@@ -608,7 +623,8 @@ class RpcCall {
         // 22/09/2026: DB gọt price_raw qua `chuan_hoa_gia_raw` ("7 tỷ 5 nha em" → "7 tỷ 5"); mock giữ đúng thế
         // để bộ đo giọng / e2e không thấy một 🤖 mà production không in.
         if (a.p_question === "gia") { l.price_raw = chuanHoaGiaRaw(a.p_answer); l.price_vnd = parseVnd(a.p_answer); }
-        if (a.p_question === "phuong") l.ward = a.p_answer;
+        // 20260928d (FR-239 j): chuan_hoa_phuong — tên chữ gõ thường ("cầu kho") → "Phường Cầu Kho".
+        if (a.p_question === "phuong") l.ward = chuanHoaPhuong(a.p_answer);
         // Trigger loại BĐS (FR-150/164): fact loai_bds đổi cột khi tin còn "chua_ro" (bắn thật 23/09: lô 1 thành đất).
         if (a.p_question === "loai_bds" && (!l.property_type || l.property_type === "chua_ro")) {
           const kdL = String(a.p_answer).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();

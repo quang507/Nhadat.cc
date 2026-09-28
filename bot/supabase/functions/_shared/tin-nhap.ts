@@ -171,7 +171,11 @@ export function soanTinNhap(t: ThamSoNhap): string {
   const coChu = (v: string, n: string) =>
     boDau(n).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 2)
       .some((w) => new RegExp(`\\b${w}`).test(boDau(v)));
-  const nhan = (n: string, v: string | null, sep = " ") => v ? (coChu(v, n) ? v : `${n}${sep}${v}`) : null;
+  // FR-239 j (phát lại test 27/09): AI ghi "Còn 4 năm" → dòng in "hợp đồng Còn 4 năm". Giá trị đứng SAU nhãn mà mở bằng
+  // từ thường viết hoa đầu câu thì hạ chữ đầu; tên riêng ("Sacombank", "Vinhomes") không đụng.
+  const thuongDau = (v: string) =>
+    /^(?:Còn|Khoảng|Tầm|Hết|Đến|Tới|Được|Có|Không|Chưa|Đã|Hơn|Gần|Trên|Dưới|Tới)(?=\s|$)/u.test(v) ? v.charAt(0).toLocaleLowerCase("vi") + v.slice(1) : v;
+  const nhan = (n: string, v: string | null, sep = " ") => v ? (coChu(v, n) ? v : `${n}${sep}${thuongDau(v)}`) : null;
   const hau = (v: string | null, n: string) => v ? (coChu(v, n) ? v : `${v} ${n}`) : null;
   const loai = l.property_type ?? "";
   const thue = l.deal === "cho_thue";

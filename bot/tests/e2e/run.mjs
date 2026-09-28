@@ -4048,6 +4048,83 @@ fresh(seedKho);
       r.body.replies.length === 1 && /em chờ/.test(r.body.replies[0]) && !/\?/.test(r.body.replies[0]),
       JSON.stringify({ rep: r.body.replies }));
   }
+  // FR-239 (chủ dự án 28/09/2026 "Sửa hết 13 điểm"): phát lại 3 hội thoại test 27–28/09 trên bot hiện tại.
+  {
+    const macDinh239 = globalThis.__model.create;
+    // (a)+(h) câu rao: model "Em đã lên tin rồi ạ" (tin còn chờ) + khen thị trường "khách mua hay quan tâm lắm".
+    fresh();
+    globalThis.__model.create = () => "Cho thuê ngân hàng ổn định thì khách mua hay quan tâm lắm anh. Em đã lên tin rồi ạ. Nhà mình thuộc phường nào vậy anh?";
+    r = await send({ external_user_id: "z-239a", text: "Nhà phố ở đường trần hưng đạo quận 1 đang cho viettinbank thuê 400 triệu 1 tháng bán 65 tỉ em" });
+    const cau = r.body.replies.filter((x) => !/^(?:🤖|💾|📝)/u.test(x)).join(" ");
+    check("FR239-E1 câu rao: bỏ 'Em đã lên tin rồi' (tin còn chờ) và câu khen 'khách mua hay quan tâm lắm', giữ câu hỏi",
+      !/lên tin rồi/.test(cau) && !/quan tâm lắm/.test(cau) && /\?/.test(cau), JSON.stringify(r.body.replies));
+    // (d) tỉnh bịa: khách nói Cần Đước, Long An → model "Đất ở Cần Thơ, Long An…".
+    fresh();
+    globalThis.__model.create = () => "Đất ở Cần Thơ, Long An là vị trí tốt cho buôn bán anh. Diện tích trên sổ bao nhiêu anh?";
+    r = await send({ external_user_id: "z-239d", text: "bán lô đất ở Cần Đước, Long An giá 3 tỷ" });
+    const cauD = r.body.replies.filter((x) => !/^(?:🤖|💾|📝)/u.test(x)).join(" ");
+    check("FR239-E2 câu rao nói Cần Đước, Long An → bỏ câu 'Cần Thơ' model bịa", !/Cần Thơ/.test(cauD), JSON.stringify(r.body.replies));
+    // (i) có đường mà chưa rõ quận → câu hỏi đầu là phường / quận.
+    fresh();
+    globalThis.__model.create = macDinh239;
+    r = await send({ external_user_id: "z-239i", text: "bán nhà hẻm 4m đường Đặng Văn Ngữ, 4x15, giá 6 tỷ" });
+    const pendI = db().t.info_requests.filter((q) => q.status === "pending").map((q) => q.question);
+    check("FR239-E3 rao có đường, chưa rõ quận → câu hỏi đầu là phường (kèm quận), không phải diện tích",
+      pendI.includes("phuong") && !pendI.includes("dien_tich_dat"), JSON.stringify({ pendI, rep: r.body.replies }));
+    globalThis.__model.create = macDinh239;
+  }
+  // (b) "Chưa xây gì hết em nhà cấp 4" khi đang hỏi kết cấu → tin NHÀ không bị đổi thành đất.
+  rnSeed("z-239b", "BDS-Q5-0972", {});
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0972");
+    db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
+    db().insert("info_requests", { listing_id: l.id, question: "ket_cau", status: "pending" });
+    r = await send({ external_user_id: "z-239b", text: "Chưa xây gì hết em nhà cấp 4" });
+    check("FR239-E4 'Chưa xây gì hết em nhà cấp 4' → loại tin KHÔNG thành đất, không có fact loai_bds 'đất trống'",
+      !/^dat/.test(l.property_type ?? "") && !db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "loai_bds" && /đất/.test(f.answer)),
+      JSON.stringify({ pt: l.property_type, rep: r.body.replies }));
+  }
+  // (c) hỏi lại giá / nhắc "cái giá hồi nãy" → nhắc đúng giá đã ghi, không nói phí, không xin lỗi lạc đề.
+  rnSeed("z-239c", "BDS-Q5-0973", { price_raw: "8.000.000.000", price_vnd: 8e9 });
+  {
+    r = await send({ external_user_id: "z-239c", text: "Là bao nhiêu vậy em nhớ không" });
+    const cauC = r.body.replies.join(" ");
+    check("FR239-E5 'Là bao nhiêu vậy em nhớ không' → trả lời giá 8 tỷ từ tin, không nói phí 1%",
+      /8 tỷ/.test(cauC) && !/1%|phí/.test(cauC), JSON.stringify(r.body.replies));
+    r = await send({ external_user_id: "z-239c", text: "Cái giá hồi nãy đó" });
+    const cauC2 = r.body.replies.join(" ");
+    check("FR239-E6 'Cái giá hồi nãy đó' (đang hỏi câu khác) → 'giá … hồi nãy là 8 tỷ, em ghi rồi', hỏi lại câu đang treo, không 'chưa thấy'",
+      /hồi nãy là 8 tỷ/.test(cauC2) && !/chưa thấy/.test(cauC2) && /\?/.test(cauC2), JSON.stringify(r.body.replies));
+  }
+  // (k) đất: trả lời diện tích xong → câu kế là GIÁ (ưu tiên 4), không phải đường / hướng.
+  rnSeed("z-239k", "BDS-DAT-0974", { property_type: "dat", price_raw: null, price_vnd: null, area_m2: null, floors: null, bedrooms: null, access_type: null, alley_width_m: null });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-DAT-0974");
+    db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
+    db().insert("info_requests", { listing_id: l.id, question: "dien_tich", status: "pending" });
+    r = await send({ external_user_id: "z-239k", text: "5x20 em" });
+    const pend = db().t.info_requests.filter((q) => q.listing_id === l.id && q.status === "pending").map((q) => q.question);
+    check("FR239-E7 đất: sau diện tích hỏi GIÁ ngay (không hỏi đường, hướng trước)", pend.includes("gia"), JSON.stringify({ pend, rep: r.body.replies }));
+  }
+  // (f) đất thiếu giá mà bảo đăng → "giá cả lô", không "giá cả căn".
+  rnSeed("z-239f", "BDS-DAT-0975", { property_type: "dat", price_raw: null, price_vnd: null, floors: null, bedrooms: null });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-DAT-0975");
+    db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
+    db().insert("info_requests", { listing_id: l.id, question: "huong", status: "pending" });
+    r = await send({ external_user_id: "z-239f", text: "hướng đông. đăng bài được chưa. a bận rồi" });
+    const cauF = r.body.replies.join(" ");
+    check("FR239-E8 tin đất thiếu giá, bảo đăng → nói thiếu 'giá cả lô', không 'giá cả căn'", /giá cả lô/.test(cauF) && !/cả căn/.test(cauF), JSON.stringify(r.body.replies));
+  }
+  // (j) phường gõ thường → cột ward viết đúng.
+  rnSeed("z-239j", "BDS-Q5-0976", { ward: null });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0976");
+    db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
+    db().insert("info_requests", { listing_id: l.id, question: "phuong", status: "pending" });
+    r = await send({ external_user_id: "z-239j", text: "phường cầu kho em" });
+    check("FR239-E9 'phường cầu kho em' → cột ward 'Phường Cầu Kho' (không 'cầu kho')", l.ward === "Phường Cầu Kho", JSON.stringify({ ward: l.ward, rep: r.body.replies }));
+  }
   rnSeed("z-pl2", "BDS-Q5-0952", { deal: "cho_thue" });
   r = await send({ external_user_id: "z-pl2", text: "sổ hồng riêng em" });
   {

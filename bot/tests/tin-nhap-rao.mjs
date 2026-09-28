@@ -191,6 +191,15 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   la("LOAI-03 câu dang_xong đất → 'tin đất mình lên kệ'", /tin đất mình lên kệ/.test(cauTD("dang_xong", { diem: 70, loai: "đất" })), cauTD("dang_xong", { diem: 70, loai: "đất" }));
 }
 
+// FR-239 j (phát lại test 27/09): "💵 Đang cho thuê: 400 triệu/tháng · hợp đồng Còn 4 năm" — chữ đầu giá trị viết hoa giữa dòng.
+{
+  const tin = { ...NHA_PHO, l: { ...NHA_PHO.l, rent_income_vnd: 400000000 }, facts: [{ question: "han_hop_dong_thue", answer: "Còn 4 năm" }, ...NHA_PHO.facts] };
+  const dong = soanTinNhap({ ...tin, lai: false, cauTD }).split("\n").find((x) => x.startsWith("💵")) ?? "";
+  la("THUONG-01 'hợp đồng Còn 4 năm' → 'hợp đồng còn 4 năm'", /hợp đồng còn 4 năm/.test(dong), dong);
+  const tin2 = { ...NHA_PHO, facts: [{ question: "tien_ich_gan", answer: "Vincom 5 phút" }, ...NHA_PHO.facts] };
+  la("THUONG-02 tên riêng đầu giá trị ('Vincom') giữ hoa", /Vincom/.test(soanTinNhap({ ...tin2, lai: false, cauTD })), "");
+}
+
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");

@@ -46,5 +46,9 @@ ok("dapHoiVeTin bán chưa, 2 khách quan tâm → nêu số khách", /2 khách 
 ok("dapHoiVeTin bán chưa, đã chốt → 'đã chốt'", /đã chốt/.test(dapHoiVeTin("ban_chua", { status: "da_chot" }, { quan_tam: 0, hoi: 0 }, "anh")));
 ok("dapHoiVeTin trạng thái đang bán", /lên kệ rồi/.test(dapHoiVeTin("trang_thai", { status: "dang_ban" }, { quan_tam: 0, hoi: 0 }, "anh")));
 
+// FR-239 c (phát lại test 27/09): hỏi lại giá mình đã nói → loại "gia" (trước model trả lời phí 1%).
+ok("FR239 'Là bao nhiêu vậy em nhớ không' → gia", hoiVeTin("Là bao nhiêu vậy em nhớ không") === "gia", String(hoiVeTin("Là bao nhiêu vậy em nhớ không")));
+ok("FR239 'nhà em rộng bao nhiêu m2 nhỉ' vẫn là dien_tich", hoiVeTin("nhà em rộng bao nhiêu m2 nhỉ") !== "gia", String(hoiVeTin("nhà em rộng bao nhiêu m2 nhỉ")));
+
 console.log(hong ? `\nHỎI VỀ TIN: ${hong}/${tong} CA HỎNG` : `\nHỎI VỀ TIN: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
