@@ -71,7 +71,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 // Câu hỏi mà câu trả lời LÀ một số tiền nhưng không phải giá bán (FR-223): số tiền kèm theo không được ghi thành `gia`.
@@ -4055,6 +4055,8 @@ Deno.serve(async (req) => {
       const luatChacCauTreo = (q: string, s: string) =>
         nhanDienNhieuFact(s).some((f) => f.question === q && (ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f))) ||
         (q === "phap_ly" && phapLyChuaSo({ question: q, answer: s })) ||
+        // FR-241 o: cả tin là đúng một câu pháp lý / một tên phường ("sổ chung", "xã Vĩnh Lộc A") trả lời đúng câu đang hỏi.
+        laTraLoiTronKhoa(q, s) ||
         // FR-223 (bắn thật 24/09, rn-test-h): hỏi tiền thuê, khách đáp "150 triệu một tháng" — AI xếp vào gia hoặc im → câu rơi
         // bổ sung. Số tiền đơn vị triệu trả lời câu tiền thuê là chắc.
         (q === "doanh_thu" && /\d+(?:[.,]\d+)?\s*(?:trieu|tr)\b/.test(boDau(s))) ||
@@ -4131,7 +4133,10 @@ Deno.serve(async (req) => {
           const giuLuat = !!kq.chuyenSang && !kem.some((f) => f.question === kq.chuyenSang!.question) &&
             (laTienTron(kq.chuyenSang, dapAn) || (kq.chuyenSang.question === "dien_tich" && /^ngang \S+m dài \S+m$/.test(kq.chuyenSang.answer)) ||
               // 27/09/2026 (test Zalo): "312 Nguyễn Thuơbgj Hiền" khi đang hỏi hẻm — số nhà + tên đường là địa chỉ chắc.
-              (kq.chuyenSang.question === "vi_tri" && laSoNhaTenDuong(dapAn)));
+              (kq.chuyenSang.question === "vi_tri" && laSoNhaTenDuong(dapAn)) ||
+              // FR-241 o (bắn lại 28/09, lx-85/87): cả tin là đúng một câu pháp lý ("sổ chung") hay một tên phường/xã ("xã Vĩnh
+              // Lộc A") — AI im thì luật bị gạt, pháp lý rơi bổ sung, phường mất hẳn (bổ sung coi tên phường là rác).
+              laTraLoiTronKhoa(kq.chuyenSang.question, dapAn));
           if (!giuLuat && kq.chuyenSang && !kem.some((f) => f.question === kq.chuyenSang!.question)) {
             kq = { ...kq, chuyenSang: kem[0] };
           } else if (!kq.chuyenSang && kem[0]) kq = { ...kq, chuyenSang: kem[0] };

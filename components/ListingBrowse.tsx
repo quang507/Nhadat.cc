@@ -179,6 +179,10 @@ export default async function ListingBrowse({
   // Link giữ nguyên các lọc khác, đổi một tham số (trang reset về 1). Bấm chip
   // là rời khỏi câu hỏi tự nhiên: bỏ `q` (tiêu đề diễn giải sẽ sai) và bỏ
   // khoảng giá/diện tích tự do khi chọn chip giá/diện tích tương ứng.
+  // 28/09/2026: một bot crawl lần theo chip lọc (giá × diện tích × phòng ngủ × đường vào × tầng × pháp lý × xếp × phường ×
+  // trang) — 15.672 tổ hợp khác nhau MỖI GIỜ vào trang động này, mỗi URL là một lần gọi hàm Vercel + nhiều truy vấn Supabase;
+  // gói Hobby hết 1.000.000 lần gọi. Link bộ lọc: `rel="nofollow"` (bot tử tế không lần theo), `prefetch={false}` (không
+  // bắn request nền cho mỗi chip lọt vào khung nhìn). robots.txt chặn URL có tham số; trang có tham số là noindex.
   const withParam = (patch: Partial<Params>) => {
     const merged: Record<string, string> = {};
     const bo: Partial<Params> = { trang: undefined };
@@ -255,7 +259,7 @@ export default async function ListingBrowse({
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Giá</span>
           {GIA[deal].map((g) => (
-            <Link key={g.key} href={withParam({ gia: sp.gia === g.key ? undefined : g.key })} className={chip(sp.gia === g.key)}>
+            <Link key={g.key} rel="nofollow" prefetch={false} href={withParam({ gia: sp.gia === g.key ? undefined : g.key })} className={chip(sp.gia === g.key)}>
               {g.label}
             </Link>
           ))}
@@ -263,7 +267,7 @@ export default async function ListingBrowse({
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Diện tích</span>
           {DT.map((d) => (
-            <Link key={d.key} href={withParam({ dt: sp.dt === d.key ? undefined : d.key })} className={chip(sp.dt === d.key)}>
+            <Link key={d.key} rel="nofollow" prefetch={false} href={withParam({ dt: sp.dt === d.key ? undefined : d.key })} className={chip(sp.dt === d.key)}>
               {d.label}
             </Link>
           ))}
@@ -271,7 +275,7 @@ export default async function ListingBrowse({
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Phòng ngủ</span>
           {PN.map((n) => (
-            <Link key={n} href={withParam({ pn: sp.pn === String(n) ? undefined : String(n) })} className={chip(sp.pn === String(n))}>
+            <Link key={n} rel="nofollow" prefetch={false} href={withParam({ pn: sp.pn === String(n) ? undefined : String(n) })} className={chip(sp.pn === String(n))}>
               {n}+ PN
             </Link>
           ))}
@@ -280,7 +284,7 @@ export default async function ListingBrowse({
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Đường vào</span>
           {VAO.map((v) => (
-            <Link key={v.key} href={withParam({ vao: sp.vao === v.key ? undefined : v.key })} className={chip(sp.vao === v.key)}>
+            <Link key={v.key} rel="nofollow" prefetch={false} href={withParam({ vao: sp.vao === v.key ? undefined : v.key })} className={chip(sp.vao === v.key)}>
               {v.label}
             </Link>
           ))}
@@ -289,12 +293,12 @@ export default async function ListingBrowse({
           <div className="flex flex-wrap items-center gap-2">
             <span className="w-24 shrink-0 eyebrow text-mute">Tầng · sổ</span>
             {TANG.map((n) => (
-              <Link key={n} href={withParam({ tang: sp.tang === String(n) ? undefined : String(n) })} className={chip(sp.tang === String(n))}>
+              <Link key={n} rel="nofollow" prefetch={false} href={withParam({ tang: sp.tang === String(n) ? undefined : String(n) })} className={chip(sp.tang === String(n))}>
                 {n}+ tầng
               </Link>
             ))}
             {PL.map((p) => (
-              <Link key={p.key} href={withParam({ pl: sp.pl === p.key ? undefined : p.key })} className={chip(sp.pl === p.key)}>
+              <Link key={p.key} rel="nofollow" prefetch={false} href={withParam({ pl: sp.pl === p.key ? undefined : p.key })} className={chip(sp.pl === p.key)}>
                 {p.label}
               </Link>
             ))}
@@ -303,7 +307,7 @@ export default async function ListingBrowse({
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Xếp theo</span>
           {XEP.map((x) => (
-            <Link key={x.key} href={withParam({ xep: x.key === "moi" ? undefined : x.key })} className={chip(xep.key === x.key)}>
+            <Link key={x.key} rel="nofollow" prefetch={false} href={withParam({ xep: x.key === "moi" ? undefined : x.key })} className={chip(xep.key === x.key)}>
               {x.label}
             </Link>
           ))}
@@ -334,13 +338,13 @@ export default async function ListingBrowse({
       {totalPages > 1 && (
         <div className="mt-8 flex items-center justify-center gap-2 text-sm">
           {page > 1 && (
-            <Link href={withParam({ trang: String(page - 1) })} className="rounded-md border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
+            <Link rel="nofollow" prefetch={false} href={withParam({ trang: String(page - 1) })} className="rounded-md border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
               Trước
             </Link>
           )}
           <span className="px-3 text-mute tabular-nums">Trang {page}/{totalPages}</span>
           {page < totalPages && (
-            <Link href={withParam({ trang: String(page + 1) })} className="rounded-md border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
+            <Link rel="nofollow" prefetch={false} href={withParam({ trang: String(page + 1) })} className="rounded-md border border-line bg-white px-5 py-2.5 font-semibold transition hover:border-brand hover:text-brand">
               Sau -
             </Link>
           )}
