@@ -65,7 +65,7 @@ import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
-  batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, laRaoLai, NHAN_HOI_LAI, nhanDienFact,
+  batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, laRaoLai, NHAN_HOI_LAI, nhanDienFact,
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
@@ -3479,9 +3479,45 @@ Deno.serve(async (req) => {
     // 21/09/2026 (bắn thật mau-tdt): "sổ hồng riêng, hoàn công đủ. mà em là người hay máy vậy?" → đủ điểm,
     // bản nháp gửi luôn và câu hỏi của chủ nhà bị NUỐT. `truoc` = bong bóng đứng trước bản nháp (đáp án
     // tiền định cho câu hỏi ngược).
+    // FR-234 (chủ dự án 27–28/09/2026: "mấy cái mày ko ghi được vào db thì để AI nó xét qua … sau nó tự bóc ra luôn"): trước
+    // khi soạn bản nháp, AI đọc lại các GHI CHÚ chủ nhà (fact `bo_sung` nguồn chat, FR-233) chưa đọc lần nào — cả cụm, không
+    // có câu đang hỏi — rồi ghi vào ô CÒN TRỐNG (qua đúng lớp kiểm bằng chứng `kiemDeXuat`; không bao giờ đè ô đã có). Chỉ
+    // chạy khi công tắc `boc_tach_ai` là ghi / chinh; ghi chú đã đọc đánh dấu trong `boc_tach.ghi_chu_da_doc`.
+    const docLaiGhiChu = async (listingId: string): Promise<void> => {
+      if (!anthropicS) return;
+      try {
+        const cheDo = cheDoBocAi ? await cheDoBocAi : String((await client.rpc("cau_hinh", { p_key: "boc_tach_ai" })).data ?? "tat").trim();
+        if (cheDo !== "ghi" && cheDo !== "chinh") return;
+        const [{ data: lRow, error: lErr }, { data: fRows, error: fErr }] = await Promise.all([
+          client.from("listings").select("boc_tach").eq("id", listingId).maybeSingle(),
+          client.from("listing_facts").select("id, question, answer, source").eq("listing_id", listingId),
+        ]);
+        if (lErr || fErr) { await ghiLoi(client, "chat-reply doc lai ghi chu(doc)", (lErr ?? fErr)!.message); return; }
+        const daDoc = ((lRow?.boc_tach as { ghi_chu_da_doc?: unknown } | null)?.ghi_chu_da_doc as string[] | undefined) ?? [];
+        const facts = (fRows ?? []) as Array<{ id: string; question: string; answer: string | null; source: string | null }>;
+        const ghiChu = facts.filter((f) => f.question === "bo_sung" && f.source === "seller_chat" && (f.answer ?? "").trim() && !daDoc.includes(f.id));
+        if (!ghiChu.length) return;
+        const coRoi = new Set(facts.filter((f) => f.question !== "bo_sung").map((f) => f.question));
+        const tinGop = ghiChu.map((f) => (f.answer ?? "").trim()).join(". ").slice(0, 1200);
+        const kq = await bocRaoBangModel(anthropicS as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, tinGop, null, null, null);
+        await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
+        const ai = docAiChinh(kiemDeXuat(kq.truong, tinGop).dat, null);
+        for (const g of ai.ghi) {
+          if (coRoi.has(g.question) || g.question === "bo_sung") continue;
+          const { error: gErr } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: g.question, p_answer: g.answer, p_source: NGUON_AI });
+          if (gErr) await ghiLoi(client, "chat-reply doc lai ghi chu(ghi)", gErr.message);
+          else coRoi.add(g.question);
+        }
+        const { error: dErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { ghi_chu_da_doc: [...daDoc, ...ghiChu.map((f) => f.id)] } });
+        if (dErr) await ghiLoi(client, "chat-reply doc lai ghi chu(danh dau)", dErr.message);
+      } catch (e) {
+        await ghiLoi(client, "chat-reply doc lai ghi chu", e);
+      }
+    };
     const guiBanNhap = async (
       listingId: string, extra: Record<string, unknown>, lai = false, truoc: string[] = [], dangLuon = false,
     ): Promise<Awaited<ReturnType<typeof traLoiSeller>> | string[]> => {
+      await docLaiGhiChu(listingId);
       const [{ data: l }, { data: dt, error: dErr }, { data: facts }] = await Promise.all([
         client.from("listings")
           .select(`code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, rent_income_vnd, ${SPEC_COLS}`)
@@ -4111,6 +4147,7 @@ Deno.serve(async (req) => {
       // câu đó (expired), đi tiếp câu kế; vòng hỏi bù sẽ hỏi lại sau.
       let boQuaCauTreo = false;
       let ghiChuLech = false; // FR-233: câu lệch đã ghi chú, không hỏi lại — lời dặn model ở lượt đi tiếp
+      let noiSangO: { question: string; answer: string } | null = null; // FR-234: câu trả lời thuộc ô khác, không hỏi lại
       // "ok / được / đăng đi" khi đang treo một câu thông số → chủ muốn ĐĂNG.
       // "ừ / dạ / vâng" trơ trọi chỉ là ừ (ack), KHÔNG phải muốn đăng (lần 3: "ừ"
       // làm hết hạn câu hẻm rồi đòi đăng tin 51 điểm).
@@ -4145,6 +4182,21 @@ Deno.serve(async (req) => {
         const goi = goiNguoi ?? kq.xungHo ?? "mình";
         const phien = /bận|mệt|hỏi (?:gì )?(?:hoài|lắm|nhiều|mãi)/i.test(text);
         const hua = khop(PROMISE_RE, PROMISE_RE_KD);
+        // FR-234 (chủ dự án 28/09/2026: khách "cứ đăng như này trước đi, chiều anh gửi thêm thông tin với ảnh các thứ, h đang
+        // bận"): vừa bảo ĐĂNG vừa hoãn → đăng luôn như hiện có (đóng dấu duyệt; đủ điểm là lên kệ), không hỏi thêm; lời hứa đã
+        // có hẹn nhắc ở trên. Chưa đủ điểm thì nói thật còn thiếu gì — dấu duyệt giữ lại, đủ là tự lên kệ.
+        if (laBaoDang(text) && pendingReq.question !== "duyet_tin" && pendingReq.question !== "danh_gia") {
+          const loiHua = `Dạ ${goi} cứ lo việc nha, lúc nào ${goi} gửi thêm thông tin với ảnh là em cập nhật vào tin liền ạ.`;
+          const nhap = await guiBanNhap(pendingReq.listing_id, { hoan: true, loai_cau: "hoan", ...(hua ? { hua: true } : {}) }, false, [loiHua], true);
+          if (!Array.isArray(nhap)) return nhap;
+          const { error: ddErr } = await client.from("listings").update({ chu_duyet_at: new Date().toISOString() }).eq("id", pendingReq.listing_id);
+          if (ddErr) await ghiLoi(client, "chat-reply dang luon(chua du diem)", ddErr.message);
+          const thieuN = nhap.slice(0, 2).join(" và ") || "vài thông tin";
+          return await traLoiSeller(
+            [`Dạ em ghi nhận ${goi} muốn đăng luôn. Tin mình còn thiếu ${thieuN} nên chưa lên được — lúc nào ${goi} rảnh gửi thêm thông tin với ảnh là em đăng liền, không hỏi lại ạ.`],
+            { hoan: true, loai_cau: "hoan", dang_luon: true, thieu_dang: thieuN, ...(hua ? { hua: true } : {}) },
+          );
+        }
         const cauHoan = hua
           ? `Dạ em chờ ${goi} nha, lúc nào ${goi} rảnh gửi em là em cập nhật liền ạ.`
           : phien
@@ -4187,10 +4239,17 @@ Deno.serve(async (req) => {
         // 16/09/2026 (chủ dự án, sau khi câu phường bị hỏi 4 lượt liền ở mau-co-thue): một câu
         // hỏi TỐI ĐA 2 LẦN trong chat — hỏi, khách nói thứ khác, hỏi lại một lần, vẫn thứ khác
         // thì thôi, để vòng hỏi bù (ask-seller) hỏi hôm sau. Trước là né 2 lần (hỏi 3 lượt).
-        if ((kq.chuyenSang && (daNe ?? 0) >= 1) || gat) {
+        // FR-234 (chủ dự án 28/09/2026 sau FR-233: bỏ luôn lần hỏi lại này): chủ nhà nói sang ô khác → ghi ô đó, thôi câu
+        // đang hỏi, đi tiếp — không hỏi lại lần nào (trước: hỏi lại một lần, né lần hai mới thôi). `daNe` giữ cho sổ nhật ký.
+        // Ô LÕI (diện tích, giá, vị trí, phường) thiếu thì tin không lên kệ được — nói sang ô khác vẫn hỏi lại MỘT lần như cũ
+        // ("Ngang 5" khi hỏi diện tích là mới nửa câu trả lời). Ô khác thì thôi luôn.
+        const CAU_LOI = ["dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "gia", "vi_tri", "phuong"];
+        if ((kq.chuyenSang && (!CAU_LOI.includes(pendingReq.question) || (daNe ?? 0) >= 1)) || gat) {
+          if (kq.chuyenSang) console.log("chat-reply: noi sang o khac, thoi cau treo", pendingReq.question, "→", kq.chuyenSang.question, "da ne", daNe ?? 0);
           const { error: neErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
           if (neErr) await ghiLoi(client, "chat-reply bo qua cau treo", neErr.message);
           boQuaCauTreo = true;
+          if (kq.chuyenSang) noiSangO = kq.chuyenSang;
         }
       }
       await capNhatQuan(pendingReq.listing_id);
@@ -4465,9 +4524,13 @@ Deno.serve(async (req) => {
       // FR-233: câu lệch đã ghi chú (không có fact kèm — có thì đã đi nhánh ghi fact ở trên) → không ghi kèm gì nữa; nhất là
       // KHÔNG ghi luật đọc khoá đang hỏi mà AI đã bác (e2e AIBOC-09: "50 triệu" vào ô giá).
       if (!ghiChuLech && pendingReq.question !== "duyet_tin" && pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh") {
-        for (const f of factKem(dapAn)) {
+        // FR-234: nói sang ô khác (không hỏi lại) → fact của ô đó ghi TRƯỚC (luật đọc chắc như "8 tỉ" khi AI im không nằm
+        // trong `factKem`); không bao giờ ghi vào ô đang hỏi ở đường này.
+        const noi = noiSangO as { question: string; answer: string } | null;
+        const kemDs = noi ? [noi, ...factKem(dapAn).filter((f) => f.question !== noi.question)] : factKem(dapAn);
+        for (const f of kemDs) {
           // Cùng họ vẫn ghi ("phường Tân Hưng" trả lời địa chỉ thì phường cũng có), chỉ bỏ trùng khoá.
-          if (!boQuaCauTreo && f.question === pendingReq.question) continue;
+          if ((!boQuaCauTreo || noi) && f.question === pendingReq.question) continue;
           // FR-223 (bắn thật 24/09, rn-test-h): đang hỏi TIỀN THUÊ / cọc / phí, số tiền trong câu là câu trả lời cho câu đó —
           // KHÔNG ghi kèm thành GIÁ BÁN ("150 triệu một tháng" từng đè giá 25 tỷ thành 150 triệu).
           if (f.question === "gia" && pendingReq.question !== "gia" && CAU_HOI_TIEN.has(pendingReq.question)) continue;
@@ -4686,6 +4749,9 @@ Deno.serve(async (req) => {
       // Bong bóng ghi nhận đã gửi trước tin này → đừng cảm ơn/ghi nhận lần nữa.
       const daAck = ackSua
         ? `Bong bóng NGAY TRƯỚC tin này đã ghi nhận số liệu rồi ("${ackSua.slice(0, 60)}…") — KHÔNG cảm ơn, KHÔNG ghi nhận lại, vào thẳng câu hỏi. `
+        : noiSangO
+        ? `Câu chủ nhà vừa nhắn là ${FACT_LABELS[noiSangO.question] ?? noiSangO.question} (em đã ghi), chưa phải câu em hỏi — KHÔNG hỏi ` +
+          `lại câu cũ, KHÔNG bảo chủ nhà hiểu nhầm: ghi nhận nhẹ một vế rồi hỏi tiếp. `
         : ghiChuLech
         ? `Câu chủ nhà vừa nhắn chưa khớp câu em hỏi — em đã ghi chú nguyên văn vào tin, KHÔNG hỏi lại câu cũ, KHÔNG nói đã ghi ` +
           `"${FACT_LABELS[pendingReq.question] ?? pendingReq.question}", KHÔNG bảo chủ nhà hiểu nhầm: ghi nhận nhẹ một vế rồi hỏi tiếp. `
