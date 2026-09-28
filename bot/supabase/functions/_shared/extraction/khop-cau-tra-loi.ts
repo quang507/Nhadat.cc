@@ -1817,7 +1817,9 @@ export function laGap(text: string): boolean {
 // bán", "vẫn đang bán"), lời rao ("bán nhà 5 tỷ"), hay số liệu ("chốt giá 5 tỷ").
 export type NgungRao = "ban_roi" | "rut";
 export function laNgungRao(text: string): NgungRao | null {
-  const goc = text.trim();
+  // 28/09/2026 (e2e FR235-E3): "giờ anh bận rồi em" bỏ dấu thành "gio anh ban roi" = "bán rồi" → bot chúc mừng đã bán và GỠ TIN.
+  // Có dấu thì "bận" / "bạn" không phải "bán" — thay bằng chữ không đọc được TRƯỚC khi bỏ dấu.
+  const goc = text.trim().replace(/[bB][ậạẬẠ][nN]/gu, "bxn");
   if (!goc || /\?/.test(goc)) return null;
   const kd = boDau(goc).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   if (!kd) return null;

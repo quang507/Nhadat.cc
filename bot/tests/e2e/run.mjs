@@ -3949,6 +3949,51 @@ fresh(seedKho);
     globalThis.__cauHinh = cuCH;
     globalThis.__model.parse = undefined;
   }
+  // FR-235 (chủ dự án 28/09/2026, ảnh test Zalo 09:15): "hướng đông. đăng bài được chưa. a bận rồi" → hướng ghi vào tin nhưng câu
+  // hướng vẫn treo; "ok e" → bot "chỉ cần thêm giá… Lô đất mình hướng nào anh?" (hỏi lại thứ vừa nói, và hỏi tiếp khi khách
+  // đã nói bận). Nay: ghi fact khoá nào thì câu treo cùng khoá đóng (DB `ghi_fact_listing`, 20260928a); lời hoãn + "ok" → đáp ngắn.
+  rnSeed("z-235", "BDS-DAT-0966", { property_type: "dat", price_raw: null, price_vnd: null, floors: null, bedrooms: null });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-DAT-0966");
+    db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
+    db().insert("info_requests", { listing_id: l.id, question: "huong", status: "pending" });
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => {
+      if (!laLuotBocRao(p)) return OUT();
+      return /hướng đông/.test(String(p.messages?.[0]?.content ?? ""))
+        ? { so_can: 0, kien_thuc: [], truong: [{ khoa: "huong", gia_tri: "Đông", trich_dan: "hướng đông", can: null }], tra_loi: { co_tra_loi: true, gia_tri: "Đông", trich_dan: "hướng đông" } }
+        : { so_can: 0, kien_thuc: [], truong: [] };
+    };
+    const ir = () => db().t.info_requests.filter((q) => q.listing_id === l.id);
+    r = await send({ external_user_id: "z-235", text: "hướng đông. đăng bài được chưa. a bận rồi" });
+    check("FR235-E1 'hướng đông. đăng bài được chưa. a bận rồi' → ghi hướng, câu hướng ĐÓNG (không treo), đóng dấu duyệt, nói thiếu gì, không hỏi thêm",
+      db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "huong") && !ir().some((q) => q.question === "huong" && q.status === "pending") &&
+        !!l.chu_duyet_at && r.body.replies.some((x) => /còn thiếu/.test(x)) && !r.body.replies.some((x) => /hướng nào/.test(x)),
+      JSON.stringify({ rep: r.body.replies, ir: ir().map((q) => [q.question, q.status]) }));
+    const soCau = ir().length;
+    r = await send({ external_user_id: "z-235", text: "ok e" });
+    check("FR235-E2 sau lời hoãn, 'ok e' → đáp ngắn, KHÔNG hỏi lại hướng, không mở câu hỏi mới",
+      r.body.replies.filter((x) => !/^🤖/.test(x)).length === 1 && /em chờ/.test(r.body.replies.at(-1)) && !/\?/.test(r.body.replies.at(-1)) && ir().length === soCau,
+      JSON.stringify({ rep: r.body.replies, ir: ir().map((q) => [q.question, q.status]) }));
+    globalThis.__cauHinh = cuCH; globalThis.__model.parse = undefined;
+  }
+  rnSeed("z-235b", "BDS-Q5-0967", {}, [["gap", "không gấp"]]);
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0967");
+    const ir = () => db().t.info_requests.filter((q) => q.listing_id === l.id);
+    r = await send({ external_user_id: "z-235b", text: "giờ anh bận rồi em" });
+    const soCau = ir().length;
+    r = await send({ external_user_id: "z-235b", text: "ok e" });
+    check("FR235-E3a 'giờ anh bận rồi em' KHÔNG phải 'bán rồi' — tin không bị gỡ khỏi kệ", l.status !== "da_chot" && !r.body.ngung_rao, JSON.stringify({ st: l.status }));
+    check("FR235-E3 'giờ anh bận rồi' (bot: lúc nào rảnh nhắn em) rồi 'ok e' → đáp ngắn, không hỏi tiếp",
+      r.body.replies.length === 1 && /em chờ/.test(r.body.replies[0]) && ir().length === soCau,
+      JSON.stringify({ rep: r.body.replies, ir: ir().map((q) => [q.question, q.status]) }));
+    r = await send({ external_user_id: "z-235b", text: "sổ hồng riêng em" });
+    check("FR235-E4 sau đó khách nói dữ liệu thật → đi đường thường (ghi sổ, không bị nuốt bởi chặn gật)",
+      db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "phap_ly"),
+      JSON.stringify({ rep: r.body.replies, f: db().t.listing_facts.filter((f) => f.listing_id === l.id).map((f) => [f.question, f.answer]) }));
+  }
   rnSeed("z-pl2", "BDS-Q5-0952", { deal: "cho_thue" });
   r = await send({ external_user_id: "z-pl2", text: "sổ hồng riêng em" });
   {

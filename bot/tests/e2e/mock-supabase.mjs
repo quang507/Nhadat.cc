@@ -592,6 +592,10 @@ class RpcCall {
       case "ghi_fact_listing": {
         const l = db.t.listings.find((x) => x.id === a.p_listing_id); if (!l) return { data: null, error: { message: "listing khong ton tai" } };
         db.insert("listing_facts", { listing_id: l.id, question: a.p_question, answer: a.p_answer, source: a.p_source });
+        // 20260928a (FR-235): ghi fact cho khoá nào thì câu ĐANG TREO cùng khoá (hỏi người bán, không phải câu khách mua) của tin đó đóng luôn — như DB thật.
+        if (!["bo_sung", "kien_thuc"].includes(a.p_question)) db.t.info_requests.forEach((q) => {
+          if (q.listing_id === l.id && !q.buyer_id && q.question === a.p_question && q.status === "pending") { q.status = "answered"; q.answer = a.p_answer; }
+        });
         // 20260909a: trg_zz_fact_vao_boc_tach + trg_zz_vi_tri_vao_cot
         l.boc_tach = { ...(l.boc_tach ?? {}), [a.p_question]: a.p_answer, _cap_nhat: now() };
         // trg_vi_tri_vao_cot (schema.sql): ghi đè location_raw trừ khi đã có fact vi_tri nguồn admin/ctv (bậc cao hơn).
