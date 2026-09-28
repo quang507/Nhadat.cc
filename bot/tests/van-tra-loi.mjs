@@ -928,6 +928,11 @@ ok("FR240-d 'khách mua hay tìm diện tích vừa phải như vậy' → bỏ"
 ok("FR240-d 'Khách mua hay hỏi pháp lý nên em hỏi kỹ…' giữ", boKhenThiTruong(["Khách mua hay hỏi pháp lý nên em hỏi kỹ chút nha anh."])[0] === "Khách mua hay hỏi pháp lý nên em hỏi kỹ chút nha anh.");
 ok("FR240-d 'Em đang rao tin cho anh rồi ạ.' (tin chưa lên) → bỏ", boHuaDaDang(["Em đang rao tin cho anh rồi ạ. Đường Trần Hưng Đạo đoạn nhà mình thuộc phường nào vậy anh?"])[0] === "Đường Trần Hưng Đạo đoạn nhà mình thuộc phường nào vậy anh?");
 ok("FR240-d lời hứa 'Em sẽ rao tích cực cho anh nha' giữ", boHuaDaDang(["Em sẽ rao tích cực cho anh nha. Phường nào anh?"])[0] === "Em sẽ rao tích cực cho anh nha. Phường nào anh?");
+// FR-240 e (phát lại lần ba, v264).
+ok("FR240-e 'dòng tiền đẹp lắm, khách đầu tư sẽ quan tâm' → bỏ", boKhenThiTruong(["Dạ anh, cho thuê ngân hàng 400 triệu/tháng là dòng tiền đẹp lắm, khách đầu tư sẽ quan tâm. Phường nào vậy anh?"])[0] === "Phường nào vậy anh?", JSON.stringify(boKhenThiTruong(["Dạ anh, cho thuê ngân hàng 400 triệu/tháng là dòng tiền đẹp lắm, khách đầu tư sẽ quan tâm. Phường nào vậy anh?"])));
+ok("FR240-e 'Nếu khách quan tâm em sẽ báo anh liền' giữ", boKhenThiTruong(["Nếu khách quan tâm em sẽ báo anh liền ạ."])[0] === "Nếu khách quan tâm em sẽ báo anh liền ạ.");
+ok("FR240-e 'Em cảm ơn anh, đã ghi đủ thông tin rồi ạ.' (tin chưa lên) → giữ lời cảm ơn", boHuaDaDang(["Em cảm ơn anh, đã ghi đủ thông tin rồi ạ. Nhà mình thuộc phường nào vậy anh?"])[0] === "Em cảm ơn anh. Nhà mình thuộc phường nào vậy anh?", JSON.stringify(boHuaDaDang(["Em cảm ơn anh, đã ghi đủ thông tin rồi ạ. Nhà mình thuộc phường nào vậy anh?"])));
+ok("FR240-e 'Dạ em ghi đủ rồi ạ.' (ví dụ mẫu) giữ", boHuaDaDang(["Dạ em ghi đủ rồi ạ. Anh chụp giúp em vài tấm mặt tiền nha?"])[0] === "Dạ em ghi đủ rồi ạ. Anh chụp giúp em vài tấm mặt tiền nha?");
 // FR-240 c: tin đất — "nhà / căn nhà + đại từ" → "lô đất + đại từ"; "nhà phố", chữ dính liền không đụng.
 ok("FR240-c 'Nhà mình ở đường nào cụ thể…' → 'Lô đất mình…'", goiDat("Nhà mình ở đường nào cụ thể, hay hẻm mấy anh?") === "Lô đất mình ở đường nào cụ thể, hay hẻm mấy anh?");
 ok("FR240-c 'Dạ căn nhà anh có sổ chưa?' → 'Dạ lô đất anh…'", goiDat("Dạ căn nhà anh có sổ chưa?") === "Dạ lô đất anh có sổ chưa?");
