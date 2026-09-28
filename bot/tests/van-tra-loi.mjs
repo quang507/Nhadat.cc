@@ -875,8 +875,11 @@ ok("CANHO-02 'Nhà mình' đầu câu → 'Căn hộ mình'; 'nhà phố' không
   const ra = giuCauDungTen(tin, MAU);
   ok("DUNGTEN-01 'Ai đứng tên sổ hiện tại nhỉ?' → câu mẫu (chính mình hay người nhà), câu khác giữ, cảm ơn vẫn đứng cuối",
     !/Ai đứng tên/.test(ra) && ra.includes(MAU) && /tranh chấp/.test(ra) && /ảnh sổ, lô đất/.test(ra) && /cảm ơn mình nhiều ạ :\)$/.test(ra), ra);
-  const tin2 = "Dạ em chào anh ạ\n\nSổ đứng tên anh hay người nhà đứng tên vậy anh?\nNhà có tranh chấp gì không ạ?\n\nCảm ơn anh nhé :)";
-  ok("DUNGTEN-02 model đã giữ vế 'người nhà' → để nguyên", giuCauDungTen(tin2, MAU) === tin2);
+  // Bắn lại sau deploy (lx-47): model viết có vế "người nhà" mà vẫn hỏi "đứng tên ai" → vẫn thay bằng câu mẫu.
+  const tin2 = "Dạ em chào anh ạ\n\nSổ nhà hiện đứng tên ai (chính anh hay người nhà khác) ạ?\nNhà có tranh chấp gì không ạ?\n\nCảm ơn anh nhé :)";
+  const ra2 = giuCauDungTen(tin2, MAU);
+  ok("DUNGTEN-02 'đứng tên ai (chính anh hay người nhà khác)' vẫn thay bằng câu mẫu", !/đứng tên ai/.test(ra2) && ra2.includes(MAU) && /tranh chấp/.test(ra2), ra2);
+  ok("DUNGTEN-05 tin đã có đúng câu mẫu → để nguyên", giuCauDungTen(`Dạ em chào anh ạ\n${MAU}\nCảm ơn anh nhé :)`, MAU) === `Dạ em chào anh ạ\n${MAU}\nCảm ơn anh nhé :)`);
   const tin3 = "Dạ em chào anh ạ\n\nCó thể gửi vài tấm ảnh sổ được không ạ?\nSổ đứng tên ai vậy anh?\n\nCảm ơn anh nhé :)";
   const ra3 = giuCauDungTen(tin3, MAU);
   ok("DUNGTEN-03 tin nhiều dòng: dòng đứng tên thay bằng câu mẫu, đặt trước dòng cảm ơn", !/đứng tên ai/.test(ra3) && ra3.split("\n").at(-2) === MAU && /^Cảm ơn anh/.test(ra3.split("\n").at(-1)), ra3);
