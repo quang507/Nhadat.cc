@@ -213,6 +213,11 @@ export const FACT_LABELS: Record<string, string> = {
   "vi_tri@dat_nong_nghiep": "đường vào, gần mốc nào dễ tìm (đất vườn không cần số nhà)",
   "vi_tri@dat_kinh_doanh": "đường nào, trong khu công nghiệp / cụm nào (không cần số nhà)",
   "vi_tri@kho_xuong": "đường nào, trong khu công nghiệp / cụm nào (không cần số nhà)",
+  // FR-237 (28/09/2026): đất / căn hộ không có "mặt tiền nhà, hẻm" để chụp.
+  "hinh_anh@dat": "vài tấm ảnh (sổ, lô đất, đường vào)",
+  "hinh_anh@dat_nong_nghiep": "vài tấm ảnh (sổ, khu đất, đường vào)",
+  "hinh_anh@dat_kinh_doanh": "vài tấm ảnh (sổ, lô đất, đường vào)",
+  "hinh_anh@chung_cu": "vài tấm ảnh (sổ, phòng khách, view)",
   loai_bds: "loại bất động sản (nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng)",
   phap_ly: "pháp lý (sổ riêng hay sổ chung)",
   dien_tich_dat: "diện tích đất",
@@ -315,6 +320,11 @@ export const CAU_HOI_MAU: Record<string, string> = {
   "vi_tri@dat": "Lô đất mình ở đường nào, khu nào {ac}?",
   "huong@chung_cu": "Ban công căn mình quay hướng nào {ac}?",
   "huong@dat": "Lô đất mình hướng nào {ac}?",
+  // FR-237: câu xin ảnh theo loại (câu chung nói "mặt tiền và hẻm").
+  "hinh_anh@dat": "{Ac} chụp giúp em ảnh sổ, lô đất và đường vào qua Zalo nha?",
+  "hinh_anh@dat_nong_nghiep": "{Ac} chụp giúp em ảnh sổ, khu đất và đường vào qua Zalo nha?",
+  "hinh_anh@dat_kinh_doanh": "{Ac} chụp giúp em ảnh sổ, lô đất và đường vào qua Zalo nha?",
+  "hinh_anh@chung_cu": "{Ac} chụp giúp em ảnh sổ và vài góc căn hộ (phòng khách, view) qua Zalo nha?",
   "phap_ly@chung_cu": "Căn hộ đã ra sổ hồng chưa hay còn hợp đồng mua bán {ac}?",
   "phap_ly@dat": "Đất mình sổ riêng chính chủ hay đất dự án chờ sổ {ac}?",
   "phap_ly@biet_thu": "Biệt thự mình đã có sổ hồng riêng chưa {ac}?",

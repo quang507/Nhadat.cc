@@ -3999,7 +3999,7 @@ fresh(seedKho);
   // đã đăng, không câu nào đang hỏi mà "giờ anh bận rồi" → "em hỏi dồn quá".
   for (const cheDo of ["chinh", "tat"]) {
     const uid = `z-236-${cheDo}`, code = cheDo === "chinh" ? "BDS-DAT-0968" : "BDS-DAT-0969";
-    rnSeed(uid, code, { property_type: "dat", floors: null, bedrooms: null, legal_status: "so_hong_rieng", access_type: "mat_tien", alley_width_m: null, frontage_m: 5, length_m: 12 });
+    rnSeed(uid, code, { property_type: "dat", floors: null, bedrooms: null, legal_status: "so_hong_rieng", access_type: "mat_tien", alley_width_m: null, frontage_m: 5, length_m: 12 }, [["tho_cu", "100%"]]);
     const l = db().t.listings.find((x) => x.code === code);
     db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
     db().insert("info_requests", { listing_id: l.id, question: "huong", status: "pending" });
@@ -4016,6 +4016,9 @@ fresh(seedKho);
     check(`FR236-E1 (${cheDo}) tin lên kệ từ câu 'hướng đông… đăng bài… bận' → bản tin CÓ dòng '🧭 Hướng: Đông' và mở 'Tin đất mình lên kệ'`,
       l.status !== "cho_thong_tin" && /🧭 Hướng: Đông/.test(tin) && /Tin đất mình lên kệ/.test(tin) && !/Tin nhà mình/.test(tin),
       JSON.stringify({ st: l.status, rep: r.body.replies }));
+    // FR-237 (chủ dự án 28/09 "Sửa đi"): tin ĐẤT không được xin "vài tấm ảnh (nhà, sổ, hẻm…)".
+    check(`FR237-E1 (${cheDo}) tin đất lên kệ, chưa ảnh → gợi ý 'ảnh (lô đất, sổ, đường vào…)', không 'nhà, sổ, hẻm'`,
+      /vài tấm ảnh \(lô đất, sổ, đường vào/.test(tin) && !/nhà, sổ, hẻm/.test(tin), JSON.stringify(tin.split("\n").filter((x) => /Độ đầy đủ/.test(x))));
     globalThis.__cauHinh = cuCH; globalThis.__model.parse = undefined;
   }
   rnSeed("z-236c", "BDS-DAT-0970", { property_type: "dat", floors: null, bedrooms: null });
