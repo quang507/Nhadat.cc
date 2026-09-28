@@ -515,6 +515,31 @@ export function boGachCheo(s: string): string {
 }
 
 /**
+ * FR-238 (bắn thật lx-46, 28/09/2026): tin hỏi bù (`ask-seller`) do model viết gọn câu đứng tên thành "Ai đứng tên sổ hiện
+ * tại nhỉ?" — khách dễ đáp bằng HỌ TÊN (bot không bao giờ được xin tên thật). Câu model tự viết về đứng tên mà thiếu vế
+ * "người nhà" bị bỏ, thay bằng câu mẫu; chèn trước câu cảm ơn cuối tin nếu có. Model đã giữ vế đó thì để nguyên.
+ */
+export function giuCauDungTen(msg: string, cauMau: string): string {
+  const kd = boDau(msg);
+  if (/\bdung ten\b/.test(kd) && /\bnguoi nha\b/.test(kd)) return msg;
+  const dong: string[] = [];
+  for (const d of (msg ?? "").split("\n")) {
+    const giu = tachCau(d).filter((c) => !/\bdung ten\b/.test(boDau(c)));
+    dong.push(giu.length === tachCau(d).length ? d : giu.join(" ").trim());
+  }
+  const sach = dong.filter((d, i) => d.trim() || (i > 0 && dong[i - 1].trim()));
+  const iCamOn = sach.map((d) => /\bcam on\b/.test(boDau(d))).lastIndexOf(true);
+  if (iCamOn >= 0) {
+    // "…vậy ạ? Em cảm ơn mình ạ :)" chung một dòng → câu mẫu chen ngay trước câu cảm ơn, cùng dòng.
+    const cau = tachCau(sach[iCamOn]);
+    const j = cau.findIndex((c) => /\bcam on\b/.test(boDau(c)));
+    if (j > 0) sach[iCamOn] = [...cau.slice(0, j), cauMau, ...cau.slice(j)].join(" ");
+    else sach.splice(iCamOn, 0, cauMau);
+  } else sach.push(cauMau);
+  return sach.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/**
  * Lọc CÂU trong từng bong bóng theo một luật, GIỮ NGUYÊN xuống dòng: bong bóng 📝/📋 nhiều dòng
  * ("📝 Em ghi nhận: …\nSai chỗ nào … nhắn lại") được tách theo dòng rồi theo câu; dòng nào không
  * mất câu nào thì giữ nguyên chữ gốc. Không bỏ gì thì trả đúng mảng cũ (so `===` được).

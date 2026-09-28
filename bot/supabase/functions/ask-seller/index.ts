@@ -18,9 +18,9 @@ import {
   serviceClient,
 } from "../_shared/claude.ts";
 import { congBiMat } from "../_shared/gate.ts";
-import { dienTen, dsHoiBu, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
+import { cauHoiMau, dienTen, dsHoiBu, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
 import { loaiDoc } from "../_shared/tin-nhap.ts";
-import { boGachCheo, doiTuXung } from "../_shared/extraction/van-tra-loi.ts";
+import { boGachCheo, doiTuXung, giuCauDungTen } from "../_shared/extraction/van-tra-loi.ts";
 
 const OutSchema = z.object({
   message: z.string().describe("Tin nhắn Zalo gửi người bán, tiếng Việt"),
@@ -210,6 +210,10 @@ Deno.serve(async (req) => {
   }
   const out = resp.parsed_output;
   // Lưới trên đường ra như chat-reply: bỏ "anh/chị" gạch chéo, tự xưng "cháu" với chú/cô/bác.
+  // FR-238: câu đứng tên đi nguyên câu mẫu (hỏi QUAN HỆ, không để model viết "Ai đứng tên sổ?" — khách dễ đáp họ tên).
+  if (toAsk.some((f) => f.fact_key === "nguoi_dung_ten")) {
+    out.message = giuCauDungTen(out.message, cauHoiMau("nguoi_dung_ten", seller?.xung_ho ?? "mình", undefined, listing.property_type));
+  }
   out.message = doiTuXung([boGachCheo(out.message)], seller?.xung_ho)[0];
   let sent_via: string = "none";
   // Khai ngoài khối `dry_run` vì câu trả lời cuối hàm đọc nó: `asked` phải là

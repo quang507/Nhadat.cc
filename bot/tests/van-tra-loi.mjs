@@ -9,7 +9,7 @@ import { boHuaDaDang, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supaba
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
-import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo, giuCauDungTen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { laGatHoiVai, laCauChungChung } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -867,6 +867,21 @@ for (const [cau, laTiemNang] of [
 
 ok("CANHO-01 tin căn hộ: 'Dạ nhà anh ở phường nào' → 'căn hộ anh'", goiCanHo("Dạ nhà anh ở phường nào vậy anh?") === "Dạ căn hộ anh ở phường nào vậy anh?");
 ok("CANHO-02 'Nhà mình' đầu câu → 'Căn hộ mình'; 'nhà phố' không đổi", goiCanHo("Nhà mình tầng mấy ạ? Khu này nhà phố nhiều.") === "Căn hộ mình tầng mấy ạ? Khu này nhà phố nhiều.");
+
+// FR-238 (bắn thật lx-46, 28/09): tin hỏi bù model viết "Ai đứng tên sổ hiện tại nhỉ?" — khách dễ đáp họ tên.
+{
+  const MAU = "Sổ đất mình do chính mình đứng tên hay người nhà đứng tên, có đồng sở hữu như vợ chồng hay anh em thừa kế không?";
+  const tin = "Dạ em chào mình :) Lô đất Nguyễn Văn Tạo này có khách đang hỏi ạ. Mình có vài tấm ảnh sổ, lô đất và đường vào được không? Lô này có tranh chấp gì không ạ? Ai đứng tên sổ hiện tại nhỉ? Em cảm ơn mình nhiều ạ :)";
+  const ra = giuCauDungTen(tin, MAU);
+  ok("DUNGTEN-01 'Ai đứng tên sổ hiện tại nhỉ?' → câu mẫu (chính mình hay người nhà), câu khác giữ, cảm ơn vẫn đứng cuối",
+    !/Ai đứng tên/.test(ra) && ra.includes(MAU) && /tranh chấp/.test(ra) && /ảnh sổ, lô đất/.test(ra) && /cảm ơn mình nhiều ạ :\)$/.test(ra), ra);
+  const tin2 = "Dạ em chào anh ạ\n\nSổ đứng tên anh hay người nhà đứng tên vậy anh?\nNhà có tranh chấp gì không ạ?\n\nCảm ơn anh nhé :)";
+  ok("DUNGTEN-02 model đã giữ vế 'người nhà' → để nguyên", giuCauDungTen(tin2, MAU) === tin2);
+  const tin3 = "Dạ em chào anh ạ\n\nCó thể gửi vài tấm ảnh sổ được không ạ?\nSổ đứng tên ai vậy anh?\n\nCảm ơn anh nhé :)";
+  const ra3 = giuCauDungTen(tin3, MAU);
+  ok("DUNGTEN-03 tin nhiều dòng: dòng đứng tên thay bằng câu mẫu, đặt trước dòng cảm ơn", !/đứng tên ai/.test(ra3) && ra3.split("\n").at(-2) === MAU && /^Cảm ơn anh/.test(ra3.split("\n").at(-1)), ra3);
+  ok("DUNGTEN-04 không có câu cảm ơn → câu mẫu nối cuối", giuCauDungTen("Ai đứng tên sổ vậy ạ?", MAU) === MAU);
+}
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
