@@ -644,7 +644,7 @@ class RpcCall {
         }
         if (a.p_question === "gap") {
           const kd = String(a.p_answer).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
-          l.gap = /\b(khong|ko|k|chua|chang)\s*(can\s*)?(gap|voi)\b|duoc gia thi thoi|khong voi|tu tu/.test(kd) ? false : /\bgap\b|can tien|\bvoi\b/.test(kd) ? true : l.gap;
+          l.gap = /\b(khong|ko|k|chua|chang)\s*(can\s*)?((ban|cho thue|ra hang|ra|di)\s*)?(gap|voi)\b|duoc gia thi thoi|khong voi|tu tu/.test(kd) ? false : /\bgap\b|can tien|\bvoi\b/.test(kd) ? true : l.gap;
         }
         if (a.p_question === "dien_tich" || a.p_question === "dien_tich_dat") {
           // 22/09: boc_thong_so thật đọc cả "ngang 4m dài 20m" — mock từng parseFloat cả câu → NaN.
