@@ -335,11 +335,15 @@ export function boKhenThiTruong(replies: string[]): string[] {
   // "kinh doanh cho thuê ổn định thế là khách sẽ mua nhanh lắm anh" — ĐOÁN THANH KHOẢN, bot không có số liệu nào. Bỏ.
   // "anh cần bán nhanh", "chốt nhanh" (ý CHỦ NHÀ) và "khách mua hay hỏi pháp lý" (giải thích) không phải đoán thị trường — giữ.
   const THANH_KHOAN = /\b(?:de ban|ban chay|hut khach)\b|\b(?:ban|mua|chot|coc|ra hang) nhanh lam\b|\bkhach (?:se|de) (?:mua|chot|coc|xuong tien)\b|\bkhach (?:mua|chot|coc) (?:nhanh|lien|ngay)\b|\bthanh khoan (?:tot|cao|manh)\b/;
+  // FR-240 d (phát lại test 28/09 trên production): "khách tìm đất nền thường thích thế này", "khách mua hay tìm diện tích vừa
+  // phải như vậy" — nói người mua HAY / THƯỜNG thích gì mà không có số liệu, không cần chữ "lắm". Câu giải thích lý do hỏi
+  // ("khách mua hay hỏi pháp lý nên em hỏi kỹ") giữ.
+  const NHU_CAU = /\b(?:khach|nguoi mua|nguoi thue)\b(?:\s+\S+){0,3}?\s+(?:hay|thuong|deu|luon)\s+(?:chuong|san|tim|thich|ua|hoi|quan tam)\b|\b(?:khach|nguoi mua|nguoi thue)\b[^.!?]*\bthuong thich\b/;
   // Lời HỨA báo lại ("Có khách quan tâm là em báo anh liền ạ") không phải khen thị trường.
-  const HUA = /\b(?:la|thi)\s+em\b|\bem\s+(?:se\s+)?bao\b/;
+  const HUA = /\b(?:la|thi)\s+em\b|\bem\s+(?:se\s+)?bao\b|\bnen em\b/;
   return locCauTrongBongBong(replies, (c) => {
     const kd = boDau(c);
-    return !/^(📋|💾|🤖|📝)/u.test(c) && !/\?/.test(c) && (RE.test(kd) || THANH_KHOAN.test(kd)) && !HUA.test(kd);
+    return !/^(📋|💾|🤖|📝)/u.test(c) && !/\?/.test(c) && (RE.test(kd) || THANH_KHOAN.test(kd) || NHU_CAU.test(kd)) && !HUA.test(kd);
   });
 }
 
@@ -1130,7 +1134,9 @@ export function thayCauHoiLech(reply: string, khoa: string | null | undefined, c
 // Cùng lượt bắn (lx-08): tin mới tạo, CHƯA lên kệ (chờ đủ thông tin + chủ duyệt bản nháp) mà model viết "đã đăng lên
 // web AI Ơi Nhà Đất rồi". Tin chưa đăng thì bỏ mệnh đề khẳng định đã đăng; câu hỏi và câu phủ định ("chưa đăng") giữ.
 // FR-239 a (phát lại test 27/09): "Em đã lên tin rồi ạ" / "em đang rao tích cực" khi tin còn chờ thông tin.
-const DA_DANG_RE = /\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\s+tich\s+cuc\b/;
+// FR-240 d (phát lại test 28/09 trên production): "Em đang rao tin cho anh rồi ạ" — "đang rao" nào cũng sai khi tin chưa lên.
+// Lời hứa ("em sẽ rao tích cực") giữ.
+const DA_DANG_RE = /\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b/;
 export function boHuaDaDang(replies: string[]): string[] {
   const ra: string[] = [];
   for (const r of replies) {

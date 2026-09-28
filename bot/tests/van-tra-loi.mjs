@@ -922,6 +922,12 @@ for (const cau of [
   "Dạ sổ riêng tốt rồi anh.",
   "Giá này khó bán không em?",
 ]) ok(`FR240-a '${cau.slice(0, 40)}…' giữ`, boKhenThiTruong([cau])[0] === cau, JSON.stringify(boKhenThiTruong([cau])));
+// FR-240 d (phát lại test 28/09 trên production): nói người mua hay / thường thích gì → bỏ; "đang rao" khi tin chưa lên → bỏ.
+ok("FR240-d 'Khuôn đất ngang dài chuẩn, khách tìm đất nền thường thích thế này.' → bỏ", boKhenThiTruong(["Khuôn đất ngang dài chuẩn, khách tìm đất nền thường thích thế này. Anh muốn thu về tầm bao nhiêu ạ?"])[0] === "Anh muốn thu về tầm bao nhiêu ạ?", JSON.stringify(boKhenThiTruong(["Khuôn đất ngang dài chuẩn, khách tìm đất nền thường thích thế này. Anh muốn thu về tầm bao nhiêu ạ?"])));
+ok("FR240-d 'khách mua hay tìm diện tích vừa phải như vậy' → bỏ", boKhenThiTruong(["Ngang 6 dài 17 là kích thước tốt, khách mua hay tìm diện tích vừa phải như vậy. Nhà mình xây mấy tầng rồi anh?"])[0] === "Nhà mình xây mấy tầng rồi anh?");
+ok("FR240-d 'Khách mua hay hỏi pháp lý nên em hỏi kỹ…' giữ", boKhenThiTruong(["Khách mua hay hỏi pháp lý nên em hỏi kỹ chút nha anh."])[0] === "Khách mua hay hỏi pháp lý nên em hỏi kỹ chút nha anh.");
+ok("FR240-d 'Em đang rao tin cho anh rồi ạ.' (tin chưa lên) → bỏ", boHuaDaDang(["Em đang rao tin cho anh rồi ạ. Đường Trần Hưng Đạo đoạn nhà mình thuộc phường nào vậy anh?"])[0] === "Đường Trần Hưng Đạo đoạn nhà mình thuộc phường nào vậy anh?");
+ok("FR240-d lời hứa 'Em sẽ rao tích cực cho anh nha' giữ", boHuaDaDang(["Em sẽ rao tích cực cho anh nha. Phường nào anh?"])[0] === "Em sẽ rao tích cực cho anh nha. Phường nào anh?");
 // FR-240 c: tin đất — "nhà / căn nhà + đại từ" → "lô đất + đại từ"; "nhà phố", chữ dính liền không đụng.
 ok("FR240-c 'Nhà mình ở đường nào cụ thể…' → 'Lô đất mình…'", goiDat("Nhà mình ở đường nào cụ thể, hay hẻm mấy anh?") === "Lô đất mình ở đường nào cụ thể, hay hẻm mấy anh?");
 ok("FR240-c 'Dạ căn nhà anh có sổ chưa?' → 'Dạ lô đất anh…'", goiDat("Dạ căn nhà anh có sổ chưa?") === "Dạ lô đất anh có sổ chưa?");
