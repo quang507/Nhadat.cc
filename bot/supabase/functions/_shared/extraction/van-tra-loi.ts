@@ -347,6 +347,17 @@ export function boKhenThiTruong(replies: string[]): string[] {
   });
 }
 
+/**
+ * FR-241 f (10 ca test làm khó 28/09): người bán nói "chưa có sổ, đang chờ ra sổ" → bot "Dạ, để em kiểm tra tiến độ sổ với chủ nhà
+ * rồi báo anh chị liền" — người đang nhắn CHÍNH LÀ bên bán; câu "để em hỏi lại chủ nhà" (TONE_RULES, dành cho khách mua) sang nhánh
+ * bán là hứa suông với một người thứ ba không có. Bỏ câu EM hỏi / kiểm tra / xác nhận / báo với chủ nhà. "Anh hỏi giúp chủ nhà…"
+ * (nhờ môi giới hỏi) giữ.
+ */
+export function boHuaHoiChuNha(replies: string[]): string[] {
+  const RE = /\bem\b[^.!?]{0,40}\b(?:hoi|kiem tra|xac nhan|bao|lien he|trao doi)\b[^.!?]{0,30}\bchu nha\b/;
+  return locCauTrongBongBong(replies, (c) => !/^(📋|💾|🤖|📝)/u.test(c) && RE.test(boDau(c)));
+}
+
 /** "Dạ em sửa lại …", "Em đổi lại …" — lời xác nhận SỬA (khác lời ghi thường). */
 function laCauSuaLai(tin: string): boolean {
   return /^(?:da|vang)?[\s,]*(?:(?:anh\/chi|anh|chi|minh)[\s,]+)?(?:em\s+)?(?:da\s+)?(?:sua|doi)\s+lai\b/.test(boDau(tin.trim()));
@@ -665,6 +676,11 @@ export function laSoDoBia(menhDe: string, bangChung: string): boolean {
   for (const m of kd.matchAll(re)) {
     const so = m[2] ? `${m[1]}.${m[2]}` : m[1];
     if (!new RegExp(`(?<![\\d.])${so.replace(".", "\\.")}(?![\\d]|\\.\\d)`).test(bc)) return true;
+  }
+  // FR-241 h (10 ca test làm khó 28/09): "Trệt lửng 2 lầu sân thượng là 3 phòng ngủ rồi anh chị ơi" — model tự suy số phòng từ
+  // số tầng. Số phòng ngủ / WC model nói ra phải có trong chữ chủ nhà.
+  for (const m of kd.matchAll(/\b(\d{1,2})\s*(?:phong ngu|pn|wc|toilet|phong tam)\b/g)) {
+    if (!new RegExp(`(?<![\\d.])${m[1]}(?![\\d])`).test(bc)) return true;
   }
   return false;
 }
@@ -1110,6 +1126,29 @@ const CHU_DE_KHOA: Record<string, RegExp> = {
   noi_that: /\bnoi that\b/,
 };
 /** Câu hỏi CUỐI của `reply` (câu kết bằng "?"), hoặc null. */
+/**
+ * FR-241 i (10 ca test làm khó 28/09): khách đã nói "3 lầu" hai lần mà bot vẫn hỏi "Nhà mình trệt lửng mấy lầu, lầu nào mấy phòng
+ * ngủ?"; khách nói "Âu Cơ" ở câu rao mà bot hỏi "nhà mình ở đường nào". Câu hỏi cuối của model hỏi một ô ĐÃ CÓ dữ liệu (khác khoá
+ * code chọn) → thay bằng câu mẫu của khoá kế; không có câu kế thì bỏ câu hỏi đó.
+ */
+const HOI_KHOA_DA_CO: Record<string, RegExp> = {
+  ket_cau: /\b(?:may|bao nhieu)\s*(?:tang|lau)\b|\btret\s*(?:lung\s*)?may\b|\bxay may\b/,
+  so_phong_ngu: /\b(?:may|bao nhieu)\s*phong ngu\b/,
+  vi_tri: /\b(?:duong nao|so may|so nha may|dia chi)\b/,
+  gia: /\b(?:gia (?:bao nhieu|nao|mong muon)|thu ve|rao gia|ban (?:bao nhieu|gia nao|voi gia))\b/,
+  dien_tich: /\b(?:dien tich|ngang dai|ngang may|dai may)\b/,
+  phap_ly: /\bso (?:hong )?(?:rieng|chung) hay\b|\bso rieng hay\b/,
+};
+export function boHoiLaiDaCo(reply: string, daCo: ReadonlySet<string>, nextKey?: string | null, cauKe?: string | null): string {
+  const q = cauHoiCuoi(reply);
+  if (!q) return reply;
+  const kd = boDau(q);
+  if (![...daCo].some((k) => k !== nextKey && HOI_KHOA_DA_CO[k]?.test(kd))) return reply;
+  const truoc = reply.slice(0, reply.lastIndexOf(q)).trim();
+  if (cauKe) return `${truoc} ${cauKe}`.trim();
+  return truoc || reply;
+}
+
 function cauHoiCuoi(reply: string): string | null {
   const ds = reply.match(/[^.!?\n]*\?/gu);
   return ds?.length ? ds[ds.length - 1] : null;

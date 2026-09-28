@@ -18,6 +18,9 @@ import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
+import { boHoiLaiDaCo, boHuaHoiChuNha } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { gonLoiSua, nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { chuanHienTrang } from "../supabase/functions/_shared/tin-nhap.ts";
 import { bocTachTaoTin, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua } from "../supabase/functions/_shared/bao_lai.ts";
 
 let hong = 0, tong = 0;
@@ -937,6 +940,30 @@ ok("FR240-e 'Dạ em ghi đủ rồi ạ.' (ví dụ mẫu) giữ", boHuaDaDang(
 ok("FR240-c 'Nhà mình ở đường nào cụ thể…' → 'Lô đất mình…'", goiDat("Nhà mình ở đường nào cụ thể, hay hẻm mấy anh?") === "Lô đất mình ở đường nào cụ thể, hay hẻm mấy anh?");
 ok("FR240-c 'Dạ căn nhà anh có sổ chưa?' → 'Dạ lô đất anh…'", goiDat("Dạ căn nhà anh có sổ chưa?") === "Dạ lô đất anh có sổ chưa?");
 ok("FR240-c 'Nhà phố mình' không đụng", goiDat("Nhà phố mình") === "Nhà phố mình");
+
+// FR-241 (28/09/2026, bắn 10 ca làm khó lx-70..79 trên production).
+ok("FR241-N1 'không cho thuê, đang ở' KHÔNG phải rút tin", laNgungRao("không cho thuê, đang ở") === null);
+ok("FR241-N1 'thôi không cho thuê nữa' vẫn là rút tin", laNgungRao("thôi không cho thuê nữa") !== null);
+ok("FR241-N1 'không bán nữa em' vẫn là rút tin", laNgungRao("không bán nữa em") !== null);
+{ const f = nhanDienNhieuFact("không cho thuê, đang ở").map((x) => x.question);
+  ok("FR241-N7 'không cho thuê, đang ở' không thành tiềm năng cho thuê", !f.includes("tiem_nang"), JSON.stringify(f)); }
+{ const f = nhanDienNhieuFact("ờ giá 15 tỷ").map((x) => x.question);
+  ok("FR241-N7 'ờ giá 15 tỷ' → chỉ giá, không tiềm năng 'ở'", f.includes("gia") && !f.includes("tiem_nang"), JSON.stringify(f)); }
+ok("FR241-N2 khách tự nhắn 'giá chín tỷ rưỡi' → ô giá (không rơi vào bổ sung)", nhanDienFact("giá chín tỷ rưỡi")?.question === "gia" && docTien(nhanDienFact("giá chín tỷ rưỡi").answer) === 9_500_000_000);
+ok("FR241-N2 'chín tỷ hai nha em' → giá 9,2 tỷ", docTien(nhanDienFact("chín tỷ hai nha em")?.answer) === 9_200_000_000, JSON.stringify(nhanDienFact("chín tỷ hai nha em")));
+ok("FR241-N2 'bán năm căn' không phải giá", nhanDienFact("bán năm căn")?.question !== "gia");
+ok("FR241-N2 docTien 'giá chín tỷ rưỡi' = 9,5 tỷ", docTien("giá chín tỷ rưỡi") === 9_500_000_000);
+{ const s4 = gonLoiSua("à nhầm ngang 4m2 chứ không phải 4");
+  ok("FR241-N4 'ngang 4m2 chứ không phải 4' → ngang 4.2", s4.laSua && s4.ngang === "4.2", JSON.stringify(s4)); }
+{ const f = nhanDienNhieuFact("chưa có sổ, đang chờ ra sổ");
+  ok("FR241-N6 'chưa có sổ, đang chờ ra sổ' → ô pháp lý", f.some((x) => x.question === "phap_ly"), JSON.stringify(f)); }
+ok("FR241-N6 'Em sẽ hỏi lại chủ nhà' (khách LÀ chủ nhà) → bỏ", boHuaHoiChuNha(["Dạ em ghi nhận. Em sẽ hỏi lại chủ nhà rồi báo anh nha. Giá mình bao nhiêu anh?"])[0] === "Dạ em ghi nhận. Giá mình bao nhiêu anh?", JSON.stringify(boHuaHoiChuNha(["Dạ em ghi nhận. Em sẽ hỏi lại chủ nhà rồi báo anh nha. Giá mình bao nhiêu anh?"])));
+ok("FR241-N8 '4 phòng ngủ' khi bằng chứng không có số 4 → bịa", laSoDoBia("nhà 4 phòng ngủ", "3 lầu, hẻm 6m") === true);
+ok("FR241-N8 '4 phòng ngủ' khi khách nói '4 phòng' → không bịa", laSoDoBia("nhà 4 phòng ngủ", "3 lầu 4 phòng") === false);
+ok("FR241-N9 kết cấu đã có mà hỏi lại 'mấy lầu' → thay bằng câu kế", boHoiLaiDaCo("Dạ em ghi nhận. Nhà mình mấy lầu vậy anh?", new Set(["ket_cau"]), "do_rong_hem", "Hẻm trước nhà rộng khoảng mấy mét anh?") === "Dạ em ghi nhận. Hẻm trước nhà rộng khoảng mấy mét anh?");
+ok("FR241-N9 câu hỏi KHÁC khoá đã có → giữ nguyên", boHoiLaiDaCo("Dạ. Hẻm trước nhà rộng mấy mét anh?", new Set(["ket_cau"]), "do_rong_hem", "x") === "Dạ. Hẻm trước nhà rộng mấy mét anh?");
+ok("FR241-N10b hiện trạng 'dang o' → 'đang ở'", chuanHienTrang("dang o") === "đang ở");
+ok("FR241-N10b hiện trạng có dấu giữ nguyên", chuanHienTrang("đang cho thuê 20 triệu") === "đang cho thuê 20 triệu");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

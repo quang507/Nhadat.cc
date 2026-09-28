@@ -1,5 +1,6 @@
 // Supabase giả trong bộ nhớ: đủ để chat-reply chạy trọn đường, ghi lại mọi truy vấn.
 import { randomUUID } from "node:crypto";
+import { soChuThanhSo } from "../../supabase/functions/_shared/extraction/luat-tien.ts";
 
 const singular = (t) => t.replace(/s$/, "");
 // Bản JS của `chuan_hoa_phuong` (20260928d, không tra bảng wards): phường số → "Phường N"; tên chữ gõ thường ngắn → viết hoa.
@@ -71,7 +72,7 @@ export class FakeDB {
       dat_kinh_doanh: [CB("vi_tri", 2), CB("dien_tich", 3), CB("gia", 4), CB("do_rong_duong", 5), CB("muc_dich", 6), CB("thoi_han_su_dung", 14), CB("hinh_thuc_thue_dat", 15), CB("phap_ly", 16), ...PL(true, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
       kho_xuong: [CB("vi_tri", 2), CB("dien_tich", 3), CB("chieu_cao", 4), CB("tai_trong_san", 5), CB("duong_container", 6), CB("tram_bien_ap", 7), CB("xu_ly_nuoc_thai", 8), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("thoi_han_su_dung", 15), CB("phap_ly", 16), ...PL(true, true), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
       chua_ro: [CB("loai_bds", 1), CB("vi_tri", 2), CB("gia", 12), CB("phuong", 22)],
-      nha_pho: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("so_phong_ngu", 5), CB("noi_that", 6, "cho_thue"), CB("do_rong_hem", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("truot_gia", 15, "cho_thue"), CB("phap_ly", 16), ...PL(true, true), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24), ...SAU_NHA, SD("tang_phu", 30), SD("tiem_nang", 39)],
+      nha_pho: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("ket_cau", 4), CB("noi_that", 6, "cho_thue"), CB("do_rong_hem", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("truot_gia", 15, "cho_thue"), CB("phap_ly", 16), ...PL(true, true), CB("so_phong_ngu", 21), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24), ...SAU_NHA, SD("tang_phu", 30), SD("tiem_nang", 39)],
       nha_cap4: [CB("vi_tri", 2), CB("dien_tich_dat", 3), CB("hien_trang", 4), CB("so_phong_ngu", 5), CB("noi_that", 6, "cho_thue"), CB("do_rong_hem", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("phap_ly", 16), ...PL(true, true), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24), SD("tang_phu", 30), SD("tiem_nang", 39)],
       chung_cu: [CB("vi_tri", 2), CB("dien_tich_tim_tuong", 3), CB("so_phong_ngu", 4), CB("tang", 5), CB("huong", 6), CB("noi_that", 7), CB("gia", 12), CB("tien_coc", 13, "cho_thue"), CB("thoi_han_thue", 14, "cho_thue"), CB("phi_quan_ly", 15), CB("phap_ly", 16), ...PL(false, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
       dat: [CB("vi_tri", 2), CB("dien_tich", 3), CB("gia", 4), CB("do_rong_duong", 5), CB("huong", 6), CB("ha_tang", 7), CB("tho_cu", 8), CB("xay_dung", 13), CB("phap_ly", 16), ...PL(true, false), CB("phuong", 22), CB("gap", 23), CB("hinh_anh", 24)],
@@ -241,9 +242,10 @@ export function chuanHoaGiaRaw(s) {
   return parseVnd(cum) != null ? cum : goc;
 }
 export function parseVnd(s) {
-  const t = String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+  // 20260928f (FR-241): parse_vnd thật đọc số viết bằng chữ ("chín tỷ rưỡi") — cùng hàm với luat-tien.ts.
+  const t = soChuThanhSo(String(s).toLowerCase()).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
   let m = /(\d+)\s*t[yi]\s*(\d)(?!\d)/.exec(t); if (m) return +m[1] * 1e9 + +m[2] * 1e8; // 22/09: "7 ti 5" — "ti" cũng là tỷ (parse_vnd 20260922c)
-  m = /(\d+(?:[.,]\d+)?)\s*(ty|ti)/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e9);
+  m = /(\d+(?:[.,]\d+)?)\s*(ty|ti)/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e9 + (/ruoi/.test(t) ? 5e8 : 0)); // "rưỡi" như parse_vnd thật
   m = /(\d+(?:[.,]\d+)?)\s*(trieu|tr)/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e6);
   // "7t" = 7 tỷ (20260908a). Sau luật `tr` để "7tr" vẫn là triệu; \b sau `t`
   // nên "7 tấm" không dính (bản thật dùng \M của Postgres, cùng ý).
@@ -379,7 +381,7 @@ class RpcCall {
   constructor(db, name, args) { this.db = db; this.name = name; this.args = args; }
   single() { this.mode = "single"; return this; } maybeSingle() { this.mode = "maybe"; return this; }
   run() {
-    const db = this.db; const a = this.args ?? {}; db.log.push({ rpc: this.name, args: a });
+    const db = this.db; let a = this.args ?? {}; db.log.push({ rpc: this.name, args: a });
     const R = globalThis.__rpc ?? {};
     if (R[this.name]) return R[this.name](db, a);
     switch (this.name) {
@@ -611,6 +613,9 @@ class RpcCall {
       case "merge_buyer_prefs": { const b = db.t.buyers.find((x) => x.id === a.p_buyer_id); if (b) b.preferences = { ...(b.preferences ?? {}), ...(a.p_delta ?? {}) }; return { data: null, error: null }; }
       case "ghi_fact_listing": {
         const l = db.t.listings.find((x) => x.id === a.p_listing_id); if (!l) return { data: null, error: { message: "listing khong ton tai" } };
+        // 20260928f (FR-241): đáp câu vi_tri mà chỉ là "xã/phường/thị trấn …" thì ghi là phuong — như ghi_fact_listing thật.
+        { const kdQ = String(a.p_answer ?? "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+          if (a.p_question === "vi_tri" && /^(xa|phuong|thi tran)\s+\S/.test(kdQ) && !/(duong|\bhem\b|\bngo\b|\bkiet\b|\bso\s*[0-9]|[0-9]+\s*\/|,\s*[0-9])/.test(kdQ)) a = { ...a, p_question: "phuong" }; }
         db.insert("listing_facts", { listing_id: l.id, question: a.p_question, answer: a.p_answer, source: a.p_source });
         // 20260928a (FR-235): ghi fact cho khoá nào thì câu ĐANG TREO cùng khoá (hỏi người bán, không phải câu khách mua) của tin đó đóng luôn — như DB thật.
         if (!["bo_sung", "kien_thuc"].includes(a.p_question)) db.t.info_requests.forEach((q) => {

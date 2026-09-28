@@ -53,8 +53,10 @@
     "R06",
     "R07",
     "R08",
-    "R10"
+    "R10",
+    "T04",
+    "N11"
   ],
-  "truong_dung": 480,
+  "truong_dung": 482,
   "truong_tong": 572
 }

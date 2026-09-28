@@ -54,6 +54,17 @@
     { "cau": "thuê 15.000.000/tháng", "mong": 15000000, "vi_sao": "tiền thuê viết đủ" },
     { "cau": "0903123456",         "mong": null,       "vi_sao": "mở bằng 0 là số điện thoại, không phải tiền" },
     { "cau": "đất 1.000.000m2",    "mong": null,       "vi_sao": "số đo diện tích, không phải tiền" },
-    { "cau": "hẻm 120/45",         "mong": null,       "vi_sao": "số hẻm ngắn không phải tiền" }
+    { "cau": "hẻm 120/45",         "mong": null,       "vi_sao": "số hẻm ngắn không phải tiền" },
+    { "cau": "giá chín tỷ rưỡi",   "mong": 9500000000, "vi_sao": "FR-241 (bắn thật lx-72): số viết bằng chữ trước tỷ" },
+    { "cau": "chín tỷ hai",        "mong": 9200000000, "vi_sao": "chữ số trơ cuối câu sau tỷ là phần mười" },
+    { "cau": "hai tỷ tư",          "mong": 2400000000, "vi_sao": "tư = 4 sau tỷ" },
+    { "cau": "hai trăm triệu",     "mong": 200000000,  "vi_sao": "d trăm triệu" },
+    { "cau": "một tỷ hai trăm",    "mong": 1200000000, "vi_sao": "tỷ d trăm" },
+    { "cau": "mười hai tỷ",        "mong": 12000000000, "vi_sao": "mười + chữ số" },
+    { "cau": "hai mươi lăm tỷ",    "mong": 25000000000, "vi_sao": "d mươi lăm" },
+    { "cau": "gia chin ty ruoi",   "mong": 9500000000, "vi_sao": "không dấu" },
+    { "cau": "năm 2020 giá 5 tỷ",  "mong": 5000000000, "vi_sao": "'năm' trước số năm không phải chữ số tiền" },
+    { "cau": "bán năm căn",        "mong": null,       "vi_sao": "chữ số không đứng trước đơn vị tiền" },
+    { "cau": "chín tỷ hai thương lượng", "mong": 9000000000, "vi_sao": "chữ sau 'hai' — không dám đọc phần lẻ" }
   ]
 }

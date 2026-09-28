@@ -69,7 +69,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
+import { boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -4150,7 +4150,9 @@ Deno.serve(async (req) => {
       // gạt (khoá AI biết) → bot hỏi lại diện tích. Kích thước dạng "AxB" không mơ hồ → luật nói thay khi AI im.
       const kichThuocChac = (f: { question: string; answer: string }) =>
         (f.question === "dien_tich" || f.question === "dien_tich_dat") && /^\s*\d+(?:[.,]\d+)?\s*m?\s*x\s*\d+(?:[.,]\d+)?\s*m?\s*$/i.test(f.answer);
-      const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "thang_may", "dien_tich_san", "do_rong_hem"]);
+      // FR-241 e (10 ca test làm khó 28/09): "ngang 4 dài 15, 3 lầu 4 phòng, …" — AI xếp "3 lầu 4 phòng" vào kết cấu, im về phòng
+      // ngủ; luật đọc 4 bị gạt → ô trống, bot hỏi lại số phòng ngủ khách vừa nói. Luật đọc "N phòng / N pn" là chắc.
+      const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "thang_may", "dien_tich_san", "do_rong_hem", "so_phong_ngu"]);
       // 27/09/2026 (bắn thật lx-36): "Ở cầu kho em ơi" khi hỏi phường → luật tiềm năng đọc "ở" là ĐỂ Ở và ghi kèm. Đang hỏi
       // địa chỉ thì "ở …" là NẰM Ở.
       const oLaNamO = (s: string) => cungHoFact("vi_tri", pendingReq.question) && /^\s*(?:nha\s+)?o\s/.test(boDau(s));
@@ -4479,6 +4481,7 @@ Deno.serve(async (req) => {
             if (hoiLai) hoiLai = motCauHoi([hoiLai])[0];
             if (hoiLai && pendingReq.listings?.property_type === "chung_cu") hoiLai = goiCanHo(hoiLai);
             if (hoiLai && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) hoiLai = goiDat(hoiLai);
+            if (hoiLai) hoiLai = boHuaHoiChuNha([hoiLai])[0]?.trim() || null;
             // 27/09/2026 (test Zalo): hỏi lại câu đứng tên thành "cho em xin tên người đứng tên trên sổ" → câu mẫu (hỏi quan hệ).
             if (hoiLai) hoiLai = giuVeCauMau(hoiLai, pendingReq.question,
               cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal));
@@ -4714,7 +4717,7 @@ Deno.serve(async (req) => {
       // cuối làm tin tự lên kệ) — nhưng đọc cùng lúc với câu kế tiếp, và danh
       // sách câu còn treo suy ra từ `ds` đã có (FR-171 h: 3 vòng → 1).
       const [{ data: lstNow }, { data: nextFactsTho }, { data: daHetHan }] = await Promise.all([
-        client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at, district, boc_tach, property_type")
+        client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at, district, boc_tach, property_type, street, location_raw, floors_text, bedrooms, price_vnd, area_m2, legal_status")
           .eq("id", pendingReq.listing_id).maybeSingle(),
         client.from("listing_missing_facts").select("fact_key, priority, nhom")
           .eq("listing_id", pendingReq.listing_id).order("priority").limit(12),
@@ -4925,6 +4928,18 @@ Deno.serve(async (req) => {
           if (sellerReply) sellerReply = boCauLapLai(sellerReply, lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-3).map((m) => m.body));
           if (sellerReply && pendingReq.listings?.property_type === "chung_cu") sellerReply = goiCanHo(sellerReply);
           if (sellerReply && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) sellerReply = goiDat(sellerReply);
+          if (sellerReply) sellerReply = boHuaHoiChuNha([sellerReply])[0]?.trim() || null;
+          // FR-241 i: câu hỏi của model hỏi lại ô đã có dữ liệu (số lầu, phòng ngủ, đường, giá, diện tích, sổ) → câu mẫu của khoá kế.
+          if (sellerReply && !(cauDuongKe ?? goiYKe)) {
+            const l = lstNow as { street?: string | null; location_raw?: string | null; floors_text?: string | null; bedrooms?: number | null; price_vnd?: number | null; area_m2?: number | string | null; legal_status?: string | null } | null;
+            const daCo = new Set<string>([
+              ...(l?.street || l?.location_raw ? ["vi_tri"] : []), ...(l?.floors_text ? ["ket_cau"] : []), ...(l?.bedrooms != null ? ["so_phong_ngu"] : []),
+              ...(l?.price_vnd ? ["gia"] : []), ...(l?.area_m2 ? ["dien_tich"] : []), ...(l?.legal_status ? ["phap_ly"] : []),
+            ]);
+            const truocHL = sellerReply;
+            sellerReply = boHoiLaiDaCo(sellerReply, daCo, nextKey, nextKey ? `${neo ? `Căn ${neo} nha. ` : ""}${cauKe}` : null);
+            if (sellerReply !== truocHL) console.log("chat-reply: bỏ câu hỏi lại ô đã có", [...daCo].join(","));
+          }
           // Tin chưa lên kệ mà model nói "đã đăng lên web" → bỏ mệnh đề đó.
           if (sellerReply && !published) sellerReply = boHuaDaDang([sellerReply])[0] ?? null;
           // 25/09/2026 (bắn thật lx-05): câu xác nhận / chọn phường, xác nhận tên đường do CODE tra ra → thay câu hỏi của
@@ -5209,6 +5224,9 @@ Deno.serve(async (req) => {
         // FR-212: đối chiếu tên đường với từ điển `duong` — không dấu → có dấu ngay; sai 1–2 ký tự → gợi ý, hỏi ở câu đầu.
         const duongRao = viTriTho ? await suaTenDuong(viTriTho, quanDoc) : null;
         const viTriRao = duongRao?.viTri ?? viTriTho;
+        // FR-241 e (10 ca test làm khó 28/09): "bán nhà Âu Cơ Tân Phú" — tên đường 5 ký tự bị ngưỡng "≥ 6" gạt, địa chỉ trống,
+        // lượt sau bot hỏi lại "nhà mình ở đường nào". Tên đường hai chữ trở lên ("Âu Cơ", "Ba Vì") là đủ.
+        const viTriDu = (v: string | null | undefined): v is string => !!v && (v.length >= 6 || (v.trim().split(/\s+/).length >= 2 && v.trim().length >= 4));
         // FR-177 n (10/09): câu rao DÀI mang 5–10 thông số → bóc HẾT ngay lúc tạo tin
         // (hướng, pháp lý, WC, nội thất, năm xây, hẻm thông, ngập, cách mặt tiền, lý do
         // bán, thương lượng…), không bắt chủ nhà nói lại. Giá/gấp đã vào cột lúc insert.
@@ -5222,7 +5240,7 @@ Deno.serve(async (req) => {
           .filter((f) => !daCo.has(f.question))
           .map((f) => [f.question, f.answer] as [string, string]);
         for (const [k, v] of [
-          ["vi_tri", viTriRao && viTriRao.length >= 6 && !/^(hẻm|hem|hxh)\s+\d+\s*(m|mét|met)?$/i.test(viTriRao) ? viTriRao : null],
+          ["vi_tri", viTriDu(viTriRao) && !/^(hẻm|hem|hxh)\s+\d+\s*(m|mét|met)?$/i.test(viTriRao) ? viTriRao : null],
           ["dien_tich", areaM ? `${areaM[1].replace(",", ".")}m2` : null],
           ["so_phong_ngu", pnM ? pnM[1] : null],
           ["du_an_ten", tenLa],
@@ -5328,6 +5346,7 @@ Deno.serve(async (req) => {
             // viết "đã đăng lên web rồi" → bỏ mệnh đề đó. Câu hỏi model lệch khoá code chọn → thay bằng câu mẫu.
             if (raoReply) raoReply = boHuaDaDang([raoReply])[0] ?? null;
             if (raoReply) raoReply = boKhenThiTruong([raoReply])[0]?.trim() || null;
+            if (raoReply) raoReply = boHuaHoiChuNha([raoReply])[0]?.trim() || null;
             // FR-239 d: tỉnh / quận / khu khách chưa nói (bằng chứng = câu rao) → bỏ câu đó, như đường hỏi tiếp.
             if (raoReply) {
               const vt = boViTriBia([raoReply], text);
@@ -5363,7 +5382,7 @@ Deno.serve(async (req) => {
         const loaiRao = LOAI_GHI[(newLst as { property_type?: string | null }).property_type ?? ""] ?? null;
         const ghiNhan = [
           `${sDeal === "cho_thue" ? "cho thuê" : "bán"}${loaiRao ? ` ${loaiRao}` : ""}`,
-          viTriRao && viTriRao.length >= 6 ? viTriRao : null,
+          viTriDu(viTriRao) ? viTriRao : null,
           [phuongRao, quanDoc].filter(Boolean).join(", ") || null,
           areaM ? (/x/.test(areaM[1]) ? `${areaM[1]}m` : `${areaM[1].replace(",", ".")}m2`) : null,
           pnM ? `${pnM[1]} phòng ngủ` : null,
