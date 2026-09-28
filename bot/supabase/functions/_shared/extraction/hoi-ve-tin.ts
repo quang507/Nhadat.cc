@@ -48,6 +48,9 @@ export function hoiVeTin(text: string): LoaiHoiTin | null {
   if (/\btang\s+(?:may|bao nhieu|nao)\b/.test(kd)) return "tang";
   if (/\bhuong\s+(?:gi|nao)\b|\bhuong\b.*\b(?:gi|nao|sao)\b/.test(kd)) return "huong";
   if (/\b(?:phap ly|so hong|so do)\b.*\b(?:gi|sao|nao|chua|the nao)\b/.test(kd)) return "phap_ly";
+  // FR-239 c (phát lại test 27/09): "Là bao nhiêu vậy em nhớ không" (hỏi lại giá mình đã nói) → model trả lời PHÍ 1%.
+  // "bao nhiêu … nhớ không" không nêu ô nào khác là hỏi lại giá.
+  if (/\bbao nhieu\b/.test(kd) && /\bnho\b/.test(kd)) return "gia";
   return null;
 }
 

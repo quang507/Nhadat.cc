@@ -9,7 +9,7 @@ import { boHuaDaDang, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supaba
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
-import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo, giuCauDungTen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo, giuCauDungTen, suaGapTheoDeal, boGhiNhanSuong, boKhenThiTruong } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { laGatHoiVai, laCauChungChung } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -885,6 +885,26 @@ ok("CANHO-02 'Nhà mình' đầu câu → 'Căn hộ mình'; 'nhà phố' không
   ok("DUNGTEN-03 tin nhiều dòng: dòng đứng tên thay bằng câu mẫu, đặt trước dòng cảm ơn", !/đứng tên ai/.test(ra3) && ra3.split("\n").at(-2) === MAU && /^Cảm ơn anh/.test(ra3.split("\n").at(-1)), ra3);
   ok("DUNGTEN-04 không có câu cảm ơn → câu mẫu nối cuối", giuCauDungTen("Ai đứng tên sổ vậy ạ?", MAU) === MAU);
 }
+
+// FR-239 (phát lại 3 hội thoại test 27–28/09).
+ok("FR239-a 'Em đã lên tin rồi ạ' (tin còn chờ) → bỏ", !/lên tin rồi/.test(boHuaDaDang(["Cho thuê ổn định lắm anh. Em đã lên tin rồi ạ. Phường nào anh?"]).join(" ")));
+ok("FR239-a 'em đang rao tích cực' (tin còn chờ) → bỏ", !/rao tích cực/.test(boHuaDaDang(["Tin anh sẽ hot lắm, em đang rao tích cực. Phường nào anh?"]).join(" ")));
+ok("FR239-a 'lúc nào lên tin em báo' không bị bỏ", /lên tin/.test(boHuaDaDang(["Đủ thông tin là em lên tin cho anh liền. Phường nào anh?"]).join(" ")));
+{
+  const vt = boViTriBia(["Đất ở Cần Thơ, Long An là vị trí tốt cho buôn bán anh. Diện tích trên sổ bao nhiêu, ngang dài thế nào anh?"], "Cần đước, long an á e Cần Đước, Long An");
+  ok("FR239-d 'Cần Thơ' khách không nói → bỏ câu, giữ câu hỏi", vt.bo.includes("can tho") && !/Cần Thơ/.test(vt.replies.join(" ")) && /Diện tích/.test(vt.replies.join(" ")), JSON.stringify(vt));
+  const vt2 = boViTriBia(["Long An đang lên giá lắm anh. Diện tích bao nhiêu anh?"], "Cần đước, long an á e");
+  ok("FR239-d tỉnh khách ĐÃ nói (Long An) → giữ", vt2.bo.length === 0, JSON.stringify(vt2));
+}
+ok("FR239-e tin bán: 'cho thuê gấp' → 'bán gấp'", suaGapTheoDeal("Anh cần cho thuê gấp hay được giá thì thôi?", "ban") === "Anh cần bán gấp hay được giá thì thôi?");
+ok("FR239-e tin cho thuê: 'bán gấp' → 'cho thuê gấp'", suaGapTheoDeal("Chị cần bán gấp không ạ?", "cho_thue") === "Chị cần cho thuê gấp không ạ?");
+ok("FR239-e tin bán 'đang cho thuê 20 triệu' không đụng", suaGapTheoDeal("Nhà đang cho thuê 20 triệu, anh cần bán gấp không?", "ban") === "Nhà đang cho thuê 20 triệu, anh cần bán gấp không?");
+ok("FR239-g 'Dạ, em ghi lại rồi anh.' (không lưu được gì) → bỏ, giữ câu hỏi", JSON.stringify(boGhiNhanSuong(["Dạ, em ghi lại rồi anh. Anh cho em xin địa chỉ để em lên tin nha?"])) === JSON.stringify(["Anh cho em xin địa chỉ để em lên tin nha?"]));
+ok("FR239-g ghi nhận CÓ nội dung ('em ghi 5 tầng rồi') không đụng", boGhiNhanSuong(["Dạ em ghi 5 tầng rồi ạ. Mấy phòng ngủ ạ?"])[0] === "Dạ em ghi 5 tầng rồi ạ. Mấy phòng ngủ ạ?");
+ok("FR239-h 'Dạo này khách chuộng khuôn đất … lắm' → bỏ", JSON.stringify(boKhenThiTruong(["Dạo này khách chuộng khuôn đất ngang 3m dài tới 14m lắm anh. Mình có mấy phòng ngủ ạ?"])) === JSON.stringify(["Mình có mấy phòng ngủ ạ?"]));
+ok("FR239-h 'khách tìm loại này nhiều lắm' → bỏ", !/khách tìm/.test(boKhenThiTruong(["5 tầng là nhà cao tốt, khách tìm loại này nhiều lắm. Anh có mấy phòng ngủ ạ?"]).join(" ")));
+ok("FR239-h lời hứa 'Có khách quan tâm là em báo anh liền ạ' giữ", boKhenThiTruong(["Có khách quan tâm là em báo anh liền ạ."])[0] === "Có khách quan tâm là em báo anh liền ạ.");
+ok("FR239-h khen căn ('sổ riêng là tốt lắm') giữ", boKhenThiTruong(["Sổ riêng là tốt lắm anh. Hướng nào ạ?"])[0] === "Sổ riêng là tốt lắm anh. Hướng nào ạ?");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

@@ -315,6 +315,30 @@ export function boCauGhiNhan(replies: string[]): string[] {
   return ra;
 }
 
+/**
+ * FR-239 g (phát lại test 27/09): "Anh muốn bán" → 🤖 "Không bóc tách được gì" rồi model "Dạ, em ghi lại rồi anh." — ghi
+ * nhận suông khi lượt này KHÔNG lưu được gì. Bỏ câu ghi nhận trơ ("Dạ em ghi lại rồi anh", "Em ghi nhận rồi ạ"); câu khác giữ.
+ */
+export function boGhiNhanSuong(replies: string[]): string[] {
+  const TRO = /^(?:da|vang)?[\s,]*(?:(?:anh|chi|minh|chu|co)[\s,]+)?(?:em\s+)?(?:da\s+)?(?:ghi|luu|cap nhat)(?:\s+(?:lai|nhan|vao))?(?:\s+(?:roi|xong|het))?(?:\s+(?:anh|chi|minh|chu|co|a|nha|nhe|ạ))*\s*[.!]*$/;
+  return locCauTrongBongBong(replies, (c) => !/^(📋|💾|🤖|📝)/u.test(c) && TRO.test(boDau(c.trim())));
+}
+
+/**
+ * FR-239 h (phát lại test 27/09): "Dạo này khách chuộng khuôn đất ngang 3m dài tới 14m lắm anh", "khách tìm loại này nhiều
+ * lắm" — nói về NHU CẦU THỊ TRƯỜNG mà bot không có số liệu nào. Câu khẳng định (không "?") nói khách / người mua chuộng, săn,
+ * tìm, hỏi, quan tâm … nhiều / lắm → bỏ. Khen đặc điểm của chính căn ("sổ riêng là tốt") không đụng.
+ */
+export function boKhenThiTruong(replies: string[]): string[] {
+  const RE = /\b(?:khach|nguoi mua|nguoi thue|thi truong)\b[^.!?]*\b(?:chuong|san|tim|thich|hoi|quan tam|ua)\b[^.!?]*\b(?:lam|nhieu|ghe)\b/;
+  // Lời HỨA báo lại ("Có khách quan tâm là em báo anh liền ạ") không phải khen thị trường.
+  const HUA = /\b(?:la|thi)\s+em\b|\bem\s+(?:se\s+)?bao\b/;
+  return locCauTrongBongBong(replies, (c) => {
+    const kd = boDau(c);
+    return !/^(📋|💾|🤖|📝)/u.test(c) && !/\?/.test(c) && RE.test(kd) && !HUA.test(kd);
+  });
+}
+
 /** "Dạ em sửa lại …", "Em đổi lại …" — lời xác nhận SỬA (khác lời ghi thường). */
 function laCauSuaLai(tin: string): boolean {
   return /^(?:da|vang)?[\s,]*(?:(?:anh\/chi|anh|chi|minh)[\s,]+)?(?:em\s+)?(?:da\s+)?(?:sua|doi)\s+lai\b/.test(boDau(tin.trim()));
@@ -1101,7 +1125,8 @@ export function thayCauHoiLech(reply: string, khoa: string | null | undefined, c
 
 // Cùng lượt bắn (lx-08): tin mới tạo, CHƯA lên kệ (chờ đủ thông tin + chủ duyệt bản nháp) mà model viết "đã đăng lên
 // web AI Ơi Nhà Đất rồi". Tin chưa đăng thì bỏ mệnh đề khẳng định đã đăng; câu hỏi và câu phủ định ("chưa đăng") giữ.
-const DA_DANG_RE = /\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke)\b|\blen\s+(?:web|trang|ke)\s+(?:roi|luon|ngay)\b/;
+// FR-239 a (phát lại test 27/09): "Em đã lên tin rồi ạ" / "em đang rao tích cực" khi tin còn chờ thông tin.
+const DA_DANG_RE = /\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\s+tich\s+cuc\b/;
 export function boHuaDaDang(replies: string[]): string[] {
   const ra: string[] = [];
   for (const r of replies) {
@@ -1138,6 +1163,12 @@ export function boChaoLai(reply: string): string {
 const KHU_HCM = [
   "phu nhuan", "binh thanh", "tan binh", "tan phu", "go vap", "thu duc", "binh tan", "nha be", "cu chi", "hoc mon", "can gio",
   "binh chanh", "phu my hung", "thu thiem", "thao dien", "van phuc", "cityland",
+  // FR-239 d (phát lại test 28/09): khách "Cần đước, long an á e" → bot "Đất ở Cần Thơ, Long An là vị trí tốt…". Tỉnh / thành
+  // (và thành phố lớn) khách chưa nói, tin không có → bịa.
+  "can tho", "da nang", "ha noi", "hai phong", "hue", "long an", "binh duong", "dong nai", "tay ninh", "vung tau", "ba ria",
+  "tien giang", "ben tre", "vinh long", "an giang", "kien giang", "ca mau", "bac lieu", "soc trang", "tra vinh", "dong thap",
+  "hau giang", "binh phuoc", "lam dong", "da lat", "khanh hoa", "nha trang", "phu quoc", "binh thuan", "phan thiet",
+  "ninh thuan", "quang nam", "quang ngai", "binh dinh", "phu yen", "dak lak", "gia lai", "kon tum", "nghe an", "thanh hoa",
 ];
 export function boViTriBia(replies: string[], nguCanh: string): { replies: string[]; bo: string[] } {
   const nc = boDau(nguCanh ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ");
@@ -1152,6 +1183,14 @@ export function boViTriBia(replies: string[], nguCanh: string): { replies: strin
     return biaCau;
   });
   return { replies: bo.size ? ra : replies, bo: [...bo] };
+}
+
+// FR-239 e (phát lại test 27/09): tin BÁN nhà đang cho thuê, câu mẫu "cần ra hàng gấp hay được giá" → model viết "Anh cần cho
+// thuê gấp hay được giá thì thôi?". Tin bán thì "cho thuê gấp" là "bán gấp" (và ngược lại với tin cho thuê).
+export function suaGapTheoDeal(reply: string, deal: string | null | undefined): string {
+  if (deal === "ban") return reply.replace(/cho thuê gấp/g, "bán gấp").replace(/Cho thuê gấp/g, "Bán gấp");
+  if (deal === "cho_thue") return reply.replace(/\bbán gấp/g, "cho thuê gấp").replace(/\bBán gấp/g, "Cho thuê gấp");
+  return reply;
 }
 
 // 25/09/2026 (bắn thật lx-34, FR-229): câu mẫu hai vế "Sổ nhà mình đang đứng tên ai, có đồng sở hữu như vợ chồng hay anh em

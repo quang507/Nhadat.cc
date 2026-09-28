@@ -264,5 +264,15 @@ ok("FR226 soNhaDau 'số 45 nha' → 45; '137/28 nhé em' → 137/28; '45' trầ
   JSON.stringify([soNhaDau("số 45 nha"), soNhaDau("137/28 nhé em"), soNhaDau("45"), soNhaDau("4 tỷ")]));
 ok("FR226 câu hẻm 'hxh, 5x12, trệt 3 lầu' → ô hẻm 'hẻm xe hơi' (không 'hxh' trần)", catDapAn("do_rong_hem", "hxh, 5x12, trệt 3 lầu") === "hẻm xe hơi", catDapAn("do_rong_hem", "hxh, 5x12, trệt 3 lầu"));
 
+// FR-239 b/m (phát lại test 27–28/09).
+ok("FR239 'Chưa xây gì hết em nhà cấp 4' → KHÔNG loai_bds đất trống", !nhanDienNhieuFact("Chưa xây gì hết em nhà cấp 4").some((f) => f.question === "loai_bds"), JSON.stringify(nhanDienNhieuFact("Chưa xây gì hết em nhà cấp 4")));
+ok("FR239 'là đất trống chưa xây nha em' vẫn → loai_bds đất trống", nhanDienNhieuFact("à anh nói lại, là đất trống chưa xây nha em").some((f) => f.question === "loai_bds" && f.answer === "đất trống"));
+ok("FR239 'chưa xây em' (không nói nhà) vẫn → đất trống", nhanDienNhieuFact("chưa xây em").some((f) => f.question === "loai_bds"));
+ok("FR239 rác bổ sung: 'Cần đước, long an á e' (chỉ địa bàn)", laBoSungRac("Cần đước, long an á e"));
+ok("FR239 KHÔNG rác: 'gần chợ Bình Chánh, Long An'", !laBoSungRac("gần chợ Bình Chánh, Long An"));
+ok("FR239 trùng: 'thổ cư' khi ô thổ cư đã có", laBoSungTrung("thổ cư", { facts: { tho_cu: "425m2" } }));
+ok("FR239 KHÔNG trùng: 'thổ cư' khi ô thổ cư trống", !laBoSungTrung("thổ cư", { facts: {} }));
+ok("FR239 KHÔNG trùng: 'thổ cư lên được thêm' (thông tin mới)", !laBoSungTrung("thổ cư lên được thêm", { facts: { tho_cu: "100%" } }));
+
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

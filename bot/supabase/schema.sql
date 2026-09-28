@@ -2487,7 +2487,7 @@ end $function$
 CREATE OR REPLACE FUNCTION public.chuan_hoa_phuong(p_text text)
  RETURNS text
  LANGUAGE sql
- IMMUTABLE
+ STABLE
  SET search_path TO 'public'
 AS $function$
   select case
@@ -2497,6 +2497,16 @@ AS $function$
       then 'Phường ' || ((regexp_match(public.bo_dau(p_text), '(?:phuong|p)\s*\.?\s*([0-9]{1,2})'))[1])::int
     when btrim(p_text) ~ '^[0-9]{1,2}$' and btrim(p_text)::int between 1 and 25
       then 'Phường ' || btrim(p_text)::int
+    when regexp_replace(btrim(p_text), '^(?:phường|xã|thị trấn)\s+', '', 'i')
+           = lower(regexp_replace(btrim(p_text), '^(?:phường|xã|thị trấn)\s+', '', 'i'))
+     and public.bo_dau(btrim(p_text)) ~ '^(?:(?:phuong|xa|thi tran)\s+)?[a-z]+(?:\s[a-z]+){0,3}$'
+     and public.bo_dau(btrim(p_text)) !~ '\m(?:em|anh|chi|nha|nhe|a|oi|o|do|day|nhen|luon)\M'
+      then coalesce(
+        (select w.ten_day_du from public.wards w
+          where public.bo_dau(w.ten) = regexp_replace(public.bo_dau(btrim(p_text)), '^(?:phuong|xa|thi tran)\s+', '')
+          limit 1),
+        case when public.bo_dau(btrim(p_text)) ~ '^(?:phuong|xa|thi tran)\s' then initcap(btrim(p_text))
+             else 'Phường ' || initcap(btrim(p_text)) end)
     when length(btrim(p_text)) between 2 and 50 then btrim(p_text)
     else null
   end;
