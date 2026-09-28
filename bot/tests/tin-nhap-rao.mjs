@@ -181,6 +181,16 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   la("TRUNG-02 🏷 Nhãn không in lặp 'sân thượng' / 'có gác lửng' khi dòng kết cấu đã có", !/sân thượng|lửng/.test(nhanDong), nhanDong || "(không có dòng nhãn)");
 }
 
+// FR-236 (bắn thật lx-43, 28/09/2026): tin ĐẤT lên kệ mở bằng "Tin nhà mình"; hướng luật ghi nguyên cụm "hướng đông" in thành
+// "🧭 Hướng: hướng đông".
+{
+  const datDang = soanTinNhap({ ...DAT, lai: false, cauTD, daDang: true, facts: [...DAT.facts, { question: "huong", answer: "hướng đông" }] });
+  la("LOAI-01 tin đất đã lên kệ → 'Tin đất mình lên kệ', không 'Tin nhà mình'", /Tin đất mình lên kệ/.test(datDang) && !/Tin nhà mình/.test(datDang), datDang.split("\n")[0]);
+  la("LOAI-02 căn hộ → 'Tin căn hộ mình lên kệ'", /Tin căn hộ mình lên kệ/.test(soanTinNhap({ ...CAN_HO_THUE, lai: false, cauTD, daDang: true })), "");
+  la("HUONG-01 fact 'hướng đông' → '🧭 Hướng: Đông' (không lặp chữ hướng)", /🧭 Hướng: Đông$/m.test(datDang), datDang.split("\n").find((x) => x.startsWith("🧭")) ?? "(không có dòng hướng)");
+  la("LOAI-03 câu dang_xong đất → 'tin đất mình lên kệ'", /tin đất mình lên kệ/.test(cauTD("dang_xong", { diem: 70, loai: "đất" })), cauTD("dang_xong", { diem: 70, loai: "đất" }));
+}
+
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");

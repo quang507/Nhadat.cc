@@ -3994,6 +3994,57 @@ fresh(seedKho);
       db().t.listing_facts.some((f) => f.listing_id === l.id && f.question === "phap_ly"),
       JSON.stringify({ rep: r.body.replies, f: db().t.listing_facts.filter((f) => f.listing_id === l.id).map((f) => [f.question, f.answer]) }));
   }
+  // FR-236 (bắn thật lx-43, 28/09/2026): tin lên kệ từ câu "hướng đông. đăng bài được chưa. a bận rồi" thiếu dòng hướng (hướng ghi ở
+  // đường ra, sau khi soạn tin) và gọi tin đất là "Tin nhà mình"; "full thổ cư" chỉ thành nhãn nên điểm vẫn báo thiếu thổ cư; tin
+  // đã đăng, không câu nào đang hỏi mà "giờ anh bận rồi" → "em hỏi dồn quá".
+  for (const cheDo of ["chinh", "tat"]) {
+    const uid = `z-236-${cheDo}`, code = cheDo === "chinh" ? "BDS-DAT-0968" : "BDS-DAT-0969";
+    rnSeed(uid, code, { property_type: "dat", floors: null, bedrooms: null, legal_status: "so_hong_rieng", access_type: "mat_tien", alley_width_m: null, frontage_m: 5, length_m: 12 });
+    const l = db().t.listings.find((x) => x.code === code);
+    db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
+    db().insert("info_requests", { listing_id: l.id, question: "huong", status: "pending" });
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: cheDo, bao_lai_da_luu: "thay_doi" };
+    if (cheDo === "chinh") globalThis.__model.parse = (p) => {
+      if (!laLuotBocRao(p)) return OUT();
+      return /hướng đông/.test(String(p.messages?.[0]?.content ?? ""))
+        ? { so_can: 0, kien_thuc: [], truong: [{ khoa: "huong", gia_tri: "Đông", trich_dan: "hướng đông", can: null }], tra_loi: { co_tra_loi: true, gia_tri: "Đông", trich_dan: "hướng đông" } }
+        : { so_can: 0, kien_thuc: [], truong: [] };
+    };
+    r = await send({ external_user_id: uid, text: "hướng đông. đăng bài được chưa. a bận rồi" });
+    const tin = r.body.replies.join("\n");
+    check(`FR236-E1 (${cheDo}) tin lên kệ từ câu 'hướng đông… đăng bài… bận' → bản tin CÓ dòng '🧭 Hướng: Đông' và mở 'Tin đất mình lên kệ'`,
+      l.status !== "cho_thong_tin" && /🧭 Hướng: Đông/.test(tin) && /Tin đất mình lên kệ/.test(tin) && !/Tin nhà mình/.test(tin),
+      JSON.stringify({ st: l.status, rep: r.body.replies }));
+    globalThis.__cauHinh = cuCH; globalThis.__model.parse = undefined;
+  }
+  rnSeed("z-236c", "BDS-DAT-0970", { property_type: "dat", floors: null, bedrooms: null });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-DAT-0970");
+    r = await send({ external_user_id: "z-236c", text: "sổ hồng riêng full thổ cư em" });
+    const tc = db().t.listing_facts.filter((f) => f.listing_id === l.id && f.question === "tho_cu");
+    check("FR236-E2 'full thổ cư' → nhãn thổ cư 100% VÀ ô thổ cư = 100% (điểm không báo thiếu thổ cư, bot không gợi ý hỏi lại)",
+      (l.nhan ?? []).includes("tho_cu_100") && tc.length === 1 && tc[0].answer === "100%" && !r.body.replies.some((x) => /thổ cư bao nhiêu/.test(x)),
+      JSON.stringify({ nhan: l.nhan, tc, rep: r.body.replies }));
+    r = await send({ external_user_id: "z-236c", text: "thổ cư toàn bộ nha em" });
+    check("FR236-E3 nói lại 'thổ cư toàn bộ' khi ô thổ cư đã có → không ghi ô thổ cư lần hai",
+      db().t.listing_facts.filter((f) => f.listing_id === l.id && f.question === "tho_cu" && f.answer === "100%").length === 1,
+      JSON.stringify(db().t.listing_facts.filter((f) => f.listing_id === l.id).map((f) => [f.question, f.answer])));
+  }
+  rnSeed("z-236d", "BDS-Q5-0971", { status: "dang_ban", legal_status: "so_hong_rieng" });
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0971");
+    db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
+    db().t.sellers.find((s) => s.zalo_user_id === "z-236d").active_listing_id = l.id;
+    r = await send({ external_user_id: "z-236d", text: "giờ anh bận rồi em" });
+    check("FR236-E4 tin đã lên kệ, không câu nào đang hỏi, 'giờ anh bận rồi em' → không 'em hỏi dồn quá'; nói tin vẫn đang rao; tin không bị gỡ",
+      !r.body.replies.some((x) => /hỏi dồn/.test(x)) && r.body.replies.some((x) => /vẫn đang rao/.test(x)) && l.status === "dang_ban",
+      JSON.stringify({ st: l.status, rep: r.body.replies }));
+    r = await send({ external_user_id: "z-236d", text: "ok e" });
+    check("FR236-E5 rồi 'ok e' → đáp ngắn 'em chờ', không hỏi gì",
+      r.body.replies.length === 1 && /em chờ/.test(r.body.replies[0]) && !/\?/.test(r.body.replies[0]),
+      JSON.stringify({ rep: r.body.replies }));
+  }
   rnSeed("z-pl2", "BDS-Q5-0952", { deal: "cho_thue" });
   r = await send({ external_user_id: "z-pl2", text: "sổ hồng riêng em" });
   {

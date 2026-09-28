@@ -489,7 +489,7 @@ export const CAU_HOI_MAU_TEXT = JSON.stringify(CAU_HOI_MAU, null, 2);
  *
  * Ô điền: {ac} = cách gọi khách (anh/chị hoặc tên), {Ac} = viết hoa đầu câu,
  * {diem} = điểm đầy đủ, {thieu} = hai thứ còn thiếu, {ds} = danh sách vừa bóc,
- * {web} = tên web, {ten} = tên trợ lý của khách (FR-181). Ô nào không có dữ liệu thì cả câu chứa nó được bỏ.
+ * {web} = tên web, {ten} = tên trợ lý của khách (FR-181), {loai} = loại BĐS đọc thường ("đất", "căn hộ" — FR-236; thiếu thì "nhà"). Ô nào không có dữ liệu thì cả câu chứa nó được bỏ.
  */
 export const CAU_TIEN_DINH: Record<string, string> = {
   // 23/09/2026 (chủ dự án, ảnh Zalo): bỏ câu "Sai chỗ nào … nhắn lại giúp em nha" — thừa, lượt nào cũng lặp.
@@ -505,10 +505,10 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   // có tên trợ lý ({ten}) và cách gọi người rao, đứng CUỐI tin bản nháp.
   nhap_goi_hanh_dong: "👉 Có khách quan tâm là {ten} báo lại {ac} liền ạ.",
   // 24/09/2026 (chủ dự án: "nếu khách nói kiểu đăng đi thì ko hỏi nữa đưa tin luôn"): tin lên kệ ngay, không hỏi duyệt.
-  nhap_da_dang: "📋 Tin nhà mình lên kệ {web} rồi nha {ac}:",
+  nhap_da_dang: "📋 Tin {loai} mình lên kệ {web} rồi nha {ac}:",
   dang_luon_cuoi: "Có khách quan tâm là em báo {ac} liền ạ.",
   dang_luon_thieu: "Dạ em đăng liền cho {ac}, chỉ còn thiếu {thieu} là tin lên kệ được. {Ac} cho em xin {thieu} nha, có là em đăng luôn không hỏi lại.",
-  dang_xong: "Dạ em cảm ơn {ac}, tin nhà mình lên kệ {web} rồi, điểm đầy đủ {diem}/100.\nCó khách quan tâm là em báo {ac} liền.",
+  dang_xong: "Dạ em cảm ơn {ac}, tin {loai} mình lên kệ {web} rồi, điểm đầy đủ {diem}/100.\nCó khách quan tâm là em báo {ac} liền.",
   dang_xong_them_diem: "Muốn thêm điểm thì {ac} gửi em {thieu}",
   dang_xong_them_anh: "; gửi thêm ảnh là điểm tăng ngay",
   dang_xong_hen: "Có thể em sẽ hỏi thêm mình một vài câu khi có khách hàng quan tâm nhé {ac}.",
@@ -535,7 +535,7 @@ export function docCauTienDinh(json: string | null | undefined): { bang: Record<
 /** Điền ô cho một câu tiền định. Ô thiếu dữ liệu → trả chuỗi rỗng để tầng gọi bỏ câu. */
 export function dienCau(mau: string, o: Record<string, string | number | null | undefined>): string {
   let thieuO = false;
-  const ra = mau.replace(/\{(ac|Ac|diem|thieu|ds|web|ten)\}/g, (_, k: string) => {
+  const ra = mau.replace(/\{(ac|Ac|diem|thieu|ds|web|ten|loai)\}/g, (_, k: string) => {
     const v = o[k];
     if (v == null || v === "") { thieuO = true; return ""; }
     const s = String(v);

@@ -40,7 +40,7 @@ import {
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
-import { LOAI_VI } from "../_shared/tin-nhap.ts";
+import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
 import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -2045,6 +2045,18 @@ Deno.serve(async (req) => {
           p_listing_id: lid, p_question: "nhan", p_answer: tenNhan(them), p_source: "seller_chat",
         });
         if (fErr) await ghiLoi(client, "chat-reply ghi_fact_listing(nhan)", fErr.message);
+        // FR-236 (bắn thật lx-43, 28/09): "sổ hồng riêng full thổ cư" chỉ thành NHÃN, ô thổ cư vẫn trống → điểm tin báo thiếu
+        // "thổ cư bao nhiêu" và bot gợi ý hỏi lại thứ khách vừa nói. Nhãn thổ cư 100% điền ô thổ cư — chỉ khi ô còn trống.
+        if (them.includes("tho_cu_100")) {
+          const { data: tc, error: tcErr } = await client.from("listing_facts").select("id").eq("listing_id", lid).eq("question", "tho_cu").limit(1);
+          if (tcErr) await ghiLoi(client, "chat-reply doc tho_cu", tcErr.message);
+          else if (!(tc ?? []).length) {
+            const { error: tgErr } = await client.rpc("ghi_fact_listing", {
+              p_listing_id: lid, p_question: "tho_cu", p_answer: "100%", p_source: "seller_chat",
+            });
+            if (tgErr) await ghiLoi(client, "chat-reply ghi_fact_listing(tho_cu 100)", tgErr.message);
+          }
+        }
       } catch (e) {
         await ghiLoi(client, "chat-reply gan nhan", e);
       }
@@ -2477,7 +2489,7 @@ Deno.serve(async (req) => {
     // ("ok e", "ừ", "👍") → đáp một câu ngắn, KHÔNG hỏi tiếp. Nói gì có dữ liệu / bảo đăng thì đi đường thường.
     const botCuoiHoan = lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-2).map((m) => m.body ?? "").join(" ");
     if (!imageUrl && !humanActive && laDongY(text) && text.trim().split(/\s+/).length <= 4 && !laBaoDang(text) &&
-        /lúc nào .{0,25}rảnh|cứ thong thả|em chờ .{0,25}nha|không hỏi lại/i.test(botCuoiHoan)) {
+        /lúc nào .{0,25}rảnh|cứ thong thả|cứ lo việc|em chờ .{0,25}nha|không hỏi lại/i.test(botCuoiHoan)) {
       return await traLoiSeller([`Dạ vâng ạ, em chờ ${cachGoi} nha.`], { hoan: true, loai_cau: "hoan_gat" });
     }
 
@@ -4203,6 +4215,17 @@ Deno.serve(async (req) => {
         // có hẹn nhắc ở trên. Chưa đủ điểm thì nói thật còn thiếu gì — dấu duyệt giữ lại, đủ là tự lên kệ.
         if (laBaoDang(text) && pendingReq.question !== "duyet_tin" && pendingReq.question !== "danh_gia") {
           const loiHua = `Dạ ${goi} cứ lo việc nha, lúc nào ${goi} gửi thêm thông tin với ảnh là em cập nhật vào tin liền ạ.`;
+          // FR-236 (bắn thật lx-43, 28/09): "hướng đông. đăng bài được chưa. a bận rồi" — hướng chỉ được ghi ở đường ra
+          // (sau khi bản tin đã soạn) nên tin lên kệ thiếu dòng hướng. Thông tin đi kèm trong câu ghi TRƯỚC khi soạn tin.
+          for (const f of factKem(dapAn)) {
+            if (f.question === "gia" && pendingReq.question !== "gia" && CAU_HOI_TIEN.has(pendingReq.question)) continue;
+            const { error: hkErr } = await client.rpc("ghi_fact_listing", {
+              p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer,
+              p_source: aiChinh?.ghi.some((g) => g === f) ? NGUON_AI : "seller_chat",
+            });
+            if (hkErr) await ghiLoi(client, "chat-reply ghi_fact_listing(hoan dang)", hkErr.message);
+            else await chepSangDuAn(f.question, f.answer);
+          }
           const nhap = await guiBanNhap(pendingReq.listing_id, { hoan: true, loai_cau: "hoan", ...(hua ? { hua: true } : {}) }, false, [loiHua], true);
           if (!Array.isArray(nhap)) return nhap;
           const { error: ddErr } = await client.from("listings").update({ chu_duyet_at: new Date().toISOString() }).eq("id", pendingReq.listing_id);
@@ -4603,7 +4626,7 @@ Deno.serve(async (req) => {
         // của anh là X, làm sao thêm điểm". Điểm và danh sách thiếu là tiền định
         // (diem_tin), 5 phút sau cron seller-hoi-bu-tick hỏi bù câu đầu tiên.
         const [{ data: lstOk }, { data: dOk, error: dOkErr }] = await Promise.all([
-          client.from("listings").select("code, status").eq("id", pendingReq.listing_id).maybeSingle(),
+          client.from("listings").select("code, status, property_type").eq("id", pendingReq.listing_id).maybeSingle(),
           client.rpc("diem_tin", { p_listing_id: pendingReq.listing_id }),
         ]);
         if (dOkErr) await ghiLoi(client, "chat-reply diem_tin(duyet)", dOkErr.message);
@@ -4630,7 +4653,7 @@ Deno.serve(async (req) => {
           }
         }
         const cau = len
-          ? cauTD("dang_xong", { diem: dk?.diem }) + dongNguoiRao
+          ? cauTD("dang_xong", { diem: dk?.diem, loai: loaiDoc(lstOk?.property_type) }) + dongNguoiRao
           : huaSauDuyet
           ? `Dạ em ghi nhận ${cachGoi} muốn đăng luôn. Tin còn thiếu ${(dk?.thieu ?? []).slice(0, 2).join(" và ") || "một chút"} nên chưa lên được — lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em đăng liền, không hỏi lại ạ.`
           : `Dạ em ghi nhận rồi ạ.\nTin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm ${cachGoi} vài thông tin nữa nha.`;
@@ -4653,7 +4676,7 @@ Deno.serve(async (req) => {
       // cuối làm tin tự lên kệ) — nhưng đọc cùng lúc với câu kế tiếp, và danh
       // sách câu còn treo suy ra từ `ds` đã có (FR-171 h: 3 vòng → 1).
       const [{ data: lstNow }, { data: nextFactsTho }, { data: daHetHan }] = await Promise.all([
-        client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at, district, boc_tach")
+        client.from("listings").select("code, status, can_chu_duyet, chu_duyet_at, district, boc_tach, property_type")
           .eq("id", pendingReq.listing_id).maybeSingle(),
         client.from("listing_missing_facts").select("fact_key, priority, nhom")
           .eq("listing_id", pendingReq.listing_id).order("priority").limit(12),
@@ -4884,7 +4907,7 @@ Deno.serve(async (req) => {
           : thieuDiem.length
           ? `${moDau}Để tin đủ điều kiện đăng, ${cachGoi} cho em hỏi thêm ${thieuDiem[0]} nha?`
           : published
-          ? `Dạ em cảm ơn ${cachGoi}! Tin ${neo ? `căn ${neo} ` : "nhà mình "}đã đủ thông tin và lên web rồi ạ, có khách quan tâm là em báo liền.`
+          ? `Dạ em cảm ơn ${cachGoi}! Tin ${neo ? `căn ${neo} ` : `${loaiDoc(lstNow?.property_type)} mình `}đã đủ thông tin và lên web rồi ạ, có khách quan tâm là em báo liền.`
           : `Dạ em cảm ơn ${cachGoi}, tin rao giờ đã đầy đủ thông tin. Có khách quan tâm là em báo ${cachGoi} ngay ạ.`;
       }
 
@@ -4915,9 +4938,15 @@ Deno.serve(async (req) => {
     // luôn câu mới. Hoãn là hoãn ở mọi nhánh: đáp một câu, không hỏi thêm.
     if (!wantsSell && !pendingReq && sellerRow.active_listing_id && laHoanLai(text)) {
       const goi = goiNguoi ?? "mình";
-      const phien = /bận|mệt|hỏi (?:gì )?(?:hoài|lắm|nhiều|mãi)/i.test(text);
-      return await traLoiSeller([phien
+      // FR-236 (bắn thật lx-43, 28/09): không có câu nào đang hỏi mà "giờ anh bận rồi em" → "em hỏi dồn quá" nghe lạc (bot
+      // có hỏi gì đâu). Chỉ xin lỗi hỏi dồn khi khách than HỎI nhiều; bận thì chúc lo việc, tin đã lên kệ thì nói vẫn đang rao.
+      const thanHoi = /hỏi (?:gì )?(?:hoài|lắm|nhiều|mãi)/i.test(text);
+      const ttTin = ((tinCuaNguoi ?? []) as Array<{ id: string; status?: string | null }>).find((t) => t.id === sellerRow.active_listing_id)?.status ?? null;
+      const dangRao = !!ttTin && ttTin !== "cho_thong_tin" && ttTin !== "an" && ttTin !== "da_chot";
+      return await traLoiSeller([thanHoi
         ? `Dạ em xin lỗi, em hỏi dồn quá. Lúc nào ${goi} rảnh nhắn em là em làm tiếp liền nha.`
+        : dangRao
+        ? `Dạ ${goi} cứ lo việc nha. Tin mình vẫn đang rao, có khách quan tâm là em báo ${goi} liền ạ.`
         : `Dạ ${goi} cứ thong thả nha. Có gì ${goi} nhắn em là em làm tiếp liền.`], { hoan: true, loai_cau: "hoan" });
     }
     if (!daGanManh && (wantsSell || raoMoiCanKhac || (dangXinCanMoi && coChiTiet))) {

@@ -79,6 +79,9 @@ const LOAI_TIEU_DE: Record<string, string> = {
   dat_kinh_doanh: "đất kinh doanh", kho_xuong: "kho xưởng",
 };
 
+/** FR-236: loại BĐS đọc thường cho câu "Tin {loai} mình lên kệ" — tin đất không được gọi là "tin nhà". */
+export const loaiDoc = (pt: string | null | undefined): string => LOAI_TIEU_DE[pt ?? ""] ?? "nhà";
+
 const DUONG_VAO_TIEU_DE: Record<string, string> = {
   mat_tien: "mặt tiền", hem_xe_hoi: "hẻm xe hơi", hem_xe_may: "hẻm", hem: "hẻm",
 };
@@ -183,7 +186,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
     if (p.length) dong.push(`${icon} ${ten}: ${p.join(" · ")}`);
   };
 
-  dong.push(cauTD(daDang ? "nhap_da_dang" : "nhap_tieu_de"));
+  dong.push(cauTD(daDang ? "nhap_da_dang" : "nhap_tieu_de", { loai: loaiDoc(l.property_type) }));
   dong.push(tieuDeTin(l, fact));
   // Chủ nhà gõ "hẻm 5m Nguyễn Trãi" thì địa chỉ mở đầu bằng chữ thường — một
   // tin rao thật không bắt đầu bằng chữ thường.
@@ -240,7 +243,9 @@ export function soanTinNhap(t: ThamSoNhap): string {
     fact("ha_tang"),
     nhan("container:", fact("duong_container")),
   ]);
-  them("🧭", "Hướng", [l.direction ?? fact("huong")]);
+  // FR-236: luật ghi nguyên cụm khách gõ ("hướng đông") → "🧭 Hướng: hướng đông". Bỏ chữ "hướng" lặp, viết hoa đầu.
+  const huong = (l.direction ?? fact("huong") ?? "").replace(/^\s*hướng\s+/iu, "").trim();
+  them("🧭", "Hướng", [huong ? huong.charAt(0).toLocaleUpperCase("vi") + huong.slice(1) : null]);
   them("📜", "Pháp lý", [
     l.legal_status === "giay_tay" && /\bvi bang\b/.test(boDau(fact("phap_ly") ?? ""))
       ? "vi bằng"
