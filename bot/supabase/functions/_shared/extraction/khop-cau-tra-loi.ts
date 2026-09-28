@@ -667,6 +667,18 @@ const HOI_CO_KHONG = new Set([
 /** Câu hỏi có / không (đáp "có", "không", "rồi" là đủ). */
 export const laCauCoKhong = (q: string): boolean => HOI_CO_KHONG.has(q);
 /**
+ * Chủ nhà bảo ĐĂNG ("cứ đăng như này trước đi", "đăng tin luôn đi em", "lên tin trước") — 28/09/2026, câu vừa bảo đăng vừa
+ * hoãn ("chiều anh gửi thêm thông tin với ảnh, giờ đang bận"). Có dấu thì "đăng" ≠ "đang" (đang bận); gõ không dấu thì phải
+ * có chữ đi kèm rõ nghĩa đăng tin. "chưa / khoan / đừng đăng" không tính.
+ */
+export function laBaoDang(text: string): boolean {
+  const t = text.toLowerCase();
+  const kd = boDau(text).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ");
+  if (/(?:chưa|khoan|đừng|không|ko|chờ)\s+(?:cần\s+)?đăng|\b(?:chua|khoan|dung|khong|ko|cho)\s+dang\s+(?:tin|bai|len|nhu)/.test(t) || /\b(?:chua|khoan|dung)\s+dang\b/.test(kd)) return false;
+  return /đăng(?!\s*ký)/.test(t) && !/đăng\s+ký/.test(t) ||
+    /\b(?:cu|thi|ok|oke)\s+dang\s+(?:nhu|truoc|luon|di|tin|bai|len|tam)\b|\bdang\s+(?:tin|bai|len tin|luon di|nhu nay|nhu vay|truoc di|tam di)\b|\blen\s+(?:tin|ke)\b|\b(?:post|up)\s+(?:tin|bai)\b/.test(kd);
+}
+/**
  * Một câu phủ định chung cho CẢ câu hỏi gộp ("không có gì hết", "ko dính gì", "sạch sẽ hết em") — 27/09/2026, câu pháp lý thứ
  * hai (quy hoạch + tranh chấp + xây lố). Có "nhưng / trừ" hay chữ số là nói riêng một ý → không tính; "không biết / không rõ"
  * không phải câu trả lời.
@@ -1431,7 +1443,8 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 24/09/2026 (chủ dự án test Zalo): "ở Nguyễn Trãi quận 5" — tên đường KHÔNG có chữ "đường" đứng trước — cũng là
   // địa chỉ: chữ sau "ở" viết hoa (tên riêng) hoặc câu có quận/phường/huyện thì không phải cách dùng.
   const oLaDiaChi = /^\s*(?:nhà\s+)?ở\s+\p{Lu}/u.test(goc.trim()) || /\b(?:quan|q|phuong|p)\s*\d{1,2}\b|\b(?:quan|huyen|phuong|xa|tinh)\s+[a-z]/.test(kd);
-  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:to\b|duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8 &&
+  // 28/09/2026 (bắn thật lx-40): "ở ai cũng khá lên" (phong thuỷ) / "ở đây …" không phải cách dùng — "ở" + ai/đây/đó/kia/đâu.
+  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:to\b|duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an|ai\b|day\b|do\b|kia\b|dau\b))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8 &&
         !(/^\s*(?:nha\s+)?o\s/.test(kd) && oLaDiaChi)) ||
       (/\b(o hoac|hoac lam|deu duoc|lam can ho dich vu|lam chdv|hop (?:de )?(?:o|kinh doanh|cho thue|lam))\b/.test(kd) && kd.split(/\s+/).length <= 14 &&
         !/\b(showroom|lam xuong|van phong cong ty|nha hang|benh vien|truong hoc|lam kho)\b/.test(kd))) {

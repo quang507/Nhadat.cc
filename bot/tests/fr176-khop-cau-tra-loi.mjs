@@ -3,7 +3,7 @@
 //   bun bot/tests/fr176-khop-cau-tra-loi.mjs
 // Mỗi dòng dưới là một câu THẬT hoặc gần thật từ log 07/09/2026. Thêm ca khi
 // bắt được một câu bot ghi sai chỗ ngoài đời — đó là cách file này lớn lên.
-import { batXungHo, laKhongGiHet, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { batXungHo, laBaoDang, laKhongGiHet, nhanDienFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 const CA = [
   // [câu hỏi đang treo, câu chủ nhà nhắn, loại mong đợi, kiểm thêm]
@@ -120,5 +120,22 @@ for (const [t, mong] of kgh) {
   if (kq !== mong) hong++;
   console.log(`${kq === mong ? "✓" : "✗"} không gì hết "${t}" → ${kq}${kq === mong ? "" : `  MONG ${mong}`}`);
 }
-console.log(hong ? `\nFR-176: ${hong}/${CA.length + xh.length + kgh.length} CA HỎNG` : `\nFR-176: ${CA.length + xh.length + kgh.length}/${CA.length + xh.length + kgh.length} CA ĐẠT`);
+// 28/09 (FR-234): bảo ĐĂNG trong câu hoãn — "đăng" khác "đang" (đang bận); "chưa / khoan đăng" không tính.
+const bd = [["Bảo cứ đăng như này trước đi chiều anh gửi thêm thông tin với ảnh các thứ h đang bận", true], ["cu dang nhu nay truoc di", true],
+  ["lên tin trước đi em", true], ["đăng tin luôn đi em, tối gửi ảnh", true], ["h đang bận", false], ["anh đang đi làm", false],
+  ["dang ban lam em", false], ["chưa đăng đâu em", false], ["khoan đăng đã", false], ["đăng ký gì vậy em", false]];
+for (const [t, mong] of bd) {
+  const kq = laBaoDang(t);
+  if (kq !== mong) hong++;
+  console.log(`${kq === mong ? "✓" : "✗"} bảo đăng "${t}" → ${kq}${kq === mong ? "" : `  MONG ${mong}`}`);
+}
+// 28/09 (bắn thật lx-40): "ở ai cũng khá lên" (phong thuỷ) không phải tiềm năng sử dụng; "để ở hoặc kinh doanh" vẫn là.
+const tn = [["ở ai cũng khá lên", null], ["ở đây yên tĩnh lắm", null], ["để ở hoặc kinh doanh", "tiem_nang"]];
+for (const [t, mong] of tn) {
+  const kq = nhanDienFact(t)?.question ?? null;
+  if (kq !== mong) hong++;
+  console.log(`${kq === mong ? "✓" : "✗"} tiềm năng "${t}" → ${kq}${kq === mong ? "" : `  MONG ${mong}`}`);
+}
+const tong176 = CA.length + xh.length + kgh.length + bd.length + tn.length;
+console.log(hong ? `\nFR-176: ${hong}/${tong176} CA HỎNG` : `\nFR-176: ${tong176}/${tong176} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
