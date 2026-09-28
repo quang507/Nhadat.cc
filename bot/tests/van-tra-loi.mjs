@@ -963,6 +963,8 @@ ok("FR241-N8 '4 phòng ngủ' khi khách nói '4 phòng' → không bịa", laSo
 ok("FR241-N9 kết cấu đã có mà hỏi lại 'mấy lầu' → thay bằng câu kế", boHoiLaiDaCo("Dạ em ghi nhận. Nhà mình mấy lầu vậy anh?", new Set(["ket_cau"]), "do_rong_hem", "Hẻm trước nhà rộng khoảng mấy mét anh?") === "Dạ em ghi nhận. Hẻm trước nhà rộng khoảng mấy mét anh?");
 ok("FR241-N9 câu hỏi KHÁC khoá đã có → giữ nguyên", boHoiLaiDaCo("Dạ. Hẻm trước nhà rộng mấy mét anh?", new Set(["ket_cau"]), "do_rong_hem", "x") === "Dạ. Hẻm trước nhà rộng mấy mét anh?");
 ok("FR241-N10b hiện trạng 'dang o' → 'đang ở'", chuanHienTrang("dang o") === "đang ở");
+ok("FR241-l nhà phố: vừa trả lời kết cấu, còn pháp lý (16) + phòng ngủ (21) → hỏi PHÁP LÝ trước, không kéo phòng ngủ lên", chonCauKe(["ket_cau"], [{ fact_key: "phap_ly", priority: 16, nhom: "co_ban" }, { fact_key: "so_phong_ngu", priority: 21, nhom: "co_ban" }, { fact_key: "phuong", priority: 22, nhom: "co_ban" }]) === "phap_ly");
+ok("FR241-l căn hộ: vừa nói tầng → vẫn hỏi phòng ngủ (tang → so_phong_ngu giữ)", chonCauKe(["tang"], [{ fact_key: "so_phong_ngu", priority: 4, nhom: "co_ban" }, { fact_key: "huong", priority: 6, nhom: "co_ban" }]) === "so_phong_ngu");
 ok("FR241-N10b hiện trạng có dấu giữ nguyên", chuanHienTrang("đang cho thuê 20 triệu") === "đang cho thuê 20 triệu");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

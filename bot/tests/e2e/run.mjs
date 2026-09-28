@@ -1216,10 +1216,12 @@ fresh(seedKho);
   fresh();
   r = await send({ external_user_id: "h-9", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2, không gấp" });
   const H9 = db().t.listings[0];
-  for (const t of ["hẻm 4m xe hơi", "3 lầu", "4 phòng ngủ", "sổ hồng riêng hoàn công đủ"]) r = await send({ external_user_id: "h-9", text: t });
+  // FR-241 l: nhà phố hỏi pháp lý TRƯỚC phòng ngủ (phòng ngủ dải 16–21, sau pháp lý).
+  for (const t of ["hẻm 4m xe hơi", "3 lầu", "sổ hồng riêng hoàn công đủ"]) r = await send({ external_user_id: "h-9", text: t });
   r = await quaPhapLy("h-9", r);
+  if (db().t.info_requests.some((q) => q.listing_id === H9.id && q.question === "so_phong_ngu" && q.status === "pending")) r = await send({ external_user_id: "h-9", text: "4 phòng ngủ" });
   // 20260916c: tiềm năng không còn trong chat → sau pháp lý (gấp đã nói lúc rao) là bản nháp ngay.
-  check("N6 chuỗi nhà phố: hẻm → lầu → phòng → pháp lý → bản nháp (tiềm năng để hỏi bù, 20260916c)", pend("duyet_tin", H9.id) && !pend("tiem_nang", H9.id), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
+  check("N6 chuỗi nhà phố: hẻm → lầu → pháp lý → phòng (FR-241) → bản nháp (tiềm năng để hỏi bù, 20260916c)", pend("duyet_tin", H9.id) && !pend("tiem_nang", H9.id), JSON.stringify(db().t.info_requests.map((q) => [q.question, q.status])));
   r = await send({ external_user_id: "h-9", text: "ở hoặc làm văn phòng đều được" });
   check("N6b nói tiềm năng lúc đang duyệt → ghi fact, gửi lại bản nháp, duyet_tin vẫn treo", db().t.listing_facts.some((f) => f.listing_id === H9.id && f.question === "tiem_nang") && pend("duyet_tin", H9.id), JSON.stringify(r.body));
   r = await send({ external_user_id: "h-9", text: "chốt đi em" });
@@ -3306,7 +3308,8 @@ fresh(seedKho);
   const cauBot = r.body.replies.find((x) => !x.startsWith("🤖") && !x.startsWith("🤖")) ?? "";
   check("KHEN-01 3 tin bot gần nhất đã khen → prompt dặn 'KHÔNG khen'; câu khen model lọt bị lọc, câu hỏi giữ",
     globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) &&
-      !/chốt nhanh/.test(cauBot) && /bao nhiêu phòng ngủ/.test(cauBot),
+      // FR-241 l: sau kết cấu code chọn câu PHÁP LÝ → câu hỏi model (phòng ngủ) thay bằng câu mẫu sổ; câu hỏi vẫn còn.
+      !/chốt nhanh/.test(cauBot) && /(bao nhiêu phòng ngủ|[Ss]ổ hồng)/.test(cauBot),
     JSON.stringify({ rep: r.body.replies }));
   // 25/09/2026 (bắn thật lx-09): code chọn câu kế mà model hỏi chuyện KHÁC (hẻm) → câu hỏi thay bằng câu mẫu của khoá.
   {
@@ -3360,7 +3363,7 @@ fresh(seedKho);
     r = await send({ external_user_id: "khen-3", text: "trệt 2 lầu" });
     const cauBot3 = r.body.replies.find((x) => !x.startsWith("🤖")) ?? "";
     check("KHEN-03 khen cách 2 lời đáp (xen 🤖) → vẫn là 'vừa khen': prompt dặn KHÔNG khen, câu khen lọt bị lọc, câu hỏi giữ",
-      globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) && !/rộng rãi/.test(cauBot3) && /phòng ngủ/.test(cauBot3),
+      globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) && !/rộng rãi/.test(cauBot3) && /(phòng ngủ|[Ss]ổ hồng)/.test(cauBot3),
       JSON.stringify({ rep: r.body.replies }));
     globalThis.__model.create = macDinhCreate;
   }

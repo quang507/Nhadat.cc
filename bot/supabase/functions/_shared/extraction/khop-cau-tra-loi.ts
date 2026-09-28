@@ -1710,7 +1710,9 @@ const LIEN_QUAN: Record<string, string[]> = {
   vi_tri: ["phuong", "do_rong_hem", "dien_tich_dat", "dien_tich"],
   loai_bds: ["phuong"],
   do_rong_hem: ["ket_cau", "mat_tien"], do_rong_duong: ["huong", "ha_tang", "mat_tien"],
-  ket_cau: ["so_phong_ngu", "san_vuon", "phap_ly"], tang: ["so_phong_ngu", "huong"], so_phong_ngu: ["huong", "noi_that", "phap_ly"],
+  // FR-241 l (bắn lại 28/09, lx-85): nhà phố — phòng ngủ đã lùi sang dải 16–21 cùng pháp lý, nên nối ket_cau → so_phong_ngu
+  // kéo phòng ngủ lên TRƯỚC pháp lý ngay sau câu kết cấu, trái ý chủ dự án ("để sau rồi hỏi"). Bỏ nối đó; căn hộ giữ tang → phòng ngủ.
+  ket_cau: ["san_vuon", "phap_ly"], tang: ["so_phong_ngu", "huong"], so_phong_ngu: ["huong", "noi_that", "phap_ly"],
   // FR-186 (09/09/2026): chuỗi hỏi giống người cho chung cư / đất / biệt thự / cho thuê.
   huong: ["noi_that", "ha_tang", "phap_ly"], noi_that: ["phap_ly", "tien_coc"],
   ha_tang: ["xay_dung", "phap_ly"], xay_dung: ["phap_ly"],

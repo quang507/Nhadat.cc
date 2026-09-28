@@ -72,8 +72,9 @@ const CM = (k) => ({ fact_key: k, nhom: "chuyen_mon" });
 ok("nghe 'ngang 5' (mat_tien) → hỏi diện tích, không hỏi phường trước",
   chonCauKe(["mat_tien"], [CB("phuong"), CB("dien_tich_dat"), CB("gia")]) === "dien_tich_dat");
 ok("nghe diện tích → hỏi giá", chonCauKe(["dien_tich"], [CB("phuong"), CB("gia")]) === "gia");
-ok("nghe '3 lầu' (ket_cau) → hỏi phòng ngủ trước pháp lý",
-  chonCauKe(["ket_cau"], [CM("phap_ly"), CM("so_phong_ngu")]) === "so_phong_ngu");
+// FR-241 l (chủ dự án 28/09: "sao cứ hỏi phòng ngủ ko z để sau rồi hỏi đi"): nghe kết cấu KHÔNG kéo phòng ngủ lên trước pháp lý.
+ok("nghe '3 lầu' (ket_cau) → hỏi pháp lý trước phòng ngủ (FR-241)",
+  chonCauKe(["ket_cau"], [CM("phap_ly"), CM("so_phong_ngu")]) === "phap_ly");
 ok("nghe hẻm → hỏi kết cấu", chonCauKe(["do_rong_hem"], [CM("phap_ly"), CM("ket_cau")]) === "ket_cau");
 ok("còn thiếu cơ bản thì KHÔNG nhảy sang chuyên môn dù liên quan",
   chonCauKe(["do_rong_hem"], [CB("gia"), CM("ket_cau")]) === "gia");
