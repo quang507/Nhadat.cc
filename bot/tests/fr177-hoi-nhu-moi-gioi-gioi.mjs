@@ -6,7 +6,7 @@
 import {
   chonCanTheoCau, chonCauKe, laDongY, laDuRoi, laGap, laNgungRao, nhanDienFact, phanLoaiCauTraLoi,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
-import { cauHoiMau, KHO_TEN_TRO_LY, tenTroLy, dienTen } from "../supabase/functions/_shared/prompts.ts";
+import { cauHoiMau, dsHoiBu, KHO_TEN_TRO_LY, tenTroLy, dienTen } from "../supabase/functions/_shared/prompts.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chiTiet = "") => { tong++; if (!dat) { hong++; console.log(`✗ ${ten}\n     → ${chiTiet}`); } else console.log(`✓ ${ten}`); };
@@ -172,6 +172,9 @@ ok("câu mẫu hướng chung (nhà phố) không đổi", /quay hướng nào/i
 // FR-237 (28/09/2026): câu xin ảnh theo loại — đất không có "mặt tiền nhà, hẻm".
 ok("câu xin ảnh đất: lô đất + đường vào, không hẻm", /lô đất và đường vào/.test(cauHoiMau("hinh_anh", "anh", undefined, "dat")) && !/hẻm/.test(cauHoiMau("hinh_anh", "anh", undefined, "dat")));
 ok("câu xin ảnh căn hộ: góc căn hộ, không hẻm", /căn hộ/.test(cauHoiMau("hinh_anh", "anh", undefined, "chung_cu")) && !/hẻm/.test(cauHoiMau("hinh_anh", "anh", undefined, "chung_cu")));
+// FR-237 (bắn thật lx-46): hỏi bù (ask-seller) dùng nhãn trần → tin đất bị xin "ảnh sổ đỏ, mặt tiền và hẻm".
+ok("hỏi bù tin đất: nhãn ảnh 'lô đất, đường vào', không 'mặt tiền nhà, hẻm'", /lô đất, đường vào/.test(dsHoiBu(["hinh_anh"], "dat")) && !/hẻm/.test(dsHoiBu(["hinh_anh"], "dat")), dsHoiBu(["hinh_anh"], "dat"));
+ok("hỏi bù nhà phố giữ nhãn ảnh cũ", /mặt tiền nhà, hẻm/.test(dsHoiBu(["hinh_anh", "gia"], "nha_pho")) && dsHoiBu(["hinh_anh", "gia"], "nha_pho").split("\n").length === 2);
 ok("câu xin ảnh nhà phố không đổi (mặt tiền và hẻm)", /mặt tiền và hẻm/.test(cauHoiMau("hinh_anh", "anh", undefined, "nha_pho")));
 // 09/09 chiều sếp chốt: hỏi địa chỉ kèm lý do "kiểm tra giá". 11/09 (lượt bắn 42 ca):
 // khuôn 25 từ kèm lý do lặp nguyên văn 22/52 câu bot → lý do chỉ ở lần hỏi ĐẦU

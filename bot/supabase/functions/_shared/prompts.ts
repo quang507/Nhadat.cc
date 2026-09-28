@@ -446,6 +446,12 @@ export function nhanTheoLoai(key: string, loai?: string | null): string {
   return (loai ? FACT_LABELS[`${key}@${loai}`] : undefined) ?? FACT_LABELS[key] ?? key;
 }
 
+/** FR-237 (bắn thật lx-46, 28/09): danh sách thông tin hỏi bù gửi model (`ask-seller`) — nhãn THEO LOẠI BĐS. Trước dùng
+ *  `FACT_LABELS[key]` trần nên tin đất bị xin "ảnh sổ đỏ, mặt tiền và hẻm". */
+export function dsHoiBu(keys: string[], loai?: string | null): string {
+  return keys.map((k) => `- ${k}: ${nhanTheoLoai(k, loai)}`).join("\n");
+}
+
 export function cauHoiMau(
   key: string, cachGoi: string, bang: Record<string, string> = CAU_HOI_MAU, loai?: string | null,
 ): string {
