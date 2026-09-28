@@ -334,7 +334,7 @@ export function boKhenThiTruong(replies: string[]): string[] {
   // FR-240 a (phát lại test 28/09 trên production): "5 tầng thì dễ bán lắm anh", "mảnh đất vuông vắn, dễ bán lắm anh",
   // "kinh doanh cho thuê ổn định thế là khách sẽ mua nhanh lắm anh" — ĐOÁN THANH KHOẢN, bot không có số liệu nào. Bỏ.
   // "anh cần bán nhanh", "chốt nhanh" (ý CHỦ NHÀ) và "khách mua hay hỏi pháp lý" (giải thích) không phải đoán thị trường — giữ.
-  const THANH_KHOAN = /\b(?:de ban|ban chay|hut khach)\b|\b(?:ban|mua|chot|coc|ra hang) nhanh lam\b|\bkhach (?:se|de) (?:mua|chot|coc|xuong tien)\b|\bkhach (?:mua|chot|coc) (?:nhanh|lien|ngay)\b|\bthanh khoan (?:tot|cao|manh)\b/;
+  const THANH_KHOAN = /\b(?:de ban|ban chay|hut khach)\b|\b(?:ban|mua|chot|coc|ra hang) nhanh lam\b|\bkhach(?:\s+\S+){0,2}?\s+(?:se|de) (?:mua|chot|coc|xuong tien|quan tam|thich|chuong|san|ung)\b|\bkhach (?:mua|chot|coc) (?:nhanh|lien|ngay)\b|\bthanh khoan (?:tot|cao|manh)\b/;
   // FR-240 d (phát lại test 28/09 trên production): "khách tìm đất nền thường thích thế này", "khách mua hay tìm diện tích vừa
   // phải như vậy" — nói người mua HAY / THƯỜNG thích gì mà không có số liệu, không cần chữ "lắm". Câu giải thích lý do hỏi
   // ("khách mua hay hỏi pháp lý nên em hỏi kỹ") giữ.
@@ -1136,7 +1136,9 @@ export function thayCauHoiLech(reply: string, khoa: string | null | undefined, c
 // FR-239 a (phát lại test 27/09): "Em đã lên tin rồi ạ" / "em đang rao tích cực" khi tin còn chờ thông tin.
 // FR-240 d (phát lại test 28/09 trên production): "Em đang rao tin cho anh rồi ạ" — "đang rao" nào cũng sai khi tin chưa lên.
 // Lời hứa ("em sẽ rao tích cực") giữ.
-const DA_DANG_RE = /\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b/;
+// FR-240 e (phát lại lần ba, v264): "Em cảm ơn anh, đã ghi đủ thông tin rồi ạ." khi tin mới có tên đường — tin chưa lên là
+// còn thiếu, "đủ thông tin" là nói sai. "Dạ em ghi đủ rồi ạ" (đủ những gì khách vừa nói — ví dụ mẫu FR-178) giữ.
+const DA_DANG_RE = /\b(?:ghi|co|nhan|lay)\s+(?:du|day du)\s+thong\s+tin\b|\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b/;
 export function boHuaDaDang(replies: string[]): string[] {
   const ra: string[] = [];
   for (const r of replies) {
@@ -1147,8 +1149,9 @@ export function boHuaDaDang(replies: string[]): string[] {
       const cacMd = c.split(/,\s+/);
       const giu = cacMd.filter((md) => !laSai(md));
       if (giu.length === cacMd.length) return c;
-      const gop = giu.join(", ").trim();
-      return gop ? gop.charAt(0).toUpperCase() + gop.slice(1) : "";
+      // Vế cuối (mang dấu chấm) bị bỏ thì vế còn lại tự đóng câu — "Em cảm ơn anh, đã ghi đủ…" → "Em cảm ơn anh."
+      const gop = giu.join(", ").trim().replace(/(?<![.!?…)])$/u, giu.length && !laSai(cacMd[cacMd.length - 1]) ? "" : ".");
+      return gop && gop !== "." ? gop.charAt(0).toUpperCase() + gop.slice(1) : "";
     }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
     if (dong) ra.push(dong);
   }
