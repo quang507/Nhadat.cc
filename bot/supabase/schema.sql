@@ -2799,7 +2799,12 @@ begin
   if l.code is not null then d_cta := 10; end if;
 
   d_anh := case when so_anh >= 3 then 10 when so_anh = 2 then 7 when so_anh = 1 then 4 else 0 end;
-  if so_anh = 0 then thieu := array_append(thieu, 'vài tấm ảnh (nhà, sổ, hẻm — ảnh nào cũng được)');
+  if so_anh = 0 then thieu := array_append(thieu, case
+      when la_dat then 'vài tấm ảnh (lô đất, sổ, đường vào — ảnh nào cũng được)'
+      when l.property_type = 'chung_cu' then 'vài tấm ảnh (căn hộ, sổ, view — ảnh nào cũng được)'
+      when l.property_type = 'phong_tro' then 'vài tấm ảnh (phòng, lối vào — ảnh nào cũng được)'
+      when l.property_type = 'kho_xuong' then 'vài tấm ảnh (kho, sổ, đường vào — ảnh nào cũng được)'
+      else 'vài tấm ảnh (nhà, sổ, hẻm — ảnh nào cũng được)' end);
   elsif so_anh < 3 then thieu := array_append(thieu, format('thêm ảnh cho đủ 3 tấm (đang có %s)', so_anh)); end if;
 
   return jsonb_build_object(

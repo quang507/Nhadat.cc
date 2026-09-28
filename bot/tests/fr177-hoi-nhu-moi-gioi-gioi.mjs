@@ -169,6 +169,10 @@ ok("chonCauKe: cho thuê trả lời cọc → hỏi thời hạn thuê",
 ok("câu mẫu hướng riêng cho chung cư", /ban công/i.test(cauHoiMau("huong", "anh", undefined, "chung_cu")));
 ok("câu mẫu hướng riêng cho đất", /lô đất/i.test(cauHoiMau("huong", "anh", undefined, "dat")));
 ok("câu mẫu hướng chung (nhà phố) không đổi", /quay hướng nào/i.test(cauHoiMau("huong", "anh", undefined, "nha_pho")));
+// FR-237 (28/09/2026): câu xin ảnh theo loại — đất không có "mặt tiền nhà, hẻm".
+ok("câu xin ảnh đất: lô đất + đường vào, không hẻm", /lô đất và đường vào/.test(cauHoiMau("hinh_anh", "anh", undefined, "dat")) && !/hẻm/.test(cauHoiMau("hinh_anh", "anh", undefined, "dat")));
+ok("câu xin ảnh căn hộ: góc căn hộ, không hẻm", /căn hộ/.test(cauHoiMau("hinh_anh", "anh", undefined, "chung_cu")) && !/hẻm/.test(cauHoiMau("hinh_anh", "anh", undefined, "chung_cu")));
+ok("câu xin ảnh nhà phố không đổi (mặt tiền và hẻm)", /mặt tiền và hẻm/.test(cauHoiMau("hinh_anh", "anh", undefined, "nha_pho")));
 // 09/09 chiều sếp chốt: hỏi địa chỉ kèm lý do "kiểm tra giá". 11/09 (lượt bắn 42 ca):
 // khuôn 25 từ kèm lý do lặp nguyên văn 22/52 câu bot → lý do chỉ ở lần hỏi ĐẦU
 // (`vi_tri@lan_dau`), các lần hỏi lại ngắn, không lý do.

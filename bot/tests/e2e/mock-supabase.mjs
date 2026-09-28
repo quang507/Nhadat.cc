@@ -124,7 +124,12 @@ export class FakeDB {
     const soAnh = this.t.listing_facts.filter((x) => x.listing_id === l.id && x.question === "hinh_anh").length
       + this.t.listing_media.filter((m) => m.listing_id === l.id).length;
     const anh = soAnh >= 3 ? 10 : soAnh === 2 ? 7 : soAnh === 1 ? 4 : 0;
-    if (soAnh === 0) thieu.push("vài tấm ảnh (nhà, sổ, hẻm — ảnh nào cũng được)");
+    // 20260928b (FR-237): câu xin ảnh theo loại BĐS — như DB thật.
+    if (soAnh === 0) thieu.push(["dat", "dat_nong_nghiep", "dat_kinh_doanh"].includes(l.property_type) ? "vài tấm ảnh (lô đất, sổ, đường vào — ảnh nào cũng được)"
+      : l.property_type === "chung_cu" ? "vài tấm ảnh (căn hộ, sổ, view — ảnh nào cũng được)"
+      : l.property_type === "phong_tro" ? "vài tấm ảnh (phòng, lối vào — ảnh nào cũng được)"
+      : l.property_type === "kho_xuong" ? "vài tấm ảnh (kho, sổ, đường vào — ảnh nào cũng được)"
+      : "vài tấm ảnh (nhà, sổ, hẻm — ảnh nào cũng được)");
     else if (soAnh < 3) thieu.push(`thêm ảnh cho đủ 3 tấm (đang có ${soAnh})`);
     return { diem: viTri + dt + kc + pl + gia + tn + cta + anh, chi_tiet: { vi_tri_hem: viTri, dien_tich: dt, ket_cau: kc, phap_ly: pl, gia, tiem_nang: tn, goi_hanh_dong: cta, anh }, thieu, co_anh: soAnh > 0, so_anh: soAnh };
   }
