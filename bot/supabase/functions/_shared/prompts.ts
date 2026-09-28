@@ -396,6 +396,11 @@ export const CAU_HOI_MAU: Record<string, string> = {
   // FR-229 (chủ dự án 25/09/2026, nhóm "Pháp lý (đây là phần quan trọng nhất)"): hỏi trước bản nháp, tin bán.
   // 27/09/2026 (test Zalo): bot từng xin "tên người đứng tên trên sổ" — hỏi QUAN HỆ (chính {ac} hay người nhà), không hỏi họ tên.
   nguoi_dung_ten: "Sổ nhà mình do chính {ac} đứng tên hay người nhà đứng tên, có đồng sở hữu như vợ chồng hay anh em thừa kế không?",
+  // FR-238: đất / căn hộ không gọi là "sổ nhà".
+  "nguoi_dung_ten@dat": "Sổ đất mình do chính {ac} đứng tên hay người nhà đứng tên, có đồng sở hữu như vợ chồng hay anh em thừa kế không?",
+  "nguoi_dung_ten@dat_nong_nghiep": "Sổ đất mình do chính {ac} đứng tên hay người nhà đứng tên, có đồng sở hữu như vợ chồng hay anh em thừa kế không?",
+  "nguoi_dung_ten@dat_kinh_doanh": "Sổ đất mình do chính {ac} đứng tên hay người nhà đứng tên, có đồng sở hữu như vợ chồng hay anh em thừa kế không?",
+  "nguoi_dung_ten@chung_cu": "Sổ căn hộ mình do chính {ac} đứng tên hay người nhà đứng tên, có đồng sở hữu như vợ chồng hay anh em thừa kế không?",
   tranh_chap: "Nhà có đang tranh chấp gì không {ac}?",
   dien_tich_khop_so: "Diện tích xây dựng thực tế có khớp với sổ không {ac}, đã hoàn công chưa?",
   han_hop_dong_thue: "Hợp đồng thuê hiện còn tới khi nào {ac}?",

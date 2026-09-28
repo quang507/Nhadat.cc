@@ -175,6 +175,7 @@ ok("câu xin ảnh căn hộ: góc căn hộ, không hẻm", /căn hộ/.test(ca
 // FR-237 (bắn thật lx-46): hỏi bù (ask-seller) dùng nhãn trần → tin đất bị xin "ảnh sổ đỏ, mặt tiền và hẻm".
 ok("hỏi bù tin đất: nhãn ảnh 'lô đất, đường vào', không 'mặt tiền nhà, hẻm'", /lô đất, đường vào/.test(dsHoiBu(["hinh_anh"], "dat")) && !/hẻm/.test(dsHoiBu(["hinh_anh"], "dat")), dsHoiBu(["hinh_anh"], "dat"));
 ok("hỏi bù nhà phố giữ nhãn ảnh cũ", /mặt tiền nhà, hẻm/.test(dsHoiBu(["hinh_anh", "gia"], "nha_pho")) && dsHoiBu(["hinh_anh", "gia"], "nha_pho").split("\n").length === 2);
+ok("câu đứng tên đất: 'Sổ đất mình', hỏi quan hệ, không hỏi tên", /^Sổ đất mình do chính anh đứng tên hay người nhà/.test(cauHoiMau("nguoi_dung_ten", "anh", undefined, "dat")));
 ok("câu xin ảnh nhà phố không đổi (mặt tiền và hẻm)", /mặt tiền và hẻm/.test(cauHoiMau("hinh_anh", "anh", undefined, "nha_pho")));
 // 09/09 chiều sếp chốt: hỏi địa chỉ kèm lý do "kiểm tra giá". 11/09 (lượt bắn 42 ca):
 // khuôn 25 từ kèm lý do lặp nguyên văn 22/52 câu bot → lý do chỉ ở lần hỏi ĐẦU
