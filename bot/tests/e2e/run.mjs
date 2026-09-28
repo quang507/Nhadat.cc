@@ -3915,6 +3915,18 @@ fresh(seedKho);
       !!l.chu_duyet_at && l.status === "cho_thong_tin" && r.body.replies.length === 1 && /thiếu giá/.test(r.body.replies[0]) && /không hỏi lại/.test(r.body.replies[0]),
       JSON.stringify({ st: l.status, duyet: l.chu_duyet_at, rep: r.body.replies }));
   }
+  // Bắn thật lx-41: câu đó tới lúc bot ĐANG CHỜ DUYỆT bản nháp → trước bản vá rơi nhánh lời hứa "nhắn ok là em đăng liền", không đăng.
+  rnSeed("z-234f", "BDS-Q5-0965", { frontage_m: 4, legal_status: "so_hong_rieng" }, [["gap", "không gấp"], ["phap_ly", "sổ hồng riêng"]]);
+  {
+    const l = db().t.listings.find((x) => x.code === "BDS-Q5-0965");
+    db().t.info_requests = db().t.info_requests.filter((q) => q.listing_id !== l.id);
+    db().insert("info_requests", { listing_id: l.id, question: "duyet_tin", status: "pending" });
+    r = await send({ external_user_id: "z-234f", text: CAU_DANG_BAN });
+    check("FR234-E3b đang chờ DUYỆT nháp, 'cứ đăng như này trước đi … chiều gửi thêm … h đang bận' → gật duyệt, lên kệ, có lời hẹn; KHÔNG 'nhắn ok là em đăng liền'",
+      !!l.chu_duyet_at && l.status !== "cho_thong_tin" && r.body.duyet === true &&
+        r.body.replies.some((x) => /gửi thêm thông tin với ảnh/.test(x)) && !r.body.replies.some((x) => /nhắn "ok"/.test(x)),
+      JSON.stringify({ st: l.status, duyet: l.chu_duyet_at, rep: r.body.replies }));
+  }
   // (b) Trước bản nháp, AI đọc lại GHI CHÚ chưa đọc (bo_sung nguồn chat) → ghi vào ô còn trống, đánh dấu đã đọc.
   rnSeed("z-234e", "BDS-Q5-0964", {}, [["gap", "không gấp"], ["bo_sung", "cửa chính nhìn hướng đông nam đón gió"]]);
   {

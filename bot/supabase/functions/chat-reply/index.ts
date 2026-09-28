@@ -3781,6 +3781,7 @@ Deno.serve(async (req) => {
       // nào thì ghi fact đó, không thì `bo_sung`) rồi GỬI LẠI bản nháp, câu
       // duyệt vẫn treo. Hỏi ngược / ừ / dặn xưng hô → đường hỏi lại chung.
       let kqDuyet: KetQuaKhop | null = null;
+      let huaSauDuyet = false; // FR-234 c: gật duyệt bằng "cứ đăng … chiều gửi thêm" — kèm lời hẹn, không hỏi thêm
       if (pendingReq.question === "duyet_tin") {
         const chiSua = !!ackSua && conChu.length < 2;
         // FR-177 g: "đủ rồi, đăng đi" lúc duyệt là GẬT, và là lời "đủ rồi".
@@ -3793,6 +3794,12 @@ Deno.serve(async (req) => {
           !nhanDienFact(dapAn.slice(dapAn.indexOf(veDau) + veDau.length));
         if (!chiSua && (laDongY(dapAn) || laDuRoi(dapAn) || gatVeDau)) {
           kqDuyet = { loai: "khop" };
+        } else if (!chiSua && laBaoDang(dapAn)) {
+          // FR-234 c (bắn thật lx-41, 28/09/2026): "Bảo cứ đăng như này trước đi chiều anh gửi thêm thông tin với ảnh các
+          // thứ h đang bận" lúc chờ duyệt → nhánh LỜI HỨA bên dưới trả "nhắn ok là em đăng liền" mà không đăng. Bảo đăng là
+          // GẬT; lời hứa (nhắc đã đặt ở trên) chỉ thêm câu hẹn.
+          kqDuyet = { loai: "khop" };
+          huaSauDuyet = khop(PROMISE_RE, PROMISE_RE_KD);
         } else if (!chiSua && !/[\p{L}\p{N}]/u.test(dapAn)) {
           // 22/09/2026 (kịch bản C): "😂😂" lúc chờ duyệt → model từng nói "Em thấy anh chị đồng ý rồi ạ" rồi
           // hỏi lại. Emoji vui (👍❤️😊) đã là gật ở `laDongY`; emoji khác không phải gật cũng không phải sửa —
@@ -4615,8 +4622,11 @@ Deno.serve(async (req) => {
         }
         const cau = len
           ? cauTD("dang_xong", { diem: dk?.diem }) + dongNguoiRao
+          : huaSauDuyet
+          ? `Dạ em ghi nhận ${cachGoi} muốn đăng luôn. Tin còn thiếu ${(dk?.thieu ?? []).slice(0, 2).join(" và ") || "một chút"} nên chưa lên được — lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em đăng liền, không hỏi lại ạ.`
           : `Dạ em ghi nhận rồi ạ.\nTin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm ${cachGoi} vài thông tin nữa nha.`;
-        return await traLoiSeller(len && themDiem ? [cau, themDiem] : [cau], {
+        const loiHuaDuyet = huaSauDuyet && len ? `Lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em cập nhật vào tin liền ạ.` : "";
+        return await traLoiSeller([cau, ...(len && loiHuaDuyet ? [loiHuaDuyet] : len && themDiem ? [themDiem] : [])], {
           duyet: true, listing_status: lstOk?.status ?? null, diem: dk?.diem ?? null, du_roi: noiDu || undefined,
         });
       }
