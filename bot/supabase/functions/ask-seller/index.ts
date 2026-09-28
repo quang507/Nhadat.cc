@@ -18,7 +18,8 @@ import {
   serviceClient,
 } from "../_shared/claude.ts";
 import { congBiMat } from "../_shared/gate.ts";
-import { dienTen, FACT_LABELS, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
+import { dienTen, dsHoiBu, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
+import { loaiDoc } from "../_shared/tin-nhap.ts";
 import { boGachCheo, doiTuXung } from "../_shared/extraction/van-tra-loi.ts";
 
 const OutSchema = z.object({
@@ -153,9 +154,8 @@ Deno.serve(async (req) => {
 
   // Drip: câu đầu tiên của listing thì chào; các câu sau nối tiếp hội thoại
   // (`isFirst` tính ở trên, cùng truy vấn với pendingKeys).
-  const factList = toAsk
-    .map((f) => `- ${f.fact_key}: ${FACT_LABELS[f.fact_key] ?? f.fact_key}`)
-    .join("\n");
+  // FR-237: nhãn theo loại BĐS (đất xin ảnh "lô đất, đường vào", không "mặt tiền nhà, hẻm").
+  const factList = dsHoiBu(toAsk.map((f) => f.fact_key), listing.property_type);
   const seller = listing.sellers as
     | { name?: string; seller_type?: string; zalo_user_id?: string | null; ten_tro_ly?: string | null; xung_ho?: string | null }
     | null;
@@ -197,6 +197,8 @@ Deno.serve(async (req) => {
         } - loại: ${
           seller?.seller_type === "nmg" ? "nhà môi giới (hỏi gọn, chuyên nghiệp)" : "chính chủ (giọng gần gũi)"
         }\n` +
+        // FR-237 (bắn thật lx-46): không nói loại thì model gọi lô đất là "căn này".
+        `Loại BĐS: ${loaiDoc(listing.property_type)} (gọi đúng loại này, đất thì "lô đất" — không gọi "căn")\n` +
         `Tin rao: #${listing.code ?? listing.id} - ${listing.location_raw ?? ""} ${listing.ward ?? ""} ${listing.district ?? ""}, giá ${listing.price_raw ?? "?"}\n` +
         `Thông tin cần hỏi:\n${factList}`,
     }],
