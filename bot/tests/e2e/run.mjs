@@ -2275,6 +2275,47 @@ fresh(seedKho);
       JSON.stringify({ dt: fD("dien_tich"), bs: fD("bo_sung"), rep: rD.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // FR-240 b (phát lại test 28/09 trên production): tin đất, đang hỏi đường, khách "diện tích 425m2 thổ cư. dài 22m ngang 19m" —
+  // AI đọc diện tích + ngang dài, xếp "thổ cư" vào kiến thức thêm → ô thổ cư trống, "thổ cư" rơi ghi chú, cuối hội thoại bot
+  // hỏi "thổ cư bao nhiêu". "425m2 thổ cư" là thổ cư 425m2.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "tho-cu-dt", text: "bán đất Cần Đước, Long An" });
+    const LC = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LC.id, question: "vi_tri", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? {
+      so_can: 0, kien_thuc: ["thổ cư"],
+      truong: [
+        { khoa: "dien_tich", gia_tri: "425", trich_dan: "diện tích 425m2", can: null },
+        { khoa: "ngang", gia_tri: "19", trich_dan: "ngang 19m", can: null },
+        { khoa: "dai", gia_tri: "22", trich_dan: "dài 22m", can: null },
+      ],
+      tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    } : OUT();
+    const rC = await send({ external_user_id: "tho-cu-dt", text: "diện tích 425m2 thổ cư. dài 22m ngang 19m" });
+    const fC = (q) => db().t.listing_facts.filter((f) => f.listing_id === LC.id && f.question === q);
+    check("FR240-E2 tin đất '425m2 thổ cư' (chinh, AI xếp 'thổ cư' vào kiến thức thêm) → ô thổ cư 425m2, không ghi chú 'thổ cư'",
+      fC("tho_cu").some((f) => /425/.test(f.answer)) && !fC("bo_sung").some((f) => /^thổ cư$/i.test(f.answer.trim())),
+      JSON.stringify({ tc: fC("tho_cu"), bs: fC("bo_sung"), rep: rC.body.replies }));
+    // FR-240 c: câu GIÁ vừa mở; lượt đó đường ra còn ghi thêm ghi chú (bo_sung, sau lúc mở câu). Lượt sau khách nói sang hẻm
+    // ("đường hxh 5m") → ô giá là ô lõi, được hỏi lại MỘT lần. Ghi chú của chính lượt mở câu không phải "khách đã né một lần".
+    const giaTreo = db().t.info_requests.find((x) => x.listing_id === LC.id && x.question === "gia" && x.status === "pending");
+    db().insert("listing_facts", { listing_id: LC.id, question: "bo_sung", answer: "gần chợ", source: "ai_kiem", created_at: new Date(Date.parse(giaTreo?.created_at ?? new Date().toISOString()) + 5).toISOString() });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? {
+      so_can: 0, kien_thuc: [],
+      truong: [{ khoa: "do_rong_hem", gia_tri: "5", trich_dan: "hxh 5m", can: null }],
+      tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    } : OUT();
+    const rC2 = await send({ external_user_id: "tho-cu-dt", text: "đường hxh 5m" });
+    check("FR240-E3 đang hỏi GIÁ (đất), khách nói sang hẻm lần đầu → ghi hẻm, câu giá VẪN treo (ghi chú lượt trước không tính là né)",
+      !!giaTreo && db().t.info_requests.some((x) => x.id === giaTreo.id && x.status === "pending") && fC("do_rong_hem").length === 1,
+      JSON.stringify({ ir: db().t.info_requests.filter((x) => x.listing_id === LC.id).map((x) => [x.question, x.status]), rep: rC2.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
   // 27/09/2026 (chủ dự án test Zalo): câu "sổ đứng tên ai" — AI nói "không trả lời" cho "Anh đứng tên chính nhé" (rơi bổ sung, bot
   // xin họ tên), AI đọc "ba a thôi" thành "ba người". Câu này giữ nguyên chữ khách, AI không quyết.
   for (const [i, [cau, tl]] of [["Anh đứng tên chính nhé", { co_tra_loi: false, gia_tri: null, trich_dan: null }],
@@ -3271,13 +3312,35 @@ fresh(seedKho);
   db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
   db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "ket_cau", status: "pending" });
   globalThis.__calls.length = 0;
-  globalThis.__model.create = () => "Dạ nhà 3 lầu là khách chốt nhanh lắm anh. Tổng cộng bao nhiêu phòng ngủ anh?";
+  // FR-240 a: câu mẫu cũ "khách chốt nhanh lắm" là đoán thanh khoản (nay bị bỏ ở mọi lượt) — ca này đo KHEN ĐẶC ĐIỂM căn.
+  globalThis.__model.create = () => "Dạ trệt 2 lầu vậy là rộng rãi lắm anh. Tổng cộng bao nhiêu phòng ngủ anh?";
   r = await send({ external_user_id: "khen-2", text: "trệt 2 lầu" });
   const cauBot2 = r.body.replies.find((x) => !x.startsWith("🤖") && !x.startsWith("🤖")) ?? "";
   check("KHEN-02 chưa khen gần đây → prompt cho phép MỘT câu khi đáng, không lọc câu model",
-    !globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) && /chốt nhanh/.test(cauBot2),
+    !globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) && /rộng rãi/.test(cauBot2),
     JSON.stringify({ rep: r.body.replies }));
   globalThis.__model.create = macDinhCreate;
+  // FR-240 a (phát lại test 28/09 trên production): mỗi lượt bot gửi 🤖 + lời đáp; 🤖 rỗng sau boBaoLai nên "3 tin gần nhất" chỉ
+  // còn hơn một lượt — khen lượt 3 rồi khen lại lượt 6. Câu khen cách 2 lời đáp (4 tin kể cả 🤖) vẫn tính là "vừa khen".
+  fresh();
+  r = await send({ external_user_id: "khen-3", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ 5" });
+  {
+    const conv3 = db().t.conversations.find((c) => c.seller_id === db().t.sellers[0].id) ?? db().t.conversations[0];
+    db().insert("messages", { conversation_id: conv3.id, sender: "bot", body: "Hẻm 4m là rộng rãi lắm anh. Nhà mình phường mấy anh nhỉ?" });
+    db().insert("messages", { conversation_id: conv3.id, sender: "bot", body: "🤖 Bóc tách được: phường: \"Phường 2\"" });
+    db().insert("messages", { conversation_id: conv3.id, sender: "bot", body: "Sổ hồng riêng hay sổ chung anh?" });
+    db().insert("messages", { conversation_id: conv3.id, sender: "bot", body: "🤖 Bóc tách được: pháp lý: \"sổ hồng riêng\"" });
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "ket_cau", status: "pending" });
+    globalThis.__calls.length = 0;
+    globalThis.__model.create = () => "Dạ trệt 2 lầu vậy là rộng rãi lắm anh. Tổng cộng bao nhiêu phòng ngủ anh?";
+    r = await send({ external_user_id: "khen-3", text: "trệt 2 lầu" });
+    const cauBot3 = r.body.replies.find((x) => !x.startsWith("🤖")) ?? "";
+    check("KHEN-03 khen cách 2 lời đáp (xen 🤖) → vẫn là 'vừa khen': prompt dặn KHÔNG khen, câu khen lọt bị lọc, câu hỏi giữ",
+      globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) && !/rộng rãi/.test(cauBot3) && /phòng ngủ/.test(cauBot3),
+      JSON.stringify({ rep: r.body.replies }));
+    globalThis.__model.create = macDinhCreate;
+  }
 }
 
 // ── FR-211 (18/09/2026): NHÃN TÌM KIẾM — gắn từ câu rao / câu trả lời, lọc ở bot mua ──
