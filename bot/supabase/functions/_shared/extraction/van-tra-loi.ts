@@ -331,11 +331,15 @@ export function boGhiNhanSuong(replies: string[]): string[] {
  */
 export function boKhenThiTruong(replies: string[]): string[] {
   const RE = /\b(?:khach|nguoi mua|nguoi thue|thi truong)\b[^.!?]*\b(?:chuong|san|tim|thich|hoi|quan tam|ua)\b[^.!?]*\b(?:lam|nhieu|ghe)\b/;
+  // FR-240 a (phát lại test 28/09 trên production): "5 tầng thì dễ bán lắm anh", "mảnh đất vuông vắn, dễ bán lắm anh",
+  // "kinh doanh cho thuê ổn định thế là khách sẽ mua nhanh lắm anh" — ĐOÁN THANH KHOẢN, bot không có số liệu nào. Bỏ.
+  // "anh cần bán nhanh", "chốt nhanh" (ý CHỦ NHÀ) và "khách mua hay hỏi pháp lý" (giải thích) không phải đoán thị trường — giữ.
+  const THANH_KHOAN = /\b(?:de ban|ban chay|hut khach)\b|\b(?:ban|mua|chot|coc|ra hang) nhanh lam\b|\bkhach (?:se|de) (?:mua|chot|coc|xuong tien)\b|\bkhach (?:mua|chot|coc) (?:nhanh|lien|ngay)\b|\bthanh khoan (?:tot|cao|manh)\b/;
   // Lời HỨA báo lại ("Có khách quan tâm là em báo anh liền ạ") không phải khen thị trường.
   const HUA = /\b(?:la|thi)\s+em\b|\bem\s+(?:se\s+)?bao\b/;
   return locCauTrongBongBong(replies, (c) => {
     const kd = boDau(c);
-    return !/^(📋|💾|🤖|📝)/u.test(c) && !/\?/.test(c) && RE.test(kd) && !HUA.test(kd);
+    return !/^(📋|💾|🤖|📝)/u.test(c) && !/\?/.test(c) && (RE.test(kd) || THANH_KHOAN.test(kd)) && !HUA.test(kd);
   });
 }
 
@@ -1260,6 +1264,15 @@ function cacSoTien(s: string): number[] {
   return ra;
 }
 
+/**
+ * FR-240 c (phát lại test 28/09 trên production): tin ĐẤT mà model hỏi "Nhà mình ở đường nào cụ thể, hay hẻm mấy anh?".
+ * "nhà / căn nhà + đại từ" → "lô đất + đại từ" cho tin đất (cùng cách `goiCanHo` làm cho căn hộ).
+ */
+export const LOAI_DAT: ReadonlySet<string> = new Set(["dat", "dat_nong_nghiep", "dat_kinh_doanh"]);
+export function goiDat(reply: string): string {
+  return reply.replace(/(?<![\p{L}])(?:([Cc])ăn\s+)?([Nn])hà (anh|chị|mình|chú|cô|bác|em)(?![\p{L}])/gu,
+    (_m, c: string | undefined, n: string, x: string) => `${/[CN]/.test(c ?? n) ? "Lô" : "lô"} đất ${x}`);
+}
 // 27/09/2026 (test Zalo, căn Botanic): tin đã là CĂN HỘ mà bot vẫn "nhà anh ở phường nào" — gọi đúng "căn hộ".
 export function goiCanHo(reply: string): string {
   return reply.replace(/(?<![\p{L}])([Nn])hà (anh|chị|mình|chú|cô|bác|em)(?![\p{L}])/gu, (_m, n: string, x: string) => `${n === "N" ? "Căn" : "căn"} hộ ${x}`);

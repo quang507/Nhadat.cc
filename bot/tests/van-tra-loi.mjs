@@ -9,7 +9,7 @@ import { boHuaDaDang, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supaba
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
-import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo, giuCauDungTen, suaGapTheoDeal, boGhiNhanSuong, boKhenThiTruong } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo, giuCauDungTen, suaGapTheoDeal, boGhiNhanSuong, boKhenThiTruong, goiDat } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { laGatHoiVai, laCauChungChung } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -905,6 +905,27 @@ ok("FR239-h 'Dạo này khách chuộng khuôn đất … lắm' → bỏ", JSON
 ok("FR239-h 'khách tìm loại này nhiều lắm' → bỏ", !/khách tìm/.test(boKhenThiTruong(["5 tầng là nhà cao tốt, khách tìm loại này nhiều lắm. Anh có mấy phòng ngủ ạ?"]).join(" ")));
 ok("FR239-h lời hứa 'Có khách quan tâm là em báo anh liền ạ' giữ", boKhenThiTruong(["Có khách quan tâm là em báo anh liền ạ."])[0] === "Có khách quan tâm là em báo anh liền ạ.");
 ok("FR239-h khen căn ('sổ riêng là tốt lắm') giữ", boKhenThiTruong(["Sổ riêng là tốt lắm anh. Hướng nào ạ?"])[0] === "Sổ riêng là tốt lắm anh. Hướng nào ạ?");
+// FR-240 a (phát lại test 28/09 trên production): đoán thanh khoản không số liệu → bỏ; câu hỏi / ý chủ nhà / lời hứa giữ.
+for (const [cau, con] of [
+  ["5 tầng thì dễ bán lắm anh. Tổng cộng bao nhiêu phòng ngủ anh?", "Tổng cộng bao nhiêu phòng ngủ anh?"],
+  ["Dạy kinh doanh cho thuê ổn định thế là khách sẽ mua nhanh lắm anh =)) Đường Trần Hưng Đạo đoạn nhà mình thuộc phường nào vậy anh?", "Đường Trần Hưng Đạo đoạn nhà mình thuộc phường nào vậy anh?"],
+  ["Đất 425m2 thổ cư, dài 22m ngang 19m là mảnh đất vuông vắn, dễ bán lắm anh. Anh muốn thu về tầm bao nhiêu ạ?", "Anh muốn thu về tầm bao nhiêu ạ?"],
+  ["Nhà mặt tiền thế này bán chạy lắm anh. Sổ riêng hay sổ chung ạ?", "Sổ riêng hay sổ chung ạ?"],
+]) ok(`FR240-a '${cau.slice(0, 40)}…' → bỏ câu đoán thanh khoản`, boKhenThiTruong([cau])[0] === con, JSON.stringify(boKhenThiTruong([cau])));
+for (const cau of [
+  "Anh cần bán nhanh hay đợi được giá ạ?",
+  "Dạ anh cần bán nhanh thì em ưu tiên đẩy tin cho mình ạ.",
+  "Khách mua hay hỏi pháp lý nên em hỏi kỹ chút nha anh.",
+  "Có khách mua là em báo anh liền ạ.",
+  "Anh muốn chốt nhanh thì mình để giá mềm chút ạ.",
+  "Nhà đang cho khách thuê, hợp đồng còn 4 năm.",
+  "Dạ sổ riêng tốt rồi anh.",
+  "Giá này khó bán không em?",
+]) ok(`FR240-a '${cau.slice(0, 40)}…' giữ`, boKhenThiTruong([cau])[0] === cau, JSON.stringify(boKhenThiTruong([cau])));
+// FR-240 c: tin đất — "nhà / căn nhà + đại từ" → "lô đất + đại từ"; "nhà phố", chữ dính liền không đụng.
+ok("FR240-c 'Nhà mình ở đường nào cụ thể…' → 'Lô đất mình…'", goiDat("Nhà mình ở đường nào cụ thể, hay hẻm mấy anh?") === "Lô đất mình ở đường nào cụ thể, hay hẻm mấy anh?");
+ok("FR240-c 'Dạ căn nhà anh có sổ chưa?' → 'Dạ lô đất anh…'", goiDat("Dạ căn nhà anh có sổ chưa?") === "Dạ lô đất anh có sổ chưa?");
+ok("FR240-c 'Nhà phố mình' không đụng", goiDat("Nhà phố mình") === "Nhà phố mình");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

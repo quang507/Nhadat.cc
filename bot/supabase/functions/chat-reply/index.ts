@@ -69,7 +69,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boChaoLai, boViTriBia, suaGapTheoDeal, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
+import { boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -2376,7 +2376,9 @@ Deno.serve(async (req) => {
     // phải lời em nói — bỏ khỏi lịch sử, không thì model bắt chước in bảng.
     // 18/09/2026 (chủ dự án: "tắt cái mỗi câu trả lời đều khen đi, lâu lâu thì khen thôi"): 3 tin gần
     // nhất của bot đã có câu khen → lượt này dặn model KHÔNG khen, và lọc tiền định câu khen lọt.
-    const khenGanDay = vuaKhen(lichSuRows.filter((m) => !laTinNguoi(m.sender)).map((m) => boBaoLai(m.body)));
+    // FR-240 a (phát lại test 28/09 trên production): mỗi lượt bot gửi 2 tin (🤖 bóc tách + lời đáp), 🤖 bị `boBaoLai` làm rỗng
+    // nên "3 tin gần nhất" chỉ còn hơn một lượt — khen ở lượt 3 rồi khen lại ở lượt 6. Đếm 3 LỜI ĐÁP thật.
+    const khenGanDay = vuaKhen(lichSuRows.filter((m) => !laTinNguoi(m.sender)).map((m) => boBaoLai(m.body)).filter((b) => !!b?.trim()));
     const lichSuText = lichSuRows.map((m) => ({ ...m, body: boBaoLai(m.body) })).filter((m) => m.body)
       .map((m) =>
         `${laTinNguoi(m.sender) ? "CHỦ NHÀ" : m.sender === "human" ? "EM (người thật bên mình nhắn tay)" : "EM"}: ${
@@ -3219,6 +3221,17 @@ Deno.serve(async (req) => {
         (/\btong\b/.test(boDau(mDtSua[0])) && !/\bdat\b/.test(boDau(mDtSua[0])) && /\b(?:tam|tang|lau|tret)\b/.test(tKD))
       );
       batSua(dtLaSan ? null : mDtSua, "dien_tich", (m) => `${m[1]}m2`);
+      // FR-240 b (phát lại test 28/09 trên production): "diện tích 425m2 thổ cư. dài 22m ngang 19m" — lời ghi diện tích cắt mất
+      // "425m2", phần còn lại "thổ cư" không có số nên rơi ghi chú và cuối hội thoại bot hỏi "thổ cư bao nhiêu". Diện tích kèm
+      // ngay chữ thổ cư là thổ cư bằng chừng ấy — ghi cả ô thổ cư, cắt luôn chữ đó khỏi phần còn lại.
+      if (mDtSua && !dtLaSan) {
+        const cuoi = mDtSua.index + mDtSua[0].length;
+        const tc = /^\s*(?:đất\s+|dat\s+)?(?:thổ cư|tho cu)(?:\s+(?:full|hết|het|100\s*%?|toàn bộ|toan bo))?(?![\p{L}\d])(?!\s*(?:\d|là|la\b|được|duoc|khoảng|khoang|tầm|tam\b|chỉ|chi\b))/iu.exec(textSua.slice(cuoi));
+        if (tc) {
+          suaFacts.push(["tho_cu", `${mDtSua[1]}m2`]);
+          nhipSua.push([cuoi, cuoi + tc[0].length]);
+        }
+      }
       // 11/09/2026 (Zalo thật, dự án ehome 3): "Bạn phải ghi dự án chung cư ehome 3
       // chứ ở hồ ngọc lãm" — chủ nhà nói RÕ loại khi sửa mà bản trước bỏ qua: tin vẫn
       // "nhà phố", bot hỏi "diện tích đất, ngang dài" cho một căn hộ. Chỉ bắt khi câu
@@ -3276,7 +3289,7 @@ Deno.serve(async (req) => {
         await capNhatQuan(suaId);
         const NHAN: Record<string, string> = {
           gia: "giá", phuong: "phường",
-          so_phong_ngu: "số phòng ngủ", dien_tich: "diện tích", loai_bds: "loại",
+          so_phong_ngu: "số phòng ngủ", dien_tich: "diện tích", loai_bds: "loại", tho_cu: "thổ cư",
         };
         // 10/09 lần 7: "1 trệt 2 lầu, 3 phòng ngủ" (tin CHƯA có phòng ngủ) mà bot
         // báo "em cập nhật lại rồi" — nghe như chủ nhà vừa nói sai cái gì. Đọc
@@ -3294,6 +3307,8 @@ Deno.serve(async (req) => {
             ? truoc?.area_m2 != null
             : k === "loai_bds"
             ? !!truoc?.property_type && truoc.property_type !== "chua_ro"
+            : k === "tho_cu"
+            ? false
             : true;
         const laSuaThat = suaThat.some(([k]) => daCoTruoc(k));
         const daGhi: string[] = [];
@@ -4289,6 +4304,10 @@ Deno.serve(async (req) => {
           // FR-211: fact `nhan` do ganNhanChoTin ghi ở ĐƯỜNG RA của lượt trước (sau khi câu chờ
           // đã mở) — không phải khách né câu hỏi, đếm vào là hết hạn câu ngay lượt sau (e2e H3).
           .neq("question", "nhan")
+          // FR-240 c (phát lại test 28/09 trên production): ghi chú (`bo_sung`) do đường ra của CHÍNH lượt mở câu ghi (AI đọc
+          // "thổ cư" thành kiến thức thêm) cũng sau lúc mở câu — đếm vào là câu GIÁ hết hạn ngay lần né đầu, bot hỏi sang hướng
+          // và không bao giờ hỏi lại giá. Ghi chú không phải "ô khác khách vừa trả lời".
+          .neq("question", "bo_sung")
           .gt("created_at", pendingReq.created_at ?? new Date(0).toISOString());
         if (ghiSoNhaLuot) neQ = neQ.neq("question", "vi_tri");
         const { count: daNe } = await neQ;
@@ -4459,6 +4478,7 @@ Deno.serve(async (req) => {
             if (hoiLai && laLoiMeta(hoiLai)) { console.log("chat-reply: r2b tra loi cau lenh, bo"); hoiLai = null; }
             if (hoiLai) hoiLai = motCauHoi([hoiLai])[0];
             if (hoiLai && pendingReq.listings?.property_type === "chung_cu") hoiLai = goiCanHo(hoiLai);
+            if (hoiLai && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) hoiLai = goiDat(hoiLai);
             // 27/09/2026 (test Zalo): hỏi lại câu đứng tên thành "cho em xin tên người đứng tên trên sổ" → câu mẫu (hỏi quan hệ).
             if (hoiLai) hoiLai = giuVeCauMau(hoiLai, pendingReq.question,
               cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal));
@@ -4904,6 +4924,7 @@ Deno.serve(async (req) => {
           // Câu nhận xét lặp y nguyên câu bot vừa nói ở lượt trước ("Sổ riêng thì bán nhanh hơn.") → bỏ.
           if (sellerReply) sellerReply = boCauLapLai(sellerReply, lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-3).map((m) => m.body));
           if (sellerReply && pendingReq.listings?.property_type === "chung_cu") sellerReply = goiCanHo(sellerReply);
+          if (sellerReply && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) sellerReply = goiDat(sellerReply);
           // Tin chưa lên kệ mà model nói "đã đăng lên web" → bỏ mệnh đề đó.
           if (sellerReply && !published) sellerReply = boHuaDaDang([sellerReply])[0] ?? null;
           // 25/09/2026 (bắn thật lx-05): câu xác nhận / chọn phường, xác nhận tên đường do CODE tra ra → thay câu hỏi của
