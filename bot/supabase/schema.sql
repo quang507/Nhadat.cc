@@ -3262,6 +3262,14 @@ begin
   values (p_listing_id, btrim(p_question), btrim(p_answer),
           coalesce(nullif(btrim(p_source), ''), 'seller_chat'))
   returning id into v_id;
+  if btrim(p_question) not in ('bo_sung', 'kien_thuc') then
+    update info_requests
+       set status = 'answered', answer = btrim(p_answer), answered_at = now()
+     where listing_id = p_listing_id
+       and buyer_id is null
+       and question = btrim(p_question)
+       and status = 'pending';
+  end if;
   return v_id;
 end $function$
 ;

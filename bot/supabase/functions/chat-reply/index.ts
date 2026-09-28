@@ -2472,6 +2472,15 @@ Deno.serve(async (req) => {
         : null) ??
       dsDung[0] ?? null;
 
+    // FR-235 (chủ dự án 28/09/2026, test Zalo: "nói nó bận rồi cái nó im luôn" … "ok e" → bot hỏi tiếp "Lô đất mình hướng nào
+    // anh?"): tin trước của bot là lời HOÃN ("lúc nào … rảnh nhắn em", "em chờ … nha", "không hỏi lại") mà chủ nhà chỉ GẬT
+    // ("ok e", "ừ", "👍") → đáp một câu ngắn, KHÔNG hỏi tiếp. Nói gì có dữ liệu / bảo đăng thì đi đường thường.
+    const botCuoiHoan = lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-2).map((m) => m.body ?? "").join(" ");
+    if (!imageUrl && !humanActive && laDongY(text) && text.trim().split(/\s+/).length <= 4 && !laBaoDang(text) &&
+        /lúc nào .{0,25}rảnh|cứ thong thả|em chờ .{0,25}nha|không hỏi lại/i.test(botCuoiHoan)) {
+      return await traLoiSeller([`Dạ vâng ạ, em chờ ${cachGoi} nha.`], { hoan: true, loai_cau: "hoan_gat" });
+    }
+
     // ─── FR-214 (b)(d), 23/09/2026 — MỘT NGƯỜI NHIỀU CĂN. "15 tỉ nhé cháu còn nhà ở quận 11 cũ muốn 7 tỉ" trả lời
     // câu giá của lô đất VÀ nói giá căn nhà Q11; bản cũ ghi cả câu vào lô đất (kèm "Quận 11"), rồi model nói
     // "cháu ghi 7 tỷ căn Quận 11" trong khi chẳng có gì được ghi. Người rao ≥ 2 tin mà câu có dấu hiệu nói tới

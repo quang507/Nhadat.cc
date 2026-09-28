@@ -112,7 +112,9 @@ for (const s of ["bán rồi em", "căn đó anh bán được rồi nhé", "đ�
 for (const s of ["ngưng bán nha em", "không bán nữa", "rút tin giúp anh", "gỡ tin đi em", "thôi không bán nữa, để lại ở", "huỷ ký gửi", "dừng rao nhé"]) {
   ok(`rút: "${s}"`, laNgungRao(s) === "rut", String(laNgungRao(s)));
 }
-for (const s of ["chưa bán", "vẫn đang bán nha", "bán rồi hả em?", "bán nhà 5 tỷ", "chốt giá 5 tỷ", "ok đăng đi em", "sổ hồng riêng rồi", "hẻm 4m", "", "còn bán em", "bán chưa em?", "đã bàn với vợ, để 6 tỷ"]) {
+for (const s of ["chưa bán", "vẫn đang bán nha", "bán rồi hả em?", "bán nhà 5 tỷ", "chốt giá 5 tỷ", "ok đăng đi em", "sổ hồng riêng rồi", "hẻm 4m", "", "còn bán em", "bán chưa em?", "đã bàn với vợ, để 6 tỷ",
+  // FR-235 (28/09): "bận rồi" / "bạn rồi" bỏ dấu cũng ra "ban roi" — không được gỡ tin.
+  "giờ anh bận rồi em", "hướng đông. đăng bài được chưa. a bận rồi", "BẬN RỒI", "bạn rồi mà"]) {
   ok(`không phải báo ngưng: "${s}"`, laNgungRao(s) === null, String(laNgungRao(s)));
 }
 
