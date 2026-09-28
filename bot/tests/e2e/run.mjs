@@ -992,13 +992,15 @@ fresh(seedKho);
   check("H1b vị trí cụ thể bóc từ câu rao ('hẻm trần bình trọng') → fact vi_tri + location_raw, KHÔNG hỏi lại vị trí",
     /trần bình trọng/i.test(fact("vi_tri")?.answer ?? "") && /trần bình trọng/i.test(H?.location_raw ?? "") && !pend("vi_tri"), JSON.stringify({ f: db().t.listing_facts, H }));
   r = await send({ external_user_id: "h-1", text: "3 lầu" });
-  check("H2 trả lời kết cấu → ghi fact, câu kế LIÊN QUAN: phòng ngủ (không nhảy sang pháp lý)",
-    fact("ket_cau") && pend("so_phong_ngu") && !pend("phap_ly"), JSON.stringify(db().t.info_requests));
+  // FR-241 (chủ dự án 28/09: "sao cứ hỏi phòng ngủ ko z để sau rồi hỏi đi"): nhà phố — phòng ngủ lùi ra sau giá + pháp lý
+  // (priority 21); câu kế sau kết cấu là HẺM, không phải phòng ngủ.
+  check("H2 trả lời kết cấu → ghi fact, câu kế là HẺM — phòng ngủ để sau (FR-241), không nhảy sang pháp lý",
+    fact("ket_cau") && pend("do_rong_hem") && !pend("so_phong_ngu") && !pend("phap_ly"), JSON.stringify(db().t.info_requests));
   check("H2 câu lệnh model: chưa khen gần đây → CHỈ khen khi thật đáng nói (18/09: lâu lâu mới khen), không đọc lại số (24/09)", /CHỈ khi chủ nhà vừa nói điều thật đáng nói với khách mua/.test(prompt(createCalls().at(-1))) && /KHÔNG đọc lại số liệu/.test(prompt(createCalls().at(-1))) && !/gộp thêm một ý/.test(prompt(createCalls().at(-1))) && !/KHÔNG khen, KHÔNG nhận xét/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
   r = await send({ external_user_id: "h-1", text: "sổ hồng riêng rồi em" });
   // FR-234 (28/09): nói sang ô khác → ghi ô đó, KHÔNG hỏi lại câu đang hỏi (ô không phải ô lõi).
-  check("H3 hỏi phòng ngủ, trả lời pháp lý → VẪN GHI phap_ly, câu phòng ngủ thôi, KHÔNG hỏi lại (FR-234)",
-    fact("phap_ly")?.answer === "sổ hồng riêng rồi em" && !fact("so_phong_ngu") && !pend("so_phong_ngu") && r.body.reask !== "so_phong_ngu",
+  check("H3 hỏi hẻm, trả lời pháp lý → VẪN GHI phap_ly, câu hẻm thôi, KHÔNG hỏi lại (FR-234)",
+    fact("phap_ly")?.answer === "sổ hồng riêng rồi em" && !fact("do_rong_hem") && !pend("do_rong_hem") && r.body.reask !== "do_rong_hem",
     JSON.stringify({ body: r.body, f: db().t.listing_facts }));
   r = await send({ external_user_id: "h-1", text: "nhà nở hậu chút" });
   // FR-233 (chủ dự án 27/09: "mấy cái mày ko ghi được vào db thì để AI nó xét qua … chứ mày cứ hỏi nhiều quá"): câu lệch
@@ -1015,6 +1017,27 @@ fresh(seedKho);
   r = await send({ external_user_id: "h-1", text: "nở hậu 5m" });
   // FR-233/234: câu hẻm đã thôi ở lượt nói lệch ("nhà nở hậu chút") — không hỏi lại; còn thiếu thì bản nháp nhắc.
   check("H4c 'nở hậu 5m' → ghi fact nở hậu; hẻm (đã thôi ở lượt lệch) không hỏi lại, bản nháp nhắc thiếu hẻm", /\b5m\b/.test(fact("no_hau")?.answer ?? "") && !pend("no_hau") && (pend("do_rong_hem") || /hẻm rộng/.test(r.body.reply ?? "")), JSON.stringify({ body: r.body, f: fact("no_hau"), ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+  // FR-241 (28/09/2026, bắn thật lx-72 / lx-77): giá viết bằng CHỮ vào được ô giá; hỏi địa chỉ mà khách chỉ đáp "xã …"
+  // thì đó là phường/xã — không được thành tên đường.
+  {
+    await send({ external_user_id: "fr241-1", text: "bán nhà Bình Chánh 4x15, 2 lầu, sổ hồng riêng" });
+    const l241 = db().t.listings.find((l) => l.id === db().t.info_requests.filter((q) => q.status === "pending").at(-1)?.listing_id);
+    const traLoi = { vi_tri: "xã Vĩnh Lộc A", gia: "giá chín tỷ rưỡi" };
+    const daHoi = [];
+    for (let i = 0; i < 8; i++) {
+      const treo = db().t.info_requests.find((q) => q.listing_id === l241?.id && q.status === "pending")?.question;
+      if (!treo || daHoi.includes(treo)) break;
+      daHoi.push(treo);
+      await send({ external_user_id: "fr241-1", text: traLoi[treo] ?? "không rõ em" });
+    }
+    if (!daHoi.includes("gia")) await send({ external_user_id: "fr241-1", text: "giá chín tỷ rưỡi" });
+    const f241 = db().t.listing_facts.filter((f) => f.listing_id === l241?.id);
+    check("FR241-E1 'giá chín tỷ rưỡi' → price_vnd 9,5 tỷ",
+      l241?.price_vnd === 9_500_000_000, JSON.stringify({ daHoi, gia: l241?.price_vnd, f: f241.map((f) => [f.question, f.answer]) }));
+    check("FR241-E2 đang hỏi địa chỉ, khách đáp 'xã Vĩnh Lộc A' → ghi PHƯỜNG, không thành vị trí/tên đường",
+      daHoi.includes("vi_tri") && f241.some((f) => f.question === "phuong" && f.answer === "xã Vĩnh Lộc A") && !f241.some((f) => f.question === "vi_tri" && /vĩnh lộc/i.test(f.answer)) && !/vĩnh lộc/i.test(l241?.location_raw ?? ""),
+      JSON.stringify({ daHoi, f: f241.map((f) => [f.question, f.answer]), loc: l241?.location_raw }));
+  }
   // 25/09/2026: số nhà có xuyệt ("105/12 …") → câu hẻm là XÁC NHẬN "trong hẻm đúng không", không hỏi trống.
   {
     const rHx = await send({ external_user_id: "hx-1", text: "Bán nhà 105/12 Trần Bình Trọng phường 1 quận 5, 4x15, 3 lầu, 4 phòng ngủ, sổ hồng riêng, giá 7 tỷ" });

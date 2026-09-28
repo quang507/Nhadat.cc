@@ -205,7 +205,9 @@ export function gonLoiSua(text: string): { laSua: boolean; con: string; ngang: s
   const con = cheoPhuDinh(text)
     .replace(/\b(?:bạn phải|em phải|phải ghi|ghi lại|ghi giúp|ghi là|sửa lại|sửa thành|chứ không phải|không phải|nhầm rồi|sai rồi|ban phai|em phai|phai ghi|ghi lai|ghi giup|ghi la|sua lai|sua thanh|chu khong phai|khong phai|nham roi|sai roi)\b/giu, " ")
     .replace(/\s+/g, " ").replace(TIEU_TU_DAU, "").replace(/^[\s,.;:–-]+|[\s,.;:–-]+$/g, "").trim();
-  const kdCon = boDau(con);
+  // FR-241 d (10 ca test làm khó 28/09): "ngang 4m2 chứ không phải 4" — sau chữ ngang / dài, "4m2" là 4 mét 2 (4,2m), không phải
+  // diện tích; bản trước lùi về "4". Viết lại "4m2" / "16m5" thành "4.2" / "16.5" trước khi bắt số.
+  const kdCon = boDau(con).replace(/\b(ngang|mat tien|mt|rong|dai|sau|doc)\s*(?:la\s*)?(\d{1,3})\s*m\s*(\d)(?!\d)/g, "$1 $2.$3");
   const dai = /\b(?:dai|sau|doc)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?(?![\d])/.exec(kdCon)?.[1] ?? null;
   const ngang = /\b(?:ngang|mat tien|mt|rong)\s*(?:la\s*)?(\d+(?:[.,]\d+)?)\s*(?:m|met)?(?![\d])/.exec(kdCon)?.[1] ?? null;
   return { laSua, con, ngang, dai };
@@ -1372,6 +1374,11 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (HOP_DONG_THUE_RE.test(kd) && !/\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hdmb|mua ban|cong chung|shr|shc|giay tay|sang ten)\b/.test(kd)) {
     return { question: "han_hop_dong_thue", answer: goc };
   }
+  // FR-241 f (10 ca test làm khó 28/09): đang hỏi giá, chủ nhà "chưa có sổ, đang chờ ra sổ" → không luật nào nhận, câu rơi ghi
+  // chú, ô pháp lý trống. "Chưa có sổ / chờ ra sổ / đang làm sổ" là câu trả lời pháp lý (giữ nguyên chữ — F2: không thành sổ hồng).
+  if (/\b(?:chua co so|chua ra so|chua lam so|cho ra so|cho so|dang cho so|dang lam so)\b/.test(kd)) {
+    return { question: "phap_ly", answer: goc };
+  }
   if (PHAP_LY_RE.test(kd)) {
     return { question: "phap_ly", answer: manhKhop(PHAP_LY_RE) };
   }
@@ -1453,7 +1460,10 @@ export function nhanDienFact(text: string): NhanDien | null {
   // địa chỉ: chữ sau "ở" viết hoa (tên riêng) hoặc câu có quận/phường/huyện thì không phải cách dùng.
   const oLaDiaChi = /^\s*(?:nhà\s+)?ở\s+\p{Lu}/u.test(goc.trim()) || /\b(?:quan|q|phuong|p)\s*\d{1,2}\b|\b(?:quan|huyen|phuong|xa|tinh)\s+[a-z]/.test(kd);
   // 28/09/2026 (bắn thật lx-40): "ở ai cũng khá lên" (phong thuỷ) / "ở đây …" không phải cách dùng — "ở" + ai/đây/đó/kia/đâu.
-  if (!laViecRao && (/^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:to\b|duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an|ai\b|day\b|do\b|kia\b|dau\b))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8 &&
+  // FR-241 g (10 ca test làm khó 28/09): "ờ giá 15 tỷ" — "ờ" (thán từ) bỏ dấu thành "o" = "ở" → tiềm năng "để ở". Câu mở bằng
+  // thán từ ờ / ơ / ừ / ồ thì "o" không phải "ở"; "ở giá …" cũng không phải cách dùng.
+  const moBangThanTu = /^\s*(?:ờ|ơ|ừ|ồ|ờm|ừm)(?![\p{L}])/iu.test(goc.trim());
+  if (!laViecRao && (!moBangThanTu && /^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:to\b|duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an|gia\b|ai\b|day\b|do\b|kia\b|dau\b))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8 &&
         !(/^\s*(?:nha\s+)?o\s/.test(kd) && oLaDiaChi)) ||
       (/\b(o hoac|hoac lam|deu duoc|lam can ho dich vu|lam chdv|hop (?:de )?(?:o|kinh doanh|cho thue|lam))\b/.test(kd) && kd.split(/\s+/).length <= 14 &&
         !/\b(showroom|lam xuong|van phong cong ty|nha hang|benh vien|truong hoc|lam kho)\b/.test(kd))) {
@@ -1561,6 +1571,12 @@ export function nhanDienFact(text: string): NhanDien | null {
       (docTien(m[0]) ?? 0) >= 1e8 && !TRUOC_LA_THUE.test(kd.slice(Math.max(0, m.index - 30), m.index))) {
     return { question: "gia", answer: catGoc(m) };
   }
+  // FR-241 (28/09/2026, bắn thật lx-72): "giá chín tỷ rưỡi" — số viết bằng CHỮ; `docTien` đọc được (soChuThanhSo), cửa
+  // bắt giá thì chỉ biết chữ số nên câu rơi vào bổ sung. Cùng ngưỡng 100 triệu, cùng luật "không đứng sau chữ thuê".
+  if ((m = /\b(?:muoi|mot|hai|ba|bon|nam|sau|bay|tam|chin)(?:\s+(?:muoi|mot|hai|ba|bon|nam|lam|sau|bay|tam|chin|tram))*\s+(?:ty|toi|trieu|tram)\b(?:\s+(?:ruoi|mot|hai|ba|bon|tu|nam|sau|bay|tam|chin)\b(?!\s*(?!(?:nha|nhe|nhen|em|a|anh|chi|thoi|luon)\b)[a-z0-9]))?/.exec(kdD)) &&
+      (docTien(m[0]) ?? 0) >= 1e8 && !TRUOC_LA_THUE.test(kd.slice(Math.max(0, m.index - 30), m.index))) {
+    return { question: "gia", answer: catGoc(m) };
+  }
   // Toà / tháp / block của chung cư — bắt TRƯỚC luật kết cấu, vì "toa S3.02 tang
   // 15" có chữ "tang" nên luật kết cấu vơ cả câu (bắt 10/09 ở lượt bắn 15 tin:
   // bản nháp in "🏗 Kết cấu: toa S3.02 tang 15 · tầng 15 · 2 phòng ngủ").
@@ -1665,7 +1681,9 @@ export function nhanDienFact(text: string): NhanDien | null {
   if (/\b(quy hoach|lo gioi|giai toa)\b/.test(kd)) return { question: "quy_hoach", answer: goc };
   if (/\btranh chap\b/.test(kd)) return { question: "tranh_chap", answer: goc }; // FR-229
   if (/\b(noi that|ban giao|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo))|full nt)\b/.test(kd)) return { question: "noi_that", answer: goc };
-  if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd) && !keVeMinh && !laViecRao) {
+  // FR-241 a: "không cho thuê, đang ở" là HIỆN TRẠNG, không phải tiềm năng "cho thuê".
+  if (/\b(de o|cho thue|kinh doanh|mo quan|mo shop|chdv|dau tu|van phong|buon ban)\b/.test(kd) && !keVeMinh && !laViecRao &&
+      !/\b(?:khong|ko|chua)\s+(?:cho thue|kinh doanh|buon ban|mo quan)\b/.test(kd)) {
     return { question: "tiem_nang", answer: goc };
   }
   return null;
@@ -1876,6 +1894,10 @@ export function laNgungRao(text: string): NgungRao | null {
     /\b(?:dang|rao|ban|cho thue)\b[^.]{0,12}\b(?:di|giup|gium|dum|ho|len)\b/.test(kd);
   const veAnh = /\b(?:dang|gui|up|chup|them|xoa|bo)\s+(?:anh|hinh|video|clip)\b/.test(kd);
   if (giucDang || veAnh) return null;
+  // FR-241 a (10 ca test làm khó 28/09): tin BÁN, hỏi hiện trạng, chủ nhà "không cho thuê, đang ở" → bị hiểu RÚT TIN, tin
+  // sang `an`. "không cho thuê" trần là HIỆN TRẠNG (nhà không có khách thuê); rút tin cho thuê phải có "nữa" hoặc động từ dừng.
+  const khongChoThueTran = /\b(?:khong|ko|k)\s*cho thue\b(?!\s*nua)/.test(kd) && !/\b(?:ngung|dung|thoi|het)\b/.test(kd);
+  if (khongChoThueTran && !/\b(?:rut|go|xoa|huy)\s*(?:tin|bai)\b/.test(kd)) return null;
   const rut =
     /\b(?:ngung|ngung|dung|thoi|het|khong|ko|k|chua muon)\s*(?:ban|cho thue|rao|dang)\s*(?:nua|nha|em|a|roi)?\b/.test(kd) ||
     /\b(?:rut|go|xoa|huy|bo|dong)\s*(?:tin|bai|dang|ky gui|rao|ho so)\b/.test(kd) ||

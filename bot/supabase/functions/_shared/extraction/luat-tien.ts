@@ -108,6 +108,38 @@ export function vndThanhChu(v: number): string {
 }
 
 /**
+ * FR-241 (28/09/2026, bắn thật lx-72): "giá chín tỷ rưỡi" rơi giá — số viết bằng CHỮ. Đổi chữ số thành chữ số
+ * CHỈ khi nó đứng ngay trước đơn vị tiền (tỷ/triệu/củ/trăm), hoặc đứng trơ cuối câu ngay sau "tỷ" ("chín tỷ hai").
+ * "năm 2020", "bán năm căn" không đứng trước đơn vị nên giữ nguyên. SQL `parse_vnd` chạy CÙNG các bước này
+ * (20260928f) — sửa ở đây thì sửa cả bên đó và thêm ca vào `bot/tests/luat/tien.json`.
+ */
+export const SO_CHU: ReadonlyArray<readonly [string, string]> = [
+  ["một", "1"], ["mốt", "1"], ["mot", "1"], ["hai", "2"], ["ba", "3"], ["bốn", "4"], ["bon", "4"], ["tư", "4"],
+  ["năm", "5"], ["nam", "5"], ["lăm", "5"], ["sáu", "6"], ["sau", "6"], ["bảy", "7"], ["bẩy", "7"], ["bay", "7"],
+  ["tám", "8"], ["tam", "8"], ["chín", "9"], ["chin", "9"],
+];
+const DON_VI_CHU = "(?=\\s*(?:tỷ|tỏi|tỉ|ty|triệu|trieu|củ|trăm|tram)(?![\\p{L}]))";
+
+export function soChuThanhSo(t: string): string {
+  for (const [w, d] of SO_CHU) {
+    t = t.replace(new RegExp(`(?<![\\p{L}\\p{N}])(?:mười|muoi)\\s+${w}${DON_VI_CHU}`, "gu"), `1${d}`);
+    t = t.replace(new RegExp(`(?<![\\p{L}\\p{N}])${w}\\s+(?:mươi|muoi)(?![\\p{L}])`, "gu"), `${d}0`);
+  }
+  for (const [w, d] of SO_CHU) {
+    t = t.replace(new RegExp(`(?<![0-9])([1-9])0\\s+${w}${DON_VI_CHU}`, "gu"), `$1${d}`);
+  }
+  t = t.replace(new RegExp(`(?<![\\p{L}\\p{N}])(?:mười|muoi)${DON_VI_CHU}`, "gu"), "10");
+  for (const [w, d] of SO_CHU) {
+    t = t.replace(new RegExp(`(?<![\\p{L}\\p{N}])${w}${DON_VI_CHU}`, "gu"), d);
+  }
+  t = t.replace(/([0-9])\s*(?:trăm|tram)(?![\p{L}])/gu, (_m, d: string) => `${d}00`);
+  for (const [w, d] of SO_CHU) {
+    t = t.replace(new RegExp(`(tỷ|tỏi|tỉ)\\s+${w}(?!\\s*[\\p{L}\\p{N}])`, "gu"), `$1 ${d}`);
+  }
+  return t;
+}
+
+/**
  * Đọc MỘT con số tiền từ một câu — cùng luật với SQL `parse_vnd` (phiên dịch
  * từng dòng, xem `bot/supabase/schema.sql`). Tồn tại để bài đối chiếu có một
  * bản TS mà so với bản SQL trên cùng bảng ca; nơi nào ở TS cần MỘT con số giá
@@ -122,6 +154,7 @@ export function docTien(p: string | null | undefined): number | null {
   let t = p.toLowerCase();
   // Giá MỖI m² không phải giá cả căn (xem `GIA_THEO_M2`).
   if (GIA_THEO_M2.test(t)) return null;
+  t = soChuThanhSo(t);
   const ruoi = /rưỡi|rươi|ruoi/.test(t);
   t = t.replace(/tỏi|tỷ|tỉ|tị|tỹ/g, " _ty ");
   t = t.replace(/triệu|trieu|củ/g, " _trieu ");

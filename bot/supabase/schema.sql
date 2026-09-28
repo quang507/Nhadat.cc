@@ -1878,6 +1878,8 @@ declare
   n_lau int; co_tret bool; co_lung bool; co_st bool; co_ham bool; co_apmai bool;
   parts text[];
   chung_cu bool := coalesce(p_type = 'chung_cu', false);
+  -- 20260928f (FR-241): tin ĐẤT không có kết cấu — "còn lại cây lâu năm" từng thành "trệt + 1 lầu".
+  la_dat bool := coalesce(p_type in ('dat', 'dat_nong_nghiep', 'dat_kinh_doanh'), false);
 begin
   if p_text is null or btrim(p_text) = '' then return j; end if;
   k := public.bo_dau(p_text);
@@ -1917,7 +1919,9 @@ begin
   m := regexp_match(k, '(?:dtxd|dt xd|dien tich xay dung|dt xay dung|dien tich san|dt san|dtsd|dt sd|dien tich su dung|dt su dung|tong dien tich san)\s*:?\s*(\d+(?:\.\d+)?)\s*m(?:2|\M)');
   if m is not null and m[1]::numeric between 5 and 20000 then j := j || jsonb_build_object('built_area_m2', m[1]::numeric); end if;
 
-  if not chung_cu then
+  if la_dat then
+    null;
+  elsif not chung_cu then
     co_tret  := k ~ '\mtret\M';
     co_lung  := k ~ '\mlung\M';
     co_st    := k ~ '(san thuong|\mst\M|mai tum)';
@@ -1943,8 +1947,8 @@ begin
       if m is not null and m[1]::int between 1 and 30 and j->>'floors' is null then
         j := j || jsonb_build_object('floors', m[1]::int);
       end if;
-      if j->>'floors' is null and (k ~ '\mlau\M' or co_tret) then
-        j := j || jsonb_build_object('floors', case when k ~ '\mlau\M' then 2 else 1 end);
+      if j->>'floors' is null and (k ~ '\mlau\M(?!\s*(nam|doi|dai|roi|qua|lam|ngay|nay))' or co_tret) then
+        j := j || jsonb_build_object('floors', case when k ~ '\mlau\M(?!\s*(nam|doi|dai|roi|qua|lam|ngay|nay))' then 2 else 1 end);
       end if;
       if j->>'floors' is null and k ~ '(cap 4|nha c4|\mc4\M)' then j := j || jsonb_build_object('floors', 1); end if;
     else
@@ -3268,21 +3272,28 @@ CREATE OR REPLACE FUNCTION public.ghi_fact_listing(p_listing_id uuid, p_question
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare v_id uuid;
+declare v_id uuid; v_q text := btrim(p_question);
 begin
   if p_listing_id is null or coalesce(btrim(p_answer), '') = '' then
     return null;
   end if;
+  -- 20260928f (FR-241, bắn thật lx-77): hỏi địa chỉ mà khách chỉ đáp "xã Vĩnh Lộc A" — đó là PHƯỜNG/XÃ, không phải
+  -- đường; ghi vào vi_tri thì tên xã thành tên đường và câu địa chỉ không bao giờ được hỏi lại.
+  if v_q = 'vi_tri'
+     and public.bo_dau(btrim(p_answer)) ~* '^(xa|phuong|thi tran)\s+\S'
+     and public.bo_dau(btrim(p_answer)) !~* '(duong|\mhem\M|\mngo\M|\mkiet\M|\mso\s*[0-9]|[0-9]+\s*/|,\s*[0-9])' then
+    v_q := 'phuong';
+  end if;
   insert into listing_facts (listing_id, question, answer, source)
-  values (p_listing_id, btrim(p_question), btrim(p_answer),
+  values (p_listing_id, v_q, btrim(p_answer),
           coalesce(nullif(btrim(p_source), ''), 'seller_chat'))
   returning id into v_id;
-  if btrim(p_question) not in ('bo_sung', 'kien_thuc') then
+  if v_q not in ('bo_sung', 'kien_thuc') then
     update info_requests
        set status = 'answered', answer = btrim(p_answer), answered_at = now()
      where listing_id = p_listing_id
        and buyer_id is null
-       and question = btrim(p_question)
+       and question = v_q
        and status = 'pending';
   end if;
   return v_id;
@@ -5193,6 +5204,11 @@ declare
   m    text[];
   v    numeric;
   ruoi boolean;
+  -- 20260928f (FR-241): so viet bang CHU — cung bang, cung thu tu voi luat-tien.ts SO_CHU / soChuThanhSo.
+  so_chu text[] := array['một','mốt','mot','hai','ba','bốn','bon','tư','năm','nam','lăm','sáu','sau','bảy','bẩy','bay','tám','tam','chín','chin'];
+  so_so  text[] := array['1','1','1','2','3','4','4','4','5','5','5','6','6','7','7','7','8','8','9','9'];
+  don_vi text := '(?=\s*(tỷ|tỏi|tỉ|ty|triệu|trieu|củ|trăm|tram)(?![[:alpha:]]))';
+  i int;
 begin
   if p is null or btrim(p) = '' then return null; end if;
   t := lower(p);
@@ -5200,6 +5216,23 @@ begin
   if t ~ '(tỷ|tỉ|tỏi|triệu|trieu|tr|củ|cu|ty|ti)\s*(/|mỗi|moi|một|mot|1)\s*(m2|m²|mét|met|m\M)' then
     return null;
   end if;
+  -- 20260928f (FR-241, bắn thật lx-72 "giá chín tỷ rưỡi"): chữ số → chữ số CHỈ khi đứng ngay trước đơn vị tiền,
+  -- hoặc trơ cuối câu ngay sau "tỷ" ("chín tỷ hai"). "năm 2020", "bán năm căn" giữ nguyên.
+  for i in 1 .. array_length(so_chu, 1) loop
+    t := regexp_replace(t, '(?<![[:alnum:]])(mười|muoi)\s+' || so_chu[i] || don_vi, '1' || so_so[i], 'g');
+    t := regexp_replace(t, '(?<![[:alnum:]])' || so_chu[i] || '\s+(mươi|muoi)(?![[:alpha:]])', so_so[i] || '0', 'g');
+  end loop;
+  for i in 1 .. array_length(so_chu, 1) loop
+    t := regexp_replace(t, '(?<![0-9])([1-9])0\s+' || so_chu[i] || don_vi, '\1' || so_so[i], 'g');
+  end loop;
+  t := regexp_replace(t, '(?<![[:alnum:]])(mười|muoi)' || don_vi, '10', 'g');
+  for i in 1 .. array_length(so_chu, 1) loop
+    t := regexp_replace(t, '(?<![[:alnum:]])' || so_chu[i] || don_vi, so_so[i], 'g');
+  end loop;
+  t := regexp_replace(t, '([0-9])\s*(trăm|tram)(?![[:alpha:]])', '\100', 'g');
+  for i in 1 .. array_length(so_chu, 1) loop
+    t := regexp_replace(t, '(tỷ|tỏi|tỉ)\s+' || so_chu[i] || '(?!\s*[[:alnum:]])', '\1 ' || so_so[i], 'g');
+  end loop;
   ruoi := t ~ 'rưỡi|rươi|ruoi';
 
   t := regexp_replace(t, 'tỏi|tỷ|tỉ|tị|tỹ', ' _ty ', 'g');

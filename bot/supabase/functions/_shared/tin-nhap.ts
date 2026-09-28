@@ -24,6 +24,20 @@ import { tenNhan, tenNhanKhongTrung } from "./extraction/nhan.ts";
 import { donViGiaDep, vndThanhChu } from "./extraction/luat-tien.ts";
 import { laBoSungTrung } from "./extraction/khop-cau-tra-loi.ts";
 
+/** FR-241 j: hiện trạng sử dụng gõ không dấu ("dang o", "de trong") → có dấu; chữ có dấu / cụm lạ giữ nguyên. */
+const HIEN_TRANG_KD: Array<[RegExp, string]> = [
+  [/^dang o$/, "đang ở"], [/^(?:dang )?cho thue$|^dang cho thue$|^dang thue$/, "đang cho thuê"], [/^(?:de|bo) trong$/, "để trống"],
+  [/^con o$/, "còn ở"], [/^khong cho thue,? dang o$/, "không cho thuê, đang ở"],
+];
+export function chuanHienTrang(v: string | null | undefined): string | null {
+  const t = (v ?? "").trim();
+  if (!t) return null;
+  const kd = boDau(t).replace(/[.!]+$/, "").trim();
+  if (kd !== t.toLowerCase().replace(/[.!]+$/, "").trim()) return t;
+  for (const [re, co] of HIEN_TRANG_KD) if (re.test(kd)) return co;
+  return t;
+}
+
 export const COT_TIN_NHAP =
   `code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, nhan, rent_income_vnd, ${SPEC_COLS}`;
 
@@ -291,7 +305,10 @@ export function soanTinNhap(t: ThamSoNhap): string {
       fact("tang_cao_toi_da") ? `xây tối đa ${hau(fact("tang_cao_toi_da"), "tầng")}` : null,
     ]);
   }
-  them("🛋", "Nội thất", [l.furnishing ?? fact("noi_that"), nhan("hiện:", fact("hien_trang_su_dung"))]);
+  // FR-241 j (10 ca test làm khó 28/09): khách gõ "dang o" → bản tin in "🛋 Nội thất: hiện: dang o" — hiện trạng sử dụng không phải
+  // nội thất, và chữ không dấu in nguyên. Tách dòng riêng; mấy cụm hiện trạng quen gõ không dấu thì in có dấu.
+  them("🛋", "Nội thất", [l.furnishing ?? fact("noi_that")]);
+  them("🏠", "Hiện trạng", [chuanHienTrang(fact("hien_trang_su_dung"))]);
   // 17/09/2026 (chủ dự án): "các trường mà khách nói bổ sung sẽ ghi vào mô tả" — mọi fact
   // `bo_sung` (AI đọc thêm hay chủ nhà nói lệch câu hỏi) vào một dòng, cũ trước, không lặp.
   const boSung: string[] = [];
