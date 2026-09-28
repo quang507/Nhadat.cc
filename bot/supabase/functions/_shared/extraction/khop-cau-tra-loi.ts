@@ -1333,6 +1333,30 @@ export const DOI_SANG_BAN_RE = /\b(?:van|la|dang)\s+ban\b[^.]{0,20}\b(?:khong|ko
  * 27/09/2026 (test Zalo): "312 Nguyễn Thuơbgj Hiền" (đang hỏi hẻm) / "45 Ngô Y Linh" — SỐ NHÀ rồi TÊN RIÊNG viết hoa, không đơn vị
  * đo / tiền → là ĐỊA CHỈ (tên gõ sai vẫn là địa chỉ; từ điển `duong` ở tầng trên gợi ý tên đúng).
  */
+/**
+ * FR-241 o (bắn lại 28/09/2026, lx-85/86/87): cả tin là ĐÚNG MỘT câu trả lời của khoá `q`, không kèm gì khác — "sổ chung",
+ * "sổ hồng rồi em", "sổ đỏ nha", "xã Vĩnh Lộc A", "phường 8". Chế độ `chinh` gạt luật khi AI im (khoá AI biết), nên khách nói
+ * sang ô khác bằng một câu trọn như vậy thì pháp lý rơi vào bổ sung, còn phường mất hẳn (bổ sung coi tên phường là rác).
+ * Câu trọn kiểu này không mơ hồ → luật nói thay. Có chữ phủ định / chờ / số tiền / đường / hẻm … thì KHÔNG phải câu trọn.
+ */
+export function laTraLoiTronKhoa(q: string, text: string): boolean {
+  const tho = boDau(text).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  // Bỏ dấu thì "đỏ" và tiểu từ "đó" cùng là "do" — thử cắt tiểu từ cả hai cách ("sổ đỏ nha em", "sổ hồng rồi đó").
+  const cat = (re: RegExp) => tho.replace(re, "").trim();
+  const bienThe = [cat(/(?:\s+(?:roi|nha|nhe|nhen|em|a|anh|chi|luon|day|oi|ne|thoi))+$/), cat(/(?:\s+(?:roi|nha|nhe|nhen|em|a|anh|chi|do|luon|day|oi|ne|thoi))+$/)];
+  return bienThe.some((kd) => !!kd && tronKhoa(q, kd));
+}
+function tronKhoa(q: string, kd: string): boolean {
+  if (q === "phap_ly") {
+    return /^(?:(?:da|co|la)\s+)?(?:shr|shc|so\s+(?:hong|do)(?:\s+(?:rieng|chung))?|so\s+(?:rieng|chung))$/.test(kd);
+  }
+  if (q === "phuong") {
+    return /^(?:xa|phuong|p|thi tran)\s+[a-z0-9]+(?:\s+[a-z0-9]+){0,3}$/.test(kd) &&
+      !/\b(?:duong|hem|ngo|kiet|so nha|quan|q|huyen|ty|trieu|m2|lau|tang)\b/.test(kd.replace(/^(?:xa|phuong|p|thi tran)\s+/, ""));
+  }
+  return false;
+}
+
 export function laSoNhaTenDuong(text: string): boolean {
   const t = (text ?? "").trim().replace(/\s+(?:nha|nhé|nhe|nha em|em|ạ|a|đó|do)\s*[.!]*$/iu, "");
   return /^(?:số\s+)?\d{1,4}[a-zA-Z]?(?:\/\d{1,4}[a-zA-Z]?)*\s+\p{Lu}[\p{L}]*(?:\s+[\p{L}]+){0,4}\s*$/u.test(t) &&

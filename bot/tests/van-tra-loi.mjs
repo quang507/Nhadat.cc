@@ -19,7 +19,7 @@ import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-t
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
 import { boHoiLaiDaCo, boHuaHoiChuNha } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { gonLoiSua, nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { gonLoiSua, nhanDienNhieuFact, laTraLoiTronKhoa } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { chuanHienTrang } from "../supabase/functions/_shared/tin-nhap.ts";
 import { bocTachTaoTin, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua } from "../supabase/functions/_shared/bao_lai.ts";
 
@@ -965,6 +965,11 @@ ok("FR241-N9 câu hỏi KHÁC khoá đã có → giữ nguyên", boHoiLaiDaCo("D
 ok("FR241-N10b hiện trạng 'dang o' → 'đang ở'", chuanHienTrang("dang o") === "đang ở");
 ok("FR241-l nhà phố: vừa trả lời kết cấu, còn pháp lý (16) + phòng ngủ (21) → hỏi PHÁP LÝ trước, không kéo phòng ngủ lên", chonCauKe(["ket_cau"], [{ fact_key: "phap_ly", priority: 16, nhom: "co_ban" }, { fact_key: "so_phong_ngu", priority: 21, nhom: "co_ban" }, { fact_key: "phuong", priority: 22, nhom: "co_ban" }]) === "phap_ly");
 ok("FR241-l căn hộ: vừa nói tầng → vẫn hỏi phòng ngủ (tang → so_phong_ngu giữ)", chonCauKe(["tang"], [{ fact_key: "so_phong_ngu", priority: 4, nhom: "co_ban" }, { fact_key: "huong", priority: 6, nhom: "co_ban" }]) === "so_phong_ngu");
+for (const [q, c, m] of [["phap_ly", "sổ chung", true], ["phap_ly", "sổ hồng rồi em", true], ["phap_ly", "sổ đỏ nha em", true], ["phap_ly", "shr", true],
+  ["phap_ly", "chưa có sổ", false], ["phap_ly", "sổ chung với anh trai", false], ["phap_ly", "sổ hồng riêng giá 8 tỷ", false], ["phap_ly", "số 5", false],
+  ["phuong", "xã Vĩnh Lộc A", true], ["phuong", "phường Tân Thành nha em", true], ["phuong", "phường 8 quận 3", false], ["phuong", "xã Vĩnh Lộc A, đường số 5", false]]) {
+  ok(`FR241-o câu trọn ${q} '${c}' → ${m}`, laTraLoiTronKhoa(q, c) === m);
+}
 ok("FR241-N10b hiện trạng có dấu giữ nguyên", chuanHienTrang("đang cho thuê 20 triệu") === "đang cho thuê 20 triệu");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

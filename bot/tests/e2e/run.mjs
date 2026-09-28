@@ -2281,6 +2281,28 @@ fresh(seedKho);
       fT("gia").length === 1 && !fT("bo_sung").length, JSON.stringify({ gia: fT("gia"), bs: fT("bo_sung"), rep: rT.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // FR-241 o (bắn lại 28/09, lx-85/lx-86/lx-87): đang hỏi ô khác, khách nhắn TRỌN một câu pháp lý ("sổ chung", "sổ hồng rồi em")
+  // hay TRỌN một tên phường/xã ("xã Vĩnh Lộc A") — AI im hoặc chỉ xếp vào kiến thức thêm → luật bị gạt: pháp lý rơi vào bổ sung,
+  // phường mất hẳn (laBoSungRac). Cả tin là đúng một giá trị của khoá đó → luật chắc, giữ.
+  for (const [i, [treo, cau, khoa, kt]] of [
+    ["do_rong_hem", "sổ chung", "phap_ly", false], ["phuong", "sổ hồng rồi em", "phap_ly", true],
+    ["huong", "xã Vĩnh Lộc A", "phuong", false], ["huong", "sổ đỏ nha em", "phap_ly", true],
+  ].entries()) {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: kt ? [cau] : [], truong: [] } : OUT();
+    await send({ external_user_id: `tron-khoa-${i}`, text: "bán nhà hẻm Trần Bình Trọng quận 5, 60m2, trệt 2 lầu, giá 8 tỷ" });
+    const LK = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LK.id, question: treo, status: "pending" });
+    const rK = await send({ external_user_id: `tron-khoa-${i}`, text: cau });
+    const fK = (q) => db().t.listing_facts.filter((f) => f.listing_id === LK.id && f.question === q);
+    check(`TRON-KHOA-0${i + 1} đang hỏi ${treo}, chỉ nhắn '${cau}' (chinh, AI ${kt ? "xếp kiến thức" : "im"}) → ghi ô ${khoa}, không vào bổ sung`,
+      fK(khoa).some((f) => f.answer === cau) && !fK("bo_sung").some((f) => f.answer === cau),
+      JSON.stringify({ khoa: fK(khoa), bs: fK("bo_sung"), rep: rK.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
   // 27/09/2026 (chủ dự án test Zalo): "Ngang có 3 m" rồi "Nhưng dài tới 14 m" khi bot đang hỏi kết cấu (chế độ chinh, AI im)
   // → diện tích "ngang 3m dài 14m", không rơi bổ sung.
   {
