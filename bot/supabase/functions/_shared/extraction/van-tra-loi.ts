@@ -516,12 +516,12 @@ export function boGachCheo(s: string): string {
 
 /**
  * FR-238 (bắn thật lx-46, 28/09/2026): tin hỏi bù (`ask-seller`) do model viết gọn câu đứng tên thành "Ai đứng tên sổ hiện
- * tại nhỉ?" — khách dễ đáp bằng HỌ TÊN (bot không bao giờ được xin tên thật). Câu model tự viết về đứng tên mà thiếu vế
- * "người nhà" bị bỏ, thay bằng câu mẫu; chèn trước câu cảm ơn cuối tin nếu có. Model đã giữ vế đó thì để nguyên.
+ * tại nhỉ?" — khách dễ đáp bằng HỌ TÊN (bot không bao giờ được xin tên thật). Mọi câu model tự viết về đứng tên bị bỏ, thay
+ * bằng câu mẫu; chèn trước câu cảm ơn cuối tin nếu có. Chủ dự án chốt "giữ nguyên câu mẫu": bắn lại sau deploy, model viết
+ * "Sổ nhà hiện đứng tên ai (chính anh hay người nhà khác) ạ?" — có vế người nhà mà vẫn hỏi "ai", nên không miễn câu nào.
  */
 export function giuCauDungTen(msg: string, cauMau: string): string {
-  const kd = boDau(msg);
-  if (/\bdung ten\b/.test(kd) && /\bnguoi nha\b/.test(kd)) return msg;
+  if ((msg ?? "").includes(cauMau)) return msg;
   const dong: string[] = [];
   for (const d of (msg ?? "").split("\n")) {
     const giu = tachCau(d).filter((c) => !/\bdung ten\b/.test(boDau(c)));
