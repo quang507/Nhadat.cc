@@ -5218,6 +5218,11 @@ begin
   end if;
   -- 20260928f (FR-241, bắn thật lx-72 "giá chín tỷ rưỡi"): chữ số → chữ số CHỈ khi đứng ngay trước đơn vị tiền,
   -- hoặc trơ cuối câu ngay sau "tỷ" ("chín tỷ hai"). "năm 2020", "bán năm căn" giữ nguyên.
+  -- 20260928g: lọc trước — vòng đổi tốn ~100 lượt regex, mà parse_vnd bị gọi trong hàm quét nhiều dòng; chạy cho mọi câu
+  -- làm DB Free quá giờ (bắn lại 28/09). Chỉ chạy khi có chữ số sát đơn vị tiền / sau "tỷ" / "<số> trăm" (luat-tien.ts CO_SO_CHU).
+  if t ~ '(một|mốt|mot|hai|ba|bốn|bon|tư|năm|nam|lăm|sáu|sau|bảy|bẩy|bay|tám|tam|chín|chin|mười|muoi|mươi)\s*(tỷ|tỏi|tỉ|ty|triệu|trieu|củ|trăm|tram)(?![[:alpha:]])'
+     or t ~ '(tỷ|tỏi|tỉ)\s+(một|mốt|mot|hai|ba|bốn|bon|tư|năm|nam|lăm|sáu|sau|bảy|bẩy|bay|tám|tam|chín|chin|mười|muoi|mươi)(?!\s*[[:alnum:]])'
+     or t ~ '[0-9]\s*(trăm|tram)(?![[:alpha:]])' then
   for i in 1 .. array_length(so_chu, 1) loop
     t := regexp_replace(t, '(?<![[:alnum:]])(mười|muoi)\s+' || so_chu[i] || don_vi, '1' || so_so[i], 'g');
     t := regexp_replace(t, '(?<![[:alnum:]])' || so_chu[i] || '\s+(mươi|muoi)(?![[:alpha:]])', so_so[i] || '0', 'g');
@@ -5233,6 +5238,7 @@ begin
   for i in 1 .. array_length(so_chu, 1) loop
     t := regexp_replace(t, '(tỷ|tỏi|tỉ)\s+' || so_chu[i] || '(?!\s*[[:alnum:]])', '\1 ' || so_so[i], 'g');
   end loop;
+  end if;
   ruoi := t ~ 'rưỡi|rươi|ruoi';
 
   t := regexp_replace(t, 'tỏi|tỷ|tỉ|tị|tỹ', ' _ty ', 'g');
