@@ -344,6 +344,9 @@ const TU_DUNG = new Set([
   // KHÔNG có "duong"/"hem" ở đây: bỏ dấu thì "Dương" (An Dương Vương, Dương Bá
   // Trạc) trùng "đường" — thêm vào là cắt cụt tên đường thật.
   "ty", "ti", "trieu", "m2", "shr", "hdmb",
+  // 29/09/2026 (kịch bản K5): "đường xe tải vào tận nơi" (tả đường vào) thành địa chỉ "đường xe tải vào tận nơi" — "tận"
+  // dừng tên đường (có dấu: chỉ "tận"; không dấu: chỉ khi sau là "nơi", để "Tân Kỳ Tân Quý" gõ không dấu còn nguyên).
+  "tan",
 ]);
 
 /**
@@ -357,7 +360,7 @@ const DANG_CO_DAU: Record<string, readonly string[]> = {
   giay: ["giấy"], gia: ["giá"], ban: ["bán"], thue: ["thuê"], huong: ["hướng"], that: ["thật"], tret: ["trệt"],
   lau: ["lầu"], tang: ["tầng"], phong: ["phòng"], ngu: ["ngủ"], hoan: ["hoàn"], gap: ["gấp"], luong: ["lượng"],
   tich: ["tích"], phuong: ["phường"], quan: ["quận"], huyen: ["huyện"], khong: ["không"], ngap: ["ngập"],
-  xay: ["xây"], moi: ["mới"], ty: ["tỷ", "tỉ"], ti: ["tỉ", "tỷ"], trieu: ["triệu"],
+  xay: ["xây"], moi: ["mới"], ty: ["tỷ", "tỉ"], ti: ["tỉ", "tỷ"], trieu: ["triệu"], tan: ["tận"],
 };
 function laTuDungTen(w: string, sau: string): boolean {
   const kd = boDau(w);
@@ -368,6 +371,7 @@ function laTuDungTen(w: string, sau: string): boolean {
     if (kd === "phuong") return /^\d/.test(kdSau);
     if (kd === "huong") return /^(?:dong|tay|nam|bac)/.test(kdSau);
     if (kd === "phong") return /^(?:ngu|khach|tam|wc|\d)/.test(kdSau);
+    if (kd === "tan") return /^noi\b/.test(kdSau);
     return true;
   }
   const dang = DANG_CO_DAU[kd];
@@ -1124,9 +1128,11 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // "cần bán gấp 5 tỷ" → câu chính là gấp, giá vẫn phải ghi.
   ["gia", new RegExp(`\\b(\\d+(?:[.,]\\d+)?)\\s*(${TIEN_KD})(?![a-z])(?:\\s*(\\d{1,3}(?:[.,]\\d+)?)${KHONG_PHAI_LE_GIA})?(?:\\s*(ruoi))?`), (m) => `${m[1]} ${m[2] === "toi" ? "tỏi" : m[2] === "ty" || m[2] === "ti" ? "tỷ" : "triệu"}${m[3] ? ` ${m[3]}` : ""}${m[4] ? " rưỡi" : ""}`],
   // 24/09/2026 (bắn 10 tin): "toà nhà CHDV 20 phòng" — phòng cho thuê, không phải phòng ngủ.
-  ["so_phong_ngu", /(?<!\b(?:chdv|dich vu|toa nha|nha tro|day tro|phong tro)\b[^,.;]{0,12})\b(\d{1,2})\s*(?:phong ngu|pn|phong)\b(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
+  // 29/09/2026 (kịch bản K2): "2pn2wc" gõ dính — biên từ `\b` giữa "n" và "2" không có, nên cả phòng ngủ lẫn WC rơi. Số đứng
+  // sau chữ cái ("pn2wc") và đơn vị đứng trước chữ số vẫn tính.
+  ["so_phong_ngu", /(?<!\b(?:chdv|dich vu|toa nha|nha tro|day tro|phong tro)\b[^,.;]{0,12})(?<![\d.,])(\d{1,2})\s*(?:phong ngu|pn|phong)(?![a-z])(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
   ["so_phong", /\b(?:chdv|can ho dich vu|toa nha|nha tro|day tro)\b[^,.;]{0,12}?\b(\d{1,3})\s*phong\b(?!\s*(?:ngu|wc|tam|ve sinh))/, (m) => m[1]],
-  ["so_wc", /\b(\d{1,2})\s*(?:wc|toilet|ve sinh)\b/, (m) => m[1]],
+  ["so_wc", /(?:\b|(?<=[a-z]))(\d{1,2})\s*(?:wc|toilet|ve sinh)(?![a-z])/, (m) => m[1]],
   ["huong", /\bhuong\s*((?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?)\b/, (m) => `hướng ${m[1]}`],
   // 13/09/2026: "ngang 5 dài 20" giữ CẢ hai chiều — đáp án "5m" làm mất chiều dài
   // (SQL `boc_thong_so` đọc được "ngang 5m dài 20m" ra frontage + length).
@@ -1318,7 +1324,8 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
     if (q === "nam_xay" && NHA_KHAC_RE.test(kd)) continue; // năm xây nhà hàng xóm không phải của căn này
     // Lý do bán giữ DẤU ("cần tiền", không phải "can tien"): khớp trên bản bỏ dấu
     // giữ độ dài rồi cắt đúng đoạn chữ gốc.
-    if (q === "ly_do_ban" || q === "view" || q === "ket_cau") {
+    // 29/09/2026 (kịch bản K10): thương lượng từng ra "con thuong luong" (chữ bỏ dấu) — cắt từ chữ gốc như lý do bán.
+    if (q === "ly_do_ban" || q === "view" || q === "ket_cau" || q === "thuong_luong") {
       const mm = re.exec(kdD);
       if (mm) them({ question: q, answer: text.slice(mm.index, mm.index + mm[0].length).trim() });
       continue;
@@ -1640,7 +1647,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:lau|tang|tam)\b/.exec(kd)) || /\btret\b/.test(kd)) {
     return { question: "ket_cau", answer: goc };
   }
-  if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:phong ngu|pn)\b/.exec(kd))) {
+  if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:phong ngu|pn)(?![a-z])/.exec(kd))) {
     return { question: "so_phong_ngu", answer: m[1] };
   }
   if ((m = /\b(?:phuong|p)\.?\s*(\d{1,2})\b/.exec(kd))) {
@@ -1682,8 +1689,9 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 29/09/2026 (kịch bản K9): "đăng ở đâu vậy em?" — bỏ dấu thì "đăng ở" = "dang o" = "đang ở", thành hiện trạng. Câu CÓ dấu
   // thì phải khớp đúng chữ có dấu ("đang"); câu gõ không dấu mới dùng bản bỏ dấu.
   const coDauCau = /[\u00C0-\u1EF9đĐ]/.test(goc);
-  const hienTrangCoDau = /(?:^|[^\p{L}])(?:đang\s+ở|đang\s+cho\s+thuê|để\s+trống|nhà\s+trống|còn\s+ở|đang\s+thuê)(?![\p{L}])/iu.test(goc);
-  if (/\b(dang o|dang cho thue|de trong|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo))|con o|dang thue)\b/.test(kd) &&
+  // 29/09/2026 (kịch bản K5): đất vườn "đang trồng cây ăn trái" không vào hiện trạng (luật chỉ biết nhà: ở / cho thuê / trống).
+  const hienTrangCoDau = /(?:^|[^\p{L}])(?:đang\s+ở|đang\s+cho\s+thuê|để\s+trống|nhà\s+trống|còn\s+ở|đang\s+thuê|đang\s+trồng|đang\s+nuôi|đất\s+trống)(?![\p{L}])/iu.test(goc);
+  if (/\b(dang o|dang cho thue|de trong|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo))|con o|dang thue|dang trong\s+(?:cay|lua|rau|hoa|sau rieng|mit|xoai|tieu|ca phe|cao su|dieu|mia|thanh long|bap|chuoi|dua)|dang nuoi\s+(?:ca|tom|heo|ga|bo|vit|de)|dat trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo)))\b/.test(kd) &&
       (!coDauCau || hienTrangCoDau) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
   const LY_DO_RE = /\b(ly do|dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san)\b/;
   if (LY_DO_RE.test(kd)) return { question: "ly_do_ban", answer: manhKhop(LY_DO_RE) };
@@ -2009,6 +2017,19 @@ export function laRaoLai(text: string): boolean {
   if (!kd) return false;
   return /\b(?:rao|dang|mo|len|treo)\s+(?:tin\s+|can\s+\d\s+|can\s+)?lai\b/.test(kd) ||
     (/\b(?:chua ban|con ban|van con|chua chot|con nguyen|chua co ai)\b/.test(kd) && /\b(?:rao|dang|mo|len)\b/.test(kd));
+}
+
+/**
+ * 29/09/2026 (kịch bản K7): "thôi em ơi nhà bán rồi" → tin gỡ; lượt sau "à không, chưa bán, vẫn bán nha" không khớp luật nào
+ * (`laRaoLai` đòi chữ rao/đăng/mở) nên tin nằm luôn ở trạng thái đã chốt. "chưa bán" + lời khẳng định "vẫn bán / còn bán /
+ * nhầm / à không" là RÚT LẠI lời báo bán. Chỉ dùng ngay sau lượt bot gỡ tin — "chưa bán, vẫn bán" còn là câu trả lời thường
+ * cho câu hỏi "căn còn bán không" của tin đang rao.
+ */
+export function laRutLoiBan(text: string): boolean {
+  const goc = (text ?? "").trim();
+  if (!goc || /\?/.test(goc)) return false;
+  const kd = boDau(goc).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  return /\b(?:chua ban|chua chot|chua coc|chua ai mua)\b/.test(kd) && /\b(?:van ban|van rao|van con|con ban|nham|a khong|khong phai)\b/.test(kd);
 }
 
 // ── Tầng phụ — FR-220 (24/09/2026) ───────────────────────────────────────────

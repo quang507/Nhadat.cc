@@ -13,7 +13,7 @@ import { donViGiaDep } from "./luat-tien.ts";
 const boDau = (s: string): string =>
   (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
-export type LoaiHoiTin = "khach" | "gia" | "dien_tich" | "dia_chi" | "tang" | "huong" | "phap_ly" | "trang_thai" | "ban_chua";
+export type LoaiHoiTin = "khach" | "gia" | "dien_tich" | "dia_chi" | "tang" | "huong" | "phap_ly" | "trang_thai" | "ban_chua" | "noi_dang";
 
 export type TinTom = {
   code?: string | null; status?: string | null; price_raw?: string | null; area_m2?: number | string | null;
@@ -29,7 +29,8 @@ const DANG_HOI = /\?|\b(?:bao nhieu|nhieu|may|nao|gi|sao|the nao|chua|khong|ko|n
 export function hoiVeTin(text: string): LoaiHoiTin | null {
   const goc = (text ?? "").trim();
   if (!goc) return null;
-  const kd = boDau(goc).replace(/\s+/g, " ").trim();
+  // 29/09/2026 (kịch bản K9): bỏ dấu thì "đang" = "đăng" — câu CÓ dấu, "đang" (không phải "đăng") không được đọc là đăng tin.
+  const kd = boDau(goc.replace(/(?<![\p{L}])[đĐ]ang(?![\p{L}])/gu, "dxng")).replace(/\s+/g, " ").trim();
   if (CO_SO_DON_VI.test(kd)) return null;
   if (!DANG_HOI.test(kd)) return null;
   // Câu mang DỮ LIỆU ("Được giá, căn tôi sở hữu nhưng… có thông tin thêm không") là câu trả lời kèm hỏi
@@ -41,6 +42,9 @@ export function hoiVeTin(text: string): LoaiHoiTin | null {
   if (/\b(?:ban roi|ban duoc chua|ban chua|da ban chua|ban dc chua|chot roi|chot chua|chot duoc chua|co ai mua|ai mua chua|mua chua)\b/.test(kd) && !/\bgia\b/.test(kd)) return "ban_chua";
   if (/\bkhach\b/.test(kd) && /\b(?:hoi|quan tam|xem|coi|nao|chua|co ai|nhieu)\b/.test(kd)) return "khach";
   if (/\b(?:ai|nguoi nao)\s+(?:hoi|quan tam|xem)\b/.test(kd)) return "khach";
+  // 29/09/2026 (kịch bản K9): "đăng ở đâu vậy em?" từng được đáp bằng trạng thái tin ("đang chờ thêm thông tin") — khách hỏi
+  // NƠI đăng, không hỏi đăng chưa.
+  if (/\b(?:dang|len|rao)\b[^?]{0,12}\b(?:o dau|cho nao|dau vay|dau em|web nao|trang nao|kenh nao|tren dau)\b/.test(kd) && !/\bgia\b/.test(kd)) return "noi_dang";
   if (/\b(?:dang|len ke|len chua|dang chua|len tin|len web|dang tin)\b/.test(kd) && !/\bgia\b/.test(kd)) return "trang_thai";
   if (/\bgia\b/.test(kd) && /\b(?:bao nhieu|nhieu|nhi|the nao|la gi|hoi nay|luc nay|khi nay|nay|dang rao|de la|ghi)\b/.test(kd)) return "gia";
   if (/\b(?:dien tich|may m2|bao nhieu m2|rong bao nhieu|rong may)\b/.test(kd)) return "dien_tich";
@@ -82,6 +86,7 @@ export function dapHoiVeTin(loai: LoaiHoiTin, tin: TinTom, khach: KhachTom, ac: 
     case "huong": return tin.direction ? `Dạ tin ghi hướng ${tin.direction} ạ.` : chua("hướng");
     case "phap_ly": return tin.legal_status ? `Dạ tin ghi pháp lý ${LEGAL_VI[tin.legal_status] ?? tin.legal_status} ạ.` : chua("pháp lý");
     case "trang_thai": return `Dạ tin mình ${STATUS_VI[tin.status ?? ""] ?? "đang được em theo dõi"} ạ.`;
+    case "noi_dang": return `Dạ tin lên kệ web AI Ơi Nhà Đất, và em giới thiệu thẳng cho khách đang tìm mua nhắn em qua Zalo ạ. Hiện tin mình ${STATUS_VI[tin.status ?? ""] ?? "đang được em theo dõi"}.`;
     case "ban_chua": {
       if (tin.status === "da_chot") return `Dạ tin mình đã chốt, em gỡ khỏi kệ rồi ạ.`;
       const n = Math.max(khach.quan_tam, 0);

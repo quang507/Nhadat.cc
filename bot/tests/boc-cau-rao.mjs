@@ -3,7 +3,7 @@
 //
 // Phần SQL của cùng lượt bắn (fact "cách mặt tiền" vào cột, "p5" dính tên đường, xe hơi
 // trong nhà) ở migration 20260914b.
-import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
 import { bocViTriRao, catDapAn, laBoSungRac, laBoSungTrung, namXayTuongDoi, soNhaDau, nhanDienFact, nhanDienNhieuFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 let hong = 0, tong = 0;
@@ -57,6 +57,11 @@ ok("diện tích: 'tổng diện tích 500m2' (không tầng) → 500", dienTich
 ok("diện tích: 'dtsd 120m2' → null", dienTichCauRao(kd("căn hộ dtsd 120m2 3pn")) === null);
 ok("ngang × dài: '5x20' → 100 (để nhân giá/m²)", ngangNhanDai(kd("lô đất 5x20, giá 95 triệu/m2")) === 100);
 ok("ngang × dài: '4.2m x 18m' → 75.6", ngangNhanDai(kd("ngang 4.2m x 18m")) === 75.6);
+// FR-243 (kịch bản K3/K8/K9/K10, 29/09/2026): câu rao đầu "4x12" không vào diện tích khi AI im. Nguyên nhân: lúc tạo tin
+// chat-reply chỉ đọc "m2" (`dienTichCauRao`); ngang × dài chỉ dùng để nhân giá/m². Nay tách hai chiều ra (`ngangDaiCauRao`).
+ok("FR243 ngangDaiCauRao '4x12 trệt 2 lầu giá 7 tỷ' → [4, 12]", JSON.stringify(ngangDaiCauRao(kd("bán nhà hẻm Lý Thường Kiệt Q10 4x12 trệt 2 lầu giá 7 tỷ"))) === "[4,12]");
+ok("FR243 ngangDaiCauRao 'ngang 4 dài 15' → [4, 15]", JSON.stringify(ngangDaiCauRao(kd("ngang 4 dài 15"))) === "[4,15]");
+ok("FR243 không kích: 'giá 7 tỷ, 60m2' không có ngang × dài → null", ngangDaiCauRao(kd("giá 7 tỷ, 60m2")) === null);
 // 20/09/2026 (bắn thật mau-y-D): "ngang 4 dài 15, giá 250 triệu/m2" không có "x" → phải nhân được.
 ok("ngang × dài: 'ngang 4 dài 15' → 60", ngangNhanDai(kd("mặt tiền Nguyễn Chí Thanh quận 5, ngang 4 dài 15, giá 250 triệu/m2")) === 60);
 ok("ngang × dài: 'ngang 5m, dài 20m' → 100", ngangNhanDai(kd("đất ngang 5m, dài 20m thổ cư")) === 100);
