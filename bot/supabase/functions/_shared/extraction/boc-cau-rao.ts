@@ -54,7 +54,7 @@ export const TRUOC_LA_THUE = /(?:(?:dang|hien|hien dang|hop dong)\s+(?:cho\s+)?t
  * nguyên đuôi rác lên web. Một nguồn cho chat-reply và bài kiểm.
  */
 export const DUOI_GIA =
-  "(?:(?!\\s*\\d+(?:[.,]\\d+)?\\s*m2)(?!\\s+(?:shr|shc|sổ|so\\b|thổ|tho\\b|hẻm|hem\\b|hxh|mặt tiền|mat tien|thanh khoản|thanh khoan|pháp lý|phap ly|dt\\b|diện tích|dien tich|ngang|dài|dai\\b|hướng|huong\\b|full|nội thất|noi that|\\d+\\s*x\\s*\\d+)(?![\\p{L}]))[^,.;\\n])*";
+  "(?:(?!\\s*\\d+(?:[.,]\\d+)?\\s*m2)(?!\\s+(?:shr|shc|sổ|so\\b|thổ|tho\\b|hẻm|hem\\b|hxh|mặt tiền|mat tien|thanh khoản|thanh khoan|pháp lý|phap ly|dt\\b|diện tích|dien tich|ngang|dài|dai\\b|hướng|huong\\b|full|nội thất|noi that|phí quản lý|phi quan ly|phí ql|phi ql|phí dịch vụ|phi dich vu|phí bảo trì|phi bao tri|\\d+\\s*x\\s*\\d+)(?![\\p{L}]))[^,.;\\n])*";
 
 export function chonGiaRao(text: string, deal: "ban" | "cho_thue", duoi: string = DUOI_GIA): string | null {
   const re = new RegExp(`((?:[\\d][\\d.,]*\\s*(?:${TIEN_CD})|${TIEN_T_KEP})${duoi})`, "giu");
@@ -92,6 +92,11 @@ export function dienTichCauRao(kd: string): number | null {
     if (SAN_NGAY_TRUOC.test(truoc)) continue;
     // "nhà 4 tấm diện tích tổng 240m2" — tổng của nhà nhiều tầng là sàn; "tổng dt đất" thì không.
     if (coTang && /\b(?:tong\s+(?:dien tich|dt)|(?:dien tich|dt)\s+tong)\s*(?:la\s*|khoang\s*|tam\s*)?$/.test(truoc) && !/\bdat\s*$/.test(truoc)) continue;
+    // 29/09/2026 (kịch bản L5): "lô đất 5x25 Hóc Môn thổ cư 100m2" — số m² đứng ngay sau "thổ cư" là phần THỔ CƯ, không phải
+    // diện tích đất, khi câu còn cách khác nói diện tích (ngang × dài, hoặc một số m² khác). Không có thì vẫn là diện tích
+    // ("đất thổ cư 100m2" — cả lô là thổ cư).
+    if (/\btho cu\s*(?:la\s*|khoang\s*|tam\s*|co\s*)?$/.test(truoc) &&
+      (ngangDaiCauRao(kd) || /\d\s*m(?:2|²)/.test(kd.slice(m.index + m[0].length)))) continue;
     return Number(m[1].replace(",", "."));
   }
   return null;

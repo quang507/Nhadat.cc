@@ -62,6 +62,14 @@ ok("ngang × dài: '4.2m x 18m' → 75.6", ngangNhanDai(kd("ngang 4.2m x 18m")) 
 ok("FR243 ngangDaiCauRao '4x12 trệt 2 lầu giá 7 tỷ' → [4, 12]", JSON.stringify(ngangDaiCauRao(kd("bán nhà hẻm Lý Thường Kiệt Q10 4x12 trệt 2 lầu giá 7 tỷ"))) === "[4,12]");
 ok("FR243 ngangDaiCauRao 'ngang 4 dài 15' → [4, 15]", JSON.stringify(ngangDaiCauRao(kd("ngang 4 dài 15"))) === "[4,15]");
 ok("FR243 không kích: 'giá 7 tỷ, 60m2' không có ngang × dài → null", ngangDaiCauRao(kd("giá 7 tỷ, 60m2")) === null);
+// FR-244 (kịch bản L1/L5, 29/09/2026) — mỗi ca ghi NGUYÊN NHÂN.
+// L1: giá "4ty6 phí quản lý 15k/m2". Nguyên nhân: đuôi giá (`DUOI_GIA`) giữ chữ lẻ tới dấu phẩy, không dừng trước "phí quản lý".
+ok("FR244 giá dừng trước 'phí quản lý'", gia("bán căn hộ Sunrise City q7 tầng 12 76m2 2pn giá 4ty6 phí quản lý 15k/m2") === "4ty6", String(gia("bán căn hộ Sunrise City q7 tầng 12 76m2 2pn giá 4ty6 phí quản lý 15k/m2")));
+ok("FR244 không kích: 'giá 5 tỷ thương lượng' vẫn giữ đuôi", gia("bán nhà q5 giá 5 tỷ thương lượng") === "5 tỷ thương lượng", String(gia("bán nhà q5 giá 5 tỷ thương lượng")));
+// L5: "lô đất 5x25 … thổ cư 100m2" → diện tích 100 (lấy nhầm thổ cư). Nguyên nhân: `dienTichCauRao` lấy số m² ĐẦU TIÊN.
+ok("FR244 'lô đất 5x25 … thổ cư 100m2' → không lấy 100 làm diện tích", dienTichCauRao(kd("bán lô đất 5x25 Hóc Môn thổ cư 100m2 giá 2 tỷ 9")) === null);
+ok("FR244 không kích: 'đất thổ cư 100m2' (không cách nói khác) vẫn là diện tích", dienTichCauRao(kd("bán đất thổ cư 100m2 giá 2 tỷ")) === 100);
+ok("FR244 không kích: '150m2 thổ cư 100m2' → 150", dienTichCauRao(kd("bán đất 150m2 thổ cư 100m2")) === 150);
 // 20/09/2026 (bắn thật mau-y-D): "ngang 4 dài 15, giá 250 triệu/m2" không có "x" → phải nhân được.
 ok("ngang × dài: 'ngang 4 dài 15' → 60", ngangNhanDai(kd("mặt tiền Nguyễn Chí Thanh quận 5, ngang 4 dài 15, giá 250 triệu/m2")) === 60);
 ok("ngang × dài: 'ngang 5m, dài 20m' → 100", ngangNhanDai(kd("đất ngang 5m, dài 20m thổ cư")) === 100);

@@ -3000,7 +3000,7 @@ Deno.serve(async (req) => {
           for (const f of nhieu.length ? nhieu : mot ? [mot] : []) {
             const { error: fcErr } = await client.rpc("ghi_fact_listing", { p_listing_id: l.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat" });
             if (fcErr) { await ghiLoi(client, "chat-reply ghi_fact_listing(theo can)", fcErr.message); continue; }
-            daGhi.push(`căn ${g.thu} ${(FACT_LABELS[f.question] ?? f.question).replace(/\s*\(.*\)\s*$/, "")}: ${f.answer}`);
+            daGhi.push(`căn ${g.nhan ?? g.thu} ${(FACT_LABELS[f.question] ?? f.question).replace(/\s*\(.*\)\s*$/, "")}: ${f.answer}`);
             // Mọi câu treo của CĂN ĐÓ cùng họ với fact vừa ghi thì đóng (không chỉ câu đang chọn).
             for (const q of ds) {
               if (q.listing_id === l.id && !daDong.has(q.id) && cungHoFact(f.question, q.question)) {

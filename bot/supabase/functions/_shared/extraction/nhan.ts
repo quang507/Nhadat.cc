@@ -56,7 +56,7 @@ export const TU_DIEN_NHAN: Record<string, Nhan> = {
   kinh_doanh: { ten: "kinh doanh được", khop: /\b(?:kinh doanh|buon ban|mo shop|mo quan|mo tiem|lam van phong|van phong duoc|cho thue kinh doanh|tien buon ban|quan an|phu hop (?:mo )?quan)\b/ },
   dong_tien: { ten: "đang cho thuê, có dòng tiền", khop: /\b(?:dang cho thue|dong tien|thu nhap thue|co khach thue|dang khai thac)\b/ },
   view_song: { ten: "view sông", khop: /\b(?:view song|nhin ra song|huong song|ven song|bo song|view kenh)\b/ },
-  view_cong_vien: { ten: "view công viên", khop: /\b(?:view cong vien|nhin ra cong vien|view ho\b|view cay xanh)\b/ },
+  view_cong_vien: { ten: "view công viên", khop: /\b(?:view cong vien|nhin ra cong vien|view ho\b(?!\s*boi)|view cay xanh)\b/ }, // 29/09 (L1): "view hồ bơi" không phải view hồ
   can_goc: { ten: "căn góc / 2 mặt tiền", khop: /\b(?:can goc|lo goc|2 mat tien|hai mat tien|goc 2 mat|nha goc)\b/ },
   ho_boi: { ten: "có hồ bơi", khop: /\b(?:ho boi|be boi)\b/ },
   nha_hoan_cong: { ten: "đã hoàn công", khop: /\b(?:da hoan cong|hoan cong day du|hoan cong du)\b/ },
