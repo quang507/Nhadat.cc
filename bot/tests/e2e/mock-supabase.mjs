@@ -431,6 +431,8 @@ class RpcCall {
         return { data: String((globalThis.__cauHinh ?? {}).tim_theo_nghia ?? "") === "bat", error: null };
       case "cau_hinh":
         return { data: (globalThis.__cauHinh ?? { test_reset_hello: "1" })[a.p_key] ?? null, error: null };
+      // FR-245 (20260929a): "hello" gọi thẳng hàm xoá lõi `xoa_nguoi_theo_zalo`; `reset_nguoi_test` (công cụ thử) chỉ nhận ID thử.
+      case "xoa_nguoi_theo_zalo":
       case "reset_nguoi_test": {
         const z = a.p_zalo;
         const sIds = db.t.sellers.filter((s) => s.zalo_user_id === z).map((s) => s.id);

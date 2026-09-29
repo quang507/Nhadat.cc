@@ -67,3 +67,42 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$SO" >/dev/null
           echo "Đã ghi sổ: $VERSION $NAME"
+
+      # 29/09/2026 (FR-245): sinh lại schema.sql ngay sau khi áp, để phiên làm việc không có service_role vẫn giữ được
+      # `schema.sql` khớp DB (cổng CI thứ 7 so md5 từng thân hàm). Chạy `xuat_schema()` qua Management API (cùng token
+      # vừa áp), chặn chuỗi giống khoá như scripts/sinh-schema.mjs, rồi để lại dạng artifact — người/máy tải về commit.
+      - name: Xuất schema.sql sau khi áp
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"query":"select public.xuat_schema() as s"}' | jq -r '.[0].s' > schema.sql
+          test -s schema.sql
+          grep -q "SINH TỰ ĐỘNG bởi public.xuat_schema" schema.sql
+          if grep -Eq 'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}|sb_secret_|sk-ant-|gsk_[A-Za-z0-9]{10}' schema.sql; then
+            echo "::error::schema.sql có chuỗi giống khoá bí mật — không xuất"
+            exit 1
+          fi
+          wc -l schema.sql
+
+      # FR-245: in SỐ ĐẾM máy soi dữ liệu tin (mã lỗi + số lượng, không nội dung — log repo công khai) để thấy trước/sau
+      # một migration sửa dữ liệu. Hàm chưa có thì bỏ qua.
+      - name: Số đếm soát dữ liệu tin
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Q="select case when to_regprocedure('public.soat_du_lieu_tin()') is null then '\"chưa có hàm\"'::json else (select coalesce(json_agg(x order by x.so desc), '[]'::json) from (select split_part(t.loi, ':', 1) as loi, count(*) as so from public.soat_du_lieu_tin() t group by 1) x) end as dem"
+          curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg q "$Q" '{query: $q}')" | jq -c '.[0].dem'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: schema-sql
+          path: schema.sql
+          retention-days: 3

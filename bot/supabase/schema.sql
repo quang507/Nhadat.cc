@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-21 16:46 (giờ VN)
+-- Sinh lúc: 2026-09-30 01:00 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -1027,8 +1027,8 @@ exception when duplicate_object then null; end $d$;
 
 -- ══ Index ══
 create index if not exists boc_tach_bong_created_at_idx ON public.boc_tach_bong USING btree (created_at DESC);
+create index if not exists boc_tach_bong_listing_id_idx ON public.boc_tach_bong USING btree (listing_id);
 create index if not exists boc_tach_bong_seller_idx ON public.boc_tach_bong USING btree (seller_id);
-CREATE INDEX boc_tach_bong_listing_id_idx ON public.boc_tach_bong USING btree (listing_id);
 create index if not exists bot_errors_at_idx ON public.bot_errors USING btree (at DESC);
 create index if not exists bot_errors_source_at_idx ON public.bot_errors USING btree (source, at DESC);
 create index if not exists chat_quota_gio_idx ON public.chat_quota USING btree (gio);
@@ -1064,17 +1064,17 @@ create index if not exists listings_nhung_hnsw ON public.listings USING hnsw (nh
 create index if not exists listings_project_idx ON public.listings USING btree (project_id) WHERE (project_id IS NOT NULL);
 CREATE UNIQUE INDEX listings_project_unit_uniq ON public.listings USING btree (project_id, unit_code) WHERE ((project_id IS NOT NULL) AND (unit_code IS NOT NULL));
 create index if not exists listings_seller_id_idx ON public.listings USING btree (seller_id);
+create index if not exists mau_cau_conversation_id_idx ON public.mau_cau USING btree (conversation_id);
 create index if not exists mau_cau_phia_moi_idx ON public.mau_cau USING btree (phia, updated_at DESC) WHERE (dung_lam = ANY (ARRAY['vi_du'::text, 'ca_hai'::text]));
-CREATE INDEX mau_cau_conversation_id_idx ON public.mau_cau USING btree (conversation_id);
 create index if not exists media_cleanup_can_lam_idx ON public.media_cleanup_queue USING btree (trang_thai, created_at) WHERE (trang_thai = ANY (ARRAY['cho'::text, 'dang_lam'::text]));
 create index if not exists media_listing_id_idx ON public.media USING btree (listing_id);
 create index if not exists messages_conv_seq_idx ON public.messages USING btree (conversation_id, seq DESC);
 create index if not exists messages_conv_time_idx ON public.messages USING btree (conversation_id, created_at);
 create index if not exists project_facts_cho_duyet_idx ON public.project_facts USING btree (trang_thai, created_at DESC);
+create index if not exists project_facts_conversation_id_idx ON public.project_facts USING btree (conversation_id);
 CREATE UNIQUE INDEX project_facts_khong_trung_idx ON public.project_facts USING btree (COALESCE((project_id)::text, lower(btrim(ten_du_an))), khoa, gia_tri) WHERE (trang_thai <> 'bo'::text);
-CREATE INDEX project_facts_project_id_idx ON public.project_facts USING btree (project_id);
-CREATE INDEX project_facts_listing_id_idx ON public.project_facts USING btree (listing_id);
-CREATE INDEX project_facts_conversation_id_idx ON public.project_facts USING btree (conversation_id);
+create index if not exists project_facts_listing_id_idx ON public.project_facts USING btree (listing_id);
+create index if not exists project_facts_project_id_idx ON public.project_facts USING btree (project_id);
 create index if not exists projects_nhung_hnsw ON public.projects USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists projects_priority_idx ON public.projects USING btree (priority, district);
 create index if not exists property_events_at_idx ON public.property_events USING btree (at DESC);
@@ -1247,6 +1247,50 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.admin_khoi_phuc_lan_xoa(p_lan bigint)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v jsonb := '{}'::jsonb;
+  n int;
+  t text;
+  v_cot text;
+  v_r text;
+begin
+  if not (public.la_admin()
+          or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
+          or current_user in ('postgres', 'supabase_admin')) then
+    raise exception 'chỉ admin được khôi phục' using errcode = '42501';
+  end if;
+  if not exists (select 1 from luu_tru.lan_xoa where lan = p_lan) then
+    raise exception 'không có lần xoá %', p_lan using errcode = '22023';
+  end if;
+  -- Dòng khôi phục là dữ liệu CŨ: không cho trigger chạy lại (gửi tin, hỏi bù, cấp mã mới…) và không kiểm khoá ngoại theo
+  -- thứ tự (sellers ↔ listings vòng tròn qua active_listing_id).
+  set local session_replication_role = replica;
+  foreach t in array array['sellers', 'buyers', 'listings', 'conversations', 'messages', 'listing_facts', 'project_facts',
+                           'info_requests', 'media', 'listing_media', 'listing_views', 'property_events', 'interests',
+                           'ratings_log', 'viewings', 'deals', 'curated_lists', 'boc_tach_bong', 'chat_quota', 'reminders'] loop
+    -- Cột sinh (generated) không chèn được — chỉ lấy cột thường của bảng HIỆN TẠI.
+    select string_agg(quote_ident(a.attname), ', ' order by a.attnum), string_agg('r.' || quote_ident(a.attname), ', ' order by a.attnum)
+      into v_cot, v_r
+      from pg_attribute a
+     where a.attrelid = format('public.%I', t)::regclass and a.attnum > 0 and not a.attisdropped and a.attgenerated = '';
+    execute format(
+      'insert into public.%I (%s) select %s from luu_tru.ban_ghi b, jsonb_populate_record(null::public.%I, b.du_lieu) r
+        where b.lan = $1 and b.bang = %L on conflict do nothing', t, v_cot, v_r, t, t)
+      using p_lan;
+    get diagnostics n = row_count;
+    v := v || jsonb_build_object(t, n);
+  end loop;
+  update luu_tru.lan_xoa set khoi_phuc_luc = now() where lan = p_lan;
+  return v;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1282,6 +1326,8 @@ AS $function$
 declare
   v jsonb := '{}'::jsonb;
   n int;
+  v_lan bigint;
+  t text;
 begin
   if not (public.la_admin()
           or coalesce(auth.jwt() ->> 'role', '') = 'service_role'
@@ -1291,6 +1337,23 @@ begin
   if coalesce(p_xac_nhan, '') <> 'XOA HET' then
     raise exception 'phải gõ đúng chữ XOA HET để xác nhận' using errcode = '22023';
   end if;
+
+  -- 20260929b (FR-245, chủ dự án 29/09: "xóa data để test thì data thật cũng nên để sang 1 chỗ" → chọn "chép sang kho lưu
+  -- rồi mới xóa"): CHÉP mọi dòng sắp xoá sang `luu_tru.ban_ghi` (một lần xoá = một `lan`) TRƯỚC khi xoá, cùng giao dịch —
+  -- chép hỏng thì không xoá gì. Khôi phục: `admin_khoi_phuc_lan_xoa(lan)`. Kho lưu nằm CÙNG DB: đỡ được bấm nút xoá,
+  -- không đỡ được mất cả DB (không có sao lưu ngoài — OPEN-25).
+  insert into luu_tru.lan_xoa (ai) values (coalesce(auth.uid()::text, current_user)) returning lan into v_lan;
+  foreach t in array array['sellers', 'buyers', 'listings', 'conversations', 'messages', 'listing_facts', 'project_facts',
+                           'info_requests', 'media', 'listing_media', 'listing_views', 'property_events', 'interests',
+                           'ratings_log', 'viewings', 'deals', 'curated_lists', 'boc_tach_bong', 'chat_quota'] loop
+    execute format('insert into luu_tru.ban_ghi (lan, bang, du_lieu) select $1, %L, to_jsonb(x) from public.%I x', t, t)
+      using v_lan;
+  end loop;
+  insert into luu_tru.ban_ghi (lan, bang, du_lieu)
+  select v_lan, 'reminders', to_jsonb(r) from reminders r
+   where r.buyer_id is not null or r.seller_id is not null or r.listing_id is not null or r.viewing_id is not null
+      or r.kind in ('promise', 'reengage', 'viewing', 'followup', 'match', 'feedback', 'sold', 'rating');
+  v := v || jsonb_build_object('luu_tru_lan', v_lan);
 
   -- `where true` ở mọi câu xoá: role `authenticator` nạp `safeupdate`, câu DELETE không WHERE
   -- bị chặn khi hàm được gọi qua PostgREST (22/09/2026, nút /admin từng đổ lỗi này).
@@ -1325,6 +1388,7 @@ begin
           format('%s: %s', to_char(now() at time zone 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD HH24:MI'), v::text),
           'FR-210: lần xoá hàng loạt khách + rổ hàng gần nhất (nút ở /admin, tab CRM).')
     on conflict (key) do update set value = excluded.value, ghi_chu = excluded.ghi_chu;
+  update luu_tru.lan_xoa set so_dong = v where lan = v_lan;
   return v;
 end $function$
 ;
@@ -1339,7 +1403,7 @@ begin
   if not public.la_admin() then
     raise exception 'chỉ admin được xoá khách' using errcode = '42501';
   end if;
-  return public.reset_nguoi_test(p_zalo);
+  return public.xoa_nguoi_theo_zalo(p_zalo);
 end $function$
 ;
 
@@ -2931,12 +2995,14 @@ begin
   if not (public.la_admin() or coalesce(auth.role(), '') = 'service_role' or current_user in ('postgres', 'supabase_admin')) then
     raise exception 'don_du_lieu_thu: chi admin' using errcode = '42501';
   end if;
+  -- 20260929a (FR-245): ID thử đọc từ MỘT chỗ (`la_id_thu`) — trước đây hai danh sách tiền tố viết tay ở đây lệch với
+  -- ID bắn thử production (lx-, do-), nên dữ liệu thử đó không bao giờ được dọn.
   create temp table if not exists _nguoi_thu on commit drop as
     select id from sellers
-     where zalo_user_id ~ '^(thu-|b15-|hoi-|z-|e2e-)';
+     where public.la_id_thu(zalo_user_id);
   create temp table if not exists _khach_thu on commit drop as
     select id from buyers
-     where zalo_user_id ~ '^(thu-|b15-|hoi-|z-|e2e-|b-)';
+     where public.la_id_thu(zalo_user_id);
   create temp table if not exists _tin_thu on commit drop as
     select id from listings where seller_id in (select id from _nguoi_thu);
   create temp table if not exists _conv_thu on commit drop as
@@ -2963,7 +3029,7 @@ begin
   delete from listings       where id in (select id from _tin_thu);
   get diagnostics v_tin = row_count;
   delete from conversations  where id in (select id from _conv_thu);
-  delete from chat_quota     where zalo_user_id ~ '^(thu-|b15-|hoi-|z-|e2e-|b-)';
+  delete from chat_quota     where public.la_id_thu(zalo_user_id);
   delete from buyers         where id in (select id from _khach_thu);
   get diagnostics v_khach = row_count;
   delete from sellers        where id in (select id from _nguoi_thu);
@@ -3760,6 +3826,16 @@ AS $function$
     select 1 from public.admins a
      where a.email = ((select auth.jwt()) ->> 'email')
   )
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.la_id_thu(p text)
+ RETURNS boolean
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'pg_catalog'
+AS $function$
+  select coalesce(p ~ '^(thu-|b15-|hoi-|z-|e2e-|b-|lx-|do-)', false)
 $function$
 ;
 
@@ -5483,33 +5559,15 @@ CREATE OR REPLACE FUNCTION public.reset_nguoi_test(p_zalo text)
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare
-  v_sellers uuid[]; v_buyers uuid[]; v_listings uuid[]; v_convs uuid[];
-  n_listings int := 0; n_msgs int := 0; n_convs int := 0; n_sellers int := 0; n_buyers int := 0;
 begin
+  -- 20260929a (FR-245): công cụ THỬ chỉ xoá được ID thử. Trước đây hàm xoá sạch bất kỳ Zalo ID nào đưa vào — gõ nhầm một
+  -- ID khách thật là mất tin, hội thoại, người bán của khách đó (không còn sao lưu, CLAUDE.md §6). Admin xoá khách thật
+  -- theo yêu cầu đi đường `admin_xoa_khach` (→ `xoa_nguoi_theo_zalo`).
   if coalesce(btrim(p_zalo), '') = '' then return jsonb_build_object('ok', false, 'ly_do', 'thiếu zalo'); end if;
-  select coalesce(array_agg(id), '{}') into v_sellers from sellers where zalo_user_id = p_zalo;
-  select coalesce(array_agg(id), '{}') into v_buyers  from buyers  where zalo_user_id = p_zalo;
-  select coalesce(array_agg(id), '{}') into v_listings from listings where seller_id = any(v_sellers);
-  select coalesce(array_agg(id), '{}') into v_convs from conversations where seller_id = any(v_sellers) or buyer_id = any(v_buyers);
-  delete from deals where listing_id = any(v_listings) or buyer_id = any(v_buyers);
-  delete from viewings where listing_id = any(v_listings) or buyer_id = any(v_buyers);
-  delete from listing_views where listing_id = any(v_listings);
-  delete from info_requests where listing_id = any(v_listings) or buyer_id = any(v_buyers);
-  delete from messages where conversation_id = any(v_convs);
-  get diagnostics n_msgs = row_count;
-  delete from conversations where id = any(v_convs);
-  get diagnostics n_convs = row_count;
-  update sellers set active_listing_id = null where id = any(v_sellers);
-  delete from listings where id = any(v_listings);
-  get diagnostics n_listings = row_count;
-  delete from sellers where id = any(v_sellers);
-  get diagnostics n_sellers = row_count;
-  delete from buyers where id = any(v_buyers);
-  get diagnostics n_buyers = row_count;
-  delete from chat_quota where zalo_user_id = p_zalo;
-  return jsonb_build_object('ok', true, 'listings', n_listings, 'messages', n_msgs,
-    'conversations', n_convs, 'sellers', n_sellers, 'buyers', n_buyers);
+  if not public.la_id_thu(p_zalo) then
+    return jsonb_build_object('ok', false, 'ly_do', 'không phải ID thử (la_id_thu) — chặn xoá dữ liệu thật');
+  end if;
+  return public.xoa_nguoi_theo_zalo(p_zalo);
 end $function$
 ;
 
@@ -5850,6 +5908,64 @@ begin
     from gui
   having count(*) > 0;
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.soat_du_lieu_tick()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare v_n int; v_tom text;
+begin
+  select coalesce(sum(so), 0), string_agg(loi || ' ' || so, ', ' order by so desc)
+    into v_n, v_tom
+    from (select split_part(x.loi, ':', 1) as loi, count(*) as so from public.soat_du_lieu_tin() x group by 1) g;
+  if v_n = 0 then return 0; end if;
+  -- Một tin mỗi ngày: tin hôm trước chưa gửi thì thay, không chất đống.
+  update reminders set status = 'cancelled'
+   where kind = 'report' and status = 'pending' and note like '🔎%';
+  insert into reminders (kind, due_at, note)
+  values ('report', now(), format('🔎 Soát dữ liệu tin: %s chỗ nghi lỗi (%s). Xem: select * from soat_du_lieu_tin();', v_n, v_tom));
+  return v_n;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.soat_du_lieu_tin()
+ RETURNS TABLE(ma text, loi text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  with tin as (
+    select l.id, l.code, l.price_raw, l.price_vnd, l.location_raw, l.ward, l.area_m2, l.frontage_m, l.length_m, l.description
+      from listings l join sellers s on s.id = l.seller_id
+     where not public.la_id_thu(s.zalo_user_id) and l.status <> 'an'
+  ), fact_moi as (
+    select distinct on (f.listing_id, f.question) f.listing_id, f.question, f.answer
+      from listing_facts f join tin on tin.id = f.listing_id
+     order by f.listing_id, f.question, f.created_at desc
+  )
+  select t.code, 'gia_dinh_phi' from tin t
+   where t.price_raw ~* '(^|\s)ph[ií]\s+(qu[ảa]n\s+l[ýy]|ql|d[ịi]ch\s+v[ụu]|b[ảa]o\s+tr[ìi])'
+  union all
+  select t.code, 'gia_khong_doc' from tin t
+   where t.price_raw is not null and t.price_vnd is null
+  union all
+  select t.code, 'dia_chi_dinh_phuong' from tin t
+   where t.location_raw ~* '(^|\s)(phường|phuong|p\.?)\s*[0-9]{1,2}\s*$'
+  union all
+  select t.code, 'dien_tich_lech' from tin t
+   where t.area_m2 > 0 and t.frontage_m > 0 and t.length_m > 0
+     and abs(t.area_m2 - t.frontage_m * t.length_m) > 0.25 * t.area_m2
+  union all
+  select t.code, 'fact_ca_cau:' || f.question from fact_moi f join tin t on t.id = f.listing_id
+   where f.question in ('phap_ly', 'phi_quan_ly', 'ket_cau', 'vi_tri', 'huong', 'noi_that', 'tang')
+     and length(f.answer) >= 40 and t.description is not null and btrim(f.answer) = btrim(t.description)
+  union all
+  select t.code, 'fact_tieng_dem:' || f.question from fact_moi f join tin t on t.id = f.listing_id
+   where f.question in ('ket_cau', 'phap_ly', 'huong', 'vi_tri') and f.answer ~* '^(à|ừ|ờ|thôi|nhầm)[\s,]'
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.stale_listing_tick()
@@ -6488,6 +6604,42 @@ begin
     'Khách: ' || coalesce(v_ten, '(chưa biết tên)') || E'\nGiờ hẹn: ' || v_gio
     || coalesce(E'\nSĐT khách: ' || new.phone, '') || E'\nTrạng thái: ' || new.status, v_listing);
   return null;
+end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.xoa_nguoi_theo_zalo(p_zalo text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_sellers uuid[]; v_buyers uuid[]; v_listings uuid[]; v_convs uuid[];
+  n_listings int := 0; n_msgs int := 0; n_convs int := 0; n_sellers int := 0; n_buyers int := 0;
+begin
+  if coalesce(btrim(p_zalo), '') = '' then return jsonb_build_object('ok', false, 'ly_do', 'thiếu zalo'); end if;
+  select coalesce(array_agg(id), '{}') into v_sellers from sellers where zalo_user_id = p_zalo;
+  select coalesce(array_agg(id), '{}') into v_buyers  from buyers  where zalo_user_id = p_zalo;
+  select coalesce(array_agg(id), '{}') into v_listings from listings where seller_id = any(v_sellers);
+  select coalesce(array_agg(id), '{}') into v_convs from conversations where seller_id = any(v_sellers) or buyer_id = any(v_buyers);
+  delete from deals where listing_id = any(v_listings) or buyer_id = any(v_buyers);
+  delete from viewings where listing_id = any(v_listings) or buyer_id = any(v_buyers);
+  delete from listing_views where listing_id = any(v_listings);
+  delete from info_requests where listing_id = any(v_listings) or buyer_id = any(v_buyers);
+  delete from messages where conversation_id = any(v_convs);
+  get diagnostics n_msgs = row_count;
+  delete from conversations where id = any(v_convs);
+  get diagnostics n_convs = row_count;
+  update sellers set active_listing_id = null where id = any(v_sellers);
+  delete from listings where id = any(v_listings);
+  get diagnostics n_listings = row_count;
+  delete from sellers where id = any(v_sellers);
+  get diagnostics n_sellers = row_count;
+  delete from buyers where id = any(v_buyers);
+  get diagnostics n_buyers = row_count;
+  delete from chat_quota where zalo_user_id = p_zalo;
+  return jsonb_build_object('ok', true, 'listings', n_listings, 'messages', n_msgs,
+    'conversations', n_convs, 'sellers', n_sellers, 'buyers', n_buyers);
 end $function$
 ;
 
@@ -7641,6 +7793,9 @@ grant execute on function public.admin_dang_tin(p jsonb) to service_role;
 revoke all on function public.admin_gan_bds_quan_tam(p_buyer_id uuid, p_code text) from public, anon, authenticated;
 grant execute on function public.admin_gan_bds_quan_tam(p_buyer_id uuid, p_code text) to authenticated;
 grant execute on function public.admin_gan_bds_quan_tam(p_buyer_id uuid, p_code text) to service_role;
+revoke all on function public.admin_khoi_phuc_lan_xoa(p_lan bigint) from public, anon, authenticated;
+grant execute on function public.admin_khoi_phuc_lan_xoa(p_lan bigint) to authenticated;
+grant execute on function public.admin_khoi_phuc_lan_xoa(p_lan bigint) to service_role;
 revoke all on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) from public, anon, authenticated;
 grant execute on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) to authenticated;
 grant execute on function public.admin_xoa_bds_quan_tam(p_buyer_id uuid, p_listing_id uuid) to service_role;
@@ -7851,6 +8006,10 @@ grant execute on function public.khu_khop(p_area_kd text, p_ward text, p_distric
 revoke all on function public.la_admin() from public, anon, authenticated;
 grant execute on function public.la_admin() to authenticated;
 grant execute on function public.la_admin() to service_role;
+revoke all on function public.la_id_thu(p text) from public, anon, authenticated;
+grant execute on function public.la_id_thu(p text) to anon;
+grant execute on function public.la_id_thu(p text) to authenticated;
+grant execute on function public.la_id_thu(p text) to service_role;
 revoke all on function public.lan_thu_ke(p_attempts integer) from public, anon, authenticated;
 grant execute on function public.lan_thu_ke(p_attempts integer) to service_role;
 revoke all on function public.liet_ke_migration() from public, anon, authenticated;
@@ -8003,6 +8162,10 @@ revoke all on function public.soat_db_cong_khai() from public, anon, authenticat
 grant execute on function public.soat_db_cong_khai() to anon;
 grant execute on function public.soat_db_cong_khai() to authenticated;
 grant execute on function public.soat_db_cong_khai() to service_role;
+revoke all on function public.soat_du_lieu_tick() from public, anon, authenticated;
+grant execute on function public.soat_du_lieu_tick() to service_role;
+revoke all on function public.soat_du_lieu_tin() from public, anon, authenticated;
+grant execute on function public.soat_du_lieu_tin() to service_role;
 revoke all on function public.stale_listing_tick() from public, anon, authenticated;
 grant execute on function public.stale_listing_tick() to service_role;
 revoke all on function public.sua_bot_prompt(p_key text, p_content text) from public, anon, authenticated;
@@ -8057,6 +8220,8 @@ revoke all on function public.viec_inbound_bo_roi(p_limit integer) from public, 
 grant execute on function public.viec_inbound_bo_roi(p_limit integer) to service_role;
 revoke all on function public.viewings_bao_ctv_va_email() from public, anon, authenticated;
 grant execute on function public.viewings_bao_ctv_va_email() to service_role;
+revoke all on function public.xoa_nguoi_theo_zalo(p_zalo text) from public, anon, authenticated;
+grant execute on function public.xoa_nguoi_theo_zalo(p_zalo text) to service_role;
 revoke all on function public.xuat_schema() from public, anon, authenticated;
 grant execute on function public.xuat_schema() to service_role;
 revoke all on function public.yeu_cau_quet_lai_zalo() from public, anon, authenticated;
@@ -8097,4 +8262,6 @@ select cron.schedule('nudge-tick', '7,37 1-13 * * *', 'select nudge_tick()');
 select cron.schedule('seller-drip-tick', '22,52 1-13 * * *', 'select seller_drip_tick()');
 select cron.schedule('seller-hoi-bu-tick', '*/5 1-13 * * *', 'select seller_hoi_bu_tick()');
 select cron.schedule('seller-keep-alive-tick', '30 2 * * *', 'select public.seller_keep_alive_tick()');
+select cron.schedule('soat-du-lieu-tick', '5 1 * * *', 'select public.soat_du_lieu_tick()');
 select cron.schedule('stale-listing-tick', '0 2 * * *', 'select public.stale_listing_tick()');
+

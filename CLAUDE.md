@@ -363,6 +363,14 @@ bucket `listing-public` không nằm trong bản sao nào, dựng lại được
 còn trên một ổ đĩa cá nhân. **Nhưng dựng cái tủ không phải là cất đồ vào tủ** — chừng
 nào chưa đẩy `masterDB/` lên thì lưới an toàn vẫn y như cũ.
 
+**Dữ liệu THỬ và THẬT tách bằng `la_id_thu(zalo)`** (FR-245, 29/09/2026). Đó là chỗ DUY NHẤT giữ tiền tố ID thử
+(`thu- b15- hoi- z- e2e- b- lx- do-`) — bắn thử production thì dùng đúng các tiền tố đó, thêm tiền tố mới là sửa hàm này.
+`reset_nguoi_test` từ chối ID thật; xoá khách thật chỉ qua `admin_xoa_khach`. Nút "Xoá hàng loạt" chép mọi dòng sang schema
+`luu_tru` trước khi xoá — khôi phục bằng `admin_khoi_phuc_lan_xoa(lan)`. Kho lưu cùng DB, KHÔNG phải sao lưu (OPEN-25);
+`xuat_schema()` không quét `luu_tru` nên dựng lại từ số không phải chạy thêm `20260929b` (như schema `so`).
+`soat_du_lieu_tin()` soi dấu vết lỗi bóc tách trên tin thật; workflow `apply-migration` in số đếm của nó và xuất
+`schema.sql` thành artifact (sinh lại schema không cần service_role trên máy).
+
 **Dữ liệu hội thoại đã dọn sạch 07/09.** Xoá 286 dòng bã kiểm thử: `messages` 69,
 `reminders` 192, `ctv_daily_reports` 15, `conversations` 3 (hai dòng
 `channel='zalo_personal_test'`), `buyers` 3 (một dòng `zalo_user_id='e2e-sweep-user'`),
