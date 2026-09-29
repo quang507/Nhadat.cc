@@ -2303,6 +2303,49 @@ fresh(seedKho);
       JSON.stringify({ khoa: fK(khoa), bs: fK("bo_sung"), rep: rK.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // FR-243 (29/09/2026, kịch bản K1–K10 qua bot giả lập) — mỗi ca ghi NGUYÊN NHÂN.
+  {
+    const cuCH = globalThis.__cauHinh;
+    // K3: câu rao đầu "4x12" (AI im) không vào diện tích → bot hỏi lại diện tích. Nguyên nhân: lúc tạo tin chỉ đọc "m2".
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+    await send({ external_user_id: "fr243-k3", text: "bán nhà hẻm Lý Thường Kiệt Q10 4x12 trệt 2 lầu giá 7 tỷ" });
+    const L3 = db().t.listings.at(-1);
+    const f3 = db().t.listing_facts.filter((f) => f.listing_id === L3?.id && f.question === "dien_tich");
+    check("FR243-E1 rao đầu '4x12' (AI im) → fact diện tích 4x12, không hỏi lại diện tích", f3.some((f) => /^4x12/.test(f.answer)) &&
+      !db().t.info_requests.some((q) => q.listing_id === L3?.id && q.status === "pending" && /^dien_tich/.test(q.question)),
+      JSON.stringify({ f3, ir: db().t.info_requests }));
+    // K7: "thôi em ơi nhà bán rồi" → gỡ; "à không, chưa bán, vẫn bán nha" → tin nằm luôn ở đã chốt. Nguyên nhân: `laRaoLai` đòi
+    // chữ rao/đăng/mở.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+    await send({ external_user_id: "fr243-k7", text: "bán nhà hẻm Phạm Thế Hiển Q8 60m2 giá 4 tỷ" });
+    const L7 = db().t.listings.at(-1);
+    await send({ external_user_id: "fr243-k7", text: "thôi em ơi nhà bán rồi" });
+    const daChot = L7?.status === "da_chot";
+    const r7 = await send({ external_user_id: "fr243-k7", text: "à không, chưa bán, vẫn bán nha" });
+    check("FR243-E2 báo bán rồi rút lời 'à không, chưa bán, vẫn bán nha' → mở lại tin", daChot && L7?.status === "cho_thong_tin" && /mở lại tin/.test((r7.body.replies ?? []).join(" ")),
+      JSON.stringify({ daChot, st: L7?.status, rep: r7.body.replies }));
+    // Không kích: chưa có lượt gỡ tin thì "chưa bán, vẫn bán nha" không đi nhánh mở lại.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+    await send({ external_user_id: "fr243-k7b", text: "bán nhà hẻm Phạm Thế Hiển Q8 60m2 giá 4 tỷ" });
+    const r7b = await send({ external_user_id: "fr243-k7b", text: "à không, chưa bán, vẫn bán nha" });
+    check("FR243-E3 không kích: chưa gỡ tin, 'chưa bán, vẫn bán nha' không trả lời 'không thấy tin nào đang gỡ'", !/đang gỡ để mở lại|mở lại tin/.test((r7b.body.replies ?? []).join(" ")), JSON.stringify(r7b.body.replies));
+    // K5: đang hỏi một câu, khách "đang trồng cây ăn trái" → bot đáp "em đăng liền cho anh chị". Nguyên nhân: bỏ dấu thì "đang" = "đăng",
+    // luật "chủ muốn đăng" khớp chữ "dang".
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+    await send({ external_user_id: "fr243-k5", text: "bán 1000m2 đất vườn Củ Chi, có 100 thổ cư, giá 3 tỷ 2" });
+    const L5 = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: L5.id, question: "vi_tri", status: "pending" });
+    const r5 = await send({ external_user_id: "fr243-k5", text: "đang trồng cây ăn trái" });
+    check("FR243-E4 'đang trồng cây ăn trái' không bị hiểu là giục đăng; ghi hiện trạng", !/đăng liền/.test((r5.body.replies ?? []).join(" ")) && r5.body.chu_muon_dang !== true &&
+      db().t.listing_facts.some((f) => f.listing_id === L5.id && f.question === "hien_trang_su_dung"),
+      JSON.stringify({ rep: r5.body.replies, facts: db().t.listing_facts.filter((f) => f.listing_id === L5.id) }));
+    globalThis.__cauHinh = cuCH;
+  }
   // 27/09/2026 (chủ dự án test Zalo): "Ngang có 3 m" rồi "Nhưng dài tới 14 m" khi bot đang hỏi kết cấu (chế độ chinh, AI im)
   // → diện tích "ngang 3m dài 14m", không rơi bổ sung.
   {

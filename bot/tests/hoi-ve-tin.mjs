@@ -50,5 +50,13 @@ ok("dapHoiVeTin trạng thái đang bán", /lên kệ rồi/.test(dapHoiVeTin("t
 ok("FR239 'Là bao nhiêu vậy em nhớ không' → gia", hoiVeTin("Là bao nhiêu vậy em nhớ không") === "gia", String(hoiVeTin("Là bao nhiêu vậy em nhớ không")));
 ok("FR239 'nhà em rộng bao nhiêu m2 nhỉ' vẫn là dien_tich", hoiVeTin("nhà em rộng bao nhiêu m2 nhỉ") !== "gia", String(hoiVeTin("nhà em rộng bao nhiêu m2 nhỉ")));
 
+// FR-243 (kịch bản K9, 29/09/2026): "đăng ở đâu vậy em?" từng được đáp bằng trạng thái. Nguyên nhân: luật trạng thái chỉ soi chữ
+// "đăng", và bỏ dấu thì "đang" = "đăng". Nay có loại "noi_dang"; câu có dấu mà là "đang" thì không tính là "đăng".
+ok("FR243 'đăng ở đâu vậy em?' → noi_dang", hoiVeTin("đăng ở đâu vậy em?") === "noi_dang", String(hoiVeTin("đăng ở đâu vậy em?")));
+ok("FR243 dapHoiVeTin noi_dang nói nơi đăng + trạng thái", /web AI Ơi Nhà Đất/.test(dapHoiVeTin("noi_dang", { status: "cho_thong_tin" }, { quan_tam: 0, hoi: 0 }, "anh")) && /chưa lên kệ/.test(dapHoiVeTin("noi_dang", { status: "cho_thong_tin" }, { quan_tam: 0, hoi: 0 }, "anh")));
+ok("FR243 không kích: 'đăng chưa em?' vẫn trạng thái", hoiVeTin("đăng chưa em?") === "trang_thai", String(hoiVeTin("đăng chưa em?")));
+ok("FR243 không kích: 'nhà đang cho thuê không em?' KHÔNG phải trạng thái tin", hoiVeTin("nhà đang cho thuê không em?") !== "trang_thai", String(hoiVeTin("nhà đang cho thuê không em?")));
+ok("FR243 không kích: 'đang ở đâu vậy em?' không phải nơi đăng", hoiVeTin("đang ở đâu vậy em?") !== "noi_dang", String(hoiVeTin("đang ở đâu vậy em?")));
+
 console.log(hong ? `\nHỎI VỀ TIN: ${hong}/${tong} CA HỎNG` : `\nHỎI VỀ TIN: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

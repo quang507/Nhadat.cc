@@ -169,7 +169,7 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       // 24/09/2026 (bắn 10 tin): "toà nhà CHDV 20 phòng" / "20 phòng như em nói đó" thành 20 PHÒNG NGỦ — phòng cho thuê
       // không phải phòng ngủ. Phòng ngủ phải có chữ ngủ / PN trong cụm trích.
       if (!soTrong(cum, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05))) return "so_khong_co_trong_trich_dan";
-      return d.khoa === "so_phong_ngu" && !/\b(ngu|pn|phong ngu)\b|\d\s*pn\b/.test(kd) ? "khong_noi_phong_ngu" : null;
+      return d.khoa === "so_phong_ngu" && !/\b(ngu|pn|phong ngu)\b|\d\s*pn(?![a-z])/.test(kd) ? "khong_noi_phong_ngu" : null;
     }
     case "loai_giao_dich": {
       // "sang nhượng MẶT BẰNG" là thuê (lượt đo bóng 14/09 model nói "ban" và lọt); "sang

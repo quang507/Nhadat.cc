@@ -42,7 +42,7 @@ import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: m�
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
 import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
-import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
 import { cauChonPhuong, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, cauTraPhuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, tachTienToPhuong } from "../_shared/extraction/tra-phuong.ts";
@@ -65,7 +65,7 @@ import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
-  batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, laRaoLai, NHAN_HOI_LAI, nhanDienFact,
+  batXungHo, bocViTriRao, chonCanTheoCau, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, laRaoLai, laRutLoiBan, NHAN_HOI_LAI, nhanDienFact,
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
@@ -2852,7 +2852,9 @@ Deno.serve(async (req) => {
     // một tiếng là em mở lại liền" mà chưa có luật nào nhận (câu này từng bị nuốt làm điểm chấm). Tin đã gỡ
     // (da_chot/an) của người này: một căn thì mở luôn, nhiều căn thì chọn theo số thứ tự / loại / địa chỉ, không
     // rõ thì hỏi. Đã duyệt trước đó → lên kệ lại (dang_ban); chưa → cho_thong_tin.
-    if (laRaoLai(text) && !laNgungRao(text)) {
+    // 29/09/2026 (kịch bản K7): "à không, chưa bán, vẫn bán nha" ngay sau lượt bot gỡ tin → rút lại lời báo bán, mở lại tin.
+    const botVuaGoTin = /gỡ tin khỏi kệ|đã ngưng rao căn/.test(lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-3).map((m) => m.body ?? "").join(" "));
+    if ((laRaoLai(text) || (botVuaGoTin && laRutLoiBan(text))) && !laNgungRao(text)) {
       type CanGo = { id: string; code: string | null; location_raw: string | null; ward: string | null; property_type: string | null; chu_duyet_at: string | null };
       const { data: daGo, error: dgoErr } = await client.from("listings").select("id, code, location_raw, ward, property_type, chu_duyet_at")
         .eq("seller_id", sellerRow.id).in("status", ["da_chot", "an"]).order("created_at", { ascending: true }).limit(10);
@@ -4219,7 +4221,9 @@ Deno.serve(async (req) => {
       // "ok / được / đăng đi" khi đang treo một câu thông số → chủ muốn ĐĂNG.
       // "ừ / dạ / vâng" trơ trọi chỉ là ừ (ack), KHÔNG phải muốn đăng (lần 3: "ừ"
       // làm hết hạn câu hẻm rồi đòi đăng tin 51 điểm).
-      const kdDang = boDau(dapAn).replace(/[^a-z0-9\s]/g, " ").trim();
+      // 29/09/2026 (kịch bản K5): "đang trồng cây ăn trái" bỏ dấu là "dang trong…" — chữ "dang" khớp luật "đăng", bot đáp "em
+      // đăng liền cho anh chị". Câu có dấu thì "đang" (không phải "đăng") thay bằng chữ không đọc được TRƯỚC khi bỏ dấu.
+      const kdDang = boDau(dapAn.replace(/(?<![\p{L}])[đĐ]ang(?![\p{L}])/gu, "dxng")).replace(/[^a-z0-9\s]/g, " ").trim();
       // FR-229 (bắn e2e PL229-E3): câu "các bên đồng ý bán chưa" / "giá còn thương lượng không" — "đồng ý", "được", "ok" là
       // ĐÁP ÁN, không phải bảo đăng (trước đó "đồng ý hết rồi" bỏ luôn các câu pháp lý còn lại).
       // 27/09/2026 (test Zalo): bot hỏi "Ô tô vào được tận nhà không anh?", khách "Ok" → bị hiểu là "đăng đi". Câu bot vừa hỏi là
@@ -4229,7 +4233,7 @@ Deno.serve(async (req) => {
       const chuMuonDang = pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
         pendingReq.question !== "danh_gia" && pendingReq.question !== "hinh_anh" &&
         pendingReq.question !== "dong_y_ban" && pendingReq.question !== "thuong_luong" &&
-        !(botVuaHoiCoKhong && !/\b(?:dang|len tin|len ke|post)\b/.test(boDau(dapAn))) &&
+        !(botVuaHoiCoKhong && !/\b(?:dang|len tin|len ke|post)\b/.test(kdDang)) &&
         (kdDang.split(/\s+/).length <= 6 &&
           (laDuRoi(dapAn) || /\b(dang|len tin|len ke|post)\b/.test(kdDang) ||
             (laDongY(dapAn) && /\b(ok|oke|okie|duoc|dc|chot|dong y|xong)\b/.test(kdDang))) ||
@@ -5064,12 +5068,14 @@ Deno.serve(async (req) => {
       // mặt FR-144 sinh ra để tránh. Giá/phường vào cột ngay lúc insert như cũ.
       // 14/09/2026: "diện tích 62,5m²" từng không ra diện tích (chỉ biết "m2").
       const dtRao = aiRao?.dienTich ?? (aiRao?.ngang != null && aiRao?.dai != null ? null : dienTichCauRao(tKD));
+      // 29/09/2026 (kịch bản K3/K8/K9/K10): AI im thì "4x12" trong câu rao không vào diện tích (chỉ đọc "m2") → bot hỏi lại.
+      const ndRao = aiRao?.ngang != null && aiRao?.dai != null ? [aiRao.ngang, aiRao.dai] : !aiRao && dtRao == null ? ngangDaiCauRao(tKD) : null;
       const areaM = dtRao != null
         ? [String(dtRao), String(dtRao)]
-        : aiRao?.ngang != null && aiRao?.dai != null ? [`${aiRao.ngang}x${aiRao.dai}`, `${aiRao.ngang}x${aiRao.dai}`] : null;
+        : ndRao ? [`${ndRao[0]}x${ndRao[1]}`, `${ndRao[0]}x${ndRao[1]}`] : null;
       const pnM = aiRao?.soPhongNgu != null
         ? [String(aiRao.soPhongNgu), String(aiRao.soPhongNgu)]
-        : /(\d{1,2})\s*(?:phong ngu|\bpn\b)/.exec(tKD);
+        : /(\d{1,2})\s*(?:phong ngu|pn(?![a-z]))/.exec(tKD);
       // 11/09/2026 (42 ca): "giá 75 triệu/m2, diện tích 50m2" → căn lên web giá 75
       // triệu. parse_vnd nay trả NULL cho giá mỗi m²; có diện tích thì ghi giá CẢ
       // CĂN (75 triệu × 50m2) và nói rõ trong bong bóng ghi nhận là em đã nhân.

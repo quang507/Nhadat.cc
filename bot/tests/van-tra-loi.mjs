@@ -12,7 +12,7 @@ import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo, giuCauDungTen, suaGapTheoDeal, boGhiNhanSuong, boKhenThiTruong, goiDat } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { laGatHoiVai, laCauChungChung } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
-import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao, laRaoLai, laRutLoiBan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -991,6 +991,29 @@ for (const [q, c, m] of [["phap_ly", "sổ chung", true], ["phap_ly", "sổ hồ
   // K5 — nguyên nhân: luật thổ cư bắt buộc đơn vị m2/%.
   ok("FR242-5 'có 100 thổ cư' → thổ cư 100m2", a("có 100 thổ cư", "tho_cu") === "100m2", JSON.stringify(nhanDienNhieuFact("có 100 thổ cư")));
   ok("FR242-5 không kích: 'thổ cư 60m2' giữ nguyên", a("thổ cư 60m2", "tho_cu") === "60m2");
+
+  // FR-243 (29/09/2026, 10 kịch bản K1–K10 chạy qua bot giả lập): mỗi ca ghi NGUYÊN NHÂN.
+  // (a) "2pn2wc" gõ dính → không có phòng ngủ/WC. Nguyên nhân: luật đòi biên từ `\b` sau "pn" và trước số WC; "n2", "n2w" liền chữ.
+  ok("FR243-a '2pn2wc' → 2 PN, 2 WC", a("ban can ho 2pn2wc the sun avenue q2", "so_phong_ngu") === "2" && a("ban can ho 2pn2wc the sun avenue q2", "so_wc") === "2", JSON.stringify(nhanDienNhieuFact("ban can ho 2pn2wc the sun avenue q2")));
+  ok("FR243-a không kích: '3 phòng ngủ 2 wc' giữ nguyên", a("3 phòng ngủ 2 wc", "so_phong_ngu") === "3" && a("3 phòng ngủ 2 wc", "so_wc") === "2");
+  ok("FR243-a không kích: 'toà nhà CHDV 20 phòng' không thành phòng ngủ", !q("toà nhà CHDV 20 phòng").includes("so_phong_ngu"));
+  // (b) "à không, chưa bán, vẫn bán nha" sau khi báo bán rồi → tin nằm ở đã chốt. Nguyên nhân: `laRaoLai` đòi chữ rao/đăng/mở.
+  ok("FR243-b 'à không, chưa bán, vẫn bán nha' → rút lời báo bán", laRutLoiBan("à không, chưa bán, vẫn bán nha") && !laNgungRao("à không, chưa bán, vẫn bán nha"));
+  ok("FR243-b không kích: 'chưa bán em' (không khẳng định vẫn bán) không phải rút lời", !laRutLoiBan("chưa bán em"));
+  ok("FR243-b không kích: 'chưa bán hả em?' là câu hỏi", !laRutLoiBan("chưa bán hả em?"));
+  ok("FR243-b không kích: 'nhà bán rồi' vẫn là báo bán", laNgungRao("thôi em ơi nhà bán rồi") === "ban_roi" && !laRutLoiBan("thôi em ơi nhà bán rồi"));
+  // (c) đất vườn "đang trồng cây ăn trái" → không có hiện trạng. Nguyên nhân: luật hiện trạng chỉ biết nhà (ở / cho thuê / trống).
+  ok("FR243-c 'đang trồng cây ăn trái' → hiện trạng", a("đang trồng cây ăn trái", "hien_trang_su_dung") === "đang trồng cây ăn trái", JSON.stringify(nhanDienNhieuFact("đang trồng cây ăn trái")));
+  ok("FR243-c không kích: 'đất trong hẻm 4m' không phải hiện trạng", !q("đất trong hẻm 4m").includes("hien_trang_su_dung"));
+  ok("FR243-c không kích: 'nhà trong hẻm' vẫn không phải hiện trạng", !q("nhà trong hẻm").includes("hien_trang_su_dung"));
+  // (d) thương lượng ra "con thuong luong". Nguyên nhân: luật FACT_PHU trả đoạn khớp trên chữ BỎ DẤU.
+  ok("FR243-d 'giá 11 tỷ 5 còn thương lượng' → thương lượng giữ dấu", a("giá 11 tỷ 5 còn thương lượng", "thuong_luong") === "còn thương lượng", JSON.stringify(nhanDienNhieuFact("giá 11 tỷ 5 còn thương lượng")));
+  // (e) "đường xe tải vào tận nơi" trả lời câu phường → ghi thành ĐỊA CHỈ. Nguyên nhân: `bocViTriRao` coi chữ sau "đường" (bỏ qua
+  // chữ tả đường xe/tải/vào) là tên đường, "tận nơi" lọt vào làm tên.
+  ok("FR243-e 'đường xe tải vào tận nơi' không phải địa chỉ", bocViTriRao("đường xe tải vào tận nơi") === null, String(bocViTriRao("đường xe tải vào tận nơi")));
+  ok("FR243-e không kích: 'đường Tân Kỳ Tân Quý' giữ nguyên", bocViTriRao("đường Tân Kỳ Tân Quý") === "đường Tân Kỳ Tân Quý", String(bocViTriRao("đường Tân Kỳ Tân Quý")));
+  ok("FR243-e không kích: 'duong tan ky tan quy' (không dấu) giữ nguyên", bocViTriRao("duong tan ky tan quy") === "duong tan ky tan quy", String(bocViTriRao("duong tan ky tan quy")));
+  ok("FR243-e không kích: 'hẻm xe hơi Tân Hương' giữ nguyên", bocViTriRao("hẻm xe hơi Tân Hương q tân phú") === "hẻm xe hơi Tân Hương", String(bocViTriRao("hẻm xe hơi Tân Hương q tân phú")));
 }
 ok("FR241-N10b hiện trạng có dấu giữ nguyên", chuanHienTrang("đang cho thuê 20 triệu") === "đang cho thuê 20 triệu");
 
