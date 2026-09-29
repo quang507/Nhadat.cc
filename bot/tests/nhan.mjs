@@ -16,6 +16,9 @@ la("nhà cũ tiện xây mới, không ngập", ["khong_ngap"]);
 la("sân vườn hồ bơi thang máy", ["thang_may", "san_vuon", "ho_boi"]);
 la("chưa có thang máy, nhà mới xây", ["moi_sua"]);
 la("mặt bằng phù hợp quán ăn", ["kinh_doanh"]);
+// FR-244 (kịch bản L1, 29/09/2026): "view hồ bơi" từng gắn "view công viên". Nguyên nhân: mẫu "view hồ" (hồ nước) khớp luôn "view hồ bơi".
+la("view hồ bơi", ["ho_boi"]);
+la("view hồ Bán Nguyệt", ["view_cong_vien"]);
 // 20/09 (4 kịch bản mới, mau-y-*): "ngõ" miền Bắc, "xe hơi vào được nhà" của khách mua.
 la("ngõ 3 mét, ngõ thông không ngập, gần trường cấp 1", ["gan_truong", "hem_thong", "khong_ngap"]);
 la("khu yên tĩnh gần chợ xe hơi vào được nhà", ["yen_tinh", "gan_cho", "xe_hoi_vao_nha"]);

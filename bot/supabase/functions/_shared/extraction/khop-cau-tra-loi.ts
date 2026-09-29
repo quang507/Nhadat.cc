@@ -1133,6 +1133,9 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   ["so_phong_ngu", /(?<!\b(?:chdv|dich vu|toa nha|nha tro|day tro|phong tro)\b[^,.;]{0,12})(?<![\d.,])(\d{1,2})\s*(?:phong ngu|pn|phong)(?![a-z])(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
   ["so_phong", /\b(?:chdv|can ho dich vu|toa nha|nha tro|day tro)\b[^,.;]{0,12}?\b(\d{1,3})\s*phong\b(?!\s*(?:ngu|wc|tam|ve sinh))/, (m) => m[1]],
   ["so_wc", /(?:\b|(?<=[a-z]))(\d{1,2})\s*(?:wc|toilet|ve sinh)(?![a-z])/, (m) => m[1]],
+  // 29/09/2026 (kịch bản L1): căn hộ "block V3 tầng 12 76m2" — câu rao một mảnh, luật cả câu trả phí quản lý nên tầng rơi. Tầng
+  // CĂN NẰM chỉ tính khi câu nói căn hộ / chung cư (nhà phố "tầng 1 cho thuê" là tầng của nhà).
+  ["tang", /(?<=\b(?:can ho|chung cu|cc|officetel|penthouse)\b.*)\btang\s+(\d{1,2})\b(?!\s*(?:lau|tret|lung|tam|ham))/, (m) => m[1]],
   ["huong", /\bhuong\s*((?:dong|tay|nam|bac)(?:\s*(?:dong|tay|nam|bac))?)\b/, (m) => `hướng ${m[1]}`],
   // 13/09/2026: "ngang 5 dài 20" giữ CẢ hai chiều — đáp án "5m" làm mất chiều dài
   // (SQL `boc_thong_so` đọc được "ngang 5m dài 20m" ra frontage + length).
@@ -1273,18 +1276,19 @@ export function nhanDienNhieuCan(text: string): CanTrongTin[] {
  * đúc 3 tấm" → [{thu: 2, manh: "sổ hồng riêng, có thương lượng."}, {thu: 1, manh: "đúc 3 tấm"}].
  * Số ngay sau "căn" mà kèm đơn vị (2 pn, 2 x 10, 2 tấm) thì không phải thứ tự. (15/09/2026)
  */
-export function tachTheoCan(text: string): Array<{ thu: number; manh: string }> {
-  const out: Array<{ thu: number; manh: string }> = [];
+export function tachTheoCan(text: string): Array<{ thu: number; manh: string; nhan?: string }> {
+  const out: Array<{ thu: number; manh: string; nhan?: string }> = [];
   const re = /(?:^|[\s,;.])(?:căn|can|lô|lo)\s+(?:số\s+|so\s+|thứ\s+|thu\s+)?(\d{1,2})(?![\d])(?!\s*(?:x\s*\d|m2|m\b|tỷ|ty|tỉ|ti|tỏi|toi|triệu|trieu|tr\b|pn|phòng|phong|lầu|lau|tầng|tang|tấm|tam|mét|met|wc))/giu;
-  const moc: Array<{ thu: number; bat: number; het: number }> = [];
+  const moc: Array<{ thu: number; bat: number; het: number; nhan?: string }> = [];
   for (let m = re.exec(text); m; m = re.exec(text)) moc.push({ thu: Number(m[1]), bat: m.index, het: m.index + m[0].length });
   // 23/09/2026: "căn B …" — chữ in hoa làm thứ tự (A=1, B=2…), cùng luật `nhanDienNhieuCan`.
   const reChu = /(?:^|[\s,;.])(?:[Cc]ăn|[Cc]an|[Ll]ô|[Ll]o)\s+([A-H])(?![\p{L}\d])/gu;
-  for (let m = reChu.exec(text); m; m = reChu.exec(text)) moc.push({ thu: m[1].charCodeAt(0) - 64, bat: m.index, het: m.index + m[0].length });
+  // 29/09/2026 (kịch bản L10): giữ chữ khách gọi ("căn B") để bong bóng không đổi thành "căn 2".
+  for (let m = reChu.exec(text); m; m = reChu.exec(text)) moc.push({ thu: m[1].charCodeAt(0) - 64, bat: m.index, het: m.index + m[0].length, nhan: m[1] });
   moc.sort((a, b) => a.bat - b.bat);
   for (let i = 0; i < moc.length; i++) {
     const manh = text.slice(moc[i].het, i + 1 < moc.length ? moc[i + 1].bat : undefined).replace(/^[\s:,.-]+|[\s,.]+$/g, "");
-    if (manh.length >= 2) out.push({ thu: moc[i].thu, manh });
+    if (manh.length >= 2) out.push({ thu: moc[i].thu, manh, ...(moc[i].nhan ? { nhan: moc[i].nhan } : {}) });
   }
   return out;
 }
@@ -1294,6 +1298,11 @@ export function tachTheoCan(text: string): Array<{ thu: number; manh: string }> 
  * `nhanDienFact` (trả MỘT kết quả — câu có "5x18" thì diện tích khớp trước) và đuôi "tám trăm" sau "tỷ" chưa được nhận.
  */
 export const GIA_CHU_RE = /\b(?:muoi|mot|hai|ba|bon|nam|sau|bay|tam|chin)(?:\s+(?:muoi|mot|hai|ba|bon|nam|lam|sau|bay|tam|chin|tram))*\s+(?:ty|toi|trieu|tram)\b(?:\s+(?:ruoi|(?:mot|hai|ba|bon|tu|nam|sau|bay|tam|chin)(?:\s+tram)?)\b(?!\s*(?!(?:nha|nhe|nhen|em|a|anh|chi|thoi|luon)\b)[a-z0-9]))?/;
+
+const CUM_KHOA: Record<string, RegExp> = {
+  phap_ly: /\b(?:so hong|so do|so chung|so rieng|hoan cong|vi bang|hdmb|hop dong mua ban|shr|srh|shrr|shc|giay tay)(?:\s+(?:rieng|chung|hong|do|hoan cong|hc|shr|shc|du|day du|lau dai|chinh chu|ca nhan|roi|san|cam tay|so hong|so do))*\b/,
+  phi_quan_ly: /\bphi\s+(?:quan ly|ql|dich vu|bao tri)(?:\s*(?:la|khoang|tam)?\s*\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr|d|dong)?(?:\s*\/\s*(?:m2|thang|th|can))?)?/,
+};
 
 export function nhanDienNhieuFact(text: string): NhanDien[] {
   const out: NhanDien[] = [];
@@ -1316,7 +1325,14 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
   // làm đáp án thì đó là rác — "anh cần bán căn nhà hẻm xe hơi 5m Nguyễn Trãi…"
   // thành fact độ rộng hẻm, "ngang 5 dài 20, đường nhựa 7m, sổ riêng" thành pháp
   // lý. Các mảnh đã được xét riêng ở trên; cả câu chỉ còn được góp đáp án ĐÃ CẮT.
-  const caCau = nhanDienFact(text);
+  let caCau = nhanDienFact(text);
+  // 29/09/2026 (kịch bản L1/L6/L9): câu rao MỘT mảnh (không dấu phẩy) mà luật cả câu trả nguyên câu làm đáp án — "bán căn hộ …
+  // giá 4ty6 phí quản lý 15k/m2" thành phí quản lý = cả câu, "…gia 7t8 shr hc" / "bán nhà giấy tay…" thành pháp lý = cả câu.
+  // Cắt đúng cụm của khoá đó; không cắt được thì bỏ (vòng quét bên dưới còn bắt các ý khác).
+  if (caCau && manh.length <= 1 && caCau.answer === text.trim() && text.trim().split(/\s+/).length >= 8 && CUM_KHOA[caCau.question]) {
+    const mk = CUM_KHOA[caCau.question].exec(boDauGiuDoDai(text));
+    caCau = mk ? { ...caCau, answer: text.slice(mk.index, mk.index + mk[0].length).trim() } : null;
+  }
   if (manh.length <= 1 || (caCau && caCau.answer !== text.trim())) them(caCau);
   const kd = boDau(text);
   const kdD = boDauGiuDoDai(text);
@@ -1335,6 +1351,12 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
     // thuê, không phải giá mong muốn — luật hiện trạng (đang cho thuê) lo.
     if (m && q === "gia" && TRUOC_LA_THUE.test(kd.slice(Math.max(0, m.index - 30), m.index))) continue;
     if (m) them({ question: q, answer: lay(m) });
+  }
+  // 29/09/2026 (kịch bản L7): địa chỉ nay cắt trước chữ phường ("đường Phan Văn Trị phường 10" → "đường Phan Văn Trị") — phường số
+  // phải đi thành ô riêng, không thì mất cùng đoạn bị cắt.
+  if (out.some((f) => f.question === "vi_tri") && !out.some((f) => f.question === "phuong")) {
+    const mp = /(?:^|\s)(?:phuong|p\.?)\s*(\d{1,2})(?!\d)/.exec(kd);
+    if (mp) them({ question: "phuong", answer: `Phường ${Number(mp[1])}` });
   }
   // Giá bằng chữ (xem GIA_CHU_RE) — vòng trên chỉ biết giá chữ số. Cùng ngưỡng 100 triệu, cùng luật "không đứng sau chữ thuê".
   if (!out.some((f) => f.question === "gia")) {
@@ -1550,7 +1572,8 @@ export function nhanDienFact(text: string): NhanDien | null {
     // 17/09/2026 (Zalo thật): "Chào cháu, cô có căn nhà hẻm 4m Trần Hưng Đạo quận 5, 50m2, giá 5 tỷ 8…"
     // từng vào NGUYÊN CÂU làm vị trí (location_raw = cả câu, street = "Chào cháu"). Câu dài /
     // có dấu phẩy thì chỉ lấy mệnh đề địa chỉ (`bocViTriRao`), không lấy cả câu.
-    const dai = goc.length > 40 || /[,;]/.test(goc);
+    // 29/09/2026 (kịch bản L7): "đường Phan Văn Trị phường 10" — phường đi riêng (ô phường), không dính vào địa chỉ.
+    const dai = goc.length > 40 || /[,;]/.test(goc) || /(?:^|\s)(?:phường|phuong|p\.?)\s*\d{1,2}(?!\d)/iu.test(goc);
     return { question: "vi_tri", answer: dai ? (bocViTriRao(goc) ?? goc) : goc };
   }
   // 22/09/2026 (kịch bản D): "nhà cô đang cho thuê 30 triệu/tháng" là DÒNG TIỀN đang thu (doanh_thu →
@@ -1645,7 +1668,10 @@ export function nhanDienFact(text: string): NhanDien | null {
   // 20260909i: "xây tối đa 5 tầng" là TẦNG CAO CHO PHÉP của lô đất, không phải kết cấu nhà.
   if ((m = /\b(?:xay|cao)\s*(?:toi da|duoc)\s*(\d{1,2})\s*(?:tang|lau|tam)\b/.exec(kd))) return { question: "tang_cao_toi_da", answer: m[1] };
   if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:lau|tang|tam)\b/.exec(kd)) || /\btret\b/.test(kd)) {
-    return { question: "ket_cau", answer: goc };
+    // 29/09/2026 (kịch bản L8): "à nhà 2 lầu thôi" (sửa lại) từng ghi nguyên câu — bỏ tiếng đệm đầu / cuối.
+    const gonKc = goc.replace(/^(?:(?:à|ừ|ờ|ồ|dạ|thôi|nhầm|à nhầm)\s*,?\s*)+/iu, "")
+      .replace(/(?:\s+(?:thôi|nha|nhé|nhe|em|ạ|a))+\s*[.!]*$/iu, "").trim();
+    return { question: "ket_cau", answer: gonKc || goc };
   }
   if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:phong ngu|pn)(?![a-z])/.exec(kd))) {
     return { question: "so_phong_ngu", answer: m[1] };

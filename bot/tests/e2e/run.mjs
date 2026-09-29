@@ -2344,6 +2344,21 @@ fresh(seedKho);
     check("FR243-E4 'đang trồng cây ăn trái' không bị hiểu là giục đăng; ghi hiện trạng", !/đăng liền/.test((r5.body.replies ?? []).join(" ")) && r5.body.chu_muon_dang !== true &&
       db().t.listing_facts.some((f) => f.listing_id === L5.id && f.question === "hien_trang_su_dung"),
       JSON.stringify({ rep: r5.body.replies, facts: db().t.listing_facts.filter((f) => f.listing_id === L5.id) }));
+    // FR-244 (kịch bản L1): căn hộ "…giá 4ty6 phí quản lý 15k/m2" → giá dính "phí quản lý", fact phí quản lý là NGUYÊN câu rao,
+    // tầng 12 mất. Nguyên nhân: đuôi giá không dừng trước "phí quản lý"; câu một mảnh thì luật cả câu trả nguyên văn.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+    await send({ external_user_id: "fr244-l1", text: "bán căn hộ Sunrise City q7 block V3 tầng 12 76m2 2pn 2wc giá 4ty6 phí quản lý 15k/m2" });
+    const L1 = db().t.listings.at(-1);
+    const f1 = (k) => db().t.listing_facts.filter((f) => f.listing_id === L1?.id && f.question === k).map((f) => f.answer);
+    check("FR244-E1 căn hộ: giá không dính phí quản lý; phí quản lý cắt đúng cụm; tầng 12 được ghi", L1?.price_raw === "4ty6" &&
+      f1("phi_quan_ly").join() === "phí quản lý 15k/m2" && f1("tang").includes("12"), JSON.stringify({ gia: L1?.price_raw, pql: f1("phi_quan_ly"), tang: f1("tang") }));
+    // FR-244 (kịch bản L10): NMG nói "căn B sổ hồng riêng" → bong bóng "căn 2 pháp lý". Nguyên nhân: tachTheoCan bỏ chữ khách gọi.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };
+    await send({ external_user_id: "fr244-l10", text: "em có 3 căn: căn A hẻm 4m Trần Hưng Đạo Q5 3x12 giá 4 tỷ, căn B mặt tiền Hùng Vương Q5 4x20 giá 25 tỷ, căn C hẻm 2m An Dương Vương Q5 3x8 giá 2 tỷ 8" });
+    const r10 = await send({ external_user_id: "fr244-l10", text: "căn B sổ hồng riêng" });
+    check("FR244-E2 'căn B sổ hồng riêng' → bong bóng nói 'căn B', không 'căn 2'", /căn B pháp lý/.test((r10.body.replies ?? []).join(" ")) && !/căn 2 pháp lý/.test((r10.body.replies ?? []).join(" ")), JSON.stringify(r10.body.replies));
     globalThis.__cauHinh = cuCH;
   }
   // 27/09/2026 (chủ dự án test Zalo): "Ngang có 3 m" rồi "Nhưng dài tới 14 m" khi bot đang hỏi kết cấu (chế độ chinh, AI im)

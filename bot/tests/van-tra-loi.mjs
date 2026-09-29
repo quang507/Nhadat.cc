@@ -493,7 +493,7 @@ ok("boCauVongLai: câu hỏi mới 'Mình cần mấy phòng ngủ ạ?' giữ",
   const n = nhanDienNhieuCan("Sale bên em đang giữ 2 căn hộ The Everrich Infinity q5: căn A 1pn 52m2 giá 4.8 tỷ, căn B 2pn 80m2 giá 7 tỷ 1, full nội thất");
   ok("nhanDienNhieuCan: 'căn A …, căn B …' → 2 căn, thứ tự 1 và 2", n.length === 2 && n[0].thu === 1 && n[1].thu === 2 && n[1].gia === "7 tỷ 1", JSON.stringify(n));
   ok("nhanDienNhieuCan: 'căn A12-05' là mã căn, không phải thứ tự", nhanDienNhieuCan("căn A12-05 giá 3 tỷ, căn B7-01 giá 4 tỷ").every((c) => !c.thu));
-  ok("tachTheoCan: 'căn B sổ hồng riêng' → thứ tự 2", JSON.stringify(tachTheoCan("căn B sổ hồng riêng, căn A đúc 3 tấm")) === JSON.stringify([{ thu: 2, manh: "sổ hồng riêng" }, { thu: 1, manh: "đúc 3 tấm" }]), JSON.stringify(tachTheoCan("căn B sổ hồng riêng, căn A đúc 3 tấm")));
+  ok("tachTheoCan: 'căn B sổ hồng riêng' → thứ tự 2", JSON.stringify(tachTheoCan("căn B sổ hồng riêng, căn A đúc 3 tấm")) === JSON.stringify([{ thu: 2, manh: "sổ hồng riêng", nhan: "B" }, { thu: 1, manh: "đúc 3 tấm", nhan: "A" }]), JSON.stringify(tachTheoCan("căn B sổ hồng riêng, căn A đúc 3 tấm")));
 }
 
 ok("boCanBia: 'căn này hẻm xe hơi 4m P12, 50m2, 7,9 tỷ' → bỏ cả bong bóng",
@@ -1014,6 +1014,26 @@ for (const [q, c, m] of [["phap_ly", "sổ chung", true], ["phap_ly", "sổ hồ
   ok("FR243-e không kích: 'đường Tân Kỳ Tân Quý' giữ nguyên", bocViTriRao("đường Tân Kỳ Tân Quý") === "đường Tân Kỳ Tân Quý", String(bocViTriRao("đường Tân Kỳ Tân Quý")));
   ok("FR243-e không kích: 'duong tan ky tan quy' (không dấu) giữ nguyên", bocViTriRao("duong tan ky tan quy") === "duong tan ky tan quy", String(bocViTriRao("duong tan ky tan quy")));
   ok("FR243-e không kích: 'hẻm xe hơi Tân Hương' giữ nguyên", bocViTriRao("hẻm xe hơi Tân Hương q tân phú") === "hẻm xe hơi Tân Hương", String(bocViTriRao("hẻm xe hơi Tân Hương q tân phú")));
+
+  // FR-244 (29/09/2026, 10 kịch bản L1–L10 qua bot giả lập): mỗi ca ghi NGUYÊN NHÂN.
+  // (a) câu rao một mảnh → fact bằng NGUYÊN CÂU (phí quản lý L1, pháp lý L6/L9). Nguyên nhân: không có dấu phẩy thì luật cả câu
+  // (`nhanDienFact`, trả `goc`) được nhận nguyên văn.
+  ok("FR244-a L1 phí quản lý cắt đúng cụm", a("bán căn hộ Sunrise City q7 block V3 tầng 12 76m2 2pn 2wc giá 4ty6 phí quản lý 15k/m2", "phi_quan_ly") === "phí quản lý 15k/m2", JSON.stringify(nhanDienNhieuFact("bán căn hộ Sunrise City q7 block V3 tầng 12 76m2 2pn 2wc giá 4ty6 phí quản lý 15k/m2")));
+  ok("FR244-a L6 pháp lý 'shr hc', không cả câu", a("can ban nha hxh 4m nguyen trai p2 q5 dt 4x14 2 lau st gia 7t8 shr hc", "phap_ly") === "shr hc");
+  ok("FR244-a L9 pháp lý 'giấy tay', không cả câu", a("bán nhà giấy tay Bình Chánh 5x20 giá 1 tỷ 5", "phap_ly") === "giấy tay");
+  ok("FR244-a không kích: câu ngắn 'sổ hồng riêng hoàn công' giữ nguyên", a("sổ hồng riêng hoàn công", "phap_ly") === "sổ hồng riêng hoàn công");
+  // (b) căn hộ "tầng 12" mất khi AI im. Nguyên nhân: câu một mảnh, luật cả câu trả phí quản lý (MỘT kết quả); vòng quét không có tầng.
+  ok("FR244-b L1 căn hộ 'tầng 12' → tang 12", a("bán căn hộ Sunrise City q7 block V3 tầng 12 76m2 2pn 2wc giá 4ty6 phí quản lý 15k/m2", "tang") === "12");
+  ok("FR244-b không kích: căn hộ 'tầng 3 lầu' (kết cấu) không thành tầng căn nằm qua luật mới", a("bán căn hộ duplex 2 tầng 3 lầu giá 9 tỷ phí quản lý 20k/m2", "tang") !== "3");
+  // (c) "đường Phan Văn Trị phường 10" → địa chỉ dính "phường 10". Nguyên nhân: câu ngắn thì luật vị trí lấy nguyên câu.
+  ok("FR244-c địa chỉ cắt trước phường, phường thành ô riêng", a("đường Phan Văn Trị phường 10", "vi_tri") === "đường Phan Văn Trị" && a("đường Phan Văn Trị phường 10", "phuong") === "Phường 10", JSON.stringify(nhanDienNhieuFact("đường Phan Văn Trị phường 10")));
+  ok("FR244-c không kích: 'đường Nguyễn Trãi' giữ nguyên, không đẻ phường", a("đường Nguyễn Trãi", "vi_tri") === "đường Nguyễn Trãi" && !q("đường Nguyễn Trãi").includes("phuong"));
+  // (d) "à nhà 2 lầu thôi" (sửa lại) → kết cấu ghi nguyên câu. Nguyên nhân: luật kết cấu trả `goc`, không bỏ tiếng đệm.
+  ok("FR244-d 'à nhà 2 lầu thôi' → 'nhà 2 lầu'", a("à nhà 2 lầu thôi", "ket_cau") === "nhà 2 lầu", String(a("à nhà 2 lầu thôi", "ket_cau")));
+  ok("FR244-d không kích: 'trệt 2 lầu sân thượng' giữ nguyên", a("trệt 2 lầu sân thượng", "ket_cau") === "trệt 2 lầu sân thượng");
+  // (e) NMG "căn B sổ hồng riêng" → bong bóng "căn 2". Nguyên nhân: `tachTheoCan` chỉ trả số thứ tự, bỏ chữ khách gọi.
+  ok("FR244-e tachTheoCan giữ chữ 'B'", tachTheoCan("căn B sổ hồng riêng")[0]?.nhan === "B");
+  ok("FR244-e không kích: 'căn 2 sổ chung' không có chữ", tachTheoCan("căn 2 sổ chung")[0]?.nhan === undefined);
 }
 ok("FR241-N10b hiện trạng có dấu giữ nguyên", chuanHienTrang("đang cho thuê 20 triệu") === "đang cho thuê 20 triệu");
 
