@@ -1282,6 +1282,13 @@ export function tachTheoCan(text: string): Array<{ thu: number; manh: string }> 
   }
   return out;
 }
+/**
+ * Giá viết bằng CHỮ ("chín tỷ rưỡi", "hai trăm triệu", "sáu tỷ tám trăm") trên bản bỏ dấu giữ độ dài. Dùng ở `nhanDienFact`
+ * VÀ vòng quét của `nhanDienNhieuFact`. 29/09/2026 (kịch bản K6): "giá sáu tỷ tám trăm" không vào ô giá vì luật chỉ nằm ở
+ * `nhanDienFact` (trả MỘT kết quả — câu có "5x18" thì diện tích khớp trước) và đuôi "tám trăm" sau "tỷ" chưa được nhận.
+ */
+export const GIA_CHU_RE = /\b(?:muoi|mot|hai|ba|bon|nam|sau|bay|tam|chin)(?:\s+(?:muoi|mot|hai|ba|bon|nam|lam|sau|bay|tam|chin|tram))*\s+(?:ty|toi|trieu|tram)\b(?:\s+(?:ruoi|(?:mot|hai|ba|bon|tu|nam|sau|bay|tam|chin)(?:\s+tram)?)\b(?!\s*(?!(?:nha|nhe|nhen|em|a|anh|chi|thoi|luon)\b)[a-z0-9]))?/;
+
 export function nhanDienNhieuFact(text: string): NhanDien[] {
   const out: NhanDien[] = [];
   // 14/09/2026: tin rao kiểu Facebook ("🏢 Kết cấu: 3 tấm", "📜 Sổ hồng riêng") — đáp án bỏ
@@ -1321,6 +1328,13 @@ export function nhanDienNhieuFact(text: string): NhanDien[] {
     // thuê, không phải giá mong muốn — luật hiện trạng (đang cho thuê) lo.
     if (m && q === "gia" && TRUOC_LA_THUE.test(kd.slice(Math.max(0, m.index - 30), m.index))) continue;
     if (m) them({ question: q, answer: lay(m) });
+  }
+  // Giá bằng chữ (xem GIA_CHU_RE) — vòng trên chỉ biết giá chữ số. Cùng ngưỡng 100 triệu, cùng luật "không đứng sau chữ thuê".
+  if (!out.some((f) => f.question === "gia")) {
+    const mc = GIA_CHU_RE.exec(kdD);
+    if (mc && (docTien(mc[0]) ?? 0) >= 1e8 && !TRUOC_LA_THUE.test(kd.slice(Math.max(0, mc.index - 30), mc.index))) {
+      them({ question: "gia", answer: text.slice(mc.index, mc.index + mc[0].length).trim() });
+    }
   }
   return out;
 }
@@ -1379,7 +1393,9 @@ export function nhanDienFact(text: string): NhanDien | null {
   };
   let m: RegExpExecArray | null;
   // 17/09/2026: "srh" là gõ lỡ của "shr" (Zalo thật) — nhận luôn.
-  const PHAP_LY_RE = /\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong|hdmb|shr|srh|shrr|shc|giay tay|cam ngan hang|dang the chap)\b/;
+  // 29/09/2026 (kịch bản K1): "hợp đồng tối thiểu 2 năm" (tin cho thuê) — "hợp đồng" đứng một mình từng khớp pháp lý (vì HĐMB)
+  // và luật này xét TRƯỚC luật thời hạn thuê. Hợp đồng THUÊ / tối thiểu / N năm-tháng là thời hạn thuê, không phải giấy tờ.
+  const PHAP_LY_RE = /\b(so hong|so do|so chung|so rieng|hoan cong|vi bang|hop dong(?!\s+(?:thue|cho thue|toi thieu|ky|\d))|hdmb|shr|srh|shrr|shc|giay tay|cam ngan hang|dang the chap)\b/;
   // 27/09/2026 (test Zalo): "ba a dứng tên", "anh đứng tên chính nhé", "mẹ em đứng tên" — NGƯỜI đứng tên sổ (FR-229), không
   // phải loại sổ. "đứng tên chung với…" / "đồng sở hữu" thuộc câu sổ chung (FR-223); câu có loại sổ thì mảnh sổ đi riêng.
   if (/\b(?:dung|dang dung)\s+ten\b/.test(kd) && !/\b(?:chung|dong so huu)\b/.test(kd) &&
@@ -1431,8 +1447,11 @@ export function nhanDienFact(text: string): NhanDien | null {
     if (SAN_RE.test(boDau(mk)) && /\d/.test(kdMk)) return { question: "san_vuon", answer: mk };
   }
   if (/\b(len tho cu|len tho|chuyen tho cu|chuyen muc dich)\b/.test(kd)) return { question: "len_tho_cu", answer: goc };
-  if ((m = /\b(?:tho cu)\s*(?:duoc|la|het|full)?\s*(\d{1,4}(?:[.,]\d+)?)\s*(m2|%)/.exec(kd)) || (m = /\b(\d{1,4}(?:[.,]\d+)?)\s*(m2|%)\s*tho cu\b/.exec(kd))) {
-    return { question: "tho_cu", answer: `${m[1]}${m[2]}` };
+  if ((m = /\b(?:tho cu)\s*(?:duoc|la|het|full)?\s*(\d{1,4}(?:[.,]\d+)?)\s*(m2|%)/.exec(kd)) || (m = /\b(\d{1,4}(?:[.,]\d+)?)\s*(m2|%)\s*tho cu\b/.exec(kd)) ||
+      // 29/09/2026 (kịch bản K5): "có 100 thổ cư" — thiếu chữ m2, luật cũ bắt buộc đơn vị nên bỏ qua. Số ≥ 10 đứng ngay trước
+      // "thổ cư" là mét vuông thổ cư.
+      (m = /\b(\d{2,4}(?:[.,]\d+)?)()\s*tho cu\b/.exec(kd))) {
+    return { question: "tho_cu", answer: `${m[1]}${m[2] || "m2"}` };
   }
   // "đường 12m", "đường trước đất rộng 8m" → độ rộng đường (đất), không phải địa chỉ.
   if ((m = new RegExp(`\\bduong\\s*(?:truoc dat|truoc nha|noi khu|noi bo)?\\s*(?:rong\\s*)?(?:la\\s*)?${SO}\\s*(?:m|met)\\b`).exec(kd))) {
@@ -1487,7 +1506,10 @@ export function nhanDienFact(text: string): NhanDien | null {
   // FR-241 g (10 ca test làm khó 28/09): "ờ giá 15 tỷ" — "ờ" (thán từ) bỏ dấu thành "o" = "ở" → tiềm năng "để ở". Câu mở bằng
   // thán từ ờ / ơ / ừ / ồ thì "o" không phải "ở"; "ở giá …" cũng không phải cách dùng.
   const moBangThanTu = /^\s*(?:ờ|ơ|ừ|ồ|ờm|ừm)(?![\p{L}])/iu.test(goc.trim());
-  if (!laViecRao && (!moBangThanTu && /^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:to\b|duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an|gia\b|ai\b|day\b|do\b|kia\b|dau\b))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8 &&
+  // 29/09/2026 (kịch bản K6): "cho thuê được 12 triệu một tháng" mở bằng "cho thuê" nên luật này bắt làm TIỀM NĂNG và trả về
+  // trước luật doanh thu bên dưới (luật viết đúng cho dạng này). Câu có số tiền (triệu/tỷ) là dữ liệu tiền, không phải tiềm năng.
+  const coSoTien = /\d+(?:[.,]\d+)?\s*(?:trieu|tr|ty|ti)(?![a-z])/.test(kd);
+  if (!laViecRao && !coSoTien && (!moBangThanTu && /^\s*(?:hop|de|nha)?\s*(?:hop )?(?:de o|o gia dinh|o(?!\s+(?:to\b|duong|hem|hxh|so|sn|phuong|quan|q\d|p\d|tai|gan|khu|xa|tren|trong|ngay|mat tien|chung cu|du an|gia\b|ai\b|day\b|do\b|kia\b|dau\b))|kinh doanh|buon ban|cho thue|lam van phong|mo shop|mo quan|lam cua hang)(?:\s|$|,)/.test(kd) && kd.split(/\s+/).length <= 8 &&
         !(/^\s*(?:nha\s+)?o\s/.test(kd) && oLaDiaChi)) ||
       (/\b(o hoac|hoac lam|deu duoc|lam can ho dich vu|lam chdv|hop (?:de )?(?:o|kinh doanh|cho thue|lam))\b/.test(kd) && kd.split(/\s+/).length <= 14 &&
         !/\b(showroom|lam xuong|van phong cong ty|nha hang|benh vien|truong hoc|lam kho)\b/.test(kd))) {
@@ -1597,7 +1619,7 @@ export function nhanDienFact(text: string): NhanDien | null {
   }
   // FR-241 (28/09/2026, bắn thật lx-72): "giá chín tỷ rưỡi" — số viết bằng CHỮ; `docTien` đọc được (soChuThanhSo), cửa
   // bắt giá thì chỉ biết chữ số nên câu rơi vào bổ sung. Cùng ngưỡng 100 triệu, cùng luật "không đứng sau chữ thuê".
-  if ((m = /\b(?:muoi|mot|hai|ba|bon|nam|sau|bay|tam|chin)(?:\s+(?:muoi|mot|hai|ba|bon|nam|lam|sau|bay|tam|chin|tram))*\s+(?:ty|toi|trieu|tram)\b(?:\s+(?:ruoi|mot|hai|ba|bon|tu|nam|sau|bay|tam|chin)\b(?!\s*(?!(?:nha|nhe|nhen|em|a|anh|chi|thoi|luon)\b)[a-z0-9]))?/.exec(kdD)) &&
+  if ((m = GIA_CHU_RE.exec(kdD)) &&
       (docTien(m[0]) ?? 0) >= 1e8 && !TRUOC_LA_THUE.test(kd.slice(Math.max(0, m.index - 30), m.index))) {
     return { question: "gia", answer: catGoc(m) };
   }
@@ -1657,7 +1679,12 @@ export function nhanDienFact(text: string): NhanDien | null {
     return { question: "thuong_luong", answer: goc };
   }
   // 25/09/2026 (bắn thật lx-19): "nhà trong hẻm" bỏ dấu là "nha trong hem" — "trong" (ở trong), không phải "trống".
-  if (/\b(dang o|dang cho thue|de trong|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo))|con o|dang thue)\b/.test(kd) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
+  // 29/09/2026 (kịch bản K9): "đăng ở đâu vậy em?" — bỏ dấu thì "đăng ở" = "dang o" = "đang ở", thành hiện trạng. Câu CÓ dấu
+  // thì phải khớp đúng chữ có dấu ("đang"); câu gõ không dấu mới dùng bản bỏ dấu.
+  const coDauCau = /[\u00C0-\u1EF9đĐ]/.test(goc);
+  const hienTrangCoDau = /(?:^|[^\p{L}])(?:đang\s+ở|đang\s+cho\s+thuê|để\s+trống|nhà\s+trống|còn\s+ở|đang\s+thuê)(?![\p{L}])/iu.test(goc);
+  if (/\b(dang o|dang cho thue|de trong|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo))|con o|dang thue)\b/.test(kd) &&
+      (!coDauCau || hienTrangCoDau) && !/\b(noi that|ban giao)\b/.test(kd)) return { question: "hien_trang_su_dung", answer: goc };
   const LY_DO_RE = /\b(ly do|dinh cu|ke tien|can tien|doi nha|chuyen cho|di nuoc ngoai|chia tai san)\b/;
   if (LY_DO_RE.test(kd)) return { question: "ly_do_ban", answer: manhKhop(LY_DO_RE) };
   // 25/09/2026 (chủ dự án test Zalo: "sang tên 1 nốt nhạc ko phải tiện ích"): "công chứng" là THỦ TỤC khi đi với sang tên /

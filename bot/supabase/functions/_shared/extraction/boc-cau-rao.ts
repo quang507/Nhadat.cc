@@ -37,7 +37,9 @@ export function dealCauRao(kd: string): "ban" | "cho_thue" {
 // từ — bản trước khớp "no" trong "nói" và "luong" trong "thương lượng", bỏ mất giá thật.
 export const TRUOC_KHONG_PHAI_GIA = /\b(?:coc|dat coc|phi sang|tien sang|hoa hong|phi moi gioi|(?<!thuong )luong|doanh thu|thu nhap|tra truoc|vay)\b(?:\s+\d{1,2}\s*(?:thang|th))?\s*[^\d,;]{0,12}$/;
 const TRUOC_LA_GIA = /(?:gia|tong|chot|ban|con|chi|muon ban)\s*(?:ban|chot|chao|mong muon|tong|thue|cho thue)?\s*:?\s*$/;
-export const TRUOC_LA_THUE = /(?:dang|hien|hien dang|hop dong)\s+(?:cho\s+)?thue\s*(?:duoc|voi gia|gia|:)?\s*$/;
+// 29/09/2026 (kịch bản K6): "cho thuê ĐƯỢC 12 triệu một tháng" (không có "đang") cũng là thu nhập thuê — bản cũ chỉ biết
+// "đang/hiện/hợp đồng cho thuê", nên 12 triệu lọt vào ô GIÁ và có thể đè giá bán 6,8 tỷ.
+export const TRUOC_LA_THUE = /(?:(?:dang|hien|hien dang|hop dong)\s+(?:cho\s+)?thue\s*(?:duoc|voi gia|gia|:)?|(?:co\s+)?cho\s+thue\s+(?:duoc|lai))\s*$/;
 
 /**
  * Chọn đoạn GIÁ trong câu rao (còn dấu, số bằng chữ đã đổi ra chữ số). Trả đúng đoạn

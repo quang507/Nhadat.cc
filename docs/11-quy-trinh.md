@@ -91,6 +91,10 @@ chủ dự án phát hiện thì phải bóc ngược năm tầng.
    bậc Free không có backup tự động (OPEN-25) — làm hỏng là mất thật.
 3. **Bí mật lấy bằng `get_secret()` ngay trong câu SQL, không in ra.** Khoá đã
    dán vào chat coi như lộ, phải xoay.
+4. **Báo lỗi phải kèm NGUYÊN NHÂN, không chỉ triệu chứng.** [nguồn: chủ dự án 29/09/2026 "sau này khi test phải ghi rõ vì
+   sao lỗi"] Mỗi lỗi trong báo cáo test (bắn thật hay chạy máy) ghi ba thứ: *triệu chứng* (khách nhắn gì → bot ghi/nói gì),
+   *nguyên nhân* (luật / hàm / thứ tự xét nào gây ra, chỉ đúng tên trong mã), *cách sửa*. Chưa tìm ra nguyên nhân thì ghi
+   "chưa rõ nguyên nhân" kèm việc đã kiểm — không đoán. Ca test tái hiện lỗi cũng ghi nguyên nhân trong dòng chú thích.
 
 ## 11.4 Máy kiểm gì, người kiểm gì
 

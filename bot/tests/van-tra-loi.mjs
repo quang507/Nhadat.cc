@@ -970,6 +970,28 @@ for (const [q, c, m] of [["phap_ly", "sổ chung", true], ["phap_ly", "sổ hồ
   ["phuong", "xã Vĩnh Lộc A", true], ["phuong", "phường Tân Thành nha em", true], ["phuong", "phường 8 quận 3", false], ["phuong", "xã Vĩnh Lộc A, đường số 5", false]]) {
   ok(`FR241-o câu trọn ${q} '${c}' → ${m}`, laTraLoiTronKhoa(q, c) === m);
 }
+// FR-242 (29/09/2026, 10 kịch bản mới K1–K10 chạy qua tầng luật). Mỗi ca ghi NGUYÊN NHÂN lỗi cũ.
+{ const q = (c) => nhanDienNhieuFact(c).map((f) => f.question);
+  const a = (c, k) => nhanDienNhieuFact(c).find((f) => f.question === k)?.answer;
+  // K6 — nguyên nhân: luật tiềm năng bắt câu mở bằng "cho thuê" trước luật doanh thu; TRUOC_LA_THUE không biết "cho thuê được".
+  ok("FR242-1 'cho thuê được 12 triệu một tháng' → doanh thu, KHÔNG vào giá (không đè giá bán)", q("cho thuê được 12 triệu một tháng").includes("doanh_thu") && !q("cho thuê được 12 triệu một tháng").includes("gia"), JSON.stringify(nhanDienNhieuFact("cho thuê được 12 triệu một tháng")));
+  ok("FR242-1 không kích: 'nhà đang cho thuê 25 triệu/tháng' vẫn doanh thu", q("nhà đang cho thuê 25 triệu/tháng").includes("doanh_thu") && !q("nhà đang cho thuê 25 triệu/tháng").includes("gia"));
+  ok("FR242-1 không kích: 'cho thuê 15 triệu' (tin thuê báo giá) vẫn là giá", q("cho thuê 15 triệu").includes("gia"));
+  ok("FR242-1 không kích: 'để ở hoặc cho thuê đều được' vẫn tiềm năng", q("để ở hoặc cho thuê đều được").includes("tiem_nang"));
+  // K6 — nguyên nhân: luật giá chữ chỉ ở nhanDienFact (trả 1 kết quả, diện tích khớp trước) + đuôi "tám trăm" chưa nhận.
+  ok("FR242-2 'bán nhà cấp 4 Bình Tân 5x18 giá sáu tỷ tám trăm' → giá 6,8 tỷ", docTien(a("bán nhà cấp 4 Bình Tân 5x18 giá sáu tỷ tám trăm", "gia") ?? "") === 6_800_000_000, JSON.stringify(nhanDienNhieuFact("bán nhà cấp 4 Bình Tân 5x18 giá sáu tỷ tám trăm")));
+  ok("FR242-2 không kích: 'bán năm căn, 4x15' không có giá", !q("bán năm căn, 4x15").includes("gia"));
+  // K1 — nguyên nhân: "hợp đồng" đứng một mình khớp PHAP_LY_RE (vì HĐMB), xét trước luật thời hạn thuê.
+  ok("FR242-3 'hợp đồng tối thiểu 2 năm' → thời hạn thuê, không phải pháp lý", q("hợp đồng tối thiểu 2 năm")[0] === "thoi_han_thue", JSON.stringify(nhanDienNhieuFact("hợp đồng tối thiểu 2 năm")));
+  ok("FR242-3 không kích: 'hợp đồng mua bán' vẫn pháp lý", q("hợp đồng mua bán").includes("phap_ly"));
+  // K9 — nguyên nhân: so khớp trên chữ bỏ dấu, "đăng ở" = "dang o" = "đang ở".
+  ok("FR242-4 'đăng ở đâu vậy em?' không thành hiện trạng", !q("đăng ở đâu vậy em?").includes("hien_trang_su_dung"));
+  ok("FR242-4 không kích: 'nhà đang ở' vẫn hiện trạng", q("nhà đang ở").includes("hien_trang_su_dung"));
+  ok("FR242-4 không kích: 'dang o' (gõ không dấu) vẫn hiện trạng", q("dang o").includes("hien_trang_su_dung"));
+  // K5 — nguyên nhân: luật thổ cư bắt buộc đơn vị m2/%.
+  ok("FR242-5 'có 100 thổ cư' → thổ cư 100m2", a("có 100 thổ cư", "tho_cu") === "100m2", JSON.stringify(nhanDienNhieuFact("có 100 thổ cư")));
+  ok("FR242-5 không kích: 'thổ cư 60m2' giữ nguyên", a("thổ cư 60m2", "tho_cu") === "60m2");
+}
 ok("FR241-N10b hiện trạng có dấu giữ nguyên", chuanHienTrang("đang cho thuê 20 triệu") === "đang cho thuê 20 triệu");
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
