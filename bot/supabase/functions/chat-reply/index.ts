@@ -846,8 +846,10 @@ Deno.serve(async (req) => {
   if (!body.human_note && /^\s*hello\s*[.!]*\s*$/i.test(text)) {
     const { data: congTac } = await client.rpc("cau_hinh", { p_key: "test_reset_hello" });
     if (String(congTac ?? "") === "1") {
-      const { data: daXoa, error: xoaErr } = await client.rpc("reset_nguoi_test", { p_zalo: externalUserId });
-      if (xoaErr) await ghiLoi(client, "chat-reply reset_nguoi_test", xoaErr.message);
+      // FR-245 (29/09/2026): `reset_nguoi_test` nay chỉ xoá ID thử (lx-, do-…) — chủ dự án test bằng Zalo THẬT của mình qua
+      // "hello" (công tắc bật tay), nên đường này gọi thẳng hàm xoá lõi.
+      const { data: daXoa, error: xoaErr } = await client.rpc("xoa_nguoi_theo_zalo", { p_zalo: externalUserId });
+      if (xoaErr) await ghiLoi(client, "chat-reply xoa_nguoi_theo_zalo", xoaErr.message);
       else console.log(`TEST reset "hello" ${externalUserId.slice(-4)}: ${JSON.stringify(daXoa)}`);
       thongBaoNhanTest = daXoa ? `(TEST) Em đã xoá dữ liệu cũ của mình: ${(daXoa as { listings?: number }).listings ?? 0} tin, ${(daXoa as { messages?: number }).messages ?? 0} tin nhắn. Bắt đầu lại như khách mới nha.` : null;
     }

@@ -348,7 +348,7 @@ function BanLamViec() {
     const go = prompt(
       "XOÁ HÀNG LOẠT: mọi khách mua, người bán, tin rao, ảnh, hội thoại, câu hỏi, lịch hẹn, giao dịch.\n" +
       "GIỮ: kho dự án, phường, CTV, admin, cấu hình, prompt, mẫu câu chuẩn, sổ lỗi.\n" +
-      "Supabase Free KHÔNG có sao lưu — không hoàn tác được.\n\nGõ đúng chữ XOA HET để xoá:",
+      "Trước khi xoá, mọi dòng được CHÉP vào kho lưu (luu_tru) — khôi phục được bằng nút \"Khôi phục lần xoá\".\n\nGõ đúng chữ XOA HET để xoá:",
     );
     if (go === null) return;
     if (go.trim() !== "XOA HET") { alert("Chưa xoá: phải gõ đúng chữ XOA HET."); return; }
@@ -357,8 +357,21 @@ function BanLamViec() {
     const d = (data ?? {}) as Record<string, number>;
     alert(
       `Đã xoá: ${d.sellers ?? 0} người bán · ${d.buyers ?? 0} khách mua · ${d.listings ?? 0} tin · ` +
-      `${d.messages ?? 0} tin nhắn · ${d.conversations ?? 0} hội thoại · ${d.reminders ?? 0} việc nhắc.`,
+      `${d.messages ?? 0} tin nhắn · ${d.conversations ?? 0} hội thoại · ${d.reminders ?? 0} việc nhắc.\n` +
+      `Đã chép vào kho lưu: lần số ${d.luu_tru_lan ?? "?"} (khôi phục được).`,
     );
+    await load();
+  };
+  // FR-245 (29/09/2026, chủ dự án: "xóa data để test thì data thật cũng nên để sang 1 chỗ"): khôi phục một lần "Xoá hết"
+  // từ kho lưu `luu_tru`. Dòng đã có thì bỏ qua, bấm hai lần không nhân đôi.
+  const khoiPhucLanXoa = async () => {
+    const lan = prompt("Khôi phục lần xoá số mấy? (số hiện trong thông báo lúc xoá)");
+    if (lan === null) return;
+    if (!/^\d+$/.test(lan.trim())) { alert("Chưa khôi phục: phải nhập một số."); return; }
+    const { data, error } = await supabase.rpc("admin_khoi_phuc_lan_xoa", { p_lan: Number(lan.trim()) });
+    if (error) { alert(`Không khôi phục được: ${error.message}`); return; }
+    const d = (data ?? {}) as Record<string, number>;
+    alert(`Đã khôi phục: ${d.sellers ?? 0} người bán · ${d.buyers ?? 0} khách mua · ${d.listings ?? 0} tin · ${d.messages ?? 0} tin nhắn.`);
     await load();
   };
   const dangNhapLaiZalo = async () => {
@@ -985,9 +998,18 @@ function BanLamViec() {
                   type="button"
                   onClick={() => void xoaHetKhachVaRoHang()}
                   className="rounded-md border border-red-300 bg-red-50 px-3 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
-                  title="Xoá mọi khách, người bán và tin rao để test lại từ đầu. Không hoàn tác được."
+                  title="Xoá mọi khách, người bán và tin rao để test lại từ đầu. Dữ liệu được chép vào kho lưu trước khi xoá."
                 >
                   Xoá hàng loạt
+                </button>
+                {/* FR-245: khôi phục một lần xoá hàng loạt từ kho lưu luu_tru */}
+                <button
+                  type="button"
+                  onClick={() => void khoiPhucLanXoa()}
+                  className="rounded-md border border-line bg-white px-3 py-1 text-xs font-bold text-ink hover:bg-line/30"
+                  title="Chép lại dữ liệu của một lần Xoá hàng loạt từ kho lưu."
+                >
+                  Khôi phục lần xoá
                 </button>
               </div>
             </div>
