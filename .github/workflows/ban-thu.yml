@@ -1,0 +1,108 @@
+name: Bắn thử bot trên production
+
+# FR-246 (29/09/2026): bắn thử chat-reply trên production KHÔNG cần Supabase MCP. Chạy SQL qua Management API bằng
+# SUPABASE_ACCESS_TOKEN (cùng đường apply-migration.yml): in tình trạng (model bot đã dùng, số tin lên kệ, vector),
+# gửi các câu thử bằng ID THỬ (phải qua `la_id_thu`), in câu bot trả lời, rồi dọn sạch người thử.
+# Tuỳ chọn đổi model chính (secret ANTHROPIC_MODEL của edge function) khi chủ dự án yêu cầu.
+# Log repo này CÔNG KHAI: chỉ in số đếm, mã tin và câu bot trả lời cho ID thử — không in dữ liệu khách thật.
+
+on:
+  workflow_dispatch:
+    inputs:
+      cau:
+        description: Các câu khách thử nhắn, cách nhau bằng dấu | (mỗi câu một lượt)
+        required: true
+        default: 'mình cần mua nhà quận 5 tầm 5 tỷ'
+      zalo:
+        description: Zalo ID THỬ (phải khớp la_id_thu — lx-, do-, thu-…)
+        required: true
+        default: 'lx-mua-01'
+      doi_model:
+        description: Để trống = giữ nguyên. Điền model ID để đặt secret ANTHROPIC_MODEL (vd claude-haiku-4-5-20251001)
+        required: false
+        default: ''
+
+env:
+  PROJECT_REF: tbcdpupiarkuxtntmosl
+
+jobs:
+  ban-thu:
+    name: Bắn thử
+    runs-on: ubuntu-latest
+    steps:
+      - name: Che token
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "::error::Thiếu SUPABASE_ACCESS_TOKEN"; exit 1; fi
+          echo "::add-mask::$TOKEN"
+
+      - name: Bắn thử
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+          CAU: ${{ inputs.cau }}
+          ZALO: ${{ inputs.zalo }}
+          DOI_MODEL: ${{ inputs.doi_model }}
+        run: |
+          set -euo pipefail
+          q() { # chạy một câu SQL, in kết quả JSON
+            curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+              -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+              -d "$(jq -n --arg q "$1" '{query: $q}')"
+          }
+          lit() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"; }
+
+          if ! printf '%s' "$ZALO" | grep -Eq '^[a-z0-9-]{3,40}$'; then echo "::error::Zalo ID thử không hợp lệ"; exit 1; fi
+          if [ "$(q "select public.la_id_thu($(lit "$ZALO")) as t" | jq -r '.[0].t')" != "true" ]; then
+            echo "::error::$ZALO không phải ID thử (la_id_thu) — không bắn bằng ID có thể là khách thật"; exit 1
+          fi
+
+          if [ -n "$DOI_MODEL" ]; then
+            if ! printf '%s' "$DOI_MODEL" | grep -Eq '^claude-[a-z0-9.-]{3,60}$'; then echo "::error::model ID lạ"; exit 1; fi
+            curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/secrets" \
+              -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+              -d "$(jq -n --arg v "$DOI_MODEL" '[{name: "ANTHROPIC_MODEL", value: $v}]')" >/dev/null
+            echo "Đã đặt ANTHROPIC_MODEL = $DOI_MODEL (edge function nhận ở lượt khởi động kế)."
+          fi
+
+          echo "== Tình trạng"
+          q "select coalesce((select json_agg(x) from (select model, count(*) as luot from boc_tach_bong where created_at > now() - interval '3 days' group by 1 order by 2 desc) x), '[]') as model_3_ngay,
+                    (select count(*) from listings where status in ('dang_ban','dang_quan_tam')) as tin_len_ke,
+                    (select count(*) from listings where status in ('dang_ban','dang_quan_tam') and nhung is not null) as tin_co_vector,
+                    (select count(*) from projects where nhung is not null) as du_an_co_vector,
+                    public.cau_hinh('tim_theo_nghia') as tim_theo_nghia" | jq -c '.[0]'
+
+          q "select public.reset_nguoi_test($(lit "$ZALO")) as r" | jq -c '.[0].r'
+          MOC=$(q "select now()::text as t" | jq -r '.[0].t')
+
+          IFS='|' read -ra DS <<< "$CAU"
+          for C in "${DS[@]}"; do
+            C="$(printf '%s' "$C" | sed 's/^ *//; s/ *$//')"
+            [ -z "$C" ] && continue
+            echo; echo "== KHÁCH: $C"
+            TRUOC=$(q "select count(*) as n from messages m join conversations c on c.id = m.conversation_id
+                         left join buyers b on b.id = c.buyer_id left join sellers s on s.id = c.seller_id
+                        where (b.zalo_user_id = $(lit "$ZALO") or s.zalo_user_id = $(lit "$ZALO")) and m.sender not in ('buyer','seller')" | jq -r '.[0].n')
+            q "select net.http_post(url := public.cau_hinh('functions_base_url') || '/chat-reply',
+                 body := jsonb_build_object('external_user_id', $(lit "$ZALO"), 'channel', 'zalo_personal_test', 'text', $(lit "$C")),
+                 headers := jsonb_build_object('Content-Type', 'application/json', 'x-bridge-secret', public.get_secret('BRIDGE_SECRET')),
+                 timeout_milliseconds := 120000) as id" >/dev/null
+            for i in $(seq 1 40); do
+              sleep 5
+              SAU=$(q "select count(*) as n from messages m join conversations c on c.id = m.conversation_id
+                         left join buyers b on b.id = c.buyer_id left join sellers s on s.id = c.seller_id
+                        where (b.zalo_user_id = $(lit "$ZALO") or s.zalo_user_id = $(lit "$ZALO")) and m.sender not in ('buyer','seller')" | jq -r '.[0].n')
+              [ "$SAU" -gt "$TRUOC" ] && { sleep 5; break; }
+            done
+          done
+
+          echo; echo "== HỘI THOẠI (từ $MOC)"
+          q "select m.sender, m.body from messages m join conversations c on c.id = m.conversation_id
+               left join buyers b on b.id = c.buyer_id left join sellers s on s.id = c.seller_id
+              where (b.zalo_user_id = $(lit "$ZALO") or s.zalo_user_id = $(lit "$ZALO")) and m.created_at >= $(lit "$MOC")::timestamptz
+              order by m.created_at, m.seq" | jq -r '.[] | "[\(.sender)] \(.body)"'
+          echo; echo "== Sổ lỗi chat-reply từ lúc bắn"
+          q "select coalesce(json_agg(x), '[]') as loi from (select source, left(detail, 160) as detail from bot_errors
+              where at >= $(lit "$MOC")::timestamptz and source like 'chat-reply%' order by at limit 10) x" | jq -c '.[0].loi'
+
+          echo; q "select public.reset_nguoi_test($(lit "$ZALO")) as r" | jq -c '.[0].r'
