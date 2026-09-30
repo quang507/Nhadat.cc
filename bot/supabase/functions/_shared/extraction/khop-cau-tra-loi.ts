@@ -23,6 +23,25 @@ import { TIEN_KD, CO_TIEN_KD, TIEN_T_KEP, docTien } from "./luat-tien.ts";
 import { TRUOC_LA_SAN, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { laThuanNhan } from "./nhan.ts";
 
+// 30/09/2026 (bắn thử vector, nhà phố Trần Bình Trọng): "nhà có 1 phòng ngủ ngay tầng trệt cho người già" → ô số phòng ngủ
+// = 1, còn chi tiết "phòng ngủ ở tầng trệt" (thứ người mua có ba mẹ lớn tuổi đi tìm) mất khỏi vector. Số phòng ngủ đi kèm
+// VỊ TRÍ TẦNG là phòng ngủ Ở ĐÂU, không phải TỔNG số phòng ngủ.
+const PN_SAU_SO = String.raw`\s*(?:phong ngu|pn)\s+(?:(?:o|ngay|nam|duoi|tren|tai|la)\s+){0,2}(?:tang|tret|lau)\b`;
+const PN_O_TANG_RE = new RegExp(String.raw`\b(\d{1,2}|mot|hai|ba|bon|nam)` + PN_SAU_SO);
+const SO_CHU_PN: Record<string, number> = { mot: 1, hai: 2, ba: 3, bon: 4, nam: 5 };
+const veCau = (tin: string): string[] => (tin ?? "").split(/[,;\n]|\.(?!\d)/).map((c) => c.trim()).filter(Boolean);
+/** Các con số phòng ngủ trong tin mà là phòng ngủ THEO TẦNG ("1 phòng ngủ ngay tầng trệt", "2pn trên lầu"). */
+export function soPhongNguTheoTang(tin: string): number[] {
+  return veCau(tin).flatMap((c) => {
+    const m = PN_O_TANG_RE.exec(boDau(c).replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " "));
+    return m ? [SO_CHU_PN[m[1]] ?? Number(m[1])] : [];
+  });
+}
+/** Vế câu gốc nói phòng ngủ theo tầng — giữ làm thông tin bổ sung (vào vector). */
+export function cumPhongNguTheoTang(tin: string): string | null {
+  return veCau(tin).find((c) => PN_O_TANG_RE.test(boDau(c).replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " "))) ?? null;
+}
+
 export type LoaiCau =
   | "khop"      // đúng là câu trả lời cho câu đang hỏi → ghi fact, đóng câu hỏi
   | "xung_ho"   // dặn cách gọi ("kêu chị nha") → nhớ, KHÔNG ghi fact, hỏi lại
@@ -1138,7 +1157,8 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // 24/09/2026 (bắn 10 tin): "toà nhà CHDV 20 phòng" — phòng cho thuê, không phải phòng ngủ.
   // 29/09/2026 (kịch bản K2): "2pn2wc" gõ dính — biên từ `\b` giữa "n" và "2" không có, nên cả phòng ngủ lẫn WC rơi. Số đứng
   // sau chữ cái ("pn2wc") và đơn vị đứng trước chữ số vẫn tính.
-  ["so_phong_ngu", /(?<!\b(?:chdv|dich vu|toa nha|nha tro|day tro|phong tro)\b[^,.;]{0,12})(?<![\d.,])(\d{1,2})\s*(?:phong ngu|pn|phong)(?![a-z])(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
+  // 30/09/2026: "1 phòng ngủ ngay tầng trệt" là phòng ngủ theo tầng, không phải tổng số (soPhongNguTheoTang).
+  ["so_phong_ngu", /(?<!\b(?:chdv|dich vu|toa nha|nha tro|day tro|phong tro)\b[^,.;]{0,12})(?<![\d.,])(\d{1,2})(?!\s*(?:phong ngu|pn)\s+(?:(?:o|ngay|nam|duoi|tren|tai|la)\s+){0,2}(?:tang|tret|lau)\b)\s*(?:phong ngu|pn|phong)(?![a-z])(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
   ["so_phong", /\b(?:chdv|can ho dich vu|toa nha|nha tro|day tro)\b[^,.;]{0,12}?\b(\d{1,3})\s*phong\b(?!\s*(?:ngu|wc|tam|ve sinh))/, (m) => m[1]],
   ["so_wc", /(?:\b|(?<=[a-z]))(\d{1,2})\s*(?:wc|toilet|ve sinh)(?![a-z])/, (m) => m[1]],
   // 29/09/2026 (kịch bản L1): căn hộ "block V3 tầng 12 76m2" — câu rao một mảnh, luật cả câu trả phí quản lý nên tầng rơi. Tầng
@@ -1731,13 +1751,14 @@ function nhanDienFactTho(text: string): NhanDien | null {
   }
   // 20260909i: "xây tối đa 5 tầng" là TẦNG CAO CHO PHÉP của lô đất, không phải kết cấu nhà.
   if ((m = /\b(?:xay|cao)\s*(?:toi da|duoc)\s*(\d{1,2})\s*(?:tang|lau|tam)\b/.exec(kd))) return { question: "tang_cao_toi_da", answer: m[1] };
-  if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:lau|tang|tam)\b/.exec(kd)) || /\btret\b/.test(kd)) {
+  // 30/09/2026: "1 phòng ngủ ngay tầng trệt" nói phòng ngủ ở đâu, không phải kết cấu nhà (đè "trệt 2 lầu sân thượng").
+  if (((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:lau|tang|tam)\b/.exec(kd)) || /\btret\b/.test(kd)) && !PN_O_TANG_RE.test(kd)) {
     // 29/09/2026 (kịch bản L8): "à nhà 2 lầu thôi" (sửa lại) từng ghi nguyên câu — bỏ tiếng đệm đầu / cuối.
     const gonKc = goc.replace(/^(?:(?:à|ừ|ờ|ồ|dạ|thôi|nhầm|à nhầm)\s*,?\s*)+/iu, "")
       .replace(/(?:\s+(?:thôi|nha|nhé|nhe|em|ạ|a))+\s*[.!]*$/iu, "").trim();
     return { question: "ket_cau", answer: gonKc || goc };
   }
-  if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:phong ngu|pn)(?![a-z])/.exec(kd))) {
+  if ((m = /\b(\d{1,2}|mot|hai|ba|bon|nam|sau)\s*(?:phong ngu|pn)(?![a-z])/.exec(kd)) && !PN_O_TANG_RE.test(kd)) {
     return { question: "so_phong_ngu", answer: m[1] };
   }
   if ((m = /\b(?:phuong|p)\.?\s*(\d{1,2})\b/.exec(kd))) {
@@ -1808,7 +1829,8 @@ function nhanDienFactTho(text: string): NhanDien | null {
   if (/\b(nuoc thai|xu ly nuoc)\b/.test(kd)) return { question: "xu_ly_nuoc_thai", answer: goc };
   if (/\b(container|cont\b|xe cong)\b/.test(kd)) return { question: "duong_container", answer: goc };
   if (/\b(len tho cu|len tho|chuyen tho cu|chuyen muc dich)\b/.test(kd)) return { question: "len_tho_cu", answer: goc };
-  if (/\b(kenh|muong|tuoi tieu|nguon nuoc|gieng)\b/.test(kd)) return { question: "nguon_nuoc", answer: goc };
+  // 30/09/2026 (bắn thử vector, nhà cấp 4): "nhà có giếng trời" từng thành "nguồn nước tưới" — giếng trời là khoảng lấy sáng.
+  if (/\b(kenh|muong|tuoi tieu|nguon nuoc|gieng(?!\s*troi))\b/.test(kd)) return { question: "nguon_nuoc", answer: goc };
   if (/\b(cam coc|rao luoi|ranh gioi|ranh dat)\b/.test(kd)) return { question: "ranh_gioi", answer: goc };
   // "đất thuê nhà nước TỚI 2058" có mốc năm → thời hạn sử dụng; không có năm → hình thức thuê đất.
   if (/\b(toi|den|het|thoi han)\s*(?:nam\s*)?20\d\d\b/.test(kd) && /\b(thue|so huu|su dung|thoi han)\b/.test(kd)) return { question: "thoi_han_su_dung", answer: goc };

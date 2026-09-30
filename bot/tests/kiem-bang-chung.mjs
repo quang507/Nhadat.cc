@@ -378,5 +378,16 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
     chonViTri("hẻm 4 Trần Phú", "Trần Phú") === "Trần Phú", chonViTri("hẻm 4 Trần Phú", "Trần Phú"));
 }
 
+// 30/09/2026 (bắn thử vector, nhà phố Trần Bình Trọng): "1 phòng ngủ ngay tầng trệt" là phòng ngủ theo TẦNG, không phải tổng số.
+{
+  const T = "nhà có 1 phòng ngủ ngay tầng trệt cho người già, sau nhà có sân phơi rộng, đi bộ ra chợ 5 phút";
+  bo("phòng ngủ theo tầng: '1 phòng ngủ ngay tầng trệt' không phải tổng số", T, "so_phong_ngu", "1", "1 phòng ngủ", "phong_ngu_theo_tang");
+  bo("phòng ngủ theo tầng: '2pn trên lầu'", "nhà 1 trệt 2 lầu, 2pn trên lầu", "so_phong_ngu", "2", "2pn trên lầu", "phong_ngu_theo_tang");
+  dat("tổng 3pn kèm '1 phòng ngủ dưới trệt' → 3 vẫn đạt", "nhà 3pn, 1 phòng ngủ dưới trệt, 2 wc", "so_phong_ngu", "3", "3pn");
+  dat("'4 phòng ngủ' trơn vẫn đạt", "nhà 4 phòng ngủ 3 wc", "so_phong_ngu", "4", "4 phòng ngủ");
+  const kt = kiemKienThuc(["đi bộ ra chợ 5 phút"], T, []);
+  ok("kiến thức: giữ vế 'phòng ngủ ngay tầng trệt' dù model không xếp vào", kt.includes("nhà có 1 phòng ngủ ngay tầng trệt cho người già") && kt.includes("đi bộ ra chợ 5 phút"), JSON.stringify(kt));
+}
+
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
