@@ -2338,6 +2338,16 @@ fresh(seedKho);
     check("FR248-E2 kho trống vì giá → nói căn gần tầm giá nhất (5,8 tỷ Trần Hưng Đạo), không bịa",
       rG.body.replies.some((x) => /Gần tầm giá nhất/.test(x) && /5,8 tỷ/.test(x) && /Trần Hưng Đạo/.test(x)), JSON.stringify(rG.body.replies));
   }
+  // (b2) bắn lại v275 (lx-mua-e3): kho CÓ căn khớp mà model chỉ "em gợi 2 căn khớp nhu cầu mình nhé:" rồi hết — câu đó không nằm
+  // trong mẫu câu hứa nên luật "thay câu hứa bằng căn đầu kho" không chạy, khách không thấy căn nào.
+  {
+    fresh((d) => { seedKho(d); const b = d.insert("buyers", { zalo_user_id: "ns-3", name: null, preferences: { deal: "ban", area: "phường 4", budget: "tầm 6 tỷ" } }).data;
+      d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-30T00:00:00Z" }); });
+    globalThis.__model.parse = () => OUT({ replies: ["Dạ em gợi 2 căn khớp nhu cầu mình nhé:"] });
+    const rH = await send({ external_user_id: "ns-3", text: "có căn nào không em" });
+    check("FR248-E2b kho có căn, model chỉ 'em gợi 2 căn … nhé:' → thay bằng căn thật trong kho (Trần Hưng Đạo 5,8 tỷ)",
+      rH.body.replies.some((x) => /Trần Hưng Đạo/.test(x) && /5,8 tỷ/.test(x)) && !rH.body.replies.some((x) => /gợi 2 căn/.test(x)), JSON.stringify(rH.body.replies));
+  }
   // (c) hỏi địa chỉ, khách "o q10" (chế độ chinh, AI im) → vi_tri "o q10", câu địa chỉ coi như xong, bot thôi hỏi đường.
   {
     fresh(seedKho);
