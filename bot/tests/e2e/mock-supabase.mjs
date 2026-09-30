@@ -485,8 +485,12 @@ class RpcCall {
       // FR-216 g (20260923h): chat-reply hỏi một RPC — mô phỏng bằng công tắc e2e (không mô phỏng tạm dừng / khoá).
       case "tim_nghia_san_sang":
         return { data: String((globalThis.__cauHinh ?? {}).tim_theo_nghia ?? "") === "bat", error: null };
-      case "cau_hinh":
-        return { data: (globalThis.__cauHinh ?? { test_reset_hello: "1" })[a.p_key] ?? null, error: null };
+      case "cau_hinh": {
+        // 30/09/2026: production không có dòng `luat_loi_bot` = GỌN. Bộ e2e cũ viết cho đủ luật nên mock mặc định `du`;
+        // ca GỌN tự đặt `luat_loi_bot: "gon"` trong __cauHinh.
+        const ch = globalThis.__cauHinh ?? { test_reset_hello: "1" };
+        return { data: ch[a.p_key] ?? (a.p_key === "luat_loi_bot" ? "du" : null), error: null };
+      }
       // FR-245 (20260929a): "hello" gọi thẳng hàm xoá lõi `xoa_nguoi_theo_zalo`; `reset_nguoi_test` (công cụ thử) chỉ nhận ID thử.
       case "xoa_nguoi_theo_zalo":
       case "reset_nguoi_test": {
