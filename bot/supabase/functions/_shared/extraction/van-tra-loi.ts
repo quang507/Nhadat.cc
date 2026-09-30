@@ -1182,7 +1182,8 @@ export function thayCauHoiLech(reply: string, khoa: string | null | undefined, c
 // Lời hứa ("em sẽ rao tích cực") giữ.
 // FR-240 e (phát lại lần ba, v264): "Em cảm ơn anh, đã ghi đủ thông tin rồi ạ." khi tin mới có tên đường — tin chưa lên là
 // còn thiếu, "đủ thông tin" là nói sai. "Dạ em ghi đủ rồi ạ" (đủ những gì khách vừa nói — ví dụ mẫu FR-178) giữ.
-const DA_DANG_RE = /\b(?:ghi|co|nhan|lay)\s+(?:du|day du)\s+thong\s+tin\b|\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b/;
+// 30/09/2026 (chủ dự án chat thử): lượt đầu "em cần bán nhà" → "mình đã tạo tin rồi" khi chưa có gì — cùng loại hứa.
+const DA_DANG_RE = /\b(?:da|vua)\s+tao\s+(?:tin|bai)\b|\btao\s+tin\s+(?:roi|xong)\b|\b(?:ghi|co|nhan|lay)\s+(?:du|day du)\s+thong\s+tin\b|\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b/;
 export function boHuaDaDang(replies: string[]): string[] {
   const ra: string[] = [];
   for (const r of replies) {
@@ -1329,4 +1330,38 @@ export function goiDat(reply: string): string {
 // 27/09/2026 (test Zalo, căn Botanic): tin đã là CĂN HỘ mà bot vẫn "nhà anh ở phường nào" — gọi đúng "căn hộ".
 export function goiCanHo(reply: string): string {
   return reply.replace(/(?<![\p{L}])([Nn])hà (anh|chị|mình|chú|cô|bác|em)(?![\p{L}])/gu, (_m, n: string, x: string) => `${n === "N" ? "Căn" : "căn"} hộ ${x}`);
+}
+
+// ── 30/09/2026 (chủ dự án chat thử, bot v277) ──
+// "Mình cho mình xin địa chỉ" — bot tự xưng "mình". "mình" chỉ dùng để GỌI khách chưa rõ anh / chị; bot luôn là "em"
+// (người lớn tuổi thì `doiTuXung` đổi tiếp sang "cháu"). Chỉ sửa những cụm chắc chắn là bot nói về mình: xin / hỏi
+// cho mình, mình ghi nhận / ghi lại / lưu lại / tạo tin.
+export function botXungEm(r: string): string {
+  if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) return r;
+  return r
+    .replace(/(?<![\p{L}])([Cc])ho mình (xin|hỏi)(?![\p{L}])/gu, "$1ho em $2")
+    .replace(/(?<![\p{L}])([Mm])ình (đã |vừa |sẽ )?(ghi nhận|ghi lại|lưu lại|tạo tin)(?![\p{L}])/gu,
+      (_m, m: string, t: string | undefined, v: string) => `${m === "M" ? "Em" : "em"} ${t ?? ""}${v}`);
+}
+
+// Khen VỊ TRÍ suông ("Địa chỉ nằm khu vực An Hội Tây, vị trí khá thuận tiện") — bot không có dữ liệu gì về khu đó. Bỏ
+// mệnh đề khen, giữ phần còn lại của câu; câu hỏi giữ nguyên.
+const KHEN_VI_TRI = /\b(?:vi tri|khu vuc|khu nay|khu do|cho nay|cho do|dia chi|dia the|vung nay)\b[^.!?]{0,40}?\b(?:(?:kha|rat|cung|qua|that|lam|thi)\s+)?(?:thuan tien|thuan loi|dac dia|dep|ly tuong|sam uat|dang song|tiem nang|dong duc|dac biet|tot|ok|on)\b/;
+export function boKhenViTri(replies: string[]): string[] {
+  const ra = boKhenViTriTho(replies);
+  return ra.length ? ra : replies;
+}
+function boKhenViTriTho(replies: string[]): string[] {
+  const laKhen = (md: string) => !/\?/.test(md) && KHEN_VI_TRI.test(boDau(md));
+  return replies.map((r) => {
+    if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) return r;
+    const ra = r.split("\n").map((d) => tachCau(d).map((c) => {
+      const md = c.split(/,\s+/);
+      const giu = md.filter((x) => !laKhen(x));
+      if (giu.length === md.length) return c;
+      const gop = giu.join(", ").trim().replace(/(?<![.!?…)])$/u, giu.length ? "." : "");
+      return gop && gop !== "." ? gop.charAt(0).toUpperCase() + gop.slice(1) : "";
+    }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
+    return ra;
+  }).filter(Boolean);
 }

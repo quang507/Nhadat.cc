@@ -2,7 +2,7 @@
 // khop-phuong.mjs — KIỂM tên phường AI đọc ra + quy ước số nhà hẻm (30/09/2026, chạy offline).
 // Chủ dự án 30/09: "để AI nhận" — không còn luật dò tên phường; AI chọn tên (có danh sách mới + cũ trong câu lệnh), máy xác
 // nhận tên có thật và câu khách có nhắc nó. Danh sách = 168 phường THẬT (20260915a) + 487 tên cũ (ds-phuong.ts).
-import { cauNhacPhuong, chotPhuongAi, danhSachPhuongChoAi, laTenPhuongChu, nghiaDuChac, phuongChuan, phuongTrongTrich, tenDayDu } from "../supabase/functions/_shared/extraction/khop-phuong.ts";
+import { cauNhacPhuong, chiLaDonViHanhChinh, chotPhuongAi, phuongNhacTrongCau, danhSachPhuongChoAi, laTenPhuongChu, nghiaDuChac, phuongChuan, phuongTrongTrich, tenDayDu } from "../supabase/functions/_shared/extraction/khop-phuong.ts";
 import { PHUONG_CU, PHUONG_MOI } from "../supabase/functions/_shared/extraction/ds-phuong.ts";
 import { kiemDeXuat } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { tachSoNhaHem } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
@@ -69,6 +69,26 @@ ok("có khoảng trắng '137 / 28 / 5' vẫn đọc", tachSoNhaHem("nhà 137 / 
 ok("'đường 3/2' là tên đường → null", tachSoNhaHem("nhà mặt tiền đường 3/2") === null);
 ok("'1/2 tỷ' không phải địa chỉ → null", tachSoNhaHem("bớt 1/2 tỷ") === null);
 ok("số nhà trơn '105 Trần Bình Trọng' → null", tachSoNhaHem("105 Trần Bình Trọng") === null);
+
+// ── FR-250 (30/09/2026, bắn thật v277): lưới đỡ khi AI không trả phường + địa chỉ chỉ có tên hành chính ──
+const pn = (c, q) => phuongNhacTrongCau(c, q)?.ten_day_du ?? null;
+for (const [c, q, mong] of [
+  ["bán căn hộ bên thảo điền quận 2 cũ, 2pn 75m2, giá 8 tỷ", "Quận 2", "Phường An Khánh"],
+  ["bán căn hộ bên thảo điền quận 2 cũ, 2pn 75m2, giá 8 tỷ", null, "Phường An Khánh"],
+  ["nhà vĩnh lộc b bình chánh 5 tỷ", null, "Xã Tân Vĩnh Lộc"],
+  ["nhà an hội tây gò vấp", "Quận Gò Vấp", "Phường An Hội Tây"],
+  ["nhà phường bến thành quận 1", "Quận 1", "Phường Bến Thành"],
+  ["bán căn hộ bên thảo điền", "Quận 9", null],           // khác quận → không đoán
+  ["bán nhà quận bình thạnh 5 tỷ", "Quận Bình Thạnh", null], // tên quận, không phải phường
+  ["bán nhà gò vấp 60m2", null, null],
+  ["nhà mặt tiền đường tân định", null, null],               // sau chữ "đường" là tên đường
+  ["bán nhà sài gòn 5 tỷ", null, null],
+]) ok(`FR250 phuongNhacTrongCau('${c}', ${q}) = ${mong}`, pn(c, q) === mong, String(pn(c, q)));
+for (const [c, mong] of [
+  ["vĩnh lộc b bình chánh", true], ["nhà ở thảo điền quận 2 cũ", true], ["o q10", true], ["an hội tây gò vấp", true],
+  ["137/28 đường số 59", false], ["đường Tân Định", false], ["ấp 3 vĩnh lộc b", false], ["Nguyễn Trãi quận 5", false],
+  ["hẻm 45 Nguyễn Trãi", false], ["Xoài Đôi", false],
+]) ok(`FR250 chiLaDonViHanhChinh('${c}') = ${mong}`, chiLaDonViHanhChinh(c) === mong);
 
 console.log(`\nKHỚP PHƯỜNG: ${dat} đạt · ${hong} hỏng`);
 if (hong) { console.log("KHỚP PHƯỜNG: CÓ CA HỎNG"); process.exit(1); }

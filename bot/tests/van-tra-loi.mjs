@@ -5,7 +5,7 @@
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { boHuaDaDang, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
@@ -1078,6 +1078,20 @@ for (const [vao, ra] of [["giá 9.2 tỷ TL, hh 1%", "giá 9.2 tỷ TL"], ["giá
 for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em gợi 2 căn khớp nhu cầu mình nhé:", true], ["Em gợi ý vài căn cho anh nha", true],
   ["Mình muốn em gợi ý khu nào ạ?", false], ["Em hỏi thêm chút nha", false]]) {
   ok(`FR248-f câu hứa '${c}' → ${m}`, laHuaCoHang(c, false) === m);
+}
+
+// FR-250 (chủ dự án chat thử 30/09, v277): lượt đầu "em cần bán nhà" → "Cảm ơn đã tin tưởng, mình đã tạo tin rồi. Mình cho mình
+// xin địa chỉ…" (bot hứa đã tạo tin + tự xưng "mình"); "Địa chỉ nằm khu vực An Hội Tây, vị trí khá thuận tiện" (khen suông).
+{
+  const r = botXungEm(boHuaDaDang(["Cảm ơn đã tin tưởng, mình đã tạo tin rồi. Mình cho mình xin địa chỉ nhà nha?"])[0]);
+  ok("FR250 bỏ 'mình đã tạo tin rồi', bot xưng em", r === "Cảm ơn đã tin tưởng. Mình cho em xin địa chỉ nhà nha?", r);
+  ok("FR250 'Mình ghi nhận rồi' → 'Em ghi nhận rồi'", botXungEm("Mình ghi nhận rồi nha.") === "Em ghi nhận rồi nha.");
+  ok("FR250 'mình cho em hỏi' (gọi khách) giữ", botXungEm("Dạ mình cho em hỏi giá nha?") === "Dạ mình cho em hỏi giá nha?");
+  ok("FR250 'Sổ nhà mình' giữ", botXungEm("Sổ nhà mình riêng hay chung ạ?") === "Sổ nhà mình riêng hay chung ạ?");
+  const k = boKhenViTri(["Dạ em ghi nhận. Địa chỉ nằm khu vực An Hội Tây, vị trí khá thuận tiện. Cho em xin diện tích nha?"]);
+  ok("FR250 bỏ 'vị trí khá thuận tiện'", k[0] === "Dạ em ghi nhận. Địa chỉ nằm khu vực An Hội Tây. Cho em xin diện tích nha?", k[0]);
+  ok("FR250 câu hỏi về khu vực giữ", boKhenViTri(["Khu vực này đẹp không anh?"])[0] === "Khu vực này đẹp không anh?");
+  ok("FR250 bong bóng chỉ có khen vị trí → bỏ", JSON.stringify(boKhenViTri(["Vị trí rất đẹp ạ.", "Cho em xin giá nha?"])) === JSON.stringify(["Cho em xin giá nha?"]));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
