@@ -26,7 +26,8 @@ import { laThuanNhan } from "./nhan.ts";
 // 30/09/2026 (bắn thử vector, nhà phố Trần Bình Trọng): "nhà có 1 phòng ngủ ngay tầng trệt cho người già" → ô số phòng ngủ
 // = 1, còn chi tiết "phòng ngủ ở tầng trệt" (thứ người mua có ba mẹ lớn tuổi đi tìm) mất khỏi vector. Số phòng ngủ đi kèm
 // VỊ TRÍ TẦNG là phòng ngủ Ở ĐÂU, không phải TỔNG số phòng ngủ.
-const PN_SAU_SO = String.raw`\s*(?:phong ngu|pn)\s+(?:(?:o|ngay|nam|duoi|tren|tai|la)\s+){0,2}(?:tang|tret|lau)\b`;
+// "2pn tầng 12" (căn hộ ở tầng 12) KHÔNG tính: không có chữ chỉ chỗ thì chỉ "trệt" mới là tầng của phòng ngủ.
+const PN_SAU_SO = String.raw`\s*(?:phong ngu|pn)\s+(?:(?:(?:o|ngay|nam|duoi|tren|tai)\s+){1,2}(?:tang|tret|lau)|(?:tang\s+)?tret)\b`;
 const PN_O_TANG_RE = new RegExp(String.raw`\b(\d{1,2}|mot|hai|ba|bon|nam)` + PN_SAU_SO);
 const SO_CHU_PN: Record<string, number> = { mot: 1, hai: 2, ba: 3, bon: 4, nam: 5 };
 const veCau = (tin: string): string[] => (tin ?? "").split(/[,;\n]|\.(?!\d)/).map((c) => c.trim()).filter(Boolean);
@@ -1158,7 +1159,7 @@ const FACT_PHU: Array<[string, RegExp, (m: RegExpExecArray) => string]> = [
   // 29/09/2026 (kịch bản K2): "2pn2wc" gõ dính — biên từ `\b` giữa "n" và "2" không có, nên cả phòng ngủ lẫn WC rơi. Số đứng
   // sau chữ cái ("pn2wc") và đơn vị đứng trước chữ số vẫn tính.
   // 30/09/2026: "1 phòng ngủ ngay tầng trệt" là phòng ngủ theo tầng, không phải tổng số (soPhongNguTheoTang).
-  ["so_phong_ngu", /(?<!\b(?:chdv|dich vu|toa nha|nha tro|day tro|phong tro)\b[^,.;]{0,12})(?<![\d.,])(\d{1,2})(?!\s*(?:phong ngu|pn)\s+(?:(?:o|ngay|nam|duoi|tren|tai|la)\s+){0,2}(?:tang|tret|lau)\b)\s*(?:phong ngu|pn|phong)(?![a-z])(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
+  ["so_phong_ngu", /(?<!\b(?:chdv|dich vu|toa nha|nha tro|day tro|phong tro)\b[^,.;]{0,12})(?<![\d.,])(\d{1,2})(?!\s*(?:phong ngu|pn)\s+(?:(?:(?:o|ngay|nam|duoi|tren|tai)\s+){1,2}(?:tang|tret|lau)|(?:tang\s+)?tret)\b)\s*(?:phong ngu|pn|phong)(?![a-z])(?!\s*(?:tro|cho thue|khach|tam|dich vu|bep|wc))/, (m) => m[1]],
   ["so_phong", /\b(?:chdv|can ho dich vu|toa nha|nha tro|day tro)\b[^,.;]{0,12}?\b(\d{1,3})\s*phong\b(?!\s*(?:ngu|wc|tam|ve sinh))/, (m) => m[1]],
   ["so_wc", /(?:\b|(?<=[a-z]))(\d{1,2})\s*(?:wc|toilet|ve sinh)(?![a-z])/, (m) => m[1]],
   // 29/09/2026 (kịch bản L1): căn hộ "block V3 tầng 12 76m2" — câu rao một mảnh, luật cả câu trả phí quản lý nên tầng rơi. Tầng
