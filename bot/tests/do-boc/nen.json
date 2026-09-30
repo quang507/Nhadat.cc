@@ -1,6 +1,6 @@
 {
   "ghi_chu": "Bản nền chế độ LUẬT MỘT MÌNH (model giả), DB giả. Chỉ tăng: thêm ca mới đạt khi code tốt lên; xoá một ca khỏi đây là tuyên bố chấp nhận tụt — cần lý do trong PR.",
-  "moc": "20260929 (FR-243)",
+  "moc": "20260930 (mock parse_vnd đọc \"tỏi\" như bản thật → T01 đạt)",
   "ca_dat": [
     "B02",
     "B03",
@@ -19,6 +19,7 @@
     "K10",
     "K13",
     "K14",
+    "T01",
     "T03",
     "T06",
     "T07",
@@ -75,6 +76,6 @@
     "S09",
     "C01"
   ],
-  "truong_dung": 509,
+  "truong_dung": 510,
   "truong_tong": 572
 }

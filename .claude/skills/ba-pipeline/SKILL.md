@@ -35,6 +35,8 @@ soát tính nhất quán của bộ tài liệu.
    └── Ý muốn tự phát → dừng, hỏi chủ dự án hoặc ghi OPEN-xx
 
 2. Cấp FR-xxx tiếp theo trong 02-requirements.md (M/S/C + nguồn)
+   — TỪ 30/09/2026 KHÔNG BẮT BUỘC cho sửa lỗi / cải tiến: ghi thẳng mục SRS ở docs/07
+     (ca gốc, nguyên nhân, chỗ sửa, cách kiểm), cùng commit với code. Xem docs/11 §11.2.
 
 3. Đi hết chuỗi — bỏ mắt xích nào là tài liệu vỡ:
    FR → UF (03) → WF (05) → SRS (07) → AC (07 §7)

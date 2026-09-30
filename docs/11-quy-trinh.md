@@ -24,6 +24,8 @@ dev làm cho nó đúng.** Ba việc, ba lượt, theo thứ tự đó.
 
 ## 11.2 Vòng BA — từ ý muốn tới truy vết
 
+**Từ 30/09/2026 (chủ dự án: "bỏ luôn giờ ko cần FR nữa, viết vào trong docs đi"): sửa lỗi / cải tiến bot và web KHÔNG cần cấp FR trước khi code.** Thay vào đó ghi thẳng vào tài liệu tầng liên quan (thường là `docs/07` — một mục SRS kèm ca gốc, nguyên nhân, chỗ sửa, cách kiểm; ví dụ SRS-5.1a), cùng commit với code và test. FR cũ giữ nguyên số, vẫn là tham chiếu; ai muốn cấp FR cho một tính năng lớn vẫn được, chỉ không còn là cổng bắt buộc. Các bước 3–6 dưới đây chỉ áp khi có cấp FR.
+
 ```
 1. Nó đến từ đâu?
    ├─ Tài liệu gốc      → trích [nguồn: <file> §<mục>]

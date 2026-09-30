@@ -198,7 +198,15 @@ create table if not exists public.duong (
   phuong text not null default ''::text,
   quan_cu text,
   nguon text not null,
-  created_at timestamp with time zone not null default now()
+  created_at timestamp with time zone not null default now(),
+  loai text not null default 'duong'::text,
+  so_hem text,
+  duong_me text,
+  lat double precision,
+  lng double precision,
+  nhung extensions.vector(768),
+  nhung_md5 text,
+  nhung_luc timestamp with time zone
 );
 
 create table if not exists public.inbound_events (
@@ -413,6 +421,14 @@ create table if not exists public.nhung_viec (
   gui_luc timestamp with time zone not null default now()
 );
 
+create table if not exists public.nhung_viec_dia_danh (
+  bang text not null,
+  khoa text not null,
+  request_id bigint not null,
+  md5 text not null,
+  gui_luc timestamp with time zone not null default now()
+);
+
 create table if not exists public.nhung_viec_du_an (
   project_id uuid not null,
   request_id bigint not null,
@@ -433,6 +449,20 @@ create table if not exists public.project_facts (
   duyet_boi text,
   created_at timestamp with time zone not null default now(),
   ten_du_an text
+);
+
+create table if not exists public.phuong_cu (
+  id bigint generated always as identity,
+  ten text not null,
+  loai text not null,
+  quan_cu text not null,
+  phuong_moi text not null,
+  toan_bo boolean not null,
+  lat double precision,
+  lng double precision,
+  nhung extensions.vector(768),
+  nhung_md5 text,
+  nhung_luc timestamp with time zone
 );
 
 create table if not exists public.projects (
@@ -477,6 +507,16 @@ create table if not exists public.property_events (
   buyer_id uuid,
   at timestamp with time zone not null default now(),
   meta jsonb
+);
+
+create table if not exists public.quan_cu (
+  ten text not null,
+  lat double precision,
+  lng double precision,
+  so_phuong_moi integer not null default 0,
+  nhung extensions.vector(768),
+  nhung_md5 text,
+  nhung_luc timestamp with time zone
 );
 
 create table if not exists public.ratings_log (
@@ -574,7 +614,10 @@ create table if not exists public.wards (
   ma_hanh_chinh text,
   nguon text not null,
   ghi_chu text,
-  created_at timestamp with time zone not null default now()
+  created_at timestamp with time zone not null default now(),
+  nhung extensions.vector(768),
+  nhung_md5 text,
+  nhung_luc timestamp with time zone
 );
 
 -- ══ Ràng buộc (PK / UNIQUE / CHECK) ══
@@ -793,6 +836,27 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.nhung_viec add constraint nhung_viec_pkey PRIMARY KEY (listing_id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.duong add constraint duong_loai_check CHECK ((loai = ANY (ARRAY['duong'::text, 'so'::text, 'hem'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.nhung_viec_dia_danh add constraint nhung_viec_dia_danh_bang_check CHECK ((bang = ANY (ARRAY['wards'::text, 'duong'::text, 'phuong_cu'::text, 'quan_cu'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.nhung_viec_dia_danh add constraint nhung_viec_dia_danh_pkey PRIMARY KEY (bang, khoa);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.phuong_cu add constraint phuong_cu_loai_check CHECK ((loai = ANY (ARRAY['phuong'::text, 'xa'::text, 'thi_tran'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.phuong_cu add constraint phuong_cu_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.phuong_cu add constraint phuong_cu_ten_quan_cu_phuong_moi_key UNIQUE (ten, quan_cu, phuong_moi);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.quan_cu add constraint quan_cu_pkey PRIMARY KEY (ten);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.nhung_viec_du_an add constraint nhung_viec_du_an_pkey PRIMARY KEY (project_id);
@@ -1075,6 +1139,12 @@ create index if not exists project_facts_conversation_id_idx ON public.project_f
 CREATE UNIQUE INDEX project_facts_khong_trung_idx ON public.project_facts USING btree (COALESCE((project_id)::text, lower(btrim(ten_du_an))), khoa, gia_tri) WHERE (trang_thai <> 'bo'::text);
 create index if not exists project_facts_listing_id_idx ON public.project_facts USING btree (listing_id);
 create index if not exists project_facts_project_id_idx ON public.project_facts USING btree (project_id);
+create index if not exists duong_hem ON public.duong USING btree (upper(so_hem), bo_dau(duong_me)) WHERE (loai = 'hem'::text);
+create index if not exists duong_lat_lng ON public.duong USING btree (lat, lng);
+create index if not exists duong_nhung_hnsw ON public.duong USING hnsw (nhung extensions.vector_cosine_ops);
+create index if not exists phuong_cu_nhung_hnsw ON public.phuong_cu USING hnsw (nhung extensions.vector_cosine_ops);
+create index if not exists quan_cu_nhung_hnsw ON public.quan_cu USING hnsw (nhung extensions.vector_cosine_ops);
+create index if not exists wards_nhung_hnsw ON public.wards USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists projects_nhung_hnsw ON public.projects USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists projects_priority_idx ON public.projects USING btree (priority, district);
 create index if not exists property_events_at_idx ON public.property_events USING btree (at DESC);
@@ -2735,6 +2805,37 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.dia_danh_gan(
+  p_lat double precision, p_lng double precision, p_ban_kinh_m double precision default 1000,
+  p_loai text[] default array['duong', 'so'], p_limit integer default 20)
+returns table (loai text, ten text, phuong text, quan_cu text, lat double precision, lng double precision, cach_m double precision)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+AS $function$
+  with k as (select greatest(50, least(coalesce(p_ban_kinh_m, 1000), 10000)) as r),
+  ung as (
+    select d.loai, d.ten, nullif(d.phuong, '') as phuong, d.quan_cu, d.lat, d.lng
+      from public.duong d, k
+     where d.lat between p_lat - k.r / 111000.0 and p_lat + k.r / 111000.0
+       and d.lng between p_lng - k.r / 109000.0 and p_lng + k.r / 109000.0
+       and (p_loai is null or d.loai = any(p_loai))
+    union all
+    select 'du_an', pr.name, pr.ward, pr.district, pr.lat::double precision, pr.lng::double precision
+      from public.projects pr, k
+     where (p_loai is null or 'du_an' = any(p_loai)) and pr.lat is not null
+       and pr.lat between p_lat - k.r / 111000.0 and p_lat + k.r / 111000.0
+       and pr.lng between p_lng - k.r / 109000.0 and p_lng + k.r / 109000.0
+  )
+  select u.loai, u.ten, u.phuong, u.quan_cu, u.lat, u.lng, public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) as cach_m
+    from ung u, k
+   where public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) <= k.r
+   order by cach_m
+   limit greatest(1, least(coalesce(p_limit, 20), 100));
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.diem_nguoi_ban(p_seller_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -3064,6 +3165,29 @@ AS $function$
            p.is_partner desc nulls last,
            p.geocode_at nulls first
   limit greatest(1, least(coalesce(p_limit, 30), 200))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.duong_gan_duong(
+  p_ten text, p_phuong text default null, p_ban_kinh_m double precision default 1500, p_limit integer default 20)
+returns table (goc_phuong text, ten text, loai text, phuong text, quan_cu text, cach_m double precision)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+AS $function$
+  with goc as (
+    select d.phuong, d.lat, d.lng from public.duong d
+     where d.ten_khong_dau = public.bo_dau(regexp_replace(btrim(coalesce(p_ten, '')), '\s+', ' ', 'g'))
+       and d.lat is not null and (p_phuong is null or d.phuong = p_phuong)
+     limit 20
+  )
+  select distinct on (g.phuong, n.ten, n.phuong) g.phuong, n.ten, n.loai, n.phuong, n.quan_cu, n.cach_m
+    from goc g
+    cross join lateral public.dia_danh_gan(g.lat, g.lng, p_ban_kinh_m, array['duong', 'so'], 60) n
+   where public.bo_dau(n.ten) <> public.bo_dau(coalesce(p_ten, ''))
+   order by g.phuong, n.ten, n.phuong, n.cach_m
+   limit greatest(1, least(coalesce(p_limit, 20), 100));
 $function$
 ;
 
@@ -3787,6 +3911,20 @@ AS $function$
   select 6371000 * 2 * asin(least(1, sqrt(
     power(sin(radians(p_lat2 - p_lat1) / 2), 2)
     + cos(radians(p_lat1)) * cos(radians(p_lat2)) * power(sin(radians(p_lng2 - p_lng1) / 2), 2))))
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.khoang_cach_m(lat1 double precision, lng1 double precision, lat2 double precision, lng2 double precision)
+returns double precision
+language sql
+immutable
+parallel safe
+set search_path = public, pg_temp
+AS $function$
+  select case when lat1 is null or lng1 is null or lat2 is null or lng2 is null then null
+    else 2 * 6371000 * asin(sqrt(
+      power(sin(radians(lat2 - lat1) / 2), 2) + cos(radians(lat1)) * cos(radians(lat2)) * power(sin(radians(lng2 - lng1) / 2), 2)))
+  end;
 $function$
 ;
 
@@ -5038,6 +5176,107 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.nhung_dia_danh_tick()
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions, pg_temp
+AS $function$
+declare
+  v record;
+  r record;
+  v_key text;
+  v_txt text;
+  v_md5 text;
+  v_vals jsonb;
+  v_gui int := 0;
+  v_tran int;
+  v_dung timestamptz;
+  v_tu_choi boolean := false;
+  v_ma int;
+  v_mau text;
+begin
+  -- (1) Thu kết quả lượt trước. Chưa có phản hồi thì chờ; quá 10 phút thì bỏ, lượt sau gửi lại.
+  -- "Đã gọi net.http_post" KHÔNG phải bằng chứng (NFR-18): chỉ ghi vector khi đọc được 200 + đúng 768 số.
+  for v in
+    select nv.bang, nv.khoa, nv.md5, nv.gui_luc, h.status_code, h.content, h.error_msg
+      from public.nhung_viec_dia_danh nv left join net._http_response h on h.id = nv.request_id
+  loop
+    if v.status_code is null and v.error_msg is null then
+      if v.gui_luc < now() - interval '10 minutes' then
+        delete from public.nhung_viec_dia_danh where bang = v.bang and khoa = v.khoa;
+      end if;
+      continue;
+    end if;
+    if v.status_code = 200 then
+      v_vals := (v.content::jsonb) -> 'embedding' -> 'values';
+      if jsonb_typeof(v_vals) = 'array' and jsonb_array_length(v_vals) = 768 then
+        if v.bang = 'wards' then
+          update public.wards set nhung = (v_vals::text)::extensions.vector, nhung_md5 = v.md5, nhung_luc = now() where ten = v.khoa;
+        elsif v.bang = 'phuong_cu' then
+          update public.phuong_cu set nhung = (v_vals::text)::extensions.vector, nhung_md5 = v.md5, nhung_luc = now() where id::text = v.khoa;
+        elsif v.bang = 'quan_cu' then
+          update public.quan_cu set nhung = (v_vals::text)::extensions.vector, nhung_md5 = v.md5, nhung_luc = now() where ten = v.khoa;
+        else
+          update public.duong set nhung = (v_vals::text)::extensions.vector, nhung_md5 = v.md5, nhung_luc = now() where id::text = v.khoa;
+        end if;
+      else
+        perform public.log_loi('nhung-dia-danh-tick', 'Gemini embed trả khuôn lạ cho ' || v.bang || ' ' || v.khoa, null);
+      end if;
+    else
+      v_tu_choi := true;
+      v_ma := coalesce(v_ma, v.status_code);
+      v_mau := coalesce(v_mau, left(coalesce(v.error_msg, v.content, ''), 200));
+    end if;
+    delete from public.nhung_viec_dia_danh where bang = v.bang and khoa = v.khoa;
+  end loop;
+
+  -- Gemini từ chối → đặt mốc tạm dừng CHUNG với nhung-tick (chung hạn mức).
+  if v_tu_choi then
+    v_dung := now() + make_interval(mins => case when v_ma = 402 then 60 else 4 end);
+    update public.app_config set value = to_char(v_dung at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+     where key = 'nhung_tam_dung_den'
+       and coalesce(nullif(value, '')::timestamptz, '-infinity'::timestamptz) < v_dung;
+    perform public.log_loi('nhung-dia-danh-tick', 'Gemini embed từ chối HTTP ' || coalesce(v_ma::text, '?') || '. ' || coalesce(v_mau, ''), null);
+  end if;
+
+  -- (2) Gửi mẻ mới: quận cũ → phường mới → phường cũ → đường (không nhúng hẻm). Chỉ khi tin rao + dự án không chờ.
+  if coalesce(public.cau_hinh('tim_theo_nghia'), 'tat') <> 'bat' then return; end if;
+  v_dung := nullif(public.cau_hinh('nhung_tam_dung_den'), '')::timestamptz;
+  if v_dung is not null and v_dung > now() then return; end if;
+  if exists (select 1 from public.nhung_viec) or exists (select 1 from public.nhung_viec_du_an)
+     or exists (select 1 from public.nhung_viec_dia_danh) then return; end if;
+  v_key := public.get_secret('GEMINI_API_KEY');
+  if v_key is null then return; end if;
+  v_tran := greatest(1, least(coalesce(nullif(public.cau_hinh('nhung_dia_danh_moi_tick'), '')::int, 20), 50));
+
+  for r in
+    (select 'quan_cu' as bang, q.ten as khoa, q.nhung_md5 from public.quan_cu q where q.nhung is null limit 50)
+    union all
+    (select 'wards', w.ten, w.nhung_md5 from public.wards w where w.nhung is null limit 50)
+    union all
+    (select 'phuong_cu', p.id::text, p.nhung_md5 from public.phuong_cu p where p.nhung is null limit 50)
+    union all
+    (select 'duong', d.id::text, d.nhung_md5 from public.duong d where d.nhung is null and d.loai <> 'hem' limit 100)
+  loop
+    exit when v_gui >= v_tran;
+    v_txt := public.van_ban_dia_danh(r.bang, r.khoa);
+    if v_txt is null or length(v_txt) < 4 then continue; end if;
+    v_md5 := md5(v_txt);
+    if r.nhung_md5 is not distinct from v_md5 then continue; end if;
+    insert into public.nhung_viec_dia_danh (bang, khoa, request_id, md5)
+    values (r.bang, r.khoa, net.http_post(
+      url := 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-goog-api-key', v_key),
+      body := jsonb_build_object(
+        'content', jsonb_build_object('parts', jsonb_build_array(jsonb_build_object('text', left(v_txt, 1500)))),
+        'taskType', 'RETRIEVAL_DOCUMENT', 'outputDimensionality', 768),
+      timeout_milliseconds := 20000), v_md5);
+    v_gui := v_gui + 1;
+  end loop;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.nhung_tick()
  RETURNS void
  LANGUAGE plpgsql
@@ -5374,6 +5613,25 @@ begin
 exception when others then
   return null;
 end
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.phuong_giao_hai_duong(p_duong1 text, p_duong2 text, p_ban_kinh_m double precision default 1200)
+returns table (phuong text, quan_cu text, cach_m double precision)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+AS $function$
+  select a.phuong, a.quan_cu, min(public.khoang_cach_m(a.lat, a.lng, b.lat, b.lng)) as cach_m
+    from public.duong a
+    join public.duong b on b.ten_khong_dau = public.bo_dau(regexp_replace(btrim(coalesce(p_duong2, '')), '\s+', ' ', 'g'))
+   where a.ten_khong_dau = public.bo_dau(regexp_replace(btrim(coalesce(p_duong1, '')), '\s+', ' ', 'g'))
+     and a.phuong <> '' and a.lat is not null and b.lat is not null
+     and public.khoang_cach_m(a.lat, a.lng, b.lat, b.lng) <= greatest(100, least(coalesce(p_ban_kinh_m, 1200), 5000))
+   group by a.phuong, a.quan_cu
+   order by cach_m
+   limit 5;
 $function$
 ;
 
@@ -6147,6 +6405,51 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.tim_dia_danh_theo_nghia(
+  p_vec double precision[], p_loai text[] default null, p_lat double precision default null, p_lng double precision default null,
+  p_limit integer default 5)
+returns table (loai text, khoa text, ten text, ten_day_du text, phuong text, quan_cu text, lat double precision, lng double precision,
+               do_gan double precision, cach_m double precision, diem double precision)
+language sql
+stable
+security definer
+set search_path = public, extensions, pg_temp
+AS $function$
+  with v as (select p_vec::extensions.vector(768) as q),
+  ung as (
+    (select 'phuong_moi'::text as loai, w.ten as khoa, w.ten, w.ten_day_du, w.ten_day_du as phuong, w.quan_cu,
+            w.lat::double precision as lat, w.lng::double precision as lng, 1 - (w.nhung <=> v.q) as do_gan
+       from public.wards w, v where w.nhung is not null and (p_loai is null or 'phuong_moi' = any(p_loai))
+      order by w.nhung <=> v.q limit 20)
+    union all
+    (select 'phuong_cu', p.id::text, p.ten, p.ten || ', ' || p.quan_cu, ww.ten_day_du, p.quan_cu, p.lat, p.lng, 1 - (p.nhung <=> v.q)
+       from public.phuong_cu p join public.wards ww on ww.ten = p.phuong_moi, v
+      where p.nhung is not null and (p_loai is null or 'phuong_cu' = any(p_loai))
+      order by p.nhung <=> v.q limit 20)
+    union all
+    (select 'quan_cu', q.ten, q.ten, q.ten, null, q.ten, q.lat, q.lng, 1 - (q.nhung <=> v.q)
+       from public.quan_cu q, v where q.nhung is not null and (p_loai is null or 'quan_cu' = any(p_loai))
+      order by q.nhung <=> v.q limit 10)
+    union all
+    (select d.loai, d.id::text, d.ten, d.ten || coalesce(', ' || nullif(d.phuong, ''), ''), nullif(d.phuong, ''), d.quan_cu, d.lat, d.lng,
+            1 - (d.nhung <=> v.q)
+       from public.duong d, v where d.nhung is not null and (p_loai is null or d.loai = any(p_loai))
+      order by d.nhung <=> v.q limit 40)
+    union all
+    (select 'du_an', pr.id::text, pr.name, pr.name, pr.ward, pr.district, pr.lat::double precision, pr.lng::double precision,
+            1 - (pr.nhung <=> v.q)
+       from public.projects pr, v where pr.nhung is not null and (p_loai is null or 'du_an' = any(p_loai))
+      order by pr.nhung <=> v.q limit 20)
+  )
+  select u.loai, u.khoa, u.ten, u.ten_day_du, u.phuong, u.quan_cu, u.lat, u.lng, u.do_gan,
+         public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) as cach_m,
+         u.do_gan - coalesce(least(public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) / 1000.0 * 0.01, 0.2), 0) as diem
+    from ung u
+   order by diem desc
+   limit greatest(1, least(coalesce(p_limit, 5), 30));
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.tim_du_an_theo_nghia(p_vec double precision[], p_limit integer DEFAULT 5)
  RETURNS TABLE(id uuid, name text, do_gan double precision)
  LANGUAGE sql
@@ -6161,11 +6464,11 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.tim_duong(p_ten text, p_quan text DEFAULT NULL::text, p_toi_da integer DEFAULT 2)
- RETURNS TABLE(ten text, khoang_cach integer, quan_cu text[], phuong text[], tinh text[])
- LANGUAGE sql
- STABLE
- SET search_path TO 'public', 'extensions'
+CREATE OR REPLACE FUNCTION public.tim_duong(p_ten text, p_quan text default null, p_toi_da integer default 2)
+returns table (ten text, khoang_cach integer, quan_cu text[], phuong text[], tinh text[])
+language sql
+stable
+set search_path = public, extensions
 AS $function$
   with q as (
     select public.bo_dau(regexp_replace(btrim(coalesce(p_ten, '')), '\s+', ' ', 'g')) as k
@@ -6174,6 +6477,7 @@ AS $function$
            levenshtein_less_equal(d.ten_khong_dau, q.k, greatest(coalesce(p_toi_da, 0), 0)) as kc
       from public.duong d, q
      where length(q.k) between 4 and 200
+       and d.loai <> 'hem'
        and abs(length(d.ten_khong_dau) - length(q.k)) <= greatest(coalesce(p_toi_da, 0), 0)
   )
   select c.ten,
@@ -6191,6 +6495,24 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.tim_hem(p_cap_hem text[], p_duong_me text, p_phuong text default null)
+returns table (ten text, so_hem text, phuong text, quan_cu text, lat double precision, lng double precision)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+AS $function$
+  select d.ten, d.so_hem, nullif(d.phuong, ''), d.quan_cu, d.lat, d.lng
+    from public.duong d
+    join unnest(p_cap_hem) with ordinality c(so, thu_tu) on upper(d.so_hem) = upper(c.so)
+   where d.loai = 'hem'
+     and public.bo_dau(coalesce(d.duong_me, '')) = public.bo_dau(regexp_replace(btrim(coalesce(p_duong_me, '')), '^(?:đường|duong)\s+(?![Ss]ố|so\s)', '', 'i'))
+     and (p_phuong is null or d.phuong = p_phuong)
+   order by c.thu_tu desc
+   limit 10;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.tim_nghia_san_sang()
  RETURNS boolean
  LANGUAGE sql
@@ -6200,6 +6522,21 @@ AS $function$
   select coalesce(public.cau_hinh('tim_theo_nghia'), 'tat') = 'bat'
      and coalesce(nullif(public.cau_hinh('nhung_tam_dung_den'), '')::timestamptz, '-infinity'::timestamptz) <= now()
      and public.get_secret('GEMINI_API_KEY') is not null;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tim_phuong_theo_nghia(p_vec double precision[], p_limit integer default 3)
+returns table (ten text, ten_day_du text, quan_cu text, do_gan double precision)
+language sql
+stable
+security definer
+set search_path = public, extensions, pg_temp
+AS $function$
+  select w.ten, w.ten_day_du, w.quan_cu, 1 - (w.nhung <=> (p_vec::extensions.vector(768)))
+    from public.wards w
+   where w.nhung is not null
+   order by w.nhung <=> (p_vec::extensions.vector(768))
+   limit greatest(1, least(coalesce(p_limit, 3), 10));
 $function$
 ;
 
@@ -6449,6 +6786,35 @@ CREATE OR REPLACE FUNCTION public.url_kho_anh()
  SET search_path TO 'public', 'pg_catalog'
 AS $function$
   select c.value from app_config c where c.key = 'storage_public_base_url';
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.van_ban_dia_danh(p_bang text, p_khoa text)
+returns text
+language sql
+stable
+set search_path = public, pg_temp
+AS $function$
+  select case p_bang
+    when 'wards' then (
+      select concat_ws('. ',
+        w.ten_day_du || ', ' || w.quan_cu || ' (cũ), ' || w.tinh_cu,
+        'Tên ngắn: ' || w.ten,
+        (select 'Gồm ' || string_agg(p.ten || ' ' || p.quan_cu, ', ' order by p.ten) || ' (trước 07/2025)'
+           from public.phuong_cu p where p.phuong_moi = w.ten))
+        from public.wards w where w.ten = p_khoa)
+    when 'phuong_cu' then (
+      select p.ten || ', ' || p.quan_cu || ' (trước 07/2025). Nay thuộc ' || w.ten_day_du || case when p.toan_bo then '' else ' (một phần)' end
+        from public.phuong_cu p join public.wards w on w.ten = p.phuong_moi where p.id::text = p_khoa)
+    when 'quan_cu' then (
+      select q.ten || ' (cũ, trước 07/2025), TP.HCM. Nay gồm các phường: '
+             || coalesce((select string_agg(distinct w.ten_day_du, ', ') from public.wards w where w.quan_cu = q.ten), '')
+        from public.quan_cu q where q.ten = p_khoa)
+    when 'duong' then (
+      select concat_ws(', ', case when d.loai = 'duong' then 'Đường ' || d.ten else d.ten end,
+                       nullif(d.phuong, ''), case when d.quan_cu is not null then d.quan_cu || ' (cũ)' end, d.tinh)
+        from public.duong d where d.id::text = p_khoa)
+  end;
 $function$
 ;
 
@@ -7502,6 +7868,9 @@ alter table public.media enable row level security;
 alter table public.media_cleanup_queue enable row level security;
 alter table public.messages enable row level security;
 alter table public.nhung_viec enable row level security;
+alter table public.nhung_viec_dia_danh enable row level security;
+alter table public.phuong_cu enable row level security;
+alter table public.quan_cu enable row level security;
 alter table public.nhung_viec_du_an enable row level security;
 alter table public.project_facts enable row level security;
 alter table public.projects enable row level security;
@@ -8257,6 +8626,7 @@ select cron.schedule('listing-interest-decay', '0 20 * * *', 'update public.list
    where status = ''dang_quan_tam'' and last_interest_at < now() - interval ''7 days''');
 select cron.schedule('media-chet-tick', '0 * * * *', 'select public.chon_viec_don_chet()');
 select cron.schedule('media-cleanup-tick', '*/5 * * * *', 'select public.media_cleanup_tick()');
+select cron.schedule('nhung-dia-danh-tick', '1-59/2 * * * *', 'select public.nhung_dia_danh_tick()');
 select cron.schedule('nhung-tick', '*/2 * * * *', 'select public.nhung_tick()');
 select cron.schedule('nudge-tick', '7,37 1-13 * * *', 'select nudge_tick()');
 select cron.schedule('seller-drip-tick', '22,52 1-13 * * *', 'select seller_drip_tick()');

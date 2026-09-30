@@ -313,8 +313,9 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const pn = (v, c) => kiemDeXuat([{ khoa: "so_phong_ngu", gia_tri: v, trich_dan: c }], c).bo[0]?.ly_do ?? null;
   ok("'20 phòng như em nói đó' → KHÔNG phải phòng ngủ", pn("20", "20 phòng như em nói đó") === "khong_noi_phong_ngu");
   ok("'3PN' / '5 phòng ngủ' vẫn là phòng ngủ", pn("3", "3PN 3WC") === null && pn("5", "5 phòng ngủ") === null);
-  ok("'xã Phước Vĩnh An' → 'Xã Phước Vĩnh An' (không thành Phường)", ghiCua([{ khoa: "phuong", gia_tri: "Phường Phước Vĩnh An", trich_dan: "xã Phước Vĩnh An" }], { deal: "ban" }) === "phuong=Xã Phước Vĩnh An");
-  ok("'thị trấn Nhà Bè' → 'Thị trấn Nhà Bè'", ghiCua([{ khoa: "phuong", gia_tri: "thị trấn Nhà Bè", trich_dan: "thị trấn Nhà Bè" }], { deal: "ban" }) === "phuong=Thị trấn Nhà Bè");
+  // 30/09/2026: tên CŨ (trước 07/2025) đổi sang phường MỚI có thật (OPEN-27: lưu tên mới) — Phước Vĩnh An gộp vào Xã Củ Chi.
+  ok("'xã Phước Vĩnh An' (cũ) → 'Xã Củ Chi' (mới)", ghiCua([{ khoa: "phuong", gia_tri: "Phường Phước Vĩnh An", trich_dan: "xã Phước Vĩnh An" }], { deal: "ban" }) === "phuong=Xã Củ Chi");
+  ok("'thị trấn Nhà Bè' (cũ) → 'Xã Nhà Bè' (mới)", ghiCua([{ khoa: "phuong", gia_tri: "thị trấn Nhà Bè", trich_dan: "thị trấn Nhà Bè" }], { deal: "ban" }) === "phuong=Xã Nhà Bè");
 }
 
 // FR-224 (25/09/2026): AI trả lời thẳng câu đang hỏi — code chỉ kiểm trích dẫn có thật + mọi con số có trong tin.

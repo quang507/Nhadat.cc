@@ -42,12 +42,13 @@ import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: m�
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
 import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
-import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
+import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
+import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, phuongChuan, tenDayDu } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
 import { cauChonPhuong, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, cauTraPhuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, tachTienToPhuong } from "../_shared/extraction/tra-phuong.ts";
 // FR-212 (21/09/2026): từ điển tên đường — chọn kết quả `tim_duong`, thay tên trong địa chỉ, câu hỏi xác nhận (thuần).
-import { catTenDuong, cauXacNhanDuong, chonDuong, type GoiYDuong, theTenDuong, type UngVienDuong } from "../_shared/extraction/tra-duong.ts";
+import { catTenDuong, cauXacNhanDuong, chonDuong, chonPhuongGanNhat, duongNhacKem, type GoiYDuong, khoaDuongSo, theTenDuong, type UngVienDuong } from "../_shared/extraction/tra-duong.ts";
 import { tenDuong } from "../_shared/geocode.ts";
 // FR-228 (25/09/2026): bộ câu tư vấn người mua của chủ dự án.
 import { cauTuVanKe, laHoiNyah, NHAN_TU_VAN } from "../_shared/extraction/tu-van-mua.ts";
@@ -1128,7 +1129,8 @@ Deno.serve(async (req) => {
           // 27/09/2026 (chủ dự án: "hỏi hơi nhiều"): tin bán — câu pháp lý gộp (`phap_ly@ban`, `quy_hoach@ban`).
           : (k === "phap_ly" || k === "quy_hoach") && deal === "ban" ? `${k}@ban` : k,
         ac, BANG_CAU, loai,
-      );
+      // 30/09/2026: "137/28 …" là hẻm 137, nhà số 28 (quy ước TP.HCM) — câu hỏi hẻm gọi đúng số hẻm.
+      ).replace(/trong hẻm(?!\s*\d)/, (s) => k === "do_rong_hem" && tachSoNhaHem(diaChi) ? `${s} ${tachSoNhaHem(diaChi)!.hem}` : s);
   const LOI_CHAO_DB = dienTen((P.loi_chao ?? LOI_CHAO).trim(), tenBot);
   const HUMAN = P.human_chat_rules ?? HUMAN_CHAT_RULES;
   const FEES = P.fee_rules ?? FEE_RULES;
@@ -1404,11 +1406,15 @@ Deno.serve(async (req) => {
     /\b(?:còn|đã|hết)\s+bán\s+(?:không|ko|k|chưa|chua)\b|\bbán\s+chưa\b|\bcòn\s+(?:không|ko|k)\s*(?:em|ạ|anh|chị|bạn)?\s*\??\s*$/i,
     /\b(?:con|da|het)\s+ban\s+(?:khong|ko|k|chua)\b|\bban\s+chua\b|\bcon\s+(?:khong|ko|k)\s*(?:em|a|anh|chi|ban)?\s*\??\s*$/,
   );
+  // 30/09/2026 (chat thử): người lạ được hỏi vai, đáp "hẻm 3m, 3x15, 2 lầu, bán 6 tỷ thương lượng" — có "bán", có giá, có
+  // ba chi tiết của CĂN mà thiếu chữ loại ("nhà / căn") nên không cổng nào nhận → thành KHÁCH MUA ngân sách 6 tỷ. Chữ
+  // "bán" + giá + ≥ 2 chi tiết căn + không dấu hiệu mua là câu rao, không cần chữ loại.
+  const raoKhongChuLoai = coChuBan && coGiaRo && !coDauHieuMua && !hoiConBan && soChiTietCan >= 2;
   const wantsSellLuat =
     (coChuBan && coLoaiBDS && !hoiConBan &&
       (coChiTiet || (coYDinhRao && !laCauHoiTinhTrang))) ||
     (moiGioiCoHang && coChiTiet && !khop(/\b(tìm|cần mua|muốn mua|thuê)\b/i, /\b(tim|can mua|muon mua)\b/)) ||
-    coHangCoGia || raoKhongChuBan;
+    coHangCoGia || raoKhongChuBan || raoKhongChuLoai;
   // ─── FR-205 (11/09/2026): LUẬT KHÔNG KẾT LUẬN ĐƯỢC THÌ HỎI MODEL ─────────────
   // Chủ dự án: "có thể dùng AI vào các chỗ quá cứng trong code không" → "gật".
   // Luật trên chỉ bắt KIỂU câu đã gặp: lượt bắn 42 câu có 6 câu rao không chữ
@@ -1690,6 +1696,27 @@ Deno.serve(async (req) => {
       if (error) await ghiLoi(client, "chat-reply doc wards", error.message);
       return (data as { ten_day_du: string; quan_cu: string } | null) ?? null;
     };
+    // Lưới đỡ khi khớp chữ không ra ("an hoi tai"): tìm phường gần NGHĨA nhất bằng vector (`tim_phuong_theo_nghia`,
+    // 20260930a). Chỉ để HỎI XÁC NHẬN, không bao giờ ghi thẳng. Tắt tìm theo nghĩa / chưa nhúng / Gemini hỏng → null,
+    // bot đi đường cũ (đây là đường đi bình thường, không vào sổ lỗi — trừ RPC hỏng).
+    const NGUONG_PHUONG_NGHIA = 0.8;
+    // Trả ứng viên nhất + nhì để biết có "đủ chắc để sửa luôn" không (`nghiaDuChac`: ≥ 0,9, bỏ xa nhì, đúng quận đã biết).
+    const timPhuongTheoNghia = async (ten: string): Promise<{ top: Phuong & { do_gan: number }; nhi: { do_gan: number } | null } | null> => {
+      try {
+        const { data: sang, error: sErr } = await client.rpc("tim_nghia_san_sang");
+        if (sErr || sang !== true) return null;
+        const khoa = await secretOf(client, "GEMINI_API_KEY");
+        if (!khoa) return null;
+        const vec = await nhungCauTim(khoa, `Phường ${ten}, Thành phố Hồ Chí Minh`);
+        const { data, error } = await client.rpc("tim_phuong_theo_nghia", { p_vec: vec, p_limit: 2 });
+        if (error) { await ghiLoi(client, "chat-reply tim_phuong_theo_nghia", error.message); return null; }
+        const ds = (data ?? []) as Array<Phuong & { do_gan: number }>;
+        return ds[0] && ds[0].do_gan >= NGUONG_PHUONG_NGHIA ? { top: ds[0], nhi: ds[1] ?? null } : null;
+      } catch (e) {
+        console.log(`tim phuong theo nghia: ${(e as Error)?.message ?? e}`);
+        return null;
+      }
+    };
     const traPhuongTuDuong = async (duongTho: string): Promise<GoiYPhuong | { nhieuNoi: string[]; duong: string } | null> => {
       const duong = chuanTenDuong(duongTho);
       if (!duongTraDuoc(duong)) return null;
@@ -1718,17 +1745,49 @@ Deno.serve(async (req) => {
       return quan.length ? { nhieuNoi: quan, duong: duong.trim() } : null;
     };
     /** Tin đang ở quận MẶC ĐỊNH và có tên đường → tra, cất gợi ý, trả câu hỏi xác nhận (null = hỏi như cũ). */
-    const cauHoiPhuongGoiY = async (listingId: string, duongBiet: string | null, cachGoiNguoi: string): Promise<string | null> => {
+    const cauHoiPhuongGoiY = async (listingId: string, duongBiet: string | null, cachGoiNguoi: string, textKem: string | null = null): Promise<string | null> => {
       const { data: l } = await client.from("listings").select("district, street, location_raw, boc_tach").eq("id", listingId).maybeSingle();
       if (!l) return null;
       const duong = (duongBiet ?? "").trim() || (l.street ?? "").trim() || tenDuong(l.location_raw ?? "");
+      const quanBiet = l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true ? l.district : null;
+      const hoiXacNhan = async (goiY: GoiYPhuong, noiDuong: string): Promise<string | null> => {
+        const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { phuong_goi_y: goiY } });
+        if (error) { await ghiLoi(client, "chat-reply ghi_boc_tach(phuong goi y vi tri)", error.message); return null; }
+        return cauXacNhanPhuong(cauHoiMau("phuong@goi_y", cachGoiNguoi).replace("đường {duong}", "{duong}"), cachGoiNguoi, noiDuong, goiY.phuong, goiY.quan);
+      };
+      // 30/09/2026 (chủ dự án: "còn mấy hẻm khác còn nhiều / nhỏ và nhỏ hơn nữa … kết hợp với vị trí nữa, để biết đường nào
+      // gần đường nào"). Hai nguồn VỊ TRÍ đi trước tra tên đường trơn:
+      // (a) SỐ HẺM — "137/28 đường số 59": từ điển `duong` có hẻm OSM kèm đường mẹ + toạ độ (`tim_hem`, hẻm nhỏ nhất trước
+      //     rồi lùi ra hẻm lớn). Đúng MỘT phường → hỏi xác nhận phường đó.
+      const sh = tachSoNhaHem(l.location_raw ?? "");
+      const duongTra = catTenDuong(chuanTenDuong(duong));
+      if (sh && duongTra) {
+        const { data: hs, error: hErr } = await client.rpc("tim_hem", { p_cap_hem: sh.capHem, p_duong_me: duongTra, p_phuong: null });
+        if (hErr) await ghiLoi(client, "chat-reply tim_hem", hErr.message);
+        const cac = [...new Map(((hs ?? []) as Array<{ phuong: string | null; quan_cu: string | null }>)
+          .filter((h) => h.phuong && (!quanBiet || h.quan_cu === quanBiet)).map((h) => [h.phuong!, h.quan_cu ?? ""])).entries()];
+        if (cac.length === 1) return await hoiXacNhan({ phuong: cac[0][0], quan: cac[0][1], duong: duongTra }, `hẻm ${sh.hem} ${duongTra}`);
+      }
+      // (b) HAI CON ĐƯỜNG — "hẻm Lê Văn Sỹ gần Trần Huy Liệu", "góc Nguyễn Trãi": phường nào có cả hai đường mà tâm cách
+      //     nhau ≤ 1,2 km (`phuong_giao_hai_duong`, toạ độ OSM). Đường có ở nhiều phường thì câu này thu về một.
+      const kem = duongNhacKem([textKem, l.location_raw].filter(Boolean).join(" "), duongTra);
+      if (kem && duongTra) {
+        const { data: gs, error: gErr } = await client.rpc("phuong_giao_hai_duong", { p_duong1: duongTra, p_duong2: kem, p_ban_kinh_m: 1200 });
+        if (gErr) await ghiLoi(client, "chat-reply phuong_giao_hai_duong", gErr.message);
+        const gn = chonPhuongGanNhat(((gs ?? []) as Array<{ phuong: string; quan_cu: string | null; cach_m: number }>)
+          .filter((g) => !quanBiet || g.quan_cu === quanBiet));
+        if (gn) return await hoiXacNhan({ phuong: gn.phuong, quan: gn.quan_cu ?? "", duong: duongTra }, `đường ${duongTra} (gần ${kem})`);
+      }
       // 25/09/2026 (chủ dự án: "người ta đưa số nhà và tên đường và quận rồi nhưng mà lại cố hỏi là phường nào"): ĐÃ
       // biết quận → tra bảng `duong` (OSM, phường mới theo quận cũ): một phường → hỏi xác nhận; 2–3 phường → hỏi chọn.
       // Không tra được (bảng chưa có đường đó) → hỏi như cũ.
       if (l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true) {
         const ten = chuanTenDuong(duong);
-        if (!duongTraDuoc(ten)) return null;
-        const { data: dd, error: ddErr } = await client.from("duong").select("phuong, quan_cu").eq("ten_khong_dau", boDau(ten)).limit(40);
+        // 30/09/2026: đường SỐ ("đường số 59") trùng khắp thành phố nên trước đây không tra; đã biết QUẬN thì nó chỉ còn
+        // một hai chỗ, và từ điển nay có đường số theo phường (nap-duong.mjs giữ loại `so`).
+        const khoaSo = khoaDuongSo(ten);
+        if (!duongTraDuoc(ten) && !khoaSo) return null;
+        const { data: dd, error: ddErr } = await client.from("duong").select("phuong, quan_cu").eq("ten_khong_dau", khoaSo ?? boDau(ten)).limit(40);
         if (ddErr) { await ghiLoi(client, "chat-reply tra duong theo quan", ddErr.message); return null; }
         const cac = phuongCuaDuongTrongQuan((dd ?? []) as Array<{ phuong: string | null; quan_cu: string | null }>, l.district);
         if (cac.length === 1) {
@@ -1752,7 +1811,7 @@ Deno.serve(async (req) => {
      * tra `wards` lấy quận. Gợi ý dùng xong thì xoá. Trả về tên phường CHUẨN ("Phường
      * Long Trường") khi tra được, để fact ghi đúng chữ chứ không phải "phường long trường".
      */
-    const capNhatQuanTuPhuong = async (listingId: string, goiY: GoiYPhuong | null, dapAnPhuong: string): Promise<string | null> => {
+    const capNhatQuanTuPhuong = async (listingId: string, goiY: GoiYPhuong | null, dapAnPhuong: string, textGoc: string = dapAnPhuong): Promise<string | null> => {
       const { data: cu } = await client.from("listings").select("district, boc_tach").eq("id", listingId).maybeSingle();
       const bt = (cu?.boc_tach ?? {}) as { quan_mac_dinh?: unknown; phuong_goi_y?: unknown };
       // 20260917a: quận trống (không còn mặc định Quận 5) cũng là "chưa rõ" như cờ cũ.
@@ -1760,7 +1819,11 @@ Deno.serve(async (req) => {
       const p: Record<string, unknown> = bt.phuong_goi_y ? { phuong_goi_y: false } : {};
       let quan = goiY?.quan ?? null;
       let tenChuan: string | null = goiY ? goiY.phuong : null;
-      if (!goiY) {
+      // 30/09/2026: chốt với bảng `wards` trước — "phường an hội tây quận gò vấp" ra đúng Phường An Hội Tây + quận Gò Vấp.
+      // 30/09/2026 (chủ dự án: "để AI nhận"): tên phường do AI đọc (đã qua kiểm bằng chứng) — máy chỉ tra đúng tên trong danh sách.
+      const chot = goiY ? null : phuongChuan(dapAnPhuong);
+      if (chot) { tenChuan = tenDayDu(chot); quan = chuaQuan ? chot.quan_cu ?? null : null; }
+      else if (!goiY) {
         const tach = tachTienToPhuong(dapAnPhuong);
         const ten = (tach?.ten ?? dapAnPhuong).trim();
         const w = ten.length >= 2 && ten.length <= 50 ? await timWard(ten) : null;
@@ -1789,12 +1852,12 @@ Deno.serve(async (req) => {
     // FR-209 hỏi phường). Không khớp → giữ nguyên chữ khách gõ: từ điển vùng ven còn mỏng,
     // "không có trong từ điển" không có nghĩa là "gõ sai". RPC hỏng là SỰ CỐ (ghi sổ) nhưng
     // địa chỉ vẫn ghi như cũ — từ điển là lớp phụ, không được chặn đường ghi.
-    const suaTenDuong = async (viTri: string, quan: string | null | undefined): Promise<{ viTri: string; goiY: GoiYDuong | null }> => {
+    const suaTenDuong = async (viTri: string, quan: string | null | undefined, phuong?: string | null): Promise<{ viTri: string; goiY: GoiYDuong | null }> => {
       const goc = catTenDuong(chuanTenDuong(tenDuong(viTri)));
       if (!duongTraDuoc(goc)) return { viTri, goiY: null };
       const { data, error } = await client.rpc("tim_duong", { p_ten: goc, p_quan: quan ?? null });
       if (error) { await ghiLoi(client, "chat-reply tim_duong", error.message); return { viTri, goiY: null }; }
-      const kq = chonDuong(goc, (data ?? null) as UngVienDuong[] | null, quan ?? null);
+      const kq = chonDuong(goc, (data ?? null) as UngVienDuong[] | null, quan ?? null, phuong ?? null);
       if (kq.loai === "sua") return { viTri: theTenDuong(viTri, goc, kq.ten), goiY: null };
       if (kq.loai === "hoi") return { viTri, goiY: { goc, ten: kq.ten, vi_tri: theTenDuong(viTri, goc, kq.ten) } };
       return { viTri, goiY: null };
@@ -2374,6 +2437,12 @@ Deno.serve(async (req) => {
     const lichSuRows = ((lichSuS ?? []) as Array<{ sender: string; body: string | null; seq: number }>)
       .slice().reverse();
     if (lichSuRows.length && laTinNguoi(lichSuRows[lichSuRows.length - 1].sender)) lichSuRows.pop();
+    // 30/09/2026: người CHƯA có tin nào — các tin họ nhắn trước câu rao (≤ 9 tin gần nhất) cũng là lời về căn sắp rao
+    // (địa chỉ nói trước, giá nói sau). Nhánh tạo tin đọc thêm ở đây những gì câu rao không nói.
+    const truocTin = (tinCuaNguoi ?? []).length === 0
+      ? lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => (m.body ?? "").trim()).filter(Boolean).join("\n")
+      : "";
+    let textBongAi = text;
     // Bong bóng 💾 (báo lại thứ đã lưu) là bảng số liệu cho người bán, không
     // phải lời em nói — bỏ khỏi lịch sử, không thì model bắt chước in bảng.
     // 18/09/2026 (chủ dự án: "tắt cái mỗi câu trả lời đều khen đi, lâu lâu thì khen thôi"): 3 tin gần
@@ -2617,6 +2686,10 @@ Deno.serve(async (req) => {
     // khởi động ở đây (cần biết câu bot đang hỏi); kết quả kiểm + so với DB ghi ở đường ra
     // `traLoiSeller`, sau khi đã trả lời khách. Công tắc `app_config.boc_tach_ai`.
     if (anthropicS && (coMuiDuLieuRao(text) || (!!pendingReq && coNoiDungTraLoi(text)))) {
+      // 30/09/2026 (chủ dự án, chat thử): "nhà chú ở 137/28 đường số 59 phường an hội tây nhé" nhắn TRƯỚC câu rao — lúc
+      // đó chưa có tin nên không có chỗ ghi, tới lúc rao thì mất. Người chưa có tin nào mà nhắn câu rao: AI đọc cả các
+      // tin khách nhắn trước đó (`truocTin`) cùng câu rao; bằng chứng kiểm trên chính đoạn gộp đó.
+      if (!pendingReq && wantsSell && truocTin) textBongAi = `${truocTin}\n${text}`;
       const tBong = Date.now();
       const ai = anthropicS;
       cheDoBocAi = (async () => {
@@ -2630,7 +2703,7 @@ Deno.serve(async (req) => {
         // FR-214 b: đã chia mảnh theo căn → AI bóc tách chỉ đọc phần thuộc căn đang treo.
         // FR-224: đưa cả CHỮ câu bot vừa hỏi để AI hiểu câu hỏi theo nghĩa (khoá trần "do_rong_hem" không nói "ô tô vào tới cửa không").
         const cauChu = pendingReq ? cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal) : null;
-        const r = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, textTreo || text, pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings));
+        const r = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, textTreo || textBongAi, pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings));
         return { ...r, ms: Date.now() - tBong, cauDangHoi: pendingReq?.question ?? null, cheDo };
       })().catch(async (e) => {
         await ghiLoi(client, "chat-reply boc_tach_ai(bong)", e);
@@ -3906,7 +3979,7 @@ Deno.serve(async (req) => {
         if (!nhanGoiYPhuong && !kqDuyet && !humanActive && !coPhuongSo && !tachTienToPhuong(dapAn) && !pendingReq.listings?.location_raw) {
           const viTriTL = bocViTriRao(dapAn);
           // FR-212: đối chiếu tên đường với từ điển trước khi ghi.
-          const duongTL = viTriTL ? await suaTenDuong(viTriTL, pendingReq.listings?.district) : null;
+          const duongTL = viTriTL ? await suaTenDuong(viTriTL, pendingReq.listings?.district, pendingReq.listings?.ward) : null;
           const viTri = duongTL?.viTri ?? viTriTL;
           if (viTri) {
             const { error: vtErr } = await client.rpc("ghi_fact_listing", {
@@ -3925,7 +3998,7 @@ Deno.serve(async (req) => {
               else await chepSangDuAn(f.question, f.answer);
             }
             const cauDuong = duongTL?.goiY ? await cauHoiDuongGoiY(pendingReq.listing_id, duongTL.goiY, cachGoi) : null;
-            const cauGoiY = cauDuong ? null : await cauHoiPhuongGoiY(pendingReq.listing_id, tenDuong(viTri), cachGoi);
+            const cauGoiY = cauDuong ? null : await cauHoiPhuongGoiY(pendingReq.listing_id, tenDuong(viTri), cachGoi, text);
             const quanMacDinh = (btRow?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true || !pendingReq.listings?.district;
             const cauPhuong = cauDuong ?? cauGoiY ?? cauHoiMau(quanMacDinh ? "phuong@chua_quan" : "phuong", cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, undefined, viTri);
             return await traLoiSeller([`Dạ em ghi địa chỉ ${viTri} rồi ạ. ${cauPhuong}`], {
@@ -4343,7 +4416,7 @@ Deno.serve(async (req) => {
       }
       await capNhatQuan(pendingReq.listing_id);
       if (pendingReq.question === "phuong" && (nhanGoiYPhuong || kq.loai === "khop")) {
-        const chuan = await capNhatQuanTuPhuong(pendingReq.listing_id, nhanGoiYPhuong ? goiYPhuong : null, dapAn);
+        const chuan = await capNhatQuanTuPhuong(pendingReq.listing_id, nhanGoiYPhuong ? goiYPhuong : null, dapAn, text);
         if (chuan) dapAn = chuan;
       }
       if (kq.loai !== "khop" && !boQuaCauTreo) {
@@ -4546,9 +4619,33 @@ Deno.serve(async (req) => {
         // AI đã đọc ra tên đường (`loaiDapAn` — bắn thật 21/09 mau-tdt: "Trần Đình Trọng" của AI đi thẳng
         // vào tin, không ai hỏi "Trần Bình Trọng phải không").
         if (pendingReq.question === "vi_tri" && dapAnGhi) {
-          const sd = await suaTenDuong(dapAnGhi, pendingReq.listings?.district);
+          // 30/09/2026 (chat thử): "nhà ở 137/28 đường số 59 phường an hội tây gò vấp" vào nguyên câu làm vị trí. Gọt còn
+          // phần địa chỉ; phường / quận trong câu đi ô riêng (ngay dưới, sau khi ghi).
+          dapAnGhi = gotDiaChi(ghepSoNhaHem(dapAnGhi, text) ?? dapAnGhi);
+          const sd = await suaTenDuong(dapAnGhi, pendingReq.listings?.district, pendingReq.listings?.ward);
           dapAnGhi = sd.viTri;
           goiYDuongKe = sd.goiY;
+        }
+        // 30/09/2026 (chủ dự án, chat thử): khách "phường an hội tây quận gò vấp", AI đọc "Phường An Hội" và giá trị AI
+        // (`loaiDapAn`) đi thẳng vào tin — không ai đối chiếu với phường có thật. Nay chốt với bảng `wards`: tên dài nhất
+        // nằm trọn trong câu khách thắng. Không khớp chữ mà là một tên phường chữ → tìm theo NGHĨA (vector) và HỎI XÁC
+        // NHẬN (không ghi, câu phường vẫn treo; khách gật thì đường gợi ý FR-209 ghi).
+        if (pendingReq.question === "phuong" && dapAnGhi && !nhanGoiYPhuong) {
+          const quanTin = pendingReq.listings?.district ?? null;
+          const chot = phuongChuan(dapAnGhi);
+          if (chot) dapAnGhi = tenDayDu(chot);
+          else if (laTenPhuongChu(dapAnGhi) && !humanActive) {
+            const kq = await timPhuongTheoNghia(dapAnGhi.replace(/^\s*(?:phường|phuong|xã|xa)\s+/iu, ""));
+            // 30/09/2026 (chủ dự án: "nhắc tới gần đúng sẽ biết cái nào đúng và sửa vào, kết hợp với vị trí"): gần nghĩa
+            // ≥ 0,9, bỏ xa ứng viên nhì, VÀ đúng quận cũ đã biết của căn → sửa luôn. Thiếu một điều → hỏi xác nhận.
+            if (kq && nghiaDuChac(kq.top, kq.nhi, quanTin)) dapAnGhi = tenDayDu(kq.top);
+            else if (kq) {
+              const goiY: GoiYPhuong = { phuong: tenDayDu(kq.top), quan: kq.top.quan_cu ?? "", duong: "" };
+              const { error: gyErr } = await client.rpc("ghi_boc_tach", { p_listing_id: pendingReq.listing_id, p: { phuong_goi_y: goiY } });
+              if (gyErr) await ghiLoi(client, "chat-reply ghi_boc_tach(phuong theo nghia)", gyErr.message);
+              else return await traLoiSeller([cauHoiPhuongGan(cachGoi, kq.top)], { reask: "phuong", loai_cau: "goi_y_phuong_nghia" });
+            }
+          }
         }
         const { error: factErr } = await client.rpc("ghi_fact_listing", {
           p_listing_id: pendingReq.listing_id,
@@ -4558,6 +4655,18 @@ Deno.serve(async (req) => {
         });
         if (factErr) await ghiLoi(client, "chat-reply ghi_fact_listing(drip)", factErr.message);
         else {
+          // 30/09/2026 (chat thử): trả lời câu ĐỊA CHỈ kèm phường ("… phường an hội tây gò vấp") — phường từng rơi mất.
+          // AI đọc phường trong câu (đã qua kiểm bằng chứng) → tin chưa có phường thì ghi luôn phường + quận cũ.
+          if (pendingReq.question === "vi_tri" && !pendingReq.listings?.ward) {
+            const pk = phuongChuan(aiChinh?.ghi.find((g) => g.question === "phuong")?.answer);
+            if (pk) {
+              const { error: pkErr } = await client.rpc("ghi_fact_listing", {
+                p_listing_id: pendingReq.listing_id, p_question: "phuong", p_answer: tenDayDu(pk), p_source: "seller_chat",
+              });
+              if (pkErr) await ghiLoi(client, "chat-reply ghi_fact_listing(phuong kem dia chi)", pkErr.message);
+              else await capNhatQuanTuPhuong(pendingReq.listing_id, null, tenDayDu(pk), text);
+            }
+          }
           // 23/09/2026 (bắn thật): mở 2 lô rồi hỏi loại, "cả lô đều là đất thổ cư" → bản trước chỉ lô đang hỏi thành đất,
           // lô kia nằm "chưa rõ loại". "Cả lô / đều / cả 2" ở câu LOẠI áp cho mọi tin chưa rõ loại của người đó.
           if (pendingReq.question === "loai_bds" && loaiDapAn && CA_LO_RE.test(tKD)) {
@@ -5033,9 +5142,9 @@ Deno.serve(async (req) => {
       if (bongAi && cheDoBocAi && (await cheDoBocAi) === "chinh") {
         const kqAi = await bongAi;
         if (kqAi?.ket && ((kqAi.ket as { so_can?: number }).so_can ?? 1) <= 1) {
-          const kdAi = kiemDeXuat(kqAi.truong, text);
+          const kdAi = kiemDeXuat(kqAi.truong, textBongAi);
           const datAi = kdAi.dat;
-          aiRao = { ...docAiChinh(datAi, { deal: dealCauRao(tKD) }), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], text, datAi) };
+          aiRao = { ...docAiChinh(datAi, { deal: dealCauRao(tKD) }), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], textBongAi, datAi) };
           // FR-212 (bắn thật 21/09): khách gõ "pham the hier" → AI đọc "Phạm Thế Hiển" (sửa chính tả) → kiểm
           // bằng chứng BỎ vì đổi chữ cái (FR-208 h) → tin không có địa chỉ, không ai hỏi. Nhưng TRÍCH DẪN
           // của đề xuất đó chính là địa chỉ khách gõ, đã kiểm là nằm trong câu: lấy trích dẫn làm địa chỉ,
@@ -5122,6 +5231,10 @@ Deno.serve(async (req) => {
           if (khop) phuongRao = khop.ten_day_du ?? `Phường ${khop.ten}`;
         }
       }
+      // 30/09/2026 (chủ dự án: "để AI nhận mới thông minh"): AI đọc phường (cả câu rao lẫn các tin nói trước — `textBongAi`),
+      // đổi tên cũ sang mới, rồi qua kiểm bằng chứng. Máy chỉ tra đúng tên trong danh sách để lấy tên đủ + quận cũ.
+      const phuongChot: Phuong | null = wardNo ? null : phuongChuan(phuongRao);
+      if (phuongChot) phuongRao = tenDayDu(phuongChot);
       const maCanRao = duAn ? (aiRao?.maCan ?? MA_CAN_RE.exec(text)?.[1]?.toUpperCase() ?? null) : null;
       // Tình trạng GẤP (chủ dự án 09/09/2026 — cần cột riêng): nói gấp → true,
       // nói rõ "không gấp" → false, không nhắc → null (chưa rõ, không ép).
@@ -5143,7 +5256,7 @@ Deno.serve(async (req) => {
           `Dạ bên em hiện chỉ nhận nhà ở Sài Gòn và Long An thôi ạ, em xin lỗi chưa hỗ trợ được căn ở ${vung.ten}.`,
         ], { ngoai_dia_ban: vung.ten });
       }
-      const quanDoc = quanAi ?? bocQuan(tKD, text) ?? duAn?.district ?? vung?.ten ?? null;
+      const quanDoc = quanAi ?? bocQuan(tKD, text) ?? duAn?.district ?? vung?.ten ?? phuongChot?.quan_cu ?? null;
       // 17/09/2026 (chủ dự án: "chỗ nào cứ mặc định quận 5 xóa sạch đi", 20260917a): chưa rõ
       // quận thì ĐỂ TRỐNG — bot hỏi "phường mấy, quận nào", hoặc suy từ phường / dự án.
       const quanRao: string | null = quanDoc ?? null;
@@ -5233,9 +5346,16 @@ Deno.serve(async (req) => {
         // bắn không có địa chỉ, bot hỏi vòng vòng, bản nháp không bao giờ bung.
         // 22/09/2026 (bắn thật sau deploy #181): AI trả tên đường trần "Trần Hưng Đạo", luật trả "hẻm 6m 12
         // Trần Hưng Đạo" — số nhà rơi vì AI đứng trước. Bản chứa bản kia mà dài hơn thì thắng (`chonViTri`).
-        const viTriTho = aiRao ? chonViTri(bocViTriRao(text), aiRao.duong) : bocViTriRao(text);
+        const viTriCau = aiRao ? chonViTri(bocViTriRao(text), aiRao.duong) : bocViTriRao(text);
+        // 30/09/2026 (chủ dự án, chat thử): câu rao không nói địa chỉ mà tin nhắn TRƯỚC câu rao có ("nhà chú ở 137/28 đường
+        // số 59 …") → lấy ở đó. Số nhà hẻm luật làm rơi thì ghép lại: "137/28 đường số 59" (hẻm 137, nhà số 28).
+        const viTriGhep = viTriCau
+          ? ghepSoNhaHem(viTriCau, textBongAi)
+          : truocTin ? ghepSoNhaHem(bocViTriRao(truocTin), truocTin) : null;
+        // Bỏ chữ nối / lời dẫn còn dính ("hẻm xe hơi nguyen van cu gần").
+        const viTriTho = viTriGhep ? gotDiaChi(viTriGhep) : null;
         // FR-212: đối chiếu tên đường với từ điển `duong` — không dấu → có dấu ngay; sai 1–2 ký tự → gợi ý, hỏi ở câu đầu.
-        const duongRao = viTriTho ? await suaTenDuong(viTriTho, quanDoc) : null;
+        const duongRao = viTriTho ? await suaTenDuong(viTriTho, quanDoc, phuongRao) : null;
         const viTriRao = duongRao?.viTri ?? viTriTho;
         // FR-241 e (10 ca test làm khó 28/09): "bán nhà Âu Cơ Tân Phú" — tên đường 5 ký tự bị ngưỡng "≥ 6" gạt, địa chỉ trống,
         // lượt sau bot hỏi lại "nhà mình ở đường nào". Tên đường hai chữ trở lên ("Âu Cơ", "Ba Vì") là đủ.
@@ -5304,7 +5424,7 @@ Deno.serve(async (req) => {
         const cauDuongDau = duongRao?.goiY && newLst ? await cauHoiDuongGoiY(newLst.id, duongRao.goiY, cachGoi) : null;
         // 25/09/2026: câu rao ĐÃ có quận cũng tra (bảng `duong` trong quận đó) — `cauHoiPhuongGoiY` tự chọn đường tra.
         const goiYDau = !cauDuongDau && firstKey === "phuong" && viTriRao && newLst
-          ? await cauHoiPhuongGoiY(newLst.id, tenDuong(viTriRao), cachGoi)
+          ? await cauHoiPhuongGoiY(newLst.id, tenDuong(viTriRao), cachGoi, textBongAi)
           : null;
         const cauXacNhanDau = cauDuongDau ?? goiYDau;
         const cauHoiDau = cauDuongDau ?? goiYDau ?? (firstKey

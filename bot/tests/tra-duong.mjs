@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // tra-duong.mjs — FR-212: từ điển tên đường, phần THUẦN (chọn kết quả tra, thay tên, câu hỏi).
 // Ứng viên ở đây là dạng `tim_duong()` trả về: { ten, khoang_cach, quan_cu[], phuong[], tinh[] }.
-import { catTenDuong, cauXacNhanDuong, chonDuong, theTenDuong } from "../supabase/functions/_shared/extraction/tra-duong.ts";
+import { catTenDuong, cauXacNhanDuong, chonDuong, chonPhuongGanNhat, duongNhacKem, khoaDuongSo, theTenDuong } from "../supabase/functions/_shared/extraction/tra-duong.ts";
 
 let dat = 0, hong = 0;
 const ok = (ten, dk, chi = "") => { if (dk) dat++; else { hong++; console.log(`✗ ${ten}${chi ? `\n    ${chi}` : ""}`); } };
@@ -27,7 +27,14 @@ ok("'pham the hier' (1 phép sửa) → hoi 'Phạm Thế Hiển'", r.loai === "
 r = chonDuong("pham the hiem", [uv("Phạm Thế Hiển", 1), uv("Phạm Thế Hiệp", 1)]);
 ok("hai ứng viên cùng khoảng cách → giu", r.loai === "giu", JSON.stringify(r));
 r = chonDuong("pham the hiem", [uv("Phạm Thế Hiển", 1, ["Quận 8"]), uv("Phạm Thế Hiệp", 1, ["Quận 9"])], "Quận 8");
-ok("hai ứng viên, biết quận → hoi tên trong quận", r.loai === "hoi" && r.ten === "Phạm Thế Hiển", JSON.stringify(r));
+// 30/09/2026: gần đúng + nằm trong quận đã biết → vị trí xác nhận, SỬA luôn (trước: hỏi).
+ok("hai ứng viên, biết quận → sua tên trong quận", r.loai === "sua" && r.ten === "Phạm Thế Hiển", JSON.stringify(r));
+r = chonDuong("pham the hier", [uv("Phạm Thế Hiển", 1, ["Quận 8"])], "Quận 8");
+ok("gần đúng, đường có trong quận đã biết → sua", r.loai === "sua" && r.ten === "Phạm Thế Hiển", JSON.stringify(r));
+r = chonDuong("pham the hier", [uv("Phạm Thế Hiển", 1, ["Quận 8"])], "Quận 5");
+ok("gần đúng, đường KHÔNG có trong quận đã biết → hoi", r.loai === "hoi", JSON.stringify(r));
+r = chonDuong("pham the hier", [{ ...uv("Phạm Thế Hiển", 1, ["Quận 8"]), phuong: ["Phường Chánh Hưng"] }], null, "Phường Chánh Hưng");
+ok("gần đúng, đường có trong phường đã biết → sua", r.loai === "sua", JSON.stringify(r));
 r = chonDuong("le lai", [uv("Lê Lợi", 1)]);
 ok("tên ngắn 'le lai' (5 chữ cái) → giu, không đoán", r.loai === "giu", JSON.stringify(r));
 r = chonDuong("tran phu", [uv("Trần Phú", 0), uv("Trần Phong", 2)]);
@@ -66,6 +73,24 @@ ok("'Xa lộ Hà Nội' giữ ('xa' đứng đầu là tên, không phải xã)"
 const cau = cauXacNhanDuong("Dạ em hiểu là đường {ten} đúng không {ac}?", "anh", "pham the hier", "Phạm Thế Hiển");
 ok("điền mẫu (không nhắc chữ khách gõ sai — chủ dự án 21/09: 'tinh tế vào')", cau === "Dạ em hiểu là đường Phạm Thế Hiển đúng không anh?", cau);
 ok("câu xác nhận < 30 từ", cau.split(/\s+/).length < 30);
+
+// ── 30/09/2026: con đường nhắc KÈM để chỉ chỗ + khoá tra đường số ──
+const kem = (t, c) => duongNhacKem(t, c);
+ok("'hẻm Lê Văn Sỹ gần Trần Huy Liệu' → Trần Huy Liệu", kem("nhà trong hẻm Lê Văn Sỹ gần Trần Huy Liệu", "Lê Văn Sỹ") === "Trần Huy Liệu", String(kem("nhà trong hẻm Lê Văn Sỹ gần Trần Huy Liệu", "Lê Văn Sỹ")));
+ok("'góc Nguyễn Trãi' dừng trước quận", kem("nhà mặt tiền Trần Hưng Đạo góc Nguyễn Trãi quận 5") === "Nguyễn Trãi", String(kem("nhà mặt tiền Trần Hưng Đạo góc Nguyễn Trãi quận 5")));
+ok("'ngã tư An Dương Vương' dừng trước phường", kem("gần ngã tư An Dương Vương phường Chợ Quán") === "An Dương Vương", String(kem("gần ngã tư An Dương Vương phường Chợ Quán")));
+ok("'gần chợ Bến Thành' không phải đường", kem("nhà gần chợ Bến Thành") === null, String(kem("nhà gần chợ Bến Thành")));
+ok("'cách mặt tiền 20m' → null", kem("hẻm xe hơi cách mặt tiền 20m") === null, String(kem("hẻm xe hơi cách mặt tiền 20m")));
+ok("không nhắc gì → null", kem("bán nhà 4x15 giá 7 tỷ") === null);
+ok("không trả lại chính đường chính", kem("Trần Hưng Đạo gần Trần Hưng Đạo", "Trần Hưng Đạo") === null);
+ok("khoaDuongSo('đường số 59') = duong so 59", khoaDuongSo("đường số 59") === "duong so 59");
+ok("khoaDuongSo('Đường 59') = duong so 59", khoaDuongSo("Đường 59") === "duong so 59");
+ok("chonPhuongGanNhat: một phường → nó", chonPhuongGanNhat([{ phuong: "A", cach_m: 900 }])?.phuong === "A");
+ok("chonPhuongGanNhat: 150 m vs 1080 m → phường gần", chonPhuongGanNhat([{ phuong: "Vườn Lài", cach_m: 1080 }, { phuong: "Chợ Quán", cach_m: 150 }])?.phuong === "Chợ Quán");
+ok("chonPhuongGanNhat: 300 m vs 500 m (sát nhau) → null", chonPhuongGanNhat([{ phuong: "A", cach_m: 300 }, { phuong: "B", cach_m: 500 }]) === null);
+ok("chonPhuongGanNhat: gần nhất 700 m (quá xa để chắc) → null", chonPhuongGanNhat([{ phuong: "A", cach_m: 700 }, { phuong: "B", cach_m: 3000 }]) === null);
+ok("chonPhuongGanNhat: rỗng → null", chonPhuongGanNhat([]) === null);
+ok("khoaDuongSo('Lê Văn Sỹ') = null", khoaDuongSo("Lê Văn Sỹ") === null);
 
 console.log(`\ntra-duong: ${dat} đạt, ${hong} hỏng`);
 process.exit(hong ? 1 : 0);
