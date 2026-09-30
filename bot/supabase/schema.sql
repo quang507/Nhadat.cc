@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-30 16:08 (giờ VN)
+-- Sinh lúc: 2026-09-30 16:52 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -5235,7 +5235,8 @@ begin
   if v_dung is not null and v_dung > now() then return; end if;
   if exists (select 1 from public.nhung_viec) or exists (select 1 from public.nhung_viec_du_an)
      or exists (select 1 from public.nhung_viec_dia_danh) then return; end if;
-  v_key := public.get_secret('GEMINI_API_KEY');
+  -- 20260930e: khoá thứ hai (nếu có) gánh việc nhúng NỀN, để khoá chính còn hạn mức cho câu tìm của khách.
+  v_key := coalesce(public.get_secret('GEMINI_API_KEY_2'), public.get_secret('GEMINI_API_KEY'));
   if v_key is null then return; end if;
   v_tran := greatest(1, least(coalesce(nullif(public.cau_hinh('nhung_dia_danh_moi_tick'), '')::int, 20), 50));
 
@@ -5347,7 +5348,8 @@ begin
   v_dung := nullif(public.cau_hinh('nhung_tam_dung_den'), '')::timestamptz;
   if v_dung is not null and v_dung > now() then return; end if;
   if exists (select 1 from public.nhung_viec) or exists (select 1 from public.nhung_viec_du_an) then return; end if;
-  v_key := public.get_secret('GEMINI_API_KEY');
+  -- 20260930e: khoá thứ hai (nếu có) gánh việc nhúng NỀN, để khoá chính còn hạn mức cho câu tìm của khách.
+  v_key := coalesce(public.get_secret('GEMINI_API_KEY_2'), public.get_secret('GEMINI_API_KEY'));
   if v_key is null then return; end if;
   v_tran := greatest(1, least(coalesce(nullif(public.cau_hinh('nhung_moi_tick'), '')::int, 10), 50));
 
@@ -6545,7 +6547,9 @@ CREATE OR REPLACE FUNCTION public.tim_nghia_san_sang()
  SET search_path TO 'public', 'pg_temp'
 AS $function$
   select coalesce(public.cau_hinh('tim_theo_nghia'), 'tat') = 'bat'
-     and coalesce(nullif(public.cau_hinh('nhung_tam_dung_den'), '')::timestamptz, '-infinity'::timestamptz) <= now()
+     -- 20260930e: cron tạm dừng vì khoá NỀN chạm trần; có khoá thứ hai thì cron chạy khoá 2, câu tìm của khách vẫn còn khoá 1.
+     and (coalesce(nullif(public.cau_hinh('nhung_tam_dung_den'), '')::timestamptz, '-infinity'::timestamptz) <= now()
+          or public.get_secret('GEMINI_API_KEY_2') is not null)
      and public.get_secret('GEMINI_API_KEY') is not null;
 $function$
 ;
