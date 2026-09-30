@@ -39,15 +39,16 @@ flowchart TB
     ZB["Zalo app (B)"]
     ZS["Zalo app (S / CTV / admin)"]
     OA["Zalo OA API (chờ duyệt)"]
-    BR["bridge zca-js<br/>acc clone, máy local"]
+    BR["bridge zca-js<br/>acc clone, VPS"]
     subgraph Supabase
         EF["Edge Functions (Deno)<br/>chat-reply · nudge · ask-seller · ctv-report · escalation-feed<br/>inbound-sweep · media-cleanup · geocode-listings · zalo-webhook"]
-        DB[("Postgres + RLS<br/>trigger · RPC · view · 3 hàng đợi")]
+        DB[("Postgres + RLS + pgvector<br/>trigger · RPC · view · 3 hàng đợi")]
         CRON["pg_cron → pg_net"]
         ST[("Storage<br/>listing-public · listing-private")]
         VA["Vault"]
     end
-    AI["Anthropic Claude"]
+    AI["Chuỗi model<br/>Groq → Gemini → Claude"]
+    EMB["Gemini embedding<br/>768 chiều"]
     NTFY["ntfy.sh (push + email)"]
     OSM["Nominatim / OSM · Leaflet"]
     W -->|publishable key, RLS| DB
@@ -59,6 +60,7 @@ flowchart TB
     OA -->|webhook| EF
     BR -->|x-bridge-secret| EF
     EF <--> AI
+    EF --> EMB
     EF --> DB
     EF --> ST
     EF --> VA
@@ -69,21 +71,22 @@ flowchart TB
 
 ### SRS-2.1 — Tech stack
 
-`[nguồn: package.json, bot/README.md, DB 04/09/2026]`
+`[nguồn: package.json, bot/README.md, DB 04/09/2026; soát lại theo mã nguồn 30/09/2026]`
 
 | Lớp | Công nghệ |
 |---|---|
 | Web | Next.js 15 (App Router) + TypeScript + Tailwind 4, Bun, deploy Vercel project `nhadat-cc` từ root repo |
 | Auth | Supabase Auth: Google OAuth + magic link email (NMG, admin, tài khoản B tự nguyện); không Zalo SSO |
-| DB | Supabase Postgres, RLS trên mọi bảng, trigger + RPC `security definer`, 3 hàng đợi bằng bảng (`inbound_ledger`, `reminders`, `media_cleanup_queue`) |
+| DB | Supabase Postgres, RLS trên mọi bảng, trigger + RPC `security definer`, 3 hàng đợi bằng bảng (`inbound_ledger`, `reminders`, `media_cleanup_queue`); `pgvector` cho tìm theo nghĩa (vector 768 chiều ở `listings`, `projects`, `wards`, `phuong_cu`, `quan_cu`, `duong`) |
 | Serverless | Supabase Edge Functions (Deno), 9 function (`§4`) |
-| Lịch / HTTP nội bộ | `pg_cron` (12 job, `SRS-5.3`) + `pg_net` (`net.http_post`) |
-| Bí mật | Supabase Vault (`ANTHROPIC_API_KEY`, `BRIDGE_SECRET`), đọc qua `get_secret()` chỉ cho `service_role` |
+| Lịch / HTTP nội bộ | `pg_cron` (`SRS-5.3`; số job đếm lại trong DB, bản 04/09 ghi 12) + `pg_net` (`net.http_post`) |
+| Bí mật | Supabase Vault (`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `GEMINI_API_KEY_2`, `BRIDGE_SECRET`), đọc qua `get_secret()` chỉ cho `service_role` |
 | Kho file | Supabase Storage: `listing-public` (ảnh, công khai), `listing-private` (sổ đỏ/giấy tờ, signed URL) |
-| AI | Anthropic Claude qua SDK (structured output zod v4, prompt cache); prompt sửa được ở bảng `bot_prompts` (FR-138) |
-| Chat | Zalo qua bridge `zca-js` (acc clone, chạy local, `bot/bridge-zca`); Zalo OA API qua `zalo-webhook` chờ OA duyệt |
+| AI | Chuỗi dự phòng 3 nguồn (`_shared/claude.ts`, `_shared/groq.ts`): Groq (mặc định `qwen/qwen3.8-27b`, đổi bằng secret `GROQ_MODEL`) → Gemini (cổng giọng OpenAI, mặc định `gemini-3.8-flash`) → Anthropic Claude Haiku 4.5 (SDK, structured output zod v4); thứ tự đổi bằng secret `MODEL_TRUOC`, không cần deploy; lượt có ảnh đi thẳng Claude. Prompt sửa được ở bảng `bot_prompts` (FR-138) |
+| Tìm theo nghĩa | Gemini `gemini-embedding-001` (768 chiều) — câu tìm nhúng lúc chat (`_shared/ai/nhung.ts`, 429 thì thử khoá 2, SRS-5.1g), tài liệu nhúng bằng cron `nhung_tick` / `nhung_dia_danh_tick`; công tắc `app_config.tim_theo_nghia` |
+| Chat | Zalo qua bridge `zca-js` (acc clone, chạy trên VPS từ 04/09 — `bot/bridge-zca/VPS.md`); Zalo OA API qua `zalo-webhook` chờ OA duyệt |
 | Cảnh báo | ntfy.sh (`canh_bao_ngoai`), chuyển tiếp email khi có tài khoản ntfy (`SRS-5.5`) |
-| Bản đồ | Leaflet + OSM tile; geocode Nominatim (`geocode-listings`) |
+| Bản đồ | Leaflet + OSM tile; geocode Nominatim (`geocode-listings`); tiện ích quanh tin qua Overpass |
 | Quan trắc | `bot_errors` / `bot_health` / `bot_usage` + `/admin` (FR-152, FR-169); không Logstash/ES, Slack, SMTP, fingerprint |
 
 ### SRS-2.2 — Đường giao tiếp S↔B
