@@ -69,6 +69,14 @@ for (const [vao, mong] of [
   ["phường 5 nha, anh bận", false],
   ["Bàn Cờ", false],
   ["sổ hồng riêng", false],
+  // 30/09/2026 (bắn thật lx-ban-f): lời hẹn "để mai" không dấu từng vào "bổ sung" và bot hỏi tiếp.
+  ["thoi de mai e noi tiep", true],
+  ["thôi để mai em nói tiếp nha.", true],
+  ["để tối anh gửi", true],
+  ["mai anh nhắn tiếp", true],
+  ["để mai bán luôn", false],
+  ["mái tôn", false],
+  ["đường Mai Chí Thọ", false],
 ]) ok(`laHoanLai "${vao}"`, laHoanLai(vao) === mong, String(laHoanLai(vao)));
 
 // ── Vế phủ định ─────────────────────────────────────────────────────────────

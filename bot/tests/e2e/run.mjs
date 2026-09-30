@@ -2281,6 +2281,41 @@ fresh(seedKho);
       fT("gia").length === 1 && !fT("bo_sung").length, JSON.stringify({ gia: fT("gia"), bs: fT("bo_sung"), rep: rT.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // 30/09/2026 (bắn thật lx-ban-f): đang hỏi hẻm, khách chỉ nhắn "60m2" — chế độ chinh, AI im → luật đọc diện tích bị gạt,
+  // bot báo "Không bóc tách được gì" rồi hỏi lại. Cả tin chỉ là con số + m2 → ghi ô diện tích.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "dt-tron-1", text: "bán nhà hẻm Trần Bình Trọng quận 5, trệt 2 lầu, giá 8 tỷ" });
+    const LD = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LD.id, question: "do_rong_hem", status: "pending" });
+    const rD = await send({ external_user_id: "dt-tron-1", text: "60m2" });
+    const fD = (q) => db().t.listing_facts.filter((f) => f.listing_id === LD.id && f.question === q);
+    check("DT-TRON-01 đang hỏi hẻm, chỉ nhắn '60m2' (chế độ chinh, AI im) → ghi ô DIỆN TÍCH, không vào bổ sung",
+      fD("dien_tich").length === 1 && !fD("bo_sung").length, JSON.stringify({ dt: fD("dien_tich"), bs: fD("bo_sung"), rep: rD.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // 30/09/2026 (bắn thật lx-mua-e): khách MUA đã có hồ sơ nới ngân sách "vậy có căn 6 tỷ rưỡi cũng được" → cổng nới
+  // `coHangCoGia` ("có căn" + giá) mở hồ sơ BÁN, tạo tin "BĐS bán", hỏi "nhà mình là nhà phố hay chung cư".
+  for (const [i, cau, laBan] of [
+    [0, "vậy có căn 6 tỷ rưỡi cũng được", false],
+    [1, "có căn nhà 6 tỷ 5 hẻm xe hơi thì em gửi anh", false],
+    [2, "à anh có căn nhà quận 10 cần bán giá 6 tỷ, 4x15", true],
+  ]) {
+    fresh((d) => {
+      const b = d.insert("buyers", { zalo_user_id: `mua-noi-${i}`, name: null, preferences: { deal: "ban", area: "Quận 5", budget: "dưới 5 tỷ" } }).data;
+      d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-30T00:00:00Z" });
+    });
+    const soTin = db().t.listings.length;
+    const rM = await send({ external_user_id: `mua-noi-${i}`, text: cau });
+    const coBan = db().t.sellers.some((x) => x.zalo_user_id === `mua-noi-${i}`);
+    check(`MUA-NOI-0${i + 1} người đang có hồ sơ MUA nhắn '${cau}' → ${laBan ? "MỞ hồ sơ bán (có chữ bán)" : "KHÔNG mở hồ sơ bán, không tạo tin"}`,
+      laBan ? coBan : (!coBan && db().t.listings.length === soTin),
+      JSON.stringify({ coBan, tin: db().t.listings.length - soTin, rep: rM.body.replies }));
+  }
   // FR-241 o (bắn lại 28/09, lx-85/lx-86/lx-87): đang hỏi ô khác, khách nhắn TRỌN một câu pháp lý ("sổ chung", "sổ hồng rồi em")
   // hay TRỌN một tên phường/xã ("xã Vĩnh Lộc A") — AI im hoặc chỉ xếp vào kiến thức thêm → luật bị gạt: pháp lý rơi vào bổ sung,
   // phường mất hẳn (laBoSungRac). Cả tin là đúng một giá trị của khoá đó → luật chắc, giữ.

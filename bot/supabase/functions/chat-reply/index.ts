@@ -1355,15 +1355,25 @@ Deno.serve(async (req) => {
   // bản trước mở thành tin rao (loại chưa rõ, 5 tầng). "căn nào", dấu hỏi, lời
   // ngân sách ("tầm/khoảng/dưới … tỷ"), "… không em?" cuối câu, "cần nhà …" là
   // dấu hiệu MUA. Chỉ chặn các cổng NỚI (không cần chữ "bán"), không đụng cổng gốc.
+  // 30/09/2026 (bắn thật lx-mua-e): khách MUA nới ngân sách "vậy có căn 6 tỷ rưỡi cũng được" — "có căn" + giá
+  // lọt `coHangCoGia` → mở hồ sơ bán, tạo tin "BĐS bán" rồi hỏi "nhà mình là nhà phố hay chung cư". "… cũng được"
+  // là lời CHẤP NHẬN của người mua, người rao không nói vậy về căn của mình.
   const coDauHieuMua = /\?/.test(text) || khop(
-    /\b(tìm|cần mua|muốn mua|đang mua|hỏi mua|cần thuê|muốn thuê|ngân sách)\b|\b(căn|nhà|lô|đất|phòng)\s+nào\b|\b(tầm|khoảng|dưới)\s+\d|\bkhông\s+(em|ạ|anh|chị|bạn)\s*$|^\s*cần\s+(một\s+|1\s+)?(nhà|căn|lô|đất|phòng|mặt bằng)\b/i,
-    /\b(tim|can mua|muon mua|dang mua|hoi mua|can thue|muon thue|ngan sach)\b|\b(can|nha|lo|dat|phong)\s+nao\b|\b(tam|khoang|duoi)\s+\d|\b(khong|ko|k)\s+(em|a|anh|chi|ban)\s*$|^\s*can\s+(mot\s+|1\s+)?(nha|can|lo|dat|phong|mat bang)\b/,
+    /\b(tìm|cần mua|muốn mua|đang mua|hỏi mua|cần thuê|muốn thuê|ngân sách)\b|\b(căn|nhà|lô|đất|phòng)\s+nào\b|\b(tầm|khoảng|dưới)\s+\d|\bkhông\s+(em|ạ|anh|chị|bạn)\s*$|^\s*cần\s+(một\s+|1\s+)?(nhà|căn|lô|đất|phòng|mặt bằng)\b|\bcũng\s+(được|đc|ok|oke|chịu)\b/i,
+    /\b(tim|can mua|muon mua|dang mua|hoi mua|can thue|muon thue|ngan sach)\b|\b(can|nha|lo|dat|phong)\s+nao\b|\b(tam|khoang|duoi)\s+\d|\b(khong|ko|k)\s+(em|a|anh|chi|ban)\s*$|^\s*can\s+(mot\s+|1\s+)?(nha|can|lo|dat|phong|mat bang)\b|\bcung\s+(duoc|dc|ok|oke|chiu)\b/,
   );
+  // Người đang có hồ sơ MUA (chưa có hồ sơ bán) nói "có căn … tỷ" là đang bàn căn trong kho, không phải rao:
+  // cổng NỚI `coHangCoGia` (không cần chữ "bán") không mở hồ sơ bán cho họ. Muốn rao thì có chữ "bán"/"rao"
+  // (cổng gốc) hoặc model phân vai — đoán nhầm người mua thành người bán là chiều sai đắt (FR-159).
+  const dangLaNguoiMua = !sellerRow && BUYER_PROFILE_FIELDS.some(([k]) => {
+    const v = (bCu?.preferences as Record<string, unknown> | null)?.[k];
+    return v != null && v !== "";
+  });
   // "anh có 2 căn: …" là rao nhiều căn — cho phép con số đứng trước "căn".
   const coHangCoGia = khop(
     /\b(có|còn|đang có)\s*(một |1 |\d{1,2} )?(căn|nhà|lô|miếng|mảnh)\b(?!\s+nào)/i,
     /\b(co|con|dang co)\s*(mot |1 |\d{1,2} )?(can|nha|lo|mieng|manh)\b(?!\s+nao)/,
-  ) && khop(/\d\s*(tỷ|tỉ|tỏi|triệu|tr)\b|\d+\s*m2/i, /\d\s*(ty|ti|toi|trieu|tr)\b|\d+\s*m2/) && !coDauHieuMua;
+  ) && khop(/\d\s*(tỷ|tỉ|tỏi|triệu|tr)\b|\d+\s*m2/i, /\d\s*(ty|ti|toi|trieu|tr)\b|\d+\s*m2/) && !coDauHieuMua && !dangLaNguoiMua;
   // 11/09/2026 (42 ca): câu rao THẬT không có chữ "bán" rơi về lời chào khuôn
   // "đang muốn mua, thuê hay bán": "Nhà mặt tiền Hùng Vương Q5, DT 5x20, 5 tầng,
   // giá 32 tỏi", "Nhà cấp 4 Bình Chánh 5x25 thổ cư 100% 1ty9", "căn hộ Hà Đô
@@ -1384,7 +1394,7 @@ Deno.serve(async (req) => {
     /\btho cu\b|\bso hong\b|\bso rieng\b|\bshr\b|\bhdmb\b|\bsang ten\b/.test(tKD),
   ].filter(Boolean).length;
   const coChuGia = /\bgia\s*:?\s*\d/.test(tKD);
-  const raoKhongChuBan = coLoaiBDS && coGiaRo && !coDauHieuMua &&
+  const raoKhongChuBan = coLoaiBDS && coGiaRo && !coDauHieuMua && !dangLaNguoiMua &&
     (soChiTietCan >= 3 || (coChuGia && soChiTietCan >= 2));
   // 15/09/2026 (bắn thật D1): "chào BẠN mình tìm nhà cho ba mẹ… tầm 5 tỷ" — bỏ dấu
   // thành "chao ban" và \bban\b khớp → người MUA bị mở hồ sơ bán + tạo tin rao.
