@@ -583,8 +583,9 @@ function tenDuAnTrongCau(t: string): string | null {
 // ─── 30/09/2026 (chủ dự án: "2 hàm tìm theo nghĩa cho địa danh và dự án đang nằm không trong DB … làm đi") ───
 // Tên DỰ ÁN / tên ĐƯỜNG khách gõ sai mà khớp chữ (`match_projects`, `tim_duong` lệch ≤ 2 ký tự) không ra → tìm theo NGHĨA
 // (vector, `tim_du_an_theo_nghia` / `tim_dia_danh_theo_nghia`, 20260930a), rồi MÁY xác nhận tên còn gần chữ khách gõ và ra
-// đúng MỘT tên (`chonUngVienNghia`). Tắt tìm theo nghĩa / chưa nhúng / Gemini hỏng → null, bot đi đường cũ; đó là đường
-// đi bình thường nên chỉ console.log (RPC hỏng mới vào sổ).
+// đúng MỘT tên (`chonUngVienNghia`). Tắt tìm theo nghĩa / không ứng viên nào đạt → null, bot đi đường cũ (đường đi bình
+// thường, không vào sổ). Gemini nhúng hỏng / quá giờ là SỰ CỐ → vào sổ (bắn thật 30/09: tin "sunrize city" không gắn dự
+// án mà không để lại dấu vết gì, trong khi chính câu nhúng đó chạy tay ra Sunrise City đứng đầu).
 async function sanSangNghia(client: ReturnType<typeof serviceClient>): Promise<string | null> {
   const { data: sang, error } = await client.rpc("tim_nghia_san_sang");
   if (error || sang !== true) return null;
@@ -607,7 +608,7 @@ async function timDuAnTheoNghia(client: ReturnType<typeof serviceClient>, ten: s
     if (p) console.log(`du an theo nghia: "${go}" → ${u.name} (${u.do_gan.toFixed(3)})`);
     return (p as DuAnNghia | null) ?? null;
   } catch (e) {
-    console.log(`tim du an theo nghia: ${(e as Error)?.message ?? e}`);
+    await ghiLoi(client, "chat-reply tim du an theo nghia", e);
     return null;
   }
 }
@@ -624,7 +625,7 @@ async function timDuongTheoNghia(client: ReturnType<typeof serviceClient>, ten: 
     if (u) console.log(`duong theo nghia: "${ten}" → ${u.ten} (${u.do_gan.toFixed(3)})`);
     return u?.ten ?? null;
   } catch (e) {
-    console.log(`tim duong theo nghia: ${(e as Error)?.message ?? e}`);
+    await ghiLoi(client, "chat-reply tim duong theo nghia", e);
     return null;
   }
 }
