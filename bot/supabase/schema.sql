@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-30 01:00 (giờ VN)
+-- Sinh lúc: 2026-09-30 10:54 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -40,6 +40,7 @@ exception when duplicate_object then null; end $d$;
 create sequence if not exists public.boc_tach_bong_id_seq;
 create sequence if not exists public.bot_errors_id_seq;
 create sequence if not exists public.messages_seq_seq;
+create sequence if not exists public.phuong_cu_id_seq;
 create sequence if not exists public.project_facts_id_seq;
 create sequence if not exists public.property_events_id_seq;
 create sequence if not exists public.required_facts_id_seq;
@@ -436,6 +437,20 @@ create table if not exists public.nhung_viec_du_an (
   gui_luc timestamp with time zone not null default now()
 );
 
+create table if not exists public.phuong_cu (
+  id bigint not null,
+  ten text not null,
+  loai text not null,
+  quan_cu text not null,
+  phuong_moi text not null,
+  toan_bo boolean not null,
+  lat double precision,
+  lng double precision,
+  nhung extensions.vector(768),
+  nhung_md5 text,
+  nhung_luc timestamp with time zone
+);
+
 create table if not exists public.project_facts (
   id bigint not null default nextval('project_facts_id_seq'::regclass),
   project_id uuid,
@@ -449,20 +464,6 @@ create table if not exists public.project_facts (
   duyet_boi text,
   created_at timestamp with time zone not null default now(),
   ten_du_an text
-);
-
-create table if not exists public.phuong_cu (
-  id bigint generated always as identity,
-  ten text not null,
-  loai text not null,
-  quan_cu text not null,
-  phuong_moi text not null,
-  toan_bo boolean not null,
-  lat double precision,
-  lng double precision,
-  nhung extensions.vector(768),
-  nhung_md5 text,
-  nhung_luc timestamp with time zone
 );
 
 create table if not exists public.projects (
@@ -700,6 +701,9 @@ do $d$ begin
   alter table public.deals add constraint deals_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.duong add constraint duong_loai_check CHECK ((loai = ANY (ARRAY['duong'::text, 'so'::text, 'hem'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.duong add constraint duong_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -838,13 +842,13 @@ do $d$ begin
   alter table public.nhung_viec add constraint nhung_viec_pkey PRIMARY KEY (listing_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
-  alter table public.duong add constraint duong_loai_check CHECK ((loai = ANY (ARRAY['duong'::text, 'so'::text, 'hem'::text])));
-exception when duplicate_object then null; end $d$;
-do $d$ begin
   alter table public.nhung_viec_dia_danh add constraint nhung_viec_dia_danh_bang_check CHECK ((bang = ANY (ARRAY['wards'::text, 'duong'::text, 'phuong_cu'::text, 'quan_cu'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.nhung_viec_dia_danh add constraint nhung_viec_dia_danh_pkey PRIMARY KEY (bang, khoa);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.nhung_viec_du_an add constraint nhung_viec_du_an_pkey PRIMARY KEY (project_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.phuong_cu add constraint phuong_cu_loai_check CHECK ((loai = ANY (ARRAY['phuong'::text, 'xa'::text, 'thi_tran'::text])));
@@ -854,12 +858,6 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.phuong_cu add constraint phuong_cu_ten_quan_cu_phuong_moi_key UNIQUE (ten, quan_cu, phuong_moi);
-exception when duplicate_object then null; end $d$;
-do $d$ begin
-  alter table public.quan_cu add constraint quan_cu_pkey PRIMARY KEY (ten);
-exception when duplicate_object then null; end $d$;
-do $d$ begin
-  alter table public.nhung_viec_du_an add constraint nhung_viec_du_an_pkey PRIMARY KEY (project_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.project_facts add constraint project_facts_co_dich CHECK (((project_id IS NOT NULL) OR (COALESCE(btrim(ten_du_an), ''::text) <> ''::text)));
@@ -884,6 +882,9 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.property_events add constraint property_events_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.quan_cu add constraint quan_cu_pkey PRIMARY KEY (ten);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.ratings_log add constraint ratings_log_pkey PRIMARY KEY (buyer_id, listing_id);
@@ -1041,6 +1042,9 @@ do $d$ begin
   alter table public.nhung_viec_du_an add constraint nhung_viec_du_an_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.phuong_cu add constraint phuong_cu_phuong_moi_fkey FOREIGN KEY (phuong_moi) REFERENCES wards(ten) ON UPDATE CASCADE;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.project_facts add constraint project_facts_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL;
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1105,6 +1109,9 @@ create index if not exists curated_lists_buyer_idx ON public.curated_lists USING
 create index if not exists deals_buyer_id_idx ON public.deals USING btree (buyer_id);
 create index if not exists deals_ctv_id_idx ON public.deals USING btree (ctv_id);
 create index if not exists deals_listing_id_idx ON public.deals USING btree (listing_id);
+create index if not exists duong_hem ON public.duong USING btree (upper(so_hem), bo_dau(duong_me)) WHERE (loai = 'hem'::text);
+create index if not exists duong_lat_lng ON public.duong USING btree (lat, lng);
+create index if not exists duong_nhung_hnsw ON public.duong USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists duong_ten_khong_dau_idx ON public.duong USING btree (ten_khong_dau);
 create index if not exists idx_conversations_seller ON public.conversations USING btree (seller_id, started_at DESC);
 create index if not exists idx_listings_price_vnd ON public.listings USING btree (deal, price_vnd);
@@ -1134,22 +1141,18 @@ create index if not exists media_cleanup_can_lam_idx ON public.media_cleanup_que
 create index if not exists media_listing_id_idx ON public.media USING btree (listing_id);
 create index if not exists messages_conv_seq_idx ON public.messages USING btree (conversation_id, seq DESC);
 create index if not exists messages_conv_time_idx ON public.messages USING btree (conversation_id, created_at);
+create index if not exists phuong_cu_nhung_hnsw ON public.phuong_cu USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists project_facts_cho_duyet_idx ON public.project_facts USING btree (trang_thai, created_at DESC);
 create index if not exists project_facts_conversation_id_idx ON public.project_facts USING btree (conversation_id);
 CREATE UNIQUE INDEX project_facts_khong_trung_idx ON public.project_facts USING btree (COALESCE((project_id)::text, lower(btrim(ten_du_an))), khoa, gia_tri) WHERE (trang_thai <> 'bo'::text);
 create index if not exists project_facts_listing_id_idx ON public.project_facts USING btree (listing_id);
 create index if not exists project_facts_project_id_idx ON public.project_facts USING btree (project_id);
-create index if not exists duong_hem ON public.duong USING btree (upper(so_hem), bo_dau(duong_me)) WHERE (loai = 'hem'::text);
-create index if not exists duong_lat_lng ON public.duong USING btree (lat, lng);
-create index if not exists duong_nhung_hnsw ON public.duong USING hnsw (nhung extensions.vector_cosine_ops);
-create index if not exists phuong_cu_nhung_hnsw ON public.phuong_cu USING hnsw (nhung extensions.vector_cosine_ops);
-create index if not exists quan_cu_nhung_hnsw ON public.quan_cu USING hnsw (nhung extensions.vector_cosine_ops);
-create index if not exists wards_nhung_hnsw ON public.wards USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists projects_nhung_hnsw ON public.projects USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists projects_priority_idx ON public.projects USING btree (priority, district);
 create index if not exists property_events_at_idx ON public.property_events USING btree (at DESC);
 create index if not exists property_events_buyer_idx ON public.property_events USING btree (buyer_id);
 create index if not exists property_events_listing_at_idx ON public.property_events USING btree (listing_id, at DESC);
+create index if not exists quan_cu_nhung_hnsw ON public.quan_cu USING hnsw (nhung extensions.vector_cosine_ops);
 create index if not exists ratings_log_listing_idx ON public.ratings_log USING btree (listing_id);
 create index if not exists reminders_buyer_id_idx ON public.reminders USING btree (buyer_id);
 create index if not exists reminders_ctv_id_idx ON public.reminders USING btree (ctv_id);
@@ -1171,6 +1174,7 @@ create index if not exists viewings_buyer_id_idx ON public.viewings USING btree 
 create index if not exists viewings_listing_id_idx ON public.viewings USING btree (listing_id);
 CREATE UNIQUE INDEX viewings_mot_hen_cho_moi_can_idx ON public.viewings USING btree (buyer_id, COALESCE(listing_code, (listing_id)::text)) WHERE (status = 'pending'::text);
 create index if not exists viewings_status_slot_idx ON public.viewings USING btree (status, slot);
+create index if not exists wards_nhung_hnsw ON public.wards USING hnsw (nhung extensions.vector_cosine_ops);
 
 -- ══ Hàm ══
 CREATE OR REPLACE FUNCTION public.admin_cap_nhat_khach(p_buyer_id uuid, p_preferences jsonb, p_notes text)
@@ -2805,14 +2809,11 @@ begin
 end $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.dia_danh_gan(
-  p_lat double precision, p_lng double precision, p_ban_kinh_m double precision default 1000,
-  p_loai text[] default array['duong', 'so'], p_limit integer default 20)
-returns table (loai text, ten text, phuong text, quan_cu text, lat double precision, lng double precision, cach_m double precision)
-language sql
-stable
-security definer
-set search_path = public, pg_temp
+CREATE OR REPLACE FUNCTION public.dia_danh_gan(p_lat double precision, p_lng double precision, p_ban_kinh_m double precision DEFAULT 1000, p_loai text[] DEFAULT ARRAY['duong'::text, 'so'::text], p_limit integer DEFAULT 20)
+ RETURNS TABLE(loai text, ten text, phuong text, quan_cu text, lat double precision, lng double precision, cach_m double precision)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   with k as (select greatest(50, least(coalesce(p_ban_kinh_m, 1000), 10000)) as r),
   ung as (
@@ -3168,13 +3169,11 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.duong_gan_duong(
-  p_ten text, p_phuong text default null, p_ban_kinh_m double precision default 1500, p_limit integer default 20)
-returns table (goc_phuong text, ten text, loai text, phuong text, quan_cu text, cach_m double precision)
-language sql
-stable
-security definer
-set search_path = public, pg_temp
+CREATE OR REPLACE FUNCTION public.duong_gan_duong(p_ten text, p_phuong text DEFAULT NULL::text, p_ban_kinh_m double precision DEFAULT 1500, p_limit integer DEFAULT 20)
+ RETURNS TABLE(goc_phuong text, ten text, loai text, phuong text, quan_cu text, cach_m double precision)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   with goc as (
     select d.phuong, d.lat, d.lng from public.duong d
@@ -5163,10 +5162,10 @@ $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.nhung_dia_danh_tick()
-returns void
-language plpgsql
-security definer
-set search_path = public, extensions, pg_temp
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
 AS $function$
 declare
   v record;
@@ -5602,12 +5601,11 @@ end
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.phuong_giao_hai_duong(p_duong1 text, p_duong2 text, p_ban_kinh_m double precision default 1200)
-returns table (phuong text, quan_cu text, cach_m double precision)
-language sql
-stable
-security definer
-set search_path = public, pg_temp
+CREATE OR REPLACE FUNCTION public.phuong_giao_hai_duong(p_duong1 text, p_duong2 text, p_ban_kinh_m double precision DEFAULT 1200)
+ RETURNS TABLE(phuong text, quan_cu text, cach_m double precision)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   select a.phuong, a.quan_cu, min(public.khoang_cach_m(a.lat, a.lng, b.lat, b.lng)) as cach_m
     from public.duong a
@@ -6391,15 +6389,11 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.tim_dia_danh_theo_nghia(
-  p_vec double precision[], p_loai text[] default null, p_lat double precision default null, p_lng double precision default null,
-  p_limit integer default 5)
-returns table (loai text, khoa text, ten text, ten_day_du text, phuong text, quan_cu text, lat double precision, lng double precision,
-               do_gan double precision, cach_m double precision, diem double precision)
-language sql
-stable
-security definer
-set search_path = public, extensions, pg_temp
+CREATE OR REPLACE FUNCTION public.tim_dia_danh_theo_nghia(p_vec double precision[], p_loai text[] DEFAULT NULL::text[], p_lat double precision DEFAULT NULL::double precision, p_lng double precision DEFAULT NULL::double precision, p_limit integer DEFAULT 5)
+ RETURNS TABLE(loai text, khoa text, ten text, ten_day_du text, phuong text, quan_cu text, lat double precision, lng double precision, do_gan double precision, cach_m double precision, diem double precision)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
 AS $function$
   with v as (select p_vec::extensions.vector(768) as q),
   ung as (
@@ -6427,10 +6421,12 @@ AS $function$
        from public.projects pr, v where pr.nhung is not null and (p_loai is null or 'du_an' = any(p_loai))
       order by pr.nhung <=> v.q limit 20)
   )
-  select u.loai, u.khoa, u.ten, u.ten_day_du, u.phuong, u.quan_cu, u.lat, u.lng, u.do_gan,
-         public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) as cach_m,
-         u.do_gan - coalesce(least(public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) / 1000.0 * 0.01, 0.2), 0) as diem
+  select u.loai, u.khoa, u.ten, u.ten_day_du, u.phuong, u.quan_cu, u.lat, u.lng, u.do_gan, k.cach_m,
+         u.do_gan - coalesce(least(k.cach_m / 1000.0 * 0.01, 0.2), 0) as diem
     from ung u
+    -- khoang_cach_m có sẵn trả ~10.000 km (không phải NULL) khi thiếu toạ độ — chặn trước.
+    cross join lateral (select case when p_lat is null or p_lng is null or u.lat is null or u.lng is null then null
+                                    else public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) end as cach_m) k
    order by diem desc
    limit greatest(1, least(coalesce(p_limit, 5), 30));
 $function$
@@ -6450,11 +6446,11 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.tim_duong(p_ten text, p_quan text default null, p_toi_da integer default 2)
-returns table (ten text, khoang_cach integer, quan_cu text[], phuong text[], tinh text[])
-language sql
-stable
-set search_path = public, extensions
+CREATE OR REPLACE FUNCTION public.tim_duong(p_ten text, p_quan text DEFAULT NULL::text, p_toi_da integer DEFAULT 2)
+ RETURNS TABLE(ten text, khoang_cach integer, quan_cu text[], phuong text[], tinh text[])
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'extensions'
 AS $function$
   with q as (
     select public.bo_dau(regexp_replace(btrim(coalesce(p_ten, '')), '\s+', ' ', 'g')) as k
@@ -6481,12 +6477,11 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.tim_hem(p_cap_hem text[], p_duong_me text, p_phuong text default null)
-returns table (ten text, so_hem text, phuong text, quan_cu text, lat double precision, lng double precision)
-language sql
-stable
-security definer
-set search_path = public, pg_temp
+CREATE OR REPLACE FUNCTION public.tim_hem(p_cap_hem text[], p_duong_me text, p_phuong text DEFAULT NULL::text)
+ RETURNS TABLE(ten text, so_hem text, phuong text, quan_cu text, lat double precision, lng double precision)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   select d.ten, d.so_hem, nullif(d.phuong, ''), d.quan_cu, d.lat, d.lng
     from public.duong d
@@ -6511,12 +6506,11 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.tim_phuong_theo_nghia(p_vec double precision[], p_limit integer default 3)
-returns table (ten text, ten_day_du text, quan_cu text, do_gan double precision)
-language sql
-stable
-security definer
-set search_path = public, extensions, pg_temp
+CREATE OR REPLACE FUNCTION public.tim_phuong_theo_nghia(p_vec double precision[], p_limit integer DEFAULT 3)
+ RETURNS TABLE(ten text, ten_day_du text, quan_cu text, do_gan double precision)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'extensions', 'pg_temp'
 AS $function$
   select w.ten, w.ten_day_du, w.quan_cu, 1 - (w.nhung <=> (p_vec::extensions.vector(768)))
     from public.wards w
@@ -6776,10 +6770,10 @@ $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.van_ban_dia_danh(p_bang text, p_khoa text)
-returns text
-language sql
-stable
-set search_path = public, pg_temp
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   select case p_bang
     when 'wards' then (
@@ -7855,12 +7849,12 @@ alter table public.media_cleanup_queue enable row level security;
 alter table public.messages enable row level security;
 alter table public.nhung_viec enable row level security;
 alter table public.nhung_viec_dia_danh enable row level security;
-alter table public.phuong_cu enable row level security;
-alter table public.quan_cu enable row level security;
 alter table public.nhung_viec_du_an enable row level security;
+alter table public.phuong_cu enable row level security;
 alter table public.project_facts enable row level security;
 alter table public.projects enable row level security;
 alter table public.property_events enable row level security;
+alter table public.quan_cu enable row level security;
 alter table public.ratings_log enable row level security;
 alter table public.reminders enable row level security;
 alter table public.required_facts enable row level security;
@@ -8052,15 +8046,18 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.me
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.media_mo_coi_storage to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.messages to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nhung_viec to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nhung_viec_dia_danh to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nhung_viec_du_an to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to authenticated;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.nmg_hoat_dong to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.phuong_cu to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.project_facts to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.project_facts_cho_duyet to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.projects to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.property_events to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.public_listings to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.public_media to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.quan_cu to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.ratings_log to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.reminders to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.required_facts to service_role;
@@ -8262,6 +8259,8 @@ grant execute on function public.ctv_sla_phut() to authenticated;
 grant execute on function public.ctv_sla_phut() to service_role;
 revoke all on function public.deals_chan_xoa_da_chot() from public, anon, authenticated;
 grant execute on function public.deals_chan_xoa_da_chot() to service_role;
+revoke all on function public.dia_danh_gan(p_lat double precision, p_lng double precision, p_ban_kinh_m double precision, p_loai text[], p_limit integer) from public, anon, authenticated;
+grant execute on function public.dia_danh_gan(p_lat double precision, p_lng double precision, p_ban_kinh_m double precision, p_loai text[], p_limit integer) to service_role;
 revoke all on function public.diem_nguoi_ban(p_seller_id uuid) from public, anon, authenticated;
 grant execute on function public.diem_nguoi_ban(p_seller_id uuid) to authenticated;
 grant execute on function public.diem_nguoi_ban(p_seller_id uuid) to service_role;
@@ -8289,6 +8288,8 @@ grant execute on function public.don_du_lieu_thu() to authenticated;
 grant execute on function public.don_du_lieu_thu() to service_role;
 revoke all on function public.du_an_can_geocode(p_limit integer) from public, anon, authenticated;
 grant execute on function public.du_an_can_geocode(p_limit integer) to service_role;
+revoke all on function public.duong_gan_duong(p_ten text, p_phuong text, p_ban_kinh_m double precision, p_limit integer) from public, anon, authenticated;
+grant execute on function public.duong_gan_duong(p_ten text, p_phuong text, p_ban_kinh_m double precision, p_limit integer) to service_role;
 revoke all on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) from public, anon, authenticated;
 grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) to authenticated;
 grant execute on function public.duyet_fact_du_an(p_id bigint, p_ok boolean, p_project_id uuid) to service_role;
@@ -8473,6 +8474,8 @@ revoke all on function public.nhan_viec_don_media(p_limit integer) from public, 
 grant execute on function public.nhan_viec_don_media(p_limit integer) to service_role;
 revoke all on function public.nhan_viec_nhac(p_kinds text[], p_limit integer, p_worker text) from public, anon, authenticated;
 grant execute on function public.nhan_viec_nhac(p_kinds text[], p_limit integer, p_worker text) to service_role;
+revoke all on function public.nhung_dia_danh_tick() from public, anon, authenticated;
+grant execute on function public.nhung_dia_danh_tick() to service_role;
 revoke all on function public.nhung_tick() from public, anon, authenticated;
 grant execute on function public.nhung_tick() to service_role;
 revoke all on function public.notify_info_request_escalation() from public, anon, authenticated;
@@ -8482,6 +8485,8 @@ grant execute on function public.nudge_tick() to service_role;
 revoke all on function public.parse_vnd(p text) from public, anon, authenticated;
 grant execute on function public.parse_vnd(p text) to authenticated;
 grant execute on function public.parse_vnd(p text) to service_role;
+revoke all on function public.phuong_giao_hai_duong(p_duong1 text, p_duong2 text, p_ban_kinh_m double precision) from public, anon, authenticated;
+grant execute on function public.phuong_giao_hai_duong(p_duong1 text, p_duong2 text, p_ban_kinh_m double precision) to service_role;
 revoke all on function public.quota_tieu_hao() from public, anon, authenticated;
 grant execute on function public.quota_tieu_hao() to authenticated;
 grant execute on function public.quota_tieu_hao() to service_role;
@@ -8536,12 +8541,18 @@ grant execute on function public.them_nhan_tin(p_listing_id uuid, p_nhan text[])
 revoke all on function public.thu_muc_dau_uuid(p_name text) from public, anon, authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to service_role;
+revoke all on function public.tim_dia_danh_theo_nghia(p_vec double precision[], p_loai text[], p_lat double precision, p_lng double precision, p_limit integer) from public, anon, authenticated;
+grant execute on function public.tim_dia_danh_theo_nghia(p_vec double precision[], p_loai text[], p_lat double precision, p_lng double precision, p_limit integer) to service_role;
 revoke all on function public.tim_du_an_theo_nghia(p_vec double precision[], p_limit integer) from public, anon, authenticated;
 grant execute on function public.tim_du_an_theo_nghia(p_vec double precision[], p_limit integer) to service_role;
 revoke all on function public.tim_duong(p_ten text, p_quan text, p_toi_da integer) from public, anon, authenticated;
 grant execute on function public.tim_duong(p_ten text, p_quan text, p_toi_da integer) to service_role;
+revoke all on function public.tim_hem(p_cap_hem text[], p_duong_me text, p_phuong text) from public, anon, authenticated;
+grant execute on function public.tim_hem(p_cap_hem text[], p_duong_me text, p_phuong text) to service_role;
 revoke all on function public.tim_nghia_san_sang() from public, anon, authenticated;
 grant execute on function public.tim_nghia_san_sang() to service_role;
+revoke all on function public.tim_phuong_theo_nghia(p_vec double precision[], p_limit integer) from public, anon, authenticated;
+grant execute on function public.tim_phuong_theo_nghia(p_vec double precision[], p_limit integer) to service_role;
 revoke all on function public.tim_tin_theo_nghia(p_vec double precision[], p_codes text[], p_limit integer) from public, anon, authenticated;
 grant execute on function public.tim_tin_theo_nghia(p_vec double precision[], p_codes text[], p_limit integer) to service_role;
 revoke all on function public.tin_can_geocode(p_limit integer) from public, anon, authenticated;
@@ -8567,6 +8578,8 @@ revoke all on function public.url_kho_anh() from public, anon, authenticated;
 grant execute on function public.url_kho_anh() to anon;
 grant execute on function public.url_kho_anh() to authenticated;
 grant execute on function public.url_kho_anh() to service_role;
+revoke all on function public.van_ban_dia_danh(p_bang text, p_khoa text) from public, anon, authenticated;
+grant execute on function public.van_ban_dia_danh(p_bang text, p_khoa text) to service_role;
 revoke all on function public.van_ban_du_an(p_id uuid) from public, anon, authenticated;
 grant execute on function public.van_ban_du_an(p_id uuid) to service_role;
 revoke all on function public.van_ban_nhung(p_id uuid) from public, anon, authenticated;
