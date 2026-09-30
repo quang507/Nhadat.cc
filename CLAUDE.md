@@ -438,6 +438,7 @@ Bản rút gọn nạp tự động cho agent: `.claude/skills/ba-pipeline/SKILL
 ```bash
 bun run kiem   # = kieu (tsc) + build + test:bot (256 e2e + FR-159/161/164/176/177 + tự kiểm TS-SEC) + truyvet
 bun run test:sec   # TS-SEC thật trên DB thật — cần Internet, nên KHÔNG nằm trong `kiem`
+bun run chat       # chat thử với bot trong terminal: DB giả trên máy; `-- --that` bắn production bằng ID thử (FR-246 e)
 ```
 
 **Bộ đo bóc tách** (`bot/tests/do-boc/`, TS-DO-BOC-01, 23/09/2026): 110 ca cố định, cho con số "bot ghi đúng bao
