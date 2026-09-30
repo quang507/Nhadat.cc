@@ -29,6 +29,10 @@ on:
         description: Để trống = bỏ qua. Tên dự án để soi tìm theo nghĩa (cổng sẵn sàng, HTTP Gemini, top ứng viên vector)
         required: false
         default: ''
+      soi_vector:
+        description: Để trống = bỏ qua. Câu tìm của người mua, cách nhau bằng | — in văn bản sẽ nhúng của tin ID thử, nhúng thật và đo độ gần từng câu
+        required: false
+        default: ''
 
 env:
   PROJECT_REF: tbcdpupiarkuxtntmosl
@@ -53,6 +57,7 @@ jobs:
           DOI_MODEL: ${{ inputs.doi_model }}
           THU_TU: ${{ inputs.thu_tu_model }}
           DO_NGHIA: ${{ inputs.do_nghia }}
+          SOI_VECTOR: ${{ inputs.soi_vector }}
         run: |
           set -euo pipefail
           q() { # chạy một câu SQL, in kết quả JSON
@@ -165,6 +170,49 @@ jobs:
           q "select coalesce(json_agg(x), '[]') as ds from (select l.property_type, l.district, l.ward, p.name as du_an, l.status
               from listings l join sellers s on s.id = l.seller_id left join projects p on p.id = l.project_id
               where s.zalo_user_id = $(lit "$ZALO") order by l.created_at) x" | jq -c '.[0].ds[]'
+          # 30/09/2026: cron `nhung-tick` chỉ nhúng tin ĐÃ LÊN KỆ, còn tin ID thử dừng ở cho_thong_tin và bị xoá cuối lượt — nên soi
+          # thẳng: văn bản `van_ban_nhung()` (đúng thứ cron sẽ gửi), nhúng thật (RETRIEVAL_DOCUMENT) và đo độ gần từng câu tìm
+          # (RETRIEVAL_QUERY, như chat-reply). Không ghi vector vào tin, không đưa tin lên kệ.
+          if [ -n "$SOI_VECTOR" ]; then (
+            nhung() { # $1 = biểu thức SQL ra text, $2 = taskType → in id request
+              q "select net.http_post(url := 'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent',
+                   body := jsonb_build_object('content', jsonb_build_object('parts', jsonb_build_array(jsonb_build_object('text', left($1, 6000)))),
+                                              'taskType', '$2', 'outputDimensionality', 768),
+                   headers := jsonb_build_object('Content-Type', 'application/json', 'x-goog-api-key', public.get_secret('GEMINI_API_KEY')),
+                   timeout_milliseconds := 20000) as id" | jq -r '.[0].id'
+            }
+            cho() { # chờ request $1 xong, in mã HTTP
+              local st=""
+              for i in $(seq 1 10); do
+                sleep 3
+                st=$(q "select coalesce(status_code::text, case when error_msg is not null then 'loi' end) as s from net._http_response where id = $1" | jq -r '.[0].s // empty')
+                [ -n "$st" ] && break
+              done
+              echo "${st:-chua_tra}"
+            }
+            vec() { echo "(select array(select jsonb_array_elements_text(content::jsonb -> 'embedding' -> 'values')::float8) from net._http_response where id = $1)::extensions.vector"; }
+            for LID in $(q "select l.id from listings l join sellers s on s.id = l.seller_id where s.zalo_user_id = $(lit "$ZALO") order by l.created_at" | jq -r '.[].id'); do
+              echo; echo "== Vector của tin ID thử"
+              q "select l.property_type, l.status, (l.nhung is not null) as da_co_vector from listings l where l.id = '$LID'" | jq -c '.[0]'
+              echo "-- Văn bản sẽ nhúng (van_ban_nhung):"
+              q "select regexp_replace(public.van_ban_nhung('$LID'::uuid), '[0-9]{9,}', '#', 'g') as t" | jq -r '.[0].t'
+              RD=$(nhung "public.van_ban_nhung('$LID'::uuid)" RETRIEVAL_DOCUMENT)
+              SD=$(cho "$RD")
+              echo "-- Gemini nhúng văn bản tin: $SD"
+              [ "$SD" = "200" ] || continue
+              IFS='|' read -ra DSV <<< "$SOI_VECTOR"
+              for CT in "${DSV[@]}"; do
+                CT="$(printf '%s' "$CT" | sed 's/^ *//; s/ *$//')"; [ -z "$CT" ] && continue
+                RQ=$(nhung "$(lit "$CT")" RETRIEVAL_QUERY)
+                SQ=$(cho "$RQ")
+                if [ "$SQ" = "200" ]; then
+                  G=$(q "select round((1 - ($(vec "$RD") operator(extensions.<=>) $(vec "$RQ")))::numeric, 3) as g" | jq -r '.[0].g')
+                  echo "độ gần $G · $CT"
+                else echo "câu tìm nhúng hỏng ($SQ) · $CT"; fi
+              done
+            done
+          ) || echo "(soi vector lỗi giữa chừng — vẫn dọn người thử)"; fi
+
           echo; echo "== Sổ lỗi chat-reply từ lúc bắn"
           q "select coalesce(json_agg(x), '[]') as loi from (select source, left(detail, 160) as detail from bot_errors
               where at >= $(lit "$MOC")::timestamptz and source like 'chat-reply%' order by at limit 10) x" | jq -c '.[0].loi'
