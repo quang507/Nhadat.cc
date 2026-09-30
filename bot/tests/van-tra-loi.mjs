@@ -1088,6 +1088,13 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
   ok("FR250 'Mình ghi nhận rồi' → 'Em ghi nhận rồi'", botXungEm("Mình ghi nhận rồi nha.") === "Em ghi nhận rồi nha.");
   ok("FR250 'mình cho em hỏi' (gọi khách) giữ", botXungEm("Dạ mình cho em hỏi giá nha?") === "Dạ mình cho em hỏi giá nha?");
   ok("FR250 'Sổ nhà mình' giữ", botXungEm("Sổ nhà mình riêng hay chung ạ?") === "Sổ nhà mình riêng hay chung ạ?");
+  for (const [vao, ra] of [
+    ["Cảm ơn em đã ghi nhận bán căn hộ Sunrise City 2PN 70 m² giá 3 tỷ. Căn hộ mình ở tầng mấy ạ?",
+      "Dạ em ghi nhận bán căn hộ Sunrise City 2PN 70 m² giá 3 tỷ. Căn hộ mình ở tầng mấy ạ?"],
+    ["Cảm ơn anh chị đã ghi nhận ạ.", "Dạ em ghi nhận ạ."],
+    ["Cám ơn mình, đã lưu lại.", "Cám ơn mình, đã lưu lại."],
+    ["Cảm ơn anh đã chia sẻ thông tin.", "Cảm ơn anh đã chia sẻ thông tin."],
+  ]) ok(`bot xưng: '${vao.slice(0, 40)}'`, botXungEm(vao) === ra, botXungEm(vao));
   const k = boKhenViTri(["Dạ em ghi nhận. Địa chỉ nằm khu vực An Hội Tây, vị trí khá thuận tiện. Cho em xin diện tích nha?"]);
   ok("FR250 bỏ 'vị trí khá thuận tiện'", k[0] === "Dạ em ghi nhận. Địa chỉ nằm khu vực An Hội Tây. Cho em xin diện tích nha?", k[0]);
   ok("FR250 câu hỏi về khu vực giữ", boKhenViTri(["Khu vực này đẹp không anh?"])[0] === "Khu vực này đẹp không anh?");
