@@ -864,7 +864,9 @@ export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[]): st
     // nhà, không phải điều gì về căn nhà — không vào mô tả.
     if (LOI_NOI_CHUYEN.test(kd)) continue;
     if (daCo.some((t) => t.includes(kd) || kd.includes(t))) continue;
-    if (ra.some((r) => chuanSo(r) === kd)) continue;
+    // 30/09/2026 (bắn thử vector v287): vế "nhà có 1 phòng ngủ ngay tầng trệt…" và bản model cắt ngắn "phòng ngủ ngay tầng
+    // trệt…" cùng vào bổ sung — vế nằm trọn trong vế đã giữ là lặp.
+    if (ra.some((r) => chuanSo(r).includes(kd) || kd.includes(chuanSo(r)))) continue;
     ra.push(v);
     if (ra.length >= 3) break;
   }
