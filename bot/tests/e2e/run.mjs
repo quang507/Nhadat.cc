@@ -1,4 +1,4 @@
-import { FakeDB } from "./mock-supabase.mjs";
+import { FakeDB, napPhuongCuThat, napPhuongThat } from "./mock-supabase.mjs";
 import { OUT } from "./mock-anthropic.mjs";
 import { tenTroLy } from "../../supabase/functions/_shared/prompts.ts"; // FR-181: cùng hàm băm với chat-reply
 globalThis.__calls = []; globalThis.__db = new FakeDB();
@@ -1051,8 +1051,9 @@ fresh(seedKho);
     }
     const pHx = prompt(createCalls().at(-1));
     const hoiHem = db().t.info_requests.some((q) => q.listing_id === lHx?.id && q.question === "do_rong_hem" && q.status === "pending");
-    check("HX-01 rao '105/12 Trần Bình Trọng' → câu hẻm là xác nhận 'nằm trong hẻm đúng không'",
-      hoiHem && /nằm trong hẻm đúng không/.test(`${pHx}\n${rHx2.body.replies.join("\n")}`),
+    // 30/09/2026: "105/12" là hẻm 105, nhà số 12 (quy ước TP.HCM) → câu hẻm gọi đúng số hẻm.
+    check("HX-01 rao '105/12 Trần Bình Trọng' → câu hẻm là xác nhận 'nằm trong hẻm 105 đúng không'",
+      hoiHem && /nằm trong hẻm 105 đúng không/.test(`${pHx}\n${rHx2.body.replies.join("\n")}`),
       JSON.stringify({ rep: rHx2.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === lHx?.id).map((q) => [q.question, q.status]), p: pHx.slice(-400) }));
   }
   r = await send({ external_user_id: "h-1", text: "hẻm 4m xe hơi vào tận nhà" });
@@ -2910,7 +2911,7 @@ fresh(seedKho);
 
   // Sai 1 ký tự → câu hỏi đầu là XÁC NHẬN tên đường; gợi ý cất; địa chỉ vẫn chữ khách gõ.
   fresh(seedDuong);
-  rp = await send({ external_user_id: "duong-2", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
+  rp = await send({ external_user_id: "duong-2", text: "bán nhà hẻm 4m pham the hier quận 7, 60m2" });
   check("DUONG-02 'pham the hier' khớp gần → hỏi 'Dạ em hiểu là đường Phạm Thế Hiển đúng không', gợi ý ở boc_tach.duong_goi_y, địa chỉ chưa sửa",
     rp.body.replies.join("\n").includes("Dạ em hiểu là đường Phạm Thế Hiển đúng không") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" &&
       tin().boc_tach?.duong_goi_y?.vi_tri === "hẻm 4m Phạm Thế Hiển" && /pham the hier/.test(tin().location_raw ?? "") && pend().length > 0,
@@ -2924,7 +2925,7 @@ fresh(seedKho);
 
   // Không gật, trả lời câu treo → gợi ý bỏ, câu trả lời đi đường thường.
   fresh(seedDuong);
-  await send({ external_user_id: "duong-3", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
+  await send({ external_user_id: "duong-3", text: "bán nhà hẻm 4m pham the hier quận 7, 60m2" });
   rp = await send({ external_user_id: "duong-3", text: "5 tỷ 2" });
   check("DUONG-04 không gật, nói '5 tỷ 2' → gợi ý xoá, địa chỉ giữ chữ khách gõ, giá vẫn ghi",
     tin().boc_tach?.duong_goi_y === false && /pham the hier/.test(tin().location_raw ?? "") && tin().price_vnd > 0,
@@ -2966,7 +2967,7 @@ fresh(seedKho);
         { khoa: "quan", gia_tri: "Quận 8", trich_dan: "quận 8", can: null },
         { khoa: "dien_tich", gia_tri: "60", trich_dan: "60m2", can: null },
       ] } : OUT();
-  rp = await send({ external_user_id: "duong-7", text: "bán nhà hẻm 4m pham the hier quận 8, 60m2" });
+  rp = await send({ external_user_id: "duong-7", text: "bán nhà hẻm 4m pham the hier quận 7, 60m2" });
   check("DUONG-08 chế độ 'chinh': AI sửa 'pham the hier' → 'Phạm Thế Hiển' bị kiểm bằng chứng bỏ → lấy trích dẫn làm địa chỉ, từ điển hỏi xác nhận, gợi ý cất",
     /pham the hier/.test(tin().location_raw ?? "") && tin().boc_tach?.duong_goi_y?.ten === "Phạm Thế Hiển" && rp.body.replies.join("\n").includes("Dạ em hiểu là đường Phạm Thế Hiển đúng không"),
     JSON.stringify({ l: tin(), rep: rp.body.replies }));
@@ -5476,6 +5477,173 @@ fresh(seedKho);
   check("BANCONG-02 câu rao thật 'còn căn nhà hẻm … giá 6 tỷ nữa' → vẫn mở tin mới", db().t.listings.length === 2, JSON.stringify(db().t.listings.map((l) => [l.code, l.property_type])));
 }
 
+// 30/09/2026 (chủ dự án, chat thử trên máy): "nhà chú ở 137/28 đường số 59 phường an hội tây nhé" nhắn TRƯỚC câu rao
+// "chú muốn bán 15 tỏi có tl, nhà 45m2 5 tấm nhé" → địa chỉ mất, phường không nhận (thường, có dấu), giá "chưa đọc ra số"
+// (mock thiếu "tỏi"); hỏi lại phường thì AI cắt "An Hội Tây" thành "An Hội". Bảng `wards` là 168 phường thật.
+{
+  const laLuotBocRaoAH = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const seedAH = (d) => {
+    d.t.wards = napPhuongThat().map((w) => ({ ...w }));
+    d.insert("sellers", { zalo_user_id: "ah-tay", seller_type: "ccrb", name: null, active_listing_id: null });
+  };
+  fresh(seedAH);
+  const cuCH = globalThis.__cauHinh;
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRaoAH(p) ? { so_can: 1, kien_thuc: [], truong: [{ khoa: "phuong", gia_tri: "Phường An Hội Tây", trich_dan: "phường an hội tây", can: null }] } : OUT();
+  await send({ external_user_id: "ah-tay", text: "nhà chú ở 137/28 đường số 59 phường an hội tây nhé" });
+  const rAH = await send({ external_user_id: "ah-tay", text: "chú muốn bán 15 tỏi có tl, nhà 45m2 5 tấm nhé" });
+  const lAH = db().t.listings.at(-1);
+  const fAH = (q) => db().t.listing_facts.filter((f) => f.listing_id === lAH?.id && f.question === q).map((f) => f.answer);
+  check("AHT-01 địa chỉ nói TRƯỚC câu rao → tin mới có phường 'Phường An Hội Tây' (viết thường có dấu vẫn nhận)",
+    lAH?.ward === "Phường An Hội Tây", JSON.stringify({ l: lAH && { ward: lAH.ward, district: lAH.district, loc: lAH.location_raw }, rep: rAH.body.replies }));
+  check("AHT-02 phường An Hội Tây → quận cũ Gò Vấp (từ bảng wards), không hỏi lại quận",
+    lAH?.district === "Quận Gò Vấp", JSON.stringify({ district: lAH?.district }));
+  check("AHT-03 vị trí giữ số nhà hẻm '137/28 đường số 59' (hẻm 137, nhà số 28)",
+    [lAH?.location_raw, ...fAH("vi_tri")].some((v) => /137\/28 đường số 59/i.test(v ?? "")), JSON.stringify({ loc: lAH?.location_raw, vt: fAH("vi_tri") }));
+  check("AHT-04 '15 tỏi có tl' → price_vnd 15 tỷ (mock parse_vnd đọc 'tỏi' như bản thật)",
+    Number(lAH?.price_vnd) === 15e9, JSON.stringify({ raw: lAH?.price_raw, vnd: lAH?.price_vnd }));
+  check("AHT-05 không hỏi lại phường khách đã nói",
+    !db().t.info_requests.some((x) => x.listing_id === lAH?.id && x.question === "phuong" && x.status === "pending"),
+    JSON.stringify(db().t.info_requests.filter((x) => x.listing_id === lAH?.id).map((x) => [x.question, x.status])));
+
+  // AI (chế độ chinh) đọc câu trả lời phường ra "Phường An Hội" — cắt mất "Tây". Chốt với bảng wards → An Hội Tây.
+  fresh(seedAH);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = (p) => laLuotBocRaoAH(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+  await send({ external_user_id: "ah-tay", text: "chú muốn bán nhà hẻm đường số 59, 45m2 5 tấm, giá 15 tỷ" });
+  const lAI = db().t.listings.at(-1);
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: lAI.id, question: "phuong", status: "pending" });
+  globalThis.__model.parse = (p) => laLuotBocRaoAH(p)
+    ? { so_can: 0, kien_thuc: [], truong: [{ khoa: "phuong", gia_tri: "Phường An Hội Tây", trich_dan: "phường an hội tây", can: null }], tra_loi: { co_tra_loi: true, gia_tri: "Phường An Hội Tây", trich_dan: "phường an hội tây" } }
+    : OUT();
+  const rAI = await send({ external_user_id: "ah-tay", text: "phường an hội tây quận gò vấp" });
+  const lAI2 = db().t.listings.find((l) => l.id === lAI.id);
+  const fPh = db().t.listing_facts.filter((f) => f.listing_id === lAI.id && f.question === "phuong").map((f) => f.answer);
+  check("AHT-06 AI đọc 'Phường An Hội' (cắt chữ) khi khách 'phường an hội tây quận gò vấp' → ghi 'Phường An Hội Tây', không ghi 'Phường An Hội'",
+    fPh.includes("Phường An Hội Tây") && !fPh.includes("Phường An Hội") && lAI2?.ward !== "Phường An Hội",
+    JSON.stringify({ fPh, ward: lAI2?.ward, rep: rAI.body.replies }));
+  check("AHT-07 quận chưa rõ → lấy quận cũ của phường: Quận Gò Vấp", lAI2?.district === "Quận Gò Vấp", JSON.stringify({ district: lAI2?.district }));
+  globalThis.__model.parse = (p) => laLuotBocRaoAH(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+  globalThis.__cauHinh = cuCH;
+}
+
+// 30/09/2026 (chủ dự án: "còn mấy hẻm khác còn nhiều / nhỏ và nhỏ hơn nữa … vector đường lớn phường quận mới và cũ và dự án
+// … nhắc tới gần đúng sẽ biết cái nào đúng và sửa vào, kết hợp với vị trí nữa, để biết đường nào gần đường nào").
+// Từ điển `duong` nay có đường số + hẻm + toạ độ, bảng `phuong_cu`; bot dùng vị trí để biết phường / sửa tên đường.
+{
+  const PHUONG_CU_E2E = await napPhuongCuThat();
+  const seedVT = (d) => {
+    d.t.wards = napPhuongThat().map((w) => ({ ...w }));
+    d.t.phuong_cu = PHUONG_CU_E2E.map((c) => ({ ...c }));
+    const duong = (ten, phuong, quan_cu, loai, lat, lng, so_hem = null, duong_me = null) =>
+      d.insert("duong", { ten, ten_khong_dau: ten.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase(), tinh: "TP.HCM", phuong, quan_cu, loai, lat, lng, so_hem, duong_me });
+    duong("Đường số 59", "Phường An Hội Tây", "Quận Gò Vấp", "so", 10.853604, 106.651747);
+    duong("Hẻm 137 Đường số 59", "Phường An Hội Tây", "Quận Gò Vấp", "hem", 10.8538, 106.6519, "137", "Đường số 59");
+    duong("Trần Bình Trọng", "Phường Chợ Quán", "Quận 5", "duong", 10.7560, 106.6780);
+    duong("Trần Bình Trọng", "Phường Vườn Lài", "Quận 10", "duong", 10.7640, 106.6700);
+    duong("Trần Bình Trọng", "Phường Bình Lợi Trung", "Quận Bình Thạnh", "duong", 10.8100, 106.7000);
+    duong("An Dương Vương", "Phường Chợ Quán", "Quận 5", "duong", 10.7570, 106.6770);
+    duong("An Dương Vương", "Phường An Lạc", "Quận Bình Tân", "duong", 10.7300, 106.6100);
+    duong("Phạm Thế Hiển", "Phường Chánh Hưng", "Quận 8", "duong", 10.7400, 106.6600);
+  };
+  const cuCH2 = globalThis.__cauHinh;
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "tat" };
+  const tatCa = (r) => r.body.replies.join("\n");
+
+  // (a) Số hẻm + đường mẹ → đúng một phường → hỏi xác nhận phường đó (không hỏi trống "phường mấy").
+  fresh(seedVT); globalThis.__nominatim = [];
+  let rv = await send({ external_user_id: "vt-hem", text: "chú bán nhà 137/28 đường số 59 gò vấp, 45m2, giá 15 tỷ" });
+  let lv = db().t.listings.at(-1);
+  check("AHT-08 '137/28 đường số 59' → tra hẻm 137 của đường số 59 → hỏi xác nhận Phường An Hội Tây, cất gợi ý",
+    /hẻm 137 đường số 59 thuộc Phường An Hội Tây/i.test(tatCa(rv)) && lv?.boc_tach?.phuong_goi_y?.phuong === "Phường An Hội Tây",
+    JSON.stringify({ rep: rv.body.replies, bt: lv?.boc_tach, loc: lv?.location_raw, d: lv?.district }));
+
+  // (b) Đường có ở ba phường, khách nhắc KÈM con đường thứ hai → phường nơi hai đường gần nhau.
+  fresh(seedVT); globalThis.__nominatim = [];
+  rv = await send({ external_user_id: "vt-giao", text: "bán nhà hẻm Trần Bình Trọng gần An Dương Vương, 60m2, giá 9 tỷ" });
+  lv = db().t.listings.at(-1);
+  check("AHT-09 'Trần Bình Trọng gần An Dương Vương' (đường có ở 3 phường) → Phường Chợ Quán (hai đường cách nhau vài trăm mét), hỏi xác nhận",
+    /Trần Bình Trọng \(gần An Dương Vương\) thuộc Phường Chợ Quán/.test(tatCa(rv)) && lv?.boc_tach?.phuong_goi_y?.phuong === "Phường Chợ Quán",
+    JSON.stringify({ rep: rv.body.replies, bt: lv?.boc_tach, rpc: db().log.filter((x) => x.rpc).map((x) => [x.rpc, JSON.stringify(x.args).slice(0, 120)]), ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
+
+  // (c) Tên phường CŨ → phường mới + quận cũ theo wards.
+  fresh(seedVT); globalThis.__nominatim = [];
+  { const bp = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? "")); globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" }; globalThis.__model.parse = (p) => bp(p) ? { so_can: 1, kien_thuc: [], truong: [{ khoa: "phuong", gia_tri: "Phường An Khánh", trich_dan: "phường thảo điền", can: null }] } : OUT(); }
+  rv = await send({ external_user_id: "vt-cu", text: "bán nhà phường thảo điền 100m2 giá 20 tỷ" });
+  lv = db().t.listings.at(-1);
+  check("AHT-10 'phường thảo điền' (phường cũ) → ward Phường An Khánh, quận Quận 2",
+    lv?.ward === "Phường An Khánh" && lv?.district === "Quận 2", JSON.stringify({ w: lv?.ward, d: lv?.district, rep: rv.body.replies }));
+
+  // (d) Tên đường gõ sai 1 chữ, quận đã nói và đường đó có trong quận → sửa luôn, không hỏi.
+  fresh(seedVT); globalThis.__nominatim = [];
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "tat" }; globalThis.__model.parse = () => OUT();
+  rv = await send({ external_user_id: "vt-sua", text: "bán nhà 12 pham the hier quận 8, 50m2, giá 5 tỷ" });
+  lv = db().t.listings.at(-1);
+  check("AHT-11 'pham the hier quận 8' → địa chỉ sửa thành Phạm Thế Hiển (đường có trong Quận 8), KHÔNG hỏi 'phải không'",
+    /Phạm Thế Hiển/.test(lv?.location_raw ?? "") && !lv?.boc_tach?.duong_goi_y && !/Phạm Thế Hiển (?:đúng|phải) không/.test(tatCa(rv)),
+    JSON.stringify({ loc: lv?.location_raw, bt: lv?.boc_tach, rep: rv.body.replies }));
+  globalThis.__cauHinh = cuCH2;
+}
+
+{ const PHUONG_CU_E2E3 = await napPhuongCuThat();
+// 30/09/2026 — bắn thử bằng `bun run chat` (4 lượt, ~30 câu), các lỗi luật tìm ra và đã sửa:
+{
+const aiPhuong = (gia_tri, trich) => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" }; globalThis.__model.parse = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? "")) ? { so_can: 1, kien_thuc: [], truong: gia_tri ? [{ khoa: "phuong", gia_tri, trich_dan: trich, can: null }] : [] } : OUT(); };
+const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "tat" }; globalThis.__model.parse = () => OUT(); };
+  const seedCT = (d) => { d.t.wards = napPhuongThat().map((w) => ({ ...w })); };
+  const cuCH3 = globalThis.__cauHinh;
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "tat" };
+
+  // (1) Người lạ được hỏi vai, đáp bằng câu rao KHÔNG có chữ loại → phải là người BÁN (trước: khách mua ngân sách 6 tỷ).
+  fresh(seedCT);
+  aiPhuong("Phường Tân Định", "phường tân định");
+  await send({ external_user_id: "ct-vai", text: "nhà mình ở phường tân định quận 1 nhé" });
+  let rc = await send({ external_user_id: "ct-vai", text: "hẻm 3m, 3x15, 2 lầu, bán 6 tỷ thương lượng" });
+  let lc = db().t.listings.at(-1);
+  check("CT-01 đáp câu hỏi vai bằng 'hẻm 3m, 3x15, 2 lầu, bán 6 tỷ' → người BÁN, tin 6 tỷ, phường Tân Định từ câu nói trước",
+    rc.body.role === "seller" && Number(lc?.price_vnd) === 6e9 && lc?.ward === "Phường Tân Định" && lc?.district === "Quận 1",
+    JSON.stringify({ role: rc.body.role, l: lc && { w: lc.ward, d: lc.district, p: lc.price_vnd }, rep: rc.body.replies }));
+
+  // (2) Trả lời câu ĐỊA CHỈ kèm phường → vị trí gọn + phường + quận cũ (trước: nguyên câu vào vị trí, phường mất).
+  fresh(seedCT);
+  aiTat();
+  await send({ external_user_id: "ct-vt", text: "chào em" });
+  await send({ external_user_id: "ct-vt", text: "có nhà muốn bán" });
+  const lvt = db().t.listings.at(-1);
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: lvt.id, question: "vi_tri", status: "pending" });
+  aiPhuong("Phường An Hội Tây", "phường an hội tây");
+  rc = await send({ external_user_id: "ct-vt", text: "nhà ở 137/28 đường số 59 phường an hội tây gò vấp" });
+  lc = db().t.listings.find((l) => l.id === lvt.id);
+  check("CT-02 trả lời địa chỉ 'nhà ở 137/28 đường số 59 phường an hội tây gò vấp' → vị trí '137/28 đường số 59', phường An Hội Tây, quận Gò Vấp",
+    lc?.location_raw === "137/28 đường số 59" && lc?.ward === "Phường An Hội Tây" && lc?.district === "Quận Gò Vấp",
+    JSON.stringify({ l: lc && { loc: lc.location_raw, w: lc.ward, d: lc.district }, rep: rc.body.replies }));
+
+  // (3) Số nhà + tên đường + tên quận trần (không chữ "quận") → có địa chỉ (trước: rơi mất).
+  fresh(seedCT);
+  rc = await send({ external_user_id: "ct-pn", text: "bán nhà 20 hồ biểu chánh phú nhuận 4x16 3 lầu 13 tỷ" });
+  lc = db().t.listings.at(-1);
+  check("CT-03 '20 hồ biểu chánh phú nhuận' → vị trí '20 hồ biểu chánh', quận Phú Nhuận",
+    /^20 h[ồo] bi[ểe]u ch[áa]nh$/i.test(lc?.location_raw ?? "") && lc?.district === "Quận Phú Nhuận", JSON.stringify({ loc: lc?.location_raw, d: lc?.district }));
+
+  // (4) Chữ nối dính cuối địa chỉ.
+  fresh(seedCT);
+  rc = await send({ external_user_id: "ct-gan", text: "bán nhà hẻm xe hơi nguyen van cu gần trần hưng đạo, 50m2, trệt 2 lầu, giá 9 tỏi rưỡi" });
+  lc = db().t.listings.at(-1);
+  check("CT-04 địa chỉ không dính chữ 'gần' cuối; '9 tỏi rưỡi' = 9,5 tỷ",
+    !/gần\s*$/.test(lc?.location_raw ?? "gần") && Number(lc?.price_vnd) === 9.5e9, JSON.stringify({ loc: lc?.location_raw, p: lc?.price_vnd }));
+
+  // (5) Tên phường cũ dễ nhầm với phường mới ngắn hơn.
+  fresh((d) => { seedCT(d); d.t.phuong_cu = PHUONG_CU_E2E3.map((c) => ({ ...c })); });
+  aiPhuong("Xã Tân Vĩnh Lộc", "xã vĩnh lộc b");
+  rc = await send({ external_user_id: "ct-vlb", text: "bán đất xã vĩnh lộc b bình chánh 5x20 giá 3 tỷ 2" });
+  lc = db().t.listings.at(-1);
+  check("CT-05 'xã vĩnh lộc b' (cũ) → Xã Tân Vĩnh Lộc, KHÔNG phải Xã Vĩnh Lộc", lc?.ward === "Xã Tân Vĩnh Lộc", JSON.stringify({ w: lc?.ward }));
+  globalThis.__cauHinh = cuCH3;
+}
+
+}
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

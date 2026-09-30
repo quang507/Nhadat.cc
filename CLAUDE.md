@@ -380,7 +380,7 @@ nào chưa đẩy `masterDB/` lên thì lưới an toàn vẫn y như cũ.
 khoá `listings_seller_id_fkey` là `NO ACTION` nên có xoá cũng bị chặn. Mốc sao Bắc
 Đẩu nay đếm từ số 0 thật (`docs/10 §10.9`), không còn lẫn lượt thử của nhóm làm.
 
-**Chú thích bảng nằm TRONG DB, không nằm trong docs** (`20260906b`). 40/40 bảng (soát 18/09: `tien_ich` từng thiếu, vá `20260918a`; `duong` thêm 21/09; `nhung_viec`, `nhung_viec_du_an` thêm 23/09)
+**Chú thích bảng nằm TRONG DB, không nằm trong docs** (`20260906b`). 43/43 bảng (soát 18/09: `tien_ich` từng thiếu, vá `20260918a`; `duong` thêm 21/09; `nhung_viec`, `nhung_viec_du_an` thêm 23/09; `nhung_viec_dia_danh`, `phuong_cu`, `quan_cu` thêm 30/09)
 và 19/19 view (public, soát 18/09) đã có `comment on`, cộng 69 chú thích cột; tiền tố `[RỔ HÀNG]`
 `[NGƯỜI & HỘI THOẠI]` `[BOT & HÀNG ĐỢI]` `[CTV]` `[HỆ THỐNG]` để Table Editor
 xếp A→Z mà mắt vẫn gom được theo việc. Thêm bảng hay cột mới thì **thêm
@@ -421,8 +421,9 @@ thuộc vào một thiết lập GitHub chẳng liên quan gì, set private mộ
 trả 404 và ảnh vỡ sạch. Tài nguyên tĩnh để trong `public/` rồi tham chiếu bằng
 đường dẫn tương đối (`/img/house1.jpg`).
 
-Thư mục `nhadat-cc/` cũ (máy local) không dùng nữa. Quy tắc giữ nguyên: tính
-năng mới phải có FR/SRS tương ứng trong `docs/` trước khi code.
+Thư mục `nhadat-cc/` cũ (máy local) không dùng nữa.
+
+**Từ 30/09/2026 (chủ dự án: "bỏ luôn giờ ko cần FR nữa, viết vào trong docs đi"): sửa lỗi / cải tiến bot và web KHÔNG cần cấp FR trước khi code.** Thay vào đó ghi thẳng vào tài liệu tầng liên quan (thường là `docs/07` — một mục SRS kèm ca gốc, nguyên nhân, chỗ sửa, cách kiểm; ví dụ SRS-5.1a), cùng commit với code và test. FR cũ giữ nguyên số, vẫn là tham chiếu; ai muốn cấp FR cho một tính năng lớn vẫn được, chỉ không còn là cổng bắt buộc.
 
 ## 6b. Nguồn thiết kế
 

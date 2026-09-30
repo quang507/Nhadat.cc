@@ -4,9 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       migration_file:
-        description: File migration name in bot/supabase/migrations/
+        description: Tên file migration trong bot/supabase/migrations/ (gõ đúng tên, không có mặc định)
         required: true
-        default: '20260908c_chuan_hoa_ma_tin_va_boc_thong_so.sql'
+        # 30/09/2026: từng mặc định '20260908c_chuan_hoa_ma_tin_va_boc_thong_so.sql' — bấm chạy để nguyên ô là ÁP LẠI file
+        # 08/09, đè boc_thong_so / next_listing_code / listing_photos_v bằng bản cũ (phải khôi phục bằng 20260930b).
+        default: ''
+      ap_lai:
+        description: File đã có trong sổ migration mà vẫn muốn áp lại (đè hàm bằng bản trong file)? Gõ đúng chữ "ap lai".
+        required: false
+        default: ''
 
 env:
   PROJECT_REF: tbcdpupiarkuxtntmosl
@@ -37,6 +43,17 @@ jobs:
           TARGET="bot/supabase/migrations/$FILE"
           if [ ! -f "$TARGET" ]; then
             echo "::error::Không tìm thấy file $TARGET"
+            exit 1
+          fi
+          # 30/09/2026: file ĐÃ ÁP thì chặn — áp lại một file cũ là dựng lại hàm/view bản cũ đè bản hiện hành (thân hàm trên
+          # DB thường đã khác file cũ, CLAUDE.md §6). Muốn áp lại thật thì gõ "ap lai" ở ô ap_lai.
+          NAME0="${FILE%.sql}"
+          if ! printf '%s' "$NAME0" | grep -Eq '^[0-9a-z_]+$'; then echo "::error::Tên file lạ: $FILE"; exit 1; fi
+          DA=$(curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            -d "{\"query\":\"select count(*)::int as n from supabase_migrations.schema_migrations where name = '$NAME0'\"}" | jq -r '.[0].n')
+          if [ "$DA" != "0" ] && [ "${{ inputs.ap_lai }}" != "ap lai" ]; then
+            echo "::error::$NAME0 đã áp trên DB rồi. Áp lại sẽ đè hàm/view bằng bản trong file (có thể là bản cũ). Muốn thật thì gõ 'ap lai' ở ô ap_lai."
             exit 1
           fi
           echo "Đang áp migration: $TARGET"

@@ -461,10 +461,14 @@ export function bocViTriRao(text: string): string | null {
   // khi ngay sau là phường/quận, để "5 tỷ" hay "40m2" không thành địa chỉ.
   // 22/09/2026 (bắn thật căn hộ): "126 Hung Vuong p12" — lookahead cũ `p\d\b` chỉ nhận phường MỘT chữ số
   // ("p4"), "p12" trượt ở ranh từ sau chữ số đầu → địa chỉ trần trước phường 10–19 không bao giờ được nhận.
-  const so = /(?:^|[\s,])(\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+(?:[\p{L}]+\s?){1,4}?)(?=\s*(?:p\.?\s*\d{1,2}|phường|phuong|quận|quan|q\.?\s*\d{1,2})\b)/iu
+  // 30/09/2026 (chat thử): "bán nhà 20 hồ biểu chánh phú nhuận 4x16…" — tên QUẬN chữ đứng trần (không chữ "quận") ngay
+  // sau tên đường cũng là mốc dừng; bản trước chỉ nhận "phường / quận / p12 / q5" nên cả địa chỉ rơi.
+  const so = /(?:^|[\s,])(\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+(?:[\p{L}]+\s?){1,4}?)(?=[\s,]*(?:p\.?\s*\d{1,2}|phường|phuong|quận|quan|q\.?\s*\d{1,2}|phú nhuận|phu nhuan|tân bình|tan binh|bình thạnh|binh thanh|gò vấp|go vap|tân phú|tan phu|bình tân|binh tan|thủ đức|thu duc|nhà bè|nha be|bình chánh|binh chanh|hóc môn|hoc mon|củ chi|cu chi|cần giờ|can gio)(?![\p{L}]))/iu
     .exec(t)?.[1]?.trim() ?? null;
   // 23/09/2026 (bắn thật): "căn 2 căn hộ Hà Đô quận 10" → "2 căn hộ Hà Đô" — số thứ tự căn + chữ LOẠI nhà không phải số nhà.
   if (so && /^\d{1,5}[a-zA-Z]?\s+(?:căn|can|nhà|nha|lô|lo|nền|nen|phòng|phong|tầng|tang|lầu|lau|miếng|mieng)(?![\p{L}])/iu.test(so)) return null;
+  // "12 tỷ rưỡi gò vấp", "3 triệu gò vấp" — tiền / diện tích đứng trước tên quận không phải số nhà.
+  if (so && /^\d{1,5}[.,]?\d*\s*(?:tỷ|tỉ|tỏi|ty|ti|toi|triệu|trieu|tr|củ|cu|m2|m²|mét|met|m)(?![\p{L}])/iu.test(so)) return null;
   return so && so.length >= 6 ? so : null;
 }
 
@@ -1595,7 +1599,20 @@ function nhanDienFactTho(text: string): NhanDien | null {
   // 13/09/2026: "để lại căn nhà 4x16…" là BÁN, không phải để lại nội thất.
   const NOI_THAT_RE = /\b(de lai(?!\s+(?:lai\s+)?(?:can|nha|lo|dat|nen|mieng|mat bang|cho|gia|so|phong))|full noi that|noi that (?:co ban|day du|full)|may lanh|tu lanh|giuong|bep|ban giao (?:tho|trong|nha trong)|nha trong(?!\s+(?:hem|ngo|kiet|ngach|khu|duong|xom|day|toa|chung cu|du an|kdc|so|lo)))\b/;
   if (NOI_THAT_RE.test(kd) && !/\b(mat tien|m2|ty|trieu)\b/.test(kd)) {
-    return { question: "noi_that", answer: manhKhop(NOI_THAT_RE) };
+    // 30/09/2026 (chat thử): câu rao MỘT vế "cho thuê căn hộ 1pn full nội thất vinhomes central park bình thạnh 15tr/tháng"
+    // → ô nội thất ghi nguyên câu. Câu dài một vế: lấy cụm khớp + tối đa 3 chữ sau (dừng ở số / tên riêng viết hoa).
+    let manh = manhKhop(NOI_THAT_RE);
+    if (manh === goc && goc.split(/\s+/).length > 8) {
+      const g = goc.normalize("NFC");
+      const m = NOI_THAT_RE.exec(boDau(g));
+      if (m && boDau(g).length === g.length) {
+        const sau = g.slice(m.index + m[0].length).split(/\s+/).filter(Boolean);
+        const them: string[] = [];
+        for (const w of sau) { if (them.length >= 3 || /\d/.test(w) || /^[A-ZÀ-Ỹ]/u.test(w) || /^(?:vinhomes|masteri|sunrise|the|căn|nhà|giá|gia)$/iu.test(w)) break; them.push(w); }
+        manh = [g.slice(m.index, m.index + m[0].length), ...them].join(" ").replace(/[,.;]+$/, "");
+      }
+    }
+    return { question: "noi_that", answer: manh };
   }
   // "phường Tân Hưng" (tên chữ, câu ngắn) — phường số bắt ở dưới.
   if (/^\s*(?:phuong|p\.)\s+[a-z][a-z ]{2,25}\s*$/.test(kd) && !/\d/.test(kd)) return { question: "phuong", answer: goc };
