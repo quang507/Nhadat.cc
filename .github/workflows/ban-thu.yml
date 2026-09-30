@@ -33,6 +33,10 @@ on:
         description: Để trống = bỏ qua. Câu tìm của người mua, cách nhau bằng | — in văn bản sẽ nhúng của tin ID thử, nhúng thật và đo độ gần từng câu
         required: false
         default: ''
+      soi_gemini:
+        description: Để trống = bỏ qua. "co" = gọi thử Gemini chat 1 lần bằng TỪNG khoá trong Vault, in mã HTTP (không in khoá)
+        required: false
+        default: ''
 
 env:
   PROJECT_REF: tbcdpupiarkuxtntmosl
@@ -58,6 +62,7 @@ jobs:
           THU_TU: ${{ inputs.thu_tu_model }}
           DO_NGHIA: ${{ inputs.do_nghia }}
           SOI_VECTOR: ${{ inputs.soi_vector }}
+          SOI_GEMINI: ${{ inputs.soi_gemini }}
         run: |
           set -euo pipefail
           q() { # chạy một câu SQL, in kết quả JSON
@@ -106,6 +111,41 @@ jobs:
                        from bot_errors where at > now() - interval '24 hours' and (source ~ '(model|boc_tach|du phong|het nhip)' or detail ~ '^(Groq|Gemini|Claude|Anthropic)')
                        group by 1, 2 order by 3 desc limit 15) x) as loi_model_24h,
                     (select left(regexp_replace(detail, '[0-9]{9,}', '#', 'g'), 220) from bot_errors where source like 'model chinh hong%' order by at desc limit 1) as loi_claude_moi_nhat" | jq -c '.[0]'
+
+          # 30/09/2026: "cho Gemini chạy có đủ để người test không" — khoá nào đang có. Chỉ in CÓ / KHÔNG và TÊN secret,
+          # không bao giờ in giá trị (log repo công khai).
+          echo "== Khoá AI"
+          q "select json_build_object('vault', json_build_object(
+                    'GEMINI_API_KEY', public.get_secret('GEMINI_API_KEY') is not null,
+                    'GEMINI_API_KEY_2', public.get_secret('GEMINI_API_KEY_2') is not null,
+                    'GROQ_API_KEY', public.get_secret('GROQ_API_KEY') is not null,
+                    'ANTHROPIC_API_KEY', public.get_secret('ANTHROPIC_API_KEY') is not null)) as k" | jq -c '.[0].k'
+          echo -n "Secret edge function (chỉ tên): "
+          curl -sS -f "https://api.supabase.com/v1/projects/$PROJECT_REF/secrets" -H "Authorization: Bearer $TOKEN" \
+            | jq -c '[.[].name | select(test("GEMINI|GROQ|ANTHROPIC|MODEL"))]' || echo "(không đọc được)"
+
+          if [ -n "$SOI_GEMINI" ]; then (
+            echo "== Gọi thử Gemini chat (1 lượt / khoá, câu 'ping')"
+            for K in GEMINI_API_KEY GEMINI_API_KEY_2; do
+              RID=$(q "select case when public.get_secret('$K') is null then null else net.http_post(
+                     url := 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+                     body := jsonb_build_object('model', coalesce(public.get_secret('GEMINI_MODEL'), 'gemini-3.8-flash'),
+                                                'messages', jsonb_build_array(jsonb_build_object('role', 'user', 'content', 'ping')), 'max_tokens', 5),
+                     headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || public.get_secret('$K')),
+                     timeout_milliseconds := 20000) end as id" | jq -r '.[0].id // empty')
+              if [ -z "$RID" ]; then echo "$K: không có trong Vault"; continue; fi
+              ST=""
+              for i in $(seq 1 10); do
+                sleep 3
+                ST=$(q "select coalesce(status_code::text, case when error_msg is not null then 'loi' end) as s,
+                          left(regexp_replace(coalesce(content, error_msg, ''), '[0-9]{6,}', '#', 'g'), 160) as m
+                        from net._http_response where id = $RID" | jq -c '.[0] // empty')
+                [ -n "$ST" ] && [ "$(echo "$ST" | jq -r '.s // empty')" != "" ] && break
+              done
+              if [ "$(echo "$ST" | jq -r '.s // empty')" = "200" ]; then echo "$K: 200"; else echo "$K: ${ST:-chua_tra}"; fi
+            done
+            echo "Model gọi thử: $(q "select coalesce(public.get_secret('GEMINI_MODEL'), 'gemini-3.8-flash (mặc định trong mã; secret edge function nếu có thì đè)') as m" | jq -r '.[0].m')"
+          ) || echo "(gọi thử Gemini lỗi giữa chừng)"; fi
 
           echo "== Câu hỏi theo loại BĐS (required_facts: loại · bán/thuê → khoá:ưu tiên:nhóm)"
           q "select coalesce(json_agg(x order by x.loai, x.deal), '[]') as ds from (select property_type::text as loai, coalesce(deal::text, '*') as deal,
