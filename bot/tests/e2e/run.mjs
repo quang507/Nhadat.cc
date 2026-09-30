@@ -2398,6 +2398,23 @@ fresh(seedKho);
       JSON.stringify(tTD.map((l) => [l.property_type, l.ward, l.district, l.price_raw])));
     globalThis.__cauHinh = cuCH;
   }
+  // (a2) cùng loại: "em cần bán nhà" rồi câu rao NHÀ đủ chi tiết (AI chết) — tin rỗng đang hỏi địa chỉ nên câu rao bị coi là câu
+  // trả lời địa chỉ, cả câu vào "bổ sung", không ra giá / diện tích (bắn thật thu-groq-02, 30/09).
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) throw new Error("Groq 413 Request too large"); return OUT(); };
+    await send({ external_user_id: "td-2", text: "em cần bán nhà" });
+    await send({ external_user_id: "td-2", text: "nhà hẻm xe hơi 137/28 đường số 59 an hội tây gò vấp, 4x15, 3 tầng, giá 6 tỷ 2" });
+    const s2 = db().t.sellers.find((x) => x.zalo_user_id === "td-2");
+    const t2 = db().t.listings.filter((l) => l.seller_id === s2?.id);
+    const bs2 = db().t.listing_facts.filter((f) => t2.some((l) => l.id === f.listing_id) && f.question === "bo_sung");
+    check("FR250-E1b 'em cần bán nhà' rồi câu rao nhà đủ chi tiết (AI hỏng: Groq 413) → MỘT tin, giá 6,2 tỷ, 60m², Phường An Hội Tây; không vào bổ sung",
+      t2.length === 1 && t2[0].price_vnd === 6.2e9 && (Number(t2[0].area_m2) === 60 || db().t.listing_facts.some((f) => f.listing_id === t2[0].id && f.question === "dien_tich" && /4x15/.test(f.answer))) && t2[0].ward === "Phường An Hội Tây" && !bs2.length,
+      JSON.stringify({ tin: t2.map((l) => [l.price_raw, l.area_m2, l.ward]), bs: bs2.map((f) => f.answer), f: db().t.listing_facts.filter((f) => t2.some((l) => l.id === f.listing_id)).map((f) => [f.question, f.answer]), loi: (db().t.bot_errors ?? []).map((e) => e.source + ":" + String(e.detail).slice(0, 80)).slice(-4) }));
+    globalThis.__cauHinh = cuCH;
+  }
   // (b) trả lời câu địa chỉ "nhà ở vĩnh lộc b bình chánh, hẻm 5m" → ô "vị trí cụ thể" = "vĩnh lộc b bình chánh" (chỉ tên hành chính).
   {
     fresh(seedKho);

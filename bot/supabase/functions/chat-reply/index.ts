@@ -2218,6 +2218,11 @@ Deno.serve(async (req) => {
     // model đã dặn sẵn — chèn câu xin lỗi, cắt khen vị trí / khen ngược nghĩa / khen lặp / đoán thanh khoản (luật cuối
     // còn cắt đúng câu mẫu prompt dạy: "hẻm xe hơi tới cửa là khách chuộng lắm"). `du` bật lại cả năm, không cần deploy.
     // Luật chống BỊA (giá, số đo, vị trí, hứa đã đăng / có hàng / hỏi chủ), khớp câu hỏi với ô đang hỏi, xưng hô: luôn giữ.
+    // Tin đang hỏi còn RỖNG: vừa mở từ "em cần bán nhà", chưa có giá, diện tích, địa chỉ, dự án (30/09/2026).
+    const laTinRong = (l: { status?: string | null; price_raw?: string | null; price_vnd?: number | string | null; area_m2?: number | null;
+      district?: string | null; ward?: string | null; location_raw: string | null; project_id?: string | null; unit_code?: string | null }) =>
+      l.status === "cho_thong_tin" && !l.price_raw && l.price_vnd == null && l.area_m2 == null && !l.district && !l.ward &&
+      !l.location_raw && !l.project_id && !l.unit_code;
     let luatLoiBotP: Promise<boolean> | null = null;
     const loiBotDu = () => (luatLoiBotP ??= (async () => {
       const { data, error } = await client.rpc("cau_hinh", { p_key: "luat_loi_bot" });
@@ -3772,7 +3777,12 @@ Deno.serve(async (req) => {
     // Câu "muốn rao bán 1 mảnh đất ở …" chưa có giá/diện tích nên luật rao (`wantsSell`) chưa nhận; có chữ bán +
     // loại BĐS + khác nơi/khác loại căn đang hỏi thì đó vẫn là căn mới, đi đường tạo tin.
     const raoMoiCanKhac = !daGanManh && !wantsSell && !!pendingReq && coChuBan && coLoaiBDS && !hoiConBan && (khacQuan || khacLoai);
+    // 30/09/2026 (bắn thật thu-groq-02): "em cần bán nhà" mở tin RỖNG, câu rao đủ chi tiết kế tiếp ("nhà hẻm xe hơi 137/28 …, 4x15,
+    // 3 tầng, giá 6 tỷ 2") bị coi là câu trả lời ĐỊA CHỈ → AI chết thì cả câu vào "bổ sung", không ra giá / diện tích. Tin đang hỏi
+    // còn rỗng mà câu là câu rao → đi đường tạo tin (điền vào tin rỗng, `tinRongId`).
+    const tinDangHoiRong = !!pendingReq?.listings && laTinRong(pendingReq.listings);
     const raoMoiKhiDangHoi = !daGanManh && !!pendingReq && (wantsSell || raoCanMoiXacNhan || raoMoiCanKhac) && (
+      (tinDangHoiRong && wantsSell && coChiTiet) ||
       raoCanMoiXacNhan || khacDuong || khacQuan || khacLoai ||
       // 15/09/2026: "còn căn 2 mặt tiền trần phú 4x20 giá 18 tỷ thì sao em" — "còn căn <số>"
       // cũng là căn KHÁC (bản trước hiểu là sửa căn 1). Số kèm đơn vị (căn 2 pn) thì không.
@@ -5341,11 +5351,7 @@ Deno.serve(async (req) => {
       // 30/09/2026 (bắn thật thu-td-01): "em cần bán nhà" mở một tin RỖNG (loại nhà, chưa gì khác); câu rao kế nói "căn hộ"
       // → `khacLoai` coi là căn khác → tin THỨ HAI, tin rỗng nằm lại. Tin đang hỏi của chính người này mà chưa có giá, diện
       // tích, địa chỉ, dự án → điền câu rao vào nó (đóng câu hỏi cũ của nó), không mở tin mới.
-      const tinDangHoi = pendingReq?.listings;
-      const tinRongId = pendingReq && tinDangHoi && tinDangHoi.status === "cho_thong_tin" &&
-          !tinDangHoi.price_raw && tinDangHoi.price_vnd == null && tinDangHoi.area_m2 == null && !tinDangHoi.district &&
-          !tinDangHoi.ward && !tinDangHoi.location_raw && !tinDangHoi.project_id && !tinDangHoi.unit_code
-        ? pendingReq.listing_id : null;
+      const tinRongId = pendingReq?.listings && laTinRong(pendingReq.listings) ? pendingReq.listing_id : null;
       let newLst: { id: string; code: string | null; property_type: string | null } | null = null;
       let newLstErr: { code?: string; message: string } | null = null;
       if (tinRongId) {
