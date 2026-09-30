@@ -967,7 +967,10 @@ ok("FR241-l nhà phố: vừa trả lời kết cấu, còn pháp lý (16) + ph�
 ok("FR241-l căn hộ: vừa nói tầng → vẫn hỏi phòng ngủ (tang → so_phong_ngu giữ)", chonCauKe(["tang"], [{ fact_key: "so_phong_ngu", priority: 4, nhom: "co_ban" }, { fact_key: "huong", priority: 6, nhom: "co_ban" }]) === "so_phong_ngu");
 for (const [q, c, m] of [["phap_ly", "sổ chung", true], ["phap_ly", "sổ hồng rồi em", true], ["phap_ly", "sổ đỏ nha em", true], ["phap_ly", "shr", true],
   ["phap_ly", "chưa có sổ", false], ["phap_ly", "sổ chung với anh trai", false], ["phap_ly", "sổ hồng riêng giá 8 tỷ", false], ["phap_ly", "số 5", false],
-  ["phuong", "xã Vĩnh Lộc A", true], ["phuong", "phường Tân Thành nha em", true], ["phuong", "phường 8 quận 3", false], ["phuong", "xã Vĩnh Lộc A, đường số 5", false]]) {
+  ["phuong", "xã Vĩnh Lộc A", true], ["phuong", "phường Tân Thành nha em", true], ["phuong", "phường 8 quận 3", false], ["phuong", "xã Vĩnh Lộc A, đường số 5", false],
+  // 30/09/2026 (bắn thật lx-ban-f): "60m2" khi đang hỏi hẻm — AI im, luật bị gạt, bot báo "Không bóc tách được gì".
+  ["dien_tich", "60m2", true], ["dien_tich", "60 m2 nha em", true], ["dien_tich", "dt 72,5m2", true], ["dien_tich", "60 mét vuông", true],
+  ["dien_tich", "60m2 3 tầng", false], ["dien_tich", "nhà 60m2 giá 5 tỷ", false], ["dien_tich", "60", false]]) {
   ok(`FR241-o câu trọn ${q} '${c}' → ${m}`, laTraLoiTronKhoa(q, c) === m);
 }
 // FR-242 (29/09/2026, 10 kịch bản mới K1–K10 chạy qua tầng luật). Mỗi ca ghi NGUYÊN NHÂN lỗi cũ.

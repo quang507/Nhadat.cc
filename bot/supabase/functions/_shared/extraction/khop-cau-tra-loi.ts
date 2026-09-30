@@ -166,7 +166,8 @@ export function tuXungTuCau(text: string): XungHo | null {
 // vẫn treo cho lượt sau. "bận" chỉ phân biệt được với "bán" khi còn dấu.
 const HOAN_CD = /(?<![\p{L}])(?:bận|mệt)(?![\p{L}])|hỏi (?:gì )?(?:hoài|lắm|nhiều|mãi)/iu;
 const HOAN_KD =
-  /\b(?:de (?:anh|chi|em|toi|tui|minh|a|c) (?:hoi|tinh|suy nghi|coi lai|xem lai|nghi|ban bac)|(?:hoi|ban|noi)\s+(?:y\s+|voi\s+|lai\s+)?(?:vo|chong|ba|me|con|gia dinh|anh em)|tinh sau|de sau|luc khac|khi khac|noi sau|bua khac|hom khac|chua ranh|khong ranh|ko ranh|dang lai xe|dang hop|hoi hoai|hoi (?:lai )?sau|thoi de do)\b/;
+  /\b(?:de (?:anh|chi|em|toi|tui|minh|a|c) (?:hoi|tinh|suy nghi|coi lai|xem lai|nghi|ban bac)|(?:hoi|ban|noi)\s+(?:y\s+|voi\s+|lai\s+)?(?:vo|chong|ba|me|con|gia dinh|anh em)|tinh sau|de sau|luc khac|khi khac|noi sau|bua khac|hom khac|chua ranh|khong ranh|ko ranh|dang lai xe|dang hop|hoi hoai|hoi (?:lai )?sau|thoi de do|(?:thoi\s+)?de\s+(?:mai|toi|chieu|mot lat|ti nua|lat nua)(?:\s+(?:nha|nhe|di|roi))?(?:\s+(?:anh|chi|em|e|a|c|minh|toi|tui))?(?:\s+(?:noi|nhan|gui|bao|tinh|tra loi)(?:\s+tiep)?)?(?:\s+(?:nha|nhe|nhen|a|nghe))?(?=[\s.!…]*$)|mai\s+(?:(?:anh|chi|em|e|a|c|minh|toi|tui)\s+)?(?:noi|nhan|gui|tra loi|bao)\s+tiep|noi tiep sau|nhan tiep sau)\b/;
+// 30/09/2026 (bắn thật lx-ban-f): "thoi de mai e noi tiep" — thiếu "để mai / mai nói tiếp": câu vào "bổ sung" và bot hỏi tiếp.
 export function laHoanLai(text: string): boolean {
   const goc = text.trim();
   if (!goc || /\d/.test(goc)) return false; // có số là có dữ liệu — xét như câu trả lời
@@ -1392,6 +1393,11 @@ export function laTraLoiTronKhoa(q: string, text: string): boolean {
 function tronKhoa(q: string, kd: string): boolean {
   if (q === "phap_ly") {
     return /^(?:(?:da|co|la)\s+)?(?:shr|shc|so\s+(?:hong|do)(?:\s+(?:rieng|chung))?|so\s+(?:rieng|chung))$/.test(kd);
+  }
+  // 30/09/2026 (bắn thật lx-ban-f): "60m2" khi đang hỏi hẻm — AI im, luật đọc diện tích mà bị gạt (khoá AI biết) → "Không
+  // bóc tách được gì", bot hỏi lại. Cả tin chỉ là một con số + m2 thì không mơ hồ.
+  if (q === "dien_tich" || q === "dien_tich_dat") {
+    return /^(?:(?:dien tich|dt)\s+)?(?:la\s+)?\d{1,5}(?:\s\d{1,2})?\s*(?:m2|m 2|met vuong|m vuong)$/.test(kd);
   }
   if (q === "phuong") {
     return /^(?:xa|phuong|p|thi tran)\s+[a-z0-9]+(?:\s+[a-z0-9]+){0,3}$/.test(kd) &&
