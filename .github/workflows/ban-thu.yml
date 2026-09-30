@@ -79,7 +79,8 @@ jobs:
                     public.cau_hinh('boc_tach_ai') as boc_tach_ai,
                     (select coalesce(json_agg(x order by x.so desc), '[]') from (select source, substring(detail from '^((?:Groq|Gemini|Claude|Anthropic|[0-9]{3})[^:\[{]{0,40})') as loai, count(*) as so
                        from bot_errors where at > now() - interval '24 hours' and (source ~ '(model|boc_tach|du phong|het nhip)' or detail ~ '^(Groq|Gemini|Claude|Anthropic)')
-                       group by 1, 2 order by 3 desc limit 15) x) as loi_model_24h" | jq -c '.[0]'
+                       group by 1, 2 order by 3 desc limit 15) x) as loi_model_24h,
+                    (select left(regexp_replace(detail, '[0-9]{9,}', '#', 'g'), 220) from bot_errors where source like 'model chinh hong%' order by at desc limit 1) as loi_claude_moi_nhat" | jq -c '.[0]'
 
           q "select public.reset_nguoi_test($(lit "$ZALO")) as r" | jq -c '.[0].r'
           MOC=$(q "select now()::text as t" | jq -r '.[0].t')
