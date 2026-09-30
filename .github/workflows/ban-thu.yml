@@ -70,6 +70,11 @@ jobs:
                     (select count(*) from listings where status in ('dang_ban','dang_quan_tam')) as tin_len_ke,
                     (select count(*) from listings where status in ('dang_ban','dang_quan_tam') and nhung is not null) as tin_co_vector,
                     (select count(*) from projects where nhung is not null) as du_an_co_vector,
+                    json_build_object('wards', (select count(nhung) || '/' || count(*) from wards),
+                      'phuong_cu', (select count(nhung) || '/' || count(*) from phuong_cu),
+                      'quan_cu', (select count(nhung) || '/' || count(*) from quan_cu),
+                      'duong_khong_hem', (select count(nhung) || '/' || count(*) from duong where loai is distinct from 'hem'),
+                      'hem', (select count(*) from duong where loai = 'hem')) as dia_danh_co_vector,
                     public.cau_hinh('tim_theo_nghia') as tim_theo_nghia" | jq -c '.[0]'
 
           q "select public.reset_nguoi_test($(lit "$ZALO")) as r" | jq -c '.[0].r'
