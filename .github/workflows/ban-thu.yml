@@ -21,6 +21,10 @@ on:
         description: Để trống = giữ nguyên. Điền model ID để đặt secret ANTHROPIC_MODEL (vd claude-haiku-4-5-20251001)
         required: false
         default: ''
+      thu_tu_model:
+        description: Để trống = giữ nguyên. groq | gemini | claude — đặt secret MODEL_TRUOC (model nào gọi trước)
+        required: false
+        default: ''
 
 env:
   PROJECT_REF: tbcdpupiarkuxtntmosl
@@ -43,6 +47,7 @@ jobs:
           CAU: ${{ inputs.cau }}
           ZALO: ${{ inputs.zalo }}
           DOI_MODEL: ${{ inputs.doi_model }}
+          THU_TU: ${{ inputs.thu_tu_model }}
         run: |
           set -euo pipefail
           q() { # chạy một câu SQL, in kết quả JSON
@@ -55,6 +60,16 @@ jobs:
           if ! printf '%s' "$ZALO" | grep -Eq '^[a-z0-9-]{3,40}$'; then echo "::error::Zalo ID thử không hợp lệ"; exit 1; fi
           if [ "$(q "select public.la_id_thu($(lit "$ZALO")) as t" | jq -r '.[0].t')" != "true" ]; then
             echo "::error::$ZALO không phải ID thử (la_id_thu) — không bắn bằng ID có thể là khách thật"; exit 1
+          fi
+
+          # 30/09/2026: tài khoản Anthropic hết tiền (400 credit balance too low) mà MODEL_TRUOC=claude → lượt nào cũng gọi
+          # Claude hỏng trước rồi mới sang Groq. Đổi thứ tự ở đây, không cần mở Supabase dashboard.
+          if [ -n "$THU_TU" ]; then
+            if ! printf '%s' "$THU_TU" | grep -Eq '^(groq|gemini|claude)$'; then echo "::error::thu_tu_model chỉ nhận groq | gemini | claude"; exit 1; fi
+            curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/secrets" \
+              -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+              -d "$(jq -n --arg v "$THU_TU" '[{name: "MODEL_TRUOC", value: $v}]')" >/dev/null
+            echo "Đã đặt MODEL_TRUOC = $THU_TU (edge function nhận ở lượt khởi động kế)."
           fi
 
           if [ -n "$DOI_MODEL" ]; then
