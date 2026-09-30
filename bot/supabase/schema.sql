@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-30 10:54 (giờ VN)
+-- Sinh lúc: 2026-09-30 15:50 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -6351,6 +6351,46 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.ten_nhan(p_khoa text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select case p_khoa
+    when 'yen_tinh' then 'yên tĩnh'
+    when 'an_ninh' then 'an ninh'
+    when 'dan_tri_cao' then 'dân trí cao'
+    when 'gan_cho' then 'gần chợ'
+    when 'gan_truong' then 'gần trường học'
+    when 'gan_benh_vien' then 'gần bệnh viện'
+    when 'gan_sieu_thi' then 'gần siêu thị'
+    when 'gan_cong_vien' then 'gần công viên'
+    when 'gan_metro' then 'gần metro'
+    when 'gan_trung_tam' then 'gần trung tâm'
+    when 'moi_sua' then 'mới sửa / mới xây'
+    when 'hem_thong' then 'hẻm thông'
+    when 'hem_cut' then 'hẻm cụt'
+    when 'khong_ngap' then 'không ngập'
+    when 'xe_hoi_vao_nha' then 'xe hơi vào nhà'
+    when 'xe_hoi_quay_dau' then 'xe hơi quay đầu'
+    when 'thang_may' then 'có thang máy'
+    when 'san_thuong' then 'sân thượng'
+    when 'san_vuon' then 'sân vườn'
+    when 'gac_lung' then 'có gác lửng'
+    when 'noi_that_full' then 'full nội thất'
+    when 'kinh_doanh' then 'kinh doanh được'
+    when 'dong_tien' then 'đang cho thuê, có dòng tiền'
+    when 'view_song' then 'view sông'
+    when 'view_cong_vien' then 'view công viên'
+    when 'can_goc' then 'căn góc / 2 mặt tiền'
+    when 'ho_boi' then 'có hồ bơi'
+    when 'nha_hoan_cong' then 'đã hoàn công'
+    when 'tho_cu_100' then 'thổ cư 100%'
+    else replace(coalesce(p_khoa, ''), '_', ' ') end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.them_nhan_tin(p_listing_id uuid, p_nhan text[])
  RETURNS integer
  LANGUAGE plpgsql
@@ -6832,7 +6872,11 @@ AS $function$
         when 'mat_bang' then 'mặt bằng' when 'toa_nha' then 'toà nhà, căn hộ dịch vụ'
         when 'dat_nong_nghiep' then 'đất nông nghiệp' when 'dat_kinh_doanh' then 'đất kinh doanh'
         when 'kho_xuong' then 'kho xưởng' else 'bất động sản' end,
-    nullif(concat_ws(', ', l.location_raw, l.street, l.ward, l.district), ''),
+    -- 20260930c: street / ward / district đã nằm trong location_raw thì không lặp ("Trần Bình Trọng, Trần Bình Trọng").
+    nullif(concat_ws(', ', l.location_raw,
+      case when position(lower(l.street) in lower(coalesce(l.location_raw, ''))) = 0 then l.street end,
+      case when position(lower(l.ward) in lower(coalesce(l.location_raw, ''))) = 0 then l.ward end,
+      case when position(lower(l.district) in lower(coalesce(l.location_raw, ''))) = 0 then l.district end), ''),
     -- 20260923g: câu rao GỐC của người bán — chi tiết bot không lưu vào ô nào ("sau nhà có đất trống cho chó mèo
     -- chạy", "phòng nào cũng có cửa sổ") vẫn vào vector. SĐT che bởi che_sdt() bọc ngoài cả đoạn.
     case when coalesce(btrim(l.description), '') <> '' then 'Người bán tả: ' || left(l.description, 3000) end,
@@ -6853,11 +6897,13 @@ AS $function$
     case when l.car_in_house then 'Xe hơi vào tận nhà' end,
     case when l.corner_lot then 'Căn góc' end,
     case when l.has_elevator then 'Có thang máy' end,
+    -- 20260930c: nhãn ra tên tiếng Việt (ten_nhan), không còn "yen tinh, san vuon".
     case when coalesce(array_length(l.nhan, 1), 0) > 0
-      then 'Đặc điểm: ' || array_to_string(array(select replace(x, '_', ' ') from unnest(l.nhan) x), ', ') end,
+      then 'Đặc điểm: ' || array_to_string(array(select public.ten_nhan(x) from unnest(l.nhan) x), ', ') end,
     -- 20260924b: fact CHỮ TỰ DO — MỌI câu trả lời (bản trước lấy câu mới nhất mỗi khoá: "sân thượng" đè mất
     -- "có 1 phòng ngủ ngay tầng trệt" cùng khoá bo_sung); khoá thông số đã có cột thì bỏ (lặp).
-    (select string_agg(replace(f.question, '_', ' ') || ': ' || f.answer, '. ' order by f.question, f.dau)
+    -- 20260930c: tên ô qua nhan_fact() ("thông tin bổ sung", "sân vườn"), không còn "bo sung", "san vuon".
+    (select string_agg(public.nhan_fact(f.question) || ': ' || f.answer, '. ' order by f.question, f.dau)
        from (select question, answer, min(created_at) as dau
                from public.listing_facts
               where listing_id = l.id and coalesce(btrim(answer), '') <> ''
@@ -8536,6 +8582,8 @@ grant execute on function public.tao_danh_sach(p_listing_codes text[], p_title t
 grant execute on function public.tao_danh_sach(p_listing_codes text[], p_title text, p_buyer_id uuid) to service_role;
 revoke all on function public.tao_followup(p_buyer_id uuid, p_code text) from public, anon, authenticated;
 grant execute on function public.tao_followup(p_buyer_id uuid, p_code text) to service_role;
+revoke all on function public.ten_nhan(p_khoa text) from public, anon, authenticated;
+grant execute on function public.ten_nhan(p_khoa text) to service_role;
 revoke all on function public.them_nhan_tin(p_listing_id uuid, p_nhan text[]) from public, anon, authenticated;
 grant execute on function public.them_nhan_tin(p_listing_id uuid, p_nhan text[]) to service_role;
 revoke all on function public.thu_muc_dau_uuid(p_name text) from public, anon, authenticated;

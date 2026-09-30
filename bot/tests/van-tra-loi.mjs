@@ -428,9 +428,14 @@ for (const [t, mong] of [
   ["xoá cái phường 4 đi", "phuong"],
   ["bỏ bớt 1 phòng ngủ đi, ghi dư", "so_phong_ngu"],
   ["cái đó sai rồi, bỏ đi em", null],
+  ["xoa cai huong dong di, ghi nham", "huong"],
+  ["bo gia ghi nham di em", "gia"],
 ]) ok(`laXinBoTruong: ${JSON.stringify(t)} → ô ${mong}`, laXinBoTruong(t)?.truong === mong && laXinBoTruong(t) !== null, JSON.stringify(laXinBoTruong(t)));
 for (const t of ["bỏ hẻm 4m, hẻm đúng là 3m5", "xóa sạch data của anh đi", "hẻm 4m", "gỡ tin đi em", "3 phòng ngủ", "bỏ qua câu này đi",
-  "8 điểm. mà xoá căn 1 khỏi hệ thống của tui đi", "xoá căn này đi", "bỏ đi em"])
+  "8 điểm. mà xoá căn 1 khỏi hệ thống của tui đi", "xoá căn này đi", "bỏ đi em",
+  // 30/09/2026 (bắn thử vector): "đi bộ" / "người già" bỏ dấu thành "đi bỏ" / "giá" — không phải xin bỏ ô giá.
+  "nhà có 1 phòng ngủ ngay tầng trệt cho người già, sau nhà có sân phơi rộng, đi bộ ra chợ 5 phút",
+  "di bo ra cho 5 phut, gan truong hoc", "bố mẹ già ở tầng trệt nên cần phòng ngủ dưới"])
   ok(`laXinBoTruong KHÔNG kích: ${JSON.stringify(t)}`, laXinBoTruong(t) === null, JSON.stringify(laXinBoTruong(t)));
 for (const [t, mong] of [["xoá căn 1 khỏi hệ thống của tui đi", true], ["gỡ căn này đi", true], ["xóa sạch data của anh", true], ["xoá cái hẻm 4m ghi nhầm đi", false], ["bỏ qua câu này", false]])
   ok(`laXinXoaDuLieu ${JSON.stringify(t)} → ${mong}`, laXinXoaDuLieu(t) === mong);

@@ -526,7 +526,13 @@ export function laXinBoTruong(text: string): { truong: string | null; nhan: stri
   if (!kd || laXinXoaDuLieu(text)) return null;
   // "bỏ qua câu này đi" là xin BỎ QUA câu hỏi (đường hoãn/FR-177 g), không phải bỏ dữ liệu.
   if (/\bbo qua\b/.test(kd)) return null;
-  const coXoa = /\b(?:xoa|bo|go|huy|xoa bo)\b/.test(kd);
+  // 30/09/2026 (bắn thử vector): "…cho người già, sau nhà có sân phơi rộng, đi bộ ra chợ 5 phút" — bỏ dấu thì "đi bộ" thành
+  // "di bo" (= "đi bỏ"), "già" thành "gia" (= giá) → bot đáp "tin mình đang ghi giá 8 tỷ ạ…". Tin CÓ DẤU thì chỉ nhận chữ
+  // xoá / bỏ / gỡ / huỷ viết đúng dấu (bộ, bố, gò không phải bỏ); tin không dấu thì bỏ cụm "đi bộ" trước khi dò.
+  const coDau = /[à-ỹđ]/iu.test(text ?? "");
+  const coXoa = coDau
+    ? /(?<![\p{L}])(?:xoá|xóa|xoa|bỏ|gỡ|huỷ|hủy|huy)(?![\p{L}])/iu.test((text ?? "").normalize("NFC"))
+    : /\b(?:xoa|bo|go|huy|xoa bo)\b/.test(kd.replace(/\bdi bo\b/g, " "));
   if (!coXoa) return null;
   // 22/09/2026 (kịch bản E): "xoá căn 1 khỏi hệ thống đi" từng bị bắt thành "xin bỏ ô" — luật "xoá … đi" quá rộng.
   // Nay: có chữ nhầm/sai, HOẶC nêu rõ một ô kèm lời giục (đi/giúp/dùm). Xoá tin/căn/dữ liệu đi đường `laXinXoaDuLieu`.

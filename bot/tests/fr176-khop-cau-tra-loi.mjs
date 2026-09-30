@@ -136,6 +136,19 @@ for (const [t, mong] of tn) {
   if (kq !== mong) hong++;
   console.log(`${kq === mong ? "✓" : "✗"} tiềm năng "${t}" → ${kq}${kq === mong ? "" : `  MONG ${mong}`}`);
 }
-const tong176 = CA.length + xh.length + kgh.length + bd.length + tn.length;
+// 30/09/2026 (bắn thử vector): "nhà có giếng trời" không phải nguồn nước tưới; "1 phòng ngủ ngay tầng trệt" không phải
+// tổng số phòng ngủ, cũng không phải kết cấu nhà.
+const vt = [
+  ["nhà có giếng trời", (f) => f?.question !== "nguon_nuoc"],
+  ["đất có giếng khoan tưới rẫy", (f) => f?.question === "nguon_nuoc"],
+  ["nhà có 1 phòng ngủ ngay tầng trệt cho người già", (f) => f?.question !== "so_phong_ngu" && f?.question !== "ket_cau"],
+  ["nhà 4 phòng ngủ", (f) => f?.question === "so_phong_ngu" && f.answer === "4"],
+];
+for (const [c, kiem] of vt) {
+  const f = nhanDienFact(c);
+  if (kiem(f)) console.log(`✓ nhanDienFact ${JSON.stringify(c)} → ${f?.question ?? "—"}`);
+  else { hong++; console.log(`✗ nhanDienFact ${JSON.stringify(c)} → ${JSON.stringify(f)}`); }
+}
+const tong176 = CA.length + xh.length + kgh.length + bd.length + tn.length + vt.length;
 console.log(hong ? `\nFR-176: ${hong}/${tong176} CA HỎNG` : `\nFR-176: ${tong176}/${tong176} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

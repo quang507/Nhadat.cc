@@ -12,7 +12,7 @@
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
 import { docTien, giaTheoM2 } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
-import { DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, laGap } from "./khop-cau-tra-loi.ts";
+import { cumPhongNguTheoTang, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, laGap, soPhongNguTheoTang } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, phuongChuan, phuongTrongTrich, phuongTuTenCu, tenDayDu } from "./khop-phuong.ts";
 
@@ -170,7 +170,9 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       // 24/09/2026 (bắn 10 tin): "toà nhà CHDV 20 phòng" / "20 phòng như em nói đó" thành 20 PHÒNG NGỦ — phòng cho thuê
       // không phải phòng ngủ. Phòng ngủ phải có chữ ngủ / PN trong cụm trích.
       if (!soTrong(cum, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05))) return "so_khong_co_trong_trich_dan";
-      return d.khoa === "so_phong_ngu" && !/\b(ngu|pn|phong ngu)\b|\d\s*pn(?![a-z])/.test(kd) ? "khong_noi_phong_ngu" : null;
+      if (d.khoa === "so_phong_ngu" && !/\b(ngu|pn|phong ngu)\b|\d\s*pn(?![a-z])/.test(kd)) return "khong_noi_phong_ngu";
+      // 30/09/2026 (bắn thử vector): "nhà có 1 phòng ngủ ngay tầng trệt" — phòng ngủ theo TẦNG, không phải tổng số.
+      return d.khoa === "so_phong_ngu" && soPhongNguTheoTang(tin).includes(n) ? "phong_ngu_theo_tang" : null;
     }
     case "loai_giao_dich": {
       // "sang nhượng MẶT BẰNG" là thuê (lượt đo bóng 14/09 model nói "ban" và lọt); "sang
@@ -850,7 +852,10 @@ export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[]): st
   const kdTin = chuanSo(tin);
   const daCo = dat.map((d) => chuanSo(d.trich_dan));
   const ra: string[] = [];
-  for (const k of kienThuc ?? []) {
+  // 30/09/2026: "1 phòng ngủ ngay tầng trệt cho người già" không phải tổng số phòng ngủ (kiemGiaTri bỏ) — giữ nguyên vế
+  // làm thông tin bổ sung để vào vector, dù model không xếp nó vào kiến thức thêm.
+  const pnTang = cumPhongNguTheoTang(tin);
+  for (const k of [...(pnTang ? [pnTang] : []), ...(kienThuc ?? [])]) {
     const v = String(k ?? "").replace(/\s+/g, " ").trim().replace(/[.!?,;]+$/, "");
     const kd = chuanSo(v);
     if (kd.length < 3 || v.length > 80) continue;
