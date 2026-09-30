@@ -6466,7 +6466,10 @@ Deno.serve(async (req) => {
       if (wardNum) gq = gq.ilike("ward", `Phường ${wardNum}`);
       else if (quanLoc) gq = gq.eq("district", quanLoc);
       if (hemLoc) gq = gq.or(hemLoc);
-      if (typeof prefsLoc.bedrooms === "number") gq = gq.gte("bedrooms", prefsLoc.bedrooms);
+      // Phòng ngủ khách vừa nói trong CÂU NÀY ("3 phòng ngủ, hẻm xe hơi") cũng lọc — hồ sơ lưu chưa kịp có (lượt model ghi sau).
+      const pnCau = /\b(\d{1,2})\s*(?:phong ngu|pn)\b/.exec(tKD);
+      const pnLoc = typeof prefsLoc.bedrooms === "number" ? prefsLoc.bedrooms : pnCau ? Number(pnCau[1]) : null;
+      if (pnLoc != null && pnLoc >= 1 && pnLoc <= 10) gq = gq.gte("bedrooms", pnLoc);
       const { data: gn, error: gnErr } = await gq;
       if (gnErr) await ghiLoi(client, "chat-reply can gan ngan sach", gnErr.message);
       const l0 = ((gn ?? []) as CanRow[])[0];

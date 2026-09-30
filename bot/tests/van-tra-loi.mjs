@@ -1074,5 +1074,11 @@ for (const [vao, ra] of [["giá 9.2 tỷ TL, hh 1%", "giá 9.2 tỷ TL"], ["giá
   ok(`FR248-e bỏ hoa hồng '${vao}' → '${ra}'`, boHoaHong(vao) === ra, boHoaHong(vao));
 }
 
+// (f) bắn lại v275 (lx-mua-e3): hai câu hứa suông lọt — "em ĐỂ lọc … báo" (chữ "để" chen giữa) và "em gợi 2 căn … nhé:" rồi hết.
+for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em gợi 2 căn khớp nhu cầu mình nhé:", true], ["Em gợi ý vài căn cho anh nha", true],
+  ["Mình muốn em gợi ý khu nào ạ?", false], ["Em hỏi thêm chút nha", false]]) {
+  ok(`FR248-f câu hứa '${c}' → ${m}`, laHuaCoHang(c, false) === m);
+}
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
