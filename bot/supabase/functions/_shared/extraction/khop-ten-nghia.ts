@@ -54,7 +54,13 @@ export function tenGan(go: string | null | undefined, kho: string | null | undef
 export function chonUngVienNghia<T extends { ten: string; do_gan: number }>(
   go: string | null | undefined, ds: T[] | null | undefined, bo: ReadonlySet<string>, nguong = 0.55,
 ): T | null {
+  const motTen = (ds2: T[]): T | null => {
+    const ten = new Set(ds2.map((u) => boDau(u.ten).replace(/[^a-z0-9]+/g, "")));
+    return ten.size === 1 ? [...ds2].sort((x, y) => y.do_gan - x.do_gan)[0] : null;
+  };
   const dat = (ds ?? []).filter((u) => u.do_gan >= nguong && tenGan(go, u.ten, bo));
-  const ten = new Set(dat.map((u) => boDau(u.ten).replace(/[^a-z0-9]+/g, "")));
-  return ten.size === 1 ? dat.sort((x, y) => y.do_gan - x.do_gan)[0] : null;
+  // Bắn thật 30/09: "Sunrize City" → "Sunrise City" VÀ "Khu Căn Hộ Sunrise" cùng lõi "sunrise" khi bỏ từ chung → hai tên,
+  // không chọn. Nhiều tên qua thì phân xử trên tên ĐẦY ĐỦ (giữ từ chung): "sunrizecity" gần "sunrisecity", xa "khucanhosunrise".
+  return motTen(dat) ?? (dat.length > 1 ? motTen(dat.filter((u) => tenGan(go, u.ten, KHONG_BO))) : null);
 }
+const KHONG_BO: ReadonlySet<string> = new Set();

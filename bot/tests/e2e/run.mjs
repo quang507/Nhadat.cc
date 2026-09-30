@@ -2496,6 +2496,23 @@ fresh(seedKho);
     check("NGHIA-DUONG-01 'huyn tan fat' (lệch 3 ký tự) → gợi ý Huỳnh Tấn Phát, hỏi xác nhận; địa chỉ chưa sửa",
       LN?.boc_tach?.duong_goi_y?.ten === "Huỳnh Tấn Phát" && rD.body.replies.join("\n").includes("Huỳnh Tấn Phát") && /huyn tan fat/.test(LN?.location_raw ?? ""),
       JSON.stringify({ l: LN?.location_raw, gy: LN?.boc_tach?.duong_goi_y, rep: rD.body.replies }));
+    // (e) bắn thật 30/09: "bán căn hộ sunrize city …" — không có chữ "dự án", AI im → tên lấy sau "căn hộ"; vector trả cả
+    // "Sunrise City" lẫn "Khu Căn Hộ Sunrise" (cùng lõi khi bỏ từ chung) → phân xử trên tên đầy đủ, gắn Sunrise City.
+    fresh((d) => { seedKho(d);
+      d.insert("projects", { name: "Sunrise City", slug: "sunrise-city", district: "Quận 7", ward: "Phường Tân Hưng", amenities: [], description: "" });
+      d.insert("projects", { name: "Khu Căn Hộ Sunrise", slug: "khu-can-ho-sunrise", district: "Quận 7", ward: null, amenities: [], description: "" }); });
+    cauNhung = null;
+    globalThis.__rpc = { tim_du_an_theo_nghia: (d) => ({ data: d.t.projects.filter((p) => /Sunrise/.test(p.name))
+      .map((p) => ({ id: p.id, name: p.name, do_gan: p.name === "Sunrise City" ? 0.73 : 0.697 })), error: null }) };
+    await send({ external_user_id: "nghia-da-4", text: "bán căn hộ sunrize city 2pn 70m2 giá 3 tỷ" });
+    const LS = db().t.listings.at(-1);
+    check("NGHIA-DA-04 'bán căn hộ sunrize city' (không chữ 'dự án') → tìm theo nghĩa, gắn Sunrise City, quận 7 từ dự án",
+      db().t.projects.find((p) => p.id === LS?.project_id)?.name === "Sunrise City" && LS?.district === "Quận 7" && /^Dự án sunrize city$/i.test(cauNhung ?? ""),
+      JSON.stringify({ pid: LS?.project_id, d: LS?.district, cauNhung }));
+    // (f) "căn hộ chính chủ" không phải tên dự án → không tốn lượt nhúng.
+    fresh(seedVin); cauNhung = null;
+    await send({ external_user_id: "nghia-da-5", text: "bán căn hộ chính chủ 2pn 70m2 giá 3 tỷ" });
+    check("NGHIA-DA-05 'bán căn hộ chính chủ' → không nhúng tìm dự án", cauNhung === null, String(cauNhung));
     // (d) tìm theo nghĩa TẮT → không nhúng, không gọi hàm.
     fresh(seedVin);
     globalThis.__cauHinh = { test_reset_hello: "1" };
