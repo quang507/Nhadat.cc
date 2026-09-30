@@ -45,6 +45,11 @@ ok("kiemDeXuat: 'thảo điền' → Phường An Khánh ĐẠT", k.dat.some((d)
 const ds = danhSachPhuongChoAi();
 ok("danh sách cho AI có 'Xã Tân Vĩnh Lộc' và 'Xã Vĩnh Lộc B'", /Xã Tân Vĩnh Lộc/.test(ds) && /Xã Vĩnh Lộc B/.test(ds));
 ok("danh sách cho AI < 40.000 ký tự", ds.length < 40000, String(ds.length));
+// 30/09/2026: câu lệnh bóc tách chỉ nhận các phường câu khách NHẮC — cả danh sách làm Groq trả 413 (quá cỡ).
+const dsTD = danhSachPhuongChoAi("bán căn hộ bên thảo điền quận 2 cũ, 2pn 75m2, giá 8 tỷ");
+ok("danh sách lọc theo câu 'thảo điền' có An Khánh, ngắn (< 1.500 ký tự)", /An Khánh/.test(dsTD) && /Thảo Điền/.test(dsTD) && dsTD.length < 1500, String(dsTD.length));
+ok("câu không nhắc phường nào → danh sách rỗng", danhSachPhuongChoAi("nhà 4x15 3 tầng giá 6 tỷ") === "");
+ok("'vinh loc b' không dấu → có Tân Vĩnh Lộc", /Tân Vĩnh Lộc/.test(danhSachPhuongChoAi("nha o vinh loc b binh chanh")));
 ok("laTenPhuongChu('an hoi tai') = true", laTenPhuongChu("an hoi tai"));
 ok("laTenPhuongChu('phường 4') = false", !laTenPhuongChu("phường 4"));
 

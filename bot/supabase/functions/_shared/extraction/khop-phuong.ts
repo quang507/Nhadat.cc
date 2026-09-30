@@ -105,10 +105,17 @@ export function chotPhuongAi(tenAi: string | null | undefined, cauKhach: string 
  * Khối chữ đưa vào câu lệnh AI bóc tách: mọi phường mới (kèm quận cũ) và bảng tên cũ → mới. Nằm trong phần system có
  * cache_control, nên chỉ tính tiền đầy đủ lần đầu mỗi 5 phút.
  */
-export function danhSachPhuongChoAi(): string {
-  const moi = MOI.map((w) => `${w.ten_day_du} (${w.quan_cu})`).join("; ");
+export function danhSachPhuongChoAi(cau?: string | null): string {
+  // 30/09/2026 (bắn thật thu-groq-02): cả 655 tên (~18.000 ký tự) nằm trong câu lệnh bóc tách → câu lệnh ~36.000 ký tự,
+  // Groq bản miễn phí trả "Request too large" (413, trần chữ mỗi phút), Gemini đang 503 → AI bóc tách chết cả chuỗi. Có câu
+  // khách thì chỉ gửi các phường câu đó NHẮC TỚI (tên mới hoặc cũ, lệch 1–2 chữ cái — `cauNhacPhuong`); không nhắc → "".
+  const chon = cau == null ? MOI : MOI.filter((w) => cauNhacPhuong(cau, w));
+  if (!chon.length) return "";
+  const tenChon = new Set(chon.map((w) => w.ten));
+  const moi = chon.map((w) => `${w.ten_day_du} (${w.quan_cu})`).join("; ");
   const theoMoi = new Map<string, string[]>();
   for (const [cu, quan, moiTen, toanBo] of PHUONG_CU) {
+    if (!tenChon.has(moiTen)) continue;
     const ds = theoMoi.get(moiTen) ?? [];
     ds.push(`${cu} ${quan.replace(/^(Quận|Huyện|Thành phố|Thị xã) /, "")}${toanBo ? "" : "*"}`);
     theoMoi.set(moiTen, ds);
