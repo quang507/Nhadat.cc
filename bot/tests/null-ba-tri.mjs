@@ -10,7 +10,7 @@ const sql = readFileSync(new URL("../supabase/schema.sql", import.meta.url), "ut
 let hong = 0;
 const ok = (ten, dk, chiTiet = "") => { console.log(`${dk ? "✓" : "✗"} ${ten}${dk ? "" : `  → ${chiTiet}`}`); if (!dk) hong++; };
 
-const view = /create or replace view public\.listing_missing_facts as([\s\S]*?);\n/.exec(sql)?.[1] ?? "";
+const view = /create or replace view public\.listing_missing_facts as([\s\S]*?);\r?\n/.exec(sql)?.[1] ?? "";
 ok("tìm thấy view listing_missing_facts trong schema.sql", view.length > 200);
 const bang = [...view.matchAll(/\bl\.[a-z_]+\s*=\s*'[^']*'/g)].map((m) => m[0]);
 ok("view: không có 'l.<cột> = <hằng>' trong khối NOT (…) — dùng IS NOT DISTINCT FROM", bang.length === 0, bang.join(" | "));

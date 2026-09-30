@@ -36,6 +36,18 @@ bun run kiem   # kiểu dữ liệu + dựng web + 102 kịch bản e2e bot + so
 Cùng lệnh này chạy trong CI ([`.github/workflows/kiem.yml`](.github/workflows/kiem.yml))
 mỗi PR — ba job `web` / `bot` / `truyvet` phải xanh mới merge.
 
+**Chạy trên Windows:** nếu tên người dùng Windows có dấu (vd. `C:\Users\QuangLêBáDuy`),
+`bun install` báo xong nhưng gói bị chép thiếu (không có `tsc`, `next` rỗng, `bun run chat`
+báo thiếu `@anthropic-ai/sdk/helpers/zod`). Nguyên nhân là bộ đệm bun nằm trên đường dẫn
+có dấu. Trỏ bộ đệm sang đường dẫn không dấu, xoá `node_modules` rồi cài lại:
+
+```powershell
+$env:BUN_INSTALL_CACHE_DIR = "C:\bun-cache"
+```
+
+Kiểu xuống dòng được `.gitattributes` ghim về LF, nên clone trên Windows cũng ra file
+giống hệt Linux/CI.
+
 ## 💻 Mã nguồn
 
 Từ 24/08/2026 code nằm **trong chính repo này** (trước đó ở thư mục riêng):
