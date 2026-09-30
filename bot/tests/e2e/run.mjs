@@ -2381,6 +2381,52 @@ fresh(seedKho);
     check("FR248-E4 đang hỏi nội thất, 'phí quản lý 15k/m2' (AI im) → ghi ô phí quản lý = '15k/m2'", fP.length === 1 && fP[0].answer === "15k/m2", JSON.stringify(fP));
     globalThis.__cauHinh = cuCH;
   }
+  // FR-250 (30/09/2026, bắn thật v277 — AI bóc tách chết vì Gemini 503, luật phải tự đứng).
+  // (a) "em cần bán nhà" mở tin rỗng loại nhà; câu rao "căn hộ bên thảo điền quận 2 cũ…" → `khacLoai` coi là căn khác, mở tin THỨ HAI;
+  // phường không ra vì không có chữ "phường" (`phuongTenCauRao`). Nay: điền vào tin rỗng, Thảo Điền (cũ) → Phường An Khánh.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "td-1", text: "em cần bán nhà" });
+    await send({ external_user_id: "td-1", text: "bán căn hộ bên thảo điền quận 2 cũ, 2pn 75m2, giá 8 tỷ" });
+    const sTD = db().t.sellers.find((x) => x.zalo_user_id === "td-1");
+    const tTD = db().t.listings.filter((l) => l.seller_id === sTD?.id);
+    check("FR250-E1 'em cần bán nhà' rồi câu rao căn hộ Thảo Điền (AI im) → MỘT tin, căn hộ, Phường An Khánh, Quận 2, 8 tỷ",
+      tTD.length === 1 && tTD[0].property_type === "chung_cu" && tTD[0].ward === "Phường An Khánh" && tTD[0].district === "Quận 2" && tTD[0].price_vnd === 8e9,
+      JSON.stringify(tTD.map((l) => [l.property_type, l.ward, l.district, l.price_raw])));
+    globalThis.__cauHinh = cuCH;
+  }
+  // (b) trả lời câu địa chỉ "nhà ở vĩnh lộc b bình chánh, hẻm 5m" → ô "vị trí cụ thể" = "vĩnh lộc b bình chánh" (chỉ tên hành chính).
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "vl-1", text: "em cần bán nhà" });
+    const LV = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LV.id, question: "vi_tri", status: "pending" });
+    await send({ external_user_id: "vl-1", text: "nhà ở vĩnh lộc b bình chánh, hẻm 5m" });
+    const fV = db().t.listing_facts.filter((f) => f.listing_id === LV.id && f.question === "vi_tri");
+    check("FR250-E2 địa chỉ chỉ có tên xã / huyện → KHÔNG ghi vị trí cụ thể; phường Xã Tân Vĩnh Lộc, Huyện Bình Chánh vẫn ghi",
+      !fV.length && !LV.location_raw && LV.ward === "Xã Tân Vĩnh Lộc" && LV.district === "Huyện Bình Chánh",
+      JSON.stringify({ vt: fV, loc: LV.location_raw, ward: LV.ward, district: LV.district }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // (c) lượt đầu model viết "Cảm ơn đã tin tưởng, mình đã tạo tin rồi. Mình cho mình xin địa chỉ…" → bỏ lời "đã tạo tin", bot xưng em.
+  {
+    fresh(seedKho);
+    const cau = "Cảm ơn đã tin tưởng, mình đã tạo tin rồi. Mình cho mình xin địa chỉ nhà (đường, phường, quận) nha?";
+    globalThis.__model.parse = (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT({ replies: [cau] });
+    globalThis.__model.create = () => cau;
+    const rT = await send({ external_user_id: "tt-1", text: "em cần bán nhà" });
+    const noi = rT.body.replies.filter((x) => !/^(🤖|💾|📝|📋|👤)/u.test(x)).join(" | ");
+    check("FR250-E3 lời bot lượt đầu: không 'đã tạo tin', không 'cho mình xin'",
+      !/tạo tin/.test(noi) && !/cho mình xin/i.test(noi), noi);
+    globalThis.__model.create = undefined;
+  }
   // FR-241 o (bắn lại 28/09, lx-85/lx-86/lx-87): đang hỏi ô khác, khách nhắn TRỌN một câu pháp lý ("sổ chung", "sổ hồng rồi em")
   // hay TRỌN một tên phường/xã ("xã Vĩnh Lộc A") — AI im hoặc chỉ xếp vào kiến thức thêm → luật bị gạt: pháp lý rơi vào bổ sung,
   // phường mất hẳn (laBoSungRac). Cả tin là đúng một giá trị của khoá đó → luật chắc, giữ.
@@ -2616,7 +2662,8 @@ fresh(seedKho);
     const rK = await send({ external_user_id: "cau-kho", text: "Ở cầu kho em ơi" });
     const fK = (q) => db().t.listing_facts.filter((f) => f.listing_id === LK.id && f.question === q);
     check("CAUKHO-E1 'Ở cầu kho em ơi' khi hỏi phường (chinh, AI im) → ghi phường, KHÔNG ghi kèm tiềm năng",
-      fK("phuong").some((f) => /cầu kho/i.test(f.answer)) && !fK("tiem_nang").length,
+      // 30/09/2026 (FR-250): tên CŨ đúng chữ đổi sang phường MỚI như AI vẫn làm — Cầu Kho (Quận 1 cũ) nay thuộc Phường Cầu Ông Lãnh.
+      fK("phuong").some((f) => /cầu kho|cầu ông lãnh/i.test(f.answer)) && !fK("tiem_nang").length,
       JSON.stringify({ ph: fK("phuong"), tn: fK("tiem_nang"), rep: rK.body.replies }));
     globalThis.__cauHinh = cuCH;
   }

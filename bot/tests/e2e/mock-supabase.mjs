@@ -225,24 +225,28 @@ export class FakeDB {
       r.code = r.code ?? `BDS-Q5-${String(this.t.listings.length + 1).padStart(4, "0")}`;
       r.status = r.status ?? "cho_thong_tin";
       if (r.price_raw && r.price_vnd == null) r.price_vnd = parseVnd(r.price_raw);
-      // trg_listings_fill_property_type (FR-150): đoán loại từ câu rao.
-      if ((r.property_type ?? "chua_ro") === "chua_ro" && r.description) {
-        // 20260910b: luôn so trên chuỗi ĐÃ BỎ DẤU — người thật gõ lẫn có dấu /
-        // thiếu dấu trong cùng câu ("bán căn ho ở Hà đô centrosa").
-        const d = boDauMock(String(r.description));
-        r.property_type = /kho bai|kho xuong|nha xuong/.test(d) ? "kho_xuong"
-          : /nong nghiep|dat vuon|dat lua/.test(d) ? "dat_nong_nghiep"
-          : /skc|tmd|thuong mai dich vu|san xuat kinh doanh/.test(d) ? "dat_kinh_doanh"
-          : /can ho dich vu|chdv|khach san|toa nha/.test(d) ? "toa_nha"
-          : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(d) ? "chung_cu"
-          : /\bdat\b|lo dat|dat nen/.test(d) ? "dat"
-          : /\bnha\b|nha pho|\bnp\b|tret|\blau\b|hem|mat tien/.test(d) ? "nha_pho" : "chua_ro";
-      }
+      this.doanLoai(r);
       // (Không chạy quyết định lên kệ lúc chèn: seed cố ý dựng tin "chưa đăng"
       //  có đủ giá/diện tích/phường để kiểm SEC — V4.1/V4.7.)
     }
     this.rows(table).push(r);
     return { data: r };
+  }
+  // trg_listings_fill_property_type chạy cả BEFORE UPDATE OF description / property_type (30/09: điền câu rao vào tin rỗng).
+  doanLoai(r) {
+    // trg_listings_fill_property_type (FR-150): đoán loại từ câu rao.
+    if ((r.property_type ?? "chua_ro") === "chua_ro" && r.description) {
+      // 20260910b: luôn so trên chuỗi ĐÃ BỎ DẤU — người thật gõ lẫn có dấu /
+      // thiếu dấu trong cùng câu ("bán căn ho ở Hà đô centrosa").
+      const d = boDauMock(String(r.description));
+      r.property_type = /kho bai|kho xuong|nha xuong/.test(d) ? "kho_xuong"
+        : /nong nghiep|dat vuon|dat lua/.test(d) ? "dat_nong_nghiep"
+        : /skc|tmd|thuong mai dich vu|san xuat kinh doanh/.test(d) ? "dat_kinh_doanh"
+        : /can ho dich vu|chdv|khach san|toa nha/.test(d) ? "toa_nha"
+        : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(d) ? "chung_cu"
+        : /\bdat\b|lo dat|dat nen/.test(d) ? "dat"
+        : /\bnha\b|nha pho|\bnp\b|tret|\blau\b|hem|mat tien/.test(d) ? "nha_pho" : "chua_ro";
+    }
   }
 }
 // Bỏ dấu — bản mock của public.bo_dau() trong DB.
@@ -351,7 +355,12 @@ class Builder {
     let rows = db.rows(t).filter((r) => this.filters.every((f) => Builder.test(f, r)));
     if (this.op === "update") {
       rows.forEach((r) => Object.assign(r, this.payload));
-      if (t === "listings") rows.forEach((r) => db.quyetDinhDangTin(r));
+      if (t === "listings") rows.forEach((r) => {
+        if ("price_raw" in this.payload) r.price_vnd = r.price_raw ? parseVnd(r.price_raw) : null;
+        if ("description" in this.payload || "property_type" in this.payload) db.doanLoai(r);
+        db.quyetDinhDangTin(r);
+      });
+      if (this.mode === "single") return rows[0] ? { data: rows[0], error: null } : { data: null, error: { code: "PGRST116", message: "0 rows" } };
       return { data: rows, error: null };
     }
     const items = parseSelect(this.sel);

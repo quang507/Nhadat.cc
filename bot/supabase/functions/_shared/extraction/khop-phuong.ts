@@ -145,3 +145,74 @@ export function nghiaDuChac(top: { do_gan: number; quan_cu?: string | null } | n
 export function cauHoiPhuongGan(cachGoi: string, w: Phuong): string {
   return `Dạ ${cachGoi} nói ${tenDayDu(w)}${w.quan_cu ? ` (${w.quan_cu} cũ)` : ""} đúng không ạ?`;
 }
+
+/** Tên quận / huyện / TP cũ (trần) — "binh thanh", "go vap", "thu duc", "nha be". Phường mới trùng tên quận chỉ tính khi
+ * khách nói rõ "phường / xã" trước tên. */
+const TEN_QUAN: ReadonlySet<string> = new Set(
+  [...PHUONG_MOI.map((r) => r[2]), ...PHUONG_CU.map((r) => r[1]), "Sài Gòn"]
+    .map((q) => phang(q).replace(/^(?:quan|huyen|thanh pho|thi xa|tp)\s+/, "")),
+);
+/** Mỗi tên (trần) khách có thể nói → phường mới + các quận (trần, có tiền tố "quan 2", "thanh pho thu duc") của nó. */
+const TEN_DO: ReadonlyArray<{ k: string; moi: string; quan: ReadonlySet<string> }> = (() => {
+  const quanMoi = new Map(MOI.map((w) => [w.ten, phang(w.quan_cu ?? "")]));
+  const ds = MOI.map((w) => ({ k: phang(w.ten), moi: w.ten, quan: new Set([quanMoi.get(w.ten) ?? ""]) }));
+  for (const [cu, quan, moi] of PHUONG_CU) {
+    const k = tenTran(cu);
+    if (k && !/^\d+$/.test(k)) ds.push({ k, moi, quan: new Set([phang(quan), quanMoi.get(moi) ?? ""]) });
+  }
+  return ds.filter((d) => d.k.split(" ").length >= 2);
+})();
+const TRUOC_KHONG_PHAI_PHUONG = /^(?:duong|d|hem|h|ngo|kiet|cau|cu|an|tp|pho|quan|q|huyen|thi)$/;
+
+/**
+ * LƯỚI ĐỠ khi AI không trả phường (AI im / model lỗi / AI bỏ sót — bắn thật 30/09: "bán căn hộ bên thảo điền quận 2 cũ"
+ * chỉ ra Quận 2). Câu khách nhắc ĐÚNG CHỮ (không lệch) một tên phường mới hoặc cũ, ≥ 2 tiếng, không đứng sau "đường /
+ * hẻm / quận…", tên trùng tên quận thì phải có chữ "phường / xã" đứng trước; đã biết quận thì phường phải thuộc quận đó.
+ * Ra đúng MỘT phường mới mới trả; hai phường trở lên (phường cũ bị chia, hai tên trong câu) → null, để bot hỏi.
+ * Đây không phải luật đọc thay AI (chủ dự án 30/09): AI vẫn đọc trước, lưới này chỉ chạy khi AI không nói gì.
+ */
+export function phuongNhacTrongCau(cau: string | null | undefined, quan?: string | null): Phuong | null {
+  const tu = phang(cau ?? "").split(" ").filter(Boolean);
+  const qk = quan ? phang(quan) : null;
+  const trung: Array<{ i: number; n: number; moi: string }> = [];
+  for (const d of TEN_DO) {
+    const kt = d.k.split(" ");
+    const n = kt.length;
+    for (let i = 0; i + n <= tu.length; i++) {
+      if (tu.slice(i, i + n).join(" ") !== d.k) continue;
+      const truoc = tu[i - 1] ?? "";
+      if (TRUOC_KHONG_PHAI_PHUONG.test(truoc)) continue;
+      if (TEN_QUAN.has(d.k) && !/^(?:phuong|p|xa|tt)$/.test(truoc) && !(truoc === "tran" && tu[i - 2] === "thi")) continue;
+      const dai = tu[i + n];
+      if (dai && /^[a-d]$/.test(dai) && (TEN_THUOC.get(`${d.k} ${dai}`) ?? d.moi) !== d.moi) continue;
+      if (qk && !d.quan.has(qk)) continue;
+      trung.push({ i, n, moi: d.moi });
+    }
+  }
+  // Tên dài nằm trùm tên ngắn ("tân hưng thuận" trùm "tân hưng") → bỏ tên ngắn.
+  const giu = trung.filter((a) => !trung.some((b) => b !== a && b.n > a.n && b.i <= a.i && a.i + a.n <= b.i + b.n));
+  const moi = [...new Set(giu.map((a) => a.moi))];
+  return moi.length === 1 ? MOI.find((w) => w.ten === moi[0]) ?? null : null;
+}
+
+const TEN_HANH_CHINH: ReadonlyArray<string> = [...new Set([
+  ...TEN_DO.map((d) => d.k), ...MOI.map((w) => phang(w.ten)), ...TEN_QUAN, "ho chi minh", "hcm", "sai gon", "sg", "long an",
+])].filter((k) => k && !/^\d+$/.test(k)).sort((a, b) => b.length - a.length);
+/**
+ * Câu trả lời ĐỊA CHỈ chỉ gồm tên đơn vị hành chính — phường / xã (mới, cũ), quận / huyện, "quận 2 cũ", "tp hcm" — không có
+ * đường, số nhà, hẻm (bắn thật 30/09: "nhà ở vĩnh lộc b bình chánh, hẻm 5m" → ô "vị trí cụ thể" = "vĩnh lộc b bình chánh",
+ * rác cho admin). Chữ nào không phải tên hành chính / chữ đệm thì là địa chỉ thật → false.
+ */
+export function chiLaDonViHanhChinh(s: string | null | undefined): boolean {
+  let t = ` ${phang(s ?? "")} `;
+  if (!t.trim()) return false;
+  let co = false;
+  t = t.replace(/\s(?:quan|q|phuong|p|xa)\s*\d{1,2}(?=\s)|\s[qp]\d{1,2}(?=\s)/g, () => { co = true; return " "; });
+  for (const k of TEN_HANH_CHINH) {
+    if (!t.includes(` ${k} `)) continue;
+    co = true;
+    t = t.split(` ${k} `).join("  ");
+  }
+  const con = t.replace(/\s(?:nha|can|o|tai|thuoc|ben|khu|vuc|gan|phuong|p|xa|quan|q|huyen|tp|thanh|pho|thi|tran|tt|tinh|cu|moi|nhe|nhen|a|em|anh|chi|oi|do|day|ne|luon|va|voi)(?=\s)/g, " ");
+  return co && con.trim() === "";
+}
