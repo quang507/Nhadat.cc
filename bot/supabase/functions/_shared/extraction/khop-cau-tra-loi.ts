@@ -166,7 +166,8 @@ export function tuXungTuCau(text: string): XungHo | null {
 // vẫn treo cho lượt sau. "bận" chỉ phân biệt được với "bán" khi còn dấu.
 const HOAN_CD = /(?<![\p{L}])(?:bận|mệt)(?![\p{L}])|hỏi (?:gì )?(?:hoài|lắm|nhiều|mãi)/iu;
 const HOAN_KD =
-  /\b(?:de (?:anh|chi|em|toi|tui|minh|a|c) (?:hoi|tinh|suy nghi|coi lai|xem lai|nghi|ban bac)|(?:hoi|ban|noi)\s+(?:y\s+|voi\s+|lai\s+)?(?:vo|chong|ba|me|con|gia dinh|anh em)|tinh sau|de sau|luc khac|khi khac|noi sau|bua khac|hom khac|chua ranh|khong ranh|ko ranh|dang lai xe|dang hop|hoi hoai|hoi (?:lai )?sau|thoi de do)\b/;
+  /\b(?:de (?:anh|chi|em|toi|tui|minh|a|c) (?:hoi|tinh|suy nghi|coi lai|xem lai|nghi|ban bac)|(?:hoi|ban|noi)\s+(?:y\s+|voi\s+|lai\s+)?(?:vo|chong|ba|me|con|gia dinh|anh em)|tinh sau|de sau|luc khac|khi khac|noi sau|bua khac|hom khac|chua ranh|khong ranh|ko ranh|dang lai xe|dang hop|hoi hoai|hoi (?:lai )?sau|thoi de do|(?:thoi\s+)?de\s+(?:mai|toi|chieu|mot lat|ti nua|lat nua)(?:\s+(?:nha|nhe|di|roi))?(?:\s+(?:anh|chi|em|e|a|c|minh|toi|tui))?(?:\s+(?:noi|nhan|gui|bao|tinh|tra loi)(?:\s+tiep)?)?(?:\s+(?:nha|nhe|nhen|a|nghe))?(?=[\s.!…]*$)|mai\s+(?:(?:anh|chi|em|e|a|c|minh|toi|tui)\s+)?(?:noi|nhan|gui|tra loi|bao)\s+tiep|noi tiep sau|nhan tiep sau)\b/;
+// 30/09/2026 (bắn thật lx-ban-f): "thoi de mai e noi tiep" — thiếu "để mai / mai nói tiếp": câu vào "bổ sung" và bot hỏi tiếp.
 export function laHoanLai(text: string): boolean {
   const goc = text.trim();
   if (!goc || /\d/.test(goc)) return false; // có số là có dữ liệu — xét như câu trả lời
@@ -848,6 +849,9 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
   }
   // 27/09/2026 (test Zalo): hỏi phường, khách "Ở cầu kho em ơi" — luật tiềm năng đọc "ở" là "để ở". Đang hỏi phường / địa chỉ
   // mà câu mở bằng "ở …" (không phải "để ở", "ở gia đình") là câu trả lời VỊ TRÍ.
+  // 30/09/2026 (bắn thật lx-ban-f): hỏi địa chỉ, khách "o q10" — chỉ có QUẬN/PHƯỜNG, chưa có đường / hẻm / số nhà. Quận vẫn
+  // được ghi ở đường bóc quận; câu địa chỉ KHÔNG coi là đã trả lời (vi_tri "o q10" là rác, bot thôi hỏi tên đường).
+  if (question === "vi_tri" && laChiDonViHanhChinh(text)) return { loai: "lech" };
   if ((question === "phuong" || question === "vi_tri") && /^\s*(?:nha\s+|can\s+)?o\s+(?!(?:gia dinh|duoc|hoac|cho thue|va)\b)\S/.test(boDau(text)) &&
       !CAU_HOI_RE.test(boDau(text))) {
     const xh = batXungHo(text);
@@ -1308,7 +1312,26 @@ const CUM_KHOA: Record<string, RegExp> = {
   phi_quan_ly: /\bphi\s+(?:quan ly|ql|dich vu|bao tri)(?:\s*(?:la|khoang|tam)?\s*\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr|d|dong)?(?:\s*\/\s*(?:m2|thang|th|can))?)?/,
 };
 
+/**
+ * 30/09/2026 (bắn thật lx-ban-c): giá trị luật đọc giữ nguyên câu khách — pháp lý "sổ hồng rồi em", phí quản lý
+ * "phí quản lý 15k/m2" — rồi in thẳng ra bản nháp. Chỉ gọn hai khoá này: bỏ tiểu từ đuôi, bỏ chữ khoá đứng đầu.
+ */
+export function gonGiaTriFact(q: string, answer: string): string {
+  if (q === "phap_ly") {
+    const g = answer.trim().replace(/(?:\s+(?:rồi|roi|nha|nhé|nhe|nhen|em|anh|chị|chi|ạ|a|đó|do|luôn|luon|á|nè|ne|ơi|oi))+\s*[.!]*$/iu, "").trim();
+    return g.length >= 2 ? g : answer;
+  }
+  if (q === "phi_quan_ly") {
+    const m = /\d+(?:[.,]\d+)?\s*(?:k|nghìn|ngàn|nghin|ngan|đ|d|đồng|dong|tr|triệu|trieu)?\s*(?:\/|trên|tren|một|mot)\s*(?:m2|m²|mét vuông|met vuong|tháng|thang)|\d+(?:[.,]\d+)?\s*(?:k|nghìn|ngàn|tr|triệu)(?![\p{L}\d])/iu.exec(answer);
+    return m ? m[0].trim() : answer;
+  }
+  return answer;
+}
+
 export function nhanDienNhieuFact(text: string): NhanDien[] {
+  return nhanDienNhieuFactTho(text).map((f) => ({ ...f, answer: gonGiaTriFact(f.question, f.answer) }));
+}
+function nhanDienNhieuFactTho(text: string): NhanDien[] {
   const out: NhanDien[] = [];
   // 14/09/2026: tin rao kiểu Facebook ("🏢 Kết cấu: 3 tấm", "📜 Sổ hồng riêng") — đáp án bỏ
   // biểu tượng và nhãn "Kết cấu:" ở đầu mảnh.
@@ -1397,11 +1420,31 @@ function tronKhoa(q: string, kd: string): boolean {
   if (q === "phap_ly") {
     return /^(?:(?:da|co|la)\s+)?(?:shr|shc|so\s+(?:hong|do)(?:\s+(?:rieng|chung))?|so\s+(?:rieng|chung))$/.test(kd);
   }
+  // 30/09/2026 (bắn thật lx-ban-f): "60m2" khi đang hỏi hẻm — AI im, luật đọc diện tích mà bị gạt (khoá AI biết) → "Không
+  // bóc tách được gì", bot hỏi lại. Cả tin chỉ là một con số + m2 thì không mơ hồ.
+  if (q === "dien_tich" || q === "dien_tich_dat") {
+    return /^(?:(?:dien tich|dt)\s+)?(?:la\s+)?\d{1,5}(?:\s\d{1,2})?\s*(?:m2|m 2|met vuong|m vuong)$/.test(kd);
+  }
+  // 30/09/2026 (bắn lại lx-ban-c2 trên v274): "phí quản lý 15k/m2" khi đang hỏi nội thất — AI im, luật bị gạt → mất hẳn.
+  if (q === "phi_quan_ly") {
+    return /^(?:phi (?:quan ly|ql)|pql)\s+(?:la\s+|khoang\s+|tam\s+)?\d+(?:\s\d+)?\s*(?:k|nghin|ngan|tr|trieu|d|dong)?\s*(?:(?:tren\s+|mot\s+)?(?:m2|m 2|thang))?$/.test(kd);
+  }
   if (q === "phuong") {
     return /^(?:xa|phuong|p|thi tran)\s+[a-z0-9]+(?:\s+[a-z0-9]+){0,3}$/.test(kd) &&
       !/\b(?:duong|hem|ngo|kiet|so nha|quan|q|huyen|ty|trieu|m2|lau|tang)\b/.test(kd.replace(/^(?:xa|phuong|p|thi tran)\s+/, ""));
   }
   return false;
+}
+
+/** "o q10", "ở quận 10 nha em", "p5 q10", "quận 10": câu chỉ nói đơn vị hành chính, không có đường / hẻm / số nhà / mốc. */
+export function laChiDonViHanhChinh(text: string): boolean {
+  const kd = boDau(text).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
+    .replace(/(?:\s+(?:nha|nhe|nhen|em|e|a|anh|chi|oi|do|day|ne|luon))+$/, "");
+  if (!kd) return false;
+  const bo = kd.replace(/^(?:nha\s+|can\s+)?(?:o|tai|thuoc)\s+/, "")
+    .replace(/\b(?:quan|q|phuong|p)\s*\d{1,2}\b|\b[qp]\d{1,2}\b|\b(?:tp|thanh pho)\s*(?:hcm|ho chi minh|sai gon|sg)\b|\bsai gon\b/g, " ")
+    .replace(/\s+/g, " ").trim();
+  return bo === "" && /\d/.test(kd);
 }
 
 export function laSoNhaTenDuong(text: string): boolean {
@@ -1411,6 +1454,10 @@ export function laSoNhaTenDuong(text: string): boolean {
 }
 
 export function nhanDienFact(text: string): NhanDien | null {
+  const r = nhanDienFactTho(text);
+  return r ? { ...r, answer: gonGiaTriFact(r.question, r.answer) } : r;
+}
+function nhanDienFactTho(text: string): NhanDien | null {
   const goc = text.trim();
   if (laSoNhaTenDuong(goc)) return { question: "vi_tri", answer: goc.replace(/\s+(?:nha|nhé|nhe|nha em|em|ạ|a|đó|do)\s*[.!]*$/iu, "") };
   const kd = boDau(goc);

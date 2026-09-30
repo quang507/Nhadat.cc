@@ -347,7 +347,7 @@ check("TOIUU-01 người lạ hỏi vai ≤ 12 truy vấn (v43: 18; +1 trần c�
 v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
 console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
 // 23/09/2026: +1 — câu đầu đủ khu vực + giá nay LỌC KHO ngay (trước chỉ hứa "em lọc kho liền" rồi im).
-check("TOIUU-02 người mua lượt đầu ≤ 22 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc)", v.n <= 22, `${v.n}`);
+check("TOIUU-02 người mua lượt đầu ≤ 23 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc; +1 FR-248 b tìm căn gần ngân sách, CHỈ khi kho trống vì giá — ca này 'tầm 5 tỷ' ≤ 5,75 tỷ mà căn phường 4 là 5,8 tỷ)", v.n <= 23, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
 console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
 check("TOIUU-03 người mua có hồ sơ ≤ 18 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖)", v.n <= 18, `${v.n}`);
@@ -1000,7 +1000,7 @@ fresh(seedKho);
   r = await send({ external_user_id: "h-1", text: "sổ hồng riêng rồi em" });
   // FR-234 (28/09): nói sang ô khác → ghi ô đó, KHÔNG hỏi lại câu đang hỏi (ô không phải ô lõi).
   check("H3 hỏi hẻm, trả lời pháp lý → VẪN GHI phap_ly, câu hẻm thôi, KHÔNG hỏi lại (FR-234)",
-    fact("phap_ly")?.answer === "sổ hồng riêng rồi em" && !fact("do_rong_hem") && !pend("do_rong_hem") && r.body.reask !== "do_rong_hem",
+    fact("phap_ly")?.answer === "sổ hồng riêng" /* FR-248 a: bỏ tiểu từ "rồi em" */ && !fact("do_rong_hem") && !pend("do_rong_hem") && r.body.reask !== "do_rong_hem",
     JSON.stringify({ body: r.body, f: db().t.listing_facts }));
   r = await send({ external_user_id: "h-1", text: "nhà nở hậu chút" });
   // FR-233 (chủ dự án 27/09: "mấy cái mày ko ghi được vào db thì để AI nó xét qua … chứ mày cứ hỏi nhiều quá"): câu lệch
@@ -2282,6 +2282,105 @@ fresh(seedKho);
       fT("gia").length === 1 && !fT("bo_sung").length, JSON.stringify({ gia: fT("gia"), bs: fT("bo_sung"), rep: rT.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // 30/09/2026 (bắn thật lx-ban-f): đang hỏi hẻm, khách chỉ nhắn "60m2" — chế độ chinh, AI im → luật đọc diện tích bị gạt,
+  // bot báo "Không bóc tách được gì" rồi hỏi lại. Cả tin chỉ là con số + m2 → ghi ô diện tích.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "dt-tron-1", text: "bán nhà hẻm Trần Bình Trọng quận 5, trệt 2 lầu, giá 8 tỷ" });
+    const LD = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LD.id, question: "do_rong_hem", status: "pending" });
+    const rD = await send({ external_user_id: "dt-tron-1", text: "60m2" });
+    const fD = (q) => db().t.listing_facts.filter((f) => f.listing_id === LD.id && f.question === q);
+    check("DT-TRON-01 đang hỏi hẻm, chỉ nhắn '60m2' (chế độ chinh, AI im) → ghi ô DIỆN TÍCH, không vào bổ sung",
+      fD("dien_tich").length === 1 && !fD("bo_sung").length, JSON.stringify({ dt: fD("dien_tich"), bs: fD("bo_sung"), rep: rD.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // 30/09/2026 (bắn thật lx-mua-e): khách MUA đã có hồ sơ nới ngân sách "vậy có căn 6 tỷ rưỡi cũng được" → cổng nới
+  // `coHangCoGia` ("có căn" + giá) mở hồ sơ BÁN, tạo tin "BĐS bán", hỏi "nhà mình là nhà phố hay chung cư".
+  for (const [i, cau, laBan] of [
+    [0, "vậy có căn 6 tỷ rưỡi cũng được", false],
+    [1, "có căn nhà 6 tỷ 5 hẻm xe hơi thì em gửi anh", false],
+    [2, "à anh có căn nhà quận 10 cần bán giá 6 tỷ, 4x15", true],
+  ]) {
+    fresh((d) => {
+      const b = d.insert("buyers", { zalo_user_id: `mua-noi-${i}`, name: null, preferences: { deal: "ban", area: "Quận 5", budget: "dưới 5 tỷ" } }).data;
+      d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-30T00:00:00Z" });
+    });
+    const soTin = db().t.listings.length;
+    const rM = await send({ external_user_id: `mua-noi-${i}`, text: cau });
+    const coBan = db().t.sellers.some((x) => x.zalo_user_id === `mua-noi-${i}`);
+    check(`MUA-NOI-0${i + 1} người đang có hồ sơ MUA nhắn '${cau}' → ${laBan ? "MỞ hồ sơ bán (có chữ bán)" : "KHÔNG mở hồ sơ bán, không tạo tin"}`,
+      laBan ? coBan : (!coBan && db().t.listings.length === soTin),
+      JSON.stringify({ coBan, tin: db().t.listings.length - soTin, rep: rM.body.replies }));
+  }
+  // FR-248 (30/09/2026, bắn lại trên v274). Mỗi ca ghi NGUYÊN NHÂN lỗi cũ.
+  // (a) khách lưu "dưới 5 tỷ" rồi nới "vậy có căn 6 tỷ rưỡi cũng được" — `hoSoTamTuCau` chỉ đọc giá trong câu khi hồ sơ CHƯA có
+  // ngân sách → kho lượt này vẫn lọc ≤ 5,75 tỷ, căn 5,8 tỷ phường 4 không tới được model, bot chỉ hứa "em sẽ để ý".
+  {
+    fresh((d) => { seedKho(d); const b = d.insert("buyers", { zalo_user_id: "ns-1", name: null, preferences: { deal: "ban", area: "phường 4", budget: "dưới 5 tỷ" } }).data;
+      d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-30T00:00:00Z" }); });
+    globalThis.__model.parse = () => OUT();
+    await send({ external_user_id: "ns-1", text: "vậy có căn 6 tỷ rưỡi cũng được" });
+    const qN = db().log.filter((l) => l.table === "listings" && l.op === "select" && l.filters.some((f) => f.kind === "lte" && f.col === "price_vnd")).pop();
+    const lteN = qN?.filters.find((f) => f.kind === "lte" && f.col === "price_vnd").val;
+    check("FR248-E1 nới ngân sách 'vậy có căn 6 tỷ rưỡi cũng được' → kho lượt này lọc theo giá MỚI (≥ 6,5 tỷ), căn 5,8 tỷ vào KHO",
+      lteN >= 6.5e9 && /BDS-Q5-0001/.test(sysText(parseCalls().pop())), `lte=${lteN}`);
+  }
+  // (b) kho trống VÌ GIÁ ("dưới 5 tỷ", phường 4 chỉ có căn 5,8 tỷ) → bot chỉ nói "chưa có căn nào khớp", không nói căn gần nhất.
+  {
+    fresh((d) => { seedKho(d); const b = d.insert("buyers", { zalo_user_id: "ns-2", name: null, preferences: { deal: "ban", area: "phường 4", budget: "dưới 5 tỷ" } }).data;
+      d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-30T00:00:00Z" }); });
+    globalThis.__model.parse = () => OUT({ replies: ["Dạ hiện em chưa có căn nào khớp ạ."] });
+    const rG = await send({ external_user_id: "ns-2", text: "có căn nào không em" });
+    check("FR248-E2 kho trống vì giá → nói căn gần tầm giá nhất (5,8 tỷ Trần Hưng Đạo), không bịa",
+      rG.body.replies.some((x) => /Gần tầm giá nhất/.test(x) && /5,8 tỷ/.test(x) && /Trần Hưng Đạo/.test(x)), JSON.stringify(rG.body.replies));
+  }
+  // (b2) bắn lại v275 (lx-mua-e3): kho CÓ căn khớp mà model chỉ "em gợi 2 căn khớp nhu cầu mình nhé:" rồi hết — câu đó không nằm
+  // trong mẫu câu hứa nên luật "thay câu hứa bằng căn đầu kho" không chạy, khách không thấy căn nào.
+  {
+    fresh((d) => { seedKho(d); const b = d.insert("buyers", { zalo_user_id: "ns-3", name: null, preferences: { deal: "ban", area: "phường 4", budget: "tầm 6 tỷ" } }).data;
+      d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-30T00:00:00Z" }); });
+    globalThis.__model.parse = () => OUT({ replies: ["Dạ em gợi 2 căn khớp nhu cầu mình nhé:"] });
+    const rH = await send({ external_user_id: "ns-3", text: "có căn nào không em" });
+    check("FR248-E2b kho có căn, model chỉ 'em gợi 2 căn … nhé:' → thay bằng căn thật trong kho (Trần Hưng Đạo 5,8 tỷ)",
+      rH.body.replies.some((x) => /Trần Hưng Đạo/.test(x) && /5,8 tỷ/.test(x)) && !rH.body.replies.some((x) => /gợi 2 căn/.test(x)), JSON.stringify(rH.body.replies));
+  }
+  // (c) hỏi địa chỉ, khách "o q10" (chế độ chinh, AI im) → vi_tri "o q10", câu địa chỉ coi như xong, bot thôi hỏi đường.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "q10-1", text: "e muon ban nha" });
+    const LQ = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LQ.id, question: "vi_tri", status: "pending" });
+    await send({ external_user_id: "q10-1", text: "o q10" });
+    const fQ = (q) => db().t.listing_facts.filter((f) => f.listing_id === LQ.id && f.question === q);
+    check("FR248-E3 hỏi địa chỉ, 'o q10' → KHÔNG ghi vị trí 'o q10', câu địa chỉ vẫn treo, không vào bổ sung",
+      !fQ("vi_tri").length && !fQ("bo_sung").length && db().t.info_requests.some((x) => x.listing_id === LQ.id && x.question === "vi_tri" && x.status === "pending"),
+      JSON.stringify({ vt: fQ("vi_tri"), bs: fQ("bo_sung"), ir: db().t.info_requests.filter((x) => x.listing_id === LQ.id).map((x) => [x.question, x.status]) }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // (d) căn hộ, đang hỏi nội thất, khách "phí quản lý 15k/m2" (AI im) → "Không bóc tách được gì", phí mất hẳn.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "pql-1", text: "bán căn hộ Sunrise City quận 7 76m2 2pn tầng 12 giá 5 tỷ 2" });
+    const LP = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LP.id, question: "noi_that", status: "pending" });
+    await send({ external_user_id: "pql-1", text: "phí quản lý 15k/m2" });
+    const fP = db().t.listing_facts.filter((f) => f.listing_id === LP.id && f.question === "phi_quan_ly");
+    check("FR248-E4 đang hỏi nội thất, 'phí quản lý 15k/m2' (AI im) → ghi ô phí quản lý = '15k/m2'", fP.length === 1 && fP[0].answer === "15k/m2", JSON.stringify(fP));
+    globalThis.__cauHinh = cuCH;
+  }
   // FR-241 o (bắn lại 28/09, lx-85/lx-86/lx-87): đang hỏi ô khác, khách nhắn TRỌN một câu pháp lý ("sổ chung", "sổ hồng rồi em")
   // hay TRỌN một tên phường/xã ("xã Vĩnh Lộc A") — AI im hoặc chỉ xếp vào kiến thức thêm → luật bị gạt: pháp lý rơi vào bổ sung,
   // phường mất hẳn (laBoSungRac). Cả tin là đúng một giá trị của khoá đó → luật chắc, giữ.
@@ -2300,7 +2399,8 @@ fresh(seedKho);
     const rK = await send({ external_user_id: `tron-khoa-${i}`, text: cau });
     const fK = (q) => db().t.listing_facts.filter((f) => f.listing_id === LK.id && f.question === q);
     check(`TRON-KHOA-0${i + 1} đang hỏi ${treo}, chỉ nhắn '${cau}' (chinh, AI ${kt ? "xếp kiến thức" : "im"}) → ghi ô ${khoa}, không vào bổ sung`,
-      fK(khoa).some((f) => f.answer === cau) && !fK("bo_sung").some((f) => f.answer === cau),
+      // FR-248 a (30/09): giá trị pháp lý gọn tiểu từ đuôi ("sổ hồng rồi em" → "sổ hồng").
+      fK(khoa).some((f) => f.answer === (khoa === "phap_ly" ? cau.replace(/\s+(?:rồi em|nha em)$/u, "") : cau)) && !fK("bo_sung").some((f) => f.answer === cau),
       JSON.stringify({ khoa: fK(khoa), bs: fK("bo_sung"), rep: rK.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
@@ -2353,7 +2453,7 @@ fresh(seedKho);
     const L1 = db().t.listings.at(-1);
     const f1 = (k) => db().t.listing_facts.filter((f) => f.listing_id === L1?.id && f.question === k).map((f) => f.answer);
     check("FR244-E1 căn hộ: giá không dính phí quản lý; phí quản lý cắt đúng cụm; tầng 12 được ghi", L1?.price_raw === "4ty6" &&
-      f1("phi_quan_ly").join() === "phí quản lý 15k/m2" && f1("tang").includes("12"), JSON.stringify({ gia: L1?.price_raw, pql: f1("phi_quan_ly"), tang: f1("tang") }));
+      f1("phi_quan_ly").join() === "15k/m2" /* FR-248 a: gọn còn con số */ && f1("tang").includes("12"), JSON.stringify({ gia: L1?.price_raw, pql: f1("phi_quan_ly"), tang: f1("tang") }));
     // FR-244 (kịch bản L10): NMG nói "căn B sổ hồng riêng" → bong bóng "căn 2 pháp lý". Nguyên nhân: tachTheoCan bỏ chữ khách gọi.
     fresh(seedKho);
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh" };

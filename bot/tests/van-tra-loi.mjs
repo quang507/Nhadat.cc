@@ -20,7 +20,9 @@ import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
 import { boHoiLaiDaCo, boHuaHoiChuNha } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { gonLoiSua, nhanDienNhieuFact, laTraLoiTronKhoa } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
-import { chuanHienTrang } from "../supabase/functions/_shared/tin-nhap.ts";
+import { chuanHienTrang, diaChiGon } from "../supabase/functions/_shared/tin-nhap.ts";
+import { gonGiaTriFact, laChiDonViHanhChinh } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { boHoaHong } from "../supabase/functions/_shared/extraction/luat-lien-he.ts";
 import { bocTachTaoTin, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua } from "../supabase/functions/_shared/bao_lai.ts";
 
 let hong = 0, tong = 0;
@@ -967,7 +969,10 @@ ok("FR241-l nhà phố: vừa trả lời kết cấu, còn pháp lý (16) + ph�
 ok("FR241-l căn hộ: vừa nói tầng → vẫn hỏi phòng ngủ (tang → so_phong_ngu giữ)", chonCauKe(["tang"], [{ fact_key: "so_phong_ngu", priority: 4, nhom: "co_ban" }, { fact_key: "huong", priority: 6, nhom: "co_ban" }]) === "so_phong_ngu");
 for (const [q, c, m] of [["phap_ly", "sổ chung", true], ["phap_ly", "sổ hồng rồi em", true], ["phap_ly", "sổ đỏ nha em", true], ["phap_ly", "shr", true],
   ["phap_ly", "chưa có sổ", false], ["phap_ly", "sổ chung với anh trai", false], ["phap_ly", "sổ hồng riêng giá 8 tỷ", false], ["phap_ly", "số 5", false],
-  ["phuong", "xã Vĩnh Lộc A", true], ["phuong", "phường Tân Thành nha em", true], ["phuong", "phường 8 quận 3", false], ["phuong", "xã Vĩnh Lộc A, đường số 5", false]]) {
+  ["phuong", "xã Vĩnh Lộc A", true], ["phuong", "phường Tân Thành nha em", true], ["phuong", "phường 8 quận 3", false], ["phuong", "xã Vĩnh Lộc A, đường số 5", false],
+  // 30/09/2026 (bắn thật lx-ban-f): "60m2" khi đang hỏi hẻm — AI im, luật bị gạt, bot báo "Không bóc tách được gì".
+  ["dien_tich", "60m2", true], ["dien_tich", "60 m2 nha em", true], ["dien_tich", "dt 72,5m2", true], ["dien_tich", "60 mét vuông", true],
+  ["dien_tich", "60m2 3 tầng", false], ["dien_tich", "nhà 60m2 giá 5 tỷ", false], ["dien_tich", "60", false]]) {
   ok(`FR241-o câu trọn ${q} '${c}' → ${m}`, laTraLoiTronKhoa(q, c) === m);
 }
 // FR-242 (29/09/2026, 10 kịch bản mới K1–K10 chạy qua tầng luật). Mỗi ca ghi NGUYÊN NHÂN lỗi cũ.
@@ -1018,7 +1023,7 @@ for (const [q, c, m] of [["phap_ly", "sổ chung", true], ["phap_ly", "sổ hồ
   // FR-244 (29/09/2026, 10 kịch bản L1–L10 qua bot giả lập): mỗi ca ghi NGUYÊN NHÂN.
   // (a) câu rao một mảnh → fact bằng NGUYÊN CÂU (phí quản lý L1, pháp lý L6/L9). Nguyên nhân: không có dấu phẩy thì luật cả câu
   // (`nhanDienFact`, trả `goc`) được nhận nguyên văn.
-  ok("FR244-a L1 phí quản lý cắt đúng cụm", a("bán căn hộ Sunrise City q7 block V3 tầng 12 76m2 2pn 2wc giá 4ty6 phí quản lý 15k/m2", "phi_quan_ly") === "phí quản lý 15k/m2", JSON.stringify(nhanDienNhieuFact("bán căn hộ Sunrise City q7 block V3 tầng 12 76m2 2pn 2wc giá 4ty6 phí quản lý 15k/m2")));
+  ok("FR244-a L1 phí quản lý cắt đúng cụm", a("bán căn hộ Sunrise City q7 block V3 tầng 12 76m2 2pn 2wc giá 4ty6 phí quản lý 15k/m2", "phi_quan_ly") === "15k/m2", JSON.stringify(nhanDienNhieuFact("bán căn hộ Sunrise City q7 block V3 tầng 12 76m2 2pn 2wc giá 4ty6 phí quản lý 15k/m2"))); // FR-248 a: giá trị gọn còn con số
   ok("FR244-a L6 pháp lý 'shr hc', không cả câu", a("can ban nha hxh 4m nguyen trai p2 q5 dt 4x14 2 lau st gia 7t8 shr hc", "phap_ly") === "shr hc");
   ok("FR244-a L9 pháp lý 'giấy tay', không cả câu", a("bán nhà giấy tay Bình Chánh 5x20 giá 1 tỷ 5", "phap_ly") === "giấy tay");
   ok("FR244-a không kích: câu ngắn 'sổ hồng riêng hoàn công' giữ nguyên", a("sổ hồng riêng hoàn công", "phap_ly") === "sổ hồng riêng hoàn công");
@@ -1036,6 +1041,44 @@ for (const [q, c, m] of [["phap_ly", "sổ chung", true], ["phap_ly", "sổ hồ
   ok("FR244-e không kích: 'căn 2 sổ chung' không có chữ", tachTheoCan("căn 2 sổ chung")[0]?.nhan === undefined);
 }
 ok("FR241-N10b hiện trạng có dấu giữ nguyên", chuanHienTrang("đang cho thuê 20 triệu") === "đang cho thuê 20 triệu");
+
+// ── FR-248 (30/09/2026, bắn lại 6 kịch bản trên v274). Mỗi ca ghi NGUYÊN NHÂN lỗi cũ. ──
+// (a) giá trị dính chữ đệm: luật ghi nguyên câu khách vào ô (không ai gọn) → bản nháp in "sổ hồng rồi em", "phí quản lý 15k/m2".
+for (const [q, vao, ra] of [["phap_ly", "sổ hồng rồi em", "sổ hồng"], ["phap_ly", "sổ đỏ nha em", "sổ đỏ"], ["phap_ly", "sổ hồng riêng", "sổ hồng riêng"],
+  ["phap_ly", "chưa có sổ", "chưa có sổ"], ["phi_quan_ly", "phí quản lý 15k/m2", "15k/m2"], ["phi_quan_ly", "phí ql 1tr/tháng", "1tr/tháng"],
+  ["phi_quan_ly", "phí quản lý 20 nghìn/m2 nha", "20 nghìn/m2"], ["gia", "giá 7 tỷ nha em", "giá 7 tỷ nha em"]]) {
+  ok(`FR248-a gọn ${q} '${vao}' → '${ra}'`, gonGiaTriFact(q, vao) === ra, gonGiaTriFact(q, vao));
+}
+ok("FR248-a nhanDienFact('sổ hồng rồi em') → phap_ly 'sổ hồng'", nhanDienFact("sổ hồng rồi em")?.answer === "sổ hồng", JSON.stringify(nhanDienFact("sổ hồng rồi em")));
+// (b) "phí quản lý 15k/m2" khi đang hỏi nội thất — AI im, luật bị gạt (khoá AI biết) → mất hẳn.
+for (const [c, m] of [["phí quản lý 15k/m2", true], ["phí ql 1tr/tháng nha em", true], ["phí quản lý 15k/m2, nội thất đầy đủ", false], ["phí quản lý bao nhiêu", false]]) {
+  ok(`FR248-b câu trọn phi_quan_ly '${c}' → ${m}`, laTraLoiTronKhoa("phi_quan_ly", c) === m);
+}
+// (c) "o q10" khi hỏi địa chỉ — chỉ có quận: không phải địa chỉ, bản nháp in "📍 O q10, Quận 10".
+for (const [c, m] of [["o q10", true], ["ở quận 10 nha em", true], ["p5 q10", true], ["ở Ô Môn", false], ["hẻm 45 q10", false], ["12 Lê Lợi q1", false], ["q10 gần chợ", false]]) {
+  ok(`FR248-c chỉ đơn vị hành chính '${c}' → ${m}`, laChiDonViHanhChinh(c) === m);
+}
+for (const [vao, ra] of [[["o q10", null, "Quận 10"], "Quận 10"], [["p5 q10", "Phường 5", "Quận 10"], "Phường 5, Quận 10"],
+  [["hẻm 45 Nguyễn Trãi", "Phường 2", "Quận 5"], "hẻm 45 Nguyễn Trãi, Phường 2, Quận 5"], [["Ô Môn", null, "Cần Thơ"], "Ô Môn, Cần Thơ"]]) {
+  ok(`FR248-c diaChiGon ${JSON.stringify(vao)} → '${ra}'`, diaChiGon(...vao) === ra, diaChiGon(...vao));
+}
+// (d) model đã nói thật "chưa có căn" mà câu hứa cạnh đó vẫn bị thay bằng lời thật → khách đọc "chưa có căn" hai lần.
+{
+  const r = chanHuaCoHang(["Dạ em lọc lại với 3 phòng ngủ ạ. Hiện em chưa có căn nào sẵn, để em báo ngay khi có căn khớp nhé."], "hiện bên em chưa có căn nào khớp đúng nhu cầu này ạ.");
+  const n = (r.replies.join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase().match(/chua co can/g) ?? []).length;
+  ok("FR248-d model đã nói 'chưa có căn' → không chèn câu 'chưa có căn' thứ hai", n === 1, JSON.stringify(r));
+}
+// (e) môi giới rao "…, hh 1%" — câu rao gốc thành mô tả, web in hoa hồng lên trang tin công khai.
+for (const [vao, ra] of [["giá 9.2 tỷ TL, hh 1%", "giá 9.2 tỷ TL"], ["giá 5 tỷ, hoa hồng 2% cho sale, sổ hồng", "giá 5 tỷ, sổ hồng"], ["nhà hh1% giá 3 tỷ", "nhà giá 3 tỷ"],
+  ["100% thổ cư", "100% thổ cư"], ["thưởng hoa hồng hấp dẫn", "thưởng hoa hồng hấp dẫn"]]) {
+  ok(`FR248-e bỏ hoa hồng '${vao}' → '${ra}'`, boHoaHong(vao) === ra, boHoaHong(vao));
+}
+
+// (f) bắn lại v275 (lx-mua-e3): hai câu hứa suông lọt — "em ĐỂ lọc … báo" (chữ "để" chen giữa) và "em gợi 2 căn … nhé:" rồi hết.
+for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em gợi 2 căn khớp nhu cầu mình nhé:", true], ["Em gợi ý vài căn cho anh nha", true],
+  ["Mình muốn em gợi ý khu nào ạ?", false], ["Em hỏi thêm chút nha", false]]) {
+  ok(`FR248-f câu hứa '${c}' → ${m}`, laHuaCoHang(c, false) === m);
+}
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

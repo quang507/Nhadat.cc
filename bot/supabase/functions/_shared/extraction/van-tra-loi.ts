@@ -51,7 +51,10 @@ const HUA_CO_HANG: RegExp[] = [
   // 20/09/2026 (bắn thật mau-y-C): "để em kiểm tra hẻm 4m Nguyễn Trãi rồi báo liền", "Em kiểm tra kho
   // rồi báo mình liền", "Đang kiểm tra … sắp báo mình liền" — hai lượt né thay vì nói thẳng chưa có.
   // 23/09/2026 (bắn thật): bot xưng "cháu" với khách lớn tuổi — "để cháu tìm … cháu sẽ báo chú liền".
-  /\b(?:de\s+)?(?:em|chau)\s+(?:kiem tra|check|xem|tim|loc|ra soat|doi chieu)\b[^.?!]*\b(?:roi|se|sap)?\s*bao\s+(?:lai\s+)?(?:anh\/chi|anh|chi|minh|em|chau|chu|co|bac|lien|ngay|sau|som)\b/,
+  // 30/09/2026 (bắn lại v275, lx-mua-e3): "Em để lọc lại và báo mình nhé" — "em ĐỂ lọc" (chữ "để" chen giữa) lọt mẫu này.
+  /\b(?:de\s+)?(?:em|chau)\s+(?:de\s+(?:em\s+|chau\s+)?)?(?:kiem tra|check|xem|tim|loc|ra soat|doi chieu)\b[^.?!]*\b(?:roi|se|sap)?\s*bao\s+(?:lai\s+)?(?:anh\/chi|anh|chi|minh|em|chau|chu|co|bac|lien|ngay|sau|som)\b/,
+  // 30/09/2026 (bắn lại v275, lx-mua-e3): "em gợi 2 căn khớp nhu cầu mình nhé:" rồi hết — báo có danh sách mà không kèm căn nào.
+  /\b(?:em|chau)\s+(?:xin\s+)?(?:goi y|goi|gioi thieu|gui)\s+(?:(?:vai|may|mot so|mot|hai|ba|\d+)\s+)?(?:can|lua chon|mau)\b(?!\s+(?:nay|do|kia|tren|vua|ho\b))/,
   // 23/09/2026: "Dạ em tìm kiếm liền ạ", "để em tìm từ từ ạ", "em lọc kho … liền", "để cháu tìm kiếm trong kho".
   /\b(?:de\s+)?(?:em|chau)\s+(?:tim kiem|tim|loc|kiem)\s+(?:(?:lien|ngay|luon|tu tu|trong kho|kho|them)\b|can\s+(?:khop|hop|phu hop))/,
   /\b(?:dang|sap|se)\s+(?:kiem tra|tim|loc|ra soat)\b[^.?!]*\b(?:sap|se|roi)\s+bao\b/,
@@ -84,7 +87,9 @@ const tachCau = (s: string): string[] => s.split(/(?<=[.!?…]|[=:;]\)+|:D|\^\^)
  */
 export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true): { replies: string[]; daChan: boolean } {
   let daChan = false;
-  let daChen = false;
+  // 30/09/2026 (bắn thật lx-mua-e2): model đã tự nói thật "Hiện em chưa có căn nào sẵn…" mà câu hứa bên cạnh vẫn bị thay
+  // bằng lời thật → khách đọc "chưa có căn" hai lần liền. Đã có câu nói thật thì chỉ bỏ câu hứa, không chèn thêm.
+  let daChen = replies.some((r) => tachCau(r).some((c) => !laHuaCoHang(c, hoiHang) && /\bchua co (?:can|tin|nha|lo)\b/.test(boDau(c))));
   const ra: string[] = [];
   for (const r of replies) {
     const giu: string[] = [];

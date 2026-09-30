@@ -12,7 +12,7 @@
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
 import { docTien, giaTheoM2 } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
-import { DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, laGap } from "./khop-cau-tra-loi.ts";
+import { DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, laGap } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, phuongChuan, phuongTrongTrich, phuongTuTenCu, tenDayDu } from "./khop-phuong.ts";
 
@@ -272,6 +272,9 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
       if (mo) { viTri = mo.viTri; kdDung = mo.cum; }
     }
     if (viTri < 0) { bo.push({ ...d, ly_do: "trich_dan_khong_co_trong_tin" }); continue; }
+    // 30/09/2026 (bắn thật lx-ban-a): "hẻm 45 Nguyễn Trãi" → AI ghi độ rộng hẻm 45m, bản nháp in "Đường vào: 45m".
+    // 45 là SỐ HẺM (số nhà), không phải bề rộng — số có trong câu nên kiểm số lọt.
+    if (d.khoa === "do_rong_hem" && laSoHemKhongPhaiDoRong(tin, d.gia_tri)) { bo.push({ ...d, ly_do: "so_hem_khong_phai_do_rong" }); continue; }
     // 27/09/2026: "Hxm" → AI "hẻm xe hơi" — loại đường vào ngược chữ khách nói rõ.
     if ((d.khoa === "do_rong_hem" || d.khoa === "do_rong_duong")) {
       const lt = loaiDuongNoiRo(kdDung ?? kdCum), la = loaiDuongNoiRo(chuanSo(d.gia_tri));
@@ -282,6 +285,23 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
     else dat.push(kdDung ? { ...d, trich_dan_sua: kdDung } : d);
   }
   return { dat, bo };
+}
+
+/**
+ * "hẻm 45 Nguyễn Trãi", "hẻm 12/3 Trần Phú", "hem 45 nguyen trai": con số ngay sau "hẻm" mà KHÔNG kèm đơn vị mét là
+ * số hẻm khi nó có "/", hoặc ≥ 10, hoặc đứng trước một tên viết hoa (tên đường). "hẻm 4 xe hơi", "hẻm 6m", "hẻm 3.5"
+ * vẫn là bề rộng. Chỉ bắt khi số trong giá trị AI đưa trùng đúng con số đó.
+ */
+export function laSoHemKhongPhaiDoRong(tin: string, giaTri: string): boolean {
+  const n = Number(chuanSo(giaTri).match(/\d+(?:\.\d+)?/)?.[0]);
+  if (!Number.isFinite(n)) return false;
+  for (const m of tin.matchAll(/(?:^|[^\p{L}])(?:hẻm|hem|hẽm|hxh|hxm)\s+(\d+)((?:\/\d+)*)(?![\d.,])\s*(\S*)/giu)) {
+    if (Number(m[1]) !== n) continue;
+    const sau = m[3] ?? "";
+    if (/^(?:m\b|m\d|mét|met\b|m,|m\.)/i.test(sau) || /^m$/i.test(sau)) continue;
+    if (m[2] || n >= 10 || /^\p{Lu}/u.test(sau)) return true;
+  }
+  return false;
 }
 
 /** Khoảng cách Levenshtein có trần: vượt `toiDa` thì trả toiDa + 1 sớm. */
@@ -593,8 +613,12 @@ export function chonViTri(luat: string | null | undefined, ai: string | null | u
     const m = /(?:^|\s)(?:so\s*)?(\d{1,4}[a-ln-z]?(?:\/\d{1,4}[a-z]?)*)\s*$/.exec(truoc);
     if (!m) continue;
     // "hẻm 4 Trần…" (số nhỏ ≤ 12 ngay sau chữ hẻm, không có "/") mập mờ giữa hẻm số 4 và hẻm rộng 4 → tin AI.
-    if (/\bhem\s*(?:rong\s*)?$/.test(truoc.slice(0, m.index + (m[0].length - m[1].length))) && !m[1].includes("/") && Number(m[1]) <= 12) continue;
-    return `${m[1]} ${a}`;
+    // Cắt tới ĐẦU con số (bản cũ cộng cả khoảng trắng phía sau nên cắt lẹm vào số, luật "hẻm 4 …" không bao giờ chạy).
+    const truocSo = truoc.slice(0, m.index + m[0].indexOf(m[1]));
+    if (/\bhem\s*(?:rong\s*)?$/.test(truocSo) && !m[1].includes("/") && Number(m[1]) <= 12) continue;
+    // 30/09/2026 (bắn thật lx-ban-a): "hẻm 45 Nguyễn Trãi" ghép thành "45 Nguyễn Trãi" — mất chữ hẻm, bản nháp đọc như
+    // nhà mặt tiền số 45. Số đứng sau "hẻm" thì giữ chữ hẻm.
+    return /\bhem\s*$/.test(truocSo) ? `hẻm ${m[1]} ${a}` : `${m[1]} ${a}`;
   }
   return a;
 }
@@ -766,6 +790,7 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   const bo: Bo[] = [];
   const them = (question: string, answer: string | null, khoa: string) => {
     if (!answer || daCo.has(question)) return;
+    answer = gonGiaTriFact(question, answer); // 30/09: "sổ hồng rồi em", "phí quản lý 15k/m2" — cùng cách gọn với luật
     daCo.add(question);
     ghi.push({ question, answer, khoa });
   };

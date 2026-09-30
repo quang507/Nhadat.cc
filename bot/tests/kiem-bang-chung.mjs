@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { chonDeGhi, chonViTri, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -360,6 +360,22 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("MATTIEN-02 AI giữ 'mặt tiền đường 5m' → nhận", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "mặt tiền đường 5m", trich_dan: "mặt tiền đường 5m" }, "mặt tiền đường 5m e").giaTri === "mặt tiền đường 5m");
   ok("MATTIEN-03 'cách mặt tiền 30m' không phải nhà mặt tiền → AI '5 mét' vẫn nhận", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "5 mét", trich_dan: "5m" }, "đường 5m, cách mặt tiền 30m").giaTri === "5 mét");
   ok("HXM-04 đề xuất trường độ rộng hẻm 'hẻm xe hơi' trích 'hxm' → bỏ", !r.dat.length && r.bo[0]?.ly_do === "loai_duong_nguoc_chu_khach", JSON.stringify(r));
+}
+
+// ── 30/09/2026 (bắn thật lx-ban-a): "hẻm 45 Nguyễn Trãi" → AI độ rộng hẻm 45m, bản nháp "Đường vào: 45m" ──
+{
+  bo("HEMSO-01 'hẻm 45 Nguyễn Trãi' → độ rộng hẻm 45m", "hẻm 45 Nguyễn Trãi phường 2 quận 5", "do_rong_hem", "45m", "hẻm 45", "so_hem_khong_phai_do_rong");
+  bo("HEMSO-02 'hem 45 nguyen trai' không dấu", "hem 45 nguyen trai p2 q5", "do_rong_hem", "45", "hem 45", "so_hem_khong_phai_do_rong");
+  bo("HEMSO-03 'hẻm 12/3 Trần Phú' → 12m", "nhà hẻm 12/3 Trần Phú", "do_rong_hem", "12m", "hẻm 12/3", "so_hem_khong_phai_do_rong");
+  bo("HEMSO-04 'hẻm 5 Nguyễn Trãi' (số nhỏ + tên đường viết hoa)", "hẻm 5 Nguyễn Trãi quận 5", "do_rong_hem", "5m", "hẻm 5", "so_hem_khong_phai_do_rong");
+  dat("HEMSO-05 'hẻm 6m 12 Trần Hưng Đạo' → 6m vẫn đạt", "hẻm 6m 12 Trần Hưng Đạo", "do_rong_hem", "6m", "hẻm 6m");
+  dat("HEMSO-06 'hẻm 4 xe hơi' → 4m vẫn đạt", "nhà hẻm 4 xe hơi vào tận nơi", "do_rong_hem", "4m", "hẻm 4");
+  dat("HEMSO-07 'hẻm 10m Lê Lợi' → 10m vẫn đạt", "hẻm 10m Lê Lợi", "do_rong_hem", "10m", "hẻm 10m");
+  ok("HEMSO-08 laSoHemKhongPhaiDoRong('hẻm 3.5 mét', '3.5') = false", laSoHemKhongPhaiDoRong("hẻm 3.5 mét", "3.5") === false);
+  ok("HEMSO-09 chonViTri: luật 'hẻm 45 Nguyễn Trãi quận 5' + AI 'Nguyễn Trãi' → 'hẻm 45 Nguyễn Trãi' (giữ chữ hẻm)",
+    chonViTri("hẻm 45 Nguyễn Trãi quận 5", "Nguyễn Trãi") === "hẻm 45 Nguyễn Trãi", chonViTri("hẻm 45 Nguyễn Trãi quận 5", "Nguyễn Trãi"));
+  ok("HEMSO-10 chonViTri: 'hẻm 4 Trần Phú' (mập mờ số hẻm / bề rộng) → tin AI 'Trần Phú'",
+    chonViTri("hẻm 4 Trần Phú", "Trần Phú") === "Trần Phú", chonViTri("hẻm 4 Trần Phú", "Trần Phú"));
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
