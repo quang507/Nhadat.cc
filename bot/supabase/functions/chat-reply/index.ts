@@ -580,6 +580,22 @@ function tenDuAnTrongCau(t: string): string | null {
   return ten.length >= 3 && tu.length <= 6 ? ten : null;
 }
 
+// 30/09/2026 (bắn thật "bán căn hộ sunrize city 2pn 70m2 giá 3 tỷ", AI im): tên không đứng sau "dự án" nên
+// `tenDuAnTrongCau` ra null và tìm theo nghĩa không có gì để tìm. Tên sau "căn hộ / chung cư" — CHỈ làm đầu vào tìm theo
+// nghĩa (máy xác nhận lọc tiếp), KHÔNG ghi thành fact tên dự án ("căn hộ chính chủ" không phải dự án "chính chủ").
+const DEM_SAU_CAN_HO = new Set([
+  "chinh", "can", "ban", "gia", "tang", "lau", "view", "goc", "full", "noi", "moi", "dep", "cao", "cap", "quan", "phuong",
+  "tai", "o", "gan", "duong", "mat", "hem", "so", "nha", "dang", "cho", "thue", "khu", "vuc", "toa", "block", "thap", "mini",
+  "dich", "vu", "trung", "tam", "ngay", "sat", "ben", "rong", "duplex", "penthouse", "studio", "officetel", "shophouse",
+  "chung", "cu", "ho", "cc",
+]);
+function tenSauCanHo(t: string): string | null {
+  const m = /(?:căn hộ|can ho|chung cư|chung cu)\s+([\p{L}\p{N}'’.\- ]{3,45})/iu.exec(t);
+  const ten = m ? tenDuAnTrongCau(`dự án ${m[1]}`) : null;
+  const dau = boDau(ten?.split(/\s+/)[0] ?? "");
+  return ten && dau && !/^(?:\d|q\d)/.test(dau) && !DEM_SAU_CAN_HO.has(dau) ? ten : null;
+}
+
 // ─── 30/09/2026 (chủ dự án: "2 hàm tìm theo nghĩa cho địa danh và dự án đang nằm không trong DB … làm đi") ───
 // Tên DỰ ÁN / tên ĐƯỜNG khách gõ sai mà khớp chữ (`match_projects`, `tim_duong` lệch ≤ 2 ký tự) không ra → tìm theo NGHĨA
 // (vector, `tim_du_an_theo_nghia` / `tim_dia_danh_theo_nghia`, 20260930a), rồi MÁY xác nhận tên còn gần chữ khách gõ và ra
@@ -4815,7 +4831,7 @@ Deno.serve(async (req) => {
             type DaKho = { id: string; name?: string; district?: string | null; ward?: string | null };
             let da: DaKho | null = ((dsDA ?? []) as DaKho[])[0] ?? null;
             // 30/09/2026: tên dự án gõ sai → tìm theo nghĩa, máy xác nhận tên (AI đọc tên dự án thì lấy tên AI đọc).
-            if (!da) da = await timDuAnTheoNghia(client, aiChinh?.ghi.find((g) => g.question === "du_an_ten")?.answer ?? tenDuAnTrongCau(dapAn));
+            if (!da) da = await timDuAnTheoNghia(client, aiChinh?.ghi.find((g) => g.question === "du_an_ten")?.answer ?? tenDuAnTrongCau(dapAn) ?? tenSauCanHo(dapAn));
             if (da && !duAnLaTenDuong(da.name, dapAn)) {
               const { data: cu } = await client.from("listings").select("district, ward, boc_tach").eq("id", pendingReq.listing_id).maybeSingle();
               const macDinh = !cu?.district || (cu?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
@@ -5335,7 +5351,7 @@ Deno.serve(async (req) => {
       let duAn: { id: string; name?: string; district?: string | null; ward?: string | null } | null =
         duAnKhop && !duAnLaTenDuong(duAnKhop.name, text) ? duAnKhop : null;
       // 30/09/2026: tên dự án gõ sai ("vinhome gran park") khớp chữ không ra → tìm theo nghĩa, máy xác nhận tên.
-      if (!duAn) duAn = await timDuAnTheoNghia(client, aiRao?.duAn ?? tenDuAnTrongCau(text));
+      if (!duAn) duAn = await timDuAnTheoNghia(client, aiRao?.duAn ?? tenDuAnTrongCau(text) ?? tenSauCanHo(text));
       // Phường tên chữ ("phường Hiệp Bình Chánh") khi câu không có phường số (14/09).
       let phuongRao = aiRao?.phuong ?? (wardNo ? `Phường ${wardNo}` : phuongTenCauRao(text));
       // 15/09/2026 (bắn thật B1): câu rao KHÔNG DẤU "phuong hiep binh chanh" — tra bảng
@@ -6354,7 +6370,7 @@ Deno.serve(async (req) => {
   // vẫn trả lời được từ hai dự án đầu.
   // 30/09/2026: khách mua gõ sai tên dự án ("sunrise siti") → khớp chữ không ra thì tìm theo nghĩa, máy xác nhận tên.
   if (!(matchedProj ?? []).length) {
-    const dn = await timDuAnTheoNghia(client, tenDuAnTrongCau(text));
+    const dn = await timDuAnTheoNghia(client, tenDuAnTrongCau(text) ?? tenSauCanHo(text));
     if (dn) {
       const { data: pd, error: pdErr } = await client.from("projects").select("*").eq("id", dn.id).limit(1);
       if (pdErr) await ghiLoi(client, "chat-reply doc du an (mua, theo nghia)", pdErr.message);

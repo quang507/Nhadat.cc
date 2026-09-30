@@ -32,6 +32,11 @@ ok("chonUngVienNghia: hai tên KHÁC nhau cùng gần chữ ('Lê Văn Sỹ', 'L
   chonUngVienNghia("le van si", [{ ten: "Lê Văn Sỹ", do_gan: 0.8 }, { ten: "Lê Văn Sĩ", do_gan: 0.79 }], TU_CHUNG_DUONG) === null);
 ok("chonUngVienNghia: cùng một tên nhiều dòng (nhiều phường) → vẫn là MỘT tên",
   chonUngVienNghia("huyn tan fat", [{ ten: "Huỳnh Tấn Phát", do_gan: 0.8 }, { ten: "Huỳnh Tấn Phát", do_gan: 0.78 }], TU_CHUNG_DUONG)?.ten === "Huỳnh Tấn Phát");
+ok("chonUngVienNghia: 'Sunrize City' → Sunrise City dù 'Khu Căn Hộ Sunrise' cùng lõi khi bỏ từ chung (bắn thật 30/09)",
+  chonUngVienNghia("Sunrize City", [{ ten: "Sunrise City", do_gan: 0.73 }, { ten: "Khu Đô Thị Sinh Thái Sunrise River", do_gan: 0.701 },
+    { ten: "Khu Căn Hộ Sunrise", do_gan: 0.697 }, { ten: "Sunrise Riverside", do_gan: 0.694 }], TU_CHUNG_DU_AN)?.ten === "Sunrise City");
+ok("chonUngVienNghia: 'sunrise' trơn, hai tên cùng lõi và tên đầy đủ đều xa → null (không đoán)",
+  chonUngVienNghia("sunrise", [{ ten: "Sunrise City", do_gan: 0.73 }, { ten: "Khu Căn Hộ Sunrise", do_gan: 0.72 }], TU_CHUNG_DU_AN) === null);
 
 console.log(hong ? `\nKHỚP TÊN THEO NGHĨA: ${hong} CA HỎNG` : `\nKHỚP TÊN THEO NGHĨA: ${dat}/${dat} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
