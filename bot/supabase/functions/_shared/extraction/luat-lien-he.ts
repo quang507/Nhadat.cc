@@ -72,6 +72,16 @@ export function thayLienHeCoId(s: string, nhan: string): string {
   return s.replace(new RegExp(`(?:${SDT_NGUON})|(?:${MANG_XA_HOI_CO_ID_NGUON})`, "gi"), nhan);
 }
 
+/**
+ * 30/09/2026 (bắn thật lx-ban-b): môi giới rao "… giá 9.2 tỷ TL, hh 1%" — câu rao gốc thành `description`, web in nguyên
+ * "hh 1%" lên trang tin công khai và bot đưa nó vào "chủ tả" cho khách mua. Hoa hồng là chuyện giữa bên bán và môi giới,
+ * khách mua không trả phí (DH-01) — không in ra. Bỏ cả dấu phẩy đứng trước để câu không còn ", ," lửng.
+ */
+export function boHoaHong(s: string): string {
+  return s.replace(/[\s,;.]*(?<![\p{L}\d])(?:hh|hoa hồng|hoa hong|huê hồng|hue hong|phí môi giới|phi moi gioi|hh mg)\s*:?\s*\d+(?:[.,]\d+)?\s*%(?:\s*(?:cho\s+)?(?:sale|mg|môi giới|moi gioi|bên mua|ben mua))?/giu, "")
+    .replace(/^[\s,;.]+/, "");
+}
+
 /** Câu có chứa SĐT không — dựng RegExp mới nên gọi bao nhiêu lần cũng đúng. */
 export function coSdt(s: string): boolean {
   return new RegExp(SDT_NGUON).test(s);

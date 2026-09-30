@@ -112,13 +112,22 @@ const so = (x: number | string): string => String(Number(x));
 
 /** Bỏ mảnh trùng ("…, quận 5, Phường 2, Quận 5") và dấu phẩy kép. */
 export function diaChiGon(...manh: Array<string | null | undefined>): string {
+  // 30/09/2026 (bắn thật lx-ban-f): hỏi địa chỉ, khách "o q10" → location_raw "o q10", bản nháp "📍 O q10, Quận 10". Mảnh
+  // nào chuẩn hoá xong (bỏ "ở/tại", q→quận, p→phường) trùng một mảnh ĐỨNG SAU (ô phường / quận viết chuẩn) thì bỏ mảnh đó.
+  const chuan = (x: string) => boDau(x).replace(/^(?:o|tai|thuoc)\s+(?=(?:q|quan|p|phuong|huyen|xa|tp)\b|[qp]\.?\s*\d)/, "")
+    .replace(/\bq\.?\s*(\d{1,2})\b/g, "quan $1").replace(/\bp\.?\s*(\d{1,2})\b/g, "phuong $1").replace(/\s+/g, " ").trim();
+  const tat = manh.map((m) => (m ?? "").split(",").map((p) => p.trim()).filter(Boolean));
   const ra: string[] = [];
-  for (const m of manh) {
-    for (const p of (m ?? "").split(",")) {
-      const s = p.trim();
-      if (s && !ra.some((x) => boDau(x) === boDau(s))) ra.push(s);
+  tat.forEach((ds, i) => {
+    const sau = new Set(tat.slice(i + 1).flat().map(chuan));
+    for (const s of ds) {
+      if (sau.has(chuan(s))) continue;
+      // "p5 q10": mảnh CHỈ gồm các đơn vị hành chính, đơn vị nào cũng đã có ở ô sau → bỏ.
+      const dv = chuan(s).match(/(?:quan|phuong) \d{1,2}/g);
+      if (dv && chuan(s).replace(/(?:quan|phuong) \d{1,2}/g, "").trim() === "" && dv.every((d) => sau.has(d))) continue;
+      if (!ra.some((x) => boDau(x) === boDau(s))) ra.push(s);
     }
-  }
+  });
   return ra.join(", ");
 }
 
