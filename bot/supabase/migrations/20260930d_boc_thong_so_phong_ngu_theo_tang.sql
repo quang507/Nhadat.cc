@@ -28,7 +28,7 @@ begin
   -- 20260930d (bắn thử vector 30/09): "nhà có 1 phòng ngủ ngay tầng trệt cho người già" (fact thông tin bổ sung) từng điền
   -- số phòng ngủ = 1 vào ô trống — phòng ngủ Ở ĐÂU, không phải TỔNG số. Bỏ cụm đó trước khi đọc phòng ngủ / kết cấu (cùng
   -- luật soPhongNguTheoTang ở khop-cau-tra-loi.ts: có chữ chỉ chỗ, hoặc "trệt"; "2pn tầng 12" của căn hộ vẫn đọc).
-  k := regexp_replace(k, '\m(\d{1,2}|mot|hai|ba|bon|nam)\s*(?:phong ngu|pn)\s+(?:(?:(?:o|ngay|nam|duoi|tren|tai)\s+){1,2}(?:tang|tret|lau)|(?:tang\s+)?tret)\M', ' ', 'g');
+  k := regexp_replace(k, '\m(\d{1,2}|mot|hai|ba|bon|nam)\s*(?:phong ngu|pn)\s+(?:(?:(?:o|ngay|nam|duoi|tren|tai)\s+){1,2}(?:tang\s+tret|(?:tang|lau)\s+\d{1,2}|tang|tret|lau)|(?:tang\s+)?tret)\M', ' ', 'g');
   k := replace(k, 'm²', 'm2');
   k := regexp_replace(k, '(\d)\s*m ?2\M', '\1m2', 'g');
   k := replace(k, 'm2', 'mv');
