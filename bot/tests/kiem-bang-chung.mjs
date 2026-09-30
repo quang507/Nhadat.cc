@@ -171,6 +171,16 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("ghi: quận / đường / mã căn không có chỗ ghi fact → bỏ khoa_khong_co_cho_ghi", r4.ghi.length === 0 && r4.bo.every((b) => b.ly_do === "khoa_khong_co_cho_ghi") && r4.bo.length === 3, JSON.stringify(r4));
   const r5 = chon([dx("so_tang", "4", "trệt 3 lầu"), dx("ket_cau", "trệt 3 lầu", "trệt 3 lầu")], { floors: null });
   ok("ghi: hai khoá cùng đổ về ket_cau → ghi một, cái sau fact_da_co", r5.ghi.length === 1 && lyDo(r5, "ket_cau") === "fact_da_co", JSON.stringify(r5));
+  // 30/09/2026 (bắn thử bán lx-ban-292b): "phí quản lý 15k/m2" → AI "15 nghìn" mất đơn vị.
+  const rPql = chon([dx("phi_quan_ly", "15 nghìn", "phí quản lý 15k/m2")], {});
+  ok("ghi: phí quản lý AI '15 nghìn' mà chữ khách '15k/m2' → giữ '15k/m2'", rPql.ghi.map((g) => `${g.question}=${g.answer}`).join() === "phi_quan_ly=15k/m2", JSON.stringify(rPql));
+  const rPql2 = chon([dx("phi_quan_ly", "15k/m2", "phí quản lý 15k/m2")], {});
+  ok("ghi: phí quản lý AI đã có đơn vị → giữ nguyên", rPql2.ghi.map((g) => g.answer).join() === "15k/m2", JSON.stringify(rPql2));
+  const rPql3 = chon([dx("phi_quan_ly", "500 nghìn/tháng", "phí quản lý 500k một tháng")], {});
+  ok("ghi: phí quản lý không có /m2 trong chữ khách → giá trị AI", rPql3.ghi.map((g) => g.answer).join() === "500 nghìn/tháng", JSON.stringify(rPql3));
+  ok("kiemTraLoiCau: '15 nghìn' trích 'phí quản lý 15k/m2' → '15 nghìn/m2'", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "15 nghìn", trich_dan: "phí quản lý 15k/m2" }, "sổ hồng rồi em, phí quản lý 15k/m2")?.giaTri === "15 nghìn/m2");
+  ok("kiemTraLoiCau: '15k/m2' đã có đơn vị → giữ", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "15k/m2", trich_dan: "phí quản lý 15k/m2" }, "phí quản lý 15k/m2")?.giaTri === "15k/m2");
+  ok("kiemTraLoiCau: '68m2' không bị gắn thêm", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "68m2", trich_dan: "68m2" }, "căn 68m2")?.giaTri === "68m2");
   const r6 = chon([dx("huong", "Tây", "hướng Tây", 2)], { direction: null });
   ok("ghi: trường căn thứ 2 → không ghi vào tin căn 1", r6.ghi.length === 0 && r6.bo.length === 0, JSON.stringify(r6));
   const r7 = chon([dx("gia", "32 tỷ", "giá 32 tỷ")], { price_vnd: null, deal: "cho_thue" });

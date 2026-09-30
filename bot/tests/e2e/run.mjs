@@ -2419,6 +2419,29 @@ fresh(seedKho);
     check("FR248-E4 đang hỏi nội thất, 'phí quản lý 15k/m2' (AI im) → ghi ô phí quản lý = '15k/m2'", fP.length === 1 && fP[0].answer === "15k/m2", JSON.stringify(fP));
     globalThis.__cauHinh = cuCH;
   }
+  // (e) 30/09/2026 (bắn thử bán lx-ban-292b): đang hỏi phí quản lý, "sổ hồng rồi em, phí quản lý 15k/m2" — AI chỉ trả phí "15 nghìn",
+  // im về pháp lý → pháp lý mất (bot hỏi lại "đã ra sổ hồng chưa"), phí mất "/m2".
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "pql-2", text: "bán căn hộ Sunrise City quận 7 76m2 2pn tầng 12 giá 5 tỷ 2" });
+    const LP = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LP.id, question: "phi_quan_ly", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? {
+      so_can: 0, kien_thuc: [],
+      truong: [{ khoa: "phi_quan_ly", gia_tri: "15 nghìn", trich_dan: "phí quản lý 15k/m2", can: null }],
+      tra_loi: { co_tra_loi: true, gia_tri: "15 nghìn", trich_dan: "phí quản lý 15k/m2" },
+    } : OUT();
+    await send({ external_user_id: "pql-2", text: "sổ hồng rồi em, phí quản lý 15k/m2" });
+    const fP = (q) => db().t.listing_facts.filter((f) => f.listing_id === LP.id && f.question === q).map((f) => f.answer);
+    check("SOHONG-01 AI chỉ trả phí '15 nghìn', im pháp lý → phí giữ '/m2' + pháp lý 'sổ hồng' (không tự thêm 'riêng')",
+      fP("phi_quan_ly").some((a) => /^15.*\/m2$/.test(a)) && fP("phap_ly").includes("sổ hồng") && !fP("phap_ly").some((a) => /riêng/.test(a)),
+      JSON.stringify({ pql: fP("phi_quan_ly"), pl: fP("phap_ly"), ir: db().t.info_requests.filter((x) => x.listing_id === LP.id).map((x) => [x.question, x.status]) }));
+    globalThis.__cauHinh = cuCH;
+  }
   // FR-250 (30/09/2026, bắn thật v277 — AI bóc tách chết vì Gemini 503, luật phải tự đứng).
   // (a) "em cần bán nhà" mở tin rỗng loại nhà; câu rao "căn hộ bên thảo điền quận 2 cũ…" → `khacLoai` coi là căn khác, mở tin THỨ HAI;
   // phường không ra vì không có chữ "phường" (`phuongTenCauRao`). Nay: điền vào tin rỗng, Thảo Điền (cũ) → Phường An Khánh.
@@ -3197,6 +3220,27 @@ fresh(seedKho);
 }
 
 // ── 21/09/2026 (bắn thật mau-tdt): bản nháp và câu duyệt — không nuốt câu hỏi ngược, gật ở vế đầu vẫn là gật ──
+// 30/09/2026 (bắn thử bán lx-ban-292a): chờ duyệt nháp, "chính chủ đứng tên, không thế chấp" → ghi HAI ý; lời không đổi bản nháp
+// thì không gửi lại nháp kèm "Em sửa lại rồi".
+{
+  const tin = () => db().t.listings.at(-1);
+  const fq = (q) => db().t.listing_facts.filter((f) => f.listing_id === tin().id && f.question === q).map((f) => f.answer);
+  fresh();
+  await send({ external_user_id: "nhap-s", text: "bán nhà hẻm 6m Trần Bình Trọng phường 2 quận 5, 4x15, trệt 2 lầu, 3 phòng ngủ, giá 9 tỷ 5" });
+  tin().alley_width_m = 6; tin().area_m2 = 60; tin().frontage_m = 4;
+  coSanPhapLy(tin().id);
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tin().id, question: "phap_ly", status: "pending" });
+  await send({ external_user_id: "nhap-s", text: "sổ hồng riêng, hoàn công đủ" });
+  let rp = await send({ external_user_id: "nhap-s", text: "chính chủ đứng tên, không thế chấp" });
+  check("NHAP-S1 chờ duyệt, 'chính chủ đứng tên, không thế chấp' → ô đứng tên 'chính chủ đứng tên' + ô thế chấp 'không thế chấp'",
+    fq("nguoi_dung_ten").includes("chính chủ đứng tên") && fq("the_chap").includes("không thế chấp"),
+    JSON.stringify({ facts: db().t.listing_facts.filter((f) => f.listing_id === tin().id).map((f) => [f.question, f.answer]), rep: rp.body.replies }));
+  rp = await send({ external_user_id: "nhap-s", text: "ba anh đứng tên" });
+  check("NHAP-S2 lời không đổi dòng nào của bản nháp → 'Dạ em ghi thêm rồi', KHÔNG gửi lại nháp / 'Em sửa lại rồi'",
+    rp.body.replies.some((r) => /ghi thêm rồi/.test(r)) && !rp.body.replies.some((r) => /Em đăng tin như vầy|Em sửa lại rồi/.test(r)),
+    JSON.stringify(rp.body.replies));
+}
 {
   const tin = () => db().t.listings.at(-1);
   const pendQ = () => db().t.info_requests.filter((x) => x.status === "pending").map((x) => x.question);

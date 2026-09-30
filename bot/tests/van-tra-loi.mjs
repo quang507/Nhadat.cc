@@ -1103,6 +1103,15 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
   ok("boLapCum chữ đơn lặp 'từ từ' giữ", boLapCum(["từ từ ạ"])[0] === "từ từ ạ");
   ok("giongCauHoi hai cách hỏi hẻm/mặt tiền", giongCauHoi("Mình thích hẻm xe hơi hay mặt tiền hơn ạ?", "Mình muốn hẻm xe hơi hay mặt tiền hơn vậy ạ?"));
   ok("giongCauHoi khác ý", !giongCauHoi("Mình thích hẻm xe hơi hay mặt tiền hơn ạ?", "Mình cần mấy phòng ngủ ạ?"));
+  ok("bocViTriRao: 'tầng 15 dự án Sunrise City quận 7' không phải số nhà", bocViTriRao("cần bán căn hộ 2pn 68m2 tầng 15 dự án Sunrise City quận 7, full nội thất, giá 4 tỷ 3") === null);
+  ok("bocViTriRao: '7 Hồng Bàng phường 12' vẫn là số nhà", bocViTriRao("bán nhà 7 Hồng Bàng phường 12 q5 giá 5 tỷ") === "7 Hồng Bàng");
+  ok("boMenhDeKhenSai: 'có hồ bơi' chủ nhà không nói → bỏ vế, giữ phần còn lại",
+    JSON.stringify(boMenhDeKhenSai(["Sunrise City có hồ bơi chân mây rộng, căn full nội thất thì khách xem nhà sẽ rất ưng ạ. Ban công căn mình quay hướng nào vậy?"], "căn hộ Sunrise City quận 7, full nội thất"))
+      === JSON.stringify(["Căn full nội thất thì khách xem nhà sẽ rất ưng ạ. Ban công căn mình quay hướng nào vậy?"]));
+  ok("boMenhDeKhenSai: chủ nói 'có hồ bơi' → giữ", boMenhDeKhenSai(["Dự án có hồ bơi thì khách thích lắm."], "căn hộ có hồ bơi, gym")[0] === "Dự án có hồ bơi thì khách thích lắm.");
+  ok("boMenhDeKhenSai: cắt vế khen sai vẫn giữ dấu chấm, không dính câu sau",
+    JSON.stringify(boMenhDeKhenSai(["Cảm ơn mình đã chia sẻ, hẻm 5m ô tô vào tận nhà là khách thích lắm. Mình muốn bán gấp hay chờ giá ổn hơn ạ?"], "bán nhà hẻm 5m Lê Hồng Phong"))
+      === JSON.stringify(["Cảm ơn mình đã chia sẻ. Mình muốn bán gấp hay chờ giá ổn hơn ạ?"]));
   ok("boCauHuaLoc bỏ 'em sẽ lọc thêm… chờ em một tí'", JSON.stringify(boCauHuaLoc(["Dạ vậy em sẽ lọc thêm mấy căn nữa cho mình ạ, chờ em một tí."])) === "[]");
   ok("boCauHuaLoc giữ câu hỏi 'mình muốn em lọc thêm không ạ?'", JSON.stringify(boCauHuaLoc(["Dạ ok. Mình muốn em lọc thêm căn hẻm xe hơi không ạ?"])) === JSON.stringify(["Dạ ok. Mình muốn em lọc thêm căn hẻm xe hơi không ạ?"]));
   ok("boCauHuaLoc giữ câu có căn thật", JSON.stringify(boCauHuaLoc(["Dạ căn Trần Hưng Đạo 5,8 tỷ hợp mình nè."])) === JSON.stringify(["Dạ căn Trần Hưng Đạo 5,8 tỷ hợp mình nè."]));

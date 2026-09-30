@@ -567,6 +567,15 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
         answer = `${cap} ${hoaDau(ten)}`;
         break;
       }
+      case "phi_quan_ly": {
+        // 30/09/2026 (bắn thử bán lx-ban-292b): "phí quản lý 15k/m2" → AI "15 nghìn" — mất "/m2", phí cả căn khác hẳn phí mỗi m².
+        // Chữ khách có đơn vị mà giá trị AI không có → giữ đúng cụm khách nói.
+        const coDv = (x: string) => /\/\s*(?:m2|m²|m\b|thang|tháng)|\bm2\b|m²/iu.test(x);
+        const cum = d.trich_dan.replace(/^.*?(?:phí|phi)\s*(?:quản lý|quan ly|ql)\s*(?:là|la|:)?\s*/iu, "").trim();
+        answer = coDv(d.trich_dan) && !coDv(v) && cum.length >= 2 && cum.length <= 60 ? cum : v;
+        if (answer.length < 1 || answer.length > 120) { bo.push({ ...d, ly_do: "gia_tri_ngoai_khoang" }); continue; }
+        break;
+      }
       case "gap": case "thuong_luong": {
         // Ghi CỤM khách nói (như luật tiền định), trigger DB đọc có/không từ đó.
         answer = d.trich_dan.trim();
@@ -682,6 +691,10 @@ export function kiemTraLoiCau(tl: TraLoiCau | null | undefined, tin: string): { 
   const loaiTin = loaiDuongNoiRo(kdTin);
   const loaiAi = loaiDuongNoiRo(gon(v));
   if (loaiTin && loaiTin !== loaiAi && (loaiAi || loaiTin === "mat_tien")) return { co: true, giaTri: null };
+  // 30/09/2026 (bắn thử bán lx-ban-292b): hỏi phí quản lý, "phí quản lý 15k/m2" → AI "15 nghìn" — mất "/m2". Cụm trích có
+  // đơn vị "/m2 · /tháng · /năm" mà giá trị AI không có → gắn lại đúng đơn vị khách nói.
+  const dv = /\/\s*(m2|m²|tháng|thang|năm|nam)(?![\p{L}\d])/iu.exec(tl.trich_dan ?? "")?.[1];
+  if (dv && /\d/.test(v) && !/\/\s*[\p{L}\d]/u.test(v) && !/(?:m2|m²)(?![\p{L}\d])/iu.test(v)) return { co: true, giaTri: `${v}/${dv}` };
   return { co: true, giaTri: v };
 }
 /** Loại đường vào nói RÕ trong chuỗi đã chuẩn hoá: "may" / "hoi" / "tai"; không rõ hoặc nhiều loại → null. */
