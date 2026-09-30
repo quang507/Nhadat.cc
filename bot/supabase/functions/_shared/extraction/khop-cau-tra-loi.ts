@@ -483,8 +483,12 @@ export function bocViTriRao(text: string): string | null {
   // ("p4"), "p12" trượt ở ranh từ sau chữ số đầu → địa chỉ trần trước phường 10–19 không bao giờ được nhận.
   // 30/09/2026 (chat thử): "bán nhà 20 hồ biểu chánh phú nhuận 4x16…" — tên QUẬN chữ đứng trần (không chữ "quận") ngay
   // sau tên đường cũng là mốc dừng; bản trước chỉ nhận "phường / quận / p12 / q5" nên cả địa chỉ rơi.
-  const so = /(?:^|[\s,])(\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+(?:[\p{L}]+\s?){1,4}?)(?=[\s,]*(?:p\.?\s*\d{1,2}|phường|phuong|quận|quan|q\.?\s*\d{1,2}|phú nhuận|phu nhuan|tân bình|tan binh|bình thạnh|binh thanh|gò vấp|go vap|tân phú|tan phu|bình tân|binh tan|thủ đức|thu duc|nhà bè|nha be|bình chánh|binh chanh|hóc môn|hoc mon|củ chi|cu chi|cần giờ|can gio)(?![\p{L}]))/iu
-    .exec(t)?.[1]?.trim() ?? null;
+  const soM = /(?:^|[\s,])(\d{1,5}[a-zA-Z]?(?:\/\d{1,5}[a-zA-Z]?)*\s+(?:[\p{L}]+\s?){1,4}?)(?=[\s,]*(?:p\.?\s*\d{1,2}|phường|phuong|quận|quan|q\.?\s*\d{1,2}|phú nhuận|phu nhuan|tân bình|tan binh|bình thạnh|binh thanh|gò vấp|go vap|tân phú|tan phu|bình tân|binh tan|thủ đức|thu duc|nhà bè|nha be|bình chánh|binh chanh|hóc môn|hoc mon|củ chi|cu chi|cần giờ|can gio)(?![\p{L}]))/iu
+    .exec(t);
+  // 30/09/2026 (bắn thử bán lx-ban-292b): "căn hộ 2pn 68m2 tầng 15 dự án Sunrise City quận 7" → địa chỉ "15 dự án Sunrise
+  // City": số TẦNG / lô / căn / block đứng trước tên dự án không phải số nhà.
+  if (soM && /\b(?:tang|lau|lo|can|block|blk|thap|toa|phong|so can|ma can)\s*$/.test(boDau(t.slice(Math.max(0, soM.index - 10), soM.index + soM[0].indexOf(soM[1])))) ) return null;
+  const so = soM?.[1]?.trim() ?? null;
   // 23/09/2026 (bắn thật): "căn 2 căn hộ Hà Đô quận 10" → "2 căn hộ Hà Đô" — số thứ tự căn + chữ LOẠI nhà không phải số nhà.
   if (so && /^\d{1,5}[a-zA-Z]?\s+(?:căn|can|nhà|nha|lô|lo|nền|nen|phòng|phong|tầng|tang|lầu|lau|miếng|mieng)(?![\p{L}])/iu.test(so)) return null;
   // "12 tỷ rưỡi gò vấp", "3 triệu gò vấp" — tiền / diện tích đứng trước tên quận không phải số nhà.

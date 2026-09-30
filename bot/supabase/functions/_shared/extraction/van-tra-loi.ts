@@ -674,6 +674,10 @@ const KHEN_CAN_BANG_CHUNG: Array<[RegExp, RegExp]> = [
   // khẳng định. "mặt tiền 4m" / "ngang mặt tiền" là CHIỀU NGANG, không phải vị trí — để yên.
   [/(?<!ngang\s)\bmat tien\b(?!\s*(?:rong\s*|ngang\s*|la\s*|khoang\s*|tam\s*)?\d)|\bmat (?:pho|duong)\b/, /\b(?:mat tien|mat pho|mat duong|mt|mtkd|2mt)\b/],
   [/\b(?:hem|hxh|hxt|hxm)\b/, /\b(?:hem|hxh|hxt|hxm|kiet|ngo|ngach)\b|\d\s*\/\s*\d/],
+  // 30/09/2026 (bắn thử bán lx-ban-292b): "Sunrise City có hồ bơi chân mây rộng" — dữ liệu dự án không có, chủ nhà không nói.
+  // Tiện ích khu / dự án model khẳng định phải có trong chữ chủ nhà.
+  [/\b(?:ho boi|be boi|phong gym|gym|san tennis|san bong|san choi|khu vui choi|cong vien noi khu|cong vien|bbq|sieu thi|trung tam thuong mai|tttm|truong hoc|truong quoc te|benh vien|an ninh 24|bao ve 24)\b/,
+    /\b(?:ho boi|be boi|phong gym|gym|san tennis|san bong|san choi|khu vui choi|cong vien|bbq|sieu thi|trung tam thuong mai|tttm|truong|benh vien|an ninh|bao ve|tien ich)\b/],
 ];
 /**
  * Model nói một SỐ ĐO mà chủ nhà chưa từng gõ (25/09/2026, chủ dự án test Zalo: khách "nở hậu nhé" → bot "Anh nói nở hậu
@@ -742,7 +746,12 @@ export function boMenhDeKhenSai(replies: string[], bangChung: string): string[] 
       const gop = giu.join(", ").trim();
       // Bắn thật lx-24: vế chính bị cắt, còn trơ "Khách chuộng lắm." — mẩu khen không chủ ngữ thì bỏ luôn.
       if (/^(?:khach|nguoi mua)(?:\s+\S+){0,4}$/.test(boDau(gop).replace(/[\s.!…=:;()^]+$/, "").trim()) && KHEN_KD.test(boDau(gop))) return "";
-      return gop ? gop.charAt(0).toUpperCase() + gop.slice(1) : "";
+      if (!gop) return "";
+      // 30/09/2026 (bắn thử bán lx-ban-292a): "Cảm ơn mình đã chia sẻ, hẻm 5m … khách thích lắm." cắt vế sau còn "Cảm ơn mình đã
+      // chia sẻ" không dấu, dính vào câu kế ("… chia sẻ Mình muốn bán gấp…"). Giữ dấu kết của câu gốc.
+      const ketGoc = /[.!?…]+[\s)=:;^D]*$/u.exec(c)?.[0]?.trim().replace(/[^.!?…]/gu, "") || ".";
+      const coKet = /[.!?…]\s*$/u.test(gop) ? gop : gop.replace(/[\s,;:]+$/u, "") + ketGoc;
+      return coKet.charAt(0).toUpperCase() + coKet.slice(1);
     }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
     if (dong) ra.push(dong);
   }

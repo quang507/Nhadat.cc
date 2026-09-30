@@ -3830,12 +3830,22 @@ Deno.serve(async (req) => {
         lai,
         cauTD,
       });
+      // 30/09/2026 (bắn thử bán lx-ban-292a): lời sửa không đổi dòng nào của bản nháp (vd "người đứng tên" không in trong nháp)
+      // → từng gửi lại nguyên bản cũ kèm "Em sửa lại rồi". Thân nháp (trước dòng điểm) y hệt thì chỉ báo đã ghi.
+      // Tin bot lưu có thể gộp nhiều bong bóng (🤖 … rồi 📋 …) — so từ dấu 📋.
+      // Luật xưng hô đổi "anh/chị" → "anh chị" trước khi lưu — so sau khi bỏ "/" và gộp khoảng trắng.
+      const thanNhap = (s: string) => s.slice(Math.max(0, s.indexOf("📋"))).split(/\n(?=Độ đầy đủ)/u)[0].replace(/\s*\/\s*/g, " ").replace(/\s+/g, " ").trim();
+      if (lai && typeof extra.nhap_cu === "string" && thanNhap(extra.nhap_cu) === thanNhap(tin)) {
+        const { nhap_cu: _bo, ...extraGon } = extra;
+        return await traLoiSeller([`Dạ em ghi thêm rồi ạ. Bản nháp ở trên ${cachGoi} thấy được thì nhắn "ok" là em đăng liền ạ.`], { ...extraGon, loai_cau: "ghi_them" });
+      }
       // 23505 = câu duyệt đã mở từ lượt trước (gửi lại bản nháp) — không phải sự cố.
       const { error: irErr } = await client.from("info_requests").insert({
         listing_id: listingId, question: "duyet_tin", status: "pending",
       });
       if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo duyet_tin", irErr.message);
-      return await traLoiSeller([...truoc, tin], { ...extra, ban_nhap: true, diem: d.diem });
+      const { nhap_cu: _nc, ...extraGui } = extra;
+      return await traLoiSeller([...truoc, tin], { ...extraGui, ban_nhap: true, diem: d.diem });
     };
     // Tự kiểm 02/09: chủ nhà đang bị hỏi dở (pendingReq) mà nhắn RAO THÊM CĂN
     // KHÁC → bản cũ ghi cả câu rao làm CÂU TRẢ LỜI cho câu hỏi đang treo, vì
@@ -4080,14 +4090,21 @@ Deno.serve(async (req) => {
           const k = chiSua ? { loai: "lech" as const } : phanLoaiCauTraLoi("duyet_tin", dapAn);
           if (k.loai === "khop" || k.loai === "lech") {
             if (!chiSua) {
-              const nd = k.chuyenSang ?? nhanDienFact(dapAn) ?? { question: "bo_sung", answer: dapAn };
-              const { error: sErr } = await client.rpc("ghi_fact_listing", {
-                p_listing_id: pendingReq.listing_id, p_question: nd.question,
-                p_answer: nd.answer, p_source: "seller_chat",
-              });
-              if (sErr) await ghiLoi(client, "chat-reply ghi_fact_listing(sua nhap)", sErr.message);
+              // 30/09/2026 (bắn thử bán lx-ban-292a): "chính chủ đứng tên, không thế chấp" lúc chờ duyệt → chỉ MỘT fact được
+              // ghi (cả câu vào ô đứng tên), thế chấp mất. Câu có từ hai ý luật nhận ra thì ghi từng ý.
+              const nhieu = nhanDienNhieuFact(dapAn).filter((f) => f.question !== "bo_sung");
+              const ds = nhieu.length >= 2 ? nhieu : [k.chuyenSang ?? nhanDienFact(dapAn) ?? { question: "bo_sung", answer: dapAn }];
+              for (const nd of ds) {
+                const { error: sErr } = await client.rpc("ghi_fact_listing", {
+                  p_listing_id: pendingReq.listing_id, p_question: nd.question,
+                  p_answer: nd.answer, p_source: "seller_chat",
+                });
+                if (sErr) await ghiLoi(client, "chat-reply ghi_fact_listing(sua nhap)", sErr.message);
+              }
             }
-            const lai = await guiBanNhap(pendingReq.listing_id, { reask: "duyet_tin", sua_nhap: true }, true);
+            // Bản nháp vừa gửi (tin bot gần nhất có "📋") — nháp mới y hệt thì không gửi lại kèm "Em sửa lại rồi".
+            const nhapCu = [...lichSuRows].reverse().find((m) => !laTinNguoi(m.sender) && (m.body ?? "").includes("📋"))?.body ?? null;
+            const lai = await guiBanNhap(pendingReq.listing_id, { reask: "duyet_tin", sua_nhap: true, nhap_cu: nhapCu }, true);
             if (!Array.isArray(lai)) return lai;
             kqDuyet = { loai: "lech" }; // điểm tụt dưới 70 sau khi sửa (hiếm) → hỏi lại
           } else {
@@ -4258,6 +4275,12 @@ Deno.serve(async (req) => {
       // lời pháp lý chắc (giữ nguyên chữ khách, KHÔNG đổi thành "sổ hồng riêng" — F2).
       const phapLyChuaSo = (f: { question: string; answer: string }) => f.question === "phap_ly" &&
         /\b(?:chua co so|chua ra so|cho so|cho ra so|dang lam so|hdmb|hop dong mua ban|vi bang|giay tay)\b/.test(boDau(f.answer));
+      // 30/09/2026 (bắn thử bán lx-ban-292b): "sổ hồng rồi em, phí quản lý 15k/m2" khi hỏi phí — AI chỉ trả phí, im về pháp lý;
+      // luật đọc "sổ hồng" bị gạt → bot hỏi lại "đã ra sổ hồng chưa". Có sổ (không phủ định / chưa / chung) là câu pháp lý chắc;
+      // giữ đúng chữ khách ("sổ hồng"), KHÔNG tự thêm "riêng".
+      const phapLyCoSo = (f: { question: string; answer: string }) => f.question === "phap_ly" &&
+        /^\s*(?:(?:co|da co|da ra)\s+)?(?:so hong|so do|so)(?:\s+(?:roi|a|nha|nhe|em|anh|chi))*\s*$/.test(boDau(f.answer)) &&
+        !/\b(?:chua|dang lam|cho|khong|ko|chung)\b/.test(boDau(f.answer));
       // 24/09/2026 (chủ dự án: "sao nó hỏi lại vậy … nếu trường hợp tương tự nó hiểu ko"): "4 tầng, 4 phòng ngủ nhé" khi đang
       // hỏi kết cấu — AI chỉ trả phòng ngủ, im về kết cấu → luật "AI im = lệch" gạt mất "4 tầng", vào bổ sung, bot hỏi lại.
       // Luật đọc CHẮC cho đúng câu đang hỏi (kết cấu dạng chắc, "shr") thì AI im không gạt được — cho mọi khoá có luật chắc.
@@ -4381,7 +4404,7 @@ Deno.serve(async (req) => {
             !KHOA_FACT_AI_BIET.has(f.question) ||
             (!aiChinh!.ghi.some((g) => g.question === f.question) &&
               (aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)) ||
-                KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f) || kichThuocChac(f)))))
+                KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f) || phapLyCoSo(f) || kichThuocChac(f)))))
             .map((f) => phapLyChac(f) ? { question: "phap_ly", answer: "sổ hồng riêng" } : f)]
         : nhanDienNhieuFact(s)
       ).filter((f) => !(oLaNamO(s) && f.question === "tiem_nang"));
