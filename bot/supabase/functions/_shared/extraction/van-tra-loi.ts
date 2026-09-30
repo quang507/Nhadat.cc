@@ -1375,3 +1375,64 @@ function boKhenViTriTho(replies: string[]): string[] {
     return ra;
   }).filter(Boolean);
 }
+
+// ─── 30/09/2026 (bắn thử người mua lx-mua-a1..d1, SRS-5.1h) ────────────────────────────────────────────────────────
+
+/**
+ * Loại nhà khách mua nói → các `listings.property_type` được lọc. Chỉ tín hiệu CHẮC: căn hộ / chung cư, đất, phòng trọ,
+ * biệt thự, nhà phố / nhà hẻm / mặt tiền / nhà cấp 4. "mua nhà" trơn KHÔNG lọc (người Việt gọi căn hộ cũng là "nhà").
+ */
+export function loaiKhoTuHoSo(v: unknown): string[] | null {
+  if (typeof v !== "string" || !v.trim()) return null;
+  const k = boDau(v);
+  if (/\b(?:can ho|chung cu|cc|officetel|penthouse|duplex|studio)\b/.test(k)) return ["chung_cu"];
+  if (/\b(?:phong tro|nha tro|phong cho thue)\b/.test(k)) return ["phong_tro"];
+  if (/\bbiet thu\b/.test(k)) return ["biet_thu"];
+  if (/\b(?:dat nen|lo dat|manh dat|dat tho cu|dat)\b/.test(k) && !/\bnha\b/.test(k)) return ["dat", "dat_nong_nghiep", "dat_kinh_doanh"];
+  if (/\b(?:nha pho|nha hem|nha mat tien|mat tien|nha cap 4|nha cap bon|nha rieng|nha trong hem)\b/.test(k)) return ["nha_pho", "nha_cap4", "biet_thu", "toa_nha"];
+  return null;
+}
+
+/** Loại nhà nói CHẮC trong câu khách (cho hồ sơ tạm lọc kho lượt này), null khi không chắc. */
+export function loaiNhaTrongCau(tKD: string): string | null {
+  if (/\b(?:can ho|chung cu|officetel|penthouse|duplex)\b/.test(tKD)) return "căn hộ";
+  if (/\b(?:phong tro|nha tro)\b/.test(tKD)) return "phòng trọ";
+  if (/\bbiet thu\b/.test(tKD)) return "biệt thự";
+  if (/\b(?:dat nen|lo dat|manh dat|dat tho cu)\b/.test(tKD)) return "đất";
+  return null;
+}
+
+/** "q5" / "quan 5" / "Q.10" → "Quận 5"; "p2" → "Phường 2" (hồ sơ mua lưu từ câu không dấu). Chữ khác giữ nguyên. */
+export function chuanKhuVucMua(s: string): string {
+  return s
+    .replace(/(?<![\p{L}\d])(?:q|quan|quận)\s*\.?\s*(\d{1,2})(?!\d)/giu, (_m, n: string) => `Quận ${Number(n)}`)
+    .replace(/(?<![\p{L}\d])(?:p|phuong|phường)\s*\.?\s*(\d{1,2})(?!\d)/giu, (_m, n: string) => `Phường ${Number(n)}`);
+}
+
+/**
+ * Cụm 2–5 chữ lặp liền nhau do model viết ("căn rẻ nhất là Nguyễn Trãi Nguyễn Trãi P2") → một lần. Chữ đơn lặp
+ * ("từ từ", "dạ dạ") không đụng. Không đụng bong bóng 🤖 / 💾 / 📝 / 📋.
+ */
+export function boLapCum(replies: string[]): string[] {
+  return replies.map((r) => /^\s*(?:🤖|💾|📝|📋)/u.test(r) ? r
+    : r.replace(/(?<![\p{L}])((?:\p{L}+\s+){1,4}\p{L}+)\s+\1(?![\p{L}])/gu, "$1"));
+}
+
+const tuCauHoi = (s: string): Set<string> => new Set(boDau(s).replace(/[^a-z0-9 ]+/g, " ").split(/\s+/)
+  .filter((w) => w.length >= 2 && !["da", "a", "vay", "nhe", "nha", "minh", "anh", "chi", "em", "hon", "thich", "muon", "can"].includes(w)));
+/** Hai câu hỏi cùng ý (≥ 70% chữ chính trùng) — "Mình thích hẻm xe hơi hay mặt tiền hơn ạ?" ≈ "Mình muốn hẻm xe hơi hay mặt tiền hơn vậy ạ?". */
+export function giongCauHoi(a: string, b: string): boolean {
+  const x = tuCauHoi(a), y = tuCauHoi(b);
+  if (x.size < 2 || y.size < 2) return false;
+  let chung = 0;
+  for (const w of x) if (y.has(w)) chung++;
+  return chung / Math.min(x.size, y.size) >= 0.7;
+}
+/** Bỏ câu hỏi trong `replies` trùng ý câu hỏi bot vừa hỏi ở tin trước (`botTruoc`); bong bóng rỗng thì bỏ luôn. */
+export function boCauHoiLap(replies: string[], botTruoc: string | null | undefined): string[] {
+  const cuHoi = tachCau(botTruoc ?? "").filter((c) => c.trim().endsWith("?"));
+  if (!cuHoi.length) return replies;
+  return replies.map((r) => /^\s*(?:🤖|💾|📝|📋)/u.test(r) ? r
+    : tachCau(r).filter((c) => !(c.trim().endsWith("?") && cuHoi.some((h) => giongCauHoi(c, h)))).join(" ").trim())
+    .filter(Boolean);
+}

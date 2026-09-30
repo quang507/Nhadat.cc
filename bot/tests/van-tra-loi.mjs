@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauHoiLap, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -1092,6 +1092,18 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
   ok("FR250 bỏ 'mình đã tạo tin rồi', bot xưng em", r === "Cảm ơn đã tin tưởng. Mình cho em xin địa chỉ nhà nha?", r);
   ok("FR250 'Mình ghi nhận rồi' → 'Em ghi nhận rồi'", botXungEm("Mình ghi nhận rồi nha.") === "Em ghi nhận rồi nha.");
   ok("FR250 'mình cho em hỏi' (gọi khách) giữ", botXungEm("Dạ mình cho em hỏi giá nha?") === "Dạ mình cho em hỏi giá nha?");
+  // 30/09/2026 (bắn thử người mua, SRS-5.1h)
+  ok("loaiKho 'căn hộ' → chung_cu", JSON.stringify(loaiKhoTuHoSo("căn hộ")) === '["chung_cu"]');
+  ok("loaiKho 'nhà' trơn → không lọc", loaiKhoTuHoSo("nhà") === null && loaiKhoTuHoSo("mua nhà để ở") === null);
+  ok("loaiKho 'đất nền' → đất", (loaiKhoTuHoSo("đất nền") ?? []).includes("dat"));
+  ok("loaiKho 'nhà hẻm' → nhà phố…", (loaiKhoTuHoSo("nhà hẻm") ?? []).includes("nha_pho"));
+  for (const [v, r] of [["q5", "Quận 5"], ["Q.10, p2", "Quận 10, Phường 2"], ["quan 7", "Quận 7"], ["Bình Thạnh", "Bình Thạnh"], ["Quận 5", "Quận 5"]])
+    ok(`chuanKhuVucMua '${v}' → '${r}'`, chuanKhuVucMua(v) === r, chuanKhuVucMua(v));
+  ok("boLapCum 'Nguyễn Trãi Nguyễn Trãi P2' → một lần", boLapCum(["là Nguyễn Trãi Nguyễn Trãi P2, 6 tỷ 3"])[0] === "là Nguyễn Trãi P2, 6 tỷ 3");
+  ok("boLapCum chữ đơn lặp 'từ từ' giữ", boLapCum(["từ từ ạ"])[0] === "từ từ ạ");
+  ok("giongCauHoi hai cách hỏi hẻm/mặt tiền", giongCauHoi("Mình thích hẻm xe hơi hay mặt tiền hơn ạ?", "Mình muốn hẻm xe hơi hay mặt tiền hơn vậy ạ?"));
+  ok("giongCauHoi khác ý", !giongCauHoi("Mình thích hẻm xe hơi hay mặt tiền hơn ạ?", "Mình cần mấy phòng ngủ ạ?"));
+  ok("boCauHoiLap bỏ câu hỏi lặp, giữ phần khác", JSON.stringify(boCauHoiLap(["Dạ em ghi nhận. Mình muốn hẻm xe hơi hay mặt tiền hơn vậy ạ?"], "Mình thích hẻm xe hơi hay mặt tiền hơn ạ?")) === JSON.stringify(["Dạ em ghi nhận."]));
   ok("FR250 'Sổ nhà mình' giữ", botXungEm("Sổ nhà mình riêng hay chung ạ?") === "Sổ nhà mình riêng hay chung ạ?");
   for (const [vao, ra] of [
     ["Cảm ơn em đã ghi nhận bán căn hộ Sunrise City 2PN 70 m² giá 3 tỷ. Căn hộ mình ở tầng mấy ạ?",
