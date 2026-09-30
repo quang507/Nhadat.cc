@@ -387,7 +387,8 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   dat("'4 phòng ngủ' trơn vẫn đạt", "nhà 4 phòng ngủ 3 wc", "so_phong_ngu", "4", "4 phòng ngủ");
   dat("căn hộ '2pn tầng 12' — tầng của căn, 2 vẫn là tổng số (do-boc R02)", "76m2 2pn tầng 12", "so_phong_ngu", "2", "2pn");
   bo("'1pn trệt' không chữ chỉ chỗ vẫn là theo tầng", "nhà 3 lầu, 1pn trệt cho ông bà", "so_phong_ngu", "1", "1pn trệt", "phong_ngu_theo_tang");
-  const kt = kiemKienThuc(["đi bộ ra chợ 5 phút"], T, []);
+  const kt = kiemKienThuc(["phòng ngủ ngay tầng trệt cho người già", "đi bộ ra chợ 5 phút"], T, []);
+  ok("kiến thức: bản model cắt ngắn của cùng vế không lặp", kt.length === 2, JSON.stringify(kt));
   ok("kiến thức: giữ vế 'phòng ngủ ngay tầng trệt' dù model không xếp vào", kt.includes("nhà có 1 phòng ngủ ngay tầng trệt cho người già") && kt.includes("đi bộ ra chợ 5 phút"), JSON.stringify(kt));
 }
 

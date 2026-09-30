@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-30 15:50 (giờ VN)
+-- Sinh lúc: 2026-09-30 16:08 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -2023,6 +2023,10 @@ begin
   k := public.bo_dau(p_text);
   k := regexp_replace(k, '(\d),(\d)', '\1.\2', 'g');
   k := regexp_replace(k, '\s+', ' ', 'g');
+  -- 20260930d (bắn thử vector 30/09): "nhà có 1 phòng ngủ ngay tầng trệt cho người già" (fact thông tin bổ sung) từng điền
+  -- số phòng ngủ = 1 vào ô trống — phòng ngủ Ở ĐÂU, không phải TỔNG số. Bỏ cụm đó trước khi đọc phòng ngủ / kết cấu (cùng
+  -- luật soPhongNguTheoTang ở khop-cau-tra-loi.ts: có chữ chỉ chỗ, hoặc "trệt"; "2pn tầng 12" của căn hộ vẫn đọc).
+  k := regexp_replace(k, '\m(\d{1,2}|mot|hai|ba|bon|nam)\s*(?:phong ngu|pn)\s+(?:(?:(?:o|ngay|nam|duoi|tren|tai)\s+){1,2}(?:tang\s+tret|(?:tang|lau)\s+\d{1,2}|tang|tret|lau)|(?:tang\s+)?tret)\M', ' ', 'g');
   k := replace(k, 'm²', 'm2');
   k := regexp_replace(k, '(\d)\s*m ?2\M', '\1m2', 'g');
   k := replace(k, 'm2', 'mv');
