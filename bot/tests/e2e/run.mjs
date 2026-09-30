@@ -2460,6 +2460,50 @@ fresh(seedKho);
     globalThis.__model.create = undefined;
     globalThis.__cauHinh = cuCH;
   }
+  // 30/09/2026 (SRS-5.1e, chủ dự án: "2 hàm tìm theo nghĩa cho địa danh và dự án … làm đi"): tên dự án / tên đường GÕ SAI mà
+  // khớp chữ không ra → tìm theo nghĩa (vector), MÁY xác nhận tên còn gần chữ khách gõ và đúng MỘT tên.
+  {
+    const env = globalThis.Deno.env; const getCu = env.get; env.get = (k) => k === "GEMINI_API_KEY" ? "gem-test" : getCu(k);
+    const cuCH = globalThis.__cauHinh;
+    const seedVin = (d) => { seedKho(d);
+      d.insert("projects", { name: "Vinhomes Grand Park", slug: "vinhomes-grand-park", district: "Thành phố Thủ Đức", ward: "Phường Long Bình", amenities: [], description: "" });
+      d.insert("projects", { name: "Vinhomes Central Park", slug: "vinhomes-central-park", district: "Quận Bình Thạnh", ward: null, amenities: [], description: "" }); };
+    // (a) dự án gõ sai → gắn đúng dự án (vector xếp Central Park gần hơn nhưng tên không gần chữ khách → loại).
+    fresh(seedVin);
+    globalThis.__cauHinh = { test_reset_hello: "1", tim_theo_nghia: "bat" };
+    let cauNhung = null;
+    globalThis.__nhung = (t) => { cauNhung = t; return Array.from({ length: 768 }, () => 0.01); };
+    globalThis.__rpc = { tim_du_an_theo_nghia: (d) => ({ data: [...d.t.projects].reverse().filter((p) => /Vinhomes/.test(p.name))
+      .map((p, i) => ({ id: p.id, name: p.name, do_gan: 0.82 - i * 0.02 })), error: null }) };
+    await send({ external_user_id: "nghia-da-1", text: "bán căn hộ dự án vinhome gran park 2pn 70m2 giá 3 tỷ" });
+    const LD = db().t.listings.at(-1); const pGP = db().t.projects.find((p) => p.name === "Vinhomes Grand Park");
+    check("NGHIA-DA-01 'dự án vinhome gran park' (khớp chữ không ra) → tìm theo nghĩa, gắn Vinhomes Grand Park, không nhầm Central Park",
+      LD?.project_id === pGP.id && /^Dự án vinhome gran park$/i.test(cauNhung ?? ""), JSON.stringify({ pid: LD?.project_id, cauNhung }));
+    // (b) vector chỉ ra tên KHÔNG gần chữ khách → không gắn gì.
+    fresh(seedVin);
+    globalThis.__rpc = { tim_du_an_theo_nghia: (d) => ({ data: d.t.projects.filter((p) => p.name === "Vinhomes Central Park")
+      .map((p) => ({ id: p.id, name: p.name, do_gan: 0.9 })), error: null }) };
+    await send({ external_user_id: "nghia-da-2", text: "bán căn hộ dự án vinhome gran park 2pn 70m2 giá 3 tỷ" });
+    check("NGHIA-DA-02 vector chỉ trả Vinhomes Central Park (tên không gần 'vinhome gran park') → KHÔNG gắn dự án",
+      !db().t.listings.at(-1)?.project_id, JSON.stringify(db().t.listings.at(-1)));
+    // (c) tên đường lệch > 2 ký tự ("huyn tanphat") → tim_duong không ra → tìm theo nghĩa → HỎI XÁC NHẬN, không ghi thẳng.
+    fresh((d) => { seedKho(d); d.insert("duong", { ten: "Huỳnh Tấn Phát", tinh: "TP.HCM", tinh_cu: "TP.HCM", phuong: "Phường Tân Thuận", quan_cu: "Quận 7", nguon: "test" }); });
+    globalThis.__rpc = { tim_dia_danh_theo_nghia: () => ({ data: [
+      { loai: "duong", ten: "Huỳnh Tấn Phát", quan_cu: "Quận 7", do_gan: 0.81 },
+      { loai: "duong", ten: "Huỳnh Tịnh Của", quan_cu: "Quận 3", do_gan: 0.8 }], error: null }) };
+    const rD = await send({ external_user_id: "nghia-duong-1", text: "bán nhà hẻm 4m huyn tan fat quận 7, 60m2, 5 tỷ" });
+    const LN = db().t.listings.at(-1);
+    check("NGHIA-DUONG-01 'huyn tan fat' (lệch 3 ký tự) → gợi ý Huỳnh Tấn Phát, hỏi xác nhận; địa chỉ chưa sửa",
+      LN?.boc_tach?.duong_goi_y?.ten === "Huỳnh Tấn Phát" && rD.body.replies.join("\n").includes("Huỳnh Tấn Phát") && /huyn tan fat/.test(LN?.location_raw ?? ""),
+      JSON.stringify({ l: LN?.location_raw, gy: LN?.boc_tach?.duong_goi_y, rep: rD.body.replies }));
+    // (d) tìm theo nghĩa TẮT → không nhúng, không gọi hàm.
+    fresh(seedVin);
+    globalThis.__cauHinh = { test_reset_hello: "1" };
+    let daNhung = false; globalThis.__nhung = () => { daNhung = true; return Array.from({ length: 768 }, () => 0); };
+    await send({ external_user_id: "nghia-da-3", text: "bán căn hộ dự án vinhome gran park 2pn 70m2 giá 3 tỷ" });
+    check("NGHIA-DA-03 tim_theo_nghia tắt → không nhúng, không gọi tim_du_an_theo_nghia", !daNhung && !db().log.some((x) => x.rpc === "tim_du_an_theo_nghia"));
+    delete globalThis.__nhung; globalThis.__rpc = {}; env.get = getCu; globalThis.__cauHinh = cuCH;
+  }
   // FR-241 o (bắn lại 28/09, lx-85/lx-86/lx-87): đang hỏi ô khác, khách nhắn TRỌN một câu pháp lý ("sổ chung", "sổ hồng rồi em")
   // hay TRỌN một tên phường/xã ("xã Vĩnh Lộc A") — AI im hoặc chỉ xếp vào kiến thức thêm → luật bị gạt: pháp lý rơi vào bổ sung,
   // phường mất hẳn (laBoSungRac). Cả tin là đúng một giá trị của khoá đó → luật chắc, giữ.
