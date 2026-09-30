@@ -114,17 +114,19 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   const groqModel = (await secretOf(db, "GROQ_MODEL")) ?? "qwen/qwen3.8-27b";
   // FR-194 c (23/09/2026): Gemini, cùng cổng giọng OpenAI với Groq (xem groq.ts).
   const geminiKey = await secretOf(db, "GEMINI_API_KEY");
+  // 30/09/2026 (chủ dự án): khoá Gemini thứ hai — khoá đầu chạm trần (429) thì chuỗi dự phòng thử khoá này.
+  const geminiKey2 = await secretOf(db, "GEMINI_API_KEY_2");
   const geminiModel = (await secretOf(db, "GEMINI_MODEL")) ?? "gemini-3.8-flash";
-  if (!apiKey && !groqKey && !geminiKey) throw new Error("Không tìm thấy ANTHROPIC_API_KEY, GROQ_API_KEY lẫn GEMINI_API_KEY (env lẫn Vault)");
+  if (!apiKey && !groqKey && !geminiKey && !geminiKey2) throw new Error("Không tìm thấy ANTHROPIC_API_KEY, GROQ_API_KEY lẫn GEMINI_API_KEY (env lẫn Vault)");
   const chinh = apiKey ? bocLocThamSo(new Anthropic({ apiKey }), db) : null;
-  if (!groqKey && !geminiKey) return chinh!;
+  if (!groqKey && !geminiKey && !geminiKey2) return chinh!;
   // FR-194 b: ai trả lời TRƯỚC. Chủ dự án 15/09/2026: Groq trước, chặn trần thì
   // Claude liền. Đổi bằng secret `MODEL_TRUOC`, không cần deploy: `claude` = Claude
   // trước; `gemini` = Gemini → Groq → Claude; còn lại (`groq`) = Groq → Gemini → Claude.
   const truoc = (await secretOf(db, "MODEL_TRUOC"))?.trim().toLowerCase();
   const thuTu = truoc === "claude" ? "claude" : "groq";
   const gq = groqKey ? [nguonGroq(groqKey, groqModel)] : [];
-  const gm = geminiKey ? [nguonGemini(geminiKey, geminiModel)] : [];
+  const gm = [geminiKey, geminiKey2].filter((k): k is string => !!k).map((k) => nguonGemini(k, geminiModel));
   const dsNguon = truoc === "gemini" ? [...gm, ...gq] : [...gq, ...gm];
   const ghiSo = async (nguon: string, chiTiet: string) => {
     try {

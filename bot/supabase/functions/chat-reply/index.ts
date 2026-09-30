@@ -602,10 +602,15 @@ function tenSauCanHo(t: string): string | null {
 // đúng MỘT tên (`chonUngVienNghia`). Tắt tìm theo nghĩa / không ứng viên nào đạt → null, bot đi đường cũ (đường đi bình
 // thường, không vào sổ). Gemini nhúng hỏng / quá giờ là SỰ CỐ → vào sổ (bắn thật 30/09: tin "sunrize city" không gắn dự
 // án mà không để lại dấu vết gì, trong khi chính câu nhúng đó chạy tay ra Sunrise City đứng đầu).
-async function sanSangNghia(client: ReturnType<typeof serviceClient>): Promise<string | null> {
+/** Khoá Gemini theo thứ tự thử: GEMINI_API_KEY rồi GEMINI_API_KEY_2 (30/09/2026, khoá dự phòng khi chạm trần 429). */
+async function khoaGemini(client: ReturnType<typeof serviceClient>): Promise<string[]> {
+  return (await Promise.all([secretOf(client, "GEMINI_API_KEY"), secretOf(client, "GEMINI_API_KEY_2")])).filter((k): k is string => !!k);
+}
+async function sanSangNghia(client: ReturnType<typeof serviceClient>): Promise<string[] | null> {
   const { data: sang, error } = await client.rpc("tim_nghia_san_sang");
   if (error || sang !== true) return null;
-  return await secretOf(client, "GEMINI_API_KEY");
+  const ds = await khoaGemini(client);
+  return ds.length ? ds : null;
 }
 type DuAnNghia = { id: string; name: string; district: string | null; ward: string | null };
 async function timDuAnTheoNghia(client: ReturnType<typeof serviceClient>, ten: string | null | undefined): Promise<DuAnNghia | null> {
@@ -1797,8 +1802,8 @@ Deno.serve(async (req) => {
       try {
         const { data: sang, error: sErr } = await client.rpc("tim_nghia_san_sang");
         if (sErr || sang !== true) return null;
-        const khoa = await secretOf(client, "GEMINI_API_KEY");
-        if (!khoa) return null;
+        const khoa = await khoaGemini(client);
+        if (!khoa.length) return null;
         const vec = await nhungCauTim(khoa, `Phường ${ten}, Thành phố Hồ Chí Minh`);
         const { data, error } = await client.rpc("tim_phuong_theo_nghia", { p_vec: vec, p_limit: 2 });
         if (error) { await ghiLoi(client, "chat-reply tim_phuong_theo_nghia", error.message); return null; }
@@ -6236,8 +6241,8 @@ Deno.serve(async (req) => {
   let listings = khoTho;
   if (timNghia && (khoTho ?? []).length > 1) {
     try {
-      const khoa = await secretOf(client, "GEMINI_API_KEY");
-      if (!khoa) throw new Error("thiếu GEMINI_API_KEY");
+      const khoa = await khoaGemini(client);
+      if (!khoa.length) throw new Error("thiếu GEMINI_API_KEY");
       // 24/09/2026: câu vừa nhắn thường cụt ("phòng cho ba mẹ riêng, có căn nào không") — ghép NHU CẦU ĐÃ LƯU (notes)
       // để vector mang đủ ý "phòng ngủ trệt, khỏi leo cầu thang" khách nói từ lượt trước.
       const cauTim = [text, typeof prefs.notes === "string" && prefs.notes.trim() ? prefs.notes.slice(0, 500) : null,

@@ -10,10 +10,29 @@
 const URL_NHUNG = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent";
 export const SO_CHIEU = 768;
 
-/** Vector 768 chiều của câu tìm. e2e đặt `globalThis.__nhung = (text) => number[]` để khỏi gọi mạng. */
-export async function nhungCauTim(khoa: string, text: string, hanMs = 2500): Promise<number[]> {
+/**
+ * Vector 768 chiều của câu tìm. e2e đặt `globalThis.__nhung = (text) => number[]` để khỏi gọi mạng.
+ * 30/09/2026 (chủ dự án: "có cái key gemini free này, đưa vào kẻo lâu lâu thiếu api ko gọi dc"): nhận NHIỀU khoá
+ * (GEMINI_API_KEY rồi GEMINI_API_KEY_2) — khoá trước hết hạn mức (429) thì thử khoá sau; lỗi khác ném luôn.
+ */
+export async function nhungCauTim(khoa: string | readonly string[], text: string, hanMs = 2500): Promise<number[]> {
   const gia = (globalThis as { __nhung?: (t: string) => number[] | Promise<number[]> }).__nhung;
   if (gia) return await gia(text);
+  const ds = (typeof khoa === "string" ? [khoa] : [...khoa]).filter(Boolean);
+  if (!ds.length) throw new Error("Gemini embed: không có khoá");
+  let loi: Error | null = null;
+  for (const k of ds) {
+    try {
+      return await nhungMotKhoa(k, text, hanMs);
+    } catch (e) {
+      loi = e as Error;
+      if (!/^Gemini embed 429\b/.test(loi.message)) throw loi;
+    }
+  }
+  throw loi!;
+}
+
+async function nhungMotKhoa(khoa: string, text: string, hanMs: number): Promise<number[]> {
   const r = await fetch(URL_NHUNG, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": khoa },
