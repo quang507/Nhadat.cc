@@ -3914,20 +3914,6 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.khoang_cach_m(lat1 double precision, lng1 double precision, lat2 double precision, lng2 double precision)
-returns double precision
-language sql
-immutable
-parallel safe
-set search_path = public, pg_temp
-AS $function$
-  select case when lat1 is null or lng1 is null or lat2 is null or lng2 is null then null
-    else 2 * 6371000 * asin(sqrt(
-      power(sin(radians(lat2 - lat1) / 2), 2) + cos(radians(lat1)) * cos(radians(lat2)) * power(sin(radians(lng2 - lng1) / 2), 2)))
-  end;
-$function$
-;
-
 CREATE OR REPLACE FUNCTION public.khu_khop(p_area_kd text, p_ward text, p_district text)
  RETURNS boolean
  LANGUAGE plpgsql

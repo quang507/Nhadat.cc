@@ -24,21 +24,8 @@
 -- Nguyên tắc cho bot: khớp CHỮ trước (chắc, miễn phí), vector sau (gõ sai / gõ lệch). Gần đúng MÀ vị trí khớp với điều
 -- đã biết (cùng phường / quận cũ, hoặc gần con đường khách nhắc kèm) → sửa luôn; không có gì để đối chiếu → hỏi xác nhận.
 
--- ── Khoảng cách ─────────────────────────────────────────────────────────────
-create or replace function public.khoang_cach_m(lat1 double precision, lng1 double precision, lat2 double precision, lng2 double precision)
-returns double precision
-language sql
-immutable
-parallel safe
-set search_path = public, pg_temp
-as $$
-  select case when lat1 is null or lng1 is null or lat2 is null or lng2 is null then null
-    else 2 * 6371000 * asin(sqrt(
-      power(sin(radians(lat2 - lat1) / 2), 2) + cos(radians(lat1)) * cos(radians(lat2)) * power(sin(radians(lng2 - lng1) / 2), 2)))
-  end;
-$$;
-comment on function public.khoang_cach_m(double precision, double precision, double precision, double precision) is
-  'Khoảng cách (mét) giữa hai toạ độ, công thức haversine. NULL nếu thiếu toạ độ.';
+-- ── Khoảng cách: dùng lại public.khoang_cach_m(p_lat1, p_lng1, p_lat2, p_lng2) đã có trên DB (haversine, mét).
+-- KHÔNG định nghĩa lại: CREATE OR REPLACE không được đổi tên tham số, áp là lỗi (soat-migration bắt 30/09).
 
 -- ── duong: loại, hẻm, toạ độ, vector ──────────────────────────────────────
 alter table public.duong
@@ -838,10 +825,12 @@ as $$
        from public.projects pr, v where pr.nhung is not null and (p_loai is null or 'du_an' = any(p_loai))
       order by pr.nhung <=> v.q limit 20)
   )
-  select u.loai, u.khoa, u.ten, u.ten_day_du, u.phuong, u.quan_cu, u.lat, u.lng, u.do_gan,
-         public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) as cach_m,
-         u.do_gan - coalesce(least(public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) / 1000.0 * 0.01, 0.2), 0) as diem
+  select u.loai, u.khoa, u.ten, u.ten_day_du, u.phuong, u.quan_cu, u.lat, u.lng, u.do_gan, k.cach_m,
+         u.do_gan - coalesce(least(k.cach_m / 1000.0 * 0.01, 0.2), 0) as diem
     from ung u
+    -- khoang_cach_m có sẵn trả ~10.000 km (không phải NULL) khi thiếu toạ độ — chặn trước.
+    cross join lateral (select case when p_lat is null or p_lng is null or u.lat is null or u.lng is null then null
+                                    else public.khoang_cach_m(p_lat, p_lng, u.lat, u.lng) end as cach_m) k
    order by diem desc
    limit greatest(1, least(coalesce(p_limit, 5), 30));
 $$;
