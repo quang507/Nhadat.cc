@@ -140,13 +140,17 @@ async function mayChuMay() {
       .replaceAll('"npm:zod@4"', '"zod"');
     writeFileSync(BUNDLE, s);
   }
-  const { FakeDB } = await import("../e2e/mock-supabase.mjs");
+  const { FakeDB, napPhuongThat, napPhuongCuThat } = await import("../e2e/mock-supabase.mjs");
+  const PHUONG_CU = await napPhuongCuThat();
   const fetchThat = globalThis.fetch;
   // Chỉ cho model đi ra ngoài; Nominatim / ảnh Zalo / mọi URL khác trả 404 (chat-reply coi là đường đi bình thường).
   globalThis.fetch = async (url, opt) => (/api\.anthropic\.com/.test(String(url)) ? fetchThat(url, opt) : new Response("", { status: 404 }));
   const moi = () => {
     globalThis.__db = new FakeDB(); globalThis.__calls = []; globalThis.__rpc = {}; globalThis.__treTruyVan = null;
     const d = globalThis.__db;
+    // 30/09/2026: bảng `wards` thật (168 phường) — như DB production, để chốt phường chạy đúng khi chat thử.
+    d.t.wards = napPhuongThat().map((w) => ({ ...w }));
+    d.t.phuong_cu = PHUONG_CU.map((c) => ({ ...c }));
     const chu = d.insert("sellers", { zalo_user_id: "may-kho-chu", seller_type: "ccrb", name: null, active_listing_id: null }).data;
     for (const l of KHO_MAU) {
       d.insert("listings", { ...l, seller_id: chu.id, deal: "ban", status: "dang_ban", property_type: "nha_pho", district: "Quận 5", location_raw: l.street, legal_status: "so_hong_rieng" });

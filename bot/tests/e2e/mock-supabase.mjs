@@ -1,6 +1,27 @@
 // Supabase giả trong bộ nhớ: đủ để chat-reply chạy trọn đường, ghi lại mọi truy vấn.
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { soChuThanhSo } from "../../supabase/functions/_shared/extraction/luat-tien.ts";
+
+// 30/09/2026: bảng `wards` giả = 168 dòng THẬT của migration 20260915a (bảng thật trên DB nạp từ đúng file đó).
+// Mặc định FakeDB vẫn để `wards` rỗng (nhiều ca e2e cố ý dựng bảng riêng vài dòng); ca cần bảng thật và `bun run chat`
+// gọi `napPhuongThat()` để nạp.
+let phuongThat = null;
+export function napPhuongThat() {
+  if (phuongThat) return phuongThat;
+  const sql = readFileSync(new URL("../../supabase/migrations/20260915a_wards_phuong_moi.sql", import.meta.url), "utf8");
+  phuongThat = [...sql.matchAll(/^\s*\('((?:[^']|'')+)',\s*'(phuong|xa|dac_khu)',\s*'((?:[^']|'')+)',\s*'((?:[^']|'')+)',[^\n]*?'(TP\.HCM|Bình Dương|Bà Rịa – Vũng Tàu)',\s*(?:'((?:[^']|'')*)'|null)/gm)]
+    .map((m) => ({
+      ten: m[1].replace(/''/g, "'"), loai: m[2], ten_day_du: m[3].replace(/''/g, "'"), quan_cu: m[4].replace(/''/g, "'"),
+      tinh_cu: m[5], don_vi_cu: m[6] != null ? m[6].replace(/''/g, "'") : null,
+    }));
+  return phuongThat;
+}
+// 20260930a: bảng `phuong_cu` giả = đúng dữ liệu migration sinh ra (tách wards.don_vi_cu bằng scripts/lib/don-vi-cu.mjs).
+export async function napPhuongCuThat() {
+  const { tachDonViCu } = await import("../../../scripts/lib/don-vi-cu.mjs");
+  return napPhuongThat().flatMap((w) => tachDonViCu(w.don_vi_cu).map((c) => ({ ten: c.ten, quan_cu: c.quan_cu, phuong_moi: w.ten, toan_bo: c.toan_bo })));
+}
 
 const singular = (t) => t.replace(/s$/, "");
 // Bản JS của `chuan_hoa_phuong` (20260928d, không tra bảng wards): phường số → "Phường N"; tên chữ gõ thường ngắn → viết hoa.
@@ -243,7 +264,9 @@ export function chuanHoaGiaRaw(s) {
 }
 export function parseVnd(s) {
   // 20260928f (FR-241): parse_vnd thật đọc số viết bằng chữ ("chín tỷ rưỡi") — cùng hàm với luat-tien.ts.
-  const t = soChuThanhSo(String(s).toLowerCase()).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+  // 30/09/2026: "tỏi" CÓ DẤU là tỷ ("15 tỏi có tl" → 15 tỷ, "2 tỏi 5" → 2,5 tỷ) — đúng như parse_vnd thật (hỏi
+  // doi_chieu_tien_cong_khai 30/09). "toi" không dấu thì parse_vnd thật trả NULL, mock cũng vậy.
+  const t = soChuThanhSo(String(s).toLowerCase().normalize("NFC").replace(/tỏi/g, "tỷ")).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
   let m = /(\d+)\s*t[yi]\s*(\d)(?!\d)/.exec(t); if (m) return +m[1] * 1e9 + +m[2] * 1e8; // 22/09: "7 ti 5" — "ti" cũng là tỷ (parse_vnd 20260922c)
   m = /(\d+(?:[.,]\d+)?)\s*(ty|ti)/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e9 + (/ruoi/.test(t) ? 5e8 : 0)); // "rưỡi" như parse_vnd thật
   m = /(\d+(?:[.,]\d+)?)\s*(trieu|tr)/.exec(t); if (m) return Math.round(parseFloat(m[1].replace(",", ".")) * 1e6);
@@ -423,6 +446,30 @@ class RpcCall {
         const rows = [...gom.values()].map((g) => ({ ten: g.ten, khoang_cach: g.khoang_cach, quan_cu: [...g.quan_cu], phuong: [...g.phuong], tinh: [...g.tinh] }))
           .sort((x, y) => x.khoang_cach - y.khoang_cach || ((a.p_quan && y.quan_cu.includes(a.p_quan)) - (a.p_quan && x.quan_cu.includes(a.p_quan))) || x.ten.localeCompare(y.ten)).slice(0, 8);
         return { data: rows, error: null };
+      }
+      // 20260930a: hẻm theo số (các cấp, nhỏ nhất trước) + đường mẹ — chép ngữ nghĩa `tim_hem`.
+      case "tim_hem": {
+        const bd = (x) => String(x ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().trim();
+        const me = bd(String(a.p_duong_me ?? "").replace(/^(?:đường|duong)\s+(?!(?:số|so)\s)/i, ""));
+        const cap = (a.p_cap_hem ?? []).map((x) => String(x).toUpperCase());
+        const rows = (db.t.duong ?? []).filter((d) => d.loai === "hem" && cap.includes(String(d.so_hem ?? "").toUpperCase()) && bd(d.duong_me) === me && (!a.p_phuong || d.phuong === a.p_phuong))
+          .sort((x, y) => cap.indexOf(String(y.so_hem).toUpperCase()) - cap.indexOf(String(x.so_hem).toUpperCase()))
+          .map((d) => ({ ten: d.ten, so_hem: d.so_hem, phuong: d.phuong || null, quan_cu: d.quan_cu ?? null, lat: d.lat ?? null, lng: d.lng ?? null }));
+        return { data: rows.slice(0, 10), error: null };
+      }
+      // 20260930a: phường có cả hai con đường mà tâm cách nhau ≤ bán kính — haversine như khoang_cach_m.
+      case "phuong_giao_hai_duong": {
+        const bd = (x) => String(x ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/\s+/g, " ").trim();
+        const km = (la1, lo1, la2, lo2) => { const r = (x) => x * Math.PI / 180; const h = Math.sin(r(la2 - la1) / 2) ** 2 + Math.cos(r(la1)) * Math.cos(r(la2)) * Math.sin(r(lo2 - lo1) / 2) ** 2; return 2 * 6371000 * Math.asin(Math.sqrt(h)); };
+        const ds = db.t.duong ?? []; const bk = Math.max(100, Math.min(a.p_ban_kinh_m ?? 1200, 5000));
+        const gom = new Map();
+        for (const x of ds.filter((d) => bd(d.ten) === bd(a.p_duong1) && d.phuong && d.lat != null)) {
+          for (const y of ds.filter((d) => bd(d.ten) === bd(a.p_duong2) && d.lat != null)) {
+            const c = km(x.lat, x.lng, y.lat, y.lng); if (c > bk) continue;
+            const g = gom.get(x.phuong); if (!g || c < g.cach_m) gom.set(x.phuong, { phuong: x.phuong, quan_cu: x.quan_cu ?? null, cach_m: c });
+          }
+        }
+        return { data: [...gom.values()].sort((p, q) => p.cach_m - q.cach_m).slice(0, 5), error: null };
       }
       case "mau_cau_fewshot":
         return { data: (globalThis.__mauCau ?? {})[a.p_phia] ?? "", error: null };

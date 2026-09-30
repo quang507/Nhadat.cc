@@ -27,11 +27,12 @@ const khoa = (s: string): string => boDau(s).toLowerCase().replace(/\s+/g, " ").
 const soChuCai = (s: string): number => (boDau(s).match(/[a-z]/gi) ?? []).length;
 
 /** Chọn kết quả từ danh sách `tim_duong` trả về cho tên khách gõ (`goc`, đã qua chuanTenDuong). */
-export function chonDuong(goc: string, ungVien: UngVienDuong[] | null | undefined, quan?: string | null): KetQuaDuong {
+export function chonDuong(goc: string, ungVien: UngVienDuong[] | null | undefined, quan?: string | null, phuong?: string | null): KetQuaDuong {
   const k = khoa(goc);
   const ds = (ungVien ?? []).filter((u) => u && typeof u.ten === "string" && Number.isFinite(u.khoang_cach));
   if (!ds.length || k.length < 4) return { loai: "giu" };
   const trongQuan = (u: UngVienDuong) => !!quan && (u.quan_cu ?? []).includes(quan);
+  const trongPhuong = (u: UngVienDuong) => !!phuong && (u.phuong ?? []).includes(phuong);
   // Khớp ĐÚNG (khoảng cách 0): chỉ khác dấu / hoa thường.
   const dung = ds.filter((u) => u.khoang_cach === 0 && khoa(u.ten) === k);
   if (dung.length) {
@@ -47,7 +48,54 @@ export function chonDuong(goc: string, ungVien: UngVienDuong[] | null | undefine
   // Lệch quá 1 phép sửa mà chuỗi ngắn (6–7 chữ cái) thì thôi — "Le Lai" ↔ "Le Loi" là hai đường khác.
   if (gan[0].khoang_cach === 2 && soChuCai(goc) < 9) return { loai: "giu" };
   const chon = tot.length === 1 ? tot[0] : (tot.filter(trongQuan).length === 1 ? tot.find(trongQuan)! : null);
-  return chon ? { loai: "hoi", ten: chon.ten } : { loai: "giu" };
+  if (!chon) return { loai: "giu" };
+  // 30/09/2026 (chủ dự án: "sau khi người ta nhắc tới gần đúng sẽ biết cái nào đúng và sửa vào, kết hợp với vị trí"):
+  // gõ gần đúng MÀ con đường đó có thật trong phường / quận đã biết của căn nhà → vị trí xác nhận, sửa luôn. Không có
+  // vị trí nào để đối chiếu → vẫn hỏi như FR-212.
+  return trongPhuong(chon) || trongQuan(chon) ? { loai: "sua", ten: chon.ten } : { loai: "hoi", ten: chon.ten };
+}
+
+/**
+ * Con đường THỨ HAI khách nhắc kèm để chỉ chỗ (30/09/2026, chủ dự án: "kết hợp với vị trí nữa, để biết đường nào gần
+ * đường nào"): "hẻm Lê Văn Sỹ gần Trần Huy Liệu", "góc Nguyễn Trãi – Trần Hưng Đạo", "ngã tư An Dương Vương giao Trần
+ * Bình Trọng", "đầu hẻm ra Phan Huy Ích". Trả tên đường trần (tối đa 5 chữ, dừng trước phường / quận / dấu câu / số),
+ * hoặc null. `duongChinh` (nếu biết) không được trả lại chính nó.
+ */
+export function duongNhacKem(text: string | null | undefined, duongChinh?: string | null): string | null {
+  const s = (text ?? "").normalize("NFC").replace(/\s+/g, " ");
+  const re = /(?:^|[\s,(])(?:gần|gan|góc|goc|giao(?:\s+với)?|ngã\s*(?:tư|ba|4|3)|nga\s*(?:tu|ba)|cạnh|canh|sát|sat|thông\s+ra|ra\s+mặt\s+tiền|đầu\s+hẻm\s+ra|cách)\s+(?:đường\s+|duong\s+|đ\.\s*)?([\p{L}][\p{L}\d]*(?:\s+[\p{L}\d][\p{L}\d]*){0,4})/giu;
+  const chinh = khoa(duongChinh ?? "");
+  for (const m of s.matchAll(re)) {
+    let ten = m[1]
+      .split(/\s+(?=(?:phường|phuong|quận|quan|p\.?|q\.?|huyện|huyen|tp|thành phố|nhà|nha|hẻm|hem|giá|gia|diện|dien|khoảng|khoang|chừng|chung|tầm|tam|tầng|tang|mét|met|nha|nhé|nhe|ạ|em|anh|chị|chi|cô|chú|bác)(?![\p{L}]))/iu)[0]
+      .replace(/\s+(?:\d+\s*m|\d+)$/u, "").trim()
+      // "gần ngã tư An Dương Vương": bỏ chữ chỉ chỗ còn dính đầu.
+      .replace(/^(?:(?:ngã\s*(?:tư|ba|4|3)|nga\s*(?:tu|ba)|góc|goc|giao(?:\s+với)?|đường|duong)\s+)+/iu, "");
+    // "cách chợ 200m", "gần chợ" — chỉ nhận khi giống TÊN ĐƯỜNG: ≥ 2 chữ, không phải từ chỉ nơi chốn chung.
+    if (ten.split(" ").length < 2 && !/^\d/.test(ten)) continue;
+    if (/^(?:chợ|cho|trường|truong|bệnh|benh|công viên|cong vien|siêu thị|sieu thi|nhà thờ|nha tho|chùa|chua|ủy ban|uy ban|trung tâm|trung tam|mặt tiền|mat tien|khu|sân bay|san bay)(?![\p{L}])/iu.test(ten)) continue;
+    if (chinh && khoa(ten) === chinh) continue;
+    return ten;
+  }
+  return null;
+}
+
+/**
+ * Chọn phường từ kết quả `phuong_giao_hai_duong` (đã xếp gần trước): một phường → nó; nhiều phường → chỉ nhận phường
+ * GẦN NHẤT RÕ RỆT (hai đường cách nhau ≤ 400 m ở đó, và phường kế xa gấp đôi + 200 m trở lên). "Trần Bình Trọng gần
+ * An Dương Vương": Chợ Quán ~150 m, Vườn Lài ~1 km → Chợ Quán. Sát nhau → null (hỏi).
+ */
+export function chonPhuongGanNhat<T extends { cach_m: number }>(ds: T[] | null | undefined): T | null {
+  const d = [...(ds ?? [])].filter((x) => Number.isFinite(x?.cach_m)).sort((a, b) => a.cach_m - b.cach_m);
+  if (d.length === 1) return d[0];
+  if (d.length >= 2 && d[0].cach_m <= 400 && d[1].cach_m >= d[0].cach_m * 2 + 200) return d[0];
+  return null;
+}
+
+/** Đường số ("đường số 59", "đường 59", "Số 59") → khoá tra bảng `duong` ("duong so 59"); không phải → null. */
+export function khoaDuongSo(ten: string | null | undefined): string | null {
+  const m = /^\s*(?:đường|duong|đ\.)?\s*(?:số|so)?\s*(\d{1,4}[a-z]?)\s*$/iu.exec(ten ?? "");
+  return m ? `duong so ${m[1].toLowerCase()}` : null;
 }
 
 /**

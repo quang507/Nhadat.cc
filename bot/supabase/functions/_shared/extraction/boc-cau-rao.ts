@@ -203,3 +203,56 @@ export function laSoNhaHem(diaChi: string | null | undefined): boolean {
   return false;
 }
 const DUONG_NGAY_LE = new Set(["3/2", "30/4", "2/9", "19/5", "1/5", "26/3", "23/9", "3/10", "19/8", "8/3"]);
+
+/**
+ * Quy ước số nhà TP.HCM (chủ dự án 30/09/2026): "137/28 đường số 59" là HẺM 137 của đường số 59, NHÀ SỐ 28 trong
+ * hẻm — số SAU dấu "/" cuối là số nhà, phần trước là hẻm. Hẻm trong hẻm ("còn nhiều hẻm nhỏ và nhỏ hơn nữa"):
+ * "137/28/5" = nhà 5 trong hẻm 137/28 (hẻm nhánh 28 của hẻm 137); "12/3/4/5A" = nhà 5A, hẻm 12 → 12/3 → 12/3/4.
+ * `capHem` liệt kê từ hẻm lớn (đầu đường) tới hẻm nhỏ nhất (sát nhà). Cùng bộ lọc với `laSoNhaHem` (bỏ "đường 3/2",
+ * "1/2 tỷ", ngày tháng). Không phải số nhà hẻm → null.
+ */
+export function tachSoNhaHem(diaChi: string | null | undefined): { hem: string; soNha: string; capHem: string[] } | null {
+  const kd = boDau(diaChi ?? "");
+  for (const m of kd.matchAll(/(^|[^\d/])(\d{1,4}[a-z]?(?:\s*\/\s*\d{1,4}[a-z]?)+)(?![\d/])/g)) {
+    const truoc = kd.slice(0, m.index! + m[1].length);
+    const phan = m[2].split("/").map((x) => x.trim());
+    if (/\b(?:duong|pho)\s*$/.test(truoc) || (phan.length === 2 && DUONG_NGAY_LE.has(phan.join("/")))) continue;
+    if (/^\s*(?:m2|m²|tr\b|trieu|ty\b|nam\b|\/)/.test(kd.slice(m.index! + m[0].length))) continue;
+    const hemPhan = phan.slice(0, -1).map((x) => x.toUpperCase());
+    return {
+      hem: hemPhan.join("/"),
+      soNha: phan[phan.length - 1].toUpperCase(),
+      capHem: hemPhan.map((_, i) => hemPhan.slice(0, i + 1).join("/")),
+    };
+  }
+  return null;
+}
+
+/**
+ * Gọt câu trả lời ĐỊA CHỈ còn đúng phần địa chỉ (30/09/2026, chat thử): "nhà ở 137/28 đường số 59 phường an hội tây gò
+ * vấp" từng vào nguyên câu làm vị trí; "hẻm xe hơi nguyen van cu gần" (luật cắt dở "gần trần hưng đạo") dính chữ "gần".
+ * Bỏ lời dẫn đầu ("nhà (mình/chú…) ở / tại"), cắt từ phường / quận / huyện / xã / TP trở đi (có ô riêng), bỏ chữ nối
+ * cuối ("gần / góc / cạnh…") và chữ đệm ("nhé / ạ"). Còn quá ngắn thì trả nguyên.
+ */
+export function gotDiaChi(s: string | null | undefined): string {
+  const goc = (s ?? "").normalize("NFC").replace(/\s+/g, " ").trim();
+  let t = goc
+    .replace(/^(?:(?:nhà|nha|căn|can|lô|lo|đất|dat)\s+)?(?:(?:mình|minh|chú|chu|anh|em|cô|co|bác|bac|tôi|toi|tui|cháu|chau)\s+)?(?:(?:nằm\s+)?ở|o|tại|tai)\s+/iu, "");
+  const cat = /[,;(]|\s(?:phường|phuong|p\.|quận|quan|q\.|huyện|huyen|xã|thị xã|thành phố|tp\.?)(?![\p{L}])|\s[pq]\s*\d{1,2}(?!\d)/iu.exec(t);
+  if (cat && cat.index >= 3) t = t.slice(0, cat.index);
+  t = t.replace(/(?:\s+(?:gần|gan|góc|goc|cạnh|canh|sát|sat|giao|ngã tư|ngã ba|đối diện|doi dien|nhé|nhe|nha|ạ|á|em|anh|chị|chi))+\s*$/iu, "").trim();
+  return t.length >= 3 ? t : goc;
+}
+
+/**
+ * Luật bóc vị trí đọc "137/28 đường số 59" ra trơn "đường số 59" (rơi số nhà hẻm). Câu khách có số nhà hẻm đứng NGAY
+ * trước vị trí đã bóc → ghép lại "137/28 đường số 59". Vị trí đã có số đó, hoặc số nằm chỗ khác → giữ nguyên.
+ */
+export function ghepSoNhaHem(viTri: string | null | undefined, text: string | null | undefined): string | null {
+  const vt = (viTri ?? "").trim();
+  if (!vt) return null;
+  if (/\d\s*\/\s*\d/.test(vt)) return vt;
+  const m = new RegExp(`(\\d{1,4}[a-zA-Z]?(?:\\s*\\/\\s*\\d{1,4}[a-zA-Z]?)+)[\\s,]+(?:(?:ở|o|tại|tai)\\s+)?${vt.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "iu").exec(text ?? "");
+  if (!m || !tachSoNhaHem(m[1])) return vt;
+  return `${m[1].replace(/\s+/g, "")} ${vt}`;
+}

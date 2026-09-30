@@ -14,6 +14,7 @@ import { docTien, giaTheoM2 } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
 import { DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, laGap } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
+import { cauNhacPhuong, phuongChuan, phuongTrongTrich, phuongTuTenCu, tenDayDu } from "./khop-phuong.ts";
 
 const boDau = (s: string): string =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
@@ -202,6 +203,12 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
         const m = /(?:phuong|\bp)\s*\.?\s*(\d{1,2})\b/.exec(kd);
         return m && Number(m[1]) === Number(so) ? null : "phuong_khong_khop_trich_dan";
       }
+      // 30/09/2026 (chủ dự án: "để AI nhận"): AI trả tên phường MỚI chuẩn (đổi cả tên cũ "Vĩnh Lộc B" → Tân Vĩnh Lộc) — máy
+      // chỉ xác nhận: phường có thật VÀ trích dẫn nhắc nó (tên mới hoặc tên cũ, lệch 1–2 chữ cái).
+      const chuan = phuongChuan(v) ?? phuongTuTenCu(v);
+      if (chuan) return cauNhacPhuong(cum, chuan) ? null : "phuong_khong_khop_trich_dan";
+      // Tên KHÔNG có thật mà trích dẫn lại nhắc một phường có thật → AI cắt / bịa tên ("An Hội" cho "an hội tây"): bỏ.
+      if (phuongTrongTrich(cum)) return "phuong_khong_co_that";
       const ten = chuanSo(v).replace(/^(phuong|xa|thi tran|p\.?)\s+/, "");
       return ten.length >= 3 && kd.includes(ten) && /\b(phuong|xa|thi tran|p)\b/.test(kd) ? null : "phuong_khong_khop_trich_dan";
     }
@@ -546,6 +553,9 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
       case "phuong": {
         const so = chuanSo(v).match(/\d{1,2}/)?.[0];
         if (so) { if (Number(so) < 1 || Number(so) > 30) { bo.push({ ...d, ly_do: "so_ngoai_khoang" }); continue; } answer = `Phường ${Number(so)}`; break; }
+        // Phường có thật (đã qua kiểm) → ghi đúng tên đầy đủ trong danh sách ("Xã Tân Vĩnh Lộc").
+        const chuanP = phuongChuan(v) ?? phuongTuTenCu(v);
+        if (chuanP) { answer = tenDayDu(chuanP); break; }
         const ten = v.replace(/^(phường|phuong|xã|xa|thị trấn|thi tran|p\.?)\s+/i, "").trim();
         if (ten.length < 3 || ten.length > 40) { bo.push({ ...d, ly_do: "gia_tri_ngoai_khoang" }); continue; }
         // 24/09/2026 (bắn 10 tin, Củ Chi / Bình Chánh): "xã Phước Vĩnh An" từng ghi thành "Phường Phước Vĩnh An" — giữ

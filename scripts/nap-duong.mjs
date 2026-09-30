@@ -8,10 +8,12 @@
 // mới + quận cũ + tỉnh cũ. Tây Ninh mới (gồm Long An) và Đồng Nai mới tra theo đa giác
 // tỉnh (`admin_level=4`), chưa gán phường (`phuong = ''`).
 //
-// LỌC (cùng luật với lượt nạp đầu bằng SQL trong DB, 21/09/2026):
-//   · bỏ tiền tố "Đường "/"Phố " khi sau nó là tên riêng viết hoa; giữ "Đường tỉnh 824";
-//   · BỎ hẻm/ngõ/kiệt/nhánh/lối/cầu (hẻm bỏ — tên đường mẹ đã có); BỎ đường số ("Số 7",
-//     "N1", "D2"); bỏ tên < 3 hay > 60 ký tự.
+// LỌC — 30/09/2026 đổi (chủ dự án: "còn mấy hẻm khác còn nhiều / nhỏ và nhỏ hơn nữa … kết hợp với vị trí nữa, để
+// biết đường nào gần đường nào"): GIỮ đường số ("Đường số 59", "Đường N1") và hẻm ("Hẻm 137 Lê Văn Sỹ", "Hẻm 137/28")
+// với cột loai / so_hem / duong_me, kèm TOẠ ĐỘ tâm (trung bình tâm các đoạn cùng tên trong phường). Luật phân loại ở
+// scripts/lib/phan-loai-duong.mjs (bài kiểm bot/tests/phan-loai-duong.mjs). Vẫn bỏ cầu / lối / nhánh / tên rác.
+// Tây Ninh / Đồng Nai (tra theo tỉnh, không gán phường): chỉ giữ tên riêng như trước — đường số, hẻm không có phường
+// đi kèm thì đúng là mơ hồ.
 //
 //   node scripts/nap-duong.mjs                 # cả ba tỉnh
 //   node scripts/nap-duong.mjs --tinh "TP.HCM" # một tỉnh
@@ -27,6 +29,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gomDuong } from "./lib/phan-loai-duong.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const env = Object.fromEntries(
@@ -52,22 +55,6 @@ const BBOX_HCM = "10.30,106.30,11.50,107.70";
 const TINH_LON = [["Tây Ninh", "Tỉnh Tây Ninh"], ["Đồng Nai", "Thành phố Đồng Nai"]];
 
 const nghi = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/** Một tên đường OSM → tên trong từ điển, hoặc null nếu bỏ (hẻm, đường số, rác). */
-export function chuanTen(tho) {
-  let t = String(tho ?? "").replace(/\s+/g, " ").trim();
-  if (!t) return null;
-  // "Đường Lý Thường Kiệt" → "Lý Thường Kiệt", "Đường 3 Tháng 2" → "3 Tháng 2"; giữ "Đường tỉnh 824"
-  // (chữ thường sau tiền tố là loại đường, không phải tên). Cùng luật với SQL nạp lần đầu.
-  t = t.replace(/^(?:Đường|Phố)\s+(?=[A-ZÀ-Ỹ0-9])/u, "");
-  if (/^(?:Hẻm|Hem|Ngõ|Ngách|Kiệt|Nhánh|Lối|Cầu)(?![\p{L}])/iu.test(t)) return null;
-  if (/(?:^|\s)Hẻm(?![\p{L}])/iu.test(t)) return null;
-  if (/^(?:Đường\s+)?(?:số|so)?\s*\d+[A-Za-z]?$/iu.test(t)) return null;          // "Số 7", "Đường 10"
-  if (/^(?:Đường\s+)?[A-Z]{1,2}\d+[A-Z]?$/u.test(t)) return null;                  // "N1", "D2", "TL10"
-  if (!/[\p{L}]{2}/u.test(t)) return null;
-  if (t.length < 3 || t.length > 60) return null;
-  return t;
-}
 
 async function overpass(query, lan = 0) {
   const url = `${OVERPASS}?data=${encodeURIComponent(query)}`;
@@ -104,21 +91,6 @@ async function ghi(rows) {
   return rows.length;
 }
 
-/**
- * Đọc CSV Overpass "name\ttype" → { ten[], soArea } — soArea = số TÊN đa giác khác nhau (dòng type=area).
- * OSM hay có hai đối tượng area cùng tên cho một phường (relation + way biên) → vẫn là một phường;
- * hai TÊN khác nhau mới là trùng tên thật (lượt 21/09: 6 phường "trùng" hoá ra cùng tên).
- */
-function docCsv(csv) {
-  const ten = new Set(); const area = new Set();
-  for (const dong of String(csv ?? "").split("\n")) {
-    const [name, type] = dong.split("\t");
-    if (type === "area") { area.add(name); continue; }
-    const t = chuanTen(name); if (t) ten.add(t);
-  }
-  return { ten: [...ten], soArea: area.size };
-}
-
 const wards = await rest("wards?select=ten_day_du,quan_cu,tinh_cu&order=ten_day_du");
 let daTra = 0, coDong = 0, tongDong = 0;
 
@@ -126,25 +98,26 @@ let daTra = 0, coDong = 0, tongDong = 0;
 if (!CHI_TINH || CHI_TINH === "TP.HCM") {
   for (const w of wards) {
     if (CHI_PHUONG && w.ten_day_du !== CHI_PHUONG) continue;
-    const q = `[out:csv(name,::type;false)][timeout:180];area["admin_level"="6"]["name"="${w.ten_day_du}"]->.a;way(area.a)(${BBOX_HCM})["highway"]["name"];out tags;.a out;`;
+    const q = `[out:csv(name,::type,::lat,::lon;false)][timeout:180];area["admin_level"="6"]["name"="${w.ten_day_du}"]->.a;way(area.a)(${BBOX_HCM})["highway"]["name"];out center tags;.a out;`;
     const csv = await overpass(q); daTra++;
     if (csv == null) { console.log(`  ✗ ${w.ten_day_du}: không có trả lời`); await nghi(2000); continue; }
-    const { ten, soArea } = docCsv(csv);
+    const { dong, soArea } = gomDuong(csv);
     if (soArea !== 1) { console.log(`  ✗ ${w.ten_day_du}: ${soArea} đa giác cùng tên trong hộp bao — bỏ, cần soi tay`); await nghi(2000); continue; }
-    const n = await ghi(ten.map((t) => ({ ten: t, tinh: "TP.HCM", tinh_cu: w.tinh_cu, phuong: w.ten_day_du, quan_cu: w.quan_cu, nguon: `OSM Overpass ${NGAY} (way highway+name trong area phường)` })));
+    const n = await ghi(dong.map((x) => ({ ...x, tinh: "TP.HCM", tinh_cu: w.tinh_cu, phuong: w.ten_day_du, quan_cu: w.quan_cu, nguon: `OSM Overpass ${NGAY} (way highway+name trong area phường, out center)` })));
     if (n) coDong++; tongDong += n;
-    console.log(`  ${w.ten_day_du} (${w.quan_cu}): ${n} tên đường`);
+    const dem = (l) => dong.filter((x) => x.loai === l).length;
+    console.log(`  ${w.ten_day_du} (${w.quan_cu}): ${n} dòng — ${dem("duong")} đường, ${dem("so")} đường số, ${dem("hem")} hẻm`);
     await nghi(2000);
   }
 }
 // 2) Tây Ninh mới, Đồng Nai mới — theo đa giác tỉnh, chưa gán phường.
 for (const [tinh, tenOsm] of TINH_LON) {
   if (CHI_PHUONG || (CHI_TINH && CHI_TINH !== tinh)) continue;
-  const q = `[out:csv(name,::type;false)][timeout:900];area["admin_level"="4"]["name"="${tenOsm}"]->.a;way(area.a)["highway"]["name"];out tags;.a out;`;
+  const q = `[out:csv(name,::type,::lat,::lon;false)][timeout:900];area["admin_level"="4"]["name"="${tenOsm}"]->.a;way(area.a)["highway"]["name"];out center tags;.a out;`;
   const csv = await overpass(q); daTra++;
   if (csv == null) { console.log(`  ✗ ${tenOsm}: không có trả lời`); continue; }
-  const { ten } = docCsv(csv);
-  const n = await ghi(ten.map((t) => ({ ten: t, tinh, tinh_cu: null, phuong: "", quan_cu: null, nguon: `OSM Overpass ${NGAY} (way highway+name trong area tỉnh)` })));
+  const { dong } = gomDuong(csv);
+  const n = await ghi(dong.filter((x) => x.loai === "duong").map((x) => ({ ...x, tinh, tinh_cu: null, phuong: "", quan_cu: null, nguon: `OSM Overpass ${NGAY} (way highway+name trong area tỉnh, out center)` })));
   if (n) coDong++; tongDong += n;
   console.log(`  ${tenOsm}: ${n} tên đường`);
 }
