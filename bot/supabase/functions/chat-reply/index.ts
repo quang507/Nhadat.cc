@@ -2213,6 +2213,17 @@ Deno.serve(async (req) => {
         return { bong: null, cheDo: "tat" };
       }
     };
+    // 30/09/2026 (chủ dự án: "nhiều quy tắc quá … quy tắc nhiều ngu con bot ra, cái nào cần thì để lại cho AI nó làm"):
+    // công tắc `app_config.luat_loi_bot`. `gon` (mặc định, không có dòng cũng là gọn) TẮT năm luật SỬA VĂN mà câu lệnh
+    // model đã dặn sẵn — chèn câu xin lỗi, cắt khen vị trí / khen ngược nghĩa / khen lặp / đoán thanh khoản (luật cuối
+    // còn cắt đúng câu mẫu prompt dạy: "hẻm xe hơi tới cửa là khách chuộng lắm"). `du` bật lại cả năm, không cần deploy.
+    // Luật chống BỊA (giá, số đo, vị trí, hứa đã đăng / có hàng / hỏi chủ), khớp câu hỏi với ô đang hỏi, xưng hô: luôn giữ.
+    let luatLoiBotP: Promise<boolean> | null = null;
+    const loiBotDu = () => (luatLoiBotP ??= (async () => {
+      const { data, error } = await client.rpc("cau_hinh", { p_key: "luat_loi_bot" });
+      if (error) await ghiLoi(client, "chat-reply cau_hinh(luat_loi_bot)", error.message);
+      return String(data ?? "gon").trim() === "du";
+    })().catch(() => false));
     const traLoiSeller = async (
       replies: string[],
       extra: Record<string, unknown> = {},
@@ -2245,9 +2256,11 @@ Deno.serve(async (req) => {
         // Model lỡ chép nguyên chữ giữ chỗ của khối nhớ tạm → thay bằng tên thật.
         .map((r) => r.split(TEN_GIU_CHO).join(tenBot).trim()).filter(Boolean);
       // 23/09/2026 (FR-218 b): khách nói bot hiểu / ghi nhầm mà không câu nào xin lỗi → chèn lời xin lỗi (trước đổi xưng hô).
-      sach = themXinLoiKhiHieuNham(text, sach, goiNguoi);
+      const luatDu = await loiBotDu();
+      if (luatDu) sach = themXinLoiKhiHieuNham(text, sach, goiNguoi);
       // 30/09/2026 (chủ dự án chat thử): "Mình cho mình xin địa chỉ" (bot tự xưng "mình"), "vị trí khá thuận tiện" (khen suông).
-      sach = boKhenViTri(sach.map(botXungEm));
+      sach = sach.map(botXungEm);
+      if (luatDu) sach = boKhenViTri(sach);
       // 16/09/2026: khách là chú/cô/bác → mọi "em" (câu tiền định lẫn model) thành "cháu".
       sach = doiTuXung(sach, sellerRow.xung_ho ?? null, sellerRow.nhom_tuoi ?? null);
       // 22/09/2026: người lớn tuổi chưa rõ chú hay cô → không "anh chị", gọi "mình" (câu tiền định lẫn model).
@@ -2279,7 +2292,7 @@ Deno.serve(async (req) => {
       }
       sach = sach.map(boGachDai);
       // 23/09/2026 (bắn 26 tin): "Căn góc view thoáng khó bán lắm cô" — khen mà nói ngược nghĩa.
-      sach = suaKhenNguocNghia(sach);
+      if (luatDu) sach = suaKhenNguocNghia(sach);
       ackSua = null;
       ackAnh = [];
       thongBaoNhan = null;
@@ -5031,7 +5044,8 @@ Deno.serve(async (req) => {
           // 15/09/2026 (bắn thật P2): model trả lời CÂU LỆNH ("Em hiểu rồi ạ… Sẵn sàng nhận
           // hội thoại") → bỏ, dùng câu tiền định.
           if (sellerReply && laLoiMeta(sellerReply)) { console.log("chat-reply: r2 tra loi cau lenh, bo"); sellerReply = null; }
-          if (sellerReply && khenGanDay) sellerReply = boCauKhen(sellerReply);
+          const luatDuR2 = await loiBotDu();
+          if (sellerReply && khenGanDay && luatDuR2) sellerReply = boCauKhen(sellerReply);
           // 22/09/2026 (bộ đo giọng B01/B15/B16): "ô tô vào được", "xuyên thoáng", "nở hậu" khi chủ nhà CHƯA
           // nói — TONE_RULES cấm khen điều khách không nói nhưng model vẫn lọt. Chỉ áp cho lời MODEL (bản
           // nháp / bảng tiền định đọc từ DB có thứ chủ nhà nói ở lượt trước). Bằng chứng = chữ chủ nhà đã gõ
@@ -5041,7 +5055,7 @@ Deno.serve(async (req) => {
             if (sellerReply) sellerReply = boMenhDeKhenSai([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null;
             if (sellerReply) sellerReply = boHoiHoanCong([sellerReply], nextKey === "hoan_cong")[0] ?? null;
             if (sellerReply) sellerReply = suaGapTheoDeal(sellerReply, pendingReq.listings?.deal);
-            if (sellerReply) sellerReply = boKhenThiTruong([sellerReply])[0]?.trim() || null;
+            if (sellerReply && luatDuR2) sellerReply = boKhenThiTruong([sellerReply])[0]?.trim() || null;
             // 27/09/2026 (chủ dự án test Zalo: "Em biết Botanic không" → "Botanic ở Quận 1, dự án Phú Mỹ Hưng"): quận / khu
             // chủ nhà chưa nói và tin không có là bịa → bỏ câu đó. Bằng chứng = chữ chủ nhà + cột địa bàn của tin (lstNow).
             if (sellerReply) {
@@ -5530,7 +5544,7 @@ Deno.serve(async (req) => {
             // 25/09/2026 (bắn thật lx-08): tin vừa tạo luôn `cho_thong_tin` (chờ đủ thông tin + chủ duyệt nháp) mà model
             // viết "đã đăng lên web rồi" → bỏ mệnh đề đó. Câu hỏi model lệch khoá code chọn → thay bằng câu mẫu.
             if (raoReply) raoReply = boHuaDaDang([raoReply])[0] ?? null;
-            if (raoReply) raoReply = boKhenThiTruong([raoReply])[0]?.trim() || null;
+            if (raoReply && (await loiBotDu())) raoReply = boKhenThiTruong([raoReply])[0]?.trim() || null;
             if (raoReply) raoReply = boHuaHoiChuNha([raoReply])[0]?.trim() || null;
             // FR-239 d: tỉnh / quận / khu khách chưa nói (bằng chứng = câu rao) → bỏ câu đó, như đường hỏi tiếp.
             if (raoReply) {

@@ -358,9 +358,9 @@ fresh(seedKho);
 db().insert("info_requests", { listing_id: db().t.listings[0].id, question: "phap_ly", status: "pending" });
 v = await vong({ external_user_id: "z-ccrb", text: "sổ hồng đầy đủ em" });
 console.log(`   [đo] người bán trả lời câu chờ: ${v.n} truy vấn`);
-check("TOIUU-07 người bán trả lời câu chờ ≤ 23 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu; +1 24/09 FR-223: đọc tin + fact (một truy vấn nhúng) để rẽ nhánh câu kế, chỉ khi có luật đụng tới)", v.n <= 23 && v.r.body.role === "seller", `${v.n}`);
+check("TOIUU-07 người bán trả lời câu chờ ≤ 23 truy vấn (v43: 21; +1 trần cá nhân SEC-05; +2 FR-176 lịch sử + đếm căn; +1 FR-181 ghi tên trợ lý, CHỈ lượt đầu; +1 09/09 tối: đọc câu đã hết hạn để không mở lại; +1 11/09: đọc công tắc app_config.bao_lai_da_luu — tắt thì dừng ở đó; +1 14/09 FR-208: đọc công tắc boc_tach_ai, CHẠY SONG SONG, chỉ khi tin có mùi dữ liệu; +1 24/09 FR-223: đọc tin + fact (một truy vấn nhúng) để rẽ nhánh câu kế, chỉ khi có luật đụng tới; +1 30/09: đọc công tắc app_config.luat_loi_bot, một lần mỗi lượt)", v.n <= 24 && v.r.body.role === "seller", `${v.n}`);
 v = await vong({ external_user_id: "z-ccrb", text: "hoàn công đủ rồi" });
-check("TOIUU-07b lượt sau của cùng người bán ≤ 25 (không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song; +4 18/09 FR-211: câu 'hoàn công đủ rồi' có NHÃN → tìm tin, đọc nhan, gộp, ghi fact — chỉ khi câu có nhãn; +1 24/09 FR-223: đọc tin + fact để rẽ nhánh)", v.n <= 25, `${v.n}`);
+check("TOIUU-07b lượt sau của cùng người bán ≤ 25 (không còn update tên trợ lý; +1 11/09: đọc công tắc app_config.bao_lai_da_luu; +1 14/09 FR-208: công tắc boc_tach_ai, song song; +4 18/09 FR-211: câu 'hoàn công đủ rồi' có NHÃN → tìm tin, đọc nhan, gộp, ghi fact — chỉ khi câu có nhãn; +1 24/09 FR-223: đọc tin + fact để rẽ nhánh; +1 30/09: công tắc app_config.luat_loi_bot)", v.n <= 26, `${v.n}`);
 check("TOIUU-08 không còn UPDATE last_message_at tay (trigger DB lo)", !db().log.some((l) => l.table === "conversations" && l.op === "update" && l.payload && Object.keys(l.payload).length === 1 && "last_message_at" in l.payload));
 check("TOIUU-09 trigger giả đẩy last_message_at khi chèn tin", db().t.conversations.every((c) => !db().t.messages.some((m) => m.conversation_id === c.id) || c.last_message_at));
 fresh();
@@ -2426,6 +2426,22 @@ fresh(seedKho);
     check("FR250-E3 lời bot lượt đầu: không 'đã tạo tin', không 'cho mình xin'",
       !/tạo tin/.test(noi) && !/cho mình xin/i.test(noi), noi);
     globalThis.__model.create = undefined;
+  }
+  // 30/09/2026 (chủ dự án: "nhiều quy tắc quá … để lại cho AI nó làm"): công tắc `luat_loi_bot`. GỌN (production mặc định)
+  // không cắt câu nhận xét thị trường / khen của model — prompt tự dặn; ĐỦ thì cắt như cũ. Luật chống bịa vẫn chạy ở cả hai.
+  for (const [cheDo, conCau] of [["gon", true], ["du", false]]) {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", luat_loi_bot: cheDo };
+    const cau = "Dạ em ghi nhận ạ, khách mua dạo này hỏi nhà phố nhiều lắm. Anh chị cho em xin địa chỉ nhà nha?";
+    globalThis.__model.parse = (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT({ replies: [cau] });
+    globalThis.__model.create = () => cau;
+    const rL = await send({ external_user_id: `luat-${cheDo}`, text: "em cần bán nhà" });
+    const noi = rL.body.replies.filter((x) => !/^(🤖|💾|📝|📋|👤)/u.test(x)).join(" | ");
+    check(`LUAT-GON-${cheDo} luat_loi_bot=${cheDo} → câu 'khách mua … hỏi nhiều lắm' ${conCau ? "GIỮ (để AI quyết)" : "bị cắt"}`,
+      /hỏi nhà phố nhiều lắm/.test(noi) === conCau && /xin địa chỉ/.test(noi), noi);
+    globalThis.__model.create = undefined;
+    globalThis.__cauHinh = cuCH;
   }
   // FR-241 o (bắn lại 28/09, lx-85/lx-86/lx-87): đang hỏi ô khác, khách nhắn TRỌN một câu pháp lý ("sổ chung", "sổ hồng rồi em")
   // hay TRỌN một tên phường/xã ("xã Vĩnh Lộc A") — AI im hoặc chỉ xếp vào kiến thức thêm → luật bị gạt: pháp lý rơi vào bổ sung,

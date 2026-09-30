@@ -158,7 +158,7 @@ async function mayChuMay() {
   };
   moi();
   // Công tắc như production (boc_tach_ai 'chinh' từ 21/09). `test_reset_hello`: gõ "hello" là làm lại người đó.
-  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi", luat_loi_bot: "gon" };
   globalThis.__mauCau = { ban: "", mua: "" };
   const ENV = { SUPABASE_URL: "http://may", SUPABASE_SERVICE_ROLE_KEY: "svc", BRIDGE_SECRET: "s3cret", ANTHROPIC_API_KEY: API_KEY ?? "test-key", ANTHROPIC_MODEL: MODEL };
   globalThis.Deno = { serve: (h) => { globalThis.__handler = h; }, env: { get: (k) => ENV[k] } };
