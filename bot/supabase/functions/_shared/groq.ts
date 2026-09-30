@@ -286,7 +286,12 @@ export function bocDuPhong(
           // nên bỏ sang nguồn kế. 413 thêm 15/09: bậc miễn phí Groq trần chữ-mỗi-phút
           // THEO MODEL, prompt người mua ~14k chữ bị qwen trả "Request too large"
           // trong khi gpt-oss-120b còn nhận được.
-          if (!/^(?:Groq|Gemini) (413|429|5\d\d)/.test(loiCua(e))) break;
+          if (!/^(?:Groq|Gemini) (413|429|5\d\d)/.test(loiCua(e))) {
+            // 30/09/2026: nguồn hỏng KHÔNG vì nhịp / quá tải (sai khoá, sai tên model, sai khuôn JSON…) là SỰ CỐ — trước đây
+            // chỉ lỗi của nguồn CUỐI được ném lên (Claude "hết tiền"), lỗi Groq biến mất và không ai biết Groq hỏng vì sao.
+            await ghiSo?.(`du phong hong - ${n.ten} ${m}`, loiCua(e).slice(0, 300));
+            break;
+          }
           // Xoay model là ĐƯỜNG ĐI BÌNH THƯỜNG của lưới dự phòng, không phải sự cố.
           // Ghi vào sổ lỗi là tự nuôi còi báo động (bài học escalation-feed 08/09).
           console.log(`${n.ten} het nhip, xoay khoi ${m}`);

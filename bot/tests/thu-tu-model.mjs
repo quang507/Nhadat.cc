@@ -92,6 +92,8 @@ const chu = (r) => r?.content?.[0]?.text;
   const c = bocDuPhong(claude, G, ghiSo, "groq");
   const r = await c.messages.create(P);
   la("groq trước: Groq 400 (không phải nhịp) → không xoay m2, sang Claude luôn", [chu(r), goiGroq, goiClaude], ["claude", ["m1"], ["create"]]);
+  // 30/09/2026: lỗi Groq không phải nhịp là sự cố — phải vào sổ (trước đây chỉ lỗi Claude ở cuối chuỗi được ném lên).
+  la("groq trước: Groq 400 → ghi MỘT dòng sổ lỗi 'du phong hong'", soGhiSo, 1);
 }
 {
   reset();
