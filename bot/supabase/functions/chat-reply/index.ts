@@ -118,7 +118,7 @@ import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extract
 import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
 import { nhanhCuaKhoa } from "../_shared/extraction/re-nhanh.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
-import { boCauHoiLap, boLapCum, chuanKhuVucMua, loaiKhoTuHoSo, loaiNhaTrongCau, boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauHoiLap, boCauHuaLoc, boLapCum, chuanKhuVucMua, loaiKhoTuHoSo, loaiNhaTrongCau, boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -6934,7 +6934,7 @@ Deno.serve(async (req) => {
     const chiHoiDo = boCauHoiDo(out.replies.filter((x) => !/^\s*(?:🤖|💾|📝|📋)/u.test(x))).length === 0;
     if (!coNhacCan(out.replies, cans) && (doiGia || (chiHoiDo && !daDuaTruoc))) {
       const botTruoc = history.find((m) => m.sender === "bot")?.body ?? null; // history mới nhất trước
-      out.replies = [...boCauHoiDo(boCauHoiLap(out.replies, botTruoc)), bongBongGoiYCan(cans, goiMua ?? "mình")];
+      out.replies = [...boCauHuaLoc(boCauHoiDo(boCauHoiLap(out.replies, botTruoc))), bongBongGoiYCan(cans, goiMua ?? "mình")];
       console.log(doiGia ? "chat-reply: khách đổi ngân sách - đưa 2 căn đầu kho" : "chat-reply: model chưa đưa căn dù đủ tiêu chí - đưa 2 căn đầu kho");
     }
   }
@@ -7364,11 +7364,12 @@ Deno.serve(async (req) => {
   // `preferences.photo_offset` và câu trả lời kết bằng "xem thêm hình không
   // ạ?"; lượt sau "xem thêm" → gửi 4 tấm kế từ offset. Hết thì xoá offset.
   let conHinh = false;
+  const KHACH_XIN_HINH_RE = /hình|ảnh|\bhinh\b|hinh anh|photo|\bpic\b/i;
   const viecAnh = async () => {
     const photoWanted = out!.send_photos ??
       (xemThemHinh
         ? offsetCu!.code!
-        : /hình|ảnh|\bhinh\b|hinh anh|photo|\bpic\b/i.test(text) ? (mentioned[0] ?? repliedCode ?? null)
+        : KHACH_XIN_HINH_RE.test(text) ? (mentioned[0] ?? repliedCode ?? null)
         // 23/09/2026: model hứa "em gửi hình liền" mà quên send_photos → đính kèm ảnh của căn đang nói (nếu có).
         : replies.some(laHuaGuiHinh) ? (repliedCode ?? canDangNoi?.code ?? null) : null);
     if (!photoWanted) return;
@@ -7404,7 +7405,11 @@ Deno.serve(async (req) => {
   await viecAnh();
   // 23/09/2026 (bắn 26 tin): tin 0 ảnh, bot vẫn "Em gửi hình liền đây :)". Không có tấm nào để gửi → nói thật.
   if (!photos.length && replies.some(laHuaGuiHinh)) {
-    const loiHinh = doiTuXung([`Căn này chủ nhà chưa gửi hình ạ, ${goiMua ?? "mình"} muốn xem thì em hẹn đi xem trực tiếp nha.`], goiMua, prefs.nhom_tuoi === "lon_tuoi" ? "lon_tuoi" : null)[0];
+    // 30/09/2026: khách không xin hình thì chỉ bỏ câu hứa (xem chanHuaGuiHinh).
+    const khachXinHinh = !!out!.send_photos || !!xemThemHinh || KHACH_XIN_HINH_RE.test(text);
+    const loiHinh = khachXinHinh
+      ? doiTuXung([`Căn này chủ nhà chưa gửi hình ạ, ${goiMua ?? "mình"} muốn xem thì em hẹn đi xem trực tiếp nha.`], goiMua, prefs.nhom_tuoi === "lon_tuoi" ? "lon_tuoi" : null)[0]
+      : null;
     replies.splice(0, replies.length, ...chanHuaGuiHinh(replies, loiHinh));
     console.log("chat-reply: chặn lời hứa gửi hình (không có ảnh)");
   }

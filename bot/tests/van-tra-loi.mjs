@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauHoiLap, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauHoiLap, boCauHuaLoc, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -1103,6 +1103,11 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
   ok("boLapCum chữ đơn lặp 'từ từ' giữ", boLapCum(["từ từ ạ"])[0] === "từ từ ạ");
   ok("giongCauHoi hai cách hỏi hẻm/mặt tiền", giongCauHoi("Mình thích hẻm xe hơi hay mặt tiền hơn ạ?", "Mình muốn hẻm xe hơi hay mặt tiền hơn vậy ạ?"));
   ok("giongCauHoi khác ý", !giongCauHoi("Mình thích hẻm xe hơi hay mặt tiền hơn ạ?", "Mình cần mấy phòng ngủ ạ?"));
+  ok("boCauHuaLoc bỏ 'em sẽ lọc thêm… chờ em một tí'", JSON.stringify(boCauHuaLoc(["Dạ vậy em sẽ lọc thêm mấy căn nữa cho mình ạ, chờ em một tí."])) === "[]");
+  ok("boCauHuaLoc giữ câu hỏi 'mình muốn em lọc thêm không ạ?'", JSON.stringify(boCauHuaLoc(["Dạ ok. Mình muốn em lọc thêm căn hẻm xe hơi không ạ?"])) === JSON.stringify(["Dạ ok. Mình muốn em lọc thêm căn hẻm xe hơi không ạ?"]));
+  ok("boCauHuaLoc giữ câu có căn thật", JSON.stringify(boCauHuaLoc(["Dạ căn Trần Hưng Đạo 5,8 tỷ hợp mình nè."])) === JSON.stringify(["Dạ căn Trần Hưng Đạo 5,8 tỷ hợp mình nè."]));
+  ok("boCauHuaLoc 'đợi em xíu' không dấu", JSON.stringify(boCauHuaLoc(["Da doi em xiu nha.", "Can Tran Hung Dao 5,8 ty."])) === JSON.stringify(["Can Tran Hung Dao 5,8 ty."]));
+  ok("chanHuaGuiHinh(null) chỉ bỏ câu hứa, không chèn", JSON.stringify(chanHuaGuiHinh(["Dạ căn Hải Thượng Lãn Ông 6 tỷ 4 ạ. Em gửi hình liền cho mình nha."], null)) === JSON.stringify(["Dạ căn Hải Thượng Lãn Ông 6 tỷ 4 ạ."]));
   ok("boCauHoiLap bỏ câu hỏi lặp, giữ phần khác", JSON.stringify(boCauHoiLap(["Dạ em ghi nhận. Mình muốn hẻm xe hơi hay mặt tiền hơn vậy ạ?"], "Mình thích hẻm xe hơi hay mặt tiền hơn ạ?")) === JSON.stringify(["Dạ em ghi nhận."]));
   ok("FR250 'Sổ nhà mình' giữ", botXungEm("Sổ nhà mình riêng hay chung ạ?") === "Sổ nhà mình riêng hay chung ạ?");
   for (const [vao, ra] of [

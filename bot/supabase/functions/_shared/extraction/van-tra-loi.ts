@@ -853,14 +853,27 @@ export function laHuaGuiHinh(cau: string): boolean {
  * Căn chưa có tấm hình nào mà bot hứa "em gửi hình liền đây" (bắn thật 23/09: tin 0 ảnh, hai khách nghe hứa).
  * Câu hứa thay bằng `loiThat` (một lần); không câu nào hứa thì trả đúng mảng cũ.
  */
-export function chanHuaGuiHinh(replies: string[], loiThat: string): string[] {
+export function chanHuaGuiHinh(replies: string[], loiThat: string | null): string[] {
   const ra = locCauTrongBongBong(replies, (c) => laHuaGuiHinh(c));
   if (ra === replies) return replies;
+  // 30/09/2026 (bắn thử mua lx-mua-d291): khách KHÔNG xin hình ("căn nào rẻ nhất") mà model tự hứa gửi → chỉ bỏ câu hứa;
+  // chèn "chủ nhà chưa gửi hình" vào đó là trả lời một câu khách không hỏi.
+  if (loiThat == null) return ra;
   // Lời thật đứng ở chỗ bong bóng đầu tiên có câu hứa.
   const i = replies.findIndex((r) => tachCau(r).some((c) => laHuaGuiHinh(c)));
   const out = [...ra];
   out.splice(Math.min(Math.max(i, 0), out.length), 0, loiThat);
   return out;
+}
+
+/**
+ * 30/09/2026 (bắn thử mua lx-mua-d291): "vậy 7 tỷ cũng được em" → model "Dạ vậy em sẽ lọc thêm mấy căn nữa cho mình ạ,
+ * chờ em một tí." ngay trước bong bóng danh sách căn code vừa chèn — hứa một việc đã làm xong. Chỉ gọi khi lượt này
+ * CÓ đưa căn; câu chỉ hỏi ("mình muốn em lọc thêm không?") giữ.
+ */
+const HUA_LOC_RE = /\b(?:(?:de\s+)?em\s+(?:se\s+|dang\s+)?(?:loc|tim|kiem|ra soat|check)\s+(?:them|lai|ngay|lien|thu)\b|(?:cho|doi)\s+em\s+(?:mot\s+)?(?:ti|chut|xiu|lat|giay)\b)/;
+export function boCauHuaLoc(replies: string[]): string[] {
+  return locCauTrongBongBong(replies, (c) => !/\?\s*$/.test(c.trim()) && HUA_LOC_RE.test(boDau(c)));
 }
 
 /** Câu hứa đi HỎI CHỦ NHÀ ("để em hỏi lại chủ nhà rồi báo", "em xác nhận lại với chủ"). */
