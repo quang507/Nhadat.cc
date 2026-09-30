@@ -3581,6 +3581,18 @@ fresh(seedKho);
     !f2b("dien_tich") && db().t.listings[0].area_m2 !== 240 && f2b("dien_tich_san")?.answer === "240m2" && f2b("ket_cau")?.answer === "4 tấm" &&
       (!f2b("loai_bds") || f2b("loai_bds").answer.length < 30),
     JSON.stringify({ f: db().t.listing_facts, L: db().t.listings[0], rep: r.body.replies }));
+  // 30/09/2026 (bắn thử vector v288, SRS-5.1f): đang hỏi PHƯỜNG, chủ nhà tả "nhà có 1 phòng ngủ ngay tầng trệt cho người già…" —
+  // lời sửa FR-164 bắt "1 phòng ngủ" thành số phòng ngủ = 1 (nguồn seller_chat). Phòng ngủ theo tầng không phải lời sửa.
+  fresh();
+  r = await send({ external_user_id: "chu-pn-tang", text: "bán nhà hẻm xe hơi đường Trần Bình Trọng quận 5, 4x15, trệt 2 lầu sân thượng, giá 8 tỷ" });
+  const Lpn = db().t.listings[0];
+  db().t.info_requests.forEach((x) => { if (x.listing_id === Lpn.id) x.status = "expired"; });
+  db().insert("info_requests", { listing_id: Lpn.id, question: "phuong", status: "pending" });
+  r = await send({ external_user_id: "chu-pn-tang", text: "nhà có 1 phòng ngủ ngay tầng trệt cho người già, sau nhà có sân phơi rộng, đi bộ ra chợ 5 phút" });
+  check("CHU-PN-TANG '1 phòng ngủ ngay tầng trệt' → KHÔNG ghi số phòng ngủ, không đáp xác nhận giá",
+    !db().t.listing_facts.some((f) => f.listing_id === Lpn.id && f.question === "so_phong_ngu") && db().t.listings[0].bedrooms == null &&
+      !/đang ghi giá/.test(r.body.replies.join("\n")),
+    JSON.stringify({ f: db().t.listing_facts.filter((f) => f.listing_id === Lpn.id).map((f) => [f.question, f.answer]), rep: r.body.replies }));
   fresh();
   r = await send({ external_user_id: "chu-3", text: "bán nhà 4 tấm hẻm 5m phú định q8 diện tích tổng 240m2 giá 6 tỷ" });
   check("CHU-9 câu rao 'nhà 4 tấm diện tích tổng 240m2' → area_m2 trống, fact dien_tich_san 240m2",

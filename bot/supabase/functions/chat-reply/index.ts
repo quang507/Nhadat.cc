@@ -73,7 +73,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, soPhongNguTheoTang, themTangPhu, TIEU_TU_DAU } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 // Câu hỏi mà câu trả lời LÀ một số tiền nhưng không phải giá bán (FR-223): số tiền kèm theo không được ghi thành `gia`.
@@ -3402,7 +3402,10 @@ Deno.serve(async (req) => {
       batSua(mGia, "gia", (m) => m[1].trim());
       batSua(/(?:phường|phuong)\s*\.?\s*(\d{1,2})\b/i.exec(textSua), "phuong",
         (m) => `Phường ${m[1]}`);
-      batSua(/(\d{1,2})\s*(?:phòng ngủ|phong ngu|\bpn\b)/i.exec(textSua), "so_phong_ngu",
+      // 30/09/2026 (bắn thử vector v288): "nhà có 1 phòng ngủ ngay tầng trệt cho người già" không phải lời SỬA số phòng ngủ —
+      // phòng ngủ theo tầng (soPhongNguTheoTang) đi đường thông tin bổ sung.
+      const mPnSua = /(\d{1,2})\s*(?:phòng ngủ|phong ngu|\bpn\b)/i.exec(textSua);
+      batSua(mPnSua && !soPhongNguTheoTang(text).includes(Number(mPnSua[1])) ? mPnSua : null, "so_phong_ngu",
         (m) => m[1]);
       // 16/09/2026 (bắn thật sau deploy #144): "nhà 4 tấm diện tích TỔNG 240m2" là SÀN — lời sửa
       // từng đè area_m2 = 240 và nuốt luôn fact `dien_tich_san`. Sàn/sử dụng/tổng-của-nhà-có-tầng
