@@ -1339,6 +1339,10 @@ export function goiCanHo(reply: string): string {
 export function botXungEm(r: string): string {
   if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) return r;
   return r
+    // 30/09/2026 (bắn thật v285): "Cảm ơn em đã ghi nhận bán căn hộ Sunrise City…" — model cảm ơn KHÁCH vì việc BOT làm.
+    // Ghi nhận / ghi lại / lưu lại là việc của bot → "Dạ em ghi nhận…".
+    .replace(/(?<![\p{L}])([Cc])(?:ảm|ám) ơn\s+(?:(?:em|mình|bạn|anh\/chị|anh chị|anh|chị)\s+)?(?:đã\s+|vừa\s+)?(ghi nhận|ghi lại|lưu lại)(?![\p{L}])/gu,
+      (_m, c: string, v: string) => `${c === "C" ? "Dạ" : "dạ"} em ${v}`)
     .replace(/(?<![\p{L}])([Cc])ho mình (xin|hỏi)(?![\p{L}])/gu, "$1ho em $2")
     .replace(/(?<![\p{L}])([Mm])ình (đã |vừa |sẽ )?(ghi nhận|ghi lại|lưu lại|tạo tin)(?![\p{L}])/gu,
       (_m, m: string, t: string | undefined, v: string) => `${m === "M" ? "Em" : "em"} ${t ?? ""}${v}`);
