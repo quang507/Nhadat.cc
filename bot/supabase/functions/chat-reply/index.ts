@@ -62,6 +62,7 @@ import { boHoaHong, coSdt, SDT_NGUON, thayLienHe, thayLienHeCoId } from "../_sha
 import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/extraction/tien-ich.ts";
 import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
 import { nhungCauTim, xepTheoNghia } from "../_shared/ai/nhung.ts"; // FR-216
+import { chonUngVienNghia, TU_CHUNG_DU_AN, TU_CHUNG_DUONG } from "../_shared/extraction/khop-ten-nghia.ts";
 import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
@@ -559,14 +560,73 @@ const MO_HO_KHONG_DAU = new Set(["la", "ben", "van", "noi", "toan"]);
 function tenDuAnTrongCau(t: string): string | null {
   const m = /(?:dự án|du an|khu đô thị|khu do thi|khu dân cư|khu dan cu)\s+([\p{L}\p{N}'’.\- ]{3,45})/iu.exec(t);
   // Cắt luôn phần địa bàn dính đuôi: "Lam Sơn Riverside quận 4" → "Lam Sơn Riverside".
-  const ten = (m?.[1]?.split(/[,.;\n]/)[0] ?? "")
+  let ten = (m?.[1]?.split(/[,.;\n]/)[0] ?? "")
     .replace(/\s+(quận|quan|phường|phuong|huyện|huyen|thành phố|tp)\b.*$/iu, "")
     .trim();
+  // 30/09/2026: câu rao không phẩy ("dự án vinhome gran park 2pn 70m2 giá 3 tỷ") — cắt ở thông số đầu tiên (số kèm đơn vị,
+  // "giá / tầm / diện tích"), kẻo cả câu thành tên (quá 6 chữ → null) và tìm theo nghĩa không có tên để tìm.
+  const DON_VI = /^(?:pn|m2|m²|m|tỷ|ty|tỉ|ti|tr|triệu|trieu|tầng|tang|lầu|lau|phòng|phong|wc)$/iu;
+  const tuTho = ten.split(/\s+/);
+  // Chữ không dấu ("gia", "tam") trùng chữ trong tên dự án thật (Gia Hòa, Saigon Gia Định) → chỉ dừng khi SỐ theo ngay sau.
+  const cat = tuTho.findIndex((w, i) => /^(?:giá|tầm|khoảng|diện|dt)$/iu.test(w) ||
+    (/^(?:gia|tam|khoang|dien)$/i.test(w) && /^\d/.test(tuTho[i + 1] ?? "")) ||
+    /^\d+(?:[.,]\d+)?(?:pn|m2|m²|m|tỷ|ty|tỉ|ti|tr|triệu|trieu|tầng|tang|lầu|lau|wc)$/iu.test(w) ||
+    (/^\d+(?:[.,]\d+)?$/.test(w) && DON_VI.test(tuTho[i + 1] ?? "")));
+  if (cat > 0) ten = tuTho.slice(0, cat).join(" ");
   const tu = ten.split(/\s+/);
   const dauTien = tu[0]?.toLowerCase() ?? "";
   if (KHONG_PHAI_TEN.has(dauTien)) return null;
   if (MO_HO_KHONG_DAU.has(dauTien) && !/^\p{Lu}/u.test(tu[1] ?? "")) return null;
   return ten.length >= 3 && tu.length <= 6 ? ten : null;
+}
+
+// ─── 30/09/2026 (chủ dự án: "2 hàm tìm theo nghĩa cho địa danh và dự án đang nằm không trong DB … làm đi") ───
+// Tên DỰ ÁN / tên ĐƯỜNG khách gõ sai mà khớp chữ (`match_projects`, `tim_duong` lệch ≤ 2 ký tự) không ra → tìm theo NGHĨA
+// (vector, `tim_du_an_theo_nghia` / `tim_dia_danh_theo_nghia`, 20260930a), rồi MÁY xác nhận tên còn gần chữ khách gõ và ra
+// đúng MỘT tên (`chonUngVienNghia`). Tắt tìm theo nghĩa / chưa nhúng / Gemini hỏng → null, bot đi đường cũ; đó là đường
+// đi bình thường nên chỉ console.log (RPC hỏng mới vào sổ).
+async function sanSangNghia(client: ReturnType<typeof serviceClient>): Promise<string | null> {
+  const { data: sang, error } = await client.rpc("tim_nghia_san_sang");
+  if (error || sang !== true) return null;
+  return await secretOf(client, "GEMINI_API_KEY");
+}
+type DuAnNghia = { id: string; name: string; district: string | null; ward: string | null };
+async function timDuAnTheoNghia(client: ReturnType<typeof serviceClient>, ten: string | null | undefined): Promise<DuAnNghia | null> {
+  const go = (ten ?? "").trim();
+  if (go.length < 3) return null;
+  try {
+    const khoa = await sanSangNghia(client);
+    if (!khoa) return null;
+    const vec = await nhungCauTim(khoa, `Dự án ${go}`);
+    const { data, error } = await client.rpc("tim_du_an_theo_nghia", { p_vec: vec, p_limit: 5 });
+    if (error) { await ghiLoi(client, "chat-reply tim_du_an_theo_nghia", error.message); return null; }
+    const u = chonUngVienNghia(go, ((data ?? []) as Array<{ id: string; name: string; do_gan: number }>).map((d) => ({ ...d, ten: d.name })), TU_CHUNG_DU_AN);
+    if (!u) return null;
+    const { data: p, error: pErr } = await client.from("projects").select("id, name, district, ward").eq("id", u.id).maybeSingle();
+    if (pErr) { await ghiLoi(client, "chat-reply doc du an (theo nghia)", pErr.message); return null; }
+    if (p) console.log(`du an theo nghia: "${go}" → ${u.name} (${u.do_gan.toFixed(3)})`);
+    return (p as DuAnNghia | null) ?? null;
+  } catch (e) {
+    console.log(`tim du an theo nghia: ${(e as Error)?.message ?? e}`);
+    return null;
+  }
+}
+async function timDuongTheoNghia(client: ReturnType<typeof serviceClient>, ten: string, quan: string | null | undefined): Promise<string | null> {
+  try {
+    const khoa = await sanSangNghia(client);
+    if (!khoa) return null;
+    const vec = await nhungCauTim(khoa, `Đường ${ten}${quan ? `, ${quan}` : ""}, Thành phố Hồ Chí Minh`);
+    const { data, error } = await client.rpc("tim_dia_danh_theo_nghia", { p_vec: vec, p_loai: ["duong", "so"], p_limit: 8 });
+    if (error) { await ghiLoi(client, "chat-reply tim_dia_danh_theo_nghia", error.message); return null; }
+    const ds = ((data ?? []) as Array<{ ten: string; quan_cu: string | null; do_gan: number }>)
+      .filter((d) => !quan || !d.quan_cu || boDau(d.quan_cu) === boDau(quan));
+    const u = chonUngVienNghia(ten, ds, TU_CHUNG_DUONG);
+    if (u) console.log(`duong theo nghia: "${ten}" → ${u.ten} (${u.do_gan.toFixed(3)})`);
+    return u?.ten ?? null;
+  } catch (e) {
+    console.log(`tim duong theo nghia: ${(e as Error)?.message ?? e}`);
+    return null;
+  }
 }
 
 const KHOA_DU_AN = new Set([
@@ -1875,6 +1935,9 @@ Deno.serve(async (req) => {
       const kq = chonDuong(goc, (data ?? null) as UngVienDuong[] | null, quan ?? null, phuong ?? null);
       if (kq.loai === "sua") return { viTri: theTenDuong(viTri, goc, kq.ten), goiY: null };
       if (kq.loai === "hoi") return { viTri, goiY: { goc, ten: kq.ten, vi_tri: theTenDuong(viTri, goc, kq.ten) } };
+      // 30/09/2026: lệch hơn 2 ký tự ("huyn tanphat") → tìm theo nghĩa; ra tên đường thì chỉ HỎI XÁC NHẬN như gợi ý thường.
+      const tenNghia = await timDuongTheoNghia(client, goc, quan);
+      if (tenNghia && boDau(tenNghia) !== boDau(goc)) return { viTri, goiY: { goc, ten: tenNghia, vi_tri: theTenDuong(viTri, goc, tenNghia) } };
       return { viTri, goiY: null };
     };
     /** Cất gợi ý vào `boc_tach.duong_goi_y` rồi trả câu hỏi xác nhận (null = không cất được → hỏi như cũ). */
@@ -4748,7 +4811,10 @@ Deno.serve(async (req) => {
           if (pendingReq.question === "vi_tri" && !pendingReq.listings?.project_id) {
             const { data: dsDA, error: daErr } = await client.rpc("match_projects", { p_text: dapAn });
             if (daErr) await ghiLoi(client, "chat-reply match_projects(vi_tri)", daErr.message);
-            const da = ((dsDA ?? []) as Array<{ id: string; name?: string; district?: string | null; ward?: string | null }>)[0] ?? null;
+            type DaKho = { id: string; name?: string; district?: string | null; ward?: string | null };
+            let da: DaKho | null = ((dsDA ?? []) as DaKho[])[0] ?? null;
+            // 30/09/2026: tên dự án gõ sai → tìm theo nghĩa, máy xác nhận tên (AI đọc tên dự án thì lấy tên AI đọc).
+            if (!da) da = await timDuAnTheoNghia(client, aiChinh?.ghi.find((g) => g.question === "du_an_ten")?.answer ?? tenDuAnTrongCau(dapAn));
             if (da && !duAnLaTenDuong(da.name, dapAn)) {
               const { data: cu } = await client.from("listings").select("district, ward, boc_tach").eq("id", pendingReq.listing_id).maybeSingle();
               const macDinh = !cu?.district || (cu?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
@@ -5265,7 +5331,10 @@ Deno.serve(async (req) => {
       // 14/09/2026: "nhà phố quận 7 đường Huỳnh Tấn Phát" khớp dự án "Căn Hộ Cao Cấp Huỳnh Tấn
       // Phát" chỉ vì trùng tên đường — tin nhận luôn phường của dự án. Trùng tên đường mà câu
       // không nhắc dự án / chung cư / căn hộ thì không phải dự án.
-      const duAn = duAnKhop && !duAnLaTenDuong(duAnKhop.name, text) ? duAnKhop : null;
+      let duAn: { id: string; name?: string; district?: string | null; ward?: string | null } | null =
+        duAnKhop && !duAnLaTenDuong(duAnKhop.name, text) ? duAnKhop : null;
+      // 30/09/2026: tên dự án gõ sai ("vinhome gran park") khớp chữ không ra → tìm theo nghĩa, máy xác nhận tên.
+      if (!duAn) duAn = await timDuAnTheoNghia(client, aiRao?.duAn ?? tenDuAnTrongCau(text));
       // Phường tên chữ ("phường Hiệp Bình Chánh") khi câu không có phường số (14/09).
       let phuongRao = aiRao?.phuong ?? (wardNo ? `Phường ${wardNo}` : phuongTenCauRao(text));
       // 15/09/2026 (bắn thật B1): câu rao KHÔNG DẤU "phuong hiep binh chanh" — tra bảng
@@ -6099,7 +6168,7 @@ Deno.serve(async (req) => {
   const saoM = SAO_RE_KD.exec(tKD);
   const saoKhach = saoM ? Number(saoM[1] ?? saoM[2]) : null;
   const [
-    { data: khoTho }, { data: partnerProj }, { data: matchedProj }, { data: askedListings },
+    { data: khoTho }, { data: partnerProj }, { data: matchedProjGoc }, { data: askedListings },
     { data: askedPhotos }, giaTB, { data: nhacFeedback },
   ] = await Promise.all([
     minimumMet || mentioned.length ? khoQ : Promise.resolve({ data: [] as never[] }),
@@ -6141,6 +6210,7 @@ Deno.serve(async (req) => {
         .order("sent_at", { ascending: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null as { id: string; listing_id: string | null } | null }),
   ]);
+  let matchedProj: unknown[] | null = matchedProjGoc as unknown[] | null;
   // FR-216: xếp kho theo NGHĨA câu khách (vector Gemini ↔ `listings.nhung`) TRONG nhóm đã lọc cứng. Hỏng bất
   // cứ bước nào → giữ thứ tự cũ (gấp trước, mới trước), ghi sổ. Căn chưa có vector xếp sau căn có.
   let listings = khoTho;
@@ -6281,6 +6351,15 @@ Deno.serve(async (req) => {
   // Tối đa 2 dự án khách nhắc (FR-171 i): mỗi dự án đủ thông số + mẫu căn là
   // ~1.350 ký tự không nhớ tạm; khách nhắc 3-4 tên một câu là hiếm và model
   // vẫn trả lời được từ hai dự án đầu.
+  // 30/09/2026: khách mua gõ sai tên dự án ("sunrise siti") → khớp chữ không ra thì tìm theo nghĩa, máy xác nhận tên.
+  if (!(matchedProj ?? []).length) {
+    const dn = await timDuAnTheoNghia(client, tenDuAnTrongCau(text));
+    if (dn) {
+      const { data: pd, error: pdErr } = await client.from("projects").select("*").eq("id", dn.id).limit(1);
+      if (pdErr) await ghiLoi(client, "chat-reply doc du an (mua, theo nghia)", pdErr.message);
+      else if (pd?.length) matchedProj = pd;
+    }
+  }
   const matched = ((matchedProj ?? []) as Proj[])
     .filter((m) => m.name !== partner?.name).slice(0, 2);
   // Dự án nhà mình đứng RIÊNG khỏi khối kho: nó giống hệt nhau cho mọi khách và
