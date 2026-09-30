@@ -1713,7 +1713,7 @@ fresh(seedKho);
   globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "quận 5", budget: "tầm 6 tỷ" }, replies: ["Dạ chị cần mấy phòng ngủ ạ?"] });
   r = await send({ external_user_id: "mua-bldl", text: "tìm nhà quận 5 tầm 6 tỷ" });
   check("BLDL-11 người MUA, công tắc bật → 🤖 'Đã lưu nhu cầu' là bong bóng ĐẦU, đúng khoá vừa lưu, không khoá nội bộ",
-    /^🤖 Bóc tách được: .*khu vực muốn tìm: "quận 5".*khoảng giá: "tầm 6 tỷ"/.test(r.body.replies[0] ?? "") && !/tên trợ lý|ten_tro_ly|•ai/.test(r.body.replies[0] ?? "") && r.body.replies.length === 2,
+    /^🤖 Bóc tách được: .*khu vực muốn tìm: "Quận 5".*khoảng giá: "tầm 6 tỷ"/.test(r.body.replies[0] ?? "") && !/tên trợ lý|ten_tro_ly|•ai/.test(r.body.replies[0] ?? "") && r.body.replies.length === 2,
     JSON.stringify(r.body.replies));
   // 22/09/2026 (bắn thật): model mở bằng "Dạ em đã lưu nhu cầu: …" sau 🤖 → câu đó bị bỏ, câu hỏi giữ.
   globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, deal: "ban", area: "quận 5", budget: "tầm 6 tỷ", bedrooms: 3 }, replies: ["Dạ em đã lưu nhu cầu: mua nhà Quận 5, tầm 6 tỷ để ở ạ. Mình thích hẻm xe hơi hay mặt tiền ạ?"] });
@@ -1722,7 +1722,7 @@ fresh(seedKho);
     /^🤖 Bóc tách được/.test(r.body.replies[0] ?? "") && !/đã lưu nhu cầu: mua/.test(r.body.replies.slice(1).join(" ")) && /hẻm xe hơi hay mặt tiền/.test(r.body.replies.join(" ")),
     JSON.stringify(r.body.replies));
   const hsMua = db().t.buyers.find((b) => b.zalo_user_id === "mua-bldl")?.preferences ?? {};
-  check("BLDL-11b 🤖 người mua nói đúng thứ ĐÃ vào DB (hồ sơ có area + budget)", hsMua.area === "quận 5" && hsMua.budget === "tầm 6 tỷ", JSON.stringify(hsMua));
+  check("BLDL-11b 🤖 người mua nói đúng thứ ĐÃ vào DB (hồ sơ có area + budget)", hsMua.area === "Quận 5" && hsMua.budget === "tầm 6 tỷ", JSON.stringify(hsMua));
   const nLich = parseCalls().length;
   r = await send({ external_user_id: "mua-bldl", text: "3 phòng em" });
   const lichSuMua = JSON.stringify(parseCalls().slice(nLich).map((c) => c.params.messages));
@@ -2348,6 +2348,35 @@ fresh(seedKho);
     const rH = await send({ external_user_id: "ns-3", text: "có căn nào không em" });
     check("FR248-E2b kho có căn, model chỉ 'em gợi 2 căn … nhé:' → thay bằng căn thật trong kho (Trần Hưng Đạo 5,8 tỷ)",
       rH.body.replies.some((x) => /Trần Hưng Đạo/.test(x) && /5,8 tỷ/.test(x)) && !rH.body.replies.some((x) => /gợi 2 căn/.test(x)), JSON.stringify(rH.body.replies));
+  }
+  // 30/09/2026 (bắn thử người mua, SRS-5.1h). (C) "tìm căn hộ quận 7 2 phòng ngủ dưới 3 tỷ" → model "Dạ có…" và bot đưa NHÀ PHỐ
+  // QUẬN 5 6 tỷ 5: kho không lọc quận / loại, còn "dưới 3 tỷ" đọc thành {min 2,85 tỷ} ("hon" khớp trong "phòng").
+  {
+    fresh((d) => { seedKho(d);
+      d.insert("listings", { code: "BDS-CH-Q7-0001", seller_id: d.t.sellers[0].id, deal: "ban", status: "dang_ban", location_raw: "Nguyễn Hữu Thọ", ward: "Phường Tân Hưng", district: "Quận 7", property_type: "chung_cu", price_raw: "2 tỷ 8", price_vnd: 2.8e9, area_m2: 70, bedrooms: 2 });
+      d.insert("listings", { code: "BDS-NP-Q5-0099", seller_id: d.t.sellers[0].id, deal: "ban", status: "dang_ban", location_raw: "Trần Bình Trọng", ward: "Phường 1", district: "Quận 5", property_type: "nha_pho", price_raw: "2 tỷ 5", price_vnd: 2.5e9, area_m2: 30, bedrooms: 2 }); });
+    globalThis.__model.parse = () => OUT({ replies: ["Dạ có, em kiếm 2PN dưới 3 tỷ ở Quận 7 ạ."] });
+    await send({ external_user_id: "mua-c-1", text: "tìm căn hộ quận 7 2 phòng ngủ dưới 3 tỷ" });
+    const qC = db().log.filter((l) => l.table === "listings" && l.op === "select" && l.filters.some((f) => f.kind === "lte" && f.col === "price_vnd")).pop();
+    const lteC = qC?.filters.find((f) => f.kind === "lte" && f.col === "price_vnd")?.val;
+    const khoC = sysText(parseCalls().pop());
+    check("MUA-C1 'căn hộ quận 7 … dưới 3 tỷ' → kho có trần giá ≤ 3,45 tỷ, lọc quận + loại: có căn hộ Q7, KHÔNG có nhà phố Q5 / căn Q5 cũ",
+      lteC != null && lteC <= 3.45e9 && /BDS-CH-Q7-0001/.test(khoC) && !/BDS-NP-Q5-0099|BDS-Q5-0001|BDS-Q5-0005/.test(khoC),
+      JSON.stringify({ lteC, kho: (khoC.match(/#BDS-[A-Z0-9-]+/g) ?? []) }));
+  }
+  // (D) "dưới 5 tỷ" (đã lưu) → "vậy 7 tỷ cũng được em": kho có căn mà model chỉ hỏi lại đúng câu vừa hỏi → khách không thấy căn.
+  {
+    fresh((d) => { seedKho(d); const b = d.insert("buyers", { zalo_user_id: "mua-d-1", name: null, preferences: { deal: "ban", area: "phường 4", budget: "dưới 5 tỷ" } }).data;
+      const cv = d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-30T00:00:00Z" }).data;
+      d.insert("messages", { conversation_id: cv.id, sender: "bot", body: "Mình thích hẻm xe hơi hay mặt tiền hơn ạ?", seq: 1 }); });
+    globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, budget: "7 tỷ" }, replies: ["Mình muốn hẻm xe hơi hay mặt tiền hơn vậy ạ?"] });
+    const rD = await send({ external_user_id: "mua-d-1", text: "vậy 7 tỷ cũng được em" });
+    check("MUA-D1 nới ngân sách, model chỉ hỏi lặp 'hẻm xe hơi hay mặt tiền' → đưa căn trong kho (Trần Hưng Đạo 5,8 tỷ), bỏ câu hỏi lặp",
+      rD.body.replies.some((x) => /Trần Hưng Đạo/.test(x) && /5,8 tỷ/.test(x)) && !rD.body.replies.some((x) => /hẻm xe hơi hay mặt tiền/.test(x)),
+      JSON.stringify(rD.body.replies));
+    globalThis.__model.parse = () => OUT({ replies: ["Căn rẻ nhất khu này là Trần Hưng Đạo Trần Hưng Đạo Phường 4, 5,8 tỷ ạ."] });
+    const rD2 = await send({ external_user_id: "mua-d-1", text: "căn nào rẻ nhất" });
+    check("MUA-D2 lời model 'Trần Hưng Đạo Trần Hưng Đạo Phường 4' → 'Trần Hưng Đạo Phường 4'", rD2.body.replies.some((x) => /Trần Hưng Đạo Phường 4/.test(x)) && !rD2.body.replies.some((x) => /Trần Hưng Đạo Trần Hưng Đạo/.test(x)), JSON.stringify(rD2.body.replies));
   }
   // (c) hỏi địa chỉ, khách "o q10" (chế độ chinh, AI im) → vi_tri "o q10", câu địa chỉ coi như xong, bot thôi hỏi đường.
   {

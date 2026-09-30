@@ -118,7 +118,7 @@ import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extract
 import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
 import { nhanhCuaKhoa } from "../_shared/extraction/re-nhanh.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
-import { boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauHoiLap, boLapCum, chuanKhuVucMua, loaiKhoTuHoSo, loaiNhaTrongCau, boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -214,6 +214,11 @@ export function hoSoTamTuCau(prefs: Record<string, unknown>, text: string, tKD: 
       const m = CO_TIEN_KD.exec(kd);
       if (m) { p.budget = menhDe.slice(Math.max(0, m.index - 25)).trim(); break; }
     }
+  }
+  // 30/09/2026 (bắn thử mua lx-mua-c1): loại nhà nói CHẮC trong câu ("căn hộ", "đất nền") — kho lọc theo loại ngay lượt này.
+  if (p.property_type == null || p.property_type === "") {
+    const loai = loaiNhaTrongCau(tKD);
+    if (loai) p.property_type = loai;
   }
   // Phòng ngủ chỉ lấy từ câu khi hồ sơ lưu còn thiếu khu vực/giá (lượt đầu) — hồ sơ đã đủ thì lọc như cũ.
   if (typeof p.bedrooms !== "number" && (prefs.area == null || prefs.budget == null)) {
@@ -340,7 +345,10 @@ function budgetRangeVnd(budget: unknown): { min?: number; max?: number } | null 
   }
   if (!cac.length) return null;
   const base = cac[0];
-  if (/tren|hon|\btu\b|toi thieu|it nhat/.test(bd)) return { min: Math.round(base * 0.95) };
+  // 30/09/2026 (bắn thử mua lx-mua-c1): "quận 7 2 phòng ngủ dưới 3 tỷ" → {min 2,85 tỷ} — chữ "hon" không ranh giới khớp
+  // trong "p-HÒN-g ngủ", "dưới" bị lờ, kho ra nhà 8 tỷ 8. Ranh giới từ, và "dưới / tối đa" thắng.
+  if (/\b(?:duoi|toi da|khong qua|nho hon)\b/.test(bd)) return { max: Math.round(base * 1.15) };
+  if (/\b(?:tren|hon|tu|toi thieu|it nhat)\b/.test(bd)) return { min: Math.round(base * 0.95) };
   return { max: Math.round(base * 1.15) };
 }
 
@@ -6163,6 +6171,15 @@ Deno.serve(async (req) => {
   // Khớp ĐÚNG số phường (ilike không wildcard = so khớp nguyên chuỗi,
   // không phân biệt hoa thường) — '%1%' cũ khiến P1 dính cả P10-P16
   if (wardNum) khoQ = khoQ.ilike("ward", `Phường ${wardNum}`);
+  // 30/09/2026 (bắn thử mua lx-mua-c1): "căn hộ quận 7 dưới 3 tỷ" từng ra nhà phố Quận 5 — kho chỉ lọc SỐ PHƯỜNG, không lọc
+  // quận, không lọc loại. Khu vực nói MỘT quận (không "hoặc / và / ,") thì lọc quận; loại nói chắc thì lọc loại.
+  const quanKho = !wardNum && typeof prefsLoc.area === "string" && !/\b(?:hoac|hay|va|voi)\b|[,/&]/.test(boDau(prefsLoc.area))
+    ? bocQuan(boDau(prefsLoc.area), prefsLoc.area) : null;
+  // Tin chưa ghi quận / loại (null, "chua_ro") vẫn giữ — lọc để BỎ căn chắc chắn sai, không để giấu căn thiếu dữ liệu.
+  if (quanKho) khoQ = khoQ.or(`district.eq.${quanKho},district.is.null`);
+  const loaiKho = loaiKhoTuHoSo(prefsLoc.property_type);
+  const orLoai = loaiKho ? [...loaiKho, "chua_ro"].map((t) => `property_type.eq.${t}`).concat("property_type.is.null").join(",") : null;
+  if (orLoai) khoQ = khoQ.or(orLoai);
   if (typeof prefsLoc.bedrooms === "number") khoQ = khoQ.gte("bedrooms", prefsLoc.bedrooms);
   if (nhanLoc.length) khoQ = khoQ.contains("nhan", nhanLoc);
   const budgetR = budgetRangeVnd(prefsLoc.budget);
@@ -6745,6 +6762,7 @@ Deno.serve(async (req) => {
       if (wardNum) gq = gq.ilike("ward", `Phường ${wardNum}`);
       else if (quanLoc) gq = gq.eq("district", quanLoc);
       if (hemLoc) gq = gq.or(hemLoc);
+      if (orLoai) gq = gq.or(orLoai);
       // Phòng ngủ khách vừa nói trong CÂU NÀY ("3 phòng ngủ, hẻm xe hơi") cũng lọc — hồ sơ lưu chưa kịp có (lượt model ghi sau).
       const pnCau = /\b(\d{1,2})\s*(?:phong ngu|pn)\b/.exec(tKD);
       const pnLoc = typeof prefsLoc.bedrooms === "number" ? prefsLoc.bedrooms : pnCau ? Number(pnCau[1]) : null;
@@ -6778,6 +6796,8 @@ Deno.serve(async (req) => {
       }
     }
   }
+  // 30/09/2026 (bắn thử mua lx-mua-d1): "căn rẻ nhất là Nguyễn Trãi Nguyễn Trãi P2" — cụm lặp liền nhau do model viết.
+  out.replies = boLapCum(out.replies);
   // 13/09/2026: khách hỏi "em là người hay máy" → model đáp "Em là người thật,
   // không phải máy đâu" (lượt bắn 13/09). Nói dối khách về bản chất trợ lý là
   // thứ không được phép lọt, dù câu lệnh dặn gì — chặn bằng code.
@@ -6896,7 +6916,10 @@ Deno.serve(async (req) => {
   }
   // FR-218 b (24/09/2026): đủ quận + giá, kho có căn, khách chưa từng được đưa căn nào trong kho này, mà model
   // lượt này CHỈ hỏi dò → bỏ câu hỏi dò, đưa 2 căn đầu (đã xếp theo nghĩa) bằng chữ tiền định.
-  if (duTieuChiDeNgungDo && minimumMet && (listings ?? []).length && !(askedListings ?? []).length && !out.send_photos && !out.viewing && !out.agreed_deal) {
+  // 30/09/2026 (bắn thử mua lx-mua-d1, SRS-5.1h): "dưới 6 tỷ" rồi "vậy 7 tỷ cũng được em" — kho CÓ căn mà model chỉ hỏi
+  // lại đúng câu "hẻm xe hơi hay mặt tiền". Lượt khách VỪA ĐỔI ngân sách đã lưu thì đưa căn như lượt đầu, kể cả đã đưa trước.
+  const doiGia = prefs.budget != null && prefs.budget !== "" && prefsLoc.budget != null && prefsLoc.budget !== prefs.budget;
+  if (minimumMet && (listings ?? []).length && (doiGia || (duTieuChiDeNgungDo && !(askedListings ?? []).length)) && !out.send_photos && !out.viewing && !out.agreed_deal) {
     const cans: CanGoiY[] = ((listings ?? []) as CanRow[]).map((l) => {
       const ten = (l.location_raw ? tenDuong(l.location_raw) : "") || l.ward || "";
       const dong = [
@@ -6909,9 +6932,10 @@ Deno.serve(async (req) => {
     // Chỉ khi model KHÔNG nói gì ngoài câu hỏi dò — khách hỏi chuyện khác ("quận 5 có dự án gì") mà model đã trả
     // lời thì để yên.
     const chiHoiDo = boCauHoiDo(out.replies.filter((x) => !/^\s*(?:🤖|💾|📝|📋)/u.test(x))).length === 0;
-    if (chiHoiDo && !daDuaTruoc && !coNhacCan(out.replies, cans)) {
-      out.replies = [...boCauHoiDo(out.replies), bongBongGoiYCan(cans, goiMua ?? "mình")];
-      console.log("chat-reply: model chưa đưa căn dù đủ tiêu chí - đưa 2 căn đầu kho");
+    if (!coNhacCan(out.replies, cans) && (doiGia || (chiHoiDo && !daDuaTruoc))) {
+      const botTruoc = history.find((m) => m.sender === "bot")?.body ?? null; // history mới nhất trước
+      out.replies = [...boCauHoiDo(boCauHoiLap(out.replies, botTruoc)), bongBongGoiYCan(cans, goiMua ?? "mình")];
+      console.log(doiGia ? "chat-reply: khách đổi ngân sách - đưa 2 căn đầu kho" : "chat-reply: model chưa đưa căn dù đủ tiêu chí - đưa 2 căn đầu kho");
     }
   }
   // FR-218 c (24/09/2026, bắn thật sau #266): "Cả 2 căn đều có phòng ngủ ở tầng trệt" cho hai căn không ghi điều
@@ -6953,7 +6977,8 @@ Deno.serve(async (req) => {
       const gop = gopGhiChu(prefs.notes, String(v));
       if (gop) delta.notes = gop;
     } else {
-      delta[k] = v;
+      // 30/09/2026 (bắn thử mua lx-mua-b1): "can mua nha q5…" → hồ sơ lưu khu vực "q5". Chuẩn "Quận 5" / "Phường 2".
+      delta[k] = k === "area" && typeof v === "string" ? chuanKhuVucMua(v) : v;
     }
   }
   // 23/09/2026 (bắn 26 tin): "ưu tiên sổ hồng riêng" → model ghi vào HOÀN CẢNH (notes). Đó là yêu cầu pháp lý:
