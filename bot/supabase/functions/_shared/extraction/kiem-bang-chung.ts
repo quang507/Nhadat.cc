@@ -12,7 +12,7 @@
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
 import { docTien, giaTheoM2 } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
-import { DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, laGap } from "./khop-cau-tra-loi.ts";
+import { DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, laGap } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 
 const boDau = (s: string): string =>
@@ -780,6 +780,7 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   const bo: Bo[] = [];
   const them = (question: string, answer: string | null, khoa: string) => {
     if (!answer || daCo.has(question)) return;
+    answer = gonGiaTriFact(question, answer); // 30/09: "sổ hồng rồi em", "phí quản lý 15k/m2" — cùng cách gọn với luật
     daCo.add(question);
     ghi.push({ question, answer, khoa });
   };

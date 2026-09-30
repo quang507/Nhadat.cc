@@ -84,7 +84,9 @@ const tachCau = (s: string): string[] => s.split(/(?<=[.!?…]|[=:;]\)+|:D|\^\^)
  */
 export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true): { replies: string[]; daChan: boolean } {
   let daChan = false;
-  let daChen = false;
+  // 30/09/2026 (bắn thật lx-mua-e2): model đã tự nói thật "Hiện em chưa có căn nào sẵn…" mà câu hứa bên cạnh vẫn bị thay
+  // bằng lời thật → khách đọc "chưa có căn" hai lần liền. Đã có câu nói thật thì chỉ bỏ câu hứa, không chèn thêm.
+  let daChen = replies.some((r) => tachCau(r).some((c) => !laHuaCoHang(c, hoiHang) && /\bchua co (?:can|tin|nha|lo)\b/.test(boDau(c))));
   const ra: string[] = [];
   for (const r of replies) {
     const giu: string[] = [];
