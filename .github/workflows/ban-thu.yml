@@ -170,6 +170,11 @@ jobs:
           q "select coalesce(json_agg(x), '[]') as ds from (select l.property_type, l.district, l.ward, p.name as du_an, l.status
               from listings l join sellers s on s.id = l.seller_id left join projects p on p.id = l.project_id
               where s.zalo_user_id = $(lit "$ZALO") order by l.created_at) x" | jq -c '.[0].ds[]'
+          echo "-- Fact của tin ID thử (khoá · nguồn · trả lời):"
+          q "select coalesce(json_agg(x order by x.luc), '[]') as ds from (select f.question as khoa, f.source as nguon,
+                left(regexp_replace(f.answer, '[0-9]{9,}', '#', 'g'), 120) as tl, f.created_at as luc
+              from listing_facts f join listings l on l.id = f.listing_id join sellers s on s.id = l.seller_id
+              where s.zalo_user_id = $(lit "$ZALO")) x" | jq -r '.[0].ds[] | "\(.khoa) · \(.nguon) · \(.tl)"'
           # 30/09/2026: cron `nhung-tick` chỉ nhúng tin ĐÃ LÊN KỆ, còn tin ID thử dừng ở cho_thong_tin và bị xoá cuối lượt — nên soi
           # thẳng: văn bản `van_ban_nhung()` (đúng thứ cron sẽ gửi), nhúng thật (RETRIEVAL_DOCUMENT) và đo độ gần từng câu tìm
           # (RETRIEVAL_QUERY, như chat-reply). Không ghi vector vào tin, không đưa tin lên kệ.
