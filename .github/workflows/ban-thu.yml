@@ -97,6 +97,11 @@ jobs:
                        group by 1, 2 order by 3 desc limit 15) x) as loi_model_24h,
                     (select left(regexp_replace(detail, '[0-9]{9,}', '#', 'g'), 220) from bot_errors where source like 'model chinh hong%' order by at desc limit 1) as loi_claude_moi_nhat" | jq -c '.[0]'
 
+          echo "== Câu hỏi theo loại BĐS (required_facts: loại · bán/thuê → khoá:ưu tiên:nhóm)"
+          q "select coalesce(json_agg(x order by x.loai, x.deal), '[]') as ds from (select property_type::text as loai, coalesce(deal::text, '*') as deal,
+                    string_agg(fact_key || ':' || priority || ':' || coalesce(nhom::text, '-'), ' ' order by priority, fact_key) as cau
+                    from required_facts group by 1, 2) x" | jq -r '.[0].ds[] | "\(.loai) [\(.deal)] \(.cau)"'
+
           q "select public.reset_nguoi_test($(lit "$ZALO")) as r" | jq -c '.[0].r'
           MOC=$(q "select now()::text as t" | jq -r '.[0].t')
 
