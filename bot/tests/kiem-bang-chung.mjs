@@ -3,7 +3,8 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { datKiemNhe, docHoiLai, kiemXacNhan, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { datKiemNhe, docHoiLai, kiemXacNhan, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -454,6 +455,21 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("HL-06 AI chép câu BOT vừa hỏi làm câu hỏi của khách → undefined", r6 === undefined, JSON.stringify(r6));
   const r7 = docHoiLai(h(true, "khu nay de ban hong em", "thi_truong"), "khu này dễ bán hông em", false);
   ok("HL-07 trích khác dấu vẫn là câu trong tin → nhận", r7?.chuDe === "thi_truong", JSON.stringify(r7));
+}
+
+// 01/10/2026 (lx-tt-08): viết tắt AI để "cần xác nhận" mà từ điển tiền định cũng đọc ra CÙNG ô → chắc, ghi thẳng (SRS-5.1s).
+{
+  const xn = (trich, khoa = "phap_ly", gia = "sổ hồng riêng") => [{ khoa, gia_tri: gia, trich_dan: trich }];
+  const a = nangXacNhanChac(xn("shr"), "shr", nhanDienNhieuFact);
+  ok("XNC-01 'shr' → AI + từ điển cùng nói pháp lý → chac", a.chac.length === 1 && a.chac[0].gia_tri === "sổ hồng riêng" && !a.conLai.length, JSON.stringify(a));
+  const b = nangXacNhanChac(xn("xhr"), "xhr", nhanDienNhieuFact);
+  ok("XNC-02 'xhr' (từ điển không đọc) → vẫn hỏi lại", !b.chac.length && b.conLai.length === 1, JSON.stringify(b));
+  const c = nangXacNhanChac(xn("SHR"), "nhà hẻm 4m, SHR nha", nhanDienNhieuFact);
+  ok("XNC-03 'SHR' viết hoa giữa câu (cách nói mới) → chac", c.chac.length === 1, JSON.stringify(c));
+  const d = nangXacNhanChac(xn("shr"), "anh bán nhà nha", nhanDienNhieuFact);
+  ok("XNC-04 trích không có trong tin → không chac, không bịa", !d.chac.length, JSON.stringify(d));
+  const e = nangXacNhanChac(xn("hxh", "phap_ly"), "hxh", nhanDienNhieuFact);
+  ok("XNC-05 AI gán sai ô ('hxh' → pháp lý), từ điển đọc ô khác → không chac", !e.chac.length, JSON.stringify(e));
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

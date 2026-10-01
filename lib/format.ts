@@ -48,22 +48,27 @@ export const TYPE_LABEL: Record<string, string> = {
 
 // Ô thông số nào CÓ NGHĨA với loại BĐS nào (01/10/2026, chủ dự án xem form sửa tin của một lô đất: "các loại bds khác thì
 // bên trong tab này đâu phải là phòng ngủ"). Lớp lỗi: form admin / trang tin dùng MỘT bộ ô cho mọi loại, trong khi bot hỏi
-// theo loại (bảng required_facts). MỘT bảng ở đây cho form admin và trang tin; `bot/tests/o-theo-loai.mjs` đối chiếu cột
-// `phongNgu` với bộ câu bot hỏi theo loại (loại có câu so_phong_ngu thì có ô phòng ngủ). Chưa rõ loại → hiện đủ.
-export type OTheoLoai = { phongNgu: boolean; ketCau: boolean; ngangDai: boolean };
-const DU_O: OTheoLoai = { phongNgu: true, ketCau: true, ngangDai: true };
+// theo loại (bảng required_facts). MỘT bảng ở đây cho form admin và trang tin; `bot/tests/o-theo-loai.mjs` đối chiếu với bộ
+// câu bot hỏi theo loại. Chưa rõ loại → hiện đủ.
+// - phongNgu: loại có khái niệm phòng ngủ — trang tin / thẻ tin hiện số phòng ngủ khi có (⇔ bot có câu so_phong_ngu).
+// - oPhongNguTrong: form sửa tin hiện ô phòng ngủ cả khi TRỐNG (⇔ phòng ngủ là thông số CHÍNH bot hỏi sớm, như căn hộ).
+//   Nhà phố / cấp 4 / biệt thự: chủ dự án 01/10 "phòng ngủ cũng ko quan trọng" → "bỏ ô phòng ngủ khỏi form với nhà"; bot
+//   hỏi phòng ngủ SAU CÙNG (20261001c) — ô chỉ hiện khi đã có số để admin sửa / xoá.
+export type OTheoLoai = { phongNgu: boolean; oPhongNguTrong: boolean; ketCau: boolean; ngangDai: boolean };
+const DU_O: OTheoLoai = { phongNgu: true, oPhongNguTrong: true, ketCau: true, ngangDai: true };
+const NHA: OTheoLoai = { phongNgu: true, oPhongNguTrong: false, ketCau: true, ngangDai: true };
 export const O_THEO_LOAI: Record<string, OTheoLoai> = {
-  nha_pho: DU_O,
-  nha_cap4: DU_O,
-  biet_thu: DU_O,
-  chung_cu: { phongNgu: true, ketCau: false, ngangDai: false },
-  toa_nha: { phongNgu: false, ketCau: true, ngangDai: true },
-  dat: { phongNgu: false, ketCau: false, ngangDai: true },
-  dat_nong_nghiep: { phongNgu: false, ketCau: false, ngangDai: true },
-  dat_kinh_doanh: { phongNgu: false, ketCau: false, ngangDai: true },
-  kho_xuong: { phongNgu: false, ketCau: false, ngangDai: true },
-  mat_bang: { phongNgu: false, ketCau: false, ngangDai: true },
-  phong_tro: { phongNgu: false, ketCau: false, ngangDai: false },
+  nha_pho: NHA,
+  nha_cap4: NHA,
+  biet_thu: NHA,
+  chung_cu: { phongNgu: true, oPhongNguTrong: true, ketCau: false, ngangDai: false },
+  toa_nha: { phongNgu: false, oPhongNguTrong: false, ketCau: true, ngangDai: true },
+  dat: { phongNgu: false, oPhongNguTrong: false, ketCau: false, ngangDai: true },
+  dat_nong_nghiep: { phongNgu: false, oPhongNguTrong: false, ketCau: false, ngangDai: true },
+  dat_kinh_doanh: { phongNgu: false, oPhongNguTrong: false, ketCau: false, ngangDai: true },
+  kho_xuong: { phongNgu: false, oPhongNguTrong: false, ketCau: false, ngangDai: true },
+  mat_bang: { phongNgu: false, oPhongNguTrong: false, ketCau: false, ngangDai: true },
+  phong_tro: { phongNgu: false, oPhongNguTrong: false, ketCau: false, ngangDai: false },
 };
 export const oTheoLoai = (loai: string | null | undefined): OTheoLoai => (loai && O_THEO_LOAI[loai]) || DU_O;
 

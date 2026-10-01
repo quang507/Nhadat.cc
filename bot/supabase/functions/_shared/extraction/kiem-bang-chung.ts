@@ -352,6 +352,28 @@ export function kiemXacNhan(ds: Array<{ khoa: string; gia_tri: string; trich_dan
   return null;
 }
 
+/**
+ * Bắn thử 01/10 (lx-tt-08): đang hỏi phường, khách "shr" — AI xếp "shr" vào `xac_nhan` (không chắc nghĩa), mà nhánh câu
+ * lệch không hỏi xác nhận → "🤖 Không bóc tách được gì", pháp lý trống. "shr" là viết tắt nghề CHUẨN, không mơ hồ.
+ * Luật: HAI bộ đọc độc lập (AI + từ điển tiền định `docLuat`, vd `nhanDienNhieuFact`) cùng đọc cụm trích ra CÙNG một ô thì
+ * không còn là chữ mơ hồ — đưa sang `truong` (giá trị chuẩn của AI). Chỉ AI thấy ("xhr") thì vẫn hỏi lại như cũ.
+ * THUẦN: bộ đọc tiền định truyền vào, file này không gọi model / RPC.
+ */
+export function nangXacNhanChac(
+  xacNhan: Array<{ khoa: string; gia_tri: string; trich_dan: string }> | null | undefined,
+  tin: string,
+  docLuat: (s: string) => Array<{ question: string; answer: string }>,
+): { chac: DeXuat[]; conLai: Array<{ khoa: string; gia_tri: string; trich_dan: string }> } {
+  const chac: DeXuat[] = [];
+  const conLai: Array<{ khoa: string; gia_tri: string; trich_dan: string }> = [];
+  for (const x of xacNhan ?? []) {
+    const hop = kiemXacNhan([x], tin);
+    if (hop && docLuat(hop.trich_dan).some((f) => f.question === hop.khoa)) chac.push({ ...hop });
+    else conLai.push(x);
+  }
+  return { chac, conLai };
+}
+
 /** Kiểm cả loạt đề xuất của model cho MỘT tin khách. */
 export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: Bo[] } {
   const kdTin = chuanSo(tin);
