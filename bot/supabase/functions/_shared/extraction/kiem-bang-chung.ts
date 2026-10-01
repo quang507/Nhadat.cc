@@ -283,6 +283,8 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
   if (v.length > 200) return "gia_tri_qua_dai";
   switch (d.khoa) {
     case "gia": case "tien_coc": case "thu_nhap_thue": {
+      // Bắn thử 01/10 (lx-ai-12): "cọc 3 tháng" — tiền cọc tính bằng THÁNG, phép kiểm riêng của bản đầy đủ.
+      if (d.khoa === "tien_coc" && /\bthang\b/.test(chuanSo(v))) return kiemGiaTri(d, tin, viTri, kdCumSua);
       const b = docTien(kdCumSua ?? d.trich_dan);
       if (b == null) return "khong_doc_duoc_tien";
       if (!tienKhop(v, b)) return "tien_khong_khop_trich_dan";
