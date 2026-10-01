@@ -674,6 +674,9 @@ const KHEN_CAN_BANG_CHUNG: Array<[RegExp, RegExp]> = [
   // khẳng định. "mặt tiền 4m" / "ngang mặt tiền" là CHIỀU NGANG, không phải vị trí — để yên.
   [/(?<!ngang\s)\bmat tien\b(?!\s*(?:rong\s*|ngang\s*|la\s*|khoang\s*|tam\s*)?\d)|\bmat (?:pho|duong)\b/, /\b(?:mat tien|mat pho|mat duong|mt|mtkd|2mt)\b/],
   [/\b(?:hem|hxh|hxt|hxm)\b/, /\b(?:hem|hxh|hxt|hxm|kiet|ngo|ngach)\b|\d\s*\/\s*\d/],
+  // 01/10/2026 (bắn thử bán lx-ban-293d): chủ nói "hẻm 3m", 🤖 ghi "hẻm xe hơi 3m" (từ 3m là xe hơi, FR-227 b) mà model
+  // viết "hẻm 3 m thuận tiện cho xe máy" — tự hạ loại hẻm. "Xe máy" chủ chưa nói thì không khẳng định.
+  [/\bxe may\b/, /\b(?:xe may|hxm|ba gac)\b/],
   // 30/09/2026 (bắn thử bán lx-ban-292b): "Sunrise City có hồ bơi chân mây rộng" — dữ liệu dự án không có, chủ nhà không nói.
   // Tiện ích khu / dự án model khẳng định phải có trong chữ chủ nhà.
   [/\b(?:ho boi|be boi|phong gym|gym|san tennis|san bong|san choi|khu vui choi|cong vien noi khu|cong vien|bbq|sieu thi|trung tam thuong mai|tttm|truong hoc|truong quoc te|benh vien|an ninh 24|bao ve 24)\b/,
@@ -812,7 +815,9 @@ export function boTenRiengBia(replies: string[], nguCanh: string): string[] {
   const nc = boDau(nguCanh ?? "").replace(/\s+/g, " ");
   // \p{Lu} chứ không phải [A-ZÀ-Ỹ]: dải À-Ỹ lẫn cả chữ THƯỜNG có dấu (đ, ú…), làm "chợ An Đông đúng" nuốt "đúng".
   // Tên = chữ hoa mở đầu, tới 3 từ nối tiếp (chữ hoa hoặc SỐ: "Sunrise Quận 5", "Tháng 2"); không nuốt dấu cách cuối.
-  const re = new RegExp(`\\b(${LOAI_TIEN_ICH})\\s+(\\p{Lu}[\\p{L}\\d]*(?:[\\s.-](?:\\p{Lu}[\\p{L}\\d]*|\\d+)){0,3})`, "gu");
+  // 01/10/2026 (bắn thử mua lx-mua-293e): "quanh khu Chợ Lớn Quận 10" — model viết hoa chữ "Chợ", luật cũ chỉ bắt "chợ" thường.
+  const loaiHoa = LOAI_TIEN_ICH.split("|").map((a) => `[${a[0]}${a[0].toLocaleUpperCase("vi")}]${a.slice(1)}`).join("|");
+  const re = new RegExp(`(?<![\\p{L}])(${loaiHoa})\\s+(\\p{Lu}[\\p{L}\\d]*(?:[\\s.-](?:\\p{Lu}[\\p{L}\\d]*|\\d+)){0,3})`, "gu");
   let daBo = false;
   const ra = replies.map((r) => r.replace(re, (m, loai: string, ten: string) => {
     const t = ten.trim().replace(/[.\-]+$/, "");
@@ -820,7 +825,9 @@ export function boTenRiengBia(replies: string[], nguCanh: string): string[] {
     if (nc.includes(boDau(t).replace(/\s+/g, " "))) return m;
     daBo = true;
     return loai;
-  }).replace(/[ \t]{2,}/g, " ").replace(/\s+([,.!?])/g, "$1"));
+  }).replace(/[ \t]{2,}/g, " ").replace(/\s+([,.!?])/g, "$1")
+    // "từ chợ, chợ và quanh khu chợ" sau khi gọt — cụm loại lặp liền nhau còn một.
+    .replace(new RegExp(`(?<![\\p{L}])(${loaiHoa})(?:,?\\s+(?:và\\s+)?(?:quanh\\s+)?(?:khu\\s+)?(?:${loaiHoa})(?![\\p{L}]))+`, "giu"), "$1"));
   return daBo ? ra : replies;
 }
 
@@ -885,7 +892,21 @@ export function boCauHuaLoc(replies: string[]): string[] {
   return locCauTrongBongBong(replies, (c) => !/\?\s*$/.test(c.trim()) && HUA_LOC_RE.test(boDau(c)));
 }
 
-/** Câu hứa đi HỎI CHỦ NHÀ ("để em hỏi lại chủ nhà rồi báo", "em xác nhận lại với chủ"). */
+/**
+ * 01/10/2026 (bắn thử bán lx-ban-293c): hỏi "có vướng cột điện hay hố ga không", chủ nói chuyện khác → model "Để em kiểm tra xem
+ * cột điện hay hố ga có chạy qua lô không nha?" — bot không có cách nào kiểm; người nói chuyện là chủ nhà. Câu bot tự hứa kiểm /
+ * xác minh bị bỏ; câu bị bỏ là câu hỏi duy nhất thì hỏi lại bằng `thay` (câu mẫu của ô kế).
+ */
+const HUA_TU_KIEM_RE = /\b(?:de\s+)?em\s+(?:se\s+|di\s+)?(?:kiem tra|check|xac minh|kiem chung|tim hieu|ra soat|coi lai|xem lai giup)\b/;
+export function boHuaTuKiemTra(reply: string, thay: string | null): string {
+  const cac = tachCau(reply);
+  const giu = cac.filter((c) => !HUA_TU_KIEM_RE.test(boDau(c)));
+  if (giu.length === cac.length) return reply;
+  const ra = giu.join(" ").trim();
+  return thay && !/\?/.test(ra) ? `${ra} ${thay}`.trim() : ra;
+}
+
+/** Câu hứa đi HỎI CHỦ NHÀ/** Câu hứa đi HỎI CHỦ NHÀ ("để em hỏi lại chủ nhà rồi báo", "em xác nhận lại với chủ"). */
 export function laHuaHoiChu(replies: string[]): boolean {
   return /\b(?:hoi|xac nhan|check|kiem tra)\s+(?:lai\s+)?(?:voi\s+|ben\s+|y\s+)?chu(?:\s+nha)?\b/.test(boDau(replies.join(" ")));
 }

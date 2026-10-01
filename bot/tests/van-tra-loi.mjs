@@ -4,11 +4,12 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauHoiLap, boCauHuaLoc, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
+import { duAnLaTenDuong } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
 import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo, giuCauDungTen, suaGapTheoDeal, boGhiNhanSuong, boKhenThiTruong, goiDat } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { laGatHoiVai, laCauChungChung } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/gan-manh-loc.ts";
@@ -1112,6 +1113,21 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
   ok("boMenhDeKhenSai: cắt vế khen sai vẫn giữ dấu chấm, không dính câu sau",
     JSON.stringify(boMenhDeKhenSai(["Cảm ơn mình đã chia sẻ, hẻm 5m ô tô vào tận nhà là khách thích lắm. Mình muốn bán gấp hay chờ giá ổn hơn ạ?"], "bán nhà hẻm 5m Lê Hồng Phong"))
       === JSON.stringify(["Cảm ơn mình đã chia sẻ. Mình muốn bán gấp hay chờ giá ổn hơn ạ?"]));
+  ok("bocViTriRao: 'hẻm 3m Bình Thạnh 4x12' — tên quận không phải tên đường", bocViTriRao("nhà cấp 4 hẻm 3m Bình Thạnh 4x12 giá 3 tỷ 8 thương lượng") === null);
+  ok("bocViTriRao: 'hẻm 3m Lê Văn Sỹ phú nhuận' vẫn nhận đường", bocViTriRao("bán nhà hẻm 3m Lê Văn Sỹ phú nhuận") === "hẻm 3m Lê Văn Sỹ");
+  ok("duAnLaTenDuong: dự án 'Khu dân cư Tân Thạnh Đông' chỉ trùng tên xã trong câu → coi là tên địa danh",
+    duAnLaTenDuong("Khu dân cư Tân Thạnh Đông", "bán đất thổ cư 5x20 đường nhựa 6m xã Tân Thạnh Đông Củ Chi, sổ riêng, giá 2 tỷ 1") === true);
+  ok("duAnLaTenDuong: câu nói rõ 'khu dân cư Tân Thạnh Đông' → là dự án", duAnLaTenDuong("Khu dân cư Tân Thạnh Đông", "bán đất trong khu dân cư Tân Thạnh Đông") === false);
+  ok("boHuaTuKiemTra: 'Để em kiểm tra xem cột điện…?' → bỏ, hỏi lại câu mẫu",
+    boHuaTuKiemTra('Lô đất "chưa xây gì" là tốt rồi ạ. Để em kiểm tra xem cột điện hay hố ga có chạy qua lô không nha?', "Lô đất có vướng cột điện, hố ga gì không ạ?")
+      === 'Lô đất "chưa xây gì" là tốt rồi ạ. Lô đất có vướng cột điện, hố ga gì không ạ?');
+  ok("boHuaTuKiemTra: câu thường giữ nguyên", boHuaTuKiemTra("Dạ em ghi rồi ạ. Lô đất hướng nào ạ?", "x") === "Dạ em ghi rồi ạ. Lô đất hướng nào ạ?");
+  ok("boMenhDeKhenSai: 'hẻm 3 m thuận tiện cho xe máy' chủ không nói xe máy → bỏ vế",
+    JSON.stringify(boMenhDeKhenSai(["Cảm ơn đã cung cấp thông tin, hẻm 3 m thuận tiện cho xe máy 😊\nBình Thạnh đó thuộc phường nào ạ?"], "nhà cấp 4 hẻm 3m Bình Thạnh 4x12"))
+      === JSON.stringify(["Cảm ơn đã cung cấp thông tin.\nBình Thạnh đó thuộc phường nào ạ?"]));
+  ok("boTenRiengBia: 'Chợ Lớn Quận 10' viết hoa, khách không nói → gọt, gộp 'chợ, chợ'",
+    JSON.stringify(boTenRiengBia(["Dạ em lọc khoảng 1 km từ chợ, chợ và quanh khu Chợ Lớn Quận 10 rồi ạ."], "tìm nhà quận 10 tầm 7 tỷ có căn nào gần chợ không em")) === JSON.stringify(["Dạ em lọc khoảng 1 km từ chợ rồi ạ."]));
+  ok("boTenRiengBia: 'chợ An Đông' có trong kho → giữ", boTenRiengBia(["Căn gần chợ An Đông ạ."], "gần chợ An Đông")[0] === "Căn gần chợ An Đông ạ.");
   ok("boCauHuaLoc bỏ 'em sẽ lọc thêm… chờ em một tí'", JSON.stringify(boCauHuaLoc(["Dạ vậy em sẽ lọc thêm mấy căn nữa cho mình ạ, chờ em một tí."])) === "[]");
   ok("boCauHuaLoc giữ câu hỏi 'mình muốn em lọc thêm không ạ?'", JSON.stringify(boCauHuaLoc(["Dạ ok. Mình muốn em lọc thêm căn hẻm xe hơi không ạ?"])) === JSON.stringify(["Dạ ok. Mình muốn em lọc thêm căn hẻm xe hơi không ạ?"]));
   ok("boCauHuaLoc giữ câu có căn thật", JSON.stringify(boCauHuaLoc(["Dạ căn Trần Hưng Đạo 5,8 tỷ hợp mình nè."])) === JSON.stringify(["Dạ căn Trần Hưng Đạo 5,8 tỷ hợp mình nè."]));

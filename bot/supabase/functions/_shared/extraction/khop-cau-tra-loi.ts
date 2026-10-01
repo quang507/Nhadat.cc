@@ -411,6 +411,7 @@ function laTuDungTen(w: string, sau: string): boolean {
  * duy nhất — sau mấy chữ tả đường, CÓ tên riêng nào không? Có thì giữ cả cụm
  * (bề rộng hẻm là thứ đáng giữ trong địa chỉ), không có thì trả null.
  */
+const TEN_QUAN_CHU = /^(?:quan\s+\d{1,2}|q\s*\d{1,2}|phu nhuan|tan binh|binh thanh|go vap|tan phu|binh tan|thu duc|nha be|binh chanh|hoc mon|cu chi|can gio)$/;
 export function bocViTriRao(text: string): string | null {
   const t = (text ?? "").trim();
   // Mệnh đề bắt đầu từ chữ hẻm/đường tới dấu ngắt câu gần nhất. 14/09/2026: "nhà phố" /
@@ -470,6 +471,9 @@ export function bocViTriRao(text: string): string | null {
       ten.push(tu[i]);
       i++;
     }
+    // 01/10/2026 (bắn thử bán lx-ban-293d): "nhà cấp 4 hẻm 3m Bình Thạnh 4x12" → địa chỉ "hẻm 3m Bình Thạnh" — tên QUẬN
+    // không phải tên đường; không có đường thì để trống, bot hỏi địa chỉ.
+    if (ten.length && TEN_QUAN_CHU.test(boDau(ten.join(" ")))) return null;
     return ten.length ? [dau, ...truoc, ...ten].join(" ") : null;
   }
   // 16/09/2026 (bắn thật): "Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ" — số căn + ở/tại/trong
