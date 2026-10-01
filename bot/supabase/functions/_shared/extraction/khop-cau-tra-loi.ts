@@ -274,6 +274,8 @@ export function laBoSungRac(s: string | null | undefined): boolean {
   if (!kd || kd.split(" ").length < 2) return true;
   // 01/10/2026 (chủ dự án test Zalo): "ko có" khi hỏi phường → ô bổ sung "ko có". Lời đáp không / không biết trơn không phải thông tin.
   if (KHONG_BIET_PHUONG.test(boDau(s ?? ""))) return true;
+  // 01/10/2026 (chủ dự án test Zalo): "hình đây" gửi kèm album → bản nháp "📝 Thêm: hình đây". Câu đưa ảnh không phải thông tin.
+  if (/^\s*(?:(?:da|day|nay|ne|gui|em|anh|chi|a|c|e|cho)\s+)*(?:(?:vai|may|mot|cac)\s+)?(?:tam\s+)?(?:hinh anh|hinh|anh|clip|video)(?:\s+(?:day|ne|nha|nhe|nhen|a|em|anh|chi|di|luon|nay|cua nha|nha em|xem|coi|thu|gui|kia|do))*\s*[.!]*\s*$/.test(boDau(s ?? ""))) return true;
   // FR-239 m (phát lại test 28/09): "Cần đước, long an á e" (trả lời câu địa chỉ) → ô quận "Cần Đước, Long An" VÀ ghi chú
   // nguyên văn. Mảnh ngắn chỉ gồm huyện + tỉnh lân cận là địa bàn, không phải thông tin thêm.
   if (kd.split(" ").length <= 6 && /^(?:o\s+|tai\s+|thuoc\s+)?(?:[a-z]+\s+){0,3}(?:long an|binh duong|dong nai|tay ninh|ba ria vung tau|vung tau|tien giang|ben tre|hcm|tp hcm|sai gon|ho chi minh)$/.test(kd)) return true;

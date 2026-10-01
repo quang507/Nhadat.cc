@@ -180,9 +180,14 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): st
   if (pl) cum.push(pl);
   if (l.gap === true) cum.push(thue ? "cần cho thuê gấp" : "cần bán gấp");
   const gia = giaHienThi(l);
-  if (gia) cum.push(`giá ${gia}${thue && !/thang/.test(boDau(gia)) ? "/tháng" : ""}`);
-  const t = cum.join(", ").replace(/\s+/g, " ").trim();
-  return t.length <= 120 ? t : t.slice(0, 117).replace(/[\s,]+\S*$/, "") + "…";
+  const cumGia = gia ? `giá ${gia}${thue && !/thang/.test(boDau(gia)) ? "/tháng" : ""}` : null;
+  const t = [...cum, ...(cumGia ? [cumGia] : [])].join(", ").replace(/\s+/g, " ").trim();
+  if (t.length <= 120) return t;
+  // 01/10/2026 (chủ dự án test Zalo: "…, SHR, cần bán…" — cắt đuôi làm mất GIÁ, thứ đáng tiền nhất): dài quá thì cắt phần
+  // giữa, giữ nguyên ", giá X" ở cuối.
+  const duoi = cumGia ? `, ${cumGia}` : "";
+  const dau = cum.join(", ").replace(/\s+/g, " ").trim();
+  return dau.slice(0, 117 - duoi.length).replace(/[\s,]+\S*$/, "") + "…" + duoi;
 }
 
 /** Bản nháp đầy đủ — một chuỗi, mỗi dòng một ý (giống một tin rao thật). */

@@ -96,6 +96,9 @@ la("tin thiếu đường/kết cấu vẫn ra tiêu đề gọn, có 'cần bá
 // 27/09/2026 (bắn thật lx-36): "Giá 8.000.000.000" → bản nháp in nguyên dãy số. Nay in bằng chữ khi chẵn triệu.
 const tdDaySo = tieuDeTin({ ...DAT.l, price_raw: "8.000.000.000" }, fact(DAT));
 la("giá dãy số '8.000.000.000' → tiêu đề 'giá 8 tỷ'", /giá 8 tỷ$/.test(tdDaySo), tdDaySo);
+// 01/10/2026 (chủ dự án test Zalo): tiêu đề dài bị cắt đuôi "…, SHR, cần bán…" — mất GIÁ. Cắt phần giữa, giữ giá.
+const tdDai = tieuDeTin({ ...NHA_PHO.l, location_raw: "137/28 đường số 59 khu dân cư Bàu Cát gần chợ Gò Vấp", gap: true, price_raw: "14 tỷ" }, fact(NHA_PHO));
+la("tiêu đề dài > 120 ký tự → cắt phần giữa, VẪN kết bằng giá", tdDai.length <= 120 && /…, giá 14 tỷ$/.test(tdDai), `${tdDai.length}: ${tdDai}`);
 const tdLe = tieuDeTin({ ...DAT.l, price_raw: "8.500.000" }, fact(DAT));
 la("giá dãy số lẻ triệu '8.500.000' giữ nguyên (không làm tròn thành 9 triệu)", /giá 8\.500\.000$/.test(tdLe), tdLe);
 

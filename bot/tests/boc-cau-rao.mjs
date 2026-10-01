@@ -161,6 +161,9 @@ ok("loại: 'đất được xây 5 tầng' KHÔNG phải đổi loại", nhanDi
   ok("hỏi 'thuê tối thiểu', đáp 'hợp đồng 1 năm' → khớp", phanLoaiCauTraLoi("thoi_han_thue", "hợp đồng 1 năm").loai === "khop");
   ok("hỏi hạn hợp đồng, đáp 'Hợp đồng 10 năm cho thuê 4 năm rồi đó' → khớp", phanLoaiCauTraLoi("han_hop_dong_thue", "Hợp đồng 10 năm cho thuê 4 năm rồi đó").loai === "khop");
   for (const r of ["Quận 1 em ơi", "mới", "phường 2 nha", "ok em"]) ok(`rác bổ sung: ${JSON.stringify(r)}`, laBoSungRac(r));
+  // 01/10/2026 (chủ dự án test Zalo): "hình đây" gửi kèm album → "📝 Thêm: hình đây". Câu đưa ảnh không phải thông tin.
+  for (const r of ["hình đây", "Hình đây em", "ảnh nè", "gửi hình nhé", "anh gửi ảnh nha", "vài tấm hình nè"]) ok(`rác bổ sung (câu đưa ảnh): ${JSON.stringify(r)}`, laBoSungRac(r));
+  for (const r of ["hình đẹp mà sơn mới", "ảnh hưởng quy hoạch", "nhà có hình rồng ở cổng"]) ok(`KHÔNG rác (có chữ hình/ảnh nhưng là thông tin): ${JSON.stringify(r)}`, !laBoSungRac(r));
   for (const r of ["ko có lửng", "tầng 1 và 2 để kinh doanh đang cho techcombank thuê", "sổ đỏ", "gần chợ Bình Tây", "khu an ninh"]) ok(`KHÔNG rác: ${JSON.stringify(r)}`, !laBoSungRac(r));
 }
 
