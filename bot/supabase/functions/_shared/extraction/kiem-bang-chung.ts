@@ -259,6 +259,48 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
   }
 }
 
+// Chế độ `ai` (01/10/2026, chủ dự án: "bỏ luật, để AI bóc — biết từ đồng nghĩa, viết gần giống"): AI quyết NGHĨA của
+// câu khách; máy chỉ chặn BỊA. Không soát từ khoá nữa ("xhr", "s.hồng riêng", "nhà ống", "căn góc 2 mặt hẻm" là việc của
+// AI). Còn giữ: trích dẫn có trong tin (lớp 1, khớp mờ), tiền / số đọc ra từ chính cụm trích, giá trị nằm trong danh
+// sách cho phép, quận / phường có thật. Công tắc `app_config.boc_tach_ai = 'ai'`, chat-reply bật qua `datKiemNhe`.
+let KIEM_NHE = false;
+export function datKiemNhe(b: boolean): void { KIEM_NHE = b; }
+export function laKiemNhe(): boolean { return KIEM_NHE; }
+const LOAI_GD = new Set(["ban", "cho_thue", "thue"]);
+function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): string | null {
+  const v = d.gia_tri.trim();
+  const kd = kdCumSua ?? chuanSo(d.trich_dan);
+  if (!v) return "gia_tri_rong";
+  if (v.length > 200) return "gia_tri_qua_dai";
+  switch (d.khoa) {
+    case "gia": case "tien_coc": case "thu_nhap_thue": {
+      const b = docTien(kdCumSua ?? d.trich_dan);
+      if (b == null) return "khong_doc_duoc_tien";
+      return tienKhop(v, b) ? null : "tien_khong_khop_trich_dan";
+    }
+    case "gia_m2": case "so_tang": case "quan": case "phuong":
+      // Phép tính (giá/m², trệt + lầu) và bảng địa danh có thật — không phải soát từ khoá, giữ nguyên.
+      return kiemGiaTri(d, tin, viTri, kdCumSua);
+    case "dien_tich": case "ngang": case "dai": case "no_hau": case "do_rong_hem": case "do_rong_duong":
+    case "cach_mat_tien": case "so_phong_ngu": case "so_wc": case "tang": {
+      const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
+      if (!m) return "khong_phai_so";
+      const n = Number(m[0]);
+      return soTrong(kdCumSua ?? d.trich_dan, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05))
+        ? null : "so_khong_co_trong_trich_dan";
+    }
+    case "loai_giao_dich": return LOAI_GD.has(v) ? null : "gia_tri_ngoai_danh_sach";
+    case "loai_bds": return LOAI_BDS[v] ? null : "gia_tri_ngoai_danh_sach";
+    case "gap": case "thuong_luong": return laCo(v) || laKhong(v) ? null : "gia_tri_ngoai_danh_sach";
+    default: {
+      if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
+      // Chữ AI viết lại được (chuẩn hoá, sửa chính tả, đổi từ đồng nghĩa) nhưng không được thêm CON SỐ khách không nói.
+      const soTrich = new Set(kd.match(/\d+/g) ?? []);
+      return (chuanSo(v).match(/\d+/g) ?? []).every((x) => soTrich.has(x)) ? null : "so_khong_co_trong_trich_dan";
+    }
+  }
+}
+
 /** Kiểm cả loạt đề xuất của model cho MỘT tin khách. */
 export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: Bo[] } {
   const kdTin = chuanSo(tin);
@@ -285,7 +327,7 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
       const lt = loaiDuongNoiRo(kdDung ?? kdCum), la = loaiDuongNoiRo(chuanSo(d.gia_tri));
       if (lt && la && lt !== la) { bo.push({ ...d, ly_do: "loai_duong_nguoc_chu_khach" }); continue; }
     }
-    const ly = kiemGiaTri(d, tin, viTri, kdDung);
+    const ly = KIEM_NHE ? kiemGiaTriNhe(d, tin, viTri, kdDung) : kiemGiaTri(d, tin, viTri, kdDung);
     if (ly) bo.push({ ...d, ly_do: ly });
     else dat.push(kdDung ? { ...d, trich_dan_sua: kdDung } : d);
   }

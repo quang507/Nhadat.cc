@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { datKiemNhe, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -402,6 +402,23 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const kt = kiemKienThuc(["phòng ngủ ngay tầng trệt cho người già", "đi bộ ra chợ 5 phút"], T, []);
   ok("kiến thức: bản model cắt ngắn của cùng vế không lặp", kt.length === 2, JSON.stringify(kt));
   ok("kiến thức: giữ vế 'phòng ngủ ngay tầng trệt' dù model không xếp vào", kt.includes("nhà có 1 phòng ngủ ngay tầng trệt cho người già") && kt.includes("đi bộ ra chợ 5 phút"), JSON.stringify(kt));
+}
+
+// Chế độ `ai` (01/10/2026): AI quyết nghĩa (đồng nghĩa, gõ sai), máy chỉ chặn bịa — trích dẫn, số, danh sách, địa danh thật.
+{
+  datKiemNhe(true);
+  dat("[ai] 'xhr' (gõ sai shr) → pháp lý 'sổ hồng riêng'", "nhà hẻm 4m, xhr, giá 8 tỷ", "phap_ly", "sổ hồng riêng", "xhr");
+  dat("[ai] 'nhà ống' → nha_pho", "bán căn nhà ống 3 tầng hẻm 5m", "loai_bds", "nha_pho", "nhà ống");
+  dat("[ai] 'đông tứ trạch' → hướng chữ", "nhà hướng đông tứ trạch nha", "huong", "Đông", "đông tứ trạch");
+  dat("[ai] 'ko cần bán vội' → gap khong", "ko cần bán vội đâu em", "gap", "khong", "ko cần bán vội");
+  dat("[ai] 'bớt chút đỉnh' → thương lượng có", "8 tỷ bớt chút đỉnh", "thuong_luong", "co", "bớt chút đỉnh");
+  bo("[ai] trích dẫn không có trong tin", "nhà hẻm 4m giá 8 tỷ", "phap_ly", "sổ hồng riêng", "sổ hồng riêng", "trich_dan_khong_co_trong_tin");
+  bo("[ai] số bịa trong chữ", "nhà có ban công", "ket_cau", "trệt 3 lầu", "ban công", "so_khong_co_trong_trich_dan");
+  bo("[ai] tiền không khớp trích", "giá 8 tỷ", "gia", "9 tỷ", "8 tỷ", "tien_khong_khop_trich_dan");
+  bo("[ai] số đo không có trong trích", "hẻm xe hơi", "do_rong_hem", "6", "hẻm xe hơi", "so_khong_co_trong_trich_dan");
+  bo("[ai] loại ngoài danh sách", "nhà ống", "loai_bds", "nha_ong", "nhà ống", "gia_tri_ngoai_danh_sach");
+  bo("[ai] 'ko có phường' vẫn không phải phường", "ko có phường", "phuong", "ko có phường", "ko có phường", "phuong_khong_co_that");
+  datKiemNhe(false);
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

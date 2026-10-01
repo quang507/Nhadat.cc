@@ -94,6 +94,15 @@ VÍ DỤ MẪU (đáp án đúng — chỉ học CÁCH bóc, giá trị phải l
 
 ` + viDuThanhChu();
 
+// Chế độ `ai` (01/10/2026, chủ dự án: "bóc thông số không biết từ đồng nghĩa hoặc viết gần giống"): máy thôi soát từ khoá
+// (`datKiemNhe`), nên AI được CHUẨN HOÁ — đọc theo nghĩa, gõ sai, viết tắt, tiếng lóng nghề. Khối này nối sau LUAT, chỉ gửi
+// khi công tắc là `ai` (khối riêng để phần LUAT vẫn cache được).
+const LUAT_CHUAN_HOA = `CHẾ ĐỘ CHUẨN HOÁ (đè lên dòng "giữ đúng chữ cái của cụm trích" ở trên):
+- Đọc theo NGHĨA như môi giới lâu năm: viết tắt, gõ sai một hai chữ, không dấu, tiếng lóng nghề đều phải hiểu ("xhr"/"shr"/"sổ hồg riêg" = sổ hồng riêng; "sổ chug"/"sổ chung" = sổ hồng chung; "hxh"/"hẻm ô tô"/"xe hơi vô tới nhà" = hẻm xe hơi; "hxm" = hẻm xe máy; "nhà ống"/"nhà phố liền kề" = nha_pho; "lô đất"/"nền" = dat; "c4"/"nhà cấp bốn" = nha_cap4; "full nt"/"đủ đồ" = full nội thất; "bớt lộc"/"có bớt"/"còn TL" = thuong_luong co; "ko gấp"/"từ từ bán" = gap khong).
+- Giá trị trường CHỮ viết bằng TỪ CHUẨN của nghề (pháp lý: "sổ hồng riêng", "sổ hồng chung", "vi bằng", "hợp đồng mua bán", "giấy tay", "chưa có sổ", "đang chờ ra sổ", thêm "đã hoàn công"/"chưa hoàn công" nếu khách nói; nội thất: "full nội thất", "nội thất cơ bản", "nhà trống"; hướng: Đông | Tây | Nam | Bắc | Đông Nam | Đông Bắc | Tây Nam | Tây Bắc). trich_dan vẫn COPY NGUYÊN VĂN chữ khách gõ.
+- Khách nói KHÔNG có / không biết (hỏi phường, khách "ko có phường", "không rõ") → KHÔNG đưa trường đó; tra_loi.co_tra_loi = false.
+- Vẫn cấm bịa: không thêm con số, không thêm ý khách không nói, không suy quận từ tên đường.`;
+
 type ClientModel = {
   messages: {
     parse: (p: Record<string, unknown>) => Promise<{ parsed_output?: unknown; usage?: unknown }>;
@@ -113,6 +122,8 @@ export async function bocRaoBangModel(
   cauHoiChu: string | null = null,
   /** FR-226: giá trị ĐANG GHI của các ô chữ gộp được (`KHOA_GOP`) — chỉ ô có giá trị. */
   dangGhi: Partial<Record<typeof KHOA_GOP[number], string>> | null = null,
+  /** Chế độ `ai`: thêm khối CHUẨN HOÁ (đồng nghĩa, gõ sai) sau LUAT. */
+  chuanHoa = false,
 ): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   const dsPhuong = danhSachPhuongChoAi(text.slice(0, 1200));
@@ -121,7 +132,10 @@ export async function bocRaoBangModel(
     model,
     max_tokens: 1300,
     output_config: { effort: "low", format: FORMAT_RAO },
-    system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
+    system: [
+      { type: "text", text: LUAT, cache_control: { type: "ephemeral" } },
+      ...(chuanHoa ? [{ type: "text", text: LUAT_CHUAN_HOA, cache_control: { type: "ephemeral" } }] : []),
+    ],
     messages: [{
       role: "user",
       content: `${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${text.slice(0, 1200)}"${dsPhuong ? `\n\n${dsPhuong}` : ""}`,
