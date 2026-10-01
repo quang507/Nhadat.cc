@@ -25,6 +25,7 @@ import {
   sendZalo,
   serviceClient,
 } from "../_shared/claude.ts";
+import { laTinNoiBo } from "../_shared/tin_nhac.ts";
 import { congBiMat } from "../_shared/gate.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { dienTen, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
@@ -225,7 +226,8 @@ Deno.serve(async (req) => {
   for (const r of escDue ?? []) {
     const ctv = r.ctvs as { name?: string | null; zalo_user_id?: string | null } | null;
     const seller = r.sellers as { name?: string | null; zalo_user_id?: string | null } | null;
-    let target = seller?.zalo_user_id ?? ctv?.zalo_user_id ?? null;
+    // Tin nội bộ (❓ 😟 🩺…) KHÔNG BAO GIỜ đi tới chủ nhà dù dòng việc gắn `seller_id` (`laTinNoiBo`, 01/10/2026).
+    let target = (laTinNoiBo(r.note) ? null : seller?.zalo_user_id) ?? ctv?.zalo_user_id ?? null;
     if (!target) {
       const { data: adm } = await client.from("admins")
         .select("zalo_user_id").not("zalo_user_id", "is", null).limit(1).maybeSingle();

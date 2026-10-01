@@ -2502,8 +2502,8 @@ fresh(seedKho);
     L = await dung("cx-1", "phuong");
     globalThis.__model.parse = aiRao({ cam_xuc: { muc: "buc", trich_dan: "hỏi hoài vậy" } });
     const rC1 = await send({ external_user_id: "cx-1", text: "trời ơi em hỏi hoài vậy" });
-    check("CX-01 AI đọc BỰC (trích có trong tin) → 1 việc escalation '😟 … có vẻ bực', bot xin lỗi, không hỏi tiếp",
-      escCx().length === 1 && /có vẻ bực/.test(escCx()[0].note) && rC1.body.replies.some((x) => /xin lỗi/i.test(x)) && !rC1.body.replies.some((x) => /\?/.test(x)),
+    check("CX-01 AI đọc BỰC (trích có trong tin) → 1 việc escalation '😟 … có vẻ bực' KHÔNG gắn seller_id (không gửi về chủ nhà), bot xin lỗi, không hỏi tiếp",
+      escCx().length === 1 && /có vẻ bực/.test(escCx()[0].note) && !escCx()[0].seller_id && rC1.body.replies.some((x) => /xin lỗi/i.test(x)) && !rC1.body.replies.some((x) => /\?/.test(x)),
       JSON.stringify({ esc: escCx().map((x) => x.note), rep: rC1.body.replies }));
     globalThis.__model.parse = aiRao({ cam_xuc: { muc: "buc", trich_dan: "phiền quá" } });
     await send({ external_user_id: "cx-1", text: "phiền quá à" });
@@ -2512,6 +2512,18 @@ fresh(seedKho);
     globalThis.__model.parse = aiRao({ cam_xuc: { muc: "nghi_ngo", trich_dan: "có phải lừa đảo không" } });
     await send({ external_user_id: "cx-3", text: "bên em có phải lừa đảo không vậy" });
     check("CX-03 nghi ngờ (cách nói mới) → báo người phụ trách 'đang nghi ngờ'", escCx().some((x) => /nghi ngờ/.test(x.note)), JSON.stringify(escCx().map((x) => x.note)));
+    // Bực rồi nghi ngờ trong 24 giờ là HAI chuyện — báo cả hai; nghi ngờ thì bong bóng trấn an tiền định đứng trước.
+    L = await dung("cx-5", "phuong");
+    globalThis.__model.parse = aiRao({ cam_xuc: { muc: "buc", trich_dan: "phiền quá" } });
+    await send({ external_user_id: "cx-5", text: "phiền quá à" });
+    globalThis.__model.parse = aiRao({ cam_xuc: { muc: "nghi_ngo", trich_dan: "chắc bên này lừa" } });
+    const rC5 = await send({ external_user_id: "cx-5", text: "chắc bên này lừa rồi" });
+    const esc5 = db().t.reminders.filter((x) => x.kind === "escalation" && /^😟 Zalo …cx-5/.test(x.note ?? ""));
+    check("CX-05 bực rồi nghi ngờ → 2 việc (mỗi mức một); nghi ngờ → lời đầu là trấn an (không thu trước, phí khi giao dịch thành công); câu nghi ngờ KHÔNG ghi vào tin",
+      esc5.length === 2 && /không thu đồng nào trước/.test(rC5.body.replies.find((x) => !/^🤖/.test(x)) ?? "") &&
+        /phí chỉ thu khi giao dịch thành công, 1% giá chốt/.test(rC5.body.replies.find((x) => !/^🤖/.test(x)) ?? "") &&
+        !db().t.listing_facts.some((f) => f.listing_id === L.id && /lừa/.test(f.answer ?? "")),
+      JSON.stringify({ esc: esc5.map((x) => x.note), rep: rC5.body.replies }));
     L = await dung("cx-4", "phuong");
     globalThis.__model.parse = aiRao({ cam_xuc: { muc: "buc", trich_dan: "cút đi" } });
     await send({ external_user_id: "cx-4", text: "phường 12 em" });
@@ -2541,6 +2553,16 @@ fresh(seedKho);
       !db().t.info_requests.some((x) => x.listing_id === LH.id && x.status === "pending" && x.question === "so_phong_ngu") &&
         db().t.info_requests.some((x) => x.listing_id === LH.id && x.status === "pending"),
       JSON.stringify(db().t.info_requests.filter((x) => x.listing_id === LH.id).map((x) => [x.question, x.status])));
+    // Câu hỏi ĐẦU sau câu rao cũng lọc: chủ nói ngay trong câu rao căn không có phòng ngủ.
+    fresh(seedKho);
+    let msgRao = "";
+    globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) msgRao = String(p.messages?.[0]?.content ?? ""); return aiRao({ khong_can_hoi: [{ khoa: "so_phong_ngu", ly_do: "studio không có phòng ngủ riêng", trich_dan: "không có phòng ngủ riêng" }] })(p); };
+    await send({ external_user_id: "kh-3", text: "bán căn hộ studio 35m2 tầng 9 Sunrise City 23 Nguyễn Hữu Thọ phường Tân Hưng quận 7 giá 2 tỷ 1, không có phòng ngủ riêng" });
+    const LS3 = db().t.listings.at(-1);
+    check("KH-03 câu rao 'không có phòng ngủ riêng' → AI nhận danh mục câu tùy căn; câu hỏi ĐẦU không phải phòng ngủ; khong_hoi cất",
+      /Câu bot còn định hỏi/.test(msgRao) && /so_phong_ngu/.test(msgRao) && (LS3?.boc_tach?.khong_hoi ?? []).includes("so_phong_ngu") &&
+        !db().t.info_requests.some((x) => x.listing_id === LS3.id && x.status === "pending" && x.question === "so_phong_ngu"),
+      JSON.stringify({ bt: LS3?.boc_tach, kh: LS3?.boc_tach?.khong_hoi, ir: db().t.info_requests.filter((x) => x.listing_id === LS3?.id).map((x) => [x.question, x.status]) }));
     // (2) Nhận xét không căn cứ: AI soát lời bot, code kiểm căn cứ → bỏ câu khen bịa, giữ câu hỏi.
     fresh(seedKho);
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
@@ -2779,8 +2801,10 @@ fresh(seedKho);
       const facts = db().t.listing_facts.filter((f) => f.listing_id === L.id && ["phap_ly", "bo_sung", "phuong"].includes(f.question));
       const rep = (r.body.replies ?? []).join(" ");
       const nhac = db().t.reminders.filter((x) => x.kind === "escalation").length - truocNhac;
-      check(`${ma} '${cau}' (AI: ${chuDe}) → nói thật + chuyển người phụ trách, không ghi dữ liệu, không đáp số khách`,
-        !facts.length && mongRep.test(rep) && !/chưa có khách|đang rao là/.test(rep) && nhac === 1,
+      // 01/10/2026: việc "❓" là tin cho NGƯỜI PHỤ TRÁCH — không gắn seller_id (có seller_id là tin gửi chủ nhà, FR-144).
+      const viecHoi = db().t.reminders.filter((x) => x.kind === "escalation" && /^❓/.test(x.note ?? "")).at(-1);
+      check(`${ma} '${cau}' (AI: ${chuDe}) → nói thật + chuyển người phụ trách (không gắn seller_id), không ghi dữ liệu, không đáp số khách`,
+        !facts.length && mongRep.test(rep) && !/chưa có khách|đang rao là/.test(rep) && nhac === 1 && !!viecHoi && !viecHoi.seller_id,
         JSON.stringify({ facts, nhac, rep: r.body.replies }));
       // Hỏi lại y câu đó trong 24 giờ → không đẻ thêm nhắc việc.
       const r2 = await send({ external_user_id: `hn-${ma}`, text: cau });

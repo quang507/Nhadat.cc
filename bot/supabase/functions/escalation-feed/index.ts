@@ -12,6 +12,7 @@
 // Bảo vệ thêm (tuỳ chọn): đặt secret BRIDGE_SECRET trong Vault thì mọi request
 // phải kèm header x-bridge-secret khớp; chưa đặt thì chỉ cần anon key như cũ.
 import { escalationText, ghiLoi, jsonResponse, serviceClient } from "../_shared/claude.ts";
+import { laTinNoiBo } from "../_shared/tin_nhac.ts";
 import { congBiMat } from "../_shared/gate.ts";
 
 const KINDS = ["escalation", "report"];
@@ -185,15 +186,17 @@ Deno.serve(async (req) => {
   const items = (due ?? []).map((r) => {
     const ctv = r.ctvs as Target;
     const seller = r.sellers as Target;
-    const uid = seller?.zalo_user_id ?? ctv?.zalo_user_id ?? adm?.zalo_user_id ?? null;
-    const sdt = seller?.phone ?? ctv?.phone ?? adm?.zalo_phone ?? null;
+    // Tin nội bộ (❓ 😟 🩺…) KHÔNG BAO GIỜ đi tới chủ nhà dù dòng việc gắn `seller_id` (`laTinNoiBo`, 01/10/2026).
+    const chuNha = laTinNoiBo(r.note) ? null : seller;
+    const uid = chuNha?.zalo_user_id ?? ctv?.zalo_user_id ?? adm?.zalo_user_id ?? null;
+    const sdt = chuNha?.phone ?? ctv?.phone ?? adm?.zalo_phone ?? null;
     return {
       id: r.id,
       note: r.note,
       // Text soạn sẵn dùng chung với nudge (_shared/claude.ts) — hai đường đi
       // ra ngoài (OA và bridge) phải nói y hệt nhau.
       text: escalationText(r),
-      name: seller?.name ?? ctv?.name ?? "admin",
+      name: chuNha?.name ?? ctv?.name ?? "admin",
       zalo_user_id: uid,
       // SEC-07 — CHỈ trả SĐT khi CHƯA biết uid Zalo.
       // Bridge cần số điện thoại đúng một việc: `findUser` để đổi ra uid lần
