@@ -1,7 +1,7 @@
 import Link from "next/link";
 import FavButton from "@/components/FavButton";
 import type { ListingCard as CardRow } from "@/lib/supabase";
-import { ACCESS_SHORT, formatArea, formatPrice, placeholderImg, TYPE_LABEL } from "@/lib/format";
+import { ACCESS_SHORT, formatArea, formatPrice, oTheoLoai, placeholderImg, TYPE_LABEL } from "@/lib/format";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
 
 export default function ListingCard({
@@ -110,7 +110,7 @@ export default function ListingCard({
               {formatArea(listing.area_m2)}
             </span>
           ) : null}
-          {listing.bedrooms ? (
+          {listing.bedrooms && oTheoLoai(listing.property_type).phongNgu ? (
             <span className="flex items-center gap-1.5 tabular-nums">
               <IconBed className="h-4 w-4 text-mute/70" />
               {listing.bedrooms} PN

@@ -4,7 +4,7 @@ import { NHAN_HOP_LE } from "@/bot/supabase/functions/_shared/extraction/nhan";
 import ListingCard from "@/components/ListingCard";
 import { coverByCode } from "@/lib/photos";
 import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase";
-import { zaloLink } from "@/lib/format";
+import { oTheoLoai, zaloLink } from "@/lib/format";
 import { parseQuery } from "@/lib/parse-query";
 
 const PAGE_SIZE = 24;
@@ -154,6 +154,8 @@ export default async function ListingBrowse({
   const gmin = soDuong(sp.gmin), gmax = soDuong(sp.gmax);
   const dtmin = soDuong(sp.dtmin), dtmax = soDuong(sp.dtmax);
   const loai = (sp.loai ?? "").split(",").map((x) => x.trim()).filter((x) => LOAI_HOP_LE.has(x));
+  // Bộ lọc phòng ngủ chỉ có nghĩa khi loại đang lọc có phòng ngủ (`O_THEO_LOAI`) — đang lọc đất / kho thì không hiện.
+  const coLocPN = !loai.length || loai.some((l) => oTheoLoai(l).phongNgu);
   const nhan = (sp.nhan ?? "").split(",").map((x) => x.trim()).filter((x) => NHAN_HOP_LE.has(x));
   const q = (sp.q ?? "").slice(0, 300).trim();
   // Diễn giải lại câu hỏi bằng CÙNG bộ luật đã sinh URL — không lệch nhau.
@@ -272,6 +274,7 @@ export default async function ListingBrowse({
             </Link>
           ))}
         </div>
+        {coLocPN && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Phòng ngủ</span>
           {PN.map((n) => (
@@ -280,6 +283,7 @@ export default async function ListingBrowse({
             </Link>
           ))}
         </div>
+        )}
         {/* FR-172: lọc trên cột thông số - trước đây "hẻm xe hơi" chỉ nằm trong mô tả */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 shrink-0 eyebrow text-mute">Đường vào</span>

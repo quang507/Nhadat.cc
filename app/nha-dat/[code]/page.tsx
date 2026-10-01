@@ -10,21 +10,7 @@ import WardMap from "@/components/WardMap";
 import { CARD_COLS, supabase, type Listing, type ListingCard as CardRow, type MapRow } from "@/lib/supabase";
 import { coverByCode, photosOfCode } from "@/lib/photos";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
-import {
-  ACCESS_LABEL,
-  formatArea,
-  formatDims,
-  formatPrice,
-  formatPricePerM2,
-  FURNISH_LABEL,
-  LEGAL_LABEL,
-  placeholderImg,
-  PLANNING_LABEL,
-  sanitizeDescription,
-  SITE_URL,
-  TYPE_LABEL,
-  zaloLink,
-} from "@/lib/format";
+import { ACCESS_LABEL, formatArea, formatDims, formatPrice, formatPricePerM2, FURNISH_LABEL, LEGAL_LABEL, placeholderImg, PLANNING_LABEL, sanitizeDescription, SITE_URL, TYPE_LABEL, zaloLink, oTheoLoai } from "@/lib/format";
 
 export const revalidate = 300;
 
@@ -225,7 +211,8 @@ export default async function Page({
     listing.area_m2
       ? { Icon: IconArea, label: "Diện tích", value: formatArea(listing.area_m2) }
       : null,
-    listing.bedrooms
+    // Ô theo loại BĐS (`O_THEO_LOAI`): đất / kho / mặt bằng không có phòng ngủ dù cột lỡ có số.
+    listing.bedrooms && oTheoLoai(listing.property_type).phongNgu
       ? { Icon: IconBed, label: "Phòng ngủ", value: `${listing.bedrooms} PN` }
       : null,
   ].filter(Boolean) as Array<{ Icon: (p: { className?: string }) => React.ReactElement; label: string; value: string }>;
@@ -243,7 +230,7 @@ export default async function Page({
   push("DT xây dựng", listing.built_area_m2 ? `${n(listing.built_area_m2)} m²` : null);
   push("Kết cấu", listing.floors_text ?? (listing.floors ? `${listing.floors} tầng` : null));
   push("Tầng (chung cư)", listing.floor != null && listing.property_type === "chung_cu" ? `Tầng ${listing.floor}` : null);
-  push("Phòng", [listing.bedrooms ? `${listing.bedrooms} PN` : null, listing.bathrooms ? `${listing.bathrooms} WC` : null].filter(Boolean).join(" · ") || null);
+  push("Phòng", [listing.bedrooms && oTheoLoai(listing.property_type).phongNgu ? `${listing.bedrooms} PN` : null, listing.bathrooms ? `${listing.bathrooms} WC` : null].filter(Boolean).join(" · ") || null);
   push("Đường vào", listing.access_type
     ? `${ACCESS_LABEL[listing.access_type] ?? listing.access_type}${listing.alley_width_m ? ` · rộng ${n(listing.alley_width_m)} m` : ""}${listing.distance_to_street_m ? ` · cách mặt tiền ${n(listing.distance_to_street_m)} m` : ""}`
     : null);
