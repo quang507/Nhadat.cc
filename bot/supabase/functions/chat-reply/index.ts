@@ -41,7 +41,7 @@ import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, datKiemNhe, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -1977,6 +1977,20 @@ Deno.serve(async (req) => {
       return cauXacNhanDuong(cauHoiMau("duong@goi_y", cachGoiNguoi), cachGoiNguoi, goiY.goc, goiY.ten);
     };
 
+    // Chế độ `ai` (01/10/2026, chủ dự án: "xhr có thể người ta nhắn shr nhưng viết nhầm, có thể hỏi lại xác nhận"): AI đánh
+    // dấu chữ viết tắt / gõ sai không chắc nghĩa (`xac_nhan`) → cất `boc_tach.xac_nhan_goi_y`, hỏi lại; chủ gật mới ghi (cùng
+    // cách gợi ý tên đường FR-212).
+    const goiYXacNhanAi = async (tinKiem: string): Promise<GoiYXacNhan | null> => {
+      if (!bongAi) return null;
+      const kq = await bongAi;
+      return laCheDoAi && kq ? kiemXacNhan(kq.xacNhan ?? [], tinKiem) : null;
+    };
+    const cauHoiXacNhanAi = async (listingId: string, g: GoiYXacNhan, cachGoiNguoi: string): Promise<string | null> => {
+      const { error } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { xac_nhan_goi_y: g } });
+      if (error) { await ghiLoi(client, "chat-reply ghi_boc_tach(xac nhan goi y)", error.message); return null; }
+      return `Dạ "${g.trich_dan}" là ${g.gia_tri} đúng không ${cachGoiNguoi} ạ?`;
+    };
+
     // Tầng tiền định đã ghi được fact dự án nào trong lượt này chưa. Lưới vét
     // bằng model (FR-199) chỉ chạy khi chỗ này còn `false` — hai tầng cùng ghi
     // là hàng chờ duyệt có hai dòng gần giống nhau cho cùng một câu.
@@ -2028,7 +2042,7 @@ Deno.serve(async (req) => {
     // gì; chỉ khi câu có mùi dự án (`coMuiDuAn`); và chỉ một lượt mỗi tin.
     let daVetDuAn = false;
     // FR-208: lượt AI bóc tách chạy bóng (khởi động sau khi biết câu đang hỏi).
-    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; traLoi?: { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null } | null; capNhat?: CapNhatDeXuat[]; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
+    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; traLoi?: { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null } | null; capNhat?: CapNhatDeXuat[]; xacNhan?: GoiYXacNhan[]; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
     // Công tắc `app_config.boc_tach_ai` đọc MỘT lần, tách khỏi lượt model để đường ra biết
     // phải chờ (chế độ `ghi`) hay chạy nền (chế độ `bong`) mà không đợi model xong.
     let cheDoBocAi: Promise<string> | null = null;
@@ -3985,6 +3999,35 @@ Deno.serve(async (req) => {
         // 22/09/2026: KHÔNG xin chấm điểm ở đây nữa (dời sang lúc chủ nhà báo bán được — xem `xinChamDiem`).
         return await traLoiSeller([cauDu], { du_roi: true, diem: diemDu ?? null });
       }
+      // Chế độ `ai`: lượt trước bot hỏi "Dạ "xhr" là sổ hồng riêng đúng không ạ?" (gợi ý ở `boc_tach.xac_nhan_goi_y`). Gật →
+      // ghi ô đó. Ô đó KHÁC câu đang treo → báo đã ghi rồi hỏi lại câu treo; CHÍNH là câu đang treo → coi như khách trả lời bằng
+      // giá trị đã xác nhận, để luồng thường ghi và hỏi câu kế. Không gật → bỏ gợi ý, câu đi đường thường. Gợi ý dùng một lần.
+      let xacNhanGhi: GoiYXacNhan | null = null;
+      {
+        const gX = (pendingReq.listings?.boc_tach as { xac_nhan_goi_y?: unknown } | null | undefined)?.xac_nhan_goi_y as GoiYXacNhan | undefined;
+        if (gX && typeof gX === "object" && typeof gX.khoa === "string" && typeof gX.gia_tri === "string" && KHOA_XAC_NHAN.has(gX.khoa)) {
+          const { error: xErr } = await client.rpc("ghi_boc_tach", { p_listing_id: pendingReq.listing_id, p: { xac_nhan_goi_y: false } });
+          if (xErr) await ghiLoi(client, "chat-reply ghi_boc_tach(xoa xac nhan goi y)", xErr.message);
+          const veDauX = dapAn.split(/[,;.!?]|\s+(?:mà|ma|nhưng|nhung|và|va|với|voi)\s+/u)[0]?.trim() ?? "";
+          const gatCaX = laDongY(dapAn);
+          const gatDauX = !gatCaX && veDauX.length > 0 && veDauX !== dapAn.trim() && laDongY(veDauX);
+          if ((gatCaX || gatDauX) && !humanActive && pendingReq.question !== "duyet_tin") {
+            const { error: gErr } = await client.rpc("ghi_fact_listing", {
+              p_listing_id: pendingReq.listing_id, p_question: gX.khoa, p_answer: gX.gia_tri, p_source: "seller_chat",
+            });
+            if (gErr) await ghiLoi(client, "chat-reply ghi_fact_listing(xac nhan)", gErr.message);
+            if (gX.khoa === pendingReq.question) {
+              xacNhanGhi = gX;
+              dapAn = gX.gia_tri;
+            } else if (gatCaX) {
+              const cauTreoX = cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw);
+              return await traLoiSeller([`Dạ em ghi ${gX.gia_tri} rồi ạ. ${cauTreoX}`], { xac_nhan: gX.khoa, reask: pendingReq.question, loai_cau: "xac_nhan" });
+            } else {
+              dapAn = dapAn.slice(dapAn.indexOf(veDauX) + veDauX.length).replace(/^[\s,;.!?]+/u, "").replace(/^(?:mà|ma|nhưng|nhung|và|va|với|voi)\s+/iu, "").trim() || dapAn;
+            }
+          }
+        }
+      }
       // FR-212: lượt trước bot hỏi "Đường mình là X phải không?" (tên đường gõ sai 1–2 ký tự,
       // gợi ý ở `boc_tach.duong_goi_y`). Gật → ghi địa chỉ đã sửa (fact vi_tri, trigger đồng bộ
       // location_raw/street), hỏi lại câu đang treo. Không gật → bỏ gợi ý, câu vừa nhắn đi đường
@@ -4316,7 +4359,7 @@ Deno.serve(async (req) => {
       // nhưng ở chế độ `chinh` vẫn quyết FACT KÈM (bắn thật 21/09 mau-v-03: trả lời câu phường bằng
       // "ngang 5 dài 20, hẻm xe hơi" → luật ghi độ rộng hẻm = "hẻm xe hơi").
       const layChoCauTreo = !CAU_KHONG_LAY_AI.has(pendingReq.question) || (cheDoAiTreo === "chinh" && CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question));
-      if (!suaKtDaGhi && bongAi && !kqDuyet && ((cheDoAiTreo === "ghi" && layChoCauTreo) || cheDoAiTreo === "chinh")) {
+      if (!suaKtDaGhi && !xacNhanGhi && bongAi && !kqDuyet && ((cheDoAiTreo === "ghi" && layChoCauTreo) || cheDoAiTreo === "chinh")) {
         const kqAi = await bongAi;
         const dongTreo = (pendingReq.listings ?? null) as unknown as DongDb | null;
         const datAi = kqAi ? kiemDeXuat(kqAi.truong, text).dat : [];
@@ -5126,10 +5169,13 @@ Deno.serve(async (req) => {
       // gật thì hỏi lại nó). Chỉ khi còn câu để hỏi — hết câu thì không cất gợi ý, kẻo "ok cảm ơn" sau
       // này bị đọc thành gật.
       const cauDuongKe = goiYDuongKe && nextKey ? await cauHoiDuongGoiY(pendingReq.listing_id, goiYDuongKe, cachGoi) : null;
-      const goiYKe = !cauDuongKe && nextKey === "phuong" ? await cauHoiPhuongGoiY(pendingReq.listing_id, null, cachGoi) : null;
+      // Chế độ `ai`: tin vừa nhắn có chữ gõ sai / viết tắt AI không chắc ("xhr") → câu kế là XÁC NHẬN nghĩa.
+      const xnKe = !cauDuongKe && nextKey && !xacNhanGhi ? await goiYXacNhanAi(text) : null;
+      const cauXnKe = xnKe ? await cauHoiXacNhanAi(pendingReq.listing_id, xnKe, cachGoi) : null;
+      const goiYKe = !cauDuongKe && !cauXnKe && nextKey === "phuong" ? await cauHoiPhuongGoiY(pendingReq.listing_id, null, cachGoi) : null;
       const nhanhKe = nextKey ? nhanhCuaKhoa(nextKey) : null;
       const cauKe = nextKey
-        ? cauDuongKe ?? goiYKe ?? cauHoiMau(nextKey === "phuong" && quanChuaRo ? "phuong@chua_quan" : nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)
+        ? cauDuongKe ?? cauXnKe ?? goiYKe ?? cauHoiMau(nextKey === "phuong" && quanChuaRo ? "phuong@chua_quan" : nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)
         : "";
       // Bong bóng ghi nhận đã gửi trước tin này → đừng cảm ơn/ghi nhận lần nữa.
       const daAck = ackSua
@@ -5635,12 +5681,15 @@ Deno.serve(async (req) => {
         // FR-209: câu rao có tên đường mà không có quận → tra phường mới, hỏi xác nhận.
         // FR-212: tên đường gõ sai 1–2 ký tự → câu hỏi đầu là XÁC NHẬN tên đường (đứng trước gợi ý phường).
         const cauDuongDau = duongRao?.goiY && newLst ? await cauHoiDuongGoiY(newLst.id, duongRao.goiY, cachGoi) : null;
+        // Chế độ `ai`: câu rao có chữ gõ sai / viết tắt AI không chắc ("xhr") → câu đầu là XÁC NHẬN nghĩa.
+        const xnDau = !cauDuongDau && newLst && firstKey ? await goiYXacNhanAi(textBongAi) : null;
+        const cauXnDau = xnDau && newLst ? await cauHoiXacNhanAi(newLst.id, xnDau, cachGoi) : null;
         // 25/09/2026: câu rao ĐÃ có quận cũng tra (bảng `duong` trong quận đó) — `cauHoiPhuongGoiY` tự chọn đường tra.
-        const goiYDau = !cauDuongDau && firstKey === "phuong" && viTriRao && newLst
+        const goiYDau = !cauDuongDau && !cauXnDau && firstKey === "phuong" && viTriRao && newLst
           ? await cauHoiPhuongGoiY(newLst.id, tenDuong(viTriRao), cachGoi, textBongAi)
           : null;
-        const cauXacNhanDau = cauDuongDau ?? goiYDau;
-        const cauHoiDau = cauDuongDau ?? goiYDau ?? (firstKey
+        const cauXacNhanDau = cauDuongDau ?? cauXnDau ?? goiYDau;
+        const cauHoiDau = cauDuongDau ?? cauXnDau ?? goiYDau ?? (firstKey
           // 12/09/2026: tin ở HUYỆN / thị xã / tỉnh lân cận thì đơn vị dưới là XÃ —
           // hỏi "thuộc phường mấy" cho đất Củ Chi là lộ ra máy đọc mẫu câu.
           ? (firstKey === "phuong" && laNgoaiDoThi(quanDoc)

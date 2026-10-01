@@ -32,6 +32,13 @@ const CapNhat = z.object({
   gia_tri_moi: z.string().describe("TOÀN BỘ giá trị mới của ô sau khi gộp phần khách vừa nói vào giá trị đang ghi (hoặc sửa phần khách sửa)."),
   cach: z.enum(["gop", "thay"]).describe("gop = thêm chi tiết vào giá trị đang ghi; thay = khách sửa / thay giá trị đang ghi."),
 });
+// 01/10/2026 (chủ dự án: "xhr có thể người ta nhắn shr nhưng viết nhầm, có thể hỏi lại xác nhận"): chữ viết tắt / gõ sai mà
+// AI không chắc nghĩa → không điền ô, mà đưa khả năng cao nhất vào đây để bot HỎI LẠI chủ nhà. Code chỉ dùng ở chế độ `ai`.
+const XacNhan = z.object({
+  khoa: z.enum(MOI_KHOA),
+  gia_tri: z.string().describe("Nghĩa AI đoán là khả năng cao nhất, viết bằng từ chuẩn ('sổ hồng riêng')."),
+  trich_dan: z.string().describe("Cụm khách gõ COPY NGUYÊN VĂN ('xhr')."),
+});
 const DeXuatRao = z.object({
   so_can: z.number().int().describe("Số căn / lô KHÁC NHAU chủ nhà rao trong tin này. Không rao căn nào (chỉ bổ sung, trả lời) thì 0."),
   truong: z.array(TruongBoc),
@@ -39,9 +46,11 @@ const DeXuatRao = z.object({
   kien_thuc: z.array(z.string()).describe("Ý KHÁC chủ nhà nói về căn nhà mà không thuộc khoá nào ở trên (gần chợ, khu an ninh, mới sơn sửa, có gác…): mỗi ý một cụm ngắn COPY NGUYÊN VĂN từ tin (≤ 12 chữ). Không có thì []."),
   tra_loi: TraLoiCau,
   cap_nhat: z.array(CapNhat).describe("Chỉ khi tin nói thêm / sửa MỘT PHẦN của thông tin ĐANG GHI (danh sách gửi kèm). Không có thì []."),
+  xac_nhan: z.array(XacNhan).describe("Chữ viết tắt / gõ sai KHÔNG CHẮC nghĩa (\"xhr\" có thể là shr gõ nhầm): KHÔNG đưa vào truong, đưa khả năng cao nhất vào đây để hỏi lại. Tối đa 1. Không có thì []."),
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish() });
+export type XacNhanLLM = z.infer<typeof XacNhan>;
 export type CapNhatLLM = z.infer<typeof CapNhat>;
 export type TraLoiCauLLM = z.infer<typeof TraLoiCau>;
 export type DeXuatRaoLLM = z.infer<typeof DeXuatRaoDoc>;
@@ -103,7 +112,7 @@ const LUAT_CHUAN_HOA = `CHẾ ĐỘ CHUẨN HOÁ (đè lên dòng "giữ đúng 
 - Khách nói KHÔNG có / không biết (hỏi phường, khách "ko có phường", "không rõ") → KHÔNG đưa trường đó; tra_loi.co_tra_loi = false.
 - Tin KHÔNG trả lời câu đang hỏi nhưng có thông tin KHÁC (đang hỏi kết cấu, khách nhắn "50m2" hay "5 tỷ") → VẪN đưa thông tin đó vào truong (dien_tich, gia…), chỉ tra_loi.co_tra_loi = false. KHÔNG trả rỗng vì lạc câu hỏi.
 - so_tang LUÔN tính cả trệt: "3 lầu" = 4, "trệt 2 lầu" = 3, "3 tấm" = 3.
-- Mỗi khoá đúng loại của nó: "hxh"/"hẻm xe hơi" KHÔNG BAO GIỜ là phap_ly. Chữ viết tắt không chắc nghĩa ("xhr" có thể là shr hay hxh) mà ngữ cảnh không phân định → KHÔNG đưa.
+- Mỗi khoá đúng loại của nó: "hxh"/"hẻm xe hơi" KHÔNG BAO GIỜ là phap_ly. Chữ viết tắt / gõ sai KHÔNG CHẮC nghĩa ("xhr" — nhiều khả năng "shr" gõ nhầm) → KHÔNG đưa vào truong, đưa khả năng cao nhất vào xac_nhan (khoa phap_ly, gia_tri "sổ hồng riêng", trich_dan "xhr") để bot hỏi lại.
 - Vẫn cấm bịa: không thêm con số, không thêm ý khách không nói, không suy quận từ tên đường.`;
 
 type ClientModel = {
@@ -127,7 +136,7 @@ export async function bocRaoBangModel(
   dangGhi: Partial<Record<typeof KHOA_GOP[number], string>> | null = null,
   /** Chế độ `ai`: thêm khối CHUẨN HOÁ (đồng nghĩa, gõ sai) sau LUAT. */
   chuanHoa = false,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; usage: unknown }> {
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   const dsPhuong = danhSachPhuongChoAi(text.slice(0, 1200));
   const dg = Object.entries(dangGhi ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `${k}: "${String(v).slice(0, 160)}"`);
@@ -151,6 +160,7 @@ export async function bocRaoBangModel(
     kienThuc: ket.success ? ket.data.kien_thuc.filter((k) => typeof k === "string") : [],
     traLoi: ket.success ? ket.data.tra_loi ?? null : null,
     capNhat: ket.success ? ket.data.cap_nhat ?? [] : [],
+    xacNhan: ket.success ? ket.data.xac_nhan ?? [] : [],
     usage: r.usage,
   };
 }

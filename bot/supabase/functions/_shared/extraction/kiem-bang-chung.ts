@@ -320,6 +320,30 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
   }
 }
 
+/** Ô được hỏi lại xác nhận (chữ, khoá fact cùng tên). Không gồm số / tiền / địa danh — những ô đó có đường riêng. */
+export const KHOA_XAC_NHAN = new Set(["phap_ly", "noi_that", "huong", "ket_cau", "hien_trang", "view"]);
+export type GoiYXacNhan = { khoa: string; gia_tri: string; trich_dan: string };
+/**
+ * Chế độ `ai` (01/10/2026, chủ dự án: "xhr có thể người ta nhắn shr nhưng viết nhầm, có thể hỏi lại xác nhận"): AI đánh dấu chữ
+ * viết tắt / gõ sai không chắc nghĩa kèm nghĩa đoán. Máy chỉ nhận khi cụm có trong tin, ô thuộc `KHOA_XAC_NHAN`, giá trị đúng hình
+ * dạng ô và không thêm số. Trả gợi ý đầu tiên đạt, hoặc null.
+ */
+export function kiemXacNhan(ds: Array<{ khoa: string; gia_tri: string; trich_dan: string }> | null | undefined, tin: string): GoiYXacNhan | null {
+  const kdTin = chuanSo(tin);
+  for (const x of ds ?? []) {
+    if (!x || typeof x.khoa !== "string" || typeof x.gia_tri !== "string" || typeof x.trich_dan !== "string") continue;
+    if (!KHOA_XAC_NHAN.has(x.khoa)) continue;
+    const v = x.gia_tri.trim(), cum = chuanSo(x.trich_dan);
+    if (!v || v.length > 60 || cum.length < 2 || !` ${kdTin} `.includes(` ${cum} `)) continue;
+    const soTrich = new Set(cum.match(/\d+/g) ?? []);
+    if (!(chuanSo(v).match(/\d+/g) ?? []).every((n) => soTrich.has(n))) continue;
+    const hinh = HINH_TRUONG_CHU[x.khoa];
+    if (hinh && !hinh.test(chuanSo(v))) continue;
+    return { khoa: x.khoa, gia_tri: v, trich_dan: x.trich_dan.trim() };
+  }
+  return null;
+}
+
 /** Kiểm cả loạt đề xuất của model cho MỘT tin khách. */
 export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: Bo[] } {
   const kdTin = chuanSo(tin);

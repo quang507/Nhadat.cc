@@ -2332,6 +2332,29 @@ fresh(seedKho);
       JSON.stringify({ hem: fA("do_rong_hem"), ir: db().t.info_requests.filter((x) => x.listing_id === LA.id).map((x) => [x.question, x.status]) }));
     globalThis.__cauHinh = cuCH;
   }
+  // 01/10/2026 (chủ dự án: "xhr có thể người ta nhắn shr nhưng viết nhầm, có thể hỏi lại xác nhận"): AI đánh dấu xac_nhan →
+  // câu đầu là xác nhận nghĩa; gật → ghi ô; câu treo cũ hỏi lại.
+  {
+    const cuCH = globalThis.__cauHinh;
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 1, kien_thuc: [], cap_nhat: [], tra_loi: null,
+      truong: [{ khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "nhà phố", can: null }, { khoa: "gia", gia_tri: "8 tỷ", trich_dan: "giá 8 tỷ", can: null }],
+      xac_nhan: [{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "xhr" }] } : OUT();
+    const rX = await send({ external_user_id: "aim-xn", text: "bán nhà phố hẻm 4m Trần Bình Trọng quận 5, 60m2, xhr, giá 8 tỷ" });
+    const LX = db().t.listings.at(-1);
+    const fX = (q) => db().t.listing_facts.filter((f) => f.listing_id === LX.id && f.question === q);
+    check("AIM-XN1 'xhr' AI không chắc → bot hỏi 'Dạ \"xhr\" là sổ hồng riêng đúng không', CHƯA ghi pháp lý, gợi ý cất ở boc_tach",
+      rX.body.replies.some((x) => /"xhr" là sổ hồng riêng đúng không/.test(x)) && !fX("phap_ly").length && LX.boc_tach?.xac_nhan_goi_y?.gia_tri === "sổ hồng riêng",
+      JSON.stringify({ rep: rX.body.replies, pl: fX("phap_ly"), bt: LX.boc_tach }));
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } } : OUT();
+    const rX2 = await send({ external_user_id: "aim-xn", text: "đúng rồi em" });
+    check("AIM-XN2 gật → ghi pháp lý 'sổ hồng riêng', gợi ý xoá, 🤖 báo pháp lý, hỏi lại câu đang treo",
+      fX("phap_ly").some((f) => f.answer === "sổ hồng riêng") && db().t.listings.at(-1).boc_tach?.xac_nhan_goi_y === false &&
+        rX2.body.replies.some((x) => /pháp lý: "sổ hồng riêng"/.test(x)) && rX2.body.replies.some((x) => /\?/.test(x)),
+      JSON.stringify({ rep: rX2.body.replies, pl: fX("phap_ly"), bt: db().t.listings.at(-1).boc_tach }));
+    globalThis.__cauHinh = cuCH;
+  }
   // 30/09/2026 (bắn thật lx-mua-e): khách MUA đã có hồ sơ nới ngân sách "vậy có căn 6 tỷ rưỡi cũng được" → cổng nới
   // `coHangCoGia` ("có căn" + giá) mở hồ sơ BÁN, tạo tin "BĐS bán", hỏi "nhà mình là nhà phố hay chung cư".
   for (const [i, cau, laBan] of [
