@@ -163,7 +163,12 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): st
   // chữ "hẻm xe hơi 5m" nếu vế đường vào ngay trên đã nói rồi.
   const duong = (l.location_raw ?? "").split(",")[0].trim();
   if (duong) {
-    const gon = duongVao ? duong.replace(/^h[eẻ]m(\s+xe\s+h[oơ]i|\s+xe\s+m[aá]y)?\s*[\d.,]*\s*m?\s*/i, "").trim() : duong;
+    // 01/10/2026 (bắn thật lx-tam-42): "12 hẻm 4m Trần Bình Trọng" — chữ "hẻm 4m" đứng SAU số nhà nên tiêu đề lặp "hẻm xe hơi 4m
+    // 12 hẻm 4m …". Bề rộng hẻm (có "m") ở giữa câu cũng bỏ; "hẻm 45" (số hẻm, không "m") giữ.
+    const gon = duongVao
+      ? duong.replace(/^h[eẻ]m(\s+xe\s+h[oơ]i|\s+xe\s+m[aá]y)?\s*[\d.,]*\s*m?\s*/i, "")
+        .replace(/(\s)h[eẻ]m(?:\s+xe\s+h[oơ]i|\s+xe\s+m[aá]y)?\s*\d+(?:[.,]\d+)?\s*m(?![\p{L}\d])\s*/iu, "$1").trim()
+      : duong;
     vitri.push(gon || duong);
   }
   const hc = [gonHanhChinh(l.ward), gonHanhChinh(l.district)].filter(Boolean).join(" ");

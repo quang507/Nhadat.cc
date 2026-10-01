@@ -85,6 +85,12 @@ la("tiêu đề nhà phố: cụm tách bằng dấu phẩy — chỗ nào, bao 
   /^Bán nhà hẻm xe hơi 5m Nguyễn Trãi P\.3 Q\.5, 60m², trệt \+ 2 lầu, 3PN, SHR, giá 7 tỷ 2$/.test(tdNha), tdNha);
 la("tiêu đề KHÔNG lặp 'hẻm 5m' hai lần", (tdNha.match(/hẻm/gi) ?? []).length === 1, tdNha);
 la("tiêu đề ≤ 120 ký tự", tdNha.length <= 120, `${tdNha.length} ký tự`);
+// 01/10/2026 (bắn thật lx-tam-42): số nhà đứng trước "hẻm 4m" → tiêu đề từng lặp "hẻm xe hơi 4m 12 hẻm 4m Trần Bình Trọng".
+{
+  const l12 = { ...NHA_PHO.l, location_raw: "12 hẻm 4m Trần Bình Trọng", alley_width_m: 4 };
+  const td12 = tieuDeTin(l12, fact(NHA_PHO));
+  la("tiêu đề: '12 hẻm 4m Trần Bình Trọng' → không lặp chữ hẻm, giữ số nhà 12", (td12.match(/hẻm/gi) ?? []).length === 1 && /\b12 Trần Bình Trọng\b/.test(td12), td12);
+}
 
 const tdThue = tieuDeTin(CAN_HO_THUE.l, fact(CAN_HO_THUE));
 la("tiêu đề cho thuê: mở bằng 'Cho thuê căn hộ', giá kèm '/tháng'",
