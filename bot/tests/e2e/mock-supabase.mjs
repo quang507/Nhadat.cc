@@ -186,6 +186,7 @@ export class FakeDB {
       r.seq = ++this.seq;
       // Trigger `trg_messages_bump_last_message` (20260902d): mọi tin đẩy mốc hội thoại.
       const cv = this.t.conversations.find((c) => c.id === r.conversation_id); if (cv) cv.last_message_at = r.created_at;
+      if (globalThis.__afterInsertMsgSeller && r.sender === 'seller') { const h = globalThis.__afterInsertMsgSeller; globalThis.__afterInsertMsgSeller = null; this.rows('messages').push(r); h(this, r); return { data: r }; }
       if (globalThis.__afterInsertMsg && r.sender === 'buyer') { const h = globalThis.__afterInsertMsg; globalThis.__afterInsertMsg = null; this.rows('messages').push(r); h(this, r); return { data: r }; }
     }
     if (table === "reminders") r.status = r.status ?? "pending"; // DB default 'pending'
@@ -350,7 +351,7 @@ class Builder {
     if (this.op === "insert") {
       const arr = Array.isArray(this.payload) ? this.payload : [this.payload]; const out = [];
       for (const p of arr) { const r = db.insert(t, p); if (r.error) return { data: null, error: r.error }; out.push(r.data); }
-      return this.mode === "single" ? { data: out[0], error: null } : { data: out, error: null };
+      return this.mode === "single" || this.mode === "maybe" ? { data: out[0] ?? null, error: null } : { data: out, error: null };
     }
     let rows = db.rows(t).filter((r) => this.filters.every((f) => Builder.test(f, r)));
     if (this.op === "update") {

@@ -1695,12 +1695,14 @@ Deno.serve(async (req) => {
     // Ghi tin CHỦ NHÀ trước khi gọi model: model lỗi giữa chừng thì vẫn còn dấu
     // vết chủ nhà đã nhắn gì. Trùng `zalo_msg_id` (23505) = kênh gửi lại tin cũ
     // → đã trả lời rồi, đừng trả lời lần hai. Cùng ngữ nghĩa với nhánh mua.
-    const { error: msgSErr } = await client.from("messages").insert({
+    const { data: msgSRow, error: msgSErr } = await client.from("messages").insert({
       conversation_id: convSId,
       sender: "seller",
       body: imageUrl ? `${textOrTag} [ảnh: ${imageUrl}]` : text,
       zalo_msg_id: msgId,
-    });
+    }).select("created_at").maybeSingle();
+    /** Giờ DB của tin chủ nhà vừa ghi — gộp album ảnh so "có tin nào mới hơn không" theo đồng hồ DB, không theo máy chạy hàm. */
+    const lucTinChu = (msgSRow as { created_at?: string } | null)?.created_at ?? null;
     if (msgSErr?.code === "23505" && !(coSo && soAttempts > 1)) {
       // Trùng từ THỜI TRƯỚC SỔ (sổ chưa có dòng nào cho msg_id này mà messages
       // đã có): lượt cũ đã trả lời rồi — dừng, và chốt sổ completed-rỗng để
@@ -2445,6 +2447,12 @@ Deno.serve(async (req) => {
       }
       if (sach.length) {
         const bl = await baoLaiDaLuu(extra);
+        // 01/10/2026 (chủ dự án test Zalo, gửi album ảnh): lượt ẢNH không có chữ để bóc — "🤖 Không bóc tách được gì" là ồn.
+        if (extra.anh === true && (!bl.bong || bl.bong.startsWith(KHONG_BOC))) {
+          const loaiAnh = Array.isArray(extra.anh_loai) ? (extra.anh_loai as string[]) : [];
+          const soAnh = typeof extra.so_anh === "number" && extra.so_anh > 1 ? `${extra.so_anh} ảnh: ` : "";
+          bl.bong = bl.cheDo !== "tat" && loaiAnh.length ? `${DAU_BAO_LAI} Bóc tách ảnh: ${soAnh}${loaiAnh.join(", ")}` : null;
+        }
         // FR-239 g: lượt này không lưu được gì mà model "Dạ, em ghi lại rồi anh" → bỏ câu ghi nhận suông.
         // Bỏ xong không còn câu nào ("dạ em" → "Dạ em ghi nhận rồi ạ.") thì đáp một lời gật, không để khách chỉ thấy 🤖.
         if (bl.bong?.startsWith(KHONG_BOC)) { const bo = boGhiNhanSuong(sach); sach = bo.length ? bo : sach.length ? ["Dạ vâng ạ."] : sach; }
@@ -3616,6 +3624,9 @@ Deno.serve(async (req) => {
       mat_tien: "mat_tien", trong_nha: "trong_nha", phong_ngu: "phong_ngu", bep: "bep", wc: "wc", san_thuong: "san_thuong",
       view: "view", hem: "hem", giay_to: "giay_to", ban_ve: "khac", khong_lien_quan: "khac", khac: "khac",
     };
+    /** Điểm mạnh model thấy trong ảnh của lượt này (gộp album dùng làm câu khen). */
+    let khenAnhLuot: string | null = null;
+    let anhLaGiayTo = false;
     /** Trả `true` khi ảnh KHÔNG liên quan tới nhà (đã hỏi "gửi nhầm ảnh không", không cất vào tin). */
     const nhanAnh = async (listingId: string | null): Promise<boolean> => {
       if (!imageUrl) return false;
@@ -3676,6 +3687,7 @@ Deno.serve(async (req) => {
       }
       // Lời đáp: nói ảnh gì, và với giấy tờ thì đối chiếu diện tích.
       if (kq?.loai === "giay_to") {
+        anhLaGiayTo = true;
         const g = kq.giay_to;
         const cau: string[] = [`Em nhận được ảnh ${g?.loai_giay ?? "giấy tờ"} rồi ạ, em cất riêng, không đưa lên web.`];
         const soM2 = g?.dien_tich_m2 ?? null;
@@ -3714,6 +3726,7 @@ Deno.serve(async (req) => {
         // 10/09 (chủ dự án): ảnh đã được model ĐỌC trước khi cất kho → khen bằng
         // điểm mạnh THẬT nhìn thấy (`khen`), không khen suông.
         const khen = (kq as { khen?: string | null }).khen?.trim()?.replace(/\.$/, "");
+        khenAnhLuot = khen || null;
         ackAnh.push(khen
           ? `Em nhận được ảnh${nhan ? ` ${nhan}` : ""} rồi ạ. ${khen.charAt(0).toUpperCase() + khen.slice(1)}, khách lướt qua là để ý liền.`
           : `Em nhận được ảnh${nhan ? ` ${nhan}` : ""} rồi ạ${moTa}. Ảnh này giúp khách hình dung căn nhà nhanh hơn nhiều.`);
@@ -3725,8 +3738,58 @@ Deno.serve(async (req) => {
     // Seller gửi ẢNH không kèm chữ → nhận ảnh rồi dừng; TUYỆT ĐỐI không coi chuỗi
     // rỗng là "câu trả lời" cho câu hỏi đang chờ (từng làm mất fact pháp lý).
     if (!text && imageUrl) {
-      const nham = await nhanAnh(pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null);
-      return await traLoiSeller(nham ? [] : [`Cảm ơn ${cachGoi} nhiều!`], { anh: true, ...(nham ? { anh_nham: true } : {}) });
+      const idNeoAnh = pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null;
+      const nham = await nhanAnh(idNeoAnh);
+      if (nham) return await traLoiSeller([], { anh: true, anh_nham: true });
+      // 01/10/2026 (chủ dự án test Zalo: album 4 ảnh → 4 lần "🤖 Không bóc tách được gì" + 4 câu khen; "gộp lại khen 1 2 câu
+      // thôi, nhận ảnh cần hỏi cái gì nữa thì hỏi"): mỗi ảnh của album là một lượt gọi chạy SONG SONG. Ảnh nào cũng vào kho,
+      // nhưng chỉ lượt ảnh CUỐI của đợt trả lời: chờ một nhịp, có tin chủ nhà mới hơn thì lượt này im (lượt sau lo).
+      const choAlbum = Number((globalThis as { __choAlbumMs?: number }).__choAlbumMs ?? 8000);
+      if (choAlbum > 0) await new Promise((r) => setTimeout(r, choAlbum));
+      let soAnhDot = 1;
+      if (lucTinChu) {
+        const { data: sauAnh, error: sauErr } = await client.from("messages").select("id")
+          .eq("conversation_id", convSId).eq("sender", "seller").gt("created_at", lucTinChu).limit(1);
+        if (sauErr) await ghiLoi(client, "chat-reply gop album (tin sau)", sauErr.message);
+        else if ((sauAnh ?? []).length) {
+          ackAnh = [];
+          return await traLoiSeller([], { anh: true, anh_gop: "luot_sau_tra_loi" });
+        }
+        // Đếm ảnh của đợt: tin chủ nhà liền trước, cách nhau ≤ 2 phút, đều là ảnh trơn.
+        const { data: dot, error: dotErr } = await client.from("messages").select("sender, body, created_at")
+          .eq("conversation_id", convSId).lte("created_at", lucTinChu)
+          .gte("created_at", new Date(Date.parse(lucTinChu) - 120_000).toISOString())
+          .order("created_at", { ascending: false }).limit(30);
+        if (dotErr) await ghiLoi(client, "chat-reply gop album (dem anh)", dotErr.message);
+        else {
+          soAnhDot = 0;
+          for (const m of (dot ?? []) as Array<{ sender: string; body: string | null }>) {
+            if (m.sender !== "seller" || !/\[ảnh: /.test(m.body ?? "") || (m.body ?? "").replace(/\[ảnh: [^\]]*\]/g, "").replace(/\[[^\]]*\]/g, "").trim()) break;
+            soAnhDot++;
+          }
+          soAnhDot = Math.max(1, soAnhDot);
+        }
+      }
+      // Chủ dự án 01/10: "tin nhắn cho người test, đã bóc tách ảnh bếp phòng tắm,... và tin nhắn dưới khen đẹp là được" —
+      // 🤖 liệt kê loại ảnh của cả đợt (đọc `listing_media` vừa cất), dưới là MỘT câu khen. Ảnh giấy tờ giữ lời đối chiếu sổ.
+      let loaiDot: string[] = [];
+      if (idNeoAnh) {
+        const tuDot = lucTinChu ? new Date(Date.parse(lucTinChu) - 120_000).toISOString() : new Date(Date.now() - 120_000).toISOString();
+        const { data: md, error: mdErr } = await client.from("listing_media").select("media_type").eq("listing_id", idNeoAnh).gte("created_at", tuDot);
+        if (mdErr) await ghiLoi(client, "chat-reply gop album (loai anh)", mdErr.message);
+        loaiDot = [...new Set(((md ?? []) as Array<{ media_type: string }>).map((m) => (LOAI_ANH_VI as Record<string, string>)[m.media_type] ?? "").filter(Boolean))];
+      }
+      if (!(anhLaGiayTo as boolean)) {
+        const khenL = khenAnhLuot as string | null; // gán trong `nhanAnh` (closure) — TS thu hẹp nhầm thành null
+        const khenGon = khenL ? `, ${khenL.charAt(0).toLowerCase()}${khenL.slice(1)}` : "";
+        ackAnh = [`Ảnh${loaiDot.length === 1 ? ` ${loaiDot[0]}` : ""} đẹp lắm ${cachGoi} ạ${khenGon}.`];
+      }
+      // Hỏi tiếp câu đang chờ (câu "gửi ảnh" thì nhanAnh đã đóng) — nhận ảnh xong không để hội thoại đứng.
+      const qAnh = pendingReq && pendingReq.question !== "hinh_anh" && pendingReq.listing_id === idNeoAnh ? pendingReq.question : null;
+      const cauSauAnh = qAnh
+        ? cauHoiMau(qAnh, cachGoi, pendingReq?.listings?.property_type, pendingReq?.listings?.district, pendingReq?.listings?.deal, pendingReq?.listings?.location_raw)
+        : null;
+      return await traLoiSeller(cauSauAnh ? [cauSauAnh] : [], { anh: true, so_anh: soAnhDot, anh_loai: loaiDot, ...(qAnh ? { reask: qAnh } : {}) });
     }
     // Soát 01/09 (vai người bán): ảnh KÈM CHÚ THÍCH từng rơi mất — chữ là câu
     // trả lời, ảnh vẫn phải vào kho. Neo căn theo thứ tự FR-157.
