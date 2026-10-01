@@ -12,7 +12,7 @@
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
 import { docTien, giaTheoM2 } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
-import { cumPhongNguTheoTang, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, laGap, soPhongNguTheoTang } from "./khop-cau-tra-loi.ts";
+import { cumPhongNguTheoTang, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, phuongChuan, phuongTrongTrich, phuongTuTenCu, tenDayDu } from "./khop-phuong.ts";
 
@@ -200,6 +200,9 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       return doc && chuanSo(doc) === chuanSo(muon) ? null : "quan_khong_khop_trich_dan";
     }
     case "phuong": {
+      // 01/10/2026 (chủ dự án test Zalo): "ko có phường" → AI trả phường "ko có phường" và lọt luật tên dưới (chữ có trong tin,
+      // có chữ "phường"). Không / không biết / không có không phải tên phường.
+      if (KHONG_BIET_PHUONG.test(chuanSo(v)) || KHONG_BIET_PHUONG.test(chuanSo(cum))) return "phuong_khong_co_that";
       const so = chuanSo(v).match(/\d{1,2}/)?.[0];
       if (so) {
         const m = /(?:phuong|\bp)\s*\.?\s*(\d{1,2})\b/.exec(kd);

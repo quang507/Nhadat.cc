@@ -35,6 +35,8 @@ bo("số phòng ngủ 3, trích '1 trệt 1 lửng 3 lầu'", MT, "so_phong_ngu"
 bo("loại căn hộ từ 'bán nhà mặt tiền'", MT, "loai_bds", "chung_cu", "bán nhà mặt tiền", "trich_dan_khong_noi_loai_nay");
 bo("gấp = có, trích 'giá 32 tỷ còn thương lượng'", MT, "gap", "co", "giá 32 tỷ còn thương lượng", "trich_dan_khong_noi_gap");
 bo("phường 4, trích 'phường 14'", MT, "phuong", "4", "phường 14", "phuong_khong_khop_trich_dan");
+bo("'ko có phường' không phải tên phường", "ko có phường", "phuong", "ko có phường", "ko có phường", "phuong_khong_co_that");
+bo("'không biết phường nào' không phải tên phường", "không biết phường nào em", "phuong", "không biết phường", "không biết phường nào", "phuong_khong_co_that");
 bo("đường diễn đạt lại ('CVL')", MT, "duong", "CVL", "đường Châu Văn Liêm", "gia_tri_khong_nam_trong_trich_dan");
 bo("loại BĐS ngoài danh sách", MT, "loai_bds", "nha_mat_tien", "nhà mặt tiền", "gia_tri_ngoai_danh_sach");
 bo("khoá lạ", MT, "so_dien_thoai", "0903", "mặt tiền", "khoa_la");

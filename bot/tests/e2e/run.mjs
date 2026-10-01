@@ -3220,6 +3220,19 @@ fresh(seedKho);
 }
 
 // ── 21/09/2026 (bắn thật mau-tdt): bản nháp và câu duyệt — không nuốt câu hỏi ngược, gật ở vế đầu vẫn là gật ──
+// 01/10/2026 (chủ dự án test Zalo: "phường ko có mà sao ghi là Không Có Phường viết vào tin"): "ko có" / "ko có phường" khi hỏi
+// phường không phải tên phường, cũng không phải thông tin bổ sung.
+for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["pkc-3", "không biết phường nào"]]) {
+  const tin = () => db().t.listings.at(-1);
+  fresh();
+  await send({ external_user_id: uid, text: "bán nhà phố hẻm 4m Lê Văn Sỹ quận 3, 4x15, trệt 2 lầu, giá 8 tỷ" });
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tin().id, question: "phuong", status: "pending" });
+  const rp = await send({ external_user_id: uid, text: cau });
+  check(`PHUONG-KC '${cau}' khi hỏi phường → KHÔNG ghi phường, KHÔNG ghi bổ sung`,
+    !tin().ward && !db().t.listing_facts.some((f) => f.listing_id === tin().id && /^(?:phuong|bo_sung)$/.test(f.question) && /ko có|không biết/.test(f.answer ?? "")),
+    JSON.stringify({ ward: tin().ward, facts: db().t.listing_facts.filter((f) => f.listing_id === tin().id).map((f) => [f.question, f.answer]), rep: rp.body.replies }));
+}
 // 30/09/2026 (bắn thử bán lx-ban-292a): chờ duyệt nháp, "chính chủ đứng tên, không thế chấp" → ghi HAI ý; lời không đổi bản nháp
 // thì không gửi lại nháp kèm "Em sửa lại rồi".
 {
