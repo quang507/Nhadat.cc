@@ -424,6 +424,8 @@ trả 404 và ảnh vỡ sạch. Tài nguyên tĩnh để trong `public/` rồi 
 
 Thư mục `nhadat-cc/` cũ (máy local) không dùng nữa.
 
+**Từ 01/10/2026 (chủ dự án: "sửa từ cái gốc nguyên nhân nào mà làm nó sai, sau này có lỗi tương tự như này nữa ko, từ đây về sau phải xét như vậy"): mỗi lần sửa lỗi bot/web phải trả lời ba câu, ghi trong mục docs/07 của lần sửa đó.** (1) **Lớp lỗi**: nguyên nhân gốc chung là gì — không phải "câu X của khách", mà là cơ chế nào cho câu X lọt (vd "đoán Ý khách bằng từ khoá trên chữ bỏ dấu"). (2) **Chỗ khác cùng lớp**: soát và liệt kê các chỗ dùng cùng cơ chế, cái nào đã sửa, cái nào còn. (3) **Bài kiểm đỏ khi tắt bản sửa**, kèm ít nhất một cách nói MỚI chưa từng bắn. Lỗi thuộc lớp "máy đoán ý bằng từ khoá" thì KHÔNG vá bằng cách thêm từ vào regex — đưa quyết định sang AI (đọc theo nghĩa, code kiểm trích dẫn), từ khoá lùi xuống lưới đỡ khi AI không chạy (mẫu: SRS-5.1q).
+
 **Từ 30/09/2026 (chủ dự án: "bỏ luôn giờ ko cần FR nữa, viết vào trong docs đi"): sửa lỗi / cải tiến bot và web KHÔNG cần cấp FR trước khi code.** Thay vào đó ghi thẳng vào tài liệu tầng liên quan (thường là `docs/07` — một mục SRS kèm ca gốc, nguyên nhân, chỗ sửa, cách kiểm; ví dụ SRS-5.1a), cùng commit với code và test. FR cũ giữ nguyên số, vẫn là tham chiếu; ai muốn cấp FR cho một tính năng lớn vẫn được, chỉ không còn là cổng bắt buộc.
 
 ## 6b. Nguồn thiết kế

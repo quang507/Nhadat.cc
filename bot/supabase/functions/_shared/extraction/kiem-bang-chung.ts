@@ -1015,3 +1015,25 @@ export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[]): st
   }
   return ra;
 }
+
+// ─── 01/10/2026 (bắn thử lx-hn-62; chủ dự án: "sửa từ cái gốc nguyên nhân") ─────────────────────────────────────────────
+// Khách HỎI LẠI bên mình: AI nói (`hoi_lai`), code chỉ kiểm câu hỏi có thật trong tin. Thay cho ba bộ từ khoá hỏi.
+export type HoiLaiDoc = { cau: string; chuDe: string; caTin: boolean };
+/**
+ * `undefined` = AI không nói gì về chuyện hỏi (model hỏng / bản cũ) → nơi gọi rơi về luật từ khoá cũ.
+ * `null` = AI đọc rồi: tin KHÔNG hỏi gì. Có hỏi → câu hỏi (trích không có trong tin thì lấy cả tin), chủ đề, và `caTin` =
+ * cả tin chỉ là câu hỏi (AI không đọc ra dữ liệu nào khác) — khi đó không phần nào của tin được ghi làm thông tin.
+ */
+export function docHoiLai(
+  h: { co_hoi?: boolean | null; cau_hoi?: string | null; chu_de?: string | null } | null | undefined,
+  tin: string, coDuLieuKhac: boolean,
+): HoiLaiDoc | null | undefined {
+  if (!h || typeof h.co_hoi !== "boolean") return undefined;
+  if (!h.co_hoi) return null;
+  const goc = (tin ?? "").trim();
+  if (!goc) return null;
+  const chuan = (s: string) => boDau(s).replace(/[^a-z0-9]+/g, " ").trim();
+  const cau = (h.cau_hoi ?? "").trim();
+  const coThat = cau.length >= 3 && chuan(goc).includes(chuan(cau));
+  return { cau: coThat ? cau : goc, chuDe: h.chu_de ?? "khac", caTin: !coDuLieuKhac };
+}

@@ -2578,6 +2578,49 @@ fresh(seedKho);
       !hoi5.includes("do_rong_duong"), JSON.stringify({ hoi5, rep: r5.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // 01/10/2026 (bắn thử lx-hn-62; chủ dự án: "sửa từ cái gốc nguyên nhân"): khách HỎI LẠI — AI nói có hỏi + chủ đề
+  // (`hoi_lai`), thay ba bộ từ khoá. Câu hỏi không bao giờ thành thông tin; hỏi thị trường không đáp bằng giá rao.
+  {
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    const aiHoi = (cau, chuDe) => (p) => laLuotBocRao(p)
+      ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+          hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: chuDe } } : OUT();
+    const moTin = async (uid) => {
+      fresh(seedKho);
+      globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: null, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null } } : OUT();
+      await send({ external_user_id: uid, text: "Bán nhà hẻm 5m Trần Hưng Đạo quận 1, 4x16, giá 15 tỷ" });
+      const L = db().t.listings.at(-1);
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: L.id, question: "phuong", status: "pending" });
+      return L;
+    };
+    for (const [ma, cau, chuDe] of [
+      ["HN-01", "bao lâu thì bán được em", "dich_vu"],
+      ["HN-02", "giá khu này giờ sao em", "thi_truong"],
+      ["HN-03", "ben minh co doc quyen ko", "dich_vu"],
+      ["HN-04", "khu này dễ bán hông em", "thi_truong"],
+    ]) {
+      const L = await moTin(`hn-${ma}`);
+      globalThis.__model.parse = aiHoi(cau, chuDe);
+      const r = await send({ external_user_id: `hn-${ma}`, text: cau });
+      const facts = db().t.listing_facts.filter((f) => f.listing_id === L.id && (f.question === "bo_sung" || f.question === "phuong"));
+      const rep = (r.body.replies ?? []).join(" ");
+      check(`${ma} khách hỏi lại '${cau}' (AI: ${chuDe}) → không ghi làm thông tin, không đáp giá rao, câu phường vẫn treo`,
+        !facts.length && !/đang rao là/.test(rep) && db().t.info_requests.some((x) => x.listing_id === L.id && x.question === "phuong" && x.status === "pending"),
+        JSON.stringify({ facts, rep: r.body.replies }));
+    }
+    // AI nói đây là hỏi về CHÍNH TIN (giá đã ghi) → vẫn đáp bằng dữ liệu tin như cũ.
+    {
+      const L = await moTin("hn-05");
+      globalThis.__model.parse = aiHoi("hồi nãy anh nói giá bao nhiêu nhỉ", "tin_cua_minh");
+      const r = await send({ external_user_id: "hn-05", text: "hồi nãy anh nói giá bao nhiêu nhỉ" });
+      check("HN-05 'hồi nãy anh nói giá bao nhiêu nhỉ' (AI: tin_cua_minh) → đáp giá đã ghi 15 tỷ",
+        /15 tỷ/.test((r.body.replies ?? []).join(" ")), JSON.stringify(r.body.replies));
+      void L;
+    }
+    globalThis.__cauHinh = cuCH;
+  }
   // 01/10/2026 (chủ dự án: "nhà nếu có 4 tấm, tầng thì hỏi có tính gác lửng ko" — tấm / tầng / lửng gọi chung là kết cấu).
   {
     fresh(seedKho);

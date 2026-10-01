@@ -403,18 +403,21 @@ export function motCauHoi(replies: string[]): string[] {
  * Chuyện gửi ảnh là luật của mình (FR-185: gửi vào chat là vào kho), nên trả lời tiền
  * định, không trông vào model. Không nhận ra thì null → model tự trả lời như cũ.
  */
-export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null): string | null {
+export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null, chuDe?: string | null): string | null {
   const kd = boDau(hoi);
   const ra: string[] = [];
+  // 01/10/2026: AI đã nói câu hỏi thuộc CHỦ ĐỀ nào (`hoi_lai.chu_de`) → câu tiền định chỉ dùng khi đúng chủ đề; từ khoá
+  // trùng mà chủ đề khác ("giá khu này") thì để model trả lời. Không có chủ đề (AI không chạy) → như cũ.
+  const dung = (...cd: string[]) => !chuDe || cd.includes(chuDe);
   // "bên em là bot hả?" / "người thật hay máy?" — nói thật, một câu (TONE).
-  if (/\b(bot|may|robot|ai|tu dong|nguoi that|nguoi hay may)\b/.test(kd) && /\b(la|phai|hay|ha|khong|ko|a|dung)\b/.test(kd) && !/\b(may lanh|may giat|may nuoc|may bom)\b/.test(kd)) {
+  if (dung("ve_bot") && /\b(bot|may|robot|ai|tu dong|nguoi that|nguoi hay may)\b/.test(kd) && /\b(la|phai|hay|ha|khong|ko|a|dung)\b/.test(kd) && !/\b(may lanh|may giat|may nuoc|may bom)\b/.test(kd)) {
     ra.push("Dạ em là trợ lý AI bên AI Ơi Nhà Đất, việc cần người thật thì có anh chị phụ trách theo sát mình ạ.");
   }
   // "phí sao?" — theo luật phí, hệ thống biết nhãn chính chủ / môi giới.
-  if (phi && /\b(phi|hoa hong|hoa hong|phan tram|bao nhieu %|mat tien gi|ton gi|tinh sao)\b/.test(kd) && !/\bphi quan ly\b/.test(kd)) {
+  if (phi && dung("dich_vu") && /\b(phi|hoa hong|hoa hong|phan tram|bao nhieu %|mat tien gi|ton gi|tinh sao)\b/.test(kd) && !/\bphi quan ly\b/.test(kd)) {
     ra.push(`Dạ ${phi} ạ.`);
   }
-  if (/\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
+  if (dung("dich_vu", "khac") && /\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
     ra.push(`Dạ ${ac} gửi ảnh thẳng vào đây là em cất vào tin luôn ạ.`);
   }
   return ra.length ? ra.join(" ") : null;
