@@ -259,13 +259,13 @@ export default function SuaTinModal({
           {oSo("area_m2", "Diện tích (m²)", "Ví dụ: 62,5")}
         </div>
 
-        {/* Ô theo LOẠI BĐS (`O_THEO_LOAI`): đất không có phòng ngủ / kết cấu, căn hộ không có ngang × dài. Ô đang có giá trị thì
-            vẫn hiện để admin thấy và xoá được. */}
-        {(oLoai.ngangDai || f.frontage_m || f.length_m || oLoai.phongNgu || f.bedrooms || oLoai.ketCau || f.floors_text) && (
+        {/* Ô theo LOẠI BĐS (`O_THEO_LOAI`): đất không có phòng ngủ / kết cấu, căn hộ không có ngang × dài, nhà không có ô phòng
+            ngủ trống (chủ dự án 01/10). Ô đang có giá trị thì vẫn hiện để admin thấy, sửa và xoá được. */}
+        {(oLoai.ngangDai || f.frontage_m || f.length_m || oLoai.oPhongNguTrong || f.bedrooms || oLoai.ketCau || f.floors_text) && (
         <div className="grid gap-4 border-t border-line/60 pt-3 sm:grid-cols-3">
           {(oLoai.ngangDai || f.frontage_m) && oSo("frontage_m", "Ngang (m)", "4,2")}
           {(oLoai.ngangDai || f.length_m) && oSo("length_m", "Dài (m)", "18")}
-          {(oLoai.phongNgu || f.bedrooms) && oSo("bedrooms", "Phòng ngủ", "3")}
+          {(oLoai.oPhongNguTrong || f.bedrooms) && oSo("bedrooms", "Phòng ngủ", "3")}
           {(oLoai.ketCau || f.floors_text) && (
           <div className="sm:col-span-3">
             <label htmlFor={id("ketcau")} className={nhan}>Kết cấu</label>
