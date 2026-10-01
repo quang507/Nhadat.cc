@@ -39,6 +39,16 @@ const XacNhan = z.object({
   gia_tri: z.string().describe("Nghĩa AI đoán là khả năng cao nhất, viết bằng từ chuẩn ('sổ hồng riêng')."),
   trich_dan: z.string().describe("Cụm khách gõ COPY NGUYÊN VĂN ('xhr')."),
 });
+// 01/10/2026 (bắn thử lx-hn-62; chủ dự án: "sửa từ cái gốc nguyên nhân"): khách HỎI LẠI bên mình. Trước đây "đây có phải câu
+// hỏi không / hỏi về chuyện gì" do ba bộ từ khoá quyết (`laCauHoiTron`, `hoiVeTin`, `dapHoiNguocTienDinh`) — bộ từ khoá thì
+// luôn thiếu cách nói mới ("bao lâu thì bán được em" → ghi làm thông tin) và bỏ dấu thì đụng chữ ("khu này" = "hồi nãy" →
+// "giá khu này giờ sao" bị đáp giá rao). AI đọc mọi tin rồi, nên AI nói luôn: có hỏi không, hỏi gì, chủ đề gì.
+export const CHU_DE_HOI = ["tin_cua_minh", "dich_vu", "thi_truong", "ve_bot", "khac"] as const;
+const HoiLai = z.object({
+  co_hoi: z.boolean().describe("Tin có câu chủ nhà HỎI bot / bên mình không — đọc theo NGHĨA, kể cả không dấu hỏi, gõ tắt, không dấu ('bao lâu thì bán được em', 'giá khu này giờ sao', 'phi ben minh sao'). Chỉ trả lời câu bot hỏi, kể chuyện, chào, cảm ơn → false."),
+  cau_hoi: z.string().nullable().describe("Câu hỏi đó COPY NGUYÊN VĂN từ tin. co_hoi = false thì null."),
+  chu_de: z.enum(CHU_DE_HOI).nullable().describe("tin_cua_minh = hỏi về chính căn mình đã rao (giá / diện tích đã ghi, đăng chưa, có khách chưa); dich_vu = phí, hợp đồng, độc quyền, cách làm việc, bao lâu bán được, ai xem tin, có dẫn khách không; thi_truong = giá khu vực, khu này dễ bán không, nên rao giá nào; ve_bot = bot là ai, người hay máy, công ty nào; khac = còn lại. co_hoi = false thì null."),
+});
 const DeXuatRao = z.object({
   so_can: z.number().int().describe("Số căn / lô KHÁC NHAU chủ nhà rao trong tin này. Không rao căn nào (chỉ bổ sung, trả lời) thì 0."),
   truong: z.array(TruongBoc),
@@ -47,9 +57,11 @@ const DeXuatRao = z.object({
   tra_loi: TraLoiCau,
   cap_nhat: z.array(CapNhat).describe("Chỉ khi tin nói thêm / sửa MỘT PHẦN của thông tin ĐANG GHI (danh sách gửi kèm). Không có thì []."),
   xac_nhan: z.array(XacNhan).describe("Chữ viết tắt / gõ sai KHÔNG CHẮC nghĩa (\"xhr\" có thể là shr gõ nhầm): KHÔNG đưa vào truong, đưa khả năng cao nhất vào đây để hỏi lại. Tối đa 1. Không có thì []."),
+  hoi_lai: HoiLai,
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish() });
+export type HoiLaiLLM = z.infer<typeof HoiLai>;
 export type XacNhanLLM = z.infer<typeof XacNhan>;
 export type CapNhatLLM = z.infer<typeof CapNhat>;
 export type TraLoiCauLLM = z.infer<typeof TraLoiCau>;
@@ -84,6 +96,11 @@ KHOÁ:
 - gap, thuong_luong: "co" | "khong". Hoa hồng môi giới KHÔNG phải thương lượng.
 - kien_thuc: ý khác về CĂN NHÀ không có khoá (tiện ích gần, an ninh, tình trạng, đồ để lại, lịch sử…) — cụm ngắn CHÉP NGUYÊN VĂN; KHÔNG đặt nhãn diễn giải ("tiềm năng kinh doanh", "phù hợp đầu tư", "dòng tiền tốt", "khai thác thương mại") khi khách không nói đúng chữ đó; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
 Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [], kien_thuc = [].
+
+KHÁCH HỎI LẠI ("hoi_lai") — đọc theo NGHĨA, như môi giới nghe khách: tin có ý HỎI bên mình (có hay không có dấu "?", gõ tắt,
+không dấu) → co_hoi = true, cau_hoi = câu hỏi chép nguyên văn, chu_de theo nội dung câu hỏi. "giá khu này giờ sao" là hỏi
+THỊ TRƯỜNG, không phải hỏi giá căn mình; "hồi nãy anh nói giá bao nhiêu" mới là hỏi tin của mình. Câu hỏi KHÔNG BAO GIỜ
+vào truong hay kien_thuc.
 - Mọi trường CHỮ (pháp lý, nội thất, hiện trạng, kết cấu, hướng, lý do bán, view, thời hạn thuê…) viết lại SẠCH: có dấu, đúng chính tả, viết hoa tên riêng, bỏ từ đệm ("nha", "nhé", "á", "ạ"), giữ đúng ý và đúng chữ cái của cụm trích — KHÔNG thêm ý, không đổi từ.
 - Khách gõ KHÔNG DẤU thì TÊN RIÊNG (đường, phường, dự án, quận) viết lại CÓ DẤU đúng chính tả tên thật ("pham the hien" → "Phạm Thế Hiển", "thu duc" → "Thủ Đức"); cụm trích dẫn vẫn COPY nguyên văn không dấu. Không chắc tên thật thì giữ nguyên chữ khách gõ. KHÔNG đổi chữ cái, chỉ thêm dấu.
 - "Hẻm xe hơi / xe tải / ba gác" không phải hien_trang. "bớt / giảm N", "bao phí" là mức giảm, không phải gia. Số có "m2" là dien_tich, không phải dai. Lời hứa ("để em xem lại rồi báo"), lời chào, câu hỏi → không vào kien_thuc.
@@ -136,7 +153,7 @@ export async function bocRaoBangModel(
   dangGhi: Partial<Record<typeof KHOA_GOP[number], string>> | null = null,
   /** Chế độ `ai`: thêm khối CHUẨN HOÁ (đồng nghĩa, gõ sai) sau LUAT. */
   chuanHoa = false,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; usage: unknown }> {
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   const dsPhuong = danhSachPhuongChoAi(text.slice(0, 1200));
   const dg = Object.entries(dangGhi ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `${k}: "${String(v).slice(0, 160)}"`);
@@ -161,6 +178,7 @@ export async function bocRaoBangModel(
     traLoi: ket.success ? ket.data.tra_loi ?? null : null,
     capNhat: ket.success ? ket.data.cap_nhat ?? [] : [],
     xacNhan: ket.success ? ket.data.xac_nhan ?? [] : [],
+    hoiLai: ket.success ? ket.data.hoi_lai ?? null : null,
     usage: r.usage,
   };
 }

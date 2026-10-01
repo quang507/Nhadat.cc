@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { datKiemNhe, kiemXacNhan, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { datKiemNhe, docHoiLai, kiemXacNhan, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -437,6 +437,19 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("chonViTri: 'hem 4m Pham The Hien' (không số nhà) + AI có dấu → AI", chonViTri("hem 4m Pham The Hien", "Phạm Thế Hiển") === "Phạm Thế Hiển", "");
   bo("[ai] 'ko có phường' vẫn không phải phường", "ko có phường", "phuong", "ko có phường", "ko có phường", "phuong_khong_co_that");
   datKiemNhe(false);
+}
+
+// 01/10/2026: khách HỎI LẠI — AI nói, code kiểm câu hỏi có trong tin.
+{
+  const h = (co_hoi, cau_hoi, chu_de) => ({ co_hoi, cau_hoi, chu_de });
+  ok("HL-01 AI không nói (null) → undefined (rơi về luật cũ)", docHoiLai(null, "abc", false) === undefined);
+  ok("HL-02 AI nói không hỏi → null", docHoiLai(h(false, null, null), "sổ hồng riêng", true) === null);
+  const r3 = docHoiLai(h(true, "bao lâu thì bán được em", "dich_vu"), "bao lâu thì bán được em", false);
+  ok("HL-03 cả tin là câu hỏi → caTin, chủ đề dich_vu", r3?.caTin === true && r3.chuDe === "dich_vu" && r3.cau === "bao lâu thì bán được em", JSON.stringify(r3));
+  const r4 = docHoiLai(h(true, "phí bên em sao", "dich_vu"), "sổ hồng riêng, phí bên em sao", true);
+  ok("HL-04 vừa trả lời vừa hỏi → chỉ câu hỏi, không caTin", r4?.caTin === false && r4.cau === "phí bên em sao", JSON.stringify(r4));
+  const r5 = docHoiLai(h(true, "giá thị trường khu vực", "thi_truong"), "giá khu này giờ sao em", false);
+  ok("HL-05 trích không có trong tin → lấy cả tin", r5?.cau === "giá khu này giờ sao em", JSON.stringify(r5));
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

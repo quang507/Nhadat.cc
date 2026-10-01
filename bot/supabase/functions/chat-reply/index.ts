@@ -63,6 +63,7 @@ import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/
 import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
 import { nhungCauTim, xepTheoNghia } from "../_shared/ai/nhung.ts"; // FR-216
 import { chonUngVienNghia, tenGan, TU_CHUNG_DU_AN, TU_CHUNG_DUONG } from "../_shared/extraction/khop-ten-nghia.ts";
+import { docHoiLai, type HoiLaiDoc } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonDiaDanh, coChuPhuong, cungQuan, type DiaDanhChon, nhacTenQuan, type NhomDiaDanh, phuongTrungTenQuan, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
 import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
@@ -85,6 +86,19 @@ const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "d
 // 21/09/2026 (Zalo thật): ở chế độ `chinh`, câu VỊ TRÍ / PHƯỜNG vẫn để AI đọc trước — AI có tên đường /
 // số phường sạch thì lấy; AI trống thì luật đỡ như cũ (không hạ "khớp" thành "lệch" như các khoá khác).
 const CAU_AI_DOC_TRUOC_LUAT_DO = new Set(["vi_tri", "phuong"]);
+// 01/10/2026 (bắn thử lx-hn-62): chỉ dẫn trả lời câu khách HỎI LẠI theo chủ đề AI đọc ra (`hoi_lai.chu_de`). Hệ thống KHÔNG
+// có số liệu giá khu vực / thời gian bán — nói thật, không đưa con số, không hứa suông "em kiểm tra rồi báo lại".
+/** Câu đỡ khi model không viết được (lỗi / im) mà khách có hỏi lại: hỏi thị trường thì nói thật không có số liệu. */
+const cauHoiLaiDuPhong = (chuDe: string | null | undefined, ac: string): string =>
+  chuDe === "thi_truong"
+    ? `Dạ giá khu vực bên em chưa có số liệu giao dịch đủ chắc để báo ${ac}, em không dám nói bừa ạ. `
+    : `Câu ${ac} hỏi em kiểm tra rồi báo lại ngay nha. `;
+const CHI_DAN_CHU_DE: Record<string, string> = {
+  thi_truong: " Đây là câu hỏi về THỊ TRƯỜNG (giá khu vực, dễ bán không, nên rao giá nào): hệ thống CHƯA có số liệu giao dịch khu vực — nói thật là bên em chưa có số liệu chốt đủ chắc để báo, KHÔNG đưa bất kỳ con số nào, KHÔNG nói lại giá căn mình như câu trả lời, KHÔNG hứa sẽ gửi số liệu.",
+  dich_vu: " Đây là câu hỏi về CÁCH BÊN EM LÀM VIỆC: phí / đăng tin / gửi ảnh trả lời theo hướng dẫn hệ thống; bao lâu bán được thì nói thật là tuỳ giá và khu vực, tin lên kệ là bên em rao ngay và báo khi có khách quan tâm — KHÔNG hứa số ngày.",
+  ve_bot: " Đây là câu hỏi về BOT: nói thật em là trợ lý AI của AI Ơi Nhà Đất, việc cần người thật có anh chị phụ trách.",
+  tin_cua_minh: " Đây là câu hỏi về CHÍNH TIN của chủ nhà: chỉ trả lời bằng thông tin tin đang ghi ở trên, không có thì nói thật là chưa ghi.",
+};
 // FR-224: câu hỏi SỐ CHẶT — giá trị ghi lấy từ ô AI đã chuẩn hoá + kiểm khoảng (`giaTriChoCauTreo`), không lấy câu trả lời
 // chữ của AI ("năm tỷ hai" / "5,2 tỷ" đều phải thành một con số đúng đơn vị). AI vẫn quyết CÓ / KHÔNG trả lời.
 /** FR-226: giá trị đang ghi của các ô chữ AI gộp / sửa được, đọc từ cột tin (đã nạp cùng câu chờ). */
@@ -2149,13 +2163,23 @@ Deno.serve(async (req) => {
     // gì; chỉ khi câu có mùi dự án (`coMuiDuAn`); và chỉ một lượt mỗi tin.
     let daVetDuAn = false;
     // FR-208: lượt AI bóc tách chạy bóng (khởi động sau khi biết câu đang hỏi).
-    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; traLoi?: { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null } | null; capNhat?: CapNhatDeXuat[]; xacNhan?: GoiYXacNhan[]; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
+    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; traLoi?: { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null } | null; capNhat?: CapNhatDeXuat[]; xacNhan?: GoiYXacNhan[]; hoiLai?: { co_hoi: boolean; cau_hoi: string | null; chu_de: string | null } | null; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
     // Công tắc `app_config.boc_tach_ai` đọc MỘT lần, tách khỏi lượt model để đường ra biết
     // phải chờ (chế độ `ghi`) hay chạy nền (chế độ `bong`) mà không đợi model xong.
     let cheDoBocAi: Promise<string> | null = null;
     // Chế độ `ai` (01/10/2026, chủ dự án: "bỏ luật, dùng AI bóc tách"): đi chung đường `chinh` (`cheDoBocAi` trả "chinh")
     // nhưng máy chỉ chặn bịa (`datKiemNhe`), AI chuẩn hoá đồng nghĩa / gõ sai, luật thôi đỡ khoá AI biết khi AI im.
     let laCheDoAi = false;
+    // 01/10/2026 (chủ dự án: "sửa từ cái gốc nguyên nhân"): khách có HỎI LẠI bên mình không, hỏi chủ đề gì — AI đọc theo
+    // nghĩa (`hoi_lai`), thay ba bộ từ khoá (`laCauHoiTron`, `hoiVeTin`, `dapHoiNguocTienDinh`) vốn thiếu cách nói mới và
+    // đụng chữ khi bỏ dấu. `undefined` = không ở chế độ `ai` / AI không chạy → nơi gọi giữ luật cũ làm lưới đỡ.
+    const hoiLaiAi = async (tinKiem: string): Promise<HoiLaiDoc | null | undefined> => {
+      if (!bongAi) return undefined;
+      const k = await bongAi;
+      if (!laCheDoAi || !k?.ket) return undefined;
+      const coDuLieu = k.truong.length > 0 || k.kienThuc.length > 0 || !!k.traLoi?.co_tra_loi || (k.capNhat?.length ?? 0) > 0;
+      return docHoiLai(k.hoiLai, tinKiem, coDuLieu);
+    };
     // FR-226: ô chữ AI đã GỘP / SỬA lượt này (đã qua `kiemCapNhat`) — đường ra không ghi lại mẩu đó làm "bổ sung".
     let capNhatLuot: Array<{ question: string; answer: string }> = [];
     // Địa chỉ luật vừa ghép số nhà lượt này ("45 Ngô Y Linh") — kiến thức AI "số 45" không vào bổ sung.
@@ -3123,7 +3147,17 @@ Deno.serve(async (req) => {
     // từ DB (giá, diện tích, địa chỉ, tầng, hướng, pháp lý, tình trạng, số khách quan tâm), rồi hỏi lại
     // câu đang treo nếu có. Nhận diện chặt (`hoiVeTin`): dáng hỏi + không có số kèm đơn vị.
     {
-      const loaiHoiTin = hoiVeTin(text);
+      let loaiHoiTin = hoiVeTin(text);
+      // AI đọc nghĩa: không phải câu hỏi, hay hỏi chuyện khác (giá KHU VỰC, phí…) → không đáp bằng dữ liệu tin (bắn thử
+      // lx-hn-62: "giá khu này giờ sao em" — bỏ dấu "này" = "nãy" — từng được đáp "giá mình đang rao là 15 tỷ").
+      if (loaiHoiTin) {
+        const h = await hoiLaiAi(text);
+        const chuDeHop = ["khach", "trang_thai", "noi_dang", "ban_chua"].includes(loaiHoiTin) ? ["tin_cua_minh", "dich_vu"] : ["tin_cua_minh"];
+        if (h !== undefined && (!h || !chuDeHop.includes(h.chuDe))) {
+          console.log("chat-reply: hoi ve tin — AI noi khong phai", loaiHoiTin, h?.chuDe ?? "khong hoi");
+          loaiHoiTin = null;
+        }
+      }
       const lidHoi = loaiHoiTin ? (pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null) : null;
       if (loaiHoiTin && lidHoi) {
         const [{ data: tinHoi, error: thErr }, { count: soQuanTam }, { count: soHoi }] = await Promise.all([
@@ -4707,19 +4741,25 @@ Deno.serve(async (req) => {
       // của chủ nhà được trả lời TRƯỚC câu kế (không nuốt, không ghi cả câu vào ô).
       // 15/09/2026 (bắn thật A5): cả tin là MỘT câu hỏi ("bên bạn có cần mình gửi hình
       // không hay sao") → là hỏi ngược, KHÔNG phải "thông tin bổ sung" để ghi vào tin.
-      const hoiNguoc = kq.hoiNguoc ?? ((kq.loai === "hoi" || (kq.loai === "lech" && !kq.chuyenSang && laCauHoiTron(dapAn))) ? dapAn : null);
+      // 01/10/2026: AI nói có hỏi không (`hoiLaiAi`) — luật từ khoá chỉ còn là lưới đỡ khi AI không chạy. Cả tin chỉ là câu
+      // hỏi (AI không đọc ra dữ liệu nào) thì cả tin là câu hỏi: không ghi làm thông tin, không coi là câu trả lời.
+      const hoiAi = await hoiLaiAi(dapAn);
+      if (hoiAi?.caTin && kq.loai === "khop" && !kqDuyet && !xacNhanGhi) kq = { loai: "hoi" };
+      const hoiNguoc = hoiAi !== undefined
+        ? (hoiAi ? (hoiAi.caTin ? dapAn : (kq.hoiNguoc ?? hoiAi.cau)) : null)
+        : kq.hoiNguoc ?? ((kq.loai === "hoi" || (kq.loai === "lech" && !kq.chuyenSang && laCauHoiTron(dapAn))) ? dapAn : null);
       if (kq.dapAn) dapAn = kq.dapAn;
       // 15/09/2026 (bắn thật F2): câu hỏi về ẢNH có đáp án của hệ thống → bong bóng tiền
       // định đứng trước, model chỉ hỏi tiếp (model từng bỏ qua lời dặn trả lời trước).
       const hoiNguocDap = hoiNguoc
-        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, phiCauSeller)
+        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, phiCauSeller, hoiAi?.chuDe)
         : laXinXoaDuLieu(dapAn) && !nhanDienFact(dapAn)
         ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
         : null;
       const hoiNguocPrompt = hoiNguoc
         ? hoiNguocDap
           ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}" — hệ thống ĐÃ trả lời câu đó ở bong bóng trước ("${hoiNguocDap}"); em KHÔNG trả lời lại, không nhắc lại chuyện ảnh, chỉ ghi nhận rồi hỏi tiếp. `
-          : `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}". TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; hỏi về cách làm việc (gửi ảnh, phí, đăng tin) thì trả lời theo hướng dẫn hệ thống; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá; hỏi "em biết dự án / chỗ X không" mà phần trên không có X thì nói thật em chưa nắm rõ X, KHÔNG đoán X ở quận nào, của chủ đầu tư nào. Rồi mới hỏi tiếp. `
+          : `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}".${CHI_DAN_CHU_DE[hoiAi?.chuDe ?? ""] ?? ""} TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; hỏi về cách làm việc (gửi ảnh, phí, đăng tin) thì trả lời theo hướng dẫn hệ thống; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá; hỏi "em biết dự án / chỗ X không" mà phần trên không có X thì nói thật em chưa nắm rõ X, KHÔNG đoán X ở quận nào, của chủ đầu tư nào. Rồi mới hỏi tiếp. `
         : "";
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
       // ơn ngắn, KHÔNG hỏi lại điểm, không gọi model. Câu hỏi ngược/ừ thì đường
@@ -5085,7 +5125,7 @@ Deno.serve(async (req) => {
         // anh?"). Như câu xác nhận ở lượt rao: model lo phần ghi nhận, câu hỏi phường giữ nguyên văn gợi ý.
         if (hoiLai && chiQuan && goiYSauQuan) hoiLai = `${hoiLai.replace(/[^.!?]*\?\s*$/u, "").trim()} ${goiYSauQuan}`.trim();
         if (!hoiLai) {
-          hoiLai = (hoiNguoc && !hoiNguocDap ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (kq.loai === "xung_ho"
+          hoiLai = (hoiNguoc && !hoiNguocDap ? cauHoiLaiDuPhong(hoiAi?.chuDe, cachGoi) : "") + (kq.loai === "xung_ho"
             ? `Dạ em nhớ rồi, em gọi ${kq.xungHo} nha. `
             : chiQuan
             ? `Dạ em ghi quận rồi ạ. `
@@ -5591,7 +5631,7 @@ Deno.serve(async (req) => {
         // 10/09 lần 7: bong bóng trước đã nói "Dạ em ghi rồi ạ: …" mà bong bóng
         // này mở đầu y hệt — hai câu ghi nhận liền nhau đọc như máy. Đã có bong
         // bóng ghi nhận thì vào thẳng câu hỏi.
-        const moDau = (hoiNguoc && !hoiNguocDap ? `Câu ${cachGoi} hỏi em kiểm tra rồi báo lại ngay nha. ` : "") + (ackSua ? "" : "Dạ em ghi rồi ạ. ");
+        const moDau = (hoiNguoc && !hoiNguocDap ? cauHoiLaiDuPhong(hoiAi?.chuDe, cachGoi) : "") + (ackSua ? "" : "Dạ em ghi rồi ạ. ");
         sellerReply = nextKey
           ? `${moDau}${neo ? `Căn ${neo} nha. ` : ""}${cauKe}`
           : thieuDiem.length
