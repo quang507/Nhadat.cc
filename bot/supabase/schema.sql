@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-09-30 16:52 (giờ VN)
+-- Sinh lúc: 2026-10-01 11:13 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -4170,7 +4170,9 @@ begin
     v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
     if v_num is not null and v_num between 1 and 40 then
       update listings set alley_width_m = v_num,
-             access_type = coalesce(access_type, case when v_num >= 6 then 'hem_xe_tai' when v_num >= 3 then 'hem_xe_hoi' else 'hem_xe_may' end),
+             -- 20261001a: "đường nhựa 6m" (độ rộng ĐƯỜNG trước nhà / đất) là mặt tiền đường, không phải hẻm xe tải.
+             access_type = coalesce(access_type, case when new.question = 'do_rong_duong' then 'mat_tien'
+                                                      when v_num >= 6 then 'hem_xe_tai' when v_num >= 3 then 'hem_xe_hoi' else 'hem_xe_may' end),
              specs_source = bac
        where id = new.listing_id and (alley_width_m is null or de);
     end if;
