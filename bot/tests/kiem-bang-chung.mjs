@@ -449,7 +449,11 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const r4 = docHoiLai(h(true, "phí bên em sao", "dich_vu"), "sổ hồng riêng, phí bên em sao", true);
   ok("HL-04 vừa trả lời vừa hỏi → chỉ câu hỏi, không caTin", r4?.caTin === false && r4.cau === "phí bên em sao", JSON.stringify(r4));
   const r5 = docHoiLai(h(true, "giá thị trường khu vực", "thi_truong"), "giá khu này giờ sao em", false);
-  ok("HL-05 trích không có trong tin → lấy cả tin", r5?.cau === "giá khu này giờ sao em", JSON.stringify(r5));
+  ok("HL-05 trích không có trong tin (AI chép câu khác) → undefined, rơi về lưới từ khoá", r5 === undefined, JSON.stringify(r5));
+  const r6 = docHoiLai(h(true, "nhà mình phường mấy anh/chị nhỉ?", "tin_cua_minh"), "ben minh co bat doc quyen ko", false);
+  ok("HL-06 AI chép câu BOT vừa hỏi làm câu hỏi của khách → undefined", r6 === undefined, JSON.stringify(r6));
+  const r7 = docHoiLai(h(true, "khu nay de ban hong em", "thi_truong"), "khu này dễ bán hông em", false);
+  ok("HL-07 trích khác dấu vẫn là câu trong tin → nhận", r7?.chuDe === "thi_truong", JSON.stringify(r7));
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

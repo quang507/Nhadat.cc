@@ -1034,6 +1034,9 @@ export function docHoiLai(
   if (!goc) return null;
   const chuan = (s: string) => boDau(s).replace(/[^a-z0-9]+/g, " ").trim();
   const cau = (h.cau_hoi ?? "").trim();
-  const coThat = cau.length >= 3 && chuan(goc).includes(chuan(cau));
-  return { cau: coThat ? cau : goc, chuDe: h.chu_de ?? "khac", caTin: !coDuLieuKhac };
+  // Bắn thử v313 (lx-hn-a2): "ben minh co bat doc quyen ko" → AI chép câu BOT vừa hỏi ("nhà mình phường mấy anh/chị nhỉ?")
+  // làm câu hỏi của khách, chủ đề sai theo. Trích không có trong tin khách = AI đọc lượt này không đáng tin → `undefined`
+  // (nơi gọi rơi về lưới từ khoá), không phải "lấy cả tin" như bản đầu — bản đó giấu lỗi của AI.
+  if (cau.length < 3 || !chuan(goc).includes(chuan(cau))) return undefined;
+  return { cau, chuDe: h.chu_de ?? "khac", caTin: !coDuLieuKhac };
 }
