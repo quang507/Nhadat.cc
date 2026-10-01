@@ -2527,6 +2527,24 @@ fresh(seedKho);
       check(`${ma} rồi khách đáp '${tra}'`, mong(Lq2), JSON.stringify({ ward: Lq2.ward, district: Lq2.district, rep: rq2.body.replies }));
     }
 
+    // Bắn thử v309 (lx-lq-61): AI IM ở lượt "tay thnh" → luật ghi chữ thô "tay thnh"; rồi "tân phú em" → AI ghi "Phường Tân Phú".
+    {
+      fresh(datTuDien);
+      globalThis.__model.parse = imAi;
+      await send({ external_user_id: "lq-5", text: "Bán nhà hẻm xe hơi quận 5, 4x15, trệt 2 lầu, giá 12 tỷ" });
+      const L5q = db().t.listings.at(-1);
+      hoiPhuong(L5q.id);
+      const r5a = await send({ external_user_id: "lq-5", text: "tay thnh" });
+      const L5a = db().t.listings.at(-1);
+      check("LQ-05 AI im, 'tay thnh' cho tin Quận 5 → không ghi chữ thô, hỏi lại Tân Phú hay Quận 5",
+        !L5a.ward && /Tân Phú/.test((r5a.body.replies ?? []).join(" ")), JSON.stringify({ ward: L5a.ward, rep: r5a.body.replies }));
+      globalThis.__model.parse = aiPhuong("Phường Tân Phú", "tân phú");
+      const r5b = await send({ external_user_id: "lq-5", text: "tân phú em" });
+      const L5b = db().t.listings.at(-1);
+      check("LQ-06 rồi 'tân phú em' (AI đọc nhầm Phường Tân Phú) → Phường Tây Thạnh, Quận Tân Phú",
+        L5b.ward === "Phường Tây Thạnh" && /Tân Phú/.test(L5b.district ?? ""), JSON.stringify({ ward: L5b.ward, district: L5b.district, rep: r5b.body.replies }));
+    }
+
     fresh(datTuDien);
     globalThis.__model.parse = imAi;
     const r4 = await send({ external_user_id: "dd-4", text: "Bán nhà 156 Nguyễn Trãi phường 3 quận 5, 4x15, 3 tầng, giá 12 tỷ" });

@@ -1796,6 +1796,9 @@ Deno.serve(async (req) => {
     // phường/xã khách GÕ trong câu (đúng, đảo chữ, sai ≤ 1 ký tự) dò theo bảng `wards` → ghi phường đó (seller_chat, đè phường
     // AI đoán). Phường khác quận đã biết của tin thì không ghi.
     let dsPhuongTuDien: PhuongDs[] | null = null;
+    // Phường từ điển dò ra trong tin này mà thuộc QUẬN KHÁC quận tin đang ghi ("tay thnh" cho tin Quận 5) — không ghi,
+    // để luồng câu phường hỏi lại khách (01/10/2026, bắn thử v309 lx-lq-61: chữ gõ sai không tra lại được bằng tên đúng).
+    let phuongLechLuot: { ten_day_du: string; quan_cu: string } | null = null;
     // 01/10/2026 (chủ dự án: "làm hàm dò địa danh chung đi, dò bằng schematic"): tin chỉ là MỘT tên trơn ("tan dinh",
     // "phường tây thạnh nha", "ở gò vấp á") mà bảng `wards` dò trong câu không ra → dò cả bốn từ điển (`tim_dia_danh`:
     // phường mới, phường cũ → phường mới, quận cũ, tên đường; đúng chữ / đảo chữ / sai 1 ký tự). Chữ không ra gì thì tìm
@@ -1866,7 +1869,10 @@ Deno.serve(async (req) => {
         quanPhuong = dd.quan_cu;
       }
       if (!ten || l.ward === ten) return null;
-      if (quanBiet && quanPhuong && boDau(quanBiet) !== boDau(String(quanPhuong))) return null;
+      if (quanBiet && quanPhuong && !cungQuan(quanBiet, String(quanPhuong))) {
+        phuongLechLuot = { ten_day_du: ten, quan_cu: String(quanPhuong) };
+        return null;
+      }
       const { error } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: "phuong", p_answer: ten, p_source: "seller_chat" });
       if (error) { await ghiLoi(client, "chat-reply ghi_fact_listing(phuong tu dien)", error.message); return null; }
       console.log("chat-reply: phuong tu dien", tp?.khop ?? tron?.ten, "→", ten);
@@ -2195,8 +2201,13 @@ Deno.serve(async (req) => {
           boGhi = chon.bo;
           // 01/10/2026 (bắn thử lx-dd-51/53): phường AI đọc thuộc QUẬN KHÁC quận tin đang ghi chắc → không ghi ở đây; luồng
           // trả lời câu phường hỏi lại khách "nhà mình ở quận nào" (gợi ý `doi_quan`).
-          const quanChac = d.district && ((d as { boc_tach?: { quan_mac_dinh?: unknown } | null }).boc_tach?.quan_mac_dinh !== true) ? String(d.district) : null;
+          const btD = (d as { boc_tach?: { quan_mac_dinh?: unknown; phuong_goi_y?: { doi_quan?: unknown } | null } | null }).boc_tach;
+          const quanChac = d.district && btD?.quan_mac_dinh !== true ? String(d.district) : null;
+          // Đang chờ khách trả lời "nhà mình ở quận Y hay Z" → phường / quận để luồng câu phường quyết (bắn thử lx-lq-61:
+          // "tân phú em" → AI ghi "Phường Tân Phú").
+          const choLechQuan = btD?.phuong_goi_y?.doi_quan === true;
           for (const g of chon.ghi) {
+            if (choLechQuan && (g.question === "phuong" || g.question === "quan")) continue;
             const qP = g.question === "phuong" && quanChac ? phuongChuan(g.answer)?.quan_cu : null;
             if (qP && !cungQuan(qP, quanChac)) { console.log("chat-reply: phuong AI lech quan, de hoi lai", g.answer, qP, quanChac); continue; }
             const { error: gErr } = await client.rpc("ghi_fact_listing", {
@@ -4585,7 +4596,8 @@ Deno.serve(async (req) => {
         const dapAnAi0 = CAU_SO_CHAT.has(pendingReq.question) ? oAi : (traLoiAi?.giaTri ?? oAi);
         // 22/09/2026: câu treo VỊ TRÍ — bản luật chứa bản AI mà dài hơn (có số nhà / hẻm) thì lấy luật.
         // 30/09/2026 (bắn thật lx-ban-f): AI trả "o q10" cho câu địa chỉ — chỉ có quận, không phải địa chỉ; luật để câu treo.
-        const dapAnAi = pendingReq.question === "phuong" && phuongTuDien ? null
+        // Khách vừa gật phường bot gợi ý (`nhanGoiYPhuong`) → phường là phường gợi ý, AI không đè ("tân phú em" ≠ Phường Tân Phú).
+        const dapAnAi = pendingReq.question === "phuong" && (phuongTuDien || nhanGoiYPhuong) ? null
           : pendingReq.question === "vi_tri" && laChiDonViHanhChinh(dapAn) ? null
           : pendingReq.question === "vi_tri" && dapAnAi0 ? chonViTri(bocViTriRao(dapAn), dapAnAi0) : dapAnAi0;
         if (cheDoAiTreo === "chinh" && kqAi?.ket) {
@@ -4873,7 +4885,7 @@ Deno.serve(async (req) => {
           const giaTriP = loaiDapAn ?? dapAn;
           const pc = phuongChuan(giaTriP);
           const tach = pc ? null : tachTienToPhuong(giaTriP);
-          const w = pc ? { ten_day_du: tenDayDu(pc), quan_cu: pc.quan_cu ?? null } : await timWard(((tach?.ten ?? giaTriP) || "").trim());
+          const w = (pc ? { ten_day_du: tenDayDu(pc), quan_cu: pc.quan_cu ?? null } : await timWard(((tach?.ten ?? giaTriP) || "").trim())) ?? phuongLechLuot;
           if (w?.quan_cu && !cungQuan(w.quan_cu, quanTin)) {
             const goiY: GoiYPhuong = { phuong: w.ten_day_du, quan: w.quan_cu, duong: "", doi_quan: true };
             const { error: gErr } = await client.rpc("ghi_boc_tach", { p_listing_id: pendingReq.listing_id, p: { phuong_goi_y: goiY } });
