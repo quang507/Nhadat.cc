@@ -2500,6 +2500,33 @@ fresh(seedKho);
       check(`${ma} đang hỏi ${q}, '${t}' → dò địa danh chung`, mong(Ly), JSON.stringify({ ward: Ly.ward, district: Ly.district, rep: rx.body.replies }));
     }
 
+    // 01/10/2026 (bắn thử lx-dd-51): phường khách nói thuộc QUẬN KHÁC quận tin đang ghi → hỏi lại, không ghi thẳng.
+    const aiPhuong = (ten, trich) => (p) => laLuotBocRao(p)
+      ? { so_can: 0, kien_thuc: [], cap_nhat: [], xac_nhan: [], tra_loi: null, truong: [{ khoa: "phuong", gia_tri: ten, trich_dan: trich, can: null }] } : OUT();
+    for (const [ma, tra, mong] of [
+      ["LQ-02", "tân phú em", (l) => l.ward === "Phường Tây Thạnh" && /Tân Phú/.test(l.district ?? "")],
+      ["LQ-03", "đúng rồi", (l) => l.ward === "Phường Tây Thạnh" && /Tân Phú/.test(l.district ?? "")],
+      ["LQ-04", "quận 5 mà em", (l) => !l.ward && l.district === "Quận 5"],
+    ]) {
+      fresh(datTuDien);
+      globalThis.__model.parse = imAi;
+      await send({ external_user_id: "lq-1", text: "Bán nhà hẻm xe hơi quận 5, 4x15, 3 tầng, giá 12 tỷ" });
+      const Lq = db().t.listings.at(-1);
+      hoiPhuong(Lq.id);
+      globalThis.__model.parse = aiPhuong("Phường Tây Thạnh", "tay thnh");
+      const rq1 = await send({ external_user_id: "lq-1", text: "tay thnh" });
+      const Lq1 = db().t.listings.at(-1);
+      if (ma === "LQ-02") {
+        check("LQ-01 tin Quận 5, 'tay thnh' → Phường Tây Thạnh (Tân Phú) KHÔNG ghi thẳng, hỏi lại Tân Phú hay Quận 5",
+          !Lq1.ward && /Tân Phú/.test((rq1.body.replies ?? []).join(" ")) && /Quận 5/.test((rq1.body.replies ?? []).join(" ")),
+          JSON.stringify({ ward: Lq1.ward, rep: rq1.body.replies }));
+      }
+      globalThis.__model.parse = imAi;
+      const rq2 = await send({ external_user_id: "lq-1", text: tra });
+      const Lq2 = db().t.listings.at(-1);
+      check(`${ma} rồi khách đáp '${tra}'`, mong(Lq2), JSON.stringify({ ward: Lq2.ward, district: Lq2.district, rep: rq2.body.replies }));
+    }
+
     fresh(datTuDien);
     globalThis.__model.parse = imAi;
     const r4 = await send({ external_user_id: "dd-4", text: "Bán nhà 156 Nguyễn Trãi phường 3 quận 5, 4x15, 3 tầng, giá 12 tỷ" });

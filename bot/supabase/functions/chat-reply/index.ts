@@ -63,7 +63,7 @@ import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/
 import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
 import { nhungCauTim, xepTheoNghia } from "../_shared/ai/nhung.ts"; // FR-216
 import { chonUngVienNghia, tenGan, TU_CHUNG_DU_AN, TU_CHUNG_DUONG } from "../_shared/extraction/khop-ten-nghia.ts";
-import { chonDiaDanh, type DiaDanhChon, type NhomDiaDanh, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
+import { chonDiaDanh, cungQuan, type DiaDanhChon, nhacTenQuan, type NhomDiaDanh, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
 import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
@@ -1879,7 +1879,8 @@ Deno.serve(async (req) => {
     // quận); quận cũ tra ở bảng `wards` (NQ 1685). Bot HỎI XÁC NHẬN, chưa ghi —
     // gợi ý nằm ở `boc_tach.phuong_goi_y`, chủ nhà gật thì mới vào cột (RSK-03).
     // Tra hỏng / hết giờ (4 s) là đường đi bình thường → console.log, không vào sổ lỗi.
-    type GoiYPhuong = { phuong: string; quan: string; duong: string };
+    // `doi_quan` (01/10/2026): gợi ý sinh ra vì phường khách nói thuộc QUẬN KHÁC quận tin đang ghi — gật thì đổi luôn quận.
+    type GoiYPhuong = { phuong: string; quan: string; duong: string; doi_quan?: boolean };
     const timWard = async (ten: string): Promise<{ ten_day_du: string; quan_cu: string } | null> => {
       if (!ten || /\d/.test(ten)) return null;
       const { data, error } = await client.from("wards").select("ten_day_du, quan_cu").ilike("ten", ten).limit(1).maybeSingle();
@@ -2022,7 +2023,7 @@ Deno.serve(async (req) => {
         // CẮT chữ đệm và tiền tố viết hoa ("Xã Tân Kiên"), không phải "xã Tân Kiên đó em".
         else if (tach) tenChuan = tach.ten_day_du;
       }
-      if (quan && chuaQuan) {
+      if (quan && (chuaQuan || goiY?.doi_quan)) {
         const { error: qErr } = await client.from("listings").update({ district: quan }).eq("id", listingId);
         if (qErr) await ghiLoi(client, "chat-reply cap nhat quan tu phuong", qErr.message);
         else { p.quan = quan; p.quan_mac_dinh = false; }
@@ -2168,7 +2169,7 @@ Deno.serve(async (req) => {
         const { data: sNow } = await client.from("sellers").select("active_listing_id").eq("id", sellerRow.id).maybeSingle();
         const lid = (sNow as { active_listing_id?: string | null } | null)?.active_listing_id ?? null;
         const chon = client.from("listings")
-          .select("id, deal, property_type, price_vnd, price_per_m2_vnd, area_m2, frontage_m, length_m, rear_width_m, alley_width_m, distance_to_street_m, bedrooms, bathrooms, floors, floor, district, ward, street, unit_code, direction, legal_status, gap, negotiable, rent_income_vnd, floors_text, access_type, nhan, projects(name)")
+          .select("id, deal, property_type, price_vnd, price_per_m2_vnd, area_m2, frontage_m, length_m, rear_width_m, alley_width_m, distance_to_street_m, bedrooms, bathrooms, floors, floor, district, ward, street, unit_code, direction, legal_status, gap, negotiable, rent_income_vnd, floors_text, access_type, nhan, boc_tach, projects(name)")
           .eq("seller_id", sellerRow.id);
         const { data: dong, error: dErr } = await (ma ? chon.eq("code", ma) : lid ? chon.eq("id", lid) : chon.order("created_at", { ascending: false }))
           .limit(1).maybeSingle();
@@ -2192,7 +2193,12 @@ Deno.serve(async (req) => {
         if ((kq.cheDo === "ghi" || kq.cheDo === "chinh") && d && (soCan ?? 0) <= 1) {
           const chon = chonDeGhi(dat, soSanh, d, facts);
           boGhi = chon.bo;
+          // 01/10/2026 (bắn thử lx-dd-51/53): phường AI đọc thuộc QUẬN KHÁC quận tin đang ghi chắc → không ghi ở đây; luồng
+          // trả lời câu phường hỏi lại khách "nhà mình ở quận nào" (gợi ý `doi_quan`).
+          const quanChac = d.district && ((d as { boc_tach?: { quan_mac_dinh?: unknown } | null }).boc_tach?.quan_mac_dinh !== true) ? String(d.district) : null;
           for (const g of chon.ghi) {
+            const qP = g.question === "phuong" && quanChac ? phuongChuan(g.answer)?.quan_cu : null;
+            if (qP && !cungQuan(qP, quanChac)) { console.log("chat-reply: phuong AI lech quan, de hoi lai", g.answer, qP, quanChac); continue; }
             const { error: gErr } = await client.rpc("ghi_fact_listing", {
               p_listing_id: d.id, p_question: g.question, p_answer: g.answer, p_source: NGUON_AI,
             });
@@ -4363,7 +4369,8 @@ Deno.serve(async (req) => {
         const { data: btRow } = await client.from("listings").select("boc_tach").eq("id", pendingReq.listing_id).maybeSingle();
         const g = (btRow?.boc_tach as { phuong_goi_y?: unknown } | null)?.phuong_goi_y;
         if (g && typeof g === "object" && typeof (g as GoiYPhuong).phuong === "string") goiYPhuong = g as GoiYPhuong;
-        if (goiYPhuong && laDongY(dapAn)) { dapAn = goiYPhuong.phuong; nhanGoiYPhuong = true; }
+        // 01/10/2026: gợi ý "phường X thuộc quận Y, nhà mình ở Y hay Z" — khách gọi tên quận Y cũng là gật.
+        if (goiYPhuong && (laDongY(dapAn) || (goiYPhuong.doi_quan && nhacTenQuan(dapAn, goiYPhuong.quan)))) { dapAn = goiYPhuong.phuong; nhanGoiYPhuong = true; }
         // Từ điển đã tìm ra phường trong câu ("156 đường 59 Tây Thông Hội") → câu phường đã trả lời; phần địa chỉ ghi vào vị
         // trí nếu tin chưa có địa chỉ.
         if (!nhanGoiYPhuong && phuongTuDien) {
@@ -4848,6 +4855,39 @@ Deno.serve(async (req) => {
         }
       }
       await capNhatQuan(pendingReq.listing_id);
+      // 01/10/2026 (bắn thử lx-dd-51/53; chủ dự án: "có, hỏi lại được, tao muốn tương tác với khách nhiều hơn"): phường khách
+      // nói thuộc QUẬN KHÁC quận tin đang ghi ("tay thnh" cho tin Quận 5 → Phường Tây Thạnh, Tân Phú) — không ghi thẳng, hỏi lại
+      // "Phường X em thấy thuộc Y, mà tin mình đang ghi Z, nhà mình ở bên nào". Gật / gọi tên Y → ghi phường + đổi quận. Gọi
+      // tên Z → giữ quận, hỏi lại phường.
+      if (pendingReq.question === "phuong" && !humanActive && !kqDuyet) {
+        const { data: lq, error: lqErr } = await client.from("listings").select("district, boc_tach").eq("id", pendingReq.listing_id).maybeSingle();
+        if (lqErr) await ghiLoi(client, "chat-reply phuong lech quan(doc)", lqErr.message);
+        const quanTin = lq?.district && (lq.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true ? String(lq.district) : null;
+        if (goiYPhuong?.doi_quan && !nhanGoiYPhuong && quanTin && nhacTenQuan(dapAn, quanTin)) {
+          const { error: bErr } = await client.rpc("ghi_boc_tach", { p_listing_id: pendingReq.listing_id, p: { phuong_goi_y: false } });
+          if (bErr) await ghiLoi(client, "chat-reply ghi_boc_tach(bo goi y lech quan)", bErr.message);
+          return await traLoiSeller([`Dạ vậy nhà mình ở ${quanTin}, phường nào vậy ${goiNguoi ?? "mình"} ạ?`], { reask: "phuong", loai_cau: "phuong_lech_quan" });
+        }
+        if (quanTin && !nhanGoiYPhuong && kq.loai === "khop") {
+          // Giá trị sắp ghi: của AI (`loaiDapAn`, đã kiểm bằng chứng — "tay thnh" → "Phường Tây Thạnh") hay chữ khách.
+          const giaTriP = loaiDapAn ?? dapAn;
+          const pc = phuongChuan(giaTriP);
+          const tach = pc ? null : tachTienToPhuong(giaTriP);
+          const w = pc ? { ten_day_du: tenDayDu(pc), quan_cu: pc.quan_cu ?? null } : await timWard(((tach?.ten ?? giaTriP) || "").trim());
+          if (w?.quan_cu && !cungQuan(w.quan_cu, quanTin)) {
+            const goiY: GoiYPhuong = { phuong: w.ten_day_du, quan: w.quan_cu, duong: "", doi_quan: true };
+            const { error: gErr } = await client.rpc("ghi_boc_tach", { p_listing_id: pendingReq.listing_id, p: { phuong_goi_y: goiY } });
+            if (gErr) await ghiLoi(client, "chat-reply ghi_boc_tach(phuong lech quan)", gErr.message);
+            else {
+              const g = goiNguoi ?? "mình";
+              return await traLoiSeller(
+                [`Dạ ${w.ten_day_du} em thấy thuộc ${w.quan_cu} cũ, mà tin nhà mình em đang ghi ${quanTin}. Nhà mình ở ${w.quan_cu} hay ${quanTin} vậy ${g}?`],
+                { reask: "phuong", loai_cau: "phuong_lech_quan" },
+              );
+            }
+          }
+        }
+      }
       if (pendingReq.question === "phuong" && (nhanGoiYPhuong || kq.loai === "khop")) {
         const chuan = await capNhatQuanTuPhuong(pendingReq.listing_id, nhanGoiYPhuong ? goiYPhuong : null, dapAn, text);
         if (chuan) dapAn = chuan;

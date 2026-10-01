@@ -102,3 +102,23 @@ export function loaiDuongVaoTuDiaChi(diaChi: string | null | undefined, chuKhac 
   if (/^(?:m|met|m2|tang|lau|tam|lo|can|block|phong|x|ty|trieu|nam|ngang|dai|dt)\b/.test(m[1])) return null;
   return "mat_tien";
 }
+
+/** Lõi tên quận để so: "Quận Gò Vấp" → "go vap", "Quận 5" → "5", "Thành phố Thủ Đức" → "thu duc". */
+const loiQuan = (q: string): string =>
+  boDau(q).replace(/\s+/g, " ").trim().replace(/^(?:quan|huyen|thanh pho|thi xa|tp\.?)\s+/, "");
+/** Hai tên quận (cũ) có cùng một quận không. */
+export function cungQuan(a: string | null | undefined, b: string | null | undefined): boolean {
+  return !!a && !!b && loiQuan(a) === loiQuan(b);
+}
+/**
+ * Tin khách có nhắc tới quận `quan` không ("gò vấp em", "quận 5", "q5", "ở tân phú"). Quận SỐ phải có chữ quận / q đi
+ * trước ("5" trơn là số khác).
+ */
+export function nhacTenQuan(tin: string | null | undefined, quan: string | null | undefined): boolean {
+  if (!tin || !quan) return false;
+  const kd = ` ${boDau(tin).replace(/[^a-z0-9]+/g, " ").trim()} `;
+  const loi = loiQuan(quan);
+  if (!loi) return false;
+  if (/^\d+$/.test(loi)) return new RegExp(`(?:quan|q)\\s*${loi}(?!\\d)`).test(kd);
+  return kd.includes(` ${loi} `);
+}
