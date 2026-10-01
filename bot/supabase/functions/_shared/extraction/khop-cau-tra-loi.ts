@@ -421,6 +421,8 @@ export function bocViTriRao(text: string): string | null {
   // Mệnh đề bắt đầu từ chữ hẻm/đường tới dấu ngắt câu gần nhất. 14/09/2026: "nhà phố" /
   // "mặt phố" là LOẠI nhà, không phải "phố <tên>" — bỏ qua, tìm chữ mở đầu kế tiếp.
   let menh: string | null = null;
+  let soNhaTruoc: string | null = null;
+  const kemSo = (diaChi: string | null) => diaChi && soNhaTruoc ? `${soNhaTruoc} ${diaChi}` : diaChi;
   // 15/09/2026 (bắn thật N1): "mặt tiền Nguyễn Chí Thanh" cũng là địa chỉ.
   // 24/09/2026 (chủ dự án test Zalo): "Góc 2 mặt tiền⏎Hợp đồng thuê Sacombank…" — `\s+` sau chữ mở đầu nuốt cả dấu
   // XUỐNG DÒNG, địa chỉ thành "mặt tiền Hợp đồng" và bot tưởng căn khác, tạo tin thứ hai. Chỉ khoảng trắng cùng dòng.
@@ -438,6 +440,14 @@ export function bocViTriRao(text: string): string | null {
       continue;
     }
     menh = mm[1].trim();
+    // 01/10/2026 (bắn thật lx-tam-12, chủ dự án: "sửa luôn lỗi mất số nhà 156… từ nguồn"): "156 đường 59 Tây Thông Hội" —
+    // mệnh đề bắt đầu từ chữ "đường" nên SỐ NHÀ đứng trước rơi mất. Số nhà (có thể kèm "số / nhà / sn", "137/28") ngay
+    // trước chữ mở đầu là một phần địa chỉ — trừ khi nó là số đo / tiền / tầng ("dt 50", "giá 5", "tầng 3").
+    const batDau = mm.index + mm[0].length - mm[1].length;
+    const sn = /(?:^|[\s,(])(?:(?:số|so|nhà|nha|sn)\s*)?(\d{1,5}[a-ln-zA-LN-Z]?(?:\/\d{1,5}[a-zA-Z]?)*)\s*$/iu.exec(t.slice(0, batDau));
+    if (sn && !/\b(?:cap|c|loai|nam|quan|q|phuong|p|dt|dien tich|ngang|dai|gia|tang|lau|tam|hem|kiet|ngo|lo|can|block|phong|x)\s*$/.test(boDau(t.slice(Math.max(0, sn.index - 12), sn.index + sn[0].indexOf(sn[1]))))) {
+      soNhaTruoc = sn[1];
+    }
     break;
   }
   if (menh) {
@@ -453,7 +463,12 @@ export function bocViTriRao(text: string): string | null {
     // 24/09/2026 (chủ dự án test Zalo): "đường số 59 Gò vấp" — đường ĐÁNH SỐ (Gò Vấp, Bình Tân, Thủ Đức…): "số" là
     // chữ dừng tên đường ("sổ/số") nên cả địa chỉ rơi. "đường số N" là tên đường trọn vẹn.
     if (/^(?:đường|duong)$/iu.test(dau) && /^(?:số|so)$/iu.test(tu[i] ?? "") && /^\d{1,3}[a-z]?$/i.test(tu[i + 1] ?? "")) {
-      return [dau, tu[i], tu[i + 1]].join(" ");
+      return kemSo([dau, tu[i], tu[i + 1]].join(" "));
+    }
+    // 01/10/2026: "đường 59" (không chữ "số") cũng là đường ĐÁNH SỐ — tên dừng ở con số; chữ sau là phường / quận
+    // ("đường 59 Tây Thông Hội" từng thành tên đường "59 Tây Thông Hội"). Số kèm đơn vị đo ("đường 5m") thì không.
+    if (/^(?:đường|duong)$/iu.test(dau) && /^\d{1,3}[a-ln-z]?$/i.test(tu[i] ?? "") && !/^(?:m|met|mét|x|tháng|thang)$/iu.test(tu[i + 1] ?? "")) {
+      return kemSo(`đường số ${tu[i]}`);
     }
     const truoc: string[] = [];
     while (i < tu.length && (TU_TA_DUONG.has(boDau(tu[i])) || /^(?:đường|phố)$/iu.test(tu[i]) ||
@@ -478,7 +493,7 @@ export function bocViTriRao(text: string): string | null {
     // 01/10/2026 (bắn thử bán lx-ban-293d): "nhà cấp 4 hẻm 3m Bình Thạnh 4x12" → địa chỉ "hẻm 3m Bình Thạnh" — tên QUẬN
     // không phải tên đường; không có đường thì để trống, bot hỏi địa chỉ.
     if (ten.length && TEN_QUAN_CHU.test(boDau(ten.join(" ")))) return null;
-    return ten.length ? [dau, ...truoc, ...ten].join(" ") : null;
+    return ten.length ? kemSo([dau, ...truoc, ...ten].join(" ")) : null;
   }
   // 16/09/2026 (bắn thật): "Căn số 14 ở Ny'ah Phú Định, 80m2, giá 7 tỷ" — số căn + ở/tại/trong
   // + tên khu/dự án là địa chỉ của căn (tin mới mở từng trống `location_raw`).

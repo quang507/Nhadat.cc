@@ -340,6 +340,9 @@ export function kiemXacNhan(ds: Array<{ khoa: string; gia_tri: string; trich_dan
     if (!KHOA_XAC_NHAN.has(x.khoa)) continue;
     const v = x.gia_tri.trim(), cum = chuanSo(x.trich_dan);
     if (!v || v.length > 60 || cum.length < 2 || !` ${kdTin} `.includes(` ${cum} `)) continue;
+    // Bắn thử 01/10 (lx-tam-22): khách gõ rõ "sổ hồng riêng" mà AI vẫn đánh dấu xác nhận → bot hỏi "Dạ "sổ hồng riêng" là sổ
+    // hồng riêng đúng không ạ?". Chữ khách đã CHỨA nguyên giá trị thì không mơ hồ — không hỏi lại.
+    if (` ${cum} `.includes(` ${chuanSo(v)} `)) continue;
     const soTrich = new Set(cum.match(/\d+/g) ?? []);
     if (!(chuanSo(v).match(/\d+/g) ?? []).every((n) => soTrich.has(n))) continue;
     const hinh = HINH_TRUONG_CHU[x.khoa];
