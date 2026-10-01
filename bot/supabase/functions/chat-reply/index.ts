@@ -62,7 +62,8 @@ import { boHoaHong, coSdt, SDT_NGUON, thayLienHe, thayLienHeCoId } from "../_sha
 import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/extraction/tien-ich.ts";
 import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
 import { nhungCauTim, xepTheoNghia } from "../_shared/ai/nhung.ts"; // FR-216
-import { chonUngVienNghia, TU_CHUNG_DU_AN, TU_CHUNG_DUONG } from "../_shared/extraction/khop-ten-nghia.ts";
+import { chonUngVienNghia, tenGan, TU_CHUNG_DU_AN, TU_CHUNG_DUONG } from "../_shared/extraction/khop-ten-nghia.ts";
+import { chonDiaDanh, type DiaDanhChon, type NhomDiaDanh, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
 import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
@@ -1795,7 +1796,39 @@ Deno.serve(async (req) => {
     // phường/xã khách GÕ trong câu (đúng, đảo chữ, sai ≤ 1 ký tự) dò theo bảng `wards` → ghi phường đó (seller_chat, đè phường
     // AI đoán). Phường khác quận đã biết của tin thì không ghi.
     let dsPhuongTuDien: PhuongDs[] | null = null;
-    const ghiPhuongTrongCau = async (listingId: string | null, tin: string, dongBiet: { ward?: string | null; district?: string | null; boc_tach?: unknown } | null = null): Promise<string | null> => {
+    // 01/10/2026 (chủ dự án: "làm hàm dò địa danh chung đi, dò bằng schematic"): tin chỉ là MỘT tên trơn ("tan dinh",
+    // "phường tây thạnh nha", "ở gò vấp á") mà bảng `wards` dò trong câu không ra → dò cả bốn từ điển (`tim_dia_danh`:
+    // phường mới, phường cũ → phường mới, quận cũ, tên đường; đúng chữ / đảo chữ / sai 1 ký tự). Chữ không ra gì thì tìm
+    // theo NGHĨA (`tim_dia_danh_theo_nghia`, vector) — chỉ nhận khi rất gần (≥ 0,9) và tên còn gần chữ khách gõ. Phường →
+    // ghi phường; quận → ghi quận khi tin chưa có quận chắc; đường → để đường địa chỉ cũ lo. Mập mờ thì không ghi.
+    const TU_CHUNG_DIA_DANH: ReadonlySet<string> = new Set([...TU_CHUNG_DUONG, "phuong", "xa", "quan", "huyen", "thi", "tran"]);
+    const giaiDiaDanh = async (ten: string, chon: { tienTo: NhomDiaDanh | null; cauHoi: NhomDiaDanh | null; quanBiet: string | null }): Promise<DiaDanhChon | null> => {
+      const { data, error } = await client.rpc("tim_dia_danh", { p_ten: ten });
+      if (error) { await ghiLoi(client, "chat-reply tim_dia_danh", error.message); return null; }
+      const ds = (data ?? []) as UngVienDiaDanh[];
+      if (ds.length) return chonDiaDanh(ds, chon);
+      try {
+        const khoa = await sanSangNghia(client);
+        if (!khoa) return null;
+        const vec = await nhungCauTim(khoa, `${ten}, Thành phố Hồ Chí Minh`);
+        const { data: nd, error: nErr } = await client.rpc("tim_dia_danh_theo_nghia", {
+          p_vec: vec, p_loai: ["phuong_moi", "phuong_cu", "quan_cu", "duong", "so"], p_limit: 8,
+        });
+        if (nErr) { await ghiLoi(client, "chat-reply tim_dia_danh_theo_nghia(chung)", nErr.message); return null; }
+        const gan = ((nd ?? []) as Array<Omit<UngVienDiaDanh, "khoang_cach"> & { do_gan: number }>)
+          .filter((u) => u.do_gan >= 0.9 && tenGan(ten, u.ten, TU_CHUNG_DIA_DANH));
+        const kq = chonDiaDanh(gan.map((u) => ({ ...u, khoang_cach: 0 })), chon);
+        if (kq) console.log(`dia danh theo nghia: "${ten}" → ${kq.nhom} ${kq.ten}`);
+        return kq;
+      } catch (e) {
+        await ghiLoi(client, "chat-reply dia danh theo nghia", e);
+        return null;
+      }
+    };
+    const ghiPhuongTrongCau = async (
+      listingId: string | null, tin: string, dongBiet: { ward?: string | null; district?: string | null; boc_tach?: unknown } | null = null,
+      cauDangHoi: string | null = null,
+    ): Promise<string | null> => {
       if (!listingId || !tin?.trim()) return null;
       if (!dsPhuongTuDien) {
         const { data, error } = await client.from("wards").select("ten, ten_day_du, loai, quan_cu").limit(400);
@@ -1803,20 +1836,40 @@ Deno.serve(async (req) => {
         dsPhuongTuDien = (data ?? []) as PhuongDs[];
       }
       const tp = timPhuongTrongCau(tin, dsPhuongTuDien);
-      const ten = tp?.phuong.ten_day_du;
-      if (!tp || !ten) return null;
+      const tron = tp ? null : tenDiaDanhTron(tin);
+      if (!tp && !tron) return null;
       let l = dongBiet;
       if (!l) {
         const { data, error: lErr } = await client.from("listings").select("ward, district, boc_tach").eq("id", listingId).maybeSingle();
         if (lErr) { await ghiLoi(client, "chat-reply phuong tu dien(doc)", lErr.message); return null; }
         l = data;
       }
-      if (!l || l.ward === ten) return null;
-      const quanBiet = l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true ? String(l.district) : null;
-      if (quanBiet && tp.phuong.quan_cu && boDau(quanBiet) !== boDau(String(tp.phuong.quan_cu))) return null;
+      if (!l) return null;
+      const quanMacDinh = (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
+      const quanBiet = l.district && !quanMacDinh ? String(l.district) : null;
+      let ten = tp?.phuong.ten_day_du ?? null;
+      let quanPhuong = tp?.phuong.quan_cu ?? null;
+      if (tron) {
+        const cauHoi: NhomDiaDanh | null = cauDangHoi === "phuong" ? "phuong" : cauDangHoi === "vi_tri" ? "duong" : null;
+        const dd = await giaiDiaDanh(tron.ten, { tienTo: tron.tienTo, cauHoi, quanBiet });
+        if (!dd || dd.nhom === "duong") return null;
+        if (dd.nhom === "quan") {
+          if (quanBiet) return null;
+          const { error: qErr } = await client.from("listings").update({ district: dd.ten }).eq("id", listingId);
+          if (qErr) { await ghiLoi(client, "chat-reply cap nhat quan (dia danh)", qErr.message); return null; }
+          const { error: bErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { quan: dd.ten, quan_mac_dinh: false } });
+          if (bErr) await ghiLoi(client, "chat-reply ghi_boc_tach(quan dia danh)", bErr.message);
+          console.log("chat-reply: quan dia danh", tron.ten, "→", dd.ten);
+          return null;
+        }
+        ten = dd.ten;
+        quanPhuong = dd.quan_cu;
+      }
+      if (!ten || l.ward === ten) return null;
+      if (quanBiet && quanPhuong && boDau(quanBiet) !== boDau(String(quanPhuong))) return null;
       const { error } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: "phuong", p_answer: ten, p_source: "seller_chat" });
       if (error) { await ghiLoi(client, "chat-reply ghi_fact_listing(phuong tu dien)", error.message); return null; }
-      console.log("chat-reply: phuong tu dien", tp.khop, "→", ten);
+      console.log("chat-reply: phuong tu dien", tp?.khop ?? tron?.ten, "→", ten);
       return ten;
     };
 
@@ -4112,7 +4165,7 @@ Deno.serve(async (req) => {
       // giá trị đã xác nhận, để luồng thường ghi và hỏi câu kế. Không gật → bỏ gợi ý, câu đi đường thường. Gợi ý dùng một lần.
       // Tên phường/xã gõ trong câu (từ điển `wards`) → ghi trước mọi nhánh (nhánh phường bên dưới trả lời sớm).
       const phuongTuDien = !humanActive && pendingReq.question !== "duyet_tin" && (pendingReq.question === "phuong" || !pendingReq.listings?.ward)
-        ? await ghiPhuongTrongCau(pendingReq.listing_id, text, pendingReq.listings ?? null) : null;
+        ? await ghiPhuongTrongCau(pendingReq.listing_id, text, pendingReq.listings ?? null, pendingReq.question) : null;
       // Lượt trước bot hỏi "kết cấu 4 tấm đó có tính cả gác lửng không" (`boc_tach.lung_goi_y`). Đáp có / không / có lửng
       // thêm → sửa kết cấu (floors + floors_text) rồi hỏi lại câu đang treo. Câu dài (kèm thông tin khác) thì sửa kết cấu xong
       // đi tiếp luồng thường. Không rõ → bỏ gợi ý. Gợi ý dùng một lần.
@@ -4428,6 +4481,9 @@ Deno.serve(async (req) => {
       let kq: KetQuaKhop = pendingReq.question === "loai_bds"
         ? { loai: "khop" }
         : kqDuyet ?? phanLoaiCauTraLoi(pendingReq.question, dapAn);
+      // 01/10/2026: từ điển địa danh đã ra tên phường CHUẨN cho tin này (`phuongTuDien`) — luật tìm-chuỗi nhận câu là
+      // "nói sang ô phường" thì lấy tên chuẩn, không ghi lại chữ thô khách gõ ("phường thảo điền" → Phường An Khánh).
+      if (phuongTuDien && kq.chuyenSang?.question === "phuong") kq = { ...kq, chuyenSang: { ...kq.chuyenSang, answer: phuongTuDien } };
       // 20/09/2026 (bắn thật mau-y-D): "à sửa lại, dài 16 chứ không phải 15" là LỜI SỬA kích thước —
       // đang hỏi giá thì vào bổ sung, đang hỏi kết cấu thì bị nhận là kết cấu (có số). Xử TRƯỚC mọi
       // luật: ghi ô ngang/dài (fact `mat_tien` đủ hai chiều, ngang lấy từ tin nếu câu không nói — DB
@@ -5030,7 +5086,9 @@ Deno.serve(async (req) => {
         }
         // 30/09/2026 (bắn thật lx-dd-c2): "nhà ở vĩnh lộc b bình chánh, hẻm 5m" → ô "vị trí cụ thể" = "vĩnh lộc b bình chánh".
         // Địa chỉ chỉ có tên phường / quận thì KHÔNG ghi vào vị trí (phường + quận vẫn ghi ngay dưới); câu vị trí sẽ được hỏi lại.
-        const viTriChiHanhChinh = pendingReq.question === "vi_tri" && chiLaDonViHanhChinh(dapAnGhi);
+        // 01/10/2026: tin chỉ là một tên phường mà từ điển địa danh vừa nhận ra (`phuongTuDien`, kể cả gõ sai "phường tay
+        // thnh") cũng là đơn vị hành chính — không ghi chữ thô vào vị trí.
+        const viTriChiHanhChinh = pendingReq.question === "vi_tri" && (chiLaDonViHanhChinh(dapAnGhi) || (!!phuongTuDien && !!tenDiaDanhTron(dapAnGhi)));
         if (viTriChiHanhChinh) console.log("chat-reply: vi tri chi co don vi hanh chinh, khong ghi");
         const { error: factErr } = viTriChiHanhChinh ? { error: null } : await client.rpc("ghi_fact_listing", {
           p_listing_id: pendingReq.listing_id,
@@ -5042,7 +5100,7 @@ Deno.serve(async (req) => {
         else {
           // 30/09/2026 (chat thử): trả lời câu ĐỊA CHỈ kèm phường ("… phường an hội tây gò vấp") — phường từng rơi mất.
           // AI đọc phường trong câu (đã qua kiểm bằng chứng) → tin chưa có phường thì ghi luôn phường + quận cũ.
-          if (pendingReq.question === "vi_tri" && !pendingReq.listings?.ward) {
+          if (pendingReq.question === "vi_tri" && !pendingReq.listings?.ward && !phuongTuDien) {
             // AI không trả phường (model lỗi / im) → tên phường mới / cũ đúng chữ, duy nhất, trong câu khách (như câu rao).
             const pk = phuongChuan(aiChinh?.ghi.find((g) => g.question === "phuong")?.answer) ??
               phuongNhacTrongCau(text, pendingReq.listings?.district ?? null);

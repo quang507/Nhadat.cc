@@ -150,6 +150,22 @@ ok("THOCU-01 thổ cư bằng diện tích → KHÔNG hỏi lên thổ cư", !ke
 r = reNhanh({ loai: "dat", deal: "ban", area_m2: 425, facts: [f("tho_cu", "200m2")] }, ["tho_cu"]);
 ok("THOCU-02 thổ cư một phần → hỏi lên thổ cư", keys(r).includes("len_tho_cu"), JSON.stringify(r.them));
 
+// 01/10/2026 (chủ dự án: "nếu 137/28 thì là hẻm rồi, đường số 59 hoặc đường có tên là đường lớn").
+const thieuNha = [{ fact_key: "dien_tich_dat", priority: 3, nhom: "co_ban" }, { fact_key: "do_rong_hem", priority: 7, nhom: "co_ban" }, { fact_key: "gia", priority: 12, nhom: "co_ban" }];
+let dsMt = apReNhanh(thieuNha, { loai: "nha_pho", deal: "ban", facts: [f("vi_tri", "156 Nguyễn Trãi")] }, ["vi_tri"]);
+ok("MT-01 số nhà trơn '156 Nguyễn Trãi' → hỏi đường trước nhà thay câu hẻm",
+  dsMt.some((t) => t.fact_key === "do_rong_duong") && !dsMt.some((t) => t.fact_key === "do_rong_hem"), JSON.stringify(dsMt));
+ok("MT-02 câu đường trước nhà giữ chỗ câu hẻm (không chen trước diện tích)", chonCauKe(["vi_tri"], dsMt) === "dien_tich_dat", chonCauKe(["vi_tri"], dsMt));
+dsMt = apReNhanh(thieuNha, { loai: "nha_pho", deal: "ban", facts: [f("vi_tri", "156 đường số 59")] }, ["gia"]);
+ok("MT-03 '156 đường số 59' ở lượt sau (vừa trả lời giá) → vẫn đường trước nhà", dsMt.some((t) => t.fact_key === "do_rong_duong") && !dsMt.some((t) => t.fact_key === "do_rong_hem"), JSON.stringify(dsMt));
+dsMt = apReNhanh(thieuNha, { loai: "nha_pho", deal: "ban", facts: [f("vi_tri", "137/28 Đường số 59")] }, ["vi_tri"]);
+ok("MT-04 '137/28' là hẻm → vẫn câu hẻm", dsMt.some((t) => t.fact_key === "do_rong_hem") && !dsMt.some((t) => t.fact_key === "do_rong_duong"), JSON.stringify(dsMt));
+dsMt = apReNhanh(thieuNha, { loai: "nha_pho", deal: "ban", facts: [f("vi_tri", "156 Nguyễn Trãi"), f("_mo_ta", "Bán nhà hẻm xe hơi 156 Nguyễn Trãi")] }, ["vi_tri"]);
+ok("MT-05 câu rao có chữ hẻm → vẫn câu hẻm", dsMt.some((t) => t.fact_key === "do_rong_hem") && !dsMt.some((t) => t.fact_key === "do_rong_duong"), JSON.stringify(dsMt));
+dsMt = apReNhanh([{ fact_key: "do_rong_duong", priority: 5, nhom: "co_ban" }], { loai: "dat", deal: "ban", facts: [f("vi_tri", "156 Nguyễn Trãi")] }, ["vi_tri"]);
+ok("MT-06 đất → luật không đụng", dsMt.length === 1 && dsMt[0].priority === 5, JSON.stringify(dsMt));
+ok("MT-07 câu đường trước nhà cho nhà phố nói 'mặt tiền … trước nhà'", /mặt tiền.*trước nhà/.test(cauHoiMau("do_rong_duong", "anh", undefined, "nha_pho")));
+
 const moiKhoa = [...new Set(RE_NHANH.flatMap((l) => (l.them ?? []).map((t) => t.fact_key)))];
 for (const k of moiKhoa) ok(`câu nhánh '${k}' có câu mẫu + nhãn`, (!!CAU_HOI_MAU[k] || !!CAU_HOI_MAU[`${k}@nha_pho`]) && !!FACT_LABELS[k], k);
 

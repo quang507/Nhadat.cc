@@ -457,6 +457,33 @@ class RpcCall {
           .sort((x, y) => x.khoang_cach - y.khoang_cach || ((a.p_quan && y.quan_cu.includes(a.p_quan)) - (a.p_quan && x.quan_cu.includes(a.p_quan))) || x.ten.localeCompare(y.ten)).slice(0, 8);
         return { data: rows, error: null };
       }
+      // 20261001e: dò một tên trong cả 4 từ điển — chép ngữ nghĩa `tim_dia_danh` (đúng chữ 0, đảo chữ 1 cho phường/quận,
+      // 1 + Levenshtein khi ≥ 6 ký tự và lệch ≤ p_toi_da; đường gộp theo tên, quận chỉ khi một quận).
+      case "tim_dia_danh": {
+        const bd = (x) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/\s+/g, " ").trim();
+        const lev = (x, y) => { const m = x.length, n = y.length; let prev = Array.from({ length: n + 1 }, (_, j) => j); for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1)); prev = cur; } return prev[n]; };
+        const sap = (x) => x.split(" ").sort().join(" ");
+        const k = bd(a.p_ten); const toiDa = Math.min(Math.max(a.p_toi_da ?? 1, 0), 2);
+        if (k.length < 3 || k.length > 60 || !/[a-z]/.test(k)) return { data: [], error: null };
+        const wards = db.t.wards ?? [];
+        const ung = [
+          ...wards.map((w) => ({ loai: "phuong_moi", ten: w.ten, ten_day_du: w.ten_day_du, phuong: w.ten_day_du, quan_cu: w.quan_cu, k: bd(w.ten), dao: true })),
+          ...(db.t.phuong_cu ?? []).flatMap((p) => { const w = wards.find((x) => x.ten === p.phuong_moi); return w ? [{ loai: "phuong_cu", ten: p.ten, ten_day_du: `${p.ten}, ${p.quan_cu}`, phuong: w.ten_day_du, quan_cu: p.quan_cu, k: bd(p.ten).replace(/^(phuong|xa|thi tran)\s+/, ""), dao: true }] : []; }),
+          ...(db.t.quan_cu ?? []).map((q) => ({ loai: "quan_cu", ten: q.ten, ten_day_du: q.ten, phuong: null, quan_cu: q.ten, k: bd(q.ten).replace(/^(quan|huyen|thanh pho|thi xa)\s+/, ""), dao: true })),
+        ];
+        const gom = new Map();
+        for (const d of (db.t.duong ?? []).filter((x) => x.loai !== "hem")) {
+          const g = gom.get(d.ten) ?? { loai: d.loai ?? "duong", ten: d.ten, ten_day_du: d.ten, phuong: null, q: new Set(), k: bd(d.ten), dao: false };
+          if (d.quan_cu) g.q.add(d.quan_cu); gom.set(d.ten, g);
+        }
+        for (const g of gom.values()) ung.push({ ...g, quan_cu: g.q.size === 1 ? [...g.q][0] : null });
+        const rows = ung.map((u) => {
+          if (Math.abs(u.k.length - k.length) > toiDa) return null;
+          const kc = u.k === k ? 0 : u.dao && k.includes(" ") && sap(u.k) === sap(k) ? 1 : k.length >= 6 && lev(u.k, k) <= toiDa ? 1 + lev(u.k, k) : null;
+          return kc == null ? null : { loai: u.loai, ten: u.ten, ten_day_du: u.ten_day_du, phuong: u.phuong, quan_cu: u.quan_cu, khoang_cach: kc };
+        }).filter(Boolean).sort((x, y) => x.khoang_cach - y.khoang_cach || x.loai.localeCompare(y.loai) || x.ten.localeCompare(y.ten));
+        return { data: rows.slice(0, 20), error: null };
+      }
       // 20260930a: hẻm theo số (các cấp, nhỏ nhất trước) + đường mẹ — chép ngữ nghĩa `tim_hem`.
       case "tim_hem": {
         const bd = (x) => String(x ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().trim();

@@ -9,6 +9,8 @@
 // của tin; đầu ra là câu phải THÊM vào danh sách còn thiếu và câu phải BỎ khỏi đó. Thêm luật = thêm một dòng
 // vào RE_NHANH + ca trong bot/tests/re-nhanh.mjs.
 
+import { loaiDuongVaoTuDiaChi } from "./dia-danh.ts";
+
 export type NgCanhReNhanh = {
   loai: string | null;
   deal: string | null;
@@ -22,7 +24,7 @@ export type NgCanhReNhanh = {
   /** Chữ chủ nhà gõ vài lượt gần đây (không phải fact) — cho luật `kichTin`. */
   lichSu?: string;
 };
-export type CauThem = { fact_key: string; priority: number; nhom: string };
+export type CauThem = { fact_key: string; priority: number; nhom: string; giuThuTu?: boolean };
 
 const boDau = (s: string): string =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
@@ -61,6 +63,8 @@ type Luat = {
   bo?: string[];
   /** Câu THÊM cũng hỏi ngay khi chữ chủ nhà vài lượt gần đây khớp mẫu này (không chờ trả lời câu `sau`). */
   kichTin?: RegExp;
+  /** Câu THÊM là câu THAY một câu bị BỎ: có mặt ở MỌI lượt luật còn khớp, giữ đúng priority của nó (không chen đầu). */
+  thay?: boolean;
 };
 
 const co = (re: RegExp) => ({ tatCa }: NgCanhLuat) => re.test(tatCa);
@@ -206,6 +210,20 @@ export const RE_NHANH: Luat[] = [
     sau: ["tho_cu"],
     them: [{ fact_key: "len_tho_cu", priority: 15.5, nhom: "co_ban" }],
   },
+  {
+    // 01/10/2026 (chủ dự án: "nếu 137/28 thì là hẻm rồi, đường số 59 hoặc đường có tên là đường lớn"). Số nhà có xẹc đã
+    // có câu "Nhà mình nằm trong hẻm đúng không…" (`do_rong_hem@so_nha_hem`). Đây là chiều kia: số nhà TRƠN rồi tới tên
+    // đường ("156 Nguyễn Trãi", "156 đường số 59") — không có chữ hẻm / kiệt / ngõ ở đâu — là nhà mặt tiền đường: hỏi
+    // đường trước nhà rộng mấy mét (`do_rong_duong`, DB ghi access_type = mặt tiền) thay cho câu hẻm.
+    id: "so_nha_mat_tien",
+    ten: "số nhà trơn — mặt tiền đường",
+    vi: "Nhà có xây, địa chỉ là số nhà không xẹc + tên đường, không nhắc hẻm → hỏi độ rộng đường trước nhà thay câu hẻm",
+    khi: ({ loai, tatCa, daHoi, c }) => NHA_CO_XAY.includes(loai) && !daHoi.has("do_rong_hem") && !daHoi.has("do_rong_duong") &&
+      loaiDuongVaoTuDiaChi([...c.facts].reverse().find((f) => f.question === "vi_tri")?.answer, tatCa) === "mat_tien",
+    thay: true,
+    them: [{ fact_key: "do_rong_duong", priority: 7, nhom: "co_ban" }],
+    bo: ["do_rong_hem"],
+  },
 ];
 
 /** Nhánh chứa một khoá (để lệnh model nói rõ đang hỏi thêm chuyện gì + các ý chính của nhánh). */
@@ -233,11 +251,11 @@ export function reNhanh(c: NgCanhReNhanh, vuaNoi?: string[]): { them: CauThem[];
     // Vừa trả lời câu kích HOẶC một ý của chính nhánh này → hỏi tiếp ý còn thiếu kế tiếp (một ý mỗi lượt).
     const kich = [...(l.sau ?? []), ...(l.them ?? []).map((t) => t.fact_key)];
     const reNgay = vuaNoi === undefined || kich.some((k) => vuaNoi.includes(k)) || !!l.kichTin?.test(lichSu);
-    if (reNgay) {
+    if (reNgay || l.thay) {
       for (const t of l.them ?? []) {
         if (daHoi.has(t.fact_key) || them.has(t.fact_key) || t.daBiet?.(ctx)) continue;
         const { daBiet: _b, ...cau } = t;
-        them.set(t.fact_key, cau);
+        them.set(t.fact_key, l.thay ? { ...cau, giuThuTu: true } : cau);
       }
     }
     for (const b of l.bo ?? []) bo.add(b);
@@ -252,7 +270,7 @@ export function apReNhanh<T extends { fact_key: string; priority?: number | null
 ): Array<T | CauThem> {
   const { them, bo } = reNhanh(c, vuaNoi);
   const giu: Array<T | CauThem> = thieu.filter((t) => !bo.has(t.fact_key) && !them.some((x) => x.fact_key === t.fact_key));
-  return [...them.map((t) => ({ ...t, priority: -1, nhom: "co_ban" })), ...giu];
+  return [...them.map((t) => t.giuThuTu ? t : { ...t, priority: -1, nhom: "co_ban" }), ...giu];
 }
 
 /** Có cần đọc DB để rẽ nhánh không: câu vừa trả lời kích một luật THÊM, hoặc danh sách có câu mà luật nào đó BỎ. */
