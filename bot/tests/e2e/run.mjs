@@ -11,6 +11,7 @@ seedBotPrompts(globalThis.__db);
 // FR-185: ảnh chủ nhà gửi được TẢI VỀ kho — mock fetch trả vài byte JPEG cho host Zalo,
 // mọi URL khác lỗi (chat-reply không được gọi ra ngoài trong bài kiểm).
 globalThis.__anhTaiDuoc = true;
+globalThis.__choAlbumMs = 0; // 01/10/2026: gộp album ảnh chờ 8s trên production; e2e không chờ
 globalThis.fetch = async (url) => {
   globalThis.__fetches = [...(globalThis.__fetches ?? []), String(url)];
   // FR-209: Nominatim giả — đặt `globalThis.__nominatim` = JSON là "tra được"; mặc định 404
@@ -1542,7 +1543,7 @@ fresh(seedKho);
   fresh(seedKho);
   globalThis.__storageHong = true;
   r = await send({ external_user_id: "z-ccrb", text: "", image_url: "https://f9-zpg.zdn.vn/hong.jpg" });
-  check("N9 kho hỏng → rơi về fact hinh_anh URL tạm + ghi sổ lỗi, vẫn cảm ơn", db().t.listing_facts.some((f) => f.question === "hinh_anh" && /hong\.jpg/.test(f.answer)) && db().t.listing_media.length === 0 && db().t.bot_errors.some((e) => /anh vao kho/.test(e.source ?? "")) && /Cảm ơn/.test(r.body.replies.at(-1)), JSON.stringify({ f: db().t.listing_facts, e: db().t.bot_errors }));
+  check("N9 kho hỏng → rơi về fact hinh_anh URL tạm + ghi sổ lỗi, vẫn đáp nhận ảnh", db().t.listing_facts.some((f) => f.question === "hinh_anh" && /hong\.jpg/.test(f.answer)) && db().t.listing_media.length === 0 && db().t.bot_errors.some((e) => /anh vao kho/.test(e.source ?? "")) && /Cảm ơn|Ảnh .*đẹp/.test(r.body.replies.at(-1)), JSON.stringify({ f: db().t.listing_facts, e: db().t.bot_errors, rep: r.body.replies }));
   globalThis.__storageHong = false;
   // FR-185: sổ ghi lệch diện tích → hỏi lại + báo admin; chưa có diện tích → lấy từ sổ.
   fresh(seedKho);
@@ -2331,6 +2332,34 @@ fresh(seedKho);
       !fA("do_rong_hem").length,
       JSON.stringify({ hem: fA("do_rong_hem"), ir: db().t.info_requests.filter((x) => x.listing_id === LA.id).map((x) => [x.question, x.status]) }));
     globalThis.__cauHinh = cuCH;
+  }
+  // 01/10/2026 (chủ dự án test Zalo: album 4 ảnh → 4 lần "🤖 Không bóc tách được gì" + 4 câu khen; "gộp lại khen 1 2 câu thôi,
+  // nhận ảnh cần hỏi cái gì nữa thì hỏi"): lượt ảnh trơn không có 🤖, chỉ lượt ảnh CUỐI của đợt trả lời, gộp số ảnh, hỏi câu đang chờ.
+  {
+    fresh(seedKho);
+    await send({ external_user_id: "alb-1", text: RAO_MT });
+    const LB = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LB.id, question: "phap_ly", status: "pending" });
+    const rA1 = await send({ external_user_id: "alb-1", text: "", image_url: "https://f9-zpg.zdn.vn/p1.jpg" });
+    check("ALB-01 ảnh trơn → KHÔNG có '🤖 Không bóc tách được gì'; 🤖 'Bóc tách ảnh: mặt tiền'; một câu khen; hỏi lại câu đang chờ (pháp lý)",
+      !rA1.body.replies.some((x) => /Không bóc tách được gì/.test(x)) && rA1.body.replies.some((x) => /^🤖 Bóc tách ảnh: mặt tiền/.test(x)) &&
+        rA1.body.replies.filter((x) => /^Ảnh .*đẹp/.test(x)).length === 1 &&
+        rA1.body.replies.some((x) => /sổ/i.test(x) && /\?/.test(x)),
+      JSON.stringify(rA1.body.replies));
+    const conv = db().t.messages.find((m) => m.sender === "seller")?.conversation_id;
+    db().insert("messages", { conversation_id: conv, sender: "seller", body: " [ảnh: https://f9-zpg.zdn.vn/p2.jpg]" });
+    db().insert("messages", { conversation_id: conv, sender: "seller", body: " [ảnh: https://f9-zpg.zdn.vn/p3.jpg]" });
+    const rA3 = await send({ external_user_id: "alb-1", text: "", image_url: "https://f9-zpg.zdn.vn/p4.jpg" });
+    check("ALB-02 ảnh cuối của đợt 3 ảnh liền nhau → 🤖 'Bóc tách ảnh: 3 ảnh', MỘT câu khen",
+      rA3.body.replies.some((x) => /^🤖 Bóc tách ảnh: 3 ảnh/.test(x)) && rA3.body.replies.filter((x) => /^Ảnh .*đẹp|nhận được ảnh/.test(x)).length === 1,
+      JSON.stringify(rA3.body.replies));
+    const soBotTruoc = db().t.messages.filter((m) => m.sender === "bot").length;
+    globalThis.__afterInsertMsgSeller = (d, m) => { d.insert("messages", { conversation_id: m.conversation_id, sender: "seller", body: " [ảnh: https://f9-zpg.zdn.vn/p6.jpg]", created_at: new Date(Date.now() + 60_000).toISOString() }); };
+    const rA4 = await send({ external_user_id: "alb-1", text: "", image_url: "https://f9-zpg.zdn.vn/p5.jpg" });
+    check("ALB-03 còn ảnh khác tới sau → lượt này IM (lượt sau trả lời), ảnh vẫn vào kho",
+      rA4.body.replies.length === 0 && db().t.messages.filter((m) => m.sender === "bot").length === soBotTruoc,
+      JSON.stringify(rA4.body));
   }
   // 01/10/2026 (chủ dự án: "xhr có thể người ta nhắn shr nhưng viết nhầm, có thể hỏi lại xác nhận"): AI đánh dấu xac_nhan →
   // câu đầu là xác nhận nghĩa; gật → ghi ô; câu treo cũ hỏi lại.
@@ -4017,8 +4046,8 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     globalThis.__model.create = () => "Em là trợ lý AI bên AI Ơi Nhà Đất, việc gì cần người thật thì có anh chị phụ trách khu vực theo sát chị ạ. Sổ hồng nhà mình riêng chưa chị?";
     r = await send({ external_user_id: "z-ccrb", text: "mà em là người hay máy vậy?" });
     check("GVA-03 hỏi 'người hay máy' → nói thật 'trợ lý AI' đúng MỘT lần (model chép lại câu tiền định bị bỏ), câu hỏi sổ vẫn còn",
-      // 27/09 (FR-232): model rút câu sổ còn một vế → thay bằng câu mẫu gộp (sổ + đứng tên + thế chấp).
-      (rep().match(/trợ lý AI/g) ?? []).length === 1 && /Sổ hồng nhà mình.*đứng tên.*thế chấp/.test(rep()),
+      // 01/10 (chủ dự án: "pháp lý … từng ý thôi"): câu sổ một ý, không gộp đứng tên / thế chấp.
+      (rep().match(/trợ lý AI/g) ?? []).length === 1 && /Sổ hồng nhà mình/.test(rep()) && !/đứng tên|thế chấp/.test(rep()),
       JSON.stringify(r.body.replies));
     globalThis.__model.create = undefined;
   }
@@ -4397,9 +4426,9 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     r = await send({ external_user_id: "z-pl4", text: "9 tỷ em" });
     globalThis.__model.create = undefined;
     const cau = r.body.replies.join("\n");
-    check("PL232-E3 câu sổ của tin bán hỏi gộp: sổ riêng/chung + ai đứng tên + cầm tay/thế chấp (model rút một vế → câu mẫu)",
+    check("PL232-E3 câu sổ của tin bán hỏi MỘT ý (01/10, chủ dự án: \"từng ý thôi\") — không gộp đứng tên / thế chấp",
       db().t.info_requests.some((q) => q.listing_id === l.id && q.status === "pending" && q.question === "phap_ly") &&
-        /sổ riêng hay sổ chung/.test(cau) && /đứng tên/.test(cau) && /thế chấp/.test(cau),
+        /riêng hay chung|riêng hay sổ chung/.test(cau) && !/đứng tên/.test(cau) && !/thế chấp/.test(cau),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
   // Bắn thật lx-38: câu hỏi ĐẦU sau câu rao (đường r1) là câu sổ — model rút còn một vế → câu mẫu gộp.
@@ -4413,9 +4442,9 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     globalThis.__cauHinh = cuCH;
     const l = db().t.listings.at(-1);
     const cau = r.body.replies.join("\n");
-    check("PL232-E3b câu hỏi đầu sau câu rao là câu sổ → câu gộp (model rút một vế → câu mẫu)",
+    check("PL232-E3b câu hỏi đầu sau câu rao là câu sổ MỘT ý — không gộp đứng tên / thế chấp",
       db().t.info_requests.some((q) => q.listing_id === l.id && q.status === "pending" && q.question === "phap_ly") &&
-        /đứng tên/.test(cau) && /thế chấp/.test(cau),
+        /[Ss]ổ/.test(cau) && !/đứng tên/.test(cau) && !/thế chấp/.test(cau),
       JSON.stringify({ rep: r.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === l.id).map((q) => [q.question, q.status]) }));
   }
   // Sau khi lên tin: hỏi bù gom ba câu (ask-seller mở ba câu treo), khách đáp "không có gì hết" → ghi cả ba, đóng cả ba.
@@ -4810,7 +4839,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     r = await send({ external_user_id: "z-ccrb", text: "", image_url: "https://photo-stal-22.zdn.vn/st.jpg" });
     globalThis.__anh = undefined;
     check("ANHNHAM-02 ảnh sân thượng → cất loại 'san_thuong', bot nói 'ảnh sân thượng' (không phải 'mặt tiền')",
-      db().t.listing_media.some((m) => m.listing_id === tA.id && m.media_type === "san_thuong") && r.body.replies.some((x) => /ảnh sân thượng/.test(x)) && !r.body.replies.some((x) => /mặt tiền/.test(x)),
+      db().t.listing_media.some((m) => m.listing_id === tA.id && m.media_type === "san_thuong") && r.body.replies.some((x) => /ảnh sân thượng/i.test(x)) && !r.body.replies.some((x) => /mặt tiền/.test(x)),
       JSON.stringify({ rep: r.body.replies, media: db().t.listing_media.map((m) => m.media_type) }));
   }
   // (4) chế độ `chinh`: AI xếp "sổ hồng riêng" vào KIẾN THỨC THÊM (không trả khoá phap_ly) → luật xếp ô pháp lý, câu kế không hỏi lại pháp lý.
