@@ -2406,6 +2406,27 @@ fresh(seedKho);
       !fI("phuong").some((f) => /lửng/.test(f.answer)) && !/lửng/.test(db().t.listings.at(-1).ward ?? ""), JSON.stringify({ ph: fI("phuong"), rep: rI2.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // 01/10/2026 (bắn thật lx-tam-12; chủ dự án: "trong data có danh sách … phường xã rồi mà nếu gần giống thì lôi ra"): đang hỏi
+  // phường, "156 đường 59 Tây Thông Hội" (đảo chữ) → Phường Thông Tây Hội theo bảng wards; phường AI đoán (Xã Tân Thông Hội) không đè.
+  {
+    const cuCH = globalThis.__cauHinh;
+    fresh((d) => { seedKho(d); d.t.wards = napPhuongThat().map((w) => ({ ...w })); });
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: null } : OUT();
+    await send({ external_user_id: "tdp-1", text: "Cần bán nhà 4 tầng hẻm xe hơi quận Gò Vấp, dt 50m2, giá 6 tỷ 5" });
+    const LT = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LT.id, question: "phuong", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], cap_nhat: [], xac_nhan: [], tra_loi: null,
+      truong: [{ khoa: "phuong", gia_tri: "Xã Tân Thông Hội", trich_dan: "Tây Thông Hội", can: null }] } : OUT();
+    const rT = await send({ external_user_id: "tdp-1", text: "156 đường 59 Tây Thông Hội" });
+    const LT2 = db().t.listings.at(-1);
+    check("TDP-01 đang hỏi phường, '156 đường 59 Tây Thông Hội' → phường 'Phường Thông Tây Hội' (từ điển wards), không ghi Tân Thông Hội / Củ Chi",
+      /Thông Tây Hội/.test(LT2.ward ?? "") && !db().t.listing_facts.some((f) => f.listing_id === LT.id && f.question === "phuong" && /Tân Thông Hội|Củ Chi/.test(f.answer)),
+      JSON.stringify({ ward: LT2.ward, ph: db().t.listing_facts.filter((f) => f.listing_id === LT.id && f.question === "phuong"), rep: rT.body.replies }));
+    check("TDP-02 'nhà 4 tầng' không thành nhà cấp 4", LT.property_type !== "nha_cap4", LT.property_type);
+    globalThis.__cauHinh = cuCH;
+  }
   // 01/10/2026 (chủ dự án: "nhà nếu có 4 tấm, tầng thì hỏi có tính gác lửng ko" — tấm / tầng / lửng gọi chung là kết cấu).
   {
     fresh(seedKho);

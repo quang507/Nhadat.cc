@@ -305,7 +305,12 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
         ? null : "so_khong_co_trong_trich_dan";
     }
     case "loai_giao_dich": return LOAI_GD.has(v) ? null : "gia_tri_ngoai_danh_sach";
-    case "loai_bds": return LOAI_BDS[v] ? null : "gia_tri_ngoai_danh_sach";
+    case "loai_bds": {
+      if (!LOAI_BDS[v]) return "gia_tri_ngoai_danh_sach";
+      // Bắn thử 01/10 (lx-tam-12): "nhà 4 tầng" → AI ghi nha_cap4 (thấy số 4). Cấp 4 phải có chữ "cấp 4 / c4" trong tin.
+      if (v === "nha_cap4" && !LOAI_BDS.nha_cap4.test(chuanSo(tin))) return "trich_dan_khong_noi_loai_nay";
+      return null;
+    }
     case "gap": case "thuong_luong": return laCo(v) || laKhong(v) ? null : "gia_tri_ngoai_danh_sach";
     default: {
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
