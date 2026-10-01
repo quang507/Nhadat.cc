@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
       // làm PostgREST trả 300 PGRST201 — và nhánh dưới từng gộp mọi lỗi select
       // thành "listing không tồn tại" (404): hỏi bù CHẾT IM từ 09/09 tới 15/09,
       // 313 lượt, sổ lỗi ghi sai nguyên nhân nên không ai truy.
-      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, sellers!listings_seller_id_fkey(name, seller_type, zalo_user_id, ten_tro_ly, xung_ho)",
+      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, boc_tach, sellers!listings_seller_id_fkey(name, seller_type, zalo_user_id, ten_tro_ly, xung_ho)",
     )
     .eq("id", listing_id)
     .maybeSingle();
@@ -78,7 +78,9 @@ Deno.serve(async (req) => {
     .order("priority");
   if (mErr) return jsonResponse({ error: mErr.message }, 500);
   // FR-223: câu nhánh theo câu trả lời — vòng hỏi bù hỏi cùng bộ câu với chat-reply.
-  const missing = await thieuCoReNhanh(db, listing_id, missingTho);
+  // 01/10/2026: câu AI đã thấy KHÔNG áp dụng cho căn này (có trích dẫn lời chủ nhà — chat-reply `khongHoiAi`) thì hỏi bù cũng bỏ.
+  const khongHoi = new Set<string>(((listing.boc_tach as { khong_hoi?: unknown } | null)?.khong_hoi as string[] | undefined) ?? []);
+  const missing = (await thieuCoReNhanh(db, listing_id, missingTho)).filter((m) => !khongHoi.has(m.fact_key));
 
   // Không hỏi lại điều đang chờ trả lời (chống spam — INS-09). Một truy vấn
   // lấy cả hai thứ cần: câu đang chờ (status) và "đã từng hỏi căn này chưa"

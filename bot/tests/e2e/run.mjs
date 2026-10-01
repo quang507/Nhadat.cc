@@ -2463,6 +2463,104 @@ fresh(seedKho);
       treo(L).includes("phuong"), JSON.stringify({ treo: treo(L), rep: rq.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+
+  // SRS-5.1t (01/10/2026, chủ dự án: "ra luật nó phải đọc thêm 1 2 câu hoặc cả ngữ cảnh phía trước nữa, sửa cả 4 đi").
+  {
+    const cuCH = globalThis.__cauHinh;
+    const laSoat = (p) => (p?.system ?? []).some((x) => /SOÁT LỜI BOT GỬI CHỦ NHÀ/.test(x.text ?? ""));
+    const aiRao = (them = {}) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [],
+      tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null },
+      cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], ...them } : laSoat(p) ? { nhan_xet: [] } : OUT();
+    const dung = async (uid, cauTreo, cauBot) => {
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__model.parse = aiRao();
+      await send({ external_user_id: uid, text: "bán nhà hẻm 4m Phan Đăng Lưu Bình Thạnh 4x16 giá 7 tỷ" });
+      const L = db().t.listings.at(-1);
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
+      if (cauBot) db().insert("messages", { conversation_id: db().t.conversations.at(-1).id, sender: "bot", body: cauBot });
+      return L;
+    };
+    const fq2 = (L, q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === q);
+    // (1) Ngữ cảnh: AI thấy câu bot THẬT vừa nói; "ừ" cho câu chọn A/B không ghi; câu có/không thì ghi.
+    let L = await dung("ctx-1", "gap", "Dạ sổ riêng thì dễ bán lắm. Mình cần ra hàng gấp hay được giá thì thôi ạ?");
+    let msgAi = "";
+    globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) msgAi = String(p.messages?.[0]?.content ?? ""); return aiRao({ tra_loi: { co_tra_loi: true, gia_tri: "được giá thì thôi", trich_dan: "ừ" } })(p); };
+    await send({ external_user_id: "ctx-1", text: "ừ" });
+    check("CTX-01 bot hỏi 'gấp hay được giá thì thôi?', khách 'ừ', AI đoán 'được giá thì thôi' → KHÔNG ghi ô gấp",
+      !fq2(L, "gap").length, JSON.stringify(fq2(L, "gap")));
+    check("CTX-02 AI nhận NGỮ CẢNH: câu bot vừa nói nguyên văn + vài lượt trước",
+      /Vài lượt NGAY TRƯỚC/.test(msgAi) && /gấp hay được giá thì thôi/.test(msgAi) && /CHỦ NHÀ: bán nhà hẻm 4m/.test(msgAi), msgAi.slice(0, 600));
+    L = await dung("ctx-3", "gap", "Dạ mình có cần bán gấp không ạ?");
+    globalThis.__model.parse = aiRao({ tra_loi: { co_tra_loi: true, gia_tri: "có, cần bán gấp", trich_dan: "ừ" } });
+    await send({ external_user_id: "ctx-3", text: "ừ" });
+    check("CTX-03 câu CÓ/KHÔNG 'có cần bán gấp không?', khách 'ừ' → ghi gấp (không chặn quá tay)",
+      fq2(L, "gap").some((f) => /gấp/.test(f.answer)), JSON.stringify(fq2(L, "gap")));
+    // (4) Cảm xúc: bực / nghi ngờ có trích dẫn → việc cho người phụ trách (một lần / 24h); bực → xin lỗi, thôi hỏi.
+    const escCx = () => db().t.reminders.filter((x) => x.kind === "escalation" && /^😟 Zalo/.test(x.note ?? ""));
+    L = await dung("cx-1", "phuong");
+    globalThis.__model.parse = aiRao({ cam_xuc: { muc: "buc", trich_dan: "hỏi hoài vậy" } });
+    const rC1 = await send({ external_user_id: "cx-1", text: "trời ơi em hỏi hoài vậy" });
+    check("CX-01 AI đọc BỰC (trích có trong tin) → 1 việc escalation '😟 … có vẻ bực', bot xin lỗi, không hỏi tiếp",
+      escCx().length === 1 && /có vẻ bực/.test(escCx()[0].note) && rC1.body.replies.some((x) => /xin lỗi/i.test(x)) && !rC1.body.replies.some((x) => /\?/.test(x)),
+      JSON.stringify({ esc: escCx().map((x) => x.note), rep: rC1.body.replies }));
+    globalThis.__model.parse = aiRao({ cam_xuc: { muc: "buc", trich_dan: "phiền quá" } });
+    await send({ external_user_id: "cx-1", text: "phiền quá à" });
+    check("CX-02 bực lần hai trong 24 giờ → KHÔNG báo trùng", escCx().length === 1, JSON.stringify(escCx().map((x) => x.note)));
+    L = await dung("cx-3", "phuong");
+    globalThis.__model.parse = aiRao({ cam_xuc: { muc: "nghi_ngo", trich_dan: "có phải lừa đảo không" } });
+    await send({ external_user_id: "cx-3", text: "bên em có phải lừa đảo không vậy" });
+    check("CX-03 nghi ngờ (cách nói mới) → báo người phụ trách 'đang nghi ngờ'", escCx().some((x) => /nghi ngờ/.test(x.note)), JSON.stringify(escCx().map((x) => x.note)));
+    L = await dung("cx-4", "phuong");
+    globalThis.__model.parse = aiRao({ cam_xuc: { muc: "buc", trich_dan: "cút đi" } });
+    await send({ external_user_id: "cx-4", text: "phường 12 em" });
+    check("CX-04 AI nói bực mà trích dẫn KHÔNG có trong tin → không báo ai", !escCx().length, JSON.stringify(escCx().map((x) => x.note)));
+    // (3) Câu không áp dụng cho căn này (AI, có trích dẫn) → không hỏi; câu lõi / trích sai thì không bỏ.
+    L = await dung("kh-1", "phuong");
+    globalThis.__model.parse = aiRao({ khong_can_hoi: [
+      { khoa: "so_phong_ngu", ly_do: "nhà để kinh doanh, không có phòng ngủ", trich_dan: "không có phòng ngủ" },
+      { khoa: "gia", ly_do: "đã có", trich_dan: "không có phòng ngủ" },
+      { khoa: "do_rong_hem", ly_do: "mặt tiền", trich_dan: "nhà mặt tiền" },
+    ] });
+    await send({ external_user_id: "kh-1", text: "phường 12 em, nhà làm văn phòng không có phòng ngủ" });
+    const LK = db().t.listings.find((x) => x.id === L.id);
+    const kh = LK?.boc_tach?.khong_hoi ?? [];
+    check("KH-01 AI: căn không có phòng ngủ (trích có trong tin) → cất khong_hoi so_phong_ngu; 'gia' (câu lõi) và trích không có trong tin thì không",
+      kh.includes("so_phong_ngu") && !kh.includes("gia") && !kh.includes("do_rong_hem"), JSON.stringify(LK?.boc_tach));
+    // Căn hộ: phòng ngủ là câu kế ngay (ưu tiên 4) — AI thấy căn officetel không có phòng ngủ → câu kế phải là câu KHÁC.
+    fresh(seedKho);
+    globalThis.__model.parse = aiRao();
+    await send({ external_user_id: "kh-2", text: "bán căn hộ 40m2 tầng 12 Sunrise City quận 7 giá 2 tỷ 2" });
+    const LH = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LH.id, question: "tang", status: "pending" });
+    globalThis.__model.parse = aiRao({ khong_can_hoi: [{ khoa: "so_phong_ngu", ly_do: "officetel không có phòng ngủ", trich_dan: "không có phòng ngủ" }] });
+    await send({ external_user_id: "kh-2", text: "căn officetel không có phòng ngủ em" });
+    check("KH-02 căn hộ officetel 'không có phòng ngủ' → câu treo kế KHÔNG phải phòng ngủ (vốn là câu kế ngay)",
+      !db().t.info_requests.some((x) => x.listing_id === LH.id && x.status === "pending" && x.question === "so_phong_ngu") &&
+        db().t.info_requests.some((x) => x.listing_id === LH.id && x.status === "pending"),
+      JSON.stringify(db().t.info_requests.filter((x) => x.listing_id === LH.id).map((x) => [x.question, x.status])));
+    // (2) Nhận xét không căn cứ: AI soát lời bot, code kiểm căn cứ → bỏ câu khen bịa, giữ câu hỏi.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laSoat(p)
+      ? { nhan_xet: [{ cau: "Nhà phố hẻm sâu yên tĩnh, kết cấu 4x15 ạ.", khang_dinh: "hẻm sâu yên tĩnh", can_cu: "hẻm sâu" }] }
+      : aiRao()(p);
+    globalThis.__model.create = () => "Nhà phố hẻm sâu yên tĩnh, kết cấu 4x15 ạ. Nhà mình ở phường nào anh chị?";
+    const rK = await send({ external_user_id: "khen-1", text: "ban nha 4x15 tret 2 lau 3pn hxh q10 gia 9ty" });
+    check("KHEN-AI-01 lời bot 'hẻm sâu…' (chủ không nói hẻm sâu) → bỏ câu khen, giữ câu hỏi",
+      !rK.body.replies.some((x) => /hẻm sâu/.test(x)) && rK.body.replies.some((x) => /\?/.test(x)), JSON.stringify(rK.body.replies));
+    globalThis.__model.parse = (p) => laSoat(p)
+      ? { nhan_xet: [{ cau: "Nhà mình hẻm xe hơi, trệt 2 lầu ạ.", khang_dinh: "hẻm xe hơi", can_cu: "hxh" }] }
+      : aiRao()(p);
+    globalThis.__model.create = () => "Nhà mình hẻm xe hơi, trệt 2 lầu ạ. Nhà mình ở phường nào anh chị?";
+    const rK2 = await send({ external_user_id: "khen-2", text: "ban nha 4x15 tret 2 lau 3pn hxh q10 gia 9ty" });
+    check("KHEN-AI-02 nhận xét CÓ căn cứ ('hxh' trong tin) → giữ nguyên",
+      rK2.body.replies.some((x) => /hẻm xe hơi, trệt 2 lầu/.test(x)), JSON.stringify(rK2.body.replies));
+    globalThis.__model.create = undefined;
+    globalThis.__cauHinh = cuCH;
+  }
   // 01/10/2026 (bắn thật lx-tam-12; chủ dự án: "trong data có danh sách … phường xã rồi mà nếu gần giống thì lôi ra"): đang hỏi
   // phường, "156 đường 59 Tây Thông Hội" (đảo chữ) → Phường Thông Tây Hội theo bảng wards; phường AI đoán (Xã Tân Thông Hội) không đè.
   {

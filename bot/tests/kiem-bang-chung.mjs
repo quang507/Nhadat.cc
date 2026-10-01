@@ -4,7 +4,8 @@
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
-import { datKiemNhe, docHoiLai, kiemXacNhan, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { boCauNhanXet, nhanXetKhongCanCu } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { datKiemNhe, docCamXuc, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -470,6 +471,33 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("XNC-04 trích không có trong tin → không chac, không bịa", !d.chac.length, JSON.stringify(d));
   const e = nangXacNhanChac(xn("hxh", "phap_ly"), "hxh", nhanDienNhieuFact);
   ok("XNC-05 AI gán sai ô ('hxh' → pháp lý), từ điển đọc ô khác → không chac", !e.chac.length, JSON.stringify(e));
+}
+
+// 01/10/2026 SRS-5.1t: ngữ cảnh (câu chọn A/B), cảm xúc, câu không áp dụng, nhận xét không căn cứ.
+{
+  const chon = "Dạ sổ riêng thì dễ bán lắm. Mình cần ra hàng gấp hay được giá thì thôi ạ?";
+  ok("NC-01 câu chọn 'gấp hay được giá thì thôi?' là câu chọn hai", laCauChonHai(chon));
+  ok("NC-02 'có gấp không ạ?' / 'bán gấp hay không?' KHÔNG phải câu chọn", !laCauChonHai("Mình có cần bán gấp không ạ?") && !laCauChonHai("bán gấp hay không anh?"));
+  ok("NC-03 'dạ đúng rồi em', 'ok' là gật trơn; 'ừ gấp' thì không", laChiGat("dạ đúng rồi em") && laChiGat("ok") && !laChiGat("ừ gấp"));
+  ok("NC-04 'ừ' cho câu chọn → AI đoán vế nào cũng bỏ",
+    kiemTraLoiCau({ co_tra_loi: true, gia_tri: "được giá thì thôi", trich_dan: "ừ" }, "ừ", chon)?.co === false);
+  ok("NC-05 'ừ gấp lắm' cho câu chọn → giữ (có nội dung)",
+    kiemTraLoiCau({ co_tra_loi: true, gia_tri: "cần bán gấp", trich_dan: "gấp lắm" }, "ừ gấp lắm", chon)?.giaTri === "cần bán gấp");
+  ok("CXK-01 bực, trích có trong tin → nhận", docCamXuc({ muc: "buc", trich_dan: "hỏi hoài" }, "em hỏi hoài vậy")?.muc === "buc");
+  ok("CXK-02 trích không có trong tin → không báo", docCamXuc({ muc: "nghi_ngo", trich_dan: "lừa đảo" }, "anh bán nhà") === null);
+  ok("CXK-03 bình thường → null", docCamXuc({ muc: "binh_thuong", trich_dan: null }, "ok em") === null);
+  const kh = docKhongCanHoi([
+    { khoa: "do_rong_hem", ly_do: "trong KCN", trich_dan: "trong khu công nghiệp" },
+    { khoa: "gia", ly_do: "x", trich_dan: "kho" },
+    { khoa: "so_wc", ly_do: "x", trich_dan: "không có chữ này" },
+    { khoa: "tram_bien_ap", ly_do: "không có trong danh sách", trich_dan: "kho" },
+  ], "cho thuê kho trong khu công nghiệp Tân Tạo", ["do_rong_hem", "gia", "so_wc"]);
+  ok("KHK-01 chỉ nhận câu có trong danh sách, không phải câu lõi, trích có thật", kh.length === 1 && kh[0].khoa === "do_rong_hem", JSON.stringify(kh));
+  const loi = "Nhà phố hẻm sâu yên tĩnh, kết cấu 4x15 ạ. Nhà mình ở phường nào anh chị?";
+  const bo = nhanXetKhongCanCu([{ cau: "Nhà phố hẻm sâu yên tĩnh, kết cấu 4x15 ạ.", can_cu: "hẻm sâu" }, { cau: "Nhà mình ở phường nào anh chị?", can_cu: null }], "ban nha 4x15 tret 2 lau hxh");
+  ok("NX-01 căn cứ AI đưa không có trong lời chủ nhà → bỏ; câu hỏi không bao giờ bỏ", bo.length === 1 && boCauNhanXet(loi, bo) === "Nhà mình ở phường nào anh chị?", JSON.stringify([bo, boCauNhanXet(loi, bo)]));
+  ok("NX-02 căn cứ có thật ('hxh') → giữ", nhanXetKhongCanCu([{ cau: "Nhà hẻm xe hơi ạ.", can_cu: "hxh" }], "ban nha hxh q10").length === 0);
+  ok("NX-03 bỏ hết chữ → null (dùng câu mẫu)", boCauNhanXet("Hẻm sâu yên tĩnh lắm ạ.", ["Hẻm sâu yên tĩnh lắm ạ."]) === null);
 }
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

@@ -213,9 +213,13 @@ jobs:
           # để so với câu khách gõ — chỉ tin của ID thử.
           q "select coalesce(json_agg(x), '[]') as ds from (select l.property_type, l.deal, l.district, l.ward, l.street, l.location_raw, p.name as du_an, l.status,
                 l.price_raw, l.area_m2, l.frontage_m, l.length_m, l.rear_width_m, l.bedrooms, l.bathrooms, l.floors, l.floors_text, l.floor,
-                l.access_type, l.alley_width_m, l.legal_status
+                l.access_type, l.alley_width_m, l.legal_status, l.boc_tach->'khong_hoi' as ai_bo_cau
               from listings l join sellers s on s.id = l.seller_id left join projects p on p.id = l.project_id
               where s.zalo_user_id = $(lit "$ZALO") order by l.created_at) x" | jq -c '.[0].ds[]'
+          # 01/10/2026 (SRS-5.1t): việc báo người phụ trách của ID thử (cảm xúc 😟, câu không có dữ liệu ❓) — chỉ ghi chú, đã che Zalo ID.
+          echo "-- Việc báo người phụ trách (escalation) của ID thử:"
+          q "select coalesce(json_agg(left(r.note, 200) order by r.created_at), '[]') as ds from reminders r join sellers s on s.id = r.seller_id
+              where s.zalo_user_id = $(lit "$ZALO") and r.kind = 'escalation'" | jq -r '.[0].ds[]' || true
           echo "-- Fact của tin ID thử (khoá · nguồn · trả lời):"
           q "select coalesce(json_agg(x order by x.luc), '[]') as ds from (select f.question as khoa, f.source as nguon,
                 left(regexp_replace(f.answer, '[0-9]{9,}', '#', 'g'), 120) as tl, f.created_at as luc
