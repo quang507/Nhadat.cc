@@ -41,7 +41,7 @@ import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -2032,6 +2032,9 @@ Deno.serve(async (req) => {
     // Công tắc `app_config.boc_tach_ai` đọc MỘT lần, tách khỏi lượt model để đường ra biết
     // phải chờ (chế độ `ghi`) hay chạy nền (chế độ `bong`) mà không đợi model xong.
     let cheDoBocAi: Promise<string> | null = null;
+    // Chế độ `ai` (01/10/2026, chủ dự án: "bỏ luật, dùng AI bóc tách"): đi chung đường `chinh` (`cheDoBocAi` trả "chinh")
+    // nhưng máy chỉ chặn bịa (`datKiemNhe`), AI chuẩn hoá đồng nghĩa / gõ sai, luật thôi đỡ khoá AI biết khi AI im.
+    let laCheDoAi = false;
     // FR-226: ô chữ AI đã GỘP / SỬA lượt này (đã qua `kiemCapNhat`) — đường ra không ghi lại mẩu đó làm "bổ sung".
     let capNhatLuot: Array<{ question: string; answer: string }> = [];
     // Địa chỉ luật vừa ghép số nhà lượt này ("45 Ngô Y Linh") — kiến thức AI "số 45" không vào bổ sung.
@@ -2813,7 +2816,10 @@ Deno.serve(async (req) => {
     // FR-208 (14/09/2026): AI bóc tách CHẠY BÓNG, song song với toàn bộ luật bên dưới. Chỉ
     // khởi động ở đây (cần biết câu bot đang hỏi); kết quả kiểm + so với DB ghi ở đường ra
     // `traLoiSeller`, sau khi đã trả lời khách. Công tắc `app_config.boc_tach_ai`.
-    if (anthropicS && (coMuiDuLieuRao(text) || (!!pendingReq && coNoiDungTraLoi(text)))) {
+    const coMuiAi = coMuiDuLieuRao(text) || (!!pendingReq && coNoiDungTraLoi(text));
+    // Chế độ `ai`: không dùng regex để quyết AI có được đọc hay không ("xhr", "c4" không có "mùi" dữ liệu với luật) — mọi tin
+    // của người đang rao / đang trả lời câu treo đều qua AI. Công tắc đọc trước để biết có phải chế độ này không.
+    if (anthropicS && (coMuiAi || !!pendingReq || wantsSell)) {
       // 30/09/2026 (chủ dự án, chat thử): "nhà chú ở 137/28 đường số 59 phường an hội tây nhé" nhắn TRƯỚC câu rao — lúc
       // đó chưa có tin nên không có chỗ ghi, tới lúc rao thì mất. Người chưa có tin nào mà nhắn câu rao: AI đọc cả các
       // tin khách nhắn trước đó (`truocTin`) cùng câu rao; bằng chứng kiểm trên chính đoạn gộp đó.
@@ -2823,15 +2829,19 @@ Deno.serve(async (req) => {
       cheDoBocAi = (async () => {
         const { data: cd, error: cdErr } = await client.rpc("cau_hinh", { p_key: "boc_tach_ai" });
         if (cdErr) await ghiLoi(client, "chat-reply cau_hinh(boc_tach_ai)", cdErr.message);
-        return String(cd ?? "tat").trim();
+        const v = String(cd ?? "tat").trim();
+        laCheDoAi = v === "ai";
+        datKiemNhe(laCheDoAi);
+        return laCheDoAi ? "chinh" : v;
       })().catch(() => "tat");
       bongAi = (async () => {
         const cheDo = await cheDoBocAi!;
         if (cheDo !== "bong" && cheDo !== "ghi" && cheDo !== "chinh") return null;
+        if (!coMuiAi && !laCheDoAi) return null;
         // FR-214 b: đã chia mảnh theo căn → AI bóc tách chỉ đọc phần thuộc căn đang treo.
         // FR-224: đưa cả CHỮ câu bot vừa hỏi để AI hiểu câu hỏi theo nghĩa (khoá trần "do_rong_hem" không nói "ô tô vào tới cửa không").
         const cauChu = pendingReq ? cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal) : null;
-        const r = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, textTreo || textBongAi, pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings));
+        const r = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, textTreo || textBongAi, pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings), laCheDoAi);
         return { ...r, ms: Date.now() - tBong, cauDangHoi: pendingReq?.question ?? null, cheDo };
       })().catch(async (e) => {
         await ghiLoi(client, "chat-reply boc_tach_ai(bong)", e);
@@ -3735,7 +3745,7 @@ Deno.serve(async (req) => {
       if (!anthropicS) return;
       try {
         const cheDo = cheDoBocAi ? await cheDoBocAi : String((await client.rpc("cau_hinh", { p_key: "boc_tach_ai" })).data ?? "tat").trim();
-        if (cheDo !== "ghi" && cheDo !== "chinh") return;
+        if (cheDo !== "ghi" && cheDo !== "chinh" && cheDo !== "ai") return;
         const [{ data: lRow, error: lErr }, { data: fRows, error: fErr }] = await Promise.all([
           client.from("listings").select("boc_tach").eq("id", listingId).maybeSingle(),
           client.from("listing_facts").select("id, question, answer, source").eq("listing_id", listingId),
@@ -4288,7 +4298,8 @@ Deno.serve(async (req) => {
       const laTienTron = (f: { question: string }, s: string) => f.question === "gia" &&
         /^\s*(?:gia\s*)?(?:la\s*)?(?:\d+(?:[.,]\d+)?\s*(?:ty|ti|toi|trieu|tr|cu)(?:\s*\d+|\s+ruoi|\s+mot|\s+hai)?|[1-9]\d{0,2}(?:[.,]\d{3}){2,}\s*(?:d|dong|vnd)?)(?:\s+(?:nha|nhe|em|a|thoi|anh|chi|do|nhen|nhe em))*\s*$/
           .test(boDau(s).replace(/[^a-z0-9.,\s]/g, " "));
-      const luatChacCauTreo = (q: string, s: string) =>
+      // Chế độ `ai`: AI im / nói "không trả lời" là AI quyết — luật không gỡ lại.
+      const luatChacCauTreo = (q: string, s: string) => !laCheDoAi && (
         nhanDienNhieuFact(s).some((f) => f.question === q && (ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f))) ||
         (q === "phap_ly" && phapLyChuaSo({ question: q, answer: s })) ||
         // FR-241 o: cả tin là đúng một câu pháp lý / một tên phường ("sổ chung", "xã Vĩnh Lộc A") trả lời đúng câu đang hỏi.
@@ -4298,7 +4309,7 @@ Deno.serve(async (req) => {
         (q === "doanh_thu" && /\d+(?:[.,]\d+)?\s*(?:trieu|tr)\b/.test(boDau(s))) ||
         // 25/09/2026 (ảnh chat thật): hỏi hẻm, khách đáp "hxh" / "hẻm xe hơi" / "ô tô vô tận nhà" — AI được dặn "không có số
         // mét thì không phải độ rộng hẻm" nên im, luật gạt vào bổ sung rồi hỏi lại số mét ba lần. Loại đường vào là câu trả lời chắc.
-        ((q === "do_rong_hem" || q === "do_rong_duong") && LOAI_DUONG_VAO_RE.test(boDau(s)));
+        ((q === "do_rong_hem" || q === "do_rong_duong") && LOAI_DUONG_VAO_RE.test(boDau(s))));
       let aiChinh: (AiChinh & { kienThuc: string[] }) | null = null;
       const cheDoAiTreo = bongAi && cheDoBocAi ? await cheDoBocAi : "tat";
       // Câu có đường riêng (`CAU_KHONG_LAY_AI`: phường, vị trí, ảnh…): AI không quyết GIÁ TRỊ câu treo,
@@ -4368,7 +4379,7 @@ Deno.serve(async (req) => {
           // Giữ NGUYÊN tham chiếu phần tử của `aiChinh.ghi` để chỗ ghi biết nguồn là ai_kiem.
           // 27/09/2026 (chủ dự án test Zalo, căn Botanic): đang hỏi hẻm, khách nhắn "8 tỉ" — AI im, luật đọc ra giá mà bị gạt
           // (khoá AI biết) → câu vào "bổ sung", bot phải hỏi giá lại. Cả tin CHỈ là một số tiền thì luật chắc, giữ.
-          const giuLuat = !!kq.chuyenSang && !kem.some((f) => f.question === kq.chuyenSang!.question) &&
+          const giuLuat = !laCheDoAi && !!kq.chuyenSang && !kem.some((f) => f.question === kq.chuyenSang!.question) &&
             (laTienTron(kq.chuyenSang, dapAn) || (kq.chuyenSang.question === "dien_tich" && /^ngang \S+m dài \S+m$/.test(kq.chuyenSang.answer)) ||
               // 27/09/2026 (test Zalo): "312 Nguyễn Thuơbgj Hiền" khi đang hỏi hẻm — số nhà + tên đường là địa chỉ chắc.
               (kq.chuyenSang.question === "vi_tri" && laSoNhaTenDuong(dapAn)) ||
@@ -4402,7 +4413,7 @@ Deno.serve(async (req) => {
       const factKem = (s: string): Array<{ question: string; answer: string }> => (aiChinh
         ? [...aiChinh.ghi, ...nhanDienNhieuFact(s).filter((f) => f.question !== "bo_sung" && (
             !KHOA_FACT_AI_BIET.has(f.question) ||
-            (!aiChinh!.ghi.some((g) => g.question === f.question) &&
+            (!laCheDoAi && !aiChinh!.ghi.some((g) => g.question === f.question) &&
               (aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)) ||
                 KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f) || phapLyCoSo(f) || kichThuocChac(f)))))
             .map((f) => phapLyChac(f) ? { question: "phap_ly", answer: "sổ hồng riêng" } : f)]
