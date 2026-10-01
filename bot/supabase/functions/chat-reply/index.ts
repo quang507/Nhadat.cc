@@ -83,6 +83,9 @@ import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, la
 const CAU_HOI_TIEN = new Set(["doanh_thu", "tien_coc", "phi_quan_ly", "phi_gui_xe", "gia_dien_nuoc"]);
 // 27/09/2026 (test Zalo): câu "sổ đứng tên ai" — AI đọc "ba a thôi" (ba anh) thành "ba người", và bác "Anh đứng tên chính nhé"
 // (câu rơi bổ sung, bot xin HỌ TÊN người đứng sổ). Giữ nguyên chữ khách nói.
+/** Câu trong bảng theo loại mà có căn không áp dụng — danh mục đưa AI ở lượt câu rao (`khong_can_hoi`). */
+const CAU_TUY_CAN = ["so_phong_ngu", "so_wc", "ket_cau", "tang", "do_rong_hem", "do_rong_duong", "noi_that", "phi_quan_ly", "huong",
+  "thang_may", "hien_trang", "tho_cu", "mat_tien", "cach_mat_tien", "san_vuon", "chieu_cao", "duong_container"];
 const CAU_KHONG_LAY_AI = new Set(["phuong", "vi_tri", "loai_bds", "hinh_anh", "duyet_tin", "danh_gia", "ngung_rao_can_nao", "xac_nhan_lich", "con_ban", "nguoi_dung_ten"]);
 // 21/09/2026 (Zalo thật): ở chế độ `chinh`, câu VỊ TRÍ / PHƯỜNG vẫn để AI đọc trước — AI có tên đường /
 // số phường sạch thì lấy; AI trống thì luật đỡ như cũ (không hạ "khớp" thành "lệch" như các khoá khác).
@@ -630,6 +633,24 @@ function tenSauCanHo(t: string): string | null {
 async function khoaGemini(client: ReturnType<typeof serviceClient>): Promise<string[]> {
   return (await Promise.all([secretOf(client, "GEMINI_API_KEY"), secretOf(client, "GEMINI_API_KEY_2")])).filter((k): k is string => !!k);
 }
+/**
+ * 01/10/2026 (bắn thử v316: mỗi lượt một dòng "Gemini embed 429" trong sổ lỗi): Gemini hết hạn mức (429 ở MỌI khoá) là một
+ * SỰ CỐ kéo dài, không phải lỗi của từng lượt. Đặt mốc tạm dừng CHUNG với việc nhúng nền (`nhung_tam_dung_den`, 60 phút) —
+ * `tim_nghia_san_sang()` thôi mở cửa nên các lượt sau không gọi Gemini nữa — và ghi sổ MỘT lần khi vừa đặt mốc. Mốc đang
+ * còn hạn thì chỉ console.log. Lỗi khác vẫn ghi sổ như cũ.
+ */
+async function loiNhung(client: ReturnType<typeof serviceClient>, cho: string, e: unknown): Promise<void> {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (!/^Gemini embed 429\b/.test(msg)) { await ghiLoi(client, cho, e); return; }
+  const isoGiay = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
+  const den = isoGiay(new Date(Date.now() + 60 * 60e3));
+  // Cùng khuôn chuỗi 'YYYY-MM-DDTHH:MI:SSZ' với hàm SQL nên so chuỗi = so thời gian; '' (không dừng) nhỏ hơn mọi mốc.
+  const { data, error } = await client.from("app_config").update({ value: den })
+    .eq("key", "nhung_tam_dung_den").lt("value", isoGiay(new Date())).select("key");
+  if (error) await ghiLoi(client, `${cho} (dat tam dung)`, error.message);
+  else if (data?.length) await ghiLoi(client, cho, `${msg.slice(0, 120)} — tạm dừng tìm theo nghĩa tới ${den}`);
+  else console.log(`${cho}: Gemini 429, đang trong đợt tạm dừng`);
+}
 async function sanSangNghia(client: ReturnType<typeof serviceClient>): Promise<string[] | null> {
   const { data: sang, error } = await client.rpc("tim_nghia_san_sang");
   if (error || sang !== true) return null;
@@ -653,7 +674,7 @@ async function timDuAnTheoNghia(client: ReturnType<typeof serviceClient>, ten: s
     if (p) console.log(`du an theo nghia: "${go}" → ${u.name} (${u.do_gan.toFixed(3)})`);
     return (p as DuAnNghia | null) ?? null;
   } catch (e) {
-    await ghiLoi(client, "chat-reply tim du an theo nghia", e);
+    await loiNhung(client, "chat-reply tim du an theo nghia", e);
     return null;
   }
 }
@@ -670,7 +691,7 @@ async function timDuongTheoNghia(client: ReturnType<typeof serviceClient>, ten: 
     if (u) console.log(`duong theo nghia: "${ten}" → ${u.ten} (${u.do_gan.toFixed(3)})`);
     return u?.ten ?? null;
   } catch (e) {
-    await ghiLoi(client, "chat-reply tim duong theo nghia", e);
+    await loiNhung(client, "chat-reply tim duong theo nghia", e);
     return null;
   }
 }
@@ -1839,7 +1860,7 @@ Deno.serve(async (req) => {
         if (kq) console.log(`dia danh theo nghia: "${ten}" → ${kq.nhom} ${kq.ten}`);
         return kq;
       } catch (e) {
-        await ghiLoi(client, "chat-reply dia danh theo nghia", e);
+        await loiNhung(client, "chat-reply dia danh theo nghia", e);
         return null;
       }
     };
@@ -1925,7 +1946,8 @@ Deno.serve(async (req) => {
         const ds = (data ?? []) as Array<Phuong & { do_gan: number }>;
         return ds[0] && ds[0].do_gan >= NGUONG_PHUONG_NGHIA ? { top: ds[0], nhi: ds[1] ?? null } : null;
       } catch (e) {
-        console.log(`tim phuong theo nghia: ${(e as Error)?.message ?? e}`);
+        if (/^Gemini embed 429\b/.test((e as Error)?.message ?? "")) await loiNhung(client, "chat-reply tim phuong theo nghia", e);
+        else console.log(`tim phuong theo nghia: ${(e as Error)?.message ?? e}`);
         return null;
       }
     };
@@ -2187,8 +2209,9 @@ Deno.serve(async (req) => {
         .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
       if (cErr) await ghiLoi(client, "chat-reply hoi chua co du lieu(dem)", cErr.message);
       if (!cErr && (count ?? 0) === 0) {
+        // KHÔNG gắn `seller_id`: dòng việc có seller_id là tin GỬI CHỦ NHÀ (FR-144) — đây là tin cho người phụ trách.
         const { error: rErr } = await client.from("reminders").insert({
-          kind: "escalation", due_at: new Date().toISOString(), seller_id: sellerRow.id,
+          kind: "escalation", due_at: new Date().toISOString(),
           listing_id: pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null,
           note: `${dau}: "${cauSach}" — câu ${chuDe === "thi_truong" ? "thị trường" : "về dịch vụ"} bot không có dữ liệu để trả lời, nhắn lại khách giúp.`,
         });
@@ -2218,17 +2241,19 @@ Deno.serve(async (req) => {
       if (!laCheDoAi || !k?.ket) return null;
       camXucLuot = docCamXuc(k.camXuc, textTreo || textBongAi);
       if (!camXucLuot) return null;
-      const dau = `😟 Zalo …${externalUserId.slice(-4)}`;
+      // Một lần / 24 giờ / người / MỨC: bực rồi nghi ngờ là hai chuyện, người phụ trách cần biết cả hai.
+      const nhan = camXucLuot.muc === "buc" ? "có vẻ bực" : camXucLuot.muc === "nghi_ngo" ? "đang nghi ngờ bên mình" : "muốn dừng";
+      const dau = `😟 Zalo …${externalUserId.slice(-4)} ${nhan}`;
       const { count, error: cErr } = await client.from("reminders").select("id", { count: "exact", head: true })
         .eq("kind", "escalation").ilike("note", `${dau}%`)
         .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
       if (cErr) await ghiLoi(client, "chat-reply cam xuc(dem)", cErr.message);
       if (!cErr && (count ?? 0) === 0) {
-        const nhan = camXucLuot.muc === "buc" ? "có vẻ bực" : camXucLuot.muc === "nghi_ngo" ? "đang nghi ngờ bên mình" : "muốn dừng";
+        // KHÔNG gắn `seller_id`: dòng việc có seller_id là tin GỬI CHỦ NHÀ (FR-144) — đây là tin cho người phụ trách.
         const { error: rErr } = await client.from("reminders").insert({
-          kind: "escalation", due_at: new Date().toISOString(), seller_id: sellerRow.id,
+          kind: "escalation", due_at: new Date().toISOString(),
           listing_id: pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null,
-          note: `${dau} ${nhan}: "${thayLienHe(camXucLuot.trich, "[liên hệ]").slice(0, 120)}" — anh chị phụ trách xem lại cuộc chat, nhắn khách giúp.`,
+          note: `${dau}: "${thayLienHe(camXucLuot.trich, "[liên hệ]").slice(0, 120)}" — anh chị phụ trách xem lại cuộc chat, nhắn khách giúp.`,
         });
         if (rErr) await ghiLoi(client, "chat-reply cam xuc(ghi)", rErr.message);
       }
@@ -2578,8 +2603,16 @@ Deno.serve(async (req) => {
       // Đường ra DUY NHẤT của nhánh người bán → chỗ nối lưới vét (FR-199). Tới
       // đây thì mọi nhánh tiền định đã ghi xong, nên `daGhiFactDuAn` đã đúng.
       await vetDuAnBangModel();
-      // Cảm xúc chủ nhà: mọi đường ra đều xét (báo người phụ trách một lần / 24 giờ).
+      // Cảm xúc chủ nhà: mọi đường ra đều xét (báo người phụ trách một lần / 24 giờ / mức).
       await camXucAi();
+      // 01/10/2026 (bắn thử lx-cx-01: "bên em có phải lừa đảo không vậy" → bot chỉ nói "em là trợ lý AI"): chủ nhà NGHI NGỜ
+      // (AI đọc, có trích dẫn) → bong bóng TRẤN AN tiền định đứng trước, chỉ nói điều có thật: phí chỉ thu khi giao dịch thành
+      // công (FEE_RULES), không thu trước; đã báo người phụ trách (việc 😟 vừa mở ở `camXucAi`).
+      if (camXucLuot?.muc === "nghi_ngo" && !replies.some((r) => /phí chỉ thu khi giao dịch thành công/i.test(r))) {
+        const goi = sellerRow.xung_ho ?? "anh/chị";
+        const pct = sellerRow.seller_type === "nmg" ? "0,5%" : "1%";
+        replies = [`Dạ ${goi} yên tâm nha, bên em là AI Ơi Nhà Đất, rao tin cho mình không thu đồng nào trước — phí chỉ thu khi giao dịch thành công, ${pct} giá chốt. Em cũng đã báo anh chị phụ trách nhắn lại ${goi} cho rõ ạ.`, ...replies];
+      }
       if (humanActive) {
         // FR-141 — người thật đang cầm cuộc: không gửi, không ghi dòng bot nào.
         return await hoanTat({
@@ -3108,6 +3141,11 @@ Deno.serve(async (req) => {
           return b.trim() ? `${laTinNguoi(m.sender) ? "CHỦ NHÀ" : "BOT"}: ${thayLienHe(b.replace(/\s+/g, " ").trim(), "[liên hệ]").slice(0, 220)}` : "";
         }).filter(Boolean);
         let cauConHoi: string[] = [];
+        // Lượt CÂU RAO (chưa có tin, chưa biết bảng câu): đưa danh mục câu hay đổi theo loại / theo căn để AI chỉ ra câu
+        // không áp dụng ngay từ câu hỏi đầu (bắn thử lx-kh-01: căn officetel bị hỏi phòng ngủ trước tiên).
+        if (laCheDoAi && !pendingReq && wantsSell) {
+          cauConHoi = CAU_TUY_CAN.map((k) => `${k}: ${FACT_LABELS[k] ?? k}`);
+        }
         if (laCheDoAi && pendingReq?.listing_id) {
           const { data: thieuAi, error: thErr } = await client.from("listing_missing_facts").select("fact_key, priority")
             .eq("listing_id", pendingReq.listing_id).order("priority").limit(20);
@@ -5148,6 +5186,9 @@ Deno.serve(async (req) => {
           else if (laBoSungRac(dapAn)) ghiBoSung = null;
           // 01/10/2026: câu HỎI không bao giờ là thông tin căn nhà — AI nói hỏi, hoặc lưới từ khoá nhận ra dáng hỏi.
           else if (hoiAi || laCauHoiTron(dapAn)) ghiBoSung = null;
+          // 01/10/2026 (e2e CX-05): câu bày tỏ cảm xúc (AI đọc có trích dẫn — bực, nghi ngờ, muốn dừng) không phải thông tin căn nhà
+          // ("chắc bên này lừa rồi" từng vào "📝 Thêm" của tin, tức ra cả web).
+          else if (camAi) ghiBoSung = null;
           // Bắn thử 01/10 (lx-tam-21): trả lời bản nháp bằng "3 phòng" → AI ghi phòng ngủ 3 mà câu vẫn vào "📝 Thêm: 3 phòng".
           // Tin NGẮN (≤ 4 chữ) mà AI đã ghi được ô từ đó → chính là ô đó, không phải thông tin thêm.
           else if (aiChinh?.ghi.length && dapAn.trim().split(/\s+/).length <= 4) ghiBoSung = null;
@@ -6132,7 +6173,9 @@ Deno.serve(async (req) => {
           // FR-229: 12 như các chỗ khác — thêm 4 câu pháp lý thì 8 câu đầu không còn tới câu phường (gia → phuong).
           .select("fact_key, nhom").eq("listing_id", newLst.id).order("priority").limit(12);
         const vuaRao = [phuongRao ? "phuong" : "", areaM ? "dien_tich" : "", priceM ? "gia" : ""].filter(Boolean);
-        const thieuDau = (await thieuCoReNhanh(client, newLst.id, firstFacts)).filter((f) => f.nhom !== "sau_dang");
+        // 01/10/2026: câu AI thấy không áp dụng cho căn này (lời chủ nhà trong câu rao) — bỏ từ câu hỏi ĐẦU (`khongHoiAi`).
+        const khongHoiDau = await khongHoiAi(newLst.id, null, (firstFacts ?? []).map((f) => f.fact_key));
+        const thieuDau = (await thieuCoReNhanh(client, newLst.id, firstFacts)).filter((f) => f.nhom !== "sau_dang" && !khongHoiDau.has(f.fact_key));
         // FR-239 i (phát lại test 27/09): "Anh muốn bán căn nhà ở đặng Văn ngữ" — có đường, chưa rõ quận → bot hỏi diện tích,
         // tầng, hẻm… mà không bao giờ hỏi quận (phường ưu tiên 22, gần cuối). Có địa chỉ mà chưa rõ quận → hỏi phường/quận trước.
         const firstKey = (!quanDoc && viTriRao && thieuDau.some((f) => f.fact_key === "phuong") ? "phuong" : null) ??

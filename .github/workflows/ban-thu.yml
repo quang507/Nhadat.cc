@@ -218,8 +218,13 @@ jobs:
               where s.zalo_user_id = $(lit "$ZALO") order by l.created_at) x" | jq -c '.[0].ds[]'
           # 01/10/2026 (SRS-5.1t): việc báo người phụ trách của ID thử (cảm xúc 😟, câu không có dữ liệu ❓) — chỉ ghi chú, đã che Zalo ID.
           echo "-- Việc báo người phụ trách (escalation) của ID thử:"
-          q "select coalesce(json_agg(left(r.note, 200) order by r.created_at), '[]') as ds from reminders r join sellers s on s.id = r.seller_id
-              where s.zalo_user_id = $(lit "$ZALO") and r.kind = 'escalation'" | jq -r '.[0].ds[]' || true
+          # Từ 01/10 (SRS-5.1u) việc nội bộ ❓/😟 KHÔNG còn seller_id → tìm qua tin của ID thử hoặc 4 số cuối Zalo trong ghi chú;
+          # cột gui_chu_nha = true là dòng sẽ đi về CHỦ NHÀ (chỉ đúng với tin 💬 soạn cho chủ nhà).
+          q "select coalesce(json_agg(json_build_object('gui_chu_nha', r.seller_id is not null, 'note', left(r.note, 200)) order by r.created_at), '[]') as ds
+              from reminders r, sellers s
+              where s.zalo_user_id = $(lit "$ZALO") and r.kind = 'escalation'
+                and (r.seller_id = s.id or r.listing_id in (select l.id from listings l where l.seller_id = s.id)
+                     or r.note like '%Zalo …' || right(s.zalo_user_id, 4) || '%')" | jq -c '.[0].ds[]' || true
           echo "-- Fact của tin ID thử (khoá · nguồn · trả lời):"
           q "select coalesce(json_agg(x order by x.luc), '[]') as ds from (select f.question as khoa, f.source as nguon,
                 left(regexp_replace(f.answer, '[0-9]{9,}', '#', 'g'), 120) as tl, f.created_at as luc

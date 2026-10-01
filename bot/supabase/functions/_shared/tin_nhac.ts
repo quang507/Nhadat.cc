@@ -14,6 +14,17 @@
  * - có seller_id (FR-144): đích là chính chủ → giọng CSKH lễ phép.
  * - còn lại: CTV/admin → thông báo nội bộ.
  */
+/**
+ * 01/10/2026 (soát sau bắn thử lx-cx-01): ghi chú mở đầu bằng DẤU HIỆU (❓ khách hỏi, 😟 cảm xúc, 🩺 sức khoẻ, 🆕, ✏️…) là tin
+ * NỘI BỘ cho người phụ trách — KHÔNG BAO GIỜ gửi chủ nhà, kể cả khi dòng việc lỡ gắn `seller_id`. "💬 " là câu soạn sẵn CHO chủ
+ * nhà (ask-seller, hỏi thay khách). Lớp lỗi: đích người nhận suy ngầm từ cột nào đang điền (`seller_id` → gửi chủ nhà), nên một
+ * việc báo admin gắn `seller_id` để làm ngữ cảnh đã đi thẳng về máy khách. Đường gửi (escalation-feed, nudge) hỏi hàm này.
+ */
+export function laTinNoiBo(note: unknown): boolean {
+  const n = String(note ?? "").trim();
+  return !!n && !n.startsWith("💬") && /^[^\p{L}\p{N}]/u.test(n);
+}
+
 export function escalationText(
   r: { kind: string; note: unknown; seller_id?: string | null },
 ): string {
@@ -23,6 +34,8 @@ export function escalationText(
   // FR-177 f (09/09/2026): "💬 " = câu hỏi bù ask-seller đã soạn sẵn cho chủ nhà
   // (đường bridge, khi không có OA). Gửi NGUYÊN VĂN, không bọc "em bên AI Ơi Nhà Đất".
   if (note.startsWith("💬")) return note.replace(/^💬\s*/, "");
+  // Tin nội bộ không bao giờ bọc lời chào chủ nhà (xem `laTinNoiBo`).
+  if (laTinNoiBo(note)) return note;
   if (r.seller_id) {
     return `Chào anh/chị, em bên AI Ơi Nhà Đất ạ. ${note}. Anh/chị bổ sung giúp em để em báo khách liền nha!`;
   }

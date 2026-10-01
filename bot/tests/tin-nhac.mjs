@@ -4,7 +4,7 @@
 // "🔔 nhadat.cc: 🩺 nhadat.cc: 4 lỗi trong 1 giờ qua. Xem trang /admin.. Anh/chị
 // check giúp rồi trả lời khách sớm nha." — lặp tên, thừa dấu chấm, và bảo admin
 // trả lời một khách không tồn tại.
-import { escalationText } from "../supabase/functions/_shared/tin_nhac.ts";
+import { escalationText, laTinNoiBo } from "../supabase/functions/_shared/tin_nhac.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, thay = "") => {
@@ -65,6 +65,17 @@ for (const [ten, note] of [
 
 // ── Ghi chú rỗng thì không nổ ───────────────────────────────────────────────
 ok("note rỗng: không nổ", typeof escalationText({ kind: "escalation", note: null }) === "string");
+
+// ── 01/10/2026: tin NỘI BỘ (❓ 😟 🩺…) lỡ gắn seller_id KHÔNG bao giờ bọc lời chào chủ nhà; đường gửi (escalation-feed, nudge)
+//    hỏi `laTinNoiBo` để không chọn chủ nhà làm người nhận. "💬" là câu soạn CHO chủ nhà — không phải nội bộ.
+{
+  const cx = '😟 Zalo …x-01 có vẻ bực: "phiền quá" — anh chị phụ trách xem lại cuộc chat, nhắn khách giúp.';
+  const t = escalationText({ kind: "escalation", note: cx, seller_id: "s-1" });
+  ok("NB-01 😟 có seller_id → KHÔNG bọc 'Chào anh/chị … bổ sung giúp em'", !/Chào anh\/chị|bổ sung giúp em/.test(t), t);
+  ok("NB-02 laTinNoiBo: ❓ / 😟 / 🩺 là nội bộ", laTinNoiBo("❓ Zalo …1234 hỏi: \"phí sao\"") && laTinNoiBo(cx) && laTinNoiBo("🩺 3 lỗi"));
+  ok("NB-03 laTinNoiBo: 💬 câu soạn cho chủ nhà, câu chữ thường → KHÔNG nội bộ",
+    !laTinNoiBo("💬 Anh ơi, có khách hỏi căn …") && !laTinNoiBo("Căn 12 Trần Hưng Đạo của mình còn bán không ạ?") && !laTinNoiBo(null));
+}
 
 console.log(hong ? `\nTIN-NHAC: ${hong}/${tong} CA HỎNG` : `\nTIN-NHAC: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
