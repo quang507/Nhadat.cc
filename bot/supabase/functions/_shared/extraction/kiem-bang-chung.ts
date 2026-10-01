@@ -267,6 +267,15 @@ let KIEM_NHE = false;
 export function datKiemNhe(b: boolean): void { KIEM_NHE = b; }
 export function laKiemNhe(): boolean { return KIEM_NHE; }
 const LOAI_GD = new Set(["ban", "cho_thue", "thue"]);
+function tienCatThieu(tin: string, trich: string, b: number): boolean {
+  const i = tin.toLowerCase().indexOf(trich.toLowerCase());
+  if (i < 0) return false;
+  const m = /^\s*(\d{1,3})(?![\d.,]|\s*(?:m\b|m2|m²|x|pn|wc|tầng|tang|lầu|lau|tấm|tam|phòng|phong|tỷ|tỉ|ty|ti|tỏi|toi|triệu|trieu|tr\b|năm|nam|tháng|thang|%))/iu
+    .exec(tin.slice(i + trich.length, i + trich.length + 10));
+  if (!m) return false;
+  const b2 = docTien(`${trich} ${m[1]}`);
+  return b2 != null && b2 !== b;
+}
 function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): string | null {
   const v = d.gia_tri.trim();
   const kd = kdCumSua ?? chuanSo(d.trich_dan);
@@ -276,7 +285,11 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
     case "gia": case "tien_coc": case "thu_nhap_thue": {
       const b = docTien(kdCumSua ?? d.trich_dan);
       if (b == null) return "khong_doc_duoc_tien";
-      return tienKhop(v, b) ? null : "tien_khong_khop_trich_dan";
+      if (!tienKhop(v, b)) return "tien_khong_khop_trich_dan";
+      // Bắn thử 01/10 (lx-ai-08): "3 tỏi 9 TL" → AI trích "3 tỏi" (giá 3 tỷ) và đẩy "9 TL" sang thương lượng. Ngay sau cụm
+      // trích còn một số lẻ không đơn vị mà đọc gộp ra số tiền KHÁC → AI cắt thiếu, bỏ để luật tiền đọc nguyên cụm.
+      if (tienCatThieu(tin, d.trich_dan, b)) return "tien_cat_thieu";
+      return null;
     }
     case "gia_m2": case "so_tang": case "quan": case "phuong":
       // Phép tính (giá/m², trệt + lầu) và bảng địa danh có thật — không phải soát từ khoá, giữ nguyên.
@@ -296,7 +309,11 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
       // Chữ AI viết lại được (chuẩn hoá, sửa chính tả, đổi từ đồng nghĩa) nhưng không được thêm CON SỐ khách không nói.
       const soTrich = new Set(kd.match(/\d+/g) ?? []);
-      return (chuanSo(v).match(/\d+/g) ?? []).every((x) => soTrich.has(x)) ? null : "so_khong_co_trong_trich_dan";
+      if (!(chuanSo(v).match(/\d+/g) ?? []).every((x) => soTrich.has(x))) return "so_khong_co_trong_trich_dan";
+      // Bắn thử 01/10 (lx-ai-03): "xhr" → AI ghi PHÁP LÝ = "hẻm xe hơi". Soát HÌNH DẠNG GIÁ TRỊ AI viết (từ chuẩn của ô),
+      // không soát chữ khách — sai ô thì bỏ.
+      const hinh = HINH_TRUONG_CHU[d.khoa];
+      return hinh && !hinh.test(chuanSo(v)) ? "gia_tri_khong_dung_loai_truong" : null;
     }
   }
 }
@@ -306,7 +323,7 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
   const kdTin = chuanSo(tin);
   const dat: DeXuat[] = [];
   const bo: Bo[] = [];
-  for (const d of deXuat ?? []) {
+  for (let d of deXuat ?? []) {
     if (!d || typeof d.khoa !== "string" || typeof d.gia_tri !== "string" || typeof d.trich_dan !== "string") continue;
     const kdCum = chuanSo(d.trich_dan);
     let viTri = kdCum.length >= 2 ? kdTin.indexOf(kdCum) : -1;
@@ -326,6 +343,12 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
     if ((d.khoa === "do_rong_hem" || d.khoa === "do_rong_duong")) {
       const lt = loaiDuongNoiRo(kdDung ?? kdCum), la = loaiDuongNoiRo(chuanSo(d.gia_tri));
       if (lt && la && lt !== la) { bo.push({ ...d, ly_do: "loai_duong_nguoc_chu_khach" }); continue; }
+    }
+    // Chế độ `ai` (bắn thử 01/10, lx-ai-03): "3 lầu" → AI ghi so_tang 3 (quên trệt). Cụm trích nói trệt / lầu / tấm và
+    // phép tính ra ĐÚNG MỘT số tầng → lấy số tính ra thay vì bỏ cả trường.
+    if (KIEM_NHE && d.khoa === "so_tang" && /\b(tret|lau|tam)\b/.test(kdDung ?? kdCum)) {
+      const st = soTangTrong(kdDung ?? d.trich_dan);
+      if (st.length === 1 && String(st[0]) !== chuanSo(d.gia_tri).match(/\d+/)?.[0]) d = { ...d, gia_tri: String(st[0]) };
     }
     const ly = KIEM_NHE ? kiemGiaTriNhe(d, tin, viTri, kdDung) : kiemGiaTri(d, tin, viTri, kdDung);
     if (ly) bo.push({ ...d, ly_do: ly });
