@@ -2610,6 +2610,28 @@ fresh(seedKho);
         !facts.length && !/đang rao là/.test(rep) && db().t.info_requests.some((x) => x.listing_id === L.id && x.question === "phuong" && x.status === "pending"),
         JSON.stringify({ facts, rep: r.body.replies }));
     }
+    // Bắn thử v312 (lx-hn-91/92): câu hệ thống không có dữ liệu → nói thật + chuyển người phụ trách (escalation), không để
+    // model tự trả lời; AI nói là câu hỏi thì luật không đọc dữ liệu từ câu hỏi ("ký hợp đồng gì không" ≠ pháp lý).
+    for (const [ma, cau, chuDe, mongRep] of [
+      ["HN-06", "ký hợp đồng gì không em", "dich_vu", /phụ trách/],
+      ["HN-07", "giá khu này giờ sao em", "thi_truong", /chưa có số liệu/],
+      ["HN-08", "tin của anh ai xem được vậy", "dich_vu", /phụ trách/],
+    ]) {
+      const L = await moTin(`hn-${ma}`);
+      const truocNhac = db().t.reminders.filter((x) => x.kind === "escalation").length;
+      globalThis.__model.parse = aiHoi(cau, chuDe);
+      const r = await send({ external_user_id: `hn-${ma}`, text: cau });
+      const facts = db().t.listing_facts.filter((f) => f.listing_id === L.id && ["phap_ly", "bo_sung", "phuong"].includes(f.question));
+      const rep = (r.body.replies ?? []).join(" ");
+      const nhac = db().t.reminders.filter((x) => x.kind === "escalation").length - truocNhac;
+      check(`${ma} '${cau}' (AI: ${chuDe}) → nói thật + chuyển người phụ trách, không ghi dữ liệu, không đáp số khách`,
+        !facts.length && mongRep.test(rep) && !/chưa có khách|đang rao là/.test(rep) && nhac === 1,
+        JSON.stringify({ facts, nhac, rep: r.body.replies }));
+      // Hỏi lại y câu đó trong 24 giờ → không đẻ thêm nhắc việc.
+      const r2 = await send({ external_user_id: `hn-${ma}`, text: cau });
+      void r2;
+      if (ma === "HN-06") check("HN-06b hỏi lại y câu đó → không thêm nhắc việc thứ hai", db().t.reminders.filter((x) => x.kind === "escalation").length - truocNhac === 1);
+    }
     // AI nói đây là hỏi về CHÍNH TIN (giá đã ghi) → vẫn đáp bằng dữ liệu tin như cũ.
     {
       const L = await moTin("hn-05");
