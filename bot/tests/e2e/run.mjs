@@ -2545,6 +2545,23 @@ fresh(seedKho);
         L5b.ward === "Phường Tây Thạnh" && /Tân Phú/.test(L5b.district ?? ""), JSON.stringify({ ward: L5b.ward, district: L5b.district, rep: r5b.body.replies }));
     }
 
+    // Bắn thử v310 (lx-lq-72): giữ quận cũ ("bình thạnh mà em") → AI ghi nền "Phường Bình Thạnh" dù bot vừa hỏi lại phường.
+    {
+      fresh(datTuDien);
+      globalThis.__model.parse = imAi;
+      await send({ external_user_id: "lq-7", text: "Cần bán nhà hẻm xe hơi quận Bình Thạnh 50m2 3 tầng giá 16 tỷ" });
+      const L7q = db().t.listings.at(-1);
+      hoiPhuong(L7q.id);
+      globalThis.__model.parse = aiPhuong("Phường An Khánh", "thảo điền");
+      await send({ external_user_id: "lq-7", text: "phường thảo điền" });
+      globalThis.__model.parse = aiPhuong("Phường Bình Thạnh", "bình thạnh");
+      const r7 = await send({ external_user_id: "lq-7", text: "bình thạnh mà em" });
+      const L7 = db().t.listings.at(-1);
+      check("LQ-07 tin Bình Thạnh, 'phường thảo điền' → hỏi lại; 'bình thạnh mà em' → giữ quận, KHÔNG ghi Phường Bình Thạnh, hỏi lại phường",
+        !L7.ward && L7.district === "Quận Bình Thạnh" && /phường nào/i.test((r7.body.replies ?? []).join(" ")),
+        JSON.stringify({ ward: L7.ward, district: L7.district, rep: r7.body.replies }));
+    }
+
     fresh(datTuDien);
     globalThis.__model.parse = imAi;
     const r4 = await send({ external_user_id: "dd-4", text: "Bán nhà 156 Nguyễn Trãi phường 3 quận 5, 4x15, 3 tầng, giá 12 tỷ" });

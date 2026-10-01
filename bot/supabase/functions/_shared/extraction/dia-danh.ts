@@ -122,3 +122,15 @@ export function nhacTenQuan(tin: string | null | undefined, quan: string | null 
   if (/^\d+$/.test(loi)) return new RegExp(`(?:quan|q)\\s*${loi}(?!\\d)`).test(kd);
   return kd.includes(` ${loi} `);
 }
+
+/**
+ * Phường mới mang đúng tên quận cũ của nó ("Phường Gò Vấp" thuộc Quận Gò Vấp cũ, "Phường Bình Thạnh"…). Khách gõ tên đó mà
+ * không có chữ "phường" là đang nói QUẬN — cùng luật `timPhuongTrongCau`.
+ */
+export function phuongTrungTenQuan(tenPhuong: string | null | undefined, quanCu: string | null | undefined): boolean {
+  if (!tenPhuong || !quanCu) return false;
+  const p = boDau(tenPhuong).replace(/\s+/g, " ").trim().replace(/^(?:phuong|xa|thi tran)\s+/, "");
+  return !!p && p === loiQuan(quanCu);
+}
+/** Tin có chữ "phường / p." đi trước một tên không. */
+export const coChuPhuong = (tin: string | null | undefined): boolean => /(?:^|[^a-z])(?:phuong|p\.)\s*[a-z]/.test(boDau(tin ?? ""));
