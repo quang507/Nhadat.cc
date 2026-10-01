@@ -209,7 +209,11 @@ jobs:
               where (b.zalo_user_id = $(lit "$ZALO") or s.zalo_user_id = $(lit "$ZALO")) and m.created_at >= $(lit "$MOC")::timestamptz
               order by m.created_at, m.seq" | jq -r '.[] | "[\(.sender)] \(.body)"'
           echo; echo "== Tin của ID thử (cột chính)"
-          q "select coalesce(json_agg(x), '[]') as ds from (select l.property_type, l.district, l.ward, p.name as du_an, l.status
+          # 01/10/2026 (chủ dự án: "bắn test xem bot có bịa ko, ghi vào db tốt ko"): in cả các cột THÔNG SỐ (ô trên form sửa tin)
+          # để so với câu khách gõ — chỉ tin của ID thử.
+          q "select coalesce(json_agg(x), '[]') as ds from (select l.property_type, l.deal, l.district, l.ward, l.street, l.location_raw, p.name as du_an, l.status,
+                l.price_raw, l.area_m2, l.frontage_m, l.length_m, l.rear_width_m, l.bedrooms, l.bathrooms, l.floors, l.floors_text, l.floor,
+                l.access_type, l.alley_width_m, l.legal_status
               from listings l join sellers s on s.id = l.seller_id left join projects p on p.id = l.project_id
               where s.zalo_user_id = $(lit "$ZALO") order by l.created_at) x" | jq -c '.[0].ds[]'
           echo "-- Fact của tin ID thử (khoá · nguồn · trả lời):"
