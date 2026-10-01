@@ -415,6 +415,7 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   bo("[ai] trích dẫn không có trong tin", "nhà hẻm 4m giá 8 tỷ", "phap_ly", "sổ hồng riêng", "sổ hồng riêng", "trich_dan_khong_co_trong_tin");
   bo("[ai] số bịa trong chữ", "nhà có ban công", "ket_cau", "trệt 3 lầu", "ban công", "so_khong_co_trong_trich_dan");
   bo("[ai] tiền không khớp trích", "giá 8 tỷ", "gia", "9 tỷ", "8 tỷ", "tien_khong_khop_trich_dan");
+  dat("[ai] 'cọc 3 tháng' (mặt bằng cho thuê) → đạt", "cho thuê mặt bằng 60tr/tháng cọc 3 tháng", "tien_coc", "3 tháng", "cọc 3 tháng");
   bo("[ai] '3 tỏi 9 TL' trích cắt '3 tỏi' → tiền cắt thiếu", "Nhà ống 3 tấm, sổ chug, 3 tỏi 9 TL", "gia", "3 tỷ", "3 tỏi", "tien_cat_thieu");
   dat("[ai] '3 tỏi 9' trích đủ → đạt", "Nhà ống 3 tấm, sổ chug, 3 tỏi 9 TL", "gia", "3 tỷ 9", "3 tỏi 9");
   dat("[ai] '8 tỷ 4 phòng ngủ' — số sau là phòng, không cắt", "giá 8 tỷ 4 phòng ngủ", "gia", "8 tỷ", "8 tỷ");
