@@ -2299,6 +2299,39 @@ fresh(seedKho);
       fD("dien_tich").length === 1 && !fD("bo_sung").length, JSON.stringify({ dt: fD("dien_tich"), bs: fD("bo_sung"), rep: rD.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // 01/10/2026 (chủ dự án: "bỏ luật, dùng AI bóc — biết từ đồng nghĩa, viết gần giống"): chế độ `ai`. AI đọc mọi tin của
+  // người đang rao (không qua cổng regex), nhận khối CHUẨN HOÁ, máy chỉ chặn bịa (không soát từ khoá).
+  {
+    const cuCH = globalThis.__cauHinh;
+    const coChuanHoa = (p) => (p?.system ?? []).some((x) => /CHẾ ĐỘ CHUẨN HOÁ/.test(x.text ?? ""));
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    let goiAi = [];
+    globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) { goiAi.push(p); return { so_can: 0, kien_thuc: [], truong: [] }; } return OUT(); };
+    await send({ external_user_id: "aim-1", text: "bán nhà phố hẻm 4m Trần Bình Trọng quận 5, 60m2, trệt 2 lầu, giá 8 tỷ" });
+    check("AIM-00 chế độ ai → lượt bóc rao có khối CHUẨN HOÁ", goiAi.length > 0 && goiAi.every(coChuanHoa), JSON.stringify(goiAi.length));
+    const LA = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LA.id, question: "phap_ly", status: "pending" });
+    goiAi = [];
+    globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) { goiAi.push(p); return { so_can: 0, kien_thuc: [], cap_nhat: [],
+      truong: [{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "xhr", can: null }],
+      tra_loi: { co_tra_loi: true, gia_tri: "sổ hồng riêng", trich_dan: "xhr" } }; } return OUT(); };
+    const rA = await send({ external_user_id: "aim-1", text: "xhr" });
+    const fA = (q) => db().t.listing_facts.filter((f) => f.listing_id === LA.id && f.question === q);
+    check("AIM-01 chế độ ai, hỏi pháp lý, 'xhr' (gõ sai shr) → AI đọc (dù không có mùi dữ liệu với luật), ghi 'sổ hồng riêng'",
+      goiAi.length === 1 && fA("phap_ly").some((f) => f.answer === "sổ hồng riêng") && !fA("bo_sung").length,
+      JSON.stringify({ goi: goiAi.length, pl: fA("phap_ly"), bs: fA("bo_sung"), rep: rA.body.replies }));
+    // AI nói không trả lời câu đang hỏi, luật đọc "chắc" (hxh) → chế độ ai KHÔNG gỡ lại bằng luật.
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LA.id, question: "do_rong_hem", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } } : OUT();
+    await send({ external_user_id: "aim-1", text: "để chiều anh coi lại hxh hay không" });
+    check("AIM-02 chế độ ai, AI nói 'không trả lời' → luật (hxh chắc) KHÔNG ghi ô hẻm",
+      !fA("do_rong_hem").length,
+      JSON.stringify({ hem: fA("do_rong_hem"), ir: db().t.info_requests.filter((x) => x.listing_id === LA.id).map((x) => [x.question, x.status]) }));
+    globalThis.__cauHinh = cuCH;
+  }
   // 30/09/2026 (bắn thật lx-mua-e): khách MUA đã có hồ sơ nới ngân sách "vậy có căn 6 tỷ rưỡi cũng được" → cổng nới
   // `coHangCoGia` ("có căn" + giá) mở hồ sơ BÁN, tạo tin "BĐS bán", hỏi "nhà mình là nhà phố hay chung cư".
   for (const [i, cau, laBan] of [
@@ -3220,6 +3253,19 @@ fresh(seedKho);
 }
 
 // ── 21/09/2026 (bắn thật mau-tdt): bản nháp và câu duyệt — không nuốt câu hỏi ngược, gật ở vế đầu vẫn là gật ──
+// 01/10/2026 (chủ dự án test Zalo: "phường ko có mà sao ghi là Không Có Phường viết vào tin"): "ko có" / "ko có phường" khi hỏi
+// phường không phải tên phường, cũng không phải thông tin bổ sung.
+for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["pkc-3", "không biết phường nào"]]) {
+  const tin = () => db().t.listings.at(-1);
+  fresh();
+  await send({ external_user_id: uid, text: "bán nhà phố hẻm 4m Lê Văn Sỹ quận 3, 4x15, trệt 2 lầu, giá 8 tỷ" });
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tin().id, question: "phuong", status: "pending" });
+  const rp = await send({ external_user_id: uid, text: cau });
+  check(`PHUONG-KC '${cau}' khi hỏi phường → KHÔNG ghi phường, KHÔNG ghi bổ sung`,
+    !tin().ward && !db().t.listing_facts.some((f) => f.listing_id === tin().id && /^(?:phuong|bo_sung)$/.test(f.question) && /ko có|không biết/.test(f.answer ?? "")),
+    JSON.stringify({ ward: tin().ward, facts: db().t.listing_facts.filter((f) => f.listing_id === tin().id).map((f) => [f.question, f.answer]), rep: rp.body.replies }));
+}
 // 30/09/2026 (bắn thử bán lx-ban-292a): chờ duyệt nháp, "chính chủ đứng tên, không thế chấp" → ghi HAI ý; lời không đổi bản nháp
 // thì không gửi lại nháp kèm "Em sửa lại rồi".
 {

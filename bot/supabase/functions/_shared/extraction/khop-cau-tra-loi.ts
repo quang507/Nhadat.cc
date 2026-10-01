@@ -272,6 +272,8 @@ export function laBoSungRac(s: string | null | undefined): boolean {
     .replace(/\b(?:em|e|anh|a|chi|c|oi|nha|nhe|nhen|nghen|a|ah|ha|nhi|luon|vay|thoi|roi|ok|oke|uh|uhm|um|da|vang)\b/g, " ")
     .replace(/\s+/g, " ").trim();
   if (!kd || kd.split(" ").length < 2) return true;
+  // 01/10/2026 (chủ dự án test Zalo): "ko có" khi hỏi phường → ô bổ sung "ko có". Lời đáp không / không biết trơn không phải thông tin.
+  if (KHONG_BIET_PHUONG.test(boDau(s ?? ""))) return true;
   // FR-239 m (phát lại test 28/09): "Cần đước, long an á e" (trả lời câu địa chỉ) → ô quận "Cần Đước, Long An" VÀ ghi chú
   // nguyên văn. Mảnh ngắn chỉ gồm huyện + tỉnh lân cận là địa bàn, không phải thông tin thêm.
   if (kd.split(" ").length <= 6 && /^(?:o\s+|tai\s+|thuoc\s+)?(?:[a-z]+\s+){0,3}(?:long an|binh duong|dong nai|tay ninh|ba ria vung tau|vung tau|tien giang|ben tre|hcm|tp hcm|sai gon|ho chi minh)$/.test(kd)) return true;
@@ -841,6 +843,7 @@ export function laCauHoiTron(text: string): boolean {
  * hẻm xe hơi nghĩa là từ khoảng 3,5m (trigger dùng đúng ngưỡng đó khi chỉ có số mét) nên không hỏi lại số mét.
  */
 export const LOAI_DUONG_VAO_RE = /\b(?:hxh|hxt|hxm|hem (?:xe hoi|oto|o to|xe tai|xe may|ba gac|3 gac|xe 3 banh|xe con|7 cho)|(?:xe hoi|o to|oto|xe tai|xe 4 banh|xe 7 cho)\s+(?:(?:khong|ko|k|kg|chua)\s+)?(?:vao|vo|toi|den|lot|do|dau|quay dau|ra vao)|(?:khong|ko|k|kg|chua)\s+(?:co\s+)?(?:xe hoi|o to|oto)\s+(?:nao\s+)?(?:vao|vo|toi)|(?<!\b(?:cach|gan|ra|sat|toi)\s)(?:mat tien|mat duong|mat pho))\b/;
+export const KHONG_BIET_PHUONG = /^\s*(?:(?:da|vang|u|dạ)\s+)?(?:khong|ko|k|hong|chua|cung)\s*(?:co|biet|ro|nho|chac|hieu)?(?:\s+(?:nua|luon|het|a|em|nha|nhe|anh|chi|do|phuong|ten|gi|nao|ro|lam|chac))*\s*[.!?]*\s*$|^\s*(?:quen|khong nho|ko nho)(?:\s+(?:roi|mat|a|em|nha|phuong))*\s*$/;
 export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
   // 11/09/2026: bận / hoãn đứng TRƯỚC mọi luật khác — câu này không mang dữ liệu
   // nào (có số thì `laHoanLai` đã trả false), mà luật phường cũ nhận bất kỳ câu
@@ -1051,6 +1054,9 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
     // 25/09/2026 (bắn thật lx-29): hỏi "phường nào, quận nào" → "quận 5 em" thành PHƯỜNG "quận 5". Chỉ nói quận thì chưa
     // trả lời phường — quận vẫn được ghi (`capNhatQuan`), câu phường hỏi lại.
     if (laChiQuan(text)) return ketQua("lech");
+    // 01/10/2026 (chủ dự án test Zalo): hỏi phường, khách "ko có" → ghi PHƯỜNG "Không Có" vào tin. "Không có / không biết /
+    // không rõ / quên…" (không kèm tên) không phải tên phường.
+    if (KHONG_BIET_PHUONG.test(kd)) return ketQua("lech");
     const soTieng = kd.split(/\s+/).filter(Boolean).length;
     const tenChu = chu.length >= 3 && soTieng <= 4 && !TU_NOI_CHUYEN.test(text);
     // Chữ "phường/xã" phải đi với một cái TÊN: "không biết phường nào" không phải tên phường.
@@ -1653,7 +1659,9 @@ function nhanDienFactTho(text: string): NhanDien | null {
   // sau số là đơn vị mét, không phải "/" hay tên đường.
   // 16/09/2026 (Zalo thật): "Căn số 14 ở Ny'ah Phú Định" — số căn + "ở/tại/trong" + tên
   // dự án / khu là VỊ TRÍ; bản trước không nhận, "14" thành diện tích đất.
-  if (/\b(duong|pho)\s+[a-z]{2,}/.test(kd) ||
+  // 01/10/2026: "bán nhà phố hẻm 4m Nguyễn Trãi" — "nhà phố / mặt phố" là LOẠI nhà, không phải "phố <tên>"; bản trước nuốt cả câu
+  // làm địa chỉ và mất "hẻm 4m" (cùng luật với `bocViTriRao`).
+  if (/\bduong\s+[a-z]{2,}|(?<!\b(?:nha|mat|day)\s)\bpho\s+[a-z]{2,}/.test(kd) ||
       /\b(?:can|lo|nen|shop)\s*(?:so\s*)?\d+[a-z]?(?:[.\-\/]\d+)?\s+(?:o|tai|trong|thuoc|cua)\s+[a-z]{2,}/.test(kd) ||
       /\b(?:hem|hxh)\s*\d+(?:\/\d+)+\b/.test(kd) ||
       // "hẻm 123 Trần Bình Trọng": số hẻm rồi TÊN ĐƯỜNG (chữ), không phải "hẻm 4m".
