@@ -258,6 +258,16 @@ jobs:
             done
           ) || echo "(soi vector lỗi giữa chừng — vẫn dọn người thử)"; fi
 
+          # 01/10/2026 (chế độ bóc tách `ai`): AI đề xuất gì, máy loại trường nào vì sao — để biết lỗi ở AI hay ở lớp kiểm.
+          # Chỉ dòng của ID thử (seller_id của nó); bảng xoá theo seller khi dọn.
+          echo; echo "== AI bóc tách từng lượt (model · câu đang hỏi · đề xuất · bị loại)"
+          q "select coalesce(json_agg(x order by x.luc), '[]') as ds from (select b.created_at as luc, b.model, b.ms, b.cau_dang_hoi as hoi,
+                (select string_agg((d->>'khoa') || '=' || (d->>'gia_tri') || ' «' || (d->>'trich_dan') || '»', ' · ') from jsonb_array_elements(b.de_xuat) d) as de_xuat,
+                (select string_agg((d->>'khoa') || ':' || (d->>'ly_do'), ' · ') from jsonb_array_elements(b.bo) d) as bo
+              from boc_tach_bong b join sellers s on s.id = b.seller_id where s.zalo_user_id = $(lit "$ZALO")) x" \
+            | jq -r '.[0].ds[] | "\(.model // "?") \(.ms // 0)ms · hỏi \(.hoi // "-") · đề xuất: \(.de_xuat // "(rỗng)") · loại: \(.bo // "-")"' \
+            || echo "(không đọc được boc_tach_bong — vẫn dọn người thử)"
+
           echo; echo "== Sổ lỗi chat-reply từ lúc bắn"
           q "select coalesce(json_agg(x), '[]') as loi from (select source, left(detail, 160) as detail from bot_errors
               where at >= $(lit "$MOC")::timestamptz and source like 'chat-reply%' order by at limit 10) x" | jq -c '.[0].loi'

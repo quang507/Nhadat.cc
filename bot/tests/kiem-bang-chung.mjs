@@ -415,6 +415,10 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   bo("[ai] trích dẫn không có trong tin", "nhà hẻm 4m giá 8 tỷ", "phap_ly", "sổ hồng riêng", "sổ hồng riêng", "trich_dan_khong_co_trong_tin");
   bo("[ai] số bịa trong chữ", "nhà có ban công", "ket_cau", "trệt 3 lầu", "ban công", "so_khong_co_trong_trich_dan");
   bo("[ai] tiền không khớp trích", "giá 8 tỷ", "gia", "9 tỷ", "8 tỷ", "tien_khong_khop_trich_dan");
+  bo("[ai] '3 tỏi 9 TL' trích cắt '3 tỏi' → tiền cắt thiếu", "Nhà ống 3 tấm, sổ chug, 3 tỏi 9 TL", "gia", "3 tỷ", "3 tỏi", "tien_cat_thieu");
+  dat("[ai] '3 tỏi 9' trích đủ → đạt", "Nhà ống 3 tấm, sổ chug, 3 tỏi 9 TL", "gia", "3 tỷ 9", "3 tỏi 9");
+  dat("[ai] '8 tỷ 4 phòng ngủ' — số sau là phòng, không cắt", "giá 8 tỷ 4 phòng ngủ", "gia", "8 tỷ", "8 tỷ");
+  dat("[ai] '5 tỷ, 60m2' — dấu phẩy ngăn, không cắt", "5 tỷ, 60m2", "gia", "5 tỷ", "5 tỷ");
   bo("[ai] số đo không có trong trích", "hẻm xe hơi", "do_rong_hem", "6", "hẻm xe hơi", "so_khong_co_trong_trich_dan");
   bo("[ai] loại ngoài danh sách", "nhà ống", "loai_bds", "nha_ong", "nhà ống", "gia_tri_ngoai_danh_sach");
   bo("[ai] 'ko có phường' vẫn không phải phường", "ko có phường", "phuong", "ko có phường", "ko có phường", "phuong_khong_co_that");

@@ -267,6 +267,15 @@ let KIEM_NHE = false;
 export function datKiemNhe(b: boolean): void { KIEM_NHE = b; }
 export function laKiemNhe(): boolean { return KIEM_NHE; }
 const LOAI_GD = new Set(["ban", "cho_thue", "thue"]);
+function tienCatThieu(tin: string, trich: string, b: number): boolean {
+  const i = tin.toLowerCase().indexOf(trich.toLowerCase());
+  if (i < 0) return false;
+  const m = /^\s*(\d{1,3})(?![\d.,]|\s*(?:m\b|m2|m²|x|pn|wc|tầng|tang|lầu|lau|tấm|tam|phòng|phong|tỷ|tỉ|ty|ti|tỏi|toi|triệu|trieu|tr\b|năm|nam|tháng|thang|%))/iu
+    .exec(tin.slice(i + trich.length, i + trich.length + 10));
+  if (!m) return false;
+  const b2 = docTien(`${trich} ${m[1]}`);
+  return b2 != null && b2 !== b;
+}
 function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): string | null {
   const v = d.gia_tri.trim();
   const kd = kdCumSua ?? chuanSo(d.trich_dan);
@@ -276,7 +285,11 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
     case "gia": case "tien_coc": case "thu_nhap_thue": {
       const b = docTien(kdCumSua ?? d.trich_dan);
       if (b == null) return "khong_doc_duoc_tien";
-      return tienKhop(v, b) ? null : "tien_khong_khop_trich_dan";
+      if (!tienKhop(v, b)) return "tien_khong_khop_trich_dan";
+      // Bắn thử 01/10 (lx-ai-08): "3 tỏi 9 TL" → AI trích "3 tỏi" (giá 3 tỷ) và đẩy "9 TL" sang thương lượng. Ngay sau cụm
+      // trích còn một số lẻ không đơn vị mà đọc gộp ra số tiền KHÁC → AI cắt thiếu, bỏ để luật tiền đọc nguyên cụm.
+      if (tienCatThieu(tin, d.trich_dan, b)) return "tien_cat_thieu";
+      return null;
     }
     case "gia_m2": case "so_tang": case "quan": case "phuong":
       // Phép tính (giá/m², trệt + lầu) và bảng địa danh có thật — không phải soát từ khoá, giữ nguyên.
