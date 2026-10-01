@@ -811,9 +811,12 @@ export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | n
  * (AI vẫn nói là CÓ trả lời — nơi gọi để luật đọc). null = AI không nói gì về câu đang hỏi.
  */
 export type TraLoiCau = { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null };
-export function kiemTraLoiCau(tl: TraLoiCau | null | undefined, tin: string): { co: boolean; giaTri: string | null } | null {
+export function kiemTraLoiCau(tl: TraLoiCau | null | undefined, tin: string, cauBotVuaHoi: string | null = null): { co: boolean; giaTri: string | null } | null {
   if (!tl || typeof tl.co_tra_loi !== "boolean") return null;
   if (!tl.co_tra_loi) return { co: false, giaTri: null };
+  // 01/10/2026 (bắn thử lx-tt-11): bot hỏi "cần ra hàng gấp hay được giá thì thôi?", khách "ừ" → AI ghi "được giá thì thôi".
+  // Câu CHỌN MỘT TRONG HAI mà cả tin chỉ là lời ừ / gật → không có căn cứ cho vế nào. Kiểm bằng chứng, không đoán ý.
+  if (laCauChonHai(cauBotVuaHoi) && laChiGat(tin)) return { co: false, giaTri: null };
   const v = (tl.gia_tri ?? "").trim().replace(/[\s.]+$/, "");
   // Dấu chấm không nằm giữa hai chữ số ("hxh.") là dấu câu — bỏ, để so theo ranh giới từ.
   const gon = (x: string) => chuanSo(x).replace(/\.(?!\d)|(?<!\d)\./g, " ").replace(/\s+/g, " ").trim();
@@ -836,6 +839,62 @@ export function kiemTraLoiCau(tl: TraLoiCau | null | undefined, tin: string): { 
   if (dv && /\d/.test(v) && !/\/\s*[\p{L}\d]/u.test(v) && !/(?:m2|m²)(?![\p{L}\d])/iu.test(v)) return { co: true, giaTri: `${v}/${dv}` };
   return { co: true, giaTri: v };
 }
+/** Câu bot hỏi CHỌN MỘT TRONG HAI ("A hay B?") — không phải "… hay không / hay chưa" (câu có / không). */
+export function laCauChonHai(cau: string | null | undefined): boolean {
+  const kd = boDauKiem(cau ?? "").replace(/\s+/g, " ");
+  for (const m of kd.matchAll(/([^.!?\n]*)\?/g)) {
+    const c = m[1];
+    if (/\S\s+hay\s+\S/.test(c) && !/\bhay\s+(?:khong|ko|chua|sao|the nao|gi)\b/.test(c)) return true;
+  }
+  return false;
+}
+/** Cả tin chỉ là lời ừ / gật / dạ — không có nội dung nào khác. */
+export function laChiGat(tin: string | null | undefined): boolean {
+  const kd = boDauKiem(tin ?? "").replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return false;
+  return kd.split(" ").every((w) => /^(?:u|uh|uhm|um|uk|uki|ok|oke|okie|okay|da|vang|dung|roi|duoc|dc|co|em|e|a|anh|chi|nha|nhe|ne|vay|the|y|oki|yes|chuan)$/.test(w));
+}
+const boDauKiem = (s: string): string =>
+  s.normalize("NFC").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+
+/**
+ * 01/10/2026 (chủ dự án: "nó có nhận ra cảm xúc của khách để báo về admin ko"): AI đọc giọng chủ nhà (`cam_xuc`). Code chỉ nhận
+ * mức khác bình thường khi cụm trích CÓ trong tin — không có bằng chứng thì không báo ai.
+ */
+export function docCamXuc(cx: { muc?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { muc: "buc" | "nghi_ngo" | "muon_dung"; trich: string } | null {
+  if (!cx || (cx.muc !== "buc" && cx.muc !== "nghi_ngo" && cx.muc !== "muon_dung")) return null;
+  const td = (cx.trich_dan ?? "").trim();
+  if (td.length < 2) return null;
+  const gon = (x: string) => chuanSo(x).replace(/[^\p{L}\d\s]/gu, " ").replace(/\s+/g, " ").trim();
+  if (!` ${gon(tin)} `.includes(` ${gon(td)} `) && !timMo(gon(tin), gon(td))) return null;
+  return { muc: cx.muc, trich: td };
+}
+
+/** Câu không bao giờ được AI gạt khỏi danh sách hỏi — thiếu là tin không lên kệ / không định danh được căn. */
+export const CAU_KHONG_DUOC_BO = new Set(["gia", "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "vi_tri", "phuong", "phap_ly", "loai_bds", "duyet_tin", "hinh_anh"]);
+/**
+ * 01/10/2026 (chủ dự án: "câu hỏi riêng cho từng loại bds … code cứng quá nên giờ cần AI hiểu"): AI chỉ ra câu trong bảng
+ * theo loại KHÔNG áp dụng cho căn này. Code nhận khi: khoá có trong danh sách còn hỏi, không phải câu lõi, và cụm trích có
+ * trong LỜI CHỦ NHÀ (tin này + các tin trước). Trả các khoá được bỏ.
+ */
+export function docKhongCanHoi(
+  ds: Array<{ khoa?: string; ly_do?: string; trich_dan?: string }> | null | undefined,
+  loiChuNha: string,
+  conHoi: Iterable<string>,
+): Array<{ khoa: string; ly_do: string; trich: string }> {
+  const con = new Set(conHoi);
+  const gon = (x: string) => chuanSo(x).replace(/[^\p{L}\d\s]/gu, " ").replace(/\s+/g, " ").trim();
+  const kd = gon(loiChuNha);
+  const ra: Array<{ khoa: string; ly_do: string; trich: string }> = [];
+  for (const x of ds ?? []) {
+    const k = (x?.khoa ?? "").trim(), td = (x?.trich_dan ?? "").trim();
+    if (!k || !con.has(k) || CAU_KHONG_DUOC_BO.has(k) || td.length < 2 || ra.some((r) => r.khoa === k)) continue;
+    if (!` ${kd} `.includes(` ${gon(td)} `) && !timMo(kd, gon(td))) continue;
+    ra.push({ khoa: k, ly_do: (x.ly_do ?? "").trim().slice(0, 120), trich: td.slice(0, 120) });
+  }
+  return ra;
+}
+
 /** Loại đường vào nói RÕ trong chuỗi đã chuẩn hoá: "may" / "hoi" / "tai"; không rõ hoặc nhiều loại → null. */
 function loaiDuongNoiRo(kd: string): "may" | "hoi" | "tai" | "mat_tien" | null {
   const co = new Set<string>();

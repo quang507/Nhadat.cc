@@ -49,6 +49,20 @@ const HoiLai = z.object({
   cau_hoi: z.string().nullable().describe("Câu hỏi đó COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ — không bao giờ chép câu bot vừa hỏi. co_hoi = false thì null."),
   chu_de: z.enum(CHU_DE_HOI).nullable().describe("tin_cua_minh = hỏi về chính căn mình đã rao (giá / diện tích đã ghi, đăng chưa, có khách chưa); dich_vu = phí, hợp đồng, độc quyền, cách làm việc, bao lâu bán được, ai xem tin, có dẫn khách không; thi_truong = giá khu vực, khu này dễ bán không, nên rao giá nào; ve_bot = bot là ai, người hay máy, công ty nào; khac = còn lại. co_hoi = false thì null."),
 });
+// 01/10/2026 (chủ dự án: "nó có nhận ra cảm xúc của khách để báo về admin ko" → "sửa cả 4 đi"): giọng chủ nhà — AI đọc theo
+// NGHĨA cả câu (có ngữ cảnh), code kiểm trích dẫn rồi mới báo admin (`docCamXuc`).
+export const MUC_CAM_XUC = ["binh_thuong", "buc", "nghi_ngo", "muon_dung"] as const;
+const CamXuc = z.object({
+  muc: z.enum(MUC_CAM_XUC).describe("binh_thuong; buc = bực, cáu, chê bot hỏi nhiều / hỏi hoài; nghi_ngo = nghi lừa đảo, không tin, sợ mất tiền / mất thông tin; muon_dung = bảo thôi, không rao nữa, đừng nhắn nữa. 'Bận', 'để mai' thôi chưa phải bực."),
+  trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ thể hiện cảm xúc đó. binh_thuong thì null."),
+});
+// 01/10/2026 (chủ dự án: "câu hỏi riêng cho từng loại bds… code cứng quá nên giờ cần AI hiểu"): bảng câu theo loại (required_facts)
+// vẫn là danh mục; AI đọc điều chủ nhà đã nói và chỉ ra câu KHÔNG áp dụng cho căn này, kèm trích dẫn (`docKhongCanHoi`).
+const KhongCanHoi = z.object({
+  khoa: z.string().describe("Khoá câu trong danh sách 'Câu bot còn định hỏi' gửi kèm."),
+  ly_do: z.string().describe("Vì sao câu đó không áp dụng cho căn này (ngắn)."),
+  trich_dan: z.string().describe("Cụm COPY NGUYÊN VĂN từ lời CHỦ NHÀ (tin này hoặc ngữ cảnh) chứng minh."),
+});
 const DeXuatRao = z.object({
   so_can: z.number().int().describe("Số căn / lô KHÁC NHAU chủ nhà rao trong tin này. Không rao căn nào (chỉ bổ sung, trả lời) thì 0."),
   truong: z.array(TruongBoc),
@@ -58,9 +72,13 @@ const DeXuatRao = z.object({
   cap_nhat: z.array(CapNhat).describe("Chỉ khi tin nói thêm / sửa MỘT PHẦN của thông tin ĐANG GHI (danh sách gửi kèm). Không có thì []."),
   xac_nhan: z.array(XacNhan).describe("Chữ viết tắt / gõ sai KHÔNG CHẮC nghĩa (\"xhr\" có thể là shr gõ nhầm): KHÔNG đưa vào truong, đưa khả năng cao nhất vào đây để hỏi lại. Tối đa 1. Không có thì []."),
   hoi_lai: HoiLai,
+  cam_xuc: CamXuc,
+  khong_can_hoi: z.array(KhongCanHoi).describe("Câu trong danh sách 'Câu bot còn định hỏi' KHÔNG áp dụng cho căn này theo lời chủ nhà. Không có danh sách / không chắc thì []."),
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish() });
+export type CamXucLLM = z.infer<typeof CamXuc>;
+export type KhongCanHoiLLM = z.infer<typeof KhongCanHoi>;
 export type HoiLaiLLM = z.infer<typeof HoiLai>;
 export type XacNhanLLM = z.infer<typeof XacNhan>;
 export type CapNhatLLM = z.infer<typeof CapNhat>;
@@ -96,6 +114,21 @@ KHOÁ:
 - gap, thuong_luong: "co" | "khong". Hoa hồng môi giới KHÔNG phải thương lượng.
 - kien_thuc: ý khác về CĂN NHÀ không có khoá (tiện ích gần, an ninh, tình trạng, đồ để lại, lịch sử…) — cụm ngắn CHÉP NGUYÊN VĂN; KHÔNG đặt nhãn diễn giải ("tiềm năng kinh doanh", "phù hợp đầu tư", "dòng tiền tốt", "khai thác thương mại") khi khách không nói đúng chữ đó; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
 Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [], kien_thuc = [].
+
+NGỮ CẢNH — tin nhắn có thể kèm vài lượt trao đổi NGAY TRƯỚC (bot nói gì, chủ nhà nói gì) và CÂU BOT VỪA HỎI đúng nguyên văn.
+Dùng ngữ cảnh để HIỂU tin như người đang nói chuyện: "ừ", "đúng rồi", "cái đó", "như trên", "vậy đi" hiểu theo câu bot vừa nói.
+MỌI trich_dan của truong / tra_loi / xac_nhan / cap_nhat / cam_xuc vẫn COPY từ TIN NHẮN CHỦ NHÀ — ngữ cảnh không phải nguồn giá trị.
+- Câu bot vừa hỏi là câu CHỌN MỘT TRONG HAI ("cần ra hàng gấp hay được giá thì thôi", "sổ riêng hay sổ chung", "để ở hay cho thuê")
+  mà khách chỉ "ừ / ok / dạ / đúng / được / có" → không biết chọn vế nào → tra_loi.co_tra_loi = false. Câu CÓ / KHÔNG ("có gấp
+  không") thì "ừ" là có.
+
+CẢM XÚC ("cam_xuc") — đọc giọng chủ nhà trong tin này, có ngữ cảnh: bực vì bị hỏi nhiều, nghi lừa đảo, bảo thôi không rao nữa.
+Đọc theo NGHĨA cả câu; "bận", "để mai" chưa phải bực. Bình thường → binh_thuong, trich_dan null.
+
+KHÔNG CẦN HỎI ("khong_can_hoi") — có danh sách "Câu bot còn định hỏi" thì xét theo điều chủ nhà ĐÃ NÓI: câu nào KHÔNG áp dụng cho
+căn này (kho trong khu công nghiệp → không hỏi độ rộng hẻm; đất trống → không hỏi kết cấu; căn hộ chung cư → không hỏi ngang dài;
+nhà nguyên căn đang ở → không hỏi phí quản lý). Mỗi câu kèm ly_do + trich_dan nguyên văn lời chủ nhà. Không chắc thì KHÔNG đưa.
+Không bao giờ đưa giá, diện tích, vị trí, phường, pháp lý, loại BĐS.
 
 KHÁCH HỎI LẠI ("hoi_lai") — đọc theo NGHĨA, như môi giới nghe khách: tin có ý HỎI bên mình (có hay không có dấu "?", gõ tắt,
 không dấu) → co_hoi = true, cau_hoi = câu hỏi chép nguyên văn, chu_de theo nội dung câu hỏi. "giá khu này giờ sao" là hỏi
@@ -154,9 +187,16 @@ export async function bocRaoBangModel(
   dangGhi: Partial<Record<typeof KHOA_GOP[number], string>> | null = null,
   /** Chế độ `ai`: thêm khối CHUẨN HOÁ (đồng nghĩa, gõ sai) sau LUAT. */
   chuanHoa = false,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; usage: unknown }> {
+  /**
+   * 01/10/2026 (chủ dự án: "ra luật nó phải đọc thêm 1 2 câu hoặc cả ngữ cảnh phía trước"): vài lượt NGAY TRƯỚC ("BOT: …",
+   * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
+   */
+  nguCanh: { hoiThoai?: string[]; cauConHoi?: string[] } | null = null,
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   const dsPhuong = danhSachPhuongChoAi(text.slice(0, 1200));
+  const hoiThoai = (nguCanh?.hoiThoai ?? []).filter((x) => typeof x === "string" && x.trim()).slice(-4);
+  const cauConHoi = (nguCanh?.cauConHoi ?? []).filter((x) => typeof x === "string" && x.trim()).slice(0, 20);
   const dg = Object.entries(dangGhi ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `${k}: "${String(v).slice(0, 160)}"`);
   const r = await ai.messages.parse({
     model,
@@ -168,7 +208,7 @@ export async function bocRaoBangModel(
     ],
     messages: [{
       role: "user",
-      content: `${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${text.slice(0, 1200)}"${dsPhuong ? `\n\n${dsPhuong}` : ""}`,
+      content: `${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${text.slice(0, 1200)}"${dsPhuong ? `\n\n${dsPhuong}` : ""}`,
     }],
   });
   const ket = DeXuatRaoDoc.safeParse(r.parsed_output);
@@ -180,6 +220,8 @@ export async function bocRaoBangModel(
     capNhat: ket.success ? ket.data.cap_nhat ?? [] : [],
     xacNhan: ket.success ? ket.data.xac_nhan ?? [] : [],
     hoiLai: ket.success ? ket.data.hoi_lai ?? null : null,
+    camXuc: ket.success ? ket.data.cam_xuc ?? null : null,
+    khongCanHoi: ket.success ? ket.data.khong_can_hoi ?? [] : [],
     usage: r.usage,
   };
 }

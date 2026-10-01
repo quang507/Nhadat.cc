@@ -1500,3 +1500,53 @@ export function boCauHoiLap(replies: string[], botTruoc: string | null | undefin
     : tachCau(r).filter((c) => !(c.trim().endsWith("?") && cuHoi.some((h) => giongCauHoi(c, h)))).join(" ").trim())
     .filter(Boolean);
 }
+
+// ── 01/10/2026: lời nhận xét của bot phải có căn cứ trong lời chủ nhà — AI soát, code kiểm (kiem-khen.ts) ───────────────
+// Lớp lỗi: `KHEN_CAN_BANG_CHUNG` là danh sách cặp cụm khen ↔ cụm bằng chứng viết tay; cụm khen mới ("hẻm sâu") lọt. Nay AI
+// liệt kê câu nhận xét kèm căn cứ; ở đây chỉ KIỂM căn cứ đó có thật trong chữ chủ nhà / thông tin đã ghi.
+const gonKhen = (s: string): string => boDau(s ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+/** Câu nhận xét (nguyên văn trong lời bot) KHÔNG có căn cứ thật → cần bỏ. */
+export function nhanXetKhongCanCu(
+  ds: Array<{ cau?: string | null; can_cu?: string | null }> | null | undefined,
+  bangChung: string,
+): string[] {
+  const bc = ` ${gonKhen(bangChung)} `;
+  const bo: string[] = [];
+  for (const x of ds ?? []) {
+    const cau = (x?.cau ?? "").trim();
+    if (!cau || /\?/.test(cau)) continue;
+    const cc = gonKhen(x?.can_cu ?? "");
+    if (cc.length >= 2 && bc.includes(` ${cc} `)) continue;
+    bo.push(cau);
+  }
+  return bo;
+}
+/**
+ * Bỏ khỏi lời bot các câu / vế trong `cauBo` (AI chép nguyên văn; so cả bản bỏ dấu). KHÔNG bao giờ bỏ phần có dấu "?" — câu
+ * hỏi giữ nguyên. Hết chữ → null (nơi gọi dùng câu mẫu).
+ */
+export function boCauNhanXet(loi: string | null | undefined, cauBo: string[]): string | null {
+  let s = (loi ?? "").trim();
+  if (!s) return null;
+  for (const c0 of cauBo) {
+    const c = c0.trim().replace(/[.,!…;:\s]+$/u, "");
+    if (c.length < 4 || /\?/.test(c)) continue;
+    let i = s.indexOf(c);
+    if (i < 0) {
+      // So bỏ dấu từng ký tự (độ dài giữ nguyên) để cắt đúng vị trí trên câu gốc.
+      const kd = [...s].map((ch) => boDau(ch) || ch).join("");
+      i = kd.indexOf(boDau(c));
+      if (i < 0 || [...kd].length !== [...s].length) continue;
+      const arr = [...s];
+      const truoc = arr.slice(0, i).join(""), giua = arr.slice(i, i + [...boDau(c)].length).join(""), sau = arr.slice(i + [...boDau(c)].length).join("");
+      if (/\?/.test(giua)) continue;
+      s = `${truoc}${sau.replace(/^[\s.,!…;:]+/u, " ")}`;
+    } else {
+      // Vế khen dính liền câu hỏi ("Hẻm sâu thì dễ bán, mình cần gấp không?") — bỏ vế, phần hỏi giữ.
+      s = `${s.slice(0, i)}${s.slice(i + c.length).replace(/^[\s.,!…;:]+/u, " ")}`;
+    }
+    s = s.replace(/\s+([.,!?…])/g, "$1").replace(/[ \t]{2,}/g, " ").replace(/^[\s.,!…;:]+/u, "").trim();
+  }
+  if (!s || !/[\p{L}\d]/u.test(s)) return null;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
