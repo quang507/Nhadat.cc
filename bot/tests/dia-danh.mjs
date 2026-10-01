@@ -1,7 +1,7 @@
 // dia-danh.mjs — dò địa danh chung (01/10/2026, chủ dự án: "làm hàm dò địa danh chung đi … nếu 137/28 thì là hẻm rồi,
 // đường số 59 hoặc đường có tên là đường lớn"). Ứng viên lấy từ mock `tim_dia_danh` (cùng ngữ nghĩa SQL 20261001e) trên
 // bảng wards / phuong_cu THẬT + vài dòng quận cũ, tên đường. Chạy: bun bot/tests/dia-danh.mjs
-import { chonDiaDanh, loaiDuongVaoTuDiaChi, tenDiaDanhTron } from "../supabase/functions/_shared/extraction/dia-danh.ts";
+import { chonDiaDanh, cungQuan, loaiDuongVaoTuDiaChi, nhacTenQuan, tenDiaDanhTron } from "../supabase/functions/_shared/extraction/dia-danh.ts";
 import { FakeDB, napPhuongThat, napPhuongCuThat, createClient } from "./e2e/mock-supabase.mjs";
 
 let tong = 0, hong = 0;
@@ -75,6 +75,16 @@ ok("'156 Nguyễn Trãi' mà câu nói hẻm xe hơi → không suy", L("156 Ngu
 ok("'Trần Bình Trọng' (không số nhà) → không suy", L("Trần Bình Trọng") === null);
 ok("'lô 12 KDC Phú Mỹ' → không suy", L("lô 12 KDC Phú Mỹ") === null);
 ok("'4m Nguyễn Trãi' → không suy", L("4m Nguyễn Trãi") === null);
+
+// ── cungQuan / nhacTenQuan (hỏi lại phường lệch quận) ──
+ok("cungQuan 'Quận 5' = 'quận 5'", cungQuan("Quận 5", "quận 5"));
+ok("cungQuan 'Quận Tân Phú' ≠ 'Quận 5'", !cungQuan("Quận Tân Phú", "Quận 5"));
+ok("nhacTenQuan 'tân phú em' → Quận Tân Phú", nhacTenQuan("tân phú em", "Quận Tân Phú"));
+ok("nhacTenQuan 'quận 5 mà em' → Quận 5", nhacTenQuan("quận 5 mà em", "Quận 5"));
+ok("nhacTenQuan 'q5' → Quận 5", nhacTenQuan("q5 nha", "Quận 5"));
+ok("nhacTenQuan '5 người đứng tên' KHÔNG phải Quận 5", !nhacTenQuan("5 người đứng tên", "Quận 5"));
+ok("nhacTenQuan 'quận 15' KHÔNG phải Quận 5", !nhacTenQuan("quận 15", "Quận 5"));
+ok("nhacTenQuan 'đúng rồi' → không", !nhacTenQuan("đúng rồi", "Quận Tân Phú"));
 
 console.log(`\n${tong - hong}/${tong} đạt`);
 if (hong) process.exit(1);
