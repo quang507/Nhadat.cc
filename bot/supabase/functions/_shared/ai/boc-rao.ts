@@ -101,6 +101,9 @@ const LUAT_CHUAN_HOA = `CHẾ ĐỘ CHUẨN HOÁ (đè lên dòng "giữ đúng 
 - Đọc theo NGHĨA như môi giới lâu năm: viết tắt, gõ sai một hai chữ, không dấu, tiếng lóng nghề đều phải hiểu ("xhr"/"shr"/"sổ hồg riêg" = sổ hồng riêng; "sổ chug"/"sổ chung" = sổ hồng chung; "hxh"/"hẻm ô tô"/"xe hơi vô tới nhà" = hẻm xe hơi; "hxm" = hẻm xe máy; "nhà ống"/"nhà phố liền kề" = nha_pho; "lô đất"/"nền" = dat; "c4"/"nhà cấp bốn" = nha_cap4; "full nt"/"đủ đồ" = full nội thất; "bớt lộc"/"có bớt"/"còn TL" = thuong_luong co; "ko gấp"/"từ từ bán" = gap khong).
 - Giá trị trường CHỮ viết bằng TỪ CHUẨN của nghề (pháp lý: "sổ hồng riêng", "sổ hồng chung", "vi bằng", "hợp đồng mua bán", "giấy tay", "chưa có sổ", "đang chờ ra sổ", thêm "đã hoàn công"/"chưa hoàn công" nếu khách nói; nội thất: "full nội thất", "nội thất cơ bản", "nhà trống"; hướng: Đông | Tây | Nam | Bắc | Đông Nam | Đông Bắc | Tây Nam | Tây Bắc). trich_dan vẫn COPY NGUYÊN VĂN chữ khách gõ.
 - Khách nói KHÔNG có / không biết (hỏi phường, khách "ko có phường", "không rõ") → KHÔNG đưa trường đó; tra_loi.co_tra_loi = false.
+- Tin KHÔNG trả lời câu đang hỏi nhưng có thông tin KHÁC (đang hỏi kết cấu, khách nhắn "50m2" hay "5 tỷ") → VẪN đưa thông tin đó vào truong (dien_tich, gia…), chỉ tra_loi.co_tra_loi = false. KHÔNG trả rỗng vì lạc câu hỏi.
+- so_tang LUÔN tính cả trệt: "3 lầu" = 4, "trệt 2 lầu" = 3, "3 tấm" = 3.
+- Mỗi khoá đúng loại của nó: "hxh"/"hẻm xe hơi" KHÔNG BAO GIỜ là phap_ly. Chữ viết tắt không chắc nghĩa ("xhr" có thể là shr hay hxh) mà ngữ cảnh không phân định → KHÔNG đưa.
 - Vẫn cấm bịa: không thêm con số, không thêm ý khách không nói, không suy quận từ tên đường.`;
 
 type ClientModel = {

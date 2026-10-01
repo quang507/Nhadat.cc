@@ -309,7 +309,11 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
       // Chữ AI viết lại được (chuẩn hoá, sửa chính tả, đổi từ đồng nghĩa) nhưng không được thêm CON SỐ khách không nói.
       const soTrich = new Set(kd.match(/\d+/g) ?? []);
-      return (chuanSo(v).match(/\d+/g) ?? []).every((x) => soTrich.has(x)) ? null : "so_khong_co_trong_trich_dan";
+      if (!(chuanSo(v).match(/\d+/g) ?? []).every((x) => soTrich.has(x))) return "so_khong_co_trong_trich_dan";
+      // Bắn thử 01/10 (lx-ai-03): "xhr" → AI ghi PHÁP LÝ = "hẻm xe hơi". Soát HÌNH DẠNG GIÁ TRỊ AI viết (từ chuẩn của ô),
+      // không soát chữ khách — sai ô thì bỏ.
+      const hinh = HINH_TRUONG_CHU[d.khoa];
+      return hinh && !hinh.test(chuanSo(v)) ? "gia_tri_khong_dung_loai_truong" : null;
     }
   }
 }
@@ -319,7 +323,7 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
   const kdTin = chuanSo(tin);
   const dat: DeXuat[] = [];
   const bo: Bo[] = [];
-  for (const d of deXuat ?? []) {
+  for (let d of deXuat ?? []) {
     if (!d || typeof d.khoa !== "string" || typeof d.gia_tri !== "string" || typeof d.trich_dan !== "string") continue;
     const kdCum = chuanSo(d.trich_dan);
     let viTri = kdCum.length >= 2 ? kdTin.indexOf(kdCum) : -1;
@@ -339,6 +343,12 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
     if ((d.khoa === "do_rong_hem" || d.khoa === "do_rong_duong")) {
       const lt = loaiDuongNoiRo(kdDung ?? kdCum), la = loaiDuongNoiRo(chuanSo(d.gia_tri));
       if (lt && la && lt !== la) { bo.push({ ...d, ly_do: "loai_duong_nguoc_chu_khach" }); continue; }
+    }
+    // Chế độ `ai` (bắn thử 01/10, lx-ai-03): "3 lầu" → AI ghi so_tang 3 (quên trệt). Cụm trích nói trệt / lầu / tấm và
+    // phép tính ra ĐÚNG MỘT số tầng → lấy số tính ra thay vì bỏ cả trường.
+    if (KIEM_NHE && d.khoa === "so_tang" && /\b(tret|lau|tam)\b/.test(kdDung ?? kdCum)) {
+      const st = soTangTrong(kdDung ?? d.trich_dan);
+      if (st.length === 1 && String(st[0]) !== chuanSo(d.gia_tri).match(/\d+/)?.[0]) d = { ...d, gia_tri: String(st[0]) };
     }
     const ly = KIEM_NHE ? kiemGiaTriNhe(d, tin, viTri, kdDung) : kiemGiaTri(d, tin, viTri, kdDung);
     if (ly) bo.push({ ...d, ly_do: ly });

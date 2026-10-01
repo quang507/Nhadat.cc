@@ -421,6 +421,9 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   dat("[ai] '5 tỷ, 60m2' — dấu phẩy ngăn, không cắt", "5 tỷ, 60m2", "gia", "5 tỷ", "5 tỷ");
   bo("[ai] số đo không có trong trích", "hẻm xe hơi", "do_rong_hem", "6", "hẻm xe hơi", "so_khong_co_trong_trich_dan");
   bo("[ai] loại ngoài danh sách", "nhà ống", "loai_bds", "nha_ong", "nhà ống", "gia_tri_ngoai_danh_sach");
+  bo("[ai] pháp lý = 'hẻm xe hơi' (sai ô) → bỏ", "nhà hẻm 4m, xhr, giá 8 tỉ", "phap_ly", "hẻm xe hơi", "xhr", "gia_tri_khong_dung_loai_truong");
+  { const k = mot("3 lầu 4 phòng ngủ", "so_tang", "3", "3 lầu");
+    ok("[ai] so_tang 3 «3 lầu» → sửa thành 4 (tính cả trệt)", k.dat.length === 1 && k.dat[0].gia_tri === "4", JSON.stringify(k)); }
   bo("[ai] 'ko có phường' vẫn không phải phường", "ko có phường", "phuong", "ko có phường", "ko có phường", "phuong_khong_co_that");
   datKiemNhe(false);
 }

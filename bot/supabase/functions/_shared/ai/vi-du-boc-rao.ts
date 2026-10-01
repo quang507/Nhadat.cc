@@ -138,7 +138,16 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     kien_thuc: ["tầng 1 và 2 là để kinh doanh"],
     luu_y: "Ý không có khoá → CHÉP NGUYÊN VĂN vào kien_thuc, không đặt nhãn (\"tiềm năng kinh doanh\"). \"tầng 1 và 2\" không phải tang.",
   },
-
+  // 01/10/2026 (bắn thử chế độ `ai`): đang hỏi câu khác, khách nhắn "50m2", "5 tỷ" → model trả RỖNG vì tin không trả lời
+  // câu đang hỏi (lx-ai-06); "3 lầu" → model ghi so_tang 3, quên trệt (lx-ai-03).
+  {
+    cau_dang_hoi: "phuong",
+    tin: "50m2, 3 lầu, giá 5 tỷ",
+    so_can: 0,
+    truong: [t("dien_tich", "50", "50m2"), t("so_tang", "4", "3 lầu"), t("gia", "5 tỷ", "giá 5 tỷ")],
+    kien_thuc: [],
+    luu_y: "Lạc câu đang hỏi vẫn đưa dữ liệu khác vào truong, không trả rỗng. \"3 lầu\" = trệt + 3 lầu = 4.",
+  },
 ];
 
 /** Bản chữ để dán vào system prompt (sau LUAT, cùng khối cache). */
