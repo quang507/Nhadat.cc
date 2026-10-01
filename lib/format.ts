@@ -46,6 +46,27 @@ export const TYPE_LABEL: Record<string, string> = {
   kho_xuong: "Kho xưởng",
 };
 
+// Ô thông số nào CÓ NGHĨA với loại BĐS nào (01/10/2026, chủ dự án xem form sửa tin của một lô đất: "các loại bds khác thì
+// bên trong tab này đâu phải là phòng ngủ"). Lớp lỗi: form admin / trang tin dùng MỘT bộ ô cho mọi loại, trong khi bot hỏi
+// theo loại (bảng required_facts). MỘT bảng ở đây cho form admin và trang tin; `bot/tests/o-theo-loai.mjs` đối chiếu cột
+// `phongNgu` với bộ câu bot hỏi theo loại (loại có câu so_phong_ngu thì có ô phòng ngủ). Chưa rõ loại → hiện đủ.
+export type OTheoLoai = { phongNgu: boolean; ketCau: boolean; ngangDai: boolean };
+const DU_O: OTheoLoai = { phongNgu: true, ketCau: true, ngangDai: true };
+export const O_THEO_LOAI: Record<string, OTheoLoai> = {
+  nha_pho: DU_O,
+  nha_cap4: DU_O,
+  biet_thu: DU_O,
+  chung_cu: { phongNgu: true, ketCau: false, ngangDai: false },
+  toa_nha: { phongNgu: false, ketCau: true, ngangDai: true },
+  dat: { phongNgu: false, ketCau: false, ngangDai: true },
+  dat_nong_nghiep: { phongNgu: false, ketCau: false, ngangDai: true },
+  dat_kinh_doanh: { phongNgu: false, ketCau: false, ngangDai: true },
+  kho_xuong: { phongNgu: false, ketCau: false, ngangDai: true },
+  mat_bang: { phongNgu: false, ketCau: false, ngangDai: true },
+  phong_tro: { phongNgu: false, ketCau: false, ngangDai: false },
+};
+export const oTheoLoai = (loai: string | null | undefined): OTheoLoai => (loai && O_THEO_LOAI[loai]) || DU_O;
+
 // FR-172 — nhãn cho các cột thông số có cấu trúc (migration 20260902e). Một
 // bảng cho thẻ tin, trang chi tiết, bộ lọc và form admin.
 export const ACCESS_LABEL: Record<string, string> = {

@@ -11,7 +11,7 @@
 // Tiếp cận (WCAG): <dialog> (Esc, giữ focus, trả focus), nhãn gắn ô, thông báo có role.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { formatPrice, TYPE_LABEL } from "@/lib/format";
+import { formatPrice, oTheoLoai, TYPE_LABEL } from "@/lib/format";
 import { docTien } from "@/bot/supabase/functions/_shared/extraction/luat-tien";
 
 export type TinSua = {
@@ -186,6 +186,7 @@ export default function SuaTinModal({
 
   const o = "w-full rounded-md border border-slate-400 bg-white p-2 text-sm text-navy focus-visible:outline-2 focus-visible:outline-brand";
   const nhan = "mb-1 block text-xs font-bold text-navy";
+  const oLoai = oTheoLoai(f.property_type);
   const oSo = (k: keyof typeof so, ten: string, goiY: string) => (
     <div>
       <label htmlFor={id(k)} className={nhan}>{ten}</label>
@@ -258,16 +259,22 @@ export default function SuaTinModal({
           {oSo("area_m2", "Diện tích (m²)", "Ví dụ: 62,5")}
         </div>
 
+        {/* Ô theo LOẠI BĐS (`O_THEO_LOAI`): đất không có phòng ngủ / kết cấu, căn hộ không có ngang × dài. Ô đang có giá trị thì
+            vẫn hiện để admin thấy và xoá được. */}
+        {(oLoai.ngangDai || f.frontage_m || f.length_m || oLoai.phongNgu || f.bedrooms || oLoai.ketCau || f.floors_text) && (
         <div className="grid gap-4 border-t border-line/60 pt-3 sm:grid-cols-3">
-          {oSo("frontage_m", "Ngang (m)", "4,2")}
-          {oSo("length_m", "Dài (m)", "18")}
-          {oSo("bedrooms", "Phòng ngủ", "3")}
+          {(oLoai.ngangDai || f.frontage_m) && oSo("frontage_m", "Ngang (m)", "4,2")}
+          {(oLoai.ngangDai || f.length_m) && oSo("length_m", "Dài (m)", "18")}
+          {(oLoai.phongNgu || f.bedrooms) && oSo("bedrooms", "Phòng ngủ", "3")}
+          {(oLoai.ketCau || f.floors_text) && (
           <div className="sm:col-span-3">
             <label htmlFor={id("ketcau")} className={nhan}>Kết cấu</label>
             <input id={id("ketcau")} value={f.floors_text} onChange={(e) => setF({ ...f, floors_text: e.target.value })}
               placeholder="Ví dụ: trệt + lửng + 2 lầu + sân thượng" className={o} />
           </div>
+          )}
         </div>
+        )}
 
         <div className="space-y-3 border-t border-line/60 pt-3">
           <div>
