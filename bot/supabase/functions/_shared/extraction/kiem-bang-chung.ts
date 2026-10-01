@@ -384,6 +384,7 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
       const st = soTangTrong(kdDung ?? d.trich_dan);
       if (st.length === 1 && String(st[0]) !== chuanSo(d.gia_tri).match(/\d+/)?.[0]) d = { ...d, gia_tri: String(st[0]) };
     }
+    if (d.khoa === "ket_cau" && boPhuDinhKetCau(d.gia_tri) !== d.gia_tri.trim()) d = { ...d, gia_tri: boPhuDinhKetCau(d.gia_tri) };
     const ly = KIEM_NHE ? kiemGiaTriNhe(d, tin, viTri, kdDung) : kiemGiaTri(d, tin, viTri, kdDung);
     if (ly) bo.push({ ...d, ly_do: ly });
     else dat.push(kdDung ? { ...d, trich_dan_sua: kdDung } : d);
@@ -733,6 +734,20 @@ export function chonViTri(luat: string | null | undefined, ai: string | null | u
     // nhà mặt tiền số 45. Số đứng sau "hẻm" thì giữ chữ hẻm.
     return /\bhem\s*$/.test(truocSo) ? `hẻm ${m[1]} ${a}` : `${m[1]} ${a}`;
   }
+  // 01/10/2026 (bắn thật lx-tam-32): "số 12 hẻm 4m Trần Bình Trọng" — luật đọc "12 hẻm 4m Trần Bình Trọng", AI trả tên đường
+  // trần (số 12 xếp nhầm thành mã căn) → địa chỉ chỉ còn "Trần Bình Trọng". Số nhà không đứng NGAY trước tên đường nên vòng
+  // trên bỏ qua. Bản luật CHỨA bản AI mà phần thêm là số nhà / hẻm / "đường" (địa chỉ, không phải lời kể) → lấy luật.
+  // Lấy PHẦN TRƯỚC tên đường của luật (có SỐ NHÀ thật — số không đuôi "m") ghép với tên đường của AI (AI có dấu, đúng chính tả).
+  const iA = lk.indexOf(ak);
+  if (iA > 0 && iA + ak.length === lk.length) {
+    const truocK = lk.slice(0, iA).trim();
+    // Số nhà = một chữ số KHÔNG đứng ngay sau "hẻm / kiệt / ngõ" ("hẻm 4 Trần Phú" mập mờ số hẻm / bề rộng → để AI).
+    const tuK = truocK.split(" ");
+    const coSoNha = tuK.some((t, j) => /^\d{1,5}[a-ln-z]?(?:\/\d{1,5}[a-z]?)*$/.test(t) && !/^(?:hem|kiet|ngo|hxh)$/.test(tuK[j - 1] ?? ""));
+    if (coSoNha && l.length === lk.length) {
+      return `${l.slice(0, iA).trim()} ${a}`;
+    }
+  }
   return a;
 }
 
@@ -821,12 +836,25 @@ const CHU_NOI_GOP = new Set(["so", "hem", "va", "voi", "nha", "m", "met", "duong
 const tachGop = (x: string) => boDau(x).replace(/(\d),(\d)/g, "$1.$2").replace(/(\d)([a-z])/g, "$1 $2").replace(/([a-z])(\d)/g, "$1 $2")
   .split(/[^a-z0-9.]+/).map((t) => t.replace(/^\.+|\.+$/g, "")).filter(Boolean);
 export type CapNhatDeXuat = { khoa: string; gia_tri_moi: string; cach?: string };
+/**
+ * Bắn thật 01/10 (lx-tam-31): khách "không có lửng em" → AI ghi kết cấu "trệt + 3 lầu (không có lửng)"; DB thấy chữ "lửng"
+ * nên bản nháp in "trệt + LỬNG + 3 lầu" — ngược ý khách. Kết cấu chỉ ghi cái CÓ: bỏ cụm phủ định (không / chưa có lửng,
+ * sân thượng, hầm, áp mái).
+ */
+export function boPhuDinhKetCau(v: string): string {
+  return v
+    .replace(/[(\[]\s*(?:không|ko|k|chưa|hông)\s+(?:có\s+)?(?:gác\s+|tầng\s+)?(?:lửng|sân thượng|hầm|áp mái)[^)\]]*[)\]]/giu, "")
+    .replace(/[,;+]?\s*(?:không|ko|chưa|hông)\s+(?:có\s+)?(?:gác\s+|tầng\s+)?(?:lửng|sân thượng|hầm|áp mái)\b/giu, "")
+    .replace(/\s{2,}/g, " ").replace(/[\s,;+]+$/u, "").trim();
+}
+
 export function kiemCapNhat(ds: CapNhatDeXuat[] | null | undefined, tin: string, dangGhi: Record<string, string | null | undefined>): Array<{ question: string; answer: string }> {
   const ra: Array<{ question: string; answer: string }> = [];
   for (const c of ds ?? []) {
     if (!c || typeof c.khoa !== "string" || typeof c.gia_tri_moi !== "string") continue;
     const cu = (dangGhi[c.khoa] ?? "").trim();
-    const moi = c.gia_tri_moi.trim().replace(/[\s.]+$/, "");
+    let moi = c.gia_tri_moi.trim().replace(/[\s.]+$/, "");
+    if (c.khoa === "ket_cau") moi = boPhuDinhKetCau(moi);
     if (!cu || !moi || moi.length > 160 || ra.some((r) => r.question === c.khoa)) continue;
     if (tachGop(moi).join(" ") === tachGop(cu).join(" ")) continue;
     const coSan = new Set([...tachGop(cu), ...tachGop(tin)]);
