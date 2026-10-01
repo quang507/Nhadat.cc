@@ -1060,7 +1060,10 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
     // không rõ / quên…" (không kèm tên) không phải tên phường.
     if (KHONG_BIET_PHUONG.test(kd)) return ketQua("lech");
     const soTieng = kd.split(/\s+/).filter(Boolean).length;
-    const tenChu = chu.length >= 3 && soTieng <= 4 && !TU_NOI_CHUYEN.test(text);
+    // 01/10/2026 (bắn thật lx-tam-01): đang xác nhận phường, khách đáp "có lửng nha em" → PHƯỜNG "có lửng". Cụm có chữ
+    // kết cấu / pháp lý / đường vào / gấp không phải tên phường (chữ "tam", "tang" thì có trong tên phường thật — không chặn).
+    const chuNha = /\b(lung|gac|lau|tret|hem|hxh|gap|phong ngu|pn|wc|san thuong|noi that|so hong|so do|so rieng|so chung|shr|mat tien)\b/.test(kd);
+    const tenChu = chu.length >= 3 && soTieng <= 4 && !TU_NOI_CHUYEN.test(text) && !chuNha;
     // Chữ "phường/xã" phải đi với một cái TÊN: "không biết phường nào" không phải tên phường.
     const coNhan = /\bp\s*\d|\b(?:phuong|xa|thi tran)\s+(?!nao\b|may\b|gi\b|do\b|nay\b)[a-z]/.test(kd);
     // 17/09/2026 (Zalo thật): "ngang 5m còn dọc 18m" → cột PHƯỜNG. Số chỉ là phường khi là
@@ -1934,6 +1937,8 @@ export function chonCauKe(vuaNoi: string[], conThieu: CauThieu[]): string | unde
   const dai = (p?: number) => p == null ? 0 : p < 12 ? 0 : p < 16 ? 1 : p < 22 ? 2 : 3;
   for (const k of [...vuaNoi].reverse()) {
     for (const lq of LIEN_QUAN[k] ?? []) {
+      // 20261001c: phòng ngủ (nhà phố / cấp 4 / biệt thự) đứng ngay trước ảnh — câu nối "→ ảnh" (= gửi bản nháp) không nhảy qua nó.
+      if (lq === "hinh_anh" && ungVien.some((u) => u.fact_key === "so_phong_ngu")) continue;
       const c = ungVien.find((u) => u.fact_key === lq);
       if (c && dai(c.priority) <= dai(dau.priority)) return lq;
     }
@@ -2207,4 +2212,49 @@ export function themTangPhu(floorsText: string | null | undefined, floors: numbe
   if (co.has("ap mai") && !/\bap mai\b/.test(kcKd)) { kc += " + áp mái"; doi = true; }
   if (co.has("san thuong") && !/\bsan thuong\b/.test(kcKd)) { kc += " + sân thượng"; doi = true; }
   return doi ? kc : null;
+}
+
+// ── "4 tấm" / "4 tầng" có tính lửng? (01/10/2026) ────────────────────────────
+// Chủ dự án 01/10: "nhà nếu có 4 tấm, tầng thì hỏi có tính gác lửng ko". Người Sài Gòn đếm tấm/tầng có khi gồm cả lửng
+// ("4 tấm" = trệt + lửng + 2 lầu), có khi không (trệt + 3 lầu). Kết cấu chỉ nói SỐ tấm/tầng trơn → hỏi một câu; nói rõ
+// lầu / trệt / lửng / gác thì không hỏi.
+export function soTamCanHoiLung(ketCau: string | null | undefined): { n: number; dv: "tấm" | "tầng" } | null {
+  const kd = boDau(ketCau ?? "");
+  if (!kd.trim()) return null;
+  if (/\b(lung|gac|lau|tret|ham|cap 4|c4|ap mai)\b/.test(kd)) return null;
+  if (/(duoc xay|xay duoc|cho xay|co the xay|xay len|xay them|nang len|len duoc|len toi)\s*(?:len|toi|den|them|toi da)?\s*\d+\s*(?:tam|tang)/.test(kd)) return null;
+  const m = /\b(\d{1,2})\s*(tam|tang)\b(?!\s*ruoi)/.exec(kd);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (n < 2 || n > 10) return null;
+  return { n, dv: m[2] === "tam" ? "tấm" : "tầng" };
+}
+
+/**
+ * Trả lời câu "N tấm đó có tính cả gác lửng không": "co" = lửng nằm TRONG N (trệt + lửng + N−2 lầu); "them" = có lửng
+ * NGOÀI N tấm (trệt + lửng + N−1 lầu); "khong" = không lửng (trệt + N−1 lầu, như đã ghi); null = không rõ.
+ */
+const TU_DAP_LUNG = new Set(["co", "khong", "ko", "k", "kg", "khg", "chua", "hong", "hok", "tinh", "ca", "luon", "gom", "bao", "roi", "dung",
+  "da", "vang", "ok", "oke", "u", "uh", "nha", "nhe", "nhen", "a", "em", "e", "anh", "chi", "c", "chu", "co", "bac", "ma", "do", "thoi", "vay", "the"]);
+export function docTraLoiLung(answer: string): "co" | "them" | "khong" | null {
+  const goc = answer ?? "";
+  if (/\?/.test(goc)) return null;
+  const kd = boDau(goc).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd) return null;
+  const noiLung = /\b(lung|gac)\b/.test(kd);
+  const phuDinh = /\b(khong|ko|k|chua|hong|hok|kg|khg)\b/.test(kd);
+  const them = /\b(them|nua|ngoai|rieng|chua tinh|khong tinh|ko tinh|k tinh)\b/.test(kd);
+  if (noiLung && them && /\b(co|con)\b/.test(kd)) return "them";
+  // Không nhắc lửng mà có chữ khác ngoài lời đáp ("có sân thượng nữa em", "sổ hồng riêng") → không phải câu trả lời này.
+  if (!noiLung && kd.split(" ").some((t) => !TU_DAP_LUNG.has(t))) return null;
+  if (phuDinh) return "khong";
+  if (laDongY(goc) || /\b(co|tinh ca|tinh luon|gom ca|gom luon|bao gom|tinh)\b/.test(kd)) return "co";
+  return null;
+}
+
+/** Kết cấu chữ sau khi biết lửng: n tấm + đáp → { floors, floors_text } (floors = số tầng KHÔNG tính lửng). */
+export function ketCauTheoLung(n: number, dap: "co" | "them" | "khong"): { floors: number; floors_text: string } {
+  if (dap === "khong") return { floors: n, floors_text: n > 1 ? `trệt + ${n - 1} lầu` : "trệt" };
+  const lau = dap === "co" ? n - 2 : n - 1;
+  return { floors: lau + 1, floors_text: lau > 0 ? `trệt + lửng + ${lau} lầu` : "trệt + lửng" };
 }
