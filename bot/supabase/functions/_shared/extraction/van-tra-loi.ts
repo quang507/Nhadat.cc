@@ -697,16 +697,33 @@ export function laSoDoBia(menhDe: string, bangChung: string): boolean {
   }
   // FR-241 h (10 ca test làm khó 28/09): "Trệt lửng 2 lầu sân thượng là 3 phòng ngủ rồi anh chị ơi" — model tự suy số phòng từ
   // số tầng. Số phòng ngủ / WC model nói ra phải có trong chữ chủ nhà.
-  for (const m of kd.matchAll(/\b(\d{1,2})\s*(?:phong ngu|pn|wc|toilet|phong tam)\b/g)) {
-    if (!new RegExp(`(?<![\\d.])${m[1]}(?![\\d])`).test(bc)) return true;
+  // Bắn thử 01/10 (lx-ai-06): chủ gõ "hẻm 3m", bot "Trệt lửng 2 lầu 3 phòng ngủ thì khách gia đình chuộng lắm" — chữ số 3
+  // có trong tin (của "hẻm 3m") nên lọt. Số phòng phải đi CÙNG đơn vị phòng trong chữ chủ nhà.
+  for (const m of kd.matchAll(/\b(\d{1,2})\s*(phong ngu|pn|wc|toilet|phong tam)\b/g)) {
+    const donVi = /wc|toilet|tam/.test(m[2]) ? "(?:wc|toilet|phong tam|ve sinh|nha ve sinh)" : "(?:phong ngu|pn|phong|p ngu)";
+    if (!new RegExp(`(?<![\\d.])${m[1]}\\s*${donVi}\\b`).test(bc)) return true;
   }
   return false;
+}
+/**
+ * Bot KHẲNG ĐỊNH kết cấu chủ nhà chưa nói (bắn thử 01/10, lx-ai-06: "Trệt lửng 2 lầu …" khi chủ chưa nói tầng nào). Số lầu /
+ * tầng / tấm phải có cùng đơn vị trong chữ chủ nhà; "lửng" phải có chữ lửng / gác. Chỉ soát câu khẳng định (câu hỏi "có lửng
+ * không anh?" là đúng việc).
+ */
+export function laKetCauBia(menhDe: string, bangChung: string): boolean {
+  const kd = boDau(menhDe);
+  const bc = boDau(bangChung ?? "");
+  for (const m of kd.matchAll(/\b(\d{1,2})\s*(?:lau|tang|tam)\b/g)) {
+    if (!new RegExp(`(?<![\\d.])${m[1]}\\s*(?:lau|tang|tam|l)\\b`).test(bc)) return true;
+  }
+  return /\blung\b/.test(kd) && !/\b(?:lung|gac)\b/.test(bc);
 }
 export function boKhenKhongCanCu(replies: string[], bangChung: string): string[] {
   const bc = boDau(bangChung ?? "");
   return locCauTrongBongBong(replies, (c) => {
     if (laSoDoBia(c, bangChung) && !/\?\s*$/.test(c)) return true;
     if (/\?/.test(c)) return false;
+    if (laKetCauBia(c, bangChung)) return true;
     const kd = boDau(c);
     return KHEN_CAN_BANG_CHUNG.some(([khen, chung]) => khen.test(kd) && !chung.test(bc));
   });
@@ -732,6 +749,7 @@ const VAO_NHA_CHUNG = /\b(?:vao (?:tan |toi |duoc |trong )?nha|trong nha|gara|ga
 export function laKhenSai(menhDe: string, bangChung: string): boolean {
   if (laSoDoBia(menhDe, bangChung)) return true;
   if (/\?/.test(menhDe)) return false;
+  if (laKetCauBia(menhDe, bangChung)) return true;
   const kd = boDau(menhDe);
   const bc = boDau(bangChung ?? "");
   if (VAO_NHA_KD.test(kd) && !VAO_NHA_CHUNG.test(bc)) return true;

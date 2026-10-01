@@ -1148,5 +1148,19 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
   ok("FR250 bong bóng chỉ có khen vị trí → bỏ", JSON.stringify(boKhenViTri(["Vị trí rất đẹp ạ.", "Cho em xin giá nha?"])) === JSON.stringify(["Cho em xin giá nha?"]));
 }
 
+// 01/10/2026 (bắn thử chế độ `ai`, lx-ai-06): chủ gõ "hẻm 3m", "50m2" — bot "Trệt lửng 2 lầu 3 phòng ngủ thì khách gia đình chuộng lắm".
+{
+  const bc = "a muốn bán căn nhà ở bình thạnh đường Xô Viết Nghệ Tĩnh hẻm 3m 50m2";
+  const r = boKhenKhongCanCu(["Trệt lửng 2 lầu 3 phòng ngủ thì khách gia đình chuộng lắm anh. Anh muốn thu về tầm bao nhiêu ạ?"], bc);
+  ok("KC-01 'Trệt lửng 2 lầu 3 phòng ngủ' khi chủ chỉ nói 'hẻm 3m' → bỏ câu bịa, giữ câu hỏi giá",
+    r.length === 1 && !/lửng|phòng ngủ/.test(r[0]) && /bao nhiêu/.test(r[0]), JSON.stringify(r));
+  ok("KC-02 '3 phòng ngủ' khi chủ nói '3 phòng ngủ' → giữ", laSoDoBia("3 phòng ngủ thì gia đình ở thoải mái", "nhà 3 phòng ngủ 2wc") === false);
+  ok("KC-03 '3 phòng ngủ' khi chủ chỉ nói 'hẻm 3m' → bịa", laSoDoBia("3 phòng ngủ thì gia đình ở thoải mái", "hẻm 3m") === true);
+  const r2 = boKhenKhongCanCu(["Trệt 2 lầu thì vừa đẹp ạ."], "nhà 1 trệt 2 lầu hẻm 4m");
+  ok("KC-04 'Trệt 2 lầu' khi chủ nói '1 trệt 2 lầu' → giữ", r2.length === 1 && /2 lầu/.test(r2[0]), JSON.stringify(r2));
+  const r3 = boKhenKhongCanCu(["Nhà mình có lửng không anh?"], "hẻm 3m");
+  ok("KC-05 câu HỎI 'có lửng không' → giữ", r3.length === 1, JSON.stringify(r3));
+}
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
