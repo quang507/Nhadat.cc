@@ -4277,7 +4277,12 @@ Deno.serve(async (req) => {
               // 30/09/2026 (bắn thử bán lx-ban-292a): "chính chủ đứng tên, không thế chấp" lúc chờ duyệt → chỉ MỘT fact được
               // ghi (cả câu vào ô đứng tên), thế chấp mất. Câu có từ hai ý luật nhận ra thì ghi từng ý.
               const nhieu = nhanDienNhieuFact(dapAn).filter((f) => f.question !== "bo_sung");
-              const ds = nhieu.length >= 2 ? nhieu : [k.chuyenSang ?? nhanDienFact(dapAn) ?? { question: "bo_sung", answer: dapAn }];
+              // Bắn thử 01/10 (lx-tam-21/31): sửa nháp bằng "3 phòng" — luật không nhận (cần "phòng ngủ / pn") nên cả câu vào
+              // "📝 Thêm", trong khi AI đã ghi phòng ngủ 3. AI đọc ra ô nào từ câu này (đã qua kiểm) thì không ghi bổ sung.
+              const kqAiN = bongAi ? await bongAi : null;
+              const aiCoO = !!kqAiN && kiemDeXuat(kqAiN.truong, text).dat.length > 0;
+              const motY = k.chuyenSang ?? nhanDienFact(dapAn) ?? (aiCoO ? null : { question: "bo_sung", answer: dapAn });
+              const ds = nhieu.length >= 2 ? nhieu : motY ? [motY] : [];
               for (const nd of ds) {
                 const { error: sErr } = await client.rpc("ghi_fact_listing", {
                   p_listing_id: pendingReq.listing_id, p_question: nd.question,

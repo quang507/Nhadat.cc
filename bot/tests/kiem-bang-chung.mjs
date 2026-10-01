@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { datKiemNhe, kiemXacNhan, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { datKiemNhe, kiemXacNhan, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -430,6 +430,11 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("[ai] xác nhận 'sổ hồng riêng' khi khách gõ đúng nguyên chữ → không hỏi lại (lx-tam-22)",
     kiemXacNhan([{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "sổ hồng riêng" }], "sổ hồng riêng") === null, "");
   ok("[ai] xác nhận 'xhr' → vẫn hỏi lại", kiemXacNhan([{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "xhr" }], "nhà hẻm 4m, xhr")?.gia_tri === "sổ hồng riêng", "");
+  ok("[ai] kết cấu 'trệt + 3 lầu (không có lửng)' → bỏ cụm phủ định (lx-tam-31: DB từng đọc ra có lửng)",
+    boPhuDinhKetCau("trệt + 3 lầu (không có lửng)") === "trệt + 3 lầu" && boPhuDinhKetCau("trệt + lửng + 2 lầu") === "trệt + lửng + 2 lầu", "");
+  ok("chonViTri: '12 hẻm 4m Trần Bình Trọng' + AI 'Trần Bình Trọng' → giữ số nhà (lx-tam-32)",
+    chonViTri("12 hẻm 4m Trần Bình Trọng", "Trần Bình Trọng") === "12 hẻm 4m Trần Bình Trọng", String(chonViTri("12 hẻm 4m Trần Bình Trọng", "Trần Bình Trọng")));
+  ok("chonViTri: 'hem 4m Pham The Hien' (không số nhà) + AI có dấu → AI", chonViTri("hem 4m Pham The Hien", "Phạm Thế Hiển") === "Phạm Thế Hiển", "");
   bo("[ai] 'ko có phường' vẫn không phải phường", "ko có phường", "phuong", "ko có phường", "ko có phường", "phuong_khong_co_that");
   datKiemNhe(false);
 }
