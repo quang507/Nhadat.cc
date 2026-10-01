@@ -182,7 +182,9 @@ export function duAnLaTenDuong(tenDuAn: string | null | undefined, text: string)
   let loi = boDau(tenDuAn).replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
   for (let i = 0; i < 4 && CHU_CHUNG_DU_AN.test(loi); i++) loi = loi.replace(CHU_CHUNG_DU_AN, "");
   if (loi.length < 5) return false;
-  return new RegExp(`\\b(?:duong|hem|hxh|mat tien|mt|pho)\\s+(?:\\d+[a-z]?(?:\\/\\d+)*\\s+)?${loi.replace(/ /g, "\\s+")}\\b`).test(kd);
+  // 01/10/2026 (bắn thử bán lx-ban-293c): "đất … xã Tân Thạnh Đông Củ Chi" → gắn dự án "Khu dân cư Tân Thạnh Đông". Tên
+  // dự án chỉ trùng tên XÃ / PHƯỜNG / thị trấn trong câu cũng không phải là khách nói dự án.
+  return new RegExp(`\\b(?:duong|hem|hxh|mat tien|mt|pho|xa|phuong|p|thi tran|tt)\\s+(?:\\d+[a-z]?(?:\\/\\d+)*\\s+)?${loi.replace(/ /g, "\\s+")}\\b`).test(kd);
 }
 
 /**

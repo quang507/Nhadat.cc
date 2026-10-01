@@ -118,7 +118,7 @@ import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extract
 import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
 import { nhanhCuaKhoa } from "../_shared/extraction/re-nhanh.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
-import { boCauHoiLap, boCauHuaLoc, boLapCum, chuanKhuVucMua, loaiKhoTuHoSo, loaiNhaTrongCau, boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, loaiKhoTuHoSo, loaiNhaTrongCau, boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
@@ -5221,6 +5221,11 @@ Deno.serve(async (req) => {
           if (sellerReply && pendingReq.listings?.property_type === "chung_cu") sellerReply = goiCanHo(sellerReply);
           if (sellerReply && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) sellerReply = goiDat(sellerReply);
           if (sellerReply) sellerReply = boHuaHoiChuNha([sellerReply])[0]?.trim() || null;
+          if (sellerReply) {
+            const truocTk = sellerReply;
+            sellerReply = boHuaTuKiemTra(sellerReply, nextKey ? `${neo ? `Căn ${neo} nha. ` : ""}${cauKe}` : null) || null;
+            if (sellerReply !== truocTk) console.log("chat-reply: bỏ câu bot tự hứa kiểm tra");
+          }
           // FR-241 i: câu hỏi của model hỏi lại ô đã có dữ liệu (số lầu, phòng ngủ, đường, giá, diện tích, sổ) → câu mẫu của khoá kế.
           if (sellerReply && !(cauDuongKe ?? goiYKe)) {
             const l = lstNow as { street?: string | null; location_raw?: string | null; floors_text?: string | null; bedrooms?: number | null; price_vnd?: number | null; area_m2?: number | string | null; legal_status?: string | null } | null;
