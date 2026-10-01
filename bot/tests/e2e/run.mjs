@@ -2384,6 +2384,50 @@ fresh(seedKho);
       JSON.stringify({ rep: rX2.body.replies, pl: fX("phap_ly"), bt: db().t.listings.at(-1).boc_tach }));
     globalThis.__cauHinh = cuCH;
   }
+  // 01/10/2026 (bắn thật lx-tam-01/02/03, chế độ `ai`): khách trả lời ô KHÁC câu đang hỏi mà AI im hẳn → luật ghi ô đó (trước:
+  // vào "📝 Thêm", bot hỏi lại gấp); đang hỏi phường mà đáp "có lửng nha em" → KHÔNG ghi phường "có lửng".
+  {
+    const cuCH = globalThis.__cauHinh;
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } } : OUT();
+    await send({ external_user_id: "aim-im", text: "bán nhà hẻm 4m Trần Bình Trọng quận 5, 60m2, trệt 2 lầu, giá 8 tỷ" });
+    const LI = db().t.listings.at(-1);
+    const fI = (q) => db().t.listing_facts.filter((f) => f.listing_id === LI.id && f.question === q);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LI.id, question: "phuong", status: "pending" });
+    const rI = await send({ external_user_id: "aim-im", text: "không gấp em" });
+    check("AIM-IM1 chế độ ai, đang hỏi phường, 'không gấp em', AI im hẳn → ghi ô GẤP, không vào bổ sung, không ghi phường",
+      fI("gap").length === 1 && !fI("bo_sung").length && !fI("phuong").length, JSON.stringify({ gap: fI("gap"), bs: fI("bo_sung"), ph: fI("phuong"), rep: rI.body.replies }));
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LI.id, question: "phuong", status: "pending" });
+    const rI2 = await send({ external_user_id: "aim-im", text: "có lửng nha em" });
+    check("AIM-IM2 đang hỏi phường, 'có lửng nha em' → KHÔNG ghi phường 'có lửng'",
+      !fI("phuong").some((f) => /lửng/.test(f.answer)) && !/lửng/.test(db().t.listings.at(-1).ward ?? ""), JSON.stringify({ ph: fI("phuong"), rep: rI2.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // 01/10/2026 (chủ dự án: "nhà nếu có 4 tấm, tầng thì hỏi có tính gác lửng ko" — tấm / tầng / lửng gọi chung là kết cấu).
+  {
+    fresh(seedKho);
+    globalThis.__model.parse = () => OUT();
+    const rL = await send({ external_user_id: "lung-1", text: "bán nhà hẻm 5m Trần Bình Trọng quận 5, 4x15, 4 tấm, giá 7 tỷ" });
+    const LL = db().t.listings.at(-1);
+    check("LUNG-01 rao '4 tấm' (không nói lầu / lửng) → câu hỏi 'kết cấu 4 tấm đó có tính cả gác lửng không', gợi ý cất ở boc_tach",
+      rL.body.replies.some((x) => /kết cấu 4 tấm đó có tính cả gác lửng không/.test(x)) && LL.boc_tach?.lung_goi_y?.n === 4,
+      JSON.stringify({ rep: rL.body.replies, bt: LL.boc_tach }));
+    const rL2 = await send({ external_user_id: "lung-1", text: "có em" });
+    const LL2 = db().t.listings.at(-1);
+    check("LUNG-02 đáp 'có em' → kết cấu 'trệt + lửng + 2 lầu' (floors 3), gợi ý xoá, nói lại kết cấu và hỏi tiếp câu đang chờ",
+      LL2.floors === 3 && LL2.floors_text === "trệt + lửng + 2 lầu" && LL2.boc_tach?.lung_goi_y === false &&
+        rL2.body.replies.some((x) => /trệt \+ lửng \+ 2 lầu/.test(x) && /\?/.test(x)),
+      JSON.stringify({ rep: rL2.body.replies, f: LL2.floors, ft: LL2.floors_text }));
+    const rL3 = await send({ external_user_id: "lung-1", text: "4 tấm em" });
+    check("LUNG-03 đã hỏi một lần → không hỏi lửng lần hai",
+      !rL3.body.replies.some((x) => /gác lửng/.test(x)), JSON.stringify(rL3.body.replies));
+    fresh(seedKho);
+    const rL4 = await send({ external_user_id: "lung-2", text: "bán nhà hẻm 5m Lê Văn Sỹ quận 3, 4x15, trệt 3 lầu, giá 7 tỷ" });
+    check("LUNG-04 rao 'trệt 3 lầu' (đã rõ) → không hỏi lửng", !rL4.body.replies.some((x) => /gác lửng/.test(x)), JSON.stringify(rL4.body.replies));
+  }
   // 30/09/2026 (bắn thật lx-mua-e): khách MUA đã có hồ sơ nới ngân sách "vậy có căn 6 tỷ rưỡi cũng được" → cổng nới
   // `coHangCoGia` ("có căn" + giá) mở hồ sơ BÁN, tạo tin "BĐS bán", hỏi "nhà mình là nhà phố hay chung cư".
   for (const [i, cau, laBan] of [
