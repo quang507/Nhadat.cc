@@ -2258,3 +2258,61 @@ export function ketCauTheoLung(n: number, dap: "co" | "them" | "khong"): { floor
   const lau = dap === "co" ? n - 2 : n - 1;
   return { floors: lau + 1, floors_text: lau > 0 ? `trệt + lửng + ${lau} lầu` : "trệt + lửng" };
 }
+
+// ── Tên phường/xã nằm TRONG câu địa chỉ, gõ gần đúng (01/10/2026) ─────────────
+// Chủ dự án 01/10: "lỡ người ta nói 156 đường 59 tây thông hội thì sao … trong data có danh sách quận đường phường xã
+// rồi mà nếu gần giống thì lôi ra". Dò theo bảng `wards` (tên mới sau 07/2025): khớp đúng chuỗi chữ, đảo thứ tự chữ
+// ("tây thông hội" ↔ Thông Tây Hội), hoặc sai ≤ 1 ký tự (tên ≥ 8 ký tự). Tên đứng ngay sau "đường / phố" hoặc ngay sau
+// số nhà đầu câu là TÊN ĐƯỜNG ("156 Phú Thọ Hòa") — không nhận. Nhiều phường cùng khớp ở mức tốt nhất → null (không đoán).
+export type PhuongDs = { ten: string; ten_day_du?: string | null; loai?: string | null; quan_cu?: string | null };
+function sai1(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, sai = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++sai > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return sai + (a.length - i) + (b.length - j) <= 1;
+}
+export function timPhuongTrongCau(cau: string, ds: PhuongDs[]): { phuong: PhuongDs; khop: string } | null {
+  const tu = boDau(cau ?? "").replace(/[,;.]/g, " , ").replace(/[^a-z0-9,\s]/g, " ").split(/\s+/).filter(Boolean);
+  if (!tu.length) return null;
+  // Tên phường mới trùng tên QUẬN cũ ("Gò Vấp", "Bình Thạnh", "Phú Nhuận") — không có chữ "phường" đi trước thì là quận.
+  const tenQuan = new Set(ds.map((p) => boDau(String(p.quan_cu ?? "")).replace(/^(quan|huyen|thi xa|thanh pho)\s+/, "").trim()).filter(Boolean));
+  let tot: Array<{ p: PhuongDs; muc: number; khop: string }> = [];
+  for (const p of ds) {
+    const pt = boDau(p.ten ?? "").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+    const n = pt.length;
+    if (n < 2 || /^\d/.test(pt[0])) continue;
+    const ptSap = [...pt].sort().join(" ");
+    const ptNoi = pt.join(" ");
+    for (let i = 0; i + n <= tu.length; i++) {
+      const cua = tu.slice(i, i + n);
+      if (cua.includes(",")) continue;
+      const noi = cua.join(" ");
+      const muc = noi === ptNoi ? 3 : [...cua].sort().join(" ") === ptSap ? 2 : ptNoi.length >= 8 && sai1(noi, ptNoi) ? 1 : 0;
+      if (!muc) continue;
+      const truoc = tu[i - 1] ?? "", truoc2 = tu[i - 2] ?? "";
+      // Ngay sau là chữ cái đơn / số ("xã Vĩnh Lộc B", "Tân Định 2") → tên dài hơn (thường là đơn vị CŨ) — để đường tra cũ lo.
+      if (/^([a-pr-z]|\d+)$/.test(tu[i + n] ?? "")) continue;
+      const nhanPhuong = /^(phuong|xa|p|f)$/.test(truoc);
+      if (!nhanPhuong && tenQuan.has(ptNoi)) continue;
+      if (/^(quan|q|huyen|tp|thanh)$/.test(truoc)) continue;
+      // Ngay sau "đường / phố", hay ngay sau số nhà đầu câu → tên ĐƯỜNG.
+      const laDuong = !nhanPhuong && (/^(duong|d|pho)$/.test(truoc) || (/^\d/.test(truoc) && (i - 1 === 0 || !/^(duong|d|hem|kiet|ngo|so)$/.test(truoc2))));
+      if (laDuong) continue;
+      // Đảo chữ / sai chữ: phải đứng sau một RANH GIỚI (đầu câu, dấu phẩy, số, "phường", "ở"…) — "Phú Thọ Hòa" không thành
+      // "Thới Hòa" chỉ vì đuôi "thọ hòa" gần giống.
+      const ranhGioi = !truoc || truoc === "," || /^\d/.test(truoc) || /^(phuong|xa|p|f|o|tai|thuoc|khu|ben|gan)$/.test(truoc);
+      if (muc < 3 && !ranhGioi) continue;
+      tot.push({ p, muc: muc + (nhanPhuong ? 1 : 0), khop: noi });
+    }
+  }
+  if (!tot.length) return null;
+  const max = Math.max(...tot.map((t) => t.muc));
+  tot = tot.filter((t) => t.muc === max);
+  const ten = new Set(tot.map((t) => t.p.ten));
+  return ten.size === 1 ? { phuong: tot[0].p, khop: tot[0].khop } : null;
+}

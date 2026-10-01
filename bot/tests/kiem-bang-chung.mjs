@@ -425,6 +425,8 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   bo("[ai] pháp lý = 'hẻm xe hơi' (sai ô) → bỏ", "nhà hẻm 4m, xhr, giá 8 tỉ", "phap_ly", "hẻm xe hơi", "xhr", "gia_tri_khong_dung_loai_truong");
   { const k = mot("3 lầu 4 phòng ngủ", "so_tang", "3", "3 lầu");
     ok("[ai] so_tang 3 «3 lầu» → sửa thành 4 (tính cả trệt)", k.dat.length === 1 && k.dat[0].gia_tri === "4", JSON.stringify(k)); }
+  bo("[ai] 'nhà 4 tầng' → nha_cap4 bị loại (không có chữ cấp 4; bắn thử lx-tam-12)", "Cần bán nhà 4 tầng hẻm xe hơi quận Gò Vấp", "loai_bds", "nha_cap4", "nhà 4 tầng", "trich_dan_khong_noi_loai_nay");
+  dat("[ai] 'nha cap 4' → nha_cap4 đạt", "ban nha cap 4 duong Xo Viet Nghe Tinh", "loai_bds", "nha_cap4", "nha cap 4");
   bo("[ai] 'ko có phường' vẫn không phải phường", "ko có phường", "phuong", "ko có phường", "ko có phường", "phuong_khong_co_that");
   datKiemNhe(false);
 }
