@@ -2427,6 +2427,95 @@ fresh(seedKho);
     check("TDP-02 'nhà 4 tầng' không thành nhà cấp 4", LT.property_type !== "nha_cap4", LT.property_type);
     globalThis.__cauHinh = cuCH;
   }
+  // 01/10/2026 (chủ dự án: "làm hàm dò địa danh chung đi … nếu 137/28 thì là hẻm rồi, đường số 59 hoặc đường có tên là
+  // đường lớn"): tên trơn dò cả bốn từ điển (tim_dia_danh); số nhà trơn + tên đường → hỏi đường trước nhà thay câu hẻm.
+  {
+    const cuCH = globalThis.__cauHinh;
+    const phuongCu = await napPhuongCuThat();
+    const datTuDien = (d) => {
+      seedKho(d);
+      d.t.wards = napPhuongThat().map((w) => ({ ...w }));
+      d.t.phuong_cu = phuongCu.map((p) => ({ ...p }));
+      d.t.quan_cu = [...new Set(d.t.wards.map((w) => w.quan_cu))].map((ten) => ({ ten }));
+      d.t.duong = [{ ten: "Tây Thạnh", loai: "duong", quan_cu: "Quận Tân Phú", phuong: "Phường Tây Thạnh", tinh: "TP.HCM" }];
+    };
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    const imAi = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: null } : OUT();
+    const hoiPhuong = (lid) => {
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: lid, question: "phuong", status: "pending" });
+    };
+
+    fresh(datTuDien);
+    globalThis.__model.parse = imAi;
+    await send({ external_user_id: "dd-1", text: "Cần bán nhà hẻm xe hơi quận Tân Phú, dt 50m2, 3 tầng, giá 6 tỷ" });
+    const L1 = db().t.listings.at(-1);
+    hoiPhuong(L1.id);
+    const r1 = await send({ external_user_id: "dd-1", text: "tây thạnh nha em" });
+    check("DD-01 đang hỏi phường, 'tây thạnh nha em' (vừa là đường vừa là phường) → Phường Tây Thạnh",
+      db().t.listings.at(-1).ward === "Phường Tây Thạnh", JSON.stringify({ ward: db().t.listings.at(-1).ward, rep: r1.body.replies }));
+
+    fresh(datTuDien);
+    globalThis.__model.parse = imAi;
+    await send({ external_user_id: "dd-2", text: "Cần bán nhà hẻm xe hơi quận Gò Vấp, dt 50m2, 3 tầng, giá 6 tỷ" });
+    const L2 = db().t.listings.at(-1);
+    hoiPhuong(L2.id);
+    const r2 = await send({ external_user_id: "dd-2", text: "thong tay hoj" });
+    check("DD-02 'thong tay hoj' (không dấu, sai 1 ký tự) → Phường Thông Tây Hội",
+      db().t.listings.at(-1).ward === "Phường Thông Tây Hội", JSON.stringify({ ward: db().t.listings.at(-1).ward, rep: r2.body.replies }));
+
+    fresh(datTuDien);
+    globalThis.__model.parse = imAi;
+    await send({ external_user_id: "dd-3", text: "Cần bán nhà hẻm xe hơi, dt 50m2, 3 tầng, giá 6 tỷ" });
+    const L3 = db().t.listings.at(-1);
+    hoiPhuong(L3.id);
+    const r3 = await send({ external_user_id: "dd-3", text: "quận binh thanh nha" });
+    const L3b = db().t.listings.at(-1);
+    check("DD-03 tin chưa có quận, 'quận binh thanh nha' → quận Bình Thạnh, không ghi phường bừa",
+      L3b.district === "Quận Bình Thạnh" && !/b[iì]nh th[aạ]nh/i.test(L3b.ward ?? ""), JSON.stringify({ ward: L3b.ward, district: L3b.district, rep: r3.body.replies }));
+    fresh(datTuDien);
+    globalThis.__model.parse = imAi;
+    await send({ external_user_id: "dd-6", text: "Cần bán nhà hẻm xe hơi, dt 50m2, 3 tầng, giá 16 tỷ" });
+    const L6 = db().t.listings.at(-1);
+    hoiPhuong(L6.id);
+    const r6 = await send({ external_user_id: "dd-6", text: "thao dien a" });
+    check("DD-04 phường CŨ 'thao dien' (Thủ Đức cũ) → phường mới Phường An Khánh",
+      db().t.listings.at(-1).ward === "Phường An Khánh", JSON.stringify({ ward: db().t.listings.at(-1).ward, rep: r6.body.replies }));
+
+    // Các ca đường cũ KHÔNG tự lo (đo 01/10 bằng cách tắt tim_dia_danh): quận gõ sai, phường cũ / phường gõ sai khi câu
+    // đang treo là câu khác — đường cũ ghi nguyên chữ thô "phường thảo điền".
+    for (const [ma, q, t, mong] of [
+      ["DD-05", "phuong", "quan binh thnh", (l) => l.district === "Quận Bình Thạnh" && !l.ward],
+      ["DD-06", "gia", "phường thảo điền", (l) => l.ward === "Phường An Khánh"],
+      ["DD-07", "vi_tri", "phường tay thnh", (l) => l.ward === "Phường Tây Thạnh"],
+    ]) {
+      fresh(datTuDien);
+      globalThis.__model.parse = imAi;
+      await send({ external_user_id: "dx-1", text: "Cần bán nhà hẻm xe hơi, dt 50m2, 3 tầng, giá 16 tỷ" });
+      const Lx = db().t.listings.at(-1);
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: Lx.id, question: q, status: "pending" });
+      const rx = await send({ external_user_id: "dx-1", text: t });
+      const Ly = db().t.listings.at(-1);
+      check(`${ma} đang hỏi ${q}, '${t}' → dò địa danh chung`, mong(Ly), JSON.stringify({ ward: Ly.ward, district: Ly.district, rep: rx.body.replies }));
+    }
+
+    fresh(datTuDien);
+    globalThis.__model.parse = imAi;
+    const r4 = await send({ external_user_id: "dd-4", text: "Bán nhà 156 Nguyễn Trãi phường 3 quận 5, 4x15, 3 tầng, giá 12 tỷ" });
+    const L4 = db().t.listings.at(-1);
+    const hoi4 = db().t.info_requests.filter((x) => x.listing_id === L4.id).map((x) => x.question);
+    check("MT-E1 '156 Nguyễn Trãi' (số nhà trơn) → không hỏi hẻm",
+      !hoi4.includes("do_rong_hem") && !/hẻm/i.test((r4.body.replies ?? []).join(" ")), JSON.stringify({ hoi4, rep: r4.body.replies }));
+    fresh(datTuDien);
+    globalThis.__model.parse = imAi;
+    const r5 = await send({ external_user_id: "dd-5", text: "Bán nhà 137/28 Nguyễn Trãi phường 3 quận 5, 4x15, 3 tầng, giá 12 tỷ" });
+    const L5 = db().t.listings.at(-1);
+    const hoi5 = db().t.info_requests.filter((x) => x.listing_id === L5.id).map((x) => x.question);
+    check("MT-E2 '137/28 Nguyễn Trãi' (có xẹc) → không hỏi đường trước nhà",
+      !hoi5.includes("do_rong_duong"), JSON.stringify({ hoi5, rep: r5.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
   // 01/10/2026 (chủ dự án: "nhà nếu có 4 tấm, tầng thì hỏi có tính gác lửng ko" — tấm / tầng / lửng gọi chung là kết cấu).
   {
     fresh(seedKho);

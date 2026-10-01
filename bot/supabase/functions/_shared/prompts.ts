@@ -360,6 +360,11 @@ export const CAU_HOI_MAU: Record<string, string> = {
   // 25/09/2026: số nhà có dấu xuyệt ("105/12 …") gần như chắc là nhà trong hẻm — hỏi XÁC NHẬN thay vì hỏi trống.
   "do_rong_hem@so_nha_hem": "Nhà mình nằm trong hẻm đúng không {ac}, hẻm rộng mấy mét, ô tô vào tới cửa không?",
   do_rong_duong: "Đường trước đất rộng mấy mét {ac}?",
+  // 01/10/2026: nhà có số nhà trơn ("156 Nguyễn Trãi") — luật `so_nha_mat_tien` (re-nhanh.ts) hỏi câu này thay câu hẻm.
+  "do_rong_duong@nha_pho": "Nhà mình mặt tiền đường luôn đúng không {ac}, đường trước nhà rộng mấy mét?",
+  "do_rong_duong@nha_cap4": "Nhà mình mặt tiền đường luôn đúng không {ac}, đường trước nhà rộng mấy mét?",
+  "do_rong_duong@biet_thu": "Nhà mình mặt tiền đường luôn đúng không {ac}, đường trước nhà rộng mấy mét?",
+  "do_rong_duong@toa_nha": "Tòa nhà mặt tiền đường luôn đúng không {ac}, đường trước rộng mấy mét?",
   ket_cau: "Nhà mình xây mấy tầng rồi {ac}?",
   so_phong_ngu: "Tổng cộng bao nhiêu phòng ngủ {ac}?",
   tang: "Căn hộ mình ở tầng mấy {ac}?",

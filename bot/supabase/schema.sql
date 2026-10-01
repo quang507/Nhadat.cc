@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-01 11:13 (giờ VN)
+-- Sinh lúc: 2026-10-01 17:10 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -6437,6 +6437,58 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.tim_dia_danh(p_ten text, p_toi_da integer DEFAULT 1)
+ RETURNS TABLE(loai text, ten text, ten_day_du text, phuong text, quan_cu text, khoang_cach integer)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'extensions'
+AS $function$
+  with q as (
+    select x.k, (select string_agg(w, ' ' order by w) from unnest(string_to_array(x.k, ' ')) w) as ks,
+           least(greatest(coalesce(p_toi_da, 1), 0), 2) as toi_da
+      from (select regexp_replace(public.bo_dau(btrim(coalesce(p_ten, ''))), '\s+', ' ', 'g') as k) x
+  ),
+  ung as (
+    select 'phuong_moi'::text as loai, w.ten, w.ten_day_du, w.ten_day_du as phuong, w.quan_cu,
+           public.bo_dau(w.ten) as k, true as dao
+      from public.wards w
+    union all
+    select 'phuong_cu', p.ten, p.ten || ', ' || p.quan_cu, ww.ten_day_du, p.quan_cu,
+           regexp_replace(public.bo_dau(p.ten), '^(phuong|xa|thi tran)\s+', ''), true
+      from public.phuong_cu p join public.wards ww on ww.ten = p.phuong_moi
+    union all
+    select 'quan_cu', qc.ten, qc.ten, null, qc.ten,
+           regexp_replace(public.bo_dau(qc.ten), '^(quan|huyen|thanh pho|thi xa)\s+', ''), true
+      from public.quan_cu qc
+    union all
+    -- Một tên đường nằm ở nhiều phường: gộp một dòng; quận chỉ trả khi cả tên đường nằm trong MỘT quận cũ.
+    select min(d.loai), d.ten, d.ten, null,
+           case when count(distinct d.quan_cu) = 1 then min(d.quan_cu) end, min(d.ten_khong_dau), false
+      from public.duong d
+     where d.loai <> 'hem'
+     group by d.ten
+  ),
+  kc as (
+    select u.loai, u.ten, u.ten_day_du, u.phuong, u.quan_cu,
+           case when u.k = q.k then 0
+                when u.dao and position(' ' in q.k) > 0
+                     and (select string_agg(w, ' ' order by w) from unnest(string_to_array(u.k, ' ')) w) = q.ks then 1
+                when length(q.k) >= 6 and abs(length(u.k) - length(q.k)) <= q.toi_da
+                     and levenshtein_less_equal(u.k, q.k, q.toi_da) <= q.toi_da
+                  then 1 + levenshtein_less_equal(u.k, q.k, q.toi_da)
+           end as khoang_cach
+      from ung u, q
+     where length(q.k) between 3 and 60 and q.k ~ '[a-z]'
+       and abs(length(u.k) - length(q.k)) <= greatest(q.toi_da, 0)
+  )
+  select kc.loai, kc.ten, kc.ten_day_du, kc.phuong, kc.quan_cu, kc.khoang_cach
+    from kc
+   where kc.khoang_cach is not null
+   order by kc.khoang_cach, kc.loai, kc.ten
+   limit 20;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.tim_dia_danh_theo_nghia(p_vec double precision[], p_loai text[] DEFAULT NULL::text[], p_lat double precision DEFAULT NULL::double precision, p_lng double precision DEFAULT NULL::double precision, p_limit integer DEFAULT 5)
  RETURNS TABLE(loai text, khoa text, ten text, ten_day_du text, phuong text, quan_cu text, lat double precision, lng double precision, do_gan double precision, cach_m double precision, diem double precision)
  LANGUAGE sql
@@ -8599,6 +8651,8 @@ grant execute on function public.them_nhan_tin(p_listing_id uuid, p_nhan text[])
 revoke all on function public.thu_muc_dau_uuid(p_name text) from public, anon, authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to authenticated;
 grant execute on function public.thu_muc_dau_uuid(p_name text) to service_role;
+revoke all on function public.tim_dia_danh(p_ten text, p_toi_da integer) from public, anon, authenticated;
+grant execute on function public.tim_dia_danh(p_ten text, p_toi_da integer) to service_role;
 revoke all on function public.tim_dia_danh_theo_nghia(p_vec double precision[], p_loai text[], p_lat double precision, p_lng double precision, p_limit integer) from public, anon, authenticated;
 grant execute on function public.tim_dia_danh_theo_nghia(p_vec double precision[], p_loai text[], p_lat double precision, p_lng double precision, p_limit integer) to service_role;
 revoke all on function public.tim_du_an_theo_nghia(p_vec double precision[], p_limit integer) from public, anon, authenticated;

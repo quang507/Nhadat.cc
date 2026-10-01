@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import * as E from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { bocQuan } from "../supabase/functions/_shared/dia_ban.ts";
 import { tachTienToPhuong } from "../supabase/functions/_shared/extraction/tra-phuong.ts";
+import { tenDiaDanhTron } from "../supabase/functions/_shared/extraction/dia-danh.ts";
 
 const HERE = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));
 const bang = JSON.parse(readFileSync(join(HERE, "luat", "khong-duoc-kich.json"), "utf8"));
@@ -49,6 +50,8 @@ const CHAY = {
   laGap: (c) => E.laGap(c),
   // FR-209 (15/09): tên phường đọc ra → tra `wards` → ghi đè ward + district (khi còn quận mặc định).
   tachTienToPhuong: (c) => tachTienToPhuong(c),
+  // 01/10/2026 (SRS-5.1p): tin là một tên trơn → dò địa danh chung → có thể ghi quận / phường.
+  tenDiaDanhTron: (c) => tenDiaDanhTron(c),
 };
 const daKich = (v) => v !== null && v !== false && v !== undefined;
 
@@ -93,7 +96,8 @@ const MAU = {
 // "ghi đè quận" 1 → 2 (15/09, FR-209): `capNhatQuanTuPhuong` ghi quận cũ tra từ `wards` sau khi chủ
 // nhà gật gợi ý hoặc tự nói tên phường mới — luật `tachTienToPhuong` có bảng ở trên.
 // "đổi trạng thái tin" 2 → 3 (22/09, kịch bản E): `laRaoLai` mở lại tin đã gỡ — luật có bảng ở trên.
-const NEN = { "đổi trạng thái tin (an/da_chot)": 3, "ghi đè quận": 2, "đóng dấu 'đủ rồi'": 4 };
+// "ghi đè quận" 2 → 3 (01/10, SRS-5.1p): dò địa danh chung ra QUẬN khi tin chưa có quận chắc — luật `tenDiaDanhTron` có bảng.
+const NEN = { "đổi trạng thái tin (an/da_chot)": 3, "ghi đè quận": 3, "đóng dấu 'đủ rồi'": 4 };
 console.log("\n▸ canh cửa — chỗ ghi đè dữ liệu trong chat-reply");
 for (const [ten, re] of Object.entries(MAU)) {
   const so = (src.match(re) ?? []).length;

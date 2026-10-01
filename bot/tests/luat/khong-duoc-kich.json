@@ -325,6 +325,56 @@
         "sửa lại giá 6 tỷ nha em",
         "hôm qua có người lại xem nhà"
       ]
+    },
+    "tenDiaDanhTron": {
+      "hau_qua": "01/10/2026 (SRS-5.1p): tin chỉ là MỘT tên trơn → dò cả bốn từ điển địa danh (tim_dia_danh) → ra quận thì ghi `listings.district` (chỉ khi tin chưa có quận chắc), ra phường thì ghi phường. Khớp nhầm = một câu trả lời thường bị đem đi tra như tên địa danh; tra trúng là quận / phường đổi theo.",
+      "phai_kich": [
+        [
+          "quận binh thnh",
+          {
+            "ten": "binh thnh",
+            "tienTo": "quan"
+          }
+        ],
+        [
+          "ở gò vấp á",
+          {
+            "ten": "gò vấp",
+            "tienTo": null
+          }
+        ],
+        [
+          "phường thảo điền",
+          {
+            "ten": "thảo điền",
+            "tienTo": "phuong"
+          }
+        ],
+        [
+          "tây thạnh nha em",
+          {
+            "ten": "tây thạnh",
+            "tienTo": null
+          }
+        ]
+      ],
+      "khong_duoc_kich": [
+        "không gấp em",
+        "sổ hồng riêng",
+        "còn ở tốt",
+        "3 phòng",
+        "ok em",
+        "hẻm xe hơi",
+        "quận mấy vậy em?",
+        "bình (một chữ trơn quá mơ hồ)",
+        "trệt 2 lầu",
+        "giá 5 tỷ",
+        "chưa có sổ",
+        "để mai nói tiếp",
+        "156 Nguyễn Trãi",
+        "bán gấp",
+        "phòng ngủ rộng"
+      ]
     }
   }
 }
