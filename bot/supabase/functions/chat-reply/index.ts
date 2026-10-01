@@ -63,7 +63,7 @@ import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/
 import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
 import { nhungCauTim, xepTheoNghia } from "../_shared/ai/nhung.ts"; // FR-216
 import { chonUngVienNghia, tenGan, TU_CHUNG_DU_AN, TU_CHUNG_DUONG } from "../_shared/extraction/khop-ten-nghia.ts";
-import { chonDiaDanh, cungQuan, type DiaDanhChon, nhacTenQuan, type NhomDiaDanh, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
+import { chonDiaDanh, coChuPhuong, cungQuan, type DiaDanhChon, nhacTenQuan, type NhomDiaDanh, phuongTrungTenQuan, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
 import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
@@ -2208,7 +2208,11 @@ Deno.serve(async (req) => {
           const choLechQuan = btD?.phuong_goi_y?.doi_quan === true;
           for (const g of chon.ghi) {
             if (choLechQuan && (g.question === "phuong" || g.question === "quan")) continue;
-            const qP = g.question === "phuong" && quanChac ? phuongChuan(g.answer)?.quan_cu : null;
+            // Bắn thử v310 (lx-lq-72): "bình thạnh mà em" (đang nói QUẬN) → AI ghi "Phường Bình Thạnh". Phường trùng tên quận
+            // cũ mà khách không gõ chữ "phường" thì không ghi ở đây.
+            const pcG = g.question === "phuong" ? phuongChuan(g.answer) : null;
+            if (pcG && phuongTrungTenQuan(pcG.ten, pcG.quan_cu) && !coChuPhuong(text)) { console.log("chat-reply: phuong trung ten quan, khong ghi", g.answer); continue; }
+            const qP = g.question === "phuong" && quanChac ? pcG?.quan_cu : null;
             if (qP && !cungQuan(qP, quanChac)) { console.log("chat-reply: phuong AI lech quan, de hoi lai", g.answer, qP, quanChac); continue; }
             const { error: gErr } = await client.rpc("ghi_fact_listing", {
               p_listing_id: d.id, p_question: g.question, p_answer: g.answer, p_source: NGUON_AI,
