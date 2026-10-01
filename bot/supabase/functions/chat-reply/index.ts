@@ -2194,7 +2194,7 @@ Deno.serve(async (req) => {
         if (rErr) await ghiLoi(client, "chat-reply hoi chua co du lieu(ghi)", rErr.message);
       }
       return chuDe === "thi_truong"
-        ? `Dạ giá khu vực bên em chưa có số liệu giao dịch đủ chắc để báo ${cachGoi}, em không dám nói bừa. Em đã nhờ anh chị phụ trách xem giúp rồi nhắn lại mình nha.`
+        ? `Dạ chuyện thị trường khu này bên em chưa có số liệu giao dịch đủ chắc để nói với ${cachGoi}, em không dám nói bừa. Em đã nhờ anh chị phụ trách xem giúp rồi nhắn lại mình nha.`
         : `Dạ câu này em nhờ anh chị phụ trách trả lời chính xác cho ${cachGoi} nha, em không dám nói sai.`;
     };
     const hoiLaiAi = async (tinKiem: string): Promise<HoiLaiDoc | null | undefined> => {
