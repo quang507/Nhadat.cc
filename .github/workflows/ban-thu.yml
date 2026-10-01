@@ -265,9 +265,11 @@ jobs:
           echo; echo "== AI bóc tách từng lượt (model · câu đang hỏi · đề xuất · bị loại)"
           q "select coalesce(json_agg(x order by x.luc), '[]') as ds from (select b.created_at as luc, b.model, b.ms, b.cau_dang_hoi as hoi,
                 (select string_agg((d->>'khoa') || '=' || (d->>'gia_tri') || ' «' || (d->>'trich_dan') || '»', ' · ') from jsonb_array_elements(b.de_xuat) d) as de_xuat,
-                (select string_agg((d->>'khoa') || ':' || (d->>'ly_do'), ' · ') from jsonb_array_elements(b.bo) d) as bo
+                (select string_agg((d->>'khoa') || ':' || (d->>'ly_do'), ' · ') from jsonb_array_elements(b.bo) d) as bo,
+                case when b.da_ghi->'hoi_lai'->>'co_hoi' = 'true' then (b.da_ghi->'hoi_lai'->>'chu_de') || ' «' || coalesce(b.da_ghi->'hoi_lai'->>'cau_hoi', '') || '»'
+                     when b.da_ghi->'hoi_lai'->>'co_hoi' = 'false' then 'không' end as hoi_lai
               from boc_tach_bong b join sellers s on s.id = b.seller_id where s.zalo_user_id = $(lit "$ZALO")) x" \
-            | jq -r '.[0].ds[] | "\(.model // "?") \(.ms // 0)ms · hỏi \(.hoi // "-") · đề xuất: \(.de_xuat // "(rỗng)") · loại: \(.bo // "-")"' \
+            | jq -r '.[0].ds[] | "\(.model // "?") \(.ms // 0)ms · hỏi \(.hoi // "-") · đề xuất: \(.de_xuat // "(rỗng)") · loại: \(.bo // "-") · khách hỏi: \(.hoi_lai // "-")"' \
             || echo "(không đọc được boc_tach_bong — vẫn dọn người thử)"
 
           echo; echo "== Sổ lỗi chat-reply từ lúc bắn"

@@ -2173,6 +2173,30 @@ Deno.serve(async (req) => {
     // 01/10/2026 (chủ dự án: "sửa từ cái gốc nguyên nhân"): khách có HỎI LẠI bên mình không, hỏi chủ đề gì — AI đọc theo
     // nghĩa (`hoi_lai`), thay ba bộ từ khoá (`laCauHoiTron`, `hoiVeTin`, `dapHoiNguocTienDinh`) vốn thiếu cách nói mới và
     // đụng chữ khi bỏ dấu. `undefined` = không ở chế độ `ai` / AI không chạy → nơi gọi giữ luật cũ làm lưới đỡ.
+    // Câu khách hỏi mà hệ thống KHÔNG có dữ liệu để trả lời (giá khu vực; chính sách dịch vụ ngoài phí / ảnh): không để model tự
+    // trả lời (bắn thử v312: model hứa "kiểm tra rồi nhắn lại", tự khẳng định "không độc quyền"). Nói thật + chuyển cho người
+    // phụ trách (reminder `escalation`, một lần / 24 giờ / câu) — lời "em nhờ anh chị phụ trách" có việc thật đi kèm.
+    const dapChuaCoDuLieu = async (cau: string, chuDe: string | null | undefined): Promise<string | null> => {
+      if (chuDe !== "thi_truong" && chuDe !== "dich_vu") return null;
+      const dau = `❓ Zalo …${externalUserId.slice(-4)} hỏi`;
+      const cauSach = thayLienHe(cau, "[liên hệ]").slice(0, 160);
+      const { count, error: cErr } = await client.from("reminders").select("id", { count: "exact", head: true })
+        .eq("kind", "escalation").in("status", ["pending", "sent"])
+        .ilike("note", `${dau}%${cauSach.slice(0, 40).replace(/[%_\\]/g, "")}%`)
+        .gte("created_at", new Date(Date.now() - 24 * 3600e3).toISOString());
+      if (cErr) await ghiLoi(client, "chat-reply hoi chua co du lieu(dem)", cErr.message);
+      if (!cErr && (count ?? 0) === 0) {
+        const { error: rErr } = await client.from("reminders").insert({
+          kind: "escalation", due_at: new Date().toISOString(), seller_id: sellerRow.id,
+          listing_id: pendingReq?.listing_id ?? sellerRow.active_listing_id ?? null,
+          note: `${dau}: "${cauSach}" — câu ${chuDe === "thi_truong" ? "thị trường" : "về dịch vụ"} bot không có dữ liệu để trả lời, nhắn lại khách giúp.`,
+        });
+        if (rErr) await ghiLoi(client, "chat-reply hoi chua co du lieu(ghi)", rErr.message);
+      }
+      return chuDe === "thi_truong"
+        ? `Dạ giá khu vực bên em chưa có số liệu giao dịch đủ chắc để báo ${cachGoi}, em không dám nói bừa. Em đã nhờ anh chị phụ trách xem giúp rồi nhắn lại mình nha.`
+        : `Dạ câu này em nhờ anh chị phụ trách trả lời chính xác cho ${cachGoi} nha, em không dám nói sai.`;
+    };
     const hoiLaiAi = async (tinKiem: string): Promise<HoiLaiDoc | null | undefined> => {
       if (!bongAi) return undefined;
       const k = await bongAi;
@@ -2274,7 +2298,7 @@ Deno.serve(async (req) => {
           seller_id: sellerRow.id, listing_id: d?.id ?? null,
           tin: thayLienHe(text, "[liên hệ]").slice(0, 2000), cau_dang_hoi: kq.cauDangHoi, model: MODEL, ms: kq.ms,
           so_can: soCan,
-          de_xuat: kq.truong, dat, bo, so_sanh: soSanh, da_ghi: { che_do: kq.cheDo, ghi: daGhi, bo: boGhi, kien_thuc: kienThucGhi },
+          de_xuat: kq.truong, dat, bo, so_sanh: soSanh, da_ghi: { che_do: kq.cheDo, ghi: daGhi, bo: boGhi, kien_thuc: kienThucGhi, hoi_lai: kq.hoiLai ?? null },
         }));
         if (bErr) await ghiLoi(client, "chat-reply boc_tach_bong(ghi)", bErr.message);
         const dongGhi = [
@@ -3152,8 +3176,8 @@ Deno.serve(async (req) => {
       // lx-hn-62: "giá khu này giờ sao em" — bỏ dấu "này" = "nãy" — từng được đáp "giá mình đang rao là 15 tỷ").
       if (loaiHoiTin) {
         const h = await hoiLaiAi(text);
-        const chuDeHop = ["khach", "trang_thai", "noi_dang", "ban_chua"].includes(loaiHoiTin) ? ["tin_cua_minh", "dich_vu"] : ["tin_cua_minh"];
-        if (h !== undefined && (!h || !chuDeHop.includes(h.chuDe))) {
+        // Bắn thử v312 (lx-hn-92): "tin của anh ai xem được vậy" (hỏi AI XEM ĐƯỢC — dịch vụ) từng được đáp số khách quan tâm.
+        if (h !== undefined && (!h || h.chuDe !== "tin_cua_minh")) {
           console.log("chat-reply: hoi ve tin — AI noi khong phai", loaiHoiTin, h?.chuDe ?? "khong hoi");
           loaiHoiTin = null;
         }
@@ -4540,6 +4564,8 @@ Deno.serve(async (req) => {
       // 01/10/2026: từ điển địa danh đã ra tên phường CHUẨN cho tin này (`phuongTuDien`) — luật tìm-chuỗi nhận câu là
       // "nói sang ô phường" thì lấy tên chuẩn, không ghi lại chữ thô khách gõ ("phường thảo điền" → Phường An Khánh).
       if (phuongTuDien && kq.chuyenSang?.question === "phuong") kq = { ...kq, chuyenSang: { ...kq.chuyenSang, answer: phuongTuDien } };
+      // 01/10/2026: AI đọc tin có HỎI LẠI không (đọc sớm: cả đường "AI im → luật đọc ô khác" lẫn đường ghi bổ sung cần biết).
+      const hoiAi = await hoiLaiAi(dapAn);
       // 20/09/2026 (bắn thật mau-y-D): "à sửa lại, dài 16 chứ không phải 15" là LỜI SỬA kích thước —
       // đang hỏi giá thì vào bổ sung, đang hỏi kết cấu thì bị nhận là kết cấu (có số). Xử TRƯỚC mọi
       // luật: ghi ô ngang/dài (fact `mat_tien` đủ hai chiều, ngang lấy từ tin nếu câu không nói — DB
@@ -4655,7 +4681,9 @@ Deno.serve(async (req) => {
           // riêng" — AI không đưa ô nào (lạc câu hỏi), luật bị tắt → câu vào "📝 Thêm", ô gấp / pháp lý trống, bot hỏi lại.
           // AI IM HẲN (không ô, không cập nhật, không chữ cần xác nhận) thì luật đọc các ô KHÁC câu đang hỏi (fact kèm); câu
           // đang hỏi vẫn theo AI (AI nói "không trả lời" là không). Có `xac_nhan` ("xhr") thì không — AI cố ý chưa ghi.
-          if (laCheDoAi && !aiChinh.ghi.length && !capNhatLuot.length && !kiemXacNhan(kqAi.xacNhan ?? [], text)) {
+          // Bắn thử v312 (lx-hn-92): AI nói tin là CÂU HỎI ("ký hợp đồng gì không em") thì AI không im — luật không được
+          // đọc dữ liệu từ câu hỏi (từng ghi pháp lý = "ký hợp đồng gì không").
+          if (laCheDoAi && !aiChinh.ghi.length && !capNhatLuot.length && !kiemXacNhan(kqAi.xacNhan ?? [], text) && !hoiAi) {
             console.log("chat-reply: che do ai — AI im han, luat doc fact kem");
             aiImHan = true;
           }
@@ -4743,7 +4771,6 @@ Deno.serve(async (req) => {
       // không hay sao") → là hỏi ngược, KHÔNG phải "thông tin bổ sung" để ghi vào tin.
       // 01/10/2026: AI nói có hỏi không (`hoiLaiAi`) — luật từ khoá chỉ còn là lưới đỡ khi AI không chạy. Cả tin chỉ là câu
       // hỏi (AI không đọc ra dữ liệu nào) thì cả tin là câu hỏi: không ghi làm thông tin, không coi là câu trả lời.
-      const hoiAi = await hoiLaiAi(dapAn);
       if (hoiAi?.caTin && kq.loai === "khop" && !kqDuyet && !xacNhanGhi) kq = { loai: "hoi" };
       const hoiNguoc = hoiAi !== undefined
         ? (hoiAi ? (hoiAi.caTin ? dapAn : (kq.hoiNguoc ?? hoiAi.cau)) : null)
@@ -4752,7 +4779,7 @@ Deno.serve(async (req) => {
       // 15/09/2026 (bắn thật F2): câu hỏi về ẢNH có đáp án của hệ thống → bong bóng tiền
       // định đứng trước, model chỉ hỏi tiếp (model từng bỏ qua lời dặn trả lời trước).
       const hoiNguocDap = hoiNguoc
-        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, phiCauSeller, hoiAi?.chuDe)
+        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, phiCauSeller, hoiAi?.chuDe) ?? await dapChuaCoDuLieu(hoiNguoc, hoiAi?.chuDe)
         : laXinXoaDuLieu(dapAn) && !nhanDienFact(dapAn)
         ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
         : null;
@@ -5021,6 +5048,8 @@ Deno.serve(async (req) => {
           else if (coSdt(dapAn)) ghiBoSung = null;
           // 24/09/2026 (tin thật: hỏi phường, khách đáp "Quận 1 em ơi"): còn < 2 chữ hoặc chỉ là tên quận / phường → rác.
           else if (laBoSungRac(dapAn)) ghiBoSung = null;
+          // 01/10/2026: câu HỎI không bao giờ là thông tin căn nhà — AI nói hỏi, hoặc lưới từ khoá nhận ra dáng hỏi.
+          else if (hoiAi || laCauHoiTron(dapAn)) ghiBoSung = null;
           // Bắn thử 01/10 (lx-tam-21): trả lời bản nháp bằng "3 phòng" → AI ghi phòng ngủ 3 mà câu vẫn vào "📝 Thêm: 3 phòng".
           // Tin NGẮN (≤ 4 chữ) mà AI đã ghi được ô từ đó → chính là ô đó, không phải thông tin thêm.
           else if (aiChinh?.ghi.length && dapAn.trim().split(/\s+/).length <= 4) ghiBoSung = null;
