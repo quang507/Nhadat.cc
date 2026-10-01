@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-01 17:10 (giờ VN)
+-- Sinh lúc: 2026-10-02 06:49 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -5186,6 +5186,8 @@ declare
   v_tu_choi boolean := false;
   v_ma int;
   v_mau text;
+  v_ok boolean := false;
+  v_loi int;
 begin
   -- (1) Thu kết quả lượt trước. Chưa có phản hồi thì chờ; quá 10 phút thì bỏ, lượt sau gửi lại.
   -- "Đã gọi net.http_post" KHÔNG phải bằng chứng (NFR-18): chỉ ghi vector khi đọc được 200 + đúng 768 số.
@@ -5202,6 +5204,7 @@ begin
     if v.status_code = 200 then
       v_vals := (v.content::jsonb) -> 'embedding' -> 'values';
       if jsonb_typeof(v_vals) = 'array' and jsonb_array_length(v_vals) = 768 then
+        v_ok := true;
         if v.bang = 'wards' then
           update public.wards set nhung = (v_vals::text)::extensions.vector, nhung_md5 = v.md5, nhung_luc = now() where ten = v.khoa;
         elsif v.bang = 'phuong_cu' then
@@ -5223,12 +5226,26 @@ begin
   end loop;
 
   -- Gemini từ chối → đặt mốc tạm dừng CHUNG với nhung-tick (chung hạn mức).
+  -- 20261001f: bản trước dừng CỐ ĐỊNH 4 phút và ghi sổ MỖI lần → hết 4 phút lại gửi mẻ mới vào đúng hạn mức đã cạn (50 dòng
+  -- 429 / 24 giờ), và câu tìm theo nghĩa của khách cũng 429 theo. Nay giãn nhịp dùng CHUNG bộ đếm với nhung-tick
+  -- (nhung_lan_loi): 2, 4, 8 … 60 phút; 402 hết tiền thì 60 phút ngay; ghi sổ lần đầu và mỗi 12 lần.
+  v_loi := coalesce(nullif(public.cau_hinh('nhung_lan_loi'), '')::int, 0);
   if v_tu_choi then
-    v_dung := now() + make_interval(mins => case when v_ma = 402 then 60 else 4 end);
+    v_loi := v_loi + 1;
+    v_dung := now() + make_interval(mins => case when v_ma = 402 then 60 else least(60, (2 ^ least(v_loi, 6))::int) end);
+    update public.app_config set value = v_loi::text where key = 'nhung_lan_loi';
     update public.app_config set value = to_char(v_dung at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
      where key = 'nhung_tam_dung_den'
        and coalesce(nullif(value, '')::timestamptz, '-infinity'::timestamptz) < v_dung;
-    perform public.log_loi('nhung-dia-danh-tick', 'Gemini embed từ chối HTTP ' || coalesce(v_ma::text, '?') || '. ' || coalesce(v_mau, ''), null);
+    if v_loi = 1 or v_loi % 12 = 0 then
+      perform public.log_loi('nhung-dia-danh-tick',
+        'Gemini embed từ chối HTTP ' || coalesce(v_ma::text, '?') || ' (lần ' || v_loi || ') — tạm dừng tới '
+          || to_char(v_dung at time zone 'Asia/Ho_Chi_Minh', 'HH24:MI DD/MM') || ' giờ VN. ' || coalesce(v_mau, ''),
+        null);
+    end if;
+  elsif v_ok and v_loi > 0 then
+    update public.app_config set value = '0' where key = 'nhung_lan_loi';
+    update public.app_config set value = '' where key = 'nhung_tam_dung_den';
   end if;
 
   -- (2) Gửi mẻ mới: quận cũ → phường mới → phường cũ → đường (không nhúng hẻm). Chỉ khi tin rao + dự án không chờ.
