@@ -114,6 +114,8 @@ jobs:
 
           # 30/09/2026: "cho Gemini chạy có đủ để người test không" — khoá nào đang có. Chỉ in CÓ / KHÔNG và TÊN secret,
           # không bao giờ in giá trị (log repo công khai).
+          echo "== Prompt đang đè trong DB (bot_prompts: chỉ tên khoá + ngày sửa, không in nội dung)"
+          q "select coalesce(json_agg(key || ' ' || to_char(updated_at, 'YYYY-MM-DD') order by key), '[]') as khoa from public.bot_prompts" | jq -c '.[0].khoa' || echo "(không đọc được)"
           echo "== Khoá AI"
           q "select json_build_object('vault', json_build_object(
                     'GEMINI_API_KEY', public.get_secret('GEMINI_API_KEY') is not null,

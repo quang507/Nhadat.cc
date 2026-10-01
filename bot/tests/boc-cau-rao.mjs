@@ -107,6 +107,17 @@ for (const [c, mong] of [
   ["Hẻm 6m Lê Văn Sỹ, P.13, Q.3", "Hẻm 6m Lê Văn Sỹ"],
   // 15/09/2026 (Zalo thật): "mới làm lại" là lời tả, không phải tên đường.
   ["căn hộ 5 tầng có sổ hồng riêng, đường Lê Văn Việt mới làm lại rất rộng, số nhà tôi là số449", "đường Lê Văn Việt"],
+  // 01/10/2026 (bắn thật lx-tam-12): số nhà đứng TRƯỚC chữ "đường" không được rơi; "đường 59" là đường đánh số.
+  ["156 đường 59 Tây Thông Hội", "156 đường số 59"],
+  ["bán nhà 156 đường 59 thong tay hoi go vap, 4x12", "156 đường số 59"],
+  ["156 duong 59", "156 đường số 59"],
+  ["nhà số 45 đường Lê Văn Sỹ", "45 đường Lê Văn Sỹ"],
+  ["137/28 đường số 59", "137/28 đường số 59"],
+  ["sn 12 hẻm 4 Trần Bình Trọng", "12 hẻm 4 Trần Bình Trọng"],
+  ["đường 3 tháng 2 quận 10", "đường 3 tháng 2"],
+  ["giá 5 tỷ đường Nguyễn Trãi", "đường Nguyễn Trãi"],
+  ["dt 50 đường Nguyễn Trãi", "đường Nguyễn Trãi"],
+  ["đường 5m xe hơi", null],
 ]) ok(`vị trí: '${c.slice(0, 50)}' → ${mong}`, bocViTriRao(c) === mong, String(bocViTriRao(c)));
 
 // ── câu bổ sung sau khi tạo tin ──

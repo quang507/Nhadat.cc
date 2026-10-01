@@ -141,7 +141,10 @@ Deno.serve(async (req) => {
   const candidates = (missing ?? [])
     .filter((f) => !pendingKeys.has(f.fact_key) && !daNeKeys.has(f.fact_key))
     .sort((a, b) => bac(a) - bac(b) || (a.priority ?? 0) - (b.priority ?? 0));
-  const toAsk = candidates.slice(0, 3);
+  // 01/10/2026 (chủ dự án, ảnh Zalo: "Để em kiểm tra giá khu vực… em cần mình tuyên bố thêm ba điểm: Quy hoạch… tranh chấp…
+  // diện tích xây khớp sổ…" — "pháp lý ko cần hỏi gộp lại nhiều quá đâu từng ý thôi"): nhịp drip hỏi ĐÚNG MỘT ý mỗi tin,
+  // bằng câu mẫu (không để model viết lời mở kiểu "tuyên bố ba điểm"). Chế độ batch (CTV gọi tay) giữ 3 câu.
+  const toAsk = candidates.slice(0, drip ? 1 : 3);
 
   if (toAsk.length === 0) {
     return jsonResponse({
@@ -169,12 +172,16 @@ Deno.serve(async (req) => {
         : `Soạn MỘT tin nhắn Zalo NGẮN (35–60 từ) hỏi bù ${toAsk.length} thông tin dưới đây trong CÙNG MỘT tin (mỗi thông tin một dòng ngắn, xuống dòng), giọng nối tiếp cuộc trò chuyện đang có, kèm lý do vì-khách khi tự nhiên ("khách mua đang hỏi…"). Không chào lại từ đầu, không hỏi gì khác.`)
     : `Soạn MỘT tin nhắn Zalo gửi người bán để xin bổ sung thông tin cho tin rao: gộp hết vào một tin duy nhất, mỗi thông tin một câu hỏi rõ ràng, mở đầu chào đúng tone + khen một điểm mạnh của tin, nói rõ "có khách đang hỏi" để tạo động lực trả lời, kết thúc bằng lời cảm ơn + câu hỏi. Không hỏi gì ngoài danh sách.`;
 
-  const anthropic = await anthropicClient(db);
+  const cachGoi = seller?.xung_ho ?? "mình";
+  const cauDrip = drip
+    ? `${isFirst ? `Dạ em cảm ơn ${cachGoi} đã gửi tin nha. ` : "Dạ, em hỏi thêm một ý nha. "}${cauHoiMau(toAsk[0].fact_key, cachGoi, undefined, listing.property_type)}`
+    : null;
+  const anthropic = cauDrip ? null : await anthropicClient(db);
   // FR-171 e: một tin ~30 từ + tối đa 3 câu hỏi ngắn — `low`/512 là đủ, như
   // nudge đang dùng cho việc tương đương. `medium`/1024 trước đây là trả thêm
   // tiền suy nghĩ cho một câu chào. 512 (không phải 256) vì đầu ra là JSON có
   // mảng questions; cắt giữa chuỗi là parse hỏng im (bài học ctv-report 26/08).
-  const resp = await anthropic.messages.parse({
+  const resp = cauDrip ? null : await anthropic!.messages.parse({
     model: MODEL,
     max_tokens: 512,
     output_config: {
@@ -204,11 +211,13 @@ Deno.serve(async (req) => {
     }],
   });
 
-  await doTien(db, resp.usage); // FR-171 e: đồng hồ tiền đếm cả câu hỏi chủ nhà
-  if (resp.stop_reason === "refusal" || !resp.parsed_output) {
+  if (resp) await doTien(db, resp.usage); // FR-171 e: đồng hồ tiền đếm cả câu hỏi chủ nhà
+  if (resp && (resp.stop_reason === "refusal" || !resp.parsed_output)) {
     return jsonResponse({ error: "Không sinh được tin nhắn", stop_reason: resp.stop_reason }, 502);
   }
-  const out = resp.parsed_output;
+  const out = cauDrip
+    ? { message: cauDrip, questions: [{ fact_key: toAsk[0].fact_key, question: cauDrip }] }
+    : resp!.parsed_output!;
   // Lưới trên đường ra như chat-reply: bỏ "anh/chị" gạch chéo, tự xưng "cháu" với chú/cô/bác.
   // FR-238: câu đứng tên đi nguyên câu mẫu (hỏi QUAN HỆ, không để model viết "Ai đứng tên sổ?" — khách dễ đáp họ tên).
   if (toAsk.some((f) => f.fact_key === "nguoi_dung_ten")) {

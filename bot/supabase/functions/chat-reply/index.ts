@@ -4537,7 +4537,7 @@ Deno.serve(async (req) => {
           // riêng" — AI không đưa ô nào (lạc câu hỏi), luật bị tắt → câu vào "📝 Thêm", ô gấp / pháp lý trống, bot hỏi lại.
           // AI IM HẲN (không ô, không cập nhật, không chữ cần xác nhận) thì luật đọc các ô KHÁC câu đang hỏi (fact kèm); câu
           // đang hỏi vẫn theo AI (AI nói "không trả lời" là không). Có `xac_nhan` ("xhr") thì không — AI cố ý chưa ghi.
-          if (laCheDoAi && !aiChinh.ghi.length && !capNhatLuot.length && !(kqAi.xacNhan?.length)) {
+          if (laCheDoAi && !aiChinh.ghi.length && !capNhatLuot.length && !kiemXacNhan(kqAi.xacNhan ?? [], text)) {
             console.log("chat-reply: che do ai — AI im han, luat doc fact kem");
             aiImHan = true;
           }
@@ -4864,6 +4864,9 @@ Deno.serve(async (req) => {
           else if (coSdt(dapAn)) ghiBoSung = null;
           // 24/09/2026 (tin thật: hỏi phường, khách đáp "Quận 1 em ơi"): còn < 2 chữ hoặc chỉ là tên quận / phường → rác.
           else if (laBoSungRac(dapAn)) ghiBoSung = null;
+          // Bắn thử 01/10 (lx-tam-21): trả lời bản nháp bằng "3 phòng" → AI ghi phòng ngủ 3 mà câu vẫn vào "📝 Thêm: 3 phòng".
+          // Tin NGẮN (≤ 4 chữ) mà AI đã ghi được ô từ đó → chính là ô đó, không phải thông tin thêm.
+          else if (aiChinh?.ghi.length && dapAn.trim().split(/\s+/).length <= 4) ghiBoSung = null;
           // Chế độ `chinh`: AI đã đọc ra kiến thức từ câu này → đường ra ghi `bo_sung` nguồn ai_kiem
           // (`ghiBongBocTach`), không ghi nguyên văn lần hai. AI không đọc ra gì → nguyên văn như cũ.
           else if (aiChinh && aiChinh.kienThuc.length) ghiBoSung = null;

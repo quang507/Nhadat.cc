@@ -3,7 +3,7 @@
 //
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
-import { datKiemNhe, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { datKiemNhe, kiemXacNhan, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -427,6 +427,9 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
     ok("[ai] so_tang 3 «3 lầu» → sửa thành 4 (tính cả trệt)", k.dat.length === 1 && k.dat[0].gia_tri === "4", JSON.stringify(k)); }
   bo("[ai] 'nhà 4 tầng' → nha_cap4 bị loại (không có chữ cấp 4; bắn thử lx-tam-12)", "Cần bán nhà 4 tầng hẻm xe hơi quận Gò Vấp", "loai_bds", "nha_cap4", "nhà 4 tầng", "trich_dan_khong_noi_loai_nay");
   dat("[ai] 'nha cap 4' → nha_cap4 đạt", "ban nha cap 4 duong Xo Viet Nghe Tinh", "loai_bds", "nha_cap4", "nha cap 4");
+  ok("[ai] xác nhận 'sổ hồng riêng' khi khách gõ đúng nguyên chữ → không hỏi lại (lx-tam-22)",
+    kiemXacNhan([{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "sổ hồng riêng" }], "sổ hồng riêng") === null, "");
+  ok("[ai] xác nhận 'xhr' → vẫn hỏi lại", kiemXacNhan([{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "xhr" }], "nhà hẻm 4m, xhr")?.gia_tri === "sổ hồng riêng", "");
   bo("[ai] 'ko có phường' vẫn không phải phường", "ko có phường", "phuong", "ko có phường", "ko có phường", "phuong_khong_co_that");
   datKiemNhe(false);
 }
