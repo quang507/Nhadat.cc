@@ -13,7 +13,7 @@ import { donViGiaDep } from "./luat-tien.ts";
 const boDau = (s: string): string =>
   (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
-export type LoaiHoiTin = "khach" | "gia" | "dien_tich" | "dia_chi" | "tang" | "huong" | "phap_ly" | "trang_thai" | "ban_chua" | "noi_dang";
+export type LoaiHoiTin = "khach" | "gia" | "dien_tich" | "dia_chi" | "tang" | "huong" | "phap_ly" | "trang_thai" | "ban_chua" | "noi_dang" | "bao_lau_ban";
 
 export type TinTom = {
   code?: string | null; status?: string | null; price_raw?: string | null; area_m2?: number | string | null;
@@ -67,9 +67,21 @@ const STATUS_VI: Record<string, string> = {
   da_chot: "đã chốt, em gỡ khỏi kệ rồi", an: "đang tạm gỡ khỏi kệ",
 };
 
+/**
+ * Tin chưa lên kệ: còn thiếu gì. `thieu` = nhãn từ `diem_tin` (null = không đọc được → không nói); rỗng = đủ, chỉ chờ chủ duyệt
+ * bản nháp (`daDuyet` false). SRS-5.1zg: "tin lên chưa" từng chỉ được đáp "đang chờ thêm thông tin" mà không nói thiếu gì.
+ */
+export type ConThieu = { thieu: string[] | null; daDuyet: boolean };
+function cauChuaLenKe(ct: ConThieu | null | undefined, ac: string): string | null {
+  if (!ct?.thieu) return null;
+  if (ct.thieu.length) return `tin mình chưa lên kệ vì còn thiếu ${ct.thieu.slice(0, 3).join(", ")}; ${ac} nhắn em mấy thông tin đó là em đăng liền`;
+  return ct.daDuyet ? null : `tin mình đủ thông tin rồi, ${ac} duyệt bản nháp em gửi (nhắn "ok") là em đăng liền`;
+}
+
 /** Câu trả lời tiền định từ DB. `ac` = cách gọi khách. Không có dữ liệu thì nói thật là chưa có. */
-export function dapHoiVeTin(loai: LoaiHoiTin, tin: TinTom, khach: KhachTom, ac: string): string {
+export function dapHoiVeTin(loai: LoaiHoiTin, tin: TinTom, khach: KhachTom, ac: string, ct?: ConThieu | null): string {
   const chua = (thu: string) => `Dạ tin mình chưa có ${thu}, ${ac} cho em xin ${thu} nha.`;
+  const chuaKe = tin.status === "cho_thong_tin" ? cauChuaLenKe(ct, ac) : null;
   switch (loai) {
     case "khach": {
       const n = Math.max(khach.quan_tam, 0), h = Math.max(khach.hoi, 0);
@@ -85,12 +97,20 @@ export function dapHoiVeTin(loai: LoaiHoiTin, tin: TinTom, khach: KhachTom, ac: 
     case "tang": return tin.floor != null ? `Dạ tin ghi tầng ${tin.floor} ạ.` : chua("số tầng");
     case "huong": return tin.direction ? `Dạ tin ghi hướng ${tin.direction} ạ.` : chua("hướng");
     case "phap_ly": return tin.legal_status ? `Dạ tin ghi pháp lý ${LEGAL_VI[tin.legal_status] ?? tin.legal_status} ạ.` : chua("pháp lý");
-    case "trang_thai": return `Dạ tin mình ${STATUS_VI[tin.status ?? ""] ?? "đang được em theo dõi"} ạ.`;
-    case "noi_dang": return `Dạ tin lên kệ web AI Ơi Nhà Đất, và em giới thiệu thẳng cho khách đang tìm mua nhắn em qua Zalo ạ. Hiện tin mình ${STATUS_VI[tin.status ?? ""] ?? "đang được em theo dõi"}.`;
+    case "trang_thai": return chuaKe ? `Dạ ${chuaKe} ạ.` : `Dạ tin mình ${STATUS_VI[tin.status ?? ""] ?? "đang được em theo dõi"} ạ.`;
+    // SRS-5.1zg (chủ dự án 02/10: "bao lâu bán được thì sau sẽ thống kê theo khu vực"): bot tự trả lời, KHÔNG chuyển người
+    // phụ trách, KHÔNG hứa số ngày — chưa có số liệu thời gian bán theo khu vực.
+    case "bao_lau_ban": return dapBaoLauBan(ac, chuaKe);
+    case "noi_dang": return `Dạ tin lên kệ web AI Ơi Nhà Đất, và em giới thiệu thẳng cho khách đang tìm mua nhắn em qua Zalo ạ. Hiện ${chuaKe ?? `tin mình ${STATUS_VI[tin.status ?? ""] ?? "đang được em theo dõi"}`}.`;
     case "ban_chua": {
       if (tin.status === "da_chot") return `Dạ tin mình đã chốt, em gỡ khỏi kệ rồi ạ.`;
       const n = Math.max(khach.quan_tam, 0);
       return `Dạ chưa bán ạ, tin mình ${STATUS_VI[tin.status ?? ""] ?? "đang được em theo dõi"}${n ? `, đang có ${n} khách quan tâm` : ""}; có khách chốt là em báo ${ac} liền.`;
     }
   }
+}
+
+/** "Bao lâu bán được" — có tin hay chưa đều trả lời được; `chuaKe` = tin chưa lên kệ vì sao (nếu biết). */
+export function dapBaoLauBan(ac: string, chuaKe?: string | null): string {
+  return `Dạ bao lâu bán được thì tuỳ giá và khu vực ${ac} ạ, em không dám hứa số ngày. Giá sát thị trường, tin đủ thông tin và có hình thì khách hỏi nhanh hơn. Tin lên kệ là em giới thiệu ngay cho khách đang tìm mua, có khách quan tâm em báo ${ac} liền.${chuaKe ? `\nHiện ${chuaKe} ạ.` : ""}`;
 }

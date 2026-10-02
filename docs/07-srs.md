@@ -1669,6 +1669,61 @@ Thứ tự đợt:
 - `AIM-XN2`, `LQ-03` cập nhật: mock AI phải nói `dong_y`.
 - `doi-chieu-ai.mjs` DC-12 đỏ khi có lời gọi `laDongY` / `laBaoDang` trần mới (dòng lưới đỡ ghi chú "lưới đỡ").
 
+### SRS-5.1zg · Bỏ luật từ khoá, đợt 3: YÊU CẦU của chủ nhà do AI đọc; "bao lâu bán", "tin lên chưa", hình và tiện ích bên mua (02/10/2026)
+
+**Ca gốc / yêu cầu**: thử 10 yêu cầu cơ bản trên production cùng ngày (ID `thu-`).
+- Chủ nhà hỏi "bao lâu bán được" → bot chuyển người phụ trách ("em nhờ anh chị phụ trách…").
+- "Tin lên chưa" → chỉ đáp "đang chờ thêm thông tin", không nói thiếu gì.
+- Người mua xin "hình căn đó" khi chưa rõ căn → bot hứa suông.
+- Người mua hỏi "gần chợ không" → câu trả lời lủng củng.
+
+Chủ dự án 02/10: "sửa luôn mấy chỗ đó trong đợt 3 đi, bao lâu bán được thì sau sẽ thống kê theo khu vực, Người mua hỏi gần tiện ích nào thì xem trên gg đi, hình căn đó ko có thì hỏi lại người mua là đúng luồng" → "dùng gửi link trước đi".
+
+**Lớp lỗi**: máy đoán YÊU CẦU của khách bằng từ khoá, gồm bốn hàm:
+- `hoiVeTin`: dáng hỏi + danh sách chữ;
+- `laXinSoKhach`: "cho/gửi/xin … số/zalo … khách";
+- `laXinXoaDuLieu`: "xoá/reset/dọn/gỡ" + "dữ liệu/tin/hệ thống…";
+- `laXinBoTruong`: xoá/bỏ + nhầm/sai.
+
+Cách nói ngoài danh sách thì trượt: "có mống nào hỏi chưa", "đưa a cách liên lạc người mua", "dẹp hết đi". Câu có chữ trong danh sách nhưng ý khác thì bị nhận nhầm: "em gửi thông tin khách hỏi cho anh xem với" bị đọc thành xin số khách.
+
+Bên mua cùng lớp: `KHACH_XIN_HINH_RE` ("hình|ảnh|photo") quyết khách có xin hình không. "Cho em coi mặt tiền căn đó" thì trượt; "ảnh hưởng" thì dính.
+
+Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà hệ thống TRẢ LỜI ĐƯỢC lại bị gộp vào nhóm "chưa có dữ liệu" (`dapChuaCoDuLieu`) nên bị chuyển người.
+
+**Chỗ khác cùng lớp — đã chuyển sang AI** (AI trước; luật chỉ chạy khi AI không chạy):
+- khối hỏi về tin (10 loại + loại mới `bao_lau_ban`). Phủ quyết `hoiLaiAi` nay chỉ còn ở nhánh lưới đỡ;
+- xin bỏ ô (AI chỉ ô, `yeu_cau_o`);
+- xin số khách;
+- xin xoá dữ liệu: khối riêng, câu duyệt bản nháp, câu hỏi ngược, câu chấm điểm (`xinXoaLuot`);
+- câu chấm điểm không phải câu hỏi về tin;
+- bên mua: khách xin hình (`xin_hinh`).
+
+**Còn lại**: `boDiem` (bỏ câu chấm điểm đang treo) còn gọi `hoiVeTin` vì chạy TRƯỚC lượt AI. Ngoại lệ này được ghi trong DC-14. Đợt 2, 4–8 làm sau.
+
+**Sửa**:
+- `_shared/ai/doc-y-luot.ts` (lượt AI nhỏ, KHÔNG phải khuôn bóc tách 14 trường — xem SRS-5.1zf):
+  - thêm `yeu_cau` (15 giá trị), `yeu_cau_trich`, `yeu_cau_o`;
+  - mỗi ô đọc riêng: ô hỏng thì `undefined` và luật đỡ đúng việc đó, ô kia vẫn dùng.
+- `docYeuCau` (kiem-bang-chung.ts): cụm trích phải có trong tin. Trích bịa → coi như không có yêu cầu.
+- `hoi-ve-tin.ts`: hỏi trạng thái / nơi đăng / bao lâu bán khi tin chưa lên kệ → nói còn thiếu gì. Nguồn là `diem_tin` + giá chưa đọc ra số, cùng nguồn với câu "chỉ cần thêm…" khi chủ bảo đăng. Đủ điểm mà chưa duyệt → nhắc duyệt bản nháp.
+- "Bao lâu bán được" (`dapBaoLauBan`): tuỳ giá và khu vực, KHÔNG hứa số ngày, nói điều giúp bán nhanh. Không chuyển người phụ trách. Chưa có tin vẫn trả lời. **Thống kê thời gian bán theo khu vực chưa làm** `[giả định BA: việc sau]`, nên bot không hứa sẽ gửi số liệu.
+- Nhánh mua, `BuyerTurn` thêm hai ô (đường JSON không dùng structured output nên không đụng giới hạn grammar):
+  - `xin_hinh`: cụm trích phải có trong tin khách. Xin hình mà không biết căn nào (không mã, không căn đang nói) → bỏ lời hứa gửi hình, hỏi lại "đang nói căn nào". Căn đang nói (`canDangNoi`) nay cũng được dùng khi khách xin hình.
+  - `hoi_tien_ich`: giữ câu trả lời từ kho / OSM, thêm link Google Maps tìm sẵn (`maps/search/?api=1&query=<loại> gần <chỗ>`). Chỗ tìm theo thứ tự: nơi khách nói (phải có trong lời khách); căn đang nói (tên đường + phường + quận, không số nhà); khu vực trong hồ sơ. Không biết chỗ thì không gửi link. Trợ lý có công cụ (`tro_ly`) gọi `tim_tien_ich_quanh` cũng ra cùng link.
+
+**Kiểm**:
+- e2e `YC-01…07`, `MUA-HINH-01`, `MUA-MAP-01/02`. Cách nói mới luật không biết:
+  - "bao lâu thì có người mua vậy em";
+  - "nay có mống nào hỏi căn nhà chưa";
+  - "đưa a cách liên lạc với người mua đi";
+  - "anh không muốn lưu gì bên em nữa, dẹp hết đi";
+  - "cho em coi mặt tiền căn đó ra sao".
+- Gỡ bản sửa (stash `bot/supabase/functions`) → 8 ca đỏ (đã chạy). `YC-07` (trích bịa) và `MUA-MAP-02` (chỗ bịa) là ca chặn, xanh cả hai phía.
+- `doi-chieu-ai.mjs`:
+  - DC-14 đỏ khi có lời gọi `hoiVeTin` / `laXin…` trần mới;
+  - DC-15 canh câu "bao lâu bán" không hứa số ngày.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
