@@ -6581,7 +6581,8 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   check("TL-E2E-01a công cụ đọc ra trường trong bán kính, khoảng cách code đo (~250 m), không kèm trường xa",
     /Trường Tiểu học Chương Dương ~250 m/.test(kqCongCu ?? "") && !/Xa Lắc/.test(kqCongCu ?? ""), String(kqCongCu));
   check("TL-E2E-01b lời trả lời giữ tên trường từ dữ liệu công cụ, payload ghi công cụ đã gọi, KHÔNG gọi đường JSON",
-    /Chương Dương/.test(rt.body.reply ?? "") && rt.body.tro_ly?.cong_cu?.join() === "tim_tien_ich_quanh" && parseCalls().length === 0,
+    /Chương Dương/.test(rt.body.reply ?? "") && rt.body.tro_ly?.cong_cu?.join() === "tim_tien_ich_quanh" && parseCalls().length === 0 &&
+      /Chương Dương/.test(rt.body.tro_ly?.van_goc?.[0] ?? "") && /Chương Dương ~250 m/.test(rt.body.tro_ly?.du_lieu?.[0] ?? ""),
     JSON.stringify({ b: rt.body, parse: parseCalls().length }));
   check("TL-E2E-01c system lượt trợ lý dùng lời dặn công cụ, không còn lời dặn JSON",
     /chế độ trợ lý có công cụ/.test(goiTroLy()[0]?.params.system[0].text ?? "") && !/trả về DUY NHẤT một object JSON/.test(goiTroLy()[0]?.params.system[0].text ?? ""));
@@ -6628,8 +6629,22 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__model.troLy = () => { throw new Error("529 overloaded"); };
   rt = await send({ external_user_id: "thu-tl5", text: "quanh đó có chợ không em" });
   check("TL-E2E-05 trợ lý ném → sổ lỗi 'chat-reply tro ly' + đường JSON trả lời",
-    goiTroLy().length === 1 && parseCalls().length === 1 && rt.body.replies?.length > 0 && db().t.bot_errors.some((e) => e.source === "chat-reply tro ly"),
+    goiTroLy().length === 1 && parseCalls().length === 1 && rt.body.replies?.length > 0 && db().t.bot_errors.some((e) => e.source === "chat-reply tro ly") && rt.body.tro_ly?.ly_do === "loi" && rt.body.tro_ly?.vong === 0,
     JSON.stringify({ b: rt.body, err: db().t.bot_errors }));
+
+  // TL-E2E-06 (bắn thật 02/10 "quanh chợ An Đông có trường tiểu học nào" → bot hỏi ngược "chợ An Đông ở đường nào"): kho căn
+  // không định vị được mốc → câu dặn của đường JSON ép HỎI LẠI KHÁCH; ở chế độ trợ lý câu dặn phải cho gọi công cụ trước.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  globalThis.__rpc = { tin_gan_moc: () => ({ data: [], error: null }), co_moc: () => ({ data: false, error: null }) };
+  globalThis.__model.parse = (p) => laLuotGan(p) ? { muon_gan: true, loai: "cho", ten: "An Đông", cap_truong: null, ban_kinh_m: null, bo_dieu_kien: false } : OUT();
+  let sysTL6 = "";
+  globalThis.__model.troLy = (p) => { sysTL6 = p.system[1].text; return { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ em xem giúp anh nha." }] }; };
+  rt = await send({ external_user_id: "thu-tl5", text: "quanh chợ An Đông có trường tiểu học nào không em" });
+  check("TL-E2E-06 kho chưa định vị được mốc → system trợ lý dặn gọi tim_tien_ich_quanh trước, không ép hỏi lại khách",
+    /CHƯA định vị được nơi đó/.test(sysTL6) && /gọi tim_tien_ich_quanh TRƯỚC/.test(sysTL6) && !/hỏi lại khách nơi đó ở đường nào/.test(sysTL6),
+    sysTL6.slice(0, 600));
+  globalThis.__rpc = {};
   globalThis.__cauHinh = cuCH;
 }
 // ── kết ──
