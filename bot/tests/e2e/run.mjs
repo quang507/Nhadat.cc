@@ -6691,6 +6691,38 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   check("TL-E2E-09 khoảng cách không nguồn → nhắc, tra công cụ, trả lời theo dữ liệu; payload nhac_khoang_cach = 1",
     luotTL9 === 3 && /Chương Dương/.test(rt.body.reply ?? "") && !/900/.test(rt.body.reply ?? "") && rt.body.tro_ly?.nhac_khoang_cach === 1,
     JSON.stringify({ n: luotTL9, b: rt.body }));
+
+  // TL-E2E-10 (bắn thật 02/10 thu-trl-07): khách hỏi trường TIỂU HỌC — công cụ lọc đúng cấp; không có cấp đó thì nói rõ
+  // "KHÔNG có trường … nào" và các trường gần nhất đều ghi CẤP, để model không gọi THCS là tiểu học.
+  fresh((d) => { seedTL(d); d.t.tien_ich.push({ osm_id: "n/4", loai: "truong_hoc", ten: "Trường Trung học Cơ sở Lý Phong", ten_kd: "truong trung hoc co so ly phong", lat: 10.7555, lng: 106.6705 }); });
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  const kqTL10 = [];
+  globalThis.__model.troLy = (p) => {
+    const cuoi = p.messages.at(-1);
+    if (Array.isArray(cuoi.content) && cuoi.content.some((c) => c.type === "tool_result")) {
+      kqTL10.push(...cuoi.content.filter((c) => c.type === "tool_result").map((c) => c.content));
+      return { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ em xem rồi ạ." }] };
+    }
+    return { stop_reason: "tool_use", content: [
+      { type: "tool_use", id: "a", name: "tim_tien_ich_quanh", input: { khu_vuc: "BDS-Q5-0001", loai: "truong_hoc", cap_truong: "tieu_hoc" } },
+      { type: "tool_use", id: "b", name: "tim_tien_ich_quanh", input: { khu_vuc: "BDS-Q5-0001", loai: "truong_hoc", cap_truong: "thpt" } },
+    ] };
+  };
+  rt = await send({ external_user_id: "thu-tl1", text: "căn BDS-Q5-0001 gần trường tiểu học nào không em" });
+  check("TL-E2E-10a cap tieu_hoc → chỉ trường tiểu học, dòng ghi '(tiểu học)', không kèm THCS Lý Phong",
+    /trường học \(tiểu học\): Trường Tiểu học Chương Dương/.test(kqTL10[0] ?? "") && !/Lý Phong/.test(kqTL10[0] ?? ""), String(kqTL10[0]));
+  check("TL-E2E-10b cap thpt không có → 'KHÔNG có trường THPT nào', trường gần nhất ghi đúng cấp (THCS)",
+    /KHÔNG có trường THPT nào/.test(kqTL10[1] ?? "") && /trường học \(THCS\): Trường Trung học Cơ sở Lý Phong/.test(kqTL10[1] ?? ""), String(kqTL10[1]));
+
+  // HS-E2E-01 (02/10/2026): đường JSON cũ (trợ lý tắt) — model ghi "vợ chồng + 2 con nhỏ" và 2 phòng ngủ từ "nhà có 2 con nhỏ"
+  // → hồ sơ không nhận hai trường đó; trường có chữ khách thì vẫn ghi.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+  globalThis.__model.parse = () => OUT({ profile: { ...OUT().profile, alley: "hẻm xe hơi", bedrooms: 2, nguoi_o_cung: "vợ chồng + 2 con nhỏ" } });
+  rt = await send({ external_user_id: "thu-tl3", text: "minh can hem xe hoi, nha co 2 con nho" });
+  const hsHS = db().t.buyers.find((b) => b.zalo_user_id === "thu-tl3")?.preferences ?? {};
+  check("HS-E2E-01 đường JSON cũ: chữ khách không nói (vợ chồng, 2 phòng ngủ) không vào hồ sơ; hẻm xe hơi vẫn vào",
+    hsHS.nguoi_o_cung == null && hsHS.bedrooms == null && /xe h[ơo]i/.test(String(hsHS.alley ?? "")), JSON.stringify(hsHS));
   globalThis.__cauHinh = cuCH;
 }
 // ── kết ──

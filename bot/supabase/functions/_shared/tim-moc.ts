@@ -93,6 +93,25 @@ function khoangCachM(a: { lat: number; lng: number }, b: { lat: number; lng: num
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+/** Cấp trường đọc từ TÊN (OSM chỉ có loại "trường học" chung). */
+export const TEN_CAP: Record<string, string> = {
+  mam_non: "mầm non", tieu_hoc: "tiểu học", thcs: "THCS", thpt: "THPT", lien_cap: "liên cấp / phổ thông", dai_hoc: "đại học / cao đẳng",
+};
+/**
+ * Cấp của một trường theo tên (02/10/2026, bắn thật thu-trl-07: khách hỏi trường TIỂU HỌC, bot nói "Trường tiểu học gần nhất là
+ * Trường Trung học Cơ sở Lý Phong" — công cụ chỉ trả "trường học" chung, model tự gán cấp). null = không đọc được cấp.
+ */
+export function capTruong(ten: string): string | null {
+  const k = kdTen(ten);
+  if (/\b(mam non|mau giao|nha tre)\b/.test(k)) return "mam_non";
+  if (/\b(tieu hoc|th)\b/.test(k) && !/\b(trung hoc|thcs|thpt)\b/.test(k)) return "tieu_hoc";
+  if (/\b(trung hoc co so|thcs)\b/.test(k)) return "thcs";
+  if (/\b(trung hoc pho thong|thpt)\b/.test(k)) return "thpt";
+  if (/\b(dai hoc|cao dang|hoc vien|du bi dai hoc)\b/.test(k)) return "dai_hoc";
+  if (/\b(pho thong|lien cap|nhieu cap)\b/.test(k)) return "lien_cap";
+  return null;
+}
+
 /**
  * Các cách gọi một khu vực để thử định vị, đầy đủ trước (SRS-5.1y, bắn thật 02/10): model gửi "chợ An Đông, Quận 5" —
  * cả chuỗi không khớp mốc nào trong `tien_ich` (tên lưu "cho an dong") và Nominatim cũng hụt (sau 07/2025 không còn
@@ -124,6 +143,7 @@ export async function timTienIchQuanh(
   khuVuc: string,
   loai: string,
   banKinhM = 1000,
+  cap: string | null = null,
 ): Promise<string> {
   const kv = khuVuc.trim().slice(0, 120);
   if (!kv) return "Thiếu khu vực — hỏi khách khu vực cụ thể (đường, phường, quận).";
@@ -159,18 +179,30 @@ export async function timTienIchQuanh(
     .gte("lng", diem.lng - dLng).lte("lng", diem.lng + dLng)
     .limit(400);
   if (error) throw new Error(error.message);
-  const ds = ((data ?? []) as Array<{ loai: string; ten: string; lat: number; lng: number }>)
-    .map((t) => ({ ...t, m: khoangCachM(diem!, { lat: Number(t.lat), lng: Number(t.lng) }) }))
+  const tatCa = ((data ?? []) as Array<{ loai: string; ten: string; lat: number; lng: number }>)
+    .map((t) => ({ ...t, m: khoangCachM(diem!, { lat: Number(t.lat), lng: Number(t.lng) }), cap: t.loai === "truong_hoc" ? capTruong(t.ten) : null }))
     .filter((t) => t.m <= bk)
     .sort((a, b) => a.m - b.m);
-  const tenLoai = (l: string) => TEN_LOAI[l as keyof typeof TEN_LOAI] ?? l;
+  const capHoi = cap && TEN_CAP[cap] && loaiHoi.length === 1 && loaiHoi[0] === "truong_hoc" ? cap : null;
+  const ds = capHoi ? tatCa.filter((t) => t.cap === capHoi) : tatCa;
+  // Mỗi dòng trường ghi CẤP đọc từ tên — model không phải (và không được) tự gán cấp.
+  const tenLoai = (l: string, c?: string | null) =>
+    l === "truong_hoc" ? `trường học (${c ? TEN_CAP[c] : "không rõ cấp"})` : TEN_LOAI[l as keyof typeof TEN_LOAI] ?? l;
   const dau = `Quanh ${diem.ten} (bán kính ~${lamTron(bk)}, đường chim bay, ước tính - nói "khoảng"):`;
+  const dong = (arr: typeof tatCa) => arr.map((t) => `- ${tenLoai(t.loai, t.cap)}: ${t.ten} ~${lamTron(t.m)}`).join("\n");
+  if (!ds.length && capHoi && tatCa.length) {
+    // Có trường nhưng không trường nào đúng cấp khách hỏi → nói thật, kèm các trường gần nhất CÓ GHI CẤP để model không
+    // gọi trường THCS là "trường tiểu học".
+    return `${dau} KHÔNG có trường ${TEN_CAP[capHoi]} nào trong dữ liệu quanh đây - nói thật là em chưa thấy trường ` +
+      `${TEN_CAP[capHoi]} nào trong bán kính này, KHÔNG gọi trường cấp khác là ${TEN_CAP[capHoi]}. Các trường gần nhất (đúng cấp ghi trong ngoặc):\n` +
+      dong(tatCa.slice(0, 5));
+  }
   if (!ds.length) {
-    return `${dau} kho dữ liệu bên em CHƯA có ${loaiHoi.length === 1 ? tenLoai(loaiHoi[0]) : "tiện ích"} nào ở đây ` +
+    return `${dau} kho dữ liệu bên em CHƯA có ${loaiHoi.length === 1 ? TEN_LOAI[loaiHoi[0] as keyof typeof TEN_LOAI] ?? loaiHoi[0] : "tiện ích"} nào ở đây ` +
       "(kho chỉ nạp quanh các căn đang rao) - nói thật là em chưa có dữ liệu, KHÔNG kể tên nào.";
   }
   const chon = loaiHoi.length === 1
     ? ds.slice(0, 8)
     : loaiHoi.flatMap((l) => ds.filter((t) => t.loai === l).slice(0, 3));
-  return `${dau}\n` + chon.map((t) => `- ${tenLoai(t.loai)}: ${t.ten} ~${lamTron(t.m)}`).join("\n");
+  return `${dau}${loaiHoi.includes("truong_hoc") ? " (cấp trường ghi trong ngoặc, nói đúng cấp đó)" : ""}\n` + dong(chon);
 }
