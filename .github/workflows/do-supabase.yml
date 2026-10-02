@@ -79,7 +79,7 @@ jobs:
           DEBUG_LOG=1
           lg() {
             echo; echo "=== $1 ==="
-            RES=$(curl -sS -G "https://api.supabase.com/v1/projects/$PROJECT_REF/analytics/endpoints/logs.all" \
+            RES=$(curl -sS -G "https://api.supabase.com/v1/projects/$PROJECT_REF/analytics/endpoints/logs" \
               -H "Authorization: Bearer $TOKEN" --data-urlencode "sql=$2" \
               --data-urlencode "iso_timestamp_start=$START" --data-urlencode "iso_timestamp_end=$END")
             [ -n "${DEBUG_LOG:-}" ] && { echo "raw: $(echo "$RES" | head -c 300)"; DEBUG_LOG=; }

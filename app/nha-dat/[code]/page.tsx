@@ -21,29 +21,30 @@ export const revalidate = 300;
 // Đo tại chỗ 26/08 (next start, production build):
 //   /                 → x-nextjs-cache: HIT, Cache-Control: s-maxage=300
 //   route [param] bất kỳ → Cache-Control: private, no-cache, no-store
-// Đây lại đúng là 164 trang SEO — thứ Google cào nhiều nhất. Khai báo sẵn mã
-// tin đang lên kệ để dựng lúc build; mã lạ (tin mới, tin đã chốt mở link cũ)
-// vẫn render on-demand vì dynamicParams mặc định = true, và render xong cũng
-// được nằm trong cache 5 phút như các trang kia.
+// Đây lại đúng là trang SEO — thứ Google cào nhiều nhất. Có generateStaticParams
+// (dù rỗng) thì mọi mã render on-demand vì dynamicParams mặc định = true, và
+// render xong được nằm trong cache 5 phút như các trang kia.
+// 02/10/2026 (đo Supabase): danh sách mã tin ở đây làm MỖI lượt build (CI mỗi PR + Vercel preview + production, ~24
+// lượt/ngày lúc làm việc) dựng sẵn mọi tin × ~6 truy vấn - cùng cơ chế đã đốt 83% request REST ở /du-an/[slug]. Trả mảng
+// RỖNG: route vẫn là ● (Next 15 dựng lần đầu có người xem rồi giữ cache 5 phút như trên), chỉ không dựng trước lúc build.
 export async function generateStaticParams() {
-  const { data, error } = await supabase
-    .from("listings")
-    .select("code")
-    .in("status", ["dang_ban", "dang_quan_tam"])
-    .not("code", "is", null);
-  // Không tới được DB lúc build thì hàm này trả [] và build VẪN XANH: 0 trang tin
-  // được dựng sẵn, bảng route vẫn hiện ● nên kiểm NFR-17 không bắt được (đo
-  // 08/09: prerender-manifest có 80 route, 0 route /nha-dat/). Nói ra ở đây.
-  if (error || !data?.length) {
-    console.warn(`[nha-dat] generateStaticParams: ${error ? error.message : "0 tin"} - không dựng sẵn trang tin nào, chỉ render on-demand.`);
-  }
-  return (data ?? []).map((l) => ({ code: l.code as string }));
+  return [];
 }
 
 // `cache` của React gộp hai lượt gọi cùng tham số trong MỘT lần render —
 // `generateMetadata` và `Page` cùng hỏi đúng tin này. supabase-js không đi qua
 // fetch-cache của Next nên không tự gộp: trước bản này mỗi trang tin là HAI
 // truy vấn y hệt, lúc build nhân với ~164 tin (FR-171 j).
+// Cột trang tin thật sự dùng (khớp type Listing + nhãn). 02/10/2026: trước đây `select("*")` kéo cả `nhung`
+// vector(768) (~9 KB dạng chữ), `boc_tach`, `tien_ich_gan` - mỗi trang tin dựng ra là vài chục KB egress Supabase
+// chỉ để vứt đi. Thêm cột mới cho trang này thì thêm vào đây.
+const DETAIL_COLS =
+  "id, code, deal, district, ward, location_raw, area_m2, price_vnd, price_raw, description, status, property_type, unit_status, " +
+  "last_confirmed_at, created_at, lat, lng, bedrooms, street, access_type, alley_width_m, distance_to_street_m, frontage_m, length_m, " +
+  "rear_width_m, legal_area_m2, built_area_m2, floors, floors_text, floor, bathrooms, direction, legal_status, has_completion, " +
+  "planning_status, has_elevator, car_in_house, corner_lot, furnishing, year_built, negotiable, rent_income_vnd, specs_source, " +
+  "price_per_m2_vnd, project_id, unit_code, nhan";
+
 const getListing = cache(async (code: string): Promise<Listing | null> => {
   // Đoạn đường dẫn đi THẲNG vào chuỗi `.or()` của PostgREST, nơi `,` `(` `)` là
   // ngữ pháp và `%` `_` là wildcard: `/nha-dat/%25` là "mọi tin", `/nha-dat/x,status.eq.an`
@@ -51,7 +52,7 @@ const getListing = cache(async (code: string): Promise<Listing | null> => {
   if (!/^[A-Za-z0-9-]{1,40}$/.test(code)) return null;
   const { data } = await supabase
     .from("listings")
-    .select("*")
+    .select(DETAIL_COLS)
     .or(`code.ilike.${code},legacy_code.ilike.${code}`)
     .limit(1)
     .maybeSingle();
