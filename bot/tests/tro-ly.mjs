@@ -257,5 +257,25 @@ ok("TL-12b tên đường / phường / chợ / mã căn KHÔNG bị coi là c�
   ok("TL-13b model vẫn gọi công cụ ở vòng cuối → null + baoHong('het_vong', công cụ đã gọi)", kq2 === null && bao?.l === "het_vong" && bao?.c.length === 2, JSON.stringify(bao));
 }
 
+// TL-14 (bắn lại D1): "…trong khoảng 1 km" nhắc lại bán kính đã tra → không phải khoảng cách bịa; bán kính KHÁC nguồn thì vẫn bắt.
+{
+  const nguon = "Quanh Chợ An Đông (bán kính ~1 km, đường chim bay):\n- trường học (tiểu học): Trường Tiểu học Trần Quang Cơ ~450 m";
+  ok("TL-14 'mấy trường khác trong khoảng 1 km' khớp bán kính nguồn → không bỏ câu",
+    cauKhoangCachKhongNguon("Có Trường Tiểu học Trần Quang Cơ và mấy trường khác trong khoảng 1 km.", nguon).length === 0);
+  ok("TL-14b cách nói mới 'trong vòng 300m có bệnh viện' (bán kính khác nguồn) → vẫn bắt",
+    cauKhoangCachKhongNguon("Trong vòng 300m có bệnh viện Chợ Rẫy.", nguon).length === 1);
+}
+// TL-15 (bắn lại D1 "còn bệnh viện gần đó"): tra xong, vòng 2 model chỉ kể việc "Ghi lại hồ sơ…:" + lệnh ghi → KHÔNG dừng; vòng
+// 3 mới là lời trả lời.
+{
+  const goi = modelGia([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "r", name: "tim_tien_ich_quanh", input: { khu_vuc: "chợ An Đông", loai: "benh_vien" } }] },
+    { stop_reason: "tool_use", content: [{ type: "text", text: "Ghi lại hồ sơ với thông tin khách đã nói rõ:" }, { type: "tool_use", id: "w", name: "ghi_ho_so_mua", input: { truong: [{ khoa: "area", gia_tri: "Quận 5", trich_dan: "quận 5" }] } }] },
+    { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ gần chợ An Đông có Bệnh viện Nguyễn Trãi khoảng 350 m ạ." }] },
+  ]);
+  const kq = await chayTroLyMua({ goi, thamSo, loiKhach: "mua nhà quận 5 tầm 6 tỷ. còn bệnh viện gần đó thì sao", doc: async () => "Quanh Chợ An Đông:\n- bệnh viện: Bệnh viện Nguyễn Trãi ~350 m" });
+  ok("TL-15 đã tra rồi thì vòng chỉ-có-ghi không phải lời cuối → trả lời ở vòng 3", kq?.vong === 3 && /Nguyễn Trãi/.test(kq?.out.replies.join(" ") ?? ""), JSON.stringify(kq?.out.replies));
+}
+
 console.log(`\n${tong - hong}/${tong} đạt`);
 if (hong) process.exit(1);
