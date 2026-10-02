@@ -91,7 +91,26 @@ kiem("DC-11 thông tin chung / dự án nói bằng 'Theo em biết, …' (khố
     const ca = chat.split("\n")[dong - 1];
     return /lưới đỡ|gatLuot|baoDangLuot|: laDongY|: \(laDongY|: !gatCa|tgH !== undefined|laDongY\(text\) && text\.trim/.test(ca) ? null : `${dong}: ${ca.trim().slice(0, 90)}`;
   }).filter(Boolean);
-  kiem("DC-12 gật / bảo đăng: không còn lời gọi laDongY / laBaoDang trần (chỉ lưới đỡ sau AI)", /docDongY\(k, textTreo/.test(chat) && /docYLuotBangModel/.test(chat) && tran.length === 0, tran.join(" | "));
+  kiem("DC-12 gật / bảo đăng: không còn lời gọi laDongY / laBaoDang trần (chỉ lưới đỡ sau AI)", /docDongY\(k\.dongY, textTreo/.test(chat) && /docYLuotBangModel/.test(chat) && tran.length === 0, tran.join(" | "));
+}
+
+// DC-14 (đợt 3 bỏ luật từ khoá, SRS-5.1zg): YÊU CẦU của chủ nhà (hỏi về tin, bao lâu bán, xin số khách, xin xoá dữ liệu, xin bỏ ô)
+// do AI quyết (`yeuCauAi`) — `hoiVeTin` / `laXinSoKhach` / `laXinXoaDuLieu` / `laXinBoTruong` trong chat-reply chỉ còn là lưới đỡ
+// (dòng ghi "lưới đỡ", nhánh `ycLuot !== undefined ? … : luật`). Ngoại lệ có lý do: `boDiem` chạy TRƯỚC lượt AI (bỏ câu chấm
+// điểm treo khi tin không phải điểm). Gọi trần mới thêm vào là đỏ.
+{
+  const tran = [...chat.matchAll(/\b(hoiVeTin|laXinSoKhach|laXinXoaDuLieu|laXinBoTruong)\(/g)].map((m) => {
+    const dong = chat.slice(0, m.index).split("\n").length;
+    const ca = chat.split("\n")[dong - 1];
+    return /lưới đỡ|ycLuot !== undefined|const boDiem/.test(ca) ? null : `${dong}: ${ca.trim().slice(0, 90)}`;
+  }).filter(Boolean);
+  kiem("DC-14 yêu cầu chủ nhà: không còn lời gọi hoiVeTin / laXin… trần (chỉ lưới đỡ sau AI)", /docYeuCau\(k\.yeuCau, textTreo/.test(chat) && tran.length === 0, tran.join(" | "));
+}
+// DC-15 (SRS-5.1zg): "bao lâu bán được" bot tự trả lời — không đi đường chuyển người phụ trách, không hứa số ngày.
+{
+  const hvt = readFileSync(goc + "_shared/extraction/hoi-ve-tin.ts", "utf8");
+  const than = hvt.slice(hvt.indexOf("export function dapBaoLauBan"));
+  kiem("DC-15 'bao lâu bán được' có câu trả lời tiền định, không hứa số ngày", /case "bao_lau_ban"/.test(hvt) && /hoi_bao_lau_ban/.test(readFileSync(goc + "_shared/ai/doc-y-luot.ts", "utf8")) && /không dám hứa số ngày/.test(than) && !/\d+\s*(?:ngày|tuần|tháng)/.test(than.split("\n").slice(0, 4).join(" ")));
 }
 
 // DC-13 (02/10/2026, #414 → revert #415): khuôn structured output của lượt bóc tách SÁT giới hạn grammar Anthropic — thêm MỘT ô

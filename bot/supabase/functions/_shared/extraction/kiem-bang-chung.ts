@@ -996,6 +996,20 @@ export function docDongY(v: { la?: string | null; trich_dan?: string | null; dan
   return coTrich ? { la: v.la, dangDi: v.la === "dong_y" && v.dang_di === true, trich: td } : null;
 }
 
+/**
+ * Đợt 3 bỏ luật từ khoá (02/10/2026, SRS-5.1zg): YÊU CẦU của chủ nhà (hỏi về tin, bao lâu bán, xin số khách, xin xoá, xin bỏ ô) do
+ * AI đọc. Nhận khi cụm trích có trong tin; `khong` hoặc trích bịa → null (= AI nói không có yêu cầu nào code xử lý được).
+ */
+export function docYeuCau<L extends string, O extends string>(
+  v: { loai?: L | null; trich_dan?: string | null; o?: O | null } | null | undefined,
+  tin: string,
+): { loai: Exclude<L, "khong">; trich: string; o: O | null } | null {
+  const loai = v?.loai;
+  if (!loai || loai === "khong") return null;
+  const td = (v?.trich_dan ?? "").trim();
+  return trichCoTrongTin(td, tin) ? { loai: loai as Exclude<L, "khong">, trich: td, o: v?.o ?? null } : null;
+}
+
 /** Đợt 3 (02/10/2026): câu hỏi kế AI chọn — chỉ nhận khoá có trong danh sách hợp lệ của lượt (đã bỏ câu hết hạn, câu không áp dụng, câu đang treo). */
 export function docCauKe(ck: { khoa?: string | null } | null | undefined, hopLe: Iterable<string>): string | null {
   const k = (ck?.khoa ?? "").trim();

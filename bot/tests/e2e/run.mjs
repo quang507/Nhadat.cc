@@ -3270,6 +3270,88 @@ fresh(seedKho);
       r.body.loai_cau === "hoan_gat" && r.body.replies.some((x) => /em chờ/.test(x)), JSON.stringify(r.body));
     globalThis.__cauHinh = cuCH;
   }
+  // Đợt 3 bỏ luật từ khoá (02/10/2026, SRS-5.1zg): YÊU CẦU của chủ nhà (hỏi về tin, bao lâu bán, xin số khách, xin xoá) do lượt
+  // AI nhỏ đọc (`yeu_cau`); `hoiVeTin` / `laXinSoKhach` / `laXinXoaDuLieu` chỉ đỡ khi AI không chạy. Câu thử là cách nói luật
+  // KHÔNG biết (hoặc biết sai) — tắt bản sửa thì đỏ.
+  {
+    const cuCH = globalThis.__cauHinh;
+    const laLuotYLuot = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+    const aiYC = (yc, them = {}) => (p) => (laLuotBocRao(p) || laLuotYLuot(p)) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, dong_y: "khong_noi", dong_y_trich: null, ...(yc ? { yeu_cau: yc.loai, yeu_cau_trich: yc.trich_dan, yeu_cau_o: yc.o ?? null } : {}), ...them } : OUT();
+    const moYC = async (uid) => {
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__model.parse = aiYC(null);
+      await send({ external_user_id: uid, text: "ban nha hem 5m Le Van Sy quan 3, 4x15, gia 7 ty" });
+      const L = db().t.listings.at(-1);
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: L.id, question: "huong", status: "pending" });
+      return L;
+    };
+    const hoiDichVu = (cau) => ({ hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "dich_vu" } });
+    const soViecHoi = () => db().t.reminders.filter((x) => x.kind === "escalation" && /^❓/.test(x.note ?? "")).length;
+    await moYC("yc-1");
+    let cau = "bao lâu thì có người mua vậy em";
+    globalThis.__model.parse = aiYC({ loai: "hoi_bao_lau_ban", trich_dan: "bao lâu thì có người mua" }, hoiDichVu(cau));
+    let r = await send({ external_user_id: "yc-1", text: cau });
+    check("YC-01 'bao lâu thì có người mua vậy em' (AI: hỏi bao lâu bán) → bot tự trả lời 'tuỳ giá và khu vực', KHÔNG chuyển người phụ trách",
+      r.body.replies.some((x) => /tuỳ giá và khu vực/.test(x)) && soViecHoi() === 0 && !r.body.replies.some((x) => /nhờ anh chị phụ trách/.test(x)), JSON.stringify({ rep: r.body.replies, n: soViecHoi() }));
+    await moYC("yc-2");
+    globalThis.__model.parse = aiYC({ loai: "hoi_trang_thai", trich_dan: "tin anh lên web được chưa" });
+    r = await send({ external_user_id: "yc-2", text: "tin anh lên web được chưa e" });
+    check("YC-02 'tin anh lên web được chưa e', tin chưa lên kệ → nói còn thiếu gì (không chỉ 'đang chờ thêm thông tin')",
+      r.body.replies.some((x) => /chưa lên kệ vì còn thiếu|đủ thông tin rồi/.test(x)) && Array.isArray(r.body.thieu), JSON.stringify(r.body));
+    await moYC("yc-3");
+    globalThis.__model.parse = aiYC({ loai: "hoi_khach", trich_dan: "có mống nào hỏi căn nhà chưa" });
+    r = await send({ external_user_id: "yc-3", text: "nay có mống nào hỏi căn nhà chưa" });
+    check("YC-03 'nay có mống nào hỏi căn nhà chưa' (luật không biết) → trả lời số khách từ DB",
+      r.body.hoi_ve_tin === "khach" && r.body.replies.some((x) => /chưa có khách nào hỏi/.test(x)), JSON.stringify(r.body.replies));
+    await moYC("yc-4");
+    globalThis.__model.parse = aiYC({ loai: "xin_so_khach", trich_dan: "đưa a cách liên lạc với người mua đi" });
+    r = await send({ external_user_id: "yc-4", text: "đưa a cách liên lạc với người mua đi, a tự nói chuyện" });
+    check("YC-04 'đưa a cách liên lạc với người mua đi' (luật không biết 'liên lạc') → nói thật khách mua không để lại số",
+      r.body.xin_so_khach === true && r.body.replies.some((x) => /không để lại số/.test(x)), JSON.stringify(r.body.replies));
+    await moYC("yc-5");
+    globalThis.__model.parse = aiYC({ loai: "xin_xoa_du_lieu", trich_dan: "dẹp hết đi" });
+    r = await send({ external_user_id: "yc-5", text: "anh không muốn lưu gì bên em nữa, dẹp hết đi" });
+    check("YC-05 'không muốn lưu gì bên em nữa, dẹp hết đi' (luật không biết) → nói thật bot không tự xoá, nhờ người phụ trách",
+      r.body.xin_xoa_du_lieu === true && r.body.replies.some((x) => /xoá dữ liệu em không tự làm được/.test(x)), JSON.stringify(r.body.replies));
+    await moYC("yc-6");
+    globalThis.__model.parse = aiYC({ loai: "hoi_khach", trich_dan: "em gửi thông tin khách hỏi cho anh xem" });
+    r = await send({ external_user_id: "yc-6", text: "em gửi thông tin khách hỏi cho anh xem với" });
+    check("YC-06 'em gửi thông tin khách hỏi cho anh xem với' — luật đọc là xin số khách, AI đọc là hỏi khách → AI quyết",
+      !r.body.xin_so_khach && r.body.hoi_ve_tin === "khach", JSON.stringify(r.body));
+    await moYC("yc-7");
+    globalThis.__model.parse = aiYC({ loai: "xin_so_khach", trich_dan: "cho anh số khách" });
+    r = await send({ external_user_id: "yc-7", text: "hướng đông nam em" });
+    check("YC-07 AI nói xin số khách mà cụm trích KHÔNG có trong tin → không nhận (không đáp 'không để lại số')",
+      !r.body.xin_so_khach && !r.body.replies.some((x) => /không để lại số/.test(x)), JSON.stringify(r.body.replies));
+    globalThis.__cauHinh = cuCH;
+  }
+  // SRS-5.1zg nhánh MUA: xin hình mà chưa rõ căn → hỏi lại căn nào; hỏi tiện ích → kèm link Google Maps tìm sẵn.
+  {
+    fresh(seedKho);
+    globalThis.__model.parse = () => OUT({ replies: ["Dạ anh/chị tìm khu nào ạ?"] });
+    await send({ external_user_id: "mh-1", text: "tôi đang tìm mua nhà để ở" });
+    globalThis.__model.parse = () => OUT({ xin_hinh: "cho em coi mặt tiền căn đó", replies: ["Dạ em gửi hình liền ạ"] });
+    let r = await send({ external_user_id: "mh-1", text: "cho em coi mặt tiền căn đó ra sao" });
+    check("MUA-HINH-01 'cho em coi mặt tiền căn đó ra sao' (không có chữ 'hình'), chưa rõ căn → hỏi lại căn nào, không hứa gửi hình",
+      (r.body.photos ?? []).length === 0 && r.body.replies.some((x) => /đang nói căn nào/.test(x)) && !r.body.replies.some((x) => /gửi hình liền/.test(x)), JSON.stringify(r.body.replies));
+    fresh(seedKho);
+    globalThis.__model.parse = () => OUT({ replies: ["Dạ anh/chị tìm khu nào ạ?"] });
+    await send({ external_user_id: "mm-1", text: "tôi đang tìm mua nhà để ở" });
+    globalThis.__model.parse = () => OUT({ hoi_tien_ich: { loai: "chợ", khu_vuc: "đường Trần Hưng Đạo" }, replies: ["Dạ quanh đó em chưa có dữ liệu chợ ạ"] });
+    r = await send({ external_user_id: "mm-1", text: "quanh đường Trần Hưng Đạo có chợ nào hông em" });
+    const link = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("chợ gần đường Trần Hưng Đạo");
+    check("MUA-MAP-01 'quanh đường Trần Hưng Đạo có chợ nào hông' → kèm link Google Maps tìm 'chợ gần đường Trần Hưng Đạo'",
+      r.body.replies.some((x) => x.includes(link)), JSON.stringify(r.body.replies));
+    fresh(seedKho);
+    globalThis.__model.parse = () => OUT({ replies: ["Dạ anh/chị tìm khu nào ạ?"] });
+    await send({ external_user_id: "mm-2", text: "tôi đang tìm mua nhà để ở" });
+    globalThis.__model.parse = () => OUT({ hoi_tien_ich: { loai: "trường học", khu_vuc: "Quận 1" }, replies: ["Dạ anh/chị hỏi quanh khu nào ạ?"] });
+    r = await send({ external_user_id: "mm-2", text: "gần đó có trường không em" });
+    check("MUA-MAP-02 khu vực model đưa KHÔNG có trong lời khách, chưa có căn / khu vực → không gửi link bịa chỗ",
+      !r.body.replies.some((x) => /google\.com\/maps/.test(x)), JSON.stringify(r.body.replies));
+  }
   // 02/10/2026 (bắn lại thu-gapd sau #412, SRS-5.1ze): AI đọc đúng "được giá thì bán em" = không gấp nhưng chỉ đưa vào
   // `khong_can_hoi` (câu đã trả lời), `truong` rỗng → không ghi ô gấp. Nay giá trị ở khong_can_hoi thành đề xuất thường.
   {
