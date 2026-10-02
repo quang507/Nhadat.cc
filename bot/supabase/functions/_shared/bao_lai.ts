@@ -112,7 +112,23 @@ const BO_QUA = new Set(["hinh_anh", "duyet_tin", "danh_gia", "xac_nhan_lich", "c
 // thì đổi "_" thành khoảng trắng, còn hơn in mã.
 // Nhãn in trên 🤖 khác nhãn câu hỏi: FACT_LABELS.view = "view căn hộ" (câu hỏi căn hộ) mà nhà phố cũng có view
 // (bắn thật 23/09: "view căn hộ: công viên" cho nhà phố). Đè trước FACT_LABELS.
-const NHAN_BAO_LAI: Record<string, string> = { view: "view" };
+// 02/10/2026 (test Zalo, ảnh chủ dự án): FACT_LABELS của nhiều ô là CÂU HỎI ("có thang máy không", "khu biệt lập có bảo vệ hay
+// khu dân cư mở") — in ra "có thang máy không: "có"" ở 🤖 và "có thang máy không có thang máy" ở 📝. Ô nào nhãn là câu hỏi thì
+// có tên ngắn ở đây; 🤖 và 📝 cùng đọc qua `nhanNgan`.
+const NHAN_BAO_LAI: Record<string, string> = {
+  view: "view",
+  thang_may: "thang máy", khu_compound: "khu", can_goc: "căn góc", ngap_nuoc: "ngập nước", hem_thong: "hẻm thông",
+  thuong_luong: "thương lượng", gap: "gấp", the_chap: "sổ", xay_dung: "xây dựng", len_tho_cu: "lên thổ cư",
+  duong_container: "xe container", o_to_vao_nha: "ô tô vào nhà", hien_trang_su_dung: "hiện trạng", ha_tang: "hạ tầng",
+  ban_giao: "bàn giao", dong_y_ban: "đồng sở hữu đồng ý bán", nguoi_dung_ten: "người đứng tên", so_huu: "sở hữu",
+  hinh_thuc_thue_dat: "thuê đất", duong_vao: "đường vào", loai_duong_vao: "đường vào", ranh_gioi: "ranh giới",
+  pccc: "PCCC", dien_tich_khop_so: "diện tích khớp sổ", han_hop_dong_thue: "hợp đồng thuê", du_kien_ra_so: "dự kiến ra sổ",
+  cach_mat_tien: "cách mặt tiền", tang_cao_toi_da: "xây tối đa", mat_do_xd: "mật độ xây dựng",
+};
+/** Nhãn ngắn của một ô để IN (🤖 / 📝): bảng đè ở trên, rồi nhãn câu hỏi bỏ phần ngoặc. */
+export function nhanNgan(k: string, nhan: Record<string, string>): string {
+  return (NHAN_BAO_LAI[k] ?? nhan[k] ?? NHAN_THEM[k] ?? k.replace(/_/g, " ")).replace(/\s*\(.*\)\s*$/, "");
+}
 const NHAN_THEM: Record<string, string> = {
   du_an_ten: "tên dự án",
   loai_giao_dich: "loại giao dịch",
@@ -194,7 +210,7 @@ export function tomTatDaLuu(
   }
   if (!moiNhat.size) return dau;
   const tho = [...moiNhat].slice(0, 10).map(([k, v]) => {
-    const ten = (nhan[k] ?? NHAN_THEM[k] ?? k.replace(/_/g, " ")).replace(/\s*\(.*\)\s*$/, "");
+    const ten = nhanNgan(k, nhan);
     return `${ten}: "${v.length > 40 ? v.slice(0, 39) + "…" : v}"`;
   });
   return `${dau}\nCâu trả lời gốc: ${tho.join(" · ")}`;
@@ -257,7 +273,7 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
   }
   // 23/09/2026 (chủ dự án: "ghi thật đầy đủ"): trần 12 khoá / 50 ký tự từng cắt mất fact và đuôi câu trả lời.
   const ds = [...moiNhat].reverse().slice(0, 40).map(([k, v]) => {
-    const ten = (NHAN_BAO_LAI[k] ?? nhan[k] ?? NHAN_THEM[k] ?? k.replace(/_/g, " ")).replace(/\s*\(.*\)\s*$/, "");
+    const ten = nhanNgan(k, nhan);
     const chu = CHU_DAP_AN[k]?.[v] ?? v;
     return `${ten}: "${chu.length > 120 ? chu.slice(0, 119) + "…" : chu}"`;
   });

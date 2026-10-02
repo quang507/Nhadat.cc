@@ -244,10 +244,16 @@ export async function bocRaoBangModel(
    * 01/10/2026 (chủ dự án: "ra luật nó phải đọc thêm 1 2 câu hoặc cả ngữ cảnh phía trước"): vài lượt NGAY TRƯỚC ("BOT: …",
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
-  nguCanh: { hoiThoai?: string[]; cauConHoi?: string[] } | null = null,
+  nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[] } | null = null,
 ): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; cauKe: CauKeLLM | null; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
-  const dsPhuong = danhSachPhuongChoAi(text.slice(0, 1200));
+  // 02/10/2026 (test Zalo: khách dán nguyên tin rao 700+ chữ có gạch đầu dòng): tin dài không được cắt — 1.200 chữ cũ cắt mất
+  // phần pháp lý / kết cấu ở cuối tin rao dài. Trần 4.000 chỉ để chặn tin rác cực dài.
+  const tin = text.slice(0, 4000);
+  const dsPhuong = danhSachPhuongChoAi(tin);
+  // "Bộ nhớ" (chủ dự án: "để AI có cache để đọc lại nguyên tin nhắn của khách để ko mất"): nguyên văn các tin chủ nhà nhắn
+  // trước tin này, nơi gọi đã giới hạn ~6.000 chữ.
+  const tinChuNha = (nguCanh?.tinChuNha ?? []).filter((x) => typeof x === "string" && x.trim()).slice(-30);
   const hoiThoai = (nguCanh?.hoiThoai ?? []).filter((x) => typeof x === "string" && x.trim()).slice(-4);
   const cauConHoi = (nguCanh?.cauConHoi ?? []).filter((x) => typeof x === "string" && x.trim()).slice(0, 20);
   const dg = Object.entries(dangGhi ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `${k}: "${String(v).slice(0, 160)}"`);
@@ -262,7 +268,7 @@ export async function bocRaoBangModel(
     ],
     messages: [{
       role: "user",
-      content: `${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${text.slice(0, 1200)}"${dsPhuong ? `\n\n${dsPhuong}` : ""}`,
+      content: `${tinChuNha.length ? `Các tin CHỦ NHÀ đã nhắn TRƯỚC tin này, NGUYÊN VĂN, cũ → mới (để nhớ chủ nhà đã nói gì — không trích từ đây):\n${tinChuNha.map((t) => `- ${t.replace(/\n+/g, " / ")}`).join("\n")}\n` : ""}${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${tin}"${dsPhuong ? `\n\n${dsPhuong}` : ""}`,
     }],
   });
   const ket = DeXuatRaoDoc.safeParse(r.parsed_output);

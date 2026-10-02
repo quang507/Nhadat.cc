@@ -1976,6 +1976,13 @@ const TU_GAT = new Set(["da","vang","ok","oke","okie","okay","u","uh","um","duoc
 // lời gật thành "thông tin bổ sung" và bản nháp gửi lại. Thêm cách xưng lớn tuổi (FR-176): cháu, chú, cô, bác, con.
 const TU_DEM = new Set(["nha","nhe","nhen","em","e","a","roi","do","day","luon","di","thoi","ha","rat","qua","lam","cu","the","nhu","tin","vay","cho","chi","anh","minh","toi","ne","het","cai","nay","ma","chau","chu","co","bac","con","ong","ba"]);
 const EMOJI_VUI = /(👍|❤️|❤|😍|🥰|😊|🙂|👌|🔥|💯|\[sticker|\[khach tha tim|\[thả tim|\[like)/;
+/**
+ * 02/10/2026 (test Zalo, ảnh chủ dự án): bridge gửi cú thả cảm xúc thành chữ "[khách thả cảm xúc /-strong]" (FR-142). Đó chỉ
+ * là GẬT — không mang nội dung nào để trả lời câu "nhà mình thuộc loại nào". Nơi gọi dùng để im khi câu đang hỏi cần nội dung.
+ */
+export function laThaCamXuc(text: string): boolean {
+  return /^\s*\[(?:khách|khach) thả cảm xúc[^\]]*\]\s*$/iu.test(text ?? "");
+}
 export function laDongY(text: string): boolean {
   const goc = text.trim();
   if (!goc) return false;
