@@ -97,6 +97,8 @@ const CAU_NHANH = ["hoan_cong", "du_kien_ra_so", "giay_to_hien_co", "han_hop_don
   "ban_giao", "len_tho_cu", "no_hau", "do_rong_duong"];
 /** Nhãn ngắn cho dòng 📝 "Em ghi vào…" — cùng bảng với 🤖 (`nhanNgan`, bao_lai.ts); FACT_LABELS là câu hỏi. */
 const nhanGhi = (q: string): string => nhanNgan(q, FACT_LABELS);
+/** Ô PHÁN ĐOÁN (phải hiểu nghĩa cả câu, có phủ định): AI đã đọc mà im thì luật tìm-chuỗi KHÔNG được ghi (SRS-5.1zd). */
+const KHOA_CAN_HIEU_NGHIA = new Set(["gap", "thuong_luong", "ly_do_ban", "tiem_nang", "hien_trang", "hien_trang_su_dung", "noi_that", "muc_dich"]);
 /** Câu hỏi ĐỊA CHỈ: trả lời câu này mới được đổi quận đã ghi của tin. */
 const CAU_DIA_CHI = new Set(["vi_tri", "phuong", "phuong@chua_quan", "quan"]);
 /** Câu mà một cú thả cảm xúc (👍 ❤️) trả lời được: xin ĐỒNG Ý, không xin nội dung. */
@@ -5096,8 +5098,9 @@ Deno.serve(async (req) => {
           // 27/09/2026 (chủ dự án test Zalo, căn Botanic): đang hỏi hẻm, khách nhắn "8 tỉ" — AI im, luật đọc ra giá mà bị gạt
           // (khoá AI biết) → câu vào "bổ sung", bot phải hỏi giá lại. Cả tin CHỈ là một số tiền thì luật chắc, giữ.
           // Chế độ `ai` mà AI im hẳn: luật giữ ô KHÁC câu đang hỏi ("không gấp em" khi hỏi phường → gấp).
+          // SRS-5.1zd (bắn thật thu-gap-06): ô PHÁN ĐOÁN (gấp, thương lượng…) thì không — luật đọc "hong có gấp gì hết" ra GẤP.
           const giuLuat = !!kq.chuyenSang && !kem.some((f) => f.question === kq.chuyenSang!.question) && (aiImHan
-            ? kq.chuyenSang.question !== pendingReq.question
+            ? kq.chuyenSang.question !== pendingReq.question && !KHOA_CAN_HIEU_NGHIA.has(kq.chuyenSang.question)
             : !laCheDoAi && (laTienTron(kq.chuyenSang, dapAn) || (kq.chuyenSang.question === "dien_tich" && /^ngang \S+m dài \S+m$/.test(kq.chuyenSang.answer)) ||
               // 27/09/2026 (test Zalo): "312 Nguyễn Thuơbgj Hiền" khi đang hỏi hẻm — số nhà + tên đường là địa chỉ chắc.
               (kq.chuyenSang.question === "vi_tri" && laSoNhaTenDuong(dapAn)) ||
@@ -5139,7 +5142,10 @@ Deno.serve(async (req) => {
               (aiKienThuc.some((k) => k.includes(boDau(f.answer)) || boDau(f.answer).includes(k)) ||
                 KHOA_LUAT_DO_KHI_AI_IM.has(f.question) || ketCauChac(f, s) || phapLyChac(f) || phapLyChuaSo(f) || phapLyCoSo(f) || kichThuocChac(f)))))
             .map((f) => phapLyChac(f) ? { question: "phap_ly", answer: "sổ hồng riêng" } : f)]
-        : nhanDienNhieuFact(s).filter((f) => !aiImHan || f.question !== pendingReq.question)
+        // 02/10/2026 (bắn thật thu-gap-04/06, SRS-5.1zd): AI im thì luật từng ghi ô CẦN HIỂU NGHĨA bằng mẩu câu — "hong có gấp gì hết"
+        // → gấp = "gấp", "chưa cần tiền, bán chơi thôi" → gấp = "cần tiền" (mất phủ định). AI đã đọc mà không thấy thì khách không
+        // nói rõ: luật chỉ còn được ghi ô dữ kiện chắc (số đo, số phòng, pháp lý…), không ghi ô phán đoán.
+        : nhanDienNhieuFact(s).filter((f) => !aiImHan || (f.question !== pendingReq.question && !KHOA_CAN_HIEU_NGHIA.has(f.question)))
       ).filter((f) => !(oLaNamO(s) && f.question === "tiem_nang"))
         // Từ điển đã ghi phường lượt này → phường / quận AI đoán không được đè (lx-tam-12: "Tây Thông Hội" → Xã Củ Chi).
         .filter((f) => !(phuongTuDien && (f.question === "phuong" || f.question === "quan")));

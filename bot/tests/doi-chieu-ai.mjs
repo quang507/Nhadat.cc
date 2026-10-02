@@ -64,5 +64,10 @@ kiem("DC-05f câu rao: AI đã đọc thì ô AI không nói không do luật đ
 kiem("DC-06 câu lệnh dạy 'được giá thì bán/thôi' = không gấp, và tin có giá + ý gấp thì đưa cả hai",
   /gap đọc theo NGHĨA/.test(LUAT) && /được giá thì\s*\n?\s*bán \/ thì thôi/.test(LUAT) && /đưa CẢ HAI trường/.test(LUAT));
 
+// DC-07 (bắn thật 02/10 thu-gap-01…12, SRS-5.1zd): 10/12 tin "ban nha hem …" không có loại (từ #408 trigger thôi đoán) → câu lệnh dặn
+// tin rao có chữ "nhà" LUÔN đưa loai_bds; ô gấp chỉ trả co/khong (AI chép cụm vào gia_tri thì code bỏ, luật lại đọc mẩu câu).
+kiem("DC-07 câu lệnh: tin rao có chữ 'nhà' (cả không dấu) luôn đưa loai_bds; gấp chỉ trả co/khong; 'ngộp ngân hàng' không phải bực",
+  /LUÔN đưa loai_bds/.test(LUAT) && /ban nha hem/.test(LUAT) && /gia_tri CHỈ là "co" hoặc "khong"/.test(LUAT) && /ngộp ngân hàng/.test(bocRao));
+
 console.log(`\n${dat}/${dat + hong} đạt`);
 if (hong) process.exit(1);

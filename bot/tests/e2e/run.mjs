@@ -2510,6 +2510,14 @@ fresh(seedKho);
     await send({ external_user_id: "dc-9", text: "hướng tây, phía sau nở ra 5m nha em" });
     check("DC-E2E-09 'hướng tây, phía sau nở ra 5m' (luật không đọc được) → ô nở hậu 5m theo AI (trước đây AI đọc ra mà bị bỏ)",
       fDC(L, "no_hau").includes("5m"), JSON.stringify({ nh: fDC(L, "no_hau") }));
+    // DC-E2E-10 (bắn thật 02/10 thu-gap-04/06, SRS-5.1zd): AI im → luật từng ghi ô gấp bằng mẩu câu, mất phủ định.
+    for (const [ma, cau] of [["dc-10a", "hong có gấp gì hết"], ["dc-10b", "chưa cần tiền, bán chơi thôi"], ["dc-10c", "giá tốt thì bán, không thì để đó"]]) {
+      L = await moDC(ma, "phuong");
+      globalThis.__model.parse = ai();
+      await send({ external_user_id: ma, text: cau });
+      check(`DC-E2E-10 ${ma} hỏi phường, '${cau}' (AI im) → luật KHÔNG ghi ô gấp từ mẩu câu`, !fDC(L, "gap").length,
+        JSON.stringify({ gap: fDC(L, "gap"), gapCot: db().t.listings.find((x) => x.id === L.id)?.gap }));
+    }
     globalThis.__cauHinh = cuCH;
     globalThis.__model = { parse: () => OUT() };
   }
@@ -2576,9 +2584,21 @@ fresh(seedKho);
     const fI = (q) => db().t.listing_facts.filter((f) => f.listing_id === LI.id && f.question === q);
     db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
     db().insert("info_requests", { listing_id: LI.id, question: "phuong", status: "pending" });
+    // SRS-5.1zd (bắn thật 02/10 thu-gap-04/06): bản trước khẳng định "AI im thì LUẬT ghi gấp" — chính luật đó đọc "hong có gấp gì hết"
+    // ra GẤP, "chưa cần tiền" ra "cần tiền". Gấp là ô phán đoán: AI im thì không ghi (không vào bổ sung, không ghi phường); AI đọc
+    // "không gấp" (khoá gap, có trích dẫn) thì ghi.
     const rI = await send({ external_user_id: "aim-im", text: "không gấp em" });
-    check("AIM-IM1 chế độ ai, đang hỏi phường, 'không gấp em', AI im hẳn → ghi ô GẤP, không vào bổ sung, không ghi phường",
-      fI("gap").length === 1 && !fI("bo_sung").length && !fI("phuong").length, JSON.stringify({ gap: fI("gap"), bs: fI("bo_sung"), ph: fI("phuong"), rep: rI.body.replies }));
+    check("AIM-IM1 chế độ ai, đang hỏi phường, 'không gấp em', AI im hẳn → luật KHÔNG ghi gấp; không vào bổ sung, không ghi phường",
+      !fI("gap").length && !fI("bo_sung").length && !fI("phuong").length, JSON.stringify({ gap: fI("gap"), bs: fI("bo_sung"), ph: fI("phuong"), rep: rI.body.replies }));
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LI.id, question: "phuong", status: "pending" });
+    const parseIm = globalThis.__model.parse;
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+      truong: [{ khoa: "gap", gia_tri: "khong", trich_dan: "không gấp", can: null }] } : OUT();
+    await send({ external_user_id: "aim-im", text: "không gấp em" });
+    check("AIM-IM1b đang hỏi phường, 'không gấp em', AI đọc gấp = khong → ghi ô gấp 'không gấp', không ghi phường",
+      fI("gap").some((f) => f.answer === "không gấp") && !fI("phuong").length, JSON.stringify({ gap: fI("gap"), ph: fI("phuong") }));
+    globalThis.__model.parse = parseIm;
     db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
     db().insert("info_requests", { listing_id: LI.id, question: "phuong", status: "pending" });
     const rI2 = await send({ external_user_id: "aim-im", text: "có lửng nha em" });
