@@ -71,6 +71,12 @@ const Vai = z.object({
   la: z.enum(VAI_NGUOI_RAO).describe("Người nhắn TỰ NÓI mình là ai: chinh_chu = chủ nhà / nhà của mình / không phải môi giới; moi_gioi = tự nhận là môi giới, sale, bán giúp chủ, nhận ký gửi. Nhắc tới môi giới KHÁC ('mấy bên môi giới hối chị'), hỏi về môi giới → khong_noi."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN người nhắn tự nói vai mình. khong_noi thì null."),
 });
+// Đợt 3 chuyển luật sang AI (02/10/2026): câu hỏi KẾ trước đây do bảng ưu tiên + từ khoá quyết (`chonCauKe`, `re-nhanh`) — AI
+// chọn trong danh sách "Câu bot còn định hỏi" như môi giới; code chỉ nhận khoá có trong danh sách hợp lệ của lượt (`docCauKe`).
+const CauKe = z.object({
+  khoa: z.string().nullable().describe("Khoá câu NÊN HỎI TIẾP, lấy ĐÚNG khoá trong danh sách 'Câu bot còn định hỏi'. Không có danh sách / không chắc → null."),
+  ly_do: z.string().nullable().describe("Vì sao hỏi câu này tiếp (ngắn)."),
+});
 const KhongCanHoi = z.object({
   khoa: z.string().describe("Khoá câu trong danh sách 'Câu bot còn định hỏi' gửi kèm."),
   ly_do: z.string().describe("Vì sao câu đó không áp dụng cho căn này (ngắn)."),
@@ -89,9 +95,11 @@ const DeXuatRao = z.object({
   khong_can_hoi: z.array(KhongCanHoi).describe("Câu trong danh sách 'Câu bot còn định hỏi' KHÔNG áp dụng cho căn này theo lời chủ nhà. Không có danh sách / không chắc thì []."),
   y_dinh: YDinh,
   vai: Vai,
+  cau_ke: CauKe,
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish() });
+export type CauKeLLM = z.infer<typeof CauKe>;
 export type YDinhLLM = z.infer<typeof YDinh>;
 export type VaiLLM = z.infer<typeof Vai>;
 export type CamXucLLM = z.infer<typeof CamXuc>;
@@ -166,6 +174,12 @@ Không bao giờ đưa giá, diện tích, vị trí, phường, pháp lý, lo�
 bán lại căn đã gỡ hoặc rút lời "bán rồi" (rao_lai), đang bận / để sau (hoan). Nhắc chuyện người khác, hỏi, kể → binh_thuong.
 "Chốt rồi / ok đăng đi" khi bot đang đưa bản nháp là ĐỒNG Ý đăng, không phải ban_roi.
 
+CÂU HỎI KẾ ("cau_ke") — có danh sách "Câu bot còn định hỏi" thì chọn MỘT câu nên hỏi tiếp, như môi giới giỏi: (1) thông tin cần
+để lên tin mà còn thiếu (giá, diện tích, vị trí / phường, pháp lý) đi trước; (2) trong số còn lại, câu NỐI MẠCH điều chủ nhà vừa
+nói (vừa nói sổ riêng → hoàn công; vừa nói đang cho thuê → hợp đồng thuê tới khi nào); (3) câu dễ trả lời. Không chọn câu chủ
+nhà đã trả lời trong tin / ngữ cảnh, không chọn câu vừa đưa vào khong_can_hoi. Câu đánh dấu "(nhánh)" chỉ chọn khi đúng hoàn
+cảnh căn này. Khoá phải đúng y chữ trong danh sách; không chắc → null.
+
 VAI ("vai") — chỉ khi người nhắn TỰ NÓI mình là chủ nhà hay môi giới. Nhắc tới môi giới khác, kể chuyện môi giới, hỏi phí môi
 giới → khong_noi.
 
@@ -231,7 +245,7 @@ export async function bocRaoBangModel(
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
   nguCanh: { hoiThoai?: string[]; cauConHoi?: string[] } | null = null,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; usage: unknown }> {
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; cauKe: CauKeLLM | null; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   const dsPhuong = danhSachPhuongChoAi(text.slice(0, 1200));
   const hoiThoai = (nguCanh?.hoiThoai ?? []).filter((x) => typeof x === "string" && x.trim()).slice(-4);
@@ -264,6 +278,7 @@ export async function bocRaoBangModel(
     khongCanHoi: ket.success ? ket.data.khong_can_hoi ?? [] : [],
     yDinh: ket.success ? ket.data.y_dinh ?? null : null,
     vai: ket.success ? ket.data.vai ?? null : null,
+    cauKe: ket.success ? ket.data.cau_ke ?? null : null,
     usage: r.usage,
   };
 }

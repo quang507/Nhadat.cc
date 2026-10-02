@@ -959,6 +959,12 @@ export function docVai(v: { la?: string | null; trich_dan?: string | null } | nu
   return trichCoTrongTin(td, tin) ? { la: v.la, trich: td } : null;
 }
 
+/** Đợt 3 (02/10/2026): câu hỏi kế AI chọn — chỉ nhận khoá có trong danh sách hợp lệ của lượt (đã bỏ câu hết hạn, câu không áp dụng, câu đang treo). */
+export function docCauKe(ck: { khoa?: string | null } | null | undefined, hopLe: Iterable<string>): string | null {
+  const k = (ck?.khoa ?? "").trim();
+  return k && new Set(hopLe).has(k) ? k : null;
+}
+
 /** Câu không bao giờ được AI gạt khỏi danh sách hỏi — thiếu là tin không lên kệ / không định danh được căn. */
 export const CAU_KHONG_DUOC_BO = new Set(["gia", "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "vi_tri", "phuong", "phap_ly", "loai_bds", "duyet_tin", "hinh_anh"]);
 /**

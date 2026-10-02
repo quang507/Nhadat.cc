@@ -2639,6 +2639,20 @@ fresh(seedKho);
     check("D2-07 'chị đang chạy xe, lát nữa nói tiếp nha' (từ khoá bỏ sót) — AI: hoãn → không hỏi tiếp, câu phường vẫn treo, không ghi bổ sung",
       !r7.body.replies.some((x) => /\?/.test(x)) && treoD2(L).includes("phuong") && !db().t.listing_facts.some((f) => f.listing_id === L.id && f.question === "bo_sung"),
       JSON.stringify({ rep: r7.body.replies, treo: treoD2(L) }));
+    // SRS-5.1x (đợt 3): câu kế do AI chọn trong danh sách hợp lệ; chọn ngoài danh sách → luật chọn như cũ.
+    L = await dung("d3-1", "ket_cau");
+    globalThis.__model.parse = aiRao({ ...binh, cau_ke: { khoa: "phap_ly", ly_do: "cần pháp lý để lên tin" },
+      tra_loi: { co_tra_loi: true, gia_tri: "trệt + 2 lầu", trich_dan: "trệt 2 lầu" }, truong: [{ khoa: "so_tang", gia_tri: "3", trich_dan: "trệt 2 lầu", can: null }] });
+    await send({ external_user_id: "d3-1", text: "trệt 2 lầu em" });
+    check("D3-01 AI chọn câu kế 'phap_ly' (có trong danh sách còn hỏi) → câu treo kế là pháp lý", treoD2(L).includes("phap_ly"), JSON.stringify({ treo: treoD2(L) }));
+    const keLuat = await (async () => {
+      L = await dung("d3-2", "ket_cau");
+      globalThis.__model.parse = aiRao({ ...binh, cau_ke: { khoa: "ten_lua", ly_do: "x" },
+        tra_loi: { co_tra_loi: true, gia_tri: "trệt + 2 lầu", trich_dan: "trệt 2 lầu" }, truong: [{ khoa: "so_tang", gia_tri: "3", trich_dan: "trệt 2 lầu", can: null }] });
+      await send({ external_user_id: "d3-2", text: "trệt 2 lầu em" });
+      return treoD2(L);
+    })();
+    check("D3-02 AI chọn khoá KHÔNG có trong danh sách → bỏ, luật chọn câu kế (vẫn có câu treo, không phải khoá lạ)", keLuat.length === 1 && keLuat[0] !== "ten_lua", JSON.stringify({ treo: keLuat }));
     fresh(seedKho);
     globalThis.__model.parse = aiRao({ truong: [
       { khoa: "loai_bds", gia_tri: "kho_xuong", trich_dan: "xưởng", can: null },
