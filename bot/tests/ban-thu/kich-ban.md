@@ -139,6 +139,34 @@ workflow `ban-thu` cho nhóm này vì nó xoá dữ liệu ID thử ở cuối m
 `/admin` thấy đủ hội thoại, lịch xem, chốt. Trang tin mở lần hai nhanh (cache). Muốn xem lại bot đã nói gì thì mở view
 `so.hoi_thoai` trong Table Editor.
 
+## Nhóm L — Thử LẺ từng câu, nhắn tay (02/10/2026)
+
+Mỗi ca là MỘT tin, kiểm MỘT việc. Trước mỗi ca: nhắn `hello` nếu là ID thử (xoá sạch, bắt đầu lại), hoặc dùng Zalo phụ đã xoá ở
+`/admin`. Ca có **[chuẩn bị]** thì nhắn câu chuẩn bị trước rồi trả lời bot cho tới khi bot hỏi đúng câu ghi trong ngoặc.
+Câu chuẩn bị chung (gọi là **R**): `bán nhà hẻm 4m Tôn Đản quận 4, 4x15, 1 trệt 2 lầu, giá 6 tỷ`.
+
+| # | Chuẩn bị | Gửi | Đúng là | Có từ |
+|---|---|---|---|---|
+| L1 | — | `chào em, chú muốn bán nhà` | gọi "chú", xưng "cháu" từ câu này trở đi | — |
+| L2 | — | `chị cần bán căn hộ` | gọi "chị", xưng "em" | — |
+| L3 | — | R | 🤖 có: nhà phố · Quận 4 · Tôn Đản · 4x15 · 3 tầng · 6 tỷ; không hỏi lại thứ vừa nói | — |
+| L4 | R (bot hỏi giá hoặc câu bất kỳ) | `16 tỉ em ạ, rao khi nào được giá thì thôi` | ghi giá 16 tỷ VÀ gấp = không gấp; bot không hỏi "có gấp không" nữa | PR sau #408 |
+| L5 | R (bot hỏi hướng) | `hướng Đông, ra Quận 1 có 5 phút` | hướng Đông; quận VẪN Quận 4 | #408 |
+| L6 | R | `à giá 5 tỷ 8 nha em` | giá đổi 5 tỷ 8, bot nói đã sửa | — |
+| L7 | R | `căn kế bên giá 9 tỷ đó em, anh để 8 tỷ 5 thôi` | giá 8 tỷ 5, không có dòng 9 tỷ | #408 |
+| L8 | R (bot hỏi kết cấu / tầng) | `xây kín hết rồi em` | ghi kết cấu, bot HỎI TIẾP câu khác (không coi là "đủ rồi") | #408 |
+| L9 | R (đang hỏi bất kỳ) | `thôi em lên luôn đi, nhiêu đó được rồi` | bot ngừng hỏi, gửi bản nháp / đăng | #408 |
+| L10 | R (bot hỏi hiện trạng) | `nha dang cho thue` | ghi hiện trạng "đang cho thuê"; KHÔNG trả "em đăng liền" | #408 |
+| L11 | R (bot hỏi giá) | `bán nhà này 5 tỷ nữa là chốt em` | giá 5 tỷ cho căn đang hỏi; KHÔNG mở tin thứ hai | #408 |
+| L12 | R (bot hỏi câu thông tin) | thả 👍 vào tin bot | bot IM, câu đang hỏi vẫn chờ | #407 |
+| L13 | — | dán tin rao dài nhiều dòng (tiêu đề in hoa + gạch đầu dòng) | ghi đủ loại / diện tích / tầng / thang máy; tiêu đề KHÔNG thành kết cấu; 📝 in "thang máy: có" | #407 |
+| L14 | R (bot hỏi hướng) | `hướng tây, phía sau nở ra 5m nha em` | ghi hướng Tây + nở hậu 5m | #408 |
+| L15 | — | `bán căn 1 trệt 1 lầu có kho chứa đồ, hẻm 3m quận 8 giá 4 tỷ` | loại KHÔNG phải kho xưởng (bot hỏi loại nếu chưa rõ) | #408 |
+| L16 | — | `bán nhà hẻm quận 3 giá 6 tỷ, chưa cần bán gấp đâu em` | gấp KHÔNG phải "cần bán gấp" | #408 |
+
+Ghi kết quả theo mẫu: `L4 · đạt / hỏng · câu bot trả (chép nguyên văn hoặc chụp màn hình)`. Hỏng thì gửi kèm ảnh chụp đoạn chat:
+không có nguyên văn thì không lần ra được câu sinh từ đâu.
+
 ## Ghi kết quả
 
 Mỗi kịch bản ghi: ID · ngày · đạt / lỗi · trích đoạn log chứng minh (chỉ ID thử, không SĐT). Lỗi tìm được thì sửa theo luật
