@@ -87,6 +87,8 @@ const CauKe = z.object({
 const KhongCanHoi = z.object({
   khoa: z.string().describe("Khoá câu trong danh sách 'Câu bot còn định hỏi' gửi kèm."),
   ly_do: z.string().describe("Vì sao câu đó không cần hỏi: không áp dụng, hoặc chủ nhà đã trả lời (ngắn)."),
+  // 02/10/2026 (bắn lại thu-gapd, SRS-5.1ze): AI đọc đúng "được giá thì bán" = không gấp nhưng chỉ đưa vào đây, `truong` rỗng → không ghi.
+  gia_tri: z.string().nullish().describe("Chủ nhà ĐÃ trả lời câu đó → giá trị đọc được, CÙNG cách ghi như truong (gấp / thương lượng: co hoặc khong). Câu không áp dụng thì null."),
   trich_dan: z.string().describe("Cụm COPY NGUYÊN VĂN từ lời CHỦ NHÀ (tin này hoặc ngữ cảnh) chứng minh."),
 });
 const DeXuatRao = z.object({
@@ -293,9 +295,14 @@ export async function bocRaoBangModel(
     }],
   });
   const ket = docLong(DeXuatRaoDoc, r.parsed_output);
+  // Câu AI nói "đã trả lời" kèm giá trị mà truong chưa có khoá đó → thành một đề xuất thường (code kiểm trích dẫn + giá trị như mọi ô).
+  const truongDu = ket.success ? [...ket.data.truong.map((t) => ({ ...t })),
+    ...(ket.data.khong_can_hoi ?? [])
+      .filter((k) => typeof k.gia_tri === "string" && k.gia_tri.trim() && (MOI_KHOA as readonly string[]).includes(k.khoa) && !ket.data.truong.some((t) => t.khoa === k.khoa))
+      .map((k) => ({ khoa: k.khoa, gia_tri: String(k.gia_tri).trim(), trich_dan: k.trich_dan, can: null }))] : [];
   return {
     ket: ket.success ? ket.data : null,
-    truong: ket.success ? ket.data.truong.map((t) => ({ ...t })) : [],
+    truong: truongDu,
     kienThuc: ket.success ? ket.data.kien_thuc.filter((k) => typeof k === "string") : [],
     traLoi: ket.success ? ket.data.tra_loi ?? null : null,
     capNhat: ket.success ? ket.data.cap_nhat ?? [] : [],

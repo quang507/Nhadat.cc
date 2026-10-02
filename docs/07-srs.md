@@ -1619,6 +1619,10 @@ Chủ dự án: "nếu lấy thông tin ra thì phải ghi vì sao có cái này
   - (b) Một bong bóng chỉ còn ")" sau chuỗi lọc → đường ra bỏ dòng không còn chữ / số / biểu tượng.
   - (c) 5/6 câu gấp đứng riêng lúc bot đang hỏi phường ("được giá thì bán em", "không vội…", "chưa cần tiền…", "giá tốt thì bán…", "cần tiền gấp em ơi") → AI trả `truong` rỗng; chỉ "kẹt bank, muốn ra nhanh trong tháng" ghi được. Chưa rõ AI xếp câu vào đâu → sổ đo `boc_tach_bong.da_ghi.ai_khac` (trả lời câu đang hỏi, câu không cần hỏi, ý định, cảm xúc) và `ban-thu` in ra, để bắn lại tìm nguyên nhân.
 
+**Bắn lại sau #412** (`thu-gapd-01…06`, sổ đo `ai_khac` mới):
+- "Nhà a 4 tầng tính cả lửng" → kết cấu "trệt + lửng + 2 lầu" (đúng).
+- Nguyên nhân câu gấp đứng riêng: AI đọc ĐÚNG nghĩa cả 5 câu nhưng chỉ đưa vào `khong_can_hoi` ("Chủ nhà nói được giá thì bán, tức không gấp", "Chủ nhà đã cho biết cần tiền gấp"), `truong` rỗng → không ghi. Lớp lỗi: một ý AI nói ở trường "phụ" mà code chỉ đọc giá trị ở `truong`. Sửa: `khong_can_hoi` có thêm `gia_tri`; câu "đã trả lời" kèm giá trị mà `truong` chưa có khoá đó → thành đề xuất thường (qua `kiemDeXuat` như mọi ô). Kiểm: e2e `GAP-KCH-01/02` đỏ khi gỡ bản sửa ("đang kẹt tiền lắm em" là cách nói mới), `GAP-KCH-03` (câu không áp dụng, không có giá trị → không ghi).
+
 **Chưa sửa (ghi lại):**
 - Hai tin liền nhau "Đường Trương Đình hkojj" / "Hội" (cách 7 giây) chạy hai lượt song song → hai câu trả lời, địa chỉ ghi "Trương Đình". Cần gom tin liền nhau ở tầng nhận tin — việc riêng.
 
