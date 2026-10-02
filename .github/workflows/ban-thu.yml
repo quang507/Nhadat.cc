@@ -289,9 +289,10 @@ jobs:
                 (select string_agg((d->>'khoa') || '=' || (d->>'gia_tri') || ' «' || (d->>'trich_dan') || '»', ' · ') from jsonb_array_elements(b.de_xuat) d) as de_xuat,
                 (select string_agg((d->>'khoa') || ':' || (d->>'ly_do'), ' · ') from jsonb_array_elements(b.bo) d) as bo,
                 case when b.da_ghi->'hoi_lai'->>'co_hoi' = 'true' then (b.da_ghi->'hoi_lai'->>'chu_de') || ' «' || coalesce(b.da_ghi->'hoi_lai'->>'cau_hoi', '') || '»'
-                     when b.da_ghi->'hoi_lai'->>'co_hoi' = 'false' then 'không' end as hoi_lai
+                     when b.da_ghi->'hoi_lai'->>'co_hoi' = 'false' then 'không' end as hoi_lai,
+                b.da_ghi->'ai_khac' as ai_khac
               from boc_tach_bong b join sellers s on s.id = b.seller_id where s.zalo_user_id = $(lit "$ZALO")) x" \
-            | jq -r '.[0].ds[] | "\(.model // "?") \(.ms // 0)ms · hỏi \(.hoi // "-") · đề xuất: \(.de_xuat // "(rỗng)") · loại: \(.bo // "-") · khách hỏi: \(.hoi_lai // "-")"' \
+            | jq -r '.[0].ds[] | "\(.model // "?") \(.ms // 0)ms · hỏi \(.hoi // "-") · đề xuất: \(.de_xuat // "(rỗng)") · loại: \(.bo // "-") · khách hỏi: \(.hoi_lai // "-")\(if .ai_khac then " · AI khác: " + (.ai_khac | tojson) else "" end)"' \
             || echo "(không đọc được boc_tach_bong — vẫn dọn người thử)"
 
           echo; echo "== Sổ lỗi chat-reply từ lúc bắn"

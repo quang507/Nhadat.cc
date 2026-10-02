@@ -12,7 +12,7 @@
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
 import { docTien, giaTheoM2 } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
-import { cumPhongNguTheoTang, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang } from "./khop-cau-tra-loi.ts";
+import { cumPhongNguTheoTang, docTraLoiLung, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, phuongChuan, phuongTrongTrich, phuongTuTenCu, tenDayDu } from "./khop-phuong.ts";
 import { goNhamDau } from "./go-nham-dau.ts";
@@ -450,6 +450,17 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
       if (st.length === 1 && String(st[0]) !== chuanSo(d.gia_tri).match(/\d+/)?.[0]) d = { ...d, gia_tri: String(st[0]) };
     }
     if (d.khoa === "ket_cau" && boPhuDinhKetCau(d.gia_tri) !== d.gia_tri.trim()) d = { ...d, gia_tri: boPhuDinhKetCau(d.gia_tri) };
+    // 02/10/2026 (bắn lại thu-tay-01, SRS-5.1ze): "Nhà a 4 tầng tính cả lửng" → AI so_tang = 3 (đúng: 3 tầng không tính lửng), lưới
+    // bỏ vì số 3 không có trong cụm → không ghi gì mà bot vẫn nói "em ghi rồi". Cụm có SỐ tấm/tầng + lửng nằm TRONG / có thêm lửng →
+    // ghi kết cấu tính ra bằng cùng phép của câu hỏi lửng (`ketCauTheoLung`); một ô ket_cau, không ghi thêm so_tang lệch nghĩa.
+    if (KIEM_NHE && (d.khoa === "so_tang" || d.khoa === "ket_cau")) {
+      const cumL = d.trich_dan ?? "";
+      const nL = soTangTrongDapLung(cumL), dapL = nL ? docTraLoiLung(cumL) : null;
+      if (nL && (dapL === "co" || dapL === "them") && trichCoTrongTin(cumL, tin)) {
+        if (!dat.some((x) => x.khoa === "ket_cau" || x.khoa === "so_tang")) dat.push({ ...d, khoa: "ket_cau", gia_tri: ketCauTheoLung(nL, dapL).floors_text });
+        continue;
+      }
+    }
     const ly = KIEM_NHE ? kiemGiaTriNhe(d, tin, viTri, kdDung) : kiemGiaTri(d, tin, viTri, kdDung);
     if (ly) bo.push({ ...d, ly_do: ly });
     else dat.push(kdDung ? { ...d, trich_dan_sua: kdDung } : d);
