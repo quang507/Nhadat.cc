@@ -2339,6 +2339,72 @@ fresh(seedKho);
       JSON.stringify({ hem: fA("do_rong_hem"), ir: db().t.info_requests.filter((x) => x.listing_id === LA.id).map((x) => [x.question, x.status]) }));
     globalThis.__cauHinh = cuCH;
   }
+  // 02/10/2026 (test Zalo, ảnh chủ dự án; "xóa luôn mấy luật này đi… để AI viết, và để AI có cache đọc lại nguyên tin nhắn"):
+  // người có 2 tin (A = nhà phố Trương Đình Hội; B = vỏ rỗng đang treo câu LOẠI), dán NGUYÊN tin rao căn A. Bản cũ: mảnh về A
+  // nhưng ô do regex ghi (tiêu đề → kết cấu, "có thang máy không có thang máy"), rồi hỏi loại nhà cho vỏ B; thả 👍 → hỏi lần ba.
+  {
+    const cuCH = globalThis.__cauHinh;
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    const uid = "zr-1";
+    globalThis.__model = { parse: (p) => laLuotBocRao(p) ? { so_can: 1, kien_thuc: [], truong: [] } : OUT(), create: () => "Dạ em ghi rồi ạ." };
+    await send({ external_user_id: uid, text: "anh muốn bán nhà ở Trương Đình Hội" });
+    const sl = () => db().t.sellers.find((x) => x.zalo_user_id === uid);
+    const A = db().t.listings.filter((l) => l.seller_id === sl().id).at(-1);
+    Object.assign(A, { code: "BDS-NP-Q8-0901", property_type: "nha_pho", street: "Trương Đình Hội", location_raw: "Trương Đình Hội", ward: "Phường Phú Định", district: "Quận 8", status: "cho_thong_tin" });
+    const B = db().insert("listings", { seller_id: sl().id, code: "BDS-XX-XX-0902", deal: "ban", property_type: "chua_ro", status: "cho_thong_tin", can_chu_duyet: true }).data;
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: B.id, question: "loai_bds", status: "pending" });
+    sl().active_listing_id = B.id;
+    const RAO = "BÁN NHÀ PHỐ 6 TẦNG CÓ THANG MÁY – TRƯƠNG ĐÌNH HỘI, P. PHÚ ĐỊNH\nGiá: 6,95 tỷ (giảm nhẹ cho khách thiện chí)\n" +
+      "Nhà phố biệt lập trong khu dân cư an ninh, yên tĩnh. Nhà bàn giao phần thô, mặt tiền đã hoàn thiện.\nThông tin nhà:\n" +
+      "• Diện tích đất: 4m x 11m\n• Tổng diện tích sàn: 245m²\n• Kết cấu: 6 tầng, có thang máy\n• 3 phòng ngủ, 4 WC\n• Hướng Tây\n" +
+      "• Garage đậu xe hơi trong nhà\n• Đường trước nhà rộng 7m\nPháp lý: Sổ hồng, hoàn công đẩy đủ.";
+    const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+    const DX_RAO = { so_can: 1, kien_thuc: [], cap_nhat: [], truong: [
+      T("loai_bds", "nha_pho", "NHÀ PHỐ"), T("gia", "6,95 tỷ", "6,95 tỷ"), T("ngang", "4", "4m x 11m"), T("dai", "11", "4m x 11m"),
+      T("so_tang", "6", "6 tầng"), T("thang_may", "co", "có thang máy"), T("so_phong_ngu", "3", "3 phòng ngủ"), T("so_wc", "4", "4 WC"),
+      T("huong", "Tây", "Hướng Tây"), T("phap_ly", "sổ hồng", "Sổ hồng"), T("hoan_cong", "co", "hoàn công đẩy đủ"),
+    ], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } };
+    const goiBoc = [];
+    globalThis.__model = {
+      parse: (p) => laLuotGanManh(p) ? { manh: [{ trich: RAO, ma_tin: A.code }] } : laLuotBocRao(p) ? (goiBoc.push(p), DX_RAO) : OUT(),
+      create: () => "Dạ em ghi rồi ạ.",
+    };
+    const rZ = await send({ external_user_id: uid, text: RAO });
+    const fZ = (q) => db().t.listing_facts.filter((f) => f.listing_id === A.id && f.question === q).map((f) => f.answer);
+    const repZ = rZ.body.replies.join("\n");
+    check("ZR-01 dán nguyên tin rao căn đã có → AI ghi ô (thang máy 'có', 4x11, 3 phòng ngủ), KHÔNG lấy tiêu đề 'BÁN NHÀ PHỐ…' làm kết cấu",
+      fZ("thang_may").includes("có") && fZ("dien_tich").includes("4x11") && A.bedrooms === 3 && !fZ("ket_cau").some((v) => /BÁN NHÀ PHỐ/i.test(v ?? "")),
+      JSON.stringify({ tm: fZ("thang_may"), dt: fZ("dien_tich"), kc: fZ("ket_cau"), pn: A.bedrooms, rep: rZ.body.replies }));
+    check("ZR-02 dòng 📝 in nhãn ngắn 'thang máy: có', không in câu hỏi nối giá trị ('có thang máy không …')",
+      /thang máy: có/.test(repZ) && !/có thang máy không/.test(repZ), JSON.stringify(rZ.body.replies));
+    check("ZR-03 tin B là vỏ rỗng → không hỏi 'nhà phố, chung cư hay đất' nữa; câu loại của B thôi treo, neo chuyển sang A",
+      !/chung cư hay đất|thuộc loại nào/.test(repZ) && !db().t.info_requests.some((x) => x.listing_id === B.id && x.status === "pending") && sl().active_listing_id === A.id,
+      JSON.stringify({ rep: rZ.body.replies, irB: db().t.info_requests.filter((x) => x.listing_id === B.id).map((x) => [x.question, x.status]), neo: sl().active_listing_id === A.id }));
+    // "Bộ nhớ": lượt bóc rao đọc lại NGUYÊN VĂN tin chủ nhà nhắn trước đó.
+    const pmBoc = JSON.stringify(goiBoc.at(-1)?.messages ?? []);
+    check("ZR-04 lượt AI bóc tách đọc lại nguyên văn tin chủ nhà nhắn trước ('anh muốn bán nhà ở Trương Đình Hội') — tin dài không bị cắt 1.200 chữ",
+      /Các tin CHỦ NHÀ đã nhắn TRƯỚC/.test(pmBoc) && /anh muốn bán nhà ở Trương Đình Hội/.test(pmBoc) && /hoàn công đẩy đủ/.test(pmBoc), pmBoc.slice(0, 400));
+    // Thả cảm xúc khi câu đang hỏi cần NỘI DUNG → im (không lấy làm câu trả lời).
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: B.id, question: "loai_bds", status: "pending" });
+    sl().active_listing_id = B.id;
+    globalThis.__model = { parse: (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT(), create: () => "Dạ em chưa rõ lắm ạ, nhà mình thuộc loại nào ta?" };
+    const rR = await send({ external_user_id: uid, text: "[khách thả cảm xúc /-strong]" });
+    const rR2 = await send({ external_user_id: uid, text: "[khách thả cảm xúc ❤️]" });
+    check("ZR-05 thả cảm xúc (/-strong, ❤️) khi đang hỏi loại nhà → bot im, câu loại vẫn treo, không ghi gì",
+      rR.body.replies.length === 0 && rR2.body.replies.length === 0 && db().t.info_requests.some((x) => x.listing_id === B.id && x.question === "loai_bds" && x.status === "pending"),
+      JSON.stringify({ r1: rR.body.replies, r2: rR2.body.replies }));
+    // Câu loại nhà: AI đã đọc mà không thấy loại → hỏi lại, KHÔNG đem câu đi đoán bằng regex (`guess_property_type_answer`).
+    const nLog = db().log.length;
+    const rL = await send({ external_user_id: uid, text: "diện tích đất 4m x 11m nha em" });
+    check("ZR-06 đang hỏi loại, 'diện tích đất 4m x 11m' (AI không thấy loại) → không gọi luật đoán loại, không ghi loại ĐẤT, hỏi lại",
+      !db().log.slice(nLog).some((x) => x.rpc === "guess_property_type_answer") && B.property_type !== "dat" && /loại nào|nhà phố/.test(rL.body.replies.join(" ")),
+      JSON.stringify({ rep: rL.body.replies, pt: B.property_type, rpc: db().log.slice(nLog).filter((x) => x.rpc).map((x) => x.rpc) }));
+    globalThis.__cauHinh = cuCH;
+    globalThis.__model = { parse: () => OUT() };
+  }
   // 01/10/2026 (chủ dự án test Zalo: album 4 ảnh → 4 lần "🤖 Không bóc tách được gì" + 4 câu khen; "gộp lại khen 1 2 câu thôi,
   // nhận ảnh cần hỏi cái gì nữa thì hỏi"): lượt ảnh trơn không có 🤖, chỉ lượt ảnh CUỐI của đợt trả lời, gộp số ảnh, hỏi câu đang chờ.
   {
