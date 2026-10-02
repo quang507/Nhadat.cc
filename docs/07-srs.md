@@ -1724,6 +1724,48 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
   - DC-14 đỏ khi có lời gọi `hoiVeTin` / `laXin…` trần mới;
   - DC-15 canh câu "bao lâu bán" không hứa số ngày.
 
+### SRS-5.1zh · Bắn thử câu đơn giản luồng người bán: "đăng đi" không đăng, phường sang quận khác, "đang bận" thành rao mới, bong bóng ")" (02/10/2026)
+
+**Ca gốc**: 19 kịch bản câu đơn giản bắn production cùng ngày (ID `thu-kb-*`). Chủ dự án: "tao đang test để người vào gửi bán đã mà" → sửa luồng người bán trước, bên mua để sau.
+
+**1. "ok đăng đi" — bot nói "em rao với thông tin hiện tại nha (85/100)", tin vẫn `cho_thong_tin`.**
+- **Lớp lỗi**: hai nhánh luồng dùng CÙNG một tín hiệu AI. "Đủ rồi" và "bảo đăng" cùng đọc `y_dinh = du_roi` (SRS-5.1zb). Nhánh "đủ rồi" đứng trước nên luôn chặn nhánh đăng.
+- **Lớp lỗi phụ**: câu "em rao với thông tin hiện tại" là lời hứa không có việc đi kèm. `chu_noi_du_at` chỉ ngừng hỏi bù, không đưa tin lên kệ.
+- **Sửa**:
+  - Bảo đăng (lượt AI nhỏ `dong_y_dang`; `laBaoDang` khi AI không chạy) → nhường cho nhánh đăng: đóng dấu duyệt, đủ thì lên kệ, thiếu thì nói thiếu gì.
+  - Chỉ "đủ rồi" mà tin chưa lên kệ, chưa duyệt → đủ điểm thì gửi bản nháp; chưa đủ thì "em thôi hỏi, tin chưa lên kệ được vì còn thiếu …".
+- **Chỗ khác cùng lớp**: nhánh duyệt bản nháp (`gatDuyet`) đã tách gật với "đủ rồi" từ SRS-5.1zf. Chưa thấy chỗ thứ ba.
+
+**2. "nhà ở Phú Nhuận" → ghi phường "Phú Thuận" (Quận 7).**
+- **Lớp lỗi**: khớp gần đúng (sai 1 chữ) chạy cả trên cụm mà khớp ĐÚNG đã cố ý bỏ. `timPhuongTrongCau` bỏ phường "Phú Nhuận" vì cụm trùng tên quận cũ, nhưng cùng cụm đó lại khớp sai-một-chữ với "Phú Thuận".
+- **Sửa**: cụm đúng bằng tên một quận (không có chữ "phường" đứng trước) không đem so gần đúng với phường nào.
+- **Chỗ khác cùng lớp**: `giaiDiaDanh` (tra vector địa danh) khi chưa biết quận — chưa soát, ghi lại.
+
+**3. "anh đang bận tí nói sau nha" → bot hỏi "căn đó hay căn khác".**
+- **Lớp lỗi**: đoán ý bằng từ khoá trên chữ bỏ dấu. "đang bận" → "dang ban" (= "đang bán", `coYDinhRao`); "nha" (hư từ) → "nhà" (`coLoaiRo`). AI đã đọc đúng `y_dinh = hoan`.
+- **Sửa**: chế độ `ai` → ý rao do AI đọc (`aiDocRaoLuot`: đề xuất `loai_giao_dich` / `loai_bds` có trích dẫn, hoặc `can_khac`). Từ khoá chỉ là lưới đỡ.
+- **Chỗ khác cùng lớp**: `coYDinhRao` / `coLoaiBDS` còn dùng ở đường mở tin mới. Thuộc đợt 6 (mở tin / nhiều căn), chưa sửa.
+
+**4. Bong bóng "Theo em biết, )", "Hẻm 5m Lê Văn Sỹ thì ) Em tra thấy…"** (lần thứ 3 gặp).
+- **Lớp lỗi**: cắt một CỤM theo trích dẫn AI (`boCauNhanXet`). AI trích nhận xét không kèm mặt cười ":)", code cắt cụm rồi gọt ":" đầu phần sau, trơ lại ")".
+- **Sửa**:
+  - Câu khẳng định chứa nhận xét → bỏ CẢ câu (`tachCau` coi ":)" là dấu hết câu nên mặt cười đi theo).
+  - Câu có hỏi vẫn chỉ cắt vế, nhưng gọt luôn mặt cười đầu phần sau (`MAT_CUOI_DAU`).
+
+**5. "chúc mừng anh đã bán được căn căn chưa rõ địa chỉ"** dù tin có Quận Tân Bình.
+- **Sửa**: ba chỗ dựng tên căn (ngưng rao, rao lại, căn cũ hay mới) dùng chung `tenCanDocLen`: đường / phường / quận; chỉ có quận → "ở Quận …".
+- **Lời dặn model câu "sao em biết"**: chưa hề nói điều đó (chỉ mới hỏi) thì nói đang hỏi để ghi đúng, không chối là chưa hỏi.
+
+**Chưa làm**:
+- Ngưỡng tự suy loại hẻm theo bề rộng nằm trong trigger SQL: từ 3m là hẻm xe hơi, từ 6m là hẻm xe tải ("hẻm 3m" thành "hẻm xe hơi 3m"). Đây là quyết định nghiệp vụ, chờ chủ dự án.
+- Bên mua (bịa giá thị trường, "em là ai", hồ sơ ghi "gần trường" vào khu vực) — để sau theo lệnh chủ dự án.
+
+**Kiểm**:
+- e2e `ZH-01…04`.
+- `kiem-bang-chung.mjs` `NX-04…06`.
+- `phuong-trong-cau.mjs`: 4 ca mới, gồm cách nói mới "căn này ở phú nhuận em", "o phu nhuan".
+- Gỡ bản sửa → ZH 4/4 đỏ, NX 3/3 đỏ (đúng nguyên văn bong bóng production), phường 3/3 đỏ (đã chạy).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

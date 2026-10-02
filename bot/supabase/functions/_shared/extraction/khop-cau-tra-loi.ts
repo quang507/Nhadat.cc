@@ -2338,6 +2338,10 @@ export function timPhuongTrongCau(cau: string, ds: PhuongDs[]): { phuong: Phuong
       const muc = noi === ptNoi ? 3 : [...cua].sort().join(" ") === ptSap ? 2 : ptNoi.length >= 8 && sai1(noi, ptNoi) ? 1 : 0;
       if (!muc) continue;
       const truoc = tu[i - 1] ?? "", truoc2 = tu[i - 2] ?? "";
+      // 02/10/2026 (bắn thử thu-kb-s02, SRS-5.1zh): "nhà ở Phú Nhuận" — cụm CHÍNH LÀ tên quận nên phường "Phú Nhuận" bị bỏ (đúng),
+      // nhưng cùng cụm đó lại khớp SAI-MỘT-CHỮ với "Phú Thuận" (Quận 7) và lọt → tin Phú Nhuận ghi phường Quận 7. Cụm đúng bằng
+      // tên một quận (không có chữ "phường" đứng trước) là nói QUẬN: không đem so gần đúng với phường nào.
+      if (!/^(phuong|xa|p|f)$/.test(truoc) && tenQuan.has(noi)) continue;
       // Ngay sau là chữ cái đơn / số ("xã Vĩnh Lộc B", "Tân Định 2") → tên dài hơn (thường là đơn vị CŨ) — để đường tra cũ lo.
       if (/^([a-pr-z]|\d+)$/.test(tu[i + n] ?? "")) continue;
       const nhanPhuong = /^(phuong|xa|p|f)$/.test(truoc);

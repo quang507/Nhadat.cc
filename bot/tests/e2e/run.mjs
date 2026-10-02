@@ -3327,6 +3327,46 @@ fresh(seedKho);
       !r.body.xin_so_khach && !r.body.replies.some((x) => /không để lại số/.test(x)), JSON.stringify(r.body.replies));
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zh (bắn thử câu đơn giản 02/10): "ok đăng đi" bị nhánh "đủ rồi" chặn (bot nói "em rao" mà không đăng); "đang bận tí nói
+  // sau nha" bỏ dấu khớp "đang bán" + "nhà" → hỏi "căn đó hay căn khác"; tên căn "căn căn chưa rõ địa chỉ".
+  {
+    const cuCH = globalThis.__cauHinh;
+    const laLuotYLuot = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+    const aiZH = (them = {}) => (p) => (laLuotBocRao(p) || laLuotYLuot(p)) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, can_khac: false, dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, ...them } : OUT();
+    const moZH = async (uid, rao, cau) => {
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__model.parse = aiZH();
+      await send({ external_user_id: uid, text: rao });
+      const L = db().t.listings.at(-1);
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: L.id, question: cau, status: "pending" });
+      return L;
+    };
+    let L = await moZH("zh-1", "ban nha hem 5m Le Van Sy quan 3, 4x15, gia 7 ty", "gap");
+    globalThis.__model.parse = aiZH({ y_dinh: { loai: "du_roi", trich_dan: "đăng đi" }, dong_y: "dong_y_dang", dong_y_trich: "ok đăng đi" });
+    let r = await send({ external_user_id: "zh-1", text: "ok đăng đi" });
+    console.log("   [zh-1]", JSON.stringify(r.body).slice(0, 400));
+    check("ZH-01 'ok đăng đi' (AI: du_roi + bảo đăng) → đi nhánh ĐĂNG, không nói 'em rao với thông tin hiện tại' khi tin chưa lên kệ",
+      !r.body.du_roi && !r.body.replies.some((x) => /rao với thông tin hiện tại/.test(x)), JSON.stringify(r.body));
+    L = await moZH("zh-2", "ban nha hem 5m Le Van Sy quan 3, 4x15, gia 7 ty", "huong");
+    globalThis.__model.parse = aiZH({ y_dinh: { loai: "du_roi", trich_dan: "thôi đủ rồi" } });
+    r = await send({ external_user_id: "zh-2", text: "thôi đủ rồi em, hỏi hoài" });
+    check("ZH-02 'thôi đủ rồi' khi tin chưa lên kệ → ngừng hỏi, nói thật còn thiếu gì (hoặc gửi bản nháp), KHÔNG nói 'em rao'",
+      !r.body.replies.some((x) => /rao với thông tin hiện tại/.test(x)) && (r.body.replies.some((x) => /chưa lên kệ được vì còn thiếu/.test(x)) || /duyet_tin/.test(JSON.stringify(r.body))), JSON.stringify(r.body));
+    L = await moZH("zh-3", "ban nha hem 5m Le Van Sy quan 3, 4x15, gia 7 ty", "phuong");
+    globalThis.__model.parse = aiZH({ y_dinh: { loai: "hoan", trich_dan: "anh đang bận tí nói sau nha" } });
+    r = await send({ external_user_id: "zh-3", text: "anh đang bận tí nói sau nha" });
+    check("ZH-03 'anh đang bận tí nói sau nha' (bỏ dấu: 'đang bán' + 'nhà') — AI không đọc ra ý rao → KHÔNG hỏi 'căn đó hay căn khác'",
+      r.body.can_cu_hay_moi !== "hoi" && !r.body.replies.some((x) => /căn đó hay căn khác/.test(x)), JSON.stringify(r.body));
+    L = await moZH("zh-4", "ban nha hem 3m Tan Binh, 4x12, gia 5 ty", "phuong");
+    L.location_raw = null; L.ward = null; L.district = "Quận Tân Bình";
+    globalThis.__model.parse = aiZH({ y_dinh: { loai: "ban_roi", trich_dan: "bán rồi" } });
+    r = await send({ external_user_id: "zh-4", text: "nhà anh bán rồi em ơi" });
+    check("ZH-04 báo bán rồi, tin chỉ có quận → 'căn ở Quận Tân Bình', không 'căn căn chưa rõ địa chỉ'",
+      r.body.replies.some((x) => /căn ở Quận Tân Bình/.test(x)) && !r.body.replies.some((x) => /căn căn|chưa rõ địa chỉ/.test(x)), JSON.stringify(r.body.replies));
+    globalThis.__cauHinh = cuCH;
+  }
   // SRS-5.1zg nhánh MUA: xin hình mà chưa rõ căn → hỏi lại căn nào; hỏi tiện ích → kèm link Google Maps tìm sẵn.
   {
     fresh(seedKho);

@@ -122,7 +122,7 @@ const CHI_DAN_CHU_DE: Record<string, string> = {
   tin_cua_minh: " Đây là câu hỏi về CHÍNH TIN của chủ nhà: chỉ trả lời bằng thông tin tin đang ghi ở trên, không có thì nói thật là chưa ghi.",
   // 02/10/2026 (test tay chủ dự án: "nếu lấy thông tin ra thì phải ghi vì sao có cái này, người ta hỏi sao em biết nhà 4-6 tầng nó ko
   // trả lời dc"; SRS-5.1ze): bot từng đáp "Dạ em là trợ lý AI…". Điều bot nói phải nói được NGUỒN.
-  nguon: " Chủ nhà hỏi em SAO BIẾT / lấy đâu ra điều em vừa nói. Nói thật NGUỒN, một câu: chủ nhà đã nói (nhắc lại đúng lời), hoặc em xem trong KHO DỰ ÁN bên em (nói 'Theo em biết, dự án <tên> …' — đó là thông tin chung của cả dự án, không phải căn của chủ nhà), hoặc không có nguồn nào thì nhận là em nói nhầm và xin lỗi. Rồi hỏi lại đúng thông tin của căn chủ nhà nếu còn thiếu. KHÔNG trả lời kiểu 'em là trợ lý AI'.",
+  nguon: " Chủ nhà hỏi em SAO BIẾT / lấy đâu ra điều em vừa nói. Nói thật NGUỒN, một câu: chủ nhà đã nói (nhắc lại đúng lời), hoặc em xem trong KHO DỰ ÁN bên em (nói 'Theo em biết, dự án <tên> …' — đó là thông tin chung của cả dự án, không phải căn của chủ nhà), hoặc không có nguồn nào thì nhận là em nói nhầm và xin lỗi. Nếu em CHƯA HỀ nói điều đó (chỉ mới HỎI) thì nói thật em chưa biết, em đang hỏi để ghi cho đúng — KHÔNG chối là em chưa hỏi khi lịch sử có câu em đã hỏi. Rồi hỏi lại đúng thông tin của căn chủ nhà nếu còn thiếu. KHÔNG trả lời kiểu 'em là trợ lý AI'.",
 };
 // FR-224: câu hỏi SỐ CHẶT — giá trị ghi lấy từ ô AI đã chuẩn hoá + kiểm khoảng (`giaTriChoCauTreo`), không lấy câu trả lời
 // chữ của AI ("năm tỷ hai" / "5,2 tỷ" đều phải thành một con số đúng đơn vị). AI vẫn quyết CÓ / KHÔNG trả lời.
@@ -413,6 +413,17 @@ const maTinSach = (s: string | null | undefined): string => {
   const v = (s ?? "").trim().toUpperCase();
   return /^[A-Z0-9-]{3,40}$/.test(v) ? v : "";
 };
+
+/**
+ * Tên căn để ĐỌC LÊN cho chủ nhà, đứng sau chữ "căn" ở nơi gọi (SRS-5.1zh — bắn thử 02/10: "chúc mừng anh đã bán được căn căn chưa
+ * rõ địa chỉ" dù tin đã có Quận Tân Bình). Đường / phường / quận; chỉ có quận → "ở Quận …"; không có gì → theo loại.
+ */
+function tenCanDocLen(c: { location_raw?: string | null; ward?: string | null; district?: string | null; property_type?: string | null }): string {
+  const dc = [c.location_raw, c.ward].filter((x, i, a) => x && a.indexOf(x) === i).join(", ");
+  if (dc) return c.district && !dc.includes(c.district) ? `${dc}, ${c.district}` : dc;
+  if (c.district) return `ở ${c.district}`;
+  return c.property_type === "chung_cu" ? "chung cư của mình" : "của mình";
+}
 
 /** Nhãn loại tiện ích của công cụ `tim_tien_ich_quanh` (tro-ly.ts) → chữ đưa vào link Google Maps. */
 const TEN_LOAI_TIEN_ICH: Record<string, string> = {
@@ -2417,6 +2428,16 @@ Deno.serve(async (req) => {
       if (!laCheDoAi || !k?.ket || typeof k.canKhac !== "boolean") return undefined;
       return k.canKhac;
     };
+    /**
+     * SRS-5.1zh: tin này có Ý RAO (bán / cho thuê một căn) không — AI đọc: đề xuất `loai_giao_dich` / `loai_bds` (đã qua kiểm trích
+     * dẫn ở `bongAi`) hoặc `can_khac`. `undefined` = AI không chạy → nơi gọi dùng từ khoá.
+     */
+    const aiDocRaoLuot = async (): Promise<boolean | undefined> => {
+      if (!bongAi) return undefined;
+      const k = await bongAi;
+      if (!laCheDoAi || !k?.ket) return undefined;
+      return k.canKhac === true || k.truong.some((t) => t.khoa === "loai_giao_dich" || t.khoa === "loai_bds");
+    };
     /** Đợt 3: câu kế AI chọn, chỉ khi nằm trong `hopLe`; null = AI không chạy / không chọn / chọn ngoài danh sách → luật chọn. */
     const cauKeAi = async (hopLe: Iterable<string>): Promise<string | null> => {
       if (!bongAi) return null;
@@ -3563,14 +3584,14 @@ Deno.serve(async (req) => {
       : ydNgung !== undefined ? (ydNgung?.loai === "ban_roi" ? "ban_roi" : ydNgung?.loai === "ngung_rao" ? "rut" : null)
       : laNgungRao(text);
     if (kieuNgung) {
-      type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; deal?: string | null; property_type?: string | null };
+      type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; district?: string | null; deal?: string | null; property_type?: string | null };
       // 22/09/2026 (kịch bản E): "căn 1 bán rồi, còn căn 2" từng gỡ CĂN 2 — danh sách xếp mới→cũ nên "căn 1" là
       // căn mở SAU. Số thứ tự chủ nhà nói là thứ tự MỞ (như bong bóng "Em mở 2 tin riêng"): cũ → mới.
-      const { data: dangRao } = await client.from("listings").select("id, code, location_raw, ward, deal, property_type")
+      const { data: dangRao } = await client.from("listings").select("id, code, location_raw, ward, district, deal, property_type")
         .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"])
         .order("created_at", { ascending: true }).limit(10);
       const cans = (dangRao ?? []) as CanRao[];
-      const tenCan = (c: CanRao) => [c.location_raw, c.ward].filter(Boolean).join(", ") || "căn chưa rõ địa chỉ";
+      const tenCan = tenCanDocLen;
       const dongCauChon = async () => {
         if (!dangChonCanNgung || !pendingReq) return;
         await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
@@ -3750,12 +3771,12 @@ Deno.serve(async (req) => {
     const botVuaGoTin = /gỡ tin khỏi kệ|đã ngưng rao căn/.test(lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-3).map((m) => m.body ?? "").join(" "));
     const ydRaoLai = await yDinhAi();
     if (ydRaoLai !== undefined ? ydRaoLai?.loai === "rao_lai" : ((laRaoLai(text) || (botVuaGoTin && laRutLoiBan(text))) && !laNgungRao(text))) {
-      type CanGo = { id: string; code: string | null; location_raw: string | null; ward: string | null; property_type: string | null; chu_duyet_at: string | null };
-      const { data: daGo, error: dgoErr } = await client.from("listings").select("id, code, location_raw, ward, property_type, chu_duyet_at")
+      type CanGo = { id: string; code: string | null; location_raw: string | null; ward: string | null; district: string | null; property_type: string | null; chu_duyet_at: string | null };
+      const { data: daGo, error: dgoErr } = await client.from("listings").select("id, code, location_raw, ward, district, property_type, chu_duyet_at")
         .eq("seller_id", sellerRow.id).in("status", ["da_chot", "an"]).order("created_at", { ascending: true }).limit(10);
       if (dgoErr) await ghiLoi(client, "chat-reply rao lai(doc tin)", dgoErr.message);
       const cans = (daGo ?? []) as CanGo[];
-      const tenCan = (c: CanGo) => [c.location_raw, c.ward].filter(Boolean).join(", ") || (c.property_type === "chung_cu" ? "căn chung cư" : "căn chưa rõ địa chỉ");
+      const tenCan = tenCanDocLen;
       if (!cans.length) {
         return await traLoiSeller([`Dạ em không thấy tin nào của ${cachGoi} đang gỡ để mở lại ạ. ${cachGoi.charAt(0).toUpperCase() + cachGoi.slice(1)} muốn rao căn nào thì nhắn em địa chỉ, giá và diện tích nha.`], { rao_lai: null });
       }
@@ -3829,17 +3850,20 @@ Deno.serve(async (req) => {
     // Zalo thật 16/09 13:36: "cô có căn nhà này Ở QUẬN 5 cần giao bán gấp" — số của quận/phường
     // không phải chi tiết căn; câu này từng đổi QUẬN của tin cũ (capNhatQuan) thay vì hỏi căn nào.
     const textKhongSoQuan = text.replace(/(?:quận|quan|phường|phuong|\bq|\bp)\s*\.?\s*\d{1,2}\b/gi, "");
-    const raoSuong = coYDinhRao && coLoaiRo && !coChiTiet && !/\d/.test(textKhongSoQuan) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
+    // 02/10/2026 (bắn thử thu-kb-s04, SRS-5.1zh): "anh đang bận tí nói sau nha" — bỏ dấu thì "đang bận" = "đang bán" (`coYDinhRao`)
+    // và "nha" = "nhà" (`coLoaiRo`) → coi là rao căn mới, bot hỏi "căn đó hay căn khác" thay vì hoãn. Chế độ `ai`: ý RAO do AI
+    // đọc (đề xuất loại giao dịch / loại BĐS có trích dẫn, hoặc `can_khac`); từ khoá chỉ là lưới đỡ khi AI không chạy.
+    const aiRao = await aiDocRaoLuot();
+    const raoSuong = (aiRao !== undefined ? aiRao : coYDinhRao && coLoaiRo /* lưới đỡ */) && !coChiTiet && !/\d/.test(textKhongSoQuan) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
       nhanDienNhieuFact(text).every((f) => f.question === "gap" || f.question === "phuong");
     if (!sellerMoi && (raoSuong || (dangHoiCanCuMoi && (laCanDo || laCanKhac)))) {
-      type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; price_raw: string | null };
-      const { data: dangRao, error: drErr } = await client.from("listings").select("id, code, location_raw, ward, price_raw")
+      type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; district: string | null; property_type: string | null; price_raw: string | null };
+      const { data: dangRao, error: drErr } = await client.from("listings").select("id, code, location_raw, ward, district, property_type, price_raw")
         .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"])
         .order("created_at", { ascending: false }).limit(5);
       if (drErr) await ghiLoi(client, "chat-reply listings(can cu hay moi)", drErr.message);
       const cans = (dangRao ?? []) as CanRao[];
-      const tenCan = (c: CanRao) =>
-        [c.location_raw, c.ward].filter(Boolean).join(", ") || (c.code ? `mã ${c.code}` : "căn chưa rõ địa chỉ");
+      const tenCan = (c: CanRao) => [c.location_raw, c.ward, c.district].some(Boolean) || !c.code ? tenCanDocLen(c) : `mã ${c.code}`;
       // "căn Căn số 14 ở…" (bắn thật mau-chu-q8): địa chỉ đã mở đầu bằng "căn" thì không thêm chữ "căn".
       const canTen = (c: CanRao) => { const t = tenCan(c); return /^căn\b/i.test(t) ? t : `căn ${t}`; };
       if (cans.length) {
@@ -4727,7 +4751,11 @@ Deno.serve(async (req) => {
       // MỌI câu, bot thôi hỏi luôn. AI đã đọc thì "đủ rồi" là ý định AI đọc ra (`du_roi`, có trích dẫn); từ khoá chỉ khi AI không chạy.
       const ydDu = await yDinhAi();
       const noiDuRoi = ydDu !== undefined ? ydDu?.loai === "du_roi" : laDuRoi(dapAn);
-      if (pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" && noiDuRoi) {
+      // 02/10/2026 (bắn thử thu-kb-s10, SRS-5.1zh): chế độ `ai` đọc "ok đăng đi" là `du_roi` — CÙNG tín hiệu với nhánh bảo đăng
+      // (`chuMuonDang`) ở dưới, nên nhánh này luôn chặn trước: bot nói "em rao" mà tin không lên kệ. Bảo ĐĂNG (lượt AI nhỏ
+      // `dong_y_dang`; luật `laBaoDang` khi AI không chạy) thì nhường cho nhánh đăng.
+      const baoDangDu = noiDuRoi && await baoDangLuot(() => laBaoDang(dapAn));
+      if (pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" && noiDuRoi && !baoDangDu) {
         const luc = new Date().toISOString();
         const { error: duErr } = await client.from("listings")
           .update({ chu_noi_du_at: luc }).eq("id", pendingReq.listing_id);
@@ -4736,8 +4764,22 @@ Deno.serve(async (req) => {
           .update({ status: "expired" })
           .eq("listing_id", pendingReq.listing_id).eq("status", "pending");
         if (dongErr) await ghiLoi(client, "chat-reply dong cau treo(du roi)", dongErr.message);
-        const { data: dDu } = await client.rpc("diem_tin", { p_listing_id: pendingReq.listing_id });
+        const [{ data: dDu }, { data: tDu, error: tDuErr }] = await Promise.all([
+          client.rpc("diem_tin", { p_listing_id: pendingReq.listing_id }),
+          client.from("listings").select("status, chu_duyet_at").eq("id", pendingReq.listing_id).maybeSingle(),
+        ]);
+        if (tDuErr) await ghiLoi(client, "chat-reply chu noi du(doc tin)", tDuErr.message);
         const diemDu = (dDu as { diem?: number } | null)?.diem;
+        // SRS-5.1zh: "em rao với thông tin hiện tại" chỉ đúng khi tin ĐÃ lên kệ (`chu_noi_du_at` chỉ ngừng hỏi bù, không đăng).
+        // Chưa lên kệ, chưa duyệt: đủ điểm → gửi bản nháp để chủ duyệt; chưa đủ → nói thật còn thiếu gì.
+        if (tDu?.status === "cho_thong_tin" && !tDu.chu_duyet_at) {
+          const nhap = await guiBanNhap(pendingReq.listing_id, { du_roi: true, diem: diemDu ?? null });
+          if (!Array.isArray(nhap)) return nhap;
+          const thieuDu = nhap.slice(0, 3).join(", ");
+          return await traLoiSeller([
+            `Dạ em thôi hỏi ạ. Tin mình chưa lên kệ được vì còn thiếu ${thieuDu || "vài thông tin"}; lúc nào có ${cachGoi} nhắn em là em đăng liền ạ.`,
+          ], { du_roi: true, diem: diemDu ?? null, thieu: nhap });
+        }
         const cauDu = `Dạ em hiểu rồi, em rao với thông tin hiện tại nha${
           typeof diemDu === "number" ? ` (tin mình ${diemDu}/100)` : ""
         }.\nLúc nào có thêm ảnh hay thông tin, ${cachGoi} nhắn em là em cập nhật liền ạ.`;

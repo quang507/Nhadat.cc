@@ -502,6 +502,13 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("NX-01 căn cứ AI đưa không có trong lời chủ nhà → bỏ; câu hỏi không bao giờ bỏ", bo.length === 1 && boCauNhanXet(loi, bo) === "Nhà mình ở phường nào anh chị?", JSON.stringify([bo, boCauNhanXet(loi, bo)]));
   ok("NX-02 căn cứ có thật ('hxh') → giữ", nhanXetKhongCanCu([{ cau: "Nhà hẻm xe hơi ạ.", can_cu: "hxh" }], "ban nha hxh q10").length === 0);
   ok("NX-03 bỏ hết chữ → null (dùng câu mẫu)", boCauNhanXet("Hẻm sâu yên tĩnh lắm ạ.", ["Hẻm sâu yên tĩnh lắm ạ."]) === null);
+  // SRS-5.1zh (bắn thử 02/10): AI trích nhận xét KHÔNG kèm mặt cười → bỏ cả câu khẳng định, không trơ ")".
+  const nx4 = boCauNhanXet("Hẻm 5m Lê Văn Sỹ thì khách tìm nhiều lắm, dễ ra hàng :) Em tra thấy đường Lê Văn Sỹ thuộc Phường Nhiêu Lộc, đúng không anh chị?", ["khách tìm nhiều lắm, dễ ra hàng"]);
+  ok("NX-04 vế khen trước ':)' bị bỏ → không còn ')' trơ", nx4 === "Em tra thấy đường Lê Văn Sỹ thuộc Phường Nhiêu Lộc, đúng không anh chị?", JSON.stringify(nx4));
+  const nx5 = boCauNhanXet("Theo em biết, dự án Sunrise City có hồ bơi rộng lắm :)\nCăn mình ở tầng mấy vậy ạ?", ["dự án Sunrise City có hồ bơi rộng lắm"]);
+  ok("NX-05 'Theo em biết, <nhận xét> :)' → bỏ cả dòng, không còn 'Theo em biết, )'", nx5 === "Căn mình ở tầng mấy vậy ạ?", JSON.stringify(nx5));
+  const nx6 = boCauNhanXet("Mặt tiền đẹp vậy dễ bán lắm ^^ mình cần bán gấp không anh?", ["Mặt tiền đẹp vậy dễ bán lắm"]);
+  ok("NX-06 vế khen dính câu hỏi → cắt vế, gọt luôn '^^'", nx6 === "Mình cần bán gấp không anh?", JSON.stringify(nx6));
 }
 
 // ── Đợt 1 chuyển luật sang AI (02/10/2026, SRS-5.1v): ô trước đây chỉ luật ghi — AI nói, code kiểm ──

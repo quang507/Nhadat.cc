@@ -1544,12 +1544,32 @@ export function nhanXetKhongCanCu(
  * Bỏ khỏi lời bot các câu / vế trong `cauBo` (AI chép nguyên văn; so cả bản bỏ dấu). KHÔNG bao giờ bỏ phần có dấu "?" — câu
  * hỏi giữ nguyên. Hết chữ → null (nơi gọi dùng câu mẫu).
  */
+/** Mặt cười ngay đầu phần còn lại sau khi cắt một vế (":)", ":D", "^^") — đi theo vế đã cắt, không được trơ lại ")". */
+const MAT_CUOI_DAU = /^\s*(?:[:;=]-?[)(D]+|\^\^)/u;
 export function boCauNhanXet(loi: string | null | undefined, cauBo: string[]): string | null {
   let s = (loi ?? "").trim();
   if (!s) return null;
   for (const c0 of cauBo) {
     const c = c0.trim().replace(/[.,!…;:\s]+$/u, "");
     if (c.length < 4 || /\?/.test(c)) continue;
+    // 02/10/2026 (bắn thử thu-kb-s05, lx "Lê Văn Sỹ", SRS-5.1zh): AI trích "khách tìm nhiều lắm, dễ ra hàng" (không kèm ":)") →
+    // cắt đúng cụm rồi gọt ":" đầu phần sau, còn trơ ")" — bong bóng "Hẻm 5m Lê Văn Sỹ thì ) Em tra thấy…", "Theo em biết, )".
+    // Câu KHẲNG ĐỊNH (không có "?") chứa nhận xét → bỏ CẢ câu (mặt cười đi theo câu, `tachCau`); câu có hỏi mới cắt vế.
+    const kdC = boDau(c);
+    let boCa = false;
+    const dongMoi = s.split("\n").map((d) => {
+      const cac = tachCau(d);
+      const giu = cac.filter((x) => {
+        const bo = !/\?/.test(x) && boDau(x).includes(kdC);
+        if (bo) boCa = true;
+        return !bo;
+      });
+      return giu.length === cac.length ? d : giu.join(" ").trim();
+    });
+    if (boCa) {
+      s = dongMoi.filter((d) => d.trim()).join("\n").trim();
+      continue;
+    }
     let i = s.indexOf(c);
     if (i < 0) {
       // So bỏ dấu từng ký tự (độ dài giữ nguyên) để cắt đúng vị trí trên câu gốc.
@@ -1559,10 +1579,10 @@ export function boCauNhanXet(loi: string | null | undefined, cauBo: string[]): s
       const arr = [...s];
       const truoc = arr.slice(0, i).join(""), giua = arr.slice(i, i + [...boDau(c)].length).join(""), sau = arr.slice(i + [...boDau(c)].length).join("");
       if (/\?/.test(giua)) continue;
-      s = `${truoc}${sau.replace(/^[\s.,!…;:]+/u, " ")}`;
+      s = `${truoc}${sau.replace(MAT_CUOI_DAU, "").replace(/^[\s.,!…;:]+/u, " ")}`;
     } else {
       // Vế khen dính liền câu hỏi ("Hẻm sâu thì dễ bán, mình cần gấp không?") — bỏ vế, phần hỏi giữ.
-      s = `${s.slice(0, i)}${s.slice(i + c.length).replace(/^[\s.,!…;:]+/u, " ")}`;
+      s = `${s.slice(0, i)}${s.slice(i + c.length).replace(MAT_CUOI_DAU, "").replace(/^[\s.,!…;:]+/u, " ")}`;
     }
     s = s.replace(/\s+([.,!?…])/g, "$1").replace(/[ \t]{2,}/g, " ").replace(/^[\s.,!…;:]+/u, "").trim();
   }
