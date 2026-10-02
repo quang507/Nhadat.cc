@@ -272,13 +272,20 @@ const metCua = (so: string, dv: string) => Number(so.replace(",", ".")) * (/^k/i
  * "bán kính 1 km" — hồ sơ khách, đầu kết quả công cụ) không phải khoảng cách tới một nơi nên không làm nguồn: e2e TL-E2E-09
  * bắt "trường Nguyễn Du khoảng 900m" lọt vì hồ sơ có "trong ~1 km".
  */
+const CUM_BAN_KINH = /(?:trong|bán kính|ban kinh)\s*(?:vòng|vong|khoảng|khoang|phạm vi|pham vi)?\s*~?\s*(\d+(?:[.,]\d+)?)\s*(km|m)(?![\p{L}\d²])/giu;
 export function cauKhoangCachKhongNguon(van: string, nguon: string): string[] {
-  const nguonSach = nguon.replace(/(?:trong|bán kính|ban kinh)\s*~?\s*\d+(?:[.,]\d+)?\s*(?:km|m)(?![\p{L}\d²])/giu, "");
+  // Cụm BÁN KÍNH trong nguồn ("bán kính ~1 km") không phải khoảng cách tới một nơi — không cho làm nguồn cho "900m".
+  const banKinh = [...nguon.matchAll(CUM_BAN_KINH)].map((m) => metCua(m[1], m[2]));
+  const nguonSach = nguon.replace(CUM_BAN_KINH, "");
   const coSan = [...nguonSach.matchAll(SO_KHOANG_CACH)].map((m) => metCua(m[1], m[2]));
   const cau = van.split(/(?<=[.!?…])\s+|\n+/).filter(Boolean);
   return cau.filter((c) => {
     if (!CHU_NOI_CHON.test(boDauNhe(c))) return false;
-    return [...c.matchAll(SO_KHOANG_CACH)].some((m) => {
+    // 02/10/2026 (bắn lại D1): lời "…mấy trường khác trong khoảng 1 km" nhắc lại ĐÚNG bán kính đã tra — không phải khoảng
+    // cách bịa. Cụm bán kính trong lời khớp bán kính của nguồn thì bỏ ra trước khi soi.
+    const cSach = c.replace(CUM_BAN_KINH, (cum, so, dv) =>
+      banKinh.some((r) => Math.abs(r - metCua(so, dv)) <= Math.max(50, r * 0.08)) ? "" : cum);
+    return [...cSach.matchAll(SO_KHOANG_CACH)].some((m) => {
       const v = metCua(m[1], m[2]);
       return v > 0 && !coSan.some((x) => Math.abs(x - v) <= Math.max(50, x * 0.08));
     });
@@ -399,7 +406,11 @@ export async function chayTroLyMua(o: {
     }
     // Chỉ công cụ GHI, mọi lệnh ghi đều qua, và đã có lời nhắn → xong. Có lệnh bị từ chối thì gửi lỗi về để model sửa lời
     // (đừng để lời "em ghi rồi" đi tới khách trong khi code không ghi).
-    if (!coDoc && van && ketQua.every((k) => !k.is_error)) {
+    // 02/10/2026 (bắn lại D1 "còn bệnh viện gần đó"): tra xong ở vòng 1, vòng 2 model viết "Ghi lại hồ sơ với thông tin khách
+    // đã nói rõ:" kèm lệnh ghi → dừng sớm với lời kể việc, khách không nhận câu trả lời nào. Lượt đã tra (có công cụ ĐỌC)
+    // thì không dừng ở vòng chỉ-có-ghi: gửi kết quả ghi về để model viết lời trả lời từ dữ liệu đã tra.
+    const daTra = congCu.some((t) => TEN_DOC.has(t));
+    if (!coDoc && !daTra && van && ketQua.every((k) => !k.is_error)) {
       if (xetKhoangCach(r, van, ketQua, vong < toiDa)) continue;
       out.replies = thanhBongBong(vanCuoi);
       return out.replies.length ? { out, duLieu, congCu, vong, usage, nhac, boCau } : null;
