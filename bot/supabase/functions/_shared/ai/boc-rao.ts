@@ -53,7 +53,7 @@ const HoiLai = z.object({
 // NGHĨA cả câu (có ngữ cảnh), code kiểm trích dẫn rồi mới báo admin (`docCamXuc`).
 export const MUC_CAM_XUC = ["binh_thuong", "buc", "nghi_ngo", "muon_dung"] as const;
 const CamXuc = z.object({
-  muc: z.enum(MUC_CAM_XUC).describe("binh_thuong; buc = bực, cáu, chê bot hỏi nhiều / hỏi hoài; nghi_ngo = nghi lừa đảo, không tin, sợ mất tiền / mất thông tin; muon_dung = bảo thôi, không rao nữa, đừng nhắn nữa. 'Bận', 'để mai' thôi chưa phải bực."),
+  muc: z.enum(MUC_CAM_XUC).describe("binh_thuong ('ngộp ngân hàng', 'kẹt bank', 'cắt lỗ' là áp lực TIỀN của chủ nhà, không phải bực với bot); buc = bực, cáu, chê bot hỏi nhiều / hỏi hoài; nghi_ngo = nghi lừa đảo, không tin, sợ mất tiền / mất thông tin; muon_dung = bảo thôi, không rao nữa, đừng nhắn nữa. 'Bận', 'để mai' thôi chưa phải bực."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ thể hiện cảm xúc đó. binh_thuong thì null."),
 });
 // 01/10/2026 (chủ dự án: "câu hỏi riêng cho từng loại bds… code cứng quá nên giờ cần AI hiểu"): bảng câu theo loại (required_facts)
@@ -129,6 +129,8 @@ LUẬT CỨNG (code kiểm từng trường, sai là bị bỏ):
 KHOÁ:
 - loai_giao_dich: "ban" | "cho_thue". "Sang nhượng mặt bằng / quán" là cho_thue; "sang nhượng căn hộ / nhà" là ban. Tin không nói bán hay thuê thì KHÔNG đưa.
 - loai_bds: chung_cu | nha_pho | nha_cap4 | dat | biet_thu | phong_tro | mat_bang | toa_nha | dat_nong_nghiep | dat_kinh_doanh | kho_xuong. "Đất nền KDC" là dat.
+  Tin RAO (có bán / cho thuê) LUÔN đưa loai_bds khi có chữ chỉ loại, kể cả không dấu: "bán nhà", "nhà hẻm", "nhà mặt tiền", "nhà 1 trệt 2 lầu",
+  "ban nha hem" → nha_pho (trừ khi nói cấp 4 / biệt thự / chung cư / phòng trọ); trich_dan là cụm có chữ "nhà".
 - gia (giá bán; tin cho thuê thì giá thuê), gia_m2, tien_coc, thu_nhap_thue (CHỈ tiền thuê căn BÁN đang thu). Giá trị tiền LUÔN kèm đơn vị như khách viết: "5 tỷ 2", "3 tỷ 150", "900 triệu", "95 triệu/m2" — không viết số trần "5.2".
 - dien_tich (m²), ngang, dai, no_hau (m), do_rong_hem, do_rong_duong, cach_mat_tien (m): trong "truong" chỉ con số (hẻm xe hơi không có số mét thì không đưa vào truong — nhưng VẪN là câu trả lời câu hẻm ở "tra_loi").
 - so_phong_ngu, so_wc; so_tang = TỔNG số tầng tính CẢ TRỆT, không tính lửng/sân thượng ("1 trệt 2 lầu" = 3, "trệt 3 lầu" = 4, "3 tấm" = 3); tang = căn hộ nằm tầng mấy.
@@ -140,8 +142,11 @@ KHOÁ:
 - huong: chỉ phương (Đông, Tây Nam…); "view sông" là view.
 - phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công; "chưa có sổ", "đang chờ sổ", "hợp đồng mua bán" cũng là câu trả lời pháp lý — ghi đúng chữ khách). "Thổ cư" không phải pháp lý.
 - noi_that, ly_do_ban (lý do CẦN bán, không phải "gấp"), ket_cau (trệt/lầu/lửng/hầm), thoi_han_thue (CHỈ tin cho thuê; tin bán có hợp đồng thuê thì hạn hợp đồng vào kien_thuc), phi_quan_ly, view, hien_trang: chữ — giá trị là cụm ngắn NẰM TRONG trích dẫn.
-- gap, thuong_luong: "co" | "khong". Hoa hồng môi giới KHÔNG phải thương lượng. gap đọc theo NGHĨA, kể cả khi bot không hỏi: "được giá thì
-  bán / thì thôi", "rao khi nào được giá", "không vội", "từ từ", "chưa cần bán gấp" → khong; "cần tiền gấp", "kẹt tiền", "bán nhanh", "bán gấp" → co.
+- gap, thuong_luong: gia_tri CHỈ là "co" hoặc "khong" (không chép cụm khách nói vào gia_tri). Hoa hồng môi giới KHÔNG phải thương lượng.
+  gap đọc theo NGHĨA cả câu, có phủ định, kể cả khi bot đang hỏi câu khác:
+  khong = "được giá thì bán / thì thôi", "rao khi nào được giá", "giá tốt thì bán, không thì để đó", "không vội", "từ từ", "chưa cần tiền",
+  "bán chơi", "ko gấp", "hong có gấp gì", "chưa cần bán gấp";
+  co = "bán gấp", "cần tiền gấp", "kẹt tiền", "kẹt bank", "ngộp ngân hàng / ngộp bank", "cắt lỗ cũng bán", "cần ra hàng sớm", "ra nhanh trong tháng".
   Một tin có cả giá lẫn ý gấp ("16 tỉ em, rao khi nào được giá thì thôi") → đưa CẢ HAI trường, không chỉ giá.
 - loai_duong_vao: mat_tien | hem_xe_tai | hem_xe_hoi | hem_xe_may | hem | khong_hem — đường trước nhà, đọc theo NGHĨA cả câu, kể
   cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền", "mặt đường" →
