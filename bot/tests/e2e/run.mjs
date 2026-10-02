@@ -2564,7 +2564,8 @@ fresh(seedKho);
     check("AIM-XN1 'xhr' AI không chắc → bot hỏi 'Dạ \"xhr\" là sổ hồng riêng đúng không', CHƯA ghi pháp lý, gợi ý cất ở boc_tach",
       rX.body.replies.some((x) => /"xhr" là sổ hồng riêng đúng không/.test(x)) && !fX("phap_ly").length && LX.boc_tach?.xac_nhan_goi_y?.gia_tri === "sổ hồng riêng",
       JSON.stringify({ rep: rX.body.replies, pl: fX("phap_ly"), bt: LX.boc_tach }));
-    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } } : OUT();
+    // SRS-5.1zf: gật do AI đọc (`dong_y`).
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, dong_y: { la: "dong_y", trich_dan: "đúng rồi em" } } : OUT();
     const rX2 = await send({ external_user_id: "aim-xn", text: "đúng rồi em" });
     check("AIM-XN2 gật → ghi pháp lý 'sổ hồng riêng', gợi ý xoá, 🤖 báo pháp lý, hỏi lại câu đang treo",
       fX("phap_ly").some((f) => f.answer === "sổ hồng riêng") && db().t.listings.at(-1).boc_tach?.xac_nhan_goi_y === false &&
@@ -3002,7 +3003,8 @@ fresh(seedKho);
           !Lq1.ward && /Tân Phú/.test((rq1.body.replies ?? []).join(" ")) && /Quận 5/.test((rq1.body.replies ?? []).join(" ")),
           JSON.stringify({ ward: Lq1.ward, rep: rq1.body.replies }));
       }
-      globalThis.__model.parse = imAi;
+      // SRS-5.1zf: chế độ `ai` — GẬT do AI đọc (`dong_y`), luật `laDongY` chỉ đỡ khi AI không chạy.
+      globalThis.__model.parse = ma === "LQ-03" ? (p) => laLuotBocRao(p) ? { ...imAi(p), dong_y: { la: "dong_y", trich_dan: "đúng rồi" } } : OUT() : imAi;
       const rq2 = await send({ external_user_id: "lq-1", text: tra });
       const Lq2 = db().t.listings.at(-1);
       check(`${ma} rồi khách đáp '${tra}'`, mong(Lq2), JSON.stringify({ ward: Lq2.ward, district: Lq2.district, rep: rq2.body.replies }));
@@ -3223,6 +3225,47 @@ fresh(seedKho);
     const fg = db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === "gap");
     check("KHOA-SAI-01 AI trả khoá ngoài danh sách (cap_nhat 'gia', truong 'gia_khong_co', cảm xúc 'vui') → vẫn ghi ô gấp 'không gấp' AI đọc đúng",
       fg.some((f) => f.answer === "không gấp"), JSON.stringify({ fg, rep: r.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // Đợt 1 bỏ luật từ khoá (02/10/2026, SRS-5.1zf): GẬT / BẢO ĐĂNG do AI đọc (`dong_y`), `laDongY` / `laBaoDang` chỉ đỡ khi AI
+  // không chạy. Chế độ `ai`: AI nói không gật thì "ok" KHÔNG duyệt; AI nói gật thì cách nói luật không biết vẫn duyệt.
+  {
+    const cuCH = globalThis.__cauHinh;
+    const aiDY = (dy, them = {}) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, dong_y: dy, ...them } : OUT();
+    const moDY = async (uid, cau = "duyet_tin") => {
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__model.parse = aiDY(null);
+      await send({ external_user_id: uid, text: "ban nha hem 5m Le Van Sy quan 3, 4x15, gia 7 ty" });
+      const L = db().t.listings.at(-1);
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: L.id, question: cau, status: "pending" });
+      return L;
+    };
+    const duyet = (L) => !!db().t.listings.find((x) => x.id === L.id)?.chu_duyet_at;
+    let L = await moDY("dy-1");
+    globalThis.__model.parse = aiDY({ la: "dong_y", trich_dan: "ổn áp rồi em", dang_di: true });
+    let r = await send({ external_user_id: "dy-1", text: "ổn áp rồi em, triển luôn" });
+    check("DY-01 duyệt bản nháp, 'ổn áp rồi em, triển luôn' (luật từ khoá không biết), AI gật + bảo đăng → đóng dấu duyệt",
+      duyet(L), JSON.stringify({ rep: r.body.replies }));
+    L = await moDY("dy-2");
+    globalThis.__model.parse = aiDY({ la: "khong_noi", trich_dan: null });
+    r = await send({ external_user_id: "dy-2", text: "ok" });
+    check("DY-02 duyệt bản nháp, 'ok' mà AI đọc là KHÔNG gật (AI quyết) → không đóng dấu duyệt",
+      !duyet(L), JSON.stringify({ rep: r.body.replies }));
+    L = await moDY("dy-3");
+    globalThis.__model.parse = aiDY({ la: "dong_y", trich_dan: "ok em" }, { truong: [{ khoa: "gia", gia_tri: "9 tỷ 8", trich_dan: "giá 9 tỷ 8", can: null }] });
+    r = await send({ external_user_id: "dy-3", text: "ok em, mà giá 9 tỷ 8 nha" });
+    check("DY-03 duyệt bản nháp, 'ok em, mà giá 9 tỷ 8 nha' — gật KÈM dữ liệu là lời sửa → chưa đóng dấu duyệt",
+      !duyet(L), JSON.stringify({ rep: r.body.replies }));
+    // Gật sau lời HOÃN của bot (FR-235, dời xuống sau lượt AI): AI gật, không dữ liệu → "Dạ vâng ạ, em chờ … nha".
+    L = await moDY("dy-4", "huong");
+    const conv = db().t.conversations.at(-1);
+    db().insert("messages", { conversation_id: conv.id, sender: "bot", body: "Dạ anh chị cứ thong thả, lúc nào rảnh nhắn em nha.", created_at: new Date().toISOString() });
+    globalThis.__model.parse = aiDY({ la: "dong_y", trich_dan: "ừa vậy cũng được" });
+    r = await send({ external_user_id: "dy-4", text: "ừa vậy cũng được" });
+    check("DY-04 sau lời hoãn, 'ừa vậy cũng được' (luật không biết, AI gật) → đáp 'em chờ … nha', không hỏi tiếp",
+      r.body.loai_cau === "hoan_gat" && r.body.replies.some((x) => /em chờ/.test(x)), JSON.stringify(r.body));
     globalThis.__cauHinh = cuCH;
   }
   // 02/10/2026 (bắn lại thu-gapd sau #412, SRS-5.1ze): AI đọc đúng "được giá thì bán em" = không gấp nhưng chỉ đưa vào
