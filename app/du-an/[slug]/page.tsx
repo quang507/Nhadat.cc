@@ -9,8 +9,8 @@ import { formatPrice, placeholderImg, sanitizeDescription, SITE_URL, zaloLink } 
 
 // FR-117 (dựng 04/09/2026) — trang dự án `/du-an/{slug}`, SSG từ bảng
 // `projects` (SRS-3.10; anon đọc được qua `anon_read_projects`). Có
-// generateStaticParams nên build ra ● (NFR-17); slug lạ vẫn render
-// on-demand (dynamicParams mặc định) — dự án mới không cần build lại.
+// generateStaticParams (rỗng, xem dưới) nên build ra ● (NFR-17); mọi slug
+// render on-demand rồi nằm cache — dự án mới không cần build lại.
 // Phần "quản lý giỏ hàng cho admin/NMG" của FR-117 CHƯA dựng: `unit_status`
 // hiện chỉ đọc; đổi qua bảng `deals`/sửa tin (SRS-3.10).
 //
@@ -32,9 +32,13 @@ type DuAn = {
 type TinDuAn = CardRow & { unit_code: string | null; unit_status: string | null };
 const TT_CAN: Record<string, string> = { con_ban: "còn bán", giu_cho: "giữ chỗ", da_coc: "đã cọc", da_ban: "đã bán" };
 
+// 02/10/2026 (đo Supabase, workflow do-supabase.yml): bản cũ trả slug của CẢ 1.639 dự án nên MỖI lượt build (CI mỗi PR,
+// Vercel preview, Vercel production) dựng sẵn 1.639 trang × 2 truy vấn. pg_stat_statements từ 22/08: hai truy vấn của trang
+// này là 3,25/3,89 triệu request REST của cả project (83%) - kéo theo egress và log ingestion vượt gói Free. Trả mảng RỖNG
+// thì route vẫn là ● (Next 15: mảng rỗng = dựng lần đầu có người xem rồi nằm cache, vẫn ISR theo `revalidate`) - chỉ trang
+// có người/bot tìm kiếm xem mới tốn truy vấn. Đừng trả lại danh sách đầy đủ.
 export async function generateStaticParams() {
-  const { data } = await supabase.from("projects").select("slug").not("slug", "is", null);
-  return (data ?? []).map((p) => ({ slug: p.slug as string }));
+  return [];
 }
 
 const getProject = cache(async (slug: string): Promise<DuAn | null> => {

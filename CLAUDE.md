@@ -243,7 +243,9 @@ thiếu `generateStaticParams()` thì `export const revalidate` là chữ chết
 Next 15 để `prerender-manifest.dynamicRoutes` rỗng và mỗi lượt xem là một lambda
 + đủ số query. Kiểm bằng bảng route sau `bun run build`: trang tin phải là `●`
 hoặc `○`, thấy `ƒ` là hỏng. Route đọc `searchParams` thì không ISR được, phải
-bọc truy vấn trong `unstable_cache`.
+bọc truy vấn trong `unstable_cache`. **`generateStaticParams` trả `[]`, KHÔNG hỏi DB** (02/10/2026,
+SRS-5.1z): trả danh sách đầy đủ là mỗi lượt build (CI mỗi PR + Vercel) dựng sẵn mọi dòng — `/du-an` từng đốt 83% request
+REST của cả project. Mảng rỗng vẫn ra `●` + ISR khi có người xem; `bot/tests/giam-egress.mjs` canh luật này và luật chọn cột.
 
 **Đường đi ĐÚNG THIẾT KẾ không được ghi vào sổ lỗi** (bắt 08/09/2026). Sổ lỗi
 `bot_errors` là ĐẦU VÀO của còi: `bot_health_tick` mỗi giờ đếm lỗi trong một giờ

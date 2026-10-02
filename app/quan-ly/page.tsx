@@ -21,6 +21,9 @@ const STATUS_LABEL: Record<string, string> = {
   an: "Đã ẩn",
 };
 
+// Cột trang này hiển thị (02/10/2026: bỏ `select("*")` - vector `nhung` ~9,8 KB/dòng, `boc_tach` jsonb không dùng ở đây).
+const COT_TIN_CUA_TOI = "id, code, deal, district, ward, location_raw, price_raw, price_vnd, description, status, created_at";
+
 export default function Page() {
   const [email, setEmail] = useState<string | null | undefined>(undefined);
   const [sellerId, setSellerId] = useState<string | null>(null);
@@ -54,7 +57,7 @@ export default function Page() {
       if (!sid) return;
       setSellerId(sid);
       const { data: ls } = await supabase
-        .from("listings").select("*").eq("seller_id", sid)
+        .from("listings").select(COT_TIN_CUA_TOI).eq("seller_id", sid)
         .order("created_at", { ascending: false });
       setMine((ls ?? []) as Listing[]);
     });
@@ -81,7 +84,7 @@ export default function Page() {
         price_raw: priceRaw.trim() || null,
         status: "cho_thong_tin",
       })
-      .select("*").single();
+      .select(COT_TIN_CUA_TOI).single();
     if (error) return setMsg("Đăng không được: " + error.message);
     setMine((m) => [data as Listing, ...m]);
     setRao(""); setPriceRaw(""); setQuan("Quận 5");

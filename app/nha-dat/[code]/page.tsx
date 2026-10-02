@@ -21,23 +21,14 @@ export const revalidate = 300;
 // Đo tại chỗ 26/08 (next start, production build):
 //   /                 → x-nextjs-cache: HIT, Cache-Control: s-maxage=300
 //   route [param] bất kỳ → Cache-Control: private, no-cache, no-store
-// Đây lại đúng là 164 trang SEO — thứ Google cào nhiều nhất. Khai báo sẵn mã
-// tin đang lên kệ để dựng lúc build; mã lạ (tin mới, tin đã chốt mở link cũ)
-// vẫn render on-demand vì dynamicParams mặc định = true, và render xong cũng
-// được nằm trong cache 5 phút như các trang kia.
+// Đây lại đúng là trang SEO — thứ Google cào nhiều nhất. Có generateStaticParams
+// (dù rỗng) thì mọi mã render on-demand vì dynamicParams mặc định = true, và
+// render xong được nằm trong cache 5 phút như các trang kia.
+// 02/10/2026 (đo Supabase): danh sách mã tin ở đây làm MỖI lượt build (CI mỗi PR + Vercel preview + production, ~24
+// lượt/ngày lúc làm việc) dựng sẵn mọi tin × ~6 truy vấn - cùng cơ chế đã đốt 83% request REST ở /du-an/[slug]. Trả mảng
+// RỖNG: route vẫn là ● (Next 15 dựng lần đầu có người xem rồi giữ cache 5 phút như trên), chỉ không dựng trước lúc build.
 export async function generateStaticParams() {
-  const { data, error } = await supabase
-    .from("listings")
-    .select("code")
-    .in("status", ["dang_ban", "dang_quan_tam"])
-    .not("code", "is", null);
-  // Không tới được DB lúc build thì hàm này trả [] và build VẪN XANH: 0 trang tin
-  // được dựng sẵn, bảng route vẫn hiện ● nên kiểm NFR-17 không bắt được (đo
-  // 08/09: prerender-manifest có 80 route, 0 route /nha-dat/). Nói ra ở đây.
-  if (error || !data?.length) {
-    console.warn(`[nha-dat] generateStaticParams: ${error ? error.message : "0 tin"} - không dựng sẵn trang tin nào, chỉ render on-demand.`);
-  }
-  return (data ?? []).map((l) => ({ code: l.code as string }));
+  return [];
 }
 
 // `cache` của React gộp hai lượt gọi cùng tham số trong MỘT lần render —
