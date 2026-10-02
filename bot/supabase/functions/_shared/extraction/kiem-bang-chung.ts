@@ -985,6 +985,17 @@ export function docTuXung(v: { la?: string | null; trich_dan?: string | null } |
   return tu.some((t) => viet.includes(t)) ? { la, trich: td } : null;
 }
 
+/**
+ * Đợt 1 bỏ luật từ khoá (02/10/2026, SRS-5.1zf): AI đọc GẬT / không đồng ý / bảo đăng. Nhận khi cụm trích có trong tin (gật bằng
+ * emoji "👍" thì cụm là chính emoji). `undefined` ở nơi gọi = AI không chạy (luật đỡ); null = AI nói tin không gật cũng không chối.
+ */
+export function docDongY(v: { la?: string | null; trich_dan?: string | null; dang_di?: boolean | null } | null | undefined, tin: string): { la: "dong_y" | "khong_dong_y"; dangDi: boolean; trich: string } | null {
+  if (v?.la !== "dong_y" && v?.la !== "khong_dong_y") return null;
+  const td = (v.trich_dan ?? "").trim();
+  const coTrich = trichCoTrongTin(td, tin) || (td.length > 0 && !/[\p{L}\p{N}]/u.test(td) && tin.includes(td));
+  return coTrich ? { la: v.la, dangDi: v.la === "dong_y" && v.dang_di === true, trich: td } : null;
+}
+
 /** Đợt 3 (02/10/2026): câu hỏi kế AI chọn — chỉ nhận khoá có trong danh sách hợp lệ của lượt (đã bỏ câu hết hạn, câu không áp dụng, câu đang treo). */
 export function docCauKe(ck: { khoa?: string | null } | null | undefined, hopLe: Iterable<string>): string | null {
   const k = (ck?.khoa ?? "").trim();

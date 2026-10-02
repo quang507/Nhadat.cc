@@ -1626,6 +1626,49 @@ Chủ dự án: "nếu lấy thông tin ra thì phải ghi vì sao có cái này
 **Chưa sửa (ghi lại):**
 - Hai tin liền nhau "Đường Trương Đình hkojj" / "Hội" (cách 7 giây) chạy hai lượt song song → hai câu trả lời, địa chỉ ghi "Trương Đình". Cần gom tin liền nhau ở tầng nhận tin — việc riêng.
 
+### SRS-5.1zf · Bỏ luật từ khoá, đợt 1: GẬT / ĐỒNG Ý / BẢO ĐĂNG do AI quyết (02/10/2026)
+
+**Ca gốc / yêu cầu**: chủ dự án 02/10 — "xóa sạch hoặc các luật nhận hàm trong bot bắt đúng từ khóa để ai nhận các phần đó được ko". Chủ dự án chọn: giữ lưới đỡ (luật chỉ chạy khi AI hỏng), làm theo đợt.
+
+Kiểm kê (cùng ngày, chỉ đọc mã) đếm được:
+- 89 chỗ ở nhánh bán và 23 chỗ ở nhánh mua mà luật từ khoá vẫn quyết luồng hoặc ghi dữ liệu dù AI đã chạy;
+- 18 + 2 chỗ chỉ chạy khi AI hỏng;
+- 15 + 3 chỗ không đoán ý (định dạng, che SĐT, lọc lời bot).
+
+Thứ tự đợt:
+1. Gật / đồng ý / đăng đi.
+2. Xưng hô, chào, hoãn, lời hứa.
+3. Câu hỏi ngược và yêu cầu meta.
+4. Địa chỉ, phường, quận.
+5. Số đo, lời sửa.
+6. Mở tin, nhiều căn, "cả lô".
+7. Phân vai mua/bán.
+8. Nhánh mua.
+
+**Lớp lỗi**: máy đoán ý "gật" bằng danh sách từ (`laDongY`, `laBaoDang`, regex "đúng rồi|ok…") ở khoảng 10 chỗ. Cách nói ngoài danh sách thì trượt; tin có chữ trong danh sách mà ý khác thì bị nhận nhầm.
+
+**Chỗ khác cùng lớp — đã chuyển sang AI** (AI trước; luật chỉ chạy khi AI không chạy):
+- gật sau lời hoãn của bot (FR-235). Khối này dời xuống sau lúc khởi động lượt AI;
+- gật lúc duyệt bản nháp: gật mà không kèm dữ liệu → duyệt; gật kèm dữ liệu → lời sửa; "đủ rồi" → `y_dinh.du_roi`;
+- bảo đăng lúc duyệt, và bảo đăng trong câu hoãn;
+- gật lúc duyệt không phải lời ngưng rao;
+- gật phường gợi ý (cả khi kèm câu rao mới), gật tên đường gợi ý (FR-212), gật xác nhận viết tắt;
+- câu "ack" gật cho câu treo hết hạn;
+- "đủ rồi" lúc duyệt và "đủ rồi" ngoài vòng hỏi.
+
+**Còn lại** (đợt sau): xem danh sách đợt 2–8 ở trên.
+
+**Sửa**:
+- `boc-rao.ts` có thêm trường `dong_y` (`dong_y` / `khong_dong_y` / `khong_noi`, trích dẫn, `dang_di`);
+- `docDongY` (code kiểm trích dẫn; gật bằng emoji thì cụm là emoji);
+- chat-reply thêm các hàm `dongYAi`, `gatLuot`, `baoDangLuot`, `gatTach`. Phần còn lại sau cụm gật lấy theo cụm AI trích.
+
+**Kiểm**:
+- e2e `DY-01…04`. Cách nói mới luật không biết: "ổn áp rồi em, triển luôn", "ừa vậy cũng được". `DY-02` là ca "ok" mà AI đọc là không gật.
+- `DY-01/02/04` đỏ khi gỡ bản sửa (đã chạy). `DY-03` là ca gật kèm giá thì không duyệt.
+- `AIM-XN2`, `LQ-03` cập nhật: mock AI phải nói `dong_y`.
+- `doi-chieu-ai.mjs` DC-12 đỏ khi có lời gọi `laDongY` / `laBaoDang` trần mới (dòng lưới đỡ ghi chú "lưới đỡ").
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

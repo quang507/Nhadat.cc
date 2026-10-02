@@ -78,6 +78,15 @@ const TuXung = z.object({
   la: z.enum(TU_XUNG_AI).nullable().describe("Chữ người nhắn dùng để TỰ GỌI CHÍNH MÌNH trong tin ('Ừ anh đang muốn bán' → anh; 'nhà a 4 tầng' → anh; 'chị gửi ảnh nha' → chị; 'chú có căn nhà' → chú). Gọi người KHÁC ('anh hàng xóm', 'chị em nó', 'nhà của bà ngoại') không tính. Không tự xưng → null."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN có chữ tự xưng đó. la = null thì null."),
 });
+// Đợt 1 bỏ luật từ khoá (02/10/2026, chủ dự án: "xóa sạch hoặc các luật nhận hàm trong bot bắt đúng từ khóa để ai nhận các
+// phần đó"; SRS-5.1zf): GẬT / ĐỒNG Ý / BẢO ĐĂNG trước đây do `laDongY` / `laBaoDang` / regex "đúng rồi|ok" quyết ở ~10 chỗ
+// (gật sau hoãn, duyệt bản nháp, nhận phường / đường gợi ý, xác nhận viết tắt). AI đọc theo nghĩa, code kiểm trích dẫn (`docDongY`).
+export const DONG_Y = ["dong_y", "khong_dong_y", "khong_noi"] as const;
+const DongY = z.object({
+  la: z.enum(DONG_Y).describe("Tin có GẬT / ĐỒNG Ý / XÁC NHẬN điều bot VỪA nói (câu bot vừa hỏi, phường / tên đường bot gợi ý, bản nháp tin, lời hẹn) không — đọc theo NGHĨA: 'ừ', 'ok e', 'đúng rồi', 'chuẩn rồi', 'được em', 'chốt', 'phải', '👍' → dong_y; 'không phải', 'sai rồi', 'không đúng' → khong_dong_y; chỉ đưa dữ liệu / nói chuyện khác → khong_noi. Gật ở VẾ ĐẦU rồi nói thêm ('ok đăng đi, mà dòng này đọc kỳ quá') vẫn là dong_y."),
+  trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN thể hiện ý gật / không đồng ý. khong_noi thì null."),
+  dang_di: z.boolean().nullish().describe("Chủ nhà BẢO ĐĂNG tin ('đăng đi', 'cứ đăng như này trước', 'lên tin luôn em') → true; còn lại false."),
+});
 // Đợt 3 chuyển luật sang AI (02/10/2026): câu hỏi KẾ trước đây do bảng ưu tiên + từ khoá quyết (`chonCauKe`, `re-nhanh`) — AI
 // chọn trong danh sách "Câu bot còn định hỏi" như môi giới; code chỉ nhận khoá có trong danh sách hợp lệ của lượt (`docCauKe`).
 const CauKe = z.object({
@@ -109,13 +118,15 @@ const DeXuatRao = z.object({
   vai: Vai,
   cau_ke: CauKe,
   tu_xung: TuXung,
+  dong_y: DongY,
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ can_khac: z.boolean().nullish(), tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish(), tu_xung: TuXung.nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ can_khac: z.boolean().nullish(), tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish(), tu_xung: TuXung.nullish(), dong_y: DongY.nullish() });
 export type CauKeLLM = z.infer<typeof CauKe>;
 export type YDinhLLM = z.infer<typeof YDinh>;
 export type VaiLLM = z.infer<typeof Vai>;
 export type TuXungLLM = z.infer<typeof TuXung>;
+export type DongYLLM = z.infer<typeof DongY>;
 export type CamXucLLM = z.infer<typeof CamXuc>;
 export type KhongCanHoiLLM = z.infer<typeof KhongCanHoi>;
 export type HoiLaiLLM = z.infer<typeof HoiLai>;
@@ -268,7 +279,7 @@ export async function bocRaoBangModel(
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
   nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[] } | null = null,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; tuXung: TuXungLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; tuXung: TuXungLLM | null; dongY: DongYLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   // 02/10/2026 (test Zalo: khách dán nguyên tin rao 700+ chữ có gạch đầu dòng): tin dài không được cắt — 1.200 chữ cũ cắt mất
   // phần pháp lý / kết cấu ở cuối tin rao dài. Trần 4.000 chỉ để chặn tin rác cực dài.
@@ -313,6 +324,7 @@ export async function bocRaoBangModel(
     yDinh: ket.success ? ket.data.y_dinh ?? null : null,
     vai: ket.success ? ket.data.vai ?? null : null,
     tuXung: ket.success ? ket.data.tu_xung ?? null : null,
+    dongY: ket.success ? ket.data.dong_y ?? null : null,
     cauKe: ket.success ? ket.data.cau_ke ?? null : null,
     canKhac: ket.success ? ket.data.can_khac ?? null : null,
     usage: r.usage,
