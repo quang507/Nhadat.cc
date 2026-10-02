@@ -58,6 +58,19 @@ const CamXuc = z.object({
 });
 // 01/10/2026 (chủ dự án: "câu hỏi riêng cho từng loại bds… code cứng quá nên giờ cần AI hiểu"): bảng câu theo loại (required_facts)
 // vẫn là danh mục; AI đọc điều chủ nhà đã nói và chỉ ra câu KHÔNG áp dụng cho căn này, kèm trích dẫn (`docKhongCanHoi`).
+// Đợt 2 chuyển luật sang AI (02/10/2026, chủ dự án: "lấy hết các luật bên kia qua cho AI"): ý định của tin và vai người rao
+// trước đây do từ khoá quyết (`laNgungRao`, `laRaoLai`, hoãn, `tinHieuMoiGioi`) — "mấy bên môi giới hối chị… sợ lắm" từng báo
+// admin đổi nhãn MÔI GIỚI. AI đọc theo nghĩa, code kiểm trích dẫn (`docYDinh`, `docVai`); từ khoá chỉ đỡ khi model chết.
+export const Y_DINH = ["binh_thuong", "ban_roi", "ngung_rao", "rao_lai", "hoan"] as const;
+const YDinh = z.object({
+  loai: z.enum(Y_DINH).describe("binh_thuong; ban_roi = căn ĐÃ BÁN / đã cọc / đã chốt được; ngung_rao = thôi không bán / không cho thuê nữa, rút tin; rao_lai = bán / cho thuê LẠI căn đã gỡ, 'chưa bán đâu, vẫn bán'; hoan = bận, để sau / mai nói tiếp, chưa trả lời được lúc này. Nói về người KHÁC ('hàng xóm bán rồi') hay hỏi ('bán được chưa em') → binh_thuong."),
+  trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ thể hiện ý định đó. binh_thuong thì null."),
+});
+export const VAI_NGUOI_RAO = ["khong_noi", "chinh_chu", "moi_gioi"] as const;
+const Vai = z.object({
+  la: z.enum(VAI_NGUOI_RAO).describe("Người nhắn TỰ NÓI mình là ai: chinh_chu = chủ nhà / nhà của mình / không phải môi giới; moi_gioi = tự nhận là môi giới, sale, bán giúp chủ, nhận ký gửi. Nhắc tới môi giới KHÁC ('mấy bên môi giới hối chị'), hỏi về môi giới → khong_noi."),
+  trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN người nhắn tự nói vai mình. khong_noi thì null."),
+});
 const KhongCanHoi = z.object({
   khoa: z.string().describe("Khoá câu trong danh sách 'Câu bot còn định hỏi' gửi kèm."),
   ly_do: z.string().describe("Vì sao câu đó không áp dụng cho căn này (ngắn)."),
@@ -74,9 +87,13 @@ const DeXuatRao = z.object({
   hoi_lai: HoiLai,
   cam_xuc: CamXuc,
   khong_can_hoi: z.array(KhongCanHoi).describe("Câu trong danh sách 'Câu bot còn định hỏi' KHÔNG áp dụng cho căn này theo lời chủ nhà. Không có danh sách / không chắc thì []."),
+  y_dinh: YDinh,
+  vai: Vai,
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish() });
+export type YDinhLLM = z.infer<typeof YDinh>;
+export type VaiLLM = z.infer<typeof Vai>;
 export type CamXucLLM = z.infer<typeof CamXuc>;
 export type KhongCanHoiLLM = z.infer<typeof KhongCanHoi>;
 export type HoiLaiLLM = z.infer<typeof HoiLai>;
@@ -145,6 +162,13 @@ căn này (kho trong khu công nghiệp → không hỏi độ rộng hẻm; đ�
 nhà nguyên căn đang ở → không hỏi phí quản lý). Mỗi câu kèm ly_do + trich_dan nguyên văn lời chủ nhà. Không chắc thì KHÔNG đưa.
 Không bao giờ đưa giá, diện tích, vị trí, phường, pháp lý, loại BĐS.
 
+Ý ĐỊNH ("y_dinh") — đọc theo NGHĨA cả câu, có ngữ cảnh: căn của chủ nhà đã bán / đã cọc (ban_roi), thôi không bán nữa (ngung_rao),
+bán lại căn đã gỡ hoặc rút lời "bán rồi" (rao_lai), đang bận / để sau (hoan). Nhắc chuyện người khác, hỏi, kể → binh_thuong.
+"Chốt rồi / ok đăng đi" khi bot đang đưa bản nháp là ĐỒNG Ý đăng, không phải ban_roi.
+
+VAI ("vai") — chỉ khi người nhắn TỰ NÓI mình là chủ nhà hay môi giới. Nhắc tới môi giới khác, kể chuyện môi giới, hỏi phí môi
+giới → khong_noi.
+
 KHÁCH HỎI LẠI ("hoi_lai") — đọc theo NGHĨA, như môi giới nghe khách: tin có ý HỎI bên mình (có hay không có dấu "?", gõ tắt,
 không dấu) → co_hoi = true, cau_hoi = câu hỏi chép nguyên văn, chu_de theo nội dung câu hỏi. "giá khu này giờ sao" là hỏi
 THỊ TRƯỜNG, không phải hỏi giá căn mình; "hồi nãy anh nói giá bao nhiêu" mới là hỏi tin của mình. Câu hỏi KHÔNG BAO GIỜ
@@ -207,7 +231,7 @@ export async function bocRaoBangModel(
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
   nguCanh: { hoiThoai?: string[]; cauConHoi?: string[] } | null = null,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; usage: unknown }> {
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   const dsPhuong = danhSachPhuongChoAi(text.slice(0, 1200));
   const hoiThoai = (nguCanh?.hoiThoai ?? []).filter((x) => typeof x === "string" && x.trim()).slice(-4);
@@ -215,7 +239,8 @@ export async function bocRaoBangModel(
   const dg = Object.entries(dangGhi ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `${k}: "${String(v).slice(0, 160)}"`);
   const r = await ai.messages.parse({
     model,
-    max_tokens: 1300,
+    // 02/10/2026: đợt 1–2 thêm ~40 khoá + ý định + vai — đầu ra dài hơn; 1300 có thể cắt cụt JSON câu rao dài.
+    max_tokens: 2000,
     output_config: { effort: "low", format: FORMAT_RAO },
     system: [
       { type: "text", text: LUAT, cache_control: { type: "ephemeral" } },
@@ -237,6 +262,8 @@ export async function bocRaoBangModel(
     hoiLai: ket.success ? ket.data.hoi_lai ?? null : null,
     camXuc: ket.success ? ket.data.cam_xuc ?? null : null,
     khongCanHoi: ket.success ? ket.data.khong_can_hoi ?? [] : [],
+    yDinh: ket.success ? ket.data.y_dinh ?? null : null,
+    vai: ket.success ? ket.data.vai ?? null : null,
     usage: r.usage,
   };
 }

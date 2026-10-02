@@ -936,6 +936,29 @@ export function docCamXuc(cx: { muc?: string | null; trich_dan?: string | null }
   return { muc: cx.muc, trich: td };
 }
 
+/** Cụm trích (đã bỏ dấu, bỏ ký hiệu) có trong tin — khớp nguyên cụm hoặc khớp mờ. */
+function trichCoTrongTin(td: string, tin: string): boolean {
+  if (td.trim().length < 2) return false;
+  const gon = (x: string) => chuanSo(x).replace(/[^\p{L}\d\s]/gu, " ").replace(/\s+/g, " ").trim();
+  return ` ${gon(tin)} `.includes(` ${gon(td)} `) || !!timMo(gon(tin), gon(td));
+}
+/**
+ * Đợt 2 chuyển luật sang AI (02/10/2026): ý định của tin (đã bán / ngưng rao / rao lại / hoãn) — AI đọc theo nghĩa, code chỉ
+ * nhận khi cụm trích có trong tin. `undefined` ở nơi gọi = AI không chạy (từ khoá đỡ); null = AI nói không có ý định nào.
+ */
+export function docYDinh(yd: { loai?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan"; trich: string } | null {
+  const l = yd?.loai;
+  if (l !== "ban_roi" && l !== "ngung_rao" && l !== "rao_lai" && l !== "hoan") return null;
+  const td = (yd?.trich_dan ?? "").trim();
+  return trichCoTrongTin(td, tin) ? { loai: l, trich: td } : null;
+}
+/** Vai người rao TỰ NÓI (chính chủ / môi giới) — cụm trích phải có trong tin. */
+export function docVai(v: { la?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { la: "chinh_chu" | "moi_gioi"; trich: string } | null {
+  if (v?.la !== "chinh_chu" && v?.la !== "moi_gioi") return null;
+  const td = (v.trich_dan ?? "").trim();
+  return trichCoTrongTin(td, tin) ? { la: v.la, trich: td } : null;
+}
+
 /** Câu không bao giờ được AI gạt khỏi danh sách hỏi — thiếu là tin không lên kệ / không định danh được căn. */
 export const CAU_KHONG_DUOC_BO = new Set(["gia", "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "vi_tri", "phuong", "phap_ly", "loai_bds", "duyet_tin", "hinh_anh"]);
 /**
