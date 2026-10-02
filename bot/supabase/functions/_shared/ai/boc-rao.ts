@@ -61,9 +61,9 @@ const CamXuc = z.object({
 // Đợt 2 chuyển luật sang AI (02/10/2026, chủ dự án: "lấy hết các luật bên kia qua cho AI"): ý định của tin và vai người rao
 // trước đây do từ khoá quyết (`laNgungRao`, `laRaoLai`, hoãn, `tinHieuMoiGioi`) — "mấy bên môi giới hối chị… sợ lắm" từng báo
 // admin đổi nhãn MÔI GIỚI. AI đọc theo nghĩa, code kiểm trích dẫn (`docYDinh`, `docVai`); từ khoá chỉ đỡ khi model chết.
-export const Y_DINH = ["binh_thuong", "ban_roi", "ngung_rao", "rao_lai", "hoan"] as const;
+export const Y_DINH = ["binh_thuong", "ban_roi", "ngung_rao", "rao_lai", "hoan", "du_roi"] as const;
 const YDinh = z.object({
-  loai: z.enum(Y_DINH).describe("binh_thuong; ban_roi = căn ĐÃ BÁN / đã cọc / đã chốt được; ngung_rao = thôi không bán / không cho thuê nữa, rút tin; rao_lai = bán / cho thuê LẠI căn đã gỡ, 'chưa bán đâu, vẫn bán'; hoan = bận, để sau / mai nói tiếp, chưa trả lời được lúc này. Nói về người KHÁC ('hàng xóm bán rồi') hay hỏi ('bán được chưa em') → binh_thuong."),
+  loai: z.enum(Y_DINH).describe("binh_thuong; ban_roi = căn ĐÃ BÁN / đã cọc / đã chốt được; ngung_rao = thôi không bán / không cho thuê nữa, rút tin; rao_lai = bán / cho thuê LẠI căn đã gỡ, 'chưa bán đâu, vẫn bán'; hoan = bận, để sau / mai nói tiếp, chưa trả lời được lúc này; du_roi = chủ nhà bảo ĐỦ thông tin rồi / đăng luôn đi / không cần hỏi thêm (KHÔNG phải câu tả nhà có chữ 'hết rồi', 'xây kín hết rồi', 'đang cho thuê'). Nói về người KHÁC ('hàng xóm bán rồi') hay hỏi ('bán được chưa em') → binh_thuong."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ thể hiện ý định đó. binh_thuong thì null."),
 });
 export const VAI_NGUOI_RAO = ["khong_noi", "chinh_chu", "moi_gioi"] as const;
@@ -83,6 +83,9 @@ const KhongCanHoi = z.object({
   trich_dan: z.string().describe("Cụm COPY NGUYÊN VĂN từ lời CHỦ NHÀ (tin này hoặc ngữ cảnh) chứng minh."),
 });
 const DeXuatRao = z.object({
+  // 02/10/2026 (đối chiếu AI ↔ code, SRS-5.1zb): "mở tin mới" từng do từ khoá quyết ("nữa", quận khác, loại khác) — "bán nhà này
+  // 5 tỷ nữa là chốt" mở tin trùng, "bán vì chuyển qua quận 7" mở tin Quận 7.
+  can_khac: z.boolean().describe("Có câu bot đang hỏi về một căn mà tin này RAO / tả một căn KHÁC (khác địa chỉ, khác loại, 'còn căn nữa') → true. Trả lời, bổ sung, sửa cho chính căn đang hỏi, nhắc nơi khác chỉ để so sánh / chỉ đường → false. Không có câu đang hỏi → false."),
   so_can: z.number().int().describe("Số căn / lô KHÁC NHAU chủ nhà rao trong tin này. Không rao căn nào (chỉ bổ sung, trả lời) thì 0."),
   truong: z.array(TruongBoc),
   // 17/09/2026 (chủ dự án): "AI có thể thêm trường kiến thức… các trường khách nói bổ sung sẽ ghi vào mô tả".
@@ -98,7 +101,7 @@ const DeXuatRao = z.object({
   cau_ke: CauKe,
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ can_khac: z.boolean().nullish(), tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish() });
 export type CauKeLLM = z.infer<typeof CauKe>;
 export type YDinhLLM = z.infer<typeof YDinh>;
 export type VaiLLM = z.infer<typeof Vai>;
@@ -129,7 +132,8 @@ KHOÁ:
 - gia (giá bán; tin cho thuê thì giá thuê), gia_m2, tien_coc, thu_nhap_thue (CHỈ tiền thuê căn BÁN đang thu). Giá trị tiền LUÔN kèm đơn vị như khách viết: "5 tỷ 2", "3 tỷ 150", "900 triệu", "95 triệu/m2" — không viết số trần "5.2".
 - dien_tich (m²), ngang, dai, no_hau (m), do_rong_hem, do_rong_duong, cach_mat_tien (m): trong "truong" chỉ con số (hẻm xe hơi không có số mét thì không đưa vào truong — nhưng VẪN là câu trả lời câu hẻm ở "tra_loi").
 - so_phong_ngu, so_wc; so_tang = TỔNG số tầng tính CẢ TRỆT, không tính lửng/sân thượng ("1 trệt 2 lầu" = 3, "trệt 3 lầu" = 4, "3 tấm" = 3); tang = căn hộ nằm tầng mấy.
-- quan: ghi đủ "Quận 5", "Quận Phú Nhuận", "Huyện Bình Chánh", "TP Thủ Đức". phuong, duong, ma_can.
+- quan: ghi đủ "Quận 5", "Quận Phú Nhuận", "Huyện Bình Chánh", "TP Thủ Đức". phuong, duong, ma_can. quan / phuong / duong là NƠI CĂN NHÀ
+  NẰM — nơi GẦN đó, nơi đi tới, nơi chủ nhà ở / chuyển tới thì KHÔNG đưa ("ra Quận 1 có 5 phút", "gần chợ Bến Thành", "bán vì chuyển qua quận 7").
 - phuong: ĐỌC THEO NGHĨA, không cần chữ "phường / xã" đứng trước — "nhà ở Vĩnh Lộc B", "bên Thảo Điền", "an hoi tay", gõ sai một hai chữ đều là nói phường. Trả tên phường MỚI ĐẦY ĐỦ đúng như DANH SÁCH PHƯỜNG gửi kèm tin nhắn (chỉ gồm các phường câu khách có thể đang nhắc; không có danh sách thì chỉ đưa phuong khi khách nói rõ "phường / xã X") ("Phường An Hội Tây", "Xã Tân Vĩnh Lộc"): khách nói tên CŨ thì đổi sang phường mới theo bảng tên cũ ("Vĩnh Lộc B" → "Xã Tân Vĩnh Lộc", "Thảo Điền" → "Phường An Khánh"); phường cũ bị chia (dấu *) sang nhiều phường mới mà câu không đủ để biết phần nào thì KHÔNG đưa phuong. KHÔNG cắt bớt chữ ("An Hội Tây" ≠ "An Hội"). trich_dan = cụm khách nói nguyên văn ("Vĩnh Lộc B"). Tên trùng tên quận cũ ("gò vấp", "phú nhuận") mà khách không nói "phường" thì là QUẬN. Phường đánh số ("phường 12", "p4") giữ số: "Phường 12".
 - duong (địa chỉ): giữ nguyên số nhà. Quy ước TP.HCM: "137/28 đường số 59" là HẺM 137 của đường số 59, NHÀ SỐ 28 trong hẻm (số sau dấu "/" cuối là số nhà; "137/28/5" = nhà 5 trong hẻm 137/28) — ghi "137/28 đường số 59", không đảo số, không bỏ số.
 - du_an: tên dự án / khu dân cư / chung cư. Tên phường, tên khu vực (Thảo Điền, An Phú) KHÔNG phải dự án.
@@ -172,7 +176,8 @@ Không bao giờ đưa giá, diện tích, vị trí, phường, pháp lý, lo�
 
 Ý ĐỊNH ("y_dinh") — đọc theo NGHĨA cả câu, có ngữ cảnh: căn của chủ nhà đã bán / đã cọc (ban_roi), thôi không bán nữa (ngung_rao),
 bán lại căn đã gỡ hoặc rút lời "bán rồi" (rao_lai), đang bận / để sau (hoan). Nhắc chuyện người khác, hỏi, kể → binh_thuong.
-"Chốt rồi / ok đăng đi" khi bot đang đưa bản nháp là ĐỒNG Ý đăng, không phải ban_roi.
+"Chốt rồi / ok đăng đi" khi bot đang đưa bản nháp là ĐỒNG Ý đăng, không phải ban_roi. "Đủ rồi em, đăng luôn đi" giữa lúc bot đang hỏi
+thông tin → du_roi; câu TẢ căn nhà có chữ "hết rồi" / "rồi" ("xây kín hết rồi em", "sổ có rồi") → binh_thuong.
 
 CÂU HỎI KẾ ("cau_ke") — có danh sách "Câu bot còn định hỏi" thì chọn MỘT câu nên hỏi tiếp, như môi giới giỏi: (1) thông tin cần
 để lên tin mà còn thiếu (giá, diện tích, vị trí / phường, pháp lý) đi trước; (2) trong số còn lại, câu NỐI MẠCH điều chủ nhà vừa
@@ -245,7 +250,7 @@ export async function bocRaoBangModel(
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
   nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[] } | null = null,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; cauKe: CauKeLLM | null; usage: unknown }> {
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   // 02/10/2026 (test Zalo: khách dán nguyên tin rao 700+ chữ có gạch đầu dòng): tin dài không được cắt — 1.200 chữ cũ cắt mất
   // phần pháp lý / kết cấu ở cuối tin rao dài. Trần 4.000 chỉ để chặn tin rác cực dài.
@@ -285,6 +290,7 @@ export async function bocRaoBangModel(
     yDinh: ket.success ? ket.data.y_dinh ?? null : null,
     vai: ket.success ? ket.data.vai ?? null : null,
     cauKe: ket.success ? ket.data.cau_ke ?? null : null,
+    canKhac: ket.success ? ket.data.can_khac ?? null : null,
     usage: r.usage,
   };
 }

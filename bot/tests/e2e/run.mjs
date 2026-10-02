@@ -2405,6 +2405,114 @@ fresh(seedKho);
     globalThis.__cauHinh = cuCH;
     globalThis.__model = { parse: () => OUT() };
   }
+  // 02/10/2026 (chủ dự án: "làm hết cả hai nhóm, cái nào trong code rối quá xóa luôn"; SRS-5.1zb): các chỗ regex còn đọc NGHĨA câu
+  // khách và ghi đè / rẽ luồng dù AI đã đọc. Mỗi ca: AI (mock) đọc đúng, luật cũ đọc sai — bản sửa phải theo AI.
+  {
+    const cuCH = globalThis.__cauHinh;
+    const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+    const ai = (them = {}) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [],
+      tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null },
+      cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null }, ...them } : OUT();
+    const RAO = "bán nhà hẻm 4m Tôn Đản quận 4, 4x15, giá 6 tỷ";
+    const moDC = async (uid, cauTreo) => {
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__model = { parse: ai({ so_can: 1, truong: [T("loai_bds", "nha_pho", "nhà hẻm"), T("gia", "6 tỷ", "giá 6 tỷ"),
+        T("ngang", "4", "4x15"), T("dai", "15", "4x15"), T("quan", "Quận 4", "quận 4")] }), create: () => "Dạ em ghi rồi ạ." };
+      await send({ external_user_id: uid, text: RAO });
+      const L = db().t.listings.at(-1);
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      if (cauTreo) db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
+      return L;
+    };
+    const fDC = (L, q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === q).map((f) => f.answer);
+    const treoDC = (L) => db().t.info_requests.filter((x) => x.listing_id === L.id && x.status === "pending").map((x) => x.question);
+
+    // DC-E2E-01: quận nhắc lúc đang hỏi hướng là nơi GẦN đó — không đè quận đã có (dù AI có lỡ đọc ra quận).
+    let L = await moDC("dc-1", "huong");
+    globalThis.__model.parse = ai({ truong: [T("huong", "Đông", "hướng Đông"), T("quan", "Quận 1", "Quận 1")] });
+    await send({ external_user_id: "dc-1", text: "hướng Đông, ra Quận 1 có 5 phút" });
+    const q1 = db().t.listings.find((x) => x.id === L.id)?.district;
+    const L1b = await moDC("dc-1b", "gia");
+    globalThis.__model.parse = ai({ truong: [T("quan", "Quận 7", "quận 7")] });
+    await send({ external_user_id: "dc-1b", text: "giá thì mình tham khảo mấy căn bên quận 7 đã em" });
+    const q1b = db().t.listings.find((x) => x.id === L1b.id)?.district;
+    check("DC-E2E-01 đang hỏi hướng 'hướng Đông, ra Quận 1 có 5 phút' / hỏi giá '…tham khảo mấy căn bên quận 7' → quận vẫn Quận 4",
+      q1 === "Quận 4" && q1b === "Quận 4", JSON.stringify([q1, q1b]));
+
+    // DC-E2E-02: lời sửa có nhãn "giá" — giá trị theo AI, không phải số đầu tiên regex nhặt.
+    L = await moDC("dc-2", "huong");
+    globalThis.__model.parse = ai({ truong: [T("gia", "8 tỷ 5", "8 tỷ 5")] });
+    const r2 = await send({ external_user_id: "dc-2", text: "căn kế bên giá 9 tỷ đó em, anh để 8 tỷ 5 thôi" });
+    check("DC-E2E-02 'căn kế bên giá 9 tỷ đó em, anh để 8 tỷ 5 thôi' → giá 8 tỷ 5 (theo AI); không lượt ghi nào mang '9 tỷ'",
+      db().t.listings.find((x) => x.id === L.id)?.price_vnd === 8.5e9 && !fDC(L, "gia").some((v) => /9 tỷ/.test(v ?? "")),
+      JSON.stringify([db().t.listings.find((x) => x.id === L.id)?.price_raw, fDC(L, "gia")]));
+
+    // DC-E2E-03: sửa bản nháp — ô theo AI.
+    L = await moDC("dc-3", "duyet_tin");
+    globalThis.__model.parse = ai({ truong: [T("hien_trang", "nhà để trống", "nhà để trống")] });
+    await send({ external_user_id: "dc-3", text: "ghi thêm giùm em, nói thật nhà để trống lâu rồi" });
+    const rac3 = db().t.listing_facts.filter((f) => f.listing_id === L.id && /ghi thêm giùm/.test(f.answer ?? "")).map((f) => [f.question, f.answer]);
+    check("DC-E2E-03 sửa nháp 'ghi thêm giùm em, nói thật nhà để trống lâu rồi' → ghi hiện trạng theo AI; không ô nào mang nguyên câu ('ghi thêm giùm em…')",
+      fDC(L, "hien_trang").length > 0 && !fDC(L, "noi_that").length && !rac3.length, JSON.stringify({ ht: fDC(L, "hien_trang"), rac: rac3 }));
+
+    // DC-E2E-04: câu TẢ nhà có chữ "hết rồi" không phải "đủ rồi".
+    L = await moDC("dc-4", "ket_cau");
+    db().insert("info_requests", { listing_id: L.id, question: "phap_ly", status: "pending" });
+    globalThis.__model.parse = ai({ truong: [T("ket_cau", "xây kín hết", "xây kín hết")], tra_loi: { co_tra_loi: true, gia_tri: "xây kín hết", trich_dan: "xây kín hết" } });
+    await send({ external_user_id: "dc-4", text: "xây kín hết rồi em" });
+    check("DC-E2E-04 trả lời kết cấu 'xây kín hết rồi em' (AI: không phải 'đủ rồi') → không đóng dấu 'chủ nói đủ', bot còn hỏi tiếp",
+      !db().t.listings.find((x) => x.id === L.id)?.chu_noi_du_at && treoDC(L).length > 0, JSON.stringify({ du: db().t.listings.find((x) => x.id === L.id)?.chu_noi_du_at, treo: treoDC(L) }));
+    // Ngược lại: AI đọc "đủ rồi" thật → đóng dấu.
+    L = await moDC("dc-4b", "ket_cau");
+    globalThis.__model.parse = ai({ y_dinh: { loai: "du_roi", trich_dan: "thôi em lên luôn đi" } });
+    await send({ external_user_id: "dc-4b", text: "thôi em lên luôn đi, nhiêu đó được rồi" });
+    check("DC-E2E-04b 'thôi em lên luôn đi, nhiêu đó được rồi' (AI: du_roi, cách nói luật không có) → đóng dấu 'chủ nói đủ'",
+      !!db().t.listings.find((x) => x.id === L.id)?.chu_noi_du_at, JSON.stringify({ du: db().t.listings.find((x) => x.id === L.id)?.chu_noi_du_at, treo: treoDC(L) }));
+
+    // DC-E2E-05: "nha dang cho thue" (không dấu) là hiện trạng, không phải "đăng".
+    L = await moDC("dc-5", "hien_trang");
+    globalThis.__model.parse = ai({ truong: [T("hien_trang", "đang cho thuê", "dang cho thue")], tra_loi: { co_tra_loi: true, gia_tri: "đang cho thuê", trich_dan: "dang cho thue" } });
+    const r5 = await send({ external_user_id: "dc-5", text: "nha dang cho thue" });
+    check("DC-E2E-05 hỏi hiện trạng, 'nha dang cho thue' → ghi hiện trạng, không coi là bảo đăng (không 'em đăng liền', không đóng dấu duyệt)",
+      fDC(L, "hien_trang").length > 0 && !db().t.listings.find((x) => x.id === L.id)?.chu_duyet_at && !/đăng liền/.test(r5.body.replies.join(" ")),
+      JSON.stringify({ ht: fDC(L, "hien_trang"), duyet: db().t.listings.find((x) => x.id === L.id)?.chu_duyet_at, rep: r5.body.replies }));
+
+    // DC-E2E-06: "nữa" trong câu không phải căn mới.
+    L = await moDC("dc-6", "gia");
+    const nTin = db().t.listings.length;
+    globalThis.__model.parse = ai({ can_khac: false, truong: [T("gia", "5 tỷ", "5 tỷ")], tra_loi: { co_tra_loi: true, gia_tri: "5 tỷ", trich_dan: "5 tỷ" } });
+    await send({ external_user_id: "dc-6", text: "bán nhà này 5 tỷ nữa là chốt em" });
+    check("DC-E2E-06 'bán nhà này 5 tỷ nữa là chốt em' (AI: cùng căn) → KHÔNG mở tin mới, giá căn đang hỏi 5 tỷ",
+      db().t.listings.length === nTin && db().t.listings.find((x) => x.id === L.id)?.price_vnd === 5e9,
+      JSON.stringify({ n: db().t.listings.length - nTin, gia: db().t.listings.find((x) => x.id === L.id)?.price_raw }));
+
+    // DC-E2E-07: câu rao — AI đã đọc mà không nói gấp → không đoán gấp bằng từ khoá.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model = { parse: ai({ so_can: 1, truong: [T("loai_bds", "nha_pho", "nhà hẻm"), T("gia", "6 tỷ", "giá 6 tỷ"), T("quan", "Quận 3", "quận 3")] }), create: () => "Dạ em ghi rồi ạ." };
+    await send({ external_user_id: "dc-7", text: "bán nhà hẻm quận 3 giá 6 tỷ, chưa cần bán gấp đâu em" });
+    check("DC-E2E-07 rao '…chưa cần bán gấp đâu em' (AI không nói gấp) → cột gấp KHÔNG phải true",
+      db().t.listings.at(-1)?.gap !== true, JSON.stringify({ gap: db().t.listings.at(-1)?.gap }));
+
+    // DC-E2E-08: AI đã đọc câu rao, không nói loại → tin để trống loại (bot hỏi), trigger không đoán bằng regex.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model = { parse: ai({ so_can: 1, truong: [T("gia", "4 tỷ", "giá 4 tỷ"), T("quan", "Quận 8", "quận 8")] }), create: () => "Dạ em ghi rồi ạ." };
+    await send({ external_user_id: "dc-8", text: "bán căn 1 trệt 1 lầu có kho chứa đồ, hẻm 3m quận 8 giá 4 tỷ" });
+    check("DC-E2E-08 AI không nói loại → tin mang dấu _thong_so_ai, loại để trống (chua_ro), trigger không tự đoán",
+      db().t.listings.at(-1)?.property_type === "chua_ro" && String(db().t.listings.at(-1)?.boc_tach?._thong_so_ai) === "true",
+      JSON.stringify({ pt: db().t.listings.at(-1)?.property_type, bt: db().t.listings.at(-1)?.boc_tach }));
+
+    // DC-E2E-09: nở hậu AI đọc ra có chỗ ghi.
+    L = await moDC("dc-9", "huong");
+    globalThis.__model.parse = ai({ truong: [T("huong", "Tây", "hướng tây"), T("no_hau", "5", "phía sau nở ra 5m")] });
+    await send({ external_user_id: "dc-9", text: "hướng tây, phía sau nở ra 5m nha em" });
+    check("DC-E2E-09 'hướng tây, phía sau nở ra 5m' (luật không đọc được) → ô nở hậu 5m theo AI (trước đây AI đọc ra mà bị bỏ)",
+      fDC(L, "no_hau").includes("5m"), JSON.stringify({ nh: fDC(L, "no_hau") }));
+    globalThis.__cauHinh = cuCH;
+    globalThis.__model = { parse: () => OUT() };
+  }
   // 01/10/2026 (chủ dự án test Zalo: album 4 ảnh → 4 lần "🤖 Không bóc tách được gì" + 4 câu khen; "gộp lại khen 1 2 câu thôi,
   // nhận ảnh cần hỏi cái gì nữa thì hỏi"): lượt ảnh trơn không có 🤖, chỉ lượt ảnh CUỐI của đợt trả lời, gộp số ảnh, hỏi câu đang chờ.
   {
@@ -2540,7 +2648,13 @@ fresh(seedKho);
     const dung = async (uid, cauTreo, cauBot) => {
       fresh(seedKho);
       globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
-      globalThis.__model.parse = aiRao();
+      // SRS-5.1zb: chế độ `ai` mà AI đã đọc câu rao thì ô AI không nói không do luật điền — mock đưa đúng thứ AI thật đọc ra.
+      globalThis.__model.parse = aiRao({ so_can: 1, truong: [
+        { khoa: "loai_giao_dich", gia_tri: "ban", trich_dan: "bán nhà", can: null }, { khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "nhà hẻm", can: null },
+        { khoa: "gia", gia_tri: "7 tỷ", trich_dan: "giá 7 tỷ", can: null },
+        { khoa: "ngang", gia_tri: "4", trich_dan: "4x16", can: null }, { khoa: "dai", gia_tri: "16", trich_dan: "4x16", can: null },
+        { khoa: "quan", gia_tri: "Quận Bình Thạnh", trich_dan: "Bình Thạnh", can: null },
+      ] });
       await send({ external_user_id: uid, text: "bán nhà hẻm 4m Phan Đăng Lưu Bình Thạnh 4x16 giá 7 tỷ" });
       const L = db().t.listings.at(-1);
       db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
@@ -2644,7 +2758,10 @@ fresh(seedKho);
     // Câu hỏi ĐẦU sau câu rao cũng lọc: chủ nói ngay trong câu rao căn không có phòng ngủ.
     fresh(seedKho);
     let msgRao = "";
-    globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) msgRao = String(p.messages?.[0]?.content ?? ""); return aiRao({ khong_can_hoi: [{ khoa: "so_phong_ngu", ly_do: "studio không có phòng ngủ riêng", trich_dan: "không có phòng ngủ riêng" }] })(p); };
+    globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) msgRao = String(p.messages?.[0]?.content ?? ""); return aiRao({ so_can: 1, khong_can_hoi: [{ khoa: "so_phong_ngu", ly_do: "studio không có phòng ngủ riêng", trich_dan: "không có phòng ngủ riêng" }],
+      // SRS-5.1zb: AI đã đọc câu rao thì ô AI không nói không do luật điền — mock đưa loại / diện tích / giá như AI thật đọc ra.
+      truong: [{ khoa: "loai_bds", gia_tri: "chung_cu", trich_dan: "căn hộ studio", can: null }, { khoa: "dien_tich", gia_tri: "35", trich_dan: "35m2", can: null },
+        { khoa: "gia", gia_tri: "2 tỷ 1", trich_dan: "giá 2 tỷ 1", can: null }, { khoa: "quan", gia_tri: "Quận 7", trich_dan: "quận 7", can: null }] })(p); };
     await send({ external_user_id: "kh-3", text: "bán căn hộ studio 35m2 tầng 9 Sunrise City 23 Nguyễn Hữu Thọ phường Tân Hưng quận 7 giá 2 tỷ 1, không có phòng ngủ riêng" });
     const LS3 = db().t.listings.at(-1);
     check("KH-03 câu rao 'không có phòng ngủ riêng' → AI nhận danh mục câu tùy căn; câu hỏi ĐẦU không phải phòng ngủ; khong_hoi cất",
@@ -2932,7 +3049,10 @@ fresh(seedKho);
           hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: chuDe } } : OUT();
     const moTin = async (uid) => {
       fresh(seedKho);
-      globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: null, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null } } : OUT();
+      // SRS-5.1zb: AI đã đọc câu rao thì ô AI không nói không do luật điền — mock đưa giá / số đo / quận như AI thật đọc ra.
+      globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 1, kien_thuc: [], cap_nhat: [], xac_nhan: [], tra_loi: null, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null },
+        truong: [{ khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "nhà hẻm", can: null }, { khoa: "gia", gia_tri: "15 tỷ", trich_dan: "giá 15 tỷ", can: null }, { khoa: "ngang", gia_tri: "4", trich_dan: "4x16", can: null },
+          { khoa: "dai", gia_tri: "16", trich_dan: "4x16", can: null }, { khoa: "quan", gia_tri: "Quận 1", trich_dan: "quận 1", can: null }] } : OUT();
       await send({ external_user_id: uid, text: "Bán nhà hẻm 5m Trần Hưng Đạo quận 1, 4x16, giá 15 tỷ" });
       const L = db().t.listings.at(-1);
       db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });

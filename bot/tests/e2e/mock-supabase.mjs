@@ -236,6 +236,8 @@ export class FakeDB {
   // trg_listings_fill_property_type chạy cả BEFORE UPDATE OF description / property_type (30/09: điền câu rao vào tin rỗng).
   doanLoai(r) {
     // trg_listings_fill_property_type (FR-150): đoán loại từ câu rao.
+    // 20261002d: tin mang dấu `_thong_so_ai` (AI đã quyết) thì không đoán — loại trống để bot hỏi.
+    if (String(r.boc_tach?._thong_so_ai ?? "") === "true") return;
     if ((r.property_type ?? "chua_ro") === "chua_ro" && r.description) {
       // 20260910b: luôn so trên chuỗi ĐÃ BỎ DẤU — người thật gõ lẫn có dấu /
       // thiếu dấu trong cùng câu ("bán căn ho ở Hà đô centrosa").
