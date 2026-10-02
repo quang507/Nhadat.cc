@@ -2607,6 +2607,49 @@ fresh(seedKho);
     const LT2 = db().t.listings.at(-1);
     check("TS-AI-02 cùng câu rao mà AI chết → KHÔNG dấu _thong_so_ai (trigger DB đọc câu rao như cũ — luật đỡ)", !!LT2 && !LT2.boc_tach?._thong_so_ai,
       JSON.stringify({ bt: LT2?.boc_tach }));
+    // SRS-5.1w (đợt 2 chuyển luật sang AI): ý định / vai / bổ sung / địa chỉ do AI quyết (có trích dẫn), từ khoá chỉ đỡ khi AI chết.
+    const binh = { y_dinh: { loai: "binh_thuong", trich_dan: null }, vai: { la: "khong_noi", trich_dan: null } };
+    const stL = (L) => db().t.listings.find((x) => x.id === L.id)?.status;
+    const treoD2 = (L) => db().t.info_requests.filter((x) => x.listing_id === L.id && x.status === "pending").map((x) => x.question);
+    L = await dung("d2-1", "phuong");
+    globalThis.__model.parse = aiRao({ ...binh, y_dinh: { loai: "ban_roi", trich_dan: "có người lấy rồi" } });
+    await send({ external_user_id: "d2-1", text: "nhà chị có người lấy rồi em" });
+    check("D2-01 'nhà chị có người lấy rồi em' (từ khoá bỏ sót) — AI: đã bán, có trích dẫn → tin đóng (da_chot)", stL(L) === "da_chot", JSON.stringify({ st: stL(L) }));
+    L = await dung("d2-2", "phuong");
+    globalThis.__model.parse = aiRao(binh);
+    await send({ external_user_id: "d2-2", text: "hàng xóm bán rồi, còn nhà chị vẫn bán nha" });
+    check("D2-02 'hàng xóm bán rồi, còn nhà chị vẫn bán' (từ khoá đọc 'bán rồi') — AI: bình thường → tin KHÔNG đóng", !["da_chot", "an"].includes(stL(L)), JSON.stringify({ st: stL(L) }));
+    L = await dung("d2-3", "ket_cau");
+    globalThis.__model.parse = aiRao(binh);
+    await send({ external_user_id: "d2-3", text: "căn này chị tính bán từ năm ngoái mà chưa có thời gian" });
+    check("D2-03 'căn này chị tính bán từ năm ngoái mà chưa có thời gian' — AI không thấy ý nào về căn nhà → KHÔNG ghi nguyên câu vào bổ sung",
+      !db().t.listing_facts.some((f) => f.listing_id === L.id && f.question === "bo_sung"), JSON.stringify(db().t.listing_facts.filter((f) => f.listing_id === L.id).map((f) => [f.question, f.answer])));
+    const escNhan = (uid) => db().t.reminders.filter((x) => x.kind === "escalation" && x.note?.startsWith(`✏️ Zalo …${uid.slice(-4)}`));
+    L = await dung("d2-4", "phuong");
+    globalThis.__model.parse = aiRao(binh);
+    await send({ external_user_id: "d2-4", text: "mấy bên môi giới gọi chị suốt, phiền lắm" });
+    check("D2-04 'mấy bên môi giới gọi chị suốt' (nhắc môi giới KHÁC) — AI: không tự xưng → KHÔNG báo đổi nhãn", !escNhan("d2-4").length, JSON.stringify(escNhan("d2-4").map((x) => x.note)));
+    L = await dung("d2-5", "phuong");
+    globalThis.__model.parse = aiRao({ ...binh, vai: { la: "moi_gioi", trich_dan: "em làm bên sàn" } });
+    await send({ external_user_id: "d2-5", text: "à em làm bên sàn nha anh" });
+    check("D2-05 'em làm bên sàn' — AI: tự xưng môi giới (có trích dẫn) → báo admin xác nhận đổi nhãn", escNhan("d2-5").length === 1, JSON.stringify(escNhan("d2-5").map((x) => x.note)));
+    L = await dung("d2-7", "phuong");
+    globalThis.__model.parse = aiRao({ ...binh, y_dinh: { loai: "hoan", trich_dan: "lát nữa nói tiếp" } });
+    const r7 = await send({ external_user_id: "d2-7", text: "chị đang chạy xe, lát nữa nói tiếp nha" });
+    check("D2-07 'chị đang chạy xe, lát nữa nói tiếp nha' (từ khoá bỏ sót) — AI: hoãn → không hỏi tiếp, câu phường vẫn treo, không ghi bổ sung",
+      !r7.body.replies.some((x) => /\?/.test(x)) && treoD2(L).includes("phuong") && !db().t.listing_facts.some((f) => f.listing_id === L.id && f.question === "bo_sung"),
+      JSON.stringify({ rep: r7.body.replies, treo: treoD2(L) }));
+    fresh(seedKho);
+    globalThis.__model.parse = aiRao({ truong: [
+      { khoa: "loai_bds", gia_tri: "kho_xuong", trich_dan: "xưởng", can: null },
+      { khoa: "loai_giao_dich", gia_tri: "cho_thue", trich_dan: "cho thuê", can: null },
+      { khoa: "loai_duong_vao", gia_tri: "khong_hem", trich_dan: "không có hẻm gì hết", can: null },
+    ] });
+    await send({ external_user_id: "d2-6", text: "cho thuê xưởng 800m2 trong cụm công nghiệp Đức Hòa Long An, không có hẻm gì hết, giá 70 triệu/tháng" });
+    const LD6 = db().t.listings.at(-1);
+    check("D2-06 câu rao 'không có hẻm gì hết' mà AI không đọc ra đường → KHÔNG ghi địa chỉ luật đoán ('hẻm gì hết')",
+      !db().t.listing_facts.some((f) => f.listing_id === LD6?.id && f.question === "vi_tri") && !/gì hết/.test(LD6?.location_raw ?? ""),
+      JSON.stringify({ vt: db().t.listing_facts.filter((f) => f.listing_id === LD6?.id && f.question === "vi_tri").map((f) => f.answer), lr: LD6?.location_raw }));
     // (2) Nhận xét không căn cứ: AI soát lời bot, code kiểm căn cứ → bỏ câu khen bịa, giữ câu hỏi.
     fresh(seedKho);
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };

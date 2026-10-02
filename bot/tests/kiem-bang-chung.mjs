@@ -5,7 +5,7 @@
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { datKiemNhe, docCamXuc, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { datKiemNhe, docCamXuc, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -537,6 +537,13 @@ datKiemNhe(true);
 datKiemNhe(false);
 ok("O-14 luật (model chết) cũng bỏ tiểu từ cuối: 'xe container vào tận nơi em'",
   nhanDienNhieuFact("kho xưởng 500m2, xe container vào tận nơi em").every((f) => !/\bem$/.test(f.answer)), JSON.stringify(nhanDienNhieuFact("kho xưởng 500m2, xe container vào tận nơi em")));
+
+// ── Đợt 2 (02/10/2026, SRS-5.1w): ý định / vai do AI đọc, code kiểm trích dẫn ──
+ok("YD-01 đã bán, trích có trong tin → nhận", docYDinh({ loai: "ban_roi", trich_dan: "có người lấy rồi" }, "nhà chị có người lấy rồi em")?.loai === "ban_roi");
+ok("YD-02 trích KHÔNG có trong tin → bỏ", docYDinh({ loai: "ban_roi", trich_dan: "bán rồi" }, "hàng xóm vừa dọn đi") === null);
+ok("YD-03 bình thường / loại lạ → null", docYDinh({ loai: "binh_thuong", trich_dan: null }, "x") === null && docYDinh({ loai: "xoa", trich_dan: "x" }, "x") === null);
+ok("VAI-01 tự xưng môi giới, trích có trong tin → nhận", docVai({ la: "moi_gioi", trich_dan: "em làm bên sàn" }, "à em làm bên sàn nha anh")?.la === "moi_gioi");
+ok("VAI-02 khong_noi → null; trích bịa → null", docVai({ la: "khong_noi", trich_dan: null }, "x") === null && docVai({ la: "chinh_chu", trich_dan: "nhà của tôi" }, "mấy bên môi giới gọi suốt") === null);
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

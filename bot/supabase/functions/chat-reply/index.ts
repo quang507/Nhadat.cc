@@ -42,7 +42,7 @@ import { soatNhanXetBangModel } from "../_shared/ai/kiem-khen.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, CAU_KHONG_DUOC_BO, chonDeGhi, datKiemNhe, docCamXuc, docKhongCanHoi, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, CAU_KHONG_DUOC_BO, chonDeGhi, datKiemNhe, docCamXuc, docKhongCanHoi, docVai, docYDinh, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -2187,7 +2187,7 @@ Deno.serve(async (req) => {
     // gì; chỉ khi câu có mùi dự án (`coMuiDuAn`); và chỉ một lượt mỗi tin.
     let daVetDuAn = false;
     // FR-208: lượt AI bóc tách chạy bóng (khởi động sau khi biết câu đang hỏi).
-    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; traLoi?: { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null } | null; capNhat?: CapNhatDeXuat[]; xacNhan?: GoiYXacNhan[]; hoiLai?: { co_hoi: boolean; cau_hoi: string | null; chu_de: string | null } | null; camXuc?: { muc?: string | null; trich_dan?: string | null } | null; khongCanHoi?: Array<{ khoa?: string; ly_do?: string; trich_dan?: string }>; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
+    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; traLoi?: { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null } | null; capNhat?: CapNhatDeXuat[]; xacNhan?: GoiYXacNhan[]; hoiLai?: { co_hoi: boolean; cau_hoi: string | null; chu_de: string | null } | null; camXuc?: { muc?: string | null; trich_dan?: string | null } | null; khongCanHoi?: Array<{ khoa?: string; ly_do?: string; trich_dan?: string }>; yDinh?: { loai?: string | null; trich_dan?: string | null } | null; vai?: { la?: string | null; trich_dan?: string | null } | null; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
     // Công tắc `app_config.boc_tach_ai` đọc MỘT lần, tách khỏi lượt model để đường ra biết
     // phải chờ (chế độ `ghi`) hay chạy nền (chế độ `bong`) mà không đợi model xong.
     let cheDoBocAi: Promise<string> | null = null;
@@ -2259,6 +2259,21 @@ Deno.serve(async (req) => {
         if (rErr) await ghiLoi(client, "chat-reply cam xuc(ghi)", rErr.message);
       }
       return camXucLuot;
+    };
+    // Đợt 2 chuyển luật sang AI (02/10/2026): ý định của tin (đã bán / ngưng rao / rao lại / hoãn) và vai người rao tự nói (chính
+    // chủ / môi giới) — AI đọc theo nghĩa, code kiểm trích dẫn. `undefined` = AI không chạy (từ khoá đỡ như cũ); null = AI nói
+    // không có. Bắn thử lx-cx-14: "mấy bên môi giới hối chị gấp gấp rồi lừa" từng báo admin đổi nhãn MÔI GIỚI (từ khoá "môi giới").
+    const yDinhAi = async (): Promise<ReturnType<typeof docYDinh> | undefined> => {
+      if (!bongAi) return undefined;
+      const k = await bongAi;
+      if (!laCheDoAi || !k?.ket) return undefined;
+      return docYDinh(k.yDinh, textTreo || textBongAi);
+    };
+    const vaiAi = async (): Promise<ReturnType<typeof docVai> | undefined> => {
+      if (!bongAi) return undefined;
+      const k = await bongAi;
+      if (!laCheDoAi || !k?.ket) return undefined;
+      return docVai(k.vai, textTreo || textBongAi);
     };
     // 01/10/2026 (bắn thử lx-tt-08: "Nhà phố hẻm sâu…" — chủ không nói hẻm sâu): AI liệt kê câu NHẬN XÉT trong lời bot kèm căn cứ
     // chép từ lời chủ nhà (`soatNhanXetBangModel`), code kiểm căn cứ (`nhanXetKhongCanCu`) rồi bỏ câu không căn cứ — câu hỏi
@@ -2889,12 +2904,18 @@ Deno.serve(async (req) => {
     // CHÍNH CHỦ; "tôi là chính chủ" khi đang MÔI GIỚI) → KHÔNG tự lật (nhãn có
     // thể do admin gán), mà báo admin xác nhận + nói với họ là đã báo. Tối đa
     // một lần mỗi 24h cho mỗi người, kẻo mỗi câu "em là sale" là một việc.
+    // Đợt 2 (02/10/2026): chế độ `ai` → AI đọc vai người nhắn TỰ NÓI (`vaiAi`, có trích dẫn); từ khoá chỉ đỡ khi AI không chạy.
+    // Chạy SAU khi lượt AI đã khởi động (gọi ở dưới, cạnh `bongAi`) — trước đây chạy ở đây, chưa có AI để đọc.
+    const xetDoiNhan = async (): Promise<void> => {
+    const vai = nhanVuaGan ? null : await vaiAi();
+    const tuXungMoiGioi = vai !== undefined ? vai?.la === "moi_gioi" : tinHieuMoiGioi;
+    const tuXungChinhChu = vai !== undefined ? vai?.la === "chinh_chu"
+      : khop(/chính chủ|tôi là chủ|nhà của tôi|không phải môi giới/i, /chinh chu|toi la chu|nha cua toi|khong phai moi gioi/);
     const xinDoiNhan: "ccrb" | "nmg" | null = nhanVuaGan
       ? null
-      : sellerRow.seller_type === "ccrb" && tinHieuMoiGioi
+      : sellerRow.seller_type === "ccrb" && tuXungMoiGioi
       ? "nmg"
-      : sellerRow.seller_type === "nmg" &&
-          khop(/chính chủ|tôi là chủ|nhà của tôi|không phải môi giới/i, /chinh chu|toi la chu|nha cua toi|khong phai moi gioi/)
+      : sellerRow.seller_type === "nmg" && tuXungChinhChu
       ? "ccrb"
       : null;
     if (xinDoiNhan) {
@@ -2917,6 +2938,7 @@ Deno.serve(async (req) => {
         ? "Dạ em ghi nhận anh/chị là môi giới, em đã báo bên quản lý cập nhật lại (phí bán 0,5% khi giao dịch thành công) nha."
         : "Dạ em ghi nhận anh/chị là chính chủ, em đã báo bên quản lý cập nhật lại (phí bán 1% khi giao dịch thành công) nha.";
     }
+    };
 
     // NEO NGỮ CẢNH THEO CĂN, không theo "câu hỏi mới nhất" (FR-157).
     // Người bán 2-3 căn, cả hai đều đang thiếu thông tin: bot vừa hỏi căn B,
@@ -3166,6 +3188,7 @@ Deno.serve(async (req) => {
         return null;
       });
     }
+    await xetDoiNhan();
 
     // Seller hứa "chiều gửi ảnh…" → đặt hẹn nhắc (SAU khi huỷ nhắc cũ ở trên,
     // kẻo lệnh huỷ chạy sau lại huỷ luôn nhắc vừa đặt)
@@ -3238,9 +3261,13 @@ Deno.serve(async (req) => {
       }
       return cauHoiMau("danh_gia", cachGoi);
     };
+    // Đợt 2 (02/10/2026): chế độ `ai` → AI đọc ý định (đã bán / thôi bán, có trích dẫn); từ khoá chỉ đỡ khi AI không chạy.
+    const ydNgung = dangChonCanNgung ? undefined : await yDinhAi();
     const kieuNgung: NgungRao | null = dangChonCanNgung
       ? ((pendingReq?.answer === "rut" ? "rut" : "ban_roi") as NgungRao)
-      : (pendingReq?.question === "duyet_tin" && laDongY(text)) ? null : laNgungRao(text);
+      : (pendingReq?.question === "duyet_tin" && laDongY(text)) ? null
+      : ydNgung !== undefined ? (ydNgung?.loai === "ban_roi" ? "ban_roi" : ydNgung?.loai === "ngung_rao" ? "rut" : null)
+      : laNgungRao(text);
     if (kieuNgung) {
       type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; deal?: string | null; property_type?: string | null };
       // 22/09/2026 (kịch bản E): "căn 1 bán rồi, còn căn 2" từng gỡ CĂN 2 — danh sách xếp mới→cũ nên "căn 1" là
@@ -3395,7 +3422,8 @@ Deno.serve(async (req) => {
     // rõ thì hỏi. Đã duyệt trước đó → lên kệ lại (dang_ban); chưa → cho_thong_tin.
     // 29/09/2026 (kịch bản K7): "à không, chưa bán, vẫn bán nha" ngay sau lượt bot gỡ tin → rút lại lời báo bán, mở lại tin.
     const botVuaGoTin = /gỡ tin khỏi kệ|đã ngưng rao căn/.test(lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-3).map((m) => m.body ?? "").join(" "));
-    if ((laRaoLai(text) || (botVuaGoTin && laRutLoiBan(text))) && !laNgungRao(text)) {
+    const ydRaoLai = await yDinhAi();
+    if (ydRaoLai !== undefined ? ydRaoLai?.loai === "rao_lai" : ((laRaoLai(text) || (botVuaGoTin && laRutLoiBan(text))) && !laNgungRao(text))) {
       type CanGo = { id: string; code: string | null; location_raw: string | null; ward: string | null; property_type: string | null; chu_duyet_at: string | null };
       const { data: daGo, error: dgoErr } = await client.from("listings").select("id, code, location_raw, ward, property_type, chu_duyet_at")
         .eq("seller_id", sellerRow.id).in("status", ["da_chot", "an"]).order("created_at", { ascending: true }).limit(10);
@@ -4697,7 +4725,13 @@ Deno.serve(async (req) => {
       const hoiAi = await hoiLaiAi(dapAn);
       // 01/10/2026: AI đọc thấy chủ nhà BỰC (có trích dẫn) mà tin không trả lời câu đang hỏi → hoãn: xin lỗi, thôi hỏi lượt này.
       const camAi = await camXucAi();
-      if (camAi?.muc === "buc" && kq.loai !== "khop" && !kqDuyet) kq = { loai: "hoan" };
+      // Đợt 2 (02/10/2026): chế độ `ai` → HOÃN khi AI nói hoãn (bận / để sau, có trích dẫn) hoặc bực; luật tìm-chuỗi nhận
+      // "hoãn" một mình không đủ (AI đã đọc cả câu). AI không chạy → như cũ.
+      const ydHoan = kqDuyet ? undefined : await yDinhAi();
+      if (ydHoan !== undefined) {
+        if ((ydHoan?.loai === "hoan" || camAi?.muc === "buc") && kq.loai !== "khop") kq = { loai: "hoan" };
+        else if (kq.loai === "hoan") kq = { loai: "lech" };
+      } else if (camAi?.muc === "buc" && kq.loai !== "khop" && !kqDuyet) kq = { loai: "hoan" };
       // 20/09/2026 (bắn thật mau-y-D): "à sửa lại, dài 16 chứ không phải 15" là LỜI SỬA kích thước —
       // đang hỏi giá thì vào bổ sung, đang hỏi kết cấu thì bị nhận là kết cấu (có số). Xử TRƯỚC mọi
       // luật: ghi ô ngang/dài (fact `mat_tien` đủ hai chiều, ngang lấy từ tin nếu câu không nói — DB
@@ -5185,6 +5219,10 @@ Deno.serve(async (req) => {
           // câu có SĐT thì không bao giờ vào bo_sung (§5 — bo_sung ra tin, tin ra web).
           else if (/\b(?:tui|toi|minh|em|e|anh|chi)\s+la\s+(?:sale|moi gioi|mg|chu|chinh chu|ccrb|nmg)\b|\b(?:ko|khong|k)\s+phai\s+(?:chu|chinh chu)\b/.test(boDau(dapAn)) && !nhanDienFact(dapAn)) ghiBoSung = null;
           else if (coSdt(dapAn)) ghiBoSung = null;
+          // Đợt 2 (02/10/2026): chế độ `ai`, AI đã đọc câu này → chỉ ý AI đọc ra (`kien_thuc`, nguyên văn) vào bổ sung (đường ra ghi);
+          // AI không thấy ý nào về căn nhà thì không ghi nguyên câu — thay chuỗi lọc từ khoá bên dưới (tự giới thiệu, nói với bot,
+          // rác, câu hỏi…), vốn luôn thiếu cách nói mới.
+          else if (laCheDoAi && aiChinh) ghiBoSung = null;
           // 24/09/2026 (tin thật: hỏi phường, khách đáp "Quận 1 em ơi"): còn < 2 chữ hoặc chỉ là tên quận / phường → rác.
           else if (laBoSungRac(dapAn)) ghiBoSung = null;
           // 01/10/2026: câu HỎI không bao giờ là thông tin căn nhà — AI nói hỏi, hoặc lưới từ khoá nhận ra dáng hỏi.
@@ -5864,7 +5902,9 @@ Deno.serve(async (req) => {
     // 16/09/2026 (bắn thật mau-co-thue): "thôi để cô hỏi lại con cô đã" lúc KHÔNG có câu treo
     // (câu gấp vừa hỏi chưa mở IR) → rơi xuống nhánh chăm sóc, model đáp "cháu chờ" rồi hỏi
     // luôn câu mới. Hoãn là hoãn ở mọi nhánh: đáp một câu, không hỏi thêm.
-    if (!wantsSell && !pendingReq && sellerRow.active_listing_id && (laHoanLai(text) || (await camXucAi())?.muc === "buc")) {
+    const ydHoanTu = !wantsSell && !pendingReq && sellerRow.active_listing_id ? await yDinhAi() : undefined;
+    if (!wantsSell && !pendingReq && sellerRow.active_listing_id &&
+      ((ydHoanTu !== undefined ? ydHoanTu?.loai === "hoan" : laHoanLai(text)) || (await camXucAi())?.muc === "buc")) {
       const goi = goiNguoi ?? "mình";
       // FR-236 (bắn thật lx-43, 28/09): không có câu nào đang hỏi mà "giờ anh bận rồi em" → "em hỏi dồn quá" nghe lạc (bot
       // có hỏi gì đâu). Chỉ xin lỗi hỏi dồn khi khách than HỎI nhiều; bận thì chúc lo việc, tin đã lên kệ thì nói vẫn đang rao.
@@ -6132,7 +6172,9 @@ Deno.serve(async (req) => {
         // bắn không có địa chỉ, bot hỏi vòng vòng, bản nháp không bao giờ bung.
         // 22/09/2026 (bắn thật sau deploy #181): AI trả tên đường trần "Trần Hưng Đạo", luật trả "hẻm 6m 12
         // Trần Hưng Đạo" — số nhà rơi vì AI đứng trước. Bản chứa bản kia mà dài hơn thì thắng (`chonViTri`).
-        const viTriCau = aiRao ? chonViTri(bocViTriRao(text), aiRao.duong) : bocViTriRao(text);
+        // Đợt 2 (02/10/2026, bắn thử lx-t6-04: "không có hẻm gì hết" → địa chỉ "hẻm gì hết"): chế độ `ai` mà AI không đọc ra
+        // đường → không lấy địa chỉ luật đoán; câu địa chỉ sẽ được hỏi. AI có đường thì luật chỉ góp số nhà (`chonViTri`).
+        const viTriCau = aiRao ? (aiRao.duong || !laCheDoAi ? chonViTri(bocViTriRao(text), aiRao.duong) : null) : bocViTriRao(text);
         // 30/09/2026 (chủ dự án, chat thử): câu rao không nói địa chỉ mà tin nhắn TRƯỚC câu rao có ("nhà chú ở 137/28 đường
         // số 59 …") → lấy ở đó. Số nhà hẻm luật làm rơi thì ghép lại: "137/28 đường số 59" (hẻm 137, nhà số 28).
         const viTriGhep = viTriCau
