@@ -41,13 +41,32 @@ jobs:
           q "Kích thước DB" "select pg_size_pretty(pg_database_size(current_database())) as db, pg_database_size(current_database()) as bytes"
           q "Top 15 quan hệ theo tổng kích thước" "select n.nspname||'.'||c.relname as rel, c.relkind as k, pg_size_pretty(pg_total_relation_size(c.oid)) as tong, pg_size_pretty(pg_relation_size(c.oid)) as bang, pg_size_pretty(pg_total_relation_size(c.oid)-pg_relation_size(c.oid)) as index_toast, c.reltuples::bigint as dong_uoc from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind in ('r','m','t') and n.nspname not in ('pg_catalog','information_schema') order by pg_total_relation_size(c.oid) desc limit 15"
           q "Bảng: lượt quét / ghi kể từ lần reset thống kê" "select schemaname||'.'||relname as rel, seq_scan, seq_tup_read, idx_scan, n_tup_ins as ins, n_tup_upd as upd, n_tup_hot_upd as hot_upd, n_tup_del as del, n_live_tup as live, n_dead_tup as dead from pg_stat_user_tables order by (n_tup_ins+n_tup_upd+n_tup_del) desc limit 20"
-          q "pg_stat_statements: mốc reset" "select stats_reset::text from pg_stat_statements_info"
-          q "pg_stat_statements top 20 theo số lần gọi" "select calls, rows, round(total_exec_time)::bigint as ms_tong, round(mean_exec_time::numeric,2) as ms_tb, left(regexp_replace(query,'\s+',' ','g'),160) as cau from pg_stat_statements where query ~* '^\s*(select|insert|update|delete|with)' order by calls desc limit 20"
-          q "pg_stat_statements top 20 theo số dòng trả về" "select rows, calls, round(rows::numeric/nullif(calls,0),1) as dong_moi_lan, left(regexp_replace(query,'\s+',' ','g'),160) as cau from pg_stat_statements where query ~* '^\s*(select|with)' order by rows desc limit 20"
-          q "pg_stat_statements top 15 theo thời gian" "select round(total_exec_time)::bigint as ms_tong, calls, left(regexp_replace(query,'\s+',' ','g'),160) as cau from pg_stat_statements where query ~* '^\s*(select|insert|update|delete|with)' order by total_exec_time desc limit 15"
+          q "pg_stat_statements: mốc reset" "select stats_reset::text from extensions.pg_stat_statements_info"
+          q "pg_stat_statements top 20 theo số lần gọi" "select calls, rows, round(total_exec_time)::bigint as ms_tong, round(mean_exec_time::numeric,2) as ms_tb, left(regexp_replace(query,'\s+',' ','g'),160) as cau from extensions.pg_stat_statements where query ~* '^\s*(select|insert|update|delete|with)' order by calls desc limit 20"
+          q "pg_stat_statements top 20 theo số dòng trả về" "select rows, calls, round(rows::numeric/nullif(calls,0),1) as dong_moi_lan, left(regexp_replace(query,'\s+',' ','g'),160) as cau from extensions.pg_stat_statements where query ~* '^\s*(select|with)' order by rows desc limit 20"
+          q "pg_stat_statements top 15 theo thời gian" "select round(total_exec_time)::bigint as ms_tong, calls, left(regexp_replace(query,'\s+',' ','g'),160) as cau from extensions.pg_stat_statements where query ~* '^\s*(select|insert|update|delete|with)' order by total_exec_time desc limit 15"
           q "pg_cron: job + số lượt 24h" "select j.jobname, j.schedule, j.active, count(d.*) filter (where d.start_time > now()-interval '24 hours') as luot_24h, count(d.*) filter (where d.start_time > now()-interval '24 hours' and d.status<>'succeeded') as hong_24h from cron.job j left join cron.job_run_details d on d.jobid=j.jobid group by 1,2,3 order by luot_24h desc"
           q "net._http_response 24h theo mã" "select status_code, count(*) as n, pg_size_pretty(sum(coalesce(length(content),0))::bigint) as noi_dung from net._http_response where created > now()-interval '24 hours' group by 1 order by 2 desc"
           q "Số dòng sinh ra 24h ở các bảng nhật ký" "select 'messages' t, count(*) from messages where created_at > now()-interval '24 hours' union all select 'bot_errors', count(*) from bot_errors where at > now()-interval '24 hours' union all select 'inbound_ledger', count(*) from inbound_ledger where created_at > now()-interval '24 hours' union all select 'cron.job_run_details', count(*) from cron.job_run_details where start_time > now()-interval '24 hours'"
+
+      - name: Đo cỡ dòng (ước egress mỗi lượt đọc)
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -uo pipefail
+          q() {
+            echo; echo "=== $1 ==="
+            PAYLOAD=$(jq -n --arg q "$2" '{query: $q, read_only: true}')
+            RES=$(curl -sS -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+              -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD")
+            echo "$RES" | jq -r 'if type=="array" then (if length>0 then ((.[0]|keys_unsorted|join(" | ")), (.[]|[.[]|tostring]|join(" | "))) else "(rỗng)" end) else . end' 2>/dev/null || echo "$RES" | head -c 600
+          }
+          q "Bảng chủ của các pg_toast lớn" "select t.relname as toast, c.relname as bang, pg_size_pretty(pg_total_relation_size(t.oid)) as co from pg_class c join pg_class t on t.oid=c.reltoastrelid order by pg_total_relation_size(t.oid) desc limit 6"
+          q "Số trang build dựng sẵn" "select (select count(*) from projects where slug is not null) as du_an, (select count(*) from listings where status in ('dang_ban','dang_quan_tam')) as tin_len_ke, (select count(*) from listings) as tin_tong"
+          q "projects: cỡ JSON trung bình (byte)" "select round(avg(octet_length(row_to_json(p)::text))) as ca_dong, round(avg(octet_length(coalesce(p.nhung::text,'')))) as nhung, round(avg(octet_length(coalesce(p.description,'')))) as description, round(avg(octet_length(coalesce(p.unit_types::text,'')||coalesce(p.amenities::text,'')||coalesce(p.images::text,'')||coalesce(p.specs::text,'')))) as jsonb_4 from projects p"
+          q "listings: cỡ JSON trung bình (byte)" "select round(avg(octet_length(row_to_json(l)::text))) as ca_dong, round(avg(octet_length(coalesce(l.nhung::text,'')))) as nhung, round(avg(octet_length(coalesce(l.boc_tach::text,'')))) as boc_tach, round(avg(octet_length(coalesce(l.tien_ich_gan::text,'')))) as tien_ich_gan, round(avg(octet_length(coalesce(l.description,'')))) as description from listings l"
+          q "bot_errors 24h theo nguồn" "select left(source,50) as nguon, count(*) as n from bot_errors where at > now()-interval '24 hours' group by 1 order by 2 desc limit 15"
+          q "bridge_dang_nhap: cỡ qr_png" "select count(*) as dong, max(octet_length(coalesce(qr_png,''))) as qr_byte from bridge_dang_nhap"
 
       - name: Đo log + egress theo đường dẫn
         env:
@@ -57,11 +76,13 @@ jobs:
           GIO="${{ inputs.gio }}"; case "$GIO" in ''|*[!0-9]*) GIO=24;; esac; [ "$GIO" -gt 24 ] && GIO=24
           END=$(date -u +%Y-%m-%dT%H:%M:%SZ); START=$(date -u -d "-$GIO hours" +%Y-%m-%dT%H:%M:%SZ)
           echo "Cửa sổ: $START → $END"
+          DEBUG_LOG=1
           lg() {
             echo; echo "=== $1 ==="
             RES=$(curl -sS -G "https://api.supabase.com/v1/projects/$PROJECT_REF/analytics/endpoints/logs.all" \
               -H "Authorization: Bearer $TOKEN" --data-urlencode "sql=$2" \
               --data-urlencode "iso_timestamp_start=$START" --data-urlencode "iso_timestamp_end=$END")
+            [ -n "${DEBUG_LOG:-}" ] && { echo "raw: $(echo "$RES" | head -c 300)"; DEBUG_LOG=; }
             echo "$RES" | jq -r 'if .error then ("LỖI: " + (.error|tostring|.[0:400])) elif (.result|length)>0 then ((.result[0]|keys_unsorted|join(" | ")), (.result[]|[.[]|tostring]|join(" | "))) else "(rỗng)" end' 2>/dev/null || echo "$RES" | head -c 600
           }
           for src in edge_logs postgres_logs function_logs function_edge_logs auth_logs storage_logs realtime_logs postgrest_logs pgbouncer_logs supavisor_logs; do
