@@ -348,10 +348,10 @@ check("TOIUU-01 người lạ hỏi vai ≤ 12 truy vấn (v43: 18; +1 trần c�
 v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
 console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
 // 23/09/2026: +1 — câu đầu đủ khu vực + giá nay LỌC KHO ngay (trước chỉ hứa "em lọc kho liền" rồi im).
-check("TOIUU-02 người mua lượt đầu ≤ 23 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc; +1 FR-248 b tìm căn gần ngân sách, CHỈ khi kho trống vì giá — ca này 'tầm 5 tỷ' ≤ 5,75 tỷ mà căn phường 4 là 5,8 tỷ)", v.n <= 23, `${v.n}`);
+check("TOIUU-02 người mua lượt đầu ≤ 23 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc; +1 FR-248 b tìm căn gần ngân sách, CHỈ khi kho trống vì giá — ca này 'tầm 5 tỷ' ≤ 5,75 tỷ mà căn phường 4 là 5,8 tỷ; +1 SRS-5.1y đọc công tắc tro_ly — không nhớ tạm để bật/tắt có hiệu lực lượt kế)", v.n <= 24, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
 console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
-check("TOIUU-03 người mua có hồ sơ ≤ 18 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖)", v.n <= 18, `${v.n}`);
+check("TOIUU-03 người mua có hồ sơ ≤ 18 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖; +1 SRS-5.1y đọc công tắc tro_ly)", v.n <= 19, `${v.n}`);
 check("TOIUU-04 follow-up FR-32 đi qua RPC tao_followup, không đếm/tra/chèn tay", db().log.some((l) => l.rpc === "tao_followup") && db().t.reminders.some((x) => x.kind === "followup"));
 check("TOIUU-05 bot_prompts chỉ đọc MỘT lần cho cả ba lượt (nhớ tạm 60 s)", db().log.filter((l) => l.table === "bot_prompts").length <= 1, String(db().log.filter((l) => l.table === "bot_prompts").length));
 check("TOIUU-06 loạt bong bóng bot vào sổ bằng MỘT câu INSERT mảng", db().log.some((l) => l.table === "messages" && l.op === "insert" && Array.isArray(l.payload)));
@@ -6545,6 +6545,92 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = cuCH3;
 }
 
+}
+// ── SRS-5.1y: TRỢ LÝ CÓ CÔNG CỤ (nhánh mua, công tắc app_config.tro_ly) ─────────────────────────────────────────────
+{
+  const cuCH = globalThis.__cauHinh;
+  const seedTL = (d) => {
+    seedKho(d);
+    const L = d.t.listings.find((l) => l.code === "BDS-Q5-0001"); L.lat = 10.755; L.lng = 106.67;
+    d.t.tien_ich = [
+      { osm_id: "n/1", loai: "truong_hoc", ten: "Trường Tiểu học Chương Dương", ten_kd: "truong tieu hoc chuong duong", lat: 10.757, lng: 106.671 },
+      { osm_id: "n/2", loai: "cho", ten: "Chợ Hoà Bình", ten_kd: "cho hoa binh", lat: 10.7595, lng: 106.6705 },
+      { osm_id: "n/3", loai: "truong_hoc", ten: "Trường Xa Lắc", ten_kd: "truong xa lac", lat: 10.80, lng: 106.70 },
+    ];
+    for (const uid of ["thu-tl1", "thu-tl2", "thu-tl5", "khach-that-tl4", "thu-tl3"]) {
+      const b = d.insert("buyers", { zalo_user_id: uid, name: null, preferences: { deal: "ban", area: "Quận 5", budget: "tầm 6 tỷ" } }).data;
+      d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-01T00:00:00Z" });
+    }
+  };
+  const goiTroLy = () => globalThis.__calls.filter((c) => c.kind === "create" && c.params.tools);
+
+  // TL-E2E-01: khách hỏi trường quanh căn → model gọi tim_tien_ich_quanh → kết quả thật từ tien_ich (đo khoảng cách bằng
+  // code) → lời trả lời giữ nguyên tên trường (lưới gọt tên riêng coi kết quả công cụ là ngữ cảnh), không qua đường JSON.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  let kqCongCu = null;
+  globalThis.__model.troLy = (p) => {
+    const cuoi = p.messages.at(-1);
+    if (Array.isArray(cuoi.content) && cuoi.content[0]?.type === "tool_result") {
+      kqCongCu = cuoi.content[0].content;
+      return { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ gần căn #BDS-Q5-0001 có Trường Tiểu học Chương Dương khoảng 250 m ạ. Mình có bé đang học cấp mấy ạ?" }] };
+    }
+    return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "tu1", name: "tim_tien_ich_quanh", input: { khu_vuc: "BDS-Q5-0001", loai: "truong_hoc" } }] };
+  };
+  let rt = await send({ external_user_id: "thu-tl1", text: "căn BDS-Q5-0001 gần đó có trường tiểu học nào không em" });
+  check("TL-E2E-01a công cụ đọc ra trường trong bán kính, khoảng cách code đo (~250 m), không kèm trường xa",
+    /Trường Tiểu học Chương Dương ~250 m/.test(kqCongCu ?? "") && !/Xa Lắc/.test(kqCongCu ?? ""), String(kqCongCu));
+  check("TL-E2E-01b lời trả lời giữ tên trường từ dữ liệu công cụ, payload ghi công cụ đã gọi, KHÔNG gọi đường JSON",
+    /Chương Dương/.test(rt.body.reply ?? "") && rt.body.tro_ly?.cong_cu?.join() === "tim_tien_ich_quanh" && parseCalls().length === 0,
+    JSON.stringify({ b: rt.body, parse: parseCalls().length }));
+  check("TL-E2E-01c system lượt trợ lý dùng lời dặn công cụ, không còn lời dặn JSON",
+    /chế độ trợ lý có công cụ/.test(goiTroLy()[0]?.params.system[0].text ?? "") && !/trả về DUY NHẤT một object JSON/.test(goiTroLy()[0]?.params.system[0].text ?? ""));
+
+  // TL-E2E-02: model ghi hồ sơ — trường có lời khách làm chứng thì vào hồ sơ; trường bịa (3 phòng ngủ) KHÔNG vào.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  globalThis.__model.troLy = (p) => {
+    const cuoi = p.messages.at(-1);
+    if (Array.isArray(cuoi.content) && cuoi.content[0]?.type === "tool_result") {
+      return { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ em ghi mình cần hẻm xe hơi rồi ạ. Mình cần mấy phòng ngủ ạ?" }] };
+    }
+    return { stop_reason: "tool_use", content: [
+      { type: "text", text: "Dạ em ghi hẻm xe hơi, 3 phòng ngủ rồi nha." },
+      { type: "tool_use", id: "g1", name: "ghi_ho_so_mua", input: { truong: [
+        { khoa: "alley", gia_tri: "hẻm xe hơi", trich_dan: "hem xe hoi" },
+        { khoa: "bedrooms", gia_tri: "3", trich_dan: "3 phòng ngủ" },
+      ] } },
+    ] };
+  };
+  rt = await send({ external_user_id: "thu-tl2", text: "anh cần hem xe hoi nha em" });
+  const hsTL2 = db().t.buyers.find((b) => b.zalo_user_id === "thu-tl2")?.preferences ?? {};
+  check("TL-E2E-02 hẻm xe hơi vào hồ sơ; '3 phòng ngủ' (khách không nói) không vào; lời 'em ghi 3 phòng ngủ' không tới khách",
+    /xe h[ơo]i/.test(String(hsTL2.alley ?? "")) && hsTL2.bedrooms == null && !/3 phòng ngủ/.test(rt.body.reply ?? "") && goiTroLy().length === 2,
+    JSON.stringify({ hs: hsTL2, rep: rt.body.reply, n: goiTroLy().length }));
+
+  // TL-E2E-03: công tắc không có dòng (= tắt) → đường JSON cũ, không lượt nào kèm công cụ.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+  globalThis.__model.troLy = () => { throw new Error("không được gọi"); };
+  rt = await send({ external_user_id: "thu-tl3", text: "quanh đó có chợ không em" });
+  check("TL-E2E-03 công tắc tắt → đường JSON, không gọi trợ lý", goiTroLy().length === 0 && parseCalls().length === 1 && !rt.body.tro_ly, JSON.stringify(rt.body));
+
+  // TL-E2E-04: công tắc `thu` mà ID THẬT → đường JSON (chỉ ID thử theo la_id_thu mới dùng trợ lý).
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  globalThis.__model.troLy = () => { throw new Error("không được gọi"); };
+  rt = await send({ external_user_id: "khach-that-tl4", text: "quanh đó có chợ không em" });
+  check("TL-E2E-04 'thu' + ID thật → đường JSON", goiTroLy().length === 0 && parseCalls().length === 1, JSON.stringify(rt.body));
+
+  // TL-E2E-05: trợ lý chết (model ném) → ghi sổ lỗi, đường JSON trả lời ngay trong lượt.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  globalThis.__model.troLy = () => { throw new Error("529 overloaded"); };
+  rt = await send({ external_user_id: "thu-tl5", text: "quanh đó có chợ không em" });
+  check("TL-E2E-05 trợ lý ném → sổ lỗi 'chat-reply tro ly' + đường JSON trả lời",
+    goiTroLy().length === 1 && parseCalls().length === 1 && rt.body.replies?.length > 0 && db().t.bot_errors.some((e) => e.source === "chat-reply tro ly"),
+    JSON.stringify({ b: rt.body, err: db().t.bot_errors }));
+  globalThis.__cauHinh = cuCH;
 }
 // ── kết ──
 let hong = 0;

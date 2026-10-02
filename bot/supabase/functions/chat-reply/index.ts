@@ -8,6 +8,7 @@ import { z } from "npm:zod@4";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
 import {
   anthropicClient,
+  anthropicTrucTiep,
   bangNhau,
   docBiMat,
   doTien,
@@ -67,7 +68,8 @@ import { chonUngVienNghia, tenGan, TU_CHUNG_DU_AN, TU_CHUNG_DUONG } from "../_sh
 import { docHoiLai, type HoiLaiDoc } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonDiaDanh, coChuPhuong, cungQuan, type DiaDanhChon, nhacTenQuan, type NhomDiaDanh, phuongTrungTenQuan, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
 import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
-import { timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
+import { timTienIchQuanh, timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
+import { chayTroLyMua, DAU_RA_CONG_CU, type PhanHoiModel } from "../_shared/ai/tro-ly.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, gonGiaTriFact, laChiDonViHanhChinh, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, laRaoLai, laRutLoiBan, NHAN_HOI_LAI, nhanDienFact,
@@ -766,6 +768,27 @@ async function napModel(client: ReturnType<typeof serviceClient>): Promise<Model
   const c = await anthropicClient(client);
   nhoModel = { at: Date.now(), client: c };
   return c;
+}
+// SRS-5.1y: trợ lý có công cụ gọi THẲNG Claude (lưới dự phòng bỏ `tools`), nhớ tạm như `napModel`.
+let nhoTroLy: { at: number; client: Awaited<ReturnType<typeof anthropicTrucTiep>> } | null = null;
+async function napTroLy(client: ReturnType<typeof serviceClient>) {
+  if (nhoTroLy && Date.now() - nhoTroLy.at < 5 * NHO_TAM_MS) return nhoTroLy.client;
+  const c = await anthropicTrucTiep(client);
+  nhoTroLy = { at: Date.now(), client: c };
+  return c;
+}
+/**
+ * Công tắc `app_config.tro_ly` (SRS-5.1y): `tat` (mặc định, không có dòng cũng là tắt) · `thu` = chỉ ID thử
+ * (`la_id_thu`, chỗ duy nhất giữ tiền tố) · `bat` = mọi khách mua. Đọc hụt thì coi là tắt — đường cũ vẫn chạy.
+ */
+async function troLyBat(client: ReturnType<typeof serviceClient>, zalo: string): Promise<boolean> {
+  const { data, error } = await client.rpc("cau_hinh", { p_key: "tro_ly" });
+  if (error) return false;
+  const v = String(data ?? "tat").trim();
+  if (v === "bat") return true;
+  if (v !== "thu") return false;
+  const { data: thu, error: thuErr } = await client.rpc("la_id_thu", { p: zalo });
+  return !thuErr && thu === true;
 }
 // FR-99 (v48): giá trung bình phường (triệu/m²) tính từ CHÍNH KHO — cùng
 // deal + phường, tin đang lên kệ hoặc đã chốt, có giá số và diện tích. Một
@@ -7030,8 +7053,7 @@ Deno.serve(async (req) => {
         .filter((f) => f.question === "hinh_anh")
         .flatMap((f) => f.answer.match(PHOTO_URL_RE) ?? []),
     ];
-  const askedBlock = ((askedListings ?? []) as Asked[])
-    .map((l) => {
+  const dongCanNhac = (l: Asked): string => {
       // Tin chủ nhà đã gỡ: chỉ nói trạng thái, KHÔNG lộ địa chỉ/giá/ảnh.
       if (l.status === "an") {
         return `#${l.code} · ${STATUS_VI.an} - KHÔNG nêu địa chỉ hay giá của căn này, báo thật là chủ nhà đã gỡ rồi gợi ý căn tương tự trong KHO`;
@@ -7049,7 +7071,8 @@ Deno.serve(async (req) => {
       const quanh = (l.tien_ich_gan ?? []).slice(0, 4)
         .map((x) => `${x.ten} ~${lamTronM(x.m)}`).join("; ");
       return `${dongKho(l)}${l.status ? ` · trạng thái: ${STATUS_VI[l.status] ?? l.status}` : ""}${facts ? ` · đã xác minh từ chủ nhà: ${facts}` : ""}${quanh ? ` · quanh căn (đường chim bay, ước tính): ${quanh}` : ""}${nPhotos ? ` · CÓ ${nPhotos} HÌNH SẴN (khách xin hình thì điền send_photos, hệ thống tự đính kèm tối đa 4 tấm/lượt và tự hỏi xem thêm - ĐỪNG hứa đi hỏi chủ nhà)` : " · chưa có hình sẵn"}`;
-    }).join("\n");
+  };
+  const askedBlock = ((askedListings ?? []) as Asked[]).map(dongCanNhac).join("\n");
 
   // Khối DỰ ÁN (FR-113…115/FR-132): kiến thức chung đã xác thực, bot trả lời
   // tầng dự án trực tiếp; Ny'ah (is_partner) luôn ở trên cùng.
@@ -7229,6 +7252,30 @@ Deno.serve(async (req) => {
   // Tên kiểu riêng: `as typeof out` ở dưới bị TS thu hẹp thành `null` theo luồng
   // (out vừa gán null), nên ép kiểu thành "chuyển sang null" — lỗi TS2352.
   let out: LuotMua | null = null;
+  // SRS-5.1y: kết quả công cụ ĐỌC của trợ lý — lưới chặn bịa phía dưới coi là dữ liệu thật; `troLy` đi vào payload.
+  const duLieuCongCu: string[] = [];
+  let troLy: { vong: number; cong_cu: string[] } | null = null;
+  const docCongCuMua = async (ten: "tim_tien_ich_quanh" | "xem_can", input: Record<string, unknown>): Promise<string> => {
+    if (ten === "tim_tien_ich_quanh") {
+      return await timTienIchQuanh(
+        client as unknown as Parameters<typeof timTienIchQuanh>[0],
+        String(input.khu_vuc ?? ""), String(input.loai ?? "tat_ca"), Number(input.ban_kinh_m) || 1000,
+      );
+    }
+    const ma = String(input.ma_can ?? "").replace(/^#/, "").trim().toUpperCase();
+    if (!/^[A-Z0-9-]{3,40}$/.test(ma)) return "Mã căn không hợp lệ - hỏi lại khách mã căn.";
+    const [{ data: l, error: lErr }, { data: ph }] = await Promise.all([
+      client.from("listings").select(`status, ${CAN_COLS}, listing_facts(question, answer)`)
+        .or(`code.ilike.${ma},legacy_code.ilike.${ma}`)
+        .in("status", ["dang_ban", "dang_quan_tam", "da_chot", "an"]).limit(1).maybeSingle(),
+      client.from("listing_photos_v").select("code, url").eq("code", ma).limit(24),
+    ]);
+    if (lErr) throw new Error(lErr.message);
+    if (!l) return `Không có căn #${ma} trong kho - nói thật là em không thấy căn này, KHÔNG tả căn.`;
+    const can = l as unknown as Asked;
+    if (!photoByCode[can.code]) for (const p of (ph ?? []) as Array<{ code: string; url: string }>) (photoByCode[p.code] ??= []).push(p.url);
+    return dongCanNhac(can);
+  };
   // FR-27 (v48): "xem thêm" hình — offset nhớ ở `buyers.preferences.photo_offset`
   // = {code, n} (rẻ nhất: đi chung RPC `merge_buyer_prefs` đã có ở hậu kỳ,
   // không thêm cột, không tra `messages`). Có nghĩa CHỈ khi lượt trước còn dư.
@@ -7238,13 +7285,12 @@ Deno.serve(async (req) => {
     danhDau("mua_truoc_model");
     // Dựng client TRONG try: thiếu key/hỏng model đều rơi về fallback regex bên
     // dưới thay vì 500 — không đổ lỗi cho khách (giữ đúng ý đồ fallback cũ).
-    const anthropic = await napModel(client);
-    const resp = await anthropic.messages.parse({
+    const thamSoMua = {
       model: MODEL,
       max_tokens: 1024,
       // effort low: nhanh hơn rõ rệt, few-shot + luật đã gánh chất lượng (nudge
       // chạy low được chấm 4.5-4.7/5); cần sâu hơn thì nâng lại "medium"
-      output_config: { effort: "low" },
+      output_config: { effort: "low" as const },
       _khuon_du_phong: BUYER_FORMAT,
       // Tách 2 khối theo GIÁ, không theo chủ đề: mọi thứ giống hệt nhau cho mọi
       // khách nằm trước điểm nhớ tạm (đọc lại chỉ tốn 1/10 giá); mọi thứ đổi
@@ -7317,7 +7363,7 @@ Deno.serve(async (req) => {
             : ""),
       }],
       messages: [{
-        role: "user",
+        role: "user" as const,
         content: [
           ...(imageUrl
             ? [{ type: "image" as const, source: { type: "url" as const, url: imageUrl } }]
@@ -7358,7 +7404,42 @@ Deno.serve(async (req) => {
           `\nSoạn lượt trả lời tiếp theo của EM và cập nhật hồ sơ:` },
         ],
       }],
-    });
+    };
+    // SRS-5.1y (02/10/2026): TRỢ LÝ CÓ CÔNG CỤ — cùng ngữ cảnh, chỉ đổi lời dặn đầu ra; model viết thẳng lời nhắn và gọi
+    // công cụ (tra tiện ích, xem căn, ghi hồ sơ/hẹn/hỏi chủ…). Công cụ ghi đổ vào đúng khuôn `out` nên mọi lưới dưới vẫn
+    // chạy. Không ra câu trả lời (model chết, từ chối, hết vòng) → đường JSON cũ ngay trong lượt.
+    if (await troLyBat(client, externalUserId)) {
+      try {
+        const ai = await napTroLy(client);
+        if (ai) {
+          const [k0, k1] = thamSoMua.system;
+          const tl = await chayTroLyMua({
+            goi: async (p) => {
+              const r = await ai.messages.create(p as unknown as Parameters<typeof ai.messages.create>[0]) as unknown as PhanHoiModel;
+              await doTien(client, r.usage ?? null);
+              return r;
+            },
+            thamSo: {
+              model: MODEL, max_tokens: 1024, output_config: { effort: "low" },
+              system: [{ ...k0, text: k0.text.replace(DAU_RA_JSON, DAU_RA_CONG_CU) }, k1],
+              messages: thamSoMua.messages,
+            },
+            loiKhach: [...history.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n"),
+            doc: docCongCuMua,
+          });
+          if (tl) {
+            out = tl.out as LuotMua;
+            duLieuCongCu.push(...tl.duLieu);
+            troLy = { vong: tl.vong, cong_cu: tl.congCu };
+          }
+        }
+      } catch (e) {
+        await ghiLoi(client, "chat-reply tro ly", e);
+      }
+    }
+    if (!out) {
+    const anthropic = await napModel(client);
+    const resp = await anthropic.messages.parse(thamSoMua as unknown as Parameters<typeof anthropic.messages.parse>[0]);
     moc.mua_tok_ra = resp.usage?.output_tokens ?? -1;
     moc.mua_tok_vao = resp.usage?.input_tokens ?? -1;
     moc.mua_tok_nho_doc = resp.usage?.cache_read_input_tokens ?? -1;
@@ -7372,6 +7453,7 @@ Deno.serve(async (req) => {
     // Đo SAU khi đã cầm chắc câu trả lời trong tay: lượt buyer là lượt đắt nhất
     // (khối tĩnh ~5.800 chữ-máy), nên đây là con số quan trọng nhất của đồng hồ.
     await doTien(client, resp.usage);
+    }
   } catch (e) {
     // Chỗ này nguy hơn vẻ ngoài: model hỏng thì khối dưới vẫn dựng câu trả lời
     // bằng regex và trả 200 tử tế. Khách không thấy gì lạ, mã HTTP không thấy
@@ -7521,8 +7603,8 @@ Deno.serve(async (req) => {
     // Đang nói về MỘT CĂN thì chỉ dữ liệu căn làm chứng (khối dự án đối tác luôn có chữ "quy hoạch 1/500" — bắn lại
     // sau deploy #193, "không có quy hoạch gì cả" lọt vì thế). Không có căn nào đang nói thì mọi khối.
     const nguCanhDuLieu = (canNoi
-      ? [kho, askedBlock, tuongTuBlock, canDuAnBlock]
-      : [kho, askedBlock, tuongTuBlock, canDuAnBlock, duAnKhuBlock, duanBlock, duanNhaMinh]).map(String).join("\n");
+      ? [kho, askedBlock, tuongTuBlock, canDuAnBlock, ...duLieuCongCu]
+      : [kho, askedBlock, tuongTuBlock, canDuAnBlock, duAnKhuBlock, duanBlock, duanNhaMinh, ...duLieuCongCu]).map(String).join("\n");
     const bia = chanBiaDuKien(out.replies, nguCanhDuLieu);
     if (bia.bo.length) {
       out.replies = bia.replies;
@@ -7558,7 +7640,7 @@ Deno.serve(async (req) => {
     // 22/09/2026 (bắn thật sau deploy #181): "gần chợ Hàng Thịt" khi kho chỉ nói "gần chợ Hoà Bình" — tên
     // riêng sau chợ / trường / bệnh viện… không có trong ngữ cảnh (kho, căn khách nhắc, dự án, lịch sử) thì
     // gọt tên, giữ loại ("gần chợ").
-    const nguCanhTen = [kho, askedBlock, tuongTuBlock, canDuAnBlock, duAnKhuBlock, duanBlock, duanNhaMinh, text, ...history.map((m) => m.body ?? "")].map(String).join("\n");
+    const nguCanhTen = [kho, askedBlock, tuongTuBlock, canDuAnBlock, duAnKhuBlock, duanBlock, duanNhaMinh, ...duLieuCongCu, text, ...history.map((m) => m.body ?? "")].map(String).join("\n");
     const truocTen = out.replies;
     out.replies = boTenRiengBia(out.replies, nguCanhTen);
     if (out.replies !== truocTen) console.log("chat-reply: gọt tên riêng không có trong kho");
@@ -8150,5 +8232,7 @@ Deno.serve(async (req) => {
     ...(conHinh ? { more_photos: true } : {}),
     ...(muonGoi ? { voice_request: true } : {}),
     ...(danhGia ? { rated: danhGia.stars } : {}),
+    // SRS-5.1y: lượt do trợ lý có công cụ trả lời — số vòng + công cụ đã gọi (tên thôi, không dữ liệu).
+    ...(troLy ? { tro_ly: troLy } : {}),
   });
 });

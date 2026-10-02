@@ -1196,6 +1196,64 @@ Chủ dự án 02/10: "lấy hết các luật bên kia qua cho AI" — đợt 2
 
 **Kiểm:** e2e `D3-01` (AI chọn pháp lý → câu treo kế là pháp lý; đỏ khi tắt), `D3-02` (khoá ngoài danh sách → luật chọn); `kiem-bang-chung.mjs` `CK-01`.
 
+### SRS-5.1y · Trợ lý có công cụ — nhánh người mua (02/10/2026)
+
+Chủ dự án: "mày để nó tương tác như 1 chatbot gắn crm bình thường… nghe hiểu các yêu cầu của khách, và ghi lại vào crm", "tao muốn tương tác tự nhiên", rồi "làm trợ lý có công cụ đi" (yêu cầu ví dụ: tìm tiện ích quanh một khu vực).
+
+**Lớp lỗi — model chỉ được ĐIỀN Ô, không được LÀM.** Lượt mua cũ là một lần gọi model trả JSON cố định (`BuyerTurn`): hồ sơ + câu trả lời + vài cờ. Khách nhờ việc gì ngoài các ô đó (tra trường/chợ quanh một khu, xem kỹ một căn chưa nằm trong ngữ cảnh) thì model không có đường làm. Nó hoặc hứa suông, hoặc kể theo trí nhớ, rồi lưới chặn bịa gọt đi. Ngữ cảnh do code đoán trước bằng từ khoá (`coMuiViTri`, `HOI_TIEP_VE_CAN_RE`…) chứ không theo điều khách thật sự nhờ.
+
+**Sửa:**
+- `_shared/ai/tro-ly.ts` chạy vòng tool use. Cùng ngữ cảnh (system, kho, hồ sơ, lịch sử) với đường cũ, chỉ thay lời dặn `DAU_RA_JSON` bằng `DAU_RA_CONG_CU`. Model viết thẳng lời nhắn và gọi công cụ:
+  - Công cụ **ĐỌC** chạy thật trong lượt:
+    - `tim_tien_ich_quanh`: định vị bằng mã căn (toạ độ đã geocode), hoặc mốc trùng tên trong `tien_ich`, hoặc Nominatim qua RPC. Sau đó đọc `tien_ich` trong bán kính 300–3.000 m, code tự đo khoảng cách.
+    - `xem_can`: dòng căn + fact đã xác minh + số hình + tiện ích quanh căn.
+  - Công cụ **GHI** không đụng DB trong module. Chúng gom về đúng khuôn `LuotMua`, nên mọi bước sau lượt model của đường cũ vẫn chạy y nguyên (ghi hồ sơ, việc hỏi chủ, lịch xem, chốt, nhắc, báo người phụ trách và các lưới chặn bịa). Ánh xạ:
+    - `ghi_ho_so_mua` → `profile`
+    - `hen_xem_nha` → `viewing`
+    - `hoi_chu_nha` → `ask_owner`
+    - `gui_hinh` → `send_photos`
+    - `chot_can` → `agreed_deal`
+    - `hen_bao_lai` → `promise`
+    - `bao_nguoi_phu_trach` → `need_human` / `voice_request`
+- **Code kiểm trích dẫn** (`trichCoTrongTin`, nay export):
+  - Công cụ ghi điều KHÁCH nói (hồ sơ, giờ hẹn, chốt, lời hứa) phải kèm cụm copy từ lời khách. Không có thì không ghi, và model nhận `is_error` để viết lại lời.
+  - Một lệnh có trường đạt lẫn trường bị bỏ vẫn tính là lỗi. Bắt ở e2e: lời "em ghi hẻm xe hơi, 3 phòng ngủ" suýt tới khách dù "3 phòng ngủ" không được ghi.
+  - SĐT trong lịch xem chỉ nhận khi đúng dãy số đó có trong lời khách.
+- **Tiết kiệm vòng gọi:**
+  - Model đã viết lời nhắn và chỉ gọi công cụ ghi (đều qua) → xong ngay, không tốn thêm một vòng.
+  - Trần 4 vòng.
+- **Rơi về đường JSON cũ ngay trong lượt** khi:
+  - model từ chối;
+  - không có chữ;
+  - đầu vào công cụ cụt vì hết trần;
+  - hết vòng;
+  - model ném lỗi (ghi sổ `chat-reply tro ly`).
+- **Lưới chặn bịa coi kết quả công cụ đọc là dữ liệu thật**: `duLieuCongCu` được đưa vào ngữ cảnh của `chanBiaDuKien`, `boDoanPhuongDiaDanh` và `boTenRiengBia`. Nếu không, tên trường do công cụ trả về sẽ bị gọt như tên bịa.
+- **Gọi THẲNG Claude** (`anthropicTrucTiep`, model `MODEL`): lưới dự phòng Groq/Gemini (`groq.ts`) dịch lượt gọi sang giọng OpenAI và bỏ `tools`.
+- **Công tắc `app_config.tro_ly`** (migration `20261002b`, mặc định dòng mới là `thu`):
+  - `tat`: tắt;
+  - `thu`: chỉ ID thử theo `la_id_thu`;
+  - `bat`: mọi khách mua.
+  - Đọc mỗi lượt mua, không nhớ tạm (+1 truy vấn, TOIUU-02/03 nâng trần kèm lý do).
+- Payload có `tro_ly: {vong, cong_cu}` (chỉ tên công cụ) để quan sát lượt nào do trợ lý trả lời.
+
+**Chỗ khác cùng lớp (còn lại):**
+- Nhánh NGƯỜI BÁN vẫn là các lượt gọi model trả chữ (r1/r2/r3) cộng lượt bóc tách JSON. Chưa có công cụ: ghi thông tin vào tin, tạo tin, ngưng rao, tra tiện ích cho chủ nhà.
+- Nhánh mua: ngữ cảnh kho vẫn do code lọc trước theo hồ sơ + câu (`hoSoTamTuCau`, `locLoaiHem`…). Chưa có công cụ `tim_tin` để model tự lọc theo yêu cầu.
+- `tien_ich` chỉ nạp quanh các căn đã geocode (3 km), nên khu không có căn nào thì công cụ báo "chưa có dữ liệu". Đúng là nói thật, nhưng còn thiếu dữ liệu.
+
+**Kiểm:**
+- `bot/tests/tro-ly.mjs` (32 ca, model giả) gồm:
+  - TL-01/02: công cụ đọc, mọi `tool_result` trong MỘT tin user;
+  - TL-03: một vòng khi chỉ ghi;
+  - TL-04/04b/05: **đỏ khi tắt kiểm trích dẫn**, cách nói mới không dấu ("chieu thu 7 minh qua xem"), SĐT model tự điền bị bỏ;
+  - TL-06/07: rơi về, lỗi tra cứu.
+- E2E qua handler thật:
+  - `TL-E2E-01`: trường trong bán kính, khoảng cách code đo, tên trường không bị gọt, không gọi đường JSON;
+  - `TL-E2E-02`: trường bịa không vào hồ sơ, lời sai không tới khách;
+  - `TL-E2E-03/04`: công tắc tắt / ID thật → đường JSON;
+  - `TL-E2E-05`: trợ lý ném → sổ lỗi + đường JSON.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

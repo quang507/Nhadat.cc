@@ -24,7 +24,7 @@ const boDau = (s: string): string =>
 
 /** Tra một địa danh trong TP.HCM. Chặn kết quả mức thành phố/tỉnh (câu quá rộng). */
 // 25/09/2026 (FR-227): gọi thẳng từ edge thì Nominatim trả "Access denied" — nhờ DB gọi qua RPC `tra_nominatim`.
-async function traDiaDanh(db: Db, cum: string): Promise<{ osm_id: string; ten: string; lat: number; lng: number } | null> {
+export async function traDiaDanh(db: Db, cum: string): Promise<{ osm_id: string; ten: string; lat: number; lng: number } | null> {
   for (const q of [`${cum}, Thành phố Hồ Chí Minh`, `${boDau(cum)}, Ho Chi Minh City`]) {
     try {
       const { data, error } = await db.rpc("tra_nominatim", { p_q: q, p_cho_giay: 4 });
@@ -81,4 +81,70 @@ export async function timTinGanMoc(
   const lai = await goi(diem.lat, diem.lng, diem.ten);
   if (lai.error) return { tin: [], loi: lai.error.message };
   return { tin: (lai.data ?? []) as TinGan[] };
+}
+
+const LOAI_HOI = ["benh_vien", "truong_hoc", "cho", "sieu_thi", "cong_vien"] as const;
+const lamTron = (m: number) =>
+  m >= 1000 ? `${String(Math.round(m / 100) / 10).replace(".", ",")} km` : `${Math.max(50, Math.round(m / 50) * 50)} m`;
+function khoangCachM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Công cụ ĐỌC của trợ lý (SRS-5.1y, 02/10/2026): tiện ích quanh một khu vực khách nói. Định vị khu vực theo thứ tự rẻ
+ * trước: mã căn trong kho (toạ độ đã geocode) → mốc đã có trong `tien_ich` trùng tên → Nominatim (qua RPC, như
+ * `timTinGanMoc`). Rồi đọc `tien_ich` trong hộp quanh điểm đó, đo khoảng cách bằng code — model không bao giờ tự nói số mét.
+ * Trả CHỮ cho model đọc; không định vị được / không có dữ liệu thì nói rõ để model nói thật, không kể tên bịa.
+ */
+export async function timTienIchQuanh(
+  db: Db,
+  khuVuc: string,
+  loai: string,
+  banKinhM = 1000,
+): Promise<string> {
+  const kv = khuVuc.trim().slice(0, 120);
+  if (!kv) return "Thiếu khu vực — hỏi khách khu vực cụ thể (đường, phường, quận).";
+  const bk = Math.min(3000, Math.max(300, Math.round(Number(banKinhM) || 1000)));
+  let diem: { ten: string; lat: number; lng: number } | null = null;
+  const ma = /\b([A-Z]{2,5}(?:-[A-Z0-9]{1,12}){1,4})\b/i.exec(kv)?.[1]?.toUpperCase();
+  if (ma) {
+    const { data } = await db.from("listings").select("code, location_raw, ward, lat, lng").ilike("code", ma).limit(1).maybeSingle();
+    const l = data as { code: string; location_raw?: string | null; ward?: string | null; lat?: number | null; lng?: number | null } | null;
+    if (l?.lat != null && l?.lng != null) diem = { ten: `căn #${l.code}`, lat: Number(l.lat), lng: Number(l.lng) };
+  }
+  if (!diem) {
+    const kd = kdTen(kv);
+    if (kd.length >= 4) {
+      const { data } = await db.from("tien_ich").select("ten, lat, lng").ilike("ten_kd", `%${kd}%`).limit(1);
+      const t = (data ?? [])[0] as { ten: string; lat: number; lng: number } | undefined;
+      if (t) diem = { ten: t.ten, lat: Number(t.lat), lng: Number(t.lng) };
+    }
+  }
+  if (!diem) diem = await traDiaDanh(db, kv);
+  if (!diem) return `Không định vị được "${kv}" — hỏi lại khách khu đó ở đường nào / quận nào, KHÔNG đoán.`;
+  const dLat = bk / 111320, dLng = bk / (111320 * Math.cos(diem.lat * Math.PI / 180));
+  const loaiHoi = (LOAI_HOI as readonly string[]).includes(loai) ? [loai] : [...LOAI_HOI];
+  const { data, error } = await db.from("tien_ich").select("loai, ten, lat, lng")
+    .in("loai", loaiHoi)
+    .gte("lat", diem.lat - dLat).lte("lat", diem.lat + dLat)
+    .gte("lng", diem.lng - dLng).lte("lng", diem.lng + dLng)
+    .limit(400);
+  if (error) throw new Error(error.message);
+  const ds = ((data ?? []) as Array<{ loai: string; ten: string; lat: number; lng: number }>)
+    .map((t) => ({ ...t, m: khoangCachM(diem!, { lat: Number(t.lat), lng: Number(t.lng) }) }))
+    .filter((t) => t.m <= bk)
+    .sort((a, b) => a.m - b.m);
+  const tenLoai = (l: string) => TEN_LOAI[l as keyof typeof TEN_LOAI] ?? l;
+  const dau = `Quanh ${diem.ten} (bán kính ~${lamTron(bk)}, đường chim bay, ước tính - nói "khoảng"):`;
+  if (!ds.length) {
+    return `${dau} kho dữ liệu bên em CHƯA có ${loaiHoi.length === 1 ? tenLoai(loaiHoi[0]) : "tiện ích"} nào ở đây ` +
+      "(kho chỉ nạp quanh các căn đang rao) - nói thật là em chưa có dữ liệu, KHÔNG kể tên nào.";
+  }
+  const chon = loaiHoi.length === 1
+    ? ds.slice(0, 8)
+    : loaiHoi.flatMap((l) => ds.filter((t) => t.loai === l).slice(0, 3));
+  return `${dau}\n` + chon.map((t) => `- ${tenLoai(t.loai)}: ${t.ten} ~${lamTron(t.m)}`).join("\n");
 }
