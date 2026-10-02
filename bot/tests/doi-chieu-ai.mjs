@@ -91,7 +91,7 @@ kiem("DC-11 thông tin chung / dự án nói bằng 'Theo em biết, …' (khố
     const ca = chat.split("\n")[dong - 1];
     return /lưới đỡ|gatLuot|baoDangLuot|: laDongY|: \(laDongY|: !gatCa|tgH !== undefined|laDongY\(text\) && text\.trim/.test(ca) ? null : `${dong}: ${ca.trim().slice(0, 90)}`;
   }).filter(Boolean);
-  kiem("DC-12 gật / bảo đăng: không còn lời gọi laDongY / laBaoDang trần (chỉ lưới đỡ sau AI)", /docDongY\(k\.dongY/.test(chat) && /dong_y: DongY/.test(bocRao) && tran.length === 0, tran.join(" | "));
+  kiem("DC-12 gật / bảo đăng: không còn lời gọi laDongY / laBaoDang trần (chỉ lưới đỡ sau AI)", /docDongY\(k\.dongY/.test(chat) && /dong_y: DongYLa/.test(bocRao) && tran.length === 0, tran.join(" | "));
 }
 
 console.log(`\n${dat}/${dat + hong} đạt`);

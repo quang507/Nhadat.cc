@@ -2565,7 +2565,7 @@ fresh(seedKho);
       rX.body.replies.some((x) => /"xhr" là sổ hồng riêng đúng không/.test(x)) && !fX("phap_ly").length && LX.boc_tach?.xac_nhan_goi_y?.gia_tri === "sổ hồng riêng",
       JSON.stringify({ rep: rX.body.replies, pl: fX("phap_ly"), bt: LX.boc_tach }));
     // SRS-5.1zf: gật do AI đọc (`dong_y`).
-    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, dong_y: { la: "dong_y", trich_dan: "đúng rồi em" } } : OUT();
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, dong_y: "dong_y", dong_y_trich: "đúng rồi em" } : OUT();
     const rX2 = await send({ external_user_id: "aim-xn", text: "đúng rồi em" });
     check("AIM-XN2 gật → ghi pháp lý 'sổ hồng riêng', gợi ý xoá, 🤖 báo pháp lý, hỏi lại câu đang treo",
       fX("phap_ly").some((f) => f.answer === "sổ hồng riêng") && db().t.listings.at(-1).boc_tach?.xac_nhan_goi_y === false &&
@@ -3004,7 +3004,7 @@ fresh(seedKho);
           JSON.stringify({ ward: Lq1.ward, rep: rq1.body.replies }));
       }
       // SRS-5.1zf: chế độ `ai` — GẬT do AI đọc (`dong_y`), luật `laDongY` chỉ đỡ khi AI không chạy.
-      globalThis.__model.parse = ma === "LQ-03" ? (p) => laLuotBocRao(p) ? { ...imAi(p), dong_y: { la: "dong_y", trich_dan: "đúng rồi" } } : OUT() : imAi;
+      globalThis.__model.parse = ma === "LQ-03" ? (p) => laLuotBocRao(p) ? { ...imAi(p), dong_y: "dong_y", dong_y_trich: "đúng rồi" } : OUT() : imAi;
       const rq2 = await send({ external_user_id: "lq-1", text: tra });
       const Lq2 = db().t.listings.at(-1);
       check(`${ma} rồi khách đáp '${tra}'`, mong(Lq2), JSON.stringify({ ward: Lq2.ward, district: Lq2.district, rep: rq2.body.replies }));
@@ -3231,7 +3231,7 @@ fresh(seedKho);
   // không chạy. Chế độ `ai`: AI nói không gật thì "ok" KHÔNG duyệt; AI nói gật thì cách nói luật không biết vẫn duyệt.
   {
     const cuCH = globalThis.__cauHinh;
-    const aiDY = (dy, them = {}) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, dong_y: dy, ...them } : OUT();
+    const aiDY = (dy, them = {}) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, ...(dy ? { dong_y: dy.dang_di ? "dong_y_dang" : dy.la, dong_y_trich: dy.trich_dan } : {}), ...them } : OUT();
     const moDY = async (uid, cau = "duyet_tin") => {
       fresh(seedKho);
       globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
