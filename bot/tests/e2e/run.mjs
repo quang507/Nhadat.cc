@@ -2524,6 +2524,28 @@ fresh(seedKho);
         /phí chỉ thu khi giao dịch thành công, 1% giá chốt/.test(rC5.body.replies.find((x) => !/^🤖/.test(x)) ?? "") &&
         !db().t.listing_facts.some((f) => f.listing_id === L.id && /lừa/.test(f.answer ?? "")),
       JSON.stringify({ esc: esc5.map((x) => x.note), rep: rC5.body.replies }));
+    // Bắn thử v317 (lx-cx-12): bực → hoãn, rồi "nói thật chứ chị sợ mấy bên online lừa lắm" → ghi vào ô NỘI THẤT.
+    for (const [uid, them] of [
+      ["cx-6a", { truong: [{ khoa: "noi_that", gia_tri: "nói thật chứ chị sợ mấy bên online lừa lắm", trich_dan: "nói thật chứ chị sợ mấy bên online lừa lắm", can: null }] }],
+      ["cx-6b", { tra_loi: { co_tra_loi: true, gia_tri: "sợ mấy bên online lừa", trich_dan: "sợ mấy bên online lừa lắm" } }],
+      ["cx-6c", {}],
+    ]) {
+      L = await dung(uid, "phuong");
+      globalThis.__model.parse = aiRao({ cam_xuc: { muc: "buc", trich_dan: "hỏi hoài vậy" } });
+      await send({ external_user_id: uid, text: "hỏi gì mà hỏi hoài vậy em" });
+      globalThis.__model.parse = aiRao({ cam_xuc: { muc: "nghi_ngo", trich_dan: "sợ mấy bên online lừa lắm" }, ...them });
+      const r6 = await send({ external_user_id: uid, text: "nói thật chứ chị sợ mấy bên online lừa lắm" });
+      const f6 = db().t.listing_facts.filter((f) => f.listing_id === L.id && /lừa/.test(f.answer ?? ""));
+      check(`CX-06 ${uid} bực rồi 'chị sợ mấy bên online lừa lắm' (AI nghi ngờ có trích dẫn) → câu cảm xúc KHÔNG vào ô nào của tin, bot không nói 'em ghi rồi'`,
+        !f6.length && !r6.body.replies.some((x) => /em ghi (?:nhận )?rồi|Bóc tách được/.test(x)),
+        JSON.stringify({ f6: f6.map((f) => [f.question, f.answer]), rep: r6.body.replies, treo: db().t.info_requests.filter((x) => x.listing_id === L.id).map((x) => [x.question, x.status]) }));
+    }
+    // AI đọc ra cảm xúc thì AI KHÔNG im — luật không đọc ô từ lời bày tỏ ("hối chị gấp gấp" là chuyện môi giới khác, không phải chủ cần bán gấp).
+    L = await dung("cx-7", "phuong");
+    globalThis.__model.parse = aiRao({ cam_xuc: { muc: "nghi_ngo", trich_dan: "hối chị gấp gấp rồi lừa, sợ lắm" } });
+    await send({ external_user_id: "cx-7", text: "mấy bên môi giới hối chị gấp gấp rồi lừa, sợ lắm" });
+    const f7 = db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === "gap");
+    check("CX-07 'mấy bên môi giới hối chị gấp gấp rồi lừa, sợ lắm' (AI: nghi ngờ, không ô nào) → KHÔNG ghi ô gấp", !f7.length, JSON.stringify(f7.map((f) => f.answer)));
     L = await dung("cx-4", "phuong");
     globalThis.__model.parse = aiRao({ cam_xuc: { muc: "buc", trich_dan: "cút đi" } });
     await send({ external_user_id: "cx-4", text: "phường 12 em" });

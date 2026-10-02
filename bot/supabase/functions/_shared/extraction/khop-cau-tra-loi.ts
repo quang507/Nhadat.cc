@@ -22,6 +22,7 @@
 import { TIEN_KD, CO_TIEN_KD, TIEN_T_KEP, docTien } from "./luat-tien.ts";
 import { TRUOC_LA_SAN, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { laThuanNhan } from "./nhan.ts";
+import { goNhamDau } from "./go-nham-dau.ts";
 
 // 30/09/2026 (bắn thử vector, nhà phố Trần Bình Trọng): "nhà có 1 phòng ngủ ngay tầng trệt cho người già" → ô số phòng ngủ
 // = 1, còn chi tiết "phòng ngủ ở tầng trệt" (thứ người mua có ba mẹ lớn tuổi đi tìm) mất khỏi vector. Số phòng ngủ đi kèm
@@ -92,7 +93,7 @@ export type KetQuaKhop = {
 };
 
 const boDau = (s: string): string =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D")
+  goNhamDau(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D")
     .toLowerCase();
 
 // ── Xưng hô ───────────────────────────────────────────────────────────────────

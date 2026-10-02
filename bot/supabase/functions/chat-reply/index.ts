@@ -139,6 +139,7 @@ import { nhanhCuaKhoa } from "../_shared/extraction/re-nhanh.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
 import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, loaiKhoTuHoSo, loaiNhaTrongCau, boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
+import { goNhamDau } from "../_shared/extraction/go-nham-dau.ts";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
 const laNgoaiDoThi = (quan?: string | null): boolean =>
@@ -155,7 +156,7 @@ const laNgoaiDoThi = (quan?: string | null): boolean =>
 // Việt không dấu (ban = bán/bàn/bạn). Model thì đọc text GỐC — model không mù
 // dấu, chỉ regex là mù.
 const boDau = (s: string): string =>
-  s.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  goNhamDau(s).toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 // Fallback quy tắc khi model lỗi/hết quota (hướng parseVnd của NhaDat-Radar):
 // bắt tối thiểu ngân sách + hẻm/mặt tiền bằng regex để hồ sơ không mất dữ liệu,
 // và trả lời template thay vì im lặng hay đổ lỗi cho khách.
@@ -4814,7 +4815,9 @@ Deno.serve(async (req) => {
           // đang hỏi vẫn theo AI (AI nói "không trả lời" là không). Có `xac_nhan` ("xhr") thì không — AI cố ý chưa ghi.
           // Bắn thử v312 (lx-hn-92): AI nói tin là CÂU HỎI ("ký hợp đồng gì không em") thì AI không im — luật không được
           // đọc dữ liệu từ câu hỏi (từng ghi pháp lý = "ký hợp đồng gì không").
-          if (laCheDoAi && !aiChinh.ghi.length && !capNhatLuot.length && !kiemXacNhan(kqAi.xacNhan ?? [], text) && !hoiAi) {
+          // Bắn thử v317 (lx-cx-12): AI đọc ra CẢM XÚC (có trích dẫn — "chị sợ mấy bên online lừa lắm") cũng là AI không im: tin là
+          // lời bày tỏ, luật không được đọc ô từ đó (từng ghi nội thất = nguyên câu, vì bỏ dấu "nói thật" = "nội thất").
+          if (laCheDoAi && !aiChinh.ghi.length && !capNhatLuot.length && !kiemXacNhan(kqAi.xacNhan ?? [], text) && !hoiAi && !camAi) {
             console.log("chat-reply: che do ai — AI im han, luat doc fact kem");
             aiImHan = true;
           }
