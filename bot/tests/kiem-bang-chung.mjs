@@ -528,6 +528,7 @@ datKiemNhe(true);
   const q = (k) => ghi.find((g) => g.question === k)?.answer;
   ok("O-10 ghi chữ chuẩn: loai_duong_vao 'không có hẻm', thang_may 'không', thương lượng 'có thương lượng' (trigger DB đọc ra cột)",
     q("loai_duong_vao") === "không có hẻm" && q("thang_may") === "không" && q("thuong_luong") === "có thương lượng", JSON.stringify(ghi));
+  ok("O-15 ô dạng câu có / không mà AI trả 'co' → 'có'", docAiChinh(kiemDeXuat([{ khoa: "duong_container", gia_tri: "co", trich_dan: "xe container vào tận nơi" }], "xe container vào tận nơi em").dat, { deal: "cho_thue" }).ghi.find((g) => g.question === "duong_container")?.answer === "có");
   ok("O-11 ô chữ bỏ tiểu từ cuối: 'xe container vào tận nơi em' → 'xe container vào tận nơi'", q("duong_container") === "xe container vào tận nơi", JSON.stringify(ghi));
   ok("O-12 khoá luật cũ nay là khoá AI biết (luật không ghi khi AI chạy): duong_container, the_chap, loai_duong_vao",
     ["duong_container", "the_chap", "loai_duong_vao", "thang_may"].every((k) => KHOA_FACT_AI_BIET.has(k)));
