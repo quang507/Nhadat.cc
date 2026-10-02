@@ -5,7 +5,7 @@
 // (2) công cụ GHI điều khách nói phải có trích dẫn trong lời khách — không có thì KHÔNG ghi, model nhận lỗi;
 // (3) model đã viết lời + chỉ gọi công cụ ghi (đều qua) → xong một vòng; (4) không có câu trả lời dùng được → null
 // để chat-reply rơi về đường JSON cũ.
-import { capTruong, ungVienKhuVuc } from "../supabase/functions/_shared/tim-moc.ts";
+import { capTruong, laKhuVucQuaRong, timTienIchQuanh, ungVienKhuVuc } from "../supabase/functions/_shared/tim-moc.ts";
 import { apCongCuGhi, cauKhoangCachKhongNguon, chayTroLyMua, CONG_CU_MUA, KHOA_HO_SO, thanhBongBong } from "../supabase/functions/_shared/ai/tro-ly.ts";
 
 let hong = 0, tong = 0;
@@ -229,6 +229,33 @@ ok("TL-11 cấp trường đọc từ tên",
   capTruong("Trường TH Nguyễn Du") === "tieu_hoc" && capTruong("Trường Trung học phổ thông Hoà Bình") === "thpt" &&
   capTruong("Trường Mầm non Phường 3") === "mam_non" && capTruong("Trường Dự bị Đại học TP.HCM") === "dai_hoc" &&
   capTruong("Trường Nguyễn Du") === null);
+
+// TL-12 (02/10/2026, bắn D4/D7): "Quận 5" là cả quận — không lấy tiện ích có tên chứa "Quận 5" làm tâm.
+ok("TL-12 cả quận/huyện/TP → quá rộng (kể cả cách viết mới 'q.10', 'quận Bình Thạnh, TP.HCM', 'quận 10 hcm')",
+  ["Quận 5", "q5", "q.10", "quận Bình Thạnh, TP.HCM", "huyện Bình Chánh", "TP Thủ Đức", "quận 10 hcm"].every(laKhuVucQuaRong));
+ok("TL-12b tên đường / phường / chợ / mã căn KHÔNG bị coi là cả quận (Quang Trung, Hùng Vương, phường Bến Thành…)",
+  !["Quang Trung", "Hùng Vương", "Huỳnh Mẫn Đạt", "phường Bến Thành", "chợ An Đông", "Nguyễn Tri Phương quận 10", "BDS-Q5-0001"].some(laKhuVucQuaRong));
+{
+  let hoiDb = 0;
+  const dbGia = { from: () => { hoiDb++; throw new Error("không được hỏi DB"); }, rpc: () => { hoiDb++; throw new Error("không được hỏi DB"); } };
+  const kq = await timTienIchQuanh(dbGia, "Quận 5", "cong_vien");
+  ok("TL-12c công cụ tiện ích với 'Quận 5' → nói quá rộng, hỏi khu cụ thể, KHÔNG đụng DB / Nominatim", /quá rộng/.test(kq) && hoiDb === 0, kq);
+}
+// TL-13: hết vòng công cụ → vòng cuối gửi tool_choice none; báo hỏng kèm lý do khi model vẫn không viết lời.
+{
+  const goi = modelGia([
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "a", name: "tim_tien_ich_quanh", input: { khu_vuc: "chợ An Đông", loai: "benh_vien" } }] },
+    { stop_reason: "tool_use", content: [{ type: "tool_use", id: "b", name: "tim_tien_ich_quanh", input: { khu_vuc: "chợ An Đông", loai: "benh_vien", ban_kinh_m: 2000 } }] },
+    { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ em chưa tra được bệnh viện quanh chợ An Đông ạ." }] },
+  ]);
+  const kq = await chayTroLyMua({ goi, thamSo, loiKhach: "còn bệnh viện gần đó thì sao", doc: async () => "kho dữ liệu bên em CHƯA có bệnh viện nào", toiDaVong: 3 });
+  ok("TL-13 vòng cuối (3/3) gửi tool_choice none, các vòng trước không; có câu trả lời",
+    goi.goi[2]?.tool_choice?.type === "none" && !goi.goi[0].tool_choice && !goi.goi[1].tool_choice && kq?.out.replies.length === 1, JSON.stringify(goi.goi.map((p) => p.tool_choice ?? null)));
+  let bao = null;
+  const goi2 = modelGia([{ stop_reason: "tool_use", content: [{ type: "tool_use", id: "c", name: "tim_tien_ich_quanh", input: { khu_vuc: "x", loai: "cho" } }] }]);
+  const kq2 = await chayTroLyMua({ goi: goi2, thamSo, loiKhach: "x", doc: async () => "kq", toiDaVong: 2, baoHong: (l, c, v) => { bao = { l, c, v }; } });
+  ok("TL-13b model vẫn gọi công cụ ở vòng cuối → null + baoHong('het_vong', công cụ đã gọi)", kq2 === null && bao?.l === "het_vong" && bao?.c.length === 2, JSON.stringify(bao));
+}
 
 console.log(`\n${tong - hong}/${tong} đạt`);
 if (hong) process.exit(1);

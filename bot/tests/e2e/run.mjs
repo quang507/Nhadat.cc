@@ -6723,6 +6723,29 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   const hsHS = db().t.buyers.find((b) => b.zalo_user_id === "thu-tl3")?.preferences ?? {};
   check("HS-E2E-01 đường JSON cũ: chữ khách không nói (vợ chồng, 2 phòng ngủ) không vào hồ sơ; hẻm xe hơi vẫn vào",
     hsHS.nguoi_o_cung == null && hsHS.bedrooms == null && /xe h[ơo]i/.test(String(hsHS.alley ?? "")), JSON.stringify(hsHS));
+
+  // TL-E2E-11 (02/10/2026, bắn D1 "còn bệnh viện gần đó thì sao"): model gọi công cụ mãi không viết lời → vòng CUỐI gửi
+  // tool_choice none, model buộc trả lời bằng dữ liệu đã tra; không rơi về đường JSON cũ.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  globalThis.__model.troLy = (p) => p.tool_choice?.type === "none"
+    ? { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ quanh căn #BDS-Q5-0001 có Chợ Hoà Bình khoảng 500 m ạ." }] }
+    : { stop_reason: "tool_use", content: [{ type: "tool_use", id: `tu${Math.random()}`, name: "tim_tien_ich_quanh", input: { khu_vuc: "BDS-Q5-0001", loai: "cho" } }] };
+  rt = await send({ external_user_id: "thu-tl1", text: "căn BDS-Q5-0001 gần chợ nào không em" });
+  check("TL-E2E-11 hết vòng công cụ → vòng cuối tool_choice none, trả lời bằng dữ liệu đã tra, không qua đường JSON cũ",
+    goiTroLy().at(-1)?.params?.tool_choice?.type === "none" && /Hoà Bình/.test(rt.body.reply ?? "") && parseCalls().length === 0 && rt.body.tro_ly?.vong === 4,
+    JSON.stringify({ b: rt.body, n: goiTroLy().length }));
+
+  // TL-E2E-12: trợ lý hỏng (model từ chối) → payload nói LÝ DO; đường JSON cũ kể "bệnh viện … khoảng 800m" không nguồn →
+  // lưới khoảng cách (nay chạy cho MỌI đường) bỏ câu đó.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  globalThis.__model.troLy = () => ({ stop_reason: "refusal", content: [] });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ gần đó có Bệnh viện Chợ Rẫy khoảng 800m ạ.", "Mình muốn nhà hẻm hay mặt tiền ạ?"] });
+  rt = await send({ external_user_id: "thu-tl9", text: "minh muon mua nha, benh vien gan do thi sao" });
+  check("TL-E2E-12 trợ lý hỏng → ly_do 'tu_choi'; đường cũ nêu khoảng cách không nguồn → bỏ câu đó, giữ câu hỏi",
+    rt.body.tro_ly?.ly_do === "tu_choi" && !/800\s*m/.test(rt.body.reply ?? "") && /hẻm hay mặt tiền/.test(rt.body.reply ?? ""),
+    JSON.stringify(rt.body));
   globalThis.__cauHinh = cuCH;
 }
 // ── kết ──

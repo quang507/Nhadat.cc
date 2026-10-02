@@ -133,6 +133,19 @@ export function ungVienKhuVuc(kv: string): string[] {
 }
 
 /**
+ * Khu vực chỉ là CẢ một quận / huyện / thành phố ("Quận 5", "q5", "huyện Bình Chánh", "TP Thủ Đức") — quá rộng để đo
+ * khoảng cách. 02/10/2026 (bắn D4 "mua nhà q5…|gần đó có công viên không"): trợ lý truyền "Quận 5", bước so tên `tien_ich`
+ * lấy "Trung tâm Giáo dục thường xuyên Quận 5" (tên chứa chữ "Quận 5") làm tâm rồi kể công viên quanh trường đó như thể
+ * quanh nhà khách. Phường thì nhỏ (≈1–2 km) nên vẫn định vị như cũ.
+ */
+export function laKhuVucQuaRong(kv: string): boolean {
+  const kd = boDau(kv).toLowerCase().replace(/[.,]/g, " ")
+    .replace(/\s+(?:tp\s*)?(?:hcm|ho chi minh|sai gon|saigon)\s*$/, "").replace(/\s+/g, " ").trim();
+  // Chữ tắt (q, h, tp, tx) phải kèm SỐ hoặc dấu cách — không thì "Quang Trung", "Hùng Vương" thành "quận/huyện".
+  return /^(?:(?:quan|huyen|thanh pho|thi xa) (?:\d{1,2}|[a-z]+(?: [a-z]+){0,2})|(?:q|h|tp|tx) ?\d{1,2}|(?:tp|tx) [a-z]+(?: [a-z]+){0,2})$/.test(kd);
+}
+
+/**
  * Công cụ ĐỌC của trợ lý (SRS-5.1y, 02/10/2026): tiện ích quanh một khu vực khách nói. Định vị khu vực theo thứ tự rẻ
  * trước: mã căn trong kho (toạ độ đã geocode) → mốc đã có trong `tien_ich` trùng tên → Nominatim (qua RPC, như
  * `timTinGanMoc`). Rồi đọc `tien_ich` trong hộp quanh điểm đó, đo khoảng cách bằng code — model không bao giờ tự nói số mét.
@@ -147,6 +160,10 @@ export async function timTienIchQuanh(
 ): Promise<string> {
   const kv = khuVuc.trim().slice(0, 120);
   if (!kv) return "Thiếu khu vực — hỏi khách khu vực cụ thể (đường, phường, quận).";
+  if (laKhuVucQuaRong(kv)) {
+    return `"${kv}" là cả một quận/huyện — quá rộng để nói gần hay xa. Hỏi khách khu cụ thể (đường, phường, chợ, trường, ` +
+      "hoặc mã căn) rồi tra lại; KHÔNG chọn đại một điểm trong quận, KHÔNG kể tên tiện ích nào.";
+  }
   const bk = Math.min(3000, Math.max(300, Math.round(Number(banKinhM) || 1000)));
   let diem: { ten: string; lat: number; lng: number } | null = null;
   const ma = /\b([A-Z]{2,5}(?:-[A-Z0-9]{1,12}){1,4})\b/i.exec(kv)?.[1]?.toUpperCase();
