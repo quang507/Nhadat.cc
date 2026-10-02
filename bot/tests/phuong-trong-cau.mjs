@@ -37,6 +37,11 @@ ca("Lê Văn Sỹ quận 3", null);
 ca("Bình Thạnh", null);                     // trùng tên quận cũ, không có chữ "phường"
 ca("Xô Viết Nghệ Tĩnh bình thạnh", null);
 ca("Huỳnh Văn Bánh Phú Nhuận", null);
+// SRS-5.1zh (bắn thử thu-kb-s02): cụm đúng bằng tên quận cũ không được khớp sai-một-chữ sang phường quận khác ("Phú Thuận", Q7).
+ca("nhà ở Phú Nhuận, 50m2, giá 6 tỷ 5", null);
+ca("căn này ở phú nhuận em", null);
+ca("o phu nhuan", null);
+ca("ở phường Phú Thuận quận 7", "Phường Phú Thuận"); // có chữ "phường" + đúng tên → vẫn nhận
 ca("Hai Bà Trưng quận 1", null);
 ca("xã vĩnh lộc b", null);                  // tên CŨ (Vĩnh Lộc B) — đường tra phuong_cu lo, không khớp xã mới Vĩnh Lộc
 ca("bán nhà 50m2 giá 6 tỷ", null);
