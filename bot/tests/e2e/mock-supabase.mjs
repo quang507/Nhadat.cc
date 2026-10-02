@@ -513,6 +513,9 @@ class RpcCall {
       // FR-216 g (20260923h): chat-reply hỏi một RPC — mô phỏng bằng công tắc e2e (không mô phỏng tạm dừng / khoá).
       case "tim_nghia_san_sang":
         return { data: String((globalThis.__cauHinh ?? {}).tim_theo_nghia ?? "") === "bat", error: null };
+      // SRS-5.1y: công tắc trợ lý `thu` hỏi `la_id_thu` — mock chỉ cần phân biệt ID thử ("thu-…") với ID thật.
+      case "la_id_thu":
+        return { data: /^thu-/.test(String(a.p ?? "")), error: null };
       case "cau_hinh": {
         // 30/09/2026: production không có dòng `luat_loi_bot` = GỌN. Bộ e2e cũ viết cho đủ luật nên mock mặc định `du`;
         // ca GỌN tự đặt `luat_loi_bot: "gon"` trong __cauHinh.

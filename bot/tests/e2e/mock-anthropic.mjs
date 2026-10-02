@@ -17,6 +17,12 @@ export default class Anthropic {
     this.messages = {
       create: async (params) => {
         globalThis.__calls.push({ kind: "create", params });
+        // SRS-5.1y: lượt có `tools` là trợ lý có công cụ — `__model.troLy(params)` trả nguyên phản hồi
+        // `{ content, stop_reason }` (khối text / tool_use), ném được để mô phỏng model chết.
+        if (params.tools && globalThis.__model?.troLy) {
+          const r = await globalThis.__model.troLy(params);
+          return { stop_reason: "end_turn", ...r, usage: usage() };
+        }
         const text = globalThis.__model?.create?.(params) ?? "Dạ em ghi nhận rồi ạ.";
         return { content: [{ type: "text", text }], usage: usage() };
       },

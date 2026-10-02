@@ -1,0 +1,160 @@
+// tro-ly.mjs — SRS-5.1y: trợ lý có công cụ (nhánh người mua). Model giả, không mạng, không DB.
+//   bun bot/tests/tro-ly.mjs
+//
+// Thứ phải giữ: (1) công cụ ĐỌC chạy thật và kết quả về model trong MỘT tin user (mọi tool_result cùng lượt);
+// (2) công cụ GHI điều khách nói phải có trích dẫn trong lời khách — không có thì KHÔNG ghi, model nhận lỗi;
+// (3) model đã viết lời + chỉ gọi công cụ ghi (đều qua) → xong một vòng; (4) không có câu trả lời dùng được → null
+// để chat-reply rơi về đường JSON cũ.
+import { apCongCuGhi, chayTroLyMua, CONG_CU_MUA, KHOA_HO_SO, thanhBongBong } from "../supabase/functions/_shared/ai/tro-ly.ts";
+
+let hong = 0, tong = 0;
+const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
+
+/** Model giả: trả lần lượt từng phản hồi trong kịch bản, ghi lại tham số mỗi lượt. */
+const modelGia = (kichBan) => {
+  const goi = [];
+  let i = 0;
+  const f = async (p) => { goi.push(structuredClone(p)); const r = kichBan[Math.min(i++, kichBan.length - 1)]; if (r instanceof Error) throw r; return r; };
+  f.goi = goi;
+  return f;
+};
+const chu = (t) => ({ type: "text", text: t });
+const dung = (id, name, input) => ({ type: "tool_use", id, name, input });
+const thamSo = { model: "m", max_tokens: 1024, system: [{ type: "text", text: "S" }], messages: [{ role: "user", content: "U" }] };
+
+// TL-01: khách hỏi tiện ích quanh khu — model gọi công cụ đọc, nhận kết quả, trả lời theo kết quả.
+{
+  const docGoi = [];
+  const goi = modelGia([
+    { stop_reason: "tool_use", content: [dung("t1", "tim_tien_ich_quanh", { khu_vuc: "Nguyễn Tri Phương quận 10", loai: "truong_hoc" })] },
+    { stop_reason: "end_turn", content: [chu("Dạ quanh đó có trường Tiểu học A khoảng 300 m ạ.\n\nMình cần trường cấp mấy để em lọc kỹ hơn ạ?")] },
+  ]);
+  const kq = await chayTroLyMua({
+    goi, thamSo, loiKhach: "quanh nguyễn tri phương q10 có trường nào không em",
+    doc: async (ten, input) => { docGoi.push([ten, input]); return "Quanh X:\n- trường học: Tiểu học A ~300 m"; },
+  });
+  ok("TL-01 có kết quả", !!kq, JSON.stringify(kq));
+  ok("TL-01 công cụ đọc được gọi đúng tham số", docGoi.length === 1 && docGoi[0][0] === "tim_tien_ich_quanh" && docGoi[0][1].loai === "truong_hoc", JSON.stringify(docGoi));
+  ok("TL-01 lượt 2 gửi đúng một tin user chứa tool_result", (() => {
+    const m = goi.goi[1].messages;
+    const cuoi = m[m.length - 1];
+    return m.length === 3 && m[1].role === "assistant" && cuoi.role === "user" && cuoi.content.length === 1 && cuoi.content[0].type === "tool_result" && cuoi.content[0].tool_use_id === "t1";
+  })(), JSON.stringify(goi.goi[1].messages));
+  ok("TL-01 mọi lượt gửi kèm danh sách công cụ", goi.goi.every((p) => p.tools?.map((t) => t.name).join() === CONG_CU_MUA.map((t) => t.name).join()));
+  ok("TL-01 hai bong bóng", kq?.out.replies.length === 2, JSON.stringify(kq?.out.replies));
+  ok("TL-01 dữ liệu đọc đưa ra cho lưới chặn bịa", kq?.duLieu[0]?.includes("Tiểu học A"), JSON.stringify(kq?.duLieu));
+  ok("TL-01 ghi tên công cụ + số vòng", kq?.congCu.join() === "tim_tien_ich_quanh" && kq?.vong === 2, JSON.stringify(kq));
+}
+
+// TL-02: nhiều công cụ đọc cùng lượt → MỘT tin user mang đủ các tool_result (không tách tin).
+{
+  const goi = modelGia([
+    { stop_reason: "tool_use", content: [dung("a", "xem_can", { ma_can: "BDS-Q5-0001" }), dung("b", "tim_tien_ich_quanh", { khu_vuc: "BDS-Q5-0001", loai: "cho" })] },
+    { stop_reason: "end_turn", content: [chu("Dạ căn này gần chợ khoảng 400 m ạ.")] },
+  ]);
+  const kq = await chayTroLyMua({ goi, thamSo, loiKhach: "căn BDS-Q5-0001 gần chợ không", doc: async (t) => `kq ${t}` });
+  const cuoi = goi.goi[1].messages.at(-1);
+  ok("TL-02 hai tool_result trong một tin", cuoi.content.length === 2 && cuoi.content.map((k) => k.tool_use_id).join() === "a,b", JSON.stringify(cuoi));
+  ok("TL-02 trả lời", kq?.out.replies[0] === "Dạ căn này gần chợ khoảng 400 m ạ.");
+}
+
+// TL-03: ghi hồ sơ — trích dẫn có trong lời khách → ghi; xong NGAY một vòng vì đã có lời nhắn.
+{
+  const goi = modelGia([
+    { stop_reason: "tool_use", content: [chu("Dạ em ghi nhận quận 7, tầm 3 tỷ ạ. Mình cần mấy phòng ngủ ạ?"), dung("g", "ghi_ho_so_mua", { truong: [
+      { khoa: "area", gia_tri: "quận 7", trich_dan: "quan 7" },
+      { khoa: "budget", gia_tri: "tầm 3 tỷ", trich_dan: "tầm 3 tỷ" },
+      { khoa: "deal", gia_tri: "ban", trich_dan: "mua nhà" },
+    ] })] },
+  ]);
+  const kq = await chayTroLyMua({ goi, thamSo, loiKhach: "mình muốn mua nhà quận 7 tầm 3 tỷ", doc: async () => "" });
+  ok("TL-03 một vòng", kq?.vong === 1 && goi.goi.length === 1, JSON.stringify(kq));
+  ok("TL-03 hồ sơ ghi area/budget/deal", kq?.out.profile.area === "quận 7" && kq?.out.profile.budget === "tầm 3 tỷ" && kq?.out.profile.deal === "ban", JSON.stringify(kq?.out.profile));
+  ok("TL-03 khoá chưa nói để null", kq?.out.profile.purpose === null && Object.keys(kq?.out.profile ?? {}).length === KHOA_HO_SO.length);
+}
+
+// TL-04 (BÀI ĐỎ KHI TẮT KIỂM TRÍCH DẪN): model ghi điều khách KHÔNG nói → không ghi, lỗi về model, model sửa lời.
+{
+  const goi = modelGia([
+    { stop_reason: "tool_use", content: [chu("Dạ em ghi mình cần 3 phòng ngủ, để ở nha."), dung("g", "ghi_ho_so_mua", { truong: [
+      { khoa: "bedrooms", gia_tri: "3", trich_dan: "3 phòng ngủ" },
+      { khoa: "purpose", gia_tri: "để ở", trich_dan: "để ở" },
+    ] })] },
+    { stop_reason: "end_turn", content: [chu("Dạ mình cần mấy phòng ngủ ạ?")] },
+  ]);
+  const kq = await chayTroLyMua({ goi, thamSo, loiKhach: "nhà quận 7 tầm 3 tỷ", doc: async () => "" });
+  const kqCongCu = goi.goi[1]?.messages.at(-1)?.content?.[0];
+  ok("TL-04 không ghi trường bịa", kq?.out.profile.bedrooms === null && kq?.out.profile.purpose === null, JSON.stringify(kq?.out.profile));
+  ok("TL-04 model nhận lỗi is_error", kqCongCu?.is_error === true && /không có trong lời khách/.test(kqCongCu?.content ?? ""), JSON.stringify(kqCongCu));
+  ok("TL-04 lời 'em ghi rồi' KHÔNG đi tới khách — dùng lời đã sửa", kq?.out.replies.join() === "Dạ mình cần mấy phòng ngủ ạ?", JSON.stringify(kq?.out.replies));
+}
+
+// TL-04b: một trường đạt + một trường bịa trong CÙNG lệnh → trường đạt vẫn ghi, nhưng lệnh là lỗi để model viết lại lời.
+{
+  const goi = modelGia([
+    { stop_reason: "tool_use", content: [chu("Dạ em ghi hẻm xe hơi, 3 phòng ngủ rồi nha."), dung("g", "ghi_ho_so_mua", { truong: [
+      { khoa: "alley", gia_tri: "hẻm xe hơi", trich_dan: "hem xe hoi" },
+      { khoa: "bedrooms", gia_tri: "3", trich_dan: "3 phòng ngủ" },
+    ] })] },
+    { stop_reason: "end_turn", content: [chu("Dạ em ghi hẻm xe hơi rồi ạ.")] },
+  ]);
+  const kq = await chayTroLyMua({ goi, thamSo, loiKhach: "anh cần hem xe hoi nha em", doc: async () => "" });
+  ok("TL-04b trường có chứng vẫn ghi, trường bịa không", kq?.out.profile.alley === "hẻm xe hơi" && kq?.out.profile.bedrooms === null, JSON.stringify(kq?.out.profile));
+  ok("TL-04b lệnh nửa đạt vẫn báo lỗi → model viết lại", goi.goi.length === 2 && kq?.out.replies.join() === "Dạ em ghi hẻm xe hơi rồi ạ.", JSON.stringify(kq?.out.replies));
+}
+
+// TL-05: cách nói MỚI — khách nói không dấu, trích có dấu vẫn nhận (khớp sau bỏ dấu); giờ hẹn + SĐT khách tự cho.
+{
+  const out = { profile: {}, replies: [] };
+  const loi = "chieu thu 7 minh qua xem can BDS-Q5-0002 duoc ko, sdt 0903 123 456";
+  const r1 = apCongCuGhi(out, "hen_xem_nha", { ma_can: "#bds-q5-0002", khi: "chiều thứ 7", sdt: "0903123456", trich_dan: "chiều thứ 7" }, loi);
+  ok("TL-05 hẹn xem ghi được", !r1.loi && out.viewing?.when === "chiều thứ 7" && out.viewing?.listing_code === "BDS-Q5-0002", JSON.stringify(out));
+  ok("TL-05 SĐT khách tự cho thì giữ", out.viewing?.phone === "0903123456", JSON.stringify(out.viewing));
+  const out2 = { profile: {}, replies: [] };
+  apCongCuGhi(out2, "hen_xem_nha", { ma_can: null, khi: "mai 9h", sdt: "0911222333", trich_dan: "mai 9h" }, "mai 9h em qua xem nha");
+  ok("TL-05 SĐT model tự điền (khách không cho) → null", out2.viewing?.phone === null, JSON.stringify(out2.viewing));
+  const out3 = { profile: {}, replies: [] };
+  const r3 = apCongCuGhi(out3, "chot_can", { ma_can: "BDS-Q5-0002", trich_dan: "ok chốt" }, "để anh suy nghĩ thêm");
+  ok("TL-05 chốt căn không có lời khách → không chốt", r3.loi && !out3.agreed_deal, JSON.stringify(out3));
+  const out4 = { profile: {}, replies: [] };
+  apCongCuGhi(out4, "bao_nguoi_phu_trach", { ly_do: "khách muốn gọi", goi_dien: true }, "alo được không em");
+  ok("TL-05 báo người phụ trách + gọi điện", out4.need_human === true && out4.voice_request === true, JSON.stringify(out4));
+  const out5 = { profile: {}, replies: [] };
+  const r5 = apCongCuGhi(out5, "ghi_ho_so_mua", { truong: [{ khoa: "bedrooms", gia_tri: "ba phòng", trich_dan: "ba phong ngu" }] }, "can ba phong ngu");
+  ok("TL-05 bedrooms không phải số → bỏ", r5.loi && out5.profile.bedrooms === undefined, JSON.stringify(r5));
+}
+
+// TL-06: đường rơi về JSON cũ — từ chối, chữ rỗng, hết trần giữa công cụ, hết vòng.
+{
+  const tuChoi = await chayTroLyMua({ goi: modelGia([{ stop_reason: "refusal", content: [] }]), thamSo, loiKhach: "x", doc: async () => "" });
+  ok("TL-06 từ chối → null", tuChoi === null);
+  const rong = await chayTroLyMua({ goi: modelGia([{ stop_reason: "end_turn", content: [] }]), thamSo, loiKhach: "x", doc: async () => "" });
+  ok("TL-06 không chữ → null", rong === null);
+  const cut = await chayTroLyMua({ goi: modelGia([{ stop_reason: "max_tokens", content: [dung("c", "ghi_ho_so_mua", { truong: [{ khoa: "area" }] })] }]), thamSo, loiKhach: "x", doc: async () => "" });
+  ok("TL-06 công cụ cụt vì hết trần → null", cut === null);
+  const lap = modelGia([{ stop_reason: "tool_use", content: [dung("l", "xem_can", { ma_can: "BDS-Q5-0001" })] }]);
+  const vong = await chayTroLyMua({ goi: lap, thamSo, loiKhach: "x", doc: async () => "kq", toiDaVong: 3 });
+  ok("TL-06 gọi công cụ mãi → dừng ở trần vòng, null", vong === null && lap.goi.length === 3, String(lap.goi.length));
+  let loiNem = null;
+  try { await chayTroLyMua({ goi: modelGia([new Error("529 overloaded")]), thamSo, loiKhach: "x", doc: async () => "" }); } catch (e) { loiNem = e; }
+  ok("TL-06 model ném → ném lên (chat-reply bắt, ghi sổ, đi đường cũ)", loiNem?.message === "529 overloaded");
+}
+
+// TL-07: công cụ đọc hỏng → tool_result is_error, model vẫn trả lời được (nói thật chưa tra được).
+{
+  const goi = modelGia([
+    { stop_reason: "tool_use", content: [dung("e", "tim_tien_ich_quanh", { khu_vuc: "Q5", loai: "cho" })] },
+    { stop_reason: "end_turn", content: [chu("Dạ em chưa tra được ạ.")] },
+  ]);
+  const kq = await chayTroLyMua({ goi, thamSo, loiKhach: "q5 có chợ nào", doc: async () => { throw new Error("db timeout"); } });
+  const kr = goi.goi[1].messages.at(-1).content[0];
+  ok("TL-07 lỗi tra cứu về model", kr.is_error === true && /chưa tra được/.test(kr.content), JSON.stringify(kr));
+  ok("TL-07 vẫn có lời trả lời", kq?.out.replies[0] === "Dạ em chưa tra được ạ.");
+}
+
+// TL-08: tách bong bóng.
+ok("TL-08 ba đoạn → hai bong bóng", JSON.stringify(thanhBongBong("A\n\nB\n\nC")) === JSON.stringify(["A", "B\nC"]));
+ok("TL-08 một đoạn nhiều dòng giữ nguyên", JSON.stringify(thanhBongBong("A\nB")) === JSON.stringify(["A\nB"]));
+
+console.log(`\n${tong - hong}/${tong} đạt`);
+if (hong) process.exit(1);

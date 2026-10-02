@@ -141,6 +141,16 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
 }
 
 /**
+ * Client Claude KHÔNG bọc lưới dự phòng — cho trợ lý có công cụ (SRS-5.1y). Lưới Groq/Gemini (`groq.ts`) dịch lượt
+ * gọi sang giọng OpenAI và BỎ `tools`, nên lượt có công cụ đi qua đó sẽ ra chữ trơn như thể model không gọi công cụ nào.
+ * Không có khoá Anthropic → null, nơi gọi đi đường cũ.
+ */
+export async function anthropicTrucTiep(db: SupabaseClient): Promise<Anthropic | null> {
+  const apiKey = await secretOf(db, "ANTHROPIC_API_KEY");
+  return apiKey ? bocLocThamSo(new Anthropic({ apiKey }), db) : null;
+}
+
+/**
  * FR-152 — ghi một lỗi tầng ứng dụng vào sổ bền `bot_errors` (hiện ở /admin).
  *
  * `console.error` KHÔNG đủ: log edge function bậc Free chỉ giữ 1 ngày, mà loại

@@ -937,7 +937,7 @@ export function docCamXuc(cx: { muc?: string | null; trich_dan?: string | null }
 }
 
 /** Cụm trích (đã bỏ dấu, bỏ ký hiệu) có trong tin — khớp nguyên cụm hoặc khớp mờ. */
-function trichCoTrongTin(td: string, tin: string): boolean {
+export function trichCoTrongTin(td: string, tin: string): boolean {
   if (td.trim().length < 2) return false;
   const gon = (x: string) => chuanSo(x).replace(/[^\p{L}\d\s]/gu, " ").replace(/\s+/g, " ").trim();
   return ` ${gon(tin)} `.includes(` ${gon(td)} `) || !!timMo(gon(tin), gon(td));
