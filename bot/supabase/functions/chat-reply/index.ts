@@ -81,6 +81,10 @@ import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, soPhongNguTheoTang, themTangPhu, TIEU_TU_DAU, soTamCanHoiLung, docTraLoiLung, ketCauTheoLung, timPhuongTrongCau, type PhuongDs } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
+// Cột dự án bot đọc (02/10/2026, giảm egress): `match_projects` trả SETOF projects, không chọn cột thì mỗi dòng kéo theo
+// `nhung` vector(768) (~9 KB dạng chữ) + `images`/`floor_plans` jsonb mà bot không dùng tới. Bot dùng cột nào mới thì thêm vào đây.
+// Một chuỗi liền (không nối "+") để bộ đọc select của supabase-js còn suy được kiểu.
+const COT_DU_AN = "id, name, slug, developer, district, ward, province, location_raw, lat, lng, legal_status, status_text, handover, handover_date, description, price_min, price_max, is_partner, priority, amenities, specs, unit_types, source, source_url";
 // Câu hỏi mà câu trả lời LÀ một số tiền nhưng không phải giá bán (FR-223): số tiền kèm theo không được ghi thành `gia`.
 const CAU_HOI_TIEN = new Set(["doanh_thu", "tien_coc", "phi_quan_ly", "phi_gui_xe", "gia_dien_nuoc"]);
 // 27/09/2026 (test Zalo): câu "sổ đứng tên ai" — AI đọc "ba a thôi" (ba anh) thành "ba người", và bác "Anh đứng tên chính nhé"
@@ -3101,7 +3105,7 @@ Deno.serve(async (req) => {
                 let vt = bocViTriRao(m.trich);
                 // Căn hộ ("còn căn hộ Sunrise City quận 7…") → tra kho dự án như đường rao thường (FR-114).
                 if (loaiM === "chung_cu") {
-                  const { data: daM, error: daMErr } = await client.rpc("match_projects", { p_text: m.trich });
+                  const { data: daM, error: daMErr } = await client.rpc("match_projects", { p_text: m.trich }).select(COT_DU_AN);
                   if (daMErr) await ghiLoi(client, "chat-reply gan manh(du an)", daMErr.message);
                   const da = ((daM ?? []) as DuAnKho[])[0];
                   if (da) {
@@ -3256,7 +3260,7 @@ Deno.serve(async (req) => {
     const coDauHieuDuAn = /\b(du an|chung cu|can ho|khu|city|plaza|residence|residences|tower|towers|park|garden|riverside|home|homes|villa|villas|ny'?ah|sunrise|vinhomes|masteri|akari|carina)\b/.test(tKD);
     const [duAnNoi, duAnCanHoi] = await Promise.all([
       coDauHieuDuAn
-        ? client.rpc("match_projects", { p_text: text }).then((r) => ((r.data ?? []) as DuAnKho[]).slice(0, 1))
+        ? client.rpc("match_projects", { p_text: text }).select(COT_DU_AN).then((r) => ((r.data ?? []) as DuAnKho[]).slice(0, 1))
         : Promise.resolve([] as DuAnKho[]),
       pendingReq?.listings?.project_id
         ? client.from("projects").select("id, name, developer, district, location_raw, amenities, description, status_text, specs")
@@ -3714,13 +3718,13 @@ Deno.serve(async (req) => {
           else moi.property_type = "chung_cu";
         }
         if (laCanHo || /\b(?:du an|plaza|tower|towers|residence|residences|city|park|garden|riverside|khu)\b/.test(kdLoai)) {
-          const { data: daCan, error: daCanErr } = await client.rpc("match_projects", { p_text: c.goc });
+          const { data: daCan, error: daCanErr } = await client.rpc("match_projects", { p_text: c.goc }).select(COT_DU_AN);
           if (daCanErr) await ghiLoi(client, "chat-reply match_projects(nhieu can)", daCanErr.message);
           let da: DuAnKho | undefined = ((daCan ?? []) as DuAnKho[])[0];
           // Căn không tự nhắc dự án → dự án nói ở đầu câu (tra một lần cho cả lô).
           if (!da && kdDauTin.trim()) {
             if (duAnLo === undefined) {
-              const { data: daLo, error: daLoErr } = await client.rpc("match_projects", { p_text: dauTin });
+              const { data: daLo, error: daLoErr } = await client.rpc("match_projects", { p_text: dauTin }).select(COT_DU_AN);
               if (daLoErr) await ghiLoi(client, "chat-reply match_projects(dau tin)", daLoErr.message);
               duAnLo = ((daLo ?? []) as DuAnKho[])[0] ?? null;
             }
@@ -5509,7 +5513,7 @@ Deno.serve(async (req) => {
           // án trong kho chỉ được khớp lúc RAO, nên tin nằm "Quận 5 (chưa rõ quận)" dù dự án ở Quận 8.
           // Nay khớp cả ở đây; quận/phường lấy của dự án khi tin còn mặc định / trống.
           if (pendingReq.question === "vi_tri" && !pendingReq.listings?.project_id) {
-            const { data: dsDA, error: daErr } = await client.rpc("match_projects", { p_text: dapAn });
+            const { data: dsDA, error: daErr } = await client.rpc("match_projects", { p_text: dapAn }).select(COT_DU_AN);
             if (daErr) await ghiLoi(client, "chat-reply match_projects(vi_tri)", daErr.message);
             type DaKho = { id: string; name?: string; district?: string | null; ward?: string | null };
             let da: DaKho | null = ((dsDA ?? []) as DaKho[])[0] ?? null;
@@ -6044,7 +6048,7 @@ Deno.serve(async (req) => {
       // dự án nào thì tin là hàng lẻ như cũ. Tin vừa rao coi như "còn bán" và
       // chủ vừa xác nhận lúc rao [giả định BA] — FR-116 đếm TTL 7 ngày từ đây.
       const { data: duAnRao, error: duAnRaoErr } = await client
-        .rpc("match_projects", { p_text: text });
+        .rpc("match_projects", { p_text: text }).select(COT_DU_AN);
       if (duAnRaoErr) await ghiLoi(client, "chat-reply match_projects(rao)", duAnRaoErr.message);
       // Dự án trong kho có quận/phường riêng (Ny'ah Phú Định ở Quận 8) — câu rao
       // không nói quận thì lấy của dự án, đừng mặc định Quận 5 (10/09 lần 6).
@@ -6926,7 +6930,7 @@ Deno.serve(async (req) => {
       .select("name, developer, district, ward, location_raw, legal_status, status_text, amenities, specs, unit_types")
       .eq("is_partner", true).order("priority").limit(1),
     // Khách nhắc tên dự án nào trong kho (mogi/aond) thì nạp kiến thức dự án đó
-    client.rpc("match_projects", { p_text: text }),
+    client.rpc("match_projects", { p_text: text }).select(COT_DU_AN),
     // Căn khách đang nhắc tới — kèm facts đã xác minh từ chủ nhà (FR-29).
     // Soát 01/09 (vai người mua đã nhắm căn): bản cũ KHÔNG lọc trạng thái, mà
     // mã tin là dãy đếm BDS-Q5-#### đoán được — gõ một mã bất kỳ là bot đọc ra
@@ -7104,7 +7108,7 @@ Deno.serve(async (req) => {
   if (!(matchedProj ?? []).length) {
     const dn = await timDuAnTheoNghia(client, tenDuAnTrongCau(text) ?? tenSauCanHo(text));
     if (dn) {
-      const { data: pd, error: pdErr } = await client.from("projects").select("*").eq("id", dn.id).limit(1);
+      const { data: pd, error: pdErr } = await client.from("projects").select(COT_DU_AN).eq("id", dn.id).limit(1);
       if (pdErr) await ghiLoi(client, "chat-reply doc du an (mua, theo nghia)", pdErr.message);
       else if (pd?.length) matchedProj = pd;
     }

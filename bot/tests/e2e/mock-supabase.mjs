@@ -413,6 +413,8 @@ class Builder {
 class RpcCall {
   constructor(db, name, args) { this.db = db; this.name = name; this.args = args; }
   single() { this.mode = "single"; return this; } maybeSingle() { this.mode = "maybe"; return this; }
+  // 02/10/2026: `.rpc(...).select("a, b")` như PostgREST — chỉ giữ cột đã chọn, để mock bắt được chỗ đọc cột không chọn.
+  select(cols) { this.cols = String(cols).split(",").map((c) => c.trim()).filter(Boolean); return this; }
   run() {
     const db = this.db; let a = this.args ?? {}; db.log.push({ rpc: this.name, args: a });
     const R = globalThis.__rpc ?? {};
@@ -835,7 +837,11 @@ class RpcCall {
     }
     return { data: null, error: { message: `rpc ${this.name} chưa giả lập` } };
   }
-  then(res, rej) { try { return Promise.resolve(this.run()).then(res, rej); } catch (e) { return Promise.reject(e).then(res, rej); } }
+  chieu(r) {
+    if (!this.cols || !r || !Array.isArray(r.data)) return r;
+    return { ...r, data: r.data.map((d) => (d && typeof d === "object" ? Object.fromEntries(Object.entries(d).filter(([k]) => this.cols.includes(k))) : d)) };
+  }
+  then(res, rej) { try { return Promise.resolve(this.run()).then((r) => this.chieu(r)).then(res, rej); } catch (e) { return Promise.reject(e).then(res, rej); } }
 }
 
 export function createClient() {

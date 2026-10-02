@@ -44,6 +44,16 @@ export async function generateStaticParams() {
 // `generateMetadata` và `Page` cùng hỏi đúng tin này. supabase-js không đi qua
 // fetch-cache của Next nên không tự gộp: trước bản này mỗi trang tin là HAI
 // truy vấn y hệt, lúc build nhân với ~164 tin (FR-171 j).
+// Cột trang tin thật sự dùng (khớp type Listing + nhãn). 02/10/2026: trước đây `select("*")` kéo cả `nhung`
+// vector(768) (~9 KB dạng chữ), `boc_tach`, `tien_ich_gan` - mỗi trang tin dựng ra là vài chục KB egress Supabase
+// chỉ để vứt đi. Thêm cột mới cho trang này thì thêm vào đây.
+const DETAIL_COLS =
+  "id, code, deal, district, ward, location_raw, area_m2, price_vnd, price_raw, description, status, property_type, unit_status, " +
+  "last_confirmed_at, created_at, lat, lng, bedrooms, street, access_type, alley_width_m, distance_to_street_m, frontage_m, length_m, " +
+  "rear_width_m, legal_area_m2, built_area_m2, floors, floors_text, floor, bathrooms, direction, legal_status, has_completion, " +
+  "planning_status, has_elevator, car_in_house, corner_lot, furnishing, year_built, negotiable, rent_income_vnd, specs_source, " +
+  "price_per_m2_vnd, project_id, unit_code, nhan";
+
 const getListing = cache(async (code: string): Promise<Listing | null> => {
   // Đoạn đường dẫn đi THẲNG vào chuỗi `.or()` của PostgREST, nơi `,` `(` `)` là
   // ngữ pháp và `%` `_` là wildcard: `/nha-dat/%25` là "mọi tin", `/nha-dat/x,status.eq.an`
@@ -51,7 +61,7 @@ const getListing = cache(async (code: string): Promise<Listing | null> => {
   if (!/^[A-Za-z0-9-]{1,40}$/.test(code)) return null;
   const { data } = await supabase
     .from("listings")
-    .select("*")
+    .select(DETAIL_COLS)
     .or(`code.ilike.${code},legacy_code.ilike.${code}`)
     .limit(1)
     .maybeSingle();
