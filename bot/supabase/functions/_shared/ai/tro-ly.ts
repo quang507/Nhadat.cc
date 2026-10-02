@@ -11,7 +11,7 @@
 //
 // Tầng này KHÔNG import SDK lẫn DB (luật `bot/tests/ranh-gioi.mjs`): hàm gọi model và hàm đọc dữ liệu đều do nơi gọi
 // truyền vào, nên `bot/tests/tro-ly.mjs` chạy được bằng bun với model giả.
-import { CHU_NOI_GOP, tachGop, trichCoTrongTin } from "../extraction/kiem-bang-chung.ts";
+import { giaTriCoTrongLoi, tachGop, trichCoTrongTin } from "../extraction/kiem-bang-chung.ts";
 
 export type KhoiNoiDung = { type: string; [k: string]: unknown };
 export type DungLuong = {
@@ -60,6 +60,10 @@ export const CONG_CU_MUA = [
         khu_vuc: { type: "string", description: "Khu vực nguyên văn khách nói, kèm quận nếu khách có nói." },
         loai: { type: "string", enum: [...LOAI_TIEN_ICH] },
         ban_kinh_m: { type: "integer", description: "Bán kính mét (300–3000), mặc định 1000." },
+        cap_truong: {
+          type: "string", enum: ["mam_non", "tieu_hoc", "thcs", "thpt", "dai_hoc"],
+          description: "Chỉ khi loai = truong_hoc và khách hỏi ĐÚNG một cấp (mầm non / tiểu học / THCS / THPT / đại học).",
+        },
       },
       required: ["khu_vuc", "loai"],
     },
@@ -157,14 +161,8 @@ export const DAU_RA_CONG_CU =
 
 const LY_DO_TRICH = "trich_dan không có trong lời khách — KHÔNG ghi. Chỉ ghi điều khách đã nói, trích đúng nguyên văn.";
 const LY_DO_GIA_TRI = "gia_tri có chữ khách KHÔNG nói — chỉ dùng chữ của khách (viết lại có dấu được), không thêm ý.";
-/**
- * Mọi chữ / số của giá trị chữ phải có trong lời khách (bỏ dấu, như `kiemCapNhat`). Bắn thật 02/10 (thu-trl-04): khách "nhà
- * có 2 con nhỏ" → trợ lý ghi người ở cùng "vợ chồng + 2 con nhỏ" — trích dẫn đúng, giá trị thêm "vợ chồng".
- */
-export function giaTriCoTrongLoi(gt: string, loiKhach: string): boolean {
-  const coSan = new Set(tachGop(loiKhach));
-  return tachGop(gt).every((t) => coSan.has(t) || CHU_NOI_GOP.has(t));
-}
+// Kiểm giá trị chữ nằm ở tầng tiền định (`kiem-bang-chung.ts`) — đường JSON cũ dùng chung. Xuất lại cho bài kiểm cũ.
+export { giaTriCoTrongLoi };
 
 const chu = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const maHoacNull = (v: unknown): string | null => {

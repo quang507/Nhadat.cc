@@ -79,6 +79,10 @@ Bug tìm thấy sau release phải có test tái hiện trước khi sửa — s
 
 ## 10.7 Bộ test chạy tay (cập nhật 06/09/2026)
 
+> **Bắn thử production theo tính năng (02/10/2026):** bộ kịch bản `bot/tests/ban-thu/kich-ban.md` — 7 nhóm (chào/vai, người bán rao
+> tin, ý định/cảm xúc người bán, người mua, trợ lý có công cụ, vừa bán vừa mua, câu khó), mỗi kịch bản là một lượt workflow
+> `ban-thu` kèm cột "kiểm" chỉ mục log cần soi. `[nguồn: SRS-5.1y]`
+
 Lệnh dán vào chạy được, không phải mô tả. ID bất biến. Cột cuối là kết quả **mới
 nhất** (dd/mm); ⏭ = chưa chạy lại được trong sandbox (cần deploy/bridge/trình
 duyệt). Ca ghi trên DB thật bọc `do … raise exception` hoặc `begin … rollback`;

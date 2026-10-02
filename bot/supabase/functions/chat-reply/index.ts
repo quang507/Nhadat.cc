@@ -65,7 +65,7 @@ import { coMuiViTri, docGanTienIch, nhanGan, type GanTienIch } from "../_shared/
 import { bocGanBangModel, thanhGan } from "../_shared/ai/boc-gan.ts";
 import { nhungCauTim, xepTheoNghia } from "../_shared/ai/nhung.ts"; // FR-216
 import { chonUngVienNghia, tenGan, TU_CHUNG_DU_AN, TU_CHUNG_DUONG } from "../_shared/extraction/khop-ten-nghia.ts";
-import { docHoiLai, type HoiLaiDoc } from "../_shared/extraction/kiem-bang-chung.ts";
+import { docHoiLai, type HoiLaiDoc, locGiaTriHoSo } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonDiaDanh, coChuPhuong, cungQuan, type DiaDanhChon, nhacTenQuan, type NhomDiaDanh, phuongTrungTenQuan, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
 import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTienIchQuanh, timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
@@ -7257,6 +7257,8 @@ Deno.serve(async (req) => {
   // Tên kiểu riêng: `as typeof out` ở dưới bị TS thu hẹp thành `null` theo luồng
   // (out vừa gán null), nên ép kiểu thành "chuyển sang null" — lỗi TS2352.
   let out: LuotMua | null = null;
+  // Mọi lời khách trong hội thoại (12 tin gần nhất + tin này) — nguồn kiểm trích dẫn / giá trị hồ sơ mua.
+  const loiKhachMua = [...history.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n");
   // SRS-5.1y: kết quả công cụ ĐỌC của trợ lý — lưới chặn bịa phía dưới coi là dữ liệu thật; `troLy` đi vào payload.
   const duLieuCongCu: string[] = [];
   // `vong` 0 = trợ lý bật mà rơi về đường JSON (`ly_do`).
@@ -7268,6 +7270,7 @@ Deno.serve(async (req) => {
       return await timTienIchQuanh(
         client as unknown as Parameters<typeof timTienIchQuanh>[0],
         String(input.khu_vuc ?? ""), String(input.loai ?? "tat_ca"), Number(input.ban_kinh_m) || 1000,
+        typeof input.cap_truong === "string" ? input.cap_truong : null,
       );
     }
     const ma = String(input.ma_can ?? "").replace(/^#/, "").trim().toUpperCase();
@@ -7432,7 +7435,7 @@ Deno.serve(async (req) => {
               system: [{ ...k0, text: k0.text.replace(DAU_RA_JSON, DAU_RA_CONG_CU) }, { ...k1, text: k1.text.replace(HOI_LAI_NOI_DO, HOI_LAI_NOI_DO_TRO_LY) }],
               messages: thamSoMua.messages,
             },
-            loiKhach: [...history.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n"),
+            loiKhach: loiKhachMua,
             doc: docCongCuMua,
             // Nguồn hợp lệ cho con số khoảng cách: kho / căn khách nhắc (khối k1) + lời dặn có hội thoại (tin user).
             nguCanh: [k1.text, ...thamSoMua.messages[0].content.map((c) => ("text" in c ? c.text ?? "" : ""))].join("\n"),
@@ -7746,6 +7749,11 @@ Deno.serve(async (req) => {
   // 14/09/2026 (bắn 16 hội thoại mua): mục đích / thời hạn / hoàn cảnh hay bị điền
   // bịa — chỉ giữ khi câu khách vừa nhắn có căn cứ (`locHoSoMua`). Trường bị gỡ thì
   // KHÔNG ghi (null = không đụng giá trị cũ), nên thứ đã biết từ trước vẫn còn.
+  // 02/10/2026 (SRS-5.1y, bắn thật lần 2–3): giá trị hồ sơ phải là CHỮ khách nói — "nhà có 2 con nhỏ" không được thành
+  // "vợ chồng + 2 con nhỏ" hay 2 phòng ngủ. Trợ lý đã kiểm khi gọi công cụ; đường JSON cũ chưa từng kiểm.
+  const giaTriLoc = locGiaTriHoSo(out.profile, loiKhachMua);
+  if (giaTriLoc.bo.length) console.log("chat-reply: gỡ trường hồ sơ có chữ khách không nói", giaTriLoc.bo.join(","));
+  out.profile = giaTriLoc.profile;
   const hoSoLoc = locHoSoMua(out.profile, text);
   if (hoSoLoc.bo.length) console.log("chat-reply: gỡ trường hồ sơ không căn cứ", hoSoLoc.bo.join(","));
   for (const [k, v] of Object.entries(hoSoLoc.profile)) {

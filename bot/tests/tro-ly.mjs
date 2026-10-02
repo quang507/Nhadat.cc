@@ -5,7 +5,7 @@
 // (2) công cụ GHI điều khách nói phải có trích dẫn trong lời khách — không có thì KHÔNG ghi, model nhận lỗi;
 // (3) model đã viết lời + chỉ gọi công cụ ghi (đều qua) → xong một vòng; (4) không có câu trả lời dùng được → null
 // để chat-reply rơi về đường JSON cũ.
-import { ungVienKhuVuc } from "../supabase/functions/_shared/tim-moc.ts";
+import { capTruong, ungVienKhuVuc } from "../supabase/functions/_shared/tim-moc.ts";
 import { apCongCuGhi, cauKhoangCachKhongNguon, chayTroLyMua, CONG_CU_MUA, KHOA_HO_SO, thanhBongBong } from "../supabase/functions/_shared/ai/tro-ly.ts";
 
 let hong = 0, tong = 0;
@@ -221,6 +221,14 @@ ok("TL-08 một đoạn nhiều dòng giữ nguyên", JSON.stringify(thanhBongBo
   ok("TL-09 'chợ bà chiểu q bình thạnh' → thêm 'chợ bà chiểu'", uv("chợ bà chiểu q bình thạnh") === JSON.stringify(["chợ bà chiểu q bình thạnh", "chợ bà chiểu"]), uv("chợ bà chiểu q bình thạnh"));
   ok("TL-09 'Phường An Đông' / 'Phương Mai' giữ nguyên", uv("Phường An Đông") === JSON.stringify(["Phường An Đông"]) && uv("Phương Mai") === JSON.stringify(["Phương Mai"]));
 }
+
+// TL-11 (bắn thật 02/10 thu-trl-07: khách hỏi trường TIỂU HỌC, bot gọi "Trường Trung học Cơ sở Lý Phong" là tiểu học): công cụ
+// đọc cấp từ tên để ghi kèm từng dòng; tên không có cấp thì không đoán.
+ok("TL-11 cấp trường đọc từ tên",
+  capTruong("Trường Trung học Cơ sở Lý Phong") === "thcs" && capTruong("Trường Tiểu học Chương Dương") === "tieu_hoc" &&
+  capTruong("Trường TH Nguyễn Du") === "tieu_hoc" && capTruong("Trường Trung học phổ thông Hoà Bình") === "thpt" &&
+  capTruong("Trường Mầm non Phường 3") === "mam_non" && capTruong("Trường Dự bị Đại học TP.HCM") === "dai_hoc" &&
+  capTruong("Trường Nguyễn Du") === null);
 
 console.log(`\n${tong - hong}/${tong} đạt`);
 if (hong) process.exit(1);

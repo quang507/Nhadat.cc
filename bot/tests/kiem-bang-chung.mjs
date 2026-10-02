@@ -5,6 +5,7 @@
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { datKiemNhe, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
@@ -547,6 +548,21 @@ ok("VAI-02 khong_noi → null; trích bịa → null", docVai({ la: "khong_noi",
 
 ok("CK-01 câu kế AI chọn có trong danh sách → nhận; ngoài danh sách / null → null",
   docCauKe({ khoa: "phap_ly" }, ["phap_ly", "huong"]) === "phap_ly" && docCauKe({ khoa: "ten_lua" }, ["phap_ly"]) === null && docCauKe(null, ["phap_ly"]) === null);
+
+// HS-01…06 (02/10/2026, SRS-5.1y — đường JSON cũ nhánh mua): giá trị hồ sơ phải là chữ khách nói. Bắn thật thu-trl-04/06:
+// "nhà có 2 con nhỏ" → "vợ chồng + 2 con nhỏ" và 2 phòng ngủ. Viết tắt / chữ đệm vẫn nhận ("q5" → "Quận 5", "6 tỏi" → "tầm 6 tỷ").
+{
+  const loi = "minh tim nha hem xe hoi quan 5 tam 7 ty, nha co 2 con nho";
+  const r = locGiaTriHoSo({ nguoi_o_cung: "vợ chồng + 2 con nhỏ", bedrooms: 2, alley: "hẻm xe hơi", notes: "có 2 con nhỏ" }, loi);
+  ok("HS-01 'vợ chồng' khách không nói → bỏ người ở cùng", r.profile.nguoi_o_cung === null && r.bo.includes("nguoi_o_cung"), JSON.stringify(r));
+  ok("HS-02 '2 con nhỏ' không phải 2 phòng ngủ → bỏ", r.profile.bedrooms === null && r.bo.includes("bedrooms"), JSON.stringify(r));
+  ok("HS-03 'hẻm xe hơi' / 'có 2 con nhỏ' (có dấu từ chữ không dấu) → giữ", r.profile.alley === "hẻm xe hơi" && r.profile.notes === "có 2 con nhỏ", JSON.stringify(r));
+  const r2 = locGiaTriHoSo({ area: "Quận 5", budget: "tầm 6 tỷ", property_type: "căn hộ", bedrooms: 3, alley: "hẻm xe hơi" }, "can mua chung cu q5 3pn hxh 6 toi");
+  ok("HS-04 cách nói mới: 'chung cu q5 3pn hxh 6 toi' → Quận 5, tầm 6 tỷ, căn hộ, 3 phòng ngủ, hẻm xe hơi đều giữ",
+    r2.bo.length === 0 && r2.profile.bedrooms === 3, JSON.stringify(r2));
+  ok("HS-05 số sai khu ('q5' → 'Quận 7') → bỏ", locGiaTriHoSo({ area: "Quận 7" }, "nha q5").profile.area === null);
+  ok("HS-06 'mẹ già ở cùng' từ 'nhà có mẹ già' → giữ (ở cùng là chữ đệm)", giaTriCoTrongLoi("mẹ già ở cùng", "nhà có mẹ già"));
+}
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

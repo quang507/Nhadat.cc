@@ -1011,6 +1011,53 @@ function loaiDuongNoiRo(kd: string): "may" | "hoi" | "tai" | "mat_tien" | null {
 export const CHU_NOI_GOP = new Set(["so", "hem", "va", "voi", "nha", "m", "met", "duong"]);
 export const tachGop = (x: string) => boDau(x).replace(/(\d),(\d)/g, "$1.$2").replace(/(\d)([a-z])/g, "$1 $2").replace(/([a-z])(\d)/g, "$1 $2")
   .split(/[^a-z0-9.]+/).map((t) => t.replace(/^\.+|\.+$/g, "")).filter(Boolean);
+/**
+ * Chữ khách hay viết TẮT / nói lóng → chữ đầy đủ model dùng khi ghi lại (02/10/2026, SRS-5.1y): "q5" → "Quận 5", "hxh" →
+ * "hẻm xe hơi", "6 tỏi" → "6 tỷ", "chung cư" ↔ "căn hộ". Không có bảng này thì kiểm giá trị bỏ oan bản viết lại đúng nghĩa.
+ */
+const CHU_TAT: Record<string, string[]> = {
+  q: ["quan"], p: ["phuong"], hxh: ["hem", "xe", "hoi"], hxm: ["hem", "xe", "may"], oto: ["o", "to"], mt: ["mat", "tien"],
+  pn: ["phong", "ngu"], wc: ["toilet"], toi: ["ty"], ti: ["ty"], tr: ["trieu"], cu: ["trieu"], k: ["nghin"], tphcm: ["ho", "chi", "minh"],
+};
+/** Chữ đệm / đơn vị hành chính model hay thêm khi viết lại cho gọn ("tầm 6 tỷ", "Quận 5") — không mang ý mới. */
+const CHU_DEM_GIA_TRI = new Set([
+  ...CHU_NOI_GOP, "tam", "khoang", "chung", "tu", "den", "toi", "duoi", "tren", "hon", "hoac", "la", "co", "can",
+  "quan", "phuong", "huyen", "xa", "tp", "thanh", "pho", "o", "cung", "muon",
+]);
+/**
+ * Mọi chữ / số của một giá trị chữ phải có trong lời khách (bỏ dấu, như `kiemCapNhat`), tính cả chữ viết tắt (`CHU_TAT`) và
+ * chữ đệm (`CHU_DEM_GIA_TRI`). Bắn thật 02/10 (thu-trl-04): khách "nhà có 2 con nhỏ" → trợ lý ghi người ở cùng "vợ chồng + 2
+ * con nhỏ" — trích dẫn đúng, giá trị thêm "vợ chồng". Dùng cho CẢ trợ lý lẫn đường JSON cũ của nhánh mua.
+ */
+export function giaTriCoTrongLoi(gt: string, loiKhach: string): boolean {
+  const tuKhach = tachGop(loiKhach);
+  const coSan = new Set(tuKhach);
+  for (const t of tuKhach) for (const day of CHU_TAT[t] ?? []) coSan.add(day);
+  if (coSan.has("chung") && coSan.has("cu")) { coSan.add("can"); coSan.add("ho"); }
+  if (coSan.has("can") && coSan.has("ho")) { coSan.add("chung"); coSan.add("cu"); }
+  return tachGop(gt).every((t) => coSan.has(t) || CHU_DEM_GIA_TRI.has(t));
+}
+
+/** Khoá hồ sơ mua mang CHỮ khách nói (kiểm bằng `giaTriCoTrongLoi`); deal / can_vay / bedrooms có luật riêng. */
+const KHOA_HO_SO_CHU = [
+  "area", "budget", "purpose", "property_type", "alley", "timeline", "notes", "khu_song", "nguoi_o_cung", "noi_lam",
+  "dien_tich_mong_muon", "thang_may", "nguoi_quyet_dinh", "name",
+];
+/**
+ * Lọc hồ sơ mua model trả (đường JSON cũ, 02/10/2026): trường chữ có chữ khách KHÔNG nói → null (không ghi, không xoá cái đã
+ * biết); số phòng ngủ chỉ giữ khi lời khách có đúng số đó kèm "phòng" / "pn".
+ */
+export function locGiaTriHoSo(profile: Record<string, unknown>, loiKhach: string): { profile: Record<string, unknown>; bo: string[] } {
+  const ra = { ...profile };
+  const bo: string[] = [];
+  for (const k of KHOA_HO_SO_CHU) {
+    const v = ra[k];
+    if (typeof v === "string" && v.trim() && !giaTriCoTrongLoi(v, loiKhach)) { ra[k] = null; bo.push(k); }
+  }
+  const pn = ra.bedrooms;
+  if (typeof pn === "number" && !new RegExp(`\\b${pn}\\s*(?:phong|pn)\\b`).test(tachGop(loiKhach).join(" "))) { ra.bedrooms = null; bo.push("bedrooms"); }
+  return { profile: ra, bo };
+}
 export type CapNhatDeXuat = { khoa: string; gia_tri_moi: string; cach?: string };
 /**
  * Bắn thật 01/10 (lx-tam-31): khách "không có lửng em" → AI ghi kết cấu "trệt + 3 lầu (không có lửng)"; DB thấy chữ "lửng"
