@@ -7260,7 +7260,9 @@ Deno.serve(async (req) => {
   // SRS-5.1y: kết quả công cụ ĐỌC của trợ lý — lưới chặn bịa phía dưới coi là dữ liệu thật; `troLy` đi vào payload.
   const duLieuCongCu: string[] = [];
   // `vong` 0 = trợ lý bật mà rơi về đường JSON (`ly_do`).
-  let troLy: { vong: number; cong_cu: string[]; van_goc?: string[]; du_lieu?: string[]; ly_do?: string } | null = null;
+  let troLy: {
+    vong: number; cong_cu: string[]; van_goc?: string[]; du_lieu?: string[]; ly_do?: string; nhac_khoang_cach?: number; bo_cau?: string[];
+  } | null = null;
   const docCongCuMua = async (ten: "tim_tien_ich_quanh" | "xem_can", input: Record<string, unknown>): Promise<string> => {
     if (ten === "tim_tien_ich_quanh") {
       return await timTienIchQuanh(
@@ -7432,12 +7434,17 @@ Deno.serve(async (req) => {
             },
             loiKhach: [...history.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n"),
             doc: docCongCuMua,
+            // Nguồn hợp lệ cho con số khoảng cách: kho / căn khách nhắc (khối k1) + lời dặn có hội thoại (tin user).
+            nguCanh: [k1.text, ...thamSoMua.messages[0].content.map((c) => ("text" in c ? c.text ?? "" : ""))].join("\n"),
           });
           if (tl) {
             out = tl.out as LuotMua;
             duLieuCongCu.push(...tl.duLieu);
             // Lời GỐC của model (trước mọi lưới) + kết quả công cụ đọc — để bắn thử thấy được lưới nào đã sửa lời.
-            troLy = { vong: tl.vong, cong_cu: tl.congCu, van_goc: [...tl.out.replies], du_lieu: tl.duLieu.map((d) => d.slice(0, 400)) };
+            troLy = {
+              vong: tl.vong, cong_cu: tl.congCu, van_goc: [...tl.out.replies], du_lieu: tl.duLieu.map((d) => d.slice(0, 400)),
+              ...(tl.nhac ? { nhac_khoang_cach: tl.nhac, bo_cau: tl.boCau } : {}),
+            };
           } else troLy = { vong: 0, cong_cu: [], ly_do: "khong_ra_cau_tra_loi" };
         } else troLy = { vong: 0, cong_cu: [], ly_do: "khong_co_khoa_anthropic" };
       } catch (e) {

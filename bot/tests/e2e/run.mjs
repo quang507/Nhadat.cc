@@ -6671,6 +6671,26 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   rt = await send({ external_user_id: "thu-tl9", text: "minh muon mua nha, cho minh hoi chut" });
   check("TL-E2E-08 chưa biết anh hay chị → 'chị ơi' thành 'mình ơi', '…vậy chị?' thành '…vậy ạ?'",
     /mình ơi/.test(rt.body.reply ?? "") && !/\bchị\b/i.test(rt.body.reply ?? ""), String(rt.body.reply));
+
+  // TL-E2E-09 (bắn thật 02/10 thu-trl-05): model tự kể "Bệnh viện Chợ Rẫy khoảng 500m" không gọi công cụ → code nhắc một lần
+  // → model tra → lời trả lời theo dữ liệu thật; payload ghi số lần nhắc.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  let luotTL9 = 0;
+  globalThis.__model.troLy = (p) => {
+    luotTL9++;
+    const cuoi = p.messages.at(-1);
+    const noiDung = Array.isArray(cuoi.content) ? cuoi.content : [];
+    if (noiDung.some((c) => c.type === "tool_result")) return { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ gần căn này có Trường Tiểu học Chương Dương khoảng 250 m ạ." }] };
+    if (noiDung.some((c) => c.type === "text" && /HỆ THỐNG/.test(c.text ?? ""))) {
+      return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "t9", name: "tim_tien_ich_quanh", input: { khu_vuc: "BDS-Q5-0001", loai: "truong_hoc" } }] };
+    }
+    return { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ gần căn này có trường Nguyễn Du khoảng 900m ạ." }] };
+  };
+  rt = await send({ external_user_id: "thu-tl1", text: "căn BDS-Q5-0001 gần trường nào không em" });
+  check("TL-E2E-09 khoảng cách không nguồn → nhắc, tra công cụ, trả lời theo dữ liệu; payload nhac_khoang_cach = 1",
+    luotTL9 === 3 && /Chương Dương/.test(rt.body.reply ?? "") && !/900/.test(rt.body.reply ?? "") && rt.body.tro_ly?.nhac_khoang_cach === 1,
+    JSON.stringify({ n: luotTL9, b: rt.body }));
   globalThis.__cauHinh = cuCH;
 }
 // ── kết ──
