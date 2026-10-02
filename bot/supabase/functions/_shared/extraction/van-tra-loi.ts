@@ -17,9 +17,10 @@
 
 import { XUNG_HO_LON_TUOI as LON_TUOI } from "./khop-cau-tra-loi.ts";
 import { docTien } from "./luat-tien.ts";
+import { goNhamDau } from "./go-nham-dau.ts";
 
 const boDau = (s: string): string =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+  goNhamDau(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 
 // Câu KHẲNG ĐỊNH đang có hàng. Chỉ sai khi không có căn nào trong tay model —
 // tầng trên quyết định lúc nào gọi.

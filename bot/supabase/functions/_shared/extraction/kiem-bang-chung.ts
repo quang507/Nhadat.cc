@@ -15,9 +15,10 @@ import { bocQuan, vungNgoai } from "../dia_ban.ts";
 import { cumPhongNguTheoTang, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, phuongChuan, phuongTrongTrich, phuongTuTenCu, tenDayDu } from "./khop-phuong.ts";
+import { goNhamDau } from "./go-nham-dau.ts";
 
 const boDau = (s: string): string =>
-  s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+  goNhamDau(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 /** Bản so khớp: bỏ dấu, ký hiệu thành khoảng trắng (giữ số thập phân, "/", "x"). */
 export const chuanSo = (s: string): string =>
   boDau(s).replace(/(\d),(\d)/g, "$1.$2").replace(/²/g, "2").replace(/[^a-z0-9./ ]+/g, " ").replace(/\s+/g, " ").trim();
