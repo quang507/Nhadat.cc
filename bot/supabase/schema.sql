@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-02 14:36 (giờ VN)
+-- Sinh lúc: 2026-10-02 16:21 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -4554,6 +4554,7 @@ AS $function$
 declare
   g public.property_type;
 begin
+  if coalesce(new.boc_tach->>'_thong_so_ai', '') = 'true' then return new; end if;
   if new.property_type is null or new.property_type = 'chua_ro' then
     g := public.guess_property_type(
       coalesce(new.description, '') || ' ' || coalesce(new.location_raw, '')
