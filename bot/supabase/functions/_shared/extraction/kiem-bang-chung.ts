@@ -772,7 +772,9 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
       default: {
         if (v.length < 2 || v.length > 120) { bo.push({ ...d, ly_do: "gia_tri_ngoai_khoang" }); continue; }
         // 02/10/2026 (lx-t5-05: "xe container vào tận nơi em"): cùng cách gọn chữ đệm với luật.
-        answer = gonGiaTriFact(question, v);
+        // Ô dạng câu có / không (xe container vào được không, lên thổ cư được không…) mà AI trả mã "co" / "khong" (lx-t6-01:
+        // ô xe container ghi "co") → chữ có dấu.
+        answer = laCo(v) ? "có" : laKhong(v) ? "không" : gonGiaTriFact(question, v);
       }
     }
     if (!answer) continue;

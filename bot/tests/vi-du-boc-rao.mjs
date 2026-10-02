@@ -19,7 +19,9 @@ for (const [i, v] of VI_DU_BOC_RAO.entries()) {
 const chu = viDuThanhChu();
 // 01/10/2026: nới 8000 → 8600 cho ví dụ 12 (lỗi thật của chế độ `ai`: lạc câu hỏi thì trả rỗng, "3 lầu" quên trệt). Khối
 // ví dụ nằm trong system có cache (tỉ lệ trúng cache Console ~92%), nên vài trăm ký tự thêm gần như không tốn thêm tiền.
-ok("bản chữ có đủ ví dụ và không dài quá 8600 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 8600, String(chu.length));
+// 02/10/2026: nới 8600 → 9500 cho ví dụ đầu (đợt 1 chuyển luật sang AI: ô có / không đọc phủ định, thế chấp, thương lượng —
+// model bỏ sót ở lượt bắn lx-t6-02). Cùng lý do trên: khối ví dụ nằm trong system có cache.
+ok("bản chữ có đủ ví dụ và không dài quá 9500 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 9500, String(chu.length));
 ok("bản chữ không chứa số điện thoại", !/\b0\d{9}\b/.test(chu));
 
 console.log(hong ? `\nVÍ DỤ MẪU: ${hong}/${tong} CA HỎNG` : `\nVÍ DỤ MẪU: ${tong}/${tong} CA ĐẠT`);

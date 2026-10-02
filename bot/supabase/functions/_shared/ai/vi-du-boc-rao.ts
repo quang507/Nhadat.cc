@@ -20,6 +20,21 @@ const t = (khoa: string, gia_tri: string, trich_dan: string): DeXuat => ({ khoa,
 
 export const VI_DU_BOC_RAO: ViDuBocRao[] = [
   {
+    // 02/10/2026 (đợt 1 chuyển luật sang AI, bắn thử lx-t6-02): model bỏ sót "chưa hoàn công", "đang thế chấp", "bớt lộc" —
+    // các ô trước đây chỉ luật ghi. Ví dụ dạy ĐỌC PHỦ ĐỊNH theo nghĩa và các ô mới (cách nói khác ca bắn thử).
+    cau_dang_hoi: null,
+    tin: "bán nhà hẻm ba gác Tân Bình 5 tầng có thang máy, chưa hoàn công, xây 2019, sổ đang cầm ngân hàng, 9 tỷ 5 có bớt",
+    so_can: 1,
+    truong: [
+      t("loai_giao_dich", "ban", "bán nhà"), t("quan", "Quận Tân Bình", "Tân Bình"), t("loai_duong_vao", "hem_xe_may", "hẻm ba gác"),
+      t("so_tang", "5", "5 tầng"), t("thang_may", "co", "có thang máy"), t("hoan_cong", "khong", "chưa hoàn công"),
+      t("nam_xay", "2019", "xây 2019"), t("the_chap", "sổ đang cầm ngân hàng", "sổ đang cầm ngân hàng"),
+      t("gia", "9 tỷ 5", "9 tỷ 5"), t("thuong_luong", "co", "có bớt"),
+    ],
+    kien_thuc: [],
+    luu_y: "Có / không đọc theo NGHĨA ('chưa hoàn công' → khong). Hẻm ba gác = hẻm xe máy. Sổ cầm ngân hàng = thế chấp.",
+  },
+  {
     // Bắn thật 21/09 (mau-tdt): câu chào có tên đường lẫn trong câu → model trả RỖNG, tin không có địa chỉ.
     cau_dang_hoi: null,
     tin: "chào em, anh có căn nhà ở trần đình trọng muốn bán, em tư vấn giúp anh",
