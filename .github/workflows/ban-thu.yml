@@ -191,7 +191,8 @@ jobs:
                          left join buyers b on b.id = c.buyer_id left join sellers s on s.id = c.seller_id
                         where (b.zalo_user_id = $(lit "$ZALO") or s.zalo_user_id = $(lit "$ZALO")) and m.sender not in ('buyer','seller')" | jq -r '.[0].n')
             q "select net.http_post(url := public.cau_hinh('functions_base_url') || '/chat-reply',
-                 body := jsonb_build_object('external_user_id', $(lit "$ZALO"), 'channel', 'zalo_personal_test', 'text', $(lit "$C")),
+                 body := jsonb_build_object('external_user_id', $(lit "$ZALO"), 'channel', 'zalo_personal_test', 'text', $(lit "$C"),
+                   'msg_id', 'bt-' || $(lit "$ZALO") || '-' || gen_random_uuid()::text),
                  headers := jsonb_build_object('Content-Type', 'application/json', 'x-bridge-secret', public.get_secret('BRIDGE_SECRET')),
                  timeout_milliseconds := 120000) as id" >/dev/null
             for i in $(seq 1 40); do
@@ -208,6 +209,13 @@ jobs:
                left join buyers b on b.id = c.buyer_id left join sellers s on s.id = c.seller_id
               where (b.zalo_user_id = $(lit "$ZALO") or s.zalo_user_id = $(lit "$ZALO")) and m.created_at >= $(lit "$MOC")::timestamptz
               order by m.created_at, m.seq" | jq -r '.[] | "[\(.sender)] \(.body)"'
+          # 02/10/2026 (SRS-5.1y): msg_id 'bt-<ID thử>-…' → sổ inbound lưu payload; in phần trợ lý có công cụ (công cụ đã gọi, lời gốc
+          # model trước các lưới, kết quả công cụ đọc, lý do rơi về đường JSON) và hồ sơ mua của ID thử.
+          echo; echo "== Trợ lý có công cụ (payload từng lượt)"
+          q "select coalesce(json_agg(json_build_object('replies', reply->'replies', 'tro_ly', reply->'tro_ly') order by created_at), '[]') as ds
+              from inbound_ledger where zalo_msg_id like 'bt-' || $(lit "$ZALO") || '-%' and created_at >= $(lit "$MOC")::timestamptz" | jq -c '.[0].ds[]' || true
+          echo "-- Hồ sơ mua của ID thử:"
+          q "select preferences from buyers where zalo_user_id = $(lit "$ZALO")" | jq -c '.[0].preferences' || true
           echo; echo "== Tin của ID thử (cột chính)"
           # 01/10/2026 (chủ dự án: "bắn test xem bot có bịa ko, ghi vào db tốt ko"): in cả các cột THÔNG SỐ (ô trên form sửa tin)
           # để so với câu khách gõ — chỉ tin của ID thử.

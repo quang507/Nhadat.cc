@@ -769,6 +769,10 @@ async function napModel(client: ReturnType<typeof serviceClient>): Promise<Model
   nhoModel = { at: Date.now(), client: c };
   return c;
 }
+// Câu dặn khi kho căn chưa định vị được nơi khách muốn ở gần. Chế độ trợ lý đổi câu này (bắn thật 02/10: khách hỏi
+// "quanh chợ An Đông có trường tiểu học nào" → bot hỏi ngược "chợ An Đông ở đường nào" vì câu dặn ép hỏi lại khách).
+const HOI_LAI_NOI_DO = "- hỏi lại khách nơi đó ở đường nào / quận nào, KHÔNG đoán vị trí.";
+const HOI_LAI_NOI_DO_TRO_LY = "- khách hỏi tiện ích / nơi chốn quanh đó thì gọi tim_tien_ich_quanh TRƯỚC; công cụ cũng không định vị được thì mới hỏi lại khách đường nào / quận nào, KHÔNG đoán vị trí.";
 // SRS-5.1y: trợ lý có công cụ gọi THẲNG Claude (lưới dự phòng bỏ `tools`), nhớ tạm như `napModel`.
 let nhoTroLy: { at: number; client: Awaited<ReturnType<typeof anthropicTrucTiep>> } | null = null;
 async function napTroLy(client: ReturnType<typeof serviceClient>) {
@@ -7254,7 +7258,8 @@ Deno.serve(async (req) => {
   let out: LuotMua | null = null;
   // SRS-5.1y: kết quả công cụ ĐỌC của trợ lý — lưới chặn bịa phía dưới coi là dữ liệu thật; `troLy` đi vào payload.
   const duLieuCongCu: string[] = [];
-  let troLy: { vong: number; cong_cu: string[] } | null = null;
+  // `vong` 0 = trợ lý bật mà rơi về đường JSON (`ly_do`).
+  let troLy: { vong: number; cong_cu: string[]; van_goc?: string[]; du_lieu?: string[]; ly_do?: string } | null = null;
   const docCongCuMua = async (ten: "tim_tien_ich_quanh" | "xem_can", input: Record<string, unknown>): Promise<string> => {
     if (ten === "tim_tien_ich_quanh") {
       return await timTienIchQuanh(
@@ -7339,7 +7344,7 @@ Deno.serve(async (req) => {
             })`
             : "") +
           (gan && khongThayMoc
-            ? `\n(Khách muốn ở gần ${nhanGan(gan)} nhưng bên em CHƯA định vị được nơi đó - hỏi lại khách nơi đó ở đường nào / quận nào, KHÔNG đoán vị trí.)`
+            ? `\n(Khách muốn ở gần ${nhanGan(gan)} nhưng bên em CHƯA định vị được nơi đó ${HOI_LAI_NOI_DO})`
             : "") +
           (askedBlock
             ? "\n\nCĂN KHÁCH ĐANG NHẮC TỚI (khách vào từ web hoặc gõ mã - chào ĐÚNG căn này, trả lời thẳng vào nó; mục 'đã xác minh từ chủ nhà' được nói chắc, còn lại vẫn 'để em hỏi lại'):\n" +
@@ -7421,7 +7426,7 @@ Deno.serve(async (req) => {
             },
             thamSo: {
               model: MODEL, max_tokens: 1024, output_config: { effort: "low" },
-              system: [{ ...k0, text: k0.text.replace(DAU_RA_JSON, DAU_RA_CONG_CU) }, k1],
+              system: [{ ...k0, text: k0.text.replace(DAU_RA_JSON, DAU_RA_CONG_CU) }, { ...k1, text: k1.text.replace(HOI_LAI_NOI_DO, HOI_LAI_NOI_DO_TRO_LY) }],
               messages: thamSoMua.messages,
             },
             loiKhach: [...history.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n"),
@@ -7430,11 +7435,13 @@ Deno.serve(async (req) => {
           if (tl) {
             out = tl.out as LuotMua;
             duLieuCongCu.push(...tl.duLieu);
-            troLy = { vong: tl.vong, cong_cu: tl.congCu };
-          }
-        }
+            // Lời GỐC của model (trước mọi lưới) + kết quả công cụ đọc — để bắn thử thấy được lưới nào đã sửa lời.
+            troLy = { vong: tl.vong, cong_cu: tl.congCu, van_goc: [...tl.out.replies], du_lieu: tl.duLieu.map((d) => d.slice(0, 400)) };
+          } else troLy = { vong: 0, cong_cu: [], ly_do: "khong_ra_cau_tra_loi" };
+        } else troLy = { vong: 0, cong_cu: [], ly_do: "khong_co_khoa_anthropic" };
       } catch (e) {
         await ghiLoi(client, "chat-reply tro ly", e);
+        troLy = { vong: 0, cong_cu: [], ly_do: "loi" };
       }
     }
     if (!out) {
@@ -8232,7 +8239,8 @@ Deno.serve(async (req) => {
     ...(conHinh ? { more_photos: true } : {}),
     ...(muonGoi ? { voice_request: true } : {}),
     ...(danhGia ? { rated: danhGia.stars } : {}),
-    // SRS-5.1y: lượt do trợ lý có công cụ trả lời — số vòng + công cụ đã gọi (tên thôi, không dữ liệu).
+    // SRS-5.1y: lượt trợ lý có công cụ — số vòng, công cụ đã gọi, lời gốc model, kết quả công cụ đọc (dữ liệu kho/OSM
+    // công khai); rơi về đường JSON thì `vong` 0 + `ly_do`. Sổ inbound lưu payload này — `ban-thu` in ra.
     ...(troLy ? { tro_ly: troLy } : {}),
   });
 });
