@@ -1659,7 +1659,7 @@ Thứ tự đợt:
 **Còn lại** (đợt sau): xem danh sách đợt 2–8 ở trên.
 
 **Sửa**:
-- `boc-rao.ts` có thêm trường `dong_y` (`dong_y` / `khong_dong_y` / `khong_noi`, trích dẫn, `dang_di`);
+- **Lượt AI nhỏ riêng** `_shared/ai/doc-y-luot.ts` ("Ý NGẮN CỦA LƯỢT": `dong_y` / `dong_y_dang` / `khong_dong_y` / `khong_noi` + trích dẫn), chạy song song với lượt bóc tách nên không thêm thời gian chờ. Lượt hỏng thì luật đỡ. Bản đầu (#414) thêm `dong_y` thẳng vào khuôn bóc tách và làm mọi lượt bóc tách trên production trả 400 "The compiled grammar is too large". Đã revert (#415) sau khoảng 5 phút. Bản thu gọn (enum phẳng, bỏ enum `xac_nhan.khoa`) bắn thử vẫn vượt giới hạn. Nay khuôn bóc tách giữ nguyên 14 trường; `doi-chieu-ai.mjs` DC-13 đỏ khi thêm trường. Các ý hội thoại của đợt sau cũng đi lượt nhỏ này;
 - `docDongY` (code kiểm trích dẫn; gật bằng emoji thì cụm là emoji);
 - chat-reply thêm các hàm `dongYAi`, `gatLuot`, `baoDangLuot`, `gatTach`. Phần còn lại sau cụm gật lấy theo cụm AI trích.
 

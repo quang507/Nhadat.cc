@@ -40,6 +40,7 @@ import {
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { soatNhanXetBangModel } from "../_shared/ai/kiem-khen.ts";
+import { docYLuotBangModel, type YLuotLLM } from "../_shared/ai/doc-y-luot.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
@@ -2253,7 +2254,9 @@ Deno.serve(async (req) => {
     // gì; chỉ khi câu có mùi dự án (`coMuiDuAn`); và chỉ một lượt mỗi tin.
     let daVetDuAn = false;
     // FR-208: lượt AI bóc tách chạy bóng (khởi động sau khi biết câu đang hỏi).
-    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; traLoi?: { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null } | null; capNhat?: CapNhatDeXuat[]; xacNhan?: GoiYXacNhan[]; hoiLai?: { co_hoi: boolean; cau_hoi: string | null; chu_de: string | null } | null; camXuc?: { muc?: string | null; trich_dan?: string | null } | null; khongCanHoi?: Array<{ khoa?: string; ly_do?: string; trich_dan?: string }>; yDinh?: { loai?: string | null; trich_dan?: string | null } | null; vai?: { la?: string | null; trich_dan?: string | null } | null; tuXung?: { la?: string | null; trich_dan?: string | null } | null; dongY?: { la?: string | null; trich_dan?: string | null; dang_di?: boolean | null } | null; cauKe?: { khoa?: string | null; ly_do?: string | null } | null; canKhac?: boolean | null; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
+    let bongAi: Promise<{ truong: DeXuat[]; kienThuc: string[]; traLoi?: { co_tra_loi: boolean; gia_tri: string | null; trich_dan: string | null } | null; capNhat?: CapNhatDeXuat[]; xacNhan?: GoiYXacNhan[]; hoiLai?: { co_hoi: boolean; cau_hoi: string | null; chu_de: string | null } | null; camXuc?: { muc?: string | null; trich_dan?: string | null } | null; khongCanHoi?: Array<{ khoa?: string; ly_do?: string; trich_dan?: string }>; yDinh?: { loai?: string | null; trich_dan?: string | null } | null; vai?: { la?: string | null; trich_dan?: string | null } | null; tuXung?: { la?: string | null; trich_dan?: string | null } | null; cauKe?: { khoa?: string | null; ly_do?: string | null } | null; canKhac?: boolean | null; ket: unknown; usage: unknown; ms: number; cauDangHoi: string | null; cheDo: string } | null> | null = null;
+    // SRS-5.1zf: lượt AI NHỎ đọc ý của lượt (gật / không / bảo đăng), song song với bóc tách — `_shared/ai/doc-y-luot.ts`.
+    let yLuotAi: Promise<YLuotLLM | undefined> | null = null;
     // Công tắc `app_config.boc_tach_ai` đọc MỘT lần, tách khỏi lượt model để đường ra biết
     // phải chờ (chế độ `ghi`) hay chạy nền (chế độ `bong`) mà không đợi model xong.
     let cheDoBocAi: Promise<string> | null = null;
@@ -2357,10 +2360,10 @@ Deno.serve(async (req) => {
      * `undefined` = AI không chạy → nơi gọi dùng luật (`laDongY`, `laBaoDang`) làm lưới đỡ.
      */
     const dongYAi = async (): Promise<ReturnType<typeof docDongY> | undefined> => {
-      if (!bongAi) return undefined;
-      const k = await bongAi;
-      if (!laCheDoAi || !k?.ket) return undefined;
-      return docDongY(k.dongY, textTreo || textBongAi);
+      if (!yLuotAi) return undefined;
+      const k = await yLuotAi;
+      if (!laCheDoAi || k === undefined) return undefined;
+      return docDongY(k, textTreo || textBongAi);
     };
     /** Gật: AI trước; `luat` chỉ chạy khi AI không chạy. */
     const gatLuot = async (luat: () => boolean): Promise<boolean> => {
@@ -3426,6 +3429,22 @@ Deno.serve(async (req) => {
         await ghiLoi(client, "chat-reply boc_tach_ai(bong)", e);
         return null;
       });
+    }
+    // SRS-5.1zf: lượt AI nhỏ "ý của lượt" — chỉ chế độ `ai`, chạy song song, hỏng thì `undefined` (luật đỡ).
+    if (anthropicS && cheDoBocAi) {
+      const aiY = anthropicS;
+      const botNoi = cauBotThat;
+      yLuotAi = (async () => {
+        if ((await cheDoBocAi!) !== "chinh") return undefined;
+        try {
+          const kq = await docYLuotBangModel(aiY as unknown as Parameters<typeof docYLuotBangModel>[0], MODEL, textTreo || textBongAi, botNoi);
+          await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
+          return kq.ket ?? undefined;
+        } catch (e) {
+          await ghiLoi(client, "chat-reply y luot(ai)", e);
+          return undefined;
+        }
+      })();
     }
     await xetDoiNhan();
 

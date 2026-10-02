@@ -34,15 +34,11 @@ const CapNhat = z.object({
 });
 // 01/10/2026 (chủ dự án: "xhr có thể người ta nhắn shr nhưng viết nhầm, có thể hỏi lại xác nhận"): chữ viết tắt / gõ sai mà
 // AI không chắc nghĩa → không điền ô, mà đưa khả năng cao nhất vào đây để bot HỎI LẠI chủ nhà. Code chỉ dùng ở chế độ `ai`.
-// 02/10/2026 (SRS-5.1zf): khuôn GỬI cho model để `khoa` là chữ tự do (mô tả nói rõ khoá nào) — một enum ~70 khoá lặp thêm
-// lần nữa ở đây làm grammar structured output vượt giới hạn Anthropic ("The compiled grammar is too large", #414). Khuôn ĐỌC
-// (`XacNhanDoc`) vẫn giữ enum: khoá lạ bị `docLong` bỏ riêng phần tử đó.
 const XacNhan = z.object({
-  khoa: z.string().describe("Khoá ô, cùng danh sách khoá của truong (vd phap_ly, ket_cau, noi_that)."),
+  khoa: z.enum(MOI_KHOA),
   gia_tri: z.string().describe("Nghĩa AI đoán là khả năng cao nhất, viết bằng từ chuẩn ('sổ hồng riêng')."),
   trich_dan: z.string().describe("Cụm khách gõ COPY NGUYÊN VĂN ('xhr')."),
 });
-const XacNhanDoc = XacNhan.extend({ khoa: z.enum(MOI_KHOA) });
 // 01/10/2026 (bắn thử lx-hn-62; chủ dự án: "sửa từ cái gốc nguyên nhân"): khách HỎI LẠI bên mình. Trước đây "đây có phải câu
 // hỏi không / hỏi về chuyện gì" do ba bộ từ khoá quyết (`laCauHoiTron`, `hoiVeTin`, `dapHoiNguocTienDinh`) — bộ từ khoá thì
 // luôn thiếu cách nói mới ("bao lâu thì bán được em" → ghi làm thông tin) và bỏ dấu thì đụng chữ ("khu này" = "hồi nãy" →
@@ -82,13 +78,6 @@ const TuXung = z.object({
   la: z.enum(TU_XUNG_AI).nullable().describe("Chữ người nhắn dùng để TỰ GỌI CHÍNH MÌNH trong tin ('Ừ anh đang muốn bán' → anh; 'nhà a 4 tầng' → anh; 'chị gửi ảnh nha' → chị; 'chú có căn nhà' → chú). Gọi người KHÁC ('anh hàng xóm', 'chị em nó', 'nhà của bà ngoại') không tính. Không tự xưng → null."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN có chữ tự xưng đó. la = null thì null."),
 });
-// Đợt 1 bỏ luật từ khoá (02/10/2026, chủ dự án: "xóa sạch hoặc các luật nhận hàm trong bot bắt đúng từ khóa để ai nhận các
-// phần đó"; SRS-5.1zf): GẬT / ĐỒNG Ý / BẢO ĐĂNG trước đây do `laDongY` / `laBaoDang` / regex "đúng rồi|ok" quyết ở ~10 chỗ
-// (gật sau hoãn, duyệt bản nháp, nhận phường / đường gợi ý, xác nhận viết tắt). AI đọc theo nghĩa, code kiểm trích dẫn (`docDongY`).
-// Hai trường PHẲNG (không lồng object) để khuôn nhỏ — bản object lồng ở #414 làm grammar vượt giới hạn.
-export const DONG_Y = ["dong_y", "dong_y_dang", "khong_dong_y", "khong_noi"] as const;
-const DongYLa = z.enum(DONG_Y).describe("Tin có GẬT / ĐỒNG Ý / XÁC NHẬN điều bot VỪA nói (câu bot vừa hỏi, phường / tên đường bot gợi ý, bản nháp tin, lời hẹn) không — đọc theo NGHĨA: 'ừ', 'ok e', 'đúng rồi', 'chuẩn rồi', 'được em', 'chốt', 'phải', '👍' → dong_y; gật VÀ BẢO ĐĂNG tin ('ok đăng đi', 'cứ đăng như này trước', 'triển luôn em') → dong_y_dang; 'không phải', 'sai rồi', 'không đúng' → khong_dong_y; chỉ đưa dữ liệu / nói chuyện khác → khong_noi. Gật ở VẾ ĐẦU rồi nói thêm vẫn là gật.");
-const DongYTrich = z.string().nullable().describe("Cụm COPY NGUYÊN VĂN thể hiện ý ở dong_y. khong_noi thì null.");
 // Đợt 3 chuyển luật sang AI (02/10/2026): câu hỏi KẾ trước đây do bảng ưu tiên + từ khoá quyết (`chonCauKe`, `re-nhanh`) — AI
 // chọn trong danh sách "Câu bot còn định hỏi" như môi giới; code chỉ nhận khoá có trong danh sách hợp lệ của lượt (`docCauKe`).
 const CauKe = z.object({
@@ -120,16 +109,13 @@ const DeXuatRao = z.object({
   vai: Vai,
   cau_ke: CauKe,
   tu_xung: TuXung,
-  dong_y: DongYLa,
-  dong_y_trich: DongYTrich,
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ can_khac: z.boolean().nullish(), tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhanDoc).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish(), tu_xung: TuXung.nullish(), dong_y: DongYLa.nullish(), dong_y_trich: DongYTrich.nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ can_khac: z.boolean().nullish(), tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish(), tu_xung: TuXung.nullish() });
 export type CauKeLLM = z.infer<typeof CauKe>;
 export type YDinhLLM = z.infer<typeof YDinh>;
 export type VaiLLM = z.infer<typeof Vai>;
 export type TuXungLLM = z.infer<typeof TuXung>;
-export type DongYLLM = { la: typeof DONG_Y[number]; trich_dan: string | null; dang_di: boolean };
 export type CamXucLLM = z.infer<typeof CamXuc>;
 export type KhongCanHoiLLM = z.infer<typeof KhongCanHoi>;
 export type HoiLaiLLM = z.infer<typeof HoiLai>;
@@ -282,7 +268,7 @@ export async function bocRaoBangModel(
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
   nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[] } | null = null,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; tuXung: TuXungLLM | null; dongY: DongYLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; tuXung: TuXungLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   // 02/10/2026 (test Zalo: khách dán nguyên tin rao 700+ chữ có gạch đầu dòng): tin dài không được cắt — 1.200 chữ cũ cắt mất
   // phần pháp lý / kết cấu ở cuối tin rao dài. Trần 4.000 chỉ để chặn tin rác cực dài.
@@ -327,7 +313,6 @@ export async function bocRaoBangModel(
     yDinh: ket.success ? ket.data.y_dinh ?? null : null,
     vai: ket.success ? ket.data.vai ?? null : null,
     tuXung: ket.success ? ket.data.tu_xung ?? null : null,
-    dongY: ket.success && ket.data.dong_y ? { la: ket.data.dong_y === "dong_y_dang" ? "dong_y" : ket.data.dong_y, trich_dan: ket.data.dong_y_trich ?? null, dang_di: ket.data.dong_y === "dong_y_dang" } as DongYLLM : null,
     cauKe: ket.success ? ket.data.cau_ke ?? null : null,
     canKhac: ket.success ? ket.data.can_khac ?? null : null,
     usage: r.usage,

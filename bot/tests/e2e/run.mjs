@@ -3231,7 +3231,9 @@ fresh(seedKho);
   // không chạy. Chế độ `ai`: AI nói không gật thì "ok" KHÔNG duyệt; AI nói gật thì cách nói luật không biết vẫn duyệt.
   {
     const cuCH = globalThis.__cauHinh;
-    const aiDY = (dy, them = {}) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, ...(dy ? { dong_y: dy.dang_di ? "dong_y_dang" : dy.la, dong_y_trich: dy.trich_dan } : {}), ...them } : OUT();
+    // SRS-5.1zf: ý gật do lượt AI nhỏ "Ý NGẮN CỦA LƯỢT" (doc-y-luot.ts) đọc — mock trả cùng một đối tượng cho cả hai lượt.
+    const laLuotYLuot = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+    const aiDY = (dy, them = {}) => (p) => (laLuotBocRao(p) || laLuotYLuot(p)) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, ...(dy ? { dong_y: dy.dang_di ? "dong_y_dang" : dy.la, dong_y_trich: dy.trich_dan } : {}), ...them } : OUT();
     const moDY = async (uid, cau = "duyet_tin") => {
       fresh(seedKho);
       globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
