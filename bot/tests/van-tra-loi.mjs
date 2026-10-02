@@ -1173,5 +1173,9 @@ ok("GOI-04 'anh chị ơi' / 'anh chị phụ trách' / 'anh Thu' giữ nguyên"
   boGoiDoanGioi("Anh chị ơi, em gửi nha.") === "Anh chị ơi, em gửi nha." && boGoiDoanGioi("Có anh chị phụ trách bên em gọi lại ạ.") === "Có anh chị phụ trách bên em gọi lại ạ." && boGoiDoanGioi("Dạ anh Thu sẽ gọi lại.") === "Dạ anh Thu sẽ gọi lại.");
 ok("GOI-05 đầu câu 'Anh cần…' → 'Anh chị cần…'", boGoiDoanGioi("Anh cần mấy phòng ngủ ạ?") === "Anh chị cần mấy phòng ngủ ạ?", boGoiDoanGioi("Anh cần mấy phòng ngủ ạ?"));
 
+ok("GOI-06 'Dạ được anh, để em lọc' → 'mình,'; 'anh, chị cần gì' (cặp) giữ",
+  boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") === "Dạ được mình, để em lọc căn khớp nha." && boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ") === "Dạ anh, chị cần gì thêm ạ",
+  boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") + " | " + boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ"));
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

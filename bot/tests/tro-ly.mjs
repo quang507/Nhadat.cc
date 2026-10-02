@@ -6,7 +6,7 @@
 // (3) model đã viết lời + chỉ gọi công cụ ghi (đều qua) → xong một vòng; (4) không có câu trả lời dùng được → null
 // để chat-reply rơi về đường JSON cũ.
 import { ungVienKhuVuc } from "../supabase/functions/_shared/tim-moc.ts";
-import { apCongCuGhi, chayTroLyMua, CONG_CU_MUA, KHOA_HO_SO, thanhBongBong } from "../supabase/functions/_shared/ai/tro-ly.ts";
+import { apCongCuGhi, cauKhoangCachKhongNguon, chayTroLyMua, CONG_CU_MUA, KHOA_HO_SO, thanhBongBong } from "../supabase/functions/_shared/ai/tro-ly.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -53,7 +53,7 @@ const thamSo = { model: "m", max_tokens: 1024, system: [{ type: "text", text: "S
     { stop_reason: "tool_use", content: [dung("a", "xem_can", { ma_can: "BDS-Q5-0001" }), dung("b", "tim_tien_ich_quanh", { khu_vuc: "BDS-Q5-0001", loai: "cho" })] },
     { stop_reason: "end_turn", content: [chu("Dạ căn này gần chợ khoảng 400 m ạ.")] },
   ]);
-  const kq = await chayTroLyMua({ goi, thamSo, loiKhach: "căn BDS-Q5-0001 gần chợ không", doc: async (t) => `kq ${t}` });
+  const kq = await chayTroLyMua({ goi, thamSo, loiKhach: "căn BDS-Q5-0001 gần chợ không", doc: async (t) => `kq ${t}: chợ Hoà Bình ~400 m` });
   const cuoi = goi.goi[1].messages.at(-1);
   ok("TL-02 hai tool_result trong một tin", cuoi.content.length === 2 && cuoi.content.map((k) => k.tool_use_id).join() === "a,b", JSON.stringify(cuoi));
   ok("TL-02 trả lời", kq?.out.replies[0] === "Dạ căn này gần chợ khoảng 400 m ạ.");
@@ -118,6 +118,17 @@ const thamSo = { model: "m", max_tokens: 1024, system: [{ type: "text", text: "S
   ok("TL-04c 'hẻm xe hơi' / 'có 2 con nhỏ' (có dấu từ chữ không dấu) → ghi", out.profile.alley === "hẻm xe hơi" && out.profile.notes === "có 2 con nhỏ", JSON.stringify(out.profile));
 }
 
+// TL-04d (bắn thật 02/10 thu-trl-06): "nhà có 2 con nhỏ" → trợ lý ghi 2 phòng ngủ — trích "2 con nhỏ" có thật nhưng không
+// nói phòng. Số phòng ngủ chỉ nhận khi trích dẫn có "phòng"/"pn" kèm đúng số.
+{
+  const out = { profile: {}, replies: [] };
+  const r = apCongCuGhi(out, "ghi_ho_so_mua", { truong: [{ khoa: "bedrooms", gia_tri: "2", trich_dan: "2 con nho" }] }, "nha co 2 con nho");
+  ok("TL-04d '2 con nhỏ' → không ghi 2 phòng ngủ", out.profile.bedrooms === undefined && r.loi, JSON.stringify({ out, r }));
+  const out2 = { profile: {}, replies: [] };
+  apCongCuGhi(out2, "ghi_ho_so_mua", { truong: [{ khoa: "bedrooms", gia_tri: "3", trich_dan: "3PN" }] }, "can tim can 3PN quan 7");
+  ok("TL-04d '3PN' (cách nói mới) → 3 phòng ngủ", out2.profile.bedrooms === 3, JSON.stringify(out2));
+}
+
 // TL-05: cách nói MỚI — khách nói không dấu, trích có dấu vẫn nhận (khớp sau bỏ dấu); giờ hẹn + SĐT khách tự cho.
 {
   const out = { profile: {}, replies: [] };
@@ -170,6 +181,35 @@ const thamSo = { model: "m", max_tokens: 1024, system: [{ type: "text", text: "S
 // TL-08: tách bong bóng.
 ok("TL-08 ba đoạn → hai bong bóng", JSON.stringify(thanhBongBong("A\n\nB\n\nC")) === JSON.stringify(["A", "B\nC"]));
 ok("TL-08 một đoạn nhiều dòng giữ nguyên", JSON.stringify(thanhBongBong("A\nB")) === JSON.stringify(["A\nB"]));
+
+// TL-10 (bắn thật 02/10 thu-trl-05): "còn bệnh viện gần đó thì sao" → model KHÔNG gọi công cụ, tự kể "Bệnh viện Chợ Rẫy
+// khoảng 500m". Khoảng cách không có trong nguồn → code nhắc một lần; model tra công cụ thì trả lời theo kết quả.
+{
+  const goi = modelGia([
+    { stop_reason: "end_turn", content: [chu("Dạ gần đó có Bệnh viện Chợ Rẫy khoảng 500m ạ.")] },
+    { stop_reason: "tool_use", content: [dung("b1", "tim_tien_ich_quanh", { khu_vuc: "chợ An Đông", loai: "benh_vien" })] },
+    { stop_reason: "end_turn", content: [chu("Dạ gần chợ An Đông có Bệnh viện Hùng Vương khoảng 600 m ạ.")] },
+  ]);
+  const kq = await chayTroLyMua({
+    goi, thamSo, loiKhach: "còn bệnh viện gần đó thì sao", nguCanh: "KHO: (trống)",
+    doc: async () => "Quanh Chợ An Đông:\n- bệnh viện: Bệnh viện Hùng Vương ~600 m",
+  });
+  const nhacTin = goi.goi[1]?.messages.at(-1);
+  ok("TL-10 lời có khoảng cách không nguồn → code nhắc model (tin user [HỆ THỐNG])", nhacTin?.role === "user" && /HỆ THỐNG/.test(JSON.stringify(nhacTin?.content)), JSON.stringify(nhacTin));
+  ok("TL-10 sau khi nhắc model tra công cụ → trả lời theo kết quả", kq?.out.replies.join() === "Dạ gần chợ An Đông có Bệnh viện Hùng Vương khoảng 600 m ạ." && kq?.nhac === 1 && kq?.congCu.includes("tim_tien_ich_quanh"), JSON.stringify(kq));
+  // Model vẫn bịa sau khi nhắc → bỏ câu đó.
+  const goi2 = modelGia([
+    { stop_reason: "end_turn", content: [chu("Dạ gần đó có bệnh viện khoảng 1km ạ. Mình cần mấy phòng ngủ ạ?")] },
+    { stop_reason: "end_turn", content: [chu("Dạ gần đó có bệnh viện cách tầm 1,2 km ạ. Mình cần mấy phòng ngủ ạ?")] },
+  ]);
+  const kq2 = await chayTroLyMua({ goi: goi2, thamSo, loiKhach: "gần đó có bệnh viện không", nguCanh: "", doc: async () => "" });
+  ok("TL-10b vẫn nêu khoảng cách không nguồn sau khi nhắc → bỏ câu đó, giữ phần còn lại", kq2?.out.replies.join() === "Mình cần mấy phòng ngủ ạ?" && kq2?.boCau.length === 1, JSON.stringify(kq2));
+  // Nguồn có số → không nhắc; số đo nhà (không có chữ nơi chốn) → không nhắc.
+  ok("TL-10c khoảng cách có trong ngữ cảnh kho ('~300 m') → không tính là bịa", cauKhoangCachKhongNguon("Căn này cách chợ Hoà Bình khoảng 300 mét ạ.", "quanh căn: Chợ Hoà Bình ~300 m").length === 0);
+  ok("TL-10d số đo nhà 'hẻm 6m, ngang 4m' → không phải khoảng cách nơi chốn", cauKhoangCachKhongNguon("Căn này hẻm 6m, ngang 4m ạ.", "").length === 0);
+  ok("TL-10f bán kính tìm 'trong ~1 km' không làm nguồn cho '900m'", cauKhoangCachKhongNguon("Gần căn có trường Nguyễn Du khoảng 900m ạ.", "muốn ở gần: trường học, trong ~1 km").length === 1);
+  ok("TL-10e diện tích '50m2' không bị đọc là 50 m", cauKhoangCachKhongNguon("Căn gần chợ, 50m2 ạ.", "").length === 0);
+}
 
 // TL-09 (bắn thật 02/10 "chợ An Đông, Quận 5" không định vị được): thử thêm bản bỏ đuôi hành chính; tên đường có chữ
 // "Phương" không bị cắt; "Phường An Đông" một mình giữ nguyên.

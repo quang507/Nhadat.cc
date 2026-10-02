@@ -200,6 +200,12 @@ export function apCongCuGhi(
         } else if (khoa === "bedrooms") {
           const n = Number(/\d{1,2}/.exec(gt)?.[0]);
           if (!(n >= 1 && n <= 20)) { bo.push("bedrooms: cần một số phòng ngủ"); continue; }
+          // Bắn thật 02/10 (thu-trl-06): khách "nhà có 2 con nhỏ" → trợ lý ghi 2 phòng ngủ (trích "2 con nhỏ" có thật). Số phòng
+          // ngủ chỉ nhận khi trích dẫn nói PHÒNG kèm đúng số đó.
+          if (!new RegExp(`\\b${n}\\s*(?:phong|pn|p\\.?n)\\b`).test(tachGop(chu(t.trich_dan)).join(" "))) {
+            bo.push(`bedrooms: ${LY_DO_TRICH} (trích dẫn phải có số phòng ngủ khách nói)`);
+            continue;
+          }
           v = n;
         } else if (khoa === "can_vay") {
           const g = gt.toLowerCase();
@@ -258,6 +264,33 @@ export function apCongCuGhi(
   return { ket: `Không có công cụ tên ${ten}.`, loi: true };
 }
 
+const SO_KHOANG_CACH = /(\d+(?:[.,]\d+)?)\s*(km|m|mét|met)(?![\p{L}\d²])/giu;
+const CHU_NOI_CHON = /\b(benh vien|truong|cho|sieu thi|cong vien|cach|gan|quanh|di bo|xe may)\b/;
+const metCua = (so: string, dv: string) => Number(so.replace(",", ".")) * (/^k/i.test(dv) ? 1000 : 1);
+/**
+ * Câu nói KHOẢNG CÁCH tới nơi chốn mà con số không có trong nguồn (kết quả công cụ, ngữ cảnh kho, lời khách). Bắn thật
+ * 02/10 (thu-trl-05): "còn bệnh viện gần đó thì sao" → model KHÔNG gọi công cụ, tự kể "Bệnh viện Chợ Rẫy khoảng 500m".
+ * Lệch ≤ 8% (tối thiểu 50 m) vẫn tính là cùng số (model làm tròn "~250 m" thành "300 mét"). Cụm BÁN KÍNH tìm ("trong ~1 km",
+ * "bán kính 1 km" — hồ sơ khách, đầu kết quả công cụ) không phải khoảng cách tới một nơi nên không làm nguồn: e2e TL-E2E-09
+ * bắt "trường Nguyễn Du khoảng 900m" lọt vì hồ sơ có "trong ~1 km".
+ */
+export function cauKhoangCachKhongNguon(van: string, nguon: string): string[] {
+  const nguonSach = nguon.replace(/(?:trong|bán kính|ban kinh)\s*~?\s*\d+(?:[.,]\d+)?\s*(?:km|m)(?![\p{L}\d²])/giu, "");
+  const coSan = [...nguonSach.matchAll(SO_KHOANG_CACH)].map((m) => metCua(m[1], m[2]));
+  const cau = van.split(/(?<=[.!?…])\s+|\n+/).filter(Boolean);
+  return cau.filter((c) => {
+    if (!CHU_NOI_CHON.test(boDauNhe(c))) return false;
+    return [...c.matchAll(SO_KHOANG_CACH)].some((m) => {
+      const v = metCua(m[1], m[2]);
+      return v > 0 && !coSan.some((x) => Math.abs(x - v) <= Math.max(50, x * 0.08));
+    });
+  });
+}
+const boDauNhe = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+const NHAC_KHOANG_CACH = (cau: string[]) =>
+  `[HỆ THỐNG, khách không thấy dòng này] Lời vừa soạn nêu khoảng cách chưa có nguồn: ${cau.map((c) => `"${c}"`).join("; ")}. ` +
+  "Gọi tim_tien_ich_quanh để tra rồi trả lời theo kết quả; không tra được thì bỏ phần khoảng cách, đừng kể theo trí nhớ.";
+
 /** Chữ model → bong bóng: tách theo dòng trống, tối đa 2 (bong bóng thừa gộp vào bong bóng cuối). */
 export function thanhBongBong(s: string): string[] {
   const ds = s.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
@@ -273,6 +306,9 @@ export type KetQuaTroLy = {
   congCu: string[];
   vong: number;
   usage: DungLuong[];
+  /** Số lần code nhắc model vì nêu khoảng cách không nguồn / số câu bị bỏ sau khi nhắc. */
+  nhac: number;
+  boCau: string[];
 };
 
 /**
@@ -287,6 +323,8 @@ export async function chayTroLyMua(o: {
   loiKhach: string;
   doc: DocCongCu;
   toiDaVong?: number;
+  /** Ngữ cảnh model đã thấy (kho, căn khách nhắc, hội thoại) — nguồn hợp lệ cho con số khoảng cách. */
+  nguCanh?: string;
 }): Promise<KetQuaTroLy | null> {
   const out: LuotMuaTroLy = {
     profile: Object.fromEntries(KHOA_HO_SO.map((k) => [k, null])),
@@ -296,6 +334,25 @@ export async function chayTroLyMua(o: {
   const messages = [...o.thamSo.messages];
   const toiDa = o.toiDaVong ?? 4;
   let vanCuoi = "";
+  let nhac = 0;
+  const boCau: string[] = [];
+  /**
+   * Lời cuối có khoảng cách không nguồn: lần đầu NHẮC model (trả `true` = đi tiếp vòng, đã đẩy tin), lần sau BỎ câu đó.
+   * `ketQua` = tool_result của lượt này (lượt chỉ có công cụ ghi) — phải đi cùng tin nhắc, không được tách.
+   */
+  const xetKhoangCach = (r: PhanHoiModel, van: string, ketQua: unknown[], choNhac: boolean): boolean => {
+    const nguon = [o.nguCanh ?? "", o.loiKhach, ...duLieu].join("\n");
+    const sai = cauKhoangCachKhongNguon(van, nguon);
+    if (!sai.length) return false;
+    if (nhac === 0 && choNhac) {
+      nhac++;
+      messages.push({ role: "assistant", content: r.content });
+      messages.push({ role: "user", content: [...ketQua, { type: "text", text: NHAC_KHOANG_CACH(sai) }] });
+      return true;
+    }
+    for (const c of sai) { boCau.push(c); vanCuoi = vanCuoi.replace(c, "").replace(/\s{2,}/g, " ").trim(); }
+    return false;
+  };
   for (let vong = 1; vong <= toiDa; vong++) {
     const r = await o.goi({ ...o.thamSo, messages, tools: CONG_CU_MUA });
     if (r.usage) usage.push(r.usage);
@@ -307,8 +364,9 @@ export async function chayTroLyMua(o: {
     >;
     if (!dung.length) {
       if (r.stop_reason === "max_tokens" || !vanCuoi) return null;
+      if (xetKhoangCach(r, vanCuoi, [], vong < toiDa)) continue;
       out.replies = thanhBongBong(vanCuoi);
-      return out.replies.length ? { out, duLieu, congCu, vong, usage } : null;
+      return out.replies.length ? { out, duLieu, congCu, vong, usage, nhac, boCau } : null;
     }
     // Đầu vào công cụ bị cắt giữa chừng vì hết trần → không chạy công cụ trên dữ liệu cụt.
     if (r.stop_reason === "max_tokens") return null;
@@ -337,8 +395,9 @@ export async function chayTroLyMua(o: {
     // Chỉ công cụ GHI, mọi lệnh ghi đều qua, và đã có lời nhắn → xong. Có lệnh bị từ chối thì gửi lỗi về để model sửa lời
     // (đừng để lời "em ghi rồi" đi tới khách trong khi code không ghi).
     if (!coDoc && van && ketQua.every((k) => !k.is_error)) {
-      out.replies = thanhBongBong(van);
-      return { out, duLieu, congCu, vong, usage };
+      if (xetKhoangCach(r, van, ketQua, vong < toiDa)) continue;
+      out.replies = thanhBongBong(vanCuoi);
+      return out.replies.length ? { out, duLieu, congCu, vong, usage, nhac, boCau } : null;
     }
     messages.push({ role: "assistant", content: r.content });
     messages.push({ role: "user", content: ketQua });

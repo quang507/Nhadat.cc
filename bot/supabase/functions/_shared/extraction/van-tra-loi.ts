@@ -648,6 +648,8 @@ export function boGoiDoanGioi(s: string): string {
 /** Hai dạng đầu của `boGoiDoanGioi` (nhánh bán dùng riêng: khách lớn tuổi thì không đổi đầu câu thành "Anh chị"). */
 export function boGoiCuoiVaOi(s: string): string {
   return s.replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(\s+)ơi(?![\p{L}])/giu, (_m, ai: string, cach: string) => (/^[AC]/.test(ai) ? "Mình" : "mình") + cach + "ơi")
+    // 02/10 (thu-trl-06): "Dạ được anh, để em lọc…" — gọi đứng trước dấu phẩy; "anh, chị" (cặp tách phẩy) giữ.
+    .replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(?=\s*,(?!\s*(?:anh|chị)(?![\p{L}])))/giu, (m: string) => (/^[AC]/.test(m) ? "Mình" : "mình"))
     .replace(/(?<!\banh\s)(?<![\p{L}\/])(?:anh|chị)(?=\s*[?!.]|\s*$)/gu, "ạ").replace(/\bạ ạ\b/g, "ạ");
 }
 
