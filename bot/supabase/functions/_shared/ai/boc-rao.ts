@@ -5,7 +5,7 @@
 // kết quả chỉ vào `boc_tach_bong` để đo, chưa ghi tin rao.
 // Tầng này KHÔNG ghi DB (luật `bot/tests/ranh-gioi.mjs`).
 import { z } from "npm:zod@4";
-import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
+import { dinhDangLong, docLong } from "./doc-long.ts";
 import { MOI_KHOA, type DeXuat } from "../extraction/kiem-bang-chung.ts";
 import { viDuThanhChu } from "./vi-du-boc-rao.ts";
 import { danhSachPhuongChoAi } from "../extraction/khop-phuong.ts";
@@ -43,11 +43,11 @@ const XacNhan = z.object({
 // hỏi không / hỏi về chuyện gì" do ba bộ từ khoá quyết (`laCauHoiTron`, `hoiVeTin`, `dapHoiNguocTienDinh`) — bộ từ khoá thì
 // luôn thiếu cách nói mới ("bao lâu thì bán được em" → ghi làm thông tin) và bỏ dấu thì đụng chữ ("khu này" = "hồi nãy" →
 // "giá khu này giờ sao" bị đáp giá rao). AI đọc mọi tin rồi, nên AI nói luôn: có hỏi không, hỏi gì, chủ đề gì.
-export const CHU_DE_HOI = ["tin_cua_minh", "dich_vu", "thi_truong", "ve_bot", "khac"] as const;
+export const CHU_DE_HOI = ["tin_cua_minh", "dich_vu", "thi_truong", "ve_bot", "nguon", "khac"] as const;
 const HoiLai = z.object({
   co_hoi: z.boolean().describe("Tin có câu chủ nhà HỎI bot / bên mình không — đọc theo NGHĨA, kể cả không dấu hỏi, gõ tắt, không dấu ('bao lâu thì bán được em', 'giá khu này giờ sao', 'khu này dễ bán hông em', 'ký hợp đồng gì không em', 'phi ben minh sao'). Chỉ trả lời câu bot hỏi, kể chuyện, chào, cảm ơn → false."),
   cau_hoi: z.string().nullable().describe("Câu hỏi đó COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ — không bao giờ chép câu bot vừa hỏi. co_hoi = false thì null."),
-  chu_de: z.enum(CHU_DE_HOI).nullable().describe("tin_cua_minh = hỏi về chính căn mình đã rao (giá / diện tích đã ghi, đăng chưa, có khách chưa); dich_vu = phí, hợp đồng, độc quyền, cách làm việc, bao lâu bán được, ai xem tin, có dẫn khách không; thi_truong = giá khu vực, khu này dễ bán không, nên rao giá nào; ve_bot = bot là ai, người hay máy, công ty nào; khac = còn lại. co_hoi = false thì null."),
+  chu_de: z.enum(CHU_DE_HOI).nullable().describe("tin_cua_minh = hỏi về chính căn mình đã rao (giá / diện tích đã ghi, đăng chưa, có khách chưa); dich_vu = phí, hợp đồng, độc quyền, cách làm việc, bao lâu bán được, ai xem tin, có dẫn khách không; thi_truong = giá khu vực, khu này dễ bán không, nên rao giá nào; ve_bot = bot là ai, người hay máy, công ty nào; nguon = hỏi bot SAO BIẾT / LẤY ĐÂU RA một điều bot vừa nói ('sao em biết nhà 4-6 tầng', 'ai nói em vậy', 'em lấy đâu ra số đó') — KHÔNG phải ve_bot; khac = còn lại. co_hoi = false thì null."),
 });
 // 01/10/2026 (chủ dự án: "nó có nhận ra cảm xúc của khách để báo về admin ko" → "sửa cả 4 đi"): giọng chủ nhà — AI đọc theo
 // NGHĨA cả câu (có ngữ cảnh), code kiểm trích dẫn rồi mới báo admin (`docCamXuc`).
@@ -71,6 +71,13 @@ const Vai = z.object({
   la: z.enum(VAI_NGUOI_RAO).describe("Người nhắn TỰ NÓI mình là ai: chinh_chu = chủ nhà / nhà của mình / không phải môi giới; moi_gioi = tự nhận là môi giới, sale, bán giúp chủ, nhận ký gửi. Nhắc tới môi giới KHÁC ('mấy bên môi giới hối chị'), hỏi về môi giới → khong_noi."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN người nhắn tự nói vai mình. khong_noi thì null."),
 });
+// 02/10/2026 (test tay chủ dự án, SRS-5.1ze): "Ừ anh đang muốn bán căn nhà…" → bot gọi "anh chị" suốt hội thoại: luật tự xưng
+// (`tuXungTuCau`) là danh sách mẫu câu, câu mở bằng "Ừ" lọt. AI đọc theo nghĩa, code kiểm trích dẫn (`docTuXung`).
+export const TU_XUNG_AI = ["anh", "chị", "chú", "cô", "bác", "ông", "bà", "dì", "cậu", "mợ", "thím", "dượng"] as const;
+const TuXung = z.object({
+  la: z.enum(TU_XUNG_AI).nullable().describe("Chữ người nhắn dùng để TỰ GỌI CHÍNH MÌNH trong tin ('Ừ anh đang muốn bán' → anh; 'nhà a 4 tầng' → anh; 'chị gửi ảnh nha' → chị; 'chú có căn nhà' → chú). Gọi người KHÁC ('anh hàng xóm', 'chị em nó', 'nhà của bà ngoại') không tính. Không tự xưng → null."),
+  trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN có chữ tự xưng đó. la = null thì null."),
+});
 // Đợt 3 chuyển luật sang AI (02/10/2026): câu hỏi KẾ trước đây do bảng ưu tiên + từ khoá quyết (`chonCauKe`, `re-nhanh`) — AI
 // chọn trong danh sách "Câu bot còn định hỏi" như môi giới; code chỉ nhận khoá có trong danh sách hợp lệ của lượt (`docCauKe`).
 const CauKe = z.object({
@@ -79,7 +86,7 @@ const CauKe = z.object({
 });
 const KhongCanHoi = z.object({
   khoa: z.string().describe("Khoá câu trong danh sách 'Câu bot còn định hỏi' gửi kèm."),
-  ly_do: z.string().describe("Vì sao câu đó không áp dụng cho căn này (ngắn)."),
+  ly_do: z.string().describe("Vì sao câu đó không cần hỏi: không áp dụng, hoặc chủ nhà đã trả lời (ngắn)."),
   trich_dan: z.string().describe("Cụm COPY NGUYÊN VĂN từ lời CHỦ NHÀ (tin này hoặc ngữ cảnh) chứng minh."),
 });
 const DeXuatRao = z.object({
@@ -95,16 +102,18 @@ const DeXuatRao = z.object({
   xac_nhan: z.array(XacNhan).describe("Chữ viết tắt / gõ sai KHÔNG CHẮC nghĩa (\"xhr\" có thể là shr gõ nhầm): KHÔNG đưa vào truong, đưa khả năng cao nhất vào đây để hỏi lại. Tối đa 1. Không có thì []."),
   hoi_lai: HoiLai,
   cam_xuc: CamXuc,
-  khong_can_hoi: z.array(KhongCanHoi).describe("Câu trong danh sách 'Câu bot còn định hỏi' KHÔNG áp dụng cho căn này theo lời chủ nhà. Không có danh sách / không chắc thì []."),
+  khong_can_hoi: z.array(KhongCanHoi).describe("Câu trong danh sách 'Câu bot còn định hỏi' KHÔNG cần hỏi nữa: không áp dụng cho căn này theo lời chủ nhà, HOẶC chủ nhà ĐÃ trả lời / đã nói ý đó (tin này hay các tin trước, kể cả nói vòng: '16 tỉ, rao khi nào được giá thì bán' là đã trả lời câu gấp; 'ở 10 năm nay' chưa trả lời câu nào). Đã trả lời mà đọc được giá trị thì VẪN đưa giá trị vào truong. Không có danh sách / không chắc thì []."),
   y_dinh: YDinh,
   vai: Vai,
   cau_ke: CauKe,
+  tu_xung: TuXung,
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ can_khac: z.boolean().nullish(), tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ can_khac: z.boolean().nullish(), tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish(), tu_xung: TuXung.nullish() });
 export type CauKeLLM = z.infer<typeof CauKe>;
 export type YDinhLLM = z.infer<typeof YDinh>;
 export type VaiLLM = z.infer<typeof Vai>;
+export type TuXungLLM = z.infer<typeof TuXung>;
 export type CamXucLLM = z.infer<typeof CamXuc>;
 export type KhongCanHoiLLM = z.infer<typeof KhongCanHoi>;
 export type HoiLaiLLM = z.infer<typeof HoiLai>;
@@ -112,7 +121,7 @@ export type XacNhanLLM = z.infer<typeof XacNhan>;
 export type CapNhatLLM = z.infer<typeof CapNhat>;
 export type TraLoiCauLLM = z.infer<typeof TraLoiCau>;
 export type DeXuatRaoLLM = z.infer<typeof DeXuatRaoDoc>;
-const FORMAT_RAO = zodOutputFormat(DeXuatRao);
+const FORMAT_RAO = dinhDangLong(DeXuatRao, DeXuatRaoDoc);
 
 const LUAT = `BÓC TÁCH TIN NHẮN NGƯỜI BÁN BẤT ĐỘNG SẢN — CHỈ ĐIỀU KHÁCH NÓI.
 Bạn đọc MỘT tin nhắn của chủ nhà / môi giới (rao căn mới, hoặc trả lời câu bot vừa hỏi, hoặc sửa lời) và liệt kê từng thông tin CÓ TRONG TIN.
@@ -257,7 +266,7 @@ export async function bocRaoBangModel(
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
   nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[] } | null = null,
-): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
+): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; tuXung: TuXungLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   // 02/10/2026 (test Zalo: khách dán nguyên tin rao 700+ chữ có gạch đầu dòng): tin dài không được cắt — 1.200 chữ cũ cắt mất
   // phần pháp lý / kết cấu ở cuối tin rao dài. Trần 4.000 chỉ để chặn tin rác cực dài.
@@ -283,7 +292,7 @@ export async function bocRaoBangModel(
       content: `${tinChuNha.length ? `Các tin CHỦ NHÀ đã nhắn TRƯỚC tin này, NGUYÊN VĂN, cũ → mới (để nhớ chủ nhà đã nói gì — không trích từ đây):\n${tinChuNha.map((t) => `- ${t.replace(/\n+/g, " / ")}`).join("\n")}\n` : ""}${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${tin}"${dsPhuong ? `\n\n${dsPhuong}` : ""}`,
     }],
   });
-  const ket = DeXuatRaoDoc.safeParse(r.parsed_output);
+  const ket = docLong(DeXuatRaoDoc, r.parsed_output);
   return {
     ket: ket.success ? ket.data : null,
     truong: ket.success ? ket.data.truong.map((t) => ({ ...t })) : [],
@@ -296,6 +305,7 @@ export async function bocRaoBangModel(
     khongCanHoi: ket.success ? ket.data.khong_can_hoi ?? [] : [],
     yDinh: ket.success ? ket.data.y_dinh ?? null : null,
     vai: ket.success ? ket.data.vai ?? null : null,
+    tuXung: ket.success ? ket.data.tu_xung ?? null : null,
     cauKe: ket.success ? ket.data.cau_ke ?? null : null,
     canKhac: ket.success ? ket.data.can_khac ?? null : null,
     usage: r.usage,

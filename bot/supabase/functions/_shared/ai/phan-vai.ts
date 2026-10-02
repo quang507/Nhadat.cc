@@ -19,7 +19,7 @@
 // gọi quyết định.
 
 import { z } from "npm:zod@4";
-import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
+import { dinhDangLong, docLong } from "./doc-long.ts";
 
 const VaiBoc = z.object({
   vai: z.enum(["ban", "mua", "chua_ro"])
@@ -27,7 +27,7 @@ const VaiBoc = z.object({
   bang_chung: z.string()
     .describe("Trích NGUYÊN VĂN cụm chữ trong tin cho thấy vai đó (tối đa 80 ký tự). chua_ro thì để chuỗi rỗng."),
 });
-const FORMAT_VAI = zodOutputFormat(VaiBoc);
+const FORMAT_VAI = dinhDangLong(VaiBoc);
 
 const LUAT = `PHÂN VAI TIN NHẮN ĐẦU TIÊN gửi tới trợ lý môi giới nhà đất AI Ơi Nhà Đất (Sài Gòn, Long An).
 Người nhắn là MỘT trong ba:
@@ -61,7 +61,7 @@ export async function phanVaiBangModel(
       system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: `Tin nhắn: "${(text ?? "").slice(0, 600)}"` }],
     });
-    const k = VaiBoc.safeParse(r.parsed_output);
+    const k = docLong(VaiBoc, r.parsed_output);
     return { ket: k.success ? k.data : null, usage: r.usage };
   } catch {
     return null;

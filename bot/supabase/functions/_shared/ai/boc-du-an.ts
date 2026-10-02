@@ -24,7 +24,7 @@
 // gọi quyết định ghi.
 
 import { z } from "npm:zod@4";
-import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
+import { dinhDangLong, docLong } from "./doc-long.ts";
 import { coMuiDuAn, donKetQua } from "../extraction/vet-du-an-loc.ts";
 export { coMuiDuAn, donKetQua };
 
@@ -45,7 +45,7 @@ const DuAnBoc = z.object({
 });
 type DuAnBocLLM = z.infer<typeof DuAnBoc>;
 
-const FORMAT_DU_AN = zodOutputFormat(DuAnBoc);
+const FORMAT_DU_AN = dinhDangLong(DuAnBoc);
 
 const LUAT = `Bạn bóc thông tin về DỰ ÁN từ tin nhắn của chủ nhà đang rao bán.
 CHỈ lấy chữ có trong câu. Cấm suy đoán, cấm dùng kiến thức bên ngoài, cấm làm tròn hay diễn giải lại số.
@@ -82,7 +82,7 @@ export async function bocDuAnBangModel(
       system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: `Tin nhắn chủ nhà: "${text}"` }],
     });
-    const ket = DuAnBoc.safeParse(r.parsed_output);
+    const ket = docLong(DuAnBoc, r.parsed_output);
     return { ket: ket.success ? ket.data : null, usage: r.usage };
   } catch {
     return null;

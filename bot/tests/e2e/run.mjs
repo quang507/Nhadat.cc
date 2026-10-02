@@ -3094,6 +3094,20 @@ fresh(seedKho);
         !facts.length && !/đang rao là/.test(rep) && !db().t.info_requests.some((x) => x.listing_id === L.id && x.question === "phuong" && x.status === "pending"),
         JSON.stringify({ facts, rep: r.body.replies }));
     }
+    // 02/10/2026 (test tay chủ dự án: "nếu lấy thông tin ra thì phải ghi vì sao có cái này, người ta hỏi sao em biết nhà 4-6 tầng
+    // nó ko trả lời dc"; SRS-5.1ze): bot đáp "Dạ em là trợ lý AI…". AI xếp câu "sao em biết" vào chủ đề `nguon` → lệnh cho model
+    // phải nói NGUỒN (chủ nhà nói / kho dự án / nhận nói nhầm).
+    for (const [ma, cau] of [["HN-09", "sao em biết nhà 4-6 tầng"], ["HN-10", "ai nói với em là có thang máy vậy"]]) {
+      await moTin(`hn-${ma}`);
+      globalThis.__model.parse = aiHoi(cau, "nguon");
+      let lenh = "";
+      globalThis.__model.create = (p) => { lenh += JSON.stringify(p.messages ?? p); return "Dạ em nói nhầm ạ, em xin lỗi. Nhà mình mấy tầng ạ?"; };
+      const r = await send({ external_user_id: `hn-${ma}`, text: cau });
+      globalThis.__model.create = undefined;
+      const rep = (r.body.replies ?? []).join(" ");
+      check(`${ma} chủ nhà hỏi '${cau}' (AI: nguon) → lệnh model đòi nói NGUỒN, không đáp 'em là trợ lý AI'`,
+        /SAO BIẾT/.test(lenh) && /KHO DỰ ÁN/.test(lenh) && !/trợ lý AI/.test(rep), JSON.stringify({ rep: r.body.replies, coLenh: /SAO BIẾT/.test(lenh) }));
+    }
     // Bắn thử v312 (lx-hn-91/92): câu hệ thống không có dữ liệu → nói thật + chuyển người phụ trách (escalation), không để
     // model tự trả lời; AI nói là câu hỏi thì luật không đọc dữ liệu từ câu hỏi ("ký hợp đồng gì không" ≠ pháp lý).
     for (const [ma, cau, chuDe, mongRep] of [
@@ -3150,6 +3164,86 @@ fresh(seedKho);
     fresh(seedKho);
     const rL4 = await send({ external_user_id: "lung-2", text: "bán nhà hẻm 5m Lê Văn Sỹ quận 3, 4x15, trệt 3 lầu, giá 7 tỷ" });
     check("LUNG-04 rao 'trệt 3 lầu' (đã rõ) → không hỏi lửng", !rL4.body.replies.some((x) => /gác lửng/.test(x)), JSON.stringify(rL4.body.replies));
+    // 02/10/2026 (test tay chủ dự án, SRS-5.1ze): khách HỎI "Sao em biết nhà 4-6 tầng" → bot hỏi "kết cấu 6 tầng đó có tính cả gác
+    // lửng không"; khách đáp "Nhà a 4 tầng tính cả lửng" → bot vẫn lấy 6 → "trệt + lửng + 4 lầu".
+    fresh(seedKho);
+    const rL7 = await send({ external_user_id: "lung-3", text: "bán nhà hẻm 5m Lê Văn Sỹ quận 3, 4x15, giá 7 tỷ" });
+    void rL7;
+    const rL7b = await send({ external_user_id: "lung-3", text: "sao em biết nhà 4-6 tầng" });
+    check("LUNG-07 (luật, AI không chạy) khách hỏi 'sao em biết nhà 4-6 tầng' → không hỏi lửng (khoảng số không phải kết cấu)",
+      !rL7b.body.replies.some((x) => /gác lửng/.test(x)), JSON.stringify(rL7b.body.replies));
+    const cuCH = globalThis.__cauHinh;
+    const rongL = (truong = []) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong, cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null } } : OUT();
+    const moL = async (uid) => {
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__model.parse = rongL();
+      await send({ external_user_id: uid, text: "ban nha hem 5m Le Van Sy quan 3, 4x15, gia 7 ty" });
+      const L = db().t.listings.at(-1);
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: L.id, question: "phuong", status: "pending" });
+      return L;
+    };
+    await moL("lung-4");
+    const rL5 = await send({ external_user_id: "lung-4", text: "sao em biết nhà 6 tầng vậy" });
+    check("LUNG-05 (chế độ ai) khách HỎI 'sao em biết nhà 6 tầng vậy', AI không đọc ra kết cấu → không hỏi 'kết cấu 6 tầng đó có tính cả gác lửng'",
+      !rL5.body.replies.some((x) => /gác lửng/.test(x)), JSON.stringify(rL5.body.replies));
+    await moL("lung-5");
+    globalThis.__model.parse = rongL([{ khoa: "so_tang", gia_tri: "5", trich_dan: "5 tầng", can: null }]);
+    const rL8 = await send({ external_user_id: "lung-5", text: "nhà anh 5 tầng em" });
+    check("LUNG-08 (chế độ ai) AI đọc so_tang 5 → hỏi 'kết cấu 5 tầng đó có tính cả gác lửng không'",
+      rL8.body.replies.some((x) => /kết cấu 5 tầng đó có tính cả gác lửng không/.test(x)), JSON.stringify(rL8.body.replies));
+    const L6 = await moL("lung-6");
+    L6.boc_tach = { ...(L6.boc_tach ?? {}), lung_goi_y: { n: 6, dv: "tầng" } };
+    globalThis.__model.parse = rongL();
+    const rL6 = await send({ external_user_id: "lung-6", text: "Nhà a 4 tầng tính cả lửng" });
+    const LL6 = db().t.listings.find((x) => x.id === L6.id);
+    check("LUNG-06 bot hỏi '6 tầng đó có tính cả gác lửng', khách đáp 'Nhà a 4 tầng tính cả lửng' → số khách nói thắng: 'trệt + lửng + 2 lầu'",
+      LL6.floors_text === "trệt + lửng + 2 lầu" && LL6.floors === 3, JSON.stringify({ ft: LL6.floors_text, f: LL6.floors, rep: rL6.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // 02/10/2026 (bắn thử thu-gapb, SRS-5.1ze): AI trả MỘT khoá ngoài danh sách (cap_nhat.khoa "gia" không thuộc KHOA_GOP, cảm xúc
+  // "vui" không thuộc danh sách) → cả lượt bóc tách bị gạt, ô gấp AI đọc đúng cũng mất. Nay chỉ bỏ phần tử sai.
+  {
+    const cuCH = globalThis.__cauHinh;
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    const rongK = (them = {}) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, ...them } : OUT();
+    globalThis.__model.parse = rongK();
+    await send({ external_user_id: "khoa-sai", text: "ban nha hem 5m Le Van Sy quan 3, 4x15, gia 7 ty" });
+    const L = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: L.id, question: "phuong", status: "pending" });
+    globalThis.__model.parse = rongK({
+      truong: [{ khoa: "gap", gia_tri: "khong", trich_dan: "được giá thì bán", can: null }, { khoa: "gia_khong_co", gia_tri: "x", trich_dan: "anh", can: null }],
+      cap_nhat: [{ khoa: "gia", gia_tri: "7 tỷ", cach: "thay" }],
+      cam_xuc: { muc: "vui", trich_dan: null },
+    });
+    const r = await send({ external_user_id: "khoa-sai", text: "từ từ anh rao, được giá thì bán em" });
+    const fg = db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === "gap");
+    check("KHOA-SAI-01 AI trả khoá ngoài danh sách (cap_nhat 'gia', truong 'gia_khong_co', cảm xúc 'vui') → vẫn ghi ô gấp 'không gấp' AI đọc đúng",
+      fg.some((f) => f.answer === "không gấp"), JSON.stringify({ fg, rep: r.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
+  // 02/10/2026 (test tay chủ dự án, SRS-5.1ze): "Ừ anh đang muốn bán căn nhà…" → bot gọi "anh chị" suốt. AI đọc khách tự xưng.
+  {
+    const cuCH = globalThis.__cauHinh;
+    const aiX = (tx) => (p) => laLuotBocRao(p) ? { so_can: 1, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, tu_xung: tx } : OUT();
+    for (const [ma, tx, mong] of [
+      ["XH-AI-01", { la: "anh", trich_dan: "nhà a" }, "anh"],
+      ["XH-AI-02", { la: "chị", trich_dan: "nhà a" }, null], // cụm trích không có chữ "chị" → không nhận
+    ]) {
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__model.parse = aiX(tx);
+      const uid = `xh-ai-${ma}`;
+      const r = await send({ external_user_id: uid, text: "ừm nhà a ở Lê Văn Sỹ quận 3, 4x15, bán 7 tỷ" });
+      const s = db().t.sellers.find((x) => x.zalo_user_id === uid);
+      const coAnhChi = (r.body.replies ?? []).some((x) => /anh chị|anh\/chị/i.test(x));
+      check(`${ma} 'ừm nhà a … bán 7 tỷ', AI đọc tự xưng ${JSON.stringify(tx)} → ${mong ? `gọi '${mong}', không 'anh chị'` : "không nhận (trích dẫn không có chữ đó)"}`,
+        mong ? (s?.xung_ho === mong && !coAnhChi) : !s?.xung_ho, JSON.stringify({ xh: s?.xung_ho, rep: r.body.replies }));
+    }
+    globalThis.__cauHinh = cuCH;
   }
   // 30/09/2026 (bắn thật lx-mua-e): khách MUA đã có hồ sơ nới ngân sách "vậy có căn 6 tỷ rưỡi cũng được" → cổng nới
   // `coHangCoGia` ("có căn" + giá) mở hồ sơ BÁN, tạo tin "BĐS bán", hỏi "nhà mình là nhà phố hay chung cư".

@@ -120,7 +120,7 @@ const KHO_MAU = [
 
 async function mayChuMay() {
   const API_KEY = layEnv("ANTHROPIC_API_KEY");
-  const MODEL = layEnv("ANTHROPIC_MODEL") ?? "claude-haiku-4-5-20251001"; // như _shared/claude.ts
+  const MODEL = layEnv("ANTHROPIC_MODEL") ?? "claude-sonnet-4-6"; // như _shared/claude.ts
   // Cài SDK lần đầu (bun tìm node_modules từ vị trí file bundle, tức thư mục này).
   if (!existsSync(join(HERE, "node_modules", "@anthropic-ai", "sdk"))) {
     console.log(XAM("Cài gói lần đầu (bun install)…"));

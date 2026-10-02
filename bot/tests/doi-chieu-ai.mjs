@@ -69,5 +69,19 @@ kiem("DC-06 câu lệnh dạy 'được giá thì bán/thôi' = không gấp, v�
 kiem("DC-07 câu lệnh: tin rao có chữ 'nhà' (cả không dấu) luôn đưa loai_bds; gấp chỉ trả co/khong; 'ngộp ngân hàng' không phải bực",
   /LUÔN đưa loai_bds/.test(LUAT) && /ban nha hem/.test(LUAT) && /gia_tri CHỈ là "co" hoặc "khong"/.test(LUAT) && /ngộp ngân hàng/.test(bocRao));
 
+// DC-08 (test tay 02/10, SRS-5.1ze): bot hỏi "cần ra hàng gấp hay được giá thì thôi" ngay sau khi chủ nhà vừa nói "rao khi nào được
+// giá thì bán" — `khong_can_hoi` chỉ dạy "không áp dụng". Nay dạy cả "đã trả lời / nói vòng".
+kiem("DC-08 khong_can_hoi dạy cả câu chủ nhà ĐÃ trả lời (nói vòng về gấp)",
+  /HOẶC chủ nhà ĐÃ trả lời/.test(bocRao) && /đã trả lời câu gấp/.test(bocRao));
+// DC-09 (cùng lượt): khách tự xưng do AI đọc, code kiểm trích dẫn; chat-reply ghi hồ sơ và gọi đúng ngay lượt đó.
+kiem("DC-09 AI đọc khách tự xưng (tu_xung) và chat-reply dùng docTuXung",
+  /tu_xung: TuXung/.test(bocRao) && /docTuXung\(kqX\.tuXung, text\)/.test(chat));
+// DC-10 (cùng lượt): khối DỰ ÁN ở nhánh người bán không mang thông số dự án (bot từng hỏi "nhà phố 4-6 tầng có thang máy" như căn chủ nhà).
+kiem("DC-10 khối DỰ ÁN nhánh bán: không đưa `specs`, dặn không dùng để nói / hỏi căn của chủ nhà",
+  !/thông số: \$\{JSON\.stringify\(ts\)\}/.test(chat) && /KHÔNG phải căn của chủ nhà/.test(chat));
+// DC-11 (chủ dự án 02/10: "nếu thông tin chung chung, thông tin dự án sẽ ghi là theo em biết là …"): khối dự án và lệnh nguồn dặn mở bằng "Theo em biết".
+kiem("DC-11 thông tin chung / dự án nói bằng 'Theo em biết, …' (khối DỰ ÁN + lệnh câu hỏi nguồn)",
+  (chat.match(/Theo em biết, dự án <tên>/g) ?? []).length >= 2);
+
 console.log(`\n${dat}/${dat + hong} đạt`);
 if (hong) process.exit(1);

@@ -2252,11 +2252,25 @@ export function soTamCanHoiLung(ketCau: string | null | undefined): { n: number;
   if (!kd.trim()) return null;
   if (/\b(lung|gac|lau|tret|ham|cap 4|c4|ap mai)\b/.test(kd)) return null;
   if (/(duoc xay|xay duoc|cho xay|co the xay|xay len|xay them|nang len|len duoc|len toi)\s*(?:len|toi|den|them|toi da)?\s*\d+\s*(?:tam|tang)/.test(kd)) return null;
+  // Khoảng "4-6 tầng", "4 tới 6 tầng" (02/10/2026: khách HỎI "Sao em biết nhà 4-6 tầng") không phải kết cấu một căn.
+  if (/\d\s*(?:-|–|toi|den|hoac|hay)\s*\d{1,2}\s*(?:tam|tang)\b/.test(kd)) return null;
   const m = /\b(\d{1,2})\s*(tam|tang)\b(?!\s*ruoi)/.exec(kd);
   if (!m) return null;
   const n = Number(m[1]);
   if (n < 2 || n > 10) return null;
   return { n, dv: m[2] === "tam" ? "tấm" : "tầng" };
+}
+
+/**
+ * Câu đáp câu lửng có nói lại SỐ tấm/tầng ("Nhà a 4 tầng tính cả lửng") → số đó (02/10/2026, test tay: bot hỏi "6 tầng đó có
+ * tính cả gác lửng không", khách đáp "4 tầng tính cả lửng" → bot vẫn lấy 6 → "trệt + lửng + 4 lầu"). Không có / nhiều số → null.
+ */
+export function soTangTrongDapLung(answer: string): number | null {
+  const kd = boDau(answer ?? "");
+  const ds = [...kd.matchAll(/\b(\d{1,2})\s*(?:tam|tang)\b/g)].map((m) => Number(m[1]));
+  if (new Set(ds).size !== 1) return null;
+  const n = ds[0];
+  return n >= 2 && n <= 10 ? n : null;
 }
 
 /**
