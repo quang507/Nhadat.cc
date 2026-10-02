@@ -69,7 +69,7 @@ import { docHoiLai, type HoiLaiDoc, locGiaTriHoSo } from "../_shared/extraction/
 import { chonDiaDanh, coChuPhuong, cungQuan, type DiaDanhChon, nhacTenQuan, type NhomDiaDanh, phuongTrungTenQuan, tenDiaDanhTron, type UngVienDiaDanh } from "../_shared/extraction/dia-danh.ts";
 import { soanLenhJson } from "../_shared/lenh-json.ts"; // FR-217
 import { timTienIchQuanh, timTinGanMoc, type TinGan } from "../_shared/tim-moc.ts";
-import { chayTroLyMua, DAU_RA_CONG_CU, type PhanHoiModel } from "../_shared/ai/tro-ly.ts";
+import { cauKhoangCachKhongNguon, chayTroLyMua, DAU_RA_CONG_CU, type PhanHoiModel } from "../_shared/ai/tro-ly.ts";
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, gonGiaTriFact, laChiDonViHanhChinh, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, laRaoLai, laRutLoiBan, NHAN_HOI_LAI, nhanDienFact,
@@ -7424,6 +7424,7 @@ Deno.serve(async (req) => {
     // công cụ (tra tiện ích, xem căn, ghi hồ sơ/hẹn/hỏi chủ…). Công cụ ghi đổ vào đúng khuôn `out` nên mọi lưới dưới vẫn
     // chạy. Không ra câu trả lời (model chết, từ chối, hết vòng) → đường JSON cũ ngay trong lượt.
     if (await troLyBat(client, externalUserId)) {
+      let hongTroLy: { ly_do: string; cong_cu: string[]; vong: number } | null = null;
       try {
         const ai = await napTroLy(client);
         if (ai) {
@@ -7443,6 +7444,7 @@ Deno.serve(async (req) => {
             doc: docCongCuMua,
             // Nguồn hợp lệ cho con số khoảng cách: kho / căn khách nhắc (khối k1) + lời dặn có hội thoại (tin user).
             nguCanh: [k1.text, ...thamSoMua.messages[0].content.map((c) => ("text" in c ? c.text ?? "" : ""))].join("\n"),
+            baoHong: (lyDo, congCu, vong) => { hongTroLy = { ly_do: lyDo, cong_cu: congCu, vong }; },
           });
           if (tl) {
             out = tl.out as LuotMua;
@@ -7452,7 +7454,7 @@ Deno.serve(async (req) => {
               vong: tl.vong, cong_cu: tl.congCu, van_goc: [...tl.out.replies], du_lieu: tl.duLieu.map((d) => d.slice(0, 400)),
               ...(tl.nhac ? { nhac_khoang_cach: tl.nhac, bo_cau: tl.boCau } : {}),
             };
-          } else troLy = { vong: 0, cong_cu: [], ly_do: "khong_ra_cau_tra_loi" };
+          } else troLy = hongTroLy ?? { vong: 0, cong_cu: [], ly_do: "khong_ra_cau_tra_loi" };
         } else troLy = { vong: 0, cong_cu: [], ly_do: "khong_co_khoa_anthropic" };
       } catch (e) {
         await ghiLoi(client, "chat-reply tro ly", e);
@@ -7663,6 +7665,20 @@ Deno.serve(async (req) => {
     // riêng sau chợ / trường / bệnh viện… không có trong ngữ cảnh (kho, căn khách nhắc, dự án, lịch sử) thì
     // gọt tên, giữ loại ("gần chợ").
     const nguCanhTen = [kho, askedBlock, tuongTuBlock, canDuAnBlock, duAnKhuBlock, duanBlock, duanNhaMinh, ...duLieuCongCu, text, ...history.map((m) => m.body ?? "")].map(String).join("\n");
+    // 02/10/2026 (bắn D1 "còn bệnh viện gần đó thì sao"): trợ lý hỏng → đường JSON cũ kể "Bệnh viện … khoảng 800m" mà không
+    // tra gì; lưới khoảng cách chỉ nằm TRONG vòng trợ lý nên đường cũ lọt, rồi lưới gọt tên cắt cụt thành "Bệnh viện tế…".
+    // Lưới khoảng cách chạy ở đây cho MỌI đường: câu nêu nơi chốn + khoảng cách không có trong kho / dữ liệu công cụ /
+    // hội thoại thì bỏ cả câu.
+    {
+      const sai = out.replies.flatMap((r) => cauKhoangCachKhongNguon(r, nguCanhTen));
+      if (sai.length) {
+        out.replies = out.replies
+          .map((r) => sai.reduce((acc, c) => acc.replace(c, ""), r).replace(/\s{2,}/g, " ").trim())
+          .filter(Boolean);
+        if (!out.replies.length) out.replies = ["Dạ phần khoảng cách tới đó em chưa tra được số liệu chắc nên không dám nói bừa ạ."];
+        console.log("chat-reply: bỏ câu khoảng cách không nguồn", sai.length);
+      }
+    }
     const truocTen = out.replies;
     out.replies = boTenRiengBia(out.replies, nguCanhTen);
     if (out.replies !== truocTen) console.log("chat-reply: gọt tên riêng không có trong kho");

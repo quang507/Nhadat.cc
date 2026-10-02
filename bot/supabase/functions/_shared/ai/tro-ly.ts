@@ -323,6 +323,8 @@ export async function chayTroLyMua(o: {
   toiDaVong?: number;
   /** Ngữ cảnh model đã thấy (kho, căn khách nhắc, hội thoại) — nguồn hợp lệ cho con số khoảng cách. */
   nguCanh?: string;
+  /** Gọi khi trả null — để payload bắn thử nói VÌ SAO (02/10 bắn D1: chỉ thấy "khong_ra_cau_tra_loi", không biết gì thêm). */
+  baoHong?: (lyDo: string, congCu: string[], vong: number) => void;
 }): Promise<KetQuaTroLy | null> {
   const out: LuotMuaTroLy = {
     profile: Object.fromEntries(KHOA_HO_SO.map((k) => [k, null])),
@@ -351,23 +353,28 @@ export async function chayTroLyMua(o: {
     for (const c of sai) { boCau.push(c); vanCuoi = vanCuoi.replace(c, "").replace(/\s{2,}/g, " ").trim(); }
     return false;
   };
+  const hong = (lyDo: string, vong: number) => { o.baoHong?.(lyDo, congCu, vong); return null; };
   for (let vong = 1; vong <= toiDa; vong++) {
-    const r = await o.goi({ ...o.thamSo, messages, tools: CONG_CU_MUA });
+    // 02/10/2026 (bắn D1 "còn bệnh viện gần đó thì sao"): model gọi công cụ hết 4 vòng mà chưa viết lời → null → đường JSON
+    // cũ (không có công cụ, không có lưới khoảng cách) kể "Bệnh viện … khoảng 800m". Vòng CUỐI cấm gọi thêm công cụ: model
+    // phải trả lời bằng kết quả đã tra (hoặc nói thật chưa tra được) — hết vòng không còn là đường rơi về chỗ bịa.
+    const cuoi = vong === toiDa && vong > 1;
+    const r = await o.goi({ ...o.thamSo, messages, tools: CONG_CU_MUA, ...(cuoi ? { tool_choice: { type: "none" } } : {}) });
     if (r.usage) usage.push(r.usage);
-    if (r.stop_reason === "refusal") return null;
+    if (r.stop_reason === "refusal") return hong("tu_choi", vong);
     const van = (r.content ?? []).filter((b) => b.type === "text").map((b) => String(b.text ?? "")).join("").trim();
     if (van) vanCuoi = van;
     const dung = (r.content ?? []).filter((b) => b.type === "tool_use") as Array<
       { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
     >;
     if (!dung.length) {
-      if (r.stop_reason === "max_tokens" || !vanCuoi) return null;
+      if (r.stop_reason === "max_tokens" || !vanCuoi) return hong(r.stop_reason === "max_tokens" ? "het_tran_token" : "khong_co_chu", vong);
       if (xetKhoangCach(r, vanCuoi, [], vong < toiDa)) continue;
       out.replies = thanhBongBong(vanCuoi);
-      return out.replies.length ? { out, duLieu, congCu, vong, usage, nhac, boCau } : null;
+      return out.replies.length ? { out, duLieu, congCu, vong, usage, nhac, boCau } : hong("loi_rong", vong);
     }
     // Đầu vào công cụ bị cắt giữa chừng vì hết trần → không chạy công cụ trên dữ liệu cụt.
-    if (r.stop_reason === "max_tokens") return null;
+    if (r.stop_reason === "max_tokens") return hong("het_tran_token_giua_cong_cu", vong);
     const ketQua: Array<{ type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }> = [];
     let coDoc = false;
     for (const d of dung) {
@@ -400,5 +407,5 @@ export async function chayTroLyMua(o: {
     messages.push({ role: "assistant", content: r.content });
     messages.push({ role: "user", content: ketQua });
   }
-  return null;
+  return hong("het_vong", toiDa);
 }
