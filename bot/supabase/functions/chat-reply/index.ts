@@ -142,7 +142,7 @@ import { dapHoiVeTin, hoiVeTin, LEGAL_VI, type TinTom } from "../_shared/extract
 import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
 import { nhanhCuaKhoa } from "../_shared/extraction/re-nhanh.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, M2_TRONG_CAU, boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaCoHang as laHuaCoHangCau, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../_shared/extraction/van-tra-loi.ts";
-import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, loaiKhoTuHoSo, loaiNhaTrongCau, boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boHoiHoanCong, boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, loaiKhoTuHoSo, loaiNhaTrongCau, boCauGhiNhan, boCauTrung, boDoanGioiDauCau, boGoiCuoiVaOi, boGoiDoanGioi, boHoiHoanCong, boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, thayCauHoiLech, boGachCheo, boHoiMucDich, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, chanHuaCoHang, chanNhanLaNguoi, dapHoiNguocTienDinh, gopGhiChu, laCauGhiNhan, laHoiCoHang, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, locHoSoMua, suaTuXungMua, motCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 import { goNhamDau } from "../_shared/extraction/go-nham-dau.ts";
 
@@ -2702,7 +2702,8 @@ Deno.serve(async (req) => {
       if (!goiNguoi && sellerRow.nhom_tuoi === "lon_tuoi") sach = sach.map((r) => r.replace(/anh\/chị|Anh\/chị|anh chị|Anh chị/g, (m) => /^[AĐ]/.test(m) ? "Mình" : "mình"));
       // 22/09/2026 (kịch bản E): khách xưng "tui" mà model hỏi "…vậy anh?" — đoán giới tính. Chưa biết cách gọi thì
       // "anh"/"chị" đứng cuối câu (trước dấu hỏi/chấm) thành "ạ"; "anh chị" (đủ cặp) và "anh Thu" không đụng.
-      if (!goiNguoi) sach = sach.map((r) => r.replace(/(?<!\banh\s)(?<![\p{L}\/])(?:anh|chị)(?=\s*[?!.]|\s*$)/gu, "ạ").replace(/\bạ ạ\b/g, "ạ"));
+      // 02/10/2026: gom vào `boGoiCuoiVaOi` (dùng chung với nhánh mua), thêm dạng gọi "anh ơi / chị ơi".
+      if (!goiNguoi) sach = sach.map(boGoiCuoiVaOi);
       // 21/09/2026 (chủ dự án "làm cả 4"): chưa biết cách gọi → "anh/chị" gạch chéo là chữ máy; người bán
       // hàng thật nói "anh chị". Áp cho mọi bong bóng (tiền định lẫn model) ở một chỗ.
       if (!goiNguoi) sach = sach.map(boGachCheo);
@@ -7670,6 +7671,9 @@ Deno.serve(async (req) => {
   // và mọi câu model ở nhánh MUA chưa đi qua bộ lọc gạch chéo như nhánh bán (1952) → khách mua chưa
   // biết nam/nữ vẫn đọc "anh/chị". Cùng một lưới cho hai nhánh.
   if (!goiMua) out.replies = out.replies.map(boGachCheo);
+  // 02/10/2026 (bắn thật thu-trl-04: khách xưng "mình", bot "Dạ được chị ơi"): nhánh mua chưa có lưới đoán giới tính như
+  // nhánh bán — dùng chung `boGoiDoanGioi`.
+  if (!goiMua) out.replies = out.replies.map(boGoiDoanGioi);
   // 15/09/2026 (bắn thật K2): "phòng riêng hay share…? Ngoài ra, có cần toilet riêng, điều hòa
   // không?" — HUMAN_CHAT_RULES cho gộp ý vào MỘT câu hỏi, không phải hai câu hỏi.
   out.replies = motCauHoi(out.replies);

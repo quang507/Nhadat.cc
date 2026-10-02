@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boGoiDoanGioi, boGoiCuoiVaOi, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -1163,6 +1163,15 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
   const r3 = boKhenKhongCanCu(["Nhà mình có lửng không anh?"], "hẻm 3m");
   ok("KC-05 câu HỎI 'có lửng không' → giữ", r3.length === 1, JSON.stringify(r3));
 }
+
+// GOI-01…05 (02/10/2026, bắn thật thu-trl-04: khách mua xưng "mình", bot "Dạ được chị ơi"): chưa biết anh hay chị thì
+// không gọi theo giới — dạng "anh ơi / chị ơi" (mới), cuối câu, đầu câu; "anh chị" đủ cặp và "anh Thu" giữ.
+ok("GOI-01 'Dạ được chị ơi :)' → 'mình ơi'", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào.") === "Dạ được mình ơi :) Hiện bên em chưa có căn nào.", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào."));
+ok("GOI-02 'Anh ơi em gửi' (cách nói mới, đầu câu) → 'Mình ơi'", boGoiDoanGioi("Anh ơi em gửi căn này nha") === "Mình ơi em gửi căn này nha", boGoiDoanGioi("Anh ơi em gửi căn này nha"));
+ok("GOI-03 cuối câu '…vậy anh?' → '…vậy ạ?'", boGoiCuoiVaOi("Mình cần mấy phòng vậy anh?") === "Mình cần mấy phòng vậy ạ?", boGoiCuoiVaOi("Mình cần mấy phòng vậy anh?"));
+ok("GOI-04 'anh chị ơi' / 'anh chị phụ trách' / 'anh Thu' giữ nguyên",
+  boGoiDoanGioi("Anh chị ơi, em gửi nha.") === "Anh chị ơi, em gửi nha." && boGoiDoanGioi("Có anh chị phụ trách bên em gọi lại ạ.") === "Có anh chị phụ trách bên em gọi lại ạ." && boGoiDoanGioi("Dạ anh Thu sẽ gọi lại.") === "Dạ anh Thu sẽ gọi lại.");
+ok("GOI-05 đầu câu 'Anh cần…' → 'Anh chị cần…'", boGoiDoanGioi("Anh cần mấy phòng ngủ ạ?") === "Anh chị cần mấy phòng ngủ ạ?", boGoiDoanGioi("Anh cần mấy phòng ngủ ạ?"));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

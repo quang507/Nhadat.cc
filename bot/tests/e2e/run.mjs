@@ -6645,6 +6645,32 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     /CHƯA định vị được nơi đó/.test(sysTL6) && /gọi tim_tien_ich_quanh TRƯỚC/.test(sysTL6) && !/hỏi lại khách nơi đó ở đường nào/.test(sysTL6),
     sysTL6.slice(0, 600));
   globalThis.__rpc = {};
+
+  // TL-E2E-07 (bắn thật 02/10): model gửi khu vực KÈM đuôi quận "chợ Hoà Bình, Quận 5" — cả chuỗi không khớp tên mốc
+  // ("cho hoa binh"); công cụ phải thử bản bỏ đuôi và ra trường quanh chợ.
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  let kqTL7 = null;
+  globalThis.__model.troLy = (p) => {
+    const cuoi = p.messages.at(-1);
+    if (Array.isArray(cuoi.content) && cuoi.content[0]?.type === "tool_result") {
+      kqTL7 = cuoi.content[0].content;
+      return { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ quanh chợ Hoà Bình có Trường Tiểu học Chương Dương khoảng 300 m ạ." }] };
+    }
+    return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "t7", name: "tim_tien_ich_quanh", input: { khu_vuc: "chợ Hoà Bình, Quận 5", loai: "truong_hoc" } }] };
+  };
+  rt = await send({ external_user_id: "thu-tl1", text: "quanh chợ Hoà Bình quận 5 có trường nào không em" });
+  check("TL-E2E-07 'chợ Hoà Bình, Quận 5' định vị qua mốc tien_ich (bỏ đuôi quận) → ra trường trong bán kính",
+    /^Quanh Chợ Hoà Bình/.test(kqTL7 ?? "") && /Chương Dương/.test(kqTL7 ?? ""), String(kqTL7));
+
+  // TL-E2E-08 (bắn thật 02/10 thu-trl-04): khách mua xưng "mình", model gọi "chị ơi" — nhánh mua chưa biết giới tính thì
+  // không gọi theo giới (lưới chung với nhánh bán, `boGoiDoanGioi`).
+  fresh(seedTL);
+  globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+  globalThis.__model.troLy = () => ({ stop_reason: "end_turn", content: [{ type: "text", text: "Dạ được chị ơi :) Mình cần mấy phòng ngủ vậy chị?" }] });
+  rt = await send({ external_user_id: "thu-tl9", text: "minh muon mua nha, cho minh hoi chut" });
+  check("TL-E2E-08 chưa biết anh hay chị → 'chị ơi' thành 'mình ơi', '…vậy chị?' thành '…vậy ạ?'",
+    /mình ơi/.test(rt.body.reply ?? "") && !/\bchị\b/i.test(rt.body.reply ?? ""), String(rt.body.reply));
   globalThis.__cauHinh = cuCH;
 }
 // ── kết ──
