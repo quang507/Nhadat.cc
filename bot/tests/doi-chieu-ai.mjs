@@ -83,5 +83,26 @@ kiem("DC-10 khối DỰ ÁN nhánh bán: không đưa `specs`, dặn không dùn
 kiem("DC-11 thông tin chung / dự án nói bằng 'Theo em biết, …' (khối DỰ ÁN + lệnh câu hỏi nguồn)",
   (chat.match(/Theo em biết, dự án <tên>/g) ?? []).length >= 2);
 
+// DC-12 (đợt 1 bỏ luật từ khoá, SRS-5.1zf): GẬT / BẢO ĐĂNG do AI quyết — mọi lời gọi `laDongY` / `laBaoDang` trong chat-reply chỉ
+// còn là lưới đỡ (trong hàm truyền cho gatLuot / baoDangLuot, hoặc nhánh `: …` sau kết quả AI). Gọi trần mới thêm vào là đỏ.
+{
+  const tran = [...chat.matchAll(/(?<!=>\s)\b(laDongY|laBaoDang)\(/g)].map((m) => {
+    const dong = chat.slice(0, m.index).split("\n").length;
+    const ca = chat.split("\n")[dong - 1];
+    return /lưới đỡ|gatLuot|baoDangLuot|: laDongY|: \(laDongY|: !gatCa|tgH !== undefined|laDongY\(text\) && text\.trim/.test(ca) ? null : `${dong}: ${ca.trim().slice(0, 90)}`;
+  }).filter(Boolean);
+  kiem("DC-12 gật / bảo đăng: không còn lời gọi laDongY / laBaoDang trần (chỉ lưới đỡ sau AI)", /docDongY\(k, textTreo/.test(chat) && /docYLuotBangModel/.test(chat) && tran.length === 0, tran.join(" | "));
+}
+
+// DC-13 (02/10/2026, #414 → revert #415): khuôn structured output của lượt bóc tách SÁT giới hạn grammar Anthropic — thêm MỘT ô
+// (`dong_y`) là mọi lượt 400 "The compiled grammar is too large", AI không chạy. Mock e2e không biên dịch grammar nên không thấy.
+// Chốt số trường cấp một của `DeXuatRao`: ý về HỘI THOẠI đi lượt nhỏ `doc-y-luot.ts`. Tăng số này là phải bắn thử production trước.
+{
+  const dau = bocRao.indexOf("const DeXuatRao = z.object({");
+  const than = bocRao.slice(dau, bocRao.indexOf("\n});", dau));
+  const khoa = [...than.matchAll(/^  ([a-z_]+):/gm)].map((m) => m[1]);
+  kiem("DC-13 khuôn bóc tách không thêm trường (giới hạn grammar Anthropic: 15 là vượt, #414)", khoa.length > 0 && khoa.length <= 14, `${khoa.length}: ${khoa.join(",")}`);
+}
+
 console.log(`\n${dat}/${dat + hong} đạt`);
 if (hong) process.exit(1);
