@@ -112,7 +112,22 @@ KHOÁ:
 - phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công; "chưa có sổ", "đang chờ sổ", "hợp đồng mua bán" cũng là câu trả lời pháp lý — ghi đúng chữ khách). "Thổ cư" không phải pháp lý.
 - noi_that, ly_do_ban (lý do CẦN bán, không phải "gấp"), ket_cau (trệt/lầu/lửng/hầm), thoi_han_thue (CHỈ tin cho thuê; tin bán có hợp đồng thuê thì hạn hợp đồng vào kien_thuc), phi_quan_ly, view, hien_trang: chữ — giá trị là cụm ngắn NẰM TRONG trích dẫn.
 - gap, thuong_luong: "co" | "khong". Hoa hồng môi giới KHÔNG phải thương lượng.
-- kien_thuc: ý khác về CĂN NHÀ không có khoá (tiện ích gần, an ninh, tình trạng, đồ để lại, lịch sử…) — cụm ngắn CHÉP NGUYÊN VĂN; KHÔNG đặt nhãn diễn giải ("tiềm năng kinh doanh", "phù hợp đầu tư", "dòng tiền tốt", "khai thác thương mại") khi khách không nói đúng chữ đó; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
+- loai_duong_vao: mat_tien | hem_xe_tai | hem_xe_hoi | hem_xe_may | hem | khong_hem — đường trước nhà, đọc theo NGHĨA cả câu, kể
+  cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền", "mặt đường" →
+  mat_tien; chỉ nói "trong hẻm" → hem; "không có hẻm", "nằm trong khu công nghiệp / nội khu" → khong_hem. "Gần / cách mặt
+  tiền" KHÔNG phải mat_tien.
+- o_to_vao_nha (ô tô vào / đậu TRONG nhà), hoan_cong (đã hoàn công), thang_may, can_goc (căn góc, lô góc, hai mặt tiền):
+  "co" | "khong" — đọc phủ định theo nghĩa ("chưa hoàn công", "không có thang máy" → khong). nam_xay: năm 4 chữ số.
+- Ô chữ (cụm ngắn, có dấu, bỏ từ đệm "em / nha / ạ", không thêm ý khách không nói): quy_hoach (quy hoạch, lộ giới), the_chap
+  (đang thế chấp), tranh_chap, tho_cu (thổ cư bao nhiêu / full thổ cư), len_tho_cu, xay_dung (được xây mấy tầng, giấy
+  phép), so_phong (TỔNG số phòng cho thuê của CHDV / toà nhà / dãy trọ), dien_tich_san (diện tích sàn / sử dụng), chieu_cao
+  (cao thông thủy), hem_thong (hẻm thông / cụt), duong_vao (đường nhựa, bê tông…), ngap_nuoc, tien_ich_gan (tiện ích gần,
+  ĐÚNG chữ khách), tiem_nang (CHỈ khi khách nói thẳng), muc_dich, hinh_dang (vuông vức, nở hậu, tóp hậu), san_vuon, pccc,
+  thoi_han_su_dung (lâu dài / 50 năm), han_hop_dong_thue (hợp đồng thuê ĐANG CHẠY của căn bán), ty_le_lap_day, phi_gui_xe,
+  mat_do_xd, tang_cao_toi_da, tai_trong_san, toa_thap (toà / block), khu_compound, ha_tang, fit_out, duong_container (xe
+  container vào được không), tram_bien_ap, xu_ly_nuoc_thai, nguon_nuoc, ranh_gioi, hinh_thuc_thue_dat (trả tiền một lần /
+  hằng năm), hien_trang_su_dung, truot_gia.
+- kien_thuc: ý khác về CĂN NHÀ không có khoá nào ở trên (an ninh, đồ để lại, lịch sử…) — cụm ngắn CHÉP NGUYÊN VĂN; KHÔNG đặt nhãn diễn giải ("tiềm năng kinh doanh", "phù hợp đầu tư", "dòng tiền tốt", "khai thác thương mại") khi khách không nói đúng chữ đó; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
 Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [], kien_thuc = [].
 
 NGỮ CẢNH — tin nhắn có thể kèm vài lượt trao đổi NGAY TRƯỚC (bot nói gì, chủ nhà nói gì) và CÂU BOT VỪA HỎI đúng nguyên văn.
