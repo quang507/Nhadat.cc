@@ -59,5 +59,10 @@ kiem("DC-05d 'đủ rồi' giữa vòng hỏi theo ý định AI", /noiDuRoi = y
 kiem("DC-05e mở tin mới theo can_khac của AI", /const canKhacAi = await canKhacLuot\(\);/.test(chat));
 kiem("DC-05f câu rao: AI đã đọc thì ô AI không nói không do luật điền", /const chiAi = laCheDoAi && !!aiRao;/.test(chat));
 
+// DC-06 (test tay 02/10/2026: "16 tỉ em ạ rao khi nào dc giá thì thôi" → chỉ ra giá): câu lệnh dạy ô gấp theo NGHĨA và dặn tin có
+// giá + ý gấp thì đưa cả hai — trước chỉ có '"co" | "khong"', model chỉ trả trường của câu đang hỏi.
+kiem("DC-06 câu lệnh dạy 'được giá thì bán/thôi' = không gấp, và tin có giá + ý gấp thì đưa cả hai",
+  /gap đọc theo NGHĨA/.test(LUAT) && /được giá thì\s*\n?\s*bán \/ thì thôi/.test(LUAT) && /đưa CẢ HAI trường/.test(LUAT));
+
 console.log(`\n${dat}/${dat + hong} đạt`);
 if (hong) process.exit(1);

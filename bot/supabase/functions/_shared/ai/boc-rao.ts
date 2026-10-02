@@ -140,7 +140,9 @@ KHOÁ:
 - huong: chỉ phương (Đông, Tây Nam…); "view sông" là view.
 - phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công; "chưa có sổ", "đang chờ sổ", "hợp đồng mua bán" cũng là câu trả lời pháp lý — ghi đúng chữ khách). "Thổ cư" không phải pháp lý.
 - noi_that, ly_do_ban (lý do CẦN bán, không phải "gấp"), ket_cau (trệt/lầu/lửng/hầm), thoi_han_thue (CHỈ tin cho thuê; tin bán có hợp đồng thuê thì hạn hợp đồng vào kien_thuc), phi_quan_ly, view, hien_trang: chữ — giá trị là cụm ngắn NẰM TRONG trích dẫn.
-- gap, thuong_luong: "co" | "khong". Hoa hồng môi giới KHÔNG phải thương lượng.
+- gap, thuong_luong: "co" | "khong". Hoa hồng môi giới KHÔNG phải thương lượng. gap đọc theo NGHĨA, kể cả khi bot không hỏi: "được giá thì
+  bán / thì thôi", "rao khi nào được giá", "không vội", "từ từ", "chưa cần bán gấp" → khong; "cần tiền gấp", "kẹt tiền", "bán nhanh", "bán gấp" → co.
+  Một tin có cả giá lẫn ý gấp ("16 tỉ em, rao khi nào được giá thì thôi") → đưa CẢ HAI trường, không chỉ giá.
 - loai_duong_vao: mat_tien | hem_xe_tai | hem_xe_hoi | hem_xe_may | hem | khong_hem — đường trước nhà, đọc theo NGHĨA cả câu, kể
   cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền", "mặt đường" →
   mat_tien; chỉ nói "trong hẻm" → hem; "không có hẻm", "nằm trong khu công nghiệp / nội khu" → khong_hem. "Gần / cách mặt
