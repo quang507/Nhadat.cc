@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-02 08:54 (giờ VN)
+-- Sinh lúc: 2026-10-02 14:36 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -1769,9 +1769,13 @@ begin
     return null;
   end if;
   -- 20260923h: 402 của Gemini embedding (tìm theo nghĩa) không làm bot câm — nhung-tick tự giãn nhịp, không báo nhầm.
-  if new.source = 'nhung-tick'
+  -- 20261002c: lọc theo TIỀN TỐ nguồn 'nhung%' (bản cũ ghi đúng tên 'nhung-tick' nên 'nhung-dia-danh-tick' lọt: câu 429 của
+  -- Gemini có chữ "billing" → 3 lần "BỘ NÃO ĐANG CÂM — HẾT TIỀN" báo nhầm ngày 01/10) + mọi lỗi Gemini (còi này nói về Anthropic).
+  if new.source like 'nhung%'
      or lower(coalesce(new.detail, '')) like '%ai.studio%'
-     or lower(coalesce(new.detail, '')) like '%generativelanguage%' then
+     or lower(coalesce(new.detail, '')) like '%generativelanguage%'
+     or lower(coalesce(new.detail, '')) like '%resource_exhausted%'
+     or lower(coalesce(new.detail, '')) like '%gemini%' then
     return null;
   end if;
 
@@ -2216,7 +2220,10 @@ begin
          left(public.che_sdt(coalesce(r.error_msg, r.content)), 500)
   from net._http_response r
   where r.id > v_from and r.id <= v_to
-    and (r.status_code is null or r.status_code < 200 or r.status_code >= 300);
+    and (r.status_code is null or r.status_code < 200 or r.status_code >= 300)
+    -- 20261002c: Gemini 429 (RESOURCE_EXHAUSTED) của lượt nhúng nền là đường đi ĐÚNG THIẾT KẾ — nhung-tick / nhung-dia-danh-tick
+    -- tự giãn nhịp và tự ghi sổ lần đầu + mỗi 12 lần. Chép thêm ở đây từng đẻ 2.951 dòng / 24h (đo 02/10, 2.951/2.952 dòng pg_net).
+    and not (r.status_code = 429 and coalesce(r.content, '') ilike '%RESOURCE_EXHAUSTED%');
   get diagnostics v_new = row_count;
   update bot_health set last_id = v_to, at = now() where who = 'pg_net';
 
@@ -5256,6 +5263,8 @@ declare
   v_tu_choi boolean := false;
   v_ma int;
   v_mau text;
+  v_ngay boolean := false;
+  v_reset timestamp;
   v_ok boolean := false;
   v_loi int;
 begin
@@ -5291,6 +5300,7 @@ begin
       v_tu_choi := true;
       v_ma := coalesce(v_ma, v.status_code);
       v_mau := coalesce(v_mau, left(coalesce(v.error_msg, v.content, ''), 200));
+      v_ngay := v_ngay or coalesce(v.content, '') ilike '%PerDay%';
     end if;
     delete from public.nhung_viec_dia_danh where bang = v.bang and khoa = v.khoa;
   end loop;
@@ -5303,6 +5313,13 @@ begin
   if v_tu_choi then
     v_loi := v_loi + 1;
     v_dung := now() + make_interval(mins => case when v_ma = 402 then 60 else least(60, (2 ^ least(v_loi, 6))::int) end);
+    -- 20261002c: hết hạn mức NGÀY (quotaId ...PerDay...) thì thử lại mỗi 60 phút chỉ đốt thêm 429 — dừng tới lúc Google cấp
+    -- lại hạn mức (nửa đêm giờ Thái Bình Dương ≈ 07:00–08:00 UTC; lấy 08:00 cho chắc).
+    if v_ngay then
+      v_reset := date_trunc('day', now() at time zone 'UTC') + interval '8 hours';
+      if v_reset <= (now() at time zone 'UTC') then v_reset := v_reset + interval '1 day'; end if;
+      v_dung := greatest(v_dung, v_reset at time zone 'UTC');
+    end if;
     update public.app_config set value = v_loi::text where key = 'nhung_lan_loi';
     update public.app_config set value = to_char(v_dung at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
      where key = 'nhung_tam_dung_den'
@@ -5376,6 +5393,8 @@ declare
   v_tu_choi boolean := false;
   v_ma int;
   v_mau text;
+  v_ngay boolean := false;
+  v_reset timestamp;
   v_ok boolean := false;
 begin
   -- (1) Thu kết quả lượt trước (tin + dự án). Chưa có phản hồi thì chờ; quá 10 phút thì bỏ, lượt sau gửi lại.
@@ -5409,6 +5428,7 @@ begin
       v_tu_choi := true;
       v_ma := coalesce(v_ma, v.status_code);
       v_mau := coalesce(v_mau, left(coalesce(v.error_msg, v.content, ''), 200));
+      v_ngay := v_ngay or coalesce(v.content, '') ilike '%PerDay%';
     end if;
     if v.loai = 'tin' then delete from public.nhung_viec where listing_id = v.id;
     else delete from public.nhung_viec_du_an where project_id = v.id; end if;
@@ -5419,6 +5439,13 @@ begin
   if v_tu_choi then
     v_loi := v_loi + 1;
     v_dung := now() + make_interval(mins => case when v_ma = 402 then 60 else least(60, (2 ^ least(v_loi, 6))::int) end);
+    -- 20261002c: hết hạn mức NGÀY (quotaId ...PerDay...) thì thử lại mỗi 60 phút chỉ đốt thêm 429 — dừng tới lúc Google cấp
+    -- lại hạn mức (nửa đêm giờ Thái Bình Dương ≈ 07:00–08:00 UTC; lấy 08:00 cho chắc).
+    if v_ngay then
+      v_reset := date_trunc('day', now() at time zone 'UTC') + interval '8 hours';
+      if v_reset <= (now() at time zone 'UTC') then v_reset := v_reset + interval '1 day'; end if;
+      v_dung := greatest(v_dung, v_reset at time zone 'UTC');
+    end if;
     update public.app_config set value = v_loi::text where key = 'nhung_lan_loi';
     update public.app_config set value = to_char(v_dung at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') where key = 'nhung_tam_dung_den';
     if v_loi = 1 or v_loi % 12 = 0 then
