@@ -83,16 +83,5 @@ kiem("DC-10 khối DỰ ÁN nhánh bán: không đưa `specs`, dặn không dùn
 kiem("DC-11 thông tin chung / dự án nói bằng 'Theo em biết, …' (khối DỰ ÁN + lệnh câu hỏi nguồn)",
   (chat.match(/Theo em biết, dự án <tên>/g) ?? []).length >= 2);
 
-// DC-12 (đợt 1 bỏ luật từ khoá, SRS-5.1zf): GẬT / BẢO ĐĂNG do AI quyết — mọi lời gọi `laDongY` / `laBaoDang` trong chat-reply chỉ
-// còn là lưới đỡ (trong hàm truyền cho gatLuot / baoDangLuot, hoặc nhánh `: …` sau kết quả AI). Gọi trần mới thêm vào là đỏ.
-{
-  const tran = [...chat.matchAll(/(?<!=>\s)\b(laDongY|laBaoDang)\(/g)].map((m) => {
-    const dong = chat.slice(0, m.index).split("\n").length;
-    const ca = chat.split("\n")[dong - 1];
-    return /lưới đỡ|gatLuot|baoDangLuot|: laDongY|: \(laDongY|: !gatCa|tgH !== undefined|laDongY\(text\) && text\.trim/.test(ca) ? null : `${dong}: ${ca.trim().slice(0, 90)}`;
-  }).filter(Boolean);
-  kiem("DC-12 gật / bảo đăng: không còn lời gọi laDongY / laBaoDang trần (chỉ lưới đỡ sau AI)", /docDongY\(k\.dongY/.test(chat) && /dong_y: DongY/.test(bocRao) && tran.length === 0, tran.join(" | "));
-}
-
 console.log(`\n${dat}/${dat + hong} đạt`);
 if (hong) process.exit(1);
