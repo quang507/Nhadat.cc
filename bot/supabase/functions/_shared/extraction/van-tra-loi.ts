@@ -635,6 +635,22 @@ export function boDoanGioiDauCau(s: string): string {
   return s.replace(/(^|[.!?…]\s+|\n)(Anh|Chị)(?=\s+(?!(?:chị|anh|em)(?![\p{L}]))\p{Ll})/gu, "$1Anh chị");
 }
 
+/**
+ * Chưa biết khách là anh hay chị: "anh" / "chị" GỌI khách thì bỏ / đổi (02/10/2026 gom từ nhánh bán sang dùng chung — bắn thật
+ * thu-trl-04, khách mua xưng "mình" mà bot "Dạ được chị ơi"). Ba dạng:
+ *   · đứng cuối câu (trước ? ! . hoặc hết câu) → "ạ" ("…vậy anh?" → "…vậy ạ?"); "anh chị" đủ cặp và "anh Thu" không đụng;
+ *   · gọi "anh ơi" / "chị ơi" → "mình ơi";
+ *   · mở câu "Anh …" / "Chị …" → "Anh chị …" (`boDoanGioiDauCau`).
+ */
+export function boGoiDoanGioi(s: string): string {
+  return boDoanGioiDauCau(boGoiCuoiVaOi(s));
+}
+/** Hai dạng đầu của `boGoiDoanGioi` (nhánh bán dùng riêng: khách lớn tuổi thì không đổi đầu câu thành "Anh chị"). */
+export function boGoiCuoiVaOi(s: string): string {
+  return s.replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(\s+)ơi(?![\p{L}])/giu, (_m, ai: string, cach: string) => (/^[AC]/.test(ai) ? "Mình" : "mình") + cach + "ơi")
+    .replace(/(?<!\banh\s)(?<![\p{L}\/])(?:anh|chị)(?=\s*[?!.]|\s*$)/gu, "ạ").replace(/\bạ ạ\b/g, "ạ");
+}
+
 export function boCauTrung(replies: string[]): string[] {
   // Trùng là trùng Ý, không cần trùng chữ: "Dạ em là trợ lý AI bên AI Ơi Nhà Đất, việc cần người
   // thật thì có anh chị phụ trách theo sát mình ạ" và "Em là trợ lý AI bên AI Ơi Nhà Đất, việc gì

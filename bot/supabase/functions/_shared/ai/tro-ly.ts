@@ -11,7 +11,7 @@
 //
 // Tầng này KHÔNG import SDK lẫn DB (luật `bot/tests/ranh-gioi.mjs`): hàm gọi model và hàm đọc dữ liệu đều do nơi gọi
 // truyền vào, nên `bot/tests/tro-ly.mjs` chạy được bằng bun với model giả.
-import { trichCoTrongTin } from "../extraction/kiem-bang-chung.ts";
+import { CHU_NOI_GOP, tachGop, trichCoTrongTin } from "../extraction/kiem-bang-chung.ts";
 
 export type KhoiNoiDung = { type: string; [k: string]: unknown };
 export type DungLuong = {
@@ -156,6 +156,15 @@ export const DAU_RA_CONG_CU =
   "nguyên văn lời khách — khách chưa nói thì đừng gọi.";
 
 const LY_DO_TRICH = "trich_dan không có trong lời khách — KHÔNG ghi. Chỉ ghi điều khách đã nói, trích đúng nguyên văn.";
+const LY_DO_GIA_TRI = "gia_tri có chữ khách KHÔNG nói — chỉ dùng chữ của khách (viết lại có dấu được), không thêm ý.";
+/**
+ * Mọi chữ / số của giá trị chữ phải có trong lời khách (bỏ dấu, như `kiemCapNhat`). Bắn thật 02/10 (thu-trl-04): khách "nhà
+ * có 2 con nhỏ" → trợ lý ghi người ở cùng "vợ chồng + 2 con nhỏ" — trích dẫn đúng, giá trị thêm "vợ chồng".
+ */
+export function giaTriCoTrongLoi(gt: string, loiKhach: string): boolean {
+  const coSan = new Set(tachGop(loiKhach));
+  return tachGop(gt).every((t) => coSan.has(t) || CHU_NOI_GOP.has(t));
+}
 
 const chu = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const maHoacNull = (v: unknown): string | null => {
@@ -181,6 +190,10 @@ export function apCongCuGhi(
         const gt = chu(t.gia_tri);
         if (!(KHOA_HO_SO as readonly string[]).includes(khoa) || !gt) { bo.push(`${khoa || "?"}: khoá/giá trị không hợp lệ`); continue; }
         if (!coTrich(t.trich_dan)) { bo.push(`${khoa}: ${LY_DO_TRICH}`); continue; }
+        if (khoa !== "deal" && khoa !== "bedrooms" && khoa !== "can_vay" && !giaTriCoTrongLoi(gt, loiKhach)) {
+          bo.push(`${khoa}: ${LY_DO_GIA_TRI}`);
+          continue;
+        }
         let v: unknown = gt;
         if (khoa === "deal") {
           if (gt !== "ban" && gt !== "thue") { bo.push("deal: chỉ nhận 'ban' hoặc 'thue'"); continue; }

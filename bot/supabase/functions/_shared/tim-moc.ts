@@ -94,6 +94,26 @@ function khoangCachM(a: { lat: number; lng: number }, b: { lat: number; lng: num
 }
 
 /**
+ * Các cách gọi một khu vực để thử định vị, đầy đủ trước (SRS-5.1y, bắn thật 02/10): model gửi "chợ An Đông, Quận 5" —
+ * cả chuỗi không khớp mốc nào trong `tien_ich` (tên lưu "cho an dong") và Nominatim cũng hụt (sau 07/2025 không còn
+ * "Quận 5"). Thêm bản bỏ ĐUÔI hành chính (", quận 5", " p12", " tp hcm"…). Đuôi chỉ cắt khi đứng SAU tên: "Phường An Đông"
+ * một mình thì giữ nguyên.
+ */
+export function ungVienKhuVuc(kv: string): string[] {
+  const goc = kv.trim().replace(/\s+/g, " ");
+  const ra = [goc];
+  const kd = boDau(goc).toLowerCase();
+  // Sau dấu phẩy: mọi chữ hành chính. Không có phẩy: "phường" CHỈ khi kèm số — tên đường "Nguyễn Tri Phương" không phải đuôi.
+  const m = /\s*,\s*(?:quan|q\b|phuong|p\b|huyen|xa|thi xa|tp|thanh pho|tphcm|hcm|sai gon|saigon)/.exec(kd) ??
+    /\s+(?:(?:quan|q|phuong|p)\.?\s*\d+\b|(?:quan|q|huyen|tp|thanh pho)\.?\s+[a-z]|tphcm\b|hcm\b|sai gon\b|saigon\b)/.exec(kd);
+  if (m && m.index > 0) {
+    const cat = goc.slice(0, m.index).replace(/[,\s]+$/, "").trim();
+    if (cat.length >= 3 && cat !== goc) ra.push(cat);
+  }
+  return ra;
+}
+
+/**
  * Công cụ ĐỌC của trợ lý (SRS-5.1y, 02/10/2026): tiện ích quanh một khu vực khách nói. Định vị khu vực theo thứ tự rẻ
  * trước: mã căn trong kho (toạ độ đã geocode) → mốc đã có trong `tien_ich` trùng tên → Nominatim (qua RPC, như
  * `timTinGanMoc`). Rồi đọc `tien_ich` trong hộp quanh điểm đó, đo khoảng cách bằng code — model không bao giờ tự nói số mét.
@@ -115,15 +135,21 @@ export async function timTienIchQuanh(
     const l = data as { code: string; location_raw?: string | null; ward?: string | null; lat?: number | null; lng?: number | null } | null;
     if (l?.lat != null && l?.lng != null) diem = { ten: `căn #${l.code}`, lat: Number(l.lat), lng: Number(l.lng) };
   }
-  if (!diem) {
-    const kd = kdTen(kv);
-    if (kd.length >= 4) {
-      const { data } = await db.from("tien_ich").select("ten, lat, lng").ilike("ten_kd", `%${kd}%`).limit(1);
-      const t = (data ?? [])[0] as { ten: string; lat: number; lng: number } | undefined;
-      if (t) diem = { ten: t.ten, lat: Number(t.lat), lng: Number(t.lng) };
-    }
+  const ungVien = ungVienKhuVuc(kv);
+  for (const uv of ungVien) {
+    if (diem) break;
+    const kd = kdTen(uv);
+    if (kd.length < 4) continue;
+    // Nhiều mốc cùng chứa chuỗi ("cho an dong", "cho an dong 2"…) → lấy tên NGẮN nhất, gần chữ khách nhất.
+    const { data } = await db.from("tien_ich").select("ten, ten_kd, lat, lng").ilike("ten_kd", `%${kd}%`).limit(10);
+    const t = ((data ?? []) as Array<{ ten: string; ten_kd: string; lat: number; lng: number }>)
+      .sort((a, b) => a.ten_kd.length - b.ten_kd.length)[0];
+    if (t) diem = { ten: t.ten, lat: Number(t.lat), lng: Number(t.lng) };
   }
-  if (!diem) diem = await traDiaDanh(db, kv);
+  for (const uv of ungVien) {
+    if (diem) break;
+    diem = await traDiaDanh(db, uv);
+  }
   if (!diem) return `Không định vị được "${kv}" — hỏi lại khách khu đó ở đường nào / quận nào, KHÔNG đoán.`;
   const dLat = bk / 111320, dLng = bk / (111320 * Math.cos(diem.lat * Math.PI / 180));
   const loaiHoi = (LOAI_HOI as readonly string[]).includes(loai) ? [loai] : [...LOAI_HOI];

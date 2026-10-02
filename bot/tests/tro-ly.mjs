@@ -5,6 +5,7 @@
 // (2) công cụ GHI điều khách nói phải có trích dẫn trong lời khách — không có thì KHÔNG ghi, model nhận lỗi;
 // (3) model đã viết lời + chỉ gọi công cụ ghi (đều qua) → xong một vòng; (4) không có câu trả lời dùng được → null
 // để chat-reply rơi về đường JSON cũ.
+import { ungVienKhuVuc } from "../supabase/functions/_shared/tim-moc.ts";
 import { apCongCuGhi, chayTroLyMua, CONG_CU_MUA, KHOA_HO_SO, thanhBongBong } from "../supabase/functions/_shared/ai/tro-ly.ts";
 
 let hong = 0, tong = 0;
@@ -103,6 +104,20 @@ const thamSo = { model: "m", max_tokens: 1024, system: [{ type: "text", text: "S
   ok("TL-04b lệnh nửa đạt vẫn báo lỗi → model viết lại", goi.goi.length === 2 && kq?.out.replies.join() === "Dạ em ghi hẻm xe hơi rồi ạ.", JSON.stringify(kq?.out.replies));
 }
 
+// TL-04c (bắn thật 02/10 thu-trl-04): khách "nhà có 2 con nhỏ" → trợ lý ghi "vợ chồng + 2 con nhỏ" — trích dẫn đúng, giá
+// trị thêm chữ khách không nói → bỏ; viết lại có dấu từ chữ không dấu của khách thì nhận.
+{
+  const out = { profile: {}, replies: [] };
+  const loi = "minh tim nha hem xe hoi quan 5 tam 7 ty, nha co 2 con nho";
+  const r = apCongCuGhi(out, "ghi_ho_so_mua", { truong: [
+    { khoa: "nguoi_o_cung", gia_tri: "vợ chồng + 2 con nhỏ", trich_dan: "nha co 2 con nho" },
+    { khoa: "alley", gia_tri: "hẻm xe hơi", trich_dan: "hem xe hoi" },
+    { khoa: "notes", gia_tri: "có 2 con nhỏ", trich_dan: "co 2 con nho" },
+  ] }, loi);
+  ok("TL-04c 'vợ chồng' khách không nói → không ghi người ở cùng", out.profile.nguoi_o_cung === undefined && r.loi && /chữ khách KHÔNG nói/.test(r.ket), JSON.stringify({ out, r }));
+  ok("TL-04c 'hẻm xe hơi' / 'có 2 con nhỏ' (có dấu từ chữ không dấu) → ghi", out.profile.alley === "hẻm xe hơi" && out.profile.notes === "có 2 con nhỏ", JSON.stringify(out.profile));
+}
+
 // TL-05: cách nói MỚI — khách nói không dấu, trích có dấu vẫn nhận (khớp sau bỏ dấu); giờ hẹn + SĐT khách tự cho.
 {
   const out = { profile: {}, replies: [] };
@@ -155,6 +170,17 @@ const thamSo = { model: "m", max_tokens: 1024, system: [{ type: "text", text: "S
 // TL-08: tách bong bóng.
 ok("TL-08 ba đoạn → hai bong bóng", JSON.stringify(thanhBongBong("A\n\nB\n\nC")) === JSON.stringify(["A", "B\nC"]));
 ok("TL-08 một đoạn nhiều dòng giữ nguyên", JSON.stringify(thanhBongBong("A\nB")) === JSON.stringify(["A\nB"]));
+
+// TL-09 (bắn thật 02/10 "chợ An Đông, Quận 5" không định vị được): thử thêm bản bỏ đuôi hành chính; tên đường có chữ
+// "Phương" không bị cắt; "Phường An Đông" một mình giữ nguyên.
+{
+  const uv = (x) => JSON.stringify(ungVienKhuVuc(x));
+  ok("TL-09 'chợ An Đông, Quận 5' → thêm 'chợ An Đông'", uv("chợ An Đông, Quận 5") === JSON.stringify(["chợ An Đông, Quận 5", "chợ An Đông"]), uv("chợ An Đông, Quận 5"));
+  ok("TL-09 'bệnh viện chợ rẫy p12' → thêm 'bệnh viện chợ rẫy'", uv("bệnh viện chợ rẫy p12") === JSON.stringify(["bệnh viện chợ rẫy p12", "bệnh viện chợ rẫy"]), uv("bệnh viện chợ rẫy p12"));
+  ok("TL-09 'nguyễn tri phương q10' → 'nguyễn tri phương' (không cắt ở chữ Phương)", uv("nguyễn tri phương q10") === JSON.stringify(["nguyễn tri phương q10", "nguyễn tri phương"]), uv("nguyễn tri phương q10"));
+  ok("TL-09 'chợ bà chiểu q bình thạnh' → thêm 'chợ bà chiểu'", uv("chợ bà chiểu q bình thạnh") === JSON.stringify(["chợ bà chiểu q bình thạnh", "chợ bà chiểu"]), uv("chợ bà chiểu q bình thạnh"));
+  ok("TL-09 'Phường An Đông' / 'Phương Mai' giữ nguyên", uv("Phường An Đông") === JSON.stringify(["Phường An Đông"]) && uv("Phương Mai") === JSON.stringify(["Phương Mai"]));
+}
 
 console.log(`\n${tong - hong}/${tong} đạt`);
 if (hong) process.exit(1);

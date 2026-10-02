@@ -1008,8 +1008,8 @@ function loaiDuongNoiRo(kd: string): "may" | "hoi" | "tai" | "mat_tien" | null {
  * hoặc trong tin (cộng vài chữ nối "số", "hẻm", "và") — AI được xếp lại, thêm dấu, bỏ bớt; không được thêm điều khách
  * không nói. Trả các ô đạt, mỗi khoá một lần.
  */
-const CHU_NOI_GOP = new Set(["so", "hem", "va", "voi", "nha", "m", "met", "duong"]);
-const tachGop = (x: string) => boDau(x).replace(/(\d),(\d)/g, "$1.$2").replace(/(\d)([a-z])/g, "$1 $2").replace(/([a-z])(\d)/g, "$1 $2")
+export const CHU_NOI_GOP = new Set(["so", "hem", "va", "voi", "nha", "m", "met", "duong"]);
+export const tachGop = (x: string) => boDau(x).replace(/(\d),(\d)/g, "$1.$2").replace(/(\d)([a-z])/g, "$1 $2").replace(/([a-z])(\d)/g, "$1 $2")
   .split(/[^a-z0-9.]+/).map((t) => t.replace(/^\.+|\.+$/g, "")).filter(Boolean);
 export type CapNhatDeXuat = { khoa: string; gia_tri_moi: string; cach?: string };
 /**
