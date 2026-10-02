@@ -33,7 +33,23 @@ export const KHOA_CHU = [
   "thoi_han_thue", "phi_quan_ly", "view", "hien_trang",
 ] as const;
 export const KHOA_KHAC = ["gia_m2", "loai_giao_dich", "loai_bds", "quan", "phuong", "gap", "thuong_luong"] as const;
-export const MOI_KHOA = [...KHOA_TIEN, ...KHOA_SO, ...KHOA_CHU, ...KHOA_KHAC] as const;
+// Đợt 1 chuyển luật sang AI (02/10/2026, chủ dự án: "lấy hết các luật bên kia qua cho AI"): các ô trước đây CHỈ luật tìm-chuỗi
+// ghi (AI không có chỗ nói) — "xe container vào tận nơi em" từng ghi nguyên câu, "không có hẻm" thành hẻm. Nay AI nói, code
+// kiểm trích dẫn; luật chỉ đỡ khi model chết (`KHOA_FACT_AI_BIET` gồm luôn các khoá này).
+export const KHOA_BOOL = ["o_to_vao_nha", "hoan_cong", "thang_may", "can_goc"] as const;
+/** Loại đường vào (cột `access_type`) — `khong_hem`: không có hẻm / nội khu, không ghi cột. */
+export const LOAI_DUONG_VAO: Record<string, string> = {
+  mat_tien: "mặt tiền", hem_xe_tai: "hẻm xe tải", hem_xe_hoi: "hẻm xe hơi", hem_xe_may: "hẻm xe máy", hem: "trong hẻm",
+  khong_hem: "không có hẻm",
+};
+export const KHOA_O = [
+  "loai_duong_vao", ...KHOA_BOOL, "nam_xay", "quy_hoach", "the_chap", "tranh_chap", "tho_cu", "len_tho_cu", "xay_dung",
+  "so_phong", "dien_tich_san", "chieu_cao", "hem_thong", "duong_vao", "ngap_nuoc", "tien_ich_gan", "tiem_nang", "muc_dich",
+  "hinh_dang", "san_vuon", "pccc", "thoi_han_su_dung", "han_hop_dong_thue", "ty_le_lap_day", "phi_gui_xe", "mat_do_xd",
+  "tang_cao_toi_da", "tai_trong_san", "toa_thap", "khu_compound", "ha_tang", "fit_out", "duong_container", "tram_bien_ap",
+  "xu_ly_nuoc_thai", "nguon_nuoc", "ranh_gioi", "hinh_thuc_thue_dat", "hien_trang_su_dung", "truot_gia",
+] as const;
+export const MOI_KHOA = [...KHOA_TIEN, ...KHOA_SO, ...KHOA_CHU, ...KHOA_KHAC, ...KHOA_O] as const;
 export type Khoa = typeof MOI_KHOA[number];
 
 export type DeXuat = { khoa: string; gia_tri: string; trich_dan: string; can?: number | null; /** cụm thật trong tin (bỏ dấu) khi trích dẫn chỉ khớp MỜ */ trich_dan_sua?: string };
@@ -111,6 +127,26 @@ const HINH_TRUONG_CHU: Record<string, RegExp> = {
 };
 // Cụm nói tới dự án: chữ chỉ loại khu, hoặc thương hiệu hay gặp. "Thảo Điền" (tên khu) không có.
 const DAU_HIEU_DU_AN = /\b(du an|kdc|khu dan cu|khu do thi|kdt|chung cu|can ho|toa|block|thap)\b|residence|city|park|tower|plaza|garden|home|green|sky|river|central|vinhomes|masteri|sunrise|saigon|sai gon|lake|land|view|pearl|star|gold|diamond|ruby|centre|center/;
+
+/** Loại đường vào: mã trong danh sách, không ngược loại khách nói rõ ("hxm" ≠ hẻm xe hơi); "không có hẻm" phải có chữ phủ định / nội khu. */
+function kiemLoaiDuongVao(v: string, kd: string): string | null {
+  const ma = v.trim();
+  if (!(ma in LOAI_DUONG_VAO)) return "gia_tri_ngoai_danh_sach";
+  if (ma === "khong_hem") return /\b(khong|ko|chang|chua)\b|\bnoi khu\b|\bkhu cong nghiep\b|\bkcn\b|\bccn\b/.test(kd) ? null : "trich_dan_khong_noi_khong_hem";
+  const lt = loaiDuongNoiRo(kd);
+  const theoMa: Record<string, string> = { mat_tien: "mat_tien", hem_xe_hoi: "hoi", hem_xe_may: "may", hem_xe_tai: "tai" };
+  if (lt && theoMa[ma] && theoMa[ma] !== lt) return "loai_duong_nguoc_chu_khach";
+  // "không có hẻm" / "xe hơi không vào" mà AI đưa loại hẻm có xe → ngược phủ định trong chính cụm trích.
+  if (ma !== "mat_tien" && /\b(khong|ko|chang)\s+(co\s+)?hem\b/.test(kd)) return "trich_dan_noi_khong_co_hem";
+  return null;
+}
+/** Năm xây: đúng một năm 1900…năm sau, có trong cụm trích. */
+function kiemNamXay(v: string, kd: string): string | null {
+  const n = chuanSo(v).match(/\b(19|20)\d{2}\b/)?.[0];
+  if (!n) return "khong_phai_nam";
+  if (Number(n) > new Date().getFullYear() + 1) return "nam_ngoai_khoang";
+  return kd.includes(n) ? null : "so_khong_co_trong_trich_dan";
+}
 
 /** Một đề xuất đã qua lớp 1: kiểm lớp 2–3. Trả lý do bỏ, null là đạt. */
 function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): string | null {
@@ -228,6 +264,9 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       if (laKhong(v)) return /\b(khong tl|khong thuong luong|gia chot|mien tl|mien thuong luong)\b/.test(kd) ? null : "trich_dan_khong_noi_gia_chot";
       return "gia_tri_ngoai_danh_sach";
     }
+    case "o_to_vao_nha": case "hoan_cong": case "thang_may": case "can_goc": return laCo(v) || laKhong(v) ? null : "gia_tri_ngoai_danh_sach";
+    case "loai_duong_vao": return kiemLoaiDuongVao(v, kd);
+    case "nam_xay": return kiemNamXay(v, kd);
     default: {
       // Trường chữ: giá trị phải NẰM TRONG cụm trích (model không được "diễn đạt lại").
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
@@ -313,6 +352,9 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
       return null;
     }
     case "gap": case "thuong_luong": return laCo(v) || laKhong(v) ? null : "gia_tri_ngoai_danh_sach";
+    case "o_to_vao_nha": case "hoan_cong": case "thang_may": case "can_goc": return laCo(v) || laKhong(v) ? null : "gia_tri_ngoai_danh_sach";
+    case "loai_duong_vao": return kiemLoaiDuongVao(v, kd);
+    case "nam_xay": return kiemNamXay(v, kd);
     default: {
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
       // Chữ AI viết lại được (chuẩn hoá, sửa chính tả, đổi từ đồng nghĩa) nhưng không được thêm CON SỐ khách không nói.
@@ -598,6 +640,8 @@ export const KHOA_GHI: Record<string, string> = {
   // 21/09/2026 (bắn lại mau-u-03): AI đọc đúng "thu nhập 120 triệu/tháng" nhưng không có chỗ ghi →
   // vào fact `doanh_thu` (ô luật vẫn dùng cho toà nhà / CHDV; `diem_tin` đếm ô này).
   thu_nhap_thue: "doanh_thu",
+  // Đợt 1 (02/10/2026): khoá trước đây chỉ luật ghi — khoá fact cùng tên.
+  ...Object.fromEntries(KHOA_O.map((k) => [k, k])),
 };
 /** Khoảng hợp lệ cho trường số (đơn vị của cột). Ngoài khoảng = không ghi, kèm lý do. */
 const KHOANG: Record<string, [number, number]> = {
@@ -703,13 +747,32 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
         break;
       }
       case "gap": case "thuong_luong": {
-        // Ghi CỤM khách nói (như luật tiền định), trigger DB đọc có/không từ đó.
-        answer = d.trich_dan.trim();
+        // 02/10/2026 (đợt 1): AI đã nói có / không (qua kiểm) → ghi CHỮ CHUẨN, trigger DB đọc ra đúng cột. Trước đây ghi cụm
+        // khách nói rồi để regex DB đọc lại — "bớt lộc" không khớp regex nên cột thương lượng trống dù AI đã nói "co".
+        answer = laCo(v) ? (d.khoa === "gap" ? "cần bán gấp" : "có thương lượng")
+          : laKhong(v) ? (d.khoa === "gap" ? "không gấp" : "không thương lượng")
+          : d.trich_dan.trim();
+        break;
+      }
+      case "o_to_vao_nha": case "hoan_cong": case "thang_may": case "can_goc": {
+        answer = laCo(v) ? "có" : laKhong(v) ? "không" : null;
+        if (!answer) { bo.push({ ...d, ly_do: "gia_tri_ngoai_danh_sach" }); continue; }
+        break;
+      }
+      case "loai_duong_vao": {
+        answer = LOAI_DUONG_VAO[v] ?? null;
+        if (!answer) { bo.push({ ...d, ly_do: "gia_tri_ngoai_danh_sach" }); continue; }
+        break;
+      }
+      case "nam_xay": {
+        answer = chuanSo(v).match(/\b(19|20)\d{2}\b/)?.[0] ?? null;
+        if (!answer) { bo.push({ ...d, ly_do: "khong_phai_nam" }); continue; }
         break;
       }
       default: {
         if (v.length < 2 || v.length > 120) { bo.push({ ...d, ly_do: "gia_tri_ngoai_khoang" }); continue; }
-        answer = v;
+        // 02/10/2026 (lx-t5-05: "xe container vào tận nơi em"): cùng cách gọn chữ đệm với luật.
+        answer = gonGiaTriFact(question, v);
       }
     }
     if (!answer) continue;

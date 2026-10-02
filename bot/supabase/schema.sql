@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-02 06:49 (giờ VN)
+-- Sinh lúc: 2026-10-02 08:54 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -3029,6 +3029,19 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.doc_co_khong(p text)
+ RETURNS boolean
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  select case
+    when public.bo_dau(btrim(coalesce(p, ''))) ~ '^(khong|ko|chua|chang|false)\M' then false
+    when public.bo_dau(btrim(coalesce(p, ''))) ~ '^(co|true|da|roi)\M' then true
+  end
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.doc_danh_sach(p_token text)
  RETURNS jsonb
  LANGUAGE sql
@@ -4033,6 +4046,7 @@ declare
                        then 'admin' else 'chu_xac_nhan' end;
   l       listings%rowtype;
   de      boolean;
+  v_ai    boolean;
 begin
   -- 20260920a (FR-211): nhãn tìm kiếm là TÊN NHÃN, không phải câu tả căn — không đọc thông số từ nó.
   if new.question = 'nhan' then return null; end if;
@@ -4041,13 +4055,17 @@ begin
   -- Cụm thông số (FR-172): được đè khi bậc của fact ≥ bậc cụm đang giữ.
   de := public.bac_nguon(bac) >= public.bac_nguon(coalesce(l.specs_source, 'boc_mo_ta'));
   j := public.boc_thong_so(v_txt, l.property_type::text);
+  -- 20261002a (đợt 1 chuyển luật sang AI): tin do AI quyết thông số → regex chỉ được đọc CỘT CỦA ĐÚNG KHOÁ fact này (pháp lý →
+  -- giấy tờ, hẻm → đường vào…). Chữ tự do (bổ sung, kiến thức, tiềm năng…) không điền cột nào; không lật loại BĐS từ chữ.
+  v_ai := coalesce(l.boc_tach->>'_thong_so_ai', '') = 'true';
+  if v_ai then j := public.loc_thong_so_theo_khoa(j, new.question); end if;
   -- 20260925e: "nhà cấp 4" (câu trả lời bất kỳ) mà tin đang là nhà phố / chưa rõ → nhà cấp 4.
-  if l.property_type in ('nha_pho', 'chua_ro') and public.bo_dau(v_txt) ~ '\m(cap 4|cap bon|nha c4)\M'
+  if not v_ai and l.property_type in ('nha_pho', 'chua_ro') and public.bo_dau(v_txt) ~ '\m(cap 4|cap bon|nha c4)\M'
      and public.bo_dau(v_txt) !~ '(khong|ko|chua)\s*(phai\s*)?(la\s*)?(nha\s*)?cap' then
     update listings set property_type = 'nha_cap4' where id = new.listing_id and property_type in ('nha_pho', 'chua_ro');
   end if;
   -- 20260927a: "căn chung cư ở Botanic", "chung cư mà em", "căn hộ tầng 6" → căn hộ (tin nhà phố chưa có số tầng / chưa rõ).
-  if l.property_type in ('nha_pho', 'chua_ro') and l.floors is null
+  if not v_ai and l.property_type in ('nha_pho', 'chua_ro') and l.floors is null
      and public.bo_dau(v_txt) ~ '(^\s*|\m(can|la|ban|o|dang|co|toi|minh|anh|chi|em|chu|cua)\s+)(chung cu|can ho|cc mini|chung cu mini)\M'
      and public.bo_dau(v_txt) !~ '(gan|canh|doi dien|sat|ke|ben|view|nhin ra|cach)\s+(cac\s+)?(chung cu|can ho)'
      and public.bo_dau(v_txt) !~ '(khong|ko|chua)\s*(phai\s*)?(la\s*)?(chung cu|can ho)' then
@@ -4208,6 +4226,23 @@ begin
       update listings set ward = v_ward, ward_source = bac
        where id = new.listing_id and ward is null;
     end if;
+  -- 20261002a: ô cột AI quyết (chữ chuẩn do code ghi: "có" / "không", "hẻm xe hơi"…). Đọc PHỦ ĐỊNH: "không có thang máy"
+  -- từng thành có thang máy vì regex chỉ tìm chữ "thang may".
+  elsif new.question = 'loai_duong_vao' then
+    v_raw := case public.bo_dau(btrim(v_txt))
+      when 'mat tien' then 'mat_tien' when 'hem xe tai' then 'hem_xe_tai' when 'hem xe hoi' then 'hem_xe_hoi'
+      when 'hem xe may' then 'hem_xe_may' when 'trong hem' then 'hem' end;
+    if v_raw is not null then
+      update listings set access_type = v_raw, specs_source = bac
+       where id = new.listing_id and (access_type is null or de) and access_type is distinct from v_raw;
+    end if;
+  elsif new.question in ('o_to_vao_nha', 'hoan_cong', 'thang_may', 'can_goc') and public.doc_co_khong(v_txt) is not null then
+    execute format('update listings set %I = $1, specs_source = $2 where id = $3 and (%I is null or $4)',
+      case new.question when 'o_to_vao_nha' then 'car_in_house' when 'hoan_cong' then 'has_completion'
+                        when 'thang_may' then 'has_elevator' else 'corner_lot' end,
+      case new.question when 'o_to_vao_nha' then 'car_in_house' when 'hoan_cong' then 'has_completion'
+                        when 'thang_may' then 'has_elevator' else 'corner_lot' end)
+      using public.doc_co_khong(v_txt), bac, new.listing_id, de;
   elsif new.question = 'mat_tien' and not (j ? 'frontage_m') then
     v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
     if v_num is not null and v_num between 1.5 and 40 then
@@ -4398,6 +4433,9 @@ declare
 begin
   if new.street is null then new.street := public.boc_ten_duong(new.location_raw); end if;
   if new.description is null then return new; end if;
+  -- 20261002a (đợt 1 chuyển luật sang AI): tin do AI quyết thông số (dấu `_thong_so_ai`, chat-reply chế độ `ai`) → KHÔNG đọc
+  -- câu rao bằng regex. Bắn thử lx-t5-05: "nằm trong khu công nghiệp nên không có hẻm" → `\mhem\M` → access_type = 'hem'.
+  if coalesce(new.boc_tach->>'_thong_so_ai', '') = 'true' then return new; end if;
   de := tg_op = 'UPDATE' and new.description is distinct from old.description
         and coalesce(new.specs_source, 'boc_mo_ta') = 'boc_mo_ta';
   j := public.boc_thong_so(new.description, new.property_type::text);
@@ -4606,6 +4644,38 @@ begin
   end if;
   return new;
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.loc_thong_so_theo_khoa(j jsonb, q text)
+ RETURNS jsonb
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  select coalesce(jsonb_object_agg(k, v), '{}'::jsonb)
+    from jsonb_each(coalesce(j, '{}'::jsonb)) as e(k, v)
+   where k = any (case q
+     when 'ket_cau' then array['floors', 'floors_text', 'floor']
+     when 'tang' then array['floors', 'floors_text', 'floor']
+     when 'so_phong_ngu' then array['bedrooms']
+     when 'so_wc' then array['bathrooms']
+     when 'dien_tich' then array['frontage_m', 'length_m', 'rear_width_m']
+     when 'dien_tich_dat' then array['frontage_m', 'length_m', 'rear_width_m']
+     when 'mat_tien' then array['frontage_m', 'length_m', 'rear_width_m']
+     when 'no_hau' then array['rear_width_m']
+     when 'dien_tich_san' then array['built_area_m2']
+     when 'phap_ly' then array['legal_status', 'has_completion', 'legal_area_m2']
+     when 'do_rong_hem' then array['alley_width_m', 'access_type']
+     when 'do_rong_duong' then array['alley_width_m', 'access_type']
+     when 'cach_mat_tien' then array['distance_to_street_m']
+     when 'huong' then array['direction']
+     when 'noi_that' then array['furnishing']
+     when 'nam_xay' then array['year_built']
+     when 'quy_hoach' then array['planning_status']
+     when 'thuong_luong' then array['negotiable']
+     when 'doanh_thu' then array['rent_income_vnd']
+     else array[]::text[] end)
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.log_loi(p_source text, p_detail text, p_code integer DEFAULT NULL::integer)
@@ -8396,6 +8466,10 @@ grant execute on function public.diem_tin(p_listing_id uuid) to service_role;
 revoke all on function public.doc_bot_prompts() from public, anon, authenticated;
 grant execute on function public.doc_bot_prompts() to authenticated;
 grant execute on function public.doc_bot_prompts() to service_role;
+revoke all on function public.doc_co_khong(p text) from public, anon, authenticated;
+grant execute on function public.doc_co_khong(p text) to anon;
+grant execute on function public.doc_co_khong(p text) to authenticated;
+grant execute on function public.doc_co_khong(p text) to service_role;
 revoke all on function public.doc_danh_sach(p_token text) from public, anon, authenticated;
 grant execute on function public.doc_danh_sach(p_token text) to anon;
 grant execute on function public.doc_danh_sach(p_token text) to authenticated;
@@ -8545,6 +8619,10 @@ revoke all on function public.listings_try_publish(p_listing_id uuid) from publi
 grant execute on function public.listings_try_publish(p_listing_id uuid) to service_role;
 revoke all on function public.listings_xoa_toa_do_khi_doi_dia_chi() from public, anon, authenticated;
 grant execute on function public.listings_xoa_toa_do_khi_doi_dia_chi() to service_role;
+revoke all on function public.loc_thong_so_theo_khoa(j jsonb, q text) from public, anon, authenticated;
+grant execute on function public.loc_thong_so_theo_khoa(j jsonb, q text) to anon;
+grant execute on function public.loc_thong_so_theo_khoa(j jsonb, q text) to authenticated;
+grant execute on function public.loc_thong_so_theo_khoa(j jsonb, q text) to service_role;
 revoke all on function public.log_loi(p_source text, p_detail text, p_code integer) from public, anon, authenticated;
 grant execute on function public.log_loi(p_source text, p_detail text, p_code integer) to anon;
 grant execute on function public.log_loi(p_source text, p_detail text, p_code integer) to authenticated;

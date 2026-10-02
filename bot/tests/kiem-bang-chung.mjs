@@ -268,8 +268,10 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("giới hạn đã biết: dấu SAI trên cùng chữ cái ('Phạm Thế Hiền') lớp kiểm không phân biệt được — chấp nhận, hại chỉ ở dấu", kiemDeXuat([dx("duong", "Phạm Thế Hiền", "pham the hien")], "hem 4m pham the hien").dat.length === 1);
   ok("câu treo VỊ TRÍ: AI duong → 'Phạm Thế Hiển' (không ghép hẻm / phường)", giaTriChoCauTreo(kDau.dat, "vi_tri", {}) === "Phạm Thế Hiển");
   ok("câu treo VỊ TRÍ: AI không có duong → null (luật đỡ)", giaTriChoCauTreo([dx("do_rong_hem", "4", "hem 4m")], "vi_tri", {}) === null);
-  ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien, KHÔNG có tien_ich_gan / nam_xay / the_chap (luật vẫn đỡ)",
-    ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds"].every((k) => KHOA_FACT_AI_BIET.has(k)) && ["tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => !KHOA_FACT_AI_BIET.has(k)));
+  // 02/10/2026 (đợt 1 chuyển luật sang AI, SRS-5.1v): tiện ích gần / năm xây / thế chấp / hẻm thông nay AI có ô — luật chỉ đỡ
+  // khi model chết. Câu đứng tên vẫn là đường riêng (giữ chữ khách, không xin họ tên).
+  ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien + tien_ich_gan / nam_xay / the_chap / hem_thong; KHÔNG có nguoi_dung_ten",
+    ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds", "tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => KHOA_FACT_AI_BIET.has(k)) && !KHOA_FACT_AI_BIET.has("nguoi_dung_ten"));
 }
 
 {
@@ -499,6 +501,41 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("NX-02 căn cứ có thật ('hxh') → giữ", nhanXetKhongCanCu([{ cau: "Nhà hẻm xe hơi ạ.", can_cu: "hxh" }], "ban nha hxh q10").length === 0);
   ok("NX-03 bỏ hết chữ → null (dùng câu mẫu)", boCauNhanXet("Hẻm sâu yên tĩnh lắm ạ.", ["Hẻm sâu yên tĩnh lắm ạ."]) === null);
 }
+
+// ── Đợt 1 chuyển luật sang AI (02/10/2026, SRS-5.1v): ô trước đây chỉ luật ghi — AI nói, code kiểm ──
+for (const nhe of [false, true]) {
+  datKiemNhe(nhe);
+  const m = nhe ? "nhẹ" : "đủ";
+  const KCN = "cho thuê kho xưởng 500m2 trong KCN Tân Tạo Bình Tân giá 60 triệu/tháng, nằm trong khu công nghiệp nên không có hẻm";
+  dat(`O-01 (${m}) "không có hẻm" (KCN) → loai_duong_vao khong_hem`, KCN, "loai_duong_vao", "khong_hem", "nằm trong khu công nghiệp nên không có hẻm");
+  bo(`O-02 (${m}) "không có hẻm" mà AI nói hẻm xe hơi → bỏ`, KCN, "loai_duong_vao", "hem_xe_hoi", "không có hẻm", "trich_dan_noi_khong_co_hem");
+  bo(`O-03 (${m}) "hxm" mà AI nói hẻm xe hơi → bỏ (ngược chữ khách)`, "nhà hxm 3m quận 8", "loai_duong_vao", "hem_xe_hoi", "hxm 3m", "loai_duong_nguoc_chu_khach");
+  bo(`O-04 (${m}) khong_hem mà cụm trích không có phủ định / nội khu → bỏ`, "nhà trong hẻm Lê Văn Sỹ", "loai_duong_vao", "khong_hem", "trong hẻm Lê Văn Sỹ", "trich_dan_khong_noi_khong_hem");
+  bo(`O-05 (${m}) mã ngoài danh sách → bỏ`, "nhà mặt tiền", "loai_duong_vao", "mat_pho", "nhà mặt tiền", "gia_tri_ngoai_danh_sach");
+  dat(`O-06 (${m}) "chưa có thang máy" → thang_may khong`, "nhà 5 tầng chưa có thang máy", "thang_may", "khong", "chưa có thang máy");
+  bo(`O-07 (${m}) thang_may giá trị lạ → bỏ`, "nhà có thang máy", "thang_may", "thang máy Mitsubishi", "có thang máy", "gia_tri_ngoai_danh_sach");
+  dat(`O-08 (${m}) năm xây 2015 có trong cụm`, "nhà xây năm 2015 kiên cố", "nam_xay", "2015", "xây năm 2015");
+  bo(`O-09 (${m}) năm xây không có trong cụm → bỏ`, "nhà xây năm 2015 kiên cố", "nam_xay", "2018", "xây năm 2015", "so_khong_co_trong_trich_dan");
+}
+datKiemNhe(true);
+{
+  const ghi = docAiChinh(kiemDeXuat([
+    { khoa: "loai_duong_vao", gia_tri: "khong_hem", trich_dan: "không có hẻm" },
+    { khoa: "duong_container", gia_tri: "xe container vào tận nơi em", trich_dan: "xe container vào tận nơi em" },
+    { khoa: "thang_may", gia_tri: "khong", trich_dan: "không có thang máy" },
+    { khoa: "thuong_luong", gia_tri: "co", trich_dan: "bớt lộc" },
+  ], "kho trong KCN không có hẻm, xe container vào tận nơi em, không có thang máy, bớt lộc").dat, { deal: "cho_thue" }).ghi;
+  const q = (k) => ghi.find((g) => g.question === k)?.answer;
+  ok("O-10 ghi chữ chuẩn: loai_duong_vao 'không có hẻm', thang_may 'không', thương lượng 'có thương lượng' (trigger DB đọc ra cột)",
+    q("loai_duong_vao") === "không có hẻm" && q("thang_may") === "không" && q("thuong_luong") === "có thương lượng", JSON.stringify(ghi));
+  ok("O-11 ô chữ bỏ tiểu từ cuối: 'xe container vào tận nơi em' → 'xe container vào tận nơi'", q("duong_container") === "xe container vào tận nơi", JSON.stringify(ghi));
+  ok("O-12 khoá luật cũ nay là khoá AI biết (luật không ghi khi AI chạy): duong_container, the_chap, loai_duong_vao",
+    ["duong_container", "the_chap", "loai_duong_vao", "thang_may"].every((k) => KHOA_FACT_AI_BIET.has(k)));
+  ok("O-13 câu đứng tên KHÔNG là khoá AI (giữ chữ khách, không xin tên thật)", !KHOA_FACT_AI_BIET.has("nguoi_dung_ten"));
+}
+datKiemNhe(false);
+ok("O-14 luật (model chết) cũng bỏ tiểu từ cuối: 'xe container vào tận nơi em'",
+  nhanDienNhieuFact("kho xưởng 500m2, xe container vào tận nơi em").every((f) => !/\bem$/.test(f.answer)), JSON.stringify(nhanDienNhieuFact("kho xưởng 500m2, xe container vào tận nơi em")));
 
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

@@ -1052,7 +1052,9 @@ ok("FR241-N10b hiện trạng có dấu giữ nguyên", chuanHienTrang("đang ch
 // (a) giá trị dính chữ đệm: luật ghi nguyên câu khách vào ô (không ai gọn) → bản nháp in "sổ hồng rồi em", "phí quản lý 15k/m2".
 for (const [q, vao, ra] of [["phap_ly", "sổ hồng rồi em", "sổ hồng"], ["phap_ly", "sổ đỏ nha em", "sổ đỏ"], ["phap_ly", "sổ hồng riêng", "sổ hồng riêng"],
   ["phap_ly", "chưa có sổ", "chưa có sổ"], ["phi_quan_ly", "phí quản lý 15k/m2", "15k/m2"], ["phi_quan_ly", "phí ql 1tr/tháng", "1tr/tháng"],
-  ["phi_quan_ly", "phí quản lý 20 nghìn/m2 nha", "20 nghìn/m2"], ["gia", "giá 7 tỷ nha em", "giá 7 tỷ nha em"]]) {
+  ["phi_quan_ly", "phí quản lý 20 nghìn/m2 nha", "20 nghìn/m2"], ["gia", "giá 7 tỷ nha em", "giá 7 tỷ"],
+  // 02/10/2026 (SRS-5.1v): mọi ô chữ bỏ tiểu từ cuối ("xe container vào tận nơi em"), TRỪ câu đứng tên ("ba anh" là người).
+  ["duong_container", "xe container vào tận nơi em", "xe container vào tận nơi"], ["nguoi_dung_ten", "ba anh", "ba anh"]]) {
   ok(`FR248-a gọn ${q} '${vao}' → '${ra}'`, gonGiaTriFact(q, vao) === ra, gonGiaTriFact(q, vao));
 }
 ok("FR248-a nhanDienFact('sổ hồng rồi em') → phap_ly 'sổ hồng'", nhanDienFact("sổ hồng rồi em")?.answer === "sổ hồng", JSON.stringify(nhanDienFact("sổ hồng rồi em")));

@@ -65,6 +65,10 @@ jobs:
       # (xem ghi chú trên về required checks).
       - name: Bộ đo bóc tách — không tụt so với bản nền
         run: bun run do-boc:nen
+      # 02/10/2026 (SRS-5.1v): trigger / hàm SQL chạy THẬT trên Postgres tạm (mock e2e không mô phỏng regex DB). Thoát 2 =
+      # máy không có Postgres = chưa kiểm được → đỏ.
+      - name: Trigger SQL thật trên Postgres tạm (thông số AI quyết không bị regex đè)
+        run: bun run test:sql
 
   baomat:
     name: Bảo mật — hồi quy RLS trên DB thật

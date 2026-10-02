@@ -6044,6 +6044,10 @@ Deno.serve(async (req) => {
         gap: gapCol,
         // FR-177 d: tin từ chat chỉ lên kệ khi đủ điểm VÀ chủ nhà gật bản nháp.
         can_chu_duyet: true,
+        // 02/10/2026 (đợt 1 chuyển luật sang AI): chế độ `ai` mà AI đọc được câu rao → THÔNG SỐ của tin do AI quyết.
+        // Trigger DB thấy dấu này thì không đọc câu rao bằng regex (`boc_thong_so` từng ghi "không có hẻm" thành hẻm), và
+        // câu trả lời chỉ điền đúng cột của khoá đó (migration 20261002a).
+        ...(laCheDoAi && aiRao ? { boc_tach: { _thong_so_ai: true } } : {}),
         ...(duAn
           ? {
             project_id: duAn.id, unit_code: maCanRao, unit_status: "con_ban",
@@ -6063,7 +6067,12 @@ Deno.serve(async (req) => {
         const { error: dongErr } = await client.from("info_requests").update({ status: "expired" })
           .eq("listing_id", tinRongId).eq("status", "pending");
         if (dongErr) await ghiLoi(client, "chat-reply dong cau tin rong", dongErr.message);
-        const { code: _ma, seller_id: _nb, ...capNhat } = dongTin;
+        const { code: _ma, seller_id: _nb, boc_tach: thongSoAi, ...capNhat } = dongTin as typeof dongTin & { boc_tach?: Record<string, unknown> };
+        // Dấu `_thong_so_ai` phải có TRƯỚC khi câu rao vào `description` (trigger đọc ở lượt cập nhật đó) — gộp, không đè boc_tach.
+        if (thongSoAi) {
+          const { error: tsErr } = await client.rpc("ghi_boc_tach", { p_listing_id: tinRongId, p: thongSoAi });
+          if (tsErr) await ghiLoi(client, "chat-reply dau thong so ai", tsErr.message);
+        }
         ({ data: newLst, error: newLstErr } = await client.from("listings").update(capNhat).eq("id", tinRongId)
           .select("id, code, property_type").single());
       } else {

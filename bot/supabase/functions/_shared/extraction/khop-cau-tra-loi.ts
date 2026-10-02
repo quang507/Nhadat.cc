@@ -1381,6 +1381,12 @@ export function gonGiaTriFact(q: string, answer: string): string {
     const m = /\d+(?:[.,]\d+)?\s*(?:k|nghìn|ngàn|nghin|ngan|đ|d|đồng|dong|tr|triệu|trieu)?\s*(?:\/|trên|tren|một|mot)\s*(?:m2|m²|mét vuông|met vuong|tháng|thang)|\d+(?:[.,]\d+)?\s*(?:k|nghìn|ngàn|tr|triệu)(?![\p{L}\d])/iu.exec(answer);
     return m ? m[0].trim() : answer;
   }
+  // 02/10/2026 (lx-t5-05: duong_container = "xe container vào tận nơi em"): mọi ô chữ bỏ tiểu từ / xưng hô cuối câu như
+  // `catDapAn`. Trừ câu đứng tên — "ba anh", "chú" là NGƯỜI đứng sổ, không phải từ đệm.
+  if (q !== "nguoi_dung_ten") {
+    const g = answer.replace(DEM_CUOI_DAP_AN, "").trim();
+    return g && /[\p{L}\p{N}]/u.test(g) ? g : answer;
+  }
   return answer;
 }
 

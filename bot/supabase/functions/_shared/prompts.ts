@@ -278,6 +278,8 @@ export const FACT_LABELS: Record<string, string> = {
   thoi_han_su_dung: "thời hạn sử dụng đất", hinh_thuc_thue_dat: "trả tiền thuê đất một lần hay hàng năm", muc_dich: "mục đích sử dụng phù hợp",
   chieu_cao: "chiều cao thông thủy", tai_trong_san: "tải trọng sàn", tram_bien_ap: "trạm biến áp bao nhiêu kVA",
   xu_ly_nuoc_thai: "hệ thống xử lý nước thải", duong_container: "xe container vào được không",
+  // 02/10/2026 (đợt 1 chuyển luật sang AI): ô cột AI quyết.
+  loai_duong_vao: "đường vào (mặt tiền hay hẻm)", o_to_vao_nha: "ô tô vào trong nhà được không",
 };
 
 // FR-178: câu hỏi kiểu NGƯỜI NÓI cho từng fact — dùng làm gợi ý cho model và làm

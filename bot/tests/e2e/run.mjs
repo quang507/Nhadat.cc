@@ -2585,6 +2585,28 @@ fresh(seedKho);
       /Câu bot còn định hỏi/.test(msgRao) && /so_phong_ngu/.test(msgRao) && (LS3?.boc_tach?.khong_hoi ?? []).includes("so_phong_ngu") &&
         !db().t.info_requests.some((x) => x.listing_id === LS3.id && x.status === "pending" && x.question === "so_phong_ngu"),
       JSON.stringify({ bt: LS3?.boc_tach, kh: LS3?.boc_tach?.khong_hoi, ir: db().t.info_requests.filter((x) => x.listing_id === LS3?.id).map((x) => [x.question, x.status]) }));
+    // SRS-5.1v (đợt 1 chuyển luật sang AI): câu rao chế độ `ai`, AI đọc được → tin mang dấu `_thong_so_ai` (trigger DB không đọc
+    // câu rao bằng regex); ô luật cũ (đường vào, xe container) do AI ghi chữ sạch. AI chết → không dấu, luật đỡ như cũ.
+    const RAO_KCN = "cho thuê kho xưởng 500m2 trong KCN Tân Tạo Bình Tân giá 60 triệu/tháng, nằm trong khu công nghiệp nên không có hẻm, xe container vào tận nơi em";
+    fresh(seedKho);
+    globalThis.__model.parse = aiRao({ truong: [
+      { khoa: "loai_bds", gia_tri: "kho_xuong", trich_dan: "kho xưởng", can: null },
+      { khoa: "loai_giao_dich", gia_tri: "cho_thue", trich_dan: "cho thuê", can: null },
+      { khoa: "loai_duong_vao", gia_tri: "khong_hem", trich_dan: "nằm trong khu công nghiệp nên không có hẻm", can: null },
+      { khoa: "duong_container", gia_tri: "xe container vào tận nơi em", trich_dan: "xe container vào tận nơi em", can: null },
+    ] });
+    await send({ external_user_id: "tsai-1", text: RAO_KCN });
+    const LT1 = db().t.listings.at(-1);
+    const fT = (L, q) => db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === q).map((f) => f.answer);
+    check("TS-AI-01 câu rao KCN 'không có hẻm, xe container vào tận nơi em' (chế độ ai) → dấu _thong_so_ai; đường vào 'không có hẻm'; xe container ghi MỘT lần, bỏ 'em'",
+      LT1?.boc_tach?._thong_so_ai === true && fT(LT1, "loai_duong_vao").join() === "không có hẻm" && fT(LT1, "duong_container").join("|") === "xe container vào tận nơi",
+      JSON.stringify({ bt: LT1?.boc_tach, f: db().t.listing_facts.filter((f) => f.listing_id === LT1?.id).map((f) => [f.question, f.answer]) }));
+    fresh(seedKho);
+    globalThis.__model.parse = (p) => { if (laLuotBocRao(p)) throw new Error("model bóc chết"); return aiRao()(p); };
+    await send({ external_user_id: "tsai-2", text: RAO_KCN });
+    const LT2 = db().t.listings.at(-1);
+    check("TS-AI-02 cùng câu rao mà AI chết → KHÔNG dấu _thong_so_ai (trigger DB đọc câu rao như cũ — luật đỡ)", !!LT2 && !LT2.boc_tach?._thong_so_ai,
+      JSON.stringify({ bt: LT2?.boc_tach }));
     // (2) Nhận xét không căn cứ: AI soát lời bot, code kiểm căn cứ → bỏ câu khen bịa, giữ câu hỏi.
     fresh(seedKho);
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
