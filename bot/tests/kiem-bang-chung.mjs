@@ -233,7 +233,8 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("docAiChinh: cột lõi — quận chuẩn hoá 'Quận 7', loại, giao dịch, giá, 2 PN, ngang/dài, gấp true, mã căn A12-05, dienTich null (đã là AxB)",
     a.quan === "Quận 7" && a.loaiBds === "chung_cu" && a.loaiGiaoDich === "ban" && a.gia === "1 tỷ 8" && a.soPhongNgu === 2 && a.ngang === 5 && a.dai === 20 &&
       a.gap === true && a.maCan === "A12-05" && a.dienTich === null && a.duong === "Nguyễn Lương Bằng" && a.duAn === "Sunrise City", JSON.stringify(a));
-  ok("docAiChinh: nở hậu chưa có ô → nằm trong `bo` (khoa_khong_co_cho_ghi), không mất dấu", a.bo.some((b) => b.khoa === "no_hau" && b.ly_do === "khoa_khong_co_cho_ghi"), JSON.stringify(a.bo));
+  // 02/10/2026 (đối chiếu AI ↔ code, SRS-5.1zb): bản trước khẳng định "nở hậu chưa có ô → bỏ vào `bo`" — tức AI đọc đúng mà code vứt.
+  ok("docAiChinh: nở hậu có ô — fact no_hau '6m', không còn nằm trong `bo`", ghi.no_hau === "6m" && !a.bo.some((b) => b.khoa === "no_hau"), JSON.stringify({ nh: ghi.no_hau, bo: a.bo }));
   const b = docAiChinh([dx("dien_tich", "80", "80m2"), dx("ngang", "4", "ngang 4m"), dx("dai", "20", "dài 20m"), dx("quan", "Quận Ba Đình", "quận Ba Đình"), dx("loai_bds", "nha_mat_tien", "nhà mặt tiền")], null);
   const ghiB = Object.fromEntries(b.ghi.map((g) => [g.question, g.answer]));
   ok("docAiChinh: có m² lẫn ngang×dài → dien_tich '80m2' + mat_tien 'ngang 4m dài 20m'; dienTich 80; quận lạ → null; loại ngoài danh sách → null",

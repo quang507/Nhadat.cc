@@ -55,7 +55,7 @@ export type Khoa = typeof MOI_KHOA[number];
 export type DeXuat = { khoa: string; gia_tri: string; trich_dan: string; can?: number | null; /** cụm thật trong tin (bỏ dấu) khi trích dẫn chỉ khớp MỜ */ trich_dan_sua?: string };
 export type Bo = DeXuat & { ly_do: string };
 
-const LOAI_BDS: Record<string, RegExp> = {
+export const LOAI_BDS: Record<string, RegExp> = {
   chung_cu: /\b(can ho|chung cu|cc|penthouse|duplex|officetel|studio)\b/,
   nha_pho: /\b(nha|nha pho|np)\b/,
   nha_cap4: /\b(cap 4|cap bon|c4)\b/,
@@ -946,9 +946,9 @@ export function trichCoTrongTin(td: string, tin: string): boolean {
  * Đợt 2 chuyển luật sang AI (02/10/2026): ý định của tin (đã bán / ngưng rao / rao lại / hoãn) — AI đọc theo nghĩa, code chỉ
  * nhận khi cụm trích có trong tin. `undefined` ở nơi gọi = AI không chạy (từ khoá đỡ); null = AI nói không có ý định nào.
  */
-export function docYDinh(yd: { loai?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan"; trich: string } | null {
+export function docYDinh(yd: { loai?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan" | "du_roi"; trich: string } | null {
   const l = yd?.loai;
-  if (l !== "ban_roi" && l !== "ngung_rao" && l !== "rao_lai" && l !== "hoan") return null;
+  if (l !== "ban_roi" && l !== "ngung_rao" && l !== "rao_lai" && l !== "hoan" && l !== "du_roi") return null;
   const td = (yd?.trich_dan ?? "").trim();
   return trichCoTrongTin(td, tin) ? { loai: l, trich: td } : null;
 }
@@ -1114,7 +1114,7 @@ function kichThuoc(mot: DeXuat[]): { ngang: number | null; dai: number | null; n
  * giá, "hợp đồng phân phối" → pháp lý, "quý 2 năm sau" → địa chỉ (TS-VAN-11).
  */
 export const KHOA_FACT_AI_BIET: ReadonlySet<string> = new Set([
-  ...Object.values(KHOA_GHI), "mat_tien", "vi_tri", "du_an_ten", "loai_giao_dich", "loai_bds", "dien_tich_dat",
+  ...Object.values(KHOA_GHI), "mat_tien", "vi_tri", "du_an_ten", "loai_giao_dich", "loai_bds", "dien_tich_dat", "no_hau",
 ]);
 
 
@@ -1169,6 +1169,9 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
     if (!daCo.has("dien_tich")) them("dien_tich", `${kt.ngang}x${kt.dai}`, "ngang");
     else them("mat_tien", `ngang ${kt.ngang}m dài ${kt.dai}m`, "ngang");
   } else if (kt.ngang != null) them("mat_tien", `${kt.ngang}m`, "ngang");
+  // 02/10/2026 (đối chiếu AI ↔ code, SRS-5.1zb): AI đọc "nở hậu 5m" mà không có ô ghi → bỏ (`khoa_khong_co_cho_ghi`). Fact
+  // `no_hau` có sẵn (trigger DB đọc ra rear_width_m), cùng dạng luật ghi ("5m").
+  if (kt.noHau != null) them("no_hau", `${kt.noHau}m`, "no_hau");
   const duong = lay("duong");
   if (duong && duong.length >= 4 && duong.length <= 80) them("vi_tri", duong, "duong");
   const duAn = lay("du_an");
@@ -1184,7 +1187,7 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   const loaiBds = lb in LOAI_BDS ? lb : null;
   if (loaiBds) them("loai_bds", loaiBds, "loai_bds");
   for (const b of boTho) {
-    if (b.ly_do === "khoa_khong_co_cho_ghi" && ["ngang", "dai", "duong", "du_an", "loai_giao_dich", "loai_bds"].includes(b.khoa) &&
+    if (b.ly_do === "khoa_khong_co_cho_ghi" && ["ngang", "dai", "no_hau", "duong", "du_an", "loai_giao_dich", "loai_bds"].includes(b.khoa) &&
       ghi.some((g) => g.khoa === b.khoa)) continue;
     bo.push(b);
   }
