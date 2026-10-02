@@ -8,7 +8,7 @@
 // lưới đỡ khi AI hỏng.
 // Tầng này KHÔNG ghi DB (luật `bot/tests/ranh-gioi.mjs`). Model hỏng thì NÉM — nơi gọi ghi sổ (FR-152 d).
 import { z } from "npm:zod@4";
-import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
+import { dinhDangLong, docLong } from "./doc-long.ts";
 
 const NhanXet = z.object({
   cau: z.string().describe("Câu hoặc vế NHẬN XÉT trong lời bot, COPY NGUYÊN VĂN (không sửa một chữ)."),
@@ -17,7 +17,7 @@ const NhanXet = z.object({
 });
 const KetSoat = z.object({ nhan_xet: z.array(NhanXet) });
 export type NhanXetLLM = z.infer<typeof NhanXet>;
-const FORMAT = zodOutputFormat(KetSoat);
+const FORMAT = dinhDangLong(KetSoat);
 
 const LUAT = `SOÁT LỜI BOT GỬI CHỦ NHÀ — bot chỉ được nói về căn nhà những điều chủ nhà đã nói.
 Đọc lời bot, liệt kê MỌI câu / vế KHẲNG ĐỊNH đặc điểm căn nhà hoặc khu vực, hay khen dựa trên một đặc điểm (hẻm sâu, ô tô vào tận
@@ -51,6 +51,6 @@ export async function soatNhanXetBangModel(
       content: `LỜI CHỦ NHÀ:\n${loiChuNha.slice(-1500)}\n${daGhi ? `THÔNG TIN ĐÃ GHI:\n${daGhi.slice(0, 600)}\n` : ""}LỜI BOT:\n${loiBot.slice(0, 800)}`,
     }],
   });
-  const k = KetSoat.safeParse(r.parsed_output);
+  const k = docLong(KetSoat, r.parsed_output);
   return { nhanXet: k.success ? k.data.nhan_xet : [], usage: r.usage };
 }

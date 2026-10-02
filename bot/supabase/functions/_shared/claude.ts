@@ -11,7 +11,8 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 // Model chính. Đổi được bằng secret `ANTHROPIC_MODEL` mà KHÔNG cần deploy —
 // hết số dư hay muốn hạ giá thì sửa một dòng trong Vault là xong.
 // Chủ dự án 10/09/2026 (còn ~15 đô số dư): "hạ bot xuống haiku 4.5 đi".
-export const MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-haiku-4-5-20251001";
+// Chủ dự án 02/10/2026 (sau test tay: Haiku đọc sót "được giá thì bán", xưng hô, kết cấu): "đổi sang sonet 4.6 đi" (SRS-5.1ze).
+export const MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-6";
 
 /**
  * DẤU SỐNG của model chính (FR-192 b). Băng đỏ "hết số dư" ở /admin trước đây

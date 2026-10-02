@@ -9,7 +9,7 @@
 // Tầng AI (bot/tests/ranh-gioi.mjs): KHÔNG ghi bảng nghiệp vụ, không gọi RPC. Kết quả là dữ liệu THÔ —
 // nơi gọi đưa qua `donManh` (extraction/gan-manh-loc.ts) để bỏ mảnh bịa chữ và mã không có thật.
 import { z } from "npm:zod@4";
-import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
+import { dinhDangLong, docLong } from "./doc-long.ts";
 
 const ManhBoc = z.object({
   manh: z.array(z.object({
@@ -17,7 +17,7 @@ const ManhBoc = z.object({
     ma_tin: z.string().describe("Mã tin trong DANH SÁCH TIN mà cụm chữ nói về; 'MOI' nếu nói về một bất động sản CHƯA có trong danh sách; 'KHONG' nếu không nói về căn nào (chào, cảm ơn, hỏi chung)."),
   })).max(6).describe("Các mảnh của tin mới, theo thứ tự xuất hiện. Tin chỉ nói về một căn thì một mảnh."),
 });
-const FORMAT_MANH = zodOutputFormat(ManhBoc);
+const FORMAT_MANH = dinhDangLong(ManhBoc);
 
 const LUAT = `GÁN MẢNH TIN NHẮN VÀO ĐÚNG CĂN — trợ lý môi giới nhà đất AI Ơi Nhà Đất.
 Một người có thể đang rao NHIỀU căn cùng lúc. Nhiệm vụ: đọc lại HỘI THOẠI và DANH SÁCH TIN của người đó,
@@ -56,7 +56,7 @@ export async function ganManhBangModel(
           `CÂU ĐANG TREO: ${vao.cauTreo ?? "(không có)"}\n\nTIN MỚI: "${(vao.text ?? "").slice(0, 800)}"`,
       }],
     });
-    const k = ManhBoc.safeParse(r.parsed_output);
+    const k = docLong(ManhBoc, r.parsed_output);
     return { ket: k.success ? k.data : null, usage: r.usage };
   } catch {
     return null;

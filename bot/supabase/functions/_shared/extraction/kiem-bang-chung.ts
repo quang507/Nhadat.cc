@@ -959,6 +959,21 @@ export function docVai(v: { la?: string | null; trich_dan?: string | null } | nu
   return trichCoTrongTin(td, tin) ? { la: v.la, trich: td } : null;
 }
 
+/**
+ * Khách TỰ XƯNG (02/10/2026, SRS-5.1ze): AI đọc theo nghĩa ("Ừ anh đang muốn bán" → anh). Code nhận khi chữ thuộc danh sách,
+ * cụm trích có trong tin, và cụm có ĐÚNG chữ đó đứng riêng (hoặc viết tắt "a" / "c" cho anh / chị).
+ */
+const TU_XUNG_HOP_LE = new Set(["anh", "chị", "chú", "cô", "bác", "ông", "bà", "dì", "cậu", "mợ", "thím", "dượng"]);
+export function docTuXung(v: { la?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { la: string; trich: string } | null {
+  const la = (v?.la ?? "").trim().toLowerCase();
+  if (!TU_XUNG_HOP_LE.has(la)) return null;
+  const td = (v?.trich_dan ?? "").trim();
+  if (!trichCoTrongTin(td, tin)) return null;
+  const tu = td.toLowerCase().normalize("NFC").split(/[^\p{L}]+/u).filter(Boolean);
+  const viet = la === "anh" ? ["anh", "a"] : la === "chị" ? ["chị", "c"] : [la];
+  return tu.some((t) => viet.includes(t)) ? { la, trich: td } : null;
+}
+
 /** Đợt 3 (02/10/2026): câu hỏi kế AI chọn — chỉ nhận khoá có trong danh sách hợp lệ của lượt (đã bỏ câu hết hạn, câu không áp dụng, câu đang treo). */
 export function docCauKe(ck: { khoa?: string | null } | null | undefined, hopLe: Iterable<string>): string | null {
   const k = (ck?.khoa ?? "").trim();

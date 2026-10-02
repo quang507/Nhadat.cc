@@ -16,7 +16,7 @@
 // Tầng này KHÔNG ghi DB (luật `bot/tests/ranh-gioi.mjs`).
 
 import { z } from "npm:zod@4";
-import { zodOutputFormat } from "npm:@anthropic-ai/sdk/helpers/zod";
+import { dinhDangLong, docLong } from "./doc-long.ts";
 import {
   BAN_KINH_GAN_M, BAN_KINH_TOI_DA_M, coMuiViTri, type GanTienIch, kdTen, thoatRe,
 } from "../extraction/tien-ich.ts";
@@ -35,7 +35,7 @@ const GanBoc = z.object({
 });
 export type GanBocLLM = z.infer<typeof GanBoc>;
 
-const FORMAT_GAN = zodOutputFormat(GanBoc);
+const FORMAT_GAN = dinhDangLong(GanBoc);
 
 const LUAT = `Bạn đọc MỘT tin nhắn của khách đang tìm mua/thuê nhà và cho biết: khách có muốn nhà ở GẦN một nơi cụ thể không.
 Hiểu theo NGHĨA, không cần đúng chữ "gần". Ví dụ:
@@ -126,7 +126,7 @@ export async function bocGanBangModel(
         }"`,
       }],
     });
-    const ket = GanBoc.safeParse(r.parsed_output);
+    const ket = docLong(GanBoc, r.parsed_output);
     return { ket: ket.success ? ket.data : null, usage: r.usage };
   } catch {
     return null;

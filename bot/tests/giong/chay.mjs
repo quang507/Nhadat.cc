@@ -47,7 +47,7 @@ function docEnvScripts() {
 }
 const envF = docEnvScripts();
 const API_KEY = process.env.ANTHROPIC_API_KEY ?? envF.ANTHROPIC_API_KEY ?? null;
-const MODEL = process.env.ANTHROPIC_MODEL ?? envF.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001"; // như _shared/claude.ts
+const MODEL = process.env.ANTHROPIC_MODEL ?? envF.ANTHROPIC_MODEL ?? "claude-sonnet-4-6"; // như _shared/claude.ts
 if (!GIA && !API_KEY) {
   console.error("Thiếu ANTHROPIC_API_KEY (env hoặc scripts/.env). Chạy `--gia` để kiểm dây không tốn tiền. Thoát 2 = CHƯA ĐO ĐƯỢC, không phải đạt.");
   process.exit(2);

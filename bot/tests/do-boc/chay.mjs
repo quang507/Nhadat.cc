@@ -74,7 +74,7 @@ if (TU_FILE) {
     return Object.fromEntries(readFileSync(p, "utf8").split(/\r?\n/).filter((l) => l && !l.startsWith("#") && l.includes("=")).map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; }));
   })();
   const API_KEY = process.env.ANTHROPIC_API_KEY ?? envF.ANTHROPIC_API_KEY ?? null;
-  const MODEL = process.env.ANTHROPIC_MODEL ?? envF.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001"; // như _shared/claude.ts
+  const MODEL = process.env.ANTHROPIC_MODEL ?? envF.ANTHROPIC_MODEL ?? "claude-sonnet-4-6"; // như _shared/claude.ts
   if (THAT && !API_KEY) {
     console.error("Thiếu ANTHROPIC_API_KEY (env hoặc scripts/.env). Bỏ --that để đo luật một mình. Thoát 2 = CHƯA ĐO ĐƯỢC.");
     process.exit(2);
