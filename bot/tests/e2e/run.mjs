@@ -3225,6 +3225,32 @@ fresh(seedKho);
       fg.some((f) => f.answer === "không gấp"), JSON.stringify({ fg, rep: r.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // 02/10/2026 (bắn lại thu-gapd sau #412, SRS-5.1ze): AI đọc đúng "được giá thì bán em" = không gấp nhưng chỉ đưa vào
+  // `khong_can_hoi` (câu đã trả lời), `truong` rỗng → không ghi ô gấp. Nay giá trị ở khong_can_hoi thành đề xuất thường.
+  {
+    const cuCH = globalThis.__cauHinh;
+    const aiK = (kch) => (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, khong_can_hoi: kch } : OUT();
+    for (const [ma, cau, kch, mong] of [
+      ["GAP-KCH-01", "được giá thì bán em", [{ khoa: "gap", ly_do: "đã trả lời", trich_dan: "được giá thì bán em", gia_tri: "khong" }], "không gấp"],
+      ["GAP-KCH-02", "đang kẹt tiền lắm em", [{ khoa: "gap", ly_do: "đã trả lời", trich_dan: "đang kẹt tiền lắm", gia_tri: "co" }], "cần bán gấp"],
+      ["GAP-KCH-03", "cái này khỏi hỏi em", [{ khoa: "gap", ly_do: "không áp dụng", trich_dan: "khỏi hỏi", gia_tri: null }], null],
+    ]) {
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__model.parse = aiK([]);
+      const uid = `gkch-${ma}`;
+      await send({ external_user_id: uid, text: "ban nha hem 5m Le Van Sy quan 3, 4x15, gia 7 ty" });
+      const L = db().t.listings.at(-1);
+      db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: L.id, question: "phuong", status: "pending" });
+      globalThis.__model.parse = aiK(kch);
+      const r = await send({ external_user_id: uid, text: cau });
+      const fg = db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === "gap");
+      check(`${ma} đang hỏi phường, '${cau}', AI để gấp ở khong_can_hoi (giá trị ${kch[0].gia_tri}) → ${mong ? `ghi gấp '${mong}'` : "không ghi gấp"}`,
+        mong ? fg.some((f) => f.answer === mong) : !fg.length, JSON.stringify({ fg, rep: r.body.replies }));
+    }
+    globalThis.__cauHinh = cuCH;
+  }
   // 02/10/2026 (test tay chủ dự án, SRS-5.1ze): "Ừ anh đang muốn bán căn nhà…" → bot gọi "anh chị" suốt. AI đọc khách tự xưng.
   {
     const cuCH = globalThis.__cauHinh;
