@@ -565,5 +565,19 @@ ok("CK-01 câu kế AI chọn có trong danh sách → nhận; ngoài danh sách
   ok("HS-06 'mẹ già ở cùng' từ 'nhà có mẹ già' → giữ (ở cùng là chữ đệm)", giaTriCoTrongLoi("mẹ già ở cùng", "nhà có mẹ già"));
 }
 
+// 02/10/2026 (bắn lại thu-tay-01, SRS-5.1ze): "Nhà a 4 tầng tính cả lửng" → AI so_tang 3 bị bỏ (3 không có trong cụm), không ghi gì.
+{
+  datKiemNhe(true);
+  const tinL = "Nhà a 4 tầng tính cả lửng";
+  const r1 = kiemDeXuat([{ khoa: "so_tang", gia_tri: "3", trich_dan: "4 tầng tính cả lửng", can: null }], tinL);
+  ok("LUNG-K1 so_tang 3 «4 tầng tính cả lửng» → ket_cau 'trệt + lửng + 2 lầu', không bị bỏ",
+    r1.dat.length === 1 && r1.dat[0].khoa === "ket_cau" && r1.dat[0].gia_tri === "trệt + lửng + 2 lầu" && !r1.bo.length, JSON.stringify(r1));
+  const r2 = kiemDeXuat([{ khoa: "ket_cau", gia_tri: "5 tấm có thêm lửng", trich_dan: "5 tấm có thêm lửng", can: null }], "nhà 5 tấm có thêm lửng nha em");
+  ok("LUNG-K2 «5 tấm có thêm lửng» (cách nói mới) → 'trệt + lửng + 4 lầu'", r2.dat[0]?.gia_tri === "trệt + lửng + 4 lầu", JSON.stringify(r2));
+  const r3 = kiemDeXuat([{ khoa: "so_tang", gia_tri: "4", trich_dan: "4 tầng", can: null }], "nhà 4 tầng em");
+  ok("LUNG-K3 «4 tầng» không nói lửng → vẫn so_tang 4 như cũ", r3.dat[0]?.khoa === "so_tang" && r3.dat[0]?.gia_tri === "4", JSON.stringify(r3));
+  datKiemNhe(false);
+}
+
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

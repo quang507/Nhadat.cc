@@ -2493,7 +2493,9 @@ Deno.serve(async (req) => {
           seller_id: sellerRow.id, listing_id: d?.id ?? null,
           tin: thayLienHe(text, "[liên hệ]").slice(0, 2000), cau_dang_hoi: kq.cauDangHoi, model: MODEL, ms: kq.ms,
           so_can: soCan,
-          de_xuat: kq.truong, dat, bo, so_sanh: soSanh, da_ghi: { che_do: kq.cheDo, ghi: daGhi, bo: boGhi, kien_thuc: kienThucGhi, hoi_lai: kq.hoiLai ?? null },
+          de_xuat: kq.truong, dat, bo, so_sanh: soSanh, da_ghi: { che_do: kq.cheDo, ghi: daGhi, bo: boGhi, kien_thuc: kienThucGhi, hoi_lai: kq.hoiLai ?? null,
+            // 02/10/2026 (SRS-5.1ze): AI trả rỗng với câu gấp đứng riêng — cần thấy AI xếp câu vào đâu (sổ đo, không phải dữ liệu tin).
+            ai_khac: { tra_loi: kq.traLoi ?? null, khong_can_hoi: kq.khongCanHoi ?? [], y_dinh: kq.yDinh ?? null, cam_xuc: kq.camXuc ?? null } },
         }));
         if (bErr) await ghiLoi(client, "chat-reply boc_tach_bong(ghi)", bErr.message);
         const dongGhi = [
@@ -2784,6 +2786,9 @@ Deno.serve(async (req) => {
       // 22/09/2026 (bộ đo giọng B08): câu tiền định "Dạ em là trợ lý AI…" đứng trước, model chép lại gần
       // nguyên văn ở bong bóng sau → chủ nhà đọc hai lần. Câu ≥ 6 từ trùng nhau chỉ giữ lần đầu.
       sach = boCauTrung(sach);
+      // 02/10/2026 (bắn lại thu-gapc-03, SRS-5.1ze): sau chuỗi lọc, một bong bóng chỉ còn ")" (mảnh của ":)" khi câu trước bị cắt).
+      // Dòng không còn chữ / số / biểu tượng nào thì bỏ — áp chung cho mọi lọc phía trên, không đi tìm từng lọc.
+      sach = sach.map((r) => r.split("\n").filter((d) => !d.trim() || /[\p{L}\d\p{Extended_Pictographic}]/u.test(d)).join("\n").trim()).filter(Boolean);
       // 24/09/2026 (chủ dự án): model không tự hỏi hoàn công — cắt mệnh đề hỏi hoàn công trong lời bot, TRỪ KHI
       // bảng rẽ nhánh (FR-223) vừa mở câu `hoan_cong` cho người này (sổ riêng, chưa nhắc hoàn công).
       if (sach.some((r) => /\?/.test(r) && /\bhoan cong\b/.test(boDau(r)))) {
