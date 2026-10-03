@@ -6,6 +6,7 @@
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
 import { datKiemNhe, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
@@ -663,6 +664,11 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("X04-c khu vực không nằm trong cụm trích (q7 là căn bán) → không nhận area", !docMuaKem({ khu_vuc: "q7", ngan_sach: null, loai: null, trich_dan: "mua nhà Bình Thạnh 6 tỷ" }, X));
   ok("X04-d cụm trích bịa → null", docMuaKem({ khu_vuc: "Bình Thạnh", ngan_sach: "6 tỷ", loai: null, trich_dan: "mua nhà Gò Vấp 6 tỷ" }, X) === null);
   const x5 = docMuaKem({ khu_vuc: "quận 2", ngan_sach: "tầm 5 tỷ rưỡi", loai: "căn hộ", trich_dan: "anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi" }, "bán xong căn này anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi");
+  const bd = (x) => x.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const cq = (t) => JSON.stringify(cacQuanTrong(t, bd));
+  ok("ZU-a 'bán căn hộ q7 … để mua nhà Bình Thạnh' → HAI quận (luật không được đoán một)", cq(X) === '["Quận 7","Quận Bình Thạnh"]', cq(X));
+  ok("ZU-b 'Cần Đước, Long An' là MỘT nơi; 'quận 1 … quận 10' là HAI", cq("bán đất Cần Đước, Long An") === '["Cần Đước, Long An"]' && cq("bán nhà quận 1, còn căn quận 10") === '["Quận 1","Quận 10"]', cq("bán đất Cần Đước, Long An"));
+  ok("ZU-c câu một quận → một ('Lê Văn Sỹ quận 3 phường 9')", cq("bán nhà hẻm Lê Văn Sỹ quận 3 phường 9 4x15 7 tỷ") === '["Quận 3"]');
   ok("X04-e (mới) 'bán xong … tính mua căn hộ quận 2 tầm 5 tỷ rưỡi' → đủ 3 ô", x5?.area === "Quận 2" && x5?.budget === "tầm 5 tỷ rưỡi" && x5?.property_type === "căn hộ", JSON.stringify(x5));
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

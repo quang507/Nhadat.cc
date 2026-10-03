@@ -49,7 +49,7 @@ import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
 import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu } from "../_shared/extraction/khop-phuong.ts";
-import { bocQuan, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
+import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
 import { cauChonPhuong, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, cauTraPhuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, tachTienToPhuong } from "../_shared/extraction/tra-phuong.ts";
 // FR-212 (21/09/2026): từ điển tên đường — chọn kết quả `tim_duong`, thay tên trong địa chỉ, câu hỏi xác nhận (thuần).
@@ -4064,7 +4064,8 @@ Deno.serve(async (req) => {
       // 20/09/2026 (bắn thật mau-y-A): "e la moi gioi ben q10, co 2 can…" — quận nói CHUNG cho cả tin
       // phải vào từng căn (trước chỉ lấy `c.quan` của mảnh → hai tin mang mã XX). Kế thừa địa chỉ căn
       // cũ chỉ khi cùng quận. Mảnh "dat 5x20" không dấu là ĐẤT (trigger đoán loại không đọc chữ không dấu).
-      const quanCau = bocQuan(tKD, text);
+      // SRS-5.1zu: câu nhắc nhiều quận thì không có "quận của cả câu" để căn thiếu quận mượn.
+      const quanCau = cacQuanTrong(text, boDau).length > 1 ? null : bocQuan(tKD, text);
       const DAT_KD_RE = /(?:^|[^a-z])dat(?=\s+(?:\d|nen|tho cu|mat tien|hem|duong|vuon|nong nghiep|trong|thanh|sxkd|kinh doanh|cong nghiep|o\b))/;
       // 23/09/2026 (bắn thật, môi giới): "đang giữ 2 căn hộ The Everrich Infinity q5: căn A …, căn B …" —
       // loại + dự án nói ở ĐẦU CÂU (trước mốc căn đầu tiên) là của CẢ LÔ; căn B không tự nhắc thì kế thừa.
@@ -6634,7 +6635,17 @@ Deno.serve(async (req) => {
           `Dạ bên em hiện chỉ nhận nhà ở Sài Gòn và Long An thôi ạ, em xin lỗi chưa hỗ trợ được căn ở ${vung.ten}.`,
         ], { ngoai_dia_ban: vung.ten });
       }
-      const quanDoc = quanAi ?? bocQuan(tKD, text) ?? duAn?.district ?? vung?.ten ?? phuongChot?.quan_cu ?? null;
+      // 03/10/2026 (bắn thử thu-x04-r, SRS-5.1zu): AI bóc tách hỏng lượt đó → luật đọc quận ĐẦU TIÊN của cả câu "bán căn hộ q7 … để
+      // mua nhà Bình Thạnh" → tin bán mang Bình Thạnh. Câu nhắc NHIỀU quận thì luật không đoán: bỏ vế MUA AI lượt nhỏ đọc ra (nếu
+      // có) rồi đọc lại; còn đúng một quận thì dùng, còn nhiều thì để trống (bot hỏi).
+      const quanLuat = await (async () => {
+        const ds = cacQuanTrong(text, boDau);
+        if (ds.length <= 1) return bocQuan(tKD, text);
+        const mk = yLuotAi && laCheDoAi ? docMuaKem((await yLuotAi)?.muaKem, text) : null;
+        const con = mk ? cacQuanTrong(text.replace(mk.trich, " "), boDau) : ds;
+        return con.length === 1 ? con[0] : null;
+      })();
+      const quanDoc = quanAi ?? quanLuat ?? duAn?.district ?? vung?.ten ?? phuongChot?.quan_cu ?? null;
       // 17/09/2026 (chủ dự án: "chỗ nào cứ mặc định quận 5 xóa sạch đi", 20260917a): chưa rõ
       // quận thì ĐỂ TRỐNG — bot hỏi "phường mấy, quận nào", hoặc suy từ phường / dự án.
       const quanRao: string | null = quanDoc ?? null;

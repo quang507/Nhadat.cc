@@ -3518,6 +3518,24 @@ fresh(seedKho);
         { khu_vuc: "quận 2", ngan_sach: "tầm 5 tỷ rưỡi", loai: "căn hộ", trich_dan: "anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi" }));
       check("ZH-16 (cách nói mới) 'bán xong anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi' → hồ sơ mua Quận 2 / 5 tỷ rưỡi / căn hộ",
         b?.preferences?.area === "Quận 2" && b?.preferences?.budget === "tầm 5 tỷ rưỡi" && b?.preferences?.property_type === "căn hộ", JSON.stringify(b?.preferences ?? null));
+      // SRS-5.1zu (bắn thử thu-x04-r): lượt AI BÓC TÁCH hỏng (model 503), lượt nhỏ vẫn đọc vế mua → luật không được lấy quận của
+      // vế MUA cho tin bán. Câu nhiều quận: bỏ vế mua rồi đọc lại; không có vế mua để bỏ thì để trống quận.
+      const moHong = async (uid, text, muaKem) => {
+        fresh(seedKho);
+        globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+        globalThis.__model.parse = (p) => {
+          if (laLuotBocRao(p) && !laLuotYLuot(p)) throw new Error("503 high demand");
+          return aiZH(muaKem !== undefined ? { mua_kem: muaKem } : {})(p);
+        };
+        await send({ external_user_id: uid, text });
+        return { L: db().t.listings.at(-1), b: db().t.buyers.find((x) => x.zalo_user_id === uid) };
+      };
+      let h = await moHong("zh-x04d", X4, { khu_vuc: "Bình Thạnh", ngan_sach: "6 tỷ", loai: "nhà", trich_dan: "mua nhà Bình Thạnh 6 tỷ" });
+      check("ZH-17 AI bóc tách hỏng, lượt nhỏ đọc vế mua → tin bán Quận 7 (không lấy Bình Thạnh của vế mua), hồ sơ mua vẫn ghi",
+        h.L?.district === "Quận 7" && /Bình Thạnh/.test(h.b?.preferences?.area ?? ""), JSON.stringify({ q: h.L?.district, p: h.b?.preferences ?? null }));
+      h = await moHong("zh-x04e", "ban can ho quan 7 gia 3 ty, con nha go vap thi de sau", undefined);
+      check("ZH-18 (cách nói mới, không dấu) AI hỏng + câu nhắc hai quận, không có vế mua để bỏ → không đoán quận (để trống, bot hỏi)",
+        h.L && !h.L.district, JSON.stringify({ q: h.L?.district ?? null }));
     }
     globalThis.__cauHinh = cuCH;
   }

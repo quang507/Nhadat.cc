@@ -96,6 +96,27 @@ export function vungNgoai(kd: string): { ten: string; xa: boolean } | null {
 // nguyên) trước khi soi tên quận. Câu có "quận tân phú" riêng thì vẫn khớp.
 const CUM_TEN_PHUONG = /(?:^|[^a-z])(?:phuong|xa|p|x)\.?\s+(?!\d)[a-z]+(?:\s+(?!(?:quan|q|huyen|h|tp|thanh)\b)[a-z]+)?/g;
 
+/**
+ * 03/10/2026 (SRS-5.1zu): các quận / vùng câu nhắc tới, đọc theo TỪNG VẾ (dấu câu, "để", "và", "còn", "rồi"…). `bocQuan` trả
+ * quận ĐẦU TIÊN khớp (tên quận đứng trước quận số), nên "bán căn hộ q7 … để mua nhà Bình Thạnh" ra Bình Thạnh. Nơi gọi dùng
+ * hàm này để biết câu có NHIỀU quận — khi đó luật không được đoán quận cho một căn (AI quyết, hoặc hỏi lại).
+ */
+export function cacQuanTrong(tho: string, boDau: (s: string) => string): string[] {
+  const ve = (tho ?? "").split(/[,.;!?\n|]|\s(?:để|de|và|va|còn|con|rồi|roi|nhưng|nhung|với|voi|xong|sau đó|sau do)\s/iu);
+  const ra: string[] = [];
+  for (const v of ve) {
+    const kd = boDau(v);
+    const q = bocQuan(kd, v) ?? vungNgoai(kd)?.ten ?? null;
+    if (!q) continue;
+    // "Cần Đước, Long An" và "Long An" là MỘT nơi (huyện trong tỉnh) — giữ tên cụ thể hơn.
+    // So theo phần sau dấu phẩy, không "chứa chuỗi" — "Quận 10" chứa "Quận 1" mà là hai quận.
+    const i = ra.findIndex((r) => r === q || r.endsWith(`, ${q}`) || q.endsWith(`, ${r}`));
+    if (i < 0) ra.push(q);
+    else if (q.length > ra[i].length) ra[i] = q;
+  }
+  return ra;
+}
+
 export function bocQuan(kd: string, tho?: string): string | null {
   const kdSach = kd.replace(CUM_TEN_PHUONG, " ");
   for (const [re, ten] of QUAN_TEN) if (re.test(kdSach)) return ten;

@@ -1963,7 +1963,7 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
 
 **Chỗ khác cùng lớp**:
 - Mảnh tin (`aiManh`, dòng tạo tin theo mảnh) đã đọc theo `m.trich` của mảnh, không theo cả câu.
-- **Còn**: tạo một tin (`quanDoc = quanAi ?? bocQuan(cả câu)`). AI chạy mà không nói quận thì luật đọc quận đầu tiên của cả câu. Ca "bán căn hộ q7 … để mua nhà Bình Thạnh" sẽ ghi nhầm Bình Thạnh nếu AI bỏ trống quận. Chưa đo được ca này trên production; chưa sửa.
+- Tạo một tin (`quanDoc = quanAi ?? bocQuan(cả câu)`): bắn thử sau deploy bắt đúng ca này (AI bóc tách hỏng lượt đó, tin bán căn hộ q7 mang Bình Thạnh) — đã sửa ở SRS-5.1zu.
 
 **Kiểm**:
 - e2e `ZH-12` (AI có `can`): hai tin Tân Bình / Gò Vấp.
@@ -2053,6 +2053,21 @@ Gỡ bản sửa thì S07-a/b đỏ (đã chạy).
 - `kiem-bang-chung.mjs` X04-a…e: khu / giá của căn bán không lọt, trích bịa thì null. X04-e là cách nói mới: "bán xong anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi".
 - e2e `ZH-14` (hồ sơ mua + câu báo + tin bán vẫn Quận 7), `ZH-15` (AI lấy nhầm vế bán thì không ghi gì), `ZH-16` (cách nói mới).
 - Gỡ bản sửa thì X04-b, ZH-14, ZH-16 đỏ (đã chạy).
+
+### SRS-5.1zu · Câu nhắc nhiều quận: luật không đoán quận cho tin (03/10/2026)
+
+**Ca gốc**: bắn thử `thu-x04-r` sau khi deploy SRS-5.1zt: "em bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ". Lượt AI bóc tách hỏng (sổ lỗi: model trả 503); lượt AI nhỏ vẫn chạy nên hồ sơ mua ghi đúng, nhưng tin BÁN mang quận Bình Thạnh.
+
+**Lớp lỗi**: như SRS-5.1zp — một trường đọc từ CẢ CÂU gán cho một phần. `bocQuan` trả quận ĐẦU TIÊN khớp (tên quận xét trước quận số), nên câu có hai quận luôn ra một quận, có khi là quận của vế khác.
+
+**Sửa**: `cacQuanTrong(câu)` (`_shared/dia_ban.ts`) đọc quận theo từng vế (dấu câu, "để", "và", "còn", "rồi"…), gộp huyện với tỉnh của nó ("Cần Đước, Long An" = "Long An") mà không gộp "Quận 1" với "Quận 10".
+- Tạo một tin: AI không nói quận và câu có nhiều quận → bỏ vế MUA AI lượt nhỏ đọc ra (nếu có) rồi đọc lại; còn đúng một quận thì dùng, còn nhiều thì để trống (bot hỏi).
+- Nhánh nhiều căn: câu nhiều quận thì không có "quận của cả câu" (`quanCau` = null) cho căn thiếu quận mượn.
+- Câu một quận: giữ nguyên như cũ.
+
+**Chỗ khác cùng lớp**: `quanRaoMoi` (so căn khác quận) chỉ chạy khi AI không nói `can_khac`; mảnh tin đọc theo mảnh. Chưa thấy chỗ khác ghi quận từ cả câu.
+
+**Kiểm**: `kiem-bang-chung.mjs` ZU-a…c; e2e `ZH-17` (AI hỏng + có vế mua → tin bán Quận 7), `ZH-18` (cách nói mới, không dấu, hai quận, không vế mua → để trống). Gỡ bản sửa → ZH-17/18 đỏ (đã chạy). Ca cũ FR240-E3 ("Cần Đước, Long An") đỏ ở bản đầu vì đếm thành hai nơi — đã sửa phần gộp.
 
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
