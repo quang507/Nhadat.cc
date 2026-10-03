@@ -3409,6 +3409,17 @@ fresh(seedKho);
     r = await send({ external_user_id: "zh-8", text: "nhà ở 45 hẻm rộng 4 mét Cộng Hòa em" });
     check("ZH-08 trả lời câu địa chỉ '45 hẻm rộng 4 mét Cộng Hòa' (cách nói mới) → địa chỉ '45 hẻm Cộng Hòa', street 'Cộng Hòa'",
       L.location_raw === "45 hẻm Cộng Hòa" && L.street === "Cộng Hòa", JSON.stringify({ loc: L.location_raw, street: L.street, facts: db().t.listing_facts.filter((f) => f.listing_id === L.id).map((f) => [f.question, f.answer]) }));
+    // SRS-5.1zk (bắn thử thu-dc4-08): đang hỏi PHƯỜNG, khách trả lời bằng địa chỉ có bề rộng hẻm → địa chỉ của AI, không của luật.
+    L = await moZH("zh-9", "ban nha Binh Thanh 4x14 gia 7 ty", "phuong");
+    L.location_raw = null; L.street = null; L.ward = null;
+    globalThis.__model.parse = aiZH({ truong: [
+      { khoa: "duong", gia_tri: "77 hẻm Xô Viết Nghệ Tĩnh", trich_dan: "77 hẻm 3m Xô Viết Nghệ Tĩnh", can: null },
+      { khoa: "ten_duong", gia_tri: "Xô Viết Nghệ Tĩnh", trich_dan: "77 hẻm 3m Xô Viết Nghệ Tĩnh", can: null },
+      { khoa: "do_rong_hem", gia_tri: "3", trich_dan: "hẻm 3m", can: null },
+    ] });
+    r = await send({ external_user_id: "zh-9", text: "nhà ở 77 hẻm 3m Xô Viết Nghệ Tĩnh em" });
+    check("ZH-09 hỏi phường, khách đáp '77 hẻm 3m Xô Viết Nghệ Tĩnh' → địa chỉ '77 hẻm Xô Viết Nghệ Tĩnh' (AI), street 'Xô Viết Nghệ Tĩnh'",
+      L.location_raw === "77 hẻm Xô Viết Nghệ Tĩnh" && L.street === "Xô Viết Nghệ Tĩnh", JSON.stringify({ loc: L.location_raw, street: L.street, rep: r.body.replies }));
     L = await moZH("zh-4", "ban nha hem 3m Tan Binh, 4x12, gia 5 ty", "phuong");
     L.location_raw = null; L.ward = null; L.district = "Quận Tân Bình";
     globalThis.__model.parse = aiZH({ y_dinh: { loai: "ban_roi", trich_dan: "bán rồi" } });

@@ -5043,10 +5043,19 @@ Deno.serve(async (req) => {
         if (g && typeof g === "object" && typeof (g as GoiYPhuong).phuong === "string") goiYPhuong = g as GoiYPhuong;
         // 01/10/2026: gợi ý "phường X thuộc quận Y, nhà mình ở Y hay Z" — khách gọi tên quận Y cũng là gật.
         if (goiYPhuong && (await gatLuot(() => laDongY(dapAn)) || (goiYPhuong.doi_quan && nhacTenQuan(dapAn, goiYPhuong.quan)))) { dapAn = goiYPhuong.phuong; nhanGoiYPhuong = true; }
+        // SRS-5.1zk (bắn thử thu-dc4-08: hỏi phường, khách "nhà ở 77 hẻm 3m Xô Viết Nghệ Tĩnh" → địa chỉ luật giữ "3m"): chế độ
+        // `ai` — địa chỉ trong câu trả lời câu phường lấy của AI (bỏ bề rộng), tên đường AI ghi cột street; luật chỉ khi AI hỏng.
+        const kqAiPhuong = laCheDoAi && bongAi ? await bongAi : null;
+        const acPhuong = kqAiPhuong?.ket ? docAiChinh(kiemDeXuat(kqAiPhuong.truong, text).dat, null) : null;
+        const viTriTuCau = (s: string): string | null => {
+          if (!acPhuong) return bocViTriRao(s);
+          if (acPhuong.duong && acPhuong.tenDuong) duongAiGhi = { id: pendingReq.listing_id, ten: acPhuong.tenDuong };
+          return acPhuong.duong;
+        };
         // Từ điển đã tìm ra phường trong câu ("156 đường 59 Tây Thông Hội") → câu phường đã trả lời; phần địa chỉ ghi vào vị
         // trí nếu tin chưa có địa chỉ.
         if (!nhanGoiYPhuong && phuongTuDien) {
-          const viTriPd = !pendingReq.listings?.location_raw ? bocViTriRao(dapAn) : null;
+          const viTriPd = !pendingReq.listings?.location_raw ? viTriTuCau(dapAn) : null;
           if (viTriPd) {
             const { error: vpErr } = await client.rpc("ghi_fact_listing", {
               p_listing_id: pendingReq.listing_id, p_question: "vi_tri", p_answer: viTriPd, p_source: "seller_chat",
@@ -5063,7 +5072,7 @@ Deno.serve(async (req) => {
         // từng ĐÈ địa chỉ "Căn số 14 ở Ny'ah Phú Định" đã có. Địa chỉ đã có thì không ghi
         // lại từ câu lệch; muốn sửa địa chỉ thì nói rõ (FR-164).
         if (!nhanGoiYPhuong && !kqDuyet && !humanActive && !coPhuongSo && !tachTienToPhuong(dapAn) && !pendingReq.listings?.location_raw) {
-          const viTriTL = bocViTriRao(dapAn);
+          const viTriTL = viTriTuCau(dapAn);
           // FR-212: đối chiếu tên đường với từ điển trước khi ghi.
           const duongTL = viTriTL ? await suaTenDuong(viTriTL, pendingReq.listings?.district, pendingReq.listings?.ward) : null;
           const viTri = duongTL?.viTri ?? viTriTL;
