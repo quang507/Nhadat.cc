@@ -10,6 +10,7 @@ import {
   anthropicClient,
   anthropicTrucTiep,
   bangNhau,
+  type DemLuuLuong,
   docBiMat,
   doTien,
   ghiLoi,
@@ -17,6 +18,7 @@ import {
   MODEL,
   secretOf,
   serviceClient,
+  tomTatLuuLuong,
 } from "../_shared/claude.ts";
 import {
   AGREE_RULES,
@@ -969,7 +971,9 @@ Deno.serve(async (req) => {
   const khop = (coDau: RegExp, khongDau: RegExp) =>
     coDau.test(text) || khongDau.test(tKD);
 
-  const client = serviceClient();
+  // 03/10/2026 (giảm egress Supabase): đếm số lần gọi + byte phản hồi của lượt, ghi vào sổ inbound (`_luu_luong`).
+  const demLuuLuong: DemLuuLuong = { so: 0, byte: 0, theo: {} };
+  const client = serviceClient(demLuuLuong);
 
   // ─── CỔNG 1: bí mật dùng chung (tuỳ chọn, cùng khuôn với escalation-feed).
   // chat-reply KHÔNG phải endpoint công khai: chỉ bridge (máy local) và
@@ -1212,7 +1216,7 @@ Deno.serve(async (req) => {
   // reclaim sau 150s). Ghi sổ hụt không được chặn đường trả lời: chỉ ghiLoi.
   const hoanTatGoc = async (payload: Record<string, unknown>, code = 200) => {
     moc.tong = Date.now() - t0Luot;
-    payload = { ...payload, _ms: { ...moc } };
+    payload = { ...payload, _ms: { ...moc }, _luu_luong: tomTatLuuLuong(demLuuLuong) };
     console.log("chat-reply _ms", JSON.stringify(moc));
     if (coSo) {
       const { error: soErr2 } = await client.from("inbound_ledger").update({
