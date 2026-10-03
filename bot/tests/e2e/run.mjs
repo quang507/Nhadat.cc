@@ -3367,6 +3367,20 @@ fresh(seedKho);
     globalThis.__model.create = undefined;
     check("ZH-05 lời model 'hệ thống đã ghi nhận…' và câu mở đầu trỏ ngược 'Cái này…' → không tới tay chủ nhà",
       !r.body.replies.some((x) => /hệ thống|Cái này khách hỏi/.test(x)), JSON.stringify(r.body.replies));
+    // SRS-5.1zj: tên đường bằng số ("30/4") — AI đọc đúng, ngưỡng độ dài địa chỉ lúc tạo tin từng gạt mất.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = aiZH({ truong: [
+      { khoa: "loai_giao_dich", gia_tri: "ban", trich_dan: "bán nhà", can: null },
+      { khoa: "duong", gia_tri: "30/4", trich_dan: "đường 30/4", can: null },
+      { khoa: "quan", gia_tri: "Quận Tân Phú", trich_dan: "quận Tân Phú", can: null },
+      { khoa: "gia", gia_tri: "12 tỷ", trich_dan: "giá 12 tỷ", can: null },
+    ] });
+    r = await send({ external_user_id: "zh-6", text: "bán nhà mặt tiền đường 30/4 quận Tân Phú, 4x18, giá 12 tỷ" });
+    const L6 = db().t.listings.at(-1);
+    check("ZH-06 'mặt tiền đường 30/4' (AI: duong '30/4') → tin có địa chỉ 'đường 30/4', không trống",
+      /đường 30\/4/.test(String(L6?.location_raw ?? "")) || db().t.listing_facts.some((f) => f.listing_id === L6?.id && f.question === "vi_tri" && /đường 30\/4/.test(f.answer)),
+      JSON.stringify({ loc: L6?.location_raw, facts: db().t.listing_facts.filter((f) => f.listing_id === L6?.id).map((f) => [f.question, f.answer]) }));
     L = await moZH("zh-4", "ban nha hem 3m Tan Binh, 4x12, gia 5 ty", "phuong");
     L.location_raw = null; L.ward = null; L.district = "Quận Tân Bình";
     globalThis.__model.parse = aiZH({ y_dinh: { loai: "ban_roi", trich_dan: "bán rồi" } });

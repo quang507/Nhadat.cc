@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-03 10:24 (giờ VN)
+-- Sinh lúc: 2026-10-03 11:48 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -1980,7 +1980,8 @@ AS $function$
            -- 15/09/2026 (bắn thật N1): "mặt tiền Nguyễn Chí Thanh" / "mt X" — bỏ chữ mặt tiền.
            regexp_replace(regexp_replace(regexp_replace(
              regexp_replace(
-               regexp_replace(seg,
+               -- 20261003b: số nhà ĐỨNG TRƯỚC chữ hẻm / đường ("88 hẻm 6m Tân Kỳ Tân Quý", "156/12/4 đường 59") bỏ TRƯỚC, để bước gọt chạy được.
+               regexp_replace(regexp_replace(seg, '^(?:(?:số|so)\s*)?[0-9]+[a-z]?(?:/[0-9]+[a-z]?)*\s+(?=(?:hẻm|hem|hxh|ngõ|ngo|kiệt|kiet|đường|duong|phố|pho)(?![[:alpha:]]))', '', 'i'),
                  '^(?:hẻm|hem|hxh|ngõ|ngo|kiệt|kiet)(?:\s+|(?=\d))(?:(?:xe\s*hơi|xe\s*hoi|xe\s*tải|xe\s*tai|xe\s*máy|xe\s*may|ba\s*gác|ba\s*gac|thông|thong|cụt|cut|nhựa|nhua|bê\s*tông|be\s*tong|rộng|rong|lớn|lon|nhỏ|nho|xh)(?![[:alpha:]])\s*|[0-9]+(?:[.,][0-9]+)?\s*m(?![[:alpha:]])\s*|[0-9]+[a-z]?(?:/[0-9]+[a-z]?)*(?![[:alpha:]0-9])\s*)*',
                  '', 'i'),
                '^(?:đường|duong|phố|pho|đ\.|đ |mặt tiền|mat tien|mt(?![[:alpha:]]))\s*', '', 'i'),

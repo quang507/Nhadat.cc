@@ -1272,7 +1272,9 @@ export function thayCauHoiLech(reply: string, khoa: string | null | undefined, c
 // FR-240 e (phát lại lần ba, v264): "Em cảm ơn anh, đã ghi đủ thông tin rồi ạ." khi tin mới có tên đường — tin chưa lên là
 // còn thiếu, "đủ thông tin" là nói sai. "Dạ em ghi đủ rồi ạ" (đủ những gì khách vừa nói — ví dụ mẫu FR-178) giữ.
 // 30/09/2026 (chủ dự án chat thử): lượt đầu "em cần bán nhà" → "mình đã tạo tin rồi" khi chưa có gì — cùng loại hứa.
-const DA_DANG_RE = /\b(?:da|vua)\s+tao\s+(?:tin|bai)\b|\btao\s+tin\s+(?:roi|xong)\b|\b(?:ghi|co|nhan|lay)\s+(?:du|day du)\s+thong\s+tin\b|\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b/;
+const DA_DANG_RE = /\b(?:da|vua)\s+tao\s+(?:tin|bai)\b|\btao\s+tin\s+(?:roi|xong)\b|\b(?:ghi|co|nhan|lay)\s+(?:du|day du)\s+thong\s+tin\b|\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b|\btin\s+(?:minh\s+|nha\s+minh\s+|cua\s+\w+\s+)?(?:da|vua)\s+(?:len|dang|duoc dang)\b|\btin\s+(?:minh\s+)?len\s+roi\b/;
+// 03/10/2026 (bắn thử thu-dc-09, SRS-5.1zj): "Chào mình! Tin đã lên rồi nha." khi tin còn chờ thông tin — chủ ngữ "tin" ĐỨNG
+// TRƯỚC ("tin đã lên", "tin vừa đăng") lọt luật cũ (chỉ bắt "đã lên web / kệ / tin").
 export function boHuaDaDang(replies: string[]): string[] {
   const ra: string[] = [];
   for (const r of replies) {
