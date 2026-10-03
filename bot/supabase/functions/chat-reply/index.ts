@@ -30,7 +30,7 @@ import {
   HUMAN_CHAT_RULES,
   SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau as cauHoiMauGoc, cauPhuongNgan, docCauHoiMau, docCauTienDinh, dienCau, LOI_CHAO,
   SLANG_NOTES,
-  TONE_RULES,
+  TONE_RULES, CAU_HOI_MAU_TEXT, CAU_TIEN_DINH_TEXT,
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
@@ -775,31 +775,27 @@ type CauHinh = {
   mauBan: string; mauMua: string;
 };
 let nhoCauHinh: CauHinh | null = null;
-// 03/10/2026 (giảm egress Supabase, SRS-5.1zl): đo một lượt bot — `bot_prompts` nguyên nội dung 38 KB, 60–80% byte của lượt,
-// kéo lại mỗi 60 s. Nay mỗi 60 s chỉ đọc `key, updated_at` (trigger `bot_prompts_touch` đóng dấu mỗi lần sửa); khác
-// phiên đã nhớ (sửa / thêm / xoá khoá) mới kéo nội dung. Sửa ở Table Editor vẫn có hiệu lực trong vòng 60 s.
-let nhoPrompt: { phien: string; P: Record<string, string> } | null = null;
+// SRS-5.1zl (03/10/2026, giảm egress Supabase): bản prompt trong code theo khoá `bot_prompts`. Lượt bot gửi mã băm SHA-256
+// của chúng cho `doc_prompt_khac` và chỉ nhận về khoá DB KHÁC code (bản sửa tay đè code) — trước đây kéo nguyên bảng ~38 KB
+// mỗi lượt (60–80% byte của lượt; mỗi lượt là một isolate mới nên nhớ tạm trong bộ nhớ không giúp được).
+const PROMPT_CODE: Record<string, string> = {
+  tone_rules: TONE_RULES, cau_hoi_mau: CAU_HOI_MAU_TEXT, cau_tien_dinh: CAU_TIEN_DINH_TEXT, loi_chao: LOI_CHAO,
+  human_chat_rules: HUMAN_CHAT_RULES, fee_rules: FEE_RULES, seller_script_rules: SELLER_SCRIPT_RULES, slang_notes: SLANG_NOTES,
+  buyer_fewshot: BUYER_FEWSHOT, agree_rules: AGREE_RULES, seller_fewshot: SELLER_FEWSHOT,
+};
+let bamPromptCode: Record<string, string> | null = null;
 async function napPrompt(client: ReturnType<typeof serviceClient>): Promise<Record<string, string>> {
-  const { data: dau, error } = await client.from("bot_prompts").select("key, updated_at").order("key");
-  const phien = !error && dau ? dau.map((r) => `${r.key}@${r.updated_at}`).join("|") : null;
-  if (phien !== null && nhoPrompt?.phien === phien) return nhoPrompt.P;
-  const { data: rows, error: e2 } = await client.from("bot_prompts").select("key, content");
-  if (e2 || !rows) return nhoPrompt?.P ?? {};
-  const P = Object.fromEntries(rows.map((r) => [r.key, r.content]));
-  if (phien !== null) nhoPrompt = { phien, P };
-  return P;
-}
-// Bảng `wards` (168 phường, đổi bằng migration) — nhớ theo isolate 6 giờ thay vì đọc lại 17 KB mỗi lượt người bán.
-type PhuongDayDu = PhuongDs & { don_vi_cu: string | null };
-// e2e dựng DB giả mới mỗi ca (`globalThis.__db`) — nhớ theo DB đó để ca sau không đọc phường của ca trước; production: undefined.
-const dbGia = () => (globalThis as { __db?: unknown }).__db;
-let nhoPhuong: { at: number; db: unknown; ds: PhuongDayDu[] } | null = null;
-async function napPhuong(client: ReturnType<typeof serviceClient>): Promise<{ ds: PhuongDayDu[] | null; loi: string | null }> {
-  if (nhoPhuong && nhoPhuong.db === dbGia() && Date.now() - nhoPhuong.at < 6 * 3600e3) return { ds: nhoPhuong.ds, loi: null };
-  const { data, error } = await client.from("wards").select("ten, ten_day_du, loai, quan_cu, don_vi_cu").limit(400);
-  if (error) return { ds: null, loi: error.message };
-  nhoPhuong = { at: Date.now(), db: dbGia(), ds: (data ?? []) as PhuongDayDu[] };
-  return { ds: nhoPhuong.ds, loi: null };
+  if (!bamPromptCode) {
+    const hex = async (t: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))]
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
+    bamPromptCode = Object.fromEntries(await Promise.all(Object.entries(PROMPT_CODE).map(async ([k, v]) => [k, await hex(v)])));
+  }
+  const { data, error } = await client.rpc("doc_prompt_khac", { p_bam: bamPromptCode });
+  if (!error) return Object.fromEntries(((data ?? []) as Array<{ key: string; content: string }>).map((r) => [r.key, r.content]));
+  // RPC hỏng (vd chưa áp migration) → đọc nguyên bảng như cũ: thà tốn byte còn hơn bot chạy prompt sai bản.
+  await ghiLoi(client, "chat-reply doc_prompt_khac", error.message);
+  const { data: rows } = await client.from("bot_prompts").select("key, content");
+  return Object.fromEntries((rows ?? []).map((r) => [r.key, r.content]));
 }
 async function napCauHinh(client: ReturnType<typeof serviceClient>): Promise<CauHinh> {
   if (nhoCauHinh && Date.now() - nhoCauHinh.at < NHO_TAM_MS) return nhoCauHinh;
@@ -1991,9 +1987,9 @@ Deno.serve(async (req) => {
     ): Promise<string | null> => {
       if (!listingId || !tin?.trim()) return null;
       if (!dsPhuongTuDien) {
-        const { ds, loi } = await napPhuong(client);
-        if (loi || !ds) { await ghiLoi(client, "chat-reply wards(tu dien phuong)", loi ?? "rong"); return null; }
-        dsPhuongTuDien = ds;
+        const { data, error } = await client.from("wards").select("ten, ten_day_du, loai, quan_cu").limit(400);
+        if (error) { await ghiLoi(client, "chat-reply wards(tu dien phuong)", error.message); return null; }
+        dsPhuongTuDien = (data ?? []) as PhuongDs[];
       }
       const tp = timPhuongTrongCau(tin, dsPhuongTuDien);
       const tron = tp ? null : tenDiaDanhTron(tin);
@@ -6521,9 +6517,9 @@ Deno.serve(async (req) => {
       if (!phuongRao && !/[À-ỹ]/.test(text)) {
         const tenKD = phuongTenKhongDau(tKD);
         if (tenKD) {
-          const { ds: dsPhuong, loi: wErr } = await napPhuong(client);
-          if (wErr) await ghiLoi(client, "chat-reply wards(khong dau)", wErr);
-          const khop = (dsPhuong ?? [])
+          const { data: dsPhuong, error: wErr } = await client.from("wards").select("ten, ten_day_du, don_vi_cu").limit(400);
+          if (wErr) await ghiLoi(client, "chat-reply wards(khong dau)", wErr.message);
+          const khop = ((dsPhuong ?? []) as Array<{ ten: string; ten_day_du: string | null; don_vi_cu: string | null }>)
             .find((w) => boDau(w.ten) === tenKD || boDau(w.don_vi_cu ?? "").includes(`phuong ${tenKD}`));
           if (khop) phuongRao = khop.ten_day_du ?? `Phường ${khop.ten}`;
         }

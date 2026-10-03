@@ -1,6 +1,12 @@
 import { FakeDB, napPhuongCuThat, napPhuongThat } from "./mock-supabase.mjs";
 import { OUT } from "./mock-anthropic.mjs";
-import { tenTroLy } from "../../supabase/functions/_shared/prompts.ts"; // FR-181: cùng hàm băm với chat-reply
+import { LOI_CHAO, tenTroLy } from "../../supabase/functions/_shared/prompts.ts";
+import { createHash as bamSha } from "node:crypto";
+// SRS-5.1zl: khoá mà doc_prompt_khac (mock) sẽ trả cho một lượt gọi đã ghi trong log.
+class RpcTra {
+  constructor(l) { const bam = l.args?.p_bam ?? {}; this.khoa = (globalThis.__db.t.bot_prompts ?? []).filter((r) => r.key in bam && bam[r.key] !== bamSha("sha256").update(r.content ?? "", "utf8").digest("hex")).map((r) => r.key); }
+  co(k) { return this.khoa.includes(k); }
+} // FR-181: cùng hàm băm với chat-reply
 globalThis.__calls = []; globalThis.__db = new FakeDB();
 // 09/09/2026: câu hỏi mẫu + lời chào sửa được ở Dashboard — seed bot_prompts trước lượt đầu
 // (napCauHinh nhớ tạm 60 s, đọc một lần cho cả run). vi_tri đổi câu để chứng minh bản DB đè bản code.
@@ -3427,6 +3433,22 @@ fresh(seedKho);
     check("ZH-04 báo bán rồi, tin chỉ có quận → 'căn ở Quận Tân Bình', không 'căn căn chưa rõ địa chỉ'",
       r.body.replies.some((x) => /căn ở Quận Tân Bình/.test(x)) && !r.body.replies.some((x) => /căn căn|chưa rõ địa chỉ/.test(x)), JSON.stringify(r.body.replies));
     globalThis.__cauHinh = cuCH;
+  }
+  // SRS-5.1zl (giảm egress): lượt bot không kéo nguyên bảng bot_prompts — chỉ khoá DB KHÁC bản code (doc_prompt_khac).
+  {
+    fresh(seedKho);
+    globalThis.__db.t.bot_prompts = globalThis.__db.t.bot_prompts.filter((r) => r.key !== "loi_chao");
+    globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: LOI_CHAO }); // trùng bản code
+    globalThis.__db.insert("bot_prompts", { key: "fee_rules", content: "Luật phí sửa tay: chỉ nói khi hỏi." }); // khác bản code
+    // Gói cấu hình nhớ 60 s theo isolate (bộ e2e chạy một tiến trình) → đẩy đồng hồ qua 61 s cho lượt này nạp lại.
+    const nowGoc = Date.now; const lech = Date.now() + 61e3 - nowGoc(); Date.now = () => nowGoc() + lech;
+    try { await send({ external_user_id: "eg-1", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5 giá 8 tỷ" }); } finally { Date.now = nowGoc; }
+    const goi = globalThis.__db.log.filter((x) => x.rpc === "doc_prompt_khac");
+    const keoBang = globalThis.__db.log.some((x) => x.table === "bot_prompts" && x.op === "select");
+    const tra = goi.length ? new RpcTra(goi[0]) : null;
+    check("EG-01 lượt bot hỏi doc_prompt_khac (không select cả bảng bot_prompts); khoá trùng code không trả, khoá sửa tay có trả",
+      goi.length >= 1 && !keoBang && tra && !tra.co("loi_chao") && tra.co("fee_rules") && tra.co("cau_hoi_mau"),
+      JSON.stringify({ goi: goi.length, keoBang, khoa: tra?.khoa }));
   }
   // SRS-5.1zg nhánh MUA: xin hình mà chưa rõ căn → hỏi lại căn nào; hỏi tiện ích → kèm link Google Maps tìm sẵn.
   {

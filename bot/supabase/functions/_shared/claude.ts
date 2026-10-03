@@ -87,20 +87,11 @@ export function tomTatLuuLuong(dem: DemLuuLuong): Record<string, unknown> {
 }
 
 /** Secret lấy từ env (supabase secrets) trước, không có thì đọc Vault. */
-// 03/10/2026 (giảm request Supabase, SRS-5.1zl): một lượt người bán đọc Vault 8 lần. Nhớ theo isolate 5 phút như client model
-// (`napModel`); chỉ nhớ giá trị CÓ — đọc hụt / chưa đặt thì lượt sau đọc lại. e2e dựng DB giả mới mỗi ca → nhớ theo DB đó.
-const nhoBiMat = new Map<string, { v: string; at: number; db: unknown }>();
 export async function secretOf(db: SupabaseClient, name: string): Promise<string | null> {
   const fromEnv = Deno.env.get(name);
   if (fromEnv) return fromEnv;
-  const dbGia = (globalThis as { __db?: unknown }).__db;
-  const nho = nhoBiMat.get(name);
-  if (nho && nho.db === dbGia && Date.now() - nho.at < 5 * 60e3) return nho.v;
   const { data } = await db.rpc("get_secret", { secret_name: name });
-  const v = (data as string) ?? null;
-  // Token OA được làm mới định kỳ — không nhớ, luôn đọc bản mới nhất.
-  if (v && name !== "ZALO_OA_ACCESS_TOKEN") nhoBiMat.set(name, { v, at: Date.now(), db: dbGia });
-  return v;
+  return (data as string) ?? null;
 }
 
 /**

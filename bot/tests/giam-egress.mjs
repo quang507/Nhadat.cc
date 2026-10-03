@@ -3,9 +3,6 @@
 //       production) sẽ dựng sẵn mọi dòng; /du-an/[slug] từng đốt 83% request REST cả project như vậy.
 //  G-02 mọi `rpc("match_projects", …)` phải nối `.select(…)` — hàm trả SETOF projects, không chọn cột là kéo cả vector `nhung`.
 //  G-03 không `select("*")` trên `listings` / `projects` ở web và chat-reply (vector `nhung` ~9,8 KB/dòng).
-//  G-04 (03/10, SRS-5.1zl) chat-reply chỉ kéo NỘI DUNG `bot_prompts` (38 KB, 60–80% byte một lượt đo được) sau bước so
-//       phiên `key, updated_at` trong `napPrompt` — không chỗ nào khác đọc `content`.
-//  G-05 chat-reply đọc CẢ bảng `wards` (17 KB) chỉ qua `napPhuong` (nhớ theo isolate).
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -43,20 +40,6 @@ for (const p of nguon) {
   for (const m of s.matchAll(/from\("(listings|projects)"\)\s*\.select\("\*"\)/g)) {
     kiem(`G-03 ${ten}: không select("*") trên ${m[1]}`, false, m[0]);
   }
-}
-
-// G-04 + G-05.
-{
-  const cr = readFileSync(join(goc, "bot/supabase/functions/chat-reply/index.ts"), "utf8");
-  const docNoiDung = [...cr.matchAll(/from\("bot_prompts"\)\.select\("key, content"\)/g)].length;
-  const thanNap = cr.match(/async function napPrompt\([\s\S]*?\n\}/)?.[0] ?? "";
-  kiem("G-04 chat-reply: nội dung bot_prompts chỉ đọc một chỗ, trong napPrompt, sau bước so key/updated_at",
-    docNoiDung === 1 && /select\("key, content"\)/.test(thanNap) && thanNap.indexOf('select("key, updated_at")') >= 0 &&
-      thanNap.indexOf('select("key, updated_at")') < thanNap.indexOf('select("key, content")'),
-    `số chỗ đọc content: ${docNoiDung}`);
-  const caBang = [...cr.matchAll(/from\("wards"\)\.select\([^)]*\)\.limit\(/g)].length;
-  const thanPhuong = cr.match(/async function napPhuong\([\s\S]*?\n\}/)?.[0] ?? "";
-  kiem("G-05 chat-reply: đọc cả bảng wards chỉ trong napPhuong", caBang === 1 && /from\("wards"\)/.test(thanPhuong), `số chỗ đọc cả bảng: ${caBang}`);
 }
 
 // Ca tự kiểm: bộ bắt phải BẮT được mẫu xấu (không thì xanh vì soi sai).
