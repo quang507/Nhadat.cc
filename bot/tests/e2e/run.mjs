@@ -3381,6 +3381,34 @@ fresh(seedKho);
     check("ZH-06 'mặt tiền đường 30/4' (AI: duong '30/4') → tin có địa chỉ 'đường 30/4', không trống",
       /đường 30\/4/.test(String(L6?.location_raw ?? "")) || db().t.listing_facts.some((f) => f.listing_id === L6?.id && f.question === "vi_tri" && /đường 30\/4/.test(f.answer)),
       JSON.stringify({ loc: L6?.location_raw, facts: db().t.listing_facts.filter((f) => f.listing_id === L6?.id).map((f) => [f.question, f.answer]) }));
+    // SRS-5.1zk (chủ dự án: "mấy hàm sql ngu quá thay bằng AI tự ghi đi"): địa chỉ AI viết đi thẳng (bỏ bề rộng hẻm, luật không
+    // ghép lại "6m"), tên đường AI đọc ghi thẳng cột street.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = aiZH({ truong: [
+      { khoa: "loai_giao_dich", gia_tri: "ban", trich_dan: "bán nhà", can: null },
+      { khoa: "duong", gia_tri: "88 hẻm Tân Kỳ Tân Quý", trich_dan: "88 hẻm 6m Tân Kỳ Tân Quý", can: null },
+      { khoa: "ten_duong", gia_tri: "Tân Kỳ Tân Quý", trich_dan: "88 hẻm 6m Tân Kỳ Tân Quý", can: null },
+      { khoa: "do_rong_hem", gia_tri: "6", trich_dan: "hẻm 6m", can: null },
+      { khoa: "quan", gia_tri: "Quận Tân Phú", trich_dan: "quận Tân Phú", can: null },
+      { khoa: "gia", gia_tri: "6 tỷ 5", trich_dan: "giá 6 tỷ 5", can: null },
+    ] });
+    r = await send({ external_user_id: "zh-7", text: "bán nhà số 88 hẻm 6m Tân Kỳ Tân Quý quận Tân Phú, 4x15, giá 6 tỷ 5" });
+    const L7 = db().t.listings.at(-1);
+    check("ZH-07 'số 88 hẻm 6m Tân Kỳ Tân Quý' → địa chỉ AI '88 hẻm Tân Kỳ Tân Quý' (không '6m'), street 'Tân Kỳ Tân Quý' do AI ghi",
+      L7?.location_raw === "88 hẻm Tân Kỳ Tân Quý" && L7?.street === "Tân Kỳ Tân Quý", JSON.stringify({ loc: L7?.location_raw, street: L7?.street }));
+    L = await moZH("zh-8", "ban nha Tan Binh, 4x12, gia 5 ty", "vi_tri");
+    L.street = null;
+    globalThis.__model.parse = aiZH({
+      truong: [
+        { khoa: "duong", gia_tri: "45 hẻm Cộng Hòa", trich_dan: "45 hẻm rộng 4 mét Cộng Hòa", can: null },
+        { khoa: "ten_duong", gia_tri: "Cộng Hòa", trich_dan: "45 hẻm rộng 4 mét Cộng Hòa", can: null },
+      ],
+      tra_loi: { co_tra_loi: true, gia_tri: "45 hẻm Cộng Hòa", trich_dan: "45 hẻm rộng 4 mét Cộng Hòa" },
+    });
+    r = await send({ external_user_id: "zh-8", text: "nhà ở 45 hẻm rộng 4 mét Cộng Hòa em" });
+    check("ZH-08 trả lời câu địa chỉ '45 hẻm rộng 4 mét Cộng Hòa' (cách nói mới) → địa chỉ '45 hẻm Cộng Hòa', street 'Cộng Hòa'",
+      L.location_raw === "45 hẻm Cộng Hòa" && L.street === "Cộng Hòa", JSON.stringify({ loc: L.location_raw, street: L.street, facts: db().t.listing_facts.filter((f) => f.listing_id === L.id).map((f) => [f.question, f.answer]) }));
     L = await moZH("zh-4", "ban nha hem 3m Tan Binh, 4x12, gia 5 ty", "phuong");
     L.location_raw = null; L.ward = null; L.district = "Quận Tân Bình";
     globalThis.__model.parse = aiZH({ y_dinh: { loai: "ban_roi", trich_dan: "bán rồi" } });

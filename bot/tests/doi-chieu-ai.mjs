@@ -18,7 +18,7 @@ const kiem = (ten, ok, ct = "") => { ok ? dat++ : hong++; console.log(`${ok ? "�
 // DC-01: khoá ngoài KHOA_GHI phải ra được một ô / cột khi đưa qua docAiChinh với giá trị mẫu.
 const MAU = { ngang: ["4", "ngang 4m"], dai: ["15", "dài 15m"], no_hau: ["5", "nở hậu 5m"], duong: ["Trần Hưng Đạo", "Trần Hưng Đạo"],
   du_an: ["Sunrise City", "Sunrise City"], loai_giao_dich: ["ban", "bán"], loai_bds: ["nha_pho", "nhà phố"], quan: ["Quận 5", "quận 5"],
-  ma_can: ["A12-05", "A12-05"], gia_m2: ["95 triệu/m2", "95 triệu/m2"] };
+  ma_can: ["A12-05", "A12-05"], gia_m2: ["95 triệu/m2", "95 triệu/m2"], ten_duong: ["Trần Hưng Đạo", "Trần Hưng Đạo"] };
 // Ngoại lệ CÓ LÝ DO (thêm dòng ở đây là một quyết định, không phải cách làm cổng xanh):
 const NGOAI_LE = { dai: "dài một mình không có ô riêng — đường câu treo ghép với ngang đã có (`ghepMotChieu`); có ngang thì thành AxB" };
 const ngoai = MOI_KHOA.filter((k) => !(k in KHOA_GHI) && !(k in NGOAI_LE));
@@ -27,7 +27,8 @@ const roi = ngoai.filter((k) => {
   if (!m) return true;
   const d = [{ khoa: k, gia_tri: m[0], trich_dan: m[1], can: null }, ...(k === "ngang" ? [{ khoa: "dai", gia_tri: "15", trich_dan: "dài 15m", can: null }] : [])];
   const r = docAiChinh(d, null);
-  return !(r.ghi.length || r.quan || r.maCan || r.giaM2Raw || r.loaiBds || r.loaiGiaoDich);
+  // ten_duong → `tenDuong`: chat-reply ghi cột street (SRS-5.1zk).
+  return !(r.ghi.length || r.quan || r.maCan || r.giaM2Raw || r.loaiBds || r.loaiGiaoDich || r.tenDuong);
 });
 kiem("DC-01 mọi khoá AI nói được đều có đường ghi", roi.length === 0, roi.join(", "));
 // Ca tự kiểm: khoá bịa phải bị bắt (không thì DC-01 xanh vì soi sai).

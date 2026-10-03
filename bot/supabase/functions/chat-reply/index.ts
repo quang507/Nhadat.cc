@@ -178,6 +178,19 @@ const laNgoaiDoThi = (quan?: string | null): boolean =>
 // dấu, chỉ regex là mù.
 const boDau = (s: string): string =>
   goNhamDau(s).toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+/** SRS-5.1zk: tên đường AI đọc nằm ở đâu trong địa chỉ đã ghi (bỏ dấu khi so) → trả đúng chữ trong địa chỉ (đã qua từ điển
+ *  `duong`, có dấu chuẩn). Không nằm trong địa chỉ → null (không ghi street lệch với địa chỉ). */
+const tenTrongDiaChi = (diaChi: string, ten: string): string | null => {
+  const phang = (x: string) => x.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const kyTu = [...diaChi.normalize("NFC")];
+  const dong = kyTu.map((c) => phang(c) || c).join("");
+  // "đường 3/2" (tên bằng số giữ chữ "đường") — địa chỉ viết "hẻm 18 3/2" thì so phần tên trần.
+  for (const t of [ten.normalize("NFC").trim(), ten.normalize("NFC").trim().replace(/^đường\s+/i, "")]) {
+    const i = t ? dong.indexOf(phang(t)) : -1;
+    if (i >= 0) return kyTu.slice(i, i + [...t].length).join("").trim();
+  }
+  return null;
+};
 // Fallback quy tắc khi model lỗi/hết quota (hướng parseVnd của NhaDat-Radar):
 // bắt tối thiểu ngân sách + hẻm/mặt tiền bằng regex để hồ sơ không mất dữ liệu,
 // và trả lời template thay vì im lặng hay đổ lỗi cho khách.
@@ -2325,6 +2338,10 @@ Deno.serve(async (req) => {
     // `escalation` cho người phụ trách (một lần / 24 giờ / người). Bực thì thôi hỏi lượt này (nhánh hoãn).
     let camXucDaXet = false;
     let camXucLuot: ReturnType<typeof docCamXuc> = null;
+    // SRS-5.1zk (03/10/2026, chủ dự án: "mấy hàm sql ngu quá thay bằng AI tự ghi đi"): chế độ `ai` — tên đường AI đọc
+    // (`ten_duong`, có trích dẫn) ghi thẳng cột `street`, thay cho `boc_ten_duong()` đoán từ chữ địa chỉ. Ghi ở `traLoiSeller`
+    // (sau khi fact vị trí đã vào cột), chỉ khi tên đó nằm trong địa chỉ đã ghi.
+    let duongAiGhi: { id: string; ten: string } | null = null;
     const camXucAi = async (): Promise<ReturnType<typeof docCamXuc>> => {
       if (camXucDaXet) return camXucLuot;
       if (!bongAi) return null; // chưa tới chỗ gọi AI (đường ra sớm) — không đánh dấu đã xét
@@ -2793,6 +2810,17 @@ Deno.serve(async (req) => {
       await vetDuAnBangModel();
       // Cảm xúc chủ nhà: mọi đường ra đều xét (báo người phụ trách một lần / 24 giờ / mức).
       await camXucAi();
+      if (duongAiGhi) {
+        const { id, ten } = duongAiGhi;
+        duongAiGhi = null;
+        const { data: lDuong, error: lDErr } = await client.from("listings").select("location_raw, street").eq("id", id).maybeSingle();
+        if (lDErr) await ghiLoi(client, "chat-reply listings(ten duong ai)", lDErr.message);
+        const st = lDuong?.location_raw ? tenTrongDiaChi(lDuong.location_raw, ten) : null;
+        if (st && st !== lDuong?.street) {
+          const { error: stErr } = await client.from("listings").update({ street: st }).eq("id", id);
+          if (stErr) await ghiLoi(client, "chat-reply listings.street(ai)", stErr.message);
+        }
+      }
       // 01/10/2026 (bắn thử lx-cx-01: "bên em có phải lừa đảo không vậy" → bot chỉ nói "em là trợ lý AI"): chủ nhà NGHI NGỜ
       // (AI đọc, có trích dẫn) → bong bóng TRẤN AN tiền định đứng trước, chỉ nói điều có thật: phí chỉ thu khi giao dịch thành
       // công (FEE_RULES), không thu trước; đã báo người phụ trách (việc 😟 vừa mở ở `camXucAi`).
@@ -5243,9 +5271,11 @@ Deno.serve(async (req) => {
         // Khách vừa gật phường bot gợi ý (`nhanGoiYPhuong`) → phường là phường gợi ý, AI không đè ("tân phú em" ≠ Phường Tân Phú).
         const dapAnAi = pendingReq.question === "phuong" && (phuongTuDien || nhanGoiYPhuong) ? null
           : pendingReq.question === "vi_tri" && laChiDonViHanhChinh(dapAn) ? null
-          : pendingReq.question === "vi_tri" && dapAnAi0 ? chonViTri(bocViTriRao(dapAn), dapAnAi0) : dapAnAi0;
+          // SRS-5.1zk: chế độ `ai` — địa chỉ AI viết (số nhà, số hẻm, tên đường; bỏ bề rộng) đi thẳng, luật không ghép thêm.
+          : pendingReq.question === "vi_tri" && dapAnAi0 ? (laCheDoAi ? dapAnAi0 : chonViTri(bocViTriRao(dapAn), dapAnAi0)) : dapAnAi0;
         if (cheDoAiTreo === "chinh" && kqAi?.ket) {
           aiChinh = { ...docAiChinh(datAi, dongTreo), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], text, datAi) };
+          if (laCheDoAi && aiChinh.tenDuong) duongAiGhi = { id: pendingReq.listing_id, ten: aiChinh.tenDuong };
           // FR-226: khách nói thêm / sửa một phần ô đang ghi ("số 45 nha" khi địa chỉ đang là "Ngô Y Linh") → AI gộp, code
           // kiểm, rồi đi chung đường fact kèm (câu khớp lẫn câu lệch). Ô đang hỏi thì để đường trả lời câu treo lo.
           capNhatLuot = kiemCapNhat(kqAi.capNhat ?? [], text, dangGhiCua(pendingReq.listings))
@@ -5804,7 +5834,8 @@ Deno.serve(async (req) => {
         if (pendingReq.question === "vi_tri" && dapAnGhi) {
           // 30/09/2026 (chat thử): "nhà ở 137/28 đường số 59 phường an hội tây gò vấp" vào nguyên câu làm vị trí. Gọt còn
           // phần địa chỉ; phường / quận trong câu đi ô riêng (ngay dưới, sau khi ghi).
-          dapAnGhi = gotDiaChi(ghepSoNhaHem(dapAnGhi, text) ?? dapAnGhi);
+          // SRS-5.1zk: địa chỉ của AI (`loaiDapAn`, chế độ `ai`) đã sạch — không gọt / ghép bằng luật.
+          if (!(laCheDoAi && loaiDapAn)) dapAnGhi = gotDiaChi(ghepSoNhaHem(dapAnGhi, text) ?? dapAnGhi);
           const sd = await suaTenDuong(dapAnGhi, pendingReq.listings?.district, pendingReq.listings?.ward);
           dapAnGhi = sd.viTri;
           goiYDuongKe = sd.goiY;
@@ -6606,14 +6637,18 @@ Deno.serve(async (req) => {
         // Trần Hưng Đạo" — số nhà rơi vì AI đứng trước. Bản chứa bản kia mà dài hơn thì thắng (`chonViTri`).
         // Đợt 2 (02/10/2026, bắn thử lx-t6-04: "không có hẻm gì hết" → địa chỉ "hẻm gì hết"): chế độ `ai` mà AI không đọc ra
         // đường → không lấy địa chỉ luật đoán; câu địa chỉ sẽ được hỏi. AI có đường thì luật chỉ góp số nhà (`chonViTri`).
-        const viTriCau = aiRao ? (aiRao.duong || !laCheDoAi ? chonViTri(bocViTriRao(text), aiRao.duong) : null) : bocViTriRao(text);
+        // SRS-5.1zk (03/10/2026): chế độ `ai` — địa chỉ AI viết đi thẳng (không chonViTri / ghepSoNhaHem / gotDiaChi);
+        // tên đường AI đọc ghi cột street (`duongAiGhi`).
+        const aiDiaChi = !!aiRao && laCheDoAi;
+        const viTriCau = aiRao ? (aiDiaChi ? aiRao.duong : chonViTri(bocViTriRao(text), aiRao.duong)) : bocViTriRao(text);
         // 30/09/2026 (chủ dự án, chat thử): câu rao không nói địa chỉ mà tin nhắn TRƯỚC câu rao có ("nhà chú ở 137/28 đường
         // số 59 …") → lấy ở đó. Số nhà hẻm luật làm rơi thì ghép lại: "137/28 đường số 59" (hẻm 137, nhà số 28).
-        const viTriGhep = viTriCau
+        const viTriGhep = aiDiaChi ? viTriCau : viTriCau
           ? ghepSoNhaHem(viTriCau, textBongAi)
           : truocTin ? ghepSoNhaHem(bocViTriRao(truocTin), truocTin) : null;
         // Bỏ chữ nối / lời dẫn còn dính ("hẻm xe hơi nguyen van cu gần").
-        const viTriTho = viTriGhep ? gotDiaChi(viTriGhep) : null;
+        const viTriTho = viTriGhep ? (aiDiaChi ? viTriGhep : gotDiaChi(viTriGhep)) : null;
+        if (aiDiaChi && aiRao?.tenDuong) duongAiGhi = { id: newLst.id, ten: aiRao.tenDuong };
         // FR-212: đối chiếu tên đường với từ điển `duong` — không dấu → có dấu ngay; sai 1–2 ký tự → gợi ý, hỏi ở câu đầu.
         const duongRao = viTriTho ? await suaTenDuong(viTriTho, quanDoc, phuongRao) : null;
         const viTriRao = duongRao?.viTri ?? viTriTho;

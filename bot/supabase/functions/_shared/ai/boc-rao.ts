@@ -148,7 +148,16 @@ KHOÁ:
 - quan: ghi đủ "Quận 5", "Quận Phú Nhuận", "Huyện Bình Chánh", "TP Thủ Đức". phuong, duong, ma_can. quan / phuong / duong là NƠI CĂN NHÀ
   NẰM — nơi GẦN đó, nơi đi tới, nơi chủ nhà ở / chuyển tới thì KHÔNG đưa ("ra Quận 1 có 5 phút", "gần chợ Bến Thành", "bán vì chuyển qua quận 7").
 - phuong: ĐỌC THEO NGHĨA, không cần chữ "phường / xã" đứng trước — "nhà ở Vĩnh Lộc B", "bên Thảo Điền", "an hoi tay", gõ sai một hai chữ đều là nói phường. Trả tên phường MỚI ĐẦY ĐỦ đúng như DANH SÁCH PHƯỜNG gửi kèm tin nhắn (chỉ gồm các phường câu khách có thể đang nhắc; không có danh sách thì chỉ đưa phuong khi khách nói rõ "phường / xã X") ("Phường An Hội Tây", "Xã Tân Vĩnh Lộc"): khách nói tên CŨ thì đổi sang phường mới theo bảng tên cũ ("Vĩnh Lộc B" → "Xã Tân Vĩnh Lộc", "Thảo Điền" → "Phường An Khánh"); phường cũ bị chia (dấu *) sang nhiều phường mới mà câu không đủ để biết phần nào thì KHÔNG đưa phuong. KHÔNG cắt bớt chữ ("An Hội Tây" ≠ "An Hội"). trich_dan = cụm khách nói nguyên văn ("Vĩnh Lộc B"). Tên trùng tên quận cũ ("gò vấp", "phú nhuận") mà khách không nói "phường" thì là QUẬN. Phường đánh số ("phường 12", "p4") giữ số: "Phường 12".
-- duong (địa chỉ): giữ nguyên số nhà. Quy ước TP.HCM: "137/28 đường số 59" là HẺM 137 của đường số 59, NHÀ SỐ 28 trong hẻm (số sau dấu "/" cuối là số nhà; "137/28/5" = nhà 5 trong hẻm 137/28) — ghi "137/28 đường số 59", không đảo số, không bỏ số.
+- duong (ĐỊA CHỈ ĐẦY ĐỦ, có dấu, như khách nói): giữ nguyên số nhà và SỐ HẺM ("hẻm 45 Nguyễn Trãi", "hẻm 18/5 đường Cách Mạng Tháng 8",
+  "12/3 Lê Văn Sỹ", "88 hẻm Tân Kỳ Tân Quý"). Quy ước TP.HCM: "137/28 đường số 59" là HẺM 137 của đường số 59, NHÀ SỐ 28 trong hẻm (số
+  sau dấu "/" cuối là số nhà; "137/28/5" = nhà 5 trong hẻm 137/28) — ghi "137/28 đường số 59", không đảo số, không bỏ số. KHÔNG ghi BỀ
+  RỘNG hẻm vào duong ("hẻm 6m", "4 mét" → do_rong_hem). Tên đường bằng số / mã thì ghi kèm chữ "đường": "đường 3/2", "đường 30/4",
+  "đường D2", "đường số 7".
+- ten_duong: CHỈ TÊN ĐƯỜNG, có dấu — không số nhà, không số hẻm, không chữ "hẻm / đường": "Nguyễn Trãi", "Cách Mạng Tháng 8", "3/2",
+  "30/4", "D2", "số 7", "Tân Kỳ Tân Quý". Có duong thì LUÔN đưa kèm ten_duong (cùng trích dẫn với duong).
+- SỐ HẺM khác BỀ RỘNG HẺM: số đứng sau "hẻm" mà KHÔNG có đơn vị là SỐ HẺM, thuộc duong ("hẻm 45", "hẻm 18/5", "hẻm 1135", "hẻm 284").
+  Bề rộng LUÔN có "m" / "mét" / "rộng": "hẻm 4m", "hẻm 4 mét", "hẻm rộng 4", "hẻm 3m5", "hẻm 6m" → do_rong_hem (chỉ con số). "hẻm 4"
+  trần (số nhỏ, không đơn vị, không "rộng") là mập mờ → không đưa do_rong_hem.
 - du_an: tên dự án / khu dân cư / chung cư. Tên phường, tên khu vực (Thảo Điền, An Phú) KHÔNG phải dự án.
 - huong: chỉ phương (Đông, Tây Nam…); "view sông" là view.
 - phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công; "chưa có sổ", "đang chờ sổ", "hợp đồng mua bán" cũng là câu trả lời pháp lý — ghi đúng chữ khách). "Thổ cư" không phải pháp lý.
@@ -162,7 +171,8 @@ KHOÁ:
 - loai_duong_vao: mat_tien | hem_xe_tai | hem_xe_hoi | hem_xe_may | hem | khong_hem — đường trước nhà, đọc theo NGHĨA cả câu, kể
   cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền", "mặt đường" →
   mat_tien; chỉ nói "trong hẻm" → hem; "không có hẻm", "nằm trong khu công nghiệp / nội khu" → khong_hem. "Gần / cách mặt
-  tiền" KHÔNG phải mat_tien.
+  tiền" KHÔNG phải mat_tien. Chủ CHỈ nói bề rộng hẻm (không nói xe nào vào) → theo bề rộng: dưới 3m → hem_xe_may; 3m đến dưới
+  3,5m → hem; từ 3,5m → hem_xe_hoi; từ 6m → hem_xe_tai (trích dẫn là cụm bề rộng, vd "hẻm 4m"). Số hẻm ("hẻm 45") KHÔNG phải bề rộng.
 - o_to_vao_nha (ô tô vào / đậu TRONG nhà), hoan_cong (đã hoàn công), thang_may, can_goc (căn góc, lô góc, hai mặt tiền):
   "co" | "khong" — đọc phủ định theo nghĩa ("chưa hoàn công", "không có thang máy" → khong). nam_xay: năm 4 chữ số.
 - Ô chữ (cụm ngắn, có dấu, bỏ từ đệm "em / nha / ạ", không thêm ý khách không nói): quy_hoach (quy hoạch, lộ giới), the_chap

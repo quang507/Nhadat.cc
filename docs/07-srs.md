@@ -1826,6 +1826,29 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
 - `bot/tests/sql/ten-duong.sql` 10 ca trên Postgres thật. Thiếu migration → 3 ca đỏ.
 - Gỡ bản sửa → `ZH-06` đỏ, `DD-01` đỏ (đã chạy).
 
+### SRS-5.1zk · Địa chỉ do AI ghi thẳng; số hẻm khác bề rộng hẻm (03/10/2026)
+
+**Ca gốc**: chủ dự án 03/10: "mấy hàm sql ngu quá thay bằng AI tự ghi đi, hẻm số người ta sẽ ghi số còn độ rộng thì sẽ ghi 4m 4 mét, dạy AI đi" — sau SRS-5.1zj, khi địa chỉ vẫn đi qua một chuỗi luật (`chonViTri`, `ghepSoNhaHem`, `gotDiaChi` trong code; `boc_ten_duong` trong SQL) mà mỗi lượt bắn lại lộ một hình mới. Chủ dự án cũng chốt: "hẻm 4m" → "hẻm xe hơi 4m" là đúng, giữ ngưỡng bề rộng.
+
+**Lớp lỗi**: máy đoán CẤU TRÚC địa chỉ bằng regex trên chữ khách — số sau "hẻm" là số hẻm hay bề rộng, đâu là số nhà, đâu là tên đường. AI đã đọc địa chỉ có trích dẫn, nhưng ở chế độ `ai` luật vẫn ghép / gọt lại sau AI (`chonViTri` lấy bản luật dài hơn, nên "6m" quay lại địa chỉ), và cột `street` vẫn do `boc_ten_duong()` (SQL) đoán từ chữ địa chỉ.
+
+**Sửa** (chỉ chế độ `ai`; chế độ khác giữ đường luật cũ):
+- Prompt `boc-rao.ts`: `duong` là địa chỉ đầy đủ (số nhà, số hẻm, tên đường), KHÔNG mang bề rộng. Khoá mới `ten_duong` (chỉ tên đường, cùng trích dẫn). Luật "số hẻm khác bề rộng": số sau "hẻm" không có m / mét / rộng là số hẻm; "hẻm 4" trần là mập mờ → không `do_rong_hem`. `loai_duong_vao` theo bề rộng: < 3m xe máy, 3–3,5m hẻm, ≥ 3,5m xe hơi, ≥ 6m xe tải.
+- Ví dụ mẫu mới "bán nhà 88 hẻm 6m Tân Kỳ Tân Quý" (`vi-du-boc-rao.ts`). Trần bản chữ ví dụ 9500 → 10200 ký tự.
+- `kiemDeXuat`: với `duong` / `ten_duong`, giá trị được so với cụm trích đã bỏ cụm bề rộng (số + m / mét). Chỉ bớt chữ, không thêm — giá trị thêm chữ lạ, hay đổi "6m" thành số hẻm "6", vẫn bị loại.
+- `docAiChinh` trả `tenDuong` (bỏ chữ "đường" đầu, tên bằng số giữ "đường 3/2"). `ten_duong` không có fact nên không vào danh sách bỏ.
+- `chat-reply`: lúc tạo tin và lúc trả lời câu địa chỉ, địa chỉ AI đi thẳng (không `chonViTri` / `ghepSoNhaHem` / `gotDiaChi`; từ điển `duong` FR-212 vẫn sửa dấu). Tên đường AI ghi cột `street` ở `traLoiSeller`, chỉ khi tên đó nằm trong `location_raw` đã ghi (`tenTrongDiaChi`, so bỏ dấu, lấy đúng chữ trong địa chỉ).
+
+**Chỗ khác cùng lớp**:
+- Đã chuyển: tạo tin (`viTriCau`), câu trả lời địa chỉ (`dapAnAi`, `dapAnGhi`), cột `street`.
+- Còn luật, cố ý giữ: `soNhaDau` (số nhà có "/" đầu câu khi đang hỏi câu khác) — AI cũng gộp qua `cap_nhat` (FR-226), chưa gỡ vì chưa có ca hỏng. `boc_ten_duong()` vẫn chạy khi AI không có `ten_duong` (AI hỏng, chế độ khác, sửa từ admin). `trg_vi_tri_vao_cot` giữ `street` khi nó khác `boc_ten_duong(địa chỉ cũ)` — admin / CTV đổi địa chỉ sau khi AI đã ghi street thì street có thể cũ; chưa sửa (đổi trigger cần migration, chờ ca thật).
+
+**Kiểm**:
+- `kiem-bang-chung.mjs` `DC-09…14`: bỏ "6m" khỏi trích dẫn qua kiểm; cách nói mới "hẻm rộng 4 mét"; thêm chữ lạ / biến bề rộng thành số hẻm bị loại; `ten_duong` → `tenDuong`.
+- `vi-du-boc-rao.mjs`: ví dụ mới qua kiểm bằng chứng.
+- e2e `ZH-07` (tạo tin: địa chỉ "88 hẻm Tân Kỳ Tân Quý", street "Tân Kỳ Tân Quý"), `ZH-08` (trả lời câu địa chỉ "45 hẻm rộng 4 mét Cộng Hòa" — cách nói mới).
+- Gỡ bản sửa (stash `bot/supabase/functions`) → `ZH-07`, `ZH-08`, `DC-09`, `DC-10`, `DC-11`, `DC-14` đỏ (đã chạy).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

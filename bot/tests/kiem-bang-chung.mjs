@@ -601,5 +601,25 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   const ac = docAiChinh(dx.dat, null);
   ok("DC-08 AI duong '30/4' → aiChinh.duong 'đường 30/4' (không bị ngưỡng độ dài gạt)", ac.duong === "đường 30/4", JSON.stringify(ac.duong));
 }
+// SRS-5.1zk (03/10, chủ dự án: "hẻm số người ta sẽ ghi số còn độ rộng thì sẽ ghi 4m 4 mét"): địa chỉ AI viết bỏ bề rộng,
+// tên đường trần vào `ten_duong` → aiChinh.tenDuong (nơi gọi ghi cột street).
+{
+  const tin = "bán nhà 88 hẻm 6m Tân Kỳ Tân Quý quận Tân Phú";
+  const dx = kiemDeXuat([
+    { khoa: "duong", gia_tri: "88 hẻm Tân Kỳ Tân Quý", trich_dan: "88 hẻm 6m Tân Kỳ Tân Quý", can: null },
+    { khoa: "ten_duong", gia_tri: "Tân Kỳ Tân Quý", trich_dan: "88 hẻm 6m Tân Kỳ Tân Quý", can: null },
+  ], tin);
+  ok("DC-09 duong '88 hẻm Tân Kỳ Tân Quý' (bỏ '6m' khỏi trích dẫn) qua kiểm", dx.dat.some((d) => d.khoa === "duong") && !dx.bo.some((b) => b.khoa === "duong"), JSON.stringify(dx.bo));
+  const ac = docAiChinh(dx.dat, null);
+  ok("DC-10 ten_duong → aiChinh.tenDuong 'Tân Kỳ Tân Quý', không vào danh sách bỏ", ac.tenDuong === "Tân Kỳ Tân Quý" && !ac.bo?.some?.((b) => b.khoa === "ten_duong"), JSON.stringify({ t: ac.tenDuong, bo: ac.bo }));
+  const dx2 = kiemDeXuat([{ khoa: "duong", gia_tri: "12 hẻm Lê Văn Sỹ", trich_dan: "12 hẻm rộng 4 mét Lê Văn Sỹ", can: null }], "nhà 12 hẻm rộng 4 mét Lê Văn Sỹ q3");
+  ok("DC-11 'hẻm rộng 4 mét' (cách nói mới) → duong '12 hẻm Lê Văn Sỹ' qua kiểm", dx2.dat.length === 1, JSON.stringify(dx2.bo));
+  const dx3 = kiemDeXuat([{ khoa: "duong", gia_tri: "88 hẻm Tân Kỳ Tân Quý quận 5", trich_dan: "88 hẻm 6m Tân Kỳ Tân Quý", can: null }], tin);
+  ok("DC-12 duong THÊM chữ không có trong trích dẫn → vẫn bị loại", dx3.dat.length === 0, JSON.stringify(dx3));
+  const dx4 = kiemDeXuat([{ khoa: "duong", gia_tri: "88 hẻm 6 Tân Kỳ Tân Quý", trich_dan: "88 hẻm 6m Tân Kỳ Tân Quý", can: null }], tin);
+  ok("DC-13 bề rộng '6m' biến thành số hẻm '6' → bị loại", dx4.dat.length === 0, JSON.stringify(dx4));
+  const ac5 = docAiChinh(kiemDeXuat([{ khoa: "ten_duong", gia_tri: "đường 3/2", trich_dan: "hẻm 18 đường 3/2", can: null }], "nhà hẻm 18 đường 3/2 q10").dat, null);
+  ok("DC-14 ten_duong 'đường 3/2' → tenDuong 'đường 3/2'", ac5.tenDuong === "đường 3/2", JSON.stringify(ac5.tenDuong));
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
