@@ -77,7 +77,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, soPhongNguTheoTang, themTangPhu, TIEU_TU_DAU, soTamCanHoiLung, docTraLoiLung, ketCauTheoLung, soTangTrongDapLung, timPhuongTrongCau, type PhuongDs } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -2865,6 +2865,8 @@ Deno.serve(async (req) => {
       // 22/09/2026 (bộ đo giọng B08): câu tiền định "Dạ em là trợ lý AI…" đứng trước, model chép lại gần
       // nguyên văn ở bong bóng sau → chủ nhà đọc hai lần. Câu ≥ 6 từ trùng nhau chỉ giữ lần đầu.
       sach = boCauTrung(sach);
+      // SRS-5.1zi: không nói "hệ thống đã gửi…" với khách; câu khen mở đầu trỏ ngược ("điểm này") mà không có gì để trỏ thì bỏ.
+      { const sHt = boCauTroNguocDauBong(boCauNoiHeThong(sach)); if (sHt.length) sach = sHt; }
       // 02/10/2026 (bắn lại thu-gapc-03, SRS-5.1ze): sau chuỗi lọc, một bong bóng chỉ còn ")" (mảnh của ":)" khi câu trước bị cắt).
       // Dòng không còn chữ / số / biểu tượng nào thì bỏ — áp chung cho mọi lọc phía trên, không đi tìm từng lọc.
       sach = sach.map((r) => r.split("\n").filter((d) => !d.trim() || /[\p{L}\d\p{Extended_Pictographic}]/u.test(d)).join("\n").trim()).filter(Boolean);
@@ -5375,7 +5377,7 @@ Deno.serve(async (req) => {
         : null;
       const hoiNguocPrompt = hoiNguoc
         ? hoiNguocDap
-          ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}" — hệ thống ĐÃ trả lời câu đó ở bong bóng trước ("${hoiNguocDap}"); em KHÔNG trả lời lại, không nhắc lại chuyện ảnh, chỉ ghi nhận rồi hỏi tiếp. `
+          ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}" — câu đó ĐÃ được trả lời ở bong bóng ngay trước ("${hoiNguocDap}"); em KHÔNG trả lời lại, KHÔNG nhắc tới câu hỏi đó hay chuyện ảnh, KHÔNG nói chữ "hệ thống" — chỉ hỏi tiếp. `
           : `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}".${CHI_DAN_CHU_DE[hoiAi?.chuDe ?? ""] ?? ""} TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; hỏi về cách làm việc (gửi ảnh, phí, đăng tin) thì trả lời theo hướng dẫn hệ thống; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá; hỏi "em biết dự án / chỗ X không" mà phần trên không có X thì nói thật em chưa nắm rõ X, KHÔNG đoán X ở quận nào, của chủ đầu tư nào. Rồi mới hỏi tiếp. `
         : "";
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
@@ -6710,7 +6712,7 @@ Deno.serve(async (req) => {
         const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, phiCauSeller) : null;
         const hoiRaoPrompt = hoiRao
           ? dapRao
-            ? `Chủ nhà còn hỏi "${hoiRao}" — hệ thống ĐÃ trả lời ở bong bóng trước; em KHÔNG trả lời lại. `
+            ? `Chủ nhà còn hỏi "${hoiRao}" — câu đó ĐÃ được trả lời ở bong bóng ngay trước; em KHÔNG trả lời lại, KHÔNG nhắc tới nó, KHÔNG nói chữ "hệ thống". `
             : `Chủ nhà còn hỏi: "${hoiRao}". TRẢ LỜI câu đó trước bằng một câu ngắn, thật thà (chưa nắm thì "em kiểm tra rồi báo lại"), rồi mới hỏi. `
           : "";
         let raoReply: string | null = null;
@@ -8222,6 +8224,7 @@ Deno.serve(async (req) => {
   // FR-105: mọi bong bóng gửi NGƯỜI MUA qua bộ lọc liên hệ — model được dặn
   // không đưa số, nhưng dặn không phải là chặn.
   // 22/09/2026: khách mua là chú/cô/bác (hoặc "chào cháu" chưa rõ) → bot xưng cháu, cùng luật nhánh bán.
+  { const rHt = boCauNoiHeThong(out.replies); if (rHt.length) out.replies = rHt; } // SRS-5.1zi — bỏ hết thì giữ bản cũ
   const replies = doiTuXung(out.replies.map((r) => locLienHeBot(suaTuXungMua(r.split(TEN_GIU_CHO).join(tenBot)).trim())).filter(Boolean), goiMua, prefs.nhom_tuoi === "lon_tuoi" ? "lon_tuoi" : null);
   danhDau("mua_truoc_hau_ky");
   // FR-32: mã trong câu trả lời, không có thì lấy mã khách vừa nhắc (bot hay

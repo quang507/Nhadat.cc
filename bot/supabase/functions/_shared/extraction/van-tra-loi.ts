@@ -1544,6 +1544,36 @@ export function nhanXetKhongCanCu(
  * Bỏ khỏi lời bot các câu / vế trong `cauBo` (AI chép nguyên văn; so cả bản bỏ dấu). KHÔNG bao giờ bỏ phần có dấu "?" — câu
  * hỏi giữ nguyên. Hết chữ → null (nơi gọi dùng câu mẫu).
  */
+/**
+ * 02/10/2026 (bắn thử thu-kb2-s01, SRS-5.1zi): "Phí thì hệ thống đã gửi cho mình rồi nha." — lời dặn model nói "hệ thống ĐÃ trả
+ * lời ở bong bóng trước", model chép nguyên chữ "hệ thống" ra cho khách. Khách không cần nghe về máy: bỏ câu KHẲNG ĐỊNH có
+ * "hệ thống" làm một việc (gửi / trả lời / báo / ghi / lưu / nhắn / cập nhật). Câu hỏi giữ nguyên ("Xưởng có hệ thống xử lý
+ * nước thải chưa?" là câu hỏi mẫu thật). Không bỏ gì thì trả đúng mảng cũ.
+ */
+const HE_THONG_LAM_RE = /\bhe thong\s+(?:(?:da|vua|se|tu|dang|cung|co)\s+)*(?:gui|tra loi|bao|ghi|luu|nhan|cap nhat|ghi nhan)\b/;
+export function boCauNoiHeThong(replies: string[]): string[] {
+  return locCauTrongBongBong(replies, (c) => !/\?/.test(c) && HE_THONG_LAM_RE.test(boDau(c)));
+}
+
+/**
+ * Câu khẳng định MỞ ĐẦU bong bóng mà trỏ ngược ("Khách hay chú ý điểm này lắm :)") — phía trước không còn gì để "điểm này" trỏ
+ * tới (câu trước đã bị lọc, hoặc model viết cụt). Bắn thử thu-kb2-s08, SRS-5.1zi. Câu ngắn (≤ 12 chữ), không có "?".
+ */
+const TRO_NGUOC_RE = /\b(?:diem nay|cai nay|cho nay|dieu nay|vu nay|khoan nay)\b/;
+export function boCauTroNguocDauBong(replies: string[]): string[] {
+  let doi = false;
+  const ra = replies.map((r) => {
+    const dong = r.split("\n");
+    const cac = tachCau(dong[0] ?? "");
+    const dau = cac[0] ?? "";
+    if (!dau || /\?/.test(dau) || !TRO_NGUOC_RE.test(boDau(dau)) || dau.split(/\s+/).length > 12) return r;
+    doi = true;
+    dong[0] = cac.slice(1).join(" ").trim();
+    return dong.filter((d, i) => i > 0 || d.trim()).join("\n").trim();
+  }).filter(Boolean);
+  return doi ? ra.map((r) => r.charAt(0).toUpperCase() + r.slice(1)) : replies;
+}
+
 /** Mặt cười ngay đầu phần còn lại sau khi cắt một vế (":)", ":D", "^^") — đi theo vế đã cắt, không được trơ lại ")". */
 const MAT_CUOI_DAU = /^\s*(?:[:;=]-?[)(D]+|\^\^)/u;
 export function boCauNhanXet(loi: string | null | undefined, cauBo: string[]): string | null {
