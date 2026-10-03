@@ -3426,6 +3426,42 @@ fresh(seedKho);
     r = await send({ external_user_id: "zh-9", text: "nhà ở 77 hẻm 3m Xô Viết Nghệ Tĩnh em" });
     check("ZH-09 hỏi phường, khách đáp '77 hẻm 3m Xô Viết Nghệ Tĩnh' → địa chỉ '77 hẻm Xô Viết Nghệ Tĩnh' (AI), street 'Xô Viết Nghệ Tĩnh'",
       L.location_raw === "77 hẻm Xô Viết Nghệ Tĩnh" && L.street === "Xô Viết Nghệ Tĩnh", JSON.stringify({ loc: L.location_raw, street: L.street, rep: r.body.replies }));
+    // SRS-5.1zo (bắn thử thu-dc4-11): kho dự án khớp GẦN ĐÚNG cả câu ("Phan Xích Long … Phú Nhuận" ~ "KDC Phước Long B - Phú Nhuận")
+    // — chế độ `ai` chỉ gắn dự án khi AI đọc ra tên dự án; tra kho bằng tên đó.
+    {
+      const daGia = { id: "da-pl", name: "KDC Phước Long B - Phú Nhuận", district: "TP Thủ Đức", ward: "Phường Phước Long B" };
+      const goiMp = [];
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      globalThis.__rpc = { match_projects: (_db, a) => { goiMp.push(a.p_text); return { data: /phu nhuan|phú nhuận|sunrise/i.test(a.p_text) ? [daGia] : [], error: null }; } };
+      globalThis.__model.parse = aiZH({ truong: [
+        { khoa: "loai_giao_dich", gia_tri: "ban", trich_dan: "bán nhà", can: null },
+        { khoa: "duong", gia_tri: "Phan Xích Long", trich_dan: "Phan Xích Long", can: null },
+        { khoa: "quan", gia_tri: "Quận Phú Nhuận", trich_dan: "Phú Nhuận", can: null },
+        { khoa: "gia", gia_tri: "10 tỷ", trich_dan: "giá 10 tỷ", can: null },
+      ] });
+      await send({ external_user_id: "zh-10", text: "bán nhà hẻm xe hơi 6 mét Phan Xích Long Phú Nhuận, 4x15, giá 10 tỷ" });
+      const L10 = db().t.listings.at(-1);
+      check("ZH-10 'Phan Xích Long Phú Nhuận', AI không nói dự án → không gắn dự án, không lấy phường Phước Long B",
+        !L10?.project_id && L10?.ward !== "Phường Phước Long B" && !goiMp.some((t) => /Phan Xích Long/.test(t)),
+        JSON.stringify({ project: L10?.project_id, ward: L10?.ward, goiMp }));
+      fresh(seedKho);
+      globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+      goiMp.length = 0;
+      globalThis.__rpc = { match_projects: (_db, a) => { goiMp.push(a.p_text); return { data: /sunrise/i.test(a.p_text) ? [{ id: "da-sr", name: "Sunrise City", district: "Quận 7", ward: null }] : [], error: null }; } };
+      globalThis.__model.parse = aiZH({ truong: [
+        { khoa: "loai_giao_dich", gia_tri: "ban", trich_dan: "bán căn hộ", can: null },
+        { khoa: "loai_bds", gia_tri: "chung_cu", trich_dan: "căn hộ", can: null },
+        { khoa: "du_an", gia_tri: "Sunrise City", trich_dan: "Sunrise City", can: null },
+        { khoa: "gia", gia_tri: "4 tỷ 2", trich_dan: "giá 4 tỷ 2", can: null },
+      ] });
+      await send({ external_user_id: "zh-11", text: "bán căn hộ Sunrise City 2pn 76m2 giá 4 tỷ 2" });
+      const L11 = db().t.listings.at(-1);
+      // (Lượt tra bằng cả câu còn lại là khối NGỮ CẢNH dự án cho lời bot — có chữ "căn hộ" — không ghi vào tin.)
+      check("ZH-11 AI đọc ra dự án 'Sunrise City' → tra kho bằng TÊN đó, gắn dự án", L11?.project_id === "da-sr" && goiMp.includes("Sunrise City"),
+        JSON.stringify({ project: L11?.project_id, goiMp }));
+      globalThis.__rpc = {};
+    }
     L = await moZH("zh-4", "ban nha hem 3m Tan Binh, 4x12, gia 5 ty", "phuong");
     L.location_raw = null; L.ward = null; L.district = "Quận Tân Bình";
     globalThis.__model.parse = aiZH({ y_dinh: { loai: "ban_roi", trich_dan: "bán rồi" } });

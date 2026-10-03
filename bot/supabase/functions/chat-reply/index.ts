@@ -5956,13 +5956,16 @@ Deno.serve(async (req) => {
           // 16/09/2026 (bắn thật mau-chu-q8): "Căn số 14 ở Ny'ah Phú Định" trả lời câu VỊ TRÍ — tên dự
           // án trong kho chỉ được khớp lúc RAO, nên tin nằm "Quận 5 (chưa rõ quận)" dù dự án ở Quận 8.
           // Nay khớp cả ở đây; quận/phường lấy của dự án khi tin còn mặc định / trống.
-          if (pendingReq.question === "vi_tri" && !pendingReq.listings?.project_id) {
-            const { data: dsDA, error: daErr } = await client.rpc("match_projects", { p_text: dapAn }).select(COT_DU_AN);
+          // SRS-5.1zo: chế độ `ai` — câu trả lời địa chỉ chỉ gắn dự án khi AI đọc ra tên dự án (`du_an_ten`); tra kho bằng tên đó.
+          const tenDaAi = aiChinh?.ghi.find((g) => g.question === "du_an_ten")?.answer ?? null;
+          const aiQuyetDaVt = laCheDoAi && !!aiChinh;
+          if (pendingReq.question === "vi_tri" && !pendingReq.listings?.project_id && (!aiQuyetDaVt || tenDaAi)) {
+            const { data: dsDA, error: daErr } = await client.rpc("match_projects", { p_text: aiQuyetDaVt ? tenDaAi! : dapAn }).select(COT_DU_AN);
             if (daErr) await ghiLoi(client, "chat-reply match_projects(vi_tri)", daErr.message);
             type DaKho = { id: string; name?: string; district?: string | null; ward?: string | null };
             let da: DaKho | null = ((dsDA ?? []) as DaKho[])[0] ?? null;
             // 30/09/2026: tên dự án gõ sai → tìm theo nghĩa, máy xác nhận tên (AI đọc tên dự án thì lấy tên AI đọc).
-            if (!da) da = await timDuAnTheoNghia(client, aiChinh?.ghi.find((g) => g.question === "du_an_ten")?.answer ?? tenDuAnTrongCau(dapAn) ?? tenSauCanHo(dapAn));
+            if (!da) da = await timDuAnTheoNghia(client, aiQuyetDaVt ? tenDaAi : (tenDaAi ?? tenDuAnTrongCau(dapAn) ?? tenSauCanHo(dapAn)));
             if (da && !duAnLaTenDuong(da.name, dapAn)) {
               const { data: cu } = await client.from("listings").select("district, ward, boc_tach").eq("id", pendingReq.listing_id).maybeSingle();
               const macDinh = !cu?.district || (cu?.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
@@ -6498,8 +6501,12 @@ Deno.serve(async (req) => {
       // tin vào dự án + bóc mã căn ("căn A12-05", "mã căn B2.07"); không khớp
       // dự án nào thì tin là hàng lẻ như cũ. Tin vừa rao coi như "còn bán" và
       // chủ vừa xác nhận lúc rao [giả định BA] — FR-116 đếm TTL 7 ngày từ đây.
-      const { data: duAnRao, error: duAnRaoErr } = await client
-        .rpc("match_projects", { p_text: text }).select(COT_DU_AN);
+      // SRS-5.1zo (03/10/2026, bắn thử thu-dc4-11): "hẻm xe hơi 6 mét Phan Xích Long Phú Nhuận" khớp gần đúng "KDC Phước Long B
+      // - Phú Nhuận" (so cả câu) → tin nhận dự án + phường Phước Long B (Thủ Đức). Chế độ `ai`: chỉ gắn dự án khi AI đọc ra tên dự
+      // án (có trích dẫn) — tra kho bằng TÊN đó, không bằng cả câu; AI không nói dự án thì tin là hàng lẻ.
+      const aiQuyetDuAn = !!aiRao && laCheDoAi;
+      const { data: duAnRao, error: duAnRaoErr } = aiQuyetDuAn && !aiRao?.duAn ? { data: [], error: null }
+        : await client.rpc("match_projects", { p_text: aiQuyetDuAn ? aiRao!.duAn! : text }).select(COT_DU_AN);
       if (duAnRaoErr) await ghiLoi(client, "chat-reply match_projects(rao)", duAnRaoErr.message);
       // Dự án trong kho có quận/phường riêng (Ny'ah Phú Định ở Quận 8) — câu rao
       // không nói quận thì lấy của dự án, đừng mặc định Quận 5 (10/09 lần 6).
@@ -6510,7 +6517,7 @@ Deno.serve(async (req) => {
       let duAn: { id: string; name?: string; district?: string | null; ward?: string | null } | null =
         duAnKhop && !duAnLaTenDuong(duAnKhop.name, text) ? duAnKhop : null;
       // 30/09/2026: tên dự án gõ sai ("vinhome gran park") khớp chữ không ra → tìm theo nghĩa, máy xác nhận tên.
-      if (!duAn) duAn = await timDuAnTheoNghia(client, aiRao?.duAn ?? tenDuAnTrongCau(text) ?? tenSauCanHo(text));
+      if (!duAn) duAn = await timDuAnTheoNghia(client, aiQuyetDuAn ? aiRao?.duAn : (aiRao?.duAn ?? tenDuAnTrongCau(text) ?? tenSauCanHo(text)));
       // Phường tên chữ ("phường Hiệp Bình Chánh") khi câu không có phường số (14/09).
       let phuongRao = aiRao?.phuong ?? (wardNo ? `Phường ${wardNo}` : phuongTenCauRao(text));
       // 15/09/2026 (bắn thật B1): câu rao KHÔNG DẤU "phuong hiep binh chanh" — tra bảng
