@@ -1604,7 +1604,7 @@ Chủ dự án: "nếu lấy thông tin ra thì phải ghi vì sao có cái này
   - câu đáp ≤ 8 chữ không đi tiếp luồng thường (luồng đó từng ghi lại "4 tầng").
 - (4) AI đọc khách tự xưng (`tu_xung`, code kiểm trích dẫn `docTuXung`) → ghi hồ sơ, gọi đúng ngay lượt đó.
 - (5) `khong_can_hoi` dạy thêm "chủ nhà ĐÃ trả lời / nói vòng" (vd "rao khi nào được giá thì bán" là đã trả lời câu gấp), để bot không hỏi lại.
-- (6) Model chính mặc định `claude-sonnet-4-6` (`_shared/claude.ts`; secret `ANTHROPIC_MODEL` đặt cùng ngày qua `ban-thu`).
+- (6) Model chính mặc định `claude-sonnet-4-6` (`_shared/claude.ts`; secret `ANTHROPIC_MODEL` đặt cùng ngày qua `ban-thu`). **03/10/2026**: tài khoản Anthropic hết credit lần nữa (~09:05 UTC, sổ lỗi `400 credit balance is too low`, bot rơi về Groq → Gemini 503 → luật); chủ dự án: "lại hết rồi đổi sang haiku đi" → secret và mặc định code về `claude-haiku-4-5-20251001`. Lưu ý: đổi model KHÔNG chạy được khi credit = 0 — chỉ giảm tốc độ đốt sau khi nạp; ba điểm Haiku từng đọc sót (SRS-5.1ze) có thể quay lại, cần đo lại `do-boc.yml` sau khi nạp.
 
 **Kiểm (đỏ khi gỡ bản sửa — đã chạy, giữ test, stash code):**
 - e2e `KHOA-SAI-01`, `LUNG-05/06/07`, `XH-AI-01`, `HN-09/10`. Cách nói mới chưa từng bắn: "sao em biết nhà 6 tầng vậy", "ai nói với em là có thang máy vậy", "ừm nhà a ở Lê Văn Sỹ…".

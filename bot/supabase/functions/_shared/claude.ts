@@ -12,7 +12,9 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 // hết số dư hay muốn hạ giá thì sửa một dòng trong Vault là xong.
 // Chủ dự án 10/09/2026 (còn ~15 đô số dư): "hạ bot xuống haiku 4.5 đi".
 // Chủ dự án 02/10/2026 (sau test tay: Haiku đọc sót "được giá thì bán", xưng hô, kết cấu): "đổi sang sonet 4.6 đi" (SRS-5.1ze).
-export const MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-sonnet-4-6";
+// Chủ dự án 03/10/2026 (tài khoản Anthropic hết credit lần nữa lúc ~09:05 UTC, sổ lỗi "credit balance is too low"):
+// "lại hết rồi đổi sang haiku đi" — secret đặt cùng ngày qua `ban-thu`; mặc định trong code đổi theo để repo không lệch Vault.
+export const MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-haiku-4-5-20251001";
 
 /**
  * DẤU SỐNG của model chính (FR-192 b). Băng đỏ "hết số dư" ở /admin trước đây
