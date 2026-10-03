@@ -4111,7 +4111,9 @@ Deno.serve(async (req) => {
           if (acCan.ngang && acCan.dai) { c.ngang = String(acCan.ngang); c.dai = String(acCan.dai); }
         }
         // AI chạy mà căn này không có quận (riêng hoặc cả lô) → để trống (hỏi sau), không mượn quận đầu câu của căn khác.
-        const quanCan = acCan ? acCan.quan : c.quan ?? quanCau ?? null;
+        // SRS-5.1zu: căn thiếu chữ "quận" ("1 lô đất Long An 2 tỷ") đọc quận trong ĐOẠN của chính căn trước, mới mượn quận cả câu.
+        const quanDoan = (() => { const ds = cacQuanTrong(c.goc, boDau); return ds.length === 1 ? ds[0] : null; })();
+        const quanCan = acCan ? acCan.quan : c.quan ?? quanDoan ?? quanCau ?? null;
         const keThua = !quanCan || quanCan === (goc?.district ?? null);
         // Không mở trùng mã căn cho cùng người bán.
         if (c.ma) {

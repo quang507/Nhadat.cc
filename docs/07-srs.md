@@ -2062,7 +2062,7 @@ Gỡ bản sửa thì S07-a/b đỏ (đã chạy).
 
 **Sửa**: `cacQuanTrong(câu)` (`_shared/dia_ban.ts`) đọc quận theo từng vế (dấu câu, "để", "và", "còn", "rồi"…), gộp huyện với tỉnh của nó ("Cần Đước, Long An" = "Long An") mà không gộp "Quận 1" với "Quận 10".
 - Tạo một tin: AI không nói quận và câu có nhiều quận → bỏ vế MUA AI lượt nhỏ đọc ra (nếu có) rồi đọc lại; còn đúng một quận thì dùng, còn nhiều thì để trống (bot hỏi).
-- Nhánh nhiều căn: câu nhiều quận thì không có "quận của cả câu" (`quanCau` = null) cho căn thiếu quận mượn.
+- Nhánh nhiều căn: căn thiếu chữ "quận" ("1 lô đất Long An 2 tỷ") đọc quận trong ĐOẠN của chính căn trước; câu nhiều quận thì không có "quận của cả câu" (`quanCau` = null) để mượn. Bản đầu thiếu bước đọc theo đoạn nên cổng `do-boc:nen` tụt (N07, N11) — CI bắt được; nay 511/572 trường (nền cũ 510), `nen.json` cập nhật theo.
 - Câu một quận: giữ nguyên như cũ.
 
 **Chỗ khác cùng lớp**: `quanRaoMoi` (so căn khác quận) chỉ chạy khi AI không nói `can_khac`; mảnh tin đọc theo mảnh. Chưa thấy chỗ khác ghi quận từ cả câu.
