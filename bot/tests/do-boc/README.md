@@ -56,13 +56,18 @@ from (select zalo_user_id z from sellers where zalo_user_id like 'do-%'
 |---|---|---|---|---|---|
 | 23/09/2026 | main sau #251 | luật một mình | 52/110 (47%) | 480/572 (84%) | mua 0/15: hồ sơ mua do AI đọc; tắt AI thì trống |
 | 23/09/2026 | main sau #251 | production | 104/110 (94,5%) | 563/572 (98,4%) | 6 ca bắn lại mẻ nhỏ vì quá tải (xem dưới) |
+| 03/10/2026 | main sau #424 | production, phía bán (bỏ nhóm `mua`, 95 ca) | 90/95 (94,7%) | 517/523 (98,9%) | chạy bằng workflow `do-boc.yml`; 5 ca rớt ở dưới |
 
 Lần đo production đầu tiên bắn 110 người cùng lúc. DB gói Free bị huỷ vì quá giờ ở `match_projects` 20 lần và ở
 `tao tin rao` 5 lần, nên 5 người nhận câu "Chưa có tin nào được lưu" dù đã nhắn đủ giá. Sáu ca có bằng chứng dính
 tải (C06, S02, S10, X03, X04, R09) được xoá rồi bắn lại mẻ nhỏ, và cả sáu đều qua. Mấy ca rớt vì lý do khác thì
 KHÔNG bắn lại. Điểm yếu này có thật: tạo tin hỏng thì bot không thử lại, mà hỏi lại khách đúng những gì khách vừa nói.
 
-6 ca còn rớt ở production (lỗi thật):
+5 ca rớt ở lượt đo 03/10 (phía bán): N06 căn 2 Gò Vấp mang quận Tân Bình của căn 1; S01 căn 2 thiếu quận "Đồng Nai";
+S07 thiếu số tầng; R02 thiếu diện tích 76m²; X04 (vừa bán vừa mua) mất hồ sơ mua (khu vực, ngân sách). Sổ lỗi có 20 dòng
+`match_projects(rao)` — DB gói Free quá giờ khi 20 người tạo tin cùng lúc.
+
+6 ca còn rớt ở production lượt 23/09 (lỗi thật):
 - T09: giá theo m² (15 triệu/m² × 100m²) bị ghi thành 15 triệu.
 - N06: nhà 2 ở Gò Vấp mang quận Tân Bình của nhà 1.
 - S03: "căn nhà thì 7 tỷ" ghi vào lô đất; lô đất "chưa rõ loại".

@@ -1929,6 +1929,26 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
 - `van-tra-loi.mjs` `DD-07…09`, trong đó DD-09 "Em up tin ngay cho anh nhé" là cách nói mới, DD-08 câu có điều kiện được giữ.
 - Gỡ bản sửa → HR-01/02/05 và DD-07/09 đỏ (đã chạy).
 
+### SRS-5.1zo · Gắn dự án chỉ khi AI đọc ra tên dự án; không tra kho bằng cả câu rao (03/10/2026)
+
+**Ca gốc**: bắn thử `thu-dc4-11` (03/10): "bán nhà hẻm xe hơi 6 mét Phan Xích Long Phú Nhuận, 4x15, giá 10 tỷ". Tin bị gắn dự án "KDC Phước Long B - Phú Nhuận" và nhận phường Phước Long B (thuộc TP Thủ Đức) cho nhà ở Phú Nhuận. Lượt AI bóc tách KHÔNG đề xuất dự án nào.
+
+**Lớp lỗi**: máy đoán dự án bằng so chữ gần đúng trên CẢ câu rao. `match_projects(p_text = câu rao)` cho "Phan Xích Long … Phú Nhuận" ra "KDC Phước Long B - Phú Nhuận". Lưới cũ `duAnLaTenDuong` chỉ chặn khi tên dự án chứa tên đường nên không bắt được ca này. Đúng lớp "đoán ý bằng chữ" mà quy ước 01/10 yêu cầu chuyển cho AI.
+
+**Sửa** (chế độ `ai`; chế độ khác giữ như cũ):
+- Lúc tạo tin: chỉ tra kho khi AI đọc ra `du_an` (có trích dẫn), và tra bằng TÊN AI đọc, không bằng cả câu. AI không nói dự án thì tin là hàng lẻ, không tìm theo nghĩa bằng tên đoán từ regex.
+- Câu trả lời địa chỉ (`vi_tri`): cùng luật — chỉ khi AI có `du_an_ten`.
+
+**Chỗ khác cùng lớp**:
+- Còn tra bằng chữ khách, cố ý giữ vì đã có cổng: nhánh nhiều căn (`match_projects(c.goc)`, chỉ khi căn hộ hoặc có chữ dự án / tower / park…), mảnh tin căn hộ (`loaiM === "chung_cu"`).
+- Khối ngữ cảnh dự án cho lời bot (`coDauHieuDuAn`) chỉ đọc để trả lời, không ghi vào tin.
+- Nhánh MUA (`match_projects(text)`) chưa đổi — chủ dự án đang test phía bán.
+
+**Kiểm**:
+- e2e `ZH-10`: AI không nói dự án, kho khớp gần đúng → không gắn dự án, không lấy phường của dự án.
+- e2e `ZH-11`: AI đọc ra "Sunrise City" → tra kho bằng tên đó, gắn đúng.
+- Gỡ bản sửa → cả hai đỏ (đã chạy).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
