@@ -23,6 +23,14 @@ const YLuot = z.object({
   yeu_cau: z.enum(YEU_CAU).describe("Chủ nhà đang HỎI / XIN gì (xem LUẬT YÊU CẦU). Không thì khong."),
   yeu_cau_trich: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong tin chủ nhà thể hiện yêu cầu. khong thì null."),
   yeu_cau_o: z.enum(O_BO).nullable().describe("CHỈ khi yeu_cau = xin_bo_o: ô chủ nhà xin bỏ (hẻm, giá, phường, diện tích, phòng ngủ, số tầng, pháp lý, hướng, địa chỉ). Không rõ ô nào thì null."),
+  // 03/10/2026 (bộ đo X04, SRS-5.1zt): "em bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ" — câu vừa bán vừa mua chỉ vào nhánh bán,
+  // khuôn bóc tách tin bán không có chỗ cho nhu cầu mua nên vế mua rơi. Vế mua là ý của NGƯỜI, đi lượt nhỏ này.
+  mua_kem: z.object({
+    khu_vuc: z.string().nullable().describe("Khu vực chủ nhà muốn MUA, chép như khách viết (\"Bình Thạnh\", \"q7\"). Không nói thì null."),
+    ngan_sach: z.string().nullable().describe("Số tiền định MUA, chép như khách viết (\"6 tỷ\"). KHÔNG lấy giá căn đang bán. Không nói thì null."),
+    loai: z.string().nullable().describe("Loại muốn mua, chép như khách viết (\"nhà\", \"căn hộ\", \"đất\"). Không nói thì null."),
+    trich_dan: z.string().describe("Cụm COPY NGUYÊN VĂN trong tin chủ nhà nói về việc MUA."),
+  }).nullable().describe("Chủ nhà NÓI MÌNH MUỐN MUA / TÌM MUA / ĐỔI SANG một bất động sản khác (ngoài căn đang rao). Không có thì null."),
 });
 const FORMAT_Y_LUOT = dinhDangLong(YLuot);
 
@@ -50,7 +58,12 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
   ("bỏ hẻm 4m, hẻm đúng là 3m5") là lời sửa → khong.
 - khong: tin đưa THÔNG TIN căn nhà (kể cả kèm hỏi "giá 4 tỷ 3 được không?"), gật, chào, hỏi về PHÍ / cách bên em làm việc, kể
   chuyện khác.
-yeu_cau_trich phải chép NGUYÊN VĂN từ TIN chủ nhà.`;
+yeu_cau_trich phải chép NGUYÊN VĂN từ TIN chủ nhà.
+
+LUẬT MUA KÈM (mua_kem) — chủ nhà nói CHÍNH MÌNH muốn mua / tìm mua / đổi sang căn khác ("bán căn này để mua nhà Bình Thạnh tầm 6
+tỷ", "bán xong anh tính mua căn hộ q2"): khu_vuc, ngan_sach, loai chép NGUYÊN chữ khách trong phần nói về MUA, trich_dan là phần
+đó. Giá / khu của căn đang BÁN không bao giờ vào mua_kem. Khách MUA HỘ người khác, kể chuyện đã mua trước đây ("anh mua căn này
+năm 2019"), hỏi khách mua của tin mình → null.`;
 
 type ClientModel = {
   messages: {
@@ -62,6 +75,8 @@ export type YLuotLLM = {
   dongY?: { la: typeof DONG_Y[number]; trich_dan: string | null; dang_di: boolean };
   /** undefined = model không trả ô yêu cầu. */
   yeuCau?: { loai: typeof YEU_CAU[number]; trich_dan: string | null; o: typeof O_BO[number] | null };
+  /** null = model nói không có vế mua; undefined = model không trả ô này. */
+  muaKem?: { khu_vuc: string | null; ngan_sach: string | null; loai: string | null; trich_dan: string } | null;
 };
 
 /** Hỏi model ý ngắn của lượt. `ket` null = model trả không đọc được (nơi gọi coi như AI không chạy). Model hỏng thì NÉM. */
@@ -89,6 +104,15 @@ export async function docYLuotBangModel(
   const ket: YLuotLLM = {
     ...(dy ? { dongY: { la: dy === "dong_y_dang" ? "dong_y" : dy, trich_dan: str(o.dong_y_trich), dang_di: dy === "dong_y_dang" } } : {}),
     ...(yc ? { yeuCau: { loai: yc, trich_dan: str(o.yeu_cau_trich), o: (O_BO as readonly unknown[]).includes(o.yeu_cau_o) ? o.yeu_cau_o as typeof O_BO[number] : null } } : {}),
+    ...("mua_kem" in o ? { muaKem: docMuaKemTho(o.mua_kem) } : {}),
   };
   return { ket: dy || yc ? ket : null, usage: r.usage };
+}
+
+function docMuaKemTho(x: unknown): YLuotLLM["muaKem"] {
+  if (!x || typeof x !== "object") return null;
+  const m = x as Record<string, unknown>;
+  const str = (v: unknown) => typeof v === "string" && v.trim() ? v.trim() : null;
+  const td = str(m.trich_dan);
+  return td ? { khu_vuc: str(m.khu_vuc), ngan_sach: str(m.ngan_sach), loai: str(m.loai), trich_dan: td } : null;
 }

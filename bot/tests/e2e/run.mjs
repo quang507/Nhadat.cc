@@ -3468,6 +3468,57 @@ fresh(seedKho);
     r = await send({ external_user_id: "zh-4", text: "nhà anh bán rồi em ơi" });
     check("ZH-04 báo bán rồi, tin chỉ có quận → 'căn ở Quận Tân Bình', không 'căn căn chưa rõ địa chỉ'",
       r.body.replies.some((x) => /căn ở Quận Tân Bình/.test(x)) && !r.body.replies.some((x) => /căn căn|chưa rõ địa chỉ/.test(x)), JSON.stringify(r.body.replies));
+    // SRS-5.1zp (bộ đo N06): tin nhiều căn — mỗi căn lấy quận / giá AI đọc cho CĂN ĐÓ (theo `can` hoặc theo cụm trích nằm trong
+    // đoạn của căn), không lấy quận đầu tiên của cả câu cho mọi căn.
+    {
+      const moN = async (uid, text, truong) => {
+        fresh(seedKho);
+        globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+        const truoc = new Set(db().t.listings.map((x) => x.id));
+        globalThis.__model.parse = aiZH({ so_can: 2, truong });
+        await send({ external_user_id: uid, text });
+        return db().t.listings.filter((x) => !truoc.has(x.id));
+      };
+      const tq = (ds) => JSON.stringify(ds.map((x) => [x.district, x.price_raw]));
+      const N6 = "Bán 2 nhà: nhà 1 ở Tân Bình 4x15 6 tỷ, nhà 2 ở Gò Vấp 4x16 5 tỷ 5";
+      let ds = await moN("zh-n06", N6, [
+        { khoa: "quan", gia_tri: "Quận Tân Bình", trich_dan: "Tân Bình", can: 1 }, { khoa: "gia", gia_tri: "6 tỷ", trich_dan: "6 tỷ", can: 1 },
+        { khoa: "quan", gia_tri: "Quận Gò Vấp", trich_dan: "Gò Vấp", can: 2 }, { khoa: "gia", gia_tri: "5 tỷ 5", trich_dan: "5 tỷ 5", can: 2 },
+      ]);
+      check("ZH-12 N06 'nhà 1 ở Tân Bình …, nhà 2 ở Gò Vấp …' (AI có `can`) → hai tin Tân Bình / Gò Vấp",
+        ds.length === 2 && ds.some((x) => x.district === "Quận Tân Bình") && ds.some((x) => x.district === "Quận Gò Vấp"), tq(ds));
+      ds = await moN("zh-n06b", "ban 2 can: can 1 phu nhuan 4x12 7 ty, can 2 binh thanh 5x20 9 ty", [
+        { khoa: "quan", gia_tri: "Phú Nhuận", trich_dan: "phu nhuan", can: null }, { khoa: "quan", gia_tri: "Bình Thạnh", trich_dan: "binh thanh", can: null },
+      ]);
+      check("ZH-13 (cách nói mới, không dấu, AI không đánh `can`) → gán quận theo cụm trích nằm trong đoạn của căn",
+        ds.length === 2 && ds.some((x) => x.district === "Quận Phú Nhuận") && ds.some((x) => x.district === "Quận Bình Thạnh"), tq(ds));
+    }
+    // SRS-5.1zt (bộ đo X04): một câu vừa bán vừa mua → tin bán + hồ sơ mua của CÙNG người (AI đọc vế mua, code kiểm trích dẫn).
+    {
+      const moX = async (uid, text, muaKem) => {
+        fresh(seedKho);
+        globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+        globalThis.__model.parse = aiZH({ truong: [
+          { khoa: "loai_bds", gia_tri: "chung_cu", trich_dan: "căn hộ", can: null }, { khoa: "gia", gia_tri: "3 tỷ", trich_dan: "3 tỷ", can: null },
+          { khoa: "quan", gia_tri: "Quận 7", trich_dan: "q7", can: null },
+        ], ...(muaKem !== undefined ? { mua_kem: muaKem } : {}) });
+        const r = await send({ external_user_id: uid, text });
+        return { r, b: db().t.buyers.find((x) => x.zalo_user_id === uid) };
+      };
+      const X4 = "em bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ";
+      let { r: rx, b } = await moX("zh-x04", X4, { khu_vuc: "Bình Thạnh", ngan_sach: "6 tỷ", loai: "nhà", trich_dan: "mua nhà Bình Thạnh 6 tỷ" });
+      check("ZH-14 X04 'bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ' → hồ sơ mua Bình Thạnh / 6 tỷ + câu báo đã ghi",
+        /Bình Thạnh/.test(b?.preferences?.area ?? "") && b?.preferences?.budget === "6 tỷ" && rx.body.replies.some((x) => /nhu cầu mua/.test(x))
+          && db().t.listings.at(-1)?.district === "Quận 7",
+        JSON.stringify({ p: b?.preferences, rep: rx.body.replies }));
+      ({ r: rx, b } = await moX("zh-x04b", X4, { khu_vuc: "q7", ngan_sach: "3 tỷ", loai: null, trich_dan: "mua nhà Bình Thạnh 6 tỷ" }));
+      check("ZH-15 AI lấy khu / giá của căn BÁN cho vế mua → không ghi gì vào hồ sơ mua",
+        !b?.preferences?.area && !b?.preferences?.budget && !rx.body.replies.some((x) => /nhu cầu mua/.test(x)), JSON.stringify(b?.preferences ?? null));
+      ({ r: rx, b } = await moX("zh-x04c", "bán căn hộ q7 3 tỷ, bán xong anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi",
+        { khu_vuc: "quận 2", ngan_sach: "tầm 5 tỷ rưỡi", loai: "căn hộ", trich_dan: "anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi" }));
+      check("ZH-16 (cách nói mới) 'bán xong anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi' → hồ sơ mua Quận 2 / 5 tỷ rưỡi / căn hộ",
+        b?.preferences?.area === "Quận 2" && b?.preferences?.budget === "tầm 5 tỷ rưỡi" && b?.preferences?.property_type === "căn hộ", JSON.stringify(b?.preferences ?? null));
+    }
     globalThis.__cauHinh = cuCH;
   }
   // SRS-5.1zl (giảm egress): lượt bot không kéo nguyên bảng bot_prompts — chỉ khoá DB KHÁC bản code (doc_prompt_khac).

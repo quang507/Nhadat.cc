@@ -1949,6 +1949,111 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
 - e2e `ZH-11`: AI đọc ra "Sunrise City" → tra kho bằng tên đó, gắn đúng.
 - Gỡ bản sửa → cả hai đỏ (đã chạy).
 
+### SRS-5.1zp · Tin nhiều căn: mỗi căn lấy kết quả AI của CHÍNH căn đó (03/10/2026)
+
+**Ca gốc**: bộ đo production 03/10, ca `N06`: "Bán 2 nhà: nhà 1 ở Tân Bình 4x15 6 tỷ, nhà 2 ở Gò Vấp 4x16 5 tỷ 5". Ra hai tin, cả hai đều Quận Tân Bình. Log AI cho thấy AI đọc đúng (căn 2 ở Gò Vấp), nhưng nhánh tách nhiều căn không dùng kết quả AI.
+
+**Lớp lỗi**: một trường đọc từ CẢ CÂU bị gán cho từng PHẦN của câu. Bộ tách nhiều căn (`nhanDienNhieuCan`) chỉ đọc quận khi có chữ "quận", nên căn 2 không có quận riêng và rơi về `quanCau` (quận đầu tiên của cả câu).
+
+**Sửa** (chế độ `ai`): trong khối nhiều căn, lấy đề xuất AI đã qua kiểm bằng chứng và gán cho từng căn:
+- theo `can` khi AI có đánh số căn;
+- không có số căn thì theo cụm trích nằm trong đoạn chữ của căn đó.
+
+Đề xuất không thuộc căn nào (ví dụ "sổ hồng" nói chung) áp cho mọi căn. Quận, giá, diện tích, ngang×dài, loại và fact của căn đều lấy từ AI. Luật tách mảnh chỉ còn là lưới đỡ khi AI không chạy.
+
+**Chỗ khác cùng lớp**:
+- Mảnh tin (`aiManh`, dòng tạo tin theo mảnh) đã đọc theo `m.trich` của mảnh, không theo cả câu.
+- **Còn**: tạo một tin (`quanDoc = quanAi ?? bocQuan(cả câu)`). AI chạy mà không nói quận thì luật đọc quận đầu tiên của cả câu. Ca "bán căn hộ q7 … để mua nhà Bình Thạnh" sẽ ghi nhầm Bình Thạnh nếu AI bỏ trống quận. Chưa đo được ca này trên production; chưa sửa.
+
+**Kiểm**:
+- e2e `ZH-12` (AI có `can`): hai tin Tân Bình / Gò Vấp.
+- e2e `ZH-13` (cách nói mới, không dấu, AI không đánh `can`): "ban 2 can: can 1 phu nhuan …, can 2 binh thanh …".
+- Gỡ bản sửa thì cả hai đỏ (đã chạy).
+
+### SRS-5.1zq · Quận ngoài TP.HCM: kiểm bằng chứng nhận tên vùng (03/10/2026)
+
+**Ca gốc**: `S01` "bán đất Nhơn Trạch 2 tỷ". AI ghi quận "Huyện Nhơn Trạch", nhưng lớp kiểm bỏ trường đó (`quan_khong_khop_trich_dan`), nên tin không có quận.
+
+**Lớp lỗi**: lớp kiểm và lớp chuẩn hoá chỉ biết danh sách quận TP.HCM (`bocQuan`):
+- `kiemGiaTri` so giá trị AI với tên chuẩn của cụm trích. Vùng ngoài TP.HCM chỉ khớp khi AI viết đúng nguyên chữ "Đồng Nai".
+- `docAiChinh` chuẩn hoá quận bằng `bocQuan` và trả null cho mọi vùng ngoài.
+
+**Sửa**: cả hai chỗ chuẩn hoá qua `bocQuan ?? vungNgoai().ten`. Đây là cùng cách đường luật vẫn ghi cột `district` cho vùng ngoài (Nhơn Trạch → "Đồng Nai", Ba Đình → "Hà Nội"). Một ca cũ trong `kiem-bang-chung.mjs` từng mong "quận Ba Đình → null" nay mong "Hà Nội", cho khớp với đường luật. Thêm ca: quận không đọc ra được ("Quận Xyz") vẫn ra null.
+
+**Chỗ khác cùng lớp**: `chonDeGhi` / `soSanhVoiDb` so quận đã qua `docAiChinh` nên được sửa theo. Phường ngoài TP.HCM không có bảng (`wards` chỉ có TP.HCM), nên AI có ghi phường vùng ngoài thì vẫn bị bỏ. Cố ý, vì chưa có dữ liệu.
+
+**Kiểm**: `kiem-bang-chung.mjs` S01-a…d, trong đó S01-b là cách nói mới, không dấu: "nhon trach" + "Nhơn Trạch, Đồng Nai". Gỡ bản sửa thì đỏ (đã chạy).
+
+### SRS-5.1zr · Diện tích căn hộ AI ghi vào ô "sàn" vẫn đổ `area_m2` (03/10/2026)
+
+**Ca gốc**: `R02`, căn hộ 76m2. AI ghi `dien_tich_san` 76. Trigger `listing_facts_sync_cols` đổ `dien_tich_san` vào `built_area_m2`, nên `area_m2` trống.
+
+**Lớp lỗi**: hai ô gần nghĩa mà prompt tả mơ hồ ("diện tích sàn / sử dụng"). Với căn hộ, diện tích sàn CHÍNH LÀ diện tích căn. Code tin tên ô AI chọn mà không xét loại BĐS.
+
+**Sửa**:
+- Prompt: `dien_tich_san` chỉ dùng cho TỔNG sàn nhà nhiều tầng; diện tích căn hộ ghi `dien_tich`.
+- `docAiChinh`: tin là căn hộ (AI nói, hoặc DB đã ghi `chung_cu`) mà chỉ có `dien_tich_san` thì đổi thành `dien_tich`.
+
+Nhà phố có cả hai ô thì giữ nguyên.
+
+**Chỗ khác cùng lớp**: cặp ô gần nghĩa khác cũng phụ thuộc loại BĐS:
+- `dien_tich_dat` / `dien_tich` với đất: trigger đã gộp.
+- `tang` / `so_tang` với căn hộ: e2e R02 cũ đã có ca "2pn tầng 12".
+
+Chưa thấy ca lỗi mới.
+
+**Kiểm**: `kiem-bang-chung.mjs`:
+- R02-a: căn hộ AI nói loại;
+- R02-b: cách nói mới, loại lấy từ DB, "68 mét vuông";
+- R02-c: nhà phố giữ diện tích sàn riêng.
+
+Gỡ bản sửa thì R02-a/b đỏ (đã chạy).
+
+### SRS-5.1zs · "3 tầng" bị AI đổi thành 4: sửa theo cụm thay vì bỏ cả ô (03/10/2026)
+
+**Ca gốc**: `S07` rớt trong lượt đo 20 người cùng lúc. Đo lại riêng 3 lần (`thu-s07-a/b/c`, workflow `ban-thu`) với câu "4x16, 3 tầng":
+- 2/3 lượt AI ghi `so_tang` = 4;
+- lớp kiểm bỏ ô (`so_tang_khong_khop_trich_dan`), tin không có số tầng mà bot vẫn hỏi "3 tầng đó có tính gác lửng không".
+
+Không phải lỗi do tải. Đây là lỗi lặp được (2/3).
+
+**Lớp lỗi**: prompt dạy "so_tang LUÔN tính cả trệt" (đúng với LẦU). AI áp luôn cho TẦNG, mà "N tầng" vốn đã gồm trệt. Lưới sửa số tầng theo cụm (01/10) chỉ nhận trệt / lầu / tấm, thiếu "tầng". Nên giá trị lệch bị bỏ thay vì được sửa.
+
+**Sửa**:
+- Lưới sửa theo cụm nhận cả "tầng": cụm cho ra đúng MỘT số tầng thì lấy số đó.
+- Prompt ghi rõ "3 tầng" = 3, chỉ LẦU mới cộng 1.
+
+**Chỗ khác cùng lớp**: ca "4 tầng tính cả lửng" (SRS-5.1ze) vẫn đi nhánh `ketCauTheoLung` phía sau, không đổi. Các ô số khác (phòng ngủ, WC) không có phép tính ra số nên bỏ khi lệch là đúng.
+
+**Kiểm**: `kiem-bang-chung.mjs`:
+- S07-a: "3 tầng", AI 4 → 3;
+- S07-b: cách nói mới, "nhà 5 tang" không dấu, AI 6 → 5;
+- S07-c: "trệt 3 lầu" = 4 không đổi.
+
+Gỡ bản sửa thì S07-a/b đỏ (đã chạy).
+
+### SRS-5.1zt · Một câu vừa bán vừa mua: ghi cả hồ sơ mua (03/10/2026)
+
+**Ca gốc**: `X04` "em bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ". Tin bán tạo đúng, nhưng hồ sơ mua trống. Vế mua rơi vào ô lý do bán.
+
+**Lớp lỗi**: cổng chọn đường chỉ chọn MỘT vai cho cả câu (`hoiMua = … && !wantsSell`). Khuôn bóc tách tin bán không có chỗ cho nhu cầu mua. X01/X03 đạt chỉ vì vế mua nằm ở tin nhắn riêng.
+
+**Sửa** (chế độ `ai`):
+- Lượt AI nhỏ "ý của lượt" (`doc-y-luot.ts`) thêm ô `mua_kem` (khu vực, ngân sách, loại, trích dẫn). Ô này ở lượt nhỏ vì khuôn bóc tách đã sát giới hạn grammar.
+- Code kiểm `docMuaKem`: cụm trích có trong tin. Khu vực phải nằm trong cụm trích. Ngân sách phải khớp một lượng tiền TRONG cụm trích, nên giá căn đang bán không lọt.
+- Đường ra duy nhất của nhánh bán (`traLoiSeller`) ghi hồ sơ mua cho CÙNG người (`ensure_buyer_conversation` + `merge_buyer_prefs`, một người một hội thoại).
+- Câu báo "Dạ còn nhu cầu mua của anh (…), em cũng lưu vào hồ sơ rồi ạ." gắn SAU các bộ lọc lời model. Lý do: `boCauGhiTienKhongCo` gọt câu "lưu … 6 tỷ" vì 6 tỷ không phải giá tin bán.
+- AI không chạy thì không đoán vế mua bằng từ khoá.
+
+**Chỗ khác cùng lớp**:
+- Cổng một vai còn ở chiều ngược: người MUA nói kèm "nhà anh cũng đang bán". Nhánh mua có `wantsSell` chặn trước nên vế bán đi nhánh bán, vế mua rơi. Chưa đo, chưa sửa.
+- Nhu cầu mua vẫn là một hồ sơ mỗi người (`buyers.preferences`); nhiều nhu cầu mua là việc T4 riêng.
+
+**Kiểm**:
+- `kiem-bang-chung.mjs` X04-a…e: khu / giá của căn bán không lọt, trích bịa thì null. X04-e là cách nói mới: "bán xong anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi".
+- e2e `ZH-14` (hồ sơ mua + câu báo + tin bán vẫn Quận 7), `ZH-15` (AI lấy nhầm vế bán thì không ghi gì), `ZH-16` (cách nói mới).
+- Gỡ bản sửa thì X04-b, ZH-14, ZH-16 đỏ (đã chạy).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
