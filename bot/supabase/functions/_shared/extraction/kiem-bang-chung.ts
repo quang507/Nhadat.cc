@@ -136,6 +136,17 @@ function kiemLoaiDuongVao(v: string, kd: string): string | null {
   const lt = loaiDuongNoiRo(kd);
   const theoMa: Record<string, string> = { mat_tien: "mat_tien", hem_xe_hoi: "hoi", hem_xe_may: "may", hem_xe_tai: "tai" };
   if (lt && theoMa[ma] && theoMa[ma] !== lt) return "loai_duong_nguoc_chu_khach";
+  // 03/10/2026 (bắn thử thu-mc-05, SRS-5.1zn): "hẻm 3m" → AI "hẻm xe máy". Khách CHỈ nói bề rộng (không nói xe hơi / xe máy) thì
+  // loại hẻm theo ngưỡng chủ dự án chốt (20261003a): < 3m xe máy, 3–<3,5m trong hẻm, ≥ 3,5m xe hơi, ≥ 6m xe tải. AI lệch ngưỡng →
+  // bỏ đề xuất; trigger DB đọc bề rộng (`do_rong_hem`) và tự xếp đúng ngưỡng.
+  if (!lt && ma.startsWith("hem")) {
+    const m = /(\d+(?:[.,]\d+)?)\s*(?:m|met)(?:\s*(\d)(?!\d))?(?![a-z0-9])/.exec(kd);
+    if (m) {
+      const w = Number(m[1].replace(",", ".")) + (m[2] && !/[.,]/.test(m[1]) ? Number(m[2]) / 10 : 0);
+      const theoRong = w >= 6 ? "hem_xe_tai" : w >= 3.5 ? "hem_xe_hoi" : w >= 3 ? "hem" : "hem_xe_may";
+      if (w >= 1 && w <= 40 && theoRong !== ma) return "loai_duong_lech_be_rong";
+    }
+  }
   // "không có hẻm" / "xe hơi không vào" mà AI đưa loại hẻm có xe → ngược phủ định trong chính cụm trích.
   if (ma !== "mat_tien" && /\b(khong|ko|chang)\s+(co\s+)?hem\b/.test(kd)) return "trich_dan_noi_khong_co_hem";
   return null;

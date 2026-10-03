@@ -1,0 +1,43 @@
+name: Đo bóc tách trên production
+
+# 03/10/2026: bộ đo bóc tách (bot/tests/do-boc, TS-DO-BOC-01) — bắn 110 ca bằng Zalo THỬ `do-*` lên bot production, chấm, dọn.
+# Repo PUBLIC: log chỉ in số đếm, mã ca và trường lệch (câu khách là câu soạn sẵn), không in lời bot, không in khoá.
+
+on:
+  workflow_dispatch:
+    inputs:
+      nhom:
+        description: Chỉ các nhóm (vd ban1,sua — trống = tất cả)
+        required: false
+        default: ''
+      bo_nhom:
+        description: Bỏ các nhóm (vd mua,mua_ban để đo riêng phía bán)
+        required: false
+        default: ''
+
+concurrency: do-boc
+
+env:
+  PROJECT_REF: tbcdpupiarkuxtntmosl
+
+jobs:
+  do:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Bắn + chấm + dọn
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+          NHOM: ${{ inputs.nhom }}
+          BO_NHOM: ${{ inputs.bo_nhom }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "::error::Thiếu SUPABASE_ACCESS_TOKEN"; exit 1; fi
+          echo "::add-mask::$TOKEN"
+          for v in "$NHOM" "$BO_NHOM"; do printf '%s' "$v" | grep -Eq '^[a-z0-9_,]*$' || { echo "::error::tên nhóm lạ"; exit 1; }; done
+          A=(); [ -n "$NHOM" ] && A+=(--nhom "$NHOM"); [ -n "$BO_NHOM" ] && A+=(--bo-nhom "$BO_NHOM")
+          node bot/tests/do-boc/ban-production.mjs "${A[@]}"

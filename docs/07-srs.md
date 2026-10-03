@@ -1905,6 +1905,30 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
 - `bot/tests/van-tra-loi.mjs` `MCL-01…06`, trong đó MCL-04 là cách nói mới (câu hỏi lẫn trong bong bóng nhiều dòng), MCL-06 soi `traLoiSeller` có gọi `motCauHoiLuot`.
 - Gỡ bản sửa trong chat-reply → MCL-06 đỏ (đã chạy). e2e 903/903 xanh, không ca cũ nào đổi.
 
+### SRS-5.1zn · "Hẻm 3m" theo ngưỡng; bỏ lời hứa "em đăng liền" khi tin chưa lên kệ; đo bóc tách trên production bằng workflow (03/10/2026)
+
+**Ca gốc** (bắn thử 03/10 sau SRS-5.1zm):
+- (a) `thu-mc-05`: "bán nhà hẻm 3m Tân Bình" → AI ghi "hẻm xe máy". Theo ngưỡng chủ dự án chốt (`20261003a`), 3–<3,5m là "trong hẻm".
+- (b) `thu-mc-06`: tin còn thiếu tầng, phòng, pháp lý mà bot nói "…khách hỏi nhiều lắm, em đăng liền nha :)".
+
+**Lớp lỗi**:
+- (a) Ngưỡng bề rộng chỉ được DẠY trong prompt; code nhận mọi loại hẻm AI đưa nếu khách không nói ngược chữ (`kiemLoaiDuongVao` chỉ bắt "xe hơi"↔"xe máy" trái lời khách).
+- (b) Lưới chặn lời "đã đăng" (`DA_DANG_RE`) chỉ bắt thì QUÁ KHỨ ("đã đăng", "tin lên rồi"); lời HỨA đăng ngay lọt.
+
+**Sửa**:
+- (a) `kiemLoaiDuongVao`: khách KHÔNG nói xe hơi / xe máy / xe tải mà cụm trích có bề rộng (số + m / mét, kể cả "3m5") → loại hẻm phải đúng ngưỡng; lệch thì bỏ đề xuất (`loai_duong_lech_be_rong`), trigger DB xếp loại từ `do_rong_hem` theo cùng ngưỡng. Khách nói thẳng "hẻm xe hơi 3m" → theo lời khách.
+- (b) `DA_DANG_RE` thêm "em (sẽ) đăng / up / đưa lên / lên tin (tin) liền / ngay / luôn"; trừ câu có điều kiện ("…là / thì / xong / để / rồi / khi em đăng liền"). Chỉ áp khi tin chưa lên kệ (chỗ gọi `boHuaDaDang` sẵn có).
+- Workflow mới `do-boc.yml` + `bot/tests/do-boc/ban-production.mjs`: làm tự động các bước README bộ đo — bắn Zalo thử `do-*` mẻ ≤ 20 người, đợi từng lượt, đổ trạng thái, chấm `chay.mjs --tu-trang-thai`, dọn `reset_nguoi_test` (kể cả khi hỏng). Trước đây đo production phải làm tay, nên số % gần nhất là của 23/09.
+
+**Chỗ khác cùng lớp**:
+- (a) Bề rộng ĐƯỜNG trước đất (`do_rong_duong`) không xếp loại hẻm — trigger đã ghi là mặt tiền (`20261001a`), không đụng.
+- (b) Các lời hứa việc hệ thống chưa làm khác ("em kiểm tra giá khu vực") chủ dự án cho giữ (03/10: "sau sẽ có data").
+
+**Kiểm**:
+- `kiem-bang-chung.mjs` `HR-01…06`, trong đó HR-05 "hẻm rộng 3 mét" là cách nói mới.
+- `van-tra-loi.mjs` `DD-07…09`, trong đó DD-09 "Em up tin ngay cho anh nhé" là cách nói mới, DD-08 câu có điều kiện được giữ.
+- Gỡ bản sửa → HR-01/02/05 và DD-07/09 đỏ (đã chạy).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
