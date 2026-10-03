@@ -3,7 +3,7 @@ import MapView from "@/components/MapView";
 import ListingCard from "@/components/ListingCard";
 import { MAP_COLS, supabase, type MapRow } from "@/lib/supabase";
 
-export const revalidate = 300;
+export const revalidate = 10800; // SRS-5.1zl (03/10/2026): 5 phút → 3 giờ, giảm egress Supabase
 export const metadata: Metadata = {
   title: "Bản đồ nhà đất",
   description:

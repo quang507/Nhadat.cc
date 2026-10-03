@@ -7,7 +7,7 @@ import { coverByCode } from "@/lib/photos";
 import { WARDS } from "@/lib/geo";
 import { FEATURED_TAGS } from "@/lib/tags";
 
-export const revalidate = 300;
+export const revalidate = 10800; // SRS-5.1zl (03/10/2026): 5 phút → 3 giờ, giảm egress Supabase
 
 // FR-01: mỗi lợi ích một minh hoạ hội thoại ngắn (3 bong bóng). Chữ đúng tone
 // §6.8 (anh/chị – em, không markdown).

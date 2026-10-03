@@ -7,8 +7,9 @@ import { CARD_COLS, supabase, type ListingCard as CardRow } from "@/lib/supabase
 import { formatPrice, zaloLink } from "@/lib/format";
 import { TAG_DEFS, relatedTags, tagBySlug, type TagDef } from "@/lib/tags";
 
-// FR-12 / IA §4.4 — trang tag SEO. Dựng tĩnh toàn bộ lúc build (●); slug lạ →
-// 404 (dynamicParams=false) để không ai đúc được URL rác.
+// FR-12 / IA §4.4 — trang tag SEO. Slug lạ → 404 (`notFound()` trong Page: chỉ slug có trong TAG_DEFS mới render).
+// 03/10/2026 (giảm egress Supabase, SRS-5.1zl): KHÔNG dựng sẵn lúc build nữa — mỗi lượt build (CI mỗi lần đẩy + Vercel preview
+// + production) từng dựng 23 trang × (tin + ảnh bìa). `generateStaticParams` trả [] → trang vẫn ISR, dựng khi có người xem.
 //
 // SỐ 3600 DƯỚI ĐÂY KHÔNG PHẢI TTL THẬT — soát build 05/09/2026: bảng route báo
 // `5m`. Next 15 hạ revalidate của cả segment xuống MIN của nó và mọi
@@ -18,10 +19,10 @@ import { TAG_DEFS, relatedTags, tagBySlug, type TagDef } from "@/lib/tags";
 // đổi (min vẫn là 300). Muốn thật sự nới lên 1 giờ thì phải nới TTL trong
 // lib/photos.ts — và đó là quyết định về độ tươi của ẢNH, không phải của tag.
 export const revalidate = 3600;
-export const dynamicParams = false;
+export const dynamicParams = true;
 
 export function generateStaticParams() {
-  return TAG_DEFS.map((t) => ({ tag: t.slug }));
+  return [];
 }
 
 const MAX = 24;
