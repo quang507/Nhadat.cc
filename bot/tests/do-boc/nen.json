@@ -1,6 +1,6 @@
 {
   "ghi_chu": "Bản nền chế độ LUẬT MỘT MÌNH (model giả), DB giả. Chỉ tăng: thêm ca mới đạt khi code tốt lên; xoá một ca khỏi đây là tuyên bố chấp nhận tụt — cần lý do trong PR.",
-  "moc": "20260930 (mock parse_vnd đọc \"tỏi\" như bản thật → T01 đạt)",
+  "moc": "20261003 (SRS-5.1zu: căn thiếu chữ \"quận\" đọc quận trong đoạn của chính căn → N06 căn 2 Gò Vấp, 511 trường)",
   "ca_dat": [
     "B02",
     "B03",
@@ -76,6 +76,6 @@
     "S09",
     "C01"
   ],
-  "truong_dung": 510,
+  "truong_dung": 511,
   "truong_tong": 572
 }

@@ -10,7 +10,7 @@
 //      "đang cho thuê… /tháng" không là giá bán).
 // Kiểm được trích dẫn thì bắt được BỊA; không bắt hết GÁN NHẦM Ô — lớp 3 và việc so với
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
-import { docTien, giaTheoM2 } from "./luat-tien.ts";
+import { docTien, giaTheoM2, TIEN_KD } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
 import { cumPhongNguTheoTang, docTraLoiLung, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
@@ -244,7 +244,9 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       const doc = bocQuan(chuanSo(cum), cum) ?? vungNgoai(chuanSo(cum))?.ten ?? null;
       // Model hay ghi "5" / "Q5" thay vì "Quận 5" — cùng một ý.
       const vv = /^\s*(?:q\.?\s*)?\d{1,2}\s*$/i.test(v) ? `Quận ${Number(v.replace(/\D/g, ""))}` : v;
-      const muon = bocQuan(chuanSo(vv), vv) ?? vv;
+      // SRS-5.1zq (03/10/2026, bộ đo S01): vùng NGOÀI TP.HCM — AI viết "Huyện Nhơn Trạch" / "Nhơn Trạch, Đồng Nai" cho cụm
+      // "Nhơn Trạch Đồng Nai"; bản cũ chỉ nhận đúng chữ "Đồng Nai". Cùng một vùng (`vungNgoai`) là cùng ý.
+      const muon = bocQuan(chuanSo(vv), vv) ?? vungNgoai(chuanSo(vv))?.ten ?? vv;
       return doc && chuanSo(doc) === chuanSo(muon) ? null : "quan_khong_khop_trich_dan";
     }
     case "phuong": {
@@ -460,7 +462,9 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
     }
     // Chế độ `ai` (bắn thử 01/10, lx-ai-03): "3 lầu" → AI ghi so_tang 3 (quên trệt). Cụm trích nói trệt / lầu / tấm và
     // phép tính ra ĐÚNG MỘT số tầng → lấy số tính ra thay vì bỏ cả trường.
-    if (KIEM_NHE && d.khoa === "so_tang" && /\b(tret|lau|tam)\b/.test(kdDung ?? kdCum)) {
+    // 03/10/2026 (đo lại S07, SRS-5.1zs): "3 tầng" → AI ghi 4 (áp luật "cộng trệt" của LẦU cho cả TẦNG) 2/3 lượt; lưới
+    // chỉ sửa cho trệt/lầu/tấm nên bỏ cả trường, tin mất số tầng. "N tầng" cũng là một số tính ra được → sửa như trên.
+    if (KIEM_NHE && d.khoa === "so_tang" && /\b(tret|lau|tam|tang)\b/.test(kdDung ?? kdCum)) {
       const st = soTangTrong(kdDung ?? d.trich_dan);
       if (st.length === 1 && String(st[0]) !== chuanSo(d.gia_tri).match(/\d+/)?.[0]) d = { ...d, gia_tri: String(st[0]) };
     }
@@ -1039,6 +1043,37 @@ export function docYeuCau<L extends string, O extends string>(
   return trichCoTrongTin(td, tin) ? { loai: loai as Exclude<L, "khong">, trich: td, o: v?.o ?? null } : null;
 }
 
+/**
+ * 03/10/2026 (bộ đo X04, SRS-5.1zt): vế MUA trong tin người bán ("bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ") do AI đọc.
+ * Code nhận khi cụm trích có trong tin; mỗi ô chỉ nhận khi chữ / số của nó nằm TRONG cụm trích (ngân sách: một lượng tiền
+ * trong cụm khớp số AI đọc — giá căn đang bán nằm ngoài cụm thì không lọt). Trả delta hồ sơ mua; không còn ô nào thì null.
+ */
+export function docMuaKem(
+  v: { khu_vuc?: string | null; ngan_sach?: string | null; loai?: string | null; trich_dan?: string | null } | null | undefined,
+  tin: string,
+): { area?: string; budget?: string; property_type?: string; trich: string } | null {
+  const td = (v?.trich_dan ?? "").trim();
+  if (!v || !trichCoTrongTin(td, tin)) return null;
+  const ra: { area?: string; budget?: string; property_type?: string; trich: string } = { trich: td };
+  const kdTd = chuanSo(td);
+  const kv = (v.khu_vuc ?? "").trim();
+  if (kv) {
+    const qKv = bocQuan(chuanSo(kv), kv) ?? vungNgoai(chuanSo(kv))?.ten ?? null;
+    const qTd = bocQuan(kdTd, td) ?? vungNgoai(kdTd)?.ten ?? null;
+    if (qKv ? qKv === qTd : trichCoTrongTin(kv, td)) ra.area = qKv ?? kv;
+  }
+  const ns = (v.ngan_sach ?? "").trim();
+  const nsVnd = docTien(ns);
+  if (nsVnd != null) {
+    const tienTd = [...kdTd.matchAll(new RegExp(`\\d[\\d.,]*\\s*(?:${TIEN_KD})(?![a-z])(?:\\s*\\d{1,3}(?![\\d.,]|\\s*m)|\\s*ruoi)?`, "g"))]
+      .map((m) => docTien(m[0]));
+    if (tienTd.some((x) => x != null && gan(x, nsVnd))) ra.budget = ns;
+  }
+  const loai = (v.loai ?? "").trim();
+  if (loai && trichCoTrongTin(loai, td)) ra.property_type = loai.toLowerCase();
+  return ra.area || ra.budget || ra.property_type ? ra : null;
+}
+
 /** Đợt 3 (02/10/2026): câu hỏi kế AI chọn — chỉ nhận khoá có trong danh sách hợp lệ của lượt (đã bỏ câu hết hạn, câu không áp dụng, câu đang treo). */
 export function docCauKe(ck: { khoa?: string | null } | null | undefined, hopLe: Iterable<string>): string | null {
   const k = (ck?.khoa ?? "").trim();
@@ -1228,7 +1263,12 @@ export type AiChinh = {
  * mới nhất). Không có gì → mọi ô null, `ghi` rỗng — nơi gọi rơi về luật.
  */
 export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
-  const mot = dat.filter((d) => !(d.can != null && d.can > 1));
+  let mot = dat.filter((d) => !(d.can != null && d.can > 1));
+  // SRS-5.1zr (03/10/2026, bộ đo R02): căn hộ "76m2 2pn tầng 12" → AI ghi `dien_tich_san` (sàn / sử dụng) → cột phụ
+  // `built_area_m2`; cột diện tích chính `area_m2` (web, bản nháp, câu còn thiếu) trống. Với CĂN HỘ, diện tích sàn CHÍNH LÀ
+  // diện tích căn: chưa có `dien_tich` thì đổi khoá. Nhà phố / toà nhà giữ `dien_tich_san` (tổng sàn khác diện tích đất).
+  const laCanHo = chuanSo(mot.find((d) => d.khoa === "loai_bds")?.gia_tri ?? dong?.property_type ?? "").replace(/\s+/g, "_") === "chung_cu";
+  if (laCanHo && !mot.some((d) => d.khoa === "dien_tich")) mot = mot.map((d) => d.khoa === "dien_tich_san" ? { ...d, khoa: "dien_tich" } : d);
   const lay = (k: string) => mot.find((d) => d.khoa === k)?.gia_tri.trim() ?? null;
   const lgd = chuanSo(lay("loai_giao_dich") ?? "").replace(/\s+/g, "_");
   const loaiGiaoDich = lgd === "ban" || lgd === "cho_thue" ? lgd : null;
@@ -1290,7 +1330,8 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
     dienTich: daCo.has("dien_tich") && !/x/.test(giaTri("dien_tich") ?? "") ? soGhi("dien_tich") : null,
     ngang: kt.ngang, dai: kt.dai,
     soPhongNgu: soGhi("so_phong_ngu"),
-    quan: (() => { const q = lay("quan"); return q ? bocQuan(chuanSo(q), q) : null; })(),
+    // SRS-5.1zq: vùng ngoài TP.HCM ("Đồng Nai", "Long An"…) giữ tên vùng — bản cũ chỉ chuẩn hoá quận nội thành nên ra null.
+    quan: (() => { const q = lay("quan"); return q ? bocQuan(chuanSo(q), q) ?? vungNgoai(chuanSo(q))?.ten ?? null : null; })(),
     phuong: giaTri("phuong"),
     duong: giaTri("vi_tri"),
     tenDuong,

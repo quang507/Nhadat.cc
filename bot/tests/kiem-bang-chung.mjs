@@ -6,7 +6,8 @@
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
-import { datKiemNhe, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
+import { datKiemNhe, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -237,8 +238,9 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("docAiChinh: nở hậu có ô — fact no_hau '6m', không còn nằm trong `bo`", ghi.no_hau === "6m" && !a.bo.some((b) => b.khoa === "no_hau"), JSON.stringify({ nh: ghi.no_hau, bo: a.bo }));
   const b = docAiChinh([dx("dien_tich", "80", "80m2"), dx("ngang", "4", "ngang 4m"), dx("dai", "20", "dài 20m"), dx("quan", "Quận Ba Đình", "quận Ba Đình"), dx("loai_bds", "nha_mat_tien", "nhà mặt tiền")], null);
   const ghiB = Object.fromEntries(b.ghi.map((g) => [g.question, g.answer]));
-  ok("docAiChinh: có m² lẫn ngang×dài → dien_tich '80m2' + mat_tien 'ngang 4m dài 20m'; dienTich 80; quận lạ → null; loại ngoài danh sách → null",
-    ghiB.dien_tich === "80m2" && ghiB.mat_tien === "ngang 4m dài 20m" && b.dienTich === 80 && b.quan === null && b.loaiBds === null, JSON.stringify(b));
+  ok("docAiChinh: có m² lẫn ngang×dài → dien_tich '80m2' + mat_tien 'ngang 4m dài 20m'; dienTich 80; quận ngoài TP.HCM → tên vùng (như đường luật, SRS-5.1zq); loại ngoài danh sách → null",
+    ghiB.dien_tich === "80m2" && ghiB.mat_tien === "ngang 4m dài 20m" && b.dienTich === 80 && b.quan === "Hà Nội" && b.loaiBds === null, JSON.stringify(b));
+  ok("docAiChinh: quận không đọc ra được ('Quận Xyz') → null", docAiChinh([dx("quan", "Quận Xyz", "quận Xyz")], null).quan === null);
   const c = docAiChinh([], null);
   ok("docAiChinh: AI không nói gì → ghi rỗng, mọi cột null (nơi gọi rơi về luật)", c.ghi.length === 0 && c.gia === null && c.quan === null && c.loaiBds === null && c.gap === null);
   bo("hiện trạng 'xe hơi' từ 'hẻm xe hơi' (không tả tình trạng nhà)", "ngang 5 dài 20 nha, hẻm xe hơi", "hien_trang", "xe hơi", "hẻm xe hơi", "gia_tri_khong_dung_loai_truong");
@@ -630,6 +632,44 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("HR-04 'hẻm 2m5' + AI hem_xe_may; 'hẻm 6m' + AI hem_xe_tai → đạt", k("hem_xe_may", "hẻm 2m5", "hẻm 2m5 nha").dat.length === 1 && k("hem_xe_tai", "hẻm 6m", "hẻm 6m").dat.length === 1);
   ok("HR-05 (cách nói mới) 'hẻm rộng 3 mét' + AI hem_xe_hoi → bỏ", k("hem_xe_hoi", "hẻm rộng 3 mét", "nhà trong hẻm rộng 3 mét").dat.length === 0);
   ok("HR-06 khách nói thẳng 'hẻm xe hơi 3m' → theo lời khách, giữ hem_xe_hoi", k("hem_xe_hoi", "hẻm xe hơi 3m", "hẻm xe hơi 3m").dat.length === 1);
+}
+// Bộ đo 03/10 (SRS-5.1zq…zt): bốn ca rớt production — mỗi ca một cách nói gốc + một cách nói MỚI chưa từng bắn.
+{
+  datKiemNhe(true);
+  const q = (gt, tc, tin) => kiemDeXuat([{ khoa: "quan", gia_tri: gt, trich_dan: tc, can: null }], tin);
+  ok("S01-a 'Huyện Nhơn Trạch' cho 'đất Nhơn Trạch' → đạt (vùng ngoài TP.HCM)", q("Huyện Nhơn Trạch", "đất Nhơn Trạch", "bán đất Nhơn Trạch 2 tỷ").dat.length === 1);
+  ok("S01-b (mới) 'Nhơn Trạch, Đồng Nai' cho 'nhon trach' không dấu → đạt", q("Nhơn Trạch, Đồng Nai", "dat nhon trach", "ban dat nhon trach 1ty8").dat.length === 1);
+  ok("S01-c vùng ngoài nhưng KHÁC vùng trong trích ('Bình Dương' cho 'Nhơn Trạch') → bỏ", q("Bình Dương", "đất Nhơn Trạch", "bán đất Nhơn Trạch 2 tỷ").dat.length === 0);
+  const acS = docAiChinh(q("Huyện Nhơn Trạch", "đất Nhơn Trạch", "bán đất Nhơn Trạch 2 tỷ").dat, null);
+  ok("S01-d docAiChinh quận vùng ngoài → 'Đồng Nai' (không rơi null)", acS.quan === "Đồng Nai", JSON.stringify(acS.quan));
+  const ch = (dat, dong = null) => docAiChinh(dat.map((d) => ({ can: null, ...d })), dong);
+  const acR = ch([{ khoa: "loai_bds", gia_tri: "chung_cu", trich_dan: "căn hộ" }, { khoa: "dien_tich_san", gia_tri: "76", trich_dan: "76m2" }]);
+  ok("R02-a căn hộ: AI ghi dien_tich_san 76 → dienTich 76 (đổ area_m2)", acR.dienTich === 76 && acR.ghi.some((g) => /76/.test(g.answer)), JSON.stringify({ dt: acR.dienTich, ghi: acR.ghi }));
+  const acR2 = ch([{ khoa: "dien_tich_san", gia_tri: "68", trich_dan: "68 mét vuông" }], { property_type: "chung_cu" });
+  ok("R02-b (mới) tin đã là chung cư trong DB, '68 mét vuông' vào dien_tich_san → dienTich 68", acR2.dienTich === 68, JSON.stringify(acR2.dienTich));
+  const acR3 = ch([{ khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "nhà" }, { khoa: "dien_tich", gia_tri: "60", trich_dan: "60m2" }, { khoa: "dien_tich_san", gia_tri: "180", trich_dan: "sàn 180m2" }]);
+  ok("R02-c nhà phố giữ diện tích SÀN riêng (không đè dien_tich)", acR3.dienTich === 60, JSON.stringify(acR3.dienTich));
+  const st = (gt, tc, tin) => kiemDeXuat([{ khoa: "so_tang", gia_tri: gt, trich_dan: tc, can: null }], tin);
+  const s7 = st("4", "3 tầng", "4x16, 3 tầng");
+  ok("S07-a '3 tầng' mà AI ghi 4 → sửa thành 3, không bỏ cả ô", s7.dat.length === 1 && s7.dat[0].gia_tri === "3", JSON.stringify(s7));
+  const s7b = st("6", "nhà 5 tang", "nha 5 tang hem 4m");
+  ok("S07-b (mới) 'nhà 5 tang' không dấu, AI ghi 6 → 5", s7b.dat.length === 1 && s7b.dat[0].gia_tri === "5", JSON.stringify(s7b));
+  const s7c = st("4", "trệt 3 lầu", "nhà trệt 3 lầu");
+  ok("S07-c 'trệt 3 lầu' = 4 vẫn đúng như cũ", s7c.dat.length === 1 && s7c.dat[0].gia_tri === "4", JSON.stringify(s7c));
+  const X = "em bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ";
+  const x1 = docMuaKem({ khu_vuc: "Bình Thạnh", ngan_sach: "6 tỷ", loai: "nhà", trich_dan: "mua nhà Bình Thạnh 6 tỷ" }, X);
+  ok("X04-a vế mua → area Bình Thạnh, budget 6 tỷ", /Bình Thạnh/.test(x1?.area ?? "") && x1?.budget === "6 tỷ", JSON.stringify(x1));
+  const x2 = docMuaKem({ khu_vuc: "Bình Thạnh", ngan_sach: "3 tỷ", loai: null, trich_dan: "mua nhà Bình Thạnh 6 tỷ" }, X);
+  ok("X04-b AI lấy nhầm giá căn BÁN (3 tỷ) làm ngân sách → không nhận budget", x2 && !x2.budget, JSON.stringify(x2));
+  ok("X04-c khu vực không nằm trong cụm trích (q7 là căn bán) → không nhận area", !docMuaKem({ khu_vuc: "q7", ngan_sach: null, loai: null, trich_dan: "mua nhà Bình Thạnh 6 tỷ" }, X));
+  ok("X04-d cụm trích bịa → null", docMuaKem({ khu_vuc: "Bình Thạnh", ngan_sach: "6 tỷ", loai: null, trich_dan: "mua nhà Gò Vấp 6 tỷ" }, X) === null);
+  const x5 = docMuaKem({ khu_vuc: "quận 2", ngan_sach: "tầm 5 tỷ rưỡi", loai: "căn hộ", trich_dan: "anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi" }, "bán xong căn này anh tính mua căn hộ quận 2 tầm 5 tỷ rưỡi");
+  const bd = (x) => x.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const cq = (t) => JSON.stringify(cacQuanTrong(t, bd));
+  ok("ZU-a 'bán căn hộ q7 … để mua nhà Bình Thạnh' → HAI quận (luật không được đoán một)", cq(X) === '["Quận 7","Quận Bình Thạnh"]', cq(X));
+  ok("ZU-b 'Cần Đước, Long An' là MỘT nơi; 'quận 1 … quận 10' là HAI", cq("bán đất Cần Đước, Long An") === '["Cần Đước, Long An"]' && cq("bán nhà quận 1, còn căn quận 10") === '["Quận 1","Quận 10"]', cq("bán đất Cần Đước, Long An"));
+  ok("ZU-c câu một quận → một ('Lê Văn Sỹ quận 3 phường 9')", cq("bán nhà hẻm Lê Văn Sỹ quận 3 phường 9 4x15 7 tỷ") === '["Quận 3"]');
+  ok("X04-e (mới) 'bán xong … tính mua căn hộ quận 2 tầm 5 tỷ rưỡi' → đủ 3 ô", x5?.area === "Quận 2" && x5?.budget === "tầm 5 tỷ rưỡi" && x5?.property_type === "căn hộ", JSON.stringify(x5));
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
