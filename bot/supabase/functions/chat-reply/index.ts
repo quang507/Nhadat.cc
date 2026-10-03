@@ -775,6 +775,32 @@ type CauHinh = {
   mauBan: string; mauMua: string;
 };
 let nhoCauHinh: CauHinh | null = null;
+// 03/10/2026 (giảm egress Supabase, SRS-5.1zl): đo một lượt bot — `bot_prompts` nguyên nội dung 38 KB, 60–80% byte của lượt,
+// kéo lại mỗi 60 s. Nay mỗi 60 s chỉ đọc `key, updated_at` (trigger `bot_prompts_touch` đóng dấu mỗi lần sửa); khác
+// phiên đã nhớ (sửa / thêm / xoá khoá) mới kéo nội dung. Sửa ở Table Editor vẫn có hiệu lực trong vòng 60 s.
+let nhoPrompt: { phien: string; P: Record<string, string> } | null = null;
+async function napPrompt(client: ReturnType<typeof serviceClient>): Promise<Record<string, string>> {
+  const { data: dau, error } = await client.from("bot_prompts").select("key, updated_at").order("key");
+  const phien = !error && dau ? dau.map((r) => `${r.key}@${r.updated_at}`).join("|") : null;
+  if (phien !== null && nhoPrompt?.phien === phien) return nhoPrompt.P;
+  const { data: rows, error: e2 } = await client.from("bot_prompts").select("key, content");
+  if (e2 || !rows) return nhoPrompt?.P ?? {};
+  const P = Object.fromEntries(rows.map((r) => [r.key, r.content]));
+  if (phien !== null) nhoPrompt = { phien, P };
+  return P;
+}
+// Bảng `wards` (168 phường, đổi bằng migration) — nhớ theo isolate 6 giờ thay vì đọc lại 17 KB mỗi lượt người bán.
+type PhuongDayDu = PhuongDs & { don_vi_cu: string | null };
+// e2e dựng DB giả mới mỗi ca (`globalThis.__db`) — nhớ theo DB đó để ca sau không đọc phường của ca trước; production: undefined.
+const dbGia = () => (globalThis as { __db?: unknown }).__db;
+let nhoPhuong: { at: number; db: unknown; ds: PhuongDayDu[] } | null = null;
+async function napPhuong(client: ReturnType<typeof serviceClient>): Promise<{ ds: PhuongDayDu[] | null; loi: string | null }> {
+  if (nhoPhuong && nhoPhuong.db === dbGia() && Date.now() - nhoPhuong.at < 6 * 3600e3) return { ds: nhoPhuong.ds, loi: null };
+  const { data, error } = await client.from("wards").select("ten, ten_day_du, loai, quan_cu, don_vi_cu").limit(400);
+  if (error) return { ds: null, loi: error.message };
+  nhoPhuong = { at: Date.now(), db: dbGia(), ds: (data ?? []) as PhuongDayDu[] };
+  return { ds: nhoPhuong.ds, loi: null };
+}
 async function napCauHinh(client: ReturnType<typeof serviceClient>): Promise<CauHinh> {
   if (nhoCauHinh && Date.now() - nhoCauHinh.at < NHO_TAM_MS) return nhoCauHinh;
   // FR-180: mẫu câu chuẩn (anh/sếp sửa tay ở /admin/mau-cau) đi cùng lượt nạp
@@ -788,10 +814,10 @@ async function napCauHinh(client: ReturnType<typeof serviceClient>): Promise<Cau
     const r1 = await docBiMat(client, "BRIDGE_SECRET");
     return r1.loi ? await docBiMat(client, "BRIDGE_SECRET") : r1;
   };
-  const [cong, capRaw, { data: promptRows }, mBan, mMua] = await Promise.all([
+  const [cong, capRaw, promptP, mBan, mMua] = await Promise.all([
     docCong(),
     secretOf(client, "DAILY_MODEL_CALL_CAP"),
-    client.from("bot_prompts").select("key, content"),
+    napPrompt(client),
     client.rpc("mau_cau_fewshot", { p_phia: "ban", p_n: 12 }),
     client.rpc("mau_cau_fewshot", { p_phia: "mua", p_n: 12 }),
   ]);
@@ -803,7 +829,7 @@ async function napCauHinh(client: ReturnType<typeof serviceClient>): Promise<Cau
     gate,
     gateLoi: cong.loi,
     cap: Number(capRaw) > 0 ? Number(capRaw) : 1000,
-    P: Object.fromEntries((promptRows ?? []).map((r) => [r.key, r.content])),
+    P: promptP,
     mauBan: String(mBan.data ?? "").trim(),
     mauMua: String(mMua.data ?? "").trim(),
   };
@@ -1965,9 +1991,9 @@ Deno.serve(async (req) => {
     ): Promise<string | null> => {
       if (!listingId || !tin?.trim()) return null;
       if (!dsPhuongTuDien) {
-        const { data, error } = await client.from("wards").select("ten, ten_day_du, loai, quan_cu").limit(400);
-        if (error) { await ghiLoi(client, "chat-reply wards(tu dien phuong)", error.message); return null; }
-        dsPhuongTuDien = (data ?? []) as PhuongDs[];
+        const { ds, loi } = await napPhuong(client);
+        if (loi || !ds) { await ghiLoi(client, "chat-reply wards(tu dien phuong)", loi ?? "rong"); return null; }
+        dsPhuongTuDien = ds;
       }
       const tp = timPhuongTrongCau(tin, dsPhuongTuDien);
       const tron = tp ? null : tenDiaDanhTron(tin);
@@ -6495,9 +6521,9 @@ Deno.serve(async (req) => {
       if (!phuongRao && !/[À-ỹ]/.test(text)) {
         const tenKD = phuongTenKhongDau(tKD);
         if (tenKD) {
-          const { data: dsPhuong, error: wErr } = await client.from("wards").select("ten, ten_day_du, don_vi_cu").limit(400);
-          if (wErr) await ghiLoi(client, "chat-reply wards(khong dau)", wErr.message);
-          const khop = ((dsPhuong ?? []) as Array<{ ten: string; ten_day_du: string | null; don_vi_cu: string | null }>)
+          const { ds: dsPhuong, loi: wErr } = await napPhuong(client);
+          if (wErr) await ghiLoi(client, "chat-reply wards(khong dau)", wErr);
+          const khop = (dsPhuong ?? [])
             .find((w) => boDau(w.ten) === tenKD || boDau(w.don_vi_cu ?? "").includes(`phuong ${tenKD}`));
           if (khop) phuongRao = khop.ten_day_du ?? `Phường ${khop.ten}`;
         }
