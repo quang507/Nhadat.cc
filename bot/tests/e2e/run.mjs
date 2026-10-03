@@ -3359,6 +3359,14 @@ fresh(seedKho);
     r = await send({ external_user_id: "zh-3", text: "anh đang bận tí nói sau nha" });
     check("ZH-03 'anh đang bận tí nói sau nha' (bỏ dấu: 'đang bán' + 'nhà') — AI không đọc ra ý rao → KHÔNG hỏi 'căn đó hay căn khác'",
       r.body.can_cu_hay_moi !== "hoi" && !r.body.replies.some((x) => /căn đó hay căn khác/.test(x)), JSON.stringify(r.body));
+    // SRS-5.1zi: lời model có "hệ thống đã gửi…" / câu khen trỏ ngược mở đầu → đường ra người bán bỏ.
+    L = await moZH("zh-5", "ban nha hem 5m Le Van Sy quan 3, 4x15, gia 7 ty", "huong");
+    globalThis.__model.parse = aiZH({ truong: [{ khoa: "huong", gia_tri: "Đông", trich_dan: "hướng đông", can: null }] });
+    globalThis.__model.create = () => "Cái này khách hỏi nhiều lắm á.\nPhần đó hệ thống đã ghi nhận cho mình rồi nha. Nhà mình xây mấy tầng anh chị?";
+    r = await send({ external_user_id: "zh-5", text: "hướng đông em" });
+    globalThis.__model.create = undefined;
+    check("ZH-05 lời model 'hệ thống đã ghi nhận…' và câu mở đầu trỏ ngược 'Cái này…' → không tới tay chủ nhà",
+      !r.body.replies.some((x) => /hệ thống|Cái này khách hỏi/.test(x)), JSON.stringify(r.body.replies));
     L = await moZH("zh-4", "ban nha hem 3m Tan Binh, 4x12, gia 5 ty", "phuong");
     L.location_raw = null; L.ward = null; L.district = "Quận Tân Bình";
     globalThis.__model.parse = aiZH({ y_dinh: { loai: "ban_roi", trich_dan: "bán rồi" } });

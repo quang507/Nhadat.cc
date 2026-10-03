@@ -5,6 +5,7 @@
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boGoiDoanGioi, boGoiCuoiVaOi, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauNoiHeThong, boCauTroNguocDauBong } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -1176,6 +1177,22 @@ ok("GOI-05 đầu câu 'Anh cần…' → 'Anh chị cần…'", boGoiDoanGioi("
 ok("GOI-06 'Dạ được anh, để em lọc' → 'mình,'; 'anh, chị cần gì' (cặp) giữ",
   boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") === "Dạ được mình, để em lọc căn khớp nha." && boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ") === "Dạ anh, chị cần gì thêm ạ",
   boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") + " | " + boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ"));
+
+// SRS-5.1zi (bắn thử câu đơn giản 02/10): lời bot nói về "hệ thống"; câu khen mở đầu trỏ ngược không có gì để trỏ.
+{
+  const a = boCauNoiHeThong(["Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ.", "Phí thì hệ thống đã gửi cho mình rồi nha.\nMình cần ra hàng sớm hay được giá thì bán vậy anh chị?"]);
+  ok("HT-01 'Phí thì hệ thống đã gửi cho mình rồi nha' → bỏ, câu hỏi kế giữ", a.length === 2 && a[1] === "Mình cần ra hàng sớm hay được giá thì bán vậy anh chị?", JSON.stringify(a));
+  const b = ["Xưởng có hệ thống xử lý nước thải chưa anh?"];
+  ok("HT-02 câu HỎI có 'hệ thống xử lý nước thải' → giữ nguyên", boCauNoiHeThong(b) === b);
+  const c = boCauNoiHeThong(["Dạ cái này he thong tu ghi nhan roi a. Nhà mình mấy tầng anh?"]);
+  ok("HT-03 không dấu 'he thong tu ghi nhan' (cách nói mới) → bỏ", c[0] === "Nhà mình mấy tầng anh?", JSON.stringify(c));
+  const d = boCauTroNguocDauBong(["Khách hay chú ý điểm này lắm :).\nNhà mình ở phường mấy vậy ạ?"]);
+  ok("TN-01 'Khách hay chú ý điểm này lắm :)' mở đầu bong bóng → bỏ, câu hỏi giữ", d[0] === "Nhà mình ở phường mấy vậy ạ?", JSON.stringify(d));
+  const e = ["Hẻm 6m xe tải vào được, khách hay chú ý điểm này lắm. Nhà mình phường mấy ạ?"];
+  ok("TN-02 'điểm này' có chỗ trỏ trong CÙNG câu → giữ", boCauTroNguocDauBong(e) === e);
+  const f = boCauTroNguocDauBong(["Cái này nhiều người hỏi lắm á. Anh cho em xin số tầng nha?"]);
+  ok("TN-03 cách nói mới 'Cái này nhiều người hỏi lắm á' mở đầu → bỏ", f[0] === "Anh cho em xin số tầng nha?", JSON.stringify(f));
+}
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

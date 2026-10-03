@@ -1766,6 +1766,34 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
 - `phuong-trong-cau.mjs`: 4 ca mới, gồm cách nói mới "căn này ở phú nhuận em", "o phu nhuan".
 - Gỡ bản sửa → ZH 4/4 đỏ, NX 3/3 đỏ (đúng nguyên văn bong bóng production), phường 3/3 đỏ (đã chạy).
 
+### SRS-5.1zi · Ngưỡng suy loại hẻm theo bề rộng; lời bot nói "hệ thống"; câu khen mở đầu trỏ ngược (03/10/2026)
+
+**Ca gốc**: bắn lại câu đơn giản luồng người bán sau SRS-5.1zh (`thu-kb2-*`). Chủ dự án 03/10: ngưỡng hẻm "tự quyết đi"; câu "độc quyền" chưa có chính sách (giữ chuyển người phụ trách); "fix mấy lỗi kia đi".
+
+**1. "hẻm 3m Tân Bình" lên bản tin thành "hẻm xe hơi 3m"** — chủ không nói xe hơi vào được.
+- **Lớp lỗi**: suy một dữ kiện chủ KHÔNG nói từ một con số, ngưỡng quá rộng: từ 3m là xe hơi.
+- **Quyết định** (chủ dự án giao): < 3m → hẻm xe máy; 3m ≤ rộng < 3,5m → `hem` (chưa rõ, bản tin chỉ ghi "trong hẻm 3m"); từ 3,5m → hẻm xe hơi; từ 6m → hẻm xe tải. Chủ nói thẳng "hxh" / "xe hơi vào được" thì theo lời chủ.
+- **Sửa**: migration `20261003a_nguong_hem_xe_hoi`, sửa hai chỗ cùng lớp trong DB: `boc_thong_so` (đọc câu rao) và `listing_facts_sync_cols` (đáp ô độ rộng hẻm). Không có chỗ thứ ba (soát `schema.sql` và TS: chỉ còn ngưỡng tiềm năng ≥ 4m, khác việc).
+- Prompt AI bóc tách không suy loại hẻm theo bề rộng (đã soát `boc-rao.ts`).
+
+**2. "Phí thì hệ thống đã gửi cho mình rồi nha."**
+- **Lớp lỗi**: lời dặn model nói về máy ("hệ thống ĐÃ trả lời ở bong bóng trước", "hệ thống tự ghi"…), model chép nguyên chữ ra cho khách.
+- **Sửa**:
+  - Hai lời dặn "câu hỏi ngược đã được trả lời" bỏ chữ "hệ thống", dặn thêm KHÔNG nói chữ đó.
+  - Đường ra (bán và mua) bỏ câu KHẲNG ĐỊNH có "hệ thống" làm một việc (gửi / trả lời / báo / ghi / lưu / nhắn / cập nhật) — `boCauNoiHeThong`. Câu hỏi giữ ("Xưởng có hệ thống xử lý nước thải chưa?" là câu hỏi mẫu thật).
+- **Chỗ khác cùng lớp**: còn nhiều lời dặn khác nhắc "hệ thống" (CHI_DAN_CHU_DE, prompts.ts) — bộ lọc đường ra phủ cả, không sửa từng lời dặn.
+
+**3. "Khách hay chú ý điểm này lắm :)." đứng trơ đầu bong bóng.**
+- **Lớp lỗi**: câu trỏ ngược ("điểm này") mất chỗ trỏ — câu trước bị lọc (`boCauNhanXet`) hoặc model viết cụt. Không xác nhận được nguồn: không có quyền đọc log edge function.
+- **Sửa**: đường ra người bán bỏ câu khẳng định ngắn (≤ 12 chữ) MỞ ĐẦU bong bóng có "điểm này / cái này / chỗ này / điều này…" — `boCauTroNguocDauBong`.
+
+**Giữ nguyên**: "để em kiểm tra giá khu vực" là lý do hỏi địa chỉ chủ dự án chốt (prompts.ts, câu mẫu `vi_tri@lan_dau`, ảnh Zalo 01/10) — không phải lỗi.
+
+**Kiểm**:
+- `bot/tests/sql/nguong-hem.sql`: 9 ca trên Postgres thật. Thiếu migration → 2 ca đỏ (3m ra `hem_xe_hoi`).
+- `van-tra-loi.mjs` `HT-01…03`, `TN-01…03`. Cách nói mới: "he thong tu ghi nhan" không dấu, "Cái này nhiều người hỏi lắm á".
+- e2e `ZH-05`: gỡ bản sửa ở chat-reply → đỏ (đã chạy).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
