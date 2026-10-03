@@ -38,6 +38,6 @@ jobs:
         run: |
           if [ -z "$TOKEN" ]; then echo "::error::Thiếu SUPABASE_ACCESS_TOKEN"; exit 1; fi
           echo "::add-mask::$TOKEN"
-          for v in "$NHOM" "$BO_NHOM"; do printf '%s' "$v" | grep -Eq '^[a-z0-9_,]*$' || { echo "::error::tên nhóm lạ"; exit 1; }; done
+          for v in "$NHOM" "$BO_NHOM"; do [[ "$v" =~ ^[a-z0-9_,]*$ ]] || { echo "::error::tên nhóm lạ"; exit 1; }; done
           A=(); [ -n "$NHOM" ] && A+=(--nhom "$NHOM"); [ -n "$BO_NHOM" ] && A+=(--bo-nhom "$BO_NHOM")
           node bot/tests/do-boc/ban-production.mjs "${A[@]}"
