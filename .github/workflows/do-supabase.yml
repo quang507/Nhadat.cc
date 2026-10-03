@@ -87,6 +87,10 @@ jobs:
             [ -n "${DEBUG_LOG:-}" ] && { echo "raw: $(echo "$RES" | head -c 300)"; DEBUG_LOG=; }
             echo "$RES" | jq -r 'if .error then ("LỖI: " + (.error|tostring|.[0:400])) elif (.result|length)>0 then ((.result[0]|keys_unsorted|join(" | ")), (.result[]|[.[]|tostring]|join(" | "))) else "(rỗng)" end' 2>/dev/null || echo "$RES" | head -c 600
           }
+          # 03/10/2026: analytics báo "Table edge_logs does not exist" — thử bảng log hợp nhất `logs` (cột source, log_attributes).
+          lg "logs hợp nhất: số dòng theo nguồn" "select source, count(*) as n from logs group by source order by n desc limit 20"
+          lg "logs hợp nhất: một dòng mẫu edge (chỉ tên khoá log_attributes)" "select mapKeys(log_attributes) as khoa from logs where source = 'edge_logs' limit 1"
+          lg "logs hợp nhất: top 30 đường dẫn edge" "select log_attributes['request.path'] as path, count(*) as n from logs where source = 'edge_logs' group by path order by n desc limit 30"
           for src in edge_logs postgres_logs function_logs function_edge_logs auth_logs storage_logs realtime_logs postgrest_logs pgbouncer_logs supavisor_logs; do
             lg "Nguồn log $src: số dòng + cỡ event_message" "select count(*) as dong, sum(length(event_message)) as byte_msg from $src"
           done
