@@ -1889,6 +1889,22 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
 - e2e `EG-01`: lượt bot gọi `doc_prompt_khac`, không select cả bảng; khoá trùng code không trả, khoá sửa tay có trả. Gỡ bản sửa chat-reply → đỏ (đã chạy).
 - `bot/tests/sql/doc-prompt-khac.sql` trên Postgres thật; thiếu migration → đỏ (đã chạy).
 
+### SRS-5.1zm · Mỗi lượt người bán chỉ một câu hỏi, tính trên cả lượt (03/10/2026)
+
+**Ca gốc**: chủ dự án chốt 03/10: "tiêu chí là 1 câu, ngoại lệ thì có thể hỏi tầm 2 3 vấn đề gần nhau 1 lần cũng được". Soát các hội thoại bắn thử trong máy: phía bán, luật cũ chỉ cắt câu hỏi thứ hai TRONG một bong bóng. Một lượt có bong bóng trả lời kèm câu hỏi ("…Anh còn thắc mắc gì không ạ?") cộng bong bóng câu kế ("Nhà mình mấy tầng ạ?") thì vẫn thành hai câu hỏi.
+
+**Lớp lỗi**: luật "một câu hỏi" (`motCauHoi`, FR-177) áp theo TỪNG bong bóng, trong khi chủ nhà đọc theo cả LƯỢT.
+
+**Sửa**: `motCauHoiLuot` (`_shared/extraction/van-tra-loi.ts`) chạy trong `traLoiSeller` — đường ra duy nhất của nhánh bán, nên mọi câu (tiền định lẫn model) đều qua. Cả lượt chỉ một bong bóng được hỏi: giữ bong bóng hỏi CUỐI (thường là câu hệ thống chọn). Bong bóng hỏi phía trước bỏ các câu hỏi, giữ phần còn lại; còn rỗng thì bỏ luôn bong bóng. Bong bóng giữ lại được gộp 2–3 ý gần nhau trong một câu ("mấy tầng, mấy phòng") và không bị cắt bên trong. Mẫu đánh giá `danh_gia` (2 ý về cách chăm sóc trong một bong bóng) thuộc ngoại lệ này nên giữ nguyên.
+
+**Chỗ khác cùng lớp**:
+- Nhánh MUA: `motCauHoi` vẫn áp từng bong bóng. Soát thấy lượt có 2 bong bóng hỏi (hỏi loại nhà + mời xem căn gần giá nhất). Chưa đổi: chủ dự án đang chỉ test phía bán, và bỏ câu mời xem căn là đổi luồng bán hàng — cần chủ dự án chốt.
+- Lời model vẫn được dặn trong prompt "không hỏi dồn"; prompt trong DB đè code nên luật nằm ở code, không trông vào prompt.
+
+**Kiểm**:
+- `bot/tests/van-tra-loi.mjs` `MCL-01…06`, trong đó MCL-04 là cách nói mới (câu hỏi lẫn trong bong bóng nhiều dòng), MCL-06 soi `traLoiSeller` có gọi `motCauHoiLuot`.
+- Gỡ bản sửa trong chat-reply → MCL-06 đỏ (đã chạy). e2e 903/903 xanh, không ca cũ nào đổi.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
