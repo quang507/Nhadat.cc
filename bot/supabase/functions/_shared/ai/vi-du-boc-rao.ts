@@ -20,6 +20,19 @@ const t = (khoa: string, gia_tri: string, trich_dan: string): DeXuat => ({ khoa,
 
 export const VI_DU_BOC_RAO: ViDuBocRao[] = [
   {
+    // 03/10/2026 (chủ dự án: "hẻm số người ta sẽ ghi số còn độ rộng thì sẽ ghi 4m 4 mét, dạy AI đi"; SRS-5.1zk): số hẻm vào địa
+    // chỉ, bề rộng (có "m") vào do_rong_hem; tên đường trần vào ten_duong (ghi thẳng cột street).
+    cau_dang_hoi: null,
+    tin: "bán nhà 88 hẻm 6m Tân Kỳ Tân Quý",
+    so_can: 1,
+    truong: [
+      t("loai_giao_dich", "ban", "bán nhà"), t("duong", "88 hẻm Tân Kỳ Tân Quý", "88 hẻm 6m Tân Kỳ Tân Quý"),
+      t("ten_duong", "Tân Kỳ Tân Quý", "88 hẻm 6m Tân Kỳ Tân Quý"), t("do_rong_hem", "6", "hẻm 6m"), t("loai_duong_vao", "hem_xe_tai", "hẻm 6m"),
+    ],
+    kien_thuc: [],
+    luu_y: "Số sau 'hẻm' không có m/mét = số hẻm (vào duong); có m/mét = bề rộng (không vào duong). ≥ 6m xe tải, ≥ 3,5m xe hơi.",
+  },
+  {
     // 02/10/2026 (đợt 1 chuyển luật sang AI, bắn thử lx-t6-02): model bỏ sót "chưa hoàn công", "đang thế chấp", "bớt lộc" —
     // các ô trước đây chỉ luật ghi. Ví dụ dạy ĐỌC PHỦ ĐỊNH theo nghĩa và các ô mới (cách nói khác ca bắn thử).
     cau_dang_hoi: null,

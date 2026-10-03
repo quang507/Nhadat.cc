@@ -29,7 +29,7 @@ export const KHOA_SO = [
   "so_phong_ngu", "so_wc", "so_tang", "tang",
 ] as const;
 export const KHOA_CHU = [
-  "duong", "du_an", "ma_can", "phap_ly", "huong", "noi_that", "ly_do_ban", "ket_cau",
+  "duong", "ten_duong", "du_an", "ma_can", "phap_ly", "huong", "noi_that", "ly_do_ban", "ket_cau",
   "thoi_han_thue", "phi_quan_ly", "view", "hien_trang",
 ] as const;
 export const KHOA_KHAC = ["gia_m2", "loai_giao_dich", "loai_bds", "quan", "phuong", "gap", "thuong_luong"] as const;
@@ -275,7 +275,11 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       // "chưa có sổ, đang chờ ra sổ") mà luật này đòi giá trị nằm NGUYÊN trong cụm trích → loại, AI coi như im, câu trả lời
       // rơi vào bổ sung. Bỏ từ đệm / xưng hô ở CẢ HAI bên rồi so; không thêm chữ nào nên vẫn không bịa được.
       const boDem = (x: string) => x.replace(/\b(?:em|anh|chi|a|nha|nhe|nhen|oi|ha|nghen)\b/g, " ").replace(/\s+/g, " ").trim();
-      if (!(cv.length >= 2 && (kd.includes(cv) || (boDem(cv).length >= 2 && boDem(kd).includes(boDem(cv)))))) {
+      // 03/10/2026 (chủ dự án: "độ rộng thì sẽ ghi 4m 4 mét, dạy AI đi"): địa chỉ KHÔNG mang bề rộng — "88 hẻm 6m Tân Kỳ Tân
+      // Quý" → duong "88 hẻm Tân Kỳ Tân Quý". Bỏ cụm bề rộng (số + m/mét) khỏi cụm trích rồi so; chỉ BỚT chữ, không thêm.
+      const boRong = (x: string) => x.replace(/\b(?:rong\s*)?\d+(?:[.,]\d+)?\s*(?:m|met)(?:\s*\d\b)?(?![a-z0-9])/g, " ").replace(/\s+/g, " ").trim();
+      const laDiaChi = d.khoa === "duong" || d.khoa === "ten_duong";
+      if (!(cv.length >= 2 && (kd.includes(cv) || (boDem(cv).length >= 2 && boDem(kd).includes(boDem(cv))) || (laDiaChi && boRong(kd).includes(cv))))) {
         // 17/09/2026 (chủ dự án: "AI đọc trước, trả kiến thức cho luật lưu"): pháp lý / nội thất
         // được CHUẨN HOÁ ("shr" → "sổ hồng riêng", "full nt" → "full nội thất") khi cả giá trị
         // lẫn cụm trích đọc ra CÙNG MỘT MÃ — vẫn không được bịa mã khác.
@@ -1200,6 +1204,8 @@ export type AiChinh = {
   quan: string | null;
   phuong: string | null;
   duong: string | null;
+  /** Tên đường trần AI đọc ("Nguyễn Trãi", "3/2") — ghi thẳng cột `street`. */
+  tenDuong: string | null;
   duAn: string | null;
   maCan: string | null;
   gap: boolean | null;
@@ -1251,9 +1257,14 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   const lb = chuanSo(lay("loai_bds") ?? "").replace(/\s+/g, "_");
   const loaiBds = lb in LOAI_BDS ? lb : null;
   if (loaiBds) them("loai_bds", loaiBds, "loai_bds");
+  // SRS-5.1zk (chủ dự án 03/10: "mấy hàm sql ngu quá thay bằng AI tự ghi đi"): TÊN ĐƯỜNG trần do AI đọc (không số nhà, không chữ
+  // hẻm / đường) — nơi gọi ghi thẳng cột `street`, thay cho `boc_ten_duong` (regex SQL) ở chế độ `ai`.
+  const tenDuong = (() => { const v = lay("ten_duong")?.replace(/^(?:đường|duong|phố|pho)\s+/i, "").trim(); return v && v.length <= 60 ? tenDuongDayDu(v) : null; })();
   for (const b of boTho) {
     if (b.ly_do === "khoa_khong_co_cho_ghi" && ["ngang", "dai", "no_hau", "duong", "du_an", "loai_giao_dich", "loai_bds"].includes(b.khoa) &&
       ghi.some((g) => g.khoa === b.khoa)) continue;
+    // SRS-5.1zk: `ten_duong` không có fact — nơi gọi ghi thẳng cột `street` (`tenDuong` bên dưới).
+    if (b.ly_do === "khoa_khong_co_cho_ghi" && b.khoa === "ten_duong" && tenDuong) continue;
     bo.push(b);
   }
   const giaTri = (q: string) => ghi.find((g) => g.question === q)?.answer ?? null;
@@ -1271,6 +1282,7 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
     quan: (() => { const q = lay("quan"); return q ? bocQuan(chuanSo(q), q) : null; })(),
     phuong: giaTri("phuong"),
     duong: giaTri("vi_tri"),
+    tenDuong,
     duAn: giaTri("du_an_ten"),
     maCan: maCan && /^[A-Za-z0-9][A-Za-z0-9.\-\/]{1,15}$/.test(maCan) ? maCan.toUpperCase() : null,
     gap: gapV === "co" ? true : gapV === "khong" ? false : null,

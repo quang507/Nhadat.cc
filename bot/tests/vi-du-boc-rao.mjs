@@ -21,7 +21,8 @@ const chu = viDuThanhChu();
 // ví dụ nằm trong system có cache (tỉ lệ trúng cache Console ~92%), nên vài trăm ký tự thêm gần như không tốn thêm tiền.
 // 02/10/2026: nới 8600 → 9500 cho ví dụ đầu (đợt 1 chuyển luật sang AI: ô có / không đọc phủ định, thế chấp, thương lượng —
 // model bỏ sót ở lượt bắn lx-t6-02). Cùng lý do trên: khối ví dụ nằm trong system có cache.
-ok("bản chữ có đủ ví dụ và không dài quá 9500 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 9500, String(chu.length));
+// 03/10/2026: nới 9500 → 10200 cho ví dụ số hẻm / bề rộng hẻm (SRS-5.1zk — địa chỉ do AI ghi thẳng, bỏ luật ghép địa chỉ).
+ok("bản chữ có đủ ví dụ và không dài quá 10200 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 10200, String(chu.length));
 ok("bản chữ không chứa số điện thoại", !/\b0\d{9}\b/.test(chu));
 
 console.log(hong ? `\nVÍ DỤ MẪU: ${hong}/${tong} CA HỎNG` : `\nVÍ DỤ MẪU: ${tong}/${tong} CA ĐẠT`);
