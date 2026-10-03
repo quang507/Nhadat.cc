@@ -621,5 +621,15 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   const ac5 = docAiChinh(kiemDeXuat([{ khoa: "ten_duong", gia_tri: "đường 3/2", trich_dan: "hẻm 18 đường 3/2", can: null }], "nhà hẻm 18 đường 3/2 q10").dat, null);
   ok("DC-14 ten_duong 'đường 3/2' → tenDuong 'đường 3/2'", ac5.tenDuong === "đường 3/2", JSON.stringify(ac5.tenDuong));
 }
+// SRS-5.1zn (bắn thử thu-mc-05): khách chỉ nói bề rộng → loại hẻm theo ngưỡng chủ dự án chốt; lệch thì bỏ để DB xếp theo bề rộng.
+{
+  const k = (gt, tc, tin) => kiemDeXuat([{ khoa: "loai_duong_vao", gia_tri: gt, trich_dan: tc, can: null }], tin);
+  ok("HR-01 'hẻm 3m' + AI hem_xe_may → bỏ (3–3,5m là 'trong hẻm')", k("hem_xe_may", "hẻm 3m", "bán nhà hẻm 3m Tân Bình").dat.length === 0);
+  ok("HR-02 'hẻm 3m2' + AI hem → đạt; 'hẻm 3m5' (= 3,5m) + AI hem → bỏ", k("hem", "hẻm 3m2", "nhà hẻm 3m2 em").dat.length === 1 && k("hem", "hẻm 3m5", "nhà hẻm 3m5 em").dat.length === 0);
+  ok("HR-03 'hẻm 3,5m' + AI hem_xe_hoi → đạt", k("hem_xe_hoi", "hẻm 3,5m", "nhà hẻm 3,5m").dat.length === 1);
+  ok("HR-04 'hẻm 2m5' + AI hem_xe_may; 'hẻm 6m' + AI hem_xe_tai → đạt", k("hem_xe_may", "hẻm 2m5", "hẻm 2m5 nha").dat.length === 1 && k("hem_xe_tai", "hẻm 6m", "hẻm 6m").dat.length === 1);
+  ok("HR-05 (cách nói mới) 'hẻm rộng 3 mét' + AI hem_xe_hoi → bỏ", k("hem_xe_hoi", "hẻm rộng 3 mét", "nhà trong hẻm rộng 3 mét").dat.length === 0);
+  ok("HR-06 khách nói thẳng 'hẻm xe hơi 3m' → theo lời khách, giữ hem_xe_hoi", k("hem_xe_hoi", "hẻm xe hơi 3m", "hẻm xe hơi 3m").dat.length === 1);
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

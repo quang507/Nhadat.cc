@@ -1221,5 +1221,15 @@ ok("GOI-06 'Dạ được anh, để em lọc' → 'mình,'; 'anh, chị cần g
   ok("MCL-06 traLoiSeller (đường ra duy nhất phía bán) áp motCauHoiLuot", /sach = motCauHoiLuot\(sach\)/.test(than));
 }
 
+// SRS-5.1zn (bắn thử thu-mc-06): hứa "em đăng liền" khi tin chưa lên kệ → bỏ; câu có điều kiện giữ.
+{
+  const a = boHuaDaDang(["Mặt tiền Hùng Vương quận 5 thì khách hỏi nhiều lắm, em đăng liền nha :) Nhà mình phường mấy vậy anh chị?"])[0];
+  ok("DD-07 '…em đăng liền nha :)' → bỏ lời hứa, giữ phần còn lại + câu hỏi", !/đăng liền/.test(a) && /khách hỏi nhiều lắm/.test(a) && /phường mấy/.test(a), a);
+  const b = "Anh chị nhắn em mấy thông tin đó là em đăng liền ạ.";
+  ok("DD-08 câu có điều kiện '…là em đăng liền ạ' → giữ", boHuaDaDang([b])[0] === b, boHuaDaDang([b])[0]);
+  const c = boHuaDaDang(["Dạ em ghi rồi ạ. Em up tin ngay cho anh nhé."])[0];
+  ok("DD-09 (cách nói mới) 'Em up tin ngay cho anh nhé' → bỏ", !/up tin/.test(c) && /em ghi rồi/i.test(c), c);
+}
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
