@@ -212,7 +212,7 @@ jobs:
           # 02/10/2026 (SRS-5.1y): msg_id 'bt-<ID thử>-…' → sổ inbound lưu payload; in phần trợ lý có công cụ (công cụ đã gọi, lời gốc
           # model trước các lưới, kết quả công cụ đọc, lý do rơi về đường JSON) và hồ sơ mua của ID thử.
           echo; echo "== Trợ lý có công cụ (payload từng lượt)"
-          q "select coalesce(json_agg(json_build_object('replies', reply->'replies', 'tro_ly', reply->'tro_ly') order by created_at), '[]') as ds
+          q "select coalesce(json_agg(json_build_object('replies', reply->'replies', 'tro_ly', reply->'tro_ly', 'luu_luong', reply->'_luu_luong', 'ms', reply->'_ms'->'tong') order by created_at), '[]') as ds
               from inbound_ledger where zalo_msg_id like 'bt-' || $(lit "$ZALO") || '-%' and created_at >= $(lit "$MOC")::timestamptz" | jq -c '.[0].ds[]' || true
           echo "-- Hồ sơ mua của ID thử:"
           q "select preferences from buyers where zalo_user_id = $(lit "$ZALO")" | jq -c '.[0].preferences' || true

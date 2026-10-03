@@ -12,7 +12,7 @@ import { coverByCode, photosOfCode } from "@/lib/photos";
 import { IconArea, IconBed, IconHouse, IconPin } from "@/components/icons";
 import { ACCESS_LABEL, formatArea, formatDims, formatPrice, formatPricePerM2, FURNISH_LABEL, LEGAL_LABEL, placeholderImg, PLANNING_LABEL, sanitizeDescription, SITE_URL, TYPE_LABEL, zaloLink, oTheoLoai } from "@/lib/format";
 
-export const revalidate = 300;
+export const revalidate = 3600; // SRS-5.1zl (03/10/2026): 5 phút → 1 giờ, giảm egress Supabase
 
 // KHÔNG có generateStaticParams thì `revalidate` ở trên là CHỮ CHẾT. Next 15
 // xếp route động chưa khai báo param vào nhóm "dựng lại từng request":

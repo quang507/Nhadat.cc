@@ -52,11 +52,38 @@ function bocLocThamSo(c: Anthropic, db: SupabaseClient): Anthropic {
   } as unknown as Anthropic;
 }
 
-export function serviceClient(): SupabaseClient {
+/** Đếm lưu lượng Supabase của một lượt (03/10/2026, giảm egress): số lần gọi + byte phản hồi, gộp theo đường dẫn REST. */
+export type DemLuuLuong = { so: number; byte: number; theo: Record<string, [number, number]> };
+
+export function serviceClient(dem?: DemLuuLuong): SupabaseClient {
   return createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    dem ? {
+      global: {
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const res = await fetch(input, init);
+          try {
+            const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+            const khoa = `${init?.method ?? "GET"} ${url.pathname.replace(/^\/rest\/v1\//, "")}`;
+            const b = (await res.clone().arrayBuffer()).byteLength;
+            dem.so++;
+            dem.byte += b;
+            const t = dem.theo[khoa] ??= [0, 0];
+            t[0]++;
+            t[1] += b;
+          } catch { /* đếm hụt không được chặn đường đi */ }
+          return res;
+        },
+      },
+    } : undefined,
   );
+}
+
+/** Tóm tắt bộ đếm cho sổ inbound: tổng + 10 đường dẫn tốn byte nhất. */
+export function tomTatLuuLuong(dem: DemLuuLuong): Record<string, unknown> {
+  const top = Object.entries(dem.theo).sort((a, b) => b[1][1] - a[1][1]).slice(0, 10).map(([k, [n, b]]) => `${k} ×${n} ${b}B`);
+  return { so: dem.so, byte: dem.byte, top };
 }
 
 /** Secret lấy từ env (supabase secrets) trước, không có thì đọc Vault. */

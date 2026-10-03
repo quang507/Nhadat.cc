@@ -1851,6 +1851,44 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
 - Gỡ bản sửa (stash `bot/supabase/functions`) → `ZH-07`, `ZH-08`, `DC-09`, `DC-10`, `DC-11`, `DC-14` đỏ; gỡ riêng bản sửa nhánh phường → `ZH-09` đỏ (đã chạy).
 - Bắn production từ nhánh 12 kiểu: số hẻm ("hẻm 45", "hẻm 18/5", "25 hẻm 120"), bề rộng ("hẻm 6m", "hẻm rộng 5 mét", "hẻm rộng 2m5"), tên đường bằng số / mã ("3/2", "D2", "đường số 59"), không dấu; 11/12 đúng địa chỉ + street, sổ lỗi rỗng. Ca hỏng là ca nhánh phường ở trên.
 
+### SRS-5.1zl · Giảm egress Supabase đợt 2: đo theo đường dẫn, bot không kéo nguyên bảng prompt, web không dựng sẵn trang tag, cache 3 giờ (03/10/2026)
+
+**Bối cảnh**: chủ dự án ở lại gói Free; sau khi tách tổ chức (sau 13/10) mỗi tổ chức chỉ còn 5 GB egress/tháng (~160 MB/ngày), lố lần sau là khoá ngay. Mục tiêu nhadat-cc dưới 50–100 MB/ngày. Đợt 1 là SRS-5.1z (02/10).
+
+**Đo** (số dưới là ĐO, trừ chỗ ghi "ước"):
+- `do-supabase.yml` nay đọc bảng log hợp nhất `logs` (bảng `edge_logs` cũ báo "does not exist"). 24 giờ 02/10 06:00 → 03/10 06:00 UTC: 60.451 request qua gateway; `/rest/v1/listings` 25.155, `/rest/v1/projects` 14.671.
+- Theo giờ: riêng 06:00–08:00 ngày 02/10 có 16.695 `listings` + 14.369 `projects` — lượt build cuối trước khi đợt 1 lên. Từ 08:00 ngày 02/10: ban đêm gần 0; giờ làm việc 600–1.500 `listings`/giờ, `projects` dưới 40/giờ. Gần hết từ client Node `supabase-js/2.112.4` — bản khoá trong `bun.lock` của web (bản dựng ở CI, Vercel preview, Vercel production, và ISR khi có người xem).
+- Cột `content_length` của log thường trống (phản hồi chunked), nên tổng byte theo log thấp hơn thật — chỉ tin được SỐ LƯỢT. Egress tính bằng byte xem ở Dashboard → Usage.
+- Một lượt bot: chat-reply nay đếm số lần gọi + byte phản hồi theo đường dẫn, ghi `_luu_luong` vào sổ inbound (`ban-thu` in ra). Trước sửa: 31–60 lần gọi, 47–65 KB mỗi lượt; riêng `bot_prompts` 37,9 KB (60–80% byte của lượt), `wards` 17 KB ở lượt đầu người bán.
+
+**Lớp lỗi**: chi phí tỉ lệ với SỐ LƯỢT CHẠY không liên quan tới người dùng — mỗi lượt build dựng lại trang có hỏi DB; mỗi lượt bot kéo lại nguyên một bảng cấu hình gần như không đổi; trang công khai làm mới mỗi 5 phút dù dữ liệu đổi vài lần một ngày.
+
+**Đã thử và bỏ**: nhớ tạm theo isolate (prompt so phiên `updated_at`, `wards`, bí mật Vault). Đo lại cùng kịch bản: không giảm byte nào, `bot_prompts` còn tăng thành 2 lần gọi — mỗi lượt bot chạy trên một isolate mới, nhớ trong bộ nhớ không sống tới lượt sau. Đã gỡ.
+
+**Sửa**:
+
+| Chỗ | Trước | Sau |
+|---|---|---|
+| chat-reply nạp `bot_prompts` | `select("key, content")` cả bảng mỗi lượt (~38 KB) | RPC `doc_prompt_khac` (migration `20261003c`): gửi SHA-256 bản prompt trong code, chỉ nhận khoá DB KHÁC code. RPC hỏng → đọc cả bảng như cũ + ghi sổ |
+| `app/[tag]` | dựng sẵn 23 trang lúc build (tin + ảnh bìa) | `generateStaticParams` trả `[]`, `dynamicParams = true`; slug lạ vẫn 404 qua `notFound()` |
+| Cache trang công khai | `/`, `/ban-do`, `ListingBrowse`, ảnh (`lib/photos.ts`): 5 phút; `/nha-dat/[code]`: 5 phút | 3 giờ; `/nha-dat/[code]`: 1 giờ |
+
+**Trước → sau**:
+- Một lượt bot (đo, cùng kịch bản `thu-eg*`): người mua 48 KB → 21 KB; người bán lượt đầu 65 KB → 38 KB, lượt sau 48 KB → 21 KB. `doc_prompt_khac` vẫn trả 11,4 KB vì vài khoá trong DB đang lệch bản code — `bun run prompt` chỉ ra khoá nào; đồng bộ xong thì phần này về ~0.
+- Mỗi lượt build (ước): bớt 23 trang tag × 2 truy vấn.
+- Trang công khai đang có người / bot quét (ước): làm mới tối đa 12 lần/giờ → 1 lần/3 giờ mỗi trang.
+- Đánh đổi: tin mới hiện trên trang chủ / danh sách / trang tag chậm tối đa 3 giờ (trang chi tiết tin dựng khi có người mở nên vẫn xem được ngay). Muốn nhanh hơn thì gọi `revalidateTag("listings")` khi tin lên kệ — chưa làm.
+
+**Chỗ khác cùng lớp (còn lại)**:
+- `wards` 17 KB ở lượt đầu người bán (dò phường trong câu bằng JS trên cả bảng): chưa sửa. Hướng: dò bằng SQL.
+- `get_secret` 3–8 lần mỗi lượt (byte nhỏ, nhưng mỗi lần là một dòng log).
+- CI `kiem.yml` vẫn build web trên DB thật (các trang ○ còn lại: trang chủ, bản đồ, thống kê, sitemap, môi giới).
+
+**Kiểm**:
+- `bot/tests/giam-egress.mjs`: G-04 mọi `generateStaticParams` trả `[]`; G-05 trang / thành phần công khai không cache dưới 3.600 s; G-06 chat-reply đọc `bot_prompts` qua `doc_prompt_khac`. Gỡ bản sửa web → G-04 đỏ ở `/[tag]`, G-05 đỏ 5 chỗ (đã chạy).
+- e2e `EG-01`: lượt bot gọi `doc_prompt_khac`, không select cả bảng; khoá trùng code không trả, khoá sửa tay có trả. Gỡ bản sửa chat-reply → đỏ (đã chạy).
+- `bot/tests/sql/doc-prompt-khac.sql` trên Postgres thật; thiếu migration → đỏ (đã chạy).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

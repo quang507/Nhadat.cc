@@ -15,7 +15,8 @@ import { supabase } from "@/lib/supabase";
 // Không bọc cache thì mỗi lượt tải là +1 query ảnh nữa. unstable_cache đặt kết
 // quả vào Data Cache của Next (trên Vercel là kho dùng chung giữa các lambda),
 // khoá theo chính tham số truyền vào — trùng bộ lọc là dùng lại, khỏi hỏi DB.
-const TTL = 300;
+// 03/10/2026 (giảm egress Supabase, SRS-5.1zl): 300 → 10800 (3 giờ). Ảnh tin mới hiện trên lưới thẻ chậm tối đa 3 giờ.
+const TTL = 10800;
 
 /** Ảnh bìa (cờ is_cover do DB giữ) cho một loạt mã tin — dùng cho lưới thẻ. */
 export const coverByCode = unstable_cache(

@@ -1,5 +1,5 @@
 // Supabase giả trong bộ nhớ: đủ để chat-reply chạy trọn đường, ghi lại mọi truy vấn.
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { soChuThanhSo } from "../../supabase/functions/_shared/extraction/luat-tien.ts";
 
@@ -511,6 +511,11 @@ class RpcCall {
           }
         }
         return { data: [...gom.values()].sort((p, q) => p.cach_m - q.cach_m).slice(0, 5), error: null };
+      }
+      // SRS-5.1zl (20261003c): trả khoá được hỏi mà nội dung DB khác mã băm SHA-256 bản code.
+      case "doc_prompt_khac": {
+        const bam = a.p_bam ?? {};
+        return { data: (db.t.bot_prompts ?? []).filter((r) => r.key in bam && bam[r.key] !== createHash("sha256").update(r.content ?? "", "utf8").digest("hex")).map((r) => ({ key: r.key, content: r.content })), error: null };
       }
       case "mau_cau_fewshot":
         return { data: (globalThis.__mauCau ?? {})[a.p_phia] ?? "", error: null };

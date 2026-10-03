@@ -10,6 +10,7 @@ import {
   anthropicClient,
   anthropicTrucTiep,
   bangNhau,
+  type DemLuuLuong,
   docBiMat,
   doTien,
   ghiLoi,
@@ -17,6 +18,7 @@ import {
   MODEL,
   secretOf,
   serviceClient,
+  tomTatLuuLuong,
 } from "../_shared/claude.ts";
 import {
   AGREE_RULES,
@@ -28,7 +30,7 @@ import {
   HUMAN_CHAT_RULES,
   SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau as cauHoiMauGoc, cauPhuongNgan, docCauHoiMau, docCauTienDinh, dienCau, LOI_CHAO,
   SLANG_NOTES,
-  TONE_RULES,
+  TONE_RULES, CAU_HOI_MAU_TEXT, CAU_TIEN_DINH_TEXT,
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
@@ -773,6 +775,28 @@ type CauHinh = {
   mauBan: string; mauMua: string;
 };
 let nhoCauHinh: CauHinh | null = null;
+// SRS-5.1zl (03/10/2026, giảm egress Supabase): bản prompt trong code theo khoá `bot_prompts`. Lượt bot gửi mã băm SHA-256
+// của chúng cho `doc_prompt_khac` và chỉ nhận về khoá DB KHÁC code (bản sửa tay đè code) — trước đây kéo nguyên bảng ~38 KB
+// mỗi lượt (60–80% byte của lượt; mỗi lượt là một isolate mới nên nhớ tạm trong bộ nhớ không giúp được).
+const PROMPT_CODE: Record<string, string> = {
+  tone_rules: TONE_RULES, cau_hoi_mau: CAU_HOI_MAU_TEXT, cau_tien_dinh: CAU_TIEN_DINH_TEXT, loi_chao: LOI_CHAO,
+  human_chat_rules: HUMAN_CHAT_RULES, fee_rules: FEE_RULES, seller_script_rules: SELLER_SCRIPT_RULES, slang_notes: SLANG_NOTES,
+  buyer_fewshot: BUYER_FEWSHOT, agree_rules: AGREE_RULES, seller_fewshot: SELLER_FEWSHOT,
+};
+let bamPromptCode: Record<string, string> | null = null;
+async function napPrompt(client: ReturnType<typeof serviceClient>): Promise<Record<string, string>> {
+  if (!bamPromptCode) {
+    const hex = async (t: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))]
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
+    bamPromptCode = Object.fromEntries(await Promise.all(Object.entries(PROMPT_CODE).map(async ([k, v]) => [k, await hex(v)])));
+  }
+  const { data, error } = await client.rpc("doc_prompt_khac", { p_bam: bamPromptCode });
+  if (!error) return Object.fromEntries(((data ?? []) as Array<{ key: string; content: string }>).map((r) => [r.key, r.content]));
+  // RPC hỏng (vd chưa áp migration) → đọc nguyên bảng như cũ: thà tốn byte còn hơn bot chạy prompt sai bản.
+  await ghiLoi(client, "chat-reply doc_prompt_khac", error.message);
+  const { data: rows } = await client.from("bot_prompts").select("key, content");
+  return Object.fromEntries((rows ?? []).map((r) => [r.key, r.content]));
+}
 async function napCauHinh(client: ReturnType<typeof serviceClient>): Promise<CauHinh> {
   if (nhoCauHinh && Date.now() - nhoCauHinh.at < NHO_TAM_MS) return nhoCauHinh;
   // FR-180: mẫu câu chuẩn (anh/sếp sửa tay ở /admin/mau-cau) đi cùng lượt nạp
@@ -786,10 +810,10 @@ async function napCauHinh(client: ReturnType<typeof serviceClient>): Promise<Cau
     const r1 = await docBiMat(client, "BRIDGE_SECRET");
     return r1.loi ? await docBiMat(client, "BRIDGE_SECRET") : r1;
   };
-  const [cong, capRaw, { data: promptRows }, mBan, mMua] = await Promise.all([
+  const [cong, capRaw, promptP, mBan, mMua] = await Promise.all([
     docCong(),
     secretOf(client, "DAILY_MODEL_CALL_CAP"),
-    client.from("bot_prompts").select("key, content"),
+    napPrompt(client),
     client.rpc("mau_cau_fewshot", { p_phia: "ban", p_n: 12 }),
     client.rpc("mau_cau_fewshot", { p_phia: "mua", p_n: 12 }),
   ]);
@@ -801,7 +825,7 @@ async function napCauHinh(client: ReturnType<typeof serviceClient>): Promise<Cau
     gate,
     gateLoi: cong.loi,
     cap: Number(capRaw) > 0 ? Number(capRaw) : 1000,
-    P: Object.fromEntries((promptRows ?? []).map((r) => [r.key, r.content])),
+    P: promptP,
     mauBan: String(mBan.data ?? "").trim(),
     mauMua: String(mMua.data ?? "").trim(),
   };
@@ -969,7 +993,9 @@ Deno.serve(async (req) => {
   const khop = (coDau: RegExp, khongDau: RegExp) =>
     coDau.test(text) || khongDau.test(tKD);
 
-  const client = serviceClient();
+  // 03/10/2026 (giảm egress Supabase): đếm số lần gọi + byte phản hồi của lượt, ghi vào sổ inbound (`_luu_luong`).
+  const demLuuLuong: DemLuuLuong = { so: 0, byte: 0, theo: {} };
+  const client = serviceClient(demLuuLuong);
 
   // ─── CỔNG 1: bí mật dùng chung (tuỳ chọn, cùng khuôn với escalation-feed).
   // chat-reply KHÔNG phải endpoint công khai: chỉ bridge (máy local) và
@@ -1212,7 +1238,7 @@ Deno.serve(async (req) => {
   // reclaim sau 150s). Ghi sổ hụt không được chặn đường trả lời: chỉ ghiLoi.
   const hoanTatGoc = async (payload: Record<string, unknown>, code = 200) => {
     moc.tong = Date.now() - t0Luot;
-    payload = { ...payload, _ms: { ...moc } };
+    payload = { ...payload, _ms: { ...moc }, _luu_luong: tomTatLuuLuong(demLuuLuong) };
     console.log("chat-reply _ms", JSON.stringify(moc));
     if (coSo) {
       const { error: soErr2 } = await client.from("inbound_ledger").update({

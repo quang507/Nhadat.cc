@@ -126,7 +126,7 @@ const layTin = unstable_cache(
     return { rows: (data ?? []) as CardRow[], total: count ?? 0 };
   },
   ["listing-browse"],
-  { revalidate: 300, tags: ["listings"] },
+  { revalidate: 10800, tags: ["listings"] }, // SRS-5.1zl: 5 phút → 3 giờ (giảm egress Supabase)
 );
 
 export default async function ListingBrowse({
