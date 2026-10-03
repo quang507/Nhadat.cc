@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-03 11:48 (giờ VN)
+-- Sinh lúc: 2026-10-03 13:27 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -3092,6 +3092,19 @@ AS $function$
     when public.bo_dau(p_text) ~ '\mgap\s*(doi|ba|lan|ruoi|[0-9])' then null
     when public.bo_dau(p_text) ~ '\mgap\M|\mcan tien\M|\m(ban|di|ra)\s*nhanh\M' or lower(p_text) ~ 'vội' then true
     else null end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.doc_prompt_khac(p_bam jsonb)
+ RETURNS TABLE(key text, content text)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select p.key, p.content
+    from public.bot_prompts p
+   where p_bam ? p.key
+     and p_bam ->> p.key is distinct from encode(sha256(convert_to(p.content, 'UTF8')), 'hex');
 $function$
 ;
 
@@ -8507,6 +8520,8 @@ revoke all on function public.doc_gap(p_text text) from public, anon, authentica
 grant execute on function public.doc_gap(p_text text) to anon;
 grant execute on function public.doc_gap(p_text text) to authenticated;
 grant execute on function public.doc_gap(p_text text) to service_role;
+revoke all on function public.doc_prompt_khac(p_bam jsonb) from public, anon, authenticated;
+grant execute on function public.doc_prompt_khac(p_bam jsonb) to service_role;
 revoke all on function public.doi_chieu_tien_cong_khai(p_cau text[]) from public, anon, authenticated;
 grant execute on function public.doi_chieu_tien_cong_khai(p_cau text[]) to anon;
 grant execute on function public.doi_chieu_tien_cong_khai(p_cau text[]) to authenticated;
