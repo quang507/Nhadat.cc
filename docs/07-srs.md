@@ -1794,6 +1794,38 @@ Câu "bao lâu bán được" còn một lớp phụ: câu hỏi dịch vụ mà
 - `van-tra-loi.mjs` `HT-01…03`, `TN-01…03`. Cách nói mới: "he thong tu ghi nhan" không dấu, "Cái này nhiều người hỏi lắm á".
 - e2e `ZH-05`: gỡ bản sửa ở chat-reply → đỏ (đã chạy).
 
+### SRS-5.1zj · Địa chỉ: tên đường bằng số / mã, số hẻm có "/", số nhà trước "hẻm"; "Tin đã lên rồi" khi chưa lên (03/10/2026)
+
+**Ca gốc**: chủ dự án 03/10 hỏi "đường có tên và hẻm có số nó hiểu ko" → bắn production 12 kiểu địa chỉ (`thu-dc-*`). Đúng 7/12. Sai:
+- (a) "mặt tiền đường 3/2", "đường 30/4", "đất đường D2" — AI đọc đúng `duong`, tin vẫn KHÔNG có địa chỉ.
+- (b) "hẻm 18/5 đường Cách Mạng Tháng 8" → chỉ còn "Cách Mạng Tháng 8".
+- (c) "số 88 hẻm 6m Tân Kỳ Tân Quý" → cột `street` "hẻm 6m Tân Kỳ Tân Quý".
+- (d) câu không dấu: bot nói "Tin đã lên rồi nha" khi tin còn `cho_thong_tin`.
+
+**Lớp lỗi**:
+- (a) Ngưỡng độ dài địa chỉ viết cho tên đường bằng CHỮ: `kiemDeXuat` ≥ 4 ký tự; chỗ tạo tin `viTriDu` ≥ 6 ký tự hoặc hai chữ. Tên đường bằng số / mã một chữ ngắn bị gạt.
+- (b) `chonViTri` coi số ngay sau "hẻm" là mập mờ với bề rộng (vì "hẻm 4" có thể là hẻm rộng 4m), kể cả số có "/" hay số lớn.
+- (c) `boc_ten_duong` gọt "hẻm …" chỉ khi chuỗi BẮT ĐẦU bằng hẻm, rồi mới gọt số nhà đầu chuỗi. Thứ tự ngược nên số nhà đứng trước hẻm làm "hẻm 6m" ở lại. Cùng lớp: "156/12/4 đường 59" ra street "đường 59".
+- (d) Luật chặn lời "đã đăng" (`DA_DANG_RE`) chỉ bắt "đã lên web / kệ / tin"; chủ ngữ "tin" đứng trước ("tin đã lên rồi") lọt.
+
+**Sửa**:
+- `tenDuongDayDu`: tên đường bằng số / mã → "đường 3/2", "đường D2". Áp ở `kiemDeXuat` (tạo tin) và `giaTriChoCauTreo` (câu hỏi địa chỉ).
+- `chonViTri`: số sau "hẻm" có "/" hoặc > 12 là số hẻm thật, giữ.
+- Migration `20261003b_ten_duong_so_nha_truoc_hem`: `boc_ten_duong` bỏ số nhà đứng ngay trước "hẻm / đường / phố" TRƯỚC tiên.
+- `DA_DANG_RE`: thêm "tin (mình) đã / vừa lên / đăng", "tin lên rồi".
+
+**Chỗ khác cùng lớp**:
+- Ngưỡng độ dài ở câu trả lời địa chỉ (`giaTriChoCauTreo`) đã đi qua `tenDuongDayDu`.
+- `viTriDu` giữ nguyên vì giá trị đến nó đã có chữ "đường".
+- "hẻm 4 Trần Phú" (số nhỏ, không "/") vẫn để AI quyết, vì thật sự mập mờ.
+
+**Kiểm**:
+- `kiem-bang-chung.mjs` `DC-01…08`, gồm cách nói mới "N12", "hẻm 284 đường Lê Văn Sỹ".
+- `van-tra-loi.mjs` `DD-01…03` (mới).
+- e2e `ZH-06`.
+- `bot/tests/sql/ten-duong.sql` 10 ca trên Postgres thật. Thiếu migration → 3 ca đỏ.
+- Gỡ bản sửa → `ZH-06` đỏ, `DD-01` đỏ (đã chạy).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

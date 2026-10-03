@@ -6,7 +6,7 @@
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
-import { datKiemNhe, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { datKiemNhe, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -586,5 +586,20 @@ ok("CK-01 câu kế AI chọn có trong danh sách → nhận; ngoài danh sách
   datKiemNhe(false);
 }
 
+// SRS-5.1zj (bắn thử địa chỉ 03/10): tên đường bằng số / mã; số hẻm có "/" sau chữ hẻm.
+ok("DC-01 tenDuongDayDu '3/2' → 'đường 3/2'", tenDuongDayDu("3/2") === "đường 3/2");
+ok("DC-02 tenDuongDayDu '30/4' → 'đường 30/4'", tenDuongDayDu("30/4") === "đường 30/4");
+ok("DC-03 tenDuongDayDu 'D2' → 'đường D2'; 'Âu Cơ' giữ", tenDuongDayDu("D2") === "đường D2" && tenDuongDayDu("Âu Cơ") === "Âu Cơ");
+ok("DC-04 tenDuongDayDu 'N12' (cách nói mới) → 'đường N12'", tenDuongDayDu("N12") === "đường N12");
+ok("DC-05 chonViTri luật 'hẻm 18/5 đường Cách Mạng Tháng 8' + AI tên đường → giữ số hẻm 18/5",
+  chonViTri("hẻm 18/5 đường Cách Mạng Tháng 8", "Cách Mạng Tháng 8") === "hẻm 18/5 đường Cách Mạng Tháng 8", chonViTri("hẻm 18/5 đường Cách Mạng Tháng 8", "Cách Mạng Tháng 8"));
+ok("DC-06 chonViTri 'hẻm 284 đường Lê Văn Sỹ' (số > 12, cách nói mới) → giữ hẻm 284",
+  chonViTri("hẻm 284 đường Lê Văn Sỹ", "Lê Văn Sỹ") === "hẻm 284 đường Lê Văn Sỹ", chonViTri("hẻm 284 đường Lê Văn Sỹ", "Lê Văn Sỹ"));
+ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề rộng) → để AI", chonViTri("hẻm 4 đường Trần Phú", "Trần Phú") === "Trần Phú");
+{
+  const dx = kiemDeXuat([{ khoa: "duong", gia_tri: "30/4", trich_dan: "đường 30/4", can: null }], "bán nhà mặt tiền đường 30/4 quận Tân Phú");
+  const ac = docAiChinh(dx.dat, null);
+  ok("DC-08 AI duong '30/4' → aiChinh.duong 'đường 30/4' (không bị ngưỡng độ dài gạt)", ac.duong === "đường 30/4", JSON.stringify(ac.duong));
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

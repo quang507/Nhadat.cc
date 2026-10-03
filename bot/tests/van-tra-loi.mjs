@@ -1194,5 +1194,15 @@ ok("GOI-06 'Dạ được anh, để em lọc' → 'mình,'; 'anh, chị cần g
   ok("TN-03 cách nói mới 'Cái này nhiều người hỏi lắm á' mở đầu → bỏ", f[0] === "Anh cho em xin số tầng nha?", JSON.stringify(f));
 }
 
+// SRS-5.1zj: "Tin đã lên rồi nha" khi tin chưa lên kệ (chủ ngữ "tin" đứng trước).
+{
+  const a = boHuaDaDang(["Chào mình! Tin đã lên rồi nha. Em tra thấy đường Lê Văn Sỹ thuộc Phường Nhiêu Lộc, đúng không anh chị?"]);
+  ok("DD-01 'Tin đã lên rồi nha' → bỏ, câu hỏi giữ", !/Tin đã lên/.test(a[0]) && /Nhiêu Lộc/.test(a[0]), JSON.stringify(a));
+  const b = boHuaDaDang(["Dạ tin nhà mình vừa đăng rồi đó anh. Nhà mình mấy tầng ạ?"]);
+  ok("DD-02 cách nói mới 'tin nhà mình vừa đăng rồi' → bỏ", !/vừa đăng/.test(b[0]), JSON.stringify(b));
+  const c = ["Tin mình chưa lên kệ vì còn thiếu giá ạ."];
+  ok("DD-03 'tin … chưa lên kệ' (nói thật) → giữ", boHuaDaDang(c)[0] === c[0]);
+}
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

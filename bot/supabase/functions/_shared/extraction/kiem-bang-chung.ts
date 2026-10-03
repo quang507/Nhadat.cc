@@ -812,6 +812,17 @@ const AI_CHO_CAU: Record<string, string[]> = {
  * biết được tên đường hả") lẫn số nhà luật đọc. Hẻm / phường vẫn đi ô riêng như thiết kế. Luật không
  * chứa tên AI đọc (AI sửa chính tả) hay không có số nhà → tin AI như cũ.
  */
+/**
+ * 03/10/2026 (bắn thử thu-dc-04/06/08, SRS-5.1zj): tên đường bằng SỐ / MÃ ("3/2", "30/4", "D2", "N1", "59", "số 7") — AI đọc đúng
+ * nhưng các ngưỡng độ dài địa chỉ (≥ 4 ký tự, hoặc ≥ 6 / hai chữ ở chỗ tạo tin) gạt mất, tin không có đường. Ghi đủ "đường 3/2"
+ * — đọc ra là đường, và qua ngưỡng. Tên đường bằng chữ giữ nguyên.
+ */
+export function tenDuongDayDu(v: string): string {
+  const t = (v ?? "").trim();
+  if (/^(?:số\s*|so\s*)?[A-Za-zĐđ]?\d{1,4}[A-Za-z]?(?:\/\d{1,2})?$/u.test(t)) return `đường ${t}`;
+  return t;
+}
+
 export function chonViTri(luat: string | null | undefined, ai: string | null | undefined): string | null {
   const l = luat?.trim() || null, a = ai?.trim() || null;
   if (!a) return l;
@@ -842,7 +853,10 @@ export function chonViTri(luat: string | null | undefined, ai: string | null | u
     const truocK = lk.slice(0, iA).trim();
     // Số nhà = một chữ số KHÔNG đứng ngay sau "hẻm / kiệt / ngõ" ("hẻm 4 Trần Phú" mập mờ số hẻm / bề rộng → để AI).
     const tuK = truocK.split(" ");
-    const coSoNha = tuK.some((t, j) => /^\d{1,5}[a-ln-z]?(?:\/\d{1,5}[a-z]?)*$/.test(t) && !/^(?:hem|kiet|ngo|hxh)$/.test(tuK[j - 1] ?? ""));
+    // 03/10/2026 (bắn thử thu-dc-12): "hẻm 18/5 đường Cách Mạng Tháng 8" — số sau "hẻm" có "/" (hoặc > 12) không mập mờ với bề
+    // rộng, là số hẻm thật: giữ (trước đây bị gạt, địa chỉ chỉ còn tên đường).
+    const coSoNha = tuK.some((t, j) => /^\d{1,5}[a-ln-z]?(?:\/\d{1,5}[a-z]?)*$/.test(t) &&
+      (!/^(?:hem|kiet|ngo|hxh)$/.test(tuK[j - 1] ?? "") || t.includes("/") || Number(t) > 12));
     if (coSoNha && l.length === lk.length) {
       return `${l.slice(0, iA).trim()} ${a}`;
     }
@@ -861,7 +875,7 @@ export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | n
   // (đã phục hồi dấu theo luật prompt) — luật `catDapAn` từng ghi cả câu "nhà của anh ở hem 4m Pham
   // The Hien, P.4" làm địa chỉ. Hẻm / phường đi ô riêng, không ghép vào.
   if (cauHoi === "vi_tri") {
-    const d = mot.find((x) => x.khoa === "duong")?.gia_tri.trim() ?? "";
+    const d = tenDuongDayDu(mot.find((x) => x.khoa === "duong")?.gia_tri ?? "");
     return d.length >= 4 && d.length <= 80 ? d : null;
   }
   const khoaAi = new Set([...(AI_CHO_CAU[cauHoi] ?? []), ...Object.entries(KHOA_GHI).filter(([, q]) => q === cauHoi).map(([k]) => k)]);
@@ -1223,7 +1237,7 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   // 02/10/2026 (đối chiếu AI ↔ code, SRS-5.1zb): AI đọc "nở hậu 5m" mà không có ô ghi → bỏ (`khoa_khong_co_cho_ghi`). Fact
   // `no_hau` có sẵn (trigger DB đọc ra rear_width_m), cùng dạng luật ghi ("5m").
   if (kt.noHau != null) them("no_hau", `${kt.noHau}m`, "no_hau");
-  const duong = lay("duong");
+  const duong = lay("duong") ? tenDuongDayDu(lay("duong")!) : null;
   if (duong && duong.length >= 4 && duong.length <= 80) them("vi_tri", duong, "duong");
   const duAn = lay("du_an");
   if (duAn && duAn.length >= 3 && duAn.length <= 80) them("du_an_ten", duAn, "du_an");
