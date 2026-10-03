@@ -399,6 +399,25 @@ export function motCauHoi(replies: string[]): string[] {
 }
 
 /**
+ * 03/10/2026 (chủ dự án: "tiêu chí là 1 câu, ngoại lệ thì có thể hỏi tầm 2 3 vấn đề gần nhau 1 lần cũng được"; SRS-5.1zm):
+ * `motCauHoi` chỉ canh TỪNG bong bóng, nên bong bóng trả lời có câu hỏi + bong bóng câu kế = hai câu hỏi một lượt. Cả lượt chỉ
+ * một bong bóng được hỏi: giữ câu hỏi ở bong bóng hỏi CUỐI (thường là câu hệ thống chọn); bong bóng hỏi phía trước bỏ các câu
+ * hỏi, còn rỗng thì bỏ luôn. Bong bóng giữ lại có thể gộp 2–3 ý gần nhau (mẫu đánh giá) — không cắt bên trong nó.
+ */
+export function motCauHoiLuot(replies: string[]): string[] {
+  const laHoi = (r: string) => !/^(📋|💾|🤖|📝)/u.test(r) && tachCau(r).some((c) => /\?\s*$/.test(c));
+  let cuoi = -1;
+  replies.forEach((r, i) => { if (laHoi(r)) cuoi = i; });
+  if (cuoi < 0) return replies;
+  return replies.map((r, i) => {
+    if (i >= cuoi || !laHoi(r)) return r;
+    let con = r;
+    for (const c of tachCau(r)) if (/\?\s*$/.test(c)) con = con.replace(c, "");
+    return con.split("\n").map((d) => d.replace(/\s{2,}/g, " ").trim()).filter(Boolean).join("\n");
+  }).filter((r) => r.trim().length > 0);
+}
+
+/**
  * Câu hỏi ngược có ĐÁP ÁN CỦA HỆ THỐNG (15/09/2026, bắn thật F2): "bên bạn có cần mình
  * gửi hình không hay sao" — model được dặn trả lời trước mà vẫn bỏ qua, chỉ hỏi phường.
  * Chuyện gửi ảnh là luật của mình (FR-185: gửi vào chat là vào kho), nên trả lời tiền

@@ -4,7 +4,7 @@
 //
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
-import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boGoiDoanGioi, boGoiCuoiVaOi, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boGoiDoanGioi, boGoiCuoiVaOi, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, motCauHoiLuot, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauNoiHeThong, boCauTroNguocDauBong } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -1202,6 +1202,23 @@ ok("GOI-06 'Dạ được anh, để em lọc' → 'mình,'; 'anh, chị cần g
   ok("DD-02 cách nói mới 'tin nhà mình vừa đăng rồi' → bỏ", !/vừa đăng/.test(b[0]), JSON.stringify(b));
   const c = ["Tin mình chưa lên kệ vì còn thiếu giá ạ."];
   ok("DD-03 'tin … chưa lên kệ' (nói thật) → giữ", boHuaDaDang(c)[0] === c[0]);
+}
+
+// SRS-5.1zm (03/10, chủ dự án: "tiêu chí là 1 câu, ngoại lệ … 2 3 vấn đề gần nhau 1 lần"): cả lượt chỉ một bong bóng hỏi.
+{
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const r1 = motCauHoiLuot(["🤖 Bóc tách được: giá 8 tỷ", "Dạ phí bên em 1% giá chốt ạ. Anh còn thắc mắc gì không ạ?", "Nhà mình mấy tầng ạ?"]);
+  ok("MCL-01 bong bóng trả lời có câu hỏi + bong bóng câu kế → bỏ câu hỏi ở bong bóng trước", eq(r1, ["🤖 Bóc tách được: giá 8 tỷ", "Dạ phí bên em 1% giá chốt ạ.", "Nhà mình mấy tầng ạ?"]), JSON.stringify(r1));
+  const r2 = motCauHoiLuot(["Anh còn cần gì thêm không ạ?", "Nhà mình mấy tầng, mấy phòng vậy ạ?"]);
+  ok("MCL-02 bong bóng chỉ có câu hỏi phía trước → bỏ cả bong bóng; câu gộp 2 ý gần nhau giữ", eq(r2, ["Nhà mình mấy tầng, mấy phòng vậy ạ?"]), JSON.stringify(r2));
+  const dg = "Anh thấy em nói chuyện có giống người thật không, có làm mất thời gian anh không ạ?\nNếu chấm cách em chăm sóc thì anh cho em mấy điểm trên 10 ạ?";
+  ok("MCL-03 một bong bóng mẫu đánh giá (2 ý gần nhau) → giữ nguyên", eq(motCauHoiLuot(["Dạ em ghi nhận nhà đã bán rồi ạ.", dg]), ["Dạ em ghi nhận nhà đã bán rồi ạ.", dg]));
+  const r4 = motCauHoiLuot(["Dạ em ghi rồi ạ, anh muốn em đăng luôn không?\nCó gì anh nhắn em nha.", "Phường mấy vậy anh?"]);
+  ok("MCL-04 (cách nói mới) câu hỏi lẫn trong bong bóng nhiều dòng → chỉ bỏ câu hỏi, giữ dòng còn lại", eq(r4, ["Có gì anh nhắn em nha.", "Phường mấy vậy anh?"]), JSON.stringify(r4));
+  ok("MCL-05 không có câu hỏi → giữ nguyên", eq(motCauHoiLuot(["Dạ em ghi rồi ạ.", "📝 Em ghi nhận: giá 8 tỷ"]), ["Dạ em ghi rồi ạ.", "📝 Em ghi nhận: giá 8 tỷ"]));
+  const cr = (await import("node:fs")).readFileSync(new URL("../supabase/functions/chat-reply/index.ts", import.meta.url), "utf8");
+  const than = cr.slice(cr.indexOf("const traLoiSeller = async"), cr.indexOf("const traLoiSeller = async") + 20000);
+  ok("MCL-06 traLoiSeller (đường ra duy nhất phía bán) áp motCauHoiLuot", /sach = motCauHoiLuot\(sach\)/.test(than));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
