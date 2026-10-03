@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-02 16:21 (giờ VN)
+-- Sinh lúc: 2026-10-03 10:24 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -2142,7 +2142,7 @@ begin
   if m is not null and m[1]::numeric between 1 and 40 then
     j := j || jsonb_build_object('alley_width_m', m[1]::numeric);
     if j->>'access_type' = 'hem' then
-      j := j || jsonb_build_object('access_type', case when m[1]::numeric >= 6 then 'hem_xe_tai' when m[1]::numeric >= 3 then 'hem_xe_hoi' else 'hem_xe_may' end);
+      j := j || jsonb_build_object('access_type', case when m[1]::numeric >= 6 then 'hem_xe_tai' when m[1]::numeric >= 3.5 then 'hem_xe_hoi' when m[1]::numeric >= 3 then 'hem' else 'hem_xe_may' end);
     end if;
   end if;
   m := regexp_match(k, '(?:cach|ra)\s*(?:mat tien|\mmt\M)\s*(?:chi|khoang|tam|hon|gan|duong)?\s*(?:[a-z ]{0,25}?)\s*(\d+(?:\.\d+)?)\s*m\M');
@@ -4197,7 +4197,7 @@ begin
       update listings set alley_width_m = v_num,
              -- 20261001a: "đường nhựa 6m" (độ rộng ĐƯỜNG trước nhà / đất) là mặt tiền đường, không phải hẻm xe tải.
              access_type = coalesce(access_type, case when new.question = 'do_rong_duong' then 'mat_tien'
-                                                      when v_num >= 6 then 'hem_xe_tai' when v_num >= 3 then 'hem_xe_hoi' else 'hem_xe_may' end),
+                                                      when v_num >= 6 then 'hem_xe_tai' when v_num >= 3.5 then 'hem_xe_hoi' when v_num >= 3 then 'hem' else 'hem_xe_may' end),
              specs_source = bac
        where id = new.listing_id and (alley_width_m is null or de);
     end if;
