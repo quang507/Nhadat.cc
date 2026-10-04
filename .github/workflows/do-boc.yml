@@ -14,6 +14,10 @@ on:
         description: Bỏ các nhóm (vd mua,mua_ban để đo riêng phía bán)
         required: false
         default: ''
+      du_bo:
+        description: Để trống ô `nhom` là chạy CẢ BỘ (~450 lượt AI (149 tin × 3, chưa kể hỏi bù), tốn credit). Muốn vậy thật thì gõ đúng chữ "ca bo".
+        required: false
+        default: ''
 
 concurrency: do-boc
 
@@ -35,9 +39,23 @@ jobs:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
           NHOM: ${{ inputs.nhom }}
           BO_NHOM: ${{ inputs.bo_nhom }}
+          DU_BO: ${{ inputs.du_bo }}
         run: |
           if [ -z "$TOKEN" ]; then echo "::error::Thiếu SUPABASE_ACCESS_TOKEN"; exit 1; fi
           echo "::add-mask::$TOKEN"
           for v in "$NHOM" "$BO_NHOM"; do [[ "$v" =~ ^[a-z0-9_,]*$ ]] || { echo "::error::tên nhóm lạ"; exit 1; }; done
+          # 04/10/2026 (SRS-5.1zw, chủ dự án: cắt tiền test): mỗi tin ≈ 3 lượt AI. In ước lượng trước khi bắn; chạy CẢ BỘ
+          # (ô nhom trống) phải gõ "ca bo" — bộ e2e offline 912 ca là miễn phí, bộ này là tiền thật.
+          node -e '
+            const fs = require("fs");
+            const nhom = (process.env.NHOM || "").split(",").filter(Boolean), bo = (process.env.BO_NHOM || "").split(",").filter(Boolean);
+            const ca = fs.readFileSync("bot/tests/do-boc/ca.jsonl", "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))
+              .filter((c) => (!nhom.length || nhom.includes(c.nhom)) && !bo.includes(c.nhom));
+            const tin = ca.reduce((s, c) => s + c.luot.length, 0);
+            console.log(`Ước lượng: ${ca.length} ca · ${tin} tin · ~${tin * 3} lượt AI (3 lượt/tin, chưa kể hỏi bù).`);
+          '
+          if [ -z "$NHOM" ] && [ "$DU_BO" != "ca bo" ]; then
+            echo "::error::Ô nhom trống = chạy CẢ BỘ, tốn credit thật. Chọn nhóm (vd ban1,sua) hoặc gõ đúng \"ca bo\" vào ô du_bo."; exit 1
+          fi
           A=(); [ -n "$NHOM" ] && A+=(--nhom "$NHOM"); [ -n "$BO_NHOM" ] && A+=(--bo-nhom "$BO_NHOM")
           node bot/tests/do-boc/ban-production.mjs "${A[@]}"
