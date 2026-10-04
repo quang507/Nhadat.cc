@@ -54,6 +54,8 @@ export type KetQua = {
     output_tokens: number;
     cache_creation_input_tokens: number;
     cache_read_input_tokens: number;
+    /** 04/10/2026 (SRS-5.1zv): model THẬT đã trả lời, dạng "Groq:<model>" / "Gemini:<model>" — `doTien` ghi sổ theo model. */
+    model?: string;
   };
 };
 
@@ -217,6 +219,7 @@ async function goiOpenAI(
       // Nguồn dự phòng không dùng bộ nhớ tạm prompt — hai ô này luôn 0, xem khối đầu file.
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 0,
+      model: `${nguon.ten}:${model}`,
     },
   };
   if (schema) {

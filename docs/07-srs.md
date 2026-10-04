@@ -438,6 +438,7 @@ handover_date:date  handover:text  status_text  source  source_url  created_at  
 
 ```text
 bot_usage   day:date! PK (giờ VN)  model_calls:int!=0  capped_at  in_tokens,out_tokens,cache_write_tokens,cache_read_tokens:bigint!=0  -- FR-151 a, FR-169
+bot_usage_model  day:date! model:text! PK(day,model)  in_tokens,out_tokens,cache_write_tokens,cache_read_tokens:bigint!=0  -- SRS-5.1zv: chữ-máy theo model, /admin quy ra đô đúng giá từng model
 bot_errors  id:bigserial  at:timestamptz!  source:text!  status_code:int  detail:text; index (at desc), (source, at desc)      -- FR-152
 bot_health  who:text! PK  at:timestamptz!  last_id:bigint!=0                                                                    -- FR-152
 ```
@@ -461,7 +462,7 @@ Cả ba: RLS, policy `*_admin_read`, ghi chỉ `service_role`. `bot_errors` là 
 | `nudge_tick` / `ctv_report_tick` / `media_cleanup_tick` / `inbound_sweep_tick` | Gọi edge function tương ứng; chỉ gọi HTTP khi có việc (FR-166 d, FR-171 c) | SR (cron) |
 | `bot_health_tick` / `beat(who)` / `bo_dem_nhac_treo(gio)` | Quét `net._http_response` không 2xx → `bot_errors`, nhịp tim bridge, gộp báo 1 tin/giờ, dọn sổ 30 ngày (FR-152, NFR-18) / nhịp tim / đếm nhắc treo | SR |
 | `log_loi(source, detail, code)` / `bat_het_tien_api()` | Cửa ghi lỗi, van 20 dòng/nguồn/giờ, 200/giờ (FR-171 b) / dấu hiệu hết tiền AI → `HET TIEN API`, ghi thẳng, hãm 6 h (FR-168) | anon / trig |
-| `bump_model_quota(limit)` / `cong_token(...)` | Trần lượt gọi model/ngày; cộng số chữ vào `bot_usage` (FR-151 a, FR-169) | SR |
+| `bump_model_quota(limit)` / `cong_token(..., p_model)` | Trần lượt gọi model/ngày; cộng số chữ vào `bot_usage` (theo ngày) và `bot_usage_model` (theo ngày × model, SRS-5.1zv) (FR-151 a, FR-169) | SR |
 | `claim_inbound` / `bao_hong_inbound` / `viec_inbound_bo_roi` / `ghi_su_kien_inbound` | Sổ idempotency tin đến: giành job atomic, 8 lần → `dead`, tìm việc bỏ rơi 24 h (FR-162, FR-166) | SR |
 | `nhan_viec_nhac` / `bao_hong_nhac` / `nha_viec_nhac(id, worker)` | Hàng đợi nhắc: thuê 5' `skip locked`; hỏng → lùi dần, 5 lần `dead`; chưa thử → trả lại nguyên vẹn (FR-166 f) | SR |
 | `nhan_viec_don_media` / `chon_viec_don_chet` / `lan_thu_ke(attempts)` | Hàng đợi dọn file `attempts < 6`; khoảng chờ nhân đôi, trần 1 h, nhiễu ±20 % (FR-165 e, FR-166) | SR |
@@ -2068,6 +2069,20 @@ Gỡ bản sửa thì S07-a/b đỏ (đã chạy).
 **Chỗ khác cùng lớp**: `quanRaoMoi` (so căn khác quận) chỉ chạy khi AI không nói `can_khac`; mảnh tin đọc theo mảnh. Chưa thấy chỗ khác ghi quận từ cả câu.
 
 **Kiểm**: `kiem-bang-chung.mjs` ZU-a…c; e2e `ZH-17` (AI hỏng + có vế mua → tin bán Quận 7), `ZH-18` (cách nói mới, không dấu, hai quận, không vế mua → để trống). Gỡ bản sửa → ZH-17/18 đỏ (đã chạy). Ca cũ FR240-E3 ("Cần Đước, Long An") đỏ ở bản đầu vì đếm thành hai nơi — đã sửa phần gộp.
+
+### SRS-5.1zv · /admin tính tiền model theo đúng model; sổ chữ-máy theo (ngày × model) (04/10/2026)
+
+**Ca gốc**: chủ dự án 04/10 hỏi "tại vì dùng AI nên tốn nhiều hơn à" sau khi credit Anthropic hết lần hai. Soát `/admin`: thẻ "Chi phí Model" quy chữ-máy ra đô bằng hai hằng số `GIA_VAO = 5`, `GIA_RA = 25` — giá Opus — cho MỌI token trong `bot_usage`. Bot chạy Sonnet 4.6 từ 02/10 (giá 3/15) và Haiku 4.5 từ 03/10 (giá 1/5): số đô trên `/admin` cao hơn thật 1,7× rồi 5×. Sổ `bot_usage` còn gộp cả token của Groq/Gemini (đường dự phòng FR-194 ghi qua cùng `cong_token`), vốn không trừ credit Anthropic.
+
+**Lớp lỗi**: một bảng giá cố định cho một sổ gộp nhiều nguồn. Sổ không ghi model, nên không có cách nào tính đúng dù biết giá — cùng lớp với "dấu vết chết" ở FR-192 (đọc dấu vết thay vì sự thật). Chỗ khác cùng lớp: `quota_tieu_hao().token_hom_nay` gộp mọi model (giữ, vì nó chỉ đếm chữ, không quy tiền); hệ số ghi cache `HE_SO_NAP = 2` giả định mọi lượt dùng `ttl: "1h"` trong khi chỉ lượt trả lời chính dùng 1h, các lượt bóc tách mặc định 5 phút (1,25×) — sổ không phân biệt, giữ 2× làm ước lượng TRÊN, ghi rõ trong `lib/gia-model.ts`.
+
+**Sửa** (`20261004a`):
+- Bảng `bot_usage_model (day, model, …)`, RLS + policy admin như `bot_usage` (revoke anon/authenticated trước khi grant — bảng mới ở project này mặc định lộ). `bot_usage` giữ nguyên cho trần lượt và `quota_tieu_hao`.
+- `cong_token(…, p_model text default null)`: DROP bản 4 tham số trước (kẻo hai hàm trùng tên → PGRST203, cổng soát-db đỏ); ghi cả hai bảng; `p_model` null → `'khac'`.
+- Model THẬT gắn vào `usage.model` ở hai lớp bọc: `bocLocThamSo` (Claude, lấy `response.model`) và `bocDuPhong` (Groq/Gemini: `"Groq:<model>"`). `doTien` chuyền `p_model` — 16 chỗ gọi không phải sửa.
+- `/admin`: bảng giá theo model ở `lib/gia-model.ts` (một nguồn); mỗi ngày hiện tổng đô + từng model (nhãn · số chữ · đô); dòng không rõ model → "chưa rõ", không đoán; Groq/Gemini = 0 đô. "Quota tiêu hao" lấy đô hôm nay từ sổ theo model.
+
+**Kiểm**: `bot/tests/gia-model.mjs` (trong `test:bot`): Haiku 1/5, Sonnet 3/15, Opus theo đời; `khac`/model lạ → null; bảng giá cũ cao hơn Haiku thật đúng 5×; tổng chỉ cộng dòng có giá. `bun run kiem` xanh. Sau khi áp migration: `/admin` hiện dòng Haiku riêng cho 04/10; dòng trước 04/10 hiện "chưa rõ".
 
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
