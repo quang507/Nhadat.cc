@@ -40,8 +40,14 @@ function bocLocThamSo(c: Anthropic, db: SupabaseClient): Anthropic {
       () => {},
     );
   };
+  // 04/10/2026 (SRS-5.1zv): gắn model THẬT trả lời vào `usage` để `doTien` ghi sổ theo model — nơi gọi chỉ chuyền `usage`,
+  // không phải sửa 16 chỗ. Phản hồi Anthropic luôn có `model`; thiếu thì lấy MODEL đang cấu hình.
+  const ganModel = (r: unknown) => {
+    const o = r as { model?: unknown; usage?: { model?: string } | null } | null;
+    if (o?.usage && typeof o.usage === "object" && !o.usage.model) o.usage.model = typeof o.model === "string" && o.model ? o.model : MODEL;
+  };
   // deno-lint-ignore no-explicit-any
-  const xong = <T,>(p: Promise<T>): Promise<T> => p.then((r) => { dongDau(); return r; });
+  const xong = <T,>(p: Promise<T>): Promise<T> => p.then((r) => { dongDau(); ganModel(r); return r; });
   return {
     messages: {
       // deno-lint-ignore no-explicit-any
@@ -235,15 +241,19 @@ export async function doTien(
     output_tokens?: number | null;
     cache_creation_input_tokens?: number | null;
     cache_read_input_tokens?: number | null;
+    /** Model thật đã trả lời — do lớp bọc (`bocLocThamSo`, `bocDuPhong`) gắn; thiếu thì ghi MODEL đang cấu hình. */
+    model?: string | null;
   } | null | undefined,
 ): Promise<void> {
   if (!usage) return;
   try {
+    // SRS-5.1zv: sổ theo (ngày, model) — /admin mới quy ra đô đúng giá từng model; Groq/Gemini tách riêng (không tốn credit).
     await db.rpc("cong_token", {
       p_in: usage.input_tokens ?? 0,
       p_out: usage.output_tokens ?? 0,
       p_cache_write: usage.cache_creation_input_tokens ?? 0,
       p_cache_read: usage.cache_read_input_tokens ?? 0,
+      p_model: usage.model ?? MODEL,
     });
   } catch (e) {
     // Nối dây vào sổ (FR-152) — một `catch` im lặng ở đây là một đồng hồ chết

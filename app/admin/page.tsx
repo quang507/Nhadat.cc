@@ -8,6 +8,7 @@
 // thoại 30 ngày + CSV, ô tìm khách. Mọi danh sách dài lật 20 mục/trang (FR-80).
 // 08/09/2026 — Phân hệ CRM Khách Hàng Hai Vai (vừa mua vừa bán · gắn BĐS quan tâm · nhu cầu)
 // và Tái cấu trúc Phân Cấp Giao Diện (Hierarchical Tabs & KPI Overview Cards).
+import { giaCua, tongTien, type DongToken } from "@/lib/gia-model";
 import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -40,20 +41,9 @@ type Tien = {
   cache_read_tokens: number;
 };
 
-// Giá niêm yết Opus 5, đô trên MỘT TRIỆU chữ-máy. Để thành hằng số ở đây, không
-// nhét vào DB: giá đổi thì sửa một chỗ này, còn số chữ đã ghi trong DB vẫn đúng
-// mãi mãi. Ngược lại — lưu sẵn thành tiền trong DB — là để lại một cột số sai mà
-// không ai biết là nó đã sai từ lúc nào.
-const GIA_VAO = 5;
-const GIA_RA = 25;
-const HE_SO_NAP = 2; // nhịp nhớ tạm 1 giờ; xem chat-reply chỗ cache_control
-const HE_SO_DOC = 0.1;
-
-const tienNgay = (t: Tien) =>
-  (t.in_tokens * GIA_VAO +
-    t.out_tokens * GIA_RA +
-    t.cache_write_tokens * GIA_VAO * HE_SO_NAP +
-    t.cache_read_tokens * GIA_VAO * HE_SO_DOC) / 1_000_000;
+// 04/10/2026 (SRS-5.1zv): tiền tính theo TỪNG model từ `bot_usage_model` (ngày × model), bảng giá ở `lib/gia-model.ts`.
+// Bản trước dùng một cặp hằng số giá Opus cho mọi token → cao hơn thật 1,7× (Sonnet) / 5× (Haiku), và tính tiền cả Groq/Gemini.
+type TienModel = DongToken & { day: string };
 
 // FR-192: quota tiêu hao — RPC `quota_tieu_hao()` gom bốn cái trần về một chỗ.
 type Quota = {
@@ -230,6 +220,7 @@ function BanLamViec() {
   }>();
   const [hang, setHang] = useState<Ng[]>([]);
   const [tien, setTien] = useState<Tien[]>([]);
+  const [tienModel, setTienModel] = useState<TienModel[]>([]);
   const [quota, setQuota] = useState<Quota | null>(null);
   const [factDuAn, setFactDuAn] = useState<FactDuAn[]>([]);
   const [zaloDn, setZaloDn] = useState<DangNhapZalo | null>(null);
@@ -387,7 +378,7 @@ function BanLamViec() {
   const load = async () => {
     void taiDangNhap();
     const d7 = new Date(Date.now() - 7 * 86400e3).toISOString();
-    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt, buyRes, intRes, qtRes, pfRes] = await Promise.all([
+    const [pend, st, beatRes, errRes, tn, vc, nb, hg, hc, ch, lx, kc, tk, hot, tre, gt, buyRes, intRes, qtRes, pfRes, tmRes] = await Promise.all([
       supabase
         .from("listings")
         .select("id, code, ward, price_vnd, price_raw, area_m2, description, location_raw, created_at")
@@ -455,7 +446,13 @@ function BanLamViec() {
       supabase.rpc("quota_tieu_hao"),
       // FR-195: hàng chờ duyệt thông tin dự án.
       supabase.from("project_facts_cho_duyet").select("*").limit(50),
+      // SRS-5.1zv: chữ-máy theo ngày × model (7 ngày), để quy ra đô đúng giá từng model.
+      supabase
+        .from("bot_usage_model")
+        .select("day, model, in_tokens, out_tokens, cache_write_tokens, cache_read_tokens")
+        .gte("day", d7.slice(0, 10)).order("day", { ascending: false }),
     ]);
+    setTienModel(tmRes.error ? [] : ((tmRes.data ?? []) as TienModel[]));
     setFactDuAn(pfRes.error ? [] : ((pfRes.data ?? []) as FactDuAn[]));
     setQuota(qtRes.error ? null : ((qtRes.data as Quota | null) ?? null));
     setBdsHot(hot.error ? null : ((hot.data ?? []) as BdsHot[]));
@@ -1827,7 +1824,7 @@ function BanLamViec() {
 
           {/* Chi phí Model (Tiền bộ não 7 ngày) */}
           <div className="rounded-2xl border border-line bg-white p-5">
-            <TheTien rows={tien} />
+            <TheTien rows={tien} rowsModel={tienModel} />
           </div>
         </section>
       )}
@@ -1846,7 +1843,7 @@ function BanLamViec() {
 
           {/* FR-192: Quota tiêu hao */}
           <div className="rounded-2xl border border-line bg-white p-6">
-            <TheQuota q={quota} tokenTien={tien[0] ? tienNgay(tien[0]) : null} />
+            <TheQuota q={quota} tokenTien={quota ? tongTien(tienModel.filter((r) => r.day === quota.ngay)).tien : null} />
           </div>
 
           {/* FR-203: đăng nhập Zalo clone — quét QR ngay trên CRM. Đang lỗi thì ô
@@ -2235,42 +2232,70 @@ function TheQuota({ q, tokenTien }: { q: Quota | null; tokenTien: number | null 
   );
 }
 
-function TheTien({ rows }: { rows: Tien[] }) {
-  const tong = rows.reduce((s, t) => s + tienNgay(t), 0);
+function TheTien({ rows, rowsModel }: { rows: Tien[]; rowsModel: TienModel[] }) {
+  // Tiền theo model (SRS-5.1zv); `rows` (bot_usage) chỉ còn cho số LƯỢT và tổng chữ theo ngày.
+  const theoNgay = new Map<string, TienModel[]>();
+  for (const r of rowsModel) theoNgay.set(r.day, [...(theoNgay.get(r.day) ?? []), r]);
+  const tongAll = tongTien(rowsModel);
   const tongLuot = rows.reduce((s, t) => s + t.model_calls, 0);
   const tongNap = rows.reduce((s, t) => s + t.cache_write_tokens, 0);
   const tongDoc = rows.reduce((s, t) => s + t.cache_read_tokens, 0);
   const daDo = rows.some((t) => t.in_tokens + t.out_tokens + tongNap + tongDoc > 0);
   const tyLeDoc = tongNap + tongDoc > 0 ? tongDoc / (tongNap + tongDoc) : null;
+  const chu = (t: Pick<DongToken, "in_tokens" | "out_tokens" | "cache_write_tokens" | "cache_read_tokens">) => t.in_tokens + t.out_tokens + t.cache_write_tokens + t.cache_read_tokens;
+  const soChu = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2">
         <h3 className="font-bold text-navy">Chi phí Model & Tiền bộ não (7 ngày)</h3>
         <span className="text-xs text-mute tabular-nums">
-          {daDo ? `$${tong.toFixed(2)} · ${tongLuot} lượt · trung bình $${tongLuot ? (tong / tongLuot).toFixed(3) : "-"}/lượt` : "chưa đo"}
+          {daDo ? `$${tongAll.tien.toFixed(2)} · ${tongLuot} lượt · trung bình $${tongLuot ? (tongAll.tien / tongLuot).toFixed(3) : "-"}/lượt` : "chưa đo"}
+          {tongAll.chuaRo > 0 ? ` · ${tongAll.chuaRo} dòng chưa rõ model (không tính)` : ""}
         </span>
       </div>
+      <p className="text-[11px] text-mute">
+        Giá theo từng model (Anthropic niêm yết), Groq/Gemini = 0 đô (bậc miễn phí). Dòng ghi trước 04/10 không có model → không quy ra đô.
+      </p>
       {daDo && tyLeDoc !== null && (
         <p className={`text-xs font-bold ${tyLeDoc >= 0.5 ? "text-emerald-700" : "text-brand"}`}>
           Tỷ lệ đọc lại cache: {Math.round(tyLeDoc * 100)}% {tyLeDoc >= 0.5 ? "- bộ nhớ tạm đang hoạt động tốt" : "- cần theo dõi"}
         </p>
       )}
       <ul className="divide-y divide-line text-xs">
-        {rows.map((t) => (
-          <li key={t.day} className="flex flex-wrap items-center justify-between gap-2 py-2">
-            <span className="tabular-nums text-mute w-24">
-              {new Date(t.day).toLocaleDateString("vi-VN")}
-            </span>
-            <span className="tabular-nums w-16">{t.model_calls} lượt</span>
-            <span className="tabular-nums font-bold text-navy w-20">
-              {t.in_tokens + t.out_tokens + t.cache_write_tokens + t.cache_read_tokens > 0 ? `$${tienNgay(t).toFixed(3)}` : "-"}
-            </span>
-            <span className="text-mute tabular-nums text-[11px] min-w-0 flex-1 truncate">
-              vào {t.in_tokens.toLocaleString("vi-VN")} · ra {t.out_tokens.toLocaleString("vi-VN")} · nạp {t.cache_write_tokens.toLocaleString("vi-VN")} · đọc {t.cache_read_tokens.toLocaleString("vi-VN")}
-            </span>
-          </li>
-        ))}
+        {rows.map((t) => {
+          const ds = theoNgay.get(t.day) ?? [];
+          const tn = tongTien(ds);
+          return (
+            <li key={t.day} className="py-2 space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="tabular-nums text-mute w-24">
+                  {new Date(t.day).toLocaleDateString("vi-VN")}
+                </span>
+                <span className="tabular-nums w-16">{t.model_calls} lượt</span>
+                <span className="tabular-nums font-bold text-navy w-20">
+                  {ds.length ? `$${tn.tien.toFixed(3)}` : chu(t) > 0 ? "chưa rõ" : "-"}
+                </span>
+                <span className="text-mute tabular-nums text-[11px] min-w-0 flex-1 truncate">
+                  vào {t.in_tokens.toLocaleString("vi-VN")} · ra {t.out_tokens.toLocaleString("vi-VN")} · nạp {t.cache_write_tokens.toLocaleString("vi-VN")} · đọc {t.cache_read_tokens.toLocaleString("vi-VN")}
+                </span>
+              </div>
+              {ds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pl-24">
+                  {ds.map((r) => {
+                    const g = giaCua(r.model);
+                    const d = tongTien([r]);
+                    return (
+                      <span key={r.model} className="rounded border border-line px-1.5 py-0.5 text-[11px] tabular-nums text-mute" title={r.model}>
+                        {g?.nhan ?? `${r.model} (chưa có giá)`} · {soChu(chu(r))} chữ{g ? ` · $${d.tien.toFixed(3)}` : ""}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

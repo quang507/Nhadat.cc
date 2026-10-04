@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-03 13:27 (giờ VN)
+-- Sinh lúc: 2026-10-04 10:53 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -100,6 +100,15 @@ create table if not exists public.bot_usage (
   day date not null default ((now() AT TIME ZONE 'Asia/Ho_Chi_Minh'::text))::date,
   model_calls integer not null default 0,
   capped_at timestamp with time zone,
+  in_tokens bigint not null default 0,
+  out_tokens bigint not null default 0,
+  cache_write_tokens bigint not null default 0,
+  cache_read_tokens bigint not null default 0
+);
+
+create table if not exists public.bot_usage_model (
+  day date not null default ((now() AT TIME ZONE 'Asia/Ho_Chi_Minh'::text))::date,
+  model text not null,
   in_tokens bigint not null default 0,
   out_tokens bigint not null default 0,
   cache_write_tokens bigint not null default 0,
@@ -642,6 +651,9 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.bot_usage add constraint bot_usage_pkey PRIMARY KEY (day);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.bot_usage_model add constraint bot_usage_model_pkey PRIMARY KEY (day, model);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.bridge_dang_nhap add constraint bridge_dang_nhap_id_check CHECK ((id = 1));
@@ -2729,21 +2741,30 @@ AS $function$
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION public.cong_token(p_in bigint DEFAULT 0, p_out bigint DEFAULT 0, p_cache_write bigint DEFAULT 0, p_cache_read bigint DEFAULT 0)
+CREATE OR REPLACE FUNCTION public.cong_token(p_in bigint DEFAULT 0, p_out bigint DEFAULT 0, p_cache_write bigint DEFAULT 0, p_cache_read bigint DEFAULT 0, p_model text DEFAULT NULL::text)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
+declare
+  v_day date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+  v_model text := coalesce(nullif(left(trim(p_model), 80), ''), 'khac');
 begin
   insert into bot_usage (day, model_calls, in_tokens, out_tokens, cache_write_tokens, cache_read_tokens)
-  values ((now() at time zone 'Asia/Ho_Chi_Minh')::date, 0,
-          coalesce(p_in,0), coalesce(p_out,0), coalesce(p_cache_write,0), coalesce(p_cache_read,0))
+  values (v_day, 0, coalesce(p_in,0), coalesce(p_out,0), coalesce(p_cache_write,0), coalesce(p_cache_read,0))
   on conflict (day) do update set
     in_tokens          = bot_usage.in_tokens          + coalesce(p_in,0),
     out_tokens         = bot_usage.out_tokens         + coalesce(p_out,0),
     cache_write_tokens = bot_usage.cache_write_tokens + coalesce(p_cache_write,0),
     cache_read_tokens  = bot_usage.cache_read_tokens  + coalesce(p_cache_read,0);
+  insert into bot_usage_model (day, model, in_tokens, out_tokens, cache_write_tokens, cache_read_tokens)
+  values (v_day, v_model, coalesce(p_in,0), coalesce(p_out,0), coalesce(p_cache_write,0), coalesce(p_cache_read,0))
+  on conflict (day, model) do update set
+    in_tokens          = bot_usage_model.in_tokens          + coalesce(p_in,0),
+    out_tokens         = bot_usage_model.out_tokens         + coalesce(p_out,0),
+    cache_write_tokens = bot_usage_model.cache_write_tokens + coalesce(p_cache_write,0),
+    cache_read_tokens  = bot_usage_model.cache_read_tokens  + coalesce(p_cache_read,0);
 exception when others then
   return;
 end $function$
@@ -8063,6 +8084,7 @@ alter table public.bot_errors enable row level security;
 alter table public.bot_health enable row level security;
 alter table public.bot_prompts enable row level security;
 alter table public.bot_usage enable row level security;
+alter table public.bot_usage_model enable row level security;
 alter table public.bridge_dang_nhap enable row level security;
 alter table public.buyers enable row level security;
 alter table public.chat_quota enable row level security;
@@ -8113,6 +8135,10 @@ create policy bot_health_admin_read on public.bot_health as permissive for SELEC
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
 drop policy if exists bot_usage_admin_read on public.bot_usage;
 create policy bot_usage_admin_read on public.bot_usage as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
+   FROM admins a
+  WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists bot_usage_model_admin_read on public.bot_usage_model;
+create policy bot_usage_model_admin_read on public.bot_usage_model as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
 drop policy if exists bridge_dang_nhap_admin_read on public.bridge_dang_nhap;
@@ -8254,6 +8280,7 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bo
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bot_health to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bot_prompts to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bot_usage to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bot_usage_model to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bridge_dang_nhap to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.buyers to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.chat_quota to service_role;
@@ -8355,6 +8382,7 @@ grant SELECT on public.bot_do_tre to service_role;
 grant SELECT on public.bot_errors to authenticated;
 grant SELECT on public.bot_health to authenticated;
 grant SELECT on public.bot_usage to authenticated;
+grant SELECT on public.bot_usage_model to authenticated;
 grant SELECT on public.bridge_dang_nhap to authenticated;
 grant SELECT on public.hoi_thoai_phien to authenticated;
 grant SELECT on public.hoi_thoai_phien to service_role;
@@ -8480,8 +8508,8 @@ revoke all on function public.claim_inbound(p_msg_id text, p_stale_secs integer,
 grant execute on function public.claim_inbound(p_msg_id text, p_stale_secs integer, p_worker text) to service_role;
 revoke all on function public.co_moc(p_loai text, p_ten_re text) from public, anon, authenticated;
 grant execute on function public.co_moc(p_loai text, p_ten_re text) to service_role;
-revoke all on function public.cong_token(p_in bigint, p_out bigint, p_cache_write bigint, p_cache_read bigint) from public, anon, authenticated;
-grant execute on function public.cong_token(p_in bigint, p_out bigint, p_cache_write bigint, p_cache_read bigint) to service_role;
+revoke all on function public.cong_token(p_in bigint, p_out bigint, p_cache_write bigint, p_cache_read bigint, p_model text) from public, anon, authenticated;
+grant execute on function public.cong_token(p_in bigint, p_out bigint, p_cache_write bigint, p_cache_read bigint, p_model text) to service_role;
 revoke all on function public.conversations_email_upset() from public, anon, authenticated;
 grant execute on function public.conversations_email_upset() to service_role;
 revoke all on function public.ctv_dang_ganh(p_ctv uuid) from public, anon, authenticated;
