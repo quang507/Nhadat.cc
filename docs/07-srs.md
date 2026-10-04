@@ -438,7 +438,7 @@ handover_date:date  handover:text  status_text  source  source_url  created_at  
 
 ```text
 bot_usage   day:date! PK (giờ VN)  model_calls:int!=0  capped_at  in_tokens,out_tokens,cache_write_tokens,cache_read_tokens:bigint!=0  -- FR-151 a, FR-169
-bot_usage_model  day:date! model:text! PK(day,model)  in_tokens,out_tokens,cache_write_tokens,cache_read_tokens:bigint!=0  -- SRS-5.1zv: chữ-máy theo model, /admin quy ra đô đúng giá từng model
+bot_usage_model  day:date! model:text! PK(day,model)  calls:int!=0  in_tokens,out_tokens,cache_write_tokens,cache_read_tokens:bigint!=0  -- SRS-5.1zv/zw: chữ-máy + lượt theo model, /admin quy ra đô đúng giá từng model
 bot_errors  id:bigserial  at:timestamptz!  source:text!  status_code:int  detail:text; index (at desc), (source, at desc)      -- FR-152
 bot_health  who:text! PK  at:timestamptz!  last_id:bigint!=0                                                                    -- FR-152
 ```
@@ -2083,6 +2083,20 @@ Gỡ bản sửa thì S07-a/b đỏ (đã chạy).
 - `/admin`: bảng giá theo model ở `lib/gia-model.ts` (một nguồn); mỗi ngày hiện tổng đô + từng model (nhãn · số chữ · đô); dòng không rõ model → "chưa rõ", không đoán; Groq/Gemini = 0 đô. "Quota tiêu hao" lấy đô hôm nay từ sổ theo model.
 
 **Kiểm**: `bot/tests/gia-model.mjs` (trong `test:bot`): Haiku 1/5, Sonnet 3/15, Opus theo đời; `khac`/model lạ → null; bảng giá cũ cao hơn Haiku thật đúng 5×; tổng chỉ cộng dòng có giá. `bun run kiem` xanh. Sau khi áp migration: `/admin` hiện dòng Haiku riêng cho 04/10; dòng trước 04/10 hiện "chưa rõ".
+
+### SRS-5.1zw · Đo tiền model trước khi cắt: đô/lượt và tỷ lệ cache theo model; chốt chạy cả bộ đo production; cảnh báo cache không chạy (04/10/2026)
+
+**Bối cảnh**: chủ dự án hỏi "có cách nào đỡ tốn hơn mà bot không ngu hơn không", rồi chốt làm ba việc không đổi hành vi bot: (1) đo trước, (2) cắt tiền test, (4) bẫy cache của Haiku. Bot chưa release, test còn nhiều nên tiền test là phần lớn.
+
+**(1) Đo theo model** (`20261004b`): `bot_usage_model.calls` — mỗi `cong_token` = một lượt gọi đã trả về. `/admin` mỗi model hiện lượt · chữ · đô · **đô/lượt** · **% đọc cache**. Trước đó chỉ có lượt gộp cả ngày (`bot_usage.model_calls`) nên không tính được đô/lượt theo model.
+
+**(2) Chốt chạy cả bộ đo production** (`do-boc.yml`): in ước lượng `ca · tin · ~lượt AI` (3 lượt/tin) trước khi bắn; để trống `nhom` phải gõ đúng `"ca bo"` vào ô `du_bo`, không thì dừng. Lý do: một lượt đủ bộ ≈ 450 lượt AI (149 tin × 3, chưa kể hỏi bù); ngày 03/10 một lượt đủ bộ + ~12 `ban-thu` là phần đáng kể của credit hết. Bộ e2e offline 912 ca là miễn phí — dựa vào nó trước. Ghi ở README bộ đo và `CLAUDE.md`.
+
+**(4) Bẫy cache theo model**: Anthropic chỉ cache prompt dài hơn một **ngưỡng tối thiểu theo model**, dưới ngưỡng thì `cache_control` im lặng không tác dụng (không lỗi, `cache_creation_input_tokens = 0`). Ngưỡng không đều theo đời: Haiku 4.5 / Opus 4.6 = 4.096 token; Sonnet 4.6 / 4.5 = 1.024; Opus 5.5 / Sonnet 5.5 = 512 (bảng trong tài liệu prompt caching, đọc 04/10/2026). Đổi Sonnet → Haiku ngày 03/10 là ngưỡng nhảy 1.024 → 4.096. Ước lượng từ code (≈ 3 ký tự/token, chưa đo): lượt bóc tách ≈ 8.100 token (cache được); lượt trả lời chính `SELLER_SYSTEM` ≈ 2.800–3.500 token (**có thể dưới ngưỡng** trên Haiku); các lượt nhỏ (ý-lượt ≈ 900, phân vai ≈ 300, gán mảnh / soát khen / dự án ≈ 250, nhãn mua ≈ 500) chắc chắn dưới ngưỡng — nhưng nhỏ nên tiền ít. Code: `lib/gia-model.ts` `nguongCache()`, `tyLeDocCache()`, `canhBaoCache()` — `/admin` in dòng cảnh báo khi một model Claude đã gửi ≥ 20.000 chữ đầu vào trong ngày mà không đọc lại cache lần nào, kèm ngưỡng của model đó. Chưa sửa prompt để vượt ngưỡng: sửa là đổi hành vi bot, chờ số đo xác nhận rồi mới quyết.
+
+**Chỗ khác cùng lớp**: hệ số ghi cache trên `/admin` vẫn là 2× cho mọi lượt (xem SRS-5.1zv) trong khi chỉ lượt trả lời chính dùng `ttl: "1h"`, các lượt bóc tách dùng 5 phút (1,25×) — sổ chưa tách hai loại ghi (`usage.cache_creation.ephemeral_5m/1h_input_tokens` có trong phản hồi API, chưa ghi); để sau nếu số đo cần.
+
+**Kiểm**: `bot/tests/gia-model.mjs` (ngưỡng theo model; tỷ lệ đọc cache; cảnh báo chỉ khi ≥ 20k chữ vào, 0 đọc, model Claude). Workflow: ô `nhom` trống + `du_bo` khác `"ca bo"` → dừng với lời báo (kiểm tay sau khi merge: dispatch không điền gì phải đỏ ở bước đầu, không bắn tin nào).
 
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 

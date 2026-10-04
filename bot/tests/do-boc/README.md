@@ -25,6 +25,11 @@ thì lấy số production.
 
 ## Đo trên production
 
+**Kỷ luật tiền (04/10/2026, chủ dự án):** mỗi tin bắn lên production ≈ 3 lượt AI (bóc tách + ý-lượt + trả lời), cả bộ ≈ 450
+lượt (149 tin × 3, chưa kể hỏi bù — workflow in số này trước khi bắn) — đây là credit thật, còn bộ e2e offline (912 ca) thì miễn phí. Nên: chỉ chạy `do-boc.yml` khi PR đụng bóc tách, và chọn
+**một nhóm** liên quan (`nhom=ban1,sua…`); để trống `nhom` là chạy cả bộ, workflow bắt gõ đúng chữ `ca bo` vào ô `du_bo`
+và in ước lượng số lượt trước khi bắn.
+
 1. Bắn từng lượt cho các Zalo thử `do-<id ca viết thường>` qua `net.http_post` tới `chat-reply`, kênh
    `zalo_personal_test`, giống cách bắn thử ở CLAUDE.md. Mỗi lượt phải đợi **mọi** người trả lời xong rồi mới
    bắn lượt kế: bot chỉ xử lý một lượt cho mỗi người tại một thời điểm.

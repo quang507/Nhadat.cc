@@ -453,7 +453,9 @@ bun run chat       # chat thử với bot trong terminal: DB giả trên máy; `
 nhiêu phần trăm" thay cho kiểu "5 ca vừa bắn thì qua". `bun run do-boc:nen` (trong job CI `bot`) đỏ khi luật
 một mình TỤT so với `nen.json`. Số production đo bằng cách bắn Zalo thử `do-*` (README của bộ đo) — bắn
 mẻ ≤ 20 người: 110 cùng lúc làm DB Free huỷ `tao tin rao` vì quá giờ và số đo sai. **Thêm ca mới đạt thì cập
-nhật `nen.json` cùng PR; xoá ca khỏi `nen.json` là chấp nhận tụt, phải ghi lý do.**
+nhật `nen.json` cùng PR; xoá ca khỏi `nen.json` là chấp nhận tụt, phải ghi lý do.** **Tiền (04/10/2026):** mỗi tin bắn
+production ≈ 3 lượt AI, cả bộ ≈ 450 lượt credit thật — chỉ chạy `do-boc.yml` khi PR đụng bóc tách và chọn `nhom`; để trống
+`nhom` phải gõ `ca bo` (SRS-5.1zw). Bộ e2e offline là miễn phí, dựa vào nó trước.
 
 Bốn job đó chạy trong CI (`.github/workflows/kiem.yml`) mỗi PR, kể cả `test:sec`.
 **Thoát 2 của `test:sec` nghĩa là "chưa kiểm được", không phải "đạt"** — bản đầu

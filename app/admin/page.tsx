@@ -8,7 +8,7 @@
 // thoại 30 ngày + CSV, ô tìm khách. Mọi danh sách dài lật 20 mục/trang (FR-80).
 // 08/09/2026 — Phân hệ CRM Khách Hàng Hai Vai (vừa mua vừa bán · gắn BĐS quan tâm · nhu cầu)
 // và Tái cấu trúc Phân Cấp Giao Diện (Hierarchical Tabs & KPI Overview Cards).
-import { giaCua, tongTien, type DongToken } from "@/lib/gia-model";
+import { canhBaoCache, giaCua, tongTien, tyLeDocCache, type DongToken } from "@/lib/gia-model";
 import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -449,7 +449,7 @@ function BanLamViec() {
       // SRS-5.1zv: chữ-máy theo ngày × model (7 ngày), để quy ra đô đúng giá từng model.
       supabase
         .from("bot_usage_model")
-        .select("day, model, in_tokens, out_tokens, cache_write_tokens, cache_read_tokens")
+        .select("day, model, calls, in_tokens, out_tokens, cache_write_tokens, cache_read_tokens")
         .gte("day", d7.slice(0, 10)).order("day", { ascending: false }),
     ]);
     setTienModel(tmRes.error ? [] : ((tmRes.data ?? []) as TienModel[]));
@@ -2257,6 +2257,10 @@ function TheTien({ rows, rowsModel }: { rows: Tien[]; rowsModel: TienModel[] }) 
       <p className="text-[11px] text-mute">
         Giá theo từng model (Anthropic niêm yết), Groq/Gemini = 0 đô (bậc miễn phí). Dòng ghi trước 04/10 không có model → không quy ra đô.
       </p>
+      {/* SRS-5.1zw (#4): cache không chạy = trả giá đầy đủ mỗi lượt. Haiku 4.5 chỉ cache prompt ≥ 4.096 token. */}
+      {rowsModel.map((r) => canhBaoCache(r)).filter((x): x is string => !!x).slice(0, 3).map((cb, i) => (
+        <p key={i} className="text-xs font-bold text-brand">⚠ {cb}</p>
+      ))}
       {daDo && tyLeDoc !== null && (
         <p className={`text-xs font-bold ${tyLeDoc >= 0.5 ? "text-emerald-700" : "text-brand"}`}>
           Tỷ lệ đọc lại cache: {Math.round(tyLeDoc * 100)}% {tyLeDoc >= 0.5 ? "- bộ nhớ tạm đang hoạt động tốt" : "- cần theo dõi"}
@@ -2287,7 +2291,9 @@ function TheTien({ rows, rowsModel }: { rows: Tien[]; rowsModel: TienModel[] }) 
                     const d = tongTien([r]);
                     return (
                       <span key={r.model} className="rounded border border-line px-1.5 py-0.5 text-[11px] tabular-nums text-mute" title={r.model}>
-                        {g?.nhan ?? `${r.model} (chưa có giá)`} · {soChu(chu(r))} chữ{g ? ` · $${d.tien.toFixed(3)}` : ""}
+                        {g?.nhan ?? `${r.model} (chưa có giá)`} · {r.calls ? `${r.calls} lượt · ` : ""}{soChu(chu(r))} chữ
+                        {g ? ` · $${d.tien.toFixed(3)}${r.calls ? ` ($${(d.tien / r.calls).toFixed(4)}/lượt)` : ""}` : ""}
+                        {(() => { const tl = tyLeDocCache(r); return tl === null ? "" : ` · đọc cache ${Math.round(tl * 100)}%`; })()}
                       </span>
                     );
                   })}

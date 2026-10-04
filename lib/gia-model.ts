@@ -38,7 +38,42 @@ export type DongToken = {
   out_tokens: number;
   cache_write_tokens: number;
   cache_read_tokens: number;
+  /** Số lượt gọi model (20261004b); thiếu ở dòng cũ. */
+  calls?: number;
 };
+
+/**
+ * Ngưỡng prompt TỐI THIỂU để Anthropic chịu cache (token) — dưới ngưỡng thì `cache_control` im lặng không có tác dụng, không lỗi,
+ * `cache_creation_input_tokens: 0` (tài liệu prompt caching, bảng theo model, đọc 04/10/2026). Không đều theo đời model:
+ * Haiku 4.5 / Opus 4.6 = 4.096; Sonnet 4.6 / 4.5 = 1.024; Opus 5.5 / Sonnet 5.5 = 512. Đổi model là phải xem lại prompt nào còn cache.
+ */
+export function nguongCache(model: string | null | undefined): number | null {
+  const m = (model ?? "").trim();
+  if (/^claude-(haiku-4-5|opus-4-[56])/.test(m)) return 4096;
+  if (/^claude-opus-4-7/.test(m)) return 2048;
+  if (/^claude-(sonnet-4-[56]|opus-4-8|sonnet-5(?!-5))/.test(m)) return 1024;
+  if (/^claude-(opus-5|sonnet-5-5|fable-5)/.test(m)) return 512;
+  return null;
+}
+
+/** Tỷ lệ chữ đọc lại từ cache trên tổng chữ đầu vào (0–1); null khi chưa có chữ. */
+export function tyLeDocCache(t: DongToken): number | null {
+  const tong = t.in_tokens + t.cache_write_tokens + t.cache_read_tokens;
+  return tong > 0 ? t.cache_read_tokens / tong : null;
+}
+
+/**
+ * Cảnh báo cache không chạy cho một dòng (ngày × model Claude): đã gửi đủ nhiều chữ đầu vào mà KHÔNG đọc lại cache lần nào.
+ * Nguyên nhân hay gặp: prompt dưới ngưỡng tối thiểu của model (xem `nguongCache`) — bot đổi sang Haiku 4.5 là ngưỡng nhảy
+ * 1.024 → 4.096. Trả câu để /admin in; null = không có gì đáng nói. `toiThieuChu` = ngưỡng chữ để tránh báo trên ngày quá ít lượt.
+ */
+export function canhBaoCache(t: DongToken, toiThieuChu = 20_000): string | null {
+  if (!/^claude-/.test(t.model)) return null;
+  const vao = t.in_tokens + t.cache_write_tokens;
+  if (vao < toiThieuChu || t.cache_read_tokens > 0) return null;
+  const ng = nguongCache(t.model);
+  return `${giaCua(t.model)?.nhan ?? t.model}: ${vao.toLocaleString("vi-VN")} chữ đầu vào mà không đọc lại cache lần nào${ng ? ` — model này chỉ cache prompt ≥ ${ng.toLocaleString("vi-VN")} token, prompt ngắn hơn là trả giá đầy đủ mỗi lượt` : ""}.`;
+}
 
 /** Đô của một dòng (ngày × model); `null` khi model chưa có giá. */
 export function tienDong(t: DongToken): number | null {

@@ -1,6 +1,6 @@
 // gia-model.mjs — SRS-5.1zv: /admin quy chữ-máy ra đô theo ĐÚNG model, không một bảng giá Opus cho tất cả.
 // Không mạng, không DB.   bun bot/tests/gia-model.mjs
-import { giaCua, tienDong, tongTien, HE_SO_NAP, HE_SO_DOC } from "../../lib/gia-model.ts";
+import { giaCua, tienDong, tongTien, HE_SO_NAP, HE_SO_DOC, nguongCache, tyLeDocCache, canhBaoCache } from "../../lib/gia-model.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -25,6 +25,14 @@ ok("Groq: có chữ nhưng 0 đô", tienDong(dong("Groq:qwen/qwen3.8-27b", 5e5, 
 ok("'khac' → null (không cộng vào tổng)", tienDong(dong("khac", 1e6, 0, 0, 0)) === null);
 const t = tongTien([dong("claude-haiku-4-5-20251001", 1e6, 0, 0, 0), dong("khac", 1e6, 0, 0, 0), dong("Groq:x", 1e6, 0, 0, 0)]);
 ok("tổng: chỉ cộng dòng có giá (1 đô), đếm 1 dòng chưa rõ", gan(t.tien, 1) && t.chuaRo === 1, JSON.stringify(t));
+
+// SRS-5.1zw (#4): ngưỡng cache theo model + cảnh báo "không đọc cache".
+ok("ngưỡng cache: Haiku 4.5 = 4096, Sonnet 4.6 = 1024, Opus 5.5 = 512, Groq → null", nguongCache("claude-haiku-4-5-20251001") === 4096 && nguongCache("claude-sonnet-4-6") === 1024 && nguongCache("claude-opus-5-5") === 512 && nguongCache("Groq:x") === null);
+ok("tỷ lệ đọc cache: 80k đọc / (10k vào + 10k nạp + 80k đọc) = 0,8", gan(tyLeDocCache(dong("claude-haiku-4-5-20251001", 1e4, 5e3, 1e4, 8e4)), 0.8));
+const cb = canhBaoCache(dong("claude-haiku-4-5-20251001", 50_000, 5_000, 0, 0));
+ok("Haiku 50k chữ vào, 0 đọc cache → cảnh báo nêu ngưỡng 4.096", !!cb && /4\.096/.test(cb) && /Haiku/.test(cb), String(cb));
+ok("có đọc cache → không cảnh báo; ít chữ (< 20k) → không cảnh báo; Groq → không cảnh báo",
+  canhBaoCache(dong("claude-haiku-4-5-20251001", 50_000, 5_000, 0, 1_000)) === null && canhBaoCache(dong("claude-haiku-4-5-20251001", 5_000, 500, 0, 0)) === null && canhBaoCache(dong("Groq:x", 90_000, 0, 0, 0)) === null);
 
 console.log(hong ? `\nGIÁ MODEL: ${hong}/${tong} CA HỎNG` : `\nGIÁ MODEL: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
