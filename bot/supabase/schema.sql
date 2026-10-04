@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-04 10:53 (giờ VN)
+-- Sinh lúc: 2026-10-04 12:33 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -112,7 +112,8 @@ create table if not exists public.bot_usage_model (
   in_tokens bigint not null default 0,
   out_tokens bigint not null default 0,
   cache_write_tokens bigint not null default 0,
-  cache_read_tokens bigint not null default 0
+  cache_read_tokens bigint not null default 0,
+  calls integer not null default 0
 );
 
 create table if not exists public.bridge_dang_nhap (
@@ -2758,9 +2759,10 @@ begin
     out_tokens         = bot_usage.out_tokens         + coalesce(p_out,0),
     cache_write_tokens = bot_usage.cache_write_tokens + coalesce(p_cache_write,0),
     cache_read_tokens  = bot_usage.cache_read_tokens  + coalesce(p_cache_read,0);
-  insert into bot_usage_model (day, model, in_tokens, out_tokens, cache_write_tokens, cache_read_tokens)
-  values (v_day, v_model, coalesce(p_in,0), coalesce(p_out,0), coalesce(p_cache_write,0), coalesce(p_cache_read,0))
+  insert into bot_usage_model (day, model, calls, in_tokens, out_tokens, cache_write_tokens, cache_read_tokens)
+  values (v_day, v_model, 1, coalesce(p_in,0), coalesce(p_out,0), coalesce(p_cache_write,0), coalesce(p_cache_read,0))
   on conflict (day, model) do update set
+    calls              = bot_usage_model.calls + 1,
     in_tokens          = bot_usage_model.in_tokens          + coalesce(p_in,0),
     out_tokens         = bot_usage_model.out_tokens         + coalesce(p_out,0),
     cache_write_tokens = bot_usage_model.cache_write_tokens + coalesce(p_cache_write,0),
