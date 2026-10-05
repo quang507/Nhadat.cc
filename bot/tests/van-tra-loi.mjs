@@ -303,7 +303,7 @@ ok("dò mục đích: 'Mình tìm mua hay thuê ạ?' không bắt", !laHoiMucDi
 ok("kho: 'Hiện kho em còn vài căn ở khu đó' là hứa", laHuaCoHang("Hiện kho em còn vài căn ở khu đó, em lọc rồi báo lại mình ngay nha."));
 ok("kho: 'bên em còn căn nào khác không' không bắt", !laHuaCoHang("Mình hỏi giúp em bên em còn căn nào khác không ạ?"));
 ok("kho: 'em còn cần biết thêm khu vực' không bắt", !laHuaCoHang("Em còn cần biết thêm khu vực mình muốn ạ."));
-ok("xưng hô: 'thì bạn cũng bị ảnh hưởng' → 'mình'", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng.") === "Nếu người khác bán phần của họ thì mình cũng bị ảnh hưởng.", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng."));
+ok("xưng hô: 'thì bạn cũng bị ảnh hưởng' → 'anh chị' (05/10: không còn 'mình')", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng.") === "Nếu người khác bán phần của họ thì anh chị cũng bị ảnh hưởng.", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng."));
 ok("xưng hô: 'bạn bè', 'người bạn có nhà' giữ nguyên", suaTuXungMua("Nhà gần bạn bè, người bạn có nhà ở đó.") === "Nhà gần bạn bè, người bạn có nhà ở đó.", suaTuXungMua("Nhà gần bạn bè, người bạn có nhà ở đó."));
 ok("gộp: 'muốn gần bệnh viện' vào 'có mẹ già ở cùng, cần gần bệnh viện' → null",
   gopGhiChu("có mẹ già ở cùng, cần gần bệnh viện", "muốn gần bệnh viện") === null,
@@ -1195,15 +1195,15 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
 
 // GOI-01…05 (02/10/2026, bắn thật thu-trl-04: khách mua xưng "mình", bot "Dạ được chị ơi"): chưa biết anh hay chị thì
 // không gọi theo giới — dạng "anh ơi / chị ơi" (mới), cuối câu, đầu câu; "anh chị" đủ cặp và "anh Thu" giữ.
-ok("GOI-01 'Dạ được chị ơi :)' → 'mình ơi'", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào.") === "Dạ được mình ơi :) Hiện bên em chưa có căn nào.", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào."));
-ok("GOI-02 'Anh ơi em gửi' (cách nói mới, đầu câu) → 'Mình ơi'", boGoiDoanGioi("Anh ơi em gửi căn này nha") === "Mình ơi em gửi căn này nha", boGoiDoanGioi("Anh ơi em gửi căn này nha"));
+ok("GOI-01 'Dạ được chị ơi :)' → 'anh chị ơi' (05/10: không còn 'mình')", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào.") === "Dạ được anh chị ơi :) Hiện bên em chưa có căn nào.", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào."));
+ok("GOI-02 'Anh ơi em gửi' (cách nói mới, đầu câu) → 'Anh chị ơi'", boGoiDoanGioi("Anh ơi em gửi căn này nha") === "Anh chị ơi em gửi căn này nha", boGoiDoanGioi("Anh ơi em gửi căn này nha"));
 ok("GOI-03 cuối câu '…vậy anh?' → '…vậy ạ?'", boGoiCuoiVaOi("Mình cần mấy phòng vậy anh?") === "Mình cần mấy phòng vậy ạ?", boGoiCuoiVaOi("Mình cần mấy phòng vậy anh?"));
 ok("GOI-04 'anh chị ơi' / 'anh chị phụ trách' / 'anh Thu' giữ nguyên",
   boGoiDoanGioi("Anh chị ơi, em gửi nha.") === "Anh chị ơi, em gửi nha." && boGoiDoanGioi("Có anh chị phụ trách bên em gọi lại ạ.") === "Có anh chị phụ trách bên em gọi lại ạ." && boGoiDoanGioi("Dạ anh Thu sẽ gọi lại.") === "Dạ anh Thu sẽ gọi lại.");
 ok("GOI-05 đầu câu 'Anh cần…' → 'Anh chị cần…'", boGoiDoanGioi("Anh cần mấy phòng ngủ ạ?") === "Anh chị cần mấy phòng ngủ ạ?", boGoiDoanGioi("Anh cần mấy phòng ngủ ạ?"));
 
-ok("GOI-06 'Dạ được anh, để em lọc' → 'mình,'; 'anh, chị cần gì' (cặp) giữ",
-  boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") === "Dạ được mình, để em lọc căn khớp nha." && boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ") === "Dạ anh, chị cần gì thêm ạ",
+ok("GOI-06 'Dạ được anh, để em lọc' → 'anh chị,'; 'anh, chị cần gì' (cặp) giữ",
+  boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") === "Dạ được anh chị, để em lọc căn khớp nha." && boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ") === "Dạ anh, chị cần gì thêm ạ",
   boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") + " | " + boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ"));
 
 // SRS-5.1zi (bắn thử câu đơn giản 02/10): lời bot nói về "hệ thống"; câu khen mở đầu trỏ ngược không có gì để trỏ.

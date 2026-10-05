@@ -121,7 +121,7 @@ export function laKhachBaoHieuNham(cau: string): boolean {
 export function themXinLoiKhiHieuNham(khach: string, replies: string[], ac?: string | null): string[] {
   if (!laKhachBaoHieuNham(khach)) return replies;
   if (replies.some((r) => /\bxin loi\b/.test(boDau(r)))) return replies;
-  const cau = ac && ac !== "mình" ? `Dạ em xin lỗi ${ac}, em hiểu nhầm ạ.` : "Dạ em xin lỗi, em hiểu nhầm ạ.";
+  const cau = ac ? `Dạ em xin lỗi ${ac}, em hiểu nhầm ạ.` : "Dạ em xin lỗi, em hiểu nhầm ạ.";
   const i = replies.findIndex((r) => !/^\s*(?:🤖|💾|📝|👤)/u.test(r));
   if (i < 0) return [...replies, cau];
   // Câu mở "Dạ …" của bong bóng đó thành phần sau lời xin lỗi — bỏ "Dạ" lặp.
@@ -211,7 +211,7 @@ export function suaTuXungMua(s: string): string {
     // thay khi "bạn" làm chủ ngữ (sau là động từ / hết câu); "bạn bè", "người bạn" giữ.
     .replace(
       /(^|[\s,.!?])(?<!(?:người|các|những|một|với|cho|của|hai|ba) )([Bb])ạn(?=\s+(?:cũng|sẽ|nên|có|cần|muốn|đang|phải|được|chỉ|không|là|hãy|thấy|đã|vẫn|tìm|mua|thuê|xem|hỏi)(?![\p{L}])|\s*[,.!?]|$)/gu,
-      (_m, dau, b) => `${dau}${b === "B" ? "Mình" : "mình"}`,
+      (_m, dau, b) => `${dau}${b === "B" ? "Anh chị" : "anh chị"}`,
     );
 }
 
@@ -658,7 +658,7 @@ export function boDoanGioiDauCau(s: string): string {
  * Chưa biết khách là anh hay chị: "anh" / "chị" GỌI khách thì bỏ / đổi (02/10/2026 gom từ nhánh bán sang dùng chung — bắn thật
  * thu-trl-04, khách mua xưng "mình" mà bot "Dạ được chị ơi"). Ba dạng:
  *   · đứng cuối câu (trước ? ! . hoặc hết câu) → "ạ" ("…vậy anh?" → "…vậy ạ?"); "anh chị" đủ cặp và "anh Thu" không đụng;
- *   · gọi "anh ơi" / "chị ơi" → "mình ơi";
+ *   · gọi "anh ơi" / "chị ơi" → "anh chị ơi" (05/10/2026: không còn "mình", SRS-5.1zza);
  *   · mở câu "Anh …" / "Chị …" → "Anh chị …" (`boDoanGioiDauCau`).
  */
 export function boGoiDoanGioi(s: string): string {
@@ -666,9 +666,9 @@ export function boGoiDoanGioi(s: string): string {
 }
 /** Hai dạng đầu của `boGoiDoanGioi` (nhánh bán dùng riêng: khách lớn tuổi thì không đổi đầu câu thành "Anh chị"). */
 export function boGoiCuoiVaOi(s: string): string {
-  return s.replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(\s+)ơi(?![\p{L}])/giu, (_m, ai: string, cach: string) => (/^[AC]/.test(ai) ? "Mình" : "mình") + cach + "ơi")
+  return s.replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(\s+)ơi(?![\p{L}])/giu, (_m, ai: string, cach: string) => (/^[AC]/.test(ai) ? "Anh chị" : "anh chị") + cach + "ơi")
     // 02/10 (thu-trl-06): "Dạ được anh, để em lọc…" — gọi đứng trước dấu phẩy; "anh, chị" (cặp tách phẩy) giữ.
-    .replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(?=\s*,(?!\s*(?:anh|chị)(?![\p{L}])))/giu, (m: string) => (/^[AC]/.test(m) ? "Mình" : "mình"))
+    .replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(?=\s*,(?!\s*(?:anh|chị)(?![\p{L}])))/giu, (m: string) => (/^[AC]/.test(m) ? "Anh chị" : "anh chị"))
     .replace(/(?<!\banh\s)(?<![\p{L}\/])(?:anh|chị)(?=\s*[?!.]|\s*$)/gu, "ạ").replace(/\bạ ạ\b/g, "ạ");
 }
 

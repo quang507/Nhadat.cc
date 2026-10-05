@@ -21,7 +21,7 @@ import { congBiMat } from "../_shared/gate.ts";
 import { cauHoiMau, dienTen, dsHoiBu, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
 import { loaiDoc } from "../_shared/tin-nhap.ts";
 import { boGachCheo, doiTuXung, giuCauDungTen } from "../_shared/extraction/van-tra-loi.ts";
-import { hocXungHoTuLichSu, suyTuXungHo } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { cachGoiKhach, hocXungHoTuLichSu, suyTuXungHo } from "../_shared/extraction/khop-cau-tra-loi.ts";
 
 const OutSchema = z.object({
   message: z.string().describe("Tin nhắn Zalo gửi người bán, tiếng Việt"),
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
       // làm PostgREST trả 300 PGRST201 — và nhánh dưới từng gộp mọi lỗi select
       // thành "listing không tồn tại" (404): hỏi bù CHẾT IM từ 09/09 tới 15/09,
       // 313 lượt, sổ lỗi ghi sai nguyên nhân nên không ai truy.
-      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, boc_tach, sellers!listings_seller_id_fkey(name, seller_type, zalo_user_id, ten_tro_ly, xung_ho)",
+      "id, code, property_type, district, ward, location_raw, price_raw, area_m2, description, seller_id, boc_tach, sellers!listings_seller_id_fkey(name, seller_type, zalo_user_id, ten_tro_ly, xung_ho, nhom_tuoi)",
     )
     .eq("id", listing_id)
     .maybeSingle();
@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
   // FR-237: nhãn theo loại BĐS (đất xin ảnh "lô đất, đường vào", không "mặt tiền nhà, hẻm").
   const factList = dsHoiBu(toAsk.map((f) => f.fact_key), listing.property_type);
   const seller = listing.sellers as
-    | { name?: string; seller_type?: string; zalo_user_id?: string | null; ten_tro_ly?: string | null; xung_ho?: string | null }
+    | { name?: string; seller_type?: string; zalo_user_id?: string | null; ten_tro_ly?: string | null; xung_ho?: string | null; nhom_tuoi?: string | null }
     | null;
   // 05/10/2026 (SRS-5.1zx, hỏi bù 04/10 "…không mình?" dù khách đã xưng "anh" hai hôm trước): hồ sơ chưa có cách gọi thì
   // học từ tin cũ của chủ nhà trước khi soạn, và ghi lại hồ sơ — không gửi câu hỏi bù bằng "mình" khi khách đã nói mình là ai.
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
         : `Soạn MỘT tin nhắn Zalo NGẮN (35–60 từ) hỏi bù ${toAsk.length} thông tin dưới đây trong CÙNG MỘT tin (mỗi thông tin một dòng ngắn, xuống dòng), giọng nối tiếp cuộc trò chuyện đang có, kèm lý do vì-khách khi tự nhiên ("khách mua đang hỏi…"). Không chào lại từ đầu, không hỏi gì khác.`)
     : `Soạn MỘT tin nhắn Zalo gửi người bán để xin bổ sung thông tin cho tin rao: gộp hết vào một tin duy nhất, mỗi thông tin một câu hỏi rõ ràng, mở đầu chào đúng tone + khen một điểm mạnh của tin, nói rõ "có khách đang hỏi" để tạo động lực trả lời, kết thúc bằng lời cảm ơn + câu hỏi. Không hỏi gì ngoài danh sách.`;
 
-  const cachGoi = seller?.xung_ho ?? "mình";
+  const cachGoi = cachGoiKhach(seller?.xung_ho, seller?.nhom_tuoi);
   const cauDrip = drip
     ? `${isFirst ? `Dạ em cảm ơn ${cachGoi} đã gửi tin nha. ` : "Dạ, em hỏi thêm một ý nha. "}${cauHoiMau(toAsk[0].fact_key, cachGoi, undefined, listing.property_type)}`
     : null;
@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
         // 21/09/2026: "chưa rõ tên (gọi anh/chị)" từng dạy model viết "anh/chị" gạch chéo — nay đưa
         // cách gọi đã dặn (`sellers.xung_ho`, FR-176); chưa biết thì gọi "mình", không gạch chéo.
         `Người bán: ${seller?.name ?? "chưa rõ tên"} - cách gọi: ${
-          seller?.xung_ho ? `"${seller.xung_ho}"` : `chưa biết nam/nữ → gọi "mình", KHÔNG viết "anh/chị"`
+          seller?.xung_ho ? `"${seller.xung_ho}"` : `chưa biết nam/nữ → gọi "${cachGoi}", KHÔNG viết "anh/chị" gạch chéo, KHÔNG gọi "mình"`
         } - loại: ${
           seller?.seller_type === "nmg" ? "nhà môi giới (hỏi gọn, chuyên nghiệp)" : "chính chủ (giọng gần gũi)"
         }\n` +
@@ -239,9 +239,9 @@ Deno.serve(async (req) => {
   // Lưới trên đường ra như chat-reply: bỏ "anh/chị" gạch chéo, tự xưng "cháu" với chú/cô/bác.
   // FR-238: câu đứng tên đi nguyên câu mẫu (hỏi QUAN HỆ, không để model viết "Ai đứng tên sổ?" — khách dễ đáp họ tên).
   if (toAsk.some((f) => f.fact_key === "nguoi_dung_ten")) {
-    out.message = giuCauDungTen(out.message, cauHoiMau("nguoi_dung_ten", seller?.xung_ho ?? "mình", undefined, listing.property_type));
+    out.message = giuCauDungTen(out.message, cauHoiMau("nguoi_dung_ten", cachGoi, undefined, listing.property_type));
   }
-  out.message = doiTuXung([boGachCheo(out.message)], seller?.xung_ho)[0];
+  out.message = doiTuXung([boGachCheo(out.message)], seller?.xung_ho, seller?.nhom_tuoi)[0];
   let sent_via: string = "none";
   // Khai ngoài khối `dry_run` vì câu trả lời cuối hàm đọc nó: `asked` phải là
   // những câu THẬT SỰ được mở, không phải những câu định mở.

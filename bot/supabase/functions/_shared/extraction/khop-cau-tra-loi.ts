@@ -66,6 +66,13 @@ export const XUNG_HO_HOP_LE: ReadonlySet<string> = new Set(["anh", "chị", ...X
 export const tuXungBot = (xh: string | null | undefined): "em" | "cháu" =>
   xh && XUNG_HO_LON_TUOI.has(xh) ? "cháu" : "em";
 /** Giới tính + nhóm tuổi suy từ cách gọi (ghi `sellers.gioi_tinh`, `sellers.nhom_tuoi`). */
+// 05/10/2026 (SRS-5.1zza, chủ dự án: "bỏ 'mình' luôn đi, chưa biết thì gọi anh chị"): MỘT chỗ quyết cách gọi khách khi hồ sơ
+// chưa có — trước đây ~20 chỗ tự điền "mình" (vừa là tôi vừa là bạn, đọc như bot tự xưng: "cảm ơn mình", "không mình?").
+// Chưa biết → "anh chị"; biết là người lớn tuổi mà chưa rõ cô hay chú → "cô chú". Cụm sở hữu "nhà mình" trong câu mẫu giữ.
+export function cachGoiKhach(xungHo: string | null | undefined, nhomTuoi?: unknown): string {
+  return xungHo ?? (nhomTuoi === "lon_tuoi" ? "cô chú" : "anh chị");
+}
+
 export function suyTuXungHo(xh: XungHo): { gioi_tinh: "nam" | "nu" | null; nhom_tuoi: "tre" | "lon_tuoi" } {
   const nam = ["anh", "chú", "ông", "cậu", "dượng"].includes(xh);
   const nu = ["chị", "cô", "bà", "dì", "mợ", "thím"].includes(xh);

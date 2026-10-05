@@ -132,7 +132,7 @@ check("V1.3 rao đủ giá+phường+diện tích nhưng chưa nói đường/h�
 // FR-193 (10/09): câu rao KHÔNG nói quận thì bong bóng không được nói "Quận 5" —
 // đó là mặc định của cột, không phải điều khách nói.
 check("V1.3 bong bóng đầu 'Em ghi nhận' liệt kê đúng thứ bóc được, không tự thêm quận, đứng trước lời chào", /^📝 Em ghi nhận: bán( nhà phố)? · Phường 4 · 50m2 · giá 5 tỷ 8\./.test(r.body.replies[0] ?? "") && r.body.replies.length >= 2 && !/gấp|phòng ngủ|Quận 5/.test(r.body.replies[0]), JSON.stringify(r.body.replies));
-check("V1.3 câu hỏi mẫu vi_tri lấy từ bot_prompts.cau_hoi_mau (đè bản code)", createCalls().some((c) => /Nhà mình ở đâu vậy anh\/chị, đường nào số mấy\?/.test(c.params.messages[0].content)), createCalls().at(-1)?.params.messages[0].content.slice(0, 300));
+check("V1.3 câu hỏi mẫu vi_tri lấy từ bot_prompts.cau_hoi_mau (đè bản code)", createCalls().some((c) => /Nhà mình ở đâu vậy anh chị, đường nào số mấy\?/.test(c.params.messages[0].content)), createCalls().at(-1)?.params.messages[0].content.slice(0, 300));
 check("V1.3 boc_tach ghi ngay lúc tạo: loại giao dịch, phường, giá thô, diện tích; không có khoá null", L?.boc_tach?.loai_giao_dich === "ban" && L?.boc_tach?.phuong === "Phường 4" && /5 tỷ 8/.test(L?.boc_tach?.gia_raw ?? "") && L?.boc_tach?.dien_tich === "50m2" && !("gap" in (L?.boc_tach ?? {})) && !("du_an" in (L?.boc_tach ?? {})), JSON.stringify(L?.boc_tach));
 check("V1.3 rao đã nói 50m2 → diện tích được ghi, drip KHÔNG hỏi lại", L?.area_m2 === 50 && !db().t.info_requests.some((q) => q.listing_id === L?.id && q.question === "dien_tich"), JSON.stringify(db().t.info_requests));
 check("V1.3 giá thô không dính đuôi '50m2'", L && !/m2/.test(L.price_raw), L?.price_raw);
@@ -6325,8 +6325,8 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   // (3) "chào cháu" trơ → biết lớn tuổi, chưa biết chú/cô: xưng cháu, gọi "mình", hỏi "cháu gọi chú hay cô".
   fresh();
   r = await send({ external_user_id: "gvd-3", text: "chào cháu" });
-  check("GVD-03 tin đầu 'chào cháu' → 'Dạ cháu chào ạ…', 'Mình cần giao bán…', + 'Cháu gọi chú hay cô cho tiện ạ?'; prefs nhom_tuoi lon_tuoi, xung_ho trống",
-    /^Dạ cháu chào ạ/.test(r.body.replies[0] ?? "") && /Mình cần giao bán bất động sản/.test(rep()) && /Cháu gọi chú hay cô/.test(rep()) && !/anh chị/i.test(rep()) && JSON.stringify(bX("gvd-3")) === JSON.stringify([null, "lon_tuoi", true]),
+  check("GVD-03 tin đầu 'chào cháu' → 'Dạ cháu chào ạ…', 'Cô chú cần giao bán…', + 'Cháu gọi chú hay cô cho tiện ạ?'; prefs nhom_tuoi lon_tuoi, xung_ho trống",
+    /^Dạ cháu chào ạ/.test(r.body.replies[0] ?? "") && /Cô chú cần giao bán bất động sản/.test(rep()) && /Cháu gọi chú hay cô/.test(rep()) && !/anh chị/i.test(rep()) && JSON.stringify(bX("gvd-3")) === JSON.stringify([null, "lon_tuoi", true]),
     JSON.stringify({ rep: r.body.replies, b: bX("gvd-3") }));
   // (4) trả lời "cô" trơ → ghi cách gọi, hỏi lại vai, cờ hỏi vai giữ.
   r = await send({ external_user_id: "gvd-3", text: "cô" });
@@ -6344,8 +6344,8 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   globalThis.__model.create = () => "Nhà mình ở phường mấy vậy anh chị?";
   r = await send({ external_user_id: "gvd-6", text: "bán nhà hẻm 4m Nguyễn Trãi q5, 60m2, 7 tỷ" });
   globalThis.__model.create = undefined;
-  check("GVD-06 'chào cháu' → câu rao không xưng → sellers.nhom_tuoi lon_tuoi, xung_ho trống; 📝 'Cháu ghi nhận', model 'anh chị?' → 'mình', không 'anh chị'",
-    r.body.role === "seller" && JSON.stringify(sX("gvd-6")) === JSON.stringify([null, "lon_tuoi"]) && /Cháu ghi nhận/.test(rep()) && /vậy mình\?/.test(rep()) && !/anh chị|anh\/chị/i.test(rep()),
+  check("GVD-06 'chào cháu' → câu rao không xưng → sellers.nhom_tuoi lon_tuoi, xung_ho trống; 📝 'Cháu ghi nhận', model 'anh chị?' → 'cô chú', không 'anh chị'",
+    r.body.role === "seller" && JSON.stringify(sX("gvd-6")) === JSON.stringify([null, "lon_tuoi"]) && /Cháu ghi nhận/.test(rep()) && /vậy cô chú\?/.test(rep()) && !/anh chị|anh\/chị/i.test(rep()),
     JSON.stringify({ rep: r.body.replies, s: sX("gvd-6") }));
   // (7) chủ nhà đã có tin, đang treo câu tầng, nhắn "cô chào cháu" → nhận "cô", không ghi fact, câu tầng treo.
   fresh(seedKho);
@@ -7406,8 +7406,8 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
   globalThis.__model.troLy = () => ({ stop_reason: "end_turn", content: [{ type: "text", text: "Dạ được chị ơi :) Mình cần mấy phòng ngủ vậy chị?" }] });
   rt = await send({ external_user_id: "thu-tl9", text: "minh muon mua nha, cho minh hoi chut" });
-  check("TL-E2E-08 chưa biết anh hay chị → 'chị ơi' thành 'mình ơi', '…vậy chị?' thành '…vậy ạ?'",
-    /mình ơi/.test(rt.body.reply ?? "") && !/\bchị\b/i.test(rt.body.reply ?? ""), String(rt.body.reply));
+  check("TL-E2E-08 chưa biết anh hay chị → 'chị ơi' thành 'anh chị ơi', '…vậy chị?' thành '…vậy ạ?' (05/10: không còn 'mình')",
+    /anh chị ơi/.test(rt.body.reply ?? "") && !/\bchị\b/i.test(rt.body.reply ?? ""), String(rt.body.reply));
 
   // TL-E2E-09 (bắn thật 02/10 thu-trl-05): model tự kể "Bệnh viện Chợ Rẫy khoảng 500m" không gọi công cụ → code nhắc một lần
   // → model tra → lời trả lời theo dữ liệu thật; payload ghi số lần nhắc.
