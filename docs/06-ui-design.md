@@ -284,6 +284,12 @@ tháng tiền thuê (BR-05); CHỦ ĐẦU TƯ dự án phí thoả thuận riên
   vay, phí) tối đa 3 câu · không đoán quận của địa danh. Phần chặn được bằng code nằm
   ở `van-tra-loi.ts` (`locHoSoMua` gỡ mục đích / thời hạn / hoàn cảnh không căn cứ,
   `suaTuXungMua`, van kho trống).
+- **Siết 05/10/2026** [nguồn: chủ dự án, ảnh hội thoại test 02/10 "nó xưng mình đây này"]: "mình" là
+  cách gọi KHÁCH, không bao giờ là em — sai "mình ghi nhận", "cho mình xin", "để mình kiểm
+  tra"; đúng "em ghi nhận", "cho em xin", "để em kiểm tra". Prompt nêu cặp sai/đúng (bản trước
+  dùng "mình" = khách ~90 lần mà luật "em xưng em" chỉ hai dòng, model học nhầm đại từ). Lưới
+  đỡ `botXungEm` (`van-tra-loi.ts`) là MỘT luật mệnh đề: "mình" mở mệnh đề + động từ việc của
+  bot, mệnh đề không có "em" → đổi "em"; thay cho danh sách ba mẫu câu (SRS-5.1zz).
 - Trả lời đúng ý khách **trước**; câu hỏi nằm cuối tin (gộp 2–3 ý được).
 - Không hỏi lại điều đã có trong hồ sơ (`buyers.preferences`); gặp lại thì nhắc
   đúng nhu cầu cũ.

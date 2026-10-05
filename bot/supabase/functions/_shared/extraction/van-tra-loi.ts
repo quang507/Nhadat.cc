@@ -1448,8 +1448,20 @@ export function goiCanHo(reply: string): string {
 // "Mình cho mình xin địa chỉ" — bot tự xưng "mình". "mình" chỉ dùng để GỌI khách chưa rõ anh / chị; bot luôn là "em"
 // (người lớn tuổi thì `doiTuXung` đổi tiếp sang "cháu"). Chỉ sửa những cụm chắc chắn là bot nói về mình: xin / hỏi
 // cho mình, mình ghi nhận / ghi lại / lưu lại / tạo tin.
+// 05/10/2026 (SRS-5.1zz, chủ dự án: "đợt trước cứ vá theo từng cái cụ thể quá mà không vá chung"): thay danh sách mẫu câu bằng MỘT
+// luật mệnh đề — "mình" mở mệnh đề (đầu câu, sau dấu, sau Dạ/Để/Rồi/Nên/Vậy/Thôi/Giờ) + động từ VIỆC CỦA BOT, mà mệnh đề đó không
+// có chữ "em" → bot đang nói về mình → "em". "Mình gửi em thêm hình nha" (có "em") và "Nhà mình" (sau danh từ) giữ nguyên.
+const VIEC_BOT = "ghi nhận|ghi lại|ghi|lưu lại|lưu|tạo tin|tạo|đăng tin|đăng|lên tin|kiểm tra|xem lại|soát|báo lại|báo|sửa lại|sửa|cập nhật|tìm|lọc|chuyển|kết nối|hẹn|soạn|chốt|nhắn|hỏi lại|gửi (?:anh|chị|chú|cô|bác|mình|khách)";
+const MINH_MO_MENH_DE = new RegExp(`(^|[.,;:!?\\n]\\s*|(?<![\\p{L}])(?:[Dd]ạ|[Đđ]ể|[Rr]ồi|[Nn]ên|[Vv]ậy|[Tt]hôi|[Gg]iờ)\\s+)([Mm])ình(\\s+(?:(?:đã|vừa|sẽ|đang|cứ|xin|mới)\\s+)?(?:${VIEC_BOT})(?![\\p{L}]))`, "gu");
+function menhDeKhongCoEm(r: string, tu: number): boolean {
+  const het = r.slice(tu).search(/[.,;:!?\n]/);
+  const menhDe = r.slice(tu, het < 0 ? undefined : tu + het);
+  return !/(?<![\p{L}])em(?![\p{L}])/u.test(menhDe);
+}
 export function botXungEm(r: string): string {
   if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) return r;
+  r = r.replace(MINH_MO_MENH_DE, (m, dau: string, M: string, sau: string, tu: number) =>
+    menhDeKhongCoEm(r, tu + dau.length) ? `${dau}${M === "M" ? "Em" : "em"}${sau}` : m);
   return r
     // 30/09/2026 (bắn thật v285): "Cảm ơn em đã ghi nhận bán căn hộ Sunrise City…" — model cảm ơn KHÁCH vì việc BOT làm.
     // Ghi nhận / ghi lại / lưu lại là việc của bot → "Dạ em ghi nhận…".

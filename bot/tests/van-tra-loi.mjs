@@ -1152,6 +1152,20 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
   ok("chanHuaGuiHinh(null) chỉ bỏ câu hứa, không chèn", JSON.stringify(chanHuaGuiHinh(["Dạ căn Hải Thượng Lãn Ông 6 tỷ 4 ạ. Em gửi hình liền cho mình nha."], null)) === JSON.stringify(["Dạ căn Hải Thượng Lãn Ông 6 tỷ 4 ạ."]));
   ok("boCauHoiLap bỏ câu hỏi lặp, giữ phần khác", JSON.stringify(boCauHoiLap(["Dạ em ghi nhận. Mình muốn hẻm xe hơi hay mặt tiền hơn vậy ạ?"], "Mình thích hẻm xe hơi hay mặt tiền hơn ạ?")) === JSON.stringify(["Dạ em ghi nhận."]));
   ok("FR250 'Sổ nhà mình' giữ", botXungEm("Sổ nhà mình riêng hay chung ạ?") === "Sổ nhà mình riêng hay chung ạ?");
+  // 05/10/2026 (SRS-5.1zz): MỘT luật mệnh đề thay danh sách mẫu — cách nói MỚI chưa bắn, và các câu phải GIỮ.
+  for (const [vao, ra] of [
+    ["Để mình kiểm tra lại rồi báo anh nha.", "Để em kiểm tra lại rồi báo anh nha."],
+    ["mình gửi anh bản nháp nha", "em gửi anh bản nháp nha"],
+    ["Dạ, mình cập nhật lại giá 7 tỷ 2 rồi ạ.", "Dạ, em cập nhật lại giá 7 tỷ 2 rồi ạ."],
+    ["Rồi mình báo anh sau nha.", "Rồi em báo anh sau nha."],
+    ["Mình đã lưu lại rồi. Nhà mình mấy toilet ạ?", "Em đã lưu lại rồi. Nhà mình mấy toilet ạ?"],
+    ["Mình gửi em thêm hình nha", "Mình gửi em thêm hình nha"],
+    ["Mình chụp thêm hình nha?", "Mình chụp thêm hình nha?"],
+    ["Mình chốt lịch với em nha", "Mình chốt lịch với em nha"],
+    ["Nhà mình mấy toilet ạ?", "Nhà mình mấy toilet ạ?"],
+    ["Dạ mình cho em hỏi giá nha?", "Dạ mình cho em hỏi giá nha?"],
+    ["🤖 Bóc tách được: mình ghi nhận", "🤖 Bóc tách được: mình ghi nhận"],
+  ]) ok(`XM '${vao}' → '${ra}'`, botXungEm(vao) === ra, botXungEm(vao));
   for (const [vao, ra] of [
     ["Cảm ơn em đã ghi nhận bán căn hộ Sunrise City 2PN 70 m² giá 3 tỷ. Căn hộ mình ở tầng mấy ạ?",
       "Dạ em ghi nhận bán căn hộ Sunrise City 2PN 70 m² giá 3 tỷ. Căn hộ mình ở tầng mấy ạ?"],

@@ -175,8 +175,13 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
     r3.ghi.map((g) => `${g.question}=${g.answer}`).join("|") === "so_phong_ngu=3|ket_cau=4 tầng|do_rong_hem=5m|phuong=Phường 14|gap=cần bán gấp" && lyDo(r3, "so_wc") === "so_ngoai_khoang", JSON.stringify(r3));
   const r4 = chon([dx("quan", "Quận 5", "quận 5"), dx("duong", "Châu Văn Liêm", "đường Châu Văn Liêm"), dx("ma_can", "S1.02", "căn S1.02")], { district: null, street: null, unit_code: null });
   ok("ghi: quận / đường / mã căn không có chỗ ghi fact → bỏ khoa_khong_co_cho_ghi", r4.ghi.length === 0 && r4.bo.every((b) => b.ly_do === "khoa_khong_co_cho_ghi") && r4.bo.length === 3, JSON.stringify(r4));
+  // 05/10/2026 (SRS-5.1zz): hai khoá cùng đổ về ket_cau → cụm chữ thắng số, bất kể AI liệt kê cái nào trước.
   const r5 = chon([dx("so_tang", "4", "trệt 3 lầu"), dx("ket_cau", "trệt 3 lầu", "trệt 3 lầu")], { floors: null });
-  ok("ghi: hai khoá cùng đổ về ket_cau → ghi một, cái sau fact_da_co", r5.ghi.length === 1 && lyDo(r5, "ket_cau") === "fact_da_co", JSON.stringify(r5));
+  ok("ghi: so_tang trước, ket_cau sau → ghi 'trệt 3 lầu', so_tang fact_da_co", r5.ghi.length === 1 && r5.ghi[0].answer === "trệt 3 lầu" && r5.bo.some((b) => b.khoa === "so_tang" && b.ly_do === "fact_da_co"), JSON.stringify(r5));
+  const r5b = chon([dx("ket_cau", "trệt 3 lầu", "trệt 3 lầu"), dx("so_tang", "4", "trệt 3 lầu")], { floors: null });
+  ok("ghi: ket_cau trước, so_tang sau → vẫn 'trệt 3 lầu'", r5b.ghi.length === 1 && r5b.ghi[0].answer === "trệt 3 lầu", JSON.stringify(r5b));
+  const r5c = chon([dx("so_tang", "3", "3 tầng")], { floors: null });
+  ok("ghi: chỉ có so_tang → vẫn ghi '3 tầng'", r5c.ghi.length === 1 && r5c.ghi[0].answer === "3 tầng", JSON.stringify(r5c));
   // 30/09/2026 (bắn thử bán lx-ban-292b): "phí quản lý 15k/m2" → AI "15 nghìn" mất đơn vị.
   const rPql = chon([dx("phi_quan_ly", "15 nghìn", "phí quản lý 15k/m2")], {});
   ok("ghi: phí quản lý AI '15 nghìn' mà chữ khách '15k/m2' → giữ '15k/m2'", rPql.ghi.map((g) => `${g.question}=${g.answer}`).join() === "phi_quan_ly=15k/m2", JSON.stringify(rPql));
@@ -679,6 +684,14 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("XH-LS-03 trích không có ở tin nào → bỏ", docTuXung({ la: "anh", trich_dan: "anh đang muốn bán" }, "Shr", cu) === null);
   ok("XH-LS-04 trích ở tin cũ nhưng không có chữ 'chị' → bỏ", docTuXung({ la: "chị", trich_dan: "Anh nói đó" }, "Shr", cu) === null);
   ok("XH-LS-05 (mới) 'Nhà a 4 tầng' ở tin cũ, trích 'Nhà a' → anh", docTuXung({ la: "anh", trich_dan: "Nhà a" }, "sổ riêng", ["Nhà a 4 tầng tính cả lửng"])?.la === "anh");
+}
+// 05/10/2026 (SRS-5.1zz): quan / ma_can / gia_m2 đã đọc vào cột lõi thì không còn ghi "bỏ, khoá không có chỗ ghi" (tiếng ồn).
+{
+  const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+  const r = docAiChinh([T("quan", "Quận 5", "quận 5"), T("ma_can", "S1.02", "căn S1.02"), T("gia_m2", "95 triệu/m2", "95 triệu/m2"), T("gia", "5 tỷ", "5 tỷ")], null);
+  ok("ON-01 quận / mã căn / giá m² đã vào cột lõi → không nằm trong bỏ", r.quan === "Quận 5" && r.maCan === "S1.02" && r.giaM2Raw === "95 triệu/m2" && !r.bo.some((b) => ["quan", "ma_can", "gia_m2"].includes(b.khoa)), JSON.stringify(r.bo));
+  const r2 = docAiChinh([T("quan", "Quận Mặt Trăng", "quận mặt trăng"), T("ma_can", "căn góc đẹp lắm nha", "căn góc đẹp lắm nha")], null);
+  ok("ON-02 quận lạ / mã căn sai dạng → vẫn báo bỏ", r2.quan === null && r2.maCan === null && r2.bo.filter((b) => ["quan", "ma_can"].includes(b.khoa)).length === 2, JSON.stringify(r2.bo));
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

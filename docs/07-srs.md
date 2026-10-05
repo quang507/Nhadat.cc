@@ -2122,6 +2122,27 @@ Gỡ bản sửa thì S07-a/b đỏ (đã chạy).
 
 **(4) Kiểm**: `van-tra-loi.mjs` DS-01…11 (tin gốc + cách nói mới "DTSD: 180m2", "Diện tích sử dụng: 300 m2", "Đất: 5 x 20m", "Giá: 3,2 tỷ, có bớt lộc"; giữ "4x15, 7 tỷ 2" và "3PN,2WC" vẫn tách), `boc-cau-rao.mjs` DS-12…14; bộ 42 ca, FR-176, kiểm bằng chứng không đổi. Bộ đo thêm ca **Z01** (tin gốc, nhóm `ban1`) với khoá mới `dt_san` (cột `built_area_m2`, thêm vào `cham.mjs`, `chay.mjs`, SQL trạng thái trong README): chế độ luật một mình 9/10 trường (sàn không có vì mock không ánh xạ fact → cột, chỉ đo được trên production); `nen.json` không đổi (Z01 chưa đạt trọn). Đo AI thật cần credit: chạy `do-boc.yml` nhóm `ban1` sau khi nạp.
 
+### SRS-5.1zz · Soát luật bóc tách: sáu chỗ hai luật nói hai hướng; bot tự xưng "mình" — luật phủ định + lưới mệnh đề (05/10/2026)
+
+**Bối cảnh** `[nguồn: chủ dự án 05/10/2026: "M xem có chỗ nào thiếu logic không. Sao lâu lâu nó cứ xưng mình" → "tôi muốn bạn sửa đống này"]`. Soát prompt bóc tách (`_shared/ai/boc-rao.ts`) đối chiếu với schema và code ghi: 77 khoá đều được nhắc tên, không khoá mồ côi; lỗ nằm ở chỗ hai luật mâu thuẫn hoặc hai tên cho một ô.
+
+**A. Sáu chỗ sửa trong luật / code ghi**
+
+1. **Hợp đồng thuê đang chạy của căn bán có hai đích**: dòng `thoi_han_thue` bảo vào `kien_thuc`, ô chữ lại có `han_hop_dong_thue`. Nay prompt chỉ một đích: `han_hop_dong_thue`, không vào `kien_thuc`.
+2. **`so_tang` và `ket_cau` cùng đổ về fact `ket_cau`**, `chonDeGhi` ghi khoá AI liệt kê TRƯỚC, prompt liệt kê `so_tang` trước → "3 tầng" đè mất "trệt 2 lầu". Nay code xét `ket_cau` trước bất kể thứ tự (cụm chữ là ô chính), `so_tang` thành `fact_da_co`; prompt nói rõ. Kiểm: `kiem-bang-chung.mjs` r5 (hai thứ tự) + r5c (chỉ `so_tang` vẫn ghi).
+3. **`hien_trang` ↔ `hien_trang_su_dung` chồng nhau**: prompt định nghĩa `hien_trang` = tình trạng căn nhà (mới / cũ / cần sửa / bàn giao thô), `hien_trang_su_dung` = đang ở / đang cho thuê / để trống, ghi ở cả hai chỗ nhắc.
+4. **Một ô hai tên** (`duong` ở `truong`, `vi_tri` ở "Thông tin đang ghi" và `cap_nhat`): prompt nói thẳng hai tên là một ô, ở cả hai chỗ.
+5. **Chế độ chuẩn hoá tự mâu thuẫn** ("khách nói KHÔNG có → không đưa" đụng "không có hẻm → `khong_hem`"): thêm ngoại lệ cho các ô có/không (`gap`, `thuong_luong`, `o_to_vao_nha`, `hoan_cong`, `thang_may`, `can_goc`, `loai_duong_vao`): "không gấp", "chưa hoàn công", "không có hẻm" là câu trả lời, vẫn đưa.
+6. **Tiếng ồn trong sổ bỏ**: `quan`, `ma_can`, `gia_m2` không có chỗ ghi FACT nên `chonDeGhi` luôn đánh "bỏ, khoá không có chỗ ghi" dù `docAiChinh` đọc chúng vào cột lõi. Nay `docAiChinh` lọc ba khoá đó khỏi `bo` khi đã đọc được; quận lạ / mã căn sai dạng vẫn báo bỏ. Kiểm: ON-01, ON-02.
+
+**B. Bot tự xưng "mình"**
+
+- **Lớp lỗi**: "mình" trong tiếng Việt vừa là tôi vừa là bạn. Prompt dùng "mình" = KHÁCH ~90 lần (câu mẫu "Nhà mình…", ví dụ) mà luật "em tự xưng em" chỉ hai dòng, không có ví dụ sai / đúng → model (Haiku, và Groq / Gemini đang gánh khi credit = 0) học "mình" là đại từ chính rồi dùng cho bản thân. Lưới đỡ `botXungEm` (30/09) chỉ bắt ba mẫu câu — đúng lớp "vá bằng danh sách mẫu câu".
+- **Chỗ khác cùng lớp**: nhánh mua có `suaTuXungMua` ("chúng mình" → "bên em", "bạn" → "mình") — cũng mẫu câu, nhưng cùng chạy qua `botXungEm`? Không: nhánh mua chỉ gọi `suaTuXungMua`. Để sau nếu bắn thử nhánh mua thấy; `ask-seller` dùng câu mẫu tiền định nên không dính.
+- **Sửa**: (1) `TONE_RULES` và `HUMAN_CHAT_RULES` thêm luật phủ định có cặp sai / đúng ("mình ghi nhận rồi" → "em ghi nhận rồi", "cho mình xin" → "cho em xin", "để mình kiểm tra" → "để em kiểm tra"); `docs/06 §6.8` ghi trước. (2) `botXungEm` thành MỘT luật mệnh đề: "mình" mở mệnh đề (đầu câu, sau dấu, sau Dạ / Để / Rồi / Nên / Vậy / Thôi / Giờ) + động từ việc của bot (`VIEC_BOT`: ghi nhận, lưu, tạo tin, đăng, kiểm tra, xem lại, báo, sửa, cập nhật, tìm, lọc, chuyển, kết nối, hẹn, soạn, chốt, nhắn, hỏi lại, "gửi anh/chị/…"), mệnh đề không có chữ "em" → "em". "Mình gửi em thêm hình nha" (có "em"), "Mình chụp thêm hình nha" (việc của khách), "Nhà mình" (sau danh từ) giữ nguyên. Ba mẫu cũ vẫn chạy sau.
+- **Kiểm, đỏ khi tắt bản sửa**: `van-tra-loi.mjs` XM (cách nói mới "Để mình kiểm tra lại rồi báo anh nha", "mình gửi anh bản nháp", "Rồi mình báo anh sau"; giữ "Mình gửi em thêm hình", "Mình chụp thêm hình", "Dạ mình cho em hỏi giá"); e2e `XM-E2E-01` (model trả "Dạ, mình cập nhật lại rồi ạ. Để mình xem lại rồi báo anh nha. Nhà mình mấy toilet ạ?" → đường ra không còn "mình cập nhật / Để mình xem lại", còn "Nhà mình").
+- **Việc còn lại ngoài repo**: bản `bot_prompts` trên DB đè bản code — sau khi merge, chủ dự án chạy `bun run prompt --day` (cần `SUPABASE_SERVICE_ROLE_KEY` trong `scripts/.env`), không thì bot vẫn chạy câu dặn cũ.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

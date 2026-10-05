@@ -3664,6 +3664,24 @@ fresh(seedKho);
       JSON.stringify({ xh: db().t.sellers.find((x) => x.zalo_user_id === "xh-ls-01")?.xung_ho, rep: r5.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // 05/10/2026 (SRS-5.1zz, chủ dự án: "nó xưng mình đây này"): model nhánh bán tự xưng "mình" bằng cách nói CHƯA từng bắn
+  // ("Để mình xem lại rồi báo anh", "mình cập nhật lại") → lưới mệnh đề đổi thành "em"; "Nhà mình" (gọi khách) giữ.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model = {
+      parse: (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null } } : OUT(),
+      create: () => "Dạ, mình cập nhật lại rồi ạ. Để mình xem lại rồi báo anh nha. Nhà mình mấy toilet ạ?",
+    };
+    const rX = await send({ external_user_id: "z-ccrb", text: "ok em" });
+    const repX = (rX.body.replies ?? []).filter((x) => !/^\s*(?:🤖|💾|📝|📋)/u.test(x)).join("\n");
+    check("XM-E2E-01 model 'mình cập nhật / Để mình xem lại' → 'em cập nhật / Để em xem lại'; 'Nhà mình' giữ",
+      repX.length > 0 && !/(?:^|[.,;:!?]\s*|Dạ,?\s+|Để\s+)[Mm]ình (?:cập nhật|xem lại)/u.test(repX) && /Nhà mình/.test(repX),
+      JSON.stringify(rX.body.replies));
+    globalThis.__cauHinh = cuCH;
+    globalThis.__model = { parse: () => OUT() };
+  }
   // 30/09/2026 (bắn thật lx-mua-e): khách MUA đã có hồ sơ nới ngân sách "vậy có căn 6 tỷ rưỡi cũng được" → cổng nới
   // `coHangCoGia` ("có căn" + giá) mở hồ sơ BÁN, tạo tin "BĐS bán", hỏi "nhà mình là nhà phố hay chung cư".
   for (const [i, cau, laBan] of [
