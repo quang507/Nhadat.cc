@@ -2144,6 +2144,9 @@ export function laNgungRao(text: string): NgungRao | null {
     /\b(?:hop dong|ngan hang|dong tien|thu nhap|khach thue|moi thang|hoan thien|kinh doanh)\b/.test(kd) &&
     !/\b(?:da ban|ban roi|ban duoc|chot roi|coc roi)\b/.test(kd);
   if (dangCoKhachThue) return null;
+  // 05/10/2026 (SRS-5.1zzc, thăm dò câu keep-alive): "ngưng bán rồi" / "thôi không bán rồi" từng ra BÁN RỒI vì luật "bán … rồi"
+  // xét trước — đó là lời DỪNG (đảo ngược được), không phải giao dịch xong (đóng tin + báo khách "đã bán").
+  if (/\b(?:ngung|dung|thoi|het|khong|ko|k)\s*(?:ban|cho thue|rao)\s*(?:nua\s*)?(?:roi|r)\b/.test(kd) && !/\b(?:da ban|ban duoc|chot|coc)\b/.test(kd)) return "rut";
   const banRoi =
     /\b(?:da|vua)\s*(?:ban|cho thue|chot|nhan coc|giao dich|co nguoi (?:mua|thue)|sang ten|xong)\b/.test(kd) ||
     /\b(?:ban|cho thue|chot|giao dich|sang ten)\s*(?:duoc|xong|het|nha|dat|can|no)?\s*(?:roi|xong roi|r)\b/.test(kd) ||
@@ -2180,6 +2183,27 @@ export function laNgungRao(text: string): NgungRao | null {
     /\b(?:de lai|giu lai)\s*(?:o|xai|dung|cho thue|nha|can)?\b/.test(kd) && /\b(khong|ko|thoi|ngung)\b/.test(kd) ||
     /\bkhong (?:ban|cho thue|rao) nua\b/.test(kd);
   return rut ? "rut" : null;
+}
+
+// ── Trả lời câu keep-alive "còn bán không" (SRD §VI 2.4, 05/10/2026, SRS-5.1zzc) ──
+// LƯỚI ĐỠ khi AI không chạy. Đường chính: AI đọc theo nghĩa (`dong_y` với câu bot vừa hỏi = còn; `y_dinh` ban_roi / ngung_rao;
+// `khong_dong_y` không kèm "bán rồi" = tạm ngưng — đảo ngược được, không gửi "đã bán" cho khách đang chờ).
+// "còn em" / "vẫn đang bán nha" / "chưa bán được" / "ừ" → con · "bán rồi" → ban_roi (laNgungRao) · "không còn" / "hết rồi" /
+// "ngưng bán" → rut · nói chuyện khác → null (tầng trên đi đường thường, câu còn treo).
+export type TraLoiConBan = "con" | NgungRao;
+export function docTraLoiConBan(text: string): TraLoiConBan | null {
+  const goc = (text ?? "").trim();
+  if (!goc) return null;
+  const ng = laNgungRao(goc);
+  if (ng) return ng;
+  const kd = boDau(goc.replace(/[bB][ậạẬẠ][nN]/gu, "bxn")).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd || /\?/.test(goc)) return null;
+  if (/\b(?:khong|ko|k|het|hong)\s*(?:con|ban|cho thue|rao)\b|\bhet roi\b/.test(kd)) return "rut";
+  // Câu HỎI / câu có số ("giá giờ còn bao nhiêu được", "còn 2 căn") không phải lời xác nhận còn bán.
+  if (/\b(?:bao nhieu|may|sao|the nao|duoc khong|khong em|hong)\b|\d/.test(kd)) return null;
+  if (/\b(?:con|van|dang|chua)\s*(?:ban|cho thue|rao|con|chot|ai mua|ai thue)?\b/.test(kd) && kd.split(" ").length <= 8) return "con";
+  if (laDongY(goc)) return "con";
+  return null;
 }
 
 // Nhiều căn đang rao → chủ nhà chỉ căn nào? Nhận SỐ THỨ TỰ ("1", "căn 2", "cái

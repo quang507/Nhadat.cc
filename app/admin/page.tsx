@@ -30,6 +30,10 @@ type Ng = {
   active_count: number;
   closed_count: number;
   rank: string;
+  // SRD §IV (05/10/2026, SRS-5.1zzd/zze/zzf): điểm người rao (50 % hoàn chỉnh + 50 % phản hồi), điểm phản hồi, đạt chuẩn NMG.
+  diem_nguoi_rao?: number | null;
+  diem_phan_hoi?: number | null;
+  dat_chuan_nmg?: boolean | null;
 };
 
 type Tien = {
@@ -401,7 +405,7 @@ function BanLamViec() {
         .order("created_at", { ascending: false }).limit(100),
       supabase
         .from("seller_ranks")
-        .select("id, name, seller_type, active_count, closed_count, rank")
+        .select("id, name, seller_type, active_count, closed_count, rank, diem_nguoi_rao, diem_phan_hoi, dat_chuan_nmg")
         .order("active_count", { ascending: false }).limit(50),
       supabase
         .from("ctv_ranks")
@@ -1795,6 +1799,20 @@ function BanLamViec() {
                       <div>
                         <span className="font-bold text-navy">{s.name ?? "Chưa tên"}</span>
                         <span className="text-mute ml-1">({s.zalo_user_id ? "chat" : "tay"})</span>
+                        {/* Hạng theo điểm (SRD §IV.3) + điểm phản hồi + chuẩn NMG — chỉ ghi, không nhắn (SRS-5.1zzd/zze/zzf). */}
+                        {(() => {
+                          const h = hang.find((x) => x.id === s.id);
+                          if (!h) return null;
+                          const hb = HANG[h.rank] ?? HANG.chua_du;
+                          return (
+                            <span className="ml-1 inline-flex items-center gap-1">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${hb.lop}`} title={`điểm ${h.diem_nguoi_rao ?? "-"}/100 · phản hồi ${h.diem_phan_hoi ?? "chưa đo"}`}>
+                                {hb.ten} {h.diem_nguoi_rao ?? "-"}
+                              </span>
+                              {h.dat_chuan_nmg === false && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-50 text-red-700" title="NMG dưới chuẩn: < 10 BĐS đang rao hoặc chốt < 5 %/6 tháng (SRD §V)">dưới chuẩn</span>}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${

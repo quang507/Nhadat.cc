@@ -616,6 +616,13 @@ class RpcCall {
       case "log_loi": db.t.bot_errors.push({ at: now(), source: a.p_source, detail: a.p_detail, status_code: a.p_code }); return { data: null, error: null };
       case "cong_token": db.t.bot_usage.push(a); return { data: null, error: null };
       case "bump_model_quota": return { data: true, error: null };
+      // SRD §IV.3 (05/10/2026): trần căn theo hạng + hạng của nhóm người bán. Mặc định "được rao", "không ai Vàng" (giữ nguyên
+      // hành vi cũ); ca kiểm đè bằng `globalThis.__rpc = { con_duoc_rao: () => ({ data: { duoc: false, hang: "dong", so_dang_rao: 5, tran: 5, diem: 20 }, error: null }) }`.
+      case "con_duoc_rao": {
+        const so = db.t.listings.filter((l) => l.seller_id === a.p_seller_id && ["cho_thong_tin", "dang_ban", "dang_quan_tam"].includes(l.status)).length;
+        return { data: { duoc: true, hang: "bac", so_dang_rao: so, tran: null, diem: 60 }, error: null };
+      }
+      case "hang_cua_nguoi_ban": return { data: [], error: null };
       // SEC-05 — trần cá nhân. Mặc định cho qua; ca kiểm đè bằng
       // `globalThis.__rpc = { bump_user_quota: () => ({ data: false, error: null }) }`.
       case "bump_user_quota": return { data: true, error: null };

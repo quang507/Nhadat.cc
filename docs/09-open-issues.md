@@ -15,7 +15,7 @@ thân mục xoá 07/09/2026 theo lệnh chủ dự án, lý lẽ gốc nằm tro
 | OPEN-12 | ✅ **ĐÃ CHỐT 07/09/2026** — theo AOND §V nguyên văn: NMG bị chấm < 3 sao ngưng hợp tác (DH-03: AOND thắng ở mặt bán); phúc tra thủ công bởi admin trước khi ngưng [giả định BA] | FR-137, OPEN-26 |
 | OPEN-21 | Vai người rao 5 loại (CĐT/sàn/NMG/lướt sóng/chủ nhà) + phí riêng cho CĐT — mở rộng nhị phân CCRB/NMG? | Trung bình | BR-05, OPEN-28 |
 | OPEN-24 | `pg_net` mở cho `anon` (mồi SSRF), REVOKE từ vai `postgres` là no-op — gác cửa cấu hình + ticket Supabase? | Cao | NFR-06, SRS-3.9 |
-| OPEN-26 | 🟡 **CHỐT MỘT PHẦN 27/08** — hạng ẩn khỏi web, chỉ hiện `/admin`; ngưỡng Đồng/Bạc/Vàng và quyền lợi mỗi hạng vẫn [giả định BA] | Trung bình | FR-155, OPEN-20 |
+| OPEN-26 | ✅ **ĐÃ CHỐT 05/10/2026** — chủ dự án "làm cho giống SRD": hạng theo ĐIỂM người rao (Đồng < 50 · Bạc 50–79 · Vàng ≥ 80), đặc quyền SRD §IV.3 (Đồng ≤ 5 căn; Vàng NMG ưu tiên khách nét; CCRB Vàng đẩy rổ ≤ 20 NMG lõi); hạng vẫn ẩn khỏi web (27/08). SRS-5.1zzf | — | FR-155, OPEN-20 |
 | OPEN-27 | ✅ **CHỐT 15/09** — nửa đầu 03/09: địa bàn = Sài Gòn phường mới + Long An, khởi điểm Quận 5 cũ (FR-174 đợt 1); nửa sau 15/09: DB lưu TÊN PHƯỜNG MỚI (`wards`, FR-209), quận/mã tin giữ tên cũ; còn thứ tự mở | Cao | FR-118, FR-174, BR-01 |
 | OPEN-28 | 🟡 **CHỐT MỘT PHẦN 02/09** — nhãn CCRB/NMG gán lúc mở hồ sơ từ chat; còn: chính chủ rao tin thứ 3 có tự lật sang NMG (FR-160) và phí có đổi theo? | Cao | FR-160, BR-05 |
 | OPEN-31 | Bậc nguồn: admin cầm sổ đỏ mà chủ nhà nhớ nhầm thì ai thắng? (FR-164 khoá cột sau `chu_xac_nhan`) | Trung bình | FR-164, FR-156 |
@@ -107,7 +107,8 @@ model.docx`). Kho chưa có giao dịch `da_chot` nên chưa ai lên Vàng đư�
 🟡 Chủ dự án chốt phần hiển thị 27/08 ("ẩn hạng khỏi web đi"): hạng chỉ hiện ở `/admin`.
 **Phương án**: (a) chốt ngưỡng thật kèm quyền lợi mỗi hạng (ưu tiên khách nét? giảm phí? trần số căn
 cho Đồng như AOND?); (b) giữ ngưỡng tạm tới khi có số thật.
-**Khuyến nghị BA**: (b) rồi (a) khi có giao dịch thật để định cỡ. **Chờ**: chủ dự án.
+**Khuyến nghị BA**: (b) rồi (a) khi có giao dịch thật để định cỡ.
+**✅ Chốt 05/10/2026** (chủ dự án, đối chiếu SRD: "thôi làm cho giống luôn"): (a) theo SRD §IV.3 — ngưỡng theo ĐIỂM người rao (50/80), quyền lợi: Đồng tối đa 5 căn; Vàng NMG được ưu tiên khách nét; CCRB Vàng được đẩy rổ tới 20 NMG lõi. Hiện thực `20261005a`, SRS-5.1zzf. Hạng vẫn ẩn khỏi web.
 
 ### OPEN-27 · Mở địa bàn ra HCM mới + Long An
 **Vấn đề**: 27/08 chủ dự án: "đánh bds trong khu vực hcm mới và long an tây ninh, nhưng hiển thị

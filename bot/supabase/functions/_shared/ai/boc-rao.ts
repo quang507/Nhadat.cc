@@ -43,11 +43,11 @@ const XacNhan = z.object({
 // hỏi không / hỏi về chuyện gì" do ba bộ từ khoá quyết (`laCauHoiTron`, `hoiVeTin`, `dapHoiNguocTienDinh`) — bộ từ khoá thì
 // luôn thiếu cách nói mới ("bao lâu thì bán được em" → ghi làm thông tin) và bỏ dấu thì đụng chữ ("khu này" = "hồi nãy" →
 // "giá khu này giờ sao" bị đáp giá rao). AI đọc mọi tin rồi, nên AI nói luôn: có hỏi không, hỏi gì, chủ đề gì.
-export const CHU_DE_HOI = ["tin_cua_minh", "dich_vu", "thi_truong", "ve_bot", "nguon", "khac"] as const;
+export const CHU_DE_HOI = ["tin_cua_minh", "dich_vu", "thi_truong", "ve_bot", "nguon", "du_an", "khac"] as const;
 const HoiLai = z.object({
   co_hoi: z.boolean().describe("Tin có câu chủ nhà HỎI bot / bên mình không — đọc theo NGHĨA, kể cả không dấu hỏi, gõ tắt, không dấu ('bao lâu thì bán được em', 'giá khu này giờ sao', 'khu này dễ bán hông em', 'ký hợp đồng gì không em', 'phi ben minh sao'). Chỉ trả lời câu bot hỏi, kể chuyện, chào, cảm ơn → false."),
   cau_hoi: z.string().nullable().describe("Câu hỏi đó COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ — không bao giờ chép câu bot vừa hỏi. co_hoi = false thì null."),
-  chu_de: z.enum(CHU_DE_HOI).nullable().describe("tin_cua_minh = hỏi về chính căn mình đã rao (giá / diện tích đã ghi, đăng chưa, có khách chưa); dich_vu = phí, hợp đồng, độc quyền, cách làm việc, bao lâu bán được, ai xem tin, có dẫn khách không; thi_truong = giá khu vực, khu này dễ bán không, nên rao giá nào; ve_bot = bot là ai, người hay máy, công ty nào; nguon = hỏi bot SAO BIẾT / LẤY ĐÂU RA một điều bot vừa nói ('sao em biết nhà 4-6 tầng', 'ai nói em vậy', 'em lấy đâu ra số đó') — KHÔNG phải ve_bot; khac = còn lại. co_hoi = false thì null."),
+  chu_de: z.enum(CHU_DE_HOI).nullable().describe("tin_cua_minh = hỏi về chính căn mình đã rao (giá / diện tích đã ghi, đăng chưa, có khách chưa); dich_vu = phí, hợp đồng, độc quyền, cách làm việc, bao lâu bán được, ai xem tin, có dẫn khách không; thi_truong = giá khu vực, khu này dễ bán không, nên rao giá nào; ve_bot = bot là ai, người hay máy, công ty nào; nguon = hỏi bot SAO BIẾT / LẤY ĐÂU RA một điều bot vừa nói ('sao em biết nhà 4-6 tầng', 'ai nói em vậy', 'em lấy đâu ra số đó') — KHÔNG phải ve_bot; du_an = hỏi bên mình có BIẾT / biết gì về một DỰ ÁN, khu, toà nhà, chung cư cụ thể ('em biết dự án ny'ah phú định không', 'và dự án vinhome grand park', 'khu X thế nào em') — không phải căn đang rao; khac = còn lại. co_hoi = false thì null."),
 });
 // 01/10/2026 (chủ dự án: "nó có nhận ra cảm xúc của khách để báo về admin ko" → "sửa cả 4 đi"): giọng chủ nhà — AI đọc theo
 // NGHĨA cả câu (có ngữ cảnh), code kiểm trích dẫn rồi mới báo admin (`docCamXuc`).
@@ -218,7 +218,9 @@ giới → khong_noi.
 
 KHÁCH HỎI LẠI ("hoi_lai") — đọc theo NGHĨA, như môi giới nghe khách: tin có ý HỎI bên mình (có hay không có dấu "?", gõ tắt,
 không dấu) → co_hoi = true, cau_hoi = câu hỏi chép nguyên văn, chu_de theo nội dung câu hỏi. "giá khu này giờ sao" là hỏi
-THỊ TRƯỜNG, không phải hỏi giá căn mình; "hồi nãy anh nói giá bao nhiêu" mới là hỏi tin của mình. Câu hỏi KHÔNG BAO GIỜ
+THỊ TRƯỜNG, không phải hỏi giá căn mình; "hồi nãy anh nói giá bao nhiêu" mới là hỏi tin của mình. Hỏi về một DỰ ÁN / khu
+("em biết dự án ny'ah phú định không", câu nối "và dự án vinhome grand park") là chu_de du_an — tên dự án / phường trong câu
+hỏi đó KHÔNG vào du_an_ten, phuong, quan (đó không phải nơi căn đang rao; khách có thể sắp rao căn khác ở đó). Câu hỏi KHÔNG BAO GIỜ
 vào truong hay kien_thuc: "ký hợp đồng gì không em" là hỏi dịch vụ, không phải phap_ly; "khu này dễ bán hông em" là hỏi thị
 trường, không phải kien_thuc.
 - Mọi trường CHỮ (pháp lý, nội thất, hiện trạng, kết cấu, hướng, lý do bán, view, thời hạn thuê…) viết lại SẠCH: có dấu, đúng chính tả, viết hoa tên riêng, bỏ từ đệm ("nha", "nhé", "á", "ạ"), giữ đúng ý và đúng chữ cái của cụm trích — KHÔNG thêm ý, không đổi từ.

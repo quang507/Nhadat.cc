@@ -2163,6 +2163,45 @@ Gỡ bản sửa thì S07-a/b đỏ (đã chạy).
 - **Sửa**: lọc tiểu từ bằng bộ chung (`DEM_CUOI_DAP_AN`, `TIEU_TU_DAU`) trước khi đọc; `DEM_CUOI_DAP_AN` thêm "đâu". Không thêm từ vào danh sách riêng.
 - **Kiểm, đỏ khi tắt**: `van-tra-loi.mjs` LUNG-TU ("có em ơi", "có nha em", "dạ có anh ơi" → có; "ko có đâu em" → không; "có sân thượng nữa em" vẫn null); e2e `LUNG-02b`.
 
+### SRS-5.1zzc · Keep-alive người bán theo SRD §VI: 5 ngày, 1–2 căn/người/ngày; trả lời "còn bán không" do AI đọc (05/10/2026)
+
+`[nguồn: SRD Aioinhadat §VI, kịch bản 2.4; chủ dự án 05/10 "thôi làm cho giống luôn"; thăm dò e2e 05/10]` FR-191 đã có `seller_keep_alive_tick` (6 ngày, theo tin), nhưng đường TRẢ LỜI hỏng: "còn em" → answered mà không đóng dấu, đáp "em ghi nhận"; "vẫn đang bán nha" → hỏi "căn đó hay căn khác"; "ừ" → câu bị thôi; "bán rồi em" → hỏi "căn nào" dù câu đã gắn căn.
+
+- **Lớp lỗi**: câu chờ `con_ban` không có chỗ xử lý riêng — câu trả lời rơi vào các nhánh chung (rao căn mới, câu lệch, báo bán nhiều căn) vốn không biết bot vừa hỏi gì; và tin keep-alive do SQL đẻ không vào `messages` nên AI của lượt kế cũng không biết bot vừa hỏi.
+- **Sửa**: (1) `20261005a` `seller_keep_alive_tick`: quét theo NGƯỜI im > 5 ngày, mỗi người một lượt / 5 ngày, ngẫu nhiên 1–2 căn (`dang_ban`/`dang_quan_tam`); câu "còn bán không" gửi `💬` nguyên văn và ghi vào `messages`. (2) chat-reply: khối riêng khi `pendingReq.question === "con_ban"` — AI quyết (`dong_y` với câu bot vừa hỏi = còn; `y_dinh` ban_roi/ngung_rao; `khong_dong_y` không nói bán rồi = tạm ngưng `an`); `docTraLoiConBan` chỉ khi AI không chạy. Còn → `answered`, `listings.last_confirmed_at`, `property_events{status, con_ban}`, đáp "em giữ tin căn X". Bán rồi / ngưng → khối FR-184 đóng ĐÚNG căn của câu hỏi, không hỏi "căn nào". (3) `laNgungRao`: "ngưng bán rồi" là DỪNG, không phải bán rồi.
+- **Chỗ khác cùng lớp**: `xac_nhan_lich`, `duyet_tin` đã có khối riêng; `ngung_rao_can_nao` có; `danh_gia` có. Hết câu chờ chưa có chỗ xử lý.
+- **Kiểm, đỏ khi tắt**: `fr177` (docTraLoiConBan 23 ca, "ngưng bán rồi" → rut); e2e CB-01 (6 cách nói, luật đỡ), CB-02 (hỏi phí → câu còn treo), CB-03/04/05 (AI: "y như cũ em nhé" → còn; "thôi em" → ngưng; "có người lấy rồi" → bán — ba cách nói luật không bắt).
+- **Áp migration từ phiên không có service_role**: `apply-migration.yml` thêm ô `commit_schema` = "commit" → sau khi áp, workflow commit `bot/supabase/schema.sql` vừa xuất về đúng nhánh đang dispatch (không bao giờ về `main`); artifact giữ như cũ.
+
+### SRS-5.1zzd · Điểm người rao = 50 % hoàn chỉnh + 50 % kịp thời phản hồi; chỉ ghi, không nhắn (05/10/2026)
+
+`[nguồn: SRD §IV.1; chủ dự án 05/10 "cái này ghi vào db thôi ko cần thông báo"]` `diem_phan_hoi(seller_id)` đo theo `messages` 90 ngày: lượt bot nhắn → chủ trả lời sau bao lâu (≤ 1 giờ 100 · ≤ 12 giờ 80 · ≤ 24 giờ 60 · ≤ 3 ngày 30 · không trả lời 0). Không đo bằng `info_requests` vì `expired` còn dùng cho câu bot TỰ thôi hỏi (FR-233). `diem_nguoi_ban` = (0,5 × trung bình `diem_tin` + 0,5 × `diem_phan_hoi`) × hệ số quy mô; chưa đo được phản hồi thì 100 % hoàn chỉnh (như FR-183). Lộ ở `seller_ranks` (`diem_hoan_chinh`, `diem_phan_hoi`, `so_luot_phan_hoi`) và `so.nguoi_ban`. KHÔNG có tin "điểm giảm còn X" (SRD 3.3) theo lệnh chủ dự án. Cổng đăng tin (`diem_tin` ≥ 70) không đổi.
+
+### SRS-5.1zze · Chuẩn NMG (≥ 10 BĐS, chốt ≥ 5 %/6 tháng) ghi vào view, không báo NMG (05/10/2026)
+
+`[nguồn: SRD §V; chủ dự án 05/10 "ko cần thông báo cho họ"]` `chuan_nmg(seller_id)` → `{dang_rao, chot_6_thang, tong_6_thang, ty_le_chot, dat_chuan}`; cột `dat_chuan_nmg` trên `seller_ranks` và `so.nguoi_ban` (null với CCRB). Không có hành động tự động nào dưới chuẩn — admin xem ở `/admin`.
+
+### SRS-5.1zzf · Hạng theo điểm (OPEN-26 chốt) và ba đặc quyền hạng (05/10/2026)
+
+`[nguồn: SRD §IV.3; chủ dự án 05/10]` Hạng = `hang_theo_diem(diem_nguoi_rao)`: Đồng < 50 · Bạc 50–79 · Vàng ≥ 80 — `seller_ranks.rank`, `so.nguoi_ban.hang` đổi theo; `agents_public` (view công khai, hạng ẩn khỏi web) giữ `seller_rank()` theo số đếm vì anon không gọi được điểm. Đặc quyền:
+- **Đồng tối đa 5 căn**: `con_duoc_rao(seller_id)` (DB); chat-reply hỏi trước khi mở tin mới (câu rao thường và câu nhiều căn), hết trần thì nói thật + cách lên Bạc, không mở tin. Điền tin rỗng thì không chặn.
+- **Vàng NMG ưu tiên khách nét**: khách MUA đủ khu vực + ngân sách (`minimumMet`) → `hang_cua_nguoi_ban(ids)` một lượt, tin của người bán Vàng lên đầu KHO, thứ tự còn lại giữ (gấp → nghĩa → mới). `CAN_COLS` thêm `seller_id`.
+- **CCRB Vàng → 20 NMG lõi**: trigger `trg_listings_day_ro_ccrb` khi tin sang `dang_ban` → `day_ro_ccrb_toi_nmg`: tin "💬 Căn chính chủ mới lên kệ…" cho ≤ 20 NMG có Zalo (Vàng → đang hoạt động → điểm), mỗi NMG ≤ 1 tin/ngày, bridge gửi nguyên văn.
+- **Kiểm**: e2e HD-01/02 (trần Đồng, RPC giả), VG-01/02 (Vàng lên đầu kho / đối chứng). Hàm SQL kiểm trên DB sau khi áp (`seller_ranks` có dòng, `con_duoc_rao` trả `duoc`).
+
+### SRS-5.1zzg · Live Chat Monitor ba nhãn (05/10/2026)
+
+`[nguồn: SRD §VII]` View `hoi_thoai_nhan` (admin/service_role): mỗi hội thoại một nhãn — `NEED_HUMAN` (cờ cần người thật chưa ai chạm, hoặc `human_hold`), `WAITING_HINT` (khách hỏi mà câu đang treo chờ chủ nhà/CTV, hoặc tin cuối của khách > 10 phút chưa có tin bot), `AI_HANDLING` (còn lại) + `ly_do`. `/admin/tin-nhan` hiện nhãn trên từng hội thoại và lọc theo nhãn; view chưa áp thì màn vẫn chạy (không nhãn). Nút cướp quyền đã có từ FR-189 (Giữ khách / Trả bot).
+
+### SRS-5.1zzh · Khách hỏi về một dự án: không ghi phường / dự án từ câu hỏi, trả lời rồi hỏi "có căn ở đó cần bán không" (05/10/2026)
+
+`[nguồn: Zalo thật 05/10 18:09 — "em biết dự án ny'ah phú định không" → 🤖 phường: "Phường Phú Định"; chủ dự án: "nó phải hiểu schematic chứ ko phải là từ cứng", "người ta đang hỏi về dự án mà có thể họ sẽ hỏi để bán nhà khác"]`
+
+- **Lớp lỗi**: từ điển địa danh (`ghiPhuongTrongCau`) và khối dự án (`duAnBiet` gắn `project_id`) đọc TÊN trong câu rồi ghi thẳng, không hỏi kết quả AI của lượt — cùng lớp "máy đoán ý bằng từ khoá" (SRS-5.1q).
+- **Sửa**: (1) từ điển phường chỉ chạy khi AI không chạy, hoặc bot đang hỏi phường/địa chỉ, hoặc câu có nhãn tường minh ("phường X", "quận Y"); tên đứng trần trong câu nói chuyện khác → chỉ ghi khi AI đọc ra ô phường/địa chỉ/quận; AI nói cả tin là câu hỏi → không ghi. (2) Không gắn dự án vào tin khi AI nói cả tin là câu hỏi hoặc chủ đề `du_an`. (3) `boc-rao` thêm chủ đề `hoi_lai.chu_de = du_an` + luật "tên dự án / phường trong câu hỏi không vào du_an_ten/phuong/quan"; `CHI_DAN_CHU_DE.du_an`: trả lời từ khối DỰ ÁN ("Theo em biết, dự án …") hoặc nói thật chưa nắm, rồi hỏi đúng một câu "có căn ở dự án đó cần bán không" thay câu kế; `cauHoiLaiDuPhong` khi model hỏng.
+- **Chỗ khác cùng lớp**: `tenDiaDanhTron` / `giaiDiaDanh` đi qua cùng cổng `ghiPhuongTrongCau` (đã gác); `match_projects` khi tạo tin mới (câu rao, không phải câu hỏi — giữ); từ điển đường `tim_duong` chỉ chạy trên ô địa chỉ AI/luật đã đọc (không đọc cả câu). Còn mở: hai tin cách 10 giây sinh hai bong bóng 🤖 trùng + hỏi phòng ngủ hai lần (log 18:10:14/18:10:17) — chưa tái hiện được offline, theo dõi log kế.
+- **Kiểm, đỏ khi tắt**: e2e PD-01 (câu hỏi → không ghi phường), PD-02 (đối chứng "nhà anh ở phú định" → ghi), PD-03 (dự án có trong kho → không gắn `project_id`, prompt có khối DỰ ÁN + dặn hỏi "có căn ở dự án đó cần bán"), PD-04 (không có trong kho → dặn nói thật). TDP-01, DD-02…07, LQ-05/06 (từ điển vẫn chạy khi bot đang hỏi phường / có nhãn) giữ xanh.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
