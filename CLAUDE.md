@@ -374,7 +374,10 @@ nào chưa đẩy `masterDB/` lên thì lưới an toàn vẫn y như cũ.
 `luu_tru` trước khi xoá — khôi phục bằng `admin_khoi_phuc_lan_xoa(lan)`. Kho lưu cùng DB, KHÔNG phải sao lưu (OPEN-25);
 `xuat_schema()` không quét `luu_tru` nên dựng lại từ số không phải chạy thêm `20260929b` (như schema `so`).
 `soat_du_lieu_tin()` soi dấu vết lỗi bóc tách trên tin thật; workflow `apply-migration` in số đếm của nó và xuất
-`schema.sql` thành artifact (sinh lại schema không cần service_role trên máy).
+`schema.sql` thành artifact (sinh lại schema không cần service_role trên máy). **05/10/2026:** phiên không tải được artifact
+(gh nội bộ không theo redirect) thì dispatch workflow trên NHÁNH của PR với ô `commit_schema` = "commit" — workflow tự commit
+`schema.sql` về nhánh đó (không bao giờ về `main`). Lưu ý commit đó do `github-actions[bot]` đẩy nên KHÔNG kích CI; push thêm
+một commit thật (hoặc dispatch `kiem.yml` trên nhánh) để CI chạy trên head mới.
 
 **Dữ liệu hội thoại đã dọn sạch 07/09.** Xoá 286 dòng bã kiểm thử: `messages` 69,
 `reminders` 192, `ctv_daily_reports` 15, `conversations` 3 (hai dòng
