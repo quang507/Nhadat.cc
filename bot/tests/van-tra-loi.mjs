@@ -17,7 +17,7 @@ import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/ga
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao, laRaoLai, laRutLoiBan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
-import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { tuXungTuCau, hocXungHoTuLichSu } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
 import { boHoiLaiDaCo, boHuaHoiChuNha } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -170,7 +170,21 @@ for (const [vao, mong] of [
   ["bán nhà quận 10 phường 12, 48m2, giá 5 tỷ 2", null],
   ["có căn nào quận 10 tầm 5 tỷ không em", null],
   ["nhà hàng xóm, anh ấy bán rồi", null],
+  // 05/10/2026 (SRS-5.1zx): hai câu thật của hội thoại test 02/10 mà luật bỏ sót → hỏi bù 04/10 gọi "mình".
+  ["Anh nói đó được giá thì thôi", "anh"],
+  ["Nhà a 4 tầng tính cả lửng", "anh"],
+  ["nhà c 50m2 giá 3 tỷ", "chị"],
+  // cách nói MỚI chưa bắn: nhắc lại lời mình, định / chốt
+  ["Chị bảo rồi mà, 4 tỷ 2 là chốt", "chị"],
+  ["a định bán tầm 6 tỷ", "anh"],
+  ["anh ấy nói giá 5 tỷ", null],
+  ["nhà A3 khu Him Lam", null],
 ]) ok(`tuXungTuCau "${vao}"`, tuXungTuCau(vao) === mong, String(tuXungTuCau(vao)));
+// 05/10/2026 (SRS-5.1zx): học cách gọi từ TIN CŨ — câu tự xưng mới nhất thắng; không có thì null.
+ok("hocXungHoTuLichSu: 'Shr' hiện tại, tin cũ 'Anh nói đó được giá thì thôi' → anh", hocXungHoTuLichSu(["bán nhà q5 50m2", "Anh nói đó được giá thì thôi", "Shr"]) === "anh");
+ok("hocXungHoTuLichSu: mới nhất thắng (anh rồi chị) → chị", hocXungHoTuLichSu(["anh cần bán nhà", "dạ em, chị gửi ảnh nha"]) === "chị");
+ok("hocXungHoTuLichSu: không câu nào tự xưng → null", hocXungHoTuLichSu(["bán nhà q10", "5 tỷ", ""]) === null);
+ok("hocXungHoTuLichSu: lời dặn 'kêu chị nha' thắng tự xưng cũ", hocXungHoTuLichSu(["anh cần bán nhà", "kêu chị nha"]) === "chị");
 
 // ── Bản nháp: tiểu từ chat không lọt vào tin rao ─────────────────────────────
 {

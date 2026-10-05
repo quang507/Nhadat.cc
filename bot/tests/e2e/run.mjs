@@ -3626,6 +3626,44 @@ fresh(seedKho);
     }
     globalThis.__cauHinh = cuCH;
   }
+  // 05/10/2026 (SRS-5.1zx, hội thoại test 02/10 → hỏi bù 04/10 "…không mình?"): cách gọi khách phải học được ở MỌI chế độ có bóc
+  // tách, từ TIN CŨ (AI trích tin cũ; luật quét lịch sử) — lỡ một lượt không còn là hồ sơ trống mãi.
+  {
+    const cuCH = globalThis.__cauHinh;
+    const aiX = (tx) => (p) => laLuotBocRao(p) ? { so_can: 1, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, tu_xung: tx } : OUT();
+    const coAnhChi = (r) => (r.body.replies ?? []).some((x) => /anh chị|anh\/chị/i.test(x));
+    // XH-AI-03: chế độ `chinh` (không phải `ai`) — AI đọc tự xưng vẫn được nhận.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = aiX({ la: "anh", trich_dan: "nhà a" });
+    const r3 = await send({ external_user_id: "xh-ai-03", text: "ừm nhà a ở Lê Văn Sỹ quận 3, 4x15, bán 7 tỷ" });
+    check("XH-AI-03 chế độ chinh, AI đọc tự xưng 'nhà a' → gọi 'anh', không 'anh chị'",
+      db().t.sellers.find((x) => x.zalo_user_id === "xh-ai-03")?.xung_ho === "anh" && !coAnhChi(r3), JSON.stringify(r3.body.replies));
+    // XH-AI-04: lượt 1 AI không thấy tự xưng, lượt 2 AI trích từ TIN CŨ → nhận.
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = aiX({ la: null, trich_dan: null });
+    await send({ external_user_id: "xh-ai-04", text: "Được giá thì anh mới bán, nhà Lê Văn Sỹ quận 3, 4x15, 7 tỷ" });
+    globalThis.__model.parse = aiX({ la: "anh", trich_dan: "thì anh mới bán" });
+    const r4 = await send({ external_user_id: "xh-ai-04", text: "Shr" });
+    check("XH-AI-04 'Shr' + AI trích 'thì anh mới bán' từ tin cũ → gọi 'anh'",
+      db().t.sellers.find((x) => x.zalo_user_id === "xh-ai-04")?.xung_ho === "anh" && !coAnhChi(r4), JSON.stringify({ xh: db().t.sellers.find((x) => x.zalo_user_id === "xh-ai-04")?.xung_ho, rep: r4.body.replies }));
+    // XH-LS-01: hồ sơ cũ trống cách gọi, lịch sử có 'Nhà a 4 tầng tính cả lửng' (lượt đó luật bỏ sót) → lượt sau học lại bằng luật, AI im.
+    fresh((d) => {
+      seedKho(d);
+      const s = d.insert("sellers", { zalo_user_id: "xh-ls-01", seller_type: "ccrb", name: null, active_listing_id: null, xung_ho: null }).data;
+      const c = d.insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-02T09:19:00Z" }).data;
+      d.insert("messages", { conversation_id: c.id, sender: "seller", body: "Nhà a 4 tầng tính cả lửng" });
+      d.insert("messages", { conversation_id: c.id, sender: "bot", body: "Dạ em ghi nhận rồi ạ. Sổ nhà mình là sổ riêng hay sổ chung ạ?" });
+    });
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = aiX({ la: null, trich_dan: null });
+    const r5 = await send({ external_user_id: "xh-ls-01", text: "Shr" });
+    check("XH-LS-01 hồ sơ trống, tin cũ 'Nhà a 4 tầng…' → luật học từ lịch sử, gọi 'anh', không 'anh chị' / 'mình'",
+      db().t.sellers.find((x) => x.zalo_user_id === "xh-ls-01")?.xung_ho === "anh" && !coAnhChi(r5) && !(r5.body.replies ?? []).some((x) => /\bmình\s*[?.!]/.test(x)),
+      JSON.stringify({ xh: db().t.sellers.find((x) => x.zalo_user_id === "xh-ls-01")?.xung_ho, rep: r5.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
   // 30/09/2026 (bắn thật lx-mua-e): khách MUA đã có hồ sơ nới ngân sách "vậy có căn 6 tỷ rưỡi cũng được" → cổng nới
   // `coHangCoGia` ("có căn" + giá) mở hồ sơ BÁN, tạo tin "BĐS bán", hỏi "nhà mình là nhà phố hay chung cư".
   for (const [i, cau, laBan] of [

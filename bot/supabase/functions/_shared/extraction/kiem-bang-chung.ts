@@ -1008,11 +1008,13 @@ export function docVai(v: { la?: string | null; trich_dan?: string | null } | nu
  * cụm trích có trong tin, và cụm có ĐÚNG chữ đó đứng riêng (hoặc viết tắt "a" / "c" cho anh / chị).
  */
 const TU_XUNG_HOP_LE = new Set(["anh", "chị", "chú", "cô", "bác", "ông", "bà", "dì", "cậu", "mợ", "thím", "dượng"]);
-export function docTuXung(v: { la?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { la: string; trich: string } | null {
+// 05/10/2026 (SRS-5.1zx): AI thấy cả "Các tin CHỦ NHÀ đã nhắn TRƯỚC", nên cụm trích được nằm trong một tin cũ (`tinTruoc`) —
+// khách xưng "anh" ở lượt luật bỏ sót thì lượt sau vẫn học được, không chờ khách xưng lại.
+export function docTuXung(v: { la?: string | null; trich_dan?: string | null } | null | undefined, tin: string, tinTruoc: readonly string[] = []): { la: string; trich: string } | null {
   const la = (v?.la ?? "").trim().toLowerCase();
   if (!TU_XUNG_HOP_LE.has(la)) return null;
   const td = (v?.trich_dan ?? "").trim();
-  if (!trichCoTrongTin(td, tin)) return null;
+  if (!trichCoTrongTin(td, tin) && !tinTruoc.some((t) => trichCoTrongTin(td, t))) return null;
   const tu = td.toLowerCase().normalize("NFC").split(/[^\p{L}]+/u).filter(Boolean);
   const viet = la === "anh" ? ["anh", "a"] : la === "chị" ? ["chị", "c"] : [la];
   return tu.some((t) => viet.includes(t)) ? { la, trich: td } : null;

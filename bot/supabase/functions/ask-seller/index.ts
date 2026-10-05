@@ -21,6 +21,7 @@ import { congBiMat } from "../_shared/gate.ts";
 import { cauHoiMau, dienTen, dsHoiBu, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES } from "../_shared/prompts.ts";
 import { loaiDoc } from "../_shared/tin-nhap.ts";
 import { boGachCheo, doiTuXung, giuCauDungTen } from "../_shared/extraction/van-tra-loi.ts";
+import { hocXungHoTuLichSu, suyTuXungHo } from "../_shared/extraction/khop-cau-tra-loi.ts";
 
 const OutSchema = z.object({
   message: z.string().describe("Tin nhắn Zalo gửi người bán, tiếng Việt"),
@@ -164,6 +165,21 @@ Deno.serve(async (req) => {
   const seller = listing.sellers as
     | { name?: string; seller_type?: string; zalo_user_id?: string | null; ten_tro_ly?: string | null; xung_ho?: string | null }
     | null;
+  // 05/10/2026 (SRS-5.1zx, hỏi bù 04/10 "…không mình?" dù khách đã xưng "anh" hai hôm trước): hồ sơ chưa có cách gọi thì
+  // học từ tin cũ của chủ nhà trước khi soạn, và ghi lại hồ sơ — không gửi câu hỏi bù bằng "mình" khi khách đã nói mình là ai.
+  if (seller && !seller.xung_ho && listing.seller_id) {
+    const { data: tinCu, error: tcErr } = await db.from("messages")
+      .select("body, created_at, conversations!messages_conversation_id_fkey!inner(seller_id)")
+      .eq("conversations.seller_id", listing.seller_id).eq("sender", "seller")
+      .order("created_at", { ascending: false }).limit(30);
+    if (tcErr) await ghiLoi(db, "ask-seller lich su xung ho", tcErr.message);
+    const xhLs = hocXungHoTuLichSu(((tinCu ?? []) as Array<{ body?: string | null }>).map((m) => m.body ?? "").reverse());
+    if (xhLs) {
+      const { error: xhErr } = await db.from("sellers").update({ xung_ho: xhLs, ...suyTuXungHo(xhLs) }).eq("id", listing.seller_id);
+      if (xhErr) await ghiLoi(db, "ask-seller sellers.xung_ho(lich su)", xhErr.message);
+      else seller.xung_ho = xhLs;
+    }
+  }
   // FR-181: cùng một tên trợ lý với chat-reply — cột `ten_tro_ly` nếu đã có,
   // không thì băm từ Zalo ID (cùng hàm, cùng kết quả).
   const tenBot = seller?.ten_tro_ly ?? (seller?.zalo_user_id ? tenTroLy(seller.zalo_user_id) : "T•ai");

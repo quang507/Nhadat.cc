@@ -132,8 +132,11 @@ export function batXungHo(text: string): XungHo | null {
 const TU_XUNG: RegExp[] = [
   /^\s*(?:e|em)\s*(?:oi)?\s*[,.]?\s*(a|anh|c|chi)\s+(?:can|muon|co|dang|ban|hoi|nho|gui)\b/,
   /^\s*(anh|chi)\s+[a-z]+\s+(?:day|nay)\b/,
-  /^\s*(anh|chi|a|c)\s+(?:can|muon|co|dang|khong|ko|chua|hoi|tinh|de|o|moi|vua|gui|ban|nho|thay|nghi|cung)\b/,
+  // 05/10/2026 (SRS-5.1zx, hội thoại test 02/10): "Anh nói đó được giá thì thôi" — nhắc lại lời mình cũng là tự xưng.
+  /^\s*(anh|chi|a|c)\s+(?:can|muon|co|dang|khong|ko|chua|hoi|tinh|de|o|moi|vua|gui|ban|nho|thay|nghi|cung|noi|bao|ke|nhan|dinh|chot)\b/,
   /\b(?:nha|can|so|dat|lo|sdt|so dien thoai|so dt|vo|chong)\s+(?:cua\s+)?(anh|chi)\b(?!\s+(?:ay|nay|kia|hang xom))/,
+  // 05/10/2026 (SRS-5.1zx): "Nhà a 4 tầng tính cả lửng", "nhà c 50m2" — chữ tắt a/c sau danh từ căn nhà, trước con số.
+  /\b(?:nha|can|dat|lo)\s+(a|c)\s+(?=\d)/,
   /\bde\s+(anh|chi)\s+(?:hoi|tinh|coi|xem|nghi|ban|suy nghi)\b/,
   /\b(anh|chi)\s+(?:ban|dang ban|met|khong ranh|chua ranh|dang lai xe|dang hop)\b/,
   // 22/09/2026 (bắn thật): "hồi nãy anh nói giá bao nhiêu nhỉ" — tự xưng khi nhắc lại lời mình.
@@ -176,6 +179,19 @@ export function tuXungTuCau(text: string): XungHo | null {
   if (!/\bvo chong\b/.test(kd)) {
     if (/\b(?:vo|ba xa)\s+(?:cua\s+)?(?:minh|toi|tui|em|t)\b|\bhoi\s+(?:y\s+)?(?:vo|ba xa)\b/.test(kd)) return "anh";
     if (/\b(?:chong|ong xa)\s+(?:cua\s+)?(?:minh|toi|tui|em|t)\b|\bhoi\s+(?:y\s+)?(?:chong|ong xa)\b/.test(kd)) return "chị";
+  }
+  return null;
+}
+
+// 05/10/2026 (SRS-5.1zx, hội thoại test 02/10 → hỏi bù 04/10 vẫn "mình"): cách gọi khách trước đây chỉ học ở ĐÚNG lượt có câu
+// tự xưng; lượt đó luật bỏ sót (hoặc AI chưa bật) là hồ sơ trống mãi, dù khách đã xưng "anh" hai lần. Quét lại các tin khách đã
+// nhắn (cũ → mới), câu tự xưng MỚI NHẤT thắng; lời dặn tường minh (`batXungHo`) vẫn hơn lời tự xưng trong cùng một tin.
+export function hocXungHoTuLichSu(tinKhach: readonly string[]): XungHo | null {
+  for (let i = tinKhach.length - 1; i >= 0; i--) {
+    const t = (tinKhach[i] ?? "").trim();
+    if (!t) continue;
+    const xh = batXungHo(t) ?? tuXungTuCau(t);
+    if (xh) return xh;
   }
   return null;
 }

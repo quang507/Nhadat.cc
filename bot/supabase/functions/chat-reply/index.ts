@@ -77,7 +77,7 @@ import { cauKhoangCachKhongNguon, chayTroLyMua, DAU_RA_CONG_CU, type PhanHoiMode
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, gonGiaTriFact, laChiDonViHanhChinh, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laThaCamXuc, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, laRaoLai, laRutLoiBan, NHAN_HOI_LAI, nhanDienFact,
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
-  suyTuXungHo, tuXungBot, laChaoChau, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
+  suyTuXungHo, tuXungBot, laChaoChau, hocXungHoTuLichSu, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
@@ -2926,9 +2926,10 @@ Deno.serve(async (req) => {
       // câu. Chế độ `ai`: chưa biết cách gọi mà AI đọc ra khách tự xưng (code kiểm trích dẫn, `docTuXung`) → ghi hồ sơ, gọi đúng
       // NGAY lượt này. Luật (`tuXungTuCau`) vẫn chạy ở đầu nhánh làm lưới đỡ.
       let goiLuot = goiNguoi;
-      if (!goiLuot && laCheDoAi && bongAi) {
+      // 05/10/2026 (SRS-5.1zx): không gài theo chế độ `ai` nữa — có lượt bóc tách là đọc; trích dẫn được nằm trong tin cũ.
+      if (!goiLuot && bongAi) {
         const kqX = await bongAi;
-        const tx = kqX?.ket ? docTuXung(kqX.tuXung, text) : null;
+        const tx = kqX?.ket ? docTuXung(kqX.tuXung, text, tinChuNhaGoc()) : null;
         if (tx) {
           const xh = tx.la as XungHo;
           const { error: txErr } = await client.from("sellers").update({ xung_ho: xh, ...suyTuXungHo(xh) }).eq("id", sellerRow.id);
@@ -3137,19 +3138,6 @@ Deno.serve(async (req) => {
       if (tenErr) await ghiLoi(client, "chat-reply sellers.ten_tro_ly", tenErr.message);
       else sellerRow.ten_tro_ly = tenBot;
     }
-    const goiNguoi = sellerRow.xung_ho ?? null;
-    const lonTuoiChuaRo = !goiNguoi && sellerRow.nhom_tuoi === "lon_tuoi";
-    const cachGoi = goiNguoi ?? (lonTuoiChuaRo ? "mình" : "anh/chị");
-    // Bot tự xưng "cháu" với chú/cô/bác (mọi câu tiền định viết "em" → đổi ở đường ra `sach`).
-    const tuXung = lonTuoiChuaRo ? "cháu" : tuXungBot(goiNguoi);
-    // Câu phí tiền định cho hỏi ngược (FEE_RULES, theo nhãn) — 15/09/2026.
-    const phiCauSeller = sellerRow.seller_type === "nmg"
-      ? "phí bên em chỉ thu khi giao dịch thành công, 0,5% giá chốt"
-      : "phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt";
-    const CachGoi = goiNguoi ? goiNguoi.charAt(0).toUpperCase() + goiNguoi.slice(1) : lonTuoiChuaRo ? "Mình" : "Anh/chị";
-    // Điền ô cho câu tiền định (FR-138 b). Ô thiếu dữ liệu → câu rỗng, tầng gọi bỏ.
-    const cauTD = (khoa: string, o: Record<string, string | number | null | undefined> = {}) =>
-      dienCau(CAU_TD[khoa] ?? "", { ac: cachGoi, Ac: CachGoi, web: "AI Ơi Nhà Đất", ten: tenBot, ...o });
     // 02/10/2026 (chủ dự án: "để AI có cache để đọc lại nguyên tin nhắn của khách để ko mất"): đọc 40 tin gần nhất (một truy
     // vấn như cũ) — 9 tin cuối làm lịch sử lượt như trước, phần tin CHỦ NHÀ làm "bộ nhớ" nguyên văn cho AI bóc tách.
     const [{ data: lichSuDai }, { data: tinCuaNguoi }] = await Promise.all([
@@ -3175,6 +3163,30 @@ Deno.serve(async (req) => {
       }
       return ra;
     };
+    // 05/10/2026 (SRS-5.1zx, hội thoại test 02/10: khách "Anh nói đó…", "Nhà a 4 tầng…" mà hỏi bù 04/10 vẫn "mình"): chưa biết
+    // cách gọi thì học lại từ TIN CŨ của khách (luật, miễn phí) — lượt có câu tự xưng bị bỏ sót không còn làm hồ sơ trống mãi.
+    // AI đọc tự xưng (có trích dẫn, kể cả trích từ tin cũ) chạy ở `traLoiSeller` và ghi đè nếu đọc ra.
+    if (!sellerRow.xung_ho) {
+      const xhLs = hocXungHoTuLichSu(tinChuNhaGoc());
+      if (xhLs) {
+        const { error: lsErr } = await client.from("sellers").update({ xung_ho: xhLs, ...suyTuXungHo(xhLs) }).eq("id", sellerRow.id);
+        if (lsErr) await ghiLoi(client, "chat-reply sellers.xung_ho(lich su)", lsErr.message);
+        else { sellerRow.xung_ho = xhLs; sellerRow.nhom_tuoi = suyTuXungHo(xhLs).nhom_tuoi; }
+      }
+    }
+    const goiNguoi = sellerRow.xung_ho ?? null;
+    const lonTuoiChuaRo = !goiNguoi && sellerRow.nhom_tuoi === "lon_tuoi";
+    const cachGoi = goiNguoi ?? (lonTuoiChuaRo ? "mình" : "anh/chị");
+    // Bot tự xưng "cháu" với chú/cô/bác (mọi câu tiền định viết "em" → đổi ở đường ra `sach`).
+    const tuXung = lonTuoiChuaRo ? "cháu" : tuXungBot(goiNguoi);
+    // Câu phí tiền định cho hỏi ngược (FEE_RULES, theo nhãn) — 15/09/2026.
+    const phiCauSeller = sellerRow.seller_type === "nmg"
+      ? "phí bên em chỉ thu khi giao dịch thành công, 0,5% giá chốt"
+      : "phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt";
+    const CachGoi = goiNguoi ? goiNguoi.charAt(0).toUpperCase() + goiNguoi.slice(1) : lonTuoiChuaRo ? "Mình" : "Anh/chị";
+    // Điền ô cho câu tiền định (FR-138 b). Ô thiếu dữ liệu → câu rỗng, tầng gọi bỏ.
+    const cauTD = (khoa: string, o: Record<string, string | number | null | undefined> = {}) =>
+      dienCau(CAU_TD[khoa] ?? "", { ac: cachGoi, Ac: CachGoi, web: "AI Ơi Nhà Đất", ten: tenBot, ...o });
     // Mã căn chỉ đáng nhắc khi người này rao TỪ HAI CĂN trở lên (FR-157 c sinh
     // ra cho người nhiều căn). Chính chủ một căn mà tin nào cũng "#BDS-Q5-0174"
     // là giọng máy đọc mã.

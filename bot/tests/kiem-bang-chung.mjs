@@ -7,7 +7,7 @@ import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop
 import { boCauNhanXet, nhanXetKhongCanCu } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
-import { datKiemNhe, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -670,6 +670,15 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZU-b 'Cần Đước, Long An' là MỘT nơi; 'quận 1 … quận 10' là HAI", cq("bán đất Cần Đước, Long An") === '["Cần Đước, Long An"]' && cq("bán nhà quận 1, còn căn quận 10") === '["Quận 1","Quận 10"]', cq("bán đất Cần Đước, Long An"));
   ok("ZU-c câu một quận → một ('Lê Văn Sỹ quận 3 phường 9')", cq("bán nhà hẻm Lê Văn Sỹ quận 3 phường 9 4x15 7 tỷ") === '["Quận 3"]');
   ok("X04-e (mới) 'bán xong … tính mua căn hộ quận 2 tầm 5 tỷ rưỡi' → đủ 3 ô", x5?.area === "Quận 2" && x5?.budget === "tầm 5 tỷ rưỡi" && x5?.property_type === "căn hộ", JSON.stringify(x5));
+}
+// 05/10/2026 (SRS-5.1zx): AI đọc tự xưng có trích dẫn nằm trong TIN CŨ của chủ nhà (khối bộ nhớ) → nhận; không có ở đâu → bỏ.
+{
+  const cu = ["bán nhà hẻm Trương Đình", "Anh nói đó được giá thì thôi"];
+  ok("XH-LS-01 trích 'Anh nói đó' nằm trong tin cũ → anh", docTuXung({ la: "anh", trich_dan: "Anh nói đó" }, "Shr", cu)?.la === "anh");
+  ok("XH-LS-02 không có tin cũ → không nhận", docTuXung({ la: "anh", trich_dan: "Anh nói đó" }, "Shr") === null);
+  ok("XH-LS-03 trích không có ở tin nào → bỏ", docTuXung({ la: "anh", trich_dan: "anh đang muốn bán" }, "Shr", cu) === null);
+  ok("XH-LS-04 trích ở tin cũ nhưng không có chữ 'chị' → bỏ", docTuXung({ la: "chị", trich_dan: "Anh nói đó" }, "Shr", cu) === null);
+  ok("XH-LS-05 (mới) 'Nhà a 4 tầng' ở tin cũ, trích 'Nhà a' → anh", docTuXung({ la: "anh", trich_dan: "Nhà a" }, "sổ riêng", ["Nhà a 4 tầng tính cả lửng"])?.la === "anh");
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

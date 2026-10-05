@@ -75,8 +75,8 @@ const Vai = z.object({
 // (`tuXungTuCau`) là danh sách mẫu câu, câu mở bằng "Ừ" lọt. AI đọc theo nghĩa, code kiểm trích dẫn (`docTuXung`).
 export const TU_XUNG_AI = ["anh", "chị", "chú", "cô", "bác", "ông", "bà", "dì", "cậu", "mợ", "thím", "dượng"] as const;
 const TuXung = z.object({
-  la: z.enum(TU_XUNG_AI).nullable().describe("Chữ người nhắn dùng để TỰ GỌI CHÍNH MÌNH trong tin ('Ừ anh đang muốn bán' → anh; 'nhà a 4 tầng' → anh; 'chị gửi ảnh nha' → chị; 'chú có căn nhà' → chú). Gọi người KHÁC ('anh hàng xóm', 'chị em nó', 'nhà của bà ngoại') không tính. Không tự xưng → null."),
-  trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN có chữ tự xưng đó. la = null thì null."),
+  la: z.enum(TU_XUNG_AI).nullable().describe("Chữ người nhắn dùng để TỰ GỌI CHÍNH MÌNH trong tin ('Ừ anh đang muốn bán' → anh; 'nhà a 4 tầng' → anh; 'chị gửi ảnh nha' → chị; 'chú có căn nhà' → chú). Gọi người KHÁC ('anh hàng xóm', 'chị em nó', 'nhà của bà ngoại') không tính. Tin này không tự xưng nhưng một tin TRƯỚC của chủ nhà (khối 'Các tin CHỦ NHÀ đã nhắn TRƯỚC') có → vẫn đưa, trích từ tin đó. Không có đâu → null."),
+  trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN có chữ tự xưng đó, từ tin này hoặc từ tin trước của chủ nhà. la = null thì null."),
 });
 // Đợt 3 chuyển luật sang AI (02/10/2026): câu hỏi KẾ trước đây do bảng ưu tiên + từ khoá quyết (`chonCauKe`, `re-nhanh`) — AI
 // chọn trong danh sách "Câu bot còn định hỏi" như môi giới; code chỉ nhận khoá có trong danh sách hợp lệ của lượt (`docCauKe`).
