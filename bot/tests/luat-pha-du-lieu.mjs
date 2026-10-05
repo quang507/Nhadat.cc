@@ -44,6 +44,8 @@ const CHAY = {
   laNgungRao: (c) => E.laNgungRao(c),
   // 22/09 (kịch bản E): mở lại tin đã gỡ.
   laRaoLai: (c) => E.laRaoLai(c),
+  // 05/10/2026 (SRS-5.1zzl): gom nhiều căn / chỉ giữ — chỉ mở câu xác nhận, gật lượt sau mới ẩn.
+  laNgungHangLoat: (c) => E.laNgungHangLoat(c),
   bocQuan: (c) => bocQuan(boDau(c), c),
   laDuRoi: (c) => E.laDuRoi(c),
   laDongY: (c) => E.laDongY(c),
@@ -97,7 +99,8 @@ const MAU = {
 // nhà gật gợi ý hoặc tự nói tên phường mới — luật `tachTienToPhuong` có bảng ở trên.
 // "đổi trạng thái tin" 2 → 3 (22/09, kịch bản E): `laRaoLai` mở lại tin đã gỡ — luật có bảng ở trên.
 // "ghi đè quận" 2 → 3 (01/10, SRS-5.1p): dò địa danh chung ra QUẬN khi tin chưa có quận chắc — luật `tenDiaDanhTron` có bảng.
-const NEN = { "đổi trạng thái tin (an/da_chot)": 3, "ghi đè quận": 3, "đóng dấu 'đủ rồi'": 4 };
+// "đổi trạng thái tin" 3 → 4, "đóng dấu 'đủ rồi'" 4 → 5 (05/10/2026, SRS-5.1zzl): ẩn hàng loạt SAU khi chủ nhà gật câu xác nhận — luật `laNgungHangLoat` có bảng ở trên.
+const NEN = { "đổi trạng thái tin (an/da_chot)": 4, "ghi đè quận": 3, "đóng dấu 'đủ rồi'": 5 };
 console.log("\n▸ canh cửa — chỗ ghi đè dữ liệu trong chat-reply");
 for (const [ten, re] of Object.entries(MAU)) {
   const so = (src.match(re) ?? []).length;

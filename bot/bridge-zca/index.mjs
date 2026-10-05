@@ -290,12 +290,15 @@ const HAN_CHO_BO_NAO = 90_000; // lượt gọi có kèm model
 const HAN_CHO_NGAN = 10_000;   // hỏi lại / ghi sổ — trả về ngay
 
 // Gửi một tin (kèm ảnh nếu bộ não trả về) — dùng chung cho tin nhắn và reaction
-async function handleIncoming(threadId, text, imageUrl, msgId) {
-  console.log(`← [${threadId}] ${text || "[ảnh]"}`);
+async function handleIncoming(threadId, text, imageUrl, msgId, tep) {
+  console.log(`← [${threadId}] ${text || (tep ? `[file ${tep.ten ?? ""}]` : "[ảnh]")}`);
   const payload = {
     external_user_id: String(threadId),
     text: typeof text === "string" ? text : "",
     image_url: imageUrl,
+    // SRS-5.1zzj (05/10/2026): file (PDF / CSV / XLSX) người bán gửi qua Zalo cá nhân — bộ não tải về và đọc.
+    file_url: tep?.url,
+    file_name: tep?.ten,
     msg_id: msgId,
     channel: "zalo_personal_test",
   };
@@ -325,10 +328,13 @@ async function handleIncoming(threadId, text, imageUrl, msgId) {
 
   // Quyết định 25/08: KHÔNG delay nhân tạo — bong bóng đầu đi ngay lập tức,
   // giữa các bong bóng chỉ chừa 300ms cho Zalo giao đúng thứ tự.
+  // SRS-5.1zzm (05/10/2026): bộ não trả `nhip_go[]` khi `app_config.nhip_go = bat` → nghỉ "đang gõ" theo độ dài tin trước;
+  // không có thì 300 ms như cũ. Bridge không tự tính nhịp — cùng một nhịp với webhook OA.
+  const nhipGo = Array.isArray(out?.nhip_go) ? out.nhip_go.map((x) => Math.min(3000, Math.max(0, Number(x) || 0))) : [];
   let daGui = 0;
   try {
     for (const [i, bubble] of bubbles.entries()) {
-      if (i > 0) await new Promise((r) => setTimeout(r, 300));
+      if (i > 0) await new Promise((r) => setTimeout(r, nhipGo[i] ?? 300));
       rememberSent(bubble);
       await api.sendMessage(bubble, String(threadId), ThreadType.User);
       daGui = i + 1;
@@ -407,8 +413,14 @@ api.listener.on("message", async (message) => {
 
     let text = message.data?.content;
     let imageUrl;
+    let tep; // SRS-5.1zzj: file đính kèm {url, ten}
+    const msgType = String(message.data?.msgType ?? "");
     if (text && typeof text === "object") {
-      if (text.href) { // FR-134: ảnh có href
+      if (text.href && (/file/i.test(msgType) || /\.(pdf|csv|xlsx?|docx?)$/i.test(String(text.title ?? text.fileName ?? "")))) {
+        // zca-js: file chia sẻ cũng mang `href` + `title` — trước đây bị coi là ảnh, phân loại hỏng rồi rơi thành URL tạm.
+        tep = { url: text.href, ten: String(text.title ?? text.fileName ?? "").slice(0, 200) || undefined };
+        text = "";
+      } else if (text.href) { // FR-134: ảnh có href
         imageUrl = text.href;
         text = text.title ?? "";
       } else if (text.catId != null || text.id != null) {
@@ -417,12 +429,13 @@ api.listener.on("message", async (message) => {
         text = "";
       }
     }
-    if ((typeof text !== "string" || !text.trim()) && !imageUrl) return;
+    if ((typeof text !== "string" || !text.trim()) && !imageUrl && !tep) return;
     await handleIncoming(
       message.threadId,
       text,
       imageUrl,
       message.data?.msgId ? String(message.data.msgId) : undefined,
+      tep,
     );
   } catch (e) {
     if (laPhienChet(e)) return await phienChet(errDetail(e));

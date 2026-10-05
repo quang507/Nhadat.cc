@@ -107,7 +107,7 @@ const TRANG_THAI: Record<string, string> = {
 };
 
 // Câu chờ và ảnh không phải thông số: ảnh là URL kho, ba khoá kia là lượt duyệt/chấm/hẹn.
-const BO_QUA = new Set(["hinh_anh", "duyet_tin", "danh_gia", "xac_nhan_lich", "con_ban"]);
+const BO_QUA = new Set(["hinh_anh", "duyet_tin", "danh_gia", "xac_nhan_lich", "con_ban", "xac_nhan_ngung_hang_loat", "tai_lieu_du_an_nao"]);
 
 // Khoá fact có thật trong DB mà FACT_LABELS (prompts.ts) chưa có nhãn — thấy khi
 // chạy thử trên 7 tin thật 11/09: "du_an_ten" hiện nguyên tên khoá. Khoá lạ khác

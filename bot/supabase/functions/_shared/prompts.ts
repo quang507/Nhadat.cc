@@ -232,6 +232,8 @@ export const FACT_LABELS: Record<string, string> = {
   truot_gia: "trượt giá thuê mỗi năm",
   // FR-184: chủ nhà nhiều căn báo ngưng rao — hỏi căn nào.
   ngung_rao_can_nao: "chủ nhà chỉ căn muốn ngưng rao",
+  xac_nhan_ngung_hang_loat: "chủ nhà xác nhận ngưng rao nhiều căn", // SRS-5.1zzl
+  tai_lieu_du_an_nao: "tài liệu vừa gửi thuộc dự án nào", // SRS-5.1zzj
   // FR-188 (10/09/2026): cần ra hàng gấp hay được giá thì thôi — hỏi ngay sau giá.
   gap: "cần bán/cho thuê gấp hay không",
   // 20260909i (FR-186 mở rộng, chat Gemini 21/06 lượt 38 + 65–67, chat 07/09): nhóm
@@ -320,6 +322,7 @@ export const CAU_HOI_MAU: Record<string, string> = {
   truot_gia: "Giá thuê mỗi năm mình tăng khoảng mấy phần trăm {ac}?",
   tiem_nang: "Nhà mình hợp để ở hay kinh doanh ngành gì {ac}?",
   ngung_rao_can_nao: "{Ac} muốn ngưng rao căn nào ạ? Nhắn số thứ tự hoặc địa chỉ giúp em.",
+  xac_nhan_ngung_hang_loat: "{Ac} chắc ngưng rao mấy căn em vừa liệt kê chưa ạ? Nhắn \"ừ\" là em ẩn, \"thôi\" là em giữ nguyên.",
   gap: "Mình cần ra hàng gấp hay được giá thì thôi {ac}?",
   // 14/09/2026: tin CHO THUÊ mà hỏi "ra hàng gấp hay được giá" là hỏi câu của tin bán
   // (bắn thật: căn hộ Sunrise City cho thuê 18 triệu/tháng).

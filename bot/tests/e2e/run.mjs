@@ -1,4 +1,5 @@
 import { FakeDB, napPhuongCuThat, napPhuongThat } from "./mock-supabase.mjs";
+import { laNgungHangLoat as laNgungHangLoatLuat } from "../../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { OUT } from "./mock-anthropic.mjs";
 import { LOI_CHAO, tenTroLy } from "../../supabase/functions/_shared/prompts.ts";
 import { createHash as bamSha } from "node:crypto";
@@ -7674,6 +7675,153 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   check("AOND-04 admin mode: khách vẫn có MỘT lời xác nhận đã ghi (của model hoặc câu tiền định), không có 🤖",
     ra.body.replies.some((x) => /em ghi (nhận|số phòng)/i.test(x)) && !ra.body.replies.some((x) => /^🤖/.test(x)), JSON.stringify(ra.body.replies));
   globalThis.__cauHinh = cuCH;
+}
+// ── 05/10/2026 (SRS-5.1zzj…zzm, demo AOND): file / link người bán gửi — CSV rổ hàng, bảng giá PDF vào kho dự án, căn A12 điền từ kho,
+//    gom nhiều căn có xác nhận, nhịp gửi ──
+{
+  const cuCH = globalThis.__cauHinh;
+  const enc = (t) => new TextEncoder().encode(t);
+  const gocFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opt) => {
+    const u = String(url);
+    if (/zdn\.vn\/ro-hang\.csv/.test(u)) return new Response(enc("Địa chỉ,Phường,Quận,Diện tích,Giá,Pháp lý,SĐT chủ\n12 Trần Hưng Đạo,P4,Quận 5,60m2,5 tỷ,SHR,0903123456\n99 Nguyễn Trãi,P3,Quận 5,4x15,6 tỷ 5,sổ chung,\n"), { status: 200, headers: { "content-type": "text/csv", "content-disposition": 'attachment; filename="ro-hang.csv"' } });
+    if (/zdn\.vn\/bang-gia\.pdf/.test(u)) return new Response(enc("%PDF-1.4 bang gia"), { status: 200, headers: { "content-type": "application/pdf" } });
+    if (/files\.example\.com\/trang\.html/.test(u)) return new Response(enc("<html>x</html>"), { status: 200, headers: { "content-type": "text/html" } });
+    return gocFetch(url, opt);
+  };
+  const laLuotDocTL = (p) => (p?.system ?? []).some((x) => /ĐỌC TÀI LIỆU DỰ ÁN/.test(x.text ?? ""));
+  const laLuotYL = (p) => (p?.system ?? []).some((x) => /Ý NGẮN CỦA LƯỢT/.test(x.text ?? ""));
+  const laLuotBR = (p) => (p?.system ?? []).some((x) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(x.text ?? ""));
+  const tinCua = (z) => { const sid = db().t.sellers.find((x) => x.zalo_user_id === z)?.id; return db().t.listings.filter((l) => l.seller_id === sid); };
+
+  // F1 — CSV qua file_url: 2 tin mới, SĐT không vào đâu, 4x15 → 60m2, sổ chung; nhịp gửi mặc định 300 ms
+  fresh();
+  await send({ external_user_id: "aond-f1", text: "bán nhà hẻm 4m Trần Bình Trọng quận 5, 60m2, giá 6 tỷ" });
+  let r = await send({ external_user_id: "aond-f1", text: "", file_url: "https://f.zdn.vn/ro-hang.csv", file_name: "ro-hang.csv" });
+  const tinF1 = tinCua("aond-f1");
+  const nt = tinF1.find((l) => /Nguyễn Trãi/.test(l.location_raw ?? ""));
+  check("AOND-F1 CSV rổ hàng qua file_url → nhập 2 tin (tổng 3), 📥 liệt kê, body.nhap_ro_hang",
+    r.body.nhap_ro_hang === true && tinF1.length === 3 && /^📥 Em nhập 2 căn/.test(r.body.replies[0] ?? "") && /Trần Hưng Đạo/.test(r.body.replies[0]),
+    JSON.stringify({ rep: r.body.replies, n: tinF1.length }));
+  check("AOND-F1b SĐT trong bảng KHÔNG vào tin nào (§5); '4x15' → 60m2; 'sổ chung' → so_hong_chung; 'SHR' → so_hong_rieng; tin ở cho_thong_tin + can_chu_duyet",
+    !JSON.stringify(tinF1).includes("0903") && nt?.area_m2 === 60 && nt?.legal_status === "so_hong_chung" &&
+      tinF1.find((l) => /12 Trần Hưng Đạo/.test(l.location_raw ?? ""))?.legal_status === "so_hong_rieng" && nt?.status === "cho_thong_tin" && nt?.can_chu_duyet === true,
+    JSON.stringify(tinF1.map((l) => [l.location_raw, l.area_m2, l.legal_status, l.status])));
+  check("AOND-F1c nhịp gửi mặc định: body.nhip_go = [0, 300] cho 2 bong bóng; tin người bán lưu kèm [file: ro-hang.csv]",
+    JSON.stringify(r.body.nhip_go) === "[0,300]" && db().t.messages.some((m) => m.sender === "seller" && /\[file: ro-hang\.csv\]/.test(m.body)),
+    JSON.stringify({ nhip: r.body.nhip_go, msgs: db().t.messages.filter((m) => m.sender === "seller").map((m) => m.body) }));
+
+  // F1d — nhịp gửi bật → [0, ≥600]
+  globalThis.__cauHinh = { test_reset_hello: "1", nhip_go: "bat" };
+  globalThis.__khongNhoCauHinh = true; // napCauHinh nhớ 60 s — ca này đổi công tắc giữa chừng
+  r = await send({ external_user_id: "aond-f1", text: "", file_url: "https://f.zdn.vn/ro-hang.csv", file_name: "ro-hang.csv" });
+  globalThis.__khongNhoCauHinh = false;
+  check("AOND-F1d app_config.nhip_go = bat → nhip_go[1] theo độ dài bong bóng trước (600–2500 ms)",
+    Array.isArray(r.body.nhip_go) && r.body.nhip_go[0] === 0 && r.body.nhip_go[1] >= 600 && r.body.nhip_go[1] <= 2500, JSON.stringify(r.body.nhip_go));
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+
+  // F1e — link tới trang HTML → không đọc được, nói rõ định dạng; không tạo tin
+  const truocHtml = tinCua("aond-f1").length;
+  r = await send({ external_user_id: "aond-f1", text: "xem thêm ở https://files.example.com/trang.html nha em" });
+  check("AOND-F1e link HTML → 'chưa đọc được định dạng', không tạo tin", /chưa đọc được định dạng/.test(r.body.replies.join("\n")) && tinCua("aond-f1").length === truocHtml, JSON.stringify(r.body.replies));
+
+  // F2 — PDF bảng giá: model giả đọc 2 căn + 1 mẫu nhà → kho du_an_can của dự án có trong kho, file cất bucket riêng tư
+  fresh();
+  const pj = db().insert("projects", { name: "Ny'ah Phú Định", district: "Quận 8", amenities: ["hồ bơi"] }).data;
+  await send({ external_user_id: "aond-f2", text: "anh là môi giới, có vài căn Ny'ah Phú Định muốn rao" });
+  globalThis.__model.parse = (p) => laLuotDocTL(p)
+    ? { loai: "bang_gia", ten_du_an: "Ny'ah Phú Định", chu_dau_tu: "Phú Định Land", mau_nha: [{ ten: "Cosmo Gen 2", thong_so: "5x20, 3 tầng, 4 phòng ngủ" }],
+        can: [{ ma_can: "A12", mau_nha: "Cosmo Gen 2", dien_tich: "100m2", dien_tich_dat: "100m2", gia: "12,5 tỷ", huong: "Đông", tang: null, ghi_chu: "lô góc" },
+              { ma_can: "A13", mau_nha: "Cosmo Gen 2", dien_tich: "95m2", dien_tich_dat: null, gia: "11,8 tỷ", huong: null, tang: null, ghi_chu: null }],
+        tien_ich: ["hồ bơi", "công viên"], ghi_chu: "bảng giá đợt 2", ro_net: true }
+    : laLuotAnh(p) ? ANH(globalThis.__anh) : OUT();
+  r = await send({ external_user_id: "aond-f2", text: "", file_url: "https://f.zdn.vn/bang-gia.pdf", file_name: "bang-gia.pdf" });
+  const kho = db().t.du_an_can.filter((c) => c.project_id === pj.id);
+  const tl = db().t.du_an_tai_lieu[0];
+  check("AOND-F2 PDF bảng giá → du_an_can 2 căn (A12 100m2 · 12,5 tỷ · lô góc), du_an_tai_lieu loai bang_gia so_can_doc 2, file ở listing-private/du-an/…",
+    r.body.tai_lieu_du_an === true && kho.length === 2 && kho.find((c) => c.ma_can === "A12")?.dien_tich_m2 === 100 && kho.find((c) => c.ma_can === "A12")?.gia_raw === "12,5 tỷ" &&
+      kho.find((c) => c.ma_can === "A12")?.thuoc_tinh?.ghi_chu === "lô góc" && tl?.loai === "bang_gia" && tl?.so_can_doc === 2 && tl?.project_id === pj.id &&
+      db().storage.some((f) => f.bucket === "listing-private" && /^du-an\//.test(f.path)),
+    JSON.stringify({ rep: r.body.replies, kho, tl, st: db().storage }));
+  check("AOND-F2b lời đáp: 'Em đọc bảng giá dự án Ny'ah Phú Định … 2 căn, mẫu Cosmo Gen 2'; mẫu nhà vào projects.unit_types",
+    /Em đọc bảng giá dự án Ny'ah Phú Định/.test(r.body.replies[0] ?? "") && /2 căn/.test(r.body.replies[0]) && /Cosmo Gen 2/.test(r.body.replies[0]) &&
+      (db().t.projects.find((x) => x.id === pj.id)?.unit_types ?? []).some((m) => m.ten === "Cosmo Gen 2"),
+    JSON.stringify({ rep: r.body.replies, ut: db().t.projects.find((x) => x.id === pj.id)?.unit_types }));
+
+  // F3 — rao "căn A12" → tin gắn dự án + unit_code, diện tích điền từ kho, fact bo_sung "theo kho dự án", khối CĂN TRONG DỰ ÁN tới model
+  globalThis.__model.parse = (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT();
+  r = await send({ external_user_id: "aond-f2", text: "bán căn A12 Ny'ah Phú Định giá 13 tỷ" });
+  const tinA12 = tinCua("aond-f2").find((l) => l.unit_code === "A12");
+  check("AOND-F3 rao 'bán căn A12 Ny'ah Phú Định giá 13 tỷ' → tin project_id + unit_code A12, area_m2 100 điền từ kho, giá rao 13 tỷ (không lấy giá niêm yết)",
+    tinA12 && tinA12.project_id === pj.id && tinA12.area_m2 === 100 && /13 tỷ/.test(tinA12.price_raw ?? "") &&
+      db().t.listing_facts.some((f) => f.listing_id === tinA12.id && f.question === "bo_sung" && /theo kho dự án, căn A12/.test(f.answer) && /giá niêm yết 12,5 tỷ/.test(f.answer)),
+    JSON.stringify({ tin: tinA12, facts: db().t.listing_facts.filter((f) => f.listing_id === tinA12?.id) }));
+  r = await send({ external_user_id: "aond-f2", text: "sổ hồng riêng rồi em" });
+  const pF3 = createCalls().at(-1)?.params?.messages?.[0]?.content ?? "";
+  check("AOND-F3b lượt hỏi tiếp: ngữ cảnh model có khối CĂN TRONG DỰ ÁN với A12 · Cosmo Gen 2 · niêm yết 12,5 tỷ · lô góc",
+    /CĂN TRONG DỰ ÁN Ny'ah Phú Định/.test(pF3) && /A12 · Cosmo Gen 2 · 100m2/.test(pF3) && /niêm yết 12,5 tỷ/.test(pF3) && /lô góc/.test(pF3), pF3.slice(0, 600));
+
+  // F2c — tài liệu CHƯA rõ dự án: model không đọc được tên, người bán chưa có tin gắn dự án → hỏi tên; lượt sau nói tên → gắn + ghi căn
+  fresh();
+  const pj2 = db().insert("projects", { name: "Akari City", district: "Bình Tân" }).data;
+  await send({ external_user_id: "aond-f2c", text: "chào em, anh có mấy căn muốn gửi bán" });
+  globalThis.__model.parse = (p) => laLuotDocTL(p)
+    ? { loai: "phan_lo", ten_du_an: null, chu_dau_tu: null, mau_nha: [], can: [{ ma_can: "B2.07", mau_nha: null, dien_tich: "70m2", dien_tich_dat: null, gia: null, huong: null, tang: "2", ghi_chu: null }], tien_ich: [], ghi_chu: null, ro_net: false }
+    : laLuotAnh(p) ? ANH(globalThis.__anh) : OUT();
+  r = await send({ external_user_id: "aond-f2c", text: "", file_url: "https://f.zdn.vn/bang-gia.pdf", file_name: "phan-lo.pdf" });
+  check("AOND-F2c tài liệu không có tên dự án → hỏi 'đây là dự án nào', giữ nội dung đọc ở du_an_tai_lieu.noi_dung, chưa ghi du_an_can",
+    /dự án nào vậy/.test(r.body.replies[0] ?? "") && db().t.du_an_tai_lieu[0]?.project_id == null && db().t.du_an_tai_lieu[0]?.noi_dung?.can?.length === 1 && db().t.du_an_can.length === 0,
+    JSON.stringify({ rep: r.body.replies, tl: db().t.du_an_tai_lieu }));
+  globalThis.__model.parse = (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT();
+  r = await send({ external_user_id: "aond-f2c", text: "dự án Akari City đó em" });
+  check("AOND-F2d lượt sau nói tên dự án có trong kho → gắn tài liệu, ghi 1 căn B2.07 tầng 2 vào du_an_can, bong bóng 'em gắn 1 căn'",
+    db().t.du_an_can.some((c) => c.project_id === pj2.id && c.ma_can === "B2.07" && c.tang === 2) && db().t.du_an_tai_lieu[0]?.project_id === pj2.id &&
+      r.body.replies.some((x) => /gắn 1 căn/.test(x)),
+    JSON.stringify({ rep: r.body.replies, kho: db().t.du_an_can, tl: db().t.du_an_tai_lieu }));
+
+  // F4 — gom nhiều căn (luật đỡ, AI tắt): "ngưng rao hết trừ căn Trần Hưng Đạo" → hỏi xác nhận, chưa ẩn; "ừ" → ẩn 0002, giữ 0001
+  fresh(seedKho);
+  const tinZ = (code) => db().t.listings.find((l) => l.code === code);
+  r = await send({ external_user_id: "z-ccrb", text: "ngưng rao hết trừ căn Trần Hưng Đạo nha em" });
+  const pendNHL = () => db().t.info_requests.find((q) => q.question === "xac_nhan_ngung_hang_loat");
+  check("AOND-F4 'ngưng rao hết trừ căn Trần Hưng Đạo' → liệt kê 1 căn sẽ ẩn (Nguyễn Trãi), giữ THĐ, hỏi xác nhận; CHƯA đổi trạng thái",
+    pendNHL()?.status === "pending" && /Em sẽ ngưng rao 1 căn/.test(r.body.replies[0] ?? "") && /Nguyễn Trãi/.test(r.body.replies[0]) && /Giữ lại:.*Trần Hưng Đạo/.test(r.body.replies[0]) &&
+      tinZ("BDS-Q5-0001").status === "dang_ban" && tinZ("BDS-Q5-0002").status === "cho_thong_tin",
+    JSON.stringify({ rep: r.body.replies, pend: pendNHL(), st: [tinZ("BDS-Q5-0001").status, tinZ("BDS-Q5-0002").status] }));
+  r = await send({ external_user_id: "z-ccrb", text: "ừ" });
+  check("AOND-F4b 'ừ' → 0002 thành an (boc_tach.ket_thuc rut), 0001 vẫn dang_ban, câu xác nhận answered, đáp 'đã ngưng rao 1 căn'",
+    tinZ("BDS-Q5-0002").status === "an" && tinZ("BDS-Q5-0002").boc_tach?.ket_thuc === "rut" && tinZ("BDS-Q5-0001").status === "dang_ban" && pendNHL()?.status === "answered" &&
+      /đã ngưng rao 1 căn/.test(r.body.replies.join("\n")),
+    JSON.stringify({ rep: r.body.replies, st: [tinZ("BDS-Q5-0001").status, tinZ("BDS-Q5-0002").status], pend: pendNHL() }));
+
+  // F5 — "gỡ hết đi" rồi "thôi" → không ẩn gì, câu xác nhận expired
+  fresh(seedKho);
+  r = await send({ external_user_id: "z-ccrb", text: "gỡ hết đi em" });
+  check("AOND-F5 'gỡ hết đi' → an_het: liệt kê 2 căn, hỏi xác nhận", /Em sẽ ngưng rao 2 căn/.test(r.body.replies[0] ?? "") && pendNHL()?.status === "pending", JSON.stringify(r.body.replies));
+  r = await send({ external_user_id: "z-ccrb", text: "thôi, giữ nguyên đi" });
+  check("AOND-F5b 'thôi' → giữ nguyên, không căn nào an, câu xác nhận expired",
+    tinZ("BDS-Q5-0001").status === "dang_ban" && tinZ("BDS-Q5-0002").status === "cho_thong_tin" && pendNHL()?.status === "expired" && /giữ nguyên/.test(r.body.replies.join("\n")),
+    JSON.stringify({ rep: r.body.replies, st: [tinZ("BDS-Q5-0001").status, tinZ("BDS-Q5-0002").status] }));
+
+  // F6 — AI đọc ý (chế độ ai): cách nói MỚI luật không bắt — "mấy căn kia dẹp giúp anh, giữ mỗi căn Nguyễn Trãi" → chi_giu
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai" };
+  const aiNHL = (nhl) => (p) => laLuotBR(p)
+    ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, y_dinh: { loai: "binh_thuong", trich_dan: null } }
+    : laLuotYL(p) ? { dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, yeu_cau_o: null, mua_kem: null, ngung_hang_loat: nhl }
+    : laLuotGanManh(p) ? { manh: [] } // câu nhắc tên đường căn khác → FR-214 hỏi model gán mảnh; model thật thấy đây là lệnh, không phải dữ kiện
+    : OUT();
+  globalThis.__model.parse = aiNHL({ kieu: "chi_giu", giu: ["căn Nguyễn Trãi"], trich_dan: "mấy căn kia dẹp giúp anh" });
+  r = await send({ external_user_id: "z-ccrb", text: "mấy căn kia dẹp giúp anh, giữ mỗi căn Nguyễn Trãi" });
+  check("AOND-F6 AI đọc 'mấy căn kia dẹp giúp anh, giữ mỗi căn Nguyễn Trãi' (luật không bắt) → ẩn THĐ, giữ Nguyễn Trãi, hỏi xác nhận",
+    laNgungHangLoatLuat("mấy căn kia dẹp giúp anh, giữ mỗi căn Nguyễn Trãi") === null &&
+      pendNHL()?.status === "pending" && /Trần Hưng Đạo/.test(r.body.replies[0] ?? "") && /Giữ lại:.*Nguyễn Trãi/.test(r.body.replies[0]),
+    JSON.stringify({ rep: r.body.replies, pend: pendNHL() }));
+  globalThis.__model.parse = aiNHL(null);
+  r = await send({ external_user_id: "z-ccrb", text: "ngưng rao căn Nguyễn Trãi thôi" });
+  check("AOND-F6b AI nói KHÔNG có ý gom (null) → không mở xác nhận hàng loạt, FR-184 một căn như cũ", !db().t.info_requests.some((q) => q.question === "xac_nhan_ngung_hang_loat" && q.status === "pending" && q.created_at > (pendNHL()?.created_at ?? "")) , JSON.stringify(r.body.replies));
+  globalThis.__cauHinh = cuCH;
+  globalThis.fetch = gocFetch;
 }
 // ── kết ──
 let hong = 0;

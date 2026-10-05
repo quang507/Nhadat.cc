@@ -1180,6 +1180,7 @@ export const NHAN_HOI_LAI: Record<string, string> = {
   thoi_han_thue: "mình muốn cho thuê tối thiểu bao lâu",
   tiem_nang: "nhà mình hợp để ở hay kinh doanh ngành gì",
   ngung_rao_can_nao: "mình muốn ngưng rao căn nào, nhắn số thứ tự hoặc địa chỉ giúp em",
+  xac_nhan_ngung_hang_loat: "mình chắc ngưng rao mấy căn em vừa liệt kê chưa, nhắn ừ hoặc thôi giúp em",
 };
 
 // ── FR-177 e: chủ nhà đang nói FACT NÀO? ─────────────────────────────────────
@@ -2213,6 +2214,25 @@ export type CanChon = { id: string; location_raw?: string | null; ward?: string 
 // Generic: trả về ĐÚNG kiểu người gọi đưa vào. Bản cũ trả `CanChon` hẹp nên
 // chat-reply đọc `chon.deal` ra TS2339 dù lúc chạy trường đó có thật (bật kiểm
 // kiểu bot 11/09).
+/**
+ * SRS-5.1zzl (05/10/2026, demo AOND): ngưng rao NHIỀU căn / CHỈ GIỮ vài căn — luật ĐỠ khi AI không chạy (AI đọc ở doc-y-luot).
+ * Không ghi gì: chỉ mở câu xác nhận; gật ở lượt sau mới ẩn. Câu hỏi ("gỡ tin kiểu gì?") → null.
+ *   "chỉ giữ căn A, ẩn hết còn lại" → chi_giu ["can a"]; "ngưng rao hết trừ căn Trần Hưng Đạo" → chi_giu ["can tran hung dao"];
+ *   "gỡ hết đi" / "ẩn tất cả" → an_het; "ngưng căn Nguyễn Trãi" / "bán hết rồi" → null.
+ */
+export function laNgungHangLoat(text: string): { kieu: "chi_giu" | "an_het"; giu: string[] } | null {
+  if (/\?/.test(text)) return null;
+  const t = boDau(text);
+  const dongTu = /\b(ngung|go|rut|an|xoa|khong ban|ko ban|k ban|dung rao|ngung rao|go tin|rut tin)\b/;
+  const tatCa = /\b(het|tat ca|toan bo|sach|moi can|cac can|may can|con lai)\b/;
+  const giuM = t.match(/\b(?:chi giu(?: lai)?|giu lai(?: moi| duy nhat)?|tru|ngoai)\s+((?:can|lo|ma)\s+[^,.;]+|[^,.;]+)/);
+  if (/\bchi giu\b/.test(t) || ((/\b(tru|ngoai)\b/.test(t)) && dongTu.test(t) && tatCa.test(t))) {
+    return { kieu: "chi_giu", giu: giuM ? [giuM[1].replace(/\b(an|go|ngung|rut)\b.*$/, "").trim()].filter(Boolean) : [] };
+  }
+  if (dongTu.test(t) && tatCa.test(t) && !/\b(ban het|ban duoc het|het hang|het roi)\b/.test(t)) return { kieu: "an_het", giu: [] };
+  return null;
+}
+
 export function chonCanTheoCau<T extends CanChon>(text: string, cans: T[]): T | null {
   if (!cans.length) return null;
   const kd = boDau(text).replace(/[^a-z0-9\s/]/g, " ").replace(/\s+/g, " ").trim();

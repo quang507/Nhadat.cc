@@ -24,13 +24,20 @@ async function handleEvent(raw: string): Promise<void> {
   const ev = JSON.parse(raw);
   const isText = ev.event_name === "user_send_text";
   const isImage = ev.event_name === "user_send_image"; // FR-134: bot đọc ảnh
-  if (!isText && !isImage) return;
+  // SRS-5.1zzj/zzl (05/10/2026, demo AOND): FILE (PDF / CSV / XLSX) và LINK người bán gửi — trước đây rơi ngay cửa.
+  const isFile = ev.event_name === "user_send_file";
+  const isLink = ev.event_name === "user_send_link";
+  if (!isText && !isImage && !isFile && !isLink) return;
 
   const zaloUserId = String(ev.sender?.id ?? "");
   const text = String(ev.message?.text ?? "").trim();
-  const imageUrl = isImage ? String(ev.message?.attachments?.[0]?.payload?.url ?? "") : "";
+  const dinhKem = ev.message?.attachments?.[0]?.payload ?? {};
+  const imageUrl = isImage ? String(dinhKem.url ?? "") : "";
+  const fileUrl = isFile ? String(dinhKem.url ?? "") : "";
+  const fileName = isFile ? String(dinhKem.name ?? "").slice(0, 200) : "";
+  const linkUrl = isLink ? String(dinhKem.url ?? "") : "";
   const zaloMsgId = ev.message?.msg_id ? String(ev.message.msg_id) : null;
-  if (!zaloUserId || (!text && !imageUrl)) return;
+  if (!zaloUserId || (!text && !imageUrl && !fileUrl && !linkUrl)) return;
 
   // Bộ não dùng chung (NFR-12): nhớ khách, hồ sơ nhu cầu FR-130, dedupe msg_id
   const brain = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/chat-reply`, {
@@ -43,6 +50,9 @@ async function handleEvent(raw: string): Promise<void> {
       external_user_id: zaloUserId,
       text,
       image_url: imageUrl || undefined,
+      file_url: fileUrl || undefined,
+      file_name: fileName || undefined,
+      link_url: linkUrl || undefined,
       msg_id: zaloMsgId,
       channel: "zalo_oa",
     }),
@@ -104,10 +114,13 @@ async function handleEvent(raw: string): Promise<void> {
 
   // Quyết định 25/08: KHÔNG delay nhân tạo — bong bóng đầu đi ngay lập tức,
   // giữa các bong bóng chỉ chừa 300ms cho Zalo giao đúng thứ tự.
+  // SRS-5.1zzm (05/10/2026): chat-reply trả `nhip_go[]` (ms nghỉ trước từng bong bóng) khi `app_config.nhip_go = bat`;
+  // không có thì vẫn 300 ms. Webhook không tự tính — một nhịp cho cả OA lẫn bridge.
+  const nhipGo: number[] = Array.isArray(out?.nhip_go) ? out.nhip_go.map((x: unknown) => Math.min(3000, Math.max(0, Number(x) || 0))) : [];
   let guiHut = 0; // FR-162: đếm bong bóng gửi hụt để ghi vào sổ inbound_ledger
   for (let i = daGui; i < bubbles.length; i++) {
     const bubble = bubbles[i];
-    if (i > 0) await new Promise((r) => setTimeout(r, 300));
+    if (i > 0) await new Promise((r) => setTimeout(r, nhipGo[i] ?? 300));
     let ok = await sendZalo(accessToken, zaloUserId, bubble);
     if (!ok) {
       // FR-162: OA nghẹn thoáng qua là chuyện có thật — thử lại ĐÚNG MỘT lần
@@ -295,7 +308,7 @@ Deno.serve(async (req) => {
   try {
     const ev = JSON.parse(raw);
     const evMsgId = ev?.message?.msg_id ? String(ev.message.msg_id) : null;
-    const evText = ev?.event_name === "user_send_text" || ev?.event_name === "user_send_image";
+    const evText = ["user_send_text", "user_send_image", "user_send_file", "user_send_link"].includes(ev?.event_name);
     if (evText && evMsgId) {
       const { error: seErr } = await client.rpc("ghi_su_kien_inbound", {
         p_event_id: evMsgId,

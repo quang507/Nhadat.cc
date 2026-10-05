@@ -68,6 +68,7 @@ globalThis.fetch = async (url, opt = {}) => {
     // `already_sent:false` là dựng một thế giới mà cửa chống-gửi-đúp không
     // bao giờ đóng — ca kiểm sẽ đo nhầm.
     const body = JSON.parse(opt.body ?? "{}");
+    (globalThis.__naoNhan ??= []).push(body); // SRS-5.1zzj: ca file/link soi body gửi bộ não
     const so = globalThis.__db.t.inbound_ledger.find((x) => x.zalo_msg_id === body.msg_id);
     return {
       status: 200,
@@ -135,6 +136,37 @@ function moi() {
   delete ENV.ALLOW_UNVERIFIED_WEBHOOK;
 }
 const soLoi = (chua) => db().t.bot_errors.filter((e) => String(e.source).includes(chua));
+
+// ═════════════════ (0) FILE / LINK / NHỊP GỬI (SRS-5.1zzj, zzm — 05/10/2026) ═════════════════
+{
+  moi(); globalThis.__vault = VAULT_DAY; globalThis.__naoNhan = [];
+  const ts = Date.now();
+  const rawF = JSON.stringify({ event_name: "user_send_file", timestamp: String(ts), sender: { id: "zalo-user-1" },
+    message: { msg_id: "m-file", attachments: [{ type: "file", payload: { url: "https://f.zdn.vn/ro-hang.csv", name: "ro-hang.csv", size: 1234, type: "csv" } }] } });
+  const rF = await goi(rawF, { "X-ZEvent-Signature": await kyThat(rawF, String(ts)) });
+  await xongViecNen();
+  const nhanF = globalThis.__naoNhan.find((b) => b.msg_id === "m-file");
+  check("TEP-1 user_send_file → bộ não nhận file_url + file_name, sự kiện vào inbound_events",
+    rF.status === 200 && nhanF?.file_url === "https://f.zdn.vn/ro-hang.csv" && nhanF?.file_name === "ro-hang.csv" && db().t.inbound_events.some((e) => e.event_id === "m-file"),
+    JSON.stringify({ rF, nhanF }));
+  const rawL = JSON.stringify({ event_name: "user_send_link", timestamp: String(ts), sender: { id: "zalo-user-1" },
+    message: { msg_id: "m-link", attachments: [{ type: "link", payload: { url: "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view", thumbnail: "" } }] } });
+  await goi(rawL, { "X-ZEvent-Signature": await kyThat(rawL, String(ts)) });
+  await xongViecNen();
+  check("TEP-2 user_send_link → bộ não nhận link_url", globalThis.__naoNhan.find((b) => b.msg_id === "m-link")?.link_url === "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view", JSON.stringify(globalThis.__naoNhan.at(-1)));
+  // nhịp gửi: bộ não trả nhip_go → webhook nghỉ đúng chừng đó trước bong bóng 2 (đo bằng thời gian giữa hai lượt gửi OA)
+  naoTraVe = { replies: ["Dạ em ghi nhận rồi ạ.", "Nhà mình ở đường nào vậy anh?"], nhip_go: [0, 700] };
+  globalThis.__vaultOA = true; // gửi OA cần token giả (như CK-8)
+  globalThis.__vault = (n) => n === "ZALO_OA_ACCESS_TOKEN" ? { data: "token-gia", error: null } : VAULT_DAY(n);
+  const rawN = suKien("m-nhip", "bán nhà", ts);
+  const t0 = Date.now();
+  await goi(rawN, { "X-ZEvent-Signature": await kyThat(rawN, String(ts)) });
+  await xongViecNen();
+  const mat = Date.now() - t0;
+  check("TEP-3 bộ não trả nhip_go [0, 700] → hai bong bóng cách nhau ≥ 700 ms (mặc định 300)", daGuiOA.length === 2 && mat >= 700, JSON.stringify({ n: daGuiOA.length, mat }));
+  naoTraVe = { replies: ["Dạ em ghi nhận rồi ạ."] };
+  globalThis.__vault = VAULT_DAY; globalThis.__vaultOA = false;
+}
 
 // ═════════════════════ (1) CHỮ KÝ ĐÚNG ═════════════════════
 {

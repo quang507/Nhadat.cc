@@ -17,6 +17,8 @@ export const YEU_CAU = [
   "hoi_noi_dang", "hoi_bao_lau_ban", "xin_so_khach", "xin_xoa_du_lieu", "xin_bo_o", "khong",
 ] as const;
 export const O_BO = ["do_rong_hem", "gia", "phuong", "dien_tich", "so_phong_ngu", "ket_cau", "phap_ly", "huong", "vi_tri"] as const;
+/** SRS-5.1zzl (05/10/2026, demo AOND thao tác phá dữ liệu chờ xác nhận): ngưng rao NHIỀU căn / chỉ giữ vài căn. */
+export const KIEU_NHL = ["chi_giu", "an_het"] as const;
 const YLuot = z.object({
   dong_y: z.enum(DONG_Y).describe("dong_y = GẬT / đồng ý / xác nhận điều bot VỪA nói; dong_y_dang = gật VÀ bảo đăng tin; khong_dong_y = nói không đúng / không đồng ý; khong_noi = không gật cũng không chối (chỉ đưa thông tin, hỏi lại, nói chuyện khác)."),
   dong_y_trich: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong tin chủ nhà thể hiện ý ở dong_y. khong_noi thì null."),
@@ -31,6 +33,11 @@ const YLuot = z.object({
     loai: z.string().nullable().describe("Loại muốn mua, chép như khách viết (\"nhà\", \"căn hộ\", \"đất\"). Không nói thì null."),
     trich_dan: z.string().describe("Cụm COPY NGUYÊN VĂN trong tin chủ nhà nói về việc MUA."),
   }).nullable().describe("Chủ nhà NÓI MÌNH MUỐN MUA / TÌM MUA / ĐỔI SANG một bất động sản khác (ngoài căn đang rao). Không có thì null."),
+  ngung_hang_loat: z.object({
+    kieu: z.enum(KIEU_NHL).describe("chi_giu = chỉ giữ một / vài căn, ngưng rao các căn còn lại; an_het = ngưng rao / gỡ / ẩn TẤT CẢ căn."),
+    giu: z.array(z.string()).describe("Cụm chỉ căn GIỮ LẠI, chép như khách viết ('căn Trần Hưng Đạo', 'căn 2', 'căn hẻm 4m'). an_het thì rỗng."),
+    trich_dan: z.string().describe("Cụm COPY NGUYÊN VĂN trong tin thể hiện ý ngưng nhiều căn."),
+  }).nullable().describe("Chủ nhà muốn ngưng rao / gỡ / ẩn NHIỀU căn một lúc, hoặc chỉ giữ một vài căn ('chỉ giữ căn A, ẩn hết còn lại', 'gỡ hết đi', 'ngưng rao hết trừ căn X'). Ngưng MỘT căn cụ thể, hỏi han, hay nói chuyện khác → null."),
 });
 const FORMAT_Y_LUOT = dinhDangLong(YLuot);
 
@@ -60,6 +67,10 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
   chuyện khác.
 yeu_cau_trich phải chép NGUYÊN VĂN từ TIN chủ nhà.
 
+LUẬT NGƯNG NHIỀU CĂN (ngung_hang_loat) — chủ nhà muốn ngưng rao / gỡ / ẩn NHIỀU căn trong một câu: "gỡ hết đi", "ngưng rao hết",
+"chỉ giữ căn Trần Hưng Đạo, ẩn hết còn lại", "ngưng hết trừ căn 2" → kieu an_het hoặc chi_giu, giu là các cụm chỉ căn giữ lại.
+Ngưng MỘT căn ("ngưng căn Nguyễn Trãi"), "bán rồi", hỏi "gỡ tin kiểu gì" → null.
+
 LUẬT MUA KÈM (mua_kem) — chủ nhà nói CHÍNH MÌNH muốn mua / tìm mua / đổi sang căn khác ("bán căn này để mua nhà Bình Thạnh tầm 6
 tỷ", "bán xong anh tính mua căn hộ q2"): khu_vuc, ngan_sach, loai chép NGUYÊN chữ khách trong phần nói về MUA, trich_dan là phần
 đó. Giá / khu của căn đang BÁN không bao giờ vào mua_kem. Khách MUA HỘ người khác, kể chuyện đã mua trước đây ("anh mua căn này
@@ -77,6 +88,8 @@ export type YLuotLLM = {
   yeuCau?: { loai: typeof YEU_CAU[number]; trich_dan: string | null; o: typeof O_BO[number] | null };
   /** null = model nói không có vế mua; undefined = model không trả ô này. */
   muaKem?: { khu_vuc: string | null; ngan_sach: string | null; loai: string | null; trich_dan: string } | null;
+  /** SRS-5.1zzl: null = model nói không có ý ngưng nhiều căn; undefined = model không trả ô này. */
+  ngungHangLoat?: { kieu: typeof KIEU_NHL[number]; giu: string[]; trich_dan: string } | null;
 };
 
 /** Hỏi model ý ngắn của lượt. `ket` null = model trả không đọc được (nơi gọi coi như AI không chạy). Model hỏng thì NÉM. */
@@ -88,7 +101,7 @@ export async function docYLuotBangModel(
 ): Promise<{ ket: YLuotLLM | null; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
-    max_tokens: 250,
+    max_tokens: 350,
     output_config: { effort: "low", format: FORMAT_Y_LUOT },
     system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
     messages: [{
@@ -105,8 +118,19 @@ export async function docYLuotBangModel(
     ...(dy ? { dongY: { la: dy === "dong_y_dang" ? "dong_y" : dy, trich_dan: str(o.dong_y_trich), dang_di: dy === "dong_y_dang" } } : {}),
     ...(yc ? { yeuCau: { loai: yc, trich_dan: str(o.yeu_cau_trich), o: (O_BO as readonly unknown[]).includes(o.yeu_cau_o) ? o.yeu_cau_o as typeof O_BO[number] : null } } : {}),
     ...("mua_kem" in o ? { muaKem: docMuaKemTho(o.mua_kem) } : {}),
+    ...("ngung_hang_loat" in o ? { ngungHangLoat: docNHLTho(o.ngung_hang_loat) } : {}),
   };
-  return { ket: dy || yc ? ket : null, usage: r.usage };
+  return { ket: dy || yc || "ngung_hang_loat" in o ? ket : null, usage: r.usage };
+}
+
+function docNHLTho(x: unknown): YLuotLLM["ngungHangLoat"] {
+  if (!x || typeof x !== "object") return null;
+  const m = x as Record<string, unknown>;
+  if (!(KIEU_NHL as readonly unknown[]).includes(m.kieu)) return null;
+  const td = typeof m.trich_dan === "string" && m.trich_dan.trim() ? m.trich_dan.trim() : null;
+  if (!td) return null;
+  const giu = Array.isArray(m.giu) ? m.giu.filter((g): g is string => typeof g === "string" && g.trim().length > 0).map((g) => g.trim()) : [];
+  return { kieu: m.kieu as typeof KIEU_NHL[number], giu, trich_dan: td };
 }
 
 function docMuaKemTho(x: unknown): YLuotLLM["muaKem"] {
