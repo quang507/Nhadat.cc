@@ -7600,6 +7600,18 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   check("PD-04 hỏi về dự án KHÔNG có trong kho → không gắn gì, prompt dặn nói thật chưa nắm + hỏi có căn ở đó cần bán",
     !tPD4.project_id && /chưa nắm rõ dự án đó/.test(sysPD4) && /có căn ở dự án đó cần bán/.test(sysPD4), JSON.stringify({ pid: tPD4.project_id, co: /chưa nắm rõ dự án đó/.test(sysPD4) }));
 
+  // CB-06 (chat thử "nhà bình thường" 05/10): đang duyệt bản nháp, "ừ còn bán, em cứ đăng đi" là GẬT + bảo đăng — không phải
+  //   "rao lại tin đã gỡ" (từng đáp "không thấy tin nào của anh đang gỡ").
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+  globalThis.__model.parse = () => OUT();
+  fresh(seedKho);
+  const tDuyet = db().t.listings.find((l) => l.code === "BDS-Q5-0002");
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tDuyet.id, question: "duyet_tin", status: "pending" });
+  const rDuyet = await send({ external_user_id: "z-ccrb", text: "ừ còn bán, em cứ đăng đi" });
+  check("CB-06 đang duyệt bản nháp, 'ừ còn bán, em cứ đăng đi' → duyệt (chu_duyet_at), KHÔNG rơi vào 'rao lại tin đã gỡ'",
+    !!tDuyet.chu_duyet_at && !/đang gỡ/.test((rDuyet.body.replies ?? []).join(" ")), JSON.stringify({ cd: tDuyet.chu_duyet_at, rep: rDuyet.body.replies }));
+
   // (4) SRS-5.1zzf — hạng Đồng tối đa 5 căn: `con_duoc_rao` (DB) nói hết trần → không mở tin, nói thật + cách lên Bạc.
   globalThis.__cauHinh = { test_reset_hello: "1" };
   globalThis.__model.parse = () => OUT();
