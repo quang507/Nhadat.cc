@@ -3947,7 +3947,7 @@ Deno.serve(async (req) => {
     // 05/10/2026 (chat thử "nhà bình thường", SRS-5.1zzc): đang DUYỆT BẢN NHÁP mà chủ nhà "ừ còn bán, em cứ đăng đi" → luật
     // `laRaoLai` ("còn bán" + "đăng") đọc thành RAO LẠI, bot đáp "không thấy tin nào đang gỡ" thay vì duyệt. Lời bảo đăng khi đang
     // duyệt là GẬT (khối duyệt lo), không phải mở lại tin đã gỡ. AI chạy thì `y_dinh` đã quyết.
-    const baoDangKhiDuyet = pendingReq?.question === "duyet_tin" && laBaoDang(text);
+    const baoDangKhiDuyet = pendingReq?.question === "duyet_tin" && await baoDangLuot(() => laBaoDang(text));
     if (ydRaoLai !== undefined ? ydRaoLai?.loai === "rao_lai" : (!baoDangKhiDuyet && (laRaoLai(text) || (botVuaGoTin && laRutLoiBan(text))) && !laNgungRao(text))) {
       type CanGo = { id: string; code: string | null; location_raw: string | null; ward: string | null; district: string | null; property_type: string | null; chu_duyet_at: string | null };
       const { data: daGo, error: dgoErr } = await client.from("listings").select("id, code, location_raw, ward, district, property_type, chu_duyet_at")
