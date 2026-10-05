@@ -30,7 +30,7 @@ import {
   HUMAN_CHAT_RULES,
   SELLER_FEWSHOT, SELLER_SCRIPT_RULES, cauHoiMau as cauHoiMauGoc, cauPhuongNgan, docCauHoiMau, docCauTienDinh, dienCau, LOI_CHAO,
   SLANG_NOTES,
-  TONE_RULES, CAU_HOI_MAU_TEXT, CAU_TIEN_DINH_TEXT,
+  TONE_RULES, CAU_HOI_MAU_TEXT, CAU_TIEN_DINH_TEXT, CAU_HOI_MAU as CAU_HOI_MAU_GOC,
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
@@ -1355,6 +1355,33 @@ Deno.serve(async (req) => {
   const TONE = dienTen(P.tone_rules ?? TONE_RULES, TEN_GIU_CHO);
   // 09/09/2026: câu hỏi mẫu + lời chào khách mới đọc từ bot_prompts (đè lên code).
   const { bang: BANG_CAU, loi: loiCauMau } = docCauHoiMau(P.cau_hoi_mau);
+  // 05/10/2026 (văn phong demo AOND, SRS-5.1zzi): câu lệnh cho model chỉ đưa Ý cần hỏi, model tự đặt câu. Câu mẫu
+  // chỉ đi kèm khi chủ dự án ĐÃ SỬA câu đó ở dashboard — quyền kiểm soát 09/09 giữ nguyên. `bot_prompts.cau_hoi_mau`
+  // chứa CẢ BẢNG (seed từ code), nên "đã sửa" = chữ trong DB KHÁC chữ trong code, không phải "có khoá trong DB".
+  const CAU_MAU_DB = ((): Set<string> => {
+    try {
+      const o = JSON.parse(P.cau_hoi_mau ?? "{}") as Record<string, unknown>;
+      return new Set(Object.keys(o).filter((k) => typeof o[k] === "string" && (o[k] as string).trim() !== (CAU_HOI_MAU_GOC[k] ?? "").trim()));
+    } catch { return new Set(); }
+  })();
+  const cauMauDaSua = (k: string, loai?: string | null): boolean => CAU_MAU_DB.has(k) || (!!loai && CAU_MAU_DB.has(`${k}@${loai}`));
+  /** Dòng ĐÃ BIẾT về căn cho model (khuôn demo AOND): chỉ cột đã có, viết kiểu nói — model không được đọc lại số này. */
+  const daBietNgan = (l: { property_type?: string | null; street?: string | null; location_raw?: string | null; district?: string | null;
+    floors_text?: string | null; bedrooms?: number | null; price_vnd?: number | string | null; area_m2?: number | string | null; legal_status?: string | null } | null | undefined): string => {
+    if (!l) return "";
+    const p: string[] = [];
+    if (l.property_type) p.push(loaiDoc(l.property_type));
+    if (l.location_raw || l.street) p.push([l.location_raw ?? l.street, l.district].filter(Boolean).join(", "));
+    else if (l.district) p.push(l.district);
+    if (l.area_m2 != null && l.area_m2 !== "") p.push(`${l.area_m2}m2`);
+    if (l.floors_text) p.push(l.floors_text);
+    if (l.bedrooms) p.push(`${l.bedrooms} phòng ngủ`);
+    const g = Number(l.price_vnd);
+    if (g > 0) p.push(g >= 1e9 ? `${String(+(g / 1e9).toFixed(2)).replace(".", ",")} tỷ` : `${Math.round(g / 1e6)} triệu`);
+    const phapLy: Record<string, string> = { so_hong_rieng: "sổ riêng", so_hong_chung: "sổ chung", so_hong: "có sổ hồng", hdmb: "hợp đồng mua bán", giay_tay: "giấy tay" };
+    if (l.legal_status) p.push(phapLy[l.legal_status] ?? l.legal_status);
+    return p.join(" · ");
+  };
   // FR-138 b (10/09): chữ TIỀN ĐỊNH cũng sửa được ở Dashboard — chủ dự án:
   // "chuyển mấy câu đó vào bot_prompts luôn đi để tao còn kiểm soát".
   const { bang: CAU_TD, loi: loiCauTD } = docCauTienDinh(P.cau_tien_dinh);
@@ -2964,7 +2991,8 @@ Deno.serve(async (req) => {
       // nguyên văn ở bong bóng sau → chủ nhà đọc hai lần. Câu ≥ 6 từ trùng nhau chỉ giữ lần đầu.
       sach = boCauTrung(sach);
       // SRS-5.1zi: không nói "hệ thống đã gửi…" với khách; câu khen mở đầu trỏ ngược ("điểm này") mà không có gì để trỏ thì bỏ.
-      { const sHt = boCauTroNguocDauBong(boCauNoiHeThong(sach)); if (sHt.length) sach = sHt; }
+      // 05/10/2026: hai van SỬA VĂN này theo công tắc `luat_loi_bot` (gọn = tắt) — prompt đã dặn, không cắt lời model nữa.
+      if (luatDu) { const sHt = boCauTroNguocDauBong(boCauNoiHeThong(sach)); if (sHt.length) sach = sHt; }
       // 02/10/2026 (bắn lại thu-gapc-03, SRS-5.1ze): sau chuỗi lọc, một bong bóng chỉ còn ")" (mảnh của ":)" khi câu trước bị cắt).
       // Dòng không còn chữ / số / biểu tượng nào thì bỏ — áp chung cho mọi lọc phía trên, không đi tìm từng lọc.
       sach = sach.map((r) => r.split("\n").filter((d) => !d.trim() || /[\p{L}\d\p{Extended_Pictographic}]/u.test(d)).join("\n").trim()).filter(Boolean);
@@ -2998,6 +3026,7 @@ Deno.serve(async (req) => {
       // FR-208 bước 2: chế độ `ghi` phải CHỜ lượt AI (đã chạy song song từ đầu nhánh) để ghi
       // fact rồi báo ngay trong lượt này — "đã lưu thì phải ghi rõ lưu vào trường nào" (17/09).
       const cheDoAi = cheDoBocAi ? await cheDoBocAi : "tat";
+      let bongAdmin: string | null = null;
       // 21/09/2026: ghi fact AI TRƯỚC khi 💾 đọc lại DB — dòng 🤖 riêng đã bỏ, fact AI hiện chung trong "🤖 Đã lưu".
       if (cheDoAi === "ghi" || cheDoAi === "chinh") await ghiBongBocTach(extra);
       await ganNhanChoTin(extra);
@@ -3034,7 +3063,10 @@ Deno.serve(async (req) => {
         // FR-239 g: lượt này không lưu được gì mà model "Dạ, em ghi lại rồi anh" → bỏ câu ghi nhận suông.
         // Bỏ xong không còn câu nào ("dạ em" → "Dạ em ghi nhận rồi ạ.") thì đáp một lời gật, không để khách chỉ thấy 🤖.
         if (bl.bong?.startsWith(KHONG_BOC)) { const bo = boGhiNhanSuong(sach); sach = bo.length ? bo : sach.length ? ["Dạ vâng ạ."] : sach; }
-        if (bl.bong) {
+        // 05/10/2026 (văn phong demo AOND, SRS-5.1zzi): chế độ `admin` — 🤖 chỉ ghi `messages` cho /admin, KHÔNG gửi khách;
+        // lời ghi nhận của model vì thế là lời xác nhận duy nhất, giữ nguyên (không `boCauGhiNhan`).
+        if (bl.bong && bl.cheDo === "admin") bongAdmin = bl.bong;
+        if (bl.bong && bl.cheDo !== "admin") {
           // 14/09/2026 (bắn thật): 💾 đã nói lưu gì, nên "Dạ em ghi số phòng ngủ 4 rồi ạ"
           // (bong bóng code) và "Dạ em ghi 1 trệt 3 lầu… rồi" (model) là ghi nhận lần hai,
           // lần ba. Bỏ bong bóng ghi nhận của code và câu ghi nhận CÓ nội dung của model.
@@ -3074,7 +3106,7 @@ Deno.serve(async (req) => {
       // vẫn tăng theo thứ tự mảng trong một INSERT.
       if (sach.length) {
         const { error: botErr } = await client.from("messages").insert(
-          sach.map((r) => ({ conversation_id: convSId, sender: "bot", body: r })),
+          [...(bongAdmin ? [bongAdmin] : []), ...sach].map((r) => ({ conversation_id: convSId, sender: "bot", body: r })),
         );
         // Ghi hụt câu bot vừa nói = sổ một chiều (có trả lời, không có câu hỏi).
         // Không chặn đường trả lời chủ nhà, nhưng phải vào bot_errors (FR-152).
@@ -3089,7 +3121,7 @@ Deno.serve(async (req) => {
         else await viecBong;
       }
       return await hoanTat({
-        reply: sach.join("\n") || null, replies: sach, role: "seller", ...extra,
+        reply: sach.join("\n") || null, replies: sach, role: "seller", ...(bongAdmin ? { bao_lai_admin: bongAdmin } : {}), ...extra,
       });
     };
 
@@ -6253,14 +6285,17 @@ Deno.serve(async (req) => {
             dongNguoiRao = `\nĐiểm người rao của ${cachGoi} hiện ${d.diem}/100 (${d.so_tin ?? "?"} căn đang rao); tin nào đủ hơn là điểm chung lên theo.`;
           }
         }
+        // 05/10/2026 (demo AOND `build_fee_followup_system`): tin lên kệ → DẪN PHÍ một lần bằng câu hỏi, nếu em chưa từng nói phí với người này.
+        const daNoiPhi = lichSuRows.some((m) => !laTinNguoi(m.sender) && /giá chốt|0,5%|0\.5%|\b1%/.test(m.body ?? ""));
+        const cauDanPhi = len && !daNoiPhi ? cauTD("dang_xong_phi", { loai: loaiDoc(lstOk?.property_type) }) : "";
         const cau = len
-          ? cauTD("dang_xong", { diem: dk?.diem, loai: loaiDoc(lstOk?.property_type) }) + dongNguoiRao
+          ? cauTD("dang_xong", { diem: dk?.diem, loai: loaiDoc(lstOk?.property_type) }) + dongNguoiRao + (cauDanPhi ? `\n${cauDanPhi}` : "")
           : huaSauDuyet
           ? `Dạ em ghi nhận ${cachGoi} muốn đăng luôn. Tin còn thiếu ${(dk?.thieu ?? []).slice(0, 2).join(" và ") || "một chút"} nên chưa lên được — lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em đăng liền, không hỏi lại ạ.`
           : `Dạ em ghi nhận rồi ạ.\nTin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm ${cachGoi} vài thông tin nữa nha.`;
         const loiHuaDuyet = huaSauDuyet && len ? `Lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em cập nhật vào tin liền ạ.` : "";
         return await traLoiSeller([cau, ...(len && loiHuaDuyet ? [loiHuaDuyet] : len && themDiem ? [themDiem] : [])], {
-          duyet: true, listing_status: lstOk?.status ?? null, diem: dk?.diem ?? null, du_roi: noiDu || undefined,
+          duyet: true, listing_status: lstOk?.status ?? null, diem: dk?.diem ?? null, du_roi: noiDu || undefined, ...(cauDanPhi ? { dan_phi: true } : {}),
         });
       }
 
@@ -6409,28 +6444,27 @@ Deno.serve(async (req) => {
         ? `Câu chủ nhà vừa nhắn chưa khớp câu em hỏi — em đã ghi chú nguyên văn vào tin, KHÔNG hỏi lại câu cũ, KHÔNG nói đã ghi ` +
           `"${FACT_LABELS[pendingReq.question] ?? pendingReq.question}", KHÔNG bảo chủ nhà hiểu nhầm: ghi nhận nhẹ một vế rồi hỏi tiếp. `
         : "";
+      // 05/10/2026 (văn phong demo AOND, SRS-5.1zzi): khuôn ngắn ĐÃ BIẾT / VỪA NHẮN / CẦN HỎI thay cho câu lệnh mười dòng
+      // "KHÔNG…". Câu mẫu chỉ đi kèm khi (a) là câu xác nhận do CODE tra ra (tên đường, phường, nghĩa viết tắt — mang lựa
+      // chọn cụ thể) hoặc (b) chủ dự án đã sửa câu đó ở dashboard. Còn lại model tự đặt câu từ Ý; luật cũ vẫn là lưới:
+      // `laHoiLechKhoa` / `giuVeCauMau` / `boHoiLaiDaCo` thay câu mẫu khi câu model lệch ô.
+      // Câu mang DỮ LIỆU code tra ra: xác nhận đường / phường / nghĩa viết tắt, và câu hẻm gọi đúng số hẻm ("105/12" → hẻm 105).
+      const cauCodeTra = cauDuongKe ?? cauXnKe ?? cauLungKe ?? goiYKe ?? (nextKey === "do_rong_hem" && /trong hẻm \d/.test(cauKe) ? cauKe : null);
+      const cauChuSua = nextKey && !cauCodeTra && cauMauDaSua(nextKey, pendingReq.listings?.property_type) ? cauKe : null;
+      const nhanCanHoi = nextKey === "phuong" && quanChuaRo ? "phường và quận (tin chưa rõ quận)" : nextKey ? nhanTheoLoai(nextKey, pendingReq.listings?.property_type) : "";
+      const dongCanHoi = nextKey
+        ? `CẦN HỎI: ${nhanCanHoi}` +
+          (cauCodeTra ? ` — hỏi đúng câu này (có lựa chọn cụ thể): "${cauCodeTra}"` : cauChuSua ? ` — câu bên em hay dùng: "${cauChuSua}", nói lại cho tự nhiên` : "") +
+          (nhanhKe ? ` (hỏi thêm cho rõ chuyện "${nhanhKe.ten}" chủ nhà vừa nhắc — các ý của chuyện này: ${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}; ý nào họ đã nói thì không hỏi lại)` : "")
+        : "";
       const prompt = nextKey
-        ? `${boiCanh}${daAck}Chủ nhà vừa trả lời câu hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}": "${text}".\n${hoiNguocPrompt}` +
-          `Viết MỘT tin ngắn như người thật nhắn Zalo: ${
-            khenGanDay
-              ? "KHÔNG khen, KHÔNG nhận xét căn nhà (mấy tin gần đây em đã khen rồi — lâu lâu mới khen một lần): ghi nhận ngắn một vế hoặc bỏ luôn phần ghi nhận, "
-              : "ghi nhận ngắn, KHÔNG đọc lại số liệu hay địa chỉ vừa nghe (hệ thống đã báo); CHỈ khi chủ nhà vừa nói điều thật đáng nói với khách mua thì thêm MỘT vế về đúng điều đó, còn không thì thôi — "
-          }rồi hỏi tiếp thứ quan trọng nhất còn thiếu: ${nhanTheoLoai(nextKey, pendingReq.listings?.property_type)}. ` +
-          // 24/09/2026 (chủ dự án chuyển nhận xét của AI khác): bỏ "gộp thêm một ý … cũng được" — chính khe đó cho model gắn
-          // "đã hoàn công chưa" vào câu hỏi sổ. Code chọn HỎI GÌ, model chỉ chọn CÁCH NÓI.
-          // FR-223 (chủ dự án chọn "lai" 24/09): câu NHÁNH → cho model biết đang hỏi thêm chuyện gì và các ý chính của
-          // nhánh, để câu hỏi nối được với điều chủ nhà vừa nói (code vẫn chọn Ý NÀO hỏi — câu trả lời ghi đúng ô).
-          (nhanhKe
-            ? `Chủ nhà vừa nói tới chuyện "${nhanhKe.ten}" nên em hỏi thêm cho rõ; các ý chính cần thu của chuyện này: ` +
-              `${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}. Lượt này hỏi ý "${nhanTheoLoai(nextKey, pendingReq.listings?.property_type)}"; ` +
-              `ý nào chủ nhà đã nói trong NGỮ CẢNH thì chỉ ghi nhận, không hỏi lại. `
-            : "") +
-          `Câu gợi ý: "${cauKe}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${nhanTheoLoai(nextKey, pendingReq.listings?.property_type)}, ` +
-          `đừng gắn thêm ý khác vào câu hỏi (hệ thống ghi câu trả lời kế vào ô này; hỏi lệch là ghi sai ô). ` +
-          (nhieuCan
-            ? `Người này rao nhiều căn: nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}, KHÔNG đọc mã tin. `
-            : `Người này chỉ có một căn: KHÔNG nhắc mã tin. `) +
-          `Lý do "vì khách hỏi" chỉ dùng nếu 3 tin gần nhất của em trong lịch sử chưa dùng.`
+        ? `${boiCanh}${daAck}${hoiNguocPrompt}` +
+          `ĐÃ BIẾT về căn${neo ? ` ${neo}` : ""}: ${daBietNgan(lstNow) || "(chưa có gì)"}\n` +
+          `CHỦ NHÀ VỪA NHẮN (em vừa hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}"): "${text}"\n` +
+          `${dongCanHoi}\n` +
+          `Viết MỘT tin ngắn như người thật nhắn Zalo: ${khenGanDay ? "không khen (mấy tin gần đây em khen rồi), " : ""}` +
+          `ghi nhận vài chữ rồi hỏi đúng ý CẦN HỎI, không gắn thêm ý khác, không đọc lại số liệu` +
+          (nhieuCan ? `; người này rao nhiều căn, nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}` : "") + `.`
         : published
         ? `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
           `Viết MỘT tin ngắn: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
@@ -6993,14 +7027,18 @@ Deno.serve(async (req) => {
                 role: "user",
                 content:
                   `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ${hoiRaoPrompt}` +
-                  `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao (${khenGanDay ? "KHÔNG khen, không nhận xét — mấy tin gần đây em đã khen rồi" : "nếu câu rao có gì đáng khen thật thì khen đúng một ý, không thì thôi"}). Hệ thống VỪA gửi một bong bóng liệt kê thông số đã ghi - KHÔNG lặp lại số liệu, không xác nhận lại địa điểm` +
+                  `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao${khenGanDay ? " (không khen, mấy tin gần đây em khen rồi)" : " (có điểm mạnh thật thì khen một ý, không thì thôi)"}, không đọc lại số liệu, không xác nhận lại địa điểm` +
                   (cauXacNhanDau
                     // 25/09/2026 (bắn thật lx-05): câu gợi ý "thuộc Phường Bến Thành hay Phường Cầu Ông Lãnh" bị model nói lại
                     // thành "phường nào vậy ạ?" — rơi mất lựa chọn. Câu xác nhận / chọn do CODE tra ra thì gửi NGUYÊN VĂN
                     // ngay sau; model chỉ nhận câu rao, không hỏi gì.
-                    ? `. KHÔNG hỏi gì (hệ thống tự gửi câu hỏi xác nhận ngay sau). KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá.`
+                    ? `. Không hỏi gì (hệ thống tự gửi câu hỏi xác nhận ngay sau). Không nhắc phí, không nhận xét giá.`
                     : firstKey
-                    ? `, rồi hỏi thứ quan trọng nhất còn thiếu: ${FACT_LABELS[firstKey] ?? firstKey}. Câu gợi ý: "${cauHoiDau}" — nói lại cho tự nhiên, hợp với loại nhà này; ý hỏi chính là ${FACT_LABELS[firstKey] ?? firstKey}, đừng gắn thêm ý khác vào câu hỏi (hệ thống ghi câu trả lời kế vào ô này). KHÔNG nhắc phí, KHÔNG nhắc mã tin, KHÔNG nhận xét giá.`
+                    // 05/10/2026 (văn phong demo AOND): chỉ đưa Ý cần hỏi; câu mẫu đi kèm khi chủ dự án đã sửa ở dashboard.
+                    ? `.\nCẦN HỎI: ${firstKey === "phuong" && !quanDoc ? "phường và quận (tin chưa rõ quận)" : FACT_LABELS[firstKey] ?? firstKey}${
+                      // Câu hẻm gọi đúng số hẻm ("105/12" → hẻm 105) là câu MANG DỮ LIỆU code tra ra → đưa nguyên; câu chủ dự án đã sửa ở dashboard → đưa làm gợi ý.
+                      firstKey === "do_rong_hem" && cauHoiDau && /trong hẻm \d/.test(cauHoiDau) ? ` — hỏi đúng câu này: "${cauHoiDau}"`
+                        : cauMauDaSua(firstKey, loaiMoi) ? ` — câu bên em hay dùng: "${cauHoiDau}", nói lại cho tự nhiên` : ""}\nHỏi đúng ý đó, không gắn thêm ý khác; không nhắc phí, không nhận xét giá.`
                     : ` và báo sẽ đăng lên web ngay.`),
               }],
             });

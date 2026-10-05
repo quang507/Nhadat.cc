@@ -24,7 +24,9 @@ import { donViGiaDep } from "./extraction/luat-tien.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
 import { tenNhanKhongTrung } from "./extraction/nhan.ts";
 
-export type CheDoBaoLai = "tat" | "thay_doi" | "day_du";
+/** `admin` (05/10/2026, văn phong AOND): vẫn dựng bong bóng 🤖 và ghi vào `messages` cho /admin + `so.hoi_thoai`,
+ *  nhưng KHÔNG gửi cho khách — khách chỉ đọc lời model (demo AOND in "[đã trích xuất]" cho người vận hành, không cho khách). */
+export type CheDoBaoLai = "tat" | "thay_doi" | "day_du" | "admin";
 
 /** Dấu mở bong bóng báo lại. Cố ý khác 📋 (tiêu đề bản nháp) và 📝 (ghi nhận lúc rao).
  *  21/09/2026 (chủ dự án): 💾 "Vừa lưu / Đã lưu" và 🤖 "AI đọc thêm" GỘP thành MỘT bong bóng "🤖 Đã lưu";
@@ -75,7 +77,7 @@ export const DAU_AI_DOC = "🤖";
 /** Giá trị lạ, rỗng, NULL → tắt. Thà im còn hơn bật nhầm cho khách thật. */
 export function docCheDo(v: unknown): CheDoBaoLai {
   const s = String(v ?? "").trim().toLowerCase();
-  return s === "day_du" || s === "thay_doi" ? s : "tat";
+  return s === "day_du" || s === "thay_doi" || s === "admin" ? s : "tat";
 }
 
 /**
