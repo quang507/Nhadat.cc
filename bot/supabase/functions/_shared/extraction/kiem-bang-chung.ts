@@ -694,7 +694,10 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
   const them = new Set(soSanh.ai_them.map((x) => x.khoa));
   const daGhi = new Set<string>();
   const co = (k: string) => facts[k] != null && facts[k] !== "";
-  for (const d of dat) {
+  // 05/10/2026 (SRS-5.1zz, soát luật): so_tang và ket_cau cùng đổ về fact ket_cau, trước đây khoá AI liệt kê TRƯỚC thắng —
+  // prompt liệt kê so_tang trước nên "3 tầng" đè mất cụm "trệt 2 lầu". Cụm chữ là ô chính: xét ket_cau trước, so_tang thành fact_da_co.
+  const datThuTu = [...dat.filter((d) => d.khoa === "ket_cau"), ...dat.filter((d) => d.khoa !== "ket_cau")];
+  for (const d of datThuTu) {
     if (d.can != null && d.can > 1) continue;
     if (!them.has(d.khoa)) continue; // luật đã ghi (trùng hay lệch) → AI không đụng
     const question = KHOA_GHI[d.khoa];
@@ -1008,11 +1011,13 @@ export function docVai(v: { la?: string | null; trich_dan?: string | null } | nu
  * cụm trích có trong tin, và cụm có ĐÚNG chữ đó đứng riêng (hoặc viết tắt "a" / "c" cho anh / chị).
  */
 const TU_XUNG_HOP_LE = new Set(["anh", "chị", "chú", "cô", "bác", "ông", "bà", "dì", "cậu", "mợ", "thím", "dượng"]);
-export function docTuXung(v: { la?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { la: string; trich: string } | null {
+// 05/10/2026 (SRS-5.1zx): AI thấy cả "Các tin CHỦ NHÀ đã nhắn TRƯỚC", nên cụm trích được nằm trong một tin cũ (`tinTruoc`) —
+// khách xưng "anh" ở lượt luật bỏ sót thì lượt sau vẫn học được, không chờ khách xưng lại.
+export function docTuXung(v: { la?: string | null; trich_dan?: string | null } | null | undefined, tin: string, tinTruoc: readonly string[] = []): { la: string; trich: string } | null {
   const la = (v?.la ?? "").trim().toLowerCase();
   if (!TU_XUNG_HOP_LE.has(la)) return null;
   const td = (v?.trich_dan ?? "").trim();
-  if (!trichCoTrongTin(td, tin)) return null;
+  if (!trichCoTrongTin(td, tin) && !tinTruoc.some((t) => trichCoTrongTin(td, t))) return null;
   const tu = td.toLowerCase().normalize("NFC").split(/[^\p{L}]+/u).filter(Boolean);
   const viet = la === "anh" ? ["anh", "a"] : la === "chị" ? ["chị", "c"] : [la];
   return tu.some((t) => viet.includes(t)) ? { la, trich: td } : null;
@@ -1322,21 +1327,28 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   const soGhi = (q: string) => { const v = giaTri(q); return v == null ? null : soCua(v); };
   const gapV = chuanSo(lay("gap") ?? "");
   const maCan = lay("ma_can");
+  const maCanChuan = maCan && /^[A-Za-z0-9][A-Za-z0-9.\-\/]{1,15}$/.test(maCan) ? maCan.toUpperCase() : null;
+  const quanChuan = (() => { const q = lay("quan"); return q ? bocQuan(chuanSo(q), q) ?? vungNgoai(chuanSo(q))?.ten ?? null : null; })();
+  const giaM2Raw = lay("gia_m2");
+  // 05/10/2026 (SRS-5.1zz): quan / ma_can / gia_m2 không có chỗ ghi FACT nhưng đã đọc vào cột lõi ngay dưới — ghi "bỏ" là tiếng ồn
+  // trong sổ và bộ đo. Chỉ còn "bỏ" khi thật sự không dùng được (quận lạ, mã căn sai dạng).
+  const boSach = bo.filter((b) => !(b.ly_do === "khoa_khong_co_cho_ghi" &&
+    ((b.khoa === "quan" && quanChuan) || (b.khoa === "ma_can" && maCanChuan) || (b.khoa === "gia_m2" && giaM2Raw))));
   return {
-    ghi, bo,
+    ghi, bo: boSach,
     loaiGiaoDich, loaiBds,
     gia: giaTri("gia"),
-    giaM2Raw: lay("gia_m2"),
+    giaM2Raw,
     dienTich: daCo.has("dien_tich") && !/x/.test(giaTri("dien_tich") ?? "") ? soGhi("dien_tich") : null,
     ngang: kt.ngang, dai: kt.dai,
     soPhongNgu: soGhi("so_phong_ngu"),
     // SRS-5.1zq: vùng ngoài TP.HCM ("Đồng Nai", "Long An"…) giữ tên vùng — bản cũ chỉ chuẩn hoá quận nội thành nên ra null.
-    quan: (() => { const q = lay("quan"); return q ? bocQuan(chuanSo(q), q) ?? vungNgoai(chuanSo(q))?.ten ?? null : null; })(),
+    quan: quanChuan,
     phuong: giaTri("phuong"),
     duong: giaTri("vi_tri"),
     tenDuong,
     duAn: giaTri("du_an_ten"),
-    maCan: maCan && /^[A-Za-z0-9][A-Za-z0-9.\-\/]{1,15}$/.test(maCan) ? maCan.toUpperCase() : null,
+    maCan: maCanChuan,
     gap: gapV === "co" ? true : gapV === "khong" ? false : null,
   };
 }

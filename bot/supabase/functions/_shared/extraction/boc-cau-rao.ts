@@ -81,7 +81,8 @@ export const TRUOC_LA_SAN =
   /\b(?:(?:dien tich|dt)\s*(?:san|su dung|sd|xay dung|xd)|dtsd|dtxd|san\s*(?:xay dung|su dung)?|tong\s*(?:dien tich|dt)\s*(?:san|su dung|sd|xay dung|xd))\b/;
 
 // Chữ sàn phải đứng NGAY trước số ("diện tích sàn 240m2, đất 60m2": 60 vẫn là đất).
-const SAN_NGAY_TRUOC = new RegExp(`(?:${TRUOC_LA_SAN.source})\\s*(?:la\\s*|khoang\\s*|tam\\s*)?$`);
+// 05/10/2026 (SRS-5.1zy): "Tổng diện tích sàn: 245m²" — dấu hai chấm sau nhãn từng làm 245 thành diện tích ĐẤT.
+const SAN_NGAY_TRUOC = new RegExp(`(?:${TRUOC_LA_SAN.source})\\s*:?\\s*(?:la\\s*|khoang\\s*|tam\\s*)?$`);
 export function dienTichCauRao(kd: string): number | null {
   const re = /(\d{1,5}(?:[.,]\d+)?)\s*m(?:2|²)(?![\d])/g;
   const coTang = /\b(?:tam|tang|lau|tret)\b/.test(kd);

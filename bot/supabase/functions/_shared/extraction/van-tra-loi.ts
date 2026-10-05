@@ -121,7 +121,7 @@ export function laKhachBaoHieuNham(cau: string): boolean {
 export function themXinLoiKhiHieuNham(khach: string, replies: string[], ac?: string | null): string[] {
   if (!laKhachBaoHieuNham(khach)) return replies;
   if (replies.some((r) => /\bxin loi\b/.test(boDau(r)))) return replies;
-  const cau = ac && ac !== "mình" ? `Dạ em xin lỗi ${ac}, em hiểu nhầm ạ.` : "Dạ em xin lỗi, em hiểu nhầm ạ.";
+  const cau = ac ? `Dạ em xin lỗi ${ac}, em hiểu nhầm ạ.` : "Dạ em xin lỗi, em hiểu nhầm ạ.";
   const i = replies.findIndex((r) => !/^\s*(?:🤖|💾|📝|👤)/u.test(r));
   if (i < 0) return [...replies, cau];
   // Câu mở "Dạ …" của bong bóng đó thành phần sau lời xin lỗi — bỏ "Dạ" lặp.
@@ -211,7 +211,7 @@ export function suaTuXungMua(s: string): string {
     // thay khi "bạn" làm chủ ngữ (sau là động từ / hết câu); "bạn bè", "người bạn" giữ.
     .replace(
       /(^|[\s,.!?])(?<!(?:người|các|những|một|với|cho|của|hai|ba) )([Bb])ạn(?=\s+(?:cũng|sẽ|nên|có|cần|muốn|đang|phải|được|chỉ|không|là|hãy|thấy|đã|vẫn|tìm|mua|thuê|xem|hỏi)(?![\p{L}])|\s*[,.!?]|$)/gu,
-      (_m, dau, b) => `${dau}${b === "B" ? "Mình" : "mình"}`,
+      (_m, dau, b) => `${dau}${b === "B" ? "Anh chị" : "anh chị"}`,
     );
 }
 
@@ -658,7 +658,7 @@ export function boDoanGioiDauCau(s: string): string {
  * Chưa biết khách là anh hay chị: "anh" / "chị" GỌI khách thì bỏ / đổi (02/10/2026 gom từ nhánh bán sang dùng chung — bắn thật
  * thu-trl-04, khách mua xưng "mình" mà bot "Dạ được chị ơi"). Ba dạng:
  *   · đứng cuối câu (trước ? ! . hoặc hết câu) → "ạ" ("…vậy anh?" → "…vậy ạ?"); "anh chị" đủ cặp và "anh Thu" không đụng;
- *   · gọi "anh ơi" / "chị ơi" → "mình ơi";
+ *   · gọi "anh ơi" / "chị ơi" → "anh chị ơi" (05/10/2026: không còn "mình", SRS-5.1zza);
  *   · mở câu "Anh …" / "Chị …" → "Anh chị …" (`boDoanGioiDauCau`).
  */
 export function boGoiDoanGioi(s: string): string {
@@ -666,9 +666,9 @@ export function boGoiDoanGioi(s: string): string {
 }
 /** Hai dạng đầu của `boGoiDoanGioi` (nhánh bán dùng riêng: khách lớn tuổi thì không đổi đầu câu thành "Anh chị"). */
 export function boGoiCuoiVaOi(s: string): string {
-  return s.replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(\s+)ơi(?![\p{L}])/giu, (_m, ai: string, cach: string) => (/^[AC]/.test(ai) ? "Mình" : "mình") + cach + "ơi")
+  return s.replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(\s+)ơi(?![\p{L}])/giu, (_m, ai: string, cach: string) => (/^[AC]/.test(ai) ? "Anh chị" : "anh chị") + cach + "ơi")
     // 02/10 (thu-trl-06): "Dạ được anh, để em lọc…" — gọi đứng trước dấu phẩy; "anh, chị" (cặp tách phẩy) giữ.
-    .replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(?=\s*,(?!\s*(?:anh|chị)(?![\p{L}])))/giu, (m: string) => (/^[AC]/.test(m) ? "Mình" : "mình"))
+    .replace(/(?<!\banh\s)(?<![\p{L}\/])(anh|chị)(?=\s*,(?!\s*(?:anh|chị)(?![\p{L}])))/giu, (m: string) => (/^[AC]/.test(m) ? "Anh chị" : "anh chị"))
     .replace(/(?<!\banh\s)(?<![\p{L}\/])(?:anh|chị)(?=\s*[?!.]|\s*$)/gu, "ạ").replace(/\bạ ạ\b/g, "ạ");
 }
 
@@ -1448,8 +1448,20 @@ export function goiCanHo(reply: string): string {
 // "Mình cho mình xin địa chỉ" — bot tự xưng "mình". "mình" chỉ dùng để GỌI khách chưa rõ anh / chị; bot luôn là "em"
 // (người lớn tuổi thì `doiTuXung` đổi tiếp sang "cháu"). Chỉ sửa những cụm chắc chắn là bot nói về mình: xin / hỏi
 // cho mình, mình ghi nhận / ghi lại / lưu lại / tạo tin.
+// 05/10/2026 (SRS-5.1zz, chủ dự án: "đợt trước cứ vá theo từng cái cụ thể quá mà không vá chung"): thay danh sách mẫu câu bằng MỘT
+// luật mệnh đề — "mình" mở mệnh đề (đầu câu, sau dấu, sau Dạ/Để/Rồi/Nên/Vậy/Thôi/Giờ) + động từ VIỆC CỦA BOT, mà mệnh đề đó không
+// có chữ "em" → bot đang nói về mình → "em". "Mình gửi em thêm hình nha" (có "em") và "Nhà mình" (sau danh từ) giữ nguyên.
+const VIEC_BOT = "ghi nhận|ghi lại|ghi|lưu lại|lưu|tạo tin|tạo|đăng tin|đăng|lên tin|kiểm tra|xem lại|soát|báo lại|báo|sửa lại|sửa|cập nhật|tìm|lọc|chuyển|kết nối|hẹn|soạn|chốt|nhắn|hỏi lại|gửi (?:anh|chị|chú|cô|bác|mình|khách)";
+const MINH_MO_MENH_DE = new RegExp(`(^|[.,;:!?\\n]\\s*|(?<![\\p{L}])(?:[Dd]ạ|[Đđ]ể|[Rr]ồi|[Nn]ên|[Vv]ậy|[Tt]hôi|[Gg]iờ)\\s+)([Mm])ình(\\s+(?:(?:đã|vừa|sẽ|đang|cứ|xin|mới)\\s+)?(?:${VIEC_BOT})(?![\\p{L}]))`, "gu");
+function menhDeKhongCoEm(r: string, tu: number): boolean {
+  const het = r.slice(tu).search(/[.,;:!?\n]/);
+  const menhDe = r.slice(tu, het < 0 ? undefined : tu + het);
+  return !/(?<![\p{L}])em(?![\p{L}])/u.test(menhDe);
+}
 export function botXungEm(r: string): string {
   if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) return r;
+  r = r.replace(MINH_MO_MENH_DE, (m, dau: string, M: string, sau: string, tu: number) =>
+    menhDeKhongCoEm(r, tu + dau.length) ? `${dau}${M === "M" ? "Em" : "em"}${sau}` : m);
   return r
     // 30/09/2026 (bắn thật v285): "Cảm ơn em đã ghi nhận bán căn hộ Sunrise City…" — model cảm ơn KHÁCH vì việc BOT làm.
     // Ghi nhận / ghi lại / lưu lại là việc của bot → "Dạ em ghi nhận…".

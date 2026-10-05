@@ -30,7 +30,20 @@ const env = Object.fromEntries(
 );
 const URL_DB = env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
 const KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-if (!KEY) { console.error("Thiếu SUPABASE_SERVICE_ROLE_KEY trong scripts/.env"); process.exit(1); }
+// 05/10/2026 (SRS-5.1zza): chạy được từ CI (`dong-bo-prompt.yml`) bằng SUPABASE_ACCESS_TOKEN qua Management API — máy không có
+// service_role (phiên Claude, máy mới) vẫn đẩy được prompt; không thì bản DB đè code mãi mà không ai thấy.
+const TOKEN_QT = process.env.SUPABASE_ACCESS_TOKEN ?? env.SUPABASE_ACCESS_TOKEN ?? null;
+const REF = (process.env.PROJECT_REF ?? "tbcdpupiarkuxtntmosl").trim();
+if (!KEY && !TOKEN_QT) { console.error("Thiếu SUPABASE_SERVICE_ROLE_KEY trong scripts/.env (hoặc SUPABASE_ACCESS_TOKEN cho đường Management API)"); process.exit(1); }
+async function sqlQuanTri(query) {
+  const r = await fetch(`https://api.supabase.com/v1/projects/${REF}/database/query`, {
+    method: "POST", headers: { Authorization: `Bearer ${TOKEN_QT}`, "Content-Type": "application/json" }, body: JSON.stringify({ query }),
+  });
+  if (!r.ok) throw new Error(`Management API HTTP ${r.status} ${(await r.text()).slice(0, 300)}`);
+  return await r.json();
+}
+// Chuỗi nội dung đi vào SQL bằng dollar-quote với thẻ không thể xuất hiện trong prompt.
+const lit = (x) => { const tag = "$prompt_" + Math.random().toString(36).slice(2, 8) + "$"; if (String(x).includes(tag)) throw new Error("thẻ trùng"); return `${tag}${x}${tag}`; };
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
 
 const DAY = process.argv.includes("--day");
@@ -55,9 +68,15 @@ const TU_CODE = {
   cau_tien_dinh: P.CAU_TIEN_DINH_TEXT,
 };
 
-const r = await fetch(`${URL_DB}/rest/v1/bot_prompts?select=key,content`, { headers: H });
-if (!r.ok) { console.error(`Đọc bot_prompts hỏng: HTTP ${r.status}`); process.exit(1); }
-const TU_DB = Object.fromEntries((await r.json()).map((x) => [x.key, x.content]));
+let dongDb;
+if (KEY) {
+  const r = await fetch(`${URL_DB}/rest/v1/bot_prompts?select=key,content`, { headers: H });
+  if (!r.ok) { console.error(`Đọc bot_prompts hỏng: HTTP ${r.status}`); process.exit(1); }
+  dongDb = await r.json();
+} else {
+  dongDb = await sqlQuanTri("select key, content from public.bot_prompts");
+}
+const TU_DB = Object.fromEntries(dongDb.map((x) => [x.key, x.content]));
 
 const khoa = [...new Set([...Object.keys(TU_CODE), ...Object.keys(TU_DB)])].sort();
 const lech = [];
@@ -86,12 +105,22 @@ if (!lech.length) {
     process.exitCode = 1;
   } else if (DAY) {
     const rows = lech.filter((k) => TU_CODE[k] != null).map((k) => ({ key: k, content: TU_CODE[k] }));
-    const w = await fetch(`${URL_DB}/rest/v1/bot_prompts?on_conflict=key`, {
-      method: "POST", headers: { ...H, Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify(rows),
-    });
-    if (!w.ok) {
-      console.error(`Ghi hỏng: HTTP ${w.status} ${(await w.text()).slice(0, 300)}`);
+    let loiGhi = null;
+    if (KEY) {
+      const w = await fetch(`${URL_DB}/rest/v1/bot_prompts?on_conflict=key`, {
+        method: "POST", headers: { ...H, Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(rows),
+      });
+      if (!w.ok) loiGhi = `HTTP ${w.status} ${(await w.text()).slice(0, 300)}`;
+    } else {
+      try {
+        const values = rows.map((x) => `(${lit(x.key)}, ${lit(x.content)})`).join(",\n");
+        await sqlQuanTri(`insert into public.bot_prompts (key, content) values ${values}\n` +
+          `on conflict (key) do update set content = excluded.content, updated_at = now()`);
+      } catch (e) { loiGhi = String(e?.message ?? e); }
+    }
+    if (loiGhi) {
+      console.error(`Ghi hỏng: ${loiGhi}`);
       process.exitCode = 1;
     } else {
       console.log(`Đã đẩy ${rows.length} khoá từ CODE lên DB. Bot đổi trong vòng 60 giây (nhớ tạm).`);

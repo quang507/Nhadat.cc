@@ -76,7 +76,8 @@ kiem("DC-08 khong_can_hoi dạy cả câu chủ nhà ĐÃ trả lời (nói vòn
   /HOẶC chủ nhà ĐÃ trả lời/.test(bocRao) && /đã trả lời câu gấp/.test(bocRao));
 // DC-09 (cùng lượt): khách tự xưng do AI đọc, code kiểm trích dẫn; chat-reply ghi hồ sơ và gọi đúng ngay lượt đó.
 kiem("DC-09 AI đọc khách tự xưng (tu_xung) và chat-reply dùng docTuXung",
-  /tu_xung: TuXung/.test(bocRao) && /docTuXung\(kqX\.tuXung, text\)/.test(chat));
+  // 05/10/2026 (SRS-5.1zx): trích dẫn được nằm trong tin cũ → gọi kèm `tinChuNhaGoc()`, và không còn cổng `laCheDoAi`.
+  /tu_xung: TuXung/.test(bocRao) && /docTuXung\(kqX\.tuXung, text, tinChuNhaGoc\(\)\)/.test(chat) && !/!goiLuot && laCheDoAi && bongAi/.test(chat));
 // DC-10 (cùng lượt): khối DỰ ÁN ở nhánh người bán không mang thông số dự án (bot từng hỏi "nhà phố 4-6 tầng có thang máy" như căn chủ nhà).
 kiem("DC-10 khối DỰ ÁN nhánh bán: không đưa `specs`, dặn không dùng để nói / hỏi căn của chủ nhà",
   !/thông số: \$\{JSON\.stringify\(ts\)\}/.test(chat) && /KHÔNG phải căn của chủ nhà/.test(chat));

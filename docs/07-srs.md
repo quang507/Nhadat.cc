@@ -2098,6 +2098,71 @@ Gỡ bản sửa thì S07-a/b đỏ (đã chạy).
 
 **Kiểm**: `bot/tests/gia-model.mjs` (ngưỡng theo model; tỷ lệ đọc cache; cảnh báo chỉ khi ≥ 20k chữ vào, 0 đọc, model Claude). Workflow: ô `nhom` trống + `du_bo` khác `"ca bo"` → dừng với lời báo (kiểm tay sau khi merge: dispatch không điền gì phải đỏ ở bước đầu, không bắn tin nào).
 
+### SRS-5.1zx · Cách gọi khách học được từ TIN CŨ, ở mọi chế độ bóc tách; hỏi bù không gọi "mình" khi khách đã xưng (05/10/2026)
+
+**Ca gốc** `[nguồn: hội thoại test 02/10/2026 16:19–16:33, chủ dự án gửi ảnh 05/10]`: chủ nhà nhắn "Anh nói đó được giá thì thôi" rồi "Nhà a 4 tầng tính cả lửng"; bot vẫn "anh chị" suốt, và tin hỏi bù (`ask-seller`) ngày 04/10 gửi "Nhà có dính quy hoạch hay lộ giới gì không **mình**?" — hai ngày sau khi khách đã xưng "anh" hai lần. Chủ dự án: "nó đã biết và người ta đã xưng anh, a rồi mà… đợt trước cứ vá theo từng cái cụ thể quá mà không vá chung".
+
+**(1) Lớp lỗi**: cách gọi khách chỉ được học ở **đúng lượt** có câu tự xưng, bằng luật tìm-chuỗi (`tuXungTuCau`), và đường AI đọc tự xưng (SRS-5.1ze) chỉ chạy ở chế độ `ai`, chỉ nhận trích dẫn nằm trong **tin hiện tại**. Lượt đó luật bỏ sót (cả hai câu trên đều sót: "Anh nói…" không có động từ trong danh sách, "Nhà a 4…" chữ tắt "a" sau danh từ) hoặc AI chưa bật (bản 5.1ze merge 17:20 cùng ngày, sau hội thoại) là `sellers.xung_ho` trống **mãi**: không chỗ nào đọc lại tin cũ, và `ask-seller` / `nudge` chỉ đọc cột, không học. Đây không phải lỗi của một câu, mà của cơ chế "học một lần, không nhìn lại".
+
+**(2) Chỗ khác cùng lớp** (soát 05/10): nhánh BÁN `chat-reply` (đã sửa); `ask-seller` hỏi bù (đã sửa); nhánh MUA dùng `batXungHo ?? tuXungTuCau` trên tin hiện tại rồi ghi `buyers.preferences.xung_ho` (SRS-5.1h có lưới đoán giới tính) — **chưa** quét lịch sử, để sau nếu bắn thử thấy; `nudge` không soạn câu gọi khách nên không dính.
+
+**(3) Sửa**: một hàm chung `hocXungHoTuLichSu(tinKhach[])` (`khop-cau-tra-loi.ts`) quét tin cũ của khách cũ → mới, câu tự xưng mới nhất thắng. `chat-reply`: khối nạp lịch sử dời lên trước lúc chốt cách gọi; hồ sơ trống → học từ `tinChuNhaGoc()` và ghi `sellers.xung_ho` + `suyTuXungHo`; AI đọc tự xưng bỏ cổng `laCheDoAi` (có lượt bóc tách là đọc) và `docTuXung(v, tin, tinTruoc)` nhận trích dẫn nằm trong tin cũ (AI vốn đã thấy khối "Các tin CHỦ NHÀ đã nhắn TRƯỚC"; schema `tu_xung` nói rõ điều đó). `ask-seller`: hồ sơ trống → đọc 30 tin cũ của chủ nhà (`conversations!messages_conversation_id_fkey!inner`), học, ghi lại hồ sơ rồi mới soạn. Lưới luật thêm hai dáng câu thật (nhắc lại lời mình "anh nói / bảo / kể / định / chốt"; "nhà|căn|đất|lô + a|c + số") — lưới đỡ, AI vẫn là đường chính. **Không đổi** chính sách gọi "mình" khi thật sự chưa biết (câu hỏi riêng, chủ dự án chưa chốt).
+
+**(4) Kiểm, đỏ khi tắt bản sửa**: e2e `XH-AI-03` (chế độ `chinh`, AI đọc "nhà a" → "anh"), `XH-AI-04` (lượt 1 AI im, lượt 2 "Shr" + AI trích "thì anh mới bán" từ tin cũ → "anh"), `XH-LS-01` (hồ sơ trống, lịch sử có "Nhà a 4 tầng tính cả lửng", AI im → luật học từ lịch sử, không "anh chị", không "…mình?"); tắt phần sửa ở `chat-reply` thì 3/915 đỏ (chạy thử 05/10). Đơn vị: `van-tra-loi.mjs` (hai câu gốc + cách nói MỚI "Chị bảo rồi mà, 4 tỷ 2 là chốt", "a định bán tầm 6 tỷ"; âm: "anh ấy nói giá 5 tỷ", "nhà A3 khu Him Lam"; `hocXungHoTuLichSu` mới nhất thắng, lời dặn thắng), `kiem-bang-chung.mjs` XH-LS-01…05 (trích từ tin cũ nhận; không tin cũ / trích không có / sai chữ → bỏ). `ask-seller` không có bộ e2e riêng: kiểm kiểu (`kieu:bot`) + hàm chung đã kiểm; cần một lượt hỏi bù thật sau deploy để xác nhận.
+
+### SRS-5.1zy · Tin rao dạng danh sách "Nhãn: giá trị": luật đỡ đọc được diện tích đất, diện tích sàn, giá thập phân (05/10/2026)
+
+**Ca gốc** `[nguồn: hội thoại test 02/10 & 04/10/2026, chủ dự án gửi 05/10]`: chủ nhà dán nguyên tin rao nhiều dòng ("Giá: 6,95 tỷ", "• Diện tích đất: 4m x 11m", "• Tổng diện tích sàn: 245m²", "• Kết cấu: 6 tầng, có thang máy", "• 3 phòng ngủ, 4 WC"). Lượt 02/10 (AI Sonnet): đất 44 ✓, **sàn 245 không ghi**. Lượt 04/10 credit = 0 → luật đỡ: **giá "95 tỷ"**, kết cấu = nguyên dòng tiêu đề, "4 WC" thành vị trí, không có diện tích nào, rồi hỏi "4x11m là sổ đỏ hay sàn ạ?". Chủ dự án: "trong đoạn chat nó không bóc tách được dt sổ với diện tích sàn".
+
+**(1) Lớp lỗi**: luật đỡ được viết cho CÂU NÓI một dòng, không cho TIN RAO DẠNG DANH SÁCH. Bốn cơ chế cùng hỏng trên dạng này: (a) tách mảnh ở MỌI dấu phẩy nên "6,95 tỷ" vỡ thành "95 tỷ" (trigger `gia` nhận 95 tỷ vì nằm trong khoảng); (b) dấu hai chấm sau nhãn làm luật "chữ sàn đứng ngay trước số" không khớp (`SAN_NGAY_TRUOC`, `DIEN_TICH_SAN_RE`) → 245 thành diện tích ĐẤT ở `dienTichCauRao`, và không ra fact sàn; (c) `\b` sau "m²" không bao giờ khớp vì "²" không phải chữ; (d) mảnh "4 WC" khớp dáng "số nhà + tên đường", dòng tiêu đề viết hoa chiếm ô kết cấu trước dòng "Kết cấu: …". Đường AI không dính (a)–(d); sàn 245 thiếu ở 02/10 vì luật prompt `dien_tich_san` = tổng sàn nhà nhiều tầng mới thêm 03/10 (SRS-5.1zr), chưa đo lại vì hết credit.
+
+**(2) Chỗ khác cùng lớp**: mọi luật đọc chữ không dấu trong `khop-cau-tra-loi.ts` dùng chung `boDau` (đã sửa "²" ở đó, một chỗ); `tachGop` của kiểm bằng chứng đã đổi "," giữa hai số thành "." từ trước (không dính); `nhanDienFact` một dòng (câu trả lời) vẫn nhận "Nhãn: giá trị" qua `chuanNhan` ở `nhanDienNhieuFact`; mock e2e đoán loại ĐẤT lỏng hơn SQL thật (`guess_property_type` loại trừ câu có tầng / lầu / PN / WC) → mock cho "dat" trong khi DB thật cho nha_pho, đã thêm đúng điều kiện đó vào mock.
+
+**(3) Sửa** (`khop-cau-tra-loi.ts`, `boc-cau-rao.ts`): dấu phẩy giữa hai chữ số không phải ranh mảnh; mảnh "Nhãn: giá trị" đọc như "Nhãn giá trị" (bỏ cả đầu dòng •/-/emoji), nhãn bỏ khỏi đáp án chỉ khi mảnh gốc có dấu hai chấm; `boDau` đổi "²" → "2"; `SAN_NGAY_TRUOC` / `DIEN_TICH_SAN_RE` nhận dấu hai chấm; mảnh "ngang x dài" đứng riêng → fact `dien_tich` "4x11" (như đường AI, trigger `boc_thong_so` nhân ra 44); "N wc/pn/phòng" không phải số nhà; ô đã có đáp án dài hơn 40 chữ (tiêu đề) thì đáp án ngắn đến sau thay thế. Không thêm luật đoán nghĩa mới; AI vẫn là đường chính.
+
+**(4) Kiểm**: `van-tra-loi.mjs` DS-01…11 (tin gốc + cách nói mới "DTSD: 180m2", "Diện tích sử dụng: 300 m2", "Đất: 5 x 20m", "Giá: 3,2 tỷ, có bớt lộc"; giữ "4x15, 7 tỷ 2" và "3PN,2WC" vẫn tách), `boc-cau-rao.mjs` DS-12…14; bộ 42 ca, FR-176, kiểm bằng chứng không đổi. Bộ đo thêm ca **Z01** (tin gốc, nhóm `ban1`) với khoá mới `dt_san` (cột `built_area_m2`, thêm vào `cham.mjs`, `chay.mjs`, SQL trạng thái trong README): chế độ luật một mình 9/10 trường (sàn không có vì mock không ánh xạ fact → cột, chỉ đo được trên production); `nen.json` không đổi (Z01 chưa đạt trọn). Đo AI thật cần credit: chạy `do-boc.yml` nhóm `ban1` sau khi nạp.
+
+### SRS-5.1zz · Soát luật bóc tách: sáu chỗ hai luật nói hai hướng; bot tự xưng "mình" — luật phủ định + lưới mệnh đề (05/10/2026)
+
+**Bối cảnh** `[nguồn: chủ dự án 05/10/2026: "M xem có chỗ nào thiếu logic không. Sao lâu lâu nó cứ xưng mình" → "tôi muốn bạn sửa đống này"]`. Soát prompt bóc tách (`_shared/ai/boc-rao.ts`) đối chiếu với schema và code ghi: 77 khoá đều được nhắc tên, không khoá mồ côi; lỗ nằm ở chỗ hai luật mâu thuẫn hoặc hai tên cho một ô.
+
+**A. Sáu chỗ sửa trong luật / code ghi**
+
+1. **Hợp đồng thuê đang chạy của căn bán có hai đích**: dòng `thoi_han_thue` bảo vào `kien_thuc`, ô chữ lại có `han_hop_dong_thue`. Nay prompt chỉ một đích: `han_hop_dong_thue`, không vào `kien_thuc`.
+2. **`so_tang` và `ket_cau` cùng đổ về fact `ket_cau`**, `chonDeGhi` ghi khoá AI liệt kê TRƯỚC, prompt liệt kê `so_tang` trước → "3 tầng" đè mất "trệt 2 lầu". Nay code xét `ket_cau` trước bất kể thứ tự (cụm chữ là ô chính), `so_tang` thành `fact_da_co`; prompt nói rõ. Kiểm: `kiem-bang-chung.mjs` r5 (hai thứ tự) + r5c (chỉ `so_tang` vẫn ghi).
+3. **`hien_trang` ↔ `hien_trang_su_dung` chồng nhau**: prompt định nghĩa `hien_trang` = tình trạng căn nhà (mới / cũ / cần sửa / bàn giao thô), `hien_trang_su_dung` = đang ở / đang cho thuê / để trống, ghi ở cả hai chỗ nhắc.
+4. **Một ô hai tên** (`duong` ở `truong`, `vi_tri` ở "Thông tin đang ghi" và `cap_nhat`): prompt nói thẳng hai tên là một ô, ở cả hai chỗ.
+5. **Chế độ chuẩn hoá tự mâu thuẫn** ("khách nói KHÔNG có → không đưa" đụng "không có hẻm → `khong_hem`"): thêm ngoại lệ cho các ô có/không (`gap`, `thuong_luong`, `o_to_vao_nha`, `hoan_cong`, `thang_may`, `can_goc`, `loai_duong_vao`): "không gấp", "chưa hoàn công", "không có hẻm" là câu trả lời, vẫn đưa.
+6. **Tiếng ồn trong sổ bỏ**: `quan`, `ma_can`, `gia_m2` không có chỗ ghi FACT nên `chonDeGhi` luôn đánh "bỏ, khoá không có chỗ ghi" dù `docAiChinh` đọc chúng vào cột lõi. Nay `docAiChinh` lọc ba khoá đó khỏi `bo` khi đã đọc được; quận lạ / mã căn sai dạng vẫn báo bỏ. Kiểm: ON-01, ON-02.
+
+**B. Bot tự xưng "mình"**
+
+- **Lớp lỗi**: "mình" trong tiếng Việt vừa là tôi vừa là bạn. Prompt dùng "mình" = KHÁCH ~90 lần (câu mẫu "Nhà mình…", ví dụ) mà luật "em tự xưng em" chỉ hai dòng, không có ví dụ sai / đúng → model (Haiku, và Groq / Gemini đang gánh khi credit = 0) học "mình" là đại từ chính rồi dùng cho bản thân. Lưới đỡ `botXungEm` (30/09) chỉ bắt ba mẫu câu — đúng lớp "vá bằng danh sách mẫu câu".
+- **Chỗ khác cùng lớp**: nhánh mua có `suaTuXungMua` ("chúng mình" → "bên em", "bạn" → "mình") — cũng mẫu câu, nhưng cùng chạy qua `botXungEm`? Không: nhánh mua chỉ gọi `suaTuXungMua`. Để sau nếu bắn thử nhánh mua thấy; `ask-seller` dùng câu mẫu tiền định nên không dính.
+- **Sửa**: (1) `TONE_RULES` và `HUMAN_CHAT_RULES` thêm luật phủ định có cặp sai / đúng ("mình ghi nhận rồi" → "em ghi nhận rồi", "cho mình xin" → "cho em xin", "để mình kiểm tra" → "để em kiểm tra"); `docs/06 §6.8` ghi trước. (2) `botXungEm` thành MỘT luật mệnh đề: "mình" mở mệnh đề (đầu câu, sau dấu, sau Dạ / Để / Rồi / Nên / Vậy / Thôi / Giờ) + động từ việc của bot (`VIEC_BOT`: ghi nhận, lưu, tạo tin, đăng, kiểm tra, xem lại, báo, sửa, cập nhật, tìm, lọc, chuyển, kết nối, hẹn, soạn, chốt, nhắn, hỏi lại, "gửi anh/chị/…"), mệnh đề không có chữ "em" → "em". "Mình gửi em thêm hình nha" (có "em"), "Mình chụp thêm hình nha" (việc của khách), "Nhà mình" (sau danh từ) giữ nguyên. Ba mẫu cũ vẫn chạy sau.
+- **Kiểm, đỏ khi tắt bản sửa**: `van-tra-loi.mjs` XM (cách nói mới "Để mình kiểm tra lại rồi báo anh nha", "mình gửi anh bản nháp", "Rồi mình báo anh sau"; giữ "Mình gửi em thêm hình", "Mình chụp thêm hình", "Dạ mình cho em hỏi giá"); e2e `XM-E2E-01` (model trả "Dạ, mình cập nhật lại rồi ạ. Để mình xem lại rồi báo anh nha. Nhà mình mấy toilet ạ?" → đường ra không còn "mình cập nhật / Để mình xem lại", còn "Nhà mình").
+- **Việc còn lại ngoài repo**: bản `bot_prompts` trên DB đè bản code — sau khi merge, chủ dự án chạy `bun run prompt --day` (cần `SUPABASE_SERVICE_ROLE_KEY` trong `scripts/.env`), không thì bot vẫn chạy câu dặn cũ.
+
+### SRS-5.1zza · Bỏ "mình" làm cách gọi khách: chưa biết thì "anh chị", lớn tuổi thì "cô chú"; đẩy prompt lên DB từ CI (05/10/2026)
+
+**Bối cảnh** `[nguồn: chủ dự án 05/10/2026, ảnh test 16:30 "Dạ em cảm ơn mình" → "bỏ 'mình' luôn đi, chưa biết thì gọi anh chị"]`. Quyết định 22/09 ("chưa rõ chú hay cô thì gọi mình") và câu dặn "chưa biết thì gọi mình" làm câu mẫu điền "mình" vào ô cách gọi: "cảm ơn mình", "…không mình?", "Sổ nhà mình do chính mình đứng tên" — tiếng Việt "mình" vừa là tôi vừa là bạn nên đọc như bot tự xưng. Đảo quyết định 22/09.
+
+**(1) Lớp lỗi**: cách gọi khi hồ sơ trống được điền RẢI ở ~20 chỗ (`goiNguoi ?? "mình"`, `goiMua ?? "mình"`, `ask-seller`, lời chào người lớn tuổi, lọc "anh ơi" → "mình ơi", "bạn" → "mình"), không có một chỗ quyết. Đổi chính sách là phải tìm đủ 20 chỗ.
+
+**(2) Sửa**: `cachGoiKhach(xungHo, nhomTuoi)` (`khop-cau-tra-loi.ts`) là chỗ DUY NHẤT: `xungHo ?? (lon_tuoi ? "cô chú" : "anh chị")`. `chat-reply` (bán + mua), `ask-seller` (thêm `nhom_tuoi` vào select, `doiTuXung` nhận nhóm tuổi để xưng cháu), `van-tra-loi` (`boGoiCuoiVaOi`: "anh ơi" → "anh chị ơi", trước dấu phẩy → "anh chị"; `suaTuXungMua`: "bạn" → "anh chị"; `themXinLoiKhiHieuNham` không còn ngoại lệ "mình") đều gọi hàm đó. Câu mẫu cố định có "mình" làm tân ngữ ("rao tích cực cho mình", "hỏi thêm mình", "báo mình", "gọi lại cho mình") đổi sang `{ac}` hoặc bỏ đại từ; cụm sở hữu "nhà mình", "sổ nhà mình" GIỮ (nhà của khách, không gây hiểu lầm). Prompt: "chưa biết thì gọi anh chị hoặc bỏ đại từ; KHÔNG dùng mình làm đại từ (không gọi khách mình, không tự xưng mình)", `docs/06` bảng nhân xưng đổi theo.
+
+**(3) Kiểm**: `van-tra-loi.mjs` GOI-01/02/06 (→ "anh chị ơi", "anh chị,"), "bạn" → "anh chị"; e2e GVD-03/06 (người lớn tuổi chưa rõ → "Cô chú"), TL-E2E-08 ("chị ơi" → "anh chị ơi"), V1.3 (câu mẫu đè từ DB điền "anh chị"); 916 ca e2e. Lưới `botXungEm` (SRS-5.1zz) vẫn chạy cho trường hợp model tự xưng "mình".
+
+**(4) Đẩy prompt lên DB từ CI**: `bot_prompts` đè code lúc chạy, nên sửa `prompts.ts` mà không `bun run prompt --day` là bot vẫn nói câu cũ. Máy chạy phiên Claude không có `SUPABASE_SERVICE_ROLE_KEY`. `scripts/dong-bo-prompt.mjs` nay chạy thêm được bằng `SUPABASE_ACCESS_TOKEN` (Management API, cùng đường `ban-thu.yml`): đọc `bot_prompts` bằng SQL, ghi bằng `insert … on conflict (key) do update` với dollar-quote. Workflow mới `dong-bo-prompt.yml` (dispatch; ô `day` = đẩy, trống = chỉ so). **Sau khi merge PR này: chạy `dong-bo-prompt.yml` với `day` bật, rồi deploy `chat-reply` + `ask-seller`.**
+
+### SRS-5.1zzb · Đáp có/không kèm tiểu từ ("có em ơi") bị coi là không trả lời (05/10/2026)
+
+`[nguồn: test Zalo 05/10 17:30]` Bot hỏi "4 tầng có tính gác lửng không?", khách "có em ơi" → không ghi lửng, bot hỏi câu khác.
+
+- **Lớp lỗi**: `docTraLoiLung` dùng danh sách từ được phép (`TU_DAP_LUNG`), thiếu "ơi", "đâu" → câu đáp rõ ràng rơi ra. Các câu trả lời khác đi qua bộ lọc tiểu từ chung nên không dính; AI chưa được hỏi câu lửng (câu phụ, không phải `cauDangHoi`), để sau.
+- **Sửa**: lọc tiểu từ bằng bộ chung (`DEM_CUOI_DAP_AN`, `TIEU_TU_DAU`) trước khi đọc; `DEM_CUOI_DAP_AN` thêm "đâu". Không thêm từ vào danh sách riêng.
+- **Kiểm, đỏ khi tắt**: `van-tra-loi.mjs` LUNG-TU ("có em ơi", "có nha em", "dạ có anh ơi" → có; "ko có đâu em" → không; "có sân thượng nữa em" vẫn null); e2e `LUNG-02b`.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

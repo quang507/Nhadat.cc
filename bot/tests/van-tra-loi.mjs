@@ -17,7 +17,7 @@ import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/ga
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao, laRaoLai, laRutLoiBan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
-import { tuXungTuCau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { tuXungTuCau, hocXungHoTuLichSu, docTraLoiLung } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
 import { boHoiLaiDaCo, boHuaHoiChuNha } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -170,7 +170,21 @@ for (const [vao, mong] of [
   ["bán nhà quận 10 phường 12, 48m2, giá 5 tỷ 2", null],
   ["có căn nào quận 10 tầm 5 tỷ không em", null],
   ["nhà hàng xóm, anh ấy bán rồi", null],
+  // 05/10/2026 (SRS-5.1zx): hai câu thật của hội thoại test 02/10 mà luật bỏ sót → hỏi bù 04/10 gọi "mình".
+  ["Anh nói đó được giá thì thôi", "anh"],
+  ["Nhà a 4 tầng tính cả lửng", "anh"],
+  ["nhà c 50m2 giá 3 tỷ", "chị"],
+  // cách nói MỚI chưa bắn: nhắc lại lời mình, định / chốt
+  ["Chị bảo rồi mà, 4 tỷ 2 là chốt", "chị"],
+  ["a định bán tầm 6 tỷ", "anh"],
+  ["anh ấy nói giá 5 tỷ", null],
+  ["nhà A3 khu Him Lam", null],
 ]) ok(`tuXungTuCau "${vao}"`, tuXungTuCau(vao) === mong, String(tuXungTuCau(vao)));
+// 05/10/2026 (SRS-5.1zx): học cách gọi từ TIN CŨ — câu tự xưng mới nhất thắng; không có thì null.
+ok("hocXungHoTuLichSu: 'Shr' hiện tại, tin cũ 'Anh nói đó được giá thì thôi' → anh", hocXungHoTuLichSu(["bán nhà q5 50m2", "Anh nói đó được giá thì thôi", "Shr"]) === "anh");
+ok("hocXungHoTuLichSu: mới nhất thắng (anh rồi chị) → chị", hocXungHoTuLichSu(["anh cần bán nhà", "dạ em, chị gửi ảnh nha"]) === "chị");
+ok("hocXungHoTuLichSu: không câu nào tự xưng → null", hocXungHoTuLichSu(["bán nhà q10", "5 tỷ", ""]) === null);
+ok("hocXungHoTuLichSu: lời dặn 'kêu chị nha' thắng tự xưng cũ", hocXungHoTuLichSu(["anh cần bán nhà", "kêu chị nha"]) === "chị");
 
 // ── Bản nháp: tiểu từ chat không lọt vào tin rao ─────────────────────────────
 {
@@ -289,7 +303,7 @@ ok("dò mục đích: 'Mình tìm mua hay thuê ạ?' không bắt", !laHoiMucDi
 ok("kho: 'Hiện kho em còn vài căn ở khu đó' là hứa", laHuaCoHang("Hiện kho em còn vài căn ở khu đó, em lọc rồi báo lại mình ngay nha."));
 ok("kho: 'bên em còn căn nào khác không' không bắt", !laHuaCoHang("Mình hỏi giúp em bên em còn căn nào khác không ạ?"));
 ok("kho: 'em còn cần biết thêm khu vực' không bắt", !laHuaCoHang("Em còn cần biết thêm khu vực mình muốn ạ."));
-ok("xưng hô: 'thì bạn cũng bị ảnh hưởng' → 'mình'", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng.") === "Nếu người khác bán phần của họ thì mình cũng bị ảnh hưởng.", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng."));
+ok("xưng hô: 'thì bạn cũng bị ảnh hưởng' → 'anh chị' (05/10: không còn 'mình')", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng.") === "Nếu người khác bán phần của họ thì anh chị cũng bị ảnh hưởng.", suaTuXungMua("Nếu người khác bán phần của họ thì bạn cũng bị ảnh hưởng."));
 ok("xưng hô: 'bạn bè', 'người bạn có nhà' giữ nguyên", suaTuXungMua("Nhà gần bạn bè, người bạn có nhà ở đó.") === "Nhà gần bạn bè, người bạn có nhà ở đó.", suaTuXungMua("Nhà gần bạn bè, người bạn có nhà ở đó."));
 ok("gộp: 'muốn gần bệnh viện' vào 'có mẹ già ở cùng, cần gần bệnh viện' → null",
   gopGhiChu("có mẹ già ở cùng, cần gần bệnh viện", "muốn gần bệnh viện") === null,
@@ -1138,6 +1152,20 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
   ok("chanHuaGuiHinh(null) chỉ bỏ câu hứa, không chèn", JSON.stringify(chanHuaGuiHinh(["Dạ căn Hải Thượng Lãn Ông 6 tỷ 4 ạ. Em gửi hình liền cho mình nha."], null)) === JSON.stringify(["Dạ căn Hải Thượng Lãn Ông 6 tỷ 4 ạ."]));
   ok("boCauHoiLap bỏ câu hỏi lặp, giữ phần khác", JSON.stringify(boCauHoiLap(["Dạ em ghi nhận. Mình muốn hẻm xe hơi hay mặt tiền hơn vậy ạ?"], "Mình thích hẻm xe hơi hay mặt tiền hơn ạ?")) === JSON.stringify(["Dạ em ghi nhận."]));
   ok("FR250 'Sổ nhà mình' giữ", botXungEm("Sổ nhà mình riêng hay chung ạ?") === "Sổ nhà mình riêng hay chung ạ?");
+  // 05/10/2026 (SRS-5.1zz): MỘT luật mệnh đề thay danh sách mẫu — cách nói MỚI chưa bắn, và các câu phải GIỮ.
+  for (const [vao, ra] of [
+    ["Để mình kiểm tra lại rồi báo anh nha.", "Để em kiểm tra lại rồi báo anh nha."],
+    ["mình gửi anh bản nháp nha", "em gửi anh bản nháp nha"],
+    ["Dạ, mình cập nhật lại giá 7 tỷ 2 rồi ạ.", "Dạ, em cập nhật lại giá 7 tỷ 2 rồi ạ."],
+    ["Rồi mình báo anh sau nha.", "Rồi em báo anh sau nha."],
+    ["Mình đã lưu lại rồi. Nhà mình mấy toilet ạ?", "Em đã lưu lại rồi. Nhà mình mấy toilet ạ?"],
+    ["Mình gửi em thêm hình nha", "Mình gửi em thêm hình nha"],
+    ["Mình chụp thêm hình nha?", "Mình chụp thêm hình nha?"],
+    ["Mình chốt lịch với em nha", "Mình chốt lịch với em nha"],
+    ["Nhà mình mấy toilet ạ?", "Nhà mình mấy toilet ạ?"],
+    ["Dạ mình cho em hỏi giá nha?", "Dạ mình cho em hỏi giá nha?"],
+    ["🤖 Bóc tách được: mình ghi nhận", "🤖 Bóc tách được: mình ghi nhận"],
+  ]) ok(`XM '${vao}' → '${ra}'`, botXungEm(vao) === ra, botXungEm(vao));
   for (const [vao, ra] of [
     ["Cảm ơn em đã ghi nhận bán căn hộ Sunrise City 2PN 70 m² giá 3 tỷ. Căn hộ mình ở tầng mấy ạ?",
       "Dạ em ghi nhận bán căn hộ Sunrise City 2PN 70 m² giá 3 tỷ. Căn hộ mình ở tầng mấy ạ?"],
@@ -1167,15 +1195,15 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
 
 // GOI-01…05 (02/10/2026, bắn thật thu-trl-04: khách mua xưng "mình", bot "Dạ được chị ơi"): chưa biết anh hay chị thì
 // không gọi theo giới — dạng "anh ơi / chị ơi" (mới), cuối câu, đầu câu; "anh chị" đủ cặp và "anh Thu" giữ.
-ok("GOI-01 'Dạ được chị ơi :)' → 'mình ơi'", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào.") === "Dạ được mình ơi :) Hiện bên em chưa có căn nào.", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào."));
-ok("GOI-02 'Anh ơi em gửi' (cách nói mới, đầu câu) → 'Mình ơi'", boGoiDoanGioi("Anh ơi em gửi căn này nha") === "Mình ơi em gửi căn này nha", boGoiDoanGioi("Anh ơi em gửi căn này nha"));
+ok("GOI-01 'Dạ được chị ơi :)' → 'anh chị ơi' (05/10: không còn 'mình')", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào.") === "Dạ được anh chị ơi :) Hiện bên em chưa có căn nào.", boGoiDoanGioi("Dạ được chị ơi :) Hiện bên em chưa có căn nào."));
+ok("GOI-02 'Anh ơi em gửi' (cách nói mới, đầu câu) → 'Anh chị ơi'", boGoiDoanGioi("Anh ơi em gửi căn này nha") === "Anh chị ơi em gửi căn này nha", boGoiDoanGioi("Anh ơi em gửi căn này nha"));
 ok("GOI-03 cuối câu '…vậy anh?' → '…vậy ạ?'", boGoiCuoiVaOi("Mình cần mấy phòng vậy anh?") === "Mình cần mấy phòng vậy ạ?", boGoiCuoiVaOi("Mình cần mấy phòng vậy anh?"));
 ok("GOI-04 'anh chị ơi' / 'anh chị phụ trách' / 'anh Thu' giữ nguyên",
   boGoiDoanGioi("Anh chị ơi, em gửi nha.") === "Anh chị ơi, em gửi nha." && boGoiDoanGioi("Có anh chị phụ trách bên em gọi lại ạ.") === "Có anh chị phụ trách bên em gọi lại ạ." && boGoiDoanGioi("Dạ anh Thu sẽ gọi lại.") === "Dạ anh Thu sẽ gọi lại.");
 ok("GOI-05 đầu câu 'Anh cần…' → 'Anh chị cần…'", boGoiDoanGioi("Anh cần mấy phòng ngủ ạ?") === "Anh chị cần mấy phòng ngủ ạ?", boGoiDoanGioi("Anh cần mấy phòng ngủ ạ?"));
 
-ok("GOI-06 'Dạ được anh, để em lọc' → 'mình,'; 'anh, chị cần gì' (cặp) giữ",
-  boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") === "Dạ được mình, để em lọc căn khớp nha." && boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ") === "Dạ anh, chị cần gì thêm ạ",
+ok("GOI-06 'Dạ được anh, để em lọc' → 'anh chị,'; 'anh, chị cần gì' (cặp) giữ",
+  boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") === "Dạ được anh chị, để em lọc căn khớp nha." && boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ") === "Dạ anh, chị cần gì thêm ạ",
   boGoiCuoiVaOi("Dạ được anh, để em lọc căn khớp nha.") + " | " + boGoiCuoiVaOi("Dạ anh, chị cần gì thêm ạ"));
 
 // SRS-5.1zi (bắn thử câu đơn giản 02/10): lời bot nói về "hệ thống"; câu khen mở đầu trỏ ngược không có gì để trỏ.
@@ -1230,6 +1258,31 @@ ok("GOI-06 'Dạ được anh, để em lọc' → 'mình,'; 'anh, chị cần g
   const c = boHuaDaDang(["Dạ em ghi rồi ạ. Em up tin ngay cho anh nhé."])[0];
   ok("DD-09 (cách nói mới) 'Em up tin ngay cho anh nhé' → bỏ", !/up tin/.test(c) && /em ghi rồi/i.test(c), c);
 }
+
+// 05/10/2026 (SRS-5.1zy, tin rao dán nguyên 02/10 & 04/10, AI chết → luật đỡ): tin dạng DANH SÁCH "Nhãn: giá trị".
+{
+  const RAO = "BÁN NHÀ PHỐ 6 TẦNG CÓ THANG MÁY – TRƯƠNG ĐÌNH HỘI, P. PHÚ ĐỊNH\nGiá: 6,95 tỷ (giảm nhẹ cho khách thiện chí)\nNhà phố biệt lập trong khu dân cư an ninh, yên tĩnh.\nThông tin nhà:\n•\tDiện tích đất: 4m x 11m\n•\tTổng diện tích sàn: 245m²\n•\tKết cấu: 6 tầng, có thang máy\n•\t3 phòng ngủ, 4 WC\n•\tHướng Tây\n•\tĐường trước nhà rộng 7m\nPháp lý: Sổ hồng, hoàn công đầy đủ.";
+  const f = nhanDienNhieuFact(RAO);
+  const lay = (q) => f.find((x) => x.question === q)?.answer ?? null;
+  ok("DS-01 'Giá: 6,95 tỷ' → giá 6,95 tỷ, KHÔNG '95 tỷ' (dấu phẩy thập phân không phải ranh mảnh)", lay("gia") === "6,95 tỷ", lay("gia"));
+  ok("DS-02 'Tổng diện tích sàn: 245m²' → dien_tich_san 245m2", lay("dien_tich_san") === "245m2", lay("dien_tich_san"));
+  ok("DS-03 'Diện tích đất: 4m x 11m' → dien_tich 4x11", lay("dien_tich") === "4x11", lay("dien_tich"));
+  ok("DS-04 mảnh '4 WC' không thành vị trí", lay("vi_tri") === null && lay("so_wc") === "4", JSON.stringify([lay("vi_tri"), lay("so_wc")]));
+  ok("DS-05 'Kết cấu: 6 tầng' → kết cấu không mang nhãn", !/^kết cấu/i.test(lay("ket_cau") ?? "") && /6 tầng/.test(lay("ket_cau") ?? ""), lay("ket_cau"));
+  // cách nói MỚI chưa bắn
+  const g = (t, q) => nhanDienNhieuFact(t).find((x) => x.question === q)?.answer ?? null;
+  ok("DS-06 (mới) 'DTSD: 180m2' → sàn 180m2", g("Nhà 3 lầu.\nDTSD: 180m2\nGiá: 5,5 tỷ", "dien_tich_san") === "180m2");
+  ok("DS-07 (mới) 'Diện tích sử dụng: 300 m2' → sàn, không thành diện tích đất", g("Diện tích sử dụng: 300 m2, sổ riêng", "dien_tich_san") === "300m2" && g("Diện tích sử dụng: 300 m2, sổ riêng", "dien_tich") === null);
+  ok("DS-08 (mới) 'Đất: 5 x 20m' → dien_tich 5x20", g("Đất: 5 x 20m\nGiá: 3,2 tỷ, có bớt lộc", "dien_tich") === "5x20");
+  ok("DS-09 (mới) 'Giá: 3,2 tỷ, có bớt lộc' → giá 3,2 tỷ", g("Đất: 5 x 20m\nGiá: 3,2 tỷ, có bớt lộc", "gia") === "3,2 tỷ");
+  ok("DS-10 '4x15, 7 tỷ 2' vẫn tách mảnh ở dấu phẩy có khoảng trắng", g("bán nhà hẻm 5m Trần Bình Trọng, 4x15, 7 tỷ 2", "gia") === "7 tỷ 2");
+  ok("DS-11 '3PN,2WC' tách mảnh ở dấu phẩy giữa chữ", g("3PN,2WC, sổ riêng", "phap_ly") !== null);
+}
+
+// 05/10/2026 (SRS-5.1zzb, test Zalo 17:30): đáp câu lửng kèm tiểu từ / cách gọi — "có em ơi" từng = không trả lời.
+for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ có anh ơi", "co"], ["có á", "co"], ["ko có đâu em", "khong"], ["không có lửng nha", "khong"],
+  ["ừ", "co"], ["có sân thượng nữa em", null], ["có lửng riêng nữa em", "them"]])
+  ok(`LUNG-TU '${vao}' → ${mong}`, docTraLoiLung(vao) === mong, String(docTraLoiLung(vao)));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

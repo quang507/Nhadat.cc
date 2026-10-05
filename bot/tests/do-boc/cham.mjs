@@ -39,6 +39,7 @@ export function soTruong(truong, ky, tin) {
   const v = {
     loai: tin.property_type, quan: tin.district, phuong: tin.ward, gia: tin.price_vnd, dt: tin.area_m2,
     pn: tin.bedrooms, phap_ly: tin.legal_status, tang: tin.floors, ngang: tin.frontage_m, deal: tin.deal,
+    dt_san: tin.built_area_m2,
   }[truong];
   if (ky === null) return v == null || v === "" || v === "chua_ro";
   switch (truong) {
@@ -47,7 +48,7 @@ export function soTruong(truong, ky, tin) {
     case "quan": return !!v && (khoaQuan(v) === khoaQuan(ky) || (!/^q\d/.test(khoaQuan(ky)) && boDau(v).split(/\s*,\s*/).some((x) => khoaQuan(x) === khoaQuan(ky))));
     case "phuong": return !!v && khoaPhuong(v) === khoaPhuong(ky);
     case "gia": return gan(v, ky, 0.01);
-    case "dt": case "ngang": return gan(v, ky, 0.02);
+    case "dt": case "ngang": case "dt_san": return gan(v, ky, 0.02);
     case "pn": case "tang": return v != null && Number(v) === Number(ky);
     case "phap_ly": return v === ky || (ky === "co_so" && /^so_/.test(String(v ?? "")));
     case "deal": return v === ky;

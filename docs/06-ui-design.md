@@ -152,7 +152,7 @@ Mục này viết lại theo code; sửa tone thì sửa cả hai nơi.
 | Đối tượng | Bot tự xưng | Gọi khách |
 |---|---|---|
 | Khách bất kỳ | **em** | **anh / chị** (biết tên thì "anh Hưng", "chị Dương") |
-| Chưa biết giới tính | em | **mình** hoặc bỏ đại từ ("Nhà mình ở đường nào vậy ạ?"); khách tự xưng ("anh bận", "e ơi a…", "chị Lan đây em") thì gọi theo. Không viết "anh/chị" gạch chéo trong tin (11/09/2026, lượt bắn 42 ca: 34/52 câu bot viết "anh/chị") |
+| Chưa biết giới tính | em | **anh chị** (lớn tuổi chưa rõ cô hay chú: **cô chú**) hoặc bỏ đại từ ("Nhà mình ở đường nào vậy ạ?"); KHÔNG gọi khách là "mình" (05/10/2026, chủ dự án: "bỏ 'mình' luôn"); khách tự xưng ("anh bận", "e ơi a…", "chị Lan đây em") thì gọi theo. Không viết "anh/chị" gạch chéo trong tin (11/09/2026, lượt bắn 42 ca: 34/52 câu bot viết "anh/chị") |
 
 Danh tính: mỗi khách **một trợ lý tên riêng** từ kho •ai (T•ai, Kh•ai, M•ai… 20 tên,
 FR-181 — chốt lại 09/09/2026, trước đó là một tên Thái), gán theo Zalo ID và giữ suốt,
@@ -214,7 +214,9 @@ thêm van code `chanNhanLaNguoi` — `bot/supabase/functions/_shared/extraction/
   thể tránh lặp thứ nó không thấy.
 - **Xưng hô do chủ nhà quyết**: "kêu chị nha" → từ đó gọi "chị", không bao giờ
   quay lại "anh/chị". Chưa dặn mà khách tự xưng ("anh bận", "e ơi a…", "chị Lan
-  đây em") thì gọi theo đó (11/09/2026, `tuXungTuCau`); chưa biết gì thì "mình".
+  đây em") thì gọi theo đó (11/09/2026, `tuXungTuCau`), kể cả câu cũ trong lịch sử
+  (05/10/2026, `hocXungHoTuLichSu`); chưa biết gì thì "anh chị", lớn tuổi thì "cô chú"
+  (`cachGoiKhach`, một chỗ cho mọi nhánh — bỏ "mình" từ 05/10/2026).
 - **Bận / hoãn thì dừng** (11/09/2026): "anh bận", "để anh hỏi vợ", "hỏi hoài vậy"
   → một câu xin lỗi hoặc bảo thong thả, không ghi gì, không hỏi thêm; câu hỏi vẫn
   treo cho vòng hỏi bù sau (`laHoanLai`, loại câu `hoan`).
@@ -284,6 +286,15 @@ tháng tiền thuê (BR-05); CHỦ ĐẦU TƯ dự án phí thoả thuận riên
   vay, phí) tối đa 3 câu · không đoán quận của địa danh. Phần chặn được bằng code nằm
   ở `van-tra-loi.ts` (`locHoSoMua` gỡ mục đích / thời hạn / hoàn cảnh không căn cứ,
   `suaTuXungMua`, van kho trống).
+- **Siết 05/10/2026** [nguồn: chủ dự án, ảnh hội thoại test 02/10 "nó xưng mình đây này" và 05/10
+  "bỏ 'mình' luôn đi, chưa biết thì gọi anh chị"]: bot KHÔNG dùng "mình" làm đại từ — không gọi
+  khách "mình" ("cảm ơn mình", "…không mình?" → "cảm ơn anh chị", "…không ạ?"), không tự xưng
+  "mình" ("mình ghi nhận", "cho mình xin", "để mình kiểm tra" → "em ghi nhận", "cho em xin",
+  "để em kiểm tra"). Cụm sở hữu "nhà mình", "sổ nhà mình" giữ. Prompt nêu cặp sai/đúng (bản
+  trước dùng "mình" = khách ~90 lần mà luật "em xưng em" chỉ hai dòng, model học nhầm đại từ).
+  Code: `cachGoiKhach()` là chỗ duy nhất điền cách gọi khi hồ sơ trống (SRS-5.1zza); lưới đỡ
+  `botXungEm` (`van-tra-loi.ts`) là MỘT luật mệnh đề: "mình" mở mệnh đề + động từ việc của bot,
+  mệnh đề không có "em" → đổi "em"; thay cho danh sách ba mẫu câu (SRS-5.1zz).
 - Trả lời đúng ý khách **trước**; câu hỏi nằm cuối tin (gộp 2–3 ý được).
 - Không hỏi lại điều đã có trong hồ sơ (`buyers.preferences`); gặp lại thì nhắc
   đúng nhu cầu cũ.
@@ -311,7 +322,7 @@ tháng tiền thuê (BR-05); CHỦ ĐẦU TƯ dự án phí thoả thuận riên
   chuyện → vẫn trả lời tử tế + "để em nhờ anh/chị phụ trách khu này nhắn lại liền
   ạ". Không bật cờ vì câu hỏi khó thường ngày.
 - **Khách đòi gọi điện / voice (`voice_request`, FR-79)**: bên em chăm qua chữ trên
-  Zalo — "dạ để em nhờ anh/chị phụ trách gọi lại cho mình liền ạ"; không đưa số,
+  Zalo — "dạ để em nhờ anh/chị phụ trách gọi lại liền ạ"; không đưa số,
   không hứa giờ gọi.
 - **Vừa hứa hỏi chủ nhà (`ask_owner`, FR-45)**: kết tin bằng "Trong khi chờ, anh/chị
   có câu hỏi gì khác về căn này không ạ?".
@@ -333,7 +344,7 @@ tháng tiền thuê (BR-05); CHỦ ĐẦU TƯ dự án phí thoả thuận riên
 - **Không delay nhân tạo** (FR-131): bong bóng đầu gửi ngay khi model trả xong, giữa
   hai bong bóng 300ms cho Zalo giao đúng thứ tự; không gom tin vụn, không typing giả.
 - **Trần 100 tin/24h/khách** (FR-146): đúng MỘT tin nhẹ nhàng — "Dạ hôm nay mình trao
-  đổi nhiều rồi, để em nhờ anh/chị phụ trách nhắn lại trực tiếp cho mình nha!" — rồi
+  đổi nhiều rồi, để em nhờ anh/chị phụ trách nhắn lại trực tiếp nha!" — rồi
   im tới hết ngày.
 - **Leo thang cần người thật** (FR-147): báo CTV trước; quá 30 phút chưa ai gõ tay mới
   lên admin — khách không thấy bước này.
