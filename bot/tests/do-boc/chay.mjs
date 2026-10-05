@@ -36,7 +36,7 @@ const CA = readFileSync(join(HERE, "ca.jsonl"), "utf8").trim().split("\n").map((
   .filter((c) => (!CHI || CHI.includes(c.id)) && (!NHOM || c.nhom === NHOM));
 
 /** Trạng thái đọc từ DB (giả hoặc thật) của một người: tin bán + hồ sơ mua. */
-const TRUONG_TIN = ["code", "property_type", "district", "ward", "price_vnd", "area_m2", "bedrooms", "legal_status", "floors", "frontage_m", "deal", "status"];
+const TRUONG_TIN = ["code", "property_type", "district", "ward", "price_vnd", "area_m2", "built_area_m2", "bedrooms", "legal_status", "floors", "frontage_m", "deal", "status"];
 const gonTin = (l) => Object.fromEntries(TRUONG_TIN.map((k) => [k, l[k] ?? null]));
 
 const moc = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13).replace("T", "-");

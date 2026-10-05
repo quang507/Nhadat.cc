@@ -94,7 +94,7 @@ export type KetQuaKhop = {
 
 const boDau = (s: string): string =>
   goNhamDau(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D")
-    .toLowerCase();
+    .toLowerCase().replace(/²/g, "2"); // 05/10/2026 (SRS-5.1zy): "245m²" — "²" không phải chữ nên `\b` sau nó không khớp
 
 // ── Xưng hô ───────────────────────────────────────────────────────────────────
 // "kêu chị nha", "gọi anh đi", "chị chứ không phải anh", "em là chị", "xưng chị
@@ -1108,6 +1108,8 @@ function phanLoaiTho(question: string, text: string): KetQuaKhop {
   // Vị trí: cần dấu hiệu địa chỉ thật (đường / hẻm / số nhà / mốc), KHÔNG chỉ vì
   // có con số — "lên thổ cư 300m2", "thời hạn đến 2060" từng đi vào địa chỉ.
   if (question === "vi_tri") {
+    // 05/10/2026 (SRS-5.1zy): mảnh "4 WC" / "3 phòng" của tin dạng danh sách — số + đơn vị đếm không phải số nhà + tên đường.
+    if (/^\s*\d+(?:[.,]\d+)?\s*(?:wc|pn|phong|toilet|tang|lau|tam|m2|m|ty|ti|trieu|tr|nam|thang)\b/.test(kd)) return ketQua("lech");
     const coDiaChi = /\b(duong|hem|hxh|so nha|dia chi|ngo|kdc|khu|toa|block|thap|chung cu|cu xa|du an|kp|ap|xa|phuong|quan|gan|doi dien|nga|cho|truong|benh vien|cong vien|lo|mat tien|mt|pho)\b/.test(kd) ||
       /\b(?:can|lo|nen|shop)\s*(?:so\s*)?\d+[a-z]?(?:[.\-\/]\d+)?\s+(?:o|tai|trong|thuoc|cua)\s+[a-z]{2,}/.test(kd) ||
       /^\s*\d+[a-z]?(?:\/\d+[a-z]?)*\s+[a-z]{2,}/.test(kd);
@@ -1197,7 +1199,7 @@ const boDauGiuDoDai = (s: string): string =>
 // "tổng diện tích 240m2" / "diện tích tổng 240m2" chỉ là sàn khi câu có tầng/tấm/lầu
 // (lookbehind dài — V8/Deno hỗ trợ) và không phải "tổng diện tích đất".
 const DIEN_TICH_SAN_RE = new RegExp(
-  `(?:(?:${TRUOC_LA_SAN.source})|(?<=\\b(?:tam|tang|lau|tret)\\b.*)\\b(?:tong\\s+(?:dien tich|dt)|(?:dien tich|dt)\\s+tong)(?!\\s+dat\\b))\\s*(?:la\\s*|khoang\\s*|tam\\s*)?(\\d{1,5}(?:[.,]\\d+)?)\\s*(?:m2|m²|met vuong|mv)\\b`,
+  `(?:(?:${TRUOC_LA_SAN.source})|(?<=\\b(?:tam|tang|lau|tret)\\b.*)\\b(?:tong\\s+(?:dien tich|dt)|(?:dien tich|dt)\\s+tong)(?!\\s+dat\\b))\\s*:?\\s*(?:la\\s*|khoang\\s*|tam\\s*)?(\\d{1,5}(?:[.,]\\d+)?)\\s*(?:m2|m²|met vuong|mv)\\b`,
 );
 // 22/09/2026 (bộ đo giọng B11): "5 tỷ 60m2" / "12 tỷ 80m2" — số đứng sau đơn vị tiền chỉ là
 // phần LẺ của giá ("5 tỷ 6") khi nó KHÔNG mang đơn vị của thứ khác (m2, x, pn, lầu, tầng…) và
@@ -1413,10 +1415,24 @@ function nhanDienNhieuFactTho(text: string): NhanDien[] {
   const out: NhanDien[] = [];
   // 14/09/2026: tin rao kiểu Facebook ("🏢 Kết cấu: 3 tấm", "📜 Sổ hồng riêng") — đáp án bỏ
   // biểu tượng và nhãn "Kết cấu:" ở đầu mảnh.
-  const gon = (a: string) => a.replace(/^[\p{Extended_Pictographic}️‍\s•\-*]+/u, "")
-    .replace(/^(?:kết cấu|pháp lý|giá|diện tích|dt|địa chỉ|vị trí|hướng|nội thất)\s*:\s*/iu, "").trim() || a;
-  const them = (nd: NhanDien | null) => {
-    if (nd && !out.some((x) => x.question === nd.question)) out.push({ ...nd, answer: gon(nd.answer) });
+  // `coNhan`: mảnh gốc viết "Nhãn: giá trị" (đã đổi thành "Nhãn giá trị" để luật đọc) → bỏ nhãn khỏi đáp án dù không còn dấu hai chấm.
+  const gon = (a: string, coNhan = false) => a.replace(/^[\p{Extended_Pictographic}️‍\s•\-*]+/u, "")
+    .replace(coNhan ? /^(?:kết cấu|pháp lý|giá|diện tích|dt|địa chỉ|vị trí|hướng|nội thất)\s*:?\s*(?=\S)/iu : /^(?:kết cấu|pháp lý|giá|diện tích|dt|địa chỉ|vị trí|hướng|nội thất)\s*:\s*/iu, "").trim() || a;
+  // 05/10/2026 (SRS-5.1zy, tin rao dán nguyên 02/10 & 04/10): tin dạng DANH SÁCH "Tổng diện tích sàn: 245m²", "Giá: 6,95 tỷ" —
+  // dấu hai chấm sau nhãn làm luật không thấy nhãn đứng trước số (sàn thành null), và dấu phẩy thập phân bị cắt thành mảnh
+  // "95 tỷ". Đọc "Nhãn: giá trị" như "Nhãn giá trị"; dấu phẩy giữa hai chữ số không phải ranh mảnh.
+  const chuanNhan = (s: string) => s.replace(/^[\p{Extended_Pictographic}️‍\s•\-*]+/u, "").replace(/^([\p{L}][\p{L}\s]{1,30}?)\s*:\s*(?=\S)/u, "$1 ");
+  const coNhanDau = (s: string) => /^[\p{L}][\p{L}\s]{1,30}?\s*:\s*\S/u.test(s.replace(/^[\p{Extended_Pictographic}️‍\s•\-*]+/u, ""));
+  const them = (nd: NhanDien | null, coNhan = false) => {
+    if (!nd) return;
+    let answer = gon(nd.answer, coNhan);
+    // "5 x 20" / "4m x 11m" → "4x11" như đường AI (`boc_thong_so` tách hai chiều rồi nhân).
+    if (nd.question === "dien_tich") answer = answer.replace(/^(\d+(?:[.,]\d+)?)\s*m?\s*x\s*(\d+(?:[.,]\d+)?)\s*m?$/i, (_m, a: string, b: string) => `${a.replace(",", ".")}x${b.replace(",", ".")}`);
+    const cu = out.findIndex((x) => x.question === nd.question);
+    if (cu < 0) out.push({ ...nd, answer });
+    // 05/10/2026 (SRS-5.1zy): tiêu đề "BÁN NHÀ PHỐ 6 TẦNG CÓ THANG MÁY – TRƯƠNG ĐÌNH HỘI" từng chiếm ô kết cấu trước dòng
+    // "Kết cấu: 6 tầng" — đáp án dài hơn 40 chữ là rác, đáp án ngắn đến sau thay thế.
+    else if (out[cu].answer.length > 40 && answer.length <= 40) out[cu] = { ...nd, answer };
   };
   // 11/09/2026 (42 ca): xét từng MẢNH trước cả câu. Bản trước lấy nhanDienFact(cả
   // câu) trước, nên câu rao "bán nhà …, 4x16, 1 trệt 2 lầu, shr, 9t5" ghi fact pháp
@@ -1424,21 +1440,31 @@ function nhanDienNhieuFactTho(text: string): NhanDien[] {
   // 15/09/2026 (bắn thật A3): "3 phòng ngủ em. nhà đang cho thuê 25 triệu/tháng" — dấu chấm + khoảng trắng cũng là ranh mảnh.
   // 24/09/2026 (xuất prompt, lượt Trần Đình Xu): "còn tầng 1 và 2 là để kinh doanh" bị cắt ở "và" thành
   // tiềm năng "2 là để kinh doanh". "và" giữa hai SỐ ("tầng 1 và 2", "lầu 2 và 3") không phải ranh mảnh.
-  const manh = text.split(/[,;\n]|\.\s+(?=\S)|(?<!\d)\s+(?:va|và)\s+|(?<=\d)\s+(?:va|và)\s+(?!\d)/i).map((s) => s.trim()).filter((s) => s.length >= 2);
-  if (manh.length > 1) for (const s of manh) them(nhanDienFact(s));
+  const manh = text.split(/(?<!\d),|,(?!\d)|[;\n]|\.\s+(?=\S)|(?<!\d)\s+(?:va|và)\s+|(?<=\d)\s+(?:va|và)\s+(?!\d)/i).map((s) => s.trim()).filter((s) => s.length >= 2);
+  if (manh.length > 1) for (const s of manh) them(nhanDienFact(chuanNhan(s)), coNhanDau(s));
+  // "Diện tích đất: 4m x 11m" — luật chỉ biết số có "m2"; ngang × dài là cách nói diện tích đất phổ biến nhất. Ghi "4x11"
+  // như đường AI (`boc_thong_so` tách hai chiều rồi nhân). Chỉ mảnh đứng riêng, không có chữ sàn.
+  if (!out.some((f) => f.question === "dien_tich" || f.question === "dien_tich_dat")) {
+    for (const s of manh) {
+      const kdS = boDau(chuanNhan(s)).trim();
+      const m = /^(?:(?:dien tich|dt|kich thuoc|dat)(?:\s+dat)?\s*)?(\d{1,3}(?:[.,]\d+)?)\s*m?\s*x\s*(\d{1,3}(?:[.,]\d+)?)\s*m?$/.exec(kdS);
+      if (m && !/\bsan\b/.test(kdS)) { them({ question: "dien_tich", answer: `${m[1].replace(",", ".")}x${m[2].replace(",", ".")}` }); break; }
+    }
+  }
   // 13/09/2026 (lượt bắn thật): câu nhiều mảnh mà lượt CẢ CÂU trả về nguyên câu
   // làm đáp án thì đó là rác — "anh cần bán căn nhà hẻm xe hơi 5m Nguyễn Trãi…"
   // thành fact độ rộng hẻm, "ngang 5 dài 20, đường nhựa 7m, sổ riêng" thành pháp
   // lý. Các mảnh đã được xét riêng ở trên; cả câu chỉ còn được góp đáp án ĐÃ CẮT.
-  let caCau = nhanDienFact(text);
+  const textC = chuanNhan(text);
+  let caCau = nhanDienFact(textC);
   // 29/09/2026 (kịch bản L1/L6/L9): câu rao MỘT mảnh (không dấu phẩy) mà luật cả câu trả nguyên câu làm đáp án — "bán căn hộ …
   // giá 4ty6 phí quản lý 15k/m2" thành phí quản lý = cả câu, "…gia 7t8 shr hc" / "bán nhà giấy tay…" thành pháp lý = cả câu.
   // Cắt đúng cụm của khoá đó; không cắt được thì bỏ (vòng quét bên dưới còn bắt các ý khác).
-  if (caCau && manh.length <= 1 && caCau.answer === text.trim() && text.trim().split(/\s+/).length >= 8 && CUM_KHOA[caCau.question]) {
-    const mk = CUM_KHOA[caCau.question].exec(boDauGiuDoDai(text));
-    caCau = mk ? { ...caCau, answer: text.slice(mk.index, mk.index + mk[0].length).trim() } : null;
+  if (caCau && manh.length <= 1 && caCau.answer === textC.trim() && textC.trim().split(/\s+/).length >= 8 && CUM_KHOA[caCau.question]) {
+    const mk = CUM_KHOA[caCau.question].exec(boDauGiuDoDai(textC));
+    caCau = mk ? { ...caCau, answer: textC.slice(mk.index, mk.index + mk[0].length).trim() } : null;
   }
-  if (manh.length <= 1 || (caCau && caCau.answer !== text.trim())) them(caCau);
+  if (manh.length <= 1 || (caCau && caCau.answer !== textC.trim())) them(caCau, coNhanDau(text));
   const kd = boDau(text);
   const kdD = boDauGiuDoDai(text);
   for (const [q, re, lay] of FACT_PHU) {
@@ -1528,7 +1554,7 @@ export function laChiDonViHanhChinh(text: string): boolean {
 export function laSoNhaTenDuong(text: string): boolean {
   const t = (text ?? "").trim().replace(/\s+(?:nha|nhé|nhe|nha em|em|ạ|a|đó|do)\s*[.!]*$/iu, "");
   return /^(?:số\s+)?\d{1,4}[a-zA-Z]?(?:\/\d{1,4}[a-zA-Z]?)*\s+\p{Lu}[\p{L}]*(?:\s+[\p{L}]+){0,4}\s*$/u.test(t) &&
-    !/(?<![\p{L}\d])(?:m|m2|met|mét|tỷ|tỉ|triệu|tr|tầng|lầu|phòng|pn|năm|tháng|tuổi|nhà|căn)(?![\p{L}\d])/iu.test(t);
+    !/(?<![\p{L}\d])(?:m|m2|met|mét|tỷ|tỉ|triệu|tr|tầng|lầu|phòng|pn|wc|toilet|năm|tháng|tuổi|nhà|căn)(?![\p{L}\d])/iu.test(t);
 }
 
 export function nhanDienFact(text: string): NhanDien | null {

@@ -247,7 +247,9 @@ export class FakeDB {
         : /skc|tmd|thuong mai dich vu|san xuat kinh doanh/.test(d) ? "dat_kinh_doanh"
         : /can ho dich vu|chdv|khach san|toa nha/.test(d) ? "toa_nha"
         : /chung cu|can ho|canho|\bcc\b|\bch\b/.test(d) ? "chung_cu"
-        : /\bdat\b|lo dat|dat nen/.test(d) ? "dat"
+        // 05/10/2026 (SRS-5.1zy): bản thật `guess_property_type` chỉ đoán ĐẤT khi câu KHÔNG có tầng / lầu / phòng ngủ / WC —
+        // "Diện tích đất: 4m x 11m" của tin nhà phố 6 tầng từng làm mock ra "dat" trong khi DB thật ra nha_pho.
+        : /\bdat\b|lo dat|dat nen/.test(d) && !/(tret|\blau\b|tang|phong ngu|\bpn\b|\bwc\b)/.test(d) ? "dat"
         : /\bnha\b|nha pho|\bnp\b|tret|\blau\b|hem|mat tien/.test(d) ? "nha_pho" : "chua_ro";
     }
   }

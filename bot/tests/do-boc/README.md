@@ -41,7 +41,7 @@ và in ước lượng số lượt trước khi bắn.
 ```sql
 select jsonb_object_agg(upper(substr(u.z, 4)), jsonb_build_object(
   'tin', coalesce((select jsonb_agg(jsonb_build_object('code', l.code, 'property_type', l.property_type,
-      'district', l.district, 'ward', l.ward, 'price_vnd', l.price_vnd, 'area_m2', l.area_m2,
+      'district', l.district, 'ward', l.ward, 'price_vnd', l.price_vnd, 'area_m2', l.area_m2, 'built_area_m2', l.built_area_m2,
       'bedrooms', l.bedrooms, 'legal_status', l.legal_status, 'floors', l.floors,
       'frontage_m', l.frontage_m, 'deal', l.deal, 'status', l.status) order by l.created_at)
     from listings l join sellers s on s.id = l.seller_id where s.zalo_user_id = u.z), '[]'::jsonb),

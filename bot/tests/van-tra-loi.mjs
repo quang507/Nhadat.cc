@@ -1245,5 +1245,25 @@ ok("GOI-06 'Dạ được anh, để em lọc' → 'mình,'; 'anh, chị cần g
   ok("DD-09 (cách nói mới) 'Em up tin ngay cho anh nhé' → bỏ", !/up tin/.test(c) && /em ghi rồi/i.test(c), c);
 }
 
+// 05/10/2026 (SRS-5.1zy, tin rao dán nguyên 02/10 & 04/10, AI chết → luật đỡ): tin dạng DANH SÁCH "Nhãn: giá trị".
+{
+  const RAO = "BÁN NHÀ PHỐ 6 TẦNG CÓ THANG MÁY – TRƯƠNG ĐÌNH HỘI, P. PHÚ ĐỊNH\nGiá: 6,95 tỷ (giảm nhẹ cho khách thiện chí)\nNhà phố biệt lập trong khu dân cư an ninh, yên tĩnh.\nThông tin nhà:\n•\tDiện tích đất: 4m x 11m\n•\tTổng diện tích sàn: 245m²\n•\tKết cấu: 6 tầng, có thang máy\n•\t3 phòng ngủ, 4 WC\n•\tHướng Tây\n•\tĐường trước nhà rộng 7m\nPháp lý: Sổ hồng, hoàn công đầy đủ.";
+  const f = nhanDienNhieuFact(RAO);
+  const lay = (q) => f.find((x) => x.question === q)?.answer ?? null;
+  ok("DS-01 'Giá: 6,95 tỷ' → giá 6,95 tỷ, KHÔNG '95 tỷ' (dấu phẩy thập phân không phải ranh mảnh)", lay("gia") === "6,95 tỷ", lay("gia"));
+  ok("DS-02 'Tổng diện tích sàn: 245m²' → dien_tich_san 245m2", lay("dien_tich_san") === "245m2", lay("dien_tich_san"));
+  ok("DS-03 'Diện tích đất: 4m x 11m' → dien_tich 4x11", lay("dien_tich") === "4x11", lay("dien_tich"));
+  ok("DS-04 mảnh '4 WC' không thành vị trí", lay("vi_tri") === null && lay("so_wc") === "4", JSON.stringify([lay("vi_tri"), lay("so_wc")]));
+  ok("DS-05 'Kết cấu: 6 tầng' → kết cấu không mang nhãn", !/^kết cấu/i.test(lay("ket_cau") ?? "") && /6 tầng/.test(lay("ket_cau") ?? ""), lay("ket_cau"));
+  // cách nói MỚI chưa bắn
+  const g = (t, q) => nhanDienNhieuFact(t).find((x) => x.question === q)?.answer ?? null;
+  ok("DS-06 (mới) 'DTSD: 180m2' → sàn 180m2", g("Nhà 3 lầu.\nDTSD: 180m2\nGiá: 5,5 tỷ", "dien_tich_san") === "180m2");
+  ok("DS-07 (mới) 'Diện tích sử dụng: 300 m2' → sàn, không thành diện tích đất", g("Diện tích sử dụng: 300 m2, sổ riêng", "dien_tich_san") === "300m2" && g("Diện tích sử dụng: 300 m2, sổ riêng", "dien_tich") === null);
+  ok("DS-08 (mới) 'Đất: 5 x 20m' → dien_tich 5x20", g("Đất: 5 x 20m\nGiá: 3,2 tỷ, có bớt lộc", "dien_tich") === "5x20");
+  ok("DS-09 (mới) 'Giá: 3,2 tỷ, có bớt lộc' → giá 3,2 tỷ", g("Đất: 5 x 20m\nGiá: 3,2 tỷ, có bớt lộc", "gia") === "3,2 tỷ");
+  ok("DS-10 '4x15, 7 tỷ 2' vẫn tách mảnh ở dấu phẩy có khoảng trắng", g("bán nhà hẻm 5m Trần Bình Trọng, 4x15, 7 tỷ 2", "gia") === "7 tỷ 2");
+  ok("DS-11 '3PN,2WC' tách mảnh ở dấu phẩy giữa chữ", g("3PN,2WC, sổ riêng", "phap_ly") !== null);
+}
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

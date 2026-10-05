@@ -301,5 +301,10 @@ ok("FR239 trùng: 'thổ cư' khi ô thổ cư đã có", laBoSungTrung("thổ c
 ok("FR239 KHÔNG trùng: 'thổ cư' khi ô thổ cư trống", !laBoSungTrung("thổ cư", { facts: {} }));
 ok("FR239 KHÔNG trùng: 'thổ cư lên được thêm' (thông tin mới)", !laBoSungTrung("thổ cư lên được thêm", { facts: { tho_cu: "100%" } }));
 
+// 05/10/2026 (SRS-5.1zy): "Tổng diện tích sàn: 245m²" (có dấu hai chấm) không phải diện tích đất.
+ok("DS-12 'Diện tích đất: 4m x 11m / Tổng diện tích sàn: 245m²' → không lấy 245 làm đất", dienTichCauRao(kd("Diện tích đất: 4m x 11m\nTổng diện tích sàn: 245m²\nKết cấu: 6 tầng")) === null);
+ok("DS-13 'Diện tích đất: 60m2, Tổng diện tích sàn: 245m²' → 60", dienTichCauRao(kd("Diện tích đất: 60m2, Tổng diện tích sàn: 245m²")) === 60);
+ok("DS-14 (mới) 'DTSD: 180m2, đất 50m2' → 50", dienTichCauRao(kd("nhà 3 lầu, DTSD: 180m2, đất 50m2")) === 50);
+
 console.log(hong ? `\nBÓC CÂU RAO: ${hong}/${tong} CA HỎNG` : `\nBÓC CÂU RAO: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
