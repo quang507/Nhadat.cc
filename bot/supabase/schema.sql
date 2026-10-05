@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-05 18:55 (giờ VN)
+-- Sinh lúc: 2026-10-05 23:30 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -198,6 +198,41 @@ create table if not exists public.deals (
   closed_at timestamp with time zone,
   created_at timestamp with time zone not null default now(),
   ctv_id uuid
+);
+
+create table if not exists public.du_an_can (
+  id uuid not null default gen_random_uuid(),
+  project_id uuid not null,
+  ma_can text not null,
+  mau_nha text,
+  dien_tich_m2 numeric,
+  dien_tich_dat_m2 numeric,
+  gia_raw text,
+  price_vnd bigint,
+  huong text,
+  tang integer,
+  thuoc_tinh jsonb not null default '{}'::jsonb,
+  nguon text not null default 'tai_lieu'::text,
+  tai_lieu_id uuid,
+  seller_id uuid,
+  trang_thai text not null default 'cho_duyet'::text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create table if not exists public.du_an_tai_lieu (
+  id uuid not null default gen_random_uuid(),
+  project_id uuid,
+  seller_id uuid,
+  bucket text not null,
+  storage_path text not null,
+  ten_tep text,
+  mime text,
+  loai text not null default 'khac'::text,
+  so_can_doc integer not null default 0,
+  tom_tat text,
+  noi_dung jsonb,
+  created_at timestamp with time zone not null default now()
 );
 
 create table if not exists public.duong (
@@ -714,6 +749,27 @@ do $d$ begin
   alter table public.deals add constraint deals_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_nguon_check CHECK ((nguon = ANY (ARRAY['tai_lieu'::text, 'nguoi_ban'::text, 'admin'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_project_id_ma_can_key UNIQUE (project_id, ma_can);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_trang_thai_check CHECK ((trang_thai = ANY (ARRAY['cho_duyet'::text, 'da_duyet'::text, 'loai'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_loai_check CHECK ((loai = ANY (ARRAY['bang_gia'::text, 'phan_lo'::text, 'brochure'::text, 'mat_bang'::text, 'khac'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_so_can_doc_check CHECK (((so_can_doc >= 0) AND (so_can_doc <= 10000)));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.duong add constraint duong_loai_check CHECK ((loai = ANY (ARRAY['duong'::text, 'so'::text, 'hem'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1004,6 +1060,21 @@ do $d$ begin
   alter table public.deals add constraint deals_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES sellers(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_tai_lieu_id_fkey FOREIGN KEY (tai_lieu_id) REFERENCES du_an_tai_lieu(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES sellers(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.info_requests add constraint info_requests_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES buyers(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1122,6 +1193,8 @@ create index if not exists curated_lists_buyer_idx ON public.curated_lists USING
 create index if not exists deals_buyer_id_idx ON public.deals USING btree (buyer_id);
 create index if not exists deals_ctv_id_idx ON public.deals USING btree (ctv_id);
 create index if not exists deals_listing_id_idx ON public.deals USING btree (listing_id);
+create index if not exists du_an_can_project_idx ON public.du_an_can USING btree (project_id);
+create index if not exists du_an_tai_lieu_project_idx ON public.du_an_tai_lieu USING btree (project_id);
 create index if not exists duong_hem ON public.duong USING btree (upper(so_hem), bo_dau(duong_me)) WHERE (loai = 'hem'::text);
 create index if not exists duong_lat_lng ON public.duong USING btree (lat, lng);
 create index if not exists duong_nhung_hnsw ON public.duong USING hnsw (nhung extensions.vector_cosine_ops);
@@ -2462,6 +2535,20 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.can_du_an(p_project_id uuid, p_gioi_han integer DEFAULT 60)
+ RETURNS TABLE(ma_can text, mau_nha text, dien_tich_m2 numeric, dien_tich_dat_m2 numeric, gia_raw text, huong text, tang integer, thuoc_tinh jsonb, trang_thai text)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  select c.ma_can, c.mau_nha, c.dien_tich_m2, c.dien_tich_dat_m2, c.gia_raw, c.huong, c.tang, c.thuoc_tinh, c.trang_thai
+    from public.du_an_can c
+   where c.project_id = p_project_id and c.trang_thai <> 'loai'
+   order by length(c.ma_can), c.ma_can
+   limit greatest(1, least(coalesce(p_gioi_han, 60), 200));
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.canh_bao_ngoai(p_title text, p_text text, p_priority integer DEFAULT 4, p_email boolean DEFAULT false)
  RETURNS bigint
  LANGUAGE plpgsql
@@ -3341,6 +3428,21 @@ begin
   return jsonb_build_object('tin', v_tin, 'tin_nhan', v_tin_nhan,
                             'nguoi_ban', v_nguoi, 'khach', v_khach, 'fact_du_an', v_pf);
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.du_an_can_doc_gia()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.gia_raw is distinct from coalesce(old.gia_raw, '') or new.price_vnd is null then
+    new.price_vnd := case when new.gia_raw is null then null else public.parse_vnd(new.gia_raw) end;
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.du_an_can_geocode(p_limit integer DEFAULT 30)
@@ -8225,6 +8327,8 @@ drop trigger if exists trg_deals_chan_xoa on public.deals;
 CREATE TRIGGER trg_deals_chan_xoa BEFORE DELETE ON public.deals FOR EACH ROW EXECUTE FUNCTION deals_chan_xoa_da_chot();
 drop trigger if exists trg_pe_deals on public.deals;
 CREATE TRIGGER trg_pe_deals AFTER INSERT ON public.deals FOR EACH ROW EXECUTE FUNCTION trg_property_event();
+drop trigger if exists trg_du_an_can_doc_gia on public.du_an_can;
+CREATE TRIGGER trg_du_an_can_doc_gia BEFORE INSERT OR UPDATE ON public.du_an_can FOR EACH ROW EXECUTE FUNCTION du_an_can_doc_gia();
 drop trigger if exists trg_inbound_ledger_trang_thai on public.inbound_ledger;
 CREATE TRIGGER trg_inbound_ledger_trang_thai BEFORE UPDATE ON public.inbound_ledger FOR EACH ROW EXECUTE FUNCTION inbound_ledger_giu_completed();
 drop trigger if exists trg_huy_nhac_khi_da_tra_loi on public.info_requests;
@@ -8325,6 +8429,8 @@ alter table public.ctv_daily_reports enable row level security;
 alter table public.ctvs enable row level security;
 alter table public.curated_lists enable row level security;
 alter table public.deals enable row level security;
+alter table public.du_an_can enable row level security;
+alter table public.du_an_tai_lieu enable row level security;
 alter table public.duong enable row level security;
 alter table public.inbound_events enable row level security;
 alter table public.inbound_ledger enable row level security;
@@ -8399,6 +8505,10 @@ drop policy if exists ctvs_admin_read on public.ctvs;
 create policy ctvs_admin_read on public.ctvs as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists du_an_can_admin_read on public.du_an_can;
+create policy du_an_can_admin_read on public.du_an_can as permissive for SELECT to authenticated using (la_admin());
+drop policy if exists du_an_tai_lieu_admin_read on public.du_an_tai_lieu;
+create policy du_an_tai_lieu_admin_read on public.du_an_tai_lieu as permissive for SELECT to authenticated using (la_admin());
 drop policy if exists info_requests_admin_read on public.info_requests;
 create policy info_requests_admin_read on public.info_requests as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
@@ -8523,6 +8633,8 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.ct
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.ctvs to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.curated_lists to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.deals to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.du_an_can to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.du_an_tai_lieu to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.duong to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.hoi_thoai_nhan to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.inbound_events to service_role;
@@ -8617,6 +8729,8 @@ grant SELECT on public.bot_health to authenticated;
 grant SELECT on public.bot_usage to authenticated;
 grant SELECT on public.bot_usage_model to authenticated;
 grant SELECT on public.bridge_dang_nhap to authenticated;
+grant SELECT on public.du_an_can to authenticated;
+grant SELECT on public.du_an_tai_lieu to authenticated;
 grant SELECT on public.hoi_thoai_nhan to authenticated;
 grant SELECT on public.hoi_thoai_phien to authenticated;
 grant SELECT on public.hoi_thoai_phien to service_role;
@@ -8707,6 +8821,8 @@ revoke all on function public.bump_user_quota(p_uid text, p_gio_limit integer, p
 grant execute on function public.bump_user_quota(p_uid text, p_gio_limit integer, p_ngay_limit integer) to service_role;
 revoke all on function public.can_cung_khu(p_buyer_id uuid, p_listing_id uuid, p_limit integer) from public, anon, authenticated;
 grant execute on function public.can_cung_khu(p_buyer_id uuid, p_listing_id uuid, p_limit integer) to service_role;
+revoke all on function public.can_du_an(p_project_id uuid, p_gioi_han integer) from public, anon, authenticated;
+grant execute on function public.can_du_an(p_project_id uuid, p_gioi_han integer) to service_role;
 revoke all on function public.canh_bao_ngoai(p_title text, p_text text, p_priority integer, p_email boolean) from public, anon, authenticated;
 grant execute on function public.canh_bao_ngoai(p_title text, p_text text, p_priority integer, p_email boolean) to service_role;
 revoke all on function public.cat_truoc_phu_dinh(p_text text) from public, anon, authenticated;
@@ -8798,6 +8914,10 @@ grant execute on function public.doi_chieu_tien_cong_khai(p_cau text[]) to servi
 revoke all on function public.don_du_lieu_thu() from public, anon, authenticated;
 grant execute on function public.don_du_lieu_thu() to authenticated;
 grant execute on function public.don_du_lieu_thu() to service_role;
+revoke all on function public.du_an_can_doc_gia() from public, anon, authenticated;
+grant execute on function public.du_an_can_doc_gia() to anon;
+grant execute on function public.du_an_can_doc_gia() to authenticated;
+grant execute on function public.du_an_can_doc_gia() to service_role;
 revoke all on function public.du_an_can_geocode(p_limit integer) from public, anon, authenticated;
 grant execute on function public.du_an_can_geocode(p_limit integer) to service_role;
 revoke all on function public.duong_gan_duong(p_ten text, p_phuong text, p_ban_kinh_m double precision, p_limit integer) from public, anon, authenticated;
