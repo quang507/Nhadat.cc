@@ -17,7 +17,7 @@ import { canGanManh, donManh } from "../supabase/functions/_shared/extraction/ga
 import { chonCauKe, nhanDienNhieuCan, tachTheoCan, themTangPhu, phanLoaiCauTraLoi, ghepMotChieu, soNhaDau, bocViTriRao, catDapAn, laNoiDaTraLoi, laNgungRao, laRaoLai, laRutLoiBan } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { docTien, donViGiaDep, gonGiaKyHan } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { nhanDienFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
-import { tuXungTuCau, hocXungHoTuLichSu } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { tuXungTuCau, hocXungHoTuLichSu, docTraLoiLung } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { soanTinNhap } from "../supabase/functions/_shared/tin-nhap.ts";
 import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts";
 import { boHoiLaiDaCo, boHuaHoiChuNha } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -1278,6 +1278,11 @@ ok("GOI-06 'Dạ được anh, để em lọc' → 'anh chị,'; 'anh, chị c�
   ok("DS-10 '4x15, 7 tỷ 2' vẫn tách mảnh ở dấu phẩy có khoảng trắng", g("bán nhà hẻm 5m Trần Bình Trọng, 4x15, 7 tỷ 2", "gia") === "7 tỷ 2");
   ok("DS-11 '3PN,2WC' tách mảnh ở dấu phẩy giữa chữ", g("3PN,2WC, sổ riêng", "phap_ly") !== null);
 }
+
+// 05/10/2026 (SRS-5.1zzb, test Zalo 17:30): đáp câu lửng kèm tiểu từ / cách gọi — "có em ơi" từng = không trả lời.
+for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ có anh ơi", "co"], ["có á", "co"], ["ko có đâu em", "khong"], ["không có lửng nha", "khong"],
+  ["ừ", "co"], ["có sân thượng nữa em", null], ["có lửng riêng nữa em", "them"]])
+  ok(`LUNG-TU '${vao}' → ${mong}`, docTraLoiLung(vao) === mong, String(docTraLoiLung(vao)));
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

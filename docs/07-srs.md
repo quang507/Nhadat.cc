@@ -2155,6 +2155,14 @@ Gỡ bản sửa thì S07-a/b đỏ (đã chạy).
 
 **(4) Đẩy prompt lên DB từ CI**: `bot_prompts` đè code lúc chạy, nên sửa `prompts.ts` mà không `bun run prompt --day` là bot vẫn nói câu cũ. Máy chạy phiên Claude không có `SUPABASE_SERVICE_ROLE_KEY`. `scripts/dong-bo-prompt.mjs` nay chạy thêm được bằng `SUPABASE_ACCESS_TOKEN` (Management API, cùng đường `ban-thu.yml`): đọc `bot_prompts` bằng SQL, ghi bằng `insert … on conflict (key) do update` với dollar-quote. Workflow mới `dong-bo-prompt.yml` (dispatch; ô `day` = đẩy, trống = chỉ so). **Sau khi merge PR này: chạy `dong-bo-prompt.yml` với `day` bật, rồi deploy `chat-reply` + `ask-seller`.**
 
+### SRS-5.1zzb · Đáp có/không kèm tiểu từ ("có em ơi") bị coi là không trả lời (05/10/2026)
+
+`[nguồn: test Zalo 05/10 17:30]` Bot hỏi "4 tầng có tính gác lửng không?", khách "có em ơi" → không ghi lửng, bot hỏi câu khác.
+
+- **Lớp lỗi**: `docTraLoiLung` dùng danh sách từ được phép (`TU_DAP_LUNG`), thiếu "ơi", "đâu" → câu đáp rõ ràng rơi ra. Các câu trả lời khác đi qua bộ lọc tiểu từ chung nên không dính; AI chưa được hỏi câu lửng (câu phụ, không phải `cauDangHoi`), để sau.
+- **Sửa**: lọc tiểu từ bằng bộ chung (`DEM_CUOI_DAP_AN`, `TIEU_TU_DAU`) trước khi đọc; `DEM_CUOI_DAP_AN` thêm "đâu". Không thêm từ vào danh sách riêng.
+- **Kiểm, đỏ khi tắt**: `van-tra-loi.mjs` LUNG-TU ("có em ơi", "có nha em", "dạ có anh ơi" → có; "ko có đâu em" → không; "có sân thượng nữa em" vẫn null); e2e `LUNG-02b`.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

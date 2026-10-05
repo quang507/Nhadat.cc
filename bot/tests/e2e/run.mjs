@@ -3166,6 +3166,15 @@ fresh(seedKho);
       LL2.floors === 3 && LL2.floors_text === "trệt + lửng + 2 lầu" && LL2.boc_tach?.lung_goi_y === false &&
         rL2.body.replies.some((x) => /trệt \+ lửng \+ 2 lầu/.test(x) && /\?/.test(x)),
       JSON.stringify({ rep: rL2.body.replies, f: LL2.floors, ft: LL2.floors_text }));
+    // 05/10/2026 (SRS-5.1zzb, test Zalo 17:30): "có em ơi" (có "ơi") từng rơi khỏi danh sách từ đáp → không ghi lửng, bot hỏi câu khác.
+    fresh(seedKho);
+    globalThis.__model.parse = () => OUT();
+    await send({ external_user_id: "lung-1b", text: "nhà anh là nhà phố, 4 tầng, hẻm 5m Trần Bình Trọng quận 5, 4x15, giá 7 tỷ" });
+    const rL2b = await send({ external_user_id: "lung-1b", text: "có em ơi" });
+    const LL2b = db().t.listings.at(-1);
+    check("LUNG-02b đáp 'có em ơi' (cách nói mới) → kết cấu 'trệt + lửng + 2 lầu', không coi là không trả lời",
+      LL2b.floors === 3 && LL2b.floors_text === "trệt + lửng + 2 lầu" && rL2b.body.replies.some((x) => /trệt \+ lửng \+ 2 lầu/.test(x)),
+      JSON.stringify({ rep: rL2b.body.replies, f: LL2b.floors, ft: LL2b.floors_text, bt: LL2b.boc_tach }));
     const rL3 = await send({ external_user_id: "lung-1", text: "4 tấm em" });
     check("LUNG-03 đã hỏi một lần → không hỏi lửng lần hai",
       !rL3.body.replies.some((x) => /gác lửng/.test(x)), JSON.stringify(rL3.body.replies));

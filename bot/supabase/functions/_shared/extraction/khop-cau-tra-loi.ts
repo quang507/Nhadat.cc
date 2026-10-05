@@ -546,7 +546,8 @@ export function bocViTriRao(text: string): string | null {
 // 25/09/2026 (dữ liệu thật: pháp lý "Shr em"; chủ dự án "bóc thông tin đúng"): chữ đệm / xưng hô VIẾT THƯỜNG ở CUỐI
 // câu trả lời không phải dữ liệu. Chỉ viết thường — tên riêng viết hoa ("… Anh", "Cô Giang") không bị cắt; "rồi",
 // "thôi" giữ vì mang nghĩa ("hoàn công rồi").
-const DEM_CUOI_DAP_AN = /(?:[\s,.;!]+(?:em|anh|chị|cô|chú|bác|cháu|ạ|á|nha|nhé|nhe|nhen|nghen|nè|ơi|đó|đấy|nhỉ|hen))+[\s.!,]*$/u;
+// 05/10/2026 (SRS-5.1zzb): thêm "đâu" cuối câu ("không có đâu em") — tiểu từ phủ định nhấn, không phải "ở đâu".
+const DEM_CUOI_DAP_AN = /(?:[\s,.;!]+(?:em|anh|chị|cô|chú|bác|cháu|ạ|á|nha|nhé|nhe|nhen|nghen|nè|ơi|đó|đấy|nhỉ|hen|đâu))+[\s.!,]*$/u;
 export function catDapAn(question: string, dapAn: string): string {
   const ra = catDapAnGoc(question, dapAn);
   // "hxh, 5x12, trệt 3 lầu" cắt còn "hxh" → chữ đầy đủ như khi khách chỉ gõ "hxh" (bắn thật lx-21).
@@ -2331,7 +2332,11 @@ const TU_DAP_LUNG = new Set(["co", "khong", "ko", "k", "kg", "khg", "chua", "hon
 export function docTraLoiLung(answer: string): "co" | "them" | "khong" | null {
   const goc = answer ?? "";
   if (/\?/.test(goc)) return null;
-  const kd = boDau(goc).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  // 05/10/2026 (SRS-5.1zzb, test Zalo 17:30 "có em ơi" → "Không bóc tách được gì", lửng không ghi): tiểu từ / cách gọi cuối
+  // câu ("em ơi", "nha anh", "ạ") lọc bằng BỘ CHUNG `DEM_CUOI_DAP_AN` / `TIEU_TU_DAU` như mọi câu trả lời khác — danh sách riêng
+  // `TU_DAP_LUNG` thiếu "ơi" là câu đáp rõ ràng bị coi như không trả lời.
+  const gonTieuTu = goc.replace(DEM_CUOI_DAP_AN, "").replace(TIEU_TU_DAU, "").trim();
+  const kd = boDau(gonTieuTu || goc).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   if (!kd) return null;
   const noiLung = /\b(lung|gac)\b/.test(kd);
   const phuDinh = /\b(khong|ko|k|chua|hong|hok|kg|khg)\b/.test(kd);
