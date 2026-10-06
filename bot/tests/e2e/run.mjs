@@ -7174,10 +7174,21 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   fresh(seedAH);
   const cuCH = globalThis.__cauHinh;
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
-  globalThis.__model.parse = (p) => laLuotBocRaoAH(p) ? { so_can: 1, kien_thuc: [], truong: [{ khoa: "phuong", gia_tri: "Phường An Hội Tây", trich_dan: "phường an hội tây", can: null }] } : OUT();
+  // SRS-5.1zzt (06/10): mock AI trả theo TỪNG câu như AI thật — câu địa chỉ ra phường, câu "15 tỏi… 45m2 5 tấm" ra giá / diện
+  // tích / kết cấu. (Bản cũ trả phường cho mọi lượt; khi câu địa chỉ đã tự mở tin thì câu sau là câu trả lời, giá phải do AI đọc.)
+  const tinAH = (p) => String((p?.messages ?? []).map((m) => typeof m.content === "string" ? m.content : (m.content ?? []).map((c) => c.text ?? "").join(" ")).join(" "));
+  globalThis.__model.parse = (p) => laLuotBocRaoAH(p)
+    ? /15 tỏi/.test(tinAH(p))
+      ? { so_can: 1, kien_thuc: [], truong: [{ khoa: "gia", gia_tri: "15 tỏi", trich_dan: "15 tỏi", can: null }, { khoa: "dien_tich", gia_tri: "45", trich_dan: "45m2", can: null }, { khoa: "so_tang", gia_tri: "5", trich_dan: "5 tấm", can: null }],
+        tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } }
+      : { so_can: 1, kien_thuc: [], truong: [{ khoa: "phuong", gia_tri: "Phường An Hội Tây", trich_dan: "phường an hội tây", can: null }] }
+    : OUT();
   await send({ external_user_id: "ah-tay", text: "nhà chú ở 137/28 đường số 59 phường an hội tây nhé" });
+  check("AHT-00 (SRS-5.1zzt) người bán chưa có tin tả địa chỉ (không chữ 'bán') → tin MỞ NGAY từ câu đó, không chờ câu rao",
+    db().t.listings.length === 1 && db().t.listings[0].ward === "Phường An Hội Tây", JSON.stringify(db().t.listings.map((l) => [l.ward, l.location_raw, l.status])));
   const rAH = await send({ external_user_id: "ah-tay", text: "chú muốn bán 15 tỏi có tl, nhà 45m2 5 tấm nhé" });
   const lAH = db().t.listings.at(-1);
+  check("AHT-00b câu rao kế vào ĐÚNG tin đó, không mở tin thứ hai", db().t.listings.length === 1, JSON.stringify(db().t.listings.map((l) => [l.ward, l.price_raw])));
   const fAH = (q) => db().t.listing_facts.filter((f) => f.listing_id === lAH?.id && f.question === q).map((f) => f.answer);
   check("AHT-01 địa chỉ nói TRƯỚC câu rao → tin mới có phường 'Phường An Hội Tây' (viết thường có dấu vẫn nhận)",
     lAH?.ward === "Phường An Hội Tây", JSON.stringify({ l: lAH && { ward: lAH.ward, district: lAH.district, loc: lAH.location_raw }, rep: rAH.body.replies }));
@@ -8132,6 +8143,65 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   check("AOND-G3 môi giới 3 căn gật → lên kệ, có hạng; KHÔNG nhắc chuẩn 10 căn, không hứa quyền lợi (chủ dự án 06/10 bỏ câu đó)",
     lG2?.status === "dang_ban" && /hạng Bạc/.test(rG.body.replies.join("\n")) && !/10 căn/.test(rG.body.replies.join("\n")) && !/ưu tiên/.test(rG.body.replies.join("\n")),
     JSON.stringify({ st: lG2?.status, rep: rG.body.replies }));
+}
+// ── SRS-5.1zzt (06/10/2026, bắn thử production thu-ai-0610): gật câu hỏi vai rồi TẢ CĂN không có chữ "bán" → phải MỞ TIN ──
+// Bản trước: wantsSell (luật) không nhận, model phân vai không hỏi khi đã có hồ sơ bán, fact rời không có tin để neo → 8 lượt
+// "🤖 Không bóc tách được gì", listings = 0, bot "ghi rồi" miệng và hứa "sẽ rao". Tắt `raoNgam` → RN-01 / RN-03 đỏ.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocRao = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+  const ai = (them = {}) => (p) => laBocRao(p) ? { so_can: 1, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [],
+    tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null },
+    cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null }, ...them } : OUT();
+  const tinCua = (uid) => { const s = db().t.sellers.find((x) => x.zalo_user_id === uid); return db().t.listings.filter((l) => s && l.seller_id === s.id); };
+  const factCua = (lid) => db().t.listing_facts.filter((f) => f.listing_id === lid);
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+  await send({ external_user_id: "rn-1", text: "chào em" });
+  globalThis.__model = { parse: ai(), create: () => "Dạ anh cho em xin địa chỉ nhà mình nha." };
+  await send({ external_user_id: "rn-1", text: "đúng rồi" });
+  check("RN-00 gật vai → hồ sơ bán, CHƯA có tin", db().t.sellers.some((s) => s.zalo_user_id === "rn-1") && tinCua("rn-1").length === 0,
+    JSON.stringify({ sellers: db().t.sellers.map((s) => s.zalo_user_id), tin: tinCua("rn-1").map((t) => [t.property_type, t.description]) }));
+  globalThis.__model = { parse: ai({ truong: [T("loai_bds", "nha_pho", "nhà"), T("duong", "hẻm 137 Nguyễn Trãi", "hẻm 137 Nguyễn Trãi"), T("quan", "Quận 1", "Q1")] }),
+    create: () => "Dạ em ghi rồi anh. Nhà mình ngang dài bao nhiêu ạ?" };
+  let rN = await send({ external_user_id: "rn-1", text: "nhà anh ở hẻm 137 Nguyễn Trãi, P. Nguyễn Cư Trinh, Q1" });
+  let tN = tinCua("rn-1");
+  const repN = rN.body.replies.join("\n");
+  check("RN-01 chế độ ai: người bán chưa có tin, tả căn KHÔNG chữ 'bán' → AI đọc ra loại + địa chỉ → MỞ TIN nhà phố Quận 1, địa chỉ nguyên văn, có câu treo, không 'Không bóc tách được gì'",
+    tN.length === 1 && tN[0].property_type === "nha_pho" && tN[0].district === "Quận 1" && tN[0].status === "cho_thong_tin"
+      && (/137 Nguyễn Trãi/.test(tN[0].location_raw ?? "") || factCua(tN[0].id).some((f) => f.question === "vi_tri" && /137 Nguyễn Trãi/.test(f.answer)))
+      && db().t.info_requests.some((i) => i.listing_id === tN[0].id && i.status === "pending") && !/Không bóc tách được gì/.test(repN),
+    JSON.stringify({ tin: tN.map((t) => [t.property_type, t.district, t.location_raw, t.status]), facts: tN[0] ? factCua(tN[0].id).map((f) => [f.question, f.answer]) : null, rep: rN.body.replies }));
+  globalThis.__model = { parse: ai({ truong: [T("ngang", "4", "4x16"), T("dai", "16", "4x16"), T("so_tang", "3", "1 trệt 2 lầu")],
+    tra_loi: { co_tra_loi: true, gia_tri: "4x16", trich_dan: "4x16" } }), create: () => "Dạ em ghi rồi anh. Giá anh mong muốn bao nhiêu ạ?" };
+  rN = await send({ external_user_id: "rn-1", text: "4x16, 1 trệt 2 lầu" });
+  tN = tinCua("rn-1");
+  check("RN-02 lượt kế '4x16, 1 trệt 2 lầu' → ghi vào ĐÚNG tin đó (vẫn 1 tin), có dữ kiện kích thước / kết cấu",
+    tN.length === 1 && (Number(tN[0].area_m2) === 64 || factCua(tN[0].id).some((f) => ["dien_tich", "dien_tich_dat", "ngang", "ket_cau", "so_tang"].includes(f.question))),
+    JSON.stringify({ n: tN.length, area: tN[0]?.area_m2, facts: tN[0] ? factCua(tN[0].id).map((f) => [f.question, f.answer]) : null, rep: rN.body.replies }));
+  // AI KHÔNG chạy (công tắc tắt) → luật đỡ: câu có địa chỉ hoặc giá vẫn mở tin.
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "tat" };
+  await send({ external_user_id: "rn-2", text: "chào em" });
+  globalThis.__model = { parse: () => OUT(), create: () => "Dạ anh cho em xin địa chỉ nhà mình nha." };
+  await send({ external_user_id: "rn-2", text: "đúng rồi" });
+  globalThis.__model = { parse: () => OUT(), create: () => "Dạ em ghi rồi anh. Nhà mình ngang dài bao nhiêu ạ?" };
+  rN = await send({ external_user_id: "rn-2", text: "nhà anh ở hẻm 137 Nguyễn Trãi quận 1, giá 5 tỷ 2" });
+  tN = tinCua("rn-2");
+  check("RN-03 AI tắt: người bán chưa có tin, 'nhà anh ở hẻm 137 Nguyễn Trãi quận 1, giá 5 tỷ 2' → luật đỡ MỞ TIN, giá 5 tỷ 2",
+    tN.length === 1 && /5 tỷ 2/.test(tN[0].price_raw ?? ""), JSON.stringify({ tin: tN.map((t) => [t.property_type, t.district, t.price_raw]), rep: rN.body.replies }));
+  // Hỏi ngược ("phí sao em") khi chưa có tin → KHÔNG mở tin.
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+  await send({ external_user_id: "rn-3", text: "chào em" });
+  globalThis.__model = { parse: ai(), create: () => "Dạ anh cho em xin địa chỉ nhà mình nha." };
+  await send({ external_user_id: "rn-3", text: "đúng rồi" });
+  globalThis.__model = { parse: ai({ hoi_lai: { co_hoi: true, cau_hoi: "phí sao em", chu_de: "phi" } }), create: () => "Dạ chính chủ thì 1% giá chốt, chỉ thu khi bán xong anh ạ. Anh cho em xin địa chỉ nhà mình nha?" };
+  rN = await send({ external_user_id: "rn-3", text: "phí sao em" });
+  check("RN-04 chưa có tin mà hỏi ngược 'phí sao em' → KHÔNG mở tin", tinCua("rn-3").length === 0, JSON.stringify({ tin: tinCua("rn-3").length, rep: rN.body.replies }));
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
 }
 // ── kết ──
 let hong = 0;
