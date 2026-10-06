@@ -1066,6 +1066,11 @@ export function kiemTraLoiCau(
   const loaiTin = loaiDuongNoiRo(kdTin);
   const loaiAi = loaiDuongNoiRo(gon(v));
   if (loaiTin && loaiTin !== loaiAi && (loaiAi || loaiTin === "mat_tien")) return { co: true, giaTri: null };
+  // SRS-5.1zzu (06/10/2026, bắn lại thu-ai-0610): hỏi độ rộng hẻm, khách "anh đứng tên, không thế chấp" → AI nói CÓ trả lời, giá
+  // trị là nguyên câu → ghi vào ô hẻm, bản nháp in "Đường vào: anh đứng tên, không thế chấp". Trích dẫn có trong tin, không có
+  // con số nào để so — hai lớp kiểm trên đều qua. Ô ĐO ĐẾM thì giá trị phải mang SỐ (ô hẻm nhận thêm loại đường / chữ hẻm, ô
+  // phí / cọc nhận "không có / miễn phí"); không → AI nói có mà không qua kiểm, để luật đọc (câu vẫn treo).
+  if (o && !giaTriHopKieu(o.cauHoi, v)) return { co: true, giaTri: null };
   // 30/09/2026 (bắn thử bán lx-ban-292b): hỏi phí quản lý, "phí quản lý 15k/m2" → AI "15 nghìn" — mất "/m2". Cụm trích có
   // đơn vị "/m2 · /tháng · /năm" mà giá trị AI không có → gắn lại đúng đơn vị khách nói.
   // SRS-5.1zzr: ô nguyên văn theo loại → giá trị là cụm khách gõ (đã kiểm có trong tin ở trên), không phải câu model.
@@ -1076,6 +1081,22 @@ export function kiemTraLoiCau(
   const dv = /\/\s*(m2|m²|tháng|thang|năm|nam)(?![\p{L}\d])/iu.exec(tl.trich_dan ?? "")?.[1];
   if (dv && /\d/.test(v) && !/\/\s*[\p{L}\d]/u.test(v) && !/(?:m2|m²)(?![\p{L}\d])/iu.test(v)) return { co: true, giaTri: `${v}/${dv}` };
   return { co: true, giaTri: v };
+}
+/**
+ * SRS-5.1zzu: ô ĐO ĐẾM — câu trả lời AI đưa cho ô này phải mang chữ số (sau `chuanSo`). Ngoại lệ theo ô: hẻm nhận loại đường
+ * nói rõ (hxh / xe hơi / mặt tiền…) hoặc chữ "hẻm / đường / mặt tiền"; phí / cọc / thời hạn nhận "không có / không thu / miễn
+ * phí / thoả thuận". Ô chữ (pháp lý, hướng, kết cấu…) không qua đây. Muốn thêm ô đo đếm thì thêm vào bảng, đừng vá từng chỗ.
+ */
+const CAU_CAN_SO = new Set(["do_rong_hem", "so_phong_ngu", "so_wc", "so_tang", "tang", "nam_xay", "phi_quan_ly", "phi_gui_xe", "tien_coc",
+  "thoi_han_thue", "gia_dien_nuoc", "cach_mat_tien", "chieu_cao", "tai_trong_san", "so_phong", "ty_le_lap_day", "doanh_thu", "mat_tien"]);
+const CAU_CHO_KHONG_CO = new Set(["phi_quan_ly", "phi_gui_xe", "tien_coc", "thoi_han_thue", "gia_dien_nuoc", "cach_mat_tien", "doanh_thu"]);
+export function giaTriHopKieu(cauHoi: string, v: string): boolean {
+  if (!CAU_CAN_SO.has(cauHoi)) return true;
+  const kd = boDauKiem(chuanSo(v)).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (/\d/.test(kd)) return true;
+  if (cauHoi === "do_rong_hem") return !!loaiDuongNoiRo(kd) || /\b(?:hem|duong|mat tien|xe hoi|o to|oto|xe may|xe tai)\b/.test(kd);
+  if (CAU_CHO_KHONG_CO.has(cauHoi)) return /\b(?:khong (?:co|thu|ton|mat|can|lay|tinh|rang buoc)|mien phi|free|thoa thuan|tuy)\b/.test(kd);
+  return false;
 }
 /** Câu bot hỏi CHỌN MỘT TRONG HAI ("A hay B?") — không phải "… hay không / hay chưa" (câu có / không). */
 export function laCauChonHai(cau: string | null | undefined): boolean {

@@ -85,7 +85,7 @@ import { cauKhoangCachKhongNguon, chayTroLyMua, DAU_RA_CONG_CU, type PhanHoiMode
 // FR-176: câu chủ nhà nhắn có phải câu trả lời không — tầng tiền định, không model.
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, gonGiaTriFact, laChiDonViHanhChinh, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laThaCamXuc, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, docTraLoiConBan, laRaoLai, laRutLoiBan, NHAN_HOI_LAI, nhanDienFact,
-  loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
+  loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, laChiLenhDang, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, hocXungHoTuLichSu, cachGoiKhach, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen } from "../_shared/extraction/van-tra-loi.ts";
@@ -2477,7 +2477,12 @@ Deno.serve(async (req) => {
       if (!bongAi) return undefined;
       const k = await bongAi;
       if (!laCheDoAi || !k?.ket) return undefined;
-      return docYDinh(k.yDinh, textTreo || textBongAi);
+      const yd = docYDinh(k.yDinh, textTreo || textBongAi);
+      // SRS-5.1zzu (bắn lại thu-ai-0610): "ok đăng đi" khi bot đang hỏi gấp → Haiku `binh_thuong` → bot lờ, hỏi tiếp phòng ngủ. CẢ
+      // TIN chỉ là câu lệnh đăng mà AI nói không có ý định nào → luật chắc (tiền lệ "cả tin chỉ là một số tiền"); câu có thêm ý
+      // thì vẫn theo AI. Prompt Ý ĐỊNH cũng đã nói rõ "bảo đăng lúc nào cũng là du_roi" — lưới này chỉ đỡ khi model vẫn trượt.
+      if (!yd && laChiLenhDang(textTreo || text)) return { loai: "du_roi", trich: (textTreo || text).trim() };
+      return yd;
     };
     /**
      * 02/10/2026 (đối chiếu AI ↔ code, SRS-5.1zb): kết quả AI của lượt, đã qua kiểm bằng chứng — `undefined` = AI không chạy

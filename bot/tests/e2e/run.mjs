@@ -8180,6 +8180,24 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   check("RN-02 lượt kế '4x16, 1 trệt 2 lầu' → ghi vào ĐÚNG tin đó (vẫn 1 tin), có dữ kiện kích thước / kết cấu",
     tN.length === 1 && (Number(tN[0].area_m2) === 64 || factCua(tN[0].id).some((f) => ["dien_tich", "dien_tich_dat", "ngang", "ket_cau", "so_tang"].includes(f.question))),
     JSON.stringify({ n: tN.length, area: tN[0]?.area_m2, facts: tN[0] ? factCua(tN[0].id).map((f) => [f.question, f.answer]) : null, rep: rN.body.replies }));
+  // SRS-5.1zzu (bắn lại 13:30): hỏi HẺM, "anh đứng tên, không thế chấp" → AI nói CÓ trả lời (giá trị nguyên câu) → từng ghi vào ô hẻm.
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tN[0].id, question: "do_rong_hem", status: "pending" });
+  globalThis.__model = { parse: ai({ truong: [], tra_loi: { co_tra_loi: true, gia_tri: "anh đứng tên, không thế chấp", trich_dan: "anh đứng tên, không thế chấp" } }),
+    create: () => "Em ghi rồi anh. Hẻm trước nhà mình rộng mấy mét ạ?" };
+  rN = await send({ external_user_id: "rn-1", text: "anh đứng tên, không thế chấp" });
+  check("RN-05 hỏi hẻm, AI nói 'anh đứng tên, không thế chấp' là câu trả lời → KHÔNG ghi ô hẻm (ô đo đếm cần số / loại đường)",
+    !factCua(tN[0].id).some((f) => f.question === "do_rong_hem") && tN[0].alley_width_m == null && !/Đường vào: anh đứng tên/.test(rN.body.replies.join("\n")),
+    JSON.stringify({ facts: factCua(tN[0].id).map((f) => [f.question, f.answer]), rep: rN.body.replies }));
+  // SRS-5.1zzu: hỏi GẤP, "ok đăng đi" → Haiku đọc y_dinh binh_thuong → từng lờ đi, hỏi tiếp phòng ngủ. Cả tin chỉ là lệnh đăng → du_roi.
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tN[0].id, question: "gap", status: "pending" });
+  globalThis.__model = { parse: ai(), create: () => "Nhà mình mấy phòng ngủ ạ?" };
+  rN = await send({ external_user_id: "rn-1", text: "ok đăng đi" });
+  check("RN-06 hỏi gấp, 'ok đăng đi' mà AI đọc binh_thuong → vẫn là bảo đăng / đủ rồi: không hỏi tiếp phòng ngủ, câu gấp đóng",
+    !/phòng ngủ/.test(rN.body.replies.join("\n")) && !db().t.info_requests.some((x) => x.listing_id === tN[0].id && x.question === "gap" && x.status === "pending")
+      && (rN.body.du_roi === true || rN.body.chu_muon_dang === true || rN.body.duyet === true || rN.body.dang_luon === true),
+    JSON.stringify({ body: Object.keys(rN.body), du_roi: rN.body.du_roi, rep: rN.body.replies, ir: db().t.info_requests.filter((x) => x.listing_id === tN[0].id).map((x) => [x.question, x.status]) }));
   // AI KHÔNG chạy (công tắc tắt) → luật đỡ: câu có địa chỉ hoặc giá vẫn mở tin.
   fresh(seedKho);
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "tat" };

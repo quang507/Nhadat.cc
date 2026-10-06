@@ -768,6 +768,19 @@ export function laBaoDang(text: string): boolean {
     /\b(?:cu|thi|ok|oke)\s+dang\s+(?:nhu|truoc|luon|di|tin|bai|len|tam)\b|\bdang\s+(?:tin|bai|len tin|luon di|nhu nay|nhu vay|truoc di|tam di)\b|\blen\s+(?:tin|ke)\b|\b(?:post|up)\s+(?:tin|bai)\b/.test(kd);
 }
 /**
+ * SRS-5.1zzu (06/10/2026, bắn lại thu-ai-0610): CẢ TIN chỉ là câu lệnh đăng — "ok đăng đi", "đăng luôn đi em", "lên tin giúp anh" —
+ * bỏ tiểu từ thì không còn chữ nào khác. Model (Haiku) từng đọc "ok đăng đi" (bot đang hỏi gấp) là `binh_thuong` → bot lờ, hỏi tiếp.
+ * Đây là lưới "luật chắc" cùng tiền lệ "cả tin chỉ là một số tiền thì luật chắc": chỉ kích khi AI nói KHÔNG có ý định nào và tin
+ * không mang gì ngoài lệnh đăng; câu có thêm ý ("chiều gửi ảnh, giờ đăng trước đi") vẫn để AI quyết.
+ */
+export function laChiLenhDang(text: string): boolean {
+  if (!laBaoDang(text)) return false;
+  const kd = boDau(text).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd || /\d/.test(kd) || kd.split(" ").length > 8) return false;
+  const TIEU_TU = /^(?:ok|oke|okie|okay|u|uh|um|da|vang|roi|duoc|dc|thoi|em|e|a|anh|chi|chu|co|bac|nha|nhe|nhen|nghe|di|luon|giup|cho|minh|toi|tui|cu|thi|truoc|tam|vay|the|nay|len|tin|bai|dang|ke|chot|post|up|dum|ho|nhu|voi|vay|ban|lun|roi)$/;
+  return kd.split(" ").every((w) => TIEU_TU.test(w));
+}
+/**
  * Một câu phủ định chung cho CẢ câu hỏi gộp ("không có gì hết", "ko dính gì", "sạch sẽ hết em") — 27/09/2026, câu pháp lý thứ
  * hai (quy hoạch + tranh chấp + xây lố). Có "nhưng / trừ" hay chữ số là nói riêng một ý → không tính; "không biết / không rõ"
  * không phải câu trả lời.
