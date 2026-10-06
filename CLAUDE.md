@@ -37,6 +37,7 @@ Thứ tự đọc = thứ tự phụ thuộc. Tài liệu sau **không được 
 | 9 | `docs/09-open-issues.md` | Mâu thuẫn / quyết định còn treo, cần chủ dự án chốt | `OPEN-` |
 | 10 | `docs/10-ke-hoach-kiem-thu.md` | Kế hoạch kiểm thử 4 tầng: chức năng, kỹ thuật, UI/UX, phi chức năng | `TS-` |
 | 11 | `docs/11-quy-trinh.md` | Quy trình BA và tester: hai vòng làm việc, ba cổng, máy kiểm gì / người kiểm gì, định nghĩa XONG. Không sinh ID mới | — |
+| — | `docs/SRD-AI-Oi-Nha-Dat.docx` | **SRD gộp .docx** theo bố cục SRD Aioinhadat (06/10/2026, chủ dự án: "đổi thành đuôi docx như bên AOND"). **Bản XUẤT, không phải nguồn sự thật**: `bun run srd` sinh lại từ các file md trên bằng `scripts/sinh-srd-docx.mjs`; sửa nội dung thì sửa md rồi sinh lại, đừng sửa tay .docx | — |
 
 ## 3. Tài liệu gốc & Phân định phạm vi
 
