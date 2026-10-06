@@ -7138,7 +7138,27 @@ Deno.serve(async (req) => {
         ? `Dạ ${goi} cứ lo việc nha. Tin mình vẫn đang rao, có khách quan tâm là em báo ${goi} liền ạ.`
         : `Dạ ${goi} cứ thong thả nha. Có gì ${goi} nhắn em là em làm tiếp liền.`], { hoan: true, loai_cau: "hoan" });
     }
-    if (!daGanManh && (wantsSell || raoMoiCanKhac || (dangXinCanMoi && coChiTiet))) {
+    // SRS-5.1zzt (06/10/2026, bắn thử thu-ai-0610): người vừa GẬT câu hỏi vai ("đúng rồi") rồi tả căn — "nhà anh ở hẻm 137
+    // Nguyễn Trãi, P. Nguyễn Cư Trinh, Q1", "4x16, 1 trệt 2 lầu", "5 tỷ 2, shr" — không có chữ "bán"/"rao" nên `wantsSell`
+    // (luật) không nhận; model phân vai không được hỏi khi đã có hồ sơ bán (`nenHoiModelVai`); đường "fact rời" bên dưới cần
+    // tin có sẵn để neo. AI đọc ra đủ dữ kiện mà không có chỗ ghi: tám lượt "🤖 Không bóc tách được gì", bot "ghi rồi" miệng,
+    // hỏi sổ riêng / chung ba lần, hứa "sẽ rao căn nhà" một tin không tồn tại. Người bán CHƯA CÓ tin mở, không câu treo,
+    // không hỏi ngược, mà AI (đã chạy song song) đọc ra loại / địa chỉ / dữ kiện căn → đó LÀ câu rao: đi đúng đường tạo tin
+    // bên dưới (cột lõi của AI, vòng hỏi nhỏ giọt). AI không chạy → luật đỡ: câu có địa chỉ hoặc giá.
+    let raoNgam = false;
+    if (!wantsSell && !hoiMua && !pendingReq && !daGanManh && dsMo.length === 0 && !humanActive && !imageUrl) {
+      const kqNgam = bongAi && cheDoBocAi && (await cheDoBocAi) === "chinh" ? await bongAi : null;
+      if (kqNgam?.ket) {
+        if (!kqNgam.hoiLai?.co_hoi && ((kqNgam.ket as { so_can?: number }).so_can ?? 1) <= 1) {
+          const aiNgam = docAiChinh(kiemDeXuat(kqNgam.truong, textBongAi).dat, null);
+          raoNgam = !!(aiNgam.loaiBds || aiNgam.duong || aiNgam.gia || aiNgam.dienTich != null || aiNgam.ngang != null ||
+            aiNgam.ghi.some((g) => g.question !== "du_an_ten" && g.question !== "bo_sung"));
+        }
+      } else {
+        raoNgam = nhanDienNhieuFact(text).some((f) => f.question === "vi_tri" || f.question === "gia");
+      }
+    }
+    if (!daGanManh && (wantsSell || raoNgam || raoMoiCanKhac || (dangXinCanMoi && coChiTiet))) {
       // Loại BĐS KHÔNG hỏi: trigger trg_listings_fill_property_type đọc chính
       // câu rao (description) mà điền (FR-150). Chỉ tin nào câu chữ không đủ
       // để đoán mới nằm lại 'chua_ro' và bị hỏi ở vòng drip.
