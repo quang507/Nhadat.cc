@@ -49,7 +49,8 @@ create policy van_kich_admin_doc on public.van_kich for select to authenticated 
 
 -- Bảng đếm cho /admin và cho người quyết bỏ van: van nào kích bao nhiêu lần trong 7 ngày, theo nhánh.
 create or replace view public.van_kich_7_ngay
-with (security_invoker = on) as
+-- `= true` chứ không `= on`: cổng soat_db_cong_khai so chuỗi reloptions `security_invoker=true` (bắt 06/10 trên CI).
+with (security_invoker = true) as
 select nhanh, van, count(*) as so_lan, max(created_at) as lan_cuoi
 from public.van_kich
 where created_at > now() - interval '7 days'
