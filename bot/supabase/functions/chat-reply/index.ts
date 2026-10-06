@@ -8270,7 +8270,8 @@ Deno.serve(async (req) => {
       await ghiLoi(client, "chat-reply tim_tin_theo_nghia", e);
     }
   }
-  // SRD §IV.3 (05/10/2026, SRS-5.1zzf): khách MUA đã nét (đủ khu vực + ngân sách) → tin của NMG hạng VÀNG lên đầu kho, thứ tự
+  // SRD §IV.3 (05/10/2026, SRS-5.1zzf): khách MUA đã nét (đủ khu vực + ngân sách) → tin của người bán hạng VÀNG (cả chính chủ lẫn
+  // môi giới — chủ dự án chốt 06/10, SRS-5.1zzx) lên đầu kho, thứ tự
   // còn lại giữ nguyên (gấp → nghĩa → mới). Hạng đọc một lượt cho cả nhóm người bán (`hang_cua_nguoi_ban`); RPC hỏng → giữ thứ tự, ghi sổ.
   if (minimumMet && (listings ?? []).length > 1) {
     const idsNb = [...new Set((listings ?? []).map((l) => (l as { seller_id?: string | null }).seller_id).filter((x): x is string => !!x))];
