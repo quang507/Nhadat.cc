@@ -393,7 +393,7 @@ một commit thật (hoặc dispatch `kiem.yml` trên nhánh) để CI chạy tr
 khoá `listings_seller_id_fkey` là `NO ACTION` nên có xoá cũng bị chặn. Mốc sao Bắc
 Đẩu nay đếm từ số 0 thật (`docs/10 §10.9`), không còn lẫn lượt thử của nhóm làm.
 
-**Chú thích bảng nằm TRONG DB, không nằm trong docs** (`20260906b`). 43/43 bảng (soát 18/09: `tien_ich` từng thiếu, vá `20260918a`; `duong` thêm 21/09; `nhung_viec`, `nhung_viec_du_an` thêm 23/09; `nhung_viec_dia_danh`, `phuong_cu`, `quan_cu` thêm 30/09)
+**Chú thích bảng nằm TRONG DB, không nằm trong docs** (`20260906b`). 46/46 bảng (soát 18/09: `tien_ich` từng thiếu, vá `20260918a`; `duong` thêm 21/09; `nhung_viec`, `nhung_viec_du_an` thêm 23/09; `nhung_viec_dia_danh`, `phuong_cu`, `quan_cu` thêm 30/09; `du_an_tai_lieu`, `du_an_can` thêm 05/10; `van_kich` thêm 06/10)
 và 19/19 view (public, soát 18/09) đã có `comment on`, cộng 69 chú thích cột; tiền tố `[RỔ HÀNG]`
 `[NGƯỜI & HỘI THOẠI]` `[BOT & HÀNG ĐỢI]` `[CTV]` `[HỆ THỐNG]` để Table Editor
 xếp A→Z mà mắt vẫn gom được theo việc. Thêm bảng hay cột mới thì **thêm
