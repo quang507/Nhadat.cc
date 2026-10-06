@@ -8,7 +8,7 @@ import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang
 import { canTheoAi } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
-import { cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -788,6 +788,26 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("KIEU-09 hỏi số tầng, '3 tầng' (trích '3 tầng') → nhận; hỏi năm xây, 'mới xây' → bỏ", tlO("3 tầng", "3 tầng", "nhà 3 tầng nha", "so_tang")?.giaTri === "3 tầng"
     && tlO("mới xây", "mới xây", "nhà mới xây", "nam_xay")?.giaTri === null);
   ok("KIEU-10 không truyền ô (nơi gọi cũ) → không kiểm kiểu, như trước", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "anh đứng tên", trich_dan: "anh đứng tên" }, "anh đứng tên")?.giaTri === "anh đứng tên");
+}
+// ── SRS-5.1zzw (06/10/2026, bắn lại thu-ai-0610 lần 3–4): một cụm chỉ trả lời một ô ──
+{
+  const L = (question, answer) => ({ question, answer });
+  const D = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan });
+  const luatDT = [L("nguoi_dung_ten", "anh đứng tên"), L("the_chap", "không thế chấp")];
+  ok("MC-01 (ca gốc 14:20) hỏi gấp, trích 'anh đứng tên, không thế chấp', cùng lượt đã vào ô đứng tên + thế chấp → thuộc ô khác",
+    traLoiThuocOKhac("anh đứng tên, không thế chấp", "gap", [], luatDT) === true);
+  ok("MC-02 (ca gốc 13:30) hỏi hẻm, cùng câu → thuộc ô khác", traLoiThuocOKhac("anh đứng tên, không thế chấp", "do_rong_hem", [], luatDT) === true);
+  ok("MC-03 'không gấp, anh đứng tên' → còn 'không gấp' → VẪN là câu trả lời câu gấp", traLoiThuocOKhac("không gấp, anh đứng tên", "gap", [], luatDT) === false);
+  ok("MC-04 'có, sổ hồng riêng' hỏi gấp → còn 'có' (câu trả lời có/không) → không gạt",
+    traLoiThuocOKhac("có, sổ hồng riêng", "gap", [D("phap_ly", "sổ hồng riêng", "sổ hồng riêng")], []) === false);
+  ok("MC-05 (cách nói MỚI) hỏi thang máy, 'giá 5 tỷ 2 nha em' — AI đã gán cụm cho ô giá → thuộc ô khác",
+    traLoiThuocOKhac("giá 5 tỷ 2 nha em", "thang_may", [D("gia", "5 tỷ 2", "giá 5 tỷ 2")], []) === true);
+  ok("MC-06 fact cùng ô đang hỏi không tính là 'ô khác': hỏi thế chấp, 'không thế chấp' → không gạt",
+    traLoiThuocOKhac("không thế chấp", "the_chap", [], luatDT) === false);
+  ok("MC-07 không có cụm ô khác nào khớp → không gạt; không có trích → không gạt",
+    traLoiThuocOKhac("hẻm 4m xe hơi vào", "do_rong_hem", [], luatDT) === false && traLoiThuocOKhac(null, "gap", [], luatDT) === false);
+  ok("MC-08 (cách nói MỚI) hỏi hẻm, 'hẻm 137 Nguyễn Trãi' mà AI gán cụm cho ô địa chỉ → thuộc ô khác (địa chỉ không phải độ rộng hẻm)",
+    traLoiThuocOKhac("hẻm 137 Nguyễn Trãi", "do_rong_hem", [D("duong", "hẻm 137 Nguyễn Trãi", "hẻm 137 Nguyễn Trãi")], []) === true);
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

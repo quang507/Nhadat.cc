@@ -8233,6 +8233,22 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   rN = await send({ external_user_id: "rn-4", text: "nhà phố" });
   check("RN-07e trả lời 'nhà phố' → tin thành nha_pho, câu loại đóng", tinCua("rn-4")[0]?.property_type === "nha_pho" && !db().t.info_requests.some((i) => i.listing_id === tN[0].id && i.question === "loai_bds" && i.status === "pending"),
     JSON.stringify({ pt: tinCua("rn-4")[0]?.property_type, rep: rN.body.replies }));
+  // SRS-5.1zzw (bắn lại lần 4, 14:20): hỏi GẤP, khách "anh đứng tên, không thế chấp" → AI tra_loi có, nguyên câu → từng vào ô gấp.
+  const lid8 = tinCua("rn-4")[0].id;
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: lid8, question: "gap", status: "pending" });
+  globalThis.__model = { parse: ai({ tra_loi: { co_tra_loi: true, gia_tri: "anh đứng tên, không thế chấp", trich_dan: "anh đứng tên, không thế chấp" } }),
+    create: () => "Nhà anh sổ riêng đứng tên là tốt lắm. Nhà mình mấy phòng ngủ ạ?" };
+  rN = await send({ external_user_id: "rn-4", text: "anh đứng tên, không thế chấp" });
+  check("RN-08 hỏi gấp, AI gán 'anh đứng tên, không thế chấp' cho câu gấp → KHÔNG ghi ô gấp; cụm vẫn vào ô đứng tên / thế chấp",
+    !factCua(lid8).some((f) => f.question === "gap") && factCua(lid8).some((f) => f.question === "nguoi_dung_ten"),
+    JSON.stringify({ facts: factCua(lid8).map((f) => [f.question, f.answer]), rep: rN.body.replies }));
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: lid8, question: "gap", status: "pending" });
+  globalThis.__model = { parse: ai({ tra_loi: { co_tra_loi: true, gia_tri: "không gấp", trich_dan: "không gấp" } }), create: () => "Dạ em ghi rồi anh." };
+  rN = await send({ external_user_id: "rn-4", text: "không gấp, anh đứng tên" });
+  check("RN-08b đối chứng: 'không gấp, anh đứng tên' → ô gấp = 'không gấp' (phần trả lời riêng của câu gấp vẫn được nhận)",
+    factCua(lid8).some((f) => f.question === "gap" && /không gấp/.test(f.answer)), JSON.stringify({ facts: factCua(lid8).map((f) => [f.question, f.answer]) }));
   // AI KHÔNG chạy (công tắc tắt) → luật đỡ: câu có địa chỉ hoặc giá vẫn mở tin.
   fresh(seedKho);
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "tat" };

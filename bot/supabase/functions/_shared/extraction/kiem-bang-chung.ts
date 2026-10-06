@@ -1098,6 +1098,35 @@ export function giaTriHopKieu(cauHoi: string, v: string): boolean {
   if (CAU_CHO_KHONG_CO.has(cauHoi)) return /\b(?:khong (?:co|thu|ton|mat|can|lay|tinh|rang buoc)|mien phi|free|thoa thuan|tuy)\b/.test(kd);
   return false;
 }
+/**
+ * SRS-5.1zzw (06/10/2026, bắn lại thu-ai-0610 lần 3 và 4): MỘT CỤM CHỮ CHỈ TRẢ LỜI MỘT Ô. Hỏi hẻm (13:30) rồi hỏi gấp (14:20), khách
+ * cùng một câu "anh đứng tên, không thế chấp" → AI nói CÓ trả lời câu đang hỏi, trích nguyên câu → ô hẻm / ô gấp nhận nguyên câu,
+ * trong khi chính lượt đó cụm "anh đứng tên" đã vào ô đứng tên, "không thế chấp" vào ô thế chấp. Lớp kiểm cũ chỉ hỏi "cụm có thật
+ * trong tin không", không hỏi "cụm đó có đang là câu trả lời của ô KHÁC không".
+ * Gỡ khỏi cụm trích của câu trả lời mọi cụm mà cùng lượt đã gán cho ô KHÁC (đề xuất AI có trích dẫn + fact luật đọc ra); còn lại
+ * chỉ là tiểu từ / dấu câu → câu trả lời không thuộc ô đang hỏi. Không xét từ khoá của ô nào — áp cho mọi ô.
+ */
+// Chỉ xưng hô, tiểu từ cuối câu, từ nối. KHÔNG có chữ tự nó là câu trả lời có / không ("có", "rồi", "dạ", "ừ", "ok", "vâng") — còn
+// một chữ đó sau khi gỡ thì vẫn có thể là câu trả lời ("có, sổ hồng riêng" khi hỏi gấp), không gạt.
+const TIEU_TU_TRA_LOI = new Set(["a", "anh", "chi", "em", "e", "chu", "bac", "ong", "ba", "minh", "toi", "tui", "nha", "nhe", "nhen", "ne", "nghe",
+  "ha", "hen", "oi", "day", "thi", "la", "va", "voi", "con", "ma", "nua", "luon", "cai", "do", "nay", "the", "vay"]);
+export function traLoiThuocOKhac(
+  trich: string | null | undefined, cauHoi: string, dat: readonly DeXuat[], luat: ReadonlyArray<{ question: string; answer: string }>,
+): boolean {
+  if (!trich?.trim()) return false;
+  const khoaCau = new Set([cauHoi, ...(AI_CHO_CAU[cauHoi] ?? []), ...Object.entries(KHOA_GHI).filter(([, q]) => q === cauHoi).map(([k]) => k)]);
+  const gon = (s: string) => boDauKiem(chuanSo(s)).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const cumKhac = [
+    ...dat.filter((d) => !khoaCau.has(d.khoa) && !khoaCau.has(KHOA_GHI[d.khoa] ?? d.khoa)).map((d) => d.trich_dan ?? ""),
+    ...luat.filter((f) => f.question !== "bo_sung" && !khoaCau.has(f.question)).map((f) => f.answer),
+  ].map(gon).filter((c) => c.length >= 3).sort((x, y) => y.length - x.length);
+  let con = ` ${gon(trich)} `;
+  let daGo = false;
+  for (const c of cumKhac) {
+    if (con.includes(` ${c} `)) { con = con.split(` ${c} `).join(" "); daGo = true; }
+  }
+  return daGo && con.trim().split(/\s+/).filter(Boolean).every((w) => TIEU_TU_TRA_LOI.has(w));
+}
 /** Câu bot hỏi CHỌN MỘT TRONG HAI ("A hay B?") — không phải "… hay không / hay chưa" (câu có / không). */
 export function laCauChonHai(cau: string | null | undefined): boolean {
   const kd = boDauKiem(cau ?? "").replace(/\s+/g, " ");

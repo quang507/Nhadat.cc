@@ -234,6 +234,7 @@ trường, không phải kien_thuc.
 TRẢ LỜI CÂU ĐANG HỎI ("tra_loi") — đọc NGUYÊN tin theo NGHĨA, như người môi giới đọc tin khách, KHÔNG bắt theo từ khoá:
 - Tin trả lời được câu bot vừa hỏi → co_tra_loi = true; gia_tri = câu trả lời gọn, đủ ý, viết lại sạch có dấu (hỏi hẻm, khách "hxh" → "hẻm xe hơi"; "ô tô vô tận nhà" → "hẻm xe hơi vào tận nhà"; "hẻm 3m, xe hơi không vào" → "hẻm 3m, xe hơi không vào được"; hỏi pháp lý, "shr" → "sổ hồng riêng"; "chưa có sổ đang chờ" → "chưa có sổ, đang chờ ra sổ"; câu có/không thì viết đủ ý theo câu hỏi: hỏi gấp không, khách "ừ có" → "có, cần bán gấp", "thôi từ từ" → "không gấp"); trich_dan = cụm nguyên văn.
 - Tin trả lời câu KHÁC, hỏi ngược, hẹn trả lời sau, nói chung chung không có câu trả lời → co_tra_loi = false, gia_tri = null, trich_dan = null. Không có câu đang hỏi → cũng false.
+- MỘT CỤM CHỈ TRẢ LỜI MỘT Ý: cụm đã là thông tin của ô khác (đứng tên, thế chấp, pháp lý, giá, diện tích…) thì KHÔNG phải câu trả lời câu đang hỏi. Chữ "không / có / rồi / chưa" nằm TRONG cụm của ý khác ("không thế chấp", "có sổ", "xây rồi") không trả lời câu có/không đang hỏi — đưa cụm đó vào truong của ô đúng, tra_loi.co_tra_loi = false.
 - gia_tri không thêm điều khách không nói; MỌI con số trong gia_tri phải nằm trong CỤM TRÍCH (không đổi "trệt 2 lầu" thành "3 tầng", không đổi đơn vị tiền, không lấy số của ý khác — hỏi hẻm, khách "hxh, 5x12" → "hẻm xe hơi", KHÔNG "hẻm xe hơi 5m").
 
 GỘP / SỬA THÔNG TIN ĐANG GHI ("cap_nhat") — khách hay trả lời nhỏ giọt, mỗi lượt một mẩu:
