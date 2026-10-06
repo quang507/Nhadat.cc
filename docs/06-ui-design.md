@@ -189,7 +189,7 @@ thêm van code `chanNhanLaNguoi` — `bot/supabase/functions/_shared/extraction/
 
 | Tình huống | Câu chuẩn |
 |---|---|
-| Chào lần đầu (bản chạy) | *"Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Cứ nhắn như nhắn bạn, gửi ảnh cũng được, không cần điền form. Anh/chị cần giao bán bất động sản đúng không ạ?"* (`LOI_CHAO`, FR-159/161/181; {ten} = tên riêng của khách; 23/09/2026 bỏ câu "anh Thu phụ trách khu vực Sài Gòn…" — FR-218 a; 27/09 chỉ hỏi "cần giao bán…" (gật trơn = người bán); 06/10 thêm vế mời gửi ảnh / không form theo AOND — SRS-5.1zzs) |
+| Chào lần đầu (bản chạy) | *"Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị cần giao bán bất động sản đúng không ạ?"* (`LOI_CHAO`, FR-159/161/181; {ten} = tên riêng của khách; 23/09/2026 bỏ câu "anh Thu phụ trách khu vực Sài Gòn…" — FR-218 a; 27/09 chỉ hỏi "cần giao bán…" (gật trơn = người bán); 06/10 từng thêm vế mời gửi ảnh / không form theo AOND rồi chủ dự án bác cùng ngày: "chào ngắn như đợt trước" — SRS-5.1zzs) |
 | Gặp lại | *"Em chào anh Hưng. Anh vẫn tìm nhà ở Quận 5, dưới 10 tỉ, hẻm xe hơi hả anh? Có gì mới không anh?"* |
 | Gửi danh sách | *"Em hiện có 24 mục. Anh xem thử vài mục hot nhất nha"* |
 | Hỏi mục đích | *"Chị mua để ở hay kinh doanh ạ?"* |
