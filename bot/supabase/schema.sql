@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-06 09:56 (giờ VN)
+-- Sinh lúc: 2026-10-07 00:28 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -3096,7 +3096,8 @@ begin
                  + 0.015 * greatest(v_n - 30, 0);
   end if;
   v_ph := public.diem_phan_hoi(p_seller_id);
-  v_ph_diem := (v_ph->>'diem')::int;
+  -- SRS-5.1zzx: dưới 5 lượt chủ động thì chưa đủ để kết luận "kịp thời" → chưa tính (null), dùng 100% hoàn chỉnh.
+  v_ph_diem := case when coalesce((v_ph->>'so_luot')::int, 0) >= 5 then (v_ph->>'diem')::int end;
   v_goc := case when v_ph_diem is null then v_tb else 0.5 * v_tb + 0.5 * v_ph_diem end;
   v_diem := least(100, round(v_goc * v_he_so))::int;
   return jsonb_build_object('diem', v_diem, 'diem_tb', round(v_tb, 1), 'so_tin', v_n, 'he_so', round(v_he_so, 3),
@@ -3112,19 +3113,24 @@ CREATE OR REPLACE FUNCTION public.diem_phan_hoi(p_seller_id uuid)
 AS $function$
   with tin as (
     select m.created_at, m.sender,
-           lead(m.sender)     over (partition by m.conversation_id order by m.created_at, m.seq) as sender_ke,
-           lead(m.created_at) over (partition by m.conversation_id order by m.created_at, m.seq) as luc_ke
+           lead(m.sender)     over w as sender_ke,
+           lead(m.created_at) over w as luc_ke,
+           max(m.created_at) filter (where m.sender = 'seller') over (w rows between unbounded preceding and 1 preceding) as luc_chu_truoc
       from messages m
       join conversations c on c.id = m.conversation_id
      where c.seller_id = p_seller_id
        and m.created_at >= now() - interval '90 days'
+    window w as (partition by m.conversation_id order by m.created_at, m.seq)
   ),
   luot as (
-    -- bong bóng cuối của một lượt bot: tin kế không phải của bot (hoặc không có tin kế)
     select created_at,
            case when sender_ke = 'seller' then extract(epoch from luc_ke - created_at) / 3600.0 end as gio_tra_loi
       from tin
-     where sender = 'bot' and (sender_ke is distinct from 'bot')
+     where sender = 'bot'
+       -- bong bóng cuối của một lượt bot: tin kế không phải của bot, hoặc tin bot kế đã là lượt khác (> 5 phút)
+       and (sender_ke is distinct from 'bot' or luc_ke > created_at + interval '5 minutes')
+       -- lượt CHỦ ĐỘNG: chủ nhà đã im > 30 phút (lượt bot đáp ngay khi chủ đang chat không đo được gì)
+       and (luc_chu_truoc is null or created_at > luc_chu_truoc + interval '30 minutes')
        -- lượt bot mới nhất mà chưa quá 7 ngày và chưa ai trả lời: chưa kết luận, không tính
        and not (sender_ke is null and created_at > now() - interval '7 days')
   ),
