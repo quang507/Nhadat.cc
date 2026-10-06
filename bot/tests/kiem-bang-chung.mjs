@@ -766,6 +766,11 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("NV-15 trả lời câu treo địa chỉ: cụm khách 'hẻm 137 Nguyễn Trãi', không phải câu model đảo", tl?.giaTri === "hẻm 137 Nguyễn Trãi", JSON.stringify(tl));
   ok("NV-16 không truyền ô → như cũ (chữ model)", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "137 hẻm Nguyễn Trãi", trich_dan: "hẻm 137 Nguyễn Trãi" }, "Nhà ở hẻm 137 Nguyễn Trãi quận 5")?.giaTri === "137 hẻm Nguyễn Trãi");
   ok("NV-17 cumGocTrongTin: giữ dấu / hoa thường của khách, bỏ dấu phẩy dính; không có → null", cumGocTrongTin("Sổ Hồng Riêng, anh đứng tên", "so hong rieng") === "Sổ Hồng Riêng" && cumGocTrongTin("abc", "xyz") === null);
+  ok("NV-19 chữ đầu là tên thật: 'Nam Kỳ Khởi Nghĩa', 'lô 5 đường số 7' không bị gọt", giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "Nam Kỳ Khởi Nghĩa", "Nam Kỳ Khởi Nghĩa")], "nhà 12 Nam Kỳ Khởi Nghĩa quận 3").dat[0]) === "Nam Kỳ Khởi Nghĩa"
+    && giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "lô 5 đường số 7", "lô 5 đường số 7")], "đất lô 5 đường số 7 phường 12").dat[0]) === "lô 5 đường số 7");
+  ok("NV-20 tên đường gõ không dấu trùng chữ hành chính ('huyen tran cong chua', 'quan hoa') không bị cắt đuôi; 'quận 3' thì cắt",
+    giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "Huyền Trân Công Chúa", "huyen tran cong chua")], "nha o huyen tran cong chua q1").dat[0]) === "Huyền Trân Công Chúa"
+    && giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "12 Nguyễn Trãi", "12 Nguyễn Trãi quận 3")], "nhà 12 Nguyễn Trãi quận 3 nha").dat[0]) === "12 Nguyễn Trãi");
   ok("NV-18 cụm không dấu trong tin thì ô cũng không dấu khi model đổi thứ tự (không mượn dấu sai chỗ)", giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "137 hẻm Nguyễn Trãi", "hem 137 nguyen trai")], "nha o hem 137 nguyen trai q5").dat[0]) === "hem 137 nguyen trai");
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);

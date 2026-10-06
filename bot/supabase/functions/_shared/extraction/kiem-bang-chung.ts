@@ -109,8 +109,11 @@ export function cumGocTrongTin(tin: string, kdCum: string): string | null {
   }
   return null;
 }
-const NV_DAU_CUM = /^(?:nhà|nha|căn|can|đất|dat|lô|lo|ở|o|tại|tai|nằm|nam|địa chỉ|dia chi|là|la|thì|thi|hiện|hien|đang|dang)\s+/iu;
-const NV_DUOI_DIA_CHI = /[,;.]?\s*(?<![\p{L}\d])(?:phường|phuong|p\.\s*\d|quận|quan|q\.\s*\d|huyện|huyen|tp\.?\s*hcm|tphcm|thành phố|thanh pho|hồ chí minh|ho chi minh|hcm)(?![\p{L}])[\s\S]*$/iu;
+// Chữ dẫn bỏ ở đầu cụm — CỐ Ý hẹp: "nam" (Nam Kỳ Khởi Nghĩa), "lô" (lô 5 đường số 7), "căn", "là" đều có thể là chữ thật của địa chỉ.
+const NV_DAU_CUM = /^(?:nhà ở|nha o|nhà|nha|ở|o|tại|tai|địa chỉ|dia chi)\s+/iu;
+// Đuôi phường / quận cắt khỏi địa chỉ (có ô riêng). Quận chỉ cắt khi theo sau là số hoặc tên quận TP.HCM — "quan hoa", "huyen tran
+// cong chua" gõ không dấu là tên đường, không phải đuôi hành chính.
+const NV_DUOI_DIA_CHI = /[,;.]?\s*(?<![\p{L}\d])(?:(?:phường|phuong|p\.)\s*(?:\d{1,2}|[\p{L}]{2,})(?![\p{L}\d])|(?:quận|quan|q\.)\s*(?:\d{1,2}(?![\d\p{L}])|tân|tan|bình|binh|gò|go|phú|phu|thủ|thu|hóc|hoc|củ|cu|nhà|nha|cần|can)(?![\p{L}\d])|tp\.?\s*hcm|tphcm|hồ chí minh|ho chi minh)[\s\S]*$/iu;
 const NV_BE_RONG_HEM = /(\b(?:hẻm|hem|hẽm)\b\s*)(?:rộng|rong)?\s*\d+(?:[.,]\d+)?\s*(?:m(?![\p{L}])|mét|met\b)\s*/giu;
 /**
  * Giá trị ghi cho ô nguyên văn: cụm gốc (hay trích dẫn của model), gọt chữ dẫn đầu ("ở", "nhà", "tại"), tiểu từ cuối câu
