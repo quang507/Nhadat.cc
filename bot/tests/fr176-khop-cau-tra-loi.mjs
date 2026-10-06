@@ -3,7 +3,7 @@
 //   bun bot/tests/fr176-khop-cau-tra-loi.mjs
 // Mỗi dòng dưới là một câu THẬT hoặc gần thật từ log 07/09/2026. Thêm ca khi
 // bắt được một câu bot ghi sai chỗ ngoài đời — đó là cách file này lớn lên.
-import { batXungHo, laBaoDang, laKhongGiHet, nhanDienFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { batXungHo, laBaoDang, laChiLenhDang, laKhongGiHet, nhanDienFact, phanLoaiCauTraLoi } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 
 const CA = [
   // [câu hỏi đang treo, câu chủ nhà nhắn, loại mong đợi, kiểm thêm]
@@ -149,6 +149,14 @@ for (const [c, kiem] of vt) {
   if (kiem(f)) console.log(`✓ nhanDienFact ${JSON.stringify(c)} → ${f?.question ?? "—"}`);
   else { hong++; console.log(`✗ nhanDienFact ${JSON.stringify(c)} → ${JSON.stringify(f)}`); }
 }
-const tong176 = CA.length + xh.length + kgh.length + bd.length + tn.length + vt.length;
+// SRS-5.1zzu (06/10/2026, bắn lại thu-ai-0610): CẢ TIN chỉ là lệnh đăng → luật chắc khi AI đọc binh_thuong; câu có thêm ý thì không.
+const ld = [["ok đăng đi", true], ["đăng luôn đi em", true], ["lên tin giúp anh nha", true], ["cứ đăng như vậy trước đi", true], ["Đăng đi.", true],
+  ["chiều anh gửi ảnh, giờ đăng trước đi", false], ["đăng đi, nhà 4x16 nha", false], ["chưa đăng đâu em", false], ["h đang bận", false], ["ok", false]];
+for (const [t, mong] of ld) {
+  const kq = laChiLenhDang(t);
+  if (kq !== mong) hong++;
+  console.log(`${kq === mong ? "✓" : "✗"} chỉ lệnh đăng "${t}" → ${kq}${kq === mong ? "" : `  MONG ${mong}`}`);
+}
+const tong176 = CA.length + xh.length + kgh.length + bd.length + tn.length + vt.length + ld.length;
 console.log(hong ? `\nFR-176: ${hong}/${tong176} CA HỎNG` : `\nFR-176: ${tong176}/${tong176} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

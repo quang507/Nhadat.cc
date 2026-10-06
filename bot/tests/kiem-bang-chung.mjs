@@ -773,5 +773,21 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
     && giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "12 Nguyễn Trãi", "12 Nguyễn Trãi quận 3")], "nhà 12 Nguyễn Trãi quận 3 nha").dat[0]) === "12 Nguyễn Trãi");
   ok("NV-18 cụm không dấu trong tin thì ô cũng không dấu khi model đổi thứ tự (không mượn dấu sai chỗ)", giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "137 hẻm Nguyễn Trãi", "hem 137 nguyen trai")], "nha o hem 137 nguyen trai q5").dat[0]) === "hem 137 nguyen trai");
 }
+// ── SRS-5.1zzu (06/10/2026, bắn lại thu-ai-0610): ô ĐO ĐẾM — câu trả lời AI phải mang số / loại đường; không thì để luật đọc ──
+{
+  const o = (q) => ({ cauHoi: q, loai: "nha_pho" });
+  const tlO = (v, td, tin, q) => kiemTraLoiCau({ co_tra_loi: true, gia_tri: v, trich_dan: td }, tin, null, o(q));
+  ok("KIEU-01 hỏi hẻm, AI 'anh đứng tên, không thế chấp' (ca gốc) → BỎ: không số, không loại đường", tlO("anh đứng tên, không thế chấp", "anh đứng tên, không thế chấp", "anh đứng tên, không thế chấp", "do_rong_hem")?.giaTri === null);
+  ok("KIEU-02 hỏi hẻm, '4 mét' → nhận", tlO("4 mét", "4m", "hẻm 4m", "do_rong_hem")?.giaTri === "4 mét");
+  ok("KIEU-03 hỏi hẻm, 'hẻm xe hơi' → nhận", tlO("hẻm xe hơi", "hxh", "hxh nha", "do_rong_hem")?.giaTri === "hẻm xe hơi");
+  ok("KIEU-04 hỏi hẻm, 'nhà mặt tiền' → nhận", tlO("nhà mặt tiền", "mặt tiền", "nhà mặt tiền đó em", "do_rong_hem")?.giaTri === "nhà mặt tiền");
+  ok("KIEU-05 hỏi phòng ngủ, AI 'sổ hồng riêng' → bỏ", tlO("sổ hồng riêng", "shr", "shr nha em", "so_phong_ngu")?.giaTri === null);
+  ok("KIEU-06 hỏi phí quản lý, 'không có phí' → nhận", tlO("không có phí", "không có phí", "chung cư này không có phí gì hết", "phi_quan_ly")?.giaTri === "không có phí");
+  ok("KIEU-07 hỏi phí quản lý, AI 'anh đứng tên' → bỏ ('không thế chấp' không phải 'không có')", tlO("anh đứng tên, không thế chấp", "anh đứng tên, không thế chấp", "anh đứng tên, không thế chấp", "phi_quan_ly")?.giaTri === null);
+  ok("KIEU-08 ô CHỮ (pháp lý) không bị đòi số: 'sổ hồng riêng' → nhận", tlO("sổ hồng riêng", "shr", "shr nha em", "phap_ly")?.giaTri === "sổ hồng riêng");
+  ok("KIEU-09 hỏi số tầng, '3 tầng' (trích '3 tầng') → nhận; hỏi năm xây, 'mới xây' → bỏ", tlO("3 tầng", "3 tầng", "nhà 3 tầng nha", "so_tang")?.giaTri === "3 tầng"
+    && tlO("mới xây", "mới xây", "nhà mới xây", "nam_xay")?.giaTri === null);
+  ok("KIEU-10 không truyền ô (nơi gọi cũ) → không kiểm kiểu, như trước", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "anh đứng tên", trich_dan: "anh đứng tên" }, "anh đứng tên")?.giaTri === "anh đứng tên");
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
