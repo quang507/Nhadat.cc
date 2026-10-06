@@ -79,7 +79,7 @@ cả hai phía (`06 §6.8`).
 | §III | Nhóm 3 công nghiệp | ✅ | FR-186 mở rộng (09/09 tối, OPEN-40 chốt): `kho_xuong`, `toa_nha`, `dat_kinh_doanh`, `dat_nong_nghiep` — bộ câu hỏi riêng, không thêm cột |
 | §IV | Điểm uy tín 50% hoàn chỉnh + 50% kịp thời | 🔶 | FR-183 (09/09): điểm người rao = TB điểm tin × hệ số quy mô NMG; vế "kịp thời" đo và ghi DB từ 05/10 (SRS-5.1zzd), chưa gộp vào điểm; hạng theo ĐIỂM từ 05/10 (SRS-5.1zzf, thay FR-155 theo số tin); CTV đo kịp thời riêng — FR-173 |
 | §IV | Điểm **từng tin** (khác điểm người rao) | ✅ | FR-177 d: `diem_tin()` 7 tiêu chí 0–100 theo kịch bản Gemini; ngưỡng rao 70 chờ chốt — OPEN-50 |
-| §IV | Thưởng quy mô; quyền lợi Đồng/Bạc/Vàng | ✅ người rao · ❓ CTV | SRS-5.1zzf (05/10, OPEN-26 chốt): Đồng tối đa 5 căn, Vàng NMG ưu tiên khách nét, CCRB Vàng đẩy tới 20 NMG lõi; hạng nói ra khi tin lên kệ (SRS-5.1zzs). CTV: OPEN-42 |
+| §IV | Thưởng quy mô; quyền lợi Đồng/Bạc/Vàng | ✅ người rao · ❓ CTV | SRS-5.1zzf (05/10, OPEN-26 chốt): Đồng tối đa 5 căn, người bán Vàng ưu tiên khách nét (SRS-5.1zzx), CCRB Vàng đẩy tới 20 NMG lõi; hạng nói ra khi tin lên kệ (SRS-5.1zzs). CTV: OPEN-42 |
 | §V | Phí; NMG ≥10 tin, chốt 5% | ✅ | BR-05, FR-125, FR-155 |
 | §V | Hệ thống điều phối CTV | ✅ | FR-136, FR-173 |
 | §VI | Quét im >5 ngày; hỏi 1–2 căn/ngày | ✅ | FR-63, FR-129, `seller_drip_tick` |

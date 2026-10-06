@@ -7543,7 +7543,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = cuCH;
 }
 // ── SRD Aioinhadat 05/10/2026 — keep-alive "còn bán không" (SRS-5.1zzc), phường từ câu hỏi (SRS-5.1zzh), trần hạng Đồng +
-//    NMG Vàng ưu tiên khách nét (SRS-5.1zzf) ──
+//    người bán Vàng ưu tiên khách nét (SRS-5.1zzf, zzx) ──
 {
   const cuCH = globalThis.__cauHinh;
   const laLuotBocRaoCB = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
@@ -7675,7 +7675,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   const rD2 = await send({ external_user_id: "z-ccrb", text: "bán thêm căn nữa ở P5 giá 6 tỷ 60m2" });
   check("HD-02 chưa đủ trần (RPC mặc định) → mở tin như cũ", db().t.listings.length === soTinTruoc + 1, JSON.stringify(rD2.body.replies));
 
-  // (5) SRS-5.1zzf — khách MUA đã nét (khu vực + ngân sách): tin của NMG hạng VÀNG lên đầu KHO, thứ tự còn lại giữ nguyên.
+  // (5) SRS-5.1zzf — khách MUA đã nét (khu vực + ngân sách): tin của người bán hạng VÀNG (chính chủ lẫn môi giới, SRS-5.1zzx) lên đầu KHO, thứ tự còn lại giữ nguyên.
   //     seedKho: #0001 (chủ "z-ccrb", tin cũ nhất) · #0005 (NMG "z-nmg", tin mới nhất → mặc định đứng trước).
   fresh(seedKho);
   const sCV = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");

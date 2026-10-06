@@ -9,7 +9,7 @@ import { boCauNoiHeThong, boCauTroNguocDauBong } from "../supabase/functions/_sh
 import { boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
+import { FEE_RULES, LOI_CHAO } from "../supabase/functions/_shared/prompts.ts";
 import { duAnLaTenDuong } from "../supabase/functions/_shared/extraction/boc-cau-rao.ts";
 import { boChaoLai, boViTriBia, giuVeCauMau, boCauLapLai, boTienBia, goiCanHo, giuCauDungTen, suaGapTheoDeal, boGhiNhanSuong, boKhenThiTruong, goiDat } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { laGatHoiVai, laCauChungChung } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
@@ -560,6 +560,11 @@ ok("boCanBia: câu nêu mã tin thật '#BDS-Q5-0006 … 8 tỷ' → giữ", boC
 ok("LOI_CHAO không còn câu 'phụ trách khu vực' / 'anh Thu'; 27/09 chỉ nhắc bán: 'cần giao bán bất động sản đúng không ạ'; 06/10 chủ dự án giữ NGẮN hai câu — không vế mời gửi ảnh / không form",
   !/phụ trách|anh Thu/.test(LOI_CHAO) && /cần giao bán bất động sản đúng không ạ\?$/.test(LOI_CHAO) && /\{ten\}/.test(LOI_CHAO)
     && !/gửi ảnh|điền form|nhắn như nhắn bạn/.test(LOI_CHAO) && LOI_CHAO.split(/[.?]\s*/).filter(Boolean).length === 2, LOI_CHAO);
+// SRS-5.1zzx (06/10): bắn thử production, bot nói "Anh đang hạng Vàng nên khách tìm kiếm sẽ thấy tin anh trước" — hệ thống chỉ
+// xếp tin người Vàng lên trước trong CHAT khi khách mua đã nói đủ khu vực + tầm giá. FEE_RULES phải nói đúng phạm vi đó và cấm lời
+// hứa rộng hơn (web, đứng đầu trang, bán nhanh hơn).
+ok("FEE_RULES: quyền lợi hạng Vàng nói đúng phạm vi (khách nói rõ khu vực + tầm giá) và cấm hứa 'khách tìm kiếm / lên web thấy trước'",
+  /hạng Vàng[^.]*khu vực và tầm giá/.test(FEE_RULES) && /KHÔNG nói "khách tìm kiếm/.test(FEE_RULES) && !/hạng Vàng được ưu tiên khách nét/.test(FEE_RULES), FEE_RULES);
 for (const [cau, mong] of [
   ["không phải vậy em, ý anh là mua để ở", true],
   ["em hiểu nhầm rồi, anh cần thuê chứ không mua", true],
