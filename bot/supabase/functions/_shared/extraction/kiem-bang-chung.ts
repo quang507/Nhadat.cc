@@ -1377,8 +1377,8 @@ export function laTrongCapNhat(kt: string, cn: Array<{ answer: string }>): boole
   return t.length > 0 && cn.some((c) => { const v = new Set(tachGop(c.answer)); return t.every((x) => v.has(x)); });
 }
 
-/** Ngang / dài / nở hậu (m) trong đề xuất đạt của MỘT căn, qua kiểm khoảng 1–200 m. */
-function kichThuoc(mot: DeXuat[]): { ngang: number | null; dai: number | null; noHau: number | null } {
+/** Ngang / dài / nở hậu (m) trong đề xuất đạt của MỘT căn, qua kiểm khoảng 1–200 m. (SRS-5.1zzv: export cho đường bóng ghi fact.) */
+export function kichThuoc(mot: DeXuat[]): { ngang: number | null; dai: number | null; noHau: number | null } {
   const lay = (k: string) => {
     const d = mot.find((x) => x.khoa === k);
     const n = d ? soCua(d.gia_tri) : null;

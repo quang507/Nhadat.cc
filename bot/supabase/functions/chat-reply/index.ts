@@ -55,7 +55,7 @@ import { nhipGui } from "../_shared/nhip-gui.ts";
 import { laNgungHangLoat } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { docNgungHangLoat } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -2673,6 +2673,16 @@ Deno.serve(async (req) => {
             if (gErr) await ghiLoi(client, `chat-reply ghi_fact_listing(ai_kiem ${g.question})`, gErr.message);
             else daGhi.push(g);
           }
+          // SRS-5.1zzv (bắn lại thu-ai-0610 13:56): "4x16, 1 trệt 2 lầu" khi câu treo là LOẠI nhà → nhánh đó trả lời sớm, chỉ đường
+          // bóng này ghi; `chonDeGhi` không ghép ngang × dài (docAiChinh mới ghép) → kết cấu có, diện tích mất. Ngang và dài AI đọc
+          // ra mà tin chưa có diện tích → ghi "AxB" (trigger nhân ra m², giữ hai chiều), cùng luật với docAiChinh.
+          const ktB = kichThuoc(dat);
+          if (ktB.ngang != null && ktB.dai != null && d.area_m2 == null && !facts.dien_tich && !facts.dien_tich_dat && !daGhi.some((g) => /^dien_tich/.test(g.question))) {
+            const dtB = `${ktB.ngang}x${ktB.dai}`;
+            const { error: dtErr } = await client.rpc("ghi_fact_listing", { p_listing_id: d.id, p_question: "dien_tich", p_answer: dtB, p_source: NGUON_AI });
+            if (dtErr) await ghiLoi(client, "chat-reply ghi_fact_listing(ai_kiem dien_tich ngang x dai)", dtErr.message);
+            else daGhi.push({ question: "dien_tich", answer: dtB, khoa: "ngang_x_dai" });
+          }
           const { data: boSungCu } = await client.from("listing_facts").select("answer")
             .eq("listing_id", d.id).eq("question", "bo_sung").limit(40);
           const daCoBoSung = new Set(((boSungCu ?? []) as Array<{ answer: string | null }>).map((x) => boDau((x.answer ?? "").trim())));
@@ -4415,7 +4425,11 @@ Deno.serve(async (req) => {
     // và "nha" = "nhà" (`coLoaiRo`) → coi là rao căn mới, bot hỏi "căn đó hay căn khác" thay vì hoãn. Chế độ `ai`: ý RAO do AI
     // đọc (đề xuất loại giao dịch / loại BĐS có trích dẫn, hoặc `can_khac`); từ khoá chỉ là lưới đỡ khi AI không chạy.
     const aiRao = await aiDocRaoLuot();
-    const raoSuong = (aiRao !== undefined ? aiRao : coYDinhRao && coLoaiRo /* lưới đỡ */) && !coChiTiet && !/\d/.test(textKhongSoQuan) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
+    // SRS-5.1zzv (e2e RN-07e): bot đang hỏi LOẠI nhà, khách đáp "nhà phố" → AI đọc ra loai_bds → từng thành "câu rao suông" và bot
+    // hỏi "căn đó hay căn khác". Câu treo là loại mà tin KHÔNG có ý rao (bán / cho thuê / có căn / rao) thì tên loại là CÂU TRẢ
+    // LỜI, không phải rao căn mới; "chú có căn nhà cần bán" (CHU-6) vẫn là rao suông như cũ.
+    const traLoiLoai = pendingReq?.question === "loai_bds" && !/\b(?:ban|cho thue|rao|co (?:mot |1 )?can|can ban|muon ban|sang nhuong|nhuong lai)\b/.test(tKD);
+    const raoSuong = !traLoiLoai && (aiRao !== undefined ? aiRao : coYDinhRao && coLoaiRo /* lưới đỡ */) && !coChiTiet && !/\d/.test(textKhongSoQuan) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
       nhanDienNhieuFact(text).every((f) => f.question === "gap" || f.question === "phuong");
     if (!sellerMoi && (raoSuong || (dangHoiCanCuMoi && (laCanDo || laCanKhac)))) {
       type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; district: string | null; property_type: string | null; price_raw: string | null };
@@ -5643,11 +5657,30 @@ Deno.serve(async (req) => {
           // không ghi fact `loai_bds`: ghi xong là listing_missing_facts hết
           // hỏi, tin nằm `chua_ro` vĩnh viễn — đúng kiểu chết lặng FR-150 diệt.
           // 20/09/2026 (mau-y-A): câu chỉ nói QUẬN ("ca 2 can deu quan 10 nhe") thì ghi quận rồi hỏi lại.
+          // SRS-5.1zzv (bắn lại thu-ai-0610 13:56): câu treo LOẠI từng là cổng chặn tuyệt đối — AI không ra loại ở câu địa chỉ,
+          // tin `chua_ro`, rồi NĂM lượt liền ("4x16…", "5 tỷ 2, shr", "anh đứng tên…", "ok đăng đi", "phí sao em") đều nhận
+          // nguyên văn một câu "Dạ em chưa rõ lắm ạ, nhà mình thuộc loại nào ta…": "ok đăng đi" (AI đọc đúng du_roi) bị nuốt,
+          // "phí sao em" không được trả lời. Vẫn KHÔNG đoán loại bằng luật (ZR-06, chủ dự án 02/10) — nhưng nhánh này phải:
+          // (a) trả lời câu khách HỎI NGƯỢC trước; (b) khách bảo ĐĂNG → "em đăng liền, chỉ còn thiếu loại nhà" (câu
+          // `dang_luon_thieu`), không lặp câu hỏi; (c) hỏi lại lần 2 trở đi bằng câu NGẮN khác, không nguyên văn.
           const qGhi = await capNhatQuan(pendingReq.listing_id);
-          const again = qGhi
+          const [ydLoai, hoiLoai] = await Promise.all([yDinhAi(), hoiLaiAi(dapAn)]);
+          const daHoiLoai = lichSuRows.filter((m) => !laTinNguoi(m.sender) && /loại nào ta|nhà phố, nhà cấp 4|nhà phố hay nhà cấp 4|nhà phố, chung cư hay đất/i.test(boBaoLai(m.body) ?? "")).length;
+          if (ydLoai?.loai === "du_roi") {
+            return await traLoiSeller([cauTD("dang_luon_thieu", { thieu: "loại nhà (nhà phố hay nhà cấp 4)" })],
+              { reask: "loai_bds", dang_luon: true, thieu_dang: "loại nhà", ...(qGhi ? { quan: qGhi } : {}) });
+          }
+          const dapNguoc = hoiLoai
+            ? dapHoiNguocTienDinh(hoiLoai.cau, cachGoi, cauPhi(sellerRow.seller_type, pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiLoai.chuDe)
+              ?? await dapChuaCoDuLieu(hoiLoai.cau, hoiLoai.chuDe)
+            : null;
+          const again = daHoiLoai >= 1
+            ? `Dạ ${cachGoi} cho em biết nhà mình là nhà phố hay nhà cấp 4 để em ghi đúng loại nha.`
+            : qGhi
             ? `Dạ em ghi ${qGhi} rồi ạ. Còn nhà mình thuộc loại nào ta: nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng ạ?`
             : "Dạ em chưa rõ lắm ạ, nhà mình thuộc loại nào ta: nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng ạ?";
-          return await traLoiSeller([again], { reask: "loai_bds", ...(qGhi ? { quan: qGhi } : {}) });
+          return await traLoiSeller([...(dapNguoc ? [dapNguoc] : []), again],
+            { reask: "loai_bds", ...(dapNguoc ? { hoi_nguoc: hoiLoai!.cau } : {}), ...(qGhi ? { quan: qGhi } : {}) });
         }
       }
 

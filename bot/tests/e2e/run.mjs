@@ -8198,6 +8198,41 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     !/phòng ngủ/.test(rN.body.replies.join("\n")) && !db().t.info_requests.some((x) => x.listing_id === tN[0].id && x.question === "gap" && x.status === "pending")
       && (rN.body.du_roi === true || rN.body.chu_muon_dang === true || rN.body.duyet === true || rN.body.dang_luon === true),
     JSON.stringify({ body: Object.keys(rN.body), du_roi: rN.body.du_roi, rep: rN.body.replies, ir: db().t.info_requests.filter((x) => x.listing_id === tN[0].id).map((x) => [x.question, x.status]) }));
+  // SRS-5.1zzv (bắn lại 13:56): AI KHÔNG trả loai_bds ở câu địa chỉ → tin `chua_ro`, câu treo LOẠI từng nuốt mọi lượt sau (lặp
+  // nguyên văn 5 lần, nuốt "ok đăng đi", không trả lời phí, rơi 4x16). Vẫn không đoán loại bằng luật (ZR-06).
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+  await send({ external_user_id: "rn-4", text: "chào em" });
+  globalThis.__model = { parse: ai(), create: () => "Dạ anh cho em xin địa chỉ nhà mình nha." };
+  await send({ external_user_id: "rn-4", text: "đúng rồi" });
+  globalThis.__model = { parse: ai({ truong: [T("duong", "hẻm 137 Nguyễn Trãi", "hẻm 137 Nguyễn Trãi"), T("quan", "Quận 1", "Q1")] }),
+    create: () => "Chỗ anh ở hẻm Nguyễn Trãi rao được lắm. Nhà mình là nhà phố, nhà cấp 4, hay đất thôi ạ?" };
+  rN = await send({ external_user_id: "rn-4", text: "chỗ anh ở hẻm 137 Nguyễn Trãi, P. Nguyễn Cư Trinh, Q1" });
+  tN = tinCua("rn-4");
+  check("RN-07 AI không ra loại ở câu địa chỉ → tin mở `chua_ro`, câu treo loai_bds",
+    tN.length === 1 && tN[0].property_type === "chua_ro" && db().t.info_requests.some((i) => i.listing_id === tN[0].id && i.question === "loai_bds" && i.status === "pending"),
+    JSON.stringify({ tin: tN.map((t) => [t.property_type, t.location_raw]), ir: db().t.info_requests.filter((i) => tN[0] && i.listing_id === tN[0].id).map((i) => [i.question, i.status]), rep: rN.body.replies }));
+  globalThis.__model = { parse: ai({ truong: [T("ngang", "4", "4x16"), T("dai", "16", "4x16"), T("so_tang", "3", "1 trệt 2 lầu")] }), create: () => "Dạ em chưa rõ lắm ạ." };
+  rN = await send({ external_user_id: "rn-4", text: "4x16, 1 trệt 2 lầu" });
+  let rep7 = rN.body.replies.join("\n");
+  check("RN-07b đang treo loại, '4x16, 1 trệt 2 lầu' (AI vẫn không ra loại) → diện tích VÀO tin; hỏi lại loại bằng câu NGẮN khác, không nguyên văn lần một",
+    (Number(tN[0].area_m2) === 64 || factCua(tN[0].id).some((f) => /^dien_tich/.test(f.question))) && /nhà phố hay nhà cấp 4/.test(rep7) && !/chưa rõ lắm ạ, nhà mình thuộc loại nào ta/.test(rep7),
+    JSON.stringify({ area: tN[0].area_m2, facts: factCua(tN[0].id).map((f) => [f.question, f.answer]), rep: rN.body.replies }));
+  globalThis.__model = { parse: ai({ hoi_lai: { co_hoi: true, cau_hoi: "phí sao em", chu_de: "dich_vu" } }), create: () => "Dạ em chưa rõ lắm ạ." };
+  rN = await send({ external_user_id: "rn-4", text: "phí sao em" });
+  rep7 = rN.body.replies.join("\n");
+  check("RN-07c đang treo loại, 'phí sao em' → trả lời phí (1% giá chốt) TRƯỚC, rồi mới hỏi loại", /1%/.test(rep7) && /nhà phố/.test(rep7), JSON.stringify(rN.body.replies));
+  globalThis.__model = { parse: ai({ y_dinh: { loai: "du_roi", trich_dan: "ok đăng đi" } }), create: () => "Dạ em chưa rõ lắm ạ." };
+  rN = await send({ external_user_id: "rn-4", text: "ok đăng đi" });
+  rep7 = rN.body.replies.join("\n");
+  check("RN-07d đang treo loại, 'ok đăng đi' (AI du_roi) → 'em đăng liền… chỉ còn thiếu loại nhà', không lặp câu hỏi loại",
+    rN.body.dang_luon === true && /đăng liền/.test(rep7) && /loại nhà/.test(rep7) && !/thuộc loại nào ta/.test(rep7)
+      && db().t.info_requests.some((i) => i.listing_id === tN[0].id && i.question === "loai_bds" && i.status === "pending"),
+    JSON.stringify({ body: Object.keys(rN.body), rep: rN.body.replies, ir: db().t.info_requests.filter((i) => i.listing_id === tN[0].id).map((i) => [i.question, i.status]), tin: [tN[0].status, tN[0].chu_duyet_at] }));
+  globalThis.__model = { parse: ai({ truong: [T("loai_bds", "nha_pho", "nhà phố")] }), create: () => "Dạ em ghi rồi anh. Giá anh mong muốn bao nhiêu ạ?" };
+  rN = await send({ external_user_id: "rn-4", text: "nhà phố" });
+  check("RN-07e trả lời 'nhà phố' → tin thành nha_pho, câu loại đóng", tinCua("rn-4")[0]?.property_type === "nha_pho" && !db().t.info_requests.some((i) => i.listing_id === tN[0].id && i.question === "loai_bds" && i.status === "pending"),
+    JSON.stringify({ pt: tinCua("rn-4")[0]?.property_type, rep: rN.body.replies }));
   // AI KHÔNG chạy (công tắc tắt) → luật đỡ: câu có địa chỉ hoặc giá vẫn mở tin.
   fresh(seedKho);
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "tat" };
