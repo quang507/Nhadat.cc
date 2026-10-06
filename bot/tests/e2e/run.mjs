@@ -13,7 +13,7 @@ globalThis.__calls = []; globalThis.__db = new FakeDB();
 // (napCauHinh nhớ tạm 60 s, đọc một lần cho cả run). vi_tri đổi câu để chứng minh bản DB đè bản code.
 // 11/09 (42 ca): câu hỏi địa chỉ LẦN ĐẦU dùng khoá riêng `vi_tri@lan_dau` — đè cả hai để V1.3 vẫn đo đúng "bản DB đè bản code".
 const seedBotPrompts = (d) => { d.insert("bot_prompts", { key: "cau_hoi_mau", content: JSON.stringify({ vi_tri: "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@lan_dau": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@chua_quan": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?" }) });
-globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Cứ nhắn như nhắn bạn, gửi ảnh cũng được, không cần điền form. Anh/chị cần giao bán bất động sản đúng không ạ?" }); }; // 23/09 FR-218 a: bỏ câu "anh Thu phụ trách khu vực" (khớp bot_prompts.loi_chao)
+globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị cần giao bán bất động sản đúng không ạ?" }); }; // 23/09 FR-218 a: bỏ câu "anh Thu phụ trách khu vực" (khớp bot_prompts.loi_chao)
 seedBotPrompts(globalThis.__db);
 // FR-185: ảnh chủ nhà gửi được TẢI VỀ kho — mock fetch trả vài byte JPEG cho host Zalo,
 // mọi URL khác lỗi (chat-reply không được gọi ra ngoài trong bài kiểm).
@@ -8108,8 +8108,8 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
 {
   fresh(seedKho);
   let rG = await send({ external_user_id: "g-moi-1", text: "chào em" });
-  check("AOND-G1 lời chào mời nhắn tự nhiên, gửi ảnh cũng được, không cần điền form",
-    /gửi ảnh/.test(rG.body.reply ?? "") && /không cần điền form/.test(rG.body.reply ?? ""), JSON.stringify(rG.body));
+  check("AOND-G1 lời chào NGẮN hai câu (chủ dự án 06/10 bác vế mời gửi ảnh / không form của AOND), kết bằng câu hỏi vai",
+    !/gửi ảnh|điền form|nhắn như nhắn bạn/.test(rG.body.reply ?? "") && /cần giao bán bất động sản đúng không ạ\?\s*$/.test(rG.body.reply ?? ""), JSON.stringify(rG.body));
   const seedDuyet = (uid, type, code, them = 0) => fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: uid, seller_type: type, name: null, active_listing_id: null }).data;
     for (let i = 0; i < them; i++) {

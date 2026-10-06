@@ -597,8 +597,10 @@ export function docCauHoiMau(json: string | null | undefined): { bang: Record<st
 // khu vực Sài Gòn…" khỏi lời chào (FR-218 a).
 // 27/09/2026 (chủ dự án): câu chào chỉ nhắc BÁN — "{danh xưng} cần giao bán bất động sản đúng không ạ"; chưa biết
 // anh hay chị thì "anh chị"; tên trợ lý vẫn theo từng khách (FR-181). Khách gật ("đúng rồi", "dạ", "ừ") là người bán.
-// 06/10/2026 (SRS-5.1zzs, khớp AOND "không form"): mời nhắn tự nhiên, gửi ảnh cũng được — một câu, không thêm lý do.
-export const LOI_CHAO = `Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Cứ nhắn như nhắn bạn, gửi ảnh cũng được, không cần điền form. Anh/chị cần giao bán bất động sản đúng không ạ?`;
+// 06/10/2026: PR #435 từng chèn "Cứ nhắn như nhắn bạn, gửi ảnh cũng được, không cần điền form" theo AOND; chủ dự án
+// cùng ngày bác ("bot phải chào ngắn như đợt trước") — lời chào giữ HAI câu, không thêm vế mời. Đổi lời chào thì đổi ở đây
+// rồi `bun run prompt --day`.
+export const LOI_CHAO = `Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị cần giao bán bất động sản đúng không ạ?`;
 
 export const RATE_CTV_RUBRIC = `Bạn là QA của AI Ơi Nhà Đất, chấm chất lượng chăm sóc khách của CTV/bot trong một hội thoại Zalo.
 Chấm theo 4 tiêu chí, mỗi tiêu chí 1-5:
