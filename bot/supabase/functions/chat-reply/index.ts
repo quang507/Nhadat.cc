@@ -5970,7 +5970,7 @@ Deno.serve(async (req) => {
         // lấy giá trị ô đã chuẩn hoá của AI (`giaTriChoCauTreo`); câu khác lấy nguyên câu trả lời của AI ("hẻm xe hơi vào tận
         // nhà", "chưa có sổ, đang chờ ra sổ") — DB tự đọc cột từ chữ. Vị trí / phường giữ đường riêng.
         const traLoiAi = cheDoAiTreo === "chinh" && kqAi?.ket && layChoCauTreo && !dapAnTuTinTruoc && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question)
-          ? kiemTraLoiCau(kqAi.traLoi, text, cauBotThat) : null;
+          ? kiemTraLoiCau(kqAi.traLoi, text, cauBotThat, { cauHoi: pendingReq.question, loai: pendingReq.listings?.property_type ?? null }) : null;
         const oAi = kqAi && layChoCauTreo ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
         const dapAnAi0 = CAU_SO_CHAT.has(pendingReq.question) ? oAi : (traLoiAi?.giaTri ?? oAi);
         // 22/09/2026: câu treo VỊ TRÍ — bản luật chứa bản AI mà dài hơn (có số nhà / hẻm) thì lấy luật.

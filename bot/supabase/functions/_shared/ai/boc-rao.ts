@@ -148,8 +148,10 @@ KHOÁ:
 - quan: ghi đủ "Quận 5", "Quận Phú Nhuận", "Huyện Bình Chánh", "TP Thủ Đức". phuong, duong, ma_can. quan / phuong / duong là NƠI CĂN NHÀ
   NẰM — nơi GẦN đó, nơi đi tới, nơi chủ nhà ở / chuyển tới thì KHÔNG đưa ("ra Quận 1 có 5 phút", "gần chợ Bến Thành", "bán vì chuyển qua quận 7").
 - phuong: ĐỌC THEO NGHĨA, không cần chữ "phường / xã" đứng trước — "nhà ở Vĩnh Lộc B", "bên Thảo Điền", "an hoi tay", gõ sai một hai chữ đều là nói phường. Trả tên phường MỚI ĐẦY ĐỦ đúng như DANH SÁCH PHƯỜNG gửi kèm tin nhắn (chỉ gồm các phường câu khách có thể đang nhắc; không có danh sách thì chỉ đưa phuong khi khách nói rõ "phường / xã X") ("Phường An Hội Tây", "Xã Tân Vĩnh Lộc"): khách nói tên CŨ thì đổi sang phường mới theo bảng tên cũ ("Vĩnh Lộc B" → "Xã Tân Vĩnh Lộc", "Thảo Điền" → "Phường An Khánh"); phường cũ bị chia (dấu *) sang nhiều phường mới mà câu không đủ để biết phần nào thì KHÔNG đưa phuong. KHÔNG cắt bớt chữ ("An Hội Tây" ≠ "An Hội"). trich_dan = cụm khách nói nguyên văn ("Vĩnh Lộc B"). Tên trùng tên quận cũ ("gò vấp", "phú nhuận") mà khách không nói "phường" thì là QUẬN. Phường đánh số ("phường 12", "p4") giữ số: "Phường 12".
-- duong (ĐỊA CHỈ ĐẦY ĐỦ, có dấu, như khách nói; ô này hiện dưới tên "vi_tri" trong "Thông tin đang ghi" và cap_nhat — hai tên, MỘT ô): giữ nguyên số nhà và SỐ HẺM ("hẻm 45 Nguyễn Trãi", "hẻm 18/5 đường Cách Mạng Tháng 8",
-  "12/3 Lê Văn Sỹ", "88 hẻm Tân Kỳ Tân Quý"). Quy ước TP.HCM: "137/28 đường số 59" là HẺM 137 của đường số 59, NHÀ SỐ 28 trong hẻm (số
+- duong (ĐỊA CHỈ ĐẦY ĐỦ, có dấu, như khách nói; ô này hiện dưới tên "vi_tri" trong "Thông tin đang ghi" và cap_nhat — hai tên, MỘT ô): giữ nguyên số nhà, SỐ HẺM và ĐÚNG THỨ TỰ CHỮ khách gõ — KHÔNG đảo, KHÔNG sắp xếp lại
+  ("hẻm 45 Nguyễn Trãi" giữ là "hẻm 45 Nguyễn Trãi", không thành "45 hẻm Nguyễn Trãi"; "hẻm 18/5 đường Cách Mạng Tháng 8", "12/3 Lê Văn Sỹ",
+  "88 hẻm Tân Kỳ Tân Quý" là khi khách gõ đúng thứ tự đó). trich_dan của duong là CỤM ĐỊA CHỈ NGUYÊN VĂN trong tin — hệ thống ghi chính cụm
+  đó vào tin, nên trích đủ số nhà + hẻm + tên đường, không trích thừa phường / quận. Quy ước TP.HCM: "137/28 đường số 59" là HẺM 137 của đường số 59, NHÀ SỐ 28 trong hẻm (số
   sau dấu "/" cuối là số nhà; "137/28/5" = nhà 5 trong hẻm 137/28) — ghi "137/28 đường số 59", không đảo số, không bỏ số. KHÔNG ghi BỀ
   RỘNG hẻm vào duong ("hẻm 6m", "4 mét" → do_rong_hem). Tên đường bằng số / mã thì ghi kèm chữ "đường": "đường 3/2", "đường 30/4",
   "đường D2", "đường số 7".
