@@ -168,6 +168,8 @@ import { lechDienTich, phanLoaiAnh, type LoaiAnh } from "../_shared/ai/phan-loai
 import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.ts";
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
+import { canTheoAi } from "../_shared/extraction/kiem-bang-chung.ts";
+import { coMenhDeDaDang, damBaoCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
 import { type ConThieu, dapBaoLauBan, dapHoiVeTin, hoiVeTin, LEGAL_VI, type LoaiHoiTin, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
 import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
@@ -2428,7 +2430,8 @@ Deno.serve(async (req) => {
       const k = await bongAi;
       if (!laCheDoAi || !k?.ket) return undefined;
       const coDuLieu = k.truong.length > 0 || k.kienThuc.length > 0 || !!k.traLoi?.co_tra_loi || (k.capNhat?.length ?? 0) > 0;
-      return docHoiLai(k.hoiLai, tinKiem, coDuLieu);
+      // SRS-5.1zzo: khách TỰ NÓI VAI trong tin (qua `docVai`) → câu đó là lời tự giới thiệu, không phải câu hỏi về bot.
+      return docHoiLai(k.hoiLai, tinKiem, coDuLieu, !!docVai(k.vai, tinKiem));
     };
     // 01/10/2026 (chủ dự án: "nó có nhận ra cảm xúc của khách để báo về admin ko" → "sửa cả 4 đi"): AI đọc giọng chủ nhà
     // (`cam_xuc`, đọc theo nghĩa, có ngữ cảnh), code kiểm trích dẫn (`docCamXuc`). Bực / nghi ngờ / muốn dừng → việc
@@ -2990,6 +2993,17 @@ Deno.serve(async (req) => {
         // Model lỡ chép nguyên chữ giữ chỗ của khối nhớ tạm → thay bằng tên thật.
         .map((r) => r.split(TEN_GIU_CHO).join(tenBot).trim()).filter(Boolean);
       const mocVan = theoDoiVan(soVan, () => sach);
+      // 06/10/2026 (bắn thử thu-srd-b1, SRS-5.1zzo): "Tin căn Trần Phú của anh đang rao" khi người này KHÔNG còn tin nào mở (căn
+      // duy nhất vừa ẩn, căn Trần Phú chưa từng được mở). Lớp lỗi: lời khẳng định TRẠNG THÁI TIN do model (hay câu tiền định) viết
+      // mà không đối chiếu DB — `boHuaDaDang` trước chỉ áp ở r2 khi tin chưa lên kệ, r3 (chăm sóc) không qua. Đây là đường ra DUY
+      // NHẤT của nhánh bán nên lưới đặt ở đây, luôn bật: lời có mệnh đề "đã đăng / đang rao / lên kệ" → đọc số tin còn mở (một
+      // truy vấn, CHỈ khi lời có mệnh đề đó) → không còn tin mở thì mọi khẳng định như vậy là sai, bỏ mệnh đề.
+      if (coMenhDeDaDang(sach)) {
+        const { count: soTinMo, error: tmErr } = await client.from("listings").select("id", { count: "exact", head: true })
+          .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"]);
+        if (tmErr) await ghiLoi(client, "chat-reply dem tin mo(trang thai)", tmErr.message);
+        else if ((soTinMo ?? 0) === 0) { sach = boHuaDaDang(sach); mocVan("boHuaDaDang(khong_tin_mo)"); }
+      }
       // 23/09/2026 (FR-218 b): khách nói bot hiểu / ghi nhầm mà không câu nào xin lỗi → chèn lời xin lỗi (trước đổi xưng hô).
       if (luatDu) sach = themXinLoiKhiHieuNham(text, sach, goiNguoi); mocVan("themXinLoiKhiHieuNham");
       // 30/09/2026 (chủ dự án chat thử): "Mình cho mình xin địa chỉ" (bot tự xưng "mình"), "vị trí khá thuận tiện" (khen suông).
@@ -3347,8 +3361,8 @@ Deno.serve(async (req) => {
         if (xErr) await ghiLoi(client, "chat-reply xin doi nhan", xErr.message);
       }
       thongBaoNhan = xinDoiNhan === "nmg"
-        ? "Dạ em ghi nhận anh/chị là môi giới, em đã báo bên quản lý cập nhật lại (phí bán 0,5% khi giao dịch thành công) nha."
-        : "Dạ em ghi nhận anh/chị là chính chủ, em đã báo bên quản lý cập nhật lại (phí bán 1% khi giao dịch thành công) nha.";
+        ? `Dạ em ghi nhận ${cachGoi} là môi giới, em đã báo bên quản lý cập nhật lại (phí bán 0,5% khi giao dịch thành công) nha.`
+        : `Dạ em ghi nhận ${cachGoi} là chính chủ, em đã báo bên quản lý cập nhật lại (phí bán 1% khi giao dịch thành công) nha.`;
     }
     };
 
@@ -4383,7 +4397,17 @@ Deno.serve(async (req) => {
         }
       }
     }
-    const nhieuCanTrongTin = nhanDienNhieuCan(text);
+    let nhieuCanTrongTin = nhanDienNhieuCan(text);
+    // 06/10/2026 (bắn thử thu-srd-b1, SRS-5.1zzo): cổng "tin có nhiều căn" từng do regex quyết — "căn 1 …, 4x12, 6.9 tỷ; căn 2 …"
+    // cắt theo dấu phẩy nên không thấy căn nào, trong khi AI đã trả `so_can = 2` và đánh số `can`. Chế độ `ai`: AI đọc ra ≥ 2 căn
+    // có đánh số → chia theo AI (`canTheoAi`); regex chỉ đỡ khi AI không chạy / không đánh số.
+    if (nhieuCanTrongTin.length < 2 && laCheDoAi && bongAi) {
+      const k = await bongAi;
+      if (k?.ket) {
+        const tuAi = canTheoAi(textBongAi, kiemDeXuat(k.truong, textBongAi).dat, (k.ket as { so_can?: number }).so_can ?? null);
+        if (tuAi.length >= 2) { console.log(`chat-reply: AI đọc ${tuAi.length} căn, regex ${nhieuCanTrongTin.length} — chia theo AI`); nhieuCanTrongTin = tuAi; }
+      }
+    }
     // ─── 15/09/2026 (bắn thật N2): người rao nhiều căn nói FACT theo số thứ tự — "căn 2 sổ
     // hồng riêng, có thương lượng. căn 1 đúc 3 tấm". Trước đây câu này mở thêm 2 tin RỖNG.
     // Nay: mỗi mảnh "căn N …" ghi fact vào căn thứ N (theo thứ tự mở); mảnh nào trả lời
@@ -6416,6 +6440,8 @@ Deno.serve(async (req) => {
             if (hoiLai && (await loiBotDu()) && pendingReq.listings?.property_type === "chung_cu") hoiLai = goiCanHo(hoiLai); mocR2b("goiCanHo");
             if (hoiLai && (await loiBotDu()) && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) hoiLai = goiDat(hoiLai); mocR2b("goiDat");
             if (hoiLai) hoiLai = boHuaHoiChuNha([hoiLai])[0]?.trim() || null; mocR2b("boHuaHoiChuNha");
+            // SRS-5.1zzo: lượt hỏi LẠI mà model không hỏi → nối câu mẫu của ô đang treo (ô vẫn mở, phải có câu hỏi đi kèm).
+            if (hoiLai) hoiLai = damBaoCauHoi(hoiLai, cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)); mocR2b("damBaoCauHoi");
             // 27/09/2026 (test Zalo): hỏi lại câu đứng tên thành "cho em xin tên người đứng tên trên sổ" → câu mẫu (hỏi quan hệ).
             if (hoiLai) hoiLai = giuVeCauMau(hoiLai, pendingReq.question,
               cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal));
@@ -6959,6 +6985,15 @@ Deno.serve(async (req) => {
           if (sellerReply && (cauDuongKe ?? cauXnKe ?? cauLungKe ?? goiYKe)) {
             sellerReply = `${sellerReply.replace(/[^.!?]*\?\s*$/u, "").trim()} ${cauDuongKe ?? cauXnKe ?? cauLungKe ?? goiYKe}`.trim(); mocR2("gheCauXacNhanCode");
           }
+          // 06/10/2026 (bắn thử thu-srd-a1, SRS-5.1zzo): model trả "Dạ em cảm ơn anh." KHÔNG hỏi gì trong lúc code mở ô chờ cho câu
+          // kế (hoặc mở lại ô giá vì tin thiếu điểm). Ô mở mà không ai hỏi → khách im, lượt sau rơi sai ô. Lưới ghi đúng ô (luôn bật):
+          // không có câu hỏi thì nối câu hỏi của ô đã mở.
+          if (sellerReply) {
+            sellerReply = damBaoCauHoi(sellerReply, nextKey
+              ? `${neo ? `Căn ${neo} nha. ` : ""}${cauKe}`
+              : thieuDiem.length ? (thieuDiem[0].startsWith("giá") ? cauHoiMau("gia", cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw) : `Để tin đủ điều kiện đăng, ${cachGoi} cho em hỏi thêm ${thieuDiem[0]} nha?`)
+              : null); mocR2("damBaoCauHoi");
+          }
           await doTien(client, r2.usage);
         } catch (e) {
           await ghiLoi(client, "chat-reply model r2(seller)", e);
@@ -7463,7 +7498,9 @@ Deno.serve(async (req) => {
             if (raoReply && !cauXacNhanDau && firstKey && cauHoiDau) raoReply = thayCauHoiLech(raoReply, firstKey, cauHoiDau); mocR1("thayCauHoiLech");
             // 27/09/2026 (bắn thật lx-38, FR-232): câu hỏi ĐẦU sau câu rao là câu sổ gộp mà model rút còn "Sổ nhà mình riêng
             // hay chung ạ?" (lời dặn "đừng gắn thêm ý khác") → mất hai ô đứng tên / thế chấp. Thiếu vế bắt buộc → câu mẫu.
-            if (raoReply && !cauXacNhanDau && firstKey && cauHoiDau) raoReply = giuVeCauMau(raoReply, firstKey, cauHoiDau); mocR1("giuVeCauMau");            await doTien(client, r1.usage);
+            if (raoReply && !cauXacNhanDau && firstKey && cauHoiDau) raoReply = giuVeCauMau(raoReply, firstKey, cauHoiDau); mocR1("giuVeCauMau");
+            // SRS-5.1zzo: ô chờ `firstKey` sắp mở — lời model không hỏi thì nối câu hỏi của ô đó (câu xác nhận code tra ra đã gửi riêng).
+            if (raoReply && !cauXacNhanDau && firstKey && cauHoiDau) raoReply = damBaoCauHoi(raoReply, cauHoiDau); mocR1("damBaoCauHoi");            await doTien(client, r1.usage);
           } catch (e) {
             await ghiLoi(client, "chat-reply model r1(seller)", e);
           }
@@ -7590,9 +7627,11 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 06/10/2026 (bắn thử thu-srd-b1, SRS-5.1zzo): danh sách này từng lấy MỌI tin của người bán, kể cả tin đã ẩn / đã chốt →
+    // khối "đang rao các tin" kể cả căn vừa ngưng, model nói "tin của anh đang rao". Chỉ tin còn MỞ; không có thì nói thẳng.
     const { data: sellerLst } = await client.from("listings")
       .select("code, location_raw, ward, price_raw")
-      .eq("seller_id", sellerRow.id)
+      .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"])
       .order("created_at", { ascending: false }).limit(5);
     const lstLines = (sellerLst ?? [])
       .map((l) => `${l.location_raw ?? "(chưa rõ địa chỉ)"} ${l.ward ?? ""} · ${l.price_raw ?? "?"}`)
@@ -7608,7 +7647,7 @@ Deno.serve(async (req) => {
           messages: [{
             role: "user",
             content:
-              `${boiCanh}NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(chưa có tin đang rao)"}\n\n` +
+              `${boiCanh}NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(KHÔNG CÓ tin nào đang rao — không nói tin nào đang rao / đã đăng / có khách; họ nhắc một căn thì nói thật em chưa có thông tin căn đó và xin địa chỉ, diện tích, giá để mở tin)"}\n\n` +
               (sellerMoi
                 // 27/09/2026 (chủ dự án test Zalo: "Chào em" → câu chào hỏi vai → "Anh bán" → bot "Dạ em chào anh! Anh muốn
                 // rao bán hay cho thuê ạ?"): đã chào ở tin trước thì KHÔNG chào lại; khách đã nói bán / cho thuê thì không hỏi lại.

@@ -422,6 +422,10 @@ Nguyên tắc: **model tự đặt câu, hệ thống chỉ đưa Ý** (dòng `C
 
 Mọi van đổi lời đều vào sổ `van_kich` (trước / sau); view `van_kich_7_ngay` trên DB cho biết van nào kích bao nhiêu lần — đo rồi mới quyết bỏ. Muốn sửa giọng thì sửa `TONE_RULES` / `SELLER_FEWSHOT`, không bật lại van.
 
+### Giọng demo AOND có quy định không? — 06/10/2026 (SRS-5.1zzo)
+
+Có, chỉ bằng prompt (`prompts.py build_chat_system`): ~30 từ, khen điểm mạnh THẬT trước rồi hỏi đúng 1 thông tin, xưng "em" gọi "anh/chị", trung thực (chỉ dùng điều khách nói + kiến thức dự án đã có, đoán thì "hình như là"), viết trọn vẹn không bỏ lửng; bản nháp mở "Em sẽ rao như vầy nhé:" kết "Anh thấy hấp dẫn chưa ạ?", chưa nhắc phí. `engine.py` không có van sửa văn. nhadat.cc đã chép các ý đó vào `TONE_RULES` / `SELLER_SCRIPT_RULES` (05/10) và tắt van sửa văn (06/10). Lời model còn lệch ("không rush", đọc lại "giá 10 tỷ có thương lượng") → sửa PROMPT (thêm ví dụ SAI / ĐÚNG, cấm chen tiếng Anh), không thêm van. Bốn lỗi khác của lượt bắn thử 06/10 là lỗi CƠ CHẾ (ô chờ không có câu hỏi, cổng nhiều căn, "khách hỏi" không bằng chứng, trạng thái tin không đối chiếu DB) — bảng ở `docs/07 SRS-5.1zzo`.
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |

@@ -1296,13 +1296,19 @@ const DA_DANG_RE = /\b(?:da|vua)\s+tao\s+(?:tin|bai)\b|\btao\s+tin\s+(?:roi|xong
 // ngay cũng sai như nói "đã đăng". Câu có điều kiện ("nhắn em mấy thông tin đó LÀ em đăng liền") vẫn giữ.
 // 03/10/2026 (bắn thử thu-dc-09, SRS-5.1zj): "Chào mình! Tin đã lên rồi nha." khi tin còn chờ thông tin — chủ ngữ "tin" ĐỨNG
 // TRƯỚC ("tin đã lên", "tin vừa đăng") lọt luật cũ (chỉ bắt "đã lên web / kệ / tin").
+/** Lời có mệnh đề KHẲNG ĐỊNH trạng thái tin (đã đăng / đang rao / lên kệ…) — để nơi gọi quyết có cần đối chiếu DB không. */
+export function coMenhDeDaDang(replies: string[]): boolean {
+  return replies.some((r) => !/^\s*(?:🤖|💾|📝|📋)/u.test(r) &&
+    r.split(/\n|(?<=[.!?…])\s+|,\s+/).some((md) => !/\?/.test(md) && DA_DANG_RE.test(boDau(md)) && !/\b(?:chua|khong)\b/.test(boDau(md))));
+}
 export function boHuaDaDang(replies: string[]): string[] {
   const ra: string[] = [];
   for (const r of replies) {
     if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) { ra.push(r); continue; }
     // ":)" / emoji cũng là chỗ ngắt câu trong tin Zalo ("… rồi :) Em tra thấy …").
     const dong = r.split("\n").map((d) => tachCau(d).flatMap((c) => c.split(/(?<=:\)|:D|=\)|\p{Extended_Pictographic})\s+/u)).map((c) => {
-      const laSai = (md: string) => !/\?/.test(md) && DA_DANG_RE.test(boDau(md)) && !/\bchua\b/.test(boDau(md));
+      // 06/10/2026 (SRS-5.1zzo): vế phủ định ("không thấy tin nào đang rao") là lời thật, giữ như vế "chưa".
+      const laSai = (md: string) => !/\?/.test(md) && DA_DANG_RE.test(boDau(md)) && !/\b(?:chua|khong)\b/.test(boDau(md));
       const cacMd = c.split(/,\s+/);
       const giu = cacMd.filter((md) => !laSai(md));
       if (giu.length === cacMd.length) return c;
@@ -1653,4 +1659,27 @@ export function boCauNhanXet(loi: string | null | undefined, cauBo: string[]): s
   }
   if (!s || !/[\p{L}\d]/u.test(s)) return null;
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ─── 06/10/2026 (bắn thử thu-srd-a1, SRS-5.1zzo) ─────────────────────────────────────────────────────────────────────────
+// Lớp lỗi "MỞ Ô CHỜ MÀ KHÔNG HỎI": code chọn ý cần hỏi kế (nextKey / thiếu điểm), mở `info_requests` cho ô đó, nhưng câu hỏi
+// giao cho model viết — model trả "Dạ em cảm ơn anh." (không hỏi) thì ô chờ vẫn mở, khách im, lượt sau câu trả lời rơi vào ô
+// không ai hỏi. Các van cũ chỉ bắt câu hỏi LỆCH khoá (`laHoiLechKhoa`) hay rút vế (`giuVeCauMau`), không bắt "không có câu hỏi".
+// Đây là lưới GHI ĐÚNG Ô (luôn bật, không treo `luat_loi_bot`): lời model không có câu hỏi → nối câu hỏi của ô đã mở.
+// Câu hỏi không dấu "?" kiểu Zalo: từ để hỏi nằm trong ~20 chữ cuối ("nhà mình mấy tầng rồi anh", "sổ riêng hay chung ạ").
+const DUOI_HOI_RE = /\b(?:khong|chua|nao|gi|sao|bao nhieu|may|ha|hong|ko|dc|duoc|hay)\b[^.!?…]{0,20}[.!…]?\s*$/;
+export function coCauHoi(reply: string | null | undefined): boolean {
+  const s = (reply ?? "").trim();
+  if (!s) return false;
+  if (/\?/.test(s)) return true;
+  return DUOI_HOI_RE.test(boDau(s.split("\n").at(-1) ?? ""));
+}
+/** Lời model không hỏi gì mà ô chờ `cauHoi` đã/đang mở → nối câu hỏi đó vào cuối. Không có ô chờ (`cauHoi` rỗng) thì giữ nguyên. */
+export function damBaoCauHoi(reply: string | null | undefined, cauHoi: string | null | undefined): string | null {
+  const s = (reply ?? "").trim();
+  const q = (cauHoi ?? "").trim();
+  if (!q) return s || null;
+  if (!s) return q;
+  if (coCauHoi(s)) return s;
+  return `${s.replace(/(?<![.!?…])$/u, ".")} ${q}`.replace(/\s+/g, " ").trim();
 }

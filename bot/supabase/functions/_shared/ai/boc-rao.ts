@@ -45,7 +45,7 @@ const XacNhan = z.object({
 // "giá khu này giờ sao" bị đáp giá rao). AI đọc mọi tin rồi, nên AI nói luôn: có hỏi không, hỏi gì, chủ đề gì.
 export const CHU_DE_HOI = ["tin_cua_minh", "dich_vu", "thi_truong", "ve_bot", "nguon", "du_an", "khac"] as const;
 const HoiLai = z.object({
-  co_hoi: z.boolean().describe("Tin có câu chủ nhà HỎI bot / bên mình không — đọc theo NGHĨA, kể cả không dấu hỏi, gõ tắt, không dấu ('bao lâu thì bán được em', 'giá khu này giờ sao', 'khu này dễ bán hông em', 'ký hợp đồng gì không em', 'phi ben minh sao'). Chỉ trả lời câu bot hỏi, kể chuyện, chào, cảm ơn → false."),
+  co_hoi: z.boolean().describe("Tin có câu chủ nhà HỎI bot / bên mình không — đọc theo NGHĨA, kể cả không dấu hỏi, gõ tắt, không dấu ('bao lâu thì bán được em', 'giá khu này giờ sao', 'khu này dễ bán hông em', 'ký hợp đồng gì không em', 'phi ben minh sao'). Chỉ trả lời câu bot hỏi, kể chuyện, chào, cảm ơn → false. Khách TỰ GIỚI THIỆU mình là ai ('anh là môi giới nha', 'chị là chủ nhà', 'bên anh là sàn') là KHẲNG ĐỊNH về chính khách, không phải câu hỏi → false (ghi vào `vai`)."),
   cau_hoi: z.string().nullable().describe("Câu hỏi đó COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ — không bao giờ chép câu bot vừa hỏi. co_hoi = false thì null."),
   chu_de: z.enum(CHU_DE_HOI).nullable().describe("tin_cua_minh = hỏi về chính căn mình đã rao (giá / diện tích đã ghi, đăng chưa, có khách chưa); dich_vu = phí, hợp đồng, độc quyền, cách làm việc, bao lâu bán được, ai xem tin, có dẫn khách không; thi_truong = giá khu vực, khu này dễ bán không, nên rao giá nào; ve_bot = bot là ai, người hay máy, công ty nào; nguon = hỏi bot SAO BIẾT / LẤY ĐÂU RA một điều bot vừa nói ('sao em biết nhà 4-6 tầng', 'ai nói em vậy', 'em lấy đâu ra số đó') — KHÔNG phải ve_bot; du_an = hỏi bên mình có BIẾT / biết gì về một DỰ ÁN, khu, toà nhà, chung cư cụ thể ('em biết dự án ny'ah phú định không', 'và dự án vinhome grand park', 'khu X thế nào em') — không phải căn đang rao; khac = còn lại. co_hoi = false thì null."),
 });
@@ -68,7 +68,7 @@ const YDinh = z.object({
 });
 export const VAI_NGUOI_RAO = ["khong_noi", "chinh_chu", "moi_gioi"] as const;
 const Vai = z.object({
-  la: z.enum(VAI_NGUOI_RAO).describe("Người nhắn TỰ NÓI mình là ai: chinh_chu = chủ nhà / nhà của mình / không phải môi giới; moi_gioi = tự nhận là môi giới, sale, bán giúp chủ, nhận ký gửi. Nhắc tới môi giới KHÁC ('mấy bên môi giới hối chị'), hỏi về môi giới → khong_noi."),
+  la: z.enum(VAI_NGUOI_RAO).describe("Người nhắn TỰ NÓI mình là ai: chinh_chu = chủ nhà / nhà của mình / không phải môi giới; moi_gioi = tự nhận là môi giới, sale, bán giúp chủ, nhận ký gửi ('anh là môi giới nha', 'em bên sàn X', 'mình làm sale', 'hàng ký gửi của khách') — câu tự giới thiệu kết bằng 'nha/nhé/ạ' vẫn là tự nói vai. Nhắc tới môi giới KHÁC ('mấy bên môi giới hối chị'), hỏi về môi giới → khong_noi."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN người nhắn tự nói vai mình. khong_noi thì null."),
 });
 // 02/10/2026 (test tay chủ dự án, SRS-5.1ze): "Ừ anh đang muốn bán căn nhà…" → bot gọi "anh chị" suốt hội thoại: luật tự xưng
