@@ -410,6 +410,18 @@ Nguyên tắc: **model tự đặt câu, hệ thống chỉ đưa Ý** (dòng `C
 | `CAU_TIEN_DINH` | `nhap_tieu_de` "Em sẽ rao như vầy nhé", `nhap_hoi_duyet` "thấy hấp dẫn chưa ạ?", thêm `dang_xong_phi` | Thân bản nháp máy dựng (09/09: như tin rao thật, không bịa); điểm, trạng thái là số máy điền |
 | Van sửa văn | `boCauNoiHeThong`, `boCauTroNguocDauBong` theo `luat_loi_bot` (gọn = tắt) | Van chống bịa, lời hứa, xưng hô, một câu hỏi: luôn chạy |
 
+### Van sửa lời theo công tắc — 06/10/2026 (SRS-5.1zzn)
+
+[nguồn: chủ dự án 06/10/2026 — "xem lại luật sửa giọng… nên sửa giống AOND ko" → "Làm bước 1 và 2 đi"]. Demo AOND không có lớp sửa văn nào sau lời model. Hệ thống giữ nguyên tắc đó cho GIỌNG, giữ lưới cho AN TOÀN:
+
+| Nhóm van (`van-tra-loi.ts`) | `luat_loi_bot` = `gon` (mặc định) | `du` |
+|---|---|---|
+| An toàn: che liên hệ, không nhận là người, chặn bịa tiền / m² / căn / tên / vị trí / đặc điểm, lời hứa (gửi hình, đã đăng, tự kiểm tra, hỏi chủ), khen không căn cứ, nói "đã ghi" khi không ghi | chạy | chạy |
+| Ghi đúng ô: một câu hỏi mỗi lượt, câu lệch khoá → câu mẫu, không hỏi lại ô đã có, hoàn công, gấp theo deal, mã tin không đọc cho khách, cách gọi ĐÃ BIẾT áp lên câu tiền định | chạy | chạy |
+| Sửa văn: gạch dài, gạch chéo "anh/chị", bot xưng "mình", đoán giới cuối câu, câu ghi nhận trùng, câu lặp giữa hai lượt, khen (vị trí / thị trường / ngược nghĩa / lặp), "hệ thống", chào lại, hỏi mục đích, gọi "căn hộ / lô đất", thêm câu xin lỗi | **tắt** — prompt đã dặn, model tự lo | chạy |
+
+Mọi van đổi lời đều vào sổ `van_kich` (trước / sau); view `van_kich_7_ngay` trên DB cho biết van nào kích bao nhiêu lần — đo rồi mới quyết bỏ. Muốn sửa giọng thì sửa `TONE_RULES` / `SELLER_FEWSHOT`, không bật lại van.
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |

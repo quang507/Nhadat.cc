@@ -355,10 +355,10 @@ check("TOIUU-01 người lạ hỏi vai ≤ 12 truy vấn (v43: 18; +1 trần c�
 v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
 console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
 // 23/09/2026: +1 — câu đầu đủ khu vực + giá nay LỌC KHO ngay (trước chỉ hứa "em lọc kho liền" rồi im).
-check("TOIUU-02 người mua lượt đầu ≤ 23 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc; +1 FR-248 b tìm căn gần ngân sách, CHỈ khi kho trống vì giá — ca này 'tầm 5 tỷ' ≤ 5,75 tỷ mà căn phường 4 là 5,8 tỷ; +1 SRS-5.1y đọc công tắc tro_ly — không nhớ tạm để bật/tắt có hiệu lực lượt kế)", v.n <= 24, `${v.n}`);
+check("TOIUU-02 người mua lượt đầu ≤ 25 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc; +1 FR-248 b tìm căn gần ngân sách, CHỈ khi kho trống vì giá — ca này 'tầm 5 tỷ' ≤ 5,75 tỷ mà căn phường 4 là 5,8 tỷ; +1 SRS-5.1y đọc công tắc tro_ly — không nhớ tạm để bật/tắt có hiệu lực lượt kế; +1 06/10 SRS-5.1zzn đọc công tắc luat_loi_bot ở nhánh mua; +1 ghi sổ van_kich, CHỈ khi có van đổi lời — mock chạy `du` nên có)", v.n <= 26, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
 console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
-check("TOIUU-03 người mua có hồ sơ ≤ 18 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖; +1 SRS-5.1y đọc công tắc tro_ly)", v.n <= 19, `${v.n}`);
+check("TOIUU-03 người mua có hồ sơ ≤ 20 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖; +1 SRS-5.1y đọc công tắc tro_ly; +1 06/10 SRS-5.1zzn công tắc luat_loi_bot; +1 ghi sổ van_kich khi có van đổi lời)", v.n <= 21, `${v.n}`);
 check("TOIUU-04 follow-up FR-32 đi qua RPC tao_followup, không đếm/tra/chèn tay", db().log.some((l) => l.rpc === "tao_followup") && db().t.reminders.some((x) => x.kind === "followup"));
 check("TOIUU-05 bot_prompts chỉ đọc MỘT lần cho cả ba lượt (nhớ tạm 60 s)", db().log.filter((l) => l.table === "bot_prompts").length <= 1, String(db().log.filter((l) => l.table === "bot_prompts").length));
 check("TOIUU-06 loạt bong bóng bot vào sổ bằng MỘT câu INSERT mảng", db().log.some((l) => l.table === "messages" && l.op === "insert" && Array.isArray(l.payload)));
@@ -3912,6 +3912,35 @@ fresh(seedKho);
     const noi = rL.body.replies.filter((x) => !/^(🤖|💾|📝|📋|👤)/u.test(x)).join(" | ");
     check(`LUAT-GON-${cheDo} luat_loi_bot=${cheDo} → câu 'khách mua … hỏi nhiều lắm' ${conCau ? "GIỮ (để AI quyết)" : "bị cắt"}`,
       /hỏi nhà phố nhiều lắm/.test(noi) === conCau && /xin địa chỉ/.test(noi), noi);
+    globalThis.__model.create = undefined;
+    globalThis.__cauHinh = cuCH;
+  }
+  // 06/10/2026 (SRS-5.1zzn, chủ dự án "làm bước 1 và 2"): `gon` nay tắt TOÀN BỘ van SỬA VĂN (gạch dài, gạch chéo, "mình", câu ghi
+  // nhận trùng, lặp, khen, chào lại…), chỉ còn lưới an toàn + ghi đúng ô; mọi van đổi lời đều vào sổ `van_kich` (trước / sau).
+  for (const [cheDo, giuNguyen] of [["gon", true], ["du", false]]) {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", luat_loi_bot: cheDo };
+    const cau = "Dạ em ghi nhận ạ — anh/chị cho mình xin địa chỉ nhà nha?";
+    globalThis.__model.parse = (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT({ replies: [cau] });
+    globalThis.__model.create = () => cau;
+    const rV = await send({ external_user_id: `van-${cheDo}`, text: "em cần bán nhà" });
+    const noi = rV.body.replies.filter((x) => !/^(🤖|💾|📝|📋|👤)/u.test(x)).join(" | ");
+    const vk = rV.body.van_kich ?? [];
+    const dongVk = db().t.van_kich ?? [];
+    if (giuNguyen) {
+      check("VAN-01 luat_loi_bot=gon: gạch dài, 'anh/chị', 'cho mình xin' của model GIỮ NGUYÊN (van sửa văn tắt, model tự lo)",
+        /—/.test(noi) && /anh\/chị/.test(noi) && /cho mình xin/.test(noi), noi);
+      check("VAN-02 gon: sổ van KHÔNG có boGachDai / boGachCheo / botXungEm (không chạy thì không ghi)",
+        !vk.some((v) => /boGachDai|boGachCheo|botXungEm/.test(v)), JSON.stringify(vk));
+    } else {
+      check("VAN-03 luat_loi_bot=du: ba lỗi đó bị sửa như cũ (bật lại ở Table Editor, không cần deploy)",
+        !/—/.test(noi) && !/anh\/chị/.test(noi) && !/cho mình xin/.test(noi), noi);
+      check("VAN-04 du: body.van_kich có boGachDai, boGachCheo, botXungEm; bảng van_kich có dòng nhánh ban, trước ≠ sau, có conversation_id",
+        ["boGachDai", "boGachCheo", "botXungEm"].every((v) => vk.includes(v))
+          && dongVk.some((d) => d.nhanh === "ban" && d.van === "boGachDai" && d.truoc !== d.sau && d.conversation_id),
+        JSON.stringify({ vk, n: dongVk.length, mau: dongVk[0] }));
+    }
     globalThis.__model.create = undefined;
     globalThis.__cauHinh = cuCH;
   }

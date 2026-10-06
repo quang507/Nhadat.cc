@@ -59,7 +59,7 @@ export class FakeDB {
     for (const n of ["sellers","buyers","conversations","messages","listings","listing_facts","info_requests",
       "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log",
       "ctvs","admins","interests","ratings","inbound_events","listing_media","app_config",
-      "du_an_can","du_an_tai_lieu"]) this.t[n] = []; // SRS-5.1zzj: kho căn dự án + tài liệu
+      "du_an_can","du_an_tai_lieu","van_kich"]) this.t[n] = []; // SRS-5.1zzj: kho căn dự án + tài liệu; SRS-5.1zzn: sổ van
     this.seq = 0; this.log = [];
     // FR-185: kho file giả — chat-reply cất ảnh chủ nhà gửi vào Storage.
     this.storage = [];
