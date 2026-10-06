@@ -1,4 +1,5 @@
 import { FakeDB, napPhuongCuThat, napPhuongThat } from "./mock-supabase.mjs";
+import { laNgungHangLoat as laNgungHangLoatLuat } from "../../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { OUT } from "./mock-anthropic.mjs";
 import { LOI_CHAO, tenTroLy } from "../../supabase/functions/_shared/prompts.ts";
 import { createHash as bamSha } from "node:crypto";
@@ -986,7 +987,7 @@ fresh(seedKho);
   fresh();
   r = await send({ external_user_id: "la-20", text: "bán nhà ở trần bình trọng q5" });
   check("G7 chủ MỘT căn: câu lệnh nói không nhắc mã tin; bong bóng nhãn KHÔNG kèm phí",
-    createCalls().some((c) => /KHÔNG nhắc mã tin/.test(prompt(c))) && !r.body.replies.some((x) => /1%|0,5%/.test(x)),
+    createCalls().some((c) => /CẦN HỎI:/.test(prompt(c)) && !/rao nhiều căn/.test(prompt(c))) && !r.body.replies.some((x) => /1%|0,5%/.test(x)),
     JSON.stringify({ replies: r.body.replies, p: prompt(createCalls().at(-1)) }));
 }
 
@@ -1008,7 +1009,7 @@ fresh(seedKho);
   // (priority 21); câu kế sau kết cấu là HẺM, không phải phòng ngủ.
   check("H2 trả lời kết cấu → ghi fact, câu kế là HẺM — phòng ngủ để sau (FR-241), không nhảy sang pháp lý",
     fact("ket_cau") && pend("do_rong_hem") && !pend("so_phong_ngu") && !pend("phap_ly"), JSON.stringify(db().t.info_requests));
-  check("H2 câu lệnh model: chưa khen gần đây → CHỈ khen khi thật đáng nói (18/09: lâu lâu mới khen), không đọc lại số (24/09)", /CHỈ khi chủ nhà vừa nói điều thật đáng nói với khách mua/.test(prompt(createCalls().at(-1))) && /KHÔNG đọc lại số liệu/.test(prompt(createCalls().at(-1))) && !/gộp thêm một ý/.test(prompt(createCalls().at(-1))) && !/KHÔNG khen, KHÔNG nhận xét/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
+  check("H2 câu lệnh model: chưa khen gần đây → CHỈ khen khi thật đáng nói (18/09: lâu lâu mới khen), không đọc lại số (24/09)", !/không khen \(mấy tin gần đây/.test(prompt(createCalls().at(-1))) && /không đọc lại số liệu/.test(prompt(createCalls().at(-1))) && !/gộp thêm một ý/.test(prompt(createCalls().at(-1))) && !/KHÔNG khen, KHÔNG nhận xét/.test(prompt(createCalls().at(-1))), prompt(createCalls().at(-1)));
   r = await send({ external_user_id: "h-1", text: "sổ hồng riêng rồi em" });
   // FR-234 (28/09): nói sang ô khác → ghi ô đó, KHÔNG hỏi lại câu đang hỏi (ô không phải ô lõi).
   check("H3 hỏi hẻm, trả lời pháp lý → VẪN GHI phap_ly, câu hẻm thôi, KHÔNG hỏi lại (FR-234)",
@@ -1072,14 +1073,14 @@ fresh(seedKho);
   r = await quaPhapLy("h-1", r);
   const nhap = r.body.replies.join("\n");
   check("H5 đủ chuyên môn + ≥70 điểm → gửi BẢN NHÁP TIN (tiền định, không model), mở câu chờ duyet_tin, tin CHƯA lên kệ",
-    r.body.ban_nhap === true && r.body.diem >= 70 && /Em đăng tin như vầy/.test(nhap) && /5 tỷ 8/.test(nhap) &&
+    r.body.ban_nhap === true && r.body.diem >= 70 && /Em sẽ rao như vầy/.test(nhap) && /5 tỷ 8/.test(nhap) &&
       // 24/09/2026 (chủ dự án): câu cuối bản nháp = "👉 Có khách quan tâm là <tên trợ lý> báo lại <cách gọi> liền ạ.", đứng SAU CÙNG.
-      !/nhắn Zalo cho em/.test(nhap) && /\n👉 Có khách quan tâm là \S*•ai báo lại .+ liền ạ\.$/.test(r.body.replies.find((x) => /Em đăng tin như vầy/.test(x)) ?? "") && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em đăng tin như vầy/.test(prompt(c))) &&
+      !/nhắn Zalo cho em/.test(nhap) && /\n👉 Có khách quan tâm là \S*•ai báo lại .+ liền ạ\.$/.test(r.body.replies.find((x) => /Em sẽ rao như vầy/.test(x)) ?? "") && !/#BDS/.test(nhap) && !/\d{3,}\s*\d{3}\s*\d{3}/.test(nhap) && !createCalls().some((c) => /Em sẽ rao như vầy/.test(prompt(c))) &&
       pend("duyet_tin") && H.status === "cho_thong_tin",
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "à giá 6 tỷ nha" });
   check("H6 chủ sửa giá lúc đang duyệt → ghi giá mới, GỬI LẠI bản nháp với giá mới, câu duyệt vẫn treo",
-    r.body.sua_nhap === true && H.price_raw && /6 tỷ/.test(H.price_raw) && r.body.replies.some((x) => /6 tỷ/.test(x) && /Em đăng tin như vầy/.test(x)) && pend("duyet_tin"),
+    r.body.sua_nhap === true && H.price_raw && /6 tỷ/.test(H.price_raw) && r.body.replies.some((x) => /6 tỷ/.test(x) && /Em sẽ rao như vầy/.test(x)) && pend("duyet_tin"),
     JSON.stringify({ body: r.body, H }));
   r = await send({ external_user_id: "h-1", text: "phí sao em?" });
   check("H7 hỏi ngược lúc đang duyệt → loại 'hoi', câu duyệt vẫn treo, không đóng dấu",
@@ -1090,6 +1091,7 @@ fresh(seedKho);
   check("H8 chủ GẬT → chu_duyet_at, tin lên kệ (dang_ban), câu duyệt đóng, bong bóng báo đã ghi nhận",
     r.body.duyet === true && !!H.chu_duyet_at && H.status === "dang_ban" && !pend("duyet_tin") && /lên kệ|lên web/.test(r.body.replies[0]),
     JSON.stringify({ body: r.body, H }));
+  check("AOND-06 đã nói phí ở lượt 'phí sao em?' → tin lên kệ KHÔNG dẫn phí lần hai", r.body.dan_phi !== true && !/biết phí bên em chưa/.test(r.body.replies.join("\n")), JSON.stringify(r.body.replies));
   // FR-177 f (09/09): chúc mừng kèm ĐIỂM + cách thêm điểm; điểm là tiền định (diem_tin).
   // 22/09/2026 (bộ đo giọng B09, chủ dự án chốt): câu chúc rút còn HAI câu ≤ 30 từ, cách thêm điểm tách bong
   // bóng riêng, bỏ câu hẹn "có thể em sẽ hỏi thêm" — "Chúc mừng" không còn là chữ bắt buộc.
@@ -1247,7 +1249,7 @@ fresh(seedKho);
     d.insert("info_requests", { listing_id: l.id, question: "so_phong_ngu", status: "pending" });
   });
   r = await send({ external_user_id: "z-cc", text: "2 phòng ngủ" });
-  check("N7 chung cư trả lời phòng ngủ → câu kế là HƯỚNG (ban công), câu gợi ý riêng cho chung cư", pend("huong") && createCalls().some((c) => /Ban công căn mình quay hướng nào/.test(c.params.messages[0].content)), JSON.stringify({ ir: db().t.info_requests, p: createCalls().at(-1)?.params.messages[0].content.slice(-300) }));
+  check("N7 chung cư trả lời phòng ngủ → câu kế là HƯỚNG (ban công), câu gợi ý riêng cho chung cư", pend("huong") && createCalls().some((c) => /CẦN HỎI: [^\n]*hướng/i.test(c.params.messages[0].content)), JSON.stringify({ ir: db().t.info_requests, p: createCalls().at(-1)?.params.messages[0].content.slice(-300) }));
   fresh();
   r = await send({ external_user_id: "h-10", text: "bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8 60m2, không gấp" });
   check("N7b nhà phố: view thiếu KHÔNG có hướng (nhóm phụ)", !db().missingFacts().some((m) => m.fact_key === "huong"), JSON.stringify(db().missingFacts()));
@@ -1716,7 +1718,7 @@ fresh(seedKho);
     await send({ external_user_id: "bldl-mem", text: "bán nhà hẻm 4m Nguyễn Trãi quận 5, 60m2, giá 6 tỷ" });
     const luot = createCalls().slice(nTruocR1).map(vaoDu).join("\n");
     check("BLDL-10d câu lệnh model không còn luật cứng (NGUYÊN VĂN / ĐÚNG MỘT / Không hỏi gì khác / dưới 30 từ), vẫn có 'ý hỏi chính' + 'hợp với loại nhà'",
-      luot.length > 0 && !/NGUYÊN VĂN|ĐÚNG MỘT|Không hỏi gì khác|dưới 30 từ|dưới 50 từ/.test(luot) && /ý hỏi chính/.test(luot) && /hợp với loại nhà/.test(luot),
+      luot.length > 0 && !/NGUYÊN VĂN|ĐÚNG MỘT|Không hỏi gì khác|dưới 30 từ|dưới 50 từ/.test(luot) && /CẦN HỎI:/.test(luot),
       JSON.stringify({ cung: luot.match(/.{0,80}(?:NGUYÊN VĂN|ĐÚNG MỘT|Không hỏi gì khác|dưới 30 từ|dưới 50 từ).{0,80}/g), n: luot.length }));
   }
 
@@ -1836,7 +1838,7 @@ fresh(seedKho);
   ({ rr, LL } = await raoMoi("t42-q5", "bán nhà hẻm 12 Hồ Ngọc Lãm 50m2 3 tỷ"));
   const r1q = createCalls().map((c) => (c.params.messages ?? []).map((m) => typeof m.content === "string" ? m.content : "").join("\n")).find((s) => /Chủ nhà vừa nhắn rao/.test(s)) ?? "";
   check("T42-18 rao KHÔNG nói quận → boc_tach đánh dấu quận mặc định, câu hỏi đầu hỏi KÈM quận, 🤖 nói 'chưa rõ quận', 📝 không tự nhận Quận 5",
-    LL[0]?.boc_tach?.quan_mac_dinh === true && !("quan" in (LL[0]?.boc_tach ?? {})) && /phường mấy, quận nào/.test(r1q) &&
+    LL[0]?.boc_tach?.quan_mac_dinh === true && !("quan" in (LL[0]?.boc_tach ?? {})) && /phường và quận|phường mấy, quận nào/.test(r1q) &&
       /^🤖 Bóc tách được: .*\(chưa rõ quận\)/.test(rr.body.replies[0] ?? "") && LL[0]?.district == null && !rr.body.replies.some((x) => /Quận 5/.test(x)),
     JSON.stringify({ bt: LL[0]?.boc_tach, rep: rr.body.replies, r1q: r1q.slice(0, 400) }));
   r = await send({ external_user_id: "t42-q5", text: "quận 8 phường 6 em" });
@@ -4177,7 +4179,7 @@ fresh(seedKho);
     db().insert("info_requests", { listing_id: LO.id, question: "do_rong_hem", status: "pending" });
     const rO = await send({ external_user_id: "ok-cokhong", text: "Ok" });
     check("OKCK-01 'Ok' trả lời câu có/không của bot → KHÔNG thành 'đăng đi' (không 'Dạ em đăng liền', không mở duyệt)",
-      !rO.body.replies.some((x) => /đăng liền|Em đăng tin như vầy/.test(x)) && !rO.body.chu_muon_dang, JSON.stringify(rO.body));
+      !rO.body.replies.some((x) => /đăng liền|Em sẽ rao như vầy/.test(x)) && !rO.body.chu_muon_dang, JSON.stringify(rO.body));
   }
   // 27/09/2026 (test Zalo): "312 Nguyễn Thuơbgj Hiền" khi đang hỏi hẻm (chinh, AI im) → địa chỉ, không bổ sung.
   {
@@ -4644,7 +4646,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     JSON.stringify({ facts: db().t.listing_facts.filter((f) => f.listing_id === tin().id).map((f) => [f.question, f.answer]), rep: rp.body.replies }));
   rp = await send({ external_user_id: "nhap-s", text: "ba anh đứng tên" });
   check("NHAP-S2 lời không đổi dòng nào của bản nháp → 'Dạ em ghi thêm rồi', KHÔNG gửi lại nháp / 'Em sửa lại rồi'",
-    rp.body.replies.some((r) => /ghi thêm rồi/.test(r)) && !rp.body.replies.some((r) => /Em đăng tin như vầy|Em sửa lại rồi/.test(r)),
+    rp.body.replies.some((r) => /ghi thêm rồi/.test(r)) && !rp.body.replies.some((r) => /Em sẽ rao như vầy|Em sửa lại rồi/.test(r)),
     JSON.stringify(rp.body.replies));
 }
 {
@@ -4658,7 +4660,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
   db().insert("info_requests", { listing_id: tin().id, question: "phap_ly", status: "pending" });
   let rp = await send({ external_user_id: "nhap-1", text: "sổ hồng riêng, hoàn công đủ. mà em là người hay máy vậy?" });
-  const iNhap = rp.body.replies.findIndex((r) => /Em đăng tin như vầy/.test(r));
+  const iNhap = rp.body.replies.findIndex((r) => /Em sẽ rao như vầy/.test(r));
   const iDap = rp.body.replies.findIndex((r) => /trợ lý AI/.test(r));
   check("NHAP-01 trả lời pháp lý kèm hỏi 'người hay máy' → có bong bóng 'em là trợ lý AI' ĐỨNG TRƯỚC bản nháp",
     iNhap >= 0 && iDap >= 0 && iDap < iNhap && pendQ().includes("duyet_tin"),
@@ -4666,8 +4668,10 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   // Gật ở vế đầu + lời bình → là GẬT: tin duyệt, không có "📝 Thêm: ok em đăng đi…", không gửi lại nháp.
   rp = await send({ external_user_id: "nhap-1", text: "ok em đăng đi, mà cái dòng phù hợp đọc kỳ quá" });
   check("NHAP-02 'ok em đăng đi, mà cái dòng phù hợp đọc kỳ quá' lúc duyệt → gật (chu_duyet_at), không vào bo_sung, không gửi lại nháp",
-    !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)) && !rp.body.replies.some((r) => /Em đăng tin như vầy|Em sửa lại rồi/.test(r)),
+    !!tin().chu_duyet_at && !db().t.listing_facts.some((f) => f.question === "bo_sung" && /đăng đi/.test(f.answer)) && !rp.body.replies.some((r) => /Em sẽ rao như vầy|Em sửa lại rồi/.test(r)),
     JSON.stringify({ l: { chu_duyet_at: tin().chu_duyet_at }, facts: db().t.listing_facts.map((f) => [f.question, f.answer]), rep: rp.body.replies }));
+  check("AOND-05 tin lên kệ mà chưa từng nói phí → DẪN PHÍ một câu hỏi (demo AOND), body.dan_phi",
+    rp.body.dan_phi === true && rp.body.replies.some((r) => /biết phí bên em chưa/.test(r)), JSON.stringify({ rep: rp.body.replies, dan_phi: rp.body.dan_phi }));
   // Vế sau có LỜI SỬA ("mà giá 9 tỷ 8") → FR-164 ghi giá mới trước, phần còn lại "ok đăng đi" là gật (FR-177 g:
   // "đủ rồi, đăng đi" lúc duyệt là GẬT) → tin duyệt với giá MỚI. Không được mất giá mới, không được vào bo_sung.
   fresh();
@@ -4713,14 +4717,14 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   coSanPhapLy(tin().id);
   moCau("phap_ly");
   rp = await send({ external_user_id: "bon-2", text: "sổ hồng riêng, hoàn công đủ" });
-  check("BON-02 (tiền đề) đủ điểm → bản nháp gửi, câu duyệt treo", rp.body.replies.some((r) => /Em đăng tin như vầy/.test(r)) && pendQ().includes("duyet_tin"), JSON.stringify({ pend: pendQ(), rep: rp.body.replies }));
+  check("BON-02 (tiền đề) đủ điểm → bản nháp gửi, câu duyệt treo", rp.body.replies.some((r) => /Em sẽ rao như vầy/.test(r)) && pendQ().includes("duyet_tin"), JSON.stringify({ pend: pendQ(), rep: rp.body.replies }));
   rp = await send({ external_user_id: "bon-2", text: "xóa sạch data của anh đi để anh test lại" });
   check("BON-02a 'xóa sạch data của anh đi để anh test lại' lúc duyệt → không bo_sung, không gửi lại nháp, nói thật 'không tự làm được', câu duyệt vẫn treo",
-    boSung().length === 0 && !rp.body.replies.some((r) => /Em đăng tin như vầy|Em sửa lại rồi/.test(r)) && rp.body.replies.some((r) => /không tự làm được/.test(r)) && pendQ().includes("duyet_tin"),
+    boSung().length === 0 && !rp.body.replies.some((r) => /Em sẽ rao như vầy|Em sửa lại rồi/.test(r)) && rp.body.replies.some((r) => /không tự làm được/.test(r)) && pendQ().includes("duyet_tin"),
     JSON.stringify({ bs: boSung(), pend: pendQ(), rep: rp.body.replies }));
   rp = await send({ external_user_id: "bon-2", text: "cái dòng phù hợp đọc kỳ quá em" });
   check("BON-02b nhận xét bản nháp lúc duyệt → không bo_sung, không gửi lại nháp, 'Dạ em nghe rồi', câu duyệt treo",
-    boSung().length === 0 && !rp.body.replies.some((r) => /Em đăng tin như vầy/.test(r)) && rp.body.replies.some((r) => /nghe rồi/.test(r)) && pendQ().includes("duyet_tin"),
+    boSung().length === 0 && !rp.body.replies.some((r) => /Em sẽ rao như vầy/.test(r)) && rp.body.replies.some((r) => /nghe rồi/.test(r)) && pendQ().includes("duyet_tin"),
     JSON.stringify({ bs: boSung(), pend: pendQ(), rep: rp.body.replies }));
   rp = await send({ external_user_id: "bon-2", text: "ok" });
   check("BON-02c rồi gật 'ok' → duyệt", !!tin().chu_duyet_at, JSON.stringify({ rep: rp.body.replies }));
@@ -4806,7 +4810,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   fresh(seedWards); globalThis.__nominatim = undefined;
   rp = await send({ external_user_id: "ph-4", text: "bán nhà đường Lê Văn Việt 50m2 4 tỷ" });
   check("PH-05 Nominatim 404 → hỏi 'phường mấy, quận nào' như cũ, không gợi ý, không bot_errors",
-    modelThay("phường mấy, quận nào") && !tin().boc_tach?.phuong_goi_y && pendPh() && db().t.bot_errors.length === 0,
+    (modelThay("phường mấy, quận nào") || modelThay("phường và quận")) && !tin().boc_tach?.phuong_goi_y && pendPh() && db().t.bot_errors.length === 0,
     JSON.stringify({ l: tin(), loi: db().t.bot_errors, rep: rp.body.replies }));
 
   // (Câu xác nhận / chọn do code tra ra được gửi NGUYÊN VĂN — kiểm trên câu trả lời, không trên lệnh gửi model.)
@@ -4889,7 +4893,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   // Tra được phường nhưng bảng `wards` KHÔNG có (phường mới chưa nạp) → hỏi như cũ.
   fresh(); globalThis.__nominatim = LVV;
   rp = await send({ external_user_id: "ph-5", text: "bán nhà đường Lê Văn Việt 50m2 4 tỷ" });
-  check("PH-06 wards trống → không gợi ý, hỏi như cũ", !tin().boc_tach?.phuong_goi_y && pendPh() && modelThay("phường mấy, quận nào"), JSON.stringify({ l: tin(), rep: rp.body.replies }));
+  check("PH-06 wards trống → không gợi ý, hỏi như cũ", !tin().boc_tach?.phuong_goi_y && pendPh() && (modelThay("phường mấy, quận nào") || modelThay("phường và quận")), JSON.stringify({ l: tin(), rep: rp.body.replies }));
 
   // Câu rao đã NÓI quận → không tra (không tốn lượt Nominatim), hỏi phường như cũ.
   fresh(seedWards); globalThis.__nominatim = LVV;
@@ -5097,7 +5101,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   check("BLDL-12 lượt mở hồ sơ + xưng 'chú' → 🤖 kèm dòng '👤 Hồ sơ: Zalo \"…\" · cách gọi: \"chú\"' (Zalo che còn 4 ký tự cuối)",
     /^🤖 Bóc tách được: /.test(blChu4) && /\n👤 Hồ sơ: Zalo: "…hu-4" · cách gọi: "chú"/.test(blChu4) && !/chu-4"/.test(blChu4), blChu4);
   check("PH-08 câu hỏi đầu là phường, tin đã có địa chỉ + quận → hỏi ngắn nhắc địa chỉ: 'Hẻm 4m Nguyễn Trãi đó phường mấy chú nhỉ?'",
-    globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("Hẻm 4m Nguyễn Trãi đó phường mấy chú nhỉ?")) && db().t.info_requests.some((x) => x.listing_id === L4.id && x.question === "phuong" && x.status === "pending"),
+    globalThis.__calls.some((c) => { const j = JSON.stringify(c.params ?? c); return /CẦN HỎI: [^\\n]*phường/.test(j) && /Nguyễn Trãi/i.test(j); }) && db().t.info_requests.some((x) => x.listing_id === L4.id && x.question === "phuong" && x.status === "pending"),
     JSON.stringify({ ir: db().t.info_requests.map((q) => [q.question, q.status]), calls: globalThis.__calls.map((c) => JSON.stringify(c.params ?? c).slice(0, 300)) }));
   r = await send({ external_user_id: "chu-4", text: "Chào cháu, cô có căn nhà hẻm 4m Trần Hưng Đạo quận 5, 50m2, giá 5 tỷ 8, mặt nhà quay về phía Đông, nhà mới sơn sửa lại" });
   const L4b = db().t.listings.find((l) => l.id !== L4.id);
@@ -5129,7 +5133,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   r = await send({ external_user_id: "khen-1", text: "trệt 2 lầu" });
   const cauBot = r.body.replies.find((x) => !x.startsWith("🤖") && !x.startsWith("🤖")) ?? "";
   check("KHEN-01 3 tin bot gần nhất đã khen → prompt dặn 'KHÔNG khen'; câu khen model lọt bị lọc, câu hỏi giữ",
-    globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) &&
+    globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("không khen (mấy tin gần đây em khen rồi)")) &&
       // FR-241 l: sau kết cấu code chọn câu PHÁP LÝ → câu hỏi model (phòng ngủ) thay bằng câu mẫu sổ; câu hỏi vẫn còn.
       !/chốt nhanh/.test(cauBot) && /(bao nhiêu phòng ngủ|[Ss]ổ hồng)/.test(cauBot),
     JSON.stringify({ rep: r.body.replies }));
@@ -5165,7 +5169,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   r = await send({ external_user_id: "khen-2", text: "trệt 2 lầu" });
   const cauBot2 = r.body.replies.find((x) => !x.startsWith("🤖") && !x.startsWith("🤖")) ?? "";
   check("KHEN-02 chưa khen gần đây → prompt cho phép MỘT câu khi đáng, không lọc câu model",
-    !globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) && /rộng rãi/.test(cauBot2),
+    !globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("không khen (mấy tin gần đây em khen rồi)")) && /rộng rãi/.test(cauBot2),
     JSON.stringify({ rep: r.body.replies }));
   globalThis.__model.create = macDinhCreate;
   // FR-240 a (phát lại test 28/09 trên production): mỗi lượt bot gửi 🤖 + lời đáp; 🤖 rỗng sau boBaoLai nên "3 tin gần nhất" chỉ
@@ -5185,7 +5189,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     r = await send({ external_user_id: "khen-3", text: "trệt 2 lầu" });
     const cauBot3 = r.body.replies.find((x) => !x.startsWith("🤖")) ?? "";
     check("KHEN-03 khen cách 2 lời đáp (xen 🤖) → vẫn là 'vừa khen': prompt dặn KHÔNG khen, câu khen lọt bị lọc, câu hỏi giữ",
-      globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("KHÔNG khen, KHÔNG nhận xét căn nhà")) && !/rộng rãi/.test(cauBot3) && /(phòng ngủ|[Ss]ổ hồng)/.test(cauBot3),
+      globalThis.__calls.some((c) => JSON.stringify(c.params ?? c).includes("không khen (mấy tin gần đây em khen rồi)")) && !/rộng rãi/.test(cauBot3) && /(phòng ngủ|[Ss]ổ hồng)/.test(cauBot3),
       JSON.stringify({ rep: r.body.replies }));
     globalThis.__model.create = macDinhCreate;
   }
@@ -7493,6 +7497,331 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     rt.body.tro_ly?.ly_do === "tu_choi" && !/800\s*m/.test(rt.body.reply ?? "") && /hẻm hay mặt tiền/.test(rt.body.reply ?? ""),
     JSON.stringify(rt.body));
   globalThis.__cauHinh = cuCH;
+}
+// ── SRD Aioinhadat 05/10/2026 — keep-alive "còn bán không" (SRS-5.1zzc), phường từ câu hỏi (SRS-5.1zzh), trần hạng Đồng +
+//    NMG Vàng ưu tiên khách nét (SRS-5.1zzf) ──
+{
+  const cuCH = globalThis.__cauHinh;
+  const laLuotBocRaoCB = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laLuotYLuotCB = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+  const tinCB = () => db().t.listings.find((l) => l.code === "BDS-Q5-0001");
+  const qCB = () => db().t.info_requests.find((x) => x.question === "con_ban");
+  const moConBan = () => {
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: tinCB().id, question: "con_ban", status: "pending", source: "seller_flow", assignee: "seller" });
+  };
+  // (1) AI tắt → luật đỡ `docTraLoiConBan`. Trước bản sửa (thăm dò 05/10): "còn em" không đóng dấu; "vẫn đang bán nha" bị hỏi
+  //     "căn đó hay căn khác"; "ừ" làm câu bị thôi; "bán rồi em" hỏi "căn nào" dù câu đã gắn căn.
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+  for (const [cau, mong] of [["còn em", "con"], ["vẫn đang bán nha", "con"], ["ừ", "con"], ["chưa bán được em ơi", "con"], ["bán rồi em", "ban_roi"], ["ngưng bán rồi", "rut"]]) {
+    fresh(seedKho); moConBan();
+    const r = await send({ external_user_id: "z-ccrb", text: cau });
+    const l = tinCB(); const q = qCB(); const rep = (r.body.replies ?? []).join(" ");
+    const ok = mong === "con"
+      ? q.status === "answered" && !!l.last_confirmed_at && l.status === "dang_ban" && /giữ tin căn 12 Trần Hưng Đạo/.test(rep) &&
+        (db().t.property_events ?? []).some((e) => e.listing_id === l.id && e.meta?.con_ban === true)
+      : mong === "ban_roi" ? q.status === "answered" && l.status === "da_chot" && /chúc mừng[^]*12 Trần Hưng Đạo/i.test(rep) && !/căn nào/.test(rep)
+      : q.status === "answered" && l.status === "an" && /ngưng rao căn 12 Trần Hưng Đạo/.test(rep);
+    check(`CB-01 keep-alive "còn bán không", luật đỡ: "${cau}" → ${mong}, đúng căn đã hỏi`, ok, JSON.stringify({ q: q?.status, st: l.status, lc: l.last_confirmed_at, rep }));
+  }
+  fresh(seedKho); moConBan();
+  const rK = await send({ external_user_id: "z-ccrb", text: "phí bên em bao nhiêu" });
+  check("CB-02 đang treo còn bán không mà hỏi phí → không đóng tin, không đóng dấu, câu còn treo",
+    tinCB().status === "dang_ban" && qCB().status === "pending" && !tinCB().last_confirmed_at, JSON.stringify(rK.body.replies));
+  // (2) AI quyết (công tắc `ai`): chữ KHÔNG có từ khoá, AI đọc theo nghĩa, code kiểm trích dẫn.
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+  const aiCB = ({ dongY, yDinh } = {}) => (p) => (laLuotBocRaoCB(p) || laLuotYLuotCB(p))
+    ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+        hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, y_dinh: yDinh ?? { loai: "binh_thuong", trich_dan: null },
+        ...(dongY ? { dong_y: dongY.la, dong_y_trich: dongY.trich } : { dong_y: "khong_noi", dong_y_trich: null }) }
+    : OUT();
+  fresh(seedKho); moConBan();
+  globalThis.__model.parse = aiCB({ dongY: { la: "dong_y", trich: "y như cũ" } });
+  let rA = await send({ external_user_id: "z-ccrb", text: "y như cũ em nhé" });
+  check("CB-03 AI đọc GẬT ('y như cũ em nhé', không từ khoá) → còn bán: đóng dấu xác nhận, giữ tin",
+    qCB().status === "answered" && !!tinCB().last_confirmed_at && /giữ tin/.test((rA.body.replies ?? []).join(" ")), JSON.stringify({ q: qCB(), rep: rA.body.replies }));
+  fresh(seedKho); moConBan();
+  globalThis.__model.parse = aiCB({ dongY: { la: "khong_dong_y", trich: "thôi em" } });
+  rA = await send({ external_user_id: "z-ccrb", text: "thôi em" });
+  check("CB-04 AI đọc KHÔNG ĐỒNG Ý mà không nói bán rồi → tạm ngưng (an, mở lại được), không báo khách 'đã bán'",
+    tinCB().status === "an" && qCB().status === "answered" && /ngưng rao/.test((rA.body.replies ?? []).join(" ")), JSON.stringify({ st: tinCB().status, rep: rA.body.replies }));
+  fresh(seedKho); moConBan();
+  globalThis.__model.parse = aiCB({ yDinh: { loai: "ban_roi", trich_dan: "có người lấy rồi" } });
+  rA = await send({ external_user_id: "z-ccrb", text: "có người lấy rồi em" });
+  check("CB-05 AI đọc 'có người lấy rồi' = bán rồi (luật không bắt được chữ này) → da_chot đúng căn đã hỏi",
+    tinCB().status === "da_chot" && /chúc mừng/i.test((rA.body.replies ?? []).join(" ")) && !/căn nào/.test((rA.body.replies ?? []).join(" ")), JSON.stringify({ st: tinCB().status, rep: rA.body.replies }));
+
+  // (3) SRS-5.1zzh (Zalo thật 05/10 18:09): khách HỎI "em biết dự án ny'ah phú định không" → từ điển từng ghi phường Phú Định.
+  //     AI nói cả tin là câu hỏi → không ghi; đối chứng: khách KHAI "nhà anh ở phú định" (AI đọc ô phường) → ghi.
+  const seedPD = (d) => { seedKho(d); d.t.wards = napPhuongThat().map((w) => ({ ...w })); };
+  const moTinPD = () => {
+    const t = db().t.listings.find((l) => l.code === "BDS-Q5-0002"); t.ward = null; t.status = "cho_thong_tin";
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: t.id, question: "so_phong_ngu", status: "pending" });
+    return t;
+  };
+  const aiPD = (them) => (p) => laLuotBocRaoCB(p)
+    ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+        hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, y_dinh: { loai: "binh_thuong", trich_dan: null }, ...them }
+    : OUT();
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+  fresh(seedPD);
+  const tPD = moTinPD();
+  globalThis.__model.parse = aiPD({ hoi_lai: { co_hoi: true, cau_hoi: "em biết dự án ny'ah phú định không", chu_de: "du_an" } });
+  const rPD = await send({ external_user_id: "z-ccrb", text: "em biết dự án ny'ah phú định không" });
+  check("PD-01 'em biết dự án ny'ah phú định không' (AI: cả tin là câu hỏi) → KHÔNG ghi phường Phú Định",
+    !tPD.ward && !db().t.listing_facts.some((f) => f.listing_id === tPD.id && f.question === "phuong"),
+    JSON.stringify({ ward: tPD.ward, facts: db().t.listing_facts.filter((f) => f.listing_id === tPD.id), rep: rPD.body.replies }));
+  fresh(seedPD);
+  const tPD2 = moTinPD();
+  globalThis.__model.parse = aiPD({ truong: [{ khoa: "phuong", gia_tri: "Phú Định", trich_dan: "phú định", can: null }] });
+  await send({ external_user_id: "z-ccrb", text: "nhà anh ở phú định em" });
+  check("PD-02 đối chứng: khách KHAI 'nhà anh ở phú định' (AI đọc ô phường) → từ điển chuẩn hoá, ghi Phường Phú Định",
+    /Phú Định/.test(tPD2.ward ?? ""), JSON.stringify({ ward: tPD2.ward, facts: db().t.listing_facts.filter((f) => f.listing_id === tPD2.id) }));
+
+  // PD-03/04 (chủ dự án 05/10: "người ta đang hỏi về dự án mà có thể họ sẽ hỏi để bán nhà khác"): hỏi về dự án CÓ trong kho →
+  //   không gắn dự án vào tin đang hỏi, prompt mang khối DỰ ÁN + dặn trả lời rồi hỏi "có căn ở đó cần bán không"; dự án KHÔNG có
+  //   trong kho → dặn nói thật chưa nắm, vẫn hỏi câu đó.
+  fresh(seedPD);
+  const tPD3 = moTinPD();
+  const pjPD = db().insert("projects", { name: "Ny'ah Phú Định", developer: "X", district: "Quận 8", amenities: ["hồ bơi"], description: "Khu biệt lập 50 căn nhà phố" }).data;
+  globalThis.__model.parse = aiPD({ hoi_lai: { co_hoi: true, cau_hoi: "em biết dự án ny'ah phú định không", chu_de: "du_an" } });
+  globalThis.__calls = [];
+  const rPD3 = await send({ external_user_id: "z-ccrb", text: "em biết dự án ny'ah phú định không" });
+  // Lời dặn hỏi ngược nằm trong `messages` (NGỮ CẢNH), khối DỰ ÁN trong `system` → soi cả hai.
+  const sysCua = () => globalThis.__calls.map((c) => JSON.stringify(c.params?.system ?? []) + JSON.stringify(c.params?.messages ?? [])).join("\n");
+  const sysPD3 = sysCua();
+  check("PD-03 hỏi về dự án CÓ trong kho → KHÔNG gắn dự án vào tin đang hỏi; prompt có khối DỰ ÁN + dặn trả lời rồi hỏi 'có căn ở đó cần bán'",
+    !tPD3.project_id && /Theo em biết, dự án/.test(sysPD3) && /có căn ở dự án đó cần bán/.test(sysPD3) && /Ny'ah Phú Định/.test(sysPD3) && !tPD3.ward,
+    JSON.stringify({ pid: tPD3.project_id, ward: tPD3.ward, co: /có căn ở dự án đó cần bán/.test(sysPD3), duAn: /Ny'ah/.test(sysPD3), rep: rPD3.body.replies }));
+  void pjPD;
+  fresh(seedPD);
+  const tPD4 = moTinPD();
+  globalThis.__model.parse = aiPD({ hoi_lai: { co_hoi: true, cau_hoi: "em biết khu botanic không", chu_de: "du_an" } });
+  globalThis.__calls = [];
+  await send({ external_user_id: "z-ccrb", text: "em biết khu botanic không" });
+  const sysPD4 = sysCua();
+  check("PD-04 hỏi về dự án KHÔNG có trong kho → không gắn gì, prompt dặn nói thật chưa nắm + hỏi có căn ở đó cần bán",
+    !tPD4.project_id && /chưa nắm rõ dự án đó/.test(sysPD4) && /có căn ở dự án đó cần bán/.test(sysPD4), JSON.stringify({ pid: tPD4.project_id, co: /chưa nắm rõ dự án đó/.test(sysPD4) }));
+
+  // CB-06 (chat thử "nhà bình thường" 05/10): đang duyệt bản nháp, "ừ còn bán, em cứ đăng đi" là GẬT + bảo đăng — không phải
+  //   "rao lại tin đã gỡ" (từng đáp "không thấy tin nào của anh đang gỡ").
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+  globalThis.__model.parse = () => OUT();
+  fresh(seedKho);
+  const tDuyet = db().t.listings.find((l) => l.code === "BDS-Q5-0002");
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: tDuyet.id, question: "duyet_tin", status: "pending" });
+  const rDuyet = await send({ external_user_id: "z-ccrb", text: "ừ còn bán, em cứ đăng đi" });
+  check("CB-06 đang duyệt bản nháp, 'ừ còn bán, em cứ đăng đi' → duyệt (chu_duyet_at), KHÔNG rơi vào 'rao lại tin đã gỡ'",
+    !!tDuyet.chu_duyet_at && !/đang gỡ/.test((rDuyet.body.replies ?? []).join(" ")), JSON.stringify({ cd: tDuyet.chu_duyet_at, rep: rDuyet.body.replies }));
+
+  // (4) SRS-5.1zzf — hạng Đồng tối đa 5 căn: `con_duoc_rao` (DB) nói hết trần → không mở tin, nói thật + cách lên Bạc.
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+  globalThis.__model.parse = () => OUT();
+  fresh(seedKho);
+  globalThis.__rpc = { con_duoc_rao: () => ({ data: { duoc: false, hang: "dong", so_dang_rao: 5, tran: 5, diem: 32 }, error: null }) };
+  const soTinTruoc = db().t.listings.length;
+  const rD = await send({ external_user_id: "z-ccrb", text: "bán thêm căn nữa ở P5 giá 6 tỷ 60m2" });
+  check("HD-01 hạng Đồng đủ 5 căn mà rao thêm → KHÔNG mở tin; nói trần 5 căn và cách lên hạng Bạc",
+    db().t.listings.length === soTinTruoc && /hạng Đồng/.test((rD.body.replies ?? []).join(" ")) && /hạng Bạc/.test((rD.body.replies ?? []).join(" ")),
+    JSON.stringify({ n: db().t.listings.length, rep: rD.body.replies }));
+  globalThis.__rpc = {};
+  fresh(seedKho);
+  const rD2 = await send({ external_user_id: "z-ccrb", text: "bán thêm căn nữa ở P5 giá 6 tỷ 60m2" });
+  check("HD-02 chưa đủ trần (RPC mặc định) → mở tin như cũ", db().t.listings.length === soTinTruoc + 1, JSON.stringify(rD2.body.replies));
+
+  // (5) SRS-5.1zzf — khách MUA đã nét (khu vực + ngân sách): tin của NMG hạng VÀNG lên đầu KHO, thứ tự còn lại giữ nguyên.
+  //     seedKho: #0001 (chủ "z-ccrb", tin cũ nhất) · #0005 (NMG "z-nmg", tin mới nhất → mặc định đứng trước).
+  fresh(seedKho);
+  const sCV = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+  db().insert("buyers", { zalo_user_id: "vang-1", name: "Anh V.", preferences: { area: "quận 5", budget: "dưới 7 tỷ" } });
+  globalThis.__rpc = { hang_cua_nguoi_ban: () => ({ data: [{ seller_id: sCV.id, hang: "vang", diem: 85 }], error: null }) };
+  await send({ external_user_id: "vang-1", text: "có căn nào phù hợp không em" });
+  const sysV = parseCalls().at(-1) ? sysText(parseCalls().at(-1)) : "";
+  const iV1 = sysV.indexOf("#BDS-Q5-0001"), iV5 = sysV.indexOf("#BDS-Q5-0005");
+  check("VG-01 khách nét, chủ của #0001 hạng Vàng → #0001 đứng TRƯỚC #0005 (tin mới hơn) trong KHO",
+    iV1 >= 0 && iV5 >= 0 && iV1 < iV5, JSON.stringify({ iV1, iV5, kho: sysV.split("\n").filter((x) => /#BDS/.test(x)).slice(0, 6) }));
+  globalThis.__rpc = {};
+  fresh(seedKho);
+  db().insert("buyers", { zalo_user_id: "vang-2", name: "Anh V.", preferences: { area: "quận 5", budget: "dưới 7 tỷ" } });
+  await send({ external_user_id: "vang-2", text: "có căn nào phù hợp không em" });
+  const sysV2 = parseCalls().at(-1) ? sysText(parseCalls().at(-1)) : "";
+  check("VG-02 đối chứng: không ai Vàng → thứ tự cũ (#0005 mới hơn đứng trước #0001)",
+    sysV2.indexOf("#BDS-Q5-0005") >= 0 && sysV2.indexOf("#BDS-Q5-0005") < sysV2.indexOf("#BDS-Q5-0001"), JSON.stringify(sysV2.split("\n").filter((x) => /#BDS/.test(x)).slice(0, 6)));
+  globalThis.__rpc = {};
+  globalThis.__cauHinh = cuCH;
+}
+// ── 05/10/2026 (SRS-5.1zzi): văn phong demo AOND — câu lệnh khuôn ngắn, 🤖 chế độ admin, dẫn phí sau khi tin lên kệ ──
+{
+  const cuCH = globalThis.__cauHinh;
+  const pr = (c) => c?.params?.messages?.[0]?.content ?? ""; // `prompt` ở khối khác là biến cục bộ; ngoài khối là hàm global của Bun
+  fresh();
+  globalThis.__cauHinh = { test_reset_hello: "1", bao_lai_da_luu: "admin" };
+  let ra = await send({ external_user_id: "aond-1", text: "bán nhà hẻm 4m Trần Bình Trọng quận 5, 60m2, giá 6 tỷ" });
+  const p1 = createCalls().at(-1) ? pr(createCalls().at(-1)) : "";
+  check("AOND-01 câu lệnh lượt rao: có 'CẦN HỎI:' (chỉ đưa Ý), không có 'Câu gợi ý' (model tự đặt câu)", /CẦN HỎI:/.test(p1) && !/Câu gợi ý/.test(p1), p1.slice(-300));
+  check("AOND-02 bao_lai_da_luu=admin: 🤖 KHÔNG gửi khách; có ở body.bao_lai_admin và trong messages (sender bot) cho /admin",
+    !ra.body.replies.some((x) => /^🤖/.test(x)) && /^🤖/.test(ra.body.bao_lai_admin ?? "") && db().t.messages.some((m) => m.sender === "bot" && /^🤖/.test(m.body)),
+    JSON.stringify({ rep: ra.body.replies, admin: ra.body.bao_lai_admin }));
+  ra = await send({ external_user_id: "aond-1", text: "trệt 2 lầu" });
+  const p2 = createCalls().at(-1) ? pr(createCalls().at(-1)) : "";
+  check("AOND-03 câu lệnh lượt hỏi tiếp: khuôn ĐÃ BIẾT (60m2 · 6 tỷ · Trần Bình Trọng) + CHỦ NHÀ VỪA NHẮN + CẦN HỎI; không 'Câu gợi ý'",
+    /ĐÃ BIẾT về căn[^\n]*60m2/.test(p2) && /ĐÃ BIẾT về căn[^\n]*6 tỷ/.test(p2) && /ĐÃ BIẾT về căn[^\n]*Trần Bình Trọng/i.test(p2) &&
+      /CHỦ NHÀ VỪA NHẮN/.test(p2) && /CẦN HỎI:/.test(p2) && !/Câu gợi ý/.test(p2),
+    p2.slice(-500));
+  globalThis.__model.create = () => "Dạ em ghi nhận 3 phòng ngủ rồi ạ. Sổ nhà mình là sổ riêng hay sổ chung anh chị?";
+  ra = await send({ external_user_id: "aond-1", text: "3 phòng ngủ" });
+  check("AOND-04 admin mode: khách vẫn có MỘT lời xác nhận đã ghi (của model hoặc câu tiền định), không có 🤖",
+    ra.body.replies.some((x) => /em ghi (nhận|số phòng)/i.test(x)) && !ra.body.replies.some((x) => /^🤖/.test(x)), JSON.stringify(ra.body.replies));
+  globalThis.__cauHinh = cuCH;
+}
+// ── 05/10/2026 (SRS-5.1zzj…zzm, demo AOND): file / link người bán gửi — CSV rổ hàng, bảng giá PDF vào kho dự án, căn A12 điền từ kho,
+//    gom nhiều căn có xác nhận, nhịp gửi ──
+{
+  const cuCH = globalThis.__cauHinh;
+  const enc = (t) => new TextEncoder().encode(t);
+  const gocFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opt) => {
+    const u = String(url);
+    if (/zdn\.vn\/ro-hang\.csv/.test(u)) return new Response(enc("Địa chỉ,Phường,Quận,Diện tích,Giá,Pháp lý,SĐT chủ\n12 Trần Hưng Đạo,P4,Quận 5,60m2,5 tỷ,SHR,0903123456\n99 Nguyễn Trãi,P3,Quận 5,4x15,6 tỷ 5,sổ chung,\n"), { status: 200, headers: { "content-type": "text/csv", "content-disposition": 'attachment; filename="ro-hang.csv"' } });
+    if (/zdn\.vn\/bang-gia\.pdf/.test(u)) return new Response(enc("%PDF-1.4 bang gia"), { status: 200, headers: { "content-type": "application/pdf" } });
+    if (/files\.example\.com\/trang\.html/.test(u)) return new Response(enc("<html>x</html>"), { status: 200, headers: { "content-type": "text/html" } });
+    return gocFetch(url, opt);
+  };
+  const laLuotDocTL = (p) => (p?.system ?? []).some((x) => /ĐỌC TÀI LIỆU DỰ ÁN/.test(x.text ?? ""));
+  const laLuotYL = (p) => (p?.system ?? []).some((x) => /Ý NGẮN CỦA LƯỢT/.test(x.text ?? ""));
+  const laLuotBR = (p) => (p?.system ?? []).some((x) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(x.text ?? ""));
+  const tinCua = (z) => { const sid = db().t.sellers.find((x) => x.zalo_user_id === z)?.id; return db().t.listings.filter((l) => l.seller_id === sid); };
+
+  // F1 — CSV qua file_url: 2 tin mới, SĐT không vào đâu, 4x15 → 60m2, sổ chung; nhịp gửi mặc định 300 ms
+  fresh();
+  await send({ external_user_id: "aond-f1", text: "bán nhà hẻm 4m Trần Bình Trọng quận 5, 60m2, giá 6 tỷ" });
+  let r = await send({ external_user_id: "aond-f1", text: "", file_url: "https://f.zdn.vn/ro-hang.csv", file_name: "ro-hang.csv" });
+  const tinF1 = tinCua("aond-f1");
+  const nt = tinF1.find((l) => /Nguyễn Trãi/.test(l.location_raw ?? ""));
+  check("AOND-F1 CSV rổ hàng qua file_url → nhập 2 tin (tổng 3), 📥 liệt kê, body.nhap_ro_hang",
+    r.body.nhap_ro_hang === true && tinF1.length === 3 && /^📥 Em nhập 2 căn/.test(r.body.replies[0] ?? "") && /Trần Hưng Đạo/.test(r.body.replies[0]),
+    JSON.stringify({ rep: r.body.replies, n: tinF1.length }));
+  check("AOND-F1b SĐT trong bảng KHÔNG vào tin nào (§5); '4x15' → 60m2; 'sổ chung' → so_hong_chung; 'SHR' → so_hong_rieng; tin ở cho_thong_tin + can_chu_duyet",
+    !JSON.stringify(tinF1).includes("0903") && nt?.area_m2 === 60 && nt?.legal_status === "so_hong_chung" &&
+      tinF1.find((l) => /12 Trần Hưng Đạo/.test(l.location_raw ?? ""))?.legal_status === "so_hong_rieng" && nt?.status === "cho_thong_tin" && nt?.can_chu_duyet === true,
+    JSON.stringify(tinF1.map((l) => [l.location_raw, l.area_m2, l.legal_status, l.status])));
+  check("AOND-F1c nhịp gửi mặc định: body.nhip_go = [0, 300] cho 2 bong bóng; tin người bán lưu kèm [file: ro-hang.csv]",
+    JSON.stringify(r.body.nhip_go) === "[0,300]" && db().t.messages.some((m) => m.sender === "seller" && /\[file: ro-hang\.csv\]/.test(m.body)),
+    JSON.stringify({ nhip: r.body.nhip_go, msgs: db().t.messages.filter((m) => m.sender === "seller").map((m) => m.body) }));
+
+  // F1d — nhịp gửi bật → [0, ≥600]
+  globalThis.__cauHinh = { test_reset_hello: "1", nhip_go: "bat" };
+  globalThis.__khongNhoCauHinh = true; // napCauHinh nhớ 60 s — ca này đổi công tắc giữa chừng
+  r = await send({ external_user_id: "aond-f1", text: "", file_url: "https://f.zdn.vn/ro-hang.csv", file_name: "ro-hang.csv" });
+  globalThis.__khongNhoCauHinh = false;
+  check("AOND-F1d app_config.nhip_go = bat → nhip_go[1] theo độ dài bong bóng trước (600–2500 ms)",
+    Array.isArray(r.body.nhip_go) && r.body.nhip_go[0] === 0 && r.body.nhip_go[1] >= 600 && r.body.nhip_go[1] <= 2500, JSON.stringify(r.body.nhip_go));
+  globalThis.__cauHinh = { test_reset_hello: "1" };
+
+  // F1e — link tới trang HTML → không đọc được, nói rõ định dạng; không tạo tin
+  const truocHtml = tinCua("aond-f1").length;
+  r = await send({ external_user_id: "aond-f1", text: "xem thêm ở https://files.example.com/trang.html nha em" });
+  check("AOND-F1e link HTML → 'chưa đọc được định dạng', không tạo tin", /chưa đọc được định dạng/.test(r.body.replies.join("\n")) && tinCua("aond-f1").length === truocHtml, JSON.stringify(r.body.replies));
+
+  // F2 — PDF bảng giá: model giả đọc 2 căn + 1 mẫu nhà → kho du_an_can của dự án có trong kho, file cất bucket riêng tư
+  fresh();
+  const pj = db().insert("projects", { name: "Ny'ah Phú Định", district: "Quận 8", amenities: ["hồ bơi"] }).data;
+  await send({ external_user_id: "aond-f2", text: "anh là môi giới, có vài căn Ny'ah Phú Định muốn rao" });
+  globalThis.__model.parse = (p) => laLuotDocTL(p)
+    ? { loai: "bang_gia", ten_du_an: "Ny'ah Phú Định", chu_dau_tu: "Phú Định Land", mau_nha: [{ ten: "Cosmo Gen 2", thong_so: "5x20, 3 tầng, 4 phòng ngủ" }],
+        can: [{ ma_can: "A12", mau_nha: "Cosmo Gen 2", dien_tich: "100m2", dien_tich_dat: "100m2", gia: "12,5 tỷ", huong: "Đông", tang: null, ghi_chu: "lô góc" },
+              { ma_can: "A13", mau_nha: "Cosmo Gen 2", dien_tich: "95m2", dien_tich_dat: null, gia: "11,8 tỷ", huong: null, tang: null, ghi_chu: null }],
+        tien_ich: ["hồ bơi", "công viên"], ghi_chu: "bảng giá đợt 2", ro_net: true }
+    : laLuotAnh(p) ? ANH(globalThis.__anh) : OUT();
+  r = await send({ external_user_id: "aond-f2", text: "", file_url: "https://f.zdn.vn/bang-gia.pdf", file_name: "bang-gia.pdf" });
+  const kho = db().t.du_an_can.filter((c) => c.project_id === pj.id);
+  const tl = db().t.du_an_tai_lieu[0];
+  check("AOND-F2 PDF bảng giá → du_an_can 2 căn (A12 100m2 · 12,5 tỷ · lô góc), du_an_tai_lieu loai bang_gia so_can_doc 2, file ở listing-private/du-an/…",
+    r.body.tai_lieu_du_an === true && kho.length === 2 && kho.find((c) => c.ma_can === "A12")?.dien_tich_m2 === 100 && kho.find((c) => c.ma_can === "A12")?.gia_raw === "12,5 tỷ" &&
+      kho.find((c) => c.ma_can === "A12")?.thuoc_tinh?.ghi_chu === "lô góc" && tl?.loai === "bang_gia" && tl?.so_can_doc === 2 && tl?.project_id === pj.id &&
+      db().storage.some((f) => f.bucket === "listing-private" && /^du-an\//.test(f.path)),
+    JSON.stringify({ rep: r.body.replies, kho, tl, st: db().storage }));
+  check("AOND-F2b lời đáp: 'Em đọc bảng giá dự án Ny'ah Phú Định … 2 căn, mẫu Cosmo Gen 2'; mẫu nhà vào projects.unit_types",
+    /Em đọc bảng giá dự án Ny'ah Phú Định/.test(r.body.replies[0] ?? "") && /2 căn/.test(r.body.replies[0]) && /Cosmo Gen 2/.test(r.body.replies[0]) &&
+      (db().t.projects.find((x) => x.id === pj.id)?.unit_types ?? []).some((m) => m.ten === "Cosmo Gen 2"),
+    JSON.stringify({ rep: r.body.replies, ut: db().t.projects.find((x) => x.id === pj.id)?.unit_types }));
+
+  // F3 — rao "căn A12" → tin gắn dự án + unit_code, diện tích điền từ kho, fact bo_sung "theo kho dự án", khối CĂN TRONG DỰ ÁN tới model
+  globalThis.__model.parse = (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT();
+  r = await send({ external_user_id: "aond-f2", text: "bán căn A12 Ny'ah Phú Định giá 13 tỷ" });
+  const tinA12 = tinCua("aond-f2").find((l) => l.unit_code === "A12");
+  check("AOND-F3 rao 'bán căn A12 Ny'ah Phú Định giá 13 tỷ' → tin project_id + unit_code A12, area_m2 100 điền từ kho, giá rao 13 tỷ (không lấy giá niêm yết)",
+    tinA12 && tinA12.project_id === pj.id && tinA12.area_m2 === 100 && /13 tỷ/.test(tinA12.price_raw ?? "") &&
+      db().t.listing_facts.some((f) => f.listing_id === tinA12.id && f.question === "bo_sung" && /theo kho dự án, căn A12/.test(f.answer) && /giá niêm yết 12,5 tỷ/.test(f.answer)),
+    JSON.stringify({ tin: tinA12, facts: db().t.listing_facts.filter((f) => f.listing_id === tinA12?.id) }));
+  r = await send({ external_user_id: "aond-f2", text: "sổ hồng riêng rồi em" });
+  const pF3 = createCalls().at(-1)?.params?.messages?.[0]?.content ?? "";
+  check("AOND-F3b lượt hỏi tiếp: ngữ cảnh model có khối CĂN TRONG DỰ ÁN với A12 · Cosmo Gen 2 · niêm yết 12,5 tỷ · lô góc",
+    /CĂN TRONG DỰ ÁN Ny'ah Phú Định/.test(pF3) && /A12 · Cosmo Gen 2 · 100m2/.test(pF3) && /niêm yết 12,5 tỷ/.test(pF3) && /lô góc/.test(pF3), pF3.slice(0, 600));
+
+  // F2c — tài liệu CHƯA rõ dự án: model không đọc được tên, người bán chưa có tin gắn dự án → hỏi tên; lượt sau nói tên → gắn + ghi căn
+  fresh();
+  const pj2 = db().insert("projects", { name: "Akari City", district: "Bình Tân" }).data;
+  await send({ external_user_id: "aond-f2c", text: "chào em, anh có mấy căn muốn gửi bán" });
+  globalThis.__model.parse = (p) => laLuotDocTL(p)
+    ? { loai: "phan_lo", ten_du_an: null, chu_dau_tu: null, mau_nha: [], can: [{ ma_can: "B2.07", mau_nha: null, dien_tich: "70m2", dien_tich_dat: null, gia: null, huong: null, tang: "2", ghi_chu: null }], tien_ich: [], ghi_chu: null, ro_net: false }
+    : laLuotAnh(p) ? ANH(globalThis.__anh) : OUT();
+  r = await send({ external_user_id: "aond-f2c", text: "", file_url: "https://f.zdn.vn/bang-gia.pdf", file_name: "phan-lo.pdf" });
+  check("AOND-F2c tài liệu không có tên dự án → hỏi 'đây là dự án nào', giữ nội dung đọc ở du_an_tai_lieu.noi_dung, chưa ghi du_an_can",
+    /dự án nào vậy/.test(r.body.replies[0] ?? "") && db().t.du_an_tai_lieu[0]?.project_id == null && db().t.du_an_tai_lieu[0]?.noi_dung?.can?.length === 1 && db().t.du_an_can.length === 0,
+    JSON.stringify({ rep: r.body.replies, tl: db().t.du_an_tai_lieu }));
+  globalThis.__model.parse = (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT();
+  r = await send({ external_user_id: "aond-f2c", text: "dự án Akari City đó em" });
+  check("AOND-F2d lượt sau nói tên dự án có trong kho → gắn tài liệu, ghi 1 căn B2.07 tầng 2 vào du_an_can, bong bóng 'em gắn 1 căn'",
+    db().t.du_an_can.some((c) => c.project_id === pj2.id && c.ma_can === "B2.07" && c.tang === 2) && db().t.du_an_tai_lieu[0]?.project_id === pj2.id &&
+      r.body.replies.some((x) => /gắn 1 căn/.test(x)),
+    JSON.stringify({ rep: r.body.replies, kho: db().t.du_an_can, tl: db().t.du_an_tai_lieu }));
+
+  // F4 — gom nhiều căn (luật đỡ, AI tắt): "ngưng rao hết trừ căn Trần Hưng Đạo" → hỏi xác nhận, chưa ẩn; "ừ" → ẩn 0002, giữ 0001
+  fresh(seedKho);
+  const tinZ = (code) => db().t.listings.find((l) => l.code === code);
+  r = await send({ external_user_id: "z-ccrb", text: "ngưng rao hết trừ căn Trần Hưng Đạo nha em" });
+  const pendNHL = () => db().t.info_requests.find((q) => q.question === "xac_nhan_ngung_hang_loat");
+  check("AOND-F4 'ngưng rao hết trừ căn Trần Hưng Đạo' → liệt kê 1 căn sẽ ẩn (Nguyễn Trãi), giữ THĐ, hỏi xác nhận; CHƯA đổi trạng thái",
+    pendNHL()?.status === "pending" && /Em sẽ ngưng rao 1 căn/.test(r.body.replies[0] ?? "") && /Nguyễn Trãi/.test(r.body.replies[0]) && /Giữ lại:.*Trần Hưng Đạo/.test(r.body.replies[0]) &&
+      tinZ("BDS-Q5-0001").status === "dang_ban" && tinZ("BDS-Q5-0002").status === "cho_thong_tin",
+    JSON.stringify({ rep: r.body.replies, pend: pendNHL(), st: [tinZ("BDS-Q5-0001").status, tinZ("BDS-Q5-0002").status] }));
+  r = await send({ external_user_id: "z-ccrb", text: "ừ" });
+  check("AOND-F4b 'ừ' → 0002 thành an (boc_tach.ket_thuc rut), 0001 vẫn dang_ban, câu xác nhận answered, đáp 'đã ngưng rao 1 căn'",
+    tinZ("BDS-Q5-0002").status === "an" && tinZ("BDS-Q5-0002").boc_tach?.ket_thuc === "rut" && tinZ("BDS-Q5-0001").status === "dang_ban" && pendNHL()?.status === "answered" &&
+      /đã ngưng rao 1 căn/.test(r.body.replies.join("\n")),
+    JSON.stringify({ rep: r.body.replies, st: [tinZ("BDS-Q5-0001").status, tinZ("BDS-Q5-0002").status], pend: pendNHL() }));
+
+  // F5 — "gỡ hết đi" rồi "thôi" → không ẩn gì, câu xác nhận expired
+  fresh(seedKho);
+  r = await send({ external_user_id: "z-ccrb", text: "gỡ hết đi em" });
+  check("AOND-F5 'gỡ hết đi' → an_het: liệt kê 2 căn, hỏi xác nhận", /Em sẽ ngưng rao 2 căn/.test(r.body.replies[0] ?? "") && pendNHL()?.status === "pending", JSON.stringify(r.body.replies));
+  r = await send({ external_user_id: "z-ccrb", text: "thôi, giữ nguyên đi" });
+  check("AOND-F5b 'thôi' → giữ nguyên, không căn nào an, câu xác nhận expired",
+    tinZ("BDS-Q5-0001").status === "dang_ban" && tinZ("BDS-Q5-0002").status === "cho_thong_tin" && pendNHL()?.status === "expired" && /giữ nguyên/.test(r.body.replies.join("\n")),
+    JSON.stringify({ rep: r.body.replies, st: [tinZ("BDS-Q5-0001").status, tinZ("BDS-Q5-0002").status] }));
+
+  // F6 — AI đọc ý (chế độ ai): cách nói MỚI luật không bắt — "mấy căn kia dẹp giúp anh, giữ mỗi căn Nguyễn Trãi" → chi_giu
+  fresh(seedKho);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai" };
+  const aiNHL = (nhl) => (p) => laLuotBR(p)
+    ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, y_dinh: { loai: "binh_thuong", trich_dan: null } }
+    : laLuotYL(p) ? { dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, yeu_cau_o: null, mua_kem: null, ngung_hang_loat: nhl }
+    : laLuotGanManh(p) ? { manh: [] } // câu nhắc tên đường căn khác → FR-214 hỏi model gán mảnh; model thật thấy đây là lệnh, không phải dữ kiện
+    : OUT();
+  globalThis.__model.parse = aiNHL({ kieu: "chi_giu", giu: ["căn Nguyễn Trãi"], trich_dan: "mấy căn kia dẹp giúp anh" });
+  r = await send({ external_user_id: "z-ccrb", text: "mấy căn kia dẹp giúp anh, giữ mỗi căn Nguyễn Trãi" });
+  check("AOND-F6 AI đọc 'mấy căn kia dẹp giúp anh, giữ mỗi căn Nguyễn Trãi' (luật không bắt) → ẩn THĐ, giữ Nguyễn Trãi, hỏi xác nhận",
+    laNgungHangLoatLuat("mấy căn kia dẹp giúp anh, giữ mỗi căn Nguyễn Trãi") === null &&
+      pendNHL()?.status === "pending" && /Trần Hưng Đạo/.test(r.body.replies[0] ?? "") && /Giữ lại:.*Nguyễn Trãi/.test(r.body.replies[0]),
+    JSON.stringify({ rep: r.body.replies, pend: pendNHL() }));
+  globalThis.__model.parse = aiNHL(null);
+  r = await send({ external_user_id: "z-ccrb", text: "ngưng rao căn Nguyễn Trãi thôi" });
+  check("AOND-F6b AI nói KHÔNG có ý gom (null) → không mở xác nhận hàng loạt, FR-184 một căn như cũ", !db().t.info_requests.some((q) => q.question === "xac_nhan_ngung_hang_loat" && q.status === "pending" && q.created_at > (pendNHL()?.created_at ?? "")) , JSON.stringify(r.body.replies));
+  globalThis.__cauHinh = cuCH;
+  globalThis.fetch = gocFetch;
 }
 // ── kết ──
 let hong = 0;

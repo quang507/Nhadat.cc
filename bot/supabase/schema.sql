@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-04 12:33 (giờ VN)
+-- Sinh lúc: 2026-10-05 23:30 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -198,6 +198,41 @@ create table if not exists public.deals (
   closed_at timestamp with time zone,
   created_at timestamp with time zone not null default now(),
   ctv_id uuid
+);
+
+create table if not exists public.du_an_can (
+  id uuid not null default gen_random_uuid(),
+  project_id uuid not null,
+  ma_can text not null,
+  mau_nha text,
+  dien_tich_m2 numeric,
+  dien_tich_dat_m2 numeric,
+  gia_raw text,
+  price_vnd bigint,
+  huong text,
+  tang integer,
+  thuoc_tinh jsonb not null default '{}'::jsonb,
+  nguon text not null default 'tai_lieu'::text,
+  tai_lieu_id uuid,
+  seller_id uuid,
+  trang_thai text not null default 'cho_duyet'::text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+);
+
+create table if not exists public.du_an_tai_lieu (
+  id uuid not null default gen_random_uuid(),
+  project_id uuid,
+  seller_id uuid,
+  bucket text not null,
+  storage_path text not null,
+  ten_tep text,
+  mime text,
+  loai text not null default 'khac'::text,
+  so_can_doc integer not null default 0,
+  tom_tat text,
+  noi_dung jsonb,
+  created_at timestamp with time zone not null default now()
 );
 
 create table if not exists public.duong (
@@ -714,6 +749,27 @@ do $d$ begin
   alter table public.deals add constraint deals_pkey PRIMARY KEY (id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_nguon_check CHECK ((nguon = ANY (ARRAY['tai_lieu'::text, 'nguoi_ban'::text, 'admin'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_project_id_ma_can_key UNIQUE (project_id, ma_can);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_trang_thai_check CHECK ((trang_thai = ANY (ARRAY['cho_duyet'::text, 'da_duyet'::text, 'loai'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_loai_check CHECK ((loai = ANY (ARRAY['bang_gia'::text, 'phan_lo'::text, 'brochure'::text, 'mat_bang'::text, 'khac'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_so_can_doc_check CHECK (((so_can_doc >= 0) AND (so_can_doc <= 10000)));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.duong add constraint duong_loai_check CHECK ((loai = ANY (ARRAY['duong'::text, 'so'::text, 'hem'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1004,6 +1060,21 @@ do $d$ begin
   alter table public.deals add constraint deals_listing_id_fkey FOREIGN KEY (listing_id) REFERENCES listings(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES sellers(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_can add constraint du_an_can_tai_lieu_id_fkey FOREIGN KEY (tai_lieu_id) REFERENCES du_an_tai_lieu(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.du_an_tai_lieu add constraint du_an_tai_lieu_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES sellers(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.info_requests add constraint info_requests_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES buyers(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1122,6 +1193,8 @@ create index if not exists curated_lists_buyer_idx ON public.curated_lists USING
 create index if not exists deals_buyer_id_idx ON public.deals USING btree (buyer_id);
 create index if not exists deals_ctv_id_idx ON public.deals USING btree (ctv_id);
 create index if not exists deals_listing_id_idx ON public.deals USING btree (listing_id);
+create index if not exists du_an_can_project_idx ON public.du_an_can USING btree (project_id);
+create index if not exists du_an_tai_lieu_project_idx ON public.du_an_tai_lieu USING btree (project_id);
 create index if not exists duong_hem ON public.duong USING btree (upper(so_hem), bo_dau(duong_me)) WHERE (loai = 'hem'::text);
 create index if not exists duong_lat_lng ON public.duong USING btree (lat, lng);
 create index if not exists duong_nhung_hnsw ON public.duong USING hnsw (nhung extensions.vector_cosine_ops);
@@ -2462,6 +2535,20 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.can_du_an(p_project_id uuid, p_gioi_han integer DEFAULT 60)
+ RETURNS TABLE(ma_can text, mau_nha text, dien_tich_m2 numeric, dien_tich_dat_m2 numeric, gia_raw text, huong text, tang integer, thuoc_tinh jsonb, trang_thai text)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  select c.ma_can, c.mau_nha, c.dien_tich_m2, c.dien_tich_dat_m2, c.gia_raw, c.huong, c.tang, c.thuoc_tinh, c.trang_thai
+    from public.du_an_can c
+   where c.project_id = p_project_id and c.trang_thai <> 'loai'
+   order by length(c.ma_can), c.ma_can
+   limit greatest(1, least(coalesce(p_gioi_han, 60), 200));
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.canh_bao_ngoai(p_title text, p_text text, p_priority integer DEFAULT 4, p_email boolean DEFAULT false)
  RETURNS bigint
  LANGUAGE plpgsql
@@ -2680,6 +2767,26 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.chuan_nmg(p_seller_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  with t as (
+    select count(*) filter (where l.status in ('dang_ban', 'dang_quan_tam'))                                   as dang_rao,
+           count(*) filter (where l.status = 'da_chot' and coalesce(l.chu_noi_du_at, l.updated_at) >= now() - interval '6 months') as chot_6t,
+           count(*) filter (where l.created_at >= now() - interval '6 months' or l.status in ('dang_ban', 'dang_quan_tam', 'cho_thong_tin')) as tong_6t
+      from listings l where l.seller_id = p_seller_id
+  )
+  select jsonb_build_object(
+           'dang_rao', dang_rao, 'chot_6_thang', chot_6t, 'tong_6_thang', tong_6t,
+           'ty_le_chot', case when tong_6t > 0 then round(100.0 * chot_6t / tong_6t, 1) else 0 end,
+           'dat_chuan', dang_rao >= 10 and tong_6t > 0 and chot_6t::numeric / tong_6t >= 0.05)
+    from t;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.claim_inbound(p_msg_id text, p_stale_secs integer DEFAULT 150, p_worker text DEFAULT NULL::text)
  RETURNS TABLE(r_state text, r_reply jsonb, r_attempts integer, r_sent_at timestamp with time zone, r_dead boolean)
  LANGUAGE plpgsql
@@ -2740,6 +2847,25 @@ CREATE OR REPLACE FUNCTION public.co_moc(p_loai text, p_ten_re text DEFAULT NULL
 AS $function$
   select exists (select 1 from public.moc_khop(p_loai, p_ten_re))
 $function$
+;
+
+CREATE OR REPLACE FUNCTION public.con_duoc_rao(p_seller_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare v_hang text; v_so int; v_diem int;
+begin
+  if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
+    raise exception 'khong du quyen' using errcode = '42501';
+  end if;
+  select count(*) into v_so from listings l
+   where l.seller_id = p_seller_id and l.status in ('cho_thong_tin', 'dang_ban', 'dang_quan_tam');
+  v_diem := (public.diem_nguoi_ban(p_seller_id)->>'diem')::int;
+  v_hang := public.hang_theo_diem(v_diem);
+  return jsonb_build_object('duoc', not (v_hang = 'dong' and v_so >= 5), 'hang', v_hang, 'so_dang_rao', v_so, 'tran', case when v_hang = 'dong' then 5 end, 'diem', v_diem);
+end $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.cong_token(p_in bigint DEFAULT 0, p_out bigint DEFAULT 0, p_cache_write bigint DEFAULT 0, p_cache_read bigint DEFAULT 0, p_model text DEFAULT NULL::text)
@@ -2830,6 +2956,48 @@ CREATE OR REPLACE FUNCTION public.ctv_sla_phut()
 AS $function$ select 120 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.day_ro_ccrb_toi_nmg(p_listing_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare l record; v_hang text; v_note text; v_n int := 0;
+begin
+  select li.id, li.code, li.seller_id, li.deal::text as deal, li.location_raw, li.ward, li.district, li.price_raw, li.area_m2, li.property_type,
+         s.seller_type
+    into l
+    from listings li join sellers s on s.id = li.seller_id
+   where li.id = p_listing_id;
+  if l.id is null or l.seller_type <> 'ccrb' then return 0; end if;
+  v_hang := public.hang_theo_diem((public.diem_nguoi_ban(l.seller_id)->>'diem')::int);
+  if v_hang <> 'vang' then return 0; end if;
+  v_note := '💬 Căn chính chủ mới lên kệ: ' ||
+            coalesce(nullif(btrim(coalesce(l.location_raw, '')), '') || ', ', '') || coalesce(l.ward, '') || coalesce(', ' || l.district, '') ||
+            coalesce(' · ' || l.price_raw, '') ||
+            coalesce(' · ' || rtrim(to_char(l.area_m2, 'FM9999999990.99'), '.') || 'm2', '') ||
+            case when l.deal = 'cho_thue' then ' (cho thuê)' else '' end ||
+            '. Anh/chị có khách phù hợp nhắn em một tiếng, em nối với chủ nhà ạ.';
+  insert into reminders (kind, listing_id, seller_id, due_at, note)
+  select 'escalation', l.id, n.id, now(), v_note
+    from (
+      select s.id, public.hang_theo_diem((public.diem_nguoi_ban(s.id)->>'diem')::int) as hang,
+             (public.diem_nguoi_ban(s.id)->>'diem')::int as diem,
+             coalesce(h.hoat_dong, false) as hoat_dong
+        from sellers s
+        left join nmg_hoat_dong h on h.id = s.id
+       where s.seller_type = 'nmg' and s.zalo_user_id is not null and s.id <> l.seller_id
+    ) n
+   where not exists (select 1 from reminders r where r.listing_id = l.id and r.seller_id = n.id and r.note like '💬 Căn chính chủ mới lên kệ%')
+     and not exists (select 1 from reminders r where r.seller_id = n.id and r.note like '💬 Căn chính chủ mới lên kệ%'
+                      and r.created_at > now() - interval '24 hours')
+   order by (n.hang = 'vang') desc, n.hoat_dong desc, n.diem desc nulls last
+   limit 20;
+  get diagnostics v_n = row_count;
+  return v_n;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.deals_chan_xoa_da_chot()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2883,6 +3051,9 @@ declare
   v_tb numeric;
   v_n int;
   v_he_so numeric := 1;
+  v_ph jsonb;
+  v_ph_diem int;
+  v_goc numeric;
   v_diem int;
 begin
   if not (coalesce(auth.role(), '') = 'service_role' or public.la_admin()) then
@@ -2895,16 +3066,62 @@ begin
     from listings l
    where l.seller_id = p_seller_id and l.status in ('dang_ban', 'dang_quan_tam', 'cho_thong_tin');
   if coalesce(v_n, 0) = 0 then
-    return jsonb_build_object('diem', 0, 'diem_tb', 0, 'so_tin', 0, 'he_so', 1);
+    return jsonb_build_object('diem', 0, 'diem_tb', 0, 'so_tin', 0, 'he_so', 1, 'diem_phan_hoi', null, 'so_luot_phan_hoi', 0);
   end if;
   if v_type = 'nmg' then
     v_he_so := 1 + 0.06 * least(v_n, 10)
                  + 0.04 * greatest(least(v_n, 30) - 10, 0)
                  + 0.015 * greatest(v_n - 30, 0);
   end if;
-  v_diem := least(100, round(v_tb * v_he_so))::int;
-  return jsonb_build_object('diem', v_diem, 'diem_tb', round(v_tb, 1), 'so_tin', v_n, 'he_so', round(v_he_so, 3));
+  v_ph := public.diem_phan_hoi(p_seller_id);
+  v_ph_diem := (v_ph->>'diem')::int;
+  v_goc := case when v_ph_diem is null then v_tb else 0.5 * v_tb + 0.5 * v_ph_diem end;
+  v_diem := least(100, round(v_goc * v_he_so))::int;
+  return jsonb_build_object('diem', v_diem, 'diem_tb', round(v_tb, 1), 'so_tin', v_n, 'he_so', round(v_he_so, 3),
+                            'diem_phan_hoi', v_ph_diem, 'so_luot_phan_hoi', coalesce((v_ph->>'so_luot')::int, 0));
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.diem_phan_hoi(p_seller_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  with tin as (
+    select m.created_at, m.sender,
+           lead(m.sender)     over (partition by m.conversation_id order by m.created_at, m.seq) as sender_ke,
+           lead(m.created_at) over (partition by m.conversation_id order by m.created_at, m.seq) as luc_ke
+      from messages m
+      join conversations c on c.id = m.conversation_id
+     where c.seller_id = p_seller_id
+       and m.created_at >= now() - interval '90 days'
+  ),
+  luot as (
+    -- bong bóng cuối của một lượt bot: tin kế không phải của bot (hoặc không có tin kế)
+    select created_at,
+           case when sender_ke = 'seller' then extract(epoch from luc_ke - created_at) / 3600.0 end as gio_tra_loi
+      from tin
+     where sender = 'bot' and (sender_ke is distinct from 'bot')
+       -- lượt bot mới nhất mà chưa quá 7 ngày và chưa ai trả lời: chưa kết luận, không tính
+       and not (sender_ke is null and created_at > now() - interval '7 days')
+  ),
+  diem as (
+    select case
+             when gio_tra_loi is null then 0
+             when gio_tra_loi <= 1   then 100
+             when gio_tra_loi <= 12  then 80
+             when gio_tra_loi <= 24  then 60
+             when gio_tra_loi <= 72  then 30
+             else 0 end as d,
+           gio_tra_loi
+      from luot
+  )
+  select case when count(*) = 0 then jsonb_build_object('diem', null, 'so_luot', 0, 'tb_gio', null)
+              else jsonb_build_object('diem', round(avg(d))::int, 'so_luot', count(*),
+                                      'tb_gio', round(avg(gio_tra_loi)::numeric, 1)) end
+    from diem;
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.diem_tin(l listings)
@@ -3211,6 +3428,21 @@ begin
   return jsonb_build_object('tin', v_tin, 'tin_nhan', v_tin_nhan,
                             'nguoi_ban', v_nguoi, 'khach', v_khach, 'fact_du_an', v_pf);
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.du_an_can_doc_gia()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.gia_raw is distinct from coalesce(old.gia_raw, '') or new.price_vnd is null then
+    new.price_vnd := case when new.gia_raw is null then null else public.parse_vnd(new.gia_raw) end;
+  end if;
+  new.updated_at := now();
+  return new;
+end;
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.du_an_can_geocode(p_limit integer DEFAULT 30)
@@ -3687,6 +3919,27 @@ AS $function$
    where p.prokind in ('f', 'p')
      and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e')
    order by 1, 2;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.hang_cua_nguoi_ban(p_ids uuid[])
+ RETURNS TABLE(seller_id uuid, hang text, diem integer)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select s.id, public.hang_theo_diem((public.diem_nguoi_ban(s.id)->>'diem')::int), (public.diem_nguoi_ban(s.id)->>'diem')::int
+    from sellers s where s.id = any(p_ids);
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.hang_theo_diem(p_diem integer)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO 'public'
+AS $function$
+  select case when coalesce(p_diem, 0) >= 80 then 'vang' when coalesce(p_diem, 0) >= 50 then 'bac' else 'dong' end;
 $function$
 ;
 
@@ -6074,33 +6327,57 @@ CREATE OR REPLACE FUNCTION public.seller_keep_alive_tick()
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare r record; n int := 0; v_ir uuid;
+declare
+  s record; r record; n int := 0; v_so int; v_cv uuid; v_note text; v_ten text; v_goi text;
 begin
-  for r in
-    select l.id, l.code, l.seller_id, s.zalo_user_id
-      from listings l join sellers s on s.id = l.seller_id
-     where l.status = 'dang_ban' and s.zalo_user_id is not null
-       -- chủ nhà im ≥ 6 ngày (tin cuối do chủ nhắn)
+  for s in
+    select se.id, se.zalo_user_id, se.xung_ho
+      from sellers se
+     where se.zalo_user_id is not null
+       and exists (select 1 from listings l where l.seller_id = se.id and l.status in ('dang_ban', 'dang_quan_tam'))
+       -- chủ nhà im > 5 ngày (tin cuối do chủ nhắn; chưa nhắn gì thì lấy ngày mở tin đầu)
        and coalesce((select max(m.created_at) from messages m join conversations c on c.id = m.conversation_id
-                      where c.seller_id = l.seller_id and m.sender = 'seller'), l.created_at) < now() - interval '6 days'
-       -- chưa keep-alive / hỏi bù trong 6 ngày
-       and not exists (select 1 from info_requests q where q.listing_id = l.id and q.created_at > now() - interval '6 days')
-       and not exists (select 1 from info_requests q where q.listing_id = l.id and q.status = 'pending')
-     order by l.updated_at limit 20
+                      where c.seller_id = se.id and m.sender = 'seller'),
+                    (select min(l.created_at) from listings l where l.seller_id = se.id)) < now() - interval '5 days'
+       -- một lượt chủ động cho CẢ tài khoản trong 5 ngày (hỏi bù hay keep-alive của bất kỳ căn nào)
+       and not exists (select 1 from info_requests q join listings l on l.id = q.listing_id
+                        where l.seller_id = se.id and q.source = 'seller_flow' and q.created_at > now() - interval '5 days')
+       and not exists (select 1 from info_requests q join listings l on l.id = q.listing_id
+                        where l.seller_id = se.id and q.status = 'pending')
+     order by se.id
+     limit 20
   loop
-    if exists (select 1 from listing_missing_facts m where m.listing_id = r.id
-                and not exists (select 1 from info_requests q where q.listing_id = r.id and q.question = m.fact_key and q.status = 'expired')) then
-      -- còn thứ để hỏi (chưa bị né) → xin bổ sung 1 lượt 2–3 thông tin (ask-seller gom)
-      perform ask_seller_drip(r.id);
-    else
-      insert into info_requests (listing_id, question, status, source)
-      values (r.id, 'con_ban', 'pending', 'seller_flow') returning id into v_ir;
-      insert into reminders (kind, listing_id, seller_id, due_at, note)
-      values ('escalation', r.id, r.seller_id, now(),
-        'Căn ' || coalesce(nullif((select coalesce(location_raw, ward) from listings where id = r.id), ''), '#' || coalesce(r.code, '?')) ||
-        ' của mình còn bán không ạ? Còn thì anh/chị nhắn "còn" giúp em, có khách hỏi em báo liền.');
-    end if;
-    n := n + 1;
+    v_so := 1 + floor(random() * 2)::int;   -- SRD §VI: "mỗi ngày chỉ hỏi ngẫu nhiên 1–2 căn trong rổ hàng"
+    v_goi := coalesce(nullif(btrim(s.xung_ho), ''), 'anh/chị');
+    for r in
+      select l.id, l.code, l.seller_id, l.deal, l.location_raw, l.ward
+        from listings l
+       where l.seller_id = s.id and l.status in ('dang_ban', 'dang_quan_tam')
+       order by random()
+       limit v_so
+    loop
+      if exists (select 1 from listing_missing_facts m where m.listing_id = r.id
+                  and not exists (select 1 from info_requests q where q.listing_id = r.id and q.question = m.fact_key and q.status = 'expired')) then
+        -- còn thứ để hỏi (chưa bị né) → xin bổ sung 1 thông tin (ask-seller drip; SRD §VI 2.1–2.3)
+        perform ask_seller_drip(r.id);
+      else
+        -- dữ liệu đủ → xác thực trạng thái (SRD §VI 2.4)
+        insert into info_requests (listing_id, question, status, source) values (r.id, 'con_ban', 'pending', 'seller_flow');
+        v_ten := coalesce(nullif(btrim(coalesce(r.location_raw, '')), ''), nullif(btrim(coalesce(r.ward, '')), ''), '#' || coalesce(r.code, '?'));
+        v_note := 'Dạ ' || v_goi || ' ơi, căn ' || v_ten || ' của mình hiện còn ' ||
+                  case when r.deal::text = 'cho_thue' then 'cho thuê' else 'bán' end ||
+                  ' không ạ? Còn thì ' || v_goi || ' nhắn em một chữ "còn" để em giữ tin, có khách hỏi em báo liền nha.';
+        -- "💬 " = câu soạn sẵn cho chủ nhà, bridge gửi nguyên văn (_shared/tin_nhac.ts)
+        insert into reminders (kind, listing_id, seller_id, due_at, note) values ('escalation', r.id, r.seller_id, now(), '💬 ' || v_note);
+        -- vào sổ hội thoại: lượt AI kế (doc-y-luot) đọc "câu bot vừa nói" từ messages — không có dòng này thì AI không biết bot
+        -- đã hỏi còn bán không, "còn em" chỉ là hai chữ lạc.
+        select c_id into v_cv from public.ensure_seller_conversation(r.seller_id, 'zalo_personal');
+        if v_cv is not null then
+          insert into messages (conversation_id, sender, body) values (v_cv, 'bot', v_note);
+        end if;
+      end if;
+      n := n + 1;
+    end loop;
   end loop;
   return n;
 end $function$
@@ -6952,6 +7229,20 @@ begin
 end $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.trg_listings_day_ro_ccrb()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.status = 'dang_ban' and coalesce(old.status, '') <> 'dang_ban' then
+    perform public.day_ro_ccrb_toi_nmg(new.id);
+  end if;
+  return new;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.trg_property_event()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -7562,23 +7853,6 @@ create or replace view public.agents_public as
           WHERE l.seller_id = s.id) c ON true
   WHERE s.seller_type = 'nmg'::seller_type;
 
-create or replace view public.seller_ranks with (security_invoker = true) as
- SELECT s.id,
-    s.name,
-    s.seller_type,
-    COALESCE(c.active, 0::bigint)::integer AS active_count,
-    COALESCE(c.closed, 0::bigint)::integer AS closed_count,
-    COALESCE(c.total, 0::bigint)::integer AS total_count,
-    seller_rank(s.seller_type, COALESCE(c.active, 0::bigint)::integer, COALESCE(c.closed, 0::bigint)::integer, COALESCE(c.total, 0::bigint)::integer) AS rank,
-    (diem_nguoi_ban(s.id) ->> 'diem'::text)::integer AS diem_nguoi_rao,
-    s.ten_tro_ly
-   FROM sellers s
-     LEFT JOIN LATERAL ( SELECT count(*) FILTER (WHERE l.status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text])) AS active,
-            count(*) FILTER (WHERE l.status = 'da_chot'::text) AS closed,
-            count(*) AS total
-           FROM listings l
-          WHERE l.seller_id = s.id) c ON true;
-
 create or replace view public.media_mo_coi_storage as
  SELECT bucket_id AS bucket,
     name AS storage_path,
@@ -7984,6 +8258,62 @@ create or replace view public.listing_photos_v with (security_invoker = true) as
      JOIN listings l ON l.id = m.listing_id
   WHERE m.bucket = 'listing-public'::text AND (l.status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text, 'da_chot'::text]));
 
+create or replace view public.seller_ranks with (security_invoker = true) as
+ SELECT s.id,
+    s.name,
+    s.seller_type,
+    COALESCE(c.active, 0::bigint)::integer AS active_count,
+    COALESCE(c.closed, 0::bigint)::integer AS closed_count,
+    COALESCE(c.total, 0::bigint)::integer AS total_count,
+    hang_theo_diem((d.j ->> 'diem'::text)::integer) AS rank,
+    (d.j ->> 'diem'::text)::integer AS diem_nguoi_rao,
+    (d.j ->> 'diem_tb'::text)::numeric AS diem_hoan_chinh,
+    (d.j ->> 'diem_phan_hoi'::text)::integer AS diem_phan_hoi,
+    (d.j ->> 'so_luot_phan_hoi'::text)::integer AS so_luot_phan_hoi,
+        CASE
+            WHEN s.seller_type = 'nmg'::seller_type THEN (chuan_nmg(s.id) ->> 'dat_chuan'::text)::boolean
+            ELSE NULL::boolean
+        END AS dat_chuan_nmg,
+    s.ten_tro_ly
+   FROM sellers s
+     LEFT JOIN LATERAL ( SELECT count(*) FILTER (WHERE l.status = ANY (ARRAY['dang_ban'::text, 'dang_quan_tam'::text])) AS active,
+            count(*) FILTER (WHERE l.status = 'da_chot'::text) AS closed,
+            count(*) AS total
+           FROM listings l
+          WHERE l.seller_id = s.id) c ON true
+     LEFT JOIN LATERAL ( SELECT diem_nguoi_ban(s.id) AS j) d ON true;
+
+create or replace view public.hoi_thoai_nhan with (security_invoker = true) as
+ SELECT c.id AS conversation_id,
+        CASE
+            WHEN c.human_hold OR c.needs_human AND (c.human_touch_at IS NULL OR c.human_touch_at < c.needs_human_at) THEN 'NEED_HUMAN'::text
+            WHEN (EXISTS ( SELECT 1
+               FROM info_requests q
+              WHERE q.buyer_id = c.buyer_id AND c.buyer_id IS NOT NULL AND q.status = 'pending'::request_status)) OR (m.sender = ANY (ARRAY['buyer'::msg_sender, 'seller'::msg_sender])) AND m.created_at < (now() - '00:10:00'::interval) THEN 'WAITING_HINT'::text
+            ELSE 'AI_HANDLING'::text
+        END AS nhan,
+        CASE
+            WHEN c.human_hold THEN 'người thật đang giữ khách'::text
+            WHEN c.needs_human AND (c.human_touch_at IS NULL OR c.human_touch_at < c.needs_human_at) THEN 'bot xin người thật'::text
+            WHEN (EXISTS ( SELECT 1
+               FROM info_requests q
+              WHERE q.buyer_id = c.buyer_id AND c.buyer_id IS NOT NULL AND q.status = 'pending'::request_status)) THEN 'khách hỏi, đang chờ chủ nhà/CTV trả lời'::text
+            WHEN (m.sender = ANY (ARRAY['buyer'::msg_sender, 'seller'::msg_sender])) AND m.created_at < (now() - '00:10:00'::interval) THEN 'khách nhắn > 10 phút chưa có tin bot'::text
+            ELSE NULL::text
+        END AS ly_do,
+    m.created_at AS tin_cuoi_at,
+    m.sender::text AS tin_cuoi_cua
+   FROM conversations c
+     LEFT JOIN LATERAL ( SELECT m1.sender,
+            m1.created_at
+           FROM messages m1
+          WHERE m1.conversation_id = c.id
+          ORDER BY m1.created_at DESC, m1.seq DESC
+         LIMIT 1) m ON true
+  WHERE auth.role() = 'service_role'::text OR (EXISTS ( SELECT 1
+           FROM admins a
+          WHERE a.email = ((( SELECT auth.jwt() AS jwt)) ->> 'email'::text)));
+
 -- ══ Trigger ══
 drop trigger if exists trg_bot_errors_het_tien on public.bot_errors;
 CREATE TRIGGER trg_bot_errors_het_tien AFTER INSERT ON public.bot_errors FOR EACH ROW EXECUTE FUNCTION bat_het_tien_api();
@@ -7997,6 +8327,8 @@ drop trigger if exists trg_deals_chan_xoa on public.deals;
 CREATE TRIGGER trg_deals_chan_xoa BEFORE DELETE ON public.deals FOR EACH ROW EXECUTE FUNCTION deals_chan_xoa_da_chot();
 drop trigger if exists trg_pe_deals on public.deals;
 CREATE TRIGGER trg_pe_deals AFTER INSERT ON public.deals FOR EACH ROW EXECUTE FUNCTION trg_property_event();
+drop trigger if exists trg_du_an_can_doc_gia on public.du_an_can;
+CREATE TRIGGER trg_du_an_can_doc_gia BEFORE INSERT OR UPDATE ON public.du_an_can FOR EACH ROW EXECUTE FUNCTION du_an_can_doc_gia();
 drop trigger if exists trg_inbound_ledger_trang_thai on public.inbound_ledger;
 CREATE TRIGGER trg_inbound_ledger_trang_thai BEFORE UPDATE ON public.inbound_ledger FOR EACH ROW EXECUTE FUNCTION inbound_ledger_giu_completed();
 drop trigger if exists trg_huy_nhac_khi_da_tra_loi on public.info_requests;
@@ -8039,6 +8371,8 @@ drop trigger if exists trg_listings_bao_tin_moi_khop on public.listings;
 CREATE TRIGGER trg_listings_bao_tin_moi_khop AFTER INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_bao_tin_moi_khop();
 drop trigger if exists trg_listings_chuan_hoa_cot on public.listings;
 CREATE TRIGGER trg_listings_chuan_hoa_cot BEFORE INSERT OR UPDATE ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_chuan_hoa_cot();
+drop trigger if exists trg_listings_day_ro_ccrb on public.listings;
+CREATE TRIGGER trg_listings_day_ro_ccrb AFTER UPDATE OF status ON public.listings FOR EACH ROW EXECUTE FUNCTION trg_listings_day_ro_ccrb();
 drop trigger if exists trg_listings_fill_property_type on public.listings;
 CREATE TRIGGER trg_listings_fill_property_type BEFORE INSERT OR UPDATE OF description, location_raw, property_type ON public.listings FOR EACH ROW EXECUTE FUNCTION listings_fill_property_type();
 drop trigger if exists trg_listings_price_vnd on public.listings;
@@ -8095,6 +8429,8 @@ alter table public.ctv_daily_reports enable row level security;
 alter table public.ctvs enable row level security;
 alter table public.curated_lists enable row level security;
 alter table public.deals enable row level security;
+alter table public.du_an_can enable row level security;
+alter table public.du_an_tai_lieu enable row level security;
 alter table public.duong enable row level security;
 alter table public.inbound_events enable row level security;
 alter table public.inbound_ledger enable row level security;
@@ -8169,6 +8505,10 @@ drop policy if exists ctvs_admin_read on public.ctvs;
 create policy ctvs_admin_read on public.ctvs as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
   WHERE (a.email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)))));
+drop policy if exists du_an_can_admin_read on public.du_an_can;
+create policy du_an_can_admin_read on public.du_an_can as permissive for SELECT to authenticated using (la_admin());
+drop policy if exists du_an_tai_lieu_admin_read on public.du_an_tai_lieu;
+create policy du_an_tai_lieu_admin_read on public.du_an_tai_lieu as permissive for SELECT to authenticated using (la_admin());
 drop policy if exists info_requests_admin_read on public.info_requests;
 create policy info_requests_admin_read on public.info_requests as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
@@ -8293,7 +8633,10 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.ct
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.ctvs to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.curated_lists to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.deals to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.du_an_can to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.du_an_tai_lieu to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.duong to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.hoi_thoai_nhan to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.inbound_events to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.inbound_ledger to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.info_requests to service_role;
@@ -8386,6 +8729,9 @@ grant SELECT on public.bot_health to authenticated;
 grant SELECT on public.bot_usage to authenticated;
 grant SELECT on public.bot_usage_model to authenticated;
 grant SELECT on public.bridge_dang_nhap to authenticated;
+grant SELECT on public.du_an_can to authenticated;
+grant SELECT on public.du_an_tai_lieu to authenticated;
+grant SELECT on public.hoi_thoai_nhan to authenticated;
 grant SELECT on public.hoi_thoai_phien to authenticated;
 grant SELECT on public.hoi_thoai_phien to service_role;
 grant SELECT on public.hoi_thoai_thong_ke to authenticated;
@@ -8398,7 +8744,6 @@ grant SELECT on public.listing_photos_v to authenticated;
 grant SELECT on public.project_facts to authenticated;
 grant SELECT on public.project_facts_cho_duyet to authenticated;
 grant SELECT on public.ro_hang_ban to authenticated;
-grant SELECT on public.seller_ranks to anon;
 grant SELECT on public.seller_ranks to authenticated;
 grant SELECT on public.tien_ich to authenticated;
 
@@ -8476,6 +8821,8 @@ revoke all on function public.bump_user_quota(p_uid text, p_gio_limit integer, p
 grant execute on function public.bump_user_quota(p_uid text, p_gio_limit integer, p_ngay_limit integer) to service_role;
 revoke all on function public.can_cung_khu(p_buyer_id uuid, p_listing_id uuid, p_limit integer) from public, anon, authenticated;
 grant execute on function public.can_cung_khu(p_buyer_id uuid, p_listing_id uuid, p_limit integer) to service_role;
+revoke all on function public.can_du_an(p_project_id uuid, p_gioi_han integer) from public, anon, authenticated;
+grant execute on function public.can_du_an(p_project_id uuid, p_gioi_han integer) to service_role;
 revoke all on function public.canh_bao_ngoai(p_title text, p_text text, p_priority integer, p_email boolean) from public, anon, authenticated;
 grant execute on function public.canh_bao_ngoai(p_title text, p_text text, p_priority integer, p_email boolean) to service_role;
 revoke all on function public.cat_truoc_phu_dinh(p_text text) from public, anon, authenticated;
@@ -8506,10 +8853,14 @@ revoke all on function public.chuan_hoa_phuong(p_text text) from public, anon, a
 grant execute on function public.chuan_hoa_phuong(p_text text) to anon;
 grant execute on function public.chuan_hoa_phuong(p_text text) to authenticated;
 grant execute on function public.chuan_hoa_phuong(p_text text) to service_role;
+revoke all on function public.chuan_nmg(p_seller_id uuid) from public, anon, authenticated;
+grant execute on function public.chuan_nmg(p_seller_id uuid) to service_role;
 revoke all on function public.claim_inbound(p_msg_id text, p_stale_secs integer, p_worker text) from public, anon, authenticated;
 grant execute on function public.claim_inbound(p_msg_id text, p_stale_secs integer, p_worker text) to service_role;
 revoke all on function public.co_moc(p_loai text, p_ten_re text) from public, anon, authenticated;
 grant execute on function public.co_moc(p_loai text, p_ten_re text) to service_role;
+revoke all on function public.con_duoc_rao(p_seller_id uuid) from public, anon, authenticated;
+grant execute on function public.con_duoc_rao(p_seller_id uuid) to service_role;
 revoke all on function public.cong_token(p_in bigint, p_out bigint, p_cache_write bigint, p_cache_read bigint, p_model text) from public, anon, authenticated;
 grant execute on function public.cong_token(p_in bigint, p_out bigint, p_cache_write bigint, p_cache_read bigint, p_model text) to service_role;
 revoke all on function public.conversations_email_upset() from public, anon, authenticated;
@@ -8524,6 +8875,8 @@ revoke all on function public.ctv_sla_phut() from public, anon, authenticated;
 grant execute on function public.ctv_sla_phut() to anon;
 grant execute on function public.ctv_sla_phut() to authenticated;
 grant execute on function public.ctv_sla_phut() to service_role;
+revoke all on function public.day_ro_ccrb_toi_nmg(p_listing_id uuid) from public, anon, authenticated;
+grant execute on function public.day_ro_ccrb_toi_nmg(p_listing_id uuid) to service_role;
 revoke all on function public.deals_chan_xoa_da_chot() from public, anon, authenticated;
 grant execute on function public.deals_chan_xoa_da_chot() to service_role;
 revoke all on function public.dia_danh_gan(p_lat double precision, p_lng double precision, p_ban_kinh_m double precision, p_loai text[], p_limit integer) from public, anon, authenticated;
@@ -8531,6 +8884,8 @@ grant execute on function public.dia_danh_gan(p_lat double precision, p_lng doub
 revoke all on function public.diem_nguoi_ban(p_seller_id uuid) from public, anon, authenticated;
 grant execute on function public.diem_nguoi_ban(p_seller_id uuid) to authenticated;
 grant execute on function public.diem_nguoi_ban(p_seller_id uuid) to service_role;
+revoke all on function public.diem_phan_hoi(p_seller_id uuid) from public, anon, authenticated;
+grant execute on function public.diem_phan_hoi(p_seller_id uuid) to service_role;
 revoke all on function public.diem_tin(l listings) from public, anon, authenticated;
 grant execute on function public.diem_tin(l listings) to service_role;
 revoke all on function public.diem_tin(p_listing_id uuid) from public, anon, authenticated;
@@ -8559,6 +8914,10 @@ grant execute on function public.doi_chieu_tien_cong_khai(p_cau text[]) to servi
 revoke all on function public.don_du_lieu_thu() from public, anon, authenticated;
 grant execute on function public.don_du_lieu_thu() to authenticated;
 grant execute on function public.don_du_lieu_thu() to service_role;
+revoke all on function public.du_an_can_doc_gia() from public, anon, authenticated;
+grant execute on function public.du_an_can_doc_gia() to anon;
+grant execute on function public.du_an_can_doc_gia() to authenticated;
+grant execute on function public.du_an_can_doc_gia() to service_role;
 revoke all on function public.du_an_can_geocode(p_limit integer) from public, anon, authenticated;
 grant execute on function public.du_an_can_geocode(p_limit integer) to service_role;
 revoke all on function public.duong_gan_duong(p_ten text, p_phuong text, p_ban_kinh_m double precision, p_limit integer) from public, anon, authenticated;
@@ -8604,6 +8963,12 @@ revoke all on function public.ham_md5_cong_khai() from public, anon, authenticat
 grant execute on function public.ham_md5_cong_khai() to anon;
 grant execute on function public.ham_md5_cong_khai() to authenticated;
 grant execute on function public.ham_md5_cong_khai() to service_role;
+revoke all on function public.hang_cua_nguoi_ban(p_ids uuid[]) from public, anon, authenticated;
+grant execute on function public.hang_cua_nguoi_ban(p_ids uuid[]) to service_role;
+revoke all on function public.hang_theo_diem(p_diem integer) from public, anon, authenticated;
+grant execute on function public.hang_theo_diem(p_diem integer) to anon;
+grant execute on function public.hang_theo_diem(p_diem integer) to authenticated;
+grant execute on function public.hang_theo_diem(p_diem integer) to service_role;
 revoke all on function public.huy_nhac_khi_da_tra_loi() from public, anon, authenticated;
 grant execute on function public.huy_nhac_khi_da_tra_loi() to service_role;
 revoke all on function public.inbound_ledger_giu_completed() from public, anon, authenticated;
@@ -8851,6 +9216,10 @@ revoke all on function public.trg_info_request_thong_bao_khach_hoi() from public
 grant execute on function public.trg_info_request_thong_bao_khach_hoi() to service_role;
 revoke all on function public.trg_listing_drip() from public, anon, authenticated;
 grant execute on function public.trg_listing_drip() to service_role;
+revoke all on function public.trg_listings_day_ro_ccrb() from public, anon, authenticated;
+grant execute on function public.trg_listings_day_ro_ccrb() to anon;
+grant execute on function public.trg_listings_day_ro_ccrb() to authenticated;
+grant execute on function public.trg_listings_day_ro_ccrb() to service_role;
 revoke all on function public.trg_property_event() from public, anon, authenticated;
 grant execute on function public.trg_property_event() to service_role;
 revoke all on function public.trg_vi_tri_vao_cot() from public, anon, authenticated;

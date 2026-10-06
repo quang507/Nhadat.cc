@@ -393,6 +393,23 @@ Kết quả: system prompt phía bán (`TONE + SELLER_SCRIPT + SELLER_FEWSHOT + 
 từ điển lóng và ví dụ đầu ra có cấu trúc). Đã đẩy `bot_prompts` cùng lúc (6 khoá, md5
 khớp code). Đo "tự nhiên hơn" bằng người đọc: chạy lại TS-NGUOI (docs/10).
 
+### Văn phong AOND 05/10/2026 — bảng bỏ/giữ (SRS-5.1zzi)
+
+[nguồn: chủ dự án 05/10/2026 — "bớt luật viết máy mà phụ thuộc AI hơn như này đi ha, sếp tao muốn văn phong như nó"; demo AOND `prompts.py`: "MẶC ĐỊNH … NGẮN, khoảng 30 từ — khen vài từ rồi hỏi đúng 1 thông tin", "KHÔNG bắt khách điền form", "Xưng em, gọi anh/chị", "Em sẽ rao như vầy nhé… Anh thấy hấp dẫn chưa ạ?", "mà anh có biết phí môi giới của tụi em chưa ạ?"]
+
+Nguyên tắc: **model tự đặt câu, hệ thống chỉ đưa Ý** (dòng `CẦN HỎI`); luật nào là lưới an toàn (bịa, liên hệ, ghi đúng ô, lời hứa) thì giữ trong code; luật nào là giọng thì ở prompt, viết bằng câu chỉ cách làm thay cho danh sách cấm. Bản chạy là `prompts.ts` (đẩy `bot_prompts` cùng commit).
+
+| Khối | Bỏ / đổi | Giữ (vì sao) |
+|---|---|---|
+| `TONE_RULES` | Viết lại theo demo: "môi giới trẻ lanh lợi nhắn Zalo", một tin ~30 từ, khen vài chữ rồi hỏi một ý, "hình như là…" | Không bịa, không gạch chéo "anh/chị", không emoji hình, không khen hai tin liền, không nhận xét giá, không hỏi SĐT — lời dặn 18/09, 21/09, 22/09 của chủ dự án (demo khen mỗi câu + 😊🔥, cố ý không chép) |
+| `SELLER_SCRIPT_RULES` | 11 → 8 gạch; bỏ "chỉ nói lại câu hệ thống đưa", bỏ "không đọc lại thứ vừa ghi (hệ thống đã báo)" (🤖 không còn gửi khách) | Code chọn Ý hỏi; hiểu loại nhà; lý do hỏi địa chỉ lần đầu; dự án chỉ khen điều có trong khối; ảnh; nhiều căn; bản nháp/điểm hệ thống nói; đang cho thuê = đã xây xong |
+| `SELLER_FEWSHOT` | 11 + 5 → 8 + 5 ví dụ; bỏ dạng "[câu hệ thống đưa]" | Ví dụ gốc kịch bản Gemini + lỗi bắn thật |
+| `FEE_RULES` | Thêm "DẪN PHÍ sau khi khách duyệt tin" + câu đỡ khi khách thấy đắt (demo `FEE_VALUE_POINTS`) | Các mức phí; chủ đầu tư không báo số |
+| Câu lệnh mỗi lượt (r1, r2) | Mười dòng "KHÔNG…" + "Câu gợi ý" → khuôn `ĐÃ BIẾT` / `CHỦ NHÀ VỪA NHẮN` / `CẦN HỎI` | Câu mẫu kèm khi code tra ra lựa chọn cụ thể, hoặc chủ dự án đã sửa câu đó ở dashboard |
+| Bong bóng 🤖 | Chế độ `admin`: ghi `messages` cho /admin, không gửi khách | `thay_doi` / `day_du` vẫn có, đổi ở Table Editor |
+| `CAU_TIEN_DINH` | `nhap_tieu_de` "Em sẽ rao như vầy nhé", `nhap_hoi_duyet` "thấy hấp dẫn chưa ạ?", thêm `dang_xong_phi` | Thân bản nháp máy dựng (09/09: như tin rao thật, không bịa); điểm, trạng thái là số máy điền |
+| Van sửa văn | `boCauNoiHeThong`, `boCauTroNguocDauBong` theo `luat_loi_bot` (gọn = tắt) | Van chống bịa, lời hứa, xưng hô, một câu hỏi: luôn chạy |
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |

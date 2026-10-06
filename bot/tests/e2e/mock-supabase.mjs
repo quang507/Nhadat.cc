@@ -58,7 +58,8 @@ export class FakeDB {
     this.t = {};
     for (const n of ["sellers","buyers","conversations","messages","listings","listing_facts","info_requests",
       "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log",
-      "ctvs","admins","interests","ratings","inbound_events","listing_media","app_config"]) this.t[n] = [];
+      "ctvs","admins","interests","ratings","inbound_events","listing_media","app_config",
+      "du_an_can","du_an_tai_lieu"]) this.t[n] = []; // SRS-5.1zzj: kho căn dự án + tài liệu
     this.seq = 0; this.log = [];
     // FR-185: kho file giả — chat-reply cất ảnh chủ nhà gửi vào Storage.
     this.storage = [];
@@ -301,6 +302,8 @@ class Builder {
   constructor(db, table) { this.db = db; this.table = table; this.filters = []; this.op = "select"; this.sel = "*"; this.embedFilters = []; }
   select(cols = "*", opts = {}) { if (this.op === "select") { this.sel = cols; this.count = opts.count; this.head = opts.head; } else this.returning = cols; return this; }
   insert(p) { this.op = "insert"; this.payload = p; return this; }
+  // SRS-5.1zzj: `.upsert(rows, { onConflict: "a,b" })` — trùng khoá thì gộp vào dòng cũ, không thì chèn.
+  upsert(p, opts = {}) { this.op = "upsert"; this.payload = p; this.onConflict = String(opts.onConflict ?? "id").split(",").map((c) => c.trim()); return this; }
   update(p) { this.op = "update"; this.payload = p; return this; }
   _f(kind, col, val) { (col.includes(".") ? this.embedFilters : this.filters).push({ kind, col, val }); return this; }
   eq(c, v) { return this._f("eq", c, v); } neq(c, v) { return this._f("neq", c, v); } in(c, v) { return this._f("in", c, v); }
@@ -352,6 +355,15 @@ class Builder {
   run() {
     const db = this.db; const t = this.table;
     db.log.push({ table: t, op: this.op, filters: this.filters, embedFilters: this.embedFilters, payload: this.payload, sel: this.sel });
+    if (this.op === "upsert") {
+      const arr = Array.isArray(this.payload) ? this.payload : [this.payload]; const out = [];
+      for (const p of arr) {
+        const cu = db.rows(t).find((r) => this.onConflict.every((c) => r[c] === p[c]));
+        if (cu) { Object.assign(cu, p); out.push(cu); continue; }
+        const r = db.insert(t, p); if (r.error) return { data: null, error: r.error }; out.push(r.data);
+      }
+      return { data: out, error: null };
+    }
     if (this.op === "insert") {
       const arr = Array.isArray(this.payload) ? this.payload : [this.payload]; const out = [];
       for (const p of arr) { const r = db.insert(t, p); if (r.error) return { data: null, error: r.error }; out.push(r.data); }
@@ -616,6 +628,13 @@ class RpcCall {
       case "log_loi": db.t.bot_errors.push({ at: now(), source: a.p_source, detail: a.p_detail, status_code: a.p_code }); return { data: null, error: null };
       case "cong_token": db.t.bot_usage.push(a); return { data: null, error: null };
       case "bump_model_quota": return { data: true, error: null };
+      // SRD §IV.3 (05/10/2026): trần căn theo hạng + hạng của nhóm người bán. Mặc định "được rao", "không ai Vàng" (giữ nguyên
+      // hành vi cũ); ca kiểm đè bằng `globalThis.__rpc = { con_duoc_rao: () => ({ data: { duoc: false, hang: "dong", so_dang_rao: 5, tran: 5, diem: 20 }, error: null }) }`.
+      case "con_duoc_rao": {
+        const so = db.t.listings.filter((l) => l.seller_id === a.p_seller_id && ["cho_thong_tin", "dang_ban", "dang_quan_tam"].includes(l.status)).length;
+        return { data: { duoc: true, hang: "bac", so_dang_rao: so, tran: null, diem: 60 }, error: null };
+      }
+      case "hang_cua_nguoi_ban": return { data: [], error: null };
       // SEC-05 — trần cá nhân. Mặc định cho qua; ca kiểm đè bằng
       // `globalThis.__rpc = { bump_user_quota: () => ({ data: false, error: null }) }`.
       case "bump_user_quota": return { data: true, error: null };
@@ -831,6 +850,11 @@ class RpcCall {
         const r = { id: t.length + 1, project_id: a.p_project_id, khoa: a.p_khoa, gia_tri: String(a.p_gia_tri).trim(), nguon: a.p_nguon ?? "seller_chat", listing_id: a.p_listing_id ?? null, conversation_id: a.p_conversation_id ?? null, trang_thai: "cho_duyet", created_at: new Date().toISOString() };
         t.push(r);
         return { data: r.id, error: null };
+      }
+      case "can_du_an": { // SRS-5.1zzj: kho căn dự án cho khối CĂN TRONG DỰ ÁN
+        const ds = (db.t.du_an_can ?? []).filter((c) => c.project_id === a.p_project_id && c.trang_thai !== "loai")
+          .sort((x, y) => x.ma_can.length - y.ma_can.length || x.ma_can.localeCompare(y.ma_can)).slice(0, a.p_gioi_han ?? 60);
+        return { data: ds.map((c) => ({ ma_can: c.ma_can, mau_nha: c.mau_nha ?? null, dien_tich_m2: c.dien_tich_m2 ?? null, dien_tich_dat_m2: c.dien_tich_dat_m2 ?? null, gia_raw: c.gia_raw ?? null, huong: c.huong ?? null, tang: c.tang ?? null, thuoc_tinh: c.thuoc_tinh ?? {}, trang_thai: c.trang_thai ?? "cho_duyet" })), error: null };
       }
       case "match_projects": { // 22/09: khớp tên dự án trong kho mock (bỏ dấu, chứa tên) — e2e nhiều căn có dự án.
         const t = boDauMock(String(a.p_text ?? "")); const ds = (db.t.projects ?? []).filter((p) => p.name && t.includes(boDauMock(String(p.name))));

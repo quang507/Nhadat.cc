@@ -146,7 +146,17 @@ hàng nên cron luôn báo `succeeded` kể cả khi function trả 500. Kết q
   `ZALO_APP_SECRET`/`ZALO_APP_ID` (OPEN-33), `ZALO_ADMIN_ZALO_ID`,
   `NTFY_TOKEN` (cần cho email FR-81), `DAILY_MODEL_CALL_CAP` (mặc định 1000).
 - **`app_config`** (khoá/giá trị, không phải secret): `ntfy_topic`, `admin_email`,
-  URL Storage công khai.
+  URL Storage công khai; `bao_lai_da_luu` (`tat` · `thay_doi` · `day_du` · `admin` = 🤖 chỉ ghi
+  `messages` cho /admin, không gửi khách — SRS-5.1zzi); `luat_loi_bot` (`gon` mặc định · `du`);
+  `nhip_go` (`bat` = nghỉ "đang gõ" theo độ dài tin trước, chat-reply trả `nhip_go[]` cho webhook
+  và bridge — SRS-5.1zzm; không có dòng = 300 ms như quyết định 25/08).
+- **File và link người bán gửi (05/10/2026, SRS-5.1zzj…zzl)**: webhook OA nhận
+  `user_send_file` / `user_send_link`; PDF / ảnh bảng giá, phân lô, brochure → model đọc ra từng
+  căn vào kho `du_an_can` (dự án dùng chung, giá niêm yết), file gốc ở `listing-private/du-an/…`,
+  dòng tham chiếu `du_an_tai_lieu`; CSV / XLSX → nhập rổ hàng mỗi dòng một tin (cột SĐT bỏ).
+  Link Google Drive: file công khai tải không cần khoá; THƯ MỤC cần secret `GOOGLE_API_KEY`
+  trong Vault (chưa có → bot nói gửi từng file). Xem kho căn: Table Editor `du_an_can` (admin
+  đọc qua `la_admin()`); duyệt bằng cột `trang_thai`.
 
 ## Vận hành
 

@@ -23,8 +23,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+// `.env` là TUỲ CHỌN: trên CI (`dong-bo-prompt.yml`) không có file này, token đi qua biến môi trường.
+// Lượt chạy đầu 05/10 đỏ ngay dòng này (ENOENT) trước khi kịp tới đường Management API.
+const docEnv = () => { try { return readFileSync(join(HERE, ".env"), "utf8"); } catch { return ""; } };
 const env = Object.fromEntries(
-  readFileSync(join(HERE, ".env"), "utf8").split(/\r?\n/)
+  docEnv().split(/\r?\n/)
     .filter((l) => l.includes("=") && !l.startsWith("#"))
     .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; }),
 );

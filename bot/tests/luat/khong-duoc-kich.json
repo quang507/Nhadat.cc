@@ -375,6 +375,66 @@
         "bán gấp",
         "phòng ngủ rộng"
       ]
+    },
+    "laNgungHangLoat": {
+      "hau_qua": "05/10/2026 (SRS-5.1zzl): mở câu XÁC NHẬN ngưng rao nhiều căn — khớp nhầm thì chủ nhà bị hỏi 'chắc ngưng rao N căn chưa' giữa chừng (chưa ẩn gì, nhưng một cú 'ừ' lạc sau đó là ẩn cả rổ). Luật chỉ đỡ khi AI không chạy.",
+      "phai_kich": [
+        [
+          "chỉ giữ căn Trần Hưng Đạo, ẩn hết còn lại",
+          {
+            "kieu": "chi_giu",
+            "giu": [
+              "can tran hung dao"
+            ]
+          }
+        ],
+        [
+          "ngưng rao hết trừ căn 2",
+          {
+            "kieu": "chi_giu",
+            "giu": [
+              "can 2"
+            ]
+          }
+        ],
+        [
+          "gỡ hết đi em",
+          {
+            "kieu": "an_het",
+            "giu": []
+          }
+        ],
+        [
+          "rút tất cả tin giúp anh",
+          {
+            "kieu": "an_het",
+            "giu": []
+          }
+        ],
+        [
+          "ẩn toàn bộ mấy căn đi",
+          {
+            "kieu": "an_het",
+            "giu": []
+          }
+        ]
+      ],
+      "khong_duoc_kich": [
+        "ngưng căn Nguyễn Trãi",
+        "bán hết rồi em",
+        "gỡ tin kiểu gì?",
+        "thôi hết hỏi đi",
+        "còn lại 2 căn",
+        "hết hàng rồi anh ơi",
+        "ẩn cái ảnh đi",
+        "ngưng rao căn này",
+        "mấy căn còn lại anh giữ giá",
+        "nhà hết tầng 3 là sân thượng",
+        "anh rút ngắn lại giá cho dễ bán",
+        "xoá cái hẻm 4m ghi nhầm đi",
+        "gỡ cái ảnh sổ ra giúp anh",
+        "ổn hết rồi em, đăng đi"
+      ]
     }
   }
 }

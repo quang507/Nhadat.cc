@@ -1180,6 +1180,7 @@ export const NHAN_HOI_LAI: Record<string, string> = {
   thoi_han_thue: "mình muốn cho thuê tối thiểu bao lâu",
   tiem_nang: "nhà mình hợp để ở hay kinh doanh ngành gì",
   ngung_rao_can_nao: "mình muốn ngưng rao căn nào, nhắn số thứ tự hoặc địa chỉ giúp em",
+  xac_nhan_ngung_hang_loat: "mình chắc ngưng rao mấy căn em vừa liệt kê chưa, nhắn ừ hoặc thôi giúp em",
 };
 
 // ── FR-177 e: chủ nhà đang nói FACT NÀO? ─────────────────────────────────────
@@ -2144,6 +2145,9 @@ export function laNgungRao(text: string): NgungRao | null {
     /\b(?:hop dong|ngan hang|dong tien|thu nhap|khach thue|moi thang|hoan thien|kinh doanh)\b/.test(kd) &&
     !/\b(?:da ban|ban roi|ban duoc|chot roi|coc roi)\b/.test(kd);
   if (dangCoKhachThue) return null;
+  // 05/10/2026 (SRS-5.1zzc, thăm dò câu keep-alive): "ngưng bán rồi" / "thôi không bán rồi" từng ra BÁN RỒI vì luật "bán … rồi"
+  // xét trước — đó là lời DỪNG (đảo ngược được), không phải giao dịch xong (đóng tin + báo khách "đã bán").
+  if (/\b(?:ngung|dung|thoi|het|khong|ko|k)\s*(?:ban|cho thue|rao)\s*(?:nua\s*)?(?:roi|r)\b/.test(kd) && !/\b(?:da ban|ban duoc|chot|coc)\b/.test(kd)) return "rut";
   const banRoi =
     /\b(?:da|vua)\s*(?:ban|cho thue|chot|nhan coc|giao dich|co nguoi (?:mua|thue)|sang ten|xong)\b/.test(kd) ||
     /\b(?:ban|cho thue|chot|giao dich|sang ten)\s*(?:duoc|xong|het|nha|dat|can|no)?\s*(?:roi|xong roi|r)\b/.test(kd) ||
@@ -2182,6 +2186,27 @@ export function laNgungRao(text: string): NgungRao | null {
   return rut ? "rut" : null;
 }
 
+// ── Trả lời câu keep-alive "còn bán không" (SRD §VI 2.4, 05/10/2026, SRS-5.1zzc) ──
+// LƯỚI ĐỠ khi AI không chạy. Đường chính: AI đọc theo nghĩa (`dong_y` với câu bot vừa hỏi = còn; `y_dinh` ban_roi / ngung_rao;
+// `khong_dong_y` không kèm "bán rồi" = tạm ngưng — đảo ngược được, không gửi "đã bán" cho khách đang chờ).
+// "còn em" / "vẫn đang bán nha" / "chưa bán được" / "ừ" → con · "bán rồi" → ban_roi (laNgungRao) · "không còn" / "hết rồi" /
+// "ngưng bán" → rut · nói chuyện khác → null (tầng trên đi đường thường, câu còn treo).
+export type TraLoiConBan = "con" | NgungRao;
+export function docTraLoiConBan(text: string): TraLoiConBan | null {
+  const goc = (text ?? "").trim();
+  if (!goc) return null;
+  const ng = laNgungRao(goc);
+  if (ng) return ng;
+  const kd = boDau(goc.replace(/[bB][ậạẬẠ][nN]/gu, "bxn")).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!kd || /\?/.test(goc)) return null;
+  if (/\b(?:khong|ko|k|het|hong)\s*(?:con|ban|cho thue|rao)\b|\bhet roi\b/.test(kd)) return "rut";
+  // Câu HỎI / câu có số ("giá giờ còn bao nhiêu được", "còn 2 căn") không phải lời xác nhận còn bán.
+  if (/\b(?:bao nhieu|may|sao|the nao|duoc khong|khong em|hong)\b|\d/.test(kd)) return null;
+  if (/\b(?:con|van|dang|chua)\s*(?:ban|cho thue|rao|con|chot|ai mua|ai thue)?\b/.test(kd) && kd.split(" ").length <= 8) return "con";
+  if (laDongY(goc)) return "con";
+  return null;
+}
+
 // Nhiều căn đang rao → chủ nhà chỉ căn nào? Nhận SỐ THỨ TỰ ("1", "căn 2", "cái
 // thứ 2", "số 1") hoặc ĐỊA CHỈ (chữ ≥ 4 ký tự trong location_raw / số phường
 // khớp câu). Không rõ → null, tầng trên hỏi lại.
@@ -2189,6 +2214,25 @@ export type CanChon = { id: string; location_raw?: string | null; ward?: string 
 // Generic: trả về ĐÚNG kiểu người gọi đưa vào. Bản cũ trả `CanChon` hẹp nên
 // chat-reply đọc `chon.deal` ra TS2339 dù lúc chạy trường đó có thật (bật kiểm
 // kiểu bot 11/09).
+/**
+ * SRS-5.1zzl (05/10/2026, demo AOND): ngưng rao NHIỀU căn / CHỈ GIỮ vài căn — luật ĐỠ khi AI không chạy (AI đọc ở doc-y-luot).
+ * Không ghi gì: chỉ mở câu xác nhận; gật ở lượt sau mới ẩn. Câu hỏi ("gỡ tin kiểu gì?") → null.
+ *   "chỉ giữ căn A, ẩn hết còn lại" → chi_giu ["can a"]; "ngưng rao hết trừ căn Trần Hưng Đạo" → chi_giu ["can tran hung dao"];
+ *   "gỡ hết đi" / "ẩn tất cả" → an_het; "ngưng căn Nguyễn Trãi" / "bán hết rồi" → null.
+ */
+export function laNgungHangLoat(text: string): { kieu: "chi_giu" | "an_het"; giu: string[] } | null {
+  if (/\?/.test(text)) return null;
+  const t = boDau(text);
+  const dongTu = /\b(ngung|go|rut|an|xoa|khong ban|ko ban|k ban|dung rao|ngung rao|go tin|rut tin)\b/;
+  const tatCa = /\b(het|tat ca|toan bo|sach|moi can|cac can|may can|con lai)\b/;
+  const giuM = t.match(/\b(?:chi giu(?: lai)?|giu lai(?: moi| duy nhat)?|tru|ngoai)\s+((?:can|lo|ma)\s+[^,.;]+|[^,.;]+)/);
+  if (/\bchi giu\b/.test(t) || ((/\b(tru|ngoai)\b/.test(t)) && dongTu.test(t) && tatCa.test(t))) {
+    return { kieu: "chi_giu", giu: giuM ? [giuM[1].replace(/\b(an|go|ngung|rut)\b.*$/, "").trim()].filter(Boolean) : [] };
+  }
+  if (dongTu.test(t) && tatCa.test(t) && !/\b(ban het|ban duoc het|het hang|het roi)\b/.test(t)) return { kieu: "an_het", giu: [] };
+  return null;
+}
+
 export function chonCanTheoCau<T extends CanChon>(text: string, cans: T[]): T | null {
   if (!cans.length) return null;
   const kd = boDau(text).replace(/[^a-z0-9\s/]/g, " ").replace(/\s+/g, " ").trim();

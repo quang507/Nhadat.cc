@@ -4,7 +4,7 @@
 //   laDongY       — chủ nhà gật bản nháp (AGREE_RULES, bản không model)
 // Chạy: bun bot/tests/fr177-hoi-nhu-moi-gioi-gioi.mjs
 import {
-  chonCanTheoCau, chonCauKe, laDongY, laDuRoi, laGap, laNgungRao, nhanDienFact, phanLoaiCauTraLoi,
+  chonCanTheoCau, chonCauKe, docTraLoiConBan, laDongY, laDuRoi, laGap, laNgungRao, nhanDienFact, phanLoaiCauTraLoi,
 } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { cauHoiMau, dsHoiBu, KHO_TEN_TRO_LY, tenTroLy, dienTen } from "../supabase/functions/_shared/prompts.ts";
 
@@ -110,13 +110,29 @@ for (const s of ["bán nhà hẻm trần bình trọng p4 giá 5 tỷ 8", "khôn
 for (const s of ["bán rồi em", "căn đó anh bán được rồi nhé", "đã bán", "có người thuê rồi", "nhà đã cho thuê rồi", "nhận cọc rồi em", "đã nhận cọc", "chốt rồi", "bán xong rồi", "có khách mua rồi", "vừa sang tên xong"]) {
   ok(`bán rồi: "${s}"`, laNgungRao(s) === "ban_roi", String(laNgungRao(s)));
 }
-for (const s of ["ngưng bán nha em", "không bán nữa", "rút tin giúp anh", "gỡ tin đi em", "thôi không bán nữa, để lại ở", "huỷ ký gửi", "dừng rao nhé"]) {
+for (const s of ["ngưng bán nha em", "không bán nữa", "rút tin giúp anh", "gỡ tin đi em", "thôi không bán nữa, để lại ở", "huỷ ký gửi", "dừng rao nhé",
+  // SRS-5.1zzc (05/10): "ngưng bán rồi" là lời DỪNG, từng ra "bán rồi" vì luật "bán … rồi" xét trước.
+  "ngưng bán rồi", "thôi không bán rồi em"]) {
   ok(`rút: "${s}"`, laNgungRao(s) === "rut", String(laNgungRao(s)));
 }
 for (const s of ["chưa bán", "vẫn đang bán nha", "bán rồi hả em?", "bán nhà 5 tỷ", "chốt giá 5 tỷ", "ok đăng đi em", "sổ hồng riêng rồi", "hẻm 4m", "", "còn bán em", "bán chưa em?", "đã bàn với vợ, để 6 tỷ",
   // FR-235 (28/09): "bận rồi" / "bạn rồi" bỏ dấu cũng ra "ban roi" — không được gỡ tin.
   "giờ anh bận rồi em", "hướng đông. đăng bài được chưa. a bận rồi", "BẬN RỒI", "bạn rồi mà"]) {
   ok(`không phải báo ngưng: "${s}"`, laNgungRao(s) === null, String(laNgungRao(s)));
+}
+
+// ── SRS-5.1zzc (05/10/2026) — docTraLoiConBan: trả lời câu keep-alive "còn bán không" (LƯỚI ĐỠ khi AI không chạy) ──
+for (const s of ["còn em", "còn", "vẫn đang bán nha", "còn bán", "ừ", "dạ còn ạ", "chưa bán được em ơi", "vẫn còn nhé", "còn chứ em"]) {
+  ok(`còn bán: "${s}"`, docTraLoiConBan(s) === "con", String(docTraLoiConBan(s)));
+}
+for (const s of ["bán rồi em", "có người mua rồi", "nhận cọc rồi", "đã bán"]) {
+  ok(`bán rồi (con_ban): "${s}"`, docTraLoiConBan(s) === "ban_roi", String(docTraLoiConBan(s)));
+}
+for (const s of ["không còn", "hết rồi em", "ngưng bán rồi", "thôi không bán nữa", "không bán nữa em"]) {
+  ok(`ngưng (con_ban): "${s}"`, docTraLoiConBan(s) === "rut", String(docTraLoiConBan(s)));
+}
+for (const s of ["phí bên em bao nhiêu", "còn bán không em?", "mai anh gửi ảnh", "", "giá giờ còn bao nhiêu được"]) {
+  ok(`không phải trả lời còn bán: "${s}"`, docTraLoiConBan(s) === null, String(docTraLoiConBan(s)));
 }
 
 // ── FR-184 — chonCanTheoCau: nhiều căn, chủ nhà chỉ căn nào ─────────────────

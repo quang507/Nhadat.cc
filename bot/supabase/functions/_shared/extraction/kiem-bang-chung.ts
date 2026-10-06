@@ -1035,6 +1035,21 @@ export function docDongY(v: { la?: string | null; trich_dan?: string | null; dan
 }
 
 /**
+ * SRS-5.1zzl (05/10/2026): ý NGƯNG NHIỀU CĂN / CHỈ GIỮ do AI đọc (doc-y-luot) — nhận khi cụm trích có trong tin.
+ * `undefined` ở nơi gọi = AI không chạy (luật `laNgungHangLoat` đỡ); null = AI nói không có ý này.
+ */
+export function docNgungHangLoat(
+  v: { kieu?: string | null; giu?: unknown; trich_dan?: string | null } | null | undefined,
+  tin: string,
+): { kieu: "chi_giu" | "an_het"; giu: string[] } | null {
+  if (v?.kieu !== "chi_giu" && v?.kieu !== "an_het") return null;
+  const td = (v.trich_dan ?? "").trim();
+  if (!trichCoTrongTin(td, tin)) return null;
+  const giu = Array.isArray(v.giu) ? v.giu.filter((g): g is string => typeof g === "string" && g.trim().length > 0).map((g) => g.trim()) : [];
+  return { kieu: v.kieu, giu };
+}
+
+/**
  * Đợt 3 bỏ luật từ khoá (02/10/2026, SRS-5.1zg): YÊU CẦU của chủ nhà (hỏi về tin, bao lâu bán, xin số khách, xin xoá, xin bỏ ô) do
  * AI đọc. Nhận khi cụm trích có trong tin; `khong` hoặc trích bịa → null (= AI nói không có yêu cầu nào code xử lý được).
  */

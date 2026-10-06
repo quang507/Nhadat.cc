@@ -13,6 +13,10 @@ on:
         description: File đã có trong sổ migration mà vẫn muốn áp lại (đè hàm bằng bản trong file)? Gõ đúng chữ "ap lai".
         required: false
         default: ''
+      commit_schema:
+        description: Sau khi áp, COMMIT bot/supabase/schema.sql vừa xuất lên đúng nhánh đang chạy (phiên không có service_role không tải được artifact). Gõ đúng chữ "commit".
+        required: false
+        default: ''
 
 env:
   PROJECT_REF: tbcdpupiarkuxtntmosl
@@ -21,6 +25,9 @@ jobs:
   migrate:
     name: Apply Migration
     runs-on: ubuntu-latest
+    # 05/10/2026: cần quyền ghi để bước cuối commit schema.sql về nhánh (chỉ khi commit_schema = "commit").
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -123,3 +130,18 @@ jobs:
           name: schema-sql
           path: schema.sql
           retention-days: 3
+
+      # 05/10/2026 (SRS-5.1zzc): phiên Claude / máy mới không tải được artifact (gh nội bộ không theo redirect sang kho blob),
+      # mà cổng CI thứ 7 so md5 thân hàm schema.sql ↔ DB — nên khi được bảo, commit thẳng schema.sql về nhánh vừa dispatch.
+      # Không có thay đổi thì không commit. Không bao giờ đẩy lên main từ đây (chỉ nhánh đang chạy, và main thì PR lo).
+      - name: Commit schema.sql về nhánh
+        if: ${{ inputs.commit_schema == 'commit' && github.ref_name != 'main' }}
+        run: |
+          set -euo pipefail
+          cp schema.sql bot/supabase/schema.sql
+          if git diff --quiet -- bot/supabase/schema.sql; then echo "schema.sql không đổi, không commit"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bot/supabase/schema.sql
+          git commit -m "schema.sql: sinh lại sau khi áp ${{ inputs.migration_file }}"
+          git push origin "HEAD:${{ github.ref_name }}"

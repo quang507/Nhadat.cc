@@ -17,6 +17,11 @@ type HoiThoai = {
   buyers: { name: string | null; zalo_user_id: string | null } | null;
 };
 type Tin = { id: string; sender: string; body: string; seq: number; created_at: string };
+// SRD §VII Live Chat Monitor (05/10/2026, SRS-5.1zzg): nhãn tự động mỗi hội thoại, DB tính (view `hoi_thoai_nhan`).
+type NhanHT = { conversation_id: string; nhan: "NEED_HUMAN" | "WAITING_HINT" | "AI_HANDLING"; ly_do: string | null };
+const MAU_NHAN: Record<NhanHT["nhan"], string> = {
+  NEED_HUMAN: "bg-red-600 text-white", WAITING_HINT: "bg-amber-400 text-navy", AI_HANDLING: "bg-emerald-50 text-emerald-800",
+};
 // Bong bóng 🤖 (bảng số liệu báo lại cho người bán, 11/09/2026) không phải lời
 // thoại: không cho lưu làm mẫu câu, và cắt đuôi "\n🤖…" gắn cuối câu bot (chế độ
 // thay_doi) trước khi điền vào ô sửa. Cùng luật với boBaoLai trong
@@ -43,6 +48,8 @@ export default function Page() {
   const [email, setEmail] = useState("");
   const [hoiThoai, setHoiThoai] = useState<HoiThoai[]>([]);
   const [mau, setMau] = useState<Mau[]>([]);
+  const [nhanHT, setNhanHT] = useState<Record<string, NhanHT>>({});
+  const [locNhan, setLocNhan] = useState<"" | NhanHT["nhan"]>("");
   const [chon, setChon] = useState<HoiThoai | null>(null);
   const [tin, setTin] = useState<Tin[]>([]);
   const [loi, setLoi] = useState<string | null>(null);
@@ -60,13 +67,19 @@ export default function Page() {
     setMau((data ?? []) as Mau[]);
   };
   const napHoiThoai = async () => {
-    const { data, error } = await supabase
-      .from("conversations")
-      .select("id, channel, seller_id, buyer_id, last_message_at, needs_human, human_touch_at, human_hold, sellers!conversations_seller_id_fkey(name, zalo_user_id), buyers!conversations_buyer_id_fkey(name, zalo_user_id)")
-      .order("last_message_at", { ascending: false, nullsFirst: false })
-      .limit(200);
+    const [{ data, error }, { data: nh, error: nhErr }] = await Promise.all([
+      supabase
+        .from("conversations")
+        .select("id, channel, seller_id, buyer_id, last_message_at, needs_human, human_touch_at, human_hold, sellers!conversations_seller_id_fkey(name, zalo_user_id), buyers!conversations_buyer_id_fkey(name, zalo_user_id)")
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(200),
+      supabase.from("hoi_thoai_nhan").select("conversation_id, nhan, ly_do").limit(400),
+    ]);
     if (error) setLoi(error.message);
+    // View chưa áp (migration 20261005a) thì không có nhãn — màn vẫn chạy, không báo lỗi đỏ.
+    if (nhErr) console.warn("hoi_thoai_nhan:", nhErr.message);
     setHoiThoai((data ?? []) as unknown as HoiThoai[]);
+    setNhanHT(Object.fromEntries(((nh ?? []) as NhanHT[]).map((x) => [x.conversation_id, x])));
   };
 
   useEffect(() => {
@@ -107,10 +120,11 @@ export default function Page() {
     return hoiThoai.filter((h) =>
       (!locPhia || (locPhia === "ban" ? !!h.seller_id : !!h.buyer_id)) &&
       (!chiCanNguoi || !!h.needs_human) &&
+      (!locNhan || nhanHT[h.id]?.nhan === locNhan) &&
       (!chiChuaMau || soMau(h.id) === 0) &&
       (!k || ten(h).toLowerCase().includes(k) || (h.sellers?.zalo_user_id ?? h.buyers?.zalo_user_id ?? "").includes(k)),
     );
-  }, [hoiThoai, q, locPhia, chiCanNguoi, chiChuaMau, mau]);
+  }, [hoiThoai, q, locPhia, chiCanNguoi, chiChuaMau, mau, locNhan, nhanHT]);
 
   // Xoá khách (20260909f): xoá sạch số Zalo này — tin, fact, ảnh, chat, hồ sơ.
   // Xác nhận nói rõ hậu quả (NN/g: error prevention), báo kết quả sau khi xoá.
@@ -166,6 +180,7 @@ export default function Page() {
     ban: hoiThoai.filter((h) => !!h.seller_id).length,
     canNguoi: hoiThoai.filter((h) => !!h.needs_human).length,
     chuaMau: hoiThoai.filter((h) => soMau(h.id) === 0).length,
+    nhan: (k: NhanHT["nhan"]) => hoiThoai.filter((h) => nhanHT[h.id]?.nhan === k).length,
   };
 
   if (role === "loading") return <div className="mx-auto max-w-4xl px-4 py-16 text-mute font-medium">Đang kiểm tra quyền…</div>;
@@ -192,6 +207,10 @@ export default function Page() {
         <div className="mb-1 mt-3 px-1 text-[11px] font-bold uppercase tracking-wider text-mute">Cần làm</div>
         <button type="button" className={chip(chiCanNguoi)} onClick={() => setChiCanNguoi(!chiCanNguoi)}>Cần người thật <span className="float-right text-xs opacity-70">{dem.canNguoi}</span></button>
         <button type="button" className={chip(chiChuaMau)} onClick={() => setChiChuaMau(!chiChuaMau)}>Chưa có mẫu chuẩn <span className="float-right text-xs opacity-70">{dem.chuaMau}</span></button>
+        <div className="mb-1 mt-3 px-1 text-[11px] font-bold uppercase tracking-wider text-mute">Monitor</div>
+        {(["NEED_HUMAN", "WAITING_HINT", "AI_HANDLING"] as const).map((k) => (
+          <button key={k} type="button" className={chip(locNhan === k)} onClick={() => setLocNhan(locNhan === k ? "" : k)}>{k} <span className="float-right text-xs opacity-70">{dem.nhan(k)}</span></button>
+        ))}
         <div className="mt-auto rounded-xl border border-line bg-white p-3 text-xs text-mute">
           Mẫu chuẩn: <b className="text-navy">{mau.filter((m) => m.dung_lam !== "bo").length}/300</b>
           <Link href="/admin/mau-cau" className="ml-1 font-semibold text-brand hover:underline">kho mẫu -</Link>
@@ -222,6 +241,7 @@ export default function Page() {
                   </div>
                   <div className="flex flex-wrap gap-1 pl-10">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${h.seller_id ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-800"}`}>{nhanVai(h)}</span>
+                    {nhanHT[h.id] && <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${MAU_NHAN[nhanHT[h.id].nhan]}`} title={nhanHT[h.id].ly_do ?? ""}>{nhanHT[h.id].nhan}</span>}
                     {h.needs_human && <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700">cần người thật</span>}
                     {h.human_hold && <span className="rounded bg-navy px-1.5 py-0.5 text-[10px] font-bold text-white">người thật giữ</span>}
                     {h.human_touch_at && !h.human_hold && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-mute">người thật đã vào</span>}

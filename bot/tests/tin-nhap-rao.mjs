@@ -111,7 +111,7 @@ la("giá dãy số lẻ triệu '8.500.000' giữ nguyên (không làm tròn th�
 const nha = dung(NHA_PHO);
 const dongNha = nha.split("\n");
 la("dòng 1 câu mở (KHÔNG kèm điểm), dòng 2 TIÊU ĐỀ, dòng 3 địa chỉ 📍 viết HOA, dòng 4 GIÁ 💰",
-  /^📋 Em đăng tin như vầy nha anh:$/.test(dongNha[0]) && dongNha[1] === tdNha && /^📍 Hẻm 5m Nguyễn Trãi/.test(dongNha[2]) && /^💰 /.test(dongNha[3]),
+  /^📋 Em sẽ rao như vầy nhé anh:$/.test(dongNha[0]) && dongNha[1] === tdNha && /^📍 Hẻm 5m Nguyễn Trãi/.test(dongNha[2]) && /^💰 /.test(dongNha[3]),
   dongNha.slice(0, 4).join(" | "));
 la("giá có '(còn thương lượng)' khi cột negotiable = true", /^💰 7 tỷ 2 \(còn thương lượng\)$/.test(dongNha[3]), dongNha[3]);
 la("kiến thức thêm: dòng '📝 Thêm' gom mọi fact bo_sung, cũ trước, không lặp (17/09)", dongNha.some((d) => d === "📝 Thêm: khu an ninh · gần chợ Bình Tây"), dongNha.join(" | "));
@@ -121,7 +121,7 @@ la("có đủ khối thông số: diện tích, kết cấu, đường vào, hư
 // 24/09/2026 (chủ dự án): bỏ "Khách quan tâm nhắn Zalo cho em để hẹn xem nhà" — lời hứa báo lại người rao, có tên
 // trợ lý, đứng SAU CÙNG.
 la("kết bằng điểm, câu hỏi duyệt, rồi SAU CÙNG '👉 … R•ai báo lại anh …'",
-  /^Độ đầy đủ 82\/100, thêm /.test(dongNha.at(-3) ?? "") && /ổn chưa|được chưa/.test(dongNha.at(-2) ?? "") &&
+  /^Độ đầy đủ 82\/100, thêm /.test(dongNha.at(-3) ?? "") && /hấp dẫn chưa|ổn chưa|được chưa/.test(dongNha.at(-2) ?? "") &&
   /^👉 Có khách quan tâm là R•ai báo lại anh liền ạ\.$/.test(dongNha.at(-1) ?? "") && !/hẹn xem nhà/.test(nha),
   dongNha.slice(-3).join(" | "));
 la("thiếu tên trợ lý thì BỎ câu 👉, không in '{ten}' hay dòng rỗng",
@@ -133,7 +133,7 @@ la("KHÔNG đọc mã tin cho khách (FR-178)", !nha.includes("BDS-"), nha);
   const daDang = soanTinNhap({ ...NHA_PHO, lai: false, cauTD, daDang: true }).split("\n");
   // (Gạch dài trong danh sách "thiếu" của DB được `boGachDai` lọc ở chỗ gửi đi — van-tra-loi.mjs kiểm.)
   la("tin ĐÃ ĐĂNG: tiêu đề 'lên kệ … rồi nha', không câu hỏi duyệt",
-    /lên kệ .* rồi nha anh:$/.test(daDang[0]) && !daDang.some((d) => /ổn chưa|được chưa/.test(d)) &&
+    /lên kệ .* rồi nha anh:$/.test(daDang[0]) && !daDang.some((d) => /hấp dẫn chưa|ổn chưa|được chưa/.test(d)) &&
     // câu `dang_luon_cuoi` gửi ngay sau đã hứa báo lại — không lặp 👉 trong tin.
     !daDang.some((d) => /^👉/.test(d)),
     daDang[0] + " | " + daDang.at(-1));

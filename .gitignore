@@ -47,6 +47,8 @@ SS/
 *.docx
 *.pptx
 *.xlsx
+# Ngoại lệ: bản SRD gộp SINH từ docs/*.md (bun run srd) — tài liệu của dự án, không phải tài liệu gốc 2024
+!docs/SRD-AI-Oi-Nha-Dat.docx
 
 # FR-180: kết quả train (adapter, GGUF) — nặng và sinh từ chat thật
 train/out/
