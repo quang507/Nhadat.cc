@@ -4,7 +4,8 @@
 // Hai loại ca: BỊA (model nói điều tin không có / gán nhầm ô) phải BỎ đúng lý do; ĐÚNG phải
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
-import { boCauNhanXet, nhanXetKhongCanCu } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang, boHuaDaDang } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { canTheoAi } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
 import { datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
@@ -692,6 +693,42 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ON-01 quận / mã căn / giá m² đã vào cột lõi → không nằm trong bỏ", r.quan === "Quận 5" && r.maCan === "S1.02" && r.giaM2Raw === "95 triệu/m2" && !r.bo.some((b) => ["quan", "ma_can", "gia_m2"].includes(b.khoa)), JSON.stringify(r.bo));
   const r2 = docAiChinh([T("quan", "Quận Mặt Trăng", "quận mặt trăng"), T("ma_can", "căn góc đẹp lắm nha", "căn góc đẹp lắm nha")], null);
   ok("ON-02 quận lạ / mã căn sai dạng → vẫn báo bỏ", r2.quan === null && r2.maCan === null && r2.bo.filter((b) => ["quan", "ma_can"].includes(b.khoa)).length === 2, JSON.stringify(r2.bo));
+}
+// ── 06/10/2026 (SRS-5.1zzo, bắn thử thu-srd-a1 / b1): bốn lớp lỗi sửa ở gốc ──
+{
+  // Lớp 1 — mở ô chờ mà không hỏi: lời model không câu hỏi → nối câu hỏi của ô đã mở.
+  ok("GOC-U01 'Dạ em cảm ơn anh.' không có câu hỏi", !coCauHoi("Dạ em cảm ơn anh."));
+  ok("GOC-U02 câu hỏi có '?' / đuôi hỏi không dấu chấm hỏi", coCauHoi("Anh dự định giá bao nhiêu ạ?") && coCauHoi("Nhà mình mấy tầng rồi anh") && coCauHoi("sổ riêng hay chung ạ"));
+  ok("GOC-U03 nối câu hỏi khi thiếu, giữ nguyên khi đã có", damBaoCauHoi("Dạ em cảm ơn anh", "Anh dự định giá bao nhiêu ạ?") === "Dạ em cảm ơn anh. Anh dự định giá bao nhiêu ạ?"
+    && damBaoCauHoi("Em ghi rồi. Nhà mình mấy tầng ạ?", "Giá?") === "Em ghi rồi. Nhà mình mấy tầng ạ?" && damBaoCauHoi("Dạ em cảm ơn anh.", null) === "Dạ em cảm ơn anh.");
+  // Lớp 2 — cổng nhiều căn: AI đánh số `can` → chia theo AI dù regex không thấy căn (câu dùng dấu phẩy phân cách thông số).
+  const B1 = "Em có 2 căn gửi bán: căn 1 hẻm 5m Phạm Văn Chí P7 Q6, 4x12, 6.9 tỷ; căn 2 mặt tiền Trần Phú Q5, 4x20, 18 tỷ";
+  const T = (khoa, gia_tri, trich_dan, can) => ({ khoa, gia_tri, trich_dan, can });
+  const datB1 = [T("duong", "hẻm 5m Phạm Văn Chí", "hẻm 5m Phạm Văn Chí", 1), T("quan", "Quận 6", "Q6", 1), T("ngang", "4", "4x12", 1), T("dai", "12", "4x12", 1), T("gia", "6.9 tỷ", "6.9 tỷ", 1),
+    T("duong", "Trần Phú", "mặt tiền Trần Phú", 2), T("quan", "Quận 5", "Q5", 2), T("ngang", "4", "4x20", 2), T("dai", "20", "4x20", 2), T("gia", "18 tỷ", "18 tỷ", 2), T("loai_duong_vao", "mat_tien", "mặt tiền", 2)];
+  const cB1 = canTheoAi(B1, datB1, 2);
+  ok("GOC-U04 'căn 1 …, 4x12, 6.9 tỷ; căn 2 …' → 2 căn theo AI, mỗi căn đúng quận / giá / đoạn chữ của mình",
+    cB1.length === 2 && cB1[0].quan === "Quận 6" && cB1[0].gia === "6.9 tỷ" && /^căn 1 hẻm 5m Phạm Văn Chí/.test(cB1[0].goc) && !/Trần Phú/.test(cB1[0].goc)
+      && cB1[1].quan === "Quận 5" && cB1[1].gia === "18 tỷ" && /^căn 2 mặt tiền Trần Phú/.test(cB1[1].goc) && cB1[1].ngang === "4" && cB1[1].dai === "20", JSON.stringify(cB1));
+  const B2 = "Bên anh đang có hai sản phẩm nhờ em đăng: nhà Lê Quang Định Bình Thạnh 4x18 giá 9 tỷ 2, và căn hộ Sunrise City Q7 70m2 3 tỷ 8";
+  const cB2 = canTheoAi(B2, [T("loai_bds", "nha_pho", "nhà", 1), T("duong", "Lê Quang Định", "Lê Quang Định", 1), T("quan", "Quận Bình Thạnh", "Bình Thạnh", 1), T("gia", "9 tỷ 2", "9 tỷ 2", 1),
+    T("loai_bds", "chung_cu", "căn hộ", 2), T("du_an", "Sunrise City", "Sunrise City", 2), T("quan", "Quận 7", "Q7", 2), T("dien_tich", "70", "70m2", 2), T("gia", "3 tỷ 8", "3 tỷ 8", 2)], 2);
+  ok("GOC-U05 (cách nói MỚI, không 'căn 1/căn 2') → vẫn 2 căn, loại nhà / căn hộ theo AI", cB2.length === 2 && cB2[0].loai === "nha_pho" && cB2[1].loai === "chung_cu" && cB2[1].dt === "70" && /Sunrise City/.test(cB2[1].goc) && !/Sunrise/.test(cB2[0].goc), JSON.stringify(cB2));
+  ok("GOC-U06 AI nói 1 căn / không đánh số → [] (regex đỡ)", canTheoAi(B1, datB1.map((d) => ({ ...d, can: null })), 2).length === 0 && canTheoAi(B1, datB1, 1).length === 0);
+  // Lớp 3 — "khách hỏi" ve_bot phải có bằng chứng về bot; khách tự nói vai thì không phải câu hỏi.
+  const hoiVeBot = (cau) => ({ co_hoi: true, cau_hoi: cau, chu_de: "ve_bot" });
+  ok("GOC-U07 'Anh là môi giới nha' + AI nói ve_bot → không tin AI (undefined, luật đỡ)", docHoiLai(hoiVeBot("Anh là môi giới nha"), "Anh là môi giới nha", false) === undefined);
+  ok("GOC-U08 cùng câu, AI đọc ra vai môi giới → không hỏi (null)", docHoiLai(hoiVeBot("Anh là môi giới nha"), "Anh là môi giới nha", false, true) === null);
+  ok("GOC-U09 (mới) 'bên anh là sàn nha em' → không phải hỏi về bot", docHoiLai(hoiVeBot("bên anh là sàn nha em"), "bên anh là sàn nha em", false, true) === null
+    && docHoiLai(hoiVeBot("mình làm sale bên Hưng Thịnh"), "mình làm sale bên Hưng Thịnh", false) === undefined);
+  ok("GOC-U10 câu hỏi về bot thật vẫn nhận", docHoiLai(hoiVeBot("em là người hay máy vậy"), "em là người hay máy vậy", false)?.chuDe === "ve_bot"
+    && docHoiLai(hoiVeBot("bên em công ty nào"), "bên em công ty nào", false)?.chuDe === "ve_bot" && docHoiLai(hoiVeBot("em la bot ha"), "em la bot ha", false)?.chuDe === "ve_bot");
+  // Lớp 4 — khẳng định trạng thái tin: nhận ra mệnh đề, bỏ khi không còn tin mở; vế phủ định giữ.
+  const r3 = ["Tin căn Trần Phú của anh đang rao, có khách quan tâm em báo anh liền nhé."];
+  ok("GOC-U11 'Tin căn X đang rao' là mệnh đề trạng thái; bỏ xong còn vế báo khách", coMenhDeDaDang(r3) && !/đang rao/.test(boHuaDaDang(r3)[0]) && /có khách quan tâm/i.test(boHuaDaDang(r3)[0]), JSON.stringify(boHuaDaDang(r3)));
+  const phuDinh = ["Dạ hiện em không thấy tin nào của anh đang rao. Khi nào có căn khác anh nhắn em nha."];
+  ok("GOC-U12 vế phủ định 'không thấy tin nào đang rao' không phải mệnh đề sai, giữ nguyên", !coMenhDeDaDang(phuDinh) && boHuaDaDang(phuDinh)[0] === phuDinh[0], JSON.stringify(boHuaDaDang(phuDinh)));
+  ok("GOC-U13 bong bóng 🤖 / câu hỏi không tính", !coMenhDeDaDang(["🤖 Bóc tách được: tin đang rao", "Tin mình đang rao chưa anh?"]));
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

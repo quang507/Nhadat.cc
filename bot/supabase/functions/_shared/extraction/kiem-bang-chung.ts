@@ -12,6 +12,7 @@
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
 import { docTien, giaTheoM2, TIEN_KD } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
+import type { CanTrongTin } from "./khop-cau-tra-loi.ts";
 import { cumPhongNguTheoTang, docTraLoiLung, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, phuongChuan, phuongTrongTrich, phuongTuTenCu, tenDayDu } from "./khop-phuong.ts";
@@ -1406,12 +1407,21 @@ export type HoiLaiDoc = { cau: string; chuDe: string; caTin: boolean };
  * `null` = AI đọc rồi: tin KHÔNG hỏi gì. Có hỏi → câu hỏi (trích không có trong tin thì lấy cả tin), chủ đề, và `caTin` =
  * cả tin chỉ là câu hỏi (AI không đọc ra dữ liệu nào khác) — khi đó không phần nào của tin được ghi làm thông tin.
  */
+// 06/10/2026 (bắn thử thu-srd-b1, SRS-5.1zzo): "Anh là môi giới nha" → AI đọc thành câu hỏi VỀ BOT (`ve_bot`), bot đáp "Em là trợ
+// lý AI…". Lớp lỗi: code chỉ kiểm cụm trích CÓ TRONG TIN, không kiểm cụm đó có mang bằng chứng của CHỦ ĐỀ AI gán — một câu
+// khẳng định về chính khách qua được. Nay: (a) `ve_bot` phải có cụm nói về bot / bên em / người hay máy trong câu hỏi; (b) tin
+// mà AI đọc ra khách TỰ NÓI VAI (`vaiTuNoi`, đã qua `docVai`) thì câu đó là lời tự giới thiệu, không phải câu hỏi về bot.
+const VE_BOT_BANG_CHUNG = /\b(?:bot|ai|robot|may|tro ly|tu dong|nguoi that|nguoi hay|hay nguoi|nguoi hay may|ben em|ben minh|cong ty|ten gi|ten em|la ai|em la|em ten|em o|em lam|em co phai|phai nguoi|nguoi hay la|chat)\b/;
 export function docHoiLai(
   h: { co_hoi?: boolean | null; cau_hoi?: string | null; chu_de?: string | null } | null | undefined,
-  tin: string, coDuLieuKhac: boolean,
+  tin: string, coDuLieuKhac: boolean, vaiTuNoi: boolean = false,
 ): HoiLaiDoc | null | undefined {
   if (!h || typeof h.co_hoi !== "boolean") return undefined;
   if (!h.co_hoi) return null;
+  if (h.chu_de === "ve_bot") {
+    if (vaiTuNoi) return null;
+    if (!VE_BOT_BANG_CHUNG.test(boDau(h.cau_hoi ?? ""))) return undefined;
+  }
   const goc = (tin ?? "").trim();
   if (!goc) return null;
   const chuan = (s: string) => boDau(s).replace(/[^a-z0-9]+/g, " ").trim();
@@ -1421,4 +1431,55 @@ export function docHoiLai(
   // (nơi gọi rơi về lưới từ khoá), không phải "lấy cả tin" như bản đầu — bản đó giấu lỗi của AI.
   if (cau.length < 3 || !chuan(goc).includes(chuan(cau))) return undefined;
   return { cau, chuDe: h.chu_de ?? "khac", caTin: !coDuLieuKhac };
+}
+
+// ─── 06/10/2026 (bắn thử thu-srd-b1, SRS-5.1zzo) ─────────────────────────────────────────────────────────────────────────
+// Lớp lỗi "CỔNG NHIỀU CĂN DO REGEX QUYẾT": `nhanDienNhieuCan` cắt câu theo dấu phẩy rồi đòi mỗi mảnh "căn N" phải có giá /
+// kích thước NGAY TRONG MẢNH — "căn 1 hẻm 5m Phạm Văn Chí P7 Q6, 4x12, 6.9 tỷ; căn 2 mặt tiền Trần Phú Q5, 4x20, 18 tỷ" tách
+// thành sáu mảnh, mảnh "căn 1…" không có số → 0 căn → cả tin thành MỘT tin lẫn hai căn (nhãn "2 mặt tiền" của căn 2 dán lên căn
+// 1, quận mất vì hai quận xung đột). Trong khi AI đã trả `so_can = 2` và đánh số `can` từng đề xuất. Hàm này dựng danh sách
+// căn TỪ AI (đề xuất đã qua `kiemDeXuat`): số căn = các `can` khác nhau; đoạn chữ của căn = từ cụm trích đầu của căn đó (kéo
+// ngược lấy mốc "căn N") tới cụm trích đầu của căn kế. Regex chỉ còn là lưới đỡ khi AI không chạy / không đánh số.
+const LOAI_CAN: Record<string, CanTrongTin["loai"]> = { chung_cu: "chung_cu", nha_pho: "nha_pho", nha_cap4: "nha_pho", biet_thu: "nha_pho", dat: "dat" };
+export function canTheoAi(tin: string, dat: DeXuat[], soCan: number | null | undefined): CanTrongTin[] {
+  if ((soCan ?? 0) < 2) return [];
+  const so = [...new Set(dat.map((d) => d.can).filter((n): n is number => typeof n === "number" && n >= 1))].sort((a, b) => a - b);
+  if (so.length < 2) return [];
+  const thap = tin.toLowerCase();
+  const kdTin = [...tin].map((ch) => boDau(ch) || ch).join("");
+  const viTri = (td: string): number => {
+    const t = td.trim().toLowerCase();
+    if (t.length < 2) return -1;
+    let i = thap.indexOf(t);
+    if (i < 0 && [...kdTin].length === [...tin].length) i = kdTin.indexOf(boDau(t));
+    return i;
+  };
+  const dau = so.map((n) => {
+    const vt = dat.filter((d) => d.can === n).map((d) => viTri(d.trich_dan_sua ?? d.trich_dan)).filter((i) => i >= 0);
+    return { n, bat: vt.length ? Math.min(...vt) : -1 };
+  });
+  // Căn không định vị được cụm trích nào → không chia theo chữ được, để regex / luật cũ lo.
+  if (dau.some((d) => d.bat < 0)) return [];
+  dau.sort((a, b) => a.bat - b.bat);
+  // Kéo mốc về trước "căn N / nhà N / lô N:" đứng ngay trước cụm trích đầu, để đoạn chữ của căn mang luôn số thứ tự.
+  const MOC_RE = /(?:căn|can|nhà|nha|lô|lo)\s+(?:số\s+|so\s+|thứ\s+|thu\s+)?(?:\d{1,2}|[a-h])\b[\s:,\-–]*$/iu;
+  const batDau = dau.map((d) => {
+    const m = MOC_RE.exec(tin.slice(0, d.bat));
+    return m ? d.bat - m[0].length : d.bat;
+  });
+  const ra: CanTrongTin[] = [];
+  for (const [i, d] of dau.entries()) {
+    const goc = tin.slice(batDau[i], i + 1 < dau.length ? batDau[i + 1] : undefined).replace(/^[\s:,;\-–]+|[\s:,;\-–]+$/gu, "").trim();
+    if (!goc) return [];
+    const cua = dat.filter((x) => x.can === d.n);
+    const lay = (khoa: string) => cua.find((x) => x.khoa === khoa)?.gia_tri?.trim() || undefined;
+    const loaiAi = lay("loai_bds");
+    ra.push({
+      thu: d.n, goc, theoLoai: true,
+      ...(lay("quan") ? { quan: lay("quan") } : {}),
+      ...(loaiAi && LOAI_CAN[loaiAi] ? { loai: LOAI_CAN[loaiAi] } : loaiAi?.startsWith("dat") ? { loai: "dat" as const } : {}),
+      ngang: lay("ngang"), dai: lay("dai"), dt: lay("dien_tich"), gia: lay("gia"),
+    });
+  }
+  return ra;
 }

@@ -220,7 +220,8 @@ thêm van code `chanNhanLaNguoi` — `bot/supabase/functions/_shared/extraction/
 - **Bận / hoãn thì dừng** (11/09/2026): "anh bận", "để anh hỏi vợ", "hỏi hoài vậy"
   → một câu xin lỗi hoặc bảo thong thả, không ghi gì, không hỏi thêm; câu hỏi vẫn
   treo cho vòng hỏi bù sau (`laHoanLai`, loại câu `hoan`).
-- **Hỏi địa chỉ nêu lý do một lần**: lần đầu "để em kiểm tra giá khu vực", từ lần
+- **Hỏi địa chỉ như người quen nhắn** (06/10/2026, thay quyết định 09/09 "kèm lý do kiểm tra giá"): lần đầu
+  "Nhà anh ở đâu vậy, ở Hồ Chí Minh đúng không?" — kèm phỏng đoán để khách gật hay sửa, không nêu lý do; từ lần
   hai hỏi thẳng dưới 12 từ (11/09/2026: khuôn 25 từ từng lặp 22/52 câu).
 - **Khen khi có gì đáng khen, không khen mọi câu.** Lý do "khách hay hỏi" tối
   đa một lần mỗi ba tin. Tin trước mở bằng "Dạ" thì tin này không.
@@ -409,6 +410,22 @@ Nguyên tắc: **model tự đặt câu, hệ thống chỉ đưa Ý** (dòng `C
 | Bong bóng 🤖 | Chế độ `admin`: ghi `messages` cho /admin, không gửi khách | `thay_doi` / `day_du` vẫn có, đổi ở Table Editor |
 | `CAU_TIEN_DINH` | `nhap_tieu_de` "Em sẽ rao như vầy nhé", `nhap_hoi_duyet` "thấy hấp dẫn chưa ạ?", thêm `dang_xong_phi` | Thân bản nháp máy dựng (09/09: như tin rao thật, không bịa); điểm, trạng thái là số máy điền |
 | Van sửa văn | `boCauNoiHeThong`, `boCauTroNguocDauBong` theo `luat_loi_bot` (gọn = tắt) | Van chống bịa, lời hứa, xưng hô, một câu hỏi: luôn chạy |
+
+### Van sửa lời theo công tắc — 06/10/2026 (SRS-5.1zzn)
+
+[nguồn: chủ dự án 06/10/2026 — "xem lại luật sửa giọng… nên sửa giống AOND ko" → "Làm bước 1 và 2 đi"]. Demo AOND không có lớp sửa văn nào sau lời model. Hệ thống giữ nguyên tắc đó cho GIỌNG, giữ lưới cho AN TOÀN:
+
+| Nhóm van (`van-tra-loi.ts`) | `luat_loi_bot` = `gon` (mặc định) | `du` |
+|---|---|---|
+| An toàn: che liên hệ, không nhận là người, chặn bịa tiền / m² / căn / tên / vị trí / đặc điểm, lời hứa (gửi hình, đã đăng, tự kiểm tra, hỏi chủ), khen không căn cứ, nói "đã ghi" khi không ghi | chạy | chạy |
+| Ghi đúng ô: một câu hỏi mỗi lượt, câu lệch khoá → câu mẫu, không hỏi lại ô đã có, hoàn công, gấp theo deal, mã tin không đọc cho khách, cách gọi ĐÃ BIẾT áp lên câu tiền định | chạy | chạy |
+| Sửa văn: gạch dài, gạch chéo "anh/chị", bot xưng "mình", đoán giới cuối câu, câu ghi nhận trùng, câu lặp giữa hai lượt, khen (vị trí / thị trường / ngược nghĩa / lặp), "hệ thống", chào lại, hỏi mục đích, gọi "căn hộ / lô đất", thêm câu xin lỗi | **tắt** — prompt đã dặn, model tự lo | chạy |
+
+Mọi van đổi lời đều vào sổ `van_kich` (trước / sau); view `van_kich_7_ngay` trên DB cho biết van nào kích bao nhiêu lần — đo rồi mới quyết bỏ. Muốn sửa giọng thì sửa `TONE_RULES` / `SELLER_FEWSHOT`, không bật lại van.
+
+### Giọng demo AOND có quy định không? — 06/10/2026 (SRS-5.1zzo)
+
+Có, chỉ bằng prompt (`prompts.py build_chat_system`): ~30 từ, khen điểm mạnh THẬT trước rồi hỏi đúng 1 thông tin, xưng "em" gọi "anh/chị", trung thực (chỉ dùng điều khách nói + kiến thức dự án đã có, đoán thì "hình như là"), viết trọn vẹn không bỏ lửng; bản nháp mở "Em sẽ rao như vầy nhé:" kết "Anh thấy hấp dẫn chưa ạ?", chưa nhắc phí. `engine.py` không có van sửa văn. nhadat.cc đã chép các ý đó vào `TONE_RULES` / `SELLER_SCRIPT_RULES` (05/10) và tắt van sửa văn (06/10). Lời model còn lệch ("không rush", đọc lại "giá 10 tỷ có thương lượng") → sửa PROMPT (thêm ví dụ SAI / ĐÚNG, cấm chen tiếng Anh), không thêm van. Bốn lỗi khác của lượt bắn thử 06/10 là lỗi CƠ CHẾ (ô chờ không có câu hỏi, cổng nhiều căn, "khách hỏi" không bằng chứng, trạng thái tin không đối chiếu DB) — bảng ở `docs/07 SRS-5.1zzo`.
 
 ## 6.9 Micro-copy web
 

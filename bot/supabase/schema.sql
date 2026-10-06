@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-05 23:30 (giờ VN)
+-- Sinh lúc: 2026-10-06 09:56 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -44,6 +44,7 @@ create sequence if not exists public.phuong_cu_id_seq;
 create sequence if not exists public.project_facts_id_seq;
 create sequence if not exists public.property_events_id_seq;
 create sequence if not exists public.required_facts_id_seq;
+create sequence if not exists public.van_kich_id_seq;
 
 -- ══ Bảng ══
 create table if not exists public.admins (
@@ -631,6 +632,16 @@ create table if not exists public.tien_ich (
   cap_nhat_at timestamp with time zone not null default now()
 );
 
+create table if not exists public.van_kich (
+  id bigint not null,
+  conversation_id uuid,
+  nhanh text not null,
+  van text not null,
+  truoc text not null default ''::text,
+  sau text not null default ''::text,
+  created_at timestamp with time zone not null default now()
+);
+
 create table if not exists public.viewings (
   id uuid not null default gen_random_uuid(),
   listing_id uuid,
@@ -1004,6 +1015,12 @@ do $d$ begin
   alter table public.tien_ich add constraint tien_ich_pkey PRIMARY KEY (osm_id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.van_kich add constraint van_kich_nhanh_check CHECK ((nhanh = ANY (ARRAY['ban'::text, 'mua'::text])));
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.van_kich add constraint van_kich_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.viewings add constraint viewings_buyer_rating_check CHECK (((buyer_rating >= 1) AND (buyer_rating <= 5)));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1171,6 +1188,9 @@ do $d$ begin
   alter table public.sellers add constraint sellers_auth_user_id_fkey FOREIGN KEY (auth_user_id) REFERENCES auth.users(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.van_kich add constraint van_kich_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL;
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.viewings add constraint viewings_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES buyers(id);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1256,6 +1276,8 @@ CREATE UNIQUE INDEX required_facts_loai_fact_deal_idx ON public.required_facts U
 CREATE UNIQUE INDEX required_facts_loai_fact_moi_deal_idx ON public.required_facts USING btree (property_type, fact_key) WHERE (deal IS NULL);
 create index if not exists sellers_active_listing_idx ON public.sellers USING btree (active_listing_id) WHERE (active_listing_id IS NOT NULL);
 create index if not exists tien_ich_loai_lat_lng_idx ON public.tien_ich USING btree (loai, lat, lng);
+create index if not exists van_kich_created_idx ON public.van_kich USING btree (created_at DESC);
+create index if not exists van_kich_van_idx ON public.van_kich USING btree (van);
 create index if not exists viewings_buyer_id_idx ON public.viewings USING btree (buyer_id);
 create index if not exists viewings_listing_id_idx ON public.viewings USING btree (listing_id);
 CREATE UNIQUE INDEX viewings_mot_hen_cho_moi_can_idx ON public.viewings USING btree (buyer_id, COALESCE(listing_code, (listing_id)::text)) WHERE (status = 'pending'::text);
@@ -3428,6 +3450,21 @@ begin
   return jsonb_build_object('tin', v_tin, 'tin_nhan', v_tin_nhan,
                             'nguoi_ban', v_nguoi, 'khach', v_khach, 'fact_du_an', v_pf);
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.don_van_kich()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare n integer;
+begin
+  delete from public.van_kich where created_at < now() - interval '30 days';
+  get diagnostics n = row_count;
+  return n;
+end;
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.du_an_can_doc_gia()
@@ -7422,6 +7459,19 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.van_kich_che_so()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  new.truoc := regexp_replace(coalesce(new.truoc, ''), '\d{9,}', '#', 'g');
+  new.sau := regexp_replace(coalesce(new.sau, ''), '\d{9,}', '#', 'g');
+  return new;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.viec_inbound_bo_roi(p_limit integer DEFAULT 20)
  RETURNS TABLE(event_id text, ly_do text, attempts integer)
  LANGUAGE sql
@@ -8314,6 +8364,16 @@ create or replace view public.hoi_thoai_nhan with (security_invoker = true) as
            FROM admins a
           WHERE a.email = ((( SELECT auth.jwt() AS jwt)) ->> 'email'::text)));
 
+create or replace view public.van_kich_7_ngay with (security_invoker = true) as
+ SELECT nhanh,
+    van,
+    count(*) AS so_lan,
+    max(created_at) AS lan_cuoi
+   FROM van_kich
+  WHERE created_at > (now() - '7 days'::interval)
+  GROUP BY nhanh, van
+  ORDER BY (count(*)) DESC;
+
 -- ══ Trigger ══
 drop trigger if exists trg_bot_errors_het_tien on public.bot_errors;
 CREATE TRIGGER trg_bot_errors_het_tien AFTER INSERT ON public.bot_errors FOR EACH ROW EXECUTE FUNCTION bat_het_tien_api();
@@ -8407,6 +8467,8 @@ drop trigger if exists trg_reminders_trang_thai on public.reminders;
 CREATE TRIGGER trg_reminders_trang_thai BEFORE UPDATE ON public.reminders FOR EACH ROW EXECUTE FUNCTION reminders_giu_trang_thai_ket();
 drop trigger if exists trg_required_facts_khong_trung on public.required_facts;
 CREATE TRIGGER trg_required_facts_khong_trung BEFORE INSERT OR UPDATE OF property_type, fact_key, deal ON public.required_facts FOR EACH ROW EXECUTE FUNCTION required_facts_khong_trung();
+drop trigger if exists trg_van_kich_che_so on public.van_kich;
+CREATE TRIGGER trg_van_kich_che_so BEFORE INSERT OR UPDATE ON public.van_kich FOR EACH ROW EXECUTE FUNCTION van_kich_che_so();
 drop trigger if exists trg_pe_viewings on public.viewings;
 CREATE TRIGGER trg_pe_viewings AFTER INSERT ON public.viewings FOR EACH ROW EXECUTE FUNCTION trg_property_event();
 drop trigger if exists trg_viewings_bao_ctv_va_email on public.viewings;
@@ -8457,6 +8519,7 @@ alter table public.reminders enable row level security;
 alter table public.required_facts enable row level security;
 alter table public.sellers enable row level security;
 alter table public.tien_ich enable row level security;
+alter table public.van_kich enable row level security;
 alter table public.viewings enable row level security;
 alter table public.wards enable row level security;
 
@@ -8607,6 +8670,8 @@ drop policy if exists sellers_self_read on public.sellers;
 create policy sellers_self_read on public.sellers as permissive for SELECT to authenticated using ((auth_user_id = ( SELECT auth.uid() AS uid)));
 drop policy if exists tien_ich_admin_read on public.tien_ich;
 create policy tien_ich_admin_read on public.tien_ich as permissive for SELECT to authenticated using (la_admin());
+drop policy if exists van_kich_admin_doc on public.van_kich;
+create policy van_kich_admin_doc on public.van_kich as permissive for SELECT to authenticated using (la_admin());
 drop policy if exists viewings_admin_read on public.viewings;
 create policy viewings_admin_read on public.viewings as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
@@ -8674,6 +8739,8 @@ grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.ro
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.seller_ranks to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.sellers to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.tien_ich to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.van_kich to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.van_kich_7_ngay to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.viewings to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.wards to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, UPDATE on public.admins to authenticated;
@@ -8746,6 +8813,8 @@ grant SELECT on public.project_facts_cho_duyet to authenticated;
 grant SELECT on public.ro_hang_ban to authenticated;
 grant SELECT on public.seller_ranks to authenticated;
 grant SELECT on public.tien_ich to authenticated;
+grant SELECT on public.van_kich to authenticated;
+grant SELECT on public.van_kich_7_ngay to authenticated;
 
 -- ══ Quyền hàm (FR-167) ══
 revoke all on function public.admin_cap_nhat_khach(p_buyer_id uuid, p_preferences jsonb, p_notes text) from public, anon, authenticated;
@@ -8914,6 +8983,8 @@ grant execute on function public.doi_chieu_tien_cong_khai(p_cau text[]) to servi
 revoke all on function public.don_du_lieu_thu() from public, anon, authenticated;
 grant execute on function public.don_du_lieu_thu() to authenticated;
 grant execute on function public.don_du_lieu_thu() to service_role;
+revoke all on function public.don_van_kich() from public, anon, authenticated;
+grant execute on function public.don_van_kich() to service_role;
 revoke all on function public.du_an_can_doc_gia() from public, anon, authenticated;
 grant execute on function public.du_an_can_doc_gia() to anon;
 grant execute on function public.du_an_can_doc_gia() to authenticated;
@@ -9234,6 +9305,10 @@ revoke all on function public.van_ban_du_an(p_id uuid) from public, anon, authen
 grant execute on function public.van_ban_du_an(p_id uuid) to service_role;
 revoke all on function public.van_ban_nhung(p_id uuid) from public, anon, authenticated;
 grant execute on function public.van_ban_nhung(p_id uuid) to service_role;
+revoke all on function public.van_kich_che_so() from public, anon, authenticated;
+grant execute on function public.van_kich_che_so() to anon;
+grant execute on function public.van_kich_che_so() to authenticated;
+grant execute on function public.van_kich_che_so() to service_role;
 revoke all on function public.viec_inbound_bo_roi(p_limit integer) from public, anon, authenticated;
 grant execute on function public.viec_inbound_bo_roi(p_limit integer) to service_role;
 revoke all on function public.viewings_bao_ctv_va_email() from public, anon, authenticated;
