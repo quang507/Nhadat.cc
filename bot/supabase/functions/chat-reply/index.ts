@@ -32,6 +32,7 @@ import {
   SLANG_NOTES,
   TONE_RULES, CAU_HOI_MAU_TEXT, CAU_TIEN_DINH_TEXT, CAU_HOI_MAU as CAU_HOI_MAU_GOC,
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
+  cauPhi, // SRS-5.1zzq: câu phí MỘT NGUỒN theo vai + loại giao dịch
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
@@ -2962,10 +2963,9 @@ Deno.serve(async (req) => {
       // 01/10/2026 (bắn thử lx-cx-01: "bên em có phải lừa đảo không vậy" → bot chỉ nói "em là trợ lý AI"): chủ nhà NGHI NGỜ
       // (AI đọc, có trích dẫn) → bong bóng TRẤN AN tiền định đứng trước, chỉ nói điều có thật: phí chỉ thu khi giao dịch thành
       // công (FEE_RULES), không thu trước; đã báo người phụ trách (việc 😟 vừa mở ở `camXucAi`).
-      if (camXucLuot?.muc === "nghi_ngo" && !replies.some((r) => /phí chỉ thu khi giao dịch thành công/i.test(r))) {
+      if (camXucLuot?.muc === "nghi_ngo" && !replies.some((r) => /phí chỉ thu khi/i.test(r))) {
         const goi = sellerRow.xung_ho ?? "anh/chị";
-        const pct = sellerRow.seller_type === "nmg" ? "0,5%" : "1%";
-        replies = [`Dạ ${goi} yên tâm nha, bên em là AI Ơi Nhà Đất, rao tin cho ${goi} không thu đồng nào trước — phí chỉ thu khi giao dịch thành công, ${pct} giá chốt. Em cũng đã báo anh chị phụ trách nhắn lại ${goi} cho rõ ạ.`, ...replies];
+        replies = [`Dạ ${goi} yên tâm nha, bên em là AI Ơi Nhà Đất, rao tin cho ${goi} không thu đồng nào trước — ${cauPhi(sellerRow.seller_type, dealNguoi)}. Em cũng đã báo anh chị phụ trách nhắn lại ${goi} cho rõ ạ.`, ...replies];
       }
       if (humanActive) {
         // FR-141 — người thật đang cầm cuộc: không gửi, không ghi dòng bot nào.
@@ -3245,7 +3245,7 @@ Deno.serve(async (req) => {
       client.from("messages").select("sender, body, seq")
         .eq("conversation_id", convSId).order("seq", { ascending: false }).limit(40),
       // FR-214 b: danh sách tin người này đang rao — `nhieuCan` đếm, bộ gán mảnh đọc mã/loại/nơi chốn/giá.
-      client.from("listings").select("id, code, status, property_type, district, ward, street, location_raw, price_raw, area_m2")
+      client.from("listings").select("id, code, status, property_type, district, ward, street, location_raw, price_raw, area_m2, deal")
         .eq("seller_id", sellerRow.id).order("created_at", { ascending: true }).limit(10),
     ]);
     const lichSuS = ((lichSuDai ?? []) as Array<{ sender: string; body: string | null; seq: number }>).slice(0, 9);
@@ -3281,9 +3281,16 @@ Deno.serve(async (req) => {
     // Bot tự xưng "cháu" với chú/cô/bác (mọi câu tiền định viết "em" → đổi ở đường ra `sach`).
     const tuXung = lonTuoiChuaRo ? "cháu" : tuXungBot(goiNguoi);
     // Câu phí tiền định cho hỏi ngược (FEE_RULES, theo nhãn) — 15/09/2026.
-    const phiCauSeller = sellerRow.seller_type === "nmg"
-      ? "phí bên em chỉ thu khi giao dịch thành công, 0,5% giá chốt"
-      : "phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt";
+    // SRS-5.1zzq: loại giao dịch của người này để câu phí nói đúng (thuê = 3/4 tháng). Ưu tiên căn đang chăm; mọi căn cùng một
+    // loại thì lấy loại đó; lẫn bán và thuê thì null (câu phí nói chung, không bịa).
+    const dealNguoi: string | null = (() => {
+      const ds = ((tinCuaNguoi ?? []) as Array<{ id: string; deal?: string | null }>);
+      const dang = ds.find((t) => t.id === sellerRow.active_listing_id)?.deal;
+      if (dang) return dang;
+      const cac = [...new Set(ds.map((t) => t.deal).filter((d): d is string => !!d))];
+      return cac.length === 1 ? cac[0] : null;
+    })();
+    const phiCauSeller = cauPhi(sellerRow.seller_type, dealNguoi, { benEm: true });
     const CachGoi = goiNguoi ? goiNguoi.charAt(0).toUpperCase() + goiNguoi.slice(1) : lonTuoiChuaRo ? "Cô chú" : "Anh chị";
     // Điền ô cho câu tiền định (FR-138 b). Ô thiếu dữ liệu → câu rỗng, tầng gọi bỏ.
     const cauTD = (khoa: string, o: Record<string, string | number | null | undefined> = {}) =>
@@ -3296,6 +3303,8 @@ Deno.serve(async (req) => {
     // khỏi lịch sử vì câu lệnh dẫn riêng.
     const lichSuRows = ((lichSuS ?? []) as Array<{ sender: string; body: string | null; seq: number }>)
       .slice().reverse();
+    /** Em đã nói phí với người này chưa (bất kỳ dạng: % giá chốt, tháng tiền thuê, câu dẫn phí) — để không dẫn phí lần hai. */
+    const daNoiPhiRoi = () => lichSuRows.some((m) => !laTinNguoi(m.sender) && /giá chốt|0,5%|0\.5%|\b1%|tháng tiền thuê|biết phí bên em chưa/.test(m.body ?? ""));
     if (lichSuRows.length && laTinNguoi(lichSuRows[lichSuRows.length - 1].sender)) lichSuRows.pop();
     /** Lời bot NGAY TRƯỚC tin này, nguyên văn (bỏ bong bóng 🤖 báo lại) — câu bot thật sự vừa hỏi, không phải câu mẫu. */
     const cauBotThat = boBaoLai(lichSuRows.filter((m) => !laTinNguoi(m.sender)).map((m) => m.body ?? "").filter((b) => !!boBaoLai(b)?.trim()).at(-1) ?? null);
@@ -5295,7 +5304,10 @@ Deno.serve(async (req) => {
             l: l as TinNhapRow, facts: (facts ?? []) as FactNhap[], diem: d.diem, thieu: d.thieu ?? [],
             soAnh: d.so_anh ?? 0, lai: false, cauTD, daDang: true,
           });
-          return await traLoiSeller([...truoc, tinDang, cauTD("dang_luon_cuoi")], { ...extra, duyet: true, dang_luon: true, diem: d.diem, listing_status: sau.status });
+          // SRS-5.1zzq: "đăng đi" lên kệ ngay cũng DẪN PHÍ một lần như nhánh duyệt thường (trước đây nhánh này quên).
+          const cauDanPhiDL = daNoiPhiRoi() ? "" : cauTD("dang_xong_phi", { loai: loaiDoc(l.property_type) });
+          return await traLoiSeller([...truoc, tinDang, cauTD("dang_luon_cuoi") + (cauDanPhiDL ? `\n${cauDanPhiDL}` : "")],
+            { ...extra, duyet: true, dang_luon: true, diem: d.diem, listing_status: sau.status, ...(cauDanPhiDL ? { dan_phi: true } : {}) });
         }
         const thieuDang = [!sau?.ward ? "phường" : null, sau?.area_m2 == null ? "diện tích" : null].filter(Boolean).join(" và ") || "vài thông tin";
         if (sau && !sau.ward) {
@@ -6096,7 +6108,7 @@ Deno.serve(async (req) => {
       // 15/09/2026 (bắn thật F2): câu hỏi về ẢNH có đáp án của hệ thống → bong bóng tiền
       // định đứng trước, model chỉ hỏi tiếp (model từng bỏ qua lời dặn trả lời trước).
       const hoiNguocDap = hoiNguoc
-        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, phiCauSeller, hoiAi?.chuDe) ?? await dapChuaCoDuLieu(hoiNguoc, hoiAi?.chuDe)
+        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, cauPhi(sellerRow.seller_type, pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiAi?.chuDe) ?? await dapChuaCoDuLieu(hoiNguoc, hoiAi?.chuDe)
         : xinXoaLuot(dapAn) && !nhanDienFact(dapAn)
         ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
         : null;
@@ -6743,8 +6755,7 @@ Deno.serve(async (req) => {
           }
         }
         // 05/10/2026 (demo AOND `build_fee_followup_system`): tin lên kệ → DẪN PHÍ một lần bằng câu hỏi, nếu em chưa từng nói phí với người này.
-        const daNoiPhi = lichSuRows.some((m) => !laTinNguoi(m.sender) && /giá chốt|0,5%|0\.5%|\b1%/.test(m.body ?? ""));
-        const cauDanPhi = len && !daNoiPhi ? cauTD("dang_xong_phi", { loai: loaiDoc(lstOk?.property_type) }) : "";
+        const cauDanPhi = len && !daNoiPhiRoi() ? cauTD("dang_xong_phi", { loai: loaiDoc(lstOk?.property_type) }) : "";
         const cau = len
           ? cauTD("dang_xong", { diem: dk?.diem, loai: loaiDoc(lstOk?.property_type) }) + dongNguoiRao + (cauDanPhi ? `\n${cauDanPhi}` : "")
           : huaSauDuyet
@@ -6870,9 +6881,7 @@ Deno.serve(async (req) => {
           pendingReq.listings?.location_raw?.split(",")[0]?.trim() ||
           pendingReq.listings?.ward || "")
         : "";
-      const phiMotCau = sellerRow.seller_type === "nmg"
-        ? "phí chỉ thu khi giao dịch thành công, 0,5% giá chốt"
-        : "phí chỉ thu khi giao dịch thành công, 1% giá chốt";
+      const phiMotCau = cauPhi(sellerRow.seller_type, pendingReq.listings?.deal ?? dealNguoi);
 
       // FR-209: câu kế là PHƯỜNG mà tin còn ở quận mặc định và đã có tên đường → tra
       // Nominatim + `wards`, hỏi xác nhận thay vì "phường mấy, quận nào".
@@ -7080,9 +7089,17 @@ Deno.serve(async (req) => {
           await ghiLoi(client, "chat-reply mo cau hoi tiep", irErr.message);
         }
       }
+      // SRS-5.1zzq: tin đã duyệt từ trước, lượt này mới đủ thông tin để trigger đưa lên kệ → dẫn phí một lần (nhánh duyệt
+      // thường đã có, đường "lên kệ muộn" này trước đây không có).
+      // Nối CÙNG bong bóng với lời báo đã đăng (như nhánh duyệt thường): `motCauHoiLuot` chỉ giữ câu hỏi ở bong bóng
+      // hỏi cuối, tách bong bóng riêng là nó cắt câu hỏi của bong bóng trước (GOVAP-06 bắt được).
+      const cauDanPhiR2 = published && pendingReq.listings?.status === "cho_thong_tin" && !daNoiPhiRoi()
+        ? cauTD("dang_xong_phi", { loai: loaiDoc(lstNow?.property_type) }) : "";
+      if (cauDanPhiR2) sellerReply = sellerReply ? `${sellerReply}\n${cauDanPhiR2}` : cauDanPhiR2;
       return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), ...(dauDangThieu ? [dauDangThieu] : []), sellerReply, ...(xinDiemCuoi ? [xinDiemCuoi] : [])], {
         ...(dauDangThieu ? { chu_muon_dang: true } : {}),
         saved_fact: boQuaCauTreo ? null : pendingReq.question, ...(xinDiemCuoi ? { xin_danh_gia: true } : {}), ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}),
+        ...(cauDanPhiR2 ? { dan_phi: true } : {}),
       });
     }
     // FR-144: chính chủ nhắn CÂU RAO MỚI → tạo tin nháp cho_thong_tin ngay + mở
@@ -7499,7 +7516,7 @@ Deno.serve(async (req) => {
         // trước đây câu hỏi bị nuốt. Có đáp án hệ thống (bot / phí / ảnh) thì bong bóng
         // tiền định đứng trước; không thì dặn model trả lời trước rồi mới hỏi.
         const hoiRao = tachCauHoiNguoc(text).hoi;
-        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, phiCauSeller) : null;
+        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(sellerRow.seller_type, sDeal ?? dealNguoi, { benEm: true })) : null;
         const hoiRaoPrompt = hoiRao
           ? dapRao
             ? `Chủ nhà còn hỏi "${hoiRao}" — câu đó ĐÃ được trả lời ở bong bóng ngay trước; em KHÔNG trả lời lại, KHÔNG nhắc tới nó, KHÔNG nói chữ "hệ thống". `

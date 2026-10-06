@@ -8002,6 +8002,68 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     lan === 1 && !(rB.body.van_kich ?? []).includes("goiLaiChoDungO"), JSON.stringify({ lan, vk: rB.body.van_kich, noi: loiBot(rB) }));
   globalThis.__model.create = undefined;
 }
+// ── 06/10/2026 (SRS-5.1zzq, đối chiếu SRD AOND): câu phí MỘT NGUỒN theo vai + loại giao dịch; dẫn phí ở nhánh "đăng đi" ──
+{
+  const laLuotBocRao = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laLuotYLuot = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+  const aiPhi = (them = {}) => (p) => (laLuotBocRao(p) || laLuotYLuot(p))
+    ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null },
+      cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], can_khac: false, dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, ...them }
+    : laLuotAnh(p) ? ANH(globalThis.__anh) : OUT();
+  const loiBot = (r) => (r.body ?? r).replies.filter((x) => !/^(🤖|💾|📝|📋|👤)/u.test(x)).join(" | ");
+  const dungThue = (uid, sellerType, deal) => {
+    fresh(seedKho);
+    const sN = db().insert("sellers", { zalo_user_id: uid, seller_type: sellerType, name: null, active_listing_id: null }).data;
+    const tin = db().insert("listings", { code: `BDS-Q5-09${uid.slice(-2)}`, seller_id: sN.id, deal, status: "cho_thong_tin", property_type: "chung_cu", district: "Quận 7", ward: "Phường Tân Phú",
+      location_raw: "Sunrise City", price_raw: deal === "cho_thue" ? "15 triệu/tháng" : "5 tỷ 8", area_m2: 76 }).data;
+    db().insert("info_requests", { listing_id: tin.id, question: "noi_that", status: "pending" });
+    return tin;
+  };
+  const cuCH = globalThis.__cauHinh;
+  // PHI-01: tin CHO THUÊ, chủ nhà hỏi phí (không dấu) → 3/4 tháng tiền thuê, không "1%".
+  dungThue("phi-t1", "ccrb", "cho_thue");
+  let rP = await send({ external_user_id: "phi-t1", text: "phi ben minh sao em" });
+  check("PHI-01 tin CHO THUÊ hỏi phí → '3/4 tháng tiền thuê', không nói 1% / 0,5% giá chốt",
+    !!rP.body.hoi_nguoc && /3\/4 tháng tiền thuê/.test(loiBot(rP)) && !/1%|0,5%|giá chốt/.test(loiBot(rP)), JSON.stringify(rP.body));
+  // PHI-02: hồ sơ chưa rõ vai (unknown) hỏi phí → không báo con số.
+  dungThue("phi-u2", "unknown", "ban");
+  rP = await send({ external_user_id: "phi-u2", text: "phi ben minh sao em" });
+  check("PHI-02 vai chưa rõ (unknown) hỏi phí → nói thu khi giao dịch thành công, KHÔNG báo con số",
+    !!rP.body.hoi_nguoc && /chỉ thu khi giao dịch thành công/.test(loiBot(rP)) && !/1%|0,5%/.test(loiBot(rP)), JSON.stringify(rP.body));
+  // PHI-02b đối chứng: môi giới tin bán → vẫn 0,5% giá chốt (câu cũ không đổi).
+  dungThue("phi-m3", "nmg", "ban");
+  rP = await send({ external_user_id: "phi-m3", text: "phi ben minh sao em" });
+  check("PHI-02b môi giới tin bán hỏi phí → 0,5% giá chốt như cũ", /0,5% giá chốt/.test(loiBot(rP)), loiBot(rP));
+  // PHI-03: nghi ngờ lừa đảo ở tin CHO THUÊ → câu trấn an tiền định nói đúng phí thuê.
+  dungThue("phi-n4", "ccrb", "cho_thue");
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+  globalThis.__model.parse = aiPhi({ cam_xuc: { muc: "nghi_ngo", trich_dan: "có phải lừa đảo không" } });
+  rP = await send({ external_user_id: "phi-n4", text: "bên em có phải lừa đảo không vậy" });
+  check("PHI-03 nghi ngờ ở tin cho thuê → trấn an 'không thu đồng nào trước' + phí 3/4 tháng tiền thuê, không '1% giá chốt'",
+    /không thu đồng nào trước/.test(loiBot(rP)) && /3\/4 tháng tiền thuê/.test(loiBot(rP)) && !/1% giá chốt/.test(loiBot(rP)), loiBot(rP));
+  globalThis.__cauHinh = cuCH;
+  // PHI-04: "đăng đi" đủ điểm → lên kệ ngay VÀ dẫn phí một lần (trước đây nhánh này quên).
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "phi-d5", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0905", seller_id: s.id, deal: "ban", status: "cho_thong_tin", can_chu_duyet: true, property_type: "nha_pho", location_raw: "9 Hồng Bàng", ward: "Phường 12", price_raw: "8 tỷ", price_vnd: 8e9, area_m2: 60, floors: 3, bedrooms: 3, legal_status: "so_hong_rieng", access_type: "hem_xe_hoi", alley_width_m: 4, district: "Quận 5" }).data;
+    d.insert("listing_facts", { listing_id: l.id, question: "hinh_anh", answer: "https://x/1.jpg", source: "seller_chat" });
+    d.insert("info_requests", { listing_id: l.id, question: "tiem_nang", status: "pending" });
+  });
+  rP = await send({ external_user_id: "phi-d5", text: "đăng đi em" });
+  check("PHI-04 'đăng đi' lên kệ ngay → có câu dẫn phí 'biết phí bên em chưa' (body.dan_phi), đúng một lần",
+    rP.body.dang_luon === true && rP.body.dan_phi === true && rP.body.replies.filter((x) => /biết phí bên em chưa/.test(x)).length === 1, JSON.stringify(rP.body.replies));
+  // PHI-04b đã nói phí trước đó → "đăng đi" không dẫn phí lần hai.
+  fresh((d) => {
+    const s = d.insert("sellers", { zalo_user_id: "phi-d6", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-Q5-0906", seller_id: s.id, deal: "ban", status: "cho_thong_tin", can_chu_duyet: true, property_type: "nha_pho", location_raw: "9 Hồng Bàng", ward: "Phường 12", price_raw: "8 tỷ", price_vnd: 8e9, area_m2: 60, floors: 3, bedrooms: 3, legal_status: "so_hong_rieng", access_type: "hem_xe_hoi", alley_width_m: 4, district: "Quận 5" }).data;
+    d.insert("listing_facts", { listing_id: l.id, question: "hinh_anh", answer: "https://x/1.jpg", source: "seller_chat" });
+    d.insert("info_requests", { listing_id: l.id, question: "tiem_nang", status: "pending" });
+    const c = d.insert("conversations", { seller_id: s.id, channel: "zalo_personal_test" }).data;
+    d.insert("messages", { conversation_id: c.id, sender: "bot", body: "Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ." });
+  });
+  rP = await send({ external_user_id: "phi-d6", text: "đăng đi em" });
+  check("PHI-04b đã nói phí rồi → 'đăng đi' KHÔNG dẫn phí lần hai", rP.body.dang_luon === true && rP.body.dan_phi !== true && !/biết phí bên em chưa/.test(rP.body.replies.join("\n")), JSON.stringify(rP.body.replies));
+}
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

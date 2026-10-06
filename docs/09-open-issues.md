@@ -90,6 +90,10 @@ sàn, KHÔNG trả 1%), sàn, NMG, lướt sóng (giữ HĐMB), chủ nhà. Nh�
 **Phương án**: (a) giữ nhị phân, thêm cờ "là CĐT?" để bot né báo phí; (b) mở `seller_type` thành 5
 vai + luật hỏi theo giai đoạn dự án; (c) chờ gặp CĐT thật.
 **Khuyến nghị BA**: (a) ngay, (b) khi có dự án sơ cấp đầu tiên. **Chờ**: chủ dự án.
+**06/10/2026 (SRS-5.1zzq)**: câu phí nay MỘT NGUỒN `cauPhi()` — thuê 3/4 tháng, vai `unknown` không báo số; `FEE_RULES`
+đã dặn model không báo số cho CĐT. Còn thiếu đúng phần nhận diện: thêm giá trị `chu_dau_tu` vào `Vai` của AI
+(`_shared/ai/boc-rao.ts`, có trích dẫn, code kiểm `docVai`) + cột/cờ `la_cdt` trên `sellers` (migration) → `cauPhi` trả
+"để em kết nối bộ phận hợp tác dự án". Một PR riêng khi chủ dự án chốt (a).
 
 ### OPEN-24 · `pg_net` mở cho `anon` — mồi SSRF không vá được bằng SQL
 **Vấn đề**: `anon` có USAGE schema `net` + EXECUTE `net.http_post` (đo 26/08); chưa khai thác được

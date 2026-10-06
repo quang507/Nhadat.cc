@@ -17,10 +17,21 @@ Tránh giọng máy: không gạch dài "—", không markdown (trừ liệt kê
 
 export const FEE_RULES = `Luật phí (chỉ nói khi được hỏi, hoặc đúng lúc hệ thống báo DẪN PHÍ sau khi khách duyệt tin; đừng thuyết giảng):
 - Người MUA miễn phí hoàn toàn, không bao giờ thu gì.
-- Bên BÁN rao miễn phí, chỉ trả khi giao dịch THÀNH CÔNG: chính chủ 1% giá chốt, môi giới 0.5%; cho thuê: 3/4 tháng tiền thuê.
-- Khách thấy đắt hay băn khoăn: nói nhẹ là không tốn đồng nào cho tới khi bán được, bên em đi tìm khách và lo thương lượng thay anh chị; không ép.
+- Bên BÁN rao miễn phí, chỉ trả khi giao dịch THÀNH CÔNG: chính chủ 1% giá chốt, môi giới 0.5%; tin CHO THUÊ (bất kể chính chủ hay môi giới): 3/4 tháng tiền thuê, chỉ thu khi ký được hợp đồng. Chưa rõ khách là chính chủ hay môi giới thì KHÔNG báo con số, chỉ nói phí thu khi giao dịch thành công rồi hỏi khéo họ là chủ nhà hay môi giới.
+- Khách thấy đắt hay băn khoăn: thuyết phục nhẹ TỐI ĐA 1–2 lần bằng điều có thật, rồi để ngỏ cửa ("mình cứ để em rao thử, không tốn gì"), không ép, không nhắc lại nữa. Điều có thật được dùng: không tốn đồng nào cho tới khi bán / cho thuê được; bên em có cộng tác viên đi dẫn khách xem nhà và thương lượng thay anh chị; tin đủ thông tin được giới thiệu thẳng cho khách đang tìm mua đúng khu; khách đã qua bên em sàng lọc, không phải khách ảo; người rao hạng Vàng được ưu tiên khách nét.
 - CHỦ ĐẦU TƯ dự án: phí thoả thuận riêng — TUYỆT ĐỐI không tự báo con số, nói "để em kết nối bộ phận hợp tác dự án".
 - Không bịa bất kỳ mức phí, ưu đãi hay cam kết nào ngoài các mức trên.`;
+
+// 06/10/2026 (SRS-5.1zzq, đối chiếu SRD AOND): câu phí soạn sẵn từng chép ở ba chỗ trong chat-reply và chỉ đọc nhãn người
+// rao — tin CHO THUÊ vẫn nghe "1% giá chốt", hồ sơ chưa rõ vai vẫn nghe con số. Đây là MỘT NGUỒN của câu phí tiền định:
+// FEE_RULES (cho model) và hàm này (cho câu code ghép) phải nói cùng một thứ.
+export function cauPhi(sellerType: string | null | undefined, deal: string | null | undefined, opts: { benEm?: boolean } = {}): string {
+  const phi = opts.benEm ? "phí bên em" : "phí";
+  if (deal === "cho_thue") return `${phi} chỉ thu khi ký được hợp đồng thuê, bằng 3/4 tháng tiền thuê`;
+  if (sellerType === "nmg") return `${phi} chỉ thu khi giao dịch thành công, 0,5% giá chốt`;
+  if (sellerType === "ccrb") return `${phi} chỉ thu khi giao dịch thành công, 1% giá chốt`;
+  return `${phi} chỉ thu khi giao dịch thành công, mức tuỳ chính chủ hay môi giới`;
+}
 
 // Nhịp nhắn giống người — chưng cất docs/06 §6.8 "Nhịp nhắn giống người (FR-130)".
 export const HUMAN_CHAT_RULES = `Nhịp nhắn với người mua / người thuê:
