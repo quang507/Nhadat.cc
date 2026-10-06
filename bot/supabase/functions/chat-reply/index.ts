@@ -55,7 +55,7 @@ import { nhipGui } from "../_shared/nhip-gui.ts";
 import { laNgungHangLoat } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { docNgungHangLoat } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -6016,8 +6016,13 @@ Deno.serve(async (req) => {
         // và trả lời thẳng câu đang hỏi (`tra_loi`, đã kiểm trích dẫn + con số). Câu SỐ CHẶT (tiền, diện tích, kích thước) vẫn
         // lấy giá trị ô đã chuẩn hoá của AI (`giaTriChoCauTreo`); câu khác lấy nguyên câu trả lời của AI ("hẻm xe hơi vào tận
         // nhà", "chưa có sổ, đang chờ ra sổ") — DB tự đọc cột từ chữ. Vị trí / phường giữ đường riêng.
-        const traLoiAi = cheDoAiTreo === "chinh" && kqAi?.ket && layChoCauTreo && !dapAnTuTinTruoc && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question)
+        const traLoiAi0 = cheDoAiTreo === "chinh" && kqAi?.ket && layChoCauTreo && !dapAnTuTinTruoc && !CAU_AI_DOC_TRUOC_LUAT_DO.has(pendingReq.question)
           ? kiemTraLoiCau(kqAi.traLoi, text, cauBotThat, { cauHoi: pendingReq.question, loai: pendingReq.listings?.property_type ?? null }) : null;
+        // SRS-5.1zzw: một cụm chỉ trả lời một ô — cụm trích của câu trả lời mà cùng lượt đã thuộc ô KHÁC (đề xuất AI + fact luật) thì
+        // AI nói "có trả lời" cũng không tính ("anh đứng tên, không thế chấp" khi hỏi gấp / hỏi hẻm). Câu treo đi đường lệch như AI nói không.
+        const traLoiAi = traLoiAi0?.co && traLoiThuocOKhac(kqAi?.traLoi?.trich_dan, pendingReq.question, datAi, nhanDienNhieuFact(text))
+          ? (console.log("chat-reply: tra_loi thuoc o khac", pendingReq.question), { co: false, giaTri: null })
+          : traLoiAi0;
         const oAi = kqAi && layChoCauTreo ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
         const dapAnAi0 = CAU_SO_CHAT.has(pendingReq.question) ? oAi : (traLoiAi?.giaTri ?? oAi);
         // 22/09/2026: câu treo VỊ TRÍ — bản luật chứa bản AI mà dài hơn (có số nhà / hẻm) thì lấy luật.
