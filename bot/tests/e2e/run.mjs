@@ -106,7 +106,9 @@ function seedKho(d) {
 }
 const R = []; const check = (n, ok, detail = "") => { R.push([n, !!ok, detail]); };
 const parseCalls = () => parseMua();
-const createCalls = () => globalThis.__calls.filter((c) => c.kind === "create");
+// SRS-5.1zzp: lượt GỌI LẠI cho đúng ô (câu lệnh mở "Em vừa soạn tin này cho chủ nhà") là lượt phụ — mock mặc định không hỏi gì
+// nên hầu hết lượt bán đều gọi lại; các ca soi "câu lệnh lượt vừa rồi" phải thấy câu lệnh CHÍNH. Đếm lượt gọi lại qua `lan` của mock.
+const createCalls = () => globalThis.__calls.filter((c) => c.kind === "create" && !/Em vừa soạn tin này cho chủ nhà/.test(c.params?.messages?.[0]?.content ?? ""));
 const sysText = (c) => c.params.system[1].text;
 
 // ── VAI 1: người lạ ─────────────────────────────────────────────────────────
@@ -7962,6 +7964,43 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
       /đang rao/.test(loiBot(rC)) && !/KHÔNG CÓ tin nào đang rao/.test(createCalls().at(-1)?.params.messages?.[0]?.content ?? ""), loiBot(rC));
     globalThis.__model.create = undefined;
   }
+}
+// ── 06/10/2026 (bước 3, SRS-5.1zzp): lời model lệch ô → GỌI LẠI model một lần, câu mẫu chỉ là lưới cuối ──
+{
+  const loiBot = (r) => (r.body ?? r).replies.filter((x) => !/^(🤖|💾|📝|📋|👤)/u.test(x)).join(" | ");
+  const dungTin = (uid) => {
+    fresh(seedKho);
+    const sN = db().t.sellers.find((x) => x.zalo_user_id === uid);
+    const tin = db().insert("listings", { code: "BDS-Q5-0902", seller_id: sN.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", district: "Quận 5", ward: "Phường 2",
+      location_raw: "123 Trần Bình Trọng", street: "Trần Bình Trọng", area_m2: 60, frontage_m: 4, length_m: 15 }).data;
+    db().insert("info_requests", { listing_id: tin.id, question: "phap_ly", status: "pending" });
+    return tin;
+  };
+  // 06a: lần 1 không hỏi → gọi lại → lần 2 có câu hỏi (không lệch khoá) → dùng lời model lần 2, không dán câu mẫu.
+  dungTin("z-nmg");
+  let lan = 0;
+  globalThis.__model.create = () => (++lan === 1 ? "Dạ em cảm ơn anh." : "Dạ em ghi rồi, anh cho em hỏi thêm một chút nha?");
+  let rB = await send({ external_user_id: "z-nmg", text: "Sổ riêng, anh đứng tên" });
+  let noi = loiBot(rB);
+  check("GOC-06 lời r2 không hỏi → gọi lại model MỘT lần, dùng lời lần 2 (giọng model), không dán câu mẫu; sổ van có goiLaiChoDungO, không có damBaoCauHoi",
+    lan === 2 && /anh cho em hỏi thêm một chút nha\?/.test(noi) && (rB.body.van_kich ?? []).includes("goiLaiChoDungO") && !(rB.body.van_kich ?? []).includes("damBaoCauHoi"),
+    JSON.stringify({ lan, noi, vk: rB.body.van_kich }));
+  // 06b: lần 2 vẫn không hỏi → câu mẫu dán (lưới cuối), chỉ gọi lại MỘT lần.
+  dungTin("z-nmg");
+  lan = 0;
+  globalThis.__model.create = () => { lan++; return "Dạ em cảm ơn anh."; };
+  rB = await send({ external_user_id: "z-nmg", text: "Sổ riêng, anh đứng tên" });
+  noi = loiBot(rB);
+  check("GOC-06b lần 2 vẫn không hỏi → chỉ gọi lại MỘT lần rồi câu mẫu dán (damBaoCauHoi), lời gửi đi vẫn có câu hỏi",
+    lan === 2 && /\?/.test(noi) && (rB.body.van_kich ?? []).includes("goiLaiChoDungO") && (rB.body.van_kich ?? []).includes("damBaoCauHoi"), JSON.stringify({ lan, noi, vk: rB.body.van_kich }));
+  // 06c: lời đã đúng ô → không gọi lại (không tốn lượt).
+  dungTin("z-nmg");
+  lan = 0;
+  globalThis.__model.create = () => { lan++; return "Dạ em ghi rồi, anh cho em hỏi thêm một chút nha?"; };
+  rB = await send({ external_user_id: "z-nmg", text: "Sổ riêng, anh đứng tên" });
+  check("GOC-06c lời đã có câu hỏi đúng ô → KHÔNG gọi lại (1 lượt model), sổ van không có goiLaiChoDungO",
+    lan === 1 && !(rB.body.van_kich ?? []).includes("goiLaiChoDungO"), JSON.stringify({ lan, vk: rB.body.van_kich, noi: loiBot(rB) }));
+  globalThis.__model.create = undefined;
 }
 // ── kết ──
 let hong = 0;

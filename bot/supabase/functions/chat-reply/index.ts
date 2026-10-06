@@ -169,7 +169,7 @@ import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
 import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 import { canTheoAi } from "../_shared/extraction/kiem-bang-chung.ts";
-import { coMenhDeDaDang, damBaoCauHoi } from "../_shared/extraction/van-tra-loi.ts";
+import { coCauHoi, coMenhDeDaDang, damBaoCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
 import { type ConThieu, dapBaoLauBan, dapHoiVeTin, hoiVeTin, LEGAL_VI, type LoaiHoiTin, type TinTom } from "../_shared/extraction/hoi-ve-tin.ts";
 import { thieuCoReNhanh } from "../_shared/re_nhanh.ts";
@@ -3325,6 +3325,41 @@ Deno.serve(async (req) => {
       }${tuXung === "cháu" ? `; tự xưng "cháu" (chủ nhà lớn tuổi), KHÔNG xưng "em"` : ""}.\n` +
       `- Lịch sử gần nhất, tin mới ở cuối. KHÔNG lặp lại khuôn câu, lời khen, hay lý do "khách hay hỏi" đã dùng trong đó; tin trước của em mở bằng "Dạ" thì tin này đừng mở bằng "Dạ"; viết như người thật nhắn tay, mỗi tin một giọng:\n` +
       `${lichSuText || "(chưa có tin nào trước đó)"}\n\n`;
+
+    // ─── 06/10/2026 (bước 3, SRS-5.1zzp; chủ dự án: "làm 3 bước đi… prompt làm sao cho nó tự nhiên hơn") ─────────────────
+    // Lời model lệch Ô CHỜ (không hỏi / hỏi chuyện khác / rút vế bắt buộc / hỏi lại ô đã có) trước đây bị thay bằng CÂU MẪU
+    // (chữ code) ngay — đúng ô nhưng giọng máy chen giữa lời model. Nay: gọi lại model MỘT lần với ghi chú vì sao câu vừa viết
+    // chưa dùng được, rồi mới qua các van cũ; câu mẫu chỉ còn là lưới cuối khi lần hai vẫn lệch hay model hỏng. Chỉ tốn thêm
+    // một lượt ở lượt lệch — sổ `van_kich` (`goiLaiChoDungO`) đếm được bao nhiêu phần trăm.
+    const lyDoLechO = (reply: string, khoa: string | null | undefined, cauMau: string | null, daCo?: ReadonlySet<string>): string | null => {
+      if (!coCauHoi(reply)) return "tin chưa có câu hỏi nào, mà lượt này em phải hỏi tiếp một ý";
+      if (khoa && laHoiLechKhoa(reply, khoa)) return "câu hỏi đang hỏi chuyện khác, không phải ý cần hỏi";
+      if (khoa && cauMau && giuVeCauMau(reply, khoa, cauMau) !== reply) return "câu hỏi thiếu một ý bắt buộc (câu bên em hay dùng có đủ các ý, đừng rút)";
+      if (daCo && boHoiLaiDaCo(reply, daCo, khoa, cauMau) !== reply) return "câu hỏi hỏi lại điều chủ nhà đã nói (đã có trong ĐÃ BIẾT)";
+      return null;
+    };
+    const goiLaiChoDungO = async (reply: string, lyDo: string, nhan: string, cauMau: string | null): Promise<string | null> => {
+      if (!anthropicS) return null;
+      try {
+        const r = await anthropicS.messages.create({
+          model: MODEL, max_tokens: 300, output_config: { effort: "low" },
+          system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }, { type: "text", text: DONG_TEN }],
+          messages: [{
+            role: "user",
+            content: `${boiCanh}Em vừa soạn tin này cho chủ nhà: "${reply}"\nTin đó chưa dùng được: ${lyDo}.\n` +
+              `Viết LẠI một tin ngắn như người thật nhắn Zalo: giữ phần ghi nhận nếu có (không khen thêm), rồi hỏi đúng MỘT ý: ${nhan}` +
+              (cauMau ? ` — ý đó bên em hay hỏi là "${cauMau}", nói lại cho tự nhiên nhưng giữ đủ các ý trong đó` : "") +
+              `. Không hỏi ý khác, không đọc lại số liệu, không cảm ơn.`,
+          }],
+        });
+        await doTien(client, r.usage);
+        const t = r.content.find((b) => b.type === "text")?.text?.trim() ?? null;
+        return t && !laLoiMeta(t) ? t : null;
+      } catch (e) {
+        await ghiLoi(client, "chat-reply goi lai cho dung o", e);
+        return null;
+      }
+    };
 
     // Người bán ĐÃ có nhãn mà tự xưng ngược lại ("em là môi giới mà" khi đang
     // CHÍNH CHỦ; "tôi là chính chủ" khi đang MÔI GIỚI) → KHÔNG tự lật (nhãn có
@@ -6912,6 +6947,25 @@ Deno.serve(async (req) => {
           // 15/09/2026 (bắn thật P2): model trả lời CÂU LỆNH ("Em hiểu rồi ạ… Sẵn sàng nhận
           // hội thoại") → bỏ, dùng câu tiền định.
           if (sellerReply && laLoiMeta(sellerReply)) { console.log("chat-reply: r2 tra loi cau lenh, bo"); sellerReply = null; }
+          // SRS-5.1zzp (bước 3): lệch ô → gọi lại model một lần TRƯỚC mọi van (lời lần hai đi qua đủ chuỗi van như lời lần một;
+          // đặt giữa chuỗi thì lời mới né được các van đã chạy — e2e KHEN-03 bắt được). Câu mẫu bên dưới chỉ là lưới cuối.
+          if (sellerReply && !(cauDuongKe ?? cauXnKe ?? cauLungKe ?? goiYKe)) {
+            const l0 = lstNow as { street?: string | null; location_raw?: string | null; floors_text?: string | null; bedrooms?: number | null; price_vnd?: number | null; area_m2?: number | string | null; legal_status?: string | null } | null;
+            const daCo0 = new Set<string>([
+              ...(l0?.street || l0?.location_raw ? ["vi_tri"] : []), ...(l0?.floors_text ? ["ket_cau"] : []), ...(l0?.bedrooms != null ? ["so_phong_ngu"] : []),
+              ...(l0?.price_vnd ? ["gia"] : []), ...(l0?.area_m2 ? ["dien_tich"] : []), ...(l0?.legal_status ? ["phap_ly"] : []),
+            ]);
+            const cauMau0 = nextKey ? `${neo ? `Căn ${neo} nha. ` : ""}${cauKe}` : thieuDiem.length && thieuDiem[0].startsWith("giá")
+              ? cauHoiMau("gia", cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw) : null;
+            const nhan0 = nextKey ? nhanCanHoi : thieuDiem[0] ?? "";
+            const lyDo = (nextKey || thieuDiem.length) ? lyDoLechO(sellerReply, nextKey, cauMau0, nextKey ? daCo0 : undefined) : null;
+            if (lyDo) {
+              console.log(`chat-reply: r2 lệch ô (${lyDo}) — gọi lại model`);
+              const lai = await goiLaiChoDungO(sellerReply, lyDo, nhan0, cauMau0);
+              if (lai) sellerReply = lai;
+              mocR2("goiLaiChoDungO", true);
+            }
+          }
           const luatDuR2 = await loiBotDu();
           if (sellerReply && khenGanDay && luatDuR2) sellerReply = boCauKhen(sellerReply); mocR2("boCauKhen");
           // 22/09/2026 (bộ đo giọng B01/B15/B16): "ô tô vào được", "xuyên thoáng", "nở hậu" khi chủ nhà CHƯA
@@ -7462,7 +7516,7 @@ Deno.serve(async (req) => {
                 role: "user",
                 content:
                   `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ${hoiRaoPrompt}` +
-                  `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao${khenGanDay ? " (không khen, mấy tin gần đây em khen rồi)" : " (có điểm mạnh thật thì khen một ý, không thì thôi)"}, không đọc lại số liệu, không xác nhận lại địa điểm` +
+                  `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao${khenGanDay ? " (không khen, mấy tin gần đây em khen rồi)" : " (có điểm mạnh thật thì khen một ý, không thì thôi)"}, không cảm ơn / không nói "tin tưởng", không đọc lại số liệu, không xác nhận lại địa điểm` +
                   (cauXacNhanDau
                     // 25/09/2026 (bắn thật lx-05): câu gợi ý "thuộc Phường Bến Thành hay Phường Cầu Ông Lãnh" bị model nói lại
                     // thành "phường nào vậy ạ?" — rơi mất lựa chọn. Câu xác nhận / chọn do CODE tra ra thì gửi NGUYÊN VĂN
@@ -7480,6 +7534,16 @@ Deno.serve(async (req) => {
             raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ?? null;
             const mocR1 = theoDoiVan(soVan, () => raoReply);
             if (raoReply && laLoiMeta(raoReply)) { console.log("chat-reply: r1 tra loi cau lenh, bo"); raoReply = null; }
+            // SRS-5.1zzp (bước 3): câu đầu lệch ô → gọi lại model một lần; câu mẫu bên dưới chỉ là lưới cuối.
+            if (raoReply && !cauXacNhanDau && firstKey && cauHoiDau) {
+              const lyDo = lyDoLechO(raoReply, firstKey, cauHoiDau);
+              if (lyDo) {
+                console.log(`chat-reply: r1 lệch ô (${lyDo}) — gọi lại model`);
+                const lai = await goiLaiChoDungO(raoReply, lyDo, FACT_LABELS[firstKey] ?? firstKey, cauHoiDau);
+                if (lai) raoReply = lai;
+                mocR1("goiLaiChoDungO", true);
+              }
+            }
             if (raoReply) raoReply = motCauHoi([raoReply])[0]; mocR1("motCauHoi");
             // 23/09/2026 (bắn thật): "hẻm 2m5 … rất được khách tìm", "ô tô đậu trước cửa" → "ô tô vào tận nhà".
             if (raoReply) raoReply = await soatNhanXet(raoReply, textBongAi); mocR1("soatNhanXet");

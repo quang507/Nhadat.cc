@@ -220,7 +220,8 @@ thêm van code `chanNhanLaNguoi` — `bot/supabase/functions/_shared/extraction/
 - **Bận / hoãn thì dừng** (11/09/2026): "anh bận", "để anh hỏi vợ", "hỏi hoài vậy"
   → một câu xin lỗi hoặc bảo thong thả, không ghi gì, không hỏi thêm; câu hỏi vẫn
   treo cho vòng hỏi bù sau (`laHoanLai`, loại câu `hoan`).
-- **Hỏi địa chỉ nêu lý do một lần**: lần đầu "để em kiểm tra giá khu vực", từ lần
+- **Hỏi địa chỉ như người quen nhắn** (06/10/2026, thay quyết định 09/09 "kèm lý do kiểm tra giá"): lần đầu
+  "Nhà anh ở đâu vậy, ở Hồ Chí Minh đúng không?" — kèm phỏng đoán để khách gật hay sửa, không nêu lý do; từ lần
   hai hỏi thẳng dưới 12 từ (11/09/2026: khuôn 25 từ từng lặp 22/52 câu).
 - **Khen khi có gì đáng khen, không khen mọi câu.** Lý do "khách hay hỏi" tối
   đa một lần mỗi ba tin. Tin trước mở bằng "Dạ" thì tin này không.
