@@ -558,7 +558,7 @@ ok("boCanBia: câu nêu mã tin thật '#BDS-Q5-0006 … 8 tỷ' → giữ", boC
 
 // ── FR-218 (23/09/2026): lời chào không kèm "anh Thu phụ trách"; hiểu nhầm ý khách thì xin lỗi ──
 ok("LOI_CHAO không còn câu 'phụ trách khu vực' / 'anh Thu'; 27/09 chỉ nhắc bán: 'cần giao bán bất động sản đúng không ạ'; 06/10 (SRS-5.1zzs) thêm vế mời gửi ảnh / không form",
-  !/phụ trách|anh Thu/.test(LOI_CHAO) && /cần giao bán bất động sản đúng không ạ\?/.test(LOI_CHAO) && /\{ten\}/.test(LOI_CHAO) && /gửi ảnh cũng được, không cần điền form\.$/.test(LOI_CHAO), LOI_CHAO);
+  !/phụ trách|anh Thu/.test(LOI_CHAO) && /cần giao bán bất động sản đúng không ạ\?$/.test(LOI_CHAO) && /\{ten\}/.test(LOI_CHAO) && /gửi ảnh cũng được, không cần điền form\./.test(LOI_CHAO), LOI_CHAO);
 for (const [cau, mong] of [
   ["không phải vậy em, ý anh là mua để ở", true],
   ["em hiểu nhầm rồi, anh cần thuê chứ không mua", true],

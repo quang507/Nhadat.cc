@@ -539,9 +539,9 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   // 05/10/2026 (demo AOND `build_fee_followup_system`): sau khi tin lên kệ, DẪN PHÍ một lần bằng câu hỏi — chưa từng nói phí
   // với người này thì nối câu này; họ hỏi lại thì model trả lời theo FEE_RULES. Xoá chữ ở bot_prompts là tắt.
   dang_xong_phi: "Em cho chào căn {loai} của {ac} ngay ạ, mà {ac} biết phí bên em chưa ạ?",
-  // SRS-5.1zzs (06/10/2026, AOND §IV): nói hạng người rao khi lên kệ; môi giới 2–9 căn nhắc chuẩn 10 căn (chỉ sự thật, không bịa quyền lợi).
+  // SRS-5.1zzs (06/10/2026, AOND §IV): nói hạng người rao khi lên kệ. Câu nhắc "chuẩn môi giới 10 căn" đã bỏ cùng ngày
+  // (chủ dự án: "hỏi thêm đó hơi ngu" — nói mà không mang lại gì cho khách).
   dang_xong_hang: "{Ac} đang ở hạng {hang} bên em.",
-  dang_xong_nmg_10: "Bên em tính chuẩn môi giới từ 10 căn đang rao, {ac} còn căn nào cứ gửi em đăng tiếp nha.",
   dang_xong_them_diem: "Muốn thêm điểm thì {ac} gửi em {thieu}",
   dang_xong_them_anh: "; gửi thêm ảnh là điểm tăng ngay",
   dang_xong_hen: "Có thể em sẽ hỏi thêm {ac} một vài câu khi có khách quan tâm nhé.",
@@ -598,7 +598,7 @@ export function docCauHoiMau(json: string | null | undefined): { bang: Record<st
 // 27/09/2026 (chủ dự án): câu chào chỉ nhắc BÁN — "{danh xưng} cần giao bán bất động sản đúng không ạ"; chưa biết
 // anh hay chị thì "anh chị"; tên trợ lý vẫn theo từng khách (FR-181). Khách gật ("đúng rồi", "dạ", "ừ") là người bán.
 // 06/10/2026 (SRS-5.1zzs, khớp AOND "không form"): mời nhắn tự nhiên, gửi ảnh cũng được — một câu, không thêm lý do.
-export const LOI_CHAO = `Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị cần giao bán bất động sản đúng không ạ? Cứ nhắn như nhắn bạn, gửi ảnh cũng được, không cần điền form.`;
+export const LOI_CHAO = `Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Cứ nhắn như nhắn bạn, gửi ảnh cũng được, không cần điền form. Anh/chị cần giao bán bất động sản đúng không ạ?`;
 
 export const RATE_CTV_RUBRIC = `Bạn là QA của AI Ơi Nhà Đất, chấm chất lượng chăm sóc khách của CTV/bot trong một hội thoại Zalo.
 Chấm theo 4 tiêu chí, mỗi tiêu chí 1-5:

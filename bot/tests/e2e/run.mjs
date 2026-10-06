@@ -13,7 +13,7 @@ globalThis.__calls = []; globalThis.__db = new FakeDB();
 // (napCauHinh nhớ tạm 60 s, đọc một lần cho cả run). vi_tri đổi câu để chứng minh bản DB đè bản code.
 // 11/09 (42 ca): câu hỏi địa chỉ LẦN ĐẦU dùng khoá riêng `vi_tri@lan_dau` — đè cả hai để V1.3 vẫn đo đúng "bản DB đè bản code".
 const seedBotPrompts = (d) => { d.insert("bot_prompts", { key: "cau_hoi_mau", content: JSON.stringify({ vi_tri: "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@lan_dau": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@chua_quan": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?" }) });
-globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị cần giao bán bất động sản đúng không ạ? Cứ nhắn như nhắn bạn, gửi ảnh cũng được, không cần điền form." }); }; // 23/09 FR-218 a: bỏ câu "anh Thu phụ trách khu vực" (khớp bot_prompts.loi_chao)
+globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Cứ nhắn như nhắn bạn, gửi ảnh cũng được, không cần điền form. Anh/chị cần giao bán bất động sản đúng không ạ?" }); }; // 23/09 FR-218 a: bỏ câu "anh Thu phụ trách khu vực" (khớp bot_prompts.loi_chao)
 seedBotPrompts(globalThis.__db);
 // FR-185: ảnh chủ nhà gửi được TẢI VỀ kho — mock fetch trả vài byte JPEG cho host Zalo,
 // mọi URL khác lỗi (chat-reply không được gọi ra ngoài trong bài kiểm).
@@ -8129,8 +8129,8 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   seedDuyet("g-nmg", "nmg", "BDS-Q5-0972", 2);
   rG = await send({ external_user_id: "g-nmg", text: "ok đăng đi em" });
   const lG2 = db().t.listings.find((l) => l.code === "BDS-Q5-0972");
-  check("AOND-G3 môi giới 3 căn gật → lên kệ, có hạng + nhắc chuẩn 10 căn, không bịa quyền lợi ('ưu tiên')",
-    lG2?.status === "dang_ban" && /hạng Bạc/.test(rG.body.replies.join("\n")) && /10 căn/.test(rG.body.replies.join("\n")) && !/ưu tiên/.test(rG.body.replies.join("\n")),
+  check("AOND-G3 môi giới 3 căn gật → lên kệ, có hạng; KHÔNG nhắc chuẩn 10 căn, không hứa quyền lợi (chủ dự án 06/10 bỏ câu đó)",
+    lG2?.status === "dang_ban" && /hạng Bạc/.test(rG.body.replies.join("\n")) && !/10 căn/.test(rG.body.replies.join("\n")) && !/ưu tiên/.test(rG.body.replies.join("\n")),
     JSON.stringify({ st: lG2?.status, rep: rG.body.replies }));
 }
 // ── kết ──

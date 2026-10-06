@@ -3984,14 +3984,11 @@ Deno.serve(async (req) => {
       `Dạ ${cachGoi} đang có ${tr.so_dang_rao} tin trên hệ thống, hạng Đồng hiện tối đa ${tr.tran ?? 5} căn nên em chưa mở thêm được ạ.\n` +
       `${CachGoi} bổ sung đủ thông tin và ảnh cho các căn đang rao để điểm lên 50 (hạng Bạc) là em mở rổ không giới hạn liền.`;
     // SRS-5.1zzs (AOND §IV gamification, 06/10/2026): tin lên kệ thì nói HẠNG người rao (Đồng / Bạc / Vàng — dữ liệu đã có từ
-    // `con_duoc_rao`, trước đây không bao giờ nói ra); môi giới đang rao 2–9 căn nhắc chuẩn môi giới 10 căn (SRS-5.1zze) — chỉ
-    // nói sự thật có trong hệ thống, không bịa quyền lợi. Dùng ở cả nhánh duyệt thường lẫn "đăng đi".
+    // `con_duoc_rao`, trước đây không bao giờ nói ra). Một câu, một lần, ở cả nhánh duyệt thường lẫn "đăng đi". Câu nhắc
+    // "chuẩn môi giới 10 căn" đã bỏ cùng ngày theo chủ dự án — không hứa, không rao thêm việc.
     const dongHangRao = async (): Promise<string> => {
       const tr = await tranHangRao();
-      if (!tr?.hang) return "";
-      let s = cauTD("dang_xong_hang", { hang: tenHang(tr.hang) });
-      if (sellerRow.seller_type === "nmg" && tr.so_dang_rao >= 2 && tr.so_dang_rao <= 9) s += `\n${cauTD("dang_xong_nmg_10")}`;
-      return s;
+      return tr?.hang ? cauTD("dang_xong_hang", { hang: tenHang(tr.hang) }) : "";
     };
 
     // ─── SRD §VI 2.4 (05/10/2026, SRS-5.1zzc): câu keep-alive "còn bán không" đang treo. AI đọc theo NGHĨA: gật với câu bot vừa
