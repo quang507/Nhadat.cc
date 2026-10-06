@@ -8,7 +8,7 @@ import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang
 import { canTheoAi } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
-import { datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -235,11 +235,11 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ], null);
   const ghi = Object.fromEntries(a.ghi.map((g) => [g.question, g.answer]));
   ok("docAiChinh: fact ghép đủ — dien_tich '5x20' (ngang×dài, chưa có m²), vi_tri, du_an_ten, loai_giao_dich, loai_bds, gia, so_phong_ngu, gap (cụm khách nói)",
-    ghi.dien_tich === "5x20" && ghi.vi_tri === "Nguyễn Lương Bằng" && ghi.du_an_ten === "Sunrise City" && ghi.loai_giao_dich === "ban" && ghi.loai_bds === "chung_cu" &&
+    ghi.dien_tich === "5x20" && ghi.vi_tri === "đường Nguyễn Lương Bằng" /* SRS-5.1zzr: nguyên văn cụm khách */ && ghi.du_an_ten === "Sunrise City" && ghi.loai_giao_dich === "ban" && ghi.loai_bds === "chung_cu" &&
       ghi.gia === "1 tỷ 8" && ghi.so_phong_ngu === "2" && ghi.gap === "cần bán gấp" && !("mat_tien" in ghi), JSON.stringify(a));
   ok("docAiChinh: cột lõi — quận chuẩn hoá 'Quận 7', loại, giao dịch, giá, 2 PN, ngang/dài, gấp true, mã căn A12-05, dienTich null (đã là AxB)",
     a.quan === "Quận 7" && a.loaiBds === "chung_cu" && a.loaiGiaoDich === "ban" && a.gia === "1 tỷ 8" && a.soPhongNgu === 2 && a.ngang === 5 && a.dai === 20 &&
-      a.gap === true && a.maCan === "A12-05" && a.dienTich === null && a.duong === "Nguyễn Lương Bằng" && a.duAn === "Sunrise City", JSON.stringify(a));
+      a.gap === true && a.maCan === "A12-05" && a.dienTich === null && a.duong === "đường Nguyễn Lương Bằng" && a.duAn === "Sunrise City", JSON.stringify(a));
   // 02/10/2026 (đối chiếu AI ↔ code, SRS-5.1zb): bản trước khẳng định "nở hậu chưa có ô → bỏ vào `bo`" — tức AI đọc đúng mà code vứt.
   ok("docAiChinh: nở hậu có ô — fact no_hau '6m', không còn nằm trong `bo`", ghi.no_hau === "6m" && !a.bo.some((b) => b.khoa === "no_hau"), JSON.stringify({ nh: ghi.no_hau, bo: a.bo }));
   const b = docAiChinh([dx("dien_tich", "80", "80m2"), dx("ngang", "4", "ngang 4m"), dx("dai", "20", "dài 20m"), dx("quan", "Quận Ba Đình", "quận Ba Đình"), dx("loai_bds", "nha_mat_tien", "nhà mặt tiền")], null);
@@ -729,6 +729,44 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   const phuDinh = ["Dạ hiện em không thấy tin nào của anh đang rao. Khi nào có căn khác anh nhắn em nha."];
   ok("GOC-U12 vế phủ định 'không thấy tin nào đang rao' không phải mệnh đề sai, giữ nguyên", !coMenhDeDaDang(phuDinh) && boHuaDaDang(phuDinh)[0] === phuDinh[0], JSON.stringify(boHuaDaDang(phuDinh)));
   ok("GOC-U13 bong bóng 🤖 / câu hỏi không tính", !coMenhDeDaDang(["🤖 Bóc tách được: tin đang rao", "Tin mình đang rao chưa anh?"]));
+}
+// ── SRS-5.1zzr (06/10/2026, chủ dự án: "trông vào model, nhưng thông tin quan trọng ghi nguyên văn; mỗi loại BĐS một bộ trường"):
+// ô NGUYÊN VĂN theo loại — model chỉ ra CỤM, ô ghi đúng cụm khách gõ. Ca gốc test Zalo 14:06: "hẻm 137 Nguyễn Trãi" → "137 hẻm Nguyễn Trãi". ──
+{
+  const dx = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan });
+  const soSanh = (khoa, ai) => ({ trung: [], lech: [], ai_them: [{ khoa, ai }] });
+  const k1 = kiemDeXuat([dx("duong", "137 hẻm Nguyễn Trãi", "hẻm 137 Nguyễn Trãi")], "Nhà ở hẻm 137 Nguyễn Trãi quận 5");
+  ok("NV-01 kiemDeXuat điền cum_goc = cụm nguyên văn trong tin", k1.dat[0]?.cum_goc === "hẻm 137 Nguyễn Trãi", JSON.stringify(k1));
+  ok("NV-02 ca gốc: model đảo '137 hẻm Nguyễn Trãi' → ô vị trí ghi 'hẻm 137 Nguyễn Trãi'", giaTriNguyenVan("vi_tri", k1.dat[0]) === "hẻm 137 Nguyễn Trãi", giaTriNguyenVan("vi_tri", k1.dat[0]));
+  ok("NV-03 câu treo vị trí cũng ra cụm khách", giaTriChoCauTreo(k1.dat, "vi_tri", {}) === "hẻm 137 Nguyễn Trãi", giaTriChoCauTreo(k1.dat, "vi_tri", {}));
+  ok("NV-04 docAiChinh (câu rao) ghi vi_tri nguyên văn", docAiChinh(k1.dat, null).ghi.find((g) => g.question === "vi_tri")?.answer === "hẻm 137 Nguyễn Trãi", JSON.stringify(docAiChinh(k1.dat, null).ghi));
+  const k2 = kiemDeXuat([dx("duong", "Hùng Vương", "126 Hung Vuong")], "co can ho Hung Vuong Plaza 126 Hung Vuong p12");
+  ok("NV-05 model chỉ thêm dấu cho một phần → '126 Hùng Vương' (số nhà giữ, dấu lấy của model)", giaTriNguyenVan("vi_tri", k2.dat[0]) === "126 Hùng Vương", giaTriNguyenVan("vi_tri", k2.dat[0]));
+  const k3 = kiemDeXuat([dx("duong", "Phạm Thế Hiển", "pham the hien")], "nhà của anh ở hem 4m pham the hien, p4 q8 nha");
+  ok("NV-06 cả cụm chỉ thêm dấu → 'Phạm Thế Hiển'", giaTriNguyenVan("vi_tri", k3.dat[0]) === "Phạm Thế Hiển", giaTriNguyenVan("vi_tri", k3.dat[0]));
+  const k4 = kiemDeXuat([dx("duong", "88 hẻm Tân Kỳ Tân Quý", "88 hẻm 6m Tân Kỳ Tân Quý")], "bán nhà số 88 hẻm 6m Tân Kỳ Tân Quý quận Tân Phú, 4x15");
+  ok("NV-07 bề rộng hẻm trong cụm không vào địa chỉ (ô riêng)", giaTriNguyenVan("vi_tri", k4.dat[0]) === "88 hẻm Tân Kỳ Tân Quý", giaTriNguyenVan("vi_tri", k4.dat[0]));
+  const k5 = kiemDeXuat([dx("duong", "Trần Hưng Đạo", "ở 12 Trần Hưng Đạo phường 2 quận 5")], "nhà ở 12 Trần Hưng Đạo phường 2 quận 5 nha em");
+  ok("NV-08 cụm trích thừa 'ở' đầu và phường / quận đuôi → '12 Trần Hưng Đạo'", giaTriNguyenVan("vi_tri", k5.dat[0]) === "12 Trần Hưng Đạo", JSON.stringify({ k5, v: giaTriNguyenVan("vi_tri", k5.dat[0]) }));
+  const k6 = kiemDeXuat([dx("phap_ly", "sổ hồng riêng", "shr")], "shr, nhà ở từ 2019 rồi");
+  ok("NV-09 viết tắt 'shr' → giữ bản viết đủ của model (đã kiểm cùng mã)", giaTriNguyenVan("phap_ly", k6.dat[0]) === "sổ hồng riêng", JSON.stringify({ k6, v: giaTriNguyenVan("phap_ly", k6.dat[0]) }));
+  const k7 = kiemDeXuat([dx("phap_ly", "Sổ hồng riêng (chính chủ)", "sổ hồng riêng chính chủ rồi em")], "sổ hồng riêng chính chủ rồi em");
+  ok("NV-10 pháp lý: cụm khách 'sổ hồng riêng chính chủ' (gọt tiểu từ), không lấy chữ model thêm ngoặc", giaTriNguyenVan("phap_ly", k7.dat[0]) === "sổ hồng riêng chính chủ", JSON.stringify({ k7, v: giaTriNguyenVan("phap_ly", k7.dat[0]) }));
+  const k8 = kiemDeXuat([dx("ket_cau", "trệt 2 lầu", "1 trệt 2 lầu")], "nhà 1 trệt 2 lầu, 3 phòng ngủ");
+  const g8 = chonDeGhi(k8.dat, soSanh("ket_cau", "trệt 2 lầu"), { property_type: "nha_pho" }, {});
+  ok("NV-11 kết cấu nhà phố: cụm khách '1 trệt 2 lầu' thay vì chữ model", g8.ghi[0]?.answer === "1 trệt 2 lầu", JSON.stringify({ k8, g8 }));
+  ok("NV-12 bảng theo loại: thổ cư nguyên văn với đất, không với nhà phố; kết cấu nguyên văn với nhà, không với đất; địa chỉ với mọi loại",
+    laONguyenVan("dat", "tho_cu") && !laONguyenVan("nha_pho", "tho_cu") && laONguyenVan("nha_pho", "ket_cau") && !laONguyenVan("dat", "ket_cau") && laONguyenVan(null, "vi_tri") && laONguyenVan("kho_xuong", "duong_container"));
+  const k9 = kiemDeXuat([dx("tho_cu", "100", "thổ cư 100m2 full")], "đất 120m2 thổ cư 100m2 full, giá 3 tỷ");
+  const g9 = chonDeGhi(k9.dat, soSanh("tho_cu", "100"), { property_type: "dat" }, {});
+  ok("NV-13 đất: ô thổ cư ghi cụm khách 'thổ cư 100m2 full'", g9.ghi[0]?.answer === "thổ cư 100m2 full", JSON.stringify({ k9, g9 }));
+  const g14 = chonDeGhi(kiemDeXuat([dx("noi_that", "full nội thất", "full nt")], "full nt, 2 máy lạnh").dat, soSanh("noi_that", "full nội thất"), { property_type: "nha_pho" }, {});
+  ok("NV-14 ô ngoài bảng (nội thất, nhà phố) vẫn lấy chữ model", g14.ghi[0]?.answer === "full nội thất", JSON.stringify(g14));
+  const tl = kiemTraLoiCau({ co_tra_loi: true, gia_tri: "137 hẻm Nguyễn Trãi", trich_dan: "hẻm 137 Nguyễn Trãi" }, "Nhà ở hẻm 137 Nguyễn Trãi quận 5", "Nhà anh ở đâu vậy?", { cauHoi: "vi_tri", loai: "nha_pho" });
+  ok("NV-15 trả lời câu treo địa chỉ: cụm khách 'hẻm 137 Nguyễn Trãi', không phải câu model đảo", tl?.giaTri === "hẻm 137 Nguyễn Trãi", JSON.stringify(tl));
+  ok("NV-16 không truyền ô → như cũ (chữ model)", kiemTraLoiCau({ co_tra_loi: true, gia_tri: "137 hẻm Nguyễn Trãi", trich_dan: "hẻm 137 Nguyễn Trãi" }, "Nhà ở hẻm 137 Nguyễn Trãi quận 5")?.giaTri === "137 hẻm Nguyễn Trãi");
+  ok("NV-17 cumGocTrongTin: giữ dấu / hoa thường của khách, bỏ dấu phẩy dính; không có → null", cumGocTrongTin("Sổ Hồng Riêng, anh đứng tên", "so hong rieng") === "Sổ Hồng Riêng" && cumGocTrongTin("abc", "xyz") === null);
+  ok("NV-18 cụm không dấu trong tin thì ô cũng không dấu khi model đổi thứ tự (không mượn dấu sai chỗ)", giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "137 hẻm Nguyễn Trãi", "hem 137 nguyen trai")], "nha o hem 137 nguyen trai q5").dat[0]) === "hem 137 nguyen trai");
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

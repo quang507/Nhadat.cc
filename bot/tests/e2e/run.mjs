@@ -4392,9 +4392,9 @@ fresh(seedKho);
   const L8 = db().t.listings.at(-1);
   const f8 = (q) => db().t.listing_facts.filter((f) => f.listing_id === L8.id && f.question === q);
   const bong8 = db().rows("boc_tach_bong");
-  check("AIBOC-08 'chinh' câu rao: giá 1 tỷ 8 (AI, không đuôi rác), loại căn hộ, Quận 7, 2 PN vào tin; địa chỉ = 'Nguyễn Lương Bằng' (không có 'quý 2 năm sau' ở bất kỳ cột/fact nào)",
+  check("AIBOC-08 'chinh' câu rao: giá 1 tỷ 8 (AI, không đuôi rác), loại căn hộ, Quận 7, 2 PN vào tin; địa chỉ = 'đường Nguyễn Lương Bằng' (nguyên văn khách gõ, SRS-5.1zzr; không có 'quý 2 năm sau' ở bất kỳ cột/fact nào)",
     L8.price_vnd === 18e8 && L8.property_type === "chung_cu" && L8.district === "Quận 7" && f8("so_phong_ngu")[0]?.answer === "2" &&
-      L8.location_raw === "Nguyễn Lương Bằng" && !/quý 2/.test(`${L8.location_raw}|${L8.street ?? ""}|${L8.ward ?? ""}|${L8.price_raw}`) &&
+      L8.location_raw === "đường Nguyễn Lương Bằng" && !/quý 2/.test(`${L8.location_raw}|${L8.street ?? ""}|${L8.ward ?? ""}|${L8.price_raw}`) &&
       !db().t.listing_facts.some((f) => f.listing_id === L8.id && f.question !== "bo_sung" && /quý 2/.test(f.answer)),
     JSON.stringify({ L8, f: db().t.listing_facts.filter((f) => f.listing_id === L8.id) }));
   check("AIBOC-08b 'bàn giao quý 2 năm sau' → kiến thức → bo_sung nguồn ai_kiem; sổ đo che_do = chinh; nguồn boc_tach 'cau_rao+ai_chinh'; khách có lời đáp",
@@ -8063,6 +8063,46 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   });
   rP = await send({ external_user_id: "phi-d6", text: "đăng đi em" });
   check("PHI-04b đã nói phí rồi → 'đăng đi' KHÔNG dẫn phí lần hai", rP.body.dang_luon === true && rP.body.dan_phi !== true && !/biết phí bên em chưa/.test(rP.body.replies.join("\n")), JSON.stringify(rP.body.replies));
+}
+// ── 06/10/2026 (SRS-5.1zzr): ô quan trọng ghi NGUYÊN VĂN cụm khách gõ — ca gốc test Zalo 14:06 "hẻm 137 Nguyễn Trãi" → bot ghi "137 hẻm Nguyễn Trãi" ──
+{
+  const laLuotBocRao = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const cuCH = globalThis.__cauHinh, cuParse = globalThis.__model.parse;
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+  // (1) câu rao: model đảo thứ tự chữ địa chỉ → tin vẫn ghi đúng chữ khách.
+  fresh(seedKho);
+  globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 1, kien_thuc: [], truong: [
+    { khoa: "loai_giao_dich", gia_tri: "ban", trich_dan: "bán nhà", can: null },
+    { khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "bán nhà", can: null },
+    { khoa: "duong", gia_tri: "137 hẻm Nguyễn Trãi", trich_dan: "hẻm 137 Nguyễn Trãi", can: null },
+    { khoa: "ten_duong", gia_tri: "Nguyễn Trãi", trich_dan: "hẻm 137 Nguyễn Trãi", can: null },
+    { khoa: "quan", gia_tri: "Quận 5", trich_dan: "quận 5", can: null },
+    { khoa: "gia", gia_tri: "8 tỷ 5", trich_dan: "giá 8 tỷ 5", can: null },
+  ] } : OUT();
+  let rN = await send({ external_user_id: "nv-01", text: "bán nhà hẻm 137 Nguyễn Trãi quận 5, 4x15, giá 8 tỷ 5" });
+  const LN = db().t.listings.at(-1);
+  check("NV-E1 câu rao, model viết '137 hẻm Nguyễn Trãi' → tin ghi đúng chữ khách 'hẻm 137 Nguyễn Trãi'",
+    LN?.location_raw === "hẻm 137 Nguyễn Trãi", JSON.stringify({ loc: LN?.location_raw, rep: rN.body.replies }));
+  // (2) trả lời câu địa chỉ đang treo (đúng kịch bản chủ dự án 06/10 14:06).
+  fresh(seedKho);
+  {
+    const s = db().t.sellers.find((x) => x.zalo_user_id === "z-ccrb");
+    const t = db().insert("listings", { code: "BDS-Q5-0961", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", can_chu_duyet: true, location_raw: null, ward: null, district: null, price_raw: "8 tỷ 5", price_vnd: 8.5e9, area_m2: 60 }).data;
+    s.active_listing_id = t.id;
+    db().insert("info_requests", { listing_id: t.id, question: "vi_tri", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [
+      { khoa: "duong", gia_tri: "137 hẻm Nguyễn Trãi", trich_dan: "hẻm 137 Nguyễn Trãi", can: null },
+      { khoa: "ten_duong", gia_tri: "Nguyễn Trãi", trich_dan: "hẻm 137 Nguyễn Trãi", can: null },
+      { khoa: "quan", gia_tri: "Quận 5", trich_dan: "quận 5", can: null },
+    ], tra_loi: { co_tra_loi: true, gia_tri: "137 hẻm Nguyễn Trãi", trich_dan: "hẻm 137 Nguyễn Trãi" } } : OUT();
+    rN = await send({ external_user_id: "z-ccrb", text: "Nhà ở hẻm 137 Nguyễn Trãi quận 5" });
+    const vt = db().t.listing_facts.filter((f) => f.listing_id === t.id && f.question === "vi_tri").map((f) => f.answer);
+    check("NV-E2 trả lời câu địa chỉ treo → vị trí là 'hẻm 137 Nguyễn Trãi', không chỗ nào '137 hẻm'",
+      [t.location_raw, ...vt].some((v) => v === "hẻm 137 Nguyễn Trãi") && ![t.location_raw, ...vt].some((v) => /137 hẻm/.test(v ?? "")),
+      JSON.stringify({ loc: t.location_raw, vt, rep: rN.body.replies }));
+  }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model.parse = cuParse;
 }
 // ── kết ──
 let hong = 0;
