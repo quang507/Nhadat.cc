@@ -2314,6 +2314,16 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Không làm**: không thêm luật tìm-chuỗi đảo lại địa chỉ; không mở rộng bảng sang ô số.
 - **Kiểm, đỏ khi tắt**: `bot/tests/kiem-bang-chung.mjs` NV-01…18 (ca gốc, thêm dấu một phần, viết tắt, bỏ bề rộng hẻm / đuôi phường, kết cấu nhà phố, thổ cư đất, ô ngoài bảng giữ chữ model, câu treo, cụm không dấu giữ không dấu); e2e NV-E1 (câu rao) và NV-E2 (trả lời câu địa chỉ treo, đúng kịch bản 14:06). Hoàn `giaTriNguyenVan` về `gia_tri` → NV-02/04/05/11/13/15 và NV-E1/E2 đỏ. Ba ca cũ đổi kỳ vọng theo quyết định mới: địa chỉ "đường Nguyễn Lương Bằng" (khách gõ có chữ "đường") thay "Nguyễn Lương Bằng".
 
+### SRS-5.1zzs · Prompt và câu tiền định khớp SRD AOND: viết trọn ý, kiến thức dự án là của em, lời chào mời ảnh / không form, nói hạng khi lên kệ, nhắc chuẩn 10 căn (06/10/2026)
+
+`[nguồn: kế hoạch 06/10 PR 2 (chủ dự án duyệt: "khớp docs bên AOND"); ma trận đối chiếu SRD/demo AOND: lời chào "không cần điền form, gửi ảnh cũng được", gamification hạng Đồng / Bạc / Vàng nói ra cho người rao, NMG khuyến khích ≥ 10 căn, prompt "viết trọn vẹn" và "kiến thức dự án là của bạn"]`
+
+- **Lệch**: (5) lời chào không mời gửi ảnh, không nói "không cần form" — docs/06 còn lời chào cũ "mua, thuê hay bán"; (6) hạng Đồng / Bạc / Vàng đã tính (SRS-5.1zzf) nhưng không bao giờ nói ra, môi giới 2–9 căn không được nhắc chuẩn 10 căn (SRS-5.1zze); (7) `TONE_RULES` thiếu "viết trọn câu" và "kiến thức dự án là của em" (bot từng nói "em không tra được" dù khối DỰ ÁN có); (8) docs/00 §II/§IV và docs/06 lệch bản chạy (30–90 từ, 1 emoji/tin, hạng ❓).
+- **Sửa**: `LOI_CHAO` thêm vế "Cứ nhắn như nhắn bạn, gửi ảnh cũng được, không cần điền form." đặt TRƯỚC câu hỏi vai (câu hỏi đứng cuối; vẫn hỏi vai một lần — FR-181 giữ); `TONE_RULES` thêm hai câu; `CAU_TIEN_DINH` thêm `dang_xong_hang` ("{Ac} đang ở hạng {hang} bên em."); `chat-reply` `dongHangRao()` đọc `con_duoc_rao` (đã hỏi một lần mỗi lượt) — nhánh duyệt thường nối vào bong bóng "thêm điểm" (bong bóng đầu giữ hai câu ≤ 30 từ), nhánh "đăng đi" nối sau "có khách là em báo"; `tenHang()` trong `prompts.ts`. Câu nhắc "chuẩn môi giới 10 căn" cho NMG 2–9 căn từng có trong bản nháp PR, **bỏ cùng ngày theo chủ dự án ("hỏi thêm đó hơi ngu")**: nói mà không mang lại gì cho khách, SRS-5.1zze cũng không gắn quyền lợi với chuẩn. Docs/00 §II 30 từ, §IV điểm uy tín và quyền lợi hạng; docs/06 lời chào, 30 từ, dòng "khác AOND".
+- **Chỗ khác cùng lớp**: câu trần Đồng (`cauTranHang`) đã nói hạng từ 05/10 — nay cùng cách gọi `tenHang`; r3 chăm sóc không nói hạng (chỉ khi lên kệ, nói một lần, không khoe lặp).
+- **Không làm**: không thêm trạng thái / migration; không đổi câu hỏi vai; không hứa quyền lợi theo số căn.
+- **Kiểm, đỏ khi tắt** (e2e): AOND-G1 lời chào có "gửi ảnh" + "không cần điền form"; AOND-G2 chính chủ gật → câu lên kệ có "hạng Bạc" (mock), không "10 căn"; AOND-G3 môi giới 3 căn gật → có hạng, không "10 căn", không chữ "ưu tiên". Bỏ `dongHangRao` → G2/G3 đỏ. Sau merge: `dong-bo-prompt --day` (ba khoá `tone_rules`, `loi_chao`, `cau_tien_dinh` đổi).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

@@ -33,6 +33,7 @@ import {
   TONE_RULES, CAU_HOI_MAU_TEXT, CAU_TIEN_DINH_TEXT, CAU_HOI_MAU as CAU_HOI_MAU_GOC,
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
   cauPhi, // SRS-5.1zzq: câu phí MỘT NGUỒN theo vai + loại giao dịch
+  tenHang, // SRS-5.1zzs: tên hạng Đồng / Bạc / Vàng cho câu lên kệ
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
@@ -3982,6 +3983,13 @@ Deno.serve(async (req) => {
     const cauTranHang = (tr: TranHang) =>
       `Dạ ${cachGoi} đang có ${tr.so_dang_rao} tin trên hệ thống, hạng Đồng hiện tối đa ${tr.tran ?? 5} căn nên em chưa mở thêm được ạ.\n` +
       `${CachGoi} bổ sung đủ thông tin và ảnh cho các căn đang rao để điểm lên 50 (hạng Bạc) là em mở rổ không giới hạn liền.`;
+    // SRS-5.1zzs (AOND §IV gamification, 06/10/2026): tin lên kệ thì nói HẠNG người rao (Đồng / Bạc / Vàng — dữ liệu đã có từ
+    // `con_duoc_rao`, trước đây không bao giờ nói ra). Một câu, một lần, ở cả nhánh duyệt thường lẫn "đăng đi". Câu nhắc
+    // "chuẩn môi giới 10 căn" đã bỏ cùng ngày theo chủ dự án — không hứa, không rao thêm việc.
+    const dongHangRao = async (): Promise<string> => {
+      const tr = await tranHangRao();
+      return tr?.hang ? cauTD("dang_xong_hang", { hang: tenHang(tr.hang) }) : "";
+    };
 
     // ─── SRD §VI 2.4 (05/10/2026, SRS-5.1zzc): câu keep-alive "còn bán không" đang treo. AI đọc theo NGHĨA: gật với câu bot vừa
     // hỏi = còn; `y_dinh` ban_roi / ngung_rao; không đồng ý mà không nói bán rồi = tạm ngưng (đảo ngược được). `docTraLoiConBan`
@@ -5306,7 +5314,8 @@ Deno.serve(async (req) => {
           });
           // SRS-5.1zzq: "đăng đi" lên kệ ngay cũng DẪN PHÍ một lần như nhánh duyệt thường (trước đây nhánh này quên).
           const cauDanPhiDL = daNoiPhiRoi() ? "" : cauTD("dang_xong_phi", { loai: loaiDoc(l.property_type) });
-          return await traLoiSeller([...truoc, tinDang, cauTD("dang_luon_cuoi") + (cauDanPhiDL ? `\n${cauDanPhiDL}` : "")],
+          const dongHangDL = await dongHangRao();
+          return await traLoiSeller([...truoc, tinDang, cauTD("dang_luon_cuoi") + (dongHangDL ? `\n${dongHangDL}` : "") + (cauDanPhiDL ? `\n${cauDanPhiDL}` : "")],
             { ...extra, duyet: true, dang_luon: true, diem: d.diem, listing_status: sau.status, ...(cauDanPhiDL ? { dan_phi: true } : {}) });
         }
         const thieuDang = [!sau?.ward ? "phường" : null, sau?.area_m2 == null ? "diện tích" : null].filter(Boolean).join(" và ") || "vài thông tin";
@@ -6756,13 +6765,17 @@ Deno.serve(async (req) => {
         }
         // 05/10/2026 (demo AOND `build_fee_followup_system`): tin lên kệ → DẪN PHÍ một lần bằng câu hỏi, nếu em chưa từng nói phí với người này.
         const cauDanPhi = len && !daNoiPhiRoi() ? cauTD("dang_xong_phi", { loai: loaiDoc(lstOk?.property_type) }) : "";
+        // SRS-5.1zzs: dòng hạng đi cùng bong bóng "thêm điểm" (chuyện điểm / hạng ở một chỗ) — bong bóng đầu giữ hai câu ≤ 30 từ (H8e).
+        const dongHang = len ? await dongHangRao() : "";
         const cau = len
           ? cauTD("dang_xong", { diem: dk?.diem, loai: loaiDoc(lstOk?.property_type) }) + dongNguoiRao + (cauDanPhi ? `\n${cauDanPhi}` : "")
           : huaSauDuyet
           ? `Dạ em ghi nhận ${cachGoi} muốn đăng luôn. Tin còn thiếu ${(dk?.thieu ?? []).slice(0, 2).join(" và ") || "một chút"} nên chưa lên được — lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em đăng liền, không hỏi lại ạ.`
           : `Dạ em ghi nhận rồi ạ.\nTin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm ${cachGoi} vài thông tin nữa nha.`;
         const loiHuaDuyet = huaSauDuyet && len ? `Lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em cập nhật vào tin liền ạ.` : "";
-        return await traLoiSeller([cau, ...(len && loiHuaDuyet ? [loiHuaDuyet] : len && themDiem ? [themDiem] : [])], {
+        const bongDiem = len && loiHuaDuyet ? loiHuaDuyet : len && themDiem ? themDiem : "";
+        const bongDiemHang = dongHang ? (bongDiem ? `${bongDiem}\n${dongHang}` : dongHang) : bongDiem;
+        return await traLoiSeller([cau, ...(bongDiemHang ? [bongDiemHang] : [])], {
           duyet: true, listing_status: lstOk?.status ?? null, diem: dk?.diem ?? null, du_roi: noiDu || undefined, ...(cauDanPhi ? { dan_phi: true } : {}),
         });
       }
