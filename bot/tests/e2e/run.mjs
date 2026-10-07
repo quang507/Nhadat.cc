@@ -3920,6 +3920,55 @@ fresh(seedKho);
       JSON.stringify({ pt: l4.property_type, rep: r4.body.replies }));
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zzzd (07/10/2026, chủ dự án: "để AI bóc tách kiểu dify… đến khi ra tin thì AI đọc và lọc rác"): AI CHỐT TIN trước bản
+  // nháp (chế độ `ai`). Tin đang mang lỗi dồn từ từng lượt: loại nhà_phố (khách đã nói cấp 4), kết cấu ôm cả câu, bổ sung rác. Lượt
+  // chốt đọc TOÀN BỘ tin chủ nhà → loại nha_cap4, kết cấu "1 tầng", ý thêm "mặt tiền đẹp"; bản nháp không còn rác.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "chot-1", text: "anh cần bán nhà trong hẻm 12 Trần Bình Trọng quận 5" });
+    const LC = db().t.listings.at(-1);
+    await send({ external_user_id: "chot-1", text: "nhà cấp 4 1 tầng thôi em, 3 phòng ngủ" });
+    await send({ external_user_id: "chot-1", text: "không có, mặt tiền đẹp em" });
+    // Trạng thái lỗi như chat thử: còn nhà phố, kết cấu ôm cả câu, bổ sung rác; đủ điểm, chỉ còn treo câu sổ.
+    Object.assign(db().t.listings.find((x) => x.id === LC.id), { property_type: "nha_pho", location_raw: "12 Trần Bình Trọng", ward: "Phường Chợ Quán",
+      district: "Quận 5", alley_width_m: 4, area_m2: 64, frontage_m: 4, floors: 1, bedrooms: 3, price_raw: "5 tỷ", price_vnd: 5000000000, legal_status: null });
+    db().t.listing_facts = db().t.listing_facts.filter((f) => f.listing_id !== LC.id);
+    for (const [q, a] of [["vi_tri", "12 Trần Bình Trọng"], ["dien_tich_dat", "4x16"], ["do_rong_hem", "4m"], ["gia", "5 tỷ"], ["phuong", "Phường Chợ Quán"],
+      ["so_phong_ngu", "3"], ["ket_cau", "cấp 4 1 tầng thôi em, 3 phòng ngủ"], ["bo_sung", "không có mặt tiền đẹp em"]]) {
+      db().insert("listing_facts", { listing_id: LC.id, question: q, answer: a, source: "seller_chat" });
+    }
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LC.id, question: "phap_ly", status: "pending" });
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__khongNhoCauHinh = true; // đổi công tắc giữa ca: cấu hình nhớ tạm 60 s ở tầng module
+    let goiChot = 0;
+    const laChot = (p) => (p?.system ?? []).some((x) => /CHẾ ĐỘ CHỐT TIN/.test(x.text ?? ""));
+    globalThis.__model.parse = (p) => {
+      if (!laLuotBocRao(p)) return OUT();
+      if (laChot(p)) {
+        goiChot++;
+        return { so_can: 0, kien_thuc: ["mặt tiền đẹp"], cap_nhat: [], truong: [
+          { khoa: "loai_bds", gia_tri: "nha_cap4", trich_dan: "nhà cấp 4", can: null },
+          { khoa: "ket_cau", gia_tri: "1 tầng", trich_dan: "1 tầng", can: null },
+          { khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "sổ riêng", can: null }] };
+      }
+      return { so_can: 0, kien_thuc: [], cap_nhat: [], truong: [{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "sổ riêng", can: null }],
+        tra_loi: { co_tra_loi: true, gia_tri: "sổ hồng riêng", trich_dan: "sổ riêng" } };
+    };
+    const rC = await send({ external_user_id: "chot-1", text: "sổ riêng" });
+    const lc = db().t.listings.find((x) => x.id === LC.id);
+    const nhapC = rC.body.replies.find((x) => /Em sẽ rao như vầy/.test(x)) ?? "";
+    const kcMoi = db().t.listing_facts.filter((f) => f.listing_id === LC.id && f.question === "ket_cau").at(-1)?.answer;
+    check("SRS-5.1zzzd AI chốt tin trước bản nháp → loại nha_cap4, kết cấu '1 tầng', '📝 Thêm' có 'mặt tiền đẹp', không còn rác",
+      goiChot === 1 && !!nhapC && lc.property_type === "nha_cap4" && kcMoi === "1 tầng" && /mặt tiền đẹp/.test(nhapC) &&
+        !/không có mặt tiền/.test(nhapC) && !/phòng ngủ"|thôi em/.test(nhapC),
+      JSON.stringify({ goiChot, pt: lc.property_type, kc: kcMoi, nhap: nhapC.slice(0, 600), rep: rC.body.replies.slice(0, 3) }));
+    globalThis.__khongNhoCauHinh = false;
+    globalThis.__cauHinh = cuCH;
+  }
   // (d) căn hộ, đang hỏi nội thất, khách "phí quản lý 15k/m2" (AI im) → "Không bóc tách được gì", phí mất hẳn.
   {
     fresh(seedKho);
