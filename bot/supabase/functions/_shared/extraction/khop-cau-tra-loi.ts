@@ -574,6 +574,9 @@ function catDapAnGoc(question: string, dapAn: string): string {
   // 15/09/2026: bỏ phần hỏi ngược trước khi cắt; đáp án chữ chỉ giữ MẢNH nói về đúng
   // câu đang hỏi — "Nhà 5 tầng, có thang máy thì phải, bạn có biết…" → kết cấu "Nhà 5
   // tầng"; "Được giá, căn tôi sở hữu nhưng chưa vào xem…" → gấp "Được giá".
+  // SRS-5.1zzzb: hỏi có / không, "ko có, đường 8m" → giá trị ô đang hỏi là "ko có" (mảnh sau ghi kèm vào ô của nó).
+  const coKhongDau = tachDapCoKhongDau(question, dapAn);
+  if (coKhongDau) return coKhongDau.dau;
   const tach = tachCauHoiNguoc(dapAn);
   const goc0 = tach.hoi && tach.traLoi ? tach.traLoi : dapAn;
   const goc = O_HOI_KEM_DOAN.has(question) ? boGatDau(goc0) : goc0;
@@ -912,6 +915,12 @@ export function phanLoaiCauTraLoi(question: string, text: string): KetQuaKhop {
   if (question !== "duyet_tin" && question !== "danh_gia" && laHoanLai(text)) {
     const xh = batXungHo(text) ?? tuXungTuCau(text);
     return { loai: "hoan", ...(xh ? { xungHo: xh } : {}) };
+  }
+  // SRS-5.1zzzb: hỏi có / không, khách "ko có, đường 8m" → mảnh đầu trả lời câu đang hỏi; mảnh sau đi đường ghi kèm.
+  // Đứng trước tách hỏi ngược: "không vướng gì, …" có chữ "gì" nhưng là câu ĐÁP, không phải câu hỏi.
+  if (tachDapCoKhongDau(question, text)) {
+    const xh = batXungHo(text);
+    return { loai: "khop", ...(xh ? { xungHo: xh } : {}) };
   }
   // 15/09/2026: vừa trả lời vừa hỏi ngược → phần trả lời đi tiếp các luật dưới, phần
   // hỏi trả về `hoiNguoc` để tầng trên trả lời TRƯỚC câu kế (không nuốt câu hỏi).
@@ -1591,6 +1600,26 @@ export function boGatDau(text: string): string {
     con = con.slice(m[0].length);
   }
   return con;
+}
+// 07/10/2026 (SRS-5.1zzzb, chủ dự án: "nó hỏi, khách sẽ trả lời 1 ý trước, rồi trong đó mới có ý cần bóc tách"): câu hỏi
+// có / không ("Lô đất có vướng cột điện, hố ga gì không?") — khách đáp "ko có, đường 8m". Mảnh đầu là câu trả lời, mảnh sau là
+// ô KHÁC; bản trước đọc cả câu là "nói sang ô đường" và mất câu trả lời. Lưới đỡ khi AI không chạy: chỉ tách theo DẤU NGẮT và khi
+// mảnh sau là thông tin có ô riêng — câu không dấu ("không có mặt tiền đẹp em") để AI đọc theo nghĩa (prompt boc-rao).
+const CAU_DAP_CO_KHONG = new Set([...HOI_CO_KHONG, "ha_tang", "quy_hoach"]);
+// "dính" / "vướng" / "bị": khách lặp lại động từ của câu hỏi ("ko dính", "không vướng gì").
+const TU_CO_KHONG = new Set(["khong", "ko", "k", "hong", "hok", "chua", "co", "gi", "het", "dau", "luon", "dinh", "vuong", "bi"]);
+function laManhCoKhong(manh: string): boolean {
+  const tu = boDau(manh).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  return tu.length > 0 && tu.length <= 6 && tu.every((w) => TU_CO_KHONG.has(w) || TU_GAT.has(w) || TU_DEM.has(w)) &&
+    tu.some((w) => w === "khong" || w === "ko" || w === "k" || w === "hong" || w === "hok" || w === "chua" || w === "co" || TU_GAT.has(w));
+}
+/** "ko có, đường 8m" khi hỏi có / không → { dau: "ko có", sau: "đường 8m" }; không tách được → null. */
+export function tachDapCoKhongDau(question: string, text: string): { dau: string; sau: string } | null {
+  if (!CAU_DAP_CO_KHONG.has(question)) return null;
+  const m = /^([^,.;!?\n]+)[,.;!?\n]+\s*(?=\S)/u.exec((text ?? "").trim());
+  if (!m || !laManhCoKhong(m[1])) return null;
+  const sau = (text ?? "").trim().slice(m[0].length).trim();
+  return nhanDienNhieuFact(sau).some((f) => f.question !== "bo_sung" && !cungHo(f.question, question)) ? { dau: m[1].trim(), sau } : null;
 }
 /** Lời dẫn đầu câu địa chỉ: "nhà a ở", "căn của chị tại", "ở". */
 const DAN_DIA_CHI = /^\s*(?:(?:nhà|nha|căn|can|đất|dat|lô|lo)\s+(?:(?:của|cua)\s+)?(?:anh|a|chị|chi|c|em|e|mình|minh|tôi|toi|chú|chu|cô|co|bác|bac)?\s*)?(?:ở|o|tại|tai|thuộc|thuoc)\s+(?=\S)/iu;

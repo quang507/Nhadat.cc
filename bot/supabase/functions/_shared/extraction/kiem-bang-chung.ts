@@ -1063,7 +1063,9 @@ export function kiemTraLoiCau(
   if ((chuanSo(v).match(/\d+/g) ?? []).some((n) => !soTrich.has(n))) return { co: true, giaTri: null };
   // 27/09/2026 (chủ dự án test Zalo): hỏi hẻm, khách "Hxm nhé" → AI trả "hẻm xe hơi" (trích "Hxm") và lọt vì lớp kiểm chỉ
   // soát CHỮ SỐ. Loại đường vào khách nói rõ (hxm / xe máy · hxh / xe hơi / ô tô · hxt / xe tải) mà AI nói loại khác → bỏ.
-  const loaiTin = loaiDuongNoiRo(kdTin);
+  // SRS-5.1zzzb (07/10/2026, chat thử): soi loại đường trong CỤM TRÍCH, không phải cả tin — hỏi "vướng cột điện gì không", khách
+  // "không có mặt tiền đẹp em", AI trích "không có" → chữ "mặt tiền" ở phần ý thêm từng làm câu trả lời bị bác, cả câu rơi bổ sung.
+  const loaiTin = loaiDuongNoiRo(td);
   const loaiAi = loaiDuongNoiRo(gon(v));
   if (loaiTin && loaiTin !== loaiAi && (loaiAi || loaiTin === "mat_tien")) return { co: true, giaTri: null };
   // SRS-5.1zzu (06/10/2026, bắn lại thu-ai-0610): hỏi độ rộng hẻm, khách "anh đứng tên, không thế chấp" → AI nói CÓ trả lời, giá
