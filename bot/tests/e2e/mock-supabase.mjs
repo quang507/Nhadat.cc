@@ -756,9 +756,24 @@ class RpcCall {
         // 20260928d (FR-239 j): chuan_hoa_phuong — tên chữ gõ thường ("cầu kho") → "Phường Cầu Kho".
         if (a.p_question === "phuong") l.ward = chuanHoaPhuong(a.p_answer);
         // Trigger loại BĐS (FR-150/164): fact loai_bds đổi cột khi tin còn "chua_ro" (bắn thật 23/09: lô 1 thành đất).
-        if (a.p_question === "loai_bds" && (!l.property_type || l.property_type === "chua_ro")) {
-          const kdL = String(a.p_answer).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
-          const ptL = /chung cu|can ho/.test(kdL) ? "chung_cu" : /\bdat\b/.test(kdL) ? "dat" : /\bnha\b/.test(kdL) ? "nha_pho" : null;
+        // 20261007b (SRS-5.1zzzc): chép `guess_property_type_answer` — nhận MÃ enum AI ghi ("nha_cap4") lẫn chữ người, và đổi cột
+        // cả khi tin đã có loại (trigger thật chỉ so bậc nguồn; bản mock cũ chỉ đổi khi "chua_ro" nên không thấy lỗi mã).
+        if (a.p_question === "loai_bds") {
+          const kdL = String(a.p_answer).replace(/đ/g, "d").replace(/Đ/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+          const MA = ["chung_cu", "nha_pho", "nha_cap4", "dat", "biet_thu", "phong_tro", "mat_bang", "toa_nha", "dat_nong_nghiep", "dat_kinh_doanh", "kho_xuong"];
+          const w = (re) => new RegExp(`(?<![a-z0-9_])(?:${re})(?![a-z0-9_])`).test(kdL);
+          const ptL = MA.includes(kdL) ? kdL
+            : w("kho|xuong") || /nha kho|kho bai/.test(kdL) ? "kho_xuong"
+            : /nong nghiep|dat vuon|dat lua|dat ray/.test(kdL) || w("cln") ? "dat_nong_nghiep"
+            : w("skc|tmd") || /dat thuong mai|dat san xuat|dat kinh doanh/.test(kdL) ? "dat_kinh_doanh"
+            : w("chdv") || /dich vu|khach san|toa nha|building|nha nghi/.test(kdL) ? "toa_nha"
+            : w("tro|phong tro|nha tro|day tro") ? "phong_tro"
+            : /biet thu|villa/.test(kdL) || w("bt") ? "biet_thu"
+            : /mat bang/.test(kdL) || w("mb") ? "mat_bang"
+            : /chung cu|can ho|canho|penthouse|duplex|officetel/.test(kdL) || w("cc|ch") ? "chung_cu"
+            : /cap 4|cap bon/.test(kdL) || w("c4") ? "nha_cap4"
+            : w("dat") || /dat nen|lo dat|nen dat/.test(kdL) ? "dat"
+            : /nha pho/.test(kdL) || w("nha|np|pho") ? "nha_pho" : null;
           if (ptL) l.property_type = ptL;
         }
         // 20260915d listing_facts_sync_deal: đổi loại giao dịch, tính lại giá từ fact giá gần nhất.

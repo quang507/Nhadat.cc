@@ -3899,6 +3899,27 @@ fresh(seedKho);
       JSON.stringify({ ht: fH("ha_tang"), dg: fH("do_rong_duong"), bs: fH("bo_sung") }));
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zzzc (chat thử 07/10, …shmn): "ừ. anh cần bán nhà trong hẻm" → tin nhà phố; khách "là nhà cấp 4", AI trả loai_bds MÃ
+  // "nha_cap4" → bản trước: 🤖 in "nha_cap4", tin vẫn nha_pho (trigger không đọc được mã), bot hỏi "trệt mấy lầu" cho nhà cấp 4.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "c4-1", text: "ừ. anh cần bán nhà trong hẻm quận 5" });
+    const L4 = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: L4.id, question: "vi_tri", status: "pending" });
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], cap_nhat: [],
+      truong: [{ khoa: "loai_bds", gia_tri: "nha_cap4", trich_dan: "nhà cấp 4", can: null }],
+      tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } } : OUT();
+    const r4 = await send({ external_user_id: "c4-1", text: "là nhà cấp 4" });
+    const l4 = db().t.listings.find((x) => x.id === L4.id);
+    check("SRS-5.1zzzc 'là nhà cấp 4' (AI trả mã nha_cap4) → tin thành nha_cap4, 🤖 in 'nhà cấp 4' không in mã",
+      l4.property_type === "nha_cap4" && !r4.body.replies.some((x) => /nha_cap4/.test(x)),
+      JSON.stringify({ pt: l4.property_type, rep: r4.body.replies }));
+    globalThis.__cauHinh = cuCH;
+  }
   // (d) căn hộ, đang hỏi nội thất, khách "phí quản lý 15k/m2" (AI im) → "Không bóc tách được gì", phí mất hẳn.
   {
     fresh(seedKho);

@@ -692,6 +692,11 @@ for (const [cau, mong] of [
     /"Nhà phố bán"/.test(bocTachTaoTin({ property_type: "nha_pho", deal: "ban", description: "bán nhà 4 tấm" }) ?? "") && /"Nhà phố bán"/.test(bocTachTaoTin({ property_type: "nha_pho", deal: "ban", floors: 3 }) ?? ""));
   const t3 = vuaLuuBan([{ question: "so_phong_ngu", answer: "3" }, { question: "ket_cau", answer: "4 tầng" }], { ket_cau: "kết cấu", so_phong_ngu: "số phòng ngủ" });
   ok("vuaLuuBan: lượt sau → 'Bóc tách được' + đúng các fact lượt đó", t3 === '🤖 Bóc tách được: kết cấu: "4 tầng" · số phòng ngủ: "3"', String(t3));
+  // SRS-5.1zzzc (chat thử 07/10): AI ghi loại BĐS bằng mã — 🤖 in chữ người đọc, không in "nha_cap4".
+  for (const [ma, chu] of [["nha_cap4", "nhà cấp 4"], ["chung_cu", "căn hộ chung cư"], ["dat_nong_nghiep", "đất nông nghiệp"]]) {
+    const tL = vuaLuuBan([{ question: "loai_bds", answer: ma }], { loai_bds: "loại bất động sản" });
+    ok(`SRS-5.1zzzc 🤖 loại BĐS '${ma}' → '${chu}'`, tL === `🤖 Bóc tách được: loại bất động sản: "${chu}"`, String(tL));
+  }
   const t4 = vuaLuuBan([{ question: "dien_tich", answer: "5x12" }, { question: "dien_tich_dat", answer: "5x12" }], { dien_tich: "diện tích", dien_tich_dat: "diện tích đất" });
   ok("vuaLuuBan: '5x12' ghi vào hai khoá diện tích → in MỘT lần", (t4?.match(/5x12/g) ?? []).length === 1, String(t4));
   const t5 = vuaLuuBan([{ question: "dien_tich", answer: "60m2" }, { question: "dien_tich_dat", answer: "80m2" }], { dien_tich: "diện tích", dien_tich_dat: "diện tích đất" });

@@ -156,7 +156,8 @@ KHOÁ:
   đó vào tin, nên trích đủ số nhà + hẻm + tên đường, không trích thừa phường / quận. Quy ước TP.HCM: "137/28 đường số 59" là HẺM 137 của đường số 59, NHÀ SỐ 28 trong hẻm (số
   sau dấu "/" cuối là số nhà; "137/28/5" = nhà 5 trong hẻm 137/28) — ghi "137/28 đường số 59", không đảo số, không bỏ số. KHÔNG ghi BỀ
   RỘNG hẻm vào duong ("hẻm 6m", "4 mét" → do_rong_hem). Tên đường bằng số / mã thì ghi kèm chữ "đường": "đường 3/2", "đường 30/4",
-  "đường D2", "đường số 7".
+  "đường D2", "đường số 7". Số đứng SAU tên đường là một phần TÊN ĐƯỜNG (đường đánh số vùng ven: "Thạnh Lộc 41", "Hiệp Thành 13",
+  "Tân Chánh Hiệp 10") — giữ trọn trong duong, ten_duong và trich_dan; số đứng TRƯỚC tên đường mới là số nhà.
 - ten_duong: CHỈ TÊN ĐƯỜNG, có dấu — không số nhà, không số hẻm, không chữ "hẻm / đường": "Nguyễn Trãi", "Cách Mạng Tháng 8", "3/2",
   "30/4", "D2", "số 7", "Tân Kỳ Tân Quý". Có duong thì LUÔN đưa kèm ten_duong (cùng trích dẫn với duong).
 - SỐ HẺM khác BỀ RỘNG HẺM: số đứng sau "hẻm" mà KHÔNG có đơn vị là SỐ HẺM, thuộc duong ("hẻm 45", "hẻm 18/5", "hẻm 1135", "hẻm 284").

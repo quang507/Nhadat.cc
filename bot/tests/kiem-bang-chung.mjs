@@ -8,7 +8,7 @@ import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang
 import { canTheoAi } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
-import { traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { gotManhOKhac, soSauTenDuong, traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -824,6 +824,25 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
     kiemTraLoiCau(TL("không dính quy hoạch", "ko dính gì hết"), "ko dính gì hết, nhà mặt tiền kinh doanh", null, { cauHoi: "quy_hoach", loai: "nha_pho" })?.giaTri === "không dính quy hoạch");
   ok("ZZZB-03 hỏi hẻm, 'Hxm nhé' AI nói 'hẻm xe hơi' → vẫn bác (loại đường trong cụm trích khác giá trị)",
     kiemTraLoiCau(TL("hẻm xe hơi", "Hxm"), "Hxm nhé", null, { cauHoi: "do_rong_hem", loai: "nha_pho" })?.giaTri === null);
+}
+// SRS-5.1zzzc (chat thử 07/10): đường ĐÁNH SỐ ("Thạnh Lộc 41") không được cắt mất số; một cụm nguyên văn chỉ một ô.
+{
+  for (const [tin, cum, so] of [["bán lô đất 45 Thạnh Lộc 41 quận 12, 5x20", "45 Thạnh Lộc", "41"], ["đường Hiệp Thành 13 hẻm 4m", "Hiệp Thành", "13"],
+    // cách nói MỚI chưa từng bắn
+    ["nhà Tân Chánh Hiệp 10 nha em", "Tân Chánh Hiệp", "10"],
+    ["nhà 12 Nguyễn Trãi 4 tầng", "12 Nguyễn Trãi", null], ["nhà 12 Nguyễn Trãi 5x20", "12 Nguyễn Trãi", null], ["Lê Văn Sỹ 3 tỷ", "Lê Văn Sỹ", null],
+    ["nhà 12 Nguyễn Trãi 2 mặt tiền", "12 Nguyễn Trãi", null], ["hẻm 45 Nguyễn Trãi", "hẻm 45", null], ["nhà Trần Hưng Đạo 120m2", "Trần Hưng Đạo", null]]) {
+    ok(`ZZZC-so '${tin}' sau '${cum}' → ${so}`, soSauTenDuong(tin, cum) === so, String(soSauTenDuong(tin, cum)));
+  }
+  const tinTL = "bán lô đất 45 Thạnh Lộc 41 quận 12, 5x20, giá 5 tỷ";
+  const kd = kiemDeXuat([{ khoa: "duong", gia_tri: "45 Thạnh Lộc", trich_dan: "45 Thạnh Lộc" }, { khoa: "ten_duong", gia_tri: "Thạnh Lộc", trich_dan: "45 Thạnh Lộc" }], tinTL).dat;
+  ok("ZZZC-01 AI trích '45 Thạnh Lộc' → địa chỉ '45 Thạnh Lộc 41', tên đường 'Thạnh Lộc 41'",
+    kd.find((d) => d.khoa === "duong")?.cum_goc === "45 Thạnh Lộc 41" && kd.find((d) => d.khoa === "ten_duong")?.gia_tri === "Thạnh Lộc 41", JSON.stringify(kd));
+  const tinKC = "nhà cấp 4 1 tầng thôi em, 3 phòng ngủ";
+  const kc = kiemTraLoiCau({ co_tra_loi: true, gia_tri: "1 tầng", trich_dan: tinKC }, tinKC, null, { cauHoi: "ket_cau", loai: "nha_pho" });
+  ok("ZZZC-02 hỏi kết cấu, trích cả câu có '3 phòng ngủ' → ô kết cấu không mang '3 phòng ngủ'", !!kc?.giaTri && !/phòng ngủ/.test(kc.giaTri), JSON.stringify(kc));
+  ok("ZZZC-03 (cách nói MỚI) 'trệt 2 lầu, sổ hồng riêng, có gác lửng' cho ô kết cấu → bỏ mảnh pháp lý",
+    gotManhOKhac("ket_cau", "trệt 2 lầu, sổ hồng riêng, có gác lửng") === "trệt 2 lầu, có gác lửng");
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

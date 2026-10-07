@@ -13,7 +13,7 @@
 import { docTien, giaTheoM2, TIEN_KD } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
 import type { CanTrongTin } from "./khop-cau-tra-loi.ts";
-import { cumPhongNguTheoTang, docTraLoiLung, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
+import { cumPhongNguTheoTang, cungHoFact, docTraLoiLung, nhanDienFact, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, phuongChuan, phuongTrongTrich, phuongTuTenCu, tenDayDu } from "./khop-phuong.ts";
 import { goNhamDau } from "./go-nham-dau.ts";
@@ -93,6 +93,23 @@ export function laONguyenVan(loai: string | null | undefined, question: string):
  * Cụm NGUYÊN VĂN trong `tin` ứng với bản so khớp `kdCum` (đầu ra `chuanSo`): quét cửa sổ theo từ, cửa sổ nào `chuanSo`
  * ra đúng `kdCum` thì trả đoạn gốc (gọt ký hiệu hai đầu). Không có → null (nơi gọi dùng trích dẫn của model).
  */
+/** Bỏ khỏi cụm các mảnh (giữa dấu phẩy / chấm phẩy) mà luật nhận ra là fact của ô KHÁC họ với `cauHoi`; còn lại trống thì giữ cụm. */
+export function gotManhOKhac(cauHoi: string, cum: string): string {
+  const manh = cum.split(/\s*[,;]\s*/).filter(Boolean);
+  if (manh.length < 2) return cum;
+  const giu = manh.filter((m) => { const f = nhanDienFact(m); return !f || f.question === "bo_sung" || cungHoFact(f.question, cauHoi); });
+  return giu.length && giu.length < manh.length ? giu.join(", ") : cum;
+}
+/** Số trơn đứng NGAY sau cụm địa chỉ trong tin ("45 Thạnh Lộc" + " 41 quận 12" → "41"); có đơn vị / dấu "/" / chữ x thì không. */
+export function soSauTenDuong(tin: string, cum: string): string | null {
+  const i = (tin ?? "").indexOf(cum);
+  // Cụm đã kết thúc bằng số (số nhà / hẻm đứng cuối) thì số sau đó không phải tên đường.
+  if (i < 0 || !cum.trim() || /\d\s*$/.test(cum)) return null;
+  // Chỉ nhận khi sau số là hết câu, dấu ngắt, hoặc chữ địa giới / tiểu từ — "Nguyễn Trãi 2 mặt tiền", "Lê Lợi 4 tầng" không nối.
+  const m = /^\s+(\d{1,3}[A-Za-z]?)(?=\s*$|\s*[,;.!?\n](?!\d)|\s+(?:quận|quan|q\.?\s*\d|phường|phuong|p\.?\s*\d|xã|xa|hẻm|hem|tp|thành phố|thanh pho|hcm|gần|gan|bên|ben|đối diện|doi dien|nha|nhé|nhe|em|anh|chị|chi|ạ|a)(?![\p{L}]))/iu
+    .exec(tin.slice(i + cum.length));
+  return m ? m[1] : null;
+}
 export function cumGocTrongTin(tin: string, kdCum: string): string | null {
   const muc = (kdCum ?? "").trim();
   if (!muc || !tin) return null;
@@ -591,8 +608,14 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
     if (ly) bo.push({ ...d, ly_do: ly });
     else {
       // SRS-5.1zzr: cụm nguyên văn trong tin — ô nguyên văn ghi chính cụm này, không ghi chữ model soạn.
-      const goc = cumGocTrongTin(tin, kdDung ?? kdCum);
-      dat.push({ ...d, ...(kdDung ? { trich_dan_sua: kdDung } : {}), ...(goc ? { cum_goc: goc } : {}) });
+      const goc0 = cumGocTrongTin(tin, kdDung ?? kdCum);
+      // SRS-5.1zzzc (chat thử 07/10): "45 Thạnh Lộc 41 quận 12" → AI trích "45 Thạnh Lộc", địa chỉ + cột street mất số 41 — đường
+      // ĐÁNH SỐ vùng ven (Thạnh Lộc 41, Hiệp Thành 13). Cụm địa chỉ phải TRỌN: ngay sau cụm trong tin là một số trơn (không đơn vị)
+      // thì số đó thuộc tên đường — nối vào cụm và vào tên đường.
+      const so = (d.khoa === "duong" || d.khoa === "ten_duong") && goc0 ? soSauTenDuong(tin, goc0) : null;
+      const goc = so ? `${goc0} ${so}` : goc0;
+      const giaTri = so && d.gia_tri && !new RegExp(`\\b${so}$`).test(d.gia_tri.trim()) ? `${d.gia_tri.trim()} ${so}` : d.gia_tri;
+      dat.push({ ...d, gia_tri: giaTri, ...(kdDung ? { trich_dan_sua: kdDung } : {}), ...(goc ? { cum_goc: goc } : {}) });
     }
   }
   return { dat, bo };
@@ -1077,7 +1100,10 @@ export function kiemTraLoiCau(
   // đơn vị "/m2 · /tháng · /năm" mà giá trị AI không có → gắn lại đúng đơn vị khách nói.
   // SRS-5.1zzr: ô nguyên văn theo loại → giá trị là cụm khách gõ (đã kiểm có trong tin ở trên), không phải câu model.
   if (o && laONguyenVan(o.loai ?? null, o.cauHoi)) {
-    const nv = giaTriNguyenVan(o.cauHoi, { khoa: o.cauHoi, gia_tri: v, trich_dan: tl.trich_dan ?? "", cum_goc: cumGocTrongTin(tin, td) ?? undefined });
+    // SRS-5.1zzzc (chat thử 07/10): hỏi kết cấu, "nhà cấp 4 1 tầng thôi em, 3 phòng ngủ" — AI trích cả câu, ô kết cấu ghi luôn
+    // "3 phòng ngủ". Một cụm chỉ một ô: mảnh (giữa dấu phẩy) là thông tin của ô KHÁC thì bỏ khỏi cụm nguyên văn của ô đang hỏi.
+    const cumNv = cumGocTrongTin(tin, td);
+    const nv = giaTriNguyenVan(o.cauHoi, { khoa: o.cauHoi, gia_tri: v, trich_dan: tl.trich_dan ?? "", cum_goc: cumNv ? gotManhOKhac(o.cauHoi, cumNv) : undefined });
     if (nv) return { co: true, giaTri: nv };
   }
   const dv = /\/\s*(m2|m²|tháng|thang|năm|nam)(?![\p{L}\d])/iu.exec(tl.trich_dan ?? "")?.[1];
