@@ -2452,6 +2452,16 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Sửa**: `phanVaiBangModel` nhận `cauBotVuaHoi` (câu hỏi vai lấy từ lời chào đang chạy, bản DB đè code), prompt thêm cách đọc câu trả lời (gật → ban, chối / tìm mua → mua, khen / hỏi lại → chua_ro). `nenHoiModelVai` gọi AI cho MỌI câu trả lời câu hỏi vai mà luật đáp vai (gật trơn, "có nhà", "bán") không ra, kể cả câu ngắn không mùi nhà đất; luật ra thì không tốn lượt. `donVai` hạ ngưỡng cụm làm bằng xuống 2 ký tự cho câu trả lời này (cụm là cả câu thì luôn nhận), cụm vẫn phải có nguyên trong tin. AI gật cho câu KHÔNG tả căn chỉ mở hồ sơ bán (`gatVaiAi`), không coi câu đó là câu rao. Câu mời người bán mới: hỏi đúng một ý "bất động sản ở đâu"; câu mẫu khi model hỏng: "… ở đâu vậy, ở Hồ Chí Minh đúng không ạ?" (cùng khuôn câu địa chỉ lần đầu SRS-5.1zzp). Chi phí: thêm một lượt model nhỏ (≤ 150 token ra) cho câu trả lời câu hỏi vai mà luật không đọc ra.
 - **Kiểm, đỏ khi tắt**: e2e ZZZE-01…06 — "đúng rồi e" mở hồ sơ bán và lượt AI có dòng "Câu trợ lý vừa hỏi"; cách nói MỚI "chính xác e" (luật không biết) thành người bán, câu mẫu chỉ một dấu hỏi; AI chết → hỏi lại câu chào như cũ; "đúng rồi" (luật ra) không tốn lượt AI; "Hay quá" + AI chưa rõ → hỏi lại câu chào. Tắt cổng (`traLoiCauVai: false`): 4/1021 đỏ (ZZZE-01, 02, 03, 06). `phan-vai.mjs` thêm 10 ca (43/43).
 
+### SRS-5.1zzzf · Bong bóng 🤖: tin là câu trả lời câu bot vừa hỏi thì nói đã hiểu gì, kèm câu đã hỏi (07/10/2026)
+
+`[nguồn: chủ dự án 07/10/2026, ảnh trang chat thử …lboq — "người ta xác nhận đúng sai hay trả lời câu hỏi của nó thì nó phải đọc lại câu của chính mình chứ đúng ko"; "làm 2 việc đi"]`
+
+- **Ca gốc**: bot hỏi "Anh chị cần rao bán bất động sản đúng không ạ?", khách "đúng rồi em" → bot hiểu đúng (mở hồ sơ người bán, hỏi tiếp "ở đâu") nhưng bong bóng 🤖 báo "Không bóc tách được gì từ tin này", như thể khách nhắn vô nghĩa.
+- **Lớp lỗi**: *bong bóng báo lại chỉ đếm dữ kiện căn* (fact / cột ghi trong lượt) — nó không biết tin khách là câu trả lời cho câu bot vừa hỏi, nên mọi câu trả lời không mang dữ kiện căn đều thành "không bóc được gì", dù bot đã hiểu và đã làm theo.
+- **Chỗ khác cùng lớp**: cùng bong bóng ở nhánh MUA (khách trả lời câu hỏi vai là "tìm mua") — đã sửa cùng lượt. Các chỗ khác bot hiểu lời gật / chối (xác nhận bản nháp, "đăng đi", gợi ý tên đường, câu có/không, ẩn hàng loạt) — soát riêng ở việc 2 (danh sách gửi chủ dự án trước khi sửa).
+- **Sửa**: `traLoiCauBot(cauBot, hieu)` trong `_shared/bao_lai.ts` — "🤖 Trả lời câu em vừa hỏi ("<câu bot đã hỏi>"): <điều đã hiểu>.". Nhánh bán: tin chỉ là câu trả lời câu hỏi vai (luật đáp vai hoặc AI gật, không tả căn) → thay "Không bóc tách được gì". Nhánh mua: trả lời câu hỏi vai là tìm mua → tương tự. Câu bot đã hỏi lấy từ lời chào đang chạy (bản DB đè code, cùng nguồn với SRS-5.1zzze).
+- **Kiểm, đỏ khi tắt**: e2e ZZZF-01 ("đúng rồi em" → 🤖 có câu hỏi vai + "cần rao bán", không "Không bóc tách"), ZZZF-02 ("không, anh đang tìm mua nhà" — cách nói mới → 🤖 "đang tìm mua"), ZZZF-03 ("ok em" lượt sau không gắn câu hỏi vai). Tắt `traLoiCauBot` ở hai chỗ: 2/1024 đỏ (ZZZF-01, 02).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

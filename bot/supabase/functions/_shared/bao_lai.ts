@@ -37,6 +37,12 @@ export const DAU_BAO_LAI = "🤖";
  *  🤖 chỉ nói thứ bóc được từ CHÍNH tin khách vừa nhắn, giá trị trong ngoặc kép; không bóc được gì cũng nói ra. */
 export const BOC_DUOC = `${DAU_BAO_LAI} Bóc tách được:`;
 export const KHONG_BOC = `${DAU_BAO_LAI} Không bóc tách được gì từ tin này.`;
+/** 07/10/2026 (SRS-5.1zzzf, chủ dự án: "người ta xác nhận đúng sai hay trả lời câu hỏi của nó thì nó phải đọc lại câu của
+ *  chính mình chứ"): tin khách là câu TRẢ LỜI cho câu bot vừa hỏi (không có dữ kiện căn để bóc) → bong bóng nói đã hiểu gì,
+ *  kèm câu bot đã hỏi — không báo "Không bóc tách được gì" như thể khách nhắn vô nghĩa. */
+export function traLoiCauBot(cauBot: string, hieu: string): string {
+  return `${DAU_BAO_LAI} Trả lời câu em vừa hỏi ("${cauBot.trim()}"): ${hieu}.`;
+}
 
 export const COT_BAO_LAI =
   `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, nhan, description, projects(name), ${SPEC_COLS}`;
