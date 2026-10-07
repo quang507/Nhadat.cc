@@ -139,6 +139,11 @@ const NHAN_THEM: Record<string, string> = {
 // Đáp án là giá trị enum (`listings.deal`) — in cho người đọc.
 const CHU_DAP_AN: Record<string, Record<string, string>> = {
   loai_giao_dich: { ban: "bán", cho_thue: "cho thuê" },
+  // SRS-5.1zzzc (chat thử 07/10): AI ghi loại BĐS bằng mã — 🤖 từng in "loại bất động sản: "nha_cap4"".
+  loai_bds: {
+    nha_pho: "nhà phố", nha_cap4: "nhà cấp 4", chung_cu: "căn hộ chung cư", dat: "đất", biet_thu: "biệt thự", phong_tro: "phòng trọ",
+    mat_bang: "mặt bằng", toa_nha: "toà nhà", dat_nong_nghiep: "đất nông nghiệp", dat_kinh_doanh: "đất kinh doanh", kho_xuong: "kho xưởng",
+  },
 };
 
 const boDau = (s: string): string =>
