@@ -73,7 +73,8 @@ jobs:
           chmod +x cloudflared
           ./cloudflared tunnel --no-autoupdate --url http://localhost:3000 > cf.log 2>&1 &
           URL=""
-          for i in $(seq 1 45); do URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' cf.log | head -1); [ -n "$URL" ] && break; sleep 2; done
+          for i in $(seq 1 45); do URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' cf.log | head -1 || true);  # chưa có link: grep trả 1, pipefail + bash -e sẽ giết cả bước
+            [ -n "$URL" ] && break; sleep 2; done
           if [ -z "$URL" ]; then echo "::error::Không mở được đường hầm Cloudflare"; tail -30 cf.log; exit 1; fi
           echo "::notice title=Trang chat thử bot::$URL (sống $PHUT phút, trần $TRAN lượt)"
           { echo "## Trang chat thử bot"; echo; echo "**$URL**"; echo; echo "Sống $PHUT phút, trần $TRAN lượt. Tắt sớm: Cancel workflow run."; } >> "$GITHUB_STEP_SUMMARY"
