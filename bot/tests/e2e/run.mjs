@@ -3846,6 +3846,27 @@ fresh(seedKho);
       JSON.stringify({ vt: fQ("vi_tri"), bs: fQ("bo_sung"), ir: db().t.info_requests.filter((x) => x.listing_id === LQ.id).map((x) => [x.question, x.status]) }));
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zzza (07/10/2026, chat thử): câu địa chỉ kèm đoán "ở Hồ Chí Minh đúng không?", khách "đúng rồi e. nhà a ở quận 5"
+  // → bản trước ghi địa chỉ "đúng rồi e. nhà a ở" và bản nháp in "Bán nhà đúng rồi e. nhà a ở…". Nay: quận vào cột, không
+  // ghi vị trí, không vào bổ sung, câu địa chỉ còn treo (hỏi đường).
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "gat-dc-1", text: "a bán nhà phố" });
+    const LG = db().t.listings.at(-1);
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LG.id, question: "vi_tri", status: "pending" });
+    await send({ external_user_id: "gat-dc-1", text: "đúng rồi e. nhà a ở quận 5" });
+    const fG = (q) => db().t.listing_facts.filter((f) => f.listing_id === LG.id && f.question === q);
+    const lg = db().t.listings.find((x) => x.id === LG.id);
+    check("SRS-5.1zzza 'đúng rồi e. nhà a ở quận 5' → quận 5, KHÔNG ghi vị trí / bổ sung, câu địa chỉ còn treo",
+      !fG("vi_tri").length && !fG("bo_sung").length && lg.district === "Quận 5" && !/đúng rồi/i.test(lg.location_raw ?? "") &&
+        db().t.info_requests.some((x) => x.listing_id === LG.id && x.question === "vi_tri" && x.status === "pending"),
+      JSON.stringify({ vt: fG("vi_tri"), bs: fG("bo_sung"), q: lg.district, lr: lg.location_raw, ir: db().t.info_requests.filter((x) => x.listing_id === LG.id).map((x) => [x.question, x.status]) }));
+    globalThis.__cauHinh = cuCH;
+  }
   // (d) căn hộ, đang hỏi nội thất, khách "phí quản lý 15k/m2" (AI im) → "Không bóc tách được gì", phí mất hẳn.
   {
     fresh(seedKho);

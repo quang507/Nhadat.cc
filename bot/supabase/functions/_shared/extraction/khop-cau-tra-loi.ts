@@ -575,7 +575,8 @@ function catDapAnGoc(question: string, dapAn: string): string {
   // câu đang hỏi — "Nhà 5 tầng, có thang máy thì phải, bạn có biết…" → kết cấu "Nhà 5
   // tầng"; "Được giá, căn tôi sở hữu nhưng chưa vào xem…" → gấp "Được giá".
   const tach = tachCauHoiNguoc(dapAn);
-  const goc = tach.hoi && tach.traLoi ? tach.traLoi : dapAn;
+  const goc0 = tach.hoi && tach.traLoi ? tach.traLoi : dapAn;
+  const goc = O_HOI_KEM_DOAN.has(question) ? boGatDau(goc0) : goc0;
   if (question === "vi_tri" && LENH_DAN.test(boDau(goc))) return bocCumDiaChi(goc) ?? goc;
   // 20/09/2026 (bắn thật mau-y-B): "phường 17 nhé, đường Phan Văn Trị" — lời sửa phường bị bóc, còn
   // "nhé, đường Phan Văn Trị" thành location_raw và street = "nhé". Tiểu từ đứng đầu mệnh đề bỏ đi.
@@ -592,6 +593,9 @@ function catDapAnGoc(question: string, dapAn: string): string {
     }
     const sach = goc.replace(TIEU_TU_DAU, "").trim();
     if (sach && sach !== goc) return sach;
+    // 07/10/2026: "nhà a ở 45 Trần Hưng Đạo" → bỏ lời dẫn "nhà anh ở" (chữ khách, không phải địa chỉ).
+    const boDan = goc.replace(DAN_DIA_CHI, "").trim();
+    if (boDan && boDan !== goc && /[\p{L}\p{N}]/u.test(boDan)) return boDan;
   }
   if (question === "phuong") {
     const m = /(?:phường|phuong|(?<![\p{L}])p)\s*\.?\s*(\d{1,2})(?!\d)/iu.exec(goc);
@@ -1564,12 +1568,40 @@ function tronKhoa(q: string, kd: string): boolean {
   return false;
 }
 
+// 07/10/2026 (SRS-5.1zzza, chủ dự án chat thử): câu hỏi KÈM PHỎNG ĐOÁN ("Nhà anh ở đâu vậy, ở Hồ Chí Minh đúng không?",
+// "Nhà mình nằm trong hẻm đúng không anh, hẻm rộng mấy mét?") — khách gật phần đoán trước rồi mới trả lời phần hỏi: "đúng rồi
+// e. nhà a ở quận 5". Mảnh gật ở đầu không phải giá trị của ô (bản trước: địa chỉ = "đúng rồi e. nhà a ở"). Chỉ các ô có câu
+// mẫu kèm đoán; ô có / không thì lời gật LÀ câu trả lời nên không bỏ.
+const O_HOI_KEM_DOAN = new Set(["vi_tri", "phuong", "do_rong_hem", "do_rong_duong"]);
+const TP_HCM_KD = /\b(?:(?:tp|thanh pho)\s*)?(?:hcm|tphcm|ho chi minh|sai gon|sg)\b/g;
+/** Mảnh đầu chỉ là lời gật (kể cả gật kèm tên thành phố: "ừ hcm", "đúng rồi sài gòn") → true. */
+function laManhGat(manh: string): boolean {
+  const kd = boDau(manh).replace(/[^a-z0-9\s]/g, " ").replace(TP_HCM_KD, " tp_hcm ").replace(/\s+/g, " ").trim();
+  if (!kd || /\b(khong|ko|k|chua|sai|nham)\b/.test(kd)) return false;
+  const tu = kd.split(" ");
+  return tu.every((w) => TU_GAT.has(w) || TU_DEM.has(w) || w === "tp_hcm" || w === "o" || w === "tai") &&
+    tu.some((w) => TU_GAT.has(w) || w === "tp_hcm");
+}
+/** Bỏ các mảnh gật đứng đầu ("đúng rồi e. nhà a ở quận 5" → "nhà a ở quận 5"); câu chỉ có lời gật thì giữ nguyên. */
+export function boGatDau(text: string): string {
+  let con = (text ?? "").trim();
+  for (let i = 0; i < 3; i++) {
+    const m = /^([^,.;!?\n]+)[,.;!?\n]+\s*(?=\S)/u.exec(con);
+    if (!m || !laManhGat(m[1])) break;
+    con = con.slice(m[0].length);
+  }
+  return con;
+}
+/** Lời dẫn đầu câu địa chỉ: "nhà a ở", "căn của chị tại", "ở". */
+const DAN_DIA_CHI = /^\s*(?:(?:nhà|nha|căn|can|đất|dat|lô|lo)\s+(?:(?:của|cua)\s+)?(?:anh|a|chị|chi|c|em|e|mình|minh|tôi|toi|chú|chu|cô|co|bác|bac)?\s*)?(?:ở|o|tại|tai|thuộc|thuoc)\s+(?=\S)/iu;
+
 /** "o q10", "ở quận 10 nha em", "p5 q10", "quận 10": câu chỉ nói đơn vị hành chính, không có đường / hẻm / số nhà / mốc. */
 export function laChiDonViHanhChinh(text: string): boolean {
-  const kd = boDau(text).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
+  // 07/10/2026: "đúng rồi e. nhà a ở quận 5" — bỏ lời gật phần đoán "ở Hồ Chí Minh đúng không" trước (SRS-5.1zzza).
+  const kd = boDau(boGatDau(text)).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
     .replace(/(?:\s+(?:nha|nhe|nhen|em|e|a|anh|chi|oi|do|day|ne|luon))+$/, "");
   if (!kd) return false;
-  const bo = kd.replace(/^(?:nha\s+|can\s+)?(?:o|tai|thuoc)\s+/, "")
+  const bo = kd.replace(/^(?:(?:nha|can|dat|lo)\s+(?:cua\s+)?(?:anh|a|chi|c|em|e|minh|toi|chu|co|bac)?\s*)?(?:o|tai|thuoc)\s+/, "")
     .replace(/\b(?:quan|q|phuong|p)\s*\d{1,2}\b|\b[qp]\d{1,2}\b|\b(?:tp|thanh pho)\s*(?:hcm|ho chi minh|sai gon|sg)\b|\bsai gon\b/g, " ")
     .replace(/\s+/g, " ").trim();
   return bo === "" && /\d/.test(kd);

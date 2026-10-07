@@ -1091,6 +1091,17 @@ for (const [c, m] of [["phí quản lý 15k/m2", true], ["phí ql 1tr/tháng nha
 for (const [c, m] of [["o q10", true], ["ở quận 10 nha em", true], ["p5 q10", true], ["ở Ô Môn", false], ["hẻm 45 q10", false], ["12 Lê Lợi q1", false], ["q10 gần chợ", false]]) {
   ok(`FR248-c chỉ đơn vị hành chính '${c}' → ${m}`, laChiDonViHanhChinh(c) === m);
 }
+// SRS-5.1zzza (07/10/2026, chat thử): câu hỏi kèm đoán "ở Hồ Chí Minh đúng không?" — lời gật phần đoán không phải địa chỉ.
+// Cách nói MỚI chưa từng bắn: "chuẩn rồi a, tại q.8", "vâng sài gòn. nhà chú thuộc quận 3".
+for (const [c, m] of [["đúng rồi e. nhà a ở quận 5", true], ["đúng rồi em, nhà anh ở quận 5", true], ["dạ đúng, ở q5", true], ["ừ hcm, quận 5", true],
+  ["chuẩn rồi a, tại q8", true], ["vâng sài gòn. nhà chú thuộc quận 3", true],
+  ["đúng rồi e. nhà a ở 45 Trần Hưng Đạo quận 5", false], ["không, ở Bình Dương", false], ["đúng rồi", false]]) {
+  ok(`SRS-5.1zzza chỉ đơn vị hành chính sau lời gật '${c}' → ${m}`, laChiDonViHanhChinh(c) === m);
+}
+for (const [q, vao, ra] of [["vi_tri", "đúng rồi e. nhà a ở 45 Trần Hưng Đạo", "45 Trần Hưng Đạo"], ["vi_tri", "ok, 12 Nguyễn Trãi", "12 Nguyễn Trãi"],
+  ["do_rong_hem", "dạ đúng, 3m", "3m"], ["vi_tri", "đúng rồi", "đúng rồi"], ["thang_may", "dạ có, mới lắp", "dạ có, mới lắp"]]) {
+  ok(`SRS-5.1zzza cắt lời gật ${q} '${vao}' → '${ra}'`, catDapAn(q, vao) === ra, catDapAn(q, vao));
+}
 for (const [vao, ra] of [[["o q10", null, "Quận 10"], "Quận 10"], [["p5 q10", "Phường 5", "Quận 10"], "Phường 5, Quận 10"],
   [["hẻm 45 Nguyễn Trãi", "Phường 2", "Quận 5"], "hẻm 45 Nguyễn Trãi, Phường 2, Quận 5"], [["Ô Môn", null, "Cần Thơ"], "Ô Môn, Cần Thơ"]]) {
   ok(`FR248-c diaChiGon ${JSON.stringify(vao)} → '${ra}'`, diaChiGon(...vao) === ra, diaChiGon(...vao));
