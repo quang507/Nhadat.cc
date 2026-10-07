@@ -7,6 +7,10 @@ name: Trang chat thử bot (web, DB giả)
 # Mỗi trình duyệt một cuộc chat riêng; lượt xử lý tuần tự nên đông người thì chờ vài giây. Không đăng nhập (chủ dự án chọn): link ngẫu nhiên, sống tối đa `phut` phút, trần `tran` lượt model — repo PUBLIC nên ai
 # đọc log Actions trong lúc đang chạy cũng thấy link. Tắt sớm: Cancel workflow run. Đừng gõ tên thật / SĐT thật.
 # Trên máy mình thì không cần workflow này: `bun run chat -- --web` rồi (nếu muốn mở từ máy khác) `ngrok http 3000`.
+# 07/10/2026 (chủ dự án: "lấy bot prompt… xuống chỗ test… và có thể sửa ở đây lun"): trước khi bật trang, kéo công tắc
+# app_config + mẫu câu + bot_prompts của production (keo-that.mjs, chỉ đọc qua Management API, không in nội dung). Trang có nút
+# "Sửa prompt" (/prompt): sửa prompt / công tắc của DB giả, bot dùng ngay. Khi tắt (hết giờ hoặc Cancel) bản sửa được cất vào
+# nhánh `chat-web/sua-prompt-<run_id>` — gộp vào prompts.ts bằng PR rồi `dong-bo-prompt --day`. Production không đổi trước đó.
 
 on:
   workflow_dispatch:
@@ -19,6 +23,11 @@ on:
         description: Trần số tin nhắn cả lượt chạy (chặn đốt credit nếu link lộ)
         required: false
         default: '300'
+      prompt:
+        description: Prompt dùng bản nào — code (bản sẽ deploy) hay db (bản production đang chạy, DB đè code)
+        type: choice
+        options: [code, db]
+        default: code
 
 env:
   PROJECT_REF: tbcdpupiarkuxtntmosl
@@ -30,8 +39,9 @@ jobs:
     timeout-minutes: 130
     # Đăng link thành một commit status ("Trang chat thử bot") để đọc được ngay qua API / tab Checks của commit trong
     # lúc job còn chạy — log Actions chỉ tải được sau khi job kết thúc.
+    # contents: write — chỉ để bước cuối đẩy nhánh `chat-web/sua-prompt-<run_id>` (không bao giờ đẩy main).
     permissions:
-      contents: read
+      contents: write
       statuses: write
     steps:
       - uses: actions/checkout@v4
@@ -58,17 +68,23 @@ jobs:
             echo "ANTHROPIC_API_KEY=$K" >> "$GITHUB_ENV"
           fi
 
+      - name: Kéo prompt + công tắc + mẫu câu production (chỉ đọc, không in nội dung)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: bun bot/tests/chat/keo-that.mjs || echo "::warning::Không kéo được dữ liệu production — trang chạy prompt code + công tắc mặc định."
+
       - name: Bật trang + đường hầm, giữ sống
         env:
           # Chủ dự án 07/10: "model là haiku thôi" — khoá cứng, không cho chọn (production cũng chạy Haiku 4.5).
           ANTHROPIC_MODEL: claude-haiku-4-5-20251001
           PHUT: ${{ inputs.phut }}
           TRAN: ${{ inputs.tran }}
+          PROMPT: ${{ inputs.prompt || 'code' }}
         run: |
           set -uo pipefail
           case "$PHUT" in ''|*[!0-9]*) PHUT=60;; esac; [ "$PHUT" -gt 120 ] && PHUT=120
           case "$TRAN" in ''|*[!0-9]*) TRAN=300;; esac
-          bun run chat -- --web --port 3000 --tran "$TRAN" > web.log 2>&1 &
+          bun run chat -- --web --port 3000 --tran "$TRAN" --prompt "$PROMPT" > web.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 2; done
           if ! curl -sf -o /dev/null http://localhost:3000/; then echo "::error::Trang không bật được"; sed -E 's/\x1b\[[0-9;]*m//g' web.log | tail -30; exit 1; fi
           curl -sSL -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
@@ -90,3 +106,19 @@ jobs:
             curl -sf -o /dev/null http://localhost:3000/ || { echo "::error::Trang đã tắt giữa chừng"; sed -E 's/\x1b\[[0-9;]*m//g' web.log | tail -30; exit 1; }
           done
           echo "Hết $PHUT phút — tắt trang."
+
+      # Chạy cả khi hết giờ lẫn khi Cancel (`always()`): bản sửa ở trang /prompt chỉ nằm trên máy runner, không cất là mất.
+      - name: Cất bản sửa prompt vào nhánh git
+        if: always()
+        run: |
+          set -uo pipefail
+          F=bot/tests/chat/sua-prompt.json
+          if [ ! -f "$F" ] || [ "$(jq '(.prompt|length)+(.cau_hinh|length)' "$F")" = "0" ]; then echo "Không có bản sửa prompt."; exit 0; fi
+          B="chat-web/sua-prompt-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b "$B"
+          git add -f "$F"
+          git commit -q -m "Bản sửa prompt từ trang chat thử (run ${{ github.run_id }})"
+          git push -q origin "$B"
+          echo "::notice title=Bản sửa prompt::đã cất vào nhánh $B — khoá: $(jq -r '[(.prompt|keys[]),(.cau_hinh|keys[])]|join(", ")' "$F")"
