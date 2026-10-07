@@ -16,6 +16,9 @@
 //   bun run chat -- --web        # chế độ MÁY nhưng chat trên TRANG WEB (http://localhost:3000, đổi bằng --port).
 //                                #   Mỗi trình duyệt một cuộc chat riêng (nhiều người thử cùng lúc), không đăng nhập. Muốn mở từ máy khác: `ngrok http 3000`
 //                                #   hoặc workflow `chat-web.yml` (chạy trên GitHub + đường hầm Cloudflare, không cần pull).
+//   bun bot/tests/chat/keo-that.mjs   # (cần SUPABASE_ACCESS_TOKEN) kéo công tắc + mẫu câu + bot_prompts production → that.json;
+//                                #   chế độ MÁY tự nạp file đó. `--prompt db` = dùng bot_prompts production (DB đè code), mặc định
+//                                #   `code` = bản sẽ deploy. `--web` có trang /prompt sửa prompt + công tắc, lưu vào sua-prompt.json.
 //
 // Lệnh trong lúc chat:  /tin  xem tin + hồ sơ người đang chat   /moi  làm lại từ đầu (người mới)
 //                       /giup  in lại hướng dẫn                   /thoat  thoát (Ctrl+C cũng được)
@@ -146,6 +149,13 @@ async function mayChuMay() {
   }
   const { FakeDB, napPhuongThat, napPhuongCuThat, createClient } = await import("../e2e/mock-supabase.mjs");
   const PHUONG_CU = await napPhuongCuThat();
+  // 07/10/2026: bản kéo từ production (keo-that.mjs → that.json): công tắc app_config + mẫu câu luôn dùng; bot_prompts chỉ
+  // đè code khi `--prompt db` (mặc định `code` = bản sẽ deploy — production chỉ lệch ở khoá keo-that.mjs in ra).
+  const pDuLieu = giaTri("--du-lieu") ?? join(HERE, "that.json");
+  const DL = existsSync(pDuLieu) ? JSON.parse(readFileSync(pDuLieu, "utf8")) : null;
+  const CHE_DO_PROMPT = giaTri("--prompt") === "db" && DL ? "db" : "code";
+  // Bảng bot_prompts của DB giả — trang sửa prompt ghi vào đây, `moi()` chép lại khi dựng DB mới.
+  const PROMPT_DB = CHE_DO_PROMPT === "db" ? (DL.bot_prompts ?? []).map((r) => ({ key: r.key, content: r.content })) : [];
   const fetchThat = globalThis.fetch;
   // Chỉ cho model đi ra ngoài; Nominatim / ảnh Zalo / mọi URL khác trả 404 (chat-reply coi là đường đi bình thường).
   globalThis.fetch = async (url, opt) => (/api\.anthropic\.com/.test(String(url)) ? fetchThat(url, opt) : new Response("", { status: 404 }));
@@ -155,6 +165,7 @@ async function mayChuMay() {
     // 30/09/2026: bảng `wards` thật (168 phường) — như DB production, để chốt phường chạy đúng khi chat thử.
     d.t.wards = napPhuongThat().map((w) => ({ ...w }));
     d.t.phuong_cu = PHUONG_CU.map((c) => ({ ...c }));
+    d.t.bot_prompts = PROMPT_DB.map((r) => ({ ...r }));
     const chu = d.insert("sellers", { zalo_user_id: "may-kho-chu", seller_type: "ccrb", name: null, active_listing_id: null }).data;
     for (const l of KHO_MAU) {
       d.insert("listings", { ...l, seller_id: chu.id, deal: "ban", status: "dang_ban", property_type: "nha_pho", district: "Quận 5", location_raw: l.street, legal_status: "so_hong_rieng" });
@@ -162,15 +173,26 @@ async function mayChuMay() {
   };
   moi();
   // Công tắc như production (boc_tach_ai 'chinh' từ 21/09). `test_reset_hello`: gõ "hello" là làm lại người đó.
-  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi", luat_loi_bot: "gon" };
-  globalThis.__mauCau = { ban: "", mua: "" };
+  globalThis.__cauHinh = { boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi", luat_loi_bot: "gon", ...(DL?.cau_hinh ?? {}), test_reset_hello: "1" };
+  globalThis.__mauCau = { ban: DL?.mau_cau?.ban ?? "", mua: DL?.mau_cau?.mua ?? "" };
+  // Trang web sửa prompt / công tắc giữa chừng: đọc lại mỗi lượt thay vì nhớ 60 s (như bộ e2e).
+  if (WEB) globalThis.__khongNhoCauHinh = true;
   const ENV = { SUPABASE_URL: "http://may", SUPABASE_SERVICE_ROLE_KEY: "svc", BRIDGE_SECRET: "s3cret", ANTHROPIC_API_KEY: API_KEY ?? "test-key", ANTHROPIC_MODEL: MODEL };
   globalThis.Deno = { serve: (h) => { globalThis.__handler = h; }, env: { get: (k) => ENV[k] } };
   await import(BUNDLE);
   const H = globalThis.__handler;
   let n = 0, daInLoi = 0;
   return {
-    ten: `MÁY (DB giả · ${API_KEY ? `model thật ${MODEL}` : "model GIẢ — không có ANTHROPIC_API_KEY, chỉ thấy phần luật"})`,
+    ten: `MÁY (DB giả · ${API_KEY ? `model thật ${MODEL}` : "model GIẢ — không có ANTHROPIC_API_KEY, chỉ thấy phần luật"} · prompt ${CHE_DO_PROMPT === "db" ? "production" : "code"} · công tắc ${DL ? "production" : "mặc định"})`,
+    // Trang sửa prompt (chỉ --web): đọc / ghi bảng bot_prompts + công tắc của DB giả, có hiệu lực từ lượt kế.
+    prompt: () => PROMPT_DB,
+    suaPrompt(key, content) {
+      const r = PROMPT_DB.find((x) => x.key === key);
+      if (r) r.content = content; else PROMPT_DB.push({ key, content });
+      const t = globalThis.__db.t.bot_prompts, r2 = t.find((x) => x.key === key);
+      if (r2) r2.content = content; else t.push({ key, content });
+    },
+    cauHinh: () => globalThis.__cauHinh,
     async kiemId() { return true; },
     async gui(uid, text) {
       const b = { msg_id: `c${++n}`, channel: "zalo_personal_test", external_user_id: uid, text };
@@ -254,11 +276,47 @@ if (WEB) {
   const tuanTu = (fn) => { const p = hang.then(fn, fn); hang = p.catch(() => {}); return p; };
   const json = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { "content-type": "application/json; charset=utf-8" } });
   const port = Number(giaTri("--port") ?? process.env.PORT ?? 3000) || 3000;
+  // 07/10/2026 (chủ dự án: "test là cái chuẩn nhất và có thể sửa ở đây lun"): trang /prompt sửa prompt + công tắc của DB giả
+  // — bot dùng ngay từ lượt kế, cho MỌI người trên link. Mỗi lần lưu ghi `sua-prompt.json` (chỉ khoá khác bản lúc bật trang);
+  // chat-web.yml cất file đó vào nhánh `chat-web/sua-prompt-<run>` khi tắt, để gộp vào prompts.ts bằng PR rồi `dong-bo-prompt --day`.
+  const P = await import(join(GOC, "bot", "supabase", "functions", "_shared", "prompts.ts"));
+  const CODE = {
+    loi_chao: P.LOI_CHAO, tone_rules: P.TONE_RULES, seller_script_rules: P.SELLER_SCRIPT_RULES, seller_fewshot: P.SELLER_FEWSHOT,
+    fee_rules: P.FEE_RULES, cau_hoi_mau: P.CAU_HOI_MAU_TEXT, cau_tien_dinh: P.CAU_TIEN_DINH_TEXT, human_chat_rules: P.HUMAN_CHAT_RULES,
+    buyer_fewshot: P.BUYER_FEWSHOT, slang_notes: P.SLANG_NOTES, agree_rules: P.AGREE_RULES,
+  };
+  const CONG_TAC = ["boc_tach_ai", "bao_lai_da_luu", "luat_loi_bot", "tro_ly", "nhip_go", "lenh_json"];
+  const dangDung = (k) => may.prompt().find((r) => r.key === k)?.content ?? CODE[k];
+  const BAN_DAU = Object.fromEntries(Object.keys(CODE).map((k) => [k, dangDung(k)]));
+  const CH_DAU = Object.fromEntries(CONG_TAC.map((k) => [k, may.cauHinh()[k] ?? ""]));
+  const pSua = giaTri("--luu-sua") ?? join(HERE, "sua-prompt.json");
+  const ghiSua = () => {
+    const prompt = Object.fromEntries(Object.keys(CODE).filter((k) => dangDung(k) !== BAN_DAU[k]).map((k) => [k, dangDung(k)]));
+    const cau_hinh = Object.fromEntries(CONG_TAC.filter((k) => (may.cauHinh()[k] ?? "") !== CH_DAU[k]).map((k) => [k, may.cauHinh()[k] ?? ""]));
+    writeFileSync(pSua, JSON.stringify({ luc: new Date().toISOString(), prompt, cau_hinh }, null, 2));
+    return { prompt: Object.keys(prompt), cau_hinh: Object.keys(cau_hinh) };
+  };
   Bun.serve({
     port,
     async fetch(req) {
       const u = new URL(req.url);
       if (req.method === "GET" && u.pathname === "/") return new Response(TRANG_WEB_HTML().replace("__TEN__", may.ten), { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (req.method === "GET" && u.pathname === "/prompt") return new Response(TRANG_PROMPT_HTML(), { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (req.method === "GET" && u.pathname === "/prompt/du-lieu") {
+        return json({
+          prompt: Object.keys(CODE).map((k) => ({ key: k, noi_dung: dangDung(k), ban_dau: BAN_DAU[k], khac_code: dangDung(k) !== CODE[k] })),
+          cau_hinh: CONG_TAC.map((k) => ({ key: k, gia_tri: may.cauHinh()[k] ?? "", ban_dau: CH_DAU[k] })),
+        });
+      }
+      if (req.method === "POST" && u.pathname === "/prompt/luu") {
+        const b = await req.json().catch(() => ({}));
+        return tuanTu(async () => {
+          if (b?.loai === "prompt" && b.key in CODE && typeof b.noi_dung === "string" && b.noi_dung.length <= 60000) may.suaPrompt(b.key, b.noi_dung);
+          else if (b?.loai === "cau_hinh" && CONG_TAC.includes(b.key) && typeof b.noi_dung === "string" && b.noi_dung.length <= 40) may.cauHinh()[b.key] = b.noi_dung.trim();
+          else return json({ loi: "khoá hoặc nội dung không hợp lệ" }, 400);
+          return json({ ok: true, da_sua: ghiSua() });
+        });
+      }
       if (u.pathname === "/") return new Response("không có", { status: 404 });
       const id = maKhach(req);
       if (!id) return json({ loi: "thiếu mã khách" }, 400);
@@ -354,7 +412,7 @@ textarea{flex:1;resize:none;font:inherit;padding:9px 12px;border-radius:10px;bor
 form button{background:var(--chinh);color:#fff;border:0;padding:0 18px}
 pre{white-space:pre-wrap;font-size:12px;background:var(--ban);border:1px solid var(--vien);border-radius:10px;padding:10px;margin:0;align-self:stretch}
 </style></head><body>
-<header><b>Chat thử bot<small>__TEN__</small></b><button id="xemTin" type="button">Xem tin</button><button id="lamLai" type="button">Làm lại</button></header>
+<header><b>Chat thử bot<small>__TEN__</small></b><a href="prompt" target="_blank"><button type="button">Sửa prompt</button></a><button id="xemTin" type="button">Xem tin</button><button id="lamLai" type="button">Làm lại</button></header>
 <div id="khung"></div>
 <form id="f"><textarea id="o" rows="1" placeholder="Nhắn như khách Zalo… (Enter để gửi, Shift+Enter xuống dòng)"></textarea><button>Gửi</button></form>
 <script>
@@ -379,5 +437,46 @@ document.getElementById('xemTin').onclick=async()=>{const j=await fetch('tin',{h
   const tq=j.treo.filter(q=>q.listing_id===l.id);if(tq.length)dong.push('  đang hỏi: '+tq.map(q=>q.question).join(', '));}
  them('tin',dong.length?dong.join('\\n'):'(chưa có hồ sơ nào)');};
 o.focus();
+</script></body></html>`;
+}
+
+// Trang sửa prompt + công tắc (chỉ --web). Sửa ở đây là sửa DB GIẢ của lần chạy này: bot dùng từ lượt kế, mất khi tắt trang
+// (chat-web.yml cất bản sửa vào nhánh git). Production KHÔNG đổi cho tới khi gộp vào prompts.ts và `dong-bo-prompt --day`.
+function TRANG_PROMPT_HTML() {
+  return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sửa prompt</title><style>
+:root{--nen:#e9ebef;--ban:#fff;--chu:#0f172a;--mo:#64748b;--vien:#d0d5dd;--chinh:#0068ff;--sua:#b45309}
+@media (prefers-color-scheme:dark){:root{--nen:#0f141a;--ban:#1c232c;--chu:#e6e9ee;--mo:#94a3b8;--vien:#2c3540;--chinh:#4d9bff;--sua:#f59e0b}}
+*{box-sizing:border-box}body{margin:0;background:var(--nen);color:var(--chu);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:960px;margin:0 auto;padding:16px}h1{font-size:20px;margin:0 0 4px}p{color:var(--mo);margin:0 0 14px;font-size:13px}
+.the{background:var(--ban);border:1px solid var(--vien);border-radius:10px;padding:12px;margin-bottom:12px}
+.hang{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hang b{flex:1}
+select,input,textarea,button{font:inherit;color:var(--chu);background:var(--nen);border:1px solid var(--vien);border-radius:8px;padding:6px 10px}
+textarea{width:100%;min-height:55vh;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;margin-top:8px}
+button{cursor:pointer;background:var(--ban)}button.chinh{background:var(--chinh);color:#fff;border:0}
+.nhan{font-size:12px;color:var(--sua)}#bao{font-size:13px;color:var(--mo);min-height:1.4em}
+.ct{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}.ct label{font-size:13px;color:var(--mo)}.ct input{width:100%}
+</style></head><body><main>
+<h1>Sửa prompt bot</h1>
+<p>Bấm Lưu thì bot dùng bản mới từ tin nhắn kế tiếp, áp cho mọi người đang chat trên link này. Production KHÔNG đổi. Bản sửa được cất vào git khi tắt trang, để gộp vào code rồi đẩy lên sau ngày mở khoá.</p>
+<div class="the"><div class="hang"><b>Prompt</b><select id="k"></select><span id="nhan" class="nhan"></span></div>
+<textarea id="nd" spellcheck="false"></textarea>
+<div class="hang" style="margin-top:8px"><button class="chinh" id="luu">Lưu</button><button id="goc">Về bản lúc bật trang</button><span id="bao"></span></div></div>
+<div class="the"><div class="hang"><b>Công tắc (app_config)</b></div><div class="ct" id="ct"></div>
+<div class="hang" style="margin-top:8px"><button id="luuCt">Lưu công tắc</button></div></div>
+</main><script>
+let D={prompt:[],cau_hinh:[]};const k=document.getElementById('k'),nd=document.getElementById('nd'),bao=document.getElementById('bao');
+const cur=()=>D.prompt.find(x=>x.key===k.value);
+function ve(){const p=cur();if(!p)return;nd.value=p.noi_dung;document.getElementById('nhan').textContent=(p.noi_dung!==p.ban_dau?'đã sửa · ':'')+(p.khac_code?'khác bản code':'');}
+async function tai(giu){D=await fetch('prompt/du-lieu').then(r=>r.json());const chon=giu||k.value;
+ k.innerHTML=D.prompt.map(p=>'<option value="'+p.key+'">'+p.key+(p.noi_dung!==p.ban_dau?' *':'')+'</option>').join('');if(chon)k.value=chon;ve();
+ document.getElementById('ct').innerHTML=D.cau_hinh.map(c=>'<div><label>'+c.key+(c.gia_tri!==c.ban_dau?' *':'')+'</label><input data-k="'+c.key+'" value="'+c.gia_tri.replace(/"/g,'&quot;')+'"></div>').join('');}
+async function luu(loai,key,noi_dung){const r=await fetch('prompt/luu',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({loai,key,noi_dung})});const j=await r.json();
+ bao.textContent=j.loi?('Lỗi: '+j.loi):('Đã lưu · đang khác bản đầu: '+([...j.da_sua.prompt,...j.da_sua.cau_hinh].join(', ')||'không'));}
+k.onchange=ve;
+document.getElementById('luu').onclick=async()=>{await luu('prompt',k.value,nd.value);await tai(k.value);};
+document.getElementById('goc').onclick=async()=>{const p=cur();if(!p||!confirm('Bỏ bản sửa của '+p.key+'?'))return;await luu('prompt',p.key,p.ban_dau);await tai(p.key);};
+document.getElementById('luuCt').onclick=async()=>{for(const i of document.querySelectorAll('#ct input')){const c=D.cau_hinh.find(x=>x.key===i.dataset.k);if(c&&i.value.trim()!==c.gia_tri)await luu('cau_hinh',c.key,i.value);}await tai(k.value);};
+tai();
 </script></body></html>`;
 }
