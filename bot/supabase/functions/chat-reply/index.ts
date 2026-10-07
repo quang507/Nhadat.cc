@@ -169,7 +169,7 @@ const LOAI_DAP_AN: Record<string, string> = {
 import { lechDienTich, phanLoaiAnh, type LoaiAnh } from "../_shared/ai/phan-loai-anh.ts";
 import { bocDuAnBangModel, coMuiDuAn, donKetQua } from "../_shared/ai/boc-du-an.ts";
 import { phanVaiBangModel } from "../_shared/ai/phan-vai.ts";
-import { donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
+import { coMuiBDS, donVai, nenHoiModelVai, type VaiModel } from "../_shared/extraction/phan-vai-loc.ts";
 import { canTheoAi } from "../_shared/extraction/kiem-bang-chung.ts";
 import { coCauHoi, coMenhDeDaDang, damBaoCauHoi } from "../_shared/extraction/van-tra-loi.ts";
 // 13/09/2026: van sau lời model — kho trống không được hứa có hàng, ghi chú không lặp, không ghi nhận hai lần.
@@ -1763,6 +1763,32 @@ Deno.serve(async (req) => {
   // `ban | mua | chua_ro` kèm cụm chữ làm bằng; `donVai` đòi cụm đó có nguyên
   // trong câu, bịa cớ thì coi như chưa rõ. Model hỏng / chưa rõ → hỏi vai như cũ.
   // Model chỉ CHỌN ĐƯỜNG; giá / diện tích / quận vẫn do luật tiền định bóc.
+  // Cờ `hoi_vai` đọc TRƯỚC lượt model phân vai (SRS-5.1zzze): tin trả lời câu hỏi vai thì model đọc kèm câu đó.
+  let dangTraLoiHoiVai: false | true | "nmg" = false;
+  if (!sellerRow) {
+    const hv = (bCu?.preferences as Record<string, unknown> | null)?.hoi_vai;
+    dangTraLoiHoiVai = hv === "nmg" ? "nmg" : !!hv;
+  }
+  // Câu hỏi vai đúng như bot đã gửi (lời chào bản DB đè code; hỏi lại "Dạ, anh cần rao bán…" cũng cùng câu hỏi này).
+  const CAU_HOI_VAI = (LOI_CHAO_DB.match(/[^.!?\n]*\?/g)?.pop() ?? "Anh/chị cần rao bán bất động sản đúng không ạ?").trim();
+  // Luật ĐÁP câu hỏi vai — chỉ xét khi đang trả lời câu đó. Luật ra thì không tốn lượt model; không ra thì model đọc.
+  const vaiDapLuat = !!dangTraLoiHoiVai && (
+    // "tôi có căn nhà…" / "có nhà" (đầu câu, không cần đại từ)
+    khop(
+      /(?:^|(?:tôi|em|mình|anh|chị|tui|bên mình|nhà mình|gia đình)\s*)(đang\s*)?có\s*(một\s*|1\s*)?(căn|nhà|đất|bất động sản|bđs|mặt bằng|chung cư|phòng trọ|biệt thự|lô)(?!\s*nào)/i,
+      /(?:^|(?:toi|em|minh|anh|chi|tui|ben minh|nha minh|gia dinh)\s*)(dang\s*)?co\s*(mot\s*|1\s*)?(can|nha|dat|bat dong san|bds|mat bang|chung cu|phong tro|biet thu|lo)(?!\s*nao)/,
+    ) ||
+    // 27/09/2026 (câu chào mới "anh chị cần rao bán bất động sản đúng không ạ?"): GẬT trơn — "đúng rồi", "dạ",
+    // "ừ", "vâng em" — là người bán. Chỉ nhận khi CẢ câu là lời gật + tiểu từ ("đúng rồi, anh muốn mua" không phải).
+    laGatHoiVai(text) ||
+    // Trả lời cụt: "bán", "muốn bán", "tôi bán", "bên bán", "cho thuê" — đang
+    // trả lời "mua hay bán?" thì một chữ là đủ (tự kiểm 02/09: bản cũ đòi cả
+    // câu rao nên "bán" trơ bị xếp vào hàng mua).
+    khop(
+      /^\s*(tôi|em|mình|anh|chị)?\s*(muốn|cần|bên|là bên)?\s*(bán|cho thu[êe]|rao)\b/i,
+      /^\s*(toi|em|minh|anh|chi)?\s*(muon|can|ben|la ben)?\s*(ban|cho thue|rao)\b/,
+    )
+  );
   let vaiModel: VaiModel | null = null;
   const hoSoMuaSom = (bCu?.preferences ?? null) as Record<string, unknown> | null;
   if (nenHoiModelVai({
@@ -1774,19 +1800,24 @@ Deno.serve(async (req) => {
     nhacMaCan: new RegExp(CODE_RE.source).test(textOrTag),
     doiGoi: VOICE_RE_KD.test(tKD),
     text,
+    traLoiCauVai: !!dangTraLoiHoiVai,
+    dapVaiTheoLuat: vaiDapLuat,
   })) {
     try {
       const ai = await napModel(client);
-      const r = await phanVaiBangModel(ai as unknown as Parameters<typeof phanVaiBangModel>[0], MODEL, text);
+      const r = await phanVaiBangModel(ai as unknown as Parameters<typeof phanVaiBangModel>[0], MODEL, text,
+        dangTraLoiHoiVai ? CAU_HOI_VAI : null);
       if (r) {
         await doTien(client, r.usage as Parameters<typeof doTien>[1]);
-        vaiModel = donVai(r.ket, text);
+        vaiModel = donVai(r.ket, text, dangTraLoiHoiVai ? 2 : 4);
       }
     } catch (e) {
       await ghiLoi(client, "chat-reply phan vai (model)", e);
     }
   }
-  const wantsSell = wantsSellLuat || vaiModel === "ban";
+  // Model gật vai cho một câu KHÔNG tả căn ("đúng rồi e") chỉ mở hồ sơ bán (`gatVaiAi`), không coi câu đó là câu rao.
+  const gatVaiAi = !!dangTraLoiHoiVai && vaiModel === "ban";
+  const wantsSell = wantsSellLuat || (vaiModel === "ban" && (!dangTraLoiHoiVai || coMuiBDS(text)));
   // Câu rao thì KHÔNG phải ý định mua, dù có chữ "mua" kể chuyện ("mua nhà cũ sửa lại bán").
   const hoiMua = (hoiMuaTho || vaiModel === "mua") && !wantsSell;
   // Phường trong câu rao, bắt trên bản bỏ dấu — chỉ lấy CON SỐ nên bỏ dấu
@@ -1821,33 +1852,12 @@ Deno.serve(async (req) => {
   // người này có dấu hiệu môi giới ("em là sale bên sàn…") — để lượt trả lời
   // "có căn cần bán" vẫn nhận đúng nhãn, không rơi về chính chủ vì câu trả lời
   // không nhắc lại chữ "môi giới" (tự kiểm 02/09).
-  let dangTraLoiHoiVai: false | true | "nmg" = false;
-  if (!sellerRow) {
-    const hv = (bCu?.preferences as Record<string, unknown> | null)?.hoi_vai;
-    dangTraLoiHoiVai = hv === "nmg" ? "nmg" : !!hv;
-  }
   const tuNhanCoBDS = wantsSell ||
     khop(
       /chính chủ|ký gửi|cần rao|muốn rao|đăng tin bán|đăng bán/i,
       /chinh chu|ky gui|can rao|muon rao|dang tin ban|dang ban/,
     ) ||
-    (!!dangTraLoiHoiVai && (
-      // "tôi có căn nhà…" / "có nhà" (đầu câu, không cần đại từ)
-      khop(
-        /(?:^|(?:tôi|em|mình|anh|chị|tui|bên mình|nhà mình|gia đình)\s*)(đang\s*)?có\s*(một\s*|1\s*)?(căn|nhà|đất|bất động sản|bđs|mặt bằng|chung cư|phòng trọ|biệt thự|lô)(?!\s*nào)/i,
-        /(?:^|(?:toi|em|minh|anh|chi|tui|ben minh|nha minh|gia dinh)\s*)(dang\s*)?co\s*(mot\s*|1\s*)?(can|nha|dat|bat dong san|bds|mat bang|chung cu|phong tro|biet thu|lo)(?!\s*nao)/,
-      ) ||
-      // 27/09/2026 (câu chào mới "anh chị cần rao bán bất động sản đúng không ạ?"): GẬT trơn — "đúng rồi", "dạ",
-      // "ừ", "vâng em" — là người bán. Chỉ nhận khi CẢ câu là lời gật + tiểu từ ("đúng rồi, anh muốn mua" không phải).
-      laGatHoiVai(text) ||
-      // Trả lời cụt: "bán", "muốn bán", "tôi bán", "bên bán", "cho thuê" — đang
-      // trả lời "mua hay bán?" thì một chữ là đủ (tự kiểm 02/09: bản cũ đòi cả
-      // câu rao nên "bán" trơ bị xếp vào hàng mua).
-      khop(
-        /^\s*(tôi|em|mình|anh|chị)?\s*(muốn|cần|bên|là bên)?\s*(bán|cho thu[êe]|rao)\b/i,
-        /^\s*(toi|em|minh|anh|chi)?\s*(muon|can|ben|la ben)?\s*(ban|cho thue|rao)\b/,
-      )
-    ));
+    vaiDapLuat || gatVaiAi;
   // ─── NHÃN chính chủ / môi giới — gán NGAY lúc bóc tách (quyết định chủ dự
   // án 02/09/2026: "gán nhãn khi bóc tách là họ có BĐS muốn bán"). Ai nói mình
   // CÓ bất động sản muốn bán là CHÍNH CHỦ; chỉ khi tự xưng môi giới mới là NMG
@@ -7953,7 +7963,9 @@ Deno.serve(async (req) => {
               (sellerMoi
                 // 27/09/2026 (chủ dự án test Zalo: "Chào em" → câu chào hỏi vai → "Anh bán" → bot "Dạ em chào anh! Anh muốn
                 // rao bán hay cho thuê ạ?"): đã chào ở tin trước thì KHÔNG chào lại; khách đã nói bán / cho thuê thì không hỏi lại.
-                ? `Người này VỪA cho biết đang có bất động sản muốn rao ("${textOrTag}") nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN ${lichSuRows.some((m) => !laTinNguoi(m.sender)) ? "(em ĐÃ chào ở tin trước — KHÔNG chào lại, mở bằng \"Dạ\")" : "chào"} + mời họ nhắn địa chỉ (đường/phường), giá mong muốn và diện tích để em lên tin - KHÔNG hỏi lại muốn bán hay cho thuê (họ vừa nói rồi; câu họ không nói rõ thì hiểu là bán), KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
+                // 07/10/2026 (SRS-5.1zzze, test os6o): câu mời cũ xin "địa chỉ, diện tích và giá" một lượt — trái luật một ý mỗi
+                // lượt (FR-177); khách trả lời một ý rồi bot hỏi dần các ý kia, nên câu ba ý chỉ làm khách gõ một tràng.
+                ? `Người này VỪA cho biết đang có bất động sản muốn rao ("${textOrTag}") nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN ${lichSuRows.some((m) => !laTinNguoi(m.sender)) ? "(em ĐÃ chào ở tin trước — KHÔNG chào lại, mở bằng \"Dạ\")" : "chào"} + hỏi đúng MỘT ý: bất động sản của họ ở đâu (một câu hỏi, không gộp diện tích / giá / loại nhà — các ý đó em hỏi dần sau) - KHÔNG hỏi lại muốn bán hay cho thuê (họ vừa nói rồi; câu họ không nói rõ thì hiểu là bán), KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
                 : `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN - tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
                   `Không bịa tình trạng tin/lượt khách quan tâm; điều chưa nắm thì nói "để em kiểm tra rồi báo lại anh/chị liền".`),
           }],
@@ -7968,7 +7980,7 @@ Deno.serve(async (req) => {
     return await traLoiSeller([
       sReply ??
         (sellerMoi
-          ? (lichSuRows.some((m) => !laTinNguoi(m.sender)) ? "Dạ, anh/chị" : "Dạ em chào anh/chị! Anh/chị") + " nhắn giúp em địa chỉ (đường/phường), giá mong muốn và diện tích căn nhà để em lên tin nha."
+          ? (lichSuRows.some((m) => !laTinNguoi(m.sender)) ? "Dạ, bất động sản của anh/chị" : "Dạ em chào anh/chị! Bất động sản của anh/chị") + " ở đâu vậy, ở Hồ Chí Minh đúng không ạ?"
           : "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha."),
     ]);
   }

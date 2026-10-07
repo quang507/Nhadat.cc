@@ -208,6 +208,51 @@ check("V1.19b rồi 'đúng rồi' → người bán", db().t.sellers.length ===
 fresh(); await send({ external_user_id: "la-hay-qua2", text: "Hello" }); await send({ external_user_id: "la-hay-qua2", text: "Hay quá" });
 r = await send({ external_user_id: "la-hay-qua2", text: "ok" });
 check("V1.19c chung chung lần hai → không hỏi lại lần ba (về hàng người mua như cũ)", !/cần rao bán bất động sản đúng không/.test(r.body.reply ?? "") , JSON.stringify(r.body));
+// 07/10/2026 (SRS-5.1zzze, test os6o): "đúng rồi e" sau câu chào → bot hỏi lại câu chào (luật gật không có chữ "e"), rồi
+// "đúng rồi" mới thành người bán và bot xin "địa chỉ, diện tích và giá" một lượt. Nay luật không ra thì AI phân vai đọc KÈM câu
+// bot vừa hỏi; câu mời người bán mới chỉ hỏi một ý.
+{
+  const luotVaiZ = () => globalThis.__calls.filter((c) => c.kind === "parse" && laLuotVai(c.params));
+  fresh(); globalThis.__model.parse = (p) => laLuotVai(p) ? { vai: "ban", bang_chung: "đúng rồi" } : laLuotAnh(p) ? ANH() : OUT();
+  await send({ external_user_id: "zzze-1", text: "chào em" });
+  r = await send({ external_user_id: "zzze-1", text: "đúng rồi e" });
+  const ndVai = luotVaiZ()[0]?.params?.messages?.[0]?.content ?? "";
+  const repZ = (r.body.replies ?? [r.body.reply]).join("\n");
+  check("ZZZE-01 'đúng rồi e' sau câu chào → AI đọc kèm câu bot vừa hỏi → mở hồ sơ bán, KHÔNG hỏi lại câu chào",
+    luotVaiZ().length === 1 && /Câu trợ lý vừa hỏi: "[^"]*cần rao bán bất động sản đúng không/.test(ndVai) && /Tin nhắn: "đúng rồi e"/.test(ndVai) &&
+      db().t.sellers.length === 1 && r.body.role === "seller" && !/cần rao bán bất động sản đúng không/.test(repZ) && db().t.listings.length === 0,
+    JSON.stringify({ nd: ndVai, rep: r.body.replies, s: db().t.sellers.length, l: db().t.listings.length }));
+  const moiZ = createCalls().map((c) => c.params.messages[0].content).find((x) => /VỪA cho biết/.test(x)) ?? "";
+  check("ZZZE-02 câu lệnh mời người bán mới: hỏi MỘT ý (ở đâu), không xin 'địa chỉ, giá và diện tích' một lượt",
+    /hỏi đúng MỘT ý: bất động sản của họ ở đâu/.test(moiZ) && !/giá mong muốn và diện tích/.test(moiZ), moiZ.slice(0, 400));
+
+  fresh(); globalThis.__model.parse = (p) => laLuotVai(p) ? { vai: "ban", bang_chung: "chính xác" } : OUT();
+  globalThis.__model.create = () => { throw new Error("model chết"); };
+  await send({ external_user_id: "zzze-2", text: "chào em" });
+  r = await send({ external_user_id: "zzze-2", text: "chính xác e" });
+  globalThis.__model.create = undefined;
+  const fbZ = (r.body.replies ?? []).join("\n");
+  check("ZZZE-03 cách gật MỚI 'chính xác e' (luật gật không biết) → người bán; model trả lời chết → câu mẫu hỏi MỘT câu, không chào lại",
+    db().t.sellers.length === 1 && (fbZ.match(/\?/g) ?? []).length === 1 && /ở đâu/.test(fbZ) && !/diện tích|giá/.test(fbZ) && !/chào/i.test(fbZ),
+    JSON.stringify(r.body.replies));
+
+  fresh(); globalThis.__model.parse = (p) => { if (laLuotVai(p)) throw new Error("model chết"); return OUT(); };
+  await send({ external_user_id: "zzze-3", text: "chào em" });
+  r = await send({ external_user_id: "zzze-3", text: "đúng rồi e" });
+  check("ZZZE-04 AI phân vai chết → như cũ: hỏi lại câu chào một lần, không mở hồ sơ bán",
+    r.status === 200 && r.body.hoi_vai === true && /cần rao bán bất động sản đúng không/.test(r.body.reply ?? "") && db().t.sellers.length === 0, JSON.stringify(r.body));
+
+  fresh(); globalThis.__model.parse = (p) => laLuotVai(p) ? { vai: "ban", bang_chung: "đúng rồi" } : OUT();
+  await send({ external_user_id: "zzze-4", text: "chào em" });
+  r = await send({ external_user_id: "zzze-4", text: "đúng rồi" });
+  check("ZZZE-05 gật trơn luật đã nhận ('đúng rồi') → KHÔNG tốn lượt AI phân vai", luotVaiZ().length === 0 && db().t.sellers.length === 1, JSON.stringify({ v: luotVaiZ().length }));
+
+  fresh(); globalThis.__model.parse = (p) => laLuotVai(p) ? { vai: "chua_ro", bang_chung: "" } : OUT();
+  await send({ external_user_id: "zzze-5", text: "chào em" });
+  r = await send({ external_user_id: "zzze-5", text: "Hay quá" });
+  check("ZZZE-06 'Hay quá' — AI đọc kèm câu hỏi, 'chua_ro' → hỏi lại câu chào một lần (V1.19 giữ nguyên), không mở hồ sơ bán",
+    luotVaiZ().length === 1 && r.body.hoi_vai === true && db().t.sellers.length === 0, JSON.stringify(r.body));
+}
 for (const [i, khong] of ["không, anh muốn mua nhà", "đúng rồi anh muốn mua"].entries()) {
   fresh(); await send({ external_user_id: `la-khong-${i}`, text: "chào em" });
   r = await send({ external_user_id: `la-khong-${i}`, text: khong });

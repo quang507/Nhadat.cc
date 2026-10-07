@@ -41,6 +41,19 @@ la("ban + cụm làm bằng KHÔNG có trong câu (model bịa cớ) → chua_ro
 la("mua + cụm làm bằng quá ngắn → chua_ro", donVai({ vai: "mua", bang_chung: "a" }, CAU_MUA), "chua_ro");
 la("mua + cụm làm bằng có trong câu → mua", donVai({ vai: "mua", bang_chung: "cần gần bệnh viện" }, CAU_MUA), "mua");
 
+// 07/10/2026 (SRS-5.1zzze, test os6o): "đúng rồi e" trả lời câu hỏi vai — luật gật không có chữ "e" nên hỏi lại câu chào.
+// Câu trả lời câu hỏi vai mà luật không ra thì tốn MỘT lượt model (đọc kèm câu bot vừa hỏi), kể cả câu ngắn không mùi nhà đất.
+for (const c of ["đúng rồi e", "chính xác e", "ừa đúng r", "hay quá"]) {
+  la(`trả lời câu hỏi vai, luật không ra → hỏi model: "${c}"`, nenHoiModelVai({ ...TRONG, text: c, traLoiCauVai: true, dapVaiTheoLuat: false }), true);
+}
+la("trả lời câu hỏi vai mà luật đã ra (gật trơn) → KHÔNG tốn model", nenHoiModelVai({ ...TRONG, text: "đúng rồi", traLoiCauVai: true, dapVaiTheoLuat: true }), false);
+la("câu ngắn KHÔNG phải trả lời câu hỏi vai → không hỏi (như cũ)", nenHoiModelVai({ ...TRONG, text: "đúng rồi e" }), false);
+la("trả lời câu hỏi vai nhưng luật đã thấy ý MUA → không hỏi", nenHoiModelVai({ ...TRONG, muaTheoLuat: true, text: "không, anh tìm mua", traLoiCauVai: true }), false);
+la("gật ngắn, cụm = 'đúng rồi' (≥ 2 ký tự) → ban", donVai({ vai: "ban", bang_chung: "đúng rồi" }, "đúng rồi e", 2), "ban");
+la("gật một chữ 'ừ' — cụm là CẢ câu → ban", donVai({ vai: "ban", bang_chung: "ừ" }, "ừ", 2), "ban");
+la("cụm 1 ký tự không phải cả câu → chua_ro", donVai({ vai: "ban", bang_chung: "a" }, "hay quá", 2), "chua_ro");
+la("cụm không có trong câu → chua_ro (dù ngưỡng thấp)", donVai({ vai: "ban", bang_chung: "đúng vậy" }, "hay quá", 2), "chua_ro");
+
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) { console.log("\x1b[31mVAN PHÂN VAI HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mVAN PHÂN VAI ĐẠT\x1b[0m");

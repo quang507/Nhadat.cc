@@ -35,7 +35,8 @@ Người nhắn là MỘT trong ba:
 - mua: người đang TÌM mua hoặc thuê — hỏi có căn nào, nêu ngân sách ("tầm", "khoảng", "dưới"), nêu nhu cầu (gần trường, gần bệnh viện, mấy phòng ngủ), hỏi giá khu vực để mua.
 - chua_ro: chào hỏi, câu chung chung, hỏi thăm, hoặc không đủ chữ để phân biệt.
 Chỉ dựa vào chữ có trong tin, không đoán thêm. Nhầm người MUA thành người BÁN là lỗi đắt nhất — chỉ trả ban khi câu cho thấy người nhắn đang có hàng. Không chắc thì chua_ro: hỏi lại khách một câu rẻ hơn nhiều so với đoán sai.
-bang_chung phải là cụm chữ chép NGUYÊN từ tin, không viết lại.`;
+bang_chung phải là cụm chữ chép NGUYÊN từ tin, không viết lại.
+Có dòng "Câu trợ lý vừa hỏi" thì tin là câu TRẢ LỜI cho câu đó, đọc theo nghĩa của cả hai: trợ lý hỏi có cần rao bán bất động sản không mà khách GẬT (đúng rồi, đúng rồi e, vâng ạ, dạ phải, chuẩn luôn, ừa, có) → ban, bang_chung là lời gật; khách chối hoặc nói đang tìm mua / thuê → mua; khen, hỏi lại, nói chuyện khác → chua_ro.`;
 
 type ClientModel = {
   messages: {
@@ -44,6 +45,9 @@ type ClientModel = {
 };
 
 /**
+ * 07/10/2026 (SRS-5.1zzze, test os6o: "đúng rồi e" sau câu chào bị hỏi lại câu chào): `cauBotVuaHoi` = câu hỏi vai bot vừa
+ * gửi — có nó model đọc tin như câu trả lời ("đúng rồi e" là gật), không có thì đọc tin đứng một mình như cũ.
+ *
  * Hỏi model vai của MỘT tin nhắn. Trả `null` khi model hỏng — nơi gọi đi đường
  * cũ (hỏi vai). `ket` là dữ liệu THÔ của model, chưa dọn: đưa qua `donVai`.
  * Không ném.
@@ -52,6 +56,7 @@ export async function phanVaiBangModel(
   ai: ClientModel,
   model: string,
   text: string,
+  cauBotVuaHoi: string | null = null,
 ): Promise<{ ket: unknown; usage: unknown } | null> {
   try {
     const r = await ai.messages.parse({
@@ -59,7 +64,10 @@ export async function phanVaiBangModel(
       max_tokens: 150,
       output_config: { effort: "low", format: FORMAT_VAI },
       system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: `Tin nhắn: "${(text ?? "").slice(0, 600)}"` }],
+      messages: [{
+        role: "user",
+        content: `${cauBotVuaHoi ? `Câu trợ lý vừa hỏi: "${cauBotVuaHoi.slice(0, 300)}"\n` : ""}Tin nhắn: "${(text ?? "").slice(0, 600)}"`,
+      }],
     });
     const k = docLong(VaiBoc, r.parsed_output);
     return { ket: k.success ? k.data : null, usage: r.usage };
