@@ -2482,6 +2482,16 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Sửa**: `chiLechChinhTa(a, b)` — hai chữ chỉ lệch lỗi gõ (bỏ dấu trùng, hoặc lệch một ký tự với chữ ≥ 3 ký tự, hoặc i ↔ y; chữ có số phải trùng hẳn). `themDauTheoModel` (ô không phải địa chỉ): đoạn cùng số chữ mà từng chữ chỉ lệch lỗi gõ → lấy bản model; model thêm ký hiệu ("(chính chủ)") hay đổi nghĩa ("sổ chung" / "sổ riêng", "2 lầu" / "3 lầu") → giữ chữ khách. Lượt chốt: giá cũ và mới `docTien` ra cùng số tiền → không ghi lại.
 - **Kiểm, đỏ khi tắt**: `kiem-bang-chung.mjs` ZZZH-01…08 ("còn nguyê", cách gõ MỚI "sổ hồng riêg", không dấu; số khác, nghĩa khác, địa chỉ, câu khác hẳn đều GIỮ) — tắt đính chính: 2/418 đỏ. e2e "SRS-5.1zzzh lượt chốt" (giá đang có "21 tỷ 300 triệu", chốt đọc "21 tỉ 300 triệu") — tắt so `docTien`: 1/1027 đỏ.
 
+### SRS-5.1zzzi · Người bán chưa có tin: câu trả lời cho câu bot vừa hỏi luôn qua AI; lời bot đọc câu nó vừa nói (07/10/2026)
+
+`[nguồn: chat thử 07/10/2026 …98iz, …lboq — chủ dự án: "người ta xác nhận đúng sai hay trả lời câu hỏi của nó thì nó phải đọc lại câu của chính mình chứ"; duyệt hướng "một chỗ hiểu ý" bằng "làm đi"]`
+
+- **Ca gốc**: (a) …98iz — vừa nhận bán, chưa có tin; bot "Bất động sản của anh chị ở đâu vậy ạ?", khách "Ở Trần Bình Trọng" → "🤖 Không bóc tách được gì", không mở tin; vài lượt sau tin mở từ "5x12" mà không có địa chỉ, cuối cùng bot hỏi lại "Nhà mình ở đường nào vậy anh chị?". (b) …lboq — bot "…ở Hồ Chí Minh đúng không?", khách "chính xác em" → bot "em sẽ rao tích cực cho căn hộ này" trong khi chưa có tin nào.
+- **Lớp lỗi**: *khi chưa có tin, không có gì nói cho code biết bot vừa hỏi gì*. Cổng gọi AI bóc tách chỉ mở khi câu có "mùi dữ liệu" theo luật (số, chữ loại nhà), có câu treo (cần một tin để treo), hoặc luật nói là câu rao — câu trả lời ngắn cho câu bot hỏi không lọt cổng nào. Đường trả lời chăm sóc người bán (r3) chỉ đưa model câu khách, không đưa câu bot vừa nói, nên model đoán bừa nghĩa của "chính xác em".
+- **Chỗ khác cùng lớp**: có tin + câu treo — AI đã đọc kèm câu bot thật (SRS-5.1t); trả lời câu hỏi vai — SRS-5.1zzze; bong bóng 🤖 — SRS-5.1zzzf; người bán đã có tin, không câu treo, nói thêm về căn — SRS-5.1zzzg. Còn lại (chờ duyệt ở bản soát): lượt đọc ý (`doc-y-luot`) ghi "đồng ý" cho câu trả lời địa chỉ / câu chọn loại nhà.
+- **Sửa**: (1) người bán chưa có tin mở mà bot vừa nói (`cauBotThat`) → tin này luôn qua lượt AI bóc tách (AI có câu bot trong 4 lượt gần nhất); AI đọc ra địa chỉ / dữ kiện thì `raoNgam` mở tin như câu rao (SRS-5.1zzt). (2) Câu lệnh r3 có thêm câu bot vừa nhắn nguyên văn + dặn: đọc tin khách như câu trả lời cho câu đó, chưa có tin thì không nói đã / sẽ rao căn nào, hỏi tiếp MỘT ý còn thiếu. Chi phí: thêm một lượt AI cho mỗi tin của người bán chưa có tin (thường 1–2 tin).
+- **Kiểm, đỏ khi tắt**: e2e SRS-5.1zzzi ("Ở Trần Bình Trọng" → AI được gọi, mở tin địa chỉ Trần Bình Trọng, không "Không bóc tách được gì") và SRS-5.1zzzi-b (cách nói MỚI "chính xác em" → câu lệnh r3 có câu bot vừa nhắn). Tắt cả hai: 2/1029 đỏ.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

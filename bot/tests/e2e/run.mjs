@@ -4041,6 +4041,44 @@ fresh(seedKho);
     globalThis.__khongNhoCauHinh = false;
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zzzi (07/10/2026, chat thử …98iz): người bán CHƯA có tin, bot hỏi "bất động sản ở đâu", khách "Ở Trần Bình Trọng" →
+  // AI không được gọi (không mùi dữ liệu, không câu treo), tên đường mất, về sau bot hỏi lại "nhà ở đường nào". Nay AI đọc và
+  // mở tin với địa chỉ đó; lời bot (r3) có câu bot vừa hỏi.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__khongNhoCauHinh = true;
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], cap_nhat: [], truong: [] } : OUT();
+    await send({ external_user_id: "chua-tin-1", text: "chào em" });
+    await send({ external_user_id: "chua-tin-1", text: "đúng rồi" });
+    const banCT = db().t.sellers.find((x) => x.zalo_user_id === "chua-tin-1");
+    const tinCT = () => db().t.listings.filter((x) => x.seller_id === banCT?.id);
+    let goiBoc = 0;
+    globalThis.__model.parse = (p) => {
+      if (!laLuotBocRao(p)) return OUT();
+      goiBoc++;
+      return { so_can: 1, can_khac: false, kien_thuc: [], cap_nhat: [], truong: [{ khoa: "duong", gia_tri: "Trần Bình Trọng", trich_dan: "Trần Bình Trọng", can: null }] };
+    };
+    const rCT = await send({ external_user_id: "chua-tin-1", text: "Ở Trần Bình Trọng" });
+    const lCT = tinCT()[0];
+    check("SRS-5.1zzzi chưa có tin, 'Ở Trần Bình Trọng' trả lời câu 'ở đâu' → AI được gọi, mở tin với địa chỉ Trần Bình Trọng, không 'Không bóc tách được gì'",
+      !!banCT && goiBoc >= 1 && tinCT().length === 1 && /Trần Bình Trọng/.test(`${lCT?.location_raw ?? ""} ${lCT?.street ?? ""}`) &&
+        !(rCT.body.replies ?? []).some((x) => /Không bóc tách được gì/.test(x)),
+      JSON.stringify({ goiBoc, n: tinCT().length, l: lCT && { lr: lCT.location_raw, st: lCT.street }, rep: rCT.body.replies }));
+    // lboq: "chính xác em" trả lời "ở Hồ Chí Minh đúng không?" — AI không đọc ra dữ kiện → lời bot (r3) phải có câu bot vừa hỏi.
+    fresh(seedKho);
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], cap_nhat: [], truong: [] } : OUT();
+    await send({ external_user_id: "chua-tin-2", text: "chào em" });
+    await send({ external_user_id: "chua-tin-2", text: "đúng rồi" });
+    const n0 = createCalls().length;
+    await send({ external_user_id: "chua-tin-2", text: "chính xác em" });
+    const ndR3 = createCalls().slice(n0).map((c) => c.params.messages[0].content).find((x) => /Họ vừa nhắn: "chính xác em"/.test(x)) ?? "";
+    check("SRS-5.1zzzi-b 'chính xác em' khi chưa có tin → câu lệnh trả lời có câu bot vừa nhắn (nguyên văn) và dặn không nói đã / sẽ rao",
+      /Câu em vừa nhắn họ \(nguyên văn\): "[^"]+"/.test(ndR3) && /không nói đã rao/.test(ndR3), ndR3);
+    globalThis.__khongNhoCauHinh = false;
+    globalThis.__cauHinh = cuCH;
+  }
   // SRS-5.1zzzh (07/10/2026, chat thử …phzg): lượt chốt ghi lại giá "21 tỉ 300 triệu" chỉ vì khác cách viết với "21 tỷ 300 triệu"
   // đang có → 🤖 báo lại giá như mới bóc. Cùng số tiền thì không ghi lại.
   {
