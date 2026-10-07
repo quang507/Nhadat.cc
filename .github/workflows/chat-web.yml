@@ -1,10 +1,10 @@
 name: Trang chat thử bot (web, DB giả)
 
-# 07/10/2026 (chủ dự án: "làm web test đơn giản… 1 log chat này thôi… dùng ngrok dc ko"): mở trang chat một khung của
+# 07/10/2026 (chủ dự án: "làm web test đơn giản… dùng ngrok dc ko", "vài người test 1 lúc dc ko"): mở trang chat của
 # `bun run chat -- --web` (mã chat-reply THẬT, DB GIẢ trong bộ nhớ) ra Internet qua đường hầm nhanh của Cloudflare
 # (trycloudflare.com — không cần tài khoản, không cần ngrok token). Chạy trên máy GitHub nên không cần pull code; chạy
 # được cả khi Supabase đang khoá vì bot không gọi DB thật. Đường link in ở log job và ở trang tóm tắt của lượt chạy.
-# Không đăng nhập (chủ dự án chọn): link ngẫu nhiên, sống tối đa `phut` phút, trần `tran` lượt model — repo PUBLIC nên ai
+# Mỗi trình duyệt một cuộc chat riêng; lượt xử lý tuần tự nên đông người thì chờ vài giây. Không đăng nhập (chủ dự án chọn): link ngẫu nhiên, sống tối đa `phut` phút, trần `tran` lượt model — repo PUBLIC nên ai
 # đọc log Actions trong lúc đang chạy cũng thấy link. Tắt sớm: Cancel workflow run. Đừng gõ tên thật / SĐT thật.
 # Trên máy mình thì không cần workflow này: `bun run chat -- --web` rồi (nếu muốn mở từ máy khác) `ngrok http 3000`.
 
@@ -19,10 +19,6 @@ on:
         description: Trần số tin nhắn cả lượt chạy (chặn đốt credit nếu link lộ)
         required: false
         default: '300'
-      model:
-        description: Model trả lời (để trống = Haiku 4.5 cho rẻ)
-        required: false
-        default: 'claude-haiku-4-5-20251001'
 
 env:
   PROJECT_REF: tbcdpupiarkuxtntmosl
@@ -64,7 +60,8 @@ jobs:
 
       - name: Bật trang + đường hầm, giữ sống
         env:
-          ANTHROPIC_MODEL: ${{ inputs.model || 'claude-haiku-4-5-20251001' }}
+          # Chủ dự án 07/10: "model là haiku thôi" — khoá cứng, không cho chọn (production cũng chạy Haiku 4.5).
+          ANTHROPIC_MODEL: claude-haiku-4-5-20251001
           PHUT: ${{ inputs.phut }}
           TRAN: ${{ inputs.tran }}
         run: |
