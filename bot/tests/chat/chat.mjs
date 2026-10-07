@@ -155,6 +155,7 @@ async function mayChuMay() {
   const DL = existsSync(pDuLieu) ? JSON.parse(readFileSync(pDuLieu, "utf8")) : null;
   const CHE_DO_PROMPT = giaTri("--prompt") === "db" && DL ? "db" : "code";
   // Bảng bot_prompts của DB giả — trang sửa prompt ghi vào đây, `moi()` chép lại khi dựng DB mới.
+  const DUONG = DL?.duong ?? []; // chỉ đọc, dùng chung giữa các lần `moi()`
   const PROMPT_DB = CHE_DO_PROMPT === "db" ? (DL.bot_prompts ?? []).map((r) => ({ key: r.key, content: r.content })) : [];
   const fetchThat = globalThis.fetch;
   // Chỉ cho model đi ra ngoài; Nominatim / ảnh Zalo / mọi URL khác trả 404 (chat-reply coi là đường đi bình thường).
@@ -166,6 +167,9 @@ async function mayChuMay() {
     d.t.wards = napPhuongThat().map((w) => ({ ...w }));
     d.t.phuong_cu = PHUONG_CU.map((c) => ({ ...c }));
     d.t.bot_prompts = PROMPT_DB.map((r) => ({ ...r }));
+    // 07/10/2026: từ điển tên đường production (keo-that.mjs) + danh sách quận cũ — như run.mjs dựng cho ca tra phường.
+    if (DUONG.length) d.t.duong = DUONG;
+    d.t.quan_cu = [...new Set(d.t.wards.map((w) => w.quan_cu).filter(Boolean))].map((ten) => ({ ten }));
     const chu = d.insert("sellers", { zalo_user_id: "may-kho-chu", seller_type: "ccrb", name: null, active_listing_id: null }).data;
     for (const l of KHO_MAU) {
       d.insert("listings", { ...l, seller_id: chu.id, deal: "ban", status: "dang_ban", property_type: "nha_pho", district: "Quận 5", location_raw: l.street, legal_status: "so_hong_rieng" });
@@ -183,7 +187,7 @@ async function mayChuMay() {
   const H = globalThis.__handler;
   let n = 0, daInLoi = 0;
   return {
-    ten: `MÁY (DB giả · ${API_KEY ? `model thật ${MODEL}` : "model GIẢ — không có ANTHROPIC_API_KEY, chỉ thấy phần luật"} · prompt ${CHE_DO_PROMPT === "db" ? "production" : "code"} · công tắc ${DL ? "production" : "mặc định"})`,
+    ten: `MÁY (DB giả · ${API_KEY ? `model thật ${MODEL}` : "model GIẢ — không có ANTHROPIC_API_KEY, chỉ thấy phần luật"} · prompt ${CHE_DO_PROMPT === "db" ? "production" : "code"} · công tắc ${DL ? "production" : "mặc định"}${DUONG.length ? ` · ${DUONG.length} tên đường` : ""})`,
     // Trang sửa prompt (chỉ --web): đọc / ghi bảng bot_prompts + công tắc của DB giả, có hiệu lực từ lượt kế.
     prompt: () => PROMPT_DB,
     suaPrompt(key, content) {

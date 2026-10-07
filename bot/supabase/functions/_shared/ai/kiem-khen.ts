@@ -14,6 +14,7 @@ const NhanXet = z.object({
   cau: z.string().describe("Câu hoặc vế NHẬN XÉT trong lời bot, COPY NGUYÊN VĂN (không sửa một chữ)."),
   khang_dinh: z.string().describe("Điều câu đó khẳng định về căn nhà / khu vực / khả năng bán (ngắn)."),
   can_cu: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong LỜI CHỦ NHÀ hoặc THÔNG TIN ĐÃ GHI nói ĐÚNG điều đó. Không có thì null."),
+  danh_gia_thi_truong: z.boolean().describe("true khi câu ĐÁNH GIÁ giá trị / thị trường / khả năng bán của KHU VỰC hay MỨC GIÁ, không gắn với một đặc điểm của căn (\"đất vàng\", \"khu đó bán được lắm\", \"giá khu này đang lên\")."),
 });
 const KetSoat = z.object({ nhan_xet: z.array(NhanXet) });
 export type NhanXetLLM = z.infer<typeof NhanXet>;
@@ -25,7 +26,10 @@ nhà, gần chợ, khu yên tĩnh, xuyên thoáng, nở hậu, kết cấu chắ
 - KHÔNG liệt kê: câu hỏi, lời chào, cảm ơn, ghi nhận chung ("dạ em ghi rồi ạ"), lời hứa của bot.
 - can_cu: cụm chép NGUYÊN VĂN từ LỜI CHỦ NHÀ hoặc THÔNG TIN ĐÃ GHI nói ĐÚNG điều được khẳng định — gần giống thì không tính
   ("hxh" là hẻm xe hơi, KHÔNG phải "hẻm sâu"; "4x15" không phải "nở hậu"). Không có thì null.
-- Khen chung ("dễ bán lắm", "khách chuộng") gắn với một đặc điểm: căn cứ là căn cứ của đặc điểm đó.`;
+- Khen chung ("dễ bán lắm", "khách chuộng") gắn với một đặc điểm: căn cứ là căn cứ của đặc điểm đó.
+- danh_gia_thi_truong = true khi câu đánh giá KHU VỰC / THỊ TRƯỜNG / MỨC GIÁ ("khu Hà Huy Giáp đất vàng", "khu đó bán được lắm", "giá
+  khu này đang lên", "quận 7 đang sốt") — bot không có số liệu thị trường nên câu đó luôn bị bỏ; tên khu chủ nhà nói KHÔNG phải căn
+  cứ cho lời đánh giá về khu. Khen gắn đặc điểm căn ("hẻm xe hơi tới cửa là khách chuộng lắm") là false.`;
 
 type ClientModel = {
   messages: {

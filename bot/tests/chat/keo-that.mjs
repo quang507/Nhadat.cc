@@ -6,6 +6,8 @@
 //   · bot_prompts            — bản DB ĐÈ code lúc chạy (chat.mjs dùng khi chạy `--prompt db`)
 //   · app_config             — CHỈ các công tắc bot đọc qua `cau_hinh` (danh sách trắng bên dưới), không lấy dòng khác
 //   · mau_cau_fewshot(ban/mua) — mẫu câu chuẩn sửa tay ở /admin/mau-cau (FR-180)
+//   · duong                  — từ điển tên đường (FR-212, ~10.000 dòng OSM theo phường mới, dữ liệu công khai): không có
+//                              bảng này DB giả không tra được phường từ tên đường + quận ("Thạnh Lộc 41, quận 12")
 // Ghi ra `bot/tests/chat/that.json` (gitignore). KHÔNG in nội dung prompt / mẫu câu ra màn hình (log Actions công khai,
 // mẫu câu có câu khách thật) — chỉ in tên khoá, khớp/lệch code, và giá trị các công tắc (chữ ngắn như "chinh", "gon").
 //
@@ -34,6 +36,8 @@ async function sql(query) {
 const prompts = await sql("select key, content from public.bot_prompts order by key");
 const ds = CONG_TAC.map((k) => `'${k}'`).join(",");
 const cauHinh = Object.fromEntries((await sql(`select key, value from public.app_config where key in (${ds})`)).map((r) => [r.key, r.value]));
+// Bỏ cột vector `nhung` (nặng, DB giả không dùng). Dòng không có tên / phường vẫn lấy như bảng thật.
+const duong = await sql("select ten, ten_khong_dau, tinh, phuong, quan_cu, loai, so_hem, duong_me, lat, lng from public.duong");
 const mau = (await sql("select public.mau_cau_fewshot('ban') as ban, public.mau_cau_fewshot('mua') as mua"))[0] ?? {};
 
 const P = await import(new URL("../../supabase/functions/_shared/prompts.ts", import.meta.url).href);
@@ -45,9 +49,10 @@ const CODE = {
 const lech = prompts.filter((r) => r.key in CODE && r.content !== CODE[r.key]).map((r) => r.key);
 
 writeFileSync(join(HERE, "that.json"), JSON.stringify({
-  luc: new Date().toISOString(), bot_prompts: prompts, cau_hinh: cauHinh, mau_cau: { ban: mau.ban ?? "", mua: mau.mua ?? "" },
+  luc: new Date().toISOString(), bot_prompts: prompts, duong, cau_hinh: cauHinh, mau_cau: { ban: mau.ban ?? "", mua: mau.mua ?? "" },
 }));
 console.log(`bot_prompts: ${prompts.length} khoá · lệch code: ${lech.length ? lech.join(", ") : "không"}`);
 console.log(`công tắc: ${CONG_TAC.map((k) => `${k}=${cauHinh[k] ?? "(trống)"}`).join(" · ")}`);
 console.log(`mẫu câu: bán ${String(mau.ban ?? "").split("\n").filter(Boolean).length} dòng · mua ${String(mau.mua ?? "").split("\n").filter(Boolean).length} dòng`);
+console.log(`duong: ${duong.length} dòng`);
 console.log("Đã ghi bot/tests/chat/that.json");

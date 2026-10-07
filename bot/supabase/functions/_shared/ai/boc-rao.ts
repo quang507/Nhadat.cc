@@ -143,6 +143,7 @@ KHOÁ:
   Tin RAO hay câu TẢ CĂN của người bán (kể cả KHÔNG có chữ bán / cho thuê: "nhà anh ở hẻm 137 Nguyễn Trãi", "chỗ anh 1 trệt 2 lầu")
   LUÔN đưa loai_bds khi có chữ chỉ loại, kể cả không dấu: "bán nhà", "nhà hẻm", "nhà mặt tiền", "nhà 1 trệt 2 lầu", "nhà anh ở",
   "ban nha hem" → nha_pho (trừ khi nói cấp 4 / biệt thự / chung cư / phòng trọ); trich_dan là cụm có chữ "nhà". Không có chữ chỉ loại thì không đưa.
+  Nhà cấp 4 chỉ có MỘT trệt (có thể có gác lửng), KHÔNG có lầu: "nhà 4 lầu", "nhà 3 tầng", "1 trệt 2 lầu" → nha_pho (trừ khi nói biệt thự).
 - gia (giá bán; tin cho thuê thì giá thuê), gia_m2, tien_coc, thu_nhap_thue (CHỈ tiền thuê căn BÁN đang thu). Giá trị tiền LUÔN kèm đơn vị như khách viết: "5 tỷ 2", "3 tỷ 150", "900 triệu", "95 triệu/m2" — không viết số trần "5.2".
 - dien_tich (m²), ngang, dai, no_hau (m), do_rong_hem, do_rong_duong, cach_mat_tien (m): trong "truong" chỉ con số (hẻm xe hơi không có số mét thì không đưa vào truong — nhưng VẪN là câu trả lời câu hẻm ở "tra_loi").
 - so_phong_ngu, so_wc; so_tang = TỔNG số tầng tính CẢ TRỆT, không tính lửng/sân thượng ("1 trệt 2 lầu" = 3, "trệt 3 lầu" = 4, "3 tấm" = 3, "3 tầng" = 3 — TẦNG đã gồm trệt, chỉ LẦU mới cộng 1); tang = căn hộ nằm tầng mấy. Tin có cụm kết cấu (trệt / lầu / lửng) thì ket_cau là ô chính, so_tang chỉ là số tính ra từ cụm đó — đưa cả hai được, code giữ ket_cau.

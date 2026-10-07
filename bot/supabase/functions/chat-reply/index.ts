@@ -1420,7 +1420,7 @@ Deno.serve(async (req) => {
   // 14/09/2026: câu "gấp" của tin CHO THUÊ khác tin bán — truyền `deal` khi biết.
   // 17/09/2026 (chủ dự án): hỏi phường khi tin ĐÃ có địa chỉ thì nhắc địa chỉ đó, ngắn:
   // "Hẻm 4m Trần Hưng Đạo đó phường mấy cô nhỉ?" — truyền `diaChi` khi biết.
-  const cauHoiMau = (k: string, ac: string, loai?: string | null, quan?: string | null, deal?: string | null, diaChi?: string | null) =>
+  const cauHoiMauTho = (k: string, ac: string, loai?: string | null, quan?: string | null, deal?: string | null, diaChi?: string | null) =>
     k === "phuong" && diaChi && !laNgoaiDoThi(quan)
       ? cauPhuongNgan(diaChi, ac)
       : cauHoiMauGoc(
@@ -1431,6 +1431,11 @@ Deno.serve(async (req) => {
         ac, BANG_CAU, loai,
       // 30/09/2026: "137/28 …" là hẻm 137, nhà số 28 (quy ước TP.HCM) — câu hỏi hẻm gọi đúng số hẻm.
       ).replace(/trong hẻm(?!\s*\d)/, (s) => k === "do_rong_hem" && tachSoNhaHem(diaChi) ? `${s} ${tachSoNhaHem(diaChi)!.hem}` : s);
+  // SRS-5.1zzy: câu mẫu viết "Nhà mình …" cho mọi loại — tin đất / căn hộ gọi đúng loại ngay tại đây, không chờ van sau lượt.
+  const cauHoiMau = (k: string, ac: string, loai?: string | null, quan?: string | null, deal?: string | null, diaChi?: string | null) => {
+    const c = cauHoiMauTho(k, ac, loai, quan, deal, diaChi);
+    return LOAI_DAT.has(loai ?? "") ? goiDat(c) : loai === "chung_cu" ? goiCanHo(c) : c;
+  };
   const LOI_CHAO_DB = dienTen((P.loi_chao ?? LOI_CHAO).trim(), tenBot);
   const HUMAN = P.human_chat_rules ?? HUMAN_CHAT_RULES;
   const FEES = P.fee_rules ?? FEE_RULES;
@@ -5341,6 +5346,16 @@ Deno.serve(async (req) => {
         if (sau && !sau.ward) {
           const { error: pErr } = await client.from("info_requests").insert({ listing_id: listingId, question: "phuong", status: "pending" });
           if (pErr && pErr.code !== "23505") await ghiLoi(client, "chat-reply dang luon(mo phuong)", pErr.message);
+          // SRS-5.1zzy (chat thử 07/10: "anh không nhớ nữa em tự search xem, đăng đi" — tin có "đường Thạnh Lộc 41", Quận 12):
+          // đã có tên đường thì TỰ TRA phường (bảng `duong` / hẻm / hai đường gần nhau — cùng hàm câu phường thường dùng) và hỏi
+          // xác nhận một câu; gật là ghi phường, dấu duyệt đã đóng nên tin tự lên kệ. Không tra ra mới xin phường như cũ.
+          if (sau.area_m2 != null) {
+            const goiY = await cauHoiPhuongGoiY(listingId, null, cachGoi);
+            if (goiY) {
+              return await traLoiSeller([...truoc, cauTD("dang_luon_goi_y_phuong", { goi_y: goiY })],
+                { ...extra, dang_luon: true, thieu_dang: thieuDang, reask: "phuong", loai_cau: "goi_y_phuong" });
+            }
+          }
         }
         return await traLoiSeller([...truoc, cauTD("dang_luon_thieu", { thieu: thieuDang })], { ...extra, dang_luon: true, thieu_dang: thieuDang });
       }
@@ -5665,9 +5680,14 @@ Deno.serve(async (req) => {
           // `dang_luon_thieu`), không lặp câu hỏi; (c) hỏi lại lần 2 trở đi bằng câu NGẮN khác, không nguyên văn.
           const qGhi = await capNhatQuan(pendingReq.listing_id);
           const [ydLoai, hoiLoai] = await Promise.all([yDinhAi(), hoiLaiAi(dapAn)]);
-          const daHoiLoai = lichSuRows.filter((m) => !laTinNguoi(m.sender) && /loại nào ta|nhà phố, nhà cấp 4|nhà phố hay nhà cấp 4|nhà phố, chung cư hay đất/i.test(boBaoLai(m.body) ?? "")).length;
+          const daHoiLoai = lichSuRows.filter((m) => !laTinNguoi(m.sender) && /loại nào ta|nhà phố, nhà cấp 4|nhà phố hay nhà cấp 4|nhà phố hay biệt thự|nhà phố, chung cư hay đất/i.test(boBaoLai(m.body) ?? "")).length;
+          // SRS-5.1zzy (chat thử 07/10: "nhà 4 lầu" → "nhà phố hay nhà cấp 4"): nhà cấp 4 chỉ một trệt, không có lầu. Chỉ đổi LỰA
+          // CHỌN trong câu hỏi (không ghi loại — ZR-06): khách đã nói lầu / từ 2 tầng thì hỏi nhà phố hay biệt thự.
+          const coLau = /(?<![\p{L}])(?:lầu|lau|tấm|tam)(?![\p{L}])|(?<!\d)[2-9]\s*(?:tầng|tang)(?![\p{L}])/iu
+            .test([dapAn, pendingReq.listings?.floors_text ?? ""].join(" "));
+          const haiLoai = coLau ? "nhà phố hay biệt thự" : "nhà phố hay nhà cấp 4";
           if (ydLoai?.loai === "du_roi") {
-            return await traLoiSeller([cauTD("dang_luon_thieu", { thieu: "loại nhà (nhà phố hay nhà cấp 4)" })],
+            return await traLoiSeller([cauTD("dang_luon_thieu", { thieu: `loại nhà (${haiLoai})` })],
               { reask: "loai_bds", dang_luon: true, thieu_dang: "loại nhà", ...(qGhi ? { quan: qGhi } : {}) });
           }
           const dapNguoc = hoiLoai
@@ -5675,7 +5695,9 @@ Deno.serve(async (req) => {
               ?? await dapChuaCoDuLieu(hoiLoai.cau, hoiLoai.chuDe)
             : null;
           const again = daHoiLoai >= 1
-            ? `Dạ ${cachGoi} cho em biết nhà mình là nhà phố hay nhà cấp 4 để em ghi đúng loại nha.`
+            ? `Dạ ${cachGoi} cho em biết nhà mình là ${haiLoai} để em ghi đúng loại nha.`
+            : coLau
+            ? `Dạ ${qGhi ? `em ghi ${qGhi} rồi ạ. ` : ""}Nhà mình là ${haiLoai} vậy ${cachGoi}?`
             : qGhi
             ? `Dạ em ghi ${qGhi} rồi ạ. Còn nhà mình thuộc loại nào ta: nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng ạ?`
             : "Dạ em chưa rõ lắm ạ, nhà mình thuộc loại nào ta: nhà phố, nhà cấp 4, chung cư, đất, biệt thự, phòng trọ hay mặt bằng ạ?";
@@ -6536,8 +6558,8 @@ Deno.serve(async (req) => {
             const mocR2b = theoDoiVan(soVan, () => hoiLai);
             if (hoiLai && laLoiMeta(hoiLai)) { console.log("chat-reply: r2b tra loi cau lenh, bo"); hoiLai = null; }
             if (hoiLai) hoiLai = motCauHoi([hoiLai])[0]; mocR2b("motCauHoi");
-            if (hoiLai && (await loiBotDu()) && pendingReq.listings?.property_type === "chung_cu") hoiLai = goiCanHo(hoiLai); mocR2b("goiCanHo");
-            if (hoiLai && (await loiBotDu()) && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) hoiLai = goiDat(hoiLai); mocR2b("goiDat");
+            if (hoiLai && pendingReq.listings?.property_type === "chung_cu") hoiLai = goiCanHo(hoiLai); mocR2b("goiCanHo");
+            if (hoiLai && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) hoiLai = goiDat(hoiLai); mocR2b("goiDat");
             if (hoiLai) hoiLai = boHuaHoiChuNha([hoiLai])[0]?.trim() || null; mocR2b("boHuaHoiChuNha");
             // SRS-5.1zzo: lượt hỏi LẠI mà model không hỏi → nối câu mẫu của ô đang treo (ô vẫn mở, phải có câu hỏi đi kèm).
             if (hoiLai) hoiLai = damBaoCauHoi(hoiLai, cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)); mocR2b("damBaoCauHoi");
@@ -6861,7 +6883,11 @@ Deno.serve(async (req) => {
         const nhap = await guiBanNhap(pendingReq.listing_id, { saved_fact: null, chu_muon_dang: true }, false, [], true);
         if (!Array.isArray(nhap)) {
           // Nháp đã gửi → câu thông số đang treo thôi, câu duyệt thay chỗ.
-          await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
+          // SRS-5.1zzy: câu đang treo LÀ câu phường mà tin vẫn chưa có phường → nhánh "đăng đi" vừa hỏi lại / gợi ý phường và
+          // dùng chính câu treo này (mở câu mới trùng thì 23505). Đóng nó là gật "đúng rồi em" rơi vào khoảng không.
+          if (!(pendingReq.question === "phuong" && !pendingReq.listings?.ward)) {
+            await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
+          }
           return nhap;
         }
         // Chưa đủ điểm: giữ câu treo, nói còn thiếu gì rồi hỏi lại câu đó.
@@ -7078,8 +7104,10 @@ Deno.serve(async (req) => {
           if (sellerReply && nextKey && !(cauDuongKe ?? cauXnKe ?? cauLungKe ?? goiYKe)) sellerReply = giuVeCauMau(sellerReply, nextKey, `${neo ? `Căn ${neo} nha. ` : ""}${cauKe}`); mocR2("giuVeCauMau");
           // Câu nhận xét lặp y nguyên câu bot vừa nói ở lượt trước ("Sổ riêng thì bán nhanh hơn.") → bỏ.
           if (sellerReply && luatDuR2) sellerReply = boCauLapLai(sellerReply, lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-3).map((m) => m.body)); mocR2("boCauLapLai");
-          if (sellerReply && luatDuR2 && pendingReq.listings?.property_type === "chung_cu") sellerReply = goiCanHo(sellerReply); mocR2("goiCanHo");
-          if (sellerReply && luatDuR2 && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) sellerReply = goiDat(sellerReply); mocR2("goiDat");
+          // SRS-5.1zzy (chat thử 07/10: tin đất mà "Nhà mình ở phường nào"): gọi đúng LOẠI căn là ghi đúng sự thật, không phải sửa
+          // văn — hai van này luôn bật, không treo theo `luat_loi_bot` (06/10 lỡ tắt cùng van sửa văn).
+          if (sellerReply && pendingReq.listings?.property_type === "chung_cu") sellerReply = goiCanHo(sellerReply); mocR2("goiCanHo");
+          if (sellerReply && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) sellerReply = goiDat(sellerReply); mocR2("goiDat");
           if (sellerReply) sellerReply = boHuaHoiChuNha([sellerReply])[0]?.trim() || null; mocR2("boHuaHoiChuNha");
           if (sellerReply) {
             const truocTk = sellerReply;

@@ -509,6 +509,12 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const bo = nhanXetKhongCanCu([{ cau: "Nhà phố hẻm sâu yên tĩnh, kết cấu 4x15 ạ.", can_cu: "hẻm sâu" }, { cau: "Nhà mình ở phường nào anh chị?", can_cu: null }], "ban nha 4x15 tret 2 lau hxh");
   ok("NX-01 căn cứ AI đưa không có trong lời chủ nhà → bỏ; câu hỏi không bao giờ bỏ", bo.length === 1 && boCauNhanXet(loi, bo) === "Nhà mình ở phường nào anh chị?", JSON.stringify([bo, boCauNhanXet(loi, bo)]));
   ok("NX-02 căn cứ có thật ('hxh') → giữ", nhanXetKhongCanCu([{ cau: "Nhà hẻm xe hơi ạ.", can_cu: "hxh" }], "ban nha hxh q10").length === 0);
+  // SRS-5.1zzy (chat thử 07/10): đánh giá KHU / THỊ TRƯỜNG luôn bỏ, kể cả khi AI trích tên khu có thật làm căn cứ.
+  const loiDv = "Khu Hà Huy Giáp đất vàng quận 12 anh. Diện tích bao nhiêu mét vuông ạ?";
+  const boDv = nhanXetKhongCanCu([{ cau: "Khu Hà Huy Giáp đất vàng quận 12 anh.", can_cu: "khu hà huy giáp", danh_gia_thi_truong: true }], "khu hà huy giáp quận 12 em ạ, chỗ đường thạnh lộc 41");
+  ok("NX-08 'đất vàng' (đánh giá thị trường) có căn cứ tên khu → vẫn bỏ, câu hỏi giữ", boDv.length === 1 && boCauNhanXet(loiDv, boDv) === "Diện tích bao nhiêu mét vuông ạ?", JSON.stringify([boDv, boCauNhanXet(loiDv, boDv)]));
+  ok("NX-09 cách nói mới 'Bình Thạnh giá đang lên lắm' → bỏ", nhanXetKhongCanCu([{ cau: "Bình Thạnh giá đang lên lắm anh.", can_cu: "bình thạnh", danh_gia_thi_truong: true }], "nha o binh thanh").length === 1);
+  ok("NX-10 khen gắn đặc điểm (không phải thị trường) có căn cứ → giữ", nhanXetKhongCanCu([{ cau: "Hẻm xe hơi tới cửa là khách chuộng lắm.", can_cu: "hxh", danh_gia_thi_truong: false }], "ban nha hxh q10").length === 0);
   ok("NX-03 bỏ hết chữ → null (dùng câu mẫu)", boCauNhanXet("Hẻm sâu yên tĩnh lắm ạ.", ["Hẻm sâu yên tĩnh lắm ạ."]) === null);
   // SRS-5.1zh (bắn thử 02/10): AI trích nhận xét KHÔNG kèm mặt cười → bỏ cả câu khẳng định, không trơ ")".
   const nx4 = boCauNhanXet("Hẻm 5m Lê Văn Sỹ thì khách tìm nhiều lắm, dễ ra hàng :) Em tra thấy đường Lê Văn Sỹ thuộc Phường Nhiêu Lộc, đúng không anh chị?", ["khách tìm nhiều lắm, dễ ra hàng"]);
