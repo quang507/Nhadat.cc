@@ -110,7 +110,13 @@ jobs:
                     (select coalesce(json_agg(x order by x.so desc), '[]') from (select source, substring(detail from '^((?:Groq|Gemini|Claude|Anthropic|[0-9]{3})[^:\[{]{0,40})') as loai, count(*) as so
                        from bot_errors where at > now() - interval '24 hours' and (source ~ '(model|boc_tach|du phong|het nhip)' or detail ~ '^(Groq|Gemini|Claude|Anthropic)')
                        group by 1, 2 order by 3 desc limit 15) x) as loi_model_24h,
-                    (select left(regexp_replace(detail, '[0-9]{9,}', '#', 'g'), 220) from bot_errors where source like 'model chinh hong%' order by at desc limit 1) as loi_claude_moi_nhat" | jq -c '.[0]'
+                    (select json_build_object('luc', e.at, 'loi', left(regexp_replace(e.detail, '[0-9]{9,}', '#', 'g'), 220),
+                            'da_goi_lai_duoc', exists (select 1 from bot_health h where h.who = 'model_chinh' and h.at > e.at))
+                       from bot_errors e where e.source like 'model chinh hong%' and e.at > now() - interval '24 hours'
+                      order by e.at desc limit 1) as loi_claude_24h" | jq -c '.[0]'
+          # 07/10/2026: dòng cũ `loi_claude_moi_nhat` lấy lỗi Claude gần nhất TỪNG có, không giới hạn thời gian — lỗi "hết credit"
+          # từ trước khi nạp tiền vẫn hiện, đọc thành báo động giả. Nay chỉ lỗi 24 giờ qua, kèm giờ và `da_goi_lai_duoc` (sau lỗi
+          # đó dấu sống `bot_health.model_chinh` — đóng mỗi lượt Claude trả về — mới hơn thì lỗi đã qua, không phải sự cố đang diễn ra).
 
           # 30/09/2026: "cho Gemini chạy có đủ để người test không" — khoá nào đang có. Chỉ in CÓ / KHÔNG và TÊN secret,
           # không bao giờ in giá trị (log repo công khai).
