@@ -218,8 +218,10 @@ export const RE_NHANH: Luat[] = [
     id: "so_nha_mat_tien",
     ten: "số nhà trơn — mặt tiền đường",
     vi: "Nhà có xây, địa chỉ là số nhà không xẹc + tên đường, không nhắc hẻm → hỏi độ rộng đường trước nhà thay câu hẻm",
-    khi: ({ loai, tatCa, daHoi, c }) => NHA_CO_XAY.includes(loai) && !daHoi.has("do_rong_hem") && !daHoi.has("do_rong_duong") &&
-      loaiDuongVaoTuDiaChi([...c.facts].reverse().find((f) => f.question === "vi_tri")?.answer, tatCa) === "mat_tien",
+    // SRS-5.1zzz (THUTU-tt-mt, 07/10/2026): bản cũ đòi `!daHoi.has("do_rong_duong")` — trả lời câu đường xong thì nhánh tắt,
+    // `bo: ["do_rong_hem"]` thôi áp, và câu hẻm bị hỏi TIẾP (hỏi trùng một ý). Đã trả lời câu đường thì nhánh vẫn giữ để bỏ câu hẻm.
+    khi: ({ loai, tatCa, daHoi, c }) => NHA_CO_XAY.includes(loai) && !daHoi.has("do_rong_hem") &&
+      (daHoi.has("do_rong_duong") || loaiDuongVaoTuDiaChi([...c.facts].reverse().find((f) => f.question === "vi_tri")?.answer, tatCa) === "mat_tien"),
     thay: true,
     them: [{ fact_key: "do_rong_duong", priority: 7, nhom: "co_ban" }],
     bo: ["do_rong_hem"],

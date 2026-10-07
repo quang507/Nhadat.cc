@@ -1076,7 +1076,10 @@ for (const [q, vao, ra] of [["phap_ly", "sổ hồng rồi em", "sổ hồng"], 
   ["phap_ly", "chưa có sổ", "chưa có sổ"], ["phi_quan_ly", "phí quản lý 15k/m2", "15k/m2"], ["phi_quan_ly", "phí ql 1tr/tháng", "1tr/tháng"],
   ["phi_quan_ly", "phí quản lý 20 nghìn/m2 nha", "20 nghìn/m2"], ["gia", "giá 7 tỷ nha em", "giá 7 tỷ"],
   // 02/10/2026 (SRS-5.1v): mọi ô chữ bỏ tiểu từ cuối ("xe container vào tận nơi em"), TRỪ câu đứng tên ("ba anh" là người).
-  ["duong_container", "xe container vào tận nơi em", "xe container vào tận nơi"], ["nguoi_dung_ten", "ba anh", "ba anh"]]) {
+  ["duong_container", "xe container vào tận nơi em", "xe container vào tận nơi"], ["nguoi_dung_ten", "ba anh", "ba anh"],
+  // 07/10/2026 (chat thử: bản nháp in "An Dương Vương nha e"): xưng hô gõ tắt một chữ SAU tiểu từ thì bỏ; một chữ đứng trơn giữ.
+  ["vi_tri", "An Dương Vương nha e", "An Dương Vương"], ["vi_tri", "137 nguyễn trãi nhé a", "137 nguyễn trãi"], ["vi_tri", "hẻm 5 lê lợi đó c", "hẻm 5 lê lợi"],
+  ["vi_tri", "lô C chung cư Hà Đô", "lô C chung cư Hà Đô"], ["vi_tri", "toà E", "toà E"], ["vi_tri", "12 Nguyễn Văn Cừ a", "12 Nguyễn Văn Cừ a"]]) {
   ok(`FR248-a gọn ${q} '${vao}' → '${ra}'`, gonGiaTriFact(q, vao) === ra, gonGiaTriFact(q, vao));
 }
 ok("FR248-a nhanDienFact('sổ hồng rồi em') → phap_ly 'sổ hồng'", nhanDienFact("sổ hồng rồi em")?.answer === "sổ hồng", JSON.stringify(nhanDienFact("sổ hồng rồi em")));

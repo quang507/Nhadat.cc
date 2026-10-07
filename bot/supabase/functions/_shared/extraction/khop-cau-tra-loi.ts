@@ -547,7 +547,9 @@ export function bocViTriRao(text: string): string | null {
 // câu trả lời không phải dữ liệu. Chỉ viết thường — tên riêng viết hoa ("… Anh", "Cô Giang") không bị cắt; "rồi",
 // "thôi" giữ vì mang nghĩa ("hoàn công rồi").
 // 05/10/2026 (SRS-5.1zzb): thêm "đâu" cuối câu ("không có đâu em") — tiểu từ phủ định nhấn, không phải "ở đâu".
-const DEM_CUOI_DAP_AN = /(?:[\s,.;!]+(?:em|anh|chị|cô|chú|bác|cháu|ạ|á|nha|nhé|nhe|nhen|nghen|nè|ơi|đó|đấy|nhỉ|hen|đâu))+[\s.!,]*$/u;
+// 07/10/2026 (chủ dự án chat thử: địa chỉ "An Dương Vương nha e" vào nguyên bản nháp): khách gõ tắt xưng hô một chữ "e" / "a" / "c"
+// (em / anh / chị) SAU một tiểu từ ("nha e", "nhé a", "đó c") — bỏ luôn. Một chữ đứng trơn ("lô C", "toà E", "12 A") không bỏ.
+const DEM_CUOI_DAP_AN = /(?:[\s,.;!]+(?:em|anh|chị|cô|chú|bác|cháu|ạ|á|nha|nhé|nhe|nhen|nghen|nè|ơi|đó|đấy|nhỉ|hen|đâu))+(?:[\s,]+[eac](?![\p{L}\d]))?[\s.!,]*$/u;
 export function catDapAn(question: string, dapAn: string): string {
   const ra = catDapAnGoc(question, dapAn);
   // "hxh, 5x12, trệt 3 lầu" cắt còn "hxh" → chữ đầy đủ như khi khách chỉ gõ "hxh" (bắn thật lx-21).

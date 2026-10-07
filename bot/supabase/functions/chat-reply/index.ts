@@ -786,6 +786,30 @@ const KHOA_DU_AN = new Set([
 // lượt sau" thành "trong vòng một phút" — ghi rõ trong docs.
 // Client Supabase KHÔNG nhớ tạm: dựng nó rẻ, và bộ e2e thay DB giả giữa các
 // kịch bản bằng cách dựng client mới.
+/**
+ * SRS-5.1zzz: mục còn thiếu do `diem_tin` liệt kê (chữ cố định trong hàm SQL) → ô hỏi tương ứng, để mở ô chờ khi bot hỏi mục
+ * đó. Tiềm năng không có ô trước bản nháp (hỏi bù sau đăng) → null. Thêm chữ mới ở `diem_tin` thì thêm dòng ở đây.
+ */
+function khoaCuaMucThieu(muc: string, loai: string | null | undefined): string | null {
+  const m = muc.trim();
+  const dat = ["dat", "dat_nong_nghiep", "dat_kinh_doanh"].includes(loai ?? "");
+  if (/^hẻm rộng/.test(m)) return "do_rong_hem";
+  if (/^đường vào rộng/.test(m)) return loai === "kho_xuong" ? "duong_container" : loai === "dat_nong_nghiep" ? "duong_vao" : "do_rong_duong";
+  if (/^chiều ngang mặt tiền/.test(m)) return "mat_tien";
+  if (m === "diện tích") return dat || ["phong_tro", "mat_bang", "kho_xuong"].includes(loai ?? "") ? "dien_tich" : loai === "chung_cu" ? "dien_tich_tim_tuong" : "dien_tich_dat";
+  if (/^mấy tầng/.test(m)) return "ket_cau";
+  if (/^mấy phòng ngủ/.test(m)) return "so_phong_ngu";
+  if (/^thổ cư/.test(m)) return "tho_cu";
+  if (/^quy hoạch, có lên thổ cư/.test(m)) return "quy_hoach";
+  if (/^thời hạn sử dụng đất/.test(m)) return "thoi_han_su_dung";
+  if (/^nội thất/.test(m)) return "noi_that";
+  if (/^chiều cao thông thủy/.test(m)) return "chieu_cao";
+  if (/^tải trọng sàn/.test(m)) return "tai_trong_san";
+  if (/^pháp lý/.test(m)) return "phap_ly";
+  if (m === "giá") return "gia";
+  if (/ảnh/.test(m)) return "hinh_anh";
+  return null;
+}
 const NHO_TAM_MS = 60e3;
 type CauHinh = {
   at: number; gate: string | null; gateLoi: string | null; cap: number; P: Record<string, string>;
@@ -6925,27 +6949,44 @@ Deno.serve(async (req) => {
       // Đợt 3 (02/10/2026): chế độ `ai` → câu kế AI chọn (nối mạch điều chủ nhà vừa nói), chỉ nhận khoá có trong `conHoi`;
       // AI không chạy / chọn ngoài danh sách → bảng ưu tiên + câu liên quan như cũ.
       const chonKe = (await cauKeAi(conHoi.map((f) => f.fact_key))) ?? chonCauKe([pendingReq.question], conHoi);
+      // SRS-5.1zzz (20261007a, ≤ 6 câu trước bản nháp): hết câu để hỏi mà tin còn thiếu một ô LÕI để lên kệ (giá, diện tích,
+      // vị trí, phường) chỉ vì câu đó vừa bị lờ ở lượt này (`hetHanSet`) → vẫn hỏi lại nó (FR-234: ô lõi hỏi lại được). Trước
+      // đây còn gấp / phòng ngủ / ảnh để hỏi nên không lộ; nay bot "cảm ơn" rồi im, hoặc gửi bản nháp không có phường / quận.
+      // Câu sổ KHÔNG ép hỏi lại (FR-233/234: khách nói lệch câu sổ thì đi tiếp, bản nháp nhắc). Câu VỪA hỏi ở lượt này mà khách
+      // nói chuyện khác thì cũng không hỏi lại ngay (FR-234, AIBOC-13) — nhưng còn thiếu ô lõi thì KHÔNG gửi bản nháp (`chanNhap`):
+      // bản nháp không phường / quận là tin không lên kệ được (RENHANH-04b); lượt sau câu đó được hỏi lại.
+      const LOI_HOI_LAI = ["vi_tri", "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "gia", "phuong"];
+      const loiThieu = ((nextFactsTho ?? []) as Array<{ fact_key: string; priority?: number; nhom?: string | null }>)
+        .filter((f) => LOI_HOI_LAI.includes(f.fact_key) && f.nhom !== "sau_dang" && !khongHoi.has(f.fact_key))
+        .sort((x, y) => (x.priority ?? 0) - (y.priority ?? 0));
+      const loiConThieu = loiThieu.find((f) => !pendSet.has(f.fact_key) && f.fact_key !== pendingReq.question)?.fact_key;
+      const chanNhap = loiThieu.length > 0;
       const nextKey = published
         ? undefined
         : pendingReq.question === "vi_tri" && quanChuaRo && conHoi.some((f) => f.fact_key === "phuong")
         ? "phuong"
         : chonKe === "hinh_anh" && conHoi.some((f) => f.fact_key === "phuong")
         ? "phuong"
-        : chonKe;
+        : chonKe ?? loiConThieu;
       // FR-177 c: hết câu cơ bản + chuyên môn (ảnh xin trong bản nháp) và tin
       // đủ 70 điểm → gửi bản nháp thay vì hỏi tiếp. Dưới 70 thì hỏi tiếp và
       // nói rõ còn thiếu gì.
       let thieuDiem: string[] = [];
-      if (!published && lstNow?.can_chu_duyet && !lstNow.chu_duyet_at &&
+      if (!published && lstNow?.can_chu_duyet && !lstNow.chu_duyet_at && !chanNhap &&
           (!nextKey || nextKey === "hinh_anh")) {
         const nhap = await guiBanNhap(pendingReq.listing_id, { saved_fact: pendingReq.question, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) }, false, hoiNguocDap ? [hoiNguocDap] : []);
         if (!Array.isArray(nhap)) return nhap;
-        thieuDiem = nhap;
-        // Thiếu GIÁ mà câu giá không còn treo (hết hạn vì chủ nhà nói thứ khác) → mở lại, kẻo bot
-        // hỏi giá mà không có ô nhận câu trả lời (20/09/2026, mau-y-D: câu giá `expired`).
-        if (thieuDiem[0]?.startsWith("giá") && pendingReq.question !== "gia" && !pendSet.has("gia")) {
-          const { error: gErr } = await client.from("info_requests").insert({ listing_id: pendingReq.listing_id, question: "gia", status: "pending" });
-          if (gErr && gErr.code !== "23505") await ghiLoi(client, "chat-reply mo lai cau gia", gErr.message);
+        // SRS-5.1zzz (20261007a: ≤ 6 câu trước bản nháp): hết câu chính mà tin chưa đủ 70 điểm → bot hỏi thứ còn thiếu MÀ
+        // KHÔNG MỞ Ô CHỜ (trước đây chỉ mở lại riêng câu giá, 20/09 mau-y-D) — câu trả lời kế rơi vào khoảng không. Nay: chọn mục
+        // thiếu đầu tiên ứng được một ô (`khoaCuaMucThieu`, chữ do `diem_tin` sinh ra — tất định), bỏ ô vừa thôi hỏi ở lượt này
+        // (FR-234: không hỏi lại ngay câu khách vừa lờ), đưa nó lên đầu danh sách cho model hỏi, và mở ô chờ cho nó.
+        const khoaVuaThoi = new Set([...hetHanSet, pendingReq.question]);
+        const iMuc = nhap.findIndex((m) => { const k = khoaCuaMucThieu(m, pendingReq.listings?.property_type); return !!k && !khoaVuaThoi.has(k); });
+        thieuDiem = iMuc > 0 ? [nhap[iMuc], ...nhap.filter((_, i) => i !== iMuc)] : nhap;
+        const khoaMo = iMuc >= 0 ? khoaCuaMucThieu(nhap[iMuc], pendingReq.listings?.property_type) : null;
+        if (khoaMo && !pendSet.has(khoaMo)) {
+          const { error: gErr } = await client.from("info_requests").insert({ listing_id: pendingReq.listing_id, question: khoaMo, status: "pending" });
+          if (gErr && gErr.code !== "23505") await ghiLoi(client, "chat-reply mo cau thieu diem", gErr.message);
         }
       }
 
@@ -7016,8 +7057,10 @@ Deno.serve(async (req) => {
         : published
         ? `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
           `Viết MỘT tin ngắn: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
+        : chanNhap && !thieuDiem.length
+        ? `${boiCanh}${daAck}${hoiNguocPrompt}Chủ nhà vừa nhắn: "${text}". Viết MỘT tin rất ngắn ghi nhận điều họ vừa nói; KHÔNG hỏi lại câu em vừa hỏi, KHÔNG nói tin đã đủ thông tin.`
         : thieuDiem.length
-        ? `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu (theo thứ tự ưu tiên): ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn như người thật: ghi nhận, rồi hỏi thứ đầu danh sách đó theo cách hợp với loại nhà này.`
+        ? `${boiCanh}${daAck}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu (theo thứ tự ưu tiên): ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn như người thật: ghi nhận, rồi hỏi thứ đầu danh sách đó theo cách hợp với loại nhà này.`
         : `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
       // OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định — vòng drip không
       // đứng lại chờ model sống. Câu mẫu CÓ hỏi thật (kèm neo căn) nên mở
