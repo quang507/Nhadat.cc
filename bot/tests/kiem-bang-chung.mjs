@@ -815,5 +815,15 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("MC-08 (cách nói MỚI) hỏi hẻm, 'hẻm 137 Nguyễn Trãi' mà AI gán cụm cho ô địa chỉ → thuộc ô khác (địa chỉ không phải độ rộng hẻm)",
     traLoiThuocOKhac("hẻm 137 Nguyễn Trãi", "do_rong_hem", [D("duong", "hẻm 137 Nguyễn Trãi", "hẻm 137 Nguyễn Trãi")], []) === true);
 }
+// SRS-5.1zzzb (07/10/2026, chat thử): lưới loại đường vào soi CỤM TRÍCH, không phải cả tin. Khách trả lời câu hỏi trước rồi nói thêm.
+{
+  const TL = (g, t) => ({ co_tra_loi: true, gia_tri: g, trich_dan: t });
+  ok("ZZZB-01 hỏi hạ tầng, 'không có mặt tiền đẹp em', AI trích 'không có' → nhận (chữ 'mặt tiền' ở ý thêm không bác)",
+    kiemTraLoiCau(TL("không vướng gì", "không có"), "không có mặt tiền đẹp em", null, { cauHoi: "ha_tang", loai: "nha_pho" })?.giaTri === "không vướng gì");
+  ok("ZZZB-02 (cách nói MỚI) hỏi quy hoạch, 'ko dính gì hết, nhà mặt tiền kinh doanh' AI trích 'ko dính gì hết' → nhận",
+    kiemTraLoiCau(TL("không dính quy hoạch", "ko dính gì hết"), "ko dính gì hết, nhà mặt tiền kinh doanh", null, { cauHoi: "quy_hoach", loai: "nha_pho" })?.giaTri === "không dính quy hoạch");
+  ok("ZZZB-03 hỏi hẻm, 'Hxm nhé' AI nói 'hẻm xe hơi' → vẫn bác (loại đường trong cụm trích khác giá trị)",
+    kiemTraLoiCau(TL("hẻm xe hơi", "Hxm"), "Hxm nhé", null, { cauHoi: "do_rong_hem", loai: "nha_pho" })?.giaTri === null);
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

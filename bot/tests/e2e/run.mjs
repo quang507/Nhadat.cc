@@ -3867,6 +3867,38 @@ fresh(seedKho);
       JSON.stringify({ vt: fG("vi_tri"), bs: fG("bo_sung"), q: lg.district, lr: lg.location_raw, ir: db().t.info_requests.filter((x) => x.listing_id === LG.id).map((x) => [x.question, x.status]) }));
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zzzb (07/10/2026, chat thử; chủ dự án: "nó hỏi, khách sẽ trả lời 1 ý trước, rồi trong đó mới có ý cần bóc tách"):
+  // đất, hỏi "vướng cột điện, hố ga gì không". (a) AI đọc đúng: "không có mặt tiền đẹp em" = "không có" (trả lời) + "mặt tiền đẹp"
+  // (ý thêm) → ô hạ tầng (đất: ô nguyên văn) = "không có", KHÔNG có "không có mặt tiền đẹp" ở đâu. Bản trước: lưới loại đường
+  // vào thấy chữ "mặt tiền" trong CẢ TIN nên bác câu trả lời của AI. (b) AI tắt, khách "ko có, đường 8m" → luật đỡ: hạ tầng
+  // "ko có", đường "đường 8m" (bản trước: chỉ ghi đường, mất câu trả lời).
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "ht-1", text: "bán lô đất Thạnh Lộc 41 quận 12, 5x20, giá 5 tỷ" });
+    const LH = db().t.listings.at(-1);
+    const datTreo = (q) => { db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+      db().insert("info_requests", { listing_id: LH.id, question: q, status: "pending" }); };
+    const fH = (q) => db().t.listing_facts.filter((f) => f.listing_id === LH.id && f.question === q);
+    datTreo("ha_tang");
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: ["mặt tiền đẹp"], truong: [], cap_nhat: [],
+      tra_loi: { co_tra_loi: true, gia_tri: "không vướng gì", trich_dan: "không có" } } : OUT();
+    await send({ external_user_id: "ht-1", text: "không có mặt tiền đẹp em" });
+    check("SRS-5.1zzzb-a AI tách 'không có' | 'mặt tiền đẹp' → hạ tầng 'không có', không ô nào mang 'không có mặt tiền đẹp'",
+      fH("ha_tang").some((f) => f.answer === "không có") &&
+        !db().t.listing_facts.some((f) => f.listing_id === LH.id && /không có mặt tiền/.test(f.answer)),
+      JSON.stringify({ ht: fH("ha_tang"), bs: fH("bo_sung") }));
+    datTreo("ha_tang");
+    db().t.listing_facts = db().t.listing_facts.filter((f) => !(f.listing_id === LH.id && f.question === "ha_tang"));
+    globalThis.__cauHinh = { ...globalThis.__cauHinh, boc_tach_ai: "tat" };
+    await send({ external_user_id: "ht-1", text: "ko có, đường 8m" });
+    check("SRS-5.1zzzb-b AI tắt, 'ko có, đường 8m' khi hỏi hạ tầng → hạ tầng 'ko có' + đường 'đường 8m'",
+      fH("ha_tang").some((f) => f.answer === "ko có") && fH("do_rong_duong").some((f) => /8m/.test(f.answer)),
+      JSON.stringify({ ht: fH("ha_tang"), dg: fH("do_rong_duong"), bs: fH("bo_sung") }));
+    globalThis.__cauHinh = cuCH;
+  }
   // (d) căn hộ, đang hỏi nội thất, khách "phí quản lý 15k/m2" (AI im) → "Không bóc tách được gì", phí mất hẳn.
   {
     fresh(seedKho);

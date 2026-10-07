@@ -23,7 +23,7 @@ import { CAU_TIEN_DINH, dienCau } from "../supabase/functions/_shared/prompts.ts
 import { boHoiLaiDaCo, boHuaHoiChuNha } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { gonLoiSua, nhanDienNhieuFact, laTraLoiTronKhoa } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { chuanHienTrang, diaChiGon } from "../supabase/functions/_shared/tin-nhap.ts";
-import { gonGiaTriFact, laChiDonViHanhChinh } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
+import { gonGiaTriFact, laChiDonViHanhChinh, tachDapCoKhongDau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boHoaHong } from "../supabase/functions/_shared/extraction/luat-lien-he.ts";
 import { bocTachTaoTin, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua } from "../supabase/functions/_shared/bao_lai.ts";
 
@@ -1097,6 +1097,15 @@ for (const [c, m] of [["đúng rồi e. nhà a ở quận 5", true], ["đúng r�
   ["chuẩn rồi a, tại q8", true], ["vâng sài gòn. nhà chú thuộc quận 3", true],
   ["đúng rồi e. nhà a ở 45 Trần Hưng Đạo quận 5", false], ["không, ở Bình Dương", false], ["đúng rồi", false]]) {
   ok(`SRS-5.1zzza chỉ đơn vị hành chính sau lời gật '${c}' → ${m}`, laChiDonViHanhChinh(c) === m);
+}
+// SRS-5.1zzzb: hỏi có / không — mảnh đầu là câu trả lời, mảnh sau là ô KHÁC (chỉ tách theo dấu ngắt, câu không dấu để AI đọc).
+for (const [q, vao, dau] of [["ha_tang", "ko có, đường 8m", "ko có"], ["quy_hoach", "ko dính, đường 6m", "ko dính"],
+  ["ha_tang", "không vướng gì, đất vuông vức", "không vướng gì"], ["ngap_nuoc", "chưa bao giờ, hẻm xe hơi", null],
+  ["ha_tang", "không có mặt tiền đẹp em", null], ["thang_may", "dạ có, mới lắp", null], ["phap_ly", "không, sổ chung", null],
+  // cách nói MỚI: "hong có gì hết á, sổ hồng riêng"
+  ["ha_tang", "hong có gì hết á, sổ hồng riêng", "hong có gì hết á"]]) {
+  const t = tachDapCoKhongDau(q, vao);
+  ok(`SRS-5.1zzzb tách có/không ${q} '${vao}' → ${dau ?? "không tách"}`, (t?.dau ?? null) === dau, JSON.stringify(t));
 }
 for (const [q, vao, ra] of [["vi_tri", "đúng rồi e. nhà a ở 45 Trần Hưng Đạo", "45 Trần Hưng Đạo"], ["vi_tri", "ok, 12 Nguyễn Trãi", "12 Nguyễn Trãi"],
   ["do_rong_hem", "dạ đúng, 3m", "3m"], ["vi_tri", "đúng rồi", "đúng rồi"], ["thang_may", "dạ có, mới lắp", "dạ có, mới lắp"]]) {
