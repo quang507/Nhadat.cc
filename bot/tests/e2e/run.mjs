@@ -2882,14 +2882,14 @@ fresh(seedKho);
     fresh(seedKho);
     globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
     globalThis.__model.parse = (p) => laSoat(p)
-      ? { nhan_xet: [{ cau: "Nhà phố hẻm sâu yên tĩnh, kết cấu 4x15 ạ.", khang_dinh: "hẻm sâu yên tĩnh", can_cu: "hẻm sâu" }] }
+      ? { nhan_xet: [{ cau: "Nhà phố hẻm sâu yên tĩnh, kết cấu 4x15 ạ.", khang_dinh: "hẻm sâu yên tĩnh", can_cu: "hẻm sâu", danh_gia_thi_truong: false }] }
       : aiRao()(p);
     globalThis.__model.create = () => "Nhà phố hẻm sâu yên tĩnh, kết cấu 4x15 ạ. Nhà mình ở phường nào anh chị?";
     const rK = await send({ external_user_id: "khen-1", text: "ban nha 4x15 tret 2 lau 3pn hxh q10 gia 9ty" });
     check("KHEN-AI-01 lời bot 'hẻm sâu…' (chủ không nói hẻm sâu) → bỏ câu khen, giữ câu hỏi",
       !rK.body.replies.some((x) => /hẻm sâu/.test(x)) && rK.body.replies.some((x) => /\?/.test(x)), JSON.stringify(rK.body.replies));
     globalThis.__model.parse = (p) => laSoat(p)
-      ? { nhan_xet: [{ cau: "Nhà mình hẻm xe hơi, trệt 2 lầu ạ.", khang_dinh: "hẻm xe hơi", can_cu: "hxh" }] }
+      ? { nhan_xet: [{ cau: "Nhà mình hẻm xe hơi, trệt 2 lầu ạ.", khang_dinh: "hẻm xe hơi", can_cu: "hxh", danh_gia_thi_truong: false }] }
       : aiRao()(p);
     globalThis.__model.create = () => "Nhà mình hẻm xe hơi, trệt 2 lầu ạ. Nhà mình ở phường nào anh chị?";
     const rK2 = await send({ external_user_id: "khen-2", text: "ban nha 4x15 tret 2 lau 3pn hxh q10 gia 9ty" });
@@ -5688,6 +5688,28 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
         r.body.replies.some((x) => /thiếu phường/.test(x)) && !r.body.replies.some((x) => /ổn chưa/.test(x)),
       JSON.stringify({ st: tP.status, rep: r.body.replies, ir: db().t.info_requests.map((q) => [q.question, q.status]) }));
   }
+  // SRS-5.1zzy (chủ dự án chat thử 07/10: "anh không nhớ nữa em tự search xem, đăng đi" — tin đất có "đường Thạnh Lộc 41", Quận 12):
+  // "đăng đi" thiếu phường mà tra được phường từ tên đường + quận → hỏi xác nhận phường đó (không "xin phường"); gật → tin lên kệ.
+  fresh((d) => {
+    d.t.duong = [{ ten: "Thạnh Lộc 41", ten_khong_dau: "thanh loc 41", loai: "duong", quan_cu: "Quận 12", phuong: "Phường An Phú Đông", tinh: "TP.HCM" }];
+    const s = d.insert("sellers", { zalo_user_id: "z-dang-p2", seller_type: "ccrb", name: null, active_listing_id: null }).data;
+    const l = d.insert("listings", { code: "BDS-DAT-Q12-0901", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "dat", location_raw: "đường Thạnh Lộc 41", street: "Thạnh Lộc 41", district: "Quận 12", ward: null, price_raw: "6 tỷ", price_vnd: 6e9, area_m2: 105, frontage_m: 7, length_m: 15, legal_status: "so_hong_rieng", access_type: "hem_xe_hoi", alley_width_m: 6, planning_status: "không dính quy hoạch", can_chu_duyet: true }).data;
+    d.insert("listing_facts", { listing_id: l.id, question: "hinh_anh", answer: "https://x/1.jpg", source: "seller_chat" });
+    d.insert("listing_facts", { listing_id: l.id, question: "tho_cu", answer: "full thổ cư", source: "seller_chat" });
+    d.insert("listing_facts", { listing_id: l.id, question: "xay_dung", answer: "tự do", source: "seller_chat" });
+    d.insert("info_requests", { listing_id: l.id, question: "phuong", status: "pending" });
+  });
+  r = await send({ external_user_id: "z-dang-p2", text: "anh không nhớ nữa em tự search xem, đăng đi" });
+  {
+    const tP = db().t.listings.find((l) => l.code === "BDS-DAT-Q12-0901");
+    const rep = r.body.replies.join("\n");
+    check("DANGLUON-02 'đăng đi' thiếu phường, có tên đường + quận → tự tra, hỏi xác nhận 'Phường An Phú Đông', không xin phường, không 'Nhà mình'",
+      r.body.dang_luon === true && /An Phú Đông/.test(rep) && !/thiếu phường/.test(rep) && !/Nhà mình/.test(rep) && !!tP.chu_duyet_at && pend("phuong", tP.id),
+      JSON.stringify({ st: tP.status, dl: r.body.dang_luon, duyet: tP.chu_duyet_at, pend: pend("phuong", tP.id), rep: r.body.replies, bt: tP.boc_tach }));
+    r = await send({ external_user_id: "z-dang-p2", text: "đúng rồi em" });
+    check("DANGLUON-03 gật phường gợi ý → ghi phường, tin lên kệ",
+      tP.ward === "Phường An Phú Đông" && tP.status !== "cho_thong_tin", JSON.stringify({ st: tP.status, ward: tP.ward, rep: r.body.replies }));
+  }
   // FR-223 (24/09/2026, chủ dự án: "rẽ nhánh nếu câu hỏi trước trả lời gì thì sau đó sẽ có bộ câu hỏi gì"): câu kế theo NỘI DUNG câu trả lời.
   const rnSeed = (uid, code, them = {}, facts = []) => fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: uid, seller_type: "ccrb", name: null, active_listing_id: null }).data;
@@ -8215,8 +8237,8 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__model = { parse: ai({ truong: [T("ngang", "4", "4x16"), T("dai", "16", "4x16"), T("so_tang", "3", "1 trệt 2 lầu")] }), create: () => "Dạ em chưa rõ lắm ạ." };
   rN = await send({ external_user_id: "rn-4", text: "4x16, 1 trệt 2 lầu" });
   let rep7 = rN.body.replies.join("\n");
-  check("RN-07b đang treo loại, '4x16, 1 trệt 2 lầu' (AI vẫn không ra loại) → diện tích VÀO tin; hỏi lại loại bằng câu NGẮN khác, không nguyên văn lần một",
-    (Number(tN[0].area_m2) === 64 || factCua(tN[0].id).some((f) => /^dien_tich/.test(f.question))) && /nhà phố hay nhà cấp 4/.test(rep7) && !/chưa rõ lắm ạ, nhà mình thuộc loại nào ta/.test(rep7),
+  check("RN-07b đang treo loại, '4x16, 1 trệt 2 lầu' (AI vẫn không ra loại) → diện tích VÀO tin; hỏi lại loại bằng câu NGẮN khác; có lầu thì KHÔNG hỏi cấp 4 (SRS-5.1zzy)",
+    (Number(tN[0].area_m2) === 64 || factCua(tN[0].id).some((f) => /^dien_tich/.test(f.question))) && /nhà phố hay biệt thự/.test(rep7) && !/cấp 4/.test(rep7) && !/chưa rõ lắm ạ, nhà mình thuộc loại nào ta/.test(rep7),
     JSON.stringify({ area: tN[0].area_m2, facts: factCua(tN[0].id).map((f) => [f.question, f.answer]), rep: rN.body.replies }));
   globalThis.__model = { parse: ai({ hoi_lai: { co_hoi: true, cau_hoi: "phí sao em", chu_de: "dich_vu" } }), create: () => "Dạ em chưa rõ lắm ạ." };
   rN = await send({ external_user_id: "rn-4", text: "phí sao em" });
@@ -8226,7 +8248,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   rN = await send({ external_user_id: "rn-4", text: "ok đăng đi" });
   rep7 = rN.body.replies.join("\n");
   check("RN-07d đang treo loại, 'ok đăng đi' (AI du_roi) → 'em đăng liền… chỉ còn thiếu loại nhà', không lặp câu hỏi loại",
-    rN.body.dang_luon === true && /đăng liền/.test(rep7) && /loại nhà/.test(rep7) && !/thuộc loại nào ta/.test(rep7)
+    rN.body.dang_luon === true && /lên kệ được/.test(rep7) && /loại nhà/.test(rep7) && !/thuộc loại nào ta/.test(rep7)
       && db().t.info_requests.some((i) => i.listing_id === tN[0].id && i.question === "loai_bds" && i.status === "pending"),
     JSON.stringify({ body: Object.keys(rN.body), rep: rN.body.replies, ir: db().t.info_requests.filter((i) => i.listing_id === tN[0].id).map((i) => [i.question, i.status]), tin: [tN[0].status, tN[0].chu_duyet_at] }));
   globalThis.__model = { parse: ai({ truong: [T("loai_bds", "nha_pho", "nhà phố")] }), create: () => "Dạ em ghi rồi anh. Giá anh mong muốn bao nhiêu ạ?" };

@@ -1567,7 +1567,7 @@ export function boCauHoiLap(replies: string[], botTruoc: string | null | undefin
 const gonKhen = (s: string): string => boDau(s ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 /** Câu nhận xét (nguyên văn trong lời bot) KHÔNG có căn cứ thật → cần bỏ. */
 export function nhanXetKhongCanCu(
-  ds: Array<{ cau?: string | null; can_cu?: string | null }> | null | undefined,
+  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null }> | null | undefined,
   bangChung: string,
 ): string[] {
   const bc = ` ${gonKhen(bangChung)} `;
@@ -1575,6 +1575,9 @@ export function nhanXetKhongCanCu(
   for (const x of ds ?? []) {
     const cau = (x?.cau ?? "").trim();
     if (!cau || /\?/.test(cau)) continue;
+    // SRS-5.1zzy (chat thử 07/10: "Khu Hà Huy Giáp đất vàng quận 12 anh"): AI trích "khu hà huy giáp" làm căn cứ — tên khu có thật
+    // nhưng lời ĐÁNH GIÁ khu thì không. Bot không có số liệu thị trường: câu AI đánh dấu đánh giá thị trường luôn bỏ, căn cứ gì cũng vậy.
+    if (x?.danh_gia_thi_truong === true) { bo.push(cau); continue; }
     const cc = gonKhen(x?.can_cu ?? "");
     if (cc.length >= 2 && bc.includes(` ${cc} `)) continue;
     bo.push(cau);
