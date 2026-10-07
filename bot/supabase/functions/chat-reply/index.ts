@@ -4461,12 +4461,18 @@ Deno.serve(async (req) => {
     const raoSuong = !traLoiLoai && (aiRao !== undefined ? aiRao : coYDinhRao && coLoaiRo /* lưới đỡ */) && !coChiTiet && !/\d/.test(textKhongSoQuan) && !laCauHoiTinhTrang && !raoCanMoiXacNhan &&
       nhanDienNhieuFact(text).every((f) => f.question === "gap" || f.question === "phuong");
     if (!sellerMoi && (raoSuong || (dangHoiCanCuMoi && (laCanDo || laCanKhac)))) {
-      type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; district: string | null; property_type: string | null; price_raw: string | null };
-      const { data: dangRao, error: drErr } = await client.from("listings").select("id, code, location_raw, ward, district, property_type, price_raw")
+      type CanRao = { id: string; code: string | null; location_raw: string | null; ward: string | null; district: string | null; property_type: string | null; price_raw: string | null; area_m2?: number | null; boc_tach?: unknown };
+      const { data: dangRao, error: drErr } = await client.from("listings").select("id, code, location_raw, ward, district, property_type, price_raw, area_m2, boc_tach")
         .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"])
         .order("created_at", { ascending: false }).limit(5);
       if (drErr) await ghiLoi(client, "chat-reply listings(can cu hay moi)", drErr.message);
-      const cans = (dangRao ?? []) as CanRao[];
+      // 07/10/2026 (chủ dự án chat thử: "a bán nhà" → tin mới chưa có gì; "đúng rồi e. a bán nhà quận 5" → bot hỏi "trước đó anh có
+      // căn mã BDS-Q5-0006, căn đó hay căn khác?"): tin "cũ" là cái vỏ rỗng vừa mở từ chính câu rao suông trước — không địa chỉ,
+      // giá, diện tích, phường, quận (quận mặc định không tính) — thì không có gì để nhầm hai căn: câu này là nói tiếp căn đó, đi
+      // đường câu treo bình thường (ghi quận, hỏi tiếp). Còn một tin có chi tiết thì vẫn hỏi như 16/09.
+      const voRong = (c: CanRao) => !c.location_raw && !c.price_raw && !c.ward && c.area_m2 == null &&
+        (!c.district || (c.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true);
+      const cans = ((dangRao ?? []) as CanRao[]).filter((c) => !(raoSuong && !dangHoiCanCuMoi && voRong(c)));
       const tenCan = (c: CanRao) => [c.location_raw, c.ward, c.district].some(Boolean) || !c.code ? tenCanDocLen(c) : `mã ${c.code}`;
       // "căn Căn số 14 ở…" (bắn thật mau-chu-q8): địa chỉ đã mở đầu bằng "căn" thì không thêm chữ "căn".
       const canTen = (c: CanRao) => { const t = tenCan(c); return /^căn\b/i.test(t) ? t : `căn ${t}`; };
