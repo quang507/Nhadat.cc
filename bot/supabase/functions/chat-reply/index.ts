@@ -5316,20 +5316,87 @@ Deno.serve(async (req) => {
         await ghiLoi(client, "chat-reply doc lai ghi chu", e);
       }
     };
+    // SRS-5.1zzzd (07/10/2026, chủ dự án: "phần bóc tách có vấn đề… để AI bóc tách kiểu dify nhiều hơn… đến khi ra tin thì AI đọc
+    // và lọc rác"): AI CHỐT TIN trước mỗi bản nháp. Bóc tách từng lượt (cơ chế 1) ghi ngay và các lớp code sau nó dồn lỗi theo lượt
+    // (địa chỉ rác, bổ sung rác, loại nhà không đổi); bước này là cơ chế 2 — đọc TOÀN BỘ tin chủ nhà một lần, đưa trạng thái cuối
+    // qua ĐÚNG bộ bóc tách + lớp kiểm trích dẫn hiện có (`kiemDeXuat` → `docAiChinh`). Giá trị qua kiểm mà khác giá trị đang ghi →
+    // AI thắng (địa chỉ qua `chonViTri` để không mất số nhà); AI để trống thì GIỮ, không xoá. Bổ sung: ý thêm AI lọc (`kiemKienThuc`)
+    // ghi nguồn ai_kiem, bản nháp bỏ ghi chú thô `seller_chat`. Chỉ chạy ở chế độ `ai` (production) và người rao MỘT căn (nhiều căn
+    // thì tin dễ lẫn giữa các căn); không chốt được → `docLaiGhiChu` như cũ. Một lượt model mỗi bản nháp.
+    const chotTinAi = async (listingId: string): Promise<boolean> => {
+      if (!anthropicS || nhieuCan) return false;
+      try {
+        // `cheDoBocAi` trả "chinh" cho công tắc `ai` (đường câu treo dùng chung) — chế độ thật nằm ở `laCheDoAi`, đặt khi nó chạy xong.
+        const laAi = cheDoBocAi ? (await cheDoBocAi, laCheDoAi) : String((await client.rpc("cau_hinh", { p_key: "boc_tach_ai" })).data ?? "tat").trim() === "ai";
+        if (!laAi) return false;
+        const tinKhach = [...tinChuNhaGoc(), thayLienHe(text.trim(), "[liên hệ]")].filter((b) => b && !laThaCamXuc(b));
+        if (!tinKhach.length) return false;
+        const tinGop = tinKhach.map((b) => b.replace(/\s*\n+\s*/g, " / ")).join("\n").slice(-6000);
+        const [{ data: lRow, error: lErr }, { data: fRows, error: fErr }] = await Promise.all([
+          client.from("listings").select("property_type, deal, street").eq("id", listingId).maybeSingle(),
+          client.from("listing_facts").select("question, answer, source, created_at").eq("listing_id", listingId).order("created_at", { ascending: false }),
+        ]);
+        if (lErr || fErr) { await ghiLoi(client, "chat-reply chot tin(doc)", (lErr ?? fErr)!.message); return false; }
+        if (!lRow) return false;
+        const kq = await bocRaoBangModel(anthropicS as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, tinGop, null, null, null, true, null, true);
+        await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
+        if (!kq.ket) return false;
+        const dat = kiemDeXuat(kq.truong, tinGop).dat;
+        const ai = docAiChinh(dat, lRow as unknown as DongDb);
+        const facts = (fRows ?? []) as Array<{ question: string; answer: string | null; source: string | null }>;
+        const hienCo = new Map<string, string>();
+        for (const f of facts) if (f.answer && !hienCo.has(f.question)) hienCo.set(f.question, f.answer);
+        const gon = (x: string) => boDau(x).replace(/\s+/g, " ").trim();
+        const sua: string[] = [];
+        for (const g of ai.ghi) {
+          if (g.question === "bo_sung") continue;
+          const lr = lRow as { property_type?: string | null; deal?: string | null; street?: string | null };
+          const cu = g.question === "loai_bds" ? (lr.property_type && lr.property_type !== "chua_ro" ? lr.property_type : null)
+            : g.question === "loai_giao_dich" ? lr.deal ?? null : hienCo.get(g.question) ?? null;
+          const moi = g.question === "vi_tri" && cu ? (chonViTri(cu, g.answer) ?? g.answer) : g.answer;
+          if (cu && gon(cu) === gon(moi)) continue;
+          const { error: gErr } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: g.question, p_answer: moi, p_source: NGUON_AI });
+          if (gErr) await ghiLoi(client, "chat-reply chot tin(ghi)", gErr.message);
+          else sua.push(g.question);
+        }
+        if (ai.tenDuong && ai.tenDuong !== (lRow as { street?: string | null }).street) {
+          const { error: sErr } = await client.from("listings").update({ street: ai.tenDuong }).eq("id", listingId);
+          if (sErr) await ghiLoi(client, "chat-reply chot tin(duong)", sErr.message);
+          else sua.push("ten_duong");
+        }
+        const yCu = new Set(facts.filter((f) => f.question === "bo_sung" && f.source === NGUON_AI).map((f) => gon(f.answer ?? "")));
+        const yThem = kiemKienThuc(kq.kienThuc ?? [], tinGop, dat).filter((y) => !yCu.has(gon(y)));
+        for (const y of yThem) {
+          const { error: yErr } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: "bo_sung", p_answer: y, p_source: NGUON_AI });
+          if (yErr) await ghiLoi(client, "chat-reply chot tin(y them)", yErr.message);
+        }
+        const { error: bErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { chot_ai: { luc: new Date().toISOString(), sua, y_them: yThem.length } } });
+        if (bErr) await ghiLoi(client, "chat-reply chot tin(dau)", bErr.message);
+        if (sua.length) console.log("chat-reply: AI chot tin sua", sua.join(", "));
+        return true;
+      } catch (e) {
+        await ghiLoi(client, "chat-reply chot tin", e);
+        return false;
+      }
+    };
     const guiBanNhap = async (
       listingId: string, extra: Record<string, unknown>, lai = false, truoc: string[] = [], dangLuon = false,
     ): Promise<Awaited<ReturnType<typeof traLoiSeller>> | string[]> => {
-      await docLaiGhiChu(listingId);
+      const daChot = await chotTinAi(listingId);
+      if (!daChot) await docLaiGhiChu(listingId);
       const [{ data: l }, { data: dt, error: dErr }, { data: facts }] = await Promise.all([
         client.from("listings")
           .select(`code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, rent_income_vnd, ${SPEC_COLS}`)
           .eq("id", listingId).maybeSingle(),
         client.rpc("diem_tin", { p_listing_id: listingId }),
-        client.from("listing_facts").select("question, answer, created_at")
+        client.from("listing_facts").select("question, answer, source, created_at")
           .eq("listing_id", listingId)
           .order("created_at", { ascending: false }),
       ]);
       if (dErr) await ghiLoi(client, "chat-reply diem_tin", dErr.message);
+      // SRS-5.1zzzd: đã chốt tin → "📝 Thêm" chỉ lấy ý thêm AI đã lọc, bỏ ghi chú thô chủ nhà (rác "đúng rồi e…" từng vào đây).
+      const factsNhap = ((facts ?? []) as Array<{ question: string; answer: string | null; source?: string | null }>)
+        .filter((f) => !(daChot && f.question === "bo_sung" && f.source === "seller_chat"));
       const d = (dt ?? null) as DiemTin | null;
       if (!l || !d) return [];
       // 20/09/2026 (bắn thật mau-y-D): "giá 250 triệu/m2 thương lượng" — price_raw có chữ nhưng
@@ -5363,7 +5430,7 @@ Deno.serve(async (req) => {
         if (dtErr) await ghiLoi(client, "chat-reply dang luon(dong duyet)", dtErr.message);
         if (sau && sau.status !== "cho_thong_tin") {
           const tinDang = soanTinNhap({
-            l: l as TinNhapRow, facts: (facts ?? []) as FactNhap[], diem: d.diem, thieu: d.thieu ?? [],
+            l: l as TinNhapRow, facts: factsNhap as FactNhap[], diem: d.diem, thieu: d.thieu ?? [],
             soAnh: d.so_anh ?? 0, lai: false, cauTD, daDang: true,
           });
           // SRS-5.1zzq: "đăng đi" lên kệ ngay cũng DẪN PHÍ một lần như nhánh duyệt thường (trước đây nhánh này quên).
@@ -5391,7 +5458,7 @@ Deno.serve(async (req) => {
       }
       const tin = soanTinNhap({
         l: l as TinNhapRow,
-        facts: (facts ?? []) as FactNhap[],
+        facts: factsNhap as FactNhap[],
         diem: d.diem,
         thieu: d.thieu ?? [],
         soAnh: d.so_anh ?? 0,

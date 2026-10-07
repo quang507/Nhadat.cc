@@ -253,6 +253,21 @@ VÍ DỤ MẪU (đáp án đúng — chỉ học CÁCH bóc, giá trị phải l
 // Chế độ `ai` (01/10/2026, chủ dự án: "bóc thông số không biết từ đồng nghĩa hoặc viết gần giống"): máy thôi soát từ khoá
 // (`datKiemNhe`), nên AI được CHUẨN HOÁ — đọc theo nghĩa, gõ sai, viết tắt, tiếng lóng nghề. Khối này nối sau LUAT, chỉ gửi
 // khi công tắc là `ai` (khối riêng để phần LUAT vẫn cache được).
+// SRS-5.1zzzd (07/10/2026, chủ dự án: "để AI bóc tách kiểu dify nhiều hơn… đến khi ra tin thì AI đọc và lọc rác"): lượt CHỐT TIN
+// trước bản nháp — cùng khuôn JSON, cùng lớp kiểm trích dẫn, nhưng đầu vào là TOÀN BỘ tin chủ nhà về căn này.
+export const LUAT_CHOT = `CHẾ ĐỘ CHỐT TIN (đè lên cách đọc "một tin nhắn" ở trên):
+"Tin nhắn chủ nhà" dưới đây là TOÀN BỘ các tin chủ nhà đã nhắn về căn này, mỗi dòng một tin, cũ → mới. Hệ thống sắp soạn bản tin
+rao từ kết quả của em — đọc hết rồi đưa TRẠNG THÁI CUỐI của căn:
+- Mỗi ô một giá trị: chủ nhà nói lại / sửa ("à sửa lại", "không phải 5 tỷ mà 5 tỷ 2") thì lấy giá trị SAU CÙNG; trich_dan là cụm của
+  lần nói sau cùng đó.
+- Đưa MỌI ô chủ nhà đã nói (loai_bds, loai_giao_dich, duong + ten_duong, phuong, quan, dien_tich / ngang / dai, ket_cau, gia, phap_ly,
+  huong, do_rong_hem / do_rong_duong…), kể cả ô nói ở tin cũ.
+- Các dòng là CÂU TRẢ LỜI cho câu bot đã hỏi: lời gật / chào / cảm ơn, "đúng rồi e", "ok đăng đi", lời nói với bot, câu hỏi ngược,
+  hẹn trả lời sau KHÔNG phải thông tin căn — không đưa vào đâu cả.
+- kien_thuc = ý THÊM về căn nhà chưa có khoá nào (gần chợ, mặt tiền đẹp, mới sơn…): chỉ cụm ngắn nguyên văn, ĐÚNG NGHĨA khách nói
+  (khách đáp "không có, mặt tiền đẹp" cho câu hỏi cột điện → "mặt tiền đẹp", không phải "không có mặt tiền đẹp"); không lặp ô đã có.
+- tra_loi, cap_nhat, hoi_lai, cam_xuc, y_dinh, cau_ke: để null / rỗng — lượt này chỉ chốt dữ liệu.`;
+
 const LUAT_CHUAN_HOA = `CHẾ ĐỘ CHUẨN HOÁ (đè lên dòng "giữ đúng chữ cái của cụm trích" ở trên):
 - Đọc theo NGHĨA như môi giới lâu năm: viết tắt, gõ sai một hai chữ, không dấu, tiếng lóng nghề đều phải hiểu ("xhr"/"shr"/"sổ hồg riêg" = sổ hồng riêng; "sổ chug"/"sổ chung" = sổ hồng chung; "hxh"/"hẻm ô tô"/"xe hơi vô tới nhà" = hẻm xe hơi; "hxm" = hẻm xe máy; "nhà ống"/"nhà phố liền kề" = nha_pho; "lô đất"/"nền" = dat; "c4"/"nhà cấp bốn" = nha_cap4; "full nt"/"đủ đồ" = full nội thất; "bớt lộc"/"có bớt"/"còn TL" = thuong_luong co; "ko gấp"/"từ từ bán" = gap khong).
 - Giá trị trường CHỮ viết bằng TỪ CHUẨN của nghề (pháp lý: "sổ hồng riêng", "sổ hồng chung", "vi bằng", "hợp đồng mua bán", "giấy tay", "chưa có sổ", "đang chờ ra sổ", thêm "đã hoàn công"/"chưa hoàn công" nếu khách nói; nội thất: "full nội thất", "nội thất cơ bản", "nhà trống"; hướng: Đông | Tây | Nam | Bắc | Đông Nam | Đông Bắc | Tây Nam | Tây Bắc). trich_dan vẫn COPY NGUYÊN VĂN chữ khách gõ.
@@ -288,11 +303,13 @@ export async function bocRaoBangModel(
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
   nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[] } | null = null,
+  /** SRS-5.1zzzd: lượt CHỐT TIN — `text` là toàn bộ tin chủ nhà về căn (mỗi dòng một tin), thêm khối LUAT_CHOT. */
+  cheDoChot = false,
 ): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; tuXung: TuXungLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
   // Danh sách phường LỌC theo câu khách, gửi trong phần tin nhắn (phần system giữ cố định để cache được).
   // 02/10/2026 (test Zalo: khách dán nguyên tin rao 700+ chữ có gạch đầu dòng): tin dài không được cắt — 1.200 chữ cũ cắt mất
   // phần pháp lý / kết cấu ở cuối tin rao dài. Trần 4.000 chỉ để chặn tin rác cực dài.
-  const tin = text.slice(0, 4000);
+  const tin = text.slice(cheDoChot ? -6000 : 0, cheDoChot ? undefined : 4000);
   const dsPhuong = danhSachPhuongChoAi(tin);
   // "Bộ nhớ" (chủ dự án: "để AI có cache để đọc lại nguyên tin nhắn của khách để ko mất"): nguyên văn các tin chủ nhà nhắn
   // trước tin này, nơi gọi đã giới hạn ~6.000 chữ.
@@ -308,6 +325,7 @@ export async function bocRaoBangModel(
     system: [
       { type: "text", text: LUAT, cache_control: { type: "ephemeral" } },
       ...(chuanHoa ? [{ type: "text", text: LUAT_CHUAN_HOA, cache_control: { type: "ephemeral" } }] : []),
+      ...(cheDoChot ? [{ type: "text", text: LUAT_CHOT }] : []),
     ],
     messages: [{
       role: "user",
