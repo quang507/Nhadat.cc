@@ -1,0 +1,86 @@
+name: Trang chat thử bot (web, DB giả)
+
+# 07/10/2026 (chủ dự án: "làm web test đơn giản… 1 log chat này thôi… dùng ngrok dc ko"): mở trang chat một khung của
+# `bun run chat -- --web` (mã chat-reply THẬT, DB GIẢ trong bộ nhớ) ra Internet qua đường hầm nhanh của Cloudflare
+# (trycloudflare.com — không cần tài khoản, không cần ngrok token). Chạy trên máy GitHub nên không cần pull code; chạy
+# được cả khi Supabase đang khoá vì bot không gọi DB thật. Đường link in ở log job và ở trang tóm tắt của lượt chạy.
+# Không đăng nhập (chủ dự án chọn): link ngẫu nhiên, sống tối đa `phut` phút, trần `tran` lượt model — repo PUBLIC nên ai
+# đọc log Actions trong lúc đang chạy cũng thấy link. Tắt sớm: Cancel workflow run. Đừng gõ tên thật / SĐT thật.
+# Trên máy mình thì không cần workflow này: `bun run chat -- --web` rồi (nếu muốn mở từ máy khác) `ngrok http 3000`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      phut:
+        description: Trang sống bao nhiêu phút (tối đa 120)
+        required: false
+        default: '60'
+      tran:
+        description: Trần số tin nhắn cả lượt chạy (chặn đốt credit nếu link lộ)
+        required: false
+        default: '300'
+      model:
+        description: Model trả lời (để trống = Haiku 4.5 cho rẻ)
+        required: false
+        default: 'claude-haiku-4-5-20251001'
+
+env:
+  PROJECT_REF: tbcdpupiarkuxtntmosl
+
+jobs:
+  web:
+    name: Trang chat
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+
+      - name: Lấy khoá Anthropic từ Vault (che trong log)
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -uo pipefail
+          if [ -z "$TOKEN" ]; then echo "::error::Thiếu SUPABASE_ACCESS_TOKEN"; exit 1; fi
+          echo "::add-mask::$TOKEN"
+          K=$(curl -sS -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+                -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+                -d "$(jq -n --arg q "select decrypted_secret as k from vault.decrypted_secrets where name = 'ANTHROPIC_API_KEY'" '{query: $q}')" \
+              | jq -r '.[0].k // empty' 2>/dev/null)
+          if [ -z "$K" ]; then
+            echo "::warning::Không đọc được ANTHROPIC_API_KEY từ Vault — trang chạy bằng model GIẢ (chỉ thấy phần luật code)."
+          else
+            echo "::add-mask::$K"
+            echo "ANTHROPIC_API_KEY=$K" >> "$GITHUB_ENV"
+          fi
+
+      - name: Bật trang + đường hầm, giữ sống
+        env:
+          ANTHROPIC_MODEL: ${{ inputs.model || 'claude-haiku-4-5-20251001' }}
+          PHUT: ${{ inputs.phut }}
+          TRAN: ${{ inputs.tran }}
+        run: |
+          set -uo pipefail
+          case "$PHUT" in ''|*[!0-9]*) PHUT=60;; esac; [ "$PHUT" -gt 120 ] && PHUT=120
+          case "$TRAN" in ''|*[!0-9]*) TRAN=300;; esac
+          bun run chat -- --web --port 3000 --tran "$TRAN" > web.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 2; done
+          if ! curl -sf -o /dev/null http://localhost:3000/; then echo "::error::Trang không bật được"; sed -E 's/\x1b\[[0-9;]*m//g' web.log | tail -30; exit 1; fi
+          curl -sSL -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared
+          ./cloudflared tunnel --no-autoupdate --url http://localhost:3000 > cf.log 2>&1 &
+          URL=""
+          for i in $(seq 1 45); do URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' cf.log | head -1); [ -n "$URL" ] && break; sleep 2; done
+          if [ -z "$URL" ]; then echo "::error::Không mở được đường hầm Cloudflare"; tail -30 cf.log; exit 1; fi
+          echo "::notice title=Trang chat thử bot::$URL (sống $PHUT phút, trần $TRAN lượt)"
+          { echo "## Trang chat thử bot"; echo; echo "**$URL**"; echo; echo "Sống $PHUT phút, trần $TRAN lượt. Tắt sớm: Cancel workflow run."; } >> "$GITHUB_STEP_SUMMARY"
+          echo "TRANG CHAT: $URL"
+          HET=$(( $(date +%s) + PHUT * 60 ))
+          while [ "$(date +%s)" -lt "$HET" ]; do
+            sleep 60
+            curl -sf -o /dev/null http://localhost:3000/ || { echo "::error::Trang đã tắt giữa chừng"; sed -E 's/\x1b\[[0-9;]*m//g' web.log | tail -30; exit 1; }
+          done
+          echo "Hết $PHUT phút — tắt trang."

@@ -13,6 +13,9 @@
 //   bun run chat -- --that --giu              # thoát KHÔNG dọn (để mở /admin xem lại)
 //   bun run chat < cau.txt       # mỗi dòng một tin nhắn, chạy tuần tự (dán kịch bản dài)
 //   bun run chat -- --log        # chế độ MÁY: in cả log nội bộ của chat-reply (_ms, lỗi model…)
+//   bun run chat -- --web        # chế độ MÁY nhưng chat trên TRANG WEB (http://localhost:3000, đổi bằng --port).
+//                                #   Một cuộc chat duy nhất, không đăng nhập. Muốn mở từ máy khác: `ngrok http 3000`
+//                                #   hoặc workflow `chat-web.yml` (chạy trên GitHub + đường hầm Cloudflare, không cần pull).
 //
 // Lệnh trong lúc chat:  /tin  xem tin + hồ sơ người đang chat   /moi  làm lại từ đầu (người mới)
 //                       /giup  in lại hướng dẫn                   /thoat  thoát (Ctrl+C cũng được)
@@ -34,6 +37,7 @@ const giaTri = (k) => { const i = args.findIndex((a) => a === k || a.startsWith(
 const THAT = co("--that");
 const LOG = co("--log"); // in cả log nội bộ của chat-reply (chế độ MÁY)
 const GIU = co("--giu");
+const WEB = co("--web"); // 07/10/2026: chat trên trang web thay cho terminal (chế độ MÁY)
 const TTY = process.stdin.isTTY;
 
 const XANH = (s) => `\x1b[32m${s}\x1b[0m`, VANG = (s) => `\x1b[33m${s}\x1b[0m`, XAM = (s) => `\x1b[90m${s}\x1b[0m`, DO = (s) => `\x1b[31m${s}\x1b[0m`;
@@ -234,6 +238,49 @@ if (THAT) {
 console.log(`${XANH("Chat thử bot")} — ${may.ten} · ID ${uid}`);
 console.log(XAM(HUONG_DAN));
 
+if (WEB) {
+  if (THAT) { console.error(DO("--web chỉ chạy chế độ MÁY (DB giả), không bắn production.")); process.exit(2); }
+  // Một cuộc chat, xử lý tuần tự (DB giả trong bộ nhớ không chịu được hai lượt chen nhau). Trần lượt để một đường link lỡ
+  // lộ ra cũng không đốt quá nhiều credit model: hết trần thì /moi không mở lại, phải chạy lại lệnh.
+  const TRAN = Number(giaTri("--tran") ?? 300) || 300;
+  let soLuot = 0, hang = Promise.resolve();
+  const lichSu = [];
+  const tuanTu = (fn) => { const p = hang.then(fn, fn); hang = p.catch(() => {}); return p; };
+  const json = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { "content-type": "application/json; charset=utf-8" } });
+  const port = Number(giaTri("--port") ?? process.env.PORT ?? 3000) || 3000;
+  Bun.serve({
+    port,
+    async fetch(req) {
+      const u = new URL(req.url);
+      if (req.method === "GET" && u.pathname === "/") return new Response(TRANG_WEB_HTML().replace("__TEN__", may.ten), { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (req.method === "GET" && u.pathname === "/lich-su") return json({ lichSu, conLai: TRAN - soLuot });
+      if (req.method === "GET" && u.pathname === "/tin") return json(await may.tin(uid));
+      if (req.method === "POST" && u.pathname === "/moi") return tuanTu(async () => { await may.xoa(uid); lichSu.length = 0; return json({ ok: true }); });
+      if (req.method === "POST" && u.pathname === "/gui") {
+        const b = await req.json().catch(() => ({}));
+        const text = String(b?.text ?? "").trim().slice(0, 2000);
+        if (!text) return json({ loi: "trống" }, 400);
+        if (soLuot >= TRAN) return json({ loi: `hết ${TRAN} lượt của lần chạy này — chạy lại lệnh để chat tiếp` }, 429);
+        return tuanTu(async () => {
+          soLuot++;
+          lichSu.push({ ai: "khach", text });
+          const t0 = Date.now();
+          try {
+            const replies = (await may.gui(uid, text)).map(String);
+            for (const r of replies) lichSu.push({ ai: "bot", text: r });
+            return json({ replies, ms: Date.now() - t0, conLai: TRAN - soLuot });
+          } catch (e) {
+            const loi = String(e?.message ?? e).slice(0, 300);
+            lichSu.push({ ai: "loi", text: loi });
+            return json({ loi }, 500);
+          }
+        });
+      }
+      return new Response("không có", { status: 404 });
+    },
+  });
+  console.log(`${XANH("Trang chat:")} http://localhost:${port}  ${XAM(`(Ctrl+C để tắt · trần ${TRAN} lượt)`)}`);
+} else {
 let dangDon = false;
 async function thoat(ma = 0) {
   if (dangDon) return;
@@ -276,3 +323,48 @@ for await (const dongVao of rl) {
   nhac();
 }
 await thoat(0);
+}
+
+// Trang chat một khung, dáng Zalo. Không thư viện ngoài, không lưu gì phía trình duyệt; lịch sử giữ ở máy chạy lệnh.
+function TRANG_WEB_HTML() {
+  return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chat thử bot</title><style>
+:root{--nen:#e9ebef;--ban:#fff;--khach:#dbeafe;--chu:#0f172a;--mo:#64748b;--vien:#d0d5dd;--chinh:#0068ff}
+@media (prefers-color-scheme:dark){:root{--nen:#0f141a;--ban:#1c232c;--khach:#163a6b;--chu:#e6e9ee;--mo:#94a3b8;--vien:#2c3540;--chinh:#4d9bff}}
+*{box-sizing:border-box}body{margin:0;background:var(--nen);color:var(--chu);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;height:100dvh;display:flex;flex-direction:column}
+header{background:var(--ban);border-bottom:1px solid var(--vien);padding:10px 16px;display:flex;gap:10px;align-items:center}
+header b{flex:1}header small{color:var(--mo);display:block;font-weight:400}
+button{font:inherit;border:1px solid var(--vien);background:var(--ban);color:var(--chu);border-radius:8px;padding:6px 10px;cursor:pointer}
+#khung{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:6px}
+.b{max-width:min(78%,640px);padding:9px 12px;border-radius:10px;white-space:pre-wrap;word-wrap:break-word;box-shadow:0 1px 1px rgba(0,0,0,.06)}
+.bot{background:var(--ban);align-self:flex-start}.khach{background:var(--khach);align-self:flex-end}
+.loi{background:#fee2e2;color:#991b1b;align-self:center;font-size:13px}.mo{color:var(--mo);font-size:12px;align-self:center}
+form{display:flex;gap:8px;padding:10px 16px;background:var(--ban);border-top:1px solid var(--vien)}
+textarea{flex:1;resize:none;font:inherit;padding:9px 12px;border-radius:10px;border:1px solid var(--vien);background:var(--nen);color:var(--chu);max-height:140px}
+form button{background:var(--chinh);color:#fff;border:0;padding:0 18px}
+pre{white-space:pre-wrap;font-size:12px;background:var(--ban);border:1px solid var(--vien);border-radius:10px;padding:10px;margin:0;align-self:stretch}
+</style></head><body>
+<header><b>Chat thử bot<small>__TEN__</small></b><button id="xemTin" type="button">Xem tin</button><button id="lamLai" type="button">Làm lại</button></header>
+<div id="khung"></div>
+<form id="f"><textarea id="o" rows="1" placeholder="Nhắn như khách Zalo… (Enter để gửi, Shift+Enter xuống dòng)"></textarea><button>Gửi</button></form>
+<script>
+const khung=document.getElementById('khung'),o=document.getElementById('o');
+const them=(ai,text)=>{const d=document.createElement(ai==='tin'?'pre':'div');d.className=ai==='tin'?'':'b '+ai;if(ai==='mo')d.className='mo';d.textContent=text;khung.appendChild(d);khung.scrollTop=khung.scrollHeight;return d;};
+fetch('lich-su').then(r=>r.json()).then(j=>{for(const m of j.lichSu)them(m.ai,m.text);them('mo','Còn '+j.conLai+' lượt');}).catch(()=>{});
+let dang=false;
+async function gui(){const text=o.value.trim();if(!text||dang)return;dang=true;o.value='';them('khach',text);const cho=them('mo','bot đang gõ…');
+ try{const r=await fetch('gui',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text})});const j=await r.json();cho.remove();
+  if(j.loi)them('loi',j.loi);else{if(!j.replies.length)them('mo','(bot không trả lời lượt này)');for(const x of j.replies)them('bot',x);them('mo',(j.ms/1000).toFixed(1)+'s');}}
+ catch(e){cho.remove();them('loi','Mất kết nối: '+e);}dang=false;o.focus();}
+document.getElementById('f').onsubmit=e=>{e.preventDefault();gui();};
+o.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();gui();}};
+document.getElementById('lamLai').onclick=async()=>{if(!confirm('Xoá cuộc chat, làm lại như khách mới?'))return;await fetch('moi',{method:'POST'});khung.innerHTML='';them('mo','Đã làm lại từ đầu');};
+document.getElementById('xemTin').onclick=async()=>{const j=await fetch('tin').then(r=>r.json());
+ const dong=[];if(j.nguoiMua)dong.push('Hồ sơ mua: '+JSON.stringify(j.nguoiMua.preferences||{}));if(j.nguoiBan)dong.push('Người bán: '+(j.nguoiBan.seller_type||'?'));
+ for(const l of j.tin){const c=Object.entries(l).filter(([k,v])=>v!==null&&v!==''&&typeof v!=='object'&&!/(_id|^id|_at)$/.test(k)).map(([k,v])=>k+'='+v);dong.push('Tin: '+c.join(' · '));
+  const fs=j.facts.filter(f=>f.listing_id===l.id);if(fs.length)dong.push('  facts: '+fs.map(f=>f.question+'='+String(f.answer).slice(0,40)).join(' · '));
+  const tq=j.treo.filter(q=>q.listing_id===l.id);if(tq.length)dong.push('  đang hỏi: '+tq.map(q=>q.question).join(', '));}
+ them('tin',dong.length?dong.join('\\n'):'(chưa có hồ sơ nào)');};
+o.focus();
+</script></body></html>`;
+}
