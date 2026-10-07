@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-07 00:28 (giờ VN)
+-- Sinh lúc: 2026-10-07 15:16 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -3934,6 +3934,8 @@ AS $function$
   with t as (select public.bo_dau(coalesce(p_text, '')) as s)
   select (case
     when (select btrim(s) from t) = '' then null
+    when (select btrim(s) from t) ~ '^(chung_cu|nha_pho|nha_cap4|dat|biet_thu|phong_tro|mat_bang|toa_nha|dat_nong_nghiep|dat_kinh_doanh|kho_xuong)$'
+                                                                                          then (select btrim(s) from t)
     when (select s from t) ~ '(\mkho\M|\mxuong\M|nha kho|kho bai)'                        then 'kho_xuong'
     when (select s from t) ~ '(nong nghiep|dat vuon|dat lua|dat ray|\mcln\M)'             then 'dat_nong_nghiep'
     when (select s from t) ~ '(\mskc\M|\mtmd\M|dat thuong mai|dat san xuat|dat kinh doanh)' then 'dat_kinh_doanh'
