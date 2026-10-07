@@ -135,7 +135,9 @@ const NV_BE_RONG_HEM = /(\b(?:hẻm|hem|hẽm)\b\s*)(?:rộng|rong)?\s*\d+(?:[.,
 /**
  * Giá trị ghi cho ô nguyên văn: cụm gốc (hay trích dẫn của model), gọt chữ dẫn đầu ("ở", "nhà", "tại"), tiểu từ cuối câu
  * (cùng `gonGiaTriFact` với luật); riêng địa chỉ bỏ đuôi phường / quận (có ô riêng) và bề rộng hẻm ("hẻm 6m" — ô
- * `do_rong_hem`). KHÔNG đảo, KHÔNG thêm, KHÔNG sửa chính tả. Không ra được cụm dùng được → null (nơi gọi lấy giá trị model).
+ * `do_rong_hem`). KHÔNG đảo, KHÔNG thêm. Chính tả: SRS-5.1zzzh — lỗi gõ nhẹ khách gõ ("còn nguyê") đính chính theo bản
+ * model ("còn nguyên") khi hai bên cùng số chữ, từng chữ chỉ lệch một ký tự; ĐỊA CHỈ thì không (tên đường gõ sai do từ điển
+ * `duong` hỏi xác nhận, FR-212). Không ra được cụm dùng được → null (nơi gọi lấy giá trị model).
  */
 export function giaTriNguyenVan(question: string, d: DeXuat | null | undefined): string | null {
   if (!d || d.giu_gia_tri) return null;
@@ -155,12 +157,49 @@ export function giaTriNguyenVan(question: string, d: DeXuat | null | undefined):
   // Model chỉ THÊM DẤU / đổi hoa thường cho một phần của cụm ("126 Hung Vuong" + model "Hùng Vương"; "pham the hien" →
   // "Phạm Thế Hiển": cùng chữ cái, cùng thứ tự) → ghép bản có dấu của model vào ĐÚNG chỗ đó, phần còn lại giữ nguyên văn
   // (FR-208 h đã cấm đổi chữ cái). Đảo chữ, thêm bớt chữ thì không khớp → cụm khách.
-  return themDauTheoModel(c, v);
+  return themDauTheoModel(c, v, question !== "vi_tri");
+}
+/** Khoảng cách sửa (Levenshtein) giữa hai chuỗi ngắn. */
+function khoangSua(a: string, b: string): number {
+  const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let truoc = d[0];
+    d[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tam = d[j];
+      d[j] = Math.min(d[j] + 1, d[j - 1] + 1, truoc + (a[i - 1] === b[j - 1] ? 0 : 1));
+      truoc = tam;
+    }
+  }
+  return d[b.length];
+}
+/**
+ * SRS-5.1zzzh: hai chữ chỉ khác nhau ở LỖI GÕ nhẹ — bỏ dấu giống nhau, hoặc lệch đúng một ký tự (chữ ≥ 3 ký tự), hoặc chỉ đổi
+ * i ↔ y ("tỉ" / "tỷ"). Chữ có số thì phải trùng hẳn (số không được "đính chính").
+ */
+export function chiLechChinhTa(a: string, b: string): boolean {
+  const x = boDau(a).toLowerCase(), y = boDau(b).toLowerCase();
+  if (x === y) return true;
+  if (/\d/.test(x) || /\d/.test(y)) return false;
+  if (x.replace(/y/g, "i") === y.replace(/y/g, "i")) return true;
+  return Math.min(x.length, y.length) >= 3 && khoangSua(x, y) <= 1;
 }
 /** Thay trong `cum` đoạn từ nào `chuanSo` trùng với `v` bằng chính `v` (bản có dấu của model). Không trùng → giữ `cum`. */
-function themDauTheoModel(cum: string, v: string): string {
+function themDauTheoModel(cum: string, v: string, choSuaChinhTa = false): string {
   const kv = chuanSo(v);
   if (!kv || !v) return cum;
+  // SRS-5.1zzzh: ô không phải địa chỉ — đoạn cùng số chữ mà từng chữ chỉ lệch lỗi gõ → bản model ("nhà còn nguyê" → "còn nguyên").
+  // Model THÊM ký hiệu ("(chính chủ)") không phải đính chính chính tả — giữ cụm khách (NV-10).
+  if (choSuaChinhTa && !/[^\p{L}\p{N}\s]/u.test(v)) {
+    const tuV = v.trim().split(/\s+/);
+    const tuC = cum.split(" ");
+    for (let i = 0; i + tuV.length <= tuC.length; i++) {
+      const doan = tuC.slice(i, i + tuV.length);
+      if (doan.every((t, k) => chiLechChinhTa(t.replace(/[^\p{L}\p{N}]+/gu, ""), tuV[k]))) {
+        return [...tuC.slice(0, i), v.trim(), ...tuC.slice(i + tuV.length)].join(" ").replace(/\s+/g, " ").trim();
+      }
+    }
+  }
   // Chỉ dấu / hoa thường được khác — ký hiệu model THÊM ("(chính chủ)") không phải thêm dấu, giữ cụm khách.
   const chiDau = (a: string, b: string) => boDau(a).replace(/\s+/g, " ").trim() === boDau(b).replace(/\s+/g, " ").trim();
   const tu = cum.split(" ");

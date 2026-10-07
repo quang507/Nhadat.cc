@@ -8,7 +8,7 @@ import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang
 import { canTheoAi } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
-import { gotManhOKhac, soSauTenDuong, traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { chiLechChinhTa, gotManhOKhac, soSauTenDuong, traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -843,6 +843,19 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZZZC-02 hỏi kết cấu, trích cả câu có '3 phòng ngủ' → ô kết cấu không mang '3 phòng ngủ'", !!kc?.giaTri && !/phòng ngủ/.test(kc.giaTri), JSON.stringify(kc));
   ok("ZZZC-03 (cách nói MỚI) 'trệt 2 lầu, sổ hồng riêng, có gác lửng' cho ô kết cấu → bỏ mảnh pháp lý",
     gotManhOKhac("ket_cau", "trệt 2 lầu, sổ hồng riêng, có gác lửng") === "trệt 2 lầu, có gác lửng");
+}
+// ── SRS-5.1zzzh (07/10/2026, chủ dự án: "sếp bảo giữ nguyên những gì khách chat nhưng… mình cần đính chính lại"): ô nguyên văn
+// giữ CHỮ khách nhưng đính chính lỗi gõ nhẹ theo bản model; địa chỉ không (từ điển đường hỏi xác nhận); nghĩa khác thì không.
+{
+  const nv = (q, cum, v) => giaTriNguyenVan(q, { khoa: q, gia_tri: v, trich_dan: cum, cum_goc: cum });
+  ok("ZZZH-01 'nhà còn nguyê' + model 'còn nguyên' → 'còn nguyên'", nv("hien_trang", "nhà còn nguyê", "còn nguyên") === "còn nguyên", nv("hien_trang", "nhà còn nguyê", "còn nguyên"));
+  ok("ZZZH-02 (cách gõ MỚI) 'sổ hồng riêg' → 'sổ hồng riêng'", nv("phap_ly", "sổ hồng riêg", "sổ hồng riêng") === "sổ hồng riêng");
+  ok("ZZZH-03 không dấu 'so hong rieng' → bản có dấu", nv("phap_ly", "so hong rieng", "sổ hồng riêng") === "sổ hồng riêng");
+  ok("ZZZH-04 số khác ('2 lầu' / '3 lầu') → GIỮ chữ khách", nv("ket_cau", "1 trệt 2 lầu", "1 trệt 3 lầu") === "1 trệt 2 lầu");
+  ok("ZZZH-05 nghĩa khác ('sổ chung' / 'sổ riêng') → GIỮ chữ khách", nv("phap_ly", "sổ chung", "sổ riêng") === "sổ chung");
+  ok("ZZZH-06 ĐỊA CHỈ gõ sai không tự sửa (từ điển đường hỏi xác nhận)", nv("vi_tri", "45 Pham The Hier", "45 Phạm Thế Hiển") === "45 Pham The Hier");
+  ok("ZZZH-07 câu khác hẳn ('đang cho thuê' / 'đang trống') → GIỮ", nv("hien_trang", "đang cho thuê", "đang trống") === "đang cho thuê");
+  ok("ZZZH-08 chiLechChinhTa: tỉ/tỷ đúng, chung/riêng sai, 2/3 sai", chiLechChinhTa("tỉ", "tỷ") && !chiLechChinhTa("chung", "riêng") && !chiLechChinhTa("2", "3"));
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

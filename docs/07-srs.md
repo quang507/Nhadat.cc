@@ -2472,6 +2472,16 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Sửa**: (1) lượt AI bóc tách nhận khối "Căn chủ nhà đang có với em" (mã, loại, nơi, giá — tối đa 5 căn mở) ở mọi lượt chế độ `ai`, và `can_khac` định nghĩa lại theo căn ĐANG CÓ: rao / tả căn khác → true; nói thêm, sửa, trả lời về căn đang có ("cần bán gấp", "giá còn bớt") → false. (2) Người bán có tin mở (không phải toàn vỏ rỗng) mà luật nói "câu rao" → chờ AI: AI nói `can_khac = false` thì KHÔNG mở tin mới, câu đi đường ghi ô cho căn đang có; AI không chạy → luật như cũ. Tin vỏ rỗng vừa mở từ "em cần bán nhà" vẫn để luật (câu rao đầy đủ kế tiếp điền vào tin rỗng).
 - **Kiểm, đỏ khi tắt**: e2e SRS-5.1zzzg-a ("Mình cần bán gấp", AI `can_khac=false`) → số tin không đổi, `gap = true` trên tin đang có, không hỏi loại nhà, lượt AI có khối căn đang có; SRS-5.1zzzg-b ("còn căn nữa ở quận 7…", AI `can_khac=true`) → vẫn mở tin mới. Tắt cổng: 1/1026 đỏ (zzzg-a).
 
+### SRS-5.1zzzh · Ô nguyên văn giữ chữ khách nhưng đính chính lỗi gõ; lượt chốt không ghi lại giá chỉ khác cách viết (07/10/2026)
+
+`[nguồn: chat thử 07/10/2026 …phzg — chủ dự án: "5, sửa đi nó có hỏi lại mà, vậy thì sếp bảo giữ nguyên những gì khách chat nhưng thôi, mình cần đính chính lại như đợt trước"]`
+
+- **Ca gốc**: khách "nhà còn nguyê, anh đứng tên, sổ hồng riêng" → ô hiện trạng (nhà cấp 4: ô nguyên văn) ghi "còn nguyê", bản nháp in "còn nguyê" dù AI đã đọc ra "còn nguyên". Cùng phiên: khách "21 tỉ 300 triệu", lượt đầu ghi "21 tỷ 300 triệu", lượt chốt ghi lại "21 tỉ 300 triệu" → 🤖 báo giá như vừa bóc.
+- **Lớp lỗi**: (1) *ô nguyên văn chép cả lỗi gõ* — luật SRS-5.1zzr "ghi đúng cụm khách gõ, KHÔNG sửa chính tả" chỉ cho model thêm dấu, nên chữ gõ thiếu / gõ nhầm một ký tự đi thẳng lên tin. (2) *so giá bằng chữ* — lượt chốt so giá trị cũ / mới bằng chuỗi bỏ dấu, "tỉ" và "tỷ" khác chữ nên ghi lại cùng một số tiền.
+- **Chỗ khác cùng lớp**: mọi ô trong `O_NGUYEN_VAN` (pháp lý, kết cấu, hiện trạng, nội thất, hạ tầng…) — sửa ở MỘT chỗ `giaTriNguyenVan` nên đủ cả; ĐỊA CHỈ cố ý giữ như cũ (tên đường gõ sai do từ điển `duong` hỏi xác nhận, FR-212). Các ô số khác trong lượt chốt (diện tích, ngang, dài) đi cột số nên không lặp lỗi chữ; chỉ giá có cột chữ `price_raw` song song.
+- **Sửa**: `chiLechChinhTa(a, b)` — hai chữ chỉ lệch lỗi gõ (bỏ dấu trùng, hoặc lệch một ký tự với chữ ≥ 3 ký tự, hoặc i ↔ y; chữ có số phải trùng hẳn). `themDauTheoModel` (ô không phải địa chỉ): đoạn cùng số chữ mà từng chữ chỉ lệch lỗi gõ → lấy bản model; model thêm ký hiệu ("(chính chủ)") hay đổi nghĩa ("sổ chung" / "sổ riêng", "2 lầu" / "3 lầu") → giữ chữ khách. Lượt chốt: giá cũ và mới `docTien` ra cùng số tiền → không ghi lại.
+- **Kiểm, đỏ khi tắt**: `kiem-bang-chung.mjs` ZZZH-01…08 ("còn nguyê", cách gõ MỚI "sổ hồng riêg", không dấu; số khác, nghĩa khác, địa chỉ, câu khác hẳn đều GIỮ) — tắt đính chính: 2/418 đỏ. e2e "SRS-5.1zzzh lượt chốt" (giá đang có "21 tỷ 300 triệu", chốt đọc "21 tỉ 300 triệu") — tắt so `docTien`: 1/1027 đỏ.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
