@@ -49,14 +49,20 @@ export type DieuKienVai = {
   nhacMaCan: boolean;   // nhắc mã tin (từ web sang) — đi thẳng hàng mua
   doiGoi: boolean;      // "alo được không" — đường VOICE riêng
   text: string;
+  // 07/10/2026 (SRS-5.1zzze): tin này trả lời CÂU HỎI VAI bot vừa gửi, và luật đáp vai (gật trơn, "có nhà", "bán") không ra.
+  traLoiCauVai?: boolean;
+  dapVaiTheoLuat?: boolean;
 };
 
 /** Có đáng tốn MỘT lượt model để phân vai không. */
 export function nenHoiModelVai(d: DieuKienVai): boolean {
   if (d.coHoSoBan || d.raoTheoLuat || d.muaTheoLuat || d.daCoHoSoMua || d.coAnh || d.nhacMaCan || d.doiGoi) return false;
   const t = (d.text ?? "").trim();
-  if (t.length < 8 || t.length > 600) return false;
-  return coMuiBDS(t);
+  if (!t || t.length > 600) return false;
+  if (t.length >= 8 && coMuiBDS(t)) return true;
+  // Trả lời câu hỏi vai: câu ngắn không mùi nhà đất ("đúng rồi e", "chuẩn luôn") vẫn đáng một lượt model — luật gật chỉ
+  // biết danh sách chữ đã gặp, câu khác đi một chữ là rơi về hỏi lại câu chào.
+  return !!d.traLoiCauVai && !d.dapVaiTheoLuat;
 }
 
 /**
@@ -64,12 +70,14 @@ export function nenHoiModelVai(d: DieuKienVai): boolean {
  * đi đường cũ. `chua_ro` = hỏi vai như cũ. Chỉ `ban`/`mua` mới đổi đường đi, và
  * chỉ khi cụm làm bằng (≥ 4 ký tự sau khi gọn) nằm NGUYÊN trong câu khách gõ.
  */
-export function donVai(k: unknown, text: string): VaiModel | null {
+export function donVai(k: unknown, text: string, toiThieu = 4): VaiModel | null {
   if (!k || typeof k !== "object") return null;
   const { vai, bang_chung } = k as { vai?: unknown; bang_chung?: unknown };
   if (vai !== "ban" && vai !== "mua" && vai !== "chua_ro") return null;
   if (vai === "chua_ro") return "chua_ro";
   const bc = boDauGon(typeof bang_chung === "string" ? bang_chung : "");
-  if (bc.length < 4 || !boDauGon(text).includes(bc)) return "chua_ro";
+  // Lời gật trả lời câu hỏi vai thường rất ngắn ("ok", "ừ e") → nơi gọi hạ `toiThieu`; cụm là CẢ câu thì luôn nhận.
+  const tg = boDauGon(text);
+  if ((bc.length < toiThieu && bc !== tg) || !bc || !tg.includes(bc)) return "chua_ro";
   return vai;
 }
