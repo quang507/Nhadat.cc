@@ -3733,7 +3733,12 @@ Deno.serve(async (req) => {
     // — demo AOND đọc ý mọi lượt; luật từ khoá chỉ là lưới đỡ, không phải cổng quyết AI có được đọc hay không.
     // Giá trị LUẬT của cổng câu rao, chụp trước lượt AI — lượt AI đọc giá trị này (không đọc `wantsSell` đã được AI sửa).
     const wantsSellTruocAi = wantsSell;
-    if (anthropicS && (coMuiAi || !!pendingReq || wantsSell || dsMo.length >= 2)) {
+    // SRS-5.1zzzi (07/10/2026, chat thử …98iz): người bán CHƯA có tin, bot vừa hỏi "bất động sản ở đâu", khách "Ở Trần Bình
+    // Trọng" — câu không có "mùi dữ liệu" theo luật, không có câu treo (chưa có tin để treo) → AI không được gọi, tên đường mất,
+    // về sau bot hỏi lại "nhà ở đường nào". Chưa có tin mà bot vừa nói → tin này là câu TRẢ LỜI cho bot, AI phải đọc (kèm câu
+    // bot vừa nói trong `hoiThoai`). Đọc ra địa chỉ / dữ kiện thì `raoNgam` mở tin như câu rao.
+    const traLoiBotKhiChuaCoTin = dsMo.length === 0 && !!cauBotThat?.trim();
+    if (anthropicS && (coMuiAi || !!pendingReq || wantsSell || dsMo.length >= 2 || traLoiBotKhiChuaCoTin)) {
       // 30/09/2026 (chủ dự án, chat thử): "nhà chú ở 137/28 đường số 59 phường an hội tây nhé" nhắn TRƯỚC câu rao — lúc
       // đó chưa có tin nên không có chỗ ghi, tới lúc rao thì mất. Người chưa có tin nào mà nhắn câu rao: AI đọc cả các
       // tin khách nhắn trước đó (`truocTin`) cùng câu rao; bằng chứng kiểm trên chính đoạn gộp đó.
@@ -7990,7 +7995,10 @@ Deno.serve(async (req) => {
                 // 07/10/2026 (SRS-5.1zzze, test os6o): câu mời cũ xin "địa chỉ, diện tích và giá" một lượt — trái luật một ý mỗi
                 // lượt (FR-177); khách trả lời một ý rồi bot hỏi dần các ý kia, nên câu ba ý chỉ làm khách gõ một tràng.
                 ? `Người này VỪA cho biết đang có bất động sản muốn rao ("${textOrTag}") nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN ${lichSuRows.some((m) => !laTinNguoi(m.sender)) ? "(em ĐÃ chào ở tin trước — KHÔNG chào lại, mở bằng \"Dạ\")" : "chào"} + hỏi đúng MỘT ý: bất động sản của họ ở đâu (một câu hỏi, không gộp diện tích / giá / loại nhà — các ý đó em hỏi dần sau) - KHÔNG hỏi lại muốn bán hay cho thuê (họ vừa nói rồi; câu họ không nói rõ thì hiểu là bán), KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
-                : `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN - tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
+                // SRS-5.1zzzi (chat thử …lboq: bot hỏi "ở Hồ Chí Minh đúng không?", khách "chính xác em" → model "em sẽ rao tích cực cho
+                // căn hộ này" — không có tin nào): model phải đọc câu EM vừa nói để hiểu tin khách là trả lời cho câu nào.
+                : `${cauBotThat?.trim() ? `Câu em vừa nhắn họ (nguyên văn): "${cauBotThat.trim().slice(0, 300)}". Tin của họ có thể là câu trả lời cho câu đó — đọc theo câu đó mà đáp; chưa có tin rao nào thì không nói đã rao / sẽ rao căn nào, hỏi tiếp đúng MỘT ý còn thiếu để lên tin. ` : ""}` +
+                  `Họ vừa nhắn: "${textOrTag}". Soạn MỘT tin trả lời NGẮN đúng vai chăm sóc NGƯỜI BÁN - tuyệt đối KHÔNG hỏi nhu cầu mua nhà. ` +
                   `Không bịa tình trạng tin/lượt khách quan tâm; điều chưa nắm thì nói "để em kiểm tra rồi báo lại anh/chị liền".`),
           }],
         });
