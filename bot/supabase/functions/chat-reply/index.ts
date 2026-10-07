@@ -5387,6 +5387,8 @@ Deno.serve(async (req) => {
             : g.question === "loai_giao_dich" ? lr.deal ?? null : hienCo.get(g.question) ?? null;
           const moi = g.question === "vi_tri" && cu ? (chonViTri(cu, g.answer) ?? g.answer) : g.answer;
           if (cu && gon(cu) === gon(moi)) continue;
+          // SRS-5.1zzzh: giá cùng số tiền, chỉ khác cách viết ("21 tỉ 300 triệu" / "21 tỷ 300 triệu") → không ghi lại.
+          if (cu && g.question === "gia" && docTien(cu) != null && docTien(cu) === docTien(moi)) continue;
           const { error: gErr } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: g.question, p_answer: moi, p_source: NGUON_AI });
           if (gErr) await ghiLoi(client, "chat-reply chot tin(ghi)", gErr.message);
           else sua.push(g.question);

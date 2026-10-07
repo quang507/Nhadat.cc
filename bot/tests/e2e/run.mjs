@@ -4041,6 +4041,41 @@ fresh(seedKho);
     globalThis.__khongNhoCauHinh = false;
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zzzh (07/10/2026, chat thử …phzg): lượt chốt ghi lại giá "21 tỉ 300 triệu" chỉ vì khác cách viết với "21 tỷ 300 triệu"
+  // đang có → 🤖 báo lại giá như mới bóc. Cùng số tiền thì không ghi lại.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "chinh", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], truong: [] } : OUT();
+    await send({ external_user_id: "chot-gia", text: "anh cần bán nhà trong hẻm 12 Trần Bình Trọng quận 5" });
+    const LP = db().t.listings.at(-1);
+    Object.assign(LP, { property_type: "nha_pho", location_raw: "12 Trần Bình Trọng", ward: "Phường Chợ Quán", district: "Quận 5", alley_width_m: 4,
+      area_m2: 64, frontage_m: 4, floors: 2, bedrooms: 3, price_raw: "21 tỷ 300 triệu", price_vnd: 21300000000, legal_status: null });
+    db().t.listing_facts = db().t.listing_facts.filter((f) => f.listing_id !== LP.id);
+    for (const [q, a] of [["vi_tri", "12 Trần Bình Trọng"], ["dien_tich_dat", "4x16"], ["do_rong_hem", "4m"], ["gia", "21 tỷ 300 triệu"], ["phuong", "Phường Chợ Quán"], ["so_phong_ngu", "3"], ["ket_cau", "1 trệt 1 lầu"]]) {
+      db().insert("listing_facts", { listing_id: LP.id, question: q, answer: a, source: "seller_chat" });
+    }
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: LP.id, question: "phap_ly", status: "pending" });
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__khongNhoCauHinh = true;
+    const laChotG = (p) => (p?.system ?? []).some((x) => /CHẾ ĐỘ CHỐT TIN/.test(x.text ?? ""));
+    let goiChotG = 0;
+    globalThis.__model.parse = (p) => {
+      if (!laLuotBocRao(p)) return OUT();
+      if (laChotG(p)) { goiChotG++; return { so_can: 0, kien_thuc: [], cap_nhat: [], truong: [{ khoa: "gia", gia_tri: "21 tỉ 300 triệu", trich_dan: "21 tỉ 300 triệu", can: null }] }; }
+      return { so_can: 0, kien_thuc: [], cap_nhat: [], truong: [{ khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "sổ riêng", can: null }],
+        tra_loi: { co_tra_loi: true, gia_tri: "sổ hồng riêng", trich_dan: "sổ riêng" } };
+    };
+    db().insert("messages", { conversation_id: db().t.conversations.at(-1)?.id, sender: "seller", body: "21 tỉ 300 triệu em" });
+    await send({ external_user_id: "chot-gia", text: "sổ riêng" });
+    const giaAi = db().t.listing_facts.filter((f) => f.listing_id === LP.id && f.question === "gia" && f.source === "ai_kiem");
+    check("SRS-5.1zzzh lượt chốt: giá cùng số tiền, chỉ khác 'tỉ'/'tỷ' → KHÔNG ghi lại giá", goiChotG === 1 && giaAi.length === 0,
+      JSON.stringify({ goiChotG, giaAi }));
+    globalThis.__khongNhoCauHinh = false;
+    globalThis.__cauHinh = cuCH;
+  }
   // SRS-5.1zzzg (07/10/2026, chat thử …gogt; chủ dự án: "Phần này cần con bot trả lời 'dạ vâng ạ' chứ nó hỏi lại thông tin nhà…
   // giống như đang cần bán cái mới"): tin đang rao đủ dữ kiện, không câu treo, khách "Mình cần bán gấp" → luật `wantsSell` (bỏ dấu
   // "cần" = "căn" + "bán") mở TIN MỚI rỗng, bot hỏi "nhà loại gì". Nay người bán đã có tin thì AI (`can_khac`, đọc kèm danh sách căn
