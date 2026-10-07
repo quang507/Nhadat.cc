@@ -31,6 +31,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
+import { createHash } from "node:crypto";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GOC = join(HERE, "..", "..", "..");
@@ -276,6 +277,15 @@ if (WEB) {
   let soLuot = 0, hang = Promise.resolve();
   const lichSuCua = new Map();
   const lichSu = (id) => { if (!lichSuCua.has(id)) lichSuCua.set(id, []); return lichSuCua.get(id); };
+  // 07/10/2026 (chủ dự án: "muốn m đọc liên tục như test trước kia"): NHẬT KÝ chung mọi người thử, chỉ thêm không xoá (nút
+  // "Xoá chat" chỉ làm người đó mới lại, nhật ký giữ dòng `xoa`) — để Claude đọc trong lúc đang test qua GET /nhat-ky.
+  // Khoá: chỉ nhận khi có CHAT_LOG_BAM = sha256 của khoá đọc (workflow nhận MÃ BĂM, không bao giờ nhận khoá — log Actions
+  // công khai); không đặt thì /nhat-ky trả 404. Nhật ký chỉ ở bộ nhớ runner, tắt trang là mất (như lịch sử chat).
+  const BAM_LOG = String(process.env.CHAT_LOG_BAM ?? "").trim().toLowerCase();
+  const nhatKy = [];
+  const ghiNhatKy = (id, ai, text, them = {}) => { nhatKy.push({ i: nhatKy.length, luc: new Date().toISOString(), id, ai, text, ...them }); if (nhatKy.length > 20000) nhatKy.splice(0, 5000); };
+  const dungKhoa = (req) => !!BAM_LOG && /^[0-9a-f]{64}$/.test(BAM_LOG) &&
+    createHash("sha256").update(String(req.headers.get("x-khoa") ?? "")).digest("hex") === BAM_LOG;
   const maKhach = (req) => { const m = String(req.headers.get("x-khach") ?? ""); return /^web-[a-z0-9]{6,16}$/.test(m) ? m : null; };
   const tuanTu = (fn) => { const p = hang.then(fn, fn); hang = p.catch(() => {}); return p; };
   const json = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -321,12 +331,22 @@ if (WEB) {
           return json({ ok: true, da_sua: ghiSua() });
         });
       }
+      if (req.method === "GET" && u.pathname === "/nhat-ky") {
+        if (!dungKhoa(req)) return new Response("không có", { status: 404 });
+        const tu = Math.max(0, Number(u.searchParams.get("tu") ?? 0) || 0);
+        const dong = nhatKy.filter((d) => d.i >= tu);
+        // ?tin=1: kèm tình trạng tin + hồ sơ hiện tại của từng người có dòng mới (như lệnh /tin).
+        const tin = u.searchParams.get("tin") === "1"
+          ? Object.fromEntries(await Promise.all([...new Set(dong.map((d) => d.id))].map(async (k) => [k, await may.tin(k)])))
+          : undefined;
+        return json({ den: nhatKy.length, conLai: TRAN - soLuot, dong, ...(tin ? { tin } : {}) });
+      }
       if (u.pathname === "/") return new Response("không có", { status: 404 });
       const id = maKhach(req);
       if (!id) return json({ loi: "thiếu mã khách" }, 400);
       if (req.method === "GET" && u.pathname === "/lich-su") return json({ lichSu: lichSu(id), conLai: TRAN - soLuot, nguoi: lichSuCua.size });
       if (req.method === "GET" && u.pathname === "/tin") return json(await may.tin(id));
-      if (req.method === "POST" && u.pathname === "/moi") return tuanTu(async () => { await may.xoaMot(id); lichSu(id).length = 0; return json({ ok: true }); });
+      if (req.method === "POST" && u.pathname === "/moi") return tuanTu(async () => { await may.xoaMot(id); lichSu(id).length = 0; ghiNhatKy(id, "xoa", "(bấm Xoá chat)"); return json({ ok: true }); });
       if (req.method === "POST" && u.pathname === "/gui") {
         const b = await req.json().catch(() => ({}));
         const text = String(b?.text ?? "").trim().slice(0, 2000);
@@ -336,14 +356,17 @@ if (WEB) {
           soLuot++;
           const ls = lichSu(id);
           ls.push({ ai: "khach", text });
+          ghiNhatKy(id, "khach", text);
           const t0 = Date.now();
           try {
             const replies = (await may.gui(id, text)).map(String);
             for (const r of replies) ls.push({ ai: "bot", text: r });
+            for (const r of replies) ghiNhatKy(id, "bot", r, { ms: Date.now() - t0 });
             return json({ replies, ms: Date.now() - t0, conLai: TRAN - soLuot });
           } catch (e) {
             const loi = String(e?.message ?? e).slice(0, 300);
             ls.push({ ai: "loi", text: loi });
+            ghiNhatKy(id, "loi", loi);
             return json({ loi }, 500);
           }
         });
