@@ -160,7 +160,23 @@ async function mayChuMay() {
   const PROMPT_DB = CHE_DO_PROMPT === "db" ? (DL.bot_prompts ?? []).map((r) => ({ key: r.key, content: r.content })) : [];
   const fetchThat = globalThis.fetch;
   // Chỉ cho model đi ra ngoài; Nominatim / ảnh Zalo / mọi URL khác trả 404 (chat-reply coi là đường đi bình thường).
-  globalThis.fetch = async (url, opt) => (/api\.anthropic\.com/.test(String(url)) ? fetchThat(url, opt) : new Response("", { status: 404 }));
+  // 07/10/2026 : có `CHAT_LOG_BAM` thì mỗi lượt model ghi vào nhật ký — loại lượt (dòng đầu system) + đầu ra (JSON
+  // bóc tách / lời trả lời), để đọc được AI đã đọc ra gì khi một ô bị mất. Không ghi header (khoá API), cắt 1.500 chữ.
+  globalThis.fetch = async (url, opt) => {
+    if (!/api\.anthropic\.com/.test(String(url))) return new Response("", { status: 404 });
+    const res = await fetchThat(url, opt);
+    if (globalThis.__ghiAi) {
+      try {
+        const req = JSON.parse(String(opt?.body ?? "{}"));
+        const sys = Array.isArray(req.system) ? req.system.map((x) => x?.text ?? "").join(" ") : String(req.system ?? "");
+        const loai = (/CHẾ ĐỘ CHỐT TIN/.test(sys) ? "chot " : "") + sys.replace(/\s+/g, " ").slice(0, 60);
+        const body = await res.clone().json().catch(() => null);
+        const ra = (body?.content ?? []).map((c) => c?.type === "tool_use" ? JSON.stringify(c.input) : c?.text ?? "").join(" ");
+        globalThis.__ghiAi(loai, ra.slice(0, 1500));
+      } catch { /* vết chỉ để đọc, hỏng thì bỏ */ }
+    }
+    return res;
+  };
   const moi = () => {
     globalThis.__db = new FakeDB(); globalThis.__calls = []; globalThis.__rpc = {}; globalThis.__treTruyVan = null;
     const d = globalThis.__db;
@@ -284,6 +300,8 @@ if (WEB) {
   const BAM_LOG = String(process.env.CHAT_LOG_BAM ?? "").trim().toLowerCase();
   const nhatKy = [];
   const ghiNhatKy = (id, ai, text, them = {}) => { nhatKy.push({ i: nhatKy.length, luc: new Date().toISOString(), id, ai, text, ...them }); if (nhatKy.length > 20000) nhatKy.splice(0, 5000); };
+  let idDangChay = null;
+  if (BAM_LOG) globalThis.__ghiAi = (loai, ra) => { if (idDangChay) ghiNhatKy(idDangChay, "ai", ra, { loai }); };
   const dungKhoa = (req) => !!BAM_LOG && /^[0-9a-f]{64}$/.test(BAM_LOG) &&
     createHash("sha256").update(String(req.headers.get("x-khoa") ?? "")).digest("hex") === BAM_LOG;
   const maKhach = (req) => { const m = String(req.headers.get("x-khach") ?? ""); return /^web-[a-z0-9]{6,16}$/.test(m) ? m : null; };
@@ -358,6 +376,7 @@ if (WEB) {
           ls.push({ ai: "khach", text });
           ghiNhatKy(id, "khach", text);
           const t0 = Date.now();
+          idDangChay = id;
           try {
             const replies = (await may.gui(id, text)).map(String);
             for (const r of replies) ls.push({ ai: "bot", text: r });
@@ -368,6 +387,8 @@ if (WEB) {
             ls.push({ ai: "loi", text: loi });
             ghiNhatKy(id, "loi", loi);
             return json({ loi }, 500);
+          } finally {
+            idDangChay = null;
           }
         });
       }
