@@ -6488,7 +6488,8 @@ Deno.serve(async (req) => {
           // rác, câu hỏi…), vốn luôn thiếu cách nói mới.
           else if (laCheDoAi && aiChinh) ghiBoSung = null;
           // 24/09/2026 (tin thật: hỏi phường, khách đáp "Quận 1 em ơi"): còn < 2 chữ hoặc chỉ là tên quận / phường → rác.
-          else if (laBoSungRac(dapAn)) ghiBoSung = null;
+          // 07/10/2026 (SRS-5.1zzza): "đúng rồi e. nhà a ở quận 5" — gật phần đoán + chỉ quận (quận đã vào cột), không phải ghi chú.
+          else if (laBoSungRac(dapAn) || laChiDonViHanhChinh(dapAn)) ghiBoSung = null;
           // 01/10/2026: câu HỎI không bao giờ là thông tin căn nhà — AI nói hỏi, hoặc lưới từ khoá nhận ra dáng hỏi.
           else if (hoiAi || laCauHoiTron(dapAn)) ghiBoSung = null;
           // 01/10/2026 (e2e CX-05): câu bày tỏ cảm xúc (AI đọc có trích dẫn — bực, nghi ngờ, muốn dừng) không phải thông tin căn nhà
