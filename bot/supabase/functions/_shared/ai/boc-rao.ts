@@ -94,7 +94,7 @@ const KhongCanHoi = z.object({
 const DeXuatRao = z.object({
   // 02/10/2026 (đối chiếu AI ↔ code, SRS-5.1zb): "mở tin mới" từng do từ khoá quyết ("nữa", quận khác, loại khác) — "bán nhà này
   // 5 tỷ nữa là chốt" mở tin trùng, "bán vì chuyển qua quận 7" mở tin Quận 7.
-  can_khac: z.boolean().describe("Có câu bot đang hỏi về một căn mà tin này RAO / tả một căn KHÁC (khác địa chỉ, khác loại, 'còn căn nữa') → true. Trả lời, bổ sung, sửa cho chính căn đang hỏi, nhắc nơi khác chỉ để so sánh / chỉ đường → false. Không có câu đang hỏi → false."),
+  can_khac: z.boolean().describe("Chủ nhà ĐANG CÓ căn với em (khối 'Căn chủ nhà đang có' hoặc câu bot đang hỏi về một căn) mà tin này RAO / tả một căn KHÁC (khác địa chỉ, khác loại, 'còn căn nữa') → true. Trả lời, bổ sung, sửa, nói thêm về chính căn đang có ('cần bán gấp', 'giá còn bớt', 'nhà có sân thượng'), nhắc nơi khác chỉ để so sánh / chỉ đường → false. Chưa có căn nào → false."),
   so_can: z.number().int().describe("Số căn / lô KHÁC NHAU chủ nhà rao trong tin này. Không rao căn nào (chỉ bổ sung, trả lời) thì 0."),
   truong: z.array(TruongBoc),
   // 17/09/2026 (chủ dự án): "AI có thể thêm trường kiến thức… các trường khách nói bổ sung sẽ ghi vào mô tả".
@@ -302,7 +302,8 @@ export async function bocRaoBangModel(
    * 01/10/2026 (chủ dự án: "ra luật nó phải đọc thêm 1 2 câu hoặc cả ngữ cảnh phía trước"): vài lượt NGAY TRƯỚC ("BOT: …",
    * "CHỦ NHÀ: …") và câu bot còn định hỏi ("khoa: nội dung") — chỉ để AI HIỂU; trích dẫn vẫn phải nằm trong tin.
    */
-  nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[] } | null = null,
+  /** SRS-5.1zzzg: `canDangCo` — các căn người này đang có ("mã: loại, nơi, giá"), để AI biết tin nói về căn nào. */
+  nguCanh: { hoiThoai?: string[]; cauConHoi?: string[]; tinChuNha?: string[]; canDangCo?: string[] } | null = null,
   /** SRS-5.1zzzd: lượt CHỐT TIN — `text` là toàn bộ tin chủ nhà về căn (mỗi dòng một tin), thêm khối LUAT_CHOT. */
   cheDoChot = false,
 ): Promise<{ ket: DeXuatRaoLLM | null; truong: DeXuat[]; kienThuc: string[]; traLoi: TraLoiCauLLM | null; capNhat: CapNhatLLM[]; xacNhan: XacNhanLLM[]; hoiLai: HoiLaiLLM | null; camXuc: CamXucLLM | null; khongCanHoi: KhongCanHoiLLM[]; yDinh: YDinhLLM | null; vai: VaiLLM | null; tuXung: TuXungLLM | null; cauKe: CauKeLLM | null; canKhac: boolean | null; usage: unknown }> {
@@ -316,6 +317,7 @@ export async function bocRaoBangModel(
   const tinChuNha = (nguCanh?.tinChuNha ?? []).filter((x) => typeof x === "string" && x.trim()).slice(-30);
   const hoiThoai = (nguCanh?.hoiThoai ?? []).filter((x) => typeof x === "string" && x.trim()).slice(-4);
   const cauConHoi = (nguCanh?.cauConHoi ?? []).filter((x) => typeof x === "string" && x.trim()).slice(0, 20);
+  const canDangCo = (nguCanh?.canDangCo ?? []).filter((x) => typeof x === "string" && x.trim()).slice(0, 5);
   const dg = Object.entries(dangGhi ?? {}).filter(([, v]) => typeof v === "string" && v.trim()).map(([k, v]) => `${k}: "${String(v).slice(0, 160)}"`);
   const r = await ai.messages.parse({
     model,
@@ -329,7 +331,7 @@ export async function bocRaoBangModel(
     ],
     messages: [{
       role: "user",
-      content: `${tinChuNha.length ? `Các tin CHỦ NHÀ đã nhắn TRƯỚC tin này, NGUYÊN VĂN, cũ → mới (để nhớ chủ nhà đã nói gì — không trích từ đây):\n${tinChuNha.map((t) => `- ${t.replace(/\n+/g, " / ")}`).join("\n")}\n` : ""}${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${tin}"${dsPhuong ? `\n\n${dsPhuong}` : ""}`,
+      content: `${canDangCo.length ? `Căn chủ nhà đang có với em (để biết tin nói về căn nào — không trích từ đây):\n${canDangCo.map((c) => `- ${c}`).join("\n")}\n` : ""}${tinChuNha.length ? `Các tin CHỦ NHÀ đã nhắn TRƯỚC tin này, NGUYÊN VĂN, cũ → mới (để nhớ chủ nhà đã nói gì — không trích từ đây):\n${tinChuNha.map((t) => `- ${t.replace(/\n+/g, " / ")}`).join("\n")}\n` : ""}${hoiThoai.length ? `Vài lượt NGAY TRƯỚC (chỉ để hiểu tin — không trích từ đây):\n${hoiThoai.join("\n")}\n` : ""}${cauConHoi.length ? `Câu bot còn định hỏi (khoá: nội dung):\n${cauConHoi.join("\n")}\n` : ""}${dg.length ? `Thông tin đang ghi của căn này (chỉ để GỘP / SỬA khi tin nhắc tới — không chép vào truong):\n${dg.join("\n")}\n` : ""}${cauDangHoi ? `Câu bot vừa hỏi chủ nhà: ${cauDangHoi}${cauHoiChu ? ` — "${cauHoiChu.slice(0, 300)}"` : ""}\n` : ""}Tin nhắn chủ nhà: "${tin}"${dsPhuong ? `\n\n${dsPhuong}` : ""}`,
     }],
   });
   const ket = docLong(DeXuatRaoDoc, r.parsed_output);

@@ -2462,6 +2462,16 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Sửa**: `traLoiCauBot(cauBot, hieu)` trong `_shared/bao_lai.ts` — "🤖 Trả lời câu em vừa hỏi ("<câu bot đã hỏi>"): <điều đã hiểu>.". Nhánh bán: tin chỉ là câu trả lời câu hỏi vai (luật đáp vai hoặc AI gật, không tả căn) → thay "Không bóc tách được gì". Nhánh mua: trả lời câu hỏi vai là tìm mua → tương tự. Câu bot đã hỏi lấy từ lời chào đang chạy (bản DB đè code, cùng nguồn với SRS-5.1zzze).
 - **Kiểm, đỏ khi tắt**: e2e ZZZF-01 ("đúng rồi em" → 🤖 có câu hỏi vai + "cần rao bán", không "Không bóc tách"), ZZZF-02 ("không, anh đang tìm mua nhà" — cách nói mới → 🤖 "đang tìm mua"), ZZZF-03 ("ok em" lượt sau không gắn câu hỏi vai). Tắt `traLoiCauBot` ở hai chỗ: 2/1024 đỏ (ZZZF-01, 02).
 
+### SRS-5.1zzzg · Người bán đã có tin: "rao căn mới hay nói thêm về căn đang có" do AI quyết (07/10/2026)
+
+`[nguồn: chat thử 07/10/2026 …gogt — chủ dự án: "Phần này cần con bot trả lời 'dạ vâng ạ' chứ nó hỏi lại thông tin nhà thì ko hay lắm… nó hỏi giống như đang cần bán cái mới vậy đó"; "đừng thấy lỗi cái là mày bắt tay sửa liền… phải sửa từ gốc"; duyệt hướng "một chỗ hiểu ý" bằng "làm đi"]`
+
+- **Ca gốc**: tin đang rao đủ dữ kiện (58A Trương Đình Hội, 4x11, 6 tầng, 7,2 tỷ), không câu treo; khách "Mình cần bán gấp" → bot mở TIN MỚI rỗng (BDS-Q5-0007, chưa rõ loại) và hỏi "Nhà mình là loại gì ạ?". Đúng ra: ghi gấp vào tin đang có, đáp ngắn.
+- **Lớp lỗi**: *không có một chỗ duy nhất hiểu ý câu khách so với cuộc trò chuyện*. Cổng "câu rao căn mới" (`wantsSell`) là luật từ khoá trên chữ bỏ dấu ("cần" = "căn", có "bán") và nó quyết mở tin mà không hỏi AI — trong khi lượt AI cùng lượt đã đọc ra "gấp" cho căn đang có. AI cũng không được biết người này đang có căn nào khi không có câu treo (`can_khac` chỉ định nghĩa theo câu đang hỏi), nên nó không có căn cứ để nói "căn khác hay không".
+- **Chỗ khác cùng lớp** (soát 07/10): `raoMoiKhiDangHoi` (có câu treo) đã nghe `can_khac` từ SRS-5.1zb; `raoSuong` (hỏi "căn đó hay căn khác") nghe AI qua `aiDocRaoLuot`; gật câu hỏi vai — SRS-5.1zzze; bong bóng 🤖 — SRS-5.1zzzf; đường trả lời người bán chưa có tin (r3) chưa đưa câu bot vừa hỏi cho model (ca …lboq "chính xác em" → "sẽ rao căn hộ này") — làm ở mục kế; danh sách đủ các cổng còn đoán ý bằng từ khoá ở bản soát gửi chủ dự án.
+- **Sửa**: (1) lượt AI bóc tách nhận khối "Căn chủ nhà đang có với em" (mã, loại, nơi, giá — tối đa 5 căn mở) ở mọi lượt chế độ `ai`, và `can_khac` định nghĩa lại theo căn ĐANG CÓ: rao / tả căn khác → true; nói thêm, sửa, trả lời về căn đang có ("cần bán gấp", "giá còn bớt") → false. (2) Người bán có tin mở (không phải toàn vỏ rỗng) mà luật nói "câu rao" → chờ AI: AI nói `can_khac = false` thì KHÔNG mở tin mới, câu đi đường ghi ô cho căn đang có; AI không chạy → luật như cũ. Tin vỏ rỗng vừa mở từ "em cần bán nhà" vẫn để luật (câu rao đầy đủ kế tiếp điền vào tin rỗng).
+- **Kiểm, đỏ khi tắt**: e2e SRS-5.1zzzg-a ("Mình cần bán gấp", AI `can_khac=false`) → số tin không đổi, `gap = true` trên tin đang có, không hỏi loại nhà, lượt AI có khối căn đang có; SRS-5.1zzzg-b ("còn căn nữa ở quận 7…", AI `can_khac=true`) → vẫn mở tin mới. Tắt cổng: 1/1026 đỏ (zzzg-a).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

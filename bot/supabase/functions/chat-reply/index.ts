@@ -1817,7 +1817,8 @@ Deno.serve(async (req) => {
   }
   // Model gật vai cho một câu KHÔNG tả căn ("đúng rồi e") chỉ mở hồ sơ bán (`gatVaiAi`), không coi câu đó là câu rao.
   const gatVaiAi = !!dangTraLoiHoiVai && vaiModel === "ban";
-  const wantsSell = wantsSellLuat || (vaiModel === "ban" && (!dangTraLoiHoiVai || coMuiBDS(text)));
+  // `let`: SRS-5.1zzzg — người bán ĐÃ CÓ tin mở thì "câu rao căn mới" do AI quyết (`can_khac`), sửa lại sau khi lượt AI chạy.
+  let wantsSell = wantsSellLuat || (vaiModel === "ban" && (!dangTraLoiHoiVai || coMuiBDS(text)));
   // Câu rao thì KHÔNG phải ý định mua, dù có chữ "mua" kể chuyện ("mua nhà cũ sửa lại bán").
   const hoiMua = (hoiMuaTho || vaiModel === "mua") && !wantsSell;
   // Phường trong câu rao, bắt trên bản bỏ dấu — chỉ lấy CON SỐ nên bỏ dấu
@@ -3553,6 +3554,9 @@ Deno.serve(async (req) => {
     type TinMo = { id: string; code: string | null; status?: string | null; property_type?: string | null; district?: string | null; ward?: string | null; street?: string | null; location_raw?: string | null; price_raw?: string | null; area_m2?: number | string | null };
     const dsMo = ((tinCuaNguoi ?? []) as TinMo[])
       .filter((t) => !!t.code && ["cho_thong_tin", "dang_ban", "dang_quan_tam"].includes(t.status ?? ""));
+    // SRS-5.1zzzg: căn người này ĐANG CÓ — đưa cho lượt AI để nó biết tin nói về căn nào (kể cả khi không có câu đang hỏi).
+    const moTaCanDangCo = (t: TinMo) =>
+      `${t.code}: ${LOAI_VI[t.property_type ?? ""] ?? "chưa rõ loại"}, ${tenCanDocLen(t)}${t.price_raw ? `, giá ${t.price_raw}` : ""}`;
     let textTreo: string | null = null;
     /** Tin ĐÃ CÓ vừa nhận dữ kiện từ một mảnh (để không hỏi tiếp một tin vỏ rỗng khi khách đang nói về tin này). */
     let tinGhiManh: { id: string; code: string | null; property_type?: string | null; district?: string | null } | null = null;
@@ -3727,6 +3731,8 @@ Deno.serve(async (req) => {
     // của người đang rao / đang trả lời câu treo đều qua AI. Công tắc đọc trước để biết có phải chế độ này không.
     // SRS-5.1zzl (05/10/2026): người đang rao TỪ HAI CĂN trở lên → mọi tin đều qua AI (ý gom căn "dẹp mấy căn kia", chuyển căn)
     // — demo AOND đọc ý mọi lượt; luật từ khoá chỉ là lưới đỡ, không phải cổng quyết AI có được đọc hay không.
+    // Giá trị LUẬT của cổng câu rao, chụp trước lượt AI — lượt AI đọc giá trị này (không đọc `wantsSell` đã được AI sửa).
+    const wantsSellTruocAi = wantsSell;
     if (anthropicS && (coMuiAi || !!pendingReq || wantsSell || dsMo.length >= 2)) {
       // 30/09/2026 (chủ dự án, chat thử): "nhà chú ở 137/28 đường số 59 phường an hội tây nhé" nhắn TRƯỚC câu rao — lúc
       // đó chưa có tin nên không có chỗ ghi, tới lúc rao thì mất. Người chưa có tin nào mà nhắn câu rao: AI đọc cả các
@@ -3762,7 +3768,7 @@ Deno.serve(async (req) => {
         let cauConHoi: string[] = [];
         // Lượt CÂU RAO (chưa có tin, chưa biết bảng câu): đưa danh mục câu hay đổi theo loại / theo căn để AI chỉ ra câu
         // không áp dụng ngay từ câu hỏi đầu (bắn thử lx-kh-01: căn officetel bị hỏi phòng ngủ trước tiên).
-        if (laCheDoAi && !pendingReq && wantsSell) {
+        if (laCheDoAi && !pendingReq && wantsSellTruocAi) {
           cauConHoi = CAU_TUY_CAN.map((k) => `${k}: ${FACT_LABELS[k] ?? k}`);
         }
         if (laCheDoAi && pendingReq?.listing_id) {
@@ -3778,7 +3784,7 @@ Deno.serve(async (req) => {
           ];
         }
         const r0 = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, textTreo || textBongAi, pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings), laCheDoAi,
-          laCheDoAi ? { hoiThoai, cauConHoi, tinChuNha: tinChuNhaGoc() } : null);
+          laCheDoAi ? { hoiThoai, cauConHoi, tinChuNha: tinChuNhaGoc(), canDangCo: dsMo.slice(0, 5).map(moTaCanDangCo) } : null);
         // 01/10/2026 (lx-tt-08): viết tắt AI đánh dấu "không chắc" mà từ điển tiền định đọc ra CÙNG ô ("shr" → pháp lý) là chắc —
         // ghi thẳng, không để rơi ở nhánh không hỏi xác nhận (`nangXacNhanChac`).
         const xnChac = laCheDoAi ? nangXacNhanChac(r0.xacNhan, textTreo || textBongAi, nhanDienNhieuFact) : null;
@@ -3806,6 +3812,19 @@ Deno.serve(async (req) => {
       })();
     }
     await xetDoiNhan();
+
+    // ─── SRS-5.1zzzg (07/10/2026, chat thử …gogt: tin đang rao đủ dữ kiện, khách "Mình cần bán gấp" → luật `wantsSell` (bỏ dấu
+    // "cần" = "căn", có "bán") mở TIN MỚI rỗng, bot hỏi "nhà loại gì"): người bán ĐÃ CÓ tin mở thì câu này là rao căn MỚI hay nói
+    // thêm về căn đang có là việc của AI (`can_khac`, đọc kèm danh sách căn đang có + câu bot vừa nói). AI chạy và nói rõ → AI
+    // quyết; AI không chạy → luật như cũ. Tin đang có là vỏ rỗng (vừa mở từ "em cần bán nhà") thì để luật: câu rao đầy đủ kế tiếp
+    // vẫn đi đường điền vào tin rỗng.
+    if (wantsSell && dsMo.length && !dsMo.every((t) => laTinRong({ ...t, status: t.status ?? null, location_raw: t.location_raw ?? null, area_m2: t.area_m2 == null ? null : Number(t.area_m2) }))) {
+      const ck = await canKhacLuot();
+      if (ck === false) {
+        console.log("chat-reply: AI doc la noi them ve can dang co, khong mo tin moi");
+        wantsSell = false;
+      }
+    }
 
     // FR-235 (dời từ trên xuống, SRS-5.1zf): sau lời HOÃN của bot mà chủ nhà chỉ GẬT ("ok e", "ừ", "👍") → đáp ngắn, không hỏi
     // tiếp. AI quyết gật (không kèm dữ liệu, không bảo đăng); luật `laDongY` ≤ 4 chữ chỉ khi AI không chạy.
