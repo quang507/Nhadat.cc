@@ -1808,7 +1808,7 @@ Deno.serve(async (req) => {
         /(?:^|(?:tôi|em|mình|anh|chị|tui|bên mình|nhà mình|gia đình)\s*)(đang\s*)?có\s*(một\s*|1\s*)?(căn|nhà|đất|bất động sản|bđs|mặt bằng|chung cư|phòng trọ|biệt thự|lô)(?!\s*nào)/i,
         /(?:^|(?:toi|em|minh|anh|chi|tui|ben minh|nha minh|gia dinh)\s*)(dang\s*)?co\s*(mot\s*|1\s*)?(can|nha|dat|bat dong san|bds|mat bang|chung cu|phong tro|biet thu|lo)(?!\s*nao)/,
       ) ||
-      // 27/09/2026 (câu chào mới "anh chị cần giao bán bất động sản đúng không ạ?"): GẬT trơn — "đúng rồi", "dạ",
+      // 27/09/2026 (câu chào mới "anh chị cần rao bán bất động sản đúng không ạ?"): GẬT trơn — "đúng rồi", "dạ",
       // "ừ", "vâng em" — là người bán. Chỉ nhận khi CẢ câu là lời gật + tiểu từ ("đúng rồi, anh muốn mua" không phải).
       laGatHoiVai(text) ||
       // Trả lời cụt: "bán", "muốn bán", "tôi bán", "bên bán", "cho thuê" — đang
@@ -8021,18 +8021,18 @@ Deno.serve(async (req) => {
       if (xtErr) await ghiLoi(client, "chat-reply merge_buyer_prefs(xung_ho tro)", xtErr.message);
       prefs.xung_ho = xhTro;
       const Xh = xhTro.charAt(0).toUpperCase() + xhTro.slice(1);
-      const cauVai = doiTuXung([`Dạ ${xhTro}. ${Xh} cần giao bán bất động sản đúng không ạ?`], xhTro)[0];
+      const cauVai = doiTuXung([`Dạ ${xhTro}. ${Xh} cần rao bán bất động sản đúng không ạ?`], xhTro)[0];
       const { error: cvErr } = await client.from("messages").insert({ conversation_id: convId, sender: "bot", body: cauVai });
       if (cvErr) await ghiLoi(client, "chat-reply messages hoi_vai(lai)", cvErr.message);
       return await hoanTat({ reply: cauVai, replies: [cauVai], conversation_id: convId, hoi_vai: true, xung_ho: xhTro });
     }
-    // 27/09/2026 (test Zalo): "Hay quá" sau câu chào "… cần giao bán bất động sản đúng không ạ?" → bot sang hỏi "mua hay thuê".
+    // 27/09/2026 (test Zalo): "Hay quá" sau câu chào "… cần rao bán bất động sản đúng không ạ?" → bot sang hỏi "mua hay thuê".
     // Câu chung chung không trả lời câu vai → hỏi lại câu chào MỘT lần (cờ `hoi_vai_lai`), lần sau mới về hàng người mua.
     if (laCauChungChung(text) && !prefs.hoi_vai_lai && !imageUrl) {
       const { error: lErr } = await client.rpc("merge_buyer_prefs", { p_buyer_id: buyer.id, p_delta: { hoi_vai_lai: true } });
       if (lErr) await ghiLoi(client, "chat-reply merge_buyer_prefs(hoi_vai_lai)", lErr.message);
       const xhL = typeof prefs.xung_ho === "string" && prefs.xung_ho ? prefs.xung_ho : null;
-      const cauLai = boGachCheo(doiTuXung([`Dạ, ${xhL ?? "anh/chị"} cần giao bán bất động sản đúng không ạ?`], xhL)[0]);
+      const cauLai = boGachCheo(doiTuXung([`Dạ, ${xhL ?? "anh/chị"} cần rao bán bất động sản đúng không ạ?`], xhL)[0]);
       const { error: clErr } = await client.from("messages").insert({ conversation_id: convId, sender: "bot", body: cauLai });
       if (clErr) await ghiLoi(client, "chat-reply messages hoi_vai(chung chung)", clErr.message);
       return await hoanTat({ reply: cauLai, replies: [cauLai], conversation_id: convId, hoi_vai: true });

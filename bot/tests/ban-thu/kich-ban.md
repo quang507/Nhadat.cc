@@ -23,7 +23,7 @@ nhắn), và ID ở cột **zalo** vào ô `zalo`. Để trống các ô khác.
 
 | ID | zalo | cau | kiểm |
 |---|---|---|---|
-| A1 | `lx-a1` | `chào em` | HỘI THOẠI: hỏi vai ("cần giao bán bất động sản đúng không ạ"), không gọi "anh/chị" gạch chéo |
+| A1 | `lx-a1` | `chào em` | HỘI THOẠI: hỏi vai ("cần rao bán bất động sản đúng không ạ"), không gọi "anh/chị" gạch chéo |
 | A2 | `lx-a2` | `cháu chào cô\|cô` | xưng "cháu", gọi "cô" từ lượt 2; hồ sơ mua có `xung_ho` = cô |
 | A3 | `lx-a3` | `hay quá\|ừ đúng rồi, chị có căn nhà muốn bán` | lượt 1 hỏi lại vai một lần; lượt 2 vào nhánh bán, không chào lần hai |
 | A4 | `lx-a4` | `em là người hay máy vậy` | nói thật là trợ lý AI, không nhận là người |
@@ -111,7 +111,7 @@ workflow `ban-thu` cho nhóm này vì nó xoá dữ liệu ID thử ở cuối m
 
 | # | Gửi | Kiểm |
 |---|---|---|
-| 1 | `chào em` | chào, hỏi có cần giao bán không; xưng hô trung tính; không xin SĐT |
+| 1 | `chào em` | chào, hỏi có cần rao bán không; xưng hô trung tính; không xin SĐT |
 | 2 | `đúng rồi, anh bán nhà` | vào nhánh bán, không chào lần hai |
 | 3 | `Bán nhà hẻm xe hơi 4m Trần Hưng Đạo phường Chợ Quán, 4x15, 1 trệt 2 lầu, 3 phòng ngủ, sổ hồng riêng, giá 8 tỷ 2 thương lượng` | dòng 🤖 bóc đủ loại, đường, phường, 4x15, tầng, phòng ngủ, pháp lý, giá; không hỏi lại thứ đã nói |
 | 4 | trả lời từng câu bot hỏi, thử `ko biết`, `để sau`, `ba anh đứng tên` | một câu hỏi mỗi lần; "không biết" không thành giá trị; không xin tên thật |

@@ -557,8 +557,8 @@ ok("boCanBia: câu nêu mã tin thật '#BDS-Q5-0006 … 8 tỷ' → giữ", boC
 }
 
 // ── FR-218 (23/09/2026): lời chào không kèm "anh Thu phụ trách"; hiểu nhầm ý khách thì xin lỗi ──
-ok("LOI_CHAO không còn câu 'phụ trách khu vực' / 'anh Thu'; 27/09 chỉ nhắc bán: 'cần giao bán bất động sản đúng không ạ'; 06/10 chủ dự án giữ NGẮN hai câu — không vế mời gửi ảnh / không form",
-  !/phụ trách|anh Thu/.test(LOI_CHAO) && /cần giao bán bất động sản đúng không ạ\?$/.test(LOI_CHAO) && /\{ten\}/.test(LOI_CHAO)
+ok("LOI_CHAO không còn câu 'phụ trách khu vực' / 'anh Thu'; 27/09 chỉ nhắc bán: 'cần rao bán bất động sản đúng không ạ'; 06/10 chủ dự án giữ NGẮN hai câu — không vế mời gửi ảnh / không form",
+  !/phụ trách|anh Thu/.test(LOI_CHAO) && /cần rao bán bất động sản đúng không ạ\?$/.test(LOI_CHAO) && /\{ten\}/.test(LOI_CHAO)
     && !/gửi ảnh|điền form|nhắn như nhắn bạn/.test(LOI_CHAO) && LOI_CHAO.split(/[.?]\s*/).filter(Boolean).length === 2, LOI_CHAO);
 // SRS-5.1zzx (06/10): bắn thử production, bot nói "Anh đang hạng Vàng nên khách tìm kiếm sẽ thấy tin anh trước" — hệ thống chỉ
 // xếp tin người Vàng lên trước trong CHAT khi khách mua đã nói đủ khu vực + tầm giá. FEE_RULES phải nói đúng phạm vi đó và cấm lời
@@ -841,7 +841,7 @@ for (const [cau, laTiemNang] of [
   ok("SOBIA-05 câu bịa bị bỏ, câu hỏi giá giữ", r.length === 1 && !/4\.5/.test(r[0]) && /giá bán/.test(r[0]), JSON.stringify(r));
 }
 
-// ── 27/09/2026: câu chào mới "anh chị cần giao bán bất động sản đúng không ạ?" — gật trơn là người bán ──
+// ── 27/09/2026: câu chào mới "anh chị cần rao bán bất động sản đúng không ạ?" — gật trơn là người bán ──
 {
   for (const t of ["đúng rồi", "Dạ", "ừ em", "vâng đúng rồi anh bán", "có ạ", "ok em", "phải", "đúng rồi cô"]) ok(`CHAO-GAT '${t}' là gật`, laGatHoiVai(t));
   for (const t of ["đúng rồi anh muốn mua", "không, anh muốn mua", "chào em", "dạ em chào anh", "không phải", "cô", "chú nha", "dạ cô", "ở quận 5"]) ok(`CHAO-GAT '${t}' KHÔNG là gật`, !laGatHoiVai(t));
