@@ -39,7 +39,7 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
-  aiDocThem, BOC_DUOC, bocTachTaoTin, boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, kemLuotTao, KHONG_BOC, NGUON_AI, nhanNgan, vuaLuuBan, vuaLuuMua,
+  aiDocThem, BOC_DUOC, bocTachTaoTin, boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, kemLuotTao, KHONG_BOC, NGUON_AI, nhanNgan, traLoiCauBot, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
@@ -1858,6 +1858,9 @@ Deno.serve(async (req) => {
       /chinh chu|ky gui|can rao|muon rao|dang tin ban|dang ban/,
     ) ||
     vaiDapLuat || gatVaiAi;
+  // SRS-5.1zzzf: tin này chỉ là câu TRẢ LỜI câu hỏi vai (không tả căn) → bong bóng 🤖 nói đã hiểu gì, kèm câu bot đã hỏi.
+  const cauVaiDaHoi = boGachCheo(CAU_HOI_VAI);
+  const hieuTraLoiVai = dangTraLoiHoiVai && !wantsSell && (vaiDapLuat || gatVaiAi) ? "cần rao bán, em mở hồ sơ người bán" : null;
   // ─── NHÃN chính chủ / môi giới — gán NGAY lúc bóc tách (quyết định chủ dự
   // án 02/09/2026: "gán nhãn khi bóc tách là họ có BĐS muốn bán"). Ai nói mình
   // CÓ bất động sản muốn bán là CHÍNH CHỦ; chỉ khi tự xưng môi giới mới là NMG
@@ -2941,7 +2944,7 @@ Deno.serve(async (req) => {
         const dongQuan = quanVuaGhi ? `quận: "${quanVuaGhi}"` : null;
         const bocDu = bocLuot
           ? (dongQuan && !/\bquận:/.test(bocLuot) ? `${bocLuot} · ${dongQuan}` : bocLuot)
-          : dongQuan ? `${BOC_DUOC} ${dongQuan}` : KHONG_BOC;
+          : dongQuan ? `${BOC_DUOC} ${dongQuan}` : hieuTraLoiVai && sellerMoi ? traLoiCauBot(cauVaiDaHoi, hieuTraLoiVai) : KHONG_BOC;
         return { bong: [bocDu, dongHoSo].filter(Boolean).join("\n"), cheDo };
       } catch (e) {
         await ghiLoi(client, "chat-reply bao_lai_da_luu", e);
@@ -9768,8 +9771,8 @@ Deno.serve(async (req) => {
           const conLai = boCauGhiNhan(replies);
           replies.splice(0, replies.length, locLienHe(bong), ...conLai);
         } else {
-          // 24/09/2026 (chủ dự án): tin không bóc được gì cũng nói ra.
-          replies.unshift(KHONG_BOC);
+          // 24/09/2026 (chủ dự án): tin không bóc được gì cũng nói ra. SRS-5.1zzzf: trừ khi tin là câu trả lời câu hỏi vai.
+          replies.unshift(dangTraLoiHoiVai && hoiMua ? traLoiCauBot(cauVaiDaHoi, "đang tìm mua / thuê, em đi hàng người mua") : KHONG_BOC);
         }
       }
     } catch (e) {

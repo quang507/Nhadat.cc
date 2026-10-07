@@ -253,6 +253,33 @@ check("V1.19c chung chung lần hai → không hỏi lại lần ba (về hàng 
   check("ZZZE-06 'Hay quá' — AI đọc kèm câu hỏi, 'chua_ro' → hỏi lại câu chào một lần (V1.19 giữ nguyên), không mở hồ sơ bán",
     luotVaiZ().length === 1 && r.body.hoi_vai === true && db().t.sellers.length === 0, JSON.stringify(r.body));
 }
+// 07/10/2026 (SRS-5.1zzzf, chủ dự án: "người ta xác nhận đúng sai hay trả lời câu hỏi của nó thì nó phải đọc lại câu của
+// chính mình chứ"): "đúng rồi em" trả lời câu hỏi vai → 🤖 nói đã hiểu gì kèm câu bot đã hỏi, không "Không bóc tách được gì".
+{
+  const cuCH = globalThis.__cauHinh;
+  globalThis.__cauHinh = { ...(cuCH ?? {}), bao_lai_da_luu: "day_du" };
+  fresh();
+  await send({ external_user_id: "zzzf-1", text: "chào em" });
+  r = await send({ external_user_id: "zzzf-1", text: "đúng rồi em" });
+  const b1 = (r.body.replies ?? [])[0] ?? "";
+  check("ZZZF-01 'đúng rồi em' sau câu hỏi vai → 🤖 'Trả lời câu em vừa hỏi (… cần rao bán …): cần rao bán', KHÔNG 'Không bóc tách được gì'",
+    /^🤖 Trả lời câu em vừa hỏi \("[^"]*cần rao bán bất động sản đúng không[^"]*"\): cần rao bán/.test(b1) && !(r.body.replies ?? []).some((x) => /Không bóc tách được gì/.test(x)) && db().t.sellers.length === 1,
+    JSON.stringify(r.body.replies));
+  fresh();
+  await send({ external_user_id: "zzzf-2", text: "chào em" });
+  r = await send({ external_user_id: "zzzf-2", text: "không, anh đang tìm mua nhà" });
+  const b2 = (r.body.replies ?? [])[0] ?? "";
+  check("ZZZF-02 'không, anh đang tìm mua nhà' sau câu hỏi vai → 🤖 nói đã hiểu là tìm mua (kèm câu bot đã hỏi), không mở hồ sơ bán",
+    (/^🤖 Trả lời câu em vừa hỏi \("[^"]*cần rao bán[^"]*"\): đang tìm mua/.test(b2) || /^🤖 Bóc tách được/.test(b2)) && !/Không bóc tách được gì/.test(b2) && db().t.sellers.length === 0,
+    JSON.stringify(r.body.replies));
+  fresh();
+  await send({ external_user_id: "zzzf-3", text: "chào em" });
+  await send({ external_user_id: "zzzf-3", text: "đúng rồi em" });
+  r = await send({ external_user_id: "zzzf-3", text: "ok em" });
+  check("ZZZF-03 tin sau đó KHÔNG phải trả lời câu hỏi vai ('ok em') → không gắn câu hỏi vai vào 🤖",
+    !(r.body.replies ?? []).some((x) => /Trả lời câu em vừa hỏi \("[^"]*cần rao bán/.test(x)), JSON.stringify(r.body.replies));
+  globalThis.__cauHinh = cuCH;
+}
 for (const [i, khong] of ["không, anh muốn mua nhà", "đúng rồi anh muốn mua"].entries()) {
   fresh(); await send({ external_user_id: `la-khong-${i}`, text: "chào em" });
   r = await send({ external_user_id: `la-khong-${i}`, text: khong });
