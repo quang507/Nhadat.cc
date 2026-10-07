@@ -1245,6 +1245,17 @@ fresh(seedKho);
   check("N6c 'chốt đi' lúc duyệt = GẬT (không phải báo bán rồi) → lên kệ", r.body.duyet === true && H9.status === "dang_ban" && !r.body.ngung_rao, JSON.stringify(r.body));
 
   fresh();
+  // 07/10/2026 (chủ dự án chat thử): "a bán nhà" mở tin rỗng; "đúng rồi e. a bán nhà quận 5" là nói TIẾP căn đó (ghi quận), không
+  // hỏi "trước đó anh có căn mã …, căn đó hay căn khác" — tin cũ là vỏ rỗng vừa mở, không có gì để nhầm hai căn.
+  {
+    const rV1 = await send({ external_user_id: "vo-rong", text: "a bán nhà" });
+    const rV2 = await send({ external_user_id: "vo-rong", text: "dúng rồi e. a bán nhà quận 5" });
+    const sV = db().t.sellers.find((x) => x.zalo_user_id === "vo-rong");
+    const lV = db().t.listings.filter((l) => l.seller_id === sV?.id);
+    check("VORONG-01 'a bán nhà' rồi 'đúng rồi e. a bán nhà quận 5' → KHÔNG hỏi căn đó hay căn khác, vẫn một tin, quận 5 vào tin",
+      !rV2.body.replies.some((x) => /căn đó hay căn khác/.test(x)) && lV.length === 1 && lV[0].district === "Quận 5",
+      JSON.stringify({ rep1: rV1.body.replies, rep2: rV2.body.replies, ds: lV.map((l) => [l.code, l.district, l.location_raw]) }));
+  }
   // SRS-5.1zzz (20261007a, chủ dự án 07/10: "thứ tự hỏi vẫn ngu ko có tự nhiên", chọn một ý một lượt, tối đa 6 lượt): đi
   // trọn một cuộc rao từ câu ngắn nhất — mỗi loại hỏi theo trình tự môi giới, ≤ 7 câu (gồm phường) rồi ra bản nháp; gấp / phòng
   // ngủ nhà / ảnh / hướng KHÔNG hỏi trước bản nháp. Bảng cũ: nhà phố 9–10 câu, căn hộ hỏi hướng, đất hỏi hướng + hạ tầng.
