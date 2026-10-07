@@ -13,7 +13,7 @@ globalThis.__calls = []; globalThis.__db = new FakeDB();
 // (napCauHinh nhớ tạm 60 s, đọc một lần cho cả run). vi_tri đổi câu để chứng minh bản DB đè bản code.
 // 11/09 (42 ca): câu hỏi địa chỉ LẦN ĐẦU dùng khoá riêng `vi_tri@lan_dau` — đè cả hai để V1.3 vẫn đo đúng "bản DB đè bản code".
 const seedBotPrompts = (d) => { d.insert("bot_prompts", { key: "cau_hoi_mau", content: JSON.stringify({ vi_tri: "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@lan_dau": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?", "vi_tri@chua_quan": "Nhà mình ở đâu vậy {ac}, đường nào số mấy?" }) });
-globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị cần giao bán bất động sản đúng không ạ?" }); }; // 23/09 FR-218 a: bỏ câu "anh Thu phụ trách khu vực" (khớp bot_prompts.loi_chao)
+globalThis.__db.insert("bot_prompts", { key: "loi_chao", content: "Dạ em chào anh/chị, em là {ten} bên AI Ơi Nhà Đất ạ. Anh/chị cần rao bán bất động sản đúng không ạ?" }); }; // 23/09 FR-218 a: bỏ câu "anh Thu phụ trách khu vực" (khớp bot_prompts.loi_chao)
 seedBotPrompts(globalThis.__db);
 // FR-185: ảnh chủ nhà gửi được TẢI VỀ kho — mock fetch trả vài byte JPEG cho host Zalo,
 // mọi URL khác lỗi (chat-reply không được gọi ra ngoài trong bài kiểm).
@@ -114,11 +114,11 @@ const sysText = (c) => c.params.system[1].text;
 // ── VAI 1: người lạ ─────────────────────────────────────────────────────────
 fresh();
 let r = await send({ external_user_id: "la-1", text: "chào em" });
-check("V1.1 lạ 'chào em' → hỏi vai, không gọi model; KHÔNG kèm 'anh Thu phụ trách khu vực' (FR-218 a)", r.body.hoi_vai === true && /cần giao bán bất động sản đúng không ạ\?/.test(r.body.reply) && !/anh Thu|phụ trách/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
+check("V1.1 lạ 'chào em' → hỏi vai, không gọi model; KHÔNG kèm 'anh Thu phụ trách khu vực' (FR-218 a)", r.body.hoi_vai === true && /cần rao bán bất động sản đúng không ạ\?/.test(r.body.reply) && !/anh Thu|phụ trách/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
 // FR-181 (09/09 chiều): lời chào xưng TÊN TRỢ LÝ RIÊNG của khách này (băm từ Zalo ID), không còn "Thái".
 check("V1.1b lời chào xưng tên trợ lý riêng (T•ai/Kh•ai…), không phải Thái, không còn {ten}", new RegExp(`em là ${tenTroLy("la-1").replace("•", "\\u2022")} bên`).test(r.body.reply) && !/Thái|\{ten\}/.test(r.body.reply), r.body.reply);
 check("V1.1 cờ hoi_vai lưu trên buyer", db().t.buyers[0]?.preferences?.hoi_vai === true);
-check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /cần giao bán bất động sản/.test(m.body)));
+check("V1.1 câu hỏi vai nằm trong sổ tin", db().t.messages.some((m) => m.sender === "bot" && /cần rao bán bất động sản/.test(m.body)));
 r = await send({ external_user_id: "la-1", text: "tôi có căn nhà ở phường 4" });
 check("V1.2 trả lời có nhà → mở hồ sơ bán, nhãn chính chủ", db().t.sellers.length === 1 && db().t.sellers[0].seller_type === "ccrb" && r.body.role === "seller", JSON.stringify(r.body));
 check("V1.2 người đó KHÔNG được báo nhãn, KHÔNG kèm biểu phí (chủ dự án 09/09 tối: gán im lặng)", !r.body.replies.some((x) => /ghi nhận anh.chị là (chính chủ|môi giới)/i.test(x)) && !r.body.replies.some((x) => /1%|0,5%/.test(x)), JSON.stringify(r.body.replies));
@@ -186,7 +186,7 @@ fresh(); await send({ external_user_id: "la-10", text: "chào em" }); r = await 
 check("V1.15 trả lời câu hỏi vai bằng một chữ 'bán' → mở hồ sơ chính chủ", db().t.sellers[0]?.seller_type === "ccrb" && r.body.role === "seller", JSON.stringify(r.body));
 fresh(); await send({ external_user_id: "la-11", text: "chào em" }); r = await send({ external_user_id: "la-11", text: "có nhà" });
 check("V1.16 trả lời 'có nhà' → mở hồ sơ bán", db().t.sellers.length === 1 && r.body.role === "seller");
-// 27/09/2026 (chủ dự án: câu chào chỉ hỏi "anh chị cần giao bán bất động sản đúng không ạ?"): GẬT trơn là người bán, và bot
+// 27/09/2026 (chủ dự án: câu chào chỉ hỏi "anh chị cần rao bán bất động sản đúng không ạ?"): GẬT trơn là người bán, và bot
 // không chào lần hai, không hỏi lại "bán hay cho thuê".
 for (const [i, gat] of ["đúng rồi em", "dạ", "ừ", "vâng đúng rồi"].entries()) {
   fresh(); await send({ external_user_id: `la-gat-${i}`, text: "chào em" });
@@ -201,13 +201,13 @@ for (const [i, gat] of ["đúng rồi em", "dạ", "ừ", "vâng đúng rồi"].
 // 27/09/2026 (test Zalo): "Hay quá" sau câu chào → không sang hỏi "mua hay thuê"; hỏi lại câu chào MỘT lần, lần sau mới về hàng mua.
 fresh(); await send({ external_user_id: "la-hay-qua", text: "Hello" });
 r = await send({ external_user_id: "la-hay-qua", text: "Hay quá" });
-check("V1.19 'Hay quá' sau câu chào → hỏi lại 'cần giao bán bất động sản đúng không ạ', không hỏi mua / thuê, không gọi model",
-  r.body.hoi_vai === true && /cần giao bán bất động sản đúng không ạ\?/.test(r.body.reply) && !/mua|thuê/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
+check("V1.19 'Hay quá' sau câu chào → hỏi lại 'cần rao bán bất động sản đúng không ạ', không hỏi mua / thuê, không gọi model",
+  r.body.hoi_vai === true && /cần rao bán bất động sản đúng không ạ\?/.test(r.body.reply) && !/mua|thuê/.test(r.body.reply) && parseCalls().length === 0, JSON.stringify(r.body));
 r = await send({ external_user_id: "la-hay-qua", text: "đúng rồi" });
 check("V1.19b rồi 'đúng rồi' → người bán", db().t.sellers.length === 1 && r.body.role === "seller", JSON.stringify(r.body));
 fresh(); await send({ external_user_id: "la-hay-qua2", text: "Hello" }); await send({ external_user_id: "la-hay-qua2", text: "Hay quá" });
 r = await send({ external_user_id: "la-hay-qua2", text: "ok" });
-check("V1.19c chung chung lần hai → không hỏi lại lần ba (về hàng người mua như cũ)", !/cần giao bán bất động sản đúng không/.test(r.body.reply ?? "") , JSON.stringify(r.body));
+check("V1.19c chung chung lần hai → không hỏi lại lần ba (về hàng người mua như cũ)", !/cần rao bán bất động sản đúng không/.test(r.body.reply ?? "") , JSON.stringify(r.body));
 for (const [i, khong] of ["không, anh muốn mua nhà", "đúng rồi anh muốn mua"].entries()) {
   fresh(); await send({ external_user_id: `la-khong-${i}`, text: "chào em" });
   r = await send({ external_user_id: `la-khong-${i}`, text: khong });
@@ -6342,7 +6342,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     JSON.stringify({ s: S("ong-1"), rep: r.body.replies }));
   r = await send({ external_user_id: "ba-1", text: "bà chào cháu" });
   const repBa = r.body.replies.join(" ");
-  check("XHO-02 tin đầu 'bà chào cháu' → 'Dạ cháu chào bà', hỏi 'Bà cần giao bán…', không 'em' / 'anh chị'",
+  check("XHO-02 tin đầu 'bà chào cháu' → 'Dạ cháu chào bà', hỏi 'Bà cần rao bán…', không 'em' / 'anh chị'",
     /cháu chào bà/i.test(repBa) && /Bà /.test(repBa) && !EM.test(repBa) && !/anh chị|anh\/chị/i.test(repBa), JSON.stringify(r.body.replies));
   r = await send({ external_user_id: "thim-1", text: "chào cháu, thím có căn nhà hẻm 4m đường Nguyễn Trãi quận 5 cần bán 6 tỷ" });
   const repThim = r.body.replies.join(" ");
@@ -6360,8 +6360,8 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   // (1) tin đầu "cô chào cháu" → lời chào gọi cô, xưng cháu, không "anh chị"; hồ sơ mua nhớ "cô".
   fresh();
   r = await send({ external_user_id: "gvd-1", text: "cô chào cháu" });
-  check("GVD-01 tin đầu 'cô chào cháu' → 'Dạ cháu chào cô…', hỏi 'Cô cần giao bán bất động sản đúng không ạ?', không 'anh chị' / 'em'; prefs xung_ho = cô",
-    /^Dạ cháu chào cô/.test(r.body.replies[0] ?? "") && /Cô cần giao bán bất động sản đúng không ạ\?/.test(rep()) && !/anh chị|anh\/chị/i.test(rep()) && !/(?<![\p{L}])em(?![\p{L}])/u.test(rep()) && bX("gvd-1")?.[0] === "cô",
+  check("GVD-01 tin đầu 'cô chào cháu' → 'Dạ cháu chào cô…', hỏi 'Cô cần rao bán bất động sản đúng không ạ?', không 'anh chị' / 'em'; prefs xung_ho = cô",
+    /^Dạ cháu chào cô/.test(r.body.replies[0] ?? "") && /Cô cần rao bán bất động sản đúng không ạ\?/.test(rep()) && !/anh chị|anh\/chị/i.test(rep()) && !/(?<![\p{L}])em(?![\p{L}])/u.test(rep()) && bX("gvd-1")?.[0] === "cô",
     JSON.stringify({ rep: r.body.replies, b: bX("gvd-1") }));
   // (2) lượt sau mở hồ sơ bán → cách gọi đi theo: xưng cháu, gọi cô ở bong bóng ghi nhận.
   r = await send({ external_user_id: "gvd-1", text: "cô có căn nhà muốn bán, hẻm 4m Nguyễn Trãi q5, 60m2" });
@@ -6371,13 +6371,13 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   // (3) "chào cháu" trơ → biết lớn tuổi, chưa biết chú/cô: xưng cháu, gọi "mình", hỏi "cháu gọi chú hay cô".
   fresh();
   r = await send({ external_user_id: "gvd-3", text: "chào cháu" });
-  check("GVD-03 tin đầu 'chào cháu' → 'Dạ cháu chào ạ…', 'Cô chú cần giao bán…', + 'Cháu gọi chú hay cô cho tiện ạ?'; prefs nhom_tuoi lon_tuoi, xung_ho trống",
-    /^Dạ cháu chào ạ/.test(r.body.replies[0] ?? "") && /Cô chú cần giao bán bất động sản/.test(rep()) && /Cháu gọi chú hay cô/.test(rep()) && !/anh chị/i.test(rep()) && JSON.stringify(bX("gvd-3")) === JSON.stringify([null, "lon_tuoi", true]),
+  check("GVD-03 tin đầu 'chào cháu' → 'Dạ cháu chào ạ…', 'Cô chú cần rao bán…', + 'Cháu gọi chú hay cô cho tiện ạ?'; prefs nhom_tuoi lon_tuoi, xung_ho trống",
+    /^Dạ cháu chào ạ/.test(r.body.replies[0] ?? "") && /Cô chú cần rao bán bất động sản/.test(rep()) && /Cháu gọi chú hay cô/.test(rep()) && !/anh chị/i.test(rep()) && JSON.stringify(bX("gvd-3")) === JSON.stringify([null, "lon_tuoi", true]),
     JSON.stringify({ rep: r.body.replies, b: bX("gvd-3") }));
   // (4) trả lời "cô" trơ → ghi cách gọi, hỏi lại vai, cờ hỏi vai giữ.
   r = await send({ external_user_id: "gvd-3", text: "cô" });
-  check("GVD-04 'cô' trơ sau câu 'gọi chú hay cô' → 'Dạ cô. Cô cần giao bán…', prefs xung_ho = cô, hoi_vai vẫn giữ",
-    /^Dạ cô\. Cô cần giao bán bất động sản đúng không ạ\?/.test(r.body.replies[0] ?? "") && bX("gvd-3")?.[0] === "cô" && bX("gvd-3")?.[2] === true,
+  check("GVD-04 'cô' trơ sau câu 'gọi chú hay cô' → 'Dạ cô. Cô cần rao bán…', prefs xung_ho = cô, hoi_vai vẫn giữ",
+    /^Dạ cô\. Cô cần rao bán bất động sản đúng không ạ\?/.test(r.body.replies[0] ?? "") && bX("gvd-3")?.[0] === "cô" && bX("gvd-3")?.[2] === true,
     JSON.stringify({ rep: r.body.replies, b: bX("gvd-3") }));
   // (5) rồi câu rao KHÔNG xưng → hồ sơ bán vẫn mang "cô" từ hồ sơ mua.
   r = await send({ external_user_id: "gvd-3", text: "bán nhà hẻm 4m Nguyễn Trãi q5, 60m2, 7 tỷ" });
@@ -8120,7 +8120,7 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   fresh(seedKho);
   let rG = await send({ external_user_id: "g-moi-1", text: "chào em" });
   check("AOND-G1 lời chào NGẮN hai câu (chủ dự án 06/10 bác vế mời gửi ảnh / không form của AOND), kết bằng câu hỏi vai",
-    !/gửi ảnh|điền form|nhắn như nhắn bạn/.test(rG.body.reply ?? "") && /cần giao bán bất động sản đúng không ạ\?\s*$/.test(rG.body.reply ?? ""), JSON.stringify(rG.body));
+    !/gửi ảnh|điền form|nhắn như nhắn bạn/.test(rG.body.reply ?? "") && /cần rao bán bất động sản đúng không ạ\?\s*$/.test(rG.body.reply ?? ""), JSON.stringify(rG.body));
   const seedDuyet = (uid, type, code, them = 0) => fresh((d) => {
     const s = d.insert("sellers", { zalo_user_id: uid, seller_type: type, name: null, active_listing_id: null }).data;
     for (let i = 0; i < them; i++) {
