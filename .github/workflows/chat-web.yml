@@ -32,6 +32,11 @@ jobs:
     name: Trang chat
     runs-on: ubuntu-latest
     timeout-minutes: 130
+    # Đăng link thành một commit status ("Trang chat thử bot") để đọc được ngay qua API / tab Checks của commit trong
+    # lúc job còn chạy — log Actions chỉ tải được sau khi job kết thúc.
+    permissions:
+      contents: read
+      statuses: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -79,6 +84,9 @@ jobs:
           echo "::notice title=Trang chat thử bot::$URL (sống $PHUT phút, trần $TRAN lượt)"
           { echo "## Trang chat thử bot"; echo; echo "**$URL**"; echo; echo "Sống $PHUT phút, trần $TRAN lượt. Tắt sớm: Cancel workflow run."; } >> "$GITHUB_STEP_SUMMARY"
           echo "TRANG CHAT: $URL"
+          curl -sS -o /dev/null -X POST "https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }}" \
+            -H "Authorization: Bearer ${{ github.token }}" -H "Accept: application/vnd.github+json" \
+            -d "$(jq -n --arg u "$URL" --arg d "Sống $PHUT phút, trần $TRAN lượt" '{state: "success", context: "Trang chat thử bot", target_url: $u, description: $d}')" || true
           HET=$(( $(date +%s) + PHUT * 60 ))
           while [ "$(date +%s)" -lt "$HET" ]; do
             sleep 60
