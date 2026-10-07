@@ -4041,6 +4041,44 @@ fresh(seedKho);
     globalThis.__khongNhoCauHinh = false;
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zzzg (07/10/2026, chat thử …gogt; chủ dự án: "Phần này cần con bot trả lời 'dạ vâng ạ' chứ nó hỏi lại thông tin nhà…
+  // giống như đang cần bán cái mới"): tin đang rao đủ dữ kiện, không câu treo, khách "Mình cần bán gấp" → luật `wantsSell` (bỏ dấu
+  // "cần" = "căn" + "bán") mở TIN MỚI rỗng, bot hỏi "nhà loại gì". Nay người bán đã có tin thì AI (`can_khac`, đọc kèm danh sách căn
+  // đang có) quyết câu này là căn mới hay nói thêm về căn đang có.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__khongNhoCauHinh = true;
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 1, kien_thuc: [], cap_nhat: [], truong: [] } : OUT();
+    await send({ external_user_id: "gap-1", text: "bán nhà hẻm 58A Trương Đình Hội phường Phú Định, 4x11, 6 tầng, giá 7,2 tỷ" });
+    const banG = db().t.sellers.find((x) => x.zalo_user_id === "gap-1");
+    const tinG = () => db().t.listings.filter((x) => x.seller_id === banG.id);
+    const LG0 = tinG()[0];
+    Object.assign(LG0, { location_raw: "58A Trương Đình Hội", ward: "Phường Phú Định", district: "Quận 8", area_m2: 44, price_raw: "7,2 tỷ", price_vnd: 7200000000, property_type: "nha_pho" });
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    const n0 = tinG().length;
+    let thayCan = false;
+    globalThis.__model.parse = (p) => {
+      if (!laLuotBocRao(p)) return OUT();
+      thayCan = thayCan || /Căn chủ nhà đang có với em[\s\S]*Trương Đình Hội/.test(p.messages?.[0]?.content ?? "");
+      return { so_can: 0, can_khac: false, kien_thuc: [], cap_nhat: [], truong: [{ khoa: "gap", gia_tri: "co", trich_dan: "cần bán gấp", can: null }] };
+    };
+    const rG = await send({ external_user_id: "gap-1", text: "Mình cần bán gấp" });
+    const repG = (rG.body.replies ?? []).join("\n");
+    check("SRS-5.1zzzg-a 'Mình cần bán gấp' khi đã có tin (AI: can_khac=false) → KHÔNG mở tin mới, gấp ghi vào tin đang có, không hỏi loại nhà; AI thấy căn đang có",
+      tinG().length === n0 && thayCan && db().t.listings.find((x) => x.id === LG0.id).gap === true && !/loại gì|nhà phố, chung cư/i.test(repG),
+      JSON.stringify({ n: tinG().length, n0, thayCan, gap: db().t.listings.find((x) => x.id === LG0.id).gap, rep: rG.body.replies }));
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 1, can_khac: true, kien_thuc: [], cap_nhat: [], truong: [
+      { khoa: "loai_giao_dich", gia_tri: "ban", trich_dan: "bán", can: null },
+      { khoa: "quan", gia_tri: "Quận 7", trich_dan: "quận 7", can: null },
+      { khoa: "gia", gia_tri: "5 tỷ", trich_dan: "5 tỷ", can: null }] } : OUT();
+    await send({ external_user_id: "gap-1", text: "còn căn nữa ở quận 7 cần bán, 4x15 giá 5 tỷ" });
+    check("SRS-5.1zzzg-b AI nói căn KHÁC (can_khac=true) → vẫn mở tin mới như cũ", tinG().length === n0 + 1,
+      JSON.stringify({ n: tinG().length, n0 }));
+    globalThis.__khongNhoCauHinh = false;
+    globalThis.__cauHinh = cuCH;
+  }
   // (d) căn hộ, đang hỏi nội thất, khách "phí quản lý 15k/m2" (AI im) → "Không bóc tách được gì", phí mất hẳn.
   {
     fresh(seedKho);
