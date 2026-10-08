@@ -149,7 +149,12 @@ if (buoc === "kiem") {
 } else if (buoc === "cau-truc") {
   // Event trigger dashboard tạo khi tick "Enable automatic RLS": chỉ gỡ cái có hàm mang chữ rls, in tên trước.
   const et = await sql("select e.evtname, p.proname from pg_event_trigger e join pg_proc p on p.oid = e.evtfoid where p.proname ilike '%rls%' or e.evtname ilike '%rls%'");
-  for (const r of et) { console.log(`gỡ event trigger ${r.evtname} (hàm ${r.proname})`); await sql(`drop event trigger if exists "${r.evtname}"`); }
+  for (const r of et) {
+    console.log(`gỡ event trigger ${r.evtname} (hàm ${r.proname})`);
+    await sql(`drop event trigger if exists "${r.evtname}"`);
+    // Hàm dashboard tạo kèm nằm ở public — không gỡ thì xuat_schema() chép nó vào schema.sql.
+    if (r.proname === "rls_auto_enable") await sql("drop function if exists public.rls_auto_enable()");
+  }
   let hong = 0;
   hong += await chay("20260929b (schema luu_tru)", tachCau(docFile(fileMig("20260929b"))));
   hong += await chay("schema.sql", tachCau(docFile(join(GOC, "bot", "supabase", "schema.sql"))));
