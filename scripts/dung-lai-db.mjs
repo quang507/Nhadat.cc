@@ -52,6 +52,7 @@ if (REF === REF_CU) { console.error("PROJECT_REF vẫn là mã project cũ"); pr
 
 async function sql(query, readOnly = false) {
   const r = await fetch(`https://api.supabase.com/v1/projects/${REF}/database/query`, {
+    signal: AbortSignal.timeout(180_000), // một câu treo (chờ khoá) không được giữ cả bước hàng giờ
     method: "POST",
     headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify(readOnly ? { query, read_only: true } : { query }),
@@ -178,6 +179,12 @@ if (buoc === "kiem") {
   console.log("event trigger:", JSON.stringify(await sql(
     "select e.evtname, e.evtevent, p.proname, n.nspname from pg_event_trigger e join pg_proc p on p.oid = e.evtfoid join pg_namespace n on n.oid = p.pronamespace order by 1", true)));
   console.log("bảng public:", JSON.stringify(await sql("select count(*)::int as n from pg_tables where schemaname = 'public'", true)));
+  console.log("hàm public:", JSON.stringify(await sql("select count(*)::int as n from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public'", true)));
+  console.log("view public:", JSON.stringify(await sql("select count(*)::int as n from pg_views where schemaname = 'public'", true)));
+  console.log("trigger:", JSON.stringify(await sql("select count(*)::int as n from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and not t.tgisinternal", true)));
+  // Câu nào đang chạy / chờ khoá (để biết lượt dựng lại treo ở đâu) — chỉ 100 chữ đầu câu SQL, không có dữ liệu.
+  console.log("đang chạy:", JSON.stringify(await sql(
+    "select pid, state, wait_event_type, wait_event, (now() - query_start)::text as lau, left(regexp_replace(query, '\\s+', ' ', 'g'), 100) as q from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() and state <> 'idle' order by query_start", true)));
   console.log("extension có sẵn:", JSON.stringify(await sql(
     "select name, installed_version from pg_available_extensions where name in ('pg_cron','pg_net','vector','http','fuzzystrmatch','supabase_vault','pgcrypto','uuid-ossp','pg_stat_statements') order by 1", true)));
 } else if (buoc === "cau-truc") {
