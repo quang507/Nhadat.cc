@@ -198,7 +198,7 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   (`tin.md` + `anh/`) kèm `ro-hang.csv` mở thẳng Excel; nó **không phải bản sao
   lưu** (chỉ 3/31 bảng, không giữ UUID/khoá ngoại) và `manifest.json` của nó ghi
   thẳng chữ `KHONG_PHAI_BAN_SAO_LUU`.
-  `thu-du-an.mjs` nạp KHO DỰ ÁN (1.639 dự án HCM/Bình Dương/Long An, nguồn mogi
+  `thu-du-an.mjs` nạp KHO DỰ ÁN (HCM/Bình Dương/Đồng Nai/Long An/Tây Ninh, nguồn mogi
   theo lệnh chủ dự án 10/09) — chỉ lấy DỮ KIỆN, mô tả viết lại từ dữ kiện, giữ
   `source_url`.
 

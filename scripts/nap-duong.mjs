@@ -76,7 +76,9 @@ async function rest(path, init = {}) {
     headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
   });
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status} ${await r.text()}`);
-  return r.status === 204 ? null : await r.json();
+  // Prefer return=minimal trả 201 thân rỗng (không chỉ 204) — đọc chữ trước, rỗng thì thôi.
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
 }
 
 async function ghi(rows) {

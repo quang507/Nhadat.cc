@@ -13,7 +13,7 @@
 // Google hạ trang chép lại chứ không hạ trang gốc. `description` được VIẾT LẠI
 // từ các dữ kiện vừa bóc (hàm `viet_mo_ta`), `source_url` giữ để truy nguồn.
 //
-//   node scripts/thu-du-an.mjs            # ba tỉnh: HCM, Bình Dương, Long An
+//   node scripts/thu-du-an.mjs            # năm tỉnh: HCM, Bình Dương, Đồng Nai, Long An, Tây Ninh
 //   node scripts/thu-du-an.mjs --tinh long-an-cid40 --trang 3
 //   node scripts/thu-du-an.mjs --dry      # xem trước, không ghi DB
 //
@@ -39,10 +39,15 @@ const co = (t) => args.includes(t);
 const lay = (t, m) => { const i = args.indexOf(t); return i >= 0 ? args[i + 1] : m; };
 const DRY = co("--dry");
 const TINH = lay("--tinh", null);
-const TRANG_TOI_DA = Number(lay("--trang", "60"));
+// 08/10/2026: trần cũ 60 cắt HCM ở 60/162 trang (nạp được 865 thay vì ~2.400) — vòng tự dừng khi hết trang mới.
+const TRANG_TOI_DA = Number(lay("--trang", "400"));
 
-const TINH_LIST = TINH ? [TINH] : ["ho-chi-minh-cid30", "binh-duong-cid9", "long-an-cid40"];
-const TEN_TINH = { "ho-chi-minh-cid30": "Hồ Chí Minh", "binh-duong-cid9": "Bình Dương", "long-an-cid40": "Long An" };
+// Mã tỉnh mogi (cid) soát 08/10/2026 bằng tiêu đề trang /du-an/x-cidN — phần chữ trước "-cid" mogi bỏ qua.
+const TEN_TINH = {
+  "ho-chi-minh-cid30": "Hồ Chí Minh", "binh-duong-cid9": "Bình Dương", "dong-nai-cid19": "Đồng Nai",
+  "long-an-cid40": "Long An", "tay-ninh-cid54": "Tây Ninh",
+};
+const TINH_LIST = TINH ? [TINH] : Object.keys(TEN_TINH);
 
 const nghi = (ms) => new Promise((r) => setTimeout(r, ms));
 const goHtml = (s) => String(s ?? "")
@@ -213,6 +218,7 @@ for (const tinh of TINH_LIST) {
   console.log("");
 }
 
+const daCo = new Set();
 const rows = tatCa.map((d) => ({
   name: d.ten,
   slug: slugHoa(d.slug || d.ten),
@@ -235,7 +241,12 @@ const rows = tatCa.map((d) => ({
   source: "mogi",
   source_url: d.url,
   priority: 50,
-}));
+})).filter((r) => {
+  // Một dự án có thể nằm ở hai trang tỉnh; hai dòng cùng slug trong một mẻ upsert làm Postgres từ chối cả mẻ.
+  if (daCo.has(r.slug)) return false;
+  daCo.add(r.slug);
+  return true;
+});
 
 // 11/09/2026: bỏ sao lưu → không còn thư mục nhadat-backup. Bản chụp dự án
 // crawl được ghi ra thư mục tạm của máy — chỉ để soi lại, không phải sao lưu.
