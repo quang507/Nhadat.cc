@@ -6,7 +6,7 @@
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang, boHuaDaDang } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
-import { boCauTrungBongTruoc } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { anCauDaDap } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
 import { chiLechChinhTa, gotManhOKhac, soSauTenDuong, traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
@@ -868,10 +868,18 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZZZN-03 AI thêm số ('7ty2' → '7 tỷ 2 hay 8 tỷ') → bỏ", docLaiHopLe("7 tỷ 2 hay 8 tỷ", "7ty2") === null);
   ok("ZZZN-04 AI viết thành câu khác hẳn → bỏ", docLaiHopLe("anh muốn bán căn hộ ở quận 7 gấp lắm em ơi", "ok e") === null);
   ok("ZZZN-05 giống hệt tin gốc / null → null", docLaiHopLe("sổ hồng riêng", "sổ hồng riêng") === null && docLaiHopLe(null, "abc") === null);
-  const phi = "Dạ phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ.";
-  ok("ZZZN-06 model nói lại câu phí rồi hỏi → chỉ còn câu hỏi", boCauTrungBongTruoc(phi, "Dạ phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ. Hẻm trước nhà chú rộng mấy mét vậy chú?") === "Hẻm trước nhà chú rộng mấy mét vậy chú?");
-  ok("ZZZN-07 (cách nói MỚI) 'Vâng ạ, phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ.' cũng bỏ", !/1%/.test(boCauTrungBongTruoc(phi, "Vâng ạ, phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ. Nhà chú mấy tầng ạ?")));
-  ok("ZZZN-08 câu khác nội dung giữ nguyên; bỏ hết thì giữ cả lời (không rỗng)", boCauTrungBongTruoc(phi, "Nhà chú mấy tầng ạ?") === "Nhà chú mấy tầng ạ?" && boCauTrungBongTruoc(phi, phi) === phi);
+}
+// ── SRS-5.1zzzq (08/10/2026): câu khách hỏi đã có bong bóng tiền định trả lời bị CẮT khỏi tin đưa model (thay lưới cắt câu trùng).
+{
+  ok("ZZZQ-01 cả tin là câu hỏi phí → rỗng (model không thấy gì để trả lời lại)", anCauDaDap("phí sao cháu", "phí sao cháu") === "");
+  ok("ZZZQ-02 AI trích thiếu đuôi ('phí sao') → đuôi 'cháu' cùng vế cũng cắt", anCauDaDap("phí sao cháu", "phí sao") === "");
+  ok("ZZZQ-03 (cách nói MỚI) trả lời kèm hỏi: '4 tầng nha, mà phí bên cháu tính sao vậy?' → còn '4 tầng nha'",
+    anCauDaDap("4 tầng nha, mà phí bên cháu tính sao vậy?", "phí bên cháu tính sao vậy") === "4 tầng nha", anCauDaDap("4 tầng nha, mà phí bên cháu tính sao vậy?", "phí bên cháu tính sao vậy"));
+  ok("ZZZQ-04 tin gõ KHÔNG DẤU, AI trích có dấu → vẫn khớp, giữ phần trả lời nguyên chữ gốc",
+    anCauDaDap("so hong rieng. phi ben e tinh sao", "phí bên e tính sao") === "so hong rieng", anCauDaDap("so hong rieng. phi ben e tinh sao", "phí bên e tính sao"));
+  ok("ZZZQ-05 câu hỏi đứng đầu: 'em là bot hả? nhà 4x15 hẻm 5m' → còn 'nhà 4x15 hẻm 5m'",
+    anCauDaDap("em là bot hả? nhà 4x15 hẻm 5m", "em là bot hả") === "nhà 4x15 hẻm 5m", anCauDaDap("em là bot hả? nhà 4x15 hẻm 5m", "em là bot hả"));
+  ok("ZZZQ-06 trích không có trong tin / rỗng → trả nguyên tin", anCauDaDap("giá 15 tỷ", "phí sao") === "giá 15 tỷ" && anCauDaDap("giá 15 tỷ", null) === "giá 15 tỷ");
 }
 // ── SRS-5.1zzzp (08/10/2026, chủ dự án: "chiều rộng đường, mặt tiền bla bla có bị ghi sai nữa ko"): số đo vào đúng ô theo CHỮ cạnh nó.
 {

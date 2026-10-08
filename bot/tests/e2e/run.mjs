@@ -4188,15 +4188,15 @@ fresh(seedKho);
       await phatLai("kb2chau", "web-pl-kb2", async (i, t, r, calls) => { if (t.text === "phí sao cháu") ndPhi = nd(calls); });
       check("SRS-5.1zzzm-f phát lại …kb2chau: 'phí sao cháu' → câu lệnh dặn tin chỉ gồm MỘT câu hỏi tiếp, không nhắc lại phí",
         /CHỈ gồm MỘT câu hỏi tiếp/.test(ndPhi), ndPhi.slice(0, 300));
-      // SRS-5.1zzzn (08/10/2026, bắn LẠI sau zzzm): lời dặn chưa đủ — model vẫn nói lại câu phí. Câu trùng bong bóng tiền định bị bỏ.
-      // Production chạy `luat_loi_bot = gon` (mọi van sửa văn tắt, kể cả `boCauTroNguocDauBong`) — đo đúng chế độ đó.
-      let repPhi = [];
-      const cuCHn = globalThis.__cauHinh;
-      globalThis.__cauHinh = { ...(cuCHn ?? {}), luat_loi_bot: "gon" };
-      await phatLai("kb2chau", "web-pl-kb2b", async (i, t, r) => { if (t.text === "phí sao cháu") repPhi = r.body.replies ?? []; });
-      globalThis.__cauHinh = cuCHn;
-      check("SRS-5.1zzzn-a phát lại …kb2chau: 'phí sao cháu', model nói lại câu phí → câu phí chỉ xuất hiện MỘT lần, câu hỏi tiếp còn",
-        repPhi.join("\n").split("1% giá chốt").length === 2 && repPhi.some((x) => /mấy mét/.test(x)), JSON.stringify(repPhi));
+      // SRS-5.1zzzq (thay lưới cắt câu trùng của SRS-5.1zzzn): câu hỏi phí đã có bong bóng tiền định trả lời bị CẮT khỏi tin đưa
+      // model viết lời — model không thấy câu hỏi thì không trả lời lại. Đo ở câu lệnh (mock model không đọc câu lệnh).
+      let ndPhi2 = "", repPhi = [], ndPhi4 = "";
+      await phatLai("kb2chau", "web-pl-kb2b", async (i, t, r, calls) => { if (t.text === "phí sao cháu") { ndPhi2 = nd(calls); repPhi = r.body.replies ?? []; } });
+      check("SRS-5.1zzzq-a phát lại …kb2chau: 'phí sao cháu' → bong bóng phí tiền định có, câu lệnh viết lời KHÔNG còn câu hỏi phí",
+        repPhi.some((x) => /1% giá chốt/.test(x)) && ndPhi2.length > 0 && !/phí sao/i.test(ndPhi2), ndPhi2.slice(0, 600));
+      await phatLai("kb4thue", "web-pl-kb4b", async (i, t, r, calls) => { if (t.text === "phí bên em tính sao") ndPhi4 = nd(calls); });
+      check("SRS-5.1zzzq-b phát lại …kb4thue: 'phí bên em tính sao' (thuê) → câu lệnh viết lời KHÔNG còn câu hỏi phí",
+        ndPhi4.length > 0 && !/phí bên em tính sao/i.test(ndPhi4), ndPhi4.slice(0, 600));
       // (b) tin còn CHỜ THÔNG TIN không được gọi là "đang rao" trong câu lệnh; (c) bản AI đọc lại tin không dấu đi tới model viết lời.
       let ndDang = "", ndAnh2 = "";
       await phatLai("kc1tatt", "web-pl-kc1", async (i, t, r, calls) => {

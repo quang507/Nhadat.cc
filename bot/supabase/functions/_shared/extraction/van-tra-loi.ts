@@ -1688,19 +1688,32 @@ export function damBaoCauHoi(reply: string | null | undefined, cauHoi: string | 
 }
 
 /**
- * SRS-5.1zzzn (08/10/2026, bắn thử …kc2chau / …kc4thue): khách hỏi phí → bong bóng phí TIỀN ĐỊNH, rồi model viết lại y câu phí ở
- * bong bóng sau dù câu lệnh đã dặn "không trả lời lại" (hai lần bắn liền). Lời dặn không đủ: hai đường (code, model) cùng sinh một
- * nội dung trong MỘT lượt. Lưới an toàn (luôn bật, không phải van sửa văn): câu của model mà ≥ 80% chữ đã nằm trong bong bóng
- * tiền định đứng trước thì bỏ. Bỏ hết thì giữ nguyên (không để tin rỗng).
+ * SRS-5.1zzzq (08/10/2026, thay lưới `boCauTrungBongTruoc` của SRS-5.1zzzn): khách hỏi phí / ảnh / bot → bong bóng TIỀN ĐỊNH trả
+ * lời, rồi model viết lại y câu đó ở bong bóng sau. Gốc: hai đường (code, model) cùng được ĐƯA câu hỏi trong một lượt, nên cả hai
+ * cùng trả lời — lời dặn "đừng trả lời lại" hay lưới cắt câu trùng chỉ chữa ngọn. Nay câu hỏi đã có bong bóng trả lời bị CẮT KHỎI
+ * tin đưa model: model không thấy câu hỏi thì không có gì để trả lời lại.
+ * `cau` là cụm AI trích từ tin (đã qua `docHoiLai`: nằm trong tin sau khi bỏ dấu) hoặc mảnh luật `tachCauHoiNguoc` tách ra. Khớp
+ * theo chữ cái / chữ số đã bỏ dấu, rồi cắt đúng đoạn đó trên chữ GỐC (giữ dấu, giữ phần còn lại). Không khớp → trả nguyên tin.
  */
-export function boCauTrungBongTruoc(bongTruoc: string | null | undefined, reply: string): string {
-  if (!bongTruoc?.trim() || !reply?.trim()) return reply;
-  const tu = (x: string) => boDau(x).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 0);
-  const daNoi = new Set(tu(bongTruoc));
-  const giu = tachCau(reply).filter((c) => {
-    const w = tu(c);
-    if (w.length < 4) return true;
-    return w.filter((x) => daNoi.has(x)).length / w.length < 0.8;
-  });
-  return giu.length ? giu.join(" ").trim() : reply;
+export function anCauDaDap(tin: string, cau: string | null | undefined): string {
+  const t = tin ?? "";
+  const c = (cau ?? "").trim();
+  if (!t.trim() || !c) return t;
+  const kyTu = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const so: string[] = [];
+  const viTri: number[] = [];
+  for (let i = 0; i < t.length; i++) for (const ch of kyTu(t[i])) { so.push(ch); viTri.push(i); }
+  const kc = kyTu(c);
+  const p = kc ? so.join("").indexOf(kc) : -1;
+  if (p < 0) return t;
+  let dau = viTri[p];
+  let cuoi = viTri[p + kc.length - 1] + 1;
+  // Mẩu ≤ 2 chữ còn dính trong cùng vế ("ủa" phí sao, phí sao "cháu") là đuôi / đầu của chính câu hỏi — cắt luôn.
+  const NGAT = /[,.;:?!…\n]/;
+  let e = cuoi; while (e < t.length && !NGAT.test(t[e])) e++;
+  if (t.slice(cuoi, e).trim().split(/\s+/).filter(Boolean).length <= 2) cuoi = e;
+  let b = dau; while (b > 0 && !NGAT.test(t[b - 1])) b--;
+  if (t.slice(b, dau).trim().split(/\s+/).filter(Boolean).length <= 2) dau = b;
+  while (cuoi < t.length && /[?!.…]/.test(t[cuoi])) cuoi++;
+  return `${t.slice(0, dau)} ${t.slice(cuoi)}`.replace(/\s+/g, " ").replace(/^[\s,;:.\-–]+|[\s,;:.\-–]+$/g, "").trim();
 }

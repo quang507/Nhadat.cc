@@ -88,7 +88,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, laChiLenhDang, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, hocXungHoTuLichSu, cachGoiKhach, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, boCauTrungBongTruoc } from "../_shared/extraction/van-tra-loi.ts";
+import { boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, anCauDaDap } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, soPhongNguTheoTang, themTangPhu, TIEU_TU_DAU, soTamCanHoiLung, docTraLoiLung, ketCauTheoLung, soTangTrongDapLung, timPhuongTrongCau, type PhuongDs } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -3419,14 +3419,21 @@ Deno.serve(async (req) => {
     // SRS-5.1zzzj (chat thử 08/10, …w44h): NGỮ CẢNH dựng TRƯỚC khi AI đọc tin này — khách tự xưng ngay lượt này ("cho anh") mà
     // model vẫn được dặn gọi "anh chị". Mọi chỗ gọi model lấy ngữ cảnh qua hàm này: AI đã đọc ra tự xưng (qua kiểm trích dẫn) thì
     // dòng cách gọi đổi trước khi model viết, không sửa chữ sau.
+    // SRS-5.1zzzq (08/10/2026, bắn thử …kc2chau / …kc4thue): câu khách hỏi đã có bong bóng TIỀN ĐỊNH trả lời (phí / ảnh / bot) bị
+    // CẮT khỏi tin đưa model viết lời — model không thấy câu hỏi thì không trả lời lại. Nơi dựng bong bóng đặt `cauDaDap`; mọi câu
+    // lệnh viết lời lấy tin khách qua `tinChoModel()` (kể cả dòng "em đọc là" trong ngữ cảnh).
+    let cauDaDap: string | null = null;
+    const tinChoModel = (): string =>
+      (cauDaDap ? anCauDaDap(text, cauDaDap) : text) || "(tin chỉ có câu hỏi đó, đã trả lời ở bong bóng trước)";
     const boiCanhLuot = async (): Promise<string> => {
       if (!bongAi) return boiCanh;
       const k = await bongAi;
       const tx = !goiNguoi && k?.ket ? docTuXung(k.tuXung, text, tinChuNhaGoc()) : null;
       const bc = tx ? boiCanh.replace(dongGoiChuNha(null), dongGoiChuNha(tx.la)) : boiCanh;
       // SRS-5.1zzzn: tin gõ không dấu / tắt → bản AI đọc (qua `docLaiHopLe`) đứng đầu ngữ cảnh, model hiểu theo bản đó.
-      const dl = k?.ket ? docLaiHopLe((k.ket as { doc_lai?: string | null }).doc_lai, text) : null;
-      return dl ? bc.replace("NGỮ CẢNH (đọc kỹ trước khi viết):\n", `NGỮ CẢNH (đọc kỹ trước khi viết):\n- Tin chủ nhà vừa nhắn gõ không dấu / tắt ("${text.slice(0, 200)}"); em đọc là: "${dl.slice(0, 300)}" — hiểu theo bản này, đừng đoán nghĩa khác (chữ không dấu không phải tên người).\n`) : bc;
+      const dl0 = k?.ket ? docLaiHopLe((k.ket as { doc_lai?: string | null }).doc_lai, text) : null;
+      const dl = dl0 && cauDaDap ? anCauDaDap(dl0, cauDaDap) : dl0;
+      return dl ? bc.replace("NGỮ CẢNH (đọc kỹ trước khi viết):\n", `NGỮ CẢNH (đọc kỹ trước khi viết):\n- Tin chủ nhà vừa nhắn gõ không dấu / tắt ("${tinChoModel().slice(0, 200)}"); em đọc là: "${dl.slice(0, 300)}" — hiểu theo bản này, đừng đoán nghĩa khác (chữ không dấu không phải tên người).\n`) : bc;
     };
 
     // ─── 06/10/2026 (bước 3, SRS-5.1zzp; chủ dự án: "làm 3 bước đi… prompt làm sao cho nó tự nhiên hơn") ─────────────────
@@ -6371,9 +6378,10 @@ Deno.serve(async (req) => {
         : xinXoaLuot(dapAn) && !nhanDienFact(dapAn)
         ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
         : null;
+      if (hoiNguoc && hoiNguocDap) cauDaDap = hoiNguoc;
       const hoiNguocPrompt = hoiNguoc
         ? hoiNguocDap
-          ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}" — câu đó ĐÃ được trả lời ở bong bóng ngay trước ("${hoiNguocDap}"); em KHÔNG trả lời lại, KHÔNG nhắc tới câu hỏi đó hay chuyện ảnh, KHÔNG nói chữ "hệ thống". Tin em viết lúc này CHỈ gồm MỘT câu hỏi tiếp (được mở bằng "Dạ"), không câu ghi nhận, không câu nào nhắc lại nội dung bong bóng đó. `
+          ? `Tin chủ nhà có kèm một câu hỏi — câu đó đã được trả lời ở bong bóng gửi ngay trước tin em, và đã được bỏ khỏi tin chủ nhà dẫn trong câu lệnh này; em không biết và không nhắc tới nó, KHÔNG nói chữ "hệ thống". Tin em viết lúc này CHỈ gồm MỘT câu hỏi tiếp (được mở bằng "Dạ"), không câu ghi nhận. `
           : danTraLoiHoiNguoc(hoiNguoc, hoiAi?.chuDe)
         : "";
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
@@ -6727,7 +6735,7 @@ Deno.serve(async (req) => {
           ? `Chủ nhà chưa gật bản nháp, cũng chưa nói sửa gì rõ.`
           : `Câu đó KHÔNG trả lời được câu em hỏi - có thể chủ nhà hiểu nhầm, hoặc đang nói một thông số khác. Em đã ghi chú lại nguyên văn (không mất), nhắc lại ngắn gọn để xác nhận rồi hỏi lại.`;
         const promptLai =
-          `${await boiCanhLuot()}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${text}". ${viSao}\n${hoiNguocPrompt}` +
+          `${await boiCanhLuot()}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${tinChoModel()}". ${viSao}\n${hoiNguocPrompt}` +
           `Viết MỘT tin ngắn như người thật nhắn Zalo: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
           `Ý hỏi chính vẫn là "${nhanDangHoi}" (hệ thống ghi câu trả lời kế vào ô này). ` +
           `Không xin lỗi dài, KHÔNG nhắc mã tin${nhieuCan ? " (nhiều căn thì gọi bằng địa chỉ)" : ""}.`;
@@ -6787,7 +6795,7 @@ Deno.serve(async (req) => {
             ? `Em ghi "${kq.chuyenSang.answer}" rồi ạ. `
             : "") + (chiQuan && goiYSauQuan ? goiYSauQuan : `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`);
         }
-        return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), boCauTrungBongTruoc(hoiNguocDap, hoiLai)], { reask: pendingReq.question, loai_cau: kq.loai, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) });
+        return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), hoiLai], { reask: pendingReq.question, loai_cau: kq.loai, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) });
         }
       }
 
@@ -7213,19 +7221,19 @@ Deno.serve(async (req) => {
       const prompt = nextKey
         ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}` +
           `ĐÃ BIẾT về căn${neo ? ` ${neo}` : ""}: ${daBietNgan(lstNow) || "(chưa có gì)"}\n` +
-          `CHỦ NHÀ VỪA NHẮN (em vừa hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}"): "${text}"\n` +
+          `CHỦ NHÀ VỪA NHẮN (em vừa hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}"): "${tinChoModel()}"\n` +
           `${dongCanHoi}\n` +
           `Viết MỘT tin ngắn như người thật nhắn Zalo: ${khenGanDay ? "không khen (mấy tin gần đây em khen rồi), " : ""}` +
           `ghi nhận vài chữ rồi hỏi đúng ý CẦN HỎI, không gắn thêm ý khác, không đọc lại số liệu` +
           (nhieuCan ? `; người này rao nhiều căn, nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}` : "") + `.`
         : published
-        ? `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
+        ? `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${tinChoModel()}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
           `Viết MỘT tin ngắn: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
         : chanNhap && !thieuDiem.length
-        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa nhắn: "${text}". Viết MỘT tin rất ngắn ghi nhận điều họ vừa nói (đúng chữ họ dùng, không diễn giải sang nghĩa khác); KHÔNG hỏi lại câu em vừa hỏi, KHÔNG đặt câu hỏi mới nào (lượt này hệ thống không mở câu hỏi — câu em tự đặt sẽ không ai ghi câu trả lời), KHÔNG nói tin đã đủ thông tin.`
+        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa nhắn: "${tinChoModel()}". Viết MỘT tin rất ngắn ghi nhận điều họ vừa nói (đúng chữ họ dùng, không diễn giải sang nghĩa khác); KHÔNG hỏi lại câu em vừa hỏi, KHÔNG đặt câu hỏi mới nào (lượt này hệ thống không mở câu hỏi — câu em tự đặt sẽ không ai ghi câu trả lời), KHÔNG nói tin đã đủ thông tin.`
         : thieuDiem.length
-        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu (theo thứ tự ưu tiên): ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn như người thật: ghi nhận, rồi hỏi thứ đầu danh sách đó theo cách hợp với loại nhà này.`
-        : `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
+        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${tinChoModel()}". Tin chưa đủ điểm để đăng, còn thiếu (theo thứ tự ưu tiên): ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn như người thật: ghi nhận, rồi hỏi thứ đầu danh sách đó theo cách hợp với loại nhà này.`
+        : `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${tinChoModel()}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
       // OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định — vòng drip không
       // đứng lại chờ model sống. Câu mẫu CÓ hỏi thật (kèm neo căn) nên mở
       // info_request bên dưới vẫn đúng luật "không mở khi chưa hỏi được".
@@ -7387,7 +7395,7 @@ Deno.serve(async (req) => {
       const cauDanPhiR2 = published && pendingReq.listings?.status === "cho_thong_tin" && !daNoiPhiRoi()
         ? cauTD("dang_xong_phi", { loai: loaiDoc(lstNow?.property_type) }) : "";
       if (cauDanPhiR2) sellerReply = sellerReply ? `${sellerReply}\n${cauDanPhiR2}` : cauDanPhiR2;
-      return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), ...(dauDangThieu ? [dauDangThieu] : []), boCauTrungBongTruoc(hoiNguocDap, sellerReply), ...(xinDiemCuoi ? [xinDiemCuoi] : [])], {
+      return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), ...(dauDangThieu ? [dauDangThieu] : []), sellerReply, ...(xinDiemCuoi ? [xinDiemCuoi] : [])], {
         ...(dauDangThieu ? { chu_muon_dang: true } : {}),
         saved_fact: boQuaCauTreo ? null : pendingReq.question, ...(xinDiemCuoi ? { xin_danh_gia: true } : {}), ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}),
         ...(cauDanPhiR2 ? { dan_phi: true } : {}),
@@ -7835,9 +7843,10 @@ Deno.serve(async (req) => {
         const hoiAiRao = await hoiLaiAi(text);
         const hoiRao = hoiAiRao !== undefined ? (hoiAiRao ? (hoiAiRao.caTin ? text : hoiAiRao.cau) : null) : tachCauHoiNguoc(text).hoi;
         const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(sellerRow.seller_type, sDeal ?? dealNguoi, { benEm: true }), hoiAiRao?.chuDe) : null;
+        if (hoiRao && dapRao) cauDaDap = hoiRao;
         const hoiRaoPrompt = hoiRao
           ? dapRao
-            ? `Chủ nhà còn hỏi "${hoiRao}" — câu đó ĐÃ được trả lời ở bong bóng ngay trước; em KHÔNG trả lời lại, KHÔNG nhắc tới nó, KHÔNG nói chữ "hệ thống". `
+            ? `Tin chủ nhà có kèm một câu hỏi — câu đó đã được trả lời ở bong bóng gửi ngay trước tin em, và đã được bỏ khỏi tin chủ nhà dẫn trong câu lệnh này; em không biết và không nhắc tới nó, KHÔNG nói chữ "hệ thống". `
             : danTraLoiHoiNguoc(hoiRao, hoiAiRao?.chuDe)
           : "";
         let raoReply: string | null = null;
@@ -7850,7 +7859,7 @@ Deno.serve(async (req) => {
               messages: [{
                 role: "user",
                 content:
-                  `${await boiCanhLuot()}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ${hoiRaoPrompt}` +
+                  `${await boiCanhLuot()}Chủ nhà vừa nhắn rao: "${tinChoModel()}". Em đã tạo tin. ${hoiRaoPrompt}` +
                   `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao${khenGanDay ? " (không khen, mấy tin gần đây em khen rồi)" : " (có điểm mạnh thật thì khen một ý, không thì thôi)"}, không cảm ơn / không nói "tin tưởng", không đọc lại số liệu, không xác nhận lại địa điểm` +
                   (cauXacNhanDau
                     // 25/09/2026 (bắn thật lx-05): câu gợi ý "thuộc Phường Bến Thành hay Phường Cầu Ông Lãnh" bị model nói lại
@@ -7911,7 +7920,7 @@ Deno.serve(async (req) => {
           // Model đã bị dặn không hỏi; lỡ còn câu hỏi thì cắt, rồi nối câu xác nhận nguyên văn.
           raoReply = `${raoReply.replace(/[^.!?]*\?\s*$/u, "").trim()} ${cauXacNhanDau}`.trim();
         }
-        if (dapRao) raoReply = `${dapRao}\n${boCauTrungBongTruoc(dapRao, raoReply)}`;
+        if (dapRao) raoReply = `${dapRao}\n${raoReply}`;
         // Chủ dự án 09/09/2026: "đã bóc tách được cái gì, viết gửi lại cho khách
         // luôn" — bong bóng TIỀN ĐỊNH liệt kê những gì vừa ghi (không liệt kê
         // thứ trống), đứng trước lời chào/câu hỏi của model. Số liệu đúng từng
