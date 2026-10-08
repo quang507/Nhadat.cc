@@ -17,7 +17,7 @@ insert into listings (id, code, seller_id, deal, district, description, status, 
   ('10000000-0000-0000-0000-0000000000c1', 'BDS-THU-SQL-PH1', '00000000-0000-0000-0000-0000000000c1', 'ban', 'Quận 5', 'bán nhà hẻm', 'dang_ban', 'nha_pho');
 
 -- (1) Lần rao đầu: 10 lượt chủ nhắn → bot đáp sau 2 giây → chủ nhắn tiếp sau 20 giây. Không lượt nào chủ động.
-insert into messages (conversation_id, sender, body, created_at, seq)
+insert into messages (conversation_id, sender, body, created_at, seq) overriding system value
 select '20000000-0000-0000-0000-0000000000c1', s.sender::msg_sender, 'x',
        now() - interval '20 days' + (i * interval '22 seconds') + case when s.sender = 'bot' then interval '2 seconds' else interval '0' end,
        i * 2 + case when s.sender = 'bot' then 1 else 0 end
@@ -32,7 +32,7 @@ do $$ declare ph jsonb; nb jsonb; begin
 end $$;
 
 -- (2) Thêm 4 lượt bot chủ động (chủ im 3 ngày), chủ trả lời sau 10 phút → 4 lượt: vẫn chưa đủ 5, chưa tính vào điểm.
-insert into messages (conversation_id, sender, body, created_at, seq)
+insert into messages (conversation_id, sender, body, created_at, seq) overriding system value
 select '20000000-0000-0000-0000-0000000000c1', s.sender::msg_sender, 'y',
        now() - interval '15 days' + (i * interval '3 days') + case when s.sender = 'seller' then interval '10 minutes' else interval '0' end,
        100 + i * 2 + case when s.sender = 'seller' then 1 else 0 end
@@ -45,7 +45,7 @@ do $$ declare ph jsonb; nb jsonb; begin
 end $$;
 
 -- (3) Lượt thứ 5 → đủ, điểm phản hồi vào điểm người rao.
-insert into messages (conversation_id, sender, body, created_at, seq) values
+insert into messages (conversation_id, sender, body, created_at, seq) overriding system value values
   ('20000000-0000-0000-0000-0000000000c1', 'bot', 'z', now() - interval '2 days', 200),
   ('20000000-0000-0000-0000-0000000000c1', 'seller', 'z', now() - interval '2 days' + interval '5 minutes', 201);
 do $$ declare nb jsonb; begin
@@ -56,7 +56,7 @@ do $$ declare nb jsonb; begin
 end $$;
 
 -- (4) Chủ lờ 5 tin nhắc liền nhau (mỗi tin cách 2 ngày, không trả lời) → 5 lượt, điểm 0. Trước đây lượt bị tin bot kế "nuốt".
-insert into messages (conversation_id, sender, body, created_at, seq)
+insert into messages (conversation_id, sender, body, created_at, seq) overriding system value
 select '20000000-0000-0000-0000-0000000000c2', 'bot', 'nhac', now() - interval '20 days' + (i * interval '2 days'), 1000 + i
   from generate_series(0, 5) i;
 do $$ declare ph jsonb; begin
@@ -65,7 +65,7 @@ do $$ declare ph jsonb; begin
 end $$;
 
 -- (5) Một lượt bot nhiều bong bóng (cách nhau 1 giây) chỉ là MỘT lượt.
-insert into messages (conversation_id, sender, body, created_at, seq) values
+insert into messages (conversation_id, sender, body, created_at, seq) overriding system value values
   ('20000000-0000-0000-0000-0000000000c3', 'bot', 'a', now() - interval '10 days', 2001),
   ('20000000-0000-0000-0000-0000000000c3', 'bot', 'b', now() - interval '10 days' + interval '1 second', 2002),
   ('20000000-0000-0000-0000-0000000000c3', 'seller', 'c', now() - interval '10 days' + interval '2 hours', 2003);
