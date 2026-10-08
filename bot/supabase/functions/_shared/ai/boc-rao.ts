@@ -149,6 +149,9 @@ KHOÁ:
   Nhà cấp 4 chỉ có MỘT trệt (có thể có gác lửng), KHÔNG có lầu: "nhà 4 lầu", "nhà 3 tầng", "1 trệt 2 lầu" → nha_pho (trừ khi nói biệt thự).
 - gia (giá bán; tin cho thuê thì giá thuê), gia_m2, tien_coc, thu_nhap_thue (CHỈ tiền thuê căn BÁN đang thu). Giá trị tiền LUÔN kèm đơn vị như khách viết: "5 tỷ 2", "3 tỷ 150", "900 triệu", "95 triệu/m2" — không viết số trần "5.2".
 - dien_tich (m²), ngang, dai, no_hau (m), do_rong_hem, do_rong_duong, cach_mat_tien (m): trong "truong" chỉ con số (hẻm xe hơi không có số mét thì không đưa vào truong — nhưng VẪN là câu trả lời câu hẻm ở "tra_loi").
+  Số đo nào vào ô nào (code kiểm: cụm trích phải nói ĐÚNG chuyện của ô): "mặt tiền 4m", "MT 5m", "ngang 4", "4x16" = CHIỀU NGANG căn
+  (ngang) — KHÔNG phải loai_duong_vao, KHÔNG phải do_rong_duong; "mặt tiền đường 8m", "đường trước nhà 8m", "lộ giới 12m" = do_rong_duong;
+  "hẻm 4m" = do_rong_hem; "mặt tiền hẻm 6m" = nhà nằm mặt HẺM (do_rong_hem 6, không phải mat_tien); "cách mặt tiền 20m" = cach_mat_tien.
 - so_phong_ngu, so_wc; so_tang = TỔNG số tầng tính CẢ TRỆT, không tính lửng/sân thượng ("1 trệt 2 lầu" = 3, "trệt 3 lầu" = 4, "3 tấm" = 3, "3 tầng" = 3 — TẦNG đã gồm trệt, chỉ LẦU mới cộng 1); tang = căn hộ nằm tầng mấy. Tin có cụm kết cấu (trệt / lầu / lửng) thì ket_cau là ô chính, so_tang chỉ là số tính ra từ cụm đó — đưa cả hai được, code giữ ket_cau.
 - quan: ghi đủ "Quận 5", "Quận Phú Nhuận", "Huyện Bình Chánh", "TP Thủ Đức". phuong, duong, ma_can. quan / phuong / duong là NƠI CĂN NHÀ
   NẰM — nơi GẦN đó, nơi đi tới, nơi chủ nhà ở / chuyển tới thì KHÔNG đưa ("ra Quận 1 có 5 phút", "gần chợ Bến Thành", "bán vì chuyển qua quận 7").
@@ -177,7 +180,7 @@ KHOÁ:
   co = "bán gấp", "cần tiền gấp", "kẹt tiền", "kẹt bank", "ngộp ngân hàng / ngộp bank", "cắt lỗ cũng bán", "cần ra hàng sớm", "ra nhanh trong tháng".
   Một tin có cả giá lẫn ý gấp ("16 tỉ em, rao khi nào được giá thì thôi") → đưa CẢ HAI trường, không chỉ giá.
 - loai_duong_vao: mat_tien | hem_xe_tai | hem_xe_hoi | hem_xe_may | hem | khong_hem — đường trước nhà, đọc theo NGHĨA cả câu, kể
-  cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền", "mặt đường" →
+  cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền đường", "mặt đường", "mặt phố", "nhà mặt tiền" (không kèm số đo ngay sau) →
   mat_tien; chỉ nói "trong hẻm" → hem; "không có hẻm", "nằm trong khu công nghiệp / nội khu" → khong_hem. "Gần / cách mặt
   tiền" KHÔNG phải mat_tien. Chủ CHỈ nói bề rộng hẻm (không nói xe nào vào) → theo bề rộng: dưới 3m → hem_xe_may; 3m đến dưới
   3,5m → hem; từ 3,5m → hem_xe_hoi; từ 6m → hem_xe_tai (trích dẫn là cụm bề rộng, vd "hẻm 4m"). Số hẻm ("hẻm 45") KHÔNG phải bề rộng.

@@ -2552,6 +2552,16 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Sửa**: thêm 12 khoá vào `KHOA_O` (khoá fact cùng tên) + mô tả trong `LUAT` (`boc-rao.ts`); `nguoi_dung_ten`, `dong_so_huu_voi` vào ô nguyên văn; chế độ `chinh` cho luật đỡ `nguoi_dung_ten` khi AI im như `the_chap` (cùng câu sổ gộp). Bài kiểm mới `bot/tests/khoa-ai-du.mjs` (trong `test:bot`): đỏ khi một câu hỏi mới không có khoá AI tương ứng.
 - **Kiểm**: `khoa-ai-du.mjs` đỏ khi bỏ 7 khoá mới (liệt kê đúng 7 ý); O-13 đổi thành "đứng tên là khoá AI VÀ ô nguyên văn"; e2e 1044/1044; bộ đo luật `do-boc:nen` 73 → 75 ca, 520 → 524 / 582 trường (N06, N14 nay đạt nhờ SRS-5.1zzzm) — `nen.json` cập nhật.
 
+### SRS-5.1zzzp · Số đo vào đúng ô theo CHỮ cạnh nó: chiều ngang / mặt tiền / bề rộng đường / bề rộng hẻm (08/10/2026)
+
+`[nguồn: chủ dự án 08/10/2026 — "giờ nó làm tốt phần chiều rộng đường, mặt tiền bla bla có bị ghi sai nữa ko, sửa từ gốc nhé"; lỗi treo từ chat thử 07/10: "mặt tiền 4m" bị AI ghi loại đường vào = mặt tiền]`
+
+- **Ca gốc**: "mặt tiền 4m" (chiều ngang căn 4m) → AI ghi `loai_duong_vao = mat_tien` (nhà mặt tiền đường); bot vẫn hỏi hẻm. Soát thêm: "hẻm 4m" có thể lọt làm chiều ngang / bề rộng đường, "đường 8m" lọt làm bề rộng hẻm — code không chặn.
+- **Lớp lỗi**: *kiểm bằng chứng chỉ kiểm CON SỐ, không kiểm CỤM nói chuyện gì*. Ô số đo (`ngang`, `do_rong_hem`, `do_rong_duong`, `no_hau`) chỉ đòi số có trong cụm trích; ô `so_phong_ngu` đã đòi chữ "ngủ / PN" (24/09) nhưng các ô đo đường thì chưa. Thêm một tầng: production chạy chế độ `ai` = kiểm NHẸ (`kiemGiaTriNhe`), là hàm riêng — phép kiểm chỉ thêm vào bản đủ thì production không có.
+- **Chỗ khác cùng lớp**: ô `loai_duong_vao` đã kiểm chữ ngược ("hẻm xe máy" vs "xe hơi") và ngưỡng bề rộng (SRS-5.1zn) — thiếu đúng ca "mặt tiền + số" và "mặt tiền hẻm"; `cach_mat_tien` ("cách mặt tiền 20m") đã đúng; luật dự phòng (`nhanDienNhieuFact`) soát lại 8 cách nói — đã xếp đúng ô ("mặt tiền 4m dài 16m" → diện tích + mặt tiền ngang, "nhà mặt tiền hẻm 6m" → hẻm 6m). Mọi phép kiểm khác chỉ có ở bản đủ: chưa soát hết, ghi ở đây.
+- **Sửa**: `chuDeSoDo(cụm)` (hẻm / đường / ngang) + `soDoSaiChuDe`: cụm nói rõ chuyện KHÁC mà không nói chuyện của ô → bỏ; cụm chỉ có số ("4m", trả lời câu bot hỏi) không bị đụng. Dùng ở CẢ kiểm đủ lẫn kiểm nhẹ. `kiemLoaiDuongVao`: `mat_tien` bị bỏ khi cụm là "mặt tiền + số đo" (không có "đường / phố / mặt đường") hoặc "mặt tiền hẻm". Prompt `LUAT` thêm bảng "số đo nào vào ô nào". (Ví dụ mẫu cho AI không thêm được: vượt trần 10.200 ký tự của khối ví dụ.)
+- **Kiểm, đỏ khi tắt**: unit ZZZP-01…08 (`kiem-bang-chung.mjs`), chạy CẢ HAI chế độ kiểm; cách nói MỚI "nhà mặt tiền hẻm 6m", "MT 5m nở hậu 6m". Tắt: 4/434 đỏ. e2e 1044/1044; `do-boc:nen` không tụt (75 ca, 524 trường).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

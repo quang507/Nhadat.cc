@@ -5,7 +5,7 @@
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang, boHuaDaDang } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { canTheoAi, docLaiHopLe } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { boCauTrungBongTruoc } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
@@ -872,6 +872,24 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZZZN-06 model nói lại câu phí rồi hỏi → chỉ còn câu hỏi", boCauTrungBongTruoc(phi, "Dạ phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ. Hẻm trước nhà chú rộng mấy mét vậy chú?") === "Hẻm trước nhà chú rộng mấy mét vậy chú?");
   ok("ZZZN-07 (cách nói MỚI) 'Vâng ạ, phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ.' cũng bỏ", !/1%/.test(boCauTrungBongTruoc(phi, "Vâng ạ, phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ. Nhà chú mấy tầng ạ?")));
   ok("ZZZN-08 câu khác nội dung giữ nguyên; bỏ hết thì giữ cả lời (không rỗng)", boCauTrungBongTruoc(phi, "Nhà chú mấy tầng ạ?") === "Nhà chú mấy tầng ạ?" && boCauTrungBongTruoc(phi, phi) === phi);
+}
+// ── SRS-5.1zzzp (08/10/2026, chủ dự án: "chiều rộng đường, mặt tiền bla bla có bị ghi sai nữa ko"): số đo vào đúng ô theo CHỮ cạnh nó.
+{
+  // Chạy ở CẢ HAI chế độ kiểm: nhẹ (production, `boc_tach_ai = ai`) và đủ.
+  const cuNhe = laKiemNheTest();
+  const lyDo = [];
+  const kt1 = (tin, khoa, gt, td) => { const x = kiemDeXuat([{ khoa, gia_tri: gt, trich_dan: td }], tin); lyDo.push(`${khoa}:${x.dat.length ? "đạt" : x.bo[0]?.ly_do}`); return x.dat.length === 1; };
+  const kt = (tin, khoa, gt, td) => { datKiemNhe(true); const a = kt1(tin, khoa, gt, td); datKiemNhe(false); const b = kt1(tin, khoa, gt, td); datKiemNhe(cuNhe); return a === b ? a : !a; };
+  ok("ZZZP-01 'mặt tiền 4m' → ngang đạt; KHÔNG phải nhà mặt tiền đường; KHÔNG phải bề rộng đường",
+    kt("mặt tiền 4m dài 16m", "ngang", "4", "mặt tiền 4m") && !kt("mặt tiền 4m dài 16m", "loai_duong_vao", "mat_tien", "mặt tiền 4m") && !kt("mặt tiền 4m dài 16m", "do_rong_duong", "4", "mặt tiền 4m"), lyDo.join(" "));
+  ok("ZZZP-02 'hẻm 4m' → chỉ bề rộng hẻm (không ngang, không đường)", kt("hẻm 4m", "do_rong_hem", "4", "hẻm 4m") && !kt("hẻm 4m", "ngang", "4", "hẻm 4m") && !kt("hẻm 4m", "do_rong_duong", "4", "hẻm 4m"));
+  ok("ZZZP-03 'đường trước nhà 10m' → bề rộng đường, không phải hẻm", kt("đường trước nhà 10m", "do_rong_duong", "10", "đường trước nhà 10m") && !kt("đường trước nhà 10m", "do_rong_hem", "10", "đường trước nhà 10m"));
+  ok("ZZZP-04 (cách nói MỚI) 'nhà mặt tiền hẻm 6m' → hẻm 6m, KHÔNG phải mặt tiền đường", kt("nhà mặt tiền hẻm 6m", "do_rong_hem", "6", "mặt tiền hẻm 6m") && !kt("nhà mặt tiền hẻm 6m", "loai_duong_vao", "mat_tien", "mặt tiền hẻm 6m"));
+  ok("ZZZP-05 'nhà mặt tiền đường 8m' → mặt tiền + đường 8m; 'mặt tiền Nguyễn Trãi' → mặt tiền",
+    kt("nhà mặt tiền đường 8m", "loai_duong_vao", "mat_tien", "nhà mặt tiền đường 8m") && kt("nhà mặt tiền đường 8m", "do_rong_duong", "8", "mặt tiền đường 8m") && kt("bán nhà mặt tiền Nguyễn Trãi", "loai_duong_vao", "mat_tien", "mặt tiền Nguyễn Trãi"));
+  ok("ZZZP-06 chỉ có số ('4m', trả lời câu bot hỏi) → không bị chặn ô nào", kt("4m", "do_rong_hem", "4", "4m") && kt("4m", "ngang", "4", "4m") && kt("4m", "do_rong_duong", "4", "4m"));
+  ok("ZZZP-07 (cách nói MỚI) 'MT 5m', '4x16' là ngang; 'hẻm 5m đường Phan Xích Long' vẫn là hẻm", kt("MT 5m nở hậu 6m", "ngang", "5", "MT 5m") && kt("4x16", "ngang", "4", "4x16") && kt("hẻm 5m đường Phan Xích Long", "do_rong_hem", "5", "hẻm 5m đường Phan Xích Long"));
+  ok("ZZZP-08 chuDeSoDo: 'lô đất ngang 5m' không bị coi là đường", !chuDeSoDo("lo dat ngang 5m").duong && chuDeSoDo("lo dat ngang 5m").ngang);
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

@@ -300,6 +300,12 @@ const DAU_HIEU_DU_AN = /\b(du an|kdc|khu dan cu|khu do thi|kdt|chung cu|can ho|t
 function kiemLoaiDuongVao(v: string, kd: string): string | null {
   const ma = v.trim();
   if (!(ma in LOAI_DUONG_VAO)) return "gia_tri_ngoai_danh_sach";
+  // SRS-5.1zzzp: "mặt tiền 4m" (số đo đứng NGAY sau "mặt tiền") là CHIỀU NGANG căn nhà, không nói nhà nằm mặt tiền đường; "mặt tiền
+  // hẻm" là nhà nằm mặt hẻm. Chỉ nhận `mat_tien` khi cụm nói mặt tiền ĐƯỜNG / mặt phố / mặt đường, hoặc "mặt tiền" không kèm số đo.
+  if (ma === "mat_tien") {
+    if (/\bmat tien\s+hem\b/.test(kd)) return "mat_tien_hem_khong_phai_mat_tien_duong";
+    if (/\b(?:mat tien|mt)\s*(?:rong\s*|ngang\s*)?\d/.test(kd) && !/\b(?:mat tien duong|mat duong|mat pho|mt duong)\b/.test(kd)) return "mat_tien_kem_so_la_chieu_ngang";
+  }
   if (ma === "khong_hem") return /\b(khong|ko|chang|chua)\b|\bnoi khu\b|\bkhu cong nghiep\b|\bkcn\b|\bccn\b/.test(kd) ? null : "trich_dan_khong_noi_khong_hem";
   const lt = loaiDuongNoiRo(kd);
   const theoMa: Record<string, string> = { mat_tien: "mat_tien", hem_xe_hoi: "hoi", hem_xe_may: "may", hem_xe_tai: "tai" };
@@ -387,6 +393,12 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       // không phải phòng ngủ. Phòng ngủ phải có chữ ngủ / PN trong cụm trích.
       if (!soTrong(cum, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05))) return "so_khong_co_trong_trich_dan";
       if (d.khoa === "so_phong_ngu" && !/\b(ngu|pn|phong ngu)\b|\d\s*pn(?![a-z])/.test(kd)) return "khong_noi_phong_ngu";
+      // SRS-5.1zzzp (08/10/2026, chủ dự án: "giờ nó làm tốt phần chiều rộng đường, mặt tiền bla bla có bị ghi sai nữa ko"): bản cũ
+      // chỉ đòi CON SỐ nằm trong cụm trích, không đòi cụm nói ĐÚNG CHUYỆN — "hẻm 4m" lọt làm chiều ngang / đường trước nhà, "đường
+      // 8m" lọt làm hẻm. Cụm trích NÓI RÕ chuyện khác (chữ hẻm / đường / ngang) mà không nói chuyện của ô → bỏ. Cụm chỉ có số ("4m",
+      // trả lời câu bot vừa hỏi) không bị đụng.
+      const saiChuDe = soDoSaiChuDe(d.khoa, kd);
+      if (saiChuDe) return saiChuDe;
       // 30/09/2026 (bắn thử vector): "nhà có 1 phòng ngủ ngay tầng trệt" — phòng ngủ theo TẦNG, không phải tổng số.
       return d.khoa === "so_phong_ngu" && soPhongNguTheoTang(tin).includes(n) ? "phong_ngu_theo_tang" : null;
     }
@@ -526,8 +538,9 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
       const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
       if (!m) return "khong_phai_so";
       const n = Number(m[0]);
-      return soTrong(kdCumSua ?? d.trich_dan, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05))
-        ? null : "so_khong_co_trong_trich_dan";
+      if (!soTrong(kdCumSua ?? d.trich_dan, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05))) return "so_khong_co_trong_trich_dan";
+      // SRS-5.1zzzp: production chạy kiểm NHẸ — phép "cụm nói đúng chuyện của ô" phải có ở đây, không chỉ ở bản đủ.
+      return soDoSaiChuDe(d.khoa, kd);
     }
     case "loai_giao_dich": return LOAI_GD.has(v) ? null : "gia_tri_ngoai_danh_sach";
     case "loai_bds": {
@@ -1373,6 +1386,25 @@ export function docKhongCanHoi(
 }
 
 /** Loại đường vào nói RÕ trong chuỗi đã chuẩn hoá: "may" / "hoi" / "tai"; không rõ hoặc nhiều loại → null. */
+/** SRS-5.1zzzp: số đo gán vào ô mà cụm trích nói rõ chuyện KHÁC → lý do bỏ; dùng ở CẢ kiểm đủ lẫn kiểm nhẹ (production). */
+function soDoSaiChuDe(khoa: string, kd: string): string | null {
+  const c = chuDeSoDo(kd);
+  if (khoa === "do_rong_hem" && !c.hem && (c.duong || c.ngang)) return "rong_hem_nhung_trich_noi_chuyen_khac";
+  if (khoa === "do_rong_duong" && !c.duong && (c.hem || c.ngang)) return "rong_duong_nhung_trich_noi_chuyen_khac";
+  if ((khoa === "ngang" || khoa === "no_hau") && !c.ngang && (c.hem || c.duong)) return "ngang_nhung_trich_noi_duong_hem";
+  return null;
+}
+/**
+ * SRS-5.1zzzp: cụm trích NÓI CHUYỆN gì về số đo: hẻm (bề rộng hẻm), đường (bề rộng đường / lộ trước nhà), ngang (chiều ngang
+ * căn: "ngang", "mặt tiền 4m", "MT 5m", "4x16"). Dùng để bỏ số đo AI gán nhầm ô — không quyết ô nào khi cụm không nói gì.
+ */
+export function chuDeSoDo(kd: string): { hem: boolean; duong: boolean; ngang: boolean } {
+  const hem = /\b(?:hem|hxh|hxm|hxt|ngo|kiet)\b/.test(kd);
+  const ngang = /\b(?:ngang|chieu ngang|be ngang|no hau|hau)\b|\b(?:mat tien|mt)\s*(?:rong\s*)?\d|\d+(?:\.\d+)?\s*m?\s*x\s*\d/.test(kd);
+  const duong = /\b(?:duong|pho|lo gioi|mat duong)\b/.test(kd) && !/\bduong\s+vao\s+hem\b/.test(kd);
+  return { hem, duong, ngang };
+}
+
 function loaiDuongNoiRo(kd: string): "may" | "hoi" | "tai" | "mat_tien" | null {
   const co = new Set<string>();
   // 27/09/2026 (test Zalo, đất Cần Đước): "mặt tiền đường 5m e" → AI "5 mét" (mất chữ mặt tiền) → bản nháp "hẻm xe hơi 5m".
