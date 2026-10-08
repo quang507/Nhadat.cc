@@ -146,7 +146,12 @@ async function mayChuMay() {
       .replaceAll('"npm:@anthropic-ai/sdk/helpers/zod"', '"@anthropic-ai/sdk/helpers/zod"')
       .replaceAll('"npm:@anthropic-ai/sdk"', API_KEY ? '"@anthropic-ai/sdk"' : '"../e2e/mock-anthropic.mjs"')
       .replaceAll('"npm:zod@4"', '"zod"');
-    writeFileSync(BUNDLE, s);
+    // 08/10/2026 (chủ dự án: "đưa chỗ thêm ảnh ở trang test"): ảnh khách thử tải lên nằm ở trang thử (https://….trycloudflare.com/anh/…),
+    // không ở CDN Zalo — CHỈ bản đóng gói cho trang thử cho thêm tên miền đó vào danh sách ảnh hợp lệ (SEC-08). Code bot / production
+    // không đổi. Không tìm thấy danh sách thì dừng, không âm thầm chạy với ảnh bị chặn.
+    const s2 = s.replace(/(HOST_ANH\s*=\s*\[\s*)"zalo\.me",/, '$1"zalo.me", "trycloudflare.com",');
+    if (s2 === s) { console.error(DO("Không tìm thấy HOST_ANH trong bundle — trang thử không nhận được ảnh.")); process.exit(1); }
+    writeFileSync(BUNDLE, s2);
   }
   const { FakeDB, napPhuongThat, napPhuongCuThat, createClient } = await import("../e2e/mock-supabase.mjs");
   const PHUONG_CU = await napPhuongCuThat();
@@ -163,6 +168,12 @@ async function mayChuMay() {
   // 07/10/2026 : có `CHAT_LOG_BAM` thì mỗi lượt model ghi vào nhật ký — loại lượt (dòng đầu system) + đầu ra (JSON
   // bóc tách / lời trả lời), để đọc được AI đã đọc ra gì khi một ô bị mất. Không ghi header (khoá API), cắt 1.500 chữ.
   globalThis.fetch = async (url, opt) => {
+    // Ảnh khách thử tải lên trang (`/anh/<id>`) → trả thẳng từ bộ nhớ, không đi vòng qua đường hầm.
+    const mAnh = /^https:\/\/[^/]+\/anh\/([a-z0-9]{8,20})(?:\.[a-z]+)?$/.exec(String(url));
+    if (mAnh && globalThis.__khoAnhThu?.has(mAnh[1])) {
+      const a = globalThis.__khoAnhThu.get(mAnh[1]);
+      return new Response(a.bytes, { status: 200, headers: { "content-type": a.mime, "content-length": String(a.bytes.byteLength) } });
+    }
     if (!/api\.anthropic\.com/.test(String(url))) return new Response("", { status: 404 });
     const res = await fetchThat(url, opt);
     if (globalThis.__ghiAi) {
@@ -217,8 +228,8 @@ async function mayChuMay() {
     },
     cauHinh: () => globalThis.__cauHinh,
     async kiemId() { return true; },
-    async gui(uid, text) {
-      const b = { msg_id: `c${++n}`, channel: "zalo_personal_test", external_user_id: uid, text };
+    async gui(uid, text, imageUrl = null) {
+      const b = { msg_id: `c${++n}`, channel: "zalo_personal_test", external_user_id: uid, text, ...(imageUrl ? { image_url: imageUrl } : {}) };
       const tho = JSON.stringify(b);
       const hdrs = { "content-length": String(Buffer.byteLength(tho)), "x-bridge-secret": "s3cret" };
       // chat-reply in log vận hành (_ms, lỗi JSON của model giả…) ra console — tắt trong lúc gọi cho màn hình gọn.
@@ -309,6 +320,10 @@ if (WEB) {
   const maKhach = (req) => { const m = String(req.headers.get("x-khach") ?? ""); return /^web-[a-z0-9]{6,16}$/.test(m) ? m : null; };
   const tuanTu = (fn) => { const p = hang.then(fn, fn); hang = p.catch(() => {}); return p; };
   const json = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { "content-type": "application/json; charset=utf-8" } });
+  // 08/10/2026: kho ảnh khách thử tải lên — chỉ trong bộ nhớ runner (tắt trang là mất), trần 8 MB / ảnh, 300 ảnh.
+  const KHO_ANH = new Map();
+  globalThis.__khoAnhThu = KHO_ANH;
+  const DUOI = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/heic": "heic" };
   const port = Number(giaTri("--port") ?? process.env.PORT ?? 3000) || 3000;
   // 07/10/2026 (chủ dự án: "test là cái chuẩn nhất và có thể sửa ở đây lun"): trang /prompt sửa prompt + công tắc của DB giả
   // — bot dùng ngay từ lượt kế, cho MỌI người trên link. Mỗi lần lưu ghi `sua-prompt.json` (chỉ khoá khác bản lúc bật trang);
@@ -361,26 +376,44 @@ if (WEB) {
           : undefined;
         return json({ den: nhatKy.length, conLai: TRAN - soLuot, dong, ...(tin ? { tin } : {}) });
       }
+      // Ảnh công khai: model (Anthropic) tự tải theo URL nên đường này không đòi mã khách.
+      if (req.method === "GET" && u.pathname.startsWith("/anh/")) {
+        const a = KHO_ANH.get(u.pathname.slice(5).replace(/\.[a-z]+$/, ""));
+        return a ? new Response(a.bytes, { headers: { "content-type": a.mime, "cache-control": "no-store" } }) : new Response("không có", { status: 404 });
+      }
       if (u.pathname === "/") return new Response("không có", { status: 404 });
       const id = maKhach(req);
       if (!id) return json({ loi: "thiếu mã khách" }, 400);
       if (req.method === "GET" && u.pathname === "/lich-su") return json({ lichSu: lichSu(id), conLai: TRAN - soLuot, nguoi: lichSuCua.size });
       if (req.method === "GET" && u.pathname === "/tin") return json(await may.tin(id));
       if (req.method === "POST" && u.pathname === "/moi") return tuanTu(async () => { await may.xoaMot(id); lichSu(id).length = 0; ghiNhatKy(id, "xoa", "(bấm Xoá chat)"); return json({ ok: true }); });
+      if (req.method === "POST" && u.pathname === "/anh") {
+        const mime = String(req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+        if (!DUOI[mime]) return json({ loi: "chỉ nhận ảnh jpg / png / webp / gif / heic" }, 400);
+        const bytes = new Uint8Array(await req.arrayBuffer());
+        if (!bytes.byteLength || bytes.byteLength > 8 * 1024 * 1024) return json({ loi: "ảnh rỗng hoặc quá 8 MB" }, 400);
+        if (KHO_ANH.size >= 300) KHO_ANH.delete(KHO_ANH.keys().next().value);
+        const ma = Math.random().toString(36).slice(2, 12).padEnd(10, "0");
+        KHO_ANH.set(ma, { bytes, mime });
+        // Host công khai (cloudflared chuyển nguyên Host) — model đi lấy ảnh qua đúng URL này.
+        return json({ url: `https://${req.headers.get("host")}/anh/${ma}.${DUOI[mime]}` });
+      }
       if (req.method === "POST" && u.pathname === "/gui") {
         const b = await req.json().catch(() => ({}));
         const text = String(b?.text ?? "").trim().slice(0, 2000);
-        if (!text) return json({ loi: "trống" }, 400);
+        const anh = /^https:\/\/[^/]+\/anh\/([a-z0-9]{8,20})\.[a-z]+$/.exec(String(b?.image_url ?? ""));
+        const imageUrl = anh && KHO_ANH.has(anh[1]) ? String(b.image_url) : null;
+        if (!text && !imageUrl) return json({ loi: "trống" }, 400);
         if (soLuot >= TRAN) return json({ loi: `hết ${TRAN} lượt của lần chạy này — chạy lại lệnh để chat tiếp` }, 429);
         return tuanTu(async () => {
           soLuot++;
           const ls = lichSu(id);
-          ls.push({ ai: "khach", text });
-          ghiNhatKy(id, "khach", text);
+          ls.push({ ai: "khach", text, ...(imageUrl ? { anh: imageUrl } : {}) });
+          ghiNhatKy(id, "khach", imageUrl ? `${text}${text ? " " : ""}[ảnh] ${imageUrl}` : text);
           const t0 = Date.now();
           idDangChay = id;
           try {
-            const replies = (await may.gui(id, text)).map(String);
+            const replies = (await may.gui(id, text, imageUrl)).map(String);
             for (const r of replies) ls.push({ ai: "bot", text: r });
             for (const r of replies) ghiNhatKy(id, "bot", r, { ms: Date.now() - t0 });
             return json({ replies, ms: Date.now() - t0, conLai: TRAN - soLuot });
@@ -460,21 +493,33 @@ button{font:inherit;border:1px solid var(--vien);background:var(--ban);color:var
 form{display:flex;gap:8px;padding:10px 16px;background:var(--ban);border-top:1px solid var(--vien)}
 textarea{flex:1;resize:none;font:inherit;padding:9px 12px;border-radius:10px;border:1px solid var(--vien);background:var(--nen);color:var(--chu);max-height:140px}
 form button{background:var(--chinh);color:#fff;border:0;padding:0 18px}
+#nutAnh{background:var(--ban);color:var(--chu);border:1px solid var(--vien);padding:0 12px;font-size:18px}
+.b img{display:block;max-width:220px;max-height:260px;border-radius:8px;margin-bottom:4px}
 pre{white-space:pre-wrap;font-size:12px;background:var(--ban);border:1px solid var(--vien);border-radius:10px;padding:10px;margin:0;align-self:stretch}
 </style></head><body>
 <header><b>Chat thử bot<small>__TEN__</small></b><a href="prompt" target="_blank"><button type="button">Sửa prompt</button></a><button id="xemTin" type="button">Xem tin</button><button id="lamLai" type="button">Làm lại</button></header>
 <div id="khung"></div>
-<form id="f"><textarea id="o" rows="1" placeholder="Nhắn như khách Zalo… (Enter để gửi, Shift+Enter xuống dòng)"></textarea><button>Gửi</button></form>
+<form id="f"><input id="fa" type="file" accept="image/*" hidden><button type="button" id="nutAnh" title="Gửi ảnh">📷</button><textarea id="o" rows="1" placeholder="Nhắn như khách Zalo… (Enter để gửi, Shift+Enter xuống dòng)"></textarea><button>Gửi</button></form>
 <script>
 let MA='';try{MA=localStorage.getItem('ma-khach')||'';}catch(e){}
 if(!/^web-[a-z0-9]{6,16}$/.test(MA)){MA='web-'+Math.random().toString(36).slice(2,10).padEnd(8,'0');try{localStorage.setItem('ma-khach',MA);}catch(e){}}
 const H={'x-khach':MA};
 const khung=document.getElementById('khung'),o=document.getElementById('o');
-const them=(ai,text)=>{const d=document.createElement(ai==='tin'?'pre':'div');d.className=ai==='tin'?'':'b '+ai;if(ai==='mo')d.className='mo';d.textContent=text;khung.appendChild(d);khung.scrollTop=khung.scrollHeight;return d;};
-fetch('lich-su',{headers:H}).then(r=>r.json()).then(j=>{for(const m of j.lichSu)them(m.ai,m.text);them('mo','Bạn là khách '+MA+' · còn '+j.conLai+' lượt chung');}).catch(()=>{});
+const them=(ai,text,anh)=>{const d=document.createElement(ai==='tin'?'pre':'div');d.className=ai==='tin'?'':'b '+ai;if(ai==='mo')d.className='mo';
+ if(anh){const i=document.createElement('img');i.src=anh;i.alt='ảnh';d.appendChild(i);if(text)d.appendChild(document.createTextNode(text));}else d.textContent=text;
+ khung.appendChild(d);khung.scrollTop=khung.scrollHeight;return d;};
+fetch('lich-su',{headers:H}).then(r=>r.json()).then(j=>{for(const m of j.lichSu)them(m.ai,m.text,m.anh);them('mo','Bạn là khách '+MA+' · còn '+j.conLai+' lượt chung');}).catch(()=>{});
 let dang=false;
-async function gui(){const text=o.value.trim();if(!text||dang)return;dang=true;o.value='';them('khach',text);const cho=them('mo','bot đang gõ…');
- try{const r=await fetch('gui',{method:'POST',headers:{...H,'content-type':'application/json'},body:JSON.stringify({text})});const j=await r.json();cho.remove();
+// Ảnh: tải lên trang trước (POST anh), rồi gửi cùng chữ đang gõ (nếu có) như Zalo gửi ảnh kèm lời.
+document.getElementById('nutAnh').onclick=()=>{if(!dang)document.getElementById('fa').click();};
+document.getElementById('fa').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f||dang)return;
+ if(f.size>8*1024*1024){them('loi','Ảnh quá 8 MB');return;}
+ dang=true;const tai=them('mo','đang tải ảnh…');
+ try{const r=await fetch('anh',{method:'POST',headers:{...H,'content-type':f.type||'image/jpeg'},body:f});const j=await r.json();tai.remove();
+  if(j.loi){them('loi',j.loi);dang=false;return;}dang=false;await gui(j.url);}
+ catch(err){tai.remove();them('loi','Không tải được ảnh: '+err);dang=false;}};
+async function gui(anh){const text=o.value.trim();if((!text&&!anh)||dang)return;dang=true;o.value='';them('khach',text,anh);const cho=them('mo','bot đang gõ…');
+ try{const r=await fetch('gui',{method:'POST',headers:{...H,'content-type':'application/json'},body:JSON.stringify({text,...(anh?{image_url:anh}:{})})});const j=await r.json();cho.remove();
   if(j.loi)them('loi',j.loi);else{if(!j.replies.length)them('mo','(bot không trả lời lượt này)');for(const x of j.replies)them('bot',x);them('mo',(j.ms/1000).toFixed(1)+'s');}}
  catch(e){cho.remove();them('loi','Mất kết nối: '+e);}dang=false;o.focus();}
 document.getElementById('f').onsubmit=e=>{e.preventDefault();gui();};
