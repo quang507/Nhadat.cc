@@ -218,7 +218,7 @@ if (buoc === "kiem") {
     "create schema if not exists supabase_migrations",
     "create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text)",
   ]);
-  const files = readdirSync(MIG).filter((f) => /^\d{8}[a-z]?_.+\.sql$/.test(f)).sort();
+  const files = readdirSync(MIG).filter((f) => /^\d{8,14}[a-z]?_.+\.sql$/.test(f)).sort(); // 14 chữ số = file dấu vết OPEN-46
   const q = (v) => `'${String(v).replaceAll("'", "''")}'`;
   hong += await chay("ghi sổ migration", [`insert into supabase_migrations.schema_migrations (version, name, statements) select v, n, array[]::text[] from (values ${
     files.map((f, i) => `(${q("dl" + String(i).padStart(4, "0"))}, ${q(f.replace(/\.sql$/, ""))})`).join(", ")
