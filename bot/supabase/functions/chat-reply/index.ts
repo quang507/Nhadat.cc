@@ -5493,7 +5493,8 @@ Deno.serve(async (req) => {
           else sua.push("ten_duong");
         }
         const yCu = new Set(facts.filter((f) => f.question === "bo_sung" && f.source === NGUON_AI).map((f) => gon(f.answer ?? "")));
-        const yThem = kiemKienThuc(kq.kienThuc ?? [], tinGop, dat).filter((y) => !yCu.has(gon(y)));
+        const yThem = kiemKienThuc(kq.kienThuc ?? [], tinGop, dat,
+          facts.filter((f) => f.question !== "bo_sung" && f.answer).map((f) => f.answer as string)).filter((y) => !yCu.has(gon(y)));
         for (const y of yThem) {
           const { error: yErr } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: "bo_sung", p_answer: y, p_source: NGUON_AI });
           if (yErr) await ghiLoi(client, "chat-reply chot tin(y them)", yErr.message);

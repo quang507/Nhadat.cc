@@ -1678,9 +1678,12 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
  * khoá (không nằm trong trích dẫn nào của `dat`), tối đa 3.
  */
 const LOI_NOI_CHUYEN = /\b(de\s+(?:em|anh|chi|minh|toi|tui)\b|roi\s+(?:bao|gui|nhan)|bao\s+lai|gui\s+sau|chut\s+nua|lat\s+nua|hoi\s+lai|se\s+(?:gui|bao|nhan)|em\s+(?:coi|xem|kiem|check)|coi\s+lai|xem\s+lai|cam on|xin loi|nha\s*$|nhe\s*$)\b/;
-export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[]): string[] {
+export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[], daGhi: readonly string[] = []): string[] {
   const kdTin = chuanSo(tin);
   const daCo = dat.map((d) => chuanSo(d.trich_dan));
+  // SRS-5.1zzzv (chủ dự án chat thử …hua2): lượt AI chốt tin đọc lại cả hội thoại, xếp "chợ quán" (câu trả lời phường đã ghi
+  // "Phường Chợ Quán") vào kiến thức thêm → bản nháp in "📝 Thêm: chợ quán". Ý thêm nằm trọn trong một giá trị TIN ĐÃ GHI là lặp.
+  const giaTriDaGhi = daGhi.map((g) => chuanSo(g)).filter((g) => g.length >= 3);
   const ra: string[] = [];
   // 30/09/2026: "1 phòng ngủ ngay tầng trệt cho người già" không phải tổng số phòng ngủ (kiemGiaTri bỏ) — giữ nguyên vế
   // làm thông tin bổ sung để vào vector, dù model không xếp nó vào kiến thức thêm.
@@ -1694,6 +1697,7 @@ export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[]): st
     // nhà, không phải điều gì về căn nhà — không vào mô tả.
     if (LOI_NOI_CHUYEN.test(kd)) continue;
     if (daCo.some((t) => t.includes(kd) || kd.includes(t))) continue;
+    if (giaTriDaGhi.some((g) => g.includes(kd))) continue;
     // 30/09/2026 (bắn thử vector v287): vế "nhà có 1 phòng ngủ ngay tầng trệt…" và bản model cắt ngắn "phòng ngủ ngay tầng
     // trệt…" cùng vào bổ sung — vế nằm trọn trong vế đã giữ là lặp.
     if (ra.some((r) => chuanSo(r).includes(kd) || kd.includes(chuanSo(r)))) continue;

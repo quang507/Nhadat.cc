@@ -4147,7 +4147,9 @@ fresh(seedKho);
         fresh(seedKho);
         for (const [i, t] of PL.entries()) {
           let ri = 0;
-          globalThis.__model.parse = (p) => laLuotVai(p) ? { vai: "ban", bang_chung: t.text } : laBocPL(p) ? (t.boc ?? { so_can: 0, kien_thuc: [], truong: [] }) : laLuotYLuot(p) ? (t.y ?? { dong_y: "khong_noi" }) : OUT();
+          // Lượt AI CHỐT TIN (cùng system bóc tách + LUAT_CHOT): fixture có `chot` (đầu ra thật) thì trả đúng nó.
+          const laChotPL = (p) => (p?.system ?? []).some((x) => /CHẾ ĐỘ CHỐT TIN/.test(x.text ?? ""));
+          globalThis.__model.parse = (p) => laLuotVai(p) ? { vai: "ban", bang_chung: t.text } : laBocPL(p) ? ((laChotPL(p) && t.chot) || (t.boc ?? { so_can: 0, kien_thuc: [], truong: [] })) : laLuotYLuot(p) ? (t.y ?? { dong_y: "khong_noi" }) : OUT();
           globalThis.__model.create = () => t.rep[Math.min(ri++, t.rep.length - 1)] ?? "Dạ em ghi nhận rồi ạ.";
           const n0 = globalThis.__calls.length;
           const r = await send({ external_user_id: uid, text: t.text });
@@ -4229,6 +4231,18 @@ fresh(seedKho);
       await phatLai("kf1tatt", "web-pl-kf1", async (i, t, r) => { if (t.text === "dang di") repGat = r.body.replies ?? []; });
       check("SRS-5.1zzzt-b phát lại …kf1tatt: 'dang di' (ý lượt: GẬT 'dang di'; bóc tách: hoãn 'dang di' — cùng cụm) → hỏi lại 'làm tiếp hay đang bận'",
         repGat.some((x) => /em chưa chắc ý/.test(x) && /làm tiếp/.test(x) && /đang bận/.test(x)), JSON.stringify(repGat));
+      // SRS-5.1zzzv (chủ dự án chat thử …hua2): "hxh quay đầu" → AI ghi `loai_duong_vao` = hẻm xe hơi; trigger thật đổ vào `access_type`,
+      // DB giả từng không → bản nháp in "Đường vào: hẻm quay đầu được" và đòi "xe hơi vào được không".
+      let tinHua = null, nhapHua = "";
+      await phatLai("hua2", "web-pl-hua2", async (i, t, r) => {
+        if (t.text === "hxh quay đầu") tinHua = db().t.listings.filter((l) => /an dương vương|quận 5/i.test(`${l.location_raw ?? ""} ${l.description ?? ""}`)).at(-1) ?? db().t.listings.at(-1);
+        if (t.text === "shr") nhapHua = (r.body.replies ?? []).join("\n");
+      });
+      check("SRS-5.1zzzv-a phát lại …hua2: 'hxh quay đầu' → cột access_type = hem_xe_hoi (như trigger thật)", tinHua?.access_type === "hem_xe_hoi", JSON.stringify({ at: tinHua?.access_type }));
+      check("SRS-5.1zzzv-b bản nháp sau 'shr': Đường vào có 'hẻm xe hơi', không đòi lại 'xe hơi vào được không'",
+        /Đường vào:[^\n]*hẻm xe hơi/.test(nhapHua) && !/xe hơi vào được không/.test(nhapHua), nhapHua.slice(0, 900));
+      check("SRS-5.1zzzv-c bản nháp sau 'shr' (lượt AI chốt tin thật xếp 'chợ quán' vào ý thêm): dòng Thêm không lặp phường",
+        /Thêm:/.test(nhapHua) && !/Thêm:[^\n]*chợ quán/i.test(nhapHua), nhapHua.slice(0, 900));
       let ndDang2 = "";
       await phatLai("kc1tatt-khong-lech", "web-pl-kc1b", async (i, t, r, calls) => { if (t.text === "dang di") ndDang2 = nd(calls); });
       check("SRS-5.1zzzn-b phát lại …kc1tatt (ý lượt không lệch): 'dang di' khi tin còn chờ thông tin → câu lệnh ghi CHƯA LÊN KỆ, không còn tiêu đề 'đang rao các tin'",
