@@ -198,7 +198,8 @@ ok("câu xin ảnh nhà phố không đổi (mặt tiền và hẻm)", /mặt ti
 // khuôn 25 từ kèm lý do lặp nguyên văn 22/52 câu bot → lý do chỉ ở lần hỏi ĐẦU
 // (`vi_tri@lan_dau`), các lần hỏi lại ngắn, không lý do.
 // 06/10/2026 (chủ dự án: "Nhà anh ở đâu, ở Hồ Chí Minh đúng không?"): câu đầu hỏi như người quen, kèm phỏng đoán, không nêu lý do.
-ok("câu mẫu địa chỉ lần ĐẦU: hỏi thẳng kèm phỏng đoán, không nêu lý do", /Nhà anh ở đâu/.test(cauHoiMau("vi_tri@lan_dau", "anh")) && /đúng không\?/.test(cauHoiMau("vi_tri@lan_dau", "anh")) && !/kiểm tra giá/.test(cauHoiMau("vi_tri@lan_dau", "anh")));
+// 08/10/2026 (chủ dự án: "cho con bot lịch sự hơn tí nhưng vẫn cần ngắn"): câu mở "Dạ", câu hỏi kết "ạ".
+ok("câu mẫu địa chỉ lần ĐẦU: hỏi thẳng kèm phỏng đoán, không nêu lý do", /nhà anh ở đâu/i.test(cauHoiMau("vi_tri@lan_dau", "anh")) && /đúng không ạ\?/.test(cauHoiMau("vi_tri@lan_dau", "anh")) && !/kiểm tra giá/.test(cauHoiMau("vi_tri@lan_dau", "anh")));
 ok("câu mẫu địa chỉ hỏi LẠI: không lý do, dưới 12 từ", !/kiểm tra giá|giá thị trường/.test(cauHoiMau("vi_tri", "anh")) && cauHoiMau("vi_tri", "anh").split(/\s+/).length <= 12, cauHoiMau("vi_tri", "anh"));
 
 // ── FR-181 — tên trợ lý theo khách: tất định, trong kho, giữ nguyên ─────────

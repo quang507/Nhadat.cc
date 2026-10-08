@@ -35,7 +35,7 @@ import { createClient } from "@supabase/supabase-js";
 const SRC = process.argv[2];
 const DRY = process.argv.includes("--dry");
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ??
-  "https://tbcdpupiarkuxtntmosl.supabase.co";
+  "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SRC) {

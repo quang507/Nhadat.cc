@@ -428,6 +428,14 @@ Mọi van đổi lời đều vào sổ `van_kich` (trước / sau); view `van_k
 
 Có, chỉ bằng prompt (`prompts.py build_chat_system`): ~30 từ, khen điểm mạnh THẬT trước rồi hỏi đúng 1 thông tin, xưng "em" gọi "anh/chị", trung thực (chỉ dùng điều khách nói + kiến thức dự án đã có, đoán thì "hình như là"), viết trọn vẹn không bỏ lửng; bản nháp mở "Em sẽ rao như vầy nhé:" kết "Anh thấy hấp dẫn chưa ạ?", chưa nhắc phí. `engine.py` không có van sửa văn. nhadat.cc đã chép các ý đó vào `TONE_RULES` / `SELLER_SCRIPT_RULES` (05/10) và tắt van sửa văn (06/10). Lời model còn lệch ("không rush", đọc lại "giá 10 tỷ có thương lượng") → sửa PROMPT (thêm ví dụ SAI / ĐÚNG, cấm chen tiếng Anh), không thêm van. Bốn lỗi khác của lượt bắn thử 06/10 là lỗi CƠ CHẾ (ô chờ không có câu hỏi, cổng nhiều căn, "khách hỏi" không bằng chứng, trạng thái tin không đối chiếu DB) — bảng ở `docs/07 SRS-5.1zzo`.
 
+### Lễ phép hơn mà vẫn ngắn — 08/10/2026 (SRS-5.1zzzk)
+
+[nguồn: chủ dự án 08/10/2026 — "nên cho con bot lịch sự hơn tí nhưng vẫn cần ngắn"]
+
+- Giọng: nhân viên môi giới trẻ, lanh lợi mà **lễ phép**. Đáp lại điều khách vừa nói thì mở "Dạ" / "Dạ vâng"; câu hỏi kết "ạ" hoặc "anh ạ / chị nha". Không nhắn cộc ("Em ghi rồi anh. Mấy tầng?" → "Dạ em ghi rồi ạ. Nhà mình mấy tầng vậy anh?"). Độ dài giữ ~30 từ: "Dạ" / "ạ" là phép lịch sự, không phải để kéo dài.
+- Câu mẫu hỏi (`CAU_HOI_MAU`) kết "{ac} ạ?"; câu địa chỉ lần đầu: "Dạ nhà {ac} ở đâu vậy, ở Hồ Chí Minh đúng không ạ?" (giữ ý câu chủ dự án chọn 06/10, thêm phép lịch sự).
+- Bỏ ví dụ mẫu "Hẻm Trần Bình Trọng khu đó bán được lắm anh" — nó dạy đúng điều `TONE_RULES` cấm (đánh giá thị trường khu vực); nay nằm ở ví dụ SAI.
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |

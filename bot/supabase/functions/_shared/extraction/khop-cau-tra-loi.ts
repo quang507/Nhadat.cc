@@ -1182,7 +1182,7 @@ export const NHAN_HOI_LAI: Record<string, string> = {
   huong: "nhà mình quay hướng nào",
   dien_tich_dat: "tổng diện tích đất bao nhiêu m2, hoặc ngang bao nhiêu dài bao nhiêu",
   dien_tich: "diện tích bao nhiêu m2",
-  ket_cau: "nhà mấy tầng, mấy phòng ngủ",
+  ket_cau: "nhà mấy tầng (trệt, lửng, mấy lầu)", // SRS-5.1zzzm: một ý, phòng ngủ là câu riêng
   quy_hoach: "nhà có dính quy hoạch hay lộ giới gì không",
   // FR-229
   nguoi_dung_ten: "sổ do chính mình hay người nhà đứng tên",

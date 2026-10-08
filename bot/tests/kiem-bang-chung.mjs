@@ -5,7 +5,8 @@
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang, boHuaDaDang } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { canTheoAi } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest, yLuotLech} from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { anCauDaDap } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
 import { chiLechChinhTa, gotManhOKhac, soSauTenDuong, traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
@@ -280,8 +281,9 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("câu treo VỊ TRÍ: AI không có duong → null (luật đỡ)", giaTriChoCauTreo([dx("do_rong_hem", "4", "hem 4m")], "vi_tri", {}) === null);
   // 02/10/2026 (đợt 1 chuyển luật sang AI, SRS-5.1v): tiện ích gần / năm xây / thế chấp / hẻm thông nay AI có ô — luật chỉ đỡ
   // khi model chết. Câu đứng tên vẫn là đường riêng (giữ chữ khách, không xin họ tên).
-  ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien + tien_ich_gan / nam_xay / the_chap / hem_thong; KHÔNG có nguoi_dung_ten",
-    ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds", "tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => KHOA_FACT_AI_BIET.has(k)) && !KHOA_FACT_AI_BIET.has("nguoi_dung_ten"));
+  // SRS-5.1zzzo: nguoi_dung_ten nay là khoá AI (xem O-13).
+  ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien + tien_ich_gan / nam_xay / the_chap / hem_thong / nguoi_dung_ten",
+    ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds", "tien_ich_gan", "nam_xay", "the_chap", "hem_thong", "nguoi_dung_ten"].every((k) => KHOA_FACT_AI_BIET.has(k)));
 }
 
 {
@@ -555,7 +557,9 @@ datKiemNhe(true);
   ok("O-11 ô chữ bỏ tiểu từ cuối: 'xe container vào tận nơi em' → 'xe container vào tận nơi'", q("duong_container") === "xe container vào tận nơi", JSON.stringify(ghi));
   ok("O-12 khoá luật cũ nay là khoá AI biết (luật không ghi khi AI chạy): duong_container, the_chap, loai_duong_vao",
     ["duong_container", "the_chap", "loai_duong_vao", "thang_may"].every((k) => KHOA_FACT_AI_BIET.has(k)));
-  ok("O-13 câu đứng tên KHÔNG là khoá AI (giữ chữ khách, không xin tên thật)", !KHOA_FACT_AI_BIET.has("nguoi_dung_ten"));
+  // SRS-5.1zzzo (08/10/2026): đứng tên nay LÀ khoá AI (không có khoá thì AI hiểu đúng mà không ghi được — "anh dung ten" vào ô
+  // bằng chữ không dấu); "giữ chữ khách" do bảng ô NGUYÊN VĂN lo (`laONguyenVan`), không phải do cấm AI.
+  ok("O-13 câu đứng tên là khoá AI VÀ là ô nguyên văn (giữ chữ khách)", KHOA_FACT_AI_BIET.has("nguoi_dung_ten") && laONguyenVan("nha_pho", "nguoi_dung_ten"));
 }
 datKiemNhe(false);
 ok("O-14 luật (model chết) cũng bỏ tiểu từ cuối: 'xe container vào tận nơi em'",
@@ -857,5 +861,61 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZZZH-07 câu khác hẳn ('đang cho thuê' / 'đang trống') → GIỮ", nv("hien_trang", "đang cho thuê", "đang trống") === "đang cho thuê");
   ok("ZZZH-08 chiLechChinhTa: tỉ/tỷ đúng, chung/riêng sai, 2/3 sai", chiLechChinhTa("tỉ", "tỷ") && !chiLechChinhTa("chung", "riêng") && !chiLechChinhTa("2", "3"));
 }
+// ── SRS-5.1zzzn (08/10/2026, bắn thử …kc1tatt / …kc2chau): bản AI đọc lại tin không dấu; câu model trùng bong bóng tiền định.
+{
+  ok("ZZZN-01 'anh dung ten' → 'anh đứng tên' nhận", docLaiHopLe("anh đứng tên", "anh dung ten") === "anh đứng tên");
+  ok("ZZZN-02 (cách gõ MỚI) 'ok up lun e' → 'ok up luôn em' nhận (viết đủ chữ tắt)", docLaiHopLe("ok up luôn em", "ok up lun e") === "ok up luôn em");
+  ok("ZZZN-03 AI thêm số ('7ty2' → '7 tỷ 2 hay 8 tỷ') → bỏ", docLaiHopLe("7 tỷ 2 hay 8 tỷ", "7ty2") === null);
+  ok("ZZZN-04 AI viết thành câu khác hẳn → bỏ", docLaiHopLe("anh muốn bán căn hộ ở quận 7 gấp lắm em ơi", "ok e") === null);
+  ok("ZZZN-05 giống hệt tin gốc / null → null", docLaiHopLe("sổ hồng riêng", "sổ hồng riêng") === null && docLaiHopLe(null, "abc") === null);
+}
+// ── SRS-5.1zzzq (08/10/2026): câu khách hỏi đã có bong bóng tiền định trả lời bị CẮT khỏi tin đưa model (thay lưới cắt câu trùng).
+{
+  ok("ZZZQ-01 cả tin là câu hỏi phí → rỗng (model không thấy gì để trả lời lại)", anCauDaDap("phí sao cháu", "phí sao cháu") === "");
+  ok("ZZZQ-02 AI trích thiếu đuôi ('phí sao') → đuôi 'cháu' cùng vế cũng cắt", anCauDaDap("phí sao cháu", "phí sao") === "");
+  ok("ZZZQ-03 (cách nói MỚI) trả lời kèm hỏi: '4 tầng nha, mà phí bên cháu tính sao vậy?' → còn '4 tầng nha'",
+    anCauDaDap("4 tầng nha, mà phí bên cháu tính sao vậy?", "phí bên cháu tính sao vậy") === "4 tầng nha", anCauDaDap("4 tầng nha, mà phí bên cháu tính sao vậy?", "phí bên cháu tính sao vậy"));
+  ok("ZZZQ-04 tin gõ KHÔNG DẤU, AI trích có dấu → vẫn khớp, giữ phần trả lời nguyên chữ gốc",
+    anCauDaDap("so hong rieng. phi ben e tinh sao", "phí bên e tính sao") === "so hong rieng", anCauDaDap("so hong rieng. phi ben e tinh sao", "phí bên e tính sao"));
+  ok("ZZZQ-05 câu hỏi đứng đầu: 'em là bot hả? nhà 4x15 hẻm 5m' → còn 'nhà 4x15 hẻm 5m'",
+    anCauDaDap("em là bot hả? nhà 4x15 hẻm 5m", "em là bot hả") === "nhà 4x15 hẻm 5m", anCauDaDap("em là bot hả? nhà 4x15 hẻm 5m", "em là bot hả"));
+  ok("ZZZQ-06 trích không có trong tin / rỗng → trả nguyên tin", anCauDaDap("giá 15 tỷ", "phí sao") === "giá 15 tỷ" && anCauDaDap("giá 15 tỷ", null) === "giá 15 tỷ");
+}
+// ── SRS-5.1zzzp (08/10/2026, chủ dự án: "chiều rộng đường, mặt tiền bla bla có bị ghi sai nữa ko"): số đo vào đúng ô theo CHỮ cạnh nó.
+{
+  // Chạy ở CẢ HAI chế độ kiểm: nhẹ (production, `boc_tach_ai = ai`) và đủ.
+  const cuNhe = laKiemNheTest();
+  const lyDo = [];
+  const kt1 = (tin, khoa, gt, td) => { const x = kiemDeXuat([{ khoa, gia_tri: gt, trich_dan: td }], tin); lyDo.push(`${khoa}:${x.dat.length ? "đạt" : x.bo[0]?.ly_do}`); return x.dat.length === 1; };
+  const kt = (tin, khoa, gt, td) => { datKiemNhe(true); const a = kt1(tin, khoa, gt, td); datKiemNhe(false); const b = kt1(tin, khoa, gt, td); datKiemNhe(cuNhe); return a === b ? a : !a; };
+  ok("ZZZP-01 'mặt tiền 4m' → ngang đạt; KHÔNG phải nhà mặt tiền đường; KHÔNG phải bề rộng đường",
+    kt("mặt tiền 4m dài 16m", "ngang", "4", "mặt tiền 4m") && !kt("mặt tiền 4m dài 16m", "loai_duong_vao", "mat_tien", "mặt tiền 4m") && !kt("mặt tiền 4m dài 16m", "do_rong_duong", "4", "mặt tiền 4m"), lyDo.join(" "));
+  ok("ZZZP-02 'hẻm 4m' → chỉ bề rộng hẻm (không ngang, không đường)", kt("hẻm 4m", "do_rong_hem", "4", "hẻm 4m") && !kt("hẻm 4m", "ngang", "4", "hẻm 4m") && !kt("hẻm 4m", "do_rong_duong", "4", "hẻm 4m"));
+  ok("ZZZP-03 'đường trước nhà 10m' → bề rộng đường, không phải hẻm", kt("đường trước nhà 10m", "do_rong_duong", "10", "đường trước nhà 10m") && !kt("đường trước nhà 10m", "do_rong_hem", "10", "đường trước nhà 10m"));
+  ok("ZZZP-04 (cách nói MỚI) 'nhà mặt tiền hẻm 6m' → hẻm 6m, KHÔNG phải mặt tiền đường", kt("nhà mặt tiền hẻm 6m", "do_rong_hem", "6", "mặt tiền hẻm 6m") && !kt("nhà mặt tiền hẻm 6m", "loai_duong_vao", "mat_tien", "mặt tiền hẻm 6m"));
+  ok("ZZZP-05 'nhà mặt tiền đường 8m' → mặt tiền + đường 8m; 'mặt tiền Nguyễn Trãi' → mặt tiền",
+    kt("nhà mặt tiền đường 8m", "loai_duong_vao", "mat_tien", "nhà mặt tiền đường 8m") && kt("nhà mặt tiền đường 8m", "do_rong_duong", "8", "mặt tiền đường 8m") && kt("bán nhà mặt tiền Nguyễn Trãi", "loai_duong_vao", "mat_tien", "mặt tiền Nguyễn Trãi"));
+  ok("ZZZP-06 chỉ có số ('4m', trả lời câu bot hỏi) → không bị chặn ô nào", kt("4m", "do_rong_hem", "4", "4m") && kt("4m", "ngang", "4", "4m") && kt("4m", "do_rong_duong", "4", "4m"));
+  ok("ZZZP-07 (cách nói MỚI) 'MT 5m', '4x16' là ngang; 'hẻm 5m đường Phan Xích Long' vẫn là hẻm", kt("MT 5m nở hậu 6m", "ngang", "5", "MT 5m") && kt("4x16", "ngang", "4", "4x16") && kt("hẻm 5m đường Phan Xích Long", "do_rong_hem", "5", "hẻm 5m đường Phan Xích Long"));
+  ok("ZZZP-08 chuDeSoDo: 'lô đất ngang 5m' không bị coi là đường", !chuDeSoDo("lo dat ngang 5m").duong && chuDeSoDo("lo dat ngang 5m").ngang);
+}
+// ── SRS-5.1zzzt (08/10/2026, bắn thử …kc1tatt "dang di"): hai lượt AI đọc cùng tin ra hai ý ngược nhau → hỏi lại.
+{
+  const dang = { la: "dong_y", dangDi: true }, gat = { la: "dong_y", dangDi: false }, khong = { la: "khong_dong_y", dangDi: false };
+  ok("ZZZT-01 'dang di': ý lượt = bảo đăng, bóc tách = hoãn → lệch [dang, hoan]", JSON.stringify(yLuotLech(dang, { loai: "hoan" })) === '["dang","hoan"]');
+  ok("ZZZT-02 (cách nói MỚI) 'thoi dang di' kiểu: bảo đăng ↔ ngưng rao / bán rồi → lệch", !!yLuotLech(dang, { loai: "ngung_rao" }) && !!yLuotLech(dang, { loai: "ban_roi" }));
+  ok("ZZZT-03 bóc tách 'du_roi' ↔ ý lượt 'không đồng ý' → lệch [dang, khong_dang]", JSON.stringify(yLuotLech(khong, { loai: "du_roi" })) === '["dang","khong_dang"]');
+  ok("ZZZT-04 hai lượt cùng ý (bảo đăng + du_roi; gật + bán rồi) → KHÔNG lệch", yLuotLech(dang, { loai: "du_roi" }) === null && yLuotLech(gat, { loai: "ban_roi" }) === null);
+  ok("ZZZT-05 một lượt không chạy / không có ý → không lệch", yLuotLech(undefined, { loai: "hoan" }) === null && yLuotLech(dang, null) === null);
+  ok("ZZZT-06 (bắn thử …kf1tatt) gật và hoãn trích CÙNG cụm 'dang di' → lệch [gat, hoan]",
+    JSON.stringify(yLuotLech({ la: "dong_y", dangDi: false, trich: "dang di" }, { loai: "hoan", trich: "dang di" })) === '["gat","hoan"]');
+  ok("ZZZT-07 (cách nói MỚI) 'ok em, để mai anh nói tiếp': gật ở 'ok em', hoãn ở 'để mai…' → KHÔNG lệch",
+    yLuotLech({ la: "dong_y", dangDi: false, trich: "ok em" }, { loai: "hoan", trich: "để mai anh nói tiếp" }) === null);
+  ok("ZZZV-01 (chủ dự án chat thử …hua2) ý thêm 'chợ quán' trùng phường đã ghi 'Phường Chợ Quán' → bỏ",
+    kiemKienThuc(["chợ quán"], "chợ quán e", [], ["Phường Chợ Quán"]).length === 0);
+  ok("ZZZV-02 (cách nói MỚI) ý thêm 'gần chợ Bến Thành' không trùng gì đã ghi → giữ; 'đang ở' vẫn giữ",
+    kiemKienThuc(["gần chợ Bến Thành", "đang ở"], "nhà gần chợ Bến Thành, đang ở", [], ["Phường Bến Thành", "sổ hồng riêng"]).length === 2);
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
+

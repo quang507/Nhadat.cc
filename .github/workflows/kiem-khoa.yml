@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_REF: tbcdpupiarkuxtntmosl
+  PROJECT_REF: rqxmmqmctpklqcmbfxuj
 
 jobs:
   kiem:

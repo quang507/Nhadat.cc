@@ -13,7 +13,7 @@ const nextConfig = {
   //
   // KHÔNG có Content-Security-Policy trong đợt này — có chủ ý, không phải quên.
   // Web đang tải từ 5 origin ngoài: `{s}.tile.openstreetmap.org` (tile bản đồ
-  // Leaflet, components/MapView.tsx:29), `tbcdpupiarkuxtntmosl.supabase.co`
+  // Leaflet, components/MapView.tsx:29), `rqxmmqmctpklqcmbfxuj.supabase.co`
   // (PostgREST), `zalo.me` (link ra), `schema.org` (chỉ là @context của JSON-LD,
   // không fetch), `nhadat.cc` (canonical). Một CSP viết thiếu một origin là
   // trang chết IM LẶNG — bản đồ trắng, hoặc dữ liệu không tải, mà không có lỗi

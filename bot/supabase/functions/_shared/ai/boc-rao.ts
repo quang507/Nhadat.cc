@@ -75,7 +75,7 @@ const Vai = z.object({
 // (`tuXungTuCau`) là danh sách mẫu câu, câu mở bằng "Ừ" lọt. AI đọc theo nghĩa, code kiểm trích dẫn (`docTuXung`).
 export const TU_XUNG_AI = ["anh", "chị", "chú", "cô", "bác", "ông", "bà", "dì", "cậu", "mợ", "thím", "dượng"] as const;
 const TuXung = z.object({
-  la: z.enum(TU_XUNG_AI).nullable().describe("Chữ người nhắn dùng để TỰ GỌI CHÍNH MÌNH trong tin ('Ừ anh đang muốn bán' → anh; 'nhà a 4 tầng' → anh; 'chị gửi ảnh nha' → chị; 'chú có căn nhà' → chú). Gọi người KHÁC ('anh hàng xóm', 'chị em nó', 'nhà của bà ngoại') không tính. Tin này không tự xưng nhưng một tin TRƯỚC của chủ nhà (khối 'Các tin CHỦ NHÀ đã nhắn TRƯỚC') có → vẫn đưa, trích từ tin đó. Không có đâu → null."),
+  la: z.enum(TU_XUNG_AI).nullable().describe("Chữ người nhắn dùng để TỰ GỌI CHÍNH MÌNH trong tin ('Ừ anh đang muốn bán' → anh; 'nhà a 4 tầng' → anh; 'chị gửi ảnh nha' → chị; 'chú có căn nhà' → chú). Chữ đó ở VỊ TRÍ NÀO trong câu cũng tính, kể cả sau 'cho', 'giúp', 'với' ('em có nhận rao bán cho anh không' → anh; 'em gọi lại cho chị nha' → chị; 'em tìm giúp cô' → cô). Gọi người KHÁC ('anh hàng xóm', 'chị em nó', 'nhà của bà ngoại') không tính. Tin này không tự xưng nhưng một tin TRƯỚC của chủ nhà (khối 'Các tin CHỦ NHÀ đã nhắn TRƯỚC') có → vẫn đưa, trích từ tin đó. Không có đâu → null."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN có chữ tự xưng đó, từ tin này hoặc từ tin trước của chủ nhà. la = null thì null."),
 });
 // Đợt 3 chuyển luật sang AI (02/10/2026): câu hỏi KẾ trước đây do bảng ưu tiên + từ khoá quyết (`chonCauKe`, `re-nhanh`) — AI
@@ -146,6 +146,9 @@ KHOÁ:
   Nhà cấp 4 chỉ có MỘT trệt (có thể có gác lửng), KHÔNG có lầu: "nhà 4 lầu", "nhà 3 tầng", "1 trệt 2 lầu" → nha_pho (trừ khi nói biệt thự).
 - gia (giá bán; tin cho thuê thì giá thuê), gia_m2, tien_coc, thu_nhap_thue (CHỈ tiền thuê căn BÁN đang thu). Giá trị tiền LUÔN kèm đơn vị như khách viết: "5 tỷ 2", "3 tỷ 150", "900 triệu", "95 triệu/m2" — không viết số trần "5.2".
 - dien_tich (m²), ngang, dai, no_hau (m), do_rong_hem, do_rong_duong, cach_mat_tien (m): trong "truong" chỉ con số (hẻm xe hơi không có số mét thì không đưa vào truong — nhưng VẪN là câu trả lời câu hẻm ở "tra_loi").
+  Số đo nào vào ô nào (code kiểm: cụm trích phải nói ĐÚNG chuyện của ô): "mặt tiền 4m", "MT 5m", "ngang 4", "4x16" = CHIỀU NGANG căn
+  (ngang) — KHÔNG phải loai_duong_vao, KHÔNG phải do_rong_duong; "mặt tiền đường 8m", "đường trước nhà 8m", "lộ giới 12m" = do_rong_duong;
+  "hẻm 4m" = do_rong_hem; "mặt tiền hẻm 6m" = nhà nằm mặt HẺM (do_rong_hem 6, không phải mat_tien); "cách mặt tiền 20m" = cach_mat_tien.
 - so_phong_ngu, so_wc; so_tang = TỔNG số tầng tính CẢ TRỆT, không tính lửng/sân thượng ("1 trệt 2 lầu" = 3, "trệt 3 lầu" = 4, "3 tấm" = 3, "3 tầng" = 3 — TẦNG đã gồm trệt, chỉ LẦU mới cộng 1); tang = căn hộ nằm tầng mấy. Tin có cụm kết cấu (trệt / lầu / lửng) thì ket_cau là ô chính, so_tang chỉ là số tính ra từ cụm đó — đưa cả hai được, code giữ ket_cau.
 - quan: ghi đủ "Quận 5", "Quận Phú Nhuận", "Huyện Bình Chánh", "TP Thủ Đức". phuong, duong, ma_can. quan / phuong / duong là NƠI CĂN NHÀ
   NẰM — nơi GẦN đó, nơi đi tới, nơi chủ nhà ở / chuyển tới thì KHÔNG đưa ("ra Quận 1 có 5 phút", "gần chợ Bến Thành", "bán vì chuyển qua quận 7").
@@ -174,8 +177,8 @@ KHOÁ:
   co = "bán gấp", "cần tiền gấp", "kẹt tiền", "kẹt bank", "ngộp ngân hàng / ngộp bank", "cắt lỗ cũng bán", "cần ra hàng sớm", "ra nhanh trong tháng".
   Một tin có cả giá lẫn ý gấp ("16 tỉ em, rao khi nào được giá thì thôi") → đưa CẢ HAI trường, không chỉ giá.
 - loai_duong_vao: mat_tien | hem_xe_tai | hem_xe_hoi | hem_xe_may | hem | khong_hem — đường trước nhà, đọc theo NGHĨA cả câu, kể
-  cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền", "mặt đường" →
-  mat_tien; chỉ nói "trong hẻm" → hem; "không có hẻm", "nằm trong khu công nghiệp / nội khu" → khong_hem. "Gần / cách mặt
+  cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền đường", "mặt đường", "mặt phố", "nhà mặt tiền" (không kèm số đo ngay sau),
+  "mặt tiền / MT + TÊN ĐƯỜNG" ("căn 2 mặt tiền Hồng Bàng") → mat_tien (tin nhiều căn: đưa riêng cho đúng căn); chỉ nói "trong hẻm" → hem; "không có hẻm", "nằm trong khu công nghiệp / nội khu" → khong_hem. "Gần / cách mặt
   tiền" KHÔNG phải mat_tien. Chủ CHỈ nói bề rộng hẻm (không nói xe nào vào) → theo bề rộng: dưới 3m → hem_xe_may; 3m đến dưới
   3,5m → hem; từ 3,5m → hem_xe_hoi; từ 6m → hem_xe_tai (trích dẫn là cụm bề rộng, vd "hẻm 4m"). Số hẻm ("hẻm 45") KHÔNG phải bề rộng.
 - o_to_vao_nha (ô tô vào / đậu TRONG nhà), hoan_cong (đã hoàn công), thang_may, can_goc (căn góc, lô góc, hai mặt tiền):
@@ -189,6 +192,12 @@ KHOÁ:
   mat_do_xd, tang_cao_toi_da, tai_trong_san, toa_thap (toà / block), khu_compound, ha_tang, fit_out, duong_container (xe
   container vào được không), tram_bien_ap, xu_ly_nuoc_thai, nguon_nuoc, ranh_gioi, hinh_thuc_thue_dat (trả tiền một lần /
   hằng năm), hien_trang_su_dung (chủ ĐANG Ở / đang cho thuê / để trống — không phải hien_trang), truot_gia.
+- Pháp lý chi tiết (ô chữ, viết lại CÓ DẤU đúng ý khách, không thêm ý): nguoi_dung_ten (AI đứng tên sổ: "anh đứng tên", "ba anh đứng
+  tên", "vợ chồng đứng tên" — chữ "anh/chị" ở đây là chính chủ nhà, KHÔNG phải tên người), dong_so_huu_voi (đứng tên chung với ai),
+  dong_y_ban (các bên đứng tên đã đồng ý bán chưa), so_huu (lâu dài / 50 năm), giay_to_hien_co (giấy tờ đang có khi chưa có sổ: hợp đồng
+  mua bán, vi bằng), du_kien_ra_so (khi nào ra sổ), ban_giao (đã nhận bàn giao chưa), dien_tich_khop_so (diện tích thực tế khớp sổ không).
+- Khác: tang_phu (lửng, sân thượng, tầng hầm), gia_dien_nuoc (giá điện nước cho thuê), gio_giac (giờ giấc ra vào), nganh_hang_phu_hop
+  (mặt bằng hợp buôn bán ngành gì).
 - kien_thuc: ý khác về CĂN NHÀ không có khoá nào ở trên (an ninh, đồ để lại, lịch sử…) — cụm ngắn CHÉP NGUYÊN VĂN; KHÔNG đặt nhãn diễn giải ("tiềm năng kinh doanh", "phù hợp đầu tư", "dòng tiền tốt", "khai thác thương mại") khi khách không nói đúng chữ đó; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
 Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [], kien_thuc = [].
 

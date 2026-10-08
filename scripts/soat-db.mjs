@@ -43,7 +43,7 @@ if (existsSync(ENV_FILE)) {
   }
 }
 
-const URL_DB = process.env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+const URL_DB = process.env.SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 /** Khoá công khai nằm sẵn trong `lib/supabase.ts` — đúng cái mọi bundle web đã phát hành. */
 const khoaTrongRepo = () => {
   try {

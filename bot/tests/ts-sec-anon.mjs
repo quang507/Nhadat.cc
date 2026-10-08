@@ -33,8 +33,8 @@
 //     node bot/tests/ts-sec-anon.mjs
 //   Tự kiểm chính nó (không cần mạng): node bot/tests/ts-sec-anon.tu-kiem.mjs
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
-const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "sb_publishable_zmJBmEgFPn3bBKx_1ve6Pg_dXdo4haX";
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
+const KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "sb_publishable_f4wNO8jQcCDWn1QmNZQ7-g_BXDtYM3Y";
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 
 let dat = 0, hong = 0;

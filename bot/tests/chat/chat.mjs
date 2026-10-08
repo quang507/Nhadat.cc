@@ -63,7 +63,7 @@ const ngauNhien = () => Math.random().toString(36).slice(2, 6);
 // Hai "máy chủ" cùng một giao diện: gui(uid, text) → replies[], tin(uid) → in tình trạng, xoa(uid).
 // ─────────────────────────────────────────────────────────────────────────────
 async function mayChuThat() {
-  const URL_DB = layEnv("SUPABASE_URL") ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+  const URL_DB = layEnv("SUPABASE_URL") ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
   const KHOA = layEnv("SUPABASE_SERVICE_ROLE_KEY");
   if (!KHOA) {
     console.error(DO("Thiếu SUPABASE_SERVICE_ROLE_KEY. Chép scripts/.env.example thành scripts/.env rồi dán khoá vào (hoặc chạy không có --that để chat trên máy)."));
@@ -146,7 +146,12 @@ async function mayChuMay() {
       .replaceAll('"npm:@anthropic-ai/sdk/helpers/zod"', '"@anthropic-ai/sdk/helpers/zod"')
       .replaceAll('"npm:@anthropic-ai/sdk"', API_KEY ? '"@anthropic-ai/sdk"' : '"../e2e/mock-anthropic.mjs"')
       .replaceAll('"npm:zod@4"', '"zod"');
-    writeFileSync(BUNDLE, s);
+    // 08/10/2026 (chủ dự án: "đưa chỗ thêm ảnh ở trang test"): ảnh khách thử tải lên nằm ở trang thử (https://….trycloudflare.com/anh/…),
+    // không ở CDN Zalo — CHỈ bản đóng gói cho trang thử cho thêm tên miền đó vào danh sách ảnh hợp lệ (SEC-08). Code bot / production
+    // không đổi. Không tìm thấy danh sách thì dừng, không âm thầm chạy với ảnh bị chặn.
+    const s2 = s.replace(/(HOST_ANH\s*=\s*\[\s*)"zalo\.me",/, '$1"zalo.me", "trycloudflare.com",');
+    if (s2 === s) { console.error(DO("Không tìm thấy HOST_ANH trong bundle — trang thử không nhận được ảnh.")); process.exit(1); }
+    writeFileSync(BUNDLE, s2);
   }
   const { FakeDB, napPhuongThat, napPhuongCuThat, createClient } = await import("../e2e/mock-supabase.mjs");
   const PHUONG_CU = await napPhuongCuThat();
@@ -163,7 +168,37 @@ async function mayChuMay() {
   // 07/10/2026 : có `CHAT_LOG_BAM` thì mỗi lượt model ghi vào nhật ký — loại lượt (dòng đầu system) + đầu ra (JSON
   // bóc tách / lời trả lời), để đọc được AI đã đọc ra gì khi một ô bị mất. Không ghi header (khoá API), cắt 1.500 chữ.
   globalThis.fetch = async (url, opt) => {
+    // Ảnh khách thử tải lên trang (`/anh/<id>`) → trả thẳng từ bộ nhớ, không đi vòng qua đường hầm.
+    const mAnh = /^https:\/\/[^/]+\/anh\/([a-z0-9]{8,20})(?:\.[a-z]+)?$/.exec(String(url));
+    if (mAnh && globalThis.__khoAnhThu?.has(mAnh[1])) {
+      const a = globalThis.__khoAnhThu.get(mAnh[1]);
+      return new Response(a.bytes, { status: 200, headers: { "content-type": a.mime, "content-length": String(a.bytes.byteLength) } });
+    }
     if (!/api\.anthropic\.com/.test(String(url))) return new Response("", { status: 404 });
+    // Ảnh trang thử gửi model theo URL thì model phải tự tải qua đường hầm — trycloudflare chặn bằng robots.txt (thử thật 08/10:
+    // "URL is disallowed by the website's robots.txt"). Đổi nguồn ảnh của CHÍNH trang thử sang base64 lấy từ bộ nhớ trước khi gửi.
+    if (globalThis.__khoAnhThu?.size && typeof opt?.body === "string" && opt.body.includes("/anh/")) {
+      try {
+        const req = JSON.parse(opt.body);
+        let doi = false;
+        const duyet = (x) => {
+          if (Array.isArray(x)) return x.forEach(duyet);
+          if (!x || typeof x !== "object") return;
+          const m = x.type === "image" && x.source?.type === "url" ? /\/anh\/([a-z0-9]{8,20})(?:\.[a-z]+)?$/.exec(String(x.source.url)) : null;
+          const a = m ? globalThis.__khoAnhThu.get(m[1]) : null;
+          if (a) { x.source = { type: "base64", media_type: a.mime, data: Buffer.from(a.bytes).toString("base64") }; doi = true; return; }
+          for (const v of Object.values(x)) duyet(v);
+        };
+        duyet(req.messages);
+        if (doi) {
+          // Thân đổi độ dài → bỏ content-length cũ (nếu SDK có đặt) để fetch tự tính lại.
+          let hd = opt.headers;
+          if (hd instanceof Headers) { hd = new Headers(hd); hd.delete("content-length"); }
+          else if (hd && typeof hd === "object") hd = Object.fromEntries(Object.entries(hd).filter(([k]) => k.toLowerCase() !== "content-length"));
+          opt = { ...opt, headers: hd, body: JSON.stringify(req) };
+        }
+      } catch { /* không đổi được thì gửi nguyên */ }
+    }
     const res = await fetchThat(url, opt);
     if (globalThis.__ghiAi) {
       try {
@@ -171,7 +206,9 @@ async function mayChuMay() {
         const sys = Array.isArray(req.system) ? req.system.map((x) => x?.text ?? "").join(" ") : String(req.system ?? "");
         const loai = (/CHẾ ĐỘ CHỐT TIN/.test(sys) ? "chot " : "") + sys.replace(/\s+/g, " ").slice(0, 60);
         const body = await res.clone().json().catch(() => null);
-        const ra = (body?.content ?? []).map((c) => c?.type === "tool_use" ? JSON.stringify(c.input) : c?.text ?? "").join(" ");
+        // 08/10/2026 (SRS-5.1zzzu): API trả lỗi (vd 400 grammar quá lớn) thì `content` không có — ghi mã + lời lỗi, đừng để dòng rỗng.
+        const ra = body?.error ? `[LỖI API ${res.status}] ${body.error.type ?? ""}: ${body.error.message ?? ""}`
+          : (body?.content ?? []).map((c) => c?.type === "tool_use" ? JSON.stringify(c.input) : c?.text ?? "").join(" ");
         globalThis.__ghiAi(loai, ra.slice(0, 1500));
       } catch { /* vết chỉ để đọc, hỏng thì bỏ */ }
     }
@@ -215,8 +252,8 @@ async function mayChuMay() {
     },
     cauHinh: () => globalThis.__cauHinh,
     async kiemId() { return true; },
-    async gui(uid, text) {
-      const b = { msg_id: `c${++n}`, channel: "zalo_personal_test", external_user_id: uid, text };
+    async gui(uid, text, imageUrl = null) {
+      const b = { msg_id: `c${++n}`, channel: "zalo_personal_test", external_user_id: uid, text, ...(imageUrl ? { image_url: imageUrl } : {}) };
       const tho = JSON.stringify(b);
       const hdrs = { "content-length": String(Buffer.byteLength(tho)), "x-bridge-secret": "s3cret" };
       // chat-reply in log vận hành (_ms, lỗi JSON của model giả…) ra console — tắt trong lúc gọi cho màn hình gọn.
@@ -247,6 +284,21 @@ async function mayChuMay() {
       };
     },
     async xoa() { moi(); daInLoi = 0; return { ok: true }; },
+    // 08/10/2026 (chủ dự án: "sửa luôn trên link… để link được lâu"): trang tự nạp code mới thì tiến trình bật lại — chụp DB giả
+    // + công tắc + prompt sửa tay để nạp lại. Bảng tĩnh (phường, tên đường) không chụp: `moi()` dựng lại từ nguồn.
+    chup() {
+      const d = globalThis.__db, TINH = new Set(["wards", "phuong_cu", "quan_cu", "duong"]);
+      return { t: Object.fromEntries(Object.entries(d.t).filter(([k]) => !TINH.has(k))), seq: d.seq, storage: d.storage, n, daInLoi, cauHinh: globalThis.__cauHinh, prompt: PROMPT_DB };
+    },
+    nap(s) {
+      const d = globalThis.__db;
+      Object.assign(d.t, s.t ?? {});
+      d.seq = s.seq ?? d.seq; d.storage = s.storage ?? [];
+      n = s.n ?? 0; daInLoi = s.daInLoi ?? 0;
+      if (s.cauHinh) globalThis.__cauHinh = s.cauHinh;
+      PROMPT_DB.splice(0, PROMPT_DB.length, ...(s.prompt ?? []));
+      d.t.bot_prompts = PROMPT_DB.map((r) => ({ ...r }));
+    },
     // Trang web nhiều người: chỉ xoá dữ liệu của MỘT người (như reset_nguoi_test thật), kho mẫu và người khác giữ nguyên.
     async xoaMot(uid) { return (await createClient().rpc("reset_nguoi_test", { p_zalo: uid })).data; },
   };
@@ -307,6 +359,10 @@ if (WEB) {
   const maKhach = (req) => { const m = String(req.headers.get("x-khach") ?? ""); return /^web-[a-z0-9]{6,16}$/.test(m) ? m : null; };
   const tuanTu = (fn) => { const p = hang.then(fn, fn); hang = p.catch(() => {}); return p; };
   const json = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { "content-type": "application/json; charset=utf-8" } });
+  // 08/10/2026: kho ảnh khách thử tải lên — chỉ trong bộ nhớ runner (tắt trang là mất), trần 8 MB / ảnh, 300 ảnh.
+  const KHO_ANH = new Map();
+  globalThis.__khoAnhThu = KHO_ANH;
+  const DUOI = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/heic": "heic" };
   const port = Number(giaTri("--port") ?? process.env.PORT ?? 3000) || 3000;
   // 07/10/2026 (chủ dự án: "test là cái chuẩn nhất và có thể sửa ở đây lun"): trang /prompt sửa prompt + công tắc của DB giả
   // — bot dùng ngay từ lượt kế, cho MỌI người trên link. Mỗi lần lưu ghi `sua-prompt.json` (chỉ khoá khác bản lúc bật trang);
@@ -328,8 +384,44 @@ if (WEB) {
     writeFileSync(pSua, JSON.stringify({ luc: new Date().toISOString(), prompt, cau_hinh }, null, 2));
     return { prompt: Object.keys(prompt), cau_hinh: Object.keys(cau_hinh) };
   };
+  // 08/10/2026: `--luu-trang <file>` — chat-web.yml tắt trang (SIGTERM) để nạp code mới khi nhánh có commit mới, đường hầm giữ
+  // nguyên nên link không đổi. Tắt thì cất mọi thứ người thử thấy (lịch sử, nhật ký, DB giả, ảnh, bản sửa prompt); bật lại thì
+  // nạp. Mốc "bản đầu" của trang sửa prompt (BAN_DAU / CH_DAU ở trên) tính TRƯỚC khi nạp, nên bản sửa tay vẫn hiện là bản sửa.
+  const pTrang = giaTri("--luu-trang");
+  if (pTrang && existsSync(pTrang)) {
+    try {
+      const s = JSON.parse(readFileSync(pTrang, "utf8"));
+      may.nap(s.db ?? {});
+      for (const [k, v] of s.lichSu ?? []) lichSuCua.set(k, v);
+      nhatKy.push(...(s.nhatKy ?? []));
+      soLuot = s.soLuot ?? 0;
+      for (const [k, a] of s.anh ?? []) KHO_ANH.set(k, { mime: a.mime, bytes: new Uint8Array(Buffer.from(a.b64, "base64")) });
+      ghiSua();
+      ghiNhatKy("he-thong", "nap", `nạp code mới (${process.env.CHAT_PHIEN ?? "?"}) — giữ ${lichSuCua.size} người, ${soLuot} lượt`);
+      console.log(XAM(`Nạp lại trang: ${lichSuCua.size} người, ${nhatKy.length} dòng nhật ký, ${KHO_ANH.size} ảnh`));
+    } catch (e) { console.error(DO(`Không nạp được ${pTrang}: ${e?.message ?? e} — bật trang trắng`)); }
+  }
+  if (pTrang) {
+    const cat = (sig) => {
+      // Chờ lượt đang chạy xong rồi mới cất (một lượt model ≤ vài chục giây); workflow đợi tối đa 90 s.
+      hang.finally(() => {
+        try {
+          writeFileSync(pTrang, JSON.stringify({
+            luc: new Date().toISOString(), db: may.chup(), lichSu: [...lichSuCua], nhatKy, soLuot,
+            anh: [...KHO_ANH].map(([k, a]) => [k, { mime: a.mime, b64: Buffer.from(a.bytes).toString("base64") }]),
+          }));
+          console.log(XAM(`Đã cất trang (${sig}) vào ${pTrang}`));
+          process.exit(0);
+        } catch (e) { console.error(DO(`Không cất được trang: ${e?.message ?? e}`)); process.exit(1); }
+      });
+    };
+    process.on("SIGTERM", () => cat("SIGTERM"));
+    process.on("SIGINT", () => cat("SIGINT"));
+  }
   Bun.serve({
     port,
+    // VPS (cai-vps.sh): `--host 127.0.0.1` — chỉ đường hầm cloudflared vào được, không mở cổng thẳng ra Internet.
+    hostname: giaTri("--host") ?? "0.0.0.0",
     async fetch(req) {
       const u = new URL(req.url);
       if (req.method === "GET" && u.pathname === "/") return new Response(TRANG_WEB_HTML().replace("__TEN__", may.ten), { headers: { "content-type": "text/html; charset=utf-8" } });
@@ -359,26 +451,44 @@ if (WEB) {
           : undefined;
         return json({ den: nhatKy.length, conLai: TRAN - soLuot, dong, ...(tin ? { tin } : {}) });
       }
+      // Ảnh công khai: model (Anthropic) tự tải theo URL nên đường này không đòi mã khách.
+      if (req.method === "GET" && u.pathname.startsWith("/anh/")) {
+        const a = KHO_ANH.get(u.pathname.slice(5).replace(/\.[a-z]+$/, ""));
+        return a ? new Response(a.bytes, { headers: { "content-type": a.mime, "cache-control": "no-store" } }) : new Response("không có", { status: 404 });
+      }
       if (u.pathname === "/") return new Response("không có", { status: 404 });
       const id = maKhach(req);
       if (!id) return json({ loi: "thiếu mã khách" }, 400);
       if (req.method === "GET" && u.pathname === "/lich-su") return json({ lichSu: lichSu(id), conLai: TRAN - soLuot, nguoi: lichSuCua.size });
       if (req.method === "GET" && u.pathname === "/tin") return json(await may.tin(id));
       if (req.method === "POST" && u.pathname === "/moi") return tuanTu(async () => { await may.xoaMot(id); lichSu(id).length = 0; ghiNhatKy(id, "xoa", "(bấm Xoá chat)"); return json({ ok: true }); });
+      if (req.method === "POST" && u.pathname === "/anh") {
+        const mime = String(req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+        if (!DUOI[mime]) return json({ loi: "chỉ nhận ảnh jpg / png / webp / gif / heic" }, 400);
+        const bytes = new Uint8Array(await req.arrayBuffer());
+        if (!bytes.byteLength || bytes.byteLength > 8 * 1024 * 1024) return json({ loi: "ảnh rỗng hoặc quá 8 MB" }, 400);
+        if (KHO_ANH.size >= 300) KHO_ANH.delete(KHO_ANH.keys().next().value);
+        const ma = Math.random().toString(36).slice(2, 12).padEnd(10, "0");
+        KHO_ANH.set(ma, { bytes, mime });
+        // Host công khai (cloudflared chuyển nguyên Host) — model đi lấy ảnh qua đúng URL này.
+        return json({ url: `https://${req.headers.get("host")}/anh/${ma}.${DUOI[mime]}` });
+      }
       if (req.method === "POST" && u.pathname === "/gui") {
         const b = await req.json().catch(() => ({}));
         const text = String(b?.text ?? "").trim().slice(0, 2000);
-        if (!text) return json({ loi: "trống" }, 400);
+        const anh = /^https:\/\/[^/]+\/anh\/([a-z0-9]{8,20})\.[a-z]+$/.exec(String(b?.image_url ?? ""));
+        const imageUrl = anh && KHO_ANH.has(anh[1]) ? String(b.image_url) : null;
+        if (!text && !imageUrl) return json({ loi: "trống" }, 400);
         if (soLuot >= TRAN) return json({ loi: `hết ${TRAN} lượt của lần chạy này — chạy lại lệnh để chat tiếp` }, 429);
         return tuanTu(async () => {
           soLuot++;
           const ls = lichSu(id);
-          ls.push({ ai: "khach", text });
-          ghiNhatKy(id, "khach", text);
+          ls.push({ ai: "khach", text, ...(imageUrl ? { anh: imageUrl } : {}) });
+          ghiNhatKy(id, "khach", imageUrl ? `${text}${text ? " " : ""}[ảnh] ${imageUrl}` : text);
           const t0 = Date.now();
           idDangChay = id;
           try {
-            const replies = (await may.gui(id, text)).map(String);
+            const replies = (await may.gui(id, text, imageUrl)).map(String);
             for (const r of replies) ls.push({ ai: "bot", text: r });
             for (const r of replies) ghiNhatKy(id, "bot", r, { ms: Date.now() - t0 });
             return json({ replies, ms: Date.now() - t0, conLai: TRAN - soLuot });
@@ -458,21 +568,33 @@ button{font:inherit;border:1px solid var(--vien);background:var(--ban);color:var
 form{display:flex;gap:8px;padding:10px 16px;background:var(--ban);border-top:1px solid var(--vien)}
 textarea{flex:1;resize:none;font:inherit;padding:9px 12px;border-radius:10px;border:1px solid var(--vien);background:var(--nen);color:var(--chu);max-height:140px}
 form button{background:var(--chinh);color:#fff;border:0;padding:0 18px}
+#nutAnh{background:var(--ban);color:var(--chu);border:1px solid var(--vien);padding:0 12px;font-size:18px}
+.b img{display:block;max-width:220px;max-height:260px;border-radius:8px;margin-bottom:4px}
 pre{white-space:pre-wrap;font-size:12px;background:var(--ban);border:1px solid var(--vien);border-radius:10px;padding:10px;margin:0;align-self:stretch}
 </style></head><body>
 <header><b>Chat thử bot<small>__TEN__</small></b><a href="prompt" target="_blank"><button type="button">Sửa prompt</button></a><button id="xemTin" type="button">Xem tin</button><button id="lamLai" type="button">Làm lại</button></header>
 <div id="khung"></div>
-<form id="f"><textarea id="o" rows="1" placeholder="Nhắn như khách Zalo… (Enter để gửi, Shift+Enter xuống dòng)"></textarea><button>Gửi</button></form>
+<form id="f"><input id="fa" type="file" accept="image/*" hidden><button type="button" id="nutAnh" title="Gửi ảnh">📷</button><textarea id="o" rows="1" placeholder="Nhắn như khách Zalo… (Enter để gửi, Shift+Enter xuống dòng)"></textarea><button>Gửi</button></form>
 <script>
 let MA='';try{MA=localStorage.getItem('ma-khach')||'';}catch(e){}
 if(!/^web-[a-z0-9]{6,16}$/.test(MA)){MA='web-'+Math.random().toString(36).slice(2,10).padEnd(8,'0');try{localStorage.setItem('ma-khach',MA);}catch(e){}}
 const H={'x-khach':MA};
 const khung=document.getElementById('khung'),o=document.getElementById('o');
-const them=(ai,text)=>{const d=document.createElement(ai==='tin'?'pre':'div');d.className=ai==='tin'?'':'b '+ai;if(ai==='mo')d.className='mo';d.textContent=text;khung.appendChild(d);khung.scrollTop=khung.scrollHeight;return d;};
-fetch('lich-su',{headers:H}).then(r=>r.json()).then(j=>{for(const m of j.lichSu)them(m.ai,m.text);them('mo','Bạn là khách '+MA+' · còn '+j.conLai+' lượt chung');}).catch(()=>{});
+const them=(ai,text,anh)=>{const d=document.createElement(ai==='tin'?'pre':'div');d.className=ai==='tin'?'':'b '+ai;if(ai==='mo')d.className='mo';
+ if(anh){const i=document.createElement('img');i.src=anh;i.alt='ảnh';d.appendChild(i);if(text)d.appendChild(document.createTextNode(text));}else d.textContent=text;
+ khung.appendChild(d);khung.scrollTop=khung.scrollHeight;return d;};
+fetch('lich-su',{headers:H}).then(r=>r.json()).then(j=>{for(const m of j.lichSu)them(m.ai,m.text,m.anh);them('mo','Bạn là khách '+MA+' · còn '+j.conLai+' lượt chung');}).catch(()=>{});
 let dang=false;
-async function gui(){const text=o.value.trim();if(!text||dang)return;dang=true;o.value='';them('khach',text);const cho=them('mo','bot đang gõ…');
- try{const r=await fetch('gui',{method:'POST',headers:{...H,'content-type':'application/json'},body:JSON.stringify({text})});const j=await r.json();cho.remove();
+// Ảnh: tải lên trang trước (POST anh), rồi gửi cùng chữ đang gõ (nếu có) như Zalo gửi ảnh kèm lời.
+document.getElementById('nutAnh').onclick=()=>{if(!dang)document.getElementById('fa').click();};
+document.getElementById('fa').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f||dang)return;
+ if(f.size>8*1024*1024){them('loi','Ảnh quá 8 MB');return;}
+ dang=true;const tai=them('mo','đang tải ảnh…');
+ try{const r=await fetch('anh',{method:'POST',headers:{...H,'content-type':f.type||'image/jpeg'},body:f});const j=await r.json();tai.remove();
+  if(j.loi){them('loi',j.loi);dang=false;return;}dang=false;await gui(j.url);}
+ catch(err){tai.remove();them('loi','Không tải được ảnh: '+err);dang=false;}};
+async function gui(anh){const text=o.value.trim();if((!text&&!anh)||dang)return;dang=true;o.value='';them('khach',text,anh);const cho=them('mo','bot đang gõ…');
+ try{const r=await fetch('gui',{method:'POST',headers:{...H,'content-type':'application/json'},body:JSON.stringify({text,...(anh?{image_url:anh}:{})})});const j=await r.json();cho.remove();
   if(j.loi)them('loi',j.loi);else{if(!j.replies.length)them('mo','(bot không trả lời lượt này)');for(const x of j.replies)them('bot',x);them('mo',(j.ms/1000).toFixed(1)+'s');}}
  catch(e){cho.remove();them('loi','Mất kết nối: '+e);}dang=false;o.focus();}
 document.getElementById('f').onsubmit=e=>{e.preventDefault();gui();};

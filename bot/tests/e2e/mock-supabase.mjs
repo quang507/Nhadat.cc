@@ -750,6 +750,8 @@ class RpcCall {
         l.boc_tach = { ...(l.boc_tach ?? {}), [a.p_question]: a.p_answer, _cap_nhat: now() };
         // trg_vi_tri_vao_cot (schema.sql): ghi đè location_raw trừ khi đã có fact vi_tri nguồn admin/ctv (bậc cao hơn).
         if (a.p_question === "vi_tri" && String(a.p_answer).trim() && !db.t.listing_facts.some((f) => f.listing_id === l.id && f.question === "vi_tri" && /^(admin|ctv)/i.test(String(f.source ?? "")) && f.answer !== a.p_answer)) l.location_raw = String(a.p_answer).trim();
+        // 20261008a (SRS-5.1zzzs): tin căn hộ — fact du_an_ten (tên dự án khách nói) điền location_raw khi còn trống.
+        if (a.p_question === "du_an_ten" && String(a.p_answer).trim() && l.property_type === "chung_cu" && !String(l.location_raw ?? "").trim()) l.location_raw = String(a.p_answer).trim();
         // 22/09/2026: DB gọt price_raw qua `chuan_hoa_gia_raw` ("7 tỷ 5 nha em" → "7 tỷ 5"); mock giữ đúng thế
         // để bộ đo giọng / e2e không thấy một 🤖 mà production không in.
         if (a.p_question === "gia") { l.price_raw = chuanHoaGiaRaw(a.p_answer); l.price_vnd = parseVnd(a.p_answer); }
@@ -805,6 +807,27 @@ class RpcCall {
         // 20/09/2026: đáp án mặt tiền dạng "ngang 4m dài 16m" (boc_thong_so thật đọc hai chiều) — mock từng parseFloat cả câu → NaN.
         if (a.p_question === "mat_tien") { const mt = /(?:ngang|mat tien|mặt tiền|mt)?\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (mt) l.frontage_m = parseFloat(mt[1].replace(",", ".")); const dm = /(?:dài|dai|dọc|doc|x)\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (dm) l.length_m = parseFloat(dm[1].replace(",", ".")); }
         if (a.p_question === "do_rong_hem") { const m = /(\d+(?:[.,]\d+)?)/.exec(a.p_answer); if (m) l.alley_width_m = parseFloat(m[1].replace(",", ".")); if (/xe hơi|xe hoi/i.test(a.p_answer)) l.access_type = l.access_type ?? "hem_xe_hoi"; }
+        // ─── SRS-5.1zzzv (08/10/2026, chủ dự án chat thử …hua2: "trên kia nói hẻm xe hơi xong xuống dưới nó hỏi hẻm xe hơi"):
+        // các nhánh `listing_facts_sync_cols` (schema.sql) mà DB giả chưa chép — trang chat thử chạy trên DB giả nên ô AI đã ghi
+        // không tới cột, bản nháp / điểm tin hỏi lại. Chép đúng nhánh thật; `bot/tests/mock-trigger-du.mjs` đỏ khi trigger có nhánh
+        // mới mà ở đây chưa có.
+        const kdF = String(a.p_answer ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase().trim();
+        const coKhong = /^(khong|ko|chua|chang|false)\b/.test(kdF) ? false : /^(co|true|da|roi)\b/.test(kdF) ? true : null; // doc_co_khong
+        const soF = (() => { const m = /[0-9]+[.]?[0-9]*/.exec(String(a.p_answer ?? "").replace(/,/g, ".")); return m ? parseFloat(m[0]) : null; })();
+        if (a.p_question === "loai_duong_vao") {
+          const at = { "mat tien": "mat_tien", "hem xe tai": "hem_xe_tai", "hem xe hoi": "hem_xe_hoi", "hem xe may": "hem_xe_may", "trong hem": "hem" }[kdF];
+          if (at) l.access_type = at;
+        }
+        if (["o_to_vao_nha", "hoan_cong", "thang_may", "can_goc"].includes(a.p_question) && coKhong !== null) {
+          const cot = { o_to_vao_nha: "car_in_house", hoan_cong: "has_completion", thang_may: "has_elevator", can_goc: "corner_lot" }[a.p_question];
+          if (l[cot] == null) l[cot] = coKhong;
+        }
+        if (a.p_question === "do_rong_duong" && soF != null && soF >= 1 && soF <= 40 && l.alley_width_m == null) { l.alley_width_m = soF; l.access_type = l.access_type ?? "mat_tien"; }
+        if (a.p_question === "quy_hoach" && /(khong|ko|k co|k dinh)/.test(kdF) && l.planning_status == null) l.planning_status = "khong_quy_hoach";
+        if (a.p_question === "nam_xay" && l.year_built == null) { const y = /(?:19|20)[0-9]{2}/.exec(kdF); if (y) l.year_built = parseInt(y[0], 10); }
+        if (a.p_question === "noi_that" && l.furnishing == null) l.furnishing = /(full|day du|cao cap)/.test(kdF) ? "full" : /(khong|trong|ko)/.test(kdF) ? "khong" : /co ban/.test(kdF) ? "co_ban" : null;
+        if (a.p_question === "cach_mat_tien" && soF != null && soF >= 1 && soF <= 2000 && l.distance_to_street_m == null) l.distance_to_street_m = soF;
+        if (a.p_question === "dien_tich_tim_tuong" && l.property_type === "chung_cu" && soF != null && soF > 5 && soF < 5000) l.area_m2 = soF;
         if (a.p_question === "ket_cau") { const m = /(\d+)\s*(?:lầu|lau|tầng|tang|tấm|tam)/i.exec(a.p_answer); if (m) l.floors = parseInt(m[1], 10) + (/lầu|lau/i.test(a.p_answer) ? 1 : 0); const pn = /(\d+)\s*(?:phòng ngủ|phong ngu|pn)/i.exec(a.p_answer); if (pn) l.bedrooms = parseInt(pn[1], 10); }
         // 20260923a: câu phủ định ("chưa có sổ") đi trước mọi nhánh pháp lý — không ghi cột.
         if (a.p_question === "phap_ly") {
