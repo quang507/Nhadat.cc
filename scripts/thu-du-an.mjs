@@ -106,9 +106,13 @@ const soTuTien = (s) => {
 };
 
 function bocChiTiet(html, url) {
-  const ten = goHtml(/<h1 class="project-title">([\s\S]*?)<\/h1>/.exec(html)?.[1]);
+  // Hai kiểu trang (soát 08/10/2026): trang đầy đủ có `h1.project-title`; trang RÚT GỌN (vd PNT Court) chỉ có
+  // `div.prj-title > h1` + một div địa chỉ, giá / chủ đầu tư / bàn giao để trống. Chỉ đọc kiểu đầu thì ~560/2.414 dự án
+  // bị bỏ im lặng (HCM 1.159/1.613). Trang rút gọn vẫn cho TÊN + ĐỊA CHỈ — đủ để bot nhận ra tên dự án khách nói.
+  const rutGon = /<div class="prj-title">\s*<h1>([\s\S]*?)<\/h1>\s*<div>([\s\S]*?)<\/div>/.exec(html);
+  const ten = goHtml(/<h1 class="project-title">([\s\S]*?)<\/h1>/.exec(html)?.[1]) || goHtml(rutGon?.[1]);
   if (!ten) return null;
-  const diaChi = goHtml(/<div class="project-address">([\s\S]*?)<\/div>/.exec(html)?.[1]);
+  const diaChi = goHtml(/<div class="project-address">([\s\S]*?)<\/div>/.exec(html)?.[1]) || goHtml(rutGon?.[2]);
   const giaDong = goHtml(/<div class="project-price">([\s\S]*?)<\/div>/.exec(html)?.[1]);
 
   const thongSo = {};
@@ -123,7 +127,10 @@ function bocChiTiet(html, url) {
     goHtml(/<div class="investor[^"]*">([\s\S]{0,160}?)<\/div>/.exec(html)?.[1]) || null;
 
   // Tiện ích: các gạch đầu dòng trong phần giới thiệu — DỮ KIỆN, không phải văn.
-  const thanBai = html.replace(/<ul class="info-general[^"]*">[\s\S]*?<\/ul>/, " ");
+  // Cắt ở chân trang: chân trang mogi cũng là các <li> (người chịu trách nhiệm, số giấy phép, địa chỉ văn phòng) — lượt
+  // nạp 08/10/2026 ghi chúng vào `amenities` của mọi dự án.
+  const chan = html.search(/class="footer/);
+  const thanBai = (chan > 0 ? html.slice(0, chan) : html).replace(/<ul class="info-general[^"]*">[\s\S]*?<\/ul>/, " ");
   const tienIch = [...thanBai.matchAll(/<li>([^<][\s\S]{0,160}?)<\/li>/g)]
     .map((m) => goHtml(m[1]))
     .filter((t) => t.length >= 8 && t.length <= 140 && !/^(Trang chủ|Mogi|Dự án|Tìm |Đăng |Giá |Môi giới)/i.test(t))
