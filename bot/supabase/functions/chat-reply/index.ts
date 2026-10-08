@@ -141,6 +141,13 @@ const CHI_DAN_CHU_DE: Record<string, string> = {
   // trả lời dc"; SRS-5.1ze): bot từng đáp "Dạ em là trợ lý AI…". Điều bot nói phải nói được NGUỒN.
   nguon: " Chủ nhà hỏi em SAO BIẾT / lấy đâu ra điều em vừa nói. Nói thật NGUỒN, một câu: chủ nhà đã nói (nhắc lại đúng lời), hoặc em xem trong KHO DỰ ÁN bên em (nói 'Theo em biết, dự án <tên> …' — đó là thông tin chung của cả dự án, không phải căn của chủ nhà), hoặc không có nguồn nào thì nhận là em nói nhầm và xin lỗi. Nếu em CHƯA HỀ nói điều đó (chỉ mới HỎI) thì nói thật em chưa biết, em đang hỏi để ghi cho đúng — KHÔNG chối là em chưa hỏi khi lịch sử có câu em đã hỏi. Rồi hỏi lại đúng thông tin của căn chủ nhà nếu còn thiếu. KHÔNG trả lời kiểu 'em là trợ lý AI'.",
 };
+/**
+ * Lời dặn model TRẢ LỜI câu chủ nhà hỏi em trước rồi mới hỏi tiếp — một nguồn cho lượt hỏi lại (r2) và lượt chăm sóc chung (r3).
+ * SRS-5.1zzzj (chat thử 08/10, …w44h): "em có nhận rao bán cho anh ở quận 8 không em" → r3 không được dặn gì về câu hỏi, model
+ * đáp "Dạ anh chị nhận rao được chứ" (đảo chủ ngữ). Nói rõ "em" trong câu khách là EM.
+ */
+const danTraLoiHoiNguoc = (cau: string, chuDe: string | null | undefined): string =>
+  `Chủ nhà còn HỎI NGƯỢC: "${cau}" ("em" trong câu đó là EM, bên AI Ơi Nhà Đất; người hỏi là chủ nhà).${CHI_DAN_CHU_DE[chuDe ?? ""] ?? ""} TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; hỏi về cách làm việc (gửi ảnh, phí, đăng tin) thì trả lời theo hướng dẫn hệ thống; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá; hỏi "em biết dự án / chỗ X không" mà phần trên không có X thì nói thật em chưa nắm rõ X, KHÔNG đoán X ở quận nào, của chủ đầu tư nào. Rồi mới hỏi tiếp. `;
 // FR-224: câu hỏi SỐ CHẶT — giá trị ghi lấy từ ô AI đã chuẩn hoá + kiểm khoảng (`giaTriChoCauTreo`), không lấy câu trả lời
 // chữ của AI ("năm tỷ hai" / "5,2 tỷ" đều phải thành một con số đúng đơn vị). AI vẫn quyết CÓ / KHÔNG trả lời.
 /** FR-226: giá trị đang ghi của các ô chữ AI gộp / sửa được, đọc từ cột tin (đã nạp cùng câu chờ). */
@@ -2493,7 +2500,7 @@ Deno.serve(async (req) => {
       camXucDaXet = true;
       const k = await bongAi;
       if (!laCheDoAi || !k?.ket) return null;
-      camXucLuot = docCamXuc(k.camXuc, textTreo || textBongAi);
+      camXucLuot = docCamXuc(k.camXuc, textTreo || text);
       if (!camXucLuot) return null;
       // Một lần / 24 giờ / người / MỨC: bực rồi nghi ngờ là hai chuyện, người phụ trách cần biết cả hai.
       const nhan = camXucLuot.muc === "buc" ? "có vẻ bực" : camXucLuot.muc === "nghi_ngo" ? "đang nghi ngờ bên mình" : "muốn dừng";
@@ -2520,7 +2527,7 @@ Deno.serve(async (req) => {
       if (!bongAi) return undefined;
       const k = await bongAi;
       if (!laCheDoAi || !k?.ket) return undefined;
-      const yd = docYDinh(k.yDinh, textTreo || textBongAi);
+      const yd = docYDinh(k.yDinh, textTreo || text);
       // SRS-5.1zzu (bắn lại thu-ai-0610): "ok đăng đi" khi bot đang hỏi gấp → Haiku `binh_thuong` → bot lờ, hỏi tiếp phòng ngủ. CẢ
       // TIN chỉ là câu lệnh đăng mà AI nói không có ý định nào → luật chắc (tiền lệ "cả tin chỉ là một số tiền"); câu có thêm ý
       // thì vẫn theo AI. Prompt Ý ĐỊNH cũng đã nói rõ "bảo đăng lúc nào cũng là du_roi" — lưới này chỉ đỡ khi model vẫn trượt.
@@ -2552,7 +2559,7 @@ Deno.serve(async (req) => {
       if (!yLuotAi) return undefined;
       const k = await yLuotAi;
       if (!laCheDoAi || k?.dongY === undefined) return undefined;
-      return docDongY(k.dongY, textTreo || textBongAi);
+      return docDongY(k.dongY, textTreo || text);
     };
     /**
      * Đợt 3 bỏ luật từ khoá (02/10/2026, SRS-5.1zg): chủ nhà HỎI về tin / XIN gì (bao lâu bán, số khách, xoá dữ liệu, bỏ ô) — AI
@@ -2562,7 +2569,7 @@ Deno.serve(async (req) => {
       if (!yLuotAi) return undefined;
       const k = await yLuotAi;
       if (!laCheDoAi || k?.yeuCau === undefined) return undefined;
-      return docYeuCau(k.yeuCau, textTreo || textBongAi);
+      return docYeuCau(k.yeuCau, textTreo || text);
     };
     /** Gật: AI trước; `luat` chỉ chạy khi AI không chạy. */
     /** SRS-5.1zzl: ý NGƯNG NHIỀU CĂN / CHỈ GIỮ (doc-y-luot). undefined = AI không chạy (luật đỡ); null = AI nói không có ý này. */
@@ -2570,7 +2577,7 @@ Deno.serve(async (req) => {
       if (!yLuotAi) return undefined;
       const k = await yLuotAi;
       if (!laCheDoAi || k?.ngungHangLoat === undefined) return undefined;
-      return docNgungHangLoat(k.ngungHangLoat, textTreo || textBongAi);
+      return docNgungHangLoat(k.ngungHangLoat, textTreo || text);
     };
     const gatLuot = async (luat: () => boolean): Promise<boolean> => {
       const d = await dongYAi();
@@ -2970,7 +2977,7 @@ Deno.serve(async (req) => {
      */
     const ghiMuaKem = async (): Promise<string | null> => {
       if (!yLuotAi || !laCheDoAi) return null;
-      const mk = docMuaKem((await yLuotAi)?.muaKem, textTreo || textBongAi);
+      const mk = docMuaKem((await yLuotAi)?.muaKem, textTreo || text);
       if (!mk) return null;
       const { data: bcMk, error: bcMkErr } = await client
         .rpc("ensure_buyer_conversation", { p_zalo_user_id: externalUserId, p_channel: channel }).single();
@@ -3386,13 +3393,28 @@ Deno.serve(async (req) => {
           (m.body ?? "").slice(0, 300)
         }`)
       .join("\n");
+    /** Dòng "Gọi chủ nhà là …" của NGỮ CẢNH — tách ra để lượt nào AI vừa đọc ra khách tự xưng thì thay dòng này trước khi model viết. */
+    const dongGoiChuNha = (goi: string | null): string => {
+      const cg = goi ?? cachGoi;
+      const tx = goi ? tuXungBot(goi) : tuXung;
+      return `- Gọi chủ nhà là "${cg}"${
+        goi ? ` - chủ nhà đã dặn, tuyệt đối không đổi, không dùng "anh/chị"` : ` (chưa biết nam hay nữ - KHÔNG tự đoán "anh" hay "chị"; gọi "${cg}" hoặc bỏ đại từ, KHÔNG gọi "mình")`
+      }${tx === "cháu" ? `; tự xưng "cháu" (chủ nhà lớn tuổi), KHÔNG xưng "em"` : ""}.\n`;
+    };
     let boiCanh =
       `NGỮ CẢNH (đọc kỹ trước khi viết):\n` +
-      `- Gọi chủ nhà là "${cachGoi}"${
-        goiNguoi ? ` - chủ nhà đã dặn, tuyệt đối không đổi, không dùng "anh/chị"` : ` (chưa biết nam hay nữ - KHÔNG tự đoán "anh" hay "chị"; gọi "${cachGoi}" hoặc bỏ đại từ, KHÔNG gọi "mình")`
-      }${tuXung === "cháu" ? `; tự xưng "cháu" (chủ nhà lớn tuổi), KHÔNG xưng "em"` : ""}.\n` +
+      dongGoiChuNha(goiNguoi) +
       `- Lịch sử gần nhất, tin mới ở cuối. KHÔNG lặp lại khuôn câu, lời khen, hay lý do "khách hay hỏi" đã dùng trong đó; tin trước của em mở bằng "Dạ" thì tin này đừng mở bằng "Dạ"; viết như người thật nhắn tay, mỗi tin một giọng:\n` +
       `${lichSuText || "(chưa có tin nào trước đó)"}\n\n`;
+    // SRS-5.1zzzj (chat thử 08/10, …w44h): NGỮ CẢNH dựng TRƯỚC khi AI đọc tin này — khách tự xưng ngay lượt này ("cho anh") mà
+    // model vẫn được dặn gọi "anh chị". Mọi chỗ gọi model lấy ngữ cảnh qua hàm này: AI đã đọc ra tự xưng (qua kiểm trích dẫn) thì
+    // dòng cách gọi đổi trước khi model viết, không sửa chữ sau.
+    const boiCanhLuot = async (): Promise<string> => {
+      if (goiNguoi || !bongAi) return boiCanh;
+      const k = await bongAi;
+      const tx = k?.ket ? docTuXung(k.tuXung, text, tinChuNhaGoc()) : null;
+      return tx ? boiCanh.replace(dongGoiChuNha(null), dongGoiChuNha(tx.la)) : boiCanh;
+    };
 
     // ─── 06/10/2026 (bước 3, SRS-5.1zzp; chủ dự án: "làm 3 bước đi… prompt làm sao cho nó tự nhiên hơn") ─────────────────
     // Lời model lệch Ô CHỜ (không hỏi / hỏi chuyện khác / rút vế bắt buộc / hỏi lại ô đã có) trước đây bị thay bằng CÂU MẪU
@@ -3414,7 +3436,7 @@ Deno.serve(async (req) => {
           system: [{ type: "text", text: SELLER_SYSTEM, cache_control: { type: "ephemeral" } }, { type: "text", text: DONG_TEN }],
           messages: [{
             role: "user",
-            content: `${boiCanh}Em vừa soạn tin này cho chủ nhà: "${reply}"\nTin đó chưa dùng được: ${lyDo}.\n` +
+            content: `${await boiCanhLuot()}Em vừa soạn tin này cho chủ nhà: "${reply}"\nTin đó chưa dùng được: ${lyDo}.\n` +
               `Viết LẠI một tin ngắn như người thật nhắn Zalo: giữ phần ghi nhận nếu có (không khen thêm), rồi hỏi đúng MỘT ý: ${nhan}` +
               (cauMau ? ` — ý đó bên em hay hỏi là "${cauMau}", nói lại cho tự nhiên nhưng giữ đủ các ý trong đó` : "") +
               `. Không hỏi ý khác, không đọc lại số liệu, không cảm ơn.`,
@@ -3807,7 +3829,7 @@ Deno.serve(async (req) => {
       yLuotAi = (async () => {
         if ((await cheDoBocAi!) !== "chinh") return undefined;
         try {
-          const kq = await docYLuotBangModel(aiY as unknown as Parameters<typeof docYLuotBangModel>[0], MODEL, textTreo || textBongAi, botNoi);
+          const kq = await docYLuotBangModel(aiY as unknown as Parameters<typeof docYLuotBangModel>[0], MODEL, textTreo || text, botNoi);
           await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
           return kq.ket ?? undefined;
         } catch (e) {
@@ -6325,7 +6347,7 @@ Deno.serve(async (req) => {
       const hoiNguocPrompt = hoiNguoc
         ? hoiNguocDap
           ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}" — câu đó ĐÃ được trả lời ở bong bóng ngay trước ("${hoiNguocDap}"); em KHÔNG trả lời lại, KHÔNG nhắc tới câu hỏi đó hay chuyện ảnh, KHÔNG nói chữ "hệ thống" — chỉ hỏi tiếp. `
-          : `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}".${CHI_DAN_CHU_DE[hoiAi?.chuDe ?? ""] ?? ""} TRẢ LỜI câu đó TRƯỚC bằng 1–2 câu ngắn, CHỈ từ thông tin dự án/khu vực đã có ở trên; hỏi về cách làm việc (gửi ảnh, phí, đăng tin) thì trả lời theo hướng dẫn hệ thống; chưa nắm thì nói "em kiểm tra rồi báo lại" — KHÔNG bịa tiện ích, trường, chợ, giá; hỏi "em biết dự án / chỗ X không" mà phần trên không có X thì nói thật em chưa nắm rõ X, KHÔNG đoán X ở quận nào, của chủ đầu tư nào. Rồi mới hỏi tiếp. `
+          : danTraLoiHoiNguoc(hoiNguoc, hoiAi?.chuDe)
         : "";
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
       // ơn ngắn, KHÔNG hỏi lại điểm, không gọi model. Câu hỏi ngược/ừ thì đường
@@ -6678,7 +6700,7 @@ Deno.serve(async (req) => {
           ? `Chủ nhà chưa gật bản nháp, cũng chưa nói sửa gì rõ.`
           : `Câu đó KHÔNG trả lời được câu em hỏi - có thể chủ nhà hiểu nhầm, hoặc đang nói một thông số khác. Em đã ghi chú lại nguyên văn (không mất), nhắc lại ngắn gọn để xác nhận rồi hỏi lại.`;
         const promptLai =
-          `${boiCanh}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${text}". ${viSao}\n${hoiNguocPrompt}` +
+          `${await boiCanhLuot()}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${text}". ${viSao}\n${hoiNguocPrompt}` +
           `Viết MỘT tin ngắn như người thật nhắn Zalo: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
           `Ý hỏi chính vẫn là "${nhanDangHoi}" (hệ thống ghi câu trả lời kế vào ô này). ` +
           `Không xin lỗi dài, KHÔNG nhắc mã tin${nhieuCan ? " (nhiều căn thì gọi bằng địa chỉ)" : ""}.`;
@@ -7160,7 +7182,7 @@ Deno.serve(async (req) => {
           (nhanhKe ? ` (hỏi thêm cho rõ chuyện "${nhanhKe.ten}" chủ nhà vừa nhắc — các ý của chuyện này: ${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}; ý nào họ đã nói thì không hỏi lại)` : "")
         : "";
       const prompt = nextKey
-        ? `${boiCanh}${daAck}${hoiNguocPrompt}` +
+        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}` +
           `ĐÃ BIẾT về căn${neo ? ` ${neo}` : ""}: ${daBietNgan(lstNow) || "(chưa có gì)"}\n` +
           `CHỦ NHÀ VỪA NHẮN (em vừa hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}"): "${text}"\n` +
           `${dongCanHoi}\n` +
@@ -7168,13 +7190,13 @@ Deno.serve(async (req) => {
           `ghi nhận vài chữ rồi hỏi đúng ý CẦN HỎI, không gắn thêm ý khác, không đọc lại số liệu` +
           (nhieuCan ? `; người này rao nhiều căn, nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}` : "") + `.`
         : published
-        ? `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
+        ? `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
           `Viết MỘT tin ngắn: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
         : chanNhap && !thieuDiem.length
-        ? `${boiCanh}${daAck}${hoiNguocPrompt}Chủ nhà vừa nhắn: "${text}". Viết MỘT tin rất ngắn ghi nhận điều họ vừa nói; KHÔNG hỏi lại câu em vừa hỏi, KHÔNG nói tin đã đủ thông tin.`
+        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa nhắn: "${text}". Viết MỘT tin rất ngắn ghi nhận điều họ vừa nói; KHÔNG hỏi lại câu em vừa hỏi, KHÔNG nói tin đã đủ thông tin.`
         : thieuDiem.length
-        ? `${boiCanh}${daAck}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu (theo thứ tự ưu tiên): ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn như người thật: ghi nhận, rồi hỏi thứ đầu danh sách đó theo cách hợp với loại nhà này.`
-        : `${boiCanh}${hoiNguocPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
+        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu (theo thứ tự ưu tiên): ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn như người thật: ghi nhận, rồi hỏi thứ đầu danh sách đó theo cách hợp với loại nhà này.`
+        : `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
       // OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định — vòng drip không
       // đứng lại chờ model sống. Câu mẫu CÓ hỏi thật (kèm neo căn) nên mở
       // info_request bên dưới vẫn đúng luật "không mở khi chưa hỏi được".
@@ -7775,12 +7797,14 @@ Deno.serve(async (req) => {
         // 15/09/2026 (bắn thật P1): câu rao kèm hỏi ngược ("…, mà bên em là bot hả?") —
         // trước đây câu hỏi bị nuốt. Có đáp án hệ thống (bot / phí / ảnh) thì bong bóng
         // tiền định đứng trước; không thì dặn model trả lời trước rồi mới hỏi.
-        const hoiRao = tachCauHoiNguoc(text).hoi;
-        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(sellerRow.seller_type, sDeal ?? dealNguoi, { benEm: true })) : null;
+        // SRS-5.1zzzj: AI nói tin có hỏi em không (`hoiLaiAi`, đọc theo nghĩa, kiểm trích dẫn); luật `tachCauHoiNguoc` chỉ đỡ khi AI không chạy.
+        const hoiAiRao = await hoiLaiAi(text);
+        const hoiRao = hoiAiRao !== undefined ? (hoiAiRao ? (hoiAiRao.caTin ? text : hoiAiRao.cau) : null) : tachCauHoiNguoc(text).hoi;
+        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(sellerRow.seller_type, sDeal ?? dealNguoi, { benEm: true }), hoiAiRao?.chuDe) : null;
         const hoiRaoPrompt = hoiRao
           ? dapRao
             ? `Chủ nhà còn hỏi "${hoiRao}" — câu đó ĐÃ được trả lời ở bong bóng ngay trước; em KHÔNG trả lời lại, KHÔNG nhắc tới nó, KHÔNG nói chữ "hệ thống". `
-            : `Chủ nhà còn hỏi: "${hoiRao}". TRẢ LỜI câu đó trước bằng một câu ngắn, thật thà (chưa nắm thì "em kiểm tra rồi báo lại"), rồi mới hỏi. `
+            : danTraLoiHoiNguoc(hoiRao, hoiAiRao?.chuDe)
           : "";
         let raoReply: string | null = null;
         if (anthropicS) {
@@ -7792,7 +7816,7 @@ Deno.serve(async (req) => {
               messages: [{
                 role: "user",
                 content:
-                  `${boiCanh}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ${hoiRaoPrompt}` +
+                  `${await boiCanhLuot()}Chủ nhà vừa nhắn rao: "${text}". Em đã tạo tin. ${hoiRaoPrompt}` +
                   `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao${khenGanDay ? " (không khen, mấy tin gần đây em khen rồi)" : " (có điểm mạnh thật thì khen một ý, không thì thôi)"}, không cảm ơn / không nói "tin tưởng", không đọc lại số liệu, không xác nhận lại địa điểm` +
                   (cauXacNhanDau
                     // 25/09/2026 (bắn thật lx-05): câu gợi ý "thuộc Phường Bến Thành hay Phường Cầu Ông Lãnh" bị model nói lại
@@ -7981,6 +8005,11 @@ Deno.serve(async (req) => {
     let sReply: string | null = null;
     if (anthropicS) {
       try {
+        // SRS-5.1zzzj (chat thử 08/10, …w44h: "ừ em có nhận rao bán cho anh ở quận 8 không em" → "Dạ anh chị nhận rao được chứ…"):
+        // lời r3 được soạn bằng NGỮ CẢNH dựng TRƯỚC khi AI đọc tin — cách gọi theo luật ("anh chị"), câu khách hỏi em không tới
+        // model. Điều AI đã hiểu (tự xưng, câu hỏi — đều qua kiểm trích dẫn) phải vào câu lệnh trước khi model viết, không sửa sau.
+        const hoiR3 = await hoiLaiAi(text);
+        const hoiR3Prompt = hoiR3 ? danTraLoiHoiNguoc(hoiR3.caTin ? text : hoiR3.cau, hoiR3.chuDe) : "";
         const r3 = await anthropicS.messages.create({
           model: MODEL, max_tokens: 512,
           output_config: { effort: "low" },
@@ -7988,13 +8017,14 @@ Deno.serve(async (req) => {
           messages: [{
             role: "user",
             content:
-              `${boiCanh}NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(KHÔNG CÓ tin nào đang rao — không nói tin nào đang rao / đã đăng / có khách; họ nhắc một căn thì nói thật em chưa có thông tin căn đó và xin địa chỉ, diện tích, giá để mở tin)"}\n\n` +
+              `${await boiCanhLuot()}NGƯỜI BÁN${sellerRow.name ? ` (${sellerRow.name})` : ""} đang rao các tin:\n${lstLines || "(KHÔNG CÓ tin nào đang rao — không nói tin nào đang rao / đã đăng / có khách; họ nhắc một căn thì nói thật em chưa có thông tin căn đó và xin địa chỉ, diện tích, giá để mở tin)"}\n\n` +
+              hoiR3Prompt +
               (sellerMoi
                 // 27/09/2026 (chủ dự án test Zalo: "Chào em" → câu chào hỏi vai → "Anh bán" → bot "Dạ em chào anh! Anh muốn
                 // rao bán hay cho thuê ạ?"): đã chào ở tin trước thì KHÔNG chào lại; khách đã nói bán / cho thuê thì không hỏi lại.
                 // 07/10/2026 (SRS-5.1zzze, test os6o): câu mời cũ xin "địa chỉ, diện tích và giá" một lượt — trái luật một ý mỗi
                 // lượt (FR-177); khách trả lời một ý rồi bot hỏi dần các ý kia, nên câu ba ý chỉ làm khách gõ một tràng.
-                ? `Người này VỪA cho biết đang có bất động sản muốn rao ("${textOrTag}") nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN ${lichSuRows.some((m) => !laTinNguoi(m.sender)) ? "(em ĐÃ chào ở tin trước — KHÔNG chào lại, mở bằng \"Dạ\")" : "chào"} + hỏi đúng MỘT ý: bất động sản của họ ở đâu (một câu hỏi, không gộp diện tích / giá / loại nhà — các ý đó em hỏi dần sau) - KHÔNG hỏi lại muốn bán hay cho thuê (họ vừa nói rồi; câu họ không nói rõ thì hiểu là bán), KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
+                ? `Người này VỪA cho biết đang có bất động sản muốn rao ("${textOrTag}") nhưng chưa nói chi tiết. Soạn MỘT tin NGẮN ${lichSuRows.some((m) => !laTinNguoi(m.sender)) ? "(em ĐÃ chào ở tin trước — KHÔNG chào lại, mở bằng \"Dạ\")" : "chào"} + hỏi đúng MỘT ý: bất động sản của họ ở đâu (một câu hỏi, không gộp diện tích / giá / loại nhà — các ý đó em hỏi dần sau; họ đã nói một phần vị trí - quận, phường hay đường - thì hỏi phần CÒN THIẾU, không hỏi lại phần đã nói) - KHÔNG hỏi lại muốn bán hay cho thuê (họ vừa nói rồi; câu họ không nói rõ thì hiểu là bán), KHÔNG hỏi nhu cầu mua nhà, KHÔNG nhắc phí hay chính chủ/môi giới (hệ thống đã báo riêng ngay sau tin này).`
                 // SRS-5.1zzzi (chat thử …lboq: bot hỏi "ở Hồ Chí Minh đúng không?", khách "chính xác em" → model "em sẽ rao tích cực cho
                 // căn hộ này" — không có tin nào): model phải đọc câu EM vừa nói để hiểu tin khách là trả lời cho câu nào.
                 : `${cauBotThat?.trim() ? `Câu em vừa nhắn họ (nguyên văn): "${cauBotThat.trim().slice(0, 300)}". Tin của họ có thể là câu trả lời cho câu đó — đọc theo câu đó mà đáp; chưa có tin rao nào thì không nói đã rao / sẽ rao căn nào, hỏi tiếp đúng MỘT ý còn thiếu để lên tin. ` : ""}` +

@@ -4079,6 +4079,45 @@ fresh(seedKho);
     globalThis.__khongNhoCauHinh = false;
     globalThis.__cauHinh = cuCH;
   }
+  // SRS-5.1zzzj (08/10/2026, chat thử …w44h): "ừ em có nhận rao bán cho anh ở quận 8 không em" → bot "Dạ anh chị nhận rao được
+  // chứ" — lời r3 soạn bằng ngữ cảnh dựng TRƯỚC khi AI đọc (cách gọi "anh chị", không có câu khách hỏi). Và lượt "ý của lượt"
+  // đọc lẫn tin cũ (truocTin) nên trích "ừ …" của tin trước làm lời gật cho câu bot hỏi sau.
+  {
+    fresh(seedKho);
+    const cuCH = globalThis.__cauHinh;
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__khongNhoCauHinh = true;
+    const laLuotYLuot = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], cap_nhat: [], truong: [] } : OUT();
+    await send({ external_user_id: "hoi-r3", text: "chào em" });
+    // Cách nói MỚI (chưa từng bắn): tự xưng "chị" sau "giúp", hỏi em ở giữa câu.
+    const cauHoi = "em nhận đăng giúp chị căn ở Bình Thạnh được không";
+    globalThis.__model.parse = (p) => {
+      if (laLuotYLuot(p)) return { dong_y: "dong_y", dong_y_trich: "ờ" };
+      if (laLuotVai(p)) return { vai: "ban", bang_chung: "nhận đăng giúp chị căn" };
+      if (!laLuotBocRao(p)) return OUT();
+      return { so_can: 0, can_khac: false, kien_thuc: [], cap_nhat: [], truong: [],
+        hoi_lai: { co_hoi: true, cau_hoi: cauHoi, chu_de: "dich_vu" }, tu_xung: { la: "chị", trich_dan: "giúp chị" } };
+    };
+    const n0 = createCalls().length;
+    const rH = await send({ external_user_id: "hoi-r3", text: `ờ ${cauHoi}` });
+    const nd = createCalls().slice(n0).map((c) => c.params.messages[0].content).find((x) => /Chủ nhà vừa nhắn rao:|NGƯỜI BÁN.*đang rao các tin/s.test(x)) ?? "";
+    check("SRS-5.1zzzj 'ờ em nhận đăng giúp chị căn ở Bình Thạnh được không' (người bán mới) → câu lệnh lời đáp có câu khách HỎI EM và gọi đúng 'chị' trước khi model viết",
+      /HỎI NGƯỢC: "[^"]*em nhận đăng giúp chị/.test(nd) && /Gọi chủ nhà là "chị"/.test(nd) && !/Gọi chủ nhà là "anh chị"/.test(nd), JSON.stringify({ rep: rH.body.replies, nd: nd.slice(Math.max(0, nd.indexOf("Chủ nhà vừa nhắn")), nd.indexOf("Chủ nhà vừa nhắn") + 900) }));
+    // Người bán CHƯA có tin: tin cũ (truocTin) được ghép cho bóc tách, nhưng lượt "ý của lượt" chỉ đọc tin VỪA nhắn.
+    fresh(seedKho);
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 0, kien_thuc: [], cap_nhat: [], truong: [] } : laLuotVai(p) ? { vai: "ban", bang_chung: "nhận đăng giúp chị" } : OUT();
+    await send({ external_user_id: "hoi-r3b", text: "chào em" });
+    await send({ external_user_id: "hoi-r3b", text: "ờ em nhận đăng giúp chị được không" });
+    const nP = globalThis.__calls.length;
+    globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 1, kien_thuc: [], cap_nhat: [], truong: [] } : laLuotYLuot(p) ? { dong_y: "khong_noi" } : OUT();
+    await send({ external_user_id: "hoi-r3b", text: "dĩ nhiên rồi, chị có căn hộ cần bán" });
+    const yl = globalThis.__calls.slice(nP).filter((c) => c.kind === "parse" && laLuotYLuot(c.params)).map((c) => c.params.messages[0].content).join("\n");
+    check("SRS-5.1zzzj-b lượt 'ý của lượt' chỉ đọc tin vừa nhắn, không ghép tin cũ ('ờ em nhận đăng…')",
+      /dĩ nhiên rồi/.test(yl) && !/em nhận đăng giúp chị/.test(yl), yl.slice(0, 600));
+    globalThis.__khongNhoCauHinh = false;
+    globalThis.__cauHinh = cuCH;
+  }
   // SRS-5.1zzzh (07/10/2026, chat thử …phzg): lượt chốt ghi lại giá "21 tỉ 300 triệu" chỉ vì khác cách viết với "21 tỷ 300 triệu"
   // đang có → 🤖 báo lại giá như mới bóc. Cùng số tiền thì không ghi lại.
   {
