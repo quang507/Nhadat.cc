@@ -14,7 +14,7 @@ on:
         required: false
         default: ''
       dung_lai:
-        description: "DỰNG LẠI DB trên project rỗng (08/10/2026, scripts/dung-lai-db.mjs): kiem | cau-truc | bu | du-lieu | xac-minh. Trống = áp migration_file như thường"
+        description: "DỰNG LẠI DB trên project rỗng (08/10/2026, scripts/dung-lai-db.mjs): kiem | cau-truc | bu | du-lieu | xac-minh | nap-du-an | nap-duong. Trống = áp migration_file như thường"
         required: false
         default: ''
       commit_schema:
@@ -47,9 +47,27 @@ jobs:
           fi
           echo "::add-mask::$TOKEN"
 
+      # 08/10/2026: nạp dữ liệu tham chiếu cần service_role (kho dự án, từ điển tên đường). Khoá lấy qua Management API
+      # bằng chính token này lúc chạy, che trong log, chỉ ghi vào scripts/.env TRÊN MÁY RUNNER (gitignore, không commit).
+      - name: Nạp dữ liệu (nap-du-an / nap-duong)
+        if: ${{ inputs.dung_lai == 'nap-du-an' || inputs.dung_lai == 'nap-duong' }}
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+          BUOC: ${{ inputs.dung_lai }}
+        run: |
+          set -euo pipefail
+          K=$(curl -sS -f "https://api.supabase.com/v1/projects/$PROJECT_REF/api-keys?reveal=true" -H "Authorization: Bearer $TOKEN" \
+              | jq -r '([.[] | select(.name == "service_role" and (.api_key // "") != "")][0].api_key) // ([.[] | select(.type == "secret" and (.api_key // "") != "")][0].api_key) // empty')
+          if [ -z "$K" ]; then echo "::error::Không lấy được khoá service_role / secret"; exit 1; fi
+          echo "::add-mask::$K"
+          umask 077
+          printf 'SUPABASE_URL=https://%s.supabase.co\nSUPABASE_SERVICE_ROLE_KEY=%s\n' "$PROJECT_REF" "$K" > scripts/.env
+          if [ "$BUOC" = "nap-du-an" ]; then node scripts/thu-du-an.mjs; else node scripts/nap-duong.mjs; fi
+          rm -f scripts/.env
+
       # 08/10/2026: project production cũ bị xoá nhầm — dựng lại từng bước trên project mới rỗng.
       - name: Dựng lại DB (dung_lai)
-        if: ${{ inputs.dung_lai != '' }}
+        if: ${{ inputs.dung_lai != '' && inputs.dung_lai != 'nap-du-an' && inputs.dung_lai != 'nap-duong' }}
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
           BUOC: ${{ inputs.dung_lai }}

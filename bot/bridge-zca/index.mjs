@@ -60,7 +60,7 @@ if (fs.existsSync(ENV_FILE)) {
 const CHAT_REPLY_URL =
   "https://rqxmmqmctpklqcmbfxuj.supabase.co/functions/v1/chat-reply";
 const ANON_KEY =
-  "sb_publishable_zmJBmEgFPn3bBKx_1ve6Pg_dXdo4haX"; // key công khai, chỉ gọi được function
+  "sb_publishable_f4wNO8jQcCDWn1QmNZQ7-g_BXDtYM3Y"; // key công khai, chỉ gọi được function
 
 // Nói thẳng lúc khởi động thay vì để nó chết lặng ở lượt gọi đầu. Cổng
 // BRIDGE_SECRET bật ở phía server rồi mà bridge không có secret thì mọi request
