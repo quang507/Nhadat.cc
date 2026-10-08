@@ -269,11 +269,28 @@ if (buoc === "kiem") {
 } else if (buoc === "du-lieu") {
   const BANG = "(?:public\\.)?(wards|phuong_cu|quan_cu|required_facts|app_config)\\b";
   const laDuLieu = new RegExp(`^(insert\\s+into\\s+${BANG}|update\\s+${BANG}|delete\\s+from\\s+${BANG})`, "i");
+  const bangCua = (b) => new RegExp(BANG, "i").exec(b.replace(/^(insert\s+into|update|delete\s+from)\s+/i, ""))?.[1];
   const files = readdirSync(MIG).filter((f) => f.endsWith(".sql")).sort();
-  const caus = [];
-  for (const f of files) for (const c of tachCau(docFile(join(MIG, f)))) { const b = boChuThich(c); if (laDuLieu.test(b)) caus.push(b); }
-  // Câu dữ liệu cũ có thể nhắc cột / giá trị không còn — lỗi thì in ra, đọc, không dừng.
-  let hong = await chay("dữ liệu tham chiếu từ migrations", caus);
+  const theoFile = files.map((f) => ({ f, caus: tachCau(docFile(join(MIG, f))).map(boChuThich) }));
+  // Điểm reset: file cuối cùng xoá sạch một bảng (`delete from <bảng>` không where) — câu của bảng đó ở file TRƯỚC điểm
+  // reset đã bị xoá trong lịch sử thật (vd 20260909h xoá rồi nạp lại nguyên bộ required_facts); chạy lại chúng chỉ đẻ lỗi
+  // vì ràng buộc / cột thời đó không còn.
+  const reset = {};
+  theoFile.forEach(({ caus }, i) => { for (const b of caus) { const m = /^delete\s+from\s+(?:public\.)?(\w+)\s*$/i.exec(b); if (m) reset[m[1]] = i; } });
+  console.log(`điểm reset: ${JSON.stringify(Object.fromEntries(Object.entries(reset).map(([t, i]) => [t, files[i]])))}`);
+  let hong = 0, gom = [];
+  for (const [i, { f, caus }] of theoFile.entries()) {
+    const dl = caus.filter((b) => laDuLieu.test(b) && i >= (reset[bangCua(b)] ?? -1));
+    if (!dl.length) continue;
+    const tam = caus.filter((b) => /^create\s+temp(orary)?\s+table/i.test(b));
+    if (tam.length) {
+      // Bảng tạm `on commit drop` chỉ sống trong một lượt gửi: gửi câu tạo bảng tạm + câu dữ liệu của file đó CHUNG một lần.
+      if (gom.length) { hong += await chay("dữ liệu tham chiếu", gom); gom = []; }
+      try { await sql([...tam, ...dl].join(";\n") + ";"); console.log(`  ${f}: ${dl.length} câu (kèm ${tam.length} bảng tạm) xong`); }
+      catch (e) { hong++; console.log(`  ✗ ${f} (kèm bảng tạm): ${String(e.message).replace(/\s+/g, " ").slice(0, 300)}`); }
+    } else gom.push(...dl);
+  }
+  if (gom.length) hong += await chay("dữ liệu tham chiếu", gom);
   const base = `https://${REF}.supabase.co`;
   const dat = [
     ["functions_base_url", `${base}/functions/v1`],
