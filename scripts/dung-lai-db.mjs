@@ -209,6 +209,63 @@ if (buoc === "kiem") {
   for (const t of ["20260907c", "20260907f", "20260907g"]) hong += await chay(`${t} (schema so)`, tachCau(docFile(fileMig(t))));
   console.log(`\nbảng public: ${JSON.stringify(await sql("select count(*)::int as n from pg_tables where schemaname = 'public'", true))}`);
   process.exit(hong ? 1 : 0);
+} else if (buoc === "bu") {
+  // Bù phần còn thiếu sau một lượt cau-truc dở dang — không chạy lại 1.400 câu (≈ 26 phút): đọc catalog, so với từng đối
+  // tượng schema.sql định nghĩa, chỉ chạy câu của đối tượng chưa có. Câu cấp quyền / chú thích chạy lại hết (rẻ, an toàn).
+  // Sổ migration: project mới không có supabase_migrations (chỉ CLI tạo) → tạo, và ghi mọi file trong repo là "đã áp qua
+  // schema.sql" — không ghi thì cổng CI thứ 7 kêu ~300 migration "chưa áp", và liet_ke_migration*() không tạo được.
+  let hong = await chay("sổ migration", [
+    "create schema if not exists supabase_migrations",
+    "create table if not exists supabase_migrations.schema_migrations (version text primary key, statements text[], name text)",
+  ]);
+  const files = readdirSync(MIG).filter((f) => /^\d{8}[a-z]?_.+\.sql$/.test(f)).sort();
+  const q = (v) => `'${String(v).replaceAll("'", "''")}'`;
+  hong += await chay("ghi sổ migration", [`insert into supabase_migrations.schema_migrations (version, name, statements) select v, n, array[]::text[] from (values ${
+    files.map((f, i) => `(${q("dl" + String(i).padStart(4, "0"))}, ${q(f.replace(/\.sql$/, ""))})`).join(", ")
+  }) x(v, n) where not exists (select 1 from supabase_migrations.schema_migrations m where m.name = x.n)`]);
+  const caus = tachCau(vaSchema(docFile(join(GOC, "bot", "supabase", "schema.sql"))));
+  const khoa = (c) => {
+    const b = boChuThich(c);
+    let m;
+    if ((m = /^create or replace function public\.(\w+)\(/i.exec(b))) return `fn:${m[1]}`;
+    if ((m = /^create or replace view public\.(\w+)/i.exec(b))) return `view:${m[1]}`;
+    if ((m = /^create trigger (\w+) .*? on public\.(\w+)/is.exec(b))) return `trg:${m[2]}.${m[1]}`;
+    if ((m = /^create (?:unique )?index (?:if not exists )?(\w+)/i.exec(b))) return `idx:${m[1]}`;
+    if ((m = /^create policy "?([^"]+?)"? on public\.(\w+)/i.exec(b))) return `pol:${m[2]}.${m[1]}`;
+    if ((m = /^create policy "?([^"]+?)"? on storage\.(\w+)/i.exec(b))) return `spol:${m[2]}.${m[1]}`;
+    if ((m = /alter table public\.(\w+) add constraint (\w+)/i.exec(b))) return `con:${m[1]}.${m[2]}`;
+    if (/^insert into storage\.buckets/i.test(b)) return "luon";
+    if ((m = /^select cron\.schedule\('([^']+)'/i.exec(b))) return `cron:${m[1]}`;
+    if (/^(grant|revoke|comment on|alter table public\.\w+ enable row level security|alter function)/i.test(b)) return "luon";
+    return null;
+  };
+  const co = new Set((await sql(`
+    select 'fn:' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public'
+    union select 'view:' || viewname from pg_views where schemaname = 'public'
+    union select 'trg:' || c.relname || '.' || t.tgname from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and not t.tgisinternal
+    union select 'idx:' || indexname from pg_indexes where schemaname = 'public'
+    union select 'pol:' || tablename || '.' || policyname from pg_policies where schemaname = 'public'
+    union select 'spol:' || tablename || '.' || policyname from pg_policies where schemaname = 'storage'
+    union select 'con:' || c.relname || '.' || con.conname from pg_constraint con join pg_class c on c.oid = con.conrelid join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public'
+    union select 'cron:' || jobname from cron.job`, true)).map((r) => Object.values(r)[0]));
+  // Hàm nạp chồng: đủ tên chưa chắc đủ bản — đếm số bản theo tên, thiếu thì chạy lại mọi bản của tên đó.
+  const demFn = Object.fromEntries((await sql("select p.proname as n, count(*)::int as c from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' group by 1", true)).map((r) => [r.n, r.c]));
+  const canFn = {};
+  for (const c of caus) { const k = khoa(c); if (k?.startsWith("fn:")) canFn[k.slice(3)] = (canFn[k.slice(3)] ?? 0) + 1; }
+  const thieu = [], luon = [];
+  for (const c of caus) {
+    const k = khoa(c);
+    if (k === "luon") luon.push(c);
+    else if (k?.startsWith("fn:") && (demFn[k.slice(3)] ?? 0) < canFn[k.slice(3)]) thieu.push(c);
+    else if (k && !k.startsWith("fn:") && !co.has(k)) thieu.push(c);
+  }
+  const loai = {};
+  for (const c of thieu) { const k = khoa(c).split(":")[0]; loai[k] = (loai[k] ?? 0) + 1; }
+  console.log(`thiếu theo loại: ${JSON.stringify(loai)}`);
+  console.log(`thiếu (40 đầu): ${thieu.slice(0, 40).map((c) => khoa(c)).join(", ")}`);
+  hong += await chay("bù đối tượng thiếu", thieu);
+  hong += await chay("cấp quyền / chú thích / RLS", luon);
+  process.exit(hong ? 1 : 0);
 } else if (buoc === "du-lieu") {
   const BANG = "(?:public\\.)?(wards|phuong_cu|quan_cu|required_facts|app_config)\\b";
   const laDuLieu = new RegExp(`^(insert\\s+into\\s+${BANG}|update\\s+${BANG}|delete\\s+from\\s+${BANG})`, "i");
@@ -241,7 +298,7 @@ if (buoc === "kiem") {
   console.log("cron:", JSON.stringify(await sql("select jobname, schedule from cron.job order by 1", true).catch((e) => e.message.slice(0, 120))));
   console.log("bucket:", JSON.stringify(await sql("select id, public from storage.buckets order by 1", true)));
 } else {
-  console.error("Bước: kiem | cau-truc | du-lieu | xac-minh");
+  console.error("Bước: kiem | cau-truc | bu | du-lieu | xac-minh");
   process.exit(2);
 }
 } catch (e) { console.log(`LỖI: ${String(e?.message ?? e).slice(0, 500)}`); process.exit(1); }
