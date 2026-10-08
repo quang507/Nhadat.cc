@@ -90,6 +90,19 @@ jobs:
           set -euo pipefail
           api="https://api.supabase.com/v1/projects/$PROJECT_REF/functions/${{ inputs.ham }}"
           ma=$(curl -sS -o /tmp/ham.json -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$api")
+          if [ "$ma" = "404" ]; then
+            # 08/10/2026: project mới (project cũ bị xoá nhầm) chưa có function nào để đọc cờ. Lần deploy ĐẦU lấy đúng
+            # bảng verify_jwt ở bot/README.md §Function đang chạy — đổi cờ thì sửa bảng đó, đừng sửa ở đây.
+            case "${{ inputs.ham }}" in
+              ask-seller|ctv-report|escalation-feed|geocode-listings) jwt=true ;;
+              chat-reply|zalo-webhook|nudge|media-cleanup|inbound-sweep) jwt=false ;;
+              *) echo "::error::${{ inputs.ham }} chưa có trong bảng verify_jwt của bot/README.md"; exit 1 ;;
+            esac
+            echo "verify_jwt=$jwt" >> "$GITHUB_OUTPUT"
+            echo "version=0"       >> "$GITHUB_OUTPUT"
+            echo "Function chưa có (deploy lần đầu): verify_jwt=$jwt theo bot/README.md"
+            exit 0
+          fi
           if [ "$ma" != "200" ]; then
             echo "::error::API trả $ma khi đọc ${{ inputs.ham }} — token sai quyền, hoặc function chưa tồn tại."
             exit 1
