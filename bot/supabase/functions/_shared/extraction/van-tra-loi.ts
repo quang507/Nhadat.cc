@@ -1686,3 +1686,21 @@ export function damBaoCauHoi(reply: string | null | undefined, cauHoi: string | 
   if (coCauHoi(s)) return s;
   return `${s.replace(/(?<![.!?…])$/u, ".")} ${q}`.replace(/\s+/g, " ").trim();
 }
+
+/**
+ * SRS-5.1zzzn (08/10/2026, bắn thử …kc2chau / …kc4thue): khách hỏi phí → bong bóng phí TIỀN ĐỊNH, rồi model viết lại y câu phí ở
+ * bong bóng sau dù câu lệnh đã dặn "không trả lời lại" (hai lần bắn liền). Lời dặn không đủ: hai đường (code, model) cùng sinh một
+ * nội dung trong MỘT lượt. Lưới an toàn (luôn bật, không phải van sửa văn): câu của model mà ≥ 80% chữ đã nằm trong bong bóng
+ * tiền định đứng trước thì bỏ. Bỏ hết thì giữ nguyên (không để tin rỗng).
+ */
+export function boCauTrungBongTruoc(bongTruoc: string | null | undefined, reply: string): string {
+  if (!bongTruoc?.trim() || !reply?.trim()) return reply;
+  const tu = (x: string) => boDau(x).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 0);
+  const daNoi = new Set(tu(bongTruoc));
+  const giu = tachCau(reply).filter((c) => {
+    const w = tu(c);
+    if (w.length < 4) return true;
+    return w.filter((x) => daNoi.has(x)).length / w.length < 0.8;
+  });
+  return giu.length ? giu.join(" ").trim() : reply;
+}

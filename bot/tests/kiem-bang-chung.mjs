@@ -5,7 +5,8 @@
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang, boHuaDaDang } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { canTheoAi } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { canTheoAi, docLaiHopLe } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { boCauTrungBongTruoc } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
 import { chiLechChinhTa, gotManhOKhac, soSauTenDuong, traLoiThuocOKhac, cumGocTrongTin, giaTriNguyenVan, laONguyenVan, datKiemNhe, docTuXung, docMuaKem, docCamXuc, docCauKe, docVai, docYDinh, docHoiLai, docKhongCanHoi, kiemXacNhan, laCauChonHai, laChiGat, nangXacNhanChac, boPhuDinhKetCau, chonDeGhi, chonViTri, tenDuongDayDu, laSoHemKhongPhaiDoRong, coMuiDuLieuRao, docAiChinh, giaTriChoCauTreo, KHOA_FACT_AI_BIET, coNoiDungTraLoi, kiemCapNhat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
@@ -856,6 +857,18 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZZZH-06 ĐỊA CHỈ gõ sai không tự sửa (từ điển đường hỏi xác nhận)", nv("vi_tri", "45 Pham The Hier", "45 Phạm Thế Hiển") === "45 Pham The Hier");
   ok("ZZZH-07 câu khác hẳn ('đang cho thuê' / 'đang trống') → GIỮ", nv("hien_trang", "đang cho thuê", "đang trống") === "đang cho thuê");
   ok("ZZZH-08 chiLechChinhTa: tỉ/tỷ đúng, chung/riêng sai, 2/3 sai", chiLechChinhTa("tỉ", "tỷ") && !chiLechChinhTa("chung", "riêng") && !chiLechChinhTa("2", "3"));
+}
+// ── SRS-5.1zzzn (08/10/2026, bắn thử …kc1tatt / …kc2chau): bản AI đọc lại tin không dấu; câu model trùng bong bóng tiền định.
+{
+  ok("ZZZN-01 'anh dung ten' → 'anh đứng tên' nhận", docLaiHopLe("anh đứng tên", "anh dung ten") === "anh đứng tên");
+  ok("ZZZN-02 (cách gõ MỚI) 'ok up lun e' → 'ok up luôn em' nhận (viết đủ chữ tắt)", docLaiHopLe("ok up luôn em", "ok up lun e") === "ok up luôn em");
+  ok("ZZZN-03 AI thêm số ('7ty2' → '7 tỷ 2 hay 8 tỷ') → bỏ", docLaiHopLe("7 tỷ 2 hay 8 tỷ", "7ty2") === null);
+  ok("ZZZN-04 AI viết thành câu khác hẳn → bỏ", docLaiHopLe("anh muốn bán căn hộ ở quận 7 gấp lắm em ơi", "ok e") === null);
+  ok("ZZZN-05 giống hệt tin gốc / null → null", docLaiHopLe("sổ hồng riêng", "sổ hồng riêng") === null && docLaiHopLe(null, "abc") === null);
+  const phi = "Dạ phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ.";
+  ok("ZZZN-06 model nói lại câu phí rồi hỏi → chỉ còn câu hỏi", boCauTrungBongTruoc(phi, "Dạ phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ. Hẻm trước nhà chú rộng mấy mét vậy chú?") === "Hẻm trước nhà chú rộng mấy mét vậy chú?");
+  ok("ZZZN-07 (cách nói MỚI) 'Vâng ạ, phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ.' cũng bỏ", !/1%/.test(boCauTrungBongTruoc(phi, "Vâng ạ, phí bên cháu chỉ thu khi giao dịch thành công, 1% giá chốt ạ. Nhà chú mấy tầng ạ?")));
+  ok("ZZZN-08 câu khác nội dung giữ nguyên; bỏ hết thì giữ cả lời (không rỗng)", boCauTrungBongTruoc(phi, "Nhà chú mấy tầng ạ?") === "Nhà chú mấy tầng ạ?" && boCauTrungBongTruoc(phi, phi) === phi);
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

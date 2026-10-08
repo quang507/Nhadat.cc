@@ -4188,6 +4188,25 @@ fresh(seedKho);
       await phatLai("kb2chau", "web-pl-kb2", async (i, t, r, calls) => { if (t.text === "phí sao cháu") ndPhi = nd(calls); });
       check("SRS-5.1zzzm-f phát lại …kb2chau: 'phí sao cháu' → câu lệnh dặn tin chỉ gồm MỘT câu hỏi tiếp, không nhắc lại phí",
         /CHỈ gồm MỘT câu hỏi tiếp/.test(ndPhi), ndPhi.slice(0, 300));
+      // SRS-5.1zzzn (08/10/2026, bắn LẠI sau zzzm): lời dặn chưa đủ — model vẫn nói lại câu phí. Câu trùng bong bóng tiền định bị bỏ.
+      // Production chạy `luat_loi_bot = gon` (mọi van sửa văn tắt, kể cả `boCauTroNguocDauBong`) — đo đúng chế độ đó.
+      let repPhi = [];
+      const cuCHn = globalThis.__cauHinh;
+      globalThis.__cauHinh = { ...(cuCHn ?? {}), luat_loi_bot: "gon" };
+      await phatLai("kb2chau", "web-pl-kb2b", async (i, t, r) => { if (t.text === "phí sao cháu") repPhi = r.body.replies ?? []; });
+      globalThis.__cauHinh = cuCHn;
+      check("SRS-5.1zzzn-a phát lại …kb2chau: 'phí sao cháu', model nói lại câu phí → câu phí chỉ xuất hiện MỘT lần, câu hỏi tiếp còn",
+        repPhi.join("\n").split("1% giá chốt").length === 2 && repPhi.some((x) => /mấy mét/.test(x)), JSON.stringify(repPhi));
+      // (b) tin còn CHỜ THÔNG TIN không được gọi là "đang rao" trong câu lệnh; (c) bản AI đọc lại tin không dấu đi tới model viết lời.
+      let ndDang = "", ndAnh2 = "";
+      await phatLai("kc1tatt", "web-pl-kc1", async (i, t, r, calls) => {
+        if (t.text === "dang di") ndDang = nd(calls);
+        if (t.text === "anh dung ten") ndAnh2 = nd(calls);
+      });
+      check("SRS-5.1zzzn-b phát lại …kc1tatt: 'dang di' khi tin còn chờ thông tin → câu lệnh ghi CHƯA LÊN KỆ, không còn tiêu đề 'đang rao các tin'",
+        /CHƯA LÊN KỆ/.test(ndDang) && !/đang rao các tin/.test(ndDang), ndDang.slice(-600));
+      check("SRS-5.1zzzn-c phát lại …kc1tatt: 'anh dung ten' (AI đọc 'anh đứng tên') → câu lệnh model viết lời có bản AI đọc",
+        /em đọc là: "anh đứng tên"/.test(ndAnh2), ndAnh2.slice(0, 500));
     }
     check("SRS-5.1zzzj-b lượt 'ý của lượt' chỉ đọc tin vừa nhắn, không ghép tin cũ ('ờ em nhận đăng…')",
       /dĩ nhiên rồi/.test(yl) && !/em nhận đăng giúp chị/.test(yl), yl.slice(0, 600));

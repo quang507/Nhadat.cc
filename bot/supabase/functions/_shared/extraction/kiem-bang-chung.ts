@@ -1727,3 +1727,20 @@ export function canTheoAi(tin: string, dat: DeXuat[], soCan: number | null | und
   }
   return ra;
 }
+
+/**
+ * SRS-5.1zzzn (08/10/2026): bản AI viết lại tin không dấu ("anh dung ten" → "anh đứng tên") — đưa model viết lời để nó không tự đoán
+ * nghĩa chữ không dấu. Nhận khi: khác tin gốc, cùng các con số, không dài quá 1,8 lần (viết đủ chữ tắt), và bỏ dấu vẫn giống tin gốc
+ * ít nhất một nửa số chữ (không phải một câu khác). Không đạt → null (model chỉ thấy tin gốc như trước).
+ */
+export function docLaiHopLe(docLai: string | null | undefined, tin: string): string | null {
+  const v = (docLai ?? "").trim();
+  const goc = (tin ?? "").trim();
+  if (!v || !goc || v === goc || v.length > goc.length * 1.8 + 4) return null;
+  const so = (x: string) => (x.match(/\d+/g) ?? []).join(",");
+  if (so(v) !== so(goc)) return null;
+  const tu = (x: string) => boDau(x).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  const a = tu(goc), b = new Set(tu(v));
+  const trung = a.filter((w) => b.has(w)).length;
+  return a.length && trung * 2 >= a.length ? v : null;
+}
