@@ -4,7 +4,8 @@
 --   · cột generated stored (duong.ten_khong_dau, listings.price_per_m2_vnd) thành `default <biểu thức>` → Postgres từ chối
 --     ("cannot use column reference in DEFAULT expression"), hai bảng lõi không tạo được, kéo theo ~240 câu hỏng dây chuyền;
 --   · cột identity (messages.seq, required_facts.id, phuong_cu.id, boc_tach_bong.id, van_kich.id) thành `not null` trơn,
---     còn sequence của nó xuất riêng → dựng lại ra bảng mất tự tăng.
+--     còn sequence của nó xuất riêng → dựng lại ra bảng mất tự tăng;
+--   · tuỳ chọn view chỉ in khi `security_invoker=true` → rơi `security_invoker=false` của agents_public (20260910q).
 -- Lưới "dựng lại được từ schema.sql" chưa từng diễn tập nên hai lỗi này nằm im từ 21/09 (duong) và 02/09 (listings).
 -- Thân hàm dưới đây = bản trong schema.sql (07/10) + hai chỗ sửa có ghi chú 08/10/2026.
 
@@ -150,9 +151,10 @@ begin
                   -- thuộc tính của ba view kia — dựng lại là chúng chạy bằng quyền
                   -- chủ sở hữu, ĐỌC XUYÊN RLS (review 10/09, mục B1). Nay nhận cả
                   -- hai cách viết, và in ra một dạng chuẩn.
-                  case when c.reloptions::text[] @> array['security_invoker=true']
-                         or c.reloptions::text[] @> array['security_invoker=on']
-                       then ' with (security_invoker = true)' else '' end,
+                  -- 08/10/2026: in NGUYÊN VĂN mọi tuỳ chọn view. Bản cũ chỉ nhận `security_invoker=true/on` nên làm rơi
+                  -- `security_invoker=false` mà agents_public cố ý khai (20260910q) — dựng lại ra view bị cổng soát kêu.
+                  case when c.reloptions is not null
+                       then ' with (' || array_to_string(c.reloptions, ', ') || ')' else '' end,
                   pg_get_viewdef(c.oid, true)),
            E'\n\n' order by c.oid), '')
     into p

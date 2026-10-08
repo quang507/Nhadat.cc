@@ -275,6 +275,9 @@ if (buoc === "kiem") {
     "revoke all on all sequences in schema public from anon, authenticated",
   ]);
   hong += await chay("cấp quyền / chú thích / RLS", luon);
+  // xuat_schema() bản trước 20261008b làm rơi `security_invoker=false` — agents_public cố ý chạy definer (20260910q).
+  hong += await chay("20261008b + tuỳ chọn view bị rơi", [...tachCau(docFile(fileMig("20261008b"))),
+    "alter view public.agents_public set (security_invoker = false)"]);
   process.exit(hong ? 1 : 0);
 } else if (buoc === "du-lieu") {
   const BANG = "(?:public\\.)?(wards|phuong_cu|quan_cu|required_facts|app_config)\\b";
