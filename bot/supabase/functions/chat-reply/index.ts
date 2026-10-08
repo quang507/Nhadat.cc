@@ -3894,7 +3894,7 @@ Deno.serve(async (req) => {
       const lech = yLuotLech(dyL, ydL);
       if (lech && !((kL?.truong?.length ?? 0) > 0 || (kL?.kienThuc?.length ?? 0) > 0)) {
         const Y_NGHIA: Record<YLuot, string> = {
-          dang: "muốn em đăng tin lên luôn", hoan: "đang bận, để lúc khác mình nói tiếp", ngung_rao: "muốn tạm ngưng rao",
+          dang: "muốn em đăng tin lên luôn", gat: "đồng ý, muốn em làm tiếp luôn", hoan: "đang bận, để lúc khác mình nói tiếp", ngung_rao: "muốn tạm ngưng rao",
           ban_roi: "báo căn này bán rồi", khong_dang: "chưa muốn đăng",
         };
         const cau = `Dạ em chưa chắc ý ${cachGoi} ở câu "${(textTreo || text).trim().slice(0, 60)}" ạ: ${cachGoi} ${Y_NGHIA[lech[0]]}, hay ${Y_NGHIA[lech[1]]} vậy ạ?`;

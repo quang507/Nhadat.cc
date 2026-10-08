@@ -907,6 +907,10 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZZZT-03 bóc tách 'du_roi' ↔ ý lượt 'không đồng ý' → lệch [dang, khong_dang]", JSON.stringify(yLuotLech(khong, { loai: "du_roi" })) === '["dang","khong_dang"]');
   ok("ZZZT-04 hai lượt cùng ý (bảo đăng + du_roi; gật + bán rồi) → KHÔNG lệch", yLuotLech(dang, { loai: "du_roi" }) === null && yLuotLech(gat, { loai: "ban_roi" }) === null);
   ok("ZZZT-05 một lượt không chạy / không có ý → không lệch", yLuotLech(undefined, { loai: "hoan" }) === null && yLuotLech(dang, null) === null);
+  ok("ZZZT-06 (bắn thử …kf1tatt) gật và hoãn trích CÙNG cụm 'dang di' → lệch [gat, hoan]",
+    JSON.stringify(yLuotLech({ la: "dong_y", dangDi: false, trich: "dang di" }, { loai: "hoan", trich: "dang di" })) === '["gat","hoan"]');
+  ok("ZZZT-07 (cách nói MỚI) 'ok em, để mai anh nói tiếp': gật ở 'ok em', hoãn ở 'để mai…' → KHÔNG lệch",
+    yLuotLech({ la: "dong_y", dangDi: false, trich: "ok em" }, { loai: "hoan", trich: "để mai anh nói tiếp" }) === null);
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

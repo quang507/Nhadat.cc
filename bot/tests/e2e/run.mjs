@@ -4225,6 +4225,10 @@ fresh(seedKho);
       // từng soi câu lệnh của nhánh r3 — nay lượt này không tới r3 nữa).
       check("SRS-5.1zzzt-a phát lại …kc1tatt: 'dang di' (ý lượt: đăng đi; bóc tách: hoãn) → hỏi lại khách 'đăng luôn hay đang bận', không đoán",
         repDang.some((x) => /em chưa chắc ý/.test(x) && /đăng tin lên luôn/.test(x) && /đang bận/.test(x)) && !repDang.some((x) => /đang rao/.test(x)), JSON.stringify(repDang));
+      let repGat = [];
+      await phatLai("kf1tatt", "web-pl-kf1", async (i, t, r) => { if (t.text === "dang di") repGat = r.body.replies ?? []; });
+      check("SRS-5.1zzzt-b phát lại …kf1tatt: 'dang di' (ý lượt: GẬT 'dang di'; bóc tách: hoãn 'dang di' — cùng cụm) → hỏi lại 'làm tiếp hay đang bận'",
+        repGat.some((x) => /em chưa chắc ý/.test(x) && /làm tiếp/.test(x) && /đang bận/.test(x)), JSON.stringify(repGat));
       let ndDang2 = "";
       await phatLai("kc1tatt-khong-lech", "web-pl-kc1b", async (i, t, r, calls) => { if (t.text === "dang di") ndDang2 = nd(calls); });
       check("SRS-5.1zzzn-b phát lại …kc1tatt (ý lượt không lệch): 'dang di' khi tin còn chờ thông tin → câu lệnh ghi CHƯA LÊN KỆ, không còn tiêu đề 'đang rao các tin'",

@@ -1298,17 +1298,22 @@ export function docDongY(v: { la?: string | null; trich_dan?: string | null; dan
  * SRS-5.1zzzt (08/10/2026, bắn thử …kc1tatt): "dang di" — lượt "ý của lượt" đọc là BẢO ĐĂNG ("đăng đi"), lượt bóc tách đọc là
  * HOÃN ("đang đi" = đang bận). Mỗi nơi gọi tin một lượt, nên bot trả lời theo lượt nó hỏi trước ("em đang rao tích cực") — đoán.
  * Hai lượt AI độc lập cùng đọc MỘT tin mà ra hai ý ngược nhau thì tin đó mơ hồ thật: hỏi lại khách, không chọn một bên.
- * Cặp ngược nhau: bảo đăng (`dangDi` / `du_roi`) ↔ dừng (`hoan` / `ngung_rao` / `ban_roi`), và `du_roi` ↔ không đồng ý.
+ * Cặp ngược nhau: bảo đăng (`dangDi` / `du_roi`) ↔ dừng (`hoan` / `ngung_rao` / `ban_roi`), và `du_roi` ↔ không đồng ý. Gật thường
+ * (`dong_y`) ↔ dừng chỉ lệch khi hai lượt trích CÙNG một cụm (bắn thử …kf1tatt: cả hai trích "dang di", một bên gật, một bên hoãn);
+ * "ok, để mai nói tiếp" — gật ở "ok", hoãn ở "để mai" — là hai ý cùng đúng, không lệch.
  * Trả hai ý (để hỏi "A hay B") hoặc null (không lệch, hoặc một lượt không chạy).
  */
-export type YLuot = "dang" | "hoan" | "ngung_rao" | "ban_roi" | "khong_dang";
+export type YLuot = "dang" | "gat" | "hoan" | "ngung_rao" | "ban_roi" | "khong_dang";
 export function yLuotLech(
-  dongY: { la: "dong_y" | "khong_dong_y"; dangDi: boolean } | null | undefined,
-  yDinh: { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan" | "du_roi" } | null | undefined,
+  dongY: { la: "dong_y" | "khong_dong_y"; dangDi: boolean; trich?: string } | null | undefined,
+  yDinh: { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan" | "du_roi"; trich?: string } | null | undefined,
 ): [YLuot, YLuot] | null {
   if (!dongY || !yDinh) return null;
-  if (dongY.dangDi && (yDinh.loai === "hoan" || yDinh.loai === "ngung_rao" || yDinh.loai === "ban_roi")) return ["dang", yDinh.loai];
+  const dung = yDinh.loai === "hoan" || yDinh.loai === "ngung_rao" || yDinh.loai === "ban_roi";
+  if (dongY.dangDi && dung) return ["dang", yDinh.loai as YLuot];
   if (yDinh.loai === "du_roi" && dongY.la === "khong_dong_y") return ["dang", "khong_dang"];
+  const cum = (x?: string) => boDau(x ?? "").replace(/[^a-z0-9]+/g, " ").trim();
+  if (dongY.la === "dong_y" && dung && cum(dongY.trich) && cum(dongY.trich) === cum(yDinh.trich)) return ["gat", yDinh.loai as YLuot];
   return null;
 }
 
