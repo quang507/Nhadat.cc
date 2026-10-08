@@ -177,6 +177,32 @@ hàng nên cron luôn báo `succeeded` kể cả khi function trả 500. Kết q
 
 ### Dựng lại từ số không
 
+**Đã diễn tập thật 08/10/2026** (project cũ `tbcdpupiarkuxtntmosl` bị xoá nhầm, gói Free, Supabase xác nhận không khôi
+phục được — dữ liệu cũ đều là dữ liệu thử). Project mới `rqxmmqmctpklqcmbfxuj` dựng bằng **`scripts/dung-lai-db.mjs`**
+chạy qua `apply-migration.yml` ô `dung_lai` (token `SUPABASE_ACCESS_TOKEN`, không cần service_role), theo thứ tự:
+`kiem` (chỉ đọc) → `cau-truc` → `bu` → `du-lieu` → `xac-minh` (kèm `commit_schema` = `commit`). Mỗi bước in kết quả
+thành annotation (log job phiên Claude không đọc được). Những gì lượt diễn tập bắt được — thủ tục tay bên dưới đều
+dính, script đã xử lý:
+
+- `xuat_schema()` cũ xuất **cột sinh** (`duong.ten_khong_dau`, `listings.price_per_m2_vnd`) thành `default <biểu thức>`
+  và **cột identity** (`messages.seq`, `required_facts.id`, `phuong_cu.id`, `boc_tach_bong.id`, `van_kich.id`) thành
+  `not null` trơn; làm rơi `security_invoker=false` của view → `schema.sql` chưa bao giờ dựng lại được hai bảng lõi.
+  Sửa tận gốc ở `20261008b`.
+- Dashboard tick "Enable automatic RLS" tạo event trigger `ensure_rls` — gỡ trước khi nạp (bảng cố ý tắt RLS).
+- Project mới **tự cấp quyền** bảng / view mới cho `anon` + `authenticated`; `schema.sql` chỉ chép GRANT nên phải
+  `revoke all` rồi cấp lại theo `schema.sql` **bản cũ** (sinh lại `schema.sql` trước bước này là chép luôn quyền thừa).
+- Project mới không có `supabase_migrations.schema_migrations` (chỉ CLI tạo) — tạo và ghi mọi file trong repo.
+- Dữ liệu tham chiếu không nằm trong `schema.sql`: script chạy lại câu insert/update/delete trên `wards`, `phuong_cu`,
+  `quan_cu`, `required_facts`, `app_config` từ **điểm reset** của từng bảng (`20260909h` xoá rồi nạp lại nguyên bộ
+  `required_facts`), file có bảng tạm gửi chung một lượt. Kết quả đối chiếu: câu `co_ban` khớp mock e2e.
+- Đối chiếu sau dựng: 646/646 đối tượng (hàm, view, trigger, policy, index, ràng buộc, bảng, cron) có đủ; chỉ khác ở
+  các chỗ sửa có chủ đích; cổng CI 7 và 8 xanh.
+- Còn phải làm tay sau khi dựng: Vault (`ANTHROPIC_API_KEY`, `BRIDGE_SECRET`…), `nap-duong.mjs`, `thu-du-an.mjs`,
+  deploy 9 function (`deploy-bot.yml` — lần đầu lấy `verify_jwt` theo bảng ở đầu file này), `dong-bo-prompt --day`,
+  biến môi trường Vercel, `.env` bridge.
+
+Thủ tục tay cũ (giữ để tham chiếu):
+
 Không còn sao lưu (chủ dự án bỏ 11/09/2026): làm theo đây ra một DB đúng cấu
 trúc nhưng RỖNG — tin, người bán, hội thoại đều mất. Thứ tự này chưa diễn tập
 thật (chưa có project thứ hai để thử).

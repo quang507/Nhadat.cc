@@ -192,6 +192,8 @@ if (buoc === "kiem") {
   console.log("quyền mẫu:", JSON.stringify(await sql(
     "select c.relname, c.relacl::text as acl from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relname in ('wards','duong','app_config','listing_missing_facts','agents_public','listings') order by 1", true)));
   console.log("default privileges:", JSON.stringify(await sql("select pg_get_userbyid(defaclrole) as role, defaclobjtype as t, defaclacl::text as acl from pg_default_acl d join pg_namespace n on n.oid = d.defaclnamespace where n.nspname = 'public'", true)));
+  // Chỉ TÊN secret trong Vault (không bao giờ đọc giá trị) — để biết còn thiếu khoá nào bot cần.
+  console.log("vault (tên):", JSON.stringify((await sql("select name from vault.secrets order by 1", true)).map((r) => r.name)));
   console.log("extension có sẵn:", JSON.stringify(await sql(
     "select name, installed_version from pg_available_extensions where name in ('pg_cron','pg_net','vector','http','fuzzystrmatch','supabase_vault','pgcrypto','uuid-ossp','pg_stat_statements') order by 1", true)));
 } else if (buoc === "cau-truc") {
