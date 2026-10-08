@@ -4197,6 +4197,16 @@ fresh(seedKho);
       await phatLai("kb4thue", "web-pl-kb4b", async (i, t, r, calls) => { if (t.text === "phí bên em tính sao") ndPhi4 = nd(calls); });
       check("SRS-5.1zzzq-b phát lại …kb4thue: 'phí bên em tính sao' (thuê) → câu lệnh viết lời KHÔNG còn câu hỏi phí",
         ndPhi4.length > 0 && !/phí bên em tính sao/i.test(ndPhi4), ndPhi4.slice(0, 600));
+      // SRS-5.1zzzr: tạo tin một căn và từng căn của tin nhiều căn ghi qua MỘT đường (`ghiDuLieuTinMoi`) — cùng ô, cùng dạng.
+      const factCuaTin = (lid) => Object.fromEntries(db().t.listing_facts.filter((f) => f.listing_id === lid).map((f) => [f.question, f.answer]));
+      let fHai = [];
+      await phatLai("w2-hai-can", "web-pl-w2", async (i) => {
+        if (i === 1) fHai = db().t.listings.filter((l) => /Lê Văn Sỹ|Nguyễn Trãi/.test(l.description ?? "")).map((l) => factCuaTin(l.id));
+      });
+      check("SRS-5.1zzzr-a tin hai căn 'căn 1 hxh … 4x15 …; căn 2 mặt tiền Nguyễn Trãi … 5x18 …' → mỗi căn có ô diện tích 'NxDm2' như tin một căn (không 'dien_tich_dat')",
+        fHai.length === 2 && fHai.some((f) => f.dien_tich === "4x15m2") && fHai.some((f) => f.dien_tich === "5x18m2") && !fHai.some((f) => f.dien_tich_dat), JSON.stringify(fHai));
+      check("SRS-5.1zzzr-b AI đọc được từng căn → đường vào lấy của AI (căn 2 mặt tiền), không ghi 'mặt tiền' vào ô bề rộng hẻm bằng mẫu chữ",
+        fHai.some((f) => /mat_tien|mặt tiền/.test(f.loai_duong_vao ?? "")) && !fHai.some((f) => f.do_rong_hem === "mặt tiền"), JSON.stringify(fHai));
       // (b) tin còn CHỜ THÔNG TIN không được gọi là "đang rao" trong câu lệnh; (c) bản AI đọc lại tin không dấu đi tới model viết lời.
       let ndDang = "", ndAnh2 = "";
       await phatLai("kc1tatt", "web-pl-kc1", async (i, t, r, calls) => {
