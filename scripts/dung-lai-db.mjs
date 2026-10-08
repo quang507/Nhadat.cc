@@ -321,6 +321,9 @@ if (buoc === "kiem") {
     ["storage_public_base_url", `${base}/storage/v1/object/public`],
     // Công tắc production lúc bị xoá (CLAUDE.md §6, bản tóm tắt phiên 08/10/2026).
     ["boc_tach_ai", "ai"], ["luat_loi_bot", "gon"], ["bao_lai_da_luu", "admin"],
+    // Tìm theo nghĩa: cron nhung-tick chỉ nhúng khi công tắc này = bat (docs/07 SRS FR-216 g). Thiếu GEMINI_API_KEY trong
+    // Vault thì tim_nghia_san_sang() = false → bot đi đường cũ, không hỏng gì.
+    ["tim_theo_nghia", "bat"],
   ];
   if (/^sb_publishable_[A-Za-z0-9_-]{20,}$/.test(PUBLISHABLE)) dat.push(["publishable_key", PUBLISHABLE]);
   else console.log("  (không có PUBLISHABLE_KEY — app_config.publishable_key chưa đặt)");
