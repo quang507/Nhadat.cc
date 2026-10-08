@@ -189,6 +189,9 @@ if (buoc === "kiem") {
   // Câu nào đang chạy / chờ khoá (để biết lượt dựng lại treo ở đâu) — chỉ 100 chữ đầu câu SQL, không có dữ liệu.
   console.log("đang chạy:", JSON.stringify(await sql(
     "select pid, state, wait_event_type, wait_event, (now() - query_start)::text as lau, left(regexp_replace(query, '\\s+', ' ', 'g'), 100) as q from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() and state <> 'idle' order by query_start", true)));
+  console.log("quyền mẫu:", JSON.stringify(await sql(
+    "select c.relname, c.relacl::text as acl from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relname in ('wards','duong','app_config','listing_missing_facts','agents_public','listings') order by 1", true)));
+  console.log("default privileges:", JSON.stringify(await sql("select pg_get_userbyid(defaclrole) as role, defaclobjtype as t, defaclacl::text as acl from pg_default_acl d join pg_namespace n on n.oid = d.defaclnamespace where n.nspname = 'public'", true)));
   console.log("extension có sẵn:", JSON.stringify(await sql(
     "select name, installed_version from pg_available_extensions where name in ('pg_cron','pg_net','vector','http','fuzzystrmatch','supabase_vault','pgcrypto','uuid-ossp','pg_stat_statements') order by 1", true)));
 } else if (buoc === "cau-truc") {
