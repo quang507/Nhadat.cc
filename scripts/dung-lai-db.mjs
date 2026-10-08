@@ -29,6 +29,24 @@ const REF = (process.env.PROJECT_REF ?? "").trim();
 const REF_CU = "tbcdpupiarkuxtntmosl";
 const PUBLISHABLE = (process.env.PUBLISHABLE_KEY ?? "").trim();
 const buoc = process.argv[2];
+
+// Log job Actions phiên Claude không tải được (chuyển hướng sang kho blob) — chỉ annotation đọc được qua API. Gom mọi dòng
+// in ra, lúc thoát phát thành vài `::notice::` (≤ 9 khối × 3.500 chữ). Chỉ số đếm / lỗi, không có dữ liệu dòng nào.
+const BAO = [];
+const logGoc = console.log.bind(console);
+console.log = (...a) => { const d = a.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join(" "); BAO.push(d); logGoc(d); };
+const thoatGoc = process.exit.bind(process);
+process.exit = (ma = 0) => {
+  if (process.env.GITHUB_ACTIONS) {
+    const all = BAO.join("\n");
+    for (let i = 0, k = 0; i < all.length && k < 9; i += 3500, k++) {
+      const m = all.slice(i, i + 3500).replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+      logGoc(`::notice title=dung-lai ${buoc} ${k + 1}::${m}`);
+    }
+  }
+  thoatGoc(ma);
+};
+process.on("unhandledRejection", (e) => { console.log(`LỖI: ${String(e?.message ?? e).slice(0, 500)}`); process.exit(1); });
 if (!TOKEN || !/^[a-z]{20}$/.test(REF)) { console.error("Thiếu TOKEN hoặc PROJECT_REF"); process.exit(2); }
 if (REF === REF_CU) { console.error("PROJECT_REF vẫn là mã project cũ"); process.exit(2); }
 
@@ -120,6 +138,7 @@ const docFile = (p) => {
 };
 const fileMig = (tien) => { const f = readdirSync(MIG).find((x) => x.startsWith(tien)); if (!f) throw new Error(`không thấy migration ${tien}`); return join(MIG, f); };
 
+try {
 if (buoc === "kiem") {
   console.log(await sql("select version() as v", true));
   console.log("event trigger:", JSON.stringify(await sql(
@@ -173,3 +192,5 @@ if (buoc === "kiem") {
   console.error("Bước: kiem | cau-truc | du-lieu | xac-minh");
   process.exit(2);
 }
+} catch (e) { console.log(`LỖI: ${String(e?.message ?? e).slice(0, 500)}`); process.exit(1); }
+process.exit(0);
