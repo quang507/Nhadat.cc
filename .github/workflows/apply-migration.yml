@@ -64,7 +64,7 @@ jobs:
           printf 'SUPABASE_URL=https://%s.supabase.co\nSUPABASE_SERVICE_ROLE_KEY=%s\n' "$PROJECT_REF" "$K" > scripts/.env
           # Log job phiên Claude không đọc được — 40 dòng cuối (tên đường / dự án công khai, không có khoá) ra một annotation.
           rc=0
-          if [ "$BUOC" = "nap-du-an" ]; then node scripts/thu-du-an.mjs > /tmp/nap.log 2>&1 || rc=$?; else node scripts/nap-duong.mjs > /tmp/nap.log 2>&1 || rc=$?; fi
+          if [ "$BUOC" = "nap-du-an" ]; then node scripts/thu-du-an.mjs > /tmp/nap.log 2>&1 || rc=$?; else node scripts/nap-duong.mjs --thieu > /tmp/nap.log 2>&1 || rc=$?; fi
           rm -f scripts/.env
           cat /tmp/nap.log
           echo "::notice title=nap $BUOC (thoát $rc)::$(tail -40 /tmp/nap.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"

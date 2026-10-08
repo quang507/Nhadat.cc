@@ -19,6 +19,7 @@
 //   node scripts/nap-duong.mjs --tinh "TP.HCM" # một tỉnh
 //   node scripts/nap-duong.mjs --phuong "Phường Phú Định"   # một phường (thử / vá)
 //   node scripts/nap-duong.mjs --dry           # xem trước, không ghi DB
+//   node scripts/nap-duong.mjs --thieu         # chỉ tra phường / tỉnh chưa có dòng nào (chạy bù; workflow dùng cờ này)
 //
 // Cần SUPABASE_SERVICE_ROLE_KEY trong scripts/.env (bảng chỉ service_role đọc/ghi). Đi
 // chậm có chủ đích: 1 truy vấn / 2 giây, lỗi 429/504 thì chờ rồi thử lại tối đa 4 lần —
@@ -40,7 +41,9 @@ const env = Object.fromEntries(
 const URL_DB = env.SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const KEY = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!KEY) { console.error("Thiếu SUPABASE_SERVICE_ROLE_KEY trong scripts/.env"); process.exit(2); }
-const OVERPASS = env.OVERPASS_URL ?? "https://overpass.kumi.systems/api/interpreter";
+// 08/10/2026: kumi trả 500 hàng loạt (100/170 đa giác hụt) — lượt hụt ở máy này thì lượt thử lại đổi sang máy kế.
+const OVERPASS_DS = env.OVERPASS_URL ? [env.OVERPASS_URL]
+  : ["https://overpass.kumi.systems/api/interpreter", "https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
 const UA = "nhadat.cc nap-duong (lien he: explore@nhadat.company)";
 const NGAY = new Date().toISOString().slice(0, 10);
 
@@ -50,6 +53,7 @@ const lay = (t) => { const i = args.indexOf(t); return i >= 0 ? args[i + 1] : nu
 const DRY = co("--dry");
 const CHI_TINH = lay("--tinh");
 const CHI_PHUONG = lay("--phuong");
+const CHI_THIEU = co("--thieu"); // chỉ tra phường/tỉnh chưa có dòng nào trong DB (chạy bù sau lượt hụt)
 // Hộp bao TP.HCM mới (gồm Bình Dương + Bà Rịa – Vũng Tàu) — chặn phường trùng tên ở tỉnh khác.
 const BBOX_HCM = "10.30,106.30,11.50,107.70";
 const TINH_LON = [["Tây Ninh", "Tỉnh Tây Ninh"], ["Đồng Nai", "Thành phố Đồng Nai"]];
@@ -57,7 +61,7 @@ const TINH_LON = [["Tây Ninh", "Tỉnh Tây Ninh"], ["Đồng Nai", "Thành ph�
 const nghi = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function overpass(query, lan = 0) {
-  const url = `${OVERPASS}?data=${encodeURIComponent(query)}`;
+  const url = `${OVERPASS_DS[lan % OVERPASS_DS.length]}?data=${encodeURIComponent(query)}`;
   try {
     const r = await fetch(url, { headers: { "User-Agent": UA } });
     if (r.status === 429 || r.status === 504 || r.status >= 500) throw new Error(`HTTP ${r.status}`);
@@ -93,13 +97,27 @@ async function ghi(rows) {
   return rows.length;
 }
 
+// PostgREST trả tối đa 1.000 dòng một lượt (max-rows): đọc theo trang, không thì đếm ra đúng 1.000 (lượt 08/10 báo
+// "591 + 267 + 142" — tổng tròn 1.000 trong khi đã ghi 16.614 dòng).
+async function tatCa(path) {
+  const ra = [];
+  for (let tu = 0; ; tu += 1000) {
+    const trang = await rest(path, { headers: { Range: `${tu}-${tu + 999}` } });
+    ra.push(...trang);
+    if (trang.length < 1000) return ra;
+  }
+}
 const wards = await rest("wards?select=ten_day_du,quan_cu,tinh_cu&order=ten_day_du");
+const daCo = CHI_THIEU ? await tatCa("duong?select=tinh,phuong&order=id") : [];
+const phuongDaCo = new Set(daCo.filter((d) => d.phuong).map((d) => d.phuong));
+const tinhDaCo = new Set(daCo.filter((d) => !d.phuong).map((d) => d.tinh));
 let daTra = 0, coDong = 0, tongDong = 0;
 
 // 1) TP.HCM mới — từng phường/xã trong `wards`.
 if (!CHI_TINH || CHI_TINH === "TP.HCM") {
   for (const w of wards) {
     if (CHI_PHUONG && w.ten_day_du !== CHI_PHUONG) continue;
+    if (CHI_THIEU && phuongDaCo.has(w.ten_day_du)) continue;
     const q = `[out:csv(name,::type,::lat,::lon;false)][timeout:180];area["admin_level"="6"]["name"="${w.ten_day_du}"]->.a;way(area.a)(${BBOX_HCM})["highway"]["name"];out center tags;.a out;`;
     const csv = await overpass(q); daTra++;
     if (csv == null) { console.log(`  ✗ ${w.ten_day_du}: không có trả lời`); await nghi(2000); continue; }
@@ -114,7 +132,7 @@ if (!CHI_TINH || CHI_TINH === "TP.HCM") {
 }
 // 2) Tây Ninh mới, Đồng Nai mới — theo đa giác tỉnh, chưa gán phường.
 for (const [tinh, tenOsm] of TINH_LON) {
-  if (CHI_PHUONG || (CHI_TINH && CHI_TINH !== tinh)) continue;
+  if (CHI_PHUONG || (CHI_TINH && CHI_TINH !== tinh) || (CHI_THIEU && tinhDaCo.has(tinh))) continue;
   const q = `[out:csv(name,::type,::lat,::lon;false)][timeout:900];area["admin_level"="4"]["name"="${tenOsm}"]->.a;way(area.a)["highway"]["name"];out center tags;.a out;`;
   const csv = await overpass(q); daTra++;
   if (csv == null) { console.log(`  ✗ ${tenOsm}: không có trả lời`); continue; }
@@ -126,7 +144,7 @@ for (const [tinh, tenOsm] of TINH_LON) {
 
 // 3) Đối chiếu: đếm trong DB theo tỉnh và số phường có dòng.
 if (!DRY) {
-  const dem = await rest("duong?select=tinh,phuong", { headers: { Prefer: "count=exact" } });
+  const dem = await tatCa("duong?select=tinh,phuong&order=id");
   const theoTinh = {}; const phuongCo = new Set();
   for (const d of dem) { theoTinh[d.tinh] = (theoTinh[d.tinh] ?? 0) + 1; if (d.phuong) phuongCo.add(d.phuong); }
   console.log(`\nĐã tra ${daTra} đa giác, ${coDong} có dữ liệu, ghi/cập nhật ${tongDong} dòng.`);
