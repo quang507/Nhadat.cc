@@ -2502,6 +2502,16 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Sửa**: (1) `boiCanhLuot()` — chưa có cách gọi trong hồ sơ mà AI đọc ra khách tự xưng (`docTuXung`, kiểm trích dẫn) thì thay dòng cách gọi trong NGỮ CẢNH trước khi model viết; chín chỗ gọi model dùng hàm này thay `boiCanh` trần. (2) `danTraLoiHoiNguoc()` — một nguồn lời dặn "trả lời câu khách hỏi em trước" (nói rõ "em" trong câu khách là EM), dùng ở r1, r2, r3; r1 lấy câu hỏi từ AI (`hoiLaiAi`), luật chỉ đỡ khi AI không chạy. (3) Câu lệnh người bán mới: khách đã nói một phần vị trí thì hỏi phần còn thiếu. (4) Prompt bóc tách `tu_xung`: chữ tự xưng ở vị trí nào cũng tính ("rao bán cho anh", "gọi lại cho chị"). (5) Lượt `doc-y-luot` nhận đúng tin vừa nhắn; kiểm trích dẫn bảy ý của lượt trên tin đó. Chi phí: không thêm lượt AI (đợi lượt bóc tách vốn đã chạy).
 - **Kiểm, đỏ khi tắt**: e2e SRS-5.1zzzj (cách nói MỚI "ờ em nhận đăng giúp chị căn ở Bình Thạnh được không" → câu lệnh có `HỎI NGƯỢC` và "Gọi chủ nhà là "chị"") và SRS-5.1zzzj-b (người bán chưa có tin, "dĩ nhiên rồi, chị có căn hộ cần bán" → lượt ý không chứa tin cũ). Tắt từng phần: mỗi ca đỏ 1/1031.
 
+### SRS-5.1zzzk · Giọng lễ phép hơn mà vẫn ngắn; ví dụ mẫu không được dạy điều luật cấm (08/10/2026)
+
+`[nguồn: chủ dự án 08/10/2026 — "nên cho con bot lịch sự hơn tí nhưng vẫn cần ngắn"; chat thử …w44h: "Nhà phố quận 8 bán được lắm anh."]`
+
+- **Ca gốc**: (a) lời bot cộc ("Em ghi rồi anh."), câu mẫu kết "…đúng không anh?" không có "ạ". (b) model viết "Nhà phố quận 8 bán được lắm anh." — lưới soát lời (`danh_gia_thi_truong`) phải gọt.
+- **Lớp lỗi**: (a) luật giọng chỉ dặn "môi giới trẻ lanh lợi", không nói lễ phép, và chặn "Dạ" ("chỉ khi đáp lại", "tin trước mở Dạ thì tin này đừng"). (b) *ví dụ mẫu dạy điều luật cấm*: `SELLER_FEWSHOT` có câu ĐÚNG "Hẻm Trần Bình Trọng khu đó bán được lắm anh" trong khi `TONE_RULES` cấm "khu đó bán được lắm" — model học theo ví dụ hơn theo luật.
+- **Chỗ khác cùng lớp**: soát các ví dụ ĐÚNG còn lại của `SELLER_FEWSHOT` với luật: "căn này dễ bán lắm anh" (nở hậu + sổ riêng — đánh giá căn từ điểm mạnh khách nói, luật cho phép khen gắn điểm mạnh thật) giữ; "khách gia đình chuộng lắm" (từ khối DỰ ÁN) giữ. `HUMAN_CHAT_RULES` (nhánh mua) đã có "Dạ có anh!", không đổi. Bản DB `bot_prompts` đè code — sau khi gộp phải `bun run prompt --day` (Supabase khoá tới 13/10).
+- **Sửa**: `TONE_RULES` thêm lễ phép (mở "Dạ" khi đáp, câu hỏi kết "ạ", ví dụ đúng / sai cộc lốc), giữ ~30 từ; ngữ cảnh r1/r2/r3: tin trước mở "Dạ" thì đổi cách mở nhưng vẫn lễ phép; `SELLER_FEWSHOT` đổi ví dụ khen thị trường và thêm hai ví dụ SAI; `CAU_HOI_MAU`: 98 câu "{ac}?" → "{ac} ạ?", câu địa chỉ lần đầu "Dạ … đúng không ạ?". docs/06 §6.8 "Lễ phép hơn mà vẫn ngắn".
+- **Kiểm**: `fr177-hoi-nhu-moi-gioi-gioi.mjs` câu địa chỉ lần đầu phải có "đúng không ạ?" (đỏ với câu cũ). Giọng model không kiểm offline được — bắn 5 kịch bản trên trang chat thử (kết quả ghi ở dưới khi có).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
