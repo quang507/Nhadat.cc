@@ -264,6 +264,13 @@ if (buoc === "kiem") {
   console.log(`thiếu theo loại: ${JSON.stringify(loai)}`);
   console.log(`thiếu (40 đầu): ${thieu.slice(0, 40).map((c) => khoa(c)).join(", ")}`);
   hong += await chay("bù đối tượng thiếu", thieu);
+  // Project mới tick "Automatically expose new tables" → mọi bảng / view vừa tạo được cấp sẵn quyền cho anon + authenticated;
+  // schema.sql chỉ chép câu GRANT (không có REVOKE cho bảng) nên chạy lại không gỡ được phần cấp thừa (soát 08/10: 5 view
+  // không cổng admin + 15 bảng nội bộ lộ trên giấy). Thu sạch rồi cấp lại đúng như bản cũ. Hàm đã có revoke riêng từng cái.
+  hong += await chay("thu quyền anon / authenticated", [
+    "revoke all on all tables in schema public from anon, authenticated",
+    "revoke all on all sequences in schema public from anon, authenticated",
+  ]);
   hong += await chay("cấp quyền / chú thích / RLS", luon);
   process.exit(hong ? 1 : 0);
 } else if (buoc === "du-lieu") {
