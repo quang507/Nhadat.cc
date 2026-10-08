@@ -119,10 +119,16 @@ async function chay(ten, caus) {
   }
   await xa();
   if (loi.length) {
-    console.log(`  ${loi.length} câu lỗi lượt một — chạy lại lượt hai`);
-    const con = [];
-    for (const x of loi) { try { await sql(x.c + ";"); } catch (e) { con.push({ c: x.c, e: String(e.message) }); } }
-    for (const x of con) console.log(`  ✗ ${dau120(x.c)}\n    ${x.e.replace(/\s+/g, " ").slice(0, 240)}`);
+    // Chạy lại tới khi không còn tiến triển (bảng cần hàm, hàm cần bảng, view cần view — mỗi lượt gỡ thêm một tầng).
+    let con = loi;
+    for (let luot = 2; luot <= 8 && con.length; luot++) {
+      console.log(`  lượt ${luot}: chạy lại ${con.length} câu lỗi`);
+      const moi = [];
+      for (const x of con) { try { await sql(x.c + ";"); } catch (e) { moi.push({ c: x.c, e: String(e.message) }); } }
+      if (moi.length === con.length) { con = moi; break; }
+      con = moi;
+    }
+    for (const x of con.slice(0, 40)) console.log(`  ✗ ${dau120(x.c)}\n    ${x.e.replace(/\s+/g, " ").slice(0, 240)}`);
     console.log(`  ${caus.length - con.length}/${caus.length} câu xong`);
     return con.length;
   }
@@ -136,6 +142,34 @@ const docFile = (p) => {
   const s = readFileSync(p, "utf8").replaceAll(REF_CU, REF);
   return /^sb_publishable_[A-Za-z0-9_-]{20,}$/.test(PUBLISHABLE) ? s.replaceAll(PUB_CU, PUBLISHABLE) : s;
 };
+// schema.sql do xuat_schema() bản trước 20261008b sinh ra: cột SINH thành `default <biểu thức>`, cột IDENTITY thành
+// `not null` trơn + sequence xuất riêng. Vá đúng các dòng đó (mỗi dòng phải khớp đúng một lần — lệch là dừng, không đoán).
+const COT_IDENTITY = [["boc_tach_bong", "id", "always"], ["messages", "seq", "always"], ["phuong_cu", "id", "always"],
+  ["required_facts", "id", "by default"], ["van_kich", "id", "always"]];
+function vaSchema(s) {
+  if (!/default bo_dau\(ten\)/.test(s)) return s; // schema.sql đã sinh bằng xuat_schema() mới
+  const doi = (a, b) => { const n = s.split(a).length - 1; if (n !== 1) throw new Error(`vá schema.sql: "${a.slice(0, 50)}" khớp ${n} lần`); s = s.replace(a, b); };
+  doi("ten_khong_dau text default bo_dau(ten),", "ten_khong_dau text generated always as (bo_dau(ten)) stored,");
+  const m = /price_per_m2_vnd bigint default \n(CASE[\s\S]*?END),/.exec(s);
+  if (!m) throw new Error("vá schema.sql: không thấy price_per_m2_vnd");
+  doi(m[0], `price_per_m2_vnd bigint generated always as (${m[1]}) stored,`);
+  for (const [t, c, kieu] of COT_IDENTITY) {
+    doi(`create sequence if not exists public.${t}_${c}_seq;`, "");
+    const re = new RegExp(`(create table if not exists public\\.${t} \\([\\s\\S]*?\\n  ${c} bigint) not null`);
+    if (!re.test(s)) throw new Error(`vá schema.sql: không thấy cột ${t}.${c}`);
+    s = s.replace(re, `$1 generated ${kieu} as identity`);
+  }
+  return s;
+}
+// Bảng đã lỡ tạo thiếu identity ở lượt chạy trước: bỏ sequence trơn cùng tên rồi gắn identity (bảng rỗng, không mất gì).
+const vaIdentity = () => COT_IDENTITY.map(([t, c, kieu]) => `do $v$ begin
+  if to_regclass('public.${t}') is not null and not exists (select 1 from pg_attribute where attrelid = 'public.${t}'::regclass and attname = '${c}' and attidentity <> '') then
+    execute 'alter table public.${t} alter column ${c} drop default';
+    execute 'drop sequence if exists public.${t}_${c}_seq';
+    execute 'alter table public.${t} alter column ${c} add generated ${kieu} as identity';
+  end if;
+end $v$`);
+
 const fileMig = (tien) => { const f = readdirSync(MIG).find((x) => x.startsWith(tien)); if (!f) throw new Error(`không thấy migration ${tien}`); return join(MIG, f); };
 
 try {
@@ -157,7 +191,9 @@ if (buoc === "kiem") {
   }
   let hong = 0;
   hong += await chay("20260929b (schema luu_tru)", tachCau(docFile(fileMig("20260929b"))));
-  hong += await chay("schema.sql", tachCau(docFile(join(GOC, "bot", "supabase", "schema.sql"))));
+  hong += await chay("vá identity bảng đã tạo", vaIdentity());
+  hong += await chay("schema.sql", tachCau(vaSchema(docFile(join(GOC, "bot", "supabase", "schema.sql")))));
+  hong += await chay("20261008b (xuat_schema xuất đúng cột sinh / identity)", tachCau(docFile(fileMig("20261008b"))));
   hong += await chay("20261008a", tachCau(docFile(fileMig("20261008a"))));
   for (const t of ["20260907c", "20260907f", "20260907g"]) hong += await chay(`${t} (schema so)`, tachCau(docFile(fileMig(t))));
   console.log(`\nbảng public: ${JSON.stringify(await sql("select count(*)::int as n from pg_tables where schemaname = 'public'", true))}`);
