@@ -101,6 +101,10 @@ export function tachCau(s) {
 const boChuThich = (c) => c.replace(/^(\s*--[^\n]*\n)+/, "").trim();
 const dau120 = (c) => boChuThich(c).replace(/\s+/g, " ").slice(0, 120);
 
+// Chạy lại trên DB đã dựng một phần: khoá chính / UNIQUE đã có ném 42P16 / 42P07 (khối do $d$ của schema.sql chỉ bắt
+// duplicate_object) — đó là "đã xong", không phải lỗi.
+const DA_CO = (m) => /ERROR: (42P16: multiple primary keys|42P07: relation .* already exists|42710: .* already exists)/.test(m);
+
 // Gửi một dãy câu: gom thành khối ≤ 120 KB cho nhanh; khối lỗi thì chạy lẻ từng câu để biết câu nào.
 async function chay(ten, caus) {
   console.log(`\n▶ ${ten}: ${caus.length} câu`);
@@ -111,7 +115,7 @@ async function chay(ten, caus) {
     const ds = khoi; khoi = []; co = 0;
     try { await sql(ds.join(";\n") + ";"); }
     catch {
-      for (const c of ds) { try { await sql(c + ";"); } catch (e) { loi.push({ c, e: String(e.message) }); } }
+      for (const c of ds) { try { await sql(c + ";"); } catch (e) { if (!DA_CO(String(e.message))) loi.push({ c, e: String(e.message) }); } }
     }
   };
   for (const c of caus) {
@@ -125,7 +129,7 @@ async function chay(ten, caus) {
     for (let luot = 2; luot <= 8 && con.length; luot++) {
       console.log(`  lượt ${luot}: chạy lại ${con.length} câu lỗi`);
       const moi = [];
-      for (const x of con) { try { await sql(x.c + ";"); } catch (e) { moi.push({ c: x.c, e: String(e.message) }); } }
+      for (const x of con) { try { await sql(x.c + ";"); } catch (e) { if (!DA_CO(String(e.message))) moi.push({ c: x.c, e: String(e.message) }); } }
       if (moi.length === con.length) { con = moi; break; }
       con = moi;
     }
