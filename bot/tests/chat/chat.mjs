@@ -175,6 +175,30 @@ async function mayChuMay() {
       return new Response(a.bytes, { status: 200, headers: { "content-type": a.mime, "content-length": String(a.bytes.byteLength) } });
     }
     if (!/api\.anthropic\.com/.test(String(url))) return new Response("", { status: 404 });
+    // Ảnh trang thử gửi model theo URL thì model phải tự tải qua đường hầm — trycloudflare chặn bằng robots.txt (thử thật 08/10:
+    // "URL is disallowed by the website's robots.txt"). Đổi nguồn ảnh của CHÍNH trang thử sang base64 lấy từ bộ nhớ trước khi gửi.
+    if (globalThis.__khoAnhThu?.size && typeof opt?.body === "string" && opt.body.includes("/anh/")) {
+      try {
+        const req = JSON.parse(opt.body);
+        let doi = false;
+        const duyet = (x) => {
+          if (Array.isArray(x)) return x.forEach(duyet);
+          if (!x || typeof x !== "object") return;
+          const m = x.type === "image" && x.source?.type === "url" ? /\/anh\/([a-z0-9]{8,20})(?:\.[a-z]+)?$/.exec(String(x.source.url)) : null;
+          const a = m ? globalThis.__khoAnhThu.get(m[1]) : null;
+          if (a) { x.source = { type: "base64", media_type: a.mime, data: Buffer.from(a.bytes).toString("base64") }; doi = true; return; }
+          for (const v of Object.values(x)) duyet(v);
+        };
+        duyet(req.messages);
+        if (doi) {
+          // Thân đổi độ dài → bỏ content-length cũ (nếu SDK có đặt) để fetch tự tính lại.
+          let hd = opt.headers;
+          if (hd instanceof Headers) { hd = new Headers(hd); hd.delete("content-length"); }
+          else if (hd && typeof hd === "object") hd = Object.fromEntries(Object.entries(hd).filter(([k]) => k.toLowerCase() !== "content-length"));
+          opt = { ...opt, headers: hd, body: JSON.stringify(req) };
+        }
+      } catch { /* không đổi được thì gửi nguyên */ }
+    }
     const res = await fetchThat(url, opt);
     if (globalThis.__ghiAi) {
       try {
