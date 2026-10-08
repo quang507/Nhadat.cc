@@ -750,6 +750,8 @@ class RpcCall {
         l.boc_tach = { ...(l.boc_tach ?? {}), [a.p_question]: a.p_answer, _cap_nhat: now() };
         // trg_vi_tri_vao_cot (schema.sql): ghi đè location_raw trừ khi đã có fact vi_tri nguồn admin/ctv (bậc cao hơn).
         if (a.p_question === "vi_tri" && String(a.p_answer).trim() && !db.t.listing_facts.some((f) => f.listing_id === l.id && f.question === "vi_tri" && /^(admin|ctv)/i.test(String(f.source ?? "")) && f.answer !== a.p_answer)) l.location_raw = String(a.p_answer).trim();
+        // 20261008a (SRS-5.1zzzs): tin căn hộ — fact du_an_ten (tên dự án khách nói) điền location_raw khi còn trống.
+        if (a.p_question === "du_an_ten" && String(a.p_answer).trim() && l.property_type === "chung_cu" && !String(l.location_raw ?? "").trim()) l.location_raw = String(a.p_answer).trim();
         // 22/09/2026: DB gọt price_raw qua `chuan_hoa_gia_raw` ("7 tỷ 5 nha em" → "7 tỷ 5"); mock giữ đúng thế
         // để bộ đo giọng / e2e không thấy một 🤖 mà production không in.
         if (a.p_question === "gia") { l.price_raw = chuanHoaGiaRaw(a.p_answer); l.price_vnd = parseVnd(a.p_answer); }

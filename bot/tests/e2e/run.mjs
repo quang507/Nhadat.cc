@@ -4207,6 +4207,14 @@ fresh(seedKho);
         fHai.length === 2 && fHai.some((f) => f.dien_tich === "4x15m2") && fHai.some((f) => f.dien_tich === "5x18m2") && !fHai.some((f) => f.dien_tich_dat), JSON.stringify(fHai));
       check("SRS-5.1zzzr-b AI đọc được từng căn → đường vào lấy của AI (căn 2 mặt tiền), không ghi 'mặt tiền' vào ô bề rộng hẻm bằng mẫu chữ",
         fHai.some((f) => /mat_tien|mặt tiền/.test(f.loai_duong_vao ?? "")) && !fHai.some((f) => f.do_rong_hem === "mặt tiền"), JSON.stringify(fHai));
+      // SRS-5.1zzzs: căn hộ — tên dự án khách nói là vị trí (trigger `trg_vi_tri_vao_cot`, 20261008a; mock chép lại), một chỗ cho mọi đường ghi.
+      let tinCH = null, treoCH = [], tinNP = null, treoNP = [];
+      await phatLai("w3-can-ho", "web-pl-w3a", async (i) => { if (i === 1) { tinCH = db().t.listings.find((l) => /Midtown/.test(l.description ?? "")); treoCH = db().t.info_requests.filter((q) => q.listing_id === tinCH?.id).map((q) => q.question); } });
+      check("SRS-5.1zzzs-a (cách nói MỚI) 'bán căn hộ Midtown Phú Mỹ Hưng 2pn 5 tỷ 2' (dự án không có trong kho) → vị trí = tên dự án, không hỏi vị trí",
+        tinCH?.location_raw === "Midtown Phú Mỹ Hưng" && !treoCH.includes("vi_tri"), JSON.stringify({ loc: tinCH?.location_raw, treoCH }));
+      await phatLai("w3-nha-khu", "web-pl-w3b", async (i) => { if (i === 1) { tinNP = db().t.listings.find((l) => /Him Lam/.test(l.description ?? "")); treoNP = db().t.info_requests.filter((q) => q.listing_id === tinNP?.id).map((q) => q.question); } });
+      check("SRS-5.1zzzs-b nhà phố 'bán nhà trong khu Him Lam …' → tên khu KHÔNG thành địa chỉ (vẫn hỏi vị trí)",
+        !!tinNP && !String(tinNP.location_raw ?? "").includes("Him Lam"), JSON.stringify({ loc: tinNP?.location_raw, treoNP }));
       // (b) tin còn CHỜ THÔNG TIN không được gọi là "đang rao" trong câu lệnh; (c) bản AI đọc lại tin không dấu đi tới model viết lời.
       let ndDang = "", ndAnh2 = "";
       await phatLai("kc1tatt", "web-pl-kc1", async (i, t, r, calls) => {

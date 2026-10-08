@@ -7767,13 +7767,10 @@ Deno.serve(async (req) => {
         // biết chủ nhà đang nói về dự án nào (FR-195).
         const tenLa = duAn ? null : aiRao ? aiRao.duAn : tenDuAnTrongCau(text);
         // SRS-5.1zzzr: ghi qua đường chung với tạo từng căn của tin nhiều căn (`ghiDuLieuTinMoi`).
+        // Căn hộ: tên dự án khách nói (fact `du_an_ten`) là câu trả lời vị trí — trigger `trg_vi_tri_vao_cot` điền `location_raw`
+        // (20261008a, SRS-5.1zzzs; thay chỗ vá SRS-5.1zzzm chỉ có ở nhánh này).
         await ghiDuLieuTinMoi(newLst.id, "rao", {
-          // SRS-5.1zzzm (08/10, bắn thử …kb4thue): "chị có căn hộ Sunrise City cần cho thuê", dự án CHƯA có trong kho → tên chỉ vào
-          // fact `du_an_ten`, mà `listing_missing_facts` chỉ coi vị trí là có khi có địa chỉ / đường / project_id → bot hỏi "căn hộ
-          // mình ở đâu" rồi "dự án nào" dù khách vừa nói. Căn hộ: tên dự án khách nói CHÍNH LÀ câu trả lời vị trí (câu
-          // `vi_tri@chung_cu` hỏi "dự án nào").
-          viTri: viTriDu(viTriRao) && !/^(hẻm|hem|hxh)\s+\d+\s*(m|mét|met)?$/i.test(viTriRao) ? viTriRao
-            : tenLa && (newLst as { property_type?: string | null }).property_type === "chung_cu" ? tenLa : null,
+          viTri: viTriDu(viTriRao) && !/^(hẻm|hem|hxh)\s+\d+\s*(m|mét|met)?$/i.test(viTriRao) ? viTriRao : null,
           dienTich: areaM?.[1] ?? null, soPhongNgu: pnM?.[1] ?? null, duAnTen: tenLa,
           kem: aiRao ? [...aiRao.ghi, ...nhanDienNhieuFact(text).filter((f) => !KHOA_FACT_AI_BIET.has(f.question))] : nhanDienNhieuFact(text),
         });
