@@ -192,6 +192,15 @@ if (buoc === "kiem") {
   console.log("quyền mẫu:", JSON.stringify(await sql(
     "select c.relname, c.relacl::text as acl from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relname in ('wards','duong','app_config','listing_missing_facts','agents_public','listings') order by 1", true)));
   console.log("default privileges:", JSON.stringify(await sql("select pg_get_userbyid(defaclrole) as role, defaclobjtype as t, defaclacl::text as acl from pg_default_acl d join pg_namespace n on n.oid = d.defaclnamespace where n.nspname = 'public'", true)));
+  // Vector (tìm theo nghĩa): đếm dòng đã nhúng / tổng, công tắc liên quan.
+  console.log("vector:", JSON.stringify(await sql(`select
+    (select count(*) from public.wards)::int as wards, (select count(nhung) from public.wards)::int as wards_vec,
+    (select count(*) from public.phuong_cu)::int as phuong_cu, (select count(nhung) from public.phuong_cu)::int as phuong_cu_vec,
+    (select count(*) from public.quan_cu)::int as quan_cu, (select count(nhung) from public.quan_cu)::int as quan_cu_vec,
+    (select count(*) from public.duong)::int as duong, (select count(nhung) from public.duong)::int as duong_vec,
+    (select count(*) from public.projects)::int as projects, (select count(nhung) from public.projects)::int as projects_vec,
+    (select count(*) from public.listings)::int as listings, (select count(nhung) from public.listings)::int as listings_vec`, true)));
+  console.log("công tắc:", JSON.stringify(await sql("select key, value from public.app_config where key in ('tim_theo_nghia','nhung_tam_dung_den','nhung_moi_tick','nhung_dia_danh_moi_tick','tro_ly','boc_tach_ai') order by 1", true)));
   // Chỉ TÊN secret trong Vault (không bao giờ đọc giá trị) — để biết còn thiếu khoá nào bot cần.
   console.log("vault (tên):", JSON.stringify((await sql("select name from vault.secrets order by 1", true)).map((r) => r.name)));
   console.log("extension có sẵn:", JSON.stringify(await sql(
