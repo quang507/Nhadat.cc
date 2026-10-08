@@ -24,7 +24,7 @@ if (!KHOA) {
   console.error("Thiếu SUPABASE_SERVICE_ROLE_KEY (scripts/.env).");
   process.exit(1);
 }
-const URL_DB = process.env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+const URL_DB = process.env.SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const r = await fetch(`${URL_DB}/rest/v1/rpc/xuat_schema`, {
   method: "POST",
   headers: { apikey: KHOA, Authorization: `Bearer ${KHOA}`, "Content-Type": "application/json" },

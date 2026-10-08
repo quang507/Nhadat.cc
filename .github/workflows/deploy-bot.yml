@@ -39,7 +39,7 @@ on:
           - inbound-sweep
 
 env:
-  PROJECT_REF: tbcdpupiarkuxtntmosl
+  PROJECT_REF: rqxmmqmctpklqcmbfxuj
 
 # Chỉ MỘT lượt deploy chạy tại một thời điểm, cho mọi function (28/09/2026). Hôm đó chat-reply và
 # ask-seller deploy song song: bước "Chứng minh nó tới nơi" của chat-reply báo v262 → v263, nhưng vài

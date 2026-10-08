@@ -4,13 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       migration_file:
-        description: Tên file migration trong bot/supabase/migrations/ (gõ đúng tên, không có mặc định)
-        required: true
+        description: Tên file migration trong bot/supabase/migrations/ (gõ đúng tên, không có mặc định). Bỏ trống khi chạy dung_lai
+        required: false
         # 30/09/2026: từng mặc định '20260908c_chuan_hoa_ma_tin_va_boc_thong_so.sql' — bấm chạy để nguyên ô là ÁP LẠI file
         # 08/09, đè boc_thong_so / next_listing_code / listing_photos_v bằng bản cũ (phải khôi phục bằng 20260930b).
         default: ''
       ap_lai:
         description: File đã có trong sổ migration mà vẫn muốn áp lại (đè hàm bằng bản trong file)? Gõ đúng chữ "ap lai".
+        required: false
+        default: ''
+      dung_lai:
+        description: "DỰNG LẠI DB trên project rỗng (08/10/2026, scripts/dung-lai-db.mjs): kiem | cau-truc | du-lieu | xac-minh. Trống = áp migration_file như thường"
         required: false
         default: ''
       commit_schema:
@@ -19,7 +23,9 @@ on:
         default: ''
 
 env:
-  PROJECT_REF: tbcdpupiarkuxtntmosl
+  PROJECT_REF: rqxmmqmctpklqcmbfxuj
+  # Khoá publishable (công khai, như lib/supabase.ts) — dung-lai-db.mjs ghi vào app_config.publishable_key.
+  PUBLISHABLE_KEY: sb_publishable_f4wNO8jQcCDWn1QmNZQ7-g_BXDtYM3Y
 
 jobs:
   migrate:
@@ -41,12 +47,22 @@ jobs:
           fi
           echo "::add-mask::$TOKEN"
 
+      # 08/10/2026: project production cũ bị xoá nhầm — dựng lại từng bước trên project mới rỗng.
+      - name: Dựng lại DB (dung_lai)
+        if: ${{ inputs.dung_lai != '' }}
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+          BUOC: ${{ inputs.dung_lai }}
+        run: node scripts/dung-lai-db.mjs "$BUOC"
+
       - name: Chạy migration qua Supabase Management API
+        if: ${{ inputs.dung_lai == '' }}
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
           FILE="${{ inputs.migration_file }}"
+          [ -n "$FILE" ] || { echo "::error::Thiếu migration_file"; exit 1; }
           TARGET="bot/supabase/migrations/$FILE"
           if [ ! -f "$TARGET" ]; then
             echo "::error::Không tìm thấy file $TARGET"
@@ -96,6 +112,7 @@ jobs:
       # `schema.sql` khớp DB (cổng CI thứ 7 so md5 từng thân hàm). Chạy `xuat_schema()` qua Management API (cùng token
       # vừa áp), chặn chuỗi giống khoá như scripts/sinh-schema.mjs, rồi để lại dạng artifact — người/máy tải về commit.
       - name: Xuất schema.sql sau khi áp
+        if: ${{ inputs.dung_lai == '' || inputs.dung_lai == 'du-lieu' || inputs.dung_lai == 'xac-minh' }}
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -115,6 +132,7 @@ jobs:
       # FR-245: in SỐ ĐẾM máy soi dữ liệu tin (mã lỗi + số lượng, không nội dung — log repo công khai) để thấy trước/sau
       # một migration sửa dữ liệu. Hàm chưa có thì bỏ qua.
       - name: Số đếm soát dữ liệu tin
+        if: ${{ inputs.dung_lai == '' }}
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -126,6 +144,7 @@ jobs:
             -d "$(jq -n --arg q "$Q" '{query: $q}')" | jq -c '.[0].dem'
 
       - uses: actions/upload-artifact@v4
+        if: ${{ inputs.dung_lai == '' || inputs.dung_lai == 'du-lieu' || inputs.dung_lai == 'xac-minh' }}
         with:
           name: schema-sql
           path: schema.sql
@@ -135,7 +154,7 @@ jobs:
       # mà cổng CI thứ 7 so md5 thân hàm schema.sql ↔ DB — nên khi được bảo, commit thẳng schema.sql về nhánh vừa dispatch.
       # Không có thay đổi thì không commit. Không bao giờ đẩy lên main từ đây (chỉ nhánh đang chạy, và main thì PR lo).
       - name: Commit schema.sql về nhánh
-        if: ${{ inputs.commit_schema == 'commit' && github.ref_name != 'main' }}
+        if: ${{ inputs.commit_schema == 'commit' && github.ref_name != 'main' && (inputs.dung_lai == '' || inputs.dung_lai == 'du-lieu' || inputs.dung_lai == 'xac-minh') }}
         run: |
           set -euo pipefail
           cp schema.sql bot/supabase/schema.sql
@@ -143,5 +162,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add bot/supabase/schema.sql
-          git commit -m "schema.sql: sinh lại sau khi áp ${{ inputs.migration_file }}"
+          git commit -m "schema.sql: sinh lại sau khi áp ${{ inputs.migration_file }}${{ inputs.dung_lai }}"
           git push origin "HEAD:${{ github.ref_name }}"

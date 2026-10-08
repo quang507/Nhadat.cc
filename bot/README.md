@@ -1,6 +1,6 @@
 # bot/ — Bot Zalo của Aioinhadat (Supabase Edge Functions)
 
-Deno trên Supabase, project `nhadat-cc` (`tbcdpupiarkuxtntmosl`). Đặc tả ở
+Deno trên Supabase, project `nhadat-cc` (`rqxmmqmctpklqcmbfxuj`). Đặc tả ở
 `docs/07-srs.md`; tone giọng ở `docs/06 §6.8` — **sửa docs trước, sửa
 `_shared/prompts.ts` sau**, rồi đồng bộ bảng `bot_prompts`.
 
@@ -60,7 +60,7 @@ nên deploy nhiều hàm thì bấm lần lượt, đợi lượt trước xong.
 Chạy tay trên máy có CLI thì tương đương:
 
 ```bash
-cd bot && supabase functions deploy <fn> --project-ref tbcdpupiarkuxtntmosl \
+cd bot && supabase functions deploy <fn> --project-ref rqxmmqmctpklqcmbfxuj \
   [--no-verify-jwt nếu bản đang chạy là false]
 ```
 

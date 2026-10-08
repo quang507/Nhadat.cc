@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TOKEN = (process.env.SUPABASE_ACCESS_TOKEN ?? "").trim();
-const REF = (process.env.PROJECT_REF ?? "tbcdpupiarkuxtntmosl").trim();
+const REF = (process.env.PROJECT_REF ?? "rqxmmqmctpklqcmbfxuj").trim();
 if (!TOKEN) { console.error("Thiếu SUPABASE_ACCESS_TOKEN"); process.exit(1); }
 
 // Công tắc chat-reply đọc qua `cau_hinh`. `tim_theo_nghia` cố ý KHÔNG lấy: DB giả không có vector, bật là gọi RPC không có.

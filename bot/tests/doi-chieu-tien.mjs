@@ -22,7 +22,7 @@ import { docTien } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 const HERE = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));
 const { ca } = JSON.parse(readFileSync(join(HERE, "luat", "tien.json"), "utf8"));
 
-const URL_DB = process.env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+const URL_DB = process.env.SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const tLib = readFileSync(join(HERE, "..", "..", "lib", "supabase.ts"), "utf8");
 const KHOA = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   ?? /(?:sb_publishable_|eyJ)[A-Za-z0-9._-]{20,}/.exec(tLib)?.[0];

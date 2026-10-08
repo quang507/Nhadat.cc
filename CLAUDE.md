@@ -288,7 +288,7 @@ thì sinh lại, đừng sửa tay:** `node scripts/sinh-schema.mjs` (đọc ser
 chạy thật lần đầu 13/09/2026). Lệnh curl tương đương:
 
 ```bash
-curl -s -X POST "https://tbcdpupiarkuxtntmosl.supabase.co/rest/v1/rpc/xuat_schema" \
+curl -s -X POST "https://rqxmmqmctpklqcmbfxuj.supabase.co/rest/v1/rpc/xuat_schema" \
   -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
   -H "Content-Type: application/json" -d '{}' | jq -r . > bot/supabase/schema.sql
 ```

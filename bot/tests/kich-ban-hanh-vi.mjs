@@ -41,7 +41,7 @@ if (existsSync(ENV_FILE)) {
     }
   }
 }
-const URL_DB = process.env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+const URL_DB = process.env.SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const KHOA = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!KHOA) {
   console.error("Thiếu SUPABASE_SERVICE_ROLE_KEY trong scripts/.env — tầng này đọc DB thật.");

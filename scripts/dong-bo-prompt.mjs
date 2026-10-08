@@ -31,12 +31,12 @@ const env = Object.fromEntries(
     .filter((l) => l.includes("=") && !l.startsWith("#"))
     .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; }),
 );
-const URL_DB = env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+const URL_DB = env.SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const KEY = env.SUPABASE_SERVICE_ROLE_KEY;
 // 05/10/2026 (SRS-5.1zza): chạy được từ CI (`dong-bo-prompt.yml`) bằng SUPABASE_ACCESS_TOKEN qua Management API — máy không có
 // service_role (phiên Claude, máy mới) vẫn đẩy được prompt; không thì bản DB đè code mãi mà không ai thấy.
 const TOKEN_QT = process.env.SUPABASE_ACCESS_TOKEN ?? env.SUPABASE_ACCESS_TOKEN ?? null;
-const REF = (process.env.PROJECT_REF ?? "tbcdpupiarkuxtntmosl").trim();
+const REF = (process.env.PROJECT_REF ?? "rqxmmqmctpklqcmbfxuj").trim();
 if (!KEY && !TOKEN_QT) { console.error("Thiếu SUPABASE_SERVICE_ROLE_KEY trong scripts/.env (hoặc SUPABASE_ACCESS_TOKEN cho đường Management API)"); process.exit(1); }
 async function sqlQuanTri(query) {
   const r = await fetch(`https://api.supabase.com/v1/projects/${REF}/database/query`, {

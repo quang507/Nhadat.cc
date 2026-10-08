@@ -56,7 +56,7 @@ if (existsSync(ENV_FILE)) {
   }
 }
 
-const URL_DU_AN = process.env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+const URL_DU_AN = process.env.SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const KHOA = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const BUCKET = process.env.MASTERDB_BUCKET ?? "masterdb-raw";
 const TRAN_FILE = 50 * 1024 * 1024; // khớp file_size_limit của bucket (20260907b)

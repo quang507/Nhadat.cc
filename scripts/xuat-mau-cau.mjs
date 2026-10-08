@@ -33,7 +33,7 @@ if (existsSync(ENV_FILE)) {
     if (val && !(m[1] in process.env)) process.env[m[1]] = val;
   }
 }
-const URL_DU_AN = process.env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+const URL_DU_AN = process.env.SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const KHOA = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!KHOA) { console.error("Thiếu SUPABASE_SERVICE_ROLE_KEY (scripts/.env)."); process.exit(1); }
 const MUC_TIEU = 300;

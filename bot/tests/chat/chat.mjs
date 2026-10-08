@@ -63,7 +63,7 @@ const ngauNhien = () => Math.random().toString(36).slice(2, 6);
 // Hai "máy chủ" cùng một giao diện: gui(uid, text) → replies[], tin(uid) → in tình trạng, xoa(uid).
 // ─────────────────────────────────────────────────────────────────────────────
 async function mayChuThat() {
-  const URL_DB = layEnv("SUPABASE_URL") ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+  const URL_DB = layEnv("SUPABASE_URL") ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
   const KHOA = layEnv("SUPABASE_SERVICE_ROLE_KEY");
   if (!KHOA) {
     console.error(DO("Thiếu SUPABASE_SERVICE_ROLE_KEY. Chép scripts/.env.example thành scripts/.env rồi dán khoá vào (hoặc chạy không có --that để chat trên máy)."));

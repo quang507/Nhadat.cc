@@ -62,7 +62,7 @@ if (existsSync(ENV_FILE)) {
 }
 
 const URL_DU_AN = process.env.SUPABASE_URL
-  ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+  ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const KHOA = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // ── Tham số ─────────────────────────────────────────────────────────────────

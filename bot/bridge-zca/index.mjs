@@ -58,7 +58,7 @@ if (fs.existsSync(ENV_FILE)) {
 }
 
 const CHAT_REPLY_URL =
-  "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/chat-reply";
+  "https://rqxmmqmctpklqcmbfxuj.supabase.co/functions/v1/chat-reply";
 const ANON_KEY =
   "sb_publishable_zmJBmEgFPn3bBKx_1ve6Pg_dXdo4haX"; // key công khai, chỉ gọi được function
 
@@ -83,7 +83,7 @@ if (!process.env.BRIDGE_SECRET) {
 // ngay trong lúc đăng nhập — các hằng khai báo phía dưới lúc đó chưa tồn tại.
 // KHÔNG BAO GIỜ ném: mất mạng thì vẫn còn link http tạm + qr.png như cũ.
 const FEED_URL_DN =
-  "https://tbcdpupiarkuxtntmosl.supabase.co/functions/v1/escalation-feed";
+  "https://rqxmmqmctpklqcmbfxuj.supabase.co/functions/v1/escalation-feed";
 async function baoDangNhap(trang_thai, qr_png = null, ghi_chu = null) {
   // Giờ SỰ KIỆN, chụp trước khi gửi: server xếp các lệnh theo giờ này chứ không
   // theo giờ request tới — hai lệnh gửi sát nhau có thể tới ngược thứ tự.

@@ -38,7 +38,7 @@ if (existsSync(ENV_FILE)) {
   }
 }
 
-const URL_DU_AN = process.env.SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+const URL_DU_AN = process.env.SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 
 // HAI ĐƯỜNG ĐỌC, cùng một câu trả lời:
 //   · máy người làm  → service_role + `liet_ke_migration()` (đầy đủ)

@@ -3,10 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 // Anon/publishable key là key công khai (chỉ đọc được thứ RLS cho phép) —
 // env override được, mặc định trỏ project nhadat-cc.
 const url =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://tbcdpupiarkuxtntmosl.supabase.co";
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://rqxmmqmctpklqcmbfxuj.supabase.co";
 const key =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-  "sb_publishable_zmJBmEgFPn3bBKx_1ve6Pg_dXdo4haX";
+  "sb_publishable_f4wNO8jQcCDWn1QmNZQ7-g_BXDtYM3Y";
 
 export const supabase = createClient(url, key);
 

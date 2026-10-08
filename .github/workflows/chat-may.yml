@@ -24,7 +24,7 @@ on:
         default: code
 
 env:
-  PROJECT_REF: tbcdpupiarkuxtntmosl
+  PROJECT_REF: rqxmmqmctpklqcmbfxuj
 
 jobs:
   chat:
