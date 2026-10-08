@@ -125,5 +125,15 @@ kiem("DC-11 thông tin chung / dự án nói bằng 'Theo em biết, …' (khố
   kiem("DC-13 khuôn bóc tách không thêm trường (giới hạn grammar Anthropic: 15 là vượt, #414)", khoa.length > 0 && khoa.length <= 14, `${khoa.length}: ${khoa.join(",")}`);
 }
 
+// DC-16 (SRS-5.1zzzu, bắn thử …ke1tatt "dang di"): model sinh ô theo thứ tự khuôn — ô đọc lại tin không dấu phải ĐỨNG ĐẦU lượt "ý của
+// lượt", để gật / bảo đăng quyết theo bản đọc lại (ô đứng sau: model chọn "dong_y" rồi mới đọc ra "đăng đi").
+{
+  const yl = readFileSync(goc + "_shared/ai/doc-y-luot.ts", "utf8");
+  const dau = yl.indexOf("const YLuot = z.object({");
+  const than = yl.slice(dau, yl.indexOf("\n});", dau));
+  const khoa = [...than.matchAll(/^  ([a-z_]+):/gm)].map((m) => m[1]);
+  kiem("DC-16 lượt ý của lượt: doc_lai là ô ĐẦU (đọc lại trước, quyết gật / bảo đăng sau)", khoa[0] === "doc_lai", khoa.join(","));
+}
+
 console.log(`\n${dat}/${dat + hong} đạt`);
 if (hong) process.exit(1);

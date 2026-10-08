@@ -20,6 +20,11 @@ export const O_BO = ["do_rong_hem", "gia", "phuong", "dien_tich", "so_phong_ngu"
 /** SRS-5.1zzl (05/10/2026, demo AOND thao tác phá dữ liệu chờ xác nhận): ngưng rao NHIỀU căn / chỉ giữ vài căn. */
 export const KIEU_NHL = ["chi_giu", "an_het"] as const;
 const YLuot = z.object({
+  // SRS-5.1zzzn → 5.1zzzu (08/10/2026): bản đọc lại tin không dấu — từng nằm ở khuôn bóc tách, làm khuôn đó vượt giới hạn
+  // grammar (15 trường cấp một, DC-13) → mọi lượt bóc tách 400. Đọc lại tin là việc của HỘI THOẠI (cần câu bot vừa nói), ở đây.
+  // ĐỨNG ĐẦU khuôn: model sinh ô theo thứ tự — đọc lại trước rồi mới quyết gật / bảo đăng theo bản đọc đó (bắn thử …ke1tatt:
+  // ô đứng sau, model chọn "dong_y" rồi mới đọc lại "dang di" = "đăng đi").
+  doc_lai: z.string().nullable().describe("Tin chủ nhà NGẮN (dưới 200 chữ) gõ KHÔNG DẤU / viết tắt / sai chính tả → viết lại CÓ DẤU, đúng nghĩa theo câu bot vừa nói, chỉ thêm dấu và viết đủ chữ tắt, KHÔNG thêm ý, KHÔNG đổi số ('anh dung ten' → 'anh đứng tên'; 'dc e' → 'được em'). Tin đã có dấu đầy đủ, hoặc tin dài → null."),
   dong_y: z.enum(DONG_Y).describe("dong_y = GẬT / đồng ý / xác nhận điều bot VỪA nói; dong_y_dang = gật VÀ bảo đăng tin; khong_dong_y = nói không đúng / không đồng ý; khong_noi = không gật cũng không chối (chỉ đưa thông tin, hỏi lại, nói chuyện khác)."),
   dong_y_trich: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong tin chủ nhà thể hiện ý ở dong_y. khong_noi thì null."),
   yeu_cau: z.enum(YEU_CAU).describe("Chủ nhà đang HỎI / XIN gì (xem LUẬT YÊU CẦU). Không thì khong."),
@@ -38,9 +43,6 @@ const YLuot = z.object({
     giu: z.array(z.string()).describe("Cụm chỉ căn GIỮ LẠI, chép như khách viết ('căn Trần Hưng Đạo', 'căn 2', 'căn hẻm 4m'). an_het thì rỗng."),
     trich_dan: z.string().describe("Cụm COPY NGUYÊN VĂN trong tin thể hiện ý ngưng nhiều căn."),
   }).nullable().describe("Chủ nhà muốn ngưng rao / gỡ / ẩn NHIỀU căn một lúc, hoặc chỉ giữ một vài căn ('chỉ giữ căn A, ẩn hết còn lại', 'gỡ hết đi', 'ngưng rao hết trừ căn X'). Ngưng MỘT căn cụ thể, hỏi han, hay nói chuyện khác → null."),
-  // SRS-5.1zzzn → 5.1zzzu (08/10/2026): bản đọc lại tin không dấu — từng nằm ở khuôn bóc tách, làm khuôn đó vượt giới hạn
-  // grammar (15 trường cấp một, DC-13) → mọi lượt bóc tách 400. Đọc lại tin là việc của HỘI THOẠI (cần câu bot vừa nói), ở đây.
-  doc_lai: z.string().nullable().describe("Tin chủ nhà NGẮN (dưới 200 chữ) gõ KHÔNG DẤU / viết tắt / sai chính tả → viết lại CÓ DẤU, đúng nghĩa theo câu bot vừa nói, chỉ thêm dấu và viết đủ chữ tắt, KHÔNG thêm ý, KHÔNG đổi số ('anh dung ten' → 'anh đứng tên'; 'dc e' → 'được em'). Tin đã có dấu đầy đủ, hoặc tin dài → null."),
 });
 const FORMAT_Y_LUOT = dinhDangLong(YLuot);
 
@@ -81,8 +83,8 @@ năm 2019"), hỏi khách mua của tin mình → null.
 
 ĐỌC LẠI (doc_lai) — tin NGẮN gõ không dấu / viết tắt → viết lại có dấu theo nghĩa câu bot vừa nói: "anh dung ten" (bot hỏi ai đứng
 tên sổ) → "anh đứng tên"; "dc e" → "được em". Chữ không dấu đọc được HAI nghĩa mà câu bot không phân định → viết nghĩa
-khớp với ô dong_y bạn vừa chọn. Chỉ thêm dấu, viết đủ chữ tắt; không thêm ý, không đổi số.
-Tin đã có dấu, hoặc dài → null.`;
+khớp câu bot vừa nói. Chỉ thêm dấu, viết đủ chữ tắt; không thêm ý, không đổi số.
+Tin đã có dấu, hoặc dài → null. Đọc lại TRƯỚC, rồi chọn dong_y / yeu_cau theo đúng bản đọc lại đó.`;
 
 type ClientModel = {
   messages: {
