@@ -49,6 +49,11 @@ export const KHOA_O = [
   "hinh_dang", "san_vuon", "pccc", "thoi_han_su_dung", "han_hop_dong_thue", "ty_le_lap_day", "phi_gui_xe", "mat_do_xd",
   "tang_cao_toi_da", "tai_trong_san", "toa_thap", "khu_compound", "ha_tang", "fit_out", "duong_container", "tram_bien_ap",
   "xu_ly_nuoc_thai", "nguon_nuoc", "ranh_gioi", "hinh_thuc_thue_dat", "hien_trang_su_dung", "truot_gia",
+  // SRS-5.1zzzo (08/10/2026, chủ dự án: "ai đọc bóc tách mới có mấy cái schema"): đối chiếu 91 ô bot hỏi ↔ khoá AI được trả —
+  // 12 ô bot HỎI mà AI không có khoá để ghi ("anh dung ten" khi hỏi đứng tên: AI hiểu đúng, không có ô, luật ghi nguyên chữ không
+  // dấu). Nay đủ; `bot/tests/khoa-ai-du.mjs` đỏ khi một câu hỏi mới không có khoá AI tương ứng.
+  "nguoi_dung_ten", "dong_so_huu_voi", "dong_y_ban", "so_huu", "giay_to_hien_co", "du_kien_ra_so", "ban_giao",
+  "dien_tich_khop_so", "tang_phu", "gia_dien_nuoc", "gio_giac", "nganh_hang_phu_hop",
 ] as const;
 export const MOI_KHOA = [...KHOA_TIEN, ...KHOA_SO, ...KHOA_CHU, ...KHOA_KHAC, ...KHOA_O] as const;
 export type Khoa = typeof MOI_KHOA[number];
@@ -69,7 +74,7 @@ export type Bo = DeXuat & { ly_do: string };
 // khách gõ (`cum_goc`), không phải chữ model soạn lại. Ca gốc: "hẻm 137 Nguyễn Trãi" → model viết "137 hẻm Nguyễn Trãi".
 // Đây là CHỖ DUY NHẤT quyết định ô nào nguyên văn; ô ngoài bảng thì model được chuẩn hoá như cũ. Số (giá, diện tích, số
 // tầng…) không nằm đây — cột là số, kiểm bằng chứng đã bắt mọi con số phải có trong tin. ──
-const NV_CHUNG = ["vi_tri", "du_an_ten", "phap_ly", "giay_to_hien_co", "du_kien_ra_so", "hien_trang_su_dung", "han_hop_dong_thue"];
+const NV_CHUNG = ["vi_tri", "du_an_ten", "phap_ly", "giay_to_hien_co", "du_kien_ra_so", "hien_trang_su_dung", "han_hop_dong_thue", "nguoi_dung_ten", "dong_so_huu_voi"];
 const NV_DAT = ["tho_cu", "quy_hoach", "len_tho_cu", "xay_dung", "ha_tang", "duong_vao", "nguon_nuoc", "ranh_gioi", "muc_dich", "thoi_han_su_dung", "hinh_thuc_thue_dat", "hinh_dang"];
 export const O_NGUYEN_VAN: Record<string, ReadonlySet<string>> = {
   nha_pho: new Set([...NV_CHUNG, "ket_cau"]),

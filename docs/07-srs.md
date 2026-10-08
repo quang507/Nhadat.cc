@@ -2542,6 +2542,16 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Sửa**: (a) r3: mỗi tin ghi "CHƯA LÊN KỆ (… CHƯA rao)" hay "ĐANG RAO trên web"; tiêu đề "có các tin (trạng thái ghi cuối mỗi dòng)". (b) bóc tách có ô mới `doc_lai` (tin viết lại có dấu, viết đủ chữ tắt, không thêm ý, không đổi số); code kiểm `docLaiHopLe` (cùng chữ số, không dài quá 1,8 lần, ≥ nửa số chữ bỏ dấu trùng tin gốc); qua thì `boiCanhLuot()` thêm dòng "em đọc là: …" đầu NGỮ CẢNH. (c) `boCauTrungBongTruoc` (luôn bật, lưới an toàn — không phải van sửa văn): câu model có ≥ 80% chữ đã nằm trong bong bóng tiền định đứng trước thì bỏ; bỏ hết thì giữ cả lời.
 - **Kiểm, đỏ khi tắt**: unit ZZZN-01…08 (`kiem-bang-chung.mjs`; cách gõ MỚI "ok up lun e", cách nói MỚI "Vâng ạ, phí bên cháu…"); e2e SRS-5.1zzzn-a (phát lại …kb2chau ở chế độ `gon`), -b, -c (phát lại …kc1tatt, `phat-lai/kc1tatt.json`). Tắt cả ba phần sửa: 3/1044 e2e + 2/426 unit đỏ.
 
+### SRS-5.1zzzo · Khoá AI bóc tách phủ MỌI ý bot hỏi (08/10/2026)
+
+`[nguồn: chủ dự án 08/10/2026 — "tao thấy ai đọc bóc tách mới có mấy cái schema", "sửa gốc hết mấy chỗ vá"]`
+
+- **Ca gốc**: bot hỏi người đứng tên, khách "anh dung ten" → AI hiểu đúng (đưa vào `khong_can_hoi`: "chủ nhà đã xác nhận là anh đứng tên") nhưng KHÔNG có khoá `nguoi_dung_ten` để ghi; luật tìm-chuỗi ghi nguyên chữ không dấu "anh dung ten", model viết lời đoán "tên anh Dung".
+- **Lớp lỗi**: *danh sách khoá AI và danh sách câu hỏi là hai bảng không ai đối chiếu*. Đối chiếu 08/10: 84 ý bot hỏi (`CAU_HOI_MAU`) ↔ 77 khoá AI (`MOI_KHOA`) — 12 ý bot HỎI mà AI không có chỗ ghi câu trả lời: người đứng tên, đứng tên chung với ai, các bên đồng ý bán, sở hữu lâu dài / 50 năm, giấy tờ hiện có, dự kiến ra sổ, bàn giao, diện tích khớp sổ, tầng phụ, giá điện nước, giờ giấc, ngành hàng phù hợp. Câu trả lời cho các câu đó chỉ luật đọc. Quyết định cũ (O-13: "đứng tên KHÔNG là khoá AI — giữ chữ khách") nay do bảng ô NGUYÊN VĂN lo (SRS-5.1zzr): đứng tên / đứng tên chung là ô nguyên văn, AI chỉ chỉ ra cụm, giá trị là chữ khách (đính chính dấu theo SRS-5.1zzzh).
+- **Chỗ khác cùng lớp**: 5 ý ghi qua khoá KHÁC tên (vị trí ← `duong`, diện tích đất / tim tường ← `dien_tich`, mặt tiền ← `ngang`, doanh thu ← `thu_nhap_thue`) — khai trong bài kiểm; 12 ô điều khiển (duyệt tin, chấm điểm, ảnh, chọn căn…) không phải dữ kiện. Nhánh mua có bảng hồ sơ riêng (`BuyerTurn`) — chưa đối chiếu.
+- **Sửa**: thêm 12 khoá vào `KHOA_O` (khoá fact cùng tên) + mô tả trong `LUAT` (`boc-rao.ts`); `nguoi_dung_ten`, `dong_so_huu_voi` vào ô nguyên văn; chế độ `chinh` cho luật đỡ `nguoi_dung_ten` khi AI im như `the_chap` (cùng câu sổ gộp). Bài kiểm mới `bot/tests/khoa-ai-du.mjs` (trong `test:bot`): đỏ khi một câu hỏi mới không có khoá AI tương ứng.
+- **Kiểm**: `khoa-ai-du.mjs` đỏ khi bỏ 7 khoá mới (liệt kê đúng 7 ý); O-13 đổi thành "đứng tên là khoá AI VÀ ô nguyên văn"; e2e 1044/1044; bộ đo luật `do-boc:nen` 73 → 75 ca, 520 → 524 / 582 trường (N06, N14 nay đạt nhờ SRS-5.1zzzm) — `nen.json` cập nhật.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

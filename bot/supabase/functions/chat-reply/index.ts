@@ -6334,7 +6334,8 @@ Deno.serve(async (req) => {
         (f.question === "dien_tich" || f.question === "dien_tich_dat") && /^\s*\d+(?:[.,]\d+)?\s*m?\s*x\s*\d+(?:[.,]\d+)?\s*m?\s*$/i.test(f.answer);
       // FR-241 e (10 ca test làm khó 28/09): "ngang 4 dài 15, 3 lầu 4 phòng, …" — AI xếp "3 lầu 4 phòng" vào kết cấu, im về phòng
       // ngủ; luật đọc 4 bị gạt → ô trống, bot hỏi lại số phòng ngủ khách vừa nói. Luật đọc "N phòng / N pn" là chắc.
-      const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "thang_may", "dien_tich_san", "do_rong_hem", "so_phong_ngu"]);
+      // SRS-5.1zzzo: `nguoi_dung_ten` nay là khoá AI — cùng nhóm câu sổ gộp với `the_chap`, luật có bằng chứng rõ ("đứng tên") nên đỡ như vậy.
+      const KHOA_LUAT_DO_KHI_AI_IM = new Set(["no_hau", "doanh_thu", "so_wc", "cach_mat_tien", "nam_xay", "the_chap", "nguoi_dung_ten", "thang_may", "dien_tich_san", "do_rong_hem", "so_phong_ngu"]);
       // 27/09/2026 (bắn thật lx-36): "Ở cầu kho em ơi" khi hỏi phường → luật tiềm năng đọc "ở" là ĐỂ Ở và ghi kèm. Đang hỏi
       // địa chỉ thì "ở …" là NẰM Ở.
       const oLaNamO = (s: string) => cungHoFact("vi_tri", pendingReq.question) && /^\s*(?:nha\s+)?o\s/.test(boDau(s));

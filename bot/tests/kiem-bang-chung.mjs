@@ -281,8 +281,9 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   ok("câu treo VỊ TRÍ: AI không có duong → null (luật đỡ)", giaTriChoCauTreo([dx("do_rong_hem", "4", "hem 4m")], "vi_tri", {}) === null);
   // 02/10/2026 (đợt 1 chuyển luật sang AI, SRS-5.1v): tiện ích gần / năm xây / thế chấp / hẻm thông nay AI có ô — luật chỉ đỡ
   // khi model chết. Câu đứng tên vẫn là đường riêng (giữ chữ khách, không xin họ tên).
-  ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien + tien_ich_gan / nam_xay / the_chap / hem_thong; KHÔNG có nguoi_dung_ten",
-    ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds", "tien_ich_gan", "nam_xay", "the_chap", "hem_thong"].every((k) => KHOA_FACT_AI_BIET.has(k)) && !KHOA_FACT_AI_BIET.has("nguoi_dung_ten"));
+  // SRS-5.1zzzo: nguoi_dung_ten nay là khoá AI (xem O-13).
+  ok("KHOA_FACT_AI_BIET có gia / phap_ly / vi_tri / mat_tien + tien_ich_gan / nam_xay / the_chap / hem_thong / nguoi_dung_ten",
+    ["gia", "phap_ly", "vi_tri", "mat_tien", "loai_bds", "tien_ich_gan", "nam_xay", "the_chap", "hem_thong", "nguoi_dung_ten"].every((k) => KHOA_FACT_AI_BIET.has(k)));
 }
 
 {
@@ -556,7 +557,9 @@ datKiemNhe(true);
   ok("O-11 ô chữ bỏ tiểu từ cuối: 'xe container vào tận nơi em' → 'xe container vào tận nơi'", q("duong_container") === "xe container vào tận nơi", JSON.stringify(ghi));
   ok("O-12 khoá luật cũ nay là khoá AI biết (luật không ghi khi AI chạy): duong_container, the_chap, loai_duong_vao",
     ["duong_container", "the_chap", "loai_duong_vao", "thang_may"].every((k) => KHOA_FACT_AI_BIET.has(k)));
-  ok("O-13 câu đứng tên KHÔNG là khoá AI (giữ chữ khách, không xin tên thật)", !KHOA_FACT_AI_BIET.has("nguoi_dung_ten"));
+  // SRS-5.1zzzo (08/10/2026): đứng tên nay LÀ khoá AI (không có khoá thì AI hiểu đúng mà không ghi được — "anh dung ten" vào ô
+  // bằng chữ không dấu); "giữ chữ khách" do bảng ô NGUYÊN VĂN lo (`laONguyenVan`), không phải do cấm AI.
+  ok("O-13 câu đứng tên là khoá AI VÀ là ô nguyên văn (giữ chữ khách)", KHOA_FACT_AI_BIET.has("nguoi_dung_ten") && laONguyenVan("nha_pho", "nguoi_dung_ten"));
 }
 datKiemNhe(false);
 ok("O-14 luật (model chết) cũng bỏ tiểu từ cuối: 'xe container vào tận nơi em'",
