@@ -284,6 +284,21 @@ async function mayChuMay() {
       };
     },
     async xoa() { moi(); daInLoi = 0; return { ok: true }; },
+    // 08/10/2026 (chủ dự án: "sửa luôn trên link… để link được lâu"): trang tự nạp code mới thì tiến trình bật lại — chụp DB giả
+    // + công tắc + prompt sửa tay để nạp lại. Bảng tĩnh (phường, tên đường) không chụp: `moi()` dựng lại từ nguồn.
+    chup() {
+      const d = globalThis.__db, TINH = new Set(["wards", "phuong_cu", "quan_cu", "duong"]);
+      return { t: Object.fromEntries(Object.entries(d.t).filter(([k]) => !TINH.has(k))), seq: d.seq, storage: d.storage, n, daInLoi, cauHinh: globalThis.__cauHinh, prompt: PROMPT_DB };
+    },
+    nap(s) {
+      const d = globalThis.__db;
+      Object.assign(d.t, s.t ?? {});
+      d.seq = s.seq ?? d.seq; d.storage = s.storage ?? [];
+      n = s.n ?? 0; daInLoi = s.daInLoi ?? 0;
+      if (s.cauHinh) globalThis.__cauHinh = s.cauHinh;
+      PROMPT_DB.splice(0, PROMPT_DB.length, ...(s.prompt ?? []));
+      d.t.bot_prompts = PROMPT_DB.map((r) => ({ ...r }));
+    },
     // Trang web nhiều người: chỉ xoá dữ liệu của MỘT người (như reset_nguoi_test thật), kho mẫu và người khác giữ nguyên.
     async xoaMot(uid) { return (await createClient().rpc("reset_nguoi_test", { p_zalo: uid })).data; },
   };
@@ -369,6 +384,40 @@ if (WEB) {
     writeFileSync(pSua, JSON.stringify({ luc: new Date().toISOString(), prompt, cau_hinh }, null, 2));
     return { prompt: Object.keys(prompt), cau_hinh: Object.keys(cau_hinh) };
   };
+  // 08/10/2026: `--luu-trang <file>` — chat-web.yml tắt trang (SIGTERM) để nạp code mới khi nhánh có commit mới, đường hầm giữ
+  // nguyên nên link không đổi. Tắt thì cất mọi thứ người thử thấy (lịch sử, nhật ký, DB giả, ảnh, bản sửa prompt); bật lại thì
+  // nạp. Mốc "bản đầu" của trang sửa prompt (BAN_DAU / CH_DAU ở trên) tính TRƯỚC khi nạp, nên bản sửa tay vẫn hiện là bản sửa.
+  const pTrang = giaTri("--luu-trang");
+  if (pTrang && existsSync(pTrang)) {
+    try {
+      const s = JSON.parse(readFileSync(pTrang, "utf8"));
+      may.nap(s.db ?? {});
+      for (const [k, v] of s.lichSu ?? []) lichSuCua.set(k, v);
+      nhatKy.push(...(s.nhatKy ?? []));
+      soLuot = s.soLuot ?? 0;
+      for (const [k, a] of s.anh ?? []) KHO_ANH.set(k, { mime: a.mime, bytes: new Uint8Array(Buffer.from(a.b64, "base64")) });
+      ghiSua();
+      ghiNhatKy("he-thong", "nap", `nạp code mới (${process.env.CHAT_PHIEN ?? "?"}) — giữ ${lichSuCua.size} người, ${soLuot} lượt`);
+      console.log(XAM(`Nạp lại trang: ${lichSuCua.size} người, ${nhatKy.length} dòng nhật ký, ${KHO_ANH.size} ảnh`));
+    } catch (e) { console.error(DO(`Không nạp được ${pTrang}: ${e?.message ?? e} — bật trang trắng`)); }
+  }
+  if (pTrang) {
+    const cat = (sig) => {
+      // Chờ lượt đang chạy xong rồi mới cất (một lượt model ≤ vài chục giây); workflow đợi tối đa 90 s.
+      hang.finally(() => {
+        try {
+          writeFileSync(pTrang, JSON.stringify({
+            luc: new Date().toISOString(), db: may.chup(), lichSu: [...lichSuCua], nhatKy, soLuot,
+            anh: [...KHO_ANH].map(([k, a]) => [k, { mime: a.mime, b64: Buffer.from(a.bytes).toString("base64") }]),
+          }));
+          console.log(XAM(`Đã cất trang (${sig}) vào ${pTrang}`));
+          process.exit(0);
+        } catch (e) { console.error(DO(`Không cất được trang: ${e?.message ?? e}`)); process.exit(1); }
+      });
+    };
+    process.on("SIGTERM", () => cat("SIGTERM"));
+    process.on("SIGINT", () => cat("SIGINT"));
+  }
   Bun.serve({
     port,
     async fetch(req) {
