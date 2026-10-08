@@ -3759,8 +3759,11 @@ Deno.serve(async (req) => {
     // Trọng" — câu không có "mùi dữ liệu" theo luật, không có câu treo (chưa có tin để treo) → AI không được gọi, tên đường mất,
     // về sau bot hỏi lại "nhà ở đường nào". Chưa có tin mà bot vừa nói → tin này là câu TRẢ LỜI cho bot, AI phải đọc (kèm câu
     // bot vừa nói trong `hoiThoai`). Đọc ra địa chỉ / dữ kiện thì `raoNgam` mở tin như câu rao.
-    const traLoiBotKhiChuaCoTin = dsMo.length === 0 && !!cauBotThat?.trim();
-    if (anthropicS && (coMuiAi || !!pendingReq || wantsSell || dsMo.length >= 2 || traLoiBotKhiChuaCoTin)) {
+    // SRS-5.1zzzl (08/10, bắn thử …kb1tatt): ĐÃ có một tin, không câu treo (bot vừa hỏi "hiện trạng" — câu model tự đặt, code
+    // không mở ô), khách "dang di" (đăng đi, không dấu) → AI không được gọi, model trả lời tự đoán "em ghi đang ở". Cổng cũ chỉ
+    // mở cho người CHƯA có tin. Bot vừa nói gì thì tin này có thể là câu trả lời cho câu đó — AI luôn đọc, bất kể có mấy tin.
+    const traLoiBot = !!cauBotThat?.trim();
+    if (anthropicS && (coMuiAi || !!pendingReq || wantsSell || dsMo.length >= 2 || traLoiBot)) {
       // 30/09/2026 (chủ dự án, chat thử): "nhà chú ở 137/28 đường số 59 phường an hội tây nhé" nhắn TRƯỚC câu rao — lúc
       // đó chưa có tin nên không có chỗ ghi, tới lúc rao thì mất. Người chưa có tin nào mà nhắn câu rao: AI đọc cả các
       // tin khách nhắn trước đó (`truocTin`) cùng câu rao; bằng chứng kiểm trên chính đoạn gộp đó.
@@ -7181,6 +7184,8 @@ Deno.serve(async (req) => {
           (cauCodeTra ? ` — hỏi đúng câu này (có lựa chọn cụ thể): "${cauCodeTra}"` : cauChuSua ? ` — câu bên em hay dùng: "${cauChuSua}", nói lại cho tự nhiên` : "") +
           (nhanhKe ? ` (hỏi thêm cho rõ chuyện "${nhanhKe.ten}" chủ nhà vừa nhắc — các ý của chuyện này: ${nhanhKe.cacY.map((k) => FACT_LABELS[k] ?? k).join("; ")}; ý nào họ đã nói thì không hỏi lại)` : "")
         : "";
+      // SRS-5.1zzzl (bắn thử …kb1tatt): nhánh không câu kế (`chanNhap`) từng chỉ dặn "không hỏi lại câu em vừa hỏi" — model tự hỏi
+      // "hiện trạng", code không mở ô nên lượt sau không có câu treo. Nhánh đó nay cấm hỏi câu mới.
       const prompt = nextKey
         ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}` +
           `ĐÃ BIẾT về căn${neo ? ` ${neo}` : ""}: ${daBietNgan(lstNow) || "(chưa có gì)"}\n` +
@@ -7193,7 +7198,7 @@ Deno.serve(async (req) => {
         ? `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
           `Viết MỘT tin ngắn: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
         : chanNhap && !thieuDiem.length
-        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa nhắn: "${text}". Viết MỘT tin rất ngắn ghi nhận điều họ vừa nói; KHÔNG hỏi lại câu em vừa hỏi, KHÔNG nói tin đã đủ thông tin.`
+        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa nhắn: "${text}". Viết MỘT tin rất ngắn ghi nhận điều họ vừa nói (đúng chữ họ dùng, không diễn giải sang nghĩa khác); KHÔNG hỏi lại câu em vừa hỏi, KHÔNG đặt câu hỏi mới nào (lượt này hệ thống không mở câu hỏi — câu em tự đặt sẽ không ai ghi câu trả lời), KHÔNG nói tin đã đủ thông tin.`
         : thieuDiem.length
         ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${text}". Tin chưa đủ điểm để đăng, còn thiếu (theo thứ tự ưu tiên): ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn như người thật: ghi nhận, rồi hỏi thứ đầu danh sách đó theo cách hợp với loại nhà này.`
         : `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${text}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
@@ -9784,7 +9789,12 @@ Deno.serve(async (req) => {
   // 23/09/2026 (bắn 26 tin): tin 0 ảnh, bot vẫn "Em gửi hình liền đây :)". Không có tấm nào để gửi → nói thật.
   if (!photos.length && replies.some(laHuaGuiHinh)) {
     // 30/09/2026: khách không xin hình thì chỉ bỏ câu hứa (xem chanHuaGuiHinh).
-    const khachXinHinh = !!out!.send_photos || !!xemThemHinh || khachXinHinhLuot;
+    // SRS-5.1zzzl (08/10, bắn thử …kb5mua): (a) "hẻm xe hơi" — model TỰ điền `send_photos` cho căn 0 ảnh → code coi là khách xin,
+    // chen "Căn này chủ nhà chưa gửi hình" vào câu khách không hỏi. Ô hành động của model không phải bằng chứng ý KHÁCH. (b) "xem
+    // hình được không" — model quên `xin_hinh`, chỉ trả "Dạ em gửi hình liền đây ạ." → bỏ câu hứa là hết lời, khách nhận tin RỖNG.
+    // Câu hứa là cả lời đáp thì lời thật thay vào chỗ nó, không để im.
+    const conLai = chanHuaGuiHinh(replies, null).filter((r) => r.trim());
+    const khachXinHinh = !!xemThemHinh || khachXinHinhLuot || conLai.length === 0;
     const loiHinh = khachXinHinh
       ? doiTuXung([`Căn này chủ nhà chưa gửi hình ạ, ${cachGoiKhach(goiMua, prefs.nhom_tuoi)} muốn xem thì em hẹn đi xem trực tiếp nha.`], goiMua, prefs.nhom_tuoi === "lon_tuoi" ? "lon_tuoi" : null)[0]
       : null;

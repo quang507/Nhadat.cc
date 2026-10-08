@@ -4113,6 +4113,30 @@ fresh(seedKho);
     globalThis.__model.parse = (p) => laLuotBocRao(p) ? { so_can: 1, kien_thuc: [], cap_nhat: [], truong: [] } : laLuotYLuot(p) ? { dong_y: "khong_noi" } : OUT();
     await send({ external_user_id: "hoi-r3b", text: "dĩ nhiên rồi, chị có căn hộ cần bán" });
     const yl = globalThis.__calls.slice(nP).filter((c) => c.kind === "parse" && laLuotYLuot(c.params)).map((c) => c.params.messages[0].content).join("\n");
+    // SRS-5.1zzzl (08/10/2026, bắn thử …kb1tatt — phát lại bằng câu trả lời THẬT của AI, `phat-lai/kb1tatt.json`): (a) lượt
+    // "anh dung ten" không có câu kế → câu lệnh cấm đặt câu hỏi mới (model từng tự hỏi "hiện trạng", code không mở ô); (b) lượt
+    // sau, người bán có MỘT tin, không câu treo → AI vẫn phải đọc ("dang di" từng không qua AI, model đoán "em ghi đang ở").
+    {
+      const { readFileSync } = await import("node:fs");
+      const PL = JSON.parse(readFileSync(new URL("./phat-lai/kb1tatt.json", import.meta.url), "utf8")).luot;
+      fresh(seedKho);
+      const laBocPL = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+      let ndAnh = "", bocCuoi = 0, repCuoi = [];
+      for (const [i, t] of PL.entries()) {
+        let ri = 0;
+        globalThis.__model.parse = (p) => laLuotVai(p) ? { vai: "ban", bang_chung: t.text } : laBocPL(p) ? (t.boc ?? { so_can: 0, kien_thuc: [], truong: [] }) : laLuotYLuot(p) ? (t.y ?? { dong_y: "khong_noi" }) : OUT();
+        globalThis.__model.create = () => t.rep[Math.min(ri++, t.rep.length - 1)] ?? "Dạ em ghi nhận rồi ạ.";
+        const n0 = globalThis.__calls.length;
+        const r = await send({ external_user_id: "web-pl-kb1", text: t.text });
+        const moi = globalThis.__calls.slice(n0);
+        if (t.text === "anh dung ten") ndAnh = moi.filter((c) => c.kind === "create").map((c) => c.params.messages[0].content).find((x) => x.includes('"anh dung ten"')) ?? "";
+        if (i === PL.length - 1) { bocCuoi = moi.filter((c) => c.kind === "parse" && laBocPL(c.params)).length; repCuoi = r.body.replies ?? []; }
+      }
+      globalThis.__model.create = undefined;
+      check("SRS-5.1zzzl-a phát lại …kb1tatt: lượt không có câu kế ('anh dung ten') → câu lệnh cấm đặt câu hỏi mới", /KHÔNG đặt câu hỏi mới/.test(ndAnh), ndAnh.slice(-400));
+      check("SRS-5.1zzzl-b phát lại …kb1tatt: một tin, không câu treo, 'up tin lun e' → AI bóc tách ĐƯỢC GỌI, lời đáp không 'đang ở'",
+        bocCuoi >= 1 && !repCuoi.some((x) => /đang ở/.test(x)), JSON.stringify({ bocCuoi, repCuoi }));
+    }
     check("SRS-5.1zzzj-b lượt 'ý của lượt' chỉ đọc tin vừa nhắn, không ghép tin cũ ('ờ em nhận đăng…')",
       /dĩ nhiên rồi/.test(yl) && !/em nhận đăng giúp chị/.test(yl), yl.slice(0, 600));
     globalThis.__khongNhoCauHinh = false;
@@ -7060,6 +7084,18 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   r = await send({ external_user_id: "gvf-5c", text: "cho anh xem hình căn đó đi em" });
   check("GVF-10b khách XIN hình, căn 0 ảnh → vẫn nói thật 'chủ nhà chưa gửi hình', không hứa gửi",
     !/gửi hình liền/.test(rep()) && /chưa gửi hình/.test(rep()) && !(r.body.photos ?? []).length, JSON.stringify(r.body.replies));
+  // SRS-5.1zzzl (08/10, bắn thử …kb5mua): (a) model TỰ điền send_photos cho căn 0 ảnh khi khách chỉ nói hẻm → không chen "chưa gửi
+  // hình"; (b) khách xin hình mà model quên xin_hinh, lời đáp chỉ là câu hứa → không được trả tin rỗng.
+  fresh((d) => { seedKho(d); const b = buyerCo(d, "gvf-5d"); quanTam(d, b, "BDS-Q5-0001"); });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ căn này hẻm 6m xe hơi vào tận cửa ạ. Em gửi hình cho anh xem nè."], send_photos: "BDS-Q5-0001", xin_hinh: null });
+  r = await send({ external_user_id: "gvf-5d", text: "anh cần hẻm ô tô vô được" });
+  check("SRS-5.1zzzl-c khách chỉ nói hẻm, model tự điền send_photos (căn 0 ảnh) → bỏ câu hứa, KHÔNG chen 'chưa gửi hình'",
+    /hẻm 6m/.test(rep()) && !/chưa gửi hình/.test(rep()) && !/gửi hình cho anh/.test(rep()), JSON.stringify(r.body.replies));
+  fresh((d) => { seedKho(d); const b = buyerCo(d, "gvf-5e"); quanTam(d, b, "BDS-Q5-0001"); });
+  globalThis.__model.parse = () => OUT({ replies: ["Dạ em gửi hình liền đây ạ."], send_photos: null, xin_hinh: null });
+  r = await send({ external_user_id: "gvf-5e", text: "có ảnh căn đó ko e" });
+  check("SRS-5.1zzzl-d khách xin hình, model quên xin_hinh, lời đáp chỉ là câu hứa (căn 0 ảnh) → không rỗng, nói thật 'chủ nhà chưa gửi hình'",
+    (r.body.replies ?? []).some((x) => x.trim()) && /chưa gửi hình/.test(rep()) && !/gửi hình liền/.test(rep()), JSON.stringify(r.body.replies));
   // (7) khách là chú, model tự xưng "chú ghi nhớ".
   fresh((d) => buyerCo(d, "gvf-7", { xung_ho: "chú", nhom_tuoi: "lon_tuoi" }));
   globalThis.__model.parse = () => OUT({ replies: ["Dạ, chú ghi nhớ rồi ạ."] });
