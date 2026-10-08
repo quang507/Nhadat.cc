@@ -420,6 +420,8 @@ if (WEB) {
   }
   Bun.serve({
     port,
+    // VPS (cai-vps.sh): `--host 127.0.0.1` — chỉ đường hầm cloudflared vào được, không mở cổng thẳng ra Internet.
+    hostname: giaTri("--host") ?? "0.0.0.0",
     async fetch(req) {
       const u = new URL(req.url);
       if (req.method === "GET" && u.pathname === "/") return new Response(TRANG_WEB_HTML().replace("__TEN__", may.ten), { headers: { "content-type": "text/html; charset=utf-8" } });
