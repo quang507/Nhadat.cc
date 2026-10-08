@@ -3404,7 +3404,7 @@ Deno.serve(async (req) => {
     let boiCanh =
       `NGỮ CẢNH (đọc kỹ trước khi viết):\n` +
       dongGoiChuNha(goiNguoi) +
-      `- Lịch sử gần nhất, tin mới ở cuối. KHÔNG lặp lại khuôn câu, lời khen, hay lý do "khách hay hỏi" đã dùng trong đó; tin trước của em mở bằng "Dạ" thì tin này đừng mở bằng "Dạ"; viết như người thật nhắn tay, mỗi tin một giọng:\n` +
+      `- Lịch sử gần nhất, tin mới ở cuối. KHÔNG lặp lại khuôn câu, lời khen, hay lý do "khách hay hỏi" đã dùng trong đó; tin trước của em mở bằng "Dạ" thì tin này đổi cách mở ("Dạ vâng", "Vâng ạ", hoặc vào thẳng) nhưng vẫn lễ phép, câu hỏi kết bằng "ạ"; viết như người thật nhắn tay, mỗi tin một giọng:\n` +
       `${lichSuText || "(chưa có tin nào trước đó)"}\n\n`;
     // SRS-5.1zzzj (chat thử 08/10, …w44h): NGỮ CẢNH dựng TRƯỚC khi AI đọc tin này — khách tự xưng ngay lượt này ("cho anh") mà
     // model vẫn được dặn gọi "anh chị". Mọi chỗ gọi model lấy ngữ cảnh qua hàm này: AI đã đọc ra tự xưng (qua kiểm trích dẫn) thì
