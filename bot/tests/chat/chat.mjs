@@ -171,7 +171,9 @@ async function mayChuMay() {
         const sys = Array.isArray(req.system) ? req.system.map((x) => x?.text ?? "").join(" ") : String(req.system ?? "");
         const loai = (/CHẾ ĐỘ CHỐT TIN/.test(sys) ? "chot " : "") + sys.replace(/\s+/g, " ").slice(0, 60);
         const body = await res.clone().json().catch(() => null);
-        const ra = (body?.content ?? []).map((c) => c?.type === "tool_use" ? JSON.stringify(c.input) : c?.text ?? "").join(" ");
+        // 08/10/2026 (SRS-5.1zzzu): API trả lỗi (vd 400 grammar quá lớn) thì `content` không có — ghi mã + lời lỗi, đừng để dòng rỗng.
+        const ra = body?.error ? `[LỖI API ${res.status}] ${body.error.type ?? ""}: ${body.error.message ?? ""}`
+          : (body?.content ?? []).map((c) => c?.type === "tool_use" ? JSON.stringify(c.input) : c?.text ?? "").join(" ");
         globalThis.__ghiAi(loai, ra.slice(0, 1500));
       } catch { /* vết chỉ để đọc, hỏng thì bỏ */ }
     }

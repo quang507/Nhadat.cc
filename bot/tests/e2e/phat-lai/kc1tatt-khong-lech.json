@@ -404,8 +404,7 @@
     "tu_xung": {
      "la": "anh",
      "trich_dan": "anh dung ten"
-    },
-    "doc_lai": "anh đứng tên"
+    }
    },
    "y": {
     "dong_y": "khong_dong_y",
@@ -414,7 +413,8 @@
     "yeu_cau_trich": null,
     "yeu_cau_o": null,
     "mua_kem": null,
-    "ngung_hang_loat": null
+    "ngung_hang_loat": null,
+    "doc_lai": "anh đứng tên"
    },
    "rep": [
     "Dạ vâng, em ghi tên anh Dung rồi ạ."

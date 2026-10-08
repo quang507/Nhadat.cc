@@ -3451,7 +3451,9 @@ Deno.serve(async (req) => {
       const tx = !goiNguoi && k?.ket ? docTuXung(k.tuXung, text, tinChuNhaGoc()) : null;
       const bc = tx ? boiCanh.replace(dongGoiChuNha(null), dongGoiChuNha(tx.la)) : boiCanh;
       // SRS-5.1zzzn: tin gõ không dấu / tắt → bản AI đọc (qua `docLaiHopLe`) đứng đầu ngữ cảnh, model hiểu theo bản đó.
-      const dl0 = k?.ket ? docLaiHopLe((k.ket as { doc_lai?: string | null }).doc_lai, text) : null;
+      // SRS-5.1zzzu: bản đọc lại lấy từ lượt "ý của lượt" (khuôn bóc tách không còn chỗ — giới hạn grammar, DC-13).
+      const yk = yLuotAi ? await yLuotAi : undefined;
+      const dl0 = yk?.docLai ? docLaiHopLe(yk.docLai, text) : null;
       const dl = dl0 && cauDaDap ? anCauDaDap(dl0, cauDaDap) : dl0;
       return dl ? bc.replace("NGỮ CẢNH (đọc kỹ trước khi viết):\n", `NGỮ CẢNH (đọc kỹ trước khi viết):\n- Tin chủ nhà vừa nhắn gõ không dấu / tắt ("${tinChoModel().slice(0, 200)}"); em đọc là: "${dl.slice(0, 300)}" — hiểu theo bản này, đừng đoán nghĩa khác (chữ không dấu không phải tên người).\n`) : bc;
     };

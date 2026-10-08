@@ -38,6 +38,9 @@ const YLuot = z.object({
     giu: z.array(z.string()).describe("Cụm chỉ căn GIỮ LẠI, chép như khách viết ('căn Trần Hưng Đạo', 'căn 2', 'căn hẻm 4m'). an_het thì rỗng."),
     trich_dan: z.string().describe("Cụm COPY NGUYÊN VĂN trong tin thể hiện ý ngưng nhiều căn."),
   }).nullable().describe("Chủ nhà muốn ngưng rao / gỡ / ẩn NHIỀU căn một lúc, hoặc chỉ giữ một vài căn ('chỉ giữ căn A, ẩn hết còn lại', 'gỡ hết đi', 'ngưng rao hết trừ căn X'). Ngưng MỘT căn cụ thể, hỏi han, hay nói chuyện khác → null."),
+  // SRS-5.1zzzn → 5.1zzzu (08/10/2026): bản đọc lại tin không dấu — từng nằm ở khuôn bóc tách, làm khuôn đó vượt giới hạn
+  // grammar (15 trường cấp một, DC-13) → mọi lượt bóc tách 400. Đọc lại tin là việc của HỘI THOẠI (cần câu bot vừa nói), ở đây.
+  doc_lai: z.string().nullable().describe("Tin chủ nhà NGẮN (dưới 200 chữ) gõ KHÔNG DẤU / viết tắt / sai chính tả → viết lại CÓ DẤU, đúng nghĩa theo câu bot vừa nói, chỉ thêm dấu và viết đủ chữ tắt, KHÔNG thêm ý, KHÔNG đổi số ('anh dung ten' → 'anh đứng tên'; 'dc e' → 'được em'). Tin đã có dấu đầy đủ, hoặc tin dài → null."),
 });
 const FORMAT_Y_LUOT = dinhDangLong(YLuot);
 
@@ -74,7 +77,12 @@ Ngưng MỘT căn ("ngưng căn Nguyễn Trãi"), "bán rồi", hỏi "gỡ tin 
 LUẬT MUA KÈM (mua_kem) — chủ nhà nói CHÍNH MÌNH muốn mua / tìm mua / đổi sang căn khác ("bán căn này để mua nhà Bình Thạnh tầm 6
 tỷ", "bán xong anh tính mua căn hộ q2"): khu_vuc, ngan_sach, loai chép NGUYÊN chữ khách trong phần nói về MUA, trich_dan là phần
 đó. Giá / khu của căn đang BÁN không bao giờ vào mua_kem. Khách MUA HỘ người khác, kể chuyện đã mua trước đây ("anh mua căn này
-năm 2019"), hỏi khách mua của tin mình → null.`;
+năm 2019"), hỏi khách mua của tin mình → null.
+
+ĐỌC LẠI (doc_lai) — tin NGẮN gõ không dấu / viết tắt → viết lại có dấu theo nghĩa câu bot vừa nói: "anh dung ten" (bot hỏi ai đứng
+tên sổ) → "anh đứng tên"; "dc e" → "được em". Chữ không dấu đọc được HAI nghĩa mà câu bot không phân định → viết nghĩa
+khớp với ô dong_y bạn vừa chọn. Chỉ thêm dấu, viết đủ chữ tắt; không thêm ý, không đổi số.
+Tin đã có dấu, hoặc dài → null.`;
 
 type ClientModel = {
   messages: {
@@ -90,6 +98,8 @@ export type YLuotLLM = {
   muaKem?: { khu_vuc: string | null; ngan_sach: string | null; loai: string | null; trich_dan: string } | null;
   /** SRS-5.1zzl: null = model nói không có ý ngưng nhiều căn; undefined = model không trả ô này. */
   ngungHangLoat?: { kieu: typeof KIEU_NHL[number]; giu: string[]; trich_dan: string } | null;
+  /** SRS-5.1zzzu: tin không dấu viết lại có dấu (nơi gọi kiểm `docLaiHopLe`). null / undefined = không có. */
+  docLai?: string | null;
 };
 
 /** Hỏi model ý ngắn của lượt. `ket` null = model trả không đọc được (nơi gọi coi như AI không chạy). Model hỏng thì NÉM. */
@@ -101,7 +111,7 @@ export async function docYLuotBangModel(
 ): Promise<{ ket: YLuotLLM | null; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
-    max_tokens: 350,
+    max_tokens: 500,
     output_config: { effort: "low", format: FORMAT_Y_LUOT },
     system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
     messages: [{
@@ -119,6 +129,7 @@ export async function docYLuotBangModel(
     ...(yc ? { yeuCau: { loai: yc, trich_dan: str(o.yeu_cau_trich), o: (O_BO as readonly unknown[]).includes(o.yeu_cau_o) ? o.yeu_cau_o as typeof O_BO[number] : null } } : {}),
     ...("mua_kem" in o ? { muaKem: docMuaKemTho(o.mua_kem) } : {}),
     ...("ngung_hang_loat" in o ? { ngungHangLoat: docNHLTho(o.ngung_hang_loat) } : {}),
+    ...(str(o.doc_lai) ? { docLai: str(o.doc_lai) } : {}),
   };
   return { ket: dy || yc || "ngung_hang_loat" in o ? ket : null, usage: r.usage };
 }

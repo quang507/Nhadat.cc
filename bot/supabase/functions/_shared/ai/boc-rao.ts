@@ -109,12 +109,9 @@ const DeXuatRao = z.object({
   vai: Vai,
   cau_ke: CauKe,
   tu_xung: TuXung,
-  // SRS-5.1zzzn (08/10, bắn thử …kc1tatt): "anh dung ten" — AI đọc đúng (anh đứng tên) nhưng lời bot do model khác viết chỉ thấy
-  // chữ không dấu, đoán "tên anh Dung". Bản đọc của AI đi cùng tin tới model viết lời (code kiểm: cùng chữ số, không dài ra).
-  doc_lai: z.string().nullable().describe("Tin chủ nhà gõ KHÔNG DẤU / viết tắt / sai chính tả → viết lại CÓ DẤU, đúng nghĩa theo ngữ cảnh (câu bot vừa hỏi), chỉ thêm dấu và viết đủ chữ tắt, KHÔNG thêm ý, KHÔNG đổi số ('anh dung ten' → 'anh đứng tên'; 'dc e' → 'được em'). Tin đã có dấu đầy đủ → null."),
 });
 // Đọc kết quả: `tra_loi` có thể thiếu (bản model cũ / mock e2e) — thiếu thì coi như AI không nói, không hỏng cả lượt.
-const DeXuatRaoDoc = DeXuatRao.extend({ can_khac: z.boolean().nullish(), tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish(), tu_xung: TuXung.nullish(), doc_lai: z.string().nullish() });
+const DeXuatRaoDoc = DeXuatRao.extend({ can_khac: z.boolean().nullish(), tra_loi: TraLoiCau.nullish(), cap_nhat: z.array(CapNhat).nullish(), xac_nhan: z.array(XacNhan).nullish(), hoi_lai: HoiLai.nullish(), cam_xuc: CamXuc.nullish(), khong_can_hoi: z.array(KhongCanHoi).nullish(), y_dinh: YDinh.nullish(), vai: Vai.nullish(), cau_ke: CauKe.nullish(), tu_xung: TuXung.nullish() });
 export type CauKeLLM = z.infer<typeof CauKe>;
 export type YDinhLLM = z.infer<typeof YDinh>;
 export type VaiLLM = z.infer<typeof Vai>;
