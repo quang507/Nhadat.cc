@@ -4216,13 +4216,20 @@ fresh(seedKho);
       check("SRS-5.1zzzs-b nhà phố 'bán nhà trong khu Him Lam …' → tên khu KHÔNG thành địa chỉ (vẫn hỏi vị trí)",
         !!tinNP && !String(tinNP.location_raw ?? "").includes("Him Lam"), JSON.stringify({ loc: tinNP?.location_raw, treoNP }));
       // (b) tin còn CHỜ THÔNG TIN không được gọi là "đang rao" trong câu lệnh; (c) bản AI đọc lại tin không dấu đi tới model viết lời.
-      let ndDang = "", ndAnh2 = "";
+      let ndDang = "", ndAnh2 = "", repDang = [];
       await phatLai("kc1tatt", "web-pl-kc1", async (i, t, r, calls) => {
-        if (t.text === "dang di") ndDang = nd(calls);
+        if (t.text === "dang di") { ndDang = nd(calls); repDang = r.body.replies ?? []; }
         if (t.text === "anh dung ten") ndAnh2 = nd(calls);
       });
-      check("SRS-5.1zzzn-b phát lại …kc1tatt: 'dang di' khi tin còn chờ thông tin → câu lệnh ghi CHƯA LÊN KỆ, không còn tiêu đề 'đang rao các tin'",
-        /CHƯA LÊN KỆ/.test(ndDang) && !/đang rao các tin/.test(ndDang), ndDang.slice(-600));
+      // SRS-5.1zzzt: "dang di" — ý của lượt đọc BẢO ĐĂNG, bóc tách đọc HOÃN → hỏi lại khách bằng hai cách hiểu (thay chỗ zzzn-b
+      // từng soi câu lệnh của nhánh r3 — nay lượt này không tới r3 nữa).
+      check("SRS-5.1zzzt-a phát lại …kc1tatt: 'dang di' (ý lượt: đăng đi; bóc tách: hoãn) → hỏi lại khách 'đăng luôn hay đang bận', không đoán",
+        repDang.some((x) => /em chưa chắc ý/.test(x) && /đăng tin lên luôn/.test(x) && /đang bận/.test(x)) && !repDang.some((x) => /đang rao/.test(x)), JSON.stringify(repDang));
+      let ndDang2 = "";
+      await phatLai("kc1tatt-khong-lech", "web-pl-kc1b", async (i, t, r, calls) => { if (t.text === "dang di") ndDang2 = nd(calls); });
+      check("SRS-5.1zzzn-b phát lại …kc1tatt (ý lượt không lệch): 'dang di' khi tin còn chờ thông tin → câu lệnh ghi CHƯA LÊN KỆ, không còn tiêu đề 'đang rao các tin'",
+        /CHƯA LÊN KỆ/.test(ndDang2) && !/đang rao các tin/.test(ndDang2), ndDang2.slice(-600));
+      void ndDang;
       check("SRS-5.1zzzn-c phát lại …kc1tatt: 'anh dung ten' (AI đọc 'anh đứng tên') → câu lệnh model viết lời có bản AI đọc",
         /em đọc là: "anh đứng tên"/.test(ndAnh2), ndAnh2.slice(0, 500));
     }

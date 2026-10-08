@@ -5,7 +5,7 @@
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang, boHuaDaDang } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest, yLuotLech } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { anCauDaDap } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
@@ -899,5 +899,15 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZZZP-07 (cách nói MỚI) 'MT 5m', '4x16' là ngang; 'hẻm 5m đường Phan Xích Long' vẫn là hẻm", kt("MT 5m nở hậu 6m", "ngang", "5", "MT 5m") && kt("4x16", "ngang", "4", "4x16") && kt("hẻm 5m đường Phan Xích Long", "do_rong_hem", "5", "hẻm 5m đường Phan Xích Long"));
   ok("ZZZP-08 chuDeSoDo: 'lô đất ngang 5m' không bị coi là đường", !chuDeSoDo("lo dat ngang 5m").duong && chuDeSoDo("lo dat ngang 5m").ngang);
 }
+// ── SRS-5.1zzzt (08/10/2026, bắn thử …kc1tatt "dang di"): hai lượt AI đọc cùng tin ra hai ý ngược nhau → hỏi lại.
+{
+  const dang = { la: "dong_y", dangDi: true }, gat = { la: "dong_y", dangDi: false }, khong = { la: "khong_dong_y", dangDi: false };
+  ok("ZZZT-01 'dang di': ý lượt = bảo đăng, bóc tách = hoãn → lệch [dang, hoan]", JSON.stringify(yLuotLech(dang, { loai: "hoan" })) === '["dang","hoan"]');
+  ok("ZZZT-02 (cách nói MỚI) 'thoi dang di' kiểu: bảo đăng ↔ ngưng rao / bán rồi → lệch", !!yLuotLech(dang, { loai: "ngung_rao" }) && !!yLuotLech(dang, { loai: "ban_roi" }));
+  ok("ZZZT-03 bóc tách 'du_roi' ↔ ý lượt 'không đồng ý' → lệch [dang, khong_dang]", JSON.stringify(yLuotLech(khong, { loai: "du_roi" })) === '["dang","khong_dang"]');
+  ok("ZZZT-04 hai lượt cùng ý (bảo đăng + du_roi; gật + bán rồi) → KHÔNG lệch", yLuotLech(dang, { loai: "du_roi" }) === null && yLuotLech(gat, { loai: "ban_roi" }) === null);
+  ok("ZZZT-05 một lượt không chạy / không có ý → không lệch", yLuotLech(undefined, { loai: "hoan" }) === null && yLuotLech(dang, null) === null);
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
+

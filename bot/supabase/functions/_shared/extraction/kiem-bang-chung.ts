@@ -1295,6 +1295,24 @@ export function docDongY(v: { la?: string | null; trich_dan?: string | null; dan
 }
 
 /**
+ * SRS-5.1zzzt (08/10/2026, bắn thử …kc1tatt): "dang di" — lượt "ý của lượt" đọc là BẢO ĐĂNG ("đăng đi"), lượt bóc tách đọc là
+ * HOÃN ("đang đi" = đang bận). Mỗi nơi gọi tin một lượt, nên bot trả lời theo lượt nó hỏi trước ("em đang rao tích cực") — đoán.
+ * Hai lượt AI độc lập cùng đọc MỘT tin mà ra hai ý ngược nhau thì tin đó mơ hồ thật: hỏi lại khách, không chọn một bên.
+ * Cặp ngược nhau: bảo đăng (`dangDi` / `du_roi`) ↔ dừng (`hoan` / `ngung_rao` / `ban_roi`), và `du_roi` ↔ không đồng ý.
+ * Trả hai ý (để hỏi "A hay B") hoặc null (không lệch, hoặc một lượt không chạy).
+ */
+export type YLuot = "dang" | "hoan" | "ngung_rao" | "ban_roi" | "khong_dang";
+export function yLuotLech(
+  dongY: { la: "dong_y" | "khong_dong_y"; dangDi: boolean } | null | undefined,
+  yDinh: { loai: "ban_roi" | "ngung_rao" | "rao_lai" | "hoan" | "du_roi" } | null | undefined,
+): [YLuot, YLuot] | null {
+  if (!dongY || !yDinh) return null;
+  if (dongY.dangDi && (yDinh.loai === "hoan" || yDinh.loai === "ngung_rao" || yDinh.loai === "ban_roi")) return ["dang", yDinh.loai];
+  if (yDinh.loai === "du_roi" && dongY.la === "khong_dong_y") return ["dang", "khong_dang"];
+  return null;
+}
+
+/**
  * SRS-5.1zzl (05/10/2026): ý NGƯNG NHIỀU CĂN / CHỈ GIỮ do AI đọc (doc-y-luot) — nhận khi cụm trích có trong tin.
  * `undefined` ở nơi gọi = AI không chạy (luật `laNgungHangLoat` đỡ); null = AI nói không có ý này.
  */

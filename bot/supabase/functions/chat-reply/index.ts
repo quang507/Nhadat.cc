@@ -55,7 +55,7 @@ import { nhipGui } from "../_shared/nhip-gui.ts";
 import { laNgungHangLoat } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { docNgungHangLoat } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -3882,6 +3882,24 @@ Deno.serve(async (req) => {
       })();
     }
     await xetDoiNhan();
+
+    // ─── SRS-5.1zzzt (08/10/2026, bắn thử …kc1tatt "dang di"): hai lượt AI đọc CÙNG tin ra hai ý NGƯỢC nhau (ý của lượt: bảo
+    // đăng; bóc tách: hoãn) → tin mơ hồ thật, hỏi lại khách bằng chính hai cách hiểu, không để nơi gọi nào hỏi AI trước thì
+    // thắng. Chỉ khi tin không mang dữ liệu nào (có dữ liệu thì phần dữ liệu vẫn phải ghi) và câu bot vừa nói chưa phải câu hỏi
+    // lại này (không hỏi hai lần liền — lượt sau mơ hồ nữa thì để các nhánh như cũ).
+    if (!imageUrl && !humanActive && laCheDoAi && (dsMo.length > 0 || !!pendingReq) && !/em chưa chắc ý/.test(cauBotThat ?? "")) {
+      const [dyL, ydL, kL] = await Promise.all([dongYAi(), yDinhAi(), bongAi]);
+      const lech = yLuotLech(dyL, ydL);
+      if (lech && !((kL?.truong?.length ?? 0) > 0 || (kL?.kienThuc?.length ?? 0) > 0)) {
+        const Y_NGHIA: Record<YLuot, string> = {
+          dang: "muốn em đăng tin lên luôn", hoan: "đang bận, để lúc khác mình nói tiếp", ngung_rao: "muốn tạm ngưng rao",
+          ban_roi: "báo căn này bán rồi", khong_dang: "chưa muốn đăng",
+        };
+        const cau = `Dạ em chưa chắc ý ${cachGoi} ở câu "${(textTreo || text).trim().slice(0, 60)}" ạ: ${cachGoi} ${Y_NGHIA[lech[0]]}, hay ${Y_NGHIA[lech[1]]} vậy ạ?`;
+        console.log(`chat-reply: hai luot AI doc lech (${lech.join(" / ")}) — hoi lai khach`);
+        return await traLoiSeller([cau], { y_lech: lech, loai_cau: "y_lech" });
+      }
+    }
 
     // ─── SRS-5.1zzzg (07/10/2026, chat thử …gogt: tin đang rao đủ dữ kiện, khách "Mình cần bán gấp" → luật `wantsSell` (bỏ dấu
     // "cần" = "căn", có "bán") mở TIN MỚI rỗng, bot hỏi "nhà loại gì"): người bán ĐÃ CÓ tin mở thì câu này là rao căn MỚI hay nói
