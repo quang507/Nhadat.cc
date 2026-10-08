@@ -4137,6 +4137,58 @@ fresh(seedKho);
       check("SRS-5.1zzzl-b phát lại …kb1tatt: một tin, không câu treo, 'up tin lun e' → AI bóc tách ĐƯỢC GỌI, lời đáp không 'đang ở'",
         bocCuoi >= 1 && !repCuoi.some((x) => /đang ở/.test(x)), JSON.stringify({ bocCuoi, repCuoi }));
     }
+    // SRS-5.1zzzm (08/10/2026, bắn thử 5 kịch bản — phát lại bằng câu trả lời THẬT của AI, `phat-lai/*.json`).
+    {
+      const { readFileSync } = await import("node:fs");
+      const laBocPL = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+      /** Phát lại một hội thoại; `moiLuot(i, t, r, cacLuotGoi)` xem từng lượt. */
+      const phatLai = async (ten, uid, moiLuot) => {
+        const PL = JSON.parse(readFileSync(new URL(`./phat-lai/${ten}.json`, import.meta.url), "utf8")).luot;
+        fresh(seedKho);
+        for (const [i, t] of PL.entries()) {
+          let ri = 0;
+          globalThis.__model.parse = (p) => laLuotVai(p) ? { vai: "ban", bang_chung: t.text } : laBocPL(p) ? (t.boc ?? { so_can: 0, kien_thuc: [], truong: [] }) : laLuotYLuot(p) ? (t.y ?? { dong_y: "khong_noi" }) : OUT();
+          globalThis.__model.create = () => t.rep[Math.min(ri++, t.rep.length - 1)] ?? "Dạ em ghi nhận rồi ạ.";
+          const n0 = globalThis.__calls.length;
+          const r = await send({ external_user_id: uid, text: t.text });
+          await moiLuot(i, t, r, globalThis.__calls.slice(n0));
+        }
+        globalThis.__model.create = undefined;
+      };
+      const nd = (calls) => calls.filter((c) => c.kind === "create").map((c) => c.params.messages[0].content).join("\n---\n");
+      // (a) môi giới 2 căn có sẵn ngang×dài → không hỏi diện tích; câu hỏi kế là bong bóng RIÊNG (không nằm trong 🤖).
+      let treoSau2 = [], bongCan1 = [], ndOk = "";
+      await phatLai("kb3mgioi", "web-pl-kb3", async (i, t, r, calls) => {
+        if (i === 1) treoSau2 = db().t.info_requests.filter((q) => q.status === "pending").map((q) => q.question);
+        if (i === 2) bongCan1 = r.body.replies ?? [];
+        if (i === 4) ndOk = nd(calls);
+      });
+      check("SRS-5.1zzzm-a phát lại …kb3mgioi: 'căn 1 … 4x16 …; căn 2 … 5x20 …' → KHÔNG treo câu diện tích",
+        treoSau2.length > 0 && !treoSau2.some((q) => /^dien_tich/.test(q)), JSON.stringify(treoSau2));
+      check("SRS-5.1zzzm-b phát lại …kb3mgioi: 'căn 1 sổ hồng riêng' → câu hỏi kế là bong bóng riêng, bong bóng 🤖 không chứa câu hỏi",
+        bongCan1.some((x) => x.startsWith("🤖")) && !bongCan1.some((x) => x.startsWith("🤖") && /\?/.test(x)) && bongCan1.some((x) => !x.startsWith("🤖") && /\?/.test(x)), JSON.stringify(bongCan1));
+      void ndOk;
+      const { nhanTheoLoai: nhanTL } = await import("../../supabase/functions/_shared/prompts.ts");
+      check("SRS-5.1zzzm-c nhãn ý kết cấu đưa model (CẦN HỎI) chỉ một ý — không kèm 'phòng'", !/phòng/.test(nhanTL("ket_cau", "nha_pho")), nhanTL("ket_cau", "nha_pho"));
+      // (b) chế độ admin: bong bóng 🤖 do nhánh "căn N" tự soạn không tới khách.
+      const cuCHm = globalThis.__cauHinh;
+      globalThis.__cauHinh = { ...(cuCHm ?? {}), bao_lai_da_luu: "admin" };
+      let bongAdm = [];
+      await phatLai("kb3mgioi", "web-pl-kb3a", async (i, t, r) => { if (i === 2) bongAdm = r.body.replies ?? []; });
+      globalThis.__cauHinh = cuCHm;
+      check("SRS-5.1zzzm-d chế độ admin: 'căn 1 sổ hồng riêng' → khách KHÔNG nhận bong bóng 🤖, vẫn nhận câu hỏi kế",
+        !bongAdm.some((x) => x.startsWith("🤖")) && bongAdm.some((x) => /\?/.test(x)), JSON.stringify(bongAdm));
+      // (c) căn hộ nói tên dự án KHÔNG có trong kho ("The Sun Avenue" — cách nói mới) → không hỏi lại vị trí / dự án.
+      const daTreo = new Set();
+      await phatLai("kb4thue", "web-pl-kb4", async () => { for (const q of db().t.info_requests) daTreo.add(q.question); });
+      check("SRS-5.1zzzm-e phát lại …kb4thue: 'chị có căn hộ The Sun Avenue cần cho thuê' → không bao giờ treo câu vị trí (dự án)",
+        daTreo.size > 0 && !daTreo.has("vi_tri"), JSON.stringify([...daTreo]));
+      // (d) hỏi phí → bong bóng phí tiền định + câu lệnh dặn model CHỈ hỏi tiếp (không nhắc lại phí).
+      let ndPhi = "";
+      await phatLai("kb2chau", "web-pl-kb2", async (i, t, r, calls) => { if (t.text === "phí sao cháu") ndPhi = nd(calls); });
+      check("SRS-5.1zzzm-f phát lại …kb2chau: 'phí sao cháu' → câu lệnh dặn tin chỉ gồm MỘT câu hỏi tiếp, không nhắc lại phí",
+        /CHỈ gồm MỘT câu hỏi tiếp/.test(ndPhi), ndPhi.slice(0, 300));
+    }
     check("SRS-5.1zzzj-b lượt 'ý của lượt' chỉ đọc tin vừa nhắn, không ghép tin cũ ('ờ em nhận đăng…')",
       /dĩ nhiên rồi/.test(yl) && !/em nhận đăng giúp chị/.test(yl), yl.slice(0, 600));
     globalThis.__khongNhoCauHinh = false;
@@ -6896,7 +6948,9 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
     check("GVE-06 chưa biết cách gọi → câu hỏi không kết bằng 'anh?'/'chị?' và không 'anh/ạ' (giữ 'anh chị')", !/(?<![\p{L}\/])(anh|chị)\s*[?]/u.test(rep().replace(/anh chị/g, "")) && !/anh\/ạ/.test(rep()), rep());
   }
   // Nhánh bán gọi model bằng `messages.create` (chữ) → mock qua `__model.create`.
-  globalThis.__model = { parse: () => OUT(), create: () => "Dạ em ghi nhận rồi. Căn 1 xây mấy tầng vậy anh?" };
+  // 08/10/2026 (SRS-5.1zzzm): đường nhiều căn nay ghi diện tích "4x12" → câu kế không còn là diện tích / kết cấu mà là sổ;
+  // lời model giả hỏi đúng câu đó (ca này đo phí + "vậy anh?" → "vậy ạ?", không đo thứ tự câu hỏi).
+  globalThis.__model = { parse: () => OUT(), create: () => "Dạ em ghi nhận rồi. Sổ hồng nhà mình là sổ riêng hay sổ chung vậy anh?" };
   r = await send({ external_user_id: "gve-e", text: "bên em thu phí sao? tui là sale nha, ko phải chủ" });
   check("GVE-07 'bên em thu phí sao? tui là sale nha, ko phải chủ' → phí 0,5%, KHÔNG ghi bo_sung 'ko phải chủ', model 'vậy anh?' → 'vậy ạ?'",
     /0,5% giá chốt/.test(rep()) && !db().t.listing_facts.some((f) => f.question === "bo_sung") && /vậy ạ\?/.test(rep()) && !/vậy anh\?/.test(rep()),

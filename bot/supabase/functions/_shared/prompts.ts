@@ -218,7 +218,9 @@ export const FACT_LABELS: Record<string, string> = {
   dien_tich: "diện tích",
   dien_tich_tim_tuong: "diện tích tim tường",
   dien_tich_san: "diện tích sàn (cộng các tầng, không phải đất)",
-  ket_cau: "kết cấu (số tầng, phòng)",
+  // SRS-5.1zzzm (08/10, bắn thử …kb2chau): nhãn cũ "kết cấu (số tầng, phòng)" là HAI ý — model đọc dòng CẦN HỎI rồi hỏi "mấy tầng
+  // và mấy phòng ngủ" trong một câu, trong khi phòng ngủ là câu riêng (`so_phong_ngu`, hỏi sau). Nhãn = đúng một ý.
+  ket_cau: "kết cấu (mấy tầng: trệt, lửng, mấy lầu)",
   do_rong_hem: "độ rộng hẻm trước nhà",
   do_rong_duong: "độ rộng đường trước đất",
   huong: "hướng",

@@ -2892,10 +2892,11 @@ Deno.serve(async (req) => {
     ): Promise<{ bong: string | null; cheDo: CheDoBaoLai }> => {
       try {
         // Nhánh đã tự soạn 💾 theo từng căn (fact theo căn) → không dựng 💾 chung nữa.
-        if (extra.bao_lai_tat === true) return { bong: null, cheDo: "tat" };
         const { data: cd, error: cdErr } = await client.rpc("cau_hinh", { p_key: "bao_lai_da_luu" });
         if (cdErr) await ghiLoi(client, "chat-reply cau_hinh(bao_lai_da_luu)", cdErr.message);
         const cheDo = docCheDo(cd);
+        // SRS-5.1zzzm: nhánh tự soạn 🤖 vẫn cần biết CHẾ ĐỘ thật để bong bóng đó đi đúng chỗ (admin → chỉ /admin).
+        if (extra.bao_lai_tat === true) return { bong: null, cheDo };
         if (cheDo === "tat") return { bong: null, cheDo };
         // Tin nào: mã vừa tạo trong lượt này > active_listing_id đọc LẠI (trigger
         // đổi nó ngay khi mở câu chờ mới, bản `sellerRow` đầu lượt đã cũ) > tin mới nhất.
@@ -3190,6 +3191,15 @@ Deno.serve(async (req) => {
         // 05/10/2026 (văn phong demo AOND, SRS-5.1zzi): chế độ `admin` — 🤖 chỉ ghi `messages` cho /admin, KHÔNG gửi khách;
         // lời ghi nhận của model vì thế là lời xác nhận duy nhất, giữ nguyên (không `boCauGhiNhan`).
         if (bl.bong && bl.cheDo === "admin") bongAdmin = bl.bong;
+        // SRS-5.1zzzm (08/10, bắn thử …kb3mgioi): nhánh "căn 1 …, căn 2 …" TỰ SOẠN bong bóng 🤖 (bao_lai_tat) — nó đi thẳng tới
+        // khách kể cả khi công tắc là `admin` (🤖 chỉ cho /admin). Chế độ admin: mọi bong bóng 🤖 trong lời đáp về /admin. (`tat` giữ như cũ: nhánh đó là lời xác nhận duy nhất ghi gì cho căn nào.)
+        if (bl.cheDo === "admin") {
+          const tuSoan = sach.filter((r) => r.startsWith(DAU_BAO_LAI));
+          if (tuSoan.length) {
+            sach = sach.filter((r) => !r.startsWith(DAU_BAO_LAI));
+            bongAdmin = [bongAdmin, ...tuSoan].filter(Boolean).join("\n");
+          }
+        }
         if (bl.bong && bl.cheDo !== "admin") {
           // 14/09/2026 (bắn thật): 💾 đã nói lưu gì, nên "Dạ em ghi số phòng ngủ 4 rồi ạ"
           // (bong bóng code) và "Dạ em ghi 1 trệt 3 lầu… rồi" (model) là ghi nhận lần hai,
@@ -4632,7 +4642,8 @@ Deno.serve(async (req) => {
           }
           // 💾 chung chỉ đọc MỘT tin (căn đang chăm) nên in pháp lý của căn 1 dưới tin căn 2 — bong bóng
           // tiền định ở đây đã nói rõ từng căn, tắt 💾 cho lượt này (20/09/2026).
-          return await traLoiSeller([`${BOC_DUOC} ${daGhi.join(" · ")}.${cauKe ? `\n${cauKe}` : ""}`], { fact_theo_can: daGhi.length, dong_cau_treo: daDong.size, bao_lai_tat: true });
+          // SRS-5.1zzzm: câu hỏi kế là lời của EM với khách — bong bóng riêng, không nằm trong bong bóng 🤖 (báo lại, có thể chỉ cho /admin).
+          return await traLoiSeller([`${BOC_DUOC} ${daGhi.join(" · ")}.`, ...(cauKe ? [cauKe] : [])], { fact_theo_can: daGhi.length, dong_cau_treo: daDong.size, bao_lai_tat: true });
         }
       }
     }
@@ -4769,6 +4780,15 @@ Deno.serve(async (req) => {
           if (["vi_tri", "gia", "dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "do_rong_hem", "mat_tien", "bo_sung", "phuong", "loai_bds", "quan"].includes(f.question)) continue;
           const { error: fkErr } = await client.rpc("ghi_fact_listing", { p_listing_id: moi.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat" });
           if (fkErr) await ghiLoi(client, `chat-reply ghi_fact_listing(${f.question} nhieu can)`, fkErr.message);
+        }
+        // SRS-5.1zzzm (08/10, bắn thử …kb3mgioi: "căn 1 … 4x16 9.5 tỷ; căn 2 … 5x20 32 tỷ" → bot hỏi diện tích ba lượt liền): đường
+        // nhiều căn ghi ngang / dài vào CỘT nhưng không ghi ô diện tích, còn `listing_missing_facts` chỉ coi diện tích là có khi có
+        // `area_m2` hoặc fact. Đường một căn ghi fact "4x15" — đường này ghi cùng thứ đó.
+        if (!c.dt && c.ngang && c.dai) {
+          const { error: dtErr } = await client.rpc("ghi_fact_listing", {
+            p_listing_id: moi.id, p_question: moi.property_type === "chung_cu" ? "dien_tich" : "dien_tich_dat", p_answer: `${c.ngang}x${c.dai}`, p_source: "seller_chat",
+          });
+          if (dtErr) await ghiLoi(client, "chat-reply ghi_fact_listing(dien_tich nhieu can)", dtErr.message);
         }
         // 22/09/2026 (bộ đo giọng B11): "căn 1 hẻm 4m …, căn 2 mặt tiền …" — đường vào nói riêng cho từng
         // căn mà trước chỉ ghi vị trí, rồi câu chung cả lô hỏi lại hẻm. Hẻm phải có đơn vị mét ("hẻm 123
@@ -6349,7 +6369,7 @@ Deno.serve(async (req) => {
         : null;
       const hoiNguocPrompt = hoiNguoc
         ? hoiNguocDap
-          ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}" — câu đó ĐÃ được trả lời ở bong bóng ngay trước ("${hoiNguocDap}"); em KHÔNG trả lời lại, KHÔNG nhắc tới câu hỏi đó hay chuyện ảnh, KHÔNG nói chữ "hệ thống" — chỉ hỏi tiếp. `
+          ? `Chủ nhà còn HỎI NGƯỢC: "${hoiNguoc}" — câu đó ĐÃ được trả lời ở bong bóng ngay trước ("${hoiNguocDap}"); em KHÔNG trả lời lại, KHÔNG nhắc tới câu hỏi đó hay chuyện ảnh, KHÔNG nói chữ "hệ thống". Tin em viết lúc này CHỈ gồm MỘT câu hỏi tiếp (được mở bằng "Dạ"), không câu ghi nhận, không câu nào nhắc lại nội dung bong bóng đó. `
           : danTraLoiHoiNguoc(hoiNguoc, hoiAi?.chuDe)
         : "";
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
@@ -7727,7 +7747,12 @@ Deno.serve(async (req) => {
           .filter((f) => !daCo.has(f.question))
           .map((f) => [f.question, f.answer] as [string, string]);
         for (const [k, v] of [
-          ["vi_tri", viTriDu(viTriRao) && !/^(hẻm|hem|hxh)\s+\d+\s*(m|mét|met)?$/i.test(viTriRao) ? viTriRao : null],
+          // SRS-5.1zzzm (08/10, bắn thử …kb4thue): "chị có căn hộ Sunrise City cần cho thuê", dự án CHƯA có trong kho → tên chỉ vào
+          // fact `du_an_ten`, mà `listing_missing_facts` chỉ coi vị trí là có khi có địa chỉ / đường / project_id → bot hỏi "căn hộ
+          // mình ở đâu" rồi "dự án nào" dù khách vừa nói. Căn hộ: tên dự án khách nói CHÍNH LÀ câu trả lời vị trí (câu
+          // `vi_tri@chung_cu` hỏi "dự án nào").
+          ["vi_tri", viTriDu(viTriRao) && !/^(hẻm|hem|hxh)\s+\d+\s*(m|mét|met)?$/i.test(viTriRao) ? viTriRao
+            : tenLa && (newLst as { property_type?: string | null }).property_type === "chung_cu" ? tenLa : null],
           ["dien_tich", areaM ? `${areaM[1].replace(",", ".")}m2` : null],
           ["so_phong_ngu", pnM ? pnM[1] : null],
           ["du_an_ten", tenLa],
