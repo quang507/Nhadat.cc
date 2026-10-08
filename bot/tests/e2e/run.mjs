@@ -4243,6 +4243,25 @@ fresh(seedKho);
         /Đường vào:[^\n]*hẻm xe hơi/.test(nhapHua) && !/xe hơi vào được không/.test(nhapHua), nhapHua.slice(0, 900));
       check("SRS-5.1zzzv-c bản nháp sau 'shr' (lượt AI chốt tin thật xếp 'chợ quán' vào ý thêm): dòng Thêm không lặp phường",
         /Thêm:/.test(nhapHua) && !/Thêm:[^\n]*chợ quán/i.test(nhapHua), nhapHua.slice(0, 900));
+      // SRS-5.1zzzw (chủ dự án chat thử …vxii): "Tôi cần bán đất mặt tiền" mở tin (bán, đất); câu rao dài "… xây căn hộ cho thuê"
+      // điền vào tin đó — AI trích "cần bán" từ câu trước nên bị bỏ, luật từ khoá đoán "cho thuê" rồi đè lên tin. Phải giữ bán / đất.
+      let tinVx = null;
+      await phatLai("vxii", "web-pl-vxii", async (i) => {
+        if (i !== 2) return;
+        const nb = db().t.sellers.find((x) => x.zalo_user_id === "web-pl-vxii");
+        tinVx = db().t.listings.filter((l) => nb && l.seller_id === nb.id).at(-1) ?? null;
+      });
+      check("SRS-5.1zzzw-a phát lại …vxii: câu rao '… phù hợp xây căn hộ cho thuê' điền vào tin 'cần bán đất' → vẫn BÁN, vẫn ĐẤT",
+        tinVx?.deal === "ban" && tinVx?.property_type === "dat", JSON.stringify({ deal: tinVx?.deal, loai: tinVx?.property_type, vi_tri: tinVx?.location_raw }));
+      // Câu này NÓI RÕ đổi sang cho thuê (AI trích trong chính câu) → đổi theo, không giữ "bán" của câu trước.
+      let tinVx2 = null;
+      await phatLai("vxii-doi-y", "web-pl-vxii2", async (i) => {
+        if (i !== 2) return;
+        const nb = db().t.sellers.find((x) => x.zalo_user_id === "web-pl-vxii2");
+        tinVx2 = db().t.listings.filter((l) => nb && l.seller_id === nb.id).at(-1) ?? null;
+      });
+      check("SRS-5.1zzzw-b (cách nói MỚI) 'Thôi anh đổi ý, cho thuê lô đất … 30 triệu/tháng' sau 'cần bán đất' → đổi sang CHO THUÊ, vẫn đất",
+        tinVx2?.deal === "cho_thue" && tinVx2?.property_type === "dat", JSON.stringify({ deal: tinVx2?.deal, loai: tinVx2?.property_type }));
       let ndDang2 = "";
       await phatLai("kc1tatt-khong-lech", "web-pl-kc1b", async (i, t, r, calls) => { if (t.text === "dang di") ndDang2 = nd(calls); });
       check("SRS-5.1zzzn-b phát lại …kc1tatt (ý lượt không lệch): 'dang di' khi tin còn chờ thông tin → câu lệnh ghi CHƯA LÊN KỆ, không còn tiêu đề 'đang rao các tin'",

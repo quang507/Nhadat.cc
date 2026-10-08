@@ -38,7 +38,7 @@ flowchart LR
 | [06-ui-design.md](06-ui-design.md) | Design system + tone giọng chat | UI, Dev, Content |
 | [07-srs.md](07-srs.md) | Đặc tả kỹ thuật: kiến trúc, DB, API, NFR | Dev, QA, Vendor |
 | [08-traceability.md](08-traceability.md) | Ma trận truy vết | PO, QA |
-| [09-open-issues.md](09-open-issues.md) | 58 vấn đề (36 đã chốt hoặc đã đóng — dọn 07/09, chốt thêm 09/09 theo chat Gemini OPEN-55 và OPEN-40, đóng OPEN-45 10/09; 21 cần chủ dự án chốt) | Founder, PO |
+| [09-open-issues.md](09-open-issues.md) | 59 vấn đề (36 đã chốt hoặc đã đóng — dọn 07/09, chốt thêm 09/09 theo chat Gemini OPEN-55 và OPEN-40, đóng OPEN-45 10/09; 22 cần chủ dự án chốt, mới nhất OPEN-59 vừa bán vừa cho thuê 08/10) | Founder, PO |
 | [10-ke-hoach-kiem-thu.md](10-ke-hoach-kiem-thu.md) | Kế hoạch kiểm thử 4 tầng (suite TS-*) | QA, Dev, PO |
 | [11-quy-trinh.md](11-quy-trinh.md) | **Quy trình BA và tester** — hai vòng làm việc, ba cổng, máy kiểm gì / người kiểm gì, định nghĩa XONG | Tất cả |
 | [SRD-AI-Oi-Nha-Dat.docx](SRD-AI-Oi-Nha-Dat.docx) | **SRD gộp (.docx)** — bản đọc nhanh theo bố cục SRD Aioinhadat 06/2026 (7 mục I–VII + đối chiếu + còn treo + thư viện kịch bản + hội thoại giả lập 30 câu). **Bản xuất, không phải nguồn sự thật**: sinh từ các file md ở đây bằng `bun run srd` (`scripts/sinh-srd-docx.mjs`, 06/10/2026 theo yêu cầu chủ dự án "đổi thành đuôi docx như bên AOND"); sửa nội dung thì sửa md rồi sinh lại, không sửa tay file .docx | Sếp, chủ dự án, người mới, đối tác đọc một lần |

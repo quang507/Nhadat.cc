@@ -2626,6 +2626,16 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Kiểm, đỏ khi tắt**: e2e phát lại đúng hội thoại của chủ dự án bằng đầu ra AI thật (`phat-lai/hua2.json`, có cả đầu ra lượt chốt tin; `phatLai` trả `chot` cho lượt chốt): `SRS-5.1zzzv-a` (`access_type` = hem_xe_hoi), `-b` (Đường vào có "hẻm xe hơi", không đòi "xe hơi vào được không") — tắt nhánh mock: 2/1053 đỏ; `-c` (dòng Thêm không lặp "chợ quán") — tắt `daGhi`: 1/1054 đỏ. Unit ZZZV-01/02 (cách nói MỚI "gần chợ Bến Thành" khi phường "Bến Thành" vẫn giữ). `test:bot` đủ: thoát 0, e2e 1054/1054.
 - **Còn mở trong cùng hội thoại**: "đúng rồi HCM e ạ. cụ thể quận 5" (chưa có tin) → 🤖 "Không bóc tách được gì" dù AI đọc ra Quận 5 (quận vẫn vào tin ở lượt sau); câu lên kệ "Em cho chào căn nhà của anh chị ngay ạ" lủng củng.
 
+### SRS-5.1zzzw · Câu rao điền vào tin đã mở: "bán / đất" của câu trước bị luật từ khoá đè thành "cho thuê" (08/10/2026)
+
+`[nguồn: chủ dự án 08/10/2026 — "có người thử đang cần rao bán mà nó nhận là cho thuê"; chat thử …vxii]`
+
+- **Ca gốc**: "Tôi cần bán đất mặt tiền" (mở tin: bán, đất) → câu rao dài "Vị trí: 156 An Dương Vương … Phù hợp xây nhà vừa ở vừa kinh doanh, hoặc xây căn hộ cho thuê" → 🤖 "loại: BĐS cho thuê", bot hỏi lại "nhà mình thuộc loại nào", bản nháp "Cho thuê đất … 8,8 tỷ/tháng".
+- **Lớp lỗi**: *AI đọc đúng từ ngữ cảnh, lớp kiểm trích dẫn quá hẹp bỏ đi, rồi luật từ khoá đoán đè lên dữ liệu đã có*. AI đọc cả hội thoại, trả `loai_giao_dich` = bán (trích "cần bán") và `loai_bds` = đất (trích "bán đất") — hai cụm ở CÂU TRƯỚC. `kiemDeXuat` chỉ tìm trích dẫn trong câu này → bỏ; `sDeal` rơi xuống `dealCauRao` (từ khoá) trên câu này: có "cho thuê", không có "bán" → cho thuê; loại → "chưa rõ"; cả hai GHI ĐÈ lên tin rỗng đang mang đúng giá trị.
+- **Chỗ khác cùng lớp**: (a) quận / phường / đường AI trích từ câu trước cũng bị bỏ ở đường này — nhưng đó là ý của TỪNG căn, mở rộng phạm vi trích cho chúng dễ kéo nhầm địa chỉ căn khác; giữ hẹp, ghi đây. (b) `dealCauRao` còn dùng ở luật dự phòng khi AI không chạy, và ở tin nhiều căn (AI đứng ngoài) — giữ làm lưới đỡ. (c) đường câu trả lời câu treo ghi fact `loai_giao_dich` qua trigger đồng bộ — không ghi đè bằng từ khoá.
+- **Sửa**: khi câu rao đang điền vào TIN RỖNG mở từ chính các câu trước, hai khoá `loai_giao_dich` / `loai_bds` được kiểm trích dẫn trên các tin chủ nhà trước (`tinChuNhaGoc`) nếu câu này không có. AI đã chạy mà không nói bán / thuê → giữ loại của tin rỗng, rồi loại giao dịch của người rao, rồi mặc định bán (lời chào hỏi "cần rao bán"); không đoán bằng từ khoá. AI không chạy → như cũ. Câu mới NÓI RÕ đổi ý thì AI trích trong chính câu đó và giá trị mới thắng. "Một căn vừa bán vừa cho thuê" chưa có thiết kế — OPEN-59.
+- **Kiểm, đỏ khi tắt**: e2e `SRS-5.1zzzw-a` phát lại …vxii bằng đầu ra AI thật (lượt câu rao bị nhật ký cắt ở 1.500 chữ, phần đuôi dựng lại "không có ý"): tin vẫn bán, vẫn đất — chạy trên code trước sửa: đỏ. `-b` (cách nói MỚI "Thôi anh đổi ý, cho thuê lô đất … 30 triệu/tháng"): đổi sang cho thuê. `FR250-E1` ("em cần bán nhà" rồi câu rao căn hộ, AI im) vẫn ra căn hộ — bản sửa đầu (giữ loại tin rỗng) làm ca này đỏ nên đã đổi sang mở phạm vi trích dẫn. `test:bot` đủ: thoát 0, e2e 1056/1056; `do-boc:nen` không tụt.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

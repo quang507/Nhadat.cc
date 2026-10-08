@@ -7497,7 +7497,16 @@ Deno.serve(async (req) => {
         const kqAi = await bongAi;
         if (kqAi?.ket && ((kqAi.ket as { so_can?: number }).so_can ?? 1) <= 1) {
           const kdAi = kiemDeXuat(kqAi.truong, textBongAi);
-          const datAi = kdAi.dat;
+          // SRS-5.1zzzw (chủ dự án chat thử …vxii): câu rao điền vào TIN RỖNG mở từ câu trước ("Tôi cần bán đất mặt tiền") — AI đọc
+          // cả hội thoại, trích "cần bán" / "bán đất" ở CÂU TRƯỚC đó; kiểm trích dẫn chỉ tìm trong câu này nên bỏ, rồi luật từ khoá đoán
+          // "cho thuê" từ "xây căn hộ cho thuê". Ý giao dịch và loại BĐS là ý của cả cuộc rao: cho phép trích từ các tin chủ nhà trước,
+          // chỉ hai khoá đó, chỉ khi đang điền tin rỗng mở từ chính các tin đó.
+          const laTinRongDangDien = !!(pendingReq?.listings && laTinRong(pendingReq.listings));
+          const datTruoc = laTinRongDangDien
+            ? kiemDeXuat(kqAi.truong.filter((t) => (t.khoa === "loai_giao_dich" || t.khoa === "loai_bds") && !kdAi.dat.some((d) => d.khoa === t.khoa)),
+              tinChuNhaGoc().join("\n")).dat
+            : [];
+          const datAi = [...kdAi.dat, ...datTruoc];
           // SRS-5.1zb: chế độ `ai` không đưa loại giao dịch đoán bằng từ khoá vào — "Chào bạn, mình cho thuê…" ("bạn" → "bán")
           // từng làm khoảng giá thành khoảng giá BÁN, giá thuê của AI bị bỏ vì ngoài khoảng.
           aiRao = { ...docAiChinh(datAi, { deal: laCheDoAi ? null : dealCauRao(tKD) }), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], textBongAi, datAi) };
@@ -7511,7 +7520,16 @@ Deno.serve(async (req) => {
           }
         }
       }
-      const sDeal = aiRao?.loaiGiaoDich ?? dealCauRao(tKD);
+      // SRS-5.1zzzw (08/10/2026, chủ dự án chat thử …vxii: "Tôi cần bán đất mặt tiền" rồi câu rao dài "… phù hợp xây căn hộ cho
+      // thuê" → tin thành "BĐS cho thuê", bản nháp "Cho thuê đất … 8,8 tỷ/tháng"): câu rao điền vào TIN RỖNG đã mở từ câu trước
+      // mang sẵn loại giao dịch / loại BĐS khách đã nói; AI không nói lại ở câu này (trích "cần bán" nằm ở câu trước nên bị bỏ) thì
+      // GIỮ, không đoán lại. AI đã chạy thì không đoán bán / thuê bằng từ khoá trên câu này (chữ "cho thuê" trong "xây căn hộ cho
+      // thuê" không phải ý giao dịch) — mặc định bán như câu chào hỏi; luật `dealCauRao` chỉ còn khi AI không chạy.
+      const tinRongCu = pendingReq?.listings && laTinRong(pendingReq.listings)
+        ? pendingReq.listings as { deal?: string | null; property_type?: string | null } : null;
+      const sDeal = aiRao
+        ? aiRao.loaiGiaoDich ?? (tinRongCu?.deal as "ban" | "cho_thue" | null | undefined) ?? (dealNguoi as "ban" | "cho_thue" | null) ?? "ban"
+        : dealCauRao(tKD);
       // (wardNo — số phường trong câu rao — tính ở trên, trước nhánh bán.)
       // price_raw cắt từ text GỐC (giữ nguyên chữ người gõ); đơn vị tiền lấy từ
       // TIEN_CD (đủ cả dạng có dấu lẫn không dấu — "giá 5 ti" gõ lẫn vẫn khớp).
