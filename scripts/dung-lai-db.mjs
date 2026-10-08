@@ -221,7 +221,7 @@ if (buoc === "kiem") {
   const files = readdirSync(MIG).filter((f) => /^\d{8,14}[a-z]?_.+\.sql$/.test(f)).sort(); // 14 chữ số = file dấu vết OPEN-46
   const q = (v) => `'${String(v).replaceAll("'", "''")}'`;
   hong += await chay("ghi sổ migration", [`insert into supabase_migrations.schema_migrations (version, name, statements) select v, n, array[]::text[] from (values ${
-    files.map((f, i) => `(${q("dl" + String(i).padStart(4, "0"))}, ${q(f.replace(/\.sql$/, ""))})`).join(", ")
+    files.map((f) => `(${q(f.replace(/\.sql$/, ""))}, ${q(f.replace(/\.sql$/, ""))})`).join(", ")
   }) x(v, n) where not exists (select 1 from supabase_migrations.schema_migrations m where m.name = x.n)`]);
   const caus = tachCau(vaSchema(docFile(join(GOC, "bot", "supabase", "schema.sql"))));
   const khoa = (c) => {
