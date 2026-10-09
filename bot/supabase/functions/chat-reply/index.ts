@@ -491,6 +491,8 @@ const BuyerTurn = z.object({
     thang_may: z.string().nullish().describe("Ý khách về thang máy: 'cần thang máy' / 'không cần' / 'phòng ngủ dưới trệt'"),
     nguoi_quyet_dinh: z.string().nullish().describe("Ai cùng quyết định mua ngoài khách (vợ/chồng, bố mẹ…); 'một mình' nếu khách nói tự quyết"),
     can_vay: z.boolean().nullish().describe("true khi khách nói CẦN tư vấn vay ngân hàng, false khi nói không cần; chưa nói thì null"),
+    // SRS-5.1zzzzb: yêu cầu số tầng ("2 lầu", "trệt 2 lầu", "tối thiểu 3 tầng") từng không có ô nào để ghi — rơi mất.
+    so_tang: z.string().nullish().describe("Số tầng / lầu khách muốn, nguyên văn ngắn ('2 lầu', 'trệt 2 lầu', 'tối thiểu 3 tầng')"),
   }).describe("CHỈ ghi điều khách NÓI RÕ trong câu vừa nhắn hoặc hội thoại. Không suy diễn. Chưa biết để null — null KHÔNG xoá thứ đã biết."),
   replies: z.array(z.string()).min(1).max(2)
     .describe("1-2 bong bóng tin nhắn gửi khách, theo đúng nhịp nhắn giống người"),
@@ -5611,6 +5613,28 @@ Deno.serve(async (req) => {
       const { nhap_cu: _nc, ...extraGui } = extra;
       return await traLoiSeller([...truoc, tin], { ...extraGui, ban_nhap: true, diem: d.diem });
     };
+    /**
+     * SRS-5.1zzzy (bắn production 09/10/2026): HẾT câu để hỏi trước bản nháp → việc kế là MỘT: gửi bản nháp; chưa đủ điểm thì
+     * mở ô chờ cho mục thiếu đầu tiên ứng được một ô (`khoaCuaMucThieu`, chữ `diem_tin` sinh ra — tất định) để bot hỏi nó.
+     * Trước đây chỉ nhánh trả lời câu treo làm việc này; câu rao đủ ý ngay lượt đầu thì rơi vào lời model "báo sẽ đăng lên
+     * web ngay" — hứa đăng mà tin vẫn `cho_thong_tin`, không nháp, không câu hỏi. Nhánh trả lời câu treo và nhánh câu rao gọi
+     * chung hàm này; nhánh tin nhiều căn (chạy trước chỗ khai báo này) còn câu hứa "em soạn bản nháp" — ghi ở docs/07 SRS-5.1zzzy.
+     */
+    const hetCauTruocNhap = async (
+      listingId: string, loai: string | null | undefined, extra: Record<string, unknown>, truoc: string[] = [],
+      khoaVuaThoi: Set<string> = new Set(), dangTreo: Set<string> = new Set(),
+    ): Promise<{ res: Awaited<ReturnType<typeof traLoiSeller>> } | { thieu: string[]; khoaMo: string | null }> => {
+      const nhap = await guiBanNhap(listingId, extra, false, truoc);
+      if (!Array.isArray(nhap)) return { res: nhap };
+      const iMuc = nhap.findIndex((m) => { const k = khoaCuaMucThieu(m, loai); return !!k && !khoaVuaThoi.has(k); });
+      const thieu = iMuc > 0 ? [nhap[iMuc], ...nhap.filter((_, i) => i !== iMuc)] : nhap;
+      const khoaMo = iMuc >= 0 ? khoaCuaMucThieu(nhap[iMuc], loai) : null;
+      if (khoaMo && !dangTreo.has(khoaMo)) {
+        const { error: gErr } = await client.from("info_requests").insert({ listing_id: listingId, question: khoaMo, status: "pending" });
+        if (gErr && gErr.code !== "23505") await ghiLoi(client, "chat-reply mo cau thieu diem", gErr.message);
+      }
+      return { thieu, khoaMo };
+    };
     // Tự kiểm 02/09: chủ nhà đang bị hỏi dở (pendingReq) mà nhắn RAO THÊM CĂN
     // KHÁC → bản cũ ghi cả câu rao làm CÂU TRẢ LỜI cho câu hỏi đang treo, vì
     // khối pendingReq đứng trước khối wantsSell và không hỏi gì thêm. Câu rao
@@ -7179,20 +7203,14 @@ Deno.serve(async (req) => {
       let thieuDiem: string[] = [];
       if (!published && lstNow?.can_chu_duyet && !lstNow.chu_duyet_at && !chanNhap &&
           (!nextKey || nextKey === "hinh_anh")) {
-        const nhap = await guiBanNhap(pendingReq.listing_id, { saved_fact: pendingReq.question, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) }, false, hoiNguocDap ? [hoiNguocDap] : []);
-        if (!Array.isArray(nhap)) return nhap;
-        // SRS-5.1zzz (20261007a: ≤ 6 câu trước bản nháp): hết câu chính mà tin chưa đủ 70 điểm → bot hỏi thứ còn thiếu MÀ
-        // KHÔNG MỞ Ô CHỜ (trước đây chỉ mở lại riêng câu giá, 20/09 mau-y-D) — câu trả lời kế rơi vào khoảng không. Nay: chọn mục
-        // thiếu đầu tiên ứng được một ô (`khoaCuaMucThieu`, chữ do `diem_tin` sinh ra — tất định), bỏ ô vừa thôi hỏi ở lượt này
-        // (FR-234: không hỏi lại ngay câu khách vừa lờ), đưa nó lên đầu danh sách cho model hỏi, và mở ô chờ cho nó.
-        const khoaVuaThoi = new Set([...hetHanSet, pendingReq.question]);
-        const iMuc = nhap.findIndex((m) => { const k = khoaCuaMucThieu(m, pendingReq.listings?.property_type); return !!k && !khoaVuaThoi.has(k); });
-        thieuDiem = iMuc > 0 ? [nhap[iMuc], ...nhap.filter((_, i) => i !== iMuc)] : nhap;
-        const khoaMo = iMuc >= 0 ? khoaCuaMucThieu(nhap[iMuc], pendingReq.listings?.property_type) : null;
-        if (khoaMo && !pendSet.has(khoaMo)) {
-          const { error: gErr } = await client.from("info_requests").insert({ listing_id: pendingReq.listing_id, question: khoaMo, status: "pending" });
-          if (gErr && gErr.code !== "23505") await ghiLoi(client, "chat-reply mo cau thieu diem", gErr.message);
-        }
+        // SRS-5.1zzz (20261007a: ≤ 6 câu trước bản nháp): hết câu chính mà tin chưa đủ 70 điểm → bot hỏi thứ còn thiếu VÀ mở ô
+        // chờ cho nó (bỏ ô vừa thôi hỏi ở lượt này — FR-234), đưa nó lên đầu danh sách cho model hỏi. SRS-5.1zzzy: chung hàm
+        // `hetCauTruocNhap` với nhánh câu rao.
+        const het = await hetCauTruocNhap(pendingReq.listing_id, pendingReq.listings?.property_type,
+          { saved_fact: pendingReq.question, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) }, hoiNguocDap ? [hoiNguocDap] : [],
+          new Set([...hetHanSet, pendingReq.question]), pendSet);
+        if ("res" in het) return het.res;
+        thieuDiem = het.thieu;
       }
 
       // Câu hỏi drip PHẢI vắt vai mã căn + địa chỉ (FR-157). Người bán nhiều
@@ -7759,7 +7777,11 @@ Deno.serve(async (req) => {
             // 11/09/2026 (Zalo thật): "sao cái nào cũng ghi Q5" — quận không đọc được thì
             // cột vẫn nhận mặc định Quận 5 (NOT NULL), nhưng boc_tach nói rõ đó là MẶC
             // ĐỊNH; bong bóng 💾 in "(chưa rõ quận)" và câu hỏi đầu hỏi thêm quận.
-            nguon: aiRao ? "cau_rao+ai_chinh" : "cau_rao", loai_giao_dich: sDeal, quan: quanDoc, ...(quanDoc ? {} : { quan_mac_dinh: true }),
+            // SRS-5.1zzzz (bắn production 09/10/2026): cờ ghi TƯỜNG MINH cả hai chiều. `ghi_boc_tach` gộp và bỏ null, nên bản cũ
+            // (chỉ ghi `true` khi thiếu quận) để câu rao điền vào TIN RỖNG giữ nguyên `quan_mac_dinh: true` của lượt mở tin dù đã
+            // đọc ra "Quận 5" — mọi nơi đọc "quận đã chắc chưa" coi như chưa biết: bot tra đường cả thành phố, hỏi lại quận, 🤖 in
+            // "(chưa rõ quận)".
+            nguon: aiRao ? "cau_rao+ai_chinh" : "cau_rao", loai_giao_dich: sDeal, quan: quanDoc, quan_mac_dinh: !quanDoc,
             phuong: phuongRao,
             gia_raw: priceM?.[1]?.trim() ?? null, ...(giaM2 ? { gia_m2: giaM2 } : {}),
             dien_tich: areaM ? `${areaM[1].replace(",", ".")}m2` : null,
@@ -7839,7 +7861,7 @@ Deno.serve(async (req) => {
         const thieuDau = (await thieuCoReNhanh(client, newLst.id, firstFacts)).filter((f) => f.nhom !== "sau_dang" && !khongHoiDau.has(f.fact_key));
         // FR-239 i (phát lại test 27/09): "Anh muốn bán căn nhà ở đặng Văn ngữ" — có đường, chưa rõ quận → bot hỏi diện tích,
         // tầng, hẻm… mà không bao giờ hỏi quận (phường ưu tiên 22, gần cuối). Có địa chỉ mà chưa rõ quận → hỏi phường/quận trước.
-        const firstKey = (!quanDoc && viTriRao && thieuDau.some((f) => f.fact_key === "phuong") ? "phuong" : null) ??
+        let firstKey: string | null = (!quanDoc && viTriRao && thieuDau.some((f) => f.fact_key === "phuong") ? "phuong" : null) ??
           chonCauKe(vuaRao, thieuDau) ?? null;
         if (firstKey) {
           const { error: ir1Err } = await client.from("info_requests").insert({
@@ -7848,6 +7870,59 @@ Deno.serve(async (req) => {
           if (ir1Err && ir1Err.code !== "23505") {
             await ghiLoi(client, "chat-reply mo cau hoi dau", ir1Err.message);
           }
+        }
+        // Chủ dự án 09/09/2026: "đã bóc tách được cái gì, viết gửi lại cho khách
+        // luôn" — bong bóng TIỀN ĐỊNH liệt kê những gì vừa ghi (không liệt kê
+        // thứ trống), đứng trước lời chào/câu hỏi của model. Số liệu đúng từng
+        // chữ với cột, chủ nhà thấy sai thì sửa ngay (FR-164 bắt lời sửa).
+        const LOAI_GHI: Record<string, string> = {
+          nha_pho: "nhà phố", nha_cap4: "nhà cấp 4", chung_cu: "căn hộ", dat: "đất",
+          biet_thu: "biệt thự", phong_tro: "phòng trọ", mat_bang: "mặt bằng",
+          toa_nha: "toà nhà / CHDV", dat_nong_nghiep: "đất nông nghiệp", dat_kinh_doanh: "đất kinh doanh", kho_xuong: "kho xưởng",
+        };
+        const loaiRao = LOAI_GHI[(newLst as { property_type?: string | null }).property_type ?? ""] ?? null;
+        const ghiNhan = [
+          `${sDeal === "cho_thue" ? "cho thuê" : "bán"}${loaiRao ? ` ${loaiRao}` : ""}`,
+          viTriDu(viTriRao) ? viTriRao : null,
+          [phuongRao, quanDoc].filter(Boolean).join(", ") || null,
+          areaM ? (/x/.test(areaM[1]) ? `${areaM[1]}m` : `${areaM[1].replace(",", ".")}m2`) : null,
+          pnM ? `${pnM[1]} phòng ngủ` : null,
+          giaNoi ? `giá ${giaNoi}` : null,
+          gapCol === true ? "cần gấp" : gapCol === false ? "không gấp" : null,
+          duAn?.name ? `dự án ${duAn.name}${maCanRao ? ` căn ${maCanRao}` : ""}` : null,
+        ].filter((x): x is string => !!x);
+        // Khách mở lời bằng câu chào thì chào lại rồi mới ghi nhận — bong bóng này
+        // là tiền định (đi TRƯỚC câu của model), nên nếu nó vào thẳng "Em ghi nhận"
+        // thì cả đoạn mở đầu đọc như máy, kể cả lúc model còn sống.
+        const khachChao = /^\s*(dạ\s*)?(xin\s*)?(chào|chao|hi|hello|alo|a lô|hế lô)\b/i.test(text);
+        // 21/09/2026 (bắn thật mau-tdt): "Dạ em chào anh ạ!" (tiền định) + "Chào anh, em R•ai bên…" (model) là
+        // chào HAI LẦN. Câu của model ĐÃ có lời chào thì thôi chào tiền định; model không chào / hỏng thì chào.
+        const bongGhiNhanCho = (loiModel: string | null) =>
+          (khachChao && !/(?<![\p{L}])(chào|xin chào|hello)(?![\p{L}])/iu.test(loiModel ?? "") ? cauTD("chao_lai") + "\n" : "") +
+          cauTD("ghi_nhan", { ds: ghiNhan.join(" · ") });
+        // 15/09/2026 (bắn thật P1): câu rao kèm hỏi ngược ("…, mà bên em là bot hả?") —
+        // trước đây câu hỏi bị nuốt. Có đáp án hệ thống (bot / phí / ảnh) thì bong bóng
+        // tiền định đứng trước; không thì dặn model trả lời trước rồi mới hỏi.
+        // SRS-5.1zzzj: AI nói tin có hỏi em không (`hoiLaiAi`, đọc theo nghĩa, kiểm trích dẫn); luật `tachCauHoiNguoc` chỉ đỡ khi AI không chạy.
+        const hoiAiRao = await hoiLaiAi(text);
+        const hoiRao = hoiAiRao !== undefined ? (hoiAiRao ? (hoiAiRao.caTin ? text : hoiAiRao.cau) : null) : tachCauHoiNguoc(text).hoi;
+        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(sellerRow.seller_type, sDeal ?? dealNguoi, { benEm: true }), hoiAiRao?.chuDe) : null;
+        if (hoiRao && dapRao) cauDaDap = hoiRao;
+        const hoiRaoPrompt = hoiRao
+          ? dapRao
+            ? `Tin chủ nhà có kèm một câu hỏi — câu đó đã được trả lời ở bong bóng gửi ngay trước tin em, và đã được bỏ khỏi tin chủ nhà dẫn trong câu lệnh này; em không biết và không nhắc tới nó, KHÔNG nói chữ "hệ thống". `
+            : danTraLoiHoiNguoc(hoiRao, hoiAiRao?.chuDe)
+          : "";
+        // SRS-5.1zzzy (bắn production 09/10/2026): câu rao đủ mọi ý hỏi trước bản nháp ("hẻm xe hơi … Chợ Quán, ngang 4 dài 15,
+        // 3 lầu, sổ hồng riêng, giá 8 tỷ") → không còn câu để hỏi. Trước đây câu lệnh model ở đây dặn "báo sẽ đăng lên web ngay":
+        // bot hứa "Em lên tin đăng cho nhà mình liền nha" trong khi tin vẫn chờ, không bản nháp, không câu hỏi. Nay đi cùng đường với
+        // nhánh trả lời câu treo: gửi bản nháp; chưa đủ điểm thì mở ô cho mục còn thiếu và hỏi nó. Tên đường còn chờ xác nhận thì để
+        // câu xác nhận đi trước (bản nháp không gửi khi địa chỉ chưa chắc).
+        if (!firstKey && !duongRao?.goiY) {
+          const het = await hetCauTruocNhap(newLst.id, (newLst as { property_type?: string | null }).property_type,
+            { listing_code: newLst.code, ghi_nhan: ghiNhan }, [bongGhiNhanCho(null), ...(dapRao ? [dapRao] : [])]);
+          if ("res" in het) return het.res;
+          firstKey = het.khoaMo;
         }
         // OPEN-30: tin rao ĐÃ tạo xong (mã đã cấp) — model chỉ soạn lời chào.
         // Model hỏng thì chào bằng câu mẫu, kèm luôn câu hỏi đầu nếu có.
@@ -7880,19 +7955,6 @@ Deno.serve(async (req) => {
             ? cauHoiMau("vi_tri@lan_dau", cachGoi, loaiMoi)
             : cauHoiMau(firstKey, cachGoi, loaiMoi, quanDoc, sDeal, viTriRao))
           : null);
-        // 15/09/2026 (bắn thật P1): câu rao kèm hỏi ngược ("…, mà bên em là bot hả?") —
-        // trước đây câu hỏi bị nuốt. Có đáp án hệ thống (bot / phí / ảnh) thì bong bóng
-        // tiền định đứng trước; không thì dặn model trả lời trước rồi mới hỏi.
-        // SRS-5.1zzzj: AI nói tin có hỏi em không (`hoiLaiAi`, đọc theo nghĩa, kiểm trích dẫn); luật `tachCauHoiNguoc` chỉ đỡ khi AI không chạy.
-        const hoiAiRao = await hoiLaiAi(text);
-        const hoiRao = hoiAiRao !== undefined ? (hoiAiRao ? (hoiAiRao.caTin ? text : hoiAiRao.cau) : null) : tachCauHoiNguoc(text).hoi;
-        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(sellerRow.seller_type, sDeal ?? dealNguoi, { benEm: true }), hoiAiRao?.chuDe) : null;
-        if (hoiRao && dapRao) cauDaDap = hoiRao;
-        const hoiRaoPrompt = hoiRao
-          ? dapRao
-            ? `Tin chủ nhà có kèm một câu hỏi — câu đó đã được trả lời ở bong bóng gửi ngay trước tin em, và đã được bỏ khỏi tin chủ nhà dẫn trong câu lệnh này; em không biết và không nhắc tới nó, KHÔNG nói chữ "hệ thống". `
-            : danTraLoiHoiNguoc(hoiRao, hoiAiRao?.chuDe)
-          : "";
         let raoReply: string | null = null;
         if (anthropicS) {
           try {
@@ -7916,7 +7978,8 @@ Deno.serve(async (req) => {
                       // Câu hẻm gọi đúng số hẻm ("105/12" → hẻm 105) là câu MANG DỮ LIỆU code tra ra → đưa nguyên; câu chủ dự án đã sửa ở dashboard → đưa làm gợi ý.
                       firstKey === "do_rong_hem" && cauHoiDau && /trong hẻm \d/.test(cauHoiDau) ? ` — hỏi đúng câu này: "${cauHoiDau}"`
                         : cauMauDaSua(firstKey, loaiMoi) ? ` — câu bên em hay dùng: "${cauHoiDau}", nói lại cho tự nhiên` : ""}\nHỏi đúng ý đó, không gắn thêm ý khác; không nhắc phí, không nhận xét giá.`
-                    : ` và báo sẽ đăng lên web ngay.`),
+                    // SRS-5.1zzzy: không còn câu nào để hỏi mà bản nháp cũng chưa gửi được → KHÔNG hứa đăng (tin chưa lên kệ).
+                    : `. Không hỏi gì, KHÔNG hứa đăng / lên tin (tin chưa lên kệ, chưa có bản nháp). Không nhắc phí, không nhận xét giá.`),
               }],
             });
             raoReply = r1.content.find((b) => b.type === "text")?.text?.trim() ?? null;
@@ -7959,43 +8022,13 @@ Deno.serve(async (req) => {
         }
         if (!raoReply) {
           raoReply = `Dạ em nhận tin rao rồi ạ.` +
-            (cauHoiDau ? ` ${cauHoiDau}` : ` Em sẽ đăng lên web ngay ạ.`);
+            (cauHoiDau ? ` ${cauHoiDau}` : "");
         } else if (cauXacNhanDau) {
           // Model đã bị dặn không hỏi; lỡ còn câu hỏi thì cắt, rồi nối câu xác nhận nguyên văn.
           raoReply = `${raoReply.replace(/[^.!?]*\?\s*$/u, "").trim()} ${cauXacNhanDau}`.trim();
         }
         if (dapRao) raoReply = `${dapRao}\n${raoReply}`;
-        // Chủ dự án 09/09/2026: "đã bóc tách được cái gì, viết gửi lại cho khách
-        // luôn" — bong bóng TIỀN ĐỊNH liệt kê những gì vừa ghi (không liệt kê
-        // thứ trống), đứng trước lời chào/câu hỏi của model. Số liệu đúng từng
-        // chữ với cột, chủ nhà thấy sai thì sửa ngay (FR-164 bắt lời sửa).
-        const LOAI_GHI: Record<string, string> = {
-          nha_pho: "nhà phố", nha_cap4: "nhà cấp 4", chung_cu: "căn hộ", dat: "đất",
-          biet_thu: "biệt thự", phong_tro: "phòng trọ", mat_bang: "mặt bằng",
-          toa_nha: "toà nhà / CHDV", dat_nong_nghiep: "đất nông nghiệp", dat_kinh_doanh: "đất kinh doanh", kho_xuong: "kho xưởng",
-        };
-        const loaiRao = LOAI_GHI[(newLst as { property_type?: string | null }).property_type ?? ""] ?? null;
-        const ghiNhan = [
-          `${sDeal === "cho_thue" ? "cho thuê" : "bán"}${loaiRao ? ` ${loaiRao}` : ""}`,
-          viTriDu(viTriRao) ? viTriRao : null,
-          [phuongRao, quanDoc].filter(Boolean).join(", ") || null,
-          areaM ? (/x/.test(areaM[1]) ? `${areaM[1]}m` : `${areaM[1].replace(",", ".")}m2`) : null,
-          pnM ? `${pnM[1]} phòng ngủ` : null,
-          giaNoi ? `giá ${giaNoi}` : null,
-          gapCol === true ? "cần gấp" : gapCol === false ? "không gấp" : null,
-          duAn?.name ? `dự án ${duAn.name}${maCanRao ? ` căn ${maCanRao}` : ""}` : null,
-        ].filter((x): x is string => !!x);
-        // Khách mở lời bằng câu chào thì chào lại rồi mới ghi nhận — bong bóng này
-        // là tiền định (đi TRƯỚC câu của model), nên nếu nó vào thẳng "Em ghi nhận"
-        // thì cả đoạn mở đầu đọc như máy, kể cả lúc model còn sống.
-        const khachChao = /^\s*(dạ\s*)?(xin\s*)?(chào|chao|hi|hello|alo|a lô|hế lô)\b/i.test(text);
-        // 21/09/2026 (bắn thật mau-tdt): "Dạ em chào anh ạ!" (tiền định) + "Chào anh, em R•ai bên…" (model) là
-        // chào HAI LẦN. Câu của model ĐÃ có lời chào thì thôi chào tiền định; model không chào / hỏng thì chào.
-        const modelDaChao = /(?<![\p{L}])(chào|xin chào|hello)(?![\p{L}])/iu.test(raoReply ?? "");
-        const bongGhiNhan =
-          (khachChao && !modelDaChao ? cauTD("chao_lai") + "\n" : "") +
-          cauTD("ghi_nhan", { ds: ghiNhan.join(" · ") });
-        return await traLoiSeller([bongGhiNhan, raoReply], { listing_code: newLst.code, ghi_nhan: ghiNhan });
+        return await traLoiSeller([bongGhiNhanCho(raoReply), raoReply], { listing_code: newLst.code, ghi_nhan: ghiNhan });
       }
     }
     // Seller nhắn nhưng KHÔNG có câu chờ → vẫn trả lời ĐÚNG VAI người bán
@@ -8851,6 +8884,8 @@ Deno.serve(async (req) => {
     // 11/09: "gần tiện ích" KHÔNG nằm trong danh sách hỏi (đừng hỏi khách nào
     // cũng "cần gần gì không") — chỉ nhắc khi khách đã tự nói.
     ...(gan ? [`- muốn ở gần: ${nhanGan(gan)}`] : []),
+    // SRS-5.1zzzzb: số tầng khách muốn — KHÔNG nằm trong danh sách hỏi dò (không hỏi ai cũng "mấy lầu"), chỉ nhắc khi khách đã nói.
+    ...(prefs.so_tang != null && prefs.so_tang !== "" ? [`- số tầng mong muốn: ${prefs.so_tang}`] : []),
   ].join("\n");
   const missing = BUYER_PROFILE_FIELDS
     .filter(([k]) => prefs[k] == null || prefs[k] === "")
@@ -9129,6 +9164,24 @@ Deno.serve(async (req) => {
   const mocMua = theoDoiVan(soVan, () => out.replies);
   if (!kho && !askedBlock && !tuongTuBlock && !canDuAn.length) {
     const ac = cachGoiKhach(goiMua, prefs.nhom_tuoi);
+    // SRS-5.1zzzza / SRS-5.1zzzzb (bắn production 09/10/2026): không căn nào trong tay mà lời model (a) khen / nhận xét ("Hẻm xe hơi
+    // tới cửa là khách chuộng lắm, vị trí tốt lắm" — lời khen dành cho căn của người BÁN) hoặc (b) nói có hàng bằng chữ mẫu từ khoá
+    // chưa có ("Em đang lọc căn 2 lầu … cho anh", "Dạ còn chị. Em tìm thấy mấy căn…"). AI liệt kê các câu đó theo NGHĨA (lượt soát
+    // nhận xét của nhánh bán, đối tượng người mua); code kiểm câu có thật trong lời bot rồi quyết: không căn nào làm căn cứ → bỏ hết,
+    // câu hỏi giữ. Mẫu từ khoá `laHuaCoHang` lùi xuống lưới đỡ khi AI không chạy.
+    let aiHuaHang: string[] = [], aiNhanXet: string[] = [];
+    try {
+      const ai = await napModel(client);
+      const { nhanXet, usage } = await soatNhanXetBangModel(ai as unknown as Parameters<typeof soatNhanXetBangModel>[0], MODEL, out.replies.join("\n"), loiKhachMua, "", "nguoi_mua");
+      await doTien(client, usage as Parameters<typeof doTien>[1]);
+      for (const n of nhanXet) {
+        const c = (n.cau ?? "").trim();
+        if (!c || /\?/.test(c)) continue;
+        (n.noi_co_hang === true ? aiHuaHang : aiNhanXet).push(c);
+      }
+    } catch (e) {
+      await ghiLoi(client, "chat-reply soat nhan xet (mua)", e);
+    }
     const chan = chanHuaCoHang(
       out.replies,
       minimumMet || mentioned.length
@@ -9137,10 +9190,16 @@ Deno.serve(async (req) => {
         // sau). Chưa đủ tiêu chí thì xin đúng thứ còn thiếu — lượt sau đủ là kho lọc ngay.
         : `${ac} cho em xin thêm ${[!(prefsLoc.area != null || gan != null) ? "khu vực" : null, prefsLoc.budget == null ? "tầm giá" : null].filter(Boolean).join(" và ") || "tiêu chí"} để em lọc đúng căn nha.`,
       laHoiCoHang(text),
+      aiHuaHang,
     );
     if (chan.daChan) {
       out.replies = chan.replies;
       console.log("chat-reply: chặn câu hứa có hàng khi kho trống"); mocMua("chanHuaCoHang");
+    }
+    if (aiNhanXet.length) {
+      const sach = out.replies.map((r) => boCauNhanXet(r, aiNhanXet)).filter((r): r is string => !!r && !!r.trim());
+      if (sach.length) { out.replies = sach; console.log("chat-reply: bo nhan xet khi chua co can (mua)", aiNhanXet.join(" | ")); }
+      mocMua("soatNhanXet(mua)");
     }
     // 23/09/2026 (bắn lại sau deploy #193): kho trống mà model tả "căn này hẻm xe hơi 4m P12, 50m2, 7,9 tỷ" —
     // căn không tồn tại. Bỏ bong bóng tả căn; còn lại trống thì nói thật.

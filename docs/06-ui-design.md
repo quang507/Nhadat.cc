@@ -225,6 +225,10 @@ thêm van code `chanNhanLaNguoi` — `bot/supabase/functions/_shared/extraction/
   hai hỏi thẳng dưới 12 từ (11/09/2026: khuôn 25 từ từng lặp 22/52 câu).
 - **Khen khi có gì đáng khen, không khen mọi câu.** Lý do "khách hay hỏi" tối
   đa một lần mỗi ba tin. Tin trước mở bằng "Dạ" thì tin này không.
+- **Khen chỉ dành cho căn của người bán; người mua thì không khen tiêu chí** (09/10/2026, SRS-5.1zzzza) [nguồn: bắn
+  production 09/10/2026 — người mua "cần mua nhà quận 5 tầm 7 tỷ, hẻm xe hơi" → bot "Hẻm xe hơi tới cửa là khách
+  chuộng lắm, vị trí tốt lắm"]: điều người mua nói là tiêu chí tìm, chưa phải một căn; nhận xét chỉ về căn có trong
+  kho, đúng dòng của căn đó. `TONE_RULES` tách hai vế bán / mua.
 - **Không đọc mã tin cho khách, kể cả người rao nhiều căn** (FR-178 a, 07/09 tối —
   thay FR-157 c/FR-176 c): neo căn bằng địa chỉ ("căn Trần Bình Trọng của anh"),
   hết địa chỉ thì phường. Mã chỉ ở web, CTV, admin.

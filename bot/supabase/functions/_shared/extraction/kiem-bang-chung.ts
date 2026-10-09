@@ -1478,7 +1478,7 @@ export function giaTriCoTrongLoi(gt: string, loiKhach: string): boolean {
 /** Khoá hồ sơ mua mang CHỮ khách nói (kiểm bằng `giaTriCoTrongLoi`); deal / can_vay / bedrooms có luật riêng. */
 const KHOA_HO_SO_CHU = [
   "area", "budget", "purpose", "property_type", "alley", "timeline", "notes", "khu_song", "nguoi_o_cung", "noi_lam",
-  "dien_tich_mong_muon", "thang_may", "nguoi_quyet_dinh", "name",
+  "dien_tich_mong_muon", "thang_may", "nguoi_quyet_dinh", "name", "so_tang",
 ];
 /**
  * Lọc hồ sơ mua model trả (đường JSON cũ, 02/10/2026): trường chữ có chữ khách KHÔNG nói → null (không ghi, không xoá cái đã

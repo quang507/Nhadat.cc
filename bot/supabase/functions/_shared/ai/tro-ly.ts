@@ -42,6 +42,9 @@ export type LuotMuaTroLy = {
 export const KHOA_HO_SO = [
   "deal", "area", "budget", "purpose", "property_type", "bedrooms", "alley", "timeline", "notes",
   "khu_song", "nguoi_o_cung", "noi_lam", "dien_tich_mong_muon", "thang_may", "nguoi_quyet_dinh", "can_vay", "name",
+  // SRS-5.1zzzzb (bắn production 09/10/2026): "có căn nào 2 lầu không em" — hồ sơ không có ô số tầng, trợ lý gọi ghi hai lần,
+  // lần đầu bị từ chối (khoá lạ), yêu cầu "2 lầu" rơi mất trong khi lời bot nói "em đang lọc căn 2 lầu".
+  "so_tang",
 ] as const;
 const LOAI_TIEN_ICH = ["benh_vien", "truong_hoc", "cho", "sieu_thi", "cong_vien", "tat_ca"] as const;
 
@@ -76,7 +79,7 @@ export const CONG_CU_MUA = [
   {
     name: "ghi_ho_so_mua",
     description:
-      "GHI vào hồ sơ khách điều khách NÓI RÕ về nhu cầu (khu vực, giá, loại nhà, phòng ngủ, hẻm, mục đích, mốc dọn vào, " +
+      "GHI vào hồ sơ khách điều khách NÓI RÕ về nhu cầu (khu vực, giá, loại nhà, phòng ngủ, số tầng / lầu, hẻm, mục đích, mốc dọn vào, " +
       "người ở cùng, nơi làm…). Không suy diễn. deal: 'ban' = khách muốn MUA, 'thue' = muốn THUÊ. can_vay: 'có' / 'không'.",
     input_schema: {
       type: "object",
