@@ -9,6 +9,7 @@
 //
 // THUẦN: không fetch, không RPC (bot/tests/ranh-gioi.mjs canh). Dữ liệu ở ds-phuong.ts.
 import { PHUONG_CU, PHUONG_MOI } from "./ds-phuong.ts";
+import { cacQuanTrong } from "../dia_ban.ts";
 
 export type Phuong = { ten: string; ten_day_du?: string | null; quan_cu?: string | null };
 
@@ -90,6 +91,59 @@ export function phuongTuTenCu(ten: string | null | undefined): Phuong | null {
   return moi.length === 1 ? MOI.find((w) => w.ten === moi[0]) ?? null : null;
 }
 
+// ── SRS-5.1zzzzc (bắn production 09/10/2026, thu-kg2): "nhà ở lê văn sỹ phường 13 phú nhuận" → AI đổi đúng sang "Phường Phú
+// Nhuận", trích «phường 13» → kiểm bằng chứng LOẠI (`phuong_khong_khop_trich_dan`), ô phường trống, ba lượt sau bot hỏi lại "Lê Văn
+// Sỹ thuộc Phường Phú Nhuận đúng không". Lớp lỗi: tên cũ dạng SỐ ("Phường 13") chỉ có nghĩa khi đi kèm QUẬN CŨ — `TEN_CUA` bỏ hẳn
+// tên số (một mình "13" khớp mọi quận), nên mọi chỗ đối chiếu tên cũ → mới (kiểm bằng chứng, lưới đỡ khi AI im, danh sách phường
+// gửi AI) đều mù với phường số. Bảng `phuong_cu` (ds-phuong.ts) đã có cặp (Phường 13, Quận Phú Nhuận) → Phú Nhuận; ba chỗ đó nay
+// cùng đi qua MỘT hàm dưới đây, khoá bằng (số, quận cũ). Quận lấy từ chính câu / quận tin đã biết — nơi gọi truyền vào.
+/** Khoá so quận cũ: "Quận Phú Nhuận" / "phú nhuận" / "Q5" / "Quận 5" / "TP Thủ Đức" → "phu nhuan" / "5" / "thu duc". */
+const khoaQuan = (q: string | null | undefined): string =>
+  phang(q ?? "").replace(/^(?:quan|huyen|thanh pho|thi xa|tp)\s+/, "").replace(/^q\s*(?=\d)/, "").trim();
+/** (số phường cũ | khoá quận cũ) → các phường mới nó gộp vào. */
+const SO_CU: ReadonlyMap<string, ReadonlyArray<{ moi: string; toanBo: boolean }>> = (() => {
+  const m = new Map<string, Array<{ moi: string; toanBo: boolean }>>();
+  for (const [cu, quan, moi, tb] of PHUONG_CU) {
+    const k = tenTran(cu);
+    if (!/^\d+$/.test(k)) continue;
+    const khoa = `${Number(k)}|${khoaQuan(quan)}`;
+    const ds = m.get(khoa) ?? [];
+    ds.push({ moi, toanBo: tb === 1 });
+    m.set(khoa, ds);
+  }
+  return m;
+})();
+/**
+ * Phường SỐ cũ + quận cũ → phường MỚI (cùng luật với `phuongTuTenCu`): về một phường mới → phường đó; bị chia mà chỉ một phần
+ * "toàn bộ" → phần đó; còn lại (chia đều, không có trong bảng) → null — câu không đủ để biết, bot hỏi.
+ */
+export function phuongTuSoCu(so: number | string | null | undefined, quan: string | null | undefined): Phuong | null {
+  const n = Number(so);
+  if (!Number.isInteger(n) || n < 1 || !quan) return null;
+  const ds = SO_CU.get(`${n}|${khoaQuan(quan)}`) ?? [];
+  let moi = [...new Set(ds.map((d) => d.moi))];
+  if (moi.length > 1) moi = [...new Set(ds.filter((d) => d.toanBo).map((d) => d.moi))];
+  return moi.length === 1 ? MOI.find((w) => w.ten === moi[0]) ?? null : null;
+}
+/** Các phường mới mà câu nhắc qua tên SỐ cũ ("phường 13", "p13", "P.13") ghép với một trong các quận cũ `quanDs`. */
+export function phuongSoCuTrongCau(cau: string | null | undefined, quanDs: ReadonlyArray<string | null | undefined>): Phuong[] {
+  const ra = new Map<string, Phuong>();
+  const quan = [...new Set(quanDs.filter((q): q is string => !!q && !!khoaQuan(q)))];
+  if (!quan.length) return [];
+  for (const m of phang(cau ?? "").matchAll(/(?:^|\s)(?:phuong|p)\s*(\d{1,2})(?!\d)/g)) {
+    for (const q of quan) {
+      const w = phuongTuSoCu(m[1], q);
+      if (w) ra.set(w.ten, w);
+    }
+  }
+  return [...ra.values()];
+}
+
+/** Quận / huyện cũ câu nhắc tới (đọc theo vế, `cacQuanTrong`). */
+export function quanTrongCau(cau: string | null | undefined): string[] {
+  return cacQuanTrong(cau ?? "", (x) => boDau(x).toLowerCase());
+}
+
 /** Trích dẫn có nhắc MỘT phường có thật nào không (dùng để bắt AI trả tên cắt / bịa khi khách nói tên thật). */
 export function phuongTrongTrich(cau: string | null | undefined): boolean {
   return MOI.some((w) => cauNhacPhuong(cau, w));
@@ -109,7 +163,9 @@ export function danhSachPhuongChoAi(cau?: string | null): string {
   // 30/09/2026 (bắn thật thu-groq-02): cả 655 tên (~18.000 ký tự) nằm trong câu lệnh bóc tách → câu lệnh ~36.000 ký tự,
   // Groq bản miễn phí trả "Request too large" (413, trần chữ mỗi phút), Gemini đang 503 → AI bóc tách chết cả chuỗi. Có câu
   // khách thì chỉ gửi các phường câu đó NHẮC TỚI (tên mới hoặc cũ, lệch 1–2 chữ cái — `cauNhacPhuong`); không nhắc → "".
-  const chon = cau == null ? MOI : MOI.filter((w) => cauNhacPhuong(cau, w));
+  // SRS-5.1zzzzc: "phường 12 quận 3" không nhắc chữ nào của tên mới → thêm phường mới mà phường SỐ cũ + quận cũ trong câu gộp vào.
+  const theoSo = cau == null ? [] : phuongSoCuTrongCau(cau, quanTrongCau(cau)).map((w) => w.ten);
+  const chon = cau == null ? MOI : MOI.filter((w) => cauNhacPhuong(cau, w) || theoSo.includes(w.ten));
   if (!chon.length) return "";
   const tenChon = new Set(chon.map((w) => w.ten));
   const moi = chon.map((w) => `${w.ten_day_du} (${w.quan_cu})`).join("; ");
@@ -198,7 +254,9 @@ export function phuongNhacTrongCau(cau: string | null | undefined, quan?: string
   }
   // Tên dài nằm trùm tên ngắn ("tân hưng thuận" trùm "tân hưng") → bỏ tên ngắn.
   const giu = trung.filter((a) => !trung.some((b) => b !== a && b.n > a.n && b.i <= a.i && a.i + a.n <= b.i + b.n));
-  const moi = [...new Set(giu.map((a) => a.moi))];
+  // SRS-5.1zzzzc: phường SỐ cũ + quận cũ ("phường 13 phú nhuận", "p12 q3", hay "phường 13" khi tin đã biết quận) — cùng bảng.
+  const soCu = phuongSoCuTrongCau(cau, quan ? [quan] : quanTrongCau(cau ?? "")).map((w) => w.ten);
+  const moi = [...new Set([...giu.map((a) => a.moi), ...soCu])];
   return moi.length === 1 ? MOI.find((w) => w.ten === moi[0]) ?? null : null;
 }
 
@@ -220,6 +278,26 @@ export function chiLaDonViHanhChinh(s: string | null | undefined): boolean {
     co = true;
     t = t.split(` ${k} `).join("  ");
   }
-  const con = t.replace(/\s(?:nha|can|o|tai|thuoc|ben|khu|vuc|gan|phuong|p|xa|quan|q|huyen|tp|thanh|pho|thi|tran|tt|tinh|cu|moi|nhe|nhen|a|em|anh|chi|oi|do|day|ne|luon|va|voi)(?=\s)/g, " ");
+  // SRS-5.1zzzzd: chữ chỉ LOẠI căn ("đất", "lô", "nền", "miếng") cũng là chữ đệm — "lô đất xã Phước Vĩnh An huyện Củ Chi" vẫn chỉ là hành chính.
+  const con = t.replace(/\s(?:nha|can|o|tai|thuoc|ben|khu|vuc|gan|phuong|p|xa|quan|q|huyen|tp|thanh|pho|thi|tran|tt|tinh|cu|moi|nhe|nhen|a|em|anh|chi|oi|do|day|ne|luon|va|voi|dat|lo|nen|manh|mieng|thua)(?=\s)/g, " ");
   return co && con.trim() === "";
+}
+
+// ── SRS-5.1zzzzd (bắn production 09/10/2026, thu-kg5): "đất 10x50 củ chi xã tân an hội giấy tay" → AI đưa cụm «10x50 củ chi xã tân an
+// hội» vào duong / ten_duong; kiểm bằng chứng chỉ đòi chữ có trong tin nên lọt → location_raw "10x50 Củ Chi xã Tân An Hội", cột street
+// "Củ Chi xã Tân An Hội", câu địa chỉ không bao giờ được hỏi. Lớp lỗi: ô ĐỊA CHỈ nhận bất cứ cụm nào có thật trong tin, không soát HÌNH
+// DẠNG của địa chỉ (ô khác đã có `HINH_TRUONG_CHU`). Kích thước và tên đơn vị hành chính có ô riêng (ngang / dài, phường, quận) — không
+// bao giờ là địa chỉ. Một hàm dùng chung cho mọi chỗ ghi ô vị trí (đề xuất AI, câu trả lời câu địa chỉ, câu rao, tin mở từ mảnh).
+/** Kích thước / diện tích lẫn trong cụm ("10x50", "4 x 16m", "120m2", "5m x 20m"). */
+const KICH_THUOC_RE = /(?<![\p{L}\d])\d+(?:[.,]\d+)?\s*(?:m|mét|met)?\s*[x×*]\s*\d+(?:[.,]\d+)?(?:\s*(?:m2|m²|mét vuông|met vuong|m|mét|met))?(?![\p{L}\d])|(?<![\p{L}\d])\d+(?:[.,]\d+)?\s*(?:m2|m²|mét vuông|met vuong)(?![\p{L}\d])/giu;
+/**
+ * Giá trị ghi được vào ô vị trí (`vi_tri` / cột `street`): bỏ kích thước; còn lại chỉ là tên phường / xã / quận / huyện (kèm chữ đệm,
+ * chữ loại căn) hay rỗng → null — ô để trống, câu địa chỉ được hỏi. Có tên đường / hẻm / số nhà → trả cụm đã bỏ kích thước.
+ */
+export function viTriGhiDuoc(s: string | null | undefined): string | null {
+  const t = (s ?? "").replace(KICH_THUOC_RE, " ").replace(/\s+/g, " ").replace(/^[\s,;.:\-–—]+|[\s,;.:\-–—]+$/gu, "")
+    .replace(/^(?:(?:lô|lo|miếng|mieng|mảnh|manh)\s+)?(?:đất|dat|nền|nen)\s+(?=\S)/iu, "").trim();
+  if (!t || !/[\p{L}\d]/u.test(t)) return null;
+  if (!/\p{L}/u.test(t) && !/\d\s*\/\s*\d/.test(t)) return null;
+  return chiLaDonViHanhChinh(t) ? null : t;
 }

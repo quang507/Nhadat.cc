@@ -15,7 +15,7 @@ import { bocQuan, vungNgoai } from "../dia_ban.ts";
 import type { CanTrongTin } from "./khop-cau-tra-loi.ts";
 import { cumPhongNguTheoTang, cungHoFact, docTraLoiLung, nhanDienFact, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
-import { cauNhacPhuong, phuongChuan, phuongTrongTrich, phuongTuTenCu, tenDayDu } from "./khop-phuong.ts";
+import { cauNhacPhuong, phuongChuan, phuongSoCuTrongCau, phuongTrongTrich, phuongTuTenCu, quanTrongCau, tenDayDu, viTriGhiDuoc } from "./khop-phuong.ts";
 import { goNhamDau } from "./go-nham-dau.ts";
 
 const boDau = (s: string): string =>
@@ -153,6 +153,10 @@ export function giaTriNguyenVan(question: string, d: DeXuat | null | undefined):
   if (question === "vi_tri") {
     c = c.replace(NV_DUOI_DIA_CHI, "").replace(NV_BE_RONG_HEM, "$1").replace(/\s+/g, " ").trim();
     c = c.replace(/^(?:số|so)\s+(?=\d)/iu, "");
+    // SRS-5.1zzzzd: cụm gốc mang kích thước ("10x50 …") — kích thước có ô riêng; chỉ còn tên hành chính → không phải địa chỉ.
+    const sach = viTriGhiDuoc(c);
+    if (!sach) return null;
+    c = sach;
   }
   c = gonGiaTriFact(question, c).replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}%²)]+$/gu, "").trim();
   if (c.length < 2 || c.length > 120 || !/[\p{L}\p{N}]/u.test(c)) return null;
@@ -333,8 +337,18 @@ function kiemNamXay(v: string, kd: string): string | null {
   return kd.includes(n) ? null : "so_khong_co_trong_trich_dan";
 }
 
+/** Ngữ cảnh kiểm do nơi gọi (chat-reply) đưa vào — tầng này không tra DB. `quan`: quận cũ tin đã biết chắc. */
+export type NguCanhKiem = { quan?: string | null };
+/**
+ * SRS-5.1zzzzd (thu-kg5): ô địa chỉ (`duong` / `ten_duong`) mà CẢ giá trị lẫn cụm trích chỉ là kích thước + tên đơn vị hành chính
+ * («10x50 củ chi xã tân an hội») → không phải địa chỉ (quận / phường / ngang × dài có ô riêng). Cụm trích có chữ đường / hẻm / số nhà
+ * ("đường Tân Sơn Nhì" — đường trùng tên phường) thì vẫn nhận.
+ */
+function diaChiChiHanhChinh(d: DeXuat): boolean {
+  return (d.khoa === "duong" || d.khoa === "ten_duong") && !viTriGhiDuoc(d.gia_tri) && !viTriGhiDuoc(d.trich_dan);
+}
 /** Một đề xuất đã qua lớp 1: kiểm lớp 2–3. Trả lý do bỏ, null là đạt. */
-function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): string | null {
+function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ngu: NguCanhKiem = {}): string | null {
   const v = d.gia_tri.trim();
   const cum = d.trich_dan;
   const kd = kdCumSua ?? chuanSo(cum);
@@ -441,7 +455,13 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
       // 30/09/2026 (chủ dự án: "để AI nhận"): AI trả tên phường MỚI chuẩn (đổi cả tên cũ "Vĩnh Lộc B" → Tân Vĩnh Lộc) — máy
       // chỉ xác nhận: phường có thật VÀ trích dẫn nhắc nó (tên mới hoặc tên cũ, lệch 1–2 chữ cái).
       const chuan = phuongChuan(v) ?? phuongTuTenCu(v);
-      if (chuan) return cauNhacPhuong(cum, chuan) ? null : "phuong_khong_khop_trich_dan";
+      if (chuan) {
+        if (cauNhacPhuong(cum, chuan)) return null;
+        // SRS-5.1zzzzc (thu-kg2): trích «phường 13», quận cũ Phú Nhuận nói trong tin (hay tin đã biết) → bảng phường cũ gộp Phường 13
+        // Phú Nhuận vào Phường Phú Nhuận: AI đổi tên cũ → mới đúng bảng, không phải bịa.
+        const quanDs = [...quanTrongCau(cum), ...quanTrongCau(tin), ngu.quan];
+        return phuongSoCuTrongCau(cum, quanDs).some((w) => w.ten === chuan.ten) ? null : "phuong_khong_khop_trich_dan";
+      }
       // Tên KHÔNG có thật mà trích dẫn lại nhắc một phường có thật → AI cắt / bịa tên ("An Hội" cho "an hội tây"): bỏ.
       if (phuongTrongTrich(cum)) return "phuong_khong_co_that";
       const ten = chuanSo(v).replace(/^(phuong|xa|thi tran|p\.?)\s+/, "");
@@ -463,6 +483,7 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): s
     default: {
       // Trường chữ: giá trị phải NẰM TRONG cụm trích (model không được "diễn đạt lại").
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
+      if (diaChiChiHanhChinh(d)) return "dia_chi_chi_la_hanh_chinh";
       const cv = chuanSo(v);
       // FR-223 (bắn thật 24/09, rn-test-c): prompt dặn model VIẾT LẠI SẠCH, bỏ từ đệm ("chưa có sổ em, đang chờ ra sổ" →
       // "chưa có sổ, đang chờ ra sổ") mà luật này đòi giá trị nằm NGUYÊN trong cụm trích → loại, AI coi như im, câu trả lời
@@ -513,7 +534,7 @@ function tienCatThieu(tin: string, trich: string, b: number): boolean {
   const b2 = docTien(`${trich} ${m[1]}`);
   return b2 != null && b2 !== b;
 }
-function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string): string | null {
+function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ngu: NguCanhKiem = {}): string | null {
   const v = d.gia_tri.trim();
   const kd = kdCumSua ?? chuanSo(d.trich_dan);
   if (!v) return "gia_tri_rong";
@@ -521,7 +542,7 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
   switch (d.khoa) {
     case "gia": case "tien_coc": case "thu_nhap_thue": {
       // Bắn thử 01/10 (lx-ai-12): "cọc 3 tháng" — tiền cọc tính bằng THÁNG, phép kiểm riêng của bản đầy đủ.
-      if (d.khoa === "tien_coc" && /\bthang\b/.test(chuanSo(v))) return kiemGiaTri(d, tin, viTri, kdCumSua);
+      if (d.khoa === "tien_coc" && /\bthang\b/.test(chuanSo(v))) return kiemGiaTri(d, tin, viTri, kdCumSua, ngu);
       const b = docTien(kdCumSua ?? d.trich_dan);
       if (b == null) return "khong_doc_duoc_tien";
       if (!tienKhop(v, b)) return "tien_khong_khop_trich_dan";
@@ -532,7 +553,7 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
     }
     case "gia_m2": case "so_tang": case "quan": case "phuong":
       // Phép tính (giá/m², trệt + lầu) và bảng địa danh có thật — không phải soát từ khoá, giữ nguyên.
-      return kiemGiaTri(d, tin, viTri, kdCumSua);
+      return kiemGiaTri(d, tin, viTri, kdCumSua, ngu);
     case "dien_tich": case "ngang": case "dai": case "no_hau": case "do_rong_hem": case "do_rong_duong":
     case "cach_mat_tien": case "so_phong_ngu": case "so_wc": case "tang": {
       const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
@@ -555,6 +576,7 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string)
     case "nam_xay": return kiemNamXay(v, kd);
     default: {
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
+      if (diaChiChiHanhChinh(d)) return "dia_chi_chi_la_hanh_chinh";
       // Chữ AI viết lại được (chuẩn hoá, sửa chính tả, đổi từ đồng nghĩa) nhưng không được thêm CON SỐ khách không nói.
       const soTrich = new Set(kd.match(/\d+/g) ?? []);
       if (!(chuanSo(v).match(/\d+/g) ?? []).every((x) => soTrich.has(x))) return "so_khong_co_trong_trich_dan";
@@ -616,7 +638,7 @@ export function nangXacNhanChac(
 }
 
 /** Kiểm cả loạt đề xuất của model cho MỘT tin khách. */
-export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: Bo[] } {
+export function kiemDeXuat(deXuat: DeXuat[], tin: string, ngu: NguCanhKiem = {}): { dat: DeXuat[]; bo: Bo[] } {
   const kdTin = chuanSo(tin);
   const dat: DeXuat[] = [];
   const bo: Bo[] = [];
@@ -661,7 +683,7 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string): { dat: DeXuat[]; bo: 
         continue;
       }
     }
-    const ly = KIEM_NHE ? kiemGiaTriNhe(d, tin, viTri, kdDung) : kiemGiaTri(d, tin, viTri, kdDung);
+    const ly = KIEM_NHE ? kiemGiaTriNhe(d, tin, viTri, kdDung, ngu) : kiemGiaTri(d, tin, viTri, kdDung, ngu);
     if (ly) bo.push({ ...d, ly_do: ly });
     else {
       // SRS-5.1zzr: cụm nguyên văn trong tin — ô nguyên văn ghi chính cụm này, không ghi chữ model soạn.
@@ -1521,6 +1543,8 @@ export function kiemCapNhat(ds: CapNhatDeXuat[] | null | undefined, tin: string,
     // "4m5" trong tin = "4.5" trong giá trị mới.
     for (const m of boDau(tin).matchAll(/(\d+)\s*m\s*(\d)(?!\d)/g)) coSan.add(`${m[1]}.${m[2]}`);
     if (!tachGop(moi).every((t) => coSan.has(t) || CHU_NOI_GOP.has(t))) continue;
+    // SRS-5.1zzzzd: ô vị trí gộp xong vẫn phải là địa chỉ (không kích thước, không chỉ tên hành chính).
+    if (c.khoa === "vi_tri") { const vt = viTriGhiDuoc(moi); if (!vt) continue; moi = vt; }
     ra.push({ question: c.khoa, answer: moi });
   }
   return ra;

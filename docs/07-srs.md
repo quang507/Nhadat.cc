@@ -2690,6 +2690,78 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Sửa (a)**: `chanHuaCoHang` — sau câu sai đầu tiên về kho chỉ giữ CÂU HỎI, bỏ mọi câu kể sau nó (không đoán câu nào là hứa); và nhận thêm danh sách câu AI chỉ ra là "nói có hàng" (`aiHua`, đọc theo nghĩa): lượt AI soát nhận xét đối tượng người mua (SRS-5.1zzzza) trả thêm ô `noi_co_hang` ("dạ có anh", "dạ còn chị", "em đang lọc căn…", "em tìm thấy mấy căn…"), code nhận câu đó khi nó nằm trong lời bot; mẫu từ khoá lùi xuống lưới đỡ. **Sửa (b)**: thêm ô `so_tang` vào `KHOA_HO_SO`, `BuyerTurn.profile`, `KHOA_HO_SO_CHU` (kiểm giá trị là chữ khách nói), nhãn 🤖 "số tầng mong muốn", dòng ĐÃ BIẾT cho model; không thêm vào danh sách hỏi dò.
 - **Kiểm, đỏ khi tắt**: e2e phát lại `phat-lai/y09-mua.json` lượt 2 (lời gốc NGUYÊN VĂN production; hai lệnh ghi dựng lại): hồ sơ `so_tang` = "2 lầu", 🤖 báo nó; lời có "chưa có căn", không còn "Dạ có anh" / "đang lọc", câu hỏi khu vực giữ. Bản AI soát không chạy: lưới từ khoá + bỏ câu kể sau câu sai vẫn bỏ "đang lọc" — tắt riêng phần bỏ câu kể: 1/1071 đỏ. Cách nói MỚI `y09-mua-moi.json` lượt 2 ("chị cần nhà trệt 3 lầu, còn căn nào không" → model "Dạ còn chị. Em tìm thấy mấy căn trệt 3 lầu …" — không mẫu từ khoá nào bắt): AI chỉ ra, câu bị bỏ — tắt `aiHua`: 1/1071 đỏ; `so_tang` = "trệt 3 lầu". Bỏ `so_tang` khỏi `KHOA_HO_SO`: 2/1071 đỏ.
 
+### SRS-5.1zzzzc · Phường SỐ cũ + quận cũ không đổi được sang phường mới: AI đổi đúng mà kiểm bằng chứng loại (09/10/2026)
+
+`[nguồn: bắn production 09/10/2026 thu-kg2, boc_tach_ai = ai]`
+
+- **Ca gốc**: chủ nhà nhắn từng ý một, "nhà ở lê văn sỹ phường 13 phú nhuận". AI đề xuất phường "Phường Phú Nhuận" trích «phường 13» → bị loại `phuong_khong_khop_trich_dan`, ô phường trống; ba lượt sau bot hỏi "Em tra thấy đường Lê Văn Sỹ thuộc Phường Phú Nhuận (Quận Phú Nhuận cũ), đúng không anh ạ?". Bảng `phuong_cu` có đúng dòng (Phường 13, Quận Phú Nhuận) → Phú Nhuận, `toan_bo`.
+- **Nguyên nhân**: `cauNhacPhuong` (`khop-phuong.ts`) đối chiếu trích dẫn với tên mới + tên cũ của phường AI chọn, nhưng bảng tên cũ `TEN_CUA` BỎ HẲN tên dạng số (một mình "13" khớp mọi quận), nên «phường 13» không bao giờ "nhắc" tới Phường Phú Nhuận. Danh sách phường gửi AI (`danhSachPhuongChoAi`) và lưới đỡ khi AI im (`phuongNhacTrongCau`) cùng dựa trên bảng đó.
+- **Lớp lỗi**: *tên cũ dạng số chỉ có nghĩa khi đi kèm QUẬN CŨ, mà mọi chỗ đối chiếu tên cũ → mới khoá bằng tên trần* — dữ liệu (ds-phuong.ts, sinh từ `phuong_cu`) có sẵn cặp (số, quận), code không dùng.
+- **Chỗ khác cùng lớp** (cùng đi qua MỘT hàm mới `phuongSoCuTrongCau` / `phuongTuSoCu`, khoá (số, quận cũ), cùng luật "toàn bộ" như `phuongTuTenCu`): (a) kiểm bằng chứng ô phường — quận lấy từ trích dẫn, cả tin, và quận tin đã biết chắc (`kiemDeXuat(…, { quan })`, chat-reply truyền ở ba chỗ đọc AI cho tin đang hỏi: bóng ghi fact, câu phường, câu treo) — tầng bóc tách không tra DB, `bot/tests/ranh-gioi.mjs` vẫn xanh; (b) `danhSachPhuongChoAi` thêm phường mới mà phường số + quận trong câu gộp vào ("phường 12 quận 3" → Nhiêu Lộc); (c) `phuongNhacTrongCau` (lưới đỡ khi AI im; trả lời câu phường "phường 9" khi tin đã ở Quận 3 → Phường Nhiêu Lộc). Hệ quả có chủ đích: câu trả lời phường số của tin đã biết quận nay ghi tên MỚI (e2e GVI-05 đổi kỳ vọng "Phường 9" → "Phường Nhiêu Lộc"; bộ đo `do-boc/cham.mjs` coi "Phường 5" Gò Vấp = "Phường An Nhơn" qua cùng hàm). Còn lại: lượt rao mới mà AI im vẫn ghi "Phường N" (đường `wardNo` trong chat-reply, dữ liệu cũ), phường cũ bị chia (Phường 15 Phú Nhuận) không đoán — bot hỏi.
+- **Kiểm, đỏ khi tắt**: e2e phát lại `phat-lai/kg2-phuong-so.json` (đầu ra AI dựng lại theo sổ): ô phường = Phường Phú Nhuận, không hỏi "tra thấy đường … thuộc phường". Cách nói MỚI `kg2-phuong-so-moi.json` ("nhà chị hẻm 5m trần quốc thảo phường 12 quận 3 cũ" → Phường Nhiêu Lộc). `kiem-bang-chung.mjs` ZZZZC-01…07 (kiểm đủ + kiểm nhẹ; «phường 13» không quận nào vẫn bỏ; AI ghi sai bảng — Bàn Cờ — vẫn bỏ). Trả `khop-phuong.ts` + `kiem-bang-chung.ts` về bản cũ: 3/1083 đỏ (hai ca mới + GVI-05).
+
+### SRS-5.1zzzzd · Cột street / vị trí nhận kích thước và tên hành chính ("10x50 Củ Chi xã Tân An Hội") (09/10/2026)
+
+`[nguồn: bắn production 09/10/2026 thu-kg5, boc_tach_ai = ai]`
+
+- **Ca gốc**: "đất 10x50 củ chi xã tân an hội giấy tay … sao tin em được" → `listings.street` = "Củ Chi xã Tân An Hội", `location_raw` = "10x50 Củ Chi xã Tân An Hội"; câu địa chỉ không bao giờ được hỏi lại.
+- **Nguyên nhân**: AI đưa cụm «10x50 củ chi xã tân an hội» vào `duong` và «củ chi xã tân an hội» vào `ten_duong` (dựng lại trong e2e đúng hai cột sai như production). Kiểm bằng chứng chế độ `ai` (`kiemGiaTriNhe`, nhánh mặc định) chỉ đòi chữ có trong trích dẫn và không thêm số → lọt. `giaTriNguyenVan("vi_tri")` ghi CỤM GỐC (kể cả "10x50"); `duongAiGhi` ghi thẳng `ten_duong` vào cột `street`.
+- **Lớp lỗi**: *ô ĐỊA CHỈ nhận bất cứ cụm nào có thật trong tin, không soát HÌNH DẠNG của địa chỉ* (ô khác đã có `HINH_TRUONG_CHU`). Kích thước và tên phường / xã / quận / huyện có ô riêng, không bao giờ là địa chỉ.
+- **Chỗ khác cùng lớp** (một hàm chung `viTriGhiDuoc` trong `khop-phuong.ts`: bỏ kích thước; còn lại chỉ là hành chính / chữ đệm / chữ loại căn → null): (a) kiểm bằng chứng `duong` / `ten_duong` (cả đủ lẫn nhẹ) — bỏ khi CẢ giá trị lẫn trích dẫn đều không phải địa chỉ (`diaChiChiHanhChinh`; "đường Tân Sơn Nhì" — đường trùng tên phường — vẫn nhận); (b) `giaTriNguyenVan("vi_tri")` bỏ kích thước khỏi cụm gốc; (c) mọi chỗ luật ghi ô vị trí: câu trả lời câu địa chỉ (thay kiểm `chiLaDonViHanhChinh` cũ — R3), câu phường trả lời bằng địa chỉ (hai chỗ), câu rao, tin mở từ mảnh, `ghiDuLieuTinMoi` (một căn + nhiều căn), AI gộp ô (`kiemCapNhat`); (d) `chiLaDonViHanhChinh` coi chữ loại căn ("đất", "lô", "nền") là chữ đệm. Chưa sửa: trigger SQL `boc_ten_duong(location_raw)` vẫn đọc cột street từ `location_raw` khi street trống — nay `location_raw` không còn nhận cụm hành chính nên không lọt, không cần migration. Prompt (`boc-rao.ts`) thêm câu "duong / ten_duong CHỈ khi tin có tên đường, hẻm hoặc số nhà" và ví dụ mẫu "bán lô đất 8x30 xã Phước Vĩnh An huyện Củ Chi, sổ chung" (không duong).
+- **Kiểm, đỏ khi tắt**: e2e phát lại `phat-lai/kg5-dat-cu-chi.json`: `location_raw`, `street`, fact vị trí đều trống, phường / quận vẫn ghi. Cách nói MỚI `kg5-dat-cu-chi-moi.json` ("lô đất 8x40 xã phước vĩnh an huyện củ chi sổ chung …"). `kiem-bang-chung.mjs` ZZZZD-01…04, `vi-du-boc-rao.mjs` (câu luật + ví dụ). Tắt `viTriGhiDuoc` + `diaChiChiHanhChinh`: 2/1083 đỏ.
+
+### SRS-5.1zzzze · Phí nói hai lần trong một lượt (bong bóng trấn an + câu phí hỏi ngược) (09/10/2026)
+
+`[nguồn: bắn production 09/10/2026 thu-kg5, luat_loi_bot = gon]`
+
+- **Ca gốc**: "… bên em lấy phí sao, mà sao tin em được" → "Dạ anh/chị yên tâm nha, … không thu đồng nào trước — phí chỉ thu khi giao dịch thành công, 1% giá chốt. …" + "Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ." + lời model.
+- **Nguyên nhân**: AI đọc cảm xúc `nghi_ngo` → `traLoiSeller` chèn bong bóng trấn an có câu phí; lưới trùng (W1) dò `/phí chỉ thu khi/` trong các bong bóng, nhưng câu phí hỏi ngược do `dapHoiNguocTienDinh` soạn bằng `cauPhi(…, { benEm: true })` = "phí BÊN EM chỉ thu khi…" → không khớp. Lưới `boCauTrung` từng che chỗ này nhưng thuộc van sửa văn, tắt khi `luat_loi_bot = gon` (production).
+- **Lớp lỗi**: *một ý (phí) hai nguồn trong một lượt, gỡ trùng bằng dò từ khoá trên chữ do chính code sinh*.
+- **Chỗ khác cùng lớp**: `cauPhi()` có tám cách viết (bốn thân × "phí" / "phí bên em"); nay `prompts.ts` xuất `MOI_CAU_PHI` + `coCauPhi` (đối chiếu đúng chữ code sinh). Lượt đã có câu phí (bong bóng hỏi ngược, hay lời model chép đúng câu phí) thì bong bóng trấn an không nói phí lại. Các chỗ khác dùng `cauPhi`: dẫn phí sau lên kệ (`dang_xong_phi` — hỏi, không trả lời), câu lệnh model (`phiMotCau`, chỉ là dữ kiện), câu rao kèm hỏi phí (đi `dapHoiNguocTienDinh`, đã có câu lệnh dặn model không nhắc lại — SRS-5.1zzzq). Lời model tự diễn đạt phí bằng chữ khác thì `coCauPhi` không thấy — prompt là tầng chính, ghi đây.
+- **Kiểm, đỏ khi tắt**: e2e `kg5-dat-cu-chi*.json` chạy công tắc production (`luat_loi_bot` gọn, `bao_lai_da_luu` admin): "chỉ thu khi" xuất hiện đúng một lần, bong bóng trấn an vẫn có. Trả `daNoiPhi` về dò `/phí chỉ thu khi/`: 2/1083 đỏ.
+
+### SRS-5.1zzzzf · Câu soạn sẵn gửi người bán viết "anh/chị" gạch chéo và gạch dài "—" (09/10/2026)
+
+`[nguồn: bắn production 09/10/2026 thu-kg5, luat_loi_bot = gon]`
+
+- **Ca gốc**: bong bóng trấn an "Dạ anh/chị yên tâm nha, … trước — phí …" ra nguyên văn.
+- **Nguyên nhân**: câu viết tay trong `traLoiSeller` dùng `sellerRow.xung_ho ?? "anh/chị"` và " — ". Hai van `boGachCheo` / `boGachDai` sửa lời trên đường ra nhưng thuộc nhóm van SỬA VĂN, tắt khi `luat_loi_bot = gon` (SRS-5.1zzn) — câu code viết sai thì không còn ai sửa.
+- **Lớp lỗi**: *câu tiền định viết sai giọng, dựa vào van sửa văn ở đường ra để chữa* — van tắt là lộ.
+- **Chỗ khác cùng lớp** (soát mọi chuỗi gửi người bán trong `chat-reply/index.ts` và `CAU_TIEN_DINH`): sửa — bong bóng trấn an (gọi `cachGoi`, dấu phẩy), câu báo nhu cầu mua kèm (`?? cachGoi`), hai câu "nên chưa lên được — lúc nào…" (đăng luôn khi thiếu), câu đọc tài liệu dự án "— ví dụ …". Không sửa: `CAU_TIEN_DINH`, `CAU_HOI_MAU` không có "anh/chị" / " — " trong chữ gửi khách (chỉ ở chú thích / lời dặn model); lời chào `LOI_CHAO` có "anh/chị" nhưng luôn qua `boGachCheo` / thay xưng hô trước khi gửi; hai câu lệnh `#mã trả bot` (admin / CTV, không gửi người bán) và câu hỏi căn bên mua (`doiTuXung`) — ghi đây.
+- **Kiểm, đỏ khi tắt**: e2e `kg5-dat-cu-chi*.json` (công tắc production): không bong bóng nào có "anh/chị" / " — ". Trả câu trấn an về bản cũ: 2/1083 đỏ.
+
+### SRS-5.1zzzzg · Ghi nhận hai lần trong một lượt: bong bóng code "Dạ em ghi giá … rồi ạ." + lời model (09/10/2026)
+
+`[nguồn: bắn production 09/10/2026 thu-kg2, bao_lai_da_luu = admin]`
+
+- **Ca gốc**: đang hỏi pháp lý, "sổ riêng, giá 9 tỷ 5" → "Dạ em ghi giá 9 tỷ 5 rồi ạ." + "Vâng ạ, em ghi sổ riêng và giá rồi anh…".
+- **Nguyên nhân**: "giá 9 tỷ 5" là lời GHI THÊM (tin chưa có giá) bắt bởi khối lời sửa → `ackSua` = bong bóng code; câu trả lời pháp lý đi tiếp tới lượt model (r2) với câu lệnh "Bong bóng ngay trước đã ghi nhận số liệu — KHÔNG ghi nhận lại". Nhưng khách VỪA trả lời câu đang hỏi — model phải ghi nhận câu đó, và gộp luôn giá. Lưới đường ra (`laCauGhiNhan`) chỉ nhận lời model mở bằng "Dạ em ghi…" nên "Vâng ạ, em ghi…" lọt; 🤖 (chế độ thường) che chỗ này nhờ `boCauGhiNhan`, chế độ admin thì không.
+- **Lớp lỗi**: *một ý (ghi nhận) hai nguồn — code ghi nhận một phần rồi bảo model đừng ghi nhận, trong khi model buộc phải ghi nhận phần còn lại; gỡ trùng bằng mẫu từ khoá đầu câu*.
+- **Chỗ khác cùng lớp**: lời SỬA THẬT ("Dạ em sửa lại …") giữ bong bóng code theo quyết định B04 (lưới `boCauSuaLaiModel` lo phần model) — không đổi. Lượt không có câu treo (`ackSua` trả thẳng, không model) — không trùng. Nhánh hỏi lại khi câu lệch (r2b) không nhận `ackSua` vào câu lệnh — còn dựa lưới `laCauGhiNhan`, ghi đây.
+- **Sửa**: lời GHI THÊM (không phải sửa, không có giá chưa đọc ra số) đi vào câu lệnh r2: "em cũng vừa ghi thêm …: ghi nhận GỘP một lần" (`ackGhiGop`); có lời model (và câu lệnh đã mang dòng đó) thì bong bóng code không gửi. Model hỏng → câu mẫu như cũ, bong bóng code giữ.
+- **Kiểm, đỏ khi tắt**: e2e phát lại `phat-lai/kg2-ghi-gia.json` (lời model NGUYÊN VĂN production; công tắc production; lượt vai "chưa rõ" như production): đúng một lời ghi nhận, giá vẫn ghi, câu lệnh có "vừa ghi thêm giá". Cách nói MỚI `kg2-ghi-gia-moi.json` ("shr nha em, gia 7ty2"; model "Ok anh, em lưu…" — không mẫu đầu câu nào bắt). N28 đổi kỳ vọng: một lời ghi nhận (của model). Bỏ dòng `ackSua = null`: 3/1083 đỏ.
+
+### SRS-5.1zzzzh · Giá đọc lại cho khách in nguyên chữ gõ ("giá 6 ty") (09/10/2026)
+
+`[nguồn: bắn production 09/10/2026 thu-kg4]`
+
+- **Ca gốc**: rao gấp không dấu "gia 6 ty" → mọi trường đúng, bong bóng 📝 in "giá 6 ty".
+- **Nguyên nhân**: `price_raw` giữ nguyên chữ khách theo thiết kế (`O_NGUYEN_VAN`, `chuan_hoa_gia_raw`); bong bóng 📝 lúc tạo tin in thẳng giá đó. 🤖 / bản nháp đã qua `donViGiaDep` (luat-tien.ts) từ 22/09 — chỗ này sót.
+- **Lớp lỗi**: *giá trị lưu NGUYÊN VĂN được in thẳng cho khách, không qua luật hiển thị một nguồn*.
+- **Chỗ khác cùng lớp** (soát mọi chỗ in `price_raw` / fact giá cho người): sửa — 📝 tạo tin, 📝 ghi theo mảnh (gán mảnh), 🤖 "Bóc tách được" (`vuaLuuBan`, ô tiền: giá, cọc, doanh thu, thu nhập thuê), câu "trước đó … có căn … giá …", danh sách căn nhiều tin, danh sách căn khi nhập bảng, khối KHO đưa model bên mua, căn gợi ý gần ngân sách (hai chỗ), danh sách căn trả lời người mua. Đã đúng từ trước: 💾 / 🤖 tóm tắt cột, bản nháp (`giaHienThi`), lời sửa ("Dạ em sửa lại giá …"), "giá … nói hồi nãy". Giữ nguyên chữ khách có chủ đích: dòng "Câu trả lời gốc" của 💾, câu "em chưa đọc ra số từ …".
+- **Kiểm, đỏ khi tắt**: e2e `phat-lai/kg4-gia-khong-dau.json`: 📝 có "giá 6 tỷ", `price_raw` vẫn "6 ty". Cách nói MỚI `kg4-gia-khong-dau-moi.json` ("gia 7ty2" → "giá 7 tỷ 2"). GVH-02 đổi kỳ vọng "7 tỉ" → "7 tỷ". Trả 📝 tạo tin về in thẳng: 2/1083 đỏ.
+
+### SRS-5.1zzzzi · "MT" (mặt tiền) không thành loại đường vào (09/10/2026)
+
+`[nguồn: bắn production 09/10/2026 thu-kg3]`
+
+- **Ca gốc**: môi giới "Bán nhà MT Nguyễn Trãi Q5, 5x20, 4 tầng thang máy…" → mọi ô đúng trừ `access_type` trống; AI không đề xuất `loai_duong_vao`.
+- **Nguyên nhân**: kiểm bằng chứng NHẬN «MT» → mat_tien (chỉ bỏ khi số đo đứng ngay sau, SRS-5.1zzzp) — lỗi ở tầng AI. Luật prompt có câu "MT 5m = chiều ngang, KHÔNG phải loai_duong_vao" đứng trước câu "MT + tên đường → mat_tien", danh sách viết tắt chuẩn của nghề không có "MT" / "MTKD", không ví dụ nào dạy.
+- **Lớp lỗi**: *viết tắt chuẩn của nghề chưa được dạy cho AI* (chế độ `ai`: luật regex không chạy cho khoá AI biết — CLAUDE.md §6).
+- **Chỗ khác cùng lớp**: danh sách viết tắt chuẩn (`boc-rao.ts`: "shr", "hxh", "hxm"…) và từ lóng — thêm "MT", "MTKD", "MTNB", "mặt phố"; các viết tắt khác của loại đường vào ("hxh", "hxm", "hxt") đã có. Không thêm regex.
+- **Sửa**: prompt — "MT", "MTKD", "MTNB", "mặt tiền kinh doanh / nội bộ" = mat_tien kể cả khi tin còn số đo ở chỗ khác; chỉ số đo ngay sau chữ MT mới là chiều ngang; ví dụ mẫu "Bán nhà MTKD Hai Bà Trưng Q1, 4x18, 5 tầng, 25 tỷ" (qua `bun bot/tests/vi-du-boc-rao.mjs`; trần chữ ví dụ nới 10200 → 12000, khối nằm trong system có cache). `LUAT` bóc tách không nằm trong `bot_prompts` — deploy là có hiệu lực.
+- **Kiểm**: `kiem-bang-chung.mjs` ZZZZI-01…03 («MT», «MTKD» đạt; «MT 5m» vẫn bỏ), `vi-du-boc-rao.mjs` (luật + ví dụ dạy MT / MTKD; xoá là đỏ). Không đo được ở e2e (model giả); số production đo bằng bắn thử sau deploy.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

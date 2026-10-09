@@ -916,6 +916,50 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZZZV-02 (cách nói MỚI) ý thêm 'gần chợ Bến Thành' không trùng gì đã ghi → giữ; 'đang ở' vẫn giữ",
     kiemKienThuc(["gần chợ Bến Thành", "đang ở"], "nhà gần chợ Bến Thành, đang ở", [], ["Phường Bến Thành", "sổ hồng riêng"]).length === 2);
 }
+// ── 09/10/2026 bắn production (SRS-5.1zzzzc / zzzzd / zzzzi). Chạy cả kiểm đủ lẫn kiểm nhẹ (production). ──
+{
+  const { viTriGhiDuoc, phuongTuSoCu, phuongNhacTrongCau } = await import("../supabase/functions/_shared/extraction/khop-phuong.ts");
+  const cu = laKiemNheTest();
+  for (const nhe of [false, true]) {
+    datKiemNhe(nhe);
+    const m = nhe ? "nhẹ" : "đủ";
+    const pn = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Phú Nhuận", trich_dan: "phường 13" }], "nhà ở lê văn sỹ phường 13 phú nhuận");
+    ok(`ZZZZC-01 (${m}, thu-kg2) «phường 13» + 'phú nhuận' trong tin → Phường Phú Nhuận ĐẠT (bảng phường cũ)`, pn.dat.length === 1, JSON.stringify(pn));
+    const pnQ = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Phú Nhuận", trich_dan: "phường 13" }], "phường 13 nha em", { quan: "Quận Phú Nhuận" });
+    ok(`ZZZZC-02 (${m}) chỉ «phường 13», quận tin đã biết Phú Nhuận (ngữ cảnh nơi gọi) → ĐẠT`, pnQ.dat.length === 1, JSON.stringify(pnQ));
+    const pnK = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Phú Nhuận", trich_dan: "phường 13" }], "phường 13 nha em");
+    ok(`ZZZZC-03 (${m}) «phường 13» không quận nào → vẫn BỎ (không đoán)`, pnK.bo[0]?.ly_do === "phuong_khong_khop_trich_dan", JSON.stringify(pnK));
+    const nl = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Nhiêu Lộc", trich_dan: "phường 12 quận 3" }], "nhà chị hẻm 5m trần quốc thảo phường 12 quận 3 cũ");
+    ok(`ZZZZC-04 (${m}, cách nói MỚI) «phường 12 quận 3» → Phường Nhiêu Lộc ĐẠT`, nl.dat.length === 1, JSON.stringify(nl));
+    const bc = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Bàn Cờ", trich_dan: "phường 12 quận 3" }], "nhà chị hẻm 5m trần quốc thảo phường 12 quận 3 cũ");
+    ok(`ZZZZC-05 (${m}) «phường 12 quận 3» mà AI ghi Bàn Cờ (sai bảng) → BỎ`, bc.bo[0]?.ly_do === "phuong_khong_khop_trich_dan", JSON.stringify(bc));
+    const dc = kiemDeXuat([{ khoa: "duong", gia_tri: "Củ Chi xã Tân An Hội", trich_dan: "10x50 củ chi xã tân an hội" },
+      { khoa: "ten_duong", gia_tri: "Củ Chi xã Tân An Hội", trich_dan: "củ chi xã tân an hội" }], "đất 10x50 củ chi xã tân an hội giấy tay");
+    ok(`ZZZZD-01 (${m}, thu-kg5) duong / ten_duong chỉ là kích thước + tên hành chính → BỎ cả hai`,
+      dc.dat.length === 0 && dc.bo.every((b) => b.ly_do === "dia_chi_chi_la_hanh_chinh"), JSON.stringify(dc));
+    const dg = kiemDeXuat([{ khoa: "ten_duong", gia_tri: "Tân Sơn Nhì", trich_dan: "đường tân sơn nhì" }], "nhà mặt tiền đường tân sơn nhì tân phú");
+    ok(`ZZZZD-02 (${m}) đường trùng tên phường nhưng trích có chữ 'đường' → vẫn ĐẠT`, dg.dat.length === 1, JSON.stringify(dg));
+    const mt = kiemDeXuat([{ khoa: "loai_duong_vao", gia_tri: "mat_tien", trich_dan: "MT" }], "Bán nhà MT Nguyễn Trãi Q5, 5x20, 4 tầng thang máy");
+    ok(`ZZZZI-01 (${m}, thu-kg3) «MT» → loai_duong_vao mat_tien ĐẠT`, mt.dat.length === 1, JSON.stringify(mt));
+    const mtkd = kiemDeXuat([{ khoa: "loai_duong_vao", gia_tri: "mat_tien", trich_dan: "MTKD" }], "Bán nhà MTKD Hai Bà Trưng Q1, 4x18, 5 tầng, 25 tỷ");
+    ok(`ZZZZI-02 (${m}, cách nói MỚI) «MTKD» → mat_tien ĐẠT`, mtkd.dat.length === 1, JSON.stringify(mtkd));
+    const mt5 = kiemDeXuat([{ khoa: "loai_duong_vao", gia_tri: "mat_tien", trich_dan: "MT 5m" }], "nhà MT 5m dài 20m");
+    ok(`ZZZZI-03 (${m}) «MT 5m» (số đo ngay sau) vẫn là chiều ngang → BỎ`, mt5.bo[0]?.ly_do === "mat_tien_kem_so_la_chieu_ngang", JSON.stringify(mt5));
+  }
+  datKiemNhe(cu);
+  ok("ZZZZC-06 phuongTuSoCu: (13, Quận Phú Nhuận) → Phú Nhuận; (15, Phú Nhuận) chia hai phường không 'toàn bộ' → null",
+    phuongTuSoCu(13, "Quận Phú Nhuận")?.ten === "Phú Nhuận" && phuongTuSoCu(15, "phú nhuận") === null, JSON.stringify([phuongTuSoCu(13, "Quận Phú Nhuận"), phuongTuSoCu(15, "phú nhuận")]));
+  ok("ZZZZC-07 lưới đỡ khi AI im: 'phường 13 phú nhuận' → Phú Nhuận; 'p4 q5' → Chợ Quán; 'phường 13' + quận tin Phú Nhuận → Phú Nhuận",
+    phuongNhacTrongCau("nhà ở lê văn sỹ phường 13 phú nhuận")?.ten === "Phú Nhuận" && phuongNhacTrongCau("p4 q5")?.ten === "Chợ Quán" &&
+      phuongNhacTrongCau("phường 13", "Quận Phú Nhuận")?.ten === "Phú Nhuận");
+  ok("ZZZZD-03 viTriGhiDuoc: kích thước / hành chính → null; địa chỉ thật giữ, bỏ kích thước",
+    viTriGhiDuoc("10x50 Củ Chi xã Tân An Hội") === null && viTriGhiDuoc("lô đất 8x40 xã Phước Vĩnh An huyện Củ Chi") === null &&
+      viTriGhiDuoc("Xã Tân An Hội") === null && viTriGhiDuoc("120m2") === null &&
+      viTriGhiDuoc("hẻm 45 Nguyễn Trãi") === "hẻm 45 Nguyễn Trãi" && viTriGhiDuoc("137/28 đường số 59") === "137/28 đường số 59" &&
+      viTriGhiDuoc("Trần Hưng Đạo 4x16") === "Trần Hưng Đạo" && viTriGhiDuoc("Lò Gốm") === "Lò Gốm");
+  const ac = docAiChinh(kiemDeXuat([{ khoa: "duong", gia_tri: "10x50 Củ Chi xã Tân An Hội", trich_dan: "10x50 củ chi xã tân an hội" }], "đất 10x50 củ chi xã tân an hội").dat, null);
+  ok("ZZZZD-04 docAiChinh: AI đưa cụm kích thước + hành chính vào duong → KHÔNG ghi vi_tri, không tên đường", !ac.duong && !ac.tenDuong && !ac.ghi.some((g) => g.question === "vi_tri"), JSON.stringify(ac));
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

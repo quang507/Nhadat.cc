@@ -266,6 +266,8 @@ export function bocTachTaoTin(l: DongBaoLai | null): string | null {
  *  dòng "🤖 Đã lưu:" đầy đủ y như lượt tạo tin. Giữ hằng để `tomTatTrongCau` còn đọc được câu bot cũ trong sổ. */
 export const DAU_TIN_GIO = "📦 Tin giờ:";
 
+/** Ô fact mang SỐ TIỀN — in bằng `donViGiaDep`. */
+const O_TIEN: ReadonlySet<string> = new Set(["gia", "tien_coc", "doanh_thu", "thu_nhap_thue"]);
 /** "🤖 Bóc tách được: giá: "6 tỷ 5" · phường: "Phường 9"" — fact lượt này (mới nhất trước), null khi không có. */
 export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): string | null {
   const moiNhat = new Map<string, string>();
@@ -287,7 +289,8 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
   // 23/09/2026 (chủ dự án: "ghi thật đầy đủ"): trần 12 khoá / 50 ký tự từng cắt mất fact và đuôi câu trả lời.
   const ds = [...moiNhat].reverse().slice(0, 40).map(([k, v]) => {
     const ten = nhanNgan(k, nhan);
-    const chu = CHU_DAP_AN[k]?.[v] ?? v;
+    // SRS-5.1zzzzh: ô tiền đọc lại bằng luật hiển thị một nguồn ("7ty2" → "7 tỷ 2") — fact trong DB giữ nguyên chữ khách.
+    const chu = CHU_DAP_AN[k]?.[v] ?? (O_TIEN.has(k) ? donViGiaDep(v) : v);
     return `${ten}: "${chu.length > 120 ? chu.slice(0, 119) + "…" : chu}"`;
   });
   return `${BOC_DUOC} ${ds.join(" · ")}`;

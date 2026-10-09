@@ -26,13 +26,27 @@ export const FEE_RULES = `Luật phí (chỉ nói khi được hỏi, hoặc đ�
 // 06/10/2026 (SRS-5.1zzq, đối chiếu SRD AOND): câu phí soạn sẵn từng chép ở ba chỗ trong chat-reply và chỉ đọc nhãn người
 // rao — tin CHO THUÊ vẫn nghe "1% giá chốt", hồ sơ chưa rõ vai vẫn nghe con số. Đây là MỘT NGUỒN của câu phí tiền định:
 // FEE_RULES (cho model) và hàm này (cho câu code ghép) phải nói cùng một thứ.
+const PHI_THAN = {
+  thue: "chỉ thu khi ký được hợp đồng thuê, bằng 3/4 tháng tiền thuê",
+  nmg: "chỉ thu khi giao dịch thành công, 0,5% giá chốt",
+  ccrb: "chỉ thu khi giao dịch thành công, 1% giá chốt",
+  chung: "chỉ thu khi giao dịch thành công, mức tuỳ chính chủ hay môi giới",
+} as const;
 export function cauPhi(sellerType: string | null | undefined, deal: string | null | undefined, opts: { benEm?: boolean } = {}): string {
   const phi = opts.benEm ? "phí bên em" : "phí";
-  if (deal === "cho_thue") return `${phi} chỉ thu khi ký được hợp đồng thuê, bằng 3/4 tháng tiền thuê`;
-  if (sellerType === "nmg") return `${phi} chỉ thu khi giao dịch thành công, 0,5% giá chốt`;
-  if (sellerType === "ccrb") return `${phi} chỉ thu khi giao dịch thành công, 1% giá chốt`;
-  return `${phi} chỉ thu khi giao dịch thành công, mức tuỳ chính chủ hay môi giới`;
+  if (deal === "cho_thue") return `${phi} ${PHI_THAN.thue}`;
+  if (sellerType === "nmg") return `${phi} ${PHI_THAN.nmg}`;
+  if (sellerType === "ccrb") return `${phi} ${PHI_THAN.ccrb}`;
+  return `${phi} ${PHI_THAN.chung}`;
 }
+/**
+ * SRS-5.1zzzze (bắn production 09/10/2026, thu-kg5): MỌI câu `cauPhi()` có thể sinh ("phí …" lẫn "phí bên em …"). Lưới trùng cũ
+ * (W1) dò `/phí chỉ thu khi/` nên câu "phí BÊN EM chỉ thu khi…" của bong bóng hỏi ngược lọt qua, bong bóng trấn an nói phí lần
+ * hai. Nay đối chiếu đúng chữ code đã sinh, không đoán bằng từ khoá.
+ */
+export const MOI_CAU_PHI: readonly string[] = ["phí", "phí bên em"].flatMap((p) => Object.values(PHI_THAN).map((t) => `${p} ${t}`));
+/** Lời có chứa một câu phí do `cauPhi()` sinh không. */
+export const coCauPhi = (s: string): boolean => MOI_CAU_PHI.some((c) => s.includes(c));
 
 /** SRS-5.1zzs: tên hạng người rao đọc cho khách (`hang_theo_diem`: dong / bac / vang). Mã lạ → trả nguyên. */
 export function tenHang(hang: string | null | undefined): string {

@@ -27,6 +27,15 @@ export function khoaPhuong(s) {
   if (m) return `p${Number(m[1])}`;
   return k.replace(/^(?:phuong|xa|thi tran)\s+/, "").trim();
 }
+// SRS-5.1zzzzc (09/10/2026): phường SỐ cũ ("Phường 5" Gò Vấp) và phường MỚI nó gộp vào ("Phường An Nhơn") là MỘT phường — bot nay
+// ghi tên mới qua bảng phường cũ (`phuongTuSoCu`, cùng hàm bot dùng). Kỳ vọng soạn trước 07/2025 vẫn chấm đúng.
+import { phuongTuSoCu } from "../../supabase/functions/_shared/extraction/khop-phuong.ts";
+function cungPhuongCu(v, ky, quan) {
+  const so = (x) => /^p(\d{1,2})$/.exec(khoaPhuong(x))?.[1] ?? null;
+  const moi = (x) => { const n = so(x); return n ? phuongTuSoCu(n, quan) : null; };
+  const a = moi(ky), b = moi(v);
+  return (!!a && boDau(a.ten) === khoaPhuong(v)) || (!!b && boDau(b.ten) === khoaPhuong(ky));
+}
 const NHOM_LOAI = { nha_pho: "nha", nha_cap4: "nha", nha_cap_4: "nha", biet_thu: "nha", nha_tro: "nha", chung_cu: "chung_cu", dat: "dat", dat_nong_nghiep: "dat", dat_kinh_doanh: "dat", mat_bang: "mat_bang", kho_xuong: "kho_xuong", toa_nha: "toa_nha" };
 const nhomLoai = (l) => NHOM_LOAI[l] ?? l ?? null;
 const gan = (a, b, tile = 0.02) => a != null && b != null && Math.abs(Number(a) - Number(b)) <= Math.max(1, Math.abs(Number(b)) * tile);
@@ -46,7 +55,7 @@ export function soTruong(truong, ky, tin) {
     case "loai": return nhomLoai(v) === nhomLoai(ky);
     // "Cần Giuộc, Long An" khớp kỳ vọng "Long An" (tỉnh), nhưng "Quận 10" KHÔNG khớp "Quận 1".
     case "quan": return !!v && (khoaQuan(v) === khoaQuan(ky) || (!/^q\d/.test(khoaQuan(ky)) && boDau(v).split(/\s*,\s*/).some((x) => khoaQuan(x) === khoaQuan(ky))));
-    case "phuong": return !!v && khoaPhuong(v) === khoaPhuong(ky);
+    case "phuong": return !!v && (khoaPhuong(v) === khoaPhuong(ky) || cungPhuongCu(v, ky, tin.district));
     case "gia": return gan(v, ky, 0.01);
     case "dt": case "ngang": case "dt_san": return gan(v, ky, 0.02);
     case "pn": case "tang": return v != null && Number(v) === Number(ky);
@@ -142,6 +151,10 @@ if (import.meta.main && process.argv.includes("--tu-kiem")) {
   ok("khoaQuan: 'Huyện Củ Chi' = 'Củ Chi'", khoaQuan("Huyện Củ Chi") === khoaQuan("Củ Chi"));
   ok("soTruong quan: 'Cần Giuộc, Long An' ~ 'Long An'; 'Quận 10' ≠ 'Quận 1'", soTruong("quan", "Long An", tin({ district: "Cần Giuộc, Long An" })) && !soTruong("quan", "Quận 1", tin({ district: "Quận 10" })));
   ok("khoaPhuong: 'Phường 9' = 'P9'", khoaPhuong("Phường 9") === khoaPhuong("P9"));
+  ok("soTruong phuong (SRS-5.1zzzzc): 'Phường 5' Gò Vấp ~ 'Phường An Nhơn'; khác quận thì không; phường cũ bị chia thì không",
+    soTruong("phuong", "Phường 5", tin({ district: "Quận Gò Vấp", ward: "Phường An Nhơn" })) &&
+      !soTruong("phuong", "Phường 5", tin({ district: "Quận 10", ward: "Phường An Nhơn" })) &&
+      !soTruong("phuong", "Phường 16", tin({ district: "Quận 8", ward: "Phường Bình Phú" })));
   const ky = { so_tin: 2, tin: [{ loai: "nha_pho", quan: "Quận 5", gia: 9e9, pn: null }, { loai: "chung_cu", quan: "Quận 10", gia: 5.2e9, pn: 2 }] };
   const dung = { tin: [tin({ property_type: "chung_cu", district: "Quận 10", price_vnd: 5.2e9, bedrooms: 2 }), tin({ property_type: "nha_pho", district: "Quận 5", price_vnd: 9e9 })] };
   ok("chamCa: hai tin đúng (thứ tự đảo) → đạt, 1 + 8 trường", (() => { const r = chamCa(ky, dung); return r.dat && r.truong.dung === 9 && r.truong.tong === 9; })());
