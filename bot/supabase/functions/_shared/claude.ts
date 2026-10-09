@@ -4,7 +4,7 @@
 // bị chép 5 bản, `sendZalo()` 2 bản, và text escalation trùng byte giữa `nudge`
 // với `escalation-feed` (sửa một nơi quên nơi kia là lệch giọng bot ngay).
 import Anthropic from "npm:@anthropic-ai/sdk";
-import { bocDuPhong, nguonGemini, nguonGroq } from "./groq.ts";
+import { bocDuPhong, goiCoHan, hanGoiMs, nguonGemini, nguonGroq } from "./groq.ts";
 import { locThamSo } from "./tham-so-model.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
@@ -29,7 +29,11 @@ export const MODEL = Deno.env.get("ANTHROPIC_MODEL") ?? "claude-haiku-4-5-202510
 const NHIP_DAU_MS = 120_000;
 let dauLuc = 0;
 
-function bocLocThamSo(c: Anthropic, db: SupabaseClient): Anthropic {
+/**
+ * `thuLai` (SRS-5.1zzzzo): model chính là nguồn CUỐI (không có dự phòng, hay dự phòng đã trả lời trước) → hỏng vì quá nhịp / quá tải /
+ * quá hạn thì thử lại một lần trong hạn. Có dự phòng đứng SAU (thứ tự `claude`) thì không — đổi nguồn nhanh hơn ngủ chờ cùng nguồn.
+ */
+function bocLocThamSo(c: Anthropic, db: SupabaseClient, thuLai = true): Anthropic {
   const dongDau = () => {
     const gio = Date.now();
     if (gio - dauLuc < NHIP_DAU_MS) return;
@@ -48,14 +52,16 @@ function bocLocThamSo(c: Anthropic, db: SupabaseClient): Anthropic {
   };
   // deno-lint-ignore no-explicit-any
   const xong = <T,>(p: Promise<T>): Promise<T> => p.then((r) => { dongDau(); ganModel(r); return r; });
+  // SRS-5.1zzzzo: mỗi lượt gọi một HẠN (`hanGoiMs`), SDK không tự ngủ theo `retry-after` (`maxRetries: 0`) — xem groq.ts.
   return {
     messages: {
       // deno-lint-ignore no-explicit-any
-      create: (p: any) => xong(c.messages.create(locThamSo(p, MODEL))),
+      create: (p: any) => xong(goiCoHan((o) => c.messages.create(locThamSo(p, MODEL), o), hanGoiMs(p), thuLai)),
       // deno-lint-ignore no-explicit-any
-      parse: (p: any) => xong(
-        (c.messages as unknown as { parse: (x: unknown) => Promise<unknown> }).parse(locThamSo(p, MODEL)),
-      ),
+      parse: (p: any) => xong(goiCoHan(
+        (o) => (c.messages as unknown as { parse: (x: unknown, o: unknown) => Promise<unknown> }).parse(locThamSo(p, MODEL), o),
+        hanGoiMs(p), thuLai,
+      )),
     },
   } as unknown as Anthropic;
 }
@@ -154,13 +160,15 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
   const geminiKey2 = await secretOf(db, "GEMINI_API_KEY_2");
   const geminiModel = (await secretOf(db, "GEMINI_MODEL")) ?? "gemini-3.8-flash";
   if (!apiKey && !groqKey && !geminiKey && !geminiKey2) throw new Error("Không tìm thấy ANTHROPIC_API_KEY, GROQ_API_KEY lẫn GEMINI_API_KEY (env lẫn Vault)");
-  const chinh = apiKey ? bocLocThamSo(new Anthropic({ apiKey }), db) : null;
-  if (!groqKey && !geminiKey && !geminiKey2) return chinh!;
+  const coDuPhong = !!(groqKey || geminiKey || geminiKey2);
   // FR-194 b: ai trả lời TRƯỚC. Chủ dự án 15/09/2026: Groq trước, chặn trần thì
   // Claude liền. Đổi bằng secret `MODEL_TRUOC`, không cần deploy: `claude` = Claude
   // trước; `gemini` = Gemini → Groq → Claude; còn lại (`groq`) = Groq → Gemini → Claude.
-  const truoc = (await secretOf(db, "MODEL_TRUOC"))?.trim().toLowerCase();
+  const truoc = coDuPhong ? (await secretOf(db, "MODEL_TRUOC"))?.trim().toLowerCase() : undefined;
   const thuTu = truoc === "claude" ? "claude" : "groq";
+  // SRS-5.1zzzzo: `maxRetries: 0` — SDK không tự thử lại / ngủ theo `retry-after`; thử lại (nếu có) do `goiCoHan` quyết trong hạn.
+  const chinh = apiKey ? bocLocThamSo(new Anthropic({ apiKey, maxRetries: 0 }), db, !coDuPhong || thuTu !== "claude") : null;
+  if (!coDuPhong) return chinh!;
   const gq = groqKey ? [nguonGroq(groqKey, groqModel)] : [];
   const gm = [geminiKey, geminiKey2].filter((k): k is string => !!k).map((k) => nguonGemini(k, geminiModel));
   const dsNguon = truoc === "gemini" ? [...gm, ...gq] : [...gq, ...gm];
@@ -183,7 +191,8 @@ export async function anthropicClient(db: SupabaseClient): Promise<Anthropic> {
  */
 export async function anthropicTrucTiep(db: SupabaseClient): Promise<Anthropic | null> {
   const apiKey = await secretOf(db, "ANTHROPIC_API_KEY");
-  return apiKey ? bocLocThamSo(new Anthropic({ apiKey }), db) : null;
+  // SRS-5.1zzzzo: trợ lý hỏng thì đường JSON cũ trả lời ngay trong lượt — đó là đường đổi nguồn, không thử lại ở đây.
+  return apiKey ? bocLocThamSo(new Anthropic({ apiKey, maxRetries: 0 }), db, false) : null;
 }
 
 /**

@@ -18,7 +18,7 @@ Tránh giọng máy: không gạch dài "—", không markdown (trừ liệt kê
 
 export const FEE_RULES = `Luật phí (chỉ nói khi được hỏi, hoặc đúng lúc hệ thống báo DẪN PHÍ sau khi khách duyệt tin; đừng thuyết giảng):
 - Người MUA miễn phí hoàn toàn, không bao giờ thu gì.
-- Bên BÁN rao miễn phí, chỉ trả khi giao dịch THÀNH CÔNG: chính chủ 1% giá chốt, môi giới 0.5%; tin CHO THUÊ (bất kể chính chủ hay môi giới): 3/4 tháng tiền thuê, chỉ thu khi ký được hợp đồng. Chưa rõ khách là chính chủ hay môi giới thì KHÔNG báo con số, chỉ nói phí thu khi giao dịch thành công rồi hỏi khéo họ là chủ nhà hay môi giới.
+- Bên BÁN rao miễn phí, chỉ trả khi giao dịch THÀNH CÔNG: chính chủ 1% giá chốt, môi giới 0.5%; tin CHO THUÊ (bất kể chính chủ hay môi giới): 3/4 tháng tiền thuê, chỉ thu khi ký được hợp đồng. Chưa rõ khách là chính chủ hay môi giới thì KHÔNG báo con số, chỉ nói phí thu khi giao dịch thành công, mức tuỳ chủ nhà hay môi giới; lượt đó có ý CẦN HỎI thì vẫn hỏi đúng ý CẦN HỎI (không đổi sang hỏi vai), không có thì hỏi khéo họ là chủ nhà hay môi giới. Khách tự nói vai thì hệ thống báo con số.
 - Khách thấy đắt hay băn khoăn: thuyết phục nhẹ TỐI ĐA 1–2 lần bằng điều có thật, rồi để ngỏ cửa ("mình cứ để em rao thử, không tốn gì"), không ép, không nhắc lại nữa. Điều có thật được dùng: không tốn đồng nào cho tới khi bán / cho thuê được; bên em có cộng tác viên đi dẫn khách xem nhà và thương lượng thay anh chị; tin đủ thông tin được giới thiệu thẳng cho khách đang tìm mua đúng khu; khách đã qua bên em sàng lọc, không phải khách ảo; người rao hạng Vàng: khi khách mua nhắn bên em đã nói rõ khu vực và tầm giá thì em giới thiệu căn của người hạng Vàng trước. Chỉ nói đúng như vậy: KHÔNG nói "khách tìm kiếm / lên web sẽ thấy tin anh trước", không hứa đứng đầu trang, không hứa bán nhanh hơn.
 - CHỦ ĐẦU TƯ dự án: phí thoả thuận riêng — TUYỆT ĐỐI không tự báo con số, nói "để em kết nối bộ phận hợp tác dự án".
 - Không bịa bất kỳ mức phí, ưu đãi hay cam kết nào ngoài các mức trên.`;
@@ -62,6 +62,13 @@ export function phanTramPhi(vai: string | null | undefined, deal: string | null 
 export const MOI_CAU_PHI: readonly string[] = ["phí", "phí bên em"].flatMap((p) => Object.values(PHI_THAN).map((t) => `${p} ${t}`));
 /** Lời có chứa một câu phí do `cauPhi()` sinh không. */
 export const coCauPhi = (s: string): boolean => MOI_CAU_PHI.some((c) => s.includes(c));
+/**
+ * SRS-5.1zzzzo (bắn production 09/10/2026: "ủa mà bên em lấy phí nhiêu vậy" → câu phí không số "mức tuỳ chính chủ hay môi giới", lượt
+ * sau "anh là chính chủ" → bot bỏ lửng chuyện phí): em đã nói câu phí CHƯA RÕ VAI (không số) / câu phí THEO VAI (có số) chưa — đối chiếu
+ * đúng chữ `cauPhi()` sinh. Khách vừa tự nói vai sau câu không số mà chưa nghe câu có số → nơi gọi báo số bằng `cauPhi(vaiPhi(…))`.
+ */
+export const coCauPhiChuaRoVai = (s: string): boolean => s.includes(PHI_THAN.chung);
+export const coCauPhiTheoVai = (s: string): boolean => s.includes(PHI_THAN.ccrb) || s.includes(PHI_THAN.nmg);
 
 /** SRS-5.1zzs: tên hạng người rao đọc cho khách (`hang_theo_diem`: dong / bac / vang). Mã lạ → trả nguyên. */
 export function tenHang(hang: string | null | undefined): string {
@@ -107,6 +114,9 @@ export const SELLER_SCRIPT_RULES = `Nhận ký gửi (FR-176/177) — cách em l
 // 09/10/2026 (SRS-5.1zzzzm, chủ dự án: "lễ phép nhưng nhanh nhẹn tí, trả lời thông minh tí chứ rep chán quá"): ví dụ mang
 // [vừa ghi gì · ý CẦN HỎI] như câu lệnh thật (dòng EM VỪA GHI), mở đầu mỗi tin một kiểu, thêm ca gật phần đoán → hỏi đường +
 // phường một câu, ca phường → một câu đáp có căn cứ (quận cũ do hệ thống tra). Sai mới: ghi nhận lại điều lượt trước, khuôn lặp.
+// 09/10/2026 (SRS-5.1zzzzo, bắn production: hỏi phí lúc treo câu sổ → bot hỏi "mấy phòng ngủ", rồi "Sổ và hẻm được không ạ?"): ví dụ hỏi
+// phí nay quay lại đúng ý CẦN HỎI (bản trước dạy hỏi vai "Anh là chủ nhà luôn đúng không" — hai chủ cho câu hỏi của lượt), thêm ca khách tự
+// nói vai; SAI thêm gộp hai ý và nhảy sang ý khác sau câu hỏi bên lề. FEE_RULES nói cùng điều.
 export const SELLER_FEWSHOT = `Ví dụ giọng ĐÚNG (chủ nhà nói [lượt này em vừa ghi gì · ý CẦN HỎI] → trợ lý {ten} đáp). Để ý: mỗi tin mở một kiểu, chỉ ghi nhận điều VỪA ghi:
 - "Anh muốn bán nhà" [vừa ghi: bán · địa chỉ] → "Dạ nhà anh ở đâu vậy, ở Hồ Chí Minh đúng không ạ?"
 - "đúng em ơi" [không ghi gì mới · địa chỉ] → "Dạ, nhà anh ở đường nào, phường nào vậy ạ?"
@@ -116,7 +126,8 @@ export const SELLER_FEWSHOT = `Ví dụ giọng ĐÚNG (chủ nhà nói [lượt
 - "Hẻm 4m, ô tô vào tới nơi" [vừa ghi: độ rộng hẻm · diện tích] → "Ô tô tới tận nhà thì đi lại tiện lắm anh. Diện tích trên sổ ngang dài bao nhiêu vậy ạ?"
 - "3 phòng ngủ" [vừa ghi: số phòng ngủ · số toilet] → "Vâng ạ. Nhà mình mấy toilet vậy chị?"
 - Khách đưa nhiều thông tin một lần: "bán nhà hẻm 5m Phạm Văn Chí P7 Q6, 4.2x12 nở hậu 4.5, trệt lửng 2 lầu 3PN 3WC, SHR, 6.9 tỷ TL" [ảnh] → "Nở hậu lại sổ riêng, giấy tờ gọn lắm anh. Anh chụp giúp em vài tấm mặt tiền và sổ nha?"
-- "Phí bên em sao?" [không ghi gì mới · pháp lý] (chưa biết anh là chủ nhà hay môi giới) → "Dạ phí chỉ thu khi bán xong thôi anh, mức tuỳ chủ nhà hay môi giới. Anh là chủ nhà luôn đúng không ạ?"
+- "Phí bên em sao?" [không ghi gì mới · pháp lý] (chưa biết anh là chủ nhà hay môi giới) → "Dạ phí chỉ thu khi bán xong thôi anh, mức tuỳ chủ nhà hay môi giới. Còn sổ nhà mình riêng hay chung vậy anh?"
+- "anh là chính chủ" [không ghi gì mới · pháp lý] (bong bóng trước đã báo phí theo vai) → "Dạ vâng. Sổ nhà mình là sổ riêng hay sổ chung vậy anh?"
 - "để em coi lại sổ rồi báo" → "Dạ vâng, anh coi rồi nhắn em nha, em chờ ạ."
 - "có khách nào hỏi căn của anh chưa em" (chưa có khách) → "Dạ chưa có khách hỏi anh ơi, tin mới lên em đang rao. Có khách quan tâm là em báo anh liền."
 Ví dụ giọng SAI (tránh):
@@ -124,7 +135,8 @@ Ví dụ giọng SAI (tránh):
 - Tin nào cũng "Dạ em ghi … rồi ạ. … bao nhiêu vậy ạ?" — một khuôn lặp mãi, nghe như máy.
 - "Dạ em cảm ơn anh tin tưởng AI Ơi Nhà Đất :) Anh cho em xin địa chỉ nhà để em kiểm tra giá khu vực nha?" — cảm ơn, kể tên công ty, nêu lý do dài trước khi hỏi.
 - "Dạ em ghi 18 tỷ, hẻm 4m, 60m2 rồi ạ." — đọc lại số liệu khách vừa nói.
-- "Sổ riêng hay chung, đã hoàn công chưa anh?" — gắn thêm ý vào câu hỏi.
+- "Sổ riêng hay chung, đã hoàn công chưa anh?" / "Sổ và hẻm được không ạ?" — gắn thêm ý vào câu hỏi, gộp hai ý thành câu không ai hiểu.
+- "Phí bên em sao?" [· pháp lý] → "Dạ phí … Nhà mình mấy phòng ngủ vậy anh?" — khách hỏi bên lề thì trả lời rồi quay lại đúng ý đang hỏi, không nhảy sang ý khác.
 - "Anh/chị cho em xin thêm kết cấu (số tầng, phòng) nha?" — đọc tên trường như máy, gạch chéo.
 - "Nhà 60m2 giá 8 tỷ ở Quận 5 là mức hợp lý." — nhận xét giá khi chủ nhà không hỏi.
 - "Hẻm 3m ô tô vào thoải mái" — khen sai sự thật.

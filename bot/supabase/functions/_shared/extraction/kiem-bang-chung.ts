@@ -862,6 +862,71 @@ export function soSanhVoiDb(dat: DeXuat[], dong: DongDb | null, facts: Record<st
   return kq;
 }
 
+/**
+ * SRS-5.1zzzzo (bắn production 09/10/2026: khách chỉ hỏi phí mà 🤖 in lại "phường … kết cấu 4 tầng … giá 9 tỷ 5 … 4x15"): MỘT chủ của
+ * câu hỏi "giá trị sắp ghi vào ô `question` có KHÁC thứ tin đang mang không". Lượt chốt tin AI (`chotTinAi`) từng so chỉ với FACT, nên
+ * giá trị câu rao giữ ở CỘT (phường, giá, diện tích, số tầng — ghi lúc tạo tin, không có fact) bị coi là "chưa có" và ghi lại mỗi lần
+ * soạn bản nháp; sổ ghi của lượt (`ghiLuot`) đếm chúng là "vừa ghi", 🤖 và dòng EM VỪA GHI đọc lại thứ khách đã nói từ lượt trước.
+ * `dong` + `facts` là trạng thái TRƯỚC lượt ghi (cột tin + fact mới nhất mỗi ô). true = không đổi (cùng ý) → không phải dữ liệu mới.
+ * Ô đã có fact thì chỉ so với fact đó (fact mới nhất là điều khách nói gần nhất); chưa có fact thì so với cột tương ứng, qua đúng
+ * bộ so của `soSanhVoiDb` (tiền theo số, phường qua `tenPhuongCot`, số đo có dung sai) + ba ô cột chữ (vị trí, kết cấu, kích thước).
+ */
+export function giaTriKhongDoi(
+  question: string, answer: string | null | undefined,
+  dong: (DongDb & { location_raw?: string | null; floors_text?: string | null; price_raw?: string | null }) | null | undefined,
+  facts: Record<string, string | null | undefined>,
+): boolean {
+  const a = String(answer ?? "").trim();
+  if (!a) return false;
+  const kd = chuanSo(a);
+  const cu = facts[question];
+  if (cu != null && String(cu).trim()) {
+    const kc = chuanSo(String(cu));
+    if (kc === kd) return true;
+    if (KHOA_TIEN.includes(question as typeof KHOA_TIEN[number]) || question === "doanh_thu") {
+      const x = docTien(String(cu)), y = docTien(a);
+      return x != null && y != null && x === y;
+    }
+    // Cùng số đo, khác cách viết: "3 lầu" ≡ "4 tầng"; "4x15m2" ≡ "4x15" ≡ "60m2".
+    if (question === "ket_cau") { const x = soTangChu(kc), y = soTangChu(kd); return x != null && x === y; }
+    if (question === "phap_ly") { const x = phapLyMa(String(cu)), y = phapLyMa(a); return x != null && x === y; }
+    if (/^dien_tich/.test(question)) {
+      const x = kichThuocChu(kc), y = kichThuocChu(kd);
+      return !!x && !!y && (x.ngang != null && y.ngang != null ? gan(x.ngang, y.ngang) && gan(x.dai!, y.dai!) : gan(x.m2, y.m2, 0.01, 0.6));
+    }
+    return false;
+  }
+  if (!dong) return false;
+  // Kích thước "AxB" (ngang × dài) ↔ cột ngang / dài, hay diện tích bằng tích hai số.
+  if (/^dien_tich/.test(question)) {
+    const k = kichThuocChu(kd);
+    if (k?.ngang != null && dong.frontage_m != null && dong.length_m != null) return gan(k.ngang, Number(dong.frontage_m)) && gan(k.dai!, Number(dong.length_m));
+    return !!k && dong.area_m2 != null && gan(k.m2, Number(dong.area_m2), 0.01, 0.6);
+  }
+  if (question === "vi_tri") return !!dong.location_raw && chuanSo(dong.location_raw) === kd;
+  if (question === "ket_cau") {
+    if (dong.floors_text && chuanSo(dong.floors_text) === kd) return true;
+    const n = soTangChu(kd);
+    return n != null && dong.floors != null && n === Number(dong.floors);
+  }
+  const ss = soSanhVoiDb([{ khoa: question, gia_tri: a, trich_dan: a, can: null } as DeXuat], dong, {});
+  return ss.trung.includes(question);
+}
+/** Số tầng (tính cả trệt) đọc từ chữ kết cấu gọn: "4 tầng" / "4 tấm" / "4" = 4; "3 lầu" / "1 trệt 3 lầu" / "trệt 3 lầu" = 4. */
+function soTangChu(kd: string): number | null {
+  const t = /^(\d{1,2})(?:\s*(?:tang|tam))?$/.exec(kd);
+  if (t) return Number(t[1]);
+  const l = /^(?:1\s*)?(?:tret\s*)?(\d{1,2})\s*lau$/.exec(kd);
+  return l ? Number(l[1]) + 1 : null;
+}
+/** "4x15" / "4 x 15m2" / "ngang 4 dai 15" → ngang × dài (+ m²); "60m2" / "60" → chỉ m². Chữ khác → null. */
+function kichThuocChu(kd: string): { ngang: number | null; dai: number | null; m2: number } | null {
+  const k = /^(?:ngang\s*)?(\d+(?:\.\d+)?)\s*m?\s*(?:x|dai)\s*(\d+(?:\.\d+)?)\s*m?2?\s*$/.exec(kd);
+  if (k) return { ngang: Number(k[1]), dai: Number(k[2]), m2: Number(k[1]) * Number(k[2]) };
+  const m = /^(\d+(?:\.\d+)?)\s*(?:m2|m)?$/.exec(kd);
+  return m ? { ngang: null, dai: null, m2: Number(m[1]) } : null;
+}
+
 // ── FR-208 bước 2 (17/09/2026): AI GHI CÓ KIỂM ─────────────────────────────────
 // Chủ dự án 17/09: "lúc ghi có cái AI chuyển đổi câu trả lời thành chuẩn dữ liệu không" →
 // "làm đi". Model bóc JSON theo đúng trường; ba lớp kiểm bằng chứng ở trên; rồi hàm này

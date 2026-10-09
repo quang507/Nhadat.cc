@@ -15,11 +15,14 @@
 //  (10) Bong bóng 🤖 "Đã trích xuất "<nguyên mẫu>" → làm chuẩn "<chuẩn>"" (SRS-5.1zzzzn): chủ chữ in là bao_lai.ts (`dongTrichXuat`);
 //       phần làm chuẩn đi qua đúng bộ in một nguồn của ô (donViGiaDep, duongHienThi, phường + quận cũ); chat-reply không tự ghép;
 //       nguyên mẫu (chữ khách gõ) chỉ đứng trước "→ làm chuẩn" — đó là chỗ duy nhất bất biến ĐỊA CHỈ (6) cho phép chữ thô.
+//  (11) SRS-5.1zzzzo — câu hỏi kế có MỘT chủ: dòng CẦN HỎI một ý (ô đã mở); không câu lệnh nào đưa model HAI mục thiếu (chỉ địa chỉ được gộp
+//       đường + phường, do câu lệnh nói). "Giá trị có đổi không" có MỘT chủ (`giaTriKhongDoi`): lượt chốt tin và sổ ghi của lượt cùng
+//       hỏi nó. Con số phí khi khách tự nói vai vẫn chỉ do `cauPhi(vaiPhi(…))`.
 import { readFileSync } from "node:fs";
-import { SELLER_FEWSHOT, BUYER_FEWSHOT, TONE_RULES, cauPhi, phanTramPhi, vaiPhi } from "../supabase/functions/_shared/prompts.ts";
+import { SELLER_FEWSHOT, BUYER_FEWSHOT, SELLER_SCRIPT_RULES, TONE_RULES, cauPhi, phanTramPhi, vaiPhi } from "../supabase/functions/_shared/prompts.ts";
 import { boCauNhanXet, chanPhiChuaXacNhan } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { duongHienThi } from "../supabase/functions/_shared/extraction/hien-thi-dia-chi.ts";
-import { vaiTuCau } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { giaTriKhongDoi, vaiTuCau } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { donViGiaDep } from "../supabase/functions/_shared/extraction/luat-tien.ts";
 import { dongTrichXuat, lamChuanFact, phuongKemQuanCu, vuaLuuBan } from "../supabase/functions/_shared/bao_lai.ts";
 
@@ -110,6 +113,24 @@ ok("(10) nguyên mẫu (chữ thô) chỉ đứng ngay trước '→ làm chuẩ
   /^• địa chỉ: "duong pham van chieu p14 go vap" → làm chuẩn "Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp"$/.test(dTho), dTho);
 const vSdt = vuaLuuBan([{ question: "bo_sung", answer: "gọi 0903123456" }], {}, { tin: "gọi 0903123456 nha" }) ?? "";
 ok("(10) nguyên mẫu đi qua luật che liên hệ một nguồn (thayLienHe) — không SĐT nào lọt ra 🤖", !/\d{6}/.test(vSdt), vSdt);
+
+// (11) SRS-5.1zzzzo — một câu hỏi một ý; "không đổi" một chủ.
+ok("(11) không câu lệnh người bán nào đưa model nhiều mục thiếu để hỏi ('còn thiếu (theo thứ tự ưu tiên)', `thieuDiem.slice(0, 2)`)",
+  !/còn thiếu \(theo thứ tự ưu tiên\)/.test(cr) && !/thieuDiem\.slice\(0,\s*[2-9]\)/.test(cr));
+ok("(11) nhánh hết câu trước bản nháp (r2) hỏi đúng ô vừa mở — `nextKey = het.khoaMo` như nhánh câu rao (`firstKey = het.khoaMo`)",
+  /nextKey = het\.khoaMo/.test(cr) && /firstKey = het\.khoaMo/.test(cr));
+ok("(11) câu lệnh người bán: chỉ ĐỊA CHỈ được gộp hai ý; còn lại không gắn thêm ý vào câu hỏi",
+  /riêng địa chỉ được gộp hai ý/u.test(SELLER_SCRIPT_RULES) && /không gắn thêm ý vào câu hỏi/u.test(SELLER_SCRIPT_RULES));
+ok("(11) lượt chốt tin và sổ ghi của lượt cùng hỏi MỘT chủ `giaTriKhongDoi` (không tự so riêng)",
+  (cr.match(/giaTriKhongDoi\(/g) ?? []).length === 2 && /doi: !truoc \|\| !giaTriKhongDoi\(/.test(cr));
+ok("(11) giá trị câu rao nằm ở CỘT (không fact) là 'không đổi' — phường / giá / '4x15' / '3 lầu' ≡ '4 tầng'",
+  ["phuong|Phường Phú Nhuận", "gia|9 tỷ 5", "dien_tich|4x15", "ket_cau|3 lầu", "ket_cau|4 tầng"].every((x) => {
+    const [q, v] = x.split("|");
+    return giaTriKhongDoi(q, v, { ward: "Phường Phú Nhuận", district: "Quận Phú Nhuận", price_vnd: 9.5e9, area_m2: 60, frontage_m: 4, length_m: 15, floors: 4 }, {});
+  }) && !giaTriKhongDoi("gia", "9 tỷ 8", { price_vnd: 9.5e9 }, {}));
+const phiVai = cr.split("\n").filter((d) => /const dapPhiRoVai|\? `Dạ vậy \$\{cauPhi\(/.test(d));
+ok("(11) bong bóng phí sau khi khách tự nói vai đi qua `cauPhi(vaiPhi…)` — không chuỗi % viết tay",
+  phiVai.some((d) => /cauPhi\(vaiPhiLuot/.test(d)) && !phiVai.some((d) => /\d\s*%/.test(d)), phiVai.join("\n"));
 
 console.log(hong ? `\nLUẬT KHÔNG MÂU THUẪN: ${hong} CA HỎNG` : "\nLUẬT KHÔNG MÂU THUẪN: ĐẠT");
 process.exit(hong ? 1 : 0);

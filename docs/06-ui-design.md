@@ -477,6 +477,18 @@ Demo AOND in "[đã trích xuất]" cho người vận hành (bảng 05/10 ở t
 - Không trích được gì: `🤖 Không trích xuất được gì từ tin này.`; ảnh: `🤖 Đã trích xuất từ ảnh: mặt tiền`; trả lời câu bot vừa hỏi: `🤖 Trả lời câu em vừa hỏi ("…"): đã trích xuất "đúng rồi em" → làm chuẩn "cần rao bán, …".`
 - Không đụng: bóc tách của demo (bảng 05/10), vị trí bong bóng (đầu, đứng riêng), công tắc.
 
+### Câu hỏi bên lề, phí theo vai, một câu một ý — 09/10/2026 (SRS-5.1zzzzo)
+
+[nguồn: bắn production 09/10/2026 — hỏi phí lúc treo câu sổ → "mấy phòng ngủ"; "anh là chính chủ" → "Vâng ạ. Sổ và hẻm được không ạ?"]
+
+| Chỗ | Đổi | Giữ |
+|---|---|---|
+| `FEE_RULES` | chưa rõ vai: nói phí không số ("mức tuỳ chủ nhà hay môi giới") rồi VẪN hỏi đúng ý CẦN HỎI; chỉ hỏi vai khi lượt không có ý cần hỏi; khách tự nói vai thì hệ thống báo con số | mọi mức phí, luật thuyết phục, chủ đầu tư |
+| `SELLER_FEWSHOT` | ví dụ "Phí bên em sao?" quay lại câu sổ (bản trước hỏi "Anh là chủ nhà luôn đúng không"); thêm "anh là chính chủ" → "Dạ vâng. Sổ nhà mình là sổ riêng hay sổ chung vậy anh?"; SAI thêm "Sổ và hẻm được không ạ?" (gộp hai ý) và nhảy sang ý khác sau câu hỏi bên lề | mọi ví dụ cũ khác |
+| Lời code | khách tự nói vai sau câu phí không số → "Dạ vậy phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ." (đúng chữ `cauPhi`) | câu phí hỏi ngược cũ |
+
+Sau khi gộp: `bun run prompt --day` (khoá `fee_rules`, `seller_fewshot`).
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |
