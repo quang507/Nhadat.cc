@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-09 15:38 (giờ VN)
+-- Sinh lúc: 2026-10-09 17:36 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -5735,6 +5735,7 @@ declare
   v_ngay boolean := false;
   v_reset timestamp;
   v_ok boolean := false;
+  v_dia_danh_hcm_con boolean;
 begin
   -- (1) Thu kết quả lượt trước (tin + dự án). Chưa có phản hồi thì chờ; quá 10 phút thì bỏ, lượt sau gửi lại.
   for v in
@@ -5830,9 +5831,18 @@ begin
     v_gui := v_gui + 1;
   end loop;
 
+  -- 20261009e (chủ dự án 09/10: "địa danh TP.HCM trước"): còn địa danh TP.HCM chưa nhúng (quận cũ, phường mới, phường cũ, tên
+  -- đường TP.HCM không tính hẻm) thì CHỈ nhúng dự án TP.HCM; dự án tỉnh khác chờ. Hàng dự án rỗng thì nhung_dia_danh_tick mới
+  -- gửi mẻ (nó đợi nhung_viec_du_an trống), nên giữ dự án tỉnh khác lại là nhường hạn mức cho địa danh TP.HCM.
+  v_dia_danh_hcm_con := exists (select 1 from public.quan_cu where nhung is null)
+    or exists (select 1 from public.wards where nhung is null)
+    -- phường cũ chỉ tính dòng nhúng ĐƯỢC (van_ban_dia_danh cần phuong_moi khớp wards.ten) — dòng lệch không được giữ cửa mãi.
+    or exists (select 1 from public.phuong_cu p join public.wards w on w.ten = p.phuong_moi where p.nhung is null)
+    or exists (select 1 from public.duong where nhung is null and loai <> 'hem' and tinh = 'TP.HCM');
   for r in
     select p.id, p.nhung_md5 from public.projects p
-     where p.nhung_md5 is null or p.updated_at > coalesce(p.nhung_luc, '-infinity'::timestamptz)
+     where (p.nhung_md5 is null or p.updated_at > coalesce(p.nhung_luc, '-infinity'::timestamptz))
+       and (p.province = 'Hồ Chí Minh' or not v_dia_danh_hcm_con)
      order by (p.province is distinct from 'Hồ Chí Minh'), p.is_partner desc nulls last, p.priority nulls last, p.updated_at desc nulls last
      limit 200
   loop
