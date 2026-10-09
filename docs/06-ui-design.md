@@ -436,9 +436,26 @@ Có, chỉ bằng prompt (`prompts.py build_chat_system`): ~30 từ, khen điể
 
 [nguồn: chủ dự án 08/10/2026 — "nên cho con bot lịch sự hơn tí nhưng vẫn cần ngắn"]
 
-- Giọng: nhân viên môi giới trẻ, lanh lợi mà **lễ phép**. Đáp lại điều khách vừa nói thì mở "Dạ" / "Dạ vâng"; câu hỏi kết "ạ" hoặc "anh ạ / chị nha". Không nhắn cộc ("Em ghi rồi anh. Mấy tầng?" → "Dạ em ghi rồi ạ. Nhà mình mấy tầng vậy anh?"). Độ dài giữ ~30 từ: "Dạ" / "ạ" là phép lịch sự, không phải để kéo dài.
+- Giọng: nhân viên môi giới trẻ, lanh lợi mà **lễ phép**. Đáp lại điều khách vừa nói thì mở "Dạ" / "Dạ vâng"; câu hỏi kết "ạ" hoặc "anh ạ / chị nha". Không nhắn cộc ("Em ghi rồi anh. Mấy tầng?" → "Dạ em ghi rồi ạ. Nhà mình mấy tầng vậy anh?" — câu mẫu này đổi 09/10, xem mục SRS-5.1zzzzm dưới). Độ dài giữ ~30 từ: "Dạ" / "ạ" là phép lịch sự, không phải để kéo dài.
 - Câu mẫu hỏi (`CAU_HOI_MAU`) kết "{ac} ạ?"; câu địa chỉ lần đầu: "Dạ nhà {ac} ở đâu vậy, ở Hồ Chí Minh đúng không ạ?" (giữ ý câu chủ dự án chọn 06/10, thêm phép lịch sự).
 - Bỏ ví dụ mẫu "Hẻm Trần Bình Trọng khu đó bán được lắm anh" — nó dạy đúng điều `TONE_RULES` cấm (đánh giá thị trường khu vực); nay nằm ở ví dụ SAI.
+
+### Lễ phép mà nhanh nhẹn, chỉ ghi nhận điều VỪA ghi — 09/10/2026 (SRS-5.1zzzzm)
+
+[nguồn: chủ dự án 09/10/2026, test Zalo thật — "tao muốn nó lễ phép nhưng nhanh nhẹn tí, trả lời thông minh tí chứ rep chán quá"]
+
+Bản 08/10 dạy câu ĐÚNG "Dạ em ghi rồi ạ. Nhà mình mấy tầng vậy anh?" và câu lệnh mỗi lượt dặn "ghi nhận vài chữ" — khách chỉ gật "đúng em ơi" thì model lấy thứ duy nhất có trong ĐÃ BIẾT ra ghi nhận: "Dạ, nhà phố em ghi rồi ạ" (nhà phố khách nói từ tin trước). Mọi tin thành một khuôn "Dạ … em ghi … rồi ạ. … bao nhiêu vậy ạ?".
+
+| Khối | Đổi | Giữ |
+|---|---|---|
+| `TONE_RULES` (dòng "Cách nói") | "lễ phép mà NHANH NHẸN"; một tin 1–2 câu, chừng hai chục chữ; phần đáp: gật thì "Dạ" / "Vâng ạ", có thông tin thì nhận vài chữ hoặc MỘT câu ngắn có căn cứ (điều khách vừa nói, dữ liệu hệ thống đưa như phường thuộc quận cũ nào); "em ghi …" chỉ cho điều lượt NÀY vừa ghi; mỗi tin mở một kiểu; câu ĐÚNG mẫu đổi thành "Vâng ạ. Nhà mình mấy tầng vậy anh?" | "Dạ" / "ạ", không cộc, phỏng đoán để khách gật, không đọc lại số, không bịa, không nhận xét thị trường / giá, khen chỉ điểm mạnh thật |
+| `SELLER_SCRIPT_RULES` | thêm gạch "Dòng EM VỪA GHI …"; địa chỉ: khách gật phần đoán thành phố thì hỏi luôn đường + phường MỘT câu (riêng địa chỉ được gộp hai ý vì câu trả lời địa chỉ ghi được cả phường) | câu địa chỉ lần đầu kèm đoán "ở Hồ Chí Minh đúng không" (quyết định 06/10, SRS-5.1zzp) — KHÔNG đổi |
+| `SELLER_FEWSHOT` | ví dụ mang `[vừa ghi gì · ý CẦN HỎI]` như câu lệnh thật; thêm ca "đúng em ơi" → hỏi đường + phường, "phường phú định em" → "Dạ Phú Định, bên quận 8 cũ ạ. …", "3 phòng ngủ" → "Vâng ạ. …"; SAI thêm "ghi nhận lại điều lượt trước" và "một khuôn lặp mãi" | các ca cũ (dự án, hẻm ô tô, nhiều thông tin, phí chưa rõ vai, hoãn, chưa có khách) |
+| Câu lệnh r2 / r2b | dòng `EM VỪA GHI ở lượt này: …` hoặc `Lượt này em KHÔNG ghi thêm gì mới …` do code đọc từ sổ ghi của lượt; bỏ lời dặn "ghi nhận vài chữ" vô điều kiện | khuôn ĐÃ BIẾT / CHỦ NHÀ VỪA NHẮN / CẦN HỎI |
+| `CAU_HOI_MAU` | thêm `vi_tri@sau_gat_tp`: "Dạ, nhà {ac} ở đường nào, phường nào vậy ạ?" (câu đỡ khi model chết) | mọi câu cũ |
+| Bong bóng 📝 | chỉ có mỗi loại giao dịch ("bán") thì không gửi — không có gì để khách soát | 📝 từ hai mục trở lên, hay có loại nhà |
+
+Sau khi gộp: `bun run prompt --day` (bản DB `bot_prompts` đè bản code — `tone_rules`, `seller_script_rules`, `seller_fewshot`, `cau_hoi_mau`).
 
 ## 6.9 Micro-copy web
 

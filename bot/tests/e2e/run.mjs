@@ -61,7 +61,24 @@ let msgN = 0;
 //   ĐỊA CHỈ — lời gửi khách không chép `location_raw` thô khi bản in chuẩn khác nó ("duong Phạm Văn Chiêu", "p5 q10").
 //   GIỌNG   — không "anh/chị" gạch chéo, không gạch dài "—" trong lời gửi khách.
 //   PHÍ     — con số % phí chỉ khi vai người rao đã xác nhận, và đúng số của vai đó.
-const BB = { phuong: [], diaChi: [], giong: [], phi: [], trangThai: [] };
+//   GHI NHẬN (SRS-5.1zzzzm) — lượt KHÔNG ghi gì vào DB (fact, cột tin) thì câu lệnh model người bán không được nói "EM VỪA GHI …",
+//            và câu lệnh khuôn ĐÃ BIẾT / hỏi lại phải nói thẳng "KHÔNG ghi thêm gì mới" (gốc của "Dạ, nhà phố em ghi rồi ạ" khi khách chỉ gật).
+const BB = { phuong: [], diaChi: [], giong: [], phi: [], trangThai: [], ghiNhan: [] };
+const VUA_GHI_CO = "EM VỪA GHI ở lượt này", VUA_GHI_KHONG = "Lượt này em KHÔNG ghi thêm gì mới";
+const anhGhi = () => {
+  const t = globalThis.__db?.t ?? {};
+  return `${(t.listing_facts ?? []).length}|${JSON.stringify((t.listings ?? []).map((l) => [l.id, l.property_type, l.deal, l.district, l.ward, l.location_raw, l.street, l.price_raw, l.area_m2, l.floors_text, l.bedrooms, l.legal_status, l.project_id, l.boc_tach]))}`;
+};
+function soatGhiNhan(body, truoc, nCall) {
+  if (truoc !== anhGhi()) return; // lượt có ghi — dòng EM VỪA GHI được phép (nội dung do sổ ghi của lượt quyết)
+  for (const c of (globalThis.__calls ?? []).slice(nCall)) {
+    if (c.kind !== "create") continue;
+    const nd = typeof c.params?.messages?.[0]?.content === "string" ? c.params.messages[0].content : "";
+    const khuon = /CHỦ NHÀ VỪA NHẮN \(em vừa hỏi|^[\s\S]*Em vừa hỏi "[^"]*", chủ nhà nhắn:/.test(nd);
+    if (nd.includes(VUA_GHI_CO)) BB.ghiNhan.push(`${ganNhan(body)} → câu lệnh nói "${VUA_GHI_CO}" mà lượt không ghi gì: ${nd.slice(nd.indexOf(VUA_GHI_CO), nd.indexOf(VUA_GHI_CO) + 100)}`);
+    else if (khuon && !nd.includes(VUA_GHI_KHONG)) BB.ghiNhan.push(`${ganNhan(body)} → lượt không ghi gì mà câu lệnh không nói "${VUA_GHI_KHONG}"`);
+  }
+}
 const ganNhan = (b) => `${b?.external_user_id ?? "?"}: "${String(b?.text ?? "").slice(0, 40)}"`;
 function soatDbBatBien(nhan) {
   for (const e of globalThis.__db?.t?.bot_errors ?? []) {
@@ -132,8 +149,10 @@ function soatLuotBatBien(body, r) {
   soatDbBatBien(nhan);
 }
 async function send(body, hdr = {}) {
+  const truoc = anhGhi(), nCall = (globalThis.__calls ?? []).length;
   const r = await guiMot(body, hdr);
   soatLuotBatBien(body, r);
+  soatGhiNhan(body, truoc, nCall);
   return r;
 }
 async function guiMot(body, hdr = {}) {
@@ -9288,6 +9307,88 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }
+// ── SRS-5.1zzzzm (chủ dự án test Zalo 09/10/2026: "tao muốn nó lễ phép nhưng nhanh nhẹn tí, trả lời thông minh tí chứ rep chán quá") ──
+// Phát lại đúng hội thoại thật (chế độ `ai`, 🤖 về admin): "chào em" → "ừ em" → "nhà phố em ạ" → "đúng em ơi" → "phường phú định em".
+// Gốc: câu lệnh r2 dặn "ghi nhận vài chữ" ở MỌI lượt mà không nói lượt này ghi được gì → khách chỉ gật, model ghi nhận thứ duy nhất có
+// trong ĐÃ BIẾT ("Dạ, nhà phố em ghi rồi ạ"). Lời model ở đây là lời NGUYÊN VĂN production — bài đo câu lệnh, không đo lời mock.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocRaoG = (p) => (p?.system ?? []).some((x) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(x.text ?? ""));
+  const laYLuotG = (p) => (p?.system ?? []).some((x) => /Ý NGẮN CỦA LƯỢT/.test(x.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+  const aiG = (them = {}) => (p) => (laBocRaoG(p) || laYLuotG(p)) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [],
+    tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null },
+    cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null }, ...them } : laLuotVai(p) ? { vai: "ban", bang_chung: "ừ" } : OUT();
+  const cauLenh = (n0) => globalThis.__calls.slice(n0).filter((c) => c.kind === "create" && typeof c.params?.messages?.[0]?.content === "string")
+    .map((c) => c.params.messages[0].content).filter((x) => !/Em vừa soạn tin này cho chủ nhà/.test(x));
+  const luot = async (uid, text, parse, create) => {
+    globalThis.__model = { parse, create: typeof create === "function" ? create : () => create ?? "Dạ." };
+    const n0 = globalThis.__calls.length;
+    const r = await send({ external_user_id: uid, text });
+    return { r, cl: cauLenh(n0), rep: (r.body.replies ?? [r.body.reply]).filter(Boolean) };
+  };
+  fresh();
+  globalThis.__cauHinh = { boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+  const U = "ghinhan-1";
+  await luot(U, "chào em", aiG());
+  const b1 = await luot(U, "ừ em", aiG({ so_can: 1, truong: [T("loai_giao_dich", "ban", "ừ em")] }),
+    "Vâng ạ. Anh chị muốn rao loại bất động sản gì vậy, nhà phố, đất, chung cư hay loại khác ạ?");
+  const L = db().t.listings.at(-1);
+  check("GHINHAN-01 'ừ em' (gật câu chào) mở tin chỉ có 'bán' → KHÔNG gửi bong bóng '📝 Em ghi nhận: bán.' (không có gì để soát), lời model vẫn đi",
+    !!L && L.deal === "ban" && !b1.rep.some((x) => /📝/u.test(x)) && b1.rep.some((x) => /loại bất động sản/.test(x)), JSON.stringify(b1.rep));
+  const b2 = await luot(U, "nhà phố em ạ", aiG({ truong: [T("loai_bds", "nha_pho", "nhà phố")], tra_loi: { co_tra_loi: true, gia_tri: "nha_pho", trich_dan: "nhà phố" } }),
+    "Dạ, nhà phố em ghi rồi ạ. Nhà anh chị ở đâu vậy, ở Hồ Chí Minh đúng không ạ?");
+  const p2 = b2.cl.find((x) => /CHỦ NHÀ VỪA NHẮN/.test(x)) ?? "";
+  check("GHINHAN-02 trả lời câu loại 'nhà phố em ạ' → câu lệnh có 'EM VỪA GHI ở lượt này: nhà phố' (ghi nhận đúng thứ VỪA ghi)",
+    /EM VỪA GHI ở lượt này: nhà phố\./.test(p2) && !/ghi nhận vài chữ/.test(p2), p2.slice(-900));
+  const b3 = await luot(U, "đúng em ơi", aiG({ dong_y: "dong_y", dong_y_trich: "đúng em ơi" }),
+    "Dạ, nhà phố em ghi rồi ạ. Nhà anh chị ở phường mấy, quận nào vậy ạ?");
+  const p3 = b3.cl.join("\n=====\n");
+  check("GHINHAN-03 (câu production) 'đúng em ơi' sau câu đoán 'ở Hồ Chí Minh đúng không' → câu lệnh nói KHÔNG ghi thêm gì mới, không 'EM VỪA GHI'",
+    b3.cl.length > 0 && b3.cl.every((x) => x.includes("Lượt này em KHÔNG ghi thêm gì mới") && !x.includes("EM VỪA GHI")), p3.slice(-1200));
+  check("GHINHAN-04 gật phần đoán thành phố → câu ĐỊA CHỈ còn treo (không bị thôi), câu lệnh hỏi đường + phường MỘT câu, không hỏi 'phường mấy, quận nào'",
+    db().t.info_requests.some((q) => q.listing_id === L.id && q.question === "vi_tri" && q.status === "pending") &&
+      !db().t.info_requests.some((q) => q.listing_id === L.id && q.question === "phuong" && q.status === "pending") &&
+      /đường nào, phường nào/.test(p3) && !/CẦN HỎI: phường và quận/.test(p3),
+    JSON.stringify({ ir: db().t.info_requests.filter((q) => q.listing_id === L.id).map((q) => [q.question, q.status]), p: p3.slice(-700) }));
+  const b4 = await luot(U, "phường phú định em", aiG({ truong: [T("phuong", "Phường Phú Định", "phường phú định")] }),
+    "Dạ Phú Định, bên quận 8 cũ ạ. Hẻm trước nhà rộng mấy mét, ô tô vào được không anh chị ạ?");
+  const p4 = b4.cl.find((x) => x.includes("EM VỪA GHI")) ?? "";
+  check("GHINHAN-05 'phường phú định em' → câu lệnh 'EM VỪA GHI ở lượt này: Phường Phú Định (Quận 8 cũ)' (dữ liệu bảng phường cho một câu đáp có căn cứ); cột phường + quận ghi đúng",
+    /EM VỪA GHI ở lượt này: Phường Phú Định \(Quận 8 cũ\)/.test(p4) && db().t.listings.find((x) => x.id === L.id)?.ward === "Phường Phú Định",
+    JSON.stringify({ p: p4.slice(-600), w: db().t.listings.find((x) => x.id === L.id)?.ward }));
+  check("GHINHAN-05b câu đáp có căn cứ 'Phú Định, bên quận 8 cũ' không bị lưới bịa vị trí gọt (quận 8 là dữ liệu của tin)",
+    b4.rep.some((x) => /Phú Định, bên quận 8 cũ/.test(x)), JSON.stringify(b4.rep));
+
+  // Cùng lớp, CÁCH NÓI MỚI: hỏi phí lúc đang treo câu sổ — "ủa mà bên em lấy phí nhiêu vậy" (production cũ: "Dạ vâng, em ghi 3 lầu rồi ạ").
+  fresh();
+  globalThis.__cauHinh = { boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+  const U2 = "ghinhan-2";
+  await luot(U2, "chào em", aiG());
+  await luot(U2, "bán nhà phố 3 lầu hẻm Trần Hưng Đạo quận 5", aiG({ so_can: 1, truong: [T("loai_giao_dich", "ban", "bán"), T("loai_bds", "nha_pho", "nhà phố"), T("quan", "Quận 5", "quận 5")] }), "Dạ.");
+  const L2 = db().t.listings.at(-1);
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L2.id, question: "phap_ly", status: "pending" });
+  const b5 = await luot(U2, "ủa mà bên em lấy phí nhiêu vậy", aiG({ hoi_lai: { co_hoi: true, cau_hoi: "bên em lấy phí nhiêu vậy", chu_de: "phi" } }),
+    "Dạ vâng, em ghi 3 lầu rồi ạ. Phí chỉ thu khi bán xong thôi anh. Sổ nhà mình riêng hay chung ạ?");
+  check("GHINHAN-06 (cách nói MỚI) hỏi phí lúc treo câu sổ → mọi câu lệnh model lượt đó nói KHÔNG ghi thêm gì mới",
+    b5.cl.length > 0 && b5.cl.filter((x) => /CHỦ NHÀ VỪA NHẮN|Em vừa hỏi "/.test(x)).every((x) => x.includes("Lượt này em KHÔNG ghi thêm gì mới")),
+    b5.cl.map((x) => x.slice(-500)).join("\n=====\n"));
+
+  // Model chết: câu mẫu chỉ mở "Dạ em ghi rồi ạ." khi lượt có ghi (sổ ghi của lượt), gật trơn thì không.
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L2.id, question: "gap", status: "pending" });
+  const b6 = await luot(U2, "ừ em", aiG({ dong_y: "dong_y", dong_y_trich: "ừ em" }), () => { throw new Error("model chết"); });
+  check("GHINHAN-07 model chết, khách chỉ 'ừ em' (không ghi gì) → câu mẫu KHÔNG mở bằng 'Dạ em ghi rồi ạ'",
+    b6.rep.length > 0 && !b6.rep.some((x) => /em ghi rồi/i.test(x)), JSON.stringify(b6.rep));
+  db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+  db().insert("info_requests", { listing_id: L2.id, question: "so_phong_ngu", status: "pending" });
+  const b7 = await luot(U2, "4 phòng ngủ em", aiG({ truong: [T("so_phong_ngu", "4", "4 phòng ngủ")], tra_loi: { co_tra_loi: true, gia_tri: "4", trich_dan: "4 phòng ngủ" } }), () => { throw new Error("model chết"); });
+  check("GHINHAN-08 model chết, khách trả lời có dữ liệu ('4 phòng ngủ em') → câu mẫu vẫn ghi nhận 'Dạ em ghi rồi ạ'",
+    b7.rep.some((x) => /Dạ em ghi rồi ạ/.test(x)) && db().t.listings.find((x) => x.id === L2.id)?.bedrooms === 4, JSON.stringify(b7.rep));
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
 // ── kết: BẤT BIẾN TOÀN BỘ ──
 soatDbBatBien("(cuối)");
 if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_DUMP, JSON.stringify(BB, null, 1));
@@ -9296,6 +9397,7 @@ check(`BẤT BIẾN-ĐỊA CHỈ: lời gửi khách không chép location_raw t
 check(`BẤT BIẾN-GIỌNG: không "anh/chị" gạch chéo, không gạch dài trong lời gửi khách (${BB.giong.length} vi phạm)`, BB.giong.length === 0, BB.giong.slice(0, 12).join("\n       "));
 check(`BẤT BIẾN-PHÍ: con số % phí chỉ khi vai người rao đã xác nhận (${BB.phi.length} vi phạm)`, BB.phi.length === 0, BB.phi.slice(0, 12).join("\n       "));
 check(`BẤT BIẾN-TRẠNG THÁI: không lời nào nói tin đã đăng / lên kệ / đang rao khi không tin nào của người đó lên kệ (${BB.trangThai.length} vi phạm)`, BB.trangThai.length === 0, BB.trangThai.slice(0, 12).join("\n       "));
+check(`BẤT BIẾN-GHI NHẬN: lượt không ghi gì → câu lệnh model không cho "em vừa ghi", nói thẳng không ghi thêm (${BB.ghiNhan.length} vi phạm)`, BB.ghiNhan.length === 0, BB.ghiNhan.slice(0, 12).join("\n       "));
 // ── kết ──
 let hong = 0;
 for (const [n, ok, d] of R) { if (!ok) hong++; console.log(`${ok ? "✓" : "✗"} ${n}${ok ? "" : "\n     → " + String(d).slice(0, 600)}`); }

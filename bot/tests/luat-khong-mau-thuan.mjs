@@ -11,6 +11,7 @@
 //       không bao giờ xoá một giá trị cửa đã nhận (đo ở ghi-phuong-mot-cua.mjs: mọi đầu ra của cửa thuộc bảng wards).
 //   (6) Hiển thị địa chỉ: ô nguyên văn (O_NGUYEN_VAN, kiem-bang-chung.ts) là chủ của chữ LƯU; `duongHienThi` là chủ của chữ IN — bản in
 //       không bao giờ mang đuôi phường / quận chữ khách (phần đó chỉ từ cột chuẩn).
+//   (9) Lời ghi nhận ("em ghi …"): chủ là sổ ghi của lượt (`ghiLuot`) → dòng EM VỪA GHI của câu lệnh; ví dụ giọng không dạy ngược lại.
 import { readFileSync } from "node:fs";
 import { SELLER_FEWSHOT, BUYER_FEWSHOT, TONE_RULES, cauPhi, phanTramPhi, vaiPhi } from "../supabase/functions/_shared/prompts.ts";
 import { boCauNhanXet, chanPhiChuaXacNhan } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -71,6 +72,27 @@ ok("(7) mọi cụm câu lệnh nêu là KHÔNG nói vai (và 'sổ hồng chín
 // (8) SRS-5.1zzzzk — trạng thái tin: chủ là lưới ở đường ra (đối chiếu DB). Câu lệnh r1 không được nói "đã tạo tin" như thể đã đăng.
 ok("(8) câu lệnh r1 (câu rao đầu) nói rõ tin là NHÁP, CHƯA đăng", /Em đã ghi tin NHÁP — CHƯA đăng/.test(cr) && !/Em đã tạo tin\. \$\{hoiRaoPrompt\}/.test(cr));
 ok("(8) không còn lưới trạng thái riêng ở r1 / r2 (một chủ: traLoiSeller)", (cr.match(/= boHuaDaDang\(/g) ?? []).length === 1, String((cr.match(/= boHuaDaDang\(/g) ?? []).length));
+
+// (9) SRS-5.1zzzzm — lời GHI NHẬN có MỘT chủ: sổ ghi của lượt (`ghiLuot` trong chat-reply) → dòng EM VỪA GHI / KHÔNG ghi thêm của câu
+//     lệnh. Câu lệnh giọng không được dạy ngược lại: ví dụ ĐÚNG nói "em ghi" phải là ví dụ có [vừa ghi: …]; ví dụ [không ghi gì mới]
+//     không được có "em ghi"; TONE_RULES không giữ khuôn "Dạ em ghi rồi ạ" làm câu ĐÚNG; câu lệnh r2 không còn lời dặn ghi nhận vô điều kiện;
+//     câu mẫu khi model chết chỉ mở "Dạ em ghi rồi ạ" khi sổ ghi của lượt có gì.
+const dongDung = SELLER_FEWSHOT.split(/Ví dụ giọng SAI/)[0].split("\n").filter((d) => /→/.test(d));
+const ghiSai = dongDung.filter((d) => /em ghi|em lưu/iu.test(d.slice(d.indexOf("→"))) && !/\[vừa ghi:/u.test(d));
+ok("(9) ví dụ ĐÚNG có 'em ghi' chỉ khi lượt đó có [vừa ghi: …]", ghiSai.length === 0, ghiSai.join(" | "));
+const khongGhi = dongDung.filter((d) => /\[không ghi gì mới/u.test(d) && /em ghi|em lưu|ghi nhận/iu.test(d.slice(d.indexOf("→"))));
+ok("(9) ví dụ [không ghi gì mới] không ghi nhận", khongGhi.length === 0, khongGhi.join(" | "));
+ok("(9) có ít nhất một ví dụ ĐÚNG [không ghi gì mới] và một ví dụ SAI ghi nhận lại điều lượt trước",
+  dongDung.some((d) => /\[không ghi gì mới/u.test(d)) && /Ví dụ giọng SAI[\s\S]*\[không ghi gì mới\][^\n]*em ghi/u.test(SELLER_FEWSHOT));
+ok("(9) TONE_RULES không giữ khuôn 'Dạ em ghi rồi ạ' làm câu ĐÚNG, và nói 'em ghi' chỉ cho điều lượt NÀY vừa ghi",
+  !/ĐÚNG: "Dạ em ghi rồi ạ/u.test(TONE_RULES) && /lượt NÀY vừa ghi/u.test(TONE_RULES));
+const r2 = cr.slice(cr.indexOf("const prompt = nextKey"), cr.indexOf("// OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định"));
+ok("(9) câu lệnh r2 mang dòng sổ ghi (`vuaGhiR2`) ở cả ba nhánh hỏi, không còn 'ghi nhận vài chữ' vô điều kiện",
+  (r2.match(/vuaGhiR2/g) ?? []).length >= 3 && !/ghi nhận vài chữ rồi hỏi/.test(r2), r2.slice(0, 300));
+const moDauGhi = cr.split("\n").filter((d) => d.includes('"Dạ em ghi rồi ạ. "'));
+ok("(9) câu mẫu 'Dạ em ghi rồi ạ.' (model chết) chỉ khi sổ ghi của lượt có gì (`coGhiLuot`)", moDauGhi.length > 0 && moDauGhi.every((d) => /coGhiLuot/.test(d)), moDauGhi.join("\n"));
+ok("(9) mọi chỗ ghi fact trong chat-reply đi qua hàm bọc ghi sổ (không gọi thẳng ghiFactMotCua ngoài hàm bọc)",
+  (cr.match(/ghiFactMotCua\(/g) ?? []).length === 1, String((cr.match(/ghiFactMotCua\(/g) ?? []).length));
 
 console.log(hong ? `\nLUẬT KHÔNG MÂU THUẪN: ${hong} CA HỎNG` : "\nLUẬT KHÔNG MÂU THUẪN: ĐẠT");
 process.exit(hong ? 1 : 0);
