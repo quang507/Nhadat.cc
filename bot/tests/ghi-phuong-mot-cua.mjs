@@ -84,5 +84,22 @@ for (const [t, q, mong] of [
   ["Thị trấn Tân Bình", "Huyện Bắc Tân Uyên", "Phường Vĩnh Tân"],
 ]) ok(`tenPhuongCot(${JSON.stringify(t)}, ${JSON.stringify(q)}) = ${mong}`, tenPhuongCot(t, q) === mong, String(tenPhuongCot(t, q)));
 
+// SRS-5.1zzzzq (bắn production 09/10, thu-thuong2/6): "ở củ chi, xã tân thạnh đông" → bảng phường MỚI khớp phần đầu "tân thạnh" với
+// Phường Tân Thành (Phú Mỹ). Bộ dò chung (tên mới + cũ, tên dài trùm tên ngắn) phải đi TRƯỚC bảng `wards` trong `ghiPhuongTrongCau`.
+{
+  const { phuongNhacTrongCau } = await import("../supabase/functions/_shared/extraction/khop-phuong.ts");
+  const { timPhuongTrongCau } = await import("../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts");
+  for (const [cau, mong] of [["ở củ chi, xã tân thạnh đông", "Xã Phú Hòa Đông"], ["đất chị ở xã tân thạnh tây bên củ chi", "Xã Phú Hòa Đông"]]) {
+    ok(`bộ dò chung "${cau}" → ${mong}`, phuongNhacTrongCau(cau)?.ten_day_du === mong, String(phuongNhacTrongCau(cau)?.ten_day_du));
+  }
+  ok("bẫy còn đó: riêng bảng phường mới khớp 'tân thạnh' với Phường Tân Thành (lý do phải hỏi bộ chung trước)",
+    timPhuongTrongCau("ở củ chi, xã tân thạnh đông", napPhuongThat())?.phuong.ten_day_du === "Phường Tân Thành");
+  const nguon = readFileSync(join(HAM, "chat-reply/index.ts"), "utf8");
+  const than = nguon.slice(nguon.indexOf("const ghiPhuongTrongCau"), nguon.indexOf("const ghiPhuongTrongCau") + 4000);
+  ok("ghiPhuongTrongCau: bộ dò chung đọc ra phường KHÁC bảng phường mới → theo bộ chung",
+    /const pn = pnChung && pnChung\.ten_day_du !== tpBang\?\.phuong\.ten_day_du \? pnChung : null;/.test(than) && /const tp = pn \? null : tpBang;/.test(than),
+    than.slice(0, 200));
+}
+
 console.log(hong ? `\nMỘT CỬA PHƯỜNG: ${hong} CA HỎNG` : "\nMỘT CỬA PHƯỜNG: ĐẠT");
 process.exit(hong ? 1 : 0);

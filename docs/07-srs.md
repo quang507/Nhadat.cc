@@ -2936,6 +2936,27 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 
 - **Kiểm, đỏ khi tắt**: `van-tra-loi.mjs` NX-01 (ca gốc nguyên văn — bản trước ra "Vâng ạ. Sổ và hẻm được không ạ?", đã chạy lại để xác nhận), NX-02 (AI hỏng → lưới từ khoá vẫn cắt khen bịa), NX-03 **cách nói MỚI** "Dạ anh gửi em ảnh mặt tiền với ảnh sổ nha.", NX-04/05 (AI đã soát vẫn bỏ số đo / kết cấu bịa), NX-06 (ca gốc meta), NX-07 **cách nói MỚI** "Tôi sẽ viết một tin ngắn gọn…", NX-08/09 (lời thường không bị coi là meta). `bun run test:bot` exit 0.
 
+### SRS-5.1zzzzq · Câu mở đầu có lời chào bị AI đọc rỗng; xã cũ Củ Chi ghi thành phường tỉnh khác (09/10/2026)
+
+`[nguồn: bắn production 09/10/2026 sau SRS-5.1zzzzp — ba kịch bản bán thường (thu-thuong1…3) và bắn lại câu mở đầu (thu-thuong4…7); ban-thu nay in kèm chữ tin AI đã đọc]`
+
+- **Ca gốc**: (a) "chào em, chị muốn bán lô đất" → AI bóc tách trả RỖNG cả hai lần bắn → tin mở `chua_ro`, bot hỏi "nhà mình thuộc loại nào ta: nhà phố, nhà cấp 4…" cho một lô đất; cùng lớp: "ừ anh bán nhà" rỗng hai lần, "em ơi chú có căn hộ cần bán" rỗng một lần / đúng hai lần → bot hỏi "nhà phố hay nhà cấp 4" SÁU lượt liền cho một căn hộ và không bao giờ ra bản nháp. (b) "ở củ chi, xã tân thạnh đông" → cột phường "Phường Tân Thành" (Phú Mỹ, Bà Rịa – Vũng Tàu cũ); xã cũ Tân Thạnh Đông nay là Xã Phú Hòa Đông (bảng `phuong_cu` có, `toan_bo`).
+
+**(a) Lời chào làm AI bỏ cả tin.**
+- **Nguyên nhân**: câu lệnh bóc tách (`boc-rao.ts`) dạy "Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = []" — model áp cho CẢ tin có chữ chào / gật, kể cả khi phần sau là ý bán + loại căn. Không ngẫu nhiên: "chào em, chị muốn bán lô đất" rỗng ở cả hai lượt bắn.
+- **Lớp lỗi**: *luật "bỏ qua" viết cho cả tin trong khi chỉ một phần tin là lời chào*.
+- **Sửa (câu lệnh, không regex)**: dòng đó nay nói rõ: tin CHỈ có chào / cảm ơn / hỏi lại mới rỗng; chào hay gật đi kèm ý bán / tả căn thì bỏ phần chào, vẫn bóc phần còn lại — kèm ba câu nguyên văn làm mẫu. Không thêm ví dụ mẫu ở `vi-du-boc-rao.ts`: bản chữ ví dụ đã chạm trần 12.000 ký tự (`vi-du-boc-rao.mjs`), ba câu mẫu nằm ngay trong luật.
+- **Chỗ khác cùng lớp**: `LUAT_CHOT` (lượt chốt tin) đã nói đúng phạm vi ("các dòng là câu trả lời … lời gật / chào … không phải thông tin căn" — theo DÒNG, không theo cả đoạn). Câu "kien_thuc … KHÔNG đưa lời chào" là phạm vi một ô — đúng.
+- **Còn lại, ghi đây**: model trả lời khác nhau giữa các lượt cùng một câu ("ừ anh bán nhà", căn hộ). Trích dẫn ở lượt sau không được lấy từ tin cũ (`trich_dan_khong_co_trong_tin`, thu-thuong3: AI nhận "căn hộ" ở lượt 2 nhưng chữ nằm ở lượt 1) — đúng luật hiện hành; lượt chốt tin đọc toàn bộ tin, nhưng tin thiếu loại thì không tới được lượt chốt. Chưa đổi.
+
+**(b) Xã cũ ghi thành phường tỉnh khác.**
+- **Nguyên nhân**: `ghiPhuongTrongCau` (chat-reply) dò tên phường trong câu bằng bảng `wards` (chỉ tên MỚI, `timPhuongTrongCau`): cửa sổ "tân thạnh" (bỏ dấu = "tan thanh") khớp đúng chữ "Tân Thành", chữ "đông" ngay sau không chặn được. Bộ dò chung `phuongNhacTrongCau` (`khop-phuong.ts`: tên mới + tên cũ, tên dài trùm tên ngắn) đọc đúng Xã Phú Hòa Đông nhưng không được hỏi ở đường này.
+- **Lớp lỗi**: *hai bộ dò cho một ô, bộ kém hiểu biết hơn có lời cuối* — cùng lớp SRS-5.1zzzzj (mỗi trường một chủ).
+- **Sửa**: bảng `wards` khớp ra một phường mà bộ chung đọc ra phường KHÁC → theo bộ chung (`pnChung`). Bảng `wards` vẫn lo chữ đảo / sai một ký tự mà bộ chung không đọc; không khớp gì thì đường cũ (`tim_dia_danh`) không đổi.
+- **Chỗ khác cùng lớp**: lượt tạo tin (`phuongChot = phuongNhacTrongCau(...)`, quanh dòng 7920) và lưới đỡ câu phường (quanh dòng 7190) đã dùng bộ chung. Tên cũ bị chia nhiều phường mới (bộ chung trả null) mà bảng mới khớp phần đầu → vẫn theo bảng mới: ghi đây, chưa đổi.
+
+- **Kiểm, đỏ khi tắt**: `ghi-phuong-mot-cua.mjs` — bộ chung "ở củ chi, xã tân thạnh đông" → Xã Phú Hòa Đông, **cách nói MỚI** "đất chị ở xã tân thạnh tây bên củ chi" → Xã Phú Hòa Đông; ca "bẫy còn đó" (riêng bảng mới vẫn khớp Phường Tân Thành — lý do phải hỏi bộ chung); soát mã nguồn `ghiPhuongTrongCau` theo bộ chung khi hai bên lệch (hoàn mã → đỏ). Phần (a) là câu lệnh — chỉ kiểm được bằng model thật: bắn lại thu-thuong sau deploy. `bun run test:bot` exit 0.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

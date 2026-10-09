@@ -2226,9 +2226,16 @@ Deno.serve(async (req) => {
         if (error) { await ghiLoi(client, "chat-reply wards(tu dien phuong)", error.message); return null; }
         dsPhuongTuDien = (data ?? []) as PhuongDs[];
       }
-      const tp = timPhuongTrongCau(tin, dsPhuongTuDien);
-      const tron = tp ? null : tenDiaDanhTron(tin);
-      if (!tp && !tron) return null;
+      // SRS-5.1zzzzq (bắn production 09/10, thu-thuong2/6): "ở củ chi, xã tân thạnh đông" → bảng `wards` (chỉ tên MỚI) khớp phần đầu
+      // "tân thạnh" với Phường Tân Thành (Phú Mỹ) và ghi phường đó, trong khi xã CŨ Tân Thạnh Đông nay là Xã Phú Hòa Đông. Bộ dò chung
+      // `phuongNhacTrongCau` (tên mới + tên cũ, tên dài trùm tên ngắn) là chủ của "câu nhắc phường nào": bảng `wards` khớp ra một
+      // phường mà bộ chung đọc ra phường KHÁC → theo bộ chung. Bảng `wards` vẫn lo chữ gõ đảo / sai một ký tự bộ chung không đọc.
+      const tpBang = timPhuongTrongCau(tin, dsPhuongTuDien);
+      const pnChung = tpBang ? phuongNhacTrongCau(tin) : null;
+      const pn = pnChung && pnChung.ten_day_du !== tpBang?.phuong.ten_day_du ? pnChung : null;
+      const tp = pn ? null : tpBang;
+      const tron = pn || tp ? null : tenDiaDanhTron(tin);
+      if (!pn && !tp && !tron) return null;
       let l = dongBiet;
       if (!l) {
         const { data, error: lErr } = await client.from("listings").select("ward, district, boc_tach").eq("id", listingId).maybeSingle();
@@ -2238,8 +2245,8 @@ Deno.serve(async (req) => {
       if (!l) return null;
       const quanMacDinh = (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
       const quanBiet = l.district && !quanMacDinh ? String(l.district) : null;
-      let ten = tp?.phuong.ten_day_du ?? null;
-      let quanPhuong = tp?.phuong.quan_cu ?? null;
+      let ten = pn?.ten_day_du ?? tp?.phuong.ten_day_du ?? null;
+      let quanPhuong = pn?.quan_cu ?? tp?.phuong.quan_cu ?? null;
       if (tron) {
         const cauHoi: NhomDiaDanh | null = cauDangHoi === "phuong" ? "phuong" : cauDangHoi === "vi_tri" ? "duong" : null;
         const dd = await giaiDiaDanh(tron.ten, { tienTo: tron.tienTo, cauHoi, quanBiet });
@@ -2264,7 +2271,7 @@ Deno.serve(async (req) => {
       const { error, boQua } = await ghiFact(client, { p_listing_id: listingId, p_question: "phuong", p_answer: ten, p_source: "seller_chat" });
       if (error) { await ghiLoi(client, "chat-reply ghi_fact_listing(phuong tu dien)", error.message); return null; }
       if (boQua) return null;
-      console.log("chat-reply: phuong tu dien", tp?.khop ?? tron?.ten, "→", ten);
+      console.log("chat-reply: phuong tu dien", pn ? "(bo chung)" : tp?.khop ?? tron?.ten, "→", ten);
       return ten;
     };
 

@@ -204,7 +204,8 @@ KHOÁ:
 - Khác: tang_phu (lửng, sân thượng, tầng hầm), gia_dien_nuoc (giá điện nước cho thuê), gio_giac (giờ giấc ra vào), nganh_hang_phu_hop
   (mặt bằng hợp buôn bán ngành gì).
 - kien_thuc: ý khác về CĂN NHÀ không có khoá nào ở trên (an ninh, đồ để lại, lịch sử…) — cụm ngắn CHÉP NGUYÊN VĂN; KHÔNG đặt nhãn diễn giải ("tiềm năng kinh doanh", "phù hợp đầu tư", "dòng tiền tốt", "khai thác thương mại") khi khách không nói đúng chữ đó; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
-Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [], kien_thuc = [].
+Tin CHỈ có chào / cảm ơn / hỏi lại → truong = [], kien_thuc = []. Tin có lời chào hay lời gật ĐI KÈM ý bán / tả căn ("chào em, chị
+muốn bán lô đất", "ừ anh bán nhà", "dạ cô có căn hộ cần bán") → bỏ qua PHẦN chào / gật, VẪN bóc phần còn lại (loai_giao_dich, loai_bds…).
 
 NGỮ CẢNH — tin nhắn có thể kèm vài lượt trao đổi NGAY TRƯỚC (bot nói gì, chủ nhà nói gì) và CÂU BOT VỪA HỎI đúng nguyên văn.
 Dùng ngữ cảnh để HIỂU tin như người đang nói chuyện: "ừ", "đúng rồi", "cái đó", "như trên", "vậy đi" hiểu theo câu bot vừa nói.
