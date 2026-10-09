@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-08 19:28 (giờ VN)
+-- Sinh lúc: 2026-10-09 11:14 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -5684,7 +5684,8 @@ begin
     union all
     (select 'phuong_cu', p.id::text, p.nhung_md5 from public.phuong_cu p where p.nhung is null limit 50)
     union all
-    (select 'duong', d.id::text, d.nhung_md5 from public.duong d where d.nhung is null and d.loai <> 'hem' limit 100)
+    (select 'duong', d.id::text, d.nhung_md5 from public.duong d where d.nhung is null and d.loai <> 'hem'
+      order by (d.tinh <> 'TP.HCM') limit 100)
   loop
     exit when v_gui >= v_tran;
     v_txt := public.van_ban_dia_danh(r.bang, r.khoa);
@@ -5825,7 +5826,7 @@ begin
   for r in
     select p.id, p.nhung_md5 from public.projects p
      where p.nhung_md5 is null or p.updated_at > coalesce(p.nhung_luc, '-infinity'::timestamptz)
-     order by p.is_partner desc nulls last, p.priority nulls last, p.updated_at desc nulls last
+     order by (p.province is distinct from 'Hồ Chí Minh'), p.is_partner desc nulls last, p.priority nulls last, p.updated_at desc nulls last
      limit 200
   loop
     exit when v_gui >= v_tran;
