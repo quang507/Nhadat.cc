@@ -1368,6 +1368,20 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   ["ừ", "co"], ["có sân thượng nữa em", null], ["có lửng riêng nữa em", "them"]])
   ok(`LUNG-TU '${vao}' → ${mong}`, docTraLoiLung(vao) === mong, String(docTraLoiLung(vao)));
 
+// SRS-5.1zzzzq (bắn production 09/10): lời chào đầu tin cắt khỏi chữ gửi AI bóc tách ("chào em, chị muốn bán lô đất" → AI rỗng 4/4 lần).
+{
+  const { boLoiChaoDau } = await import("../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts");
+  for (const [vao, mong] of [
+    ["chào em, chị muốn bán lô đất", "chị muốn bán lô đất"], // ca gốc
+    ["Chào anh ơi, em có căn nhà cần bán", "em có căn nhà cần bán"], // cách nói MỚI
+    ["Chao em ban nha hem 5m", "ban nha hem 5m"], // không dấu
+    ["hello, bán nhà q5", "bán nhà q5"],
+    ["chào em", "chào em"], // chỉ có lời chào → giữ
+    ["chào giá 5 tỷ nha em", "chào giá 5 tỷ nha em"], // "chào giá" = báo giá, không phải lời chào
+    ["chị muốn bán lô đất", "chị muốn bán lô đất"],
+  ]) ok(`CHAO-${vao}`, boLoiChaoDau(vao) === mong, boLoiChaoDau(vao));
+}
+
 // SRS-5.1zzzzp (bắn production 09/10): AI soát nhận xét đã chạy xong → danh sách từ khoá không cắt lời nữa, chỉ còn so số đo / kết cấu.
 {
   const anh = "Vâng ạ. Anh chụp giúp em vài tấm mặt tiền, sổ và hẻm được không ạ?";

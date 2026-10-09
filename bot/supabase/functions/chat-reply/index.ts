@@ -87,7 +87,7 @@ import { cauKhoangCachKhongNguon, chayTroLyMua, DAU_RA_CONG_CU, type PhanHoiMode
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, gonGiaTriFact, laChiDonViHanhChinh, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laThaCamXuc, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, docTraLoiConBan, laRaoLai, laRutLoiBan, NHAN_HOI_LAI, nhanDienFact,
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, laChiLenhDang, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
-  suyTuXungHo, tuXungBot, laChaoChau, hocXungHoTuLichSu, cachGoiKhach, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
+  suyTuXungHo, tuXungBot, laChaoChau, hocXungHoTuLichSu, cachGoiKhach, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo, boLoiChaoDau,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { chanPhiChuaXacNhan, boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, anCauDaDap } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
@@ -4053,7 +4053,8 @@ Deno.serve(async (req) => {
             ...CAU_NHANH.filter((k) => !coSan.has(k)).map((k) => `${k}: ${FACT_LABELS[k] ?? k} (nhánh)`),
           ];
         }
-        const r0 = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, textTreo || textBongAi, pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings), laCheDoAi,
+        // SRS-5.1zzzzq: lời chào đầu tin cắt khỏi chữ AI đọc ("chào em, chị muốn bán lô đất" → AI rỗng); trích dẫn vẫn kiểm trên tin gốc.
+        const r0 = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, boLoiChaoDau(textTreo || textBongAi), pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings), laCheDoAi,
           laCheDoAi ? { hoiThoai, cauConHoi, tinChuNha: tinChuNhaGoc(), canDangCo: dsMo.slice(0, 5).map(moTaCanDangCo) } : null);
         // 01/10/2026 (lx-tt-08): viết tắt AI đánh dấu "không chắc" mà từ điển tiền định đọc ra CÙNG ô ("shr" → pháp lý) là chắc —
         // ghi thẳng, không để rơi ở nhánh không hỏi xác nhận (`nangXacNhanChac`).
