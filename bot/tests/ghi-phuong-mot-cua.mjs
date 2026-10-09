@@ -74,8 +74,10 @@ const mat = PHUONG_CU.filter(([cu, q, moi, tb]) => tb === 1 && PHUONG_CU.filter(
 ok("tên cũ thuộc trọn một phường mới → cửa ra đúng phường đó", mat.length === 0, JSON.stringify(mat.slice(0, 5)));
 
 // Cách nói MỚI chưa từng bắn (SRS-5.1zzzzj): phường số cũ không có trong bảng phường cũ → null (bot hỏi), không bao giờ "Phường N".
+// SRS-5.1zzzzl (OPEN-60): Phường 6 / 7 Quận 3 có văn bản (NQ 1111/NQ-UBTVQH14 Điều 2 khoản 1 điểm a, 20261009d) → Xuân Hòa; số chưa có
+// văn bản (Phường 7 Quận 4) vẫn null.
 for (const [t, q, mong] of [
-  ["phường 6 quận 3 cũ", null, null], ["Phường 6", "Quận 3", null], ["p.7 q3", null, null], ["phuong 15 tan binh", null, null],
+  ["phường 6 quận 3 cũ", null, "Phường Xuân Hòa"], ["Phường 6", "Quận 3", "Phường Xuân Hòa"], ["p.7 q3", null, "Phường Xuân Hòa"], ["phường 7 quận 4", null, null], ["phuong 15 tan binh", null, null],
   ["P.14 Gò Vấp", null, "Phường An Hội Tây"], ["p14", "Quận Gò Vấp", "Phường An Hội Tây"], ["phường 13", "Quận Phú Nhuận", "Phường Phú Nhuận"],
   ["phường 12 quận 3", null, "Phường Nhiêu Lộc"], ["xã Tân Thạnh Đông huyện Củ Chi", null, "Xã Phú Hòa Đông"], ["Phường 4", null, null],
   ["an hoi tay", null, "Phường An Hội Tây"], ["thảo điền", null, "Phường An Khánh"], ["Phường Tân Phú", "Quận 7", "Phường Tân Mỹ"],

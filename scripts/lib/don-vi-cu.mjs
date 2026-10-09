@@ -44,3 +44,20 @@ export function tachDonViCu(doanVan) {
   }
   return ra;
 }
+
+// ── OPEN-60 (20261009d): phường SỐ cũ gộp TRƯỚC 07/2025 (NQ 1111/2020, NQ 1278/2024) ─────────────────────────────────────
+/**
+ * Đọc khối VALUES của migration 20261009d: `('Phường 6', 'Quận 3', 'Phường Võ Thị Sáu', 'Xuân Hòa', true, 'NQ 1111/… Điều 2 …')`.
+ * THUẦN (nhận chữ SQL). `goc` = các dòng phuong_cu đã có ({ ten, quan_cu, phuong_moi }): như câu insert của migration, dòng chỉ
+ * được nhận khi dòng TRUNG GIAN (tên, quận cũ, phường mới) có trong `goc` — lệch thì bỏ, giống hệt DB.
+ * @returns {Array<{ ten: string, quan_cu: string, phuong_moi: string, toan_bo: boolean, trung_gian: string, nguon: string }>}
+ */
+export function tachPhuongCuTruoc2025(sql, goc) {
+  const s = (x) => x.replace(/''/g, "'");
+  const re = /^\s*\('((?:[^']|'')+)',\s*'((?:[^']|'')+)',\s*'((?:[^']|'')+)',\s*'((?:[^']|'')+)',\s*(true|false),\s*'((?:[^']|'')+)'\)/gm;
+  return [...String(sql ?? "").matchAll(re)]
+    .map((m) => ({ ten: s(m[1]), quan_cu: s(m[2]), trung_gian: s(m[3]), phuong_moi: s(m[4]), toan_bo: m[5] === "true", nguon: s(m[6]) }))
+    .filter((r) => goc.some((g) => g.quan_cu === r.quan_cu && g.phuong_moi === r.phuong_moi && r.trung_gian.split(" + ").includes(g.ten)))
+    // `on conflict (ten, quan_cu, phuong_moi) do nothing`
+    .filter((r) => !goc.some((g) => g.ten === r.ten && g.quan_cu === r.quan_cu && g.phuong_moi === r.phuong_moi));
+}

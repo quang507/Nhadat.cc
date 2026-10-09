@@ -3149,11 +3149,25 @@ fresh(seedKho);
     ] })(p);
     const rP1 = await send({ external_user_id: "pm-1", text: "Cần bán nhà MTKD đường Võ Văn Tần phường 6 quận 3 cũ, 4x20, giá 25 tỷ" });
     const LP1 = db().t.listings.at(-1);
-    check("PMOI-01 (bắn production) AI phuong=6 «phường 6», Quận 3 → cột phường TRỐNG (không 'Phường 6'), không lời nào in 'Phường 6', câu phường chưa đóng",
-      LP1?.ward == null && LP1?.district === "Quận 3" && !rP1.body.replies.some((x) => /Phường 6/.test(x))
-        && !db().t.listing_facts.some((f) => f.listing_id === LP1?.id && f.question === "phuong")
-        && !db().t.info_requests.some((q) => q.listing_id === LP1?.id && q.question === "phuong" && q.status === "answered"),
+    // SRS-5.1zzzzl (OPEN-60): Phường 6 Quận 3 gộp vào Võ Thị Sáu năm 2020 (NQ 1111/NQ-UBTVQH14 Điều 2 khoản 1 điểm a), Võ Thị Sáu vào
+    // Xuân Hòa năm 2025 → cột phường mang tên MỚI, không bao giờ "Phường 6"; bot không hỏi lại phường.
+    check("PMOI-01 (bắn production) AI phuong=6 «phường 6», Quận 3 → cột phường 'Phường Xuân Hòa' (bảng phường cũ 20261009d), không lời nào in 'Phường 6', câu phường không chờ",
+      LP1?.ward === "Phường Xuân Hòa" && LP1?.district === "Quận 3" && !rP1.body.replies.some((x) => /Phường 6/.test(x))
+        && !db().t.info_requests.some((q) => q.listing_id === LP1?.id && q.question === "phuong" && q.status === "pending"),
       JSON.stringify({ w: LP1?.ward, d: LP1?.district, rep: rP1.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === LP1?.id).map((q) => [q.question, q.status]) }));
+    // Phường cũ bị CHIA (Bình Thạnh Phường 6: một phần → Phường 5 = Bình Lợi Trung, còn lại → Phường 7 = Gia Định; NQ 1278/NQ-UBTVQH15
+    // Điều 1 khoản 8 điểm b, c) → không đoán: cột phường TRỐNG, không fact phường, không in "Phường 6".
+    globalThis.__model.parse = (p) => laSoat(p) ? { nhan_xet: [] } : aiRao({ truong: [
+      { khoa: "phuong", gia_tri: "6", trich_dan: "phường 6", can: null }, { khoa: "quan", gia_tri: "Quận Bình Thạnh", trich_dan: "bình thạnh", can: null },
+      { khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "nhà", can: null },
+    ] })(p);
+    const rP1b = await send({ external_user_id: "pm-1b", text: "bán nhà hẻm 4m phường 6 bình thạnh, 4x15, giá 7 tỷ" });
+    const LP1b = db().t.listings.at(-1);
+    check("PMOI-01b phường cũ bị CHIA ('phường 6 bình thạnh') → cột phường TRỐNG, không fact phường, không in 'Phường 6', câu phường chưa đóng",
+      LP1b?.ward == null && LP1b?.district === "Quận Bình Thạnh" && !rP1b.body.replies.some((x) => /Phường 6/.test(x))
+        && !db().t.listing_facts.some((f) => f.listing_id === LP1b?.id && f.question === "phuong")
+        && !db().t.info_requests.some((q) => q.listing_id === LP1b?.id && q.question === "phuong" && q.status === "answered"),
+      JSON.stringify({ w: LP1b?.ward, d: LP1b?.district, rep: rP1b.body.replies, ir: db().t.info_requests.filter((q) => q.listing_id === LP1b?.id).map((q) => [q.question, q.status]) }));
     // SRS-5.1zzzzk (bắn production 09/10, A): câu rao đầu → r1 "Em vừa đăng tin rồi ạ." (cả lời là câu sai) + câu lửng code tra ra; tin
     // cho_thong_tin. Lưới r1 cũ trả LẠI nguyên lời khi bỏ hết chữ. Và cách nói MỚI ngoài mẫu từ khoá ("lên sóng") — AI soát chỉ ra.
     for (const [uid, loiModel, aiTT] of [
@@ -3172,7 +3186,8 @@ fresh(seedKho);
     globalThis.__model.create = () => "Dạ em ghi rồi ạ. Nhà mình ngang dài bao nhiêu ạ?";
     globalThis.__model.parse = (p) => laSoat(p) ? { nhan_xet: [] } : aiRao()(p);
     for (const [i, [cau, mong, khongIn]] of [
-      ["bán nhà p.7 q3 giá 8 tỷ 50m2", null, /Phường 7|p\.7/],
+      ["bán nhà p.7 q3 giá 8 tỷ 50m2", "Phường Xuân Hòa", /Phường 7|p\.7/], // SRS-5.1zzzzl: P7 Q3 → Võ Thị Sáu (2020) → Xuân Hòa
+      ["ban nha phuong 24 binh thanh 60m2 gia 7 ty", "Phường Bình Thạnh", /Phường 24|phuong 24/], // NQ 1278 Điều 1 khoản 8 điểm h
       ["ban nha phuong 15 tan binh 60m2 gia 7 ty", null, /Phường 15|phuong 15/],
       ["bán đất xã Tân Thạnh Đông huyện Củ Chi 500m2 giá 3 tỷ", "Xã Phú Hòa Đông", /Tân Thạnh Đông/],
       ["ban nha duong nguyen van troi phu nhuan 4x15 gia 12 ty", null, /duong nguyen van troi/i],
@@ -5736,7 +5751,7 @@ for (const [uid, cau] of [["pkc-1", "ko có"], ["pkc-2", "ko có phường"], ["
   // Không gật, tự nói phường số + quận → đường cũ (capNhatQuan), gợi ý bỏ.
   fresh(seedWards); globalThis.__nominatim = LVV;
   await send({ external_user_id: "ph-2", text: "bán nhà đường Lê Văn Việt 50m2 4 tỷ" });
-  // SRS-5.1zzzzj: phường số + quận cũ → phường MỚI (P9 Q5 → An Đông; "phường 8 quận 5" không còn trong bảng phường cũ → bot hỏi lại).
+  // SRS-5.1zzzzj: phường số + quận cũ → phường MỚI (P9 Q5 → An Đông). SRS-5.1zzzzl: "phường 8 quận 5" (gộp vào P7 năm 2024, NQ 1278) nay cũng ra An Đông.
   rp = await send({ external_user_id: "ph-2", text: "phường 9 quận 5 em" });
   check("PH-03 không gật, nói 'phường 9 quận 5' → ward Phường An Đông, district Quận 5 hết mặc định, gợi ý xoá",
     tin().ward === "Phường An Đông" && tin().district === "Quận 5" && tin().boc_tach?.quan_mac_dinh === false && tin().boc_tach?.phuong_goi_y === false,

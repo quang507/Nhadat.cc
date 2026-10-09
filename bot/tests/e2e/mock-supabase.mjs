@@ -18,9 +18,14 @@ export function napPhuongThat() {
   return phuongThat;
 }
 // 20260930a: bảng `phuong_cu` giả = đúng dữ liệu migration sinh ra (tách wards.don_vi_cu bằng scripts/lib/don-vi-cu.mjs).
+// 20261009d (OPEN-60): + phường SỐ cũ gộp trước 07/2025 (NQ 1111/2020, NQ 1278/2024), đọc thẳng khối VALUES của migration — cùng
+// điều kiện "dòng trung gian có thật" như câu insert. ds-phuong.ts sinh từ hàm này (`bun scripts/sinh-ds-phuong.mjs`).
 export async function napPhuongCuThat() {
-  const { tachDonViCu } = await import("../../../scripts/lib/don-vi-cu.mjs");
-  return napPhuongThat().flatMap((w) => tachDonViCu(w.don_vi_cu).map((c) => ({ ten: c.ten, quan_cu: c.quan_cu, phuong_moi: w.ten, toan_bo: c.toan_bo })));
+  const { tachDonViCu, tachPhuongCuTruoc2025 } = await import("../../../scripts/lib/don-vi-cu.mjs");
+  const goc = napPhuongThat().flatMap((w) => tachDonViCu(w.don_vi_cu).map((c) => ({ ten: c.ten, quan_cu: c.quan_cu, phuong_moi: w.ten, toan_bo: c.toan_bo })));
+  const sql = readFileSync(new URL("../../supabase/migrations/20261009d_phuong_cu_truoc_2025.sql", import.meta.url), "utf8");
+  const them = tachPhuongCuTruoc2025(sql, goc).map(({ ten, quan_cu, phuong_moi, toan_bo, nguon }) => ({ ten, quan_cu, phuong_moi, toan_bo, nguon }));
+  return [...goc, ...them];
 }
 
 const singular = (t) => t.replace(/s$/, "");
