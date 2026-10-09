@@ -4262,6 +4262,36 @@ fresh(seedKho);
       });
       check("SRS-5.1zzzw-b (cách nói MỚI) 'Thôi anh đổi ý, cho thuê lô đất … 30 triệu/tháng' sau 'cần bán đất' → đổi sang CHO THUÊ, vẫn đất",
         tinVx2?.deal === "cho_thue" && tinVx2?.property_type === "dat", JSON.stringify({ deal: tinVx2?.deal, loai: tinVx2?.property_type }));
+      // SRS-5.1zzzx (bắn production 09/10/2026): "anh muốn bán căn nhà" → AI đọc nhà phố, tin rỗng mở loại nha_pho, 📝 "bán nhà phố";
+      // câu rao kế đủ chi tiết, AI KHÔNG nhắc lại loại → dòng UPDATE điền tin rỗng ghi `property_type: "chua_ro"` đè lên, trigger
+      // không đoán lại (dấu `_thong_so_ai`) → bot hỏi lại "nhà phố hay biệt thự". AI không nói loại ở câu này thì GIỮ loại tin rỗng.
+      const xemTinPL = (uid) => {
+        const nb = db().t.sellers.find((x) => x.zalo_user_id === uid);
+        const ds = db().t.listings.filter((l) => nb && l.seller_id === nb.id);
+        return { ds, treo: db().t.info_requests.filter((q) => ds.some((l) => l.id === q.listing_id) && q.status === "pending").map((q) => q.question) };
+      };
+      for (const [ten, uid, nhan] of [["x09-can-nha", "web-pl-x09a", "phát lại 'anh muốn bán căn nhà'"], ["x09-cai-nha", "web-pl-x09b", "(cách nói MỚI) 'mình cần bán cái nhà' + câu rao không dấu"]]) {
+        let loaiTruoc = null, kq = null, rep = [];
+        const PLn = JSON.parse(readFileSync(new URL(`./phat-lai/${ten}.json`, import.meta.url), "utf8")).luot.length;
+        await phatLai(ten, uid, async (i, t, r) => {
+          if (i === PLn - 2) loaiTruoc = xemTinPL(uid).ds.at(-1)?.property_type ?? null;
+          if (i === PLn - 1) { kq = xemTinPL(uid); rep = r.body.replies ?? []; }
+        });
+        check(`SRS-5.1zzzx ${nhan} → AI im loại ở câu rao kế: MỘT tin, vẫn nha_pho, không treo / không hỏi lại câu loại`,
+          loaiTruoc === "nha_pho" && kq?.ds.length === 1 && kq.ds[0].property_type === "nha_pho" && !kq.treo.includes("loai_bds") &&
+            !rep.some((x) => /nhà phố hay|thuộc loại/i.test(x)),
+          JSON.stringify({ loaiTruoc, loai: kq?.ds.map((l) => l.property_type), treo: kq?.treo, rep }));
+      }
+      // Cùng lớp: "gấp" nói ở câu mở tin rỗng, câu rao kế AI im về gấp → GIỮ (từng bị null đè).
+      let kqGap = null;
+      await phatLai("x09-gap", "web-pl-x09d", async (i) => { if (i === 1) kqGap = xemTinPL("web-pl-x09d"); });
+      check("SRS-5.1zzzx-d (cùng lớp) 'mình cần bán gấp cái nhà' rồi câu rao không nhắc gấp → một tin, vẫn gap = true và nha_pho",
+        kqGap?.ds.length === 1 && kqGap.ds[0].gap === true && kqGap.ds[0].property_type === "nha_pho",
+        JSON.stringify(kqGap?.ds.map((l) => [l.property_type, l.gap])));
+      let kqDoi = null;
+      await phatLai("x09-doi-loai", "web-pl-x09c", async (i) => { if (i === 1) kqDoi = xemTinPL("web-pl-x09c"); });
+      check("SRS-5.1zzzx-c đối chứng: tin rỗng 'nhà' rồi câu rao NÓI RÕ 'căn hộ' (AI trích trong câu) → đổi sang chung_cu, một tin",
+        kqDoi?.ds.length === 1 && kqDoi.ds[0].property_type === "chung_cu", JSON.stringify(kqDoi?.ds.map((l) => [l.property_type, l.district])));
       let ndDang2 = "";
       await phatLai("kc1tatt-khong-lech", "web-pl-kc1b", async (i, t, r, calls) => { if (t.text === "dang di") ndDang2 = nd(calls); });
       check("SRS-5.1zzzn-b phát lại …kc1tatt (ý lượt không lệch): 'dang di' khi tin còn chờ thông tin → câu lệnh ghi CHƯA LÊN KỆ, không còn tiêu đề 'đang rao các tin'",

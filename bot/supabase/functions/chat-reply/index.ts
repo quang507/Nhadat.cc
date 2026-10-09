@@ -3565,7 +3565,7 @@ Deno.serve(async (req) => {
     const [{ data: pendings }] = await Promise.all([
       client
         .from("info_requests")
-        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, district, deal, unit_code, property_type, project_id, area_m2, frontage_m, length_m, boc_tach, floors_text, legal_status, access_type, alley_width_m, furnishing, price_vnd, price_raw)")
+        .select("id, listing_id, question, answer, created_at, listings!inner(seller_id, code, status, location_raw, ward, district, deal, unit_code, property_type, gap, project_id, area_m2, frontage_m, length_m, boc_tach, floors_text, legal_status, access_type, alley_width_m, furnishing, price_vnd, price_raw)")
         .eq("listings.seller_id", sellerRow.id)
         .eq("status", "pending")
         .order("created_at", { ascending: false })
@@ -7526,7 +7526,7 @@ Deno.serve(async (req) => {
       // GIỮ, không đoán lại. AI đã chạy thì không đoán bán / thuê bằng từ khoá trên câu này (chữ "cho thuê" trong "xây căn hộ cho
       // thuê" không phải ý giao dịch) — mặc định bán như câu chào hỏi; luật `dealCauRao` chỉ còn khi AI không chạy.
       const tinRongCu = pendingReq?.listings && laTinRong(pendingReq.listings)
-        ? pendingReq.listings as { deal?: string | null; property_type?: string | null } : null;
+        ? pendingReq.listings as { deal?: string | null; property_type?: string | null; gap?: boolean | null } : null;
       const sDeal = aiRao
         ? aiRao.loaiGiaoDich ?? (tinRongCu?.deal as "ban" | "cho_thue" | null | undefined) ?? (dealNguoi as "ban" | "cho_thue" | null) ?? "ban"
         : dealCauRao(tKD);
@@ -7679,9 +7679,16 @@ Deno.serve(async (req) => {
         code: null, seller_id: sellerRow.id, deal: sDeal, district: quanRao ?? loCu?.district ?? null,
         ward: phuongRao ?? duAn?.ward ?? (loCanHo ? loCu!.ward : null),
         description: text, price_raw: giaGhi,
-        property_type: aiRao?.loaiBds ?? (loCu?.property_type && loCu.property_type !== "chua_ro" ? loCu.property_type : "chua_ro"),
+        // SRS-5.1zzzx (bắn production 09/10/2026): "anh muốn bán căn nhà" mở tin rỗng nha_pho (AI trích "căn nhà"); câu rao kế
+        // AI không nhắc lại loại → dòng này từng ghi "chua_ro" đè lên, trigger không đoán lại (`_thong_so_ai`), bot hỏi lại loại.
+        // Chế độ `ai` mà AI đã đọc câu này: im về loại = khách không đổi loại → GIỮ loại tin rỗng (cùng luật với `sDeal` ở trên).
+        // AI không chạy / chế độ khác: vẫn "chua_ro" để trigger đoán lại từ câu rao mới (FR250-E1: "bán nhà" rồi "căn hộ").
+        property_type: aiRao?.loaiBds ??
+          (chiAi && tinRongCu?.property_type && tinRongCu.property_type !== "chua_ro" ? tinRongCu.property_type : null) ??
+          (loCu?.property_type && loCu.property_type !== "chua_ro" ? loCu.property_type : "chua_ro"),
         status: "cho_thong_tin",
-        gap: gapCol,
+        // SRS-5.1zzzx — cùng lớp: "gấp" khách nói ở câu mở tin rỗng, câu rao kế AI im về gấp → GIỮ, không đè null.
+        gap: gapCol ?? (chiAi ? tinRongCu?.gap ?? null : null),
         // FR-177 d: tin từ chat chỉ lên kệ khi đủ điểm VÀ chủ nhà gật bản nháp.
         can_chu_duyet: true,
         // 02/10/2026 (đợt 1 chuyển luật sang AI): chế độ `ai` mà AI đọc được câu rao → THÔNG SỐ của tin do AI quyết.
