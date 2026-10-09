@@ -13,7 +13,7 @@
 // Google hạ trang chép lại chứ không hạ trang gốc. `description` được VIẾT LẠI
 // từ các dữ kiện vừa bóc (hàm `viet_mo_ta`), `source_url` giữ để truy nguồn.
 //
-//   node scripts/thu-du-an.mjs            # ba tỉnh: HCM, Bình Dương, Long An
+//   node scripts/thu-du-an.mjs            # năm tỉnh: HCM, Bình Dương, Đồng Nai, Long An, Tây Ninh
 //   node scripts/thu-du-an.mjs --tinh long-an-cid40 --trang 3
 //   node scripts/thu-du-an.mjs --dry      # xem trước, không ghi DB
 //
@@ -39,10 +39,15 @@ const co = (t) => args.includes(t);
 const lay = (t, m) => { const i = args.indexOf(t); return i >= 0 ? args[i + 1] : m; };
 const DRY = co("--dry");
 const TINH = lay("--tinh", null);
-const TRANG_TOI_DA = Number(lay("--trang", "60"));
+// 08/10/2026: trần cũ 60 cắt HCM ở 60/162 trang (nạp được 865 thay vì ~2.400) — vòng tự dừng khi hết trang mới.
+const TRANG_TOI_DA = Number(lay("--trang", "400"));
 
-const TINH_LIST = TINH ? [TINH] : ["ho-chi-minh-cid30", "binh-duong-cid9", "long-an-cid40"];
-const TEN_TINH = { "ho-chi-minh-cid30": "Hồ Chí Minh", "binh-duong-cid9": "Bình Dương", "long-an-cid40": "Long An" };
+// Mã tỉnh mogi (cid) soát 08/10/2026 bằng tiêu đề trang /du-an/x-cidN — phần chữ trước "-cid" mogi bỏ qua.
+const TEN_TINH = {
+  "ho-chi-minh-cid30": "Hồ Chí Minh", "binh-duong-cid9": "Bình Dương", "dong-nai-cid19": "Đồng Nai",
+  "long-an-cid40": "Long An", "tay-ninh-cid54": "Tây Ninh",
+};
+const TINH_LIST = TINH ? [TINH] : Object.keys(TEN_TINH);
 
 const nghi = (ms) => new Promise((r) => setTimeout(r, ms));
 const goHtml = (s) => String(s ?? "")
@@ -101,9 +106,13 @@ const soTuTien = (s) => {
 };
 
 function bocChiTiet(html, url) {
-  const ten = goHtml(/<h1 class="project-title">([\s\S]*?)<\/h1>/.exec(html)?.[1]);
+  // Hai kiểu trang (soát 08/10/2026): trang đầy đủ có `h1.project-title`; trang RÚT GỌN (vd PNT Court) chỉ có
+  // `div.prj-title > h1` + một div địa chỉ, giá / chủ đầu tư / bàn giao để trống. Chỉ đọc kiểu đầu thì ~560/2.414 dự án
+  // bị bỏ im lặng (HCM 1.159/1.613). Trang rút gọn vẫn cho TÊN + ĐỊA CHỈ — đủ để bot nhận ra tên dự án khách nói.
+  const rutGon = /<div class="prj-title">\s*<h1>([\s\S]*?)<\/h1>\s*<div>([\s\S]*?)<\/div>/.exec(html);
+  const ten = goHtml(/<h1 class="project-title">([\s\S]*?)<\/h1>/.exec(html)?.[1]) || goHtml(rutGon?.[1]);
   if (!ten) return null;
-  const diaChi = goHtml(/<div class="project-address">([\s\S]*?)<\/div>/.exec(html)?.[1]);
+  const diaChi = goHtml(/<div class="project-address">([\s\S]*?)<\/div>/.exec(html)?.[1]) || goHtml(rutGon?.[2]);
   const giaDong = goHtml(/<div class="project-price">([\s\S]*?)<\/div>/.exec(html)?.[1]);
 
   const thongSo = {};
@@ -118,7 +127,10 @@ function bocChiTiet(html, url) {
     goHtml(/<div class="investor[^"]*">([\s\S]{0,160}?)<\/div>/.exec(html)?.[1]) || null;
 
   // Tiện ích: các gạch đầu dòng trong phần giới thiệu — DỮ KIỆN, không phải văn.
-  const thanBai = html.replace(/<ul class="info-general[^"]*">[\s\S]*?<\/ul>/, " ");
+  // Cắt ở chân trang: chân trang mogi cũng là các <li> (người chịu trách nhiệm, số giấy phép, địa chỉ văn phòng) — lượt
+  // nạp 08/10/2026 ghi chúng vào `amenities` của mọi dự án.
+  const chan = html.search(/class="footer/);
+  const thanBai = (chan > 0 ? html.slice(0, chan) : html).replace(/<ul class="info-general[^"]*">[\s\S]*?<\/ul>/, " ");
   const tienIch = [...thanBai.matchAll(/<li>([^<][\s\S]{0,160}?)<\/li>/g)]
     .map((m) => goHtml(m[1]))
     .filter((t) => t.length >= 8 && t.length <= 140 && !/^(Trang chủ|Mogi|Dự án|Tìm |Đăng |Giá |Môi giới)/i.test(t))
@@ -213,6 +225,7 @@ for (const tinh of TINH_LIST) {
   console.log("");
 }
 
+const daCo = new Set();
 const rows = tatCa.map((d) => ({
   name: d.ten,
   slug: slugHoa(d.slug || d.ten),
@@ -235,7 +248,12 @@ const rows = tatCa.map((d) => ({
   source: "mogi",
   source_url: d.url,
   priority: 50,
-}));
+})).filter((r) => {
+  // Một dự án có thể nằm ở hai trang tỉnh; hai dòng cùng slug trong một mẻ upsert làm Postgres từ chối cả mẻ.
+  if (daCo.has(r.slug)) return false;
+  daCo.add(r.slug);
+  return true;
+});
 
 // 11/09/2026: bỏ sao lưu → không còn thư mục nhadat-backup. Bản chụp dự án
 // crawl được ghi ra thư mục tạm của máy — chỉ để soi lại, không phải sao lưu.

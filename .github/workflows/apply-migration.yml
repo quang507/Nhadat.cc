@@ -14,7 +14,7 @@ on:
         required: false
         default: ''
       dung_lai:
-        description: "DỰNG LẠI DB trên project rỗng (08/10/2026, scripts/dung-lai-db.mjs): kiem | cau-truc | bu | du-lieu | xac-minh | nap-du-an | nap-duong. Trống = áp migration_file như thường"
+        description: "DỰNG LẠI DB trên project rỗng (08/10/2026, scripts/dung-lai-db.mjs): kiem | cau-truc | bu | du-lieu | xac-minh | nap-du-an | nap-duong | cai-vps. Trống = áp migration_file như thường"
         required: false
         default: ''
       commit_schema:
@@ -62,12 +62,58 @@ jobs:
           echo "::add-mask::$K"
           umask 077
           printf 'SUPABASE_URL=https://%s.supabase.co\nSUPABASE_SERVICE_ROLE_KEY=%s\n' "$PROJECT_REF" "$K" > scripts/.env
-          if [ "$BUOC" = "nap-du-an" ]; then node scripts/thu-du-an.mjs; else node scripts/nap-duong.mjs; fi
+          # Log job phiên Claude không đọc được — 40 dòng cuối (tên đường / dự án công khai, không có khoá) ra một annotation.
+          rc=0
+          if [ "$BUOC" = "nap-du-an" ]; then node scripts/thu-du-an.mjs > /tmp/nap.log 2>&1 || rc=$?; else node scripts/nap-duong.mjs --thieu > /tmp/nap.log 2>&1 || rc=$?; fi
           rm -f scripts/.env
+          cat /tmp/nap.log
+          echo "::notice title=nap $BUOC (thoát $rc)::$(tail -40 /tmp/nap.log | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          exit $rc
+
+      # 09/10/2026: cài / cập nhật bridge Zalo clone trên VPS khi chủ dự án không tự SSH được. Thông tin VPS và
+      # BRIDGE_SECRET nằm trong Supabase Vault (VPS_HOST, VPS_ROOT_PASSWORD đặt tạm), đọc qua Management API, che trong
+      # log, BRIDGE_SECRET đi qua stdin (không nằm trên dòng lệnh). Log không in link / ảnh QR — ai cầm QR là đăng nhập
+      # được bridge; QR đọc ở bảng bridge_dang_nhap (chỉ admin). Bước sau luôn GHI ĐÈ VPS_ROOT_PASSWORD + VPS_HOST trong Vault
+      # (DELETE trên vault.secrets qua Management API bị từ chối — lượt 09/10 thoát 22; update_secret thì được).
+      - name: Cài bridge Zalo trên VPS (cai-vps)
+        if: ${{ inputs.dung_lai == 'cai-vps' }}
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          q() { curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+                  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$(jq -n --arg q "$1" '{query:$q}')"; }
+          J=$(q "select json_object_agg(name, decrypted_secret) as s from vault.decrypted_secrets where name in ('VPS_HOST','VPS_ROOT_PASSWORD','BRIDGE_SECRET')")
+          HOST=$(jq -r '.[0].s.VPS_HOST // empty' <<<"$J"); PW=$(jq -r '.[0].s.VPS_ROOT_PASSWORD // empty' <<<"$J"); BS=$(jq -r '.[0].s.BRIDGE_SECRET // empty' <<<"$J")
+          unset J
+          for v in "$HOST" "$PW" "$BS"; do [ -n "$v" ] && echo "::add-mask::$v"; done
+          if [ -z "$HOST" ] || [ -z "$PW" ] || [ -z "$BS" ]; then echo "::error::Thiếu VPS_HOST / VPS_ROOT_PASSWORD / BRIDGE_SECRET trong Vault"; exit 1; fi
+          sudo apt-get install -y -qq sshpass >/dev/null
+          export SSHPASS="$PW"
+          rc=0
+          printf '%s\n' "$BS" | sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 "root@$HOST" \
+            'read -r BRIDGE_SECRET; export BRIDGE_SECRET; curl -fsSL https://raw.githubusercontent.com/quang507/Nhadat.cc/main/bot/bridge-zca/cai-vps.sh -o /root/cai-vps.sh && bash /root/cai-vps.sh </dev/null; unset BRIDGE_SECRET; sleep 25; echo "== service: $(systemctl is-active nhadat-bridge)"; journalctl -u nhadat-bridge -n 40 --no-pager -o cat | grep -viE "qr-|http://|https://" | tail -25' \
+            > /tmp/vps.log 2>&1 || rc=$?
+          unset SSHPASS PW BS
+          # Che dãy số ≥ 9 chữ số (Zalo ID của acc clone / khách, SĐT) — log repo này công khai.
+          sach() { grep -viE "qr-[a-z0-9]|password|secret=" /tmp/vps.log | sed -E 's/[0-9]{9,}/#/g; s/\r//g'; }
+          sach | tail -60
+          echo "::notice title=cai-vps (thoát $rc)::$(sach | tail -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
+          exit $rc
+
+      - name: Ghi đè thông tin VPS tạm trong Vault
+        if: ${{ always() && inputs.dung_lai == 'cai-vps' }}
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            -d '{"query":"select vault.update_secret(id, ''x'', ''DA_XOA_'' || name || ''_'' || floor(extract(epoch from now()))::text, ''đã ghi đè'') from vault.secrets where name in (''VPS_ROOT_PASSWORD'',''VPS_HOST'')"}'
+          echo
 
       # 08/10/2026: project production cũ bị xoá nhầm — dựng lại từng bước trên project mới rỗng.
       - name: Dựng lại DB (dung_lai)
-        if: ${{ inputs.dung_lai != '' && inputs.dung_lai != 'nap-du-an' && inputs.dung_lai != 'nap-duong' }}
+        if: ${{ inputs.dung_lai != '' && inputs.dung_lai != 'nap-du-an' && inputs.dung_lai != 'nap-duong' && inputs.dung_lai != 'cai-vps' }}
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
           BUOC: ${{ inputs.dung_lai }}
