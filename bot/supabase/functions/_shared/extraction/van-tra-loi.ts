@@ -461,6 +461,9 @@ export function laLoiMeta(text: string): boolean {
   const t = (text ?? "").trim();
   if (!t) return false;
   const kd = boDau(t);
+  // SRS-5.1zzzzp (bắn production 09/10): "Tôi hiểu rõ:\n\n- **Không ghi nhận lại** … Tôi sẵn sàng viết tin" — dấu hiệu HÌNH THỨC,
+  // không phải từ khoá nội dung: bot không bao giờ xưng "tôi" mở câu, không bao giờ in đậm markdown trong tin Zalo.
+  if (/\*\*[^*\n]+\*\*/.test(t) || /(?:^|[.!?:\n]\s*)toi\s/.test(kd)) return true;
   if (/\b(san sang nhan|em hieu roi a|cau hoi cuoi (?:tin )?(?:la|bat buoc)|\d+\s*[–-]\s*\d+ tu\b|khuon cau|theo luat phi|huong dan he thong|cau lenh|hoi thoai\b.*\bcho chu nha|ngoi thu|system prompt)\b/.test(kd)) return true;
   // Nói về "chủ nhà"/"khách" ở ngôi thứ ba kèm động từ chỉ đạo → đang đọc lại lời dặn.
   return /\b(chu nha|khach)\b/.test(kd) && /\b(hoi nguoc|tra loi truoc|mot tin duy nhat|viet mot tin|khong lap)\b/.test(kd);
@@ -768,12 +771,19 @@ export function laKetCauBia(menhDe: string, bangChung: string): boolean {
   }
   return /\blung\b/.test(kd) && !/\b(?:lung|gac)\b/.test(bc);
 }
-export function boKhenKhongCanCu(replies: string[], bangChung: string): string[] {
+/**
+ * `chiSoDo` (SRS-5.1zzzzp): lượt AI soát nhận xét (`kiem-khen.ts`) đã chạy xong cho lời này — AI là chủ phần "khen có căn cứ
+ * không", danh sách từ khoá bên dưới chỉ là lưới đỡ khi AI hỏng. Chạy cả hai thì từ khoá cắt nhầm lời AI đã cho qua (bắn
+ * production 09/10: "Anh chụp giúp em vài tấm mặt tiền, sổ và hẻm được không ạ?" → "Sổ và hẻm được không ạ?" — "mặt tiền" ở
+ * đây là chỗ chụp ảnh, không phải lời khen). Số đo / kết cấu bịa là so SỐ tất định, vẫn soát.
+ */
+export function boKhenKhongCanCu(replies: string[], bangChung: string, chiSoDo = false): string[] {
   const bc = boDau(bangChung ?? "");
   return locCauTrongBongBong(replies, (c) => {
     if (laSoDoBia(c, bangChung) && !/\?\s*$/.test(c)) return true;
     if (/\?/.test(c)) return false;
     if (laKetCauBia(c, bangChung)) return true;
+    if (chiSoDo) return false;
     const kd = boDau(c);
     return KHEN_CAN_BANG_CHUNG.some(([khen, chung]) => khen.test(kd) && !chung.test(bc));
   });
@@ -796,23 +806,25 @@ function hemNhoTrong(kd: string): boolean {
 const VAO_NHA_KD = /\b(?:vao tan nha|vao toi nha|vao nha|vao tan cua|vao trong nha|dau trong nha|de xe (?:hoi )?trong nha)\b/;
 const VAO_NHA_CHUNG = /\b(?:vao (?:tan |toi |duoc |trong )?nha|trong nha|gara|ga ra|garage|dau trong nha)\b/;
 /** Mệnh đề khen không có căn cứ (lời MODEL, không phải bảng đọc từ DB). */
-export function laKhenSai(menhDe: string, bangChung: string): boolean {
+export function laKhenSai(menhDe: string, bangChung: string, chiSoDo = false): boolean {
   if (laSoDoBia(menhDe, bangChung)) return true;
   if (/\?/.test(menhDe)) return false;
   if (laKetCauBia(menhDe, bangChung)) return true;
+  if (chiSoDo) return false;
   const kd = boDau(menhDe);
   const bc = boDau(bangChung ?? "");
   if (VAO_NHA_KD.test(kd) && !VAO_NHA_CHUNG.test(bc)) return true;
   if (KHEN_KD.test(kd) && (hemNhoTrong(kd) || (/\bhem\b/.test(kd) && hemNhoTrong(bc) && !/\b(?:mat tien|xe hoi|o to|oto)\b/.test(bc)))) return true;
   return KHEN_CAN_BANG_CHUNG.some(([khen, chung]) => khen.test(kd) && !chung.test(bc));
 }
-export function boMenhDeKhenSai(replies: string[], bangChung: string): string[] {
+/** `chiSoDo`: xem `boKhenKhongCanCu` (SRS-5.1zzzzp). */
+export function boMenhDeKhenSai(replies: string[], bangChung: string, chiSoDo = false): string[] {
   const ra: string[] = [];
   for (const r of replies) {
     const dong = r.split("\n").map((d) => tachCau(d).map((c) => {
       const cacMd = c.split(/,\s+/);
-      if (cacMd.length === 1) return laKhenSai(c, bangChung) ? "" : c;
-      const giu = cacMd.filter((md) => !laKhenSai(md, bangChung));
+      if (cacMd.length === 1) return laKhenSai(c, bangChung, chiSoDo) ? "" : c;
+      const giu = cacMd.filter((md) => !laKhenSai(md, bangChung, chiSoDo));
       if (giu.length === cacMd.length) return c;
       const gop = giu.join(", ").trim();
       // Bắn thật lx-24: vế chính bị cắt, còn trơ "Khách chuộng lắm." — mẩu khen không chủ ngữ thì bỏ luôn.

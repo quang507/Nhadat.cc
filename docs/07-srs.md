@@ -2915,6 +2915,27 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Sau khi gộp**: `bun run prompt --day` (khoá `fee_rules`, `seller_fewshot` — bản DB đè bản code). Không migration (dấu `chot_ai.so_fact` nằm trong `boc_tach` jsonb có sẵn).
 - **Treo cho chủ dự án**: (1) lượt bên lề giữ câu đang hỏi là đổi một phần quyết định 01/10 ("không hỏi lại lần nào hết") cho riêng câu hỏi ngược / tự nói vai — chặn trên ba lần hỏi; nếu chủ dự án muốn giữ quyết định cũ cho cả câu hỏi ngược thì bỏ `luotBenLe`; (2) `MODEL_TRUOC` (xem mục 4); (3) `nhanhKe` còn đưa model các ý con của một ô nhánh (mục 1, chỗ khác cùng lớp).
 
+### SRS-5.1zzzzp · Lưới từ khoá cắt nhầm câu xin ảnh, model trả lời câu lệnh bằng "Tôi hiểu rõ…" (09/10/2026)
+
+`[nguồn: bắn production 09/10/2026 sau SRS-5.1zzzzo (thu-gion3, thu-gion4) — sổ van_kich id 19, 22; sổ bot_usage_model cùng ngày]`
+
+- **Ca gốc**: (a) `van_kich` id 19, van `boMenhDeKhenSai`: lời model "Vâng ạ. Anh chụp giúp em vài tấm mặt tiền, sổ và hẻm được không ạ?" → tới khách "Vâng ạ. Sổ và hẻm được không ạ?". (b) `van_kich` id 22, nhánh bán: lời model là "Tôi hiểu rõ:\n\n- **Không ghi nhận lại** … Tôi sẵn sàng viết tin theo cách này…" — `laLoiMeta` không nhận ra, chỉ nhờ `motCauHoi` cắt hết mà khách không thấy.
+- **Đính chính SRS-5.1zzzzo (1)**: câu "Sổ và hẻm được không ạ?" ở đó KHÔNG phải model gộp hai mục — sổ van ghi rõ model viết đúng MỘT ý (xin ảnh), van cắt mất nửa câu. Bản sửa zzzzo (một ý mỗi câu hỏi) vẫn đúng và vẫn giữ; nguyên nhân thật của chữ méo ở đây.
+
+**(1) Lưới từ khoá cắt nhầm.**
+- **Nguyên nhân**: `boMenhDeKhenSai` tách câu theo dấu phẩy; vế "Anh chụp giúp em vài tấm mặt tiền" mất dấu "?" của cả câu nên bị coi là câu KHẲNG ĐỊNH, chứa "mặt tiền" mà chủ nhà chưa nói → bỏ vế. Trong khi đó lượt AI soát nhận xét (`kiem-khen.ts`, SRS N2) đã chạy NGAY TRƯỚC và cho câu này qua — nó hiểu đây là lời xin ảnh, không phải lời khen.
+- **Lớp lỗi**: *hai chủ cho một đầu ra*. Header `kiem-khen.ts` ghi "danh sách cũ vẫn chạy làm lưới đỡ khi AI hỏng", nhưng code gọi danh sách từ khoá SAU AI ở mọi lượt, nên từ khoá luôn có lời cuối và cắt cả thứ AI đã đọc đúng nghĩa.
+- **Sửa**: `soatNhanXet` ghi `nhanXetAiXong` khi model trả kết quả; `boKhenKhongCanCu` / `boMenhDeKhenSai` / `laKhenSai` nhận `chiSoDo` — AI đã soát xong thì danh sách từ khoá KHÔNG chạy, chỉ còn so số đo (`laSoDoBia`) và kết cấu (`laKetCauBia`) — hai phép so SỐ tất định, không đoán nghĩa. AI hỏng / chế độ khác `ai` → lưới từ khoá chạy như cũ.
+- **Chỗ khác cùng lớp**: r2 (`chat-reply` quanh dòng 7620) và r1 (quanh dòng 8280) — cả hai đã sửa. Nhánh mua (`soatNhanXet(mua)`) không gọi danh sách từ khoá sau AI — đúng sẵn. `boKhenThiTruong`, `boViTriBia` vẫn chạy sau AI: `boKhenThiTruong` treo theo `luat_loi_bot` (gọn = tắt); `boViTriBia` soát quận / khu bịa bằng cột tin — ghi đây, chưa đổi, chưa thấy cắt nhầm trong sổ van.
+
+**(2) Model trả lời câu lệnh.**
+- **Nguyên nhân**: lời viết cho khách do nguồn dự phòng (Gemini) viết TRƯỚC (`MODEL_TRUOC` chưa đặt, Vault không có khoá Groq — `bot_usage_model` 09/10: 74 lượt Gemini), và nguồn này có lúc đọc khuôn `ĐÃ BIẾT / CẦN HỎI` như một lời giao việc. `laLoiMeta` chỉ có danh sách cụm chữ ("sẵn sàng nhận", "em hiểu rồi ạ"…) nên câu mới "Tôi hiểu rõ / Tôi sẵn sàng viết tin" lọt.
+- **Lớp lỗi**: *nhận diện bằng cụm chữ cho một hiện tượng có dấu hiệu hình thức*.
+- **Sửa**: `laLoiMeta` thêm hai dấu hiệu HÌNH THỨC: xưng "tôi" ở đầu câu (bot chỉ xưng em / cháu / con theo `doiTuXung`), và in đậm markdown `**…**` (tin Zalo không bao giờ có). Lời bị nhận là meta thì bỏ, đi câu mẫu như cũ.
+- **Không sửa ở đây**: câu méo do model viết ("Anh chủ nhân sổ hồng hay là sổ chung vậy?", thu-gion3) không lưới nào bắt được mà không đoán nghĩa — gốc là nguồn viết lời. **Treo cho chủ dự án**: đặt `MODEL_TRUOC=claude` (đổi chi phí, xem SRS-5.1zzzzo mục 4).
+
+- **Kiểm, đỏ khi tắt**: `van-tra-loi.mjs` NX-01 (ca gốc nguyên văn — bản trước ra "Vâng ạ. Sổ và hẻm được không ạ?", đã chạy lại để xác nhận), NX-02 (AI hỏng → lưới từ khoá vẫn cắt khen bịa), NX-03 **cách nói MỚI** "Dạ anh gửi em ảnh mặt tiền với ảnh sổ nha.", NX-04/05 (AI đã soát vẫn bỏ số đo / kết cấu bịa), NX-06 (ca gốc meta), NX-07 **cách nói MỚI** "Tôi sẽ viết một tin ngắn gọn…", NX-08/09 (lời thường không bị coi là meta). `bun run test:bot` exit 0.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

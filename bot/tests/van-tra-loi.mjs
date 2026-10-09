@@ -1368,5 +1368,21 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   ["ừ", "co"], ["có sân thượng nữa em", null], ["có lửng riêng nữa em", "them"]])
   ok(`LUNG-TU '${vao}' → ${mong}`, docTraLoiLung(vao) === mong, String(docTraLoiLung(vao)));
 
+// SRS-5.1zzzzp (bắn production 09/10): AI soát nhận xét đã chạy xong → danh sách từ khoá không cắt lời nữa, chỉ còn so số đo / kết cấu.
+{
+  const anh = "Vâng ạ. Anh chụp giúp em vài tấm mặt tiền, sổ và hẻm được không ạ?";
+  ok("NX-01 ca gốc: AI đã soát → giữ nguyên câu xin ảnh", boMenhDeKhenSai([anh], "ban nha hem 5m duong le van sy", true)[0] === anh, boMenhDeKhenSai([anh], "ban nha hem 5m duong le van sy", true)[0]);
+  ok("NX-02 AI hỏng → lưới từ khoá vẫn chạy như cũ", boMenhDeKhenSai(["Hẻm xe hơi 5m, khách chuộng lắm. Mình cần bán gấp không ạ?"], "bán nhà hẻm 3m đường Lê Văn Việt")[0] !== "Hẻm xe hơi 5m, khách chuộng lắm. Mình cần bán gấp không ạ?");
+  ok("NX-03 (mới) AI đã soát: 'gửi em ảnh mặt tiền với ảnh sổ nha' giữ", boKhenKhongCanCu(["Dạ anh gửi em ảnh mặt tiền với ảnh sổ nha."], "bán nhà hẻm 4m", true)[0] === "Dạ anh gửi em ảnh mặt tiền với ảnh sổ nha.");
+  const r4 = boMenhDeKhenSai(["Anh nói nở hậu 4.5 nhỉ, em ghi rồi. Giá anh định rao bao nhiêu ạ?"], "no hau nhe", true)[0] ?? "";
+  ok("NX-04 AI đã soát vẫn bỏ số đo bịa 'nở hậu 4.5'", !/4\.5/.test(r4) && /Giá anh định rao/.test(r4), r4);
+  ok("NX-05 AI đã soát vẫn bỏ kết cấu bịa 'trệt lửng 2 lầu'", !/lửng/.test(boKhenKhongCanCu(["Trệt lửng 2 lầu thì ở rộng rãi."], "hẻm 3m", true)[0] ?? ""));
+  // laLoiMeta: dấu hiệu hình thức (xưng "tôi", in đậm markdown)
+  ok("NX-06 ca gốc 'Tôi hiểu rõ: - **Không ghi nhận lại** …' là lời đọc câu lệnh", laLoiMeta("Tôi hiểu rõ:\n\n- **Không ghi nhận lại** điều chủ nhà chỉ hỏi\n\nTôi sẵn sàng viết tin theo cách này."));
+  ok("NX-07 (mới) 'Tôi sẽ viết một tin ngắn…' là lời đọc câu lệnh", laLoiMeta("Được rồi. Tôi sẽ viết một tin ngắn gọn theo yêu cầu."));
+  ok("NX-08 lời thường có 'tối nay' không bị coi là meta", !laLoiMeta("Dạ tối nay anh rảnh thì gửi em ảnh sổ nha."));
+  ok("NX-09 lời thường có '•' / gạch đầu dòng không in đậm vẫn không meta", !laLoiMeta("Dạ em ghi rồi ạ. Nhà mình hẻm rộng mấy mét vậy anh?"));
+}
+
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

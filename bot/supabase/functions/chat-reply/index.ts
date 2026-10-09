@@ -2735,10 +2735,15 @@ Deno.serve(async (req) => {
     // 01/10/2026 (bắn thử lx-tt-08: "Nhà phố hẻm sâu…" — chủ không nói hẻm sâu): AI liệt kê câu NHẬN XÉT trong lời bot kèm căn cứ
     // chép từ lời chủ nhà (`soatNhanXetBangModel`), code kiểm căn cứ (`nhanXetKhongCanCu`) rồi bỏ câu không căn cứ — câu hỏi
     // giữ nguyên. Chế độ `ai` mới chạy (một lượt model nhỏ); AI hỏng thì lưới danh sách cũ vẫn chạy sau.
+    // SRS-5.1zzzzp: lượt AI soát nhận xét vừa chạy XONG cho lời đang xét → danh sách từ khoá cũ (boKhenKhongCanCu /
+    // boMenhDeKhenSai) chỉ còn soát số đo / kết cấu bịa (so số, tất định); phần "khen theo từ khoá" là lưới đỡ khi AI hỏng.
+    let nhanXetAiXong = false;
     const soatNhanXet = async (loi: string | null, bangChung: string, daGhi = ""): Promise<string | null> => {
+      nhanXetAiXong = false;
       if (!loi || !anthropicS || !laCheDoAi) return loi;
       try {
         const { nhanXet, usage } = await soatNhanXetBangModel(anthropicS as unknown as Parameters<typeof soatNhanXetBangModel>[0], MODEL, loi, bangChung, daGhi);
+        nhanXetAiXong = true;
         await doTien(client, usage as Parameters<typeof doTien>[1]);
         for (const n of nhanXet) if (n.noi_trang_thai_tin === true && n.cau?.trim() && !/\?/.test(n.cau)) aiNoiTrangThai.push(n.cau.trim());
         const bo = nhanXetKhongCanCu(nhanXet, `${bangChung}\n${daGhi}`);
@@ -7613,8 +7618,8 @@ Deno.serve(async (req) => {
               [lstNow?.floors_text, lstNow?.street, lstNow?.location_raw].filter(Boolean).join(" · ")); mocR2("soatNhanXet");
           }
           if (sellerReply) {
-            sellerReply = boKhenKhongCanCu([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null;
-            if (sellerReply) sellerReply = boMenhDeKhenSai([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null; mocR2("boMenhDeKhenSai");
+            sellerReply = boKhenKhongCanCu([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "), nhanXetAiXong)[0] ?? null;
+            if (sellerReply) sellerReply = boMenhDeKhenSai([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "), nhanXetAiXong)[0] ?? null; mocR2("boMenhDeKhenSai");
             if (sellerReply) sellerReply = boHoiHoanCong([sellerReply], nextKey === "hoan_cong")[0] ?? null; mocR2("boHoiHoanCong");
             if (sellerReply) sellerReply = suaGapTheoDeal(sellerReply, pendingReq.listings?.deal); mocR2("suaGapTheoDeal");
             if (sellerReply && luatDuR2) sellerReply = boKhenThiTruong([sellerReply])[0]?.trim() || null; mocR2("boKhenThiTruong");
@@ -8272,7 +8277,7 @@ Deno.serve(async (req) => {
             if (raoReply) raoReply = motCauHoi([raoReply])[0]; mocR1("motCauHoi");
             // 23/09/2026 (bắn thật): "hẻm 2m5 … rất được khách tìm", "ô tô đậu trước cửa" → "ô tô vào tận nhà".
             if (raoReply) raoReply = await soatNhanXet(raoReply, textBongAi); mocR1("soatNhanXet");
-            if (raoReply) raoReply = boMenhDeKhenSai([raoReply], text)[0] ?? null; mocR1("boMenhDeKhenSai");
+            if (raoReply) raoReply = boMenhDeKhenSai([raoReply], text, nhanXetAiXong)[0] ?? null; mocR1("boMenhDeKhenSai");
             // 25/09/2026 (bắn thật lx-08) → SRS-5.1zzzzk: tin vừa tạo luôn `cho_thong_tin`; câu "đã đăng" do lưới trạng thái ở đường ra
             // lo (`tinTrongLuot` = tin vừa tạo) — lưới riêng ở đây từng trả lại nguyên câu sai khi câu sai là cả lời.
             if (raoReply && (await loiBotDu())) raoReply = boKhenThiTruong([raoReply])[0]?.trim() || null; mocR1("boKhenThiTruong");
