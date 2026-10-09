@@ -14,6 +14,8 @@ const NhanXet = z.object({
   cau: z.string().describe("Câu hoặc vế NHẬN XÉT trong lời bot, COPY NGUYÊN VĂN (không sửa một chữ)."),
   khang_dinh: z.string().describe("Điều câu đó khẳng định về căn nhà / khu vực / khả năng bán (ngắn)."),
   can_cu: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong LỜI CHỦ NHÀ hoặc THÔNG TIN ĐÃ GHI nói ĐÚNG điều đó. Không có thì null."),
+  // SRS-5.1zzzzb: chỉ lượt soát lời gửi NGƯỜI MUA dùng ô này (nhánh bán luôn false).
+  noi_co_hang: z.boolean().nullish().describe("true khi câu nói bên em CÓ / còn / đang có căn, đã tìm thấy căn, hay đang lọc / tìm căn cho khách (\"dạ có anh\", \"em đang lọc căn 2 lầu cho anh\", \"em tìm thấy mấy căn\"). Không thì false."),
   danh_gia_thi_truong: z.boolean().describe("true khi câu ĐÁNH GIÁ giá trị / thị trường / khả năng bán của KHU VỰC hay MỨC GIÁ, không gắn với một đặc điểm của căn (\"đất vàng\", \"khu đó bán được lắm\", \"giá khu này đang lên\")."),
 });
 const KetSoat = z.object({ nhan_xet: z.array(NhanXet) });
@@ -31,6 +33,18 @@ nhà, gần chợ, khu yên tĩnh, xuyên thoáng, nở hậu, kết cấu chắ
   khu này đang lên", "quận 7 đang sốt") — bot không có số liệu thị trường nên câu đó luôn bị bỏ; tên khu chủ nhà nói KHÔNG phải căn
   cứ cho lời đánh giá về khu. Khen gắn đặc điểm căn ("hẻm xe hơi tới cửa là khách chuộng lắm") là false.`;
 
+// SRS-5.1zzzza (bắn production 09/10/2026): người MUA "cần mua nhà quận 5 tầm 7 tỷ, hẻm xe hơi" → trợ lý "Hẻm xe hơi tới cửa là
+// khách chuộng lắm, vị trí tốt lắm" — lời khen dành cho người BÁN về căn của họ, nói với người mua chưa có căn nào trong tay. Cùng
+// lượt AI soát, đổi đối tượng: AI chỉ LIỆT KÊ câu nhận xét (đọc theo nghĩa); nơi gọi quyết (không căn nào trong tay → bỏ hết).
+const LUAT_MUA = `SOÁT LỜI BOT GỬI NGƯỜI MUA / THUÊ — bot CHƯA đưa căn nào cho khách xem; điều khách nói là TIÊU CHÍ TÌM, chưa phải một căn.
+Đọc lời bot, liệt kê MỌI câu / vế NHẬN XÉT hay KHEN về nhà, đặc điểm nhà, tiêu chí khách đặt, khu vực, mức giá hay thị trường
+("hẻm xe hơi tới cửa là khách chuộng lắm", "vị trí tốt lắm", "mặt tiền đắt khách", "khu này giá đang lên", "tầm giá đó dễ mua").
+- Liệt kê CẢ câu nói có hàng / đang có căn / đã tìm thấy / đang lọc căn cho khách ("dạ có anh", "dạ còn chị", "em đang lọc căn 2 lầu
+  cho anh", "em tìm thấy mấy căn hợp tầm giá") với noi_co_hang = true — bot chưa có căn nào nên câu đó sai.
+- KHÔNG liệt kê: câu hỏi, lời chào, ghi nhận chung ("dạ em ghi nhận rồi anh"), câu nói thật là chưa có căn.
+- can_cu: luôn null (người mua chưa có căn nào để làm căn cứ).
+- danh_gia_thi_truong = true khi câu đánh giá KHU VỰC / THỊ TRƯỜNG / MỨC GIÁ.`;
+
 type ClientModel = {
   messages: {
     parse: (p: Record<string, unknown>) => Promise<{ parsed_output?: unknown; usage?: unknown }>;
@@ -44,15 +58,16 @@ export async function soatNhanXetBangModel(
   loiBot: string,
   loiChuNha: string,
   daGhi = "",
+  doiTuong: "chu_nha" | "nguoi_mua" = "chu_nha",
 ): Promise<{ nhanXet: NhanXetLLM[]; usage: unknown }> {
   const r = await ai.messages.parse({
     model,
     max_tokens: 500,
     output_config: { effort: "low", format: FORMAT },
-    system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: doiTuong === "nguoi_mua" ? LUAT_MUA : LUAT, cache_control: { type: "ephemeral" } }],
     messages: [{
       role: "user",
-      content: `LỜI CHỦ NHÀ:\n${loiChuNha.slice(-1500)}\n${daGhi ? `THÔNG TIN ĐÃ GHI:\n${daGhi.slice(0, 600)}\n` : ""}LỜI BOT:\n${loiBot.slice(0, 800)}`,
+      content: `${doiTuong === "nguoi_mua" ? "LỜI KHÁCH MUA" : "LỜI CHỦ NHÀ"}:\n${loiChuNha.slice(-1500)}\n${daGhi ? `THÔNG TIN ĐÃ GHI:\n${daGhi.slice(0, 600)}\n` : ""}LỜI BOT:\n${loiBot.slice(0, 800)}`,
     }],
   });
   const k = docLong(KetSoat, r.parsed_output);

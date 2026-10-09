@@ -86,16 +86,25 @@ const tachCau = (s: string): string[] => s.split(/(?<=[.!?…]|[=:;]\)+|:D|\^\^)
  * Bỏ các câu hứa có hàng; chèn `loiThat` đúng chỗ câu đầu tiên bị bỏ (để "Dạ được
  * chị." đứng trước vẫn tự nhiên). Không có câu nào vi phạm → trả nguyên mảng.
  */
-export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true): { replies: string[]; daChan: boolean } {
+export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true, aiHua: string[] = []): { replies: string[]; daChan: boolean } {
   let daChan = false;
+  // SRS-5.1zzzzb: câu AI (lượt soát, đọc theo nghĩa) chỉ ra là "nói có hàng" — chép nguyên văn từ lời bot; code chỉ nhận khi câu đó
+  // nằm trong lời bot (so bỏ dấu). Mẫu từ khoá `laHuaCoHang` vẫn chạy làm lưới đỡ.
+  const aiKd = aiHua.map((a) => boDau(a.trim().replace(/[.,!…;:\s]+$/u, ""))).filter((a) => a.length >= 4);
+  const laHua = (c: string) => laHuaCoHang(c, hoiHang) || aiKd.some((a) => boDau(c).includes(a));
   // 30/09/2026 (bắn thật lx-mua-e2): model đã tự nói thật "Hiện em chưa có căn nào sẵn…" mà câu hứa bên cạnh vẫn bị thay
   // bằng lời thật → khách đọc "chưa có căn" hai lần liền. Đã có câu nói thật thì chỉ bỏ câu hứa, không chèn thêm.
-  let daChen = replies.some((r) => tachCau(r).some((c) => !laHuaCoHang(c, hoiHang) && /\bchua co (?:can|tin|nha|lo)\b/.test(boDau(c))));
+  let daChen = replies.some((r) => tachCau(r).some((c) => !laHua(c) && /\bchua co (?:can|tin|nha|lo)\b/.test(boDau(c))));
   const ra: string[] = [];
   for (const r of replies) {
     const giu: string[] = [];
     for (const c of tachCau(r)) {
-      if (!laHuaCoHang(c, hoiHang)) { giu.push(c); continue; }
+      // SRS-5.1zzzzb (bắn production 09/10/2026): "Dạ có anh. Em đang lọc căn 2 lầu hẻm xe hơi tầm 7 tỷ … cho anh. Còn anh muốn ở
+      // khu nào …?" — câu đầu khớp mẫu, bị thay bằng lời thật; câu thứ hai nói CÙNG điều sai bằng chữ mẫu chưa có, nên còn nguyên
+      // cạnh lời thật: "chưa có căn nào khớp … Em đang lọc căn 2 lầu …". Một lời đã sai về KHO thì cả phần kể sau nó dựng trên
+      // tiền đề sai: sau câu sai đầu tiên chỉ giữ CÂU HỎI (khách vẫn được hỏi tiếp), bỏ mọi câu kể — không đoán câu nào là hứa.
+      if (daChan && !/\?/.test(c)) continue;
+      if (!laHua(c)) { giu.push(c); continue; }
       daChan = true;
       if (!daChen) {
         const loi = giu.length || ra.length ? loiThat.charAt(0).toLocaleUpperCase("vi") + loiThat.slice(1) : `Dạ ${loiThat}`;

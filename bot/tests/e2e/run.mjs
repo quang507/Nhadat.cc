@@ -88,7 +88,9 @@ const coSanPhapLy = (listingId) => { for (const [question, answer] of Object.ent
 // ca sau, làm bộ kiểm chậm đi và đo một thế giới khác.
 function fresh(seed) { globalThis.__db = new FakeDB(); seedBotPrompts(globalThis.__db); globalThis.__calls = []; globalThis.__nominatim = undefined; globalThis.__fetches = []; globalThis.__model = { parse: (p) => laLuotAnh(p) ? ANH(globalThis.__anh) : OUT() }; globalThis.__rpc = {}; globalThis.__treTruyVan = null; globalThis.__anh = undefined; globalThis.__anhTaiDuoc = true; globalThis.__storageHong = false; seed?.(globalThis.__db); }
 // Lượt gọi model chỉ tính NHÁNH MUA (parse hồ sơ), không tính lượt phân loại ảnh (FR-185).
-const parseMua = () => globalThis.__calls.filter((c) => c.kind === "parse" && !laLuotAnh(c.params) && !laLuotGan(c.params) && !laLuotVai(c.params) && !laLuotGanManh(c.params));
+// SRS-5.1zzzza: lượt AI soát nhận xét (người mua, không căn trong tay) cũng không phải lượt trả lời.
+const laLuotSoatKhen = (p) => (p?.system ?? []).some((s) => /SOÁT LỜI BOT GỬI/.test(s.text ?? ""));
+const parseMua = () => globalThis.__calls.filter((c) => c.kind === "parse" && !laLuotAnh(c.params) && !laLuotGan(c.params) && !laLuotVai(c.params) && !laLuotGanManh(c.params) && !laLuotSoatKhen(c.params));
 function seedKho(d) {
   const sC = d.insert("sellers", { zalo_user_id: "z-ccrb", seller_type: "ccrb", name: "Chị D.", active_listing_id: null }).data;
   const sU = d.insert("sellers", { zalo_user_id: "z-unknown", seller_type: "unknown", name: null, active_listing_id: null }).data;
@@ -429,10 +431,10 @@ check("TOIUU-01 người lạ hỏi vai ≤ 12 truy vấn (v43: 18; +1 trần c�
 v = await vong({ external_user_id: "do-1", text: "tôi muốn mua nhà phường 4 tầm 5 tỷ" });
 console.log(`   [đo] người mua lượt đầu (có model): ${v.n} truy vấn`);
 // 23/09/2026: +1 — câu đầu đủ khu vực + giá nay LỌC KHO ngay (trước chỉ hứa "em lọc kho liền" rồi im).
-check("TOIUU-02 người mua lượt đầu ≤ 25 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc; +1 FR-248 b tìm căn gần ngân sách, CHỈ khi kho trống vì giá — ca này 'tầm 5 tỷ' ≤ 5,75 tỷ mà căn phường 4 là 5,8 tỷ; +1 SRS-5.1y đọc công tắc tro_ly — không nhớ tạm để bật/tắt có hiệu lực lượt kế; +1 06/10 SRS-5.1zzn đọc công tắc luat_loi_bot ở nhánh mua; +1 ghi sổ van_kich, CHỈ khi có van đổi lời — mock chạy `du` nên có)", v.n <= 26, `${v.n}`);
+check("TOIUU-02 người mua lượt đầu ≤ 25 truy vấn (+1 trần cá nhân SEC-05; +1 FR-181 ghi tên trợ lý vào hồ sơ, CHỈ lượt đầu; +1 14/09 đọc công tắc báo lại 🤖; +1 23/09 lọc kho ngay tin đầu; +1 FR-216 đọc công tắc tim_theo_nghia, chỉ khi kho được lọc; +1 FR-248 b tìm căn gần ngân sách, CHỈ khi kho trống vì giá — ca này 'tầm 5 tỷ' ≤ 5,75 tỷ mà căn phường 4 là 5,8 tỷ; +1 SRS-5.1y đọc công tắc tro_ly — không nhớ tạm để bật/tắt có hiệu lực lượt kế; +1 06/10 SRS-5.1zzn đọc công tắc luat_loi_bot ở nhánh mua; +1 ghi sổ van_kich, CHỈ khi có van đổi lời — mock chạy `du` nên có; +1 SRS-5.1zzzza ghi token lượt AI soát nhận xét, CHỈ khi không căn nào trong tay)", v.n <= 27, `${v.n}`);
 v = await vong({ external_user_id: "do-1", text: "có căn nào không em" });
 console.log(`   [đo] người mua đã có hồ sơ, bot gợi căn + follow-up: ${v.n} truy vấn`);
-check("TOIUU-03 người mua có hồ sơ ≤ 20 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖; +1 SRS-5.1y đọc công tắc tro_ly; +1 06/10 SRS-5.1zzn công tắc luat_loi_bot; +1 ghi sổ van_kich khi có van đổi lời)", v.n <= 21, `${v.n}`);
+check("TOIUU-03 người mua có hồ sơ ≤ 20 truy vấn (v43: 24; +1 trần cá nhân SEC-05; +1 14/09 đọc công tắc báo lại 🤖; +1 SRS-5.1y đọc công tắc tro_ly; +1 06/10 SRS-5.1zzn công tắc luat_loi_bot; +1 ghi sổ van_kich khi có van đổi lời; +1 SRS-5.1zzzza ghi token lượt AI soát nhận xét khi không căn nào trong tay)", v.n <= 22, `${v.n}`);
 check("TOIUU-04 follow-up FR-32 đi qua RPC tao_followup, không đếm/tra/chèn tay", db().log.some((l) => l.rpc === "tao_followup") && db().t.reminders.some((x) => x.kind === "followup"));
 check("TOIUU-05 bot_prompts chỉ đọc MỘT lần cho cả ba lượt (nhớ tạm 60 s)", db().log.filter((l) => l.table === "bot_prompts").length <= 1, String(db().log.filter((l) => l.table === "bot_prompts").length));
 check("TOIUU-06 loạt bong bóng bot vào sổ bằng MỘT câu INSERT mảng", db().log.some((l) => l.table === "messages" && l.op === "insert" && Array.isArray(l.payload)));
@@ -4142,9 +4144,11 @@ fresh(seedKho);
       const { readFileSync } = await import("node:fs");
       const laBocPL = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
       /** Phát lại một hội thoại; `moiLuot(i, t, r, cacLuotGoi)` xem từng lượt. */
-      const phatLai = async (ten, uid, moiLuot) => {
+      /** `tuyChon.seed` thêm dữ liệu sau seedKho (wards / duong…); `tuyChon.nominatim` = JSON Nominatim giả (SRS-5.1zzzz). */
+      const phatLai = async (ten, uid, moiLuot, tuyChon = {}) => {
         const PL = JSON.parse(readFileSync(new URL(`./phat-lai/${ten}.json`, import.meta.url), "utf8")).luot;
-        fresh(seedKho);
+        fresh((d) => { seedKho(d); tuyChon.seed?.(d); });
+        if (tuyChon.nominatim) globalThis.__nominatim = tuyChon.nominatim;
         for (const [i, t] of PL.entries()) {
           let ri = 0;
           // Lượt AI CHỐT TIN (cùng system bóc tách + LUAT_CHOT): fixture có `chot` (đầu ra thật) thì trả đúng nó.
@@ -4292,6 +4296,91 @@ fresh(seedKho);
       await phatLai("x09-doi-loai", "web-pl-x09c", async (i) => { if (i === 1) kqDoi = xemTinPL("web-pl-x09c"); });
       check("SRS-5.1zzzx-c đối chứng: tin rỗng 'nhà' rồi câu rao NÓI RÕ 'căn hộ' (AI trích trong câu) → đổi sang chung_cu, một tin",
         kqDoi?.ds.length === 1 && kqDoi.ds[0].property_type === "chung_cu", JSON.stringify(kqDoi?.ds.map((l) => [l.property_type, l.district])));
+      // SRS-5.1zzzy (bắn production 09/10/2026): câu rao đủ mọi ý hỏi trước bản nháp → không còn câu để hỏi; câu lệnh model từng dặn
+      // "báo sẽ đăng lên web ngay" → bot hứa "Em lên tin đăng cho nhà mình liền nha", tin vẫn chờ, không nháp, không câu hỏi.
+      // Nay hết câu thì làm đúng việc của nhánh trả lời câu treo (`hetCauTruocNhap`): gửi bản nháp, hoặc mở ô cho mục thiếu và hỏi.
+      for (const [ten, uid, nhan, hua] of [["y09-hua-dang", "web-pl-y09a", "phát lại (lời model NGUYÊN VĂN production)", /lên tin đăng cho nhà mình liền/],
+        ["y09-hua-dang-moi", "web-pl-y09b", "(cách nói MỚI) 'chị có căn nhà muốn bán' + câu rao mặt tiền, model 'em đăng tin ngay cho chị nhé'", /đăng tin ngay/]]) {
+        let kq = null, rep = [];
+        await phatLai(ten, uid, async (i, t, r) => { if (i === 2) { kq = xemTinPL(uid); rep = r.body.replies ?? []; } });
+        const coNhap = rep.some((x) => x.includes("📋")) && kq?.treo.includes("duyet_tin");
+        const coHoi = (kq?.treo.length ?? 0) > 0 && rep.some((x) => !x.startsWith("🤖") && /\?/.test(x));
+        check(`SRS-5.1zzzy ${nhan} → không hứa đăng; có bản nháp (hoặc câu hỏi kèm ô chờ)`,
+          (coNhap || coHoi) && !rep.some((x) => hua.test(x)), JSON.stringify({ treo: kq?.treo, rep }));
+      }
+      // SRS-5.1zzzz (bắn production 09/10/2026): tin rỗng mở lúc chưa có quận mang `quan_mac_dinh: true`; câu rao "q5" điền vào nó
+      // ghi district = Quận 5 nhưng `ghi_boc_tach` (gộp, bỏ null) giữ nguyên cờ cũ → bot tra đường cả thành phố, hỏi "Đường Nguyễn
+      // Trãi có ở nhiều nơi (…), phường nào, quận nào", 🤖 in "(chưa rõ quận)". Đường có ở nhiều quận: Nominatim kể Q1 / Q5 / Q9.
+      {
+        const W = [["Chợ Quán", "Quận 5"], ["An Đông", "Quận 5"], ["Bến Thành", "Quận 1"], ["Long Bình", "Quận 9"], ["Vườn Lài", "Quận 10"], ["Bình Lợi Trung", "Bình Thạnh"]];
+        const seedDuong = (d) => {
+          for (const [ten, q] of W) d.insert("wards", { ten, ten_day_du: `Phường ${ten}`, quan_cu: q, loai: "phuong" });
+          for (const [p, q] of [["Phường Chợ Quán", "Quận 5"], ["Phường An Đông", "Quận 5"], ["Phường Bến Thành", "Quận 1"]]) d.insert("duong", { ten: "Nguyễn Trãi", ten_khong_dau: "nguyen trai", phuong: p, quan_cu: q });
+          for (const [p, q] of [["Phường Chợ Quán", "Quận 5"], ["Phường Vườn Lài", "Quận 10"], ["Phường Bình Lợi Trung", "Bình Thạnh"]]) d.insert("duong", { ten: "Trần Bình Trọng", ten_khong_dau: "tran binh trong", phuong: p, quan_cu: q });
+        };
+        const nomi = (duong, ps) => ps.map((p) => ({ addresstype: "road", address: { road: duong, suburb: p, city: "Thành phố Hồ Chí Minh" } }));
+        let kq = null, rep = [];
+        await phatLai("y09-quan-biet", "web-pl-y09c", async (i, t, r) => { if (i === 2) { kq = xemTinPL("web-pl-y09c"); rep = r.body.replies ?? []; } },
+          { seed: seedDuong, nominatim: nomi("Nguyễn Trãi", ["Phường Bến Thành", "Phường Chợ Quán", "Phường Long Bình"]) });
+        check("SRS-5.1zzzz phát lại 'chị cần bán gấp cái nhà' → '… nguyen trai q5 …' (điền tin rỗng) → cờ quận mặc định gỡ, chỉ hỏi phường TRONG Quận 5, không 'nhiều nơi'",
+          kq?.ds.length === 1 && kq.ds[0].district === "Quận 5" && kq.ds[0].boc_tach?.quan_mac_dinh === false &&
+            rep.some((x) => /Phường Chợ Quán hay Phường An Đông/.test(x)) && !rep.some((x) => /nhiều nơi|quận nào|chưa rõ quận/.test(x)),
+          JSON.stringify({ d: kq?.ds.map((l) => [l.district, l.ward, l.boc_tach?.quan_mac_dinh]), rep }));
+        let kq2 = null, rep2 = [];
+        await phatLai("y09-quan-biet-moi", "web-pl-y09d", async (i, t, r) => { if (i === 1) { kq2 = xemTinPL("web-pl-y09d"); rep2 = r.body.replies ?? []; } },
+          { seed: seedDuong, nominatim: nomi("Trần Bình Trọng", ["Phường Chợ Quán", "Phường Vườn Lài", "Phường Bình Lợi Trung"]) });
+        check("SRS-5.1zzzz (cách nói MỚI) 'anh cần bán nhà' → 'nhà hẻm 4m Trần Bình Trọng quận 5 …' → hỏi xác nhận Phường Chợ Quán, không kể Quận 10 / Bình Thạnh",
+          kq2?.ds[0]?.boc_tach?.quan_mac_dinh === false && rep2.some((x) => /Phường Chợ Quán/.test(x)) && !rep2.some((x) => /nhiều nơi|Quận 10|Bình Thạnh|chưa rõ quận/.test(x)),
+          JSON.stringify({ d: kq2?.ds.map((l) => [l.district, l.ward, l.boc_tach?.quan_mac_dinh]), rep2 }));
+      }
+      // SRS-5.1zzzza / SRS-5.1zzzzb (bắn production 09/10/2026, người mua, trợ lý có công cụ, kho 0 tin). Phát lại: `tro_ly` = các
+      // phản hồi model theo thứ tự gọi trong lượt; `khen` = đầu ra lượt AI soát nhận xét (đối tượng người mua).
+      {
+        const laSoatPL = (p) => (p?.system ?? []).some((x) => /SOÁT LỜI BOT GỬI/.test(x.text ?? ""));
+        const phatLaiMua = async (ten, uid, moiLuot, { aiSoat = true } = {}) => {
+          const PL = JSON.parse(readFileSync(new URL(`./phat-lai/${ten}.json`, import.meta.url), "utf8")).luot;
+          fresh();
+          const cu = globalThis.__cauHinh;
+          globalThis.__cauHinh = { ...(cu ?? {}), bao_lai_da_luu: "thay_doi", tro_ly: "bat" };
+          for (const [i, t] of PL.entries()) {
+            let k = 0;
+            globalThis.__model.troLy = () => t.tro_ly[Math.min(k++, t.tro_ly.length - 1)];
+            globalThis.__model.parse = (p) => laLuotVai(p) ? { vai: "mua", bang_chung: t.text } : laSoatPL(p) ? (aiSoat ? (t.khen ?? { nhan_xet: [] }) : OUT()) : OUT();
+            const n0 = globalThis.__calls.length;
+            const r = await send({ external_user_id: uid, text: t.text });
+            await moiLuot(i, t, r, globalThis.__calls.slice(n0));
+          }
+          globalThis.__model.troLy = undefined;
+          globalThis.__cauHinh = cu;
+        };
+        const loi = (r) => (r.body.replies ?? []).filter((x) => !x.startsWith("🤖")).join("\n");
+        const hs = (uid) => db().t.buyers.find((b) => b.zalo_user_id === uid)?.preferences ?? {};
+        const lan = {};
+        await phatLaiMua("y09-mua", "thu-pl-y09m", async (i, t, r, calls) => { lan[i] = { rep: r.body.replies ?? [], loi: loi(r), calls }; });
+        const sysTL = lan[0]?.calls.find((c) => c.kind === "create" && c.params.tools)?.params.system[0].text ?? "";
+        const soatMua = lan[0]?.calls.find((c) => c.kind === "parse" && laSoatPL(c.params))?.params.system[0].text ?? "";
+        check("SRS-5.1zzzza phát lại người mua 'cần mua nhà quận 5 tầm 7 tỷ, hẻm xe hơi' → bỏ 'khách chuộng lắm, vị trí tốt lắm', câu hỏi giữ",
+          !/chuộng|vị trí tốt/.test(lan[0]?.loi ?? "") && /khu nào/.test(lan[0]?.loi ?? ""), lan[0]?.loi);
+        check("SRS-5.1zzzza system trợ lý mua có luật 'người mua: không khen tiêu chí', lượt soát dùng luật NGƯỜI MUA",
+          /Với NGƯỜI MUA \/ THUÊ: điều khách nói là TIÊU CHÍ TÌM/.test(sysTL) && /SOÁT LỜI BOT GỬI NGƯỜI MUA/.test(soatMua), sysTL.slice(0, 300));
+        check("SRS-5.1zzzzb phát lại 'có căn nào 2 lầu không em' → hồ sơ có số tầng '2 lầu', 🤖 báo nó (không 'Không bóc tách được gì')",
+          hs("thu-pl-y09m").so_tang === "2 lầu" && (lan[1]?.rep ?? []).some((x) => /^🤖.*2 lầu/.test(x)) && !(lan[1]?.rep ?? []).some((x) => /Không bóc tách được gì/.test(x)),
+          JSON.stringify({ hs: hs("thu-pl-y09m"), rep: lan[1]?.rep }));
+        check("SRS-5.1zzzzb lời không tự mâu thuẫn: 'chưa có căn' và KHÔNG còn 'Dạ có anh' / 'đang lọc căn', câu hỏi khu vực giữ",
+          /chưa có căn/.test(lan[1]?.loi ?? "") && !/Dạ có anh|đang lọc/.test(lan[1]?.loi ?? "") && /khu nào/.test(lan[1]?.loi ?? ""), lan[1]?.loi);
+        // Lưới đỡ khi AI soát không chạy: sau câu sai đầu tiên về kho chỉ còn câu hỏi — "đang lọc" (mẫu từ khoá chưa có) vẫn bỏ.
+        const lan2 = {};
+        await phatLaiMua("y09-mua", "thu-pl-y09m2", async (i, t, r) => { lan2[i] = loi(r); }, { aiSoat: false });
+        check("SRS-5.1zzzzb AI soát không chạy → lưới từ khoá bắt 'Dạ có anh', câu kể 'đang lọc' sau nó vẫn bỏ (không ghép lời thật vào cạnh lời sai)",
+          /chưa có căn/.test(lan2[1] ?? "") && !/đang lọc/.test(lan2[1] ?? "") && /khu nào/.test(lan2[1] ?? ""), lan2[1]);
+        const lan3 = {};
+        await phatLaiMua("y09-mua-moi", "thu-pl-y09m3", async (i, t, r) => { lan3[i] = loi(r); });
+        check("SRS-5.1zzzza (cách nói MỚI) người mua 'quận 10 khoảng 9 tỷ, mặt tiền' → bỏ 'mặt tiền … đắt khách', 'khu này giá đang lên'",
+          !/đắt khách|giá đang lên/.test(lan3[0] ?? ""), lan3[0]);
+        check("SRS-5.1zzzzb (cách nói MỚI) 'chị cần nhà trệt 3 lầu, còn căn nào không' → số tầng vào hồ sơ; 'Dạ còn chị. Em tìm thấy mấy căn…' (từ khoá không bắt, AI chỉ ra) bị bỏ",
+          hs("thu-pl-y09m3").so_tang === "trệt 3 lầu" && /chưa có căn/.test(lan3[1] ?? "") && !/Dạ còn chị|tìm thấy/.test(lan3[1] ?? ""),
+          JSON.stringify({ hs: hs("thu-pl-y09m3"), loi: lan3[1] }));
+      }
       let ndDang2 = "";
       await phatLai("kc1tatt-khong-lech", "web-pl-kc1b", async (i, t, r, calls) => { if (t.text === "dang di") ndDang2 = nd(calls); });
       check("SRS-5.1zzzn-b phát lại …kc1tatt (ý lượt không lệch): 'dang di' khi tin còn chờ thông tin → câu lệnh ghi CHƯA LÊN KỆ, không còn tiêu đề 'đang rao các tin'",
