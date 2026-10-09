@@ -73,7 +73,8 @@ jobs:
       # 09/10/2026: cài / cập nhật bridge Zalo clone trên VPS khi chủ dự án không tự SSH được. Thông tin VPS và
       # BRIDGE_SECRET nằm trong Supabase Vault (VPS_HOST, VPS_ROOT_PASSWORD đặt tạm), đọc qua Management API, che trong
       # log, BRIDGE_SECRET đi qua stdin (không nằm trên dòng lệnh). Log không in link / ảnh QR — ai cầm QR là đăng nhập
-      # được bridge; QR đọc ở bảng bridge_dang_nhap (chỉ admin). Bước sau luôn xoá VPS_ROOT_PASSWORD + VPS_HOST khỏi Vault.
+      # được bridge; QR đọc ở bảng bridge_dang_nhap (chỉ admin). Bước sau luôn GHI ĐÈ VPS_ROOT_PASSWORD + VPS_HOST trong Vault
+      # (DELETE trên vault.secrets qua Management API bị từ chối — lượt 09/10 thoát 22; update_secret thì được).
       - name: Cài bridge Zalo trên VPS (cai-vps)
         if: ${{ inputs.dung_lai == 'cai-vps' }}
         env:
@@ -94,18 +95,20 @@ jobs:
             'read -r BRIDGE_SECRET; export BRIDGE_SECRET; curl -fsSL https://raw.githubusercontent.com/quang507/Nhadat.cc/main/bot/bridge-zca/cai-vps.sh -o /root/cai-vps.sh && bash /root/cai-vps.sh </dev/null; unset BRIDGE_SECRET; sleep 25; echo "== service: $(systemctl is-active nhadat-bridge)"; journalctl -u nhadat-bridge -n 40 --no-pager -o cat | grep -viE "qr-|http://|https://" | tail -25' \
             > /tmp/vps.log 2>&1 || rc=$?
           unset SSHPASS PW BS
-          grep -viE "qr-[a-z0-9]|password|secret=" /tmp/vps.log | tail -60
-          echo "::notice title=cai-vps (thoát $rc)::$(grep -viE 'qr-[a-z0-9]|password|secret=' /tmp/vps.log | tail -40 | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')"
+          # Che dãy số ≥ 9 chữ số (Zalo ID của acc clone / khách, SĐT) — log repo này công khai.
+          sach() { grep -viE "qr-[a-z0-9]|password|secret=" /tmp/vps.log | sed -E 's/[0-9]{9,}/#/g; s/\r//g'; }
+          sach | tail -60
+          echo "::notice title=cai-vps (thoát $rc)::$(sach | tail -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')"
           exit $rc
 
-      - name: Xoá thông tin VPS tạm khỏi Vault
+      - name: Ghi đè thông tin VPS tạm trong Vault
         if: ${{ always() && inputs.dung_lai == 'cai-vps' }}
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
         run: |
           curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
             -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-            -d '{"query":"delete from vault.secrets where name in (''VPS_ROOT_PASSWORD'',''VPS_HOST'') returning name"}'
+            -d '{"query":"select vault.update_secret(id, ''x'', ''DA_XOA_'' || name || ''_'' || floor(extract(epoch from now()))::text, ''đã ghi đè'') from vault.secrets where name in (''VPS_ROOT_PASSWORD'',''VPS_HOST'')"}'
           echo
 
       # 08/10/2026: project production cũ bị xoá nhầm — dựng lại từng bước trên project mới rỗng.
