@@ -25,7 +25,7 @@ import { gonLoiSua, nhanDienNhieuFact, laTraLoiTronKhoa } from "../supabase/func
 import { chuanHienTrang, diaChiGon } from "../supabase/functions/_shared/tin-nhap.ts";
 import { gonGiaTriFact, laChiDonViHanhChinh, tachDapCoKhongDau } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boHoaHong } from "../supabase/functions/_shared/extraction/luat-lien-he.ts";
-import { bocTachTaoTin, kemLuotTao, tomTatDaLuu, tomTatTrongCau, vuaLuuBan, vuaLuuMua } from "../supabase/functions/_shared/bao_lai.ts";
+import { bocTachTaoTin, kemLuotTao, tomTatDaLuu, tomTatTrongCau, traLoiCauBot, vuaLuuBan, vuaLuuMua } from "../supabase/functions/_shared/bao_lai.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => {
@@ -222,7 +222,8 @@ ok("hocXungHoTuLichSu: lời dặn 'kêu chị nha' thắng tự xưng cũ", hoc
   const kem = kemLuotTao([
     { question: "view", answer: "view sông" }, { question: "tang", answer: "15" }, { question: "dien_tich", answer: "76m2" },
   ], nhan);
-  ok("lượt tạo tin: 'Kèm' chỉ fact tóm tắt cột chưa nói (view), không lặp tầng/diện tích", kem === 'Kèm: view: "view sông"', String(kem));
+  // SRS-5.1zzzzn: dòng fact nối thẳng dưới các cột của bocTachTaoTin (cùng kiểu "• nhãn: …"), không còn chữ "Kèm:".
+  ok("lượt tạo tin: fact kèm chỉ fact tóm tắt cột chưa nói (view), không lặp tầng/diện tích", kem === '• view: làm chuẩn "view sông"', String(kem));
   ok("lượt tạo tin: không còn fact nào ngoài tóm tắt → không có dòng Kèm", kemLuotTao([{ question: "dien_tich", answer: "60m2" }], nhan) === null);
   const tt = tomTatDaLuu({ property_type: "chung_cu", deal: "cho_thue", ward: "Phường Tân Hưng", district: "Quận 7", area_m2: 76,
     bedrooms: 2, price_raw: "18 triệu/tháng", price_vnd: 18e6, floor: 15, furnishing: "full", projects: { name: "Sunrise City" } }, [], {}, "thay_doi");
@@ -233,7 +234,11 @@ ok("hocXungHoTuLichSu: lời dặn 'kêu chị nha' thắng tự xưng cũ", hoc
     tomTatTrongCau('🤖 Đã lưu: hướng: "đông nam"\n📦 Tin giờ: Nhà phố bán · hướng Đông Nam') === "Nhà phố bán · hướng Đông Nam");
   const mua = vuaLuuMua({ area: "Quận 5" }, { area: "Quận 5", budget: "7 tỷ", deal: "ban", ten_tro_ly: "H•ai", xung_ho: "chị", gan_tien_ich_loc: { m: 1000 } },
     [["deal", "mua hay thuê"], ["area", "khu vực muốn tìm (phường nào)"], ["budget", "khoảng giá"]]);
-  ok("người mua: chỉ khoá ĐỔI, không khoá nội bộ, deal 'ban' đọc là 'mua'", mua === '🤖 Bóc tách được: mua hay thuê: "mua" · khoảng giá: "7 tỷ"', String(mua));
+  ok("người mua: chỉ khoá ĐỔI, không khoá nội bộ, deal 'ban' đọc là 'mua'", mua === '🤖 Đã trích xuất:\n• mua hay thuê: làm chuẩn "mua"\n• khoảng giá: làm chuẩn "7 tỷ"', String(mua));
+  // SRS-5.1zzzzn: có tin khách → nguyên mẫu là cụm khách gõ ("7 ty") → làm chuẩn ("7 tỷ").
+  const mua2 = vuaLuuMua({}, { budget: "7 tỷ", deal: "ban" }, [["deal", "mua hay thuê"], ["budget", "khoảng giá"]], "chị cần mua nhà tầm 7 ty");
+  ok("TRX-MUA người mua: '• khoảng giá: \"7 ty\" → làm chuẩn \"7 tỷ\"', '• mua hay thuê: \"mua\"'",
+    mua2 === '🤖 Đã trích xuất:\n• mua hay thuê: "mua"\n• khoảng giá: "7 ty" → làm chuẩn "7 tỷ"', String(mua2));
 }
 
 // ── 14/09 bắn lại kịch bản 7 (người mua) ──────────────────────────────────────
@@ -678,34 +683,73 @@ for (const [cau, mong] of [
   ok("hồ sơ mua: khách nói 'hẻm ô tô' → giữ alley", h2.profile.alley === "hẻm xe hơi", JSON.stringify(h2));
 }
 
-// ── 24/09/2026: 🤖 "Bóc tách được" — chỉ thứ bóc từ tin vừa nhắn, giá trị trong ngoặc kép ──
+// ── 24/09/2026: 🤖 chỉ thứ bóc từ tin vừa nhắn, giá trị trong ngoặc kép. SRS-5.1zzzzn: "🤖 Đã trích xuất:" + một dòng mỗi mục,
+//    `"<nguyên mẫu>" → làm chuẩn "<chữ chuẩn>"`; không có tin khách để tìm nguyên mẫu → chỉ phần làm chuẩn. ──
 {
   const t1 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 4m Nguyễn Trãi", ward: "Phường Chợ Quán", district: "Quận 5", area_m2: 56, price_raw: "5 tới 6", price_vnd: null, bedrooms: 2 });
   ok("bocTachTaoTin: lượt tạo tin in từng cột trong ngoặc kép, giá không ra số nói rõ",
-    t1 === '🤖 Bóc tách được: loại: "Nhà phố bán" · địa chỉ: "Hẻm 4m Nguyễn Trãi, Phường Chợ Quán, Quận 5" · diện tích: "56m²" · phòng ngủ: "2" · giá: "5 tới 6 (chưa đọc ra số)"', String(t1));
+    t1 === '🤖 Đã trích xuất:\n• loại: làm chuẩn "Nhà phố bán"\n• địa chỉ: làm chuẩn "Hẻm 4m Nguyễn Trãi, Phường Chợ Quán, Quận 5"\n• diện tích: làm chuẩn "56m²"\n• phòng ngủ: làm chuẩn "2"\n• giá: làm chuẩn "5 tới 6 (chưa đọc ra số)"', String(t1));
   const t2 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 12 Hồ Ngọc Lãm", district: null, area_m2: 50, price_raw: "3 tỷ", price_vnd: 3e9 });
-  ok("bocTachTaoTin: chưa rõ quận → nói '(chưa rõ quận)', không bịa Quận 5", /địa chỉ: "Hẻm 12 Hồ Ngọc Lãm \(chưa rõ quận\)"/.test(t2 ?? "") && !/Quận 5/.test(t2 ?? ""), String(t2));
+  ok("bocTachTaoTin: chưa rõ quận → nói '(chưa rõ quận)', không bịa Quận 5", /địa chỉ: làm chuẩn "Hẻm 12 Hồ Ngọc Lãm \(chưa rõ quận\)"/.test(t2 ?? "") && !/Quận 5/.test(t2 ?? ""), String(t2));
   // SRS-5.1zzzzj (bắn production 09/10: 🤖 "địa chỉ: duong Phạm Văn Chiêu…"): cột lưu nguyên văn, bản IN qua `diaChiHienThi` — từ loại chuẩn,
   // tên đường từ điển (cột street), phường chỉ từ cột chuẩn; đuôi "p14 go vap" khách gõ không in lại.
   const tDc = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "duong pham van chieu p14 go vap", street: "Phạm Văn Chiêu", ward: "Phường An Hội Tây", district: "Quận Gò Vấp" });
   ok("bocTachTaoTin: 'duong pham van chieu p14 go vap' → in 'Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp'",
-    /địa chỉ: "Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp"/.test(tDc ?? "") && !/duong|p14/.test(tDc ?? ""), String(tDc));
+    /địa chỉ: làm chuẩn "Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp"/.test(tDc ?? "") && !/duong|p14/.test(tDc ?? ""), String(tDc));
+  // SRS-5.1zzzzn: cùng tin, CÓ câu rao → nguyên mẫu là cụm khách gõ (không dấu, kèm đuôi phường khách gõ), làm chuẩn từ cột chuẩn.
+  const tDc2 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "duong pham van chieu p14 go vap", street: "Phạm Văn Chiêu", ward: "Phường An Hội Tây", district: "Quận Gò Vấp" },
+    { tin: "a can ban gap nha hem xe hoi duong pham van chieu p14 go vap" });
+  ok("TRX-DUONG đường không dấu: '• địa chỉ: \"duong pham van chieu p14 go vap\" → làm chuẩn \"Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp\"'",
+    /\n• địa chỉ: "duong pham van chieu p14 go vap" → làm chuẩn "Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp"/.test(tDc2 ?? ""), String(tDc2));
   const t0 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: null, ward: null, district: null });
   // FR-226 a (25/09/2026, chủ dự án: "Nhà người ta chưa có gì mà nó tự nhận là nhà phố"): tin nhà chưa có dấu hiệu nhà phố → "Nhà".
-  ok("bocTachTaoTin: chưa có địa chỉ → KHÔNG in 'địa chỉ: \"(chưa rõ)…\"'; chưa có dấu hiệu nhà phố → 'Nhà bán'", t0 === '🤖 Bóc tách được: loại: "Nhà bán"', String(t0));
+  ok("bocTachTaoTin: chưa có địa chỉ → KHÔNG in 'địa chỉ: \"(chưa rõ)…\"'; chưa có dấu hiệu nhà phố → 'Nhà bán'", t0 === '🤖 Đã trích xuất:\n• loại: làm chuẩn "Nhà bán"', String(t0));
   ok("bocTachTaoTin: câu rao 'bán nhà 4 tấm' / cột số tầng 3 → 'Nhà phố bán'",
     /"Nhà phố bán"/.test(bocTachTaoTin({ property_type: "nha_pho", deal: "ban", description: "bán nhà 4 tấm" }) ?? "") && /"Nhà phố bán"/.test(bocTachTaoTin({ property_type: "nha_pho", deal: "ban", floors: 3 }) ?? ""));
   const t3 = vuaLuuBan([{ question: "so_phong_ngu", answer: "3" }, { question: "ket_cau", answer: "4 tầng" }], { ket_cau: "kết cấu", so_phong_ngu: "số phòng ngủ" });
-  ok("vuaLuuBan: lượt sau → 'Bóc tách được' + đúng các fact lượt đó", t3 === '🤖 Bóc tách được: kết cấu: "4 tầng" · số phòng ngủ: "3"', String(t3));
+  ok("vuaLuuBan: lượt sau → 'Đã trích xuất' + đúng các fact lượt đó", t3 === '🤖 Đã trích xuất:\n• kết cấu: làm chuẩn "4 tầng"\n• số phòng ngủ: làm chuẩn "3"', String(t3));
   // SRS-5.1zzzc (chat thử 07/10): AI ghi loại BĐS bằng mã — 🤖 in chữ người đọc, không in "nha_cap4".
   for (const [ma, chu] of [["nha_cap4", "nhà cấp 4"], ["chung_cu", "căn hộ chung cư"], ["dat_nong_nghiep", "đất nông nghiệp"]]) {
     const tL = vuaLuuBan([{ question: "loai_bds", answer: ma }], { loai_bds: "loại bất động sản" });
-    ok(`SRS-5.1zzzc 🤖 loại BĐS '${ma}' → '${chu}'`, tL === `🤖 Bóc tách được: loại bất động sản: "${chu}"`, String(tL));
+    ok(`SRS-5.1zzzc 🤖 loại BĐS '${ma}' → '${chu}'`, tL === `🤖 Đã trích xuất:\n• loại bất động sản: làm chuẩn "${chu}"`, String(tL));
   }
-  const t4 = vuaLuuBan([{ question: "dien_tich", answer: "5x12" }, { question: "dien_tich_dat", answer: "5x12" }], { dien_tich: "diện tích", dien_tich_dat: "diện tích đất" });
+  const t4 = vuaLuuBan([{ question: "dien_tich", answer: "5x12" }, { question: "dien_tich_dat", answer: "5x12" }], { dien_tich: "diện tích", dien_tich_dat: "diện tích đất" }, { tin: "5x12 em" });
   ok("vuaLuuBan: '5x12' ghi vào hai khoá diện tích → in MỘT lần", (t4?.match(/5x12/g) ?? []).length === 1, String(t4));
   const t5 = vuaLuuBan([{ question: "dien_tich", answer: "60m2" }, { question: "dien_tich_dat", answer: "80m2" }], { dien_tich: "diện tích", dien_tich_dat: "diện tích đất" });
-  ok("vuaLuuBan: hai khoá diện tích KHÁC giá trị → in đủ cả hai", /60m2/.test(t5 ?? "") && /80m2/.test(t5 ?? ""), String(t5));
+  ok("vuaLuuBan: hai khoá diện tích KHÁC giá trị → in đủ cả hai", /60m²/.test(t5 ?? "") && /80m²/.test(t5 ?? ""), String(t5));
+  // ── SRS-5.1zzzzn: nguyên mẫu → làm chuẩn, mỗi ca một bộ in một nguồn ──
+  const N = { phuong: "phường", gia: "giá mong muốn", dien_tich: "diện tích", vi_tri: "vị trí cụ thể", bo_sung: "ghi thêm", phap_ly: "pháp lý", mat_tien: "chiều ngang mặt tiền" };
+  const v1 = vuaLuuBan([{ question: "phuong", answer: "Phường Phú Định", goc: ["phường phú định"] }], N, { tin: "phường phú định em" });
+  ok("TRX-PHUONG phường mới: '\"phường phú định\" → làm chuẩn \"Phường Phú Định (Quận 8 cũ)\"'", v1 === '🤖 Đã trích xuất:\n• phường: "phường phú định" → làm chuẩn "Phường Phú Định (Quận 8 cũ)"', String(v1));
+  // Phường SỐ cũ: cửa ghi đổi "phường 13" (+ Quận 8) → Phường Phú Định; chữ vào cửa (`vao`) là ứng viên nguyên mẫu.
+  const v1b = vuaLuuBan([{ question: "phuong", answer: "Phường Phú Định", goc: [null, "phường 13"] }], N, { tin: "phường 13 quận 8 nha em" });
+  ok("TRX-PHUONG-CU phường số cũ: '\"phường 13\" → làm chuẩn \"Phường Phú Định (Quận 8 cũ)\"'", /• phường: "phường 13" → làm chuẩn "Phường Phú Định \(Quận 8 cũ\)"/.test(v1b ?? ""), String(v1b));
+  const v2 = vuaLuuBan([{ question: "gia", answer: "9 ty 5" }], N, { tin: "gia 9 ty 5 co thuong luong" });
+  ok("TRX-TIEN tiền '9 ty 5' → làm chuẩn '9 tỷ 5' (donViGiaDep)", v2 === '🤖 Đã trích xuất:\n• giá mong muốn: "9 ty 5" → làm chuẩn "9 tỷ 5"', String(v2));
+  const v3 = vuaLuuBan([{ question: "dien_tich", answer: "4x15" }], N, { tin: "nhà 4x15, 3 lầu" });
+  ok("TRX-KICH-THUOC '4x15' → làm chuẩn 'ngang 4m × dài 15m (60m²)'", v3 === '🤖 Đã trích xuất:\n• diện tích: "4x15" → làm chuẩn "ngang 4m × dài 15m (60m²)"', String(v3));
+  const v3b = vuaLuuBan([{ question: "mat_tien", answer: "ngang 4,5m dài 16m" }], N, { tin: "ngang 4,5m dài 16m nha" });
+  ok("TRX-KICH-THUOC-2 'ngang 4,5m dài 16m' → 'ngang 4,5m × dài 16m (72m²)'", /"ngang 4,5m dài 16m" → làm chuẩn "ngang 4,5m × dài 16m \(72m²\)"/.test(v3b ?? ""), String(v3b));
+  const v4 = vuaLuuBan([{ question: "vi_tri", answer: "hem 45 pham the hien" }], N, { tin: "hem 45 pham the hien p5 q8", dong: { street: "Phạm Thế Hiển" } });
+  ok("TRX-DUONG-FACT đường không dấu (fact vị trí) → làm chuẩn 'Hẻm 45 Phạm Thế Hiển' (duongHienThi + tên từ điển)",
+    v4 === '🤖 Đã trích xuất:\n• vị trí cụ thể: "hem 45 pham the hien" → làm chuẩn "Hẻm 45 Phạm Thế Hiển"', String(v4));
+  // SĐT trong cụm khách gõ: che bằng luật liên hệ MỘT nguồn (thayLienHe) ở CẢ hai phần.
+  const v5 = vuaLuuBan([{ question: "bo_sung", answer: "chủ gọi 0903 123 456 xem nhà" }], N, { tin: "chủ gọi 0903 123 456 xem nhà nha" });
+  ok("TRX-SDT SĐT trong nguyên mẫu bị che '[đã che liên hệ]', không còn số", !!v5 && !/0903|123 456/.test(v5) && /\[đã che liên hệ\]/.test(v5), String(v5));
+  // Nguyên mẫu chỉ là chữ CÓ trong tin khách: ứng viên không có trong tin → chỉ in phần làm chuẩn (không bao giờ bịa chữ "khách gõ").
+  const v6 = vuaLuuBan([{ question: "phap_ly", answer: "sổ hồng riêng", goc: ["sổ hồng riêng"] }], N, { tin: "đúng rồi em" });
+  ok("TRX-KHONG-BIA khách chỉ gật → '• pháp lý: làm chuẩn \"sổ hồng riêng\"' (không có nguyên mẫu)", v6 === '🤖 Đã trích xuất:\n• pháp lý: làm chuẩn "sổ hồng riêng"', String(v6));
+  // Nguyên mẫu và làm chuẩn chỉ khác hoa thường → in MỘT lần, chữ chuẩn.
+  const v7 = vuaLuuBan([{ question: "phap_ly", answer: "Sổ hồng riêng" }], N, { tin: "sổ hồng riêng em" });
+  ok("TRX-MOT-LAN như nhau (bỏ qua hoa thường) → in một lần", v7 === '🤖 Đã trích xuất:\n• pháp lý: "Sổ hồng riêng"', String(v7));
+  ok("TRX-CAU-BOT traLoiCauBot kèm nguyên mẫu → làm chuẩn",
+    traLoiCauBot("Anh cần rao bán đúng không ạ?", "cần rao bán", "đúng rồi em") === '🤖 Trả lời câu em vừa hỏi ("Anh cần rao bán đúng không ạ?"): đã trích xuất "đúng rồi em" → làm chuẩn "cần rao bán".');
+  // Lượt tạo tin: diện tích nhân từ ngang × dài — nguyên mẫu là "4x15" khách gõ; giá; cột suy ra (loại, thông số) chỉ làm chuẩn.
+  const tt2 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 6m Phạm Văn Chiêu", ward: "Phường An Hội Tây", district: "Quận Gò Vấp",
+    area_m2: 60, frontage_m: 4, length_m: 15, price_raw: "9 ty 5", price_vnd: 9.5e9 }, { tin: "ban nha hem 6m Phạm Văn Chiêu p14 go vap 4x15 9 ty 5" });
+  ok("TRX-TAO-TIN lượt tạo tin: diện tích '\"4x15\" → làm chuẩn \"60m²\"', giá '\"9 ty 5\" → làm chuẩn \"9 tỷ 5\"', thông số chỉ làm chuẩn",
+    /\n• diện tích: "4x15" → làm chuẩn "60m²"/.test(tt2 ?? "") && /\n• giá: "9 ty 5" → làm chuẩn "9 tỷ 5"/.test(tt2 ?? "") && /\n• thông số: làm chuẩn "4x15m"/.test(tt2 ?? "") &&
+      /\n• địa chỉ: "hem 6m Phạm Văn Chiêu" → làm chuẩn "Hẻm 6m Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp"/.test(tt2 ?? ""), String(tt2));
 }
 
 // ── 24/09/2026: "ở Nguyễn Trãi quận 5" là ĐỊA CHỈ, không phải tiềm năng "để ở" ──
@@ -837,7 +881,7 @@ for (const [cau, laTiemNang] of [
 // 25/09/2026 (bắn thật lx-13): 🤖 "thông số: … lửng … sân thượng" rồi "nhãn: sân thượng · có gác lửng" — không in lặp.
 {
   const b = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "105/12 Trần Bình Trọng", ward: "Phường Chợ Quán", district: "Quận 5", floors_text: "trệt + lửng + 2 lầu + sân thượng", frontage_m: 4, length_m: 15, nhan: ["san_thuong", "gac_lung", "yen_tinh"] });
-  ok("NL-01 bocTachTaoTin: nhãn bỏ 'sân thượng' / 'có gác lửng' (thông số đã có), giữ 'yên tĩnh'", /nhãn: "yên tĩnh"/.test(b) && !/nhãn: "[^"]*(?:sân thượng|lửng)/.test(b), b);
+  ok("NL-01 bocTachTaoTin: nhãn bỏ 'sân thượng' / 'có gác lửng' (thông số đã có), giữ 'yên tĩnh'", /nhãn: làm chuẩn "yên tĩnh"/.test(b) && !/nhãn: [^\n]*(?:sân thượng|lửng)/.test(b), b);
 }
 
 // FR-225 a (25/09/2026, chủ dự án test Zalo): khách "nở hậu nhé" → bot "Anh nói nở hậu 4.5 nhỉ, em ghi rồi" (số lấy từ ví dụ prompt).

@@ -457,6 +457,26 @@ Bản 08/10 dạy câu ĐÚNG "Dạ em ghi rồi ạ. Nhà mình mấy tầng v�
 
 Sau khi gộp: `bun run prompt --day` (bản DB `bot_prompts` đè bản code — `tone_rules`, `seller_script_rules`, `seller_fewshot`, `cau_hoi_mau`).
 
+### Bong bóng 🤖 kiểu AOND "[đã trích xuất]" — 09/10/2026 (SRS-5.1zzzzn)
+
+[nguồn: chủ dự án 09/10/2026 — đổi `bao_lai_da_luu` từ `admin` sang `thay_doi` cho người thử đọc trên Zalo; "ghi như con AOND á. Đã trích xuất “data nguyên mẫu”, làm chuẩn “data làm chuẩn”"]
+
+Demo AOND in "[đã trích xuất]" cho người vận hành (bảng 05/10 ở trên: 🤖 về `admin`). Nay 🤖 lại tới khách thử, nên in theo đúng ý đó: mỗi mục một dòng, hai phần — chữ khách GÕ và chữ hệ thống LƯU / IN.
+
+```
+🤖 Đã trích xuất:
+• phường: "phường phú định" → làm chuẩn "Phường Phú Định (Quận 8 cũ)"
+• giá: "9 ty 5" → làm chuẩn "9 tỷ 5"
+• diện tích: "4x15" → làm chuẩn "ngang 4m × dài 15m (60m²)"
+• pháp lý: "sổ hồng riêng"
+• thông số: làm chuẩn "4x15m · trệt + 2 lầu"
+```
+
+- Hai phần như nhau (bỏ qua hoa thường) thì in một lần; giá trị máy suy ra (thông số, nhãn tìm kiếm, khách chỉ gật) chỉ có phần "làm chuẩn" — nguyên mẫu luôn là đoạn CÓ trong tin khách, không bao giờ là chữ máy.
+- Phần làm chuẩn đi qua bộ in một nguồn (giá `donViGiaDep`, địa chỉ `diaChiHienThi`, phường + quận cũ, kích thước); SĐT / Zalo trong cụm khách gõ được che "[đã che liên hệ]".
+- Không trích được gì: `🤖 Không trích xuất được gì từ tin này.`; ảnh: `🤖 Đã trích xuất từ ảnh: mặt tiền`; trả lời câu bot vừa hỏi: `🤖 Trả lời câu em vừa hỏi ("…"): đã trích xuất "đúng rồi em" → làm chuẩn "cần rao bán, …".`
+- Không đụng: bóc tách của demo (bảng 05/10), vị trí bong bóng (đầu, đứng riêng), công tắc.
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |

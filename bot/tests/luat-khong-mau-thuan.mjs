@@ -12,11 +12,16 @@
 //   (6) Hiển thị địa chỉ: ô nguyên văn (O_NGUYEN_VAN, kiem-bang-chung.ts) là chủ của chữ LƯU; `duongHienThi` là chủ của chữ IN — bản in
 //       không bao giờ mang đuôi phường / quận chữ khách (phần đó chỉ từ cột chuẩn).
 //   (9) Lời ghi nhận ("em ghi …"): chủ là sổ ghi của lượt (`ghiLuot`) → dòng EM VỪA GHI của câu lệnh; ví dụ giọng không dạy ngược lại.
+//  (10) Bong bóng 🤖 "Đã trích xuất "<nguyên mẫu>" → làm chuẩn "<chuẩn>"" (SRS-5.1zzzzn): chủ chữ in là bao_lai.ts (`dongTrichXuat`);
+//       phần làm chuẩn đi qua đúng bộ in một nguồn của ô (donViGiaDep, duongHienThi, phường + quận cũ); chat-reply không tự ghép;
+//       nguyên mẫu (chữ khách gõ) chỉ đứng trước "→ làm chuẩn" — đó là chỗ duy nhất bất biến ĐỊA CHỈ (6) cho phép chữ thô.
 import { readFileSync } from "node:fs";
 import { SELLER_FEWSHOT, BUYER_FEWSHOT, TONE_RULES, cauPhi, phanTramPhi, vaiPhi } from "../supabase/functions/_shared/prompts.ts";
 import { boCauNhanXet, chanPhiChuaXacNhan } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { duongHienThi } from "../supabase/functions/_shared/extraction/hien-thi-dia-chi.ts";
 import { vaiTuCau } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { donViGiaDep } from "../supabase/functions/_shared/extraction/luat-tien.ts";
+import { dongTrichXuat, lamChuanFact, phuongKemQuanCu, vuaLuuBan } from "../supabase/functions/_shared/bao_lai.ts";
 
 let hong = 0;
 const ok = (n, dk, ct = "") => { console.log(`${dk ? "✓" : "✗"} ${n}${dk ? "" : `\n    → ${ct}`}`); if (!dk) hong++; };
@@ -93,6 +98,18 @@ const moDauGhi = cr.split("\n").filter((d) => d.includes('"Dạ em ghi rồi ạ
 ok("(9) câu mẫu 'Dạ em ghi rồi ạ.' (model chết) chỉ khi sổ ghi của lượt có gì (`coGhiLuot`)", moDauGhi.length > 0 && moDauGhi.every((d) => /coGhiLuot/.test(d)), moDauGhi.join("\n"));
 ok("(9) mọi chỗ ghi fact trong chat-reply đi qua hàm bọc ghi sổ (không gọi thẳng ghiFactMotCua ngoài hàm bọc)",
   (cr.match(/ghiFactMotCua\(/g) ?? []).length === 1, String((cr.match(/ghiFactMotCua\(/g) ?? []).length));
+
+// (10) SRS-5.1zzzzn — 🤖 một chủ chữ in.
+const lamChuanSai = [["gia", "9 ty 5", donViGiaDep("9 ty 5")], ["gia", "7ty2", donViGiaDep("7ty2")], ["vi_tri", "duong pham van chieu p14 go vap", duongHienThi("duong pham van chieu p14 go vap")],
+  ["phuong", "Phường Phú Định", phuongKemQuanCu("Phường Phú Định")]].filter(([q, v, mong]) => lamChuanFact(q, v) !== mong);
+ok("(10) phần LÀM CHUẨN của 🤖 = đúng bộ in một nguồn của ô (donViGiaDep / duongHienThi / phuongKemQuanCu)", lamChuanSai.length === 0, JSON.stringify(lamChuanSai));
+const tuGhep = cr.split("\n").filter((d) => !/^\s*\/\//.test(d) && /làm chuẩn|Đã trích xuất|Bóc tách (?:được|ảnh)|\(\$\{[^}]*quan_cu\} cũ\)/.test(d));
+ok("(10) chat-reply không tự ghép chữ 🤖 ('làm chuẩn', 'Đã trích xuất', '(… cũ)') — mọi dòng do bao_lai.ts dựng", tuGhep.length === 0, tuGhep.join("\n      "));
+const dTho = dongTrichXuat("địa chỉ", "duong pham van chieu p14 go vap", "Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp");
+ok("(10) nguyên mẫu (chữ thô) chỉ đứng ngay trước '→ làm chuẩn' — đúng chỗ bất biến ĐỊA CHỈ của e2e cho qua",
+  /^• địa chỉ: "duong pham van chieu p14 go vap" → làm chuẩn "Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp"$/.test(dTho), dTho);
+const vSdt = vuaLuuBan([{ question: "bo_sung", answer: "gọi 0903123456" }], {}, { tin: "gọi 0903123456 nha" }) ?? "";
+ok("(10) nguyên mẫu đi qua luật che liên hệ một nguồn (thayLienHe) — không SĐT nào lọt ra 🤖", !/\d{6}/.test(vSdt), vSdt);
 
 console.log(hong ? `\nLUẬT KHÔNG MÂU THUẪN: ${hong} CA HỎNG` : "\nLUẬT KHÔNG MÂU THUẪN: ĐẠT");
 process.exit(hong ? 1 : 0);

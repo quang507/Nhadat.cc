@@ -869,7 +869,9 @@ export function soSanhVoiDb(dat: DeXuat[], dong: DongDb | null, facts: Record<st
 // `ai_them` của `soSanhVoiDb`), giá trị đọc ra được thành số/khoảng hợp lệ, và khoá có
 // chỗ ghi tường minh trong `listing_facts` (trigger DB đưa vào cột). Không đè: `lech`
 // (luật và AI khác nhau) không ghi.
-export type DeGhi = { question: string; answer: string; khoa: string };
+/** `goc` (SRS-5.1zzzzn): cụm khách gõ mà AI chỉ ra cho fact này (`cum_goc` / `trich_dan`) — chỉ để IN phần "nguyên mẫu" ở bong bóng
+ *  🤖 (bao_lai.ts tìm lại đúng đoạn đó trong tin khách); không bao giờ là chữ ghi DB. */
+export type DeGhi = { question: string; answer: string; khoa: string; goc?: string };
 
 /** khoá AI → khoá fact (`required_facts.fact_key`). Không có trong bảng = không ghi. */
 export const KHOA_GHI: Record<string, string> = {
@@ -1019,7 +1021,7 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
     }
     if (!answer) continue;
     daGhi.add(question);
-    ghi.push({ question, answer, khoa: d.khoa });
+    ghi.push({ question, answer, khoa: d.khoa, goc: d.cum_goc ?? d.trich_dan });
   }
   return { ghi, bo };
 }
@@ -1638,11 +1640,18 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   const { ghi, bo: boTho } = chonDeGhi(mot, { trung: [], lech: [], ai_them: mot.map((d) => ({ khoa: d.khoa, ai: d.gia_tri })) }, dongSo, {});
   const daCo = new Set(ghi.map((g) => g.question));
   const bo: Bo[] = [];
+  // SRS-5.1zzzzn: `goc` = cụm khách gõ của đề xuất làm ra fact (để 🤖 in "nguyên mẫu"); ghép nhiều đề xuất thì lấy cụm đầu.
+  // Ngang × dài ghép từ HAI đề xuất: cụm của "ngang" chỉ dùng khi nó mang cả số dài ("4x15"), không thì để bao_lai tìm theo giá trị.
+  const cumCua = (k: string) => {
+    const d = mot.find((x) => x.khoa === k);
+    const c = d ? d.cum_goc ?? d.trich_dan : undefined;
+    return k === "ngang" && c && kt.dai != null && !chuanSo(c).includes(String(kt.dai)) ? undefined : c;
+  };
   const them = (question: string, answer: string | null, khoa: string) => {
     if (!answer || daCo.has(question)) return;
     answer = gonGiaTriFact(question, answer); // 30/09: "sổ hồng rồi em", "phí quản lý 15k/m2" — cùng cách gọn với luật
     daCo.add(question);
-    ghi.push({ question, answer, khoa });
+    ghi.push({ question, answer, khoa, goc: cumCua(khoa) });
   };
   const kt = kichThuoc(mot);
   // Ngang × dài: có cả hai và chưa có diện tích → "AxB" (trigger nhân ra m² + ghi hai chiều);
