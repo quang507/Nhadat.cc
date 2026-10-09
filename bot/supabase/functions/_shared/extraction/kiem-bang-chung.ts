@@ -1272,11 +1272,34 @@ export function docYDinh(yd: { loai?: string | null; trich_dan?: string | null }
   const td = (yd?.trich_dan ?? "").trim();
   return trichCoTrongTin(td, tin) ? { loai: l, trich: td } : null;
 }
-/** Vai người rao TỰ NÓI (chính chủ / môi giới) — cụm trích phải có trong tin. */
+/**
+ * SRS-5.1zzzzk (bắn production 09/10/2026: "bán lô đất 10x50 củ chi … giấy tay" rồi "phí sao em" → "1% giá chốt"): cụm chữ có GỌI
+ * TÊN vai người nói không — "chính chủ", "tôi là chủ (nhà)", "nhà / đất của tôi", "không phải môi giới" → chinh_chu; "môi giới",
+ * "sale", "bên sàn", "bán giúp / hộ", "hàng ký gửi", "chủ nhà gửi / nhờ" → moi_gioi; còn lại null. Đây là KIỂM BẰNG CHỨNG cho vai AI
+ * đọc (`docVai`) và lưới đỡ khi AI không chạy — không phải luật đoán vai: "bán lô đất", "có căn nhà cần bán" KHÔNG gọi tên vai
+ * nào (FR-159 vẫn gán nhãn ĐOÁN cho kế toán; vai XÁC NHẬN — thứ cho phép nói con số phí — chỉ từ cụm gọi tên vai).
+ * "sổ hồng chính chủ", "giấy tờ chính chủ" nói về GIẤY TỜ, không phải người nói.
+ */
+export function vaiTuCau(cau: string | null | undefined): "chinh_chu" | "moi_gioi" | null {
+  const kd = ` ${boDauKiem(cau ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()} `;
+  if (/ (?:khong|ko|k|chang|hong) (?:phai|qua|lam|co) (?:la )?(?:moi gioi|sale|trung gian|co) /.test(kd)) return "chinh_chu";
+  if (/ (?:moi gioi|sale|sales|san (?:giao dich|bds|bat dong san)|nhan vien kinh doanh|chuyen vien (?:bds|bat dong san|kinh doanh)|ban (?:giup|ho|gium|dum)|chu nha (?:gui|nho)|khach gui ban|hang ky gui|nhan ky gui|(?:ben|lam|o) san|lam (?:nghe )?(?:moi gioi|bds|bat dong san|dia oc)|ctv (?:bds|bat dong san)) /.test(kd)) return "moi_gioi";
+  // "chính chủ" nói về giấy tờ ("sổ hồng chính chủ", "giấy tờ chính chủ", "đứng tên chính chủ") — bỏ trước khi xét.
+  const conLai = kd.replace(/ (?:so(?: hong| do)?|giay(?: to)?|phap ly|dung ten|ten|hop dong|cong chung) (?:\S+ )?chinh chu /g, " ");
+  if (/ chinh chu /.test(conLai)) return "chinh_chu";
+  if (/ (?:toi|tui|anh|chi|em|minh|co|chu|bac|con|chau|ong|ba) la (?:chu|nguoi chu|chinh chu) /.test(conLai) || / (?:toi|tui|minh) chu nha /.test(conLai)) return "chinh_chu";
+  if (/ (?:nha|dat|can|lo|mieng|can nha|lo dat) (?:nay |do )?(?:la )?cua (?:toi|tui|minh|anh|chi|em|co|chu|bac|nha toi|gia dinh) /.test(conLai)) return "chinh_chu";
+  return null;
+}
+
+/**
+ * Vai người rao TỰ NÓI (chính chủ / môi giới) — cụm trích phải có trong tin VÀ phải GỌI TÊN đúng vai đó (`vaiTuCau`). SRS-5.1zzzzk:
+ * AI từng trả chinh_chu «bán lô đất» — cụm có thật nhưng không nói người nhắn là ai → nhãn thành "đã xác nhận", bot báo 1%.
+ */
 export function docVai(v: { la?: string | null; trich_dan?: string | null } | null | undefined, tin: string): { la: "chinh_chu" | "moi_gioi"; trich: string } | null {
   if (v?.la !== "chinh_chu" && v?.la !== "moi_gioi") return null;
   const td = (v.trich_dan ?? "").trim();
-  return trichCoTrongTin(td, tin) ? { la: v.la, trich: td } : null;
+  return trichCoTrongTin(td, tin) && vaiTuCau(td) === v.la ? { la: v.la, trich: td } : null;
 }
 
 /**

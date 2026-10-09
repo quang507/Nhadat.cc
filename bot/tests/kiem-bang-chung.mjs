@@ -577,6 +577,19 @@ ok("YD-01 đã bán, trích có trong tin → nhận", docYDinh({ loai: "ban_roi
 ok("YD-02 trích KHÔNG có trong tin → bỏ", docYDinh({ loai: "ban_roi", trich_dan: "bán rồi" }, "hàng xóm vừa dọn đi") === null);
 ok("YD-03 bình thường / loại lạ → null", docYDinh({ loai: "binh_thuong", trich_dan: null }, "x") === null && docYDinh({ loai: "xoa", trich_dan: "x" }, "x") === null);
 ok("VAI-01 tự xưng môi giới, trích có trong tin → nhận", docVai({ la: "moi_gioi", trich_dan: "em làm bên sàn" }, "à em làm bên sàn nha anh")?.la === "moi_gioi");
+// SRS-5.1zzzzk (bắn production 09/10 + sổ AI thật …kb2chau): trích có thật nhưng KHÔNG gọi tên vai («bán lô đất», «chú có», «chú có căn
+// nhà», «sổ hồng chính chủ») → không nhận; trích gọi tên vai → nhận.
+for (const [la, td, tin, mong] of [
+  ["chinh_chu", "bán lô đất", "bán lô đất 10x50 củ chi xã tân an hội, giấy tay", null],
+  ["chinh_chu", "chú có", "chú có căn nhà muốn bán", null],
+  ["chinh_chu", "chú có căn nhà", "chú có căn nhà muốn bán", null],
+  ["chinh_chu", "sổ hồng chính chủ", "bán nhà MTKD Võ Văn Tần, sổ hồng chính chủ", null],
+  ["chinh_chu", "chú", "thôi để mai chú nói tiếp", null],
+  ["chinh_chu", "anh là chủ đất", "anh là chủ đất, cần bán lô đất củ chi", "chinh_chu"],
+  ["chinh_chu", "nhà của tôi", "nhà của tôi ở hẻm 5", "chinh_chu"],
+  ["chinh_chu", "không phải môi giới", "anh không phải môi giới đâu em", "chinh_chu"],
+  ["moi_gioi", "em làm bên sàn", "à em làm bên sàn nha anh", "moi_gioi"],
+]) ok(`VAI-ZZZZK «${td}» (${la}) → ${mong ?? "không nhận"}`, (docVai({ la, trich_dan: td }, tin)?.la ?? null) === mong, JSON.stringify(docVai({ la, trich_dan: td }, tin)));
 ok("VAI-02 khong_noi → null; trích bịa → null", docVai({ la: "khong_noi", trich_dan: null }, "x") === null && docVai({ la: "chinh_chu", trich_dan: "nhà của tôi" }, "mấy bên môi giới gọi suốt") === null);
 
 ok("CK-01 câu kế AI chọn có trong danh sách → nhận; ngoài danh sách / null → null",

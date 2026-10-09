@@ -1305,10 +1305,22 @@ const DA_DANG_RE = /\b(?:da|vua)\s+tao\s+(?:tin|bai)\b|\btao\s+tin\s+(?:roi|xong
 // ngay cũng sai như nói "đã đăng". Câu có điều kiện ("nhắn em mấy thông tin đó LÀ em đăng liền") vẫn giữ.
 // 03/10/2026 (bắn thử thu-dc-09, SRS-5.1zj): "Chào mình! Tin đã lên rồi nha." khi tin còn chờ thông tin — chủ ngữ "tin" ĐỨNG
 // TRƯỚC ("tin đã lên", "tin vừa đăng") lọt luật cũ (chỉ bắt "đã lên web / kệ / tin").
+/**
+ * Một vế có KHẲNG ĐỊNH trạng thái tin không: khớp mẫu, không phải câu hỏi, không phủ định, và không phải lời hứa CÓ ĐIỀU KIỆN ("đủ thông
+ * tin LÀ EM SẼ đăng lên web ngay" — SRS-5.1zzzzk: trước đây vế này khớp "lên web ngay" và chỉ thoát nhờ `boHuaDaDang` trả lại lời gốc).
+ */
+const laMenhDeDaDang = (md: string): boolean => {
+  const kd = boDau(md);
+  return !/\?/.test(md) && DA_DANG_RE.test(kd) && !/\b(?:chua|khong)\b/.test(kd) &&
+    !/\b(?:la|thi|xong|khi|neu|de|sau do)\s+(?:em|minh|ben em)\s+(?:se\s+)?(?:dang|up|dua|len)\b/.test(kd) &&
+    // "giá mình đang rao là 15 tỷ" — "giá rao" là GIÁ CHÀO, không phải trạng thái tin.
+    !/\bgia\b[^.!?]{0,20}\bdang rao\b/.test(kd);
+};
+/** Các vế của một bong bóng — ngắt câu như `tachCau`, thêm mặt cười / emoji (Zalo) và dấu phẩy. Dùng chung cho dò và bỏ. */
+const veDaDang = (dong: string): string[] => tachCau(dong).flatMap((c) => c.split(/(?<=:\)|:D|=\)|\p{Extended_Pictographic})\s+/u)).flatMap((c) => c.split(/,\s+/));
 /** Lời có mệnh đề KHẲNG ĐỊNH trạng thái tin (đã đăng / đang rao / lên kệ…) — để nơi gọi quyết có cần đối chiếu DB không. */
 export function coMenhDeDaDang(replies: string[]): boolean {
-  return replies.some((r) => !/^\s*(?:🤖|💾|📝|📋)/u.test(r) &&
-    r.split(/\n|(?<=[.!?…])\s+|,\s+/).some((md) => !/\?/.test(md) && DA_DANG_RE.test(boDau(md)) && !/\b(?:chua|khong)\b/.test(boDau(md))));
+  return replies.some((r) => !/^\s*(?:🤖|💾|📝|📋)/u.test(r) && r.split("\n").some((d) => veDaDang(d).some(laMenhDeDaDang)));
 }
 export function boHuaDaDang(replies: string[]): string[] {
   const ra: string[] = [];
@@ -1317,7 +1329,7 @@ export function boHuaDaDang(replies: string[]): string[] {
     // ":)" / emoji cũng là chỗ ngắt câu trong tin Zalo ("… rồi :) Em tra thấy …").
     const dong = r.split("\n").map((d) => tachCau(d).flatMap((c) => c.split(/(?<=:\)|:D|=\)|\p{Extended_Pictographic})\s+/u)).map((c) => {
       // 06/10/2026 (SRS-5.1zzo): vế phủ định ("không thấy tin nào đang rao") là lời thật, giữ như vế "chưa".
-      const laSai = (md: string) => !/\?/.test(md) && DA_DANG_RE.test(boDau(md)) && !/\b(?:chua|khong)\b/.test(boDau(md));
+      const laSai = laMenhDeDaDang;
       const cacMd = c.split(/,\s+/);
       const giu = cacMd.filter((md) => !laSai(md));
       if (giu.length === cacMd.length) return c;
@@ -1327,7 +1339,9 @@ export function boHuaDaDang(replies: string[]): string[] {
     }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
     if (dong) ra.push(dong);
   }
-  return ra.length ? ra : replies;
+  // SRS-5.1zzzzk (bắn production 09/10: r1 "Em vừa đăng tin rồi ạ." với tin còn cho_thong_tin): bản cũ trả LẠI lời gốc khi bỏ hết
+  // chữ (để không gửi bong bóng rỗng) — tức là trả lại đúng câu sai. Bỏ hết thì trả mảng rỗng; nơi gọi tự có câu thay.
+  return ra;
 }
 
 // 27/09/2026 (chủ dự án test Zalo): "Chào em" → bot chào + hỏi vai → "Anh bán" → model "Dạ em chào anh! Anh muốn rao bán
@@ -1576,7 +1590,7 @@ export function boCauHoiLap(replies: string[], botTruoc: string | null | undefin
 const gonKhen = (s: string): string => boDau(s ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 /** Câu nhận xét (nguyên văn trong lời bot) KHÔNG có căn cứ thật → cần bỏ. */
 export function nhanXetKhongCanCu(
-  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null }> | null | undefined,
+  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null }> | null | undefined,
   bangChung: string,
 ): string[] {
   const bc = ` ${gonKhen(bangChung)} `;
@@ -1584,6 +1598,8 @@ export function nhanXetKhongCanCu(
   for (const x of ds ?? []) {
     const cau = (x?.cau ?? "").trim();
     if (!cau || /\?/.test(cau)) continue;
+    // SRS-5.1zzzzk: câu trạng thái tin có chủ riêng (lưới trạng thái ở đường ra, đối chiếu DB) — đúng thì giữ, sai thì lưới đó bỏ.
+    if (x?.noi_trang_thai_tin === true) continue;
     // SRS-5.1zzy (chat thử 07/10: "Khu Hà Huy Giáp đất vàng quận 12 anh"): AI trích "khu hà huy giáp" làm căn cứ — tên khu có thật
     // nhưng lời ĐÁNH GIÁ khu thì không. Bot không có số liệu thị trường: câu AI đánh dấu đánh giá thị trường luôn bỏ, căn cứ gì cũng vậy.
     if (x?.danh_gia_thi_truong === true) { bo.push(cau); continue; }

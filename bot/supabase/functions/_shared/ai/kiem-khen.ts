@@ -20,6 +20,8 @@ const NhanXet = z.object({
   can_cu: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong LỜI CHỦ NHÀ hoặc THÔNG TIN ĐÃ GHI nói ĐÚNG điều đó. Không có thì null."),
   // SRS-5.1zzzzb: chỉ lượt soát lời gửi NGƯỜI MUA dùng ô này (nhánh bán luôn false).
   noi_co_hang: z.boolean().nullish().describe("true khi câu nói bên em CÓ / còn / đang có căn, đã tìm thấy căn, hay đang lọc / tìm căn cho khách (\"dạ có anh\", \"em đang lọc căn 2 lầu cho anh\", \"em tìm thấy mấy căn\"). Không thì false."),
+  // SRS-5.1zzzzk: câu nói TRẠNG THÁI TIN — chủ là lưới trạng thái ở đường ra (đối chiếu DB), không phải lưới nhận xét.
+  noi_trang_thai_tin: z.boolean().nullish().describe("true khi câu KHẲNG ĐỊNH tin / bài của chủ nhà đã đăng, đang rao, đã lên web / kệ / sóng, đã duyệt, đang có khách xem tin (\"em vừa đăng tin rồi ạ\", \"tin mình lên sóng rồi\", \"bài đang chạy rồi anh\"). Lời hứa có điều kiện (\"có giá là em đăng liền\") và câu hỏi → false."),
   danh_gia_thi_truong: z.boolean().describe("true khi câu ĐÁNH GIÁ giá trị / thị trường / khả năng bán của KHU VỰC hay MỨC GIÁ, không gắn với một đặc điểm của căn (\"đất vàng\", \"khu đó bán được lắm\", \"giá khu này đang lên\")."),
 });
 const KetSoat = z.object({ nhan_xet: z.array(NhanXet) });
@@ -30,6 +32,8 @@ const LUAT = `SOÁT LỜI BOT GỬI CHỦ NHÀ — bot chỉ được nói về 
 Đọc lời bot, liệt kê MỌI câu / vế KHẲNG ĐỊNH đặc điểm căn nhà hoặc khu vực, hay khen dựa trên một đặc điểm (hẻm sâu, ô tô vào tận
 nhà, gần chợ, khu yên tĩnh, xuyên thoáng, nở hậu, kết cấu chắc, "… thì dễ bán lắm", "khách chuộng …").
 - KHÔNG liệt kê: câu hỏi, lời chào, cảm ơn, ghi nhận chung ("dạ em ghi rồi ạ"), lời hứa của bot.
+- LIỆT KÊ cả câu nói TRẠNG THÁI TIN ("em vừa đăng tin rồi ạ", "tin mình lên sóng rồi", "bài đang chạy") với noi_trang_thai_tin = true,
+  can_cu = null — code đối chiếu trạng thái thật của tin.
 - can_cu: cụm chép NGUYÊN VĂN từ LỜI CHỦ NHÀ hoặc THÔNG TIN ĐÃ GHI nói ĐÚNG điều được khẳng định — gần giống thì không tính
   ("hxh" là hẻm xe hơi, KHÔNG phải "hẻm sâu"; "4x15" không phải "nở hậu"). Không có thì null.
 - danh_gia_thi_truong = true khi câu đánh giá KHU VỰC / THỊ TRƯỜNG / MỨC GIÁ ("khu Hà Huy Giáp đất vàng", "khu đó bán được lắm", "giá

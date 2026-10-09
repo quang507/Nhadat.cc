@@ -68,7 +68,7 @@ const YDinh = z.object({
 });
 export const VAI_NGUOI_RAO = ["khong_noi", "chinh_chu", "moi_gioi"] as const;
 const Vai = z.object({
-  la: z.enum(VAI_NGUOI_RAO).describe("Người nhắn TỰ NÓI mình là ai: chinh_chu = chủ nhà / nhà của mình / không phải môi giới; moi_gioi = tự nhận là môi giới, sale, bán giúp chủ, nhận ký gửi ('anh là môi giới nha', 'em bên sàn X', 'mình làm sale', 'hàng ký gửi của khách') — câu tự giới thiệu kết bằng 'nha/nhé/ạ' vẫn là tự nói vai. Nhắc tới môi giới KHÁC ('mấy bên môi giới hối chị'), hỏi về môi giới → khong_noi."),
+  la: z.enum(VAI_NGUOI_RAO).describe("Người nhắn TỰ NÓI mình là ai, bằng chữ GỌI TÊN vai: chinh_chu = 'chính chủ' / 'anh là chủ' / 'nhà của chị' / 'không phải môi giới' (có nhà, muốn bán, 'chú có căn nhà', 'sổ hồng chính chủ' KHÔNG phải tự nói vai → khong_noi); moi_gioi = tự nhận là môi giới, sale, bán giúp chủ, nhận ký gửi ('anh là môi giới nha', 'em bên sàn X', 'mình làm sale', 'hàng ký gửi của khách') — câu tự giới thiệu kết bằng 'nha/nhé/ạ' vẫn là tự nói vai. Nhắc tới môi giới KHÁC ('mấy bên môi giới hối chị'), hỏi về môi giới → khong_noi."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN người nhắn tự nói vai mình. khong_noi thì null."),
 });
 // 02/10/2026 (test tay chủ dự án, SRS-5.1ze): "Ừ anh đang muốn bán căn nhà…" → bot gọi "anh chị" suốt hội thoại: luật tự xưng
@@ -233,8 +233,10 @@ nói (vừa nói sổ riêng → hoàn công; vừa nói đang cho thuê → h�
 nhà đã trả lời trong tin / ngữ cảnh, không chọn câu vừa đưa vào khong_can_hoi. Câu đánh dấu "(nhánh)" chỉ chọn khi đúng hoàn
 cảnh căn này. Khoá phải đúng y chữ trong danh sách; không chắc → null.
 
-VAI ("vai") — chỉ khi người nhắn TỰ NÓI mình là chủ nhà hay môi giới. Nhắc tới môi giới khác, kể chuyện môi giới, hỏi phí môi
-giới → khong_noi.
+VAI ("vai") — chỉ khi người nhắn TỰ NÓI mình là chủ nhà hay môi giới, bằng chữ GỌI TÊN vai ("chính chủ", "anh là chủ", "nhà của
+chị", "không phải môi giới"; "em là sale", "bên sàn", "bán giúp chủ"), trich_dan chép đúng cụm đó. Có nhà / muốn bán / "chú có căn
+nhà" / "bán lô đất" KHÔNG nói vai (môi giới cũng nói vậy); "sổ hồng chính chủ" nói về GIẤY TỜ. Nhắc tới môi giới khác, kể chuyện môi
+giới, hỏi phí môi giới → khong_noi.
 
 KHÁCH HỎI LẠI ("hoi_lai") — đọc theo NGHĨA, như môi giới nghe khách: tin có ý HỎI bên mình (có hay không có dấu "?", gõ tắt,
 không dấu) → co_hoi = true, cau_hoi = câu hỏi chép nguyên văn, chu_de theo nội dung câu hỏi. "giá khu này giờ sao" là hỏi

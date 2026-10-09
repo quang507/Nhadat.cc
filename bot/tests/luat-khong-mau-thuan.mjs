@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 import { SELLER_FEWSHOT, BUYER_FEWSHOT, TONE_RULES, cauPhi, phanTramPhi, vaiPhi } from "../supabase/functions/_shared/prompts.ts";
 import { boCauNhanXet, chanPhiChuaXacNhan } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { duongHienThi } from "../supabase/functions/_shared/extraction/hien-thi-dia-chi.ts";
+import { vaiTuCau } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 
 let hong = 0;
 const ok = (n, dk, ct = "") => { console.log(`${dk ? "✓" : "✗"} ${n}${dk ? "" : `\n    → ${ct}`}`); if (!dk) hong++; };
@@ -56,6 +57,20 @@ ok("(4) TONE_RULES vẫn cấm gạch dài và 'anh/chị' (lưới chỉ giữ 
 const dc = ["Võ Văn Tần phường 6 quận 3 cũ", "duong pham van chieu p14 go vap", "hxh Nguyễn Trãi p3 q5", "12 Lê Lợi, P.Bến Thành, Q1", "o q10"]
   .map((x) => [x, duongHienThi(x)]).filter(([, y]) => /\b(?:phường|phuong|quận|quan|p\.?\s*\d|q\.?\s*\d|go vap)\b/iu.test(y));
 ok("(6) duongHienThi không in lại phường / quận chữ khách (chủ của phần đó là cột chuẩn)", dc.length === 0, JSON.stringify(dc));
+
+// (7) SRS-5.1zzzzk — vai TỰ NÓI: câu lệnh AI (boc-rao.ts, mục VAI) và bộ kiểm trích dẫn `vaiTuCau` nói cùng một điều. Cụm câu lệnh nêu
+//     là "gọi tên vai" thì bộ kiểm nhận; cụm câu lệnh nêu là "KHÔNG nói vai" thì bộ kiểm không nhận (production 09/10: «bán lô đất»).
+const bocRao = readFileSync(new URL("../supabase/functions/_shared/ai/boc-rao.ts", import.meta.url), "utf8");
+const doanVai = bocRao.slice(bocRao.indexOf('VAI ("vai")'), bocRao.indexOf("KHÁCH HỎI LẠI"));
+const goiTen = [...doanVai.split("Có nhà")[0].matchAll(/"([^"]+)"/g)].map((m) => m[1]).filter((x) => x !== "vai");
+const khongGoi = [...(doanVai.split("Có nhà")[1] ?? "").split("KHÔNG nói vai")[0].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+ok("(7) mục VAI của câu lệnh AI có cả cụm gọi tên vai và cụm KHÔNG nói vai", goiTen.length >= 4 && khongGoi.length >= 2, JSON.stringify({ goiTen, khongGoi }));
+ok("(7) mọi cụm câu lệnh nêu là GỌI TÊN vai → vaiTuCau nhận", goiTen.every((x) => vaiTuCau(x) !== null), JSON.stringify(goiTen.map((x) => [x, vaiTuCau(x)])));
+ok("(7) mọi cụm câu lệnh nêu là KHÔNG nói vai (và 'sổ hồng chính chủ') → vaiTuCau không nhận", [...khongGoi, "sổ hồng chính chủ"].every((x) => vaiTuCau(x) === null),
+  JSON.stringify(khongGoi.map((x) => [x, vaiTuCau(x)])));
+// (8) SRS-5.1zzzzk — trạng thái tin: chủ là lưới ở đường ra (đối chiếu DB). Câu lệnh r1 không được nói "đã tạo tin" như thể đã đăng.
+ok("(8) câu lệnh r1 (câu rao đầu) nói rõ tin là NHÁP, CHƯA đăng", /Em đã ghi tin NHÁP — CHƯA đăng/.test(cr) && !/Em đã tạo tin\. \$\{hoiRaoPrompt\}/.test(cr));
+ok("(8) không còn lưới trạng thái riêng ở r1 / r2 (một chủ: traLoiSeller)", (cr.match(/= boHuaDaDang\(/g) ?? []).length === 1, String((cr.match(/= boHuaDaDang\(/g) ?? []).length));
 
 console.log(hong ? `\nLUẬT KHÔNG MÂU THUẪN: ${hong} CA HỎNG` : "\nLUẬT KHÔNG MÂU THUẪN: ĐẠT");
 process.exit(hong ? 1 : 0);
