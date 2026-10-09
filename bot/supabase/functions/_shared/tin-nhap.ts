@@ -23,6 +23,7 @@ import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
 import { tenNhan, tenNhanKhongTrung } from "./extraction/nhan.ts";
 import { donViGiaDep, vndThanhChu } from "./extraction/luat-tien.ts";
 import { laBoSungTrung } from "./extraction/khop-cau-tra-loi.ts";
+import { diaChiHienThi, duongGiuaCau, duongHienThi, ghepDiaChi } from "./extraction/hien-thi-dia-chi.ts";
 
 /** FR-241 j: hiện trạng sử dụng gõ không dấu ("dang o", "de trong") → có dấu; chữ có dấu / cụm lạ giữ nguyên. */
 const HIEN_TRANG_KD: Array<[RegExp, string]> = [
@@ -39,11 +40,12 @@ export function chuanHienTrang(v: string | null | undefined): string | null {
 }
 
 export const COT_TIN_NHAP =
-  `code, location_raw, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, nhan, rent_income_vnd, ${SPEC_COLS}`;
+  `code, location_raw, street, ward, district, deal, area_m2, price_raw, price_vnd, bedrooms, property_type, gap, negotiable, furnishing, floor, rear_width_m, nhan, rent_income_vnd, ${SPEC_COLS}`;
 
 export type TinNhapRow = SpecRow & {
   code?: string | null;
   location_raw?: string | null;
+  street?: string | null; // SRS-5.1zzzzj: tên đường từ điển, in thay chữ khách
   ward?: string | null;
   district?: string | null;
   deal?: string | null;
@@ -110,25 +112,12 @@ const boDau = (s: string): string =>
 
 const so = (x: number | string): string => String(Number(x));
 
-/** Bỏ mảnh trùng ("…, quận 5, Phường 2, Quận 5") và dấu phẩy kép. */
+/**
+ * Địa chỉ in cho khách từ các mảnh (mảnh đầu = `location_raw` nguyên văn). SRS-5.1zzzzj: không còn luật riêng — mảnh đầu qua
+ * `duongHienThi` (cắt đuôi phường / quận khách gõ kèm, chuẩn từ loại), các mảnh sau là cột chuẩn; ghép bỏ trùng (`ghepDiaChi`).
+ */
 export function diaChiGon(...manh: Array<string | null | undefined>): string {
-  // 30/09/2026 (bắn thật lx-ban-f): hỏi địa chỉ, khách "o q10" → location_raw "o q10", bản nháp "📍 O q10, Quận 10". Mảnh
-  // nào chuẩn hoá xong (bỏ "ở/tại", q→quận, p→phường) trùng một mảnh ĐỨNG SAU (ô phường / quận viết chuẩn) thì bỏ mảnh đó.
-  const chuan = (x: string) => boDau(x).replace(/^(?:o|tai|thuoc)\s+(?=(?:q|quan|p|phuong|huyen|xa|tp)\b|[qp]\.?\s*\d)/, "")
-    .replace(/\bq\.?\s*(\d{1,2})\b/g, "quan $1").replace(/\bp\.?\s*(\d{1,2})\b/g, "phuong $1").replace(/\s+/g, " ").trim();
-  const tat = manh.map((m) => (m ?? "").split(",").map((p) => p.trim()).filter(Boolean));
-  const ra: string[] = [];
-  tat.forEach((ds, i) => {
-    const sau = new Set(tat.slice(i + 1).flat().map(chuan));
-    for (const s of ds) {
-      if (sau.has(chuan(s))) continue;
-      // "p5 q10": mảnh CHỈ gồm các đơn vị hành chính, đơn vị nào cũng đã có ở ô sau → bỏ.
-      const dv = chuan(s).match(/(?:quan|phuong) \d{1,2}/g);
-      if (dv && chuan(s).replace(/(?:quan|phuong) \d{1,2}/g, "").trim() === "" && dv.every((d) => sau.has(d))) continue;
-      if (!ra.some((x) => boDau(x) === boDau(s))) ra.push(s);
-    }
-  });
-  return ra.join(", ");
+  return ghepDiaChi(duongHienThi(manh[0]), ...manh.slice(1));
 }
 
 /** "Phường 3" → "P.3"; "Quận 5" → "Q.5"; tên chữ giữ nguyên (mogi viết vậy). */
@@ -161,7 +150,8 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): st
   if (duongVao) vitri.push(duongVao + (l.alley_width_m ? ` ${so(l.alley_width_m)}m` : ""));
   // Đường/hẻm: lời chủ nhà nói, bỏ phần phường/quận vì đã có ở vế sau, và bỏ
   // chữ "hẻm xe hơi 5m" nếu vế đường vào ngay trên đã nói rồi.
-  const duong = (l.location_raw ?? "").split(",")[0].trim();
+  // Giữa câu tiêu đề: từ loại đầu chữ thường ("Bán nhà phố hẻm 45 …"), tên riêng giữ hoa.
+  const duong = duongGiuaCau(l.location_raw, l.street).split(",")[0].trim();
   if (duong) {
     // 01/10/2026 (bắn thật lx-tam-42): "12 hẻm 4m Trần Bình Trọng" — chữ "hẻm 4m" đứng SAU số nhà nên tiêu đề lặp "hẻm xe hơi 4m
     // 12 hẻm 4m …". Bề rộng hẻm (có "m") ở giữa câu cũng bỏ; "hẻm 45" (số hẻm, không "m") giữ.
@@ -227,7 +217,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
   dong.push(tieuDeTin(l, fact));
   // Chủ nhà gõ "hẻm 5m Nguyễn Trãi" thì địa chỉ mở đầu bằng chữ thường — một
   // tin rao thật không bắt đầu bằng chữ thường.
-  const dc = diaChiGon(l.location_raw, l.ward, l.district);
+  const dc = diaChiHienThi(l);
   dong.push(`📍 ${dc.charAt(0).toLocaleUpperCase("vi") + dc.slice(1)}${fact("khu_compound") ? ` · ${fact("khu_compound")}` : ""}`);
   // GIÁ đứng ngay dưới địa chỉ như mọi tin rao thật (bản cũ để tận cuối).
   const gia = giaHienThi(l);

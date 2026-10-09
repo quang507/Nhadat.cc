@@ -82,10 +82,14 @@ const TEN_THUOC: Map<string, string> = (() => {
  * Tên AI trả là tên CŨ ("Hiệp Bình Chánh", "Thị trấn Nhà Bè") — AI được dặn đổi sang tên mới nhưng có lúc giữ tên khách
  * nói. Tên cũ chỉ về MỘT phường mới (hoặc chỉ một phần "toàn bộ") → phường mới đó; phường cũ bị chia → null.
  */
-export function phuongTuTenCu(ten: string | null | undefined): Phuong | null {
+export function phuongTuTenCu(ten: string | null | undefined, quanDs: ReadonlyArray<string | null | undefined> = [], chiTrongQuan = false): Phuong | null {
   const k = tenTran(ten);
   if (!k || /^\d+$/.test(k)) return null;
-  const dong = PHUONG_CU.filter(([cu]) => tenTran(cu) === k);
+  let dong = PHUONG_CU.filter(([cu]) => tenTran(cu) === k);
+  // SRS-5.1zzzzj: tên cũ trùng ở hai quận cũ ("Phường Tân Phú" Quận 7 / Quận 9) — biết quận thì chỉ xét dòng của quận đó
+  // (`chiTrongQuan`: không có dòng nào của quận đó thì thôi, không lấy dòng quận khác).
+  const qk = new Set(quanDs.map((q) => khoaQuan(q)).filter(Boolean));
+  if (qk.size) { const theoQuan = dong.filter(([, q]) => qk.has(khoaQuan(q))); if (theoQuan.length || chiTrongQuan) dong = theoQuan; }
   let moi = [...new Set(dong.map(([, , m]) => m))];
   if (moi.length > 1) moi = [...new Set(dong.filter(([, , , tb]) => tb === 1).map(([, , m]) => m))];
   return moi.length === 1 ? MOI.find((w) => w.ten === moi[0]) ?? null : null;
@@ -143,6 +147,54 @@ export function phuongSoCuTrongCau(cau: string | null | undefined, quanDs: Reado
 export function quanTrongCau(cau: string | null | undefined): string[] {
   return cacQuanTrong(cau ?? "", (x) => boDau(x).toLowerCase());
 }
+
+// ── SRS-5.1zzzzj (bắn production 09/10/2026): MỘT CỬA cho cột `listings.ward` ───────────────────────────────────────────
+// "MTKD đường Võ Văn Tần phường 6 quận 3 cũ" → cột phường "Phường 6", bản nháp "Phường 6, Quận 3" — không có phường mới nào tên đó
+// (Phường 6 Quận 3 gộp vào Võ Thị Sáu năm 2020, bảng phường cũ không có dòng này). Lớp lỗi: mỗi đường ghi phường (đề xuất AI, câu
+// rao, câu trả lời câu phường, dự án, rổ hàng, trigger DB) tự chuẩn hoá theo cách riêng — có đường ghép "Phường " + số, có đường
+// viết hoa chữ khách gõ — nên cột phường mang bất cứ chữ gì. Nay cột chỉ mang tên phường MỚI có thật (`wards.ten_day_du`), và mọi
+// đường ghi đi qua hàm này; DB (`20261009b`) chặn lần cuối, ghi sổ lỗi nếu có chữ lạ lọt tới.
+/** Cắt đuôi quận / tỉnh khỏi tên phường ("Phường 6, Quận 3", "phường tân định quận 1 cũ") để tra phần tên. */
+const catDuoiHanhChinh = (s: string): string =>
+  s.replace(/\s*[,;(]\s*.*$/u, "").replace(/\s+(?:quận|quan|q\.?\s*\d|huyện|huyen|thành phố|thanh pho|tp\.?|thị xã|thi xa)(?![\p{L}]).*$/iu, "").trim();
+/**
+ * Mọi dạng tên phường khách / AI / bảng khác đưa — tên mới (đủ, ngắn, không dấu), tên cũ chữ ("Thảo Điền", "xã Tân Thạnh Đông"),
+ * phường SỐ cũ kèm quận cũ ("phường 13" + Phú Nhuận) — → phường MỚI có thật, hoặc null (không đủ để biết: không ghi, bot hỏi).
+ * `quan`: quận cũ đã biết của căn (cột district, quận trong câu) — chỉ dùng để tra phường số / tên cũ trùng; tên trong chuỗi cũng được đọc.
+ */
+export function phuongCot(ten: string | null | undefined, quan: string | ReadonlyArray<string | null | undefined> | null = null): Phuong | null {
+  const s = (ten ?? "").normalize("NFC").replace(/\s+/g, " ").trim();
+  if (!s || s.length > 80) return null;
+  const loi = catDuoiHanhChinh(s) || s;
+  // Quận đọc ở phần ĐUÔI đã cắt ("…, Quận 3"), không đọc trong chính tên phường ("Thị trấn Tân Bình" không phải Quận Tân Bình).
+  const quanDs = [...(typeof quan === "string" || quan == null ? [quan] : quan), ...quanTrongCau(s.slice(loi.length))]
+    .filter((q): q is string => !!q && !!khoaQuan(q));
+  const moi = phuongChuan(loi) ?? phuongChuan(s);
+  // Tên mới trùng tên CŨ ở quận khác ("Xã Tân Hưng" Bàu Bàng cũ ≠ Phường Tân Hưng Quận 7 cũ): biết quận mà phường mới không thuộc quận
+  // đó, còn bảng tên cũ có dòng đúng quận đó → theo bảng tên cũ.
+  if (moi) {
+    if (!quanDs.length || quanDs.some((q) => khoaQuan(q) === khoaQuan(moi.quan_cu))) return moi;
+    return phuongTuTenCu(loi, quanDs, true) ?? moi;
+  }
+  // "P.14 Gò Vấp", "phuong 15 tan binh": số + phần còn lại chỉ là tên quận (đã đọc vào `quanDs`) → vẫn là phường số.
+  const mSo = /^(?:(?:phuong|p)\s*)?(\d{1,2})(?:\s+(.+))?$/.exec(phang(loi).replace(DEM_CUOI, "").trim());
+  const so = mSo && (!mSo[2] || chiLaDonViHanhChinh(mSo[2])) ? mSo[1] : null;
+  if (so) {
+    const quanSo = [...quanDs, ...(mSo?.[2] ? quanTrongCau(mSo[2]) : [])];
+    const ra = [...new Set(quanSo.map((q) => phuongTuSoCu(so, q)?.ten).filter((x): x is string => !!x))];
+    return ra.length === 1 ? MOI.find((w) => w.ten === ra[0]) ?? null : null;
+  }
+  return phuongTuTenCu(loi, quanDs);
+}
+/** Giá trị ghi vào cột `ward` / fact `phuong`: "Phường An Hội Tây" — hoặc null (không ghi). */
+export function tenPhuongCot(ten: string | null | undefined, quan: string | ReadonlyArray<string | null | undefined> | null = null): string | null {
+  const w = phuongCot(ten, quan);
+  return w ? tenDayDu(w) : null;
+}
+/** Tập tên ĐẦY ĐỦ hợp lệ của cột phường (cùng dữ liệu bảng `wards` — kiểm bất biến, DB giả). */
+export const TEN_PHUONG_HOP_LE: ReadonlySet<string> = new Set(PHUONG_MOI.map((r) => r[1]));
+/** Chuỗi đúng là một tên ĐẦY ĐỦ có trong bảng `wards` (không tra, không sửa) — điều DB chặn lần cuối đòi. */
+export const laTenPhuongHopLe = (s: string | null | undefined): boolean => !!s && TEN_PHUONG_HOP_LE.has(s);
 
 /** Trích dẫn có nhắc MỘT phường có thật nào không (dùng để bắt AI trả tên cắt / bịa khi khách nói tên thật). */
 export function phuongTrongTrich(cau: string | null | undefined): boolean {

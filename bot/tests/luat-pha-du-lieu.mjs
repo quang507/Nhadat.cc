@@ -30,6 +30,7 @@ import * as E from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts
 import { bocQuan } from "../supabase/functions/_shared/dia_ban.ts";
 import { tachTienToPhuong } from "../supabase/functions/_shared/extraction/tra-phuong.ts";
 import { tenDiaDanhTron } from "../supabase/functions/_shared/extraction/dia-danh.ts";
+import { viTriLaPhuong } from "../supabase/functions/_shared/ghi-fact.ts";
 
 const HERE = import.meta.dirname ?? dirname(fileURLToPath(import.meta.url));
 const bang = JSON.parse(readFileSync(join(HERE, "luat", "khong-duoc-kich.json"), "utf8"));
@@ -54,6 +55,8 @@ const CHAY = {
   tachTienToPhuong: (c) => tachTienToPhuong(c),
   // 01/10/2026 (SRS-5.1p): tin là một tên trơn → dò địa danh chung → có thể ghi quận / phường.
   tenDiaDanhTron: (c) => tenDiaDanhTron(c),
+  // 09/10/2026 (SRS-5.1zzzzj): cửa ghi fact `ghiFact` đổi câu vị trí chỉ-là-tên-phường sang fact phường (để tên đó qua `tenPhuongCot`).
+  viTriLaPhuong: (c) => viTriLaPhuong(c),
 };
 const daKich = (v) => v !== null && v !== false && v !== undefined;
 

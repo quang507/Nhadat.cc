@@ -24,20 +24,14 @@ export async function napPhuongCuThat() {
 }
 
 const singular = (t) => t.replace(/s$/, "");
-// Bản JS của `chuan_hoa_phuong` (20260928d, không tra bảng wards): phường số → "Phường N"; tên chữ gõ thường ngắn → viết hoa.
-const boDauM = (x) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+// Bản JS của `chuan_hoa_phuong` từ 20261009b (SRS-5.1zzzzj): KHÔNG chuẩn hoá nữa — đúng một tên đầy đủ có trong bảng `wards` THẬT
+// (168 dòng của migration 20260915a, bất kể ca e2e dựng `db.t.wards` riêng) thì giữ, còn lại null. Code (tenPhuongCot) là chỗ duy nhất
+// chuẩn hoá; tới được đây mà chữ lạ là lỗi code — mock ghi `bot_errors` y như trigger thật, và bộ e2e coi mỗi dòng như vậy là ĐỎ.
+let tenWardThat = null;
+const laTenWard = (v) => { tenWardThat ??= new Set(napPhuongThat().map((w) => w.ten_day_du)); return tenWardThat.has(String(v ?? "").trim()); };
 function chuanHoaPhuong(t) {
-  const v = String(t ?? "").trim(); if (!v) return null;
-  const m = /(?:phuong|p)\s*\.?\s*([0-9]{1,2})/.exec(boDauM(v));
-  if (m && +m[1] >= 1 && +m[1] <= 25) return `Phường ${+m[1]}`;
-  if (/^[0-9]{1,2}$/.test(v) && +v >= 1 && +v <= 25) return `Phường ${+v}`;
-  const kd = boDauM(v);
-  const ten = v.replace(/^(?:phường|xã|thị trấn)\s+/iu, "");
-  if (ten === ten.toLowerCase() && /^(?:(?:phuong|xa|thi tran)\s+)?[a-z]+(?:\s[a-z]+){0,3}$/.test(kd) && !/\b(?:em|anh|chi|nha|nhe|a|oi|o|do|day|nhen|luon)\b/.test(kd)) {
-    const hoa = v.toLowerCase().replace(/(^|\s)(\p{L})/gu, (_, s1, c) => s1 + c.toUpperCase());
-    return /^(?:phuong|xa|thi tran)\s/.test(kd) ? hoa : `Phường ${hoa}`;
-  }
-  return v.length >= 2 && v.length <= 50 ? v : null;
+  const v = String(t ?? "").trim();
+  return v && laTenWard(v) ? v : null;
 }
 // Mốc thời gian phải DUY NHẤT, như Postgres. `toISOString()` chỉ có mili giây,
 // mà ba câu hỏi chờ mở liên tiếp rơi trọn trong một mili giây là chuyện thường —
@@ -357,6 +351,16 @@ class Builder {
   run() {
     const db = this.db; const t = this.table;
     db.log.push({ table: t, op: this.op, filters: this.filters, embedFilters: this.embedFilters, payload: this.payload, sel: this.sel });
+    // 20261009b — trigger `listings_chuan_hoa_cot`: cột phường đổi mà không phải tên chuẩn → để trống + sổ lỗi. Chỉ lượt ghi của CODE
+    // (Builder / RPC); dòng ca e2e dựng sẵn bằng db.insert là dữ liệu cũ, không qua đây (như dòng cũ trên DB thật trước migration).
+    if (t === "listings" && (this.op === "insert" || this.op === "update" || this.op === "upsert")) {
+      for (const p of Array.isArray(this.payload) ? this.payload : [this.payload]) {
+        if (!p || !("ward" in p) || p.ward == null) continue;
+        if (chuanHoaPhuong(p.ward)) continue;
+        db.insert("bot_errors", { source: "listings.ward khong chuan", detail: `"${p.ward}"`, at: now() });
+        p.ward = null;
+      }
+    }
     if (this.op === "upsert") {
       const arr = Array.isArray(this.payload) ? this.payload : [this.payload]; const out = [];
       for (const p of arr) {
@@ -756,7 +760,12 @@ class RpcCall {
         // để bộ đo giọng / e2e không thấy một 🤖 mà production không in.
         if (a.p_question === "gia") { l.price_raw = chuanHoaGiaRaw(a.p_answer); l.price_vnd = parseVnd(a.p_answer); }
         // 20260928d (FR-239 j): chuan_hoa_phuong — tên chữ gõ thường ("cầu kho") → "Phường Cầu Kho".
-        if (a.p_question === "phuong") l.ward = chuanHoaPhuong(a.p_answer);
+        // 20261009b: chỉ tên chuẩn mới đổ vào cột (trigger thật: v_ward null thì cột giữ nguyên); chữ lạ → sổ lỗi (trg_listing_facts_soat_phuong).
+        if (a.p_question === "phuong") {
+          const w = chuanHoaPhuong(a.p_answer);
+          if (w) l.ward = w;
+          else db.insert("bot_errors", { source: "fact phuong khong chuan", detail: `${l.id}: "${a.p_answer}" (${a.p_source ?? "?"})`, at: now() });
+        }
         // Trigger loại BĐS (FR-150/164): fact loai_bds đổi cột khi tin còn "chua_ro" (bắn thật 23/09: lô 1 thành đất).
         // 20261007b (SRS-5.1zzzc): chép `guess_property_type_answer` — nhận MÃ enum AI ghi ("nha_cap4") lẫn chữ người, và đổi cột
         // cả khi tin đã có loại (trigger thật chỉ so bậc nguồn; bản mock cũ chỉ đổi khi "chua_ro" nên không thấy lỗi mã).

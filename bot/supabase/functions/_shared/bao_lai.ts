@@ -23,6 +23,7 @@
 import { donViGiaDep } from "./extraction/luat-tien.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
 import { tenNhanKhongTrung } from "./extraction/nhan.ts";
+import { diaChiHienThi, duongHienThi } from "./extraction/hien-thi-dia-chi.ts";
 
 /** `admin` (05/10/2026, văn phong AOND): vẫn dựng bong bóng 🤖 và ghi vào `messages` cho /admin + `so.hoi_thoai`,
  *  nhưng KHÔNG gửi cho khách — khách chỉ đọc lời model (demo AOND in "[đã trích xuất]" cho người vận hành, không cho khách). */
@@ -45,7 +46,7 @@ export function traLoiCauBot(cauBot: string, hieu: string): string {
 }
 
 export const COT_BAO_LAI =
-  `id, code, property_type, deal, status, location_raw, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, nhan, description, projects(name), ${SPEC_COLS}`;
+  `id, code, property_type, deal, status, location_raw, street, ward, district, area_m2, price_raw, price_vnd, bedrooms, boc_tach, floor, furnishing, nhan, description, projects(name), ${SPEC_COLS}`;
 
 export type DongBaoLai = SpecRow & {
   id?: string;
@@ -56,6 +57,8 @@ export type DongBaoLai = SpecRow & {
   deal?: string | null;
   status?: string | null;
   location_raw?: string | null;
+  /** Tên đường từ điển (FR-212) — in thay chữ khách gõ (SRS-5.1zzzzj). */
+  street?: string | null;
   ward?: string | null;
   district?: string | null;
   area_m2?: number | string | null;
@@ -155,18 +158,6 @@ const CHU_DAP_AN: Record<string, Record<string, string>> = {
 const boDau = (s: string): string =>
   s.toLowerCase().replace(/đ/g, "d").normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-// "12 Trần Hưng Đạo, Phường 4" — bỏ mảnh trùng (location_raw hay đã chứa phường/quận).
-function gonDiaChi(...manh: Array<string | null | undefined>): string {
-  const ra: string[] = [];
-  for (const m of manh) {
-    for (const p of (m ?? "").split(",")) {
-      const s = p.trim();
-      if (s && !ra.some((x) => boDau(x) === boDau(s))) ra.push(s);
-    }
-  }
-  return ra.join(", ");
-}
-
 // numeric của PostgREST có thể về dạng chuỗi "66.00" — in gọn thành "66".
 const so = (x: number | string): string => String(Number(x));
 
@@ -189,7 +180,8 @@ export function tomTatDaLuu(
   // ai nói quận) thì nói thẳng ra, đừng để người đọc tưởng hệ thống đọc được Quận 5.
   // 20260917a: không còn mặc định Quận 5 — quận trống thì in "(chưa rõ quận)"; cờ cũ giữ để đọc tin cũ.
   const quanMacDinh = !l.district || (l.district === "Quận 5" && l.boc_tach?.quan_mac_dinh === true);
-  const dc = gonDiaChi(l.location_raw, l.ward, quanMacDinh ? (l.district ? `${l.district} (chưa rõ quận)` : "(chưa rõ quận)") : l.district);
+  // SRS-5.1zzzzj: in qua MỘT nguồn `diaChiHienThi` — đường chuẩn hoá từ chữ khách, phường / quận từ cột chuẩn.
+  const dc = diaChiHienThi(l, quanMacDinh ? (l.district ? `${l.district} (chưa rõ quận)` : "(chưa rõ quận)") : l.district);
   if (dc) p.push(dc);
   // 14/09/2026 (bắn thật): căn hộ Sunrise City đã gắn project_id, tầng 15, full nội
   // thất nằm trong DB mà 💾 không nói — tóm tắt chỉ biết cột nhà phố.
@@ -238,7 +230,7 @@ export function bocTachTaoTin(l: DongBaoLai | null): string | null {
   const p: Array<[string, string]> = [];
   p.push(["loại", `${tenLoai(l)} ${l.deal === "cho_thue" ? "cho thuê" : "bán"}`]);
   const quanMacDinh = !l.district || (l.district === "Quận 5" && l.boc_tach?.quan_mac_dinh === true);
-  const dc = gonDiaChi(l.location_raw, l.ward, quanMacDinh ? null : l.district);
+  const dc = diaChiHienThi(l, quanMacDinh ? null : l.district);
   if (dc) p.push(["địa chỉ", `${dc}${quanMacDinh ? " (chưa rõ quận)" : ""}`]);
   if (l.projects?.name) p.push(["dự án", l.projects.name]);
   if (l.area_m2 !== null && l.area_m2 !== undefined && l.area_m2 !== "") p.push(["diện tích", `${so(l.area_m2)}m²`]);
@@ -290,7 +282,8 @@ export function vuaLuuBan(facts: FactBaoLai[], nhan: Record<string, string>): st
   const ds = [...moiNhat].reverse().slice(0, 40).map(([k, v]) => {
     const ten = nhanNgan(k, nhan);
     // SRS-5.1zzzzh: ô tiền đọc lại bằng luật hiển thị một nguồn ("7ty2" → "7 tỷ 2") — fact trong DB giữ nguyên chữ khách.
-    const chu = CHU_DAP_AN[k]?.[v] ?? (O_TIEN.has(k) ? donViGiaDep(v) : v);
+    // SRS-5.1zzzzj: ô địa chỉ in qua `duongHienThi` (chữ khách "duong …" → "Đường …"); fact giữ nguyên văn trong DB.
+    const chu = CHU_DAP_AN[k]?.[v] ?? (O_TIEN.has(k) ? donViGiaDep(v) : k === "vi_tri" ? duongHienThi(v) || v : v);
     return `${ten}: "${chu.length > 120 ? chu.slice(0, 119) + "…" : chu}"`;
   });
   return `${BOC_DUOC} ${ds.join(" · ")}`;

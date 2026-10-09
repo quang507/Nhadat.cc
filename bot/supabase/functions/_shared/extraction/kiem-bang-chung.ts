@@ -15,7 +15,7 @@ import { bocQuan, vungNgoai } from "../dia_ban.ts";
 import type { CanTrongTin } from "./khop-cau-tra-loi.ts";
 import { cumPhongNguTheoTang, cungHoFact, docTraLoiLung, nhanDienFact, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
-import { cauNhacPhuong, phuongChuan, phuongSoCuTrongCau, phuongTrongTrich, phuongTuTenCu, quanTrongCau, tenDayDu, viTriGhiDuoc } from "./khop-phuong.ts";
+import { cauNhacPhuong, tenPhuongCot, phuongChuan, phuongSoCuTrongCau, phuongTrongTrich, phuongTuTenCu, quanTrongCau, viTriGhiDuoc } from "./khop-phuong.ts";
 import { goNhamDau } from "./go-nham-dau.ts";
 
 const boDau = (s: string): string =>
@@ -838,10 +838,8 @@ export function soSanhVoiDb(dat: DeXuat[], dong: DongDb | null, facts: Record<st
       db = dong?.district; if (db) khop = chuanSo(String(db)) === chuanSo(bocQuan(chuanSo(v), v) ?? v);
     } else if (k === "phuong") {
       db = dong?.ward;
-      if (db) {
-        const a = chuanSo(v).match(/\d{1,2}/)?.[0], b = chuanSo(String(db)).match(/\d{1,2}/)?.[0];
-        khop = a || b ? Number(a) === Number(b) : chuaNhau(v, String(db));
-      }
+      // SRS-5.1zzzzj: cột mang tên phường MỚI — so sau cùng cửa chuẩn hoá (AI "phường 14" + Gò Vấp ≡ "Phường An Hội Tây").
+      if (db) khop = tenPhuongCot(v, [dong?.district]) === String(db) || chuaNhau(v, String(db));
     } else if (k === "duong") {
       db = dong?.street; if (db) khop = chuaNhau(v, String(db));
     } else if (k === "du_an") {
@@ -895,7 +893,6 @@ const soCua = (v: string): number | null => {
   const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
   return m ? Number(m[0]) : null;
 };
-const hoaDau = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
  * Từ đề xuất ĐẠT + kết quả so DB → danh sách fact được ghi (nguồn `ai_kiem`).
@@ -970,18 +967,12 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
         break;
       }
       case "phuong": {
-        const so = chuanSo(v).match(/\d{1,2}/)?.[0];
-        if (so) { if (Number(so) < 1 || Number(so) > 30) { bo.push({ ...d, ly_do: "so_ngoai_khoang" }); continue; } answer = `Phường ${Number(so)}`; break; }
-        // Phường có thật (đã qua kiểm) → ghi đúng tên đầy đủ trong danh sách ("Xã Tân Vĩnh Lộc").
-        const chuanP = phuongChuan(v) ?? phuongTuTenCu(v);
-        if (chuanP) { answer = tenDayDu(chuanP); break; }
-        const ten = v.replace(/^(phường|phuong|xã|xa|thị trấn|thi tran|p\.?)\s+/i, "").trim();
-        if (ten.length < 3 || ten.length > 40) { bo.push({ ...d, ly_do: "gia_tri_ngoai_khoang" }); continue; }
-        // 24/09/2026 (bắn 10 tin, Củ Chi / Bình Chánh): "xã Phước Vĩnh An" từng ghi thành "Phường Phước Vĩnh An" — giữ
-        // đúng cấp hành chính khách nói (xã / thị trấn).
-        const cap = /\b(?:thi tran|tt)\b/.test(kd) || /^(?:thị trấn|thi tran)\b/i.test(v) ? "Thị trấn"
-          : /\bxa\b/.test(kd) || /^(?:xã|xa)\b/i.test(v) ? "Xã" : "Phường";
-        answer = `${cap} ${hoaDau(ten)}`;
+        // SRS-5.1zzzzj (bắn production 09/10: AI phuong=6 «phường 6», tin Quận 3 → ghi "Phường 6", không phường mới nào tên đó): cột
+        // phường chỉ mang tên phường MỚI có thật — MỘT cửa `tenPhuongCot` (tên mới / cũ / số cũ + quận cũ của căn hay trong trích dẫn).
+        // Thay hai nhánh cũ: ghép "Phường " + số (không biết quận) và viết hoa chữ AI trả ("Xã Phước Vĩnh An"). Không ra → không ghi.
+        const ten = tenPhuongCot(v, [dong?.district, ...quanTrongCau(d.trich_dan)]) ?? tenPhuongCot(d.trich_dan, [dong?.district]);
+        if (!ten) { bo.push({ ...d, ly_do: "phuong_khong_chuan" }); continue; }
+        answer = ten;
         break;
       }
       case "phi_quan_ly": {

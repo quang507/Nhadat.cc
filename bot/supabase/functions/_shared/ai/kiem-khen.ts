@@ -6,6 +6,10 @@
 // từ khoá thì đưa quyết định sang AI, code kiểm trích dẫn. Ở đây AI liệt kê từng câu NHẬN XÉT kèm căn cứ chép nguyên văn từ
 // lời chủ nhà; code (`nhanXetKhongCanCu`, van-tra-loi.ts) kiểm căn cứ có thật rồi mới giữ câu. Danh sách cũ vẫn chạy làm
 // lưới đỡ khi AI hỏng.
+// SRS-5.1zzzzj (bắn production 09/10/2026: "Dạ vâng, nhà hẻm xe hơi đường Phạm Văn Chiêu là khách chuộng lắm anh."): luật cũ cho qua
+// lời khen "khách chuộng / dễ bán" khi gắn với một đặc điểm có thật — mà điều đó là đoán NGƯỜI MUA, bot không có số liệu. Nay lời nói
+// về người mua / khả năng bán luôn là đánh giá thị trường (bỏ); câu lệnh giọng (TONE_RULES, SELLER_FEWSHOT) dạy cùng một điều — bài
+// `bot/tests/luat-khong-mau-thuan.mjs` đỏ khi ví dụ trong câu lệnh lại dạy câu mà lượt soát này bỏ.
 // Tầng này KHÔNG ghi DB (luật `bot/tests/ranh-gioi.mjs`). Model hỏng thì NÉM — nơi gọi ghi sổ (FR-152 d).
 import { z } from "npm:zod@4";
 import { dinhDangLong, docLong } from "./doc-long.ts";
@@ -28,10 +32,14 @@ nhà, gần chợ, khu yên tĩnh, xuyên thoáng, nở hậu, kết cấu chắ
 - KHÔNG liệt kê: câu hỏi, lời chào, cảm ơn, ghi nhận chung ("dạ em ghi rồi ạ"), lời hứa của bot.
 - can_cu: cụm chép NGUYÊN VĂN từ LỜI CHỦ NHÀ hoặc THÔNG TIN ĐÃ GHI nói ĐÚNG điều được khẳng định — gần giống thì không tính
   ("hxh" là hẻm xe hơi, KHÔNG phải "hẻm sâu"; "4x15" không phải "nở hậu"). Không có thì null.
-- Khen chung ("dễ bán lắm", "khách chuộng") gắn với một đặc điểm: căn cứ là căn cứ của đặc điểm đó.
 - danh_gia_thi_truong = true khi câu đánh giá KHU VỰC / THỊ TRƯỜNG / MỨC GIÁ ("khu Hà Huy Giáp đất vàng", "khu đó bán được lắm", "giá
   khu này đang lên", "quận 7 đang sốt") — bot không có số liệu thị trường nên câu đó luôn bị bỏ; tên khu chủ nhà nói KHÔNG phải căn
-  cứ cho lời đánh giá về khu. Khen gắn đặc điểm căn ("hẻm xe hơi tới cửa là khách chuộng lắm") là false.`;
+  cứ cho lời đánh giá về khu.
+- danh_gia_thi_truong = true CẢ khi câu nói về NGƯỜI MUA hay KHẢ NĂNG BÁN của căn, dù gắn với một đặc điểm có thật ("hẻm xe hơi là
+  khách chuộng lắm", "nở hậu lại sổ riêng, căn này dễ bán lắm", "mặt tiền thì bán nhanh", "đắt khách", "thanh khoản cao", "nhiều
+  người tìm"): bot không có số liệu người mua — đặc điểm thật chỉ là căn cứ cho chính đặc điểm đó, không cho lời đoán thị trường.
+- Khen chỉ nói đặc điểm có thật và lợi ích trực tiếp của nó ("ô tô tới tận nhà, đi lại tiện lắm", "sổ riêng thì giấy tờ gọn") là
+  false — căn cứ là cụm chủ nhà nói về đặc điểm đó.`;
 
 // SRS-5.1zzzza (bắn production 09/10/2026): người MUA "cần mua nhà quận 5 tầm 7 tỷ, hẻm xe hơi" → trợ lý "Hẻm xe hơi tới cửa là
 // khách chuộng lắm, vị trí tốt lắm" — lời khen dành cho người BÁN về căn của họ, nói với người mua chưa có căn nào trong tay. Cùng

@@ -1604,6 +1604,37 @@ export function nhanXetKhongCanCu(
  * nước thải chưa?" là câu hỏi mẫu thật). Không bỏ gì thì trả đúng mảng cũ.
  */
 const HE_THONG_LAM_RE = /\bhe thong\s+(?:(?:da|vua|se|tu|dang|cung|co)\s+)*(?:gui|tra loi|bao|ghi|luu|nhan|cap nhat|ghi nhan)\b/;
+/**
+ * SRS-5.1zzzzj (bắn production 09/10/2026: "phí sao em" → "1% giá chốt" với người rao chưa nói mình là chủ hay môi giới). Con số
+ * phí thuộc về MỘT chủ: `cauPhi(vaiPhi(…))` (prompts.ts). Câu KHẲNG ĐỊNH trong lời gửi người rao có "phí" kèm con số phần trăm mà
+ * số đó không phải số của vai ĐÃ XÁC NHẬN (`phanTram`: "1" / "0,5" / null = không được nói số) → thay bằng `cauThay` (chính câu
+ * `cauPhi` sinh) ở câu đầu, bỏ các câu sau. Lưới chống bịa (luôn bật), không sửa văn. Không đụng câu hỏi (có "?") — câu hỏi là
+ * của `damBaoCauHoi`; không đụng bong bóng 🤖 / 📝 / 📋 / 💾 (chữ code từ DB).
+ */
+export function chanPhiChuaXacNhan(replies: string[], phanTram: string | null, cauThay: string): string[] {
+  const so = (x: string) => x.replace(".", ",").replace(/^0+(?=\d)/, "");
+  const sai = (c: string): boolean => {
+    // Câu nói về phí: có chữ phí / hoa hồng, hoặc con số % đi với giá chốt / giao dịch / vai ("chính chủ thì 1% giá chốt").
+    if (/\?/.test(c) || !/\b(?:phi|hoa hong|gia chot|giao dich|chinh chu|moi gioi)\b/.test(boDau(c))) return false;
+    const cac = [...c.matchAll(/(\d+(?:[.,]\d+)?)\s*%/g)].map((m) => so(m[1]));
+    return cac.length > 0 && cac.some((n) => n !== phanTram);
+  };
+  let daThay = false;
+  const ra: string[] = [];
+  for (const r of replies) {
+    if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) { ra.push(r); continue; }
+    const dong = r.split("\n").map((d) => tachCau(d).map((c) => {
+      if (!sai(c)) return c;
+      if (daThay) return "";
+      daThay = true;
+      const t = cauThay.trim();
+      return `Dạ ${t.charAt(0).toLowerCase()}${t.slice(1)}${/[.!]$/.test(t) ? "" : " ạ."}`;
+    }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
+    if (dong) ra.push(dong);
+  }
+  return daThay ? ra : replies;
+}
+
 export function boCauNoiHeThong(replies: string[]): string[] {
   return locCauTrongBongBong(replies, (c) => !/\?/.test(c) && HE_THONG_LAM_RE.test(boDau(c)));
 }

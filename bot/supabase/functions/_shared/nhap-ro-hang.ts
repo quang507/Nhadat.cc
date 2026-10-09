@@ -152,7 +152,7 @@ export function bangThanhTin(bang: string[][], macDinh: { deal?: "ban" | "cho_th
       deal,
       property_type: loai ?? (o.du_an || o.ma_can ? "chung_cu" : "chua_ro"),
       location_raw: o.location_raw ?? null,
-      ward: o.ward ?? null,
+      ward: o.ward ?? null, // dòng nhập thô (chưa ghi DB) — chat-reply chuẩn hoá qua tenPhuongCot khi ghi
       district: o.district ?? null,
       area_m2: area,
       price_raw: o.price_raw ?? null,

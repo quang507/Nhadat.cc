@@ -680,11 +680,16 @@ for (const [cau, mong] of [
 
 // ── 24/09/2026: 🤖 "Bóc tách được" — chỉ thứ bóc từ tin vừa nhắn, giá trị trong ngoặc kép ──
 {
-  const t1 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 4m Nguyễn Trãi", ward: "Phường 2", district: "Quận 5", area_m2: 56, price_raw: "5 tới 6", price_vnd: null, bedrooms: 2 });
+  const t1 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 4m Nguyễn Trãi", ward: "Phường Chợ Quán", district: "Quận 5", area_m2: 56, price_raw: "5 tới 6", price_vnd: null, bedrooms: 2 });
   ok("bocTachTaoTin: lượt tạo tin in từng cột trong ngoặc kép, giá không ra số nói rõ",
-    t1 === '🤖 Bóc tách được: loại: "Nhà phố bán" · địa chỉ: "hẻm 4m Nguyễn Trãi, Phường 2, Quận 5" · diện tích: "56m²" · phòng ngủ: "2" · giá: "5 tới 6 (chưa đọc ra số)"', String(t1));
+    t1 === '🤖 Bóc tách được: loại: "Nhà phố bán" · địa chỉ: "Hẻm 4m Nguyễn Trãi, Phường Chợ Quán, Quận 5" · diện tích: "56m²" · phòng ngủ: "2" · giá: "5 tới 6 (chưa đọc ra số)"', String(t1));
   const t2 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "hẻm 12 Hồ Ngọc Lãm", district: null, area_m2: 50, price_raw: "3 tỷ", price_vnd: 3e9 });
-  ok("bocTachTaoTin: chưa rõ quận → nói '(chưa rõ quận)', không bịa Quận 5", /địa chỉ: "hẻm 12 Hồ Ngọc Lãm \(chưa rõ quận\)"/.test(t2 ?? "") && !/Quận 5/.test(t2 ?? ""), String(t2));
+  ok("bocTachTaoTin: chưa rõ quận → nói '(chưa rõ quận)', không bịa Quận 5", /địa chỉ: "Hẻm 12 Hồ Ngọc Lãm \(chưa rõ quận\)"/.test(t2 ?? "") && !/Quận 5/.test(t2 ?? ""), String(t2));
+  // SRS-5.1zzzzj (bắn production 09/10: 🤖 "địa chỉ: duong Phạm Văn Chiêu…"): cột lưu nguyên văn, bản IN qua `diaChiHienThi` — từ loại chuẩn,
+  // tên đường từ điển (cột street), phường chỉ từ cột chuẩn; đuôi "p14 go vap" khách gõ không in lại.
+  const tDc = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: "duong pham van chieu p14 go vap", street: "Phạm Văn Chiêu", ward: "Phường An Hội Tây", district: "Quận Gò Vấp" });
+  ok("bocTachTaoTin: 'duong pham van chieu p14 go vap' → in 'Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp'",
+    /địa chỉ: "Đường Phạm Văn Chiêu, Phường An Hội Tây, Quận Gò Vấp"/.test(tDc ?? "") && !/duong|p14/.test(tDc ?? ""), String(tDc));
   const t0 = bocTachTaoTin({ property_type: "nha_pho", deal: "ban", location_raw: null, ward: null, district: null });
   // FR-226 a (25/09/2026, chủ dự án: "Nhà người ta chưa có gì mà nó tự nhận là nhà phố"): tin nhà chưa có dấu hiệu nhà phố → "Nhà".
   ok("bocTachTaoTin: chưa có địa chỉ → KHÔNG in 'địa chỉ: \"(chưa rõ)…\"'; chưa có dấu hiệu nhà phố → 'Nhà bán'", t0 === '🤖 Bóc tách được: loại: "Nhà bán"', String(t0));
@@ -1117,7 +1122,7 @@ for (const [q, vao, ra] of [["vi_tri", "đúng rồi e. nhà a ở 45 Trần Hư
   ok(`SRS-5.1zzza cắt lời gật ${q} '${vao}' → '${ra}'`, catDapAn(q, vao) === ra, catDapAn(q, vao));
 }
 for (const [vao, ra] of [[["o q10", null, "Quận 10"], "Quận 10"], [["p5 q10", "Phường 5", "Quận 10"], "Phường 5, Quận 10"],
-  [["hẻm 45 Nguyễn Trãi", "Phường 2", "Quận 5"], "hẻm 45 Nguyễn Trãi, Phường 2, Quận 5"], [["Ô Môn", null, "Cần Thơ"], "Ô Môn, Cần Thơ"]]) {
+  [["hẻm 45 Nguyễn Trãi", "Phường 2", "Quận 5"], "Hẻm 45 Nguyễn Trãi, Phường 2, Quận 5"], [["Ô Môn", null, "Cần Thơ"], "Ô Môn, Cần Thơ"]]) {
   ok(`FR248-c diaChiGon ${JSON.stringify(vao)} → '${ra}'`, diaChiGon(...vao) === ra, diaChiGon(...vao));
 }
 // (d) model đã nói thật "chưa có căn" mà câu hứa cạnh đó vẫn bị thay bằng lời thật → khách đọc "chưa có căn" hai lần.

@@ -172,9 +172,16 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const r2 = chon([dx("gia", "30 tỷ", "giá 30 tỷ")], { price_vnd: 32e9, deal: "ban" });
   ok("ghi: luật và AI LỆCH giá → không ghi, không đè", r2.ghi.length === 0 && r2.bo.length === 0, JSON.stringify(r2));
   const r3 = chon([dx("so_phong_ngu", "3", "3 phòng ngủ"), dx("so_wc", "70", "70 wc"), dx("so_tang", "4", "trệt 3 lầu"), dx("do_rong_hem", "5", "hẻm 5m"), dx("phuong", "14", "phường 14"), dx("gap", "co", "cần bán gấp")],
-    { bedrooms: null, bathrooms: null, floors: null, alley_width_m: null, ward: null, gap: null });
-  ok("ghi: số trong khoảng → ghi đúng dạng (3 · '4 tầng' vào ket_cau · '5m' · 'Phường 14' · cụm gấp); 70 wc ngoài khoảng → bỏ",
-    r3.ghi.map((g) => `${g.question}=${g.answer}`).join("|") === "so_phong_ngu=3|ket_cau=4 tầng|do_rong_hem=5m|phuong=Phường 14|gap=cần bán gấp" && lyDo(r3, "so_wc") === "so_ngoai_khoang", JSON.stringify(r3));
+    { bedrooms: null, bathrooms: null, floors: null, alley_width_m: null, ward: null, gap: null, district: "Quận Gò Vấp" });
+  // SRS-5.1zzzzj: phường số chỉ ghi qua cửa `tenPhuongCot` — "phường 14" + Quận Gò Vấp → Phường An Hội Tây (không "Phường 14").
+  ok("ghi: số trong khoảng → ghi đúng dạng (3 · '4 tầng' vào ket_cau · '5m' · phường 14 Gò Vấp = 'Phường An Hội Tây' · cụm gấp); 70 wc ngoài khoảng → bỏ",
+    r3.ghi.map((g) => `${g.question}=${g.answer}`).join("|") === "so_phong_ngu=3|ket_cau=4 tầng|do_rong_hem=5m|phuong=Phường An Hội Tây|gap=cần bán gấp" && lyDo(r3, "so_wc") === "so_ngoai_khoang", JSON.stringify(r3));
+  // Cách nói mới: "phường 6" + Quận 3 (Phường 6 Q3 gộp năm 2020, không có trong bảng phường cũ) → KHÔNG ghi, lý do phuong_khong_chuan;
+  // không quận thì phường số cũng không ghi.
+  const r3b = chon([dx("phuong", "6", "phường 6")], { ward: null, district: "Quận 3" });
+  const r3c = chon([dx("phuong", "Phường 7", "p.7")], { ward: null, district: null });
+  ok("ghi: phường số không ra phường mới (P6 Q3 · P7 không quận) → bỏ 'phuong_khong_chuan', không bao giờ 'Phường N'",
+    r3b.ghi.length === 0 && lyDo(r3b, "phuong") === "phuong_khong_chuan" && r3c.ghi.length === 0 && lyDo(r3c, "phuong") === "phuong_khong_chuan", JSON.stringify({ r3b, r3c }));
   const r4 = chon([dx("quan", "Quận 5", "quận 5"), dx("duong", "Châu Văn Liêm", "đường Châu Văn Liêm"), dx("ma_can", "S1.02", "căn S1.02")], { district: null, street: null, unit_code: null });
   ok("ghi: quận / đường / mã căn không có chỗ ghi fact → bỏ khoa_khong_co_cho_ghi", r4.ghi.length === 0 && r4.bo.every((b) => b.ly_do === "khoa_khong_co_cho_ghi") && r4.bo.length === 3, JSON.stringify(r4));
   // 05/10/2026 (SRS-5.1zz): hai khoá cùng đổ về ket_cau → cụm chữ thắng số, bất kể AI liệt kê cái nào trước.
