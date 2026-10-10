@@ -132,5 +132,16 @@ const phiVai = cr.split("\n").filter((d) => /const dapPhiRoVai|\? `Dạ vậy \$
 ok("(11) bong bóng phí sau khi khách tự nói vai đi qua `cauPhi(vaiPhi…)` — không chuỗi % viết tay",
   phiVai.some((d) => /cauPhi\(vaiPhiLuot/.test(d)) && !phiVai.some((d) => /\d\s*%/.test(d)), phiVai.join("\n"));
 
+// (12) SRS-5.1zzzzr — lời hứa tự kiểm: lưới `boHuaTuKiemTra` (luôn bật, r2 + r3) bỏ câu "để em kiểm tra … rồi báo lại". Câu lệnh giọng và
+//      kịch bản người bán KHÔNG được dạy model chính câu đó (bản trước TONE_RULES dạy "kiểm tra rồi báo lại ạ", SELLER_SCRIPT_RULES dạy
+//      "em kiểm tra giá giao dịch gần đây rồi báo lại" — prompt dạy, lưới cắt, thu-thuong11 lọt ở r3 nơi lưới chưa chạy).
+{
+  const { boHuaTuKiemTra } = await import("../supabase/functions/_shared/extraction/van-tra-loi.ts");
+  const cacCau = [...`${TONE_RULES}\n${SELLER_SCRIPT_RULES}`.matchAll(/"([^"]{6,160})"/g)].map((m) => m[1]);
+  const day = cacCau.filter((c) => boHuaTuKiemTra(c, null) !== c);
+  ok("(12) câu lệnh không dạy câu hứa tự kiểm mà lưới boHuaTuKiemTra sẽ bỏ", day.length === 0, JSON.stringify(day));
+  ok("(12) lưới bỏ ca gốc thu-thuong11", boHuaTuKiemTra("Vâng ạ. Để em kiểm tra giá giao dịch khu Phú Hòa Đông gần đây rồi báo lại chị nhé.", null) === "Vâng ạ.");
+}
+
 console.log(hong ? `\nLUẬT KHÔNG MÂU THUẪN: ${hong} CA HỎNG` : "\nLUẬT KHÔNG MÂU THUẪN: ĐẠT");
 process.exit(hong ? 1 : 0);

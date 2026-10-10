@@ -1223,6 +1223,16 @@ for (const [c, m] of [["Em để lọc lại và báo mình nhé", true], ["em g
     boHuaTuKiemTra('Lô đất "chưa xây gì" là tốt rồi ạ. Để em kiểm tra xem cột điện hay hố ga có chạy qua lô không nha?', "Lô đất có vướng cột điện, hố ga gì không ạ?")
       === 'Lô đất "chưa xây gì" là tốt rồi ạ. Lô đất có vướng cột điện, hố ga gì không ạ?');
   ok("boHuaTuKiemTra: câu thường giữ nguyên", boHuaTuKiemTra("Dạ em ghi rồi ạ. Lô đất hướng nào ạ?", "x") === "Dạ em ghi rồi ạ. Lô đất hướng nào ạ?");
+  // SRS-5.1zzzzr: hứa tra giá / gọi điện / đi xem cũng là việc bot không tự làm; "em trả lời", "em gọi anh là" thì không phải hứa.
+  for (const [cau, conLai] of [
+    ["Dạ vâng anh. Để em tra giúp giá giao dịch quanh khu đó rồi nhắn lại anh nhé.", "Dạ vâng anh."],
+    ["Dạ. Em sẽ gọi điện cho chủ nhà rồi báo anh ạ.", "Dạ."],
+    ["Dạ được ạ. Mai em qua xem nhà rồi báo lại chú nha.", "Dạ được ạ."],
+    ["Dạ. Để em tra cứu quy hoạch khu đó nha chị.", "Dạ."],
+  ]) ok(`boHuaTuKiemTra: '${cau}' → bỏ mệnh đề hứa`, boHuaTuKiemTra(cau, null) === conLai, boHuaTuKiemTra(cau, null));
+  for (const cau of ["Dạ em trả lời anh liền nha. Nhà mình mấy tầng ạ?", "Dạ em gọi anh là anh Tâm được không ạ?", "Dạ em ghi giá 5 tỷ rồi ạ, phường nào anh?",
+    "Dạ tin mình đang chờ duyệt, anh xem bản nháp giúp em nhé.", "Dạ em trao đổi thêm với anh về pháp lý nha. Sổ riêng hay chung ạ?"])
+    ok(`boHuaTuKiemTra: '${cau}' → giữ nguyên (không phải lời hứa)`, boHuaTuKiemTra(cau, null) === cau, boHuaTuKiemTra(cau, null));
   ok("boMenhDeKhenSai: 'hẻm 3 m thuận tiện cho xe máy' chủ không nói xe máy → bỏ vế",
     JSON.stringify(boMenhDeKhenSai(["Cảm ơn đã cung cấp thông tin, hẻm 3 m thuận tiện cho xe máy 😊\nBình Thạnh đó thuộc phường nào ạ?"], "nhà cấp 4 hẻm 3m Bình Thạnh 4x12"))
       === JSON.stringify(["Cảm ơn đã cung cấp thông tin.\nBình Thạnh đó thuộc phường nào ạ?"]));

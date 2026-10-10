@@ -7460,8 +7460,21 @@ Deno.serve(async (req) => {
       const loiThieu = ((nextFactsTho ?? []) as Array<{ fact_key: string; priority?: number; nhom?: string | null }>)
         .filter((f) => LOI_HOI_LAI.includes(f.fact_key) && f.nhom !== "sau_dang" && !khongHoi.has(f.fact_key))
         .sort((x, y) => (x.priority ?? 0) - (y.priority ?? 0));
-      const loiConThieu = loiThieu.find((f) => !pendSet.has(f.fact_key) && f.fact_key !== pendingReq.question)?.fact_key;
-      const chanNhap = loiThieu.length > 0;
+      // SRS-5.1zzzzr: ô lõi hỏi lại tối đa SO_LAN_HOI_LOI lần mỗi ô (đếm mọi câu đã mở cho ô đó, mọi trạng thái). Ô đã hỏi đủ số
+      // lần thì thôi hỏi VÀ thôi chặn bản nháp — một chỗ đếm cho cả hai đường hỏi lại (`loiConThieu` và nhánh hết câu ở dưới).
+      const SO_LAN_HOI_LOI = 3;
+      const hoiDuLan = new Set<string>();
+      if (loiThieu.length) {
+        const { data: daHoiRows, error: cErr } = await client.from("info_requests").select("question")
+          .eq("listing_id", pendingReq.listing_id).in("question", loiThieu.map((f) => f.fact_key));
+        if (cErr) await ghiLoi(client, "chat-reply dem lan hoi o loi", cErr.message);
+        const dem = new Map<string, number>();
+        for (const x of (daHoiRows ?? []) as Array<{ question: string }>) dem.set(x.question, (dem.get(x.question) ?? 0) + 1);
+        for (const [k, n] of dem) if (n >= SO_LAN_HOI_LOI) hoiDuLan.add(k);
+      }
+      const loiConHoi = loiThieu.filter((f) => !hoiDuLan.has(f.fact_key));
+      const loiConThieu = loiConHoi.find((f) => !pendSet.has(f.fact_key) && f.fact_key !== pendingReq.question)?.fact_key;
+      let chanNhap = loiConHoi.length > 0;
       let nextKey = published
         ? undefined
         : pendingReq.question === "vi_tri" && quanChuaRo && conHoi.some((f) => f.fact_key === "phuong")
@@ -7469,6 +7482,17 @@ Deno.serve(async (req) => {
         : chonKe === "hinh_anh" && conHoi.some((f) => f.fact_key === "phuong")
         ? "phuong"
         : chonKe ?? loiConThieu;
+      // SRS-5.1zzzzr (bắn production 09/10, thu-thuong11/12: "sổ riêng em" → "Dạ vâng, sổ riêng gọn lắm chị ơi." rồi im; lượt sau
+      // "ok em" → bot tự bịa "để em kiểm tra giá giao dịch rồi báo lại"): câu VỪA hỏi là ô LÕI, khách nói chuyện khác → FR-234 không hỏi
+      // lại ngay, `chanNhap` chặn bản nháp vì thiếu chính ô đó, mà không còn câu nào khác → lượt không có bước tiếp, lượt sau không
+      // còn câu treo để hỏi lại. Bất biến: lượt bán chưa lên kệ luôn có bước tiếp. Ô lõi còn thiếu được hỏi lại (ngoại lệ của luật
+      // 01/10 "không hỏi lại", chủ dự án duyệt 10/10) tới SO_LAN_HOI_LOI lần cho mỗi ô (`hoiDuLan` ở trên); quá số đó thì thôi chặn —
+      // bản nháp ra và nói rõ còn thiếu gì (`hetCauTruocNhap`).
+      if (!published && !nextKey && chanNhap) {
+        const loiHoiLai = loiConHoi.find((f) => !pendSet.has(f.fact_key))?.fact_key ?? null;
+        if (loiHoiLai) nextKey = loiHoiLai;
+        else chanNhap = false;
+      }
       // FR-177 c: hết câu cơ bản + chuyên môn (ảnh xin trong bản nháp) và tin
       // đủ 70 điểm → gửi bản nháp thay vì hỏi tiếp. Dưới 70 thì hỏi tiếp và
       // nói rõ còn thiếu gì.
@@ -7480,7 +7504,7 @@ Deno.serve(async (req) => {
         // `hetCauTruocNhap` với nhánh câu rao.
         const het = await hetCauTruocNhap(pendingReq.listing_id, pendingReq.listings?.property_type,
           { saved_fact: pendingReq.question, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) }, [...(hoiNguocDap ? [hoiNguocDap] : []), ...(dapPhiRoVai ? [dapPhiRoVai] : [])],
-          new Set([...hetHanSet, pendingReq.question]), pendSet);
+          new Set([...hetHanSet, pendingReq.question, ...hoiDuLan]), pendSet);
         if ("res" in het) return het.res;
         thieuDiem = het.thieu;
         // SRS-5.1zzzzo (bắn production 09/10: "Vâng ạ. Sổ và hẻm được không ạ?"): ô vừa mở cho mục thiếu đầu (`khoaMo`) LÀ ý cần hỏi kế —
@@ -8381,9 +8405,27 @@ Deno.serve(async (req) => {
       if (tinChot) {
         const luc = new Date().toISOString();
         const { error: duErr } = await client.from("listings")
-          .update({ chu_noi_du_at: luc, ...(tinChot.status === "cho_thong_tin" ? { chu_duyet_at: luc } : {}) })
+          .update({ chu_noi_du_at: luc })
           .eq("id", tinChot.id);
         if (duErr) await ghiLoi(client, "chat-reply chu noi du roi", duErr.message);
+        // SRS-5.1zzzzr (bắn production 09/10, thu-thuong12: "đăng giúp chú" → "Dạ vâng, vậy em rao như vậy nhé…" mà tin vẫn
+        // `cho_thong_tin`, không bản nháp): nhánh này từng đóng dấu duyệt rồi nói "em rao" bất kể tin có lên kệ được không. Tin CHƯA
+        // lên kệ đi đúng một đường với "đăng đi" trong vòng hỏi (`guiBanNhap(…, dangLuon)`): đủ điểm thì đóng dấu và nói theo trạng
+        // thái ĐỌC LẠI sau khi ghi; chưa đủ thì nói thật còn thiếu gì và mở câu hỏi cho mục thiếu đầu.
+        if (tinChot.status === "cho_thong_tin") {
+          const nhap = await guiBanNhap(tinChot.id, { du_roi: true }, false, [], true);
+          if (!Array.isArray(nhap)) return nhap;
+          const { data: lLoai } = await client.from("listings").select("property_type, district, deal").eq("id", tinChot.id).maybeSingle();
+          const khoaThieu = nhap.map((m) => khoaCuaMucThieu(m, lLoai?.property_type)).find(Boolean) ?? null;
+          if (khoaThieu) {
+            const { error: tErr } = await client.from("info_requests").insert({ listing_id: tinChot.id, question: khoaThieu, status: "pending" });
+            if (tErr && tErr.code !== "23505") await ghiLoi(client, "chat-reply du roi(mo cau thieu)", tErr.message);
+          }
+          const thieuVan = nhap.slice(0, 2).join(" và ");
+          return await traLoiSeller([
+            `Dạ tin mình chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.${khoaThieu ? `\n${cauHoiMau(khoaThieu, cachGoi, lLoai?.property_type, lLoai?.district, lLoai?.deal)}` : ""}`,
+          ], { du_roi: true, thieu: nhap, ...(khoaThieu ? { asked: khoaThieu } : {}) });
+        }
         const { data: dk } = await client.rpc("diem_tin", { p_listing_id: tinChot.id });
         const d = dk as { diem?: number; thieu?: string[] } | null;
         const thieu = (d?.thieu ?? []).slice(0, 2);
@@ -8443,6 +8485,9 @@ Deno.serve(async (req) => {
         });
         sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ?? null;
         if (sReply && sellerMoi && lichSuRows.some((m) => !laTinNguoi(m.sender)) && (await loiBotDu())) sReply = apVan(soVan, "boChaoLai", sReply, boChaoLai(sReply));
+        // SRS-5.1zzzzr (thu-thuong11: "ok em" → "Để em kiểm tra giá giao dịch khu Phú Hòa Đông gần đây rồi báo lại chị nhé."): lưới
+        // lời hứa tự kiểm (lớp an toàn, luôn bật) trước đây chỉ chạy ở r2 — r3 cũng là lời model gửi chủ nhà.
+        if (sReply) sReply = apVan<string | null>(soVan, "boHuaTuKiemTra(r3)", sReply, boHuaTuKiemTra(sReply, null) || null);
         await doTien(client, r3.usage);
       } catch (e) {
         await ghiLoi(client, "chat-reply model r3(seller)", e);
@@ -8452,7 +8497,8 @@ Deno.serve(async (req) => {
       sReply ??
         (sellerMoi
           ? (lichSuRows.some((m) => !laTinNguoi(m.sender)) ? "Dạ, bất động sản của anh/chị" : "Dạ em chào anh/chị! Bất động sản của anh/chị") + " ở đâu vậy, ở Hồ Chí Minh đúng không ạ?"
-          : "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha."),
+          // SRS-5.1zzzzr: câu dự phòng không hứa "kiểm tra rồi báo lại" — không có việc nào đi kèm lời hứa đó.
+          : `Dạ em ghi nhận rồi ạ.`),
     ]);
   }
 

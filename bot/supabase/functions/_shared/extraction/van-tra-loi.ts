@@ -977,7 +977,9 @@ export function boCauHuaLoc(replies: string[]): string[] {
  * cột điện hay hố ga có chạy qua lô không nha?" — bot không có cách nào kiểm; người nói chuyện là chủ nhà. Câu bot tự hứa kiểm /
  * xác minh bị bỏ; câu bị bỏ là câu hỏi duy nhất thì hỏi lại bằng `thay` (câu mẫu của ô kế).
  */
-const HUA_TU_KIEM_RE = /\b(?:de\s+)?em\s+(?:se\s+|di\s+)?(?:kiem tra|check|xac minh|kiem chung|tim hieu|ra soat|coi lai|xem lai giup)\b/;
+// SRS-5.1zzzzr: thêm "tra (giúp / cứu)", "gọi điện", "đi / qua / ghé xem" — việc bot không tự làm được (prompt TONE_RULES nói cùng
+// một danh sách). "em trả lời" (tra loi) và "em gọi anh là" không phải lời hứa.
+const HUA_TU_KIEM_RE = /\b(?:de\s+)?em\s+(?:se\s+|di\s+)?(?:kiem tra|check|xac minh|kiem chung|tim hieu|ra soat|coi lai|xem lai giup|tra(?!\s+loi)(?:\s+(?:giup|cuu|thu))?|goi dien|di xem|qua xem|ghe xem)\b/;
 export function boHuaTuKiemTra(reply: string, thay: string | null): string {
   const cac = tachCau(reply);
   const giu = cac.filter((c) => !HUA_TU_KIEM_RE.test(boDau(c)));

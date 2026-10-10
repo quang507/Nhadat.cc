@@ -2957,6 +2957,40 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 
 - **Kiểm, đỏ khi tắt**: `ghi-phuong-mot-cua.mjs` — bộ chung "ở củ chi, xã tân thạnh đông" → Xã Phú Hòa Đông, **cách nói MỚI** "đất chị ở xã tân thạnh tây bên củ chi" → Xã Phú Hòa Đông; ca "bẫy còn đó" (riêng bảng mới vẫn khớp Phường Tân Thành — lý do phải hỏi bộ chung); soát mã nguồn `ghiPhuongTrongCau` theo bộ chung khi hai bên lệch (hoàn mã → đỏ). `van-tra-loi.mjs` CHAO-* (ca gốc, **cách nói MỚI** "Chào anh ơi, em có căn nhà cần bán", không dấu, chỉ có lời chào, "chào giá"); phần câu lệnh chỉ kiểm được bằng model thật: bắn lại sau deploy. `bun run test:bot` exit 0.
 
+### SRS-5.1zzzzr · Lượt bán không có bước tiếp; "em rao" khi tin chưa lên kệ; bot hứa tự kiểm tra giá (10/10/2026)
+
+`[nguồn: bắn production 09/10/2026 sau SRS-5.1zzzzq — thu-thuong11…13; chủ dự án 10/10/2026: "sửa từ gốc nhé, nếu gốc ổn rồi mà nó vẫn chạy lung tung mới sửa vá, nếu là lỗi code thì sửa vá, ok làm theo m đề xuất đi"]`
+
+- **Ca gốc** (thu-thuong11/12): bot hỏi giá, chủ nhà trả lời "sổ riêng em" → "Dạ vâng, sổ riêng gọn lắm chị ơi." rồi KHÔNG hỏi gì nữa; lượt sau "ok em" → "Vâng ạ. Để em kiểm tra giá giao dịch khu Phú Hòa Đông gần đây rồi báo lại chị nhé." (bot không có công cụ nào làm việc đó); lượt sau "đăng giúp chú" → "Dạ vâng, vậy em rao như vậy nhé…" trong khi tin vẫn `cho_thong_tin`, không có bản nháp.
+
+**(1) Lượt bán không có bước tiếp.**
+- **Nguyên nhân**: câu VỪA hỏi là một ô lõi (giá / diện tích / vị trí / phường). Khách nói chuyện khác → luật FR-234 không hỏi lại ngay trong lượt đó, còn `chanNhap` chặn bản nháp vì vẫn thiếu đúng ô đó. Không còn câu nào khác để hỏi → lượt không mở câu treo nào và cũng không gửi bản nháp. Sang lượt sau thì không còn câu treo nào để hỏi lại.
+- **Lớp lỗi**: *hai luật đúng khi đứng riêng, ghép lại thì ra ngõ cụt* ("không hỏi lại" và "thiếu ô lõi thì không gửi nháp"). Bất biến bị vỡ: lượt bán chưa lên kệ luôn có bước tiếp.
+- **Sửa**: ô lõi còn thiếu được hỏi lại tối đa `SO_LAN_HOI_LOI = 3` lần mỗi ô, đếm theo mọi `info_requests` đã mở cho ô đó. Đây là ngoại lệ của luật 01/10 "không hỏi lại", chỉ áp cho ô lõi, chủ dự án duyệt 10/10. Một chỗ đếm (`hoiDuLan`) dùng cho cả ba đường: câu lõi kế (`loiConThieu`), nhánh hết câu, và `hetCauTruocNhap` (nó bỏ qua ô đã hỏi đủ). Ô đã hỏi đủ 3 lần thì thôi hỏi và cũng thôi chặn bản nháp: bản nháp ra và nói rõ còn thiếu gì.
+- **Chỗ khác cùng lớp**: lượt r3 (không có câu treo) mà tin còn thiếu ô lõi thì vẫn không tự mở lại câu đó. Ghi ở đây, chưa đổi: lượt r3 do model viết, và câu kế ở đó chưa có chủ.
+
+**(2) "Em rao" khi tin chưa lên kệ.**
+- **Nguyên nhân**: nhánh "đủ rồi" NGOÀI vòng hỏi đóng dấu `chu_noi_du_at` rồi luôn nói câu soạn sẵn `du_roi` ("em rao với thông tin hiện tại"), không đọc trạng thái tin. Nhánh "đủ rồi" TRONG vòng hỏi đã sửa ở SRS-5.1zh.
+- **Lớp lỗi**: *câu nói trạng thái tin không đọc trạng thái thật* — cùng lớp SRS-5.1zzzzk.
+- **Sửa**: tin `cho_thong_tin` đi đúng đường của "đăng đi" (`guiBanNhap(…, dangLuon)`). Tin đủ điều kiện thì lên bản nháp hoặc lên kệ theo trạng thái đọc lại. Chưa đủ thì nói thật "chỉ cần thêm … là đủ điều kiện lên kệ" và mở câu hỏi cho mục thiếu đầu tiên (`khoaCuaMucThieu`). Tin đã lên kệ giữ câu cũ.
+- **Chỗ khác cùng lớp**: nhánh trong vòng hỏi (SRS-5.1zh) đã đúng sẵn. Lưới `traLoiSeller` (SRS-5.1zzzzk) lo các câu "đã đăng" do model viết.
+
+**(3) Bot hứa việc tự nó không làm được.**
+- **Nguyên nhân gốc là câu lệnh**: `TONE_RULES` dạy model nói "để em hỏi lại chủ nhà / kiểm tra rồi báo lại ạ" khi chưa có thông tin. Model dùng nguyên câu đó với chủ nhà ("kiểm tra giá giao dịch"). Lưới `boHuaTuKiemTra` có sẵn ở r2 nhưng chưa có ở r3, nên câu lệnh và lưới dạy hai điều ngược nhau.
+- **Lớp lỗi**: *câu lệnh dạy đúng câu mà lưới an toàn sẽ bỏ* (luật mâu thuẫn nhau).
+- **Sửa ở gốc (câu lệnh)**: `TONE_RULES` nay nói thật là chưa có thông tin, và cấm hứa tra / kiểm tra giá giao dịch, kiểm tra quy hoạch hay sổ, gọi điện, đi xem nhà rồi "báo lại". Riêng khách MUA hỏi về căn thì vẫn được nói "để em hỏi lại chủ nhà rồi báo", vì việc đó có đường thật (FR-173). `SELLER_SCRIPT_RULES`, dòng giá thị trường: không nêu số, không hứa tra giá (câu đó hệ thống đã chuyển người phụ trách — `dapChuaCoDuLieu`), hỏi giá chủ nhà mong muốn.
+- **Lưới (vá, vì model vẫn có thể viết)**: `boHuaTuKiemTra` chạy cả ở r3 (van `boHuaTuKiemTra(r3)`). Danh sách thêm "tra (giúp / cứu)", "gọi điện", "đi / qua / ghé xem". "Em trả lời", "em gọi anh là…", "em trao đổi" không bị kích. Câu mặc định của r3 khi lời bị bỏ hết là "Dạ em ghi nhận rồi ạ.".
+- **Chỗ khác cùng lớp**: `luat-khong-mau-thuan.mjs` (12) soi MỌI câu lệnh: không câu nào dạy một câu mà lưới hứa sẽ bỏ. Đã chạy trên câu lệnh cũ và thấy đỏ.
+
+- **Kiểm, đỏ khi tắt**:
+  - e2e ZZZZR-01/01b: ô giá bị lờ ba lượt, mỗi lượt có bước tiếp, câu giá mở đúng 3 lần. Bản đầu (chưa có `hoiDuLan` chung) đỏ ở 01b vì lượt thứ tư mở câu giá lần 4 qua `loiConThieu`.
+  - e2e ZZZZR-02: "đủ rồi" ngoài vòng hỏi, tin thiếu giá → không "em rao", nói còn thiếu, có câu treo, tin vẫn `cho_thong_tin`.
+  - e2e ZZZZR-03, **cách nói MỚI** ở r3: "Để em tra giúp giá giao dịch quanh khu đó rồi nhắn lại anh nhé" → mệnh đề bị bỏ. Lưới cũ không có "tra giúp".
+  - `van-tra-loi.mjs`: 4 câu hứa (tra giúp, gọi điện, qua xem, tra cứu) và 5 câu không được kích.
+  - `luat-khong-mau-thuan.mjs` (12).
+  - Ba kỳ vọng e2e cũ đổi theo hành vi mới (SRS-5.1zzzl-a nhận "CẦN HỎI: phường"; SRS-5.1zzzn-b không câu nào nói đang rao / đã đăng; AIBOC-13 câu phường mở ≤ 3 lần).
+  - `bun run test:bot` exit 0, `bun run kieu:bot` sạch.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
