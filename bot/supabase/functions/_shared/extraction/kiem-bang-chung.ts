@@ -700,6 +700,24 @@ export function kiemDeXuat(deXuat: DeXuat[], tin: string, ngu: NguCanhKiem = {})
   return { dat, bo };
 }
 
+/** Ý của CẢ CUỘC RAO, không của riêng một tin: khách nói loại / bán hay thuê một lần ở tin đầu, các tin sau tả căn. */
+export const KHOA_Y_CUOC_RAO = ["loai_giao_dich", "loai_bds"] as const;
+/**
+ * SRS-5.1zzzzu (bắn thật thu-cmp45-2): "e co mieng dat can ban" → AI lượt đó im; hai lượt sau, đang hỏi loại, khách "5x20 tho cu het"
+ * → AI đọc lại bộ nhớ (`tinChuNha`), trích «mieng dat» ở TIN ĐẦU, kiểm trích dẫn chỉ soi tin này nên bỏ → loại kẹt `chua_ro`, bot hỏi
+ * "nhà phố hay nhà cấp 4" cho lô đất. AI được đọc tin cũ thì trích dẫn tin cũ phải kiểm được trên tin cũ — chỉ cho khoá ý cả cuộc
+ * rao, và chỉ khi nơi gọi đã biết ô đó đang TRỐNG (không bao giờ đè giá trị đã ghi bằng chữ cũ). Đề xuất có trong tin này giữ nguyên.
+ */
+export function kiemYCuocRao(deXuat: DeXuat[], tin: string, tinCu: string, ngu: NguCanhKiem = {}): { dat: DeXuat[]; bo: Bo[] } {
+  const kd = kiemDeXuat(deXuat, tin, ngu);
+  if (!tinCu.trim()) return kd;
+  const conThieu = (deXuat ?? []).filter((t) => t && (KHOA_Y_CUOC_RAO as readonly string[]).includes(t.khoa) && !kd.dat.some((d) => d.khoa === t.khoa));
+  if (!conThieu.length) return kd;
+  const cu = kiemDeXuat(conThieu, tinCu, ngu);
+  const nhan = new Set(cu.dat.map((d) => d.khoa));
+  return { dat: [...kd.dat, ...cu.dat], bo: kd.bo.filter((b) => !nhan.has(b.khoa)) };
+}
+
 /**
  * "hẻm 45 Nguyễn Trãi", "hẻm 12/3 Trần Phú", "hem 45 nguyen trai": con số ngay sau "hẻm" mà KHÔNG kèm đơn vị mét là
  * số hẻm khi nó có "/", hoặc ≥ 10, hoặc đứng trước một tên viết hoa (tên đường). "hẻm 4 xe hơi", "hẻm 6m", "hẻm 3.5"

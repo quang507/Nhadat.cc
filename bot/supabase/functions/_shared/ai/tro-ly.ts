@@ -299,9 +299,21 @@ const NHAC_KHOANG_CACH = (cau: string[]) =>
   `[HỆ THỐNG, khách không thấy dòng này] Lời vừa soạn nêu khoảng cách chưa có nguồn: ${cau.map((c) => `"${c}"`).join("; ")}. ` +
   "Gọi tim_tien_ich_quanh để tra rồi trả lời theo kết quả; không tra được thì bỏ phần khoảng cách, đừng kể theo trí nhớ.";
 
+/**
+ * SRS-5.1zzzzu (bắn production 10/10, thu-cmp45-4): lượt chỉ có công cụ GHI, model viết "…em báo anh ngay nhé.\n\n---\n**CẬP NHẬT HỒ SƠ:**"
+ * rồi gọi `ghi_ho_so_mua` — dòng dẫn cho lệnh công cụ đi thẳng tới khách. Zalo không hiển thị markdown: bỏ dòng kẻ (---, ***), dấu
+ * đậm / tiêu đề; đoạn còn lại chỉ là lời dẫn kết thúc bằng ":" (không có gì theo sau nó) là lời kể việc, không phải lời nói với khách.
+ */
+function boLoiDanMarkdown(doan: string): string {
+  const s = doan.split("\n")
+    .filter((d) => !/^\s*(?:[-*_]\s*){3,}$/.test(d))
+    .map((d) => d.replace(/^\s*#{1,6}\s+/, "").replace(/\*\*([^*]*)\*\*/g, "$1").replace(/__([^_]*)__/g, "$1"))
+    .join("\n").trim();
+  return /:\s*$/.test(s) && !/\n/.test(s) && s.length <= 80 ? "" : s;
+}
 /** Chữ model → bong bóng: tách theo dòng trống, tối đa 2 (bong bóng thừa gộp vào bong bóng cuối). */
 export function thanhBongBong(s: string): string[] {
-  const ds = s.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean);
+  const ds = s.split(/\n\s*\n/).map((x) => boLoiDanMarkdown(x.trim())).filter(Boolean);
   if (ds.length <= 2) return ds;
   return [ds[0], ds.slice(1).join("\n")];
 }

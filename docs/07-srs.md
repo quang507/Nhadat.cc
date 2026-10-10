@@ -3063,6 +3063,67 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
   - Phần câu lệnh chỉ kiểm được bằng model thật: bắn lại sau deploy.
   - `bun run test:bot` exit 0, `kieu:bot` sạch.
 
+### SRS-5.1zzzzu · Đất gõ không dấu kẹt loại; trấn an "tin đã được kiểm duyệt"; nhánh mua lộ markdown và câu mảnh (10/10/2026)
+
+`[nguồn: bắn production 10/10/2026 (5 kịch bản, thu-cmp45-1…4); chủ dự án 10/10: "sửa luôn 3 lỗi trc đi"]`
+
+**(1) Đất gõ không dấu: loại kẹt `chua_ro`, bot hỏi "nhà phố hay nhà cấp 4" cho lô đất** (thu-cmp45-2).
+- **Ca gốc**: "e co mieng dat can ban" → lượt AI đó im. Hai lượt sau, đang hỏi loại, khách "5x20 tho cu het" → AI đọc bộ nhớ (`tinChuNha`, SRS-5.1za) và đề xuất `loai_bds = dat «mieng dat»`; kiểm bằng chứng bỏ vì `trich_dan_khong_co_trong_tin`.
+- **Nguyên nhân**: AI được đọc các tin chủ nhà trước, nhưng `kiemDeXuat` chỉ soi trích dẫn trên tin hiện tại. Riêng nhánh câu rao điền tin rỗng đã có ngoại lệ (SRS-5.1zzzw) chép tay ngay tại chỗ.
+- **Lớp lỗi**: *AI đọc ngữ cảnh rộng hơn phạm vi code kiểm trích dẫn*.
+- **Sửa**: một hàm chung `kiemYCuocRao(deXuat, tin, tinCu)` (`kiem-bang-chung.ts`). Chỉ cho hai khoá ý của cả cuộc rao (`loai_giao_dich`, `loai_bds`), và chỉ khi nơi gọi biết ô đó đang TRỐNG, nên không bao giờ đè giá trị đã ghi. Dùng ở ba chỗ:
+  - câu treo loại;
+  - nhánh trả lời câu treo khi loại còn trống;
+  - nhánh câu rao điền tin rỗng (thay bản chép tay SRS-5.1zzzw).
+  Lượt chỉ nói giá trong lúc đang hỏi loại ("gia 3 ty ruoi") không còn dừng ở lời ghi giá. Lượt đó đi tiếp xuống câu treo loại (`loaiTuTinCu`) để ghi loại từ tin trước.
+- **Chỗ khác cùng lớp**:
+  - lối ghi bóng `ghiBongBocTach` cũng chỉ soi tin hiện tại, nhưng nó chạy trước khi đọc lịch sử (`lichSuDai`), nên chưa làm; câu treo loại đã đỡ phần này;
+  - các khoá khác (giá, diện tích) cố ý KHÔNG nhận trích dẫn tin cũ, vì giá trị cũ có thể đã được sửa.
+
+**(2) Chủ nhà nghi lừa: AI đọc cảm xúc bình thường, model trấn an "tin chị lên sàn em đã được kiểm duyệt kỹ lắm"** (thu-cmp45-3, "sao chị biết em không lừa").
+- **Đính chính**: "Sunrise City do Novaland làm chủ đầu tư, có sổ" KHÔNG phải bịa. Kho `projects` có đúng hai dữ kiện đó (developer, legal_status "Đã có sổ").
+- **Hai lỗi thật**:
+  - (a) Lượt bóc tách xếp câu hỏi vặn vào `cam_xuc = binh_thuong`, nên bong bóng trấn an tiền định và việc 😟 báo người phụ trách không chạy.
+  - (b) "Lên sàn" / "đã được kiểm duyệt" là khẳng định trạng thái tin khi tin chưa lên kệ. Lưới trạng thái thật (`traLoiSeller`, chủ duy nhất của đầu ra này, SRS-5.1zzzzk) không có các chữ đó.
+- **Lớp lỗi**:
+  - (a) *ý định chỉ được dạy bằng dạng câu thẳng* (cùng lớp SRS-5.1zzzzt (2));
+  - (b) *bộ nhận diện của chủ đầu ra thiếu cách nói đồng nghĩa*.
+- **Sửa**:
+  - (a) Câu lệnh: mô tả `cam_xuc` gọi tên các kiểu hỏi vặn là `nghi_ngo`. `TONE_RULES`: khách nghi ngờ thì đáp bằng điều có thật về cách làm việc, không lấy dự án / căn ra trấn an, không nói "đã được kiểm duyệt" hay "lên sàn".
+  - (b) `DA_DANG_RE` (`van-tra-loi.ts`) thêm "đã / vừa (được) (kiểm) duyệt", "lên sàn". Vẫn tôn trọng phủ định ("chưa") và hứa có điều kiện ("sẽ được duyệt trước khi lên").
+- **Chỗ khác cùng lớp**: lưới trạng thái chạy ở `traLoiSeller` cho mọi lời gửi người bán (r1 / r2 / r3), không còn chỗ riêng.
+
+**(3) Nhánh mua: "---\n**CẬP NHẬT HỒ SƠ:**" tới khách; câu mảnh "Nhưng em sẽ theo sát…"** (thu-cmp45-4).
+- **Nguyên nhân**:
+  - Lượt trợ lý chỉ gọi công cụ GHI thì lấy nguyên chữ model làm lời (`tro-ly.ts`). Model viết lời rồi thêm một dòng dẫn markdown cho lệnh công cụ.
+  - Một van bỏ câu đầu "Dạ em lọc rồi, hiện bên em chưa có căn nào khớp…" thì câu sau, mở bằng "Nhưng", trơ trọi.
+- **Lớp lỗi**:
+  - *lời kể việc / định dạng không dành cho Zalo lọt cửa ra*;
+  - *bỏ câu mà không xử câu trỏ về nó*.
+- **Sửa**:
+  - `thanhBongBong` (cửa ra duy nhất của trợ lý) bỏ dòng kẻ, dấu đậm, tiêu đề markdown, và đoạn chỉ là lời dẫn kết thúc bằng ":".
+  - `locCauGotNoi` / `goTuNoiDau` (`van-tra-loi.ts`): câu giữ lại mà câu liền trước vừa bị bỏ thì gọt từ nối đối lập (nhưng / tuy nhiên / thế nhưng / song / mà).
+  - Dùng trong `locCauTrongBongBong` (mọi van bỏ câu đi qua đó) và `boCauNhanXet`.
+- **Chỗ khác cùng lớp**:
+  - Nhánh bán đã có `laLoiMeta` (in đậm, xưng "tôi"), lời model dạng đó bị bỏ cả.
+  - Đường JSON cũ của nhánh mua chưa có lọc markdown; chưa thấy ca, ghi đây.
+  - `chanHuaCoHang` thay câu sai bằng lời thật rồi bỏ mọi câu kể sau nó, nên không để lại câu mảnh.
+
+- **Kiểm, đỏ khi tắt** (đã chạy: gỡ từng bản sửa thì đỏ đúng ca):
+  - e2e ZZZZU-01/02/03:
+    - ZZZZU-01: ca gốc.
+    - ZZZZU-02: **cách nói MỚI** "con co lo dat nen muon ban" rồi "gia 3 ty ruoi".
+    - ZZZZU-03: đối chứng, trích dẫn bịa vẫn bỏ.
+  - e2e ZZZZU-04/05/06:
+    - ZZZZU-04/05: dòng dẫn markdown, từ nối.
+    - ZZZZU-06: **cách nói MỚI** "***" + "## Ghi chú hồ sơ:".
+  - e2e ZZZZU-07: "lên sàn / kiểm duyệt" khi không tin nào lên kệ.
+  - `kiem-bang-chung.mjs` ZZZZU-U1…U3.
+  - `van-tra-loi.mjs` ZZZZU-V1…V7, trong đó V5 là **cách nói MỚI** "tin anh vừa duyệt xong".
+  - `luat-khong-mau-thuan.mjs` (15).
+  - Phần câu lệnh (cam_xuc, TONE_RULES) chỉ kiểm được bằng model thật: bắn lại sau deploy + `dong-bo-prompt`.
+  - `bun run test:bot` exit 0, `kieu:bot` sạch.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

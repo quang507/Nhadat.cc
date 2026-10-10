@@ -53,7 +53,7 @@ const HoiLai = z.object({
 // NGHĨA cả câu (có ngữ cảnh), code kiểm trích dẫn rồi mới báo admin (`docCamXuc`).
 export const MUC_CAM_XUC = ["binh_thuong", "buc", "nghi_ngo", "muon_dung"] as const;
 const CamXuc = z.object({
-  muc: z.enum(MUC_CAM_XUC).describe("binh_thuong ('ngộp ngân hàng', 'kẹt bank', 'cắt lỗ' là áp lực TIỀN của chủ nhà, không phải bực với bot); buc = bực, cáu, chê bot hỏi nhiều / hỏi hoài; nghi_ngo = nghi lừa đảo, không tin, sợ mất tiền / mất thông tin; muon_dung = bảo thôi, không rao nữa, đừng nhắn nữa. 'Bận', 'để mai' thôi chưa phải bực."),
+  muc: z.enum(MUC_CAM_XUC).describe("binh_thuong ('ngộp ngân hàng', 'kẹt bank', 'cắt lỗ' là áp lực TIỀN của chủ nhà, không phải bực với bot); buc = bực, cáu, chê bot hỏi nhiều / hỏi hoài; nghi_ngo = nghi lừa đảo, không tin, sợ mất tiền / mất thông tin — kể cả hỏi vặn ('sao chị biết em không lừa', 'bên em có phải lừa đảo không', 'làm sao tin được', 'đưa thông tin rồi ai chịu trách nhiệm'): đó là nghi ngờ, KHÔNG phải binh_thuong; muon_dung = bảo thôi, không rao nữa, đừng nhắn nữa. 'Bận', 'để mai' thôi chưa phải bực."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ thể hiện cảm xúc đó. binh_thuong thì null."),
 });
 // 01/10/2026 (chủ dự án: "câu hỏi riêng cho từng loại bds… code cứng quá nên giờ cần AI hiểu"): bảng câu theo loại (required_facts)

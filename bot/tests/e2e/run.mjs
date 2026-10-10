@@ -9670,6 +9670,91 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }
+// ── SRS-5.1zzzzu (bắn production 10/10, thu-cmp45-2): "e co mieng dat can ban" lượt đầu AI im; hai lượt sau, đang hỏi loại, khách
+// "5x20 tho cu het" → AI đọc bộ nhớ và trích «mieng dat» ở TIN ĐẦU → trước: bỏ vì trích dẫn không có trong tin này, loại kẹt chua_ro, bot
+// hỏi "nhà phố hay nhà cấp 4" cho lô đất. Nay `kiemYCuocRao`: ô loại trống thì trích dẫn loại ở tin chủ nhà trước được nhận.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBoc = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const rong = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null } };
+  const chay = async (uid, tinDau, tinSau, deXuat) => {
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model.parse = (p) => laBoc(p) ? rong : OUT();
+    await send({ external_user_id: uid, text: tinDau });
+    const s = db().t.sellers.find((x) => x.zalo_user_id === uid);
+    let L = db().t.listings.filter((l) => l.seller_id === s?.id).at(-1);
+    if (!L) L = db().insert("listings", { code: "BDS-Q5-0903", seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "chua_ro" }).data;
+    L.property_type = "chua_ro";
+    db().t.info_requests.forEach((x) => { if (x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: L.id, question: "loai_bds", status: "pending" });
+    globalThis.__model.parse = (p) => laBoc(p) ? { ...rong, so_can: 1, truong: deXuat } : OUT();
+    const r = await send({ external_user_id: uid, text: tinSau });
+    return { L: db().t.listings.find((l) => l.id === L.id), rep: (r.body?.replies ?? []).join(" | ") };
+  };
+  const a = await chay("thu-dat-kd", "e co mieng dat can ban", "5x20 tho cu het",
+    [{ khoa: "loai_bds", gia_tri: "dat", trich_dan: "mieng dat", can: null }, { khoa: "dien_tich", gia_tri: "100", trich_dan: "5x20", can: null }]);
+  check("ZZZZU-01 'e co mieng dat can ban' rồi (đang hỏi loại) '5x20 tho cu het', AI trích «mieng dat» ở tin đầu → loại = đất, không hỏi 'nhà phố hay nhà cấp 4'",
+    a.L?.property_type === "dat" && !/nhà phố hay nhà cấp 4|loại nào ta/.test(a.rep), JSON.stringify({ pt: a.L?.property_type, rep: a.rep }));
+  // Cách nói MỚI chưa bắn: "con co lo dat nen" (không dấu, chữ "lô đất nền"), lượt sau chỉ trả giá.
+  const b = await chay("thu-dat-kd2", "con co lo dat nen muon ban", "gia 3 ty ruoi",
+    [{ khoa: "loai_bds", gia_tri: "dat", trich_dan: "lo dat nen", can: null }, { khoa: "gia", gia_tri: "3.5 tỷ", trich_dan: "3 ty ruoi", can: null }]);
+  check("ZZZZU-02 (cách nói MỚI) 'con co lo dat nen muon ban' rồi 'gia 3 ty ruoi' → loại = đất",
+    b.L?.property_type === "dat", JSON.stringify({ pt: b.L?.property_type, rep: b.rep }));
+  // Đối chứng: AI bịa trích dẫn không có ở tin nào → vẫn bỏ, loại vẫn trống, bot hỏi lại loại.
+  const c = await chay("thu-dat-kd3", "e co mieng dat can ban", "5x20 tho cu het",
+    [{ khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "nha pho 3 tang", can: null }]);
+  check("ZZZZU-03 đối chứng: trích dẫn loại không nằm ở tin nào của chủ nhà → BỎ, loại vẫn chua_ro",
+    c.L?.property_type === "chua_ro", JSON.stringify({ pt: c.L?.property_type, rep: c.rep }));
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
+// ── SRS-5.1zzzzu (bắn production 10/10, thu-cmp45-4): nhánh mua, lượt chỉ có công cụ GHI — model viết lời + "---\n**CẬP NHẬT HỒ SƠ:**"
+// rồi gọi ghi_ho_so_mua → khối markdown tới khách; vế đầu bị van bỏ, còn trơ "Nhưng em sẽ theo sát…".
+{
+  const cuCH = globalThis.__cauHinh;
+  const goiTroLyMd = () => globalThis.__calls.filter((c) => c.kind === "create" && c.params.tools);
+  const chay = async (uid, loi) => {
+    fresh((d) => {
+      seedKho(d);
+      const b = d.insert("buyers", { zalo_user_id: uid, name: null, preferences: { deal: "ban", area: "Quận 12", budget: "7 tỷ", bedrooms: 3 } }).data;
+      d.insert("conversations", { buyer_id: b.id, channel: "zalo_personal_test", started_at: "2026-09-01T00:00:00Z" });
+    });
+    globalThis.__cauHinh = { test_reset_hello: "1", tro_ly: "thu" };
+    globalThis.__model.troLy = (p) => {
+      const cuoi = p.messages.at(-1);
+      if (Array.isArray(cuoi.content) && cuoi.content[0]?.type === "tool_result") return { stop_reason: "end_turn", content: [{ type: "text", text: "Dạ vâng ạ." }] };
+      return { stop_reason: "tool_use", content: [{ type: "text", text: loi },
+        { type: "tool_use", id: "g1", name: "ghi_ho_so_mua", input: { truong: [{ khoa: "alley", gia_tri: "hẻm xe hơi", trich_dan: "hẻm xe hơi" }] } }] };
+    };
+    const r = await send({ external_user_id: uid, text: "có căn nào hẻm xe hơi không em" });
+    if (goiTroLyMd().length !== 1) return ["(lượt ghi bị từ chối, ca không đo được)"];
+    return (r.body?.replies ?? []).filter((x) => !/^🤖/u.test(x));
+  };
+  const a = await chay("thu-mua-md", "Dạ em lọc rồi, hiện bên em chưa có căn nào khớp hẻm xe hơi, 3 phòng ngủ, Quận 12, tầm 7 tỷ ạ. Nhưng em sẽ theo sát, khi có căn khớp em báo anh ngay nhé.\n\n---\n**CẬP NHẬT HỒ SƠ:**");
+  check("ZZZZU-04 lượt chỉ ghi: '---' / '**CẬP NHẬT HỒ SƠ:**' không tới khách",
+    a.length > 0 && !a.some((x) => /---|\*\*|CẬP NHẬT HỒ SƠ/.test(x)), JSON.stringify(a));
+  check("ZZZZU-05 không bong bóng nào mở bằng từ nối trơ trọi ('Nhưng …') sau khi vế trước bị bỏ",
+    !a.some((x) => /^(?:Nhưng|Tuy nhiên|Mà)\b/u.test(x.trim())), JSON.stringify(a));
+  // Cách nói MỚI chưa bắn: tiêu đề "## Ghi chú hồ sơ" + dòng "***".
+  const b = await chay("thu-mua-md2", "Dạ em ghi thêm nhu cầu của anh rồi ạ.\n\n***\n## Ghi chú hồ sơ:");
+  check("ZZZZU-06 (cách nói MỚI) '***' + '## Ghi chú hồ sơ:' không tới khách, lời thật giữ",
+    b.some((x) => /em ghi thêm nhu cầu/.test(x)) && !b.some((x) => /\*\*\*|##|Ghi chú hồ sơ/.test(x)), JSON.stringify(b));
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+  // thu-cmp45-3: chủ nhà "sao chị biết em không lừa", không tin nào lên kệ, model trấn an "tin chị lên sàn em đã được kiểm duyệt kỹ lắm"
+  // → lưới trạng thái thật (một chủ, `traLoiSeller`) bỏ vế đó; vế dự án / câu hỏi giữ.
+  fresh(seedKho);
+  const sN = db().t.sellers.find((x) => x.zalo_user_id === "z-nmg");
+  for (const l of db().t.listings.filter((l) => l.seller_id === sN.id)) l.status = "an";
+  globalThis.__model.create = () => "Vâng ạ, Sunrise City do Novaland làm chủ đầu tư, có sổ đầy đủ và tin chị lên sàn em đã được kiểm duyệt kỹ lắm. Vậy chị muốn định giá căn này bao nhiêu ạ?";
+  const rL = await send({ external_user_id: "z-nmg", text: "sao chị biết em không lừa" });
+  const loiL = (rL.body?.replies ?? []).filter((x) => !/^(🤖|💾|📝|📋|👤)/u.test(x)).join(" | ");
+  check("ZZZZU-07 không tin nào lên kệ, model nói 'tin chị lên sàn em đã được kiểm duyệt' → vế đó bị bỏ, câu hỏi giá giữ",
+    !/kiểm duyệt|lên sàn/.test(loiL) && /bao nhiêu/.test(loiL), JSON.stringify({ loiL, vk: rL.body?.van_kich }));
+  globalThis.__model.create = undefined;
+  globalThis.__model = { parse: () => OUT() };
+}
 // ── kết: BẤT BIẾN TOÀN BỘ ──
 soatDbBatBien("(cuối)");
 if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_DUMP, JSON.stringify(BB, null, 1));

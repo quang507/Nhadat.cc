@@ -5,7 +5,8 @@
 // Phần SQL (tầng căn hộ, giá "/tháng", tên đường "m Nguyễn Trãi") ở migration
 // 20260913a — đã chạy thử trên DB bằng khối DO rollback, không nằm ở đây.
 import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, giongCauHoi, loaiKhoTuHoSo, boCauTrung, boDoanGioiDauCau, boGoiDoanGioi, boGoiCuoiVaOi, boKhenKhongCanCu, boMauThuanCan, boTenRiengBia, boCauGhiNhan, boGachCheo, boHoiMucDich, chanHuaCoHang, dapHoiNguocTienDinh, laLoiMeta, laNoiVoiBot, laXinBoTruong, laXinSoKhach, laXinXoaDuLieu, boCauSuaLaiModel, motCauHoi, motCauHoiLuot, chanNhanLaNguoi, gopGhiChu, laCauGhiNhan, laHoiCoHang, laHoiMucDich, laHuaCoHang, laNhanLaNguoi, locHoSoMua, suaTuXungMua, doiTuXung, vuaKhen, boCauKhen } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { boCauNoiHeThong, boCauTroNguocDauBong } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { boCauNoiHeThong, boCauTroNguocDauBong, goTuNoiDau, coMenhDeDaDang, boCauNhanXet as boCauNhanXetU } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
+import { thanhBongBong } from "../supabase/functions/_shared/ai/tro-ly.ts";
 import { boHuaDaDang, boKhenViTri, botXungEm, laHoiLechKhoa, laSoDoBia, thayCauHoiLech } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCanBia, boCauVongLai, boDoanPhuongDiaDanh, chanBiaDuKien, chanHuaGuiHinh, laHuaGuiHinh, laHuaHoiChu, suaBotXungNhamKhach, suaKhenNguocNghia } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { boCauGhiTienKhongCo, boCauM2KhongCo, boGachDai, boHoiHoanCong, laKhachBaoHieuNham, themXinLoiKhiHieuNham, laKhenSai, boMenhDeKhenSai, boMaTinKhach, coNhacCan, bongBongGoiYCan, boCauHoiDo, boDacDiemKhongCo } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
@@ -1406,6 +1407,27 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   ok("NX-07 (mới) 'Tôi sẽ viết một tin ngắn…' là lời đọc câu lệnh", laLoiMeta("Được rồi. Tôi sẽ viết một tin ngắn gọn theo yêu cầu."));
   ok("NX-08 lời thường có 'tối nay' không bị coi là meta", !laLoiMeta("Dạ tối nay anh rảnh thì gửi em ảnh sổ nha."));
   ok("NX-09 lời thường có '•' / gạch đầu dòng không in đậm vẫn không meta", !laLoiMeta("Dạ em ghi rồi ạ. Nhà mình hẻm rộng mấy mét vậy anh?"));
+}
+
+// SRS-5.1zzzzu (bắn production 10/10): câu mảnh sau khi bỏ câu trước; "lên sàn / đã được kiểm duyệt" là khẳng định trạng thái; markdown
+// và dòng dẫn công cụ trong lời trợ lý.
+{
+  const loi = "Dạ em lọc rồi, hiện bên em chưa có căn nào khớp hẻm xe hơi ạ. Nhưng em sẽ theo sát, khi có căn khớp em báo anh ngay nhé.";
+  const sau = boCauNhanXetU(loi, ["Dạ em lọc rồi, hiện bên em chưa có căn nào khớp hẻm xe hơi ạ"]);
+  ok("ZZZZU-V1 bỏ câu đầu → câu sau không mở bằng 'Nhưng' trơ trọi", sau === "Em sẽ theo sát, khi có căn khớp em báo anh ngay nhé.", String(sau));
+  ok("ZZZZU-V2 goTuNoiDau: 'Tuy nhiên, …' / 'Mà …' gọt; câu không mở bằng từ nối giữ nguyên",
+    goTuNoiDau("Tuy nhiên, em vẫn ghi lại ạ.") === "Em vẫn ghi lại ạ." && goTuNoiDau("Mà anh cần mấy phòng ạ?") === "Anh cần mấy phòng ạ?" &&
+      goTuNoiDau("Nhưng") === "Nhưng" && goTuNoiDau("Nhà mình ở đâu ạ?") === "Nhà mình ở đâu ạ?");
+  ok("ZZZZU-V3 câu KHÔNG bị bỏ phía trước → giữ nguyên 'Nhưng …'",
+    boCauNhanXetU("Dạ chưa có căn ạ. Nhưng em sẽ báo anh.", ["không có trong lời"]) === "Dạ chưa có căn ạ. Nhưng em sẽ báo anh.");
+  ok("ZZZZU-V4 'tin chị lên sàn em đã được kiểm duyệt kỹ lắm' là khẳng định trạng thái (lưới trạng thái thật bắt được)",
+    coMenhDeDaDang(["Vâng ạ, có sổ đầy đủ và tin chị lên sàn em đã được kiểm duyệt kỹ lắm."]));
+  ok("ZZZZU-V5 (cách nói MỚI) 'tin anh vừa duyệt xong' bắt; 'tin sẽ được duyệt trước khi lên sàn' (hứa có điều kiện) và câu hỏi KHÔNG bắt",
+    coMenhDeDaDang(["Dạ tin anh vừa duyệt xong rồi ạ."]) && !coMenhDeDaDang(["Dạ tin sẽ được kiểm duyệt trước khi lên ạ."]) && !coMenhDeDaDang(["Tin mình lên sàn chưa anh?"]));
+  const bb = thanhBongBong("Dạ em ghi rồi ạ, có căn khớp em báo anh liền nhé.\n\n---\n**CẬP NHẬT HỒ SƠ:**");
+  ok("ZZZZU-V6 thanhBongBong: '---' + '**CẬP NHẬT HỒ SƠ:**' (dòng dẫn công cụ) bỏ, lời thật giữ", bb.length === 1 && /em ghi rồi/.test(bb[0]), JSON.stringify(bb));
+  const bb2 = thanhBongBong("Dạ có **2 căn** khớp ạ:\n1. Căn A\n2. Căn B");
+  ok("ZZZZU-V7 thanhBongBong: đậm bỏ dấu sao; đoạn có ':' mà CÓ nội dung sau nó giữ", bb2.length === 1 && /có 2 căn khớp ạ:\n1\. Căn A/.test(bb2[0]), JSON.stringify(bb2));
 }
 
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);

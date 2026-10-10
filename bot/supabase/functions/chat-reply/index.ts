@@ -56,7 +56,7 @@ import { nhipGui } from "../_shared/nhip-gui.ts";
 import { laNgungHangLoat } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { docNgungHangLoat, giaTriKhongDoi, vaiTuCau } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
 import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu, phuongCot, tenPhuongCot, viTriGhiDuoc } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
@@ -5960,7 +5960,14 @@ Deno.serve(async (req) => {
       // phường 4") → phần còn lại "sai rồi em" không phải câu trả lời; bản trước đem
       // nó đi phân loại và nó thành ĐỊA CHỈ. Nhận lời sửa rồi hỏi lại câu đang treo
       // trong CÙNG một bong bóng.
-      if (ackSua && conChu.length < 2 && pendingReq.question !== "duyet_tin" && !humanActive) {
+      // SRS-5.1zzzzu: đang hỏi loại, khách chỉ nói giá ("gia 3 ty ruoi") mà loại đã nằm ở tin trước ("lo dat nen") → không dừng ở lời
+      // sửa, đi tiếp xuống câu treo loại để ghi loại từ tin trước (`kiemYCuocRao`), khỏi hỏi lại điều khách đã nói.
+      let loaiTuTinCu = false;
+      if (ackSua && conChu.length < 2 && pendingReq.question === "loai_bds" && bongAi && cheDoBocAi && (await cheDoBocAi) === "chinh") {
+        const kL = await bongAi;
+        loaiTuTinCu = !!(kL?.ket && docAiChinh(kiemYCuocRao(kL.truong, text, tinChuNhaGoc().join("\n")).dat, null).loaiBds);
+      }
+      if (ackSua && conChu.length < 2 && pendingReq.question !== "duyet_tin" && !humanActive && !loaiTuTinCu) {
         const cauSua = `${ackSua} ${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`;
         ackSua = null;
         return await traLoiSeller([cauSua], { sua_fact: true, reask: pendingReq.question });
@@ -6123,7 +6130,8 @@ Deno.serve(async (req) => {
           const kqAi = await bongAi;
           if (kqAi?.ket) {
             aiDaDoc = true;
-            pt = docAiChinh(kiemDeXuat(kqAi.truong, text).dat, null).loaiBds;
+            // SRS-5.1zzzzu: đang hỏi loại = ô loại trống → nhận trích dẫn loại ở tin chủ nhà trước ("e co mieng dat can ban").
+            pt = docAiChinh(kiemYCuocRao(kqAi.truong, text, tinChuNhaGoc().join("\n")).dat, null).loaiBds;
           }
         }
         if (!pt && !aiDaDoc) {
@@ -6501,7 +6509,11 @@ Deno.serve(async (req) => {
       if (!suaKtDaGhi && !xacNhanGhi && bongAi && !kqDuyet && ((cheDoAiTreo === "ghi" && layChoCauTreo) || cheDoAiTreo === "chinh")) {
         const kqAi = await bongAi;
         const dongTreo = (pendingReq.listings ?? null) as unknown as DongDb | null;
-        const datAi = kqAi ? kiemDeXuat(kqAi.truong, text, { quan: quanChacCua(pendingReq.listings) }).dat : [];
+        // SRS-5.1zzzzu: loại tin còn trống → trích dẫn loại / ý giao dịch ở tin chủ nhà trước cũng nhận (`kiemYCuocRao`).
+        const loaiTrong = !pendingReq.listings?.property_type || pendingReq.listings.property_type === "chua_ro";
+        const datAi = !kqAi ? [] : loaiTrong
+          ? kiemYCuocRao(kqAi.truong, text, tinChuNhaGoc().join("\n"), { quan: quanChacCua(pendingReq.listings) }).dat
+          : kiemDeXuat(kqAi.truong, text, { quan: quanChacCua(pendingReq.listings) }).dat;
         // FR-224 (25/09/2026, chủ dự án: "bắt theo nguyên cả câu của khách để AI đọc lại"): chế độ `chinh`, AI đọc NGUYÊN tin
         // và trả lời thẳng câu đang hỏi (`tra_loi`, đã kiểm trích dẫn + con số). Câu SỐ CHẶT (tiền, diện tích, kích thước) vẫn
         // lấy giá trị ô đã chuẩn hoá của AI (`giaTriChoCauTreo`); câu khác lấy nguyên câu trả lời của AI ("hẻm xe hơi vào tận
@@ -7837,11 +7849,7 @@ Deno.serve(async (req) => {
           // "cho thuê" từ "xây căn hộ cho thuê". Ý giao dịch và loại BĐS là ý của cả cuộc rao: cho phép trích từ các tin chủ nhà trước,
           // chỉ hai khoá đó, chỉ khi đang điền tin rỗng mở từ chính các tin đó.
           const laTinRongDangDien = !!(pendingReq?.listings && laTinRong(pendingReq.listings));
-          const datTruoc = laTinRongDangDien
-            ? kiemDeXuat(kqAi.truong.filter((t) => (t.khoa === "loai_giao_dich" || t.khoa === "loai_bds") && !kdAi.dat.some((d) => d.khoa === t.khoa)),
-              tinChuNhaGoc().join("\n")).dat
-            : [];
-          const datAi = [...kdAi.dat, ...datTruoc];
+          const datAi = laTinRongDangDien ? kiemYCuocRao(kqAi.truong, textBongAi, tinChuNhaGoc().join("\n")).dat : kdAi.dat;
           // SRS-5.1zb: chế độ `ai` không đưa loại giao dịch đoán bằng từ khoá vào — "Chào bạn, mình cho thuê…" ("bạn" → "bán")
           // từng làm khoảng giá thành khoảng giá BÁN, giá thuê của AI bị bỏ vì ngoài khoảng.
           aiRao = { ...docAiChinh(datAi, { deal: laCheDoAi ? null : dealCauRao(tKD) }), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], textBongAi, datAi) };

@@ -160,5 +160,14 @@ ok("(11) bong bóng phí sau khi khách tự nói vai đi qua `cauPhi(vaiPhi…)
   ok("(14) câu lệnh bóc tách coi 'đủ rồi em' đứng một mình là du_roi", /THÔI HỎI[^\n]*"đủ rồi em"[\s\S]{0,200}du_roi/.test(br));
 }
 
+// (15) SRS-5.1zzzzu — chủ nhà hỏi vặn "sao chị biết em không lừa" (thu-cmp45-3: AI đọc binh_thuong, model trấn an bằng "tin đã được kiểm
+//      duyệt"): câu lệnh bóc tách gọi tên kiểu hỏi vặn là nghi_ngo; luật giọng dặn đáp bằng điều có thật, không nói "kiểm duyệt" / "lên sàn".
+{
+  const br = readFileSync(new URL("../supabase/functions/_shared/ai/boc-rao.ts", import.meta.url), "utf8");
+  const pr = readFileSync(new URL("../supabase/functions/_shared/prompts.ts", import.meta.url), "utf8");
+  ok("(15a) cam_xuc: 'sao chị biết em không lừa' là nghi_ngo", /nghi_ngo = [^"\n]*sao chị biết em không lừa/.test(br));
+  ok("(15b) TONE_RULES: khách nghi ngờ → điều có thật, cấm 'đã được kiểm duyệt' / 'lên sàn'", /Khách nghi ngờ bên em[^\n]*kiểm duyệt[^\n]*lên sàn/.test(pr));
+}
+
 console.log(hong ? `\nLUẬT KHÔNG MÂU THUẪN: ${hong} CA HỎNG` : "\nLUẬT KHÔNG MÂU THUẪN: ĐẠT");
 process.exit(hong ? 1 : 0);

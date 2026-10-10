@@ -633,6 +633,29 @@ export function giuCauDungTen(msg: string, cauMau: string): string {
  * ("📝 Em ghi nhận: …\nSai chỗ nào … nhắn lại") được tách theo dòng rồi theo câu; dòng nào không
  * mất câu nào thì giữ nguyên chữ gốc. Không bỏ gì thì trả đúng mảng cũ (so `===` được).
  */
+/**
+ * SRS-5.1zzzzu (bắn production 10/10, thu-cmp45-4): van bỏ câu "Dạ em lọc rồi, hiện bên em chưa có căn nào khớp…" thì câu sau nó
+ * "Nhưng em sẽ theo sát…" thành bong bóng mở bằng từ nối trỏ về câu đã mất. Mọi chỗ BỎ CÂU đi qua đây: câu giữ lại mà câu ngay trước nó
+ * vừa bị bỏ thì gọt từ nối đối lập ở đầu (nhưng / tuy nhiên / thế nhưng / song / mà). Không đổi chữ nào khác.
+ */
+const TU_NOI_DAU = /^(?:nhưng mà|nhưng|tuy nhiên|thế nhưng|song|mà)\s*,?\s+/iu;
+export function goTuNoiDau(c: string): string {
+  const m = c.match(TU_NOI_DAU);
+  if (!m) return c;
+  const r = c.slice(m[0].length);
+  return r ? r.charAt(0).toLocaleUpperCase("vi") + r.slice(1) : c;
+}
+/** Lọc câu theo `bo`; câu giữ mà câu liền trước bị bỏ thì gọt từ nối đầu (`goTuNoiDau`). */
+export function locCauGotNoi(cac: string[], bo: (cau: string) => boolean): string[] {
+  const giu: string[] = [];
+  let truocBo = false;
+  for (const c of cac) {
+    if (bo(c)) { truocBo = true; continue; }
+    giu.push(truocBo ? goTuNoiDau(c) : c);
+    truocBo = false;
+  }
+  return giu;
+}
 function locCauTrongBongBong(replies: string[], bo: (cau: string) => boolean): string[] {
   let daBo = false;
   const ra: string[] = [];
@@ -640,7 +663,7 @@ function locCauTrongBongBong(replies: string[], bo: (cau: string) => boolean): s
     const dongMoi: string[] = [];
     for (const dong of r.split("\n")) {
       const cac = tachCau(dong);
-      const giu = cac.filter((c) => !bo(c));
+      const giu = locCauGotNoi(cac, bo);
       if (giu.length === cac.length) { dongMoi.push(dong); continue; }
       daBo = true;
       const gop = giu.join(" ").trim();
@@ -1314,11 +1337,13 @@ export function thayCauHoiLech(reply: string, khoa: string | null | undefined, c
 // FR-240 e (phát lại lần ba, v264): "Em cảm ơn anh, đã ghi đủ thông tin rồi ạ." khi tin mới có tên đường — tin chưa lên là
 // còn thiếu, "đủ thông tin" là nói sai. "Dạ em ghi đủ rồi ạ" (đủ những gì khách vừa nói — ví dụ mẫu FR-178) giữ.
 // 30/09/2026 (chủ dự án chat thử): lượt đầu "em cần bán nhà" → "mình đã tạo tin rồi" khi chưa có gì — cùng loại hứa.
-const DA_DANG_RE = /\b(?:da|vua)\s+tao\s+(?:tin|bai)\b|\btao\s+tin\s+(?:roi|xong)\b|\b(?:ghi|co|nhan|lay)\s+(?:du|day du)\s+thong\s+tin\b|\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b|\btin\s+(?:minh\s+|nha\s+minh\s+|cua\s+\w+\s+)?(?:da|vua)\s+(?:len|dang|duoc dang)\b|\btin\s+(?:minh\s+)?len\s+roi\b|(?<!\b(?:la|thi|xong|de|roi|khi|sau do)\s)\bem\s+(?:se\s+)?(?:dang|up|dua len|len tin|len ke)\s+(?:tin\s+)?(?:lien|ngay|luon)\b/;
+const DA_DANG_RE = /\b(?:da|vua)\s+tao\s+(?:tin|bai)\b|\btao\s+tin\s+(?:roi|xong)\b|\b(?:ghi|co|nhan|lay)\s+(?:du|day du)\s+thong\s+tin\b|\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b|\btin\s+(?:minh\s+|nha\s+minh\s+|cua\s+\w+\s+)?(?:da|vua)\s+(?:len|dang|duoc dang)\b|\btin\s+(?:minh\s+)?len\s+roi\b|\b(?:da|vua)\s+(?:duoc\s+)?(?:kiem\s+)?duyet\b|\b(?:da|vua)\s+len\s+san\b|\blen\s+san\s+(?:roi|luon|ngay)\b|\btin\s+(?:\w+\s+){0,2}len\s+san\b|(?<!\b(?:la|thi|xong|de|roi|khi|sau do)\s)\bem\s+(?:se\s+)?(?:dang|up|dua len|len tin|len ke)\s+(?:tin\s+)?(?:lien|ngay|luon)\b/;
 // 03/10/2026 (bắn thử thu-mc-06, SRS-5.1zn): "…khách hỏi nhiều lắm, em đăng liền nha :)" khi tin còn thiếu thông tin — HỨA đăng
 // ngay cũng sai như nói "đã đăng". Câu có điều kiện ("nhắn em mấy thông tin đó LÀ em đăng liền") vẫn giữ.
 // 03/10/2026 (bắn thử thu-dc-09, SRS-5.1zj): "Chào mình! Tin đã lên rồi nha." khi tin còn chờ thông tin — chủ ngữ "tin" ĐỨNG
 // TRƯỚC ("tin đã lên", "tin vừa đăng") lọt luật cũ (chỉ bắt "đã lên web / kệ / tin").
+// SRS-5.1zzzzu (bắn production 10/10, thu-cmp45-3): chủ nhà hỏi "sao chị biết em không lừa" → model "tin chị lên sàn em đã được kiểm
+// duyệt kỹ lắm" khi tin chưa lên kệ — "lên sàn", "đã (được) duyệt" là cùng một khẳng định trạng thái, chủ cũ không có chữ đó.
 /**
  * Một vế có KHẲNG ĐỊNH trạng thái tin không: khớp mẫu, không phải câu hỏi, không phủ định, và không phải lời hứa CÓ ĐIỀU KIỆN ("đủ thông
  * tin LÀ EM SẼ đăng lên web ngay" — SRS-5.1zzzzk: trước đây vế này khớp "lên web ngay" và chỉ thoát nhờ `boHuaDaDang` trả lại lời gốc).
@@ -1703,10 +1728,10 @@ export function boCauNhanXet(loi: string | null | undefined, cauBo: string[]): s
     let boCa = false;
     const dongMoi = s.split("\n").map((d) => {
       const cac = tachCau(d);
-      const giu = cac.filter((x) => {
+      const giu = locCauGotNoi(cac, (x) => {
         const bo = !/\?/.test(x) && boDau(x).includes(kdC);
         if (bo) boCa = true;
-        return !bo;
+        return bo;
       });
       return giu.length === cac.length ? d : giu.join(" ").trim();
     });
