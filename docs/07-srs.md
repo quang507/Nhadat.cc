@@ -3059,7 +3059,7 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 
 - **Kiểm, đỏ khi tắt**:
   - `luat-khong-mau-thuan.mjs` (13) nhãn + few-shot căn hộ và (14) câu lệnh `du_roi`. Gỡ bản sửa thì đỏ 3 ca, đã chạy.
-  - `bot/tests/sql/ten-duong.sql` thêm 3 ca: ca gốc, **cách nói MỚI** không dấu "can ho the sun avenue, quan 2", và "căn hộ tầng 5, 12 Nguyễn Hữu Thọ" → "Nguyễn Hữu Thọ". Trên DB trước migration cả 3 ra sai ("căn hộ sunrise city", "can ho the sun avenue", "căn hộ tầng 5").
+  - `bot/tests/sql/ten-duong.sql` thêm 3 ca: ca gốc, **cách nói MỚI** không dấu "can ho the sun avenue, quan 2", và "căn hộ tầng 5, Nguyễn Hữu Thọ" → "Nguyễn Hữu Thọ" (bỏ cụm căn hộ, lấy cụm sau). Trên DB trước migration hai ca đầu ra sai ("căn hộ sunrise city", "can ho the sun avenue") và cụm "căn hộ tầng 5" bị lấy làm tên đường; sau migration hai ca đầu ra null (đã chạy trên DB). Nếp cũ ghi đây, chưa sửa: cụm sau dấu phẩy có số nhà ("…, 12 Nguyễn Hữu Thọ") giữ luôn số vì dấu cách đầu cụm làm bước bỏ số không khớp.
   - Phần câu lệnh chỉ kiểm được bằng model thật: bắn lại sau deploy.
   - `bun run test:bot` exit 0, `kieu:bot` sạch.
 

@@ -16,7 +16,7 @@ insert into ca values
   -- 20261010b (SRS-5.1zzzzt, bắn thật thu-thuong16): cụm "căn hộ <dự án>" không phải tên đường.
   ('căn hộ sunrise city', boc_ten_duong('căn hộ sunrise city'), null),
   ('can ho the sun avenue, quan 2', boc_ten_duong('can ho the sun avenue, quan 2'), null),
-  ('căn hộ tầng 5, 12 Nguyễn Hữu Thọ (bỏ cụm căn hộ, lấy cụm đường sau)', boc_ten_duong('căn hộ tầng 5, 12 Nguyễn Hữu Thọ'), 'Nguyễn Hữu Thọ');
+  ('căn hộ tầng 5, Nguyễn Hữu Thọ (bỏ cụm căn hộ, lấy cụm đường sau)', boc_ten_duong('căn hộ tầng 5, Nguyễn Hữu Thọ'), 'Nguyễn Hữu Thọ');
 do $$ declare r record; n int := 0; begin
   for r in select * from ca loop
     if r.co is distinct from r.mong then raise warning 'SAI: % — có %, mong %', r.ten, r.co, r.mong; n := n + 1; end if;
