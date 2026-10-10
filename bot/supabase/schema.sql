@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-09 17:44 (giờ VN)
+-- Sinh lúc: 2026-10-10 18:57 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -2107,7 +2107,7 @@ AS $function$
     from unnest(string_to_array(coalesce(p, ''), ',')) with ordinality as t(s, i)
     where btrim(s) !~* '^(?:số|so)?\s*\d+[a-z]?(?:/\d+[a-z]?)*$'
       and btrim(s) !~* '^(?:hẻm|hem|hxh)\s*[\d/]+\s*$'
-      and btrim(s) !~* '^(?:dự án|du an|chung cư|cc |toà|tòa|toa|khu|kdc|cư xá|cu xa)'
+      and btrim(s) !~* '^(?:dự án|du an|chung cư|căn hộ|can ho|chcc|cc |toà|tòa|toa|khu|kdc|cư xá|cu xa)'
       and btrim(s) !~* '^(?:phường|phuong|p\.|p\d|quận|quan|q\.|q\d|tp|thành phố|hồ chí minh|ho chi minh|việt nam)'
       and btrim(s) <> ''
     order by i limit 1
