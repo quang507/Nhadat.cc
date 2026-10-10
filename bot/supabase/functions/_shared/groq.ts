@@ -68,12 +68,55 @@ const dsTu = (models: string) => models.split(",").map((m) => m.trim()).filter(B
 export const nguonGroq = (khoa: string, models: string): NguonOpenAI => ({ ten: "Groq", url: URL_GROQ, khoa, models: dsTu(models) });
 export const nguonGemini = (khoa: string, models: string): NguonOpenAI => ({ ten: "Gemini", url: URL_GEMINI, khoa, models: dsTu(models) });
 
-/** Lỗi nào thì đáng đổi sang đường dự phòng — hết tiền, quá nhịp, quá tải. */
+/** Lỗi nào thì đáng đổi sang đường dự phòng — hết tiền, quá nhịp, quá tải, QUÁ HẠN (SRS-5.1zzzzo). */
 export function nenDoiSang(e: unknown): boolean {
   const s = String((e as { message?: string })?.message ?? e ?? "");
   const ma = (e as { status?: number })?.status ?? 0;
-  return ma === 429 || ma === 529 || ma === 500 || ma === 503 ||
+  return ma === 429 || ma === 529 || ma === 500 || ma === 503 || ma === 504 || laHetHan(e) ||
     /credit balance is too low|insufficient|quota|rate limit|overloaded|billing/i.test(s);
+}
+
+// ─── SRS-5.1zzzzo (bắn production 09/10/2026: hai lượt 76–96 giây, lượt AI bóc tách tự nó 76–78 giây trong khi lượt thường 4–8 giây) ───
+// Không lượt gọi model nào có HẠN: `fetch` tới Gemini / Groq không hẹn giờ (chờ tới khi máy chủ bên kia tự cắt), còn SDK Anthropic mặc
+// định chờ 10 PHÚT và tự thử lại 2 lần, mỗi lần NGỦ đúng số giây máy chủ ghi ở `retry-after` (429 / 529 có thể tới 60 giây) — ngủ ngay
+// trong lượt khách đang chờ, trong khi đường dự phòng đứng sẵn bên cạnh. Nay mỗi lượt gọi một hạn (theo trần chữ đầu ra), hết hạn là
+// lỗi "quá hạn" đi ĐÚNG đường đổi nguồn như quá tải; SDK không tự ngủ — thử lại (một lần, ngủ ≤ 1,5 giây) chỉ khi không còn nguồn nào
+// khác để đổi sang.
+/** Hạn một lượt gọi model (ms): 8 giây + 8 ms mỗi chữ-máy đầu ra cho phép, trong [10 s, 30 s] — 2000 chữ (bóc tách) → 24 s, 512 → 12 s. */
+export function hanGoiMs(p: { max_tokens?: number | null }): number {
+  return Math.min(30_000, Math.max(10_000, 8_000 + (p.max_tokens ?? 1024) * 8));
+}
+/** Lỗi do hết hạn (của ta: `hetHan`; của SDK: APIConnectionTimeoutError "Request timed out"; của fetch: TimeoutError / AbortError). */
+export function laHetHan(e: unknown): boolean {
+  const o = e as { hetHan?: boolean; name?: string; message?: string } | null;
+  return !!o && (o.hetHan === true || /^(?:TimeoutError|AbortError|APIConnectionTimeoutError)$/.test(o.name ?? "") || /timed out|timeout/i.test(o.message ?? ""));
+}
+/** Lỗi đáng THỬ LẠI cùng nguồn (khi không còn nguồn nào khác): quá nhịp, quá tải, lỗi máy chủ, đứt kết nối, quá hạn. Hết tiền thì không. */
+export function nenThuLai(e: unknown): boolean {
+  const s = String((e as { message?: string })?.message ?? e ?? "");
+  const ma = (e as { status?: number })?.status ?? 0;
+  if (/credit balance is too low|insufficient|billing/i.test(s)) return false;
+  return ma === 408 || ma === 409 || ma === 429 || ma >= 500 || laHetHan(e) || /overloaded|rate limit|connection error/i.test(s);
+}
+/**
+ * Gọi model chính với HẠN TỔNG `hanMs` cho cả lượt thử lại. `goi` nhận tuỳ chọn của SDK (`timeout`, `maxRetries: 0` — SDK không tự ngủ).
+ * `thuLai`: lượt hỏng vì quá nhịp / quá tải / quá hạn thì thử lại MỘT lần sau ≤ 1,5 giây nếu còn ≥ 3 giây trong hạn — chỉ bật khi không
+ * còn nguồn dự phòng nào để đổi sang (nơi gọi quyết). `ngu` thay được trong bài kiểm.
+ */
+export async function goiCoHan<T>(
+  goi: (o: { timeout: number; maxRetries: number }) => Promise<T>, hanMs: number, thuLai: boolean,
+  ngu: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<T> {
+  const het = Date.now() + hanMs;
+  try {
+    return await goi({ timeout: hanMs, maxRetries: 0 });
+  } catch (e) {
+    const con = het - Date.now();
+    if (!thuLai || !nenThuLai(e) || con < 3_000) throw e;
+    console.log(`model chinh loi (${String((e as { message?: string })?.message ?? e).slice(0, 80)}), thu lai mot lan`);
+    await ngu(Math.min(1_500, con - 2_000));
+    return await goi({ timeout: Math.max(2_000, het - Date.now()), maxRetries: 0 });
+  }
 }
 
 /** system của Anthropic là MẢNG khối; OpenAI chỉ nhận một chuỗi. */
@@ -159,7 +202,7 @@ function bocSchema(format: unknown): { name: string; schema: unknown } | null {
 }
 
 async function goiOpenAI(
-  nguon: NguonOpenAI, model: string, p: ThamSo, schema: { name: string; schema: unknown } | null,
+  nguon: NguonOpenAI, model: string, p: ThamSo, schema: { name: string; schema: unknown } | null, hanMs: number = hanGoiMs(p),
 ): Promise<KetQua> {
   const messages = [
     ...(gopHeThong(p.system) ? [{ role: "system", content: gopHeThong(p.system) }] : []),
@@ -191,16 +234,28 @@ async function goiOpenAI(
       json_schema: { name: schema.name, schema: schema.schema, strict: true },
     };
   }
-  const r = await fetch(nguon.url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${nguon.khoa}`, "Content-Type": "application/json" },
-    body: JSON.stringify(than),
-  });
-  if (!r.ok) throw new Error(`${nguon.ten} ${r.status} ${(await r.text()).slice(0, 300)}`);
-  const j = await r.json() as {
+  // SRS-5.1zzzzo: một HẠN cho cả lượt (gửi + đọc thân) — trước đây không hạn, chờ tới khi máy chủ bên kia tự cắt.
+  const huy = new AbortController();
+  const hen = setTimeout(() => huy.abort(), hanMs);
+  let j: {
     choices?: Array<{ message?: { content?: string } }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
+  try {
+    const r = await fetch(nguon.url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${nguon.khoa}`, "Content-Type": "application/json" },
+      body: JSON.stringify(than),
+      signal: huy.signal,
+    });
+    if (!r.ok) throw new Error(`${nguon.ten} ${r.status} ${(await r.text()).slice(0, 300)}`);
+    j = await r.json();
+  } catch (e) {
+    if (huy.signal.aborted) throw Object.assign(new Error(`${nguon.ten} 504 quá hạn ${hanMs} ms (model ${model})`), { hetHan: true });
+    throw e;
+  } finally {
+    clearTimeout(hen);
+  }
   // Lưới thứ hai: cắt mọi khối nghĩ còn sót, kể cả khối chưa đóng thẻ (bị cắt
   // giữa chừng vì hết max_completion_tokens). Khách KHÔNG bao giờ được đọc nó.
   const tho = j.choices?.[0]?.message?.content ?? "";
@@ -269,6 +324,8 @@ export function bocDuPhong(
   dsNguon: NguonOpenAI[],
   ghiSo?: (nguon: string, chiTiet: string) => Promise<void>,
   thuTu: ThuTuModel = "claude",
+  /** SRS-5.1zzzzo: hạn một lượt gọi (mặc định `hanGoiMs`) — bài kiểm thay để đo không phải chờ thật. */
+  o: { hanMs?: (p: ThamSo) => number } = {},
 ): CoMessages {
   // Bậc miễn phí Groq chặn nhịp THEO TỪNG MODEL. Đo 10/09: lượt đầu qua được,
   // lượt hai dính "Rate limit reached for model qwen/qwen3.8-27b" và rơi tiếp về
@@ -278,12 +335,19 @@ export function bocDuPhong(
   const thuDuPhong = async (ten: "create" | "parse", p: ThamSo): Promise<KetQua> => {
     const schema = ten === "parse" ? bocSchema(p.output_config?.format ?? p._khuon_du_phong) : null;
     let cuoi: unknown = null;
+    // SRS-5.1zzzzo: cả chuỗi dự phòng chung MỘT hạn (một lượt gọi) — xoay model / nguồn không được cộng dồn thời gian chờ của khách.
+    const het = Date.now() + (o.hanMs ?? hanGoiMs)(p);
     for (const n of dsNguon) {
       for (const m of n.models) {
+        const con = het - Date.now();
+        if (con < 1_500) throw cuoi ?? Object.assign(new Error("Dự phòng: hết hạn trước khi thử được nguồn nào"), { hetHan: true });
         try {
-          return await goiOpenAI(n, m, p, schema);
+          return await goiOpenAI(n, m, p, schema, con);
         } catch (e) {
           cuoi = e;
+          // Quá hạn: nguồn này đang chậm — xoay sang model / khoá khác của cùng chuỗi chỉ chờ thêm; trả về để nơi gọi sang model chính
+          // (thứ tự `groq`) hay câu mẫu. Chậm là đường đi bình thường của nguồn miễn phí, không vào sổ lỗi.
+          if ((e as { hetHan?: boolean }).hetHan) { console.log(`${n.ten} qua han, bo du phong: ${loiCua(e).slice(0, 120)}`); throw e; }
           // Hết nhịp / quá tải / QUÁ CỠ thì xoay model; lỗi khác (sai schema, sai
           // prompt) xoay trong CÙNG nguồn cũng vô ích — model nào cũng hỏng như nhau —
           // nên bỏ sang nguồn kế. 413 thêm 15/09: bậc miễn phí Groq trần chữ-mỗi-phút

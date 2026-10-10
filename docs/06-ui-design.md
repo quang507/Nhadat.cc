@@ -436,9 +436,58 @@ Có, chỉ bằng prompt (`prompts.py build_chat_system`): ~30 từ, khen điể
 
 [nguồn: chủ dự án 08/10/2026 — "nên cho con bot lịch sự hơn tí nhưng vẫn cần ngắn"]
 
-- Giọng: nhân viên môi giới trẻ, lanh lợi mà **lễ phép**. Đáp lại điều khách vừa nói thì mở "Dạ" / "Dạ vâng"; câu hỏi kết "ạ" hoặc "anh ạ / chị nha". Không nhắn cộc ("Em ghi rồi anh. Mấy tầng?" → "Dạ em ghi rồi ạ. Nhà mình mấy tầng vậy anh?"). Độ dài giữ ~30 từ: "Dạ" / "ạ" là phép lịch sự, không phải để kéo dài.
+- Giọng: nhân viên môi giới trẻ, lanh lợi mà **lễ phép**. Đáp lại điều khách vừa nói thì mở "Dạ" / "Dạ vâng"; câu hỏi kết "ạ" hoặc "anh ạ / chị nha". Không nhắn cộc ("Em ghi rồi anh. Mấy tầng?" → "Dạ em ghi rồi ạ. Nhà mình mấy tầng vậy anh?" — câu mẫu này đổi 09/10, xem mục SRS-5.1zzzzm dưới). Độ dài giữ ~30 từ: "Dạ" / "ạ" là phép lịch sự, không phải để kéo dài.
 - Câu mẫu hỏi (`CAU_HOI_MAU`) kết "{ac} ạ?"; câu địa chỉ lần đầu: "Dạ nhà {ac} ở đâu vậy, ở Hồ Chí Minh đúng không ạ?" (giữ ý câu chủ dự án chọn 06/10, thêm phép lịch sự).
 - Bỏ ví dụ mẫu "Hẻm Trần Bình Trọng khu đó bán được lắm anh" — nó dạy đúng điều `TONE_RULES` cấm (đánh giá thị trường khu vực); nay nằm ở ví dụ SAI.
+
+### Lễ phép mà nhanh nhẹn, chỉ ghi nhận điều VỪA ghi — 09/10/2026 (SRS-5.1zzzzm)
+
+[nguồn: chủ dự án 09/10/2026, test Zalo thật — "tao muốn nó lễ phép nhưng nhanh nhẹn tí, trả lời thông minh tí chứ rep chán quá"]
+
+Bản 08/10 dạy câu ĐÚNG "Dạ em ghi rồi ạ. Nhà mình mấy tầng vậy anh?" và câu lệnh mỗi lượt dặn "ghi nhận vài chữ" — khách chỉ gật "đúng em ơi" thì model lấy thứ duy nhất có trong ĐÃ BIẾT ra ghi nhận: "Dạ, nhà phố em ghi rồi ạ" (nhà phố khách nói từ tin trước). Mọi tin thành một khuôn "Dạ … em ghi … rồi ạ. … bao nhiêu vậy ạ?".
+
+| Khối | Đổi | Giữ |
+|---|---|---|
+| `TONE_RULES` (dòng "Cách nói") | "lễ phép mà NHANH NHẸN"; một tin 1–2 câu, chừng hai chục chữ; phần đáp: gật thì "Dạ" / "Vâng ạ", có thông tin thì nhận vài chữ hoặc MỘT câu ngắn có căn cứ (điều khách vừa nói, dữ liệu hệ thống đưa như phường thuộc quận cũ nào); "em ghi …" chỉ cho điều lượt NÀY vừa ghi; mỗi tin mở một kiểu; câu ĐÚNG mẫu đổi thành "Vâng ạ. Nhà mình mấy tầng vậy anh?" | "Dạ" / "ạ", không cộc, phỏng đoán để khách gật, không đọc lại số, không bịa, không nhận xét thị trường / giá, khen chỉ điểm mạnh thật |
+| `SELLER_SCRIPT_RULES` | thêm gạch "Dòng EM VỪA GHI …"; địa chỉ: khách gật phần đoán thành phố thì hỏi luôn đường + phường MỘT câu (riêng địa chỉ được gộp hai ý vì câu trả lời địa chỉ ghi được cả phường) | câu địa chỉ lần đầu kèm đoán "ở Hồ Chí Minh đúng không" (quyết định 06/10, SRS-5.1zzp) — KHÔNG đổi |
+| `SELLER_FEWSHOT` | ví dụ mang `[vừa ghi gì · ý CẦN HỎI]` như câu lệnh thật; thêm ca "đúng em ơi" → hỏi đường + phường, "phường phú định em" → "Dạ Phú Định, bên quận 8 cũ ạ. …", "3 phòng ngủ" → "Vâng ạ. …"; SAI thêm "ghi nhận lại điều lượt trước" và "một khuôn lặp mãi" | các ca cũ (dự án, hẻm ô tô, nhiều thông tin, phí chưa rõ vai, hoãn, chưa có khách) |
+| Câu lệnh r2 / r2b | dòng `EM VỪA GHI ở lượt này: …` hoặc `Lượt này em KHÔNG ghi thêm gì mới …` do code đọc từ sổ ghi của lượt; bỏ lời dặn "ghi nhận vài chữ" vô điều kiện | khuôn ĐÃ BIẾT / CHỦ NHÀ VỪA NHẮN / CẦN HỎI |
+| `CAU_HOI_MAU` | thêm `vi_tri@sau_gat_tp`: "Dạ, nhà {ac} ở đường nào, phường nào vậy ạ?" (câu đỡ khi model chết) | mọi câu cũ |
+| Bong bóng 📝 | chỉ có mỗi loại giao dịch ("bán") thì không gửi — không có gì để khách soát | 📝 từ hai mục trở lên, hay có loại nhà |
+
+Sau khi gộp: `bun run prompt --day` (bản DB `bot_prompts` đè bản code — `tone_rules`, `seller_script_rules`, `seller_fewshot`, `cau_hoi_mau`).
+
+### Bong bóng 🤖 kiểu AOND "[đã trích xuất]" — 09/10/2026 (SRS-5.1zzzzn)
+
+[nguồn: chủ dự án 09/10/2026 — đổi `bao_lai_da_luu` từ `admin` sang `thay_doi` cho người thử đọc trên Zalo; "ghi như con AOND á. Đã trích xuất “data nguyên mẫu”, làm chuẩn “data làm chuẩn”"]
+
+Demo AOND in "[đã trích xuất]" cho người vận hành (bảng 05/10 ở trên: 🤖 về `admin`). Nay 🤖 lại tới khách thử, nên in theo đúng ý đó: mỗi mục một dòng, hai phần — chữ khách GÕ và chữ hệ thống LƯU / IN.
+
+```
+🤖 Đã trích xuất:
+• phường: "phường phú định" → làm chuẩn "Phường Phú Định (Quận 8 cũ)"
+• giá: "9 ty 5" → làm chuẩn "9 tỷ 5"
+• diện tích: "4x15" → làm chuẩn "ngang 4m × dài 15m (60m²)"
+• pháp lý: "sổ hồng riêng"
+• thông số: làm chuẩn "4x15m · trệt + 2 lầu"
+```
+
+- Hai phần như nhau (bỏ qua hoa thường) thì in một lần; giá trị máy suy ra (thông số, nhãn tìm kiếm, khách chỉ gật) chỉ có phần "làm chuẩn" — nguyên mẫu luôn là đoạn CÓ trong tin khách, không bao giờ là chữ máy.
+- Phần làm chuẩn đi qua bộ in một nguồn (giá `donViGiaDep`, địa chỉ `diaChiHienThi`, phường + quận cũ, kích thước); SĐT / Zalo trong cụm khách gõ được che "[đã che liên hệ]".
+- Không trích được gì: `🤖 Không trích xuất được gì từ tin này.`; ảnh: `🤖 Đã trích xuất từ ảnh: mặt tiền`; trả lời câu bot vừa hỏi: `🤖 Trả lời câu em vừa hỏi ("…"): đã trích xuất "đúng rồi em" → làm chuẩn "cần rao bán, …".`
+- Không đụng: bóc tách của demo (bảng 05/10), vị trí bong bóng (đầu, đứng riêng), công tắc.
+
+### Câu hỏi bên lề, phí theo vai, một câu một ý — 09/10/2026 (SRS-5.1zzzzo)
+
+[nguồn: bắn production 09/10/2026 — hỏi phí lúc treo câu sổ → "mấy phòng ngủ"; "anh là chính chủ" → "Vâng ạ. Sổ và hẻm được không ạ?"]
+
+| Chỗ | Đổi | Giữ |
+|---|---|---|
+| `FEE_RULES` | chưa rõ vai: nói phí không số ("mức tuỳ chủ nhà hay môi giới") rồi VẪN hỏi đúng ý CẦN HỎI; chỉ hỏi vai khi lượt không có ý cần hỏi; khách tự nói vai thì hệ thống báo con số | mọi mức phí, luật thuyết phục, chủ đầu tư |
+| `SELLER_FEWSHOT` | ví dụ "Phí bên em sao?" quay lại câu sổ (bản trước hỏi "Anh là chủ nhà luôn đúng không"); thêm "anh là chính chủ" → "Dạ vâng. Sổ nhà mình là sổ riêng hay sổ chung vậy anh?"; SAI thêm "Sổ và hẻm được không ạ?" (gộp hai ý) và nhảy sang ý khác sau câu hỏi bên lề | mọi ví dụ cũ khác |
+| Lời code | khách tự nói vai sau câu phí không số → "Dạ vậy phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ." (đúng chữ `cauPhi`) | câu phí hỏi ngược cũ |
+
+Sau khi gộp: `bun run prompt --day` (khoá `fee_rules`, `seller_fewshot`).
 
 ## 6.9 Micro-copy web
 

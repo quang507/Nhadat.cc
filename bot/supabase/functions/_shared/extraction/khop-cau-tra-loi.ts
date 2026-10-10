@@ -2537,3 +2537,17 @@ export function timPhuongTrongCau(cau: string, ds: PhuongDs[]): { phuong: Phuong
   const ten = new Set(tot.map((t) => t.p.ten));
   return ten.size === 1 ? { phuong: tot[0].p, khop: tot[0].khop } : null;
 }
+
+/**
+ * SRS-5.1zzzzq (bắn production 09/10/2026): "chào em, chị muốn bán lô đất" → AI bóc tách trả RỖNG bốn lần liền (cả sau khi sửa
+ * luật và thêm ví dụ mẫu); "chị muốn bán lô đất" → đúng ngay. Lời chào ĐẦU tin chỉ được cắt khỏi chữ GỬI CHO AI ĐỌC — không quyết
+ * ý gì, không ghi gì; trích dẫn vẫn kiểm trên tin gốc (cụm sau lời chào vẫn nằm nguyên trong đó). Tin chỉ có lời chào → giữ nguyên.
+ */
+export function boLoiChaoDau(tin: string): string {
+  const t = (tin ?? "").trim();
+  // Sau chữ chào phải là cách gọi ("chào em") hoặc dấu câu ("hello,") — "chào giá 5 tỷ" (chào giá = báo giá) không phải lời chào.
+  const m = /^(?:(?:dạ|da|vâng|vang)\s*,?\s*)?(?:xin\s+)?(?:chào|chao|hello|hi|alo)(?:\s+(?:em|anh|chị|chi|bạn|ban|cháu|chau|cô|co|chú|chu|bác|bac|shop|ad|admin|bot)(?:\s+(?:ơi|oi|nhé|nhe|nha))?\s*[,.!:;–-]*|\s*[,.!:;–-]+)\s+/iu.exec(t);
+  if (!m) return t;
+  const con = t.slice(m[0].length).trim();
+  return con.length >= 3 ? con : t;
+}

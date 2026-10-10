@@ -5,7 +5,7 @@
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang, boHuaDaDang } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest, yLuotLech} from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest, yLuotLech, kiemYCuocRao } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { anCauDaDap } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
@@ -172,9 +172,20 @@ ok("mùi: 'hướng đông nam nha' → có", coMuiDuLieuRao("hướng đông na
   const r2 = chon([dx("gia", "30 tỷ", "giá 30 tỷ")], { price_vnd: 32e9, deal: "ban" });
   ok("ghi: luật và AI LỆCH giá → không ghi, không đè", r2.ghi.length === 0 && r2.bo.length === 0, JSON.stringify(r2));
   const r3 = chon([dx("so_phong_ngu", "3", "3 phòng ngủ"), dx("so_wc", "70", "70 wc"), dx("so_tang", "4", "trệt 3 lầu"), dx("do_rong_hem", "5", "hẻm 5m"), dx("phuong", "14", "phường 14"), dx("gap", "co", "cần bán gấp")],
-    { bedrooms: null, bathrooms: null, floors: null, alley_width_m: null, ward: null, gap: null });
-  ok("ghi: số trong khoảng → ghi đúng dạng (3 · '4 tầng' vào ket_cau · '5m' · 'Phường 14' · cụm gấp); 70 wc ngoài khoảng → bỏ",
-    r3.ghi.map((g) => `${g.question}=${g.answer}`).join("|") === "so_phong_ngu=3|ket_cau=4 tầng|do_rong_hem=5m|phuong=Phường 14|gap=cần bán gấp" && lyDo(r3, "so_wc") === "so_ngoai_khoang", JSON.stringify(r3));
+    { bedrooms: null, bathrooms: null, floors: null, alley_width_m: null, ward: null, gap: null, district: "Quận Gò Vấp" });
+  // SRS-5.1zzzzj: phường số chỉ ghi qua cửa `tenPhuongCot` — "phường 14" + Quận Gò Vấp → Phường An Hội Tây (không "Phường 14").
+  ok("ghi: số trong khoảng → ghi đúng dạng (3 · '4 tầng' vào ket_cau · '5m' · phường 14 Gò Vấp = 'Phường An Hội Tây' · cụm gấp); 70 wc ngoài khoảng → bỏ",
+    r3.ghi.map((g) => `${g.question}=${g.answer}`).join("|") === "so_phong_ngu=3|ket_cau=4 tầng|do_rong_hem=5m|phuong=Phường An Hội Tây|gap=cần bán gấp" && lyDo(r3, "so_wc") === "so_ngoai_khoang", JSON.stringify(r3));
+  // Cách nói mới: phường số không có trong bảng phường cũ ("phường 7" + Quận 4 — chưa có văn bản, OPEN-60) → KHÔNG ghi, lý do
+  // phuong_khong_chuan; không quận thì phường số cũng không ghi.
+  const r3b = chon([dx("phuong", "7", "phường 7")], { ward: null, district: "Quận 4" });
+  const r3c = chon([dx("phuong", "Phường 7", "p.7")], { ward: null, district: null });
+  ok("ghi: phường số không ra phường mới (P7 Q4 · P7 không quận) → bỏ 'phuong_khong_chuan', không bao giờ 'Phường N'",
+    r3b.ghi.length === 0 && lyDo(r3b, "phuong") === "phuong_khong_chuan" && r3c.ghi.length === 0 && lyDo(r3c, "phuong") === "phuong_khong_chuan", JSON.stringify({ r3b, r3c }));
+  // SRS-5.1zzzzl (OPEN-60): Phường 6 Quận 3 gộp vào Võ Thị Sáu năm 2020 (NQ 1111/NQ-UBTVQH14 Điều 2 khoản 1 điểm a) → nay Xuân Hòa.
+  const r3d = chon([dx("phuong", "6", "phường 6")], { ward: null, district: "Quận 3" });
+  ok("ghi: «phường 6» + Quận 3 (gộp 2020, có văn bản, 20261009d) → phuong=Phường Xuân Hòa",
+    r3d.ghi.map((g) => `${g.question}=${g.answer}`).join("|") === "phuong=Phường Xuân Hòa", JSON.stringify(r3d));
   const r4 = chon([dx("quan", "Quận 5", "quận 5"), dx("duong", "Châu Văn Liêm", "đường Châu Văn Liêm"), dx("ma_can", "S1.02", "căn S1.02")], { district: null, street: null, unit_code: null });
   ok("ghi: quận / đường / mã căn không có chỗ ghi fact → bỏ khoa_khong_co_cho_ghi", r4.ghi.length === 0 && r4.bo.every((b) => b.ly_do === "khoa_khong_co_cho_ghi") && r4.bo.length === 3, JSON.stringify(r4));
   // 05/10/2026 (SRS-5.1zz): hai khoá cùng đổ về ket_cau → cụm chữ thắng số, bất kể AI liệt kê cái nào trước.
@@ -570,6 +581,19 @@ ok("YD-01 đã bán, trích có trong tin → nhận", docYDinh({ loai: "ban_roi
 ok("YD-02 trích KHÔNG có trong tin → bỏ", docYDinh({ loai: "ban_roi", trich_dan: "bán rồi" }, "hàng xóm vừa dọn đi") === null);
 ok("YD-03 bình thường / loại lạ → null", docYDinh({ loai: "binh_thuong", trich_dan: null }, "x") === null && docYDinh({ loai: "xoa", trich_dan: "x" }, "x") === null);
 ok("VAI-01 tự xưng môi giới, trích có trong tin → nhận", docVai({ la: "moi_gioi", trich_dan: "em làm bên sàn" }, "à em làm bên sàn nha anh")?.la === "moi_gioi");
+// SRS-5.1zzzzk (bắn production 09/10 + sổ AI thật …kb2chau): trích có thật nhưng KHÔNG gọi tên vai («bán lô đất», «chú có», «chú có căn
+// nhà», «sổ hồng chính chủ») → không nhận; trích gọi tên vai → nhận.
+for (const [la, td, tin, mong] of [
+  ["chinh_chu", "bán lô đất", "bán lô đất 10x50 củ chi xã tân an hội, giấy tay", null],
+  ["chinh_chu", "chú có", "chú có căn nhà muốn bán", null],
+  ["chinh_chu", "chú có căn nhà", "chú có căn nhà muốn bán", null],
+  ["chinh_chu", "sổ hồng chính chủ", "bán nhà MTKD Võ Văn Tần, sổ hồng chính chủ", null],
+  ["chinh_chu", "chú", "thôi để mai chú nói tiếp", null],
+  ["chinh_chu", "anh là chủ đất", "anh là chủ đất, cần bán lô đất củ chi", "chinh_chu"],
+  ["chinh_chu", "nhà của tôi", "nhà của tôi ở hẻm 5", "chinh_chu"],
+  ["chinh_chu", "không phải môi giới", "anh không phải môi giới đâu em", "chinh_chu"],
+  ["moi_gioi", "em làm bên sàn", "à em làm bên sàn nha anh", "moi_gioi"],
+]) ok(`VAI-ZZZZK «${td}» (${la}) → ${mong ?? "không nhận"}`, (docVai({ la, trich_dan: td }, tin)?.la ?? null) === mong, JSON.stringify(docVai({ la, trich_dan: td }, tin)));
 ok("VAI-02 khong_noi → null; trích bịa → null", docVai({ la: "khong_noi", trich_dan: null }, "x") === null && docVai({ la: "chinh_chu", trich_dan: "nhà của tôi" }, "mấy bên môi giới gọi suốt") === null);
 
 ok("CK-01 câu kế AI chọn có trong danh sách → nhận; ngoài danh sách / null → null",
@@ -915,6 +939,61 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
     kiemKienThuc(["chợ quán"], "chợ quán e", [], ["Phường Chợ Quán"]).length === 0);
   ok("ZZZV-02 (cách nói MỚI) ý thêm 'gần chợ Bến Thành' không trùng gì đã ghi → giữ; 'đang ở' vẫn giữ",
     kiemKienThuc(["gần chợ Bến Thành", "đang ở"], "nhà gần chợ Bến Thành, đang ở", [], ["Phường Bến Thành", "sổ hồng riêng"]).length === 2);
+}
+// ── 09/10/2026 bắn production (SRS-5.1zzzzc / zzzzd / zzzzi). Chạy cả kiểm đủ lẫn kiểm nhẹ (production). ──
+{
+  const { viTriGhiDuoc, phuongTuSoCu, phuongNhacTrongCau } = await import("../supabase/functions/_shared/extraction/khop-phuong.ts");
+  const cu = laKiemNheTest();
+  for (const nhe of [false, true]) {
+    datKiemNhe(nhe);
+    const m = nhe ? "nhẹ" : "đủ";
+    const pn = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Phú Nhuận", trich_dan: "phường 13" }], "nhà ở lê văn sỹ phường 13 phú nhuận");
+    ok(`ZZZZC-01 (${m}, thu-kg2) «phường 13» + 'phú nhuận' trong tin → Phường Phú Nhuận ĐẠT (bảng phường cũ)`, pn.dat.length === 1, JSON.stringify(pn));
+    const pnQ = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Phú Nhuận", trich_dan: "phường 13" }], "phường 13 nha em", { quan: "Quận Phú Nhuận" });
+    ok(`ZZZZC-02 (${m}) chỉ «phường 13», quận tin đã biết Phú Nhuận (ngữ cảnh nơi gọi) → ĐẠT`, pnQ.dat.length === 1, JSON.stringify(pnQ));
+    const pnK = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Phú Nhuận", trich_dan: "phường 13" }], "phường 13 nha em");
+    ok(`ZZZZC-03 (${m}) «phường 13» không quận nào → vẫn BỎ (không đoán)`, pnK.bo[0]?.ly_do === "phuong_khong_khop_trich_dan", JSON.stringify(pnK));
+    const nl = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Nhiêu Lộc", trich_dan: "phường 12 quận 3" }], "nhà chị hẻm 5m trần quốc thảo phường 12 quận 3 cũ");
+    ok(`ZZZZC-04 (${m}, cách nói MỚI) «phường 12 quận 3» → Phường Nhiêu Lộc ĐẠT`, nl.dat.length === 1, JSON.stringify(nl));
+    const bc = kiemDeXuat([{ khoa: "phuong", gia_tri: "Phường Bàn Cờ", trich_dan: "phường 12 quận 3" }], "nhà chị hẻm 5m trần quốc thảo phường 12 quận 3 cũ");
+    ok(`ZZZZC-05 (${m}) «phường 12 quận 3» mà AI ghi Bàn Cờ (sai bảng) → BỎ`, bc.bo[0]?.ly_do === "phuong_khong_khop_trich_dan", JSON.stringify(bc));
+    const dc = kiemDeXuat([{ khoa: "duong", gia_tri: "Củ Chi xã Tân An Hội", trich_dan: "10x50 củ chi xã tân an hội" },
+      { khoa: "ten_duong", gia_tri: "Củ Chi xã Tân An Hội", trich_dan: "củ chi xã tân an hội" }], "đất 10x50 củ chi xã tân an hội giấy tay");
+    ok(`ZZZZD-01 (${m}, thu-kg5) duong / ten_duong chỉ là kích thước + tên hành chính → BỎ cả hai`,
+      dc.dat.length === 0 && dc.bo.every((b) => b.ly_do === "dia_chi_chi_la_hanh_chinh"), JSON.stringify(dc));
+    const dg = kiemDeXuat([{ khoa: "ten_duong", gia_tri: "Tân Sơn Nhì", trich_dan: "đường tân sơn nhì" }], "nhà mặt tiền đường tân sơn nhì tân phú");
+    ok(`ZZZZD-02 (${m}) đường trùng tên phường nhưng trích có chữ 'đường' → vẫn ĐẠT`, dg.dat.length === 1, JSON.stringify(dg));
+    const mt = kiemDeXuat([{ khoa: "loai_duong_vao", gia_tri: "mat_tien", trich_dan: "MT" }], "Bán nhà MT Nguyễn Trãi Q5, 5x20, 4 tầng thang máy");
+    ok(`ZZZZI-01 (${m}, thu-kg3) «MT» → loai_duong_vao mat_tien ĐẠT`, mt.dat.length === 1, JSON.stringify(mt));
+    const mtkd = kiemDeXuat([{ khoa: "loai_duong_vao", gia_tri: "mat_tien", trich_dan: "MTKD" }], "Bán nhà MTKD Hai Bà Trưng Q1, 4x18, 5 tầng, 25 tỷ");
+    ok(`ZZZZI-02 (${m}, cách nói MỚI) «MTKD» → mat_tien ĐẠT`, mtkd.dat.length === 1, JSON.stringify(mtkd));
+    const mt5 = kiemDeXuat([{ khoa: "loai_duong_vao", gia_tri: "mat_tien", trich_dan: "MT 5m" }], "nhà MT 5m dài 20m");
+    ok(`ZZZZI-03 (${m}) «MT 5m» (số đo ngay sau) vẫn là chiều ngang → BỎ`, mt5.bo[0]?.ly_do === "mat_tien_kem_so_la_chieu_ngang", JSON.stringify(mt5));
+  }
+  datKiemNhe(cu);
+  ok("ZZZZC-06 phuongTuSoCu: (13, Quận Phú Nhuận) → Phú Nhuận; (15, Phú Nhuận) chia hai phường không 'toàn bộ' → null",
+    phuongTuSoCu(13, "Quận Phú Nhuận")?.ten === "Phú Nhuận" && phuongTuSoCu(15, "phú nhuận") === null, JSON.stringify([phuongTuSoCu(13, "Quận Phú Nhuận"), phuongTuSoCu(15, "phú nhuận")]));
+  ok("ZZZZC-07 lưới đỡ khi AI im: 'phường 13 phú nhuận' → Phú Nhuận; 'p4 q5' → Chợ Quán; 'phường 13' + quận tin Phú Nhuận → Phú Nhuận",
+    phuongNhacTrongCau("nhà ở lê văn sỹ phường 13 phú nhuận")?.ten === "Phú Nhuận" && phuongNhacTrongCau("p4 q5")?.ten === "Chợ Quán" &&
+      phuongNhacTrongCau("phường 13", "Quận Phú Nhuận")?.ten === "Phú Nhuận");
+  ok("ZZZZD-03 viTriGhiDuoc: kích thước / hành chính → null; địa chỉ thật giữ, bỏ kích thước",
+    viTriGhiDuoc("10x50 Củ Chi xã Tân An Hội") === null && viTriGhiDuoc("lô đất 8x40 xã Phước Vĩnh An huyện Củ Chi") === null &&
+      viTriGhiDuoc("Xã Tân An Hội") === null && viTriGhiDuoc("120m2") === null &&
+      viTriGhiDuoc("hẻm 45 Nguyễn Trãi") === "hẻm 45 Nguyễn Trãi" && viTriGhiDuoc("137/28 đường số 59") === "137/28 đường số 59" &&
+      viTriGhiDuoc("Trần Hưng Đạo 4x16") === "Trần Hưng Đạo" && viTriGhiDuoc("Lò Gốm") === "Lò Gốm");
+  const ac = docAiChinh(kiemDeXuat([{ khoa: "duong", gia_tri: "10x50 Củ Chi xã Tân An Hội", trich_dan: "10x50 củ chi xã tân an hội" }], "đất 10x50 củ chi xã tân an hội").dat, null);
+  ok("ZZZZD-04 docAiChinh: AI đưa cụm kích thước + hành chính vào duong → KHÔNG ghi vi_tri, không tên đường", !ac.duong && !ac.tenDuong && !ac.ghi.some((g) => g.question === "vi_tri"), JSON.stringify(ac));
+}
+// SRS-5.1zzzzu: trích dẫn loại / ý giao dịch ở tin chủ nhà TRƯỚC được nhận (ô trống do nơi gọi quyết); khoá khác vẫn chỉ soi tin này.
+{
+  const ds = [{ khoa: "loai_bds", gia_tri: "dat", trich_dan: "mieng dat" }, { khoa: "gia", gia_tri: "5 tỷ", trich_dan: "5 ty" }, { khoa: "dien_tich", gia_tri: "100", trich_dan: "5x20" }];
+  const k = kiemYCuocRao(ds, "5x20 tho cu het", "e co mieng dat can ban 5 ty");
+  ok("ZZZZU-U1 «mieng dat» ở tin trước → loai_bds ĐẠT; «5 ty» (khoá giá) chỉ ở tin trước → vẫn BỎ; «5x20» tin này ĐẠT",
+    k.dat.some((d) => d.khoa === "loai_bds") && !k.dat.some((d) => d.khoa === "gia") && k.dat.some((d) => d.khoa === "dien_tich"), JSON.stringify(k));
+  const k2 = kiemYCuocRao([{ khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "nha pho" }], "5x20 tho cu het", "e co mieng dat can ban");
+  ok("ZZZZU-U2 trích dẫn không có ở tin nào → BỎ", k2.dat.length === 0 && k2.bo.length === 1, JSON.stringify(k2));
+  const k3 = kiemYCuocRao([{ khoa: "loai_bds", gia_tri: "dat", trich_dan: "mieng dat" }], "5x20 tho cu het", "");
+  ok("ZZZZU-U3 không có tin cũ → như kiemDeXuat (BỎ)", k3.dat.length === 0, JSON.stringify(k3));
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

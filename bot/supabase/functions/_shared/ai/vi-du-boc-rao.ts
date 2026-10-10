@@ -20,6 +20,41 @@ const t = (khoa: string, gia_tri: string, trich_dan: string): DeXuat => ({ khoa,
 
 export const VI_DU_BOC_RAO: ViDuBocRao[] = [
   {
+    // SRS-5.1zzzzq (bắn production 09/10/2026): "chào em, chị muốn bán lô đất" → rỗng ba lần, "chị muốn bán lô đất" → đúng. Cách nói khác ca gốc.
+    cau_dang_hoi: null,
+    tin: "chào cháu, cô có miếng đất cần bán",
+    so_can: 1,
+    truong: [t("loai_giao_dich", "ban", "cần bán"), t("loai_bds", "dat", "miếng đất")],
+    kien_thuc: [],
+    luu_y: "Lời chào đầu tin không làm tin rỗng: vẫn bóc phần sau.",
+  },
+  {
+    // SRS-5.1zzzzi (bắn production 09/10/2026, thu-kg3): "Bán nhà MT Nguyễn Trãi Q5, 5x20, 4 tầng thang máy…" → AI đọc đủ mọi ô trừ
+    // loại đường vào (cột access_type trống). Dạy viết tắt "MT" / "MTKD" = mặt tiền bằng ví dụ (cách nói khác ca gốc).
+    cau_dang_hoi: null,
+    tin: "Bán nhà MTKD Hai Bà Trưng Q1, 4x18, 5 tầng, 25 tỷ",
+    so_can: 1,
+    truong: [
+      t("loai_giao_dich", "ban", "Bán nhà"), t("loai_bds", "nha_pho", "Bán nhà"), t("loai_duong_vao", "mat_tien", "MTKD"),
+      t("duong", "Hai Bà Trưng", "Hai Bà Trưng"), t("ten_duong", "Hai Bà Trưng", "Hai Bà Trưng"), t("quan", "Quận 1", "Q1"),
+      t("ngang", "4", "4x18"), t("dai", "18", "4x18"), t("so_tang", "5", "5 tầng"), t("gia", "25 tỷ", "25 tỷ"),
+    ],
+    kien_thuc: [],
+    luu_y: "MT / MTKD / mặt tiền kinh doanh = nhà nằm mặt tiền đường → loai_duong_vao mat_tien (trích 'MTKD'). Số đo ở chỗ khác (4x18) là ngang × dài.",
+  },
+  {
+    // SRS-5.1zzzzd (thu-kg5): tên xã / huyện + kích thước KHÔNG phải địa chỉ — không đưa duong / ten_duong (cách nói khác ca gốc).
+    cau_dang_hoi: null,
+    tin: "bán lô đất 8x30 xã Phước Vĩnh An huyện Củ Chi, sổ chung",
+    so_can: 1,
+    truong: [
+      t("loai_giao_dich", "ban", "bán lô đất"), t("loai_bds", "dat", "lô đất"), t("ngang", "8", "8x30"), t("dai", "30", "8x30"),
+      t("phuong", "Xã Phước Vĩnh An", "xã Phước Vĩnh An"), t("quan", "Huyện Củ Chi", "huyện Củ Chi"), t("phap_ly", "sổ chung", "sổ chung"),
+    ],
+    kien_thuc: [],
+    luu_y: "Không có tên đường / hẻm / số nhà thì KHÔNG đưa duong, ten_duong — tên xã, huyện có ô riêng; bot sẽ hỏi đường.",
+  },
+  {
     // 03/10/2026 (chủ dự án: "hẻm số người ta sẽ ghi số còn độ rộng thì sẽ ghi 4m 4 mét, dạy AI đi"; SRS-5.1zk): số hẻm vào địa
     // chỉ, bề rộng (có "m") vào do_rong_hem; tên đường trần vào ten_duong (ghi thẳng cột street).
     cau_dang_hoi: null,

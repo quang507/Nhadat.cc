@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-09 11:14 (giờ VN)
+-- Sinh lúc: 2026-10-10 18:57 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -489,7 +489,8 @@ create table if not exists public.phuong_cu (
   lng double precision,
   nhung extensions.vector(768),
   nhung_md5 text,
-  nhung_luc timestamp with time zone
+  nhung_luc timestamp with time zone,
+  nguon text
 );
 
 create table if not exists public.project_facts (
@@ -614,7 +615,8 @@ create table if not exists public.sellers (
   xung_ho text,
   ten_tro_ly text,
   gioi_tinh text,
-  nhom_tuoi text
+  nhom_tuoi text,
+  seller_type_source text not null default 'suy_doan'::text
 );
 
 create table if not exists public.tien_ich (
@@ -996,6 +998,9 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.sellers add constraint sellers_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
+  alter table public.sellers add constraint sellers_seller_type_source_check CHECK ((seller_type_source = ANY (ARRAY['suy_doan'::text, 'tu_nhan'::text, 'admin'::text])));
 exception when duplicate_object then null; end $d$;
 do $d$ begin
   alter table public.sellers add constraint sellers_xung_ho_check CHECK (((xung_ho IS NULL) OR (xung_ho = ANY (ARRAY['anh'::text, 'chị'::text, 'chú'::text, 'cô'::text, 'bác'::text, 'ông'::text, 'bà'::text, 'dì'::text, 'cậu'::text, 'mợ'::text, 'thím'::text, 'dượng'::text]))));
@@ -2102,7 +2107,7 @@ AS $function$
     from unnest(string_to_array(coalesce(p, ''), ',')) with ordinality as t(s, i)
     where btrim(s) !~* '^(?:số|so)?\s*\d+[a-z]?(?:/\d+[a-z]?)*$'
       and btrim(s) !~* '^(?:hẻm|hem|hxh)\s*[\d/]+\s*$'
-      and btrim(s) !~* '^(?:dự án|du an|chung cư|cc |toà|tòa|toa|khu|kdc|cư xá|cu xa)'
+      and btrim(s) !~* '^(?:dự án|du an|chung cư|căn hộ|can ho|chcc|cc |toà|tòa|toa|khu|kdc|cư xá|cu xa)'
       and btrim(s) !~* '^(?:phường|phuong|p\.|p\d|quận|quan|q\.|q\d|tp|thành phố|hồ chí minh|ho chi minh|việt nam)'
       and btrim(s) <> ''
     order by i limit 1
@@ -2761,26 +2766,7 @@ CREATE OR REPLACE FUNCTION public.chuan_hoa_phuong(p_text text)
  STABLE
  SET search_path TO 'public'
 AS $function$
-  select case
-    when p_text is null or btrim(p_text) = '' then null
-    when (regexp_match(public.bo_dau(p_text), '(?:phuong|p)\s*\.?\s*([0-9]{1,2})'))[1] is not null
-     and ((regexp_match(public.bo_dau(p_text), '(?:phuong|p)\s*\.?\s*([0-9]{1,2})'))[1])::int between 1 and 25
-      then 'Phường ' || ((regexp_match(public.bo_dau(p_text), '(?:phuong|p)\s*\.?\s*([0-9]{1,2})'))[1])::int
-    when btrim(p_text) ~ '^[0-9]{1,2}$' and btrim(p_text)::int between 1 and 25
-      then 'Phường ' || btrim(p_text)::int
-    when regexp_replace(btrim(p_text), '^(?:phường|xã|thị trấn)\s+', '', 'i')
-           = lower(regexp_replace(btrim(p_text), '^(?:phường|xã|thị trấn)\s+', '', 'i'))
-     and public.bo_dau(btrim(p_text)) ~ '^(?:(?:phuong|xa|thi tran)\s+)?[a-z]+(?:\s[a-z]+){0,3}$'
-     and public.bo_dau(btrim(p_text)) !~ '\m(?:em|anh|chi|nha|nhe|a|oi|o|do|day|nhen|luon)\M'
-      then coalesce(
-        (select w.ten_day_du from public.wards w
-          where public.bo_dau(w.ten) = regexp_replace(public.bo_dau(btrim(p_text)), '^(?:phuong|xa|thi tran)\s+', '')
-          limit 1),
-        case when public.bo_dau(btrim(p_text)) ~ '^(?:phuong|xa|thi tran)\s' then initcap(btrim(p_text))
-             else 'Phường ' || initcap(btrim(p_text)) end)
-    when length(btrim(p_text)) between 2 and 50 then btrim(p_text)
-    else null
-  end;
+  select w.ten_day_du from public.wards w where w.ten_day_du = btrim(p_text) limit 1;
 $function$
 ;
 
@@ -4363,6 +4349,20 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.listing_facts_soat_phuong()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.question = 'phuong' and public.chuan_hoa_phuong(new.answer) is null then
+    perform public.log_loi('fact phuong khong chuan', left(new.listing_id::text || ': "' || coalesce(new.answer, '') || '" (' || coalesce(new.source, '?') || ')', 300), null::integer);
+  end if;
+  return null;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.listing_facts_sync_cols()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -4811,9 +4811,17 @@ CREATE OR REPLACE FUNCTION public.listings_chuan_hoa_cot()
  LANGUAGE plpgsql
  SET search_path TO 'public'
 AS $function$
+declare v_ward text;
 begin
   new.price_raw := public.chuan_hoa_gia_raw(new.price_raw);
-  new.ward      := public.chuan_hoa_phuong(new.ward);
+  -- 20261009b: chỉ xét khi phường ĐỔI (dòng cũ đã sửa ở bước dữ liệu bên dưới). Không phải tên chuẩn → để trống + sổ lỗi.
+  if new.ward is not null and (tg_op = 'INSERT' or new.ward is distinct from old.ward) then
+    v_ward := public.chuan_hoa_phuong(new.ward);
+    if v_ward is null then
+      perform public.log_loi('listings.ward khong chuan', left(coalesce(new.code, new.id::text) || ': "' || new.ward || '"', 300), null::integer);
+    end if;
+    new.ward := v_ward;
+  end if;
   -- 20260909k: ngang × dài → diện tích (chỉ khi chưa có; 5…5000 m² như listing_facts_sync_cols)
   if new.area_m2 is null and new.frontage_m is not null and new.length_m is not null then
     if new.frontage_m * new.length_m between 5 and 5000 then
@@ -5728,6 +5736,7 @@ declare
   v_ngay boolean := false;
   v_reset timestamp;
   v_ok boolean := false;
+  v_dia_danh_hcm_con boolean;
 begin
   -- (1) Thu kết quả lượt trước (tin + dự án). Chưa có phản hồi thì chờ; quá 10 phút thì bỏ, lượt sau gửi lại.
   for v in
@@ -5823,9 +5832,18 @@ begin
     v_gui := v_gui + 1;
   end loop;
 
+  -- 20261009e (chủ dự án 09/10: "địa danh TP.HCM trước"): còn địa danh TP.HCM chưa nhúng (quận cũ, phường mới, phường cũ, tên
+  -- đường TP.HCM không tính hẻm) thì CHỈ nhúng dự án TP.HCM; dự án tỉnh khác chờ. Hàng dự án rỗng thì nhung_dia_danh_tick mới
+  -- gửi mẻ (nó đợi nhung_viec_du_an trống), nên giữ dự án tỉnh khác lại là nhường hạn mức cho địa danh TP.HCM.
+  v_dia_danh_hcm_con := exists (select 1 from public.quan_cu where nhung is null)
+    or exists (select 1 from public.wards where nhung is null)
+    -- phường cũ chỉ tính dòng nhúng ĐƯỢC (van_ban_dia_danh cần phuong_moi khớp wards.ten) — dòng lệch không được giữ cửa mãi.
+    or exists (select 1 from public.phuong_cu p join public.wards w on w.ten = p.phuong_moi where p.nhung is null)
+    or exists (select 1 from public.duong where nhung is null and loai <> 'hem' and tinh = 'TP.HCM');
   for r in
     select p.id, p.nhung_md5 from public.projects p
-     where p.nhung_md5 is null or p.updated_at > coalesce(p.nhung_luc, '-infinity'::timestamptz)
+     where (p.nhung_md5 is null or p.updated_at > coalesce(p.nhung_luc, '-infinity'::timestamptz))
+       and (p.province = 'Hồ Chí Minh' or not v_dia_danh_hcm_con)
      order by (p.province is distinct from 'Hồ Chí Minh'), p.is_partner desc nulls last, p.priority nulls last, p.updated_at desc nulls last
      limit 200
   loop
@@ -6443,6 +6461,23 @@ AS $function$
     end
   end;
 $function$
+;
+
+CREATE OR REPLACE FUNCTION public.sellers_nguon_nhan()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if coalesce(auth.role(), '') = 'authenticated'
+     and new.seller_type <> 'unknown'
+     and (tg_op = 'INSERT' or new.seller_type is distinct from old.seller_type)
+     and exists (select 1 from public.admins a where a.email = (auth.jwt() ->> 'email')) then
+    new.seller_type_source := 'admin';
+  end if;
+  return new;
+end $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.so_nmg_cong_khai()
@@ -8426,6 +8461,8 @@ drop trigger if exists trg_route_info_request on public.info_requests;
 CREATE TRIGGER trg_route_info_request BEFORE INSERT ON public.info_requests FOR EACH ROW EXECUTE FUNCTION route_info_request();
 drop trigger if exists trg_pe_interests on public.interests;
 CREATE TRIGGER trg_pe_interests AFTER INSERT ON public.interests FOR EACH ROW EXECUTE FUNCTION trg_property_event();
+drop trigger if exists trg_listing_facts_soat_phuong on public.listing_facts;
+CREATE TRIGGER trg_listing_facts_soat_phuong AFTER INSERT ON public.listing_facts FOR EACH ROW WHEN ((new.question = 'phuong'::text)) EXECUTE FUNCTION listing_facts_soat_phuong();
 drop trigger if exists trg_listing_facts_sync_cols on public.listing_facts;
 CREATE TRIGGER trg_listing_facts_sync_cols AFTER INSERT ON public.listing_facts FOR EACH ROW EXECUTE FUNCTION listing_facts_sync_cols();
 drop trigger if exists trg_listing_facts_sync_deal on public.listing_facts;
@@ -8486,6 +8523,8 @@ drop trigger if exists trg_reminders_trang_thai on public.reminders;
 CREATE TRIGGER trg_reminders_trang_thai BEFORE UPDATE ON public.reminders FOR EACH ROW EXECUTE FUNCTION reminders_giu_trang_thai_ket();
 drop trigger if exists trg_required_facts_khong_trung on public.required_facts;
 CREATE TRIGGER trg_required_facts_khong_trung BEFORE INSERT OR UPDATE OF property_type, fact_key, deal ON public.required_facts FOR EACH ROW EXECUTE FUNCTION required_facts_khong_trung();
+drop trigger if exists trg_sellers_nguon_nhan on public.sellers;
+CREATE TRIGGER trg_sellers_nguon_nhan BEFORE INSERT OR UPDATE OF seller_type ON public.sellers FOR EACH ROW EXECUTE FUNCTION sellers_nguon_nhan();
 drop trigger if exists trg_van_kich_che_so on public.van_kich;
 CREATE TRIGGER trg_van_kich_che_so BEFORE INSERT OR UPDATE ON public.van_kich FOR EACH ROW EXECUTE FUNCTION van_kich_che_so();
 drop trigger if exists trg_pe_viewings on public.viewings;
@@ -9106,6 +9145,8 @@ revoke all on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 
 grant execute on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 numeric, p_ward text) to anon;
 grant execute on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 numeric, p_ward text) to authenticated;
 grant execute on function public.listing_du_dang_tin(p_price_vnd bigint, p_area_m2 numeric, p_ward text) to service_role;
+revoke all on function public.listing_facts_soat_phuong() from public, anon, authenticated;
+grant execute on function public.listing_facts_soat_phuong() to service_role;
 revoke all on function public.listing_facts_sync_cols() from public, anon, authenticated;
 grant execute on function public.listing_facts_sync_cols() to service_role;
 revoke all on function public.listing_facts_sync_deal() from public, anon, authenticated;
@@ -9246,6 +9287,8 @@ revoke all on function public.seller_rank(p_type seller_type, p_active integer, 
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to anon;
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to authenticated;
 grant execute on function public.seller_rank(p_type seller_type, p_active integer, p_closed integer, p_total integer) to service_role;
+revoke all on function public.sellers_nguon_nhan() from public, anon, authenticated;
+grant execute on function public.sellers_nguon_nhan() to service_role;
 revoke all on function public.so_nmg_cong_khai() from public, anon, authenticated;
 grant execute on function public.so_nmg_cong_khai() to anon;
 grant execute on function public.so_nmg_cong_khai() to authenticated;

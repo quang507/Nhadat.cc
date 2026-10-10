@@ -14,7 +14,7 @@ const ok = (ten, dk, chi = "") => { if (dk) dat++; else { hong++; console.log(`�
 const ten = (w) => w ? tenDayDu(w) : null;
 
 ok("ds-phuong.ts khớp migration: 168 phường mới", PHUONG_MOI.length === 168 && PHUONG_MOI.length === napPhuongThat().length);
-ok("ds-phuong.ts: 487 tên cũ", PHUONG_CU.length === 487, String(PHUONG_CU.length));
+ok("ds-phuong.ts: 544 tên cũ (487 NQ 1685 + 57 phường số gộp trước 07/2025, 20261009d)", PHUONG_CU.length === 544, String(PHUONG_CU.length));
 
 // phuongChuan: tra ĐÚNG tên AI trả, không dò câu.
 ok("'Phường An Hội Tây' → có thật", ten(phuongChuan("Phường An Hội Tây")) === "Phường An Hội Tây");

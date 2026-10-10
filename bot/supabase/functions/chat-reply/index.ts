@@ -33,13 +33,14 @@ import {
   TONE_RULES, CAU_HOI_MAU_TEXT, CAU_TIEN_DINH_TEXT, CAU_HOI_MAU as CAU_HOI_MAU_GOC,
   dienTen, tenTroLy, // FR-181: mỗi khách một tên trợ lý (T•ai, Kh•ai…)
   cauPhi, // SRS-5.1zzq: câu phí MỘT NGUỒN theo vai + loại giao dịch
+  coCauPhi, coCauPhiChuaRoVai, coCauPhiTheoVai, vaiPhi, phanTramPhi, // SRS-5.1zzzze: lượt đã nói phí chưa — đối chiếu đúng chữ cauPhi() sinh
   tenHang, // SRS-5.1zzs: tên hạng Đồng / Bạc / Vàng cho câu lên kệ
 } from "../_shared/prompts.ts";
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "../_shared/thong_so.ts";
 import { type FactNhap, soanTinNhap, type TinNhapRow } from "../_shared/tin-nhap.ts";
 // 11/09/2026: báo lại cho người bán thứ ĐÃ LƯU trong DB (công tắc app_config.bao_lai_da_luu).
 import {
-  aiDocThem, BOC_DUOC, bocTachTaoTin, boBaoLai, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, kemLuotTao, KHONG_BOC, NGUON_AI, nhanNgan, traLoiCauBot, vuaLuuBan, vuaLuuMua,
+  aiDocThem, bocTachTaoTin, boBaoLai, bongTrichXuat, COT_BAO_LAI, DAU_BAO_LAI, docCheDo, dongFact, dongVuaLuu, KHONG_BOC, NGUON_AI, nhanNgan, phuongKemQuanCu, traLoiCauBot, TU_ANH, vuaLuuBan, vuaLuuMua,
   type CheDoBaoLai, type DongBaoLai, type FactBaoLai,
 } from "../_shared/bao_lai.ts";
 import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
@@ -53,11 +54,11 @@ import { docTaiLieuDuAn, type NguonTaiLieu, type TaiLieuDoc } from "../_shared/a
 import { bangThanhTin, cauRaoTuDong } from "../_shared/nhap-ro-hang.ts";
 import { nhipGui } from "../_shared/nhip-gui.ts";
 import { laNgungHangLoat } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { docNgungHangLoat } from "../_shared/extraction/kiem-bang-chung.ts";
+import { docNgungHangLoat, giaTriKhongDoi, vaiTuCau } from "../_shared/extraction/kiem-bang-chung.ts";
 import { LOAI_VI, loaiDoc } from "../_shared/tin-nhap.ts";
-import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
+import { type AiChinh, chonDeGhi, datKiemNhe, docCamXuc, docCauKe, docDongY, docLaiHopLe, docKhongCanHoi, docMuaKem, docYeuCau, docTuXung, docVai, docYDinh, yLuotLech, type YLuot, type GoiYXacNhan, KHOA_XAC_NHAN, kiemXacNhan, nangXacNhanChac, chonViTri, coMuiDuLieuRao, coNoiDungTraLoi, type DeXuat, docAiChinh, type DongDb, giaTriChoCauTreo, KHOA_FACT_AI_BIET, kichThuoc, kiemCapNhat, traLoiThuocOKhac, type CapNhatDeXuat, kiemDeXuat, kiemYCuocRao, kiemKienThuc, kiemTraLoiCau, laTrongCapNhat, soSanhVoiDb } from "../_shared/extraction/kiem-bang-chung.ts";
 import { chonGiaRao, dealCauRao, dienTichCauRao, duAnLaTenDuong, DUOI_GIA, ghepSoNhaHem, gotDiaChi, laSoNhaHem, ngangDaiCauRao, ngangNhanDai, phuongTenCauRao, phuongTenKhongDau, tachSoNhaHem, TRUOC_LA_SAN } from "../_shared/extraction/boc-cau-rao.ts";
-import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu } from "../_shared/extraction/khop-phuong.ts";
+import { cauHoiPhuongGan, laTenPhuongChu, nghiaDuChac, type Phuong, chiLaDonViHanhChinh, phuongChuan, phuongNhacTrongCau, tenDayDu, phuongCot, tenPhuongCot, viTriGhiDuoc } from "../_shared/extraction/khop-phuong.ts";
 import { bocQuan, cacQuanTrong, vungNgoai } from "../_shared/dia_ban.ts"; // FR-174: quận/huyện từ câu rao (+ vùng ngoài, 11/09)
 // FR-209 (15/09): tra PHƯỜNG MỚI từ tên đường (Nominatim → bảng `wards`), hỏi xác nhận rồi mới ghi.
 import { cauChonPhuong, cauNhieuNoiPhuong, cauXacNhanPhuong, chuanTenDuong, cauTraPhuong, docCacPhuongNominatim, duongTraDuoc, phuongCuaDuongTrongQuan, tachTienToPhuong } from "../_shared/extraction/tra-phuong.ts";
@@ -86,9 +87,9 @@ import { cauKhoangCachKhongNguon, chayTroLyMua, DAU_RA_CONG_CU, type PhanHoiMode
 import {
   batXungHo, bocViTriRao, chonCanTheoCau, gonGiaTriFact, laChiDonViHanhChinh, chonCauKe, cungHoFact, HOI_MOT_LAN, laBaoDang, laCauHoiTron, laDongY, laThaCamXuc, laDuRoi, laGap, laHoanLai, laKhongGiHet, laNgungRao, docTraLoiConBan, laRaoLai, laRutLoiBan, NHAN_HOI_LAI, nhanDienFact,
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, laChiLenhDang, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
-  suyTuXungHo, tuXungBot, laChaoChau, hocXungHoTuLichSu, cachGoiKhach, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo,
+  suyTuXungHo, tuXungBot, laChaoChau, hocXungHoTuLichSu, cachGoiKhach, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo, boLoiChaoDau,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, anCauDaDap } from "../_shared/extraction/van-tra-loi.ts";
+import { chanPhiChuaXacNhan, boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, anCauDaDap } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, soPhongNguTheoTang, themTangPhu, TIEU_TU_DAU, soTamCanHoiLung, docTraLoiLung, ketCauTheoLung, soTangTrongDapLung, timPhuongTrongCau, type PhuongDs } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -188,6 +189,12 @@ import { boCauHoiLap, boCauHuaLoc, boHuaTuKiemTra, boLapCum, chuanKhuVucMua, loa
 import { moSoVan, theoDoiVan, apVan, tenVanKich } from "../_shared/extraction/so-van.ts";
 import { catAnhVaoKho, taiAnh, type LoaiMedia } from "../_shared/kho_anh.ts";
 import { goNhamDau } from "../_shared/extraction/go-nham-dau.ts";
+import { ghiFact as ghiFactMotCua, viTriLaPhuong, type ThamSoFact } from "../_shared/ghi-fact.ts";
+import { diaChiHienThi, duongGiuaCau, duongHienThi } from "../_shared/extraction/hien-thi-dia-chi.ts";
+
+// SRS-5.1zzzzm: hai dấu của dòng "lượt này em ghi gì" trong câu lệnh model người bán — bất biến e2e GHI NHẬN đọc đúng hai chuỗi này.
+const VUA_GHI_CO = "EM VỪA GHI ở lượt này";
+const VUA_GHI_KHONG = "Lượt này em KHÔNG ghi thêm gì mới";
 
 // Đơn vị dưới quận/huyện là XÃ chứ không phải phường (huyện, thị xã, tỉnh lân cận).
 const laNgoaiDoThi = (quan?: string | null): boolean =>
@@ -458,8 +465,10 @@ const maTinSach = (s: string | null | undefined): string => {
  * Tên căn để ĐỌC LÊN cho chủ nhà, đứng sau chữ "căn" ở nơi gọi (SRS-5.1zh — bắn thử 02/10: "chúc mừng anh đã bán được căn căn chưa
  * rõ địa chỉ" dù tin đã có Quận Tân Bình). Đường / phường / quận; chỉ có quận → "ở Quận …"; không có gì → theo loại.
  */
-function tenCanDocLen(c: { location_raw?: string | null; ward?: string | null; district?: string | null; property_type?: string | null }): string {
-  const dc = [c.location_raw, c.ward].filter((x, i, a) => x && a.indexOf(x) === i).join(", ");
+function tenCanDocLen(c: { location_raw?: string | null; street?: string | null; ward?: string | null; district?: string | null; property_type?: string | null }): string {
+  // SRS-5.1zzzzj: in qua MỘT nguồn `diaChiHienThi` (đường chuẩn hoá, phường / quận từ cột) — đứng sau chữ "căn" nên từ loại viết thường.
+  const duong = duongGiuaCau(c.location_raw, c.street);
+  const dc = [duong, c.ward].filter(Boolean).join(", ");
   if (dc) return c.district && !dc.includes(c.district) ? `${dc}, ${c.district}` : dc;
   if (c.district) return `ở ${c.district}`;
   return c.property_type === "chung_cu" ? "chung cư của mình" : "của mình";
@@ -782,6 +791,10 @@ async function timDuongTheoNghia(client: ReturnType<typeof serviceClient>, ten: 
   }
 }
 
+/** SRS-5.1zzzzo: cột tin cho ảnh chụp "trước lượt" (`docTruocLuot`) và lượt chốt tin — đủ cho `giaTriKhongDoi` / `soSanhVoiDb`. */
+const COT_TRUOC_LUOT = "deal, property_type, price_vnd, price_raw, price_per_m2_vnd, area_m2, frontage_m, length_m, rear_width_m, alley_width_m, " +
+  "distance_to_street_m, bedrooms, bathrooms, floors, floor, floors_text, district, ward, street, location_raw, unit_code, direction, legal_status, " +
+  "gap, negotiable, rent_income_vnd";
 const KHOA_DU_AN = new Set([
   "phi_quan_ly", "phi_gui_xe", "tien_ich_gan", "ha_tang", "khu_compound",
   "thang_may", "pccc", "nam_xay", "xay_dung", "mat_do_xd", "tang_cao_toi_da",
@@ -995,6 +1008,64 @@ Deno.serve(async (req) => {
   const t0Luot = Date.now();
   const moc: Record<string, number> = {};
   const danhDau = (k: string) => { moc[k] = Date.now() - t0Luot; };
+  // SRS-5.1zzzzm (chủ dự án test Zalo 09/10/2026: khách "đúng em ơi" → bot "Dạ, nhà phố em ghi rồi ạ…" — nhà phố ghi từ lượt TRƯỚC):
+  // SỔ GHI CỦA LƯỢT. Mọi fact lượt này ghi được đi qua cửa `ghiFactMotCua` (ghi-fact.ts) bằng hàm bọc dưới, nên đây là MỘT nguồn
+  // của câu "lượt này em vừa ghi gì". Câu lệnh model chỉ được cho ghi nhận đúng những thứ trong sổ này (`dongVuaGhi`); sổ rỗng là
+  // nói thẳng "không ghi thêm gì" — ghi nhận lại thứ trong ĐÃ BIẾT là lời máy ("em ghi rồi" cho điều khách không vừa nói).
+  // SRS-5.1zzzzn: sổ ghi còn giữ ỨNG VIÊN NGUYÊN MẪU của từng fact — `goc` (cụm khách gõ AI chỉ ra, nơi gọi đưa kèm) và `vao` (chữ
+  // đưa vào cửa ghi, trước khi cửa chuẩn hoá phường) — để bong bóng 🤖 in "Đã trích xuất "<cụm khách gõ>" → làm chuẩn "<chữ lưu>"".
+  // `goc` KHÔNG bao giờ tới RPC (cửa ghi chỉ nhận `ThamSoFact`).
+  // SRS-5.1zzzzo (bắn production 09/10/2026: khách chỉ hỏi phí, 🤖 in lại phường / kết cấu / giá / diện tích của câu rao): `doi` = giá
+  // trị KHÁC thứ tin mang TRƯỚC lượt (`giaTriKhongDoi`, kiem-bang-chung.ts — một chủ). Ghi lại một giá trị không đổi (lượt chốt tin, khách
+  // nhắc lại) vẫn đi DB như cũ (cửa ghi còn đồng bộ cột), nhưng KHÔNG phải "lượt này trích xuất được": dòng EM VỪA GHI, câu mẫu "Dạ em ghi
+  // rồi ạ" và bong bóng 🤖 chỉ đọc mục `doi`.
+  const ghiLuot: Array<{ listing_id: string; question: string; ghi: string; vao: string; goc: string | null; doi: boolean }> = [];
+  // Trạng thái TRƯỚC lượt của từng tin (cột + fact mới nhất mỗi ô): đọc MỘT lần, ngay trước lượt ghi fact đầu tiên vào tin đó — mọi lượt
+  // ghi sau trong cùng lượt so với cùng ảnh chụp. Tin không có trong danh sách tin đầu lượt (`idsTinDauLuot`, tin vừa tạo) → trước lượt là
+  // rỗng: mọi giá trị đều mới. Đọc hỏng → coi như rỗng (đường cũ: mọi mục là mới), không chặn lượt ghi.
+  // Cột tin đầu lượt đi chung truy vấn danh sách tin của người bán (`tinCuaNguoi`, đã có sẵn) — ảnh chụp chỉ tốn MỘT truy vấn fact.
+  type DongTruoc = DongDb & { location_raw?: string | null; floors_text?: string | null; price_raw?: string | null };
+  let idsTinDauLuot: Map<string, DongTruoc> | null = null;
+  type TruocLuot = { dong: DongTruoc; facts: Record<string, string> };
+  const truocLuot = new Map<string, Promise<TruocLuot | null>>();
+  const docTruocLuot = (c: Parameters<typeof ghiFactMotCua>[0], lid: string): Promise<TruocLuot | null> => {
+    let p = truocLuot.get(lid);
+    if (!p) {
+      p = (async () => {
+        if (idsTinDauLuot && !idsTinDauLuot.has(lid)) return null;
+        const [{ data: l, error: lErr }, { data: fs, error: fErr }] = await Promise.all([
+          idsTinDauLuot ? Promise.resolve({ data: idsTinDauLuot.get(lid) ?? null, error: null }) : c.from("listings").select(COT_TRUOC_LUOT).eq("id", lid).maybeSingle(),
+          c.from("listing_facts").select("question, answer").eq("listing_id", lid).order("created_at", { ascending: false }).limit(200),
+        ]);
+        if (lErr || fErr || !l) return null;
+        const facts: Record<string, string> = {};
+        for (const f of (fs ?? []) as Array<{ question: string; answer: string | null }>) if (f.answer && !(f.question in facts)) facts[f.question] = f.answer;
+        return { dong: l as unknown as TruocLuot["dong"], facts };
+      })().catch(() => null);
+      truocLuot.set(lid, p);
+    }
+    return p;
+  };
+  const ghiFact = async (c: Parameters<typeof ghiFactMotCua>[0], a: ThamSoFact & { goc?: string | null }) => {
+    const { goc, ...tham } = a;
+    const lid = tham.p_listing_id ? String(tham.p_listing_id) : null;
+    // Ô GHI NỐI (nhãn tìm kiếm chỉ ghi nhãn MỚI, ghi chú bổ sung nối thêm) — luôn là điều mới, không cần ảnh chụp.
+    const laONoi = tham.p_question === "nhan" || tham.p_question === "bo_sung";
+    const truoc = lid && !laONoi ? await docTruocLuot(c, lid) : null;
+    const kq = await ghiFactMotCua(c, tham);
+    if (!kq.error && !kq.boQua && lid) {
+      const laPhuong = tham.p_question === "phuong" || (tham.p_question === "vi_tri" && viTriLaPhuong(String(tham.p_answer ?? "")));
+      const question = laPhuong ? "phuong" : tham.p_question;
+      const ghi = kq.ghi ?? String(tham.p_answer ?? "");
+      ghiLuot.push({
+        listing_id: lid, question, ghi, vao: String(tham.p_answer ?? ""), goc: goc ?? null,
+        doi: !truoc || !giaTriKhongDoi(question, ghi, truoc.dong, truoc.facts),
+      });
+    }
+    return kq;
+  };
+  /** Cụm khách gõ AI chỉ ra cho một fact (DeGhi.goc) — fact của luật không có. */
+  const gocCua = (f: unknown): string | null => (f as { goc?: string | null } | null)?.goc ?? null;
   // SEC-06 — chặn body khổng lồ TRƯỚC khi parse. Trần model đếm LƯỢT, nhưng
   // tiền tính theo TOKEN: một request kèm `text` 500 KB là ~125.000 token đầu
   // vào cho đúng một "lượt", nên trần 1000 lượt/ngày không giữ được ví. Cầu
@@ -1426,13 +1497,14 @@ Deno.serve(async (req) => {
   })();
   const cauMauDaSua = (k: string, loai?: string | null): boolean => CAU_MAU_DB.has(k) || (!!loai && CAU_MAU_DB.has(`${k}@${loai}`));
   /** Dòng ĐÃ BIẾT về căn cho model (khuôn demo AOND): chỉ cột đã có, viết kiểu nói — model không được đọc lại số này. */
-  const daBietNgan = (l: { property_type?: string | null; street?: string | null; location_raw?: string | null; district?: string | null;
+  const daBietNgan = (l: { property_type?: string | null; street?: string | null; location_raw?: string | null; ward?: string | null; district?: string | null;
     floors_text?: string | null; bedrooms?: number | null; price_vnd?: number | string | null; area_m2?: number | string | null; legal_status?: string | null } | null | undefined): string => {
     if (!l) return "";
     const p: string[] = [];
     if (l.property_type) p.push(loaiDoc(l.property_type));
-    if (l.location_raw || l.street) p.push([l.location_raw ?? l.street, l.district].filter(Boolean).join(", "));
-    else if (l.district) p.push(l.district);
+    // SRS-5.1zzzzj: địa chỉ qua MỘT nguồn in (`diaChiHienThi`) — model chép lại chữ nào thì khách đọc chữ đó, nên không đưa chữ khách gõ thô.
+    const dc = diaChiHienThi({ location_raw: l.location_raw ?? l.street, street: l.street, ward: l.ward, district: l.district });
+    if (dc) p.push(dc);
     if (l.area_m2 != null && l.area_m2 !== "") p.push(`${l.area_m2}m2`);
     if (l.floors_text) p.push(l.floors_text);
     if (l.bedrooms) p.push(`${l.bedrooms} phòng ngủ`);
@@ -1455,7 +1527,7 @@ Deno.serve(async (req) => {
   // "Hẻm 4m Trần Hưng Đạo đó phường mấy cô nhỉ?" — truyền `diaChi` khi biết.
   const cauHoiMauTho = (k: string, ac: string, loai?: string | null, quan?: string | null, deal?: string | null, diaChi?: string | null) =>
     k === "phuong" && diaChi && !laNgoaiDoThi(quan)
-      ? cauPhuongNgan(diaChi, ac)
+      ? cauPhuongNgan(duongHienThi(diaChi), ac) // SRS-5.1zzzzj: in địa chỉ qua MỘT nguồn, không chép chữ khách thô
       : cauHoiMauGoc(
         k === "phuong" && laNgoaiDoThi(quan) ? "phuong@huyen" : k === "gap" && deal === "cho_thue" ? "gap@cho_thue"
           : k === "do_rong_hem" && laSoNhaHem(diaChi) ? "do_rong_hem@so_nha_hem"
@@ -1527,7 +1599,7 @@ Deno.serve(async (req) => {
       const { data: pend } = await client.from("info_requests").select("id, question")
         .eq("listing_id", lst.id).eq("status", "pending").eq("source", "buyer_ask")
         .order("created_at", { ascending: true }).limit(1).maybeSingle();
-      const { error: fErr } = await client.rpc("ghi_fact_listing", {
+      const { error: fErr } = await ghiFact(client, {
         p_listing_id: lst.id, p_question: pend?.question ?? "bo_sung",
         p_answer: traLoi, p_source: vai,
       });
@@ -1553,16 +1625,27 @@ Deno.serve(async (req) => {
   type SellerRow = {
     id: string; name: string | null; active_listing_id: string | null;
     seller_type?: string | null;
+    // SRS-5.1zzzzj (20261009c): nhãn trên từ đâu — suy_doan (bot gán lúc mở hồ sơ, FR-159) / tu_nhan / admin. Con số phí chỉ nói khi
+    // không phải suy_doan (`vaiPhi`, prompts.ts).
+    seller_type_source?: string | null;
     xung_ho?: XungHo | null; // FR-176: chủ nhà dặn gọi anh/chị/chú/cô/bác (16/09: thêm ba từ lớn tuổi)
     nhom_tuoi?: "tre" | "lon_tuoi" | null; // 22/09: "chào cháu" → lớn tuổi dù chưa biết chú hay cô
     ten_tro_ly?: string | null;      // FR-181: tên trợ lý riêng (CRM đọc cột này)
   };
-  const [{ data: sellerCu }, { data: bCu }] = await Promise.all([
-    client.from("sellers").select("id, name, active_listing_id, seller_type, xung_ho, nhom_tuoi, ten_tro_ly")
+  const [{ data: sellerDoc, error: sellerErr }, { data: bCu }] = await Promise.all([
+    client.from("sellers").select("id, name, active_listing_id, seller_type, seller_type_source, xung_ho, nhom_tuoi, ten_tro_ly")
       .eq("zalo_user_id", externalUserId).maybeSingle(),
     client.from("buyers").select("preferences")
       .eq("zalo_user_id", externalUserId).maybeSingle(),
   ]);
+  // Hàm deploy trước migration 20261009c (cột chưa có, 42703) thì đọc như cũ — không để mọi người bán thành người lạ.
+  let sellerCu = sellerDoc;
+  if (sellerErr) {
+    await ghiLoi(client, "chat-reply doc sellers", sellerErr.message);
+    const { data: lai } = await client.from("sellers").select("id, name, active_listing_id, seller_type, xung_ho, nhom_tuoi, ten_tro_ly")
+      .eq("zalo_user_id", externalUserId).maybeSingle();
+    sellerCu = lai as typeof sellerDoc;
+  }
   let sellerRow = (sellerCu ?? null) as SellerRow | null;
   // Người này VỪA được mở hồ sơ bán trong lượt này (FR-159) — nhánh bán cần
   // biết để không chăm sóc như khách quen "đang rao các tin".
@@ -2024,6 +2107,29 @@ Deno.serve(async (req) => {
     /** Trả về chữ đã ghi ("Quận 10", "Quận 10 cho 2 căn") hay null khi không đổi gì. */
     // 25/09/2026 (bắn thật lx-30): "quận 5 em" ghi quận vào cột (không qua fact) → 🤖 báo "Không bóc tách được gì".
     let quanVuaGhi: string | null = null;
+    // SRS-5.1zzzzm: quận lượt này THẬT SỰ ghi (đổi cột, hay bỏ dấu "mặc định") — `quanVuaGhi` là quận đọc được, có thể không ghi
+    // (quận nhắc lúc hỏi hướng / giá là nơi gần đó). Dòng "em vừa ghi" chỉ đọc biến này (bất biến e2e GHI NHẬN bắt được chỗ lệch).
+    let quanGhiLuot: string | null = null;
+    // SRS-5.1zzzzm: dòng "lượt này em vừa ghi gì" cho câu lệnh model — đọc sổ `ghiLuot` (+ quận `capNhatQuan`) của ĐÚNG căn đang
+    // nói. Phường kèm quận CŨ tra từ bảng phường (dữ liệu hệ thống, không phải đoán) để model có một câu đáp có căn cứ.
+    const dongVuaGhi = (listingId: string | null | undefined): string => {
+      const muc: string[] = [];
+      for (const g of ghiLuot) {
+        // SRS-5.1zzzzo: giá trị ghi lại mà không đổi (lượt chốt tin, khách nhắc lại) không phải điều lượt này vừa ghi.
+        if (g.listing_id !== listingId || g.question === "nhan" || g.question === "kien_thuc" || !g.doi) continue;
+        // SRS-5.1zzzzn: phường + quận cũ in qua MỘT hàm (`phuongKemQuanCu`, bao_lai.ts) — cùng chữ với phần "làm chuẩn" của 🤖.
+        const p = g.question === "phuong" ? phuongKemQuanCu(g.ghi) : null;
+        const nhan = g.question === "loai_bds" ? g.ghi
+          : p ? p
+          : g.question === "bo_sung" ? "ghi chú điều chủ nhà vừa kể"
+          : (FACT_LABELS[g.question] ?? g.question).replace(/\s*\(.*\)\s*$/, "");
+        if (!muc.includes(nhan)) muc.push(nhan);
+      }
+      if (quanGhiLuot && !muc.some((m) => m.includes(quanGhiLuot!))) muc.push(quanGhiLuot);
+      return muc.length
+        ? `${VUA_GHI_CO}: ${muc.join("; ")}. Ghi nhận (nếu đáng) chỉ những điều này, vài chữ, không đọc lại số; điều khác trong ĐÃ BIẾT là chuyện các lượt trước — không nói "em ghi" cho nó.\n`
+        : `${VUA_GHI_KHONG} (chủ nhà chỉ gật, hỏi hay nói chuyện khác): KHÔNG nói "em ghi / em lưu / em ghi nhận", không nhắc lại điều trong ĐÃ BIẾT; đáp một tiếng ("Dạ", "Vâng ạ") hoặc trả lời điều họ hỏi, rồi vào câu hỏi.\n`;
+    };
     const capNhatQuan = async (listingId: string | null): Promise<string | null> => {
       if (!listingId) return null;
       // Truyền cả bản THÔ: "quán 2 tầng" bỏ dấu thành "quan 2 tang", không có
@@ -2055,6 +2161,7 @@ Deno.serve(async (req) => {
           if ((cu.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true) {
             const { error: bt0 } = await client.rpc("ghi_boc_tach", { p_listing_id: id, p: { quan: q, quan_mac_dinh: false } });
             if (bt0) await ghiLoi(client, "chat-reply ghi_boc_tach(quan xac nhan)", bt0.message);
+            else quanGhiLuot = q;
           }
           continue;
         }
@@ -2068,6 +2175,7 @@ Deno.serve(async (req) => {
         const { error: btErr } = await client.rpc("ghi_boc_tach", { p_listing_id: id, p: { quan: q, quan_mac_dinh: false } });
         if (btErr) await ghiLoi(client, "chat-reply ghi_boc_tach(quan)", btErr.message);
       }
+      if (soDoi) quanGhiLuot = q;
       return soDoi ? `${q}${soDoi > 1 ? ` cho ${soDoi} căn` : ""}` : null;
     };
 
@@ -2118,9 +2226,16 @@ Deno.serve(async (req) => {
         if (error) { await ghiLoi(client, "chat-reply wards(tu dien phuong)", error.message); return null; }
         dsPhuongTuDien = (data ?? []) as PhuongDs[];
       }
-      const tp = timPhuongTrongCau(tin, dsPhuongTuDien);
-      const tron = tp ? null : tenDiaDanhTron(tin);
-      if (!tp && !tron) return null;
+      // SRS-5.1zzzzq (bắn production 09/10, thu-thuong2/6): "ở củ chi, xã tân thạnh đông" → bảng `wards` (chỉ tên MỚI) khớp phần đầu
+      // "tân thạnh" với Phường Tân Thành (Phú Mỹ) và ghi phường đó, trong khi xã CŨ Tân Thạnh Đông nay là Xã Phú Hòa Đông. Bộ dò chung
+      // `phuongNhacTrongCau` (tên mới + tên cũ, tên dài trùm tên ngắn) là chủ của "câu nhắc phường nào": bảng `wards` khớp ra một
+      // phường mà bộ chung đọc ra phường KHÁC → theo bộ chung. Bảng `wards` vẫn lo chữ gõ đảo / sai một ký tự bộ chung không đọc.
+      const tpBang = timPhuongTrongCau(tin, dsPhuongTuDien);
+      const pnChung = tpBang ? phuongNhacTrongCau(tin) : null;
+      const pn = pnChung && pnChung.ten_day_du !== tpBang?.phuong.ten_day_du ? pnChung : null;
+      const tp = pn ? null : tpBang;
+      const tron = pn || tp ? null : tenDiaDanhTron(tin);
+      if (!pn && !tp && !tron) return null;
       let l = dongBiet;
       if (!l) {
         const { data, error: lErr } = await client.from("listings").select("ward, district, boc_tach").eq("id", listingId).maybeSingle();
@@ -2130,8 +2245,8 @@ Deno.serve(async (req) => {
       if (!l) return null;
       const quanMacDinh = (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh === true;
       const quanBiet = l.district && !quanMacDinh ? String(l.district) : null;
-      let ten = tp?.phuong.ten_day_du ?? null;
-      let quanPhuong = tp?.phuong.quan_cu ?? null;
+      let ten = pn?.ten_day_du ?? tp?.phuong.ten_day_du ?? null;
+      let quanPhuong = pn?.quan_cu ?? tp?.phuong.quan_cu ?? null;
       if (tron) {
         const cauHoi: NhomDiaDanh | null = cauDangHoi === "phuong" ? "phuong" : cauDangHoi === "vi_tri" ? "duong" : null;
         const dd = await giaiDiaDanh(tron.ten, { tienTo: tron.tienTo, cauHoi, quanBiet });
@@ -2153,9 +2268,10 @@ Deno.serve(async (req) => {
         phuongLechLuot = { ten_day_du: ten, quan_cu: String(quanPhuong) };
         return null;
       }
-      const { error } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: "phuong", p_answer: ten, p_source: "seller_chat" });
+      const { error, boQua } = await ghiFact(client, { p_listing_id: listingId, p_question: "phuong", p_answer: ten, p_source: "seller_chat" });
       if (error) { await ghiLoi(client, "chat-reply ghi_fact_listing(phuong tu dien)", error.message); return null; }
-      console.log("chat-reply: phuong tu dien", tp?.khop ?? tron?.ten, "→", ten);
+      if (boQua) return null;
+      console.log("chat-reply: phuong tu dien", pn ? "(bo chung)" : tp?.khop ?? tron?.ten, "→", ten);
       return ten;
     };
 
@@ -2299,17 +2415,12 @@ Deno.serve(async (req) => {
       let tenChuan: string | null = goiY ? goiY.phuong : null;
       // 30/09/2026: chốt với bảng `wards` trước — "phường an hội tây quận gò vấp" ra đúng Phường An Hội Tây + quận Gò Vấp.
       // 30/09/2026 (chủ dự án: "để AI nhận"): tên phường do AI đọc (đã qua kiểm bằng chứng) — máy chỉ tra đúng tên trong danh sách.
-      const chot = goiY ? null : phuongChuan(dapAnPhuong);
-      if (chot) { tenChuan = tenDayDu(chot); quan = chuaQuan ? chot.quan_cu ?? null : null; }
-      else if (!goiY) {
-        const tach = tachTienToPhuong(dapAnPhuong);
-        const ten = (tach?.ten ?? dapAnPhuong).trim();
-        const w = ten.length >= 2 && ten.length <= 50 ? await timWard(ten) : null;
-        if (w) { tenChuan = w.ten_day_du; quan = chuaQuan ? w.quan_cu : null; }
-        // 15/09/2026: không có trong `wards` (xã cũ như "Tân Kiên") thì vẫn ghi tên ĐÃ
-        // CẮT chữ đệm và tiền tố viết hoa ("Xã Tân Kiên"), không phải "xã Tân Kiên đó em".
-        else if (tach) tenChuan = tach.ten_day_du;
-      }
+      // SRS-5.1zzzzj: MỘT cửa `phuongCot` (tên mới / cũ / số cũ + quận cũ) thay ba đường cũ (phuongChuan → tra `wards` → "Xã Tân Kiên"
+      // viết hoa chữ khách). Không ra phường mới → null: không ghi, câu phường còn treo.
+      const tachP = goiY ? null : tachTienToPhuong(dapAnPhuong);
+      const chot = goiY ? phuongCot(goiY.phuong, goiY.quan) : phuongCot(tachP?.ten_day_du ?? dapAnPhuong, chuaQuan ? null : cu?.district ?? null);
+      tenChuan = chot ? tenDayDu(chot) : null;
+      if (chot && !goiY) quan = chuaQuan ? chot.quan_cu ?? null : null;
       if (quan && (chuaQuan || goiY?.doi_quan)) {
         const { error: qErr } = await client.from("listings").update({ district: quan }).eq("id", listingId);
         if (qErr) await ghiLoi(client, "chat-reply cap nhat quan tu phuong", qErr.message);
@@ -2631,11 +2742,17 @@ Deno.serve(async (req) => {
     // 01/10/2026 (bắn thử lx-tt-08: "Nhà phố hẻm sâu…" — chủ không nói hẻm sâu): AI liệt kê câu NHẬN XÉT trong lời bot kèm căn cứ
     // chép từ lời chủ nhà (`soatNhanXetBangModel`), code kiểm căn cứ (`nhanXetKhongCanCu`) rồi bỏ câu không căn cứ — câu hỏi
     // giữ nguyên. Chế độ `ai` mới chạy (một lượt model nhỏ); AI hỏng thì lưới danh sách cũ vẫn chạy sau.
+    // SRS-5.1zzzzp: lượt AI soát nhận xét vừa chạy XONG cho lời đang xét → danh sách từ khoá cũ (boKhenKhongCanCu /
+    // boMenhDeKhenSai) chỉ còn soát số đo / kết cấu bịa (so số, tất định); phần "khen theo từ khoá" là lưới đỡ khi AI hỏng.
+    let nhanXetAiXong = false;
     const soatNhanXet = async (loi: string | null, bangChung: string, daGhi = ""): Promise<string | null> => {
+      nhanXetAiXong = false;
       if (!loi || !anthropicS || !laCheDoAi) return loi;
       try {
         const { nhanXet, usage } = await soatNhanXetBangModel(anthropicS as unknown as Parameters<typeof soatNhanXetBangModel>[0], MODEL, loi, bangChung, daGhi);
+        nhanXetAiXong = true;
         await doTien(client, usage as Parameters<typeof doTien>[1]);
+        for (const n of nhanXet) if (n.noi_trang_thai_tin === true && n.cau?.trim() && !/\?/.test(n.cau)) aiNoiTrangThai.push(n.cau.trim());
         const bo = nhanXetKhongCanCu(nhanXet, `${bangChung}\n${daGhi}`);
         if (!bo.length) return loi;
         console.log("chat-reply: bo nhan xet khong can cu", bo.join(" | "));
@@ -2661,6 +2778,9 @@ Deno.serve(async (req) => {
       if (error) await ghiLoi(client, "chat-reply ghi_boc_tach(khong hoi)", error.message);
       return cu;
     };
+    /** SRS-5.1zzzzc: quận tin đã biết CHẮC (không phải cờ quận mặc định) — ngữ cảnh cho kiểm bằng chứng phường số cũ. */
+    const quanChacCua = (l: { district?: string | null; boc_tach?: unknown } | null | undefined): string | null =>
+      l?.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null | undefined)?.quan_mac_dinh !== true ? String(l.district) : null;
     // FR-226: ô chữ AI đã GỘP / SỬA lượt này (đã qua `kiemCapNhat`) — đường ra không ghi lại mẩu đó làm "bổ sung".
     let capNhatLuot: Array<{ question: string; answer: string }> = [];
     // Địa chỉ luật vừa ghép số nhà lượt này ("45 Ngô Y Linh") — kiến thức AI "số 45" không vào bổ sung.
@@ -2692,11 +2812,12 @@ Deno.serve(async (req) => {
             .eq("listing_id", d.id).order("created_at", { ascending: true }).limit(80);
           for (const f of (fs ?? []) as Array<{ question: string; answer: string | null }>) if (f.answer) facts[f.question] = f.answer;
         }
-        const { dat, bo } = kiemDeXuat(kq.truong, text);
+        // SRS-5.1zzzzc: quận tin đã biết chắc → kiểm bằng chứng đối chiếu được "phường 13" (tên cũ dạng số) với phường mới AI đổi.
+        const { dat, bo } = kiemDeXuat(kq.truong, text, { quan: quanChacCua(d) });
         const soCan = (kq.ket as { so_can?: number } | null)?.so_can ?? null;
         const soSanh = soSanhVoiDb(dat, d, facts);
         // Chế độ `ghi`: chỉ khi tin xác định được và tin rao MỘT căn (nhiều căn: DB chỉ có một tin để so).
-        const daGhi: Array<{ question: string; answer: string; khoa: string }> = [];
+        const daGhi: Array<{ question: string; answer: string; khoa: string; goc?: string }> = [];
         let boGhi: unknown[] = [];
         // Kiến thức thêm (17/09/2026): ý khách nói về căn mà không có khoá → fact `bo_sung`, ra tin
         // vào dòng "📝 Thêm" của bản nháp (`soanTinNhap`).
@@ -2719,8 +2840,8 @@ Deno.serve(async (req) => {
             if (pcG && phuongTrungTenQuan(pcG.ten, pcG.quan_cu) && !coChuPhuong(text)) { console.log("chat-reply: phuong trung ten quan, khong ghi", g.answer); continue; }
             const qP = g.question === "phuong" && quanChac ? pcG?.quan_cu : null;
             if (qP && !cungQuan(qP, quanChac)) { console.log("chat-reply: phuong AI lech quan, de hoi lai", g.answer, qP, quanChac); continue; }
-            const { error: gErr } = await client.rpc("ghi_fact_listing", {
-              p_listing_id: d.id, p_question: g.question, p_answer: g.answer, p_source: NGUON_AI,
+            const { error: gErr } = await ghiFact(client, {
+              p_listing_id: d.id, p_question: g.question, p_answer: g.answer, p_source: NGUON_AI, goc: g.goc,
             });
             if (gErr) await ghiLoi(client, `chat-reply ghi_fact_listing(ai_kiem ${g.question})`, gErr.message);
             else daGhi.push(g);
@@ -2731,7 +2852,7 @@ Deno.serve(async (req) => {
           const ktB = kichThuoc(dat);
           if (ktB.ngang != null && ktB.dai != null && d.area_m2 == null && !facts.dien_tich && !facts.dien_tich_dat && !daGhi.some((g) => /^dien_tich/.test(g.question))) {
             const dtB = `${ktB.ngang}x${ktB.dai}`;
-            const { error: dtErr } = await client.rpc("ghi_fact_listing", { p_listing_id: d.id, p_question: "dien_tich", p_answer: dtB, p_source: NGUON_AI });
+            const { error: dtErr } = await ghiFact(client, { p_listing_id: d.id, p_question: "dien_tich", p_answer: dtB, p_source: NGUON_AI });
             if (dtErr) await ghiLoi(client, "chat-reply ghi_fact_listing(ai_kiem dien_tich ngang x dai)", dtErr.message);
             else daGhi.push({ question: "dien_tich", answer: dtB, khoa: "ngang_x_dai" });
           }
@@ -2751,7 +2872,7 @@ Deno.serve(async (req) => {
               // Nhãn tin đang mang + nhãn gắn từ chính tin vừa nhắn (ganNhanChoTin chạy trên cùng câu).
               nhan: [...(dx.nhan ?? []), ...ganNhan(text)] };
             if (daCoBoSung.has(boDau(kt)) || daCoTrongFact(kt) || laBoSungRac(kt) || laBoSungTrung(kt, ngCanh) || laTrongCapNhat(kt, [...capNhatLuot, ...(soNhaGhep ? [{ answer: soNhaGhep }] : [])])) continue;
-            const { error: kErr } = await client.rpc("ghi_fact_listing", {
+            const { error: kErr } = await ghiFact(client, {
               p_listing_id: d.id, p_question: "bo_sung", p_answer: kt, p_source: NGUON_AI,
             });
             if (kErr) await ghiLoi(client, "chat-reply ghi_fact_listing(ai_kiem bo_sung)", kErr.message);
@@ -2763,7 +2884,9 @@ Deno.serve(async (req) => {
         const sachJson = <T>(x: T): T => JSON.parse(JSON.stringify(x).replace(/\\u0000/g, "")) as T;
         const { error: bErr } = await client.from("boc_tach_bong").insert(sachJson({
           seller_id: sellerRow.id, listing_id: d?.id ?? null,
-          tin: thayLienHe(text, "[liên hệ]").slice(0, 2000), cau_dang_hoi: kq.cauDangHoi, model: MODEL, ms: kq.ms,
+          // SRS-5.1zzzzo: model THẬT đã trả lời (lớp bọc gắn vào `usage.model`: "Gemini:…" / "Groq:…" / tên Claude) — cột này từng ghi
+          // MODEL cấu hình, nên lượt 76 giây ghi "claude-haiku" dù có thể là nguồn dự phòng trả lời sau khi chờ / đổi nguồn.
+          tin: thayLienHe(text, "[liên hệ]").slice(0, 2000), cau_dang_hoi: kq.cauDangHoi, model: (kq.usage as { model?: string } | null)?.model ?? MODEL, ms: kq.ms,
           so_can: soCan,
           de_xuat: kq.truong, dat, bo, so_sanh: soSanh, da_ghi: { che_do: kq.cheDo, ghi: daGhi, bo: boGhi, kien_thuc: kienThucGhi, hoi_lai: kq.hoiLai ?? null,
             // 02/10/2026 (SRS-5.1ze): AI trả rỗng với câu gấp đứng riêng — cần thấy AI xếp câu vào đâu (sổ đo, không phải dữ liệu tin).
@@ -2771,10 +2894,10 @@ Deno.serve(async (req) => {
         }));
         if (bErr) await ghiLoi(client, "chat-reply boc_tach_bong(ghi)", bErr.message);
         const dongGhi = [
-          ...daGhi.map((g) => ({ question: g.question, answer: g.answer, source: NGUON_AI })),
+          ...daGhi.map((g) => ({ question: g.question, answer: g.answer, source: NGUON_AI, goc: [g.goc] })),
           ...(kienThucGhi.length ? [{ question: "bo_sung", answer: kienThucGhi.join(" · "), source: NGUON_AI }] : []),
         ];
-        return dongGhi.length ? aiDocThem(dongGhi, FACT_LABELS) : null;
+        return dongGhi.length ? aiDocThem(dongGhi, FACT_LABELS, { tin: text, dong: d as unknown as DongBaoLai }) : null;
       } catch (e) {
         await ghiLoi(client, "chat-reply boc_tach_bong", e);
         return null;
@@ -2814,7 +2937,14 @@ Deno.serve(async (req) => {
       }
     };
 
+    // SRS-5.1zzzzk: tin ĐANG NÓI trong lượt (tin vừa tạo ở r1, tin của câu treo ở r2) và các câu AI soát chỉ ra là "nói trạng thái tin" —
+    // cho lưới trạng thái ở đường ra (`traLoiSeller`) đối chiếu đúng tin, đúng câu.
+    let tinTrongLuot: string | null = null;
+    const aiNoiTrangThai: string[] = [];
     let ackSua: string | null = null;
+    // SRS-5.1zzzzg: nội dung lời GHI THÊM (không phải sửa) của `ackSua` — lượt có model viết lời thì đưa vào câu lệnh để model ghi nhận
+    // gộp một lần, bong bóng code bỏ (một ý một nguồn).
+    let ackGhiGop: string | null = null;
     // FR-185: bong bóng nhận ảnh (loại ảnh, đối chiếu sổ) — đứng trước lời đáp
     // chính, cùng chỗ với lời cảm ơn sửa fact.
     let ackAnh: string[] = [];
@@ -2846,12 +2976,15 @@ Deno.serve(async (req) => {
       kem: ReadonlyArray<{ question: string; answer: string }>;
     }): Promise<void> => {
       const dt = o.dienTich?.trim() ? `${o.dienTich.trim().replace(",", ".").replace(/\s*m2$/i, "")}m2` : null;
-      for (const [k, v] of [
-        ["vi_tri", o.viTri ?? null], ["dien_tich", dt], ["so_phong_ngu", o.soPhongNgu != null ? String(o.soPhongNgu) : null], ["du_an_ten", o.duAnTen ?? null],
-        ...o.kem.filter((f) => !KHOA_LOI_TIN_MOI.has(f.question)).map((f) => [f.question, f.answer]),
-      ] as Array<[string, string | null]>) {
-        if (!v) continue;
-        const { error } = await client.rpc("ghi_fact_listing", { p_listing_id: lid, p_question: k, p_answer: v, p_source: "seller_chat" });
+      // SRS-5.1zzzzn: fact kèm của AI mang cụm khách gõ (`goc`) — để 🤖 lượt tạo tin in được nguyên mẫu.
+      for (const [k, v, goc] of [
+        ["vi_tri", o.viTri ?? null, null], ["dien_tich", dt, null], ["so_phong_ngu", o.soPhongNgu != null ? String(o.soPhongNgu) : null, null], ["du_an_ten", o.duAnTen ?? null, null],
+        ...o.kem.filter((f) => !KHOA_LOI_TIN_MOI.has(f.question)).map((f) => [f.question, f.answer, gocCua(f)]),
+      ] as Array<[string, string | null, string | null]>) {
+        // SRS-5.1zzzzd: ô vị trí không nhận kích thước / tên hành chính trơn (một hàm chung `viTriGhiDuoc`).
+        const vv = k === "vi_tri" ? viTriGhiDuoc(v) : v;
+        if (!vv) continue;
+        const { error } = await ghiFact(client, { p_listing_id: lid, p_question: k, p_answer: vv, p_source: "seller_chat", goc });
         if (error) await ghiLoi(client, `chat-reply ghi_fact_listing(${nhan}:${k})`, error.message);
       }
     };
@@ -2889,7 +3022,7 @@ Deno.serve(async (req) => {
         if (!them.length) return;
         const { error: nErr } = await client.rpc("them_nhan_tin", { p_listing_id: lid, p_nhan: them });
         if (nErr) { await ghiLoi(client, "chat-reply them_nhan_tin", nErr.message); return; }
-        const { error: fErr } = await client.rpc("ghi_fact_listing", {
+        const { error: fErr } = await ghiFact(client, {
           p_listing_id: lid, p_question: "nhan", p_answer: tenNhan(them), p_source: "seller_chat",
         });
         if (fErr) await ghiLoi(client, "chat-reply ghi_fact_listing(nhan)", fErr.message);
@@ -2899,7 +3032,7 @@ Deno.serve(async (req) => {
           const { data: tc, error: tcErr } = await client.from("listing_facts").select("id").eq("listing_id", lid).eq("question", "tho_cu").limit(1);
           if (tcErr) await ghiLoi(client, "chat-reply doc tho_cu", tcErr.message);
           else if (!(tc ?? []).length) {
-            const { error: tgErr } = await client.rpc("ghi_fact_listing", {
+            const { error: tgErr } = await ghiFact(client, {
               p_listing_id: lid, p_question: "tho_cu", p_answer: "100%", p_source: "seller_chat",
             });
             if (tgErr) await ghiLoi(client, "chat-reply ghi_fact_listing(tho_cu 100)", tgErr.message);
@@ -2956,7 +3089,15 @@ Deno.serve(async (req) => {
             .order("created_at", { ascending: false }).limit(40);
           if (fErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(facts)", fErr.message);
           // 21/09/2026 (chủ dự án): fact AI đọc (ai_kiem) nằm CHUNG bong bóng "🤖 Đã lưu", không tách dòng.
-          factLuot = (fs ?? []) as FactBaoLai[];
+          // SRS-5.1zzzzn: ứng viên NGUYÊN MẪU của từng fact đọc từ sổ ghi của lượt (`ghiLuot`, cùng câu hỏi + cùng chữ đã ghi) — cụm
+          // AI chỉ ra, rồi chữ đưa vào cửa ghi. Không đọc lại DB, không đoán: bao_lai chỉ in đoạn tìm lại được trong tin khách.
+          // SRS-5.1zzzzo: fact ghi lại GIÁ TRỊ KHÔNG ĐỔI (mọi lượt ghi khớp nó trong sổ đều `doi = false`) không phải thứ tin này trích
+          // xuất được — bỏ khỏi 🤖 (bất biến e2e KHÔNG ĐỔI). Fact không có trong sổ (đường ghi ngoài hàm bọc) giữ như cũ.
+          factLuot = ((fs ?? []) as FactBaoLai[]).flatMap((f) => {
+            const g = ghiLuot.filter((x) => x.question === f.question && x.ghi === f.answer);
+            if (g.length && g.every((x) => !x.doi)) return [];
+            return [g.length ? { ...f, goc: g.flatMap((x) => [x.goc, x.vao]) } : f];
+          });
         }
         const hoSo = [
           sellerMoi ? `Zalo: "…${String(externalUserId).slice(-4)}"` : null,
@@ -2967,15 +3108,16 @@ Deno.serve(async (req) => {
         // của khách ko bóc tách được gì thì ghi là ko bóc tách được gì"): 🤖 chỉ nói thứ bóc từ CHÍNH tin vừa nhắn,
         // giá trị trong ngoặc kép — không in lại cả tin đang nằm trong DB (quyết định 21 + 23/09 thay bằng câu này).
         // Lượt TẠO tin: cả dòng tin là thứ bóc từ câu rao → từng cột + fact lượt này mà cột chưa nói.
+        // SRS-5.1zzzzn: "Đã trích xuất "<cụm khách gõ>" → làm chuẩn "<chữ lưu>"" — nguyên mẫu tìm trong chính tin khách vừa nhắn.
         if (ma) {
-          const kem = kemLuotTao(factLuot, FACT_LABELS, dong);
-          return { bong: [bocTachTaoTin(dong), dongHoSo, kem].filter(Boolean).join("\n") || null, cheDo };
+          return { bong: [bocTachTaoTin(dong, { tin: text, facts: factLuot, nhan: FACT_LABELS }), dongHoSo].filter(Boolean).join("\n") || null, cheDo };
         }
-        const bocLuot = vuaLuuBan(factLuot, FACT_LABELS);
-        const dongQuan = quanVuaGhi ? `quận: "${quanVuaGhi}"` : null;
-        const bocDu = bocLuot
-          ? (dongQuan && !/\bquận:/.test(bocLuot) ? `${bocLuot} · ${dongQuan}` : bocLuot)
-          : dongQuan ? `${BOC_DUOC} ${dongQuan}` : hieuTraLoiVai && sellerMoi ? traLoiCauBot(cauVaiDaHoi, hieuTraLoiVai) : KHONG_BOC;
+        const ngu = { tin: text, dong };
+        const dongLuot = dongVuaLuu(factLuot, FACT_LABELS, ngu);
+        // Quận ghi thẳng cột (không qua fact) — cùng kiểu dòng, nguyên mẫu là cụm quận khách gõ.
+        if (quanVuaGhi && !dongLuot.some((d) => /^• quận:/.test(d))) dongLuot.push(dongFact({ question: "quan", answer: quanVuaGhi }, { quan: "quận" }, ngu));
+        const bocDu = bongTrichXuat(dongLuot) ??
+          (hieuTraLoiVai && sellerMoi ? traLoiCauBot(cauVaiDaHoi, hieuTraLoiVai, text) : KHONG_BOC);
         return { bong: [bocDu, dongHoSo].filter(Boolean).join("\n"), cheDo };
       } catch (e) {
         await ghiLoi(client, "chat-reply bao_lai_da_luu", e);
@@ -3021,7 +3163,7 @@ Deno.serve(async (req) => {
         await ghiLoi(client, "chat-reply merge_buyer_prefs(mua kem)", mkErr.message);
         return null;
       }
-      const goi = sellerRow.xung_ho ?? "anh/chị";
+      const goi = sellerRow.xung_ho ?? cachGoi; // SRS-5.1zzzze: không "anh/chị" gạch chéo trong câu soạn sẵn
       const ta = [mk.property_type, mk.area].filter(Boolean).join(" ") || "căn";
       // Không mở bằng "Dạ em ghi/lưu …": `boCauGhiNhan` gọt câu đó khi đã có 🤖 — mà 🤖 chỉ in dữ liệu TIN BÁN, không in hồ sơ mua.
       return `Dạ còn nhu cầu mua của ${goi} (${ta}${mk.budget ? `, tầm ${mk.budget.replace(/^\s*(?:tầm|khoảng|tam|khoang)\s+/i, "")}` : ""}), em cũng lưu vào hồ sơ rồi ạ.`;
@@ -3052,9 +3194,15 @@ Deno.serve(async (req) => {
       // 01/10/2026 (bắn thử lx-cx-01: "bên em có phải lừa đảo không vậy" → bot chỉ nói "em là trợ lý AI"): chủ nhà NGHI NGỜ
       // (AI đọc, có trích dẫn) → bong bóng TRẤN AN tiền định đứng trước, chỉ nói điều có thật: phí chỉ thu khi giao dịch thành
       // công (FEE_RULES), không thu trước; đã báo người phụ trách (việc 😟 vừa mở ở `camXucAi`).
-      if (camXucLuot?.muc === "nghi_ngo" && !replies.some((r) => /phí chỉ thu khi/i.test(r))) {
-        const goi = sellerRow.xung_ho ?? "anh/chị";
-        replies = [`Dạ ${goi} yên tâm nha, bên em là AI Ơi Nhà Đất, rao tin cho ${goi} không thu đồng nào trước — ${cauPhi(sellerRow.seller_type, dealNguoi)}. Em cũng đã báo anh chị phụ trách nhắn lại ${goi} cho rõ ạ.`, ...replies];
+      // SRS-5.1zzzze (bắn production 09/10/2026, thu-kg5: "… bên em lấy phí sao, mà sao tin em được"): lưới trùng cũ dò `/phí chỉ thu
+      // khi/` nên câu phí hỏi ngược ("Dạ phí BÊN EM chỉ thu khi…") lọt, khách đọc phí HAI lần trong một lượt; câu này còn viết "anh/chị"
+      // gạch chéo và gạch dài — van sửa văn tắt (`luat_loi_bot` gọn) nên ra nguyên văn. Một ý một nguồn: lượt đã có câu phí (bong bóng
+      // hỏi ngược, lời model chép câu phí — đối chiếu đúng chữ `cauPhi()` sinh, không dò từ khoá) thì bong bóng trấn an không nói phí lại;
+      // chưa có thì nó nói. Gọi khách bằng cách gọi thật của người này (`cachGoi`), không gạch chéo, không gạch dài.
+      if (camXucLuot?.muc === "nghi_ngo") {
+        const goi = sellerRow.xung_ho ?? cachGoi;
+        const daNoiPhi = replies.some(coCauPhi);
+        replies = [`Dạ ${goi} yên tâm nha, bên em là AI Ơi Nhà Đất, rao tin cho ${goi} không thu đồng nào trước${daNoiPhi ? "" : `, ${cauPhi(vaiPhi(sellerRow), dealNguoi)}`}. Em cũng đã báo anh chị phụ trách nhắn lại ${goi} cho rõ ạ.`, ...replies];
       }
       if (humanActive) {
         // FR-141 — người thật đang cầm cuộc: không gửi, không ghi dòng bot nào.
@@ -3082,16 +3230,34 @@ Deno.serve(async (req) => {
         // Model lỡ chép nguyên chữ giữ chỗ của khối nhớ tạm → thay bằng tên thật.
         .map((r) => r.split(TEN_GIU_CHO).join(tenBot).trim()).filter(Boolean);
       const mocVan = theoDoiVan(soVan, () => sach);
+      // SRS-5.1zzzzj: con số phí chỉ do `cauPhi(vaiPhi(…))` nói — lời model (hay câu nào) nói "1%" / "0,5%" khi vai chưa xác nhận (hoặc
+      // sai số của vai) → thay bằng đúng câu `cauPhi`. Lưới chống bịa, luôn bật; không đụng câu hỏi.
+      sach = chanPhiChuaXacNhan(sach, phanTramPhi(vaiPhi(sellerRow), dealNguoi), cauPhi(vaiPhi(sellerRow), dealNguoi)); mocVan("chanPhiChuaXacNhan");
       // 06/10/2026 (bắn thử thu-srd-b1, SRS-5.1zzo): "Tin căn Trần Phú của anh đang rao" khi người này KHÔNG còn tin nào mở (căn
       // duy nhất vừa ẩn, căn Trần Phú chưa từng được mở). Lớp lỗi: lời khẳng định TRẠNG THÁI TIN do model (hay câu tiền định) viết
       // mà không đối chiếu DB — `boHuaDaDang` trước chỉ áp ở r2 khi tin chưa lên kệ, r3 (chăm sóc) không qua. Đây là đường ra DUY
       // NHẤT của nhánh bán nên lưới đặt ở đây, luôn bật: lời có mệnh đề "đã đăng / đang rao / lên kệ" → đọc số tin còn mở (một
       // truy vấn, CHỈ khi lời có mệnh đề đó) → không còn tin mở thì mọi khẳng định như vậy là sai, bỏ mệnh đề.
-      if (coMenhDeDaDang(sach)) {
-        const { count: soTinMo, error: tmErr } = await client.from("listings").select("id", { count: "exact", head: true })
-          .eq("seller_id", sellerRow.id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"]);
-        if (tmErr) await ghiLoi(client, "chat-reply dem tin mo(trang thai)", tmErr.message);
-        else if ((soTinMo ?? 0) === 0) { sach = boHuaDaDang(sach); mocVan("boHuaDaDang(khong_tin_mo)"); }
+      // SRS-5.1zzzzk (bắn production 09/10: câu rao đầu → "Em vừa đăng tin rồi ạ." khi tin CHỜ THÔNG TIN, chưa có bản nháp): lưới này là
+      // CHỦ DUY NHẤT của mọi câu nói trạng thái tin. Bản cũ chỉ xét "không còn tin mở" (r1 / r2 có lưới riêng, và lưới riêng trả LẠI câu
+      // sai khi câu sai là cả lời). Nay: câu nói trạng thái (AI soát chỉ ra — `aiNoiTrangThai`; luật `coMenhDeDaDang` đỡ khi AI không
+      // chạy) → đọc trạng thái THẬT: tin đang nói trong lượt (hay tin đang hoạt động) chưa lên kệ, hoặc không tin nào lên kệ → câu sai, bỏ.
+      const aiTT = aiNoiTrangThai.filter((c) => sach.some((r) => boDau(r).includes(boDau(c).replace(/[.!…\s]+$/u, ""))));
+      if (coMenhDeDaDang(sach) || aiTT.length) {
+        const { data: tinTT, error: tmErr } = await client.from("listings").select("id, status").eq("seller_id", sellerRow.id).limit(50);
+        if (tmErr) await ghiLoi(client, "chat-reply doc trang thai tin", tmErr.message);
+        else {
+          const LEN_KE = ["dang_ban", "dang_quan_tam"];
+          const ds = (tinTT ?? []) as Array<{ id: string; status: string | null }>;
+          const tieuDiem = ds.find((t) => t.id === (tinTrongLuot ?? sellerRow.active_listing_id));
+          const dung = tieuDiem ? LEN_KE.includes(tieuDiem.status ?? "") : ds.some((t) => LEN_KE.includes(t.status ?? ""));
+          if (!dung) {
+            sach = boHuaDaDang(sach);
+            if (aiTT.length) sach = sach.map((r) => /^\s*(?:🤖|💾|📝|📋)/u.test(r) ? r : boCauNhanXet(r, aiTT) ?? "").filter((r) => r.trim());
+            if (!sach.length) sach = ["Dạ em ghi nhận rồi ạ."];
+            mocVan("boHuaDaDang(trang_thai_that)");
+          }
+        }
       }
       // 23/09/2026 (FR-218 b): khách nói bot hiểu / ghi nhầm mà không câu nào xin lỗi → chèn lời xin lỗi (trước đổi xưng hô).
       if (luatDu) sach = themXinLoiKhiHieuNham(text, sach, goiNguoi); mocVan("themXinLoiKhiHieuNham");
@@ -3129,7 +3295,9 @@ Deno.serve(async (req) => {
       if (luatDu && !goiLuot) sach = sach.map(boGoiCuoiVaOi); mocVan("boGoiCuoiVaOi");
       // 21/09/2026 (chủ dự án "làm cả 4"): chưa biết cách gọi → "anh/chị" gạch chéo là chữ máy; người bán
       // hàng thật nói "anh chị". Áp cho mọi bong bóng (tiền định lẫn model) ở một chỗ.
-      if (luatDu && !goiLuot) sach = sach.map(boGachCheo); mocVan("boGachCheo");
+      // SRS-5.1zzzzj: gạch chéo / gạch dài là CHỮ IN (không phải văn phong) — luôn chuẩn ở đây, mọi nguồn (câu code, lời model) đều qua.
+      // TONE_RULES cấm cả hai, nên lưới này chỉ giữ đúng điều prompt nói; công tắc `luat_loi_bot` vẫn tắt các van sửa VĂN khác.
+      if (!goiLuot) sach = sach.map(boGachCheo); mocVan("boGachCheo");
       if (luatDu && !goiLuot && sellerRow.nhom_tuoi !== "lon_tuoi") sach = sach.map(boDoanGioiDauCau); mocVan("boDoanGioiDauCau");
       // 22/09/2026 (bộ đo giọng B08): câu tiền định "Dạ em là trợ lý AI…" đứng trước, model chép lại gần
       // nguyên văn ở bong bóng sau → chủ nhà đọc hai lần. Câu ≥ 6 từ trùng nhau chỉ giữ lần đầu.
@@ -3155,12 +3323,13 @@ Deno.serve(async (req) => {
         }
         sach = boHoiHoanCong(sach, coCauHc); mocVan("boHoiHoanCong");
       }
-      if (luatDu) sach = sach.map(boGachDai); mocVan("boGachDai");
+      sach = sach.map(boGachDai); mocVan("boGachDai");
       // SRS-5.1zm (03/10/2026): cả lượt chỉ một bong bóng hỏi (2–3 ý gần nhau gộp trong bong bóng đó vẫn được).
       sach = motCauHoiLuot(sach); mocVan("motCauHoiLuot");
       // 23/09/2026 (bắn 26 tin): "Căn góc view thoáng khó bán lắm cô" — khen mà nói ngược nghĩa.
       if (luatDu) sach = suaKhenNguocNghia(sach); mocVan("suaKhenNguocNghia");
       ackSua = null;
+      ackGhiGop = null;
       ackAnh = [];
       thongBaoNhan = null;
       // 14/09/2026 — chủ dự án: "nhắn tin lại cho khách LIỀN SAU tin nhắn đó đã bóc
@@ -3205,7 +3374,7 @@ Deno.serve(async (req) => {
         if (extra.anh === true && (!bl.bong || bl.bong.startsWith(KHONG_BOC))) {
           const loaiAnh = Array.isArray(extra.anh_loai) ? (extra.anh_loai as string[]) : [];
           const soAnh = typeof extra.so_anh === "number" && extra.so_anh > 1 ? `${extra.so_anh} ảnh: ` : "";
-          bl.bong = bl.cheDo !== "tat" && loaiAnh.length ? `${DAU_BAO_LAI} Bóc tách ảnh: ${soAnh}${loaiAnh.join(", ")}` : null;
+          bl.bong = bl.cheDo !== "tat" && loaiAnh.length ? `${TU_ANH} ${soAnh}${loaiAnh.join(", ")}` : null;
         }
         // FR-239 g: lượt này không lưu được gì mà model "Dạ, em ghi lại rồi anh" → bỏ câu ghi nhận suông.
         // Bỏ xong không còn câu nào ("dạ em" → "Dạ em ghi nhận rồi ạ.") thì đáp một lời gật, không để khách chỉ thấy 🤖.
@@ -3340,13 +3509,20 @@ Deno.serve(async (req) => {
     // 02/10/2026 (chủ dự án: "để AI có cache để đọc lại nguyên tin nhắn của khách để ko mất"): đọc 40 tin gần nhất (một truy
     // vấn như cũ) — 9 tin cuối làm lịch sử lượt như trước, phần tin CHỦ NHÀ làm "bộ nhớ" nguyên văn cho AI bóc tách.
     const [{ data: lichSuDai }, { data: tinCuaNguoi }] = await Promise.all([
-      client.from("messages").select("sender, body, seq")
+      // SRS-5.1zzzzo: `created_at` để đếm khách đã nhắn mấy lượt từ lúc câu đang treo mở (`soLuotTreo`, lượt bên lề).
+      client.from("messages").select("sender, body, seq, created_at")
         .eq("conversation_id", convSId).order("seq", { ascending: false }).limit(40),
       // FR-214 b: danh sách tin người này đang rao — `nhieuCan` đếm, bộ gán mảnh đọc mã/loại/nơi chốn/giá.
-      client.from("listings").select("id, code, status, property_type, district, ward, street, location_raw, price_raw, area_m2, deal")
+      // SRS-5.1zzzzo: thêm vài cột số / chữ của tin — ảnh chụp "trước lượt" (`docTruocLuot`) đọc cột từ đây, không tốn truy vấn riêng.
+      client.from("listings").select(`id, code, status, ${COT_TRUOC_LUOT}`)
         .eq("seller_id", sellerRow.id).order("created_at", { ascending: true }).limit(10),
     ]);
-    const lichSuS = ((lichSuDai ?? []) as Array<{ sender: string; body: string | null; seq: number }>).slice(0, 9);
+    // SRS-5.1zzzzo: tin có từ ĐẦU lượt (cột lúc đầu lượt) — tin không nằm trong đây là tin vừa tạo lượt này (ảnh chụp "trước lượt" rỗng).
+    // Danh sách bị cắt ở 10 tin thì không kết luận được — để null (ảnh chụp đọc cột bằng truy vấn riêng).
+    idsTinDauLuot = (tinCuaNguoi ?? []).length < 10
+      ? new Map(((tinCuaNguoi ?? []) as unknown as Array<DongTruoc & { id: string }>).map((t) => [t.id, { ...t }]))
+      : null;
+    const lichSuS = ((lichSuDai ?? []) as Array<{ sender: string; body: string | null; seq: number; created_at?: string | null }>).slice(0, 9);
     /** Tin chủ nhà TRƯỚC tin này, NGUYÊN VĂN, cũ → mới (bỏ tin vừa nhắn — câu lệnh dẫn riêng), tổng ≤ 6.000 chữ. Trước đây AI
      *  bóc tách chỉ thấy 4 lượt, mỗi lượt cắt 220 chữ. */
     const tinChuNhaGoc = (): string[] => {
@@ -3388,7 +3564,7 @@ Deno.serve(async (req) => {
       const cac = [...new Set(ds.map((t) => t.deal).filter((d): d is string => !!d))];
       return cac.length === 1 ? cac[0] : null;
     })();
-    const phiCauSeller = cauPhi(sellerRow.seller_type, dealNguoi, { benEm: true });
+    const phiCauSeller = cauPhi(vaiPhi(sellerRow), dealNguoi, { benEm: true });
     const CachGoi = goiNguoi ? goiNguoi.charAt(0).toUpperCase() + goiNguoi.slice(1) : lonTuoiChuaRo ? "Cô chú" : "Anh chị";
     // Điền ô cho câu tiền định (FR-138 b). Ô thiếu dữ liệu → câu rỗng, tầng gọi bỏ.
     const cauTD = (khoa: string, o: Record<string, string | number | null | undefined> = {}) =>
@@ -3399,10 +3575,12 @@ Deno.serve(async (req) => {
     const nhieuCan = (tinCuaNguoi ?? []).length >= 2;
     // Tin chủ nhà VỪA nhắn đã nằm trong sổ (ghi trước khi gọi model) — bỏ nó
     // khỏi lịch sử vì câu lệnh dẫn riêng.
-    const lichSuRows = ((lichSuS ?? []) as Array<{ sender: string; body: string | null; seq: number }>)
+    const lichSuRows = ((lichSuS ?? []) as Array<{ sender: string; body: string | null; seq: number; created_at?: string | null }>)
       .slice().reverse();
     /** Em đã nói phí với người này chưa (bất kỳ dạng: % giá chốt, tháng tiền thuê, câu dẫn phí) — để không dẫn phí lần hai. */
-    const daNoiPhiRoi = () => lichSuRows.some((m) => !laTinNguoi(m.sender) && /giá chốt|0,5%|0\.5%|\b1%|tháng tiền thuê|biết phí bên em chưa/.test(m.body ?? ""));
+    // SRS-5.1zzzzj: câu phí KHÔNG số (vai chưa xác nhận — "mức tuỳ chính chủ hay môi giới") cũng là đã nói phí: đối chiếu đúng chữ `cauPhi()`
+    // sinh (`coCauPhi`), không chỉ dò con số.
+    const daNoiPhiRoi = () => lichSuRows.some((m) => !laTinNguoi(m.sender) && (coCauPhi(m.body ?? "") || /giá chốt|0,5%|0\.5%|\b1%|tháng tiền thuê|biết phí bên em chưa/.test(m.body ?? "")));
     if (lichSuRows.length && laTinNguoi(lichSuRows[lichSuRows.length - 1].sender)) lichSuRows.pop();
     /** Lời bot NGAY TRƯỚC tin này, nguyên văn (bỏ bong bóng 🤖 báo lại) — câu bot thật sự vừa hỏi, không phải câu mẫu. */
     const cauBotThat = boBaoLai(lichSuRows.filter((m) => !laTinNguoi(m.sender)).map((m) => m.body ?? "").filter((b) => !!boBaoLai(b)?.trim()).at(-1) ?? null);
@@ -3501,11 +3679,26 @@ Deno.serve(async (req) => {
     // một lần mỗi 24h cho mỗi người, kẻo mỗi câu "em là sale" là một việc.
     // Đợt 2 (02/10/2026): chế độ `ai` → AI đọc vai người nhắn TỰ NÓI (`vaiAi`, có trích dẫn); từ khoá chỉ đỡ khi AI không chạy.
     // Chạy SAU khi lượt AI đã khởi động (gọi ở dưới, cạnh `bongAi`) — trước đây chạy ở đây, chưa có AI để đọc.
+    // SRS-5.1zzzzo: lượt này khách TỰ NÓI vai (qua `docVai` / `vaiTuCau` — cụm gọi tên vai) — lời tự giới thiệu, không phải câu trả lời
+    // cho câu đang treo (`luotBenLe`), và là lúc báo con số phí nếu trước đó em chỉ nói được câu phí không số (`dapPhiRoVai`).
+    let vaiTuNoiLuot: "chinh_chu" | "moi_gioi" | null = null;
     const xetDoiNhan = async (): Promise<void> => {
-    const vai = nhanVuaGan ? null : await vaiAi();
-    const tuXungMoiGioi = vai !== undefined ? vai?.la === "moi_gioi" : tinHieuMoiGioi;
-    const tuXungChinhChu = vai !== undefined ? vai?.la === "chinh_chu"
-      : khop(/chính chủ|tôi là chủ|nhà của tôi|không phải môi giới/i, /chinh chu|toi la chu|nha cua toi|khong phai moi gioi/);
+    const vai = await vaiAi();
+    // SRS-5.1zzzzk: vai TỰ NÓI có MỘT chủ — cụm phải GỌI TÊN vai (`vaiTuCau`, kiem-bang-chung.ts): AI đọc thì `docVai` kiểm trích dẫn bằng
+    // nó; AI không chạy thì chính nó đọc cả tin (thay hai bộ từ khoá cũ chép tay ở đây).
+    const vaiLuat = vai === undefined ? vaiTuCau(text) : null;
+    const tuXungMoiGioi = vai !== undefined ? vai?.la === "moi_gioi" : vaiLuat === "moi_gioi";
+    const tuXungChinhChu = vai !== undefined ? vai?.la === "chinh_chu" : vaiLuat === "chinh_chu";
+    vaiTuNoiLuot = tuXungChinhChu ? "chinh_chu" : tuXungMoiGioi ? "moi_gioi" : null;
+    // SRS-5.1zzzzj (20261009c): người rao TỰ NÓI đúng vai đang ghi → nhãn thành ĐÃ XÁC NHẬN (`tu_nhan`): từ đây câu phí mới được nói
+    // con số. Nhãn vừa gán lượt này từ chính lời tự xưng môi giới cũng là tự nói. Vai ngược nhãn → giữ đường báo admin bên dưới.
+    const tuNoiDung = (sellerRow.seller_type === "nmg" && (tuXungMoiGioi || (nhanVuaGan === "nmg" && (vaiTuCau(text) === "moi_gioi" || dangTraLoiHoiVai === "nmg")))) ||
+      (sellerRow.seller_type === "ccrb" && tuXungChinhChu);
+    if (tuNoiDung && (sellerRow.seller_type_source ?? "suy_doan") === "suy_doan") {
+      const { error: nErr } = await client.from("sellers").update({ seller_type_source: "tu_nhan" }).eq("id", sellerRow.id);
+      if (nErr) await ghiLoi(client, "chat-reply sellers.seller_type_source", nErr.message);
+      else sellerRow.seller_type_source = "tu_nhan";
+    }
     const xinDoiNhan: "ccrb" | "nmg" | null = nhanVuaGan
       ? null
       : sellerRow.seller_type === "ccrb" && tuXungMoiGioi
@@ -3529,9 +3722,10 @@ Deno.serve(async (req) => {
         });
         if (xErr) await ghiLoi(client, "chat-reply xin doi nhan", xErr.message);
       }
+      // SRS-5.1zzzzj: câu này không nói con số phí — nhãn chưa đổi (chờ admin), con số phí chỉ do `cauPhi(vaiPhi(…))` nói.
       thongBaoNhan = xinDoiNhan === "nmg"
-        ? `Dạ em ghi nhận ${cachGoi} là môi giới, em đã báo bên quản lý cập nhật lại (phí bán 0,5% khi giao dịch thành công) nha.`
-        : `Dạ em ghi nhận ${cachGoi} là chính chủ, em đã báo bên quản lý cập nhật lại (phí bán 1% khi giao dịch thành công) nha.`;
+        ? `Dạ em ghi nhận ${cachGoi} là môi giới, em đã báo bên quản lý cập nhật lại nha.`
+        : `Dạ em ghi nhận ${cachGoi} là chính chủ, em đã báo bên quản lý cập nhật lại nha.`;
     }
     };
 
@@ -3622,7 +3816,7 @@ Deno.serve(async (req) => {
       .filter((t) => !!t.code && ["cho_thong_tin", "dang_ban", "dang_quan_tam"].includes(t.status ?? ""));
     // SRS-5.1zzzg: căn người này ĐANG CÓ — đưa cho lượt AI để nó biết tin nói về căn nào (kể cả khi không có câu đang hỏi).
     const moTaCanDangCo = (t: TinMo) =>
-      `${t.code}: ${LOAI_VI[t.property_type ?? ""] ?? "chưa rõ loại"}, ${tenCanDocLen(t)}${t.price_raw ? `, giá ${t.price_raw}` : ""}`;
+      `${t.code}: ${LOAI_VI[t.property_type ?? ""] ?? "chưa rõ loại"}, ${tenCanDocLen(t)}${t.price_raw ? `, giá ${donViGiaDep(t.price_raw)}` : ""}`;
     let textTreo: string | null = null;
     /** Tin ĐÃ CÓ vừa nhận dữ kiện từ một mảnh (để không hỏi tiếp một tin vỏ rỗng khi khách đang nói về tin này). */
     let tinGhiManh: { id: string; code: string | null; property_type?: string | null; district?: string | null } | null = null;
@@ -3637,7 +3831,7 @@ Deno.serve(async (req) => {
           .map((m) => `${laTinNguoi(m.sender) ? "CHỦ NHÀ" : "EM"}: ${(boBaoLai(m.body ?? "") ?? "").slice(0, 300)}`).join("\n");
         const moTaTin = (t: TinMo) => [LOAI_VI[t.property_type ?? ""] ?? t.property_type ?? "chưa rõ loại",
           [t.location_raw ?? t.street, t.ward, t.district].filter(Boolean).join(", ") || "chưa rõ nơi chốn",
-          t.price_raw ?? "chưa có giá", t.area_m2 ? `${Number(t.area_m2)}m2` : null].filter(Boolean).join(" · ");
+          t.price_raw ? donViGiaDep(t.price_raw) : "chưa có giá", t.area_m2 ? `${Number(t.area_m2)}m2` : null].filter(Boolean).join(" · ");
         const dsTin = dsMo.map((t) => `${t.code} · ${moTaTin(t)}`).join("\n");
         const cauTreo = pendingReq && maTreo ? `${maTreo} — ${(FACT_LABELS[pendingReq.question] ?? pendingReq.question).replace(/\s*\(.*\)\s*$/, "")}` : null;
         const r = await ganManhBangModel(anthropicS as unknown as Parameters<typeof ganManhBangModel>[0], MODEL, { hoiThoai, dsTin, cauTreo, text });
@@ -3709,8 +3903,9 @@ Deno.serve(async (req) => {
                     if (!vt) vt = da.location_raw ? `${da.name}, ${da.location_raw}` : da.name;
                   }
                 }
+                vt = viTriGhiDuoc(vt); // SRS-5.1zzzzd
                 if (vt) {
-                  const { error: vtErr } = await client.rpc("ghi_fact_listing", { p_listing_id: moi.id, p_question: "vi_tri", p_answer: vt, p_source: "seller_chat" });
+                  const { error: vtErr } = await ghiFact(client, { p_listing_id: moi.id, p_question: "vi_tri", p_answer: vt, p_source: "seller_chat" });
                   if (vtErr) await ghiLoi(client, "chat-reply gan manh(vi_tri moi)", vtErr.message);
                 }
                 tin = moi as TinMo;
@@ -3728,11 +3923,12 @@ Deno.serve(async (req) => {
               }
               for (const f of facts) {
                 if ((f.question === "vi_tri" || f.question === "loai_bds") && m.ma === "MOI") continue; // đã ghi ở trên
-                const { error: fErr } = await client.rpc("ghi_fact_listing", { p_listing_id: tin.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat" });
+                const { error: fErr } = await ghiFact(client, { p_listing_id: tin.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat", goc: gocCua(f) });
                 if (fErr) { await ghiLoi(client, `chat-reply gan manh(${f.question})`, fErr.message); continue; }
                 // Bắn thật 23/09: fact pháp lý mang nguyên mảnh câu ("Nhà phố mà thổ cư full … shr") — cột đã đọc ra
                 // `so_hong_rieng`, dòng 📝 thì in cột đó ("sổ hồng riêng"), không in lại cả câu khách gõ.
-                let hienThi = f.answer;
+                // SRS-5.1zzzzh: giá đọc lại bằng luật hiển thị một nguồn ("2 ty 3" → "2 tỷ 3"), fact giữ chữ khách.
+                let hienThi = f.question === "gia" ? donViGiaDep(f.answer) : f.answer;
                 if (f.question === "phap_ly") {
                   const { data: lg } = await client.from("listings").select("legal_status").eq("id", tin.id).maybeSingle();
                   const ma = (lg as { legal_status?: string | null } | null)?.legal_status;
@@ -3857,7 +4053,8 @@ Deno.serve(async (req) => {
             ...CAU_NHANH.filter((k) => !coSan.has(k)).map((k) => `${k}: ${FACT_LABELS[k] ?? k} (nhánh)`),
           ];
         }
-        const r0 = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, textTreo || textBongAi, pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings), laCheDoAi,
+        // SRS-5.1zzzzq: lời chào đầu tin cắt khỏi chữ AI đọc ("chào em, chị muốn bán lô đất" → AI rỗng); trích dẫn vẫn kiểm trên tin gốc.
+        const r0 = await bocRaoBangModel(ai as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, boLoiChaoDau(textTreo || textBongAi), pendingReq?.question ?? null, cauChu, dangGhiCua(pendingReq?.listings), laCheDoAi,
           laCheDoAi ? { hoiThoai, cauConHoi, tinChuNha: tinChuNhaGoc(), canDangCo: dsMo.slice(0, 5).map(moTaCanDangCo) } : null);
         // 01/10/2026 (lx-tt-08): viết tắt AI đánh dấu "không chắc" mà từ điển tiền định đọc ra CÙNG ô ("shr" → pháp lý) là chắc —
         // ghi thẳng, không để rơi ở nhánh không hỏi xác nhận (`nangXacNhanChac`).
@@ -4041,7 +4238,7 @@ Deno.serve(async (req) => {
       const mau = kq.mau_nha.slice(0, 3).map((m) => m.ten).join(", ");
       const vd = kq.can.slice(0, 3).map((c) => `${c.ma_can}${c.dien_tich ? ` ${c.dien_tich}` : ""}${c.gia ? ` · ${c.gia}` : ""}`).join("; ");
       return [
-        `Em đọc ${tenLoai} dự án ${duAn.name}${duAnMoi ? " (dự án mới, em vừa thêm vào kho)" : ""} rồi ạ: ${soCan} căn${mau ? `, mẫu ${mau}` : ""}${vd ? ` — ví dụ ${vd}` : ""}.${kq.ro_net ? "" : " Vài chỗ chữ mờ nên em chỉ ghi những căn đọc rõ."}`,
+        `Em đọc ${tenLoai} dự án ${duAn.name}${duAnMoi ? " (dự án mới, em vừa thêm vào kho)" : ""} rồi ạ: ${soCan} căn${mau ? `, mẫu ${mau}` : ""}${vd ? `, ví dụ ${vd}` : ""}.${kq.ro_net ? "" : " Vài chỗ chữ mờ nên em chỉ ghi những căn đọc rõ."}`,
         `${CachGoi} rao căn nào thì nhắn mã căn với giá mình muốn bán, em điền diện tích và mẫu nhà từ ${tenLoai} luôn.`,
       ];
     };
@@ -4067,7 +4264,7 @@ Deno.serve(async (req) => {
         typeof can.thuoc_tinh?.ghi_chu === "string" ? can.thuoc_tinh.ghi_chu : null,
       ].filter(Boolean).join(", ");
       if (ghi) {
-        const { error: fErr } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: "bo_sung", p_answer: `theo kho dự án, căn ${can.ma_can}: ${ghi}`, p_source: "kho_du_an" });
+        const { error: fErr } = await ghiFact(client, { p_listing_id: listingId, p_question: "bo_sung", p_answer: `theo kho dự án, căn ${can.ma_can}: ${ghi}`, p_source: "kho_du_an" });
         if (fErr) await ghiLoi(client, "chat-reply ghi_fact_listing(kho du an)", fErr.message);
       }
     };
@@ -4150,7 +4347,7 @@ Deno.serve(async (req) => {
     })();
     const cauTranHang = (tr: TranHang) =>
       `Dạ ${cachGoi} đang có ${tr.so_dang_rao} tin trên hệ thống, hạng Đồng hiện tối đa ${tr.tran ?? 5} căn nên em chưa mở thêm được ạ.\n` +
-      `${CachGoi} bổ sung đủ thông tin và ảnh cho các căn đang rao để điểm lên 50 (hạng Bạc) là em mở rổ không giới hạn liền.`;
+      `${CachGoi} bổ sung đủ thông tin và ảnh cho các tin của mình để điểm lên 50 (hạng Bạc) là em mở rổ không giới hạn liền.`;
     // SRS-5.1zzs (AOND §IV gamification, 06/10/2026): tin lên kệ thì nói HẠNG người rao (Đồng / Bạc / Vàng — dữ liệu đã có từ
     // `con_duoc_rao`, trước đây không bao giờ nói ra). Một câu, một lần, ở cả nhánh duyệt thường lẫn "đăng đi". Câu nhắc
     // "chuẩn môi giới 10 căn" đã bỏ cùng ngày theo chủ dự án — không hứa, không rao thêm việc.
@@ -4231,7 +4428,7 @@ Deno.serve(async (req) => {
         }
         await dongCau("answered", JSON.stringify({ ...ke, da_an: true }));
         return await traLoiSeller([
-          `Dạ em đã ngưng rao ${ke.an.length} căn theo ý ${cachGoi}${ke.giu.length ? `, giữ lại ${ke.giu.length} căn đang rao` : ""}. Lúc nào muốn rao lại căn nào thì nhắn em, em mở lại liền.`,
+          `Dạ em đã ngưng rao ${ke.an.length} căn theo ý ${cachGoi}${ke.giu.length ? `, giữ lại ${ke.giu.length} căn` : ""}. Lúc nào muốn rao lại căn nào thì nhắn em, em mở lại liền.`,
         ], { ngung_hang_loat: ke.an.length, giu: ke.giu.length });
       }
       if (tuChoi) {
@@ -4254,7 +4451,7 @@ Deno.serve(async (req) => {
           const giuIds = new Set(giu.map((c) => c.id));
           if (nhl.kieu === "chi_giu" && !giu.length) {
             return await traLoiSeller([
-              `Dạ ${cachGoi} muốn giữ lại căn nào ạ? Em đang rao ${mo.length} căn:\n${mo.map((c, i) => `${i + 1}. ${tenCanDocLen(c)}`).join("\n")}\nNhắn số thứ tự hoặc địa chỉ giúp em, mấy căn còn lại em sẽ ngưng rao sau khi ${cachGoi} xác nhận.`,
+              `Dạ ${cachGoi} muốn giữ lại căn nào ạ? Em đang giữ ${mo.length} tin của ${cachGoi}:\n${mo.map((c, i) => `${i + 1}. ${tenCanDocLen(c)}`).join("\n")}\nNhắn số thứ tự hoặc địa chỉ giúp em, mấy căn còn lại em sẽ ngưng rao sau khi ${cachGoi} xác nhận.`,
             ], { ngung_hang_loat: "hoi_giu" });
           }
           const an = mo.filter((c) => !giuIds.has(c.id));
@@ -4324,7 +4521,7 @@ Deno.serve(async (req) => {
           if (irErr && irErr.code !== "23505") await ghiLoi(client, "chat-reply mo ngung_rao_can_nao", irErr.message);
         }
         const ds = cans.map((c, i) => `${i + 1}. ${tenCan(c)}`).join("\n");
-        const hoi = `${CachGoi} đang rao ${cans.length} căn, mình ${kieuNgung === "ban_roi" ? "đã bán" : "ngưng rao"} căn nào ạ?\n${ds}\nNhắn số thứ tự hoặc địa chỉ giúp em.`;
+        const hoi = `${CachGoi} đang có ${cans.length} tin bên em, mình ${kieuNgung === "ban_roi" ? "đã bán" : "ngưng rao"} căn nào ạ?\n${ds}\nNhắn số thứ tự hoặc địa chỉ giúp em.`;
         return await traLoiSeller([hoi], { ngung_rao: kieuNgung, hoi_can: cans.length });
       }
       const luc = new Date().toISOString();
@@ -4618,8 +4815,8 @@ Deno.serve(async (req) => {
         // Câu rao suông (lần đầu, hoặc lặp lại mà chưa trả lời căn đó/căn khác) → hỏi.
         if (raoSuong && !(dangHoiCanCuMoi && (laCanDo || laCanKhac))) {
           const ds = cans.length === 1
-            ? `trước đó ${cachGoi} có ${canTen(cans[0])}${cans[0].price_raw ? ` giá ${cans[0].price_raw}` : ""}`
-            : `trước đó ${cachGoi} đang rao ${cans.length} căn: ${cans.map(tenCan).join(" · ")}`;
+            ? `trước đó ${cachGoi} có ${canTen(cans[0])}${cans[0].price_raw ? ` giá ${donViGiaDep(cans[0].price_raw)}` : ""}`
+            : `trước đó ${cachGoi} đang có ${cans.length} tin bên em: ${cans.map(tenCan).join(" · ")}`;
           return await traLoiSeller(
             [`Dạ ${cachGoi}, ${ds}. Căn ${cachGoi} vừa nhắc là căn đó hay căn khác ạ? Căn khác thì ${cachGoi} cho em xin địa chỉ, diện tích và giá nha.`],
             { can_cu_hay_moi: "hoi" },
@@ -4661,9 +4858,10 @@ Deno.serve(async (req) => {
           const nhieu = nhanDienNhieuFact(g.manh);
           const mot = nhieu.length ? null : nhanDienFact(g.manh);
           for (const f of nhieu.length ? nhieu : mot ? [mot] : []) {
-            const { error: fcErr } = await client.rpc("ghi_fact_listing", { p_listing_id: l.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat" });
+            const { error: fcErr } = await ghiFact(client, { p_listing_id: l.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat" });
             if (fcErr) { await ghiLoi(client, "chat-reply ghi_fact_listing(theo can)", fcErr.message); continue; }
-            daGhi.push(`căn ${g.nhan ?? g.thu} ${(FACT_LABELS[f.question] ?? f.question).replace(/\s*\(.*\)\s*$/, "")}: ${f.answer}`);
+            // SRS-5.1zzzzn: cùng kiểu dòng với 🤖 chung — nguyên mẫu tìm trong mảnh "căn N …" của chính căn đó.
+            daGhi.push(dongFact({ question: f.question, answer: f.answer }, FACT_LABELS, { tin: g.manh }, `căn ${g.nhan ?? g.thu} `));
             // Mọi câu treo của CĂN ĐÓ cùng họ với fact vừa ghi thì đóng (không chỉ câu đang chọn).
             for (const q of ds) {
               if (q.listing_id === l.id && !daDong.has(q.id) && cungHoFact(f.question, q.question)) {
@@ -4695,7 +4893,7 @@ Deno.serve(async (req) => {
           // 💾 chung chỉ đọc MỘT tin (căn đang chăm) nên in pháp lý của căn 1 dưới tin căn 2 — bong bóng
           // tiền định ở đây đã nói rõ từng căn, tắt 💾 cho lượt này (20/09/2026).
           // SRS-5.1zzzm: câu hỏi kế là lời của EM với khách — bong bóng riêng, không nằm trong bong bóng 🤖 (báo lại, có thể chỉ cho /admin).
-          return await traLoiSeller([`${BOC_DUOC} ${daGhi.join(" · ")}.`, ...(cauKe ? [cauKe] : [])], { fact_theo_can: daGhi.length, dong_cau_treo: daDong.size, bao_lai_tat: true });
+          return await traLoiSeller([bongTrichXuat(daGhi)!, ...(cauKe ? [cauKe] : [])], { fact_theo_can: daGhi.length, dong_cau_treo: daDong.size, bao_lai_tat: true });
         }
       }
     }
@@ -4774,7 +4972,7 @@ Deno.serve(async (req) => {
         const { data: moi, error: moiErr } = await client.from("listings").insert({
           code: null, seller_id: sellerRow.id, deal: goc?.deal ?? "ban",
           // 11/09: căn nói rõ quận riêng ("1 căn q11 …") thì không kế thừa địa chỉ căn cũ.
-          district: quanCan ?? goc?.district ?? null, ward: keThua ? goc?.ward ?? null : null,
+          district: quanCan ?? goc?.district ?? null, ward: keThua ? tenPhuongCot(goc?.ward, goc?.district) : null,
           location_raw: keThua ? goc?.location_raw ?? null : null, street: keThua ? goc?.street ?? null : null,
           description: c.goc, price_raw: c.gia ?? null,
           property_type: acCan?.loaiBds ?? c.loai ?? (DAT_KD_RE.test(boDau(c.goc)) ? "dat" : loaiDauTin ?? goc?.property_type ?? "chua_ro"), status: "cho_thong_tin",
@@ -4843,10 +5041,10 @@ Deno.serve(async (req) => {
         const mHem = acCan ? null : /\bhem\s*(?:rong\s*)?(?:la\s*|tam\s*|khoang\s*)?(\d{1,2}(?:[.,]\d)?)\s*(?:m|met)\b/.exec(kdCan);
         const duongVao = acCan ? null : mHem ? `hẻm ${mHem[1].replace(",", ".")}m` : /\bmat tien\b/.test(kdCan) && !/\bcach\s*mat tien\b/.test(kdCan) ? "mặt tiền" : null;
         if (duongVao) {
-          const { error: dvErr } = await client.rpc("ghi_fact_listing", { p_listing_id: moi.id, p_question: "do_rong_hem", p_answer: duongVao, p_source: "seller_chat" });
+          const { error: dvErr } = await ghiFact(client, { p_listing_id: moi.id, p_question: "do_rong_hem", p_answer: duongVao, p_source: "seller_chat" });
           if (dvErr) await ghiLoi(client, "chat-reply ghi_fact_listing(do_rong_hem nhieu can)", dvErr.message);
         }
-        daMo.push(`${c.ma ?? vtCan ?? (c.thu ? `căn ${c.thu}` : null) ?? c.quan ?? `căn ${daMo.length + 1}`}${c.dt ? ` ${c.dt}m2` : ""}${c.gia ? ` ${c.gia}` : ""}`);
+        daMo.push(`${c.ma ?? (vtCan ? duongGiuaCau(vtCan) || null : null) ?? (c.thu ? `căn ${c.thu}` : null) ?? c.quan ?? `căn ${daMo.length + 1}`}${c.dt ? ` ${c.dt}m2` : ""}${c.gia ? ` ${c.gia}` : ""}`);
         dau = dau ?? { id: moi.id, property_type: moi.property_type };
       }
       if (daMo.length) {
@@ -5039,10 +5237,12 @@ Deno.serve(async (req) => {
         let giaKhongDoc: string | null = null;
         for (const [k, v] of suaThat) {
           if (k === "gia" && docTien(v) == null) { giaKhongDoc = v; continue; }
-          const { error: fErr } = await client.rpc("ghi_fact_listing", {
+          const { error: fErr, boQua: suaBo, ghi: suaGhi } = await ghiFact(client, {
             p_listing_id: suaId, p_question: k, p_answer: v, p_source: "seller_chat",
           });
           if (fErr) await ghiLoi(client, `chat-reply ghi_fact_listing(${k})`, fErr.message);
+          // SRS-5.1zzzzj: không ghi được (phường không ra phường mới) thì KHÔNG nói "đã sửa" — lời xác nhận chỉ đọc điều đã ghi.
+          else if (suaBo) continue;
           // Giá trị đã tự mang nhãn ("Phường 3") thì đừng dán nhãn lần nữa —
           // "phường Phường 3" đọc như máy hỏng.
           else {
@@ -5051,7 +5251,8 @@ Deno.serve(async (req) => {
             // DB gọt (`chuan_hoa_gia_raw`), nhưng lời xác nhận đọc lên thì bỏ.
             const hien = v.replace(/(?:\s+(?:nha|nhé|nhe|nghen|em|anh|chị|ạ|ơi|đó|á|nè|hen|ha|nhá|cháu|chú|cô|bác|ông|bà|dì|cậu|mợ|thím|dượng|thôi|luôn|nghe))+\s*$/iu, "");
             // 22/09/2026 (kịch bản C): lời xác nhận đọc đơn vị có dấu ("7 tỷ 5"), DB vẫn giữ chữ khách gõ.
-            const hienDep = k === "gia" ? donViGiaDep(hien) : hien;
+            // SRS-5.1zzzzj: phường đọc đúng tên ĐÃ ghi ("phường 9" + Quận 5 → "Phường An Đông"), không đọc chữ khách gõ.
+            const hienDep = k === "gia" ? donViGiaDep(hien) : k === "phuong" && suaGhi ? suaGhi : hien;
             daGhi.push(
               boDau(hienDep).startsWith(boDau(nhan)) ? hienDep : `${nhan} ${hienDep}`,
             );
@@ -5084,6 +5285,7 @@ Deno.serve(async (req) => {
           // tránh. Gắn lời cảm ơn vào đường ra chung rồi đi tiếp xuống khối
           // `pendingReq` để câu trả lời cũng vào sổ.
           ackSua = cau;
+          ackGhiGop = !laSuaThat && !giaKhongDoc ? daGhi.join(", ") : null;
         }
       }
     }
@@ -5127,7 +5329,7 @@ Deno.serve(async (req) => {
       for (const d of nhap) {
         const duAnD = d.du_an ? await timDuAnTheoTen(d.du_an) : null;
         const dongTinNhap = {
-          code: null, seller_id: sellerRow.id, deal: d.deal, district: d.district, ward: d.ward, location_raw: d.location_raw,
+          code: null, seller_id: sellerRow.id, deal: d.deal, district: d.district, ward: tenPhuongCot(d.ward, d.district), location_raw: d.location_raw,
           description: cauRaoTuDong(d), price_raw: d.price_raw, property_type: d.property_type, status: "cho_thong_tin", gap: null, can_chu_duyet: true,
           ...(d.area_m2 ? { area_m2: d.area_m2 } : {}), ...(d.bedrooms ? { bedrooms: d.bedrooms } : {}),
           ...(d.legal_status ? { legal_status: d.legal_status } : {}), ...(d.floors_text ? { floors_text: d.floors_text } : {}),
@@ -5143,7 +5345,7 @@ Deno.serve(async (req) => {
         const { error: btErr } = await client.rpc("ghi_boc_tach", { p_listing_id: idMoi, p: { nguon: "bang_nhap", ten_tep: tenTep, dong: d.stt } });
         if (btErr) await ghiLoi(client, "chat-reply ghi_boc_tach(bang nhap)", btErr.message);
         if (duAnD && d.ma_can) await dienTuKhoDuAn(idMoi, duAnD.id, d.ma_can);
-        tenCan.push(`${d.stt}. ${[d.location_raw ?? (d.du_an ? `${d.ma_can ? `căn ${d.ma_can} ` : ""}${d.du_an}` : null), d.area_m2 ? `${d.area_m2}m2` : null, d.price_raw].filter(Boolean).join(" · ")}`);
+        tenCan.push(`${d.stt}. ${[d.location_raw ?? (d.du_an ? `${d.ma_can ? `căn ${d.ma_can} ` : ""}${d.du_an}` : null), d.area_m2 ? `${d.area_m2}m2` : null, d.price_raw ? donViGiaDep(d.price_raw) : null].filter(Boolean).join(" · ")}`);
         if (d.thieu.length) thieu.push(`dòng ${d.stt} thiếu ${d.thieu.join(", ")}`);
       }
       if (!soTao) return [`Dạ em đọc được bảng mà chưa nhập được căn nào, em đã ghi sổ để anh Thu xem. ${CachGoi} nhắn từng căn giúp em cũng được ạ.`];
@@ -5253,7 +5455,7 @@ Deno.serve(async (req) => {
       if (!cat) {
         await ghiLoi(client, "chat-reply anh vao kho",
           `không ${tai ? "cất" : "tải"} được ảnh ${imageUrl.slice(0, 80)} - giữ URL tạm trong fact hinh_anh`);
-        const { error: aErr } = await client.rpc("ghi_fact_listing", {
+        const { error: aErr } = await ghiFact(client, {
           p_listing_id: id, p_question: "hinh_anh", p_answer: `[ảnh] ${imageUrl}`, p_source: "seller_chat",
         });
         if (aErr) await ghiLoi(client, "chat-reply ghi_fact_listing(anh)", aErr.message);
@@ -5274,7 +5476,7 @@ Deno.serve(async (req) => {
         const soM2 = g?.dien_tich_m2 ?? null;
         const lech = lechDienTich(soM2, l?.area_m2);
         if (soM2 && !l?.area_m2) {
-          const { error: dtErr } = await client.rpc("ghi_fact_listing", {
+          const { error: dtErr } = await ghiFact(client, {
             p_listing_id: id, p_question: "dien_tich", p_answer: `${soM2}m2`, p_source: "so_do_ocr",
           });
           if (dtErr) await ghiLoi(client, "chat-reply ghi_fact_listing(ocr dien tich)", dtErr.message);
@@ -5282,7 +5484,7 @@ Deno.serve(async (req) => {
         } else if (lech !== null && lech > 5) {
           cau.push(`Sổ ghi ${soM2}m2 mà mình đang ghi ${l?.area_m2}m2, ${cachGoi} xác nhận giúp em số nào đúng ạ?`);
           await Promise.all([
-            client.rpc("ghi_fact_listing", {
+            ghiFact(client, {
               p_listing_id: id, p_question: "bo_sung",
               p_answer: `sổ ghi ${soM2}m2, lệch ${lech}% so với ${l?.area_m2}m2 chủ nhà nói (OCR)`, p_source: "so_do_ocr",
             }),
@@ -5295,7 +5497,7 @@ Deno.serve(async (req) => {
           cau.push(`Sổ ghi ${soM2}m2, khớp với số em đã ghi.`);
         }
         if (g?.dia_chi) {
-          const { error: dcErr } = await client.rpc("ghi_fact_listing", {
+          const { error: dcErr } = await ghiFact(client, {
             p_listing_id: id, p_question: "bo_sung", p_answer: `địa chỉ trên sổ: ${g.dia_chi}`, p_source: "so_do_ocr",
           });
           if (dcErr) await ghiLoi(client, "chat-reply ghi_fact_listing(ocr dia chi)", dcErr.message);
@@ -5434,7 +5636,7 @@ Deno.serve(async (req) => {
         const ai = docAiChinh(kiemDeXuat(kq.truong, tinGop).dat, null);
         for (const g of ai.ghi) {
           if (coRoi.has(g.question) || g.question === "bo_sung") continue;
-          const { error: gErr } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: g.question, p_answer: g.answer, p_source: NGUON_AI });
+          const { error: gErr } = await ghiFact(client, { p_listing_id: listingId, p_question: g.question, p_answer: g.answer, p_source: NGUON_AI, goc: g.goc });
           if (gErr) await ghiLoi(client, "chat-reply doc lai ghi chu(ghi)", gErr.message);
           else coRoi.add(g.question);
         }
@@ -5461,11 +5663,20 @@ Deno.serve(async (req) => {
         if (!tinKhach.length) return false;
         const tinGop = tinKhach.map((b) => b.replace(/\s*\n+\s*/g, " / ")).join("\n").slice(-6000);
         const [{ data: lRow, error: lErr }, { data: fRows, error: fErr }] = await Promise.all([
-          client.from("listings").select("property_type, deal, street").eq("id", listingId).maybeSingle(),
+          client.from("listings").select(`${COT_TRUOC_LUOT}, boc_tach`).eq("id", listingId).maybeSingle(),
           client.from("listing_facts").select("question, answer, source, created_at").eq("listing_id", listingId).order("created_at", { ascending: false }),
         ]);
         if (lErr || fErr) { await ghiLoi(client, "chat-reply chot tin(doc)", (lErr ?? fErr)!.message); return false; }
         if (!lRow) return false;
+        // SRS-5.1zzzzo (độ trễ, bắn production 09/10): lượt chốt đọc lại TOÀN BỘ tin chủ nhà — một lượt model lớn trước MỖI bản nháp,
+        // kể cả khi từ lần chốt trước tới giờ tin không có fact nào mới (khách chỉ hỏi phí, chỉ gật). Không fact mới = đầu vào của lượt
+        // chốt về căn này không đổi so với lần trước → giữ kết quả lần trước (đã ghi), không gọi lại. Đếm fact thay vì so giờ: giờ ghi
+        // `chot_ai.luc` là đồng hồ edge, `created_at` là đồng hồ DB.
+        const chotCu = ((lRow as { boc_tach?: { chot_ai?: { so_fact?: unknown } } | null }).boc_tach?.chot_ai?.so_fact);
+        if (typeof chotCu === "number" && chotCu === (fRows ?? []).length) {
+          console.log("chat-reply: chot tin — khong co fact moi tu lan chot truoc, bo qua luot model");
+          return true;
+        }
         const kq = await bocRaoBangModel(anthropicS as unknown as Parameters<typeof bocRaoBangModel>[0], MODEL, tinGop, null, null, null, true, null, true);
         await doTien(client, kq.usage as Parameters<typeof doTien>[1]);
         if (!kq.ket) return false;
@@ -5476,18 +5687,22 @@ Deno.serve(async (req) => {
         for (const f of facts) if (f.answer && !hienCo.has(f.question)) hienCo.set(f.question, f.answer);
         const gon = (x: string) => boDau(x).replace(/\s+/g, " ").trim();
         const sua: string[] = [];
+        let soGhi = 0; // fact lượt chốt này ghi thêm — để `so_fact` của dấu chốt khớp số đếm lần sau
         for (const g of ai.ghi) {
           if (g.question === "bo_sung") continue;
-          const lr = lRow as { property_type?: string | null; deal?: string | null; street?: string | null };
+          const lr = lRow as { property_type?: string | null; deal?: string | null; street?: string | null; location_raw?: string | null };
           const cu = g.question === "loai_bds" ? (lr.property_type && lr.property_type !== "chua_ro" ? lr.property_type : null)
-            : g.question === "loai_giao_dich" ? lr.deal ?? null : hienCo.get(g.question) ?? null;
+            : g.question === "loai_giao_dich" ? lr.deal ?? null : hienCo.get(g.question) ?? (g.question === "vi_tri" ? lr.location_raw ?? null : null);
           const moi = g.question === "vi_tri" && cu ? (chonViTri(cu, g.answer) ?? g.answer) : g.answer;
           if (cu && gon(cu) === gon(moi)) continue;
           // SRS-5.1zzzh: giá cùng số tiền, chỉ khác cách viết ("21 tỉ 300 triệu" / "21 tỷ 300 triệu") → không ghi lại.
           if (cu && g.question === "gia" && docTien(cu) != null && docTien(cu) === docTien(moi)) continue;
-          const { error: gErr } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: g.question, p_answer: moi, p_source: NGUON_AI });
+          // SRS-5.1zzzzo: giá trị câu rao giữ ở CỘT (phường, giá, diện tích, số tầng — tạo tin không ghi fact cho chúng) là "đang có", không
+          // phải "trống": so qua MỘT chủ `giaTriKhongDoi` (cột + fact). Bản trước chỉ so fact → mỗi bản nháp ghi lại cả bốn ô.
+          if (giaTriKhongDoi(g.question, moi, lRow as Parameters<typeof giaTriKhongDoi>[2], Object.fromEntries(hienCo))) continue;
+          const { error: gErr, boQua: gBo } = await ghiFact(client, { p_listing_id: listingId, p_question: g.question, p_answer: moi, p_source: NGUON_AI, goc: g.goc });
           if (gErr) await ghiLoi(client, "chat-reply chot tin(ghi)", gErr.message);
-          else sua.push(g.question);
+          else if (!gBo) { sua.push(g.question); soGhi++; }
         }
         if (ai.tenDuong && ai.tenDuong !== (lRow as { street?: string | null }).street) {
           const { error: sErr } = await client.from("listings").update({ street: ai.tenDuong }).eq("id", listingId);
@@ -5498,10 +5713,11 @@ Deno.serve(async (req) => {
         const yThem = kiemKienThuc(kq.kienThuc ?? [], tinGop, dat,
           facts.filter((f) => f.question !== "bo_sung" && f.answer).map((f) => f.answer as string)).filter((y) => !yCu.has(gon(y)));
         for (const y of yThem) {
-          const { error: yErr } = await client.rpc("ghi_fact_listing", { p_listing_id: listingId, p_question: "bo_sung", p_answer: y, p_source: NGUON_AI });
+          const { error: yErr } = await ghiFact(client, { p_listing_id: listingId, p_question: "bo_sung", p_answer: y, p_source: NGUON_AI });
           if (yErr) await ghiLoi(client, "chat-reply chot tin(y them)", yErr.message);
+          else soGhi++;
         }
-        const { error: bErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { chot_ai: { luc: new Date().toISOString(), sua, y_them: yThem.length } } });
+        const { error: bErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { chot_ai: { luc: new Date().toISOString(), sua, y_them: yThem.length, so_fact: (fRows ?? []).length + soGhi } } });
         if (bErr) await ghiLoi(client, "chat-reply chot tin(dau)", bErr.message);
         if (sua.length) console.log("chat-reply: AI chot tin sua", sua.join(", "));
         return true;
@@ -5690,8 +5906,10 @@ Deno.serve(async (req) => {
         /\b(thêm|nữa|căn khác|căn thứ|còn (một|1) căn|lô khác|còn (?:căn|lô) (?:số )?\d{1,2}\b(?!\s*(?:pn|phòng|x\s*\d|m2|tỷ|triệu|lầu|tầng|tấm)))\b/i,
         /\b(them|nua|can khac|can thu|con (mot|1) can|lo khac|con (?:can|lo) (?:so )?\d{1,2}\b(?!\s*(?:pn|phong|x\s*\d|m2|ty|trieu|lau|tang|tam)))\b/,
       ) ||
-      (!!wardNo && !!pendingReq.listings?.ward &&
-        `Phường ${wardNo}` !== pendingReq.listings.ward)
+      // SRS-5.1zzzzj: cột phường mang tên MỚI — so phường số trong câu sau khi qua cùng cửa chuẩn hoá (không ra phường mới = chưa biết,
+      // không tính là căn khác; bản cũ so "Phường 6" với "Phường Xuân Hòa" thì câu nào có phường số cũng thành căn mới).
+      (!!wardNo && !!pendingReq.listings?.ward && !!tenPhuongCot(`Phường ${wardNo}`, [pendingReq.listings?.district, ...cacQuanTrong(text, boDau)]) &&
+        tenPhuongCot(`Phường ${wardNo}`, [pendingReq.listings?.district, ...cacQuanTrong(text, boDau)]) !== pendingReq.listings.ward)
     );
     // FR-214 b: "Đúng rồi và cô muốn rao bán mảnh đất …" — nửa đầu GẬT phường bot gợi ý cho căn đang hỏi, nửa
     // sau là căn mới (đi tiếp đường rao bên dưới). Bản cũ nuốt cả câu vào ô phường, phường gợi ý không được ghi.
@@ -5699,17 +5917,17 @@ Deno.serve(async (req) => {
         await gatLuot(() => /^\s*(?:da\s+)?(?:dung roi|dung vay|dung|u|uh|um|ok|oke|vang|phai|chinh xac)\b/.test(tKD))) {
       const g = (pendingReq.listings?.boc_tach as { phuong_goi_y?: { phuong?: unknown } } | null)?.phuong_goi_y;
       if (g && typeof g === "object" && typeof g.phuong === "string" && g.phuong) {
-        const { error: pgErr } = await client.rpc("ghi_fact_listing", {
+        const { error: pgErr, boQua: pgBo } = await ghiFact(client, {
           p_listing_id: pendingReq.listing_id, p_question: "phuong", p_answer: g.phuong, p_source: "seller_chat",
         });
         if (pgErr) await ghiLoi(client, "chat-reply gat phuong + rao moi", pgErr.message);
-        else {
+        else if (!pgBo) {
           const { error: irErr } = await client.from("info_requests").update({ status: "answered", answer: g.phuong, answered_at: new Date().toISOString() }).eq("id", pendingReq.id);
           if (irErr) await ghiLoi(client, "chat-reply gat phuong + rao moi(dong cau)", irErr.message);
           // Gợi ý mang cả quận ("Phường Bình Thới (Quận 11 cũ)") → ghi quận khi căn chưa có, và xoá gợi ý (bắn thật 23/09:
           // bản trước chỉ xoá gợi ý, căn nhà nằm "chưa rõ quận").
           await capNhatQuanTuPhuong(pendingReq.listing_id, typeof (g as { quan?: unknown }).quan === "string" ? g as GoiYPhuong : null, g.phuong);
-          const tenCu = pendingReq.listings?.location_raw ? ` căn ${pendingReq.listings.location_raw}` : "";
+          const tenCu = pendingReq.listings?.location_raw ? ` căn ${duongGiuaCau(pendingReq.listings.location_raw)}` : "";
           ackAnh.push(doiTuXung([`Dạ em ghi ${g.phuong} cho${tenCu} rồi ạ.`], sellerRow.xung_ho ?? null, sellerRow.nhom_tuoi ?? null)[0]);
         }
       }
@@ -5742,7 +5960,14 @@ Deno.serve(async (req) => {
       // phường 4") → phần còn lại "sai rồi em" không phải câu trả lời; bản trước đem
       // nó đi phân loại và nó thành ĐỊA CHỈ. Nhận lời sửa rồi hỏi lại câu đang treo
       // trong CÙNG một bong bóng.
-      if (ackSua && conChu.length < 2 && pendingReq.question !== "duyet_tin" && !humanActive) {
+      // SRS-5.1zzzzu: đang hỏi loại, khách chỉ nói giá ("gia 3 ty ruoi") mà loại đã nằm ở tin trước ("lo dat nen") → không dừng ở lời
+      // sửa, đi tiếp xuống câu treo loại để ghi loại từ tin trước (`kiemYCuocRao`), khỏi hỏi lại điều khách đã nói.
+      let loaiTuTinCu = false;
+      if (ackSua && conChu.length < 2 && pendingReq.question === "loai_bds" && bongAi && cheDoBocAi && (await cheDoBocAi) === "chinh") {
+        const kL = await bongAi;
+        loaiTuTinCu = !!(kL?.ket && docAiChinh(kiemYCuocRao(kL.truong, text, tinChuNhaGoc().join("\n")).dat, null).loaiBds);
+      }
+      if (ackSua && conChu.length < 2 && pendingReq.question !== "duyet_tin" && !humanActive && !loaiTuTinCu) {
         const cauSua = `${ackSua} ${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`;
         ackSua = null;
         return await traLoiSeller([cauSua], { sua_fact: true, reask: pendingReq.question });
@@ -5846,7 +6071,7 @@ Deno.serve(async (req) => {
           const gatCaX = tgX ? tgX.gat && tgX.ca : laDongY(dapAn);
           const gatDauX = tgX ? tgX.gat && !tgX.ca : !gatCaX && veDauX.length > 0 && veDauX !== dapAn.trim() && laDongY(veDauX);
           if ((gatCaX || gatDauX) && !humanActive && pendingReq.question !== "duyet_tin") {
-            const { error: gErr } = await client.rpc("ghi_fact_listing", {
+            const { error: gErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: gX.khoa, p_answer: gX.gia_tri, p_source: "seller_chat",
             });
             if (gErr) await ghiLoi(client, "chat-reply ghi_fact_listing(xac nhan)", gErr.message);
@@ -5879,7 +6104,7 @@ Deno.serve(async (req) => {
           const gatCa = tgD ? tgD.gat && tgD.ca : laDongY(dapAn);
           const gatDau = tgD ? tgD.gat && !tgD.ca : !gatCa && veDauD.length > 0 && veDauD !== dapAn.trim() && laDongY(veDauD);
           if ((gatCa || gatDau) && !humanActive && pendingReq.question !== "duyet_tin") {
-            const { error: vErr } = await client.rpc("ghi_fact_listing", {
+            const { error: vErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: "vi_tri", p_answer: goiY.vi_tri, p_source: "seller_chat",
             });
             if (vErr) await ghiLoi(client, "chat-reply ghi_fact_listing(vi_tri sua duong)", vErr.message);
@@ -5905,7 +6130,8 @@ Deno.serve(async (req) => {
           const kqAi = await bongAi;
           if (kqAi?.ket) {
             aiDaDoc = true;
-            pt = docAiChinh(kiemDeXuat(kqAi.truong, text).dat, null).loaiBds;
+            // SRS-5.1zzzzu: đang hỏi loại = ô loại trống → nhận trích dẫn loại ở tin chủ nhà trước ("e co mieng dat can ban").
+            pt = docAiChinh(kiemYCuocRao(kqAi.truong, text, tinChuNhaGoc().join("\n")).dat, null).loaiBds;
           }
         }
         if (!pt && !aiDaDoc) {
@@ -5941,7 +6167,7 @@ Deno.serve(async (req) => {
               { reask: "loai_bds", dang_luon: true, thieu_dang: "loại nhà", ...(qGhi ? { quan: qGhi } : {}) });
           }
           const dapNguoc = hoiLoai
-            ? dapHoiNguocTienDinh(hoiLoai.cau, cachGoi, cauPhi(sellerRow.seller_type, pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiLoai.chuDe)
+            ? dapHoiNguocTienDinh(hoiLoai.cau, cachGoi, cauPhi(vaiPhi(sellerRow), pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiLoai.chuDe)
               ?? await dapChuaCoDuLieu(hoiLoai.cau, hoiLoai.chuDe)
             : null;
           const again = daHoiLoai >= 1
@@ -6032,7 +6258,7 @@ Deno.serve(async (req) => {
                 ds = nhieu.length >= 2 ? nhieu : [motY];
               }
               for (const nd of ds) {
-                const { error: sErr } = await client.rpc("ghi_fact_listing", {
+                const { error: sErr } = await ghiFact(client, {
                   p_listing_id: pendingReq.listing_id, p_question: nd.question,
                   p_answer: nd.answer, p_source: "seller_chat",
                 });
@@ -6063,7 +6289,7 @@ Deno.serve(async (req) => {
         // SRS-5.1zk (bắn thử thu-dc4-08: hỏi phường, khách "nhà ở 77 hẻm 3m Xô Viết Nghệ Tĩnh" → địa chỉ luật giữ "3m"): chế độ
         // `ai` — địa chỉ trong câu trả lời câu phường lấy của AI (bỏ bề rộng), tên đường AI ghi cột street; luật chỉ khi AI hỏng.
         const kqAiPhuong = laCheDoAi && bongAi ? await bongAi : null;
-        const acPhuong = kqAiPhuong?.ket ? docAiChinh(kiemDeXuat(kqAiPhuong.truong, text).dat, null) : null;
+        const acPhuong = kqAiPhuong?.ket ? docAiChinh(kiemDeXuat(kqAiPhuong.truong, text, { quan: quanChacCua(pendingReq.listings) }).dat, null) : null;
         const viTriTuCau = (s: string): string | null => {
           if (!acPhuong) return bocViTriRao(s);
           if (acPhuong.duong && acPhuong.tenDuong) duongAiGhi = { id: pendingReq.listing_id, ten: acPhuong.tenDuong };
@@ -6072,9 +6298,9 @@ Deno.serve(async (req) => {
         // Từ điển đã tìm ra phường trong câu ("156 đường 59 Tây Thông Hội") → câu phường đã trả lời; phần địa chỉ ghi vào vị
         // trí nếu tin chưa có địa chỉ.
         if (!nhanGoiYPhuong && phuongTuDien) {
-          const viTriPd = !pendingReq.listings?.location_raw ? viTriTuCau(dapAn) : null;
+          const viTriPd = !pendingReq.listings?.location_raw ? viTriGhiDuoc(viTriTuCau(dapAn)) : null;
           if (viTriPd) {
-            const { error: vpErr } = await client.rpc("ghi_fact_listing", {
+            const { error: vpErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: "vi_tri", p_answer: viTriPd, p_source: "seller_chat",
             });
             if (vpErr) await ghiLoi(client, "chat-reply ghi_fact_listing(vi_tri kem phuong tu dien)", vpErr.message);
@@ -6089,12 +6315,12 @@ Deno.serve(async (req) => {
         // từng ĐÈ địa chỉ "Căn số 14 ở Ny'ah Phú Định" đã có. Địa chỉ đã có thì không ghi
         // lại từ câu lệch; muốn sửa địa chỉ thì nói rõ (FR-164).
         if (!nhanGoiYPhuong && !kqDuyet && !humanActive && !coPhuongSo && !tachTienToPhuong(dapAn) && !pendingReq.listings?.location_raw) {
-          const viTriTL = viTriTuCau(dapAn);
+          const viTriTL = viTriGhiDuoc(viTriTuCau(dapAn));
           // FR-212: đối chiếu tên đường với từ điển trước khi ghi.
           const duongTL = viTriTL ? await suaTenDuong(viTriTL, pendingReq.listings?.district, pendingReq.listings?.ward) : null;
           const viTri = duongTL?.viTri ?? viTriTL;
           if (viTri) {
-            const { error: vtErr } = await client.rpc("ghi_fact_listing", {
+            const { error: vtErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: "vi_tri", p_answer: viTri, p_source: "seller_chat",
             });
             if (vtErr) await ghiLoi(client, "chat-reply ghi_fact_listing(vi_tri thay phuong)", vtErr.message);
@@ -6103,8 +6329,8 @@ Deno.serve(async (req) => {
             // đi kèm ghi luôn như nhánh khớp ở dưới; vi_tri/phường đã có đường riêng.
             for (const f of nhanDienNhieuFact(dapAn)) {
               if (f.question === "vi_tri" || f.question === "phuong" || f.question === "bo_sung") continue;
-              const { error: kErr } = await client.rpc("ghi_fact_listing", {
-                p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat",
+              const { error: kErr } = await ghiFact(client, {
+                p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat", goc: gocCua(f),
               });
               if (kErr) await ghiLoi(client, "chat-reply ghi_fact_listing(kem vi_tri)", kErr.message);
               else await chepSangDuAn(f.question, f.answer);
@@ -6169,7 +6395,7 @@ Deno.serve(async (req) => {
         const sn = pendingReq.question !== "vi_tri" ? soNhaDau(dapAn) : null;
         const lr = (pendingReq.listings?.location_raw ?? "").trim();
         if (sn && lr && !/^\d/.test(lr) && !/\d\/\d/.test(lr)) {
-          const { error: snErr } = await client.rpc("ghi_fact_listing", {
+          const { error: snErr } = await ghiFact(client, {
             p_listing_id: pendingReq.listing_id, p_question: "vi_tri", p_answer: `${sn.soNha} ${lr}`, p_source: "seller_chat",
           });
           if (snErr) await ghiLoi(client, "chat-reply ghi_fact_listing(so nha)", snErr.message);
@@ -6214,7 +6440,7 @@ Deno.serve(async (req) => {
           const dai = sua.dai ?? (cu?.length_m != null ? String(cu.length_m) : null);
           const dapKt = ngang && dai ? `ngang ${ngang}m dài ${dai}m` : ngang ? `${ngang}m` : null;
           if (dapKt) {
-            const { error: ktErr } = await client.rpc("ghi_fact_listing", {
+            const { error: ktErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: "mat_tien", p_answer: dapKt, p_source: "seller_chat",
             });
             if (ktErr) await ghiLoi(client, "chat-reply ghi_fact_listing(sua kich thuoc)", ktErr.message);
@@ -6283,7 +6509,11 @@ Deno.serve(async (req) => {
       if (!suaKtDaGhi && !xacNhanGhi && bongAi && !kqDuyet && ((cheDoAiTreo === "ghi" && layChoCauTreo) || cheDoAiTreo === "chinh")) {
         const kqAi = await bongAi;
         const dongTreo = (pendingReq.listings ?? null) as unknown as DongDb | null;
-        const datAi = kqAi ? kiemDeXuat(kqAi.truong, text).dat : [];
+        // SRS-5.1zzzzu: loại tin còn trống → trích dẫn loại / ý giao dịch ở tin chủ nhà trước cũng nhận (`kiemYCuocRao`).
+        const loaiTrong = !pendingReq.listings?.property_type || pendingReq.listings.property_type === "chua_ro";
+        const datAi = !kqAi ? [] : loaiTrong
+          ? kiemYCuocRao(kqAi.truong, text, tinChuNhaGoc().join("\n"), { quan: quanChacCua(pendingReq.listings) }).dat
+          : kiemDeXuat(kqAi.truong, text, { quan: quanChacCua(pendingReq.listings) }).dat;
         // FR-224 (25/09/2026, chủ dự án: "bắt theo nguyên cả câu của khách để AI đọc lại"): chế độ `chinh`, AI đọc NGUYÊN tin
         // và trả lời thẳng câu đang hỏi (`tra_loi`, đã kiểm trích dẫn + con số). Câu SỐ CHẶT (tiền, diện tích, kích thước) vẫn
         // lấy giá trị ô đã chuẩn hoá của AI (`giaTriChoCauTreo`); câu khác lấy nguyên câu trả lời của AI ("hẻm xe hơi vào tận
@@ -6338,7 +6568,7 @@ Deno.serve(async (req) => {
           : (kq.loai === "lech" || kq.loai === "ack" || (kq.loai === "khop" && (dapAn.length > 40 || /[,;]/.test(dapAn)))));
         if (aiThang) {
           if (!aiChinh && kq.chuyenSang && kq.chuyenSang.question !== pendingReq.question) {
-            const { error: csErr } = await client.rpc("ghi_fact_listing", {
+            const { error: csErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: kq.chuyenSang.question, p_answer: kq.chuyenSang.answer, p_source: "seller_chat",
             });
             if (csErr) await ghiLoi(client, "chat-reply ghi_fact_listing(kem ai truoc)", csErr.message);
@@ -6433,7 +6663,7 @@ Deno.serve(async (req) => {
       // 15/09/2026 (bắn thật F2): câu hỏi về ẢNH có đáp án của hệ thống → bong bóng tiền
       // định đứng trước, model chỉ hỏi tiếp (model từng bỏ qua lời dặn trả lời trước).
       const hoiNguocDap = hoiNguoc
-        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, cauPhi(sellerRow.seller_type, pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiAi?.chuDe) ?? await dapChuaCoDuLieu(hoiNguoc, hoiAi?.chuDe)
+        ? dapHoiNguocTienDinh(hoiNguoc, cachGoi, cauPhi(vaiPhi(sellerRow), pendingReq.listings?.deal ?? dealNguoi, { benEm: true }), hoiAi?.chuDe) ?? await dapChuaCoDuLieu(hoiNguoc, hoiAi?.chuDe)
         : xinXoaLuot(dapAn) && !nhanDienFact(dapAn)
         ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
         : null;
@@ -6443,12 +6673,25 @@ Deno.serve(async (req) => {
           ? `Tin chủ nhà có kèm một câu hỏi — câu đó đã được trả lời ở bong bóng gửi ngay trước tin em, và đã được bỏ khỏi tin chủ nhà dẫn trong câu lệnh này; em không biết và không nhắc tới nó, KHÔNG nói chữ "hệ thống". Tin em viết lúc này CHỈ gồm MỘT câu hỏi tiếp (được mở bằng "Dạ"), không câu ghi nhận. `
           : danTraLoiHoiNguoc(hoiNguoc, hoiAi?.chuDe)
         : "";
+      // SRS-5.1zzzzo (bắn production 09/10/2026): "ủa mà bên em lấy phí nhiêu vậy" → câu phí KHÔNG số ("mức tuỳ chính chủ hay môi
+      // giới" — vai chưa rõ, FEE_RULES), lượt sau "anh là chính chủ" → bot không nói gì về phí nữa, câu hỏi của khách bỏ lửng. Khách
+      // vừa TỰ NÓI vai (nhãn đã thành `tu_nhan` ở `xetDoiNhan`) sau câu không số, chưa nghe câu có số → báo số NGAY, qua đúng chủ của
+      // con số phí (`cauPhi(vaiPhi(…))`) — không chuỗi mới. Vai ngược nhãn (chờ admin đổi) thì `vaiPhi` vẫn "unknown" → không báo.
+      const vaiPhiLuot = vaiPhi(sellerRow);
+      const botDaNoi = lichSuRows.filter((m) => !laTinNguoi(m.sender)).map((m) => m.body ?? "");
+      const dapPhiRoVai = !hoiNguoc && vaiTuNoiLuot && vaiPhiLuot !== "unknown" &&
+          botDaNoi.some(coCauPhiChuaRoVai) && !botDaNoi.some(coCauPhiTheoVai)
+        ? `Dạ vậy ${cauPhi(vaiPhiLuot, pendingReq.listings?.deal ?? dealNguoi, { benEm: true })} ạ.`
+        : null;
+      const phiRoVaiPrompt = dapPhiRoVai
+        ? `Chủ nhà vừa cho biết mình là ${vaiTuNoiLuot === "moi_gioi" ? "môi giới" : "chính chủ"}; bong bóng gửi ngay trước tin em đã báo phí theo vai đó — KHÔNG nhắc phí, KHÔNG hỏi lại chủ nhà hay môi giới. `
+        : "";
       // Chủ nhà CHẤM ĐIỂM cách chăm sóc (09/09/2026) → ghi fact + boc_tach, cảm
       // ơn ngắn, KHÔNG hỏi lại điểm, không gọi model. Câu hỏi ngược/ừ thì đường
       // hỏi lại chung ở dưới lo.
       // 22/09/2026: câu HỎI ("có khách nào hỏi chưa em") không phải điểm — `hoiVeTin` đã đỡ ở trên, đây chặn nốt.
       if (pendingReq.question === "danh_gia" && kq.loai === "khop" && !laCauHoiTron(dapAn) && !(ycLuot !== undefined ? !!ycLuot?.loai.startsWith("hoi_") : hoiVeTin(dapAn))) {
-        const { error: dgErr } = await client.rpc("ghi_fact_listing", {
+        const { error: dgErr } = await ghiFact(client, {
           p_listing_id: pendingReq.listing_id, p_question: "danh_gia",
           p_answer: dapAn, p_source: "seller_chat",
         });
@@ -6472,6 +6715,7 @@ Deno.serve(async (req) => {
       let ghiChuLech = false; // FR-233: câu lệch đã ghi chú, không hỏi lại — lời dặn model ở lượt đi tiếp
       let noiSangO: { question: string; answer: string } | null = null; // FR-234: câu trả lời thuộc ô khác, không hỏi lại
       let chuaTraLoi: string | null = null; // 01/10/2026: khách chưa trả lời câu treo (ừ, hỏi ngược, dặn xưng hô…) — thôi câu, không hỏi lại
+      let gatDoanTp = false; // SRS-5.1zzzzm: khách chỉ gật phần ĐOÁN "ở Hồ Chí Minh đúng không" — câu địa chỉ chưa có trả lời, hỏi tiếp đường + phường
       // "ok / được / đăng đi" khi đang treo một câu thông số → chủ muốn ĐĂNG.
       // "ừ / dạ / vâng" trơ trọi chỉ là ừ (ack), KHÔNG phải muốn đăng (lần 3: "ừ"
       // làm hết hạn câu hẻm rồi đòi đăng tin 51 điểm).
@@ -6520,9 +6764,9 @@ Deno.serve(async (req) => {
           // (sau khi bản tin đã soạn) nên tin lên kệ thiếu dòng hướng. Thông tin đi kèm trong câu ghi TRƯỚC khi soạn tin.
           for (const f of factKem(dapAn)) {
             if (f.question === "gia" && pendingReq.question !== "gia" && CAU_HOI_TIEN.has(pendingReq.question)) continue;
-            const { error: hkErr } = await client.rpc("ghi_fact_listing", {
+            const { error: hkErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer,
-              p_source: aiChinh?.ghi.some((g) => g === f) ? NGUON_AI : "seller_chat",
+              p_source: aiChinh?.ghi.some((g) => g === f) ? NGUON_AI : "seller_chat", goc: gocCua(f),
             });
             if (hkErr) await ghiLoi(client, "chat-reply ghi_fact_listing(hoan dang)", hkErr.message);
             else await chepSangDuAn(f.question, f.answer);
@@ -6533,7 +6777,7 @@ Deno.serve(async (req) => {
           if (ddErr) await ghiLoi(client, "chat-reply dang luon(chua du diem)", ddErr.message);
           const thieuN = nhap.slice(0, 2).join(" và ") || "vài thông tin";
           return await traLoiSeller(
-            [`Dạ em ghi nhận ${goi} muốn đăng luôn. Tin mình còn thiếu ${thieuN} nên chưa lên được — lúc nào ${goi} rảnh gửi thêm thông tin với ảnh là em đăng liền, không hỏi lại ạ.`],
+            [`Dạ em ghi nhận ${goi} muốn đăng luôn. Tin mình còn thiếu ${thieuN} nên chưa lên được, lúc nào ${goi} rảnh gửi thêm thông tin với ảnh là em đăng liền, không hỏi lại ạ.`],
             { hoan: true, loai_cau: "hoan", dang_luon: true, thieu_dang: thieuN, ...(hua ? { hua: true } : {}) },
           );
         }
@@ -6563,6 +6807,15 @@ Deno.serve(async (req) => {
         // và nói rõ còn thiếu gì (xử ở dưới, sau khi đọc trạng thái tin).
         boQuaCauTreo = true;
       }
+      // SRS-5.1zzzzm (chủ dự án test Zalo 09/10/2026: "đúng em ơi" → câu địa chỉ bị THÔI, bot hỏi "phường mấy, quận nào", đường
+      // không được hỏi lại trước khi hết các câu khác): câu địa chỉ lần đầu KÈM PHỎNG ĐOÁN thành phố — gật là gật phần đoán, chưa
+      // trả lời câu hỏi. Giữ câu địa chỉ, hỏi tiếp đường + phường trong MỘT câu (ô vẫn là `vi_tri`; phường trong câu trả lời địa chỉ
+      // được ghi kèm). Gật do AI đọc (`gatLuot`, luật `laDongY` chỉ khi AI không chạy) — chế độ `ai` phân loại câu này là "lệch"
+      // chứ không phải "ack", nên không dựa vào `kq.loai`. `cauBotCuoi` đã bỏ dấu.
+      if (!boQuaCauTreo && pendingReq.question === "vi_tri" && kq.loai !== "khop" && !kq.chuyenSang && kq.loai !== "hoi" &&
+          /(?:ho chi minh|sai gon|hcm)[^?]*dung khong/.test(cauBotCuoi)) {
+        gatDoanTp = await gatLuot(() => laDongY(dapAn));
+      }
       if (!boQuaCauTreo && kq.loai !== "khop" && pendingReq.question !== "duyet_tin" && pendingReq.question !== "loai_bds" &&
           pendingReq.question !== "danh_gia" && (kq.chuyenSang || kq.loai === "ack")) {
         let neQ = client.from("listing_facts")
@@ -6588,7 +6841,7 @@ Deno.serve(async (req) => {
         // Ô LÕI (diện tích, giá, vị trí, phường) thiếu thì tin không lên kệ được — nói sang ô khác vẫn hỏi lại MỘT lần như cũ
         // ("Ngang 5" khi hỏi diện tích là mới nửa câu trả lời). Ô khác thì thôi luôn.
         const CAU_LOI = ["dien_tich", "dien_tich_dat", "dien_tich_tim_tuong", "gia", "vi_tri", "phuong"];
-        if ((kq.chuyenSang && (!CAU_LOI.includes(pendingReq.question) || (daNe ?? 0) >= 1)) || gat) {
+        if ((kq.chuyenSang && (!CAU_LOI.includes(pendingReq.question) || (daNe ?? 0) >= 1)) || (gat && !gatDoanTp)) {
           if (kq.chuyenSang) console.log("chat-reply: noi sang o khac, thoi cau treo", pendingReq.question, "→", kq.chuyenSang.question, "da ne", daNe ?? 0);
           const { error: neErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
           if (neErr) await ghiLoi(client, "chat-reply bo qua cau treo", neErr.message);
@@ -6675,9 +6928,9 @@ Deno.serve(async (req) => {
             ? [kq.chuyenSang, ...factKem(dapAn).filter((f) => f.question !== kq.chuyenSang!.question)]
             : kemLech).filter((f) => f.question !== pendingReq.question);
           for (const f of cacFact) {
-            const { error: csErr } = await client.rpc("ghi_fact_listing", {
+            const { error: csErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: f.question,
-              p_answer: f.answer, p_source: aiChinh?.ghi.some((g) => g === f) ? NGUON_AI : "seller_chat",
+              p_answer: f.answer, p_source: aiChinh?.ghi.some((g) => g === f) ? NGUON_AI : "seller_chat", goc: gocCua(f),
             });
             if (csErr) await ghiLoi(client, "chat-reply ghi_fact_listing(chuyen sang)", csErr.message);
             // FR-195: nhánh TRẢ LỜI LỆCH cũng phải chép sang kho dự án. Bắt 10/09:
@@ -6696,6 +6949,7 @@ Deno.serve(async (req) => {
           const sua = gonLoiSua(dapAn);
           let ghiBoSung: string | null = dapAn;
           if (suaKtDaGhi) ghiBoSung = null;
+          else if (gatDoanTp) ghiBoSung = null; // SRS-5.1zzzzm: gật phần đoán thành phố — không phải thông tin căn nhà
           else if (sua.laSua) ghiBoSung = sua.con.length >= 2 ? sua.con : null;
           // 21/09/2026 ("làm cả 4"): tin CHỈ có emoji/dấu ("😂😂", "👍👍") không phải thông tin căn nhà; lời nói
           // với bot ("xóa hết dữ liệu của anh đi", "cái câu này đọc kỳ") cũng không — không ghi `bo_sung`.
@@ -6724,7 +6978,7 @@ Deno.serve(async (req) => {
           // (`ghiBongBocTach`), không ghi nguyên văn lần hai. AI không đọc ra gì → nguyên văn như cũ.
           else if (aiChinh && aiChinh.kienThuc.length) ghiBoSung = null;
           if (ghiBoSung) {
-            const { error: bsErr } = await client.rpc("ghi_fact_listing", {
+            const { error: bsErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: "bo_sung",
               p_answer: ghiBoSung, p_source: "seller_chat",
             });
@@ -6747,10 +7001,19 @@ Deno.serve(async (req) => {
         // (chỉ nói quận khi hỏi phường, chỉ quận / số nhà khi hỏi địa chỉ, chỉ ngang khi hỏi diện tích) — câu kế hỏi phần còn thiếu,
         // không phải câu cũ — và các câu chốt luồng (duyệt bản nháp, loại BĐS, xác nhận lịch, còn bán, ngưng rao căn nào).
         const CAU_CHOT_LUONG = ["duyet_tin", "loai_bds", "xac_nhan_lich", "con_ban", "ngung_rao_can_nao", "xac_nhan_ngung_hang_loat"];
-        const traLoiMotPhan = (pendingReq.question === "phuong" && laChiQuan(dapAn)) || (!!soNhaGhep && !dapAn.trim()) ||
+        const traLoiMotPhan = gatDoanTp || (pendingReq.question === "phuong" && laChiQuan(dapAn)) || (!!soNhaGhep && !dapAn.trim()) ||
           (pendingReq.question === "vi_tri" && laChiDonViHanhChinh(dapAn)) ||
           (/^dien_tich/.test(pendingReq.question) && kq.chuyenSang?.question === "mat_tien");
-        const khongHoiLai = !CAU_CHOT_LUONG.includes(pendingReq.question) && !traLoiMotPhan;
+        // SRS-5.1zzzzo (bắn production 09/10/2026: đang hỏi "sổ riêng hay sổ chung", khách "ủa mà bên em lấy phí nhiêu vậy" → bot trả lời
+        // phí rồi hỏi "mấy phòng ngủ"; câu sổ bị THÔI và không bao giờ được hỏi lại trước bản nháp). LƯỢT BÊN LỀ — khách hỏi bên em một
+        // câu (`hoiNguoc`, AI đọc theo nghĩa) hay tự nói vai (`vaiTuNoiLuot`), không đưa dữ liệu nào: khách CHƯA trả lời câu đang hỏi,
+        // cũng không né nó (không nói sang ô khác). Câu đó vẫn mở, trả lời chuyện bên lề rồi quay lại nó (r2b) — không chọn câu kế.
+        // Chặn trên: đã có hai lượt khách từ lúc mở câu mà chưa trả lời (câu đã hỏi ba lần) → thôi như cũ, để không hỏi dồn.
+        const moCau = pendingReq.created_at ?? null;
+        const soLuotTreo = moCau ? lichSuRows.filter((m) => laTinNguoi(m.sender) && !!m.created_at && m.created_at > moCau).length : 0;
+        const luotBenLe = !kq.chuyenSang && !kemLech.length && !daGhiChuLech && kq.loai !== "xung_ho" && kq.loai !== "ack" &&
+          (!!hoiNguoc || !!vaiTuNoiLuot) && soLuotTreo < 2;
+        const khongHoiLai = !CAU_CHOT_LUONG.includes(pendingReq.question) && !traLoiMotPhan && !luotBenLe;
         if (khongHoiLai) {
           const { error: klErr } = await client.from("info_requests").update({ status: "expired" }).eq("id", pendingReq.id);
           if (klErr) await ghiLoi(client, "chat-reply thoi cau lech (ghi chu)", klErr.message);
@@ -6771,13 +7034,21 @@ Deno.serve(async (req) => {
         // nào" — nhãn ở đây đọc thẳng bảng chung, không biết tin ở huyện.
         const xaThayPhuong = pendingReq.question === "phuong" && laNgoaiDoThi(pendingReq.listings?.district);
         const nhanDangHoi = xaThayPhuong ? "xã" : FACT_LABELS[pendingReq.question] ?? pendingReq.question;
-        const nhanHoiLai = xaThayPhuong ? "chỗ mình thuộc xã nào" : NHAN_HOI_LAI[pendingReq.question] ?? nhanDangHoi;
+        const nhanHoiLai = gatDoanTp ? "nhà mình ở đường nào, phường nào" : xaThayPhuong ? "chỗ mình thuộc xã nào" : NHAN_HOI_LAI[pendingReq.question] ?? nhanDangHoi;
         const chiSoNha = !!soNhaGhep && !dapAn.trim();
         // 25/09/2026 (bắn thật lx-29): hỏi phường/quận, chủ nói "quận 5 em" → quận đã ghi (`capNhatQuan` ở trên), hỏi
         // tiếp phường; biết quận rồi thì tra bảng `duong` (một phường → xác nhận, 2–3 phường → hỏi chọn).
         const chiQuan = pendingReq.question === "phuong" && laChiQuan(dapAn);
         const goiYSauQuan = chiQuan ? await cauHoiPhuongGoiY(pendingReq.listing_id, null, cachGoi) : null;
-        const viSao = chiQuan
+        const viSao = luotBenLe
+          ? hoiNguoc
+            ? hoiNguocDap
+              ? `Chủ nhà hỏi bên em một câu (đã trả lời ở bong bóng ngay trước), chưa trả lời câu em đang hỏi — không phải hiểu nhầm, không phải né. Quay lại đúng câu đang hỏi.`
+              : `Chủ nhà đang HỎI NGƯỢC, chưa trả lời câu em đang hỏi: trả lời thẳng câu đó trước (phí thì theo luật phí; điều chưa nắm thì "để em kiểm tra rồi báo lại"), rồi quay lại đúng câu đang hỏi.`
+            : `${phiRoVaiPrompt || `Chủ nhà vừa cho biết mình là ${vaiTuNoiLuot === "moi_gioi" ? "môi giới" : "chính chủ"}. `}Họ chưa trả lời câu em đang hỏi — không phải hiểu nhầm. Đáp một tiếng rồi quay lại đúng câu đang hỏi.`
+          : gatDoanTp
+          ? `Chủ nhà xác nhận nhà ở TP.HCM (gật phần em đoán), chưa nói đường, phường — không phải hiểu nhầm. Hỏi tiếp cả đường (số nhà hay hẻm nếu có) và phường trong MỘT câu ngắn.`
+          : chiQuan
           ? `Chủ nhà mới nói QUẬN (em đã ghi quận), chưa nói phường — không phải hiểu nhầm, đừng hỏi lại quận. Báo ngắn đã ghi quận rồi hỏi phường` +
             (goiYSauQuan ? `, đúng ý câu này: "${goiYSauQuan}"` : ".")
           : chiSoNha
@@ -6794,8 +7065,8 @@ Deno.serve(async (req) => {
           ? `Chủ nhà chưa gật bản nháp, cũng chưa nói sửa gì rõ.`
           : `Câu đó KHÔNG trả lời được câu em hỏi - có thể chủ nhà hiểu nhầm, hoặc đang nói một thông số khác. Em đã ghi chú lại nguyên văn (không mất), nhắc lại ngắn gọn để xác nhận rồi hỏi lại.`;
         const promptLai =
-          `${await boiCanhLuot()}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${tinChoModel()}". ${viSao}\n${hoiNguocPrompt}` +
-          `Viết MỘT tin ngắn như người thật nhắn Zalo: xử lý ý trên, rồi hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước: ${nhanHoiLai}? ` +
+          `${await boiCanhLuot()}Em vừa hỏi "${nhanDangHoi}", chủ nhà nhắn: "${tinChoModel()}". ${viSao}\n${dongVuaGhi(pendingReq.listing_id)}${hoiNguocPrompt}` +
+          `Viết MỘT tin ngắn như người thật nhắn Zalo: xử lý ý trên, rồi ${gatDoanTp ? "hỏi" : "hỏi lại nhẹ nhàng, diễn đạt KHÁC câu hỏi trước"}: ${nhanHoiLai}? ` +
           `Ý hỏi chính vẫn là "${nhanDangHoi}" (hệ thống ghi câu trả lời kế vào ô này). ` +
           `Không xin lỗi dài, KHÔNG nhắc mã tin${nhieuCan ? " (nhiều căn thì gọi bằng địa chỉ)" : ""}.`;
         let hoiLai: string | null = null;
@@ -6819,6 +7090,11 @@ Deno.serve(async (req) => {
             // 27/09/2026 (test Zalo): hỏi lại câu đứng tên thành "cho em xin tên người đứng tên trên sổ" → câu mẫu (hỏi quan hệ).
             if (hoiLai) hoiLai = giuVeCauMau(hoiLai, pendingReq.question,
               cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal));
+            // SRS-5.1zzzzo: câu hỏi lại của model mang chủ đề ô KHÁC ô đang mở ("Sổ và hẻm…" khi ô là phòng ngủ) → câu trả lời kế rơi sai ô.
+            // Cùng lưới ghi đúng ô của r1 / r2 (`thayCauHoiLech`), trước đây r2b không có.
+            if (hoiLai) hoiLai = thayCauHoiLech(hoiLai, pendingReq.question,
+              cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw));
+            mocR2b("thayCauHoiLech");
             // 27/09/2026: quận / khu chủ nhà chưa nói là bịa ("Botanic ở Quận 1, dự án Phú Mỹ Hưng") — xem `boViTriBia`.
             if (hoiLai) {
               const vt = boViTriBia([hoiLai], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""),
@@ -6852,9 +7128,14 @@ Deno.serve(async (req) => {
             ? `Dạ em ghi địa chỉ ${soNhaGhep} rồi ạ. `
             : kq.chuyenSang
             ? `Em ghi "${kq.chuyenSang.answer}" rồi ạ. `
-            : "") + (chiQuan && goiYSauQuan ? goiYSauQuan : `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`);
+            : "") + (chiQuan && goiYSauQuan ? goiYSauQuan
+            : gatDoanTp ? cauHoiMau("vi_tri@sau_gat_tp", cachGoi, pendingReq.listings?.property_type)
+            // SRS-5.1zzzzo: lượt bên lề — câu đang hỏi chưa ai trả lời, hỏi lại đúng câu của ô (không "cho em hỏi lại" như khách trả lời lệch).
+            : luotBenLe ? `${hoiNguoc && !hoiNguocDap ? "" : "Dạ. "}${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)}`
+            : `${CachGoi} cho em hỏi lại chút, ${nhanHoiLai} ạ?`);
         }
-        return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), hoiLai], { reask: pendingReq.question, loai_cau: kq.loai, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) });
+        return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), ...(dapPhiRoVai ? [dapPhiRoVai] : []), hoiLai],
+          { reask: pendingReq.question, loai_cau: luotBenLe ? "ben_le" : kq.loai, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}), ...(dapPhiRoVai ? { phi_ro_vai: true } : {}) });
         }
       }
 
@@ -6904,9 +7185,11 @@ Deno.serve(async (req) => {
         // Địa chỉ chỉ có tên phường / quận thì KHÔNG ghi vào vị trí (phường + quận vẫn ghi ngay dưới); câu vị trí sẽ được hỏi lại.
         // 01/10/2026: tin chỉ là một tên phường mà từ điển địa danh vừa nhận ra (`phuongTuDien`, kể cả gõ sai "phường tay
         // thnh") cũng là đơn vị hành chính — không ghi chữ thô vào vị trí.
-        const viTriChiHanhChinh = pendingReq.question === "vi_tri" && (chiLaDonViHanhChinh(dapAnGhi) || (!!phuongTuDien && !!tenDiaDanhTron(dapAnGhi)));
+        // SRS-5.1zzzzd: cùng một hàm với mọi chỗ ghi ô vị trí — bỏ kích thước ("10x50"), còn lại chỉ là hành chính thì không ghi.
+        if (pendingReq.question === "vi_tri" && dapAnGhi) dapAnGhi = viTriGhiDuoc(dapAnGhi) ?? dapAnGhi;
+        const viTriChiHanhChinh = pendingReq.question === "vi_tri" && (!viTriGhiDuoc(dapAnGhi) || chiLaDonViHanhChinh(dapAnGhi) || (!!phuongTuDien && !!tenDiaDanhTron(dapAnGhi)));
         if (viTriChiHanhChinh) console.log("chat-reply: vi tri chi co don vi hanh chinh, khong ghi");
-        const { error: factErr } = viTriChiHanhChinh ? { error: null } : await client.rpc("ghi_fact_listing", {
+        const { error: factErr } = viTriChiHanhChinh ? { error: null } : await ghiFact(client, {
           p_listing_id: pendingReq.listing_id,
           p_question: pendingReq.question,
           p_answer: dapAnGhi,
@@ -6921,7 +7204,7 @@ Deno.serve(async (req) => {
             const pk = phuongChuan(aiChinh?.ghi.find((g) => g.question === "phuong")?.answer) ??
               phuongNhacTrongCau(text, pendingReq.listings?.district ?? null);
             if (pk) {
-              const { error: pkErr } = await client.rpc("ghi_fact_listing", {
+              const { error: pkErr } = await ghiFact(client, {
                 p_listing_id: pendingReq.listing_id, p_question: "phuong", p_answer: tenDayDu(pk), p_source: "seller_chat",
               });
               if (pkErr) await ghiLoi(client, "chat-reply ghi_fact_listing(phuong kem dia chi)", pkErr.message);
@@ -6935,7 +7218,7 @@ Deno.serve(async (req) => {
               .eq("property_type", "chua_ro").neq("id", pendingReq.listing_id).in("status", ["cho_thong_tin", "dang_ban", "dang_quan_tam"]).limit(20);
             if (crErr) await ghiLoi(client, "chat-reply loai ca lo(doc)", crErr.message);
             for (const t of (chuaRo ?? []) as Array<{ id: string }>) {
-              const { error: lErr } = await client.rpc("ghi_fact_listing", { p_listing_id: t.id, p_question: "loai_bds", p_answer: loaiDapAn, p_source: "seller_chat" });
+              const { error: lErr } = await ghiFact(client, { p_listing_id: t.id, p_question: "loai_bds", p_answer: loaiDapAn, p_source: "seller_chat" });
               if (lErr) await ghiLoi(client, "chat-reply loai ca lo", lErr.message);
               const { error: irLErr } = await client.from("info_requests").update({ status: "answered", answer: dapAn, answered_at: new Date().toISOString() })
                 .eq("listing_id", t.id).eq("question", "loai_bds").eq("status", "pending");
@@ -6974,7 +7257,7 @@ Deno.serve(async (req) => {
                 project_id: da.id,
                 ...(macDinh && da.district ? { district: da.district } : {}),
                 // Phường của dự án chỉ khi quận cũng lấy của dự án — tin đã nói rõ quận khác thì không lai.
-                ...(macDinh && !cu?.ward && da.ward ? { ward: da.ward } : {}),
+                ...(macDinh && !cu?.ward && tenPhuongCot(da.ward, da.district) ? { ward: tenPhuongCot(da.ward, da.district) } : {}),
               }).eq("id", pendingReq.listing_id).is("project_id", null);
               if (gErr) await ghiLoi(client, "chat-reply gan du an(vi_tri)", gErr.message);
               else if (macDinh && da.district) {
@@ -7001,9 +7284,9 @@ Deno.serve(async (req) => {
           // FR-223 (bắn thật 24/09, rn-test-h): đang hỏi TIỀN THUÊ / cọc / phí, số tiền trong câu là câu trả lời cho câu đó —
           // KHÔNG ghi kèm thành GIÁ BÁN ("150 triệu một tháng" từng đè giá 25 tỷ thành 150 triệu).
           if (f.question === "gia" && pendingReq.question !== "gia" && CAU_HOI_TIEN.has(pendingReq.question)) continue;
-          const { error: ndErr } = await client.rpc("ghi_fact_listing", {
+          const { error: ndErr } = await ghiFact(client, {
             p_listing_id: pendingReq.listing_id, p_question: f.question, p_answer: f.answer,
-            p_source: aiChinh?.ghi.some((g) => g === f) ? NGUON_AI : "seller_chat",
+            p_source: aiChinh?.ghi.some((g) => g === f) ? NGUON_AI : "seller_chat", goc: gocCua(f),
           });
           if (ndErr) await ghiLoi(client, "chat-reply ghi_fact_listing(kem)", ndErr.message);
           else {
@@ -7023,7 +7306,7 @@ Deno.serve(async (req) => {
           const theoKhong = khongGiHet && BA_PHAP_LY.includes(q.question) && !daGhiKem.has(q.question);
           if (!daGhiKem.has(q.question) && !theoKhong) continue;
           if (theoKhong) {
-            const { error: kgErr } = await client.rpc("ghi_fact_listing", {
+            const { error: kgErr } = await ghiFact(client, {
               p_listing_id: pendingReq.listing_id, p_question: q.question, p_answer: dapAn, p_source: "seller_chat",
             });
             if (kgErr) { await ghiLoi(client, "chat-reply ghi_fact_listing(khong gi het)", kgErr.message); continue; }
@@ -7078,7 +7361,7 @@ Deno.serve(async (req) => {
           if (dnbErr) await ghiLoi(client, "chat-reply diem_nguoi_ban", dnbErr.message);
           const d = (dnb ?? null) as { diem?: number; so_tin?: number } | null;
           if (d && typeof d.diem === "number") {
-            dongNguoiRao = `\nĐiểm người rao của ${cachGoi} hiện ${d.diem}/100 (${d.so_tin ?? "?"} căn đang rao); tin nào đủ hơn là điểm chung lên theo.`;
+            dongNguoiRao = `\nĐiểm người rao của ${cachGoi} hiện ${d.diem}/100 (${d.so_tin ?? "?"} tin); tin nào đủ hơn là điểm chung lên theo.`;
           }
         }
         // 05/10/2026 (demo AOND `build_fee_followup_system`): tin lên kệ → DẪN PHÍ một lần bằng câu hỏi, nếu em chưa từng nói phí với người này.
@@ -7088,7 +7371,7 @@ Deno.serve(async (req) => {
         const cau = len
           ? cauTD("dang_xong", { diem: dk?.diem, loai: loaiDoc(lstOk?.property_type) }) + dongNguoiRao + (cauDanPhi ? `\n${cauDanPhi}` : "")
           : huaSauDuyet
-          ? `Dạ em ghi nhận ${cachGoi} muốn đăng luôn. Tin còn thiếu ${(dk?.thieu ?? []).slice(0, 2).join(" và ") || "một chút"} nên chưa lên được — lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em đăng liền, không hỏi lại ạ.`
+          ? `Dạ em ghi nhận ${cachGoi} muốn đăng luôn. Tin còn thiếu ${(dk?.thieu ?? []).slice(0, 2).join(" và ") || "một chút"} nên chưa lên được, lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em đăng liền, không hỏi lại ạ.`
           : `Dạ em ghi nhận rồi ạ.\nTin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm ${cachGoi} vài thông tin nữa nha.`;
         const loiHuaDuyet = huaSauDuyet && len ? `Lúc nào ${cachGoi} gửi thêm thông tin với ảnh là em cập nhật vào tin liền ạ.` : "";
         const bongDiem = len && loiHuaDuyet ? loiHuaDuyet : len && themDiem ? themDiem : "";
@@ -7128,6 +7411,7 @@ Deno.serve(async (req) => {
       const khongHoi = await khongHoiAi(pendingReq.listing_id, lstNow?.boc_tach ?? pendingReq.listings?.boc_tach, (nextFactsTho ?? []).map((f) => f.fact_key));
       const nextFacts = (await thieuCoReNhanh(client, pendingReq.listing_id, nextFactsTho, [pendingReq.question], text, chuGanDay)).filter((f) => !hetHanSet.has(f.fact_key) && !khongHoi.has(f.fact_key));
       const published = !!lstNow && lstNow.status !== "cho_thong_tin";
+      tinTrongLuot = pendingReq.listing_id; // SRS-5.1zzzzk: tin của câu treo là tin đang nói trong lượt (lưới trạng thái ở đường ra)
       // Chủ nói "đăng đi / ok / được" giữa vòng hỏi (09/09 tối lần 2): đủ 70 điểm
       // thì gửi BẢN NHÁP ngay (bỏ câu đang treo), dưới 70 thì nói rõ còn thiếu gì
       // rồi hỏi tiếp — không ghi "đăng đi" thành câu trả lời, không hỏi lại câu cũ.
@@ -7146,9 +7430,9 @@ Deno.serve(async (req) => {
         // Chưa đủ điểm: giữ câu treo, nói còn thiếu gì rồi hỏi lại câu đó.
         const thieuVan = nhap.slice(0, 2).join(" và ");
         // Câu vừa trả lời xong (traLoiKemDang) → không hỏi lại nó; báo còn thiếu gì rồi đi tiếp câu KẾ ở dưới.
-        if (traLoiKemDang) dauDangThieu = `Dạ em đăng liền cho ${cachGoi}, chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.`;
+        if (traLoiKemDang) dauDangThieu = `Dạ tin mình chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.`;
         else return await traLoiSeller(
-          [`Dạ em đăng liền cho ${cachGoi}, chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.\n${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`],
+          [`Dạ tin mình chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.\n${cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal)}`],
           { chu_muon_dang: true, thieu: nhap, reask: pendingReq.question },
         );
       }
@@ -7188,15 +7472,39 @@ Deno.serve(async (req) => {
       const loiThieu = ((nextFactsTho ?? []) as Array<{ fact_key: string; priority?: number; nhom?: string | null }>)
         .filter((f) => LOI_HOI_LAI.includes(f.fact_key) && f.nhom !== "sau_dang" && !khongHoi.has(f.fact_key))
         .sort((x, y) => (x.priority ?? 0) - (y.priority ?? 0));
-      const loiConThieu = loiThieu.find((f) => !pendSet.has(f.fact_key) && f.fact_key !== pendingReq.question)?.fact_key;
-      const chanNhap = loiThieu.length > 0;
-      const nextKey = published
+      // SRS-5.1zzzzr: ô lõi hỏi lại tối đa SO_LAN_HOI_LOI lần mỗi ô (đếm mọi câu đã mở cho ô đó, mọi trạng thái). Ô đã hỏi đủ số
+      // lần thì thôi hỏi VÀ thôi chặn bản nháp — một chỗ đếm cho cả hai đường hỏi lại (`loiConThieu` và nhánh hết câu ở dưới).
+      const SO_LAN_HOI_LOI = 3;
+      const hoiDuLan = new Set<string>();
+      if (loiThieu.length) {
+        const { data: daHoiRows, error: cErr } = await client.from("info_requests").select("question")
+          .eq("listing_id", pendingReq.listing_id).in("question", loiThieu.map((f) => f.fact_key));
+        if (cErr) await ghiLoi(client, "chat-reply dem lan hoi o loi", cErr.message);
+        const dem = new Map<string, number>();
+        for (const x of (daHoiRows ?? []) as Array<{ question: string }>) dem.set(x.question, (dem.get(x.question) ?? 0) + 1);
+        for (const [k, n] of dem) if (n >= SO_LAN_HOI_LOI) hoiDuLan.add(k);
+      }
+      const loiConHoi = loiThieu.filter((f) => !hoiDuLan.has(f.fact_key));
+      const loiConThieu = loiConHoi.find((f) => !pendSet.has(f.fact_key) && f.fact_key !== pendingReq.question)?.fact_key;
+      let chanNhap = loiConHoi.length > 0;
+      let nextKey = published
         ? undefined
         : pendingReq.question === "vi_tri" && quanChuaRo && conHoi.some((f) => f.fact_key === "phuong")
         ? "phuong"
         : chonKe === "hinh_anh" && conHoi.some((f) => f.fact_key === "phuong")
         ? "phuong"
         : chonKe ?? loiConThieu;
+      // SRS-5.1zzzzr (bắn production 09/10, thu-thuong11/12: "sổ riêng em" → "Dạ vâng, sổ riêng gọn lắm chị ơi." rồi im; lượt sau
+      // "ok em" → bot tự bịa "để em kiểm tra giá giao dịch rồi báo lại"): câu VỪA hỏi là ô LÕI, khách nói chuyện khác → FR-234 không hỏi
+      // lại ngay, `chanNhap` chặn bản nháp vì thiếu chính ô đó, mà không còn câu nào khác → lượt không có bước tiếp, lượt sau không
+      // còn câu treo để hỏi lại. Bất biến: lượt bán chưa lên kệ luôn có bước tiếp. Ô lõi còn thiếu được hỏi lại (ngoại lệ của luật
+      // 01/10 "không hỏi lại", chủ dự án duyệt 10/10) tới SO_LAN_HOI_LOI lần cho mỗi ô (`hoiDuLan` ở trên); quá số đó thì thôi chặn —
+      // bản nháp ra và nói rõ còn thiếu gì (`hetCauTruocNhap`).
+      if (!published && !nextKey && chanNhap) {
+        const loiHoiLai = loiConHoi.find((f) => !pendSet.has(f.fact_key))?.fact_key ?? null;
+        if (loiHoiLai) nextKey = loiHoiLai;
+        else chanNhap = false;
+      }
       // FR-177 c: hết câu cơ bản + chuyên môn (ảnh xin trong bản nháp) và tin
       // đủ 70 điểm → gửi bản nháp thay vì hỏi tiếp. Dưới 70 thì hỏi tiếp và
       // nói rõ còn thiếu gì.
@@ -7207,10 +7515,15 @@ Deno.serve(async (req) => {
         // chờ cho nó (bỏ ô vừa thôi hỏi ở lượt này — FR-234), đưa nó lên đầu danh sách cho model hỏi. SRS-5.1zzzy: chung hàm
         // `hetCauTruocNhap` với nhánh câu rao.
         const het = await hetCauTruocNhap(pendingReq.listing_id, pendingReq.listings?.property_type,
-          { saved_fact: pendingReq.question, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) }, hoiNguocDap ? [hoiNguocDap] : [],
-          new Set([...hetHanSet, pendingReq.question]), pendSet);
+          { saved_fact: pendingReq.question, ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}) }, [...(hoiNguocDap ? [hoiNguocDap] : []), ...(dapPhiRoVai ? [dapPhiRoVai] : [])],
+          new Set([...hetHanSet, pendingReq.question, ...hoiDuLan]), pendSet);
         if ("res" in het) return het.res;
         thieuDiem = het.thieu;
+        // SRS-5.1zzzzo (bắn production 09/10: "Vâng ạ. Sổ và hẻm được không ạ?"): ô vừa mở cho mục thiếu đầu (`khoaMo`) LÀ ý cần hỏi kế —
+        // đi đúng đường CẦN HỎI một ý như nhánh câu rao (`firstKey = het.khoaMo`), có đủ lưới ghi đúng ô (`laHoiLechKhoa`, `giuVeCauMau`,
+        // `goiLaiChoDungO`). Bản trước đưa model HAI mục thiếu ("còn thiếu: A; B … hỏi thứ đầu") mà không có khoá nào để soát — model gộp hai
+        // mục không liên quan thành một câu vô nghĩa, và câu đó không khớp ô đã mở.
+        if (!nextKey && het.khoaMo) nextKey = het.khoaMo;
       }
 
       // Câu hỏi drip PHẢI vắt vai mã căn + địa chỉ (FR-157). Người bán nhiều
@@ -7224,10 +7537,10 @@ Deno.serve(async (req) => {
       // "Căn Phường 16" — cả lô cùng một phường nên câu đó không chỉ ra căn nào.
       const neo = nhieuCan
         ? (pendingReq.listings?.unit_code?.trim() ||
-          pendingReq.listings?.location_raw?.split(",")[0]?.trim() ||
+          duongGiuaCau(pendingReq.listings?.location_raw).split(",")[0]?.trim() ||
           pendingReq.listings?.ward || "")
         : "";
-      const phiMotCau = cauPhi(sellerRow.seller_type, pendingReq.listings?.deal ?? dealNguoi);
+      const phiMotCau = cauPhi(vaiPhi(sellerRow), pendingReq.listings?.deal ?? dealNguoi);
 
       // FR-209: câu kế là PHƯỜNG mà tin còn ở quận mặc định và đã có tên đường → tra
       // Nominatim + `wards`, hỏi xác nhận thay vì "phường mấy, quận nào".
@@ -7245,7 +7558,14 @@ Deno.serve(async (req) => {
         ? cauDuongKe ?? cauXnKe ?? cauLungKe ?? goiYKe ?? cauHoiMau(nextKey === "phuong" && quanChuaRo ? "phuong@chua_quan" : nextKey, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)
         : "";
       // Bong bóng ghi nhận đã gửi trước tin này → đừng cảm ơn/ghi nhận lần nữa.
-      const daAck = ackSua
+      // SRS-5.1zzzzg (bắn production 09/10/2026, thu-kg2): đang hỏi pháp lý, khách "sổ riêng, giá 9 tỷ 5" → bong bóng code "Dạ em ghi giá
+      // 9 tỷ 5 rồi ạ." + model "Vâng ạ, em ghi sổ riêng và giá rồi anh…" — HAI lời ghi nhận một lượt. Lớp lỗi: một ý hai nguồn — code
+      // đã ghi nhận phần GHI THÊM, rồi câu lệnh bảo model "không ghi nhận lại" trong khi khách VỪA trả lời câu hỏi (model phải ghi nhận
+      // câu đó, và gộp luôn giá). Lưới cũ (`laCauGhiNhan` ở đường ra) chỉ nhận lời model mở bằng "Dạ em ghi…", "Vâng ạ, em ghi…" lọt.
+      // Nay lời GHI THÊM (không phải sửa) đi vào câu lệnh — model ghi nhận gộp một lần; có lời model thì bong bóng code bỏ (dưới).
+      const daAck = ackGhiGop
+        ? `Lượt này ngoài câu trả lời cho câu em hỏi, em cũng vừa ghi thêm ${ackGhiGop}: ghi nhận GỘP một lần trong tin này (vài chữ, không đọc lại số), rồi hỏi tiếp. `
+        : ackSua
         ? `Bong bóng NGAY TRƯỚC tin này đã ghi nhận số liệu rồi ("${ackSua.slice(0, 60)}…") — KHÔNG cảm ơn, KHÔNG ghi nhận lại, vào thẳng câu hỏi. `
         : chuaTraLoi
         ? chuaTraLoi
@@ -7271,22 +7591,28 @@ Deno.serve(async (req) => {
         : "";
       // SRS-5.1zzzl (bắn thử …kb1tatt): nhánh không câu kế (`chanNhap`) từng chỉ dặn "không hỏi lại câu em vừa hỏi" — model tự hỏi
       // "hiện trạng", code không mở ô nên lượt sau không có câu treo. Nhánh đó nay cấm hỏi câu mới.
+      // SRS-5.1zzzzm (chủ dự án test Zalo 09/10/2026, "rep chán quá"): câu lệnh cũ dặn "ghi nhận vài chữ" ở MỌI lượt mà không nói
+      // lượt này ghi được gì — khách chỉ "đúng em ơi", model lấy thứ duy nhất có trong ĐÃ BIẾT ra ghi nhận ("Dạ, nhà phố em ghi rồi ạ").
+      // Nay câu lệnh mang dòng `dongVuaGhi` (sổ ghi của lượt); bong bóng trước đã ghi nhận (`ackSua`, không phải ghi gộp) thì `daAck` đã nói.
+      const vuaGhiR2 = ackSua && !ackGhiGop ? "" : dongVuaGhi(pendingReq.listing_id);
       const prompt = nextKey
-        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}` +
-          `ĐÃ BIẾT về căn${neo ? ` ${neo}` : ""}: ${daBietNgan(lstNow) || "(chưa có gì)"}\n` +
+        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}${phiRoVaiPrompt}` +
+          `ĐÃ BIẾT về căn${neo ? ` ${neo}` : ""} (để hiểu, không đọc lại): ${daBietNgan(lstNow) || "(chưa có gì)"}\n` +
           `CHỦ NHÀ VỪA NHẮN (em vừa hỏi "${FACT_LABELS[pendingReq.question] ?? pendingReq.question}"): "${tinChoModel()}"\n` +
+          vuaGhiR2 +
           `${dongCanHoi}\n` +
           `Viết MỘT tin ngắn như người thật nhắn Zalo: ${khenGanDay ? "không khen (mấy tin gần đây em khen rồi), " : ""}` +
-          `ghi nhận vài chữ rồi hỏi đúng ý CẦN HỎI, không gắn thêm ý khác, không đọc lại số liệu` +
+          `đáp lại đúng điều chủ nhà vừa nhắn (theo dòng em vừa ghi ở trên) rồi hỏi đúng ý CẦN HỎI, không gắn thêm ý khác, không đọc lại số liệu` +
           (nhieuCan ? `; người này rao nhiều căn, nói rõ đang hỏi căn ${neo || "nào (theo đặc điểm)"}` : "") + `.`
         : published
-        ? `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${tinChoModel()}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
+        ? `${await boiCanhLuot()}${hoiNguocPrompt}${phiRoVaiPrompt}Chủ nhà vừa trả lời: "${tinChoModel()}". Tin${neo ? ` căn ${neo}` : ""} giờ đã đủ thông tin và ĐÃ LÊN WEB AI Ơi Nhà Đất. ` +
           `Viết MỘT tin ngắn: cảm ơn, báo tin đã đăng, có khách quan tâm là em báo liền. KHÔNG nhắc phí (chỉ nói khi họ hỏi: ${phiMotCau}). KHÔNG nhắc mã tin. KHÔNG hỏi thêm thông tin nào nữa.`
         : chanNhap && !thieuDiem.length
-        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa nhắn: "${tinChoModel()}". Viết MỘT tin rất ngắn ghi nhận điều họ vừa nói (đúng chữ họ dùng, không diễn giải sang nghĩa khác); KHÔNG hỏi lại câu em vừa hỏi, KHÔNG đặt câu hỏi mới nào (lượt này hệ thống không mở câu hỏi — câu em tự đặt sẽ không ai ghi câu trả lời), KHÔNG nói tin đã đủ thông tin.`
+        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}${phiRoVaiPrompt}Chủ nhà vừa nhắn: "${tinChoModel()}".\n${vuaGhiR2}Viết MỘT tin rất ngắn đáp lại điều họ vừa nói (đúng chữ họ dùng, không diễn giải sang nghĩa khác); KHÔNG hỏi lại câu em vừa hỏi, KHÔNG đặt câu hỏi mới nào (lượt này hệ thống không mở câu hỏi — câu em tự đặt sẽ không ai ghi câu trả lời), KHÔNG nói tin đã đủ thông tin.`
         : thieuDiem.length
-        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}Chủ nhà vừa trả lời: "${tinChoModel()}". Tin chưa đủ điểm để đăng, còn thiếu (theo thứ tự ưu tiên): ${thieuDiem.slice(0, 2).join("; ")}. Viết MỘT tin ngắn như người thật: ghi nhận, rồi hỏi thứ đầu danh sách đó theo cách hợp với loại nhà này.`
-        : `${await boiCanhLuot()}${hoiNguocPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${tinChoModel()}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
+        // SRS-5.1zzzzo: mục thiếu không ứng ô nào (tiềm năng sử dụng…) — đưa ĐÚNG MỘT mục; hai mục là mời model gộp hai câu hỏi.
+        ? `${await boiCanhLuot()}${daAck}${hoiNguocPrompt}${phiRoVaiPrompt}Chủ nhà vừa trả lời: "${tinChoModel()}".\n${vuaGhiR2}Tin chưa đủ điểm để đăng. CẦN HỎI: ${thieuDiem[0]}. Viết MỘT tin ngắn như người thật: đáp lại điều họ vừa nói, rồi hỏi đúng ý đó theo cách hợp với loại nhà này — một câu hỏi, không gắn thêm ý khác.`
+        : `${await boiCanhLuot()}${hoiNguocPrompt}${phiRoVaiPrompt}Chủ nhà vừa trả lời câu hỏi cuối: "${tinChoModel()}". Viết MỘT tin ngắn cảm ơn, báo tin rao giờ đã đầy đủ thông tin, tụi em sẽ báo ngay khi có khách quan tâm. Kết thúc bằng một câu hỏi nhẹ xem ${cachGoi} còn muốn bổ sung gì không.`;
       // OPEN-30: model hỏng thì hỏi bằng câu mẫu tất định — vòng drip không
       // đứng lại chờ model sống. Câu mẫu CÓ hỏi thật (kèm neo căn) nên mở
       // info_request bên dưới vẫn đúng luật "không mở khi chưa hỏi được".
@@ -7336,8 +7662,8 @@ Deno.serve(async (req) => {
               [lstNow?.floors_text, lstNow?.street, lstNow?.location_raw].filter(Boolean).join(" · ")); mocR2("soatNhanXet");
           }
           if (sellerReply) {
-            sellerReply = boKhenKhongCanCu([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null;
-            if (sellerReply) sellerReply = boMenhDeKhenSai([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "))[0] ?? null; mocR2("boMenhDeKhenSai");
+            sellerReply = boKhenKhongCanCu([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "), nhanXetAiXong)[0] ?? null;
+            if (sellerReply) sellerReply = boMenhDeKhenSai([sellerReply], [text, ...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? "")].join(" "), nhanXetAiXong)[0] ?? null; mocR2("boMenhDeKhenSai");
             if (sellerReply) sellerReply = boHoiHoanCong([sellerReply], nextKey === "hoan_cong")[0] ?? null; mocR2("boHoiHoanCong");
             if (sellerReply) sellerReply = suaGapTheoDeal(sellerReply, pendingReq.listings?.deal); mocR2("suaGapTheoDeal");
             if (sellerReply && luatDuR2) sellerReply = boKhenThiTruong([sellerReply])[0]?.trim() || null; mocR2("boKhenThiTruong");
@@ -7393,8 +7719,7 @@ Deno.serve(async (req) => {
             sellerReply = boHoiLaiDaCo(sellerReply, daCo, nextKey, nextKey ? `${neo ? `Căn ${neo} nha. ` : ""}${cauKe}` : null);
             if (sellerReply !== truocHL) console.log("chat-reply: bỏ câu hỏi lại ô đã có", [...daCo].join(",")); mocR2("boHoiLaiDaCo");
           }
-          // Tin chưa lên kệ mà model nói "đã đăng lên web" → bỏ mệnh đề đó.
-          if (sellerReply && !published) sellerReply = boHuaDaDang([sellerReply])[0] ?? null; mocR2("boHuaDaDang");
+          // SRS-5.1zzzzk: câu "đã đăng / lên web" do lưới trạng thái ở đường ra (`traLoiSeller`, `tinTrongLuot`) lo.
           // 25/09/2026 (bắn thật lx-05): câu xác nhận / chọn phường, xác nhận tên đường do CODE tra ra → thay câu hỏi của
           // model bằng câu đó NGUYÊN VĂN (model từng nói lại thành "phường nào vậy ạ?", rơi mất lựa chọn).
           if (sellerReply && (cauDuongKe ?? cauXnKe ?? cauLungKe ?? goiYKe)) {
@@ -7414,12 +7739,16 @@ Deno.serve(async (req) => {
           await ghiLoi(client, "chat-reply model r2(seller)", e);
         }
       }
+      // SRS-5.1zzzzg: model đã viết lời (đã được dặn ghi nhận gộp phần ghi thêm) → bong bóng ghi nhận của code không gửi nữa.
+      if (sellerReply && ackGhiGop && prompt.includes(daAck)) ackSua = null;
       if (!sellerReply) {
         // FR-178: câu mẫu cũng phải là câu người nói, không đọc tên trường.
         // 10/09 lần 7: bong bóng trước đã nói "Dạ em ghi rồi ạ: …" mà bong bóng
         // này mở đầu y hệt — hai câu ghi nhận liền nhau đọc như máy. Đã có bong
         // bóng ghi nhận thì vào thẳng câu hỏi.
-        const moDau = (hoiNguoc && !hoiNguocDap ? cauHoiLaiDuPhong(hoiAi?.chuDe, cachGoi) : "") + (ackSua ? "" : "Dạ em ghi rồi ạ. ");
+        // SRS-5.1zzzzm: "Dạ em ghi rồi ạ." chỉ khi lượt này ghi được thứ gì vào căn đang nói (sổ `ghiLuot`) — khách chỉ gật / hỏi thì "Dạ.".
+        const coGhiLuot = ghiLuot.some((g) => g.listing_id === pendingReq.listing_id && g.question !== "nhan" && g.doi) || !!quanGhiLuot;
+        const moDau = (hoiNguoc && !hoiNguocDap ? cauHoiLaiDuPhong(hoiAi?.chuDe, cachGoi) : "") + (ackSua ? "" : coGhiLuot ? "Dạ em ghi rồi ạ. " : "Dạ. ");
         sellerReply = nextKey
           ? `${moDau}${neo ? `Căn ${neo} nha. ` : ""}${cauKe}`
           : thieuDiem.length
@@ -7448,7 +7777,7 @@ Deno.serve(async (req) => {
       const cauDanPhiR2 = published && pendingReq.listings?.status === "cho_thong_tin" && !daNoiPhiRoi()
         ? cauTD("dang_xong_phi", { loai: loaiDoc(lstNow?.property_type) }) : "";
       if (cauDanPhiR2) sellerReply = sellerReply ? `${sellerReply}\n${cauDanPhiR2}` : cauDanPhiR2;
-      return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), ...(dauDangThieu ? [dauDangThieu] : []), sellerReply, ...(xinDiemCuoi ? [xinDiemCuoi] : [])], {
+      return await traLoiSeller([...(hoiNguocDap ? [hoiNguocDap] : []), ...(dapPhiRoVai ? [dapPhiRoVai] : []), ...(dauDangThieu ? [dauDangThieu] : []), sellerReply, ...(xinDiemCuoi ? [xinDiemCuoi] : [])], {
         ...(dauDangThieu ? { chu_muon_dang: true } : {}),
         saved_fact: boQuaCauTreo ? null : pendingReq.question, ...(xinDiemCuoi ? { xin_danh_gia: true } : {}), ...(hoiNguoc ? { hoi_nguoc: hoiNguoc } : {}),
         ...(cauDanPhiR2 ? { dan_phi: true } : {}),
@@ -7520,11 +7849,7 @@ Deno.serve(async (req) => {
           // "cho thuê" từ "xây căn hộ cho thuê". Ý giao dịch và loại BĐS là ý của cả cuộc rao: cho phép trích từ các tin chủ nhà trước,
           // chỉ hai khoá đó, chỉ khi đang điền tin rỗng mở từ chính các tin đó.
           const laTinRongDangDien = !!(pendingReq?.listings && laTinRong(pendingReq.listings));
-          const datTruoc = laTinRongDangDien
-            ? kiemDeXuat(kqAi.truong.filter((t) => (t.khoa === "loai_giao_dich" || t.khoa === "loai_bds") && !kdAi.dat.some((d) => d.khoa === t.khoa)),
-              tinChuNhaGoc().join("\n")).dat
-            : [];
-          const datAi = [...kdAi.dat, ...datTruoc];
+          const datAi = laTinRongDangDien ? kiemYCuocRao(kqAi.truong, textBongAi, tinChuNhaGoc().join("\n")).dat : kdAi.dat;
           // SRS-5.1zb: chế độ `ai` không đưa loại giao dịch đoán bằng từ khoá vào — "Chào bạn, mình cho thuê…" ("bạn" → "bán")
           // từng làm khoảng giá thành khoảng giá BÁN, giá thuê của AI bị bỏ vì ngoài khoảng.
           aiRao = { ...docAiChinh(datAi, { deal: laCheDoAi ? null : dealCauRao(tKD) }), kienThuc: kiemKienThuc(kqAi.kienThuc ?? [], textBongAi, datAi) };
@@ -7619,32 +7944,17 @@ Deno.serve(async (req) => {
         duAnKhop && !duAnLaTenDuong(duAnKhop.name, text) ? duAnKhop : null;
       // 30/09/2026: tên dự án gõ sai ("vinhome gran park") khớp chữ không ra → tìm theo nghĩa, máy xác nhận tên.
       if (!duAn) duAn = await timDuAnTheoNghia(client, aiQuyetDuAn ? aiRao?.duAn : (aiRao?.duAn ?? tenDuAnTrongCau(text) ?? tenSauCanHo(text)));
-      // Phường tên chữ ("phường Hiệp Bình Chánh") khi câu không có phường số (14/09).
-      let phuongRao = aiRao?.phuong ?? (wardNo ? `Phường ${wardNo}` : phuongTenCauRao(text));
-      // 15/09/2026 (bắn thật B1): câu rao KHÔNG DẤU "phuong hiep binh chanh" — tra bảng
-      // `wards` bằng so bỏ dấu (tên 2025 hoặc phường cũ trong `don_vi_cu`); không khớp
-      // thì để trống và hỏi như cũ, không ghi chữ không dấu vào cột phường.
-      if (!phuongRao && !/[À-ỹ]/.test(text)) {
-        const tenKD = phuongTenKhongDau(tKD);
-        if (tenKD) {
-          const { data: dsPhuong, error: wErr } = await client.from("wards").select("ten, ten_day_du, don_vi_cu").limit(400);
-          if (wErr) await ghiLoi(client, "chat-reply wards(khong dau)", wErr.message);
-          const khop = ((dsPhuong ?? []) as Array<{ ten: string; ten_day_du: string | null; don_vi_cu: string | null }>)
-            .find((w) => boDau(w.ten) === tenKD || boDau(w.don_vi_cu ?? "").includes(`phuong ${tenKD}`));
-          if (khop) phuongRao = khop.ten_day_du ?? `Phường ${khop.ten}`;
-        }
-      }
-      // 30/09/2026 (bắn thật, v277): "bán căn hộ bên thảo điền quận 2 cũ…" chỉ ra Quận 2 — không có chữ "phường" nên
-      // `phuongTenCauRao` không bắt, AI không trả phường. AI im thì câu nhắc ĐÚNG CHỮ một tên phường (mới / cũ) duy nhất,
-      // khớp quận nếu đã nói → lấy phường mới đó (Thảo Điền → An Khánh).
-      if (!phuongRao && !wardNo) {
-        const nhac = phuongNhacTrongCau(text, aiRao?.quan ?? bocQuan(tKD, text));
-        if (nhac) phuongRao = tenDayDu(nhac);
-      }
-      // 30/09/2026 (chủ dự án: "để AI nhận mới thông minh"): AI đọc phường (cả câu rao lẫn các tin nói trước — `textBongAi`),
-      // đổi tên cũ sang mới, rồi qua kiểm bằng chứng. Máy chỉ tra đúng tên trong danh sách để lấy tên đủ + quận cũ.
-      const phuongChot: Phuong | null = wardNo ? null : phuongChuan(phuongRao);
-      if (phuongChot) phuongRao = tenDayDu(phuongChot);
+      // Phường khách NÓI trong câu rao (ĐỌC — chưa chuẩn hoá): AI (đã qua kiểm bằng chứng) → phường số → tên sau chữ "phường / xã"
+      // (có dấu, rồi không dấu — bắn thật B1 15/09) → tên phường mới / cũ nhắc đúng chữ trong câu (Thảo Điền, 30/09, chỉ khi AI im).
+      const phuongTho: string | null = aiRao?.phuong ?? (wardNo ? `Phường ${wardNo}` : phuongTenCauRao(text)) ??
+        (!/[À-ỹ]/.test(text) ? phuongTenKhongDau(tKD) : null);
+      // SRS-5.1zzzzj: CHUẨN HOÁ ở MỘT cửa `phuongCot` — tên mới / cũ / số cũ + quận cũ trong câu → phường MỚI có thật, không thì null
+      // (không ghi; bot hỏi). Thay ba đường cũ ghép "Phường " + số (bắn production 09/10: "phường 6 quận 3 cũ" → cột "Phường 6"),
+      // tra bảng `wards` bằng so bỏ dấu, và `phuongChuan` chỉ nhận tên mới.
+      const quanCauRao = [aiRao?.quan, bocQuan(tKD, text), ...cacQuanTrong(text, boDau), duAn?.district];
+      let phuongChot: Phuong | null = phuongCot(phuongTho, quanCauRao);
+      if (!phuongChot && !phuongTho) phuongChot = phuongNhacTrongCau(text, aiRao?.quan ?? bocQuan(tKD, text));
+      const phuongRao: string | null = phuongChot ? tenDayDu(phuongChot) : null;
       const maCanRao = duAn ? (aiRao?.maCan ?? MA_CAN_RE.exec(text)?.[1]?.toUpperCase() ?? null) : null;
       // Tình trạng GẤP (chủ dự án 09/09/2026 — cần cột riêng): nói gấp → true,
       // nói rõ "không gấp" → false, không nhắc → null (chưa rõ, không ép).
@@ -7695,7 +8005,7 @@ Deno.serve(async (req) => {
       const loCanHo = loCu?.property_type === "chung_cu" && !!loCu.project_id;
       const dongTin = {
         code: null, seller_id: sellerRow.id, deal: sDeal, district: quanRao ?? loCu?.district ?? null,
-        ward: phuongRao ?? duAn?.ward ?? (loCanHo ? loCu!.ward : null),
+        ward: phuongRao ?? tenPhuongCot(duAn?.ward, duAn?.district) ?? (loCanHo ? tenPhuongCot(loCu!.ward, loCu!.district) : null),
         description: text, price_raw: giaGhi,
         // SRS-5.1zzzx (bắn production 09/10/2026): "anh muốn bán căn nhà" mở tin rỗng nha_pho (AI trích "căn nhà"); câu rao kế
         // AI không nhắc lại loại → dòng này từng ghi "chua_ro" đè lên, trigger không đoán lại (`_thong_so_ai`), bot hỏi lại loại.
@@ -7766,6 +8076,7 @@ Deno.serve(async (req) => {
         await ghiLoi(client, "chat-reply tao tin rao", newLstErr.message);
       }
       if (newLst) {
+        tinTrongLuot = newLst.id; // SRS-5.1zzzzk: tin đang nói trong lượt (lưới trạng thái ở đường ra đối chiếu đúng tin này)
         // SRS-5.1zzj: căn có trong KHO DỰ ÁN → điền diện tích / tầng còn trống, ghi chú mẫu nhà + giá niêm yết (không thành giá rao).
         if (duAn && maCanRao) await dienTuKhoDuAn(newLst.id, duAn.id, maCanRao);
         // FR-177 h: bóc được gì thì LƯU NGAY dạng JSON (ghi_boc_tach bỏ null),
@@ -7820,7 +8131,8 @@ Deno.serve(async (req) => {
           ? ghepSoNhaHem(viTriCau, textBongAi)
           : truocTin ? ghepSoNhaHem(bocViTriRao(truocTin), truocTin) : null;
         // Bỏ chữ nối / lời dẫn còn dính ("hẻm xe hơi nguyen van cu gần").
-        const viTriTho = viTriGhep ? (aiDiaChi ? viTriGhep : gotDiaChi(viTriGhep)) : null;
+        // SRS-5.1zzzzd: kích thước / tên hành chính trơn không phải địa chỉ (cùng hàm `viTriGhiDuoc` với mọi chỗ ghi ô vị trí).
+        const viTriTho = viTriGhep ? viTriGhiDuoc(aiDiaChi ? viTriGhep : gotDiaChi(viTriGhep)) : null;
         if (aiDiaChi && aiRao?.tenDuong) duongAiGhi = { id: newLst.id, ten: aiRao.tenDuong };
         // FR-212: đối chiếu tên đường với từ điển `duong` — không dấu → có dấu ngay; sai 1–2 ký tự → gợi ý, hỏi ở câu đầu.
         const duongRao = viTriTho ? await suaTenDuong(viTriTho, quanDoc, phuongRao) : null;
@@ -7883,11 +8195,14 @@ Deno.serve(async (req) => {
         const loaiRao = LOAI_GHI[(newLst as { property_type?: string | null }).property_type ?? ""] ?? null;
         const ghiNhan = [
           `${sDeal === "cho_thue" ? "cho thuê" : "bán"}${loaiRao ? ` ${loaiRao}` : ""}`,
-          viTriDu(viTriRao) ? viTriRao : null,
-          [phuongRao, quanDoc].filter(Boolean).join(", ") || null,
+          // SRS-5.1zzzzj: địa chỉ in qua MỘT nguồn `diaChiHienThi` — chữ khách "duong Phạm Văn Chiêu" → "Đường Phạm Văn Chiêu"; phường chỉ
+          // là tên chuẩn đã ghi cột (`phuongRao` qua `phuongCot`), không bao giờ chữ khách gõ.
+          diaChiHienThi({ location_raw: viTriDu(viTriRao) ? viTriRao : null, ward: phuongRao, district: quanDoc }) || null,
           areaM ? (/x/.test(areaM[1]) ? `${areaM[1]}m` : `${areaM[1].replace(",", ".")}m2`) : null,
           pnM ? `${pnM[1]} phòng ngủ` : null,
-          giaNoi ? `giá ${giaNoi}` : null,
+          // SRS-5.1zzzzh (thu-kg4: "gia 6 ty" → 📝 "giá 6 ty"): đọc lại cho khách bằng luật hiển thị MỘT NGUỒN (`donViGiaDep`,
+          // luat-tien.ts) như 🤖 / bản nháp — `price_raw` trong DB vẫn giữ nguyên chữ khách gõ.
+          giaNoi ? `giá ${donViGiaDep(giaNoi)}` : null,
           gapCol === true ? "cần gấp" : gapCol === false ? "không gấp" : null,
           duAn?.name ? `dự án ${duAn.name}${maCanRao ? ` căn ${maCanRao}` : ""}` : null,
         ].filter((x): x is string => !!x);
@@ -7897,16 +8212,20 @@ Deno.serve(async (req) => {
         const khachChao = /^\s*(dạ\s*)?(xin\s*)?(chào|chao|hi|hello|alo|a lô|hế lô)\b/i.test(text);
         // 21/09/2026 (bắn thật mau-tdt): "Dạ em chào anh ạ!" (tiền định) + "Chào anh, em R•ai bên…" (model) là
         // chào HAI LẦN. Câu của model ĐÃ có lời chào thì thôi chào tiền định; model không chào / hỏng thì chào.
+        // SRS-5.1zzzzm (chủ dự án test Zalo 09/10/2026: "ừ em" → "📝 Em ghi nhận: bán."): 📝 để khách SOÁT LẠI thứ đã bóc. Chỉ có mỗi
+        // loại giao dịch (khách gật câu chào / "cần bán", chưa nói loại nhà, nơi chốn, số nào) thì không có gì để soát — lời của
+        // model đã nhận ý đó. Có từ hai mục, hay có loại nhà ("bán nhà phố"), 📝 giữ nguyên như cũ.
+        const ghiNhanTrong = ghiNhan.length === 1 && !loaiRao;
         const bongGhiNhanCho = (loiModel: string | null) =>
-          (khachChao && !/(?<![\p{L}])(chào|xin chào|hello)(?![\p{L}])/iu.test(loiModel ?? "") ? cauTD("chao_lai") + "\n" : "") +
-          cauTD("ghi_nhan", { ds: ghiNhan.join(" · ") });
+          ((khachChao && !/(?<![\p{L}])(chào|xin chào|hello)(?![\p{L}])/iu.test(loiModel ?? "") ? cauTD("chao_lai") + "\n" : "") +
+            (ghiNhanTrong ? "" : cauTD("ghi_nhan", { ds: ghiNhan.join(" · ") }))).trim();
         // 15/09/2026 (bắn thật P1): câu rao kèm hỏi ngược ("…, mà bên em là bot hả?") —
         // trước đây câu hỏi bị nuốt. Có đáp án hệ thống (bot / phí / ảnh) thì bong bóng
         // tiền định đứng trước; không thì dặn model trả lời trước rồi mới hỏi.
         // SRS-5.1zzzj: AI nói tin có hỏi em không (`hoiLaiAi`, đọc theo nghĩa, kiểm trích dẫn); luật `tachCauHoiNguoc` chỉ đỡ khi AI không chạy.
         const hoiAiRao = await hoiLaiAi(text);
         const hoiRao = hoiAiRao !== undefined ? (hoiAiRao ? (hoiAiRao.caTin ? text : hoiAiRao.cau) : null) : tachCauHoiNguoc(text).hoi;
-        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(sellerRow.seller_type, sDeal ?? dealNguoi, { benEm: true }), hoiAiRao?.chuDe) : null;
+        const dapRao = hoiRao ? dapHoiNguocTienDinh(hoiRao, cachGoi, cauPhi(vaiPhi(sellerRow), sDeal ?? dealNguoi, { benEm: true }), hoiAiRao?.chuDe) : null;
         if (hoiRao && dapRao) cauDaDap = hoiRao;
         const hoiRaoPrompt = hoiRao
           ? dapRao
@@ -7920,7 +8239,7 @@ Deno.serve(async (req) => {
         // câu xác nhận đi trước (bản nháp không gửi khi địa chỉ chưa chắc).
         if (!firstKey && !duongRao?.goiY) {
           const het = await hetCauTruocNhap(newLst.id, (newLst as { property_type?: string | null }).property_type,
-            { listing_code: newLst.code, ghi_nhan: ghiNhan }, [bongGhiNhanCho(null), ...(dapRao ? [dapRao] : [])]);
+            { listing_code: newLst.code, ghi_nhan: ghiNhan }, [bongGhiNhanCho(null), ...(dapRao ? [dapRao] : [])].filter(Boolean));
           if ("res" in het) return het.res;
           firstKey = het.khoaMo;
         }
@@ -7965,7 +8284,7 @@ Deno.serve(async (req) => {
               messages: [{
                 role: "user",
                 content:
-                  `${await boiCanhLuot()}Chủ nhà vừa nhắn rao: "${tinChoModel()}". Em đã tạo tin. ${hoiRaoPrompt}` +
+                  `${await boiCanhLuot()}Chủ nhà vừa nhắn rao: "${tinChoModel()}". Em đã ghi tin NHÁP — CHƯA đăng, chưa lên web (không nói đã đăng / lên tin / đang rao). ${hoiRaoPrompt}` +
                   `Viết MỘT tin ngắn như người thật nhắn Zalo: nhận câu rao${khenGanDay ? " (không khen, mấy tin gần đây em khen rồi)" : " (có điểm mạnh thật thì khen một ý, không thì thôi)"}, không cảm ơn / không nói "tin tưởng", không đọc lại số liệu, không xác nhận lại địa điểm` +
                   (cauXacNhanDau
                     // 25/09/2026 (bắn thật lx-05): câu gợi ý "thuộc Phường Bến Thành hay Phường Cầu Ông Lãnh" bị model nói lại
@@ -7998,10 +8317,9 @@ Deno.serve(async (req) => {
             if (raoReply) raoReply = motCauHoi([raoReply])[0]; mocR1("motCauHoi");
             // 23/09/2026 (bắn thật): "hẻm 2m5 … rất được khách tìm", "ô tô đậu trước cửa" → "ô tô vào tận nhà".
             if (raoReply) raoReply = await soatNhanXet(raoReply, textBongAi); mocR1("soatNhanXet");
-            if (raoReply) raoReply = boMenhDeKhenSai([raoReply], text)[0] ?? null; mocR1("boMenhDeKhenSai");
-            // 25/09/2026 (bắn thật lx-08): tin vừa tạo luôn `cho_thong_tin` (chờ đủ thông tin + chủ duyệt nháp) mà model
-            // viết "đã đăng lên web rồi" → bỏ mệnh đề đó. Câu hỏi model lệch khoá code chọn → thay bằng câu mẫu.
-            if (raoReply) raoReply = boHuaDaDang([raoReply])[0] ?? null; mocR1("boHuaDaDang");
+            if (raoReply) raoReply = boMenhDeKhenSai([raoReply], text, nhanXetAiXong)[0] ?? null; mocR1("boMenhDeKhenSai");
+            // 25/09/2026 (bắn thật lx-08) → SRS-5.1zzzzk: tin vừa tạo luôn `cho_thong_tin`; câu "đã đăng" do lưới trạng thái ở đường ra
+            // lo (`tinTrongLuot` = tin vừa tạo) — lưới riêng ở đây từng trả lại nguyên câu sai khi câu sai là cả lời.
             if (raoReply && (await loiBotDu())) raoReply = boKhenThiTruong([raoReply])[0]?.trim() || null; mocR1("boKhenThiTruong");
             if (raoReply) raoReply = boHuaHoiChuNha([raoReply])[0]?.trim() || null; mocR1("boHuaHoiChuNha");
             // FR-239 d: tỉnh / quận / khu khách chưa nói (bằng chứng = câu rao) → bỏ câu đó, như đường hỏi tiếp.
@@ -8028,7 +8346,7 @@ Deno.serve(async (req) => {
           raoReply = `${raoReply.replace(/[^.!?]*\?\s*$/u, "").trim()} ${cauXacNhanDau}`.trim();
         }
         if (dapRao) raoReply = `${dapRao}\n${raoReply}`;
-        return await traLoiSeller([bongGhiNhanCho(raoReply), raoReply], { listing_code: newLst.code, ghi_nhan: ghiNhan });
+        return await traLoiSeller([bongGhiNhanCho(raoReply), raoReply].filter(Boolean), { listing_code: newLst.code, ghi_nhan: ghiNhan });
       }
     }
     // Seller nhắn nhưng KHÔNG có câu chờ → vẫn trả lời ĐÚNG VAI người bán
@@ -8056,8 +8374,8 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
       if (canNeo) {
         for (const f of factRoi) {
-          const { error: frErr } = await client.rpc("ghi_fact_listing", {
-            p_listing_id: canNeo.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat",
+          const { error: frErr } = await ghiFact(client, {
+            p_listing_id: canNeo.id, p_question: f.question, p_answer: f.answer, p_source: "seller_chat", goc: gocCua(f),
           });
           if (frErr) await ghiLoi(client, "chat-reply ghi_fact_listing(roi)", frErr.message);
         }
@@ -8095,9 +8413,27 @@ Deno.serve(async (req) => {
       if (tinChot) {
         const luc = new Date().toISOString();
         const { error: duErr } = await client.from("listings")
-          .update({ chu_noi_du_at: luc, ...(tinChot.status === "cho_thong_tin" ? { chu_duyet_at: luc } : {}) })
+          .update({ chu_noi_du_at: luc })
           .eq("id", tinChot.id);
         if (duErr) await ghiLoi(client, "chat-reply chu noi du roi", duErr.message);
+        // SRS-5.1zzzzr (bắn production 09/10, thu-thuong12: "đăng giúp chú" → "Dạ vâng, vậy em rao như vậy nhé…" mà tin vẫn
+        // `cho_thong_tin`, không bản nháp): nhánh này từng đóng dấu duyệt rồi nói "em rao" bất kể tin có lên kệ được không. Tin CHƯA
+        // lên kệ đi đúng một đường với "đăng đi" trong vòng hỏi (`guiBanNhap(…, dangLuon)`): đủ điểm thì đóng dấu và nói theo trạng
+        // thái ĐỌC LẠI sau khi ghi; chưa đủ thì nói thật còn thiếu gì và mở câu hỏi cho mục thiếu đầu.
+        if (tinChot.status === "cho_thong_tin") {
+          const nhap = await guiBanNhap(tinChot.id, { du_roi: true }, false, [], true);
+          if (!Array.isArray(nhap)) return nhap;
+          const { data: lLoai } = await client.from("listings").select("property_type, district, deal").eq("id", tinChot.id).maybeSingle();
+          const khoaThieu = nhap.map((m) => khoaCuaMucThieu(m, lLoai?.property_type)).find(Boolean) ?? null;
+          if (khoaThieu) {
+            const { error: tErr } = await client.from("info_requests").insert({ listing_id: tinChot.id, question: khoaThieu, status: "pending" });
+            if (tErr && tErr.code !== "23505") await ghiLoi(client, "chat-reply du roi(mo cau thieu)", tErr.message);
+          }
+          const thieuVan = nhap.slice(0, 2).join(" và ");
+          return await traLoiSeller([
+            `Dạ tin mình chỉ cần thêm ${thieuVan || "vài thông tin"} là đủ điều kiện lên kệ ạ.${khoaThieu ? `\n${cauHoiMau(khoaThieu, cachGoi, lLoai?.property_type, lLoai?.district, lLoai?.deal)}` : ""}`,
+          ], { du_roi: true, thieu: nhap, ...(khoaThieu ? { asked: khoaThieu } : {}) });
+        }
         const { data: dk } = await client.rpc("diem_tin", { p_listing_id: tinChot.id });
         const d = dk as { diem?: number; thieu?: string[] } | null;
         const thieu = (d?.thieu ?? []).slice(0, 2);
@@ -8121,7 +8457,7 @@ Deno.serve(async (req) => {
     // SRS-5.1zzzn (08/10, bắn thử …kc1tatt: "dang di" → "em đang rao tích cực" khi tin còn CHỜ THÔNG TIN): khối này từng gọi mọi
     // tin mở là "đang rao" — model nói theo tiêu đề. Mỗi dòng mang TRẠNG THÁI THẬT: chưa lên kệ thì nói rõ là chưa rao.
     const lstLines = (sellerLst ?? [])
-      .map((l) => `${l.location_raw ?? "(chưa rõ địa chỉ)"} ${l.ward ?? ""} · ${l.price_raw ?? "?"} — ${
+      .map((l) => `${diaChiHienThi({ location_raw: l.location_raw, ward: l.ward }, null) || "(chưa rõ địa chỉ)"} · ${l.price_raw ? donViGiaDep(l.price_raw) : "?"} — ${
         (l as { status?: string }).status === "cho_thong_tin" ? "CHƯA LÊN KỆ (đang hỏi thêm thông tin, CHƯA rao — không nói đang rao / đã đăng)" : "ĐANG RAO trên web"}`)
       .join("\n");
     // OPEN-30: chăm sóc chung — model hỏng thì ghi nhận bằng câu mẫu.
@@ -8157,6 +8493,9 @@ Deno.serve(async (req) => {
         });
         sReply = r3.content.find((b) => b.type === "text")?.text?.trim() ?? null;
         if (sReply && sellerMoi && lichSuRows.some((m) => !laTinNguoi(m.sender)) && (await loiBotDu())) sReply = apVan(soVan, "boChaoLai", sReply, boChaoLai(sReply));
+        // SRS-5.1zzzzr (thu-thuong11: "ok em" → "Để em kiểm tra giá giao dịch khu Phú Hòa Đông gần đây rồi báo lại chị nhé."): lưới
+        // lời hứa tự kiểm (lớp an toàn, luôn bật) trước đây chỉ chạy ở r2 — r3 cũng là lời model gửi chủ nhà.
+        if (sReply) sReply = apVan<string | null>(soVan, "boHuaTuKiemTra(r3)", sReply, boHuaTuKiemTra(sReply, null) || null);
         await doTien(client, r3.usage);
       } catch (e) {
         await ghiLoi(client, "chat-reply model r3(seller)", e);
@@ -8166,7 +8505,8 @@ Deno.serve(async (req) => {
       sReply ??
         (sellerMoi
           ? (lichSuRows.some((m) => !laTinNguoi(m.sender)) ? "Dạ, bất động sản của anh/chị" : "Dạ em chào anh/chị! Bất động sản của anh/chị") + " ở đâu vậy, ở Hồ Chí Minh đúng không ạ?"
-          : "Dạ em ghi nhận rồi ạ, em kiểm tra rồi báo lại anh/chị liền nha."),
+          // SRS-5.1zzzzr: câu dự phòng không hứa "kiểm tra rồi báo lại" — không có việc nào đi kèm lời hứa đó.
+          : `Dạ em ghi nhận rồi ạ.`),
     ]);
   }
 
@@ -8682,7 +9022,7 @@ Deno.serve(async (req) => {
     return ` · chủ tả: "${mt.length > 200 ? mt.slice(0, 199).replace(/\s+\S*$/, "") + "…" : mt}"`;
   };
   const dongKho = (l: CanRow) =>
-    `#${l.code} · ${locLienHe(l.location_raw ?? "")} ${l.ward ?? ""} · ${l.price_raw ?? "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l)}${duAnNgan(l)}${ganTxt(l)}${tienIchNgan(l)}${chuTa(l)}`;
+    `#${l.code} · ${locLienHe(l.location_raw ?? "")} ${l.ward ?? ""} · ${l.price_raw ? donViGiaDep(l.price_raw) : "giá đang cập nhật"} · ${l.area_m2 ?? "?"}m2${l.bedrooms ? ` · ${l.bedrooms}PN` : ""}${thongSoNgan(l)}${duAnNgan(l)}${ganTxt(l)}${tienIchNgan(l)}${chuTa(l)}`;
   const kho = ((listings ?? []) as CanRow[]).map(dongKho).join("\n");
 
   // Khối "căn khách đang nhắc" (FR-29): đủ chi tiết + facts đã xác minh + trạng
@@ -9232,7 +9572,7 @@ Deno.serve(async (req) => {
       if (gnErr) await ghiLoi(client, "chat-reply can gan ngan sach", gnErr.message);
       const l0 = ((gn ?? []) as CanRow[])[0];
       if (l0 && !out.replies.some((r) => boDau(r).includes(boDau(l0.code)))) {
-        const moTa = [`${locLienHe(l0.location_raw ?? "").trim()} ${l0.ward ?? ""}`.trim(), l0.price_raw, l0.area_m2 ? `${Number(l0.area_m2)}m2` : null, l0.bedrooms ? `${l0.bedrooms}PN` : null]
+        const moTa = [`${locLienHe(l0.location_raw ?? "").trim()} ${l0.ward ?? ""}`.trim(), l0.price_raw ? donViGiaDep(l0.price_raw) : null, l0.area_m2 ? `${Number(l0.area_m2)}m2` : null, l0.bedrooms ? `${l0.bedrooms}PN` : null]
           .filter(Boolean).join(" · ");
         out.replies = [...out.replies, `Gần tầm giá nhất bên em có căn #${l0.code} · ${moTa}, ${ac} muốn xem thử không ạ?`];
         console.log(`chat-reply: gợi căn gần ngân sách ${l0.code}`);
@@ -9248,7 +9588,7 @@ Deno.serve(async (req) => {
     const daNoiCan = dsKho.some((l) => vb.includes(boDau(l.code)) || (() => { const dc = boDau(l.location_raw ?? ""); return dc.length >= 5 && vb.includes(dc); })());
     if (!daNoiCan && out.replies.some((r) => laHuaCoHangCau(r, false))) {
       const l0 = dsKho[0];
-      const moTa = [`${locLienHe(l0.location_raw ?? "").trim()} ${l0.ward ?? ""}`.trim(), l0.price_raw, l0.area_m2 ? `${Number(l0.area_m2)}m2` : null, l0.bedrooms ? `${l0.bedrooms}PN` : null]
+      const moTa = [`${locLienHe(l0.location_raw ?? "").trim()} ${l0.ward ?? ""}`.trim(), l0.price_raw ? donViGiaDep(l0.price_raw) : null, l0.area_m2 ? `${Number(l0.area_m2)}m2` : null, l0.bedrooms ? `${l0.bedrooms}PN` : null]
         .filter(Boolean).join(" · ");
       const chan = chanHuaCoHang(out.replies, `em có căn #${l0.code} · ${moTa}, ${cachGoiKhach(goiMua, prefs.nhom_tuoi)} xem thử nha?`, false);
       if (chan.daChan) {
@@ -9376,7 +9716,8 @@ Deno.serve(async (req) => {
   // 22/09/2026 (bộ đo giọng, ca M01/M02/M06 chạy model giả): câu dò tiền định "Anh/chị cho em xin thêm…"
   // và mọi câu model ở nhánh MUA chưa đi qua bộ lọc gạch chéo như nhánh bán (1952) → khách mua chưa
   // biết nam/nữ vẫn đọc "anh/chị". Cùng một lưới cho hai nhánh.
-  if (luatDuMua && !goiMua) out.replies = out.replies.map(boGachCheo); mocMua("boGachCheo");
+  // SRS-5.1zzzzj: gạch chéo là chữ in, không phải văn phong — luôn chuẩn (cùng luật nhánh bán).
+  if (!goiMua) out.replies = out.replies.map(boGachCheo); mocMua("boGachCheo");
   // 02/10/2026 (bắn thật thu-trl-04: khách xưng "mình", bot "Dạ được chị ơi"): nhánh mua chưa có lưới đoán giới tính như
   // nhánh bán — dùng chung `boGoiDoanGioi`.
   if (luatDuMua && !goiMua) out.replies = out.replies.map(boGoiDoanGioi); mocMua("boGoiDoanGioi");
@@ -9402,7 +9743,7 @@ Deno.serve(async (req) => {
       const ten = (l.location_raw ? tenDuong(l.location_raw) : "") || l.ward || "";
       const dong = [
         [ten, l.ward].filter((x, i, a) => x && a.indexOf(x) === i).join(" "),
-        l.price_raw, l.area_m2 ? `${l.area_m2}m²` : null, l.floors_text, l.bedrooms ? `${l.bedrooms} phòng ngủ` : null,
+        l.price_raw ? donViGiaDep(l.price_raw) : null, l.area_m2 ? `${l.area_m2}m²` : null, l.floors_text, l.bedrooms ? `${l.bedrooms} phòng ngủ` : null,
       ].filter(Boolean).join(" · ");
       return { code: l.code, ten, dong };
     });
@@ -9530,7 +9871,7 @@ Deno.serve(async (req) => {
       if (l.code && ten) nhanCan[l.code.toUpperCase()] = ten;
     }
     const truocMa = [...replies];
-    replies.splice(0, replies.length, ...boMaTinKhach(replies, nhanCan).map(luatDuMua ? boGachDai : (x: string) => x));
+    replies.splice(0, replies.length, ...boMaTinKhach(replies, nhanCan).map(boGachDai));
     apVan(soVan, "boMaTinKhach+boGachDai", truocMa, replies);
   }
   let photos: string[] = [];
@@ -9977,7 +10318,7 @@ Deno.serve(async (req) => {
         const { data: bSau, error: bSauErr } = await client.from("buyers")
           .select("preferences").eq("id", buyer.id).maybeSingle();
         if (bSauErr) await ghiLoi(client, "chat-reply bao_lai_da_luu(buyers)", bSauErr.message);
-        const bong = vuaLuuMua(prefs, (bSau as { preferences?: Record<string, unknown> } | null)?.preferences, [...BUYER_PROFILE_FIELDS, ...Object.entries(NHAN_TU_VAN)]);
+        const bong = vuaLuuMua(prefs, (bSau as { preferences?: Record<string, unknown> } | null)?.preferences, [...BUYER_PROFILE_FIELDS, ...Object.entries(NHAN_TU_VAN)], text);
         // Qua bộ lọc liên hệ như mọi bong bóng gửi người mua (FR-105) — ghi chú hoàn cảnh do model viết.
         if (bong) {
           // 💾 đã báo lưu gì → "Dạ chị, em ghi lại: mua nhà Quận 5 tầm 7 tỷ…" là ghi nhận lần hai.
@@ -9985,7 +10326,7 @@ Deno.serve(async (req) => {
           replies.splice(0, replies.length, locLienHe(bong), ...conLai);
         } else {
           // 24/09/2026 (chủ dự án): tin không bóc được gì cũng nói ra. SRS-5.1zzzf: trừ khi tin là câu trả lời câu hỏi vai.
-          replies.unshift(dangTraLoiHoiVai && hoiMua ? traLoiCauBot(cauVaiDaHoi, "đang tìm mua / thuê, em đi hàng người mua") : KHONG_BOC);
+          replies.unshift(dangTraLoiHoiVai && hoiMua ? traLoiCauBot(cauVaiDaHoi, "đang tìm mua / thuê, em đi hàng người mua", text) : KHONG_BOC);
         }
       }
     } catch (e) {

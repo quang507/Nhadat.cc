@@ -94,7 +94,8 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
   const laHua = (c: string) => laHuaCoHang(c, hoiHang) || aiKd.some((a) => boDau(c).includes(a));
   // 30/09/2026 (bắn thật lx-mua-e2): model đã tự nói thật "Hiện em chưa có căn nào sẵn…" mà câu hứa bên cạnh vẫn bị thay
   // bằng lời thật → khách đọc "chưa có căn" hai lần liền. Đã có câu nói thật thì chỉ bỏ câu hứa, không chèn thêm.
-  let daChen = replies.some((r) => tachCau(r).some((c) => !laHua(c) && /\bchua co (?:can|tin|nha|lo)\b/.test(boDau(c))));
+  const laNoiThat = (c: string) => !laHua(c) && /\bchua co (?:can|tin|nha|lo)\b/.test(boDau(c));
+  let daChen = replies.some((r) => tachCau(r).some(laNoiThat));
   const ra: string[] = [];
   for (const r of replies) {
     const giu: string[] = [];
@@ -103,7 +104,10 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
       // khu nào …?" — câu đầu khớp mẫu, bị thay bằng lời thật; câu thứ hai nói CÙNG điều sai bằng chữ mẫu chưa có, nên còn nguyên
       // cạnh lời thật: "chưa có căn nào khớp … Em đang lọc căn 2 lầu …". Một lời đã sai về KHO thì cả phần kể sau nó dựng trên
       // tiền đề sai: sau câu sai đầu tiên chỉ giữ CÂU HỎI (khách vẫn được hỏi tiếp), bỏ mọi câu kể — không đoán câu nào là hứa.
-      if (daChan && !/\?/.test(c)) continue;
+      // SRS-5.1zzzzu (bắn production 10/10, thu-cmp46-4): "Dạ em lọc trong kho rồi ạ. Hiện bên em chưa có căn nào khớp…" — câu đầu khớp
+      // mẫu, câu nói thật ĐỨNG SAU nó bị luật "bỏ mọi câu kể" cuốn đi, mà vì đã có câu nói thật nên lời thật không chèn → khách không
+      // nhận được chữ nào. Câu nói thật (chưa có căn) chính là lời thay thế: luôn giữ.
+      if (daChan && !/\?/.test(c) && !laNoiThat(c)) continue;
       if (!laHua(c)) { giu.push(c); continue; }
       daChan = true;
       if (!daChen) {
@@ -115,6 +119,7 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
     const moi = giu.join(" ").trim();
     if (moi) ra.push(moi);
   }
+  if (daChan && !ra.length) ra.push(`Dạ ${loiThat}`);
   return daChan ? { replies: ra, daChan } : { replies, daChan };
 }
 
@@ -461,6 +466,9 @@ export function laLoiMeta(text: string): boolean {
   const t = (text ?? "").trim();
   if (!t) return false;
   const kd = boDau(t);
+  // SRS-5.1zzzzp (bắn production 09/10): "Tôi hiểu rõ:\n\n- **Không ghi nhận lại** … Tôi sẵn sàng viết tin" — dấu hiệu HÌNH THỨC,
+  // không phải từ khoá nội dung: bot không bao giờ xưng "tôi" mở câu, không bao giờ in đậm markdown trong tin Zalo.
+  if (/\*\*[^*\n]+\*\*/.test(t) || /(?:^|[.!?:\n]\s*)toi\s/.test(kd)) return true;
   if (/\b(san sang nhan|em hieu roi a|cau hoi cuoi (?:tin )?(?:la|bat buoc)|\d+\s*[–-]\s*\d+ tu\b|khuon cau|theo luat phi|huong dan he thong|cau lenh|hoi thoai\b.*\bcho chu nha|ngoi thu|system prompt)\b/.test(kd)) return true;
   // Nói về "chủ nhà"/"khách" ở ngôi thứ ba kèm động từ chỉ đạo → đang đọc lại lời dặn.
   return /\b(chu nha|khach)\b/.test(kd) && /\b(hoi nguoc|tra loi truoc|mot tin duy nhat|viet mot tin|khong lap)\b/.test(kd);
@@ -630,6 +638,29 @@ export function giuCauDungTen(msg: string, cauMau: string): string {
  * ("📝 Em ghi nhận: …\nSai chỗ nào … nhắn lại") được tách theo dòng rồi theo câu; dòng nào không
  * mất câu nào thì giữ nguyên chữ gốc. Không bỏ gì thì trả đúng mảng cũ (so `===` được).
  */
+/**
+ * SRS-5.1zzzzu (bắn production 10/10, thu-cmp45-4): van bỏ câu "Dạ em lọc rồi, hiện bên em chưa có căn nào khớp…" thì câu sau nó
+ * "Nhưng em sẽ theo sát…" thành bong bóng mở bằng từ nối trỏ về câu đã mất. Mọi chỗ BỎ CÂU đi qua đây: câu giữ lại mà câu ngay trước nó
+ * vừa bị bỏ thì gọt từ nối đối lập ở đầu (nhưng / tuy nhiên / thế nhưng / song / mà). Không đổi chữ nào khác.
+ */
+const TU_NOI_DAU = /^(?:nhưng mà|nhưng|tuy nhiên|thế nhưng|song|mà)\s*,?\s+/iu;
+export function goTuNoiDau(c: string): string {
+  const m = c.match(TU_NOI_DAU);
+  if (!m) return c;
+  const r = c.slice(m[0].length);
+  return r ? r.charAt(0).toLocaleUpperCase("vi") + r.slice(1) : c;
+}
+/** Lọc câu theo `bo`; câu giữ mà câu liền trước bị bỏ thì gọt từ nối đầu (`goTuNoiDau`). */
+export function locCauGotNoi(cac: string[], bo: (cau: string) => boolean): string[] {
+  const giu: string[] = [];
+  let truocBo = false;
+  for (const c of cac) {
+    if (bo(c)) { truocBo = true; continue; }
+    giu.push(truocBo ? goTuNoiDau(c) : c);
+    truocBo = false;
+  }
+  return giu;
+}
 function locCauTrongBongBong(replies: string[], bo: (cau: string) => boolean): string[] {
   let daBo = false;
   const ra: string[] = [];
@@ -637,7 +668,7 @@ function locCauTrongBongBong(replies: string[], bo: (cau: string) => boolean): s
     const dongMoi: string[] = [];
     for (const dong of r.split("\n")) {
       const cac = tachCau(dong);
-      const giu = cac.filter((c) => !bo(c));
+      const giu = locCauGotNoi(cac, bo);
       if (giu.length === cac.length) { dongMoi.push(dong); continue; }
       daBo = true;
       const gop = giu.join(" ").trim();
@@ -768,12 +799,19 @@ export function laKetCauBia(menhDe: string, bangChung: string): boolean {
   }
   return /\blung\b/.test(kd) && !/\b(?:lung|gac)\b/.test(bc);
 }
-export function boKhenKhongCanCu(replies: string[], bangChung: string): string[] {
+/**
+ * `chiSoDo` (SRS-5.1zzzzp): lượt AI soát nhận xét (`kiem-khen.ts`) đã chạy xong cho lời này — AI là chủ phần "khen có căn cứ
+ * không", danh sách từ khoá bên dưới chỉ là lưới đỡ khi AI hỏng. Chạy cả hai thì từ khoá cắt nhầm lời AI đã cho qua (bắn
+ * production 09/10: "Anh chụp giúp em vài tấm mặt tiền, sổ và hẻm được không ạ?" → "Sổ và hẻm được không ạ?" — "mặt tiền" ở
+ * đây là chỗ chụp ảnh, không phải lời khen). Số đo / kết cấu bịa là so SỐ tất định, vẫn soát.
+ */
+export function boKhenKhongCanCu(replies: string[], bangChung: string, chiSoDo = false): string[] {
   const bc = boDau(bangChung ?? "");
   return locCauTrongBongBong(replies, (c) => {
     if (laSoDoBia(c, bangChung) && !/\?\s*$/.test(c)) return true;
     if (/\?/.test(c)) return false;
     if (laKetCauBia(c, bangChung)) return true;
+    if (chiSoDo) return false;
     const kd = boDau(c);
     return KHEN_CAN_BANG_CHUNG.some(([khen, chung]) => khen.test(kd) && !chung.test(bc));
   });
@@ -796,23 +834,25 @@ function hemNhoTrong(kd: string): boolean {
 const VAO_NHA_KD = /\b(?:vao tan nha|vao toi nha|vao nha|vao tan cua|vao trong nha|dau trong nha|de xe (?:hoi )?trong nha)\b/;
 const VAO_NHA_CHUNG = /\b(?:vao (?:tan |toi |duoc |trong )?nha|trong nha|gara|ga ra|garage|dau trong nha)\b/;
 /** Mệnh đề khen không có căn cứ (lời MODEL, không phải bảng đọc từ DB). */
-export function laKhenSai(menhDe: string, bangChung: string): boolean {
+export function laKhenSai(menhDe: string, bangChung: string, chiSoDo = false): boolean {
   if (laSoDoBia(menhDe, bangChung)) return true;
   if (/\?/.test(menhDe)) return false;
   if (laKetCauBia(menhDe, bangChung)) return true;
+  if (chiSoDo) return false;
   const kd = boDau(menhDe);
   const bc = boDau(bangChung ?? "");
   if (VAO_NHA_KD.test(kd) && !VAO_NHA_CHUNG.test(bc)) return true;
   if (KHEN_KD.test(kd) && (hemNhoTrong(kd) || (/\bhem\b/.test(kd) && hemNhoTrong(bc) && !/\b(?:mat tien|xe hoi|o to|oto)\b/.test(bc)))) return true;
   return KHEN_CAN_BANG_CHUNG.some(([khen, chung]) => khen.test(kd) && !chung.test(bc));
 }
-export function boMenhDeKhenSai(replies: string[], bangChung: string): string[] {
+/** `chiSoDo`: xem `boKhenKhongCanCu` (SRS-5.1zzzzp). */
+export function boMenhDeKhenSai(replies: string[], bangChung: string, chiSoDo = false): string[] {
   const ra: string[] = [];
   for (const r of replies) {
     const dong = r.split("\n").map((d) => tachCau(d).map((c) => {
       const cacMd = c.split(/,\s+/);
-      if (cacMd.length === 1) return laKhenSai(c, bangChung) ? "" : c;
-      const giu = cacMd.filter((md) => !laKhenSai(md, bangChung));
+      if (cacMd.length === 1) return laKhenSai(c, bangChung, chiSoDo) ? "" : c;
+      const giu = cacMd.filter((md) => !laKhenSai(md, bangChung, chiSoDo));
       if (giu.length === cacMd.length) return c;
       const gop = giu.join(", ").trim();
       // Bắn thật lx-24: vế chính bị cắt, còn trơ "Khách chuộng lắm." — mẩu khen không chủ ngữ thì bỏ luôn.
@@ -965,7 +1005,9 @@ export function boCauHuaLoc(replies: string[]): string[] {
  * cột điện hay hố ga có chạy qua lô không nha?" — bot không có cách nào kiểm; người nói chuyện là chủ nhà. Câu bot tự hứa kiểm /
  * xác minh bị bỏ; câu bị bỏ là câu hỏi duy nhất thì hỏi lại bằng `thay` (câu mẫu của ô kế).
  */
-const HUA_TU_KIEM_RE = /\b(?:de\s+)?em\s+(?:se\s+|di\s+)?(?:kiem tra|check|xac minh|kiem chung|tim hieu|ra soat|coi lai|xem lai giup)\b/;
+// SRS-5.1zzzzr: thêm "tra (giúp / cứu)", "gọi điện", "đi / qua / ghé xem" — việc bot không tự làm được (prompt TONE_RULES nói cùng
+// một danh sách). "em trả lời" (tra loi) và "em gọi anh là" không phải lời hứa.
+const HUA_TU_KIEM_RE = /\b(?:de\s+)?em\s+(?:se\s+|di\s+)?(?:kiem tra|check|xac minh|kiem chung|tim hieu|ra soat|coi lai|xem lai giup|tra(?!\s+loi)(?:\s+(?:giup|cuu|thu))?|goi dien|di xem|qua xem|ghe xem)\b/;
 export function boHuaTuKiemTra(reply: string, thay: string | null): string {
   const cac = tachCau(reply);
   const giu = cac.filter((c) => !HUA_TU_KIEM_RE.test(boDau(c)));
@@ -1300,15 +1342,29 @@ export function thayCauHoiLech(reply: string, khoa: string | null | undefined, c
 // FR-240 e (phát lại lần ba, v264): "Em cảm ơn anh, đã ghi đủ thông tin rồi ạ." khi tin mới có tên đường — tin chưa lên là
 // còn thiếu, "đủ thông tin" là nói sai. "Dạ em ghi đủ rồi ạ" (đủ những gì khách vừa nói — ví dụ mẫu FR-178) giữ.
 // 30/09/2026 (chủ dự án chat thử): lượt đầu "em cần bán nhà" → "mình đã tạo tin rồi" khi chưa có gì — cùng loại hứa.
-const DA_DANG_RE = /\b(?:da|vua)\s+tao\s+(?:tin|bai)\b|\btao\s+tin\s+(?:roi|xong)\b|\b(?:ghi|co|nhan|lay)\s+(?:du|day du)\s+thong\s+tin\b|\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b|\btin\s+(?:minh\s+|nha\s+minh\s+|cua\s+\w+\s+)?(?:da|vua)\s+(?:len|dang|duoc dang)\b|\btin\s+(?:minh\s+)?len\s+roi\b|(?<!\b(?:la|thi|xong|de|roi|khi|sau do)\s)\bem\s+(?:se\s+)?(?:dang|up|dua len|len tin|len ke)\s+(?:tin\s+)?(?:lien|ngay|luon)\b/;
+const DA_DANG_RE = /\b(?:da|vua)\s+tao\s+(?:tin|bai)\b|\btao\s+tin\s+(?:roi|xong)\b|\b(?:ghi|co|nhan|lay)\s+(?:du|day du)\s+thong\s+tin\b|\b(?:da|vua|em da|em vua)\s+(?:dang|up|dua)\b|\b(?:da|vua)\s+len\s+(?:web|trang|ke|tin)\b|\blen\s+(?:web|trang|ke|tin)\s+(?:roi|luon|ngay)\b|\bdang\s+rao\b|\btin\s+(?:minh\s+|nha\s+minh\s+|cua\s+\w+\s+)?(?:da|vua)\s+(?:len|dang|duoc dang)\b|\btin\s+(?:minh\s+)?len\s+roi\b|\b(?:da|vua)\s+(?:duoc\s+)?(?:kiem\s+)?duyet\b|\b(?:da|vua)\s+len\s+san\b|\blen\s+san\s+(?:roi|luon|ngay)\b|\btin\s+(?:\w+\s+){0,2}len\s+san\b|(?<!\b(?:la|thi|xong|de|roi|khi|sau do)\s)\bem\s+(?:se\s+)?(?:dang|up|dua len|len tin|len ke)\s+(?:tin\s+)?(?:lien|ngay|luon)\b/;
 // 03/10/2026 (bắn thử thu-mc-06, SRS-5.1zn): "…khách hỏi nhiều lắm, em đăng liền nha :)" khi tin còn thiếu thông tin — HỨA đăng
 // ngay cũng sai như nói "đã đăng". Câu có điều kiện ("nhắn em mấy thông tin đó LÀ em đăng liền") vẫn giữ.
 // 03/10/2026 (bắn thử thu-dc-09, SRS-5.1zj): "Chào mình! Tin đã lên rồi nha." khi tin còn chờ thông tin — chủ ngữ "tin" ĐỨNG
 // TRƯỚC ("tin đã lên", "tin vừa đăng") lọt luật cũ (chỉ bắt "đã lên web / kệ / tin").
+// SRS-5.1zzzzu (bắn production 10/10, thu-cmp45-3): chủ nhà hỏi "sao chị biết em không lừa" → model "tin chị lên sàn em đã được kiểm
+// duyệt kỹ lắm" khi tin chưa lên kệ — "lên sàn", "đã (được) duyệt" là cùng một khẳng định trạng thái, chủ cũ không có chữ đó.
+/**
+ * Một vế có KHẲNG ĐỊNH trạng thái tin không: khớp mẫu, không phải câu hỏi, không phủ định, và không phải lời hứa CÓ ĐIỀU KIỆN ("đủ thông
+ * tin LÀ EM SẼ đăng lên web ngay" — SRS-5.1zzzzk: trước đây vế này khớp "lên web ngay" và chỉ thoát nhờ `boHuaDaDang` trả lại lời gốc).
+ */
+const laMenhDeDaDang = (md: string): boolean => {
+  const kd = boDau(md);
+  return !/\?/.test(md) && DA_DANG_RE.test(kd) && !/\b(?:chua|khong)\b/.test(kd) &&
+    !/\b(?:la|thi|xong|khi|neu|de|sau do)\s+(?:em|minh|ben em)\s+(?:se\s+)?(?:dang|up|dua|len)\b/.test(kd) &&
+    // "giá mình đang rao là 15 tỷ" — "giá rao" là GIÁ CHÀO, không phải trạng thái tin.
+    !/\bgia\b[^.!?]{0,20}\bdang rao\b/.test(kd);
+};
+/** Các vế của một bong bóng — ngắt câu như `tachCau`, thêm mặt cười / emoji (Zalo) và dấu phẩy. Dùng chung cho dò và bỏ. */
+const veDaDang = (dong: string): string[] => tachCau(dong).flatMap((c) => c.split(/(?<=:\)|:D|=\)|\p{Extended_Pictographic})\s+/u)).flatMap((c) => c.split(/,\s+/));
 /** Lời có mệnh đề KHẲNG ĐỊNH trạng thái tin (đã đăng / đang rao / lên kệ…) — để nơi gọi quyết có cần đối chiếu DB không. */
 export function coMenhDeDaDang(replies: string[]): boolean {
-  return replies.some((r) => !/^\s*(?:🤖|💾|📝|📋)/u.test(r) &&
-    r.split(/\n|(?<=[.!?…])\s+|,\s+/).some((md) => !/\?/.test(md) && DA_DANG_RE.test(boDau(md)) && !/\b(?:chua|khong)\b/.test(boDau(md))));
+  return replies.some((r) => !/^\s*(?:🤖|💾|📝|📋)/u.test(r) && r.split("\n").some((d) => veDaDang(d).some(laMenhDeDaDang)));
 }
 export function boHuaDaDang(replies: string[]): string[] {
   const ra: string[] = [];
@@ -1317,7 +1373,7 @@ export function boHuaDaDang(replies: string[]): string[] {
     // ":)" / emoji cũng là chỗ ngắt câu trong tin Zalo ("… rồi :) Em tra thấy …").
     const dong = r.split("\n").map((d) => tachCau(d).flatMap((c) => c.split(/(?<=:\)|:D|=\)|\p{Extended_Pictographic})\s+/u)).map((c) => {
       // 06/10/2026 (SRS-5.1zzo): vế phủ định ("không thấy tin nào đang rao") là lời thật, giữ như vế "chưa".
-      const laSai = (md: string) => !/\?/.test(md) && DA_DANG_RE.test(boDau(md)) && !/\b(?:chua|khong)\b/.test(boDau(md));
+      const laSai = laMenhDeDaDang;
       const cacMd = c.split(/,\s+/);
       const giu = cacMd.filter((md) => !laSai(md));
       if (giu.length === cacMd.length) return c;
@@ -1327,7 +1383,9 @@ export function boHuaDaDang(replies: string[]): string[] {
     }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
     if (dong) ra.push(dong);
   }
-  return ra.length ? ra : replies;
+  // SRS-5.1zzzzk (bắn production 09/10: r1 "Em vừa đăng tin rồi ạ." với tin còn cho_thong_tin): bản cũ trả LẠI lời gốc khi bỏ hết
+  // chữ (để không gửi bong bóng rỗng) — tức là trả lại đúng câu sai. Bỏ hết thì trả mảng rỗng; nơi gọi tự có câu thay.
+  return ra;
 }
 
 // 27/09/2026 (chủ dự án test Zalo): "Chào em" → bot chào + hỏi vai → "Anh bán" → model "Dạ em chào anh! Anh muốn rao bán
@@ -1576,7 +1634,7 @@ export function boCauHoiLap(replies: string[], botTruoc: string | null | undefin
 const gonKhen = (s: string): string => boDau(s ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 /** Câu nhận xét (nguyên văn trong lời bot) KHÔNG có căn cứ thật → cần bỏ. */
 export function nhanXetKhongCanCu(
-  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null }> | null | undefined,
+  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null }> | null | undefined,
   bangChung: string,
 ): string[] {
   const bc = ` ${gonKhen(bangChung)} `;
@@ -1584,6 +1642,8 @@ export function nhanXetKhongCanCu(
   for (const x of ds ?? []) {
     const cau = (x?.cau ?? "").trim();
     if (!cau || /\?/.test(cau)) continue;
+    // SRS-5.1zzzzk: câu trạng thái tin có chủ riêng (lưới trạng thái ở đường ra, đối chiếu DB) — đúng thì giữ, sai thì lưới đó bỏ.
+    if (x?.noi_trang_thai_tin === true) continue;
     // SRS-5.1zzy (chat thử 07/10: "Khu Hà Huy Giáp đất vàng quận 12 anh"): AI trích "khu hà huy giáp" làm căn cứ — tên khu có thật
     // nhưng lời ĐÁNH GIÁ khu thì không. Bot không có số liệu thị trường: câu AI đánh dấu đánh giá thị trường luôn bỏ, căn cứ gì cũng vậy.
     if (x?.danh_gia_thi_truong === true) { bo.push(cau); continue; }
@@ -1604,6 +1664,37 @@ export function nhanXetKhongCanCu(
  * nước thải chưa?" là câu hỏi mẫu thật). Không bỏ gì thì trả đúng mảng cũ.
  */
 const HE_THONG_LAM_RE = /\bhe thong\s+(?:(?:da|vua|se|tu|dang|cung|co)\s+)*(?:gui|tra loi|bao|ghi|luu|nhan|cap nhat|ghi nhan)\b/;
+/**
+ * SRS-5.1zzzzj (bắn production 09/10/2026: "phí sao em" → "1% giá chốt" với người rao chưa nói mình là chủ hay môi giới). Con số
+ * phí thuộc về MỘT chủ: `cauPhi(vaiPhi(…))` (prompts.ts). Câu KHẲNG ĐỊNH trong lời gửi người rao có "phí" kèm con số phần trăm mà
+ * số đó không phải số của vai ĐÃ XÁC NHẬN (`phanTram`: "1" / "0,5" / null = không được nói số) → thay bằng `cauThay` (chính câu
+ * `cauPhi` sinh) ở câu đầu, bỏ các câu sau. Lưới chống bịa (luôn bật), không sửa văn. Không đụng câu hỏi (có "?") — câu hỏi là
+ * của `damBaoCauHoi`; không đụng bong bóng 🤖 / 📝 / 📋 / 💾 (chữ code từ DB).
+ */
+export function chanPhiChuaXacNhan(replies: string[], phanTram: string | null, cauThay: string): string[] {
+  const so = (x: string) => x.replace(".", ",").replace(/^0+(?=\d)/, "");
+  const sai = (c: string): boolean => {
+    // Câu nói về phí: có chữ phí / hoa hồng, hoặc con số % đi với giá chốt / giao dịch / vai ("chính chủ thì 1% giá chốt").
+    if (/\?/.test(c) || !/\b(?:phi|hoa hong|gia chot|giao dich|chinh chu|moi gioi)\b/.test(boDau(c))) return false;
+    const cac = [...c.matchAll(/(\d+(?:[.,]\d+)?)\s*%/g)].map((m) => so(m[1]));
+    return cac.length > 0 && cac.some((n) => n !== phanTram);
+  };
+  let daThay = false;
+  const ra: string[] = [];
+  for (const r of replies) {
+    if (/^\s*(?:🤖|💾|📝|📋)/u.test(r)) { ra.push(r); continue; }
+    const dong = r.split("\n").map((d) => tachCau(d).map((c) => {
+      if (!sai(c)) return c;
+      if (daThay) return "";
+      daThay = true;
+      const t = cauThay.trim();
+      return `Dạ ${t.charAt(0).toLowerCase()}${t.slice(1)}${/[.!]$/.test(t) ? "" : " ạ."}`;
+    }).filter(Boolean).join(" ").trim()).filter(Boolean).join("\n").trim();
+    if (dong) ra.push(dong);
+  }
+  return daThay ? ra : replies;
+}
+
 export function boCauNoiHeThong(replies: string[]): string[] {
   return locCauTrongBongBong(replies, (c) => !/\?/.test(c) && HE_THONG_LAM_RE.test(boDau(c)));
 }
@@ -1642,10 +1733,10 @@ export function boCauNhanXet(loi: string | null | undefined, cauBo: string[]): s
     let boCa = false;
     const dongMoi = s.split("\n").map((d) => {
       const cac = tachCau(d);
-      const giu = cac.filter((x) => {
+      const giu = locCauGotNoi(cac, (x) => {
         const bo = !/\?/.test(x) && boDau(x).includes(kdC);
         if (bo) boCa = true;
-        return !bo;
+        return bo;
       });
       return giu.length === cac.length ? d : giu.join(" ").trim();
     });

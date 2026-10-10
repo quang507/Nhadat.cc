@@ -6,7 +6,7 @@
 // tự nào, trong từng cảnh: Groq trả lời được · Groq 429 cả danh sách · Groq 400
 // (lỗi không phải nhịp) · lượt có ẢNH · đường cũ `claude`. Không gọi ra ngoài,
 // không tốn một đồng.
-import { bocDuPhong, giaiThamChieu, nguonGemini, nguonGroq } from "../supabase/functions/_shared/groq.ts";
+import { bocDuPhong, giaiThamChieu, goiCoHan, hanGoiMs, nenDoiSang, nguonGemini, nguonGroq } from "../supabase/functions/_shared/groq.ts";
 
 let dat = 0, hong = 0;
 const ok = (t) => { dat++; console.log(`✓ ${t}`); };
@@ -26,6 +26,7 @@ let goiClaude = []; // "create"/"parse" đã gọi
 let claudeNem = null; // Claude ném lỗi này nếu khác null
 let soGhiSo = 0;
 let thanCuoi = null; // body lượt gọi Groq gần nhất
+let treo = {}; // SRS-5.1zzzzo: model → treo (không trả lời) tới khi lượt gọi bị huỷ bằng `signal`
 
 globalThis.fetch = async (url, init) => {
   const laGemini = /generativelanguage\.googleapis\.com\/v1beta\/openai\/chat\/completions/.test(String(url));
@@ -33,6 +34,12 @@ globalThis.fetch = async (url, init) => {
   const than = JSON.parse(init.body);
   thanCuoi = than;
   goiGroq.push(than.model);
+  if (treo[than.model]) {
+    return await new Promise((_, nem) => {
+      if (!init.signal) return; // không có signal (bản cũ): treo mãi — bài đo sẽ bắt bằng hẹn giờ của chính nó
+      init.signal.addEventListener("abort", () => nem(Object.assign(new Error("The operation was aborted"), { name: "AbortError" })));
+    });
+  }
   const kb = kichBan[than.model] ?? 200;
   if (kb !== 200) return new Response(`loi ${kb}`, { status: kb });
   return new Response(JSON.stringify({
@@ -47,7 +54,7 @@ const claude = {
   },
 };
 const ghiSo = async () => { soGhiSo++; };
-const reset = () => { kichBan = {}; goiGroq = []; goiClaude = []; claudeNem = null; soGhiSo = 0; thanCuoi = null; };
+const reset = () => { kichBan = {}; goiGroq = []; goiClaude = []; claudeNem = null; soGhiSo = 0; thanCuoi = null; treo = {}; };
 const P = { messages: [{ role: "user", content: "xin chào" }], max_tokens: 200 };
 const P_ANH = { messages: [{ role: "user", content: [{ type: "image", source: {} }, { type: "text", text: "ảnh gì" }] }] };
 const DS = "m1,m2";
@@ -237,6 +244,44 @@ const KHUON_REF = {
   const c = bocDuPhong(claude, G, ghiSo);
   const r = await c.messages.create(P);
   la("không truyền thứ tự: giữ đường cũ Claude trước (tham số mặc định của hàm)", [chu(r), goiGroq], ["claude", []]);
+}
+
+// ── SRS-5.1zzzzo: HẠN mỗi lượt gọi (bắn production 09/10: lượt bóc tách 76–78 giây) ─────────────────────────────────────────────
+// Bản cũ: fetch dự phòng không hạn, SDK Anthropic chờ 10 phút + tự ngủ theo `retry-after`. Đo bằng đồng hồ thật, hạn thu nhỏ (200 ms).
+const voiHan = async (p, ms) => { const t0 = Date.now(); const kq = await Promise.race([p.then((r) => ({ r })), new Promise((ok) => setTimeout(() => ok({ treoQua: true }), ms))]); return { ...kq, ms: Date.now() - t0 }; };
+{
+  reset(); treo = { m1: true };
+  const c = bocDuPhong(claude, G, ghiSo, "groq", { hanMs: () => 2000 });
+  const k = await voiHan(c.messages.parse({ ...P, output_config: { format: { type: "json_schema", schema: { type: "object" } } } }), 6000);
+  la("HAN-01 nguồn dự phòng TREO (không trả lời) → hết hạn chuỗi dự phòng (2 s) thì sang Claude NGAY, không xoay m2, không ghi sổ lỗi",
+    [!!k.treoQua, chu(k.r), goiGroq, goiClaude, soGhiSo, k.ms >= 1900 && k.ms < 3500], [false, "claude", ["m1"], ["parse"], 0, true]);
+}
+{
+  reset(); kichBan = { m1: 429 }; treo = { m2: true };
+  const c = bocDuPhong(claude, G, ghiSo, "groq", { hanMs: () => 2000 });
+  const k = await voiHan(c.messages.create(P), 6000);
+  la("HAN-02 m1 chạm trần, m2 treo → cả chuỗi chung MỘT hạn (≈2 s, không cộng dồn) rồi Claude", [chu(k.r), goiGroq, goiClaude, k.ms < 3500], ["claude", ["m1", "m2"], ["create"], true]);
+}
+{
+  la("HAN-03 hạn theo trần chữ: bóc tách 2000 → 24 s, lời 512 → 12 s, nhỏ → 10 s, lớn → trần 30 s",
+    [hanGoiMs({ max_tokens: 2000 }), hanGoiMs({ max_tokens: 512 }), hanGoiMs({ max_tokens: 100 }), hanGoiMs({ max_tokens: 9000 })], [24000, 12096, 10000, 30000]);
+  la("HAN-04 quá hạn của SDK ('Request timed out', APIConnectionTimeoutError) là lỗi ĐỔI NGUỒN như quá tải",
+    [nenDoiSang(Object.assign(new Error("Request timed out."), { name: "APIConnectionTimeoutError" })), nenDoiSang(new Error("invalid_request_error"))], [true, false]);
+}
+{
+  // goiCoHan: SDK không tự thử lại (maxRetries 0); thử lại MỘT lần, ngủ ≤ 1,5 s dù máy chủ đòi 60 s; chỉ khi `thuLai`.
+  const ngu = []; const ghiNgu = async (ms) => { ngu.push(ms); };
+  let lan = 0; const tuyChon = [];
+  const goi529 = async (o) => { tuyChon.push(o); lan++; if (lan === 1) throw Object.assign(new Error("Overloaded"), { status: 529, headers: { "retry-after": "60" } }); return "ok"; };
+  const r1 = await goiCoHan(goi529, 20000, true, ghiNgu);
+  la("HAN-05 Claude 529 (máy chủ đòi chờ 60 s) → thử lại MỘT lần sau ≤ 1,5 s, SDK luôn maxRetries 0, có hạn timeout",
+    [r1, lan, ngu.length, ngu[0] <= 1500, tuyChon.every((o) => o.maxRetries === 0 && o.timeout > 0 && o.timeout <= 20000)], ["ok", 2, 1, true, true]);
+  lan = 0; ngu.length = 0;
+  let loi = null; try { await goiCoHan(goi529, 20000, false, ghiNgu); } catch (e) { loi = e.status; }
+  la("HAN-06 có dự phòng đứng sau (thuLai = false) → KHÔNG ngủ, ném ngay để đổi nguồn", [loi, lan, ngu.length], [529, 1, 0]);
+  lan = 0; ngu.length = 0;
+  loi = null; try { await goiCoHan(async () => { lan++; throw Object.assign(new Error("Your credit balance is too low"), { status: 400 }); }, 20000, true, ghiNgu); } catch (e) { loi = e.status; }
+  la("HAN-07 hết tiền → không thử lại (thử lại không chữa được)", [loi, lan, ngu.length], [400, 1, 0]);
 }
 
 console.log(`\n${dat} đạt, ${hong} hỏng`);

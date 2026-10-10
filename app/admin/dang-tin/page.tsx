@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { TYPE_LABEL } from "@/lib/format";
-import { WARDS } from "@/lib/geo"; // một danh sách phường cho cả web (FR-171 j)
+import { PHUONG_MOI } from "@/bot/supabase/functions/_shared/extraction/ds-phuong";
 import UploadAnh from "@/components/UploadAnh";
 
 const NGUON = [
@@ -46,7 +46,11 @@ const TRANG_THAI = [
 // Trước đây tự đếm 1..16 — "Phường 16" không có trong WARD_CENTROIDS nên trang
 // tin không vẽ được bản đồ và không vào trang tag phường nào (FR-171 j gọi đích
 // danh bản 16 này là một trong bốn bản lệch).
-const PHUONG = WARDS;
+// SRS-5.1zzzzj (09/10/2026): cột `listings.ward` chỉ nhận tên phường MỚI (`wards.ten_day_du`) — DB để trống + ghi sổ lỗi mọi chữ
+// khác (20261009b). Danh sách cũ "Phường 1–15" (Quận 5 cũ) sẽ bị DB xoá ngay khi lưu, nên chọn trong 168 phường / xã mới, kèm quận cũ.
+const PHUONG: Array<[string, string]> = [...PHUONG_MOI]
+  .sort((a, b) => a[2].localeCompare(b[2], "vi") || a[0].localeCompare(b[0], "vi"))
+  .map(([, tenDu, quanCu]) => [tenDu, `${tenDu} (${quanCu} cũ)`]);
 
 type Ng = { id: string; name: string | null; seller_type: string; active_count: number; rank: string };
 
@@ -193,8 +197,8 @@ export default function Page() {
             <Chon nhan="Hình thức" giaTri={deal} doi={setDeal}
               chon={[["ban", "Bán"], ["cho_thue", "Cho thuê"]]} />
             <Chon nhan="Loại bất động sản" giaTri={loai} doi={setLoai} chon={LOAI} />
-            <Chon nhan="Phường (khu Quận 5 cũ)" giaTri={ward} doi={setWard}
-              chon={[["", "- chưa rõ -"], ...PHUONG.map((p) => [p, p] as [string, string])]} />
+            <Chon nhan="Phường / xã (tên mới)" giaTri={ward} doi={setWard}
+              chon={[["", "- chưa rõ -"], ...PHUONG]} />
             <O nhan="Quận / huyện, tỉnh" giaTri={quan} doi={setQuan}
               goiY="VD: Quận 5 · Quận Tân Bình · Bến Lức, Long An" />
             <O nhan="Địa chỉ / tên đường" giaTri={diaChi} doi={setDiaChi}

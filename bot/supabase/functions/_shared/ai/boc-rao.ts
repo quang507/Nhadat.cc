@@ -53,7 +53,7 @@ const HoiLai = z.object({
 // NGHĨA cả câu (có ngữ cảnh), code kiểm trích dẫn rồi mới báo admin (`docCamXuc`).
 export const MUC_CAM_XUC = ["binh_thuong", "buc", "nghi_ngo", "muon_dung"] as const;
 const CamXuc = z.object({
-  muc: z.enum(MUC_CAM_XUC).describe("binh_thuong ('ngộp ngân hàng', 'kẹt bank', 'cắt lỗ' là áp lực TIỀN của chủ nhà, không phải bực với bot); buc = bực, cáu, chê bot hỏi nhiều / hỏi hoài; nghi_ngo = nghi lừa đảo, không tin, sợ mất tiền / mất thông tin; muon_dung = bảo thôi, không rao nữa, đừng nhắn nữa. 'Bận', 'để mai' thôi chưa phải bực."),
+  muc: z.enum(MUC_CAM_XUC).describe("binh_thuong ('ngộp ngân hàng', 'kẹt bank', 'cắt lỗ' là áp lực TIỀN của chủ nhà, không phải bực với bot); buc = bực, cáu, chê bot hỏi nhiều / hỏi hoài; nghi_ngo = nghi lừa đảo, không tin, sợ mất tiền / mất thông tin — kể cả hỏi vặn ('sao chị biết em không lừa', 'bên em có phải lừa đảo không', 'làm sao tin được', 'đưa thông tin rồi ai chịu trách nhiệm'): đó là nghi ngờ, KHÔNG phải binh_thuong; muon_dung = bảo thôi, không rao nữa, đừng nhắn nữa. 'Bận', 'để mai' thôi chưa phải bực."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ thể hiện cảm xúc đó. binh_thuong thì null."),
 });
 // 01/10/2026 (chủ dự án: "câu hỏi riêng cho từng loại bds… code cứng quá nên giờ cần AI hiểu"): bảng câu theo loại (required_facts)
@@ -68,7 +68,7 @@ const YDinh = z.object({
 });
 export const VAI_NGUOI_RAO = ["khong_noi", "chinh_chu", "moi_gioi"] as const;
 const Vai = z.object({
-  la: z.enum(VAI_NGUOI_RAO).describe("Người nhắn TỰ NÓI mình là ai: chinh_chu = chủ nhà / nhà của mình / không phải môi giới; moi_gioi = tự nhận là môi giới, sale, bán giúp chủ, nhận ký gửi ('anh là môi giới nha', 'em bên sàn X', 'mình làm sale', 'hàng ký gửi của khách') — câu tự giới thiệu kết bằng 'nha/nhé/ạ' vẫn là tự nói vai. Nhắc tới môi giới KHÁC ('mấy bên môi giới hối chị'), hỏi về môi giới → khong_noi."),
+  la: z.enum(VAI_NGUOI_RAO).describe("Người nhắn TỰ NÓI mình là ai, bằng chữ GỌI TÊN vai: chinh_chu = 'chính chủ' / 'anh là chủ' / 'nhà của chị' / 'không phải môi giới' (có nhà, muốn bán, 'chú có căn nhà', 'sổ hồng chính chủ' KHÔNG phải tự nói vai → khong_noi); moi_gioi = tự nhận là môi giới, sale, bán giúp chủ, nhận ký gửi ('anh là môi giới nha', 'em bên sàn X', 'mình làm sale', 'hàng ký gửi của khách') — câu tự giới thiệu kết bằng 'nha/nhé/ạ' vẫn là tự nói vai. Nhắc tới môi giới KHÁC ('mấy bên môi giới hối chị'), hỏi về môi giới → khong_noi."),
   trich_dan: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN người nhắn tự nói vai mình. khong_noi thì null."),
 });
 // 02/10/2026 (test tay chủ dự án, SRS-5.1ze): "Ừ anh đang muốn bán căn nhà…" → bot gọi "anh chị" suốt hội thoại: luật tự xưng
@@ -153,6 +153,8 @@ KHOÁ:
 - quan: ghi đủ "Quận 5", "Quận Phú Nhuận", "Huyện Bình Chánh", "TP Thủ Đức". phuong, duong, ma_can. quan / phuong / duong là NƠI CĂN NHÀ
   NẰM — nơi GẦN đó, nơi đi tới, nơi chủ nhà ở / chuyển tới thì KHÔNG đưa ("ra Quận 1 có 5 phút", "gần chợ Bến Thành", "bán vì chuyển qua quận 7").
 - phuong: ĐỌC THEO NGHĨA, không cần chữ "phường / xã" đứng trước — "nhà ở Vĩnh Lộc B", "bên Thảo Điền", "an hoi tay", gõ sai một hai chữ đều là nói phường. Trả tên phường MỚI ĐẦY ĐỦ đúng như DANH SÁCH PHƯỜNG gửi kèm tin nhắn (chỉ gồm các phường câu khách có thể đang nhắc; không có danh sách thì chỉ đưa phuong khi khách nói rõ "phường / xã X") ("Phường An Hội Tây", "Xã Tân Vĩnh Lộc"): khách nói tên CŨ thì đổi sang phường mới theo bảng tên cũ ("Vĩnh Lộc B" → "Xã Tân Vĩnh Lộc", "Thảo Điền" → "Phường An Khánh"); phường cũ bị chia (dấu *) sang nhiều phường mới mà câu không đủ để biết phần nào thì KHÔNG đưa phuong. KHÔNG cắt bớt chữ ("An Hội Tây" ≠ "An Hội"). trich_dan = cụm khách nói nguyên văn ("Vĩnh Lộc B"). Tên trùng tên quận cũ ("gò vấp", "phú nhuận") mà khách không nói "phường" thì là QUẬN. Phường đánh số ("phường 12", "p4") giữ số: "Phường 12".
+- duong / ten_duong CHỈ khi tin có tên đường, hẻm hoặc số nhà. Tên xã / phường / huyện / quận và kích thước ("10x50") KHÔNG phải địa
+  chỉ — "đất 10x50 củ chi xã tân an hội" chỉ có quan + phuong + ngang × dài, KHÔNG đưa duong / ten_duong (code bỏ, bot sẽ hỏi đường).
 - duong (ĐỊA CHỈ ĐẦY ĐỦ, có dấu, như khách nói; ô này hiện dưới tên "vi_tri" trong "Thông tin đang ghi" và cap_nhat — hai tên, MỘT ô): giữ nguyên số nhà, SỐ HẺM và ĐÚNG THỨ TỰ CHỮ khách gõ — KHÔNG đảo, KHÔNG sắp xếp lại
   ("hẻm 45 Nguyễn Trãi" giữ là "hẻm 45 Nguyễn Trãi", không thành "45 hẻm Nguyễn Trãi"; "hẻm 18/5 đường Cách Mạng Tháng 8", "12/3 Lê Văn Sỹ",
   "88 hẻm Tân Kỳ Tân Quý" là khi khách gõ đúng thứ tự đó). trich_dan của duong là CỤM ĐỊA CHỈ NGUYÊN VĂN trong tin — hệ thống ghi chính cụm
@@ -178,7 +180,10 @@ KHOÁ:
   Một tin có cả giá lẫn ý gấp ("16 tỉ em, rao khi nào được giá thì thôi") → đưa CẢ HAI trường, không chỉ giá.
 - loai_duong_vao: mat_tien | hem_xe_tai | hem_xe_hoi | hem_xe_may | hem | khong_hem — đường trước nhà, đọc theo NGHĨA cả câu, kể
   cả phủ định: "hxh", "ô tô vào tận nhà" → hem_xe_hoi; "hxm", "xe hơi không vào được" → hem_xe_may; "mặt tiền đường", "mặt đường", "mặt phố", "nhà mặt tiền" (không kèm số đo ngay sau),
-  "mặt tiền / MT + TÊN ĐƯỜNG" ("căn 2 mặt tiền Hồng Bàng") → mat_tien (tin nhiều căn: đưa riêng cho đúng căn); chỉ nói "trong hẻm" → hem; "không có hẻm", "nằm trong khu công nghiệp / nội khu" → khong_hem. "Gần / cách mặt
+  "mặt tiền / MT + TÊN ĐƯỜNG" ("căn 2 mặt tiền Hồng Bàng", "nhà MT Nguyễn Trãi") → mat_tien (tin nhiều căn: đưa riêng cho đúng căn). "MT",
+  "MTKD", "MTNB", "mặt tiền kinh doanh", "mặt tiền nội bộ" là viết tắt CHUẨN của nghề = nhà nằm mặt tiền → LUÔN đưa loai_duong_vao mat_tien (trích
+  đúng chữ "MT" / "MTKD"), kể cả khi tin còn số đo ở chỗ khác ("Bán nhà MT Nguyễn Trãi Q5, 5x20" → mat_tien + ngang 5 + dai 20); chỉ khi số
+  đo đứng NGAY SAU chữ MT ("MT 5m", "mặt tiền 4m") thì đó là chiều ngang, không phải loại đường vào; chỉ nói "trong hẻm" → hem; "không có hẻm", "nằm trong khu công nghiệp / nội khu" → khong_hem. "Gần / cách mặt
   tiền" KHÔNG phải mat_tien. Chủ CHỈ nói bề rộng hẻm (không nói xe nào vào) → theo bề rộng: dưới 3m → hem_xe_may; 3m đến dưới
   3,5m → hem; từ 3,5m → hem_xe_hoi; từ 6m → hem_xe_tai (trích dẫn là cụm bề rộng, vd "hẻm 4m"). Số hẻm ("hẻm 45") KHÔNG phải bề rộng.
 - o_to_vao_nha (ô tô vào / đậu TRONG nhà), hoan_cong (đã hoàn công), thang_may, can_goc (căn góc, lô góc, hai mặt tiền):
@@ -199,7 +204,8 @@ KHOÁ:
 - Khác: tang_phu (lửng, sân thượng, tầng hầm), gia_dien_nuoc (giá điện nước cho thuê), gio_giac (giờ giấc ra vào), nganh_hang_phu_hop
   (mặt bằng hợp buôn bán ngành gì).
 - kien_thuc: ý khác về CĂN NHÀ không có khoá nào ở trên (an ninh, đồ để lại, lịch sử…) — cụm ngắn CHÉP NGUYÊN VĂN; KHÔNG đặt nhãn diễn giải ("tiềm năng kinh doanh", "phù hợp đầu tư", "dòng tiền tốt", "khai thác thương mại") khi khách không nói đúng chữ đó; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
-Không có gì đáng bóc (chào, cảm ơn, hỏi lại) → truong = [], kien_thuc = [].
+Tin CHỈ có chào / cảm ơn / hỏi lại → truong = [], kien_thuc = []. Tin có lời chào hay lời gật ĐI KÈM ý bán / tả căn ("chào em, chị
+muốn bán lô đất", "ừ anh bán nhà", "dạ cô có căn hộ cần bán") → bỏ qua PHẦN chào / gật, VẪN bóc phần còn lại (loai_giao_dich, loai_bds…).
 
 NGỮ CẢNH — tin nhắn có thể kèm vài lượt trao đổi NGAY TRƯỚC (bot nói gì, chủ nhà nói gì) và CÂU BOT VỪA HỎI đúng nguyên văn.
 Dùng ngữ cảnh để HIỂU tin như người đang nói chuyện: "ừ", "đúng rồi", "cái đó", "như trên", "vậy đi" hiểu theo câu bot vừa nói.
@@ -220,6 +226,8 @@ Không bao giờ đưa giá, diện tích, vị trí, phường, pháp lý, lo�
 bán lại căn đã gỡ hoặc rút lời "bán rồi" (rao_lai), đang bận / để sau (hoan). Nhắc chuyện người khác, hỏi, kể → binh_thuong.
 Chủ nhà BẢO ĐĂNG / lên tin / chốt — "ok đăng đi", "đăng luôn đi em", "lên tin giúp anh", "cứ đăng như vậy trước", "đủ rồi em, đăng đi" —
 dù bot đang HỎI thông tin hay đang đưa bản nháp → du_roi (trich_dan là chính cụm đó), KHÔNG phải ban_roi, KHÔNG phải binh_thuong.
+Chủ nhà bảo THÔI HỎI mà không nói "đăng" — "đủ rồi em", "nhiêu đó thôi cháu", "vậy được rồi, khỏi hỏi nữa" — đáp NGAY sau câu bot hỏi
+mà không trả lời câu đó → cũng là du_roi.
 Câu TẢ căn nhà có chữ "hết rồi" / "rồi" ("xây kín hết rồi em", "sổ có rồi") → binh_thuong.
 
 CÂU HỎI KẾ ("cau_ke") — có danh sách "Câu bot còn định hỏi" thì chọn MỘT câu nên hỏi tiếp, như môi giới giỏi: (1) thông tin cần
@@ -228,8 +236,10 @@ nói (vừa nói sổ riêng → hoàn công; vừa nói đang cho thuê → h�
 nhà đã trả lời trong tin / ngữ cảnh, không chọn câu vừa đưa vào khong_can_hoi. Câu đánh dấu "(nhánh)" chỉ chọn khi đúng hoàn
 cảnh căn này. Khoá phải đúng y chữ trong danh sách; không chắc → null.
 
-VAI ("vai") — chỉ khi người nhắn TỰ NÓI mình là chủ nhà hay môi giới. Nhắc tới môi giới khác, kể chuyện môi giới, hỏi phí môi
-giới → khong_noi.
+VAI ("vai") — chỉ khi người nhắn TỰ NÓI mình là chủ nhà hay môi giới, bằng chữ GỌI TÊN vai ("chính chủ", "anh là chủ", "nhà của
+chị", "không phải môi giới"; "em là sale", "bên sàn", "bán giúp chủ"), trich_dan chép đúng cụm đó. Có nhà / muốn bán / "chú có căn
+nhà" / "bán lô đất" KHÔNG nói vai (môi giới cũng nói vậy); "sổ hồng chính chủ" nói về GIẤY TỜ. Nhắc tới môi giới khác, kể chuyện môi
+giới, hỏi phí môi giới → khong_noi.
 
 KHÁCH HỎI LẠI ("hoi_lai") — đọc theo NGHĨA, như môi giới nghe khách: tin có ý HỎI bên mình (có hay không có dấu "?", gõ tắt,
 không dấu) → co_hoi = true, cau_hoi = câu hỏi chép nguyên văn, chu_de theo nội dung câu hỏi. "giá khu này giờ sao" là hỏi
@@ -278,12 +288,12 @@ rao từ kết quả của em — đọc hết rồi đưa TRẠNG THÁI CUỐI 
 - tra_loi, cap_nhat, hoi_lai, cam_xuc, y_dinh, cau_ke: để null / rỗng — lượt này chỉ chốt dữ liệu.`;
 
 const LUAT_CHUAN_HOA = `CHẾ ĐỘ CHUẨN HOÁ (đè lên dòng "giữ đúng chữ cái của cụm trích" ở trên):
-- Đọc theo NGHĨA như môi giới lâu năm: viết tắt, gõ sai một hai chữ, không dấu, tiếng lóng nghề đều phải hiểu ("xhr"/"shr"/"sổ hồg riêg" = sổ hồng riêng; "sổ chug"/"sổ chung" = sổ hồng chung; "hxh"/"hẻm ô tô"/"xe hơi vô tới nhà" = hẻm xe hơi; "hxm" = hẻm xe máy; "nhà ống"/"nhà phố liền kề" = nha_pho; "lô đất"/"nền" = dat; "c4"/"nhà cấp bốn" = nha_cap4; "full nt"/"đủ đồ" = full nội thất; "bớt lộc"/"có bớt"/"còn TL" = thuong_luong co; "ko gấp"/"từ từ bán" = gap khong).
+- Đọc theo NGHĨA như môi giới lâu năm: viết tắt, gõ sai một hai chữ, không dấu, tiếng lóng nghề đều phải hiểu ("xhr"/"shr"/"sổ hồg riêg" = sổ hồng riêng; "sổ chug"/"sổ chung" = sổ hồng chung; "hxh"/"hẻm ô tô"/"xe hơi vô tới nhà" = hẻm xe hơi; "hxm" = hẻm xe máy; "MT"/"MTKD"/"mặt phố" = mặt tiền (mat_tien); "nhà ống"/"nhà phố liền kề" = nha_pho; "lô đất"/"nền" = dat; "c4"/"nhà cấp bốn" = nha_cap4; "full nt"/"đủ đồ" = full nội thất; "bớt lộc"/"có bớt"/"còn TL" = thuong_luong co; "ko gấp"/"từ từ bán" = gap khong).
 - Giá trị trường CHỮ viết bằng TỪ CHUẨN của nghề (pháp lý: "sổ hồng riêng", "sổ hồng chung", "vi bằng", "hợp đồng mua bán", "giấy tay", "chưa có sổ", "đang chờ ra sổ", thêm "đã hoàn công"/"chưa hoàn công" nếu khách nói; nội thất: "full nội thất", "nội thất cơ bản", "nhà trống"; hướng: Đông | Tây | Nam | Bắc | Đông Nam | Đông Bắc | Tây Nam | Tây Bắc). trich_dan vẫn COPY NGUYÊN VĂN chữ khách gõ.
 - Khách nói KHÔNG có / không biết (hỏi phường, khách "ko có phường", "không rõ") → KHÔNG đưa trường đó; tra_loi.co_tra_loi = false. TRỪ các ô có/không (gap, thuong_luong, o_to_vao_nha, hoan_cong, thang_may, can_goc, loai_duong_vao): "không gấp", "chưa hoàn công", "không có thang máy", "không có hẻm" là CÂU TRẢ LỜI → vẫn đưa ("khong" / "khong_hem"), và co_tra_loi = true nếu đó là câu đang hỏi.
 - Tin KHÔNG trả lời câu đang hỏi nhưng có thông tin KHÁC (đang hỏi kết cấu, khách nhắn "50m2" hay "5 tỷ") → VẪN đưa thông tin đó vào truong (dien_tich, gia…), chỉ tra_loi.co_tra_loi = false. KHÔNG trả rỗng vì lạc câu hỏi.
 - so_tang LUÔN tính cả trệt: "3 lầu" = 4, "trệt 2 lầu" = 3, "3 tấm" = 3, "3 tầng" = 3 (tầng đã gồm trệt).
-- Mỗi khoá đúng loại của nó: "hxh"/"hẻm xe hơi" KHÔNG BAO GIỜ là phap_ly. Viết tắt CHUẨN của nghề ("shr", "sh", "hxh", "hxm", "pn", "wc", "c4", "full nt") là CHẮC nghĩa → đưa vào truong, KHÔNG vào xac_nhan — kể cả khi tin đó không trả lời câu đang hỏi. Chữ viết tắt / gõ sai KHÔNG CHẮC nghĩa ("xhr" — nhiều khả năng "shr" gõ nhầm) → KHÔNG đưa vào truong, đưa khả năng cao nhất vào xac_nhan (khoa phap_ly, gia_tri "sổ hồng riêng", trich_dan "xhr") để bot hỏi lại.
+- Mỗi khoá đúng loại của nó: "hxh"/"hẻm xe hơi" KHÔNG BAO GIỜ là phap_ly. Viết tắt CHUẨN của nghề ("shr", "sh", "hxh", "hxm", "MT", "MTKD", "pn", "wc", "c4", "full nt") là CHẮC nghĩa → đưa vào truong, KHÔNG vào xac_nhan — kể cả khi tin đó không trả lời câu đang hỏi. Chữ viết tắt / gõ sai KHÔNG CHẮC nghĩa ("xhr" — nhiều khả năng "shr" gõ nhầm) → KHÔNG đưa vào truong, đưa khả năng cao nhất vào xac_nhan (khoa phap_ly, gia_tri "sổ hồng riêng", trich_dan "xhr") để bot hỏi lại.
 - Vẫn cấm bịa: không thêm con số, không thêm ý khách không nói, không suy quận từ tên đường.`;
 
 type ClientModel = {
