@@ -99,6 +99,19 @@ Log vẫn hiện "Session cũ hết hạn — quét QR lại" rồi dòng "▶ Q
 Làm lại mục 3, không cần dừng service. Cảnh báo "bridge-zca đang im" sẽ tới
 điện thoại qua ntfy (mục 6) sau 15 phút.
 
+### 5b. KHÔNG mở Zalo Web / Zalo PC bằng acc clone (10/10/2026)
+
+Bridge là một phiên "Zalo Web". Ai mở Zalo Web hay Zalo PC bằng **chính acc clone** thì Zalo đá phiên của bridge (mã 3000
+"Another connection is opened") — bot thôi nghe tin. Trước 10/10 bridge không biết mình bị đá: tai nghe chết, vòng kéo việc
+vẫn điểm danh nên /admin vẫn báo "sống" (acc clone im từ 09/10 10:39). Nay bridge báo ngay lên ô *Zalo clone* ở /admin
+("acc clone đang mở ở Zalo Web / Zalo PC…"), chờ 2 phút rồi tự dựng lại — dựng lại sẽ đá phiên Zalo Web kia.
+Người trong nhóm trả lời khách bằng **app Zalo trên điện thoại** đăng nhập acc clone (không đụng phiên bridge), bấm
+**Giữ khách** ở /admin/tin-nhan để bot im với khách đó, xong bấm **Trả bot**. Gõ tay từ acc clone mà không bấm Giữ khách thì
+bot tự nhường 30 phút (FR-141).
+
+Mất kết nối vì lý do khác (mạng chớp, Zalo cắt) thì zca-js tự thử lại (`retryOnClose`); hết lượt thử thì bridge thoát và
+systemd dựng lại bằng phiên đã lưu — không cần quét QR trừ khi phiên đã chết.
+
 ## 6. Cảnh báo tới điện thoại không qua bridge
 
 Migration `20260904a` dựng kênh **ntfy.sh**: nhịp kiểm 15 phút của DB gọi thẳng

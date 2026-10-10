@@ -480,6 +480,7 @@ try {
 // escalation-feed, resolve SĐT → uid Zalo rồi nhắn từ acc clone, xong ack.
 // OA duyệt xong thì nudge tự gửi phía server, vòng này tự hết việc.
 const uidCache = new Map(); // SĐT → uid, khỏi findUser lặp lại
+const daBaoKhongTimRa = new Set(); // id việc đã ghi sổ "không resolve được" trong lần chạy này
 
 // CHỐNG CHỒNG LƯỢT. `setInterval` cứ 60 giây là bắn một lượt, KHÔNG cần biết
 // lượt trước xong chưa. Mỗi việc phải đi ba lượt mạng (tìm người → nhắn → báo
@@ -528,7 +529,15 @@ async function pumpEscalations() {
             if (uid) uidCache.set(it.phone, uid);
           }
         }
-        if (!uid) { await ghiLoi("escalation", `${it.id}: không resolve được ${it.name}`); continue; }
+        if (!uid) {
+          // Một dòng sổ cho mỗi việc mỗi lần chạy, không phải mỗi lượt kéo: 08–10/10 bảng admins rỗng → hai việc báo admin
+          // ghi 660 dòng trong 3 ngày, còi đếm "N lỗi" mỗi giờ mà vẫn chỉ là một chuyện (chưa có người nhận).
+          if (!daBaoKhongTimRa.has(it.id)) {
+            daBaoKhongTimRa.add(it.id);
+            await ghiLoi("escalation", `${it.id}: không resolve được ${it.name} (chưa có Zalo ID / SĐT người nhận)`);
+          }
+          continue;
+        }
         const msg = it.text ?? `🔔 nhadat.cc: ${it.note}. Anh/chị check giúp rồi trả lời khách sớm nha.`;
         rememberSent(msg);
         await api.sendMessage(msg, String(uid), ThreadType.User);
@@ -569,4 +578,27 @@ try {
 
 vongKeo();
 
-api.listener.start();
+// TAI NGHE ZALO PHẢI TỰ NỐI LẠI (10/10/2026). Bản trước gọi `listener.start()` trần: zca-js 2.1.2 khi đó hễ websocket
+// đóng một lần (mạng chớp, Zalo cắt, hoặc ai đó mở Zalo Web / Zalo PC bằng acc clone — mã 3000 "Another connection is
+// opened") là phát `closed` rồi thôi luôn. Bridge không nghe `closed` nên tai nghe chết vĩnh viễn, còn vòng kéo việc ở trên
+// vẫn chạy và vẫn điểm danh `bot_health` — /admin báo "sống" trong khi khách nhắn không ai trả lời (09/10 10:39 → 10/10).
+// Nay: `retryOnClose` để zca-js tự thử lại với các mã nó cho phép; hết lượt thử (hoặc mã không được thử) thì báo /admin,
+// ghi sổ, rồi thoát để systemd (Restart=always) dựng lại tiến trình — đăng nhập lại bằng phiên đã lưu, tai nghe mới.
+// Mã 3000 / 3003 = acc clone đang mở nơi khác: chờ 2 phút rồi mới dựng lại, để người đang mở Zalo Web kịp thấy cảnh báo
+// mà đóng (dựng lại ngay là giành phiên qua lại với họ mỗi 10 giây). Cách nối lại theo ZaloCRM (MIT, zalo-pool.ts).
+const MA_BI_CHIEM = new Set([3000, 3003]);
+api.listener.on("closed", async (code, reason) => {
+  const biChiem = MA_BI_CHIEM.has(Number(code));
+  const lyDo = biChiem
+    ? `acc clone đang mở ở Zalo Web / Zalo PC (mã ${code}) — bot không nghe được tin; đóng Zalo Web/PC, bridge tự nối lại sau 2 phút`
+    : `tai nghe Zalo đóng (mã ${code}${reason ? `: ${String(reason).slice(0, 80)}` : ""}) — bridge khởi động lại`;
+  console.log(`✖ ${lyDo}`);
+  await baoDangNhap("chua_ro", null, lyDo.slice(0, 200));
+  await ghiLoi("tai nghe zalo", lyDo);
+  setTimeout(() => process.exit(1), biChiem ? 120_000 : 3_000);
+});
+api.listener.on("error", (e) => {
+  // Có người nghe thì EventEmitter không ném nữa; lỗi giải mã một gói tin không đáng làm sập cả bridge — ghi sổ là đủ.
+  void ghiLoi("tai nghe zalo (error)", errDetail(e));
+});
+api.listener.start({ retryOnClose: true });

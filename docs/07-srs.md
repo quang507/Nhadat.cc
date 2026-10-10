@@ -2991,6 +2991,43 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
   - Ba kỳ vọng e2e cũ đổi theo hành vi mới (SRS-5.1zzzl-a nhận "CẦN HỎI: phường"; SRS-5.1zzzn-b không câu nào nói đang rao / đã đăng; AIBOC-13 câu phường mở ≤ 3 lần).
   - `bun run test:bot` exit 0, `bun run kieu:bot` sạch.
 
+### SRS-5.1zzzzs · Acc Zalo clone im mà /admin vẫn báo "sống"; dựng lại DB mất dòng trạng thái acc (10/10/2026)
+
+`[nguồn: chủ dự án 10/10/2026: "Dùng chung clone này trước đi ừ nên có nút đó sửa và cho acc clone rep được lại đi"; DB production 10/10: tin cuối kênh zalo_personal_test 09/10 10:39 UTC, bot_health bridge-zca 11:40 UTC, bridge_dang_nhap 0 dòng, bot_errors "không resolve được admin" 660 dòng / 3 ngày; mã zca-js 2.1.2 dist/apis/listen.js]`
+
+- **Ca gốc**: acc clone không trả lời khách. Bảng `messages` của kênh acc clone dừng ở 09/10 10:39, nhưng `bot_health.bridge-zca` vẫn nhích mỗi vài phút. Ô "Zalo clone" ở /admin trống và nút "Đăng nhập lại" bấm không được.
+
+**(1) Tai nghe Zalo chết im.**
+- **Nguyên nhân**: bridge gọi `api.listener.start()` không có `retryOnClose` và không nghe sự kiện `closed`. Trong zca-js 2.1.2, websocket đóng một lần là phát `closed` rồi thôi luôn. Socket đóng có thể vì mạng chớp, Zalo cắt, hoặc có người mở Zalo Web / Zalo PC bằng acc clone (mã 3000 "Another connection is opened"). Điểm danh `bot_health` lại đi theo vòng kéo việc `escalation-feed` (không cần socket), nên tiến trình còn sống là /admin báo sống, dù tai nghe đã chết. Không có log VPS ở phiên này nên chưa biết lần 09/10 đóng vì mã nào; cơ chế thì đã đọc thẳng trong mã zca-js.
+- **Lớp lỗi**: *nhịp tim đo một vòng khác với vòng đang làm việc* — cùng họ với NFR-18 ("đã gọi hàm gửi" không phải bằng chứng tới nơi).
+- **Sửa** (`bot/bridge-zca/index.mjs`, theo cách ZaloCRM — MIT — nối lại trong `zalo-pool.ts`):
+  - `start({ retryOnClose: true })`.
+  - Bắt sự kiện `closed`: báo lên ô Zalo clone ở /admin (`baoDangNhap("chua_ro", …)` kèm lý do), ghi sổ, rồi thoát để systemd dựng lại bằng phiên đã lưu.
+  - Mã 3000 / 3003 (acc đang mở nơi khác): chờ 2 phút rồi mới thoát, để người đang mở Zalo Web kịp đóng, không giành phiên qua lại với họ mỗi 10 giây.
+  - Bắt sự kiện `error` để ghi sổ.
+- **Chỗ khác cùng lớp**:
+  - Nhịp tim vẫn đo vòng kéo việc. Chưa có tín hiệu "tai nghe còn mở" riêng (ví dụ giờ tin vào cuối cùng hay sự kiện `connected` gửi lên) — ghi đây, chưa làm.
+  - Kênh OA không dính, vì webhook do Zalo đẩy tới.
+- **Vận hành**: dùng chung acc clone cho người trong nhóm thì trả lời bằng app điện thoại, không mở Zalo Web/PC; bấm "Giữ khách" / "Trả bot" ở /admin/tin-nhan (FR-189, có sẵn) để bot im với khách đó (`bot/bridge-zca/VPS.md §5b`).
+
+**(2) Dựng lại DB mất dòng khởi tạo.**
+- **Nguyên nhân**: `bridge_dang_nhap` là bảng một dòng (`check id = 1`), mà dòng đó chỉ được tạo trong `20260911b`. Dựng lại 08/10 chỉ nạp `schema.sql`, còn bước `du-lieu` của `scripts/dung-lai-db.mjs` chỉ quét 5 bảng tham chiếu. Thiếu dòng nên:
+  - `escalation-feed` `update … where id = 1` trúng 0 dòng, không lỗi gì;
+  - /admin đọc `maybeSingle` ra null nên ô trống và nút "Đăng nhập lại" bị khoá;
+  - `yeu_cau_quet_lai_zalo()` cũng update 0 dòng.
+- **Lớp lỗi**: *dữ liệu khởi tạo nằm trong migration, bản dựng lại không mang theo*.
+- **Sửa**: migration `20261010a` nạp lại dòng `id = 1` (chạy lại được), và `bridge_dang_nhap` vào `BANG` của bước `du-lieu`.
+- **Chỗ khác cùng lớp**: đã soát mọi câu `insert` cấp cao nhất trong migration.
+  - `ctvs`: 2 dòng giữ chỗ "CTV 1/2" không có SĐT / Zalo. Cố ý không nạp; chủ dự án nhập CTV thật.
+  - `admins` rỗng: chưa ai được thêm, đúng ý chủ dự án 09/10 ("khi nào làm thật t thêm"). Vì vậy việc báo admin không gửi được tới ai. Bridge nay chỉ ghi sổ "không resolve được" một lần mỗi việc mỗi lần chạy (trước là mỗi lượt kéo, 660 dòng / 3 ngày).
+  - Các bảng khác ghi lý do miễn trong `MIEN` của bài kiểm.
+
+**Triển khai**: bước `cai-vps` của `apply-migration.yml` nay cài đúng nhánh đang chạy (trước luôn lấy `main`). Bước này vẫn cần chủ dự án đặt tạm `VPS_HOST` + `VPS_ROOT_PASSWORD` vào Vault; bước sau tự ghi đè hai giá trị đó.
+
+- **Kiểm, đỏ khi tắt**:
+  - `bot/tests/hat-giong-dung-lai.mjs` (trong `test:bot`): mọi câu insert cấp cao nhất phải được `du-lieu` phủ hoặc có lý do miễn; có ca gốc `bridge_dang_nhap`; không nhặt nhầm insert trong thân hàm. Gỡ `bridge_dang_nhap` khỏi `BANG` thì đỏ 2 ca, đã chạy.
+  - Phần bridge không có bộ kiểm offline (cần socket Zalo thật). Cách kiểm: sau deploy, mở Zalo Web bằng acc clone; ô Zalo clone ở /admin phải hiện cảnh báo trong vài giây; đóng Zalo Web, sau 2 phút nhắn thử thì bot trả lời.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
