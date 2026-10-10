@@ -3107,7 +3107,14 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Chỗ khác cùng lớp**:
   - Nhánh bán đã có `laLoiMeta` (in đậm, xưng "tôi"), lời model dạng đó bị bỏ cả.
   - Đường JSON cũ của nhánh mua chưa có lọc markdown; chưa thấy ca, ghi đây.
-  - `chanHuaCoHang` thay câu sai bằng lời thật rồi bỏ mọi câu kể sau nó, nên không để lại câu mảnh.
+  - `chanHuaCoHang` có cùng lớp, lộ ra ở lượt bắn lại; xem (4).
+
+**(4) Bắn lại sau deploy (thu-cmp46-4): "có căn nào không em" → khách không nhận được chữ nào.**
+- **Ca gốc**: model viết "Dạ em lọc trong kho rồi ạ. Hiện bên em chưa có căn nào khớp…, nhưng em sẽ để ý và báo ngay…".
+- **Diễn biến**: `chanHuaCoHang` coi câu đầu là hứa có hàng. Sau câu sai đầu tiên, luật bỏ mọi câu kể, kể cả câu nói thật "chưa có căn" đứng sau. Vì đã có câu nói thật, nó không chèn lời thật, nên `replies` rỗng.
+- **Lớp lỗi**: như (3), *bỏ câu mà không xử câu liên quan*. Ở đây câu bị cuốn đi lại chính là lời thay thế.
+- **Sửa**: câu nói thật (`laNoiThat`) luôn giữ. Lưới cuối: đã chặn mà kết quả rỗng thì chèn lời thật.
+- **Kiểm**: `van-tra-loi.mjs` ZZZZU-V8 (ca gốc; gỡ bản sửa thì đỏ, đã chạy) và V9 (**cách nói MỚI** "đang lọc căn 2 lầu", AI chỉ ra câu hứa).
 
 - **Kiểm, đỏ khi tắt** (đã chạy: gỡ từng bản sửa thì đỏ đúng ca):
   - e2e ZZZZU-01/02/03:

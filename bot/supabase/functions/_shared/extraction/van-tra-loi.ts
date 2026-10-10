@@ -94,7 +94,8 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
   const laHua = (c: string) => laHuaCoHang(c, hoiHang) || aiKd.some((a) => boDau(c).includes(a));
   // 30/09/2026 (bắn thật lx-mua-e2): model đã tự nói thật "Hiện em chưa có căn nào sẵn…" mà câu hứa bên cạnh vẫn bị thay
   // bằng lời thật → khách đọc "chưa có căn" hai lần liền. Đã có câu nói thật thì chỉ bỏ câu hứa, không chèn thêm.
-  let daChen = replies.some((r) => tachCau(r).some((c) => !laHua(c) && /\bchua co (?:can|tin|nha|lo)\b/.test(boDau(c))));
+  const laNoiThat = (c: string) => !laHua(c) && /\bchua co (?:can|tin|nha|lo)\b/.test(boDau(c));
+  let daChen = replies.some((r) => tachCau(r).some(laNoiThat));
   const ra: string[] = [];
   for (const r of replies) {
     const giu: string[] = [];
@@ -103,7 +104,10 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
       // khu nào …?" — câu đầu khớp mẫu, bị thay bằng lời thật; câu thứ hai nói CÙNG điều sai bằng chữ mẫu chưa có, nên còn nguyên
       // cạnh lời thật: "chưa có căn nào khớp … Em đang lọc căn 2 lầu …". Một lời đã sai về KHO thì cả phần kể sau nó dựng trên
       // tiền đề sai: sau câu sai đầu tiên chỉ giữ CÂU HỎI (khách vẫn được hỏi tiếp), bỏ mọi câu kể — không đoán câu nào là hứa.
-      if (daChan && !/\?/.test(c)) continue;
+      // SRS-5.1zzzzu (bắn production 10/10, thu-cmp46-4): "Dạ em lọc trong kho rồi ạ. Hiện bên em chưa có căn nào khớp…" — câu đầu khớp
+      // mẫu, câu nói thật ĐỨNG SAU nó bị luật "bỏ mọi câu kể" cuốn đi, mà vì đã có câu nói thật nên lời thật không chèn → khách không
+      // nhận được chữ nào. Câu nói thật (chưa có căn) chính là lời thay thế: luôn giữ.
+      if (daChan && !/\?/.test(c) && !laNoiThat(c)) continue;
       if (!laHua(c)) { giu.push(c); continue; }
       daChan = true;
       if (!daChen) {
@@ -115,6 +119,7 @@ export function chanHuaCoHang(replies: string[], loiThat: string, hoiHang = true
     const moi = giu.join(" ").trim();
     if (moi) ra.push(moi);
   }
+  if (daChan && !ra.length) ra.push(`Dạ ${loiThat}`);
   return daChan ? { replies: ra, daChan } : { replies, daChan };
 }
 

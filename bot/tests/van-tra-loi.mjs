@@ -1427,6 +1427,14 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   const bb = thanhBongBong("Dạ em ghi rồi ạ, có căn khớp em báo anh liền nhé.\n\n---\n**CẬP NHẬT HỒ SƠ:**");
   ok("ZZZZU-V6 thanhBongBong: '---' + '**CẬP NHẬT HỒ SƠ:**' (dòng dẫn công cụ) bỏ, lời thật giữ", bb.length === 1 && /em ghi rồi/.test(bb[0]), JSON.stringify(bb));
   const bb2 = thanhBongBong("Dạ có **2 căn** khớp ạ:\n1. Căn A\n2. Căn B");
+  {
+    const loiT = "hiện bên em chưa có căn nào khớp đúng nhu cầu này ạ. Có căn mới hợp là em báo anh liền nha.";
+    const c8 = chanHuaCoHang(["Dạ em lọc trong kho rồi ạ. Hiện bên em chưa có căn nào khớp tiêu chí 3 phòng ngủ ở Quận 5, nhưng em sẽ để ý báo anh nha."], loiT, true, []);
+    ok("ZZZZU-V8 (thu-cmp46-4) câu 'em lọc rồi' bị chặn → câu nói thật 'chưa có căn nào khớp' sau nó GIỮ, không trả rỗng",
+      c8.replies.length === 1 && /chưa có căn nào khớp tiêu chí/.test(c8.replies[0]), JSON.stringify(c8));
+    const c9 = chanHuaCoHang(["Dạ em đang lọc căn 2 lầu cho anh. Còn mấy căn khác nữa."], loiT, true, ["Dạ em đang lọc căn 2 lầu cho anh"]);
+    ok("ZZZZU-V9 (cách nói MỚI, AI chỉ ra câu hứa) không có câu nói thật → chèn lời thật, không bao giờ rỗng", c9.replies.length >= 1 && /chưa có căn nào khớp/.test(c9.replies.join(" ")), JSON.stringify(c9));
+  }
   ok("ZZZZU-V7 thanhBongBong: đậm bỏ dấu sao; đoạn có ':' mà CÓ nội dung sau nó giữ", bb2.length === 1 && /có 2 căn khớp ạ:\n1\. Căn A/.test(bb2[0]), JSON.stringify(bb2));
 }
 
