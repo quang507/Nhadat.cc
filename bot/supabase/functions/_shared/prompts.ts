@@ -123,6 +123,7 @@ export const SELLER_FEWSHOT = `Ví dụ giọng ĐÚNG (chủ nhà nói [lượt
 - "phường phú định em" [vừa ghi: Phường Phú Định (Quận 8 cũ) · diện tích] → "Dạ Phú Định, bên quận 8 cũ ạ. Nhà mình ngang dài bao nhiêu vậy anh?"
 - "Nhà hẻm 123 Trần Bình Trọng, phường 2 quận 5" [vừa ghi: vị trí · diện tích] → "Dạ em ghi hẻm Trần Bình Trọng rồi ạ. Nhà mình ngang dài bao nhiêu vậy anh?"
 - "Chị có căn hộ Sunrise City muốn bán" [khối DỰ ÁN ghi có hồ bơi; tầng] → "Sunrise City có hồ bơi lớn, ở tiện lắm chị. Căn mình ở tầng mấy ạ?"
+- "căn hộ the sun avenue quận 2" [vừa ghi: dự án · diện tích tim tường] → "Dạ The Sun Avenue ạ. Căn mình bao nhiêu m² vậy chị?" (căn hộ hỏi m², không hỏi ngang dài)
 - "Hẻm 4m, ô tô vào tới nơi" [vừa ghi: độ rộng hẻm · diện tích] → "Ô tô tới tận nhà thì đi lại tiện lắm anh. Diện tích trên sổ ngang dài bao nhiêu vậy ạ?"
 - "3 phòng ngủ" [vừa ghi: số phòng ngủ · số toilet] → "Vâng ạ. Nhà mình mấy toilet vậy chị?"
 - Khách đưa nhiều thông tin một lần: "bán nhà hẻm 5m Phạm Văn Chí P7 Q6, 4.2x12 nở hậu 4.5, trệt lửng 2 lầu 3PN 3WC, SHR, 6.9 tỷ TL" [ảnh] → "Nở hậu lại sổ riêng, giấy tờ gọn lắm anh. Anh chụp giúp em vài tấm mặt tiền và sổ nha?"
@@ -267,7 +268,9 @@ export const FACT_LABELS: Record<string, string> = {
   phap_ly: "pháp lý (sổ riêng hay sổ chung)",
   dien_tich_dat: "diện tích đất",
   dien_tich: "diện tích",
-  dien_tich_tim_tuong: "diện tích tim tường",
+  // SRS-5.1zzzzt (bắn production 10/10, thu-thuong16: căn hộ Sunrise City bị hỏi "Căn mình ngang dài bao nhiêu"): ví dụ mẫu chỉ có nhà
+  // ("diện tích → ngang dài") nên model áp khuôn nhà cho căn hộ. Phần trong ngoặc tới model ở dòng CẦN HỎI; nhãn ngắn (📝, 🤖) cắt ngoặc.
+  dien_tich_tim_tuong: "diện tích tim tường (căn hộ hỏi bao nhiêu m², không hỏi ngang dài)",
   dien_tich_san: "diện tích sàn (cộng các tầng, không phải đất)",
   // SRS-5.1zzzm (08/10, bắn thử …kb2chau): nhãn cũ "kết cấu (số tầng, phòng)" là HAI ý — model đọc dòng CẦN HỎI rồi hỏi "mấy tầng
   // và mấy phòng ngủ" trong một câu, trong khi phòng ngủ là câu riêng (`so_phong_ngu`, hỏi sau). Nhãn = đúng một ý.

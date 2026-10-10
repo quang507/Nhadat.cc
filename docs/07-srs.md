@@ -3028,6 +3028,41 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
   - `bot/tests/hat-giong-dung-lai.mjs` (trong `test:bot`): mọi câu insert cấp cao nhất phải được `du-lieu` phủ hoặc có lý do miễn; có ca gốc `bridge_dang_nhap`; không nhặt nhầm insert trong thân hàm. Gỡ `bridge_dang_nhap` khỏi `BANG` thì đỏ 2 ca, đã chạy.
   - Phần bridge không có bộ kiểm offline (cần socket Zalo thật). Cách kiểm: sau deploy, mở Zalo Web bằng acc clone; ô Zalo clone ở /admin phải hiện cảnh báo trong vài giây; đóng Zalo Web, sau 2 phút nhắn thử thì bot trả lời.
 
+### SRS-5.1zzzzt · Căn hộ bị hỏi "ngang dài"; "đủ rồi em" bị lờ; cột street nhận "căn hộ <dự án>" (10/10/2026)
+
+`[nguồn: bắn production 10/10/2026 sau SRS-5.1zzzzr — thu-thuong16 (căn hộ Sunrise City quận 7); chủ dự án 10/10: "rồi làm tiếp tiếp"]`
+
+- **Ca gốc** (thu-thuong16):
+  - Sau "căn hộ sunrise city quận 7", bot hỏi "Căn mình ngang dài bao nhiêu vậy chị?".
+  - Khách "đủ rồi em" ngay sau câu hỏi giá → AI `y_dinh = binh_thuong`, bot hỏi tiếp "Căn hộ chị ở phường nào".
+  - Cột `listings.street` = "căn hộ sunrise city".
+
+**(1) Căn hộ bị hỏi ngang dài.**
+- **Nguyên nhân**: lời hỏi do model viết từ dòng `CẦN HỎI: diện tích tim tường`. Ba ví dụ mẫu về diện tích trong `SELLER_FEWSHOT` đều là nhà ("Nhà mình ngang dài bao nhiêu"), nên model áp khuôn đó cho căn hộ. Câu mẫu `CAU_HOI_MAU.dien_tich_tim_tuong` vẫn đúng ("bao nhiêu m2 tim tường"), chỉ là không tới model.
+- **Lớp lỗi**: *ví dụ mẫu chỉ phủ một loại BĐS, model áp cho mọi loại*.
+- **Sửa (câu lệnh)**:
+  - Nhãn ý `dien_tich_tim_tuong` thêm "(căn hộ hỏi bao nhiêu m², không hỏi ngang dài)". Phần trong ngoặc tới model; nhãn ngắn 📝 / 🤖 cắt ngoặc như cũ.
+  - Thêm một ví dụ căn hộ hỏi m² vào few-shot.
+- **Chỗ khác cùng lớp**: `khong_can_hoi` của lượt bóc tách đã có "căn hộ chung cư → không hỏi ngang dài" — đúng sẵn. Đất / mặt bằng hỏi "ngang dài" là đúng. Kho xưởng hỏi theo m² qua câu mẫu; chưa thấy lệch, không đổi.
+
+**(2) "Đủ rồi em" bị lờ.**
+- **Nguyên nhân**: câu lệnh bóc tách chỉ có mẫu "đủ rồi em, đăng đi" cho `du_roi`. "Đủ rồi em" đứng một mình, ngay sau câu bot hỏi giá, model đọc là câu bình thường.
+- **Lớp lỗi**: *ý định chỉ được dạy bằng một dạng câu*.
+- **Sửa (câu lệnh, không regex)**: thêm dòng "chủ nhà bảo THÔI HỎI mà không nói 'đăng' ('đủ rồi em', 'nhiêu đó thôi cháu', 'vậy được rồi, khỏi hỏi nữa'), đáp ngay sau câu bot hỏi mà không trả lời câu đó → du_roi". Nhánh `du_roi` trong vòng hỏi đã nói thật còn thiếu gì (SRS-5.1zh).
+- **Chỗ khác cùng lớp**: luật `laDuRoi` (lưới khi AI không chạy) nhận "đủ rồi" sẵn. Hai ý `hoan`, `ngung_rao` đã có nhiều dạng câu trong mô tả.
+
+**(3) Cột street nhận "căn hộ sunrise city".**
+- **Nguyên nhân**: trigger `listings_boc_thong_so` suy `street = boc_ten_duong(location_raw)` khi street trống. `boc_ten_duong` loại các cụm mở đầu bằng "dự án / chung cư / toà / khu…", nhưng không loại "căn hộ".
+- **Lớp lỗi**: *bộ lọc "cụm không phải tên đường" thiếu chữ loại căn* — cùng lớp SRS-5.1zzzzd.
+- **Sửa**: migration `20261010b` thêm `căn hộ | can ho | chcc` vào bộ lọc. Thân hàm chép nguyên từ `schema.sql`.
+- **Chỗ khác cùng lớp**: tên dự án đứng trần không có chữ loại ("sunrise city quận 7") vẫn có thể thành street. Cần đối chiếu với `project_id` trong trigger, mà trigger không chạy khi chỉ `project_id` đổi — ghi đây, chưa làm.
+
+- **Kiểm, đỏ khi tắt**:
+  - `luat-khong-mau-thuan.mjs` (13) nhãn + few-shot căn hộ và (14) câu lệnh `du_roi`. Gỡ bản sửa thì đỏ 3 ca, đã chạy.
+  - `bot/tests/sql/ten-duong.sql` thêm 3 ca: ca gốc, **cách nói MỚI** không dấu "can ho the sun avenue, quan 2", và "căn hộ tầng 5, 12 Nguyễn Hữu Thọ" → "Nguyễn Hữu Thọ". Trên DB trước migration cả 3 ra sai ("căn hộ sunrise city", "can ho the sun avenue", "căn hộ tầng 5").
+  - Phần câu lệnh chỉ kiểm được bằng model thật: bắn lại sau deploy.
+  - `bun run test:bot` exit 0, `kieu:bot` sạch.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

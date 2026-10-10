@@ -226,6 +226,8 @@ Không bao giờ đưa giá, diện tích, vị trí, phường, pháp lý, lo�
 bán lại căn đã gỡ hoặc rút lời "bán rồi" (rao_lai), đang bận / để sau (hoan). Nhắc chuyện người khác, hỏi, kể → binh_thuong.
 Chủ nhà BẢO ĐĂNG / lên tin / chốt — "ok đăng đi", "đăng luôn đi em", "lên tin giúp anh", "cứ đăng như vậy trước", "đủ rồi em, đăng đi" —
 dù bot đang HỎI thông tin hay đang đưa bản nháp → du_roi (trich_dan là chính cụm đó), KHÔNG phải ban_roi, KHÔNG phải binh_thuong.
+Chủ nhà bảo THÔI HỎI mà không nói "đăng" — "đủ rồi em", "nhiêu đó thôi cháu", "vậy được rồi, khỏi hỏi nữa" — đáp NGAY sau câu bot hỏi
+mà không trả lời câu đó → cũng là du_roi.
 Câu TẢ căn nhà có chữ "hết rồi" / "rồi" ("xây kín hết rồi em", "sổ có rồi") → binh_thuong.
 
 CÂU HỎI KẾ ("cau_ke") — có danh sách "Câu bot còn định hỏi" thì chọn MỘT câu nên hỏi tiếp, như môi giới giỏi: (1) thông tin cần

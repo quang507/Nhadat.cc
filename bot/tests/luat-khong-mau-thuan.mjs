@@ -143,5 +143,22 @@ ok("(11) bong bóng phí sau khi khách tự nói vai đi qua `cauPhi(vaiPhi…)
   ok("(12) lưới bỏ ca gốc thu-thuong11", boHuaTuKiemTra("Vâng ạ. Để em kiểm tra giá giao dịch khu Phú Hòa Đông gần đây rồi báo lại chị nhé.", null) === "Vâng ạ.");
 }
 
+// (13) SRS-5.1zzzzt — câu hỏi diện tích theo loại: ví dụ mẫu chỉ có nhà ("diện tích → ngang dài") dạy model hỏi căn hộ "ngang dài
+//      bao nhiêu" (thu-thuong16). Ý CẦN HỎI của căn hộ nói rõ m², và few-shot có một ca căn hộ hỏi m² không có "ngang dài".
+{
+  const { FACT_LABELS, nhanTheoLoai } = await import("../supabase/functions/_shared/prompts.ts");
+  ok("(13) nhãn ý diện tích tim tường (tới model ở dòng CẦN HỎI) nói căn hộ không hỏi ngang dài",
+    /không hỏi ngang dài/.test(nhanTheoLoai("dien_tich_tim_tuong", "chung_cu")), FACT_LABELS.dien_tich_tim_tuong);
+  const caCanHo = SELLER_FEWSHOT.split("\n").filter((d) => /diện tích tim tường/.test(d));
+  ok("(13) few-shot có ca căn hộ hỏi diện tích bằng m², lời mẫu không có 'ngang dài'",
+    caCanHo.length > 0 && caCanHo.every((d) => /m²/.test(d.split("→")[1] ?? "") && !/ngang dài/.test(d.split("→")[1]?.split("(")[0] ?? "")), caCanHo.join("\n"));
+}
+// (14) SRS-5.1zzzzt — "đủ rồi em" (không kèm "đăng") ngay sau câu bot hỏi là ý THÔI HỎI (du_roi): câu lệnh bóc tách gọi tên nó, không
+//      chỉ có mẫu "đủ rồi em, đăng đi" (thu-thuong16: AI đọc binh_thuong, bot hỏi tiếp phường).
+{
+  const br = readFileSync(new URL("../supabase/functions/_shared/ai/boc-rao.ts", import.meta.url), "utf8");
+  ok("(14) câu lệnh bóc tách coi 'đủ rồi em' đứng một mình là du_roi", /THÔI HỎI[^\n]*"đủ rồi em"[\s\S]{0,200}du_roi/.test(br));
+}
+
 console.log(hong ? `\nLUẬT KHÔNG MÂU THUẪN: ${hong} CA HỎNG` : "\nLUẬT KHÔNG MÂU THUẪN: ĐẠT");
 process.exit(hong ? 1 : 0);
