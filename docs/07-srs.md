@@ -3305,6 +3305,34 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 
 **Kiểm (đỏ khi tắt từng bản sửa, đã chạy)**: e2e ZZZZZ-01 (ca gốc đường) / 02 (cách nói mới "đường thì em chịu, ko nhớ tên đường đâu") / 03 (ca gốc phường) — tắt chặn "không biết" → 3 đỏ; 04 đối chứng (AI không nói không biết → địa chỉ ghi như cũ); 05 (ca gốc gật, thiếu phường, khách từng nói không biết) / 06 (cách nói mới, thiếu phường và diện tích) — trả câu "còn thiếu một chút" → 2 đỏ; 07 (ca gốc gán mảnh MOI cùng đường) — tắt kiểm → đỏ; 08 đối chứng (MOI đường khác vẫn mở tin); 09 (kể lại 90m²) — tắt → đỏ; 10 (ca gốc hỏi phí lần nữa) / 11 (cách nói mới "ăn bao nhiêu phần trăm") — tắt → 2 đỏ; 12 (gật duyệt kèm hỏi hoa hồng) — tắt → đỏ; 13 / 14 (lời ghi nhận ngoài câu treo) — trả `FACT_LABELS` → 14 đỏ (13 không đỏ: ô đường vào không vào nhánh này trong mock, giữ làm đối chứng). `kiem-bang-chung.mjs` ZZZZZ-K1…K8 — tắt `laSoDemKhoang` → K1/K2 kiểm nhẹ đỏ (kiểm đủ đã có luật "phòng ngủ phải có chữ ngủ"), tắt gọt xưng hô → K4/K5 đỏ, K6 đối chứng "Cô Giang"; `tin-nhap-rao.mjs` ZZZZZ-T1 (tắt → đỏ) / T2 đối chứng. e2e **1188/1188**, `kiem-bang-chung` 511/511, `tin-nhap-rao` 44/44.
 
+### SRS-5.1zzzzzb · Bot không bịa: mọi khẳng định trong lời bot phải có nguồn (11/10/2026)
+
+`[nguồn: lượt mo-phong.yml thứ tư 11/10/2026 sau deploy SRS-5.1zzzzz (5 persona; 4 persona ghi đúng 100%, người lớn tuổi 78%); chủ dự án 11/10: "cái này lại là vá à sửa hết từ gốc đi rồi merge, làm sao để bot ko bịa ntn phải nghĩ chứ"]`
+
+**Ca gốc.** Bác lớn tuổi hỏi "hẻm Quang Trung ở phường nào nhỉ" → bot "Hẻm Quang Trung ở phường Thạnh Lộc bác ơi. Vậy nhà bác ở phường Thạnh Lộc đúng không bác?" — Thạnh Lộc là phường của Quận 12, tin ở Gò Vấp. Bác gật, code đổi sang phường mới (An Phú Đông, Quận 12 cũ), hỏi lệch quận; bác nói "Gò Vấp mà" — chữ "dạ" đầu câu bị đọc là gật, tin ghi phường Quận 12. Cùng lượt: "anh chị định để giá 3 tỷ 2 là chuẩn rồi ạ" (khen giá không căn cứ).
+
+**Nghĩ từ gốc — vì sao bot bịa được.** Người viết lời là một model có kiến thức riêng. Ba điều cùng lúc cho phép nó bịa:
+1. **Không có nguồn sự thật cho câu hỏi sự thật.** Hệ thống có bảng tên đường (`duong`, 168 phường) nhưng chỉ dùng ở vài câu hỏi code soạn sẵn; khi khách HỎI, model không được đưa dữ liệu đó nên trả lời bằng trí nhớ.
+2. **Lưới soát chỉ soát "nhận xét", không soát "khẳng định sự thật".** `kiem-khen.ts` liệt kê câu khen / nhận xét về căn nhà; câu địa danh, giá khu, quy hoạch không thuộc diện đó, và mọi câu có dấu "?" được cho qua — trong khi câu hỏi gợi ý ("ở phường X đúng không") chính là khẳng định trá hình, khách gật là thành dữ liệu.
+3. **Lưới không phủ mọi đường viết lời.** Năm chỗ model viết lời người bán (r1 câu rao, r2 câu treo, r2b hỏi lại, r3 chăm sóc, `goiLaiChoDungO` viết lại cho đúng ô); chỗ thứ năm không qua soát.
+
+**Bất biến mới (MỘT luật cho mọi lời model gửi người bán):** chỉ được KHẲNG ĐỊNH điều có trong ba nguồn — lời chủ nhà, thông tin đã ghi, DỮ LIỆU TRA CỨU do code tra. Kiến thức riêng của model không phải nguồn.
+
+**Sửa.**
+- **Nguồn thứ ba — DỮ LIỆU TRA CỨU** (`duLieuTra`, một lần mỗi lượt): tin có phường thì nêu phường đã ghi; chưa có phường thì tra bảng `duong` theo tên đường + quận (một phường / các phường đường đi qua), không tra ra thì nói rõ "chưa tra được, không tự nêu tên phường". Khối này vào ngữ cảnh của MỌI lượt model viết (`boiCanhLuot`) và là căn cứ hợp lệ cho lượt soát.
+- **Lượt soát tổng quát** (`kiem-khen.ts`): liệt kê MỌI khẳng định (căn nhà, khu vực, địa danh, giá / thị trường, pháp lý, quy hoạch, dự án) kể cả CÂU HỎI GỢI Ý giá trị (`goi_y`); căn cứ phải chép nguyên văn từ một trong ba nguồn. Code bỏ câu khẳng định không nguồn (`nhanXetKhongCanCu`, như cũ) và bỏ CẢ câu hỏi gợi ý không nguồn (`cauHoiGoiYKhongNguon` + `boCauHoiGoiY`); câu hỏi mở không bao giờ bị bỏ.
+- **Một cửa:** `goiLaiChoDungO` qua cùng lượt soát; `luat-khong-mau-thuan.mjs` (16) đếm số chỗ `anthropicS.messages.create(` ↔ số chỗ `await soatNhanXet(` — thêm đường viết lời mà quên soát là đỏ.
+- **Câu lệnh:** `TONE_RULES` nói ba nguồn, địa danh / giá khu / quy hoạch chỉ theo DỮ LIỆU TRA CỨU, cấm câu hỏi gợi ý tự nghĩ; chủ đề hỏi ngược mới `dia_danh` ("đường này thuộc phường nào") với chỉ dẫn trả lời đúng theo khối tra (trước bị xếp `du_an`).
+- **Câu lệch quận:** câu "Phường X thuộc Y, tin ghi Z — Y hay Z?" là câu chọn quận; khách gọi tên Z (quận tin đang ghi) thì đó là lời chọn Z — chữ "dạ / đúng rồi" kèm theo không còn được đọc là gật gợi ý (gật trơn vẫn nhận như LQ-02/03).
+
+**Cùng lượt, hai lỗi tầng code khác.**
+- **Diện tích "4 mét x 16 mét" mất ba lượt liền.** AI đưa `dien_tich = "4 x 16"`, qua kiểm trích dẫn, rồi `docAiChinh` đọc SỐ ĐẦU "4" làm m² → ngoài khoảng → bỏ im. Lớp lỗi: nơi đọc giá trị AI không hiểu dạng ngang × dài mà kiểm bằng chứng đã nhận. Sửa: dạng "A x B" ghi đúng "AxB" như luật (DB đọc ra ngang / dài / m²). Chỗ khác cùng lớp: `dienTich` trong `docAiChinh` đã bỏ qua giá trị có "x"; ô ngang / dài riêng không đổi.
+- **Bot vừa hoãn mà vẫn hỏi / xin lỗi lại.** "anh đang bận, tối nói tiếp" → câu hoãn y nguyên lần hai; "tối nhắn anh nhé" → bot hỏi tiếp thổ cư; "tối em nhắn lại nhé" → "em chưa chắc ý". Lớp lỗi: trạng thái "đang hoãn" không được nhớ qua lượt — mỗi lượt đọc lại như hội thoại mới, và gật / hẹn lại / nói bận bị xem là ba ý khác nhau. Sửa: bot vừa hoãn mà lượt không mang dữ liệu nào (AI đọc) và khách chỉ gật / hẹn lại → một câu "Dạ vâng ạ, em chờ … nha.", không hỏi, không xin lỗi lại; chạy TRƯỚC lượt "hai AI đọc lệch" (sau lời hoãn, gật và hẹn lại là cùng một ý).
+
+**Chỗ khác cùng lớp (chưa sửa, ghi lại).** Nhánh người MUA có lượt soát riêng (`LUAT_MUA`, `doiTuong = nguoi_mua`) và trợ lý có công cụ (`tro-ly.ts`, lưới gọt tên bịa) — đã theo nguyên tắc nguồn từ trước; chưa có khối DỮ LIỆU TRA địa danh cho người mua. Lời code soạn sẵn (câu tiền định) không qua soát vì dữ liệu của chúng là cột / fact đã ghi.
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy)**: e2e ZZZZZB-01 (ca gốc "hẻm Quang Trung ở phường nào") / 02 (cách nói mới "chỗ bác ở thuộc phường gì") — tắt bỏ câu hỏi gợi ý → 2 đỏ; tắt khối DỮ LIỆU TRA trong ngữ cảnh → 2 đỏ; 03 đối chứng (câu kể đúng các phường lấy từ khối tra → giữ); 04 (ca gốc "4 mét x 16 mét") / 05 (cách nói mới "đất 5 x 20 mét") — tắt → 2 đỏ; 06 (lệch quận, "dạ, nhà bác ở Gò Vấp…") — tắt → đỏ; 07 (ca gốc "anh đang bận, tối nói tiếp") / 08 (cách nói mới "tối nhắn anh nhé") — tắt → 2 đỏ. `van-tra-loi.mjs` ZZZZZB-V1…V3, `kiem-bang-chung.mjs` ZZZZZB-K1…K3, `luat-khong-mau-thuan.mjs` (16). e2e **1196/1196**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

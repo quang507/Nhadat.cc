@@ -1077,6 +1077,16 @@ export function chonDeGhi(dat: DeXuat[], soSanh: SoSanh, dong: DongDb | null, fa
         if (/\b(san|su dung|tong|xay dung|tim tuong)\b/.test(kd) || co("dien_tich_san") || co("dien_tich_dat") || co("dien_tich_tim_tuong")) {
           bo.push({ ...d, ly_do: "dien_tich_khong_phai_dat" }); continue;
         }
+        // SRS-5.1zzzzzb (khách mô phỏng 11/10: "diện tích 4 mét x 16 mét" → AI dien_tich = "4 x 16", qua kiểm trích dẫn, rồi ở đây đọc SỐ ĐẦU
+        // "4" làm m² → ngoài khoảng → bỏ im; bot hỏi diện tích ba lần). Giá trị dạng ngang × dài là KÍCH THƯỚC — ghi đúng dạng "AxB" như
+        // luật (DB đọc ra ngang / dài / m²), không đọc số đầu.
+        const kt = /^(\d+(?:[.,]\d+)?)\s*m?\s*x\s*(\d+(?:[.,]\d+)?)\s*m?$/.exec(chuanSo(v).replace(/\bmet\b/g, "m").replace(/\s+/g, " ").trim());
+        if (kt) {
+          const [a, b] = [Number(kt[1].replace(",", ".")), Number(kt[2].replace(",", "."))];
+          if (!(a * b >= KHOANG.dien_tich[0] && a * b <= KHOANG.dien_tich[1])) { bo.push({ ...d, ly_do: "so_ngoai_khoang" }); continue; }
+          answer = `${a}x${b}`;
+          break;
+        }
         const n = soCua(v);
         if (n == null || n < KHOANG.dien_tich[0] || n > KHOANG.dien_tich[1]) { bo.push({ ...d, ly_do: "so_ngoai_khoang" }); continue; }
         answer = `${n}m2`;

@@ -1469,5 +1469,17 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   const c = cauHoiMau("duyet_tin", "anh chị");
   ok("ZZZZY-V4 (ca gốc) cauHoiMau('duyet_tin') → nhắc 'ok', không 'cho em xin thêm'", /nhắn "ok"/.test(c) && !/cho em xin thêm/.test(c), c);
 }
+// SRS-5.1zzzzzb: câu hỏi gợi ý giá trị không nguồn bị bỏ cả câu; câu hỏi mở và câu hỏi gợi ý có nguồn giữ.
+{
+  const { cauHoiGoiYKhongNguon, boCauHoiGoiY } = await import("../supabase/functions/_shared/extraction/van-tra-loi.ts");
+  const loi = "Vâng ạ. Hẻm Quang Trung bác nhớ gần chỗ nào không bác? Vậy nhà bác ở phường Thạnh Lộc đúng không bác?";
+  const bo = cauHoiGoiYKhongNguon([{ cau: "Vậy nhà bác ở phường Thạnh Lộc đúng không bác?", can_cu: null, goi_y: true }, { cau: "Hẻm Quang Trung bác nhớ gần chỗ nào không bác?", can_cu: null, goi_y: false }], "hẻm quang trung");
+  const r = boCauHoiGoiY(loi, bo);
+  ok("ZZZZZB-V1 (ca gốc) câu hỏi gợi ý 'ở phường Thạnh Lộc đúng không' không nguồn → bỏ cả câu; câu hỏi mở giữ", bo.length === 1 && !/Thạnh Lộc/.test(r ?? "") && /gần chỗ nào/.test(r ?? ""), JSON.stringify({ bo, r }));
+  const bo2 = cauHoiGoiYKhongNguon([{ cau: "Nhà anh ở Phường Gò Vấp đúng không anh?", can_cu: "Phường Gò Vấp", goi_y: true }], "bảng tên đường: đường Quang Trung ở Quận Gò Vấp thuộc Phường Gò Vấp.");
+  ok("ZZZZZB-V2 đối chứng câu hỏi gợi ý có căn cứ trong DỮ LIỆU TRA → giữ", bo2.length === 0, JSON.stringify(bo2));
+  const bo3 = cauHoiGoiYKhongNguon([{ cau: "Giá mình 5 tỷ phải không chị?", can_cu: "5 tỷ", goi_y: true }], "chị bán nhà hẻm 4m");
+  ok("ZZZZZB-V3 (cách nói mới) 'giá mình 5 tỷ phải không' — căn cứ AI đưa không có trong nguồn → bỏ", bo3.length === 1, JSON.stringify(bo3));
+}
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
