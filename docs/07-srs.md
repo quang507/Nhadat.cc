@@ -3131,6 +3131,63 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
   - Phần câu lệnh (cam_xuc, TONE_RULES) chỉ kiểm được bằng model thật: bắn lại sau deploy + `dong-bo-prompt`.
   - `bun run test:bot` exit 0, `kieu:bot` sạch.
 
+### SRS-5.1zzzzv · Ba lỗi còn lại sau lượt bắn lại 10/10; bước ghi đè mật khẩu VPS chưa từng chạy được (11/10/2026)
+
+`[nguồn: bắn production 10/10/2026 sau SRS-5.1zzzzu (thu-cmp46-2, thu-cmp46-3); lượt cai-vps 11/10/2026; chủ dự án 11/10: "cho mấy lỗi còn lại từ lượt bắn hôm qua"]`
+
+**(1) "e co mieng dat can ban": AI trả rỗng hai lượt liền** (thu-cmp46-2).
+- **Nguyên nhân**: bộ ví dụ mẫu có "chào cháu, cô có miếng đất cần bán" (có dấu), không có ví dụ tin ngắn KHÔNG DẤU. Model coi chữ không dấu ngắn là không có dữ kiện.
+- **Lớp lỗi**: *ví dụ mẫu chỉ phủ một cách gõ* (cùng lớp SRS-5.1zzzzt (1)).
+- **Sửa (dạy bằng ví dụ, không regex)**: thêm ví dụ "a co lo dat muon ban" → `loai_giao_dich ban «muon ban»`, `loai_bds dat «lo dat»`. Luật đi kèm: đọc chữ không dấu như có dấu, trích dẫn giữ đúng chữ khách gõ. Trần khối ví dụ nới 12400 → 12600.
+- **Chỗ khác cùng lớp**: lượt 2 "o cu chi xa tan thanh dong" (địa danh không dấu) cũng rỗng. Phường vẫn được ghi qua đường tra phường riêng; ví dụ mới dạy chung cách đọc không dấu.
+- **Kiểm**: `bun bot/tests/vi-du-boc-rao.mjs` (mọi trường của ví dụ qua `kiemDeXuat`). Phần model chỉ kiểm được bằng bắn lại.
+
+**(2) Lô đất mà bot hỏi "Nhà mình ở đường nào, số mấy"** (thu-cmp46-2, lượt loại vừa thành đất).
+- **Nguyên nhân**: đổi "nhà mình" thành "lô đất / căn hộ" đang rải ba chỗ (câu mẫu, r2, r2b). Chỗ nào cũng đọc loại từ ẢNH CHỤP đầu lượt (`pendingReq.listings`); đúng lượt loại vừa được ghi thì ảnh chụp vẫn là `chua_ro`.
+- **Lớp lỗi**: *quyết định theo trạng thái cũ của đầu lượt, đầu ra không có một chủ*.
+- **Sửa**: một chủ ở đường ra duy nhất `traLoiSeller`. Lời có cụm "nhà anh / chị / mình…" thì đọc loại THẬT của tin đang nói (`tinTrongLuot` hoặc `active_listing_id`, một truy vấn, chỉ khi có cụm đó). Hai dòng r2 / r2b bỏ; câu mẫu vẫn đổi tại chỗ.
+- **Chỗ khác cùng lớp**: lưới trạng thái tin (SRS-5.1zzzzk) đã đọc DB ở đường ra như vậy. Nhánh mua không gọi "nhà anh" theo loại tin nên không dính.
+- **Kiểm**: e2e ZZZZV-02 (ca gốc; tắt lưới thì đỏ, đã chạy).
+
+**(3) Chủ nhà nghi ngờ: bong bóng trấn an và lời model cùng nói "không thu đồng nào trước"** (thu-cmp46-3).
+- **Nguyên nhân**: bong bóng trấn an tiền định được thêm ở đường ra, SAU khi model đã viết lời. Model không biết bong bóng đó, nên trấn an lại cùng ý.
+- **Lớp lỗi**: *hai nguồn nói cùng một ý trong một lượt* (cùng lớp SRS-5.1zzzze).
+- **Sửa**: chỉ dẫn hỏi ngược (`hoiNguocPrompt`, dùng chung cho các câu lệnh r2 / r2b) đọc `camXucAi()` trước. Nghi ngờ thì báo model: bong bóng trấn an đã gửi, không nói lại, không nhắc phí, chỉ đáp ngắn rồi đi tiếp. Bong bóng tiền định vẫn là chủ của lời trấn an.
+- **Bắn lại sau deploy (thu-cmp48-3) vẫn lặp**: lượt đó đi đường r2b ("lượt bên lề", đang treo câu diện tích), nơi dòng `viSao` dặn "trả lời thẳng câu hỏi ngược trước (phí theo luật phí)". Dòng này **mâu thuẫn** với dòng mới, và model theo dòng `viSao`. Nay:
+  - nghi ngờ thì `viSao` coi câu hỏi đã được bong bóng trả lời (như `hoiNguocDap`);
+  - lời dặn về câu hỏi ngược / trấn an gom về MỘT hàm `danHoiNguocLuot`, dùng ở r1 (câu rao), r2 / r2b (câu treo), r3 (chăm sóc). Hai đường r1 và r3 trước đây chưa biết bong bóng trấn an.
+- **Kiểm**:
+  - e2e ZZZZV-035/036/037: câu lệnh r2 có dòng đó. Tắt thì đỏ cả ba, đã chạy.
+  - ZZZZV-04a/b/c (r2b):
+    - 04a: ca gốc. Tắt sửa `viSao` thì đỏ, đã chạy.
+    - 04b: **cách nói MỚI** "đưa thông tin rồi ai chịu trách nhiệm".
+    - 04c: đối chứng, hỏi ngược bình thường vẫn được dặn trả lời.
+
+**(4) Bước "Ghi đè thông tin VPS tạm trong Vault" của `apply-migration.yml` chưa từng chạy được.**
+- **Nguyên nhân**: SQL viết trong chuỗi bash nháy đơn, `''x''` bị bash nuốt dấu nháy, SQL sai cú pháp, API trả 400. Lượt cai-vps 11/10 phải ghi đè tay: IP và mật khẩu VPS trong Vault nay chỉ còn 1 ký tự.
+- **Lớp lỗi**: *SQL nhúng trong chuỗi shell*.
+- **Sửa**: dựng JSON bằng `jq --arg`, như ban-thu / do-boc đã làm.
+- **Chỗ khác cùng lớp**: `mo-phong.yml` mới viết theo cách `jq`.
+
+- `bun run test:bot` exit 0, `kieu:bot` sạch.
+
+### SRS-5.1zzzzw · Khách mô phỏng có persona kiểm bot trên production (11/10/2026)
+
+`[nguồn: kế hoạch PR4 (tư duy từ UKPLab/llm-roleplay, real-estate-coach-gpt: kiểm bot bằng khách giả có tính cách thay cho kịch bản viết tay); chủ dự án 11/10: "làm cái pr4 đi"]`
+
+- **Vì sao**: lỗi bot mấy ngày nay chủ yếu lộ ra khi bắn tay từng kịch bản cố định. Kịch bản cố định không phản ứng theo câu bot hỏi, nên không lộ ra kiểu lỗi chỉ xuất hiện khi khách trả lời lệch, cụt hay đổi ý.
+- **Cách làm** (`bot/tests/mo-phong/`, tách khỏi code bot, không import vào bot):
+  - `persona.json`: 8 kiểu chủ nhà giả, mỗi kiểu có cách gõ, hành vi ẩn và bộ sự thật về căn. Dữ kiện là dữ kiện bịa, không SĐT.
+  - `mo-phong.mjs`: một model đóng vai khách nhắn từng tin qua đúng đường ban-thu (`net.http_post` → chat-reply, Zalo thử `thu-mp-<mã>`), đợi bot trả lời, tới khi khách nói xong hoặc hết lượt. Dọn dữ liệu thử ở `finally` và một bước `if: always()`.
+  - `cham.mjs` (thuần, chấm tất định):
+    - tỉ lệ trường ghi đúng so với bộ sự thật;
+    - lượt tới bản nháp, có lên kệ không;
+    - lỗi lời bot đo bằng code: markdown, gạch dài, "anh/chị", lượt không lời, lặp nguyên văn.
+  - Giám khảo AI chấm 5 tiêu chí giọng: một ý, không đọc lại số, không bịa, không tiếng Anh, tự nhiên. Mỗi lỗi phải TRÍCH nguyên văn câu bot; `kiemTrichDanGiamKhao` bỏ lỗi không có trích dẫn thật hoặc trích từ bong bóng hệ thống.
+- **Chạy**: workflow `mo-phong.yml`, chỉ chạy tay, 1–5 persona. Khoá Anthropic đọc từ Vault và che trong log. Tiền thật, không vào CI.
+- **Kiểm offline**: `bun bot/tests/mo-phong/tu-kiem.mjs` (trong `test:bot`, 10 ca). Ca gồm: ghi đúng 100% khi DB khớp; DB lệch thì đúng 3 trường sai; mỗi loại lỗi lời bot bắt đúng lượt; giám khảo bỏ trích dẫn bịa.
+- TS-MO-PHONG-01 (docs/10).
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

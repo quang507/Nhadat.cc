@@ -109,10 +109,12 @@ jobs:
         if: ${{ always() && inputs.dung_lai == 'cai-vps' }}
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
+        # 11/10/2026: bản cũ viết SQL trong chuỗi bash nháy đơn — `''x''` bị bash nuốt dấu nháy, SQL sai, API trả 400, bước này
+        # chưa từng ghi đè được (lượt cai-vps 11/10 phải ghi đè tay). Dựng JSON bằng jq để SQL đi nguyên văn.
         run: |
-          curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
-            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-            -d '{"query":"select vault.update_secret(id, ''x'', ''DA_XOA_'' || name || ''_'' || floor(extract(epoch from now()))::text, ''đã ghi đè'') from vault.secrets where name in (''VPS_ROOT_PASSWORD'',''VPS_HOST'')"}'
+          SQL="select vault.update_secret(id, 'x', 'DA_XOA_' || name || '_' || floor(extract(epoch from now()))::text, 'đã ghi đè') from vault.secrets where name in ('VPS_ROOT_PASSWORD','VPS_HOST')"
+          jq -n --arg q "$SQL" '{query: $q}' | curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d @-
           echo
 
       # 08/10/2026: project production cũ bị xoá nhầm — dựng lại từng bước trên project mới rỗng.

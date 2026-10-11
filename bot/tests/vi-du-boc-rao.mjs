@@ -38,7 +38,8 @@ const chu = viDuThanhChu();
 // không phải địa chỉ). Cùng lý do trên: khối ví dụ nằm trong system có cache.
 // 09/10/2026: nới 12000 → 12400 cho ví dụ "lời chào đầu tin" (SRS-5.1zzzzq — luật chữ một mình không đủ, "chào em, chị muốn bán lô đất"
 // vẫn rỗng sau khi sửa luật). Cùng lý do trên: khối ví dụ nằm trong system có cache.
-ok("bản chữ có đủ ví dụ và không dài quá 12400 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 12400, String(chu.length));
+// 11/10/2026: nới 12400 → 12600 cho ví dụ tin KHÔNG DẤU (SRS-5.1zzzzv — "e co mieng dat can ban" AI trả rỗng hai lượt). Cùng lý do trên.
+ok("bản chữ có đủ ví dụ và không dài quá 12600 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 12600, String(chu.length));
 ok("bản chữ không chứa số điện thoại", !/\b0\d{9}\b/.test(chu));
 
 console.log(hong ? `\nVÍ DỤ MẪU: ${hong}/${tong} CA HỎNG` : `\nVÍ DỤ MẪU: ${tong}/${tong} CA ĐẠT`);
