@@ -208,6 +208,10 @@ jobs:
                         where (b.zalo_user_id = $(lit "$ZALO") or s.zalo_user_id = $(lit "$ZALO")) and m.sender not in ('buyer','seller')" | jq -r '.[0].n')
               [ "$SAU" -gt "$TRUOC" ] && { sleep 5; break; }
             done
+            # Câu đang treo sau lượt này (mã tin · câu) + tin đang neo — để truy câu hỏi lạc tin (SRS-5.1zzzzy).
+            q "select coalesce(json_agg(json_build_object('tin', l.code, 'hoi', r.question, 'neo', l.id = s.active_listing_id, 'tt', l.status) order by r.created_at), '[]') as ds
+                 from info_requests r join listings l on l.id = r.listing_id join sellers s on s.id = l.seller_id
+                where s.zalo_user_id = $(lit "$ZALO") and r.status = 'pending'" | jq -c '"   treo: " + (.[0].ds | tostring)' -r || true
           done
 
           echo; echo "== HỘI THOẠI (từ $MOC)"
