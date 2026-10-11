@@ -136,6 +136,7 @@ Ví dụ giọng SAI (tránh):
 - Tin nào cũng "Dạ em ghi … rồi ạ. … bao nhiêu vậy ạ?" — một khuôn lặp mãi, nghe như máy.
 - "Dạ em cảm ơn anh tin tưởng AI Ơi Nhà Đất :) Anh cho em xin địa chỉ nhà để em kiểm tra giá khu vực nha?" — cảm ơn, kể tên công ty, nêu lý do dài trước khi hỏi.
 - "Dạ em ghi 18 tỷ, hẻm 4m, 60m2 rồi ạ." — đọc lại số liệu khách vừa nói.
+- "3 tỷ 2" → "Em ghi giá 3.2 tỷ rồi ạ." — đọc lại số, lại viết khác chữ khách; chỉ "Vâng ạ." rồi hỏi tiếp.
 - "Sổ riêng hay chung, đã hoàn công chưa anh?" / "Sổ và hẻm được không ạ?" — gắn thêm ý vào câu hỏi, gộp hai ý thành câu không ai hiểu.
 - "Phí bên em sao?" [· pháp lý] → "Dạ phí … Nhà mình mấy phòng ngủ vậy anh?" — khách hỏi bên lề thì trả lời rồi quay lại đúng ý đang hỏi, không nhảy sang ý khác.
 - "Anh/chị cho em xin thêm kết cấu (số tầng, phòng) nha?" — đọc tên trường như máy, gạch chéo.
@@ -430,6 +431,9 @@ export const CAU_HOI_MAU: Record<string, string> = {
   // 24/09/2026 (chủ dự án: "hoàn công xong chưa" là câu ngớ ngẩn khi nhà đang cho ngân hàng thuê): hỏi MỘT ý, chỉ sổ.
   phap_ly: "Sổ hồng nhà mình là sổ riêng hay sổ chung {ac} ạ?",
   hinh_anh: "{Ac} chụp giúp em ảnh sổ, mặt tiền và hẻm qua Zalo nha?",
+  // SRS-5.1zzzzy (khách mô phỏng 11/10): không có khoá này thì `cauHoiMau("duyet_tin")` rơi về khuôn "cho em xin thêm {nhãn}" →
+  // "Anh chị cho em xin thêm chủ nhà duyệt bản nháp tin nha?". Câu chờ duyệt là câu nhắc "ok", như mọi chỗ nhắc khác.
+  duyet_tin: "Bản nháp ở trên {ac} thấy được thì nhắn \"ok\" là em đăng liền ạ.",
   hien_trang: "Nhà hiện còn ở tốt hay cần sửa lại {ac} ạ?",
   noi_that: "Nội thất để lại những gì {ac} ạ?",
   phi_quan_ly: "Phí quản lý mỗi tháng tầm bao nhiêu {ac} ạ?",
@@ -604,7 +608,8 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   dang_xong: "Dạ em cảm ơn {ac}, tin {loai} mình lên kệ {web} rồi, điểm đầy đủ {diem}/100.\nCó khách quan tâm là em báo {ac} liền.",
   // 05/10/2026 (demo AOND `build_fee_followup_system`): sau khi tin lên kệ, DẪN PHÍ một lần bằng câu hỏi — chưa từng nói phí
   // với người này thì nối câu này; họ hỏi lại thì model trả lời theo FEE_RULES. Xoá chữ ở bot_prompts là tắt.
-  dang_xong_phi: "Em cho chào căn {loai} của {ac} ngay ạ, mà {ac} biết phí bên em chưa ạ?",
+  // SRS-5.1zzzzy (khách mô phỏng 11/10): "Em cho chào căn nhà…" là tiếng nghề khách không hiểu; câu trước đã nói tin lên kệ, có khách là báo.
+  dang_xong_phi: "Mà {ac} biết phí bên em chưa ạ?",
   // SRS-5.1zzs (06/10/2026, AOND §IV): nói hạng người rao khi lên kệ. Câu nhắc "chuẩn môi giới 10 căn" đã bỏ cùng ngày
   // (chủ dự án: "hỏi thêm đó hơi ngu" — nói mà không mang lại gì cho khách).
   dang_xong_hang: "{Ac} đang ở hạng {hang} bên em.",

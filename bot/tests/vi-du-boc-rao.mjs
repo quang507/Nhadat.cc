@@ -13,6 +13,10 @@ for (const [i, v] of VI_DU_BOC_RAO.entries()) {
   ok(`ví dụ ${i + 1}: khoá đều trong MOI_KHOA`, v.truong.every((t) => MOI_KHOA.includes(t.khoa)));
   const kt = kiemKienThuc(v.kien_thuc, v.tin, dat);
   ok(`ví dụ ${i + 1}: kiến thức (${v.kien_thuc.length}) đều được giữ`, kt.length === v.kien_thuc.length, JSON.stringify({ kt, muon: v.kien_thuc }));
+  // SRS-5.1zzzzy: ke_rieng chép nguyên văn từ tin và không trùng kien_thuc.
+  const gd = (x) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  ok(`ví dụ ${i + 1}: ke_rieng (${(v.ke_rieng ?? []).length}) nguyên văn trong tin, không trùng kien_thuc`,
+    (v.ke_rieng ?? []).every((r) => gd(v.tin).includes(gd(r)) && !v.kien_thuc.some((k) => gd(k).includes(gd(r)) || gd(r).includes(gd(k)))));
   ok(`ví dụ ${i + 1}: không trường nào trùng khoá (trừ ngang/dai chung cụm)`,
     new Set(v.truong.map((t) => t.khoa)).size === v.truong.length);
 }
@@ -39,7 +43,8 @@ const chu = viDuThanhChu();
 // 09/10/2026: nới 12000 → 12400 cho ví dụ "lời chào đầu tin" (SRS-5.1zzzzq — luật chữ một mình không đủ, "chào em, chị muốn bán lô đất"
 // vẫn rỗng sau khi sửa luật). Cùng lý do trên: khối ví dụ nằm trong system có cache.
 // 11/10/2026: nới 12400 → 12600 cho ví dụ tin KHÔNG DẤU (SRS-5.1zzzzv — "e co mieng dat can ban" AI trả rỗng hai lượt). Cùng lý do trên.
-ok("bản chữ có đủ ví dụ và không dài quá 12600 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 12600, String(chu.length));
+// 11/10/2026: nới 12600 → 13000 cho ví dụ ke_rieng (SRS-5.1zzzzy — luật chữ "không chuyện riêng" có từ trước mà "con chị ở Úc" vẫn lên tin).
+ok("bản chữ có đủ ví dụ và không dài quá 13000 ký tự", chu.split("VÍ DỤ ").length - 1 === VI_DU_BOC_RAO.length && chu.length <= 13000, String(chu.length));
 ok("bản chữ không chứa số điện thoại", !/\b0\d{9}\b/.test(chu));
 
 console.log(hong ? `\nVÍ DỤ MẪU: ${hong}/${tong} CA HỎNG` : `\nVÍ DỤ MẪU: ${tong}/${tong} CA ĐẠT`);

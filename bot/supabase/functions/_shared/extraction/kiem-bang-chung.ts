@@ -12,7 +12,7 @@
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
 import { docTien, giaTheoM2, TIEN_KD } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
-import type { CanTrongTin } from "./khop-cau-tra-loi.ts";
+import { type CanTrongTin, trungY } from "./khop-cau-tra-loi.ts";
 import { cumPhongNguTheoTang, cungHoFact, docTraLoiLung, nhanDienFact, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, tenPhuongCot, phuongChuan, phuongSoCuTrongCau, phuongTrongTrich, phuongTuTenCu, quanTrongCau, viTriGhiDuoc } from "./khop-phuong.ts";
@@ -315,7 +315,8 @@ const HINH_TRUONG_CHU: Record<string, RegExp> = {
   // 21/09/2026 (bắn thật mau-v-03 chế độ chinh): "hẻm xe hơi" → hiện trạng "xe hơi" lọt vì chữ có
   // thật trong cụm. Hiện trạng phải có chữ tả TÌNH TRẠNG căn nhà.
   hien_trang: /\b(trong|moi|cu|nha o|dang o|o tu|o lien|vao o|don vao|dang cho thue|dang thue|xuong cap|son|sua|hoan thien|tho|bo trong|dang kinh doanh|dang su dung|nha nat|dot nat|xay|dep|sach|nguyen ban|da su dung|chua o|con tot|ban giao|hien trang|cho thue|kinh doanh)\b/,
-  phap_ly: /\b(so|hong|do|hoan cong|vi bang|hdmb|hop dong|giay tay|shr|shc|cong chung|chung|rieng|sang ten|the chap)\b/,
+  // SRS-5.1zzzzy (khách mô phỏng 11/10: "không có shr đâu, giấy tờ thường thôi" — AI ghi đúng ô mà bảng hình dạng thiếu chữ "giấy tờ").
+  phap_ly: /\b(so|hong|do|hoan cong|vi bang|hdmb|hop dong|giay tay|giay to|shr|shc|cong chung|chung|rieng|sang ten|the chap)\b/,
   ket_cau: /\d|\b(tret|lau|tang|tam|lung|ham|mai|san thuong|cap 4|btct|be tong|khung|gac)\b/,
   ly_do_ban: /^(?!(?:can\s+)?(?:ban\s+)?gap\s*$).{3,}/,
   // Đo bóng lần 2: "để ở hoặc cho thuê đều được" vào ô nội thất.
@@ -1506,13 +1507,13 @@ export function docNgungHangLoat(
  * AI đọc. Nhận khi cụm trích có trong tin; `khong` hoặc trích bịa → null (= AI nói không có yêu cầu nào code xử lý được).
  */
 export function docYeuCau<L extends string, O extends string>(
-  v: { loai?: L | null; trich_dan?: string | null; o?: O | null } | null | undefined,
+  v: { loai?: L | null; trich_dan?: string | null; o?: O | null; boY?: string[] } | null | undefined,
   tin: string,
-): { loai: Exclude<L, "khong">; trich: string; o: O | null } | null {
+): { loai: Exclude<L, "khong">; trich: string; o: O | null; boY: string[] } | null {
   const loai = v?.loai;
   if (!loai || loai === "khong") return null;
   const td = (v?.trich_dan ?? "").trim();
-  return trichCoTrongTin(td, tin) ? { loai: loai as Exclude<L, "khong">, trich: td, o: v?.o ?? null } : null;
+  return trichCoTrongTin(td, tin) ? { loai: loai as Exclude<L, "khong">, trich: td, o: v?.o ?? null, boY: v?.boY ?? [] } : null;
 }
 
 /**
@@ -1855,6 +1856,19 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
  * khoá (không nằm trong trích dẫn nào của `dat`), tối đa 3.
  */
 const LOI_NOI_CHUYEN = /\b(de\s+(?:em|anh|chi|minh|toi|tui)\b|roi\s+(?:bao|gui|nhan)|bao\s+lai|gui\s+sau|chut\s+nua|lat\s+nua|hoi\s+lai|se\s+(?:gui|bao|nhan)|em\s+(?:coi|xem|kiem|check)|coi\s+lai|xem\s+lai|cam on|xin loi|nha\s*$|nhe\s*$)\b/;
+/** SRS-5.1zzzzy: model ghi chuyện riêng / nhận định giá trong `kien_thuc` với tiền tố "riêng:" (khuôn không thêm trường được, DC-13). */
+export function tachKeRieng(kienThuc: string[]): { canNha: string[]; rieng: string[] } {
+  const TIEN_TO = /^\s*(?:riêng|rieng)\s*:\s*/iu;
+  return {
+    canNha: kienThuc.filter((k) => !TIEN_TO.test(k)),
+    rieng: kienThuc.filter((k) => TIEN_TO.test(k)).map((k) => k.replace(TIEN_TO, "").trim()).filter(Boolean),
+  };
+}
+/** SRS-5.1zzzzy: bỏ khỏi kien_thuc ý trùng chuyện riêng (`tachKeRieng`), hoặc ý chủ nhà đã xin bỏ (`boc_tach.y_da_bo`) — cùng ý theo `trungY`. */
+export function boKeRieng(kienThuc: string[], keRieng: string[]): string[] {
+  const rieng = keRieng.filter((x) => (x ?? "").trim().length >= 3);
+  return kienThuc.filter((k) => !rieng.some((r) => trungY(k, r)));
+}
 export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[], daGhi: readonly string[] = []): string[] {
   const kdTin = chuanSo(tin);
   const daCo = dat.map((d) => chuanSo(d.trich_dan));

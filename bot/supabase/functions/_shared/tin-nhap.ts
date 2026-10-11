@@ -140,6 +140,18 @@ export function giaHienThi(l: Pick<TinNhapRow, "price_raw">): string | null {
   return l.price_raw ? donViGiaDep(l.price_raw) : null;
 }
 
+/**
+ * SRS-5.1zzzzy (khách mô phỏng 11/10: "hẻm khoảng 2-3 mét" → tin in "hẻm 2m"): cột `alley_width_m` là MỘT số (số đầu của khoảng); tin
+ * in đúng khoảng khách nói khi fact độ rộng là khoảng bắt đầu bằng đúng số trong cột. Một chỗ cho tiêu đề và dòng đường vào.
+ */
+function rongDuongVao(l: Pick<TinNhapRow, "alley_width_m">, fact: (k: string) => string | null): string | null {
+  if (!l.alley_width_m) return null;
+  const f = boDau(fact("do_rong_hem") ?? fact("do_rong_duong") ?? "");
+  const m = /(\d+(?:[.,]\d+)?)\s*(?:m|met)?\s*(?:-|–|den|toi)\s*(\d+(?:[.,]\d+)?)/.exec(f);
+  const a = m ? Number(m[1].replace(",", ".")) : NaN;
+  return m && a === Number(l.alley_width_m) ? `${so(a)}-${so(m[2].replace(",", "."))}m` : `${so(l.alley_width_m)}m`;
+}
+
 export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): string {
   const thue = l.deal === "cho_thue";
   // Tách CỤM bằng dấu phẩy, đúng thứ tự người ta đọc một tin rao: chỗ nào →
@@ -147,7 +159,8 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): st
   // không dấu phẩy thì đọc như máy đọc ("Bán nhà trệt + 2 lầu 3PN hẻm…").
   const vitri: string[] = [thue ? "Cho thuê" : "Bán", LOAI_TIEU_DE[l.property_type ?? ""] ?? "bất động sản"];
   const duongVao = DUONG_VAO_TIEU_DE[l.access_type ?? ""] ?? null;
-  if (duongVao) vitri.push(duongVao + (l.alley_width_m ? ` ${so(l.alley_width_m)}m` : ""));
+  const rong = rongDuongVao(l, fact);
+  if (duongVao) vitri.push(duongVao + (rong ? ` ${rong}` : ""));
   // Đường/hẻm: lời chủ nhà nói, bỏ phần phường/quận vì đã có ở vế sau, và bỏ
   // chữ "hẻm xe hơi 5m" nếu vế đường vào ngay trên đã nói rồi.
   // Giữa câu tiêu đề: từ loại đầu chữ thường ("Bán nhà phố hẻm 45 …"), tên riêng giữ hoa.
@@ -155,8 +168,11 @@ export function tieuDeTin(l: TinNhapRow, fact: (k: string) => string | null): st
   if (duong) {
     // 01/10/2026 (bắn thật lx-tam-42): "12 hẻm 4m Trần Bình Trọng" — chữ "hẻm 4m" đứng SAU số nhà nên tiêu đề lặp "hẻm xe hơi 4m
     // 12 hẻm 4m …". Bề rộng hẻm (có "m") ở giữa câu cũng bỏ; "hẻm 45" (số hẻm, không "m") giữ.
+    // SRS-5.1zzzzy (khách mô phỏng 11/10): "MT Trần Hưng Đạo" (địa chỉ chuẩn thành "Mặt tiền Trần Hưng Đạo") → tiêu đề "Bán nhà mặt tiền
+    // mặt tiền Trần Hưng Đạo". Chữ đường vào ở ĐẦU địa chỉ (mặt tiền / MT / MTKD / hẻm…) đã nằm ở vế đường vào thì bỏ.
     const gon = duongVao
-      ? duong.replace(/^h[eẻ]m(\s+xe\s+h[oơ]i|\s+xe\s+m[aá]y)?\s*[\d.,]*\s*m?\s*/i, "")
+      ? duong.replace(/^(?:m[aặ]t\s+ti[eề]n(?:\s+kinh\s+doanh)?|mtkd|mt)\s+/iu, "")
+        .replace(/^h[eẻ]m(\s+xe\s+h[oơ]i|\s+xe\s+m[aá]y)?\s*[\d.,]*\s*m?\s*/i, "")
         .replace(/(\s)h[eẻ]m(?:\s+xe\s+h[oơ]i|\s+xe\s+m[aá]y)?\s*\d+(?:[.,]\d+)?\s*m(?![\p{L}\d])\s*/iu, "$1").trim()
       : duong;
     vitri.push(gon || duong);
@@ -262,7 +278,7 @@ export function soanTinNhap(t: ThamSoNhap): string {
   ]);
   them("🛣", "Đường vào", [
     l.access_type
-      ? thongSoNgan({ access_type: l.access_type, alley_width_m: l.alley_width_m } as SpecRow).replace(/^ · /, "")
+      ? thongSoNgan({ access_type: l.access_type, alley_width_m: null } as SpecRow).replace(/^ · /, "") + (rongDuongVao(l, fact) ? ` ${rongDuongVao(l, fact)}` : "")
       : (fact("do_rong_hem") ?? fact("do_rong_duong") ?? fact("duong_vao")),
     nhan("cách mặt tiền", fact("cach_mat_tien")),
     fact("hem_thong"),

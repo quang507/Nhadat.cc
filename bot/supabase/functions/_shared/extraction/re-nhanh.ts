@@ -39,7 +39,8 @@ const NHA_NAT = /\b(?:nha nat|nha cu nat|dap di xay lai|dap xay lai|mua dat tang
 const NO_HAU = /\bno hau\b/;
 const NO_HAU_SO = /\bno hau\s*(?:la\s*|hon\s*|khoang\s*|tam\s*|ra\s*|thanh\s*)?\d/;
 const KHONG_NO_HAU = /\b(?:khong|ko|k|chua)\s*(?:co\s*)?no hau\b/;
-const THO_CU_DU = /\b(?:100|full|toan bo|het|du)\b/;
+// Đọc GIÁ TRỊ ô thổ cư đã ghi (cụm ngắn khách gõ, ô nguyên văn), không đoán ý cả câu. SRS-5.1zzzzy: "toàn thổ cư" (khách mô phỏng 11/10).
+const THO_CU_DU = /\b(?:100|full|toan(?: bo)?|het|du|tron)\b/;
 // FR-229: câu "sổ đứng tên ai" nói NHIỀU người đứng tên.
 const NHIEU_NGUOI_DUNG_TEN = /\b(?:vo chong|2 vo chong|hai vo chong|anh em|chi em|ba me|bo me|cha me|ong ba|thua ke|dong so huu|chung|nhieu nguoi|ca nha|gia dinh|may anh em|\d+\s*(?:nguoi|anh em|chi em))\b/;
 const MOT_NGUOI_DUNG_TEN = /\b(?:mot minh|1 minh|mot nguoi|1 nguoi|chi (?:minh )?(?:toi|anh|chi|em|minh)|rieng (?:toi|anh|chi|em|minh)|khong (?:co )?(?:dong so huu|chung))\b/;

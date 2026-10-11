@@ -306,6 +306,8 @@ class Builder {
   // SRS-5.1zzj: `.upsert(rows, { onConflict: "a,b" })` — trùng khoá thì gộp vào dòng cũ, không thì chèn.
   upsert(p, opts = {}) { this.op = "upsert"; this.payload = p; this.onConflict = String(opts.onConflict ?? "id").split(",").map((c) => c.trim()); return this; }
   update(p) { this.op = "update"; this.payload = p; return this; }
+  // SRS-5.1zzzzy: chat-reply xoá dòng ghi chú khách xin bỏ (`.delete().eq("id", …)`).
+  delete() { this.op = "delete"; return this; }
   _f(kind, col, val) { (col.includes(".") ? this.embedFilters : this.filters).push({ kind, col, val }); return this; }
   eq(c, v) { return this._f("eq", c, v); } neq(c, v) { return this._f("neq", c, v); } in(c, v) { return this._f("in", c, v); }
   gte(c, v) { return this._f("gte", c, v); } lte(c, v) { return this._f("lte", c, v); } gt(c, v) { return this._f("gt", c, v); } lt(c, v) { return this._f("lt", c, v); }
@@ -381,6 +383,11 @@ class Builder {
       return this.mode === "single" || this.mode === "maybe" ? { data: out[0] ?? null, error: null } : { data: out, error: null };
     }
     let rows = db.rows(t).filter((r) => this.filters.every((f) => Builder.test(f, r)));
+    if (this.op === "delete") {
+      const bo = new Set(rows);
+      db.t[t] = (db.t[t] ?? []).filter((r) => !bo.has(r));
+      return { data: rows, error: null };
+    }
     if (this.op === "update") {
       rows.forEach((r) => Object.assign(r, this.payload));
       if (t === "listings") rows.forEach((r) => {

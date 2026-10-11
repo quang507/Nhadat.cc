@@ -2469,6 +2469,30 @@ export function docTraLoiLung(answer: string): "co" | "them" | "khong" | null {
   return null;
 }
 
+/**
+ * SRS-5.1zzzzy (khách mô phỏng 11/10: "không có gác lửng ạ, 4 tầng đầy đủ thôi" — 9 chữ): câu đáp câu lửng đã được đọc (sửa kết cấu)
+ * thì các mảnh nói về lửng / số tầng thuộc về câu đó, không đi tiếp luồng thường (luồng đó ghi nguyên văn câu vào ô kết cấu, rồi tầng
+ * DB thấy chữ "lửng" là bật có lửng). Bản cũ cắt theo độ dài (≤ 8 chữ) — một cụm chỉ trả lời một ô, không phải theo số chữ. Trả phần
+ * CÒN LẠI (mảnh không nói lửng / số tầng); rỗng = cả tin là câu đáp lửng.
+ */
+export function phanNgoaiCauLung(answer: string): string {
+  return (answer ?? "").split(/[,;.!\n]+/).map((m) => m.trim()).filter((m) => m &&
+    docTraLoiLung(m) == null && soTangTrongDapLung(m) == null && !/\b(lung|gac)\b/.test(boDau(m))).join(", ");
+}
+/**
+ * SRS-5.1zzzzy: hai cụm nói CÙNG một ý — so theo từ (bỏ dấu, bỏ hư từ), không theo chuỗi con: khách gõ "con chị ở Úc" để chỉ
+ * ý thêm "con chị đang ở Úc nên cần bán". Đủ khi ≥ 3/4 từ của cụm ngắn nằm trong cụm dài (ít nhất 2 từ, cụm một từ thì 1).
+ * Dùng cho xin bỏ ý dòng "Thêm" (`boYGhiChu`) và lọc chuyện riêng / ý đã bỏ khỏi kiến thức thêm (`boKeRieng`).
+ */
+const HU_TU_Y = new Set(["va", "voi", "cua", "la", "thi", "ma", "nen", "dang", "se", "da", "cai", "may", "dong", "cau", "ve", "chuyen", "nay", "do", "kia", "nha", "a", "ak", "nhe", "di", "ra", "lam", "qua", "roi", "thoi", "can", "minh", "chi", "anh", "em", "co", "chu", "bac"]);
+export function trungY(a: string, b: string): boolean {
+  const tu = (x: string) => boDau(x ?? "").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((t) => t.length >= 2 && !HU_TU_Y.has(t));
+  const [ta, tb] = [tu(a), tu(b)];
+  const [ngan, dai] = ta.length <= tb.length ? [ta, new Set(tb)] : [tb, new Set(ta)];
+  if (!ngan.length) return false;
+  const trung = ngan.filter((t) => dai.has(t)).length;
+  return trung >= Math.min(2, ngan.length) && trung / ngan.length >= 0.75;
+}
 /** Kết cấu chữ sau khi biết lửng: n tấm + đáp → { floors, floors_text } (floors = số tầng KHÔNG tính lửng). */
 export function ketCauTheoLung(n: number, dap: "co" | "them" | "khong"): { floors: number; floors_text: string } {
   if (dap === "khong") return { floors: n, floors_text: n > 1 ? `trệt + ${n - 1} lầu` : "trệt" };

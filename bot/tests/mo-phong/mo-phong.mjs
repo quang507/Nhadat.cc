@@ -49,6 +49,9 @@ const ai = new Anthropic({ apiKey: ANTHROPIC_API_KEY, maxRetries: 2 });
 const chuCuaLoi = (r) => (r.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
 const layJson = (s, mac) => { const m = String(s).match(/[[{][\s\S]*[\]}]/); try { return m ? JSON.parse(m[0]) : mac; } catch { return mac; } };
 const banGhi = (luot) => luot.map((l) => `KHÁCH: ${l.khach}\n${(l.bot ?? []).map((b) => `BOT: ${b}`).join("\n")}`).join("\n\n");
+// SRS-5.1zzzzy (lượt 11/10: bác lớn tuổi hỏi "pháp lý là sao", rồi chính model đóng vai bác viết "Dạ cháu giải thích cho bác nghe nhé…"):
+// bản ghi cho model ĐÓNG VAI đánh dấu theo góc nhìn của nó — BẠN là tin của bạn, TRỢ LÝ là bên app — để nó không nhận nhầm vai.
+const banGhiChoKhach = (luot) => luot.map((l) => `BẠN: ${l.khach}\n${(l.bot ?? []).map((b) => `TRỢ LÝ: ${b}`).join("\n")}`).join("\n\n");
 
 /** Model đóng vai khách: trả {tin, xong}. */
 async function tinKhachKe(p, luot) {
@@ -58,11 +61,12 @@ async function tinKhachKe(p, luot) {
 Tính cách / cách gõ: ${p.mo_ta}
 Xưng hô của bạn: ${p.xung_ho}. Hành vi ẩn: ${p.an_y}
 SỰ THẬT về căn (chỉ nói những gì có ở đây, đúng cách gõ của bạn, mỗi tin một ít; không bịa thêm dữ kiện; KHÔNG đưa số điện thoại): ${p.loi_ke}
-Bạn LUÔN là người bán, KHÔNG BAO GIỜ nói thay bên app / trợ lý: không giải thích phí hay cách bên app làm việc, không tự trấn an mình
-("app này không lấy tiền trước đâu" là lời của bên app, không phải của bạn). Bot nói chưa rõ thì bạn hỏi lại hoặc bỏ qua, như người bán thật.
+Bạn LUÔN là người bán, KHÔNG BAO GIỜ nói thay bên app / trợ lý: không giải thích phí, thuật ngữ hay cách bên app làm việc, không tự trấn an
+mình ("app này không lấy tiền trước đâu" là lời của bên app, không phải của bạn). Bạn hỏi mà TRỢ LÝ chưa trả lời rõ thì hỏi lại hoặc bỏ qua,
+như người bán thật — không tự trả lời câu của chính mình. Trong bản ghi, dòng BẠN là tin bạn đã nhắn, dòng TRỢ LÝ là bên app.
 Luật: mỗi lượt viết ĐÚNG MỘT tin như người thật nhắn (không giải thích, không ngoặc kép). Bot hỏi gì thì trả lời theo tính cách. Bot gửi bản nháp tin (dòng bắt đầu 📋) thì đồng ý đăng hoặc sửa chỗ sai. Bot báo tin đã lên kệ, hoặc bạn đã kể hết và bot không hỏi gì nữa → xong.
 Trả về DUY NHẤT JSON: {"tin": "<tin nhắn kế>", "xong": false} hoặc {"tin": "", "xong": true}.`,
-    messages: [{ role: "user", content: luot.length ? `Cuộc chat tới giờ:\n\n${banGhi(luot)}\n\nTin kế của bạn?` : `Bắt đầu bằng đúng câu này: "${p.cau_dau}"` }],
+    messages: [{ role: "user", content: luot.length ? `Cuộc chat tới giờ:\n\n${banGhiChoKhach(luot)}\n\nTin kế của bạn?` : `Bắt đầu bằng đúng câu này: "${p.cau_dau}"` }],
   });
   const j = layJson(chuCuaLoi(r), {});
   return { tin: String(j.tin ?? "").slice(0, 400).trim(), xong: j.xong === true };

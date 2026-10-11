@@ -12,6 +12,8 @@ export type ViDuBocRao = {
   so_can: number;
   truong: DeXuat[];
   kien_thuc: string[];
+  /** SRS-5.1zzzzy: điều chủ nhà kể mà không lên tin rao (chuyện riêng, nhận định giá) — in vào đáp án thành kien_thuc tiền tố "riêng: ". */
+  ke_rieng?: string[];
   /** Vì sao đáp án như vậy — in vào prompt để model hiểu luật, không chỉ chép mẫu. */
   luu_y?: string;
 };
@@ -19,6 +21,16 @@ export type ViDuBocRao = {
 const t = (khoa: string, gia_tri: string, trich_dan: string): DeXuat => ({ khoa, gia_tri, trich_dan, can: null });
 
 export const VI_DU_BOC_RAO: ViDuBocRao[] = [
+  {
+    // SRS-5.1zzzzy (khách mô phỏng 11/10: "con chị bây giờ ở Úc", "sẽ tăng giá lắm" lên dòng "Thêm" của tin rao). Cách nói khác ca gốc.
+    cau_dang_hoi: null,
+    tin: "nhà gần chợ Bà Chiểu, con cái đi làm xa hết nên bán, nghe nói khu này sắp lên giá",
+    so_can: 1,
+    truong: [],
+    kien_thuc: ["gần chợ Bà Chiểu"],
+    ke_rieng: ["con cái đi làm xa hết", "khu này sắp lên giá"],
+    luu_y: "Tin rao là công khai: chuyện gia đình và nhận định giá của chủ nhà ghi tiền tố \"riêng: \", chỉ đặc điểm căn mới không tiền tố.",
+  },
   {
     // SRS-5.1zzzzq (bắn production 09/10/2026): "chào em, chị muốn bán lô đất" → rỗng ba lần, "chị muốn bán lô đất" → đúng. Cách nói khác ca gốc.
     cau_dang_hoi: null,
@@ -227,7 +239,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
 export function viDuThanhChu(ds: ViDuBocRao[] = VI_DU_BOC_RAO): string {
   return ds.map((v, i) => {
     const dau = v.cau_dang_hoi ? `Câu bot vừa hỏi chủ nhà: ${v.cau_dang_hoi}\n` : "";
-    const ra = JSON.stringify({ so_can: v.so_can, truong: v.truong, kien_thuc: v.kien_thuc });
+    const ra = JSON.stringify({ so_can: v.so_can, truong: v.truong, kien_thuc: [...v.kien_thuc, ...(v.ke_rieng ?? []).map((r) => `riêng: ${r}`)] });
     return `VÍ DỤ ${i + 1}\n${dau}Tin nhắn chủ nhà: "${v.tin}"\nĐáp án: ${ra}${v.luu_y ? `\nVì sao: ${v.luu_y}` : ""}`;
   }).join("\n\n");
 }

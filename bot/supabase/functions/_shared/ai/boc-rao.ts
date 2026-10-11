@@ -6,7 +6,7 @@
 // Tầng này KHÔNG ghi DB (luật `bot/tests/ranh-gioi.mjs`).
 import { z } from "npm:zod@4";
 import { dinhDangLong, docLong } from "./doc-long.ts";
-import { MOI_KHOA, type DeXuat } from "../extraction/kiem-bang-chung.ts";
+import { boKeRieng, MOI_KHOA, tachKeRieng, type DeXuat } from "../extraction/kiem-bang-chung.ts";
 import { viDuThanhChu } from "./vi-du-boc-rao.ts";
 import { danhSachPhuongChoAi } from "../extraction/khop-phuong.ts";
 
@@ -46,11 +46,11 @@ const XacNhan = z.object({
 // SRS-5.1zzzzx (khách mô phỏng 11/10: "app này có lấy tiền trước không" → chủ đề dich_vu → bot "câu này em nhờ anh chị phụ trách, em
 // không dám nói sai", vài lượt sau lại tự nói chính sách phí): phí là thứ hệ thống CÓ câu trả lời (`cauPhi`), còn dich_vu gom cả thứ bot
 // không có dữ liệu (hợp đồng, độc quyền) — câu phí chỉ được nhận ra bằng từ khoá trong dich_vu. Tách chủ đề `phi` để AI đọc theo nghĩa.
-export const CHU_DE_HOI = ["tin_cua_minh", "phi", "dich_vu", "thi_truong", "ve_bot", "nguon", "du_an", "khac"] as const;
+export const CHU_DE_HOI = ["tin_cua_minh", "phi", "dich_vu", "thi_truong", "ve_bot", "nguon", "du_an", "nghia_tu", "khac"] as const;
 const HoiLai = z.object({
   co_hoi: z.boolean().describe("Tin có câu chủ nhà HỎI bot / bên mình không — đọc theo NGHĨA, kể cả không dấu hỏi, gõ tắt, không dấu ('bao lâu thì bán được em', 'giá khu này giờ sao', 'khu này dễ bán hông em', 'ký hợp đồng gì không em', 'phi ben minh sao'). Chỉ trả lời câu bot hỏi, kể chuyện, chào, cảm ơn → false. Khách TỰ GIỚI THIỆU mình là ai ('anh là môi giới nha', 'chị là chủ nhà', 'bên anh là sàn') là KHẲNG ĐỊNH về chính khách, không phải câu hỏi → false (ghi vào `vai`)."),
   cau_hoi: z.string().nullable().describe("Câu hỏi đó COPY NGUYÊN VĂN từ TIN NHẮN CHỦ NHÀ — không bao giờ chép câu bot vừa hỏi. co_hoi = false thì null."),
-  chu_de: z.enum(CHU_DE_HOI).nullable().describe("tin_cua_minh = hỏi về chính căn mình đã rao (giá / diện tích đã ghi, đăng chưa, có khách chưa); phi = hỏi TIỀN phải trả cho bên em: phí bao nhiêu, hoa hồng, có thu tiền trước không, đăng có mất tiền không, khi nào trả ('app này có lấy tiền trước không', 'đăng tin tốn gì không em', 'hoa hồng mấy phần trăm') — phí quản lý chung cư là thông tin căn, KHÔNG phải phi; dich_vu = hợp đồng, độc quyền, cách làm việc, bao lâu bán được, ai xem tin, có dẫn khách không; thi_truong = giá khu vực, khu này dễ bán không, nên rao giá nào; ve_bot = bot là ai, người hay máy, công ty nào; nguon = hỏi bot SAO BIẾT / LẤY ĐÂU RA một điều bot vừa nói ('sao em biết nhà 4-6 tầng', 'ai nói em vậy', 'em lấy đâu ra số đó') — KHÔNG phải ve_bot; du_an = hỏi bên mình có BIẾT / biết gì về một DỰ ÁN, khu, toà nhà, chung cư cụ thể ('em biết dự án ny'ah phú định không', 'và dự án vinhome grand park', 'khu X thế nào em') — không phải căn đang rao; khac = còn lại. co_hoi = false thì null."),
+  chu_de: z.enum(CHU_DE_HOI).nullable().describe("tin_cua_minh = hỏi về chính căn mình đã rao (giá / diện tích đã ghi, đăng chưa, có khách chưa); phi = hỏi TIỀN phải trả cho bên em: phí bao nhiêu, hoa hồng, có thu tiền trước không, đăng có mất tiền không, khi nào trả ('app này có lấy tiền trước không', 'đăng tin tốn gì không em', 'hoa hồng mấy phần trăm') — phí quản lý chung cư là thông tin căn, KHÔNG phải phi; dich_vu = hợp đồng, độc quyền, cách làm việc, bao lâu bán được, ai xem tin, có dẫn khách không; thi_truong = giá khu vực, khu này dễ bán không, nên rao giá nào; ve_bot = bot là ai, người hay máy, công ty nào; nguon = hỏi bot SAO BIẾT / LẤY ĐÂU RA một điều bot vừa nói ('sao em biết nhà 4-6 tầng', 'ai nói em vậy', 'em lấy đâu ra số đó') — KHÔNG phải ve_bot; nghia_tu = hỏi NGHĨA một từ / thuật ngữ ('pháp lý là sao', 'sổ hồng riêng nghĩa là gì', 'thổ cư là gì cháu') — KHÔNG phải ve_bot, không phải tin_cua_minh; du_an = hỏi bên mình có BIẾT / biết gì về một DỰ ÁN, khu, toà nhà, chung cư cụ thể ('em biết dự án ny'ah phú định không', 'và dự án vinhome grand park', 'khu X thế nào em') — không phải căn đang rao; khac = còn lại. co_hoi = false thì null."),
 });
 // 01/10/2026 (chủ dự án: "nó có nhận ra cảm xúc của khách để báo về admin ko" → "sửa cả 4 đi"): giọng chủ nhà — AI đọc theo
 // NGHĨA cả câu (có ngữ cảnh), code kiểm trích dẫn rồi mới báo admin (`docCamXuc`).
@@ -101,7 +101,10 @@ const DeXuatRao = z.object({
   so_can: z.number().int().describe("Số căn / lô KHÁC NHAU chủ nhà rao trong tin này. Không rao căn nào (chỉ bổ sung, trả lời) thì 0."),
   truong: z.array(TruongBoc),
   // 17/09/2026 (chủ dự án): "AI có thể thêm trường kiến thức… các trường khách nói bổ sung sẽ ghi vào mô tả".
-  kien_thuc: z.array(z.string()).describe("Ý KHÁC chủ nhà nói về căn nhà mà không thuộc khoá nào ở trên (gần chợ, khu an ninh, mới sơn sửa, có gác…): mỗi ý một cụm ngắn COPY NGUYÊN VĂN từ tin (≤ 12 chữ). Không có thì []."),
+  // SRS-5.1zzzzy (khách mô phỏng 11/10: "con chị bây giờ ở Úc", "sẽ tăng giá lắm" lên dòng "Thêm" của tin rao): luật cấm chuyện riêng
+  // có từ trước mà model vẫn đưa vào — không có chỗ nào khác để đặt. Không thêm trường được (khuôn sát giới hạn grammar, DC-13), nên chuyện
+  // riêng đi CÙNG mảng với tiền tố "riêng: "; code tách ra và bỏ (`tachKeRieng` + `boKeRieng`), không ý nào có tiền tố lên tin.
+  kien_thuc: z.array(z.string()).describe("Ý KHÁC chủ nhà nói về căn nhà mà không thuộc khoá nào ở trên (gần chợ, khu an ninh, mới sơn sửa, có gác…): mỗi ý một cụm ngắn COPY NGUYÊN VĂN từ tin (≤ 12 chữ). Chuyện riêng của chủ nhà (gia đình, con cái, cần tiền, về quê) và nhận định giá / thị trường của chủ nhà (\"sẽ tăng giá\") ghi kèm tiền tố \"riêng: \" (vd \"riêng: con chị ở Úc\") — ý đó KHÔNG lên tin. Không có thì []."),
   tra_loi: TraLoiCau,
   cap_nhat: z.array(CapNhat).describe("Chỉ khi tin nói thêm / sửa MỘT PHẦN của thông tin ĐANG GHI (danh sách gửi kèm). Không có thì []."),
   xac_nhan: z.array(XacNhan).describe("Chữ viết tắt / gõ sai KHÔNG CHẮC nghĩa (\"xhr\" có thể là shr gõ nhầm): KHÔNG đưa vào truong, đưa khả năng cao nhất vào đây để hỏi lại. Tối đa 1. Không có thì []."),
@@ -173,7 +176,7 @@ KHOÁ:
   trần (số nhỏ, không đơn vị, không "rộng") là mập mờ → không đưa do_rong_hem.
 - du_an: tên dự án / khu dân cư / chung cư. Tên phường, tên khu vực (Thảo Điền, An Phú) KHÔNG phải dự án.
 - huong: chỉ phương (Đông, Tây Nam…); "view sông" là view.
-- phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công; "chưa có sổ", "đang chờ sổ", "hợp đồng mua bán" cũng là câu trả lời pháp lý — ghi đúng chữ khách). "Thổ cư" không phải pháp lý.
+- phap_ly: giấy tờ (sổ hồng riêng, sổ chung, vi bằng, hoàn công; "chưa có sổ", "đang chờ sổ", "hợp đồng mua bán", "giấy tờ thường", "giấy tay", "không có shr" cũng là câu trả lời pháp lý — ghi đúng chữ khách; nói cả hai vế "không có shr, giấy tờ thường" thì ghi vế khẳng định "giấy tờ thường"). "Thổ cư" không phải pháp lý.
 - noi_that, ly_do_ban (lý do CẦN bán, không phải "gấp"), ket_cau (trệt/lầu/lửng/hầm), thoi_han_thue (CHỈ tin cho thuê; tin BÁN đang có người thuê thì hạn hợp đồng vào ô han_hop_dong_thue, KHÔNG vào kien_thuc), phi_quan_ly, view, hien_trang (tình trạng CĂN NHÀ: mới xây, cũ, cần sửa, bàn giao thô — còn "đang ở / đang cho thuê / để trống" là hien_trang_su_dung): chữ — giá trị là cụm ngắn NẰM TRONG trích dẫn.
 - gap, thuong_luong: gia_tri CHỈ là "co" hoặc "khong" (không chép cụm khách nói vào gia_tri). Hoa hồng môi giới KHÔNG phải thương lượng.
   gap đọc theo NGHĨA cả câu, có phủ định, kể cả khi bot đang hỏi câu khác:
@@ -192,7 +195,7 @@ KHOÁ:
 - o_to_vao_nha (ô tô vào / đậu TRONG nhà), hoan_cong (đã hoàn công), thang_may, can_goc (căn góc, lô góc, hai mặt tiền):
   "co" | "khong" — đọc phủ định theo nghĩa ("chưa hoàn công", "không có thang máy" → khong). nam_xay: năm 4 chữ số.
 - Ô chữ (cụm ngắn, có dấu, bỏ từ đệm "em / nha / ạ", không thêm ý khách không nói): quy_hoach (quy hoạch, lộ giới), the_chap
-  (đang thế chấp), tranh_chap, tho_cu (thổ cư bao nhiêu / full thổ cư), len_tho_cu, xay_dung (được xây mấy tầng, giấy
+  (đang thế chấp), tranh_chap, tho_cu (thổ cư bao nhiêu / full / toàn / hết thổ cư — "ko biết, toàn thổ cư" vẫn là tho_cu = "toàn thổ cư": chỉ không biết số m²), len_tho_cu, xay_dung (được xây mấy tầng, giấy
   phép), so_phong (TỔNG số phòng cho thuê của CHDV / toà nhà / dãy trọ), dien_tich_san (TỔNG sàn xây dựng / sử dụng của NHÀ nhiều tầng; diện tích CĂN HỘ ghi dien_tich), chieu_cao
   (cao thông thủy), hem_thong (hẻm thông / cụt), duong_vao (đường nhựa, bê tông…), ngap_nuoc, tien_ich_gan (tiện ích gần,
   ĐÚNG chữ khách), tiem_nang (CHỈ khi khách nói thẳng), muc_dich, hinh_dang (vuông vức, nở hậu, tóp hậu), san_vuon, pccc,
@@ -206,7 +209,7 @@ KHOÁ:
   mua bán, vi bằng), du_kien_ra_so (khi nào ra sổ), ban_giao (đã nhận bàn giao chưa), dien_tich_khop_so (diện tích thực tế khớp sổ không).
 - Khác: tang_phu (lửng, sân thượng, tầng hầm), gia_dien_nuoc (giá điện nước cho thuê), gio_giac (giờ giấc ra vào), nganh_hang_phu_hop
   (mặt bằng hợp buôn bán ngành gì).
-- kien_thuc: ý khác về CĂN NHÀ không có khoá nào ở trên (an ninh, đồ để lại, lịch sử…) — cụm ngắn CHÉP NGUYÊN VĂN; KHÔNG đặt nhãn diễn giải ("tiềm năng kinh doanh", "phù hợp đầu tư", "dòng tiền tốt", "khai thác thương mại") khi khách không nói đúng chữ đó; KHÔNG đưa lời chào, câu hỏi, chuyện riêng của chủ nhà, và không lặp ý đã có khoá.
+- kien_thuc: ý khác về CĂN NHÀ không có khoá nào ở trên (an ninh, đồ để lại, lịch sử…) — cụm ngắn CHÉP NGUYÊN VĂN; KHÔNG đặt nhãn diễn giải ("tiềm năng kinh doanh", "phù hợp đầu tư", "dòng tiền tốt", "khai thác thương mại") khi khách không nói đúng chữ đó; KHÔNG đưa lời chào, câu hỏi, và không lặp ý đã có khoá. Chuyện riêng của chủ nhà (gia đình, con cái, cần tiền, về quê) và nhận định giá / thị trường của chủ nhà ("sẽ tăng giá") ghi với tiền tố "riêng: " — kien_thuc không tiền tố lên tin rao công khai.
 Tin CHỈ có chào / cảm ơn / hỏi lại → truong = [], kien_thuc = []. Tin có lời chào hay lời gật ĐI KÈM ý bán / tả căn ("chào em, chị
 muốn bán lô đất", "ừ anh bán nhà", "dạ cô có căn hộ cần bán") → bỏ qua PHẦN chào / gật, VẪN bóc phần còn lại (loai_giao_dich, loai_bds…).
 
@@ -288,6 +291,8 @@ rao từ kết quả của em — đọc hết rồi đưa TRẠNG THÁI CUỐI 
   hẹn trả lời sau KHÔNG phải thông tin căn — không đưa vào đâu cả.
 - kien_thuc = ý THÊM về căn nhà chưa có khoá nào (gần chợ, mặt tiền đẹp, mới sơn…): chỉ cụm ngắn nguyên văn, ĐÚNG NGHĨA khách nói
   (khách đáp "không có, mặt tiền đẹp" cho câu hỏi cột điện → "mặt tiền đẹp", không phải "không có mặt tiền đẹp"); không lặp ô đã có.
+  Chuyện riêng / nhận định giá của chủ nhà → tiền tố "riêng: " (không lên tin). Chủ nhà đã bảo bỏ / xoá một ý khỏi tin ("xoá dòng con chị ở Úc
+  đi") thì ý đó không vào kien_thuc nữa.
 - tra_loi, cap_nhat, hoi_lai, cam_xuc, y_dinh, cau_ke: để null / rỗng — lượt này chỉ chốt dữ liệu.`;
 
 const LUAT_CHUAN_HOA = `CHẾ ĐỘ CHUẨN HOÁ (đè lên dòng "giữ đúng chữ cái của cụm trích" ở trên):
@@ -365,7 +370,7 @@ export async function bocRaoBangModel(
   return {
     ket: ket.success ? ket.data : null,
     truong: truongDu,
-    kienThuc: ket.success ? ket.data.kien_thuc.filter((k) => typeof k === "string") : [],
+    kienThuc: ket.success ? (({ canNha, rieng }) => boKeRieng(canNha, rieng))(tachKeRieng(ket.data.kien_thuc.filter((k) => typeof k === "string"))) : [],
     traLoi: ket.success ? ket.data.tra_loi ?? null : null,
     capNhat: ket.success ? ket.data.cap_nhat ?? [] : [],
     xacNhan: ket.success ? ket.data.xac_nhan ?? [] : [],

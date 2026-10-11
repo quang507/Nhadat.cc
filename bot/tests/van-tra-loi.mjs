@@ -1438,5 +1438,36 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   ok("ZZZZU-V7 thanhBongBong: đậm bỏ dấu sao; đoạn có ':' mà CÓ nội dung sau nó giữ", bb2.length === 1 && /có 2 căn khớp ạ:\n1\. Căn A/.test(bb2[0]), JSON.stringify(bb2));
 }
 
+// SRS-5.1zzzzy: xin bỏ ý ở dòng "Thêm" — chỉ bỏ MẢNH có thật trong ghi chú đang lưu (các ý nối " · ").
+{
+  const { boYGhiChu } = await import("../supabase/functions/_shared/extraction/van-tra-loi.ts");
+  const dong = [
+    { id: "a", answer: "con chị đi nước ngoài · ở không hết" },
+    { id: "b", answer: "con chị bây giờ ở Úc" },
+    { id: "c", answer: "sẽ tăng giá lắm" },
+    { id: "d", answer: "cần tiền để đầu tư thêm" },
+  ];
+  const r1 = boYGhiChu(dong, ["con chị ở Úc", "sẽ tăng giá"]);
+  ok("ZZZZY-V1 (ca gốc) 'con chị ở Úc' + 'sẽ tăng giá' → xoá dòng b, c; dòng a, d không đụng",
+    r1.daBo.length === 2 && r1.doi.length === 2 && r1.doi.every((d) => d.answer === null) && r1.doi.map((d) => d.id).sort().join() === "b,c", JSON.stringify(r1));
+  const r2 = boYGhiChu(dong, ["ở không hết"]);
+  ok("ZZZZY-V2 (cách nói mới) bỏ một mảnh trong dòng gộp → dòng a còn 'con chị đi nước ngoài'",
+    r2.doi.length === 1 && r2.doi[0].id === "a" && r2.doi[0].answer === "con chị đi nước ngoài", JSON.stringify(r2));
+  const r3 = boYGhiChu(dong, ["view sông"]);
+  ok("ZZZZY-V3 đối chứng: ý không có trong ghi chú → không đổi gì (rơi về câu hỏi lại)", r3.doi.length === 0 && r3.daBo.length === 0, JSON.stringify(r3));
+}
+// SRS-5.1zzzzy (MQ1): câu đáp lửng dài — phần nói lửng / số tầng đã trả lời câu lửng; chỉ phần khác đi tiếp luồng thường.
+{
+  const { phanNgoaiCauLung } = await import("../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts");
+  ok("ZZZZY-V5 (ca gốc) 'không có gác lửng ạ, 4 tầng đầy đủ thôi' → không còn phần nào", phanNgoaiCauLung("không có gác lửng ạ, 4 tầng đầy đủ thôi") === "", phanNgoaiCauLung("không có gác lửng ạ, 4 tầng đầy đủ thôi"));
+  const v6 = phanNgoaiCauLung("ko có lửng đâu em, mà nhà ở phường 5 nha");
+  ok("ZZZZY-V6 (cách nói mới) 'ko có lửng đâu em, mà nhà ở phường 5 nha' → còn đúng vế phường", /phường 5/.test(v6) && !/lửng/.test(v6), v6);
+}
+// SRS-5.1zzzzy: câu duyệt có câu mẫu riêng — không còn khuôn "cho em xin thêm chủ nhà duyệt bản nháp tin".
+{
+  const { cauHoiMau } = await import("../supabase/functions/_shared/prompts.ts");
+  const c = cauHoiMau("duyet_tin", "anh chị");
+  ok("ZZZZY-V4 (ca gốc) cauHoiMau('duyet_tin') → nhắc 'ok', không 'cho em xin thêm'", /nhắn "ok"/.test(c) && !/cho em xin thêm/.test(c), c);
+}
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

@@ -15,7 +15,7 @@
 //
 // Tầng bóc tách (bot/tests/ranh-gioi.mjs): không model, không RPC.
 
-import { XUNG_HO_LON_TUOI as LON_TUOI } from "./khop-cau-tra-loi.ts";
+import { trungY, XUNG_HO_LON_TUOI as LON_TUOI } from "./khop-cau-tra-loi.ts";
 import { docTien } from "./luat-tien.ts";
 import { goNhamDau } from "./go-nham-dau.ts";
 
@@ -542,6 +542,28 @@ export function laXinSoKhach(text: string): boolean {
   const kd = boDau((text ?? "").trim());
   return /\b(?:cho|gui|xin|lay|dua|bao|chuyen)\b[^.?!]{0,25}\b(?:so|sdt|so dien thoai|zalo|lien he|contact|thong tin)\b[^.?!]{0,20}\b(?:khach|ho|nguoi mua|nguoi hoi|nguoi ta|khach hang|ben mua)\b/.test(kd) ||
     /\b(?:so|sdt|zalo|so dien thoai)\s+(?:cua\s+)?(?:khach|ho|nguoi mua|khach hang|ben mua)\b/.test(kd) && /\b(?:cho|gui|xin|lay|dua|bao|chuyen|de)\b/.test(kd);
+}
+
+/**
+ * SRS-5.1zzzzy (khách mô phỏng 11/10: "chị muốn xoá mấy dòng về con chị ở Úc với sẽ tăng giá đi" → bot "chỗ nào ghi nhầm chị nhắn lại
+ * giúp em" hai lần, tin không lên kệ). Ô "Thêm" (fact `bo_sung`) không có trong danh sách ô xin bỏ, nên yêu cầu bỏ một ý ở đó không có
+ * đường đi. AI chỉ ra cụm chủ nhà xin bỏ (`bo_y`); code chỉ bỏ MẢNH có thật trong ghi chú đang lưu (so bỏ dấu, chứa nhau) — không có
+ * mảnh nào khớp thì không bỏ gì. Ghi chú lưu nhiều mảnh nối " · " trong một dòng: bỏ từng mảnh, dòng rỗng thì xoá.
+ */
+export function boYGhiChu(dong: Array<{ id: string; answer: string | null }>, boY: string[]): { doi: Array<{ id: string; answer: string | null }>; daBo: string[] } {
+  const can = boY.filter((x) => (x ?? "").trim().length >= 3);
+  const doi: Array<{ id: string; answer: string | null }> = [];
+  const daBo: string[] = [];
+  for (const d of dong) {
+    const manh = (d.answer ?? "").split(/\s*·\s*/).map((m) => m.trim()).filter(Boolean);
+    const giu = manh.filter((m) => {
+      const bo = can.some((c) => trungY(m, c));
+      if (bo) daBo.push(m);
+      return !bo;
+    });
+    if (giu.length !== manh.length) doi.push({ id: d.id, answer: giu.length ? giu.join(" · ") : null });
+  }
+  return { doi, daBo };
 }
 
 /** Ô của tin mà câu "xoá/bỏ … nhầm" đang nhắc tới; nhãn để đọc lên. */

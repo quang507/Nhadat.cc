@@ -1021,6 +1021,21 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   const k3 = kiemYCuocRao([{ khoa: "loai_bds", gia_tri: "dat", trich_dan: "mieng dat" }], "5x20 tho cu het", "");
   ok("ZZZZU-U3 không có tin cũ → như kiemDeXuat (BỎ)", k3.dat.length === 0, JSON.stringify(k3));
 }
+// SRS-5.1zzzzy (khách mô phỏng 11/10): chuyện riêng / nhận định giá model xếp `ke_rieng` không lên dòng "Thêm"; so CÙNG Ý theo từ.
+{
+  const { boKeRieng } = await import("../supabase/functions/_shared/extraction/kiem-bang-chung.ts");
+  const { trungY } = await import("../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts");
+  const k1 = boKeRieng(["con chị bây giờ ở Úc", "sẽ tăng giá lắm", "gần chợ Phú Nhuận"], ["con chị ở Úc", "căn này sẽ tăng giá"]);
+  ok("ZZZZY-K1 (ca gốc) kien_thuc 'con chị bây giờ ở Úc', 'sẽ tăng giá lắm' trùng ý ke_rieng → bỏ, 'gần chợ Phú Nhuận' giữ",
+    k1.length === 1 && k1[0] === "gần chợ Phú Nhuận", JSON.stringify(k1));
+  const k2 = boKeRieng(["con cái đi làm xa hết nên bán", "hẻm thông"], ["con cai di lam xa"]);
+  ok("ZZZZY-K2 (cách nói mới, không dấu) 'con cai di lam xa' bỏ 'con cái đi làm xa hết nên bán'", k2.length === 1 && k2[0] === "hẻm thông", JSON.stringify(k2));
+  ok("ZZZZY-K3 đối chứng: trungY không nhận hai ý khác nhau chung một từ ('gần chợ' ↔ 'gần trường')", !trungY("gần chợ", "gần trường"));
+  ok("ZZZZY-K4 trungY: cụm một từ khớp đúng từ đó ('Úc' ↔ 'con ở Úc')", trungY("Úc", "con chị ở Úc"));
+  const { tachKeRieng } = await import("../supabase/functions/_shared/extraction/kiem-bang-chung.ts");
+  const t5 = tachKeRieng(["gần chợ", "riêng: con chị ở Úc", "Riêng:sẽ tăng giá"]);
+  ok("ZZZZY-K5 tachKeRieng: tiền tố 'riêng:' (hoa / thường, có / không cách) tách ra, ý căn nhà giữ", t5.canNha.join() === "gần chợ" && t5.rieng.join("|") === "con chị ở Úc|sẽ tăng giá", JSON.stringify(t5));
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

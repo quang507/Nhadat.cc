@@ -501,6 +501,19 @@ Sau khi gộp: `bun run prompt --day` (khoá `fee_rules`, `seller_fewshot`).
 
 Sau khi gộp: `bun run prompt --day` (khoá `tone_rules`, `seller_fewshot`).
 
+### Câu nhắc duyệt, câu dẫn phí, hỏi nghĩa từ — 11/10/2026 (SRS-5.1zzzzy)
+
+[nguồn: lượt khách mô phỏng thứ hai 11/10/2026: "Anh chị cho em xin thêm chủ nhà duyệt bản nháp tin nha?"; "Em cho chào căn nhà của bác ngay ạ"; "Em ghi giá 3.2 tỷ rồi ạ"; bác hỏi "cái chữ 'pháp lý' là sao" → "Dạ tin ghi pháp lý sổ hồng riêng ạ"]
+
+| Chỗ | Đổi | Giữ |
+|---|---|---|
+| `CAU_HOI_MAU.duyet_tin` | câu mới "Bản nháp ở trên {ac} thấy được thì nhắn "ok" là em đăng liền ạ." (trước rơi về khuôn "cho em xin thêm {nhãn}") | câu nhắc "ok" ở các chỗ khác |
+| `CAU_TIEN_DINH.dang_xong_phi` | "Mà {ac} biết phí bên em chưa ạ?" — bỏ "Em cho chào căn…" (tiếng nghề) | câu lên kệ đứng trước đã nói "có khách quan tâm là em báo liền" |
+| `SELLER_FEWSHOT` | SAI thêm "3 tỷ 2" → "Em ghi giá 3.2 tỷ rồi ạ." (đọc lại số, đổi cách viết) | mọi ví dụ cũ |
+| Chỉ dẫn hỏi ngược `nghia_tu` | khách hỏi nghĩa một từ → giải thích một câu bằng lời thường, không đọc lại giá trị tin | chỉ dẫn các chủ đề khác |
+
+Sau khi gộp: `bun run prompt --day` (khoá `cau_hoi_mau`, `cau_tien_dinh`, `seller_fewshot`).
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |
