@@ -3226,7 +3226,7 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 
 **1. "Không có gác lửng ạ, 4 tầng đầy đủ thôi" → bản nháp "trệt + lửng + 3 lầu".**
 - Lớp lỗi (hai tầng): (a) bộ đọc kết cấu SQL `boc_thong_so` thấy chữ "lửng" là bật có lửng, không đọc phủ định; (b) luồng đáp câu lửng (TS) cắt theo độ dài (≤ 8 chữ thì coi là câu đáp lửng), câu 9 chữ đi tiếp luồng thường và ghi nguyên câu vào ô kết cấu.
-- Sửa: migration `20261011a_ket_cau_phu_dinh` (cụm "không / ko / chưa … lửng / sân thượng / hầm / áp mái / mái tum" bỏ khỏi chữ trước khi dò); `phanNgoaiCauLung` (`khop-cau-tra-loi.ts`) tách theo MẢNH: mảnh nói lửng / số tầng đã trả lời câu lửng, chỉ phần còn lại ("…, phường 5 nha") đi tiếp.
+- Sửa: migration `20261011a_ket_cau_phu_dinh` (đã áp production 11/10/2026 qua `apply-migration.yml`, `schema.sql` sinh lại; cụm "không / ko / chưa … lửng / sân thượng / hầm / áp mái / mái tum" bỏ khỏi chữ trước khi dò); `phanNgoaiCauLung` (`khop-cau-tra-loi.ts`) tách theo MẢNH: mảnh nói lửng / số tầng đã trả lời câu lửng, chỉ phần còn lại ("…, phường 5 nha") đi tiếp.
 - Chỗ khác cùng lớp: sân thượng, hầm, áp mái, mái tum cùng một chỗ dò trong `boc_thong_so`, sửa chung. Luồng xác nhận gợi ý (`xac_nhan_goi_y`) tách vế bằng AI (`gatTach`), không theo độ dài.
 
 **2. "Xoá mấy dòng về con chị ở Úc với sẽ tăng giá đi" → "chỗ nào ghi nhầm" hai lần, tin không lên kệ.**
