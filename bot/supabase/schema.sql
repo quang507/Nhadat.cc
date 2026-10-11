@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-10 18:57 (giờ VN)
+-- Sinh lúc: 2026-10-11 13:51 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -2127,6 +2127,7 @@ declare
   m text[];
   j jsonb := '{}'::jsonb;
   n_lau int; co_tret bool; co_lung bool; co_st bool; co_ham bool; co_apmai bool;
+  k_phu text;
   parts text[];
   chung_cu bool := coalesce(p_type = 'chung_cu', false);
   -- 20260928f (FR-241): tin ĐẤT không có kết cấu — "còn lại cây lâu năm" từng thành "trệt + 1 lầu".
@@ -2178,10 +2179,13 @@ begin
     null;
   elsif not chung_cu then
     co_tret  := k ~ '\mtret\M';
-    co_lung  := k ~ '\mlung\M';
-    co_st    := k ~ '(san thuong|\mst\M|mai tum)';
-    co_ham   := k ~ '\mham\M';
-    co_apmai := k ~ 'ap mai';
+    -- 20261011a (SRS-5.1zzzzy, khách mô phỏng 11/10: "không có gác lửng ạ, 4 tầng đầy đủ" → "trệt + lửng + 3 lầu"): tầng phụ
+    -- (lửng / sân thượng / hầm / áp mái) đi sau chữ PHỦ ĐỊNH là chủ nhà nói KHÔNG có — bỏ cụm đó trước khi dò có / không.
+    k_phu := regexp_replace(k, '\m(?:khong|ko|kg|khg|chua|hong|hok|k)\s+(?:co\s+)?(?:gac\s+|tang\s+)?(?:lung|san thuong|ham|ap mai|mai tum)\M', ' ', 'g');
+    co_lung  := k_phu ~ '\mlung\M';
+    co_st    := k_phu ~ '(san thuong|\mst\M|mai tum)';
+    co_ham   := k_phu ~ '\mham\M';
+    co_apmai := k_phu ~ 'ap mai';
     n_lau := null;
     m := regexp_match(k, '(?:tong )?so tang\s*:?\s*(\d+)');
     if m is not null and m[1]::int between 1 and 30 then j := j || jsonb_build_object('floors', m[1]::int); end if;

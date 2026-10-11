@@ -16,7 +16,7 @@ export const YEU_CAU = [
   "hoi_khach", "hoi_gia", "hoi_dien_tich", "hoi_dia_chi", "hoi_tang", "hoi_huong", "hoi_phap_ly", "hoi_trang_thai", "hoi_ban_chua",
   "hoi_noi_dang", "hoi_bao_lau_ban", "xin_so_khach", "xin_xoa_du_lieu", "xin_bo_o", "khong",
 ] as const;
-export const O_BO = ["do_rong_hem", "gia", "phuong", "dien_tich", "so_phong_ngu", "ket_cau", "phap_ly", "huong", "vi_tri"] as const;
+export const O_BO = ["do_rong_hem", "gia", "phuong", "dien_tich", "so_phong_ngu", "ket_cau", "phap_ly", "huong", "vi_tri", "bo_sung"] as const;
 /** SRS-5.1zzl (05/10/2026, demo AOND thao tác phá dữ liệu chờ xác nhận): ngưng rao NHIỀU căn / chỉ giữ vài căn. */
 export const KIEU_NHL = ["chi_giu", "an_het"] as const;
 const YLuot = z.object({
@@ -29,7 +29,9 @@ const YLuot = z.object({
   dong_y_trich: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong tin chủ nhà thể hiện ý ở dong_y. khong_noi thì null."),
   yeu_cau: z.enum(YEU_CAU).describe("Chủ nhà đang HỎI / XIN gì (xem LUẬT YÊU CẦU). Không thì khong."),
   yeu_cau_trich: z.string().nullable().describe("Cụm COPY NGUYÊN VĂN trong tin chủ nhà thể hiện yêu cầu. khong thì null."),
-  yeu_cau_o: z.enum(O_BO).nullable().describe("CHỈ khi yeu_cau = xin_bo_o: ô chủ nhà xin bỏ (hẻm, giá, phường, diện tích, phòng ngủ, số tầng, pháp lý, hướng, địa chỉ). Không rõ ô nào thì null."),
+  yeu_cau_o: z.enum(O_BO).nullable().describe("CHỈ khi yeu_cau = xin_bo_o: ô chủ nhà xin bỏ (hẻm, giá, phường, diện tích, phòng ngủ, số tầng, pháp lý, hướng, địa chỉ; bo_sung = một ý ở dòng \"Thêm\" của bản nháp). Không rõ ô nào thì null."),
+  // SRS-5.1zzzzy: xin bỏ ý ở dòng "Thêm" — chỉ ra cụm, code chỉ bỏ mảnh có thật trong ghi chú đang lưu (`boYGhiChu`).
+  bo_y: z.array(z.string()).nullable().describe("CHỈ khi yeu_cau_o = bo_sung: các ý chủ nhà xin bỏ khỏi dòng \"Thêm\", chép theo lời khách (\"con chị ở Úc\", \"sẽ tăng giá\"). Không thì null."),
   // 03/10/2026 (bộ đo X04, SRS-5.1zt): "em bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ" — câu vừa bán vừa mua chỉ vào nhánh bán,
   // khuôn bóc tách tin bán không có chỗ cho nhu cầu mua nên vế mua rơi. Vế mua là ý của NGƯỜI, đi lượt nhỏ này.
   mua_kem: z.object({
@@ -60,6 +62,7 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
 - hoi_khach: hỏi có khách nào hỏi / quan tâm / xem căn chưa ("có ai hỏi chưa em", "nay có mống nào ko").
 - hoi_gia / hoi_dien_tich / hoi_dia_chi / hoi_tang / hoi_huong / hoi_phap_ly: hỏi LẠI con số / chi tiết của tin mình đã nói
   ("hồi nãy anh nói giá bao nhiêu nhỉ", "tin ghi mấy m2 vậy em"). Hỏi giá KHU VỰC / thị trường, hỏi dự án khác → khong.
+  Hỏi NGHĨA một từ ("cái chữ pháp lý là sao", "sổ hồng riêng nghĩa là gì", "thổ cư là sao em") là xin giải thích → khong.
 - hoi_trang_thai: hỏi tin đã đăng / lên kệ / lên web chưa ("tin lên chưa em", "đăng được chưa").
 - hoi_ban_chua: hỏi căn đã bán / chốt được chưa.
 - hoi_noi_dang: hỏi tin đăng Ở ĐÂU (web nào, kênh nào).
@@ -67,7 +70,8 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
 - xin_so_khach: xin số điện thoại / Zalo / liên hệ của NGƯỜI MUA để tự gọi.
 - xin_xoa_du_lieu: xin xoá tin / căn / hồ sơ / dữ liệu / tài khoản khỏi hệ thống (không phải ngưng rao vì bán rồi).
 - xin_bo_o: xin bỏ / xoá MỘT chi tiết đã ghi nhầm mà KHÔNG đưa giá trị mới ("xoá cái hẻm 4m ghi nhầm đi"). Có giá trị mới
-  ("bỏ hẻm 4m, hẻm đúng là 3m5") là lời sửa → khong.
+  ("bỏ hẻm 4m, hẻm đúng là 3m5") là lời sửa → khong. Xin bỏ ý ở dòng "Thêm" của bản nháp ("xoá mấy câu về con chị ở Úc đi",
+  "bỏ cái sẽ tăng giá ra") → xin_bo_o, yeu_cau_o = bo_sung, bo_y là các ý đó — kể cả khi cùng tin có gật ("đồng ý rồi, nhưng xoá…").
 - khong: tin đưa THÔNG TIN căn nhà (kể cả kèm hỏi "giá 4 tỷ 3 được không?"), gật, chào, hỏi về PHÍ / cách bên em làm việc, kể
   chuyện khác.
 yeu_cau_trich phải chép NGUYÊN VĂN từ TIN chủ nhà.
@@ -95,7 +99,7 @@ export type YLuotLLM = {
   /** undefined = model không trả ô gật (nơi gọi dùng luật làm lưới đỡ). */
   dongY?: { la: typeof DONG_Y[number]; trich_dan: string | null; dang_di: boolean };
   /** undefined = model không trả ô yêu cầu. */
-  yeuCau?: { loai: typeof YEU_CAU[number]; trich_dan: string | null; o: typeof O_BO[number] | null };
+  yeuCau?: { loai: typeof YEU_CAU[number]; trich_dan: string | null; o: typeof O_BO[number] | null; boY: string[] };
   /** null = model nói không có vế mua; undefined = model không trả ô này. */
   muaKem?: { khu_vuc: string | null; ngan_sach: string | null; loai: string | null; trich_dan: string } | null;
   /** SRS-5.1zzl: null = model nói không có ý ngưng nhiều căn; undefined = model không trả ô này. */
@@ -128,7 +132,8 @@ export async function docYLuotBangModel(
   const yc = (YEU_CAU as readonly unknown[]).includes(o.yeu_cau) ? o.yeu_cau as typeof YEU_CAU[number] : undefined;
   const ket: YLuotLLM = {
     ...(dy ? { dongY: { la: dy === "dong_y_dang" ? "dong_y" : dy, trich_dan: str(o.dong_y_trich), dang_di: dy === "dong_y_dang" } } : {}),
-    ...(yc ? { yeuCau: { loai: yc, trich_dan: str(o.yeu_cau_trich), o: (O_BO as readonly unknown[]).includes(o.yeu_cau_o) ? o.yeu_cau_o as typeof O_BO[number] : null } } : {}),
+    ...(yc ? { yeuCau: { loai: yc, trich_dan: str(o.yeu_cau_trich), o: (O_BO as readonly unknown[]).includes(o.yeu_cau_o) ? o.yeu_cau_o as typeof O_BO[number] : null,
+      boY: Array.isArray(o.bo_y) ? o.bo_y.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()) : [] } } : {}),
     ...("mua_kem" in o ? { muaKem: docMuaKemTho(o.mua_kem) } : {}),
     ...("ngung_hang_loat" in o ? { ngungHangLoat: docNHLTho(o.ngung_hang_loat) } : {}),
     ...(str(o.doc_lai) ? { docLai: str(o.doc_lai) } : {}),

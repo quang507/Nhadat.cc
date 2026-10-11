@@ -92,6 +92,26 @@ la("tiêu đề ≤ 120 ký tự", tdNha.length <= 120, `${tdNha.length} ký t�
   la("tiêu đề: '12 hẻm 4m Trần Bình Trọng' → không lặp chữ hẻm, giữ số nhà 12", (td12.match(/hẻm/gi) ?? []).length === 1 && /\b12 Trần Bình Trọng\b/.test(td12), td12);
 }
 
+// SRS-5.1zzzzy (khách mô phỏng 11/10): "MT Trần Hưng Đạo" → địa chỉ "Mặt tiền Trần Hưng Đạo" → tiêu đề từng ra "nhà mặt tiền mặt tiền …";
+// "hẻm khoảng 2-3 mét" → cột 2, tin từng in "hẻm 2m".
+{
+  const lMt = { ...NHA_PHO.l, location_raw: "Mặt tiền Trần Hưng Đạo", access_type: "mat_tien", alley_width_m: null };
+  const tdMt = tieuDeTin(lMt, fact(NHA_PHO));
+  la("ZZZZY-T1 (ca gốc) địa chỉ 'Mặt tiền Trần Hưng Đạo' + đường vào mặt tiền → tiêu đề một lần 'mặt tiền'", (tdMt.match(/mặt tiền/gi) ?? []).length === 1 && /Trần Hưng Đạo/.test(tdMt), tdMt);
+  const tdMt2 = tieuDeTin({ ...lMt, location_raw: "MTKD Hai Bà Trưng" }, fact(NHA_PHO));
+  la("ZZZZY-T2 (cách viết mới) 'MTKD Hai Bà Trưng' → không 'mặt tiền MTKD'", !/MTKD/i.test(tdMt2) && (tdMt2.match(/mặt tiền/gi) ?? []).length === 1, tdMt2);
+  const khoang = { ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "do_rong_hem", answer: "2-3" }] };
+  const lK = { ...NHA_PHO.l, location_raw: "hẻm Phan Xích Long", access_type: "hem_xe_may", alley_width_m: 2 };
+  const tdK = tieuDeTin(lK, fact(khoang));
+  const banK = soanTinNhap({ l: lK, facts: khoang.facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
+  la("ZZZZY-T3 (ca gốc) hẻm '2-3' (cột 2) → tiêu đề và dòng đường vào in 'hẻm 2-3m', không 'hẻm 2m'", /hẻm 2-3m/.test(tdK) && /Đường vào: [^\n]*2-3m/.test(banK) && !/\b2m\b/.test(banK), tdK + " || " + banK);
+  const kD = { ...NHA_PHO, facts: [...NHA_PHO.facts, { question: "do_rong_hem", answer: "khoảng 3 tới 4 mét" }] };
+  const tdD = tieuDeTin({ ...lK, alley_width_m: 3 }, fact(kD));
+  la("ZZZZY-T4 (cách nói mới) 'khoảng 3 tới 4 mét' → 'hẻm 3-4m'", /hẻm 3-4m/.test(tdD), tdD);
+  const tdN = tieuDeTin({ ...lK, alley_width_m: 5 }, fact(khoang));
+  la("ZZZZY-T5 đối chứng: khoảng không khớp số trong cột (cột 5, fact 2-3) → in đúng cột 5m", /hẻm 5m/.test(tdN), tdN);
+}
+
 const tdThue = tieuDeTin(CAN_HO_THUE.l, fact(CAN_HO_THUE));
 la("tiêu đề cho thuê: mở bằng 'Cho thuê căn hộ', giá kèm '/tháng'",
   /^Cho thuê căn hộ/.test(tdThue) && /giá 18 triệu\/tháng$/.test(tdThue), tdThue);

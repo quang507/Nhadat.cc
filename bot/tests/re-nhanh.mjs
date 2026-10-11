@@ -67,6 +67,11 @@ r = reNhanh({ loai: "dat", deal: "ban", facts: [f("tho_cu", "100m2 thổ cư")] 
 ok("đất thổ cư một phần → hỏi lên thổ cư", keys(r).includes("len_tho_cu"), JSON.stringify(r));
 r = reNhanh({ loai: "dat", deal: "ban", facts: [f("tho_cu", "full thổ cư")] });
 ok("đất full thổ cư → KHÔNG hỏi lên thổ cư", !keys(r).includes("len_tho_cu"), JSON.stringify(r));
+// SRS-5.1zzzzy (khách mô phỏng 11/10): ô thổ cư nguyên văn "toàn thổ cư" / "ko biết, toàn thổ cư" → bot vẫn hỏi "lên được thổ cư không".
+for (const [ma, v] of [["ZZZZY-R1 (ca gốc)", "ko biết, toàn thổ cư"], ["ZZZZY-R2 (cách nói mới)", "đất này trọn thổ cư"]]) {
+  r = reNhanh({ loai: "dat", deal: "ban", facts: [f("tho_cu", v)] });
+  ok(`${ma} thổ cư '${v}' → KHÔNG hỏi lên thổ cư`, !keys(r).includes("len_tho_cu"), JSON.stringify(r));
+}
 r = reNhanh({ loai: "nha_pho", deal: "cho_thue", facts: [f("phap_ly", "sổ hồng riêng")] });
 ok("tin CHO THUÊ sổ riêng → KHÔNG hỏi hoàn công", !keys(r).includes("hoan_cong"), JSON.stringify(r));
 r = reNhanh({ loai: "nha_pho", deal: null, facts: [f("phap_ly", "sổ hồng riêng"), f("hoan_cong", "rồi em")] });

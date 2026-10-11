@@ -15,7 +15,7 @@
 //
 // Tầng bóc tách (bot/tests/ranh-gioi.mjs): không model, không RPC.
 
-import { XUNG_HO_LON_TUOI as LON_TUOI } from "./khop-cau-tra-loi.ts";
+import { trungY, XUNG_HO_LON_TUOI as LON_TUOI } from "./khop-cau-tra-loi.ts";
 import { docTien } from "./luat-tien.ts";
 import { goNhamDau } from "./go-nham-dau.ts";
 
@@ -448,7 +448,9 @@ export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null
     ra.push("Dạ em là trợ lý AI bên AI Ơi Nhà Đất, việc cần người thật thì có anh chị phụ trách theo sát mình ạ.");
   }
   // "phí sao?" — theo luật phí, hệ thống biết nhãn chính chủ / môi giới.
-  if (phi && dung("dich_vu") && /\b(phi|hoa hong|hoa hong|phan tram|bao nhieu %|mat tien gi|ton gi|tinh sao)\b/.test(kd) && !/\bphi quan ly\b/.test(kd)) {
+  // SRS-5.1zzzzx: AI nói chủ đề `phi` ("app này có lấy tiền trước không") → câu phí, không cần từ khoá; từ khoá chỉ còn là lưới đỡ khi
+  // AI không chạy (chuDe trống) hay cho chủ đề cũ dich_vu.
+  if (phi && (chuDe === "phi" || (dung("dich_vu") && /\b(phi|hoa hong|hoa hong|phan tram|bao nhieu %|mat tien gi|ton gi|tinh sao)\b/.test(kd) && !/\bphi quan ly\b/.test(kd)))) {
     ra.push(`Dạ ${phi} ạ.`);
   }
   if (dung("dich_vu", "khac") && /\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
@@ -540,6 +542,28 @@ export function laXinSoKhach(text: string): boolean {
   const kd = boDau((text ?? "").trim());
   return /\b(?:cho|gui|xin|lay|dua|bao|chuyen)\b[^.?!]{0,25}\b(?:so|sdt|so dien thoai|zalo|lien he|contact|thong tin)\b[^.?!]{0,20}\b(?:khach|ho|nguoi mua|nguoi hoi|nguoi ta|khach hang|ben mua)\b/.test(kd) ||
     /\b(?:so|sdt|zalo|so dien thoai)\s+(?:cua\s+)?(?:khach|ho|nguoi mua|khach hang|ben mua)\b/.test(kd) && /\b(?:cho|gui|xin|lay|dua|bao|chuyen|de)\b/.test(kd);
+}
+
+/**
+ * SRS-5.1zzzzy (khách mô phỏng 11/10: "chị muốn xoá mấy dòng về con chị ở Úc với sẽ tăng giá đi" → bot "chỗ nào ghi nhầm chị nhắn lại
+ * giúp em" hai lần, tin không lên kệ). Ô "Thêm" (fact `bo_sung`) không có trong danh sách ô xin bỏ, nên yêu cầu bỏ một ý ở đó không có
+ * đường đi. AI chỉ ra cụm chủ nhà xin bỏ (`bo_y`); code chỉ bỏ MẢNH có thật trong ghi chú đang lưu (so bỏ dấu, chứa nhau) — không có
+ * mảnh nào khớp thì không bỏ gì. Ghi chú lưu nhiều mảnh nối " · " trong một dòng: bỏ từng mảnh, dòng rỗng thì xoá.
+ */
+export function boYGhiChu(dong: Array<{ id: string; answer: string | null }>, boY: string[]): { doi: Array<{ id: string; answer: string | null }>; daBo: string[] } {
+  const can = boY.filter((x) => (x ?? "").trim().length >= 3);
+  const doi: Array<{ id: string; answer: string | null }> = [];
+  const daBo: string[] = [];
+  for (const d of dong) {
+    const manh = (d.answer ?? "").split(/\s*·\s*/).map((m) => m.trim()).filter(Boolean);
+    const giu = manh.filter((m) => {
+      const bo = can.some((c) => trungY(m, c));
+      if (bo) daBo.push(m);
+      return !bo;
+    });
+    if (giu.length !== manh.length) doi.push({ id: d.id, answer: giu.length ? giu.join(" · ") : null });
+  }
+  return { doi, daBo };
 }
 
 /** Ô của tin mà câu "xoá/bỏ … nhầm" đang nhắc tới; nhãn để đọc lên. */
@@ -1634,7 +1658,7 @@ export function boCauHoiLap(replies: string[], botTruoc: string | null | undefin
 const gonKhen = (s: string): string => boDau(s ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 /** Câu nhận xét (nguyên văn trong lời bot) KHÔNG có căn cứ thật → cần bỏ. */
 export function nhanXetKhongCanCu(
-  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null }> | null | undefined,
+  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null; kieu?: string | null }> | null | undefined,
   bangChung: string,
 ): string[] {
   const bc = ` ${gonKhen(bangChung)} `;
@@ -1647,6 +1671,10 @@ export function nhanXetKhongCanCu(
     // SRS-5.1zzy (chat thử 07/10: "Khu Hà Huy Giáp đất vàng quận 12 anh"): AI trích "khu hà huy giáp" làm căn cứ — tên khu có thật
     // nhưng lời ĐÁNH GIÁ khu thì không. Bot không có số liệu thị trường: câu AI đánh dấu đánh giá thị trường luôn bỏ, căn cứ gì cũng vậy.
     if (x?.danh_gia_thi_truong === true) { bo.push(cau); continue; }
+    // SRS-5.1zzzzx (khách mô phỏng 11/10: "hem 4m" → "hẻm 4m ô tô vào tới nhà tiện lắm"; "4x16 là diện tích vừa phải"; "hẻm hẹp thì đi
+    // lại cần cẩn thận"): căn cứ có thật ("hem 4m", "4x16") chỉ chứng minh CON SỐ, không chứng minh tính chất bot gắn thêm. AI phân loại
+    // câu suy ra / chấm điểm → bỏ dù căn cứ có thật.
+    if (x?.kieu === "suy_ra" || x?.kieu === "danh_gia") { bo.push(cau); continue; }
     const cc = gonKhen(x?.can_cu ?? "");
     if (cc.length >= 2 && bc.includes(` ${cc} `)) continue;
     bo.push(cau);

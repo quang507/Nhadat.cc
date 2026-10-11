@@ -12,7 +12,7 @@
 // thứ luật đã ghi (`soSanhVoiDb`) là để thấy phần đó.
 import { docTien, giaTheoM2, TIEN_KD } from "./luat-tien.ts";
 import { bocQuan, vungNgoai } from "../dia_ban.ts";
-import type { CanTrongTin } from "./khop-cau-tra-loi.ts";
+import { type CanTrongTin, trungY } from "./khop-cau-tra-loi.ts";
 import { cumPhongNguTheoTang, cungHoFact, docTraLoiLung, nhanDienFact, DOI_SANG_BAN_RE, DOI_SANG_THUE_RE, gonGiaTriFact, ketCauTheoLung, KHONG_BIET_PHUONG, laGap, soPhongNguTheoTang, soTangTrongDapLung } from "./khop-cau-tra-loi.ts";
 import { dealCauRao, TRUOC_KHONG_PHAI_GIA, TRUOC_LA_THUE } from "./boc-cau-rao.ts";
 import { cauNhacPhuong, tenPhuongCot, phuongChuan, phuongSoCuTrongCau, phuongTrongTrich, phuongTuTenCu, quanTrongCau, viTriGhiDuoc } from "./khop-phuong.ts";
@@ -159,14 +159,38 @@ export function giaTriNguyenVan(question: string, d: DeXuat | null | undefined):
     c = sach;
   }
   c = gonGiaTriFact(question, c).replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}%²)]+$/gu, "").trim();
-  if (c.length < 2 || c.length > 120 || !/[\p{L}\p{N}]/u.test(c)) return null;
   const v = (d.gia_tri ?? "").trim();
+  c = phanCumTheoGiaTri(c, v);
+  if (c.length < 2 || c.length > 120 || !/[\p{L}\p{N}]/u.test(c)) return null;
   // Cụm là VIẾT TẮT ("shr", "hxh", "q5": một từ ngắn) → giá trị model đã qua kiểm "cùng mã" là bản viết đủ, không phải bịa — giữ.
   if (c.length <= 4 && !/\s/.test(c) && v) return gonGiaTriFact(question, v);
   // Model chỉ THÊM DẤU / đổi hoa thường cho một phần của cụm ("126 Hung Vuong" + model "Hùng Vương"; "pham the hien" →
   // "Phạm Thế Hiển": cùng chữ cái, cùng thứ tự) → ghép bản có dấu của model vào ĐÚNG chỗ đó, phần còn lại giữ nguyên văn
   // (FR-208 h đã cấm đổi chữ cái). Đảo chữ, thêm bớt chữ thì không khớp → cụm khách.
   return themDauTheoModel(c, v, question !== "vi_tri");
+}
+/**
+ * SRS-5.1zzzzx (khách mô phỏng 11/10: "duong 3/2 so nha thi da noi roi" → ô địa chỉ "Đường 3/2 so nha thi da noi roi", in luôn ra bản
+ * nháp). Lớp lỗi: ô nguyên văn lấy BIÊN của giá trị từ TRÍCH DẪN — mà trích dẫn là bằng chứng, model hay trích rộng cả câu, kèm lời
+ * phàn nàn / chữ đệm phía SAU. Chỗ kết thúc của giá trị thuộc về model (`gia_tri`), chữ thuộc về khách (`cum`): giá trị model khớp một
+ * đoạn LIỀN trong cụm (so bỏ dấu, đúng thứ tự từng chữ) thì ô dừng ở cuối đoạn đó — phần ĐẦU cụm giữ nguyên ("đường 30/4", "hẻm đường
+ * Tên Lửa": model hay bỏ chữ "đường / hẻm" đứng trước, chữ đó vẫn là của địa chỉ; chữ dẫn "ở / nhà" đã có `NV_DAU_CUM` gọt). Phần đuôi
+ * bỏ đi có chữ số (số nhà sau tên đường "Thạnh Lộc 41"…) thì giữ cả cụm: model không được làm rơi con số khách nói. Không khớp liền
+ * (model đảo chữ, viết lại) → cụm như cũ.
+ */
+export function phanCumTheoGiaTri(cum: string, giaTri: string): string {
+  const khoa = (t: string) => boDau(t).toLowerCase().replace(/[^a-z0-9/]+/g, "");
+  const tuC = cum.split(/\s+/).filter(Boolean);
+  const kC = tuC.map(khoa);
+  const kV = (giaTri ?? "").split(/\s+/).map(khoa).filter(Boolean);
+  if (!kV.length || kV.length >= tuC.length) return cum;
+  for (let i = 0; i + kV.length <= kC.length; i++) {
+    if (!kV.every((k, j) => kC[i + j] === k)) continue;
+    const duoi = tuC.slice(i + kV.length);
+    if (!duoi.length || duoi.some((t) => /\d/.test(t))) return cum;
+    return tuC.slice(0, i + kV.length).join(" ").replace(/[^\p{L}\p{N}%²)]+$/u, "");
+  }
+  return cum;
 }
 /** Khoảng cách sửa (Levenshtein) giữa hai chuỗi ngắn. */
 function khoangSua(a: string, b: string): number {
@@ -291,7 +315,8 @@ const HINH_TRUONG_CHU: Record<string, RegExp> = {
   // 21/09/2026 (bắn thật mau-v-03 chế độ chinh): "hẻm xe hơi" → hiện trạng "xe hơi" lọt vì chữ có
   // thật trong cụm. Hiện trạng phải có chữ tả TÌNH TRẠNG căn nhà.
   hien_trang: /\b(trong|moi|cu|nha o|dang o|o tu|o lien|vao o|don vao|dang cho thue|dang thue|xuong cap|son|sua|hoan thien|tho|bo trong|dang kinh doanh|dang su dung|nha nat|dot nat|xay|dep|sach|nguyen ban|da su dung|chua o|con tot|ban giao|hien trang|cho thue|kinh doanh)\b/,
-  phap_ly: /\b(so|hong|do|hoan cong|vi bang|hdmb|hop dong|giay tay|shr|shc|cong chung|chung|rieng|sang ten|the chap)\b/,
+  // SRS-5.1zzzzy (khách mô phỏng 11/10: "không có shr đâu, giấy tờ thường thôi" — AI ghi đúng ô mà bảng hình dạng thiếu chữ "giấy tờ").
+  phap_ly: /\b(so|hong|do|hoan cong|vi bang|hdmb|hop dong|giay tay|giay to|shr|shc|cong chung|chung|rieng|sang ten|the chap)\b/,
   ket_cau: /\d|\b(tret|lau|tang|tam|lung|ham|mai|san thuong|cap 4|btct|be tong|khung|gac)\b/,
   ly_do_ban: /^(?!(?:can\s+)?(?:ban\s+)?gap\s*$).{3,}/,
   // Đo bóng lần 2: "để ở hoặc cho thuê đều được" vào ô nội thất.
@@ -338,7 +363,18 @@ function kiemNamXay(v: string, kd: string): string | null {
 }
 
 /** Ngữ cảnh kiểm do nơi gọi (chat-reply) đưa vào — tầng này không tra DB. `quan`: quận cũ tin đã biết chắc. */
-export type NguCanhKiem = { quan?: string | null };
+export type NguCanhKiem = { quan?: string | null; cauDangHoi?: string | null };
+/**
+ * SRS-5.1zzzzx (khách mô phỏng 11/10: bot hỏi tình trạng nhà, chủ nhà "đang ở tình trạng bình thường" → AI ghi hien_trang = "bình thường",
+ * máy loại vì chữ không nằm trong danh sách từ tả tình trạng → bot hỏi lại y nguyên). `HINH_TRUONG_CHU` là danh sách TỪ KHOÁ, sinh ra để
+ * bắt chữ có thật nhưng SAI Ô ("xe hơi" vào hiện trạng); câu trả lời tự nhiên ngoài danh sách thì bị loại oan. Ô đang được HỎI mà luật
+ * không nhận ra giá trị là của ô khác → không thể là chữ lạc ô: nhận. Danh sách chỉ còn soát chữ chảy sang ô KHÔNG được hỏi.
+ */
+function dangHoiDungO(khoa: string, v: string, cum: string, ngu: NguCanhKiem): boolean {
+  if (!ngu.cauDangHoi || ngu.cauDangHoi !== khoa) return false;
+  // Cả giá trị lẫn cụm trích: "xe hơi" (giá trị) luật không nhận ra, nhưng cụm "hẻm xe hơi" là ô đường vào → vẫn sai ô.
+  return [v, cum].every((x) => { const f = nhanDienFact(x); return !f || f.question === "bo_sung" || cungHoFact(f.question, khoa); });
+}
 /**
  * SRS-5.1zzzzd (thu-kg5): ô địa chỉ (`duong` / `ten_duong`) mà CẢ giá trị lẫn cụm trích chỉ là kích thước + tên đơn vị hành chính
  * («10x50 củ chi xã tân an hội») → không phải địa chỉ (quận / phường / ngang × dài có ô riêng). Cụm trích có chữ đường / hẻm / số nhà
@@ -506,7 +542,7 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ng
       // Lượt đo bóng 14/09: chữ có thật trong cụm nhưng SAI Ô — "view sông" vào hướng, "thổ cư
       // hết" vào pháp lý, "xây tự do" vào kết cấu, "Thảo Điền" (khu) vào dự án, "gấp" vào lý do bán.
       const hinh = HINH_TRUONG_CHU[d.khoa];
-      if (hinh && !hinh.test(cv)) return "gia_tri_khong_dung_loai_truong";
+      if (hinh && !hinh.test(cv) && !dangHoiDungO(d.khoa, v, cum, ngu)) return "gia_tri_khong_dung_loai_truong";
       // 24/09/2026 (chủ dự án test Zalo): "Hợp đồng 10 năm cho thuê 4 năm rồi đó" thành pháp lý — chữ "hợp đồng" ở đây
       // là HỢP ĐỒNG THUÊ, không phải giấy tờ nhà. Pháp lý nói về thuê mà không có chữ giấy tờ nào → sai ô.
       if (d.khoa === "phap_ly" && /\bthue\b/.test(cv) &&
@@ -583,7 +619,7 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string,
       // Bắn thử 01/10 (lx-ai-03): "xhr" → AI ghi PHÁP LÝ = "hẻm xe hơi". Soát HÌNH DẠNG GIÁ TRỊ AI viết (từ chuẩn của ô),
       // không soát chữ khách — sai ô thì bỏ.
       const hinh = HINH_TRUONG_CHU[d.khoa];
-      return hinh && !hinh.test(chuanSo(v)) ? "gia_tri_khong_dung_loai_truong" : null;
+      return hinh && !hinh.test(chuanSo(v)) && !dangHoiDungO(d.khoa, v, d.trich_dan, ngu) ? "gia_tri_khong_dung_loai_truong" : null;
     }
   }
 }
@@ -1137,6 +1173,24 @@ export function tenDuongDayDu(v: string): string {
   return t;
 }
 
+/**
+ * SRS-5.1zzzzx (khách mô phỏng 11/10: "3/2 q10" khi hỏi địa chỉ → AI đọc `duong` = "3/2", cụm nguyên văn "3/2" có 3 ký tự, ngưỡng
+ * "địa chỉ ≥ 4 ký tự" gạt đi, ô địa chỉ đóng mà không ghi gì → bot hỏi lại đường hai lần nữa). Địa chỉ ghi từ ô `duong` của AI — MỘT
+ * chỗ cho câu treo (`giaTriChoCauTreo`) lẫn fact kèm (`docAiChinh`), trước đây chép hai nơi. Tên đường theo NGÀY ("3/2", "30/4") hay
+ * MÃ ("D2") khách gõ trơn thì ghi kèm chữ "đường" (luật prompt đã dặn, model hay quên); số nhà hẻm ("137/28") không đụng — số trước
+ * dấu "/" lớn hơn 31 hay số sau lớn hơn 12 không phải ngày.
+ */
+export function viTriTuDuong(dD: DeXuat | null | undefined): string | null {
+  const nv = giaTriNguyenVan("vi_tri", dD);
+  const d = nv != null ? (laTenDuongNgayHayMa(nv) ? `đường ${nv}` : nv) : tenDuongDayDu(dD?.gia_tri ?? "");
+  return d.length >= 4 && d.length <= 80 ? d : null;
+}
+function laTenDuongNgayHayMa(t: string): boolean {
+  const m = /^(\d{1,2})\/(\d{1,2})$/.exec(t.trim());
+  if (m) return Number(m[1]) >= 1 && Number(m[1]) <= 31 && Number(m[2]) >= 1 && Number(m[2]) <= 12;
+  return /^[A-Za-zĐđ]\d{1,2}$/u.test(t.trim());
+}
+
 export function chonViTri(luat: string | null | undefined, ai: string | null | undefined): string | null {
   const l = luat?.trim() || null, a = ai?.trim() || null;
   if (!a) return l;
@@ -1188,12 +1242,7 @@ export function giaTriChoCauTreo(dat: DeXuat[], cauHoi: string, dong: DongDb | n
   // 21/09/2026 (Zalo thật, chủ dự án: "ai không biết được tên đường hả"): câu VỊ TRÍ lấy `duong` AI đọc
   // (đã phục hồi dấu theo luật prompt) — luật `catDapAn` từng ghi cả câu "nhà của anh ở hem 4m Pham
   // The Hien, P.4" làm địa chỉ. Hẻm / phường đi ô riêng, không ghép vào.
-  if (cauHoi === "vi_tri") {
-    // SRS-5.1zzr: ô nguyên văn — cụm khách gõ trước, chữ model chỉ khi không ra cụm.
-    const dD = mot.find((x) => x.khoa === "duong");
-    const d = giaTriNguyenVan("vi_tri", dD) ?? tenDuongDayDu(dD?.gia_tri ?? "");
-    return d.length >= 4 && d.length <= 80 ? d : null;
-  }
+  if (cauHoi === "vi_tri") return viTriTuDuong(mot.find((x) => x.khoa === "duong"));
   const khoaAi = new Set([...(AI_CHO_CAU[cauHoi] ?? []), ...Object.entries(KHOA_GHI).filter(([, q]) => q === cauHoi).map(([k]) => k)]);
   const loc = mot.filter((d) => khoaAi.has(d.khoa));
   if (!loc.length) {
@@ -1458,13 +1507,13 @@ export function docNgungHangLoat(
  * AI đọc. Nhận khi cụm trích có trong tin; `khong` hoặc trích bịa → null (= AI nói không có yêu cầu nào code xử lý được).
  */
 export function docYeuCau<L extends string, O extends string>(
-  v: { loai?: L | null; trich_dan?: string | null; o?: O | null } | null | undefined,
+  v: { loai?: L | null; trich_dan?: string | null; o?: O | null; boY?: string[] } | null | undefined,
   tin: string,
-): { loai: Exclude<L, "khong">; trich: string; o: O | null } | null {
+): { loai: Exclude<L, "khong">; trich: string; o: O | null; boY: string[] } | null {
   const loai = v?.loai;
   if (!loai || loai === "khong") return null;
   const td = (v?.trich_dan ?? "").trim();
-  return trichCoTrongTin(td, tin) ? { loai: loai as Exclude<L, "khong">, trich: td, o: v?.o ?? null } : null;
+  return trichCoTrongTin(td, tin) ? { loai: loai as Exclude<L, "khong">, trich: td, o: v?.o ?? null, boY: v?.boY ?? [] } : null;
 }
 
 /**
@@ -1747,9 +1796,8 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   // `no_hau` có sẵn (trigger DB đọc ra rear_width_m), cùng dạng luật ghi ("5m").
   if (kt.noHau != null) them("no_hau", `${kt.noHau}m`, "no_hau");
   // SRS-5.1zzr: địa chỉ và tên dự án là ô NGUYÊN VĂN với mọi loại — ghi đúng cụm khách gõ; model chỉ chỉ ra cụm.
-  const duongNv = giaTriNguyenVan("vi_tri", mot.find((d) => d.khoa === "duong"));
-  const duong = duongNv ?? (lay("duong") ? tenDuongDayDu(lay("duong")!) : null);
-  if (duong && duong.length >= 4 && duong.length <= 80) them("vi_tri", duong, "duong");
+  const duong = viTriTuDuong(mot.find((d) => d.khoa === "duong"));
+  if (duong) them("vi_tri", duong, "duong");
   const duAn = lay("du_an");
   const duAnNv = giaTriNguyenVan("du_an_ten", mot.find((d) => d.khoa === "du_an")) ?? duAn;
   if (duAnNv && duAnNv.length >= 3 && duAnNv.length <= 80) them("du_an_ten", duAnNv, "du_an");
@@ -1808,6 +1856,19 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
  * khoá (không nằm trong trích dẫn nào của `dat`), tối đa 3.
  */
 const LOI_NOI_CHUYEN = /\b(de\s+(?:em|anh|chi|minh|toi|tui)\b|roi\s+(?:bao|gui|nhan)|bao\s+lai|gui\s+sau|chut\s+nua|lat\s+nua|hoi\s+lai|se\s+(?:gui|bao|nhan)|em\s+(?:coi|xem|kiem|check)|coi\s+lai|xem\s+lai|cam on|xin loi|nha\s*$|nhe\s*$)\b/;
+/** SRS-5.1zzzzy: model ghi chuyện riêng / nhận định giá trong `kien_thuc` với tiền tố "riêng:" (khuôn không thêm trường được, DC-13). */
+export function tachKeRieng(kienThuc: string[]): { canNha: string[]; rieng: string[] } {
+  const TIEN_TO = /^\s*(?:riêng|rieng)\s*:\s*/iu;
+  return {
+    canNha: kienThuc.filter((k) => !TIEN_TO.test(k)),
+    rieng: kienThuc.filter((k) => TIEN_TO.test(k)).map((k) => k.replace(TIEN_TO, "").trim()).filter(Boolean),
+  };
+}
+/** SRS-5.1zzzzy: bỏ khỏi kien_thuc ý trùng chuyện riêng (`tachKeRieng`), hoặc ý chủ nhà đã xin bỏ (`boc_tach.y_da_bo`) — cùng ý theo `trungY`. */
+export function boKeRieng(kienThuc: string[], keRieng: string[]): string[] {
+  const rieng = keRieng.filter((x) => (x ?? "").trim().length >= 3);
+  return kienThuc.filter((k) => !rieng.some((r) => trungY(k, r)));
+}
 export function kiemKienThuc(kienThuc: string[], tin: string, dat: DeXuat[], daGhi: readonly string[] = []): string[] {
   const kdTin = chuanSo(tin);
   const daCo = dat.map((d) => chuanSo(d.trich_dan));
