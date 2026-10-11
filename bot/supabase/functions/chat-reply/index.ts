@@ -47,6 +47,7 @@ import { bocRaoBangModel } from "../_shared/ai/boc-rao.ts";
 import { soatNhanXetBangModel } from "../_shared/ai/kiem-khen.ts";
 import { docYLuotBangModel, type YLuotLLM } from "../_shared/ai/doc-y-luot.ts";
 import { ganManhBangModel } from "../_shared/ai/gan-manh.ts"; // FR-214 b/d: một người nhiều căn
+import { bocGhiAi, chayCoGhiAi, type DongGhiAi } from "../_shared/ai/ghi-luot-ai.ts"; // SRS-5.1zzzzzd: ghi đầu ra model của ID thử
 import { canGanManh, donManh } from "../_shared/extraction/gan-manh-loc.ts";
 // 05/10/2026 (demo AOND, SRS-5.1zzj…zzm): file / link người bán gửi, tài liệu dự án, nhập rổ hàng, nhịp gửi.
 import { base64, docCsv, docLinkDrive, docXlsx, loaiTep, m2TuChu, taiTep, tangTuChu, timLinkTrongChu, type TepTai } from "../_shared/kho_tep.ts";
@@ -919,7 +920,7 @@ type ModelClient = Awaited<ReturnType<typeof anthropicClient>>;
 let nhoModel: { at: number; client: ModelClient } | null = null;
 async function napModel(client: ReturnType<typeof serviceClient>): Promise<ModelClient> {
   if (nhoModel && Date.now() - nhoModel.at < 5 * NHO_TAM_MS) return nhoModel.client;
-  const c = await anthropicClient(client);
+  const c = bocGhiAi(await anthropicClient(client));
   nhoModel = { at: Date.now(), client: c };
   return c;
 }
@@ -931,7 +932,7 @@ const HOI_LAI_NOI_DO_TRO_LY = "- khách hỏi tiện ích / nơi chốn quanh đ
 let nhoTroLy: { at: number; client: Awaited<ReturnType<typeof anthropicTrucTiep>> } | null = null;
 async function napTroLy(client: ReturnType<typeof serviceClient>) {
   if (nhoTroLy && Date.now() - nhoTroLy.at < 5 * NHO_TAM_MS) return nhoTroLy.client;
-  const c = await anthropicTrucTiep(client);
+  const c = bocGhiAi(await anthropicTrucTiep(client));
   nhoTroLy = { at: Date.now(), client: c };
   return c;
 }
@@ -1011,7 +1012,7 @@ function anhHopLe(url: string | null): string | null {
   return ok ? url : null;
 }
 
-Deno.serve(async (req) => {
+const xuLyLuot = async (req: Request): Promise<Response> => {
   if (req.method !== "POST") return new Response("POST only", { status: 405 });
   // 14/09/2026: đồng hồ theo chặng — lượt đầu người mua chậm 10–12 s mà không ai biết
   // chậm ở đâu. Mốc (ms từ đầu lượt) đi kèm payload `_ms` và log; không đổi hành vi.
@@ -6764,10 +6765,17 @@ Deno.serve(async (req) => {
           ? kiemTraLoiCau(kqAi.traLoi, text, cauBotThat, { cauHoi: pendingReq.question, loai: pendingReq.listings?.property_type ?? null }) : null;
         // SRS-5.1zzw: một cụm chỉ trả lời một ô — cụm trích của câu trả lời mà cùng lượt đã thuộc ô KHÁC (đề xuất AI + fact luật) thì
         // AI nói "có trả lời" cũng không tính ("anh đứng tên, không thế chấp" khi hỏi gấp / hỏi hẻm). Câu treo đi đường lệch như AI nói không.
-        const traLoiAi = traLoiAi0?.co && traLoiThuocOKhac(kqAi?.traLoi?.trich_dan, pendingReq.question, datAi, nhanDienNhieuFact(text))
+        const traLoiAi1 = traLoiAi0?.co && traLoiThuocOKhac(kqAi?.traLoi?.trich_dan, pendingReq.question, datAi, nhanDienNhieuFact(text), traLoiAi0.giaTri)
           ? (console.log("chat-reply: tra_loi thuoc o khac", pendingReq.question), { co: false, giaTri: null })
           : traLoiAi0;
-        const oAi = kqAi && layChoCauTreo ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
+        // SRS-5.1zzzzzd: hai lượt AI nói ngược nhau — bóc tách đưa câu trả lời ("ko biết cái" cho ô thổ cư) trong khi lượt ý ngắn đọc ra
+        // chủ nhà KHÔNG BIẾT điều đang hỏi (trích dẫn đã kiểm). Lời không biết không bao giờ là giá trị: tín hiệu chuyên của AI thắng, câu
+        // treo đi đường "không biết" bên dưới. Thay luật từ khoá `laLoiKhongBiet` (5.1zzzzzc) — đoán nghĩa bằng danh sách chữ.
+        const oAi0 = kqAi && layChoCauTreo ? giaTriChoCauTreo(datAi, pendingReq.question, dongTreo) : null;
+        const aiKhongBiet = (traLoiAi1?.giaTri || oAi0) ? !!(await khongBietAi()) : false;
+        if (aiKhongBiet) console.log("chat-reply: AI dua gia tri nhung AI doc khong biet", pendingReq.question);
+        const traLoiAi = aiKhongBiet ? { co: false, giaTri: null } : traLoiAi1;
+        const oAi = aiKhongBiet ? null : oAi0;
         const dapAnAi0 = CAU_SO_CHAT.has(pendingReq.question) ? oAi : (traLoiAi?.giaTri ?? oAi);
         // 22/09/2026: câu treo VỊ TRÍ — bản luật chứa bản AI mà dài hơn (có số nhà / hẻm) thì lấy luật.
         // 30/09/2026 (bắn thật lx-ban-f): AI trả "o q10" cho câu địa chỉ — chỉ có quận, không phải địa chỉ; luật để câu treo.
@@ -10633,4 +10641,28 @@ Deno.serve(async (req) => {
     // công khai); rơi về đường JSON thì `vong` 0 + `ly_do`. Sổ inbound lưu payload này — `ban-thu` in ra.
     ...(troLy ? { tro_ly: troLy } : {}),
   });
+};
+
+// SRS-5.1zzzzzd: lượt mang cờ `ghi_ai: true` (chỉ khách mô phỏng gửi — bridge / OA không bao giờ có; kênh `zalo_personal_test` thì
+// khách thật qua bridge cũng dùng, nên không gác theo kênh) chạy trong ngữ cảnh ghi đầu ra model (`ghi-luot-ai.ts`); xong lượt, đầu ra
+// đi `ghi_ai_thu` — hàm DB tự bỏ qua ID không phải ID thử (`la_id_thu`, chỗ duy nhất giữ tiền tố). Lượt thường: không thêm truy vấn
+// nào. Thân request đọc MỘT lần ở đây rồi chuyền nguyên chữ cho lượt (cửa SEC-06 vẫn ở trong). Lượt bị chặn ở cổng không gọi model
+// nào → không ghi gì.
+Deno.serve(async (req) => {
+  if (req.method !== "POST") return await xuLyLuot(req);
+  const tho = await req.text();
+  const reqLai = { method: req.method, headers: req.headers, text: async () => tho } as unknown as Request;
+  let b: { external_user_id?: unknown; ghi_ai?: unknown; text?: unknown } | null = null;
+  try { b = tho.length <= 128 * 1024 && tho.includes('"ghi_ai"') ? JSON.parse(tho) : null; } catch { b = null; }
+  if (b?.ghi_ai !== true || !b.external_user_id) return await xuLyLuot(reqLai);
+  const so: DongGhiAi[] = [];
+  const res = await chayCoGhiAi(so, () => xuLyLuot(reqLai));
+  if (so.length) {
+    const client = serviceClient();
+    const { error } = await client.rpc("ghi_ai_thu", {
+      p_zalo: String(b.external_user_id).slice(0, 128), p_tin: thayLienHe(String(b.text ?? ""), "[liên hệ]").slice(0, 4000), p_luot: so,
+    });
+    if (error) await ghiLoi(client, "chat-reply ghi_ai_thu", error.message);
+  }
+  return res;
 });

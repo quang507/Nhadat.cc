@@ -1073,12 +1073,13 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
 // SRS-5.1zzzzzc (khách mô phỏng lần năm): lời "không biết" không phải giá trị; giá trị phải đúng loại ô; số suy ra rõ ràng có bằng chứng;
 // "hẻm ngang N" là chiều ngang căn; xưng hô giữa cụm nguyên văn; quận chung của lô trích từ tin trước.
 {
-  const { laLoiKhongBiet, giaTriHopKieu } = await import("../supabase/functions/_shared/extraction/kiem-bang-chung.ts");
+  const kbc = await import("../supabase/functions/_shared/extraction/kiem-bang-chung.ts");
   const tl = (gia_tri, trich_dan, tin, cauHoi) => kiemTraLoiCau({ co_tra_loi: true, gia_tri, trich_dan }, tin, null, { cauHoi, loai: "dat" });
-  ok("ZZZZZC-K1 (ca gốc) hỏi thổ cư, AI tra_loi 'ko biết cái' «ko biết cái đó» → không có giá trị", tl("ko biết cái", "ko biết cái đó", "uh ko biết cái đó", "tho_cu")?.giaTri == null);
-  ok("ZZZZZC-K2 (cách nói mới) 'cái đó chú không nhớ' / 'chịu em' → lời không biết", laLoiKhongBiet("khong nho") && laLoiKhongBiet("chiu em") && !laLoiKhongBiet("khong co gac lung") && !laLoiKhongBiet("toan tho cu"));
-  ok("ZZZZZC-K3 (ca gốc) hỏi thổ cư, AI tra_loi 'được' (câu trả lời của ô lên thổ cư) → không vào ô thổ cư; 'toàn thổ cư' / '200m2' thì nhận",
-    !giaTriHopKieu("tho_cu", "được") && giaTriHopKieu("tho_cu", "toàn thổ cư") && giaTriHopKieu("tho_cu", "200m2") && giaTriHopKieu("tho_cu", "full"));
+  // SRS-5.1zzzzzd: gỡ luật từ khoá "không biết" / "thổ cư phải có số" (đoán nghĩa). Bộ kiểm chỉ còn soát trích dẫn có trong tin; lời
+  // "không biết" do AI đọc (`khong_biet`, chat-reply cho nó thắng — e2e ZZZZZC-01/02), ô thổ cư theo luật bóc tách.
+  ok("ZZZZZD-K1 luật từ khoá 'không biết' đã gỡ khỏi bộ kiểm", !("laLoiKhongBiet" in kbc));
+  ok("ZZZZZD-K2 trích dẫn có trong tin → bộ kiểm không phán nghĩa (giá trị đi qua, AI chịu trách nhiệm)", tl("được", "được", "được, lên thổ cư được", "tho_cu")?.giaTri === "được");
+  ok("ZZZZZD-K3 trích dẫn KHÔNG có trong tin → vẫn bỏ", tl("toàn thổ cư", "toàn thổ cư", "uh ko biết cái đó", "tho_cu")?.giaTri == null);
   const pn = kiemDeXuat([{ khoa: "so_phong_ngu", gia_tri: "4", trich_dan: "3 phòng ngủ ở lầu với 1 phòng ở trệt" }], "mà nhà chị có 3 phòng ngủ ở lầu với 1 phòng ở trệt nữa");
   ok("ZZZZZC-K4 (ca gốc) 'có 3 phòng ngủ ở lầu với 1 phòng ở trệt' → so_phong_ngu 4 (tổng) đạt", pn.dat.some((d) => d.khoa === "so_phong_ngu"), JSON.stringify(pn.bo));
   const pn2 = kiemDeXuat([{ khoa: "so_phong_ngu", gia_tri: "5", trich_dan: "3 phòng ngủ ở lầu với 1 phòng ở trệt" }], "mà nhà chị có 3 phòng ngủ ở lầu với 1 phòng ở trệt nữa");
@@ -1086,19 +1087,17 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   // Production chạy kiểm NHẸ (chế độ `ai`) — các ca dưới soi đúng lớp đó.
   datKiemNhe(true);
   const kc = kiemDeXuat([{ khoa: "ket_cau", gia_tri: "trệt + 1 lầu", trich_dan: "trệt lầu" }, { khoa: "so_tang", gia_tri: "2", trich_dan: "trệt lầu" }], "phường 3 cháu, sổ hồng bác có rồi, nhà 4x16 trệt lầu, đẹp lắm");
-  const h = kiemDeXuat([{ khoa: "do_rong_hem", gia_tri: "5", trich_dan: "hẻm ngang 5" }], "ở hẻm Phan Xích Long ấy em, hẻm ngang 5 dài 18.");
+  const h = kiemDeXuat([{ khoa: "do_rong_hem", gia_tri: "2", trich_dan: "Hẻm ngang khoảng 2m" }], "Hẻm ngang khoảng 2m thôi em, xe máy vào được");
   const h2 = kiemDeXuat([{ khoa: "do_rong_hem", gia_tri: "4", trich_dan: "hẻm rộng 4m" }], "hẻm rộng 4m, ngang 5 dài 18");
-  const kb = kiemDeXuat([{ khoa: "tho_cu", gia_tri: "ko biết cái", trich_dan: "ko biết cái đó" }], "uh ko biết cái đó");
   datKiemNhe(false);
   ok("ZZZZZC-K6 (ca gốc) 'nhà 4x16 trệt lầu' → kết cấu 'trệt + 1 lầu' và số tầng 2 đạt", kc.dat.length === 2, JSON.stringify(kc.bo));
-  ok("ZZZZZC-K7 (ca gốc) «hẻm ngang 5» (cặp ngang × dài) → không phải độ rộng hẻm", !h.dat.length, JSON.stringify(h));
+  // SRS-5.1zzzzzd: luật "cụm có chữ ngang thì không phải bề rộng hẻm" (5.1zzzzzc) đã gỡ — nó bỏ luôn câu đúng ở khách mô phỏng lần sáu.
+  ok("ZZZZZD-K7 (ca gốc lần sáu) «Hẻm ngang khoảng 2m» → độ rộng hẻm 2 đạt", h.dat.length === 1, JSON.stringify(h));
   ok("ZZZZZC-K8 đối chứng «hẻm rộng 4m» → vẫn là độ rộng hẻm", h2.dat.length === 1, JSON.stringify(h2));
-  ok("ZZZZZC-K8b ô chữ AI đề xuất 'ko biết cái' → bỏ (lời không biết)", !kb.dat.length, JSON.stringify(kb));
-  const nv1 = giaTriNguyenVan("phap_ly", { khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "sổ hồng bác có rồi", cum_goc: "sổ hồng bác có rồi" });
-  const nv2 = giaTriNguyenVan("phap_ly", { khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "shr bạn, mình có sổ riêng", cum_goc: "shr bạn, mình có sổ riêng" });
+  // SRS-5.1zzzzzd: gỡ luật cắt xưng hô GIỮA cụm — cụm gọn do AI trích (luật bóc tách dặn); code chỉ gọt chữ đệm đầu cụm.
+  const nv1 = giaTriNguyenVan("phap_ly", { khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "sổ hồng", cum_goc: "sổ hồng" });
   const nv3 = giaTriNguyenVan("hien_trang_su_dung", { khoa: "hien_trang_su_dung", gia_tri: "đang ở", trich_dan: "nhà anh đang ở", cum_goc: "nhà anh đang ở" });
-  ok("ZZZZZC-K9 nguyên văn: 'sổ hồng bác có rồi' → 'sổ hồng'; 'shr bạn, mình có sổ riêng' → bản viết đủ; 'nhà anh đang ở' không bị cắt cụt",
-    nv1 === "sổ hồng" && !/bạn|mình/.test(nv2 ?? "") && /đang ở/.test(nv3 ?? ""), JSON.stringify({ nv1, nv2, nv3 }));
+  ok("ZZZZZD-K9 nguyên văn: cụm AI trích gọn 'sổ hồng' giữ nguyên; 'nhà anh đang ở' không bị cắt cụt", nv1 === "sổ hồng" && /đang ở/.test(nv3 ?? ""), JSON.stringify({ nv1, nv3 }));
   const q = kiemYCuocRao([{ khoa: "quan", gia_tri: "Quận 5", trich_dan: "quận 5" }], "căn thứ 2 hẻm Nguyễn Trãi 3x12 2 tầng 6 tỷ 5 bạn", "chào bạn, mình bên môi giới, có mấy căn quận 5 cần đăng", {}, ["quan"]);
   ok("ZZZZZC-K10 (ca gốc) căn thứ 2 của môi giới: quận chung «quận 5» ở tin trước → nhận khi khoá cho phép là quan", q.dat.some((d) => d.khoa === "quan"), JSON.stringify(q));
   const q2 = kiemYCuocRao([{ khoa: "gia", gia_tri: "18 tỷ", trich_dan: "18 tỷ" }], "căn thứ 2 hẻm Nguyễn Trãi", "1 căn mt Trần Hưng Đạo giá 18 tỷ", {}, ["quan"]);

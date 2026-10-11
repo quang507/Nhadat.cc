@@ -3431,6 +3431,67 @@ Ngoài e2e:
 
 e2e **1215/1215**.
 
+### SRS-5.1zzzzzd · Phát lại đầu ra model thật; gỡ luật đoán nghĩa bằng từ khoá ở bộ kiểm bằng chứng (11/10/2026)
+
+`[nguồn: chủ dự án 11/10/2026 sau lượt mo-phong.yml thứ sáu: "sao sửa lỗi này vẫn lòi ra lỗi kia z" — "ok làm đi rồi merge"]`
+
+**Ca gốc.** Lượt khách mô phỏng thứ sáu (sau SRS-5.1zzzzzc) có một lỗi DO CHÍNH BẢN SỬA trước gây ra: luật "cụm có chữ ngang thì không phải bề
+rộng hẻm" bỏ luôn câu đúng "Hẻm ngang khoảng 2m". Các lỗi còn lại phần lớn là lỗi cũ mà các lượt trước khách chưa đi tới.
+
+**Lớp lỗi (1) — bộ kiểm chỉ kiểm giả định của người sửa.** Bộ e2e dùng model GIẢ trả đúng thứ người viết ca đặt sẵn, nên một bản sửa xanh
+trên e2e chỉ chứng minh code làm đúng điều người sửa NGHĨ model sẽ trả. Khách mô phỏng dùng model thật nhưng mỗi lần một mẫu, tốn tiền, và
+lỗi đã thấy không có gì giữ lại.
+- **Sửa:** ghi lại đầu ra model THẬT, phát lại offline.
+  - `_shared/ai/ghi-luot-ai.ts`: `bocGhiAi` bọc client model (`napModel`, `napTroLy`); mỗi lượt create / parse ghi `{kind, loai, ra}` vào sổ của
+    lượt khách. Sổ đi theo NGỮ CẢNH lượt (AsyncLocalStorage), không theo biến toàn cục — một isolate phục vụ nhiều khách cùng lúc. `loaiLuotAi`
+    đặt tên loại lượt theo dấu hiệu đầu system prompt (`boc_rao`, `chot_tin`, `doc_y_luot`, `soat_ban`, `viet`, `tro_ly`…).
+  - chat-reply: chỉ lượt mang cờ `ghi_ai: true` mới chạy trong ngữ cảnh ghi (khách mô phỏng gửi; bridge / OA không bao giờ có — kênh
+    `zalo_personal_test` thì khách thật qua bridge cũng dùng nên không gác theo kênh). Xong lượt, sổ đi RPC `ghi_ai_thu`; lượt thường không thêm
+    truy vấn nào (TOIUU-* canh).
+  - Migration `20261011b_ai_ghi_thu.sql`: bảng `ai_ghi_thu` (RLS, chỉ admin đọc, giữ 2 ngày, trigger gọt dãy giống SĐT) + hàm `ghi_ai_thu` tự bỏ
+    qua ID không phải ID thử (`la_id_thu`). Khách thật không bao giờ vào bảng.
+  - `mo-phong.mjs`: tin gửi kèm `ghi_ai`; cuối mỗi persona in một dòng `PHAT_LAI_JSON` (tin khách + lời bot gốc + đầu ra model từng lượt + công tắc
+    production); dọn cả `ai_ghi_thu` cùng dữ liệu thử. `bot/tests/phat-lai/lay-tu-log.mjs` cắt các dòng đó thành file `bot/tests/phat-lai/ca/`.
+  - `bot/tests/phat-lai/phat-lai.mjs` (trong `test:bot`): bơm lại tin khách + đầu ra model đã ghi qua handler chat-reply thật trên DB giả của e2e,
+    soát `ky_vong` người sửa ghi cho đúng lỗi đã thấy. Ghép đầu ra theo loại lượt + thứ tự; code mới gọi lượt mà bản ghi không có thì model "hỏng"
+    ở lượt đó và bộ này in "thiếu đầu ra" (ca cũ hơn code), không trả nhầm đầu ra của lượt khác.
+- **Cách dùng từ đây:** lỗi thấy ở khách mô phỏng → lấy ca từ log, thêm kỳ vọng, thấy ĐỎ trên code cũ, rồi mới sửa. Ca không bị xoá khi sửa xong.
+
+**Lớp lỗi (2) — bộ kiểm bằng chứng đoán nghĩa bằng danh sách từ.** SRS-5.1zzzzzc thêm vào `kiem-bang-chung.ts` bốn luật đọc NGHĨA chữ khách
+bằng từ khoá — đúng loại cơ chế CLAUDE.md §6 cấm vá: luật "không biết" (`laLoiKhongBiet`), ô thổ cư phải có số / full, cụm có chữ "ngang" không
+là bề rộng hẻm, cắt xưng hô giữa cụm nguyên văn (`NV_XUNG_HO_GIUA`). Luật thứ ba đã cắn câu đúng ở lượt sáu.
+- **Gỡ cả bốn.** Bộ kiểm chỉ còn soát trích dẫn có trong tin (và con số có trong cụm trích như trước).
+- Lời "không biết": lượt ý ngắn của AI đã có trường riêng `khong_biet` (SRS-5.1zzzzz, trích dẫn kiểm). chat-reply cho nó THẮNG `tra_loi` / ô
+  của bóc tách: hai lượt AI nói ngược nhau thì tín hiệu chuyên thắng, câu treo đi đường "không biết".
+- Ô thổ cư nhận "được" của câu lên thổ cư: `traLoiThuocOKhac` nhận thêm GIÁ TRỊ — phần còn lại sau khi gỡ cụm ô khác chỉ là chính giá trị, mà
+  giá trị nằm gọn trong cụm của ô khác ("được" trong "lên thổ cư được") thì là câu của ô khác. Chỉ so cụm AI đã trích, không đọc từ.
+- "hẻm ngang 5 dài 18" và cụm gọn của ô nguyên văn: luật bóc tách (`boc-rao.ts`) — "trích dẫn gọn đúng phần nói giá trị, không kèm xưng hô và
+  lời kể đi sau; 'hẻm ngang khoảng 2m' là bề rộng hẻm".
+- **Giữ lại** hai luật số học của 5.1zzzzzc (`laTongTrongCum`; "trệt lầu" = 2 tầng ở `soTangTrong` và số 1 cho ô kết cấu): chúng nới phép kiểm
+  chống bịa số đã có từ trước. Gỡ thì lỗi BT2 quay lại. Sẽ thay khi ca phát lại cho thấy model thật ghi đúng mà không cần.
+
+**Chỗ khác cùng lớp.**
+- `giaTriHopKieu` còn hình dạng cho ô ĐO ĐẾM (phải có số, hẻm nhận loại đường, phí nhận "không có") — có từ SRS-5.1zzu, chưa gỡ ở lượt này.
+- `HINH_TRUONG_CHU` (hình dạng giá trị AI viết cho ô chữ) soát chữ AI viết, không phải chữ khách; giữ.
+- Luật tìm-chuỗi trong `khop-cau-tra-loi.ts` / `boc-cau-rao.ts` chỉ chạy khi AI không chạy (chế độ `ai`); không đổi.
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy).**
+
+| Ca | Nội dung | Tắt bản sửa |
+|---|---|---|
+| ZZZZZC-01 / 02 | AI `tra_loi` "ko biết cái" + AI `khong_biet` → ô thổ cư không ghi, câu thôi treo | cả hai đỏ khi bỏ `aiKhongBiet` |
+| ZZZZZC-03 | "được, lên thổ cư được" → ô thổ cư không ghi | đỏ khi bỏ nhánh giá trị của `traLoiThuocOKhac` |
+| ZZZZZD-09 | (ca gốc lần sáu) "Hẻm ngang khoảng 2m" → hẻm 2 | thay ZZZZZC-09 |
+| ZZZZZD-PL01…03 | ID thử + cờ `ghi_ai` → một dòng `ai_ghi_thu` có nguyên đầu ra bóc tách; không cờ / ID thật → không dòng | PL01 đỏ khi bỏ cờ |
+
+Ngoài e2e:
+- `bot/tests/ghi-luot-ai.mjs`: hai lượt song song không lẫn sổ, ngoài ngữ cảnh không ghi, lượt ném lỗi ghi `loi`, tên loại lượt, trần 40.
+- `bot/tests/phat-lai/phat-lai.mjs --tu-kiem` (ca TỰ DỰNG `tu-kiem.json`, không phải đầu ra model thật — chỉ để kiểm chính bộ phát lại; đổi kỳ
+  vọng sai là đỏ). Thư mục `ca/` hiện trống: ca thật đầu tiên có sau lượt mo-phong kế tiếp.
+- `kiem-bang-chung.mjs` ZZZZZD-K1…K3, K7, K9 (thay ZZZZZC-K1…K3, K7, K8b, K9).
+
+e2e **1218/1218**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

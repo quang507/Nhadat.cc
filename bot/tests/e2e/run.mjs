@@ -10271,11 +10271,13 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   const treo = (L) => db().t.info_requests.filter((q) => q.listing_id === L.id && q.status === "pending").map((q) => q.question);
   globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
 
-  // (1) Lời "không biết" AI gửi qua tra_loi → không thành giá trị ô thổ cư.
+  // (1) Lời "không biết" AI gửi qua tra_loi → không thành giá trị ô thổ cư. SRS-5.1zzzzzd: không đoán bằng từ khoá nữa — lượt ý ngắn của AI
+  // đọc ra `khong_biet` (trích dẫn có trong tin) thì thắng `tra_loi` của bóc tách; tắt bản sửa đó là hai ca này đỏ.
   for (const [ma, cau, gt] of [["01 (ca gốc)", "uh ko biết cái đó", "ko biết cái"], ["02 (cách nói mới)", "cái đó chú không nhớ đâu cháu", "không nhớ"]]) {
     const { uid, L } = dung({ tin: TIN_DAT, cauTreo: "tho_cu", botNoi: ["Dạ vâng. Trong đó thổ cư được bao nhiêu m² vậy anh chị ạ?"] });
-    await goi(uid, cau, { tra_loi: { co_tra_loi: true, gia_tri: gt, trich_dan: cau.split(" ").slice(0, 4).join(" ") } });
-    check(`ZZZZZC-${ma} hỏi thổ cư, «${cau}» (AI tra_loi «${gt}») → ô thổ cư KHÔNG ghi`, !fq(L, "tho_cu").length, JSON.stringify(fq(L, "tho_cu")));
+    await goi(uid, cau, { tra_loi: { co_tra_loi: true, gia_tri: gt, trich_dan: cau.split(" ").slice(0, 4).join(" ") }, khong_biet: cau });
+    check(`ZZZZZC-${ma} hỏi thổ cư, «${cau}» (AI tra_loi «${gt}», AI khong_biet) → ô thổ cư KHÔNG ghi, câu thổ cư thôi treo`,
+      !fq(L, "tho_cu").length && !treo(L).includes("tho_cu"), JSON.stringify({ tc: fq(L, "tho_cu"), treo: treo(L) }));
   }
   // (2) Câu trả lời của ô KHÁC không vào ô đang hỏi.
   {
@@ -10303,8 +10305,9 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   {
     const { uid, L } = dung({ tin: TIN_GV, cauTreo: "phuong", xung: "bác", wards: true });
     await goi(uid, "phường 3 cháu, sổ hồng bác có rồi, nhà 4x16 trệt lầu, đẹp lắm",
-      { truong: [T("phuong", "Phường 3", "phường 3 cháu"), T("phap_ly", "sổ hồng riêng", "sổ hồng bác có rồi"), T("ngang", "4", "4x16"), T("dai", "16", "4x16"), T("ket_cau", "trệt + 1 lầu", "trệt lầu"), T("so_tang", "2", "trệt lầu")] });
-    check("ZZZZZC-07 (ca gốc) «sổ hồng bác có rồi … trệt lầu» → pháp lý 'sổ hồng' (không 'bác có'), kết cấu không phải '1 tầng'",
+      // SRS-5.1zzzzzd: cụm pháp lý gọn do AI trích (luật bóc tách: trích dẫn không kèm xưng hô / lời kể) — code không cắt bằng danh sách từ.
+      { truong: [T("phuong", "Phường 3", "phường 3 cháu"), T("phap_ly", "sổ hồng riêng", "sổ hồng"), T("ngang", "4", "4x16"), T("dai", "16", "4x16"), T("ket_cau", "trệt + 1 lầu", "trệt lầu"), T("so_tang", "2", "trệt lầu")] });
+    check("ZZZZZC-07 (ca gốc) «sổ hồng bác có rồi … trệt lầu», AI trích «sổ hồng» → pháp lý 'sổ hồng', kết cấu không phải '1 tầng'",
       fq(L, "phap_ly").includes("sổ hồng") && !fq(L, "phap_ly").some((x) => /bác/.test(x)) && !fq(L, "ket_cau").includes("1 tầng"), JSON.stringify({ pl: fq(L, "phap_ly"), kc: fq(L, "ket_cau") }));
   }
   // (6) Tổng phòng ngủ có bằng chứng.
@@ -10314,11 +10317,13 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     check("ZZZZZC-08 (ca gốc) «3 phòng ngủ ở lầu với 1 phòng ở trệt» → số phòng ngủ 4, không vào bổ sung", fq(L, "so_phong_ngu").includes("4") && !fq(L, "bo_sung").length,
       JSON.stringify({ pn: fq(L, "so_phong_ngu"), bs: fq(L, "bo_sung") }));
   }
-  // (7) "hẻm ngang 5 dài 18" — chiều ngang căn, không phải hẻm.
+  // (7) SRS-5.1zzzzzd: bỏ luật "cụm có chữ ngang thì không phải bề rộng hẻm" (5.1zzzzzc) — khách mô phỏng lần sáu "Hẻm ngang khoảng 2m" là
+  // bề rộng hẻm thật mà luật đó bỏ. "hẻm ngang 5 dài 18" là kích thước căn do AI đọc (luật bóc tách: cặp ngang A dài B là kích thước căn).
   {
-    const { uid, L } = dung({ tin: { ...TIN_GV, location_raw: null, street: null, district: "Quận Phú Nhuận" }, cauTreo: "vi_tri", xung: "chị" });
-    await goi(uid, "ở hẻm Phan Xích Long ấy em, hẻm ngang 5 dài 18.", { truong: [T("duong", "hẻm Phan Xích Long", "hẻm Phan Xích Long"), T("ten_duong", "Phan Xích Long", "hẻm Phan Xích Long"), T("do_rong_hem", "5", "hẻm ngang 5"), T("dai", "18", "dài 18")] });
-    check("ZZZZZC-09 (ca gốc) «hẻm ngang 5 dài 18» → không ghi độ rộng hẻm 5", !fq(L, "do_rong_hem").length && lr(L).alley_width_m == null, JSON.stringify({ h: fq(L, "do_rong_hem"), aw: lr(L).alley_width_m }));
+    const { uid, L } = dung({ tin: { ...TIN_GV, location_raw: "hẻm Phan Xích Long", street: "Phan Xích Long", district: "Quận Phú Nhuận" }, cauTreo: "do_rong_hem", xung: "chị",
+      botNoi: ["Dạ vâng. Hẻm trước nhà mình rộng khoảng bao nhiêu mét chị?"] });
+    await goi(uid, "Hẻm ngang khoảng 2m thôi em", { truong: [T("do_rong_hem", "2", "Hẻm ngang khoảng 2m")], tra_loi: { co_tra_loi: true, gia_tri: "2m", trich_dan: "Hẻm ngang khoảng 2m" } });
+    check("ZZZZZD-09 (ca gốc lần sáu) «Hẻm ngang khoảng 2m» → độ rộng hẻm 2", lr(L).alley_width_m === 2 || fq(L, "do_rong_hem").some((x) => /2/.test(x)), JSON.stringify({ h: fq(L, "do_rong_hem"), aw: lr(L).alley_width_m }));
   }
   // (8) Hỏi về tin KÈM dữ liệu → đi đường chính: ghi phường, không hỏi lại phường.
   {
@@ -10387,6 +10392,29 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
 // ── kết: BẤT BIẾN TOÀN BỘ ──
 soatDbBatBien("(cuối)");
 if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_DUMP, JSON.stringify(BB, null, 1));
+// ── SRS-5.1zzzzzd (11/10/2026): ghi đầu ra model của lượt THỬ để phát lại offline. Chỉ khi tin mang cờ `ghi_ai` (khách mô phỏng gửi) VÀ ID
+// là ID thử (hàm DB `ghi_ai_thu` lọc `la_id_thu`); lượt thường không có truy vấn thêm nào (TOIUU-* canh số truy vấn).
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocPL = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+  const ra = { so_can: 1, kien_thuc: [], truong: [T("loai_bds", "nha_pho", "nhà hẻm"), T("gia", "6 tỷ", "giá 6 tỷ"), T("quan", "Quận 4", "quận 4")], cap_nhat: [], xac_nhan: [],
+    tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null },
+    khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null } };
+  const RAO = "bán nhà hẻm Tôn Đản quận 4, giá 6 tỷ";
+  for (const [ma, uid, co, can] of [["01", "thu-pl-e2e-1", true, 1], ["02 đối chứng không cờ", "thu-pl-e2e-2", false, 0], ["03 đối chứng ID thật", "pl-that-3", true, 0]]) {
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    globalThis.__model = { parse: (p) => laBocPL(p) ? ra : OUT(), create: () => "Dạ em ghi rồi ạ." };
+    await send({ external_user_id: uid, text: RAO, ...(co ? { ghi_ai: true } : {}) });
+    const dong = db().t.ai_ghi_thu ?? [];
+    const coBoc = dong.some((d) => d.luot.some((x) => x.loai === "boc_rao" && x.ra?.po?.truong?.length === 3));
+    check(`ZZZZZD-PL${ma}: ${uid}${co ? " + cờ ghi_ai" : ""} → ${can} dòng sổ đầu ra model${can ? " (có lượt bóc tách nguyên đầu ra)" : ""}`,
+      dong.length === can && (!can || (coBoc && dong[0].tin === RAO)), JSON.stringify(dong.map((d) => ({ z: d.zalo_user_id, loai: d.luot.map((x) => x.loai) }))));
+  }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
 check(`BẤT BIẾN-PHƯỜNG: không lượt ghi nào đưa chữ lạ tới cột / fact phường (${BB.phuong.length} vi phạm)`, BB.phuong.length === 0, BB.phuong.slice(0, 12).join("\n       "));
 check(`BẤT BIẾN-ĐỊA CHỈ: lời gửi khách không chép location_raw thô khi bản in chuẩn khác (${BB.diaChi.length} vi phạm)`, BB.diaChi.length === 0, BB.diaChi.slice(0, 12).join("\n       "));
 check(`BẤT BIẾN-GIỌNG: không "anh/chị" gạch chéo, không gạch dài trong lời gửi khách (${BB.giong.length} vi phạm)`, BB.giong.length === 0, BB.giong.slice(0, 12).join("\n       "));

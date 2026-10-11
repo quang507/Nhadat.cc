@@ -43,7 +43,9 @@ const zalo = (p) => `thu-mp-${p.ma}`.slice(0, 40);
 const tinBot = async (z) => (await q(`select m.body from messages m join conversations c on c.id = m.conversation_id
   left join buyers b on b.id = c.buyer_id left join sellers s on s.id = c.seller_id
   where (b.zalo_user_id = ${lit(z)} or s.zalo_user_id = ${lit(z)}) and m.sender not in ('buyer','seller') order by m.created_at, m.seq`)).map((r) => r.body ?? "");
-const donDep = (ds) => q(`select count(public.reset_nguoi_test(z)) as n from unnest(array[${ds.map(lit).join(",")}]::text[]) z`);
+// SRS-5.1zzzzzd: dọn cả sổ đầu ra model (`ai_ghi_thu`) của các ID thử này — reset_nguoi_test không biết bảng đó.
+const donDep = (ds) => q(`with a as (delete from ai_ghi_thu where zalo_user_id = any(array[${ds.map(lit).join(",")}]::text[]) returning 1)
+  select count(public.reset_nguoi_test(z)) as n, (select count(*) from a) as ai from unnest(array[${ds.map(lit).join(",")}]::text[]) z`);
 
 const ai = new Anthropic({ apiKey: ANTHROPIC_API_KEY, maxRetries: 2 });
 const chuCuaLoi = (r) => (r.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("").trim();
@@ -97,7 +99,7 @@ async function chayMot(p) {
     const truoc = (await tinBot(z)).length;
     await q(`select net.http_post(url := public.cau_hinh('functions_base_url') || '/chat-reply',
         body := jsonb_build_object('external_user_id', ${lit(z)}, 'channel', 'zalo_personal_test', 'text', ${lit(tin)},
-          'msg_id', 'mp-' || ${lit(z)} || '-' || gen_random_uuid()::text),
+          'msg_id', 'mp-' || ${lit(z)} || '-' || gen_random_uuid()::text, 'ghi_ai', true),
         headers := jsonb_build_object('Content-Type', 'application/json', 'x-bridge-secret', public.get_secret('BRIDGE_SECRET')),
         timeout_milliseconds := 120000) as id`);
     const han = Date.now() + 150_000;
@@ -119,6 +121,19 @@ async function chayMot(p) {
       b.da_ghi->'hoi_lai'->>'chu_de' as hoi_lai
     from boc_tach_bong b join sellers s on s.id = b.seller_id where s.zalo_user_id = ${lit(z)} order by b.created_at`).catch(() => []);
   for (const a of aiLuot) console.log(`[${p.ma}] AI · hỏi ${a.hoi ?? "-"} · «${a.tin ?? ""}» · đề xuất: ${a.de_xuat ?? "(rỗng)"} · loại: ${a.bo ?? "-"}${a.hoi_lai ? ` · khách hỏi: ${a.hoi_lai}` : ""}`);
+  // SRS-5.1zzzzzd: CA PHÁT LẠI — đầu ra model thật của từng lượt (chat-reply ghi vào `ai_ghi_thu` vì tin mang cờ `ghi_ai`), ghép theo
+  // đúng tin khách, in một dòng JSON để chép vào bot/tests/phat-lai/ca/ (lấy bằng `lay-tu-log.mjs`). Chạy lại offline không tốn tiền.
+  const ghiAi = await q(`select tin, luot from ai_ghi_thu where zalo_user_id = ${lit(z)} order by created_at, id`).catch(() => []);
+  const caPhatLai = { ten: `mp-${p.ma}-${new Date().toISOString().slice(0, 10)}`, nguon: { run: process.env.GITHUB_RUN_ID ?? null, persona: p.ma },
+    cau_hinh: CAU_HINH, luot: [], ky_vong: [] };
+  let j = 0;
+  for (const l of luot) {
+    const k = ghiAi.findIndex((g, i) => i >= j && String(g.tin ?? "").trim() === l.khach.trim());
+    const ai = k >= 0 ? (typeof ghiAi[k].luot === "string" ? JSON.parse(ghiAi[k].luot) : ghiAi[k].luot) : [];
+    if (k >= 0) j = k + 1;
+    caPhatLai.luot.push({ khach: l.khach, bot_goc: l.bot ?? [], ai });
+  }
+  console.log(`PHAT_LAI_JSON ${p.ma} ${JSON.stringify(caPhatLai)}`);
   const kq = chamTatDinh(p, luot, tin ?? null);
   let loiAi = [];
   try { loiAi = kiemTrichDanGiamKhao(await giamKhao(luot), luot).giu; } catch (e) { console.log(`[${p.ma}] giám khảo AI hỏng: ${String(e).slice(0, 160)}`); }
@@ -126,9 +141,12 @@ async function chayMot(p) {
 }
 
 const IDS = PERSONA.map(zalo);
+const CAU_HINH = {};
 let thoat = 0;
 try {
   for (const z of IDS) if ((await q(`select public.la_id_thu(${lit(z)}) as t`))[0]?.t !== true) throw new Error(`${z} không phải ID thử`);
+  // Công tắc production lúc chạy — ca phát lại chạy lại đúng chế độ đó (chỉ khoá công tắc, không có bí mật).
+  for (const r of await q(`select key, value from app_config where key in ('boc_tach_ai','bao_lai_da_luu','luat_loi_bot','tro_ly','nhip_go','lenh_json')`).catch(() => [])) CAU_HINH[r.key] = r.value;
   console.log(`Dọn dữ liệu thử cũ: ${JSON.stringify(await donDep(IDS))}`);
   console.log(`Chạy ${PERSONA.length} persona, tối đa ${LUOT} lượt, khách ${MODEL_KHACH}, giám khảo ${MODEL_CHAM}`);
   const ketQua = await Promise.all(PERSONA.map((p) => chayMot(p).catch((e) => ({ loi: String(e).slice(0, 300), ma: p.ma }))));

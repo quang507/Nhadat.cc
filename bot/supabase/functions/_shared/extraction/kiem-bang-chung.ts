@@ -138,10 +138,6 @@ const NV_DAU_CUM = /^(?:nhà ở|nha o|nhà|nha|ở|o|tại|tai|địa chỉ|dia
 // Khiêm"; người đứng tên thì "anh" CHÍNH là giá trị.
 const NV_O_BO_XUNG_HO = new Set(["hien_trang", "hien_trang_su_dung", "ket_cau", "noi_that", "phap_ly", "giay_to_hien_co", "view"]);
 const NV_XUNG_HO_DAU = /^(?:của\s+)?(?:bác|chú|cô|dì|anh|chị|em|cháu|tui|tôi|mình|ông|bà|bạn)\s+(?=\S)/iu;
-// SRS-5.1zzzzzc (khách mô phỏng lần năm: "sổ hồng bác có rồi" → ô pháp lý "sổ hồng bác có"; "shr bạn, mình có sổ riêng" → cả câu): xưng hô
-// GIỮA cụm cũng là người nói — từ chữ đó về sau là lời kể ("bác có rồi", "bạn, mình có…"), không phải giá trị. Chỉ cắt khi phần trước
-// đã đủ hình giá trị của ô (`HINH_TRUONG_CHU`), để "nhà anh đang ở" (chữ đầu đã gọt) không bị cắt cụt.
-const NV_XUNG_HO_GIUA = /[\s,;.]+(?:bác|chú|cô|dì|anh|chị|em|cháu|tui|tôi|mình|ông|bà|bạn)(?=[\s,;.!?]|$)/iu;
 // Đuôi phường / quận cắt khỏi địa chỉ (có ô riêng). Quận chỉ cắt khi theo sau là số hoặc tên quận TP.HCM — "quan hoa", "huyen tran
 // cong chua" gõ không dấu là tên đường, không phải đuôi hành chính.
 const NV_DUOI_DIA_CHI = /[,;.]?\s*(?<![\p{L}\d])(?:(?:phường|phuong|p\.)\s*(?:\d{1,2}|[\p{L}]{2,})(?![\p{L}\d])|(?:quận|quan|q\.)\s*(?:\d{1,2}(?![\d\p{L}])|tân|tan|bình|binh|gò|go|phú|phu|thủ|thu|hóc|hoc|củ|cu|nhà|nha|cần|can)(?![\p{L}\d])|tp\.?\s*hcm|tphcm|hồ chí minh|ho chi minh)[\s\S]*$/iu;
@@ -159,13 +155,9 @@ export function giaTriNguyenVan(question: string, d: DeXuat | null | undefined):
   if (question === "ket_cau" && d.khoa !== "ket_cau") return null;
   let c = (d.cum_goc ?? d.trich_dan ?? "").replace(/\s+/g, " ").trim();
   for (let i = 0; i < 3 && NV_DAU_CUM.test(c); i++) c = c.replace(NV_DAU_CUM, "");
-  if (NV_O_BO_XUNG_HO.has(question)) {
-    c = c.replace(NV_XUNG_HO_DAU, "");
-    const g = NV_XUNG_HO_GIUA.exec(c);
-    const dau = g ? c.slice(0, g.index).trim() : "";
-    const hinh = HINH_TRUONG_CHU[question];
-    if (dau.length >= 2 && (!hinh || hinh.test(chuanSo(dau)))) c = dau;
-  }
+  // SRS-5.1zzzzzd: bỏ luật cắt xưng hô GIỮA cụm (5.1zzzzzc) — đoán "đâu là lời kể" bằng danh sách từ. Cụm nào là giá trị do AI chỉ
+  // ra (`cum_goc`, luật bóc tách dặn không gồm xưng hô / lời kể đi sau); code chỉ gọt chữ đệm ĐẦU cụm như trước.
+  if (NV_O_BO_XUNG_HO.has(question)) c = c.replace(NV_XUNG_HO_DAU, "");
   if (question === "vi_tri") {
     c = c.replace(NV_DUOI_DIA_CHI, "").replace(NV_BE_RONG_HEM, "$1").replace(/\s+/g, " ").trim();
     c = c.replace(/^(?:số|so)\s+(?=\d)/iu, "");
@@ -539,7 +531,6 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ng
       // Trường chữ: giá trị phải NẰM TRONG cụm trích (model không được "diễn đạt lại").
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
       if (diaChiChiHanhChinh(d)) return "dia_chi_chi_la_hanh_chinh";
-      if (laLoiKhongBiet(boDauKiem(chuanSo(v)))) return "loi_khong_biet_khong_phai_gia_tri";
       const cv = chuanSo(v);
       // FR-223 (bắn thật 24/09, rn-test-c): prompt dặn model VIẾT LẠI SẠCH, bỏ từ đệm ("chưa có sổ em, đang chờ ra sổ" →
       // "chưa có sổ, đang chờ ra sổ") mà luật này đòi giá trị nằm NGUYÊN trong cụm trích → loại, AI coi như im, câu trả lời
@@ -635,7 +626,6 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string,
     default: {
       if (!(MOI_KHOA as readonly string[]).includes(d.khoa)) return "khoa_la";
       if (diaChiChiHanhChinh(d)) return "dia_chi_chi_la_hanh_chinh";
-      if (laLoiKhongBiet(boDauKiem(chuanSo(v)))) return "loi_khong_biet_khong_phai_gia_tri";
       // Chữ AI viết lại được (chuẩn hoá, sửa chính tả, đổi từ đồng nghĩa) nhưng không được thêm CON SỐ khách không nói.
       const soTrich = new Set(kd.match(/\d+/g) ?? []);
       // SRS-5.1zzzzzc: kết cấu "trệt lầu" (lầu không kèm số) → AI viết "trệt + 1 lầu" — số 1 là cách đọc chuẩn của "lầu" trần, có bằng chứng.
@@ -1357,14 +1347,6 @@ export function kiemTraLoiCau(
  * phí / thoả thuận". Ô chữ (pháp lý, hướng, kết cấu…) không qua đây. Muốn thêm ô đo đếm thì thêm vào bảng, đừng vá từng chỗ.
  */
 /**
- * SRS-5.1zzzzzc (khách mô phỏng lần năm: hỏi thổ cư, khách "uh ko biết cái đó" → AI `tra_loi` có, giá trị "ko biết cái" → ghi vào ô
- * thổ cư, bot đi tiếp như đã có). Lời KHÔNG BIẾT / không nhớ / không rõ / chịu là KHÔNG trả lời — không phải giá trị của ô nào. Một chỗ,
- * dùng cho cả câu trả lời câu đang hỏi (`giaTriHopKieu`) lẫn ô chữ AI đề xuất (`kiemDeXuat`). `kd` là chữ đã bỏ dấu.
- */
-export function laLoiKhongBiet(kd: string): boolean {
-  return /^(?:(?:da|vang|u|uh|um|ua)\s+)?(?:(?:khong|ko|k|hong|chua|cung khong|cung ko)\s+(?:biet|ro|nho|chac|hieu)|quen|chiu|ai biet)\b/.test(kd);
-}
-/**
  * SRS-5.1zzzzzc: số ĐẾM suy ra bằng phép cộng rõ ràng trong chính cụm trích ("3 phòng ngủ ở lầu với 1 phòng ở trệt" = 4) là có bằng chứng —
  * lớp kiểm cũ đòi con số nằm nguyên trong cụm nên bỏ, câu rơi vào "📝 Thêm" mà lời bot vẫn nói "em ghi 4 phòng ngủ".
  */
@@ -1376,10 +1358,10 @@ const CAU_CAN_SO = new Set(["do_rong_hem", "so_phong_ngu", "so_wc", "so_tang", "
   "thoi_han_thue", "gia_dien_nuoc", "cach_mat_tien", "chieu_cao", "tai_trong_san", "so_phong", "ty_le_lap_day", "doanh_thu", "mat_tien"]);
 const CAU_CHO_KHONG_CO = new Set(["phi_quan_ly", "phi_gui_xe", "tien_coc", "thoi_han_thue", "gia_dien_nuoc", "cach_mat_tien", "doanh_thu"]);
 export function giaTriHopKieu(cauHoi: string, v: string): boolean {
-  const kd = boDauKiem(chuanSo(v)).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-  if (laLoiKhongBiet(kd)) return false;
-  if (cauHoi === "tho_cu") return /\d|\b(?:full|toan|het|tron|100|khong co|chua co|khong|chua)\b/.test(kd);
+  // SRS-5.1zzzzzd: bỏ hai luật 5.1zzzzzc đoán nghĩa bằng từ khoá ở đây (lời "không biết", ô thổ cư phải có số / full). Lời "không biết"
+  // do AI đọc (`khong_biet` của lượt ý ngắn — chat-reply cho nó thắng `tra_loi`); ô thổ cư theo luật bóc tách.
   if (!CAU_CAN_SO.has(cauHoi)) return true;
+  const kd = boDauKiem(chuanSo(v)).replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   if (/\d/.test(kd)) return true;
   if (cauHoi === "do_rong_hem") return !!loaiDuongNoiRo(kd) || /\b(?:hem|duong|mat tien|xe hoi|o to|oto|xe may|xe tai)\b/.test(kd);
   if (CAU_CHO_KHONG_CO.has(cauHoi)) return /\b(?:khong (?:co|thu|ton|mat|can|lay|tinh|rang buoc)|mien phi|free|thoa thuan|tuy)\b/.test(kd);
@@ -1399,6 +1381,10 @@ const TIEU_TU_TRA_LOI = new Set(["a", "anh", "chi", "em", "e", "chu", "bac", "on
   "ha", "hen", "oi", "day", "thi", "la", "va", "voi", "con", "ma", "nua", "luon", "cai", "do", "nay", "the", "vay"]);
 export function traLoiThuocOKhac(
   trich: string | null | undefined, cauHoi: string, dat: readonly DeXuat[], luat: ReadonlyArray<{ question: string; answer: string }>,
+  /** SRS-5.1zzzzzd: GIÁ TRỊ AI đưa cho câu đang hỏi. Phần còn lại sau khi gỡ cụm ô khác chỉ là chính giá trị đó, mà giá trị lại nằm gọn
+   *  trong cụm của ô khác ("được, lên thổ cư được" khi hỏi thổ cư: giá trị "được" là mẩu của ô lên thổ cư) → vẫn là câu của ô khác.
+   *  Thay luật "ô thổ cư phải có số / full" (5.1zzzzzc) — luật đó đoán theo từ, cái này chỉ so cụm AI đã trích. */
+  giaTri?: string | null,
 ): boolean {
   if (!trich?.trim()) return false;
   const khoaCau = new Set([cauHoi, ...(AI_CHO_CAU[cauHoi] ?? []), ...Object.entries(KHOA_GHI).filter(([, q]) => q === cauHoi).map(([k]) => k)]);
@@ -1412,7 +1398,11 @@ export function traLoiThuocOKhac(
   for (const c of cumKhac) {
     if (con.includes(` ${c} `)) { con = con.split(` ${c} `).join(" "); daGo = true; }
   }
-  return daGo && con.trim().split(/\s+/).filter(Boolean).every((w) => TIEU_TU_TRA_LOI.has(w));
+  if (!daGo) return false;
+  const conLai = con.trim().split(/\s+/).filter((w) => w && !TIEU_TU_TRA_LOI.has(w));
+  if (!conLai.length) return true;
+  const gt = gon(giaTri ?? "");
+  return !!gt && conLai.join(" ") === gt && cumKhac.some((c) => ` ${c} `.includes(` ${gt} `));
 }
 /** Câu bot hỏi CHỌN MỘT TRONG HAI ("A hay B?") — không phải "… hay không / hay chưa" (câu có / không). */
 export function laCauChonHai(cau: string | null | undefined): boolean {
@@ -1662,9 +1652,6 @@ export function docKhongCanHoi(
 function soDoSaiChuDe(khoa: string, kd: string): string | null {
   const c = chuDeSoDo(kd);
   if (khoa === "do_rong_hem" && !c.hem && (c.duong || c.ngang)) return "rong_hem_nhung_trich_noi_chuyen_khac";
-  // SRS-5.1zzzzzc (khách mô phỏng lần năm: "ở hẻm Phan Xích Long ấy em, hẻm ngang 5 dài 18" → AI độ rộng hẻm 5 «hẻm ngang 5» → tin đăng "hẻm xe
-  // hơi 5m"): chữ NGANG là chiều ngang CĂN; cụm có cả hẻm lẫn ngang mà không nói "rộng" thì không phải bề rộng hẻm.
-  if ((khoa === "do_rong_hem" || khoa === "do_rong_duong") && c.ngang && !/\brong\b/.test(kd)) return "rong_nhung_trich_noi_chieu_ngang";
   if (khoa === "do_rong_duong" && !c.duong && (c.hem || c.ngang)) return "rong_duong_nhung_trich_noi_chuyen_khac";
   if ((khoa === "ngang" || khoa === "no_hau") && !c.ngang && (c.hem || c.duong)) return "ngang_nhung_trich_noi_duong_hem";
   return null;

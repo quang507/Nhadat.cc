@@ -64,6 +64,7 @@ jobs:
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN || vars.SUPABASE_ACCESS_TOKEN }}
         run: |
-          SQL="select count(public.reset_nguoi_test(z)) as n from (select zalo_user_id z from sellers where zalo_user_id like 'thu-mp-%' union select zalo_user_id from buyers where zalo_user_id like 'thu-mp-%') u"
+          # SRS-5.1zzzzzd: dọn cả sổ đầu ra model của ID thử (ai_ghi_thu) — reset_nguoi_test không biết bảng đó.
+          SQL="with a as (delete from ai_ghi_thu where zalo_user_id like 'thu-mp-%' returning 1) select (select count(*) from a) as ai, count(public.reset_nguoi_test(z)) as n from (select zalo_user_id z from sellers where zalo_user_id like 'thu-mp-%' union select zalo_user_id from buyers where zalo_user_id like 'thu-mp-%') u"
           jq -n --arg q "$SQL" '{query: $q}' | curl -sS -f -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
             -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d @- ; echo

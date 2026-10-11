@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-11 13:51 (giờ VN)
+-- Sinh lúc: 2026-10-12 01:45 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -46,6 +46,14 @@ create table if not exists public.admins (
   email text not null,
   zalo_user_id text,
   zalo_phone text
+);
+
+create table if not exists public.ai_ghi_thu (
+  id bigint generated always as identity,
+  zalo_user_id text not null,
+  tin text not null default ''::text,
+  luot jsonb not null default '[]'::jsonb,
+  created_at timestamp with time zone not null default now()
 );
 
 create table if not exists public.app_config (
@@ -679,6 +687,9 @@ do $d$ begin
   alter table public.admins add constraint admins_pkey PRIMARY KEY (email);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
+  alter table public.ai_ghi_thu add constraint ai_ghi_thu_pkey PRIMARY KEY (id);
+exception when duplicate_object then null; end $d$;
+do $d$ begin
   alter table public.app_config add constraint app_config_pkey PRIMARY KEY (key);
 exception when duplicate_object then null; end $d$;
 do $d$ begin
@@ -1198,6 +1209,7 @@ do $d$ begin
 exception when duplicate_object then null; end $d$;
 
 -- ══ Index ══
+create index if not exists ai_ghi_thu_zalo_idx ON public.ai_ghi_thu USING btree (zalo_user_id, created_at);
 create index if not exists boc_tach_bong_created_at_idx ON public.boc_tach_bong USING btree (created_at DESC);
 create index if not exists boc_tach_bong_listing_id_idx ON public.boc_tach_bong USING btree (listing_id);
 create index if not exists boc_tach_bong_seller_idx ON public.boc_tach_bong USING btree (seller_id);
@@ -1587,6 +1599,21 @@ begin
   end if;
   return public.xoa_nguoi_theo_zalo(p_zalo);
 end $function$
+;
+
+CREATE OR REPLACE FUNCTION public.ai_ghi_thu_che_so()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  -- Dãy giống SĐT (0 + 8–10 số). Không gọt mọi dãy ≥ 9 số như van_kich: trong JSON đó có thể là số giá (5200000000) — gọt là hỏng
+  -- JSON lẫn hỏng phát lại; số JSON không bao giờ mở đầu bằng 0 nên mẫu này không chạm số JSON.
+  new.tin := regexp_replace(coalesce(new.tin, ''), '\m0\d{8,10}\M', '#', 'g');
+  new.luot := regexp_replace(coalesce(new.luot, '[]'::jsonb)::text, '\m0\d{8,10}\M', '#', 'g')::jsonb;
+  return new;
+end;
+$function$
 ;
 
 CREATE OR REPLACE FUNCTION public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean)
@@ -3683,6 +3710,21 @@ CREATE OR REPLACE FUNCTION public.get_secret(secret_name text)
  SET search_path TO ''
 AS $function$
   select decrypted_secret from vault.decrypted_secrets where name = secret_name;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.ghi_ai_thu(p_zalo text, p_tin text, p_luot jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not public.la_id_thu(p_zalo) then return; end if;
+  if jsonb_typeof(p_luot) is distinct from 'array' then return; end if;
+  delete from public.ai_ghi_thu where created_at < now() - interval '2 days';
+  insert into public.ai_ghi_thu (zalo_user_id, tin, luot) values (p_zalo, left(coalesce(p_tin, ''), 4000), p_luot);
+end;
 $function$
 ;
 
@@ -8433,6 +8475,8 @@ create or replace view public.seller_ranks with (security_invoker=true) as
      LEFT JOIN LATERAL ( SELECT diem_nguoi_ban(s.id) AS j) d ON true;
 
 -- ══ Trigger ══
+drop trigger if exists trg_ai_ghi_thu_che_so on public.ai_ghi_thu;
+CREATE TRIGGER trg_ai_ghi_thu_che_so BEFORE INSERT OR UPDATE ON public.ai_ghi_thu FOR EACH ROW EXECUTE FUNCTION ai_ghi_thu_che_so();
 drop trigger if exists trg_bot_errors_het_tien on public.bot_errors;
 CREATE TRIGGER trg_bot_errors_het_tien AFTER INSERT ON public.bot_errors FOR EACH ROW EXECUTE FUNCTION bat_het_tien_api();
 drop trigger if exists trg_bot_prompts_touch on public.bot_prompts;
@@ -8538,6 +8582,7 @@ CREATE TRIGGER trg_viewings_bao_ctv_va_email AFTER INSERT ON public.viewings FOR
 
 -- ══ Bật RLS ══
 alter table public.admins enable row level security;
+alter table public.ai_ghi_thu enable row level security;
 alter table public.app_config enable row level security;
 alter table public.boc_tach_bong enable row level security;
 alter table public.bot_errors enable row level security;
@@ -8588,6 +8633,8 @@ alter table public.wards enable row level security;
 -- ══ Policy ══
 drop policy if exists admins_self_read on public.admins;
 create policy admins_self_read on public.admins as permissive for SELECT to authenticated using ((email = (( SELECT auth.jwt() AS jwt) ->> 'email'::text)));
+drop policy if exists ai_ghi_thu_admin_doc on public.ai_ghi_thu;
+create policy ai_ghi_thu_admin_doc on public.ai_ghi_thu as permissive for SELECT to authenticated using (la_admin());
 drop policy if exists bot_errors_admin_read on public.bot_errors;
 create policy bot_errors_admin_read on public.bot_errors as permissive for SELECT to authenticated using ((EXISTS ( SELECT 1
    FROM admins a
@@ -8742,6 +8789,7 @@ create policy viewings_admin_read on public.viewings as permissive for SELECT to
 -- ══ Quyền bảng ══
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.admins to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.agents_public to service_role;
+grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.ai_ghi_thu to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.app_config to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.bds_hot to service_role;
 grant DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE on public.boc_tach_bong to service_role;
@@ -8853,6 +8901,7 @@ grant REFERENCES, SELECT, TRIGGER on public.reminders to anon;
 grant REFERENCES, SELECT, TRIGGER on public.required_facts to anon;
 grant REFERENCES, SELECT, TRIGGER on public.sellers to anon;
 grant REFERENCES, SELECT, TRIGGER on public.viewings to anon;
+grant SELECT on public.ai_ghi_thu to authenticated;
 grant SELECT on public.bds_hot to authenticated;
 grant SELECT on public.boc_tach_v to authenticated;
 grant SELECT on public.bot_do_tre to authenticated;
@@ -8900,6 +8949,10 @@ grant execute on function public.admin_xoa_het_khach_va_ro_hang(p_xac_nhan text)
 revoke all on function public.admin_xoa_khach(p_zalo text) from public, anon, authenticated;
 grant execute on function public.admin_xoa_khach(p_zalo text) to authenticated;
 grant execute on function public.admin_xoa_khach(p_zalo text) to service_role;
+revoke all on function public.ai_ghi_thu_che_so() from public, anon, authenticated;
+grant execute on function public.ai_ghi_thu_che_so() to anon;
+grant execute on function public.ai_ghi_thu_che_so() to authenticated;
+grant execute on function public.ai_ghi_thu_che_so() to service_role;
 revoke all on function public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean) from public, anon, authenticated;
 grant execute on function public.ap_thong_so(p_listing_id uuid, j jsonb, p_bac text, p_de boolean) to service_role;
 revoke all on function public.ask_seller_drip(p_listing_id uuid) from public, anon, authenticated;
@@ -9068,6 +9121,8 @@ revoke all on function public.geocode_tick() from public, anon, authenticated;
 grant execute on function public.geocode_tick() to service_role;
 revoke all on function public.get_secret(secret_name text) from public, anon, authenticated;
 grant execute on function public.get_secret(secret_name text) to service_role;
+revoke all on function public.ghi_ai_thu(p_zalo text, p_tin text, p_luot jsonb) from public, anon, authenticated;
+grant execute on function public.ghi_ai_thu(p_zalo text, p_tin text, p_luot jsonb) to service_role;
 revoke all on function public.ghi_boc_tach(p_listing_id uuid, p jsonb) from public, anon, authenticated;
 grant execute on function public.ghi_boc_tach(p_listing_id uuid, p jsonb) to service_role;
 revoke all on function public.ghi_danh_gia(p_buyer_id uuid, p_listing_id uuid, p_stars integer, p_note text) from public, anon, authenticated;
