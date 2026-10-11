@@ -2633,6 +2633,12 @@ Deno.serve(async (req) => {
       }
       return camXucLuot;
     };
+    // SRS-5.1zzzzv: MỘT chỗ quyết câu lệnh model nói gì về câu hỏi ngược / lời trấn an — r1 (câu rao), r2 / r2b (câu treo), r3 (chăm sóc)
+    // cùng gọi. AI đọc ra nghi ngờ → bong bóng trấn an tiền định ở `traLoiSeller` là chủ của lời trấn an, model không nói lại (kể cả
+    // khi khách không hỏi thành câu). Không nghi ngờ → dặn trả lời câu hỏi ngược như cũ (`danTraLoiHoiNguoc`).
+    const DAN_DA_TRAN_AN = `Chủ nhà đang nghi ngờ bên em — hệ thống GỬI TRƯỚC tin em một bong bóng trấn an (bên em không thu đồng nào trước, phí chỉ thu khi giao dịch thành công, đã báo người phụ trách nhắn lại). Em KHÔNG nói lại các ý đó, không trấn an thêm, không nhắc phí; chỉ đáp ngắn rồi đi tiếp. `;
+    const danHoiNguocLuot = async (hoi: { cau: string; chuDe: string | null | undefined } | null): Promise<string> =>
+      (await camXucAi())?.muc === "nghi_ngo" ? DAN_DA_TRAN_AN : hoi ? danTraLoiHoiNguoc(hoi.cau, hoi.chuDe) : "";
     // Đợt 2 chuyển luật sang AI (02/10/2026): ý định của tin (đã bán / ngưng rao / rao lại / hoãn) và vai người rao tự nói (chính
     // chủ / môi giới) — AI đọc theo nghĩa, code kiểm trích dẫn. `undefined` = AI không chạy (từ khoá đỡ như cũ); null = AI nói
     // không có. Bắn thử lx-cx-14: "mấy bên môi giới hối chị gấp gấp rồi lừa" từng báo admin đổi nhãn MÔI GIỚI (từ khoá "môi giới").
@@ -6688,7 +6694,7 @@ Deno.serve(async (req) => {
       // trấn an lại cùng ý. Một ý một nguồn: AI đọc ra nghi ngờ thì câu lệnh báo model ý đó đã được nói, model chỉ đi tiếp việc của lượt.
       const nghiNgoLuot = (await camXucAi())?.muc === "nghi_ngo";
       const hoiNguocPrompt = nghiNgoLuot
-        ? `Chủ nhà đang nghi ngờ bên em — hệ thống GỬI TRƯỚC tin em một bong bóng trấn an (bên em không thu đồng nào trước, phí chỉ thu khi giao dịch thành công, đã báo người phụ trách nhắn lại). Em KHÔNG nói lại các ý đó, không trấn an thêm, không nhắc phí; chỉ đáp ngắn rồi đi tiếp. `
+        ? DAN_DA_TRAN_AN
         : hoiNguoc
         ? hoiNguocDap
           ? `Tin chủ nhà có kèm một câu hỏi — câu đó đã được trả lời ở bong bóng gửi ngay trước tin em, và đã được bỏ khỏi tin chủ nhà dẫn trong câu lệnh này; em không biết và không nhắc tới nó, KHÔNG nói chữ "hệ thống". Tin em viết lúc này CHỈ gồm MỘT câu hỏi tiếp (được mở bằng "Dạ"), không câu ghi nhận. `
@@ -7061,9 +7067,11 @@ Deno.serve(async (req) => {
         // tiếp phường; biết quận rồi thì tra bảng `duong` (một phường → xác nhận, 2–3 phường → hỏi chọn).
         const chiQuan = pendingReq.question === "phuong" && laChiQuan(dapAn);
         const goiYSauQuan = chiQuan ? await cauHoiPhuongGoiY(pendingReq.listing_id, null, cachGoi) : null;
+        // SRS-5.1zzzzv (bắn lại thu-cmp48-3): nghi ngờ thì câu hỏi ngược ĐÃ được bong bóng trấn an trả lời — dòng "trả lời thẳng câu đó
+        // trước (phí theo luật phí)" mâu thuẫn với `hoiNguocPrompt` ("không nhắc phí"), model theo dòng này và nói phí lần hai.
         const viSao = luotBenLe
           ? hoiNguoc
-            ? hoiNguocDap
+            ? hoiNguocDap || nghiNgoLuot
               ? `Chủ nhà hỏi bên em một câu (đã trả lời ở bong bóng ngay trước), chưa trả lời câu em đang hỏi — không phải hiểu nhầm, không phải né. Quay lại đúng câu đang hỏi.`
               : `Chủ nhà đang HỎI NGƯỢC, chưa trả lời câu em đang hỏi: trả lời thẳng câu đó trước (phí thì theo luật phí; điều chưa nắm thì "để em kiểm tra rồi báo lại"), rồi quay lại đúng câu đang hỏi.`
             : `${phiRoVaiPrompt || `Chủ nhà vừa cho biết mình là ${vaiTuNoiLuot === "moi_gioi" ? "môi giới" : "chính chủ"}. `}Họ chưa trả lời câu em đang hỏi — không phải hiểu nhầm. Đáp một tiếng rồi quay lại đúng câu đang hỏi.`
@@ -7076,7 +7084,7 @@ Deno.serve(async (req) => {
           ? `Chủ nhà bổ sung SỐ NHÀ, em đã ghi địa chỉ "${soNhaGhep}" — không phải hiểu nhầm, không hỏi lại số nhà. Báo ngắn đã ghi địa chỉ rồi hỏi tiếp.`
           : kq.loai === "xung_ho"
           ? `Chủ nhà dặn gọi họ là "${kq.xungHo}": nhận bằng một câu thật ngắn, từ nay gọi đúng vậy.`
-          : kq.loai === "hoi"
+          : kq.loai === "hoi" && !nghiNgoLuot
           ? `Chủ nhà đang HỎI NGƯỢC: trả lời thẳng câu đó trước (phí thì theo luật phí; điều chưa nắm thì "để em kiểm tra rồi báo lại").`
           : kq.loai === "ack"
           ? `Chủ nhà chỉ ừ/ok, chưa trả lời.`
@@ -8247,8 +8255,8 @@ Deno.serve(async (req) => {
         const hoiRaoPrompt = hoiRao
           ? dapRao
             ? `Tin chủ nhà có kèm một câu hỏi — câu đó đã được trả lời ở bong bóng gửi ngay trước tin em, và đã được bỏ khỏi tin chủ nhà dẫn trong câu lệnh này; em không biết và không nhắc tới nó, KHÔNG nói chữ "hệ thống". `
-            : danTraLoiHoiNguoc(hoiRao, hoiAiRao?.chuDe)
-          : "";
+            : await danHoiNguocLuot({ cau: hoiRao, chuDe: hoiAiRao?.chuDe })
+          : await danHoiNguocLuot(null);
         // SRS-5.1zzzy (bắn production 09/10/2026): câu rao đủ mọi ý hỏi trước bản nháp ("hẻm xe hơi … Chợ Quán, ngang 4 dài 15,
         // 3 lầu, sổ hồng riêng, giá 8 tỷ") → không còn câu để hỏi. Trước đây câu lệnh model ở đây dặn "báo sẽ đăng lên web ngay":
         // bot hứa "Em lên tin đăng cho nhà mình liền nha" trong khi tin vẫn chờ, không bản nháp, không câu hỏi. Nay đi cùng đường với
@@ -8485,7 +8493,7 @@ Deno.serve(async (req) => {
         // lời r3 được soạn bằng NGỮ CẢNH dựng TRƯỚC khi AI đọc tin — cách gọi theo luật ("anh chị"), câu khách hỏi em không tới
         // model. Điều AI đã hiểu (tự xưng, câu hỏi — đều qua kiểm trích dẫn) phải vào câu lệnh trước khi model viết, không sửa sau.
         const hoiR3 = await hoiLaiAi(text);
-        const hoiR3Prompt = hoiR3 ? danTraLoiHoiNguoc(hoiR3.caTin ? text : hoiR3.cau, hoiR3.chuDe) : "";
+        const hoiR3Prompt = await danHoiNguocLuot(hoiR3 ? { cau: hoiR3.caTin ? text : hoiR3.cau, chuDe: hoiR3.chuDe } : null);
         const r3 = await anthropicS.messages.create({
           model: MODEL, max_tokens: 512,
           output_config: { effort: "low" },

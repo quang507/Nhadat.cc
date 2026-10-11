@@ -3153,7 +3153,15 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Nguyên nhân**: bong bóng trấn an tiền định được thêm ở đường ra, SAU khi model đã viết lời. Model không biết bong bóng đó, nên trấn an lại cùng ý.
 - **Lớp lỗi**: *hai nguồn nói cùng một ý trong một lượt* (cùng lớp SRS-5.1zzzze).
 - **Sửa**: chỉ dẫn hỏi ngược (`hoiNguocPrompt`, dùng chung cho các câu lệnh r2 / r2b) đọc `camXucAi()` trước. Nghi ngờ thì báo model: bong bóng trấn an đã gửi, không nói lại, không nhắc phí, chỉ đáp ngắn rồi đi tiếp. Bong bóng tiền định vẫn là chủ của lời trấn an.
-- **Kiểm**: e2e ZZZZV-035/036/037 (câu lệnh có dòng đó; tắt thì đỏ cả ba, đã chạy).
+- **Bắn lại sau deploy (thu-cmp48-3) vẫn lặp**: lượt đó đi đường r2b ("lượt bên lề", đang treo câu diện tích), nơi dòng `viSao` dặn "trả lời thẳng câu hỏi ngược trước (phí theo luật phí)". Dòng này **mâu thuẫn** với dòng mới, và model theo dòng `viSao`. Nay:
+  - nghi ngờ thì `viSao` coi câu hỏi đã được bong bóng trả lời (như `hoiNguocDap`);
+  - lời dặn về câu hỏi ngược / trấn an gom về MỘT hàm `danHoiNguocLuot`, dùng ở r1 (câu rao), r2 / r2b (câu treo), r3 (chăm sóc). Hai đường r1 và r3 trước đây chưa biết bong bóng trấn an.
+- **Kiểm**:
+  - e2e ZZZZV-035/036/037: câu lệnh r2 có dòng đó. Tắt thì đỏ cả ba, đã chạy.
+  - ZZZZV-04a/b/c (r2b):
+    - 04a: ca gốc. Tắt sửa `viSao` thì đỏ, đã chạy.
+    - 04b: **cách nói MỚI** "đưa thông tin rồi ai chịu trách nhiệm".
+    - 04c: đối chứng, hỏi ngược bình thường vẫn được dặn trả lời.
 
 **(4) Bước "Ghi đè thông tin VPS tạm trong Vault" của `apply-migration.yml` chưa từng chạy được.**
 - **Nguyên nhân**: SQL viết trong chuỗi bash nháy đơn, `''x''` bị bash nuốt dấu nháy, SQL sai cú pháp, API trả 400. Lượt cai-vps 11/10 phải ghi đè tay: IP và mật khẩu VPS trong Vault nay chỉ còn 1 ký tự.

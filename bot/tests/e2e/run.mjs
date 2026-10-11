@@ -9763,6 +9763,41 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__model.create = undefined;
   globalThis.__model = { parse: () => OUT() };
 }
+// ── SRS-5.1zzzzv (bắn lại production 11/10, thu-cmp48-3): đường r2b (câu treo diện tích, khách hỏi vặn "sao chị biết em không lừa") —
+// câu lệnh từng vừa dặn "không nhắc phí" vừa dặn "trả lời thẳng câu đó trước (phí theo luật phí)", model nói phí lần hai.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocV = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const aiV = (them) => (p) => laBocV(p) ? { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [],
+    tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null }, hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null },
+    cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null }, ...them } : OUT();
+  for (const [ma, cau, camXuc, mongDan] of [
+    ["a", "sao chị biết em không lừa", { muc: "nghi_ngo", trich_dan: "sao chị biết em không lừa" }, true],
+    // Cách nói MỚI: "đưa thông tin rồi ai chịu trách nhiệm hả em".
+    ["b", "đưa thông tin rồi ai chịu trách nhiệm hả em", { muc: "nghi_ngo", trich_dan: "ai chịu trách nhiệm" }, true],
+    // Đối chứng: hỏi ngược bình thường (không nghi ngờ) → vẫn dặn trả lời thẳng câu hỏi.
+    ["c", "bên em làm lâu chưa em", { muc: "binh_thuong", trich_dan: null }, false],
+  ]) {
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+    const uid = `thu-zv-${ma}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "chị", seller_type: "ccrb" }).data;
+    const L = db().insert("listings", { code: `BDS-Q7-09${ma === "a" ? 1 : ma === "b" ? 2 : 3}`, seller_id: s.id, deal: "ban", status: "cho_thong_tin",
+      property_type: "chung_cu", district: "Quận 7", location_raw: "Sunrise City" }).data;
+    s.active_listing_id = L.id;
+    db().insert("info_requests", { listing_id: L.id, question: "dien_tich_tim_tuong", status: "pending" });
+    globalThis.__model = { parse: aiV({ hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "ve_bot" }, cam_xuc: camXuc }),
+      create: () => "Dạ chị ơi, bên em không thu đồng nào trước đâu. Căn mình bao nhiêu m² vậy chị?" };
+    const n0 = createCalls().length;
+    await send({ external_user_id: uid, text: cau });
+    const pr = createCalls().slice(n0).map((c) => c.params?.messages?.[0]?.content ?? "").join("\n---\n");
+    check(`ZZZZV-04${ma} r2b ${mongDan ? "nghi ngờ" : "không nghi ngờ"} «${cau}» → câu lệnh ${mongDan ? "báo đã trấn an, KHÔNG dặn trả lời thẳng / nhắc phí" : "vẫn dặn trả lời câu hỏi ngược"}`,
+      mongDan ? /GỬI TRƯỚC tin em một bong bóng trấn an/.test(pr) && !/trả lời thẳng câu đó trước/.test(pr) : !/GỬI TRƯỚC tin em một bong bóng trấn an/.test(pr) && pr.length > 0,
+      pr.slice(-900));
+  }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
 // ── kết: BẤT BIẾN TOÀN BỘ ──
 soatDbBatBien("(cuối)");
 if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_DUMP, JSON.stringify(BB, null, 1));
