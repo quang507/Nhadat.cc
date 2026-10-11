@@ -9420,11 +9420,16 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const sB = db().t.sellers.find((x) => x.zalo_user_id === uid);
     globalThis.__model = { parse: ai({ hoi_lai: { co_hoi: true, cau_hoi: "phí sao em, mà sao tin em được", chu_de: "dich_vu" }, cam_xuc: { muc: "nghi_ngo", trich_dan: "sao tin em được" } }),
       create: () => "Dạ vâng, em ghi rồi ạ. Lô đất mình rộng đường vào bao nhiêu ạ?" };
+    const nTruocN = createCalls().length;
     rN = await send({ external_user_id: uid, text: "phí sao em, mà sao tin em được" });
     const loiN = rN.body.replies.filter((x) => !/^(🤖|💾|📝|📋|👤)/u.test(x)).join(" | ");
     check(`RN-VAI-${uid.slice(-1)} AI vai chinh_chu «${vaiAi.trich_dan}» → nhãn ${mongXacNhan ? "XÁC NHẬN, phí 1%" : "vẫn ĐOÁN, phí không con số"}`,
       (sB?.seller_type_source === "tu_nhan") === mongXacNhan && (mongXacNhan ? /1% giá chốt/.test(loiN) : !/\d\s*%/.test(loiN) && /chỉ thu khi giao dịch thành công/.test(loiN)),
       JSON.stringify({ src: sB?.seller_type_source, loi: loiN }));
+    // SRS-5.1zzzzv (thu-cmp46-3): AI đọc ra nghi ngờ → câu lệnh model nói bong bóng trấn an đã gửi, model không trấn an / nhắc phí lại.
+    const pTA = createCalls().slice(nTruocN).map((c) => c.params?.messages?.[0]?.content ?? "").join("\n---\n");
+    check(`ZZZZV-03${uid.slice(-1)} nghi ngờ → câu lệnh model báo "đã gửi bong bóng trấn an, không nói lại, không nhắc phí"`,
+      /GỬI TRƯỚC tin em một bong bóng trấn an[^]*KHÔNG nói lại/.test(pTA), pTA.slice(-700));
   }
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
@@ -9706,6 +9711,9 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     [{ khoa: "loai_bds", gia_tri: "nha_pho", trich_dan: "nha pho 3 tang", can: null }]);
   check("ZZZZU-03 đối chứng: trích dẫn loại không nằm ở tin nào của chủ nhà → BỎ, loại vẫn chua_ro",
     c.L?.property_type === "chua_ro", JSON.stringify({ pt: c.L?.property_type, rep: c.rep }));
+  // SRS-5.1zzzzv (thu-cmp46-2): loại vừa ghi là đất NGAY lượt này → câu hỏi kế gọi "lô đất mình", không "Nhà mình ở đường nào".
+  check("ZZZZV-02 lượt loại vừa thành đất: lời gửi không còn 'Nhà mình …', gọi 'lô đất'",
+    a.L?.property_type === "dat" && !/[Nn]hà (?:mình|anh|chị)/.test(a.rep.split(" | ").filter((x) => !/^🤖/u.test(x)).join(" ")), a.rep);
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }

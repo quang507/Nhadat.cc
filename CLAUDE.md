@@ -472,6 +472,10 @@ nhật `nen.json` cùng PR; xoá ca khỏi `nen.json` là chấp nhận tụt, p
 production ≈ 3 lượt AI, cả bộ ≈ 450 lượt credit thật — chỉ chạy `do-boc.yml` khi PR đụng bóc tách và chọn `nhom`; để trống
 `nhom` phải gõ `ca bo` (SRS-5.1zw). Bộ e2e offline là miễn phí, dựa vào nó trước.
 
+**Khách mô phỏng** (`bot/tests/mo-phong/`, TS-MO-PHONG-01, 11/10/2026): model đóng vai 1–5 kiểu chủ nhà (`persona.json`) chat với bot
+production bằng Zalo thử `thu-mp-*`, chấm ghi đúng / lỗi lời bot / giám khảo AI (lỗi phải trích nguyên văn). Chạy tay qua `mo-phong.yml`,
+tiền thật (~10 lượt × ~4 lượt AI mỗi persona), không vào CI; tự dọn dữ liệu thử. Bộ chấm tự kiểm offline nằm trong `test:bot`.
+
 Bốn job đó chạy trong CI (`.github/workflows/kiem.yml`) mỗi PR, kể cả `test:sec`.
 **Thoát 2 của `test:sec` nghĩa là "chưa kiểm được", không phải "đạt"** — bản đầu
 của nó coi mọi HTTP ≥400 là bị chặn và báo 24/24 xanh trong lúc proxy chặn sạch,

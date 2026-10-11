@@ -3259,6 +3259,21 @@ Deno.serve(async (req) => {
           }
         }
       }
+      // SRS-5.1zzzzv (bắn production 10/10, thu-cmp46-2): lô đất mà bot hỏi "Nhà mình ở đường nào, số mấy". Gọi đúng loại (đất / căn
+      // hộ) từng rải ba chỗ (câu mẫu, r2, r2b), chỗ nào cũng đọc loại từ ẢNH CHỤP đầu lượt (`pendingReq.listings`) — đúng lượt loại vừa
+      // ghi thì ảnh chụp còn `chua_ro`. Chủ duy nhất ở đường ra: lời có "nhà anh / chị / mình…" → đọc loại THẬT của tin đang nói.
+      if (sach.some((r) => !/^\s*(?:🤖|💾|📝|📋)/u.test(r) && /(?<![\p{L}])[Nn]hà (?:anh|chị|mình|chú|cô|bác|em)(?![\p{L}])/u.test(r))) {
+        const idLoai = tinTrongLuot ?? sellerRow.active_listing_id;
+        const { data: lLoai, error: llErr } = idLoai
+          ? await client.from("listings").select("property_type").eq("id", idLoai).maybeSingle()
+          : { data: null, error: null };
+        if (llErr) await ghiLoi(client, "chat-reply doc loai tin (goi dung loai)", llErr.message);
+        const pt = (lLoai as { property_type?: string | null } | null)?.property_type ?? null;
+        if (LOAI_DAT.has(pt ?? "") || pt === "chung_cu") {
+          sach = sach.map((r) => /^\s*(?:🤖|💾|📝|📋)/u.test(r) ? r : LOAI_DAT.has(pt ?? "") ? goiDat(r) : goiCanHo(r));
+          mocVan("goiDungLoai");
+        }
+      }
       // 23/09/2026 (FR-218 b): khách nói bot hiểu / ghi nhầm mà không câu nào xin lỗi → chèn lời xin lỗi (trước đổi xưng hô).
       if (luatDu) sach = themXinLoiKhiHieuNham(text, sach, goiNguoi); mocVan("themXinLoiKhiHieuNham");
       // 30/09/2026 (chủ dự án chat thử): "Mình cho mình xin địa chỉ" (bot tự xưng "mình"), "vị trí khá thuận tiện" (khen suông).
@@ -6668,7 +6683,13 @@ Deno.serve(async (req) => {
         ? "Dạ việc xoá dữ liệu em không tự làm được, để em nhờ anh chị phụ trách xử lý ạ."
         : null;
       if (hoiNguoc && hoiNguocDap) cauDaDap = hoiNguoc;
-      const hoiNguocPrompt = hoiNguoc
+      // SRS-5.1zzzzv (bắn production 10/10, thu-cmp46-3: "sao chị biết em không lừa"): bong bóng trấn an tiền định (`traLoiSeller`, chủ của
+      // lời trấn an) đã nói "không thu đồng nào trước, phí chỉ khi giao dịch thành công, đã báo người phụ trách" — model không biết nên
+      // trấn an lại cùng ý. Một ý một nguồn: AI đọc ra nghi ngờ thì câu lệnh báo model ý đó đã được nói, model chỉ đi tiếp việc của lượt.
+      const nghiNgoLuot = (await camXucAi())?.muc === "nghi_ngo";
+      const hoiNguocPrompt = nghiNgoLuot
+        ? `Chủ nhà đang nghi ngờ bên em — hệ thống GỬI TRƯỚC tin em một bong bóng trấn an (bên em không thu đồng nào trước, phí chỉ thu khi giao dịch thành công, đã báo người phụ trách nhắn lại). Em KHÔNG nói lại các ý đó, không trấn an thêm, không nhắc phí; chỉ đáp ngắn rồi đi tiếp. `
+        : hoiNguoc
         ? hoiNguocDap
           ? `Tin chủ nhà có kèm một câu hỏi — câu đó đã được trả lời ở bong bóng gửi ngay trước tin em, và đã được bỏ khỏi tin chủ nhà dẫn trong câu lệnh này; em không biết và không nhắc tới nó, KHÔNG nói chữ "hệ thống". Tin em viết lúc này CHỈ gồm MỘT câu hỏi tiếp (được mở bằng "Dạ"), không câu ghi nhận. `
           : danTraLoiHoiNguoc(hoiNguoc, hoiAi?.chuDe)
@@ -7082,8 +7103,6 @@ Deno.serve(async (req) => {
             const mocR2b = theoDoiVan(soVan, () => hoiLai);
             if (hoiLai && laLoiMeta(hoiLai)) { console.log("chat-reply: r2b tra loi cau lenh, bo"); hoiLai = null; }
             if (hoiLai) hoiLai = motCauHoi([hoiLai])[0]; mocR2b("motCauHoi");
-            if (hoiLai && pendingReq.listings?.property_type === "chung_cu") hoiLai = goiCanHo(hoiLai); mocR2b("goiCanHo");
-            if (hoiLai && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) hoiLai = goiDat(hoiLai); mocR2b("goiDat");
             if (hoiLai) hoiLai = boHuaHoiChuNha([hoiLai])[0]?.trim() || null; mocR2b("boHuaHoiChuNha");
             // SRS-5.1zzo: lượt hỏi LẠI mà model không hỏi → nối câu mẫu của ô đang treo (ô vẫn mở, phải có câu hỏi đi kèm).
             if (hoiLai) hoiLai = damBaoCauHoi(hoiLai, cauHoiMau(pendingReq.question, cachGoi, pendingReq.listings?.property_type, pendingReq.listings?.district, pendingReq.listings?.deal, pendingReq.listings?.location_raw)); mocR2b("damBaoCauHoi");
@@ -7700,8 +7719,6 @@ Deno.serve(async (req) => {
           if (sellerReply && luatDuR2) sellerReply = boCauLapLai(sellerReply, lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-3).map((m) => m.body)); mocR2("boCauLapLai");
           // SRS-5.1zzy (chat thử 07/10: tin đất mà "Nhà mình ở phường nào"): gọi đúng LOẠI căn là ghi đúng sự thật, không phải sửa
           // văn — hai van này luôn bật, không treo theo `luat_loi_bot` (06/10 lỡ tắt cùng van sửa văn).
-          if (sellerReply && pendingReq.listings?.property_type === "chung_cu") sellerReply = goiCanHo(sellerReply); mocR2("goiCanHo");
-          if (sellerReply && LOAI_DAT.has(pendingReq.listings?.property_type ?? "")) sellerReply = goiDat(sellerReply); mocR2("goiDat");
           if (sellerReply) sellerReply = boHuaHoiChuNha([sellerReply])[0]?.trim() || null; mocR2("boHuaHoiChuNha");
           if (sellerReply) {
             const truocTk = sellerReply;

@@ -29,6 +29,16 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     luu_y: "Lời chào đầu tin không làm tin rỗng: vẫn bóc phần sau.",
   },
   {
+    // SRS-5.1zzzzv (bắn production 10/10/2026, thu-cmp46-2): "e co mieng dat can ban" → AI trả rỗng hai lượt liền, bot phải hỏi loại
+    // cho lô đất. Tin gõ KHÔNG DẤU (cách nói khác ca gốc: "lo dat", "muon ban").
+    cau_dang_hoi: null,
+    tin: "a co lo dat muon ban",
+    so_can: 1,
+    truong: [t("loai_giao_dich", "ban", "muon ban"), t("loai_bds", "dat", "lo dat")],
+    kien_thuc: [],
+    luu_y: "Tin không dấu đọc như có dấu ('lo dat' = lô đất, 'muon ban' = muốn bán); trích dẫn giữ đúng chữ khách gõ.",
+  },
+  {
     // SRS-5.1zzzzi (bắn production 09/10/2026, thu-kg3): "Bán nhà MT Nguyễn Trãi Q5, 5x20, 4 tầng thang máy…" → AI đọc đủ mọi ô trừ
     // loại đường vào (cột access_type trống). Dạy viết tắt "MT" / "MTKD" = mặt tiền bằng ví dụ (cách nói khác ca gốc).
     cau_dang_hoi: null,
