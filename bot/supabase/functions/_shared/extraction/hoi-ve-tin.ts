@@ -71,11 +71,15 @@ const STATUS_VI: Record<string, string> = {
  * Tin chưa lên kệ: còn thiếu gì. `thieu` = nhãn từ `diem_tin` (null = không đọc được → không nói); rỗng = đủ, chỉ chờ chủ duyệt
  * bản nháp (`daDuyet` false). SRS-5.1zg: "tin lên chưa" từng chỉ được đáp "đang chờ thêm thông tin" mà không nói thiếu gì.
  */
-export type ConThieu = { thieu: string[] | null; daDuyet: boolean };
+export type ConThieu = { thieu: string[] | null; daDuyet: boolean; nhapDaGui?: boolean };
 function cauChuaLenKe(ct: ConThieu | null | undefined, ac: string): string | null {
   if (!ct?.thieu) return null;
   if (ct.thieu.length) return `tin mình chưa lên kệ vì còn thiếu ${ct.thieu.slice(0, 3).join(", ")}; ${ac} nhắn em mấy thông tin đó là em đăng liền`;
-  return ct.daDuyet ? null : `tin mình đủ thông tin rồi, ${ac} duyệt bản nháp em gửi (nhắn "ok") là em đăng liền`;
+  if (ct.daDuyet) return null;
+  // SRS-5.1zzzzzc: câu này từng nói "duyệt bản nháp em gửi" khi chưa có bản nháp nào — chỉ nói theo trạng thái thật.
+  return ct.nhapDaGui === false
+    ? `tin mình đủ thông tin rồi, ${ac} nhắn "đăng đi" là em đăng liền`
+    : `tin mình đủ thông tin rồi, ${ac} duyệt bản nháp em gửi (nhắn "ok") là em đăng liền`;
 }
 
 /** Câu trả lời tiền định từ DB. `ac` = cách gọi khách. Không có dữ liệu thì nói thật là chưa có. */

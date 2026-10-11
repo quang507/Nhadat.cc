@@ -21,7 +21,7 @@ const NhanXet = z.object({
   // SRS-5.1zzzzx: căn cứ có thật chưa đủ — "hẻm 4m" là căn cứ cho con số, không cho "ô tô vào tới nhà". AI phân loại quan hệ giữa
   // câu và căn cứ; code bỏ `suy_ra` / `danh_gia` dù căn cứ có thật.
   kieu: z.enum(["nhac_lai", "loi_ich", "suy_ra", "danh_gia"]).nullish().describe(
-    "nhac_lai = nói lại đúng điều chủ nhà đã nói BẰNG CHỮ (cùng nghĩa, không thêm tính chất). loi_ich = lợi ích hiển nhiên của một đặc điểm chủ nhà ĐÃ NÓI BẰNG CHỮ (\"ô tô vào tới nơi\" → \"đi lại tiện\"; \"sổ riêng\" → \"giấy tờ gọn\"). suy_ra = tính chất chủ nhà KHÔNG nói, suy từ con số hay dữ kiện khác (\"hẻm 4m\" → \"ô tô vào tới nhà\"; \"4 lầu\" → \"kết cấu chắc\"). danh_gia = chấm điểm tốt / xấu / vừa, nói điểm yếu hay khuyên răn (\"4x16 là diện tích vừa phải\", \"rộng rãi\", \"hẻm hẹp thì đi lại cần cẩn thận\").",
+    "nhac_lai = nói lại đúng điều chủ nhà đã nói BẰNG CHỮ (cùng nghĩa, không thêm tính chất). loi_ich = bot GẮN THÊM lợi ích / tính chất cho một đặc điểm chủ nhà đã nói (\"ô tô vào tới nơi\" → \"đi lại tiện\"; \"sổ riêng\" → \"giấy tờ gọn\") — chủ nhà không nói điều được gắn thêm. suy_ra = tính chất chủ nhà KHÔNG nói, suy từ con số hay dữ kiện khác (\"hẻm 4m\" → \"ô tô vào tới nhà\"; \"4 lầu\" → \"kết cấu chắc\"). danh_gia = chấm điểm tốt / xấu / vừa, nói điểm yếu hay khuyên răn (\"4x16 là diện tích vừa phải\", \"rộng rãi\", \"hẻm hẹp thì đi lại cần cẩn thận\").",
   ),
   // SRS-5.1zzzzb: chỉ lượt soát lời gửi NGƯỜI MUA dùng ô này (nhánh bán luôn false).
   noi_co_hang: z.boolean().nullish().describe("true khi câu nói bên em CÓ / còn / đang có căn, đã tìm thấy căn, hay đang lọc / tìm căn cho khách (\"dạ có anh\", \"em đang lọc căn 2 lầu cho anh\", \"em tìm thấy mấy căn\"). Không thì false."),
@@ -29,6 +29,8 @@ const NhanXet = z.object({
   noi_trang_thai_tin: z.boolean().nullish().describe("true khi câu KHẲNG ĐỊNH tin / bài của chủ nhà đã đăng, đang rao, đã lên web / kệ / sóng, đã duyệt, đang có khách xem tin (\"em vừa đăng tin rồi ạ\", \"tin mình lên sóng rồi\", \"bài đang chạy rồi anh\"). Lời hứa có điều kiện (\"có giá là em đăng liền\") và câu hỏi → false."),
   // SRS-5.1zzzzzb: câu HỎI đưa sẵn một giá trị chủ nhà chưa nói ("nhà bác ở phường Thạnh Lộc đúng không?") là khẳng định trá hình.
   goi_y: z.boolean().nullish().describe("true khi câu là CÂU HỎI mà đưa sẵn một giá trị cụ thể (tên phường / đường / quận, con số, loại nhà…) để chủ nhà gật (\"nhà bác ở phường Thạnh Lộc đúng không?\", \"giá 5 tỷ phải không anh?\"). Câu hỏi mở (\"phường nào ạ?\") → false."),
+  // SRS-5.1zzzzzc (khách mô phỏng lần năm: "anh cứ bận, tối em gọi lại nha" — bot không gọi điện được).
+  hua_khong_lam: z.boolean().nullish().describe("true khi câu là LỜI HỨA bot làm việc bot KHÔNG tự làm được: gọi điện / gọi lại, đi xem nhà, gặp mặt, kiểm tra quy hoạch / sổ / giá giao dịch rồi báo (\"tối em gọi lại nha\", \"em qua xem nhà\", \"để em check quy hoạch rồi báo\"). Hứa báo khi có khách, đăng khi đủ, chờ khách nhắn → false."),
   danh_gia_thi_truong: z.boolean().describe("true khi câu ĐÁNH GIÁ giá trị / thị trường / khả năng bán của KHU VỰC hay MỨC GIÁ, không gắn với một đặc điểm của căn (\"đất vàng\", \"khu đó bán được lắm\", \"giá khu này đang lên\")."),
 });
 const KetSoat = z.object({ nhan_xet: z.array(NhanXet) });
@@ -42,7 +44,10 @@ nào), giá / thị trường, pháp lý, quy hoạch, dự án, hay khen dựa 
 xuyên thoáng, nở hậu, kết cấu chắc, "… thì dễ bán lắm", "khách chuộng …").
 - LIỆT KÊ cả CÂU HỎI đưa sẵn một giá trị cụ thể chủ nhà chưa nói ("nhà bác ở phường Thạnh Lộc đúng không bác?", "giá mình 5 tỷ phải
   không?") với goi_y = true — câu đó khẳng định giá trị trước khi hỏi; can_cu như mọi khẳng định khác.
-- KHÔNG liệt kê: câu hỏi mở, lời chào, cảm ơn, ghi nhận chung ("dạ em ghi rồi ạ"), lời hứa của bot.
+- KHÔNG liệt kê: câu hỏi mở, lời chào, cảm ơn, ghi nhận chung ("dạ em ghi rồi ạ"), lời hứa bot LÀM ĐƯỢC (báo khi có khách, đăng khi đủ,
+  chờ khách nhắn).
+- LIỆT KÊ lời hứa bot KHÔNG tự làm được (gọi điện, "tối em gọi lại", đi xem nhà, gặp mặt, kiểm tra quy hoạch / sổ / giá giao dịch rồi báo)
+  với hua_khong_lam = true, can_cu = null.
 - LIỆT KÊ cả câu nói TRẠNG THÁI TIN ("em vừa đăng tin rồi ạ", "tin mình lên sóng rồi", "bài đang chạy") với noi_trang_thai_tin = true,
   can_cu = null — code đối chiếu trạng thái thật của tin.
 - can_cu: cụm chép NGUYÊN VĂN từ LỜI CHỦ NHÀ, THÔNG TIN ĐÃ GHI hoặc DỮ LIỆU TRA CỨU nói ĐÚNG điều được khẳng định — gần giống thì không tính
@@ -50,11 +55,15 @@ xuyên thoáng, nở hậu, kết cấu chắc, "… thì dễ bán lắm", "kh�
 - danh_gia_thi_truong = true khi câu đánh giá KHU VỰC / THỊ TRƯỜNG / MỨC GIÁ ("khu Hà Huy Giáp đất vàng", "khu đó bán được lắm", "giá
   khu này đang lên", "quận 7 đang sốt") — bot không có số liệu thị trường nên câu đó luôn bị bỏ; tên khu chủ nhà nói KHÔNG phải căn
   cứ cho lời đánh giá về khu.
+- danh_gia_thi_truong = true CẢ khi câu nói BÊN EM / hệ thống có khách, hay có khách tìm, nhiều người hỏi khu này ("quận 5 bên em hay có khách
+  tìm", "khu này bên em đang có khách") — bot không có số liệu khách.
+- LIỆT KÊ cả câu nói về THUẾ, phí nhà nước, thủ tục, ai chịu khoản nào ("thuế chuyển nhượng người bán chịu", "phí sang tên khoảng 1%") —
+  can_cu chỉ có khi DỮ LIỆU TRA CỨU nói đúng điều đó; lời chủ nhà hỏi không phải căn cứ.
 - danh_gia_thi_truong = true CẢ khi câu nói về NGƯỜI MUA hay KHẢ NĂNG BÁN của căn, dù gắn với một đặc điểm có thật ("hẻm xe hơi là
   khách chuộng lắm", "nở hậu lại sổ riêng, căn này dễ bán lắm", "mặt tiền thì bán nhanh", "đắt khách", "thanh khoản cao", "nhiều
   người tìm"): bot không có số liệu người mua — đặc điểm thật chỉ là căn cứ cho chính đặc điểm đó, không cho lời đoán thị trường.
-- Khen chỉ nói đặc điểm có thật và lợi ích trực tiếp của nó ("ô tô tới tận nhà, đi lại tiện lắm", "sổ riêng thì giấy tờ gọn") là
-  false — căn cứ là cụm chủ nhà nói về đặc điểm đó.
+- Khen gắn lợi ích cho đặc điểm có thật ("ô tô tới tận nhà, đi lại tiện lắm", "sổ riêng thì giấy tờ gọn") là kieu loi_ich (không phải
+  đánh giá thị trường) — code bỏ: bot không gắn thêm điều chủ nhà không nói.
 - kieu: căn cứ có thật CHƯA ĐỦ — xét câu có nói ĐÚNG điều chủ nhà nói không. Chủ nhà chỉ đưa CON SỐ ("hẻm 4m", "4x16", "hẻm 2m5") thì
   mọi tính chất bot gắn thêm là suy_ra ("hẻm 4m ô tô vào tới nhà": chủ nhà chưa nói xe vào) hoặc danh_gia ("4x16 là diện tích vừa
   phải", "hẻm hẹp thì đi lại cần cẩn thận"). Chủ nhà NÓI "ô tô vào tới nơi" rồi bot nói "đi lại tiện lắm" là loi_ich.`;

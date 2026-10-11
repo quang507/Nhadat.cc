@@ -3333,6 +3333,104 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 
 **Kiểm (đỏ khi tắt từng bản sửa, đã chạy)**: e2e ZZZZZB-01 (ca gốc "hẻm Quang Trung ở phường nào") / 02 (cách nói mới "chỗ bác ở thuộc phường gì") — tắt bỏ câu hỏi gợi ý → 2 đỏ; tắt khối DỮ LIỆU TRA trong ngữ cảnh → 2 đỏ; 03 đối chứng (câu kể đúng các phường lấy từ khối tra → giữ); 04 (ca gốc "4 mét x 16 mét") / 05 (cách nói mới "đất 5 x 20 mét") — tắt → 2 đỏ; 06 (lệch quận, "dạ, nhà bác ở Gò Vấp…") — tắt → đỏ; 07 (ca gốc "anh đang bận, tối nói tiếp") / 08 (cách nói mới "tối nhắn anh nhé") — tắt → 2 đỏ. `van-tra-loi.mjs` ZZZZZB-V1…V3, `kiem-bang-chung.mjs` ZZZZZB-K1…K3, `luat-khong-mau-thuan.mjs` (16). e2e **1196/1196**.
 
+### SRS-5.1zzzzzc · Bóc tách: AI im là AI quyết, giá trị phải đúng loại ô; lời bot không gắn thêm điều khách không nói (11/10/2026)
+
+`[nguồn: lượt mo-phong.yml thứ năm 11/10/2026 sau deploy SRS-5.1zzzzzb (5/5 tin lên kệ, bảng chấm "ghi đúng 100%" cả năm persona); đọc lại nguyên văn transcript; chủ dự án 11/10: "sửa hết từ gốc đi rồi merge, bóc tách có sai ko"]`
+
+**Bảng chấm nói 100% nhưng bóc tách vẫn sai.** Bộ chấm mo-phong chỉ so các trường trong "bộ sự thật" của persona; đọc nguyên văn thì thấy:
+- thổ cư = "ko biết cái" (khách "uh ko biết cái đó"), rồi thổ cư = "được" (khách "được, lên thổ cư được" — câu trả lời của ô LÊN thổ cư); bản nháp in "Diện tích: 500m² · thổ cư được";
+- kết cấu = "không bạn, 2 tầng đủ rồi" (trả lời câu "2 tầng đó có tính cả gác lửng không");
+- "nhà 4x16 trệt lầu" → kết cấu "1 tầng"; pháp lý "sổ hồng bác có" và "shr bạn, mình có sổ riêng" (dính xưng hô);
+- "3 phòng ngủ ở lầu với 1 phòng ở trệt" → AI đọc 4, kiểm bằng chứng bỏ (số 4 không có trong cụm), câu rơi "📝 Thêm" mà bot vẫn nói "em ghi 4 phòng ngủ rồi";
+- "ở hẻm Phan Xích Long ấy em, hẻm ngang 5 dài 18" → độ rộng hẻm 5, tin đăng "hẻm xe hơi 5m";
+- môi giới "có mấy căn quận 5 cần đăng" rồi "căn thứ 2 hẻm Nguyễn Trãi …" → tin mới "chưa rõ quận", bot hỏi lại quận.
+
+**Lời bot cùng lượt.**
+- Bịa: "quận 5 cũ bên em hay có khách tìm", "sổ riêng, giấy tờ gọn lắm", "thuế chuyển nhượng hay lệ phí trích nước ngoài là của người mua và người bán".
+- Phí: câu phí lặp nguyên văn ba lượt không trả lời "ngoài 1% còn mất gì".
+- Hỏi lại: "Nhà mình phường mấy chị nhỉ?" ngay sau khi khách vừa nói phường; khách bực thì bot "em hỏi dồn quá. Lúc nào chị rảnh nhắn em".
+- Hứa suông: "tối em gọi lại nha" (bot không gọi điện được).
+
+**Lớp lỗi (1) — AI im thì luật tìm-chuỗi ghi nguyên câu.** Nhánh "AI IM HẲN → luật đọc fact kèm" (01/10, lx-tam-02/03) cho luật ghi mọi ô nó đoán ra từ câu mà AI đã đọc và không thấy gì — câu trả lời câu lửng, câu gật, câu kể chuyện thành giá trị nguyên câu. Nó trái chính câu luật của chế độ `ai` ("AI im / nói không trả lời là AI quyết"). **Sửa: bỏ hẳn nhánh đó** (cùng hằng `KHOA_CAN_HIEU_NGHIA` chỉ nhánh đó dùng). Ca gốc của nhánh ("không gấp em" khi hỏi phường) nay AI đọc được: luật bóc tách dặn đọc `gap` theo nghĩa "kể cả khi bot đang hỏi câu khác". Tắt nhánh làm hỏng 1/1196 ca cũ (RN-08); ca đó trông vào luật để ghi ô đứng tên khi AI im, nên mock được sửa cho AI đọc ra ô đứng tên / thế chấp như AI thật.
+
+**Lớp lỗi (2) — câu trả lời câu đang hỏi không được kiểm "có đúng loại ô không".** Đề xuất `truong` có bảng hình dạng giá trị theo ô; câu trả lời `tra_loi` thì chỉ kiểm trích dẫn có thật và vài ô đo đếm. Vì vậy "ko biết cái" và "được" lọt vào ô thổ cư.
+- **Sửa:** `giaTriHopKieu` là MỘT chỗ quyết giá trị có hợp ô.
+  - Lời KHÔNG BIẾT (`laLoiKhongBiet`: không biết / không nhớ / không rõ / chịu) không là giá trị của ô nào; ô chữ AI đề xuất cũng bị kiểm.
+  - Ô thổ cư phải là số hoặc full / toàn / hết / không có.
+- **Prompt:** khách không biết → `co_tra_loi = false`.
+
+**Lớp lỗi (3) — câu trả lời câu lửng đọc bằng từ khoá.**
+- **Lỗi:** `docTraLoiLung` không nhận "không bạn, 2 tầng đủ rồi".
+- **Sửa:** AI đọc theo nghĩa. `tra_loi` của lượt bóc tách là câu trả lời cho đúng câu bot vừa hỏi nguyên văn, tức câu lửng. Code chỉ chuyển câu AI viết gọn ("không có gác lửng") thành có / thêm / không; từ khoá trên chữ khách chỉ còn là lưới đỡ.
+- Tin còn ô khác thì đi tiếp đường thường. Fact kết cấu / số tầng cùng lượt không đè kết cấu vừa sửa (`lungDaGhi`).
+
+**Lớp lỗi (4) — kiểm bằng chứng đòi con số nằm nguyên trong cụm, kể cả số suy ra rõ ràng.**
+- **Sửa:** nhận số đếm bằng tổng các số trong cụm (`laTongTrongCum`: 3 + 1 = 4 phòng ngủ / toilet).
+- "trệt lầu" (lầu không số) = trệt + 1 lầu: `soTangTrong` trả 2 thay vì 1. Ô kết cấu nhận số 1 khi cụm có "lầu" trần.
+
+**Lớp lỗi (5) — cụm chữ nói chuyện khác vẫn được nhận làm số đo.**
+- **Sửa:** cụm có chữ NGANG (chiều ngang căn) mà không nói "rộng" thì không là bề rộng hẻm / đường (`soDoSaiChuDe`).
+- **Prompt:** cặp "ngang A dài B" là kích thước căn kể cả khi đứng sau chữ "hẻm".
+
+**Lớp lỗi (6) — ô nguyên văn lấy cả lời kể của người nói.**
+- **Sửa:** ở các ô mô tả căn, xưng hô GIỮA cụm cắt phần sau ("sổ hồng | bác có rồi" → "sổ hồng"; "shr | bạn, mình có sổ riêng" → "shr" → bản viết đủ).
+- Chỉ cắt khi phần trước đã đủ hình giá trị của ô, để "nhà anh đang ở" không bị cụt.
+
+**Lớp lỗi (7) — trích dẫn chỉ được nằm trong tin này, kể cả với thông tin chung của cả lô.**
+- **Sửa:** người đã có tin mà rao căn THÊM thì AI được trích QUẬN từ tin trước của chính họ (`kiemYCuocRao` nhận danh sách khoá, ở đây chỉ `quan`). Loại, giá, địa chỉ của căn trước không được trích sang.
+- **Prompt:** quận chung "có mấy căn quận 5" là của các căn sau.
+
+**Lớp lỗi (8) — nhánh trả lời câu hỏi về tin trả về TRƯỚC đường câu treo.**
+- **Lỗi:** "Phường Cầu Kiệu em ơi, mà … em có giúp chị đăng tin đó không" thì nhánh hỏi-về-tin trả lời, rồi `hoiLaiTreoTin` hỏi lại câu phường. Phần trả lời phường chưa từng được xử lý, và câu "duyệt bản nháp em gửi" nói về một bản nháp chưa gửi.
+- **Sửa:** tin mà AI đọc ra ô hay câu trả lời thì đi đường chính, nơi câu hỏi được trả lời như mọi câu hỏi kèm.
+- Câu "duyệt bản nháp em gửi" chỉ dùng khi bản nháp đã gửi (`nhapDaGui`: câu duyệt đang treo / lịch sử có 📋); chưa gửi thì "nhắn 'đăng đi' là em đăng liền".
+- Dựng lại trên DB giả: tắt bản sửa ra đúng câu production.
+
+**Lớp lỗi (9) — BỰC bị coi là HOÃN.**
+- **Lỗi:** hai nhánh (có câu treo / không câu treo) đổi `cam_xuc = buc` thành câu "Lúc nào … rảnh nhắn em".
+- **Sửa:** `bucMaLamTiep` là MỘT chỗ quyết cho cả hai nhánh. Tin vẫn mang dữ liệu, có câu hỏi cho em, hay bảo đăng thì khách đang muốn làm tiếp, nên đi đường thường. Chỉ bực trơn mới lùi lại.
+
+**Lớp lỗi (10) — lời bot tự gắn thêm điều khách không nói.**
+- **Lỗi:** chính câu lệnh giọng dạy khen "lợi ích thật" ("ô tô tới tận nhà thì đi lại tiện lắm", "nở hậu lại sổ riêng, giấy tờ gọn lắm"), và lượt soát cho qua `loi_ich`.
+- **Sửa:** `TONE_RULES` cấm gắn thêm lợi ích / tính chất / lời khen; ví dụ ĐÚNG đổi theo; `kiem-khen` xếp lời gắn lợi ích là `loi_ich` và code bỏ như `suy_ra` / `danh_gia`. Chỉ câu NHẮC LẠI đúng lời chủ nhà có căn cứ.
+- **Soát liệt kê thêm:** câu "bên em hay có khách tìm khu này" (đánh giá thị trường), câu về thuế / thủ tục (căn cứ chỉ từ DỮ LIỆU TRA CỨU), lời hứa việc bot không tự làm được (`hua_khong_lam`: gọi điện, đi xem nhà, kiểm tra quy hoạch).
+- Khối DỰ ÁN của lượt là nguồn hợp lệ cho lượt soát ("Theo em biết, dự án X có hồ bơi"), cùng điều `TONE_RULES` cho phép.
+
+**Lớp lỗi (11) — câu soạn sẵn nói lại nguyên văn và một chủ đề gánh hai câu hỏi.**
+- **Sửa:** chủ đề hỏi ngược mới `thue_phi` (thuế, phí sang tên, chi phí ngoài phí bên em) với câu đúng nguồn: phí bên em là khoản duy nhất (FEE_RULES), thuế là quy định nhà nước, em không tư vấn con số hay ai chịu.
+- Câu phí có số đã nói y hệt thì nói "chỉ có đúng khoản phí đó"; câu phí chưa có số vẫn nói để nối câu hỏi vai (ZZZZZ-10/11).
+- **Prompt:** `TONE_RULES` cấm nói loại thuế / ai chịu.
+
+**Chỗ khác cùng lớp.**
+- Còn trông vào luật khi AI im: chế độ `ghi` / `chinh` không phải `ai`. Các danh sách `KHOA_LUAT_DO_KHI_AI_IM`, `ketCauChac`… chỉ chạy khi `!laCheDoAi`, nên production (`ai`) không còn đường nào.
+- `giaTriHopKieu` mới có hình dạng cho các ô đo đếm + thổ cư. Ô chữ khác dựa vào `HINH_TRUONG_CHU` ở đề xuất; câu trả lời câu treo vẫn bỏ qua hình dạng ô chữ (để "bình thường" khi hỏi hiện trạng vẫn nhận, MP3).
+- Lượt 6 của persona nói nhiều ("Nhà mình phường mấy") dựng lại được và đã sửa.
+- Chưa dựng lại được: lượt 1 của persona hỏi phí (AI bỏ trống loại "căn hộ" khi câu có hỏi phí) — chỉ sửa câu lệnh (câu hỏi kèm ý bán vẫn bóc), chưa có bằng chứng production.
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy).** e2e:
+
+| Ca | Nội dung | Tắt bản sửa |
+|---|---|---|
+| ZZZZZC-01 / 02 | lời không biết | 02 đỏ khi tắt `laLoiKhongBiet`; 01 còn lớp hình dạng thổ cư đỡ |
+| ZZZZZC-03 | "được" sang ô thổ cư | đỏ |
+| ZZZZZC-04 / 05 | câu lửng AI | 2 đỏ |
+| ZZZZZC-06 | AI im | đỏ, 7 ca đỏ khi khôi phục luật-khi-AI-im |
+| ZZZZZC-07 | xưng hô giữa cụm | đỏ |
+| ZZZZZC-08 | tổng phòng ngủ | đỏ |
+| ZZZZZC-09 | hẻm ngang | đỏ |
+| ZZZZZC-10 | hỏi về tin kèm dữ liệu | đỏ |
+| ZZZZZC-11 / 11b / 11c / 12 / 12b / 12c | bực mà làm tiếp; đối chứng bực trơn | 11b đỏ |
+| ZZZZZC-13 | thuế | đỏ |
+| ZZZZZC-14 | quận của lô | đỏ |
+| ZZZZX-03 | đổi kỳ vọng: lời gắn lợi ích bị bỏ; 03b đối chứng câu nhắc lại giữ | đỏ |
+
+Ngoài e2e:
+- `kiem-bang-chung.mjs` ZZZZZC-K1…K11.
+- `van-tra-loi.mjs` ZZZZZC-V1…V5.
+- `luat-khong-mau-thuan.mjs` (1): TONE_RULES cấm gắn lợi ích, ví dụ ĐÚNG không dạy câu gắn lợi ích.
+
+e2e **1215/1215**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

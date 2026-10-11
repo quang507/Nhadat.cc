@@ -540,6 +540,20 @@ Sau khi gộp: `bun run prompt --day` (khoá `cau_tien_dinh`, `fee_rules`).
 
 Sau khi gộp: `bun run prompt --day` (khoá `tone_rules`).
 
+### Không gắn thêm điều khách không nói — 11/10/2026 (SRS-5.1zzzzzc)
+
+[nguồn: lượt khách mô phỏng thứ năm 11/10/2026: "Dạ sổ riêng, giấy tờ gọn lắm anh chị", "quận 5 cũ bên em hay có khách tìm", "thuế chuyển nhượng … là của người mua và người bán", "tối em gọi lại nha"; câu phí lặp nguyên văn ba lượt]
+
+| Chỗ | Đổi | Giữ |
+|---|---|---|
+| `TONE_RULES` (dòng khen) | bỏ khen "lợi ích thật"; cấm gắn thêm lợi ích / tính chất / lời khen cho căn ("đi lại tiện", "giấy tờ gọn", "kết cấu chắc"); không nói "bên em hay có khách tìm khu này"; khách đưa thông tin thì đáp một tiếng rồi hỏi | không suy ra từ con số, không chấm điểm, không đoán người mua |
+| `TONE_RULES` (dòng Trung thực) | thuế, phí sang tên, công chứng là quy định nhà nước: không tư vấn, không nói loại thuế / ai chịu | ba nguồn sự thật của SRS-5.1zzzzzb |
+| `SELLER_FEWSHOT` | ba ví dụ ĐÚNG bỏ câu gắn lợi ích ("Ô tô tới tận nhà thì đi lại tiện lắm", "Nở hậu lại sổ riêng, giấy tờ gọn lắm") → "Dạ vâng anh."; ví dụ dự án mở bằng "Theo em biết, dự án …" | các ví dụ khác |
+| Câu soạn sẵn hỏi thuế (code, chủ đề `thue_phi`) | "Dạ ngoài {phí bên em} thì bên em không thu thêm khoản nào ạ. Thuế, phí sang tên là theo quy định nhà nước, em không tư vấn con số được, {ac} hỏi bên công chứng giúp em nha." — hỏi lại thì câu ngắn khác | câu phí theo vai (`cauPhi`) |
+| Câu phí hỏi lại (code) | câu phí có số đã nói y hệt → "Dạ bên em chỉ có đúng khoản phí đó thôi ạ, ngoài ra không thu thêm gì." | câu phí chưa có số → nói lại + hỏi vai |
+
+Sau khi gộp: `bun run prompt --day` (khoá `tone_rules`, `seller_fewshot`).
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |
