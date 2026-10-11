@@ -437,7 +437,9 @@ export function motCauHoiLuot(replies: string[]): string[] {
  * Chuyện gửi ảnh là luật của mình (FR-185: gửi vào chat là vào kho), nên trả lời tiền
  * định, không trông vào model. Không nhận ra thì null → model tự trả lời như cũ.
  */
-export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null, chuDe?: string | null): string | null {
+export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null, chuDe?: string | null,
+  /** SRS-5.1zzzzzc: lời bot gần đây (nguyên văn) — câu soạn sẵn đã nói y hệt thì không nói lại nguyên câu. */
+  botDaNoi = ""): string | null {
   const kd = boDau(hoi);
   const ra: string[] = [];
   // 01/10/2026: AI đã nói câu hỏi thuộc CHỦ ĐỀ nào (`hoi_lai.chu_de`) → câu tiền định chỉ dùng khi đúng chủ đề; từ khoá
@@ -450,8 +452,16 @@ export function dapHoiNguocTienDinh(hoi: string, ac: string, phi?: string | null
   // "phí sao?" — theo luật phí, hệ thống biết nhãn chính chủ / môi giới.
   // SRS-5.1zzzzx: AI nói chủ đề `phi` ("app này có lấy tiền trước không") → câu phí, không cần từ khoá; từ khoá chỉ còn là lưới đỡ khi
   // AI không chạy (chuDe trống) hay cho chủ đề cũ dich_vu.
-  if (phi && (chuDe === "phi" || (dung("dich_vu") && /\b(phi|hoa hong|hoa hong|phan tram|bao nhieu %|mat tien gi|ton gi|tinh sao)\b/.test(kd) && !/\bphi quan ly\b/.test(kd)))) {
-    ra.push(`Dạ ${phi} ạ.`);
+  // SRS-5.1zzzzzc (khách mô phỏng lần năm, persona hỏi phí: cùng câu phí lặp nguyên văn ba lượt, không trả lời "ngoài 1% còn mất gì"). Câu
+  // soạn sẵn chỉ nói NGUYÊN câu một lần: đã nói y hệt (cùng vai, cùng mức) thì nói ý "chỉ có khoản đó"; hỏi thuế / chi phí ngoài phí bên em
+  // (chủ đề `thue_phi`, AI đọc) thì nói đúng điều có nguồn — phí bên em là khoản duy nhất, thuế là quy định nhà nước, em không tư vấn.
+  if (phi && chuDe === "thue_phi") {
+    ra.push(/quy định nhà nước/.test(botDaNoi)
+      ? `Dạ bên em chỉ thu đúng khoản phí khi bán được thôi ạ, còn thuế phí sang tên ${ac} hỏi bên công chứng là chính xác nhất.`
+      : `Dạ ngoài ${phi} thì bên em không thu thêm khoản nào ạ. Thuế, phí sang tên là theo quy định nhà nước, em không tư vấn con số được, ${ac} hỏi bên công chứng giúp em nha.`);
+  } else if (phi && (chuDe === "phi" || (dung("dich_vu") && /\b(phi|hoa hong|hoa hong|phan tram|bao nhieu %|mat tien gi|ton gi|tinh sao)\b/.test(kd) && !/\bphi quan ly\b/.test(kd)))) {
+    // Câu phí CHƯA có con số (vai chưa rõ) thì vẫn nói lại để nơi gọi nối câu hỏi vai — hỏi vai mới là cách trả lời đúng lần hai.
+    ra.push(botDaNoi.includes(phi) && /\d/.test(phi) ? `Dạ bên em chỉ có đúng khoản phí đó thôi ạ, ngoài ra không thu thêm gì.` : `Dạ ${phi} ạ.`);
   }
   if (dung("dich_vu", "khac") && /\b(anh|hinh|video|clip)\b/.test(kd) && /\b(gui|can|co|chup|up|dang|them)\b/.test(kd) && !/\b(tien|phi|gia|ty|trieu)\b/.test(kd)) {
     ra.push(`Dạ ${ac} gửi ảnh thẳng vào đây là em cất vào tin luôn ạ.`);
@@ -1658,13 +1668,15 @@ export function boCauHoiLap(replies: string[], botTruoc: string | null | undefin
 const gonKhen = (s: string): string => boDau(s ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 /** Câu nhận xét (nguyên văn trong lời bot) KHÔNG có căn cứ thật → cần bỏ. */
 export function nhanXetKhongCanCu(
-  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null; kieu?: string | null }> | null | undefined,
+  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null; kieu?: string | null; hua_khong_lam?: boolean | null }> | null | undefined,
   bangChung: string,
 ): string[] {
   const bc = ` ${gonKhen(bangChung)} `;
   const bo: string[] = [];
   for (const x of ds ?? []) {
     const cau = (x?.cau ?? "").trim();
+    // SRS-5.1zzzzzc: lời hứa việc bot không tự làm được ("tối em gọi lại nha") — không có nguồn nào làm nó đúng.
+    if (cau && x?.hua_khong_lam === true) { bo.push(cau); continue; }
     // SRS-5.1zzzzzb: câu hỏi GỢI Ý giá trị chủ nhà chưa nói cũng cần nguồn (`cauHoiGoiYKhongNguon` bỏ cả câu hỏi đó); câu hỏi mở thì giữ.
     if (!cau || /\?/.test(cau)) continue;
     // SRS-5.1zzzzk: câu trạng thái tin có chủ riêng (lưới trạng thái ở đường ra, đối chiếu DB) — đúng thì giữ, sai thì lưới đó bỏ.
@@ -1675,7 +1687,9 @@ export function nhanXetKhongCanCu(
     // SRS-5.1zzzzx (khách mô phỏng 11/10: "hem 4m" → "hẻm 4m ô tô vào tới nhà tiện lắm"; "4x16 là diện tích vừa phải"; "hẻm hẹp thì đi
     // lại cần cẩn thận"): căn cứ có thật ("hem 4m", "4x16") chỉ chứng minh CON SỐ, không chứng minh tính chất bot gắn thêm. AI phân loại
     // câu suy ra / chấm điểm → bỏ dù căn cứ có thật.
-    if (x?.kieu === "suy_ra" || x?.kieu === "danh_gia") { bo.push(cau); continue; }
+    // SRS-5.1zzzzzc (khách mô phỏng lần năm: "Dạ sổ riêng, giấy tờ gọn lắm anh chị" — giám khảo: bot không biết giấy tờ "gọn"): lợi ích bot
+    // GẮN THÊM cho đặc điểm thật cũng là điều chủ nhà không nói — bỏ như suy ra / chấm điểm. Chỉ câu NHẮC LẠI đúng lời chủ nhà có căn cứ.
+    if (x?.kieu === "suy_ra" || x?.kieu === "danh_gia" || x?.kieu === "loi_ich") { bo.push(cau); continue; }
     const cc = gonKhen(x?.can_cu ?? "");
     if (cc.length >= 2 && bc.includes(` ${cc} `)) continue;
     bo.push(cau);

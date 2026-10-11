@@ -1481,5 +1481,27 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   const bo3 = cauHoiGoiYKhongNguon([{ cau: "Giá mình 5 tỷ phải không chị?", can_cu: "5 tỷ", goi_y: true }], "chị bán nhà hẻm 4m");
   ok("ZZZZZB-V3 (cách nói mới) 'giá mình 5 tỷ phải không' — căn cứ AI đưa không có trong nguồn → bỏ", bo3.length === 1, JSON.stringify(bo3));
 }
+// SRS-5.1zzzzzc: câu phí soạn sẵn không nói lại nguyên câu; hỏi thuế / chi phí ngoài là chủ đề riêng; soát bỏ lời gắn lợi ích và lời hứa bot không làm được.
+{
+  const { nhanXetKhongCanCu } = await import("../supabase/functions/_shared/extraction/van-tra-loi.ts");
+  const phi1 = "phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt";
+  const a = dapHoiNguocTienDinh("ngoài 1% đó còn mất thuế hay phí gì không", "chị", phi1, "thue_phi");
+  ok("ZZZZZC-V1 (ca gốc) hỏi thuế / chi phí ngoài phí bên em → nói phí bên em là khoản duy nhất + thuế theo quy định nhà nước, không nói ai chịu",
+    /không thu thêm/.test(a ?? "") && /quy định nhà nước/.test(a ?? "") && !/người (?:mua|bán) chịu|chịu thuế/.test(a ?? ""), String(a));
+  const a2 = dapHoiNguocTienDinh("vậy phí sang tên ai trả em", "chị", phi1, "thue_phi", `Dạ ngoài ${phi1} thì bên em không thu thêm khoản nào ạ. Thuế, phí sang tên là theo quy định nhà nước…`);
+  ok("ZZZZZC-V2 (cách nói mới) hỏi lại thuế lần hai → không lặp nguyên câu cũ", !!a2 && !/không tư vấn con số/.test(a2), String(a2));
+  const b = dapHoiNguocTienDinh("vậy em lấy bao nhiêu phí", "chị", phi1, "phi", `Dạ ${phi1} ạ.`);
+  ok("ZZZZZC-V3 (ca gốc) câu phí có số đã nói y hệt → không lặp nguyên văn", b === "Dạ bên em chỉ có đúng khoản phí đó thôi ạ, ngoài ra không thu thêm gì.", String(b));
+  const phi0 = "phí bên em chỉ thu khi giao dịch thành công, mức tuỳ chính chủ hay môi giới";
+  const b2 = dapHoiNguocTienDinh("phí sao em", "chị", phi0, "phi", `Dạ ${phi0} ạ.`);
+  ok("ZZZZZC-V4 đối chứng: câu phí CHƯA có số (vai chưa rõ) → vẫn nói để nơi gọi nối câu hỏi vai", b2 === `Dạ ${phi0} ạ.`, String(b2));
+  const bo = nhanXetKhongCanCu([
+    { cau: "Dạ sổ riêng, giấy tờ gọn lắm anh chị.", can_cu: "sổ riêng", kieu: "loi_ich", danh_gia_thi_truong: false },
+    { cau: "Dạ vâng, anh cứ bận, tối em gọi lại nha.", can_cu: null, kieu: "nhac_lai", hua_khong_lam: true, danh_gia_thi_truong: false },
+    { cau: "Dạ sổ riêng ạ.", can_cu: "sổ riêng", kieu: "nhac_lai", danh_gia_thi_truong: false },
+  ], "shr bạn, mình có sổ riêng");
+  ok("ZZZZZC-V5 (ca gốc) soát: 'giấy tờ gọn lắm' (gắn lợi ích) và 'tối em gọi lại' (hứa việc không làm được) bị bỏ; câu nhắc lại giữ",
+    bo.length === 2 && !bo.includes("Dạ sổ riêng ạ."), JSON.stringify(bo));
+}
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

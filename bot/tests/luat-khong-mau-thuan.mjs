@@ -34,9 +34,12 @@ const viDuDung = (s) => s.split(/Ví dụ giọng SAI|Ví dụ SAI/)[0].split("\
 const DOAN_NGUOI_MUA = /khách[^.?!]{0,20}chuộng|dễ bán|bán nhanh|đắt khách|thanh khoản\s+(?:rất\s+)?cao|nhiều người tìm/iu;
 const sai1 = viDuDung(SELLER_FEWSHOT).filter((d) => DOAN_NGUOI_MUA.test(d));
 ok("(1) ví dụ ĐÚNG của người bán không dạy lời đoán người mua / khả năng bán (kiem-khen bỏ câu đó)", sai1.length === 0, sai1.join(" | "));
-const khen = TONE_RULES.match(/Khen là việc với NGƯỜI BÁN[^\n]*/u)?.[0] ?? "";
-ok("(1) TONE_RULES: câu mẫu khen KHÔNG phải lời đoán người mua (chỉ lợi ích thật của đặc điểm)",
-  !!khen && !/\("[^"]*(?:khách[^"]{0,20}chuộng|dễ bán)[^"]*"\);/u.test(khen.split("không đoán")[0] ?? khen), khen.slice(0, 200));
+// SRS-5.1zzzzzc: kiem-khen bỏ cả lời GẮN THÊM lợi ích (kieu loi_ich) — câu lệnh giọng phải dạy cùng một điều: TONE_RULES cấm gắn lợi ích,
+// ví dụ ĐÚNG không có câu gắn lợi ích ("đi lại tiện", "giấy tờ gọn", "ở tiện") — trước đây chính ví dụ dạy hai câu đó.
+const khen = TONE_RULES.match(/Không gắn thêm lợi ích[^\n]*/u)?.[0] ?? "";
+ok("(1) TONE_RULES cấm gắn thêm lợi ích / tính chất cho căn (cùng luật với kiem-khen bỏ loi_ich)", !!khen && /đi lại tiện/.test(khen), khen.slice(0, 200));
+const loiIch = viDuDung(SELLER_FEWSHOT).filter((d) => /đi lại tiện|giấy tờ gọn|ở tiện|kết cấu chắc/iu.test(d));
+ok("(1) ví dụ ĐÚNG của người bán không dạy câu gắn lợi ích", loiIch.length === 0, loiIch.join(" | "));
 const sai2 = [...viDuDung(SELLER_FEWSHOT), ...viDuDung(BUYER_FEWSHOT)].filter((d) => /\d\s*%/.test(d) && /phí/iu.test(d));
 ok("(2) ví dụ ĐÚNG không nói con số phí (chủ của con số phí là cauPhi(vaiPhi(…)))", sai2.length === 0, sai2.join(" | "));
 
