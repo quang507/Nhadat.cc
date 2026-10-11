@@ -133,6 +133,11 @@ export function cumGocTrongTin(tin: string, kdCum: string): string | null {
 }
 // Chữ dẫn bỏ ở đầu cụm — CỐ Ý hẹp: "nam" (Nam Kỳ Khởi Nghĩa), "lô" (lô 5 đường số 7), "căn", "là" đều có thể là chữ thật của địa chỉ.
 const NV_DAU_CUM = /^(?:nhà ở|nha o|nhà|nha|ở|o|tại|tai|địa chỉ|dia chi)\s+/iu;
+// SRS-5.1zzzzz (khách mô phỏng 11/10, người lớn tuổi: "nhà bác cũ rồi nhưng còn sử dụng được" → ô hiện trạng "bác cũ rồi…", in lên tin):
+// chữ XƯNG HÔ đầu cụm là người nói, không phải giá trị. Chỉ các ô mô tả căn nhà — địa chỉ có tên đường "Cô Giang", "Bà Triệu", "Ông Ích
+// Khiêm"; người đứng tên thì "anh" CHÍNH là giá trị.
+const NV_O_BO_XUNG_HO = new Set(["hien_trang", "hien_trang_su_dung", "ket_cau", "noi_that", "phap_ly", "giay_to_hien_co", "view"]);
+const NV_XUNG_HO_DAU = /^(?:của\s+)?(?:bác|chú|cô|dì|anh|chị|em|cháu|tui|tôi|mình|ông|bà)\s+(?=\S)/iu;
 // Đuôi phường / quận cắt khỏi địa chỉ (có ô riêng). Quận chỉ cắt khi theo sau là số hoặc tên quận TP.HCM — "quan hoa", "huyen tran
 // cong chua" gõ không dấu là tên đường, không phải đuôi hành chính.
 const NV_DUOI_DIA_CHI = /[,;.]?\s*(?<![\p{L}\d])(?:(?:phường|phuong|p\.)\s*(?:\d{1,2}|[\p{L}]{2,})(?![\p{L}\d])|(?:quận|quan|q\.)\s*(?:\d{1,2}(?![\d\p{L}])|tân|tan|bình|binh|gò|go|phú|phu|thủ|thu|hóc|hoc|củ|cu|nhà|nha|cần|can)(?![\p{L}\d])|tp\.?\s*hcm|tphcm|hồ chí minh|ho chi minh)[\s\S]*$/iu;
@@ -150,6 +155,7 @@ export function giaTriNguyenVan(question: string, d: DeXuat | null | undefined):
   if (question === "ket_cau" && d.khoa !== "ket_cau") return null;
   let c = (d.cum_goc ?? d.trich_dan ?? "").replace(/\s+/g, " ").trim();
   for (let i = 0; i < 3 && NV_DAU_CUM.test(c); i++) c = c.replace(NV_DAU_CUM, "");
+  if (NV_O_BO_XUNG_HO.has(question)) c = c.replace(NV_XUNG_HO_DAU, "");
   if (question === "vi_tri") {
     c = c.replace(NV_DUOI_DIA_CHI, "").replace(NV_BE_RONG_HEM, "$1").replace(/\s+/g, " ").trim();
     c = c.replace(/^(?:số|so)\s+(?=\d)/iu, "");
@@ -439,6 +445,7 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ng
       const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
       if (!m) return "khong_phai_so";
       const n = Number(m[0]);
+      if (laSoDemKhoang(d.khoa, v)) return "so_dem_la_khoang";
       // 24/09/2026 (bắn 10 tin): "toà nhà CHDV 20 phòng" / "20 phòng như em nói đó" thành 20 PHÒNG NGỦ — phòng cho thuê
       // không phải phòng ngủ. Phòng ngủ phải có chữ ngủ / PN trong cụm trích.
       if (!soTrong(cum, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05))) return "so_khong_co_trong_trich_dan";
@@ -595,6 +602,7 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string,
       const m = chuanSo(v).replace(/(\d)\s*m\s*([013-9])(?!\d)/g, "$1.$2").match(/\d+(?:\.\d+)?/);
       if (!m) return "khong_phai_so";
       const n = Number(m[0]);
+      if (laSoDemKhoang(d.khoa, v)) return "so_dem_la_khoang";
       if (!soTrong(kdCumSua ?? d.trich_dan, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05))) return "so_khong_co_trong_trich_dan";
       // SRS-5.1zzzp: production chạy kiểm NHẸ — phép "cụm nói đúng chuyện của ô" phải có ở đây, không chỉ ở bản đủ.
       return soDoSaiChuDe(d.khoa, kd);
@@ -1500,6 +1508,30 @@ export function docNgungHangLoat(
   if (!trichCoTrongTin(td, tin)) return null;
   const giu = Array.isArray(v.giu) ? v.giu.filter((g): g is string => typeof g === "string" && g.trim().length > 0).map((g) => g.trim()) : [];
   return { kieu: v.kieu, giu };
+}
+
+/**
+ * SRS-5.1zzzzz (11/10/2026, khách mô phỏng: "con chị nói chia được khoảng 4-5 phòng để cho thuê" → AI đưa so_phong_ngu = "4-5", code
+ * ghi 4 phòng ngủ): ô ĐẾM (phòng ngủ, WC, tầng căn hộ) mang một con số — giá trị là KHOẢNG ("4-5", "3 đến 4") là khách không chắc
+ * hoặc nói chuyện khác (chia phòng cho thuê), không phải số đếm. Kiểm HÌNH giá trị, không phải từ khoá.
+ */
+function laSoDemKhoang(khoa: string, v: string): boolean {
+  return (khoa === "so_phong_ngu" || khoa === "so_wc" || khoa === "tang") &&
+    /\d\s*(?:-|–|~|đến|den|tới|toi|hoặc|hoac|hay)\s*\d/i.test(v);
+}
+
+/**
+ * SRS-5.1zzzzz (11/10/2026): AI đọc chủ nhà KHÔNG BIẾT điều bot vừa hỏi (doc-y-luot `khong_biet`). Nhận khi cụm trích có trong tin;
+ * không có / trích bịa → null. Nơi gọi: câu treo không lấy giá trị từ luật, thôi câu và nhớ ô đó (`boc_tach.khong_biet`).
+ */
+export function docKhongBiet(trich: string | null | undefined, tin: string): string | null {
+  const td = (trich ?? "").trim();
+  return td && trichCoTrongTin(td, tin) ? td : null;
+}
+/** SRS-5.1zzzzz: các ô chủ nhà đã nói không biết (`listings.boc_tach.khong_biet`) — chat-reply và hỏi bù cùng đọc một chỗ. */
+export function khongBietCua(bocTach: unknown): string[] {
+  const v = (bocTach as { khong_biet?: unknown } | null | undefined)?.khong_biet;
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
 /**

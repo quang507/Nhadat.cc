@@ -229,6 +229,16 @@ la("gửi lại sau khi sửa thì câu cuối đổi", /Em sửa lại rồi/.t
   la("THUONG-02 tên riêng đầu giá trị ('Vincom') giữ hoa", /Vincom/.test(soanTinNhap({ ...tin2, lai: false, cauTD })), "");
 }
 
+// SRS-5.1zzzzz (khách mô phỏng 11/10): hiện trạng sử dụng cùng ý tình trạng nhà đã in ở dòng kết cấu → không in dòng 🏠 lần hai.
+{
+  const goc = NHA_PHO.facts.filter((f) => !/^hien_trang/.test(f.question));
+  const hai = { ...NHA_PHO, facts: [...goc, { question: "hien_trang", answer: "cũ, còn sử dụng được" }, { question: "hien_trang_su_dung", answer: "cũ rồi nhưng còn sử dụng được" }] };
+  const b1 = soanTinNhap({ l: NHA_PHO.l, facts: hai.facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
+  la("ZZZZZ-T1 (ca gốc) 'cũ, còn sử dụng được' (kết cấu) + 'cũ rồi nhưng còn sử dụng được' (hiện trạng) → ý in một lần", (b1.match(/sử dụng được/g) ?? []).length === 1 && !/🏠/u.test(b1), b1);
+  const khac = { ...NHA_PHO, facts: [...goc, { question: "hien_trang", answer: "mới sơn lại" }, { question: "hien_trang_su_dung", answer: "đang cho thuê" }] };
+  const b2 = soanTinNhap({ l: NHA_PHO.l, facts: khac.facts, diem: 80, thieu: [], soAnh: 0, lai: false, cauTD });
+  la("ZZZZZ-T2 đối chứng 'mới sơn lại' + 'đang cho thuê' (hai ý) → giữ cả hai dòng", /mới sơn lại/.test(b2) && /🏠 Hiện trạng: đang cho thuê/u.test(b2), b2);
+}
 console.log(`\n${dat} đạt · ${hong} hỏng`);
 if (hong) { console.log("\x1b[31mBẢN NHÁP TIN RAO HỎNG\x1b[0m"); process.exitCode = 1; }
 else console.log("\x1b[32mBẢN NHÁP TIN RAO ĐẠT\x1b[0m");
