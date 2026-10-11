@@ -3188,6 +3188,38 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 - **Kiểm offline**: `bun bot/tests/mo-phong/tu-kiem.mjs` (trong `test:bot`, 10 ca). Ca gồm: ghi đúng 100% khi DB khớp; DB lệch thì đúng 3 trường sai; mỗi loại lỗi lời bot bắt đúng lượt; giám khảo bỏ trích dẫn bịa.
 - TS-MO-PHONG-01 (docs/10).
 
+### SRS-5.1zzzzx · Lỗi từ lượt khách mô phỏng đầu tiên: nhận xét suy từ con số, ô nguyên văn lấy cả câu, đường "3/2" bị gạt, câu trả lời tự nhiên bị loại, hỏi tiền thành chuyển người (11/10/2026)
+
+`[nguồn: lượt mo-phong.yml đầu tiên 11/10/2026 (3 persona: gõ cộc không dấu, nghi lừa, đổi ý) và 3 lượt bắn lại ban-thu.yml (thu-mp3-a/b/c) để lấy bằng chứng AI bóc tách; chủ dự án 11/10: "luật là sửa từ gốc nhé … sửa hết đi"]`
+
+**1. Nhận xét bịa có căn cứ thật.** Ca gốc: "hem 4m" → "Dạ, hẻm 4m ô tô vào tới nhà tiện lắm anh"; "4x16" → "4x16 là diện tích vừa phải"; "hẻm 2m5" → "Hẻm hẹp thì đi lại cần cẩn thận"; bắn lại còn ra "hẻm 2m5 thì hẻm xe máy".
+- Lớp lỗi: lượt AI soát nhận xét (`kiem-khen.ts`) chỉ đòi một CỤM CĂN CỨ có thật trong lời khách, code (`nhanXetKhongCanCu`) chỉ kiểm cụm đó có trong chữ. "hem 4m" có thật nên câu "ô tô vào tới nhà" qua: căn cứ chứng minh con số, không chứng minh tính chất bot gắn thêm. Phía sinh lời, `TONE_RULES` dạy "khen điểm mạnh thật + lợi ích" mà không nói con số trơn không phải điểm mạnh.
+- Sửa: AI soát trả thêm `kieu` (`nhac_lai` · `loi_ich` · `suy_ra` · `danh_gia`); code bỏ `suy_ra` / `danh_gia` dù căn cứ có thật. `TONE_RULES` + `SELLER_FEWSHOT` (ví dụ SAI) nói cùng điều: khách chỉ đưa số thì đáp một tiếng rồi hỏi, không suy tính chất, không chấm điểm, không nói điểm yếu.
+- Chỗ khác cùng lớp: lượt soát chỉ chạy ở r1 / r2; lời hỏi lại (r2b) và lời chăm sóc (r3) cũng do model viết mà không qua. Nay cả bốn gọi cùng `soatNhanXet`. Nhánh mua có lượt soát riêng (`LUAT_MUA`, bỏ mọi nhận xét khi chưa có căn), không đổi.
+
+**2. Ô nguyên văn lấy cả câu trích dẫn.** Ca gốc: "duong 3/2 so nha thi da noi roi" → ô địa chỉ "Đường 3/2 so nha thi da noi roi", in luôn ra bản nháp.
+- Lớp lỗi: ô nguyên văn (SRS-5.1zzr) lấy BIÊN giá trị từ trích dẫn, mà trích dẫn là bằng chứng, model hay trích rộng cả câu.
+- Sửa (`phanCumTheoGiaTri`, `kiem-bang-chung.ts`): giá trị model khớp một đoạn liền trong cụm (so bỏ dấu, đúng thứ tự) thì ô dừng ở cuối đoạn đó, phần đầu cụm giữ ("đường 30/4", "hẻm đường Tên Lửa"); phần đuôi bỏ đi có chữ số thì giữ cả cụm. Áp cho mọi ô nguyên văn (pháp lý "sổ riêng nguyên căn từ lâu rồi chú" → "sổ riêng").
+
+**3. Đường "3/2" bị gạt.** Ca gốc: hỏi địa chỉ, "3/2 q10", AI đọc `duong` = "3/2" → ô địa chỉ đóng mà không ghi, bot hỏi lại đường hai lần.
+- Lớp lỗi: ngưỡng "địa chỉ ≥ 4 ký tự" thay cho phép kiểm thật; "3/2" có 3 ký tự. Ngưỡng chép ở hai nơi (`giaTriChoCauTreo`, `docAiChinh`).
+- Sửa: một hàm `viTriTuDuong` cho cả hai; tên đường theo ngày ("3/2", "30/4") hay mã ("D2") gõ trơn thì ghi "đường 3/2". Số nhà hẻm ("137/28": số trước "/" lớn hơn 31) không đụng.
+
+**4. Câu trả lời tự nhiên bị loại khi đang hỏi đúng ô.** Ca gốc: bot hỏi tình trạng nhà, "nhà chú đang ở tình trạng bình thường" → AI ghi `hien_trang` = "bình thường", máy loại `gia_tri_khong_dung_loai_truong`, bot hỏi lại y nguyên.
+- Lớp lỗi: `HINH_TRUONG_CHU` là danh sách từ khoá (máy đoán ý bằng từ khoá), sinh ra để bắt chữ có thật nhưng sai ô; câu trả lời ngoài danh sách bị loại oan.
+- Sửa (`dangHoiDungO`): ô đang được hỏi (`cauDangHoi` truyền vào `kiemDeXuat` ở lượt bóng và lượt câu treo) mà luật không nhận ra giá trị LẪN cụm trích là của ô khác → nhận. Danh sách chỉ còn soát chữ chảy sang ô không được hỏi; "xe hơi" trích từ "hẻm xe hơi" khi hỏi tình trạng vẫn bị loại.
+- Chỗ khác cùng lớp: `noi_that`, `huong`, `phap_ly`, `ket_cau` cùng danh sách, cùng được nới khi đang hỏi đúng ô. Đường trả lời câu treo (`kiemTraLoiCau`) không dùng danh sách này.
+
+**5. Hỏi tiền thành chuyển người.** Ca gốc: "app này có lấy tiền trước không nhỉ" → "Dạ câu này cháu nhờ anh chị phụ trách trả lời chính xác cho chú nha, cháu không dám nói sai" + việc ❓ cho người phụ trách; vài lượt sau bot lại tự nói chính sách phí.
+- Lớp lỗi: chủ đề `dich_vu` gom cả phí (hệ thống CÓ câu trả lời, `cauPhi`) lẫn thứ không có dữ liệu (hợp đồng, độc quyền); trong `dich_vu`, câu phí chỉ được nhận ra bằng từ khoá ("phí", "hoa hồng", "tốn gì"), "lấy tiền trước" lọt xuống nhánh chuyển người.
+- Sửa: thêm chủ đề `phi` cho AI (`CHU_DE_HOI`, `boc-rao.ts`); `dapHoiNguocTienDinh` trả câu `cauPhi` cho `phi` không cần từ khoá; từ khoá chỉ còn là lưới khi AI không chạy. `CHI_DAN_CHU_DE.phi` dặn model cùng điều ở r3.
+
+**Bộ khách mô phỏng** (`bot/tests/mo-phong/`): bộ chấm từng so mã `so_hong_rieng` với chữ "sổ hồng riêng" (ca nào cũng "sai") và không biết "3/2" là "Ba Tháng Hai" (bộ sự thật nhận mảng bí danh); model đóng khách từng nói thay bên app ("app này không lấy tiền trước đâu chú"); giám khảo coi câu phí chuẩn là bịa (nay được đưa chính sách có thật). Lượt chạy nay in AI bóc tách từng lượt trước khi dọn: lỗi "4x18 mới đúng" → "Không trích xuất được gì" của lượt đầu không truy được vì dữ liệu đã dọn, bắn lại thì AI đọc đúng (chưa tái hiện, chưa sửa).
+
+**Deploy**: `deploy-bot.yml` đỏ khi code đã deploy từ nhánh trước đó (CLI báo "No change found", version đứng yên). Nay dòng CLI đó + version không đổi + mã bản build giữ nguyên sau 30 giây là bằng chứng hợp lệ.
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy)**: e2e ZZZZX-01 (ca gốc "hem 4m") / 02 (cách nói mới "4x16 vừa phải") / 03 (đối chứng `loi_ich` giữ) / 04 ("3/2 q10") / 05 ("tình trạng bình thường") / 06 (ca gốc tiền) / 07 (cách nói mới "đăng tin có tốn đồng nào không"); `kiem-bang-chung.mjs` NV-21…24, VT-01…03, HT-01…04; `bot/tests/mo-phong/tu-kiem.mjs` 12 ca.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

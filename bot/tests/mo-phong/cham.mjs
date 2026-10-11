@@ -25,11 +25,18 @@ function soTruong(khoa, mong, dong) {
       return { co: dong?.district ?? null, dat: !!dong?.district && kd(dong.district) === kd(mong) };
     }
     case "duong": {
+      // 11/10/2026 (lượt chạy đầu): một con đường nhiều cách gõ ("3/2" = "Ba Tháng Hai") — bộ sự thật được ghi MẢNG bí danh.
       const chu = boDau([dong?.street, dong?.location_raw].filter(Boolean).join(" "));
-      return { co: dong?.street ?? dong?.location_raw ?? null, dat: chu.includes(boDau(mong)) };
+      return { co: dong?.street ?? dong?.location_raw ?? null, dat: [mong].flat().some((m) => chu.includes(boDau(m))) };
     }
     case "phap_ly": {
-      const loai = (s) => /so chung/.test(boDau(s)) ? "so_chung" : /giay tay|vi bang/.test(boDau(s)) ? "giay_tay" : /so (hong|do)|shr|sdcc/.test(boDau(s)) ? "so_rieng" : null;
+      // 11/10/2026 (lượt chạy đầu): cột `legal_status` là MÃ ("so_hong_rieng") — bản đầu so mã với chữ nên ca nào cũng "sai".
+      const loai = (s) => {
+        const k = boDau(s).replace(/_/g, " ");
+        if (/\bchung\b/.test(k)) return "so_chung";
+        if (/giay tay|vi bang|hdmb|hop dong/.test(k)) return "giay_tay";
+        return /\bso\b|shr|sdcc/.test(k) ? "so_rieng" : null;
+      };
       const co = dong?.legal_status ?? null;
       return { co, dat: !!co && loai(co) === loai(mong) };
     }

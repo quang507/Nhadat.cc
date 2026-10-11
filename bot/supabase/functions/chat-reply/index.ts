@@ -132,6 +132,7 @@ const cauHoiLaiDuPhong = (chuDe: string | null | undefined, ac: string): string 
     : `Câu ${ac} hỏi em kiểm tra rồi báo lại ngay nha. `;
 const CHI_DAN_CHU_DE: Record<string, string> = {
   thi_truong: " Đây là câu hỏi về THỊ TRƯỜNG (giá khu vực, dễ bán không, nên rao giá nào): hệ thống CHƯA có số liệu giao dịch khu vực — nói thật là bên em chưa có số liệu chốt đủ chắc để báo, KHÔNG đưa bất kỳ con số nào, KHÔNG nói lại giá căn mình như câu trả lời, KHÔNG hứa sẽ gửi số liệu.",
+  phi: " Đây là câu hỏi về TIỀN phải trả cho bên em: trả lời theo luật phí — không thu đồng nào trước, phí chỉ thu khi giao dịch thành công (con số theo luật phí, chưa rõ chủ nhà hay môi giới thì không nói số); KHÔNG nói phải nhờ người phụ trách.",
   dich_vu: " Đây là câu hỏi về CÁCH BÊN EM LÀM VIỆC: phí / đăng tin / gửi ảnh trả lời theo hướng dẫn hệ thống; bao lâu bán được thì nói thật là tuỳ giá và khu vực, tin lên kệ là bên em rao ngay và báo khi có khách quan tâm — KHÔNG hứa số ngày.",
   ve_bot: " Đây là câu hỏi về BOT: nói thật em là trợ lý AI của AI Ơi Nhà Đất, việc cần người thật có anh chị phụ trách.",
   tin_cua_minh: " Đây là câu hỏi về CHÍNH TIN của chủ nhà: chỉ trả lời bằng thông tin tin đang ghi ở trên, không có thì nói thật là chưa ghi.",
@@ -2819,7 +2820,7 @@ Deno.serve(async (req) => {
           for (const f of (fs ?? []) as Array<{ question: string; answer: string | null }>) if (f.answer) facts[f.question] = f.answer;
         }
         // SRS-5.1zzzzc: quận tin đã biết chắc → kiểm bằng chứng đối chiếu được "phường 13" (tên cũ dạng số) với phường mới AI đổi.
-        const { dat, bo } = kiemDeXuat(kq.truong, text, { quan: quanChacCua(d) });
+        const { dat, bo } = kiemDeXuat(kq.truong, text, { quan: quanChacCua(d), cauDangHoi: kq.cauDangHoi });
         const soCan = (kq.ket as { so_can?: number } | null)?.so_can ?? null;
         const soSanh = soSanhVoiDb(dat, d, facts);
         // Chế độ `ghi`: chỉ khi tin xác định được và tin rao MỘT căn (nhiều căn: DB chỉ có một tin để so).
@@ -6533,8 +6534,8 @@ Deno.serve(async (req) => {
         // SRS-5.1zzzzu: loại tin còn trống → trích dẫn loại / ý giao dịch ở tin chủ nhà trước cũng nhận (`kiemYCuocRao`).
         const loaiTrong = !pendingReq.listings?.property_type || pendingReq.listings.property_type === "chua_ro";
         const datAi = !kqAi ? [] : loaiTrong
-          ? kiemYCuocRao(kqAi.truong, text, tinChuNhaGoc().join("\n"), { quan: quanChacCua(pendingReq.listings) }).dat
-          : kiemDeXuat(kqAi.truong, text, { quan: quanChacCua(pendingReq.listings) }).dat;
+          ? kiemYCuocRao(kqAi.truong, text, tinChuNhaGoc().join("\n"), { quan: quanChacCua(pendingReq.listings), cauDangHoi: pendingReq.question }).dat
+          : kiemDeXuat(kqAi.truong, text, { quan: quanChacCua(pendingReq.listings), cauDangHoi: pendingReq.question }).dat;
         // FR-224 (25/09/2026, chủ dự án: "bắt theo nguyên cả câu của khách để AI đọc lại"): chế độ `chinh`, AI đọc NGUYÊN tin
         // và trả lời thẳng câu đang hỏi (`tra_loi`, đã kiểm trích dẫn + con số). Câu SỐ CHẶT (tiền, diện tích, kích thước) vẫn
         // lấy giá trị ô đã chuẩn hoá của AI (`giaTriChoCauTreo`); câu khác lấy nguyên câu trả lời của AI ("hẻm xe hơi vào tận
@@ -7137,6 +7138,12 @@ Deno.serve(async (req) => {
                 [pendingReq.listings?.price_vnd]);
               if (tb.bo.length) console.log("chat-reply: r2b bo tien bia", tb.bo.join(", "));
               hoiLai = tb.replies[0]?.trim() || null; mocR2b("boTienBia");
+            }
+            // SRS-5.1zzzzx: lượt AI soát nhận xét từng chỉ chạy ở r1 / r2 — lời hỏi lại (r2b) cũng do model viết, cùng một lưới.
+            if (hoiLai) {
+              hoiLai = await soatNhanXet(hoiLai, [...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n"),
+                pendingReq.listings?.location_raw ?? "");
+              mocR2b("soatNhanXet");
             }
             await doTien(client, r2b.usage);
           } catch (e) {
@@ -8521,6 +8528,8 @@ Deno.serve(async (req) => {
         // SRS-5.1zzzzr (thu-thuong11: "ok em" → "Để em kiểm tra giá giao dịch khu Phú Hòa Đông gần đây rồi báo lại chị nhé."): lưới
         // lời hứa tự kiểm (lớp an toàn, luôn bật) trước đây chỉ chạy ở r2 — r3 cũng là lời model gửi chủ nhà.
         if (sReply) sReply = apVan<string | null>(soVan, "boHuaTuKiemTra(r3)", sReply, boHuaTuKiemTra(sReply, null) || null);
+        // SRS-5.1zzzzx: lời chăm sóc (r3) cũng do model viết — cùng lượt AI soát nhận xét như r1 / r2 / r2b.
+        if (sReply) sReply = await soatNhanXet(sReply, [...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n"), lstLines ?? "");
         await doTien(client, r3.usage);
       } catch (e) {
         await ghiLoi(client, "chat-reply model r3(seller)", e);

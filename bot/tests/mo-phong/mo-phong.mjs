@@ -58,6 +58,8 @@ async function tinKhachKe(p, luot) {
 Tính cách / cách gõ: ${p.mo_ta}
 Xưng hô của bạn: ${p.xung_ho}. Hành vi ẩn: ${p.an_y}
 SỰ THẬT về căn (chỉ nói những gì có ở đây, đúng cách gõ của bạn, mỗi tin một ít; không bịa thêm dữ kiện; KHÔNG đưa số điện thoại): ${p.loi_ke}
+Bạn LUÔN là người bán, KHÔNG BAO GIỜ nói thay bên app / trợ lý: không giải thích phí hay cách bên app làm việc, không tự trấn an mình
+("app này không lấy tiền trước đâu" là lời của bên app, không phải của bạn). Bot nói chưa rõ thì bạn hỏi lại hoặc bỏ qua, như người bán thật.
 Luật: mỗi lượt viết ĐÚNG MỘT tin như người thật nhắn (không giải thích, không ngoặc kép). Bot hỏi gì thì trả lời theo tính cách. Bot gửi bản nháp tin (dòng bắt đầu 📋) thì đồng ý đăng hoặc sửa chỗ sai. Bot báo tin đã lên kệ, hoặc bạn đã kể hết và bot không hỏi gì nữa → xong.
 Trả về DUY NHẤT JSON: {"tin": "<tin nhắn kế>", "xong": false} hoặc {"tin": "", "xong": true}.`,
     messages: [{ role: "user", content: luot.length ? `Cuộc chat tới giờ:\n\n${banGhi(luot)}\n\nTin kế của bạn?` : `Bắt đầu bằng đúng câu này: "${p.cau_dau}"` }],
@@ -72,6 +74,9 @@ async function giamKhao(luot) {
     model: MODEL_CHAM, max_tokens: 4000, thinking: { type: "adaptive" },
     system: `Bạn chấm lời một trợ lý môi giới nhắn Zalo với người bán (chỉ chấm dòng BOT; dòng bắt đầu 🤖 💾 📝 📋 👤 là bong bóng hệ thống, bỏ qua).
 Năm tiêu chí: (1) mot_y — mỗi tin chỉ hỏi MỘT ý; (2) khong_doc_lai — không đọc lại số liệu khách vừa nói; (3) khong_bia — không khẳng định điều khách chưa nói / bot không thể biết (tin đã đăng, đã kiểm duyệt, giá thị trường, pháp lý chưa ai nói); (4) khong_tieng_anh — không chen tiếng Anh; (5) tu_nhien — không máy móc ("Dạ em cảm ơn" mở mọi tin, lặp khuôn câu), không cụt lủn vô nghĩa.
+CHÍNH SÁCH CÓ THẬT của bên trợ lý (bot nói đúng những điều này KHÔNG phải bịa): không thu đồng nào trước; phí chỉ thu khi giao dịch thành công;
+chính chủ 1% giá chốt, môi giới 0,5%, cho thuê 3/4 tháng tiền thuê; chưa rõ người bán là chính chủ hay môi giới thì nói "mức tuỳ chính chủ hay
+môi giới" (không số); hạng người rao Đồng / Bạc / Vàng là có thật; câu "Em tra thấy đường X thuộc phường Y" là tra từ điển đường có thật.
 Chỉ liệt kê VI PHẠM có thật. Mỗi vi phạm trích NGUYÊN VĂN một đoạn ≥ 6 ký tự của câu BOT đó.
 Trả về DUY NHẤT JSON mảng: [{"tieu_chi": "mot_y|khong_doc_lai|khong_bia|khong_tieng_anh|tu_nhien", "trich_dan": "...", "nhan_xet": "..."}] (không lỗi thì []).`,
     messages: [{ role: "user", content: banGhi(luot) }],
@@ -102,10 +107,18 @@ async function chayMot(p) {
   const [tin] = await q(`select l.property_type, l.deal, l.district, l.street, l.location_raw, l.price_vnd, l.area_m2, l.frontage_m, l.length_m,
       l.floors, l.bedrooms, l.legal_status, l.status from listings l join sellers s on s.id = l.seller_id
      where s.zalo_user_id = ${lit(z)} order by l.created_at limit 1`);
+  // Lượt chạy đầu (11/10): "4x18 mới đúng" ra "Không trích xuất được gì" mà dữ liệu thử đã dọn, không còn gì để truy. In AI bóc tách
+  // từng lượt (đề xuất · bị loại vì sao · khách hỏi gì) như ban-thu.yml, TRƯỚC khi dọn — lỗi lần sau có bằng chứng.
+  const aiLuot = await q(`select b.cau_dang_hoi as hoi, left(b.tin, 120) as tin,
+      (select string_agg((d->>'khoa') || '=' || (d->>'gia_tri') || ' «' || (d->>'trich_dan') || '»', ' · ') from jsonb_array_elements(b.de_xuat) d) as de_xuat,
+      (select string_agg((d->>'khoa') || ':' || (d->>'ly_do'), ' · ') from jsonb_array_elements(b.bo) d) as bo,
+      b.da_ghi->'hoi_lai'->>'chu_de' as hoi_lai
+    from boc_tach_bong b join sellers s on s.id = b.seller_id where s.zalo_user_id = ${lit(z)} order by b.created_at`).catch(() => []);
+  for (const a of aiLuot) console.log(`[${p.ma}] AI · hỏi ${a.hoi ?? "-"} · «${a.tin ?? ""}» · đề xuất: ${a.de_xuat ?? "(rỗng)"} · loại: ${a.bo ?? "-"}${a.hoi_lai ? ` · khách hỏi: ${a.hoi_lai}` : ""}`);
   const kq = chamTatDinh(p, luot, tin ?? null);
   let loiAi = [];
   try { loiAi = kiemTrichDanGiamKhao(await giamKhao(luot), luot).giu; } catch (e) { console.log(`[${p.ma}] giám khảo AI hỏng: ${String(e).slice(0, 160)}`); }
-  return { kq, loiAi, luot };
+  return { kq, loiAi, luot, aiLuot };
 }
 
 const IDS = PERSONA.map(zalo);

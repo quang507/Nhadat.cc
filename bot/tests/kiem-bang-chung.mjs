@@ -806,6 +806,32 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
     giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "Huyền Trân Công Chúa", "huyen tran cong chua")], "nha o huyen tran cong chua q1").dat[0]) === "Huyền Trân Công Chúa"
     && giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "12 Nguyễn Trãi", "12 Nguyễn Trãi quận 3")], "nhà 12 Nguyễn Trãi quận 3 nha").dat[0]) === "12 Nguyễn Trãi");
   ok("NV-18 cụm không dấu trong tin thì ô cũng không dấu khi model đổi thứ tự (không mượn dấu sai chỗ)", giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "137 hẻm Nguyễn Trãi", "hem 137 nguyen trai")], "nha o hem 137 nguyen trai q5").dat[0]) === "hem 137 nguyen trai");
+  // SRS-5.1zzzzx (khách mô phỏng 11/10): trích dẫn rộng cả câu kèm lời phàn nàn → ô chỉ mang đoạn model chỉ ra, chữ vẫn của khách.
+  const tl21 = kiemTraLoiCau({ co_tra_loi: true, gia_tri: "đường 3/2", trich_dan: "duong 3/2 so nha thi da noi roi" }, "duong 3/2 so nha thi da noi roi", "Nhà anh ở đường nào, số bao nhiêu vậy ạ?", { cauHoi: "vi_tri", loai: "nha_pho" });
+  ok("NV-21 ca gốc: 'duong 3/2 so nha thi da noi roi' → ô địa chỉ 'đường 3/2', không kèm lời phàn nàn", tl21?.giaTri === "đường 3/2", JSON.stringify(tl21));
+  ok("NV-22 cách nói mới: 'Tên Lửa á, nói rồi mà em' (truong) → 'Tên Lửa'",
+    giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "Tên Lửa", "Tên Lửa á, nói rồi mà em")], "Tên Lửa á, nói rồi mà em").dat[0]) === "Tên Lửa",
+    giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "Tên Lửa", "Tên Lửa á, nói rồi mà em")], "Tên Lửa á, nói rồi mà em").dat[0]));
+  ok("NV-23 model làm rơi con số khách nói ('Nguyễn Trãi' từ 'hẻm 137 Nguyễn Trãi') → giữ cả cụm",
+    giaTriNguyenVan("vi_tri", kiemDeXuat([dx("duong", "Nguyễn Trãi", "hẻm 137 Nguyễn Trãi")], "nhà hẻm 137 Nguyễn Trãi").dat[0]) === "hẻm 137 Nguyễn Trãi");
+  // SRS-5.1zzzzx (khách mô phỏng 11/10): "3/2 q10" khi hỏi địa chỉ — tên đường 3 ký tự từng bị ngưỡng độ dài gạt.
+  const vt = (gt, td, tin) => giaTriChoCauTreo(kiemDeXuat([dx("duong", gt, td)], tin).dat, "vi_tri", { property_type: "nha_pho" });
+  ok("VT-01 ca gốc: AI duong '3/2' «3/2» (tin '3/2 q10') → địa chỉ 'đường 3/2', không rơi", vt("3/2", "3/2", "3/2 q10") === "đường 3/2", vt("3/2", "3/2", "3/2 q10"));
+  ok("VT-02 cách nói mới: '30/4 nha em' → 'đường 30/4'; mã 'D2' → 'đường D2'",
+    vt("30/4", "30/4", "30/4 nha em") === "đường 30/4" && vt("D2", "D2", "D2 binh thanh") === "đường D2", `${vt("30/4", "30/4", "30/4 nha em")} | ${vt("D2", "D2", "D2 binh thanh")}`);
+  ok("VT-03 số nhà hẻm '137/28' (137 > 31) không bị thêm chữ 'đường'", vt("137/28", "137/28", "137/28 nha anh") === "137/28", vt("137/28", "137/28", "137/28 nha anh"));
+  // SRS-5.1zzzzx (khách mô phỏng 11/10): câu trả lời tự nhiên cho ô ĐANG HỎI không bị danh sách từ khoá hình dạng loại oan.
+  const ht = (gt, td, tin, hoi) => kiemDeXuat([dx("hien_trang", gt, td)], tin, hoi ? { cauDangHoi: hoi } : {});
+  ok("HT-01 ca gốc: đang hỏi tình trạng, 'đang ở tình trạng bình thường' → nhận 'bình thường'",
+    ht("bình thường", "đang ở tình trạng bình thường", "nhà chú đang ở tình trạng bình thường, sổ riêng từ lâu", "hien_trang").dat.length === 1);
+  ok("HT-02 cách nói mới: đang hỏi tình trạng, 'vẫn ổn anh, chưa phải làm gì' → nhận",
+    ht("vẫn ổn, chưa phải làm gì", "vẫn ổn anh, chưa phải làm gì", "vẫn ổn anh, chưa phải làm gì", "hien_trang").dat.length === 1);
+  ok("HT-03 đang hỏi tình trạng mà cụm là 'hẻm xe hơi' (ô đường vào) → vẫn loại 'xe hơi'",
+    ht("xe hơi", "hẻm xe hơi", "hẻm xe hơi", "hien_trang").bo[0]?.ly_do === "gia_tri_khong_dung_loai_truong");
+  ok("HT-04 KHÔNG hỏi tình trạng → danh sách hình dạng vẫn soát như cũ",
+    ht("bình thường", "đang ở tình trạng bình thường", "nhà chú đang ở tình trạng bình thường").bo[0]?.ly_do === "gia_tri_khong_dung_loai_truong");
+  ok("NV-24 pháp lý trích kèm chữ đệm: 'sổ riêng nguyên căn từ lâu rồi chú' với giá trị 'sổ riêng' → 'sổ riêng'",
+    giaTriNguyenVan("phap_ly", kiemDeXuat([dx("phap_ly", "sổ riêng", "sổ riêng nguyên căn từ lâu rồi chú")], "4 tỷ rưỡi chú, sổ riêng nguyên căn từ lâu rồi chú").dat[0]) === "sổ riêng");
 }
 // ── SRS-5.1zzu (06/10/2026, bắn lại thu-ai-0610): ô ĐO ĐẾM — câu trả lời AI phải mang số / loại đường; không thì để luật đọc ──
 {

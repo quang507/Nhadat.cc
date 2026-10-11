@@ -130,7 +130,7 @@ jobs:
           co=""
           if [ "${{ steps.truoc.outputs.verify_jwt }}" = "false" ]; then co="--no-verify-jwt"; fi
           echo "supabase functions deploy ${{ inputs.ham }} $co"
-          supabase functions deploy "${{ inputs.ham }}" --project-ref "$PROJECT_REF" $co
+          supabase functions deploy "${{ inputs.ham }}" --project-ref "$PROJECT_REF" $co 2>&1 | tee /tmp/deploy.log
 
       # "Đã gọi lệnh deploy" không phải bằng chứng đã deploy — cùng cái bẫy
       # NFR-18. Đọc lại bản đang chạy: số version PHẢI tăng, verify_jwt PHẢI
@@ -148,7 +148,13 @@ jobs:
           echo "Trước: v$truoc verify_jwt=${{ steps.truoc.outputs.verify_jwt }}"
           echo "Sau  : v$ver verify_jwt=$jwt"
           loi=0
-          if [ "$ver" -le "$truoc" ]; then
+          # 11/10/2026 (deploy main sau PR #468): code đã deploy từ nhánh trước đó, CLI so bản đóng gói rồi báo "No change found" và
+          # Supabase KHÔNG tạo bản mới — version đứng yên là ĐÚNG, không phải deploy hỏng. Bằng chứng lúc đó là chính dòng CLI đó +
+          # version không đổi + mã bản build giữ nguyên ở lần đọc sau 30 giây (bên dưới).
+          if grep -q "No change found in Function" /tmp/deploy.log; then
+            if [ "$ver" != "$truoc" ]; then echo "::error::CLI báo không đổi mà version đổi ($truoc → $ver) — không rõ bản nào đang chạy."; loi=1
+            else echo "CLI báo code giống bản đang chạy (v$ver) — Supabase không tạo bản mới, không phải lỗi."; fi
+          elif [ "$ver" -le "$truoc" ]; then
             echo "::error::version không tăng ($truoc → $ver) — deploy KHÔNG tới nơi."; loi=1
           fi
           if [ "$jwt" != "${{ steps.truoc.outputs.verify_jwt }}" ]; then

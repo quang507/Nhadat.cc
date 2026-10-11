@@ -5,7 +5,7 @@
     "xung_ho": "anh",
     "an_y": "Không tự kể hết; bot hỏi gì mới nói nấy. Bot hỏi 2 ý một lúc thì chỉ trả lời ý đầu.",
     "cau_dau": "a can ban nha",
-    "su_that": { "deal": "ban", "loai_bds": "nha_pho", "quan": "Quận 10", "duong": "Ba Tháng Hai", "ngang": 4, "dai": 15, "so_tang": 3, "gia_vnd": 9500000000, "phap_ly": "sổ hồng riêng" },
+    "su_that": { "deal": "ban", "loai_bds": "nha_pho", "quan": "Quận 10", "duong": ["Ba Tháng Hai", "3/2"], "ngang": 4, "dai": 15, "so_tang": 3, "gia_vnd": 9500000000, "phap_ly": "sổ hồng riêng" },
     "loi_ke": "nha hxh 3/2 q10 · 4x15 · 1 tret 2 lau · shr · 9ty5"
   },
   {

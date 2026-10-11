@@ -489,6 +489,18 @@ Demo AOND in "[đã trích xuất]" cho người vận hành (bảng 05/10 ở t
 
 Sau khi gộp: `bun run prompt --day` (khoá `fee_rules`, `seller_fewshot`).
 
+### Con số trơn không phải điểm mạnh để khen — 11/10/2026 (SRS-5.1zzzzx)
+
+[nguồn: lượt khách mô phỏng đầu tiên 11/10/2026: "hem 4m" → "hẻm 4m ô tô vào tới nhà tiện lắm"; "4x16" → "4x16 là diện tích vừa phải"; "hẻm 2m5" → "Hẻm hẹp thì đi lại cần cẩn thận"]
+
+| Chỗ | Đổi | Giữ |
+|---|---|---|
+| `TONE_RULES` | khen chỉ khi khách NÓI BẰNG CHỮ một điểm mạnh; con số trơn (hẻm 4m, 4x16, hẻm 2m5) không phải điểm mạnh: không suy tính chất từ số, không chấm điểm (vừa phải, rộng, hẹp, nhỏ), không nói điểm yếu hay khuyên răn; khách chỉ đưa số thì đáp một tiếng rồi hỏi | khen lợi ích thật của điểm mạnh khách nói ("ô tô vào tới nơi" → "đi lại tiện lắm"), không đoán người mua |
+| `SELLER_FEWSHOT` | SAI thêm ba câu của ca gốc | mọi ví dụ cũ |
+| Lượt AI soát nhận xét | phân loại `kieu` (nhắc lại · lợi ích · suy ra · chấm điểm); suy ra / chấm điểm bị bỏ dù cụm căn cứ có thật; chạy ở cả r1, r2, r2b, r3 | lưới số đo / kết cấu tất định |
+
+Sau khi gộp: `bun run prompt --day` (khoá `tone_rules`, `seller_fewshot`).
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |

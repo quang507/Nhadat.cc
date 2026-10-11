@@ -31,6 +31,10 @@ ok("lượt tới bản nháp = 5 (bong bóng 📋), chưa lên kệ", kq.luot_t
 
 const sai = chamTatDinh(p, luot, { ...tin, price_vnd: 9_000_000_000, property_type: "dat", legal_status: "sổ chung" });
 ok("DB lệch: giá 9 tỷ (≠ 9,5), loại đất, sổ chung → ba trường sai", sai.truong.filter((t) => !t.dat).map((t) => t.khoa).sort().join() === "gia_vnd,loai_bds,phap_ly", JSON.stringify(sai.truong));
+// 11/10/2026 (lượt chạy đầu): DB lưu MÃ pháp lý và tên đường như khách gõ ("3/2") — bộ chấm từng tính sai cả hai.
+const ma2 = chamTatDinh(p, luot, { ...tin, legal_status: "so_hong_rieng", street: "đường 3/2", location_raw: "đường 3/2" });
+ok("pháp lý mã 'so_hong_rieng' = 'sổ hồng riêng'; đường 'đường 3/2' khớp bí danh của 'Ba Tháng Hai'", ma2.ty_le_ghi_dung === 1, JSON.stringify(ma2.truong.filter((t) => !t.dat)));
+ok("pháp lý mã 'so_hong_chung' ≠ 'sổ hồng riêng'", chamTatDinh(p, luot, { ...tin, legal_status: "so_hong_chung" }).truong.find((t) => t.khoa === "phap_ly")?.dat === false);
 ok("không có tin trong DB → ghi đúng 0%", chamTatDinh(p, luot, null).ty_le_ghi_dung === 0);
 
 const { giu, bo } = kiemTrichDanGiamKhao([

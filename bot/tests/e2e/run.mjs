@@ -9798,6 +9798,64 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }
+// ── SRS-5.1zzzzx (khách mô phỏng 11/10/2026, mo-phong.yml) ─────────────────────────────────────────────────────────────────────
+// (1) nhận xét suy từ con số / chấm điểm ("hẻm 4m ô tô vào tới nhà", "4x16 là diện tích vừa phải") lọt vì căn cứ có thật; (2) "3/2 q10" →
+// đường 3 ký tự bị ngưỡng độ dài gạt; (3) "tình trạng bình thường" bị danh sách từ khoá hình dạng loại khi đang hỏi đúng ô; (4) "app này có
+// lấy tiền trước không" → chủ đề dich_vu → chuyển người thay vì câu phí.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocX = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laSoatX = (p) => (p?.system ?? []).some((s) => /SOÁT LỜI BOT GỬI CHỦ NHÀ/.test(s.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+  const rongX = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null } };
+  let n = 0;
+  const chay = async ({ cauTreo, text, boc = {}, soat = [], loi = "Dạ vâng.", tin = {} }) => {
+    fresh(seedKho);
+    globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "thay_doi" };
+    const uid = `thu-zx-${++n}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "anh", seller_type: "ccrb" }).data;
+    const L = db().insert("listings", { code: `BDS-Q10-09${n}`, seller_id: s.id, deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", district: "Quận 10", ...tin }).data;
+    s.active_listing_id = L.id;
+    db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
+    globalThis.__model = { parse: (p) => laBocX(p) ? { ...rongX, ...boc } : laSoatX(p) ? { nhan_xet: soat } : OUT(), create: () => loi };
+    const r = await send({ external_user_id: uid, text });
+    const rep = (r.body?.replies ?? []).filter((x) => !/^\s*(?:🤖|📝|📋|💾|👤)/u.test(x)).join(" | ");
+    return { L: db().t.listings.find((l) => l.id === L.id), rep, uid,
+      treo: db().t.info_requests.filter((q) => q.listing_id === L.id && q.status === "pending").map((q) => q.question),
+      f: (q) => db().t.listing_facts.filter((x) => x.listing_id === L.id && x.question === q).map((x) => x.answer) };
+  };
+  const nx = (cau, can_cu, kieu) => ({ cau, khang_dinh: cau, can_cu, kieu, danh_gia_thi_truong: false });
+  // (1) nhận xét
+  const a = await chay({ cauTreo: "ket_cau", text: "hem 4m", boc: { truong: [T("do_rong_hem", "4", "hem 4m")] },
+    loi: "Dạ, hẻm 4m ô tô vào tới nhà tiện lắm anh. Nhà anh mấy tầng vậy ạ?", soat: [nx("Dạ, hẻm 4m ô tô vào tới nhà tiện lắm anh.", "hem 4m", "suy_ra")] });
+  check("ZZZZX-01 (ca gốc) 'hem 4m' → lời 'hẻm 4m ô tô vào tới nhà tiện lắm' (AI: suy_ra, căn cứ 'hem 4m' có thật) bị bỏ, câu hỏi giữ",
+    !/ô tô vào/.test(a.rep) && /mấy tầng/.test(a.rep), a.rep);
+  const b = await chay({ cauTreo: "dien_tich_dat", text: "4x16 anh ơi", boc: { truong: [T("ngang", "4", "4x16"), T("dai", "16", "4x16")] },
+    loi: "Dạ 4x16 là diện tích vừa phải anh. Nhà mình mấy tầng vậy ạ?", soat: [nx("Dạ 4x16 là diện tích vừa phải anh.", "4x16", "danh_gia")] });
+  check("ZZZZX-02 (cách nói mới) '4x16 là diện tích vừa phải' (AI: danh_gia) bị bỏ", !/vừa phải/.test(b.rep) && /mấy tầng/.test(b.rep), b.rep);
+  const c = await chay({ cauTreo: "do_rong_hem", text: "hẻm 4m, ô tô vào tới nơi", boc: { truong: [T("do_rong_hem", "4", "hẻm 4m")] },
+    loi: "Ô tô tới tận nhà thì đi lại tiện lắm anh. Nhà mình mấy tầng vậy ạ?", soat: [nx("Ô tô tới tận nhà thì đi lại tiện lắm anh.", "ô tô vào tới nơi", "loi_ich")] });
+  check("ZZZZX-03 đối chứng: chủ nhà NÓI 'ô tô vào tới nơi' → lời khen lợi ích (AI: loi_ich) giữ", /đi lại tiện/.test(c.rep), c.rep);
+  // (2) "3/2 q10"
+  const d = await chay({ cauTreo: "vi_tri", text: "3/2 q10", tin: { district: null }, boc: { truong: [T("duong", "3/2", "3/2"), T("quan", "Quận 10", "q10")] } });
+  check("ZZZZX-04 (ca gốc) hỏi địa chỉ, '3/2 q10', AI duong '3/2' → địa chỉ 'đường 3/2' được ghi, không đóng ô trắng",
+    d.L?.location_raw === "đường 3/2" && d.f("vi_tri").includes("đường 3/2"), JSON.stringify({ loc: d.L?.location_raw, f: d.f("vi_tri"), treo: d.treo }));
+  // (3) tình trạng
+  const e = await chay({ cauTreo: "hien_trang", text: "nhà chú đang ở tình trạng bình thường",
+    boc: { truong: [T("hien_trang", "bình thường", "đang ở tình trạng bình thường")] } });
+  check("ZZZZX-05 (ca gốc) đang hỏi tình trạng, 'đang ở tình trạng bình thường' → ghi 'bình thường', câu tình trạng không treo lại",
+    e.f("hien_trang").some((x) => /bình thường/.test(x)) && !e.treo.includes("hien_trang"), JSON.stringify({ f: e.f("hien_trang"), treo: e.treo, rep: e.rep }));
+  // (4) tiền
+  const esc = () => db().t.reminders.filter((x) => x.kind === "escalation" && /^❓/.test(x.note ?? ""));
+  for (const [ma, cau] of [["06", "app này có lấy tiền trước không nhỉ"], ["07", "đăng tin bên em có tốn đồng nào không em"]]) {
+    const g = await chay({ cauTreo: "hien_trang", text: cau, boc: { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "phi" } }, loi: "Dạ vâng. Nhà mình hiện ở tốt hay cần sửa ạ?" });
+    check(`ZZZZX-${ma} ${ma === "06" ? "(ca gốc)" : "(cách nói mới)"} «${cau}» (AI: chủ đề phi) → câu phí, không 'nhờ anh chị phụ trách … không dám nói sai', không việc ❓`,
+      /chỉ thu khi giao dịch thành công/.test(g.rep) && !/không dám nói sai/.test(g.rep) && !esc().length, JSON.stringify({ rep: g.rep, esc: esc().map((x) => x.note) }));
+  }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
 // ── kết: BẤT BIẾN TOÀN BỘ ──
 soatDbBatBien("(cuối)");
 if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_DUMP, JSON.stringify(BB, null, 1));
