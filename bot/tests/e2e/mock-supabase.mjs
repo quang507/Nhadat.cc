@@ -58,7 +58,7 @@ export class FakeDB {
     for (const n of ["sellers","buyers","conversations","messages","listings","listing_facts","info_requests",
       "reminders","viewings","deals","inbound_ledger","bot_prompts","projects","listing_photos_v","bot_errors","bot_usage","ledger_log",
       "ctvs","admins","interests","ratings","inbound_events","listing_media","app_config",
-      "du_an_can","du_an_tai_lieu","van_kich"]) this.t[n] = []; // SRS-5.1zzj: kho căn dự án + tài liệu; SRS-5.1zzn: sổ van
+      "du_an_can","du_an_tai_lieu","van_kich","ai_ghi_thu"]) this.t[n] = []; // SRS-5.1zzj: kho căn dự án + tài liệu; SRS-5.1zzn: sổ van
     this.seq = 0; this.log = [];
     // FR-185: kho file giả — chat-reply cất ảnh chủ nhà gửi vào Storage.
     this.storage = [];
@@ -557,6 +557,10 @@ class RpcCall {
       // SRS-5.1y: công tắc trợ lý `thu` hỏi `la_id_thu` — mock chỉ cần phân biệt ID thử ("thu-…") với ID thật.
       case "la_id_thu":
         return { data: /^thu-/.test(String(a.p ?? "")), error: null };
+      // SRS-5.1zzzzzd: sổ đầu ra model của ID thử — như hàm thật, ID không phải ID thử thì bỏ qua im lặng.
+      case "ghi_ai_thu":
+        if (/^thu-/.test(String(a.p_zalo ?? "")) && Array.isArray(a.p_luot)) db.insert("ai_ghi_thu", { zalo_user_id: a.p_zalo, tin: a.p_tin ?? "", luot: a.p_luot });
+        return { data: null, error: null };
       case "cau_hinh": {
         // 30/09/2026: production không có dòng `luat_loi_bot` = GỌN. Bộ e2e cũ viết cho đủ luật nên mock mặc định `du`;
         // ca GỌN tự đặt `luat_loi_bot: "gon"` trong __cauHinh.

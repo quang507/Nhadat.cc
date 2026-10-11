@@ -476,6 +476,11 @@ production ≈ 3 lượt AI, cả bộ ≈ 450 lượt credit thật — chỉ c
 production bằng Zalo thử `thu-mp-*`, chấm ghi đúng / lỗi lời bot / giám khảo AI (lỗi phải trích nguyên văn). Chạy tay qua `mo-phong.yml`,
 tiền thật (~10 lượt × ~4 lượt AI mỗi persona), không vào CI; tự dọn dữ liệu thử. Bộ chấm tự kiểm offline nằm trong `test:bot`.
 
+**Phát lại** (`bot/tests/phat-lai/`, TS-PHAT-LAI-01, 11/10/2026, SRS-5.1zzzzzd): tin khách mô phỏng mang cờ `ghi_ai` → chat-reply ghi nguyên đầu ra
+model của lượt vào `ai_ghi_thu` (chỉ ID thử, giữ 2 ngày), log `mo-phong.yml` in dòng `PHAT_LAI_JSON`; `lay-tu-log.mjs` cắt thành ca ở `ca/`,
+`phat-lai.mjs` (trong `test:bot`) bơm lại qua handler thật trên DB giả, không tốn tiền. **Lỗi thấy ở khách mô phỏng: lấy ca, thêm `ky_vong`, thấy
+đỏ trên code cũ rồi mới sửa; ca không xoá khi sửa xong.** e2e dùng model giả chỉ kiểm giả định của người sửa — đừng coi e2e xanh là đủ.
+
 Bốn job đó chạy trong CI (`.github/workflows/kiem.yml`) mỗi PR, kể cả `test:sec`.
 **Thoát 2 của `test:sec` nghĩa là "chưa kiểm được", không phải "đạt"** — bản đầu
 của nó coi mọi HTTP ≥400 là bị chặn và báo 24/24 xanh trong lúc proxy chặn sạch,

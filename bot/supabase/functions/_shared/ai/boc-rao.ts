@@ -137,6 +137,8 @@ Tin có thể gồm vài dòng khách nhắn liên tiếp trước khi rao (đ�
 
 LUẬT CỨNG (code kiểm từng trường, sai là bị bỏ):
 1. Mỗi trường phải có "trich_dan" là cụm chữ COPY NGUYÊN VĂN trong tin. Không có cụm nào nói thẳng → KHÔNG đưa trường đó.
+   trich_dan GỌN đúng phần nói giá trị: không kèm chữ xưng hô và lời kể đi sau ("sổ hồng bác có rồi" → "sổ hồng"; "shr bạn, mình có sổ riêng" → "shr";
+   "hẻm ngang khoảng 2m" là bề rộng hẻm 2m, giữ nguyên cụm). Ô ghi nguyên văn lấy đúng cụm này, thừa chữ là thừa trên tin đăng.
 2. Không suy luận, không đoán, không lấy kiến thức ngoài: không tự điền quận từ tên đường/dự án, không tự đổi "3 tấm" thành số tầng khác, không tự tính diện tích nếu khách không nói diện tích hoặc ngang×dài.
 3. Giá trị phải đọc ra được từ chính cụm trích: tiền "32 tỷ" thì cụm phải có "32 tỷ".
 4. Tiền cọc, phí sang nhượng, hoa hồng, tiền thuê ĐANG THU của căn bán KHÔNG phải "gia". Tiền thuê đang thu → "thu_nhap_thue". Cọc → "tien_coc".
