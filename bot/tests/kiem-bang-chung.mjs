@@ -1061,6 +1061,15 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
     docKhongBiet("ko biết cụ thể đường", "ko biết cụ thể đường, chỉ biết xã thôi") === "ko biết cụ thể đường" && docKhongBiet("không nhớ số nhà", "ko biết cụ thể đường") === null);
   ok("ZZZZZ-K8 khongBietCua đọc boc_tach.khong_biet, rỗng khi không có", khongBietCua({ khong_biet: ["phuong", 3] }).join() === "phuong" && khongBietCua(null).length === 0);
 }
+// SRS-5.1zzzzzb: AI ghi dien_tich dạng ngang × dài ("4 x 16") — đọc là kích thước, không đọc số đầu làm m².
+{
+  const d1 = docAiChinh([{ khoa: "dien_tich", gia_tri: "4 x 16", trich_dan: "4 mét x 16 mét", can: null }], null);
+  ok("ZZZZZB-K1 (ca gốc) dien_tich '4 x 16' → ghi '4x16' (không bỏ 'số ngoài khoảng')", d1.ghi.some((g) => g.question === "dien_tich" && g.answer === "4x16") && !d1.bo.length, JSON.stringify(d1));
+  const d2 = docAiChinh([{ khoa: "dien_tich", gia_tri: "5m x 20m", trich_dan: "5m x 20m", can: null }], null);
+  ok("ZZZZZB-K2 (cách viết mới) '5m x 20m' → '5x20'", d2.ghi.some((g) => g.answer === "5x20"), JSON.stringify(d2));
+  const d3 = docAiChinh([{ khoa: "dien_tich", gia_tri: "60", trich_dan: "60m2", can: null }], null);
+  ok("ZZZZZB-K3 đối chứng '60' → '60m2' như cũ", d3.ghi.some((g) => g.answer === "60m2"), JSON.stringify(d3));
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

@@ -1665,6 +1665,7 @@ export function nhanXetKhongCanCu(
   const bo: string[] = [];
   for (const x of ds ?? []) {
     const cau = (x?.cau ?? "").trim();
+    // SRS-5.1zzzzzb: câu hỏi GỢI Ý giá trị chủ nhà chưa nói cũng cần nguồn (`cauHoiGoiYKhongNguon` bỏ cả câu hỏi đó); câu hỏi mở thì giữ.
     if (!cau || /\?/.test(cau)) continue;
     // SRS-5.1zzzzk: câu trạng thái tin có chủ riêng (lưới trạng thái ở đường ra, đối chiếu DB) — đúng thì giữ, sai thì lưới đó bỏ.
     if (x?.noi_trang_thai_tin === true) continue;
@@ -1680,6 +1681,34 @@ export function nhanXetKhongCanCu(
     bo.push(cau);
   }
   return bo;
+}
+/**
+ * SRS-5.1zzzzzb (khách mô phỏng 11/10: "Hẻm Quang Trung ở phường Thạnh Lộc bác ơi. Vậy nhà bác ở phường Thạnh Lộc đúng không bác?" —
+ * phường bịa, rồi hỏi gật): câu HỎI đưa sẵn một giá trị (AI soát đánh dấu `goi_y`) mà giá trị đó không có nguồn (lời chủ nhà / đã ghi
+ * / dữ liệu tra) → trả về để bỏ CẢ câu. Câu hỏi mở không bao giờ bị bỏ.
+ */
+export function cauHoiGoiYKhongNguon(
+  ds: Array<{ cau?: string | null; can_cu?: string | null; goi_y?: boolean | null }> | null | undefined,
+  bangChung: string,
+): string[] {
+  const bc = ` ${gonKhen(bangChung)} `;
+  return (ds ?? []).filter((x) => x?.goi_y === true && (x.cau ?? "").trim().length >= 4).filter((x) => {
+    const cc = gonKhen(x?.can_cu ?? "");
+    return !(cc.length >= 2 && bc.includes(` ${cc} `));
+  }).map((x) => (x.cau ?? "").trim());
+}
+/** Bỏ khỏi lời bot các CÂU (theo `tachCau`) chứa một câu hỏi gợi ý không nguồn. Hết chữ → null (nơi gọi dùng câu mẫu / lưới câu hỏi). */
+export function boCauHoiGoiY(loi: string | null | undefined, cauBo: string[]): string | null {
+  let s = (loi ?? "").trim();
+  if (!s || !cauBo.length) return s || null;
+  const kd = cauBo.map((c) => boDau(c.replace(/[?.!…\s]+$/u, "")).trim()).filter((c) => c.length >= 4);
+  const trung = (x: string) => {
+    const kx = boDau(x).replace(/[?.!…\s]+$/u, "").trim();
+    return kd.some((c) => kx.includes(c) || (kx.length >= 12 && c.includes(kx)));
+  };
+  s = s.split("\n").map((d) => tachCau(d).filter((x) => !trung(x)).join(" ").trim())
+    .filter((d) => d).join("\n").trim();
+  return s || null;
 }
 /**
  * Bỏ khỏi lời bot các câu / vế trong `cauBo` (AI chép nguyên văn; so cả bản bỏ dấu). KHÔNG bao giờ bỏ phần có dấu "?" — câu

@@ -170,5 +170,13 @@ ok("(11) bong bóng phí sau khi khách tự nói vai đi qua `cauPhi(vaiPhi…)
   ok("(15b) TONE_RULES: khách nghi ngờ → điều có thật, cấm 'đã được kiểm duyệt' / 'lên sàn'", /Khách nghi ngờ bên em[^\n]*kiểm duyệt[^\n]*lên sàn/.test(pr));
 }
 
+// (16) SRS-5.1zzzzzb — lời model gửi người bán có MỘT cửa soát nguồn (`soatNhanXet`): mỗi chỗ gọi model viết lời (`anthropicS.messages.create`)
+// phải có một chỗ soát tương ứng. Thêm đường viết lời mới mà quên soát là đỏ.
+{
+  const soCreate = (cr.match(/anthropicS\.messages\.create\(/g) ?? []).length;
+  const soSoat = (cr.match(/await soatNhanXet\(/g) ?? []).length;
+  ok(`(16) mọi đường model viết lời người bán đi qua soát nguồn (${soCreate} chỗ viết, ${soSoat} chỗ soát)`, soCreate > 0 && soSoat >= soCreate, `${soCreate} / ${soSoat}`);
+}
+
 console.log(hong ? `\nLUẬT KHÔNG MÂU THUẪN: ${hong} CA HỎNG` : "\nLUẬT KHÔNG MÂU THUẪN: ĐẠT");
 process.exit(hong ? 1 : 0);

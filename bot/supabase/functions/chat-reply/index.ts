@@ -89,7 +89,7 @@ import {
   loaiTuChu, nhanDienNhieuCan, nhanDienNhieuFact, laChiLenhDang, phanLoaiCauTraLoi, tachCauHoiNguoc, tachTheoCan, tuXungTuCau, vungPhuDinh, cheoPhuDinh, catDapAn, type KetQuaKhop, type NgungRao,
   suyTuXungHo, tuXungBot, laChaoChau, hocXungHoTuLichSu, cachGoiKhach, XUNG_HO_LON_TUOI, XUNG_HO_HOP_LE, type XungHo, boLoiChaoDau,
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
-import { chanPhiChuaXacNhan, boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, anCauDaDap } from "../_shared/extraction/van-tra-loi.ts";
+import { chanPhiChuaXacNhan, boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, cauHoiGoiYKhongNguon, boCauHoiGoiY, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, anCauDaDap } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
 import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, soPhongNguTheoTang, themTangPhu, TIEU_TU_DAU, soTamCanHoiLung, docTraLoiLung, ketCauTheoLung, soTangTrongDapLung, phanNgoaiCauLung, timPhuongTrongCau, type PhuongDs } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
@@ -141,6 +141,8 @@ const CHI_DAN_CHU_DE: Record<string, string> = {
   // SRS-5.1zzzzy (khách mô phỏng 11/10: bác hỏi "cái chữ 'pháp lý' là sao cháu" → "Dạ tin ghi pháp lý sổ hồng riêng ạ"): hỏi NGHĨA
   // một từ là xin giải thích, không phải hỏi lại giá trị tin.
   nghia_tu: " Chủ nhà hỏi NGHĨA một từ / thuật ngữ: giải thích bằng lời thường, MỘT câu ngắn đúng kiến thức phổ thông (vd pháp lý = giấy tờ nhà đất, sổ hồng riêng = sổ đứng tên riêng một chủ, thổ cư = đất ở, hoàn công = giấy xác nhận nhà xây xong đúng phép), KHÔNG đọc lại giá trị đang ghi như một câu trả lời, KHÔNG khen.",
+  // SRS-5.1zzzzzb (khách mô phỏng 11/10: "hẻm Quang Trung ở phường nào nhỉ" → model tự trả lời "phường Thạnh Lộc", sai quận).
+  dia_danh: " Chủ nhà hỏi ĐỊA DANH (đường / hẻm thuộc phường, quận nào): chỉ trả lời đúng theo khối DỮ LIỆU TRA CỨU — nhiều phường thì kể đúng các phường đó và hỏi gần đoạn nào; khối đó nói chưa tra được thì nói thật em chưa tra được, xin chủ nhà xem trên sổ hồng. KHÔNG nêu tên phường / quận nào ngoài khối đó, KHÔNG hỏi gợi ý \"ở phường X đúng không\".",
   tin_cua_minh: " Đây là câu hỏi về CHÍNH TIN của chủ nhà: chỉ trả lời bằng thông tin tin đang ghi ở trên, không có thì nói thật là chưa ghi.",
   // 05/10/2026 (Zalo thật 18:09, SRS-5.1zzh; chủ dự án: "người ta đang hỏi về dự án mà có thể họ sẽ hỏi để bán nhà khác"): hỏi
   // về một DỰ ÁN là dò đường — trả lời bằng kiến thức kho (khối DỰ ÁN) hoặc nói thật chưa nắm, rồi hỏi họ có căn ở đó cần bán không.
@@ -2769,14 +2771,19 @@ Deno.serve(async (req) => {
       nhanXetAiXong = false;
       if (!loi || !anthropicS || !laCheDoAi) return loi;
       try {
-        const { nhanXet, usage } = await soatNhanXetBangModel(anthropicS as unknown as Parameters<typeof soatNhanXetBangModel>[0], MODEL, loi, bangChung, daGhi);
+        // SRS-5.1zzzzzb: căn cứ hợp lệ có BA nguồn — lời chủ nhà, đã ghi, dữ liệu tra (cùng khối model đã thấy khi viết, `duLieuTra`).
+        const tra = await duLieuTra();
+        const { nhanXet, usage } = await soatNhanXetBangModel(anthropicS as unknown as Parameters<typeof soatNhanXetBangModel>[0], MODEL, loi, bangChung, daGhi, "chu_nha", tra);
         nhanXetAiXong = true;
         await doTien(client, usage as Parameters<typeof doTien>[1]);
         for (const n of nhanXet) if (n.noi_trang_thai_tin === true && n.cau?.trim() && !/\?/.test(n.cau)) aiNoiTrangThai.push(n.cau.trim());
-        const bo = nhanXetKhongCanCu(nhanXet, `${bangChung}\n${daGhi}`);
-        if (!bo.length) return loi;
-        console.log("chat-reply: bo nhan xet khong can cu", bo.join(" | "));
-        return boCauNhanXet(loi, bo);
+        const nguon = `${bangChung}\n${daGhi}\n${tra}`;
+        const bo = nhanXetKhongCanCu(nhanXet, nguon);
+        const boHoi = cauHoiGoiYKhongNguon(nhanXet, nguon);
+        if (!bo.length && !boHoi.length) return loi;
+        console.log("chat-reply: bo khang dinh khong nguon", [...bo, ...boHoi].join(" | "));
+        const sach = bo.length ? boCauNhanXet(loi, bo) : loi;
+        return boHoi.length ? boCauHoiGoiY(sach, boHoi) : sach;
       } catch (e) {
         await ghiLoi(client, "chat-reply soat nhan xet", e);
         return loi;
@@ -3693,7 +3700,41 @@ Deno.serve(async (req) => {
     let cauDaDap: string | null = null;
     const tinChoModel = (): string =>
       (cauDaDap ? anCauDaDap(text, cauDaDap) : text) || "(tin chỉ có câu hỏi đó, đã trả lời ở bong bóng trước)";
-    const boiCanhLuot = async (): Promise<string> => {
+    // ─── SRS-5.1zzzzzb (khách mô phỏng 11/10, người lớn tuổi: "hẻm Quang Trung ở phường nào nhỉ" → model tự trả lời "phường Thạnh Lộc"
+    // — phường của Quận 12, tin ở Gò Vấp; khách gật, tin ghi sai phường lẫn quận). LỚP LỖI: model viết lời có kiến thức riêng và trả
+    // lời câu hỏi SỰ THẬT (địa danh, giá khu, quy hoạch) bằng trí nhớ, trong khi hệ thống CÓ bảng tra mà không đưa cho nó. Nguồn sự
+    // thật của lời bot chỉ có ba: lời chủ nhà, thông tin đã ghi, và DỮ LIỆU TRA do code tra — khối này đưa phần thứ ba vào MỌI lượt
+    // model viết (`boiCanhLuot`), và cũng là căn cứ hợp lệ cho lượt soát (`soatNhanXet`). Không tra ra thì nói rõ là không tra ra.
+    let duLieuTraP: Promise<string> | null = null;
+    const duLieuTra = (): Promise<string> => duLieuTraP ??= (async () => {
+      const lid = pendingReq?.listing_id ?? sellerRow?.active_listing_id ?? null;
+      if (!lid) return "";
+      // Tin của câu đang treo đã nạp sẵn đủ cột (không đọc lại); không có câu treo mới đọc tin đang neo.
+      const l = (pendingReq?.listings as { district?: string | null; ward?: string | null; street?: string | null; location_raw?: string | null; boc_tach?: unknown } | null | undefined) ??
+        (await client.from("listings").select("district, ward, street, location_raw, boc_tach").eq("id", lid).maybeSingle()).data;
+      if (!l) return "";
+      const quanBiet = l.district && (l.boc_tach as { quan_mac_dinh?: unknown } | null)?.quan_mac_dinh !== true ? String(l.district) : null;
+      if (l.ward) return `- Phường của tin: ${l.ward}${quanBiet ? `, ${quanBiet}` : ""} (đã ghi theo lời chủ nhà).\n`;
+      const ten = chuanTenDuong((l.street ?? "").trim() || tenDuong(l.location_raw ?? ""));
+      const chuaTra = `- Phường của tin: chưa có, và em CHƯA tra được phường${ten ? ` của đường ${ten}` : ""} — chủ nhà hỏi thì nói em chưa tra được, ` +
+        `xin chủ nhà xem trên sổ hồng; KHÔNG tự nêu tên phường nào.\n`;
+      const khoaSo = ten ? khoaDuongSo(ten) : null;
+      if (!ten || !quanBiet || (!duongTraDuoc(ten) && !khoaSo)) return chuaTra;
+      const { data: dd, error } = await client.from("duong").select("phuong, quan_cu").eq("ten_khong_dau", khoaSo ?? boDau(ten)).limit(40);
+      if (error) { await ghiLoi(client, "chat-reply du lieu tra (duong)", error.message); return chuaTra; }
+      const cac = phuongCuaDuongTrongQuan((dd ?? []) as Array<{ phuong: string | null; quan_cu: string | null }>, quanBiet);
+      if (!cac.length) return chuaTra;
+      return cac.length === 1
+        ? `- Bảng tên đường: đường ${ten} ở ${quanBiet} thuộc ${cac[0]}.\n`
+        : `- Bảng tên đường: đường ${ten} ở ${quanBiet} đi qua ${cac.length} phường: ${cac.slice(0, 8).join(", ")} — chưa biết đoạn nhà chủ nhà thuộc phường nào; ` +
+          `chủ nhà hỏi thì kể đúng các phường này và hỏi gần đoạn nào, KHÔNG tự chọn một phường.\n`;
+    })().catch(() => "");
+    const khoiDuLieuTra = async (): Promise<string> => {
+      const d = await duLieuTra();
+      return d ? `DỮ LIỆU TRA CỨU (hệ thống tra, chỉ nói địa danh / sự thật theo đây):\n${d}\n` : "";
+    };
+    const boiCanhLuot = async (): Promise<string> => (await boiCanhLuot0()) + (await khoiDuLieuTra());
+    const boiCanhLuot0 = async (): Promise<string> => {
       if (!bongAi) return boiCanh;
       const k = await bongAi;
       const tx = !goiNguoi && k?.ket ? docTuXung(k.tuXung, text, tinChuNhaGoc()) : null;
@@ -3734,7 +3775,8 @@ Deno.serve(async (req) => {
         });
         await doTien(client, r.usage);
         const t = r.content.find((b) => b.type === "text")?.text?.trim() ?? null;
-        return t && !laLoiMeta(t) ? t : null;
+        // SRS-5.1zzzzzb: lời viết lại cũng là lời model — qua cùng lượt soát nguồn như lời đầu (từng là đường duy nhất không soát).
+        return t && !laLoiMeta(t) ? await soatNhanXet(t, [...lichSuRows.filter((m) => laTinNguoi(m.sender)).map((m) => m.body ?? ""), text].join("\n")) : null;
       } catch (e) {
         await ghiLoi(client, "chat-reply goi lai cho dung o", e);
         return null;
@@ -4176,6 +4218,20 @@ Deno.serve(async (req) => {
     // đăng; bóc tách: hoãn) → tin mơ hồ thật, hỏi lại khách bằng chính hai cách hiểu, không để nơi gọi nào hỏi AI trước thì
     // thắng. Chỉ khi tin không mang dữ liệu nào (có dữ liệu thì phần dữ liệu vẫn phải ghi) và câu bot vừa nói chưa phải câu hỏi
     // lại này (không hỏi hai lần liền — lượt sau mơ hồ nữa thì để các nhánh như cũ).
+    // SRS-5.1zzzzzb (khách mô phỏng 11/10, bán cụt: bot vừa hoãn "lúc nào anh rảnh nhắn em", khách "tối em nhắn lại nhé" → "em chưa chắc ý:
+    // đồng ý làm tiếp hay đang bận", rồi "anh đang bận, tối nói tiếp" → câu hoãn y nguyên lần hai, rồi "tối nhắn anh nhé" → bot hỏi tiếp
+    // thổ cư). LỚP LỖI: trạng thái "đang hoãn" không được nhớ qua lượt — mỗi lượt tự đọc lại như hội thoại mới. Bot VỪA hoãn thì lượt
+    // không mang dữ liệu nào (AI đọc) mà khách gật / hẹn lại / nói bận là cùng một ý: đáp một tiếng chờ, không hỏi gì, không xin lỗi lại.
+    const botCuoiHoan = lichSuRows.filter((m) => !laTinNguoi(m.sender)).slice(-2).map((m) => m.body ?? "").join(" ");
+    const vuaHoan = /lúc nào .{0,25}rảnh|cứ thong thả|cứ lo việc|em chờ .{0,25}nha|không hỏi lại/i.test(botCuoiHoan);
+    if (vuaHoan && !imageUrl && !humanActive && laCheDoAi && bongAi) {
+      const [kH, ydH, tgH0] = await Promise.all([bongAi, yDinhAi(), gatTach(text)]);
+      const khongDuLieu = !!kH?.ket && !(kH.truong?.length) && !(kH.kienThuc?.length) && !(kH.capNhat?.length);
+      const chiHenHayGat = ydH?.loai === "hoan" || (tgH0?.gat === true && tgH0.ca === true);
+      if (khongDuLieu && chiHenHayGat && !(await baoDangLuot(() => false)) && !(kH?.hoiLai?.co_hoi)) {
+        return await traLoiSeller([`Dạ vâng ạ, em chờ ${cachGoi} nha.`], { hoan: true, loai_cau: ydH?.loai === "hoan" ? "hoan_lai" : "hoan_gat" });
+      }
+    }
     if (!imageUrl && !humanActive && laCheDoAi && (dsMo.length > 0 || !!pendingReq) && !/em chưa chắc ý/.test(cauBotThat ?? "")) {
       const [dyL, ydL, kL] = await Promise.all([dongYAi(), yDinhAi(), bongAi]);
       const lech = yLuotLech(dyL, ydL);
@@ -6423,7 +6479,14 @@ Deno.serve(async (req) => {
         const g = (btRow?.boc_tach as { phuong_goi_y?: unknown } | null)?.phuong_goi_y;
         if (g && typeof g === "object" && typeof (g as GoiYPhuong).phuong === "string") goiYPhuong = g as GoiYPhuong;
         // 01/10/2026: gợi ý "phường X thuộc quận Y, nhà mình ở Y hay Z" — khách gọi tên quận Y cũng là gật.
-        if (goiYPhuong && (await gatLuot(() => laDongY(dapAn)) || (goiYPhuong.doi_quan && nhacTenQuan(dapAn, goiYPhuong.quan)))) { dapAn = goiYPhuong.phuong; nhanGoiYPhuong = true; }
+        // SRS-5.1zzzzzb (khách mô phỏng 11/10: "Quận 12 hay Quận Gò Vấp?" → "dạ, nhà bác ở Gò Vấp đó cháu…" → "dạ" bị đọc là gật, tin ghi
+        // phường của Quận 12): câu lệch quận hỏi CHỌN quận — khách gọi tên quận tin đang ghi là chọn vế đó, lời "dạ / đúng rồi" kèm theo không
+        // phải gật gợi ý. Gật trơn hay gọi tên quận của phường gợi ý thì nhận như cũ (LQ-02/03).
+        const quanTinGoiY = pendingReq.listings?.district ?? null;
+        const chonQuanTin = !!goiYPhuong?.doi_quan && nhacTenQuan(dapAn, quanTinGoiY) && !nhacTenQuan(dapAn, goiYPhuong.quan);
+        const nhanGoiY = !!goiYPhuong && !chonQuanTin &&
+          (await gatLuot(() => laDongY(dapAn)) || (!!goiYPhuong.doi_quan && nhacTenQuan(dapAn, goiYPhuong.quan)));
+        if (goiYPhuong && nhanGoiY) { dapAn = goiYPhuong.phuong; nhanGoiYPhuong = true; }
         // SRS-5.1zk (bắn thử thu-dc4-08: hỏi phường, khách "nhà ở 77 hẻm 3m Xô Viết Nghệ Tĩnh" → địa chỉ luật giữ "3m"): chế độ
         // `ai` — địa chỉ trong câu trả lời câu phường lấy của AI (bỏ bề rộng), tên đường AI ghi cột street; luật chỉ khi AI hỏng.
         const kqAiPhuong = laCheDoAi && bongAi ? await bongAi : null;

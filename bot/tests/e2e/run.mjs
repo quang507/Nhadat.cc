@@ -10130,6 +10130,101 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }
+// ── SRS-5.1zzzzzb (11/10/2026, khách mô phỏng lượt bốn): lời bot chỉ KHẲNG ĐỊNH điều có nguồn (lời chủ nhà / đã ghi / dữ liệu tra) — kể cả
+// câu hỏi gợi ý giá trị; dữ liệu tra địa danh vào ngữ cảnh model; diện tích "4 x 16"; câu lệch quận; đang hoãn không hỏi tiếp.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocY = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laYLuotY = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+  const rongY = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null },
+    dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, doc_lai: null, khong_biet: null };
+  const TIN_GV = { deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", can_chu_duyet: true, location_raw: "hẻm Quang Trung", street: "Quang Trung",
+    ward: null, district: "Quận Gò Vấp" };
+  let n = 0;
+  const dung = ({ tin = TIN_GV, cauTreo = null, xung = "bác", botNoi = [] } = {}) => {
+    fresh((d) => {
+      seedKho(d);
+      for (const p of ["Phường Gò Vấp", "Phường An Hội Đông", "Phường Thông Tây Hội"]) d.insert("duong", { ten: "Quang Trung", ten_khong_dau: "quang trung", phuong: p, quan_cu: "Quận Gò Vấp" });
+    });
+    const uid = `thu-nn-${++n}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: xung, seller_type: "ccrb" }).data;
+    const L = db().insert("listings", { code: `BDS-NP-GV-07${n}`, seller_id: s.id, ...tin }).data;
+    s.active_listing_id = L.id;
+    if (cauTreo) db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
+    if (botNoi.length) {
+      const c = db().insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-11T01:00:00Z" }).data;
+      for (const b of botNoi) db().insert("messages", { conversation_id: c.id, sender: "bot", body: b, created_at: new Date().toISOString() });
+    }
+    return { uid, s, L };
+  };
+  const goi = async (uid, text, ai = {}, loi = "Dạ vâng ạ.", soat = null) => {
+    globalThis.__model = { parse: (p) => soat && laLuotSoatKhen(p) ? soat : (laBocY(p) || laYLuotY(p)) ? { ...rongY, ...ai } : OUT(), create: () => loi };
+    const n0 = globalThis.__calls.length;
+    const r = await send({ external_user_id: uid, text });
+    const reps = r.body?.replies ?? [];
+    const cl = globalThis.__calls.slice(n0).filter((c) => c.kind === "create").map((c) => JSON.stringify(c.params?.messages ?? "")).join("\n");
+    return { r, reps, rep: reps.join(" | "), cl };
+  };
+  const lr = (L) => db().t.listings.find((x) => x.id === L.id);
+  const NX = (cau, can_cu = null, o = {}) => ({ cau, khang_dinh: cau, can_cu, kieu: "nhac_lai", danh_gia_thi_truong: false, ...o });
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+
+  // (1) Hỏi địa danh: model bịa phường + câu hỏi gợi ý → cả hai bị bỏ; câu lệnh có DỮ LIỆU TRA CỨU từ bảng tên đường.
+  for (const [ma, cau, loi, soat] of [
+    ["01 (ca gốc)", "dạ phường nào cháu, bác quên mất rồi, hẻm Quang Trung ở phường nào nhỉ",
+      "Vâng ạ. Hẻm Quang Trung ở phường Thạnh Lộc bác ơi. Vậy nhà bác ở phường Thạnh Lộc đúng không bác?",
+      { nhan_xet: [NX("Hẻm Quang Trung ở phường Thạnh Lộc bác ơi."), NX("Vậy nhà bác ở phường Thạnh Lộc đúng không bác?", null, { goi_y: true })] }],
+    ["02 (cách nói mới)", "chỗ bác ở thuộc phường gì vậy cháu, bác cũng không rõ",
+      "Dạ chỗ bác thuộc Phường 17 đó bác. Nhà bác ở Phường 17 phải không bác?",
+      { nhan_xet: [NX("Dạ chỗ bác thuộc Phường 17 đó bác."), NX("Nhà bác ở Phường 17 phải không bác?", null, { goi_y: true })] }],
+  ]) {
+    const { uid } = dung({ cauTreo: "phuong" });
+    const a = await goi(uid, cau, { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "dia_danh" } }, loi, soat);
+    check(`ZZZZZB-${ma} khách hỏi phường của đường, model bịa phường + hỏi gợi ý → cả câu khẳng định lẫn câu hỏi gợi ý bị bỏ; câu lệnh có DỮ LIỆU TRA CỨU (3 phường từ bảng tên đường)`,
+      !/Thạnh Lộc|Phường 17/.test(a.rep) && /DỮ LIỆU TRA CỨU/.test(a.cl) && /Phường An Hội Đông/.test(a.cl) && /dia_danh|ĐỊA DANH/.test(a.cl),
+      JSON.stringify({ rep: a.rep, cl: a.cl.slice(0, 300) }));
+  }
+  // (1b) Đối chứng: câu kể đúng các phường trong DỮ LIỆU TRA (căn cứ chép từ khối đó) → giữ.
+  {
+    const { uid } = dung({ cauTreo: "phuong" });
+    const cau = "hẻm Quang Trung ở phường nào nhỉ cháu";
+    const loi = "Dạ đường Quang Trung ở Quận Gò Vấp đi qua Phường Gò Vấp, Phường An Hội Đông, Phường Thông Tây Hội. Nhà bác gần đoạn nào ạ?";
+    const b = await goi(uid, cau, { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "dia_danh" } }, loi,
+      { nhan_xet: [NX("Dạ đường Quang Trung ở Quận Gò Vấp đi qua Phường Gò Vấp, Phường An Hội Đông, Phường Thông Tây Hội.", "Phường Gò Vấp, Phường An Hội Đông, Phường Thông Tây Hội")] });
+    check("ZZZZZB-03 (đối chứng) câu kể đúng các phường lấy từ DỮ LIỆU TRA CỨU (căn cứ có trong khối đó) → giữ", /Phường An Hội Đông/.test(b.rep), b.rep);
+  }
+
+  // (2) Diện tích "4 x 16" (AI) khi đang hỏi kết cấu → ghi kích thước, không hỏi lại diện tích.
+  for (const [ma, cau, cum] of [["04 (ca gốc)", "dạ nhà bác 1 trệt 1 lầu thôi cháu, diện tích 4 mét x 16 mét", "4 mét x 16 mét"],
+    ["05 (cách nói mới)", "trệt 2 lầu nha em, đất 5 x 20 mét", "5 x 20 mét"]]) {
+    const { uid, L } = dung({ tin: { ...TIN_GV, ward: "Phường Gò Vấp" }, cauTreo: "ket_cau", xung: "anh" });
+    const gt = cum.replace(/\s*mét/g, "");
+    await goi(uid, cau, { truong: [T("ket_cau", /1 trệt 1 lầu/.test(cau) ? "1 trệt 1 lầu" : "trệt 2 lầu", /1 trệt 1 lầu/.test(cau) ? "1 trệt 1 lầu" : "trệt 2 lầu"), T("dien_tich", gt, cum)] });
+    const f = db().t.listing_facts.filter((x) => x.listing_id === L.id && x.question === "dien_tich").map((x) => x.answer);
+    check(`ZZZZZB-${ma} AI dien_tich «${gt}» (ngang × dài) khi hỏi kết cấu → ghi kích thước`, f.some((x) => /^\d+x\d+$/.test(x ?? "")), JSON.stringify({ f, treo: db().t.info_requests.filter((q) => q.listing_id === L.id && q.status === "pending").map((q) => q.question) }));
+  }
+
+  // (3) Câu lệch quận: khách gọi tên quận tin đang ghi (kèm "dạ") → không ghi phường quận khác.
+  {
+    const { uid, L } = dung({ tin: { ...TIN_GV, boc_tach: { phuong_goi_y: { phuong: "Phường An Phú Đông", quan: "Quận 12", duong: "", doi_quan: true } } }, cauTreo: "phuong" });
+    const c = await goi(uid, "dạ, nhà bác ở Gò Vấp đó cháu, hẻm Quang Trung, bác vẫn nhớ là ở Gò Vấp", { dong_y: "dong_y", dong_y_trich: "dạ" });
+    check("ZZZZZB-06 (ca gốc) 'Quận 12 hay Gò Vấp?' → 'dạ, nhà bác ở Gò Vấp…' → KHÔNG ghi Phường An Phú Đông, quận giữ Gò Vấp, hỏi phường",
+      lr(L).ward !== "Phường An Phú Đông" && lr(L).district === "Quận Gò Vấp" && /phường/i.test(c.rep), JSON.stringify({ ward: lr(L).ward, q: lr(L).district, rep: c.rep }));
+  }
+
+  // (4) Đang hoãn: khách nói bận / hẹn lại → một câu chờ, không xin lỗi lại, không hỏi.
+  for (const [ma, cau] of [["07 (ca gốc)", "anh đang bận, tối nói tiếp nhé"], ["08 (cách nói mới)", "tối nhắn anh nhé"]]) {
+    const { uid } = dung({ tin: { ...TIN_GV, ward: "Phường Gò Vấp" }, cauTreo: "do_rong_duong", xung: "anh",
+      botNoi: ["Dạ em xin lỗi, em hỏi dồn quá. Lúc nào anh rảnh nhắn em là em làm tiếp liền nha."] });
+    const d = await goi(uid, cau, { y_dinh: { loai: "hoan", trich_dan: cau } }, "Dạ em chờ anh. Đường trước nhà rộng mấy mét anh ạ?");
+    check(`ZZZZZB-${ma} bot vừa hoãn, «${cau}» → một câu chờ, không xin lỗi lại, không câu hỏi`,
+      /em chờ/.test(d.rep) && !/xin lỗi/.test(d.rep) && !/\?/.test(d.rep), d.rep);
+  }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
 // ── kết: BẤT BIẾN TOÀN BỘ ──
 soatDbBatBien("(cuối)");
 if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_DUMP, JSON.stringify(BB, null, 1));

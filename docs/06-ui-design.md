@@ -528,6 +528,18 @@ Sau khi gộp: `bun run prompt --day` (khoá `cau_hoi_mau`, `cau_tien_dinh`, `se
 
 Sau khi gộp: `bun run prompt --day` (khoá `cau_tien_dinh`, `fee_rules`).
 
+### Ba nguồn sự thật của lời bot — 11/10/2026 (SRS-5.1zzzzzb)
+
+[nguồn: lượt khách mô phỏng thứ tư 11/10/2026: "Hẻm Quang Trung ở phường Thạnh Lộc bác ơi. Vậy nhà bác ở phường Thạnh Lộc đúng không bác?" (phường bịa, sai quận); "anh chị định để giá 3 tỷ 2 là chuẩn rồi ạ"]
+
+| Chỗ | Đổi | Giữ |
+|---|---|---|
+| `TONE_RULES` (dòng Trung thực) | thêm khối DỮ LIỆU TRA CỨU vào danh sách nguồn; "kiến thức riêng của em không phải nguồn"; địa danh / giá khu / quy hoạch chỉ theo khối tra, không tra ra thì nói em chưa tra được; cấm câu hỏi gợi ý "ở phường X đúng không" với X tự nghĩ ra | các luật trung thực cũ (không bịa số, không đánh giá thị trường, không hứa kiểm tra rồi báo) |
+| Chỉ dẫn hỏi ngược `dia_danh` (mới) | khách hỏi đường / hẻm thuộc phường, quận nào → trả lời đúng theo khối tra; nhiều phường thì kể và hỏi gần đoạn nào; không tra ra thì xin xem sổ hồng | chỉ dẫn `du_an` cho câu hỏi về dự án |
+| Câu chờ sau lời hoãn (code) | "Dạ vâng ạ, em chờ {ac} nha." khi bot vừa hoãn mà khách chỉ gật / hẹn lại / nói bận — không hỏi, không xin lỗi lại | câu hoãn lần đầu |
+
+Sau khi gộp: `bun run prompt --day` (khoá `tone_rules`).
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |
