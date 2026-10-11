@@ -22,6 +22,7 @@ import { cauHoiMau, dienTen, dsHoiBu, SELLER_SCRIPT_RULES, tenTroLy, TONE_RULES 
 import { loaiDoc } from "../_shared/tin-nhap.ts";
 import { boGachCheo, doiTuXung, giuCauDungTen } from "../_shared/extraction/van-tra-loi.ts";
 import { cachGoiKhach, hocXungHoTuLichSu, suyTuXungHo } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { khongBietCua } from "../_shared/extraction/kiem-bang-chung.ts";
 
 const OutSchema = z.object({
   message: z.string().describe("Tin nhắn Zalo gửi người bán, tiếng Việt"),
@@ -80,7 +81,8 @@ Deno.serve(async (req) => {
   if (mErr) return jsonResponse({ error: mErr.message }, 500);
   // FR-223: câu nhánh theo câu trả lời — vòng hỏi bù hỏi cùng bộ câu với chat-reply.
   // 01/10/2026: câu AI đã thấy KHÔNG áp dụng cho căn này (có trích dẫn lời chủ nhà — chat-reply `khongHoiAi`) thì hỏi bù cũng bỏ.
-  const khongHoi = new Set<string>(((listing.boc_tach as { khong_hoi?: unknown } | null)?.khong_hoi as string[] | undefined) ?? []);
+  // SRS-5.1zzzzz: ô chủ nhà đã nói KHÔNG BIẾT (chat-reply ghi `boc_tach.khong_biet`) thì hỏi bù cũng không hỏi lại.
+  const khongHoi = new Set<string>([...(((listing.boc_tach as { khong_hoi?: unknown } | null)?.khong_hoi as string[] | undefined) ?? []), ...khongBietCua(listing.boc_tach)]);
   const missing = (await thieuCoReNhanh(db, listing_id, missingTho)).filter((m) => !khongHoi.has(m.fact_key));
 
   // Không hỏi lại điều đang chờ trả lời (chống spam — INS-09). Một truy vấn

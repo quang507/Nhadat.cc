@@ -3262,6 +3262,49 @@ Hai lỗi giọng còn lại của lượt a1 ("Anh để lại giá 10 tỷ có
 
 **Kiểm (đỏ khi tắt từng bản sửa, đã chạy)**: e2e ZZZZY-01 (ca gốc lửng) / 02 (cách nói mới) · 03 / 04 (ca gốc xoá ý + chốt tin không thêm lại) / 05 (cách nói mới, không chờ duyệt) · 06 (tiền tố "riêng:") · 07 (ca gốc gật kèm 2 căn mới, AI) / 08 (cách nói mới, luật đỡ) · 09 (mảnh về căn 3) / 10 (giấy tờ thường) · 11 (toàn thổ cư) · 12 (ca gốc nghĩa từ) / 13 (cách nói mới); `bot/tests/sql/ket-cau-phu-dinh.sql` (5 ca, đỏ khi không có migration); `kiem-bang-chung.mjs` ZZZZY-K1…K5; `van-tra-loi.mjs` ZZZZY-V1…V6; `re-nhanh.mjs` ZZZZY-R1/R2; `tin-nhap-rao.mjs` ZZZZY-T1…T5.
 
+### SRS-5.1zzzzz · Lỗi từ lượt khách mô phỏng thứ ba: khách "không biết", tin chờ lên kệ, gán mảnh trùng, số phòng là khoảng, phí hỏi lại (11/10/2026)
+
+`[nguồn: lượt mo-phong.yml thứ ba 11/10/2026 sau khi deploy SRS-5.1zzzzy (5 persona; 5/5 ghi đúng ô 100%, 4/5 lên kệ) — log từng lượt AI cho thấy AI đọc ĐÚNG ở mọi ca dưới đây, lỗi nằm ở tầng code; chủ dự án 11/10: "fix đi, giờ có AI hiểu schematic rồi mà vẫn lắm lỗi vậy hả"]`
+
+**Vì sao AI đọc đúng mà vẫn lỗi.** Cả bảy nhóm lỗi đều là một trong ba hình: (a) không có KÊNH để AI nói điều nó đã hiểu (khách "không biết"), nên luật cũ quyết thay; (b) code soạn câu từ nhãn / chuỗi chép sẵn thay vì từ trạng thái thật; (c) code không kiểm đầu ra AI với dữ liệu đang có (mở tin trùng đường, kể lại số cũ thành "sửa").
+
+**1. "ko biết cụ thể đường, chỉ biết xã thôi" → địa chỉ "Ko biết cụ thể đường" lên tiêu đề tin; "chị không biết phường nào" → hỏi phường bốn lần.**
+- Lớp lỗi: không có kênh "khách KHÔNG BIẾT điều đang hỏi". AI để trống ô (đúng), nhưng địa chỉ / phường là câu "AI trống thì luật đỡ" (`CAU_AI_DOC_TRUOC_LUAT_DO`) — luật địa chỉ thấy chữ "xã" nên ghi cả câu; với phường, luật "không biết" chỉ khớp khi câu MỞ ĐẦU bằng "không" (`KHONG_BIET_PHUONG` neo `^`), và không có chỗ nhớ nên ô lõi bị hỏi lại tới trần ba lần (SRS-5.1zzzzr).
+- Sửa: lượt AI nhỏ (`doc-y-luot.ts`, không đụng khuôn bóc tách đang sát giới hạn grammar — DC-13) thêm `khong_biet` (cụm chép nguyên văn); code kiểm trích dẫn (`docKhongBiet`). Có cụm đó mà AI không đưa giá trị cho câu đang hỏi → câu treo KHÔNG lấy chữ của luật (mọi câu dữ kiện, `CAU_KHONG_BIET_DUOC`), thôi câu kể cả khi khách nói một phần, nhớ ô ở `boc_tach.khong_biet` (`ghiKhongBiet`). Câu kế (`khongHoiAi`), vòng hỏi lại ô lõi và hỏi bù (`ask-seller`) đều đọc danh sách này qua MỘT hàm (`khongBietCua`). Câu lệnh dặn model đáp nhẹ "không sao", không hỏi lại.
+- Chỗ khác cùng lớp: `KHONG_BIET_PHUONG` và các luật "không nhớ / chưa rõ" trong `phanLoaiCauTraLoi` (câu số) vẫn là lưới khi AI không chạy — không thêm từ vào regex. Ô lõi để lên kệ (phường) không mất hẳn: được nhắc lại MỘT lần lúc chủ nhà muốn đăng, kèm chỗ tìm (mục 2).
+
+**2. Gật / "đăng đi" mà tin chưa lên kệ được → "Tin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm chị vài thông tin nữa nha", rồi không hỏi gì.**
+- Lớp lỗi: hai đường cùng việc "tin đã duyệt mà chưa đủ `listing_du_dang_tin` (giá, diện tích, phường)" viết hai câu khác nhau — nhánh "đăng đi" nói đúng thứ thiếu và tra phường, nhánh gật bản nháp nói chung chung.
+- Sửa: MỘT hàm `noiThieuDeDang` cho cả hai nhánh: nêu đúng thứ thiếu; thiếu phường thì mở câu phường, tra được từ tên đường (và chủ nhà chưa nói không biết) thì hỏi xác nhận, không thì câu mới `dang_luon_thieu_phuong` nói chỗ tìm phường (sổ hồng, hoá đơn điện nước).
+- Chỗ khác cùng lớp: lời hẹn sau duyệt (`huaSauDuyet`) vẫn nêu thứ thiếu như cũ.
+
+**3. "Dạ em ghi độ rộng hẻm trước nhà, đường vào (mặt tiền hay hẻm) rồi ạ".**
+- Lớp lỗi: câu ghi nhận ghép từ `FACT_LABELS` — đó là CÂU HỎI, không phải tên ô.
+- Sửa: nhánh ghi fact ngoài câu treo dùng nhãn ngắn `nhanGhi` (cùng bảng với 🤖, `nhanNgan`), mỗi nhãn một lần. Chỗ khác cùng lớp: dòng 📝 gán mảnh và 🤖 đã dùng `nhanGhi` / `nhanNgan`; các chỗ còn `FACT_LABELS` là câu lệnh cho model (đúng nghĩa câu hỏi), không gửi khách.
+
+**4. Môi giới: bot hỏi loại căn hẻm Nguyễn Trãi, khách "nhà phố anh, hẻm Nguyễn Trãi quận 5 ạ" → mở tin trùng BDS-NP-XX-0002 rồi hỏi loại lần nữa.**
+- Lớp lỗi: đầu ra lượt gán mảnh (AI) không được kiểm với dữ liệu đang có — "MOI" là mở tin.
+- Sửa: code kiểm — mảnh "MOI" gọi đúng TÊN ĐƯỜNG của căn đang được hỏi (trừ khi câu treo là bản nháp chờ duyệt) là trả lời căn đó; prompt gán mảnh nói rõ nhắc lại nơi chốn để trả lời câu đang hỏi không phải căn mới.
+- Chỗ khác cùng lớp: mảnh về căn đã có ghi thẳng vào căn đó (không vị trí / loại) — giữ; mảnh MOI ở đường khác vẫn mở tin (e2e đối chứng).
+
+**5. "con chị nói chia được khoảng 4-5 phòng để cho thuê" → 4 phòng ngủ.**
+- Lớp lỗi: ô ĐẾM nhận giá trị khoảng; kiểm nhẹ (production) chỉ đòi con số có trong trích dẫn.
+- Sửa: kiểm HÌNH giá trị (`laSoDemKhoang`, cả kiểm đủ lẫn kiểm nhẹ): phòng ngủ / WC / tầng căn hộ là khoảng ("4-5", "3 hoặc 4") → bỏ; prompt: "chia được N phòng cho thuê" là tiềm năng → `kien_thuc`.
+
+**6. Tin đã 90m², khách kể lại "diện tích 90m2" → "Dạ em sửa lại diện tích 90m2 rồi ạ".**
+- Lớp lỗi: đường lời sửa (`batSua`) không so với giá trị đang có. Sửa: cùng bộ so với 🤖 (`giaTriKhongDoi`) — trùng giá trị thì không ghi, không báo đã sửa.
+
+**7. Phí: hỏi bốn lần, lần nào cũng "mức tuỳ chính chủ hay môi giới"; có lần "em sẽ báo rõ khi chị quyết định rao"; gật duyệt kèm hỏi hoa hồng → câu hỏi bị bỏ qua.**
+- Lớp lỗi: câu phí không số không bao giờ dẫn tới hỏi vai (FEE_RULES bảo giữ ý CẦN HỎI); nhánh duyệt tin không đọc câu hỏi kèm lời gật.
+- Sửa: khách hỏi phí lần nữa khi em đã nói câu không số và vẫn chưa rõ vai → bong bóng phí + hỏi vai (`cauHoiVaiPhi`), câu đang hỏi vẫn mở (lượt bên lề), vai trả lời thì `dapPhiRoVai` báo số (SRS-5.1zzzzo). Nhánh duyệt: câu hỏi kèm được trả lời bằng bong bóng tiền định đã soạn (`hoiNguocDap`), không dẫn phí lần hai. FEE_RULES: không hẹn "sẽ báo sau".
+- Chỗ khác cùng lớp: nhánh không câu treo (r3) còn do model trả lời theo FEE_RULES — đã thêm luật cấm hẹn.
+
+**8. Người lớn tuổi: "nhà bác cũ rồi nhưng còn sử dụng được" → ô hiện trạng "bác cũ rồi…", bản nháp in ý đó hai dòng.**
+- Lớp lỗi: (a) ô nguyên văn giữ chữ xưng hô đầu cụm; (b) hai ô gần nghĩa (`hien_trang` tình trạng nhà, `hien_trang_su_dung` đang ở / trống) cùng mang một ý, bản nháp in cả hai.
+- Sửa: `giaTriNguyenVan` gọt chữ xưng hô đầu cụm cho các ô mô tả căn nhà (KHÔNG cho địa chỉ — "Cô Giang", "Bà Triệu" — và người đứng tên); bản nháp in dòng 🏠 chỉ khi khác ý dòng kết cấu (`trungY`).
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy)**: e2e ZZZZZ-01 (ca gốc đường) / 02 (cách nói mới "đường thì em chịu, ko nhớ tên đường đâu") / 03 (ca gốc phường) — tắt chặn "không biết" → 3 đỏ; 04 đối chứng (AI không nói không biết → địa chỉ ghi như cũ); 05 (ca gốc gật, thiếu phường, khách từng nói không biết) / 06 (cách nói mới, thiếu phường và diện tích) — trả câu "còn thiếu một chút" → 2 đỏ; 07 (ca gốc gán mảnh MOI cùng đường) — tắt kiểm → đỏ; 08 đối chứng (MOI đường khác vẫn mở tin); 09 (kể lại 90m²) — tắt → đỏ; 10 (ca gốc hỏi phí lần nữa) / 11 (cách nói mới "ăn bao nhiêu phần trăm") — tắt → 2 đỏ; 12 (gật duyệt kèm hỏi hoa hồng) — tắt → đỏ; 13 / 14 (lời ghi nhận ngoài câu treo) — trả `FACT_LABELS` → 14 đỏ (13 không đỏ: ô đường vào không vào nhánh này trong mock, giữ làm đối chứng). `kiem-bang-chung.mjs` ZZZZZ-K1…K8 — tắt `laSoDemKhoang` → K1/K2 kiểm nhẹ đỏ (kiểm đủ đã có luật "phòng ngủ phải có chữ ngủ"), tắt gọt xưng hô → K4/K5 đỏ, K6 đối chứng "Cô Giang"; `tin-nhap-rao.mjs` ZZZZZ-T1 (tắt → đỏ) / T2 đối chứng. e2e **1188/1188**, `kiem-bang-chung` 511/511, `tin-nhap-rao` 44/44.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

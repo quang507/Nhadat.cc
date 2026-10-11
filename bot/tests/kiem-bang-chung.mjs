@@ -1036,6 +1036,31 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   const t5 = tachKeRieng(["gần chợ", "riêng: con chị ở Úc", "Riêng:sẽ tăng giá"]);
   ok("ZZZZY-K5 tachKeRieng: tiền tố 'riêng:' (hoa / thường, có / không cách) tách ra, ý căn nhà giữ", t5.canNha.join() === "gần chợ" && t5.rieng.join("|") === "con chị ở Úc|sẽ tăng giá", JSON.stringify(t5));
 }
+// SRS-5.1zzzzz (khách mô phỏng 11/10): ô đếm không nhận KHOẢNG; xưng hô đầu cụm ô mô tả bị gọt; "không biết" phải có trích dẫn trong tin.
+{
+  const { docKhongBiet, khongBietCua } = await import("../supabase/functions/_shared/extraction/kiem-bang-chung.ts");
+  for (const nhe of [false, true]) {
+    datKiemNhe(nhe);
+    const t1 = "Dạ, con chị nó nói có thể chia được khoảng 4-5 phòng để cho thuê";
+    const k1 = kiemDeXuat([{ khoa: "so_phong_ngu", gia_tri: "4-5", trich_dan: "chia được khoảng 4-5 phòng để cho thuê", can: null }], t1);
+    ok(`ZZZZZ-K1${nhe ? " (kiểm nhẹ)" : ""} (ca gốc) so_phong_ngu '4-5' (chia phòng cho thuê) → bỏ`, k1.dat.length === 0, JSON.stringify(k1));
+    const t2 = "nhà chắc tầm 3 hoặc 4 phòng ngủ gì đó em";
+    const k2 = kiemDeXuat([{ khoa: "so_phong_ngu", gia_tri: "3 hoặc 4", trich_dan: "3 hoặc 4 phòng ngủ", can: null }], t2);
+    ok(`ZZZZZ-K2${nhe ? " (kiểm nhẹ)" : ""} (cách nói mới) '3 hoặc 4 phòng ngủ' → bỏ`, k2.dat.length === 0, JSON.stringify(k2));
+    const k3 = kiemDeXuat([{ khoa: "so_phong_ngu", gia_tri: "3", trich_dan: "3 phòng ngủ", can: null }], "nhà có 3 phòng ngủ em");
+    ok(`ZZZZZ-K3${nhe ? " (kiểm nhẹ)" : ""} đối chứng '3 phòng ngủ' → giữ`, k3.dat.length === 1, JSON.stringify(k3));
+  }
+  datKiemNhe(false);
+  const g1 = giaTriNguyenVan("hien_trang_su_dung", { khoa: "hien_trang_su_dung", gia_tri: "cũ, còn sử dụng được", trich_dan: "nhà bác cũ rồi nhưng còn sử dụng được", cum_goc: "nhà bác cũ rồi nhưng còn sử dụng được" });
+  ok("ZZZZZ-K4 (ca gốc) hiện trạng 'nhà bác cũ rồi nhưng còn sử dụng được' → không còn chữ 'bác'", !!g1 && !/bác/.test(g1) && /cũ rồi/.test(g1), String(g1));
+  const g2 = giaTriNguyenVan("phap_ly", { khoa: "phap_ly", gia_tri: "sổ hồng riêng", trich_dan: "chú có sổ hồng riêng", cum_goc: "chú có sổ hồng riêng" });
+  ok("ZZZZZ-K5 (cách nói mới) pháp lý 'chú có sổ hồng riêng' → không còn 'chú'", !!g2 && !/^chú/i.test(g2), String(g2));
+  const g3 = giaTriNguyenVan("vi_tri", { khoa: "vi_tri", gia_tri: "Cô Giang", trich_dan: "đường Cô Giang", cum_goc: "đường Cô Giang" });
+  ok("ZZZZZ-K6 đối chứng địa chỉ 'đường Cô Giang' giữ nguyên chữ 'Cô'", /Cô Giang/.test(g3 ?? ""), String(g3));
+  ok("ZZZZZ-K7 docKhongBiet: cụm có trong tin → nhận; cụm bịa → null",
+    docKhongBiet("ko biết cụ thể đường", "ko biết cụ thể đường, chỉ biết xã thôi") === "ko biết cụ thể đường" && docKhongBiet("không nhớ số nhà", "ko biết cụ thể đường") === null);
+  ok("ZZZZZ-K8 khongBietCua đọc boc_tach.khong_biet, rỗng khi không có", khongBietCua({ khong_biet: ["phuong", 3] }).join() === "phuong" && khongBietCua(null).length === 0);
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

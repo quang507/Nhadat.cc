@@ -25,6 +25,8 @@ rồi chia TIN MỚI thành các mảnh, mỗi mảnh gắn với đúng một m
 - Mảnh trả lời câu bot đang hỏi (CÂU ĐANG TREO) thuộc về căn của câu đó, trừ khi chữ nói rõ căn khác.
 - "còn nhà ở quận 11 …", "căn đất thì …", "căn kia …" → căn khớp nơi chốn / loại / cách người đó gọi trong hội thoại.
 - Nói về một bất động sản chưa có trong danh sách (nơi khác, loại khác, "còn 1 căn nữa ở …") → MOI.
+- Nhắc lại nơi chốn / tên đường của căn đang được hỏi để trả lời câu đó ("nhà phố anh, hẻm Nguyễn Trãi quận 5" khi đang hỏi loại căn
+  hẻm Nguyễn Trãi) là căn đó, KHÔNG phải MOI — kể cả khi danh sách chưa ghi quận.
 - Không đoán: mảnh không rõ thuộc căn nào thì gắn vào căn của CÂU ĐANG TREO.
 - trich phải chép NGUYÊN VĂN từ tin mới; mọi chữ của tin mới nên nằm trong đúng một mảnh.`;
 

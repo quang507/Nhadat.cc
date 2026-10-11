@@ -121,8 +121,9 @@ ok("(11) nhánh hết câu trước bản nháp (r2) hỏi đúng ô vừa mở 
   /nextKey = het\.khoaMo/.test(cr) && /firstKey = het\.khoaMo/.test(cr));
 ok("(11) câu lệnh người bán: chỉ ĐỊA CHỈ được gộp hai ý; còn lại không gắn thêm ý vào câu hỏi",
   /riêng địa chỉ được gộp hai ý/u.test(SELLER_SCRIPT_RULES) && /không gắn thêm ý vào câu hỏi/u.test(SELLER_SCRIPT_RULES));
-ok("(11) lượt chốt tin và sổ ghi của lượt cùng hỏi MỘT chủ `giaTriKhongDoi` (không tự so riêng)",
-  (cr.match(/giaTriKhongDoi\(/g) ?? []).length === 2 && /doi: !truoc \|\| !giaTriKhongDoi\(/.test(cr));
+// SRS-5.1zzzzz: thêm chỗ thứ ba — lời sửa (`batSua`) kể lại đúng giá trị đang có thì không ghi, không báo "đã sửa".
+ok("(11) lượt chốt tin, sổ ghi của lượt và lời sửa cùng hỏi MỘT chủ `giaTriKhongDoi` (không tự so riêng)",
+  (cr.match(/giaTriKhongDoi\(/g) ?? []).length === 3 && /doi: !truoc \|\| !giaTriKhongDoi\(/.test(cr) && /if \(truoc && giaTriKhongDoi\(k, v,/.test(cr));
 ok("(11) giá trị câu rao nằm ở CỘT (không fact) là 'không đổi' — phường / giá / '4x15' / '3 lầu' ≡ '4 tầng'",
   ["phuong|Phường Phú Nhuận", "gia|9 tỷ 5", "dien_tich|4x15", "ket_cau|3 lầu", "ket_cau|4 tầng"].every((x) => {
     const [q, v] = x.split("|");

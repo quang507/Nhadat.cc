@@ -32,6 +32,9 @@ const YLuot = z.object({
   yeu_cau_o: z.enum(O_BO).nullable().describe("CHỈ khi yeu_cau = xin_bo_o: ô chủ nhà xin bỏ (hẻm, giá, phường, diện tích, phòng ngủ, số tầng, pháp lý, hướng, địa chỉ; bo_sung = một ý ở dòng \"Thêm\" của bản nháp). Không rõ ô nào thì null."),
   // SRS-5.1zzzzy: xin bỏ ý ở dòng "Thêm" — chỉ ra cụm, code chỉ bỏ mảnh có thật trong ghi chú đang lưu (`boYGhiChu`).
   bo_y: z.array(z.string()).nullable().describe("CHỈ khi yeu_cau_o = bo_sung: các ý chủ nhà xin bỏ khỏi dòng \"Thêm\", chép theo lời khách (\"con chị ở Úc\", \"sẽ tăng giá\"). Không thì null."),
+  // SRS-5.1zzzzz (11/10/2026, khách mô phỏng: "ko biết cụ thể đường, chỉ biết xã thôi" → luật ghi địa chỉ = "Ko biết cụ thể đường";
+  // "chị không biết phường nào" → bot hỏi phường bốn lần): lời KHÔNG BIẾT điều bot vừa hỏi là ý của hội thoại, đi lượt nhỏ này.
+  khong_biet: z.string().nullable().describe("Chủ nhà nói KHÔNG BIẾT / không nhớ / không rõ điều bot VỪA HỎI (cả câu hỏi hay phần chính của nó): chép NGUYÊN VĂN cụm đó ('ko biết cụ thể đường', 'chị không rõ phường nào'). Biết phần khác mà không biết phần được hỏi thì vẫn chép cụm không biết. Có trả lời được câu đang hỏi, hay không biết chuyện KHÁC → null."),
   // 03/10/2026 (bộ đo X04, SRS-5.1zt): "em bán căn hộ q7 3 tỷ để mua nhà Bình Thạnh 6 tỷ" — câu vừa bán vừa mua chỉ vào nhánh bán,
   // khuôn bóc tách tin bán không có chỗ cho nhu cầu mua nên vế mua rơi. Vế mua là ý của NGƯỜI, đi lượt nhỏ này.
   mua_kem: z.object({
@@ -76,6 +79,11 @@ LUẬT YÊU CẦU (yeu_cau) — chủ nhà HỎI về CHÍNH TIN của mình (th
   chuyện khác.
 yeu_cau_trich phải chép NGUYÊN VĂN từ TIN chủ nhà.
 
+LUẬT KHÔNG BIẾT (khong_biet) — bot vừa hỏi một điều, chủ nhà nói không biết / không nhớ / không rõ điều đó: "ko biết cụ thể đường,
+chỉ biết xã thôi" (bot hỏi đường) → "ko biết cụ thể đường"; "chị thực ra không biết chính xác là phường nào đâu" (bot hỏi phường) →
+"không biết chính xác là phường nào". Chủ nhà nói không biết MÀ vẫn đưa câu trả lời ("ko biết, chắc tầm 4m") → null. Không biết
+điều bot KHÔNG hỏi ("con chị không rõ giá thị trường") → null.
+
 LUẬT NGƯNG NHIỀU CĂN (ngung_hang_loat) — chủ nhà muốn ngưng rao / gỡ / ẩn NHIỀU căn trong một câu: "gỡ hết đi", "ngưng rao hết",
 "chỉ giữ căn Trần Hưng Đạo, ẩn hết còn lại", "ngưng hết trừ căn 2" → kieu an_het hoặc chi_giu, giu là các cụm chỉ căn giữ lại.
 Ngưng MỘT căn ("ngưng căn Nguyễn Trãi"), "bán rồi", hỏi "gỡ tin kiểu gì" → null.
@@ -104,6 +112,8 @@ export type YLuotLLM = {
   muaKem?: { khu_vuc: string | null; ngan_sach: string | null; loai: string | null; trich_dan: string } | null;
   /** SRS-5.1zzl: null = model nói không có ý ngưng nhiều căn; undefined = model không trả ô này. */
   ngungHangLoat?: { kieu: typeof KIEU_NHL[number]; giu: string[]; trich_dan: string } | null;
+  /** SRS-5.1zzzzz: cụm "không biết điều bot vừa hỏi" (nơi gọi kiểm trích dẫn `docKhongBiet`). null = không có; undefined = không trả. */
+  khongBiet?: string | null;
   /** SRS-5.1zzzu: tin không dấu viết lại có dấu (nơi gọi kiểm `docLaiHopLe`). null / undefined = không có. */
   docLai?: string | null;
 };
@@ -137,6 +147,7 @@ export async function docYLuotBangModel(
     ...("mua_kem" in o ? { muaKem: docMuaKemTho(o.mua_kem) } : {}),
     ...("ngung_hang_loat" in o ? { ngungHangLoat: docNHLTho(o.ngung_hang_loat) } : {}),
     ...(str(o.doc_lai) ? { docLai: str(o.doc_lai) } : {}),
+    ...("khong_biet" in o ? { khongBiet: str(o.khong_biet) } : {}),
   };
   return { ket: dy || yc || "ngung_hang_loat" in o ? ket : null, usage: r.usage };
 }

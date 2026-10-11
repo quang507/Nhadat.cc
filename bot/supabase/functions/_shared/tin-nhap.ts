@@ -22,7 +22,7 @@
 import { SPEC_COLS, thongSoNgan, type SpecRow } from "./thong_so.ts";
 import { tenNhan, tenNhanKhongTrung } from "./extraction/nhan.ts";
 import { donViGiaDep, vndThanhChu } from "./extraction/luat-tien.ts";
-import { laBoSungTrung } from "./extraction/khop-cau-tra-loi.ts";
+import { laBoSungTrung, trungY } from "./extraction/khop-cau-tra-loi.ts";
 import { diaChiHienThi, duongGiuaCau, duongHienThi, ghepDiaChi } from "./extraction/hien-thi-dia-chi.ts";
 
 /** FR-241 j: hiện trạng sử dụng gõ không dấu ("dang o", "de trong") → có dấu; chữ có dấu / cụm lạ giữ nguyên. */
@@ -333,7 +333,11 @@ export function soanTinNhap(t: ThamSoNhap): string {
   // FR-241 j (10 ca test làm khó 28/09): khách gõ "dang o" → bản tin in "🛋 Nội thất: hiện: dang o" — hiện trạng sử dụng không phải
   // nội thất, và chữ không dấu in nguyên. Tách dòng riêng; mấy cụm hiện trạng quen gõ không dấu thì in có dấu.
   them("🛋", "Nội thất", [l.furnishing ?? fact("noi_that")]);
-  them("🏠", "Hiện trạng", [chuanHienTrang(fact("hien_trang_su_dung"))]);
+  // SRS-5.1zzzzz (khách mô phỏng 11/10: "🏗 Kết cấu: … · cũ, còn sử dụng được" + "🏠 Hiện trạng: bác cũ rồi nhưng còn sử dụng được"): một ý
+  // một dòng — hiện trạng sử dụng cùng ý tình trạng nhà đã in ở dòng kết cấu thì không in lần hai.
+  const htSuDung = chuanHienTrang(fact("hien_trang_su_dung"));
+  const htNha = fact("hien_trang");
+  them("🏠", "Hiện trạng", [htSuDung && htNha && trungY(htSuDung, htNha) ? null : htSuDung]);
   // 17/09/2026 (chủ dự án): "các trường mà khách nói bổ sung sẽ ghi vào mô tả" — mọi fact
   // `bo_sung` (AI đọc thêm hay chủ nhà nói lệch câu hỏi) vào một dòng, cũ trước, không lặp.
   const boSung: string[] = [];

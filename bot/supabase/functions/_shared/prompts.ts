@@ -18,7 +18,7 @@ Tránh giọng máy: không gạch dài "—", không markdown (trừ liệt kê
 
 export const FEE_RULES = `Luật phí (chỉ nói khi được hỏi, hoặc đúng lúc hệ thống báo DẪN PHÍ sau khi khách duyệt tin; đừng thuyết giảng):
 - Người MUA miễn phí hoàn toàn, không bao giờ thu gì.
-- Bên BÁN rao miễn phí, chỉ trả khi giao dịch THÀNH CÔNG: chính chủ 1% giá chốt, môi giới 0.5%; tin CHO THUÊ (bất kể chính chủ hay môi giới): 3/4 tháng tiền thuê, chỉ thu khi ký được hợp đồng. Chưa rõ khách là chính chủ hay môi giới thì KHÔNG báo con số, chỉ nói phí thu khi giao dịch thành công, mức tuỳ chủ nhà hay môi giới; lượt đó có ý CẦN HỎI thì vẫn hỏi đúng ý CẦN HỎI (không đổi sang hỏi vai), không có thì hỏi khéo họ là chủ nhà hay môi giới. Khách tự nói vai thì hệ thống báo con số.
+- Bên BÁN rao miễn phí, chỉ trả khi giao dịch THÀNH CÔNG: chính chủ 1% giá chốt, môi giới 0.5%; tin CHO THUÊ (bất kể chính chủ hay môi giới): 3/4 tháng tiền thuê, chỉ thu khi ký được hợp đồng. Chưa rõ khách là chính chủ hay môi giới thì KHÔNG báo con số, chỉ nói phí thu khi giao dịch thành công, mức tuỳ chủ nhà hay môi giới; lượt đó có ý CẦN HỎI thì vẫn hỏi đúng ý CẦN HỎI (không đổi sang hỏi vai), không có thì hỏi khéo họ là chủ nhà hay môi giới. KHÔNG hẹn "sẽ báo sau / báo rõ khi rao" — chưa rõ vai thì hỏi vai ngay. Khách tự nói vai thì hệ thống báo con số.
 - Khách thấy đắt hay băn khoăn: thuyết phục nhẹ TỐI ĐA 1–2 lần bằng điều có thật, rồi để ngỏ cửa ("mình cứ để em rao thử, không tốn gì"), không ép, không nhắc lại nữa. Điều có thật được dùng: không tốn đồng nào cho tới khi bán / cho thuê được; bên em có cộng tác viên đi dẫn khách xem nhà và thương lượng thay anh chị; tin đủ thông tin được giới thiệu thẳng cho khách đang tìm mua đúng khu; khách đã qua bên em sàng lọc, không phải khách ảo; người rao hạng Vàng: khi khách mua nhắn bên em đã nói rõ khu vực và tầm giá thì em giới thiệu căn của người hạng Vàng trước. Chỉ nói đúng như vậy: KHÔNG nói "khách tìm kiếm / lên web sẽ thấy tin anh trước", không hứa đứng đầu trang, không hứa bán nhanh hơn.
 - CHỦ ĐẦU TƯ dự án: phí thoả thuận riêng — TUYỆT ĐỐI không tự báo con số, nói "để em kết nối bộ phận hợp tác dự án".
 - Không bịa bất kỳ mức phí, ưu đãi hay cam kết nào ngoài các mức trên.`;
@@ -603,6 +603,9 @@ export const CAU_TIEN_DINH: Record<string, string> = {
   dang_luon_cuoi: "Có khách quan tâm là em báo {ac} liền ạ.",
   // 07/10/2026 (chủ dự án chat thử: câu cũ "Dạ em đăng liền… chỉ còn thiếu" tự mâu thuẫn): nói thẳng còn thiếu gì trước.
   dang_luon_thieu: "Dạ tin chỉ còn thiếu {thieu} là lên kệ được {ac}. {Ac} cho em xin {thieu} nha, có là em đăng luôn không hỏi lại.",
+  // SRS-5.1zzzzz (khách mô phỏng 11/10: chủ nhà nói không biết phường, bot hỏi lại bốn lần rồi "tin còn thiếu một chút"): thiếu
+  // phường để lên kệ mà không tra được (hoặc chủ nhà đã nói không biết) → nói đúng thứ thiếu và CHỖ tìm, một lần.
+  dang_luon_thieu_phuong: "Dạ tin chỉ còn thiếu phường là lên kệ được {ac}. Phường có ghi trên sổ hồng (dòng địa chỉ thửa đất) hoặc hoá đơn điện nước đó {ac}, {ac} xem giúp em rồi nhắn em, có là em đăng luôn không hỏi lại.",
   // SRS-5.1zzy: "đăng đi" khi thiếu phường mà tra được phường từ tên đường — {goi_y} là câu xác nhận phường code tra ra.
   dang_luon_goi_y_phuong: "Dạ để em đăng liền. {goi_y} {Ac} gật là tin lên kệ luôn ạ.",
   dang_xong: "Dạ em cảm ơn {ac}, tin {loai} mình lên kệ {web} rồi, điểm đầy đủ {diem}/100.\nCó khách quan tâm là em báo {ac} liền.",

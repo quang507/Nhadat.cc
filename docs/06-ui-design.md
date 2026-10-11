@@ -514,6 +514,20 @@ Sau khi gộp: `bun run prompt --day` (khoá `tone_rules`, `seller_fewshot`).
 
 Sau khi gộp: `bun run prompt --day` (khoá `cau_hoi_mau`, `cau_tien_dinh`, `seller_fewshot`).
 
+### Khách không biết phường, hỏi vai khi hỏi phí lần nữa — 11/10/2026 (SRS-5.1zzzzz)
+
+[nguồn: lượt khách mô phỏng thứ ba 11/10/2026: "Tin còn thiếu một chút để đủ điều kiện đăng, em hỏi thêm chị vài thông tin nữa nha" (không nêu thiếu gì); phường hỏi bốn lần sau "chị không biết phường nào"; "Phí mức bao nhiêu tuỳ chị là chính chủ hay môi giới, em sẽ báo rõ khi chị quyết định rao ạ"; "Dạ em ghi độ rộng hẻm trước nhà, đường vào (mặt tiền hay hẻm) rồi ạ"]
+
+| Chỗ | Đổi | Giữ |
+|---|---|---|
+| `CAU_TIEN_DINH.dang_luon_thieu_phuong` (mới) | "Dạ tin chỉ còn thiếu phường là lên kệ được {ac}. Phường có ghi trên sổ hồng (dòng địa chỉ thửa đất) hoặc hoá đơn điện nước đó {ac}, {ac} xem giúp em rồi nhắn em, có là em đăng luôn không hỏi lại." — dùng cho cả gật bản nháp lẫn "đăng đi" khi không tra được phường | `dang_luon_goi_y_phuong` khi tra được phường từ tên đường (trừ khi khách đã nói không biết phường) |
+| Câu hỏi vai khi hỏi phí lần nữa (code, `cauHoiVaiPhi`) | "{Ac} là chính chủ hay môi giới để em báo đúng mức phí ạ?" sau câu phí không số | câu phí theo vai `cauPhi(vaiPhi(…))` |
+| `FEE_RULES` | thêm: không hẹn "sẽ báo sau / báo rõ khi rao" — chưa rõ vai thì hỏi vai ngay | các mức phí, luật thuyết phục |
+| Lời ghi nhận ngoài câu treo | đọc tên ô ngắn ("độ rộng hẻm trước nhà, đường vào"), không đọc câu hỏi | câu hỏi kế (`cauHoiMau`) |
+| Câu lệnh khi khách nói không biết | "Chủ nhà nói không biết … — đáp nhẹ một tiếng là không sao, KHÔNG hỏi lại câu đó" | các câu lệnh câu treo khác |
+
+Sau khi gộp: `bun run prompt --day` (khoá `cau_tien_dinh`, `fee_rules`).
+
 ## 6.9 Micro-copy web
 
 | Vị trí | Copy |
