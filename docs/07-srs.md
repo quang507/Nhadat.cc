@@ -3492,6 +3492,83 @@ Ngoài e2e:
 
 e2e **1218/1218**.
 
+### SRS-5.1zzzzze · Lần bảy qua bộ phát lại: chính sách phí là nguồn, người bán không rẽ sang nhánh mua, phường không có thật, giữ tin thiếu phường, số căn theo ngữ cảnh (12/10/2026)
+
+`[nguồn: chủ dự án 12/10/2026 sau lượt mo-phong.yml thứ bảy: "b đi, sửa hết từ gốc rồi merge" — (b) = giữ bắt buộc phường; bot nói rõ MỘT lần là thiếu phường chưa đăng được, giữ tin, thôi hỏi]`
+
+**Cách làm.** Lượt bảy là lượt đầu có cờ `ghi_ai`: năm ca thật vào `bot/tests/phat-lai/ca/` (TS-PHAT-LAI-01). Mỗi lỗi: thêm `ky_vong` vào ca, thấy
+ĐỎ khi phát lại trên code cũ, rồi mới sửa. Lỗi nằm sau một lượt đã sửa thì phát lại rẽ khác bản ghi (lượt sau không còn khớp), nên những lỗi
+đó kiểm bằng e2e.
+
+**Lớp lỗi (1) — lượt soát không biết chính sách của chính bên em.** Khách hỏi "phí 1% đó lấy từ chị hay từ bên mua?". Model trả lời đúng
+(bên bán trả, người mua miễn phí). Lượt soát `kiem-khen.ts` chỉ nhận ba nguồn: lời chủ nhà, đã ghi, dữ liệu tra. Nó bỏ cả câu, khách nhận
+"Vâng ạ." cụt hai lần.
+- **Sửa:** `soatNhanXetBangModel` nhận thêm khối `CHÍNH SÁCH CỦA BÊN EM` (`FEES` — cùng bản luật phí model đã thấy khi viết), luật soát gọi nó
+  là nguồn hợp lệ; `nhanXetKhongCanCu` đối chiếu căn cứ trên nguồn có luật phí.
+- **Cùng lớp:** câu soạn sẵn ở `dapHoiNguocTienDinh` (`van-tra-loi.ts`). Phí đã nói có số rồi mà khách hỏi tiếp về phí, câu ghép là "chỉ có
+  đúng khoản phí đó". Câu này chọn theo CHỦ ĐỀ nên trả lời một câu khác câu khách hỏi. Nay nhánh đó trả rỗng, để model trả lời theo luật phí.
+  Hỏi thuế (`thue_phi`) vẫn đi câu riêng như 5.1zzzzzc.
+
+**Lớp lỗi (2) — đoán Ý đổi vai bằng từ khoá.** Câu trên có chữ "mua nhà", nên luật `hoiMuaTho` rẽ người ĐANG rao sang nhánh MUA và ghi hồ sơ
+mua "mua hay thuê: mua".
+- **Sửa:** người đã có hồ sơ bán mà luật thấy chữ mua / thuê / tìm thì AI phân vai quyết. `phanVaiBangModel(…, daLaNguoiBan = true)` thêm lời dặn
+  `NGUOI_BAN_CU`: chỉ trả `mua` khi chính họ muốn tìm mua / thuê thêm căn khác. Hỏi phí, bên mua của căn đang bán, tin của họ → `ban`. Luật chỉ
+  đỡ khi model hỏng.
+- **Cùng lớp:** lượt phân vai người lạ (FR-205) đã do AI quyết từ trước.
+
+**Lớp lỗi (3) — luật bóc tách cho tính, bộ kiểm số không cho.** Khách nói "4 mét rộng 16 mét sâu", AI ghi diện tích 64. Luật bóc tách dặn được
+tính ngang × dài, nhưng bộ kiểm số bỏ vì 64 không có trong cụm. Kết quả: bot hỏi lại diện tích ba lần.
+- **Sửa:** `laTichTrongCum` — diện tích bằng TÍCH hai số đo trong chính cụm trích là có bằng chứng. Áp cho cả kiểm đủ lẫn kiểm nhẹ, cùng chỗ
+  với `laTongTrongCum` (tổng phòng ngủ).
+
+**Lớp lỗi (4) — AI đánh số căn theo ngữ cảnh hội thoại, code đọc số căn trong MỘT tin.** Môi giới đã có 2 căn nhắn "căn nữa hẻm An Dương Vương
+4x10 cấp 4 5 tỷ". AI đánh `can: 3` cho mọi ô. Mọi chỗ đọc (`docAiChinh`, so cột, kiểm lệch) bỏ ô có `can > 1`, nên tin mới mở RỖNG.
+- **Sửa (một chỗ):** `bocRaoBangModel` (`boc-rao.ts`). Tin chỉ có MỘT số căn khác nhau là tin về một căn: số đó thành `null` trước mọi nơi đọc.
+  Nhánh gán mảnh và nhánh tin nguyên lượt cùng được (e2e ZZZZZE-05 đi nhánh tin nguyên lượt).
+- **Cùng lớp:** `canTheoAi`. AI gán cụm CHUNG ("em muốn đăng luôn", "cả hai đều sổ riêng") cho nhiều căn, nên hai căn cùng mốc, đoạn chữ căn
+  đầu rỗng, cả lượt chia bị bỏ. Nay mốc của một căn chỉ tính từ cụm trích RIÊNG của căn đó.
+
+**Lớp lỗi (5) — câu không ghi được vẫn bị coi là đã trả lời.** Hỏi phường, khách đáp "Phường Nguyễn Trãi ạ" (không có phường đó). Cửa ghi
+`ghiFact` từ chối (`boQua`), nhưng câu treo vẫn đóng "đã trả lời" và bot hỏi sang sổ như đã có phường.
+- **Sửa:** cửa ghi từ chối fact phường VÀ AI đọc ra khách nói một tên phường (ô phường hay câu trả lời, trước kiểm bằng chứng) → giữ câu
+  phường. Bot nói thẳng "em chưa tìm thấy phường …" và gợi ý theo đường nếu tra được (`cauHoiPhuongGoiY`), không thì chỉ chỗ tìm trên sổ hồng.
+  Chữ luật nhặt khi AI im ("xhr") không phải khách nói tên phường, nên đi đường cũ (XN-CHAC-02).
+
+**Lớp lỗi (6) — không biết phường mà bảo đăng: hứa suông và hỏi mãi (cách (b)).** Khách không biết phường, không tìm thấy sổ, bảo "cứ đăng
+trước". Model hứa "chị cứ đăng trước được", rồi lúc duyệt `noiThieuDeDang` mở lại câu phường. Gốc có hai chỗ:
+- Nhánh "đủ rồi" (`noiDuRoi`) đóng mọi câu treo TRƯỚC khi khối `khong_biet` chạy, nên ô khách không biết bị quên. Nay nhánh đó gọi
+  `ghiKhongBiet` trước khi đóng.
+- `noiThieuDeDang` (một chỗ cho gật duyệt / "đăng đi" khi chưa lên kệ): chỉ thiếu phường mà khách đã nói không biết, hoặc em đã nói "chỉ còn
+  thiếu phường" rồi → câu tiền định mới `dang_giu_thieu_phuong`. Câu đó nói một lần: tin cần phường mới lên kệ, em giữ tin, biết thì nhắn. Không
+  mở lại câu phường. Thiếu cả diện tích / giá thì câu "còn thiếu …" nói đủ, vẫn không mở lại câu phường khách đã nói không biết.
+- Khối `khong_biet` của câu treo phường + `du_roi` / lệnh đăng: trả thẳng câu của `noiThieuDeDang`, model không viết lượt đó.
+- e2e ZZZZZ-05 (5.1zzzzz) đổi kỳ vọng theo (b): trước là "mở lại câu phường", nay "cần có phường mới lên kệ", không mở lại.
+
+**Chưa sửa ở lượt này (ghi để lượt sau soát).**
+- "4x16 cháu ghi rồi" khi lượt đó không ghi: lượt soát bỏ qua câu ghi nhận.
+- Câu chờ "em chờ anh chị nha" lặp hai lượt.
+- Đọc lại số "ngang 5 dài 18".
+- "hẻm xe máy" suy từ hẻm 2m.
+- hoi-phi: "Được rồi" bị coi là gật bản nháp. Chấp nhận được: khách đúng là đồng ý.
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy).**
+
+| Ca | Nội dung | Tắt bản sửa |
+|---|---|---|
+| ZZZZZE-01 / 01b | hỏi ai trả phí, căn cứ soát từ luật phí → câu được giữ | đỏ khi bỏ `FEES` khỏi soát + nguồn |
+| ZZZZZE-02 / 02b, 02c | người đã rao hỏi "bên mua nhà" → AI `ban`, không hồ sơ mua; đối chứng muốn mua thêm → nhánh mua | 02 (và 01) đỏ khi bỏ kết quả AI phân vai |
+| ZZZZZE-03 / 03b | "Phường Nguyễn Trãi" / "phường Hùng Vương" ở Quận 5 → phường trống, câu phường còn treo, "chưa tìm thấy phường" | cả hai đỏ |
+| ZZZZZE-04 / 04b | không biết phường + bảo đăng → nhớ ô, không hỏi phường; gật nháp → "cần có phường mới lên kệ", không "đăng trước được" | đỏ khi bỏ nhánh giữ tin (cùng ZZZZZ-05) hoặc bỏ `ghiKhongBiet` ở nhánh đủ rồi |
+| ZZZZZE-05 | AI ghi `can: 3` cho căn mới → tin mới có giá, ngang; đối chứng `can: null` | đỏ khi bỏ chuẩn hoá ở `bocRaoBangModel` |
+
+Ngoài e2e:
+- `kiem-bang-chung.mjs` ZZZZZE-K1…K3 (tích ngang × dài, kiểm đủ + nhẹ; K1, K2 đỏ khi tắt `laTichTrongCum`) và K4 / K5 (cụm chung nhiều căn;
+  đỏ khi tắt `chung`).
+- `van-tra-loi.mjs` ZZZZZE-V3 / V3b (phí đã nói có số + hỏi tiếp → không câu soạn sẵn).
+- Phát lại: 5 ca thật, 6 kỳ vọng (lon-tuoi diện tích 64; hoi-phi không "chỉ có đúng khoản phí đó"; moi-gioi giá + quận hai căn thêm).
+
+e2e **1229/1229**.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

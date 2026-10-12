@@ -899,5 +899,13 @@
    ]
   }
  ],
- "ky_vong": []
+ "ky_vong": [
+  {
+   "sau_luot": 4,
+   "loai": "cot",
+   "cot": "area_m2",
+   "bang": 64,
+   "ghi_chu": "SRS-5.1zzzzze: «4 mét rộng 16 mét sâu» → AI diện tích 64 (tích hai số trong cụm) được ghi"
+  }
+ ]
 }

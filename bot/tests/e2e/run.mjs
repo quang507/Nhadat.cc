@@ -10061,8 +10061,10 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   {
     const { uid, L } = dung({ tin: { ...TIN_NHA, boc_tach: { khong_biet: ["phuong"] } }, cauTreo: "duyet_tin" });
     const b = await goi(uid, "Dạ ổn rồi em, chị thấy tin này ngon lắm. Thôi em cứ đăng đi", { dong_y: "dong_y_dang", dong_y_trich: "Dạ ổn rồi em" });
-    check("ZZZZZ-05 (ca gốc) gật bản nháp, thiếu phường (khách từng nói không biết) → 'chỉ còn thiếu phường' + 'sổ hồng', mở câu phường, không 'một chút'",
-      /thiếu phường/.test(b.rep) && /sổ hồng/.test(b.rep) && !/một chút/.test(b.rep) && treo(L).includes("phuong") && !!lr(L).chu_duyet_at,
+    // SRS-5.1zzzzze (chủ dự án chọn (b) 12/10/2026): khách ĐÃ nói không biết phường → nói một lần "cần có phường mới lên kệ" + chỗ tìm,
+    // giữ tin, KHÔNG mở lại câu phường (trước đó: mở câu phường, khách mô phỏng lần bảy bị hỏi phường mãi).
+    check("ZZZZZ-05 (ca gốc) gật bản nháp, thiếu phường (khách từng nói không biết) → 'cần có phường mới lên kệ' + 'sổ hồng', KHÔNG mở lại câu phường, không 'một chút'",
+      /cần có phường mới lên kệ/.test(b.rep) && /sổ hồng/.test(b.rep) && !/một chút/.test(b.rep) && !treo(L).includes("phuong") && !!lr(L).chu_duyet_at,
       JSON.stringify({ rep: b.rep, treo: treo(L) }));
   }
   {
@@ -10385,6 +10387,121 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
     const moi = db().t.listings.filter((x) => x.seller_id === s.id).at(-1);
     check("ZZZZZC-14 (ca gốc) môi giới 'có mấy căn quận 5' rồi 'căn thứ 2 hẻm Nguyễn Trãi …' → tin mới mang Quận 5", db().t.listings.length === truoc + 1 && moi.district === "Quận 5",
       JSON.stringify({ n: db().t.listings.length - truoc, q: moi?.district, loc: moi?.location_raw }));
+  }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
+// ── SRS-5.1zzzzze (12/10/2026, khách mô phỏng lần bảy, ca phát lại `bot/tests/phat-lai/ca/`): chính sách phí là nguồn hợp lệ cho lượt
+// soát; người đã rao hỏi "bên mua nhà" không bị rẽ sang nhánh mua (AI phân vai); phường không có thật thì câu phường còn treo; không
+// biết phường mà bảo đăng → nói một lần chưa đăng được, giữ tin (cách (b)); mảnh gán căn mới mang số căn AI vẫn ghi vào tin mới.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocY = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laYLuotY = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan, can = null) => ({ khoa, gia_tri, trich_dan, can });
+  const rongY = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null },
+    dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, doc_lai: null, khong_biet: null };
+  const TIN_Q5 = { deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", can_chu_duyet: true, location_raw: "hẻm Nguyễn Trãi", street: "Nguyễn Trãi",
+    ward: null, district: "Quận 5", area_m2: 64, frontage_m: 4, length_m: 16, price_raw: "6 tỷ 8", price_vnd: 6.8e9 };
+  let n = 0;
+  const dung = ({ tin = TIN_Q5, cauTreo = null, xung = "chị", botNoi = [], loaiNguoi = "ccrb", nguonVai = null, wards = false } = {}) => {
+    fresh((d) => { seedKho(d); if (wards) d.t.wards = napPhuongThat().map((w) => ({ ...w })); });
+    const uid = `thu-ze-${++n}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: xung, seller_type: loaiNguoi, ...(nguonVai ? { seller_type_source: nguonVai } : {}) }).data;
+    const L = db().insert("listings", { code: `BDS-ZE-${n}`, seller_id: s.id, ...tin }).data;
+    s.active_listing_id = L.id;
+    if (cauTreo) db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
+    if (botNoi.length) {
+      const c = db().insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-12T01:00:00Z" }).data;
+      for (const b of botNoi) db().insert("messages", { conversation_id: c.id, sender: "bot", body: b, created_at: new Date().toISOString() });
+    }
+    return { uid, s, L };
+  };
+  const goi = async (uid, text, { ai = {}, loi = "Dạ vâng ạ.", soat = null, vai = null, ganManh = null } = {}) => {
+    globalThis.__model = {
+      parse: (p) => vai && laLuotVai(p) ? vai : ganManh && laLuotGanManh(p) ? ganManh : soat && laLuotSoatKhen(p) ? soat : (laBocY(p) || laYLuotY(p)) ? { ...rongY, ...ai } : OUT(),
+      create: () => loi,
+    };
+    const r = await send({ external_user_id: uid, text });
+    return { r, rep: (r.body?.replies ?? []).join(" | ") };
+  };
+  const lr = (L) => db().t.listings.find((x) => x.id === L.id);
+  const treo = (L) => db().t.info_requests.filter((q) => q.listing_id === L.id && q.status === "pending").map((q) => q.question);
+  const muaCua = (uid) => db().t.buyers.filter((b) => b.zalo_user_id === uid).length;
+  const PHI1 = "Dạ phí bên em chỉ thu khi giao dịch thành công, 1% giá chốt ạ.";
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+
+  // (1) Chính sách phí là NGUỒN: model trả lời "ai trả phí" đúng chính sách, lượt soát dẫn căn cứ từ luật phí → câu được giữ.
+  for (const [ma, cau, loi, canCu] of [
+    ["01 (ca gốc)", "phí 1% đó lấy từ chị hay từ bên mua nhà vậy em?", "Dạ phí đó bên bán trả thôi chị, người mua miễn phí hoàn toàn ạ.", "Người MUA miễn phí hoàn toàn"],
+    ["01b (cách nói mới)", "cái 1% đó là chị chịu hay người ta chịu hả em?", "Dạ chị chỉ trả khi giao dịch thành công thôi ạ, bên mua không mất gì.", "chỉ trả khi giao dịch THÀNH CÔNG"],
+  ]) {
+    const { uid } = dung({ cauTreo: "phap_ly", nguonVai: "admin", botNoi: [PHI1, "Nhà mình có sổ chưa chị?"] });
+    const a = await goi(uid, cau, {
+      ai: { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: "phi" } }, loi, vai: { vai: "ban", bang_chung: cau.split(" ").slice(0, 4).join(" ") },
+      soat: { nhan_xet: [{ cau: loi, khang_dinh: "ai trả phí", can_cu: canCu, kieu: "nhac_lai", danh_gia_thi_truong: false }] },
+    });
+    check(`ZZZZZE-${ma} hỏi ai trả phí, model trả lời đúng chính sách, lượt soát dẫn căn cứ từ luật phí → câu được giữ (không "Vâng ạ." cụt)`,
+      a.rep.includes(loi.slice(3, 25)), a.rep);
+  }
+  // (2) Người đã rao hỏi về phí / bên mua của căn mình → AI phân vai "ban" thắng luật thấy chữ "mua nhà": không mở hồ sơ mua.
+  for (const [ma, cau] of [["02 (ca gốc)", "phí 1% đó lấy từ chị hay từ bên mua nhà vậy em? chị là chính chủ"],
+    ["02b (cách nói mới)", "bên em có tìm được người mua nhà cho cô không cháu, cô đợi lâu rồi"]]) {
+    const { uid } = dung({ cauTreo: "phap_ly", nguonVai: "admin", botNoi: [PHI1, "Nhà mình có sổ chưa chị?"] });
+    const a = await goi(uid, cau, { ai: { hoi_lai: { co_hoi: true, cau_hoi: cau, chu_de: /phí/.test(cau) ? "phi" : "dich_vu" } }, loi: "Dạ vâng ạ.",
+      vai: { vai: "ban", bang_chung: /chính chủ/.test(cau) ? "chị là chính chủ" : "người mua nhà cho cô" } });
+    check(`ZZZZZE-${ma} người đã rao, «${cau.slice(0, 40)}…», AI phân vai "ban" → không mở hồ sơ mua, không hỏi tiêu chí mua`,
+      muaCua(uid) === 0 && !/mua hay thuê|tầm giá|khu vực nào/i.test(a.rep), JSON.stringify({ mua: muaCua(uid), rep: a.rep }));
+  }
+  // (2c) Đối chứng: người đã rao nói MUỐN MUA thêm → AI "mua" → vẫn vào nhánh mua.
+  {
+    const cau = "giờ chị muốn mua thêm một căn nhỏ ở quận 7 nữa em";
+    const { uid } = dung({ nguonVai: "admin" });
+    await goi(uid, cau, { vai: { vai: "mua", bang_chung: "chị muốn mua thêm một căn" }, loi: "Dạ chị tìm căn tầm giá bao nhiêu ạ?" });
+    check("ZZZZZE-02c (đối chứng) người đã rao muốn mua thêm căn → AI phân vai 'mua' → vẫn vào nhánh mua", muaCua(uid) === 1, JSON.stringify({ mua: muaCua(uid) }));
+  }
+  // (3) Phường không có thật ở quận đang ghi → không đóng câu phường, nói thẳng chưa tìm thấy.
+  for (const [ma, cau, gt] of [["03 (ca gốc)", "Phường Nguyễn Trãi ạ", "Phường Nguyễn Trãi"], ["03b (cách nói mới)", "phường Hùng Vương đó em", "Phường Hùng Vương"]]) {
+    const { uid, L } = dung({ cauTreo: "phuong", wards: true, botNoi: ["Dạ nhà mình thuộc phường nào vậy chị?"] });
+    const a = await goi(uid, cau, { ai: { truong: [T("phuong", gt, cau.replace(/ (ạ|đó em)$/, ""))], tra_loi: { co_tra_loi: true, gia_tri: gt, trich_dan: cau.replace(/ (ạ|đó em)$/, "") } } });
+    check(`ZZZZZE-${ma} hỏi phường, «${cau}» (không có ở Quận 5) → phường trống, câu phường còn treo, bot nói chưa tìm thấy`,
+      !lr(L).ward && treo(L).includes("phuong") && /chưa tìm thấy phường/.test(a.rep), JSON.stringify({ w: lr(L).ward, treo: treo(L), rep: a.rep }));
+  }
+  // (4) Không biết phường mà bảo đăng → nói MỘT lần: tin cần phường mới lên kệ, em giữ tin; không hỏi lại phường, không hứa "đăng trước được".
+  for (const [ma, cau, kb, dang] of [
+    ["04 (ca gốc)", "chị không biết phường đâu em, sổ cũng không tìm thấy, em cứ đăng trước đi", "chị không biết phường đâu em", "em cứ đăng trước đi"],
+    ["04b (cách nói mới)", "phường thì cô chịu, cháu cứ cho lên giùm cô", "phường thì cô chịu", "cháu cứ cho lên giùm cô"],
+  ]) {
+    const xung = /cô/.test(cau) ? "cô" : "chị";
+    const { uid, L } = dung({ tin: { ...TIN_Q5, floors: 2, floors_text: "trệt + 1 lầu", legal_status: "so_hong_rieng", alley_width_m: 4, access_type: "hem_xe_hoi" },
+      cauTreo: "phuong", xung, botNoi: [`Dạ nhà mình thuộc phường nào vậy ${xung}?`] });
+    // Lượt 1: không biết phường + bảo đăng (AI đọc khong_biet + du_roi, như bản ghi production) → nhớ ô, không hỏi lại phường.
+    const a = await goi(uid, cau, { ai: { khong_biet: kb, y_dinh: { loai: "du_roi", trich_dan: dang } }, loi: `Dạ không sao, ${xung} cứ đăng trước được ạ. Nhà mình phường nào vậy ${xung}?` });
+    const kbGhi = (lr(L).boc_tach?.khong_biet ?? []).includes("phuong");
+    // Lượt 2: gật bản nháp → nói một lần cần phường mới lên kệ, giữ tin, không mở lại câu phường.
+    db().t.info_requests.forEach((x) => { if (x.listing_id === L.id && x.status === "pending") x.status = "expired"; });
+    db().insert("info_requests", { listing_id: L.id, question: "duyet_tin", status: "pending" });
+    const b = await goi(uid, "ok đăng đi em", { ai: { dong_y: "dong_y_dang", dong_y_trich: "ok đăng đi em" }, loi: `Dạ ${xung} cứ đăng trước được ạ.` });
+    check(`ZZZZZE-${ma} không biết phường + bảo đăng → nhớ ô không biết, không hỏi phường; gật nháp → "cần có phường mới lên kệ" một lần, không "đăng trước được", không mở lại câu phường, tin chưa lên kệ`,
+      kbGhi && !/phường nào|phường mấy/.test(a.rep + b.rep) && !/đăng trước được/.test(a.rep + b.rep) && /cần có phường mới lên kệ/.test(b.rep) && !treo(L).includes("phuong") && lr(L).status !== "dang_ban",
+      JSON.stringify({ kbGhi, a: a.rep.slice(0, 300), b: b.rep.slice(0, 300), treo: treo(L), st: lr(L).status }));
+  }
+  // (5) Môi giới: mảnh gán căn MỚI, AI đánh số `can: 3` theo ngữ cảnh → tin mới vẫn mang giá / kích thước của mảnh.
+  for (const CAN of [3, null]) {
+    const C1 = { deal: "ban", status: "dang_ban", property_type: "nha_pho", can_chu_duyet: true, chu_duyet_at: "2026-10-12T01:00:00Z",
+      location_raw: "mặt tiền Trần Hưng Đạo", street: "Trần Hưng Đạo", ward: "Phường An Đông", district: "Quận 5", area_m2: 80, price_raw: "18 tỷ", price_vnd: 18e9 };
+    const { uid, s } = dung({ tin: C1, xung: "anh", loaiNguoi: "nmg", nguonVai: "admin" });
+    const truoc = db().t.listings.length;
+    const cau = "căn nữa hẻm An Dương Vương 4x10 cấp 4 5 tỷ, sổ riêng";
+    const aR = await goi(uid, cau, {
+      ai: { truong: [T("loai_bds", "nha_cap4", "cấp 4", CAN), T("duong", "hẻm An Dương Vương", "hẻm An Dương Vương", CAN), T("ngang", "4", "4x10", CAN), T("dai", "10", "4x10", CAN),
+        T("gia", "5 tỷ", "5 tỷ", CAN), T("phap_ly", "sổ riêng", "sổ riêng", CAN)], can_khac: true },
+      ganManh: { manh: [{ trich: cau, ma_tin: "MOI" }] },
+    });
+    const moi = db().t.listings.filter((x) => x.seller_id === s.id).at(-1);
+    check(`ZZZZZE-05 (ca gốc) mảnh gán căn mới, AI ghi can ${CAN} → tin mới có giá 5 tỷ và ngang 4`,
+      db().t.listings.length === truoc + 1 && moi.price_vnd === 5e9 && moi.frontage_m === 4, JSON.stringify({ n: db().t.listings.length - truoc, gia: moi?.price_vnd, pr: moi?.price_raw, ng: moi?.frontage_m, rep: aR.rep.slice(0, 400), f: db().t.listing_facts.filter((f) => f.listing_id === moi?.id).map((f) => `${f.question}=${f.answer}`) }));
   }
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };

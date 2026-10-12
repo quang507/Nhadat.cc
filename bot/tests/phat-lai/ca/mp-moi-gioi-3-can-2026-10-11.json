@@ -1452,5 +1452,38 @@
    ]
   }
  ],
- "ky_vong": []
+ "ky_vong": [
+  {
+   "sau_luot": 4,
+   "loai": "cot",
+   "tin": 1,
+   "cot": "price_vnd",
+   "bang": 6500000000,
+   "ghi_chu": "SRS-5.1zzzzze: căn hẻm Nguyễn Trãi mở với giá 6 tỷ 5"
+  },
+  {
+   "sau_luot": 4,
+   "loai": "cot",
+   "tin": 2,
+   "cot": "price_vnd",
+   "bang": 5000000000,
+   "ghi_chu": "SRS-5.1zzzzze: căn hẻm An Dương Vương MỞ CÙNG LƯỢT (cụm chung 'em muốn đăng luôn' không làm mất căn)"
+  },
+  {
+   "sau_luot": 4,
+   "loai": "cot",
+   "tin": 1,
+   "cot": "district",
+   "bang": "Quận 5",
+   "ghi_chu": "quận chung của lô (khách nói 'mấy căn quận 5')"
+  },
+  {
+   "sau_luot": 4,
+   "loai": "cot",
+   "tin": 2,
+   "cot": "district",
+   "bang": "Quận 5",
+   "ghi_chu": "quận chung của lô"
+  }
+ ]
 }

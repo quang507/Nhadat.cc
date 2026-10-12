@@ -1103,6 +1103,31 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   const q2 = kiemYCuocRao([{ khoa: "gia", gia_tri: "18 tỷ", trich_dan: "18 tỷ" }], "căn thứ 2 hẻm Nguyễn Trãi", "1 căn mt Trần Hưng Đạo giá 18 tỷ", {}, ["quan"]);
   ok("ZZZZZC-K11 đối chứng: GIÁ của căn trước không được trích sang căn thêm", !q2.dat.length, JSON.stringify(q2));
 }
+// SRS-5.1zzzzze (khách mô phỏng lần bảy, ca phát lại `bot/tests/phat-lai/ca/`): luật bóc tách cho AI tính diện tích = ngang × dài, kiểm số
+// phải nhận tích đó; cụm trích CHUNG của nhiều căn không định vị căn nào.
+{
+  for (const nhe of [false, true]) {
+    datKiemNhe(nhe);
+    const e1 = kiemDeXuat([{ khoa: "dien_tich", gia_tri: "64", trich_dan: "4 mét rộng 16 mét sâu" }], "nhà chú 4 mét rộng 16 mét sâu cháu ạ");
+    ok(`ZZZZZE-K1${nhe ? " (kiểm nhẹ)" : ""} (ca gốc) dien_tich 64 trích «4 mét rộng 16 mét sâu» → nhận (tích ngang × dài)`, e1.dat.length === 1, JSON.stringify(e1));
+    const e2 = kiemDeXuat([{ khoa: "dien_tich", gia_tri: "60", trich_dan: "ngang 5 dài 12" }], "đất ngang 5 dài 12 sổ riêng");
+    ok(`ZZZZZE-K2${nhe ? " (kiểm nhẹ)" : ""} (cách nói mới) dien_tich 60 trích «ngang 5 dài 12» → nhận`, e2.dat.length === 1, JSON.stringify(e2));
+    const e3 = kiemDeXuat([{ khoa: "dien_tich", gia_tri: "70", trich_dan: "4x16" }], "nhà cháu 4x16 trệt 2 lầu");
+    ok(`ZZZZZE-K3${nhe ? " (kiểm nhẹ)" : ""} đối chứng dien_tich 70 trích «4x16» (không phải tích) → bỏ`, e3.dat.length === 0, JSON.stringify(e3));
+  }
+  datKiemNhe(false);
+  const T = (khoa, gia_tri, trich_dan, can) => ({ khoa, gia_tri, trich_dan, can });
+  for (const [ma, tin, chungTd] of [
+    ["K4 (ca gốc)", "Còn 2 căn nữa em muốn đăng luôn, hẻm Nguyễn Trãi 3x12 2 tầng 6 tỷ 5, và hẻm An Dương Vương 4x10 cấp 4 5 tỷ", "em muốn đăng luôn"],
+    ["K5 (cách nói mới)", "hai căn này đều sổ riêng: một căn hẻm Nguyễn Trãi 3x12 6 tỷ 5, một căn hẻm An Dương Vương 4x10 5 tỷ", "sổ riêng"],
+  ]) {
+    const dat = [T("ghi_chu", chungTd, chungTd, 2), T("duong", "hẻm Nguyễn Trãi", "hẻm Nguyễn Trãi", 2), T("ngang", "3", "3x12", 2), T("gia", "6 tỷ 5", "6 tỷ 5", 2),
+      T("ghi_chu", chungTd, chungTd, 3), T("duong", "hẻm An Dương Vương", "hẻm An Dương Vương", 3), T("ngang", "4", "4x10", 3), T("gia", "5 tỷ", "5 tỷ", 3)];
+    const c = canTheoAi(tin, dat, 2);
+    ok(`ZZZZZE-${ma} cụm «${chungTd}» AI gán cho cả hai căn → vẫn chia 2 căn, mỗi căn đúng giá`,
+      c.length === 2 && c[0].gia === "6 tỷ 5" && c[1].gia === "5 tỷ" && /Nguyễn Trãi/.test(c[0].goc) && /An Dương Vương/.test(c[1].goc) && !/An Dương Vương/.test(c[0].goc), JSON.stringify(c));
+  }
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

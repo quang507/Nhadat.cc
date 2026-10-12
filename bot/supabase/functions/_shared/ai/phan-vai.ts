@@ -38,6 +38,12 @@ Chỉ dựa vào chữ có trong tin, không đoán thêm. Nhầm người MUA t
 bang_chung phải là cụm chữ chép NGUYÊN từ tin, không viết lại.
 Có dòng "Câu trợ lý vừa hỏi" thì tin là câu TRẢ LỜI cho câu đó, đọc theo nghĩa của cả hai: trợ lý hỏi có cần rao bán bất động sản không mà khách GẬT (đúng rồi, đúng rồi e, vâng ạ, dạ phải, chuẩn luôn, ừa, có) → ban, bang_chung là lời gật; khách chối hoặc nói đang tìm mua / thuê → mua; khen, hỏi lại, nói chuyện khác → chua_ro.`;
 
+// SRS-5.1zzzzze (khách mô phỏng lần bảy: chủ nhà đã rao hỏi "phí 1% đó lấy từ chị hay từ bên mua nhà vậy?" → luật thấy "mua nhà",
+// mở hồ sơ NGƯỜI MUA cho chủ nhà). Người đã rao bán mà luật thấy chữ mua / thuê / tìm thì hỏi model: họ có đang TÌM MUA thêm không.
+const NGUOI_BAN_CU = `Người nhắn ĐANG rao bán căn của họ với trợ lý. Chỉ trả mua khi tin cho thấy CHÍNH HỌ muốn tìm mua / thuê thêm một căn
+khác ("giờ chị muốn mua thêm căn ở Q7", "có căn nào 2 phòng ngủ cho thuê không em"). Hỏi về phí, về bên mua / khách mua của căn họ
+đang bán, về tin của họ, kể chuyện từng mua căn này → ban, bang_chung là cụm cho thấy họ đang nói về căn của mình.\n`;
+
 type ClientModel = {
   messages: {
     parse: (p: Record<string, unknown>) => Promise<{ parsed_output?: unknown; usage?: unknown }>;
@@ -57,6 +63,8 @@ export async function phanVaiBangModel(
   model: string,
   text: string,
   cauBotVuaHoi: string | null = null,
+  /** SRS-5.1zzzzze: người nhắn ĐÃ rao bán với bên em — hỏi xem tin này có phải họ muốn TÌM MUA / THUÊ thêm không. */
+  daLaNguoiBan = false,
 ): Promise<{ ket: unknown; usage: unknown } | null> {
   try {
     const r = await ai.messages.parse({
@@ -66,7 +74,7 @@ export async function phanVaiBangModel(
       system: [{ type: "text", text: LUAT, cache_control: { type: "ephemeral" } }],
       messages: [{
         role: "user",
-        content: `${cauBotVuaHoi ? `Câu trợ lý vừa hỏi: "${cauBotVuaHoi.slice(0, 300)}"\n` : ""}Tin nhắn: "${(text ?? "").slice(0, 600)}"`,
+        content: `${daLaNguoiBan ? NGUOI_BAN_CU : ""}${cauBotVuaHoi ? `Câu trợ lý vừa hỏi: "${cauBotVuaHoi.slice(0, 300)}"\n` : ""}Tin nhắn: "${(text ?? "").slice(0, 600)}"`,
       }],
     });
     const k = docLong(VaiBoc, r.parsed_output);

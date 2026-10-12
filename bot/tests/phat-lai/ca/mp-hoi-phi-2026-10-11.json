@@ -1081,5 +1081,12 @@
    ]
   }
  ],
- "ky_vong": []
+ "ky_vong": [
+  {
+   "sau_luot": 5,
+   "loai": "loi_khong",
+   "mau": "chỉ có đúng khoản phí đó",
+   "ghi_chu": "SRS-5.1zzzzze: hỏi ai trả phí → không câu soạn sẵn trả lời câu khác"
+  }
+ ]
 }

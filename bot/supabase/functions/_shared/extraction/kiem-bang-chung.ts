@@ -452,7 +452,8 @@ function kiemGiaTri(d: DeXuat, tin: string, viTri: number, kdCumSua?: string, ng
       // 24/09/2026 (bắn 10 tin): "toà nhà CHDV 20 phòng" / "20 phòng như em nói đó" thành 20 PHÒNG NGỦ — phòng cho thuê
       // không phải phòng ngủ. Phòng ngủ phải có chữ ngủ / PN trong cụm trích.
       if (!soTrong(cum, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05)) &&
-        !((d.khoa === "so_phong_ngu" || d.khoa === "so_wc") && laTongTrongCum(n, cum))) return "so_khong_co_trong_trich_dan";
+        !((d.khoa === "so_phong_ngu" || d.khoa === "so_wc") && laTongTrongCum(n, cum)) &&
+        !(d.khoa === "dien_tich" && laTichTrongCum(n, cum))) return "so_khong_co_trong_trich_dan";
       if (d.khoa === "so_phong_ngu" && !/\b(ngu|pn|phong ngu)\b|\d\s*pn(?![a-z])/.test(kd)) return "khong_noi_phong_ngu";
       // SRS-5.1zzzp (08/10/2026, chủ dự án: "giờ nó làm tốt phần chiều rộng đường, mặt tiền bla bla có bị ghi sai nữa ko"): bản cũ
       // chỉ đòi CON SỐ nằm trong cụm trích, không đòi cụm nói ĐÚNG CHUYỆN — "hẻm 4m" lọt làm chiều ngang / đường trước nhà, "đường
@@ -608,7 +609,8 @@ function kiemGiaTriNhe(d: DeXuat, tin: string, viTri: number, kdCumSua?: string,
       const n = Number(m[0]);
       if (laSoDemKhoang(d.khoa, v)) return "so_dem_la_khoang";
       if (!soTrong(kdCumSua ?? d.trich_dan, d.khoa === "dien_tich").some((x) => gan(n, x, 0.01, d.khoa === "dien_tich" ? 0.6 : 0.05)) &&
-        !((d.khoa === "so_phong_ngu" || d.khoa === "so_wc") && laTongTrongCum(n, kdCumSua ?? d.trich_dan))) return "so_khong_co_trong_trich_dan";
+        !((d.khoa === "so_phong_ngu" || d.khoa === "so_wc") && laTongTrongCum(n, kdCumSua ?? d.trich_dan)) &&
+        !(d.khoa === "dien_tich" && laTichTrongCum(n, kdCumSua ?? d.trich_dan))) return "so_khong_co_trong_trich_dan";
       // SRS-5.1zzzp: production chạy kiểm NHẸ — phép "cụm nói đúng chuyện của ô" phải có ở đây, không chỉ ở bản đủ.
       return soDoSaiChuDe(d.khoa, kd);
     }
@@ -1354,6 +1356,16 @@ function laTongTrongCum(n: number, cum: string): boolean {
   const so = soTrong(cum, false).filter((x) => Number.isInteger(x) && x > 0 && x < 50);
   return so.length >= 2 && so.reduce((a, b) => a + b, 0) === n;
 }
+/**
+ * SRS-5.1zzzzze (khách mô phỏng lần bảy: "diện tích trên sổ cũng 4 mét rộng 16 mét sâu" → AI diện tích 64, bộ kiểm bỏ vì 64 không có
+ * trong cụm — luật bóc tách lại CHO tính diện tích khi khách nói ngang × dài, prompt và code nói ngược nhau; bot hỏi lại diện tích ba lần).
+ * Diện tích bằng TÍCH hai số đo trong chính cụm trích là có bằng chứng, như tổng phòng ngủ.
+ */
+function laTichTrongCum(n: number, cum: string): boolean {
+  const so = soTrong(cum, false).filter((x) => x > 0 && x < 1000);
+  for (let i = 0; i < so.length; i++) for (let j = i + 1; j < so.length; j++) if (gan(n, so[i] * so[j], 0.01, 0.6)) return true;
+  return false;
+}
 const CAU_CAN_SO = new Set(["do_rong_hem", "so_phong_ngu", "so_wc", "so_tang", "tang", "nam_xay", "phi_quan_ly", "phi_gui_xe", "tien_coc",
   "thoi_han_thue", "gia_dien_nuoc", "cach_mat_tien", "chieu_cao", "tai_trong_san", "so_phong", "ty_le_lap_day", "doanh_thu", "mat_tien"]);
 const CAU_CHO_KHONG_CO = new Set(["phi_quan_ly", "phi_gui_xe", "tien_coc", "thoi_han_thue", "gia_dien_nuoc", "cach_mat_tien", "doanh_thu"]);
@@ -2022,8 +2034,14 @@ export function canTheoAi(tin: string, dat: DeXuat[], soCan: number | null | und
     if (i < 0 && [...kdTin].length === [...tin].length) i = kdTin.indexOf(boDau(t));
     return i;
   };
+  // SRS-5.1zzzzze (khách mô phỏng lần bảy, môi giới: "Còn 2 căn nữa em muốn đăng luôn, hẻm Nguyễn Trãi …, và hẻm An Dương Vương …" → AI
+  // gán cụm CHUNG "em muốn đăng luôn" cho cả căn 2 lẫn căn 3 → hai căn cùng mốc, đoạn chữ căn đầu rỗng, cả lượt chia bị bỏ, căn 3 không
+  // mở). Mốc của một căn chỉ tính từ cụm trích RIÊNG của căn đó — cụm nhiều căn cùng mang là lời chung, không định vị căn nào.
+  const tdCua = (d: DeXuat) => (d.trich_dan_sua ?? d.trich_dan ?? "").trim().toLowerCase();
+  const chung = new Set([...new Set(dat.filter((d) => typeof d.can === "number").map(tdCua))]
+    .filter((t) => new Set(dat.filter((d) => typeof d.can === "number" && tdCua(d) === t).map((d) => d.can)).size >= 2));
   const dau = so.map((n) => {
-    const vt = dat.filter((d) => d.can === n).map((d) => viTri(d.trich_dan_sua ?? d.trich_dan)).filter((i) => i >= 0);
+    const vt = dat.filter((d) => d.can === n && !chung.has(tdCua(d))).map((d) => viTri(d.trich_dan_sua ?? d.trich_dan)).filter((i) => i >= 0);
     return { n, bat: vt.length ? Math.min(...vt) : -1 };
   });
   // Căn không định vị được cụm trích nào → không chia theo chữ được, để regex / luật cũ lo.

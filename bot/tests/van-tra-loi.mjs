@@ -1491,7 +1491,10 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   const a2 = dapHoiNguocTienDinh("vậy phí sang tên ai trả em", "chị", phi1, "thue_phi", `Dạ ngoài ${phi1} thì bên em không thu thêm khoản nào ạ. Thuế, phí sang tên là theo quy định nhà nước…`);
   ok("ZZZZZC-V2 (cách nói mới) hỏi lại thuế lần hai → không lặp nguyên câu cũ", !!a2 && !/không tư vấn con số/.test(a2), String(a2));
   const b = dapHoiNguocTienDinh("vậy em lấy bao nhiêu phí", "chị", phi1, "phi", `Dạ ${phi1} ạ.`);
-  ok("ZZZZZC-V3 (ca gốc) câu phí có số đã nói y hệt → không lặp nguyên văn", b === "Dạ bên em chỉ có đúng khoản phí đó thôi ạ, ngoài ra không thu thêm gì.", String(b));
+  // SRS-5.1zzzzze: con số đã nói → khách đang hỏi điều KHÁC về phí (ai trả, khi nào, còn gì) → không ghép câu soạn sẵn, model trả lời.
+  ok("ZZZZZE-V3 (ca gốc lần bảy) câu phí có số đã nói → không câu soạn sẵn (model trả lời theo luật phí)", b === null, String(b));
+  const b3 = dapHoiNguocTienDinh("phí 1% kia thì lấy từ bên bán hay bên mua vậy em", "chị", phi1, "phi", `Dạ ${phi1} ạ.`);
+  ok("ZZZZZE-V3b (ca gốc lần bảy) 'lấy từ bên bán hay bên mua' → không trả 'chỉ có đúng khoản phí đó'", b3 === null, String(b3));
   const phi0 = "phí bên em chỉ thu khi giao dịch thành công, mức tuỳ chính chủ hay môi giới";
   const b2 = dapHoiNguocTienDinh("phí sao em", "chị", phi0, "phi", `Dạ ${phi0} ạ.`);
   ok("ZZZZZC-V4 đối chứng: câu phí CHƯA có số (vai chưa rõ) → vẫn nói để nơi gọi nối câu hỏi vai", b2 === `Dạ ${phi0} ạ.`, String(b2));
