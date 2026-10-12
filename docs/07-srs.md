@@ -3813,6 +3813,13 @@ Lớn", khách "cái thứ 2". AI đọc câu bot vừa nói nên trả `phuong`
 - Chỗ khác cùng lớp: câu chọn quận khi lệch quận (`doi_quan`) đã cất trong `phuong_goi_y`; `cauNhieuNoiPhuong` (đường ở nhiều quận, quận chưa biết) hỏi trống
   "phường nào, quận nào" — câu trả lời là tên, đi đường thường, không cần danh sách.
 
+**Bắn production sau deploy (12/10, `ban-thu.yml`, ID thử `thu-zi-phuong`) — bản sửa (2) CHƯA chạy.** Bot kể "Phường An Đông, Phường Chợ Lớn hay
+Phường Chợ Quán", khách "cái thứ 2" → model thật đọc ĐÚNG Phường Chợ Lớn nhưng đặt ở `tra_loi` (trả lời câu đang treo), `truong` rỗng; code chỉ đọc
+`truong` nên bot vẫn "em chưa tìm thấy phường cái thứ 2". Model giả trong e2e đặt ở `truong` — e2e chỉ kiểm giả định của người sửa (CLAUDE.md, phát lại).
+Sửa: ứng viên lấy từ cả `truong` (khoá phuong) lẫn `tra_loi`, cùng kiểm (cửa `phuongCot`, trong danh sách, trích có trong tin). Kiểm: e2e ZZZZZI-02c (đúng
+hình production: `truong` rỗng, phường ở `tra_loi`) / 02d "chắc cái số hai á" (mới) — đỏ khi bỏ nhánh `tra_loi`; đối chứng 03c (`tra_loi` nói Bến Thành →
+không ghi). "ừ" sau câu CHỌN (không phải câu có/không) → bot hỏi lại câu chọn: đúng ý, không phải lỗi. e2e **1272/1272**.
+
 **Còn lại, chưa sửa lượt này:** khách nói "ko rõ nữa" khi AI KHÔNG chạy → bot hỏi lại y câu (chế độ `ai` đã nhận `khong_biet`, SRS-5.1zzzzz); câu phường tới sau
 pháp lý / kết cấu (đổi thứ tự là sửa `required_facts`, chưa có yêu cầu).
 

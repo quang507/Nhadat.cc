@@ -6642,10 +6642,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
         if (!nhanGoiYPhuong && Array.isArray(luaChon) && luaChon.length && laCheDoAi && bongAi) {
           const kqLc = await bongAi;
           const quanLc = pendingReq.listings?.district ?? null;
-          const chon = kqLc?.ket ? (kqLc.truong ?? [])
-            .filter((t) => t.khoa === "phuong" && trichCoTrongTin(t.trich_dan ?? "", text))
+          // Bắn production 12/10: model thật đặt phường khách chọn vào `tra_loi` (trả lời câu phường đang treo), không vào `truong` — đọc cả hai.
+          const ungVien = kqLc?.ket ? [
+            ...(kqLc.truong ?? []).filter((t) => t.khoa === "phuong").map((t) => ({ gia_tri: t.gia_tri, trich_dan: t.trich_dan })),
+            ...(kqLc.traLoi?.co_tra_loi ? [{ gia_tri: kqLc.traLoi.gia_tri, trich_dan: kqLc.traLoi.trich_dan }] : []),
+          ] : [];
+          const chon = ungVien
+            .filter((t) => trichCoTrongTin(t.trich_dan ?? "", text))
             .map((t) => { const pc = phuongCot(String(t.gia_tri ?? ""), quanLc); return pc ? tenDayDu(pc) : null; })
-            .find((ten) => !!ten && luaChon.includes(ten)) : null;
+            .find((ten) => !!ten && luaChon.includes(ten)) ?? null;
           if (chon && quanLc) { goiYPhuong = { phuong: chon, quan: quanLc, duong: "" }; dapAn = chon; nhanGoiYPhuong = true; }
         }
         // SRS-5.1zk (bắn thử thu-dc4-08: hỏi phường, khách "nhà ở 77 hẻm 3m Xô Viết Nghệ Tĩnh" → địa chỉ luật giữ "3m"): chế độ
