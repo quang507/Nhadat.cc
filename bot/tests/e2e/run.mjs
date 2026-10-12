@@ -10797,6 +10797,75 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__model = { parse: () => OUT() };
 }
 // ── kết: BẤT BIẾN TOÀN BỘ ──
+// ── SRS-5.1zzzzzi (12/10/2026): phường tra từ tên đường + quận (bảng `duong`, không gọi AI tra) — hỏi xác nhận một phường, kể 2–3 phường
+// cho khách chọn; khách gật một chữ ("ừ") hay chọn theo thứ tự ("cái thứ 2") thì nhận đúng phường bot đã nêu.
+{
+  const laBocI = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laYI = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+  const rongI = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null },
+    dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, doc_lai: null, khong_biet: null };
+  const cuCH = globalThis.__cauHinh;
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+  const bd = (x) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+  const DUONG_I = [["Trần Hưng Đạo", "Phường An Đông"], ["Trần Hưng Đạo", "Phường Chợ Quán"], ["Trần Hưng Đạo", "Phường Chợ Lớn"], ["Trần Hưng Đạo", "Phường Bến Thành", "Quận 1"],
+    ["Lương Nhữ Học", "Phường Chợ Lớn"]];
+  const goiI = async (uid, text, ai) => {
+    globalThis.__model = { parse: (p) => (laBocI(p) || laYI(p)) ? (ai ? { ...rongI, ...ai } : (() => { throw new Error("AI im"); })()) : OUT(), create: () => "Dạ vâng ạ." };
+    const r = await send({ external_user_id: uid, text });
+    return (r.body?.replies ?? []).join(" | ");
+  };
+  let nI = 0;
+  // Tin đã có địa chỉ (đường + Quận 5) và gần đủ ô; hai lượt trả lời pháp lý + kết cấu đưa bot tới câu phường.
+  const toiCauPhuong = async (duong) => {
+    fresh((d) => { seedKho(d); d.t.wards = napPhuongThat().map((w) => ({ ...w }));
+      d.t.duong = DUONG_I.map(([ten, phuong, q]) => ({ ten, ten_khong_dau: bd(ten), loai: "duong", quan_cu: q ?? "Quận 5", phuong, tinh: "TP.HCM" })); });
+    const uid = `thu-zi-${++nI}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "anh", seller_type: "ccrb", seller_type_source: "admin" }).data;
+    const L = db().insert("listings", { code: `BDS-ZI-${nI}`, seller_id: s.id, deal: "ban", status: "cho_thong_tin", can_chu_duyet: true, boc_tach: { _thong_so_ai: true }, property_type: "nha_pho",
+      district: "Quận 5", location_raw: `hẻm 120 ${duong}`, access_type: "hem_xe_hoi", alley_width_m: 4, area_m2: 60, price_vnd: 8e9, price_raw: "8 tỷ" }).data;
+    s.active_listing_id = L.id;
+    db().insert("info_requests", { listing_id: L.id, question: "phap_ly", status: "pending" });
+    const c = db().insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-12T03:00:00Z" }).data;
+    db().insert("messages", { conversation_id: c.id, sender: "bot", body: "Sổ hồng riêng hay sổ chung anh?", created_at: new Date().toISOString() });
+    await goiI(uid, "sổ hồng riêng", { truong: [T("phap_ly", "so_hong", "sổ hồng riêng")], tra_loi: { co_tra_loi: true, gia_tri: "sổ hồng riêng", trich_dan: "sổ hồng riêng" } });
+    const cau = await goiI(uid, "3 lầu", { truong: [T("so_lau", "3", "3 lầu")], tra_loi: { co_tra_loi: true, gia_tri: "3 lầu", trich_dan: "3 lầu" } });
+    return { uid, L, cau };
+  };
+  const lrI = (L) => db().t.listings.find((x) => x.id === L.id);
+  const treoI = (L) => db().t.info_requests.filter((x) => x.listing_id === L.id && x.status === "pending").map((x) => x.question);
+  // (1) Ca gốc: Trần Hưng Đạo ở Quận 5 qua 3 phường → kể đúng 3 phường của Quận 5 (không kể Bến Thành Q1), cất danh sách, chưa ghi phường.
+  {
+    const { L, cau } = await toiCauPhuong("Trần Hưng Đạo");
+    check("ZZZZZI-01 «hẻm 120 Trần Hưng Đạo» Quận 5 → câu phường kể An Đông, Chợ Quán, Chợ Lớn (không Bến Thành), cất phuong_lua_chon, chưa ghi phường",
+      /An Đông/.test(cau) && /Chợ Quán/.test(cau) && /Chợ Lớn/.test(cau) && !/Bến Thành/.test(cau) && (lrI(L).boc_tach?.phuong_lua_chon ?? []).length === 3 && !lrI(L).ward && treoI(L).includes("phuong"),
+      JSON.stringify({ cau, bt: lrI(L).boc_tach, w: lrI(L).ward, treo: treoI(L) }));
+  }
+  // (2) Khách chọn theo thứ tự / mô tả — AI đọc theo câu bot vừa hỏi, code nhận vì phường nằm trong danh sách đã kể.
+  for (const [ma, tl, cum] of [["02 (ca gốc)", "cái thứ 2", "cái thứ 2"], ["02b (cách nói mới)", "cái ở giữa á em", "cái ở giữa"]]) {
+    const { uid, L } = await toiCauPhuong("Trần Hưng Đạo");
+    const rep = await goiI(uid, tl, { truong: [T("phuong", "Phường Chợ Quán", cum)], tra_loi: { co_tra_loi: true, gia_tri: tl, trich_dan: cum } });
+    check(`ZZZZZI-${ma} chọn «${tl}» → ward Phường Chợ Quán, câu phường đóng, không nói "chưa tìm thấy phường ${cum}"`,
+      lrI(L).ward === "Phường Chợ Quán" && !treoI(L).includes("phuong") && !/chưa tìm thấy phường/.test(rep) && lrI(L).boc_tach?.phuong_lua_chon === false,
+      JSON.stringify({ w: lrI(L).ward, treo: treoI(L), rep: rep.slice(0, 200), bt: lrI(L).boc_tach }));
+  }
+  // (3) Đối chứng: phường AI nói KHÔNG nằm trong danh sách đã kể (Bến Thành — Quận 1), hay trích dẫn không có trong tin → không ghi.
+  for (const [ma, tl, ai] of [["03 (ngoài danh sách)", "cái đầu", [T("phuong", "Phường Bến Thành", "cái đầu")]], ["03b (trích không có trong tin)", "cái đầu", [T("phuong", "Phường Chợ Quán", "cái thứ hai")]]]) {
+    const { uid, L } = await toiCauPhuong("Trần Hưng Đạo");
+    await goiI(uid, tl, { truong: ai, tra_loi: { co_tra_loi: true, gia_tri: tl, trich_dan: tl } });
+    check(`ZZZZZI-${ma} «${tl}» → không ghi phường, câu phường còn treo`, !lrI(L).ward && treoI(L).includes("phuong"), JSON.stringify({ w: lrI(L).ward, treo: treoI(L) }));
+  }
+  // (4) Một phường (Lương Nhữ Học ở Quận 5 chỉ Chợ Lớn) → hỏi xác nhận; khách gật MỘT chữ — AI đọc gật, trích "ừ" phải qua kiểm.
+  for (const [ma, tl] of [["04 (ca gốc)", "ừ"], ["04b (cách nói mới)", "ờ"]]) {
+    const { uid, L, cau } = await toiCauPhuong("Lương Nhữ Học");
+    await goiI(uid, tl, { dong_y: "dong_y", dong_y_trich: tl });
+    check(`ZZZZZI-${ma} hỏi «…Phường Chợ Lớn, đúng không» rồi khách «${tl}» → ward Phường Chợ Lớn, không hỏi lại`,
+      /Chợ Lớn/.test(cau) && lrI(L).ward === "Phường Chợ Lớn" && !treoI(L).includes("phuong"), JSON.stringify({ cau, w: lrI(L).ward, treo: treoI(L) }));
+  }
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
 soatDbBatBien("(cuối)");
 if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_DUMP, JSON.stringify(BB, null, 1));
 // ── SRS-5.1zzzzzd (11/10/2026): ghi đầu ra model của lượt THỬ để phát lại offline. Chỉ khi tin mang cờ `ghi_ai` (khách mô phỏng gửi) VÀ ID

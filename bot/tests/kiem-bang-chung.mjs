@@ -5,7 +5,7 @@
 // ĐẠT. Một ca bịa lọt vào `dat` là cổng đỏ — đó là thứ duy nhất FR-208 hứa.
 import { nhanDienNhieuFact } from "../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts";
 import { boCauNhanXet, nhanXetKhongCanCu, coCauHoi, damBaoCauHoi, coMenhDeDaDang, boHuaDaDang } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
-import { canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest, yLuotLech, kiemYCuocRao } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
+import { trichCoTrongTin as trichCoTrongTinT, docDongY as docDongYT, canTheoAi, docLaiHopLe, chuDeSoDo, laKiemNhe as laKiemNheTest, yLuotLech, kiemYCuocRao } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { anCauDaDap } from "../supabase/functions/_shared/extraction/van-tra-loi.ts";
 import { giaTriCoTrongLoi, locGiaTriHoSo } from "../supabase/functions/_shared/extraction/kiem-bang-chung.ts";
 import { cacQuanTrong } from "../supabase/functions/_shared/dia_ban.ts";
@@ -1189,6 +1189,13 @@ ok("ZZZZZH-K2c (đối chứng) vị trí giữ phường, diện tích giữ ng
   const r = kiemTraLoiCau({ co_tra_loi: true, gia_tri: "sổ hồng riêng, anh đứng tên", trich_dan: "sổ hồng riêng, anh đứng tên" }, "sổ hồng riêng, anh đứng tên",
     "Sổ nhà mình riêng hay chung vậy ạ?", { cauHoi: "phap_ly", loai: "nha_pho" });
   ok("ZZZZZH-K2d câu treo pháp lý → giá trị ghi 'sổ hồng riêng' (không dính đứng tên)", r?.giaTri === "sổ hồng riêng", JSON.stringify(r));
+}
+// SRS-5.1zzzzzi: cụm trích MỘT chữ là bằng chứng khi đứng riêng thành một từ trong tin; không khớp gần, không khớp giữa từ.
+{
+  const ca = [["ừ", "ừ", true], ["ờ", "ờ em", true], ["k", "k biết nữa", true], ["5", "5 lầu", true], ["ừ", "chưa", false], ["u", "uống nước", false], ["a", "bán", false], ["", "ừ", false], ["ừ", "", false]];
+  for (const [td, tin, mong] of ca) ok(`ZZZZZI-K1 trichCoTrongTin(«${td}», «${tin}») = ${mong}`, trichCoTrongTinT(td, tin) === mong);
+  ok("ZZZZZI-K2 docDongY gật «ừ» trích «ừ» → dong_y", docDongYT({ la: "dong_y", trich_dan: "ừ" }, "ừ")?.la === "dong_y");
+  ok("ZZZZZI-K2b docDongY trích «ừ» mà tin «chưa» → null", docDongYT({ la: "dong_y", trich_dan: "ừ" }, "chưa") === null);
 }
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

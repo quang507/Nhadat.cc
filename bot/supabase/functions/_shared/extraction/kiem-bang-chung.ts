@@ -1479,8 +1479,11 @@ export function docCamXuc(cx: { muc?: string | null; trich_dan?: string | null }
 
 /** Cụm trích (đã bỏ dấu, bỏ ký hiệu) có trong tin — khớp nguyên cụm hoặc khớp mờ. */
 export function trichCoTrongTin(td: string, tin: string): boolean {
-  if (td.trim().length < 2) return false;
   const gon = (x: string) => chuanSo(x).replace(/[^\p{L}\d\s]/gu, " ").replace(/\s+/g, " ").trim();
+  // SRS-5.1zzzzzi (12/10/2026: bot hỏi "…thuộc Phường Chợ Lớn, đúng không anh?", khách "ừ" → AI đọc gật, trích "ừ", bị loại vì ngắn hơn
+  // 2 chữ → bot hỏi lại y câu cũ). Cụm MỘT chữ ("ừ", "ờ", "k", "5") vẫn là bằng chứng khi nó là MỘT TỪ đứng riêng trong tin — chỉ khớp
+  // đúng, không khớp gần (khớp gần một chữ thì chữ nào cũng ra).
+  if (td.trim().length < 2) return !!gon(td) && ` ${gon(tin)} `.includes(` ${gon(td)} `);
   return ` ${gon(tin)} `.includes(` ${gon(td)} `) || !!timMo(gon(tin), gon(td));
 }
 /**

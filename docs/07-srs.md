@@ -3783,6 +3783,51 @@ Ngoài e2e: `tro-ly.mjs` ZZZZZH-TL1/TL2; `kiem-bang-chung.mjs` ZZZZZH-K1 (đư�
 chỉ + kích thước); `vi-du-boc-rao.mjs` (ví dụ mới qua kiểm bằng chứng, trần 13.000 ký tự); `phuong-trong-cau.mjs` (5 ca mới); `bot/tests/sql/street-ten-du-an.sql`.
 e2e **1262/1262**. Prompt đổi ở `prompts.ts` (`SELLER_FEWSHOT`) → `dong-bo-prompt --day` sau merge.
 
+### SRS-5.1zzzzzi · Phường tra từ tên đường: khách gật một chữ, khách chọn theo thứ tự (12/10/2026)
+
+`[nguồn: chủ dự án 12/10/2026 sau SRS-5.1zzzzzh: "ra phường xã làm bằng code và bảng trong DB, không gọi AI mà sao lại tìm mặc dù 2 Phường đoán sai";
+"admin làm mục 3 đi, e2e test" — mục 3: tra phường từ tên đường + quận bằng bảng `duong`, một phường thì hỏi xác nhận, nhiều phường thì kể cho khách chọn]`
+
+**Soát trước khi sửa.** Mục 3 ĐÃ có từ 25/09/2026 (FR-209, `cauHoiPhuongGoiY` nhánh "đã biết quận → tra bảng `duong`"): một phường → `phuong_goi_y` + câu
+"Em tra thấy đường X thuộc Phường Y (Quận Z cũ), đúng không anh ạ?"; 2–3 phường → `cauChonPhuong`. Bảng `duong` production 12/10: Trần Hưng Đạo ở Quận 5 đi qua
+Phường An Đông, Chợ Quán, Chợ Lớn; Lương Nhữ Học chỉ Chợ Lớn. e2e dựng lại ca gốc "hẻm 120 Trần Hưng Đạo" Quận 5: bot kể đúng ba phường, khách gõ "chợ quán" /
+"an đông em" / "cho lon" / "không phải, chợ quán" đều ghi đúng. Câu phường tới sau pháp lý / kết cấu là theo `required_facts.priority`, không đổi. Lỗi Tân Hưng của
+ca gốc là khớp gần đúng, đã sửa ở SRS-5.1zzzzzh (0). Soát ra HAI chỗ hỏng ở bước khách TRẢ LỜI câu gợi ý:
+
+**(1) Khách gật MỘT chữ ("ừ", "ờ") → bot hỏi lại y câu cũ.** Ca gốc (e2e): "…Lương Nhữ Học thuộc Phường Chợ Lớn (Quận 5 cũ), đúng không anh ạ?" → "ừ". Chế độ `ai`:
+lượt "ý của lượt" đọc đúng `dong_y`, trích "ừ"; `trichCoTrongTin` loại mọi cụm ngắn hơn 2 chữ → `docDongY` trả null → `gatLuot` coi là AI nói KHÔNG gật (AI có
+chạy nên luật không đỡ). "chuẩn", "đúng rồi" thì qua.
+- Lớp lỗi: sàn độ dài của kiểm trích dẫn (đặt để khớp gần không bắt được một chữ cái lẻ) loại luôn câu trả lời đúng một từ một chữ.
+- Sửa: `trichCoTrongTin` nhận cụm MỘT chữ khi nó là một TỪ đứng riêng trong tin (khớp đúng, không khớp gần). "u" trong "uống", "a" trong "bán" vẫn không qua.
+- Chỗ khác cùng lớp: mọi nơi kiểm qua `trichCoTrongTin` (11 chỗ trong `kiem-bang-chung.ts` — gật, ý định, vai, hỏi lại, yêu cầu…, 3 trong `chat-reply`, 1 trong
+  `tro-ly.ts`) cùng được sửa một lần. `docCamXuc` có sàn riêng (`td.length < 2`) — giữ cố ý: cảm xúc gửi việc cho người, một chữ không đủ làm bằng chứng.
+
+**(2) Khách chọn theo thứ tự ("cái thứ 2") → "Dạ em chưa tìm thấy phường cái thứ 2 ở Quận 5".** Ca gốc (e2e): bot kể "Phường An Đông, Phường Chợ Quán hay Phường Chợ
+Lớn", khách "cái thứ 2". AI đọc câu bot vừa nói nên trả `phuong` = Phường Chợ Quán, trích "cái thứ 2"; ô phường là ô NGUYÊN VĂN nên giá trị ghi thành chính cụm
+"cái thứ 2", tra không ra phường.
+- Lớp lỗi: danh sách bot vừa đưa cho khách chọn không được cất ở đâu, nên không lớp nào đối chiếu được câu chọn với nó (gợi ý MỘT phường thì đã cất
+  `phuong_goi_y` từ FR-209; danh sách thì không).
+- Sửa: `cauHoiPhuongGoiY` cất `boc_tach.phuong_lua_chon` (2–3 phường vừa kể, xoá `phuong_goi_y` cũ; cất gợi ý một phường thì xoá danh sách). Lúc câu phường treo:
+  phường AI nói qua cửa `phuongCot` (quận của tin) và NẰM TRONG danh sách đó, trích dẫn có trong tin → nhận như gật gợi ý (đi `capNhatQuanTuPhuong`, xoá danh sách).
+  Không có AI thì không đoán thứ tự bằng từ khoá — câu phường treo như cũ. Không migration (`ghi_boc_tach` gộp khoá jsonb bất kỳ).
+- Chỗ khác cùng lớp: câu chọn quận khi lệch quận (`doi_quan`) đã cất trong `phuong_goi_y`; `cauNhieuNoiPhuong` (đường ở nhiều quận, quận chưa biết) hỏi trống
+  "phường nào, quận nào" — câu trả lời là tên, đi đường thường, không cần danh sách.
+
+**Còn lại, chưa sửa lượt này:** khách nói "ko rõ nữa" khi AI KHÔNG chạy → bot hỏi lại y câu (chế độ `ai` đã nhận `khong_biet`, SRS-5.1zzzzz); câu phường tới sau
+pháp lý / kết cấu (đổi thứ tự là sửa `required_facts`, chưa có yêu cầu).
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy).**
+
+| Ca | Nội dung | Tắt bản sửa |
+|---|---|---|
+| ZZZZZI-01 | "hẻm 120 Trần Hưng Đạo" Quận 5 → câu phường kể An Đông / Chợ Quán / Chợ Lớn (không Bến Thành Q1), cất `phuong_lua_chon`, chưa ghi phường | — (đối chứng hành vi FR-209) |
+| ZZZZZI-02 / 02b | "cái thứ 2" (gốc), "cái ở giữa á em" (mới) → Phường Chợ Quán, câu phường đóng, không "chưa tìm thấy phường" | đỏ khi bỏ khối `phuong_lua_chon` |
+| ZZZZZI-03 / 03b | AI nói Phường Bến Thành (ngoài danh sách); trích dẫn không có trong tin → không ghi, câu phường treo | 03 đỏ khi bỏ điều kiện "trong danh sách"; 03b đỏ khi bỏ kiểm trích dẫn |
+| ZZZZZI-04 / 04b | gợi ý một phường, khách "ừ" (gốc), "ờ" (mới) → Phường Chợ Lớn | đỏ khi trả sàn 2 chữ |
+
+`kiem-bang-chung.mjs` ZZZZZI-K1 (9 ca một chữ: "ừ", "ờ em", "k biết nữa", "5 lầu" qua; "chưa", "uống nước", "bán", rỗng không qua), K2 / K2b (`docDongY`). e2e **1269/1269**,
+`kiem-bang-chung.mjs` 562/562, `test:bot` xanh, `do-boc:nen` không tụt.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.
