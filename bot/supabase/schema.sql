@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-12 01:45 (giờ VN)
+-- Sinh lúc: 2026-10-12 08:56 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -4518,6 +4518,16 @@ begin
     if v_num is not null and v_num between 1.5 and 40 then
       update listings set rear_width_m = v_num, specs_source = bac
        where id = new.listing_id and (rear_width_m is null or de);
+    end if;
+
+  -- 20261012a (SRS-5.1zzzzzf, khách mô phỏng lần bảy: "chiều sâu thì 16 mét" khi chưa nói ngang → AI đọc dài 16, code không có ô
+  -- nào để cất nên bỏ, bot hỏi lại diện tích). Fact `chieu_dai` chỉ điền cột length_m; ngang tới sau thì trigger trên listings nhân ra
+  -- diện tích. Không dùng fact mat_tien / dien_tich: có fact đó là listing_missing_facts coi như đã trả lời ngang / diện tích.
+  elsif new.question = 'chieu_dai' then
+    v_num := nullif(substring(replace(v_txt, ',', '.'), '[0-9]+[.]?[0-9]*'), '')::numeric;
+    if v_num is not null and v_num between 3 and 150 then
+      update listings set length_m = v_num, specs_source = bac
+       where id = new.listing_id and (length_m is null or de);
     end if;
 
   -- 22/09/2026 (kịch bản D): "đang cho thuê 30 triệu/tháng" → fact doanh_thu; tin BÁN thì đó là dòng tiền đang thu.
