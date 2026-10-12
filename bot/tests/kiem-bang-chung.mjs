@@ -1167,6 +1167,29 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
     lungChuaRoDem("3 tầng có lửng")?.n === 3 && lungChuaRoDem("nhà 4 tấm có gác lửng")?.n === 4 &&
       !lungChuaRoDem("4 tầng tính cả lửng") && !lungChuaRoDem("3 tầng, có lửng thêm nữa") && !lungChuaRoDem("không có gác lửng, 4 tầng"), "");
 }
+// SRS-5.1zzzzzh (bắn production 12/10, thu-kb-dat): "đường trước đất rộng 6m xe tải vô được" → do_rong_duong 6 + loai_duong_vao hem_xe_tai cùng
+// lượt — bề rộng của ĐƯỜNG, loại nói HẺM, khách không nhắc hẻm → bỏ loại hẻm. Cách nói mới: "lộ giới 8m, container vào tận nơi". Đối chứng: "hẻm 6m".
+{
+  const T = (k, g, t) => ({ khoa: k, gia_tri: g, trich_dan: t, can: null });
+  const a = kiemDeXuat([T("do_rong_duong", "6", "đường trước đất rộng 6m"), T("loai_duong_vao", "hem_xe_tai", "xe tải vô được")], "đường trước đất rộng 6m xe tải vô được");
+  ok("ZZZZZH-K1 (ca gốc) đường trước đất 6m + 'xe tải vô được' → không loại hẻm, giữ bề rộng đường",
+    !a.dat.some((d) => d.khoa === "loai_duong_vao") && a.dat.some((d) => d.khoa === "do_rong_duong") && a.bo.some((b) => b.ly_do === "duong_truoc_khong_phai_hem"), JSON.stringify(a));
+  const b = kiemDeXuat([T("do_rong_duong", "8", "lộ giới 8m"), T("loai_duong_vao", "hem_xe_tai", "container vào tận nơi")], "lộ giới 8m, container vào tận nơi");
+  ok("ZZZZZH-K1b (cách nói mới) 'lộ giới 8m, container vào tận nơi' → không loại hẻm", !b.dat.some((d) => d.khoa === "loai_duong_vao"), JSON.stringify(b));
+  const c = kiemDeXuat([T("do_rong_hem", "6", "hẻm 6m"), T("loai_duong_vao", "hem_xe_tai", "xe tải vô được")], "hẻm 6m xe tải vô được");
+  ok("ZZZZZH-K1c (đối chứng) 'hẻm 6m xe tải vô được' → giữ hem_xe_tai", c.dat.some((d) => d.khoa === "loai_duong_vao" && d.gia_tri === "hem_xe_tai"), JSON.stringify(c));
+}
+// SRS-5.1zzzzzh (test Zalo 12/10): hỏi pháp lý, "sổ hồng riêng, anh đứng tên" → ô pháp lý ghi cả vế đứng tên (đứng tên CÙNG HỌ pháp lý nhưng là ô
+// riêng). Cách nói mới: "sổ đỏ, không thế chấp". Đối chứng: địa chỉ + phường, ngang + dài vẫn ghép một giá trị.
+ok("ZZZZZH-K2 (ca gốc) gotManhOKhac pháp lý bỏ vế 'anh đứng tên'", gotManhOKhac("phap_ly", "sổ hồng riêng, anh đứng tên") === "sổ hồng riêng", gotManhOKhac("phap_ly", "sổ hồng riêng, anh đứng tên"));
+ok("ZZZZZH-K2b (cách nói mới) pháp lý bỏ vế 'không thế chấp'", gotManhOKhac("phap_ly", "sổ đỏ, không thế chấp") === "sổ đỏ", gotManhOKhac("phap_ly", "sổ đỏ, không thế chấp"));
+ok("ZZZZZH-K2c (đối chứng) vị trí giữ phường, diện tích giữ ngang + dài",
+  gotManhOKhac("vi_tri", "hẻm 12 Lê Lợi, phường 4") === "hẻm 12 Lê Lợi, phường 4" && gotManhOKhac("dien_tich", "ngang 4, dài 16") === "ngang 4, dài 16", "");
+{
+  const r = kiemTraLoiCau({ co_tra_loi: true, gia_tri: "sổ hồng riêng, anh đứng tên", trich_dan: "sổ hồng riêng, anh đứng tên" }, "sổ hồng riêng, anh đứng tên",
+    "Sổ nhà mình riêng hay chung vậy ạ?", { cauHoi: "phap_ly", loai: "nha_pho" });
+  ok("ZZZZZH-K2d câu treo pháp lý → giá trị ghi 'sổ hồng riêng' (không dính đứng tên)", r?.giaTri === "sổ hồng riêng", JSON.stringify(r));
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

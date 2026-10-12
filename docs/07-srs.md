@@ -3689,6 +3689,100 @@ hiểu một câu theo hai cách, lượt chốt tin đè cách này lên cách 
 Ngoài e2e: `kiem-bang-chung.mjs` ZZZZZG-K1…K4 (K2b đỏ khi bỏ `soDoMet`, K3 đỏ khi bỏ cổng `DEM_LUNG_RO`); `don-vi-hien-thi.mjs` (đỏ 10/45 khi bỏ bản sửa).
 e2e **1247/1247**. Không bắn production (chủ dự án 12/10: tiền API "tốn thế hết tiền rồi") — mọi kiểm ở đây offline.
 
+### SRS-5.1zzzzzh · Test Zalo + bắn production ba kịch bản: phường đoán từ tên đường, mất đường, lộ ghi chú nội bộ, hỏi lại điều đã biết (12/10/2026)
+
+`[nguồn: chủ dự án test Zalo 12/10/2026 kịch bản 1 ("hẻm 120 Trần Hưng Đạo quận 5" → phường Tân Hưng), dán nguyên hội thoại: "đạt ko"; bắn production
+`ban-thu.yml` ba ID thử `thu-kb-dat` / `thu-kb-thue` / `thu-kb-mua` cùng ngày (log job, bảng `boc_tach_bong`, `inbound_ledger`); chủ dự án: "ok sửa hết từ gốc rồi merge đi"]`
+
+Mười hai điểm từ ba kịch bản + một điểm từ test Zalo. Mỗi lớp dưới đây ghi: ca gốc, lớp lỗi, sửa, chỗ khác cùng lớp.
+
+**(0) Phường đoán gần đúng từ TÊN ĐƯỜNG.** Ca gốc: "hẻm 120 Trần Hưng Đạo quận 5" → `timPhuongTrongCau` khớp sai-một-chữ "Trần Hưng" ≈ "Tân Hưng" (Q7 cũ),
+ghi phường Tân Hưng cho nhà Quận 5, bản nháp "Phường Tân Hưng, Quận 5". Lớp lỗi: dò tên phường bằng khớp gần đúng trên MỌI câu địa chỉ, trong khi chữ sau
+"hẻm / kiệt / ngõ / số N" là tên ĐƯỜNG; và quận khách nói cùng câu chưa được coi là quận đã biết.
+- Sửa: `timPhuongTrongCau` coi chữ sau "hẻm / kiệt / ngõ / số N" là tên đường (chỉ "đường N" đánh số mới cho chữ sau là phường) và trả `ganDung`;
+  `ghiPhuongTrongCau` chỉ nhận khớp gần đúng khi câu đang hỏi là PHƯỜNG; quận nói trong chính câu (`bocQuan`) là quận đã biết để soi lệch quận (cột quận vẫn chỉ
+  ghi qua đường địa danh như cũ).
+- Chỗ khác cùng lớp: `phuongNhacTrongCau` (khớp đủ chữ, tên dài trùm tên ngắn) không dính; nhãn nguồn `ward_source = chu_xac_nhan` cho phường đọc từ câu
+  vẫn giữ (đổi bậc nguồn là migration riêng, chưa làm).
+
+**(1) Bên mua lộ ghi chú nội bộ.** Ca gốc: "thôi để mình suy nghĩ thêm" → bong bóng "Cập nhật hồ sơ: Khách đang chần chừ… Lý do không hỏi tiếp: …". Lớp lỗi:
+chế độ trợ lý dùng lại tin user của đường JSON, lệnh cuối "Soạn lượt trả lời … và cập nhật hồ sơ:" mời model viết phần hồ sơ ra chữ, mà ở chế độ này chữ đi thẳng
+tới khách.
+- Sửa: `doiLenhCuoiTroLy` (tro-ly.ts) thay lệnh cuối bằng lệnh chỉ đòi lời nói với khách; `DAU_RA_CONG_CU` thêm luật phản hồi + một câu hỏi, không ghi chú;
+  `thanhBongBong` bỏ đoạn / dòng mở bằng nhãn nội bộ (hồ sơ, ghi chú, lý do) làm lưới.
+- Chỗ khác cùng lớp: SRS-5.1zzzzu đã bỏ markdown + lời dẫn công cụ; đường JSON không dính (lời ra từ trường `replies`).
+
+**(2) Đất mất tên đường, bot hỏi lại đường.** Ca gốc: "đất ở đường Vườn Thơm, xã Bình Lợi, Bình Chánh" → AI đọc đúng `duong` "Vườn Thơm", vị trí không ghi, hai
+lượt sau bot hỏi "Lô đất mình ở đường nào". Lớp lỗi: điều kiện "vị trí chỉ là hành chính" coi MỌI tên trơn là hành chính khi câu có phường (`phuongTuDien`), nên tên
+đường trơn bị bỏ.
+- Sửa: tên trơn chỉ là hành chính khi nó CHÍNH LÀ phường vừa nhận ra và khách không gõ "đường" trước nó (`tronLaPhuong`).
+- Chỗ khác cùng lớp: `chiLaDonViHanhChinh` / `viTriGhiDuoc` so chữ hành chính thật, không dính.
+
+**(3) AI bỏ ý ngoài câu đang hỏi.** Ca gốc: đang hỏi độ rộng đường, "sổ hồng riêng anh đứng tên" → AI trả `truong` rỗng, cả câu vào `tra_loi` của câu đường; bot
+ghi không được gì rồi hỏi lại pháp lý. Luật trong prompt đã có (dòng "Tin KHÔNG trả lời câu đang hỏi…") mà model vẫn lệch. Sửa: ví dụ mẫu (`vi-du-boc-rao.ts`) gộp
+vào ví dụ cùng lớp: hỏi độ rộng đường, khách đưa diện tích + giá + pháp lý + đứng tên → đủ `truong`, `tra_loi.co_tra_loi = false`, đứng tên tách khỏi pháp lý.
+Cùng lớp mục (8).
+
+**(3b) Giá trị pháp lý dính vế đứng tên.** Ca gốc (test Zalo): hỏi pháp lý, "sổ hồng riêng, anh đứng tên" → ô pháp lý "sổ hồng riêng, anh đứng tên". Lớp lỗi:
+`gotManhOKhac` (cắt cụm nguyên văn của ô) giữ mảnh CÙNG HỌ (`cungHoFact`, họ dùng để biết một câu có phải câu trả lời không), mà đứng tên / thế chấp / hoàn công
+cùng họ pháp lý nhưng là ô riêng. Sửa: cắt giá trị chỉ giữ mảnh của đúng ô, hoặc nhóm ghép thành một giá trị (`GHEP_MOT_GIA_TRI`: địa chỉ + phường, kích thước).
+Chỗ khác cùng lớp: `dangHoiDungO` (kiem-bang-chung.ts) vẫn dùng họ, đúng mục đích (hỏi "chữ này có phải của ô đang hỏi không").
+
+**(4) Hỏi lại điều đã biết: "bán hay cho thuê", phường bốn lần.** Ca gốc: "mình cần cho thuê căn hộ" ở lượt đầu, lượt hai bot "Anh chị định bán hay cho thuê căn
+này vậy?"; căn hộ "Sunrise City quận 7" bot hỏi phường bốn lần, "xem trên sổ hồng". Lớp lỗi: điều hệ thống đã biết không có mặt ở chỗ model đọc / chỗ chọn câu: dòng
+ĐÃ BIẾT (`daBietNgan`) không có bán / thuê (truy vấn cũng không lấy `ward`, `deal`); phường của dự án có trong kho `projects` mà không ai chép sang tin.
+- Sửa: `daBietNgan` có "bán" / "cho thuê", truy vấn lấy thêm `ward, deal`; `phuongTuDuAn` (một hàm, qua `tenPhuongCot`, không đè phường khách nói) gọi ở mọi chỗ
+  gắn dự án (gán mảnh, nhiều căn, câu rao thường cùng quận, gắn dự án theo tên lượt sau) và đầu lượt khi tin đã có dự án mà chưa có phường (trừ lúc câu phường đang treo).
+- Chỗ khác cùng lớp: nhánh câu vị trí (`gan du an(vi_tri)`) đã chép phường dự án từ trước, giữ nguyên.
+
+**(5) "Khi nào có khách thì báo mình nha" bị chuyển người.** Lớp lỗi: chủ đề hỏi ngược `dich_vu` gom cả việc bên em CÓ câu trả lời (báo khi có khách, bao lâu bán
+được) lẫn việc chưa có dữ liệu (hợp đồng, độc quyền); `dapChuaCoDuLieu` chuyển người cho cả chủ đề. Hai luật mâu thuẫn: chỉ dẫn `dich_vu` cho model nói "báo khi có
+khách quan tâm", còn đường chuyển người nói "câu này em nhờ anh chị phụ trách". Sửa: chủ đề mới `quy_trinh` (schema `CHU_DE_HOI`, mô tả theo nghĩa) đi đường model
+với chỉ dẫn riêng, không việc ❓; `dich_vu` thu về hợp đồng / độc quyền / điều khoản. Cùng lớp SRS-5.1zzzzx (tách `phi`).
+
+**(6) Bên mua: hứa "em tìm cho anh chị" khi kho trống; hai bong bóng một ý xin số chủ; lời phẳng.** Lớp lỗi (a): lượt soát người mua (`kiem-khen.ts` `LUAT_MUA`)
+chỉ coi "nói có hàng / đang lọc" là sai, chưa coi câu HỨA sẽ tìm. Sửa: `LUAT_MUA` + mô tả `noi_co_hang` gồm câu hứa tìm / lọc / gửi căn. Lớp lỗi (b): câu xin
+số chủ có câu soạn sẵn mà model không được báo, tự giải thích lần nữa. Sửa: tin user báo model câu đó đã gửi, chỉ nối một câu hỏi (ý có MỘT chủ). Lớp lỗi (c):
+lời cuối sau lượt công cụ chỉ "Dạ anh chị. Em ghi nhận rồi ạ." Sửa: `DAU_RA_CONG_CU` (mục 1).
+
+**(7) Đường trước đất in "hẻm xe tải".** Ca gốc: "đường trước đất rộng 6m xe tải vô được" → `do_rong_duong` 6 + `loai_duong_vao` hem_xe_tai cùng lượt. Lớp lỗi:
+hai đề xuất của cùng lượt mâu thuẫn (bề rộng của ĐƯỜNG, loại nói HẺM) mà không lớp nào đối chiếu. Sửa: `kiemDeXuat` bỏ loại hẻm khi cùng lượt có `do_rong_duong`,
+không có `do_rong_hem` và tin không nhắc hẻm / kiệt / ngõ; trigger `do_rong_duong` tự xếp `mat_tien` như cũ; prompt `loai_duong_vao` thêm luật xe gì vào được
+không làm đường thành hẻm.
+
+**(8) "Full nội thất" chỉ thành nhãn.** Lớp lỗi: một thông tin có hai chủ (nhãn tìm kiếm và ô nội thất); FR-236 đã vá riêng cho "thổ cư 100%". Sửa: bảng `NHAN_LA_O`
+(nhãn chính là giá trị của ô → điền ô khi còn trống), thổ cư và nội thất cùng một bảng.
+
+**(9) Cột `street` = tên dự án.** Lớp lỗi: trigger `listings_boc_thong_so` điền street bằng `boc_ten_duong(location_raw)`, mà với căn hộ location_raw là TÊN DỰ ÁN.
+Sửa: migration `20261012c` bỏ street khi chữ đọc ra trùng tên dự án tin đang gắn (đã áp production 12/10 qua `apply-migration.yml`, `schema.sql` sinh lại). Kiểm `bot/tests/sql/street-ten-du-an.sql` (đỏ khi chưa áp migration).
+
+**(10) Người bán mới "hạng Vàng".** Đã soát: hạng = trung bình điểm tin (`diem_nguoi_ban` → `hang_theo_diem`, ≥ 80 là Vàng); một tin 85/100 là Vàng đúng công thức
+SRS-5.1zzf. Không phải lỗi; đổi công thức là quyết định của chủ dự án.
+
+**(11) Đọc lại số "để em rao giá 3 tỷ 2".** Luật không đọc lại số đã có trong `TONE_RULES` + ví dụ SAI; model đọc theo dạng mới. Sửa: thêm đúng dạng đó vào ví dụ SAI
+(`SELLER_FEWSHOT`). Không thêm van sửa văn (`luat_loi_bot` = gọn).
+
+**(12) Việc cho người: `admins` có một dòng nhưng `zalo_user_id` trống** → việc ❓ / 😟 không gửi được, sổ lỗi "bridge escalation: không resolve được admin" mỗi phút.
+Không phải code: chủ dự án đặt Zalo admin ở `/admin`.
+
+**Còn lại, chưa sửa lượt này:** `docTien` chưa đọc "16 toi" / "16 cu" không dấu (đổi cả `parse_vnd` + `tien.json`, SRS-5.1zzzzzg).
+
+**Kiểm (đỏ khi tắt từng bản sửa, đã chạy).**
+
+| Ca | Nội dung | Tắt bản sửa |
+|---|---|---|
+| ZZZZZH-00 / 00b / 00d / 00e / 00c | "hẻm 120 Trần Hưng Đạo quận 5", "nhà 120/5 tran hung dao q5" (mới), không quận, "nhà ở trần hưng đạo" → không phường Tân Hưng; đối chứng đang hỏi phường "tan hungg" → Tân Hưng | 00e đỏ khi bỏ `ganDung`; `phuong-trong-cau.mjs` đỏ 4 ca khi bỏ luật "hẻm N" |
+| ZZZZZH-02 / 02b | "đường Vườn Thơm, xã Bình Lợi" (gốc), "đường Láng Le Bàu Cò xã Tân Nhựt" (mới) → vị trí ghi, không hỏi lại đường | đỏ |
+| ZZZZZH-04 | tin cho thuê → dòng ĐÃ BIẾT có "cho thuê" | đỏ |
+| ZZZZZH-04b / 04c | căn hộ Sunrise City (gốc), Sunrise Riverside Nhà Bè (mới) → phường từ kho dự án, không hỏi phường | đỏ |
+| ZZZZZH-05 / 05b | "khi nao co khach thi bao minh nha", "có ai hỏi thì nhắn anh liền nhé em" (mới) → không chuyển người, không việc ❓ | đỏ |
+| ZZZZZH-07 | đường trước đất 6m xe tải → không hẻm | đỏ |
+| ZZZZZH-08 / 08b | "full noi that", "để lại hết nội thất" (mới) → ô nội thất | đỏ |
+
+Ngoài e2e: `tro-ly.mjs` ZZZZZH-TL1/TL2; `kiem-bang-chung.mjs` ZZZZZH-K1 (đường trước ≠ hẻm, đối chứng "hẻm 6m"), K2 (pháp lý bỏ vế đứng tên / thế chấp, đối chứng địa
+chỉ + kích thước); `vi-du-boc-rao.mjs` (ví dụ mới qua kiểm bằng chứng, trần 13.000 ký tự); `phuong-trong-cau.mjs` (5 ca mới); `bot/tests/sql/street-ten-du-an.sql`.
+e2e **1262/1262**. Prompt đổi ở `prompts.ts` (`SELLER_FEWSHOT`) → `dong-bo-prompt --day` sau merge.
+
 ## 6. Yêu cầu phi chức năng — tiêu chí nghiệm thu
 
 `[nguồn: docs/10 §10.7–10.8, DB 04/09/2026]` ✅ đạt · 🟡 một phần/chưa đo đủ · ❌ chưa.

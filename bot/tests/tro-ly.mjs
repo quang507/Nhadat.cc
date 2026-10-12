@@ -6,7 +6,7 @@
 // (3) model đã viết lời + chỉ gọi công cụ ghi (đều qua) → xong một vòng; (4) không có câu trả lời dùng được → null
 // để chat-reply rơi về đường JSON cũ.
 import { capTruong, laKhuVucQuaRong, timTienIchQuanh, ungVienKhuVuc } from "../supabase/functions/_shared/tim-moc.ts";
-import { apCongCuGhi, cauKhoangCachKhongNguon, chayTroLyMua, CONG_CU_MUA, KHOA_HO_SO, thanhBongBong } from "../supabase/functions/_shared/ai/tro-ly.ts";
+import { apCongCuGhi, cauKhoangCachKhongNguon, chayTroLyMua, CONG_CU_MUA, doiLenhCuoiTroLy, KHOA_HO_SO, LENH_CUOI_JSON, thanhBongBong } from "../supabase/functions/_shared/ai/tro-ly.ts";
 
 let hong = 0, tong = 0;
 const ok = (ten, dat, chi = "") => { tong++; if (!dat) hong++; console.log(`${dat ? "✓" : "✗"} ${ten}${dat ? "" : `  → ${chi}`}`); };
@@ -181,6 +181,24 @@ const thamSo = { model: "m", max_tokens: 1024, system: [{ type: "text", text: "S
 // TL-08: tách bong bóng.
 ok("TL-08 ba đoạn → hai bong bóng", JSON.stringify(thanhBongBong("A\n\nB\n\nC")) === JSON.stringify(["A", "B\nC"]));
 ok("TL-08 một đoạn nhiều dòng giữ nguyên", JSON.stringify(thanhBongBong("A\nB")) === JSON.stringify(["A\nB"]));
+// ZZZZZH-TL1 (bắn production 12/10): ghi chú nội bộ của model về khách đi thẳng tới Zalo. Đoạn mở bằng nhãn nội bộ bỏ cả đoạn; dòng
+// nhãn nội bộ lẫn trong lời bỏ dòng đó. Cách nói mới chưa bắn: "Ghi chú: …", "- Lý do chưa gửi căn: …".
+{
+  const goc = thanhBongBong("Dạ không sao anh, khi nào anh cần cứ nhắn em nha.\n\nCập nhật hồ sơ:\nKhách đang chần chừ, chưa chốt khu vực.\nLý do không hỏi tiếp: khách bận.");
+  ok("ZZZZZH-TL1 ca gốc: bỏ đoạn 'Cập nhật hồ sơ:'", goc.length === 1 && !/hồ sơ|Lý do/i.test(goc.join(" ")), JSON.stringify(goc));
+  const moi = thanhBongBong("Dạ em tìm thêm cho anh nha.\nGhi chú: khách thích nhà hẻm xe hơi\n- Lý do chưa gửi căn: kho trống");
+  ok("ZZZZZH-TL1 cách nói mới: dòng 'Ghi chú:' / '- Lý do …:' bị bỏ, lời khách giữ", JSON.stringify(moi) === JSON.stringify(["Dạ em tìm thêm cho anh nha."]), JSON.stringify(moi));
+  const giu = thanhBongBong("Dạ căn này hồ sơ pháp lý đầy đủ ạ: sổ hồng riêng, hoàn công rồi.");
+  ok("ZZZZZH-TL1 không bỏ nhầm câu có chữ 'hồ sơ' nói với khách", giu.length === 1, JSON.stringify(giu));
+}
+// ZZZZZH-TL2: lệnh cuối của đường JSON ("…và cập nhật hồ sơ:") mời model viết hồ sơ ra chữ — chế độ trợ lý thay bằng lệnh chỉ đòi lời nói với khách.
+{
+  const goc = [{ role: "user", content: [{ type: "image", source: {} }, { type: "text", text: `HỒ SƠ…${LENH_CUOI_JSON}` }] }];
+  const moi = doiLenhCuoiTroLy(goc);
+  const chu = moi[0].content[1].text;
+  ok("ZZZZZH-TL2 chế độ trợ lý: lệnh cuối không còn 'cập nhật hồ sơ', đòi lời nói với khách; phần ảnh giữ nguyên",
+    !/cập nhật hồ sơ/.test(chu) && /lời nhắn gửi khách/.test(chu) && chu.startsWith("HỒ SƠ…") && moi[0].content[0].type === "image" && goc[0].content[1].text.endsWith(LENH_CUOI_JSON), chu);
+}
 
 // TL-10 (bắn thật 02/10 thu-trl-05): "còn bệnh viện gần đó thì sao" → model KHÔNG gọi công cụ, tự kể "Bệnh viện Chợ Rẫy
 // khoảng 500m". Khoảng cách không có trong nguồn → code nhắc một lần; model tra công cụ thì trả lời theo kết quả.

@@ -29,7 +29,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     truong: [],
     kien_thuc: ["gần chợ Bà Chiểu"],
     ke_rieng: ["con cái đi làm xa hết", "khu này sắp lên giá"],
-    luu_y: "Tin rao là công khai: chuyện gia đình và nhận định giá của chủ nhà ghi tiền tố \"riêng: \", chỉ đặc điểm căn mới không tiền tố.",
+    luu_y: "Chuyện gia đình, nhận định giá → tiền tố \"riêng: \"; chỉ đặc điểm căn mới không tiền tố.",
   },
   {
     // SRS-5.1zzzzq (bắn production 09/10/2026): "chào em, chị muốn bán lô đất" → rỗng ba lần, "chị muốn bán lô đất" → đúng. Cách nói khác ca gốc.
@@ -48,7 +48,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     so_can: 1,
     truong: [t("loai_giao_dich", "ban", "muon ban"), t("loai_bds", "dat", "lo dat")],
     kien_thuc: [],
-    luu_y: "Tin không dấu đọc như có dấu ('lo dat' = lô đất, 'muon ban' = muốn bán); trích dẫn giữ đúng chữ khách gõ.",
+    luu_y: "Không dấu đọc như có dấu ('lo dat' = lô đất); trích dẫn giữ đúng chữ khách gõ.",
   },
   {
     // SRS-5.1zzzzi (bắn production 09/10/2026, thu-kg3): "Bán nhà MT Nguyễn Trãi Q5, 5x20, 4 tầng thang máy…" → AI đọc đủ mọi ô trừ
@@ -62,7 +62,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("ngang", "4", "4x18"), t("dai", "18", "4x18"), t("so_tang", "5", "5 tầng"), t("gia", "25 tỷ", "25 tỷ"),
     ],
     kien_thuc: [],
-    luu_y: "MT / MTKD / mặt tiền kinh doanh = nhà nằm mặt tiền đường → loai_duong_vao mat_tien (trích 'MTKD'). Số đo ở chỗ khác (4x18) là ngang × dài.",
+    luu_y: "MT / MTKD = nhà mặt tiền đường → loai_duong_vao mat_tien (trích 'MTKD'). 4x18 là ngang × dài.",
   },
   {
     // SRS-5.1zzzzd (thu-kg5): tên xã / huyện + kích thước KHÔNG phải địa chỉ — không đưa duong / ten_duong (cách nói khác ca gốc).
@@ -74,7 +74,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("phuong", "Xã Phước Vĩnh An", "xã Phước Vĩnh An"), t("quan", "Huyện Củ Chi", "huyện Củ Chi"), t("phap_ly", "sổ chung", "sổ chung"),
     ],
     kien_thuc: [],
-    luu_y: "Không có tên đường / hẻm / số nhà thì KHÔNG đưa duong, ten_duong — tên xã, huyện có ô riêng; bot sẽ hỏi đường.",
+    luu_y: "Không có tên đường / hẻm / số nhà thì KHÔNG đưa duong, ten_duong; xã, huyện có ô riêng.",
   },
   {
     // 03/10/2026 (chủ dự án: "hẻm số người ta sẽ ghi số còn độ rộng thì sẽ ghi 4m 4 mét, dạy AI đi"; SRS-5.1zk): số hẻm vào địa
@@ -211,7 +211,7 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
       t("duong", "Phạm Thế Hiển", "pham the hien"), t("do_rong_hem", "4", "hem 4m"), t("phuong", "4", "p4"), t("quan", "Quận 8", "q8"),
     ],
     kien_thuc: [],
-    luu_y: "Không dấu → tên đường viết lại CÓ DẤU, trích dẫn giữ nguyên văn. Chỉ tên đường vào duong; hẻm, phường đi ô riêng.",
+    luu_y: "Tên đường viết lại CÓ DẤU, trích dẫn nguyên văn. Chỉ tên đường vào duong; hẻm, phường ô riêng.",
   },
   // 24/09/2026 (chủ dự án chuyển nhận xét của AI khác sau khi đọc prompt xuất ra, lượt Trần Đình Xu): ý không có khoá
   // chép NGUYÊN VĂN, không đặt nhãn diễn giải (luật thoi_han_thue chỉ cho tin cho thuê nằm ở LUAT, boc-rao.ts).
@@ -221,17 +221,20 @@ export const VI_DU_BOC_RAO: ViDuBocRao[] = [
     so_can: 0,
     truong: [t("so_phong_ngu", "4", "4 phòng ngủ")],
     kien_thuc: ["tầng 1 và 2 là để kinh doanh"],
-    luu_y: "Ý không có khoá → CHÉP NGUYÊN VĂN vào kien_thuc, không đặt nhãn (\"tiềm năng kinh doanh\"). \"tầng 1 và 2\" không phải tang.",
+    luu_y: "Ý không có khoá → CHÉP NGUYÊN VĂN vào kien_thuc, không đặt nhãn. \"tầng 1 và 2\" không phải tang.",
   },
   // 01/10/2026 (bắn thử chế độ `ai`): đang hỏi câu khác, khách nhắn "50m2", "5 tỷ" → model trả RỖNG vì tin không trả lời
   // câu đang hỏi (lx-ai-06); "3 lầu" → model ghi so_tang 3, quên trệt (lx-ai-03).
+  // SRS-5.1zzzzzh (bắn production 12/10, thu-kb-dat): đang hỏi độ rộng đường, "sổ hồng riêng anh đứng tên" → truong RỖNG, cả câu vào
+  // tra_loi của câu đường; bot ghi không được gì rồi hỏi lại pháp lý. Gộp vào ví dụ cùng lớp (trần độ dài bản chữ), cách nói khác ca gốc.
   {
-    cau_dang_hoi: "phuong",
-    tin: "50m2, 3 lầu, giá 5 tỷ",
+    cau_dang_hoi: "do_rong_duong",
+    tin: "50m2, 3 lầu, giá 5 tỷ, sổ đỏ riêng ba anh đứng tên",
     so_can: 0,
-    truong: [t("dien_tich", "50", "50m2"), t("so_tang", "4", "3 lầu"), t("gia", "5 tỷ", "giá 5 tỷ")],
+    truong: [t("dien_tich", "50", "50m2"), t("so_tang", "4", "3 lầu"), t("gia", "5 tỷ", "giá 5 tỷ"), t("phap_ly", "sổ đỏ riêng", "sổ đỏ riêng"),
+      t("nguoi_dung_ten", "ba anh đứng tên", "ba anh đứng tên")],
     kien_thuc: [],
-    luu_y: "Lạc câu đang hỏi vẫn đưa dữ liệu khác vào truong, không trả rỗng. \"3 lầu\" = trệt + 3 lầu = 4.",
+    luu_y: "Lạc câu đang hỏi: dữ liệu vẫn vào truong, tra_loi.co_tra_loi = false. Mỗi cụm một ô (đứng tên tách khỏi pháp lý). 3 lầu = 4.",
   },
 ];
 

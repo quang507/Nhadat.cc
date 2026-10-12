@@ -3,7 +3,7 @@
 -- Sinh lại: gọi rpc xuat_schema() rồi ghi đè file này (CLAUDE.md).
 -- Đây là lưới an toàn để dựng lại từ số không, KHÔNG thay cho migration:
 -- thay đổi schema vẫn phải đi qua một file trong bot/supabase/migrations/.
--- Sinh lúc: 2026-10-12 11:27 (giờ VN)
+-- Sinh lúc: 2026-10-12 15:04 (giờ VN)
 
 -- ══ Extension ══
 create extension if not exists fuzzystrmatch with schema extensions;
@@ -4832,7 +4832,14 @@ declare
   de boolean;
   co boolean := false;
 begin
-  if new.street is null then new.street := public.boc_ten_duong(new.location_raw); end if;
+  -- 20261012c (SRS-5.1zzzzzh, bắn production 12/10 thu-kb-thue): căn hộ "Sunrise City" → location_raw "Sunrise City" → street "Sunrise City".
+  -- Tên DỰ ÁN không phải tên ĐƯỜNG: chữ đọc ra trùng tên dự án tin đang gắn thì cột street để trống.
+  if new.street is null then
+    new.street := public.boc_ten_duong(new.location_raw);
+    if new.street is not null and new.project_id is not null and exists (
+      select 1 from public.projects p where p.id = new.project_id and lower(btrim(p.name)) = lower(btrim(new.street))
+    ) then new.street := null; end if;
+  end if;
   if new.description is null then return new; end if;
   -- 20261002a (đợt 1 chuyển luật sang AI): tin do AI quyết thông số (dấu `_thong_so_ai`, chat-reply chế độ `ai`) → KHÔNG đọc
   -- câu rao bằng regex. Bắn thử lx-t5-05: "nằm trong khu công nghiệp nên không có hẻm" → `\mhem\M` → access_type = 'hem'.

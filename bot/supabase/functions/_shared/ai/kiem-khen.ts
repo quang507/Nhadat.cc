@@ -80,7 +80,9 @@ const LUAT_MUA = `SOÁT LỜI BOT GỬI NGƯỜI MUA / THUÊ — bot CHƯA đưa
 Đọc lời bot, liệt kê MỌI câu / vế NHẬN XÉT hay KHEN về nhà, đặc điểm nhà, tiêu chí khách đặt, khu vực, mức giá hay thị trường
 ("hẻm xe hơi tới cửa là khách chuộng lắm", "vị trí tốt lắm", "mặt tiền đắt khách", "khu này giá đang lên", "tầm giá đó dễ mua").
 - Liệt kê CẢ câu nói có hàng / đang có căn / đã tìm thấy / đang lọc căn cho khách ("dạ có anh", "dạ còn chị", "em đang lọc căn 2 lầu
-  cho anh", "em tìm thấy mấy căn hợp tầm giá") với noi_co_hang = true — bot chưa có căn nào nên câu đó sai.
+  cho anh", "em tìm thấy mấy căn hợp tầm giá") với noi_co_hang = true — bot chưa có căn nào nên câu đó sai. Câu HỨA sẽ tìm / lọc / gửi
+  căn ngay ("dạ em tìm cho anh chị", "để em tìm giúp chú", "em kiếm liền cho mình") cũng noi_co_hang = true: khách đang hỏi có căn không
+  mà bot không có căn nào, câu đó né câu trả lời thật.
 - KHÔNG liệt kê: câu hỏi, lời chào, ghi nhận chung ("dạ em ghi nhận rồi anh"), câu nói thật là chưa có căn.
 - can_cu: luôn null (người mua chưa có căn nào để làm căn cứ).
 - danh_gia_thi_truong = true khi câu đánh giá KHU VỰC / THỊ TRƯỜNG / MỨC GIÁ.`;
