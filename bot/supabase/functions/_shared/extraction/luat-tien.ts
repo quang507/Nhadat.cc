@@ -84,11 +84,13 @@ export function donViGiaDep(s: string): string {
   // 22/09/2026 (kịch bản C): "7ty2" — đơn vị dính số hai đầu, `\b` không thấy ("7ty2" in nguyên). Không dùng
   // `\b`: sau đơn vị không được là chữ; số dính ngay sau thì chèn khoảng trắng. "toi" chỉ là tỏi khi sau nó
   // KHÔNG có số ("5 toi 6 ty" là TỚI — cùng luật `TIEN_KD`).
+  // SRS-5.1zzzzzg (test Zalo 12/10: "16 tỏi" → bản nháp và tiêu đề in "giá 16 tỏi"): bảng đơn vị ở đây từng chép tay riêng, thiếu
+  // "tỏi" có dấu và "củ" mà `docTien` / `TIEN_CD` đều đọc. Đủ MỌI đơn vị của `TIEN_CD` — `bot/tests/don-vi-hien-thi.mjs` đỏ khi lệch.
   return s
-    .replace(/(\d)\s*(?:ty|ti)(?![\p{L}])\s*(?=\d)/giu, "$1 tỷ ")
-    .replace(/(\d)\s*(?:ty|ti|toi(?!\s*\d))(?![\p{L}\p{N}])/giu, "$1 tỷ")
-    .replace(/(\d)\s*(?:trieu|tr)(?![\p{L}])\s*(?=\d)/giu, "$1 triệu ")
-    .replace(/(\d)\s*(?:trieu|tr)(?![\p{L}\p{N}])/giu, "$1 triệu")
+    .replace(/(\d)\s*(?:ty|ti|tỏi|tị|tỹ)(?![\p{L}])\s*(?=\d)/giu, "$1 tỷ ")
+    .replace(/(\d)\s*(?:ty|ti|tỏi|tị|tỹ|toi(?!\s*\d))(?![\p{L}\p{N}])/giu, "$1 tỷ")
+    .replace(/(\d)\s*(?:trieu|tr|củ|cu)(?![\p{L}])\s*(?=\d)/giu, "$1 triệu ")
+    .replace(/(\d)\s*(?:trieu|tr|củ|cu)(?![\p{L}\p{N}])/giu, "$1 triệu")
     .replace(/(?<![\p{L}])tỉ(?![\p{L}])/gu, "tỷ");
 }
 

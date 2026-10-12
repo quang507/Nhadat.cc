@@ -92,7 +92,7 @@ import {
 } from "../_shared/extraction/khop-cau-tra-loi.ts";
 import { chanPhiChuaXacNhan, boCauNoiHeThong, boCauTroNguocDauBong, boChaoLai, boViTriBia, suaGapTheoDeal, goiDat, LOAI_DAT, boHuaHoiChuNha, boHoiLaiDaCo, boGhiNhanSuong, boKhenThiTruong, boTienBia, goiCanHo, boCauLapLai, giuVeCauMau, boCauHoiDo, boCauKhen, boDacDiemKhongCo, type CanDuLieu, boMaTinKhach, boMenhDeKhenSai, boCauNhanXet, nhanXetKhongCanCu, cauHoiGoiYKhongNguon, boCauHoiGoiY, bongBongGoiYCan, type CanGoiY, coNhacCan, doiTuXung, themXinLoiKhiHieuNham, vuaKhen, anCauDaDap } from "../_shared/extraction/van-tra-loi.ts";
 import { ganNhan, tenNhan } from "../_shared/extraction/nhan.ts";
-import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, soPhongNguTheoTang, themTangPhu, TIEU_TU_DAU, soTamCanHoiLung, docTraLoiLung, ketCauTheoLung, soTangTrongDapLung, phanNgoaiCauLung, timPhuongTrongCau, type PhuongDs } from "../_shared/extraction/khop-cau-tra-loi.ts";
+import { ghepMotChieu, gonLoiSua, laBoSungRac, laCauChungChung, laCauCoKhong, laSoNhaTenDuong, laTraLoiTronKhoa, laChiQuan, laGatHoiVai, laBoSungTrung, LOAI_DUONG_VAO_RE, laNoiDaTraLoi, soNhaDau, soPhongNguTheoTang, themTangPhu, TIEU_TU_DAU, soTamCanHoiLung, lungChuaRoDem, docTraLoiLung, ketCauTheoLung, soTangTrongDapLung, phanNgoaiCauLung, timPhuongTrongCau, type PhuongDs } from "../_shared/extraction/khop-cau-tra-loi.ts";
 // Đáp án ô `loai_bds` khi hàm DB đoán ra loại từ một câu dài (16/09/2026).
 // Câu treo có đường ghi riêng — AI đọc trước KHÔNG thay đáp án (17/09/2026).
 // Cột dự án bot đọc (02/10/2026, giảm egress): `match_projects` trả SETOF projects, không chọn cột thì mỗi dòng kéo theo
@@ -2523,9 +2523,13 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       if (!g) return null;
       const { data: l, error } = await client.from("listings").select("floors_text, property_type, boc_tach").eq("id", listingId).maybeSingle();
       if (error) { await ghiLoi(client, "chat-reply hoi lung(doc)", error.message); return null; }
-      if (!l || ["chung_cu", "dat", "phong_tro"].includes(String(l.property_type ?? "")) || /lửng/iu.test(String(l.floors_text ?? ""))) return null;
+      // SRS-5.1zzzzzg: kết cấu đã có lửng thì thôi hỏi — TRỪ khi chính lời khách nói lửng mà chưa rõ trong hay ngoài số tầng ("3 tầng có
+      // lửng"): kết cấu đang ghi khi đó là đoán của tầng dưới, không phải điều khách nói.
+      if (!l || ["chung_cu", "dat", "phong_tro"].includes(String(l.property_type ?? "")) ||
+        (/lửng/iu.test(String(l.floors_text ?? "")) && !lungChuaRoDem(tinKiem))) return null;
       if ((l.boc_tach as { lung_goi_y?: unknown } | null)?.lung_goi_y !== undefined) return null;
-      const { error: gErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { lung_goi_y: g } });
+      // SRS-5.1zzzzzg: khách đã nói CÓ lửng → câu đáp "không" là "không tính lửng vào số tầng", không phải "không có lửng" (`co_lung`).
+      const { error: gErr } = await client.rpc("ghi_boc_tach", { p_listing_id: listingId, p: { lung_goi_y: lungChuaRoDem(tinKiem) ? { ...g, co_lung: true } : g } });
       if (gErr) { await ghiLoi(client, "chat-reply ghi_boc_tach(lung goi y)", gErr.message); return null; }
       return `Dạ kết cấu ${g.n} ${g.dv} đó có tính cả gác lửng không ${cachGoiNguoi} ạ?`;
     };
@@ -5983,11 +5987,15 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           if (sErr) await ghiLoi(client, "chat-reply chot tin(duong)", sErr.message);
           else sua.push("ten_duong");
         }
-        const yCu = new Set(facts.filter((f) => f.question === "bo_sung" && f.source === NGUON_AI).map((f) => gon(f.answer ?? "")));
+        // SRS-5.1zzzzzg (test Zalo 12/10: "📝 Thêm: rộng thoải mái · đường lớn 2 chiều em rộng thoải mái"): ý thêm của lượt chốt so với ý thêm
+        // AI đã ghi (từng lượt lẫn lượt chốt trước) theo CÙNG Ý (`trungY` qua `boKeRieng`), không theo chuỗi bằng nhau. Ý chữ khách ghi tay
+        // (seller_chat) không tính: đó có thể là rác lượt chốt đang sửa ("không có, mặt tiền đẹp" → "mặt tiền đẹp", SRS-5.1zzzd).
+        const yCu = facts.filter((f) => f.question === "bo_sung" && f.source === NGUON_AI && f.answer).map((f) => f.answer as string);
         // SRS-5.1zzzzy: ý chủ nhà đã xin bỏ khỏi dòng "Thêm" không quay lại ở lượt chốt sau (lượt này đọc lại cả hội thoại cũ).
         const yDaBo = ((lRow as { boc_tach?: { y_da_bo?: unknown } | null }).boc_tach?.y_da_bo as string[] | undefined) ?? [];
         const yThem = boKeRieng(kiemKienThuc(kq.kienThuc ?? [], tinGop, dat,
-          facts.filter((f) => f.question !== "bo_sung" && f.answer).map((f) => f.answer as string)).filter((y) => !yCu.has(gon(y))), yDaBo);
+          facts.filter((f) => f.question !== "bo_sung" && f.answer).map((f) => f.answer as string)).filter((y) => !yCu.some((c) => gon(c) === gon(y))),
+          [...yCu, ...yDaBo]); // chuỗi bằng nhau vẫn là trùng — `trungY` bỏ qua cụm toàn hư từ ("đang ở")
         for (const y of yThem) {
           const { error: yErr } = await ghiFact(client, { p_listing_id: listingId, p_question: "bo_sung", p_answer: y, p_source: NGUON_AI });
           if (yErr) await ghiLoi(client, "chat-reply chot tin(y them)", yErr.message);
@@ -6312,7 +6320,7 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
       // thêm → sửa kết cấu (floors + floors_text) rồi hỏi lại câu đang treo. Câu dài (kèm thông tin khác) thì sửa kết cấu xong
       // đi tiếp luồng thường. Không rõ → bỏ gợi ý. Gợi ý dùng một lần.
       {
-        const gL = (pendingReq.listings?.boc_tach as { lung_goi_y?: unknown } | null | undefined)?.lung_goi_y as { n?: unknown } | undefined;
+        const gL = (pendingReq.listings?.boc_tach as { lung_goi_y?: unknown } | null | undefined)?.lung_goi_y as { n?: unknown; co_lung?: unknown } | undefined;
         if (gL && typeof gL === "object" && typeof gL.n === "number" && !humanActive && pendingReq.question !== "duyet_tin") {
           const { error: lErr } = await client.rpc("ghi_boc_tach", { p_listing_id: pendingReq.listing_id, p: { lung_goi_y: false } });
           if (lErr) await ghiLoi(client, "chat-reply ghi_boc_tach(xoa lung goi y)", lErr.message);
@@ -6320,7 +6328,10 @@ const xuLyLuot = async (req: Request): Promise<Response> => {
           // câu trả lời câu lửng theo NGHĨA (`tra_loi` — câu bot vừa hỏi nguyên văn chính là câu lửng), code chỉ chuyển câu AI viết lại
           // gọn ("không có lửng") thành có / thêm / không. Từ khoá trên chữ khách chỉ còn đỡ khi AI không chạy.
           const tlL = laCheDoAi && bongAi ? kiemTraLoiCau((await bongAi)?.traLoi, text, cauBotThat) : null;
-          const dapL = (tlL?.co && tlL.giaTri ? docTraLoiLung(tlL.giaTri) : null) ?? docTraLoiLung(dapAn);
+          const dapL0 = (tlL?.co && tlL.giaTri ? docTraLoiLung(tlL.giaTri) : null) ?? docTraLoiLung(dapAn);
+          // SRS-5.1zzzzzg: khách đã nói CÓ lửng ("3 tầng có lửng") → "không" là lửng NGOÀI số tầng, nhà vẫn có lửng.
+          // Trừ khi khách nói rõ "không có lửng" (rút lại) — khi đó vẫn là không lửng.
+          const dapL = gL.co_lung === true && dapL0 === "khong" && !/\b(?:khong|ko|k|chua|hong)\s+(?:co\s+)?(?:gac\s+)?(?:lung|gac)\b/.test(boDau(dapAn)) ? "them" : dapL0;
           if (dapL) {
             // Khách nói lại SỐ tầng trong câu đáp ("Nhà a 4 tầng tính cả lửng") → số khách vừa nói thắng số bot hỏi.
             const kcL = ketCauTheoLung(soTangTrongDapLung(dapAn) ?? gL.n, dapL);

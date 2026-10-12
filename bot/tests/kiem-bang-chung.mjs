@@ -1142,6 +1142,31 @@ ok("DC-07 chonViTri 'hẻm 4 đường Trần Phú' (số nhỏ, mập mờ bề
   ok("ZZZZZF-K3 tên đường AI viết khác chữ khách → lấy chữ khách ('Phan Xích Long', 'Lê Văn Sỹ'); khách gõ không dấu, AI thêm dấu → giữ bản AI",
     t1.tenDuong === "Phan Xích Long" && t2.tenDuong === "Lê Văn Sỹ" && t3.tenDuong === "Nguyễn Trãi", JSON.stringify([t1.tenDuong, t2.tenDuong, t3.tenDuong]));
 }
+// ── SRS-5.1zzzzzg (test Zalo 12/10): số của ô số đo mét phải là SỐ ĐO; "N tầng có lửng" không phải câu đáp "có, tính cả lửng". ──
+{
+  const { soDoMet } = await import("../supabase/functions/_shared/extraction/kiem-bang-chung.ts");
+  const { lungChuaRoDem } = await import("../supabase/functions/_shared/extraction/khop-cau-tra-loi.ts");
+  const so = (v) => soDoMet(v)?.[0] ?? null;
+  ok("ZZZZZG-K1 (ca gốc) 'nhà mặt tiền …, đường lớn 2 chiều' không có số đo", so("nhà mặt tiền đường Trương Đình Hội, đường lớn 2 chiều") === null, String(so("nhà mặt tiền đường Trương Đình Hội, đường lớn 2 chiều")));
+  ok("ZZZZZG-K1b (cách nói mới) 'đường 2 làn xe', '3 xe máy tránh nhau' không có số đo", so("đường 2 làn xe") === null && so("hẻm 3 xe máy tránh nhau") === null, "");
+  ok("ZZZZZG-K1c (đối chứng) '4m', 'hẻm 3m5', '5 mét', '6', 'rộng 4 m' là số đo",
+    so("4m") === "4" && so("hẻm 3m5") === "3.5" && so("5 mét") === "5" && so("6") === "6" && so("rộng 4 m") === "4", JSON.stringify(["4m", "hẻm 3m5", "5 mét", "6", "rộng 4 m"].map(so)));
+  datKiemNhe(true);
+  const tinG = "mặt tiền là đường trương đình hội, đường lớn 2 chiều em rộng thoải mái";
+  const kq = kiemDeXuat([{ khoa: "do_rong_hem", gia_tri: "nhà mặt tiền đường Trương Đình Hội, đường lớn 2 chiều", trich_dan: "mặt tiền là đường trương đình hội, đường lớn 2 chiều" }], tinG);
+  ok("ZZZZZG-K2 AI đặt chữ không số đo vào do_rong_hem → bỏ", kq.dat.length === 0, JSON.stringify(kq));
+  const kq2 = kiemDeXuat([{ khoa: "do_rong_hem", gia_tri: "hẻm 3 xe máy tránh nhau", trich_dan: "hẻm 3 xe máy tránh nhau" }], "hẻm 3 xe máy tránh nhau thoải mái anh");
+  ok("ZZZZZG-K2b (cách nói mới) cụm nói hẻm nhưng '3' là số xe, không phải mét → bỏ", kq2.dat.length === 0, JSON.stringify(kq2));
+  const tinL = "3 tầng có lửng em ơi";
+  const kqL = kiemDeXuat([{ khoa: "ket_cau", gia_tri: "trệt + lửng + 1 lầu", trich_dan: "3 tầng có lửng" }], tinL);
+  ok("ZZZZZG-K3 (ca gốc) '3 tầng có lửng' → không đổi thành 'trệt + lửng + 1 lầu'", !kqL.dat.some((d) => d.gia_tri === "trệt + lửng + 1 lầu"), JSON.stringify(kqL.dat));
+  const kqT = kiemDeXuat([{ khoa: "ket_cau", gia_tri: "4 tầng tính cả lửng", trich_dan: "4 tầng tính cả lửng" }], "nhà 4 tầng tính cả lửng nha");
+  ok("ZZZZZG-K3b (đối chứng) '4 tầng tính cả lửng' vẫn ra 'trệt + lửng + 2 lầu'", kqT.dat.some((d) => d.gia_tri === "trệt + lửng + 2 lầu"), JSON.stringify(kqT.dat));
+  datKiemNhe(false);
+  ok("ZZZZZG-K4 lungChuaRoDem: '3 tầng có lửng', 'nhà 4 tấm có gác lửng' mơ hồ; 'tính cả lửng', 'lửng thêm nữa', 'không có lửng' rõ",
+    lungChuaRoDem("3 tầng có lửng")?.n === 3 && lungChuaRoDem("nhà 4 tấm có gác lửng")?.n === 4 &&
+      !lungChuaRoDem("4 tầng tính cả lửng") && !lungChuaRoDem("3 tầng, có lửng thêm nữa") && !lungChuaRoDem("không có gác lửng, 4 tầng"), "");
+}
 console.log(hong ? `\nKIỂM BẰNG CHỨNG: ${hong}/${tong} CA HỎNG` : `\nKIỂM BẰNG CHỨNG: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);
 

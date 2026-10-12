@@ -2417,10 +2417,25 @@ export function themTangPhu(floorsText: string | null | undefined, floors: numbe
 // Chủ dự án 01/10: "nhà nếu có 4 tấm, tầng thì hỏi có tính gác lửng ko". Người Sài Gòn đếm tấm/tầng có khi gồm cả lửng
 // ("4 tấm" = trệt + lửng + 2 lầu), có khi không (trệt + 3 lầu). Kết cấu chỉ nói SỐ tấm/tầng trơn → hỏi một câu; nói rõ
 // lầu / trệt / lửng / gác thì không hỏi.
+/**
+ * SRS-5.1zzzzzg (test Zalo 12/10: "3 tầng có lửng" → lượt chốt tin ghi "trệt + lửng + 1 lầu", DB thì đọc "trệt + lửng + 2 lầu"): cụm
+ * có nói RÕ lửng nằm TRONG hay NGOÀI số tấm / tầng không — "tính cả lửng", "gồm lửng", "lửng thêm nữa", "chưa tính lửng", "lửng riêng".
+ * "có lửng" chỉ nói nhà CÓ lửng, không nói đếm thế nào.
+ */
+export const DEM_LUNG_RO = /\b(tinh|gom|bao gom|them|nua|ngoai|rieng)\b/;
+/** Có N tấm / tầng + có lửng mà KHÔNG nói lửng trong hay ngoài N → hai cách hiểu, phải hỏi. Không có lửng / nói rõ / đã có trệt-lầu → null. */
+export function lungChuaRoDem(s: string | null | undefined): { n: number; dv: "tấm" | "tầng" } | null {
+  const kd = boDau(s ?? "");
+  if (!/\b(lung|gac)\b/.test(kd) || DEM_LUNG_RO.test(kd)) return null;
+  if (/\b(khong|ko|k|kg|khg|chua|hong|hok)\s+(?:co\s+)?(?:gac\s+)?(?:lung|gac)\b/.test(kd)) return null;
+  return soTamCanHoiLung(kd.replace(/\b(?:gac\s+)?lung\b|\bgac\b/g, " "));
+}
 export function soTamCanHoiLung(ketCau: string | null | undefined): { n: number; dv: "tấm" | "tầng" } | null {
   const kd = boDau(ketCau ?? "");
   if (!kd.trim()) return null;
-  if (/\b(lung|gac|lau|tret|ham|cap 4|c4|ap mai)\b/.test(kd)) return null;
+  // Nói lửng mà chưa rõ lửng trong hay ngoài số tầng ("3 tầng có lửng") vẫn phải hỏi — SRS-5.1zzzzzg.
+  if (/\b(lung|gac)\b/.test(kd)) return lungChuaRoDem(kd);
+  if (/\b(lau|tret|ham|cap 4|c4|ap mai)\b/.test(kd)) return null;
   if (/(duoc xay|xay duoc|cho xay|co the xay|xay len|xay them|nang len|len duoc|len toi)\s*(?:len|toi|den|them|toi da)?\s*\d+\s*(?:tam|tang)/.test(kd)) return null;
   // Khoảng "4-6 tầng", "4 tới 6 tầng" (02/10/2026: khách HỎI "Sao em biết nhà 4-6 tầng") không phải kết cấu một căn.
   if (/\d\s*(?:-|–|toi|den|hoac|hay)\s*\d{1,2}\s*(?:tam|tang)\b/.test(kd)) return null;

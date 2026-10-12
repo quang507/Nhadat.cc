@@ -10603,6 +10603,85 @@ const aiTat = () => { globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_a
   globalThis.__cauHinh = cuCH;
   globalThis.__model = { parse: () => OUT() };
 }
+// ── SRS-5.1zzzzzg (12/10/2026, test Zalo chủ dự án — tin Trương Đình Hội): số đo phải là SỐ ĐO ("2 chiều" không ra 2m); "3 tầng có
+// lửng" mơ hồ thì hỏi, không đoán; câu đáp "không" khi khách đã nói có lửng là lửng ngoài; ý thêm lượt chốt so CÙNG Ý với ý đã ghi.
+{
+  const cuCH = globalThis.__cauHinh;
+  const laBocG = (p) => (p?.system ?? []).some((s) => /BÓC TÁCH TIN NHẮN NGƯỜI BÁN/.test(s.text ?? ""));
+  const laYG = (p) => (p?.system ?? []).some((s) => /Ý NGẮN CỦA LƯỢT/.test(s.text ?? ""));
+  const laChotG2 = (p) => (p?.system ?? []).some((x) => /CHẾ ĐỘ CHỐT TIN/.test(x.text ?? ""));
+  const T = (khoa, gia_tri, trich_dan) => ({ khoa, gia_tri, trich_dan, can: null });
+  const rongG = { so_can: 0, kien_thuc: [], truong: [], cap_nhat: [], xac_nhan: [], tra_loi: { co_tra_loi: false, gia_tri: null, trich_dan: null },
+    hoi_lai: { co_hoi: false, cau_hoi: null, chu_de: null }, cam_xuc: { muc: "binh_thuong", trich_dan: null }, khong_can_hoi: [], y_dinh: { loai: "binh_thuong", trich_dan: null },
+    dong_y: "khong_noi", dong_y_trich: null, yeu_cau: "khong", yeu_cau_trich: null, doc_lai: null, khong_biet: null };
+  const TIN_Q8 = { deal: "ban", status: "cho_thong_tin", property_type: "nha_pho", can_chu_duyet: true, location_raw: null, street: null,
+    ward: "Phường Phú Định", district: "Quận 8", price_raw: "16 tỏi", price_vnd: 16e9, boc_tach: { _thong_so_ai: true } };
+  let n = 0;
+  const dung = (cauTreo, botNoi, tin = TIN_Q8, khachNoi = []) => {
+    fresh((d) => seedKho(d));
+    const uid = `thu-zg-${++n}`;
+    const s = db().insert("sellers", { zalo_user_id: uid, xung_ho: "anh", seller_type: "ccrb", seller_type_source: "admin" }).data;
+    const L = db().insert("listings", { code: `BDS-ZG-${n}`, seller_id: s.id, ...tin }).data;
+    s.active_listing_id = L.id;
+    if (cauTreo) db().insert("info_requests", { listing_id: L.id, question: cauTreo, status: "pending" });
+    const c = db().insert("conversations", { seller_id: s.id, channel: "zalo_personal_test", started_at: "2026-10-12T03:00:00Z" }).data;
+    for (const b of khachNoi) db().insert("messages", { conversation_id: c.id, sender: "seller", body: b, created_at: new Date().toISOString() });
+    if (botNoi) db().insert("messages", { conversation_id: c.id, sender: "bot", body: botNoi, created_at: new Date().toISOString() });
+    return { uid, L };
+  };
+  const goi = async (uid, text, ai = {}, chot = null) => {
+    globalThis.__model = { parse: (p) => chot && laChotG2(p) ? chot : (laBocG(p) || laYG(p)) ? { ...rongG, ...ai } : OUT(), create: () => "Dạ vâng ạ." };
+    const r = await send({ external_user_id: uid, text });
+    return (r.body?.replies ?? []).join(" | ");
+  };
+  const lr = (L) => db().t.listings.find((x) => x.id === L.id);
+  globalThis.__cauHinh = { test_reset_hello: "1", boc_tach_ai: "ai", bao_lai_da_luu: "admin" };
+  globalThis.__khongNhoCauHinh = true;
+
+  // (1) Độ rộng: AI đặt chữ không có số đo vào ô độ rộng → không ghi bề rộng; số đo thật vẫn ghi.
+  for (const [ma, cau, gt, mong] of [
+    ["01 (ca gốc)", "mặt tiền là đường trương đình hội, đường lớn 2 chiều em rộng thoải mái", "nhà mặt tiền đường Trương Đình Hội, đường lớn 2 chiều", null],
+    ["01b (cách nói mới)", "hẻm 3 xe máy tránh nhau thoải mái anh", "hẻm 3 xe máy tránh nhau", null],
+    ["01c (đối chứng)", "hẻm 4m xe hơi vô tới nhà", "4m", 4]]) {
+    const { uid, L } = dung("do_rong_hem", "Hẻm trước nhà rộng mấy mét, ô tô vào được không anh ạ?");
+    const cum = cau.split(",")[0];
+    await goi(uid, cau, { truong: [T("do_rong_hem", gt, ma.startsWith("01c") ? "hẻm 4m" : cau.replace(/ (em|anh) rộng thoải mái$| thoải mái anh$/, "")),
+      ...(ma.startsWith("01 ") ? [T("loai_duong_vao", "mat_tien", "mặt tiền")] : [])], tra_loi: { co_tra_loi: true, gia_tri: gt, trich_dan: cum } });
+    const l = lr(L);
+    check(`ZZZZZG-${ma} «${cau}» → alley_width_m ${mong}`, (l.alley_width_m ?? null) === mong, JSON.stringify({ aw: l.alley_width_m, at: l.access_type, f: db().t.listing_facts.filter((f) => f.listing_id === L.id).map((f) => `${f.question}=${f.answer}`) }));
+  }
+  // (2) "3 tầng có lửng": không đoán lửng trong hay ngoài — hỏi; đáp "không" → lửng ngoài (trệt + lửng + 2 lầu); "có tính luôn" → trong.
+  for (const [ma, cau, dap, aiDap, mong] of [
+    ["02 (ca gốc)", "3 tầng có lửng em ơi", "không em", "không", "trệt + lửng + 2 lầu"],
+    ["02b (cách nói mới)", "nhà 4 tấm có gác lửng nha", "có, tính luôn lửng", "có, tính cả lửng", "trệt + lửng + 2 lầu"]]) {
+    const { uid, L } = dung("ket_cau", "Nhà mình xây mấy tầng rồi anh ạ?");
+    const cum = cau.replace(/ (em ơi|nha)$/, "");
+    const r1 = await goi(uid, cau, { truong: [T("ket_cau", "trệt + lửng + 1 lầu", cum)], tra_loi: { co_tra_loi: true, gia_tri: cum, trich_dan: cum } });
+    const kc1 = lr(L).floors_text;
+    check(`ZZZZZG-${ma} «${cau}» → bot hỏi lửng có tính trong số tầng không; AI đoán «trệt + lửng + 1 lầu» không được ghi`,
+      /tính cả gác lửng/.test(r1) && kc1 !== "trệt + lửng + 1 lầu", JSON.stringify({ r1, kc1 }));
+    await goi(uid, dap, { tra_loi: { co_tra_loi: true, gia_tri: aiDap, trich_dan: dap } });
+    check(`ZZZZZG-${ma}a đáp «${dap}» → kết cấu ${mong}`, lr(L).floors_text === mong, JSON.stringify({ kc: lr(L).floors_text, fl: lr(L).floors }));
+  }
+  // (3) Lượt chốt tin: ý thêm cùng ý với ý đã ghi ("rộng thoải mái") không thêm dòng thứ hai; giá in "16 tỷ", không "16 tỏi".
+  {
+    const { uid, L } = dung("phap_ly", "Sổ hồng nhà mình là sổ riêng hay sổ chung anh ạ?", { ...TIN_Q8, location_raw: "đường Trương Đình Hội", street: "Trương Đình Hội",
+      access_type: "mat_tien", area_m2: 160, frontage_m: 8, length_m: 20, floors: 3, floors_text: "trệt + lửng + 2 lầu" },
+      ["mặt tiền là đường trương đình hội, đường lớn 2 chiều em rộng thoải mái"]);
+    for (const [q, a] of [["vi_tri", "đường Trương Đình Hội"], ["dien_tich_dat", "8x20"], ["gia", "16 tỏi"], ["phuong", "Phường Phú Định"], ["ket_cau", "trệt + lửng + 2 lầu"],
+      ["loai_duong_vao", "mặt tiền"], ["bo_sung", "rộng thoải mái"]]) db().insert("listing_facts", { listing_id: L.id, question: q, answer: a, source: q === "bo_sung" ? "ai_kiem" : "seller_chat" });
+    const chot = { ...rongG, kien_thuc: ["đường lớn 2 chiều em rộng thoải mái"], truong: [T("phap_ly", "sổ hồng riêng", "shr")] };
+    const rep = await goi(uid, "shr nha", { truong: [T("phap_ly", "sổ hồng riêng", "shr")], tra_loi: { co_tra_loi: true, gia_tri: "sổ hồng riêng", trich_dan: "shr" } }, chot);
+    const nhap = rep.split(" | ").find((x) => /Em sẽ rao như vầy/.test(x)) ?? "";
+    const them = db().t.listing_facts.filter((f) => f.listing_id === L.id && f.question === "bo_sung").map((f) => f.answer);
+    check("ZZZZZG-03 (ca gốc) lượt chốt đọc ra «đường lớn 2 chiều em rộng thoải mái» khi đã có «rộng thoải mái» → không thêm dòng trùng ý",
+      them.length === 1 && !/2 chiều em rộng/.test(nhap), JSON.stringify({ them, nhap: nhap.slice(0, 500) }));
+    check("ZZZZZG-04 (ca gốc) price_raw «16 tỏi» → bản nháp in «16 tỷ», không còn «tỏi»", !!nhap && /16 tỷ/.test(nhap) && !/tỏi/.test(nhap), nhap.slice(0, 500));
+  }
+  globalThis.__khongNhoCauHinh = false;
+  globalThis.__cauHinh = cuCH;
+  globalThis.__model = { parse: () => OUT() };
+}
 // ── kết: BẤT BIẾN TOÀN BỘ ──
 soatDbBatBien("(cuối)");
 if (process.env.BB_DUMP) (await import("node:fs")).writeFileSync(process.env.BB_DUMP, JSON.stringify(BB, null, 1));
