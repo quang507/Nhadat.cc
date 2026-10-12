@@ -3618,7 +3618,7 @@ mỗi file một lần, và e2e ZZZZZE-01 soi câu lệnh soát phải có khố
 
 **Địa danh TP.HCM.** Lượt `nap-duong --thieu` ngày 12/10 đếm được: TP.HCM 37.081 dòng tên đường / hẻm, 167/168 phường có dữ liệu, Tây Ninh
 1.598, Đồng Nai 677. Phường thiếu là Đặc khu Côn Đảo (~8,7°N), nằm ngoài hộp bao đất liền của truy vấn Overpass, nên 0 dòng. `nap-duong.mjs`
-thêm `BBOX_RIENG`. Từ điển chỉ có tên đường / hẻm; chưa có chợ, trường, khu dân cư, tên chung cư ngoài `projects` (ghi ở OPEN cũ, không đổi
+thêm `BBOX_RIENG`; chạy lại cùng ngày: Côn Đảo 65 dòng, TP.HCM 37.146 dòng, đủ 168/168 phường. Từ điển chỉ có tên đường / hẻm; chưa có chợ, trường, khu dân cư, tên chung cư ngoài `projects` (ghi ở OPEN cũ, không đổi
 lượt này).
 
 **Kiểm (đỏ khi tắt từng bản sửa, đã chạy).**
