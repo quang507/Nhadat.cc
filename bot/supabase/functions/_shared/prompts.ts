@@ -322,7 +322,7 @@ export const FACT_LABELS: Record<string, string> = {
   ly_do_ban: "lý do bán", thuong_luong: "giá còn thương lượng không", fit_out: "thời gian sửa chữa miễn phí (fit-out)",
   view: "view căn hộ", can_goc: "có phải căn góc không", phi_gui_xe: "phí gửi xe", so_huu: "sở hữu lâu dài hay 50 năm",
   hinh_dang: "hình dáng đất (vuông vức, nở hậu, bóp hậu)", mat_do_xd: "mật độ xây dựng cho phép", tang_cao_toi_da: "được xây tối đa mấy tầng",
-  no_hau: "nở hậu", thang_may: "có thang máy không",
+  no_hau: "nở hậu", chieu_dai: "chiều dài", thang_may: "có thang máy không",
   // FR-220 (24/09/2026): hỏi bù sau khi lên kệ; câu trả lời chen vào kết cấu chữ.
   tang_phu: "tầng lửng, sân thượng, tầng hầm",
   so_phong: "tổng số phòng cho thuê", ty_le_lap_day: "tỷ lệ lấp đầy", doanh_thu: "doanh thu mỗi tháng", pccc: "PCCC đã nghiệm thu chưa",

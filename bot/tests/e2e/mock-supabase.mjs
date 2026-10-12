@@ -825,12 +825,14 @@ class RpcCall {
         // 20260922d: doanh_thu → rent_income_vnd (tin bán).
         if (a.p_question === "doanh_thu" && l.deal !== "cho_thue") { const v = parseVnd(a.p_answer); if (v != null && v >= 1e6 && v <= 1e10) l.rent_income_vnd = v; }
         if (a.p_question === "no_hau") { const r = /(\d+(?:\.\d+)?)/.exec(String(a.p_answer)); if (r) l.rear_width_m = parseFloat(r[1]); }
+        // 20261012a: fact chieu_dai chỉ điền length_m; có ngang thì DB (trigger listings) nhân ra diện tích.
+        if (a.p_question === "chieu_dai") { const r = /(\d+(?:[.,]\d+)?)/.exec(String(a.p_answer)); const v = r ? parseFloat(r[1].replace(",", ".")) : null; if (v != null && v >= 3 && v <= 150 && l.length_m == null) { l.length_m = v; if (l.frontage_m != null && l.area_m2 == null) l.area_m2 = Math.round(l.frontage_m * v * 10) / 10; } }
         if (a.p_question === "tang" && l.property_type === "chung_cu") { const t = parseInt(a.p_answer, 10); if (t >= 0 && t <= 80) l.floor = t; }
         // 20260920a: fact `nhan` là tên nhãn, không đi qua đồng bộ cột.
         if (a.p_question === "nhan") return { data: null, error: null };
         // listing_facts_sync_cols + boc_thong_so (rút gọn): đủ để điểm FR-177 đo được.
         // 20/09/2026: đáp án mặt tiền dạng "ngang 4m dài 16m" (boc_thong_so thật đọc hai chiều) — mock từng parseFloat cả câu → NaN.
-        if (a.p_question === "mat_tien") { const mt = /(?:ngang|mat tien|mặt tiền|mt)?\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (mt) l.frontage_m = parseFloat(mt[1].replace(",", ".")); const dm = /(?:dài|dai|dọc|doc|x)\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (dm) l.length_m = parseFloat(dm[1].replace(",", ".")); }
+        if (a.p_question === "mat_tien") { const mt = /(?:ngang|mat tien|mặt tiền|mt)?\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (mt) l.frontage_m = parseFloat(mt[1].replace(",", ".")); const dm = /(?:dài|dai|dọc|doc|x)\s*(\d+(?:[.,]\d+)?)/i.exec(String(a.p_answer)); if (dm) l.length_m = parseFloat(dm[1].replace(",", ".")); if (l.frontage_m != null && l.length_m != null && l.area_m2 == null) l.area_m2 = Math.round(l.frontage_m * l.length_m * 10) / 10; }
         if (a.p_question === "do_rong_hem") { const m = /(\d+(?:[.,]\d+)?)/.exec(a.p_answer); if (m) l.alley_width_m = parseFloat(m[1].replace(",", ".")); if (/xe hơi|xe hoi/i.test(a.p_answer)) l.access_type = l.access_type ?? "hem_xe_hoi"; }
         // ─── SRS-5.1zzzv (08/10/2026, chủ dự án chat thử …hua2: "trên kia nói hẻm xe hơi xong xuống dưới nó hỏi hẻm xe hơi"):
         // các nhánh `listing_facts_sync_cols` (schema.sql) mà DB giả chưa chép — trang chat thử chạy trên DB giả nên ô AI đã ghi

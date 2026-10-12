@@ -56,6 +56,9 @@ const CHI_PHUONG = lay("--phuong");
 const CHI_THIEU = co("--thieu"); // chỉ tra phường/tỉnh chưa có dòng nào trong DB (chạy bù sau lượt hụt)
 // Hộp bao TP.HCM mới (gồm Bình Dương + Bà Rịa – Vũng Tàu) — chặn phường trùng tên ở tỉnh khác.
 const BBOX_HCM = "10.30,106.30,11.50,107.70";
+// 12/10/2026 (SRS-5.1zzzzzf): Đặc khu Côn Đảo (~8,7°N) nằm ngoài hộp bao đất liền → lượt 12/10 ra 0 dòng, 167/168 phường. Phường
+// nằm ngoài hộp chung có hộp riêng; vẫn giữ phép "đúng một đa giác cùng tên" bên dưới.
+const BBOX_RIENG = { "Đặc khu Côn Đảo": "8.55,106.45,8.85,106.75" };
 const TINH_LON = [["Tây Ninh", "Tỉnh Tây Ninh"], ["Đồng Nai", "Thành phố Đồng Nai"]];
 
 const nghi = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -118,7 +121,7 @@ if (!CHI_TINH || CHI_TINH === "TP.HCM") {
   for (const w of wards) {
     if (CHI_PHUONG && w.ten_day_du !== CHI_PHUONG) continue;
     if (CHI_THIEU && phuongDaCo.has(w.ten_day_du)) continue;
-    const q = `[out:csv(name,::type,::lat,::lon;false)][timeout:180];area["admin_level"="6"]["name"="${w.ten_day_du}"]->.a;way(area.a)(${BBOX_HCM})["highway"]["name"];out center tags;.a out;`;
+    const q = `[out:csv(name,::type,::lat,::lon;false)][timeout:180];area["admin_level"="6"]["name"="${w.ten_day_du}"]->.a;way(area.a)(${BBOX_RIENG[w.ten_day_du] ?? BBOX_HCM})["highway"]["name"];out center tags;.a out;`;
     const csv = await overpass(q); daTra++;
     if (csv == null) { console.log(`  ✗ ${w.ten_day_du}: không có trả lời`); await nghi(2000); continue; }
     const { dong, soArea } = gomDuong(csv);

@@ -1873,6 +1873,9 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
     if (!daCo.has("dien_tich")) them("dien_tich", `${kt.ngang}x${kt.dai}`, "ngang");
     else them("mat_tien", `ngang ${kt.ngang}m dài ${kt.dai}m`, "ngang");
   } else if (kt.ngang != null) them("mat_tien", `${kt.ngang}m`, "ngang");
+  // SRS-5.1zzzzzf (khách mô phỏng lần bảy: "chiều sâu thì 16 mét" khi chưa nói ngang → khoá `dai` không có ô, bị bỏ, bot hỏi lại diện
+  // tích). Dài nói riêng vào fact `chieu_dai` (trigger chỉ điền length_m — 20261012a); ngang tới sau thì DB nhân ra diện tích.
+  else if (kt.dai != null) them("chieu_dai", `dài ${kt.dai}m`, "dai");
   // 02/10/2026 (đối chiếu AI ↔ code, SRS-5.1zb): AI đọc "nở hậu 5m" mà không có ô ghi → bỏ (`khoa_khong_co_cho_ghi`). Fact
   // `no_hau` có sẵn (trigger DB đọc ra rear_width_m), cùng dạng luật ghi ("5m").
   if (kt.noHau != null) them("no_hau", `${kt.noHau}m`, "no_hau");
@@ -1894,10 +1897,24 @@ export function docAiChinh(dat: DeXuat[], dong: DongDb | null): AiChinh {
   if (loaiBds) them("loai_bds", loaiBds, "loai_bds");
   // SRS-5.1zk (chủ dự án 03/10: "mấy hàm sql ngu quá thay bằng AI tự ghi đi"): TÊN ĐƯỜNG trần do AI đọc (không số nhà, không chữ
   // hẻm / đường) — nơi gọi ghi thẳng cột `street`, thay cho `boc_ten_duong` (regex SQL) ở chế độ `ai`.
-  const tenDuong = (() => { const v = lay("ten_duong")?.replace(/^(?:đường|duong|phố|pho)\s+/i, "").trim(); return v && v.length <= 60 ? tenDuongDayDu(v) : null; })();
+  const tenDuong = (() => {
+    const dT = mot.find((d) => d.khoa === "ten_duong");
+    const v = lay("ten_duong")?.replace(/^(?:đường|duong|phố|pho)\s+/i, "").trim();
+    if (!v || v.length > 60) return null;
+    // SRS-5.1zzzzzf (khách mô phỏng lần bảy: khách gõ "hẻm Phan Xích Long", lượt chốt tin trả `ten_duong` "Phạm Xích Long" kèm trích dẫn
+    // đúng chữ khách → cột street ghi tên đường sai). Tên riêng là chữ KHÁCH gõ: giá trị phải có trong cụm trích (bỏ dấu, không phân biệt
+    // hoa thường); khác thì lấy đúng chữ khách trong cụm (bỏ chữ hẻm / đường / số nhà đầu cụm). Sửa chính tả là việc của từ điển `duong`
+    // (tim_duong hỏi xác nhận), không phải của model.
+    const cum = (dT?.cum_goc ?? dT?.trich_dan ?? "").trim();
+    if (!cum || boDau(cum).includes(boDau(v))) return tenDuongDayDu(v);
+    const chuKhach = cum.replace(/^(?:(?:hẻm|hem|kiệt|kiet|ngõ|ngo|ngách|ngach|đường|duong|phố|pho|số|so)\s+)+/iu, "").replace(/^[0-9][0-9a-z/]*\s+/iu, "").trim();
+    return chuKhach && chuKhach.length <= 60 && !/\d{3,}/.test(chuKhach) ? tenDuongDayDu(chuKhach) : null;
+  })();
   for (const b of boTho) {
     if (b.ly_do === "khoa_khong_co_cho_ghi" && ["ngang", "dai", "no_hau", "duong", "du_an", "loai_giao_dich", "loai_bds"].includes(b.khoa) &&
       ghi.some((g) => g.khoa === b.khoa)) continue;
+    // Dài đã ghép vào "AxB" (đề xuất ghi mang khoá "ngang") — không phải bị bỏ.
+    if (b.ly_do === "khoa_khong_co_cho_ghi" && b.khoa === "dai" && kt.ngang != null) continue;
     // SRS-5.1zk: `ten_duong` không có fact — nơi gọi ghi thẳng cột `street` (`tenDuong` bên dưới).
     if (b.ly_do === "khoa_khong_co_cho_ghi" && b.khoa === "ten_duong" && tenDuong) continue;
     bo.push(b);

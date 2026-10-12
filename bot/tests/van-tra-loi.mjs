@@ -1506,5 +1506,16 @@ for (const [vao, mong] of [["có em ơi", "co"], ["có nha em", "co"], ["dạ c�
   ok("ZZZZZC-V5 (ca gốc) soát: 'giấy tờ gọn lắm' (gắn lợi ích) và 'tối em gọi lại' (hứa việc không làm được) bị bỏ; câu nhắc lại giữ",
     bo.length === 2 && !bo.includes("Dạ sổ riêng ạ."), JSON.stringify(bo));
 }
+// SRS-5.1zzzzzf: câu "em ghi X rồi" (ghi_nhan) chỉ đứng khi X có trong sổ ghi LƯỢT NÀY — lời chủ nhà có X không đủ.
+{
+  const { nhanXetKhongCanCu: nx } = await import("../supabase/functions/_shared/extraction/van-tra-loi.ts");
+  const ds = [{ cau: "Vâng ạ, 4x16 cháu ghi rồi bác ơi.", can_cu: "16 mét", ghi_nhan: true }, { cau: "Dạ hẻm 4m cháu ghi rồi.", can_cu: "4m", ghi_nhan: true }];
+  const bo = nx(ds, "hẻm bác chừng 4 mét rộng, chiều sâu thì 16 mét", "độ rộng hẻm trước nhà: 4m\nkết cấu: trệt lầu");
+  ok("ZZZZZF-V1 (ca gốc lần bảy) «4x16 cháu ghi rồi», căn cứ chỉ ở lời chủ nhà → bỏ; «hẻm 4m cháu ghi rồi», 4m trong sổ ghi lượt → giữ",
+    bo.length === 1 && bo[0].startsWith("Vâng ạ, 4x16"), JSON.stringify(bo));
+  const bo2 = nx(ds, "hẻm bác chừng 4 mét rộng, chiều sâu thì 16 mét");
+  ok("ZZZZZF-V2 không truyền sổ ghi lượt (lượt soát người mua) → đi đường căn cứ thường: '16 mét' có trong lời → giữ, '4m' không → bỏ",
+    bo2.length === 1 && bo2[0].startsWith("Dạ hẻm 4m"), JSON.stringify(bo2));
+}
 console.log(hong ? `\nVAN TRẢ LỜI: ${hong}/${tong} CA HỎNG` : `\nVAN TRẢ LỜI: ${tong}/${tong} CA ĐẠT`);
 process.exit(hong ? 1 : 0);

@@ -151,7 +151,7 @@ Từ 24/08/2026 (quyết định chủ dự án) code nằm **trong repo này**,
   web lọc, cùng một file — thêm nhãn là thêm khoá ở đó + ca trong `bot/tests/nhan.mjs`, KHÔNG
   ghi tay vào `listings.nhan`. Văn bản nhúng vector đọc tên nhãn qua `ten_nhan()` (SQL, `20260930c`) — thêm nhãn thì thêm dòng
   `when` bằng migration mới; `bot/tests/ten-nhan-sql.mjs` đỏ khi hai bên lệch. Từ 21/09 thêm **từ điển tên đường** bảng `duong` (FR-212, `20260921b`,
-  ~5.200 tên lượt đầu 21/09, đủ 168/168 phường TP.HCM từ 25/09 — 10.083 dòng, OSM theo phường mới): bot gọi `tim_duong` ở MỌI chỗ ghi địa chỉ — không dấu → có dấu
+  ~5.200 tên lượt đầu 21/09; đếm 12/10/2026 sau `nap-duong`: TP.HCM 37.081 dòng gồm hẻm, 167/168 phường có dữ liệu — Đặc khu Côn Đảo nằm ngoài hộp bao, vá bằng `BBOX_RIENG`; Tây Ninh 1.598, Đồng Nai 677; OSM theo phường mới): bot gọi `tim_duong` ở MỌI chỗ ghi địa chỉ — không dấu → có dấu
   ngay, sai 1–2 ký tự → hỏi xác nhận (`boc_tach.duong_goi_y`), không có → giữ nguyên chữ khách; nạp lại
   bằng `node scripts/nap-duong.mjs`, KHÔNG ghi tay. `listings` nay 67 cột (số "56 cột" cũ ở đây đã lệch từ lâu).
   (3) **Luật phá dữ liệu phải có bảng câu KHÔNG được kích** — `bot/tests/luat/khong-duoc-kich.json`:

@@ -1671,13 +1671,21 @@ export function boCauHoiLap(replies: string[], botTruoc: string | null | undefin
 const gonKhen = (s: string): string => boDau(s ?? "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 /** Câu nhận xét (nguyên văn trong lời bot) KHÔNG có căn cứ thật → cần bỏ. */
 export function nhanXetKhongCanCu(
-  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null; kieu?: string | null; hua_khong_lam?: boolean | null }> | null | undefined,
+  ds: Array<{ cau?: string | null; can_cu?: string | null; danh_gia_thi_truong?: boolean | null; noi_trang_thai_tin?: boolean | null; kieu?: string | null; hua_khong_lam?: boolean | null; ghi_nhan?: boolean | null }> | null | undefined,
   bangChung: string,
+  /** SRS-5.1zzzzzf: sổ ghi của lượt — câu "em ghi X rồi" (`ghi_nhan`) chỉ đứng được khi X có trong đây. Không truyền = không soát loại câu này. */
+  vuaGhi?: string,
 ): string[] {
   const bc = ` ${gonKhen(bangChung)} `;
   const bo: string[] = [];
   for (const x of ds ?? []) {
     const cau = (x?.cau ?? "").trim();
+    // SRS-5.1zzzzzf: câu nói đã ghi một giá trị — căn cứ chỉ ở sổ ghi LƯỢT NÀY (lời chủ nhà có nói cũng không phải bằng chứng là đã ghi).
+    if (cau && x?.ghi_nhan === true && vuaGhi !== undefined) {
+      const ccG = gonKhen(x?.can_cu ?? "");
+      if (!(ccG.length >= 2 && ` ${gonKhen(vuaGhi)} `.includes(` ${ccG} `))) bo.push(cau);
+      continue;
+    }
     // SRS-5.1zzzzzc: lời hứa việc bot không tự làm được ("tối em gọi lại nha") — không có nguồn nào làm nó đúng.
     if (cau && x?.hua_khong_lam === true) { bo.push(cau); continue; }
     // SRS-5.1zzzzzb: câu hỏi GỢI Ý giá trị chủ nhà chưa nói cũng cần nguồn (`cauHoiGoiYKhongNguon` bỏ cả câu hỏi đó); câu hỏi mở thì giữ.
